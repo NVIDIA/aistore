@@ -242,13 +242,10 @@ func (t *targetrunner) headObjS3(w http.ResponseWriter, r *http.Request, items [
 		return
 	}
 
-	lom.Lock(false)
-	if err = lom.Load(true); err != nil && !cmn.IsObjNotExist(err) { // (doesnotexist -> ok, other)
-		lom.Unlock(false)
+	if err = lom.Load(true); err != nil && !cmn.IsObjNotExist(err) {
 		t.writeErr(w, r, err)
 		return
 	}
-	lom.Unlock(false)
 
 	exists := err == nil
 	if !exists {

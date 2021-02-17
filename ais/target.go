@@ -952,13 +952,10 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 		return
 	}
 
-	lom.Lock(false)
-	if err = lom.Load(true); err != nil && !cmn.IsObjNotExist(err) { // (doesnotexist -> ok, other)
-		lom.Unlock(false)
+	if err = lom.Load(true); err != nil && !cmn.IsObjNotExist(err) {
 		invalidHandler(w, r, err)
 		return
 	}
-	lom.Unlock(false)
 
 	if glog.FastV(4, glog.SmoduleAIS) {
 		pid := query.Get(cmn.URLParamProxyID)

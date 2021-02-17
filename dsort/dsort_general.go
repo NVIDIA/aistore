@@ -383,7 +383,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 			if ds.m.Metrics.extended {
 				beforeSend = mono.NanoTime()
 			}
-			o.Callback = func(hdr transport.ObjHdr, r io.ReadCloser, _ unsafe.Pointer, err error) {
+			o.Callback = func(hdr transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, err error) {
 				if err != nil {
 					cbErr = err
 				}

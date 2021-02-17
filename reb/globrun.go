@@ -558,15 +558,12 @@ func (rj *rebJogger) jog(mpathInfo *fs.MountpathInfo) {
 }
 
 // send completion
-func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, r io.ReadCloser, lomptr unsafe.Pointer, err error) {
+func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, lom unsafe.Pointer, err error) {
 	rj.m.inQueue.Dec()
-
-	lom := (*cluster.LOM)(lomptr)
-	lom.Unlock(false)
 
 	rj.m.t.SmallMMSA().Free(hdr.Opaque)
 	if err != nil {
-		rj.m.delLomAck(lom)
+		rj.m.delLomAck((*cluster.LOM)(lom))
 		si := rj.m.t.Snode()
 		glog.Errorf("%s: failed to send o[%s/%s], err: %v", si, hdr.Bck, hdr.ObjName, err)
 		return
@@ -624,61 +621,64 @@ func (rj *rebJogger) _lwalk(lom *cluster.LOM) (err error) {
 		return cmn.ErrSkip
 	}
 	// prepare to send
-	var file *cmn.FileHandle
-	if file, err = rj.prepSend(lom); err != nil {
-		lom.Unlock(false)
+	var roc cmn.ReadOpenCloser
+	if roc, err = rj.prepSend(lom); err != nil {
 		return
 	}
 	// transmit
 	rj.m.addLomAck(lom)
 	if rj.sema == nil {
-		rj.doSend(lom, tsi, file)
+		rj.doSend(lom, tsi, roc)
 	} else { // rebalance.multiplier > 1
 		rj.sema.Acquire()
 		go func() {
-			rj.doSend(lom, tsi, file)
+			rj.doSend(lom, tsi, roc)
 			rj.sema.Release()
 		}()
 	}
 	return
 }
 
-func (rj *rebJogger) prepSend(lom *cluster.LOM) (file *cmn.FileHandle, err error) {
+func (rj *rebJogger) prepSend(lom *cluster.LOM) (roc cmn.ReadOpenCloser, err error) {
 	lom.Lock(false)
-	err = lom.Load(false)
-	if err != nil {
-		return
+	if err = lom.Load(false); err != nil {
+		goto retErr
 	}
 	if lom.IsCopy() {
 		err = cmn.ErrSkip
-		return
+		goto retErr
 	}
 	if _, err = lom.ComputeCksumIfMissing(); err != nil { // not persisting it locally
-		return
+		goto retErr
 	}
-	file, err = cmn.NewFileHandle(lom.FQN)
+	if roc, err = cmn.NewFileHandle(lom.FQN); err != nil {
+		goto retErr
+	}
+	roc = cmn.NewDeferROC(roc, func() { lom.Unlock(false) })
 	return
+
+retErr:
+	lom.Unlock(false)
+	return nil, err
 }
 
-func (rj *rebJogger) doSend(lom *cluster.LOM, tsi *cluster.Snode, file *cmn.FileHandle) {
+func (rj *rebJogger) doSend(lom *cluster.LOM, tsi *cluster.Snode, roc cmn.ReadOpenCloser) {
 	var (
-		ack                   = regularAck{rebID: rj.m.RebID(), daemonID: rj.m.t.SID()}
-		mm                    = rj.m.t.SmallMMSA()
-		opaque                = ack.NewPack(mm)
-		o                     = transport.AllocSend()
-		cksumType, cksumValue = lom.Cksum().Get()
+		ack    = regularAck{rebID: rj.m.RebID(), daemonID: rj.m.t.SID()}
+		opaque = ack.NewPack(rj.m.t.SmallMMSA())
+		o      = transport.AllocSend()
 	)
 	o.Hdr.Bck = lom.Bucket()
 	o.Hdr.ObjName = lom.ObjName
 	o.Hdr.Opaque = opaque
 	o.Hdr.ObjAttrs.Size = lom.Size()
 	o.Hdr.ObjAttrs.Atime = lom.AtimeUnix()
-	o.Hdr.ObjAttrs.CksumType = cksumType
-	o.Hdr.ObjAttrs.CksumValue = cksumValue
+	o.Hdr.ObjAttrs.CksumType = lom.Cksum().Type()
+	o.Hdr.ObjAttrs.CksumValue = lom.Cksum().Value()
 	o.Hdr.ObjAttrs.Version = lom.Version()
 	o.Callback, o.CmplPtr = rj.objSentCallback, unsafe.Pointer(lom)
 	rj.m.inQueue.Inc()
-	if err := rj.m.dm.Send(o, file, tsi); err == nil {
+	if err := rj.m.dm.Send(o, roc, tsi); err == nil {
 		rj.m.laterx.Store(true)
 	}
 }

@@ -384,7 +384,7 @@ func (reb *Manager) pushSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ un
 	reb.t.SmallMMSA().Free(hdr.Opaque)
 }
 
-func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
+func (reb *Manager) recvPush(_ http.ResponseWriter, hdr transport.ObjHdr, _ io.Reader, err error) {
 	if err != nil {
 		glog.Errorf("Failed to get notification %s from %s: %v", hdr.ObjName, hdr.Bck, err)
 		return
@@ -528,13 +528,12 @@ func (reb *Manager) retransmit(md *rebArgs) (cnt int) {
 				continue
 			}
 			// retransmit
-			if file, err := rj.prepSend(lom); err == nil {
-				rj.doSend(lom, tsi, file)
+			if roc, err := rj.prepSend(lom); err != nil {
+				glog.Errorf("%s: failed to retransmit %s => %s: %v", loghdr, lom, tsi, err)
+			} else {
+				rj.doSend(lom, tsi, roc)
 				glog.Warningf("%s: retransmitting %s => %s", loghdr, lom, tsi)
 				cnt++
-			} else {
-				lom.Unlock(false)
-				glog.Errorf("%s: failed to retransmit %s => %s: %v", loghdr, lom, tsi, err)
 			}
 			if aborted() {
 				lomAck.mu.Unlock()

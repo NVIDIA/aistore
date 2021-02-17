@@ -295,7 +295,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) (err error) {
 	var (
 		lom       *cluster.LOM
 		parsedFQN fs.ParsedFQN
-		fh        *cmn.FileHandle
+		roc       cmn.ReadOpenCloser
 		fqn       = ct.realFQN
 	)
 	debug.Assert(ct.meta != nil)
@@ -305,6 +305,8 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) (err error) {
 	if parsedFQN, _, err = cluster.ResolveFQN(fqn); err != nil {
 		return
 	}
+	// FIXME: We should unify acquiring a reader for LOM and CT. Both should be
+	//  locked and handled similarly.
 	if parsedFQN.ContentType == fs.ObjectType {
 		lom = cluster.AllocLOM(parsedFQN.ObjName)
 		if err = lom.Init(ct.Bck); err != nil {
@@ -321,12 +323,17 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) (err error) {
 		lom = nil // sending slice; TODO: rlock
 	}
 	// open
-	if fh, err = cmn.NewFileHandle(fqn); err != nil {
+	if roc, err = cmn.NewFileHandle(fqn); err != nil {
 		if lom != nil {
 			lom.Unlock(false)
 			cluster.FreeLOM(lom)
 		}
 		return
+	} else if lom != nil {
+		roc = cmn.NewDeferROC(roc, func() {
+			lom.Unlock(false)
+			cluster.FreeLOM(lom)
+		})
 	}
 	// transmit
 	req := pushReq{daemonID: reb.t.SID(), stage: rebStageECRepair, rebID: reb.rebID.Load(), md: ct.meta}
@@ -349,8 +356,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) (err error) {
 	reb.ec.onAir.Inc()
 	o.Hdr.Opaque = req.NewPack(nil, rebMsgEC)
 	o.Callback = reb.transportECCB
-	o.CmplPtr = unsafe.Pointer(lom)
-	if err = reb.dm.Send(o, fh, target); err != nil {
+	if err = reb.dm.Send(o, roc, target); err != nil {
 		err = fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
 		return
 	}
@@ -362,12 +368,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) (err error) {
 }
 
 // send completion
-func (reb *Manager) transportECCB(hdr transport.ObjHdr, reader io.ReadCloser, lomptr unsafe.Pointer, _ error) {
-	lom := (*cluster.LOM)(lomptr)
-	if lom != nil {
-		lom.Unlock(false)
-		cluster.FreeLOM(lom)
-	}
+func (reb *Manager) transportECCB(_ transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
 	reb.ec.onAir.Dec()
 }
 
@@ -941,22 +942,21 @@ func (reb *Manager) resilverSlice(fromFQN, toFQN string, buf []byte) error {
 }
 
 func (reb *Manager) resilverObject(fromMpath fs.ParsedFQN, fromFQN, toFQN string, buf []byte) error {
-	var clone *cluster.LOM
 	lom := cluster.AllocLOMbyFQN(fromFQN)
 	defer cluster.FreeLOM(lom)
 
-	err := lom.Init(fromMpath.Bck)
-	if err == nil {
-		err = lom.Load()
-	}
-	if err != nil {
+	if err := lom.Init(fromMpath.Bck); err != nil {
 		return err
 	}
 
 	lom.Lock(true)
+	defer lom.Unlock(true)
+	if err := lom.Load(); err != nil {
+		return err
+	}
+
 	lom.Uncache(true /*delDirty*/)
-	clone, err = lom.CopyObject(toFQN, buf)
-	lom.Unlock(true)
+	clone, err := lom.CopyObject(toFQN, buf)
 	cluster.FreeLOM(clone)
 	if err != nil {
 		reb.t.FSHC(err, fromFQN)
