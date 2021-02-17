@@ -466,6 +466,14 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			p.writeErrf(w, r, fmtNotRemote, bck.Name)
 			return
 		}
+		keepMD := cmn.IsParseBool(r.URL.Query().Get(cmn.URLParamKeepBckMD))
+		// HDFS buckets will always keep metadata so they can re-register later
+		if bck.IsHDFS() || keepMD {
+			if err := p.destroyBucketData(&msg, bck); err != nil {
+				p.writeErr(w, r, err)
+			}
+			return
+		}
 		fallthrough // fallthrough
 	case cmn.ActDestroyBck:
 		if p.forwardCP(w, r, &msg, bck.Name) {

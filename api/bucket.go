@@ -266,15 +266,19 @@ func EvictRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) 
 	return doListRangeRequest(baseParams, bck, cmn.ActEvictObjects, evictMsg)
 }
 
-// EvictRemoteBucket sends a HTTP request to a proxy to evict an entire cloud bucket from the AIStore
-// - the operation results in eliminating all traces of the specified cloud bucket in the AIStore
-func EvictRemoteBucket(baseParams BaseParams, bck cmn.Bck) error {
+// EvictRemoteBucket sends a HTTP request to a proxy to evict an entire remote bucket from the AIStore
+// - the operation results in eliminating all traces of the specified remote bucket in the AIStore
+func EvictRemoteBucket(baseParams BaseParams, bck cmn.Bck, keepMD bool) error {
+	var q url.Values
 	baseParams.Method = http.MethodDelete
+	if keepMD {
+		q = url.Values{cmn.URLParamKeepBckMD: []string{"true"}}
+	}
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(bck.Name),
 		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActEvictRemoteBck}),
-		Query:      cmn.AddBckToQuery(nil, bck),
+		Query:      cmn.AddBckToQuery(q, bck),
 	})
 }
 

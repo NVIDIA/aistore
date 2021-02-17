@@ -816,6 +816,30 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 	return nil
 }
 
+// erase bucket data from all targets (keep metadata)
+func (p *proxyrunner) destroyBucketData(msg *cmn.ActionMsg, bck *cluster.Bck) error {
+	query := cmn.AddBckToQuery(
+		url.Values{cmn.URLParamKeepBckMD: []string{"true"}},
+		bck.Bck)
+	args := allocBcastArgs()
+	args.req = cmn.ReqArgs{
+		Method: http.MethodDelete,
+		Path:   cmn.URLPathBuckets.Join(bck.Name),
+		Body:   cmn.MustMarshal(msg),
+		Query:  query,
+	}
+	args.to = cluster.Targets
+	results := p.bcastGroup(args)
+	freeBcastArgs(args)
+	for _, res := range results {
+		if res.err != nil {
+			return res.err
+		}
+	}
+	freeCallResults(results)
+	return nil
+}
+
 //////////////////////////////////////
 // context, rollback & misc helpers //
 //////////////////////////////////////

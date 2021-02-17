@@ -170,6 +170,7 @@ const (
 	URLParamNamespace = "namespace"
 	URLParamBucket    = "bck"
 	URLParamBucketTo  = "bck_to"
+	URLParamKeepBckMD = "keep_md"
 
 	URLParamRegex = "regex" // dsort/downloader regex
 	// internal use

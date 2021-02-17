@@ -167,7 +167,7 @@ func EvictRemoteBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
 	if bck.HasBackendBck() {
 		bck = *bck.BackendBck()
 	}
-	err := api.EvictRemoteBucket(BaseAPIParams(proxyURL), bck)
+	err := api.EvictRemoteBucket(BaseAPIParams(proxyURL), bck, false)
 	tassert.CheckFatal(tb, err)
 }
 

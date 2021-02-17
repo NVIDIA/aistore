@@ -19,6 +19,7 @@ var (
 		commandEvict: append(
 			baseLstRngFlags,
 			dryRunFlag,
+			keepMDFlag,
 		),
 		commandGet: {
 			offsetFlag,

@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/dsort"
@@ -464,6 +465,26 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch msg.Action {
+	case cmn.ActEvictRemoteBck:
+		keepMD := cmn.IsParseBool(r.URL.Query().Get(cmn.URLParamKeepBckMD))
+		// HDFS buckets will always keep metadata so they can re-register later
+		if request.bck.IsHDFS() || keepMD {
+			nlp := request.bck.GetNameLockPair()
+			nlp.Lock()
+			defer nlp.Unlock()
+
+			err := fs.DestroyBucket(msg.Action, request.bck.Bck, request.bck.Props.BID)
+			if err != nil {
+				t.writeErr(w, r, err)
+				return
+			}
+			// Recreate bucket directories (now empty), since bck is still in BMD
+			errs := fs.CreateBuckets(msg.Action, request.bck.Bck)
+			if len(errs) > 0 {
+				debug.AssertNoErr(errs[0])
+				t.writeErr(w, r, errs[0]) // only 1 err is possible for 1 bck
+			}
+		}
 	case cmn.ActDelete, cmn.ActEvictObjects:
 		var (
 			rangeMsg = &cmn.RangeMsg{}

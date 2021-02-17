@@ -875,6 +875,11 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 }
 
 func TestEvictRemoteBucket(t *testing.T) {
+	t.Run("KeepMD", func(t *testing.T) { testEvictRemoteBucket(t, true) })
+	t.Run("DeleteMD", func(t *testing.T) { testEvictRemoteBucket(t, false) })
+}
+
+func testEvictRemoteBucket(t *testing.T, keepMD bool) {
 	var (
 		m = ioContext{
 			t:        t,
@@ -910,7 +915,7 @@ func TestEvictRemoteBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, bProps.Mirror.Enabled, "test property hasn't changed")
 
-	err = api.EvictRemoteBucket(baseParams, m.bck)
+	err = api.EvictRemoteBucket(baseParams, m.bck, keepMD)
 	tassert.CheckFatal(t, err)
 
 	for _, objName := range m.objNames {
@@ -919,7 +924,11 @@ func TestEvictRemoteBucket(t *testing.T) {
 	}
 	bProps, err = api.HeadBucket(baseParams, m.bck)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, !bProps.Mirror.Enabled, "test property not reset")
+	if keepMD {
+		tassert.Fatalf(t, bProps.Mirror.Enabled, "test property was reset")
+	} else {
+		tassert.Fatalf(t, !bProps.Mirror.Enabled, "test property not reset")
+	}
 }
 
 func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, objName, fqn string,

@@ -152,7 +152,7 @@ func evictBucket(c *cli.Context, bck cmn.Bck) (err error) {
 	if err = ensureHasProvider(bck, c.Command.Name); err != nil {
 		return
 	}
-	if err = api.EvictRemoteBucket(defaultAPIParams, bck); err != nil {
+	if err = api.EvictRemoteBucket(defaultAPIParams, bck, flagIsSet(c, keepMDFlag)); err != nil {
 		return
 	}
 	fmt.Fprintf(c.App.Writer, "%q bucket evicted\n", bck)

@@ -253,11 +253,31 @@ shard-1.tar	16.00KiB	1
 ...
 ```
 
-## Evict cloud bucket
+## Evict remote bucket
 
 `ais evict BUCKET_NAME`
 
-Evict a cloud bucket. It also resets the properties of the bucket (if changed).
+Evict a [remote bucket](../../../docs/bucket.md/#cloud-bucket). It also resets the properties of the bucket (if changed).
+All data from the remote bucket stored in the cluster will be removed, and AIS will stop keeping track of the remote bucket.
+Read more about this feature [here](../../../docs/bucket.md/#evict-remote-bucket).
+
+Various flags that can be used with this command are below.
+```console
+$ ais evict aws://abc/
+"aws://abc" bucket evicted
+
+# Dry run: the cluster will not be modified
+$ ais evict --dry-run aws://abc/
+[DRY RUN] No modifications on the cluster
+EVICT: "aws://abc"
+
+# Only evict the remote bucket's data (AIS will retain the bucket's metadata)
+$ ais evict --keep-md aws://abc/
+"aws://abc" bucket evicted
+```
+
+Note: When an [HDFS bucket](../../../docs/bucket.md/#hdfs-provider) is evicted, AIS will only delete objects stored in the cluster.
+AIS will retain the bucket's metadata to allow the bucket to re-register later.
 
 ## Move or Rename a bucket
 

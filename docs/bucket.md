@@ -12,7 +12,7 @@
     - [Configuration](#configuration)
     - [Usage](#usage)
   - [Prefetch/Evict Objects](#prefetchevict-objects)
-  - [Evict Cloud Bucket](#evict-cloud-bucket)
+  - [Evict Remote Bucket](#evict-remote-bucket)
 - [Backend Bucket](#backend-bucket)
 - [Bucket Properties](#bucket-properties)
   - [CLI examples: listing and setting bucket properties](#cli-examples-listing-and-setting-bucket-properties)
@@ -320,19 +320,22 @@ To use a [range operation](batch.md#range) to evict the 1000th to 2000th objects
 $ ais evict aws://abc --template "__tst/test-{1000..2000}"
 ```
 
-### Evict Cloud Bucket
+### Evict Remote Bucket
 
-Before a cloud bucket is accessed through AIS, the cluster has no awareness of the bucket.
+Before a remote bucket is accessed through AIS, the cluster has no awareness of the bucket.
 
 Once there is a request to access the bucket, or a request to change the bucket's properties (see `set bucket props` in [REST API](http_api.md)), then the AIS cluster starts keeping track of the bucket.
 
-In an evict bucket operation, AIS will remove all traces of the cloud bucket within the AIS cluster. This effectively resets the AIS cluster to the point before any requests to the bucket have been made. This does not affect the objects stored within the cloud bucket.
+In an evict bucket operation, AIS will remove all traces of the remote bucket within the AIS cluster. This effectively resets the AIS cluster to the point before any requests to the bucket have been made. This does not affect the objects stored within the remote bucket.
 
-For example, to evict `abc` cloud bucket from the AIS cluster, run:
+For example, to evict `abc` remote bucket from the AIS cluster, run:
 
 ```console
 $ ais evict aws://abc
 ```
+
+Note: When an HDFS bucket is evicted, AIS will only delete objects stored in the cluster. AIS will retain the bucket's metadata to allow the bucket to re-register later.
+This behavior can be applied to other remote buckets by using the `--keep-md` flag with `ais evict`.
 
 ## Backend Bucket
 
