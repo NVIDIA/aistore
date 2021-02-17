@@ -98,10 +98,10 @@ func (r *XactPut) Do(req *Request, lom *cluster.LOM) error {
 	default:
 		return fmt.Errorf("invalid request's action %s for putxaction", req.Action)
 	}
-	return r.dispatchReqest(req, lom)
+	return r.dispatchRequest(req, lom)
 }
 
-func (r *XactPut) dispatchReqest(req *Request, lom *cluster.LOM) error {
+func (r *XactPut) dispatchRequest(req *Request, lom *cluster.LOM) error {
 	r.IncPending()
 	if !r.ecRequestsEnabled() {
 		r.DecPending()
@@ -227,7 +227,7 @@ func (r *XactPut) dispatchDecodingRequest(req *Request, lom *cluster.LOM) {
 		return
 	}
 
-	r.dispatchReqest(req, lom)
+	r.dispatchRequest(req, lom)
 }
 
 type ExtECPutStats struct {

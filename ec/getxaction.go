@@ -136,10 +136,10 @@ func (r *XactGet) Do(req *Request, lom *cluster.LOM) error {
 	}
 
 	r.stats.updateDecode()
-	return r.dispatchReqest(req, lom)
+	return r.dispatchRequest(req, lom)
 }
 
-func (r *XactGet) dispatchReqest(req *Request, lom *cluster.LOM) error {
+func (r *XactGet) dispatchRequest(req *Request, lom *cluster.LOM) error {
 	r.IncPending()
 	if !r.ecRequestsEnabled() {
 		err := fmt.Errorf("EC on bucket %s is being disabled, no EC requests accepted", r.bck)
@@ -276,7 +276,7 @@ func (r *XactGet) dispatchEncodingRequest(req *Request, lom *cluster.LOM) {
 		return
 	}
 
-	r.dispatchReqest(req, lom)
+	r.dispatchRequest(req, lom)
 }
 
 //
