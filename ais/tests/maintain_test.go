@@ -13,7 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/fs"
@@ -122,10 +121,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 // TODO: Run only with long tests when the test is stable.
 func TestMaintenanceMD(t *testing.T) {
 	// NOTE: This function requires local deployment as it checks local file system for VMDs.
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
-	if containers.DockerRunning() {
-		t.Skip("skipping in docker")
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal})
 
 	var (
 		proxyURL   = tutils.RandomProxyURL(t)

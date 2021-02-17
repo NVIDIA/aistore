@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools/tutils/readers"
 	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 )
@@ -129,7 +130,9 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 			tb.Skipf("%s requires a cloud bucket", tb.Name())
 		}
 	}
-	if args.RequiredDeployment == ClusterTypeK8s {
+
+	switch args.RequiredDeployment {
+	case ClusterTypeK8s:
 		// NOTE: The test suite doesn't have to be deployed on K8s, the cluster has to be.
 		isK8s, err := isClusterK8s()
 		if err != nil {
@@ -138,11 +141,15 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 		if !isK8s {
 			tb.Skipf("%s requires Kubernetes", tb.Name())
 		}
-	} else if args.RequiredDeployment == ClusterTypeLocal {
+	case ClusterTypeLocal:
 		isLocal, err := isClusterLocal()
 		tassert.CheckFatal(tb, err)
 		if !isLocal {
 			tb.Skipf("%s requires local deployment", tb.Name())
+		}
+	case ClusterTypeDocker:
+		if !containers.DockerRunning() {
+			tb.Skipf("%s requires docker deployment", tb.Name())
 		}
 	}
 

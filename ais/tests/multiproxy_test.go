@@ -156,9 +156,6 @@ func nodeCrashRestoreDifferentIP(t *testing.T) {
 func killRestoreDiffIP(t *testing.T, nodeType string) {
 	// NOTE: This function requires local deployment as it changes node config
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal})
-	if containers.DockerRunning() {
-		t.Skip("skipping in docker")
-	}
 
 	var (
 		proxyURL                      = tutils.GetPrimaryURL()
@@ -342,10 +339,7 @@ func addNodeDuplicateDaemonID(t *testing.T) {
 // TODO: add test for target that tries to join with duplicate DaemonID and contains user-data
 func _addNodeDuplicateDaemonID(t *testing.T, nodeType string) {
 	// NOTE: This function requires local deployment as it changes node config
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
-	if containers.DockerRunning() {
-		t.Skip("skipping in docker")
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal})
 
 	var (
 		proxyURL = tutils.GetPrimaryURL()
@@ -405,10 +399,7 @@ func addNodeDuplicateIP(t *testing.T) {
 // NOTE: Test assumes that the randomly chosen node is healthy (i.e. doesn't terminate or restart)
 func _addNodeDuplicateIP(t *testing.T, nodeType string) {
 	// NOTE: This function requires local deployment as it changes node config
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
-	if containers.DockerRunning() {
-		t.Skip("skipping in docker")
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal})
 
 	var (
 		proxyURL = tutils.GetPrimaryURL()
@@ -1309,9 +1300,7 @@ func networkFailurePrimary(t *testing.T) {
 }
 
 func networkFailure(t *testing.T) {
-	if !containers.DockerRunning() {
-		t.Skip("Network failure test requires Docker cluster")
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeDocker})
 
 	t.Run("Target network disconnect", networkFailureTarget)
 	t.Run("Secondary proxy network disconnect", networkFailureProxy)

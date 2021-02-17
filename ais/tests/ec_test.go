@@ -1965,10 +1965,7 @@ func TestECEmergencyMpath(t *testing.T) {
 }
 
 func TestECRebalance(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-	if containers.DockerRunning() {
-		t.Skip(fmt.Sprintf("test %q requires direct access to filesystem, doesn't work with docker", t.Name()))
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RequiredDeployment: tutils.ClusterTypeLocal})
 
 	var (
 		bck = cmn.Bck{
@@ -1998,9 +1995,7 @@ func TestECRebalance(t *testing.T) {
 }
 
 func TestECMountpaths(t *testing.T) {
-	if containers.DockerRunning() {
-		t.Skip(fmt.Sprintf("test %q requires direct access to filesystem, doesn't work with docker", t.Name()))
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal})
 
 	var (
 		bck = cmn.Bck{
@@ -2170,10 +2165,7 @@ func TestECBucketEncode(t *testing.T) {
 // Creates two buckets (with EC enabled and disabled), fill them with data,
 // and then runs two parallel rebalances
 func TestECAndRegularRebalance(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-	if containers.DockerRunning() {
-		t.Skip(fmt.Sprintf("test %q requires direct access to filesystem, doesn't work with docker", t.Name()))
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RequiredDeployment: tutils.ClusterTypeLocal})
 
 	var (
 		bckReg = cmn.Bck{
@@ -2401,10 +2393,8 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 // 8. Stop reading loop and read all objects once more (nothing should fail)
 // 9. Get the number of objects in the bucket (must be the same as at start)
 func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-	if containers.DockerRunning() {
-		t.Skip(fmt.Sprintf("test %q requires direct access to filesystem, doesn't work with docker", t.Name()))
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RequiredDeployment: tutils.ClusterTypeLocal})
+
 	var (
 		bckEC = cmn.Bck{
 			Name:     testBucketName + "-EC",
