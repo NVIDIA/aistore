@@ -58,16 +58,18 @@ type (
 		Size  int64
 	}
 
-	// ReqArgs specifies http request that we want to send
+	// ReqArgs specifies HTTP request that we want to send.
 	ReqArgs struct {
 		Method string      // GET, POST, ...
 		Header http.Header // request headers
 		Base   string      // base URL: http://xyz.abc
 		Path   string      // path URL: /x/y/z
-		Query  url.Values  // query: ?x=y&y=z
+		Query  url.Values  // query: ?a=x&b=y
 		Body   []byte      // body for [POST, PUT, ...]
 		// BodyR is an alternative to `Body` to avoid unnecessary allocations
 		// when body for [POST, PUT, ...] is in stored `io.Reader`.
+		// If non-nil and implements `io.Closer`, it will be closed by `client.Do`,
+		// even on errors.
 		BodyR io.Reader
 	}
 
