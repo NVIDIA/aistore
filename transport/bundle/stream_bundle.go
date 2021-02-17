@@ -7,7 +7,6 @@ package bundle
 
 import (
 	"fmt"
-	"io"
 	"sync"
 	"unsafe"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/transport"
 )
 
@@ -40,7 +40,7 @@ type (
 		extra        transport.Extra
 		lid          string
 		rxNodeType   int // receiving nodes: [Targets, ..., AllNodes ] enum above
-		multiplier   int // optionally, greater than 1 number of streams per destination (with round-robin selection)
+		multiplier   int // optionally: multiple streams per destination (round-robin)
 		manualResync bool
 	}
 	BundleStats map[string]*transport.Stats // by DaemonID
@@ -131,28 +131,32 @@ func (sb *Streams) Close(gracefully bool) {
 // when (nodes == nil) transmit via all established streams in a bundle
 // otherwise, restrict to the specified subset (nodes)
 func (sb *Streams) Send(obj *transport.Obj, roc cmn.ReadOpenCloser, nodes ...*cluster.Snode) (err error) {
-	var (
-		streams = sb.get()
-		reopen  bool
-	)
+	streams := sb.get()
 	if len(streams) == 0 {
 		err = fmt.Errorf("no streams %s => .../%s", sb.lsnode, sb.trname)
-		return
-	}
-	if obj.IsUnsized() && sb.extra.SizePDU == 0 {
-		err = fmt.Errorf("[%s/%s] sending unsized object supported only with PDUs", obj.Hdr.Bck.String(), obj.Hdr.ObjName)
-		return
+	} else if nodes != nil && len(nodes) == 0 {
+		err = fmt.Errorf("no destinations %s => .../%s", sb.lsnode, sb.trname)
+	} else if obj.IsUnsized() && sb.extra.SizePDU == 0 {
+		err = fmt.Errorf("[%s/%s] sending unsized object supported only with PDUs",
+			obj.Hdr.Bck.String(), obj.Hdr.ObjName)
 	}
 
+	debug.AssertNoErr(err)
 	if obj.Callback == nil {
 		obj.Callback = sb.extra.Callback
 	}
 	if obj.IsHeaderOnly() {
 		roc = nil
 	}
-	if nodes == nil {
-		obj.SetPrc(len(streams))
+	if err != nil {
+		// compare w/ transport doCmpl()
+		_doCmpl(obj, roc, err)
+		return
+	}
 
+	if nodes == nil {
+		var reopen bool
+		obj.SetPrc(len(streams))
 		// Reader-reopening logic: since the streams in a bundle are mutually independent
 		// and asynchronous, reader.Open() (aka reopen) is skipped for the 1st replica
 		// that we put on the wire and is done for the 2nd, 3rd, etc. replicas.
@@ -165,16 +169,19 @@ func (sb *Streams) Send(obj *transport.Obj, roc cmn.ReadOpenCloser, nodes ...*cl
 			reopen = true
 		}
 	} else {
-		// first, find out whether the designated streams are present
+		// first, check streams vs destinations
 		for _, di := range nodes {
-			if _, ok := streams[di.ID()]; !ok {
-				err = fmt.Errorf("%s: destination mismatch: stream => %s %s", sb, di, cmn.DoesNotExist)
-				return
+			if _, ok := streams[di.ID()]; ok {
+				continue
 			}
+			err = fmt.Errorf("%s: destination mismatch: stream => %s %s", sb, di, cmn.DoesNotExist)
+			_doCmpl(obj, roc, err) // ditto
+			return
 		}
 		obj.SetPrc(len(nodes))
 
 		// second, do send. Same comment wrt reopening.
+		var reopen bool
 		for _, di := range nodes {
 			robin := streams[di.ID()]
 			if err = sb.sendOne(obj, roc, robin, reopen); err != nil {
@@ -184,6 +191,15 @@ func (sb *Streams) Send(obj *transport.Obj, roc cmn.ReadOpenCloser, nodes ...*cl
 		}
 	}
 	return
+}
+
+func _doCmpl(obj *transport.Obj, roc cmn.ReadOpenCloser, err error) {
+	if roc != nil {
+		cmn.Close(roc)
+	}
+	if obj.Callback != nil {
+		obj.Callback(obj.Hdr, roc, obj.CmplPtr, err)
+	}
 }
 
 func (sb *Streams) String() string { return sb.lid }
@@ -221,26 +237,25 @@ func (sb *Streams) get() (bun bundle) {
 }
 
 // one obj, one stream
-func (sb *Streams) sendOne(obj *transport.Obj, roc cmn.ReadOpenCloser, robin *robin, reopen bool) (err error) {
+func (sb *Streams) sendOne(obj *transport.Obj, roc cmn.ReadOpenCloser, robin *robin, reopen bool) error {
 	one := transport.AllocSend()
 	*one = *obj
 	one.Reader = roc // reduce to io.ReadCloser
 	if reopen && roc != nil {
-		var reader io.ReadCloser
-		if reader, err = roc.Open(); err != nil { // reopen for every destination
-			return fmt.Errorf("unexpected: %s failed to reopen reader, err: %v", sb, err)
+		if reader, err := roc.Open(); err == nil { // reopen for every destination
+			one.Reader = reader
+		} else {
+			err := fmt.Errorf("%s failed to reopen %q reader: %v", sb, obj, err)
+			debug.AssertNoErr(err) // must never happen
+			return err
 		}
-		one.Reader = reader
 	}
 	i := 0
 	if sb.multiplier > 1 {
 		i = int(robin.i.Inc()) % len(robin.stsdest)
 	}
 	s := robin.stsdest[i]
-	if err = s.Send(one); err != nil {
-		transport.FreeSend(one)
-	}
-	return
+	return s.Send(one)
 }
 
 func (sb *Streams) apply(action int) {

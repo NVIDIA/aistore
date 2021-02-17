@@ -529,9 +529,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 			lr := cmn.NopReader(req.RecordObj.MetadataSize + req.RecordObj.Size)
 			r := cmn.NopOpener(ioutil.NopCloser(lr))
 			o.Hdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
-			if err := ds.streams.response.Send(o, r, fromNode); err != nil {
-				ds.m.abort(err)
-			}
+			ds.streams.response.Send(o, r, fromNode)
 			return
 		}
 
@@ -544,19 +542,14 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 				errHandler(err, fromNode, o)
 				return
 			}
-			if err := ds.streams.response.Send(o, r, fromNode); err != nil {
-				ds.m.abort(err)
-			}
+			ds.streams.response.Send(o, r, fromNode)
 		case extract.SGLStoreType:
 			v, ok := ds.m.recManager.RecordContents().Load(fullContentPath)
 			cmn.AssertMsg(ok, fullContentPath)
 			ds.m.recManager.RecordContents().Delete(fullContentPath)
 			sgl := v.(*memsys.SGL)
 			o.Hdr.ObjAttrs.Size = sgl.Size()
-			if err := ds.streams.response.Send(o, sgl, fromNode); err != nil {
-				sgl.Free() // NOTE: sgl.Close() is a no-op
-				ds.m.abort(err)
-			}
+			ds.streams.response.Send(o, sgl, fromNode)
 		case extract.DiskStoreType:
 			f, err := cmn.NewFileHandle(fullContentPath)
 			if err != nil {
@@ -570,9 +563,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 				return
 			}
 			o.Hdr.ObjAttrs.Size = fi.Size()
-			if err := ds.streams.response.Send(o, f, fromNode); err != nil {
-				ds.m.abort(err)
-			}
+			ds.streams.response.Send(o, f, fromNode)
 		default:
 			cmn.Assert(false)
 		}

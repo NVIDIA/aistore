@@ -5,7 +5,6 @@
 package ec
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -186,7 +185,8 @@ func (r *xactECBase) newReplicaResponse(attrs *transport.ObjectAttrs, bck *clust
 // encoding or to send requested "object" to a client. In the latter case
 // if the local object does not exist, it sends an empty body and sets
 // exists=false in response header
-func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck, objName, id string, md *Metadata) (err error) {
+func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck, objName, id string,
+	md *Metadata) (err error) {
 	var (
 		reader   cmn.ReadOpenCloser
 		objAttrs transport.ObjectAttrs
@@ -212,7 +212,7 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 
 	r.ObjectsInc()
 	r.BytesAdd(objAttrs.Size)
-
+	r.IncPending()
 	cb := func(hdr transport.ObjHdr, c io.ReadCloser, _ unsafe.Pointer, err error) {
 		r.t.SmallMMSA().Free(hdr.Opaque)
 		if err != nil {
@@ -234,8 +234,8 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 //		- true - send lightweight request to all targets (usually reader is nil
 //			in this case)
 //	    - false - send a slice/replica/metadata to targets
-func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr,
-	reader cmn.ReadOpenCloser, cb transport.ObjSentCB, isRequest bool) error {
+func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr, reader cmn.ReadOpenCloser,
+	cb transport.ObjSentCB, isRequest bool) error {
 	nodes := make([]*cluster.Snode, 0, len(daemonIDs))
 	smap := r.smap.Get()
 	for _, id := range daemonIDs {
@@ -246,11 +246,6 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr,
 		}
 		nodes = append(nodes, si)
 	}
-
-	if len(nodes) == 0 {
-		return errors.New("destination list is empty")
-	}
-
 	var (
 		err error
 		o   = transport.AllocSend()

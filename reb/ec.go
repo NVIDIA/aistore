@@ -313,54 +313,51 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) (err error) {
 		}
 		lom.Lock(false)
 		if err = lom.Load(false); err != nil {
-			goto reterr
+			lom.Unlock(false)
+			cluster.FreeLOM(lom)
+			return
 		}
 	} else {
 		lom = nil // sending slice; TODO: rlock
 	}
 	// open
 	if fh, err = cmn.NewFileHandle(fqn); err != nil {
-		goto reterr
+		if lom != nil {
+			lom.Unlock(false)
+			cluster.FreeLOM(lom)
+		}
+		return
 	}
 	// transmit
-	{
-		req := pushReq{daemonID: reb.t.SID(), stage: rebStageECRepair, rebID: reb.rebID.Load(), md: ct.meta}
-		o := transport.AllocSend()
-		o.Hdr = transport.ObjHdr{
-			Bck:      ct.Bck,
-			ObjName:  ct.ObjName,
-			ObjAttrs: transport.ObjectAttrs{Size: ct.ObjSize},
-		}
-		if lom != nil {
-			o.Hdr.ObjAttrs.Atime = lom.AtimeUnix()
-			o.Hdr.ObjAttrs.Version = lom.Version()
-			if cksum := lom.Cksum(); cksum != nil {
-				o.Hdr.ObjAttrs.CksumType, o.Hdr.ObjAttrs.CksumValue = cksum.Get()
-			}
-		}
-		if ct.SliceID != 0 {
-			o.Hdr.ObjAttrs.Size = ec.SliceSize(ct.ObjSize, int(ct.DataSlices))
-		}
-		reb.ec.onAir.Inc()
-		o.Hdr.Opaque = req.NewPack(nil, rebMsgEC)
-		o.Callback = reb.transportECCB
-		o.CmplPtr = unsafe.Pointer(lom)
-		if err = reb.dm.Send(o, fh, target); err != nil {
-			reb.ec.onAir.Dec()
-			err = fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
-			goto reterr
-		}
-		reb.statTracker.AddMany(
-			stats.NamedVal64{Name: stats.RebTxCount, Value: 1},
-			stats.NamedVal64{Name: stats.RebTxSize, Value: o.Hdr.ObjAttrs.Size},
-		)
+	req := pushReq{daemonID: reb.t.SID(), stage: rebStageECRepair, rebID: reb.rebID.Load(), md: ct.meta}
+	o := transport.AllocSend()
+	o.Hdr = transport.ObjHdr{
+		Bck:      ct.Bck,
+		ObjName:  ct.ObjName,
+		ObjAttrs: transport.ObjectAttrs{Size: ct.ObjSize},
 	}
-	return
-reterr:
 	if lom != nil {
-		lom.Unlock(false)
-		cluster.FreeLOM(lom)
+		o.Hdr.ObjAttrs.Atime = lom.AtimeUnix()
+		o.Hdr.ObjAttrs.Version = lom.Version()
+		if cksum := lom.Cksum(); cksum != nil {
+			o.Hdr.ObjAttrs.CksumType, o.Hdr.ObjAttrs.CksumValue = cksum.Get()
+		}
 	}
+	if ct.SliceID != 0 {
+		o.Hdr.ObjAttrs.Size = ec.SliceSize(ct.ObjSize, int(ct.DataSlices))
+	}
+	reb.ec.onAir.Inc()
+	o.Hdr.Opaque = req.NewPack(nil, rebMsgEC)
+	o.Callback = reb.transportECCB
+	o.CmplPtr = unsafe.Pointer(lom)
+	if err = reb.dm.Send(o, fh, target); err != nil {
+		err = fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
+		return
+	}
+	reb.statTracker.AddMany(
+		stats.NamedVal64{Name: stats.RebTxCount, Value: 1},
+		stats.NamedVal64{Name: stats.RebTxSize, Value: o.Hdr.ObjAttrs.Size},
+	)
 	return
 }
 
@@ -415,7 +412,6 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 	reb.ec.onAir.Inc()
 	o.Callback = reb.transportECCB
 	if err := reb.dm.Send(o, reader, target); err != nil {
-		reb.ec.onAir.Dec()
 		reb.ec.ackCTs.remove(rt)
 		return fmt.Errorf("failed to send slices to node %s: %v", target, err)
 	}

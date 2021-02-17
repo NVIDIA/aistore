@@ -143,8 +143,6 @@ func (r *XactRespond) trySendCT(iReq intraReq, bck *cluster.Bck, objName string)
 
 // DispatchReq is responsible for handling request from other targets
 func (r *XactRespond) DispatchReq(iReq intraReq, bck *cluster.Bck, objName string) {
-	r.IncPending()
-	doCleanup := true
 	switch iReq.act {
 	case reqDel:
 		// object cleanup request: delete replicas, slices and metafiles
@@ -153,17 +151,12 @@ func (r *XactRespond) DispatchReq(iReq intraReq, bck *cluster.Bck, objName strin
 		}
 	case reqGet:
 		err := r.trySendCT(iReq, bck, objName)
-		// When err==nil, the data is sent by transport and the callback cleans everything up
-		doCleanup = err != nil
 		if err != nil {
 			glog.Error(err)
 		}
 	default:
 		// invalid request detected
 		glog.Errorf("Invalid request type %d", iReq.act)
-	}
-	if doCleanup {
-		r.DecPending()
 	}
 }
 

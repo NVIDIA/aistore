@@ -377,7 +377,6 @@ func (reb *Manager) changeStage(newStage uint32, batchID int64) {
 	// second, notify all
 	if err := reb.pushes.Send(&transport.Obj{Hdr: hdr, Callback: reb.pushSentCallback}, nil); err != nil {
 		glog.Warningf("Failed to broadcast ack %s: %v", stages[newStage], err)
-		mm.Free(hdr.Opaque)
 	}
 }
 
@@ -500,11 +499,12 @@ func (reb *Manager) retransmit(md *rebArgs) (cnt int) {
 		return
 	}
 	var (
-		rj = &rebalanceJogger{joggerBase: joggerBase{
+		rj = &rebJogger{joggerBase: joggerBase{
 			m: reb, xreb: &reb.xact().RebBase,
 			wg: &sync.WaitGroup{},
 		}, smap: md.smap}
-		query = url.Values{}
+		query  = url.Values{}
+		loghdr = reb.logHdr(md)
 	)
 	query.Add(cmn.URLParamSilent, "true")
 	for _, lomAck := range reb.lomAcks() {
@@ -512,9 +512,9 @@ func (reb *Manager) retransmit(md *rebArgs) (cnt int) {
 		for uname, lom := range lomAck.q {
 			if err := lom.Load(false); err != nil {
 				if cmn.IsObjNotExist(err) {
-					glog.Warningf("%s: %s %s", reb.logHdr(md), lom, cmn.DoesNotExist)
+					glog.Warningf("%s: %s %s", loghdr, lom, cmn.DoesNotExist)
 				} else {
-					glog.Errorf("%s: failed loading %s, err: %s", reb.logHdr(md), lom, err)
+					glog.Errorf("%s: failed loading %s, err: %s", loghdr, lom, err)
 				}
 				delete(lomAck.q, uname)
 				continue
@@ -522,17 +522,19 @@ func (reb *Manager) retransmit(md *rebArgs) (cnt int) {
 			tsi, _ := cluster.HrwTarget(lom.Uname(), md.smap)
 			if reb.t.LookupRemoteSingle(lom, tsi) {
 				if glog.FastV(4, glog.SmoduleReb) {
-					glog.Infof("%s: HEAD ok %s at %s", reb.logHdr(md), lom, tsi)
+					glog.Infof("%s: HEAD ok %s at %s", loghdr, lom, tsi)
 				}
 				delete(lomAck.q, uname)
 				continue
 			}
-			// send obj
-			if err := rj.send(lom, tsi, false /*addAck*/); err == nil {
-				glog.Warningf("%s: resending %s => %s", reb.logHdr(md), lom, tsi)
+			// retransmit
+			if file, err := rj.prepSend(lom); err == nil {
+				rj.doSend(lom, tsi, file)
+				glog.Warningf("%s: retransmitting %s => %s", loghdr, lom, tsi)
 				cnt++
 			} else {
-				glog.Errorf("%s: failed resending %s => %s, err: %v", reb.logHdr(md), lom, tsi, err)
+				lom.Unlock(false)
+				glog.Errorf("%s: failed to retransmit %s => %s: %v", loghdr, lom, tsi, err)
 			}
 			if aborted() {
 				lomAck.mu.Unlock()

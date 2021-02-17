@@ -48,7 +48,7 @@ type (
 		Offset         atomic.Int64 // stream offset, in bytes
 		CompressedSize atomic.Int64 // compressed size (NOTE: converges to the actual compressed size over time)
 	}
-	EndpointStats map[uint64]*Stats // all stats for a given http endpoint defined by a tuple(network, trname) by session ID
+	EndpointStats map[uint64]*Stats // all stats for a given (network, trname) endpoint indexed by session ID
 
 	// object attrs
 	ObjectAttrs struct {
@@ -69,7 +69,7 @@ type (
 	Obj struct {
 		Hdr      ObjHdr         // object header
 		Reader   io.ReadCloser  // reader, to read the object, and close when done
-		Callback ObjSentCB      // callback fired when sending is done OR when the stream terminates (see term.reason)
+		Callback ObjSentCB      // fired when sending is done OR when the stream terminates (see term.reason)
 		CmplPtr  unsafe.Pointer // local pointer that gets returned to the caller via Send completion callback
 		prc      *atomic.Int64  // private; if present, ref-counts to call ObjSentCB only once
 	}
@@ -141,12 +141,12 @@ func NewObjStream(client Client, toURL string, extra *Extra) (s *Stream) {
 //   stream(s).
 func (s *Stream) Send(obj *Obj) (err error) {
 	debug.Assert(len(obj.Hdr.Opaque) < len(s.maxheader)-int(unsafe.Sizeof(Obj{})))
+
 	if err = s.startSend(obj); err != nil {
-		if obj.Reader != nil {
-			cmn.Close(obj.Reader) // NOTE: always closing
-		}
+		s.doCmpl(obj, err) // take a shortcut
 		return
 	}
+
 	// reader == nil iff is-header-only
 	debug.Func(func() {
 		if obj.Reader == nil {
@@ -156,6 +156,7 @@ func (s *Stream) Send(obj *Obj) (err error) {
 			debug.AssertMsg(val.IsNil(), obj.String())
 		}
 	})
+
 	s.workCh <- obj
 	if verbose {
 		glog.Infof("%s: send %s[sq=%d]", s, obj, len(s.workCh))

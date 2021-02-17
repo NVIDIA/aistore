@@ -1208,7 +1208,7 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 }
 
 // streaming send via bundle.DataMover
-func _sendObjDM(lom *cluster.LOM, params *cluster.SendToParams) (err error) {
+func _sendObjDM(lom *cluster.LOM, params *cluster.SendToParams) error {
 	o := transport.AllocSend()
 	hdr, meta := &o.Hdr, params.HdrMeta
 	{
@@ -1224,10 +1224,7 @@ func _sendObjDM(lom *cluster.LOM, params *cluster.SendToParams) (err error) {
 	o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
 		cluster.FreeLOM(lom)
 	}
-	if err = params.DM.Send(o, params.Reader, params.Tsi); err != nil {
-		o.Callback(transport.ObjHdr{}, nil, nil, nil)
-	}
-	return
+	return params.DM.Send(o, params.Reader, params.Tsi)
 }
 
 ///////////////
