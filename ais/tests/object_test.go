@@ -1121,6 +1121,7 @@ func TestRangeRead(t *testing.T) {
 		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=-1-2")
 		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=10--1")
 		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=1-2,4-6")
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=--1")
 	})
 }
 

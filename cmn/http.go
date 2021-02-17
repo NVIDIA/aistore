@@ -291,7 +291,8 @@ func (r HTTPRange) ContentRange(size int64) string {
 	return fmt.Sprintf("%s%d-%d/%d", HeaderContentRangeValPrefix, r.Start, r.Start+r.Length-1, size)
 }
 
-// TODO: simplify the range logic
+// ParseMultiRange parses a Range header string as per RFC 7233.
+// ErrNoOverlap is returned if none of the ranges overlap.
 func ParseMultiRange(s string, size int64) (ranges []HTTPRange, err error) {
 	if s == "" {
 		return nil, nil // header not present
@@ -317,10 +318,14 @@ func ParseMultiRange(s string, size int64) (ranges []HTTPRange, err error) {
 
 		var r HTTPRange
 		if start == "" {
-			// If no start is specified, end specifies the
-			// range start relative to the end of the file.
+			// If no start is specified, end specifies the range start relative
+			// to the end of the file, and we are dealing with <suffix-length>
+			// which has to be a non-negative integer as per RFC 7233 Section 2.1 "Byte-Ranges".
+			if end == "" || end[0] == '-' {
+				return nil, errors.New("invalid range")
+			}
 			i, err := strconv.ParseInt(end, 10, 64)
-			if err != nil {
+			if i < 0 || err != nil {
 				return nil, errors.New("invalid range")
 			}
 
