@@ -14,7 +14,6 @@ import (
 	"os"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -195,7 +194,7 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cmn.ReadOpenClos
 	// _ io.ReadCloser: pass copyMisssingReplicas reader argument(memsys.SGL type)
 	// instead of callback's reader argument(memsys.Reader type) to freeObject
 	// Reason: memsys.Reader does not provide access to internal memsys.SGL that must be freed
-	cb := func(hdr transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, err error) {
+	cb := func(hdr transport.ObjHdr, _ io.ReadCloser, _ interface{}, err error) {
 		if err != nil {
 			glog.Errorf("%s failed to send %s to %v: %v",
 				c.parent.t.Snode(), ctx.lom, daemons, err)
@@ -708,7 +707,7 @@ func (c *getJogger) uploadRestoredSlices(ctx *restoreCtx, slices []*slice) error
 
 		// Every slice's SGL is freed upon transfer completion
 		cb := func(daemonID string, s *slice) transport.ObjSentCB {
-			return func(hdr transport.ObjHdr, reader io.ReadCloser, _ unsafe.Pointer, err error) {
+			return func(hdr transport.ObjHdr, reader io.ReadCloser, _ interface{}, err error) {
 				if err != nil {
 					glog.Errorf("%s failed to send %s to %v: %v", c.parent.t.Snode(), ctx.lom, daemonID, err)
 				}

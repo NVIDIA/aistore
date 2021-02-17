@@ -19,7 +19,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -1221,7 +1220,7 @@ func _sendObjDM(lom *cluster.LOM, params *cluster.SendToParams) error {
 		}
 		hdr.ObjAttrs.Version = meta.Version()
 	}
-	o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
+	o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
 		cluster.FreeLOM(lom)
 	}
 	return params.DM.Send(o, params.Reader, params.Tsi)

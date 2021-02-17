@@ -15,7 +15,6 @@ import (
 	"sort"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -368,7 +367,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) (err error) {
 }
 
 // send completion
-func (reb *Manager) transportECCB(_ transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
+func (reb *Manager) transportECCB(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
 	reb.ec.onAir.Dec()
 }
 

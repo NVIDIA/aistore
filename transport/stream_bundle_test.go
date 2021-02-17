@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
@@ -118,7 +117,7 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 		written, _ := io.Copy(ioutil.Discard, objReader)
 		cmn.Assert(written == hdr.ObjAttrs.Size || hdr.IsUnsized())
 	}
-	callback := func(_ transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
+	callback := func(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
 		numCompleted.Inc()
 	}
 

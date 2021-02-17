@@ -198,7 +198,7 @@ func _doCmpl(obj *transport.Obj, roc cmn.ReadOpenCloser, err error) {
 		cmn.Close(roc)
 	}
 	if obj.Callback != nil {
-		obj.Callback(obj.Hdr, roc, obj.CmplPtr, err)
+		obj.Callback(obj.Hdr, roc, obj.CmplArg, err)
 	}
 }
 

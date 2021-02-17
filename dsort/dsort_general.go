@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"sync"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -383,7 +382,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 			if ds.m.Metrics.extended {
 				beforeSend = mono.NanoTime()
 			}
-			o.Callback = func(hdr transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, err error) {
+			o.Callback = func(hdr transport.ObjHdr, r io.ReadCloser, _ interface{}, err error) {
 				if err != nil {
 					cbErr = err
 				}
@@ -520,8 +519,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 			beforeSend = mono.NanoTime()
 		}
 		o.Hdr = transport.ObjHdr{ObjName: req.Record.MakeUniqueName(req.RecordObj)}
-		o.Callback = ds.responseCallback
-		o.CmplPtr = unsafe.Pointer(&beforeSend)
+		o.Callback, o.CmplArg = ds.responseCallback, beforeSend
 
 		fullContentPath := ds.m.recManager.FullContentPath(req.RecordObj)
 
@@ -570,9 +568,9 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 	}
 }
 
-func (ds *dsorterGeneral) responseCallback(hdr transport.ObjHdr, rc io.ReadCloser, x unsafe.Pointer, err error) {
+func (ds *dsorterGeneral) responseCallback(hdr transport.ObjHdr, rc io.ReadCloser, x interface{}, err error) {
 	if ds.m.Metrics.extended {
-		dur := mono.Since(*(*int64)(x))
+		dur := mono.Since(x.(int64))
 		ds.m.Metrics.Creation.Lock()
 		ds.m.Metrics.Creation.LocalSendStats.updateTime(dur)
 		ds.m.Metrics.Creation.LocalSendStats.updateThroughput(hdr.ObjAttrs.Size, dur)

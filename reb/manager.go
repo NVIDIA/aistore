@@ -296,7 +296,7 @@ func (reb *Manager) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unp
 	}
 }
 
-func (reb *Manager) rackSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
+func (reb *Manager) rackSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
 	reb.t.SmallMMSA().Free(hdr.Opaque)
 }
 
@@ -380,7 +380,7 @@ func (reb *Manager) changeStage(newStage uint32, batchID int64) {
 	}
 }
 
-func (reb *Manager) pushSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
+func (reb *Manager) pushSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
 	reb.t.SmallMMSA().Free(hdr.Opaque)
 }
 

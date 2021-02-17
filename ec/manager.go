@@ -91,7 +91,7 @@ func (mgr *Manager) initECBundles() error {
 		return fmt.Errorf("failed to register respResponse: %v", err)
 	}
 
-	cbReq := func(hdr transport.ObjHdr, reader io.ReadCloser, _ unsafe.Pointer, err error) {
+	cbReq := func(hdr transport.ObjHdr, reader io.ReadCloser, _ interface{}, err error) {
 		if err != nil {
 			glog.Errorf("failed to request %s/%s: %v", hdr.Bck, hdr.ObjName, err)
 		}

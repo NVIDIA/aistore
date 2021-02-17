@@ -13,7 +13,6 @@ import (
 	"os"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -278,14 +277,14 @@ func (c *putJogger) encode(req *Request, lom *cluster.LOM) error {
 	return c.splitAndDistribute(ctx)
 }
 
-func (c *putJogger) ctSendCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, err error) {
+func (c *putJogger) ctSendCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ interface{}, err error) {
 	c.parent.t.SmallMMSA().Free(hdr.Opaque)
 	if err != nil {
 		glog.Errorf("failed to send o[%s/%s], err: %v", hdr.Bck, hdr.ObjName, err)
 	}
 }
 
-func (c *putJogger) replicaSendCallback(hdr transport.ObjHdr, reader io.ReadCloser, _ unsafe.Pointer, err error) {
+func (c *putJogger) replicaSendCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ interface{}, err error) {
 	if err != nil {
 		glog.Errorf("Failed to send %s/%s replica: %v", hdr.Bck, hdr.ObjName, err)
 	}
@@ -483,7 +482,7 @@ func (c *putJogger) sendSlice(ctx *encodeCtx, data *slice, node *cluster.Snode, 
 		isSlice:  true,
 		reqType:  reqPut,
 	}
-	sentCB := func(hdr transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, err error) {
+	sentCB := func(hdr transport.ObjHdr, _ io.ReadCloser, _ interface{}, err error) {
 		if data != nil {
 			data.release()
 		}

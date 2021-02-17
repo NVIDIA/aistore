@@ -213,7 +213,7 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 	r.ObjectsInc()
 	r.BytesAdd(objAttrs.Size)
 	r.IncPending()
-	cb := func(hdr transport.ObjHdr, c io.ReadCloser, _ unsafe.Pointer, err error) {
+	cb := func(hdr transport.ObjHdr, _ io.ReadCloser, _ interface{}, err error) {
 		r.t.SmallMMSA().Free(hdr.Opaque)
 		if err != nil {
 			glog.Errorf("Failed to send %s/%s: %v", hdr.Bck, hdr.ObjName, err)
@@ -383,10 +383,10 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 		Opaque:   putData,
 	}
 	oldCallback := cb
-	cb = func(hdr transport.ObjHdr, reader io.ReadCloser, ptr unsafe.Pointer, err error) {
+	cb = func(hdr transport.ObjHdr, reader io.ReadCloser, arg interface{}, err error) {
 		mm.Free(hdr.Opaque)
 		if oldCallback != nil {
-			oldCallback(hdr, reader, ptr, err)
+			oldCallback(hdr, reader, arg, err)
 		}
 	}
 	return r.sendByDaemonID(daemonIDs, hdr, src.reader, cb, false)

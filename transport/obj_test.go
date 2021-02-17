@@ -33,7 +33,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
@@ -134,7 +133,7 @@ func Example_headers() {
 
 func sendText(stream *transport.Stream, txt1, txt2 string) {
 	var wg sync.WaitGroup
-	cb := func(transport.ObjHdr, io.ReadCloser, unsafe.Pointer, error) {
+	cb := func(transport.ObjHdr, io.ReadCloser, interface{}, error) {
 		wg.Done()
 	}
 	sgl1 := MMSA.NewSGL(0)
@@ -543,10 +542,7 @@ func Test_DryRun(t *testing.T) {
 			reader := memsys.NewReader(sgl)
 			reader.Seek(i*hdr.ObjAttrs.Size, io.SeekStart)
 
-			obj := transport.AllocSend()
-			*obj = transport.Obj{Hdr: hdr, Reader: reader}
-			obj.CmplPtr = unsafe.Pointer(obj) // TODO -- FIXME
-			stream.Send(obj)
+			stream.Send(&transport.Obj{Hdr: hdr, Reader: reader})
 			num++
 			size += hdr.ObjAttrs.Size
 			if size-prevsize >= cmn.GiB*100 {
@@ -573,7 +569,7 @@ func Test_CompletionCount(t *testing.T) {
 		cmn.Assert(written == hdr.ObjAttrs.Size)
 		numReceived.Inc()
 	}
-	callback := func(_ transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
+	callback := func(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
 		numCompleted.Inc()
 	}
 
@@ -856,7 +852,7 @@ type randReaderCtx struct {
 	idx    int
 }
 
-func (rrc *randReaderCtx) sentCallback(hdr transport.ObjHdr, reader io.ReadCloser, _ unsafe.Pointer, err error) {
+func (rrc *randReaderCtx) sentCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ interface{}, err error) {
 	if err != nil {
 		rrc.t.Errorf("sent-callback %d(%s/%s) returned an error: %v", rrc.idx, hdr.Bck, hdr.ObjName, err)
 	}

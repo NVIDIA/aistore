@@ -12,7 +12,6 @@ import (
 	"os"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -620,9 +619,9 @@ func (m *Manager) unlock() {
 	m.mu.Unlock()
 }
 
-func (m *Manager) sentCallback(hdr transport.ObjHdr, rc io.ReadCloser, x unsafe.Pointer, err error) {
+func (m *Manager) sentCallback(hdr transport.ObjHdr, rc io.ReadCloser, x interface{}, err error) {
 	if m.Metrics.extended {
-		dur := mono.Since(*(*int64)(x))
+		dur := mono.Since(x.(int64))
 		m.Metrics.Creation.Lock()
 		m.Metrics.Creation.LocalSendStats.updateTime(dur)
 		m.Metrics.Creation.LocalSendStats.updateThroughput(hdr.ObjAttrs.Size, dur)

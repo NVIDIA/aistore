@@ -67,11 +67,11 @@ type (
 	}
 	// object to transmit
 	Obj struct {
-		Hdr      ObjHdr         // object header
-		Reader   io.ReadCloser  // reader, to read the object, and close when done
-		Callback ObjSentCB      // fired when sending is done OR when the stream terminates (see term.reason)
-		CmplPtr  unsafe.Pointer // local pointer that gets returned to the caller via Send completion callback
-		prc      *atomic.Int64  // private; if present, ref-counts to call ObjSentCB only once
+		Hdr      ObjHdr        // object header
+		Reader   io.ReadCloser // reader, to read the object, and close when done
+		Callback ObjSentCB     // fired when sending is done OR when the stream terminates (see term.reason)
+		CmplArg  interface{}   // Additional parameter which will be passed to the callback.
+		prc      *atomic.Int64 // private; if present, ref-counts to call ObjSentCB only once
 	}
 
 	// object-sent callback that has the following signature can optionally be defined on a:
@@ -80,7 +80,7 @@ type (
 	// Naturally, object callback "overrides" the per-stream one: when object callback is defined
 	// (i.e., non-nil), the stream callback is ignored/skipped.
 	// NOTE: if defined, the callback executes asynchronously as far as the sending part is concerned
-	ObjSentCB func(ObjHdr, io.ReadCloser, unsafe.Pointer, error)
+	ObjSentCB func(ObjHdr, io.ReadCloser, interface{}, error)
 
 	Msg struct {
 		Flags int64

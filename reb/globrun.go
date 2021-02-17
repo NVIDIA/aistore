@@ -558,12 +558,12 @@ func (rj *rebJogger) jog(mpathInfo *fs.MountpathInfo) {
 }
 
 // send completion
-func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, lom unsafe.Pointer, err error) {
+func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, arg interface{}, err error) {
 	rj.m.inQueue.Dec()
 
 	rj.m.t.SmallMMSA().Free(hdr.Opaque)
 	if err != nil {
-		rj.m.delLomAck((*cluster.LOM)(lom))
+		rj.m.delLomAck(arg.(*cluster.LOM))
 		si := rj.m.t.Snode()
 		glog.Errorf("%s: failed to send o[%s/%s], err: %v", si, hdr.Bck, hdr.ObjName, err)
 		return
@@ -676,7 +676,7 @@ func (rj *rebJogger) doSend(lom *cluster.LOM, tsi *cluster.Snode, roc cmn.ReadOp
 	o.Hdr.ObjAttrs.CksumType = lom.Cksum().Type()
 	o.Hdr.ObjAttrs.CksumValue = lom.Cksum().Value()
 	o.Hdr.ObjAttrs.Version = lom.Version()
-	o.Callback, o.CmplPtr = rj.objSentCallback, unsafe.Pointer(lom)
+	o.Callback, o.CmplArg = rj.objSentCallback, lom
 	rj.m.inQueue.Inc()
 	if err := rj.m.dm.Send(o, roc, tsi); err == nil {
 		rj.m.laterx.Store(true)

@@ -12,7 +12,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"sync"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
@@ -514,8 +513,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 		} else {
 			o := transport.AllocSend()
 			o.Hdr = hdr
-			o.Callback = ds.m.sentCallback
-			o.CmplPtr = unsafe.Pointer(&beforeSend)
+			o.Callback, o.CmplArg = ds.m.sentCallback, beforeSend
 			err = ds.streams.records.Send(o, r, toNode)
 		}
 		return
