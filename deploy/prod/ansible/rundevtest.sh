@@ -94,6 +94,11 @@ echo "----- K8S TESTS FINISHED WITH: ${exit_code} -----"
 # Deleting minikube cluster
 ./deploy/dev/k8s/stop.sh
 
+# Clean docker images cache - it takes tens of GBs if not cleaned regularly.
+if docker -v ; then
+  docker image prune -a
+fi
+
 # Running long tests
 deploy ${TARGET_COUNT:-6} ${PROXY_COUNT:-6} ${MPATH_COUNT:-4} ${USE_AWS:-y} ${USE_GCP:-y} ${USE_AZURE:-n} ${USE_HDFS:-n} ${USE_LOOPBACK:-y}
 for bucket in ${CLOUD_BCKS}; do
