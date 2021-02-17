@@ -781,12 +781,6 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		_          = cluster.NewTargetMock(cluster.NewBaseBownerMock(
-			cluster.NewBck(
-				m.bck.Name, m.bck.Provider, cmn.NsGlobal,
-				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}, BID: 0xa73b9f11},
-			),
-		))
 	)
 
 	m.init()
@@ -797,9 +791,17 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))
 	}
 
-	initMountpaths(t, proxyURL)
 	p, err := api.HeadBucket(baseParams, m.bck)
 	tassert.CheckFatal(t, err)
+
+	_ = cluster.NewTargetMock(cluster.NewBaseBownerMock(
+		cluster.NewBck(
+			m.bck.Name, m.bck.Provider, cmn.NsGlobal,
+			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}, Extra: p.Extra, BID: 0xa73b9f11},
+		),
+	))
+
+	initMountpaths(t, proxyURL)
 
 	m.puts()
 
