@@ -133,6 +133,7 @@ const (
 	// AuthN subcommands
 	subcmdAuthAdd     = "add"
 	subcmdAuthShow    = "show"
+	subcmdAuthSet     = commandSet
 	subcmdAuthUpdate  = "update"
 	subcmdAuthRemove  = commandRemove
 	subcmdAuthLogin   = "login"
@@ -141,6 +142,7 @@ const (
 	subcmdAuthRole    = "role"
 	subcmdAuthCluster = "cluster"
 	subcmdAuthToken   = "token"
+	subcmdAuthConfig  = subcmdConfig
 
 	// Warm up subcommands
 	subcmdPreload = "preload"

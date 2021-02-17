@@ -99,9 +99,10 @@ func initializeDB(driver dbdriver.Driver) error {
 // Creates a new user manager. If user DB exists, it loads the data from the
 // file and decrypts passwords
 func newUserManager(driver dbdriver.Driver) (*userManager, error) {
-	clientHTTP := cmn.NewClient(cmn.TransportArgs{Timeout: conf.Timeout.Default})
+	timeout := time.Duration(conf.Timeout.Default)
+	clientHTTP := cmn.NewClient(cmn.TransportArgs{Timeout: timeout})
 	clientHTTPS := cmn.NewClient(cmn.TransportArgs{
-		Timeout:    conf.Timeout.Default,
+		Timeout:    timeout,
 		UseHTTPS:   true,
 		SkipVerify: true,
 	})
@@ -356,10 +357,10 @@ func (m *userManager) issueToken(userID, pwd string, ttl *time.Duration) (string
 	}
 
 	// generate token
-	conf.mtx.RLock()
-	defer conf.mtx.RUnlock()
+	conf.RLock()
+	defer conf.RUnlock()
 	issued := time.Now()
-	expDelta := conf.Auth.ExpirePeriod
+	expDelta := time.Duration(conf.Server.ExpirePeriod)
 	if ttl != nil {
 		expDelta = *ttl
 	}
@@ -387,7 +388,7 @@ func (m *userManager) issueToken(userID, pwd string, ttl *time.Duration) (string
 			"clusters": uInfo.Clusters,
 		})
 	}
-	tokenString, err := t.SignedString([]byte(conf.Auth.Secret))
+	tokenString, err := t.SignedString([]byte(conf.Server.Secret))
 	if err != nil {
 		return "", fmt.Errorf("failed to generate token: %v", err)
 	}
@@ -417,7 +418,7 @@ func (m *userManager) generateRevokedTokenList() ([]string, error) {
 	}
 	now := time.Now()
 	revokeList := make([]string, 0)
-	secret := conf.secret()
+	secret := conf.Secret()
 	for _, t := range tokens {
 		token, err := cmn.DecryptToken(t, secret)
 		shortInfo := t

@@ -24,8 +24,8 @@ var (
 
 func init() {
 	// Set default expiration time to 30 minutes
-	if conf.Auth.ExpirePeriod == 0 {
-		conf.Auth.ExpirePeriod = time.Minute * 30
+	if conf.Server.ExpirePeriod == 0 {
+		conf.Server.ExpirePeriod = cmn.DurationJSON(time.Minute * 30)
 	}
 }
 
@@ -129,7 +129,7 @@ func TestToken(t *testing.T) {
 	var (
 		err    error
 		token  string
-		secret = conf.Auth.Secret
+		secret = conf.Server.Secret
 	)
 
 	driver := dbdriver.NewDBMock()

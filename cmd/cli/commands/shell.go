@@ -558,3 +558,31 @@ func oneClusterCompletions(c *cli.Context) {
 		fmt.Println(cmn.Either(clu.Alias, clu.ID))
 	}
 }
+
+func authNConfigPropList() []string {
+	propList := []string{}
+	emptyCfg := cmn.AuthNConfigToUpdate{Server: &cmn.AuthNServerConfToUpdate{}}
+	cmn.IterFields(emptyCfg, func(tag string, field cmn.IterField) (error, bool) {
+		propList = append(propList, tag)
+		return nil, false
+	})
+	return propList
+}
+
+func suggestUpdatableAuthNConfig(c *cli.Context) {
+	props := authNConfigPropList()
+	lastIsProp := c.NArg() != 0
+	if c.NArg() != 0 {
+		lastVal := c.Args().Get(c.NArg() - 1)
+		lastIsProp = cmn.StringInSlice(lastVal, props)
+	}
+	if lastIsProp {
+		return
+	}
+
+	for _, prop := range props {
+		if !cmn.AnyHasPrefixInSlice(prop, c.Args()) {
+			fmt.Println(prop)
+		}
+	}
+}

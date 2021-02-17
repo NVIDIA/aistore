@@ -534,7 +534,9 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *c
 			sleepTime += sleepTime / 2
 		}
 	}
-	glog.Errorf("Failed to request election from next primary proxy: %v", res.err)
+	if res.err != nil {
+		glog.Errorf("Failed to request election from next primary proxy: %v", res.err)
+	}
 	return
 }
 

@@ -286,3 +286,63 @@ ClusterOwner-srv1       Full access to cluster 78df35690[srv1]
 Guest-2xs35th89         Read-only access to buckets of cluster 2xs35th89
 Guest-srv1              Read-only access to buckets of cluster 78df35690[srv1]
 ```
+
+### Show AuthN server configuration
+
+`ais auth show config [--json | PREFIX]`
+
+Display the AuthN server configuration in tabular or JSON format.
+In tabular output, the prefix filters only properties which names start with it.
+
+```console
+$ ais auth show config auth.e
+PROPERTY                 VALUE
+auth.expiration_time     5h
+
+$ ais auth show config --json
+{
+    "path": "/home/ubuntu/.authn/authn.json",
+    "confdir": "/home/ubuntu/.authn",
+    "log": {
+        "dir": "/tmp/ais/authn/log",
+        "level": "3"
+    },
+    "net": {
+        "http": {
+            "port": 52001,
+            "use_https": false,
+            "server_crt": "server.crt",
+            "server_key": "server.key"
+        }
+    },
+    "auth": {
+        "secret": "aBitLongSecretKey",
+        "expiration_time": "5h"
+    },
+    "timeout": {
+        "default_timeout": "30s"
+    }
+}
+
+```
+
+### Change AuthN server configuration
+
+`ais auth set config PROP VALUE [PROP VALUE...]`
+
+Update AuthN server configuration.
+The command allows updating options that can be changed without AuthN server restart.
+New property values can be defined either in `PROPERTY VALUE` or `PROPERTY=VALUE` form.
+
+```console
+$ ais auth set config auth.
+auth.expiration_time  auth.secret
+
+$ ais auth set config auth.expiration_time 4h
+$ ais auth show config auth.e
+PROPERTY                 VALUE
+auth.expiration_time     4h
+```
+
+Do not forget to update the secret on all clusters if you change AuthN secret.
+Otherwise, new tokens will be rejected by AIS clusters.

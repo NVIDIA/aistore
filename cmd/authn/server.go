@@ -138,7 +138,7 @@ func (a *authServ) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	secret := conf.secret()
+	secret := conf.Secret()
 	_, err := cmn.DecryptToken(msg.Token, secret)
 	if err != nil {
 		cmn.WriteErr(w, r, err)
@@ -274,7 +274,7 @@ func (a *authServ) checkAuthorization(w http.ResponseWriter, r *http.Request) er
 		cmn.WriteErrMsg(w, r, "Not authorized", http.StatusUnauthorized)
 		return fmt.Errorf("invalid header")
 	}
-	secret := conf.secret()
+	secret := conf.Secret()
 	token, err := cmn.DecryptToken(s[1], secret)
 	if err != nil {
 		cmn.WriteErrMsg(w, r, "Not authorized", http.StatusUnauthorized)
@@ -562,8 +562,8 @@ func (a *authServ) httpConfifGet(w http.ResponseWriter, r *http.Request) {
 	if err := a.checkAuthorization(w, r); err != nil {
 		return
 	}
-	conf.mtx.RLock()
-	defer conf.mtx.RUnlock()
+	conf.RLock()
+	defer conf.RUnlock()
 	a.writeJSON(w, conf, "config")
 }
 
@@ -571,14 +571,14 @@ func (a *authServ) httpConfigPut(w http.ResponseWriter, r *http.Request) {
 	if err := a.checkAuthorization(w, r); err != nil {
 		return
 	}
-	updateCfg := &configToUpdate{}
+	updateCfg := &cmn.AuthNConfigToUpdate{}
 	if err := jsoniter.NewDecoder(r.Body).Decode(updateCfg); err != nil {
 		cmn.WriteErrMsg(w, r, "Invalid request")
 		return
 	}
-	conf.mtx.Lock()
-	defer conf.mtx.Unlock()
-	if err := conf.applyUpdate(updateCfg); err != nil {
+	conf.Lock()
+	defer conf.Unlock()
+	if err := conf.ApplyUpdate(updateCfg); err != nil {
 		cmn.WriteErr(w, r, err)
 	}
 }

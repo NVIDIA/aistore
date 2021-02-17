@@ -191,3 +191,22 @@ func RevokeToken(baseParams BaseParams, token string) error {
 		Path:       cmn.URLPathTokens.S,
 	})
 }
+
+func GetAuthNConfig(baseParams BaseParams) (*cmn.AuthNConfig, error) {
+	conf := &cmn.AuthNConfig{}
+	baseParams.Method = http.MethodGet
+	err := DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPathDaemon.S,
+	}, &conf)
+	return conf, err
+}
+
+func SetAuthNConfig(baseParams BaseParams, conf *cmn.AuthNConfigToUpdate) error {
+	baseParams.Method = http.MethodPut
+	return DoHTTPRequest(ReqParams{
+		Body:       cmn.MustMarshal(conf),
+		BaseParams: baseParams,
+		Path:       cmn.URLPathDaemon.S,
+	})
+}

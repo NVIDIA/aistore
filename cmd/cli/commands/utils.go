@@ -1168,3 +1168,22 @@ func waitForXactionCompletion(defaultAPIParams api.BaseParams, args api.XactReqA
 
 	return nil
 }
+
+func authNConfPairs(conf *cmn.AuthNConfig, prefix string) ([]prop, error) {
+	propList := make([]prop, 0, 8)
+	err := cmn.IterFields(conf, func(uniqueTag string, field cmn.IterField) (err error, b bool) {
+		if prefix != "" && !strings.HasPrefix(uniqueTag, prefix) {
+			return nil, false
+		}
+		value := fmt.Sprintf("%v", field.Value())
+		propList = append(propList, prop{
+			Name:  uniqueTag,
+			Value: value,
+		})
+		return nil, false
+	})
+	sort.Slice(propList, func(i, j int) bool {
+		return propList[i].Name < propList[j].Name
+	})
+	return propList, err
+}

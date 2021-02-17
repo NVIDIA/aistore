@@ -35,6 +35,7 @@ const (
 	flagsAuthRoleAdd     = "role_add"
 	flagsAuthRevokeToken = "revoke_token"
 	flagsAuthRoleShow    = "role_show"
+	flagsAuthConfShow    = "conf_show"
 )
 
 var (
@@ -45,6 +46,7 @@ var (
 		flagsAuthRevokeToken: {tokenFileFlag},
 		flagsAuthUserShow:    {verboseFlag},
 		flagsAuthRoleShow:    {verboseFlag},
+		flagsAuthConfShow:    {jsonFlag},
 	}
 	authCmds = []cli.Command{
 		{
@@ -157,6 +159,12 @@ var (
 							ArgsUsage: showUserListArgument,
 							Action:    wrapAuthN(showUserHandler),
 						},
+						{
+							Name:   subcmdAuthConfig,
+							Usage:  "show AuthN server configuration",
+							Flags:  authFlags[flagsAuthConfShow],
+							Action: wrapAuthN(showAuthConfigHandler),
+						},
 					},
 				},
 				{
@@ -170,6 +178,18 @@ var (
 					Name:   subcmdAuthLogout,
 					Usage:  "log out",
 					Action: wrapAuthN(logoutUserHandler),
+				},
+				{
+					Name:  subcmdAuthSet,
+					Usage: "set entity properties",
+					Subcommands: []cli.Command{
+						{
+							Name:         subcmdAuthConfig,
+							Usage:        "set AuthN server configuration",
+							Action:       wrapAuthN(setAuthConfigHandler),
+							BashComplete: suggestUpdatableAuthNConfig,
+						},
+					},
 				},
 			},
 		},
@@ -537,4 +557,51 @@ func revokeTokenHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "token or token filename")
 	}
 	return api.RevokeToken(authParams, token)
+}
+
+func showAuthConfigHandler(c *cli.Context) (err error) {
+	conf, err := api.GetAuthNConfig(authParams)
+	if err != nil {
+		return err
+	}
+
+	list, err := authNConfPairs(conf, c.Args().Get(0))
+	if err != nil {
+		return err
+	}
+	useJSON := flagIsSet(c, jsonFlag)
+	if useJSON {
+		return templates.DisplayOutput(conf, c.App.Writer, templates.PropsSimpleTmpl, useJSON)
+	}
+	return templates.DisplayOutput(list, c.App.Writer, templates.PropsSimpleTmpl, useJSON)
+}
+
+func authNConfigFromArgs(c *cli.Context) (conf *cmn.AuthNConfigToUpdate, err error) {
+	conf = &cmn.AuthNConfigToUpdate{Server: &cmn.AuthNServerConfToUpdate{}}
+	items := c.Args()
+	for i := 0; i < len(items); {
+		name, value := items.Get(i), items.Get(i+1)
+		if idx := strings.Index(name, "="); idx > 0 {
+			name = name[:idx]
+			value = name[idx+1:]
+			i++
+		} else {
+			i += 2
+		}
+		if value == "" {
+			return nil, fmt.Errorf("no value for %q", name)
+		}
+		if err := cmn.UpdateFieldValue(conf, name, value); err != nil {
+			return nil, err
+		}
+	}
+	return conf, nil
+}
+
+func setAuthConfigHandler(c *cli.Context) (err error) {
+	conf, err := authNConfigFromArgs(c)
+	if err != nil {
+		return err
+	}
+	return api.SetAuthNConfig(authParams, conf)
 }

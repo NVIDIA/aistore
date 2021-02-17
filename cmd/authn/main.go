@@ -19,10 +19,14 @@ import (
 	"github.com/NVIDIA/aistore/dbdriver"
 )
 
+const (
+	secretKeyEnvVar = "SECRETKEY"
+)
+
 var (
 	version, build string
 	configPath     string
-	conf           = &config{}
+	conf           = &cmn.AuthNConfig{}
 )
 
 // Set up glog with options from configuration file
@@ -76,10 +80,9 @@ func main() {
 	if _, err = jsp.Load(configPath, conf, jsp.Plain()); err != nil {
 		cmn.ExitLogf("Failed to load configuration from %q: %v", configPath, err)
 	}
-	conf.path = configPath
-	conf.applySecrets()
-	if err = conf.validate(); err != nil {
-		cmn.ExitLogf("Invalid configuration: %v", err)
+	conf.Path = configPath
+	if val := os.Getenv(secretKeyEnvVar); val != "" {
+		conf.Server.Secret = val
 	}
 
 	if err = updateLogOptions(); err != nil {
