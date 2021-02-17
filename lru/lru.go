@@ -390,7 +390,7 @@ func (j *lruJ) walk(fqn string, de fs.DirEntry) error {
 	if !j.allowDelObj {
 		return nil // ===>
 	}
-	err = lom.Load(false)
+	err = lom.Load(false /*cache it*/, false /*locked*/)
 	if err != nil {
 		return nil
 	}

@@ -95,7 +95,7 @@ var _ = Describe("Mirror", func() {
 
 			// Check reloaded default LOM
 			newLOM := newBasicLom(defaultObjFQN)
-			Expect(newLOM.Load(false)).ShouldNot(HaveOccurred())
+			Expect(newLOM.Load(false, true)).ShouldNot(HaveOccurred())
 			Expect(newLOM.IsCopy()).To(BeFalse())
 			Expect(newLOM.HasCopies()).To(BeTrue())
 			Expect(newLOM.NumCopies()).To(Equal(2))
@@ -103,7 +103,7 @@ var _ = Describe("Mirror", func() {
 
 			// Check reloaded copyLOM
 			copyLOM := newBasicLom(expectedCopyFQN)
-			Expect(copyLOM.Load(false)).ShouldNot(HaveOccurred())
+			Expect(copyLOM.Load(false, false)).ShouldNot(HaveOccurred())
 			copyCksum, err := copyLOM.ComputeCksumIfMissing()
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(copyCksum.Value()).To(Equal(newLOM.Cksum().Value()))

@@ -109,7 +109,7 @@ func (c *putJogger) processRequest(req *Request) {
 		return
 	}
 	if req.Action == ActSplit {
-		if err = lom.Load(); err != nil {
+		if err = lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 			return
 		}
 		ecConf := lom.Bprops().EC
@@ -122,8 +122,7 @@ func (c *putJogger) processRequest(req *Request) {
 	if err = c.ec(req, lom); err != nil {
 		glog.Errorf("Failed to %s object %s (fqn: %q, err: %v)", req.Action, lom, lom.FQN, err)
 	}
-	// In case of everything is OK, a transport bundle calls `DecPending`
-	// on finishing transferring all the data
+	// If everything is OK, transport bundle calls `DecPending` upon transferring all data
 	if err != nil || req.Action == ActDelete {
 		c.parent.DecPending()
 	}
@@ -142,7 +141,7 @@ func (c *putJogger) run() {
 		select {
 		case req := <-c.putCh:
 			c.processRequest(req)
-			// repeat in case of more objects in the HIGH-priority queue
+			// repeat if there are more objects in the HIGH-priority queue
 			putsDone++
 			if putsDone < putBatchSize {
 				continue

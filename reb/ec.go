@@ -313,7 +313,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) (err error) {
 			return
 		}
 		lom.Lock(false)
-		if err = lom.Load(false); err != nil {
+		if err = lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 			lom.Unlock(false)
 			cluster.FreeLOM(lom)
 			return
@@ -950,7 +950,7 @@ func (reb *Manager) resilverObject(fromMpath fs.ParsedFQN, fromFQN, toFQN string
 
 	lom.Lock(true)
 	defer lom.Unlock(true)
-	if err := lom.Load(); err != nil {
+	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		return err
 	}
 

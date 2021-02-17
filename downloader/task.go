@@ -63,7 +63,7 @@ func (t *singleObjectTask) download() {
 	defer cluster.FreeLOM(lom)
 	err := lom.Init(t.job.Bck())
 	if err == nil {
-		err = lom.Load()
+		err = lom.Load(true /*cache it*/, false /*locked*/)
 	}
 	if err != nil && !os.IsNotExist(err) {
 		t.markFailed(internalErrorMsg)
@@ -140,7 +140,7 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 	if err := t.parent.t.PutObject(lom, params); err != nil {
 		return true, err
 	}
-	return true, lom.Load()
+	return true, lom.Load(true /*cache it*/, false /*locked*/) // TODO: review
 }
 
 func (t *singleObjectTask) downloadLocal(lom *cluster.LOM) (err error) {

@@ -83,7 +83,7 @@ func (r *prefetch) prefetchMissing(args *xreg.DeletePrefetchArgs, objName string
 		return err
 	}
 	var coldGet bool
-	if err = lom.Load(); err != nil {
+	if err = lom.Load(true /*cache it*/, false /*locked*/); err != nil {
 		coldGet = cmn.IsErrObjNought(err)
 		if !coldGet {
 			return err

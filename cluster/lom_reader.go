@@ -29,7 +29,7 @@ func (r *LomReader) Reader(lom *LOM) (cmn.ReadOpenCloser, cmn.ObjHeaderMetaProvi
 	var lomLoadErr, err error
 
 	lom.Lock(false)
-	if lomLoadErr = lom.Load(); lomLoadErr == nil {
+	if lomLoadErr = lom.Load(false /*cache it*/, true /*locked*/); lomLoadErr == nil {
 		var file *cmn.FileHandle
 		if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
 			lom.Unlock(false)

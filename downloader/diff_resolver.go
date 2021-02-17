@@ -194,7 +194,7 @@ func (dr *DiffResolver) Stopped() bool   { return dr.stopped.Load() }
 func (dr *DiffResolver) Abort(err error) { dr.err.Store(err) }
 
 func (*defaultDiffResolverCtx) CompareObjects(src *cluster.LOM, dst *DstElement) (bool, error) {
-	if err := src.Load(); err != nil {
+	if err := src.Load(true /*cache it*/, false /*locked*/); err != nil {
 		if cmn.IsObjNotExist(err) {
 			return false, nil
 		}
@@ -204,7 +204,7 @@ func (*defaultDiffResolverCtx) CompareObjects(src *cluster.LOM, dst *DstElement)
 }
 
 func (*defaultDiffResolverCtx) IsObjFromRemote(src *cluster.LOM) (bool, error) {
-	if err := src.Load(); err != nil {
+	if err := src.Load(true /*cache it*/, false /*locked*/); err != nil {
 		if cmn.IsObjNotExist(err) {
 			return false, nil
 		}

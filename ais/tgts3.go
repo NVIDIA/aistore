@@ -71,7 +71,7 @@ func (t *targetrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items [
 		}
 		return
 	}
-	if err := lom.Load(); err != nil {
+	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
@@ -130,7 +130,7 @@ func (t *targetrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, it
 		}
 	}
 	if lom.Bck().IsAIS() && lom.VersionConf().Enabled {
-		lom.Load() // need to know the current version if versioning enabled
+		lom.Load(true /*cache it*/, false /*locked*/) // load it to see the current version
 	}
 	lom.SetAtimeUnix(started.UnixNano())
 
@@ -189,12 +189,6 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 		}
 		return
 	}
-	if err = lom.Load(true); err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
-
-	objSize = lom.Size()
 	goi := allocGetObjInfo()
 	{
 		goi.started = started
@@ -204,7 +198,6 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 		goi.ctx = context.Background()
 		goi.ranges = cmn.RangesQuery{Range: r.Header.Get(cmn.HeaderRange), Size: objSize}
 	}
-	s3compat.SetHeaderFromLOM(w.Header(), lom, objSize)
 	if sent, errCode, err := goi.getObject(); err != nil {
 		if sent {
 			// Cannot send error message at this point so we just glog.
@@ -213,6 +206,8 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 			t.writeErr(w, r, err, errCode)
 		}
 	}
+	objSize = lom.Size()
+	s3compat.SetHeaderFromLOM(w.Header(), lom, objSize)
 	freeGetObjInfo(goi)
 }
 
@@ -242,7 +237,7 @@ func (t *targetrunner) headObjS3(w http.ResponseWriter, r *http.Request, items [
 		return
 	}
 
-	if err = lom.Load(true); err != nil && !cmn.IsObjNotExist(err) {
+	if err = lom.Load(true /*cache it*/, false /*locked*/); err != nil && !cmn.IsObjNotExist(err) {
 		t.writeErr(w, r, err)
 		return
 	}

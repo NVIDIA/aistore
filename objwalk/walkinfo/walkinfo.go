@@ -181,8 +181,7 @@ func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (*cmn.BucketEntry, erro
 	if err := lom.Init(cmn.Bck{}); err != nil {
 		return nil, err
 	}
-
-	if err := lom.Load(); err != nil {
+	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
 		if cmn.IsErrObjNought(err) {
 			return nil, nil
 		}

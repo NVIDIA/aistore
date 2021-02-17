@@ -308,15 +308,18 @@ func (j *jogger) visitFQN(fqn string, buf []byte) error {
 }
 
 func (j *jogger) visitObj(lom *cluster.LOM, buf []byte) error {
+	var locked bool
 	if j.opts.DoLoad > noLoad {
 		if j.opts.DoLoad == LoadRLock {
 			lom.Lock(false)
+			locked = true
 			defer lom.Unlock(false)
 		} else if j.opts.DoLoad == LoadLock {
 			lom.Lock(true)
+			locked = true
 			defer lom.Unlock(true)
 		}
-		if err := lom.Load(); err != nil {
+		if err := lom.Load(false /*cache it*/, locked); err != nil {
 			return err
 		}
 		if !j.opts.IncludeCopy && lom.IsCopy() {

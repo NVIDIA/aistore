@@ -123,12 +123,10 @@ func (r *ObjectsListingXact) startFromTemplate() {
 			r.putResult(&Result{err: err})
 			return
 		}
-
 		if si.ID() != r.t.SID() {
 			continue
 		}
-
-		if err = lom.Load(); err != nil {
+		if err = lom.Load(true /*cache it*/, false /*locked*/); err != nil {
 			if !cmn.IsObjNotExist(err) {
 				r.putResult(&Result{err: err})
 				return

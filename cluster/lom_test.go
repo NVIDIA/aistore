@@ -272,7 +272,7 @@ var _ = Describe("LOM", func() {
 				lom := &cluster.LOM{FQN: localFQN}
 				err := lom.Init(cmn.Bck{})
 				Expect(err).NotTo(HaveOccurred())
-				err = lom.Load(false)
+				err = lom.Load(false, false)
 				Expect(cmn.IsObjNotExist(err)).To(BeTrue())
 			})
 
@@ -283,7 +283,7 @@ var _ = Describe("LOM", func() {
 				lom.SetSize(int64(testFileSize))
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.Persist()).NotTo(HaveOccurred())
-				err = lom.Load(false)
+				err = lom.Load(false, false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.Size()).To(BeEquivalentTo(testFileSize))
 			})
@@ -302,7 +302,7 @@ var _ = Describe("LOM", func() {
 				err := lom.Init(cmn.Bck{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.Persist()).NotTo(HaveOccurred())
-				err = lom.Load(false)
+				err = lom.Load(false, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(time.Unix(0, lom.AtimeUnix())).To(BeEquivalentTo(desiredAtime))
@@ -316,7 +316,7 @@ var _ = Describe("LOM", func() {
 				err := lom.Init(cmn.Bck{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.Persist()).NotTo(HaveOccurred())
-				err = lom.Load(false)
+				err = lom.Load(false, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(time.Unix(0, lom.AtimeUnix())).To(BeEquivalentTo(desiredAtime))
@@ -364,7 +364,7 @@ var _ = Describe("LOM", func() {
 					Expect(lom.Cksum().Equal(cksum)).To(BeTrue())
 
 					newLom := NewBasicLom(lom.FQN)
-					err = newLom.Load(false)
+					err = newLom.Load(false, false)
 					Expect(err).NotTo(HaveOccurred())
 					cksumType, _ = newLom.Cksum().Get()
 					Expect(cksumType).To(BeEquivalentTo(cmn.ChecksumNone))
@@ -387,7 +387,7 @@ var _ = Describe("LOM", func() {
 					expectedChecksum := getTestFileHash(localFQN)
 
 					fsLOM := NewBasicLom(localFQN)
-					err := fsLOM.Load(false)
+					err := fsLOM.Load(false, false)
 					Expect(err).NotTo(HaveOccurred())
 
 					cksumType, _ := fsLOM.Cksum().Get()
@@ -399,7 +399,7 @@ var _ = Describe("LOM", func() {
 					Expect(lom.Cksum()).ToNot(BeNil())
 					_, val := lom.Cksum().Get()
 					fsLOM = NewBasicLom(localFQN)
-					err = fsLOM.Load(false)
+					err = fsLOM.Load(false, false)
 					Expect(err).ShouldNot(HaveOccurred())
 					_, fsVal := fsLOM.Cksum().Get()
 					Expect(fsVal).To(BeEquivalentTo(expectedChecksum))
@@ -469,7 +469,7 @@ var _ = Describe("LOM", func() {
 					expectedChecksum := getTestFileHash(localFQN)
 
 					fsLOM := NewBasicLom(localFQN)
-					err := fsLOM.Load(false)
+					err := fsLOM.Load(false, false)
 					Expect(err).ShouldNot(HaveOccurred())
 
 					cksumType, _ := fsLOM.Cksum().Get()
@@ -482,7 +482,7 @@ var _ = Describe("LOM", func() {
 					_, cksumValue := lom.Cksum().Get()
 
 					fsLOM = NewBasicLom(localFQN)
-					err = fsLOM.Load(false)
+					err = fsLOM.Load(false, false)
 					Expect(err).ShouldNot(HaveOccurred())
 
 					_, fsCksmVal := fsLOM.Cksum().Get()
@@ -534,7 +534,7 @@ var _ = Describe("LOM", func() {
 					Expect(lom1.ValidateContentChecksum()).NotTo(HaveOccurred())
 					Expect(lom1.Persist()).ToNot(HaveOccurred())
 
-					Expect(lom2.Load()).ToNot(HaveOccurred()) // Calls `FromFS`.
+					Expect(lom2.Load(false, false)).ToNot(HaveOccurred()) // Calls `FromFS`.
 					Expect(lom2.Cksum()).To(BeEquivalentTo(lom1.Cksum()))
 					Expect(lom2.Version()).To(BeEquivalentTo(lom1.Version()))
 					Expect(lom2.Size()).To(BeEquivalentTo(testFileSize))
@@ -553,7 +553,7 @@ var _ = Describe("LOM", func() {
 				lom.SetVersion(desiredVersion)
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
-				err := lom.Load(false)
+				err := lom.Load(false, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(lom.Version()).To(BeEquivalentTo(desiredVersion))
 			})
@@ -639,7 +639,7 @@ var _ = Describe("LOM", func() {
 			Expect(lom.Persist()).NotTo(HaveOccurred())
 			lom.Uncache(false)
 			Expect(err).NotTo(HaveOccurred())
-			err = lom.Load(false)
+			err = lom.Load(false, false)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 			return
@@ -665,7 +665,7 @@ var _ = Describe("LOM", func() {
 
 			// Reload copy, to make sure it is fresh
 			dst = NewBasicLom(dst.FQN)
-			Expect(dst.Load(false)).NotTo(HaveOccurred())
+			Expect(dst.Load(false, true)).NotTo(HaveOccurred())
 			Expect(dst.ValidateContentChecksum()).NotTo(HaveOccurred())
 			hrwLom.Uncache(false)
 			return
@@ -676,7 +676,7 @@ var _ = Describe("LOM", func() {
 
 			for _, copyFQN := range copiesFQNs {
 				copyLOM := NewBasicLom(copyFQN)
-				Expect(copyLOM.Load(false)).NotTo(HaveOccurred())
+				Expect(copyLOM.Load(false, true)).NotTo(HaveOccurred())
 
 				_, cksumValue := copyLOM.Cksum().Get()
 				Expect(cksumValue).To(Equal(expectedHash))
@@ -912,7 +912,7 @@ var _ = Describe("LOM", func() {
 
 				// Reload default object and check if the lom was correctly updated.
 				lom = NewBasicLom(mirrorFQNs[0])
-				Expect(lom.Load(false)).ToNot(HaveOccurred())
+				Expect(lom.Load(false, true)).ToNot(HaveOccurred())
 				Expect(lom.IsCopy()).To(BeFalse())
 				Expect(lom.HasCopies()).To(BeFalse())
 				Expect(lom.NumCopies()).To(Equal(1))
@@ -940,7 +940,7 @@ var _ = Describe("LOM", func() {
 
 				// Reload default object and check if the lom was correctly updated.
 				lom = NewBasicLom(mirrorFQNs[0])
-				Expect(lom.Load(false)).ToNot(HaveOccurred())
+				Expect(lom.Load(false, true)).ToNot(HaveOccurred())
 				Expect(lom.IsCopy()).To(BeFalse())
 				Expect(lom.HasCopies()).To(BeTrue())
 				Expect(lom.NumCopies()).To(Equal(2))
@@ -948,7 +948,7 @@ var _ = Describe("LOM", func() {
 
 				// Check that left copy was correctly updated.
 				copyLOM := NewBasicLom(mirrorFQNs[2])
-				Expect(copyLOM.Load(false)).NotTo(HaveOccurred())
+				Expect(copyLOM.Load(false, true)).NotTo(HaveOccurred())
 				_, cksumValue := copyLOM.Cksum().Get()
 				Expect(cksumValue).To(Equal(expectedHash))
 				Expect(copyLOM.Version()).To(Equal(desiredVersion))
@@ -983,7 +983,7 @@ var _ = Describe("LOM", func() {
 
 				// Reload default object and see if the lom was correctly updated.
 				lom = NewBasicLom(mirrorFQNs[0])
-				Expect(lom.Load(false)).ToNot(HaveOccurred())
+				Expect(lom.Load(false, true)).ToNot(HaveOccurred())
 				Expect(lom.IsCopy()).To(BeFalse())
 				Expect(lom.HasCopies()).To(BeFalse())
 				Expect(lom.NumCopies()).To(Equal(1))
@@ -1006,7 +1006,7 @@ var _ = Describe("LOM", func() {
 			lomEmpty := &cluster.LOM{ObjName: testObject}
 			err := lomEmpty.Init(cmn.Bck{Name: sameBucketName})
 			Expect(err).NotTo(HaveOccurred())
-			err = lomEmpty.Load(false)
+			err = lomEmpty.Load(false, false)
 			Expect(cmn.IsObjNotExist(err)).To(BeTrue())
 			Expect(lomEmpty.FQN).To(Equal(desiredLocalFQN))
 			Expect(lomEmpty.Uname()).To(Equal(lomEmpty.Bck().MakeUname(testObject)))
@@ -1018,7 +1018,7 @@ var _ = Describe("LOM", func() {
 			lomLocal := &cluster.LOM{ObjName: testObject}
 			err = lomLocal.Init(cmn.Bck{Name: sameBucketName, Provider: cmn.ProviderAIS})
 			Expect(err).NotTo(HaveOccurred())
-			err = lomLocal.Load(false)
+			err = lomLocal.Load(false, false)
 			Expect(cmn.IsObjNotExist(err)).To(BeTrue())
 			Expect(lomLocal.FQN).To(Equal(desiredLocalFQN))
 			Expect(lomLocal.Uname()).To(Equal(lomLocal.Bck().MakeUname(testObject)))
@@ -1030,7 +1030,7 @@ var _ = Describe("LOM", func() {
 			lomCloud := &cluster.LOM{ObjName: testObject}
 			err = lomCloud.Init(cmn.Bck{Name: sameBucketName, Provider: cmn.ProviderAmazon})
 			Expect(err).NotTo(HaveOccurred())
-			err = lomCloud.Load(false)
+			err = lomCloud.Load(false, false)
 			Expect(cmn.IsObjNotExist(err)).To(BeTrue())
 			Expect(lomCloud.FQN).To(Equal(desiredCloudFQN))
 			Expect(lomCloud.Uname()).To(Equal(lomCloud.Bck().MakeUname(testObject)))

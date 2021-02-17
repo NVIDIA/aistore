@@ -153,7 +153,7 @@ func (pc *pushComm) tryDoRequest(lom *cluster.LOM, ts ...time.Duration) (cmn.Rea
 	lom.Lock(false)
 	defer lom.Unlock(false)
 
-	if err := lom.Load(); err != nil {
+	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		return nil, err
 	}
 

@@ -416,7 +416,7 @@ func (lom *LOM) syncMetaWithCopies() (err error) {
 // TODO: locking vs concurrent restore: consider (read-lock object + write-lock meta) split
 func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 	lom.Lock(true)
-	if err := lom.Load(false); err == nil {
+	if err := lom.Load(true /*cache it*/, true /*locked*/); err == nil {
 		lom.Unlock(true)
 		return true // nothing to do
 	}
@@ -452,7 +452,7 @@ func (lom *LOM) _restore(fqn string, buf []byte) (dst *LOM, err error) {
 	if err = src.Init(lom.Bucket()); err != nil {
 		return
 	}
-	if err = src.Load(false); err != nil {
+	if err = src.Load(false /*cache it*/, true /*locked*/); err != nil {
 		return
 	}
 	// restore at default location
@@ -831,35 +831,42 @@ func (lom *LOM) Init(bck cmn.Bck) (err error) {
 	return
 }
 
-func (lom *LOM) Load(adds ...bool) (err error) {
-	// fast path
+// * locked: is locked by the immediate caller (or otherwise is known to be locked);
+//   if false, try Rlock temporarily *if and only when* reading from FS
+func (lom *LOM) Load(cacheit, locked bool) (err error) {
 	var (
 		hkey, idx = lom.Hkey()
-		cache     = lom.mpathInfo.LomCache(idx)
+		lcache    = lom.mpathInfo.LomCache(idx)
 		bmd       = T.Bowner().Get()
-		add       = true // default: cache it
 	)
-	if len(adds) > 0 {
-		add = adds[0]
-	}
-	if md, ok := cache.Load(hkey); ok { // fast path
+	if md, ok := lcache.Load(hkey); ok { // fast path
 		lmeta := md.(*lmeta)
 		lom.md = *lmeta
 		err = lom._checkBucket(bmd)
 		return
 	}
-	err = lom.FromFS() // slow path
-	if err == nil {
-		if lom.Bprops().BID == 0 {
-			return
-		}
-		lom.md.bckID = lom.Bprops().BID
-		err = lom._checkBucket(bmd)
-		if err == nil && add {
-			md := &lmeta{}
-			*md = lom.md
-			cache.Store(hkey, md)
-		}
+	// slow path
+	if !locked && lom.TryLock(false) {
+		defer lom.Unlock(false)
+	}
+	err = lom.FromFS()
+	if err != nil {
+		return
+	}
+	bid := lom.Bprops().BID
+	debug.AssertMsg(bid != 0, lom.BckName()+"/"+lom.ObjName)
+	if bid == 0 {
+		return
+	}
+	lom.md.bckID = bid
+	err = lom._checkBucket(bmd)
+	if err != nil {
+		return
+	}
+	if cacheit {
+		md := &lmeta{}
+		*md = lom.md
+		lcache.Store(hkey, md)
 	}
 	return
 }
@@ -876,18 +883,18 @@ func (lom *LOM) _checkBucket(bmd *BMD) (err error) {
 func (lom *LOM) ReCache(store bool) {
 	var (
 		hkey, idx = lom.Hkey()
-		cache     = lom.mpathInfo.LomCache(idx)
+		lcache    = lom.mpathInfo.LomCache(idx)
 		md        = &lmeta{}
 	)
 	if !store {
-		_, store = cache.Load(hkey) // refresh an existing one
+		_, store = lcache.Load(hkey) // refresh an existing one
 	}
 	if store {
 		*md = lom.md
 		md.bckID = lom.Bprops().BID
 		lom.md.bckID = md.bckID
 		debug.Assert(md.bckID != 0)
-		cache.Store(hkey, md)
+		lcache.Store(hkey, md)
 	}
 }
 
@@ -895,19 +902,19 @@ func (lom *LOM) Uncache(delDirty bool) {
 	debug.Assert(!lom.IsCopy()) // not caching copies
 	var (
 		hkey, idx = lom.Hkey()
-		cache     = lom.mpathInfo.LomCache(idx)
+		lcache    = lom.mpathInfo.LomCache(idx)
 	)
 	if delDirty {
-		cache.Delete(hkey)
+		lcache.Delete(hkey)
 		return
 	}
-	if md, ok := cache.Load(hkey); ok {
+	if md, ok := lcache.Load(hkey); ok {
 		lmeta := md.(*lmeta)
 		if lmeta.dirty {
 			return
 		}
 	}
-	cache.Delete(hkey)
+	lcache.Delete(hkey)
 }
 
 func (lom *LOM) FromFS() (err error) {
@@ -971,7 +978,7 @@ func EvictLomCache(b *Bck) {
 		caches = lomCaches()
 		wg     = &sync.WaitGroup{}
 	)
-	for _, cache := range caches {
+	for _, lcache := range caches {
 		wg.Add(1)
 		go func(cache *sync.Map) {
 			cache.Range(func(hkey, _ interface{}) bool {
@@ -983,7 +990,7 @@ func EvictLomCache(b *Bck) {
 				return true
 			})
 			wg.Done()
-		}(cache)
+		}(lcache)
 	}
 	wg.Wait()
 }

@@ -19,7 +19,7 @@ func delCopies(lom *cluster.LOM, copies int) (size int64, err error) {
 
 	// Reload metadata, it is necessary to have it fresh.
 	lom.Uncache(false /*delDirty*/)
-	if err := lom.Load(false); err != nil {
+	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		return 0, err
 	}
 
@@ -55,7 +55,7 @@ func addCopies(lom *cluster.LOM, copies int, buf []byte) (size int64, err error)
 
 	// Reload metadata, it is necessary to have it fresh.
 	lom.Uncache(false /*delDirty*/)
-	if err := lom.Load(false); err != nil {
+	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		return 0, err
 	}
 

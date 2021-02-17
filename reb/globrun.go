@@ -641,7 +641,7 @@ func (rj *rebJogger) _lwalk(lom *cluster.LOM) (err error) {
 
 func (rj *rebJogger) prepSend(lom *cluster.LOM) (roc cmn.ReadOpenCloser, err error) {
 	lom.Lock(false)
-	if err = lom.Load(false); err != nil {
+	if err = lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		goto retErr
 	}
 	if lom.IsCopy() {

@@ -161,7 +161,7 @@ func (r *xactECBase) newReplicaResponse(attrs *transport.ObjectAttrs, bck *clust
 		glog.Warning(err)
 		return nil, err
 	}
-	if err = lom.Load(); err != nil {
+	if err = lom.Load(true /*cache it*/, false /*locked*/); err != nil {
 		glog.Warning(err)
 		return nil, err
 	}

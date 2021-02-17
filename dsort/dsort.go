@@ -167,7 +167,6 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 		if err := lom.Init(cmn.Bck{Name: m.rs.Bucket, Provider: m.rs.Provider}); err != nil {
 			return err
 		}
-
 		si, err := cluster.HrwTarget(lom.Uname(), m.smap)
 		if err != nil {
 			return err
@@ -175,7 +174,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 		if si.DaemonID != m.ctx.node.DaemonID {
 			return nil
 		}
-		if err = lom.Load(false); err != nil {
+		if err = lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 			if cmn.IsErrObjNought(err) {
 				msg := fmt.Sprintf("shard %q does not exist (is missing)", shardName)
 				return m.react(m.rs.MissingShards, msg)
@@ -416,7 +415,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		defer lom.Unlock(false)
 
 		// Need to make sure that the object is still there.
-		if err := lom.Load(); err != nil {
+		if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 			return err
 		}
 

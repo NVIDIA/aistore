@@ -510,7 +510,7 @@ func (reb *Manager) retransmit(md *rebArgs) (cnt int) {
 	for _, lomAck := range reb.lomAcks() {
 		lomAck.mu.Lock()
 		for uname, lom := range lomAck.q {
-			if err := lom.Load(false); err != nil {
+			if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 				if cmn.IsObjNotExist(err) {
 					glog.Warningf("%s: %s %s", loghdr, lom, cmn.DoesNotExist)
 				} else {

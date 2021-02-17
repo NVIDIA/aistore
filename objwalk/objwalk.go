@@ -107,7 +107,7 @@ func (w *Walk) RemoteObjPage() (*cmn.BucketList, error) {
 			}
 			continue
 		}
-		if err := lom.Load(); err != nil {
+		if err := lom.Load(true /* cache it*/, false /*locked*/); err != nil {
 			cluster.FreeLOM(lom)
 			continue
 		}

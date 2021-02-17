@@ -226,7 +226,7 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 		for lom.UpgradeLock() {
 			// The action was performed by some other goroutine and we don't need
 			// to do it again. But we need to ensure that the operation was successful.
-			if err := lom.Load(false); err != nil {
+			if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 				if cmn.IsErrObjNought(err) {
 					// Try to get `UpgradeLock` again and retry getting object.
 					glog.Errorf("[get_cold] %s(%q) doesn't exist, err: %v - retrying...",
@@ -314,7 +314,7 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 	}
 
 	// local
-	err = lom.Load(false)
+	err = lom.Load(false /*cache it*/, false /*locked*/)
 	if err == nil && !params.Overwrite {
 		// TODO: Handle the case where the object does not exist but there are two
 		//  or more targets racing to override the same object with their local promotions.

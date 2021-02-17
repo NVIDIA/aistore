@@ -98,7 +98,7 @@ func (w *worker) work() error {
 		case lif := <-w.workCh:
 			lom, err := lif.LOM(w.opts.BMD)
 			if err == nil {
-				err = lom.Load()
+				err = lom.Load(false /*cache it*/, false)
 			}
 			if err == nil {
 				w.opts.Callback(lom, buf)

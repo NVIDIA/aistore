@@ -79,8 +79,8 @@ import (
 // How protection works.
 //
 // Object PUT:
-// 1. The main target - the target that is responsible for keeping the full object
-//	  data and for restoring the object in case of it is damaged - is selected by
+// 1. The main target - the target responsible for keeping the full object
+//	  data and for restoring the object if damaged - is selected by
 //	  HrwTarget. A proxy delegates object PUT request to it.
 // 2. The main target calculates all other targets to keep slices/replicas. For
 //	  small files it is #ParitySlices, for big ones it #DataSlices+#ParitySlices
@@ -317,7 +317,7 @@ func useDisk(objSize int64) bool {
 	}
 }
 
-// Frees allocated memory if it is SGL or closes the file handle in case of regular file
+// Frees allocated memory if it is SGL or closes the file handle if regular file
 func freeObject(r interface{}) {
 	if r == nil {
 		return
@@ -341,7 +341,7 @@ func freeObject(r interface{}) {
 	}
 }
 
-// removes all temporary slices in case of erasure coding fails in the middle
+// removes all temporary slices in case of erasure coding failure
 func freeSlices(slices []*slice) {
 	for _, s := range slices {
 		if s != nil {

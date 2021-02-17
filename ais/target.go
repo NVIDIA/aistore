@@ -731,7 +731,6 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 			return
 		}
 	}
-
 	if isETLRequest(query) {
 		t.doETL(w, r, query.Get(cmn.URLParamUUID), bck, objName)
 		return
@@ -806,7 +805,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if lom.Load() == nil { // if exists, check custom md
+	if lom.Load(true /*cache it*/, false /*locked*/) == nil { // if exists, check custom md
 		srcProvider, hasSrc := lom.GetCustomMD(cluster.SourceObjMD)
 		if hasSrc && srcProvider != cluster.SourceWebObjMD {
 			bck := lom.Bck()
@@ -951,19 +950,16 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 		invalidHandler(w, r, err)
 		return
 	}
-
-	if err = lom.Load(true); err != nil && !cmn.IsObjNotExist(err) {
+	if err = lom.Load(true /*cache it*/, false /*locked*/); err != nil && !cmn.IsObjNotExist(err) {
 		invalidHandler(w, r, err)
 		return
 	}
-
 	if glog.FastV(4, glog.SmoduleAIS) {
 		pid := query.Get(cmn.URLParamProxyID)
 		glog.Infof("%s %s <= %s", r.Method, lom, pid)
 	}
 
 	exists := err == nil
-
 	// * checkExists and checkExistsAny establish local presence of the object by looking up all mountpaths
 	// * checkExistsAny does it *even* if the object *may* not have local copies
 	// * see also: GFN
@@ -1282,7 +1278,7 @@ func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict
 	defer lom.Unlock(true)
 
 	delFromBackend = lom.Bck().IsRemote() && !evict
-	if err := lom.Load(false); err == nil {
+	if err := lom.Load(false /*cache it*/, true /*locked*/); err == nil {
 		delFromAIS = true
 	} else if !cmn.IsObjNotExist(err) {
 		return 0, err

@@ -71,7 +71,7 @@ func (c *getJogger) newCtx(req *Request) (*restoreCtx, error) {
 	ctx.toDisk = useDisk(0 /*size of the original object is unknown*/)
 	ctx.lom = lom
 	if err == nil {
-		err = lom.Load()
+		err = lom.Load(true /*cache it*/, false /*locked*/)
 		if os.IsNotExist(err) {
 			err = nil
 		}
@@ -145,10 +145,10 @@ func (c *getJogger) ec(req *Request) {
 }
 
 // The final step of replica restoration process: the main target detects which
-// nodes do not have replicas and copy it to them
+// nodes do not have replicas and then runs respective replications.
 // * reader - replica content to send to remote targets
 func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cmn.ReadOpenCloser) error {
-	if err := ctx.lom.Load(); err != nil {
+	if err := ctx.lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		return err
 	}
 	targets, err := cluster.HrwTargetList(ctx.lom.Uname(), c.parent.smap.Get(), ctx.meta.Parity+1)

@@ -370,7 +370,7 @@ do:
 	if daemon.dryRun.disk {
 		goto get
 	}
-	err = goi.lom.Load()
+	err = goi.lom.Load(true /*cache it*/, true /*locked*/)
 	if err != nil {
 		coldGet = cmn.IsObjNotExist(err)
 		if !coldGet {
@@ -394,7 +394,7 @@ do:
 			lom2 := &cluster.LOM{ObjName: goi.lom.ObjName}
 			er2 := lom2.Init(goi.lom.Bucket())
 			if er2 == nil {
-				er2 = lom2.Load()
+				er2 = lom2.Load(true /*cache it*/, false /*locked*/)
 				if er2 == nil {
 					goi.lom = lom2
 					err = nil
@@ -602,7 +602,7 @@ gfn:
 
 	// restore from existing EC slices if possible
 	if ecErr := ec.ECM.RestoreObject(goi.lom); ecErr == nil {
-		ecErr = goi.lom.Load(true)
+		ecErr = goi.lom.Load(true /*cache it*/, false /*locked*/) // TODO: optimize locking
 		debug.AssertNoErr(ecErr)
 		if ecErr == nil {
 			if glog.FastV(4, glog.SmoduleAIS) {
@@ -816,13 +816,13 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry, sent bool, errCode int, er
 
 	// GFN: atime must be already set
 	if !coldGet && !goi.isGFN {
-		goi.lom.Load(false)
+		goi.lom.Load(false /*cache it*/, true /*locked*/)
 		goi.lom.SetAtimeUnix(goi.started.UnixNano())
 		goi.lom.ReCache(true) // GFN and cold GETs already did this
 	}
 
 	// Update objects which were sent during GFN. Thanks to this we will not
-	// have to resend them in rebalance. In case of race between rebalance
+	// have to resend them in rebalance. In case of a race between rebalance
 	// and GFN, the former wins and it will result in double send.
 	if goi.isGFN {
 		goi.t.rebManager.FilterAdd([]byte(goi.lom.Uname()))
@@ -1014,7 +1014,7 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 	exclusive := src.Uname() == dst.Uname()
 	src.Lock(exclusive)
 	defer src.Unlock(exclusive)
-	if err = src.Load(false); err != nil {
+	if err = src.Load(false /*cache it*/, true /*locked*/); err != nil {
 		if !cmn.IsObjNotExist(err) {
 			err = fmt.Errorf("%s: err: %v", src, err)
 		}
@@ -1025,7 +1025,7 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 	if src.Uname() != dst.Uname() {
 		dst.Lock(true)
 		defer dst.Unlock(true)
-		if err = dst.Load(false); err == nil {
+		if err = dst.Load(false /*cache it*/, true /*locked*/); err == nil {
 			if src.Cksum().Equal(dst.Cksum()) {
 				return
 			}
@@ -1082,15 +1082,13 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 		return
 	}
 
-	if err = lom.Load(); err != nil {
+	if err = lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		return
 	}
-
 	// DryRun: just get a reader and discard it. Init on dstLOM would cause and error as dstBck doesn't exist.
 	if coi.DryRun {
 		return coi.dryRunCopyReader(lom)
 	}
-
 	dst := cluster.AllocLOM(objNameTo)
 	defer cluster.FreeLOM(dst)
 	if err = dst.Init(coi.BckTo.Bck); err != nil {
@@ -1149,7 +1147,7 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 		var reader cmn.ReadOpenCloser
 		if !coi.promoteFile {
 			lom.Lock(false)
-			if err := lom.Load(false); err != nil {
+			if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 				lom.Unlock(false)
 				return 0, nil
 			}
