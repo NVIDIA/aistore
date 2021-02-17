@@ -108,6 +108,8 @@ func (c *putJogger) processRequest(req *Request) {
 	if err != nil {
 		return
 	}
+	c.parent.IncPending()
+	defer c.parent.DecPending()
 	if req.Action == ActSplit {
 		if err = lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 			return
@@ -121,10 +123,6 @@ func (c *putJogger) processRequest(req *Request) {
 	req.tm = time.Now()
 	if err = c.ec(req, lom); err != nil {
 		glog.Errorf("Failed to %s object %s (fqn: %q, err: %v)", req.Action, lom, lom.FQN, err)
-	}
-	// If everything is OK, transport bundle calls `DecPending` upon transferring all data
-	if err != nil || req.Action == ActDelete {
-		c.parent.DecPending()
 	}
 	if req.Callback != nil {
 		req.Callback(lom, err)
@@ -457,11 +455,12 @@ func generateSlicesToDisk(ctx *encodeCtx) error {
 	return finalizeSlices(ctx, sliceWriters)
 }
 
-func (c *putJogger) sendSlice(ctx *encodeCtx, data *slice, node *cluster.Snode, idx int, counter *atomic.Int32) error {
+func (c *putJogger) sendSlice(ctx *encodeCtx, data *slice, node *cluster.Snode, idx int) error {
 	// Reopen the slice's reader, because it was read to the end by erasure
 	// encoding while calculating parity slices.
 	reader, err := ctx.slices[idx].reopenReader()
 	if err != nil {
+		data.release()
 		return err
 	}
 
@@ -488,9 +487,7 @@ func (c *putJogger) sendSlice(ctx *encodeCtx, data *slice, node *cluster.Snode, 
 		if err != nil {
 			glog.Errorf("Failed to send %s/%s: %v", hdr.Bck, hdr.ObjName, err)
 		}
-		if cnt := counter.Dec(); cnt == 0 {
-			c.parent.DecPending()
-		}
+		c.parent.DecPending()
 	}
 
 	return c.parent.writeRemote([]string{node.ID()}, ctx.lom, src, sentCB)
@@ -518,7 +515,6 @@ func (c *putJogger) sendSlices(ctx *encodeCtx) error {
 
 	dataSlice := &slice{refCnt: *atomic.NewInt32(int32(ctx.dataSlices)), obj: ctx.fh}
 	toSend := cmn.Min(totalCnt, len(targets)-1)
-	counter := atomic.NewInt32(int32(toSend))
 
 	// If the slice is data one - no immediate cleanup is required because this
 	// slice is just a section reader of the entire file.
@@ -533,8 +529,7 @@ func (c *putJogger) sendSlices(ctx *encodeCtx) error {
 		} else {
 			sl = &slice{refCnt: *atomic.NewInt32(1), obj: ctx.slices[i].obj, workFQN: ctx.slices[i].workFQN}
 		}
-		if err := c.sendSlice(ctx, sl, targets[i+1], i, counter); err != nil {
-			sl.release()
+		if err := c.sendSlice(ctx, sl, targets[i+1], i); err != nil {
 			copyErr = err
 		}
 	}

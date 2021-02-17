@@ -92,7 +92,9 @@ func (c *getJogger) run() {
 		case req := <-c.workCh:
 			c.parent.stats.updateWaitTime(time.Since(req.tm))
 			req.tm = time.Now()
+			c.parent.IncPending()
 			c.ec(req)
+			c.parent.DecPending()
 		case <-c.stopCh:
 			return
 		}
@@ -109,9 +111,6 @@ func (c *getJogger) stop() {
 func (c *getJogger) finalizeReq(req *Request, err error) {
 	if err != nil {
 		glog.Errorf("Error restoring %s: %v", req.LIF.Uname, err)
-		// If everything is OK, a transport bundle calls `DecPending`
-		// after all the data is transferred
-		c.parent.DecPending()
 	}
 	if req.ErrCh != nil {
 		if err != nil {
@@ -172,7 +171,6 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cmn.ReadOpenClos
 	// memory on completion. Otherwise free allocated memory and return immediately
 	if len(daemons) == 0 {
 		freeObject(reader)
-		c.parent.DecPending()
 		return nil
 	}
 
@@ -670,7 +668,6 @@ func (c *getJogger) uploadRestoredSlices(ctx *restoreCtx, slices []*slice) error
 		counter.Inc()
 	}
 	if counter.Load() == 0 {
-		c.parent.DecPending()
 		return nil
 	}
 	// Send reconstructed slices one by one to targets that are "empty".
@@ -712,9 +709,7 @@ func (c *getJogger) uploadRestoredSlices(ctx *restoreCtx, slices []*slice) error
 					glog.Errorf("%s failed to send %s to %v: %v", c.parent.t.Snode(), ctx.lom, daemonID, err)
 				}
 				s.free()
-				if cnt := counter.Dec(); cnt == 0 {
-					c.parent.DecPending()
-				}
+				c.parent.DecPending()
 			}
 		}(tid, sl)
 		if err := c.parent.writeRemote([]string{tid}, ctx.lom, dataSrc, cb); err != nil {

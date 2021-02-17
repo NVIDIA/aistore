@@ -102,9 +102,7 @@ func (r *XactPut) Do(req *Request, lom *cluster.LOM) error {
 }
 
 func (r *XactPut) dispatchRequest(req *Request, lom *cluster.LOM) error {
-	r.IncPending()
 	if !r.ecRequestsEnabled() {
-		r.DecPending()
 		err := fmt.Errorf("EC on bucket %s is being disabled, no EC requests accepted", r.bck)
 		if req.ErrCh != nil {
 			req.ErrCh <- err
