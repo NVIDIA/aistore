@@ -6,6 +6,7 @@ package tassert
 
 import (
 	"fmt"
+	"net/http"
 	"runtime"
 	"runtime/debug"
 	"sync"
@@ -39,6 +40,13 @@ func CheckError(tb testing.TB, err error) {
 		debug.PrintStack()
 		tb.Error(err.Error())
 	}
+}
+
+func CheckResp(tb testing.TB, client *http.Client, req *http.Request, statusCode int) {
+	resp, err := client.Do(req)
+	CheckFatal(tb, err)
+	resp.Body.Close()
+	Errorf(tb, resp.StatusCode == statusCode, "expected %d status code, got %d", statusCode, resp.StatusCode)
 }
 
 func Fatalf(tb testing.TB, cond bool, msg string, args ...interface{}) {

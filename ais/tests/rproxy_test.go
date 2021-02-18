@@ -193,10 +193,9 @@ func TestRProxyInvalidURL(t *testing.T) {
 		tassert.CheckError(t, err)
 		api.DestroyBucket(baseParams, hbo.Bck)
 
-		res, err := client.Get(test.url)
+		req, err := http.NewRequest(http.MethodGet, test.url, nil)
 		tassert.CheckFatal(t, err)
-		res.Body.Close()
-		tassert.Errorf(t, res.StatusCode == test.statusCode, "%q: expected status %d - got %d", test.url, test.statusCode, res.StatusCode)
+		tassert.CheckResp(t, client, req, test.statusCode)
 
 		_, err = api.HeadBucket(baseParams, hbo.Bck)
 		tassert.Errorf(t, err != nil, "shouldn't create bucket (%s) for invalid resource URL", hbo.Bck)

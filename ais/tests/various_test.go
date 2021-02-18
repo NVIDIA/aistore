@@ -17,8 +17,5 @@ func TestInvalidHTTPMethod(t *testing.T) {
 
 	req, err := http.NewRequest("TEST", proxyURL, nil)
 	tassert.CheckFatal(t, err)
-	resp, err := tutils.HTTPClient.Do(req)
-	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, resp.StatusCode == http.StatusBadRequest, "expected %d status code", http.StatusBadRequest)
-	resp.Body.Close()
+	tassert.CheckResp(t, tutils.HTTPClient, req, http.StatusBadRequest)
 }
