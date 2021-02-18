@@ -686,11 +686,8 @@ func (t *targetrunner) receiveSmap(newSmap *smapX, msg *aisMsg, caller string) (
 }
 
 func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error) {
-	glog.Infof(
-		"[metasync] receive %s from %q (action: %q, uuid: %q)",
-		newRMD.String(), caller, msg.Action, msg.UUID,
-	)
-
+	loghdr := fmt.Sprintf("[metasync] %s from %q (action: %q, uuid: %q)",
+		newRMD.String(), caller, msg.Action, msg.UUID)
 	t.owner.rmd.Lock()
 	defer t.owner.rmd.Unlock()
 
@@ -701,22 +698,28 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 		return
 	}
 
-	smap := t.owner.smap.Get()
+	smap := t.owner.smap.get()
+	if err = smap.validate(); err != nil {
+		glog.Errorf("%s: cannot start rebalance %s: %v", t.si, loghdr, err) // TODO: remove
+		return
+	}
+	if smap.GetNode(t.si.ID()) == nil {
+		err = fmt.Errorf("%s (self) not present in %s", t.si, smap)
+		glog.Errorf("%s - cannot start: %v", loghdr, err) // ditto
+		return
+	}
 	notif := &xaction.NotifXact{
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 	}
-	if msg.Action == cmn.ActRebalance { // manual (triggered by user)
-		glog.Infof("[metasync] manual rebalance (version: %d)", newRMD.version())
-		go t.rebManager.RunRebalance(smap, newRMD.Version, notif)
+	if msg.Action == cmn.ActRebalance {
+		glog.Infof("%s - starting user-requested rebalance", loghdr)
+		go t.rebManager.RunRebalance(&smap.Smap, newRMD.Version, notif)
 		return
 	}
-
-	glog.Infof(
-		"[metasync] rebalance (version: %d; new_targets: %v; resilver: %v)",
-		newRMD.version(), newRMD.TargetIDs, newRMD.Resilver,
-	)
-	go t.rebManager.RunRebalance(smap, newRMD.Version, notif)
+	glog.Infof("%s - starting automated rebalance", loghdr)
+	go t.rebManager.RunRebalance(&smap.Smap, newRMD.Version, notif)
 	if newRMD.Resilver != "" {
+		glog.Infof("%s - ... and resilver", loghdr)
 		go t.runResilver(newRMD.Resilver, true /*skipGlobMisplaced*/)
 	}
 	return

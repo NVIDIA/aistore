@@ -383,7 +383,7 @@ func (p *proxyrunner) _setPropsPre(ctx *bmdModifier, clone *bucketMD) (err error
 // rename-bucket: { confirm existence -- begin -- RebID -- metasync -- commit -- wait for rebalance and unlock }
 func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
 	if rebErr := p.canStartRebalance(); rebErr != nil {
-		err = fmt.Errorf("%s: bucket cannot be renamed: %w", p.si, rebErr)
+		err = fmt.Errorf("%s: bucket %s cannot be renamed: %w", p.si, bckFrom, rebErr)
 		return
 	}
 	// 1. confirm existence & non-existence

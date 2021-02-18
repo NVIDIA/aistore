@@ -2303,7 +2303,6 @@ func (p *proxyrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err
 		"[metasync] receive %s from %q (action: %q, uuid: %q)",
 		newRMD.String(), caller, msg.Action, msg.UUID,
 	)
-
 	p.owner.rmd.Lock()
 	rmd := p.owner.rmd.get()
 	if newRMD.version() <= rmd.version() {
@@ -2406,7 +2405,12 @@ func (p *proxyrunner) detectDaemonDuplicate(osi, nsi *cluster.Snode) bool {
 }
 
 func (p *proxyrunner) canStartRebalance(skipConfigCheck ...bool) error {
-	const minTargetCnt = 2
+	smap := p.owner.smap.get()
+	debug.Assert(smap.IsPrimary(p.si))
+	if !p.NodeStarted() {
+		return fmt.Errorf("%s primary is not yet ready to start rebalance", p.si)
+	}
+	// config
 	var skipCfg bool
 	if len(skipConfigCheck) != 0 {
 		skipCfg = skipConfigCheck[0]
@@ -2416,14 +2420,13 @@ func (p *proxyrunner) canStartRebalance(skipConfigCheck ...bool) error {
 		return fmt.Errorf("rebalance is not enabled in the configuration")
 	}
 	if dontRun := cfg.DontRunTime; dontRun > 0 {
-		if !p.NodeStarted() {
-			return fmt.Errorf("primary is not yet ready to start rebalance")
-		}
 		if time.Since(p.NodeStartedTime()) < dontRun {
-			return fmt.Errorf("rebalance cannot be started before: %v", p.NodeStartedTime().Add(dontRun))
+			return fmt.Errorf("rebalance cannot be started before: %v",
+				p.NodeStartedTime().Add(dontRun))
 		}
 	}
-	smap := p.owner.smap.get()
+	// > 1
+	const minTargetCnt = 2
 	if smap.CountActiveTargets() < minTargetCnt {
 		return &errNotEnoughTargets{p.si, smap, minTargetCnt}
 	}
@@ -2431,18 +2434,12 @@ func (p *proxyrunner) canStartRebalance(skipConfigCheck ...bool) error {
 }
 
 func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
-	if err := p.canStartRebalance(); err != nil {
-		return false
-	}
-
 	if cur.CountActiveTargets() == 0 {
 		return false
 	}
-
 	if cur.CountActiveTargets() > prev.CountActiveTargets() {
 		return true
 	}
-
 	if cur.CountTargets() > prev.CountTargets() {
 		return true
 	}
@@ -2461,7 +2458,6 @@ func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
 			}
 		}
 	}
-
 	return false
 }
 

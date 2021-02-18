@@ -447,7 +447,8 @@ func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, tag s
 	return
 }
 
-func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg, flags cluster.SnodeFlags) (xactID string) {
+func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg,
+	flags cluster.SnodeFlags) (xactID string) {
 	ctx := &smapModifier{
 		pre:   p._updPre,
 		post:  p._updPost,
@@ -485,6 +486,10 @@ func (p *proxyrunner) _updPre(ctx *smapModifier, clone *smapX) error {
 func (p *proxyrunner) _updPost(ctx *smapModifier, clone *smapX) {
 	if !ctx.nsi.IsTarget() {
 		debug.Assert(ctx.nsi.IsProxy())
+		return
+	}
+	if err := p.canStartRebalance(); err != nil {
+		glog.Error(err) // TODO: remove
 		return
 	}
 	// NOTE: trigger rebalance when target with the same ID already exists
@@ -565,6 +570,10 @@ func (p *proxyrunner) addOrUpdateNode(nsi, osi *cluster.Snode, keepalive bool) b
 }
 
 func (p *proxyrunner) _perfRebPost(ctx *smapModifier, clone *smapX) {
+	if err := p.canStartRebalance(); err != nil {
+		glog.Error(err) // TODO: remove
+		return
+	}
 	if !ctx.skipReb && p.requiresRebalance(ctx.smap, clone) {
 		rmdCtx := &rmdModifier{
 			pre: func(_ *rmdModifier, clone *rebMD) {
@@ -965,15 +974,9 @@ func (p *proxyrunner) finalizeMaintenance(msg *cmn.ActionMsg, si *cluster.Snode)
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("put %s under maintenance and rebalance: action %s", si, msg.Action)
 	}
-
-	if p.owner.smap.get().CountActiveTargets() == 0 {
-		return
-	}
-
-	if err = p.canStartRebalance(true /*skip config*/); err == nil {
+	if err = p.canStartRebalance(); err == nil {
 		goto updateRMD
 	}
-
 	if _, ok := err.(*errNotEnoughTargets); !ok {
 		return
 	}

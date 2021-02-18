@@ -1282,7 +1282,7 @@ func _addCaller(r *http.Request, omsg string) (nmsg string) {
 		return
 	}
 	if caller := r.Header.Get(cmn.HeaderCallerName); caller != "" {
-		nmsg = omsg + cmn.FromNodePrefix + caller + "]"
+		nmsg = omsg + cmn.FromNodePrefix + caller
 	}
 	return
 }

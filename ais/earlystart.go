@@ -19,6 +19,12 @@ import (
 
 const minPidConfirmations = 3
 
+const (
+	metaction1 = "early-start-have-registrations"
+	metaction2 = "primary-started-up"
+	metaction3 = "primary-startup-resume-rebalance"
+)
+
 type (
 	bmds  map[*cluster.Snode]*bucketMD
 	smaps map[*cluster.Snode]*smapX
@@ -175,10 +181,6 @@ func (p *proxyrunner) secondaryStartup(smap *smapX, primaryURLs ...string) error
 // It waits a configured time for other nodes to join,
 // discovers cluster-wide metadata, and resolve remaining conflicts.
 func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets int) {
-	const (
-		metaction1 = "early-start-have-registrations"
-		metaction2 = "primary-started-up"
-	)
 	var (
 		smap             = newSmap()
 		uuid, created    string
@@ -315,17 +317,10 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	)
 
 	// 8. bump up RMD (to take over) and resume rebalance if needed
-	err := p.canStartRebalance()
-	if err == nil && p.owner.rmd.rebalance.CAS(true, false) {
-		glog.Infof("rebalance did not finish, restarting...")
-		aisMsg.Action = cmn.ActRebalance
-		ctx := &rmdModifier{
-			pre: func(_ *rmdModifier, clone *rebMD) { clone.Version += 100 },
-		}
-		rmd := p.owner.rmd.modify(ctx)
-		pairs = append(pairs, revsPair{rmd, aisMsg})
+	if config.Rebalance.Enabled {
+		go p.resumeRebalanceIf(config)
 	}
-
+	// 9. metasync smap & vmd
 	wg := p.metasyncer.sync(pairs...)
 	wg.Wait()
 	glog.Infof("%s: metasync %s, %s", p.si, smap.StringEx(), bmd.StringEx())
@@ -339,12 +334,49 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	p.reg.mtx.Unlock()
 }
 
-// maxVerSmap != nil iff there's a primary change _and_ the cluster has moved on
-func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.Config, ntargets int) (maxVerSmap *smapX) {
-	const (
-		// Number of iteration to consider the cluster quiescent.
-		quiescentIter = 4
+// resume rebalance if needed
+func (p *proxyrunner) resumeRebalanceIf(config *cmn.Config) {
+	const retries = 8
+	var (
+		err   error
+		sleep = config.Timeout.MaxKeepalive
 	)
+	for i := 0; i < retries; i++ {
+		time.Sleep(sleep)
+		if err = p.canStartRebalance(); err == nil {
+			break
+		}
+	}
+	if !p.owner.rmd.rebalance.CAS(true, false) {
+		// nothing to do
+		return
+	}
+	if err != nil {
+		// TODO: insist on rebalancing at a later time
+		p.owner.rmd.rebalance.CAS(false, true)
+		glog.Errorf("%s: cannot resume rebalance: %v", p.si, err)
+		return
+	}
+	glog.Errorf("%s: rebalance did not finish, restarting...", p.si)
+	var (
+		smap   = p.owner.smap.get()
+		bmd    = p.owner.bmd.get()
+		aisMsg = p.newAisMsg(&cmn.ActionMsg{Value: metaction3}, smap, bmd)
+	)
+	aisMsg.Action = cmn.ActRebalance
+	ctx := &rmdModifier{
+		pre: func(_ *rmdModifier, clone *rebMD) { clone.Version += 100 },
+	}
+	rmd := p.owner.rmd.modify(ctx)
+	wg := p.metasyncer.sync(revsPair{rmd, aisMsg})
+	wg.Wait()
+	glog.Infof("%s: metasync %s, %s", p.si, smap.StringEx(), rmd.String())
+}
+
+// maxVerSmap != nil iff there's a primary change _and_ the cluster has moved on
+func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.Config,
+	ntargets int) (maxVerSmap *smapX) {
+	const quiescentIter = 4 // Number of iterations to consider the cluster quiescent.
 	var (
 		deadlineTime         = config.Timeout.Startup
 		checkClusterInterval = deadlineTime / quiescentIter
@@ -353,7 +385,6 @@ func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.C
 		definedTargetCnt = ntargets > 0
 		doClusterCheck   = loadedSmap != nil && loadedSmap.CountTargets() != 0
 	)
-
 	for wait, iter := time.Duration(0), 0; wait < deadlineTime && iter < quiescentIter; wait += sleepDuration {
 		time.Sleep(sleepDuration)
 		// Check the cluster Smap only once at max.
@@ -385,7 +416,8 @@ func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.C
 		if targetCnt >= ntargets {
 			glog.Infof("%s: reached expected %d targets (registered: %d)", p.si, ntargets, targetCnt)
 		} else {
-			glog.Warningf("%s: timed-out waiting for %d targets (registered: %d)", p.si, ntargets, targetCnt)
+			glog.Warningf("%s: timed-out waiting for %d targets (registered: %d)",
+				p.si, ntargets, targetCnt)
 		}
 	} else {
 		glog.Infof("%s: registered %d new targets", p.si, targetCnt)

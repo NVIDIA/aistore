@@ -29,7 +29,7 @@ import (
 
 const (
 	stackTracePrefix = "stack: ["
-	FromNodePrefix   = " from: ["
+	FromNodePrefix   = " from: "
 )
 
 type (

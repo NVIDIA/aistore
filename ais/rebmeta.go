@@ -45,7 +45,7 @@ type (
 	rmdOwner struct {
 		sync.Mutex
 		rmd       atomic.Pointer
-		rebalance atomic.Bool // at primary startup it determine whether to start rebalance right after the cluster is up
+		rebalance atomic.Bool // true: resume rebalance right after the cluster started up
 	}
 )
 
@@ -66,7 +66,7 @@ func (r *rebMD) String() string {
 	if r == nil {
 		return "RMD <nil>"
 	}
-	return fmt.Sprintf("RMD v%d", r.Version)
+	return fmt.Sprintf("RMD v%d(%v, %s)", r.Version, r.TargetIDs, r.Resilver)
 }
 
 func newRMDOwner() *rmdOwner {
