@@ -115,7 +115,7 @@ type (
 		UUID        string `json:"uuid"` // cluster-wide ID of this action (operation, transaction)
 	}
 
-	// TODO: add usage
+	// node <=> node cluster-info exchange
 	clusterInfo struct {
 		BMD struct {
 			Version int64  `json:"version,string"`
@@ -171,6 +171,7 @@ type (
 
 	glogWriter struct{}
 
+	// error types
 	// BMD & its uuid
 	errTgtBmdUUIDDiffer struct{ detail string }
 	errPrxBmdUUIDDiffer struct{ detail string }
@@ -192,6 +193,12 @@ type (
 		si       *cluster.Snode
 		from, to string
 	}
+	errNotPrimary struct {
+		si     *cluster.Snode
+		smap   *smapX
+		detail string
+	}
+	// apiRequest
 	apiRequest struct {
 		prefix []string     // in: URL must start with these items
 		after  int          // in: the number of items after the prefix
@@ -218,6 +225,57 @@ func (e *errPrxBmdUUIDDiffer) Error() string { return e.detail }
 func (e *errSmapUUIDDiffer) Error() string   { return e.detail }
 func (e *errNodeNotFound) Error() string {
 	return fmt.Sprintf("%s: %s node %s (not present in the %s)", e.si, e.msg, e.id, e.smap)
+}
+
+//////////////////
+// errDowngrade //
+//////////////////
+
+func newErrDowngrade(si *cluster.Snode, from, to string) *errDowngrade {
+	return &errDowngrade{si, from, to}
+}
+
+func (e *errDowngrade) Error() string {
+	return fmt.Sprintf("%s: attempt to downgrade %s to %s", e.si, e.from, e.to)
+}
+
+func isErrDowngrade(err error) bool {
+	if _, ok := err.(*errDowngrade); ok {
+		return true
+	}
+	erd := &errDowngrade{}
+	return errors.As(err, &erd)
+}
+
+/////////////////////////
+// errNotEnoughTargets //
+////////////////////////
+
+func (e *errNotEnoughTargets) Error() string {
+	return fmt.Sprintf("%s: not enough targets in %s: need %d, have %d",
+		e.si, e.smap, e.required, e.smap.CountActiveTargets())
+}
+
+///////////////////
+// errNotPrimary //
+///////////////////
+
+func newErrNotPrimary(si *cluster.Snode, smap *smapX, detail ...string) *errNotPrimary {
+	if len(detail) == 0 {
+		return &errNotPrimary{si, smap, ""}
+	}
+	return &errNotPrimary{si, smap, detail[0]}
+}
+
+func (e *errNotPrimary) Error() string {
+	var present, detail string
+	if !e.smap.isPresent(e.si) {
+		present = "not present in the "
+	}
+	if e.detail != "" {
+		detail = ": " + e.detail
+	}
+	return fmt.Sprintf("%s is not primary [%s%s]%s", e.si, present, e.smap.StringEx(), detail)
 }
 
 ///////////////
@@ -285,34 +343,6 @@ func freeCallResults(results sliceResults) {
 	}
 	results = results[:0]
 	resultsPool.Put(&results)
-}
-
-//////////////////
-// errDowngrade //
-//////////////////
-
-func newErrDowngrade(si *cluster.Snode, from, to string) errDowngrade {
-	return errDowngrade{si, from, to}
-}
-
-func (e errDowngrade) Error() string {
-	return fmt.Sprintf("%s: attempt to downgrade %s to %s", e.si, e.from, e.to)
-}
-
-func isErrDowngrade(err error) bool {
-	if _, ok := err.(*errDowngrade); ok {
-		return true
-	}
-	return errors.As(err, &errDowngrade{})
-}
-
-/////////////////////////
-// errNotEnoughTargets //
-////////////////////////
-
-func (e *errNotEnoughTargets) Error() string {
-	return fmt.Sprintf("%s: not enough targets in %s: need %d, have %d",
-		e.si, e.smap, e.required, e.smap.CountActiveTargets())
 }
 
 ////////////////
@@ -1863,14 +1893,6 @@ func (h *httprunner) unregisterSelf(ignoreErr bool) (err error) {
 }
 
 func (h *httprunner) healthByExternalWD(w http.ResponseWriter, r *http.Request) (responded bool) {
-	if !h.NodeStarted() {
-		// respond with 503 as per https://tools.ietf.org/html/rfc7231#section-6.6.4
-		// see also:
-		// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes
-		w.WriteHeader(http.StatusServiceUnavailable)
-		return true
-	}
-
 	callerID := r.Header.Get(cmn.HeaderCallerID)
 	caller := r.Header.Get(cmn.HeaderCallerName)
 	// external (i.e. not intra-cluster) call
@@ -1893,17 +1915,12 @@ func (h *httprunner) healthByExternalWD(w http.ResponseWriter, r *http.Request) 
 
 	// Intra cluster health ping
 	if !h.ensureIntraControl(w, r) {
-		return true
-	}
-
-	smap := h.owner.smap.get()
-	if !smap.containsID(callerID) {
-		glog.Warningf("%s: health-ping from a not-yet-registered (%s, %s)", h.si, callerID, caller)
+		responded = true
 	}
 	return
 }
 
-// Determine if request is intra-control. For now, using the http.Server handling the request.
+// Determine if the request is intra-control. For now, using the http.Server handling the request.
 // TODO: Add other checks based on request e.g. `r.RemoteAddr`
 func (h *httprunner) ensureIntraControl(w http.ResponseWriter, r *http.Request) (isIntra bool) {
 	// When `config.UseIntraControl` is `false`, intra-control net is same as public net.

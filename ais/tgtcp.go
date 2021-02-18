@@ -443,7 +443,7 @@ func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request
 func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
 	enabled, err := t.fsprg.enableMountpath(mountpath)
 	if err != nil {
-		if _, ok := err.(cmn.NoMountpathError); ok {
+		if _, ok := err.(*cmn.NoMountpathError); ok {
 			t.writeErr(w, r, err, http.StatusNotFound)
 		} else {
 			// cmn.InvalidMountpathError
@@ -981,14 +981,14 @@ func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Reques
 
 // GET /v1/health (cmn.Health)
 func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
-	if t.healthByExternalWD(w, r) {
+	if !t.NodeStarted() {
+		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	callerID := r.Header.Get(cmn.HeaderCallerID)
-	caller := r.Header.Get(cmn.HeaderCallerName)
-	smap := t.owner.smap.get()
-
-	// NOTE: internal use
+	if responded := t.healthByExternalWD(w, r); responded {
+		return
+	}
+	// cluster info piggy-back
 	query := r.URL.Query()
 	getCii := cmn.IsParseBool(query.Get(cmn.URLParamClusterInfo))
 	if getCii {
@@ -998,15 +998,20 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 		_ = t.writeJSON(w, r, cii, "cluster-info")
 		return
 	}
-
+	// valid?
+	smap := t.owner.smap.get()
+	if !smap.isValid() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	// return ok plus optional reb info
+	callerID := r.Header.Get(cmn.HeaderCallerID)
+	caller := r.Header.Get(cmn.HeaderCallerName)
 	callerSmapVer, _ := strconv.ParseInt(r.Header.Get(cmn.HeaderCallerSmapVersion), 10, 64)
 	if smap.version() != callerSmapVer {
-		glog.Warningf(
-			"%s: health-ping from node (%s, %s) which has different smap version: our (%d), node's (%d)",
-			t.si, callerID, caller, smap.version(), callerSmapVer,
-		)
+		glog.Warningf("%s[%s]: health-ping from node (%s, %s) with different Smap v%d",
+			t.si, smap.StringEx(), callerID, caller, callerSmapVer)
 	}
-
 	getRebStatus := cmn.IsParseBool(query.Get(cmn.URLParamRebStatus))
 	if getRebStatus {
 		status := &reb.Status{}
@@ -1015,7 +1020,6 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
 	if smap.GetProxy(callerID) != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s: health-ping from %s", t.si, caller)

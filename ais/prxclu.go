@@ -414,7 +414,7 @@ func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, tag s
 	debug.AssertMutexLocked(&p.owner.smap.Mutex)
 	smap = p.owner.smap.get()
 	if !smap.isPrimary(p.si) {
-		err = fmt.Errorf("%s is not the primary(%s, %s): cannot %s %s", p.si, smap.Primary, smap, tag, nsi)
+		err = newErrNotPrimary(p.si, smap, fmt.Sprintf("cannot %s %s", tag, nsi))
 		return
 	}
 
@@ -470,7 +470,7 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 
 func (p *proxyrunner) _updPre(ctx *smapModifier, clone *smapX) error {
 	if !clone.isPrimary(p.si) {
-		return fmt.Errorf("%s is not primary [%s]: cannot add %s", p.si, clone.StringEx(), ctx.nsi)
+		return newErrNotPrimary(p.si, clone, fmt.Sprintf("cannot add %s", ctx.nsi))
 	}
 	ctx.exists = clone.putNode(ctx.nsi, ctx.flags)
 	if ctx.nsi.IsTarget() {
@@ -1028,7 +1028,8 @@ func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, opts *cmn.ActValDeco
 
 func (p *proxyrunner) _cancelMaintPre(ctx *smapModifier, clone *smapX) error {
 	if !clone.isPrimary(p.si) {
-		return fmt.Errorf("%s is not primary [%s]: cannot cancel maintenance for %s", p.si, clone, ctx.sid)
+		return newErrNotPrimary(p.si, clone,
+			fmt.Sprintf("cannot cancel maintenance for %s", ctx.sid))
 	}
 	clone.clearNodeFlags(ctx.sid, ctx.flags)
 	clone.staffIC()
@@ -1235,7 +1236,7 @@ func (p *proxyrunner) _unregNodePre(ctx *smapModifier, clone *smapX) error {
 	sid := ctx.sid
 	node := clone.GetNode(sid)
 	if !clone.isPrimary(p.si) {
-		return fmt.Errorf("%s is not primary [%s]: cannot %s %s", p.si, clone, verb, sid)
+		return newErrNotPrimary(p.si, clone, fmt.Sprintf("cannot cancel %s %s", verb, sid))
 	}
 	if node == nil {
 		ctx.status = http.StatusNotFound

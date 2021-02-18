@@ -215,11 +215,14 @@ func (y *metasyncer) Stop(err error) {
 
 // notify only targets - see bcastTo below
 func (y *metasyncer) notify(wait bool, pair revsPair) (failedCnt int) {
-	cmn.Assert(y.isPrimary())
 	var (
 		failedCntAtomic = atomic.NewInt32(0)
 		req             = revsReq{pairs: []revsPair{pair}}
 	)
+	if y.isPrimary() != nil {
+		debug.Assert(false)
+		return
+	}
 	if wait {
 		req.wg = &sync.WaitGroup{}
 		req.wg.Add(1)
@@ -236,10 +239,13 @@ func (y *metasyncer) notify(wait bool, pair revsPair) (failedCnt int) {
 }
 
 func (y *metasyncer) sync(pairs ...revsPair) *sync.WaitGroup {
-	cmn.Assert(y.isPrimary()) // expecting caller to check
-	cmn.Assert(len(pairs) > 0)
+	debug.Assert(len(pairs) > 0)
 	req := revsReq{pairs: pairs}
 	req.wg = &sync.WaitGroup{}
+	if y.isPrimary() != nil {
+		debug.Assert(false)
+		return req.wg
+	}
 	req.wg.Add(1)
 	req.reqType = revsReqSync
 	y.workCh <- req
@@ -539,22 +545,14 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 	return
 }
 
-func (y *metasyncer) isPrimary() bool {
+func (y *metasyncer) isPrimary() (err error) {
 	smap := y.p.owner.smap.get()
-	cmn.Assert(smap != nil)
 	if smap.isPrimary(y.p.si) {
-		return true
+		return
 	}
-	reason := "the primary"
-	if !smap.isPresent(y.p.si) {
-		reason = "present in the Smap"
-	}
-	lead := "?"
-	if smap.Primary != nil {
-		lead = smap.Primary.ID()
-	}
-	glog.Errorf("%s is not %s (primary=%s, %s)", y.p.si, reason, lead, smap)
-	return false
+	err = newErrNotPrimary(y.p.si, smap)
+	glog.Error(err)
+	return
 }
 
 func (y *metasyncer) lastVersion(tag string) int64 {

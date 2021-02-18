@@ -172,7 +172,7 @@ func (r *XactTransferBck) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 	if err != nil {
 		if cmn.IsErrOOS(err) {
 			what := fmt.Sprintf("%s(%q)", r.Kind(), r.ID())
-			err = cmn.NewAbortedErrorDetails(what, err.Error())
+			err = cmn.NewAbortedError(what, err.Error())
 		}
 		goto ret
 	}
@@ -181,7 +181,7 @@ func (r *XactTransferBck) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 	// keep checking remaining capacity
 	if cs := fs.GetCapStatus(); cs.Err != nil {
 		what := fmt.Sprintf("%s(%q)", r.Kind(), r.ID())
-		err = cmn.NewAbortedErrorDetails(what, cs.Err.Error())
+		err = cmn.NewAbortedError(what, cs.Err.Error())
 	}
 ret:
 	freeCpObjParams(params)

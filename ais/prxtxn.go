@@ -753,7 +753,7 @@ func (p *proxyrunner) markMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) err
 
 func (p *proxyrunner) _markMaint(ctx *smapModifier, clone *smapX) error {
 	if !clone.isPrimary(p.si) {
-		return fmt.Errorf("%s is not primary [%s]: cannot put in maintenance %s", p.si, clone.StringEx(), ctx.sid)
+		return newErrNotPrimary(p.si, clone, fmt.Sprintf("cannot put %s in maintenance", ctx.sid))
 	}
 	clone.setNodeFlags(ctx.sid, ctx.flags)
 	clone.staffIC()

@@ -337,10 +337,10 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 
 // resume rebalance if needed
 func (p *proxyrunner) resumeRebalanceIf(config *cmn.Config) {
-	const retries = 8
+	const retries = 10
 	var (
 		err   error
-		sleep = config.Timeout.MaxKeepalive
+		sleep = cmn.MaxDuration(config.Timeout.Startup/retries, config.Timeout.MaxKeepalive)
 	)
 	for i := 0; i < retries; i++ {
 		time.Sleep(sleep)
@@ -469,7 +469,7 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 				}
 				// If the primary in max-ver Smap version and current node only differ by `DaemonID`,
 				// overwrite the proxy entry with current `Snode` and proceed to merging Smap.
-				// TODO: Add sophisticated validation to ensure `dupNode` and `p.si` only differ in `DaemonID`.
+				// TODO: Add validation to ensure `dupNode` and `p.si` only differ in `DaemonID`.
 				svm.Smap.Primary = p.si
 				svm.Smap.delProxy(dupNode.ID())
 				svm.Smap.Pmap[p.si.ID()] = p.si

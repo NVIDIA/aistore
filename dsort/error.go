@@ -9,8 +9,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-func newDSortAbortedError(managerUUID string) cmn.AbortedError {
-	return cmn.NewAbortedErrorDetails(cmn.DSortName, managerUUID)
+func newDSortAbortedError(managerUUID string) *cmn.AbortedError {
+	return cmn.NewAbortedError(cmn.DSortName, managerUUID)
 }
 
 // Returns if the error is not abort error - in other cases we need to report

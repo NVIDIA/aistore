@@ -93,7 +93,7 @@ func (r *xactMNC) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 	}
 	if err != nil && cmn.IsErrOOS(err) {
 		what := fmt.Sprintf("%s(%q)", r.Kind(), r.ID())
-		return cmn.NewAbortedErrorDetails(what, err.Error())
+		return cmn.NewAbortedError(what, err.Error())
 	}
 
 	r.ObjectsInc()
@@ -102,7 +102,7 @@ func (r *xactMNC) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 	if r.ObjCount()%100 == 0 {
 		if cs := fs.GetCapStatus(); cs.Err != nil {
 			what := fmt.Sprintf("%s(%q)", r.Kind(), r.ID())
-			return cmn.NewAbortedErrorDetails(what, cs.Err.Error())
+			return cmn.NewAbortedError(what, cs.Err.Error())
 		}
 	}
 	return nil

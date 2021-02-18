@@ -576,7 +576,7 @@ func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, arg 
 
 func (rj *rebJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	if rj.xreb.Aborted() || rj.xreb.Finished() {
-		return cmn.NewAbortedErrorDetails("traversal", rj.xreb.String())
+		return cmn.NewAbortedError("traversal", rj.xreb.String())
 	}
 	if de.IsDir() {
 		return nil

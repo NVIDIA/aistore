@@ -1156,7 +1156,7 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, ob
 		if !checkEntireObjCksum {
 			t.Errorf("Failed to get object %s/%s! Error: %v", bck, objName, err)
 		} else {
-			if ckErr, ok := err.(cmn.InvalidCksumError); ok {
+			if ckErr, ok := err.(*cmn.InvalidCksumError); ok {
 				file, err := os.Open(fqn)
 				if err != nil {
 					t.Fatalf("Unable to open file: %s. Error:  %v", fqn, err)

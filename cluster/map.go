@@ -307,7 +307,8 @@ func (m *Smap) StringEx() string {
 	if m == nil {
 		return "Smap <nil>"
 	}
-	return fmt.Sprintf("Smap v%d[%s, pid=%s, t=%d, p=%d]", m.Version, m.UUID, m.Primary, m.CountTargets(), m.CountProxies())
+	return fmt.Sprintf("Smap v%d[%s, pid=%s, t=%d, p=%d]", m.Version, m.UUID, m.Primary,
+		m.CountTargets(), m.CountProxies())
 }
 
 func (m *Smap) CountTargets() int { return len(m.Tmap) }

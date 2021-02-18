@@ -178,7 +178,7 @@ func (p *proxyrunner) sendKeepalive(timeout time.Duration) (status int, err erro
 func (p *proxyrunner) joinCluster(primaryURLs ...string) (status int, err error) {
 	var query url.Values
 	if smap := p.owner.smap.get(); smap.isPrimary(p.si) {
-		return 0, fmt.Errorf("%s should not be joining: is primary, %s", p.si, smap)
+		return 0, fmt.Errorf("%s should not be joining: is primary, %s", p.si, smap.StringEx())
 	}
 	if cmn.GCO.Get().Proxy.NonElectable {
 		query = url.Values{cmn.URLParamNonElectable: []string{"true"}}
@@ -584,27 +584,29 @@ func (p *proxyrunner) syncNewICOwners(smap, newSmap *smapX) {
 }
 
 // GET /v1/health
-// TODO: split/separate ais-internal vs external calls
 func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
-	if p.healthByExternalWD(w, r) {
+	if !p.NodeStarted() {
+		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-
-	var (
-		smap    = p.owner.smap.get()
-		primary = smap != nil && smap.version() > 0 && smap.isPrimary(p.si)
-		query   = r.URL.Query()
-		getCii  = cmn.IsParseBool(query.Get(cmn.URLParamClusterInfo))
-	)
-	// NOTE: internal use
+	if responded := p.healthByExternalWD(w, r); responded {
+		return
+	}
+	// cluster info piggy-back
+	getCii := cmn.IsParseBool(r.URL.Query().Get(cmn.URLParamClusterInfo))
 	if getCii {
 		cii := &clusterInfo{}
 		cii.fill(&p.httprunner)
 		_ = p.writeJSON(w, r, cii, "cluster-info")
 		return
 	}
+	smap := p.owner.smap.get()
+	if !smap.isValid() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
 	// non-primary will keep returning 503 until cluster starts up
-	if !primary && !p.ClusterStarted() {
+	if !smap.isPrimary(p.si) && !p.ClusterStarted() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
@@ -915,7 +917,8 @@ func (p *proxyrunner) hpostAllBuckets(w http.ResponseWriter, r *http.Request, ms
 	}
 }
 
-func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg *cmn.ActionMsg, begin int64) {
+func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg *cmn.ActionMsg,
+	begin int64) {
 	var (
 		err     error
 		bckList *cmn.BucketList
@@ -1959,7 +1962,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		}
 		force := cmn.IsParseBool(query.Get(cmn.URLParamForce))
 		if !force {
-			p.writeErrf(w, r, "cannot shutdown primary %s (see documentation and consider %s=true option)",
+			p.writeErrf(w, r, "cannot shutdown primary %s (consider %s=true option)",
 				p.si, cmn.URLParamForce)
 			return
 		}
@@ -2133,8 +2136,8 @@ func (p *proxyrunner) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 	force := cmn.IsParseBool(query.Get(cmn.URLParamForce))
 	// forceful primary change
 	if force && apiItems[0] == cmn.Proxy {
-		if !p.owner.smap.get().isPrimary(p.si) {
-			p.writeErrf(w, r, "%s is not the primary", p.si)
+		if smap := p.owner.smap.get(); !smap.isPrimary(p.si) {
+			p.writeErr(w, r, newErrNotPrimary(p.si, smap))
 		}
 		p.forcefulJoin(w, r, proxyID)
 		return

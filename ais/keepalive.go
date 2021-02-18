@@ -273,7 +273,7 @@ func (pkr *proxyKeepaliveRunner) closeCh() {
 func (pkr *proxyKeepaliveRunner) _pre(ctx *smapModifier, clone *smapX) error {
 	ctx.smap = pkr.p.owner.smap.get()
 	if !ctx.smap.isPrimary(pkr.p.si) {
-		return fmt.Errorf("%s: is not primary [%s]", pkr.p.si, ctx.smap.StringEx())
+		return newErrNotPrimary(pkr.p.si, ctx.smap)
 	}
 	metaction := "keepalive: removing ["
 	cnt := 0

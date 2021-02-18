@@ -139,7 +139,8 @@ func IsErrAborted(err error) bool {
 	if _, ok := err.(*AbortedError); ok {
 		return true
 	}
-	return errors.As(err, &AbortedError{})
+	target := &AbortedError{}
+	return errors.As(err, &target)
 }
 
 // IsErrorSoft returns true if the error is not critical and can be
@@ -148,7 +149,8 @@ func IsErrSoft(err error) bool {
 	if _, ok := err.(*SoftError); ok {
 		return true
 	}
-	return errors.As(err, &SoftError{})
+	target := &SoftError{}
+	return errors.As(err, &target)
 }
 
 ////////////////////////
@@ -220,8 +222,13 @@ func IsUnreachable(err error, status int) bool {
 // structured error types //
 ////////////////////////////
 
-func NewSignalError(s syscall.Signal) *SignalError { return &SignalError{signal: s} }
-func (e *SignalError) Error() string               { return fmt.Sprintf("Signal %d", e.signal) }
+func NewSignalError(s syscall.Signal) *SignalError {
+	return &SignalError{signal: s}
+}
+
+func (e *SignalError) Error() string {
+	return fmt.Sprintf("Signal %d", e.signal)
+}
 
 // https://tldp.org/LDP/abs/html/exitcodes.html
 func (e *SignalError) ExitCode() int { return 128 + int(e.signal) }
@@ -280,14 +287,21 @@ func (e *ErrorBucketIsBusy) Error() string {
 func (e *errAccessDenied) String() string {
 	return fmt.Sprintf("%s: %s access denied (%#x)", e.entity, e.operation, e.accessAttrs)
 }
-func (e *BucketAccessDenied) Error() string { return "bucket " + e.String() }
-func (e *ObjectAccessDenied) Error() string { return "object " + e.String() }
+
+func (e *BucketAccessDenied) Error() string {
+	return "bucket " + e.String()
+}
+
+func (e *ObjectAccessDenied) Error() string {
+	return "object " + e.String()
+}
 
 func NewBucketAccessDenied(bucket, oper string, aattrs AccessAttrs) *BucketAccessDenied {
 	return &BucketAccessDenied{errAccessDenied{bucket, oper, aattrs}}
 }
 
-func NewErrorCapacityExceeded(highWM int64, usedPct int32, totalBytesUsed, totalBytes uint64, oos bool) *ErrorCapacityExceeded {
+func NewErrorCapacityExceeded(highWM int64, usedPct int32, totalBytesUsed, totalBytes uint64,
+	oos bool) *ErrorCapacityExceeded {
 	return &ErrorCapacityExceeded{
 		highWM:         highWM,
 		usedPct:        usedPct,
@@ -307,24 +321,30 @@ func (e *ErrorCapacityExceeded) Error() string {
 		e.usedPct, e.highWM, suffix)
 }
 
-func (e InvalidCksumError) Error() string {
+func (e *InvalidCksumError) Error() string {
 	return fmt.Sprintf("checksum: expected [%s], actual [%s]", e.expectedHash, e.actualHash)
 }
 
-func NewInvalidCksumError(eHash, aHash string) InvalidCksumError {
-	return InvalidCksumError{actualHash: aHash, expectedHash: eHash}
+func NewInvalidCksumError(eHash, aHash string) *InvalidCksumError {
+	return &InvalidCksumError{actualHash: aHash, expectedHash: eHash}
 }
-func (e InvalidCksumError) Expected() string { return e.expectedHash }
 
-func (e NoMountpathError) Error() string                { return "mountpath [" + e.mpath + "] doesn't exist" }
-func NewNoMountpathError(mpath string) NoMountpathError { return NoMountpathError{mpath} }
+func (e *InvalidCksumError) Expected() string { return e.expectedHash }
 
-func (e InvalidMountpathError) Error() string {
+func (e *NoMountpathError) Error() string {
+	return "mountpath [" + e.mpath + "] doesn't exist"
+}
+
+func NewNoMountpathError(mpath string) *NoMountpathError {
+	return &NoMountpathError{mpath}
+}
+
+func (e *InvalidMountpathError) Error() string {
 	return "invalid mountpath [" + e.mpath + "]; " + e.cause
 }
 
-func NewInvalidaMountpathError(mpath, cause string) InvalidMountpathError {
-	return InvalidMountpathError{mpath: mpath, cause: cause}
+func NewInvalidaMountpathError(mpath, cause string) *InvalidMountpathError {
+	return &InvalidMountpathError{mpath: mpath, cause: cause}
 }
 
 func NewNoNodesError(role string) *NoNodesError {
@@ -339,35 +359,43 @@ func (e *NoNodesError) Error() string {
 	return "no available targets"
 }
 
-func (e XactionNotFoundError) Error() string { return "xaction " + e.cause + " not found" }
-func NewXactionNotFoundError(cause string) XactionNotFoundError {
-	return XactionNotFoundError{cause: cause}
+func (e *XactionNotFoundError) Error() string {
+	return "xaction " + e.cause + " not found"
 }
 
-func (e ObjDefunctErr) Error() string {
+func NewXactionNotFoundError(cause string) *XactionNotFoundError {
+	return &XactionNotFoundError{cause: cause}
+}
+
+func (e *ObjDefunctErr) Error() string {
 	return fmt.Sprintf("%s is defunct (%d != %d)", e.name, e.d1, e.d2)
 }
-func NewObjDefunctError(name string, d1, d2 uint64) ObjDefunctErr { return ObjDefunctErr{name, d1, d2} }
 
-func (e ObjMetaErr) Error() string {
+func NewObjDefunctError(name string, d1, d2 uint64) *ObjDefunctErr {
+	return &ObjDefunctErr{name, d1, d2}
+}
+
+func (e *ObjMetaErr) Error() string {
 	return fmt.Sprintf("object %s failed to load meta: %v", e.name, e.err)
 }
 
-func NewObjMetaErr(name string, err error) ObjMetaErr { return ObjMetaErr{name: name, err: err} }
-
-func NewAbortedError(what string) AbortedError {
-	return AbortedError{what: what, details: ""}
+func NewObjMetaErr(name string, err error) *ObjMetaErr {
+	return &ObjMetaErr{name: name, err: err}
 }
 
-func NewAbortedErrorDetails(what, details string) AbortedError {
-	return AbortedError{what: what, details: details}
+func NewAbortedError(what string, details ...string) *AbortedError {
+	var d string
+	if len(details) > 0 {
+		d = details[0]
+	}
+	return &AbortedError{what: what, details: d}
 }
 
-func NewAbortedErrorWrapped(what string, cause error) AbortedError {
-	return AbortedError{what: what, cause: cause}
+func NewAbortedErrorWrapped(what string, cause error) *AbortedError {
+	return &AbortedError{what: what, cause: cause}
 }
 
-func (e AbortedError) Error() string {
+func (e *AbortedError) Error() string {
 	if e.cause != nil {
 		return fmt.Sprintf("%s aborted. %s", e.what, e.cause.Error())
 	}
@@ -470,8 +498,13 @@ func (e *ETLError) WithContext(ctx *ETLErrorContext) *ETLError {
 		withSvcName(ctx.SvcName)
 }
 
-func NewSoftError(what string) SoftError { return SoftError{what} }
-func (e SoftError) Error() string        { return e.what }
+func NewSoftError(what string) *SoftError {
+	return &SoftError{what}
+}
+
+func (e *SoftError) Error() string {
+	return e.what
+}
 
 ////////////////////////////
 // error grouping helpers //
@@ -493,10 +526,10 @@ func IsErrObjNought(err error) bool {
 	if IsObjNotExist(err) {
 		return true
 	}
-	if _, ok := err.(ObjMetaErr); ok {
+	if _, ok := err.(*ObjMetaErr); ok {
 		return true
 	}
-	if _, ok := err.(ObjDefunctErr); ok {
+	if _, ok := err.(*ObjDefunctErr); ok {
 		return true
 	}
 	return false
