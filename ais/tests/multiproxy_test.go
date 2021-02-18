@@ -10,7 +10,6 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"reflect"
 	"strconv"
@@ -348,10 +347,7 @@ func _addNodeDuplicateDaemonID(t *testing.T, nodeType string) {
 		err      error
 
 		// node configs
-		instance = 42
-		portInc  = 100
-		suffName = "dup"
-		logDir   = "/tmp/ais/dup/log"
+		portInc = 100
 	)
 
 	if nodeType == cmn.Proxy {
@@ -361,36 +357,19 @@ func _addNodeDuplicateDaemonID(t *testing.T, nodeType string) {
 	}
 	tassert.CheckFatal(t, err)
 
-	cfg := tutils.GetDaemonConfig(t, node.ID())
+	conf := tutils.GetDaemonConfig(t, node.ID())
 
-	// Create local config for daemon
-	localConfFile := path.Join(cfg.Confdir, "ais_local.json")
+	// Create local config for daemon.
 	localConf := &cmn.LocalConfig{}
-	_, err = jsp.Load(localConfFile, localConf, jsp.Plain())
-	tassert.CheckFatal(t, err)
-	localConf.Net.PortStr = strconv.Itoa(cfg.Net.L4.Port + portInc)
-	localConf.Net.PortIntraControlStr = strconv.Itoa(cfg.Net.L4.PortIntraControl + portInc)
-	localConf.Net.PortIntraDataStr = strconv.Itoa(cfg.Net.L4.PortIntraData + portInc)
+	localConf.Net.PortStr = strconv.Itoa(conf.Net.L4.Port + portInc)
+	localConf.Net.PortIntraControlStr = strconv.Itoa(conf.Net.L4.PortIntraControl + portInc)
+	localConf.Net.PortIntraDataStr = strconv.Itoa(conf.Net.L4.PortIntraData + portInc)
 
-	// Create new config directory and save local and global config.
-	cfg.Confdir += suffName
-	err = os.MkdirAll(cfg.Confdir, cmn.PermRWXRX)
-	tassert.CheckFatal(t, err)
-	cfg.Log.Dir = logDir
-	cfg.TestFSP.Instance = instance
-	configFile := path.Join(cfg.Confdir, "ais.json")
-	localConfFile = path.Join(cfg.Confdir, "ais_local.json")
-
-	err = jsp.Save(configFile, cfg, jsp.PlainLocal())
-	tassert.CheckFatal(t, err)
-
-	err = jsp.Save(localConfFile, localConf, jsp.Plain())
-	tassert.CheckFatal(t, err)
-
-	// Start with different config but same daemon ID
-	pid, err := tutils.DeployNode(t, nodeType, configFile, node.ID())
-	tassert.CheckFatal(t, err)
-	defer tutils.CleanupNode(t, pid, cfg, nodeType)
+	// start with different config but same daemon ID
+	pid := tutils.DeployNode(t, node, conf, localConf)
+	t.Cleanup(func() {
+		tutils.CleanupNode(t, pid)
+	})
 
 	err = tutils.WaitForNodeToTerminate(pid)
 	tassert.CheckFatal(t, err)
@@ -417,12 +396,6 @@ func _addNodeDuplicateIP(t *testing.T, nodeType string) {
 		smap     = tutils.GetClusterMap(t, proxyURL)
 		node     *cluster.Snode
 		err      error
-
-		// node configs
-		instance = 42
-		suffName = "dup"
-		logDir   = "/tmp/ais/dup/log"
-		daemonID = "testdupdaemon"
 	)
 
 	if nodeType == cmn.Proxy {
@@ -432,20 +405,15 @@ func _addNodeDuplicateIP(t *testing.T, nodeType string) {
 	}
 	tassert.CheckFatal(t, err)
 
-	cfg := tutils.GetDaemonConfig(t, node.ID())
-	cfg.Confdir += suffName
-	err = os.MkdirAll(cfg.Confdir, cmn.PermRWXRX)
-	tassert.CheckFatal(t, err)
-	cfg.Log.Dir = logDir
-	cfg.TestFSP.Instance = instance
-	configFile := path.Join(cfg.Confdir, "ais.json")
+	conf := tutils.GetDaemonConfig(t, node.ID())
 
-	err = jsp.Save(configFile, cfg, jsp.Plain())
-	tassert.CheckFatal(t, err)
+	// Make sure that the `DaemonID` is different.
+	node.DaemonID = "testing_" + cmn.RandString(10)
 
-	pid, err := tutils.DeployNode(t, nodeType, configFile, daemonID)
-	tassert.CheckFatal(t, err)
-	defer tutils.CleanupNode(t, pid, cfg, nodeType)
+	pid := tutils.DeployNode(t, node, conf, nil)
+	t.Cleanup(func() {
+		tutils.CleanupNode(t, pid)
+	})
 
 	err = tutils.WaitForNodeToTerminate(pid)
 	tassert.CheckFatal(t, err)

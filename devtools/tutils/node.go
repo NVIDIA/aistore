@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -21,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools"
 	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
@@ -406,49 +406,44 @@ func startNode(cmd string, args []string, asPrimary bool) (pid int, err error) {
 	return
 }
 
-func DeployNode(t *testing.T, daeType, cfgPath, daeID string) (int, error) {
+func DeployNode(t *testing.T, node *cluster.Snode, conf *cmn.Config, localConf *cmn.LocalConfig) int {
+	conf.Confdir = t.TempDir()
+	conf.Log.Dir = t.TempDir()
+	conf.TestFSP.Root = t.TempDir()
+	conf.TestFSP.Instance = 42
+
+	if localConf == nil {
+		localConf = &cmn.LocalConfig{}
+		localConf.Net.PortStr = strconv.Itoa(conf.Net.L4.Port)
+		localConf.Net.PortIntraControlStr = strconv.Itoa(conf.Net.L4.PortIntraControl)
+		localConf.Net.PortIntraDataStr = strconv.Itoa(conf.Net.L4.PortIntraData)
+	}
+
+	localConfFile := path.Join(conf.Confdir, "ais_local.json")
+	err := jsp.Save(localConfFile, localConf, jsp.Plain())
+	tassert.CheckFatal(t, err)
+
+	configFile := path.Join(conf.Confdir, "ais.json")
+	err = jsp.Save(configFile, conf, jsp.Plain())
+	tassert.CheckFatal(t, err)
+
 	args := []string{
-		"-config=" + cfgPath,
-		"-daemon_id=" + daeID,
-		"-role=" + daeType,
+		"-role=" + node.Type(),
+		"-daemon_id=" + node.ID(),
+		"-config=" + configFile,
+		"-local_config=" + localConfFile,
 	}
 
 	cmd := getAISNodeCmd(t)
-	return startNode(cmd, args, false)
+	pid, err := startNode(cmd, args, false)
+	tassert.CheckFatal(t, err)
+	return pid
 }
 
-// CleanupNode, cleanup the process and directories associated with node
-func CleanupNode(t *testing.T, pid int, cfg *cmn.Config, daeTy string) {
-	// Make sure the process is killed
-	exec.Command("kill", "-9", strconv.Itoa(pid)).CombinedOutput()
-
-	if err := os.RemoveAll(cfg.Confdir); err != nil && !os.IsNotExist(err) {
-		t.Error(err.Error())
-	}
-
-	if err := os.RemoveAll(cfg.Log.Dir); err != nil && !os.IsNotExist(err) {
-		t.Error(err.Error())
-	}
-
-	fsWalkFunc := func(p string, info os.FileInfo, err error) error {
-		if !info.IsDir() {
-			return nil
-		}
-
-		if !strings.HasPrefix(info.Name(), "mp") {
-			return nil
-		}
-
-		deletePath := path.Join(p, info.Name(), strconv.Itoa(cfg.TestFSP.Instance))
-		if err := os.RemoveAll(deletePath); err != nil && !os.IsNotExist(err) {
-			t.Error(err.Error())
-		}
-		return nil
-	}
-	// Clean mountpaths for targets
-	if daeTy == cmn.Target {
-		filepath.Walk(cfg.TestFSP.Root, fsWalkFunc)
-	}
+// CleanupNode kills the process.
+func CleanupNode(t *testing.T, pid int) {
+	_, err := exec.Command("kill", "-9", strconv.Itoa(pid)).CombinedOutput()
+	tassert.CheckError(t, err)
 }
 
 // getAISNodeCmd finds the command for deploying AIS node
