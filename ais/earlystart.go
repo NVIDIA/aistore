@@ -316,11 +316,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		pairs  = []revsPair{{smap, aisMsg}, {bmd, aisMsg}}
 	)
 
-	// 8. bump up RMD (to take over) and resume rebalance if needed
-	if config.Rebalance.Enabled {
-		go p.resumeRebalanceIf(config)
-	}
-	// 9. metasync smap & vmd
+	// 8. metasync smap & bmd
 	wg := p.metasyncer.sync(pairs...)
 	wg.Wait()
 	glog.Infof("%s: metasync %s, %s", p.si, smap.StringEx(), bmd.StringEx())
@@ -328,10 +324,15 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	glog.Infof("%s: primary & cluster startup complete", p.si)
 	p.markClusterStarted()
 
-	// Clear regpool, only used in startup
+	// Clear regpool
 	p.reg.mtx.Lock()
 	p.reg.pool = nil
 	p.reg.mtx.Unlock()
+
+	// 9. resume rebalance if needed
+	if config.Rebalance.Enabled {
+		go p.resumeRebalanceIf(config)
+	}
 }
 
 // resume rebalance if needed
