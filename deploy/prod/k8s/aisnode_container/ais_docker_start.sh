@@ -19,23 +19,15 @@ node /opt/statsd/stats.js /opt/statsd/statsd.conf &
 mkdir /var/log/aismisc
 
 #
-# If /var/ais_env/env exists then the initContainer that runs only on
-# proxy pods has determined:
-#  - that we're in initial cluster deployment (proxy clusterIP can't return an smap)
-#  - that the current node is labeled as initial primary proxy
-# We'll pass a hint on to the aisnode instance that it is likely the (initial) primary.
-#
-if [[ "${AIS_NODE_ROLE}" != "target" && -f /var/ais_env/env ]]; then
-    echo "Running on node labeled as initial primary proxy during initial cluster deployment"
-    export AIS_IS_PRIMARY=True
+# Use environment variables from /var/ais_env/env file
+env_file=/var/ais_env/env
+if [[ -f  ${env_file} ]]; then
+    source ${env_file}
+fi
+
+if [[ "${AIS_IS_PRIMARY}" == "true" ]]; then
     is_primary=true
 else
-    # This path is taken for:
-    #  - all target pods
-    #  - proxy pods during initial deployment starting up on a node that is not labeled
-    #    as initial primary proxy
-    #  - all proxy pods once initial k8s deployment is done
-    # Caution - don't set AIS_IS_PRIMARY false here, it just looks for any non-NULL value
     is_primary=false
 fi
 
