@@ -31,7 +31,14 @@ const (
 	maxNodeRetry      = 10              // max retries to get health
 )
 
-type nodesCnt int
+type (
+	nodesCnt int
+
+	WaitRetryOpts struct {
+		MaxRetries int
+		Interval   time.Duration
+	}
+)
 
 func (n nodesCnt) satisfied(actual int) bool {
 	if n == 0 {
@@ -650,11 +657,20 @@ retry:
 	goto retry
 }
 
-func WaitNodeReady(url string) (err error) {
+func WaitNodeReady(url string, opts ...*WaitRetryOpts) (err error) {
 	var (
 		i          = 0
 		baseParams = BaseAPIParams(url)
+
+		retries       = maxNodeRetry
+		retryInterval = nodeRetryInterval
 	)
+
+	if len(opts) > 0 && opts[0] != nil {
+		retries = opts[0].MaxRetries
+		retryInterval = opts[0].Interval
+	}
+
 while503:
 	err = api.Health(baseParams)
 	if err == nil {
@@ -663,10 +679,10 @@ while503:
 	if !cmn.IsStatusServiceUnavailable(err) && !cmn.IsErrConnectionRefused(err) {
 		return
 	}
-	time.Sleep(nodeRetryInterval)
+	time.Sleep(retryInterval)
 	i++
-	if i > maxNodeRetry {
-		return fmt.Errorf("node start failed - max retries (%d) exceeded", maxNodeRetry)
+	if i > retries {
+		return fmt.Errorf("node start failed - max retries (%d) exceeded", retries)
 	}
 	goto while503
 }
