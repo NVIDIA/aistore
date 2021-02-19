@@ -15,6 +15,7 @@ exec node /statsd/stats.js ${STATSD_CONF_FILE} 2>&1 | tee -a ${AIS_LOG_DIR}/stat
 
 ${GOBIN}/aisnode \
     -config=${AIS_CONF_FILE} \
+    -local_config=${AIS_LOCAL_CONF_FILE} \
     -role=${AIS_NODE_ROLE} \
     -ntargets=${TARGET_CNT} \
     -nodiskio=${AIS_NO_DISK_IO} \

@@ -84,9 +84,21 @@ ubuntu           soft    nofile          999999
 
 ## Storage
 
-Storage-wise, each local `ais.json` config must be looking as follows:
+Storage-wise, each local `ais_local.json` config must be looking as follows:
 
-((missing -- image))
+```json
+{
+    "net": {
+        "hostname": "127.0.1.0",
+        "port": "8080",
+    },
+    "fspaths": {
+        "/tmp/ais/1": " ",
+        "/tmp/ais/2": " ",
+        "/tmp/ais/3": " "
+    }
+}
+```
 
 * Each local path from the `fspaths` section above must be (or contain as a prefix) a mountpoint of a local filesystem.
 * Each local filesystem (above) must utilize one or more data drives, whereby none of the data drives is shared between two or more local filesystems.

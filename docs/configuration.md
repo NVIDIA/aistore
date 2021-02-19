@@ -131,7 +131,7 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 AIS command-line allows to override configuration at AIS node's startup. For example:
 
 ```console
-$ aisnode -config=/etc/ais.json -role=target -config_custom="client.timeout=13s,log.level=4"
+$ aisnode -config=/etc/ais.json -local_config=/etc/ais_local.json -role=target -config_custom="client.timeout=13s,log.level=4"
 ```
 
 As shown above, the CLI option in-question is: `confjson`.
@@ -140,21 +140,21 @@ By default, the config provided in `config_custom` will be persisted on the disk
 To make it transient either add `-transient=true` flag or add additional JSON entry:
 
 ```console
-$ aisnode -config=/etc/ais.json -role=target -transient=true -config_custom="client.timeout=13s, transient=true"
+$ aisnode -config=/etc/ais.json -local_config=/etc/ais_local.json -role=target -transient=true -config_custom="client.timeout=13s, transient=true"
 ```
 
 Another example.
 To override locally-configured address of the primary proxy, run:
 
 ```console
-$ aisnode -config=/etc/ais.json -role=target -config_custom="proxy.primary_url=http://G"
+$ aisnode -config=/etc/ais.json -local_config=/etc/ais_local.json -role=target -config_custom="proxy.primary_url=http://G"
 # where G denotes the designated primary's hostname and port.
 ```
 
 To achieve the same on temporary basis, add `-transient=true` as follows:
 
 ```console
-$ aisnode -config=/etc/ais.json -role=target -config_custom="proxy.primary_url=http://G"
+$ aisnode -config=/etc/ais.json -local_config=/etc/ais_local.json -role=target -config_custom="proxy.primary_url=http://G"
 ```
 
 > Please see [AIS command-line](command_line.md) for other command-line options and details.

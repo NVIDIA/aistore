@@ -9,7 +9,9 @@ RUN apt-get clean && apt-get update &&\
       ca-certificates \
       wget \
       vim \
-      python \
+      python3 \
+      python3-distutils \
+      python3-apt \
       sysstat \
       attr \
       net-tools \
@@ -23,7 +25,7 @@ RUN curl -sL https://deb.nodesource.com/setup_10.x | bash -
 RUN apt-get install -y nodejs
 
 RUN wget https://bootstrap.pypa.io/get-pip.py &&\
-  python get-pip.py &&\
+  python3 get-pip.py &&\
   pip install awscli s3cmd
 
 # Setting ENV variables
@@ -45,6 +47,7 @@ RUN git clone https://github.com/etsy/statsd.git
 
 ENV AIS_CONF_DIR /tmp/.conf
 ENV AIS_CONF_FILE ${AIS_CONF_DIR}/ais.json
+ENV AIS_LOCAL_CONF_FILE ${AIS_CONF_DIR}/ais_local.json
 ENV COLLECTD_CONF_FILE ${AIS_CONF_DIR}/collectd.conf
 ENV STATSD_CONF_FILE ${AIS_CONF_DIR}/statsd.conf
 

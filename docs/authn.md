@@ -238,8 +238,8 @@ If a cluster does not have an alias, the role names contain cluster ID.
 
 | Operation | HTTP Action | Example |
 |---|---|---|
-| Get AuthN configuration | GET /v1/daemon | curl -X GET AUTHSRV/v1/deamon |
-| Update AuthN configuration | PUT /v1/daemon { "auth": { "secret": "new_secret", "expiration_time": "24h"}}  | curl -X PUT AUTHSRV/v1/deamon -d '{"auth": {"secret": "new_secret"}}' -H 'Content-Type: application/json' |
+| Get AuthN configuration | GET /v1/daemon | curl -X GET AUTHSRV/v1/daemon |
+| Update AuthN configuration | PUT /v1/daemon { "auth": { "secret": "new_secret", "expiration_time": "24h"}}  | curl -X PUT AUTHSRV/v1/daemon -d '{"auth": {"secret": "new_secret"}}' -H 'Content-Type: application/json' |
 
 ## AuthN server typical workflow
 

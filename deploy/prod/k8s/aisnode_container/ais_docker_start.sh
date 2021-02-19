@@ -7,6 +7,7 @@ echo "---------------------------------------------------"
 [[ -f /git-showbranch.out ]] && cat /git-showbranch.out
 
 cp -fv $AIS_CONF_FILE /etc/ais || exit 1
+cp -fv $AIS_LOCAL_CONF_FILE /etc/ais || exit 1
 cp -fv $STATSD_CONF_FILE /opt/statsd/statsd.conf || exit 1
 
 node /opt/statsd/stats.js /opt/statsd/statsd.conf &
@@ -54,7 +55,7 @@ fi
 # token effort to allow StatsD to set up shop before ais tries to connect
 sleep 2
 
-ARGS="-config=/etc/ais/$(basename -- $AIS_CONF_FILE) -role=$AIS_NODE_ROLE -alsologtostderr=true -stderrthreshold=1"
+ARGS="-config=/etc/ais/$(basename -- $AIS_CONF_FILE) -local_config=/etc/ais/$(basename -- $AIS_LOCAL_CONF_FILE) -role=$AIS_NODE_ROLE -alsologtostderr=true -stderrthreshold=1"
 $is_primary && ARGS+=" -ntargets=$TARGETS"
 echo "aisnode args: $ARGS"
 

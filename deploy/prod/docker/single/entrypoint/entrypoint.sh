@@ -6,6 +6,7 @@ function start_node {
   # Required for `aisnode_config.sh`.
   export AIS_CONF_DIR=/etc/aisnode/$1
   export AIS_CONF_FILE=${AIS_CONF_DIR}/ais.json
+  export AIS_LOCAL_CONF_FILE=${AIS_CONF_DIR}/ais_local.json
   export COLLECTD_CONF_FILE=${AIS_CONF_DIR}/collectd.conf
   export STATSD_CONF_FILE=${AIS_CONF_DIR}/statsd.conf
 
@@ -19,6 +20,7 @@ function start_node {
 
   AIS_IS_PRIMARY="true" bin/aisnode \
     -config=${AIS_CONF_FILE} \
+    -local_config=${AIS_LOCAL_CONF_FILE}
     -role=$1 \
     -ntargets=1 \
     &

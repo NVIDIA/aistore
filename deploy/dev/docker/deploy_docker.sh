@@ -138,7 +138,7 @@ deploy_quickstart() {
     fi
 
     echo "SSH into container ..."
-    container_id=`docker ps | grep ais-quickstart | awk '{ print $1 }'`
+    container_id=$(docker ps | grep ais-quickstart | awk '{ print $1 }')
     docker exec -it $container_id /bin/bash -c "echo 'Hello from AIS!'; /bin/bash;"
 
     rm -rf aisnode_config.sh

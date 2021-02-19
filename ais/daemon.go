@@ -178,7 +178,7 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 		}
 	}
 	if daemon.cli.globalConfPath == "" {
-		str := fmt.Sprintln(confMsg, "config")
+		str := fmt.Sprintf(confMsg, "config")
 		str += usageStr
 		cmn.ExitLogf(str)
 	}

@@ -15,6 +15,7 @@ sleep 20
 parallel-ssh -h inventory/proxy.txt -i 'ps -C aisnode'
 parallel-ssh -h inventory/targets.txt -i 'ps -C aisnode'
 parallel-ssh -h inventory/proxy.txt -i 'cat ~/ais.json'
+parallel-ssh -h inventory/proxy.txt -i 'cat ~/ais_local.json'
 parallel-ssh -h inventory/proxy.txt -i 'tail -20 /var/log/aisproxy/aisnode.INFO'
 parallel-ssh -h inventory/targets.txt -i 'tail -20 /var/log/ais/aisnode.INFO'
 parallel-ssh -h inventory/targets.txt -i 'tail -20 /var/log/aisproxy/aisnode.INFO'
