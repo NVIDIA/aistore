@@ -780,28 +780,25 @@ func Get() (MPI, MPI) {
 	return *availablePaths, *disabledPaths
 }
 
-func CreateBuckets(op string, bcks ...cmn.Bck) (errs []error) {
+func CreateBucket(op string, bck cmn.Bck) (errs []error) {
 	var (
 		availablePaths, _ = Get()
-		totalDirs         = len(availablePaths) * len(bcks) * len(CSM.RegisteredContentTypes)
+		totalDirs         = len(availablePaths) * len(CSM.RegisteredContentTypes)
 		totalCreatedDirs  int
 	)
 	for _, mi := range availablePaths {
-		for _, bck := range bcks {
-			num, err := mi.createBckDirs(bck)
-			if err != nil {
-				errs = append(errs, err)
-			} else {
-				totalCreatedDirs += num
-			}
+		num, err := mi.createBckDirs(bck)
+		if err != nil {
+			errs = append(errs, err)
+		} else {
+			totalCreatedDirs += num
 		}
 	}
-	if errs == nil && totalCreatedDirs != totalDirs {
-		errs = append(errs, fmt.Errorf("failed to create %d out of %d buckets' directories: %v",
-			totalDirs-totalCreatedDirs, totalDirs, bcks))
-	}
-	if errs == nil && glog.FastV(4, glog.SmoduleFS) {
-		glog.Infof("%s(create bucket dirs): %v, num=%d", op, bcks, totalDirs)
+	if errs == nil {
+		debug.Assert(totalCreatedDirs == totalDirs)
+		if glog.FastV(4, glog.SmoduleFS) {
+			glog.Infof("%s(create bucket dirs): %s, num=%d", op, bck, totalDirs)
+		}
 	}
 	return
 }

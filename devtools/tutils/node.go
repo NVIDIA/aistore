@@ -177,7 +177,8 @@ func WaitForClusterStateActual(proxyURL, reason string, origVersion int64, proxy
 //
 // It returns the smap which satisfies those requirements.
 // NOTE: Upon successful return from this function cluster state might have already changed.
-func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, targetCnt int, syncIgnoreIDs ...string) (*cluster.Smap, error) {
+func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, targetCnt int,
+	syncIgnoreIDs ...string) (*cluster.Smap, error) {
 	var (
 		lastVersion                               int64
 		smapChangeDeadline, timeStart, opDeadline time.Time
@@ -213,9 +214,10 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 			expPrx.satisfied(smap.CountActiveProxies()) &&
 			smap.Version > origVersion
 		if !satisfied {
-			d := time.Since(timeStart)
-			Logf("Still polling %s, %s(pid=%s) (%s)\n",
-				proxyURL, smap, smap.Primary.ID(), d.Truncate(time.Second))
+			if d := time.Since(timeStart); d > 7*time.Second {
+				Logf("Still polling %s, %s(pid=%s) (%s)\n",
+					proxyURL, smap, smap.Primary.ID(), d.Truncate(time.Second))
+			}
 		}
 
 		if smap.Version != lastVersion {
@@ -245,8 +247,9 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 			if syncedSmap.Version != smap.Version {
 				if !expTgt.satisfied(smap.CountActiveTargets()) ||
 					!expPrx.satisfied(smap.CountActiveProxies()) {
-					return nil, fmt.Errorf("%s changed after sync (to %s) and does not satisfy the state",
-						smap, syncedSmap)
+					return nil,
+						fmt.Errorf("%s changed after sync (to %s) and does not satisfy the state",
+							smap, syncedSmap)
 				}
 				Logf("%s changed after sync (to %s) but satisfies the state\n", smap, syncedSmap)
 			}
@@ -583,7 +586,8 @@ func EnsureOrigClusterState(t *testing.T) {
 		node := smap.GetNode(cmd.Node.ID())
 		tassert.Errorf(t, node != nil, "%s %s changed its ID", cmd.Node.Type(), cmd.Node.ID())
 		if node != nil {
-			tassert.Errorf(t, node.Equals(cmd.Node), "%s %s changed, before = %+v, after = %+v", cmd.Node.Type(), node.ID(), cmd.Node, node)
+			tassert.Errorf(t, node.Equals(cmd.Node),
+				"%s %s changed, before = %+v, after = %+v", cmd.Node.Type(), node.ID(), cmd.Node, node)
 		}
 
 		if containers.DockerRunning() {

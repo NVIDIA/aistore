@@ -479,7 +479,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			// Recreate bucket directories (now empty), since bck is still in BMD
-			errs := fs.CreateBuckets(msg.Action, request.bck.Bck)
+			errs := fs.CreateBucket(msg.Action, request.bck.Bck)
 			if len(errs) > 0 {
 				debug.AssertNoErr(errs[0])
 				t.writeErr(w, r, errs[0]) // only 1 err is possible for 1 bck

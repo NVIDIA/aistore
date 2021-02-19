@@ -272,7 +272,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 
 	tMock = cluster.NewTargetMock(bmd)
 
-	errs := fs.CreateBuckets("testing", bck)
+	errs := fs.CreateBucket("testing", bck)
 	if len(errs) > 0 {
 		tassert.CheckFatal(t, errs[0])
 	}
