@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
-	"syscall"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -169,7 +168,7 @@ func (t *targetrunner) daeputJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case cmn.ActShutdown:
-		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+		t.Stop(errShutdown)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}

@@ -142,9 +142,9 @@ deploy: ## Build 'aisnode' and deploy the specified numbers of local AIS proxies
 .PHONY: kill clean clean-client-bindings
 
 kill: ## Kill all locally deployed targets and proxies
-	@echo -n "Local AIS shutdown... "
+	@which ais >/dev/nil || echo "Warning: missing CLI (ais) binary for proper graceful shutdown"
+	@ais stop cluster 2>/dev/null || true
 	@"$(DEPLOY_DIR)/kill.sh"
-	@echo "done."
 
 clean: ## Remove all AIS related files and binaries
 	@echo -n "Cleaning... "

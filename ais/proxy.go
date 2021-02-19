@@ -2407,37 +2407,28 @@ func (p *proxyrunner) detectDaemonDuplicate(osi, nsi *cluster.Snode) bool {
 	return !nsi.Equals(si)
 }
 
-func (p *proxyrunner) canStartRebalance(skipConfigCheck ...bool) error {
+func (p *proxyrunner) canStartRebalance() error {
 	smap := p.owner.smap.get()
-	debug.Assert(smap.IsPrimary(p.si))
-	if !p.NodeStarted() {
-		return fmt.Errorf("%s primary is not yet ready to start rebalance", p.si)
+	if err := smap.validate(); err != nil {
+		debug.AssertNoErr(err)
+		return err
 	}
-	// config
-	var skipCfg bool
-	if len(skipConfigCheck) != 0 {
-		skipCfg = skipConfigCheck[0]
+	if !smap.IsPrimary(p.si) {
+		err := newErrNotPrimary(p.si, smap)
+		debug.AssertNoErr(err)
+		return err
 	}
-	cfg := cmn.GCO.Get().Rebalance
-	if !skipCfg && !cfg.Enabled {
-		return fmt.Errorf("rebalance is not enabled in the configuration")
+	if !p.ClusterStarted() {
+		return fmt.Errorf("%s primary is not ready yet to start rebalance", p.si)
 	}
-	if dontRun := cfg.DontRunTime; dontRun > 0 {
-		if time.Since(p.NodeStartedTime()) < dontRun {
-			return fmt.Errorf("rebalance cannot be started before: %v",
-				p.NodeStartedTime().Add(dontRun))
-		}
-	}
-	// > 1
-	const minTargetCnt = 2
-	if smap.CountActiveTargets() < minTargetCnt {
-		return &errNotEnoughTargets{p.si, smap, minTargetCnt}
+	if smap.CountActiveTargets() < 2 {
+		return &errNotEnoughTargets{p.si, smap, 2}
 	}
 	return nil
 }
 
 func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
-	if cur.CountActiveTargets() == 0 {
+	if cur.CountActiveTargets() < 2 {
 		return false
 	}
 	if cur.CountActiveTargets() > prev.CountActiveTargets() {
@@ -2451,7 +2442,6 @@ func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
 			return true
 		}
 	}
-
 	bmd := p.owner.bmd.get()
 	if bmd.IsECUsed() {
 		// If there is any target missing we must start rebalance.

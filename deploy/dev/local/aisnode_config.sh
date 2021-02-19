@@ -74,7 +74,6 @@ cat > $AIS_CONF_FILE <<EOL
 	},
 	"rebalance": {
 		"enabled":         true,
-		"dont_run_time":   "0m",
 		"dest_retry_time": "2m",
 		"quiescent":       "10s",
 		"compression":     "${COMPRESSION:-never}",

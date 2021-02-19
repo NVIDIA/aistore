@@ -342,8 +342,6 @@ type (
 		IostatTimeShortStr *string `json:"iostat_time_short"`
 	}
 	RebalanceConf struct {
-		DontRunTimeStr   string        `json:"dont_run_time"`
-		DontRunTime      time.Duration `json:"-"`
 		DestRetryTimeStr string        `json:"dest_retry_time"` // max wait for ACKs & neighbors to complete
 		Quiesce          time.Duration `json:"-"`               // (runtime)
 		QuiesceStr       string        `json:"quiescent"`       // max wait for no-obj before next stage/batch
@@ -354,7 +352,6 @@ type (
 	}
 
 	RebalanceConfToUpdate struct {
-		DontRunTimeStr   *string `json:"dont_run_time"`
 		DestRetryTimeStr *string `json:"dest_retry_time"` // max wait for ACKs & neighbors to complete
 		QuiesceStr       *string `json:"quiescent"`       // max wait for no-obj before next stage/batch
 		Compression      *string `json:"compression"`     // see CompressAlways, etc. enum
@@ -998,12 +995,6 @@ func (c *ClientConf) Validate(_ *Config) (err error) {
 }
 
 func (c *RebalanceConf) Validate(_ *Config) (err error) {
-	if c.DontRunTimeStr != "" { // can be missing
-		if c.DontRunTime, err = time.ParseDuration(c.DontRunTimeStr); err != nil {
-			return fmt.Errorf("invalid rebalance.dont_run_time format %s, err %v",
-				c.DontRunTimeStr, err)
-		}
-	}
 	if c.DestRetryTime, err = time.ParseDuration(c.DestRetryTimeStr); err != nil {
 		return fmt.Errorf("invalid rebalance.dest_retry_time format %s, err %v", c.DestRetryTimeStr, err)
 	}

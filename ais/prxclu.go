@@ -744,14 +744,12 @@ func (p *proxyrunner) xactStarStop(w http.ResponseWriter, r *http.Request, msg *
 }
 
 func (p *proxyrunner) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
-	if err := p.canStartRebalance(true /*skip config*/); err != nil {
+	if err := p.canStartRebalance(); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
 	rmdCtx := &rmdModifier{
-		pre: func(_ *rmdModifier, clone *rebMD) {
-			clone.inc()
-		},
+		pre:   func(_ *rmdModifier, clone *rebMD) { clone.inc() },
 		final: p._syncRMDFinal,
 		msg:   &cmn.ActionMsg{Action: cmn.ActRebalance},
 		smap:  p.owner.smap.get(),
