@@ -498,6 +498,8 @@ func clearAllECObjects(t *testing.T, bck cmn.Bck, failOnDelErr bool, o *ecOption
 		}(idx)
 	}
 	wg.Wait()
+	reqArgs := api.XactReqArgs{Kind: cmn.ActECPut, Bck: bck, Latest: true}
+	api.WaitForXactionIdle(tutils.BaseAPIParams(proxyURL), reqArgs)
 }
 
 func objectsExist(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objPatt string, objCount int) {

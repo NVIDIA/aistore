@@ -388,6 +388,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 		if oldCallback != nil {
 			oldCallback(hdr, reader, arg, err)
 		}
+		r.DecPending()
 	}
 	r.IncPending()
 	return r.sendByDaemonID(daemonIDs, hdr, src.reader, cb, false)

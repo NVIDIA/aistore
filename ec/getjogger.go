@@ -198,7 +198,6 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cmn.ReadOpenClos
 				c.parent.t.Snode(), ctx.lom, daemons, err)
 		}
 		freeObject(reader)
-		c.parent.DecPending()
 	}
 	src := &dataSource{
 		reader:   srcReader,
@@ -709,7 +708,6 @@ func (c *getJogger) uploadRestoredSlices(ctx *restoreCtx, slices []*slice) error
 					glog.Errorf("%s failed to send %s to %v: %v", c.parent.t.Snode(), ctx.lom, daemonID, err)
 				}
 				s.free()
-				c.parent.DecPending()
 			}
 		}(tid, sl)
 		if err := c.parent.writeRemote([]string{tid}, ctx.lom, dataSrc, cb); err != nil {

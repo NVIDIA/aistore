@@ -279,12 +279,6 @@ func (c *putJogger) ctSendCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ inte
 	if err != nil {
 		glog.Errorf("failed to send o[%s/%s], err: %v", hdr.Bck, hdr.ObjName, err)
 	}
-}
-
-func (c *putJogger) replicaSendCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ interface{}, err error) {
-	if err != nil {
-		glog.Errorf("Failed to send %s/%s replica: %v", hdr.Bck, hdr.ObjName, err)
-	}
 	c.parent.DecPending()
 }
 
@@ -302,6 +296,7 @@ func (c *putJogger) cleanup(lom *cluster.LOM) error {
 	o := transport.AllocSend()
 	o.Hdr = transport.ObjHdr{Bck: lom.Bucket(), ObjName: lom.ObjName, Opaque: request}
 	o.Callback = c.ctSendCallback
+	c.parent.IncPending()
 	return c.parent.mgr.req().Send(o, nil)
 }
 
@@ -327,7 +322,7 @@ func (c *putJogger) createCopies(ctx *encodeCtx) error {
 		metadata: ctx.meta,
 		reqType:  reqPut,
 	}
-	return c.parent.writeRemote(nodes, ctx.lom, src, c.replicaSendCallback)
+	return c.parent.writeRemote(nodes, ctx.lom, src, nil)
 }
 
 // Fills slices with calculated checksums, reports errors to error channel
@@ -487,7 +482,6 @@ func (c *putJogger) sendSlice(ctx *encodeCtx, data *slice, node *cluster.Snode, 
 		if err != nil {
 			glog.Errorf("Failed to send %s/%s: %v", hdr.Bck, hdr.ObjName, err)
 		}
-		c.parent.DecPending()
 	}
 
 	return c.parent.writeRemote([]string{node.ID()}, ctx.lom, src, sentCB)
