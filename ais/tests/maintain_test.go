@@ -323,6 +323,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	}
 	tassert.CheckFatal(t, err)
 
+	tutils.Logf("Shutting down the node %s[%s]...\n", node, nodeType)
 	// 1. Shutdown a random node
 	cmd, err := tutils.ShutdownNode(t, baseParams, node)
 	tassert.CheckFatal(t, err)
@@ -331,9 +332,10 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	}
 
 	// 2. Make sure the node has been shut down
-	_, err = tutils.WaitForClusterState(proxyURL, "shutdown node", smap.Version, origProxyCnt-pdc, origTargetCount-tdc, node.DaemonID)
+	_, err = tutils.WaitForClusterStateActual(proxyURL, "shutdown node", smap.Version, origProxyCnt-pdc, origTargetCount-tdc, node.DaemonID)
 	tassert.CheckError(t, err)
 
+	tutils.Logf("Starting the node %s[%s]...\n", node, nodeType)
 	// 3. Start node again
 	err = tutils.RestoreNode(cmd, false, nodeType)
 	tassert.CheckError(t, err)

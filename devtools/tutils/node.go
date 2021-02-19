@@ -149,10 +149,31 @@ func GetICProxy(t testing.TB, smap *cluster.Smap, ignoreID string) *cluster.Snod
 	return nil
 }
 
+// WaitForClusterStateActual waits until a cluster reaches specified state, meaning:
+// - smap has version larger than origVersion
+// - number of proxies in Smap is equal proxyCnt, unless proxyCnt == 0
+// - number of targets in Smap is equal targetCnt, unless targetCnt == 0.
+//
+// It returns the smap which satisfies those requirements.
+func WaitForClusterStateActual(proxyURL, reason string, origVersion int64, proxyCnt, targetCnt int, syncIgnoreIDs ...string) (*cluster.Smap, error) {
+	for {
+		smap, err := WaitForClusterState(proxyURL, reason, origVersion, proxyCnt, targetCnt, syncIgnoreIDs...)
+		if err != nil {
+			return nil, err
+		}
+		if smap.CountTargets() == targetCnt && smap.CountProxies() == proxyCnt {
+			return smap, nil
+		}
+		Logf("Smap changed from %d to %d, but the number of proxies(%d/%d)/targets(%d/%d) is not reached",
+			origVersion, smap.Version, targetCnt, smap.CountTargets(), proxyCnt, smap.CountProxies())
+		origVersion = smap.Version
+	}
+}
+
 // WaitForClusterState waits until a cluster reaches specified state, meaning:
 // - smap has version larger than origVersion
-// - number of proxies is equal proxyCnt, unless proxyCnt == 0
-// - number of targets is equal targetCnt, unless targetCnt == 0.
+// - number of active proxies is equal proxyCnt, unless proxyCnt == 0
+// - number of active targets is equal targetCnt, unless targetCnt == 0.
 //
 // It returns the smap which satisfies those requirements.
 // NOTE: Upon successful return from this function cluster state might have already changed.
