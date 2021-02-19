@@ -105,7 +105,7 @@ func newPrimary() *proxyrunner {
 	config.Client.TimeoutLong = 10 * time.Second
 	config.Cksum.Type = cmn.ChecksumXXHash
 	cmn.GCO.CommitUpdate(config)
-	cmn.GCO.SetConfigPath("/tmp/ais-tests/ais.config")
+	cmn.GCO.SetGlobalConfigPath("/tmp/ais-tests/ais.config")
 
 	p.client.data = &http.Client{}
 	p.client.control = &http.Client{}

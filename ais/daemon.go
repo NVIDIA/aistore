@@ -37,13 +37,14 @@ type (
 	}
 
 	cliFlags struct {
-		role        string // proxy | target
-		confPath    string // path to config
-		daemonID    string // daemon ID to assign
-		confCustom  string // "key1=value1,key2=value2" formatted to override selected entries in config
-		ntargets    int    // expected number of targets in a starting-up cluster (proxy only)
-		skipStartup bool   // determines if the proxy should skip waiting for targets
-		transient   bool   // false: make cmn.ConfigCLI settings permanent, true: leave them transient
+		localConfPath  string // path to local config
+		globalConfPath string // path to global config
+		role           string // proxy | target
+		daemonID       string // daemon ID to assign
+		confCustom     string // "key1=value1,key2=value2" formatted to override selected entries in config
+		ntargets       int    // expected number of targets in a starting-up cluster (proxy only)
+		skipStartup    bool   // determines if the proxy should skip waiting for targets
+		transient      bool   // false: make cmn.ConfigCLI settings permanent, true: leave them transient
 	}
 
 	// daemon instance: proxy or storage target
@@ -114,8 +115,10 @@ func init() {
 	flag.StringVar(&daemon.cli.daemonID, "daemon_id", "", "unique ID to be assigned to the AIS daemon")
 
 	// config itself and its command line overrides
-	flag.StringVar(&daemon.cli.confPath, "config", "",
-		"config filename: local file that stores this daemon's configuration")
+	flag.StringVar(&daemon.cli.globalConfPath, "config", "",
+		"config filename: local file that stores the global cluster configuration")
+	flag.StringVar(&daemon.cli.localConfPath, "local_config", "", "config filename: local file that stores daemon's local configuration")
+
 	flag.StringVar(&daemon.cli.confCustom, "config_custom", "",
 		"\"key1=value1,key2=value2\" formatted string to override selected entries in config")
 
@@ -155,6 +158,11 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 		config cmn.Config
 		err    error
 	)
+	const (
+		usageStr = "Usage: aisnode -role=<proxy|target> -config=</dir/config.json> -local_config=</dir/local-config.json> ..."
+		confMsg  = "Missing `%s` flag pointing to configuration file (must be provided via command line)\n"
+	)
+
 	flag.Parse()
 	if daemon.cli.role != cmn.Proxy && daemon.cli.role != cmn.Target {
 		cmn.ExitLogf(
@@ -169,24 +177,29 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 			cmn.ExitLogf("Invalid object size: %d [%s]\n", daemon.dryRun.size, daemon.dryRun.sizeStr)
 		}
 	}
-	if daemon.cli.confPath == "" {
-		str := "Missing `config` flag pointing to configuration file (must be provided via command line)\n"
-		str += "Usage: aisnode -role=<proxy|target> -config=</dir/config.json> ..."
+	if daemon.cli.globalConfPath == "" {
+		str := fmt.Sprintln(confMsg, "config")
+		str += usageStr
+		cmn.ExitLogf(str)
+	}
+	if daemon.cli.localConfPath == "" {
+		str := fmt.Sprintf(confMsg, "local-config")
+		str += usageStr
 		cmn.ExitLogf(str)
 	}
 
-	if err = jsp.LoadConfig(daemon.cli.confPath, daemon.cli.role, &config); err != nil {
+	if err = jsp.LoadConfig(daemon.cli.globalConfPath, daemon.cli.localConfPath, daemon.cli.role, &config); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
 	cmn.GCO.Put(&config)
 
 	// Examples overriding default configuration at a node startup via command line:
 	// 1) set client timeout to 13s and store the updated value on disk:
-	// $ aisnode -config=/etc/ais.json -role=target -config_custom="client.client_timeout=13s"
+	// $ aisnode -config=/etc/ais.json -local_config=/etc/ais_local.json -role=target -config_custom="client.client_timeout=13s"
 	//
 	// 2) same as above except that the new timeout will remain transient
 	//    (won't persist across restarts):
-	// $ aisnode -config=/etc/ais.json -role=target -transient=true -config_custom="client.client_timeout=13s"
+	// $ aisnode -config=/etc/ais.json -local_config=/etc/ais_local.json -role=target -transient=true -config_custom="client.client_timeout=13s"
 	if daemon.cli.confCustom != "" {
 		var (
 			toUpdate = &cmn.ConfigToUpdate{}
@@ -200,7 +213,7 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 		}
 	}
 	if !daemon.cli.transient {
-		if err = jsp.Save(cmn.GCO.GetConfigPath(), config, jsp.Plain()); err != nil {
+		if err = jsp.SaveConfig(&config); err != nil {
 			cmn.ExitLogf("Failed to save config: %v", err)
 		}
 	}

@@ -31,9 +31,11 @@ type Options struct {
 	Signature   bool // when true, write 128bit prefix (of the layout shown above) at offset zero
 
 	Indent bool // Determines if the JSON should be indented. Useful for CLI config.
+	Local  bool // when true, use JSON local extension
 }
 
-func Plain() Options { return Options{} }
+func Plain() Options      { return Options{} }
+func PlainLocal() Options { return Options{Local: true} }
 func CCSign() Options {
 	return Options{Compression: true, Checksum: true, Signature: true, Indent: false}
 }

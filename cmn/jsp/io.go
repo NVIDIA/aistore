@@ -81,8 +81,11 @@ func Encode(ws cmn.WriterAt, v interface{}, opts Options) (err error) {
 		cmn.Assert(h.Size() == sizeXXHash64)
 		w = io.MultiWriter(h, w)
 	}
-
-	encoder = cmn.JSON.NewEncoder(w)
+	if opts.Local {
+		encoder = cmn.JSONLocal.NewEncoder(w)
+	} else {
+		encoder = cmn.JSON.NewEncoder(w)
+	}
 	if opts.Indent {
 		encoder.SetIndent("", "  ")
 	}

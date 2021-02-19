@@ -80,7 +80,9 @@ type (
 		c         atomic.Pointer
 		lmtx      sync.Mutex // mutex for protecting listeners
 		listeners map[string]ConfigListener
-		confPath  atomic.Pointer
+
+		confPath      atomic.Pointer
+		localConfPath atomic.Pointer
 	}
 	// ConfigListener is interface for listeners which require to be notified
 	// about config updates.
@@ -118,7 +120,7 @@ type (
 		Replication ReplicationConf `json:"replication"`
 		Cksum       CksumConf       `json:"checksum"`
 		Versioning  VersionConf     `json:"versioning"`
-		FSpaths     FSPathsConf     `json:"fspaths"`
+		FSpaths     FSPathsConf     `json:"fspaths" local:"omit"`
 		TestFSP     TestfspathConf  `json:"test_fspaths"`
 		Net         NetConf         `json:"net"`
 		FSHC        FSHCConf        `json:"fshc"`
@@ -128,6 +130,21 @@ type (
 		DSort       DSortConf       `json:"distributed_sort"`
 		Compression CompressionConf `json:"compression"`
 		MDWrite     MDWritePolicy   `json:"md_write"`
+	}
+
+	LocalConfig struct {
+		Net     LocalNetConfig `json:"net"`
+		FSpaths FSPathsConf    `json:"fspaths"`
+	}
+
+	// Network config specific to node
+	LocalNetConfig struct {
+		Hostname             string `json:"hostname"`
+		HostnameIntraControl string `json:"hostname_intra_control"`
+		HostnameIntraData    string `json:"hostname_intra_data"`
+		PortStr              string `json:"port"`               // listening port
+		PortIntraControlStr  string `json:"port_intra_control"` // listening port for intra control network
+		PortIntraDataStr     string `json:"port_intra_data"`    // listening port for intra data network
 	}
 
 	ConfigToUpdate struct {
@@ -426,9 +443,9 @@ type (
 		Instance int    `json:"instance"`
 	}
 	NetConf struct {
-		Hostname             string   `json:"hostname"`
-		HostnameIntraControl string   `json:"hostname_intra_control"`
-		HostnameIntraData    string   `json:"hostname_intra_data"`
+		Hostname             string   `json:"hostname" local:"omit"`
+		HostnameIntraControl string   `json:"hostname_intra_control" local:"omit"`
+		HostnameIntraData    string   `json:"hostname_intra_data" local:"omit"`
 		L4                   L4Conf   `json:"l4"`
 		HTTP                 HTTPConf `json:"http"`
 		UseIntraControl      bool     `json:"-"`
@@ -440,14 +457,11 @@ type (
 	}
 
 	L4Conf struct {
-		Proto               string `json:"proto"`              // tcp, udp
-		PortStr             string `json:"port"`               // listening port
-		PortIntraControlStr string `json:"port_intra_control"` // listening port for intra control network
-		PortIntraDataStr    string `json:"port_intra_data"`    // listening port for intra data network
-		Port                int    `json:"-"`                  // (runtime)
-		PortIntraControl    int    `json:"-"`                  // --/--
-		PortIntraData       int    `json:"-"`                  // --/--
-		SndRcvBufSize       int    `json:"sndrcv_buf_size"`    // SO_RCVBUF and SO_SNDBUF
+		Proto            string `json:"proto"`                                  // tcp, udp
+		Port             int    `json:"port,string" local:"omit"`               // listening port
+		PortIntraControl int    `json:"port_intra_control,string" local:"omit"` // listening port for intra control network
+		PortIntraData    int    `json:"port_intra_data,string" local:"omit"`    // listening port for intra data network
+		SndRcvBufSize    int    `json:"sndrcv_buf_size"`                        // SO_RCVBUF and SO_SNDBUF
 	}
 	L4ConfToUpdate struct {
 		Proto               *string `json:"proto"`              // tcp, udp
@@ -629,11 +643,19 @@ func (gco *globalConfigOwner) DiscardUpdate() {
 	gco.mtx.Unlock()
 }
 
-func (gco *globalConfigOwner) SetConfigPath(path string) {
+func (gco *globalConfigOwner) SetGlobalConfigPath(path string) {
 	gco.confPath.Store(unsafe.Pointer(&path))
 }
 
-func (gco *globalConfigOwner) GetConfigPath() (s string) {
+func (gco *globalConfigOwner) SetLocalConfigPath(path string) {
+	gco.localConfPath.Store(unsafe.Pointer(&path))
+}
+
+func (gco *globalConfigOwner) GetLocalConfigPath() (s string) {
+	return *(*string)(gco.localConfPath.Load())
+}
+
+func (gco *globalConfigOwner) GetGlobalConfigPath() (s string) {
 	return *(*string)(gco.confPath.Load())
 }
 
@@ -721,6 +743,27 @@ func (c *Config) Validate() error {
 func (c *Config) SetRole(role string) {
 	debug.Assert(role == Target || role == Proxy)
 	c.role = role
+}
+
+func (c *Config) SetNetConf(conf LocalNetConfig) (err error) {
+	c.Net.Hostname = conf.Hostname
+	c.Net.HostnameIntraControl = conf.HostnameIntraControl
+	c.Net.HostnameIntraData = conf.HostnameIntraData
+	// Parse ports
+	if c.Net.L4.Port, err = ParsePort(conf.PortStr); err != nil {
+		return fmt.Errorf("invalid %s port specified: %v", NetworkPublic, err)
+	}
+	if conf.PortIntraControlStr != "" {
+		if c.Net.L4.PortIntraControl, err = ParsePort(conf.PortIntraControlStr); err != nil {
+			return fmt.Errorf("invalid %s port specified: %v", NetworkIntraControl, err)
+		}
+	}
+	if conf.PortIntraDataStr != "" {
+		if c.Net.L4.PortIntraData, err = ParsePort(conf.PortIntraDataStr); err != nil {
+			return fmt.Errorf("invalid %s port specified: %v", NetworkIntraData, err)
+		}
+	}
+	return
 }
 
 func (c *Config) Apply(updateConf ConfigToUpdate) error {
@@ -1046,21 +1089,6 @@ func (c *NetConf) Validate(_ *Config) (err error) {
 	c.HTTP.Proto = httpProto // not validating: read-only, and can take only two values
 	if c.HTTP.UseHTTPS {
 		c.HTTP.Proto = httpsProto
-	}
-
-	// Parse ports
-	if c.L4.Port, err = ParsePort(c.L4.PortStr); err != nil {
-		return fmt.Errorf("invalid %s port specified: %v", NetworkPublic, err)
-	}
-	if c.L4.PortIntraControlStr != "" {
-		if c.L4.PortIntraControl, err = ParsePort(c.L4.PortIntraControlStr); err != nil {
-			return fmt.Errorf("invalid %s port specified: %v", NetworkIntraControl, err)
-		}
-	}
-	if c.L4.PortIntraDataStr != "" {
-		if c.L4.PortIntraData, err = ParsePort(c.L4.PortIntraDataStr); err != nil {
-			return fmt.Errorf("invalid %s port specified: %v", NetworkIntraData, err)
-		}
 	}
 
 	c.Hostname = strings.ReplaceAll(c.Hostname, " ", "")

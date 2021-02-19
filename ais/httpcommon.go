@@ -656,7 +656,7 @@ func (h *httprunner) initSI(daemonType string) {
 	var (
 		s                                        string
 		config                                   = cmn.GCO.Get()
-		port                                     = config.Net.L4.PortStr
+		port                                     = strconv.Itoa(config.Net.L4.Port)
 		proto                                    = config.Net.HTTP.Proto
 		addrList, err                            = getLocalIPv4List()
 		k8sDetected                              = k8s.Detect() == nil
@@ -684,7 +684,7 @@ func (h *httprunner) initSI(daemonType string) {
 
 	intraControlAddr = pubAddr
 	if config.Net.UseIntraControl {
-		intraControlAddr, err = getNetInfo(addrList, proto, config.Net.HostnameIntraControl, config.Net.L4.PortIntraControlStr)
+		intraControlAddr, err = getNetInfo(addrList, proto, config.Net.HostnameIntraControl, strconv.Itoa(config.Net.L4.PortIntraControl))
 		if err != nil {
 			cmn.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetworkIntraControl, err)
 		}
@@ -697,7 +697,7 @@ func (h *httprunner) initSI(daemonType string) {
 
 	intraDataAddr = pubAddr
 	if config.Net.UseIntraData {
-		intraDataAddr, err = getNetInfo(addrList, proto, config.Net.HostnameIntraData, config.Net.L4.PortIntraDataStr)
+		intraDataAddr, err = getNetInfo(addrList, proto, config.Net.HostnameIntraData, strconv.Itoa(config.Net.L4.PortIntraData))
 		if err != nil {
 			cmn.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetworkIntraData, err)
 		}

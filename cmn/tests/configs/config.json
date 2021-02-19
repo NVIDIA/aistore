@@ -7,7 +7,9 @@
         "http://127.0.0.2",
         "https://api.web.org"
       ]
-    }
+    },
+    "aws": {},
+    "gcp": {}
   },
   "mirror": {
     "copies":       2,
@@ -88,25 +90,14 @@
     "enabled":           true,
     "validate_warm_get": false
   },
-  "fspaths": {
-    "/tmp/ais/1": " ",
-    "/tmp/ais/2": " ",
-    "/tmp/ais/3": " "
-  },
   "test_fspaths": {
     "root":     "/tmp/ais",
     "count":    0,
     "instance": 0
   },
   "net": {
-    "hostname":               "127.0.1.0",
-    "hostname_intra_control": "127.0.2.0",
-    "hostname_intra_data":    "127.0.3.0",
     "l4": {
-      "proto":              "tcp",
-      "port":	              "8080",
-      "port_intra_control": "9080",
-      "port_intra_data":    "10080"
+      "proto":              "tcp"
     },
     "http": {
       "server_crt":	"server.crt",

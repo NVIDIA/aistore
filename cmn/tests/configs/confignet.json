@@ -1,0 +1,10 @@
+{
+    "net": {
+        "hostname": "127.0.1.0",
+        "hostname_intra_control": "127.0.2.0",
+        "hostname_intra_data": "127.0.3.0",
+        "port": "8080",
+        "port_intra_control": "9080",
+        "port_intra_data": "10080"
+    }
+}

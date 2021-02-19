@@ -10,20 +10,34 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 ////////////////
 // ais config //
 ////////////////
 
-func LoadConfig(confPath, daeRole string, config *cmn.Config) (err error) {
-	cmn.GCO.SetConfigPath(confPath)
-	_, err = Load(confPath, &config, Plain())
+func LoadConfig(confPath, localConfPath, daeRole string, config *cmn.Config) (err error) {
+	debug.Assert(confPath != "" && localConfPath != "")
+	cmn.GCO.SetGlobalConfigPath(confPath)
+	cmn.GCO.SetLocalConfigPath(localConfPath)
+	_, err = Load(confPath, &config, PlainLocal())
 	if err != nil {
 		return fmt.Errorf("failed to load config %q, err: %v", confPath, err)
 	}
 	config.SetRole(daeRole)
 
+	localConf := cmn.LocalConfig{}
+	_, err = Load(localConfPath, &localConf, Plain())
+	if err != nil {
+		return fmt.Errorf("failed to load local config %q, err: %v", localConfPath, err)
+	}
+
+	if err = config.SetNetConf(localConf.Net); err != nil {
+		return
+	}
+
+	config.FSpaths = localConf.FSpaths
 	if err = cmn.CreateDir(config.Log.Dir); err != nil {
 		return fmt.Errorf("failed to create log dir %q, err: %v", config.Log.Dir, err)
 	}
@@ -66,10 +80,14 @@ func SetConfig(toUpdate *cmn.ConfigToUpdate, transient bool) error {
 		return err
 	}
 	if !transient {
-		Save(cmn.GCO.GetConfigPath(), config, Plain())
+		SaveConfig(config)
 	}
 	cmn.GCO.CommitUpdate(config)
 	return nil
+}
+
+func SaveConfig(config *cmn.Config) error {
+	return Save(cmn.GCO.GetGlobalConfigPath(), config, PlainLocal())
 }
 
 func SetConfigInMem(toUpdate *cmn.ConfigToUpdate, config *cmn.Config) (err error) {

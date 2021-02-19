@@ -97,23 +97,14 @@ cat > $AIS_CONF_FILE <<EOL
 		"enabled":           true,
 		"validate_warm_get": false
 	},
-	"fspaths": {
-		$AIS_FS_PATHS
-	},
 	"test_fspaths": {
 		"root":     "${TEST_FSPATH_ROOT:-/tmp/ais$NEXT_TIER/}",
 		"count":    ${TEST_FSPATH_COUNT:-0},
 		"instance": ${INSTANCE:-0}
 	},
 	"net": {
-		"hostname":                 "${HOSTNAME_LIST}",
-		"hostname_intra_control":   "${HOSTNAME_LIST_INTRA_CONTROL}",
-		"hostname_intra_data":      "${HOSTNAME_LIST_INTRA_DATA}",
 		"l4": {
 			"proto":              "tcp",
-			"port":               "${PORT:-8080}",
-			"port_intra_control": "${PORT_INTRA_CONTROL:-9080}",
-			"port_intra_data":    "${PORT_INTRA_DATA:-10080}",
 			"sndrcv_buf_size":    ${SNDRCV_BUF_SIZE:-131072}
 		},
 		"http": {
@@ -163,6 +154,22 @@ cat > $AIS_CONF_FILE <<EOL
 		"call_timeout":          "10m"
 	},
 	"md_write": "${MD_WRITE:-}"
+}
+EOL
+
+cat > $AIS_LOCAL_CONF_FILE <<EOL
+{
+	"net": {
+		"hostname":                 "${HOSTNAME_LIST}",
+		"hostname_intra_control":   "${HOSTNAME_LIST_INTRA_CONTROL}",
+		"hostname_intra_data":      "${HOSTNAME_LIST_INTRA_DATA}",
+		"port":               "${PORT:-8080}",
+		"port_intra_control": "${PORT_INTRA_CONTROL:-9080}",
+		"port_intra_data":    "${PORT_INTRA_DATA:-10080}"
+	},
+	"fspaths": {
+		$AIS_FS_PATHS
+	}
 }
 EOL
 

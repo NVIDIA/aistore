@@ -185,16 +185,16 @@ killRestore:
 
 	smap, err = tutils.WaitForClusterState(proxyURL, "kill primary", smap.Version, origProxyCnt-pdc, origTargetCount-tdc)
 	tassert.CheckFatal(t, err)
-	cfg.Net.L4.Port += portInc
-	cfg.Net.L4.PortIntraControl += portInc
-	cfg.Net.L4.PortIntraData += portInc
 
-	cfg.Net.L4.PortStr = strconv.Itoa(cfg.Net.L4.Port)
-	cfg.Net.L4.PortIntraControlStr = strconv.Itoa(cfg.Net.L4.PortIntraControl)
-	cfg.Net.L4.PortIntraDataStr = strconv.Itoa(cfg.Net.L4.PortIntraData)
-
-	cfgPath := path.Join(cfg.Confdir, "ais.json")
-	err = jsp.Save(cfgPath, cfg, jsp.Plain())
+	// Update local config ports.
+	localConfPath := path.Join(cfg.Confdir, "ais_local.json")
+	localConf := &cmn.LocalConfig{}
+	_, err = jsp.Load(localConfPath, localConf, jsp.Plain())
+	tassert.CheckFatal(t, err)
+	localConf.Net.PortStr = strconv.Itoa(cfg.Net.L4.Port + portInc)
+	localConf.Net.PortIntraControlStr = strconv.Itoa(cfg.Net.L4.PortIntraControl + portInc)
+	localConf.Net.PortIntraDataStr = strconv.Itoa(cfg.Net.L4.PortIntraData + portInc)
+	err = jsp.Save(localConfPath, localConf, jsp.Plain())
 	tassert.CheckFatal(t, err)
 
 	err = tutils.RestoreNode(cmd, false, nodeType)
@@ -362,21 +362,32 @@ func _addNodeDuplicateDaemonID(t *testing.T, nodeType string) {
 	tassert.CheckFatal(t, err)
 
 	cfg := tutils.GetDaemonConfig(t, node.ID())
-	cfg.Confdir += suffName
-	cfg.Net.L4.PortStr = strconv.Itoa(cfg.Net.L4.Port + portInc)
-	cfg.Net.L4.PortIntraControlStr = strconv.Itoa(cfg.Net.L4.PortIntraControl + portInc)
-	cfg.Net.L4.PortIntraDataStr = strconv.Itoa(cfg.Net.L4.PortIntraData + portInc)
 
+	// Create local config for daemon
+	localConfFile := path.Join(cfg.Confdir, "ais_local.json")
+	localConf := &cmn.LocalConfig{}
+	_, err = jsp.Load(localConfFile, localConf, jsp.Plain())
+	tassert.CheckFatal(t, err)
+	localConf.Net.PortStr = strconv.Itoa(cfg.Net.L4.Port + portInc)
+	localConf.Net.PortIntraControlStr = strconv.Itoa(cfg.Net.L4.PortIntraControl + portInc)
+	localConf.Net.PortIntraDataStr = strconv.Itoa(cfg.Net.L4.PortIntraData + portInc)
+
+	// Create new config directory and save local and global config.
+	cfg.Confdir += suffName
 	err = os.MkdirAll(cfg.Confdir, cmn.PermRWXRX)
 	tassert.CheckFatal(t, err)
 	cfg.Log.Dir = logDir
 	cfg.TestFSP.Instance = instance
 	configFile := path.Join(cfg.Confdir, "ais.json")
+	localConfFile = path.Join(cfg.Confdir, "ais_local.json")
 
-	err = jsp.Save(configFile, cfg, jsp.Plain())
+	err = jsp.Save(configFile, cfg, jsp.PlainLocal())
 	tassert.CheckFatal(t, err)
 
-	// start with different config but same daemon ID
+	err = jsp.Save(localConfFile, localConf, jsp.Plain())
+	tassert.CheckFatal(t, err)
+
+	// Start with different config but same daemon ID
 	pid, err := tutils.DeployNode(t, nodeType, configFile, node.ID())
 	tassert.CheckFatal(t, err)
 	defer tutils.CleanupNode(t, pid, cfg, nodeType)

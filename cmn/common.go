@@ -72,6 +72,8 @@ const (
 var (
 	// JSON is used to Marshal/Unmarshal API json messages and is initialized in init function.
 	JSON jsoniter.API
+	// JSONLocal is jsoniter API with `local` tag extension enabled
+	JSONLocal jsoniter.API
 
 	EnvVars = struct {
 		Endpoint string
@@ -138,6 +140,12 @@ type (
 	}
 	DurationJSON time.Duration
 	SizeJSON     int64
+
+	// jsoniter extension to use `local` tag.
+	// supported flag  `local:"omit"` to omit a field while Marshal
+	jsonLocalExt struct {
+		jsoniter.DummyExtension
+	}
 )
 
 var (
@@ -190,14 +198,27 @@ func init() {
 	config := &Config{}
 	GCO.c.Store(unsafe.Pointer(config))
 
-	// API related
-	JSON = jsoniter.Config{
+	jsonConf := jsoniter.Config{
 		EscapeHTML:             false, // We don't send HTMLs.
 		ValidateJsonRawMessage: false, // RawMessages are validated by morphing.
 		// Need to be sure that we have exactly the same struct as user requested.
 		DisallowUnknownFields: true,
 		SortMapKeys:           true,
-	}.Froze()
+	}
+	// API related
+	JSON = jsonConf.Froze()
+	JSONLocal = jsonConf.Froze()
+	JSONLocal.RegisterExtension(&jsonLocalExt{})
+}
+
+func (e *jsonLocalExt) UpdateStructDescriptor(sd *jsoniter.StructDescriptor) {
+	for _, binding := range sd.Fields {
+		tag := binding.Field.Tag()
+		localTag := tag.Get("local")
+		if localTag == tagOmit {
+			binding.ToNames = []string{}
+		}
+	}
 }
 
 ///////////////

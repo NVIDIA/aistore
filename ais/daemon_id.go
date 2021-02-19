@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -101,9 +102,9 @@ func generateDaemonID(daemonType string, config *cmn.Config) string {
 	daemonID := cmn.RandStringStrong(4)
 	switch daemonType {
 	case cmn.Target:
-		return daemonID + "t" + config.Net.L4.PortStr
+		return fmt.Sprintf("%st%d", daemonID, config.Net.L4.Port)
 	case cmn.Proxy:
-		return daemonID + "p" + config.Net.L4.PortStr
+		return fmt.Sprintf("%sp%d", daemonID, config.Net.L4.Port)
 	}
 	cmn.Assertf(false, daemonType)
 	return ""

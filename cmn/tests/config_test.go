@@ -21,21 +21,34 @@ func TestConfigTestEnv(t *testing.T) {
 		cmn.GCO.CommitUpdate(oldConfig)
 	}()
 
-	confPath := filepath.Join(thisFileDir(t), "configs", "configtest.json")
+	confPath := filepath.Join(thisFileDir(t), "configs", "config.json")
+	localConfPath := filepath.Join(thisFileDir(t), "configs", "confignet.json")
 	newConfig := cmn.Config{}
-	tassert.CheckFatal(t, jsp.LoadConfig(confPath, cmn.Proxy, &newConfig))
+	tassert.CheckFatal(t, jsp.LoadConfig(confPath, localConfPath, cmn.Proxy, &newConfig))
 }
 
 func TestConfigFSPaths(t *testing.T) {
-	oldConfig := cmn.GCO.Get()
+	var (
+		oldConfig     = cmn.GCO.Get()
+		confPath      = filepath.Join(thisFileDir(t), "configs", "config.json")
+		localConfPath = filepath.Join(thisFileDir(t), "configs", "configmpaths.json")
+	)
 	defer func() {
 		cmn.GCO.BeginUpdate()
 		cmn.GCO.CommitUpdate(oldConfig)
 	}()
 
-	confPath := filepath.Join(thisFileDir(t), "configs", "configfspaths.json")
+	var localConf cmn.LocalConfig
+	_, err := jsp.Load(localConfPath, &localConf, jsp.Plain())
+	tassert.CheckFatal(t, err)
 	newConfig := cmn.Config{}
-	tassert.CheckFatal(t, jsp.LoadConfig(confPath, cmn.Target, &newConfig))
+	tassert.CheckFatal(t, jsp.LoadConfig(confPath, localConfPath, cmn.Target, &newConfig))
+
+	mpaths := localConf.FSpaths.Paths
+	tassert.Fatalf(t, len(newConfig.FSpaths.Paths) == len(mpaths), "mountpath count %v != %v", len(newConfig.FSpaths.Paths), len(mpaths))
+	for p := range mpaths {
+		tassert.Fatalf(t, newConfig.FSpaths.Paths.Contains(p), "%q not in config FSpaths", p)
+	}
 }
 
 func thisFileDir(t *testing.T) string {

@@ -242,10 +242,9 @@ func cfgBeginUpdate() *cmn.Config { return cmn.GCO.BeginUpdate() }
 func cfgDiscardUpdate()           { cmn.GCO.DiscardUpdate() }
 
 func cfgCommitUpdate(config *cmn.Config, detail string) (err error) {
-	confPath := cmn.GCO.GetConfigPath()
-	if err = jsp.Save(confPath, config, jsp.Plain()); err != nil {
+	if err = jsp.SaveConfig(config); err != nil {
 		cmn.GCO.DiscardUpdate()
-		return fmt.Errorf("FATAL: failed writing config %s: %s, %v", confPath, detail, err)
+		return fmt.Errorf("FATAL: failed writing config %s: %s, %v", cmn.GCO.GetGlobalConfigPath(), detail, err)
 	}
 	cmn.GCO.CommitUpdate(config)
 	return
