@@ -199,7 +199,7 @@ Error from AIStore in completing the request
 ___
 
 #### ListBuckets
-Given the url of an AIS gateway, `ListBuckets` returns the names of all existing local and cloud buckets
+Given the url of an AIS gateway, `ListBuckets` returns the names of all existing local and remote buckets
 
 ##### Parameters
 | Name       | Type         | Description                                                                           |
@@ -209,7 +209,7 @@ Given the url of an AIS gateway, `ListBuckets` returns the names of all existing
 | provider   | string       | "ais" or one of the supported backend providers: "ais", "gcp", "aws", "azure", "http", "hdfs". If the provider value is empty, returns *all* bucket names. |
 
 ##### Return
-Two lists: one for the names of ais buckets, and the other for the names of cloud buckets
+Two lists: one for the names of ais buckets, and the other for the names of remote buckets
 
 Error from AIStore in completing the request
 ___
@@ -271,7 +271,7 @@ Error from AIStore in completing the request
 ___
 
 #### EvictRemoteBucket
-Evicts a cloud bucket using its name as the identifier
+Evicts a remote bucket using its name as the identifier
 
 ##### Parameters
 | Name       | Type         | Description                                                                           |

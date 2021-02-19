@@ -19,13 +19,13 @@ The full taxonomy of the supported backends is shown below (and note that AIS su
 
 <img src="images/supported-backends.png" alt="Supported Backends" width="500">
 
-In each case, we use the vendor's own SDK/API to provide transparent access to Cloud storage with the additional capability of *persistently caching* all read data in the AIStore's [cloud buckets](bucket.md).
+In each case, we use the vendor's own SDK/API to provide transparent access to Cloud storage with the additional capability of *persistently caching* all read data in the AIStore's [remote buckets](bucket.md).
 
-> The term "persistent caching" is used to indicate much more than what's conventionally understood as "caching": irrespectively of its origin and source, all data inside an AIStore cluster is end-to-end checksummed and protected by the [storage services](storage_svcs.md) configured both globally and on a per bucket basis. For instance, both cloud buckets and ais buckets can be erasure coded, etc.
+> The term "persistent caching" is used to indicate much more than what's conventionally understood as "caching": irrespectively of its origin and source, all data inside an AIStore cluster is end-to-end checksummed and protected by the [storage services](storage_svcs.md) configured both globally and on a per bucket basis. For instance, both remote buckets and ais buckets can be erasure coded, etc.
 
-> Notwithstanding, *cloud buckets* will often serve as a fast cache or a fast tier in front of a given 3rd party Cloud storage.
+> Notwithstanding, *remote buckets* will often serve as a fast cache or a fast tier in front of a given 3rd party Cloud storage.
 
-> Note as well that AIS provides [5 (five) easy ways to populate its *cloud buckets*](overview.md) - including, but not limited to conventional on-demand caching (aka *cold GET*).
+> Note as well that AIS provides [5 (five) easy ways to populate its *remote buckets*](overview.md) - including, but not limited to conventional on-demand caching (aka *cold GET*).
 
 But there's more.
 

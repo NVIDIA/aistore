@@ -5,7 +5,7 @@
 - [AIS Bucket](#ais-bucket)
   - [CLI examples: create, rename and, destroy ais bucket](#cli-examples-create-rename-and-destroy-ais-bucket)
   - [CLI example: working with remote AIS bucket](#cli-example-working-with-remote-ais-bucket)
-- [Cloud Bucket](#cloud-bucket)
+- [Remote Bucket](#remote-bucket)
   - [Public Cloud Buckets](#public-cloud-buckets)
   - [Public HTTP(S) Datasets](#public-https-dataset)
   - [HDFS Provider](#hdfs-provider)
@@ -42,7 +42,7 @@ All the [supported storage services](storage_svcs.md) equally apply to all stora
 
 | Kind | Description | Supported Storage Services |
 | --- | --- | --- |
-| AIS buckets | buckets that are **not** 3rd party backend-based. AIS buckets store user objects and support user-specified bucket properties (e.g., 3 copies). Unlike cloud buckets, ais buckets can be created through the [RESTful API](http_api.md). Similar to cloud buckets, ais buckets are distributed and balanced, content-wise, across the entire AIS cluster. | [Checksumming](storage_svcs.md#checksumming), [LRU (advanced usage)](storage_svcs.md#lru-for-local-buckets), [Erasure Coding](storage_svcs.md#erasure-coding), [Local Mirroring and Load Balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
+| AIS buckets | buckets that are **not** 3rd party backend-based. AIS buckets store user objects and support user-specified bucket properties (e.g., 3 copies). Unlike remote buckets, ais buckets can be created through the [RESTful API](http_api.md). Similar to remote buckets, ais buckets are distributed and balanced, content-wise, across the entire AIS cluster. | [Checksumming](storage_svcs.md#checksumming), [LRU (advanced usage)](storage_svcs.md#lru-for-local-buckets), [Erasure Coding](storage_svcs.md#erasure-coding), [Local Mirroring and Load Balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
 | remote buckets | When AIS is deployed as [fast tier](/docs/overview.md#fast-tier), buckets in the cloud storage can be viewed and accessed through the [RESTful API](http_api.md) in AIS, in the exact same way as ais buckets. When this happens, AIS creates local instances of said buckets which then serves as a cache. These are referred to as **3rd party backend-based buckets**. | [Checksumming](storage_svcs.md#checksumming), [LRU](storage_svcs.md#lru), [Erasure Coding](storage_svcs.md#erasure-coding), [Local mirroring and load balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
 
 3rd party backend-based and AIS buckets support the same API with a few documented exceptions. Remote buckets can be *evicted* from AIS. AIS buckets are the only buckets that can be created, renamed, and deleted via the [RESTful API](http_api.md).
@@ -68,7 +68,7 @@ AIS buckets are the AIStore-own distributed buckets that are not associated with
 
 The [RESTful API](docs/http_api.md) can be used to create, rename and, destroy ais buckets.
 
-New ais buckets must be given a unique name that does not duplicate any existing ais or cloud bucket.
+New ais buckets must be given a unique name that does not duplicate any existing ais or remote bucket.
 
 If you are going to use an AIS bucket as an S3-compatible one, consider changing the bucket's checksum to `MD5`.
 For details, see [S3 compatibility](/docs/s3compat.md#s3-compatibility).
@@ -145,11 +145,12 @@ train-002.tgz     136.44KiB
 ...
 ```
 
-## Cloud Bucket
+## Remote Bucket
 
-Cloud buckets are existing buckets in the 3rd party Cloud storage when AIS is deployed as [fast tier](/docs/overview.md#fast-tier).
+Remote buckets are buckets that use 3rd party storage (AWS/GCP/Azure or HDFS) when AIS is deployed as [fast tier](/docs/overview.md#fast-tier).
+Any reference to "Cloud buckets" refer to remote buckets that use a public cloud bucket as their backend (i.e. AWS/GCP/Azure, but not HDFS).
 
-> By default, AIS does not keep track of the cloud buckets in its configuration map. However, if users modify the properties of the cloud bucket, AIS will then keep track.
+> By default, AIS does not keep track of the remote buckets in its configuration map. However, if users modify the properties of the remote bucket, AIS will then keep track.
 
 ### Public Cloud Buckets
 
@@ -302,19 +303,19 @@ It means that when accessing object `hdfs://yt8m/1.mp4` the path will be resolve
 
 ### Prefetch/Evict Objects
 
-Objects within cloud buckets are automatically fetched into storage targets when accessed through AIS and are evicted based on the monitored capacity and configurable high/low watermarks when [LRU](storage_svcs.md#lru) is enabled.
+Objects within remote buckets are automatically fetched into storage targets when accessed through AIS and are evicted based on the monitored capacity and configurable high/low watermarks when [LRU](storage_svcs.md#lru) is enabled.
 
-The [RESTful API](http_api.md) can be used to manually fetch a group of objects from the cloud bucket (called prefetch) into storage targets or to remove them from AIS (called evict).
+The [RESTful API](http_api.md) can be used to manually fetch a group of objects from the remote bucket (called prefetch) into storage targets or to remove them from AIS (called evict).
 
 Objects are prefetched or evicted using [List/Range Operations](batch.md#listrange-operations).
 
-For example, to use a [list operation](batch.md#list) to prefetch 'o1', 'o2', and, 'o3' from Amazon S3 cloud bucket `abc`, run:
+For example, to use a [list operation](batch.md#list) to prefetch 'o1', 'o2', and, 'o3' from Amazon S3 remote bucket `abc`, run:
 
 ```console
 $ ais start prefetch aws://abc --list o1,o2,o3
 ```
 
-To use a [range operation](batch.md#range) to evict the 1000th to 2000th objects in the cloud bucket `abc` from AIS, which names begin with the prefix `__tst/test-`, run:
+To use a [range operation](batch.md#range) to evict the 1000th to 2000th objects in the remote bucket `abc` from AIS, which names begin with the prefix `__tst/test-`, run:
 
 ```console
 $ ais evict aws://abc --template "__tst/test-{1000..2000}"
@@ -339,12 +340,12 @@ This behavior can be applied to other remote buckets by using the `--keep-md` fl
 
 ## Backend Bucket
 
-So far, we have covered AIS and cloud buckets. These abstractions are sufficient for almost all use cases.  But there are times when we would like to download objects from an existing cloud bucket and then make use of the features available only for AIS buckets.
+So far, we have covered AIS and remote buckets. These abstractions are sufficient for almost all use cases. But there are times when we would like to download objects from an existing remote bucket and then make use of the features available only for AIS buckets.
 
 One way of accomplishing that could be:
 1. Prefetch cloud objects.
 2. Create AIS bucket.
-3. Use the bucket-copying [API](http_api.md) or [CLI](/cmd/cli/resources/bucket.md) to copy over the objects from the cloud bucket to the newly created AIS bucket.
+3. Use the bucket-copying [API](http_api.md) or [CLI](/cmd/cli/resources/bucket.md) to copy over the objects from the remote bucket to the newly created AIS bucket.
 
 However, the extra-copying involved may prove to be time and/or space consuming. Hence, AIS-supported capability to establish an **ad-hoc** 1-to-1 relationship between a given AIS bucket and an existing cloud (*backend*).
 
@@ -471,7 +472,7 @@ An empty structure `{}` results in getting just the names of the objects (from t
 | Property/Option | Description | Value |
 | --- | --- | --- |
 | `uuid` | ID of the list objects operation | After initial request to list objects the `uuid` is returned and should be used for subsequent requests. The ID ensures integrity between next requests. |
-| `pagesize` | The maximum number of object names returned in response | For AIS buckets default value is `10000`. For cloud buckets this value varies as each cloud has it's own maximal page size. |
+| `pagesize` | The maximum number of object names returned in response | For AIS buckets default value is `10000`. For remote buckets this value varies as each provider has it's own maximal page size. |
 | `props` | The properties of the object to return | A comma-separated string containing any combination of: `name,size,version,checksum,atime,target_url,copies,ec,status` (if not specified, props are set to `name,size,version,checksum,atime`). <sup id="a1">[1](#ft1)</sup> |
 | `prefix` | The prefix which all returned objects must have | For example, `prefix = "my/directory/structure/"` will include object `object_name = "my/directory/structure/object1.txt"` but will not `object_name = "my/directory/object2.txt"` |
 | `start_after` | Name of the object after which the listing should start | For example, `start_after = "baa"` will include object `object_name = "caa"` but will not `object_name = "ba"` nor `object_name = "aab"`. |
@@ -484,12 +485,12 @@ SelectMsg extended flags:
 
 | Name | Value | Description |
 | --- | --- | --- |
-| `SelectCached` | `1` | For Cloud buckets only: return only objects that are cached on AIS drives, i.e. objects that can be read without accessing to the Cloud |
+| `SelectCached` | `1` | For remote buckets only: return only objects that are cached on AIS drives, i.e. objects that can be read without accessing to the Cloud |
 | `SelectMisplaced` | `2` | Include objects that are on incorrect target or mountpath |
 
 We say that "an object is cached" to indicate two separate things:
 
-* The object was originally downloaded from a Cloud bucket, bucket in a remote AIS cluster, or an HTTP(s) based dataset;
+* The object was originally downloaded from a remote bucket, bucket in a remote AIS cluster, or an HTTP(s) based dataset;
 * The object is stored in the AIS cluster.
 
 In other words, the term "cached" is simply a **shortcut** to indicate the object's immediate availability without the need to go and check the object's original location. Being "cached" does not have any implications on object's persistence: "cached" objects, similar to those objects that originated in a given AIS cluster, are stored with arbitrary (per bucket configurable) levels of redundancy, etc. In short, the same storage policies apply to "cached" and "non-cached".

@@ -63,7 +63,7 @@ $ ais get aws://imagenet/imagenet_train-000010.tgz -
 
 We say that "an object is cached" to indicate two separate things:
 
-* The object was originally downloaded from a Cloud bucket, a bucket in a remote AIS cluster, or a HTTP(s) based dataset;
+* The object was originally downloaded from a remote bucket, a bucket in a remote AIS cluster, or a HTTP(s) based dataset;
 * The object is stored in the AIS cluster.
 
 In other words, the term "cached" is simply a **shortcut** to indicate the object's immediate availability without the need to go to the object's original location.
@@ -549,7 +549,7 @@ removed files in the range 'test-{001..003}' from mybucket bucket
 
 `ais evict BUCKET_NAME/[OBJECT_NAME]...`
 
-[Evict](../../../docs/bucket.md#prefetchevict-objects) objects from a cloud bucket.
+[Evict](../../../docs/bucket.md#prefetchevict-objects) objects from a remote bucket.
 
 ### Options
 
@@ -588,7 +588,7 @@ aws://cloudbucket  0             0B      0%
 
 `ais start prefetch BUCKET_NAME/ --list|--template <value>`
 
-[Prefetch](../../../docs/bucket.md#prefetchevict-objects) objects from the cloud bucket.
+[Prefetch](../../../docs/bucket.md#prefetchevict-objects) objects from the remote bucket.
 
 ### Options
 

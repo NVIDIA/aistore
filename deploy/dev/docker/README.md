@@ -42,7 +42,7 @@ runs some smoke tests.
 $ CGO_ENABLED=0 BUCKET=test go test ./tests -v -count=1 -run=bucketname
 ```
 
-Will return you a list of all local and AWS cloud buckets.
+Will return you a list of all local and remote buckets.
 
 > CGO_ENABLED is set to false to enable cross-compiling
 

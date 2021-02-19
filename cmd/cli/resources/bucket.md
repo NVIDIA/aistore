@@ -61,7 +61,7 @@ $ ais create bucket ais://@Bghort1l/bucket_name --bucket-props='{"versioning": {
 
 ```console
 $ ais create bucket aws://bucket_name
-Creating cloud buckets (aws://bucket_name) is not supported
+Create bucket "aws://bucket_name" failed: creating a bucket for any of the cloud or HTTP providers is not supported
 ```
 
 ## Delete bucket
@@ -109,11 +109,11 @@ $ ais rm bucket ais://@Bghort1l#ml/bucket_name
 
 #### Incorrect buckets removal
 
-Removing cloud buckets is not supported.
+Removing remote buckets is not supported.
 
 ```console
 $ ais rm bucket aws://bucket_name
-Removing cloud buckets (aws://bucket_name) is not supported
+Operation "destroy_bck" is not supported by "aws://bucket_name"
 ```
 
 ## List bucket names
@@ -168,7 +168,7 @@ List all objects contained in `BUCKET_NAME` bucket.
 | `--all` | `bool` | Show all objects, including misplaced, duplicated, etc. | `false` |
 | `--marker` | `string` | Start listing objects starting from the object that follows the marker alphabetically | `""` |
 | `--no-headers` | `bool` | Display tables without headers | `false` |
-| `--cached` | `bool` | For a cloud bucket, shows only objects that have already been downloaded and are cached on local drives (ignored for ais buckets) | `false` |
+| `--cached` | `bool` | For a remote bucket, shows only objects that have already been downloaded and are cached on local drives (ignored for ais buckets) | `false` |
 | `--use-cache` | `bool` | Use proxy cache to speed up list object request | `false` |
 | `--start-after` | `string` | Object name after which the listing should start | `""` |
 
@@ -207,7 +207,7 @@ shard-1.tar	16.00KiB	1
 ...
 ```
 
-List objects in the cloud bucket `bucket_name`.
+List objects in the remote bucket `bucket_name`.
 
 ```console
 ais ls aws://bucket_name
@@ -257,7 +257,7 @@ shard-1.tar	16.00KiB	1
 
 `ais evict BUCKET_NAME`
 
-Evict a [remote bucket](../../../docs/bucket.md/#cloud-bucket). It also resets the properties of the bucket (if changed).
+Evict a [remote bucket](../../../docs/bucket.md/#remote-bucket). It also resets the properties of the bucket (if changed).
 All data from the remote bucket stored in the cluster will be removed, and AIS will stop keeping track of the remote bucket.
 Read more about this feature [here](../../../docs/bucket.md/#evict-remote-bucket).
 
