@@ -204,7 +204,7 @@ func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string, options 
 // temporary buffer is allocated when reading from the response body to compute
 // the object checksum.
 //
-// Returns `cmn.InvalidCksumError` when the expected and actual checksum values
+// Returns `cmn.ErrInvalidCksum` when the expected and actual checksum values
 // are different.
 func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (n int64, err error) {
 	var (

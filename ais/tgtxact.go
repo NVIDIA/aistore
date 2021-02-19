@@ -116,7 +116,7 @@ func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request,
 		t.writeJSON(w, r, stats, what)
 		return
 	}
-	if _, ok := err.(*cmn.XactionNotFoundError); ok {
+	if _, ok := err.(*cmn.ErrXactionNotFound); ok {
 		t.writeErrSilent(w, r, err, http.StatusNotFound)
 	} else {
 		t.writeErr(w, r, err)

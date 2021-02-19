@@ -611,7 +611,7 @@ func isErrAcceptable(err error) bool {
 	if err == nil {
 		return true
 	}
-	if hErr, ok := err.(*cmn.HTTPError); ok {
+	if hErr, ok := err.(*cmn.ErrHTTP); ok {
 		// TODO: http.StatusBadGateway should be handled while performing reverseProxy (if a IC node is killed)
 		return hErr.Status == http.StatusServiceUnavailable || hErr.Status == http.StatusBadGateway
 	}
@@ -656,8 +656,8 @@ func CheckErrIsNotFound(t *testing.T, err error) {
 		t.Fatalf("expected error")
 		return
 	}
-	httpErr, ok := err.(*cmn.HTTPError)
-	tassert.Fatalf(t, ok, "expected an error of type *cmn.HTTPError, but got: %T.", err)
+	httpErr, ok := err.(*cmn.ErrHTTP)
+	tassert.Fatalf(t, ok, "expected an error of type *cmn.ErrHTTP, but got: %T.", err)
 	tassert.Fatalf(
 		t, httpErr.Status == http.StatusNotFound,
 		"expected status: %d, got: %d.", http.StatusNotFound, httpErr.Status,

@@ -291,7 +291,7 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 		rebStats, err := api.QueryXactionStats(defaultAPIParams, xactArgs)
 		if err != nil {
 			switch err := err.(type) {
-			case *cmn.HTTPError:
+			case *cmn.ErrHTTP:
 				if err.Status == http.StatusNotFound {
 					fmt.Fprintln(c.App.Writer, "Rebalance has not started yet.")
 					return nil

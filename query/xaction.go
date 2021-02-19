@@ -221,7 +221,7 @@ func (r *ObjectsListingXact) startFromBck() {
 	}
 
 	if err := fs.WalkBck(opts); err != nil {
-		if _, ok := err.(*cmn.AbortedError); !ok {
+		if _, ok := err.(*cmn.ErrAborted); !ok {
 			glog.Error(err)
 		}
 	}

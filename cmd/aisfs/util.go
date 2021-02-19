@@ -107,24 +107,24 @@ func tryAccessBucket(url string, bck cmn.Bck) bool {
 // ERROR HANDLING
 //////////////////
 
-type usageError struct {
+type errUsage struct {
 	message string
 }
 
-func (e *usageError) Error() string {
+func (e *errUsage) Error() string {
 	return fmt.Sprintf("Incorrect usage of %s: %s\nRun '%s -h' for help", appName, e.message, appName)
 }
 
 func incorrectUsageError(err error) error {
 	cmn.Assert(err != nil)
-	return &usageError{
+	return &errUsage{
 		message: err.Error(),
 	}
 }
 
 func missingArgumentsError(missingArguments ...string) error {
 	cmn.Assert(len(missingArguments) > 0)
-	return &usageError{
+	return &errUsage{
 		message: fmt.Sprintf("missing arguments: %s.", strings.Join(missingArguments, ", ")),
 	}
 }

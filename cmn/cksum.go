@@ -30,7 +30,7 @@ const (
 type (
 	noopHash struct{}
 
-	BadCksumError struct {
+	ErrBadCksum struct {
 		prefix  string
 		a, b    interface{}
 		context string
@@ -184,7 +184,7 @@ func NewBadDataCksumError(a, b *Cksum, context ...string) error {
 	if len(context) > 0 {
 		ctx = context[0]
 	}
-	return &BadCksumError{prefix: badDataCksumPrefix, a: a, b: b, context: ctx}
+	return &ErrBadCksum{prefix: badDataCksumPrefix, a: a, b: b, context: ctx}
 }
 
 func NewBadMetaCksumError(a, b uint64, context ...string) error {
@@ -192,10 +192,10 @@ func NewBadMetaCksumError(a, b uint64, context ...string) error {
 	if len(context) > 0 {
 		ctx = context[0]
 	}
-	return &BadCksumError{prefix: badMetaCksumPrefix, a: a, b: b, context: ctx}
+	return &ErrBadCksum{prefix: badMetaCksumPrefix, a: a, b: b, context: ctx}
 }
 
-func (e *BadCksumError) Error() string {
+func (e *ErrBadCksum) Error() string {
 	var context string
 	if e.context != "" {
 		context = " (context: " + e.context + ")"
@@ -219,7 +219,7 @@ func (e *BadCksumError) Error() string {
 	return fmt.Sprintf("%s (%v != %v)%s", e.prefix, e.a, e.b, context)
 }
 
-func (e *BadCksumError) Is(target error) bool {
-	_, ok := target.(*BadCksumError)
+func (e *ErrBadCksum) Is(target error) bool {
+	_, ok := target.(*ErrBadCksum)
 	return ok
 }

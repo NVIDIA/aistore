@@ -57,7 +57,7 @@ func validateBucket(c *cli.Context, bck cmn.Bck, tag string, optional bool) (cmn
 // Creates new ais bucket
 func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BucketPropsToUpdate) (err error) {
 	if err = api.CreateBucket(defaultAPIParams, bck, props); err != nil {
-		if herr, ok := err.(*cmn.HTTPError); ok {
+		if herr, ok := err.(*cmn.ErrHTTP); ok {
 			if herr.Status == http.StatusConflict {
 				desc := fmt.Sprintf("Bucket %q already exists", bck)
 				if flagIsSet(c, ignoreErrorFlag) {

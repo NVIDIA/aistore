@@ -70,14 +70,14 @@ var (
 )
 
 type (
-	usageError struct {
+	errUsage struct {
 		context       *cli.Context
 		message       string
 		bottomMessage string
 		helpData      interface{}
 		helpTemplate  string
 	}
-	additionalInfoError struct {
+	errAdditionalInfo struct {
 		baseErr        error
 		additionalInfo string
 	}
@@ -95,7 +95,7 @@ type (
 
 func isWebURL(url string) bool { return cmn.IsHTTP(url) || cmn.IsHTTPS(url) }
 
-func (e *usageError) Error() string {
+func (e *errUsage) Error() string {
 	msg := helpMessage(e.helpTemplate, e.helpData)
 	if e.bottomMessage != "" {
 		msg += fmt.Sprintf("\n%s\n", e.bottomMessage)
@@ -120,7 +120,7 @@ func helpMessage(template string, data interface{}) string {
 
 func incorrectUsageError(c *cli.Context, err error) error {
 	cmn.Assert(err != nil)
-	return &usageError{
+	return &errUsage{
 		context:      c,
 		message:      err.Error(),
 		helpData:     c.Command,
@@ -129,7 +129,7 @@ func incorrectUsageError(c *cli.Context, err error) error {
 }
 
 func incorrectUsageMsg(c *cli.Context, fmtString string, args ...interface{}) error {
-	return &usageError{
+	return &errUsage{
 		context:      c,
 		message:      fmt.Sprintf(fmtString, args...),
 		helpData:     c.Command,
@@ -177,7 +177,7 @@ func objectPropList(props *cmn.ObjectProps, selection []string) (propList []prop
 
 func missingArgumentsError(c *cli.Context, missingArgs ...string) error {
 	cmn.Assert(len(missingArgs) > 0)
-	return &usageError{
+	return &errUsage{
 		context:      c,
 		message:      fmt.Sprintf("missing arguments %q", strings.Join(missingArgs, ", ")),
 		helpData:     c.Command,
@@ -186,7 +186,7 @@ func missingArgumentsError(c *cli.Context, missingArgs ...string) error {
 }
 
 func commandNotFoundError(c *cli.Context, cmd string) error {
-	return &usageError{
+	return &errUsage{
 		context:       c,
 		message:       fmt.Sprintf("unknown command %q", cmd),
 		helpData:      c.App,
@@ -228,13 +228,13 @@ func findClosestCommand(cmd string, candidates []cli.Command) (result string, di
 	return closestName, minDist
 }
 
-func (e *additionalInfoError) Error() string {
+func (e *errAdditionalInfo) Error() string {
 	return fmt.Sprintf("%s. %s", e.baseErr.Error(), cmn.StrToSentence(e.additionalInfo))
 }
 
 func newAdditionalInfoError(err error, info string) error {
 	cmn.Assert(err != nil)
-	return &additionalInfoError{
+	return &errAdditionalInfo{
 		baseErr:        err,
 		additionalInfo: info,
 	}
@@ -877,7 +877,7 @@ func headBucket(bck cmn.Bck) (p *cmn.BucketProps, err error) {
 	if p, err = api.HeadBucket(defaultAPIParams, bck); err == nil {
 		return
 	}
-	if httpErr, ok := err.(*cmn.HTTPError); ok {
+	if httpErr, ok := err.(*cmn.ErrHTTP); ok {
 		if httpErr.Status == http.StatusNotFound {
 			err = fmt.Errorf("bucket %q does not exist", bck)
 		} else if httpErr.Message != "" {

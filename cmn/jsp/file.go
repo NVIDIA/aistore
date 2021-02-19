@@ -80,7 +80,7 @@ func Load(path string, v interface{}, opts Options) (checksum *cmn.Cksum, err er
 		return
 	}
 	checksum, err = Decode(file, v, opts, path)
-	if err != nil && errors.Is(err, &cmn.BadCksumError{}) {
+	if err != nil && errors.Is(err, &cmn.ErrBadCksum{}) {
 		if errRm := os.Remove(path); errRm == nil {
 			if flag.Parsed() {
 				glog.Errorf("bad checksum: removing %s", path)

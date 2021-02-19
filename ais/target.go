@@ -454,7 +454,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := request.bck.Init(t.owner.bmd); err != nil {
-		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
+		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
 			err = request.bck.Init(t.owner.bmd)
 		}
@@ -539,7 +539,7 @@ func (t *targetrunner) httpbcksummary(w http.ResponseWriter, r *http.Request, ms
 		bck, err = newBckFromQuery(apiItems[0], query)
 		if err != nil {
 			if err = bck.Init(t.owner.bmd); err != nil {
-				if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
+				if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
 					t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
 					err = bck.Init(t.owner.bmd)
 				}
@@ -573,7 +573,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	t.ensureLatestSmap(msg, r)
 
 	if err := request.bck.Init(t.owner.bmd); err != nil {
-		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
+		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
 			err = request.bck.Init(t.owner.bmd)
 		}
@@ -642,7 +642,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = request.bck.Init(t.owner.bmd); err != nil {
-		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok { // is ais
+		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); !ok { // is ais
 			t.writeErr(w, r, err)
 			return
 		}
@@ -743,7 +743,7 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(bck.Bck); err != nil {
-		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
+		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
 			err = lom.Init(bck.Bck)
 		}
@@ -817,7 +817,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	defer cluster.FreeLOM(lom)
 
 	if err := lom.Init(request.bck.Bck); err != nil {
-		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
+		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
 			err = lom.Init(request.bck.Bck)
 		}
@@ -1071,7 +1071,7 @@ func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
 // Returns a CT's metadata.
 func (t *targetrunner) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) {
 	if err := bck.Init(t.owner.bmd); err != nil {
-		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok { // is ais
+		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); !ok { // is ais
 			t.writeErrSilent(w, r, err)
 			return
 		}
@@ -1092,7 +1092,7 @@ func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, bck *clu
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(bck.Bck); err != nil {
-		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
+		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
 			err = lom.Init(bck.Bck)
 		}
@@ -1429,7 +1429,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		return
 	}
 	if err = request.bck.Init(t.owner.bmd); err != nil {
-		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
+		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
 			err = request.bck.Init(t.owner.bmd)
 		}

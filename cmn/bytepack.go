@@ -89,7 +89,7 @@ type (
 // it is possible to use int32 instead of int64 to keep the length of the data.
 const SizeofLen = SizeofI32
 
-var ErrorBufferUnderrun = errors.New("buffer underrun")
+var ErrBufferUnderrun = errors.New("buffer underrun")
 
 func NewUnpacker(buf []byte) *ByteUnpack {
 	return &ByteUnpack{b: buf}
@@ -108,7 +108,7 @@ func NewPacker(buf []byte, bufLen int) *BytePack {
 
 func (br *ByteUnpack) ReadByte() (byte, error) {
 	if br.off >= len(br.b) {
-		return 0, ErrorBufferUnderrun
+		return 0, ErrBufferUnderrun
 	}
 	Assert(br.off < len(br.b))
 	b := br.b[br.off]
@@ -128,7 +128,7 @@ func (br *ByteUnpack) ReadInt64() (int64, error) {
 
 func (br *ByteUnpack) ReadUint64() (uint64, error) {
 	if len(br.b)-br.off < SizeofI64 {
-		return 0, ErrorBufferUnderrun
+		return 0, ErrBufferUnderrun
 	}
 	n := binary.BigEndian.Uint64(br.b[br.off:])
 	br.off += SizeofI64
@@ -142,7 +142,7 @@ func (br *ByteUnpack) ReadInt16() (int16, error) {
 
 func (br *ByteUnpack) ReadUint16() (uint16, error) {
 	if len(br.b)-br.off < SizeofI16 {
-		return 0, ErrorBufferUnderrun
+		return 0, ErrBufferUnderrun
 	}
 	n := binary.BigEndian.Uint16(br.b[br.off:])
 	br.off += SizeofI16
@@ -156,7 +156,7 @@ func (br *ByteUnpack) ReadInt32() (int32, error) {
 
 func (br *ByteUnpack) ReadUint32() (uint32, error) {
 	if len(br.b)-br.off < SizeofI32 {
-		return 0, ErrorBufferUnderrun
+		return 0, ErrBufferUnderrun
 	}
 	n := binary.BigEndian.Uint32(br.b[br.off:])
 	br.off += SizeofI32
@@ -165,14 +165,14 @@ func (br *ByteUnpack) ReadUint32() (uint32, error) {
 
 func (br *ByteUnpack) ReadBytes() ([]byte, error) {
 	if len(br.b)-br.off < SizeofLen {
-		return nil, ErrorBufferUnderrun
+		return nil, ErrBufferUnderrun
 	}
 	l, err := br.ReadUint32()
 	if err != nil {
 		return nil, err
 	}
 	if len(br.b)-br.off < int(l) {
-		return nil, ErrorBufferUnderrun
+		return nil, ErrBufferUnderrun
 	}
 	start := br.off
 	br.off += int(l)

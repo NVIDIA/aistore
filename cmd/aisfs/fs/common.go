@@ -64,7 +64,7 @@ func (fs *aisfs) fatalf(fmt string, v ...interface{}) {
 }
 
 func (fs *aisfs) handleIOError(err error) error {
-	var ioerr *ais.IOError
+	var ioerr *ais.ErrIO
 	if errors.As(err, &ioerr) {
 		fs.logf("%v", err)
 		return fuse.EIO

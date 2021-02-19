@@ -9,7 +9,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-func newDSortAbortedError(managerUUID string) *cmn.AbortedError {
+func newDSortAbortedError(managerUUID string) *cmn.ErrAborted {
 	return cmn.NewAbortedError(cmn.DSortName, managerUUID)
 }
 

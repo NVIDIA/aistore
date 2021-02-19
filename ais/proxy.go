@@ -485,7 +485,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if err := p.destroyBucket(&msg, bck); err != nil {
-			if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok { // race
+			if _, ok := err.(*cmn.ErrBucketDoesNotExist); ok { // race
 				glog.Infof("%s: %s already %q-ed, nothing to do", p.si, bck, msg.Action)
 			} else {
 				p.writeErr(w, r, err)
@@ -794,7 +794,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		}
 		if err := p.createBucket(msg, bck); err != nil {
 			errCode := http.StatusInternalServerError
-			if _, ok := err.(*cmn.ErrorBucketAlreadyExists); ok {
+			if _, ok := err.(*cmn.ErrBucketAlreadyExists); ok {
 				errCode = http.StatusConflict
 			}
 			p.writeErr(w, r, err, errCode)
@@ -879,7 +879,7 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 			// Initialize backend bucket.
 			backend := cluster.BackendBck(bck)
 			if err = backend.InitNoBackend(p.owner.bmd); err != nil {
-				if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok {
+				if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); !ok {
 					p.writeErrf(w, r,
 						"cannot create %s: failing to initialize backend %s, err: %v",
 						bck, backend, err)
@@ -897,7 +897,7 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 	}
 	if err := p.createBucket(msg, bck); err != nil {
 		errCode := http.StatusInternalServerError
-		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); ok {
+		if _, ok := err.(*cmn.ErrBucketAlreadyExists); ok {
 			errCode = http.StatusConflict
 		}
 		p.writeErr(w, r, err, errCode)

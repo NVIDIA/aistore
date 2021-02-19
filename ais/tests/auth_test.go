@@ -25,8 +25,8 @@ func createBaseParams() (unAuth, auth api.BaseParams) {
 
 func expectUnauthorized(t *testing.T, err error) {
 	tassert.Fatalf(t, err != nil, "expected unauthorized error")
-	var httpErr *cmn.HTTPError
-	tassert.Fatalf(t, errors.As(err, &httpErr), "expected cmn.HTTPError")
+	var httpErr *cmn.ErrHTTP
+	tassert.Fatalf(t, errors.As(err, &httpErr), "expected cmn.ErrHTTP")
 	tassert.Fatalf(
 		t, httpErr.Status == http.StatusUnauthorized,
 		"expected status unauthorized, got: %d", httpErr.Status,

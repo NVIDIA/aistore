@@ -442,7 +442,7 @@ func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request
 func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
 	enabled, err := t.fsprg.enableMountpath(mountpath)
 	if err != nil {
-		if _, ok := err.(*cmn.NoMountpathError); ok {
+		if _, ok := err.(*cmn.ErrNoMountpath); ok {
 			t.writeErr(w, r, err, http.StatusNotFound)
 		} else {
 			// cmn.InvalidMountpathError
@@ -481,7 +481,7 @@ func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.R
 func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
 	disabled, err := t.fsprg.disableMountpath(mountpath)
 	if err != nil {
-		if _, ok := err.(*cmn.NoMountpathError); ok {
+		if _, ok := err.(*cmn.ErrNoMountpath); ok {
 			t.writeErr(w, r, err, http.StatusNotFound)
 		} else {
 			// cmn.InvalidMountpathError

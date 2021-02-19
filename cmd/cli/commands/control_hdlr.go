@@ -269,7 +269,7 @@ func startDownloadHandler(c *cli.Context) error {
 	if c.NArg() > 2 {
 		const q = "For range download, enclose source in quotation marks, e.g.: \"gs://imagenet/train-{00..99}.tgz\""
 		s := fmt.Sprintf("too many arguments - expected 2, got %d.\n%s", len(c.Args()), q)
-		return &usageError{
+		return &errUsage{
 			context:      c,
 			message:      s,
 			helpData:     c.Command,
@@ -439,7 +439,7 @@ func startDsortHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 && specPath == "" {
 		return missingArgumentsError(c, "job specification")
 	} else if c.NArg() > 0 && specPath != "" {
-		return &usageError{
+		return &errUsage{
 			context:      c,
 			message:      "multiple job specifications provided, expected one",
 			helpData:     c.Command,

@@ -147,7 +147,7 @@ func (args *bckInitArgs) initAndTry(bucket string, origURLBck ...string) (bck *c
 	}
 
 	// Should create only for remote bucket when `tryOnlyRem` flag is set.
-	if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok && args.tryOnlyRem {
+	if _, ok := err.(*cmn.ErrBucketDoesNotExist); ok && args.tryOnlyRem {
 		args.p.writeErr(args.w, args.r, err, errCode)
 		return
 	}
@@ -235,7 +235,7 @@ func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode i
 	}
 
 	if err = args.p.createBucket(&cmn.ActionMsg{Action: action}, bck, remoteProps); err != nil {
-		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); !ok {
+		if _, ok := err.(*cmn.ErrBucketAlreadyExists); !ok {
 			errCode = http.StatusConflict
 			return
 		}

@@ -150,7 +150,7 @@ func (p *proxyrunner) putBckS3(w http.ResponseWriter, r *http.Request, bucket st
 	}
 	if err := p.createBucket(&msg, bck); err != nil {
 		errCode := http.StatusInternalServerError
-		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); ok {
+		if _, ok := err.(*cmn.ErrBucketAlreadyExists); ok {
 			errCode = http.StatusConflict
 		}
 		p.writeErr(w, r, err, errCode)
@@ -175,7 +175,7 @@ func (p *proxyrunner) delBckS3(w http.ResponseWriter, r *http.Request, bucket st
 	}
 	if err := p.destroyBucket(&msg, bck); err != nil {
 		errCode := http.StatusInternalServerError
-		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); ok {
+		if _, ok := err.(*cmn.ErrBucketAlreadyExists); ok {
 			glog.Infof("%s: %s already %q-ed, nothing to do", p.si, bck, msg.Action)
 			return
 		}

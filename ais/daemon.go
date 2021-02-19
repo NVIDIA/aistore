@@ -337,7 +337,7 @@ func Run(version, build string) int {
 		glog.Infoln("Terminated OK")
 		return 0
 	}
-	if e, ok := err.(*cmn.SignalError); ok {
+	if e, ok := err.(*cmn.ErrSignal); ok {
 		glog.Infof("Terminated OK (via signal: %v)\n", e)
 		return e.ExitCode()
 	}

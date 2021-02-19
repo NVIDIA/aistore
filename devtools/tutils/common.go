@@ -93,9 +93,9 @@ func GenerateNonexistentBucketName(prefix string, baseParams api.BaseParams) (st
 		if err == nil {
 			continue
 		}
-		errHTTP, ok := err.(*cmn.HTTPError)
+		errHTTP, ok := err.(*cmn.ErrHTTP)
 		if !ok {
-			return "", fmt.Errorf("error generating bucket name: expected error of type *cmn.HTTPError, but got: %T", err)
+			return "", fmt.Errorf("error generating bucket name: expected error of type *cmn.ErrHTTP, but got: %T", err)
 		}
 		if errHTTP.Status == http.StatusNotFound {
 			return bck.Name, nil

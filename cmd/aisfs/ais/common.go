@@ -17,20 +17,19 @@ const (
 	IOErrorKindObject = "object"
 )
 
-type IOError struct {
+type ErrIO struct {
 	Kind   string
 	Op     string
 	Object string
 	Err    error
 }
 
-func (e *IOError) Error() string {
-	return fmt.Sprintf("IOError: %s op %s %s: %v",
-		e.Kind, e.Op, e.Object, e.Err)
+func (e *ErrIO) Error() string {
+	return fmt.Sprintf("ErrIO: %s op %s %s: %v", e.Kind, e.Op, e.Object, e.Err)
 }
 
 func newIOError(err error, kind, op, object string) error {
-	return &IOError{
+	return &ErrIO{
 		Kind:   kind,
 		Op:     op,
 		Object: object,

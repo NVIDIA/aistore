@@ -232,7 +232,7 @@ func (mgr *Manager) recvRequest(w http.ResponseWriter, hdr transport.ObjHdr, obj
 	}
 	bck := cluster.NewBckEmbed(hdr.Bck)
 	if err = bck.Init(mgr.t.Bowner()); err != nil {
-		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok { // is ais
+		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); !ok { // is ais
 			glog.Errorf("failed to init bucket %s: %v", bck, err)
 			return
 		}
@@ -263,7 +263,7 @@ func (mgr *Manager) recvResponse(w http.ResponseWriter, hdr transport.ObjHdr, ob
 	}
 	bck := cluster.NewBckEmbed(hdr.Bck)
 	if err = bck.Init(mgr.t.Bowner()); err != nil {
-		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok { // is ais
+		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); !ok { // is ais
 			glog.Error(err)
 			cmn.DrainReader(object)
 			return

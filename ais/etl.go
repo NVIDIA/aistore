@@ -106,7 +106,7 @@ func (t *targetrunner) stopETL(w http.ResponseWriter, r *http.Request) {
 	uuid := apiItems[0]
 	if err := etl.Stop(t, uuid); err != nil {
 		statusCode := http.StatusBadRequest
-		if _, ok := err.(*cmn.NotFoundError); ok {
+		if _, ok := err.(*cmn.ErrNotFound); ok {
 			statusCode = http.StatusNotFound
 		}
 		t.writeErr(w, r, err, statusCode)
@@ -120,7 +120,7 @@ func (t *targetrunner) doETL(w http.ResponseWriter, r *http.Request, uuid string
 	)
 	comm, err = etl.GetCommunicator(uuid)
 	if err != nil {
-		if _, ok := err.(*cmn.NotFoundError); ok {
+		if _, ok := err.(*cmn.ErrNotFound); ok {
 			smap := t.owner.smap.Get()
 			t.writeErrStatusf(w, r,
 				http.StatusNotFound,
@@ -170,7 +170,7 @@ func (t *targetrunner) healthETL(w http.ResponseWriter, r *http.Request) {
 
 	healthMsg, err := etl.PodHealth(t, apiItems[0])
 	if err != nil {
-		if _, ok := err.(*cmn.NotFoundError); ok {
+		if _, ok := err.(*cmn.ErrNotFound); ok {
 			t.writeErrSilent(w, r, err, http.StatusNotFound)
 		} else {
 			t.writeErr(w, r, err)

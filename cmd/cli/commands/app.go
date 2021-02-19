@@ -104,9 +104,9 @@ func (aisCLI *AISCLI) runNTimes(input []string) error {
 
 func isUnreachableError(err error) bool {
 	switch err := err.(type) {
-	case *cmn.HTTPError:
+	case *cmn.ErrHTTP:
 		return cmn.IsUnreachable(err, err.Status)
-	case *usageError, *additionalInfoError:
+	case *errUsage, *errAdditionalInfo:
 		return false
 	default:
 		return unreachableRegex.MatchString(err.Error())
@@ -135,11 +135,11 @@ func (aisCLI *AISCLI) handleCLIError(err error) error {
 	}
 
 	switch err := err.(type) {
-	case *cmn.HTTPError:
+	case *cmn.ErrHTTP:
 		return prepareError(err.Message)
-	case *usageError:
+	case *errUsage:
 		return err
-	case *additionalInfoError:
+	case *errAdditionalInfo:
 		err.baseErr = aisCLI.handleCLIError(err.baseErr)
 		return err
 	default:

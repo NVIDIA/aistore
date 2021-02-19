@@ -209,7 +209,7 @@ func checkResp(reqParams ReqParams, resp *http.Response) error {
 		}
 	}
 	var (
-		httpErr *cmn.HTTPError
+		httpErr *cmn.ErrHTTP
 		msg, _  = ioutil.ReadAll(resp.Body)
 	)
 	if reqParams.BaseParams.Method != http.MethodHead && resp.StatusCode != http.StatusServiceUnavailable {

@@ -33,51 +33,49 @@ const (
 )
 
 type (
-	SignalError struct {
+	ErrSignal struct {
 		signal syscall.Signal
 	}
+	ErrBucketAlreadyExists      struct{ bck Bck }
+	ErrRemoteBucketDoesNotExist struct{ bck Bck }
+	ErrRemoteBucketOffline      struct{ bck Bck }
+	ErrBucketDoesNotExist       struct{ bck Bck }
+	ErrBucketIsBusy             struct{ bck Bck }
 
-	ErrorBucketAlreadyExists      struct{ bck Bck }
-	ErrorRemoteBucketDoesNotExist struct{ bck Bck }
-	ErrorRemoteBucketOffline      struct{ bck Bck }
-	ErrorBucketDoesNotExist       struct{ bck Bck }
-	ErrorBucketIsBusy             struct{ bck Bck }
-
-	ErrorInvalidBucketProvider struct {
+	ErrInvalidBucketProvider struct {
 		bck Bck
 		err error
 	}
-	ErrorCapacityExceeded struct {
+	ErrCapacityExceeded struct {
 		totalBytes     uint64
 		totalBytesUsed uint64
 		highWM         int64
 		usedPct        int32
 		oos            bool
 	}
-
-	BucketAccessDenied struct{ errAccessDenied }
-	ObjectAccessDenied struct{ errAccessDenied }
-	errAccessDenied    struct {
+	ErrBucketAccessDenied struct{ errAccessDenied }
+	ErrObjectAccessDenied struct{ errAccessDenied }
+	errAccessDenied       struct {
 		entity      string
 		operation   string
 		accessAttrs AccessAttrs
 	}
 
-	InvalidCksumError struct {
+	ErrInvalidCksum struct {
 		expectedHash string
 		actualHash   string
 	}
-	NoMountpathError struct {
+	ErrNoMountpath struct {
 		mpath string
 	}
 	InvalidMountpathError struct {
 		mpath string
 		cause string
 	}
-	NoNodesError struct {
+	ErrNoNodes struct {
 		role string
 	}
-	XactionNotFoundError struct {
+	ErrXactionNotFound struct {
 		cause string
 	}
 	ObjDefunctErr struct {
@@ -88,15 +86,15 @@ type (
 		name string // object's name
 		err  error  // underlying error
 	}
-	AbortedError struct {
+	ErrAborted struct {
 		what    string
 		details string
 		cause   error
 	}
-	NotFoundError struct {
+	ErrNotFound struct {
 		what string
 	}
-	ETLError struct {
+	ErrETL struct {
 		Reason string
 		ETLErrorContext
 	}
@@ -107,12 +105,11 @@ type (
 		PodName string
 		SvcName string
 	}
-	SoftError struct {
+	ErrSoft struct {
 		what string
 	}
-
 	// Error structure for HTTP errors
-	HTTPError struct {
+	ErrHTTP struct {
 		Status     int    `json:"status"`
 		Message    string `json:"message"`
 		Method     string `json:"method"`
@@ -136,20 +133,20 @@ func IsEOF(err error) bool {
 }
 
 func IsErrAborted(err error) bool {
-	if _, ok := err.(*AbortedError); ok {
+	if _, ok := err.(*ErrAborted); ok {
 		return true
 	}
-	target := &AbortedError{}
+	target := &ErrAborted{}
 	return errors.As(err, &target)
 }
 
 // IsErrorSoft returns true if the error is not critical and can be
 // ignored in some cases(e.g, when `--force` is set)
 func IsErrSoft(err error) bool {
-	if _, ok := err.(*SoftError); ok {
+	if _, ok := err.(*ErrSoft); ok {
 		return true
 	}
-	target := &SoftError{}
+	target := &ErrSoft{}
 	return errors.As(err, &target)
 }
 
@@ -158,7 +155,7 @@ func IsErrSoft(err error) bool {
 ////////////////////////
 
 func IsStatusServiceUnavailable(err error) (yes bool) {
-	hErr, ok := err.(*HTTPError)
+	hErr, ok := err.(*ErrHTTP)
 	if !ok {
 		return false
 	}
@@ -166,7 +163,7 @@ func IsStatusServiceUnavailable(err error) (yes bool) {
 }
 
 func IsStatusNotFound(err error) (yes bool) {
-	hErr, ok := err.(*HTTPError)
+	hErr, ok := err.(*ErrHTTP)
 	if !ok {
 		return false
 	}
@@ -174,7 +171,7 @@ func IsStatusNotFound(err error) (yes bool) {
 }
 
 func IsStatusBadGateway(err error) (yes bool) {
-	hErr, ok := err.(*HTTPError)
+	hErr, ok := err.(*ErrHTTP)
 	if !ok {
 		return false
 	}
@@ -182,7 +179,7 @@ func IsStatusBadGateway(err error) (yes bool) {
 }
 
 func IsStatusGone(err error) (yes bool) {
-	hErr, ok := err.(*HTTPError)
+	hErr, ok := err.(*ErrHTTP)
 	if !ok {
 		return false
 	}
@@ -222,65 +219,65 @@ func IsUnreachable(err error, status int) bool {
 // structured error types //
 ////////////////////////////
 
-func NewSignalError(s syscall.Signal) *SignalError {
-	return &SignalError{signal: s}
+func NewSignalError(s syscall.Signal) *ErrSignal {
+	return &ErrSignal{signal: s}
 }
 
-func (e *SignalError) Error() string {
+func (e *ErrSignal) Error() string {
 	return fmt.Sprintf("Signal %d", e.signal)
 }
 
 // https://tldp.org/LDP/abs/html/exitcodes.html
-func (e *SignalError) ExitCode() int { return 128 + int(e.signal) }
+func (e *ErrSignal) ExitCode() int { return 128 + int(e.signal) }
 
-func NewErrorBucketAlreadyExists(bck Bck) *ErrorBucketAlreadyExists {
-	return &ErrorBucketAlreadyExists{bck: bck}
+func NewErrorBucketAlreadyExists(bck Bck) *ErrBucketAlreadyExists {
+	return &ErrBucketAlreadyExists{bck: bck}
 }
 
-func (e *ErrorBucketAlreadyExists) Error() string {
+func (e *ErrBucketAlreadyExists) Error() string {
 	return fmt.Sprintf("bucket %q already exists", e.bck)
 }
 
-func NewErrorRemoteBucketDoesNotExist(bck Bck) *ErrorRemoteBucketDoesNotExist {
-	return &ErrorRemoteBucketDoesNotExist{bck: bck}
+func NewErrorRemoteBucketDoesNotExist(bck Bck) *ErrRemoteBucketDoesNotExist {
+	return &ErrRemoteBucketDoesNotExist{bck: bck}
 }
 
-func (e *ErrorRemoteBucketDoesNotExist) Error() string {
+func (e *ErrRemoteBucketDoesNotExist) Error() string {
 	if e.bck.IsCloud() {
 		return fmt.Sprintf("cloud bucket %q does not exist", e.bck)
 	}
 	return fmt.Sprintf("remote ais bucket %q does not exist", e.bck)
 }
 
-func NewErrorRemoteBucketOffline(bck Bck) *ErrorRemoteBucketOffline {
-	return &ErrorRemoteBucketOffline{bck: bck}
+func NewErrorRemoteBucketOffline(bck Bck) *ErrRemoteBucketOffline {
+	return &ErrRemoteBucketOffline{bck: bck}
 }
 
-func (e *ErrorRemoteBucketOffline) Error() string {
+func (e *ErrRemoteBucketOffline) Error() string {
 	return fmt.Sprintf("bucket %q is currently unreachable", e.bck)
 }
 
-func NewErrorBucketDoesNotExist(bck Bck) *ErrorBucketDoesNotExist {
-	return &ErrorBucketDoesNotExist{bck: bck}
+func NewErrorBucketDoesNotExist(bck Bck) *ErrBucketDoesNotExist {
+	return &ErrBucketDoesNotExist{bck: bck}
 }
 
-func (e *ErrorBucketDoesNotExist) Error() string {
+func (e *ErrBucketDoesNotExist) Error() string {
 	return fmt.Sprintf("bucket %q does not exist", e.bck)
 }
 
-func NewErrorInvalidBucketProvider(bck Bck, err error) *ErrorInvalidBucketProvider {
-	return &ErrorInvalidBucketProvider{bck: bck, err: err}
+func NewErrorInvalidBucketProvider(bck Bck, err error) *ErrInvalidBucketProvider {
+	return &ErrInvalidBucketProvider{bck: bck, err: err}
 }
 
-func (e *ErrorInvalidBucketProvider) Error() string {
+func (e *ErrInvalidBucketProvider) Error() string {
 	return fmt.Sprintf("%v, bucket %s", e.err, e.bck)
 }
 
-func NewErrorBucketIsBusy(bck Bck) *ErrorBucketIsBusy {
-	return &ErrorBucketIsBusy{bck: bck}
+func NewErrorBucketIsBusy(bck Bck) *ErrBucketIsBusy {
+	return &ErrBucketIsBusy{bck: bck}
 }
 
-func (e *ErrorBucketIsBusy) Error() string {
+func (e *ErrBucketIsBusy) Error() string {
 	return fmt.Sprintf("bucket %q is currently busy, please retry later", e.bck)
 }
 
@@ -288,21 +285,21 @@ func (e *errAccessDenied) String() string {
 	return fmt.Sprintf("%s: %s access denied (%#x)", e.entity, e.operation, e.accessAttrs)
 }
 
-func (e *BucketAccessDenied) Error() string {
+func (e *ErrBucketAccessDenied) Error() string {
 	return "bucket " + e.String()
 }
 
-func (e *ObjectAccessDenied) Error() string {
+func (e *ErrObjectAccessDenied) Error() string {
 	return "object " + e.String()
 }
 
-func NewBucketAccessDenied(bucket, oper string, aattrs AccessAttrs) *BucketAccessDenied {
-	return &BucketAccessDenied{errAccessDenied{bucket, oper, aattrs}}
+func NewBucketAccessDenied(bucket, oper string, aattrs AccessAttrs) *ErrBucketAccessDenied {
+	return &ErrBucketAccessDenied{errAccessDenied{bucket, oper, aattrs}}
 }
 
 func NewErrorCapacityExceeded(highWM int64, usedPct int32, totalBytesUsed, totalBytes uint64,
-	oos bool) *ErrorCapacityExceeded {
-	return &ErrorCapacityExceeded{
+	oos bool) *ErrCapacityExceeded {
+	return &ErrCapacityExceeded{
 		highWM:         highWM,
 		usedPct:        usedPct,
 		totalBytes:     totalBytes,
@@ -311,7 +308,7 @@ func NewErrorCapacityExceeded(highWM int64, usedPct int32, totalBytesUsed, total
 	}
 }
 
-func (e *ErrorCapacityExceeded) Error() string {
+func (e *ErrCapacityExceeded) Error() string {
 	suffix := fmt.Sprintf("total used %s out of %s", B2S(int64(e.totalBytesUsed), 2), B2S(int64(e.totalBytes), 2))
 	if e.oos {
 		return fmt.Sprintf("out of space: used %d%% of total capacity on at least one of the mountpaths (%s)",
@@ -321,22 +318,22 @@ func (e *ErrorCapacityExceeded) Error() string {
 		e.usedPct, e.highWM, suffix)
 }
 
-func (e *InvalidCksumError) Error() string {
+func (e *ErrInvalidCksum) Error() string {
 	return fmt.Sprintf("checksum: expected [%s], actual [%s]", e.expectedHash, e.actualHash)
 }
 
-func NewInvalidCksumError(eHash, aHash string) *InvalidCksumError {
-	return &InvalidCksumError{actualHash: aHash, expectedHash: eHash}
+func NewInvalidCksumError(eHash, aHash string) *ErrInvalidCksum {
+	return &ErrInvalidCksum{actualHash: aHash, expectedHash: eHash}
 }
 
-func (e *InvalidCksumError) Expected() string { return e.expectedHash }
+func (e *ErrInvalidCksum) Expected() string { return e.expectedHash }
 
-func (e *NoMountpathError) Error() string {
+func (e *ErrNoMountpath) Error() string {
 	return "mountpath [" + e.mpath + "] doesn't exist"
 }
 
-func NewNoMountpathError(mpath string) *NoMountpathError {
-	return &NoMountpathError{mpath}
+func NewNoMountpathError(mpath string) *ErrNoMountpath {
+	return &ErrNoMountpath{mpath}
 }
 
 func (e *InvalidMountpathError) Error() string {
@@ -347,11 +344,11 @@ func NewInvalidaMountpathError(mpath, cause string) *InvalidMountpathError {
 	return &InvalidMountpathError{mpath: mpath, cause: cause}
 }
 
-func NewNoNodesError(role string) *NoNodesError {
-	return &NoNodesError{role: role}
+func NewNoNodesError(role string) *ErrNoNodes {
+	return &ErrNoNodes{role: role}
 }
 
-func (e *NoNodesError) Error() string {
+func (e *ErrNoNodes) Error() string {
 	if e.role == Proxy {
 		return "no available proxies"
 	}
@@ -359,12 +356,12 @@ func (e *NoNodesError) Error() string {
 	return "no available targets"
 }
 
-func (e *XactionNotFoundError) Error() string {
+func (e *ErrXactionNotFound) Error() string {
 	return "xaction " + e.cause + " not found"
 }
 
-func NewXactionNotFoundError(cause string) *XactionNotFoundError {
-	return &XactionNotFoundError{cause: cause}
+func NewXactionNotFoundError(cause string) *ErrXactionNotFound {
+	return &ErrXactionNotFound{cause: cause}
 }
 
 func (e *ObjDefunctErr) Error() string {
@@ -383,19 +380,19 @@ func NewObjMetaErr(name string, err error) *ObjMetaErr {
 	return &ObjMetaErr{name: name, err: err}
 }
 
-func NewAbortedError(what string, details ...string) *AbortedError {
+func NewAbortedError(what string, details ...string) *ErrAborted {
 	var d string
 	if len(details) > 0 {
 		d = details[0]
 	}
-	return &AbortedError{what: what, details: d}
+	return &ErrAborted{what: what, details: d}
 }
 
-func NewAbortedErrorWrapped(what string, cause error) *AbortedError {
-	return &AbortedError{what: what, cause: cause}
+func NewAbortedErrorWrapped(what string, cause error) *ErrAborted {
+	return &ErrAborted{what: what, cause: cause}
 }
 
-func (e *AbortedError) Error() string {
+func (e *ErrAborted) Error() string {
 	if e.cause != nil {
 		return fmt.Sprintf("%s aborted. %s", e.what, e.cause.Error())
 	}
@@ -405,8 +402,8 @@ func (e *AbortedError) Error() string {
 	return fmt.Sprintf("%s aborted", e.what)
 }
 
-func (e *AbortedError) As(target error) bool {
-	_, ok := target.(*AbortedError)
+func (e *ErrAborted) As(target error) bool {
+	_, ok := target.(*ErrAborted)
 	if e.cause == nil {
 		return ok
 	}
@@ -417,20 +414,20 @@ func NewFailedToCreateHTTPRequest(err error) error {
 	return fmt.Errorf("failed to create new HTTP request, err: %v", err)
 }
 
-func NewNotFoundError(format string, a ...interface{}) *NotFoundError {
-	return &NotFoundError{fmt.Sprintf(format, a...)}
+func NewNotFoundError(format string, a ...interface{}) *ErrNotFound {
+	return &ErrNotFound{fmt.Sprintf(format, a...)}
 }
 
-func (e *NotFoundError) Error() string { return e.what + " not found" }
+func (e *ErrNotFound) Error() string { return e.what + " not found" }
 
-func NewETLError(ctx *ETLErrorContext, format string, a ...interface{}) *ETLError {
-	e := &ETLError{
+func NewETLError(ctx *ETLErrorContext, format string, a ...interface{}) *ErrETL {
+	e := &ErrETL{
 		Reason: fmt.Sprintf(format, a...),
 	}
 	return e.WithContext(ctx)
 }
 
-func (e *ETLError) Error() string {
+func (e *ErrETL) Error() string {
 	s := make([]string, 0, 3)
 	if e.TID != "" {
 		s = append(s, fmt.Sprintf("t[%s]", e.TID))
@@ -447,46 +444,45 @@ func (e *ETLError) Error() string {
 	if e.SvcName != "" {
 		s = append(s, fmt.Sprintf("service=%q", e.SvcName))
 	}
-
 	return fmt.Sprintf("[%s] %s", strings.Join(s, ","), e.Reason)
 }
 
-func (e *ETLError) withUUID(uuid string) *ETLError {
+func (e *ErrETL) withUUID(uuid string) *ErrETL {
 	if uuid != "" {
 		e.UUID = uuid
 	}
 	return e
 }
 
-func (e *ETLError) withTarget(tid string) *ETLError {
+func (e *ErrETL) withTarget(tid string) *ErrETL {
 	if tid != "" {
 		e.TID = tid
 	}
 	return e
 }
 
-func (e *ETLError) withETLName(name string) *ETLError {
+func (e *ErrETL) withETLName(name string) *ErrETL {
 	if name != "" {
 		e.ETLName = name
 	}
 	return e
 }
 
-func (e *ETLError) withSvcName(name string) *ETLError {
+func (e *ErrETL) withSvcName(name string) *ErrETL {
 	if name != "" {
 		e.SvcName = name
 	}
 	return e
 }
 
-func (e *ETLError) WithPodName(name string) *ETLError {
+func (e *ErrETL) WithPodName(name string) *ErrETL {
 	if name != "" {
 		e.PodName = name
 	}
 	return e
 }
 
-func (e *ETLError) WithContext(ctx *ETLErrorContext) *ETLError {
+func (e *ErrETL) WithContext(ctx *ETLErrorContext) *ErrETL {
 	if ctx == nil {
 		return e
 	}
@@ -498,11 +494,11 @@ func (e *ETLError) WithContext(ctx *ETLErrorContext) *ETLError {
 		withSvcName(ctx.SvcName)
 }
 
-func NewSoftError(what string) *SoftError {
-	return &SoftError{what}
+func NewSoftError(what string) *ErrSoft {
+	return &ErrSoft{what}
 }
 
-func (e *SoftError) Error() string {
+func (e *ErrSoft) Error() string {
 	return e.what
 }
 
@@ -512,13 +508,13 @@ func (e *SoftError) Error() string {
 
 // nought: not a thing
 func IsErrBucketNought(err error) bool {
-	if _, ok := err.(*ErrorBucketDoesNotExist); ok {
+	if _, ok := err.(*ErrBucketDoesNotExist); ok {
 		return true
 	}
-	if _, ok := err.(*ErrorRemoteBucketDoesNotExist); ok {
+	if _, ok := err.(*ErrRemoteBucketDoesNotExist); ok {
 		return true
 	}
-	_, ok := err.(*ErrorRemoteBucketOffline)
+	_, ok := err.(*ErrRemoteBucketOffline)
 	return ok
 }
 
@@ -539,17 +535,18 @@ func IsObjNotExist(err error) bool {
 	if os.IsNotExist(err) {
 		return true
 	}
-	_, ok := err.(*NotFoundError)
+	_, ok := err.(*ErrNotFound)
 	return ok
 }
+
 func IsErrBucketLevel(err error) bool { return IsErrBucketNought(err) }
 func IsErrObjLevel(err error) bool    { return IsErrObjNought(err) }
 
 ///////////////
-// HTTPError //
+// ErrHTTP //
 ///////////////
 
-func NewHTTPErr(r *http.Request, msg string, errCode ...int) (e *HTTPError) {
+func NewHTTPErr(r *http.Request, msg string, errCode ...int) (e *ErrHTTP) {
 	status := http.StatusBadRequest
 	if len(errCode) > 0 && errCode[0] > status {
 		status = errCode[0]
@@ -562,9 +559,9 @@ func NewHTTPErr(r *http.Request, msg string, errCode ...int) (e *HTTPError) {
 	return
 }
 
-func S2HTTPErr(r *http.Request, msg string, status int) *HTTPError {
+func S2HTTPErr(r *http.Request, msg string, status int) *ErrHTTP {
 	if msg != "" {
-		var httpErr HTTPError
+		var httpErr ErrHTTP
 		if err := jsoniter.UnmarshalFromString(msg, &httpErr); err == nil {
 			return &httpErr
 		}
@@ -572,12 +569,12 @@ func S2HTTPErr(r *http.Request, msg string, status int) *HTTPError {
 	return NewHTTPErr(r, msg, status)
 }
 
-func Err2HTTPErr(err error) (httpErr *HTTPError) {
+func Err2HTTPErr(err error) (httpErr *ErrHTTP) {
 	var ok bool
-	if httpErr, ok = err.(*HTTPError); ok {
+	if httpErr, ok = err.(*ErrHTTP); ok {
 		return
 	}
-	httpErr = &HTTPError{}
+	httpErr = &ErrHTTP{}
 	if !errors.As(err, &httpErr) {
 		httpErr = nil
 	}
@@ -586,7 +583,7 @@ func Err2HTTPErr(err error) (httpErr *HTTPError) {
 
 // E.g.: Bad Request: Bucket abc does not appear to be local or does not exist:
 // DELETE /v1/buckets/abc from 127.0.0.1:54064 (stack: [httpcommon.go:840 <- proxy.go:484 <- proxy.go:264])
-func (e *HTTPError) String() (s string) {
+func (e *ErrHTTP) String() (s string) {
 	s = http.StatusText(e.Status) + ": " + e.Message
 	if e.Method != "" || e.URLPath != "" {
 		s += ":"
@@ -603,7 +600,7 @@ func (e *HTTPError) String() (s string) {
 	return s + " (" + string(e.trace) + ")"
 }
 
-func (e *HTTPError) Error() string {
+func (e *ErrHTTP) Error() string {
 	// Stop from escaping <, > ,and &
 	buf := new(bytes.Buffer)
 	enc := jsoniter.NewEncoder(buf)
@@ -614,7 +611,7 @@ func (e *HTTPError) Error() string {
 	return buf.String()
 }
 
-func (e *HTTPError) write(w http.ResponseWriter, r *http.Request, silent bool) {
+func (e *ErrHTTP) write(w http.ResponseWriter, r *http.Request, silent bool) {
 	msg := e.Error()
 	if len(msg) > 0 {
 		// error strings should not be capitalized (lint)
@@ -640,7 +637,7 @@ func (e *HTTPError) write(w http.ResponseWriter, r *http.Request, silent bool) {
 	}
 }
 
-func (e *HTTPError) stackTrace() {
+func (e *ErrHTTP) stackTrace() {
 	debug.Assert(len(e.trace) == 0)
 	buffer := bytes.NewBuffer(e.trace)
 	fmt.Fprint(buffer, stackTracePrefix)
@@ -685,7 +682,7 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int) {
 	}
 }
 
-// create HTTPError (based on `msg` and `opts`) and write it into http response
+// create ErrHTTP (based on `msg` and `opts`) and write it into http response
 func WriteErrMsg(w http.ResponseWriter, r *http.Request, msg string, opts ...int) {
 	httpErr := NewHTTPErr(r, msg, opts...)
 	httpErr.write(w, r, len(opts) > 1 /*silent*/)
@@ -709,18 +706,18 @@ func WriteErr405(w http.ResponseWriter, r *http.Request, methods ...string) {
 
 var (
 	errPool sync.Pool
-	err0    HTTPError
+	err0    ErrHTTP
 )
 
-func allocHTTPErr() (a *HTTPError) {
+func allocHTTPErr() (a *ErrHTTP) {
 	if v := errPool.Get(); v != nil {
-		a = v.(*HTTPError)
+		a = v.(*ErrHTTP)
 		return
 	}
-	return &HTTPError{}
+	return &ErrHTTP{}
 }
 
-func FreeHTTPErr(a *HTTPError) {
+func FreeHTTPErr(a *ErrHTTP) {
 	trace := a.trace
 	*a = err0
 	if trace != nil {

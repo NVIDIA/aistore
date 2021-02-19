@@ -479,7 +479,7 @@ retry:
 		return
 	}
 	code = http.StatusInternalServerError
-	if _, ok := err.(*cmn.BadCksumError); !ok {
+	if _, ok := err.(*cmn.ErrBadCksum); !ok {
 		return
 	}
 	if !lom.Bck().IsAIS() {

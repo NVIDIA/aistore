@@ -1392,7 +1392,7 @@ func (res *callResult) _error() error {
 	if res.err == nil {
 		return nil
 	}
-	// cmn.HTTPError
+	// cmn.ErrHTTP
 	if httpErr := cmn.Err2HTTPErr(res.err); httpErr != nil {
 		// NOTE: optionally overwrite status, add details
 		if res.status >= http.StatusBadRequest {
@@ -1403,7 +1403,7 @@ func (res *callResult) _error() error {
 		}
 		return httpErr
 	}
-	// res => cmn.HTTPError
+	// res => cmn.ErrHTTP
 	if res.status >= http.StatusBadRequest {
 		var detail string
 		if res.details != "" {
