@@ -20,6 +20,7 @@ import (
 )
 
 const (
+	svcName         = "AuthN"
 	secretKeyEnvVar = "SECRETKEY"
 )
 

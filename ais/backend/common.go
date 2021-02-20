@@ -14,7 +14,7 @@ import (
 )
 
 func creatingBucketNotSupportedErr(provider string) (errCode int, err error) {
-	return http.StatusBadRequest, fmt.Errorf("creating bucket is not supported for %q provider", provider)
+	return http.StatusBadRequest, fmt.Errorf(cmn.FmtErrUnsupported, provider, "creating bucket")
 }
 
 func wrapReader(ctx context.Context, r io.ReadCloser) io.ReadCloser {

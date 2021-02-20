@@ -848,7 +848,7 @@ func (p *proxyrunner) rmNode(w http.ResponseWriter, r *http.Request, msg *cmn.Ac
 	}
 	si := smap.GetNode(opts.DaemonID)
 	if si == nil {
-		p.writeErrStatusf(w, r, http.StatusNotFound, "Node %q %s", opts.DaemonID, cmn.DoesNotExist)
+		p.writeErrStatusf(w, r, http.StatusNotFound, cmn.FmtErrNotExist, p.si, "node", opts.DaemonID)
 		return
 	}
 	if smap.PresentInMaint(si) {
@@ -862,13 +862,13 @@ func (p *proxyrunner) rmNode(w http.ResponseWriter, r *http.Request, msg *cmn.Ac
 	// proxy
 	if si.IsProxy() {
 		if err := p.markMaintenance(msg, si); err != nil {
-			p.writeErrf(w, r, "failed to %s %s: %v", msg.Action, si, err)
+			p.writeErrf(w, r, cmn.FmtErrFailed, p.si, msg.Action, si, err)
 			return
 		}
 		if msg.Action == cmn.ActDecommission || msg.Action == cmn.ActShutdownNode {
 			errCode, err := p.callRmSelf(msg, si, true /*skipReb*/)
 			if err != nil {
-				p.writeErrStatusf(w, r, errCode, "failed to %s %s: %v", msg.Action, si, err)
+				p.writeErrStatusf(w, r, errCode, cmn.FmtErrFailed, p.si, msg.Action, si, err)
 			}
 		}
 		return
@@ -876,7 +876,7 @@ func (p *proxyrunner) rmNode(w http.ResponseWriter, r *http.Request, msg *cmn.Ac
 	// target
 	rebID, err := p.startMaintenance(si, msg, &opts)
 	if err != nil {
-		p.writeErrf(w, r, "failed to %s %s: %v", msg.Action, si, err)
+		p.writeErrf(w, r, cmn.FmtErrFailed, p.si, msg.Action, si, err)
 		return
 	}
 	if rebID != 0 {
@@ -895,7 +895,7 @@ func (p *proxyrunner) stopMaintenance(w http.ResponseWriter, r *http.Request, ms
 	}
 	si := smap.GetNode(opts.DaemonID)
 	if si == nil {
-		p.writeErrStatusf(w, r, http.StatusNotFound, "Node %q %s", opts.DaemonID, cmn.DoesNotExist)
+		p.writeErrStatusf(w, r, http.StatusNotFound, cmn.FmtErrNotExist, p.si, "node", opts.DaemonID)
 		return
 	}
 	if !smap.PresentInMaint(si) {

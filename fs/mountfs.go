@@ -581,7 +581,7 @@ func add(mpath, daeID string, enabled bool) (*MountpathInfo, error) {
 		return nil, err
 	}
 	if err := Access(cleanMpath); err != nil {
-		return nil, fmt.Errorf("fspath %q %s, err: %v", mpath, cmn.DoesNotExist, err)
+		return nil, fmt.Errorf(cmn.FmtErrNotExist, daeID, "fspath", mpath)
 	}
 	statfs := syscall.Statfs_t{}
 	if err := syscall.Statfs(cleanMpath, &statfs); err != nil {

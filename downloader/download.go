@@ -334,7 +334,8 @@ func (d *Downloader) checkJob(req *request) (*downloadJobInfo, error) {
 	jInfo, err := dlStore.getJob(req.id)
 	if err != nil {
 		cmn.Assert(errors.Is(err, errJobNotFound))
-		req.writeErrResp(fmt.Errorf("download job %q not found", req.id), http.StatusNotFound)
+		err := fmt.Errorf(cmn.FmtErrNotExist, d.t.Snode(), "job", req.id)
+		req.writeErrResp(err, http.StatusNotFound)
 		return nil, err
 	}
 	return jInfo, nil

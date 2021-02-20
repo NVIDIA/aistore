@@ -119,13 +119,13 @@ func NewAzure(t cluster.Target) (cluster.BackendProvider, error) {
 	path := azureURL()
 	u, err := url.Parse(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse URL: %v", err)
+		return nil, fmt.Errorf(cmn.FmtErrFailed, cmn.ProviderAzure, "parse", "URL", err)
 	}
 	name := azureUserName()
 	key := azureUserKey()
 	creds, err := azblob.NewSharedKeyCredential(name, key)
 	if err != nil {
-		return nil, fmt.Errorf("failed to init credentials %v", err)
+		return nil, fmt.Errorf(cmn.FmtErrFailed, cmn.ProviderAzure, "init", "credentials", err)
 	}
 	p := azblob.NewPipeline(creds, azblob.PipelineOptions{})
 	return &azureProvider{
@@ -188,7 +188,8 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 		return bckProps, status, err
 	}
 	if resp.StatusCode() >= http.StatusBadRequest {
-		return bckProps, resp.StatusCode(), fmt.Errorf("failed to read bucket %q props", cloudBck.Name)
+		err := fmt.Errorf(cmn.FmtErrFailed, cmn.ProviderAzure, "read bucket", cloudBck.Name, strconv.Itoa(resp.StatusCode()))
+		return bckProps, resp.StatusCode(), err
 	}
 	bckProps = make(cmn.SimpleKVs, 2)
 	bckProps[cmn.HeaderBackendProvider] = cmn.ProviderAzure
@@ -226,7 +227,8 @@ func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 		return nil, status, err
 	}
 	if resp.StatusCode() >= http.StatusBadRequest {
-		return nil, resp.StatusCode(), fmt.Errorf("failed to list objects %q", cloudBck.Name)
+		err := fmt.Errorf(cmn.FmtErrFailed, cmn.ProviderAzure, "list objects of", cloudBck.Name, strconv.Itoa(resp.StatusCode()))
+		return nil, resp.StatusCode(), err
 	}
 	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, len(resp.Segment.BlobItems))}
 	for idx := range resp.Segment.BlobItems {
@@ -305,7 +307,8 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 		return objMeta, status, err
 	}
 	if resp.StatusCode() >= http.StatusBadRequest {
-		return objMeta, resp.StatusCode(), fmt.Errorf("failed to get object props %s/%s", cloudBck, lom.ObjName)
+		err := fmt.Errorf(cmn.FmtErrFailed, cmn.ProviderAzure, "get object props of", cloudBck.Name+"/"+lom.ObjName, strconv.Itoa(resp.StatusCode()))
+		return objMeta, resp.StatusCode(), err
 	}
 	objMeta[cmn.HeaderObjSize] = strconv.FormatInt(resp.ContentLength(), 10)
 	objMeta[cmn.HeaderBackendProvider] = cmn.ProviderAzure
@@ -367,7 +370,8 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 		return nil, nil, status, err
 	}
 	if respProps.StatusCode() >= http.StatusBadRequest {
-		return nil, nil, respProps.StatusCode(), fmt.Errorf("failed to get object props %s/%s", cloudBck, lom.ObjName)
+		err := fmt.Errorf(cmn.FmtErrFailed, cmn.ProviderAzure, "get object props of", cloudBck.Name+"/"+lom.ObjName, strconv.Itoa(respProps.StatusCode()))
+		return nil, nil, respProps.StatusCode(), err
 	}
 	// 0, 0 = read range: the whole object
 	resp, err := blobURL.Download(ctx, 0, 0, azblob.BlobAccessConditions{}, false)
@@ -376,7 +380,8 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 		return nil, nil, errCode, err
 	}
 	if resp.StatusCode() >= http.StatusBadRequest {
-		return nil, nil, resp.StatusCode(), fmt.Errorf("failed to GET object %s/%s", cloudBck, lom.ObjName)
+		err := fmt.Errorf(cmn.FmtErrFailed, cmn.ProviderAzure, "get object", cloudBck.Name+"/"+lom.ObjName, strconv.Itoa(respProps.StatusCode()))
+		return nil, nil, resp.StatusCode(), err
 	}
 
 	var (
@@ -446,7 +451,8 @@ func (ap *azureProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *clust
 	resp := putResp.Response()
 	resp.Body.Close()
 	if resp.StatusCode >= http.StatusBadRequest {
-		return "", resp.StatusCode, fmt.Errorf("failed to put object %s/%s", cloudBck, lom.ObjName)
+		err := fmt.Errorf(cmn.FmtErrFailed, cmn.ProviderAzure, "put object", cloudBck.Name+"/"+lom.ObjName, strconv.Itoa(resp.StatusCode))
+		return "", resp.StatusCode, err
 	}
 	if v, ok := h.EncodeVersion(string(putResp.ETag())); ok {
 		version = v
@@ -476,7 +482,8 @@ func (ap *azureProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (int, 
 		return ap.azureErrorToAISError(err, cloudBck, lom.ObjName)
 	}
 	if acqResp.StatusCode() >= http.StatusBadRequest {
-		return acqResp.StatusCode(), fmt.Errorf("failed to acquire %s/%s", cloudBck, lom.ObjName)
+		err := fmt.Errorf(cmn.FmtErrFailed, cmn.ProviderAzure, "acquire object", cloudBck.Name+"/"+lom.ObjName, strconv.Itoa(acqResp.StatusCode()))
+		return acqResp.StatusCode(), err
 	}
 
 	delCond := azblob.BlobAccessConditions{
@@ -488,7 +495,8 @@ func (ap *azureProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (int, 
 		return ap.azureErrorToAISError(err, cloudBck, lom.ObjName)
 	}
 	if delResp.StatusCode() >= http.StatusBadRequest {
-		return delResp.StatusCode(), fmt.Errorf("failed to delete object %s/%s", cloudBck, lom.ObjName)
+		err := fmt.Errorf(cmn.FmtErrFailed, cmn.ProviderAzure, "delete object", cloudBck.Name+"/"+lom.ObjName, strconv.Itoa(delResp.StatusCode()))
+		return delResp.StatusCode(), err
 	}
 	return http.StatusOK, nil
 }

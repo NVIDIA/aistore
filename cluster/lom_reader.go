@@ -33,7 +33,7 @@ func (r *LomReader) Reader(lom *LOM) (cmn.ReadOpenCloser, cmn.ObjHeaderMetaProvi
 		var file *cmn.FileHandle
 		if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
 			lom.Unlock(false)
-			return nil, nil, fmt.Errorf("failed to open %s, err: %v", lom.FQN, err)
+			return nil, nil, fmt.Errorf(cmn.FmtErrFailed, "LOMReader", "open", lom.FQN, err)
 		}
 		return cmn.NewDeferROC(file, func() { lom.Unlock(false) }), lom, nil
 	}

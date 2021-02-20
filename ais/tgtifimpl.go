@@ -168,7 +168,7 @@ func (t *targetrunner) _sendPUT(lom *cluster.LOM, params *cluster.SendToParams) 
 	defer cancel()
 	resp, err := t.client.data.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to PUT to %s, err: %w", reqArgs.URL(), err)
+		return fmt.Errorf(cmn.FmtErrFailed, t.si, "PUT to", reqArgs.URL(), err)
 	}
 	cmn.DrainReader(resp.Body)
 	resp.Body.Close()

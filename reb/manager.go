@@ -512,7 +512,7 @@ func (reb *Manager) retransmit(md *rebArgs) (cnt int) {
 		for uname, lom := range lomAck.q {
 			if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 				if cmn.IsObjNotExist(err) {
-					glog.Warningf("%s: %s %s", loghdr, lom, cmn.DoesNotExist)
+					glog.Warningf(cmn.FmtErrNotExist, reb.t.Snode(), loghdr, lom)
 				} else {
 					glog.Errorf("%s: failed loading %s, err: %s", loghdr, lom, err)
 				}

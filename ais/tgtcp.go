@@ -83,7 +83,7 @@ func (t *targetrunner) joinCluster(primaryURLs ...string) (status int, err error
 func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 	var regMeta nodeRegMeta
 	if err = jsoniter.Unmarshal(body, &regMeta); err != nil {
-		return fmt.Errorf("unexpected: %s failed to unmarshal reg-meta, err: %v", t.si, err)
+		return fmt.Errorf(cmn.FmtErrUnmarshal, t.si, "reg-meta", cmn.BytesHead(body), err)
 	}
 	if err = fs.SetDaemonIDXattrAllMpaths(t.si.ID()); err != nil {
 		cmn.ExitLogf("%v", err)
@@ -114,7 +114,7 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 		if isErrDowngrade(err) {
 			err = nil
 		} else {
-			glog.Errorf("%s: failed to synch %s, err: %v", t.si, regMeta.Smap, err)
+			glog.Errorf(cmn.FmtErrFailed, t.si, "sync", regMeta.Smap, err)
 		}
 	} else {
 		glog.Infof("%s: synch %s", t.si, t.owner.smap.get())
@@ -185,7 +185,7 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiIt
 			return
 		}
 		if err := t.owner.smap.synchronize(t.si, newsmap); err != nil {
-			t.writeErrf(w, r, "failed to synch %s: %v", newsmap, err)
+			t.writeErrf(w, r, cmn.FmtErrFailed, t.si, "sync", newsmap, err)
 		}
 		glog.Infof("%s: %s %s done", t.si, cmn.SyncSmap, newsmap)
 	case cmn.Mountpaths:
@@ -839,7 +839,7 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, rename
 	}
 	err = jsoniter.Unmarshal(res.bytes, outStruct)
 	if err != nil {
-		err = fmt.Errorf("%s: unexpected: failed to unmarshal GET(%q) response: %v", t.si, what, err)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, t.si, what, cmn.BytesHead(res.bytes), err)
 	}
 	return
 }

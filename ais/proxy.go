@@ -201,7 +201,7 @@ func (p *proxyrunner) applyRegMeta(body []byte, caller string) (err error) {
 	var regMeta nodeRegMeta
 	err = jsoniter.Unmarshal(body, &regMeta)
 	if err != nil {
-		return fmt.Errorf("unexpected: %s failed to unmarshal reg-meta, err: %v", p.si, err)
+		return fmt.Errorf(cmn.FmtErrUnmarshal, p.si, "reg-meta", cmn.BytesHead(body), err)
 	}
 
 	msg := p.newAisMsgStr(cmn.ActRegTarget, regMeta.Smap, regMeta.BMD)
@@ -209,7 +209,7 @@ func (p *proxyrunner) applyRegMeta(body []byte, caller string) (err error) {
 	// BMD
 	if err = p.receiveBMD(regMeta.BMD, msg, caller); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Errorf("%s: failed to synch %s, err: %v", p.si, regMeta.BMD, err)
+			glog.Errorf(cmn.FmtErrFailed, p.si, "sync", regMeta.BMD, err)
 		}
 	} else {
 		glog.Infof("%s: synch %s", p.si, regMeta.BMD)
@@ -218,7 +218,7 @@ func (p *proxyrunner) applyRegMeta(body []byte, caller string) (err error) {
 	// Smap
 	if err = p.receiveSmap(regMeta.Smap, msg, caller); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Errorf("%s: failed to synch %s, err: %v", p.si, regMeta.Smap, err)
+			glog.Errorf(cmn.FmtErrFailed, p.si, "sync", regMeta.Smap, err)
 		}
 	} else {
 		glog.Infof("%s: synch %s", p.si, regMeta.Smap)
@@ -1384,7 +1384,7 @@ func (p *proxyrunner) reverseReqRemote(w http.ResponseWriter, r *http.Request, m
 	aisConf := v.(cmn.BackendConfAIS)
 	urls, exists := aisConf[remoteUUID]
 	if !exists {
-		err = fmt.Errorf("remote UUID/alias (%s) not found", remoteUUID)
+		err = fmt.Errorf(cmn.FmtErrNotExist, p.si, "remote UUID/alias", remoteUUID)
 		p.writeErr(w, r, err)
 		return err
 	}
@@ -1502,7 +1502,7 @@ func (p *proxyrunner) checkBckTaskResp(uuid string, results sliceResults) (allOK
 	}
 	freeCallResults(results)
 	if allNotFound {
-		err = fmt.Errorf("task %s %s", uuid, cmn.DoesNotExist)
+		err = fmt.Errorf(cmn.FmtErrNotExist, p.si, "task", uuid)
 	}
 	return
 }
@@ -1994,7 +1994,7 @@ func (p *proxyrunner) daePathAction(w http.ResponseWriter, r *http.Request, acti
 			return
 		}
 		if err := p.owner.smap.synchronize(p.si, newsmap); err != nil {
-			p.writeErrf(w, r, "failed to synch %s: %v", newsmap, err)
+			p.writeErrf(w, r, cmn.FmtErrFailed, p.si, "sync", newsmap, err)
 			return
 		}
 		glog.Infof("%s: %s %s done", p.si, cmn.SyncSmap, newsmap)

@@ -174,7 +174,7 @@ func (sb *Streams) Send(obj *transport.Obj, roc cmn.ReadOpenCloser, nodes ...*cl
 			if _, ok := streams[di.ID()]; ok {
 				continue
 			}
-			err = fmt.Errorf("%s: destination mismatch: stream => %s %s", sb, di, cmn.DoesNotExist)
+			err = fmt.Errorf(cmn.FmtErrNotExist, sb, "destination mismatch: stream =>", di)
 			_doCmpl(obj, roc, err) // ditto
 			return
 		}

@@ -214,7 +214,7 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 		}
 	}
 	if err = cmn.Rename(poi.workFQN, lom.FQN); err != nil {
-		err = fmt.Errorf("PUT %s: failed to rename: %w", lom, err)
+		err = fmt.Errorf(cmn.FmtErrFailed, poi.t.si, "rename", lom, err)
 		return
 	}
 	if lom.HasCopies() {
@@ -237,7 +237,7 @@ func (poi *putObjInfo) putRemote() (version string, errCode int, err error) {
 	)
 	fh, err := cmn.NewFileHandle(poi.workFQN)
 	if err != nil {
-		err = fmt.Errorf("failed to open %s err: %w", poi.workFQN, err)
+		err = fmt.Errorf(cmn.FmtErrFailed, poi.t.Snode(), "open", poi.workFQN, err)
 		return
 	}
 
@@ -349,7 +349,7 @@ write:
 		poi.lom.SetCksum(&cksums.store.Cksum)
 	}
 	if err = file.Close(); err != nil {
-		return fmt.Errorf("failed to close received %s: %w", poi.workFQN, err)
+		return fmt.Errorf(cmn.FmtErrFailed, poi.t.si, "close received", poi.workFQN, err)
 	}
 	return nil
 }
@@ -610,12 +610,12 @@ gfn:
 			}
 			return
 		}
-		err = fmt.Errorf("%s: failed to load EC-recovered %s: %v", tname, goi.lom, ecErr)
+		err = fmt.Errorf(cmn.FmtErrFailed, tname, "load EC-recovered", goi.lom, ecErr)
 	} else if ecErr != ec.ErrorECDisabled {
-		err = fmt.Errorf("%s: failed to EC-recover %s: %v", tname, goi.lom, ecErr)
+		err = fmt.Errorf(cmn.FmtErrFailed, tname, "EC-recover", goi.lom, ecErr)
 	}
 
-	s := fmt.Sprintf("GET local: %s(%s) %s", goi.lom, goi.lom.FQN, cmn.DoesNotExist)
+	s := fmt.Sprintf(cmn.FmtErrNotExist, tname, "object", goi.lom.FQN)
 	if err != nil {
 		err = fmt.Errorf("%s => [%v]", s, err)
 	} else {
@@ -747,7 +747,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry, sent bool, errCode int, er
 
 		if len(ranges) > 0 {
 			if len(ranges) > 1 {
-				err = fmt.Errorf("multi-range is not supported")
+				err = fmt.Errorf(cmn.FmtErrUnsupported, goi.t.Snode(), "multi-range")
 				errCode = http.StatusRequestedRangeNotSatisfiable
 				return false, sent, errCode, err
 			}
@@ -811,7 +811,8 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry, sent bool, errCode int, er
 		}
 		goi.t.fsErr(err, fqn)
 		goi.t.statsT.Add(stats.ErrGetCount, 1)
-		return retry, sent, http.StatusInternalServerError, fmt.Errorf("failed to GET %s, err: %w", fqn, err)
+		err := fmt.Errorf(cmn.FmtErrFailed, goi.t.si, "GET", fqn, err)
+		return retry, sent, http.StatusInternalServerError, err
 	}
 
 	// GFN: atime must be already set
@@ -1158,7 +1159,7 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 			fh, err := cmn.NewFileHandle(lom.FQN)
 			if err != nil {
 				lom.Unlock(false)
-				return 0, fmt.Errorf("failed to open %s: %w", lom.FQN, err)
+				return 0, fmt.Errorf(cmn.FmtErrFailed, coi.t.Snode(), "open", lom.FQN, err)
 			}
 			size = lom.Size()
 			reader = cmn.NewDeferROC(fh, func() { lom.Unlock(false) })
@@ -1166,7 +1167,7 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 			debug.Assert(!coi.DryRun)
 			fh, err := cmn.NewFileHandle(lom.FQN)
 			if err != nil {
-				return 0, fmt.Errorf("failed to open %s: %w", lom.FQN, err)
+				return 0, fmt.Errorf(cmn.FmtErrFailed, coi.t.Snode(), "open", lom.FQN, err)
 			}
 			fi, err := fh.Stat()
 			if err != nil {

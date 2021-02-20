@@ -275,7 +275,8 @@ func (m *AISBackendProvider) remoteCluster(uuid string) (*remAISCluster, error) 
 		orig := uuid
 		if uuid, ok = m.alias[uuid /*alias?*/]; !ok {
 			m.mu.RUnlock()
-			return nil, fmt.Errorf("unknown uuid (or alias) of remote cluster %q", orig)
+			err := fmt.Errorf(cmn.FmtErrNotExist, m.t.Snode(), "UUID or alias of a remote cluster", orig)
+			return nil, err
 		}
 		remAis, ok = m.remote[uuid]
 		cmn.Assert(ok)

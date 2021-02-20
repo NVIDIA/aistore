@@ -116,7 +116,7 @@ retErr:
 	if args.msg != nil {
 		op = fmt.Sprintf("operation %q", args.msg.Action)
 	}
-	err = fmt.Errorf("%s is not supported by %q", op, args.queryBck)
+	err = fmt.Errorf(cmn.FmtErrUnsupported, args.queryBck, op)
 	return
 }
 

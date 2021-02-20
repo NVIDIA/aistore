@@ -128,7 +128,7 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bc
 	const erfmn = "xaction %q requires a bucket to start"
 
 	if !xaction.IsValid(xactMsg.Kind) {
-		return fmt.Errorf("unknown %q xaction kind", xactMsg.Kind)
+		return fmt.Errorf(cmn.FmtErrUnknown, t.si, "xaction kind", xactMsg.Kind)
 	}
 
 	if dtor := xaction.XactsDtor[xactMsg.Kind]; dtor.Type == xaction.XactTypeBck && bck == nil {
@@ -182,7 +182,7 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bc
 	case "":
 		return fmt.Errorf("%q: unspecified (empty) xaction kind", xactMsg)
 	default:
-		return fmt.Errorf("%q: kind is not supported", xactMsg)
+		return fmt.Errorf(cmn.FmtErrUnsupported, xactMsg, "kind")
 	}
 	return nil
 }

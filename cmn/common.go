@@ -54,8 +54,6 @@ const (
 
 	assertMsg = "assertion failed"
 
-	DoesNotExist = "does not exist"
-
 	// NOTE: Taken from cloud.google.com/go/storage/storage.go (userAgent).
 	GcsUA      = "gcloud-golang-storage/20151204"
 	GithubHome = "https://github.com/NVIDIA/aistore"
@@ -401,6 +399,18 @@ func FreeMemToOS(d ...time.Duration) {
 	}
 	runtime.GC()
 	debug.FreeOSMemory()
+}
+
+// BytesHead returns first `length` bytes from the slice as a string
+func BytesHead(b []byte, length ...int) string {
+	maxLength := 16
+	if len(length) != 0 {
+		maxLength = length[0]
+	}
+	if len(b) < maxLength {
+		return string(b)
+	}
+	return string(b[:maxLength]) + "..."
 }
 
 //////////////////////////////

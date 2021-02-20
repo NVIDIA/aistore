@@ -311,7 +311,7 @@ func (b backends) initExt(t *targetrunner) (err error) {
 		case cmn.ProviderHDFS:
 			b[provider], err = backend.NewHDFS(t)
 		default:
-			err = fmt.Errorf("unknown backend provider: %q", provider)
+			err = fmt.Errorf(cmn.FmtErrUnknown, t.si, "backend provider", provider)
 		}
 		if err != nil {
 			return
@@ -993,14 +993,14 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 
 	if checkExists || checkExistsAny {
 		if !exists {
-			invalidHandler(w, r, fmt.Errorf("%s/%s %s", bck.Name, objName, cmn.DoesNotExist),
+			invalidHandler(w, r, fmt.Errorf(cmn.FmtErrObjNotExist, t.si, bck, objName),
 				http.StatusNotFound)
 		}
 		return
 	}
 	if lom.Bck().IsAIS() || exists { // && !lom.VerConf().Enabled) {
 		if !exists {
-			invalidHandler(w, r, fmt.Errorf("%s/%s %s", bck.Name, objName, cmn.DoesNotExist),
+			invalidHandler(w, r, fmt.Errorf(cmn.FmtErrObjNotExist, t.si, bck, objName),
 				http.StatusNotFound)
 			return
 		}
@@ -1008,7 +1008,7 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 	} else {
 		objMeta, errCode, err := t.Backend(lom.Bck()).HeadObj(context.Background(), lom)
 		if err != nil {
-			err = fmt.Errorf("%s: HEAD request failed, err: %v", lom, err)
+			err = fmt.Errorf(cmn.FmtErrFailed, t.si, "HEAD", lom, err)
 			invalidHandler(w, r, err, errCode)
 			return
 		}
@@ -1133,7 +1133,7 @@ func (t *targetrunner) CheckRemoteVersion(ctx context.Context, lom *cluster.LOM)
 	var objMeta cmn.SimpleKVs
 	objMeta, errCode, err = t.Backend(lom.Bck()).HeadObj(ctx, lom)
 	if err != nil {
-		err = fmt.Errorf("%s: failed to head metadata, err: %v", lom, err)
+		err = fmt.Errorf(cmn.FmtErrFailed, t.si, "head metadata of", lom, err)
 		return
 	}
 	if remoteVersion, ok := objMeta[cmn.HeaderObjVersion]; ok {
@@ -1248,7 +1248,7 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 	if recvType != "" {
 		n, err := strconv.Atoi(recvType)
 		if err != nil {
-			return http.StatusBadRequest, fmt.Errorf("failed to parse receive type, err: %v", err)
+			return http.StatusBadRequest, fmt.Errorf(cmn.FmtErrFailed, t.si, "parse", "receive type", err)
 		}
 		poi.recvType = cluster.RecvType(n)
 	}
@@ -1422,7 +1422,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	finfo, err := os.Stat(srcFQN)
 	if err != nil {
 		if os.IsNotExist(err) {
-			t.writeErrStatusf(w, r, http.StatusNotFound, "%s: %q %s", t.si, srcFQN, cmn.DoesNotExist)
+			t.writeErrStatusf(w, r, http.StatusNotFound, cmn.FmtErrNotExist, t.si, "file", srcFQN)
 			return
 		}
 		t.writeErr(w, r, err)

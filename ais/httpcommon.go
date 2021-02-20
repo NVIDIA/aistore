@@ -1541,12 +1541,12 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 	newSmap, msg = &smapX{}, &aisMsg{}
 	smapValue := payload[revsSmapTag]
 	if err1 := jsoniter.Unmarshal(smapValue, newSmap); err1 != nil {
-		err = fmt.Errorf("failed to unmarshal new Smap, value (%s), err: %v", smapValue, err1)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new Smap", cmn.BytesHead(smapValue), err1)
 		return
 	}
 	if msgValue, ok := payload[revsSmapTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
-			err = fmt.Errorf("failed to unmarshal action message, value (%s), err: %v", msgValue, err1)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cmn.BytesHead(msgValue), err1)
 			return
 		}
 	}
@@ -1602,14 +1602,12 @@ func (h *httprunner) extractRMD(payload msPayload, caller string) (newRMD *rebMD
 	newRMD, msg = &rebMD{}, &aisMsg{}
 	rmdValue := payload[revsRMDTag]
 	if err1 := jsoniter.Unmarshal(rmdValue, newRMD); err1 != nil {
-		err = fmt.Errorf("%s: failed to unmarshal new RMD, value (%+v, %T), err: %v",
-			h.si, rmdValue, rmdValue, err1)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new RMD", cmn.BytesHead(rmdValue), err1)
 		return
 	}
 	if msgValue, ok := payload[revsRMDTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
-			err = fmt.Errorf("%s: failed to unmarshal action message, value (%s), err: %v",
-				h.si, msgValue, err1)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cmn.BytesHead(msgValue), err1)
 			return
 		}
 	}
@@ -1636,14 +1634,12 @@ func (h *httprunner) extractBMD(payload msPayload, caller string) (newBMD *bucke
 	newBMD, msg = &bucketMD{}, &aisMsg{}
 	bmdValue := payload[revsBMDTag]
 	if err1 := jsoniter.Unmarshal(bmdValue, newBMD); err1 != nil {
-		err = fmt.Errorf("%s: failed to unmarshal new %s, value (%+v, %T), err: %v",
-			h.si, bmdTermName, bmdValue, bmdValue, err1)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, bmdTermName, cmn.BytesHead(bmdValue), err1)
 		return
 	}
 	if msgValue, ok := payload[revsBMDTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
-			err = fmt.Errorf("%s: failed to unmarshal action message, value (%s), err: %v",
-				h.si, msgValue, err1)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cmn.BytesHead(msgValue), err1)
 			return
 		}
 	}
@@ -1677,18 +1673,15 @@ func (h *httprunner) extractRevokedTokenList(payload msPayload, caller string) (
 	}
 	if msgValue, ok := payload[revsTokenTag+revsActionTag]; ok {
 		if err := jsoniter.Unmarshal(msgValue, &msg); err != nil {
-			err := fmt.Errorf(
-				"failed to unmarshal action message, value (%s), err: %v",
-				msgValue, err)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cmn.BytesHead(msgValue), err)
 			return nil, err
 		}
 	}
 
 	tokenList := &TokenList{}
 	if err := jsoniter.Unmarshal(bytes, tokenList); err != nil {
-		return nil, fmt.Errorf(
-			"failed to unmarshal blocked token list, value (%+v, %T), err: %v",
-			bytes, bytes, err)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "blocked token list", cmn.BytesHead(bytes), err)
+		return nil, err
 	}
 
 	glog.Infof(

@@ -30,6 +30,14 @@ import (
 const (
 	stackTracePrefix = "stack: ["
 	FromNodePrefix   = " from: "
+
+	FmtErrUnmarshal      = "%s: failed to unmarshal %s (%s), err: %w"
+	FmtErrMorphUnmarshal = "%s: failed to unmarshal %s (%T), err: %w"
+	FmtErrNotExist       = "%s: %s %q does not exist"
+	FmtErrObjNotExist    = "%s: object %s/%s does not exist"
+	FmtErrUnsupported    = "%s: %s is not supported"
+	FmtErrUnknown        = "%s: unknown %s %q"
+	FmtErrFailed         = "%s: failed to %s %s, err: %v" // node: action object, error
 )
 
 type (

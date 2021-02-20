@@ -252,7 +252,7 @@ func ProxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if allNotFound {
-		err := fmt.Errorf("%s job %q not found", cmn.DSortName, managerUUID)
+		err := fmt.Errorf(cmn.FmtErrNotExist, cmn.DSortName, "job", managerUUID)
 		cmn.WriteErr(w, r, err, http.StatusNotFound)
 		return
 	}
@@ -374,7 +374,8 @@ func initSortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = js.Unmarshal(b, &rs); err != nil {
-		cmn.WriteErr(w, r, fmt.Errorf("could not unmarshal request body, err: %v", err))
+		err := fmt.Errorf(cmn.FmtErrUnmarshal, cmn.DSortName, "ParsedRequestSpec", cmn.BytesHead(b), err)
+		cmn.WriteErr(w, r, err)
 		return
 	}
 
@@ -484,8 +485,8 @@ func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
 		defer slab.Free(buf)
 
 		if err := tmpMetadata.DecodeMsg(msgp.NewReaderBuf(r.Body, buf)); err != nil {
-			cmn.WriteErr(w, r, fmt.Errorf("could not unmarshal request body, err: %v", err),
-				http.StatusInternalServerError)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, cmn.DSortName, "creation phase metadata", "-", err)
+			cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 			return
 		}
 
@@ -562,8 +563,8 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 		defer slab.Free(buf)
 
 		if err := records.DecodeMsg(msgp.NewReaderBuf(r.Body, buf)); err != nil {
-			cmn.WriteErr(w, r, fmt.Errorf("could not unmarshal request body, err: %v", err),
-				http.StatusInternalServerError)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, cmn.DSortName, "records", "-", err)
+			cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 			return
 		}
 

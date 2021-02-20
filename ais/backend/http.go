@@ -220,9 +220,9 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 }
 
 func (hp *httpProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluster.LOM) (string, int, error) {
-	return "", http.StatusBadRequest, fmt.Errorf("%q provider doesn't support creating new objects", hp.Provider())
+	return "", http.StatusBadRequest, fmt.Errorf(cmn.FmtErrUnsupported, hp.Provider(), "creating new objects")
 }
 
 func (hp *httpProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (int, error) {
-	return http.StatusBadRequest, fmt.Errorf("%q provider doesn't support deleting object", hp.Provider())
+	return http.StatusBadRequest, fmt.Errorf(cmn.FmtErrUnsupported, hp.Provider(), "deleting object")
 }

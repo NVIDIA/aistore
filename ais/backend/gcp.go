@@ -93,13 +93,13 @@ func (gcpp *gcpProvider) createClient(ctx context.Context) (*storage.Client, con
 	// Create a custom HTTP client
 	transport, err := htransport.NewTransport(ctx, cmn.NewTransport(cmn.TransportArgs{}), opts...)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create http client transport, err: %v", err)
+		return nil, nil, fmt.Errorf(cmn.FmtErrFailed, cmn.ProviderGoogle, "create", "http transport", err)
 	}
 	opts = append(opts, option.WithHTTPClient(&http.Client{Transport: transport}))
 
 	client, err := storage.NewClient(ctx, opts...)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create client, err: %v", err)
+		return nil, nil, fmt.Errorf(cmn.FmtErrFailed, cmn.ProviderGoogle, "create", "client", err)
 	}
 	return client, ctx, nil
 }

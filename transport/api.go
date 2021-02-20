@@ -232,7 +232,7 @@ func Unhandle(trname string) (err error) {
 		hk.Unreg(h.hkName)
 	} else {
 		mu.Unlock()
-		err = fmt.Errorf("transport endpoint %s is unknown", trname)
+		err = fmt.Errorf(cmn.FmtErrUnknown, "transport", "endpoint", trname)
 	}
 	return
 }

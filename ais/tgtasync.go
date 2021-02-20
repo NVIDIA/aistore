@@ -79,7 +79,7 @@ func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck
 
 	var msg cmn.BucketSummaryMsg
 	if err := cmn.MorphMarshal(actionMsg.Value, &msg); err != nil {
-		err := fmt.Errorf("unable to unmarshal 'value' in request to a cmn.BucketSummaryMsg: %v", actionMsg.Value)
+		err := fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, "BucketSummaryMsg", actionMsg.Value, err)
 		t.writeErr(w, r, err)
 		return
 	}
@@ -121,7 +121,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 	xact := xreg.GetXact(msg.UUID)
 	// task never started
 	if xact == nil {
-		err := fmt.Errorf("task %q not found", msg.UUID)
+		err := fmt.Errorf(cmn.FmtErrNotExist, t.si, "task", msg.UUID)
 		if silent {
 			t.writeErrSilent(w, r, err, http.StatusNotFound)
 		} else {

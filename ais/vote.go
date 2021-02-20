@@ -110,7 +110,7 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 			}
 		}
 		if err != nil {
-			p.writeErrf(w, r, "%s: failed to synch %s: %v", p.si, newsmap, err)
+			p.writeErrf(w, r, cmn.FmtErrFailed, p.si, "sync", newsmap, err)
 			return
 		}
 	}
