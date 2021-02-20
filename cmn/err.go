@@ -542,9 +542,9 @@ func IsObjNotExist(err error) bool {
 func IsErrBucketLevel(err error) bool { return IsErrBucketNought(err) }
 func IsErrObjLevel(err error) bool    { return IsErrObjNought(err) }
 
-///////////////
+/////////////
 // ErrHTTP //
-///////////////
+/////////////
 
 func NewHTTPErr(r *http.Request, msg string, errCode ...int) (e *ErrHTTP) {
 	status := http.StatusBadRequest

@@ -485,7 +485,7 @@ func showMpathHandler(c *cli.Context) (err error) {
 		}
 		nodes = []*cluster.Snode{tgt}
 	} else {
-		nodes = make([]*cluster.Snode, 0, len(smap.Tmap))
+		nodes = make(cluster.Nodes, 0, len(smap.Tmap))
 		for _, tgt := range smap.Tmap {
 			nodes = append(nodes, tgt)
 		}

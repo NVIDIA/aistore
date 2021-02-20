@@ -236,7 +236,7 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 //	    - false - send a slice/replica/metadata to targets
 func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr, reader cmn.ReadOpenCloser,
 	cb transport.ObjSentCB, isRequest bool) error {
-	nodes := make([]*cluster.Snode, 0, len(daemonIDs))
+	nodes := cluster.AllocNodes(len(daemonIDs))
 	smap := r.smap.Get()
 	for _, id := range daemonIDs {
 		si, ok := smap.Tmap[id]
@@ -256,6 +256,7 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr, re
 	} else {
 		err = r.mgr.resp().Send(o, reader, nodes...)
 	}
+	cluster.FreeNodes(nodes)
 	return err
 }
 

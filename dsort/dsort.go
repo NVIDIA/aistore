@@ -951,7 +951,7 @@ func randomTargetOrder(salt uint64, tmap cluster.NodeMap) []*cluster.Snode {
 	}
 	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
 
-	t := make([]*cluster.Snode, len(keys))
+	t := make(cluster.Nodes, len(keys))
 	for i, k := range keys {
 		t[i] = targets[k]
 	}

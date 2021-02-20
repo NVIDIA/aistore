@@ -868,12 +868,12 @@ func (reb *Manager) cleanupEC() {
 }
 
 // send collected CTs to all targets with retry (to assemble the entire namespace)
-func (reb *Manager) exchange(md *rebArgs) error {
+func (reb *Manager) exchange(md *rebArgs) (err error) {
 	const retries = 3 // number of retries to send collected CT info
 	var (
 		rebID   = reb.rebID.Load()
-		sendTo  = make(cluster.Nodes, 0, len(md.smap.Tmap))
-		failed  = make(cluster.Nodes, 0, len(md.smap.Tmap))
+		sendTo  = cluster.AllocNodes(len(md.smap.Tmap))
+		failed  = cluster.AllocNodes(len(md.smap.Tmap))
 		emptyCT = make([]*rebCT, 0)
 		config  = cmn.GCO.Get()
 		sleep   = config.Timeout.MaxKeepalive // delay between retries
@@ -889,28 +889,23 @@ func (reb *Manager) exchange(md *rebArgs) error {
 		cts = emptyCT // no data collected for the target, send empty notification
 	}
 	var (
-		req = pushReq{
-			daemonID: reb.t.SID(),
-			stage:    rebStageECNamespace,
-			rebID:    rebID,
-		}
+		req    = pushReq{daemonID: reb.t.SID(), stage: rebStageECNamespace, rebID: rebID}
 		body   = cmn.MustMarshal(cts)
 		opaque = req.NewPack(nil, rebMsgEC)
 		o      = transport.AllocSend()
 	)
-	o.Hdr = transport.ObjHdr{
-		ObjAttrs: transport.ObjectAttrs{Size: int64(len(body))},
-		Opaque:   opaque,
-	}
+	o.Hdr.ObjAttrs = transport.ObjectAttrs{Size: int64(len(body))}
+	o.Hdr.Opaque = opaque
 	for i := 0; i < retries; i++ {
 		failed = failed[:0]
 		for _, node := range sendTo {
 			if reb.xact().Aborted() {
-				return cmn.NewAbortedError("exchange")
+				err = cmn.NewAbortedError("exchange")
+				goto ret
 			}
 			rd := cmn.NewByteHandle(body)
-			if err := reb.dm.Send(o, rd, node); err != nil {
-				glog.Errorf("Failed to send CTs to node %s: %v", node.ID(), err)
+			if er1 := reb.dm.Send(o, rd, node); er1 != nil {
+				glog.Errorf("Failed to send CTs to node %s: %v", node.ID(), er1)
 				failed = append(failed, node)
 			}
 			reb.statTracker.AddMany(
@@ -920,12 +915,16 @@ func (reb *Manager) exchange(md *rebArgs) error {
 		}
 		if len(failed) == 0 {
 			reb.changeStage(rebStageECDetect, 0)
-			return nil
+			goto ret
 		}
 		time.Sleep(sleep)
 		copy(sendTo, failed)
 	}
-	return fmt.Errorf("could not send data to %d nodes", len(failed))
+	err = fmt.Errorf("could not send data to %d nodes", len(failed))
+ret:
+	cluster.FreeNodes(sendTo)
+	cluster.FreeNodes(failed)
+	return
 }
 
 func (reb *Manager) resilverSlice(fromFQN, toFQN string, buf []byte) error {
@@ -1668,7 +1667,7 @@ func (reb *Manager) releaseSGLs(md *rebArgs, objList []*rebObject) {
 // Object is missing (and maybe a few slices as well). Default target receives all
 // existing slices into SGLs, restores the object, rebuilds slices, and finally
 // sends missing slices to other targets
-func (reb *Manager) rebuildFromSlices(obj *rebObject, conf *cmn.CksumConf) (err error) {
+func (reb *Manager) rebuildFromSlices(obj *rebObject, conf *cmn.CksumConf) error {
 	var (
 		meta     *ec.Metadata
 		sliceCnt = obj.dataSlices + obj.paritySlices
@@ -1736,12 +1735,15 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, conf *cmn.CksumConf) (err 
 	src := io.MultiReader(srcReaders...)
 	objMD := ecMD.Clone()
 	objMD.SliceID = 0
-
 	if err := reb.restoreObject(obj, objMD, src); err != nil {
 		return err
 	}
 
-	freeTargets := obj.emptyTargets(reb.t.Snode())
+	var (
+		sendErr     error
+		freeTargets = cluster.AllocNodes(8)
+	)
+	freeTargets = obj.emptyTargets(reb.t.Snode(), freeTargets)
 	for i, wr := range writers {
 		if wr == nil {
 			continue
@@ -1754,11 +1756,13 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, conf *cmn.CksumConf) (err 
 			continue
 		}
 		if len(freeTargets) == 0 {
-			return fmt.Errorf("failed to send slice %d of %s - no free target", sliceID, obj.uid)
+			sendErr = fmt.Errorf("failed to send slice %d of %s - no free target", sliceID, obj.uid)
+			break
 		}
 		cksum, err := checksumSlice(memsys.NewReader(obj.rebuildSGLs[i]), obj.sliceSize, conf.Type, reb.t.MMSA())
 		if err != nil {
-			return fmt.Errorf("failed to checksum %s: %v", obj.objName, err)
+			sendErr = fmt.Errorf("failed to checksum %s: %v", obj.objName, err)
+			break
 		}
 		reader := memsys.NewReader(obj.rebuildSGLs[i])
 		si := freeTargets[0]
@@ -1783,11 +1787,12 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, conf *cmn.CksumConf) (err 
 		// if we do not receive ACK back
 		dest := &retransmitCT{sliceID: int16(sliceID)}
 		if err := reb.sendFromReader(reader, sl, sliceID, cksum, si, dest); err != nil {
-			return fmt.Errorf("failed to send slice %d of %s to %s: %v", i, obj.uid, si, err)
+			sendErr = fmt.Errorf("failed to send slice %d of %s to %s: %v", i, obj.uid, si, err)
+			break
 		}
 	}
-
-	return nil
+	cluster.FreeNodes(freeTargets)
+	return sendErr
 }
 
 func (reb *Manager) restoreObject(obj *rebObject, objMD *ec.Metadata, src io.Reader) (err error) {
@@ -1979,8 +1984,7 @@ func (so *rebObject) foundCT() int {
 
 // Returns the list of targets that does not have any CT but
 // they should have according to HRW.
-func (so *rebObject) emptyTargets(skip *cluster.Snode) cluster.Nodes {
-	freeTargets := make(cluster.Nodes, 0)
+func (so *rebObject) emptyTargets(skip *cluster.Snode, freeTargets cluster.Nodes) cluster.Nodes {
 	for _, tgt := range so.hrwTargets {
 		if skip != nil && skip.ID() == tgt.ID() {
 			continue
