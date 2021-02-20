@@ -176,9 +176,8 @@ func killRestoreDiffIP(t *testing.T, nodeType string) {
 	}
 	tassert.CheckFatal(t, err)
 
-	cfg := tutils.GetDaemonConfig(t, node.ID())
-
 killRestore:
+	cfg := tutils.GetDaemonConfig(t, node.ID())
 	cmd, err := tutils.KillNode(node)
 	tassert.CheckFatal(t, err)
 
