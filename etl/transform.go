@@ -538,23 +538,24 @@ func setPodEnvVariables(t cluster.Target, pod *corev1.Pod, customEnv map[string]
 // NOTE: However, currently, we do require readinessProbe config in the ETL spec.
 func waitPodReady(errCtx *cmn.ETLErrorContext, pod *corev1.Pod, waitTimeout cmn.DurationJSON) error {
 	var (
-		latestPodCondition *corev1.PodCondition
-		client, err        = k8s.GetClient()
+		condition   *corev1.PodCondition
+		client, err = k8s.GetClient()
 	)
 	if err != nil {
 		return cmn.NewETLError(errCtx, "%v", err)
 	}
 
 	err = wait.PollImmediate(time.Second, time.Duration(waitTimeout), func() (ready bool, err error) {
-		ready, latestPodCondition, err = checkPodReady(client, pod.Name)
+		ready, condition, err = checkPodReady(client, pod.Name)
 		return ready, err
 	})
 	if err != nil {
-		if latestPodCondition == nil {
+		if condition == nil {
 			return cmn.NewETLError(errCtx, "%v", err)
 		}
-		return cmn.NewETLError(errCtx, "%v (latest pod condition: %s, expected status Ready)",
-			err, latestPodCondition.Message)
+		conditionStr := fmt.Sprintf("%s, reason: %s, msg: %s", condition.Type, condition.Reason, condition.Message)
+		return cmn.NewETLError(errCtx, "%v (pod condition: %s; expected status Ready)",
+			err, conditionStr)
 	}
 	return nil
 }
