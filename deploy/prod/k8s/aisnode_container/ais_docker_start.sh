@@ -70,7 +70,7 @@ fi
 #    has passed).
 #
 total_wait=0
-if [[ ! $is_primary ]] && $AIS_HELM_DEPLOYMENT; then
+if [[ ! $is_primary ]] && [[ "$AIS_HELM_DEPLOYMENT" == "true" ]]; then
     echo "Waiting for proxy clusterIP service ($CLUSTERIP_PROXY_SERVICE_HOSTNAME) to be accessible"
 
     # Now that the proxy clusterIP has a DNS entry and is pingable, wait until we're able
