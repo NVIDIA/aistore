@@ -68,8 +68,9 @@ func (p *xactBckEncodeProvider) PreRenewHook(previousEntry xreg.BucketEntry) (ke
 }
 
 func NewXactBckEncode(bck cmn.Bck, t cluster.Target, uuid string) *XactBckEncode {
+	args := xaction.Args{ID: xaction.BaseID(uuid), Kind: cmn.ActECEncode, Bck: &bck}
 	return &XactBckEncode{
-		XactBase: *xaction.NewXactBaseBck(uuid, cmn.ActECEncode, bck),
+		XactBase: *xaction.NewXactBase(args),
 		t:        t,
 		bck:      bck,
 		wg:       &sync.WaitGroup{},

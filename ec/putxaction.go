@@ -42,8 +42,9 @@ func (p *xactPutProvider) Start(bck cmn.Bck) error {
 	var (
 		xec      = ECM.NewPutXact(bck)
 		idleTime = cmn.GCO.Get().Timeout.SendFile
+		args     = xaction.Args{ID: xaction.BaseID(""), Kind: p.Kind(), Bck: &bck}
 	)
-	xec.XactDemandBase = *xaction.NewXactDemandBaseBck(p.Kind(), bck, idleTime)
+	xec.XactDemandBase = *xaction.NewXDB(args, idleTime)
 	xec.InitIdle()
 	p.xact = xec
 	go xec.Run()

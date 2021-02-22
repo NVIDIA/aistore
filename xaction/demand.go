@@ -56,52 +56,23 @@ type (
 // XactDemandBase //
 ////////////////////
 
-// NOTE: call xaction.InitIdle in constructor after derived xaction initialized
-func NewXactDemandBaseBck(kind string, bck cmn.Bck, idleTimes ...time.Duration) *XactDemandBase {
-	idleTime := totallyIdle
-	if len(idleTimes) != 0 {
-		idleTime = idleTimes[0]
-	}
-	r := &XactDemandBase{
-		XactBase: *NewXactBaseBck("", kind, bck),
-		hkName:   kind + "/" + cmn.GenUUID(),
-		idle:     idleInfo{dur: idleTime, ticks: cmn.NewStopCh()},
-	}
-	return r
-}
-
-// TODO: it would be good to merge with above function but optional
-// argument is already used up
-// NOTE: call xaction.InitIdle in constructor after derived xaction initialized
-func NewXactDemandBaseBckUUID(uuid, kind string, bck cmn.Bck, idleTimes ...time.Duration) *XactDemandBase {
-	idleTime := totallyIdle
-	if len(idleTimes) != 0 {
-		idleTime = idleTimes[0]
-	}
-	r := &XactDemandBase{
-		XactBase: *NewXactBaseBck(uuid, kind, bck),
-		hkName:   kind + "/" + uuid,
-		idle:     idleInfo{dur: idleTime, ticks: cmn.NewStopCh()},
-	}
-	return r
-}
-
-// NOTE: call xaction.InitIdle in constructor after derived xaction initialized
-func NewXactDemandBase(uuid, kind string, idleTimes ...time.Duration) *XactDemandBase {
+// NOTE: to fully initialize it, must call xact.InitIdle() upon return
+func NewXDB(args Args, idleTimes ...time.Duration) *XactDemandBase {
 	var (
 		hkName   string
 		idleTime = totallyIdle
+		uuid     = args.ID.String()
 	)
 	if len(idleTimes) != 0 {
 		idleTime = idleTimes[0]
 	}
 	if uuid == "" {
-		hkName = kind + cmn.GenUUID()
+		hkName = args.Kind + cmn.GenUUID()
 	} else {
-		hkName = kind + "/" + uuid
+		hkName = args.Kind + "/" + uuid
 	}
 	r := &XactDemandBase{
-		XactBase: *NewXactBase(XactBaseID(uuid), kind),
+		XactBase: *NewXactBase(args),
 		hkName:   hkName,
 		idle:     idleInfo{dur: idleTime, ticks: cmn.NewStopCh()},
 	}

@@ -74,10 +74,8 @@ func (xact *RebBase) String() string {
 func makeXactRebBase(id cluster.XactID, kind string) RebBase {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	return RebBase{
-		XactBase: *xaction.NewXactBase(id, kind),
-		wg:       wg,
-	}
+	args := xaction.Args{ID: id, Kind: kind}
+	return RebBase{XactBase: *xaction.NewXactBase(args), wg: wg}
 }
 
 ///////////////
@@ -170,7 +168,7 @@ func (p *resilverProvider) PostRenewHook(previousEntry xreg.GlobalEntry) {
 
 func NewResilver(uuid, kind string) *Resilver {
 	return &Resilver{
-		RebBase: makeXactRebBase(xaction.XactBaseID(uuid), kind),
+		RebBase: makeXactRebBase(xaction.BaseID(uuid), kind),
 	}
 }
 
@@ -185,11 +183,11 @@ func (xact *Resilver) String() string {
 func (*electionProvider) New(_ xreg.XactArgs) xreg.GlobalEntry { return &electionProvider{} }
 
 func (p *electionProvider) Start(_ cmn.Bck) error {
-	p.xact = &Election{
-		XactBase: *xaction.NewXactBase(xaction.XactBaseID(""), cmn.ActElection),
-	}
+	args := xaction.Args{ID: xaction.BaseID(""), Kind: cmn.ActElection}
+	p.xact = &Election{XactBase: *xaction.NewXactBase(args)}
 	return nil
 }
+
 func (*electionProvider) Kind() string                           { return cmn.ActElection }
 func (p *electionProvider) Get() cluster.Xact                    { return p.xact }
 func (p *electionProvider) PreRenewHook(_ xreg.GlobalEntry) bool { return true }

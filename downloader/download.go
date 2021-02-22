@@ -243,8 +243,9 @@ func (d *Downloader) Name() string {
 }
 
 func newDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
+	args := xaction.Args{ID: xaction.BaseID(""), Kind: cmn.Download, Bck: &cmn.Bck{Provider: cmn.ProviderAIS}}
 	downloader := &Downloader{
-		XactDemandBase: *xaction.NewXactDemandBaseBck(cmn.Download, cmn.Bck{Provider: cmn.ProviderAIS}),
+		XactDemandBase: *xaction.NewXDB(args),
 		t:              t,
 		statsT:         statsT,
 	}

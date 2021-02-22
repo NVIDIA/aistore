@@ -37,10 +37,8 @@ func init() {
 }
 
 func newXactBckBase(id, kind string, bck cmn.Bck, opts *mpather.JoggerGroupOpts) *xactBckBase {
-	base := &xactBckBase{
-		XactBase: *xaction.NewXactBaseBck(id, kind, bck),
-		t:        opts.T,
-	}
+	args := xaction.Args{ID: xaction.BaseID(id), Kind: kind, Bck: &bck}
+	base := &xactBckBase{XactBase: *xaction.NewXactBase(args), t: opts.T}
 	base.joggers = mpather.NewJoggerGroup(opts)
 	return base
 }

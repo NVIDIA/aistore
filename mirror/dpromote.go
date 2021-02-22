@@ -57,13 +57,11 @@ func (p *dirPromoteProvider) Get() cluster.Xact { return p.xact }
 //
 
 func NewXactDirPromote(dir string, bck cmn.Bck, t cluster.Target, params *cmn.ActValPromote) *XactDirPromote {
+	args := xaction.Args{ID: xaction.BaseID(""), Kind: cmn.ActPromote, Bck: &bck}
 	return &XactDirPromote{
-		xactBckBase: xactBckBase{
-			XactBase: *xaction.NewXactBaseBck("", cmn.ActPromote, bck),
-			t:        t,
-		},
-		dir:    dir,
-		params: params,
+		xactBckBase: xactBckBase{XactBase: *xaction.NewXactBase(args), t: t},
+		dir:         dir,
+		params:      params,
 	}
 }
 

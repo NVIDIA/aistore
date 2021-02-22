@@ -41,14 +41,13 @@ type (
 )
 
 const (
-	xactionTTL = 10 * time.Minute // TODO: it should be Xaction argument
+	xactionTTL = 10 * time.Minute // TODO -- FIXME: see "quiescence"
 )
 
 func NewObjectsListing(ctx context.Context, t cluster.Target, query *ObjectsQuery, msg *cmn.SelectMsg) *ObjectsListingXact {
-	cmn.Assert(query.BckSource.Bck != nil)
-	cmn.Assert(msg.UUID != "")
+	args := xaction.Args{ID: xaction.BaseID(msg.UUID), Kind: cmn.ActQueryObjects, Bck: &query.BckSource.Bck.Bck}
 	return &ObjectsListingXact{
-		XactBase: *xaction.NewXactBaseBck(msg.UUID, cmn.ActQueryObjects, query.BckSource.Bck.Bck),
+		XactBase: *xaction.NewXactBase(args),
 		t:        t,
 		ctx:      ctx,
 		msg:      msg,

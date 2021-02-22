@@ -105,8 +105,8 @@ func newXact(ctx context.Context, t cluster.Target, bck cmn.Bck, smsg *cmn.Selec
 		lastPage: make([]*cmn.BucketEntry, 0, cacheSize),
 	}
 	cmn.Assert(xact.bck.Props != nil)
-
-	xact.XactDemandBase = *xaction.NewXactDemandBaseBckUUID(uuid, cmn.ActListObjects, bck, idleTime)
+	args := xaction.Args{ID: xaction.BaseID(uuid), Kind: cmn.ActListObjects, Bck: &bck}
+	xact.XactDemandBase = *xaction.NewXDB(args, idleTime)
 	xact.InitIdle()
 	return xact
 }

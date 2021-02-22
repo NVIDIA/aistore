@@ -21,6 +21,11 @@ import (
 )
 
 type (
+	Args struct {
+		ID   cluster.XactID
+		Kind string
+		Bck  *cmn.Bck
+	}
 	XactBase struct {
 		id      cluster.XactID
 		sutime  atomic.Int64
@@ -33,25 +38,26 @@ type (
 		aborted atomic.Bool
 		notif   *NotifXact
 	}
-
-	XactBaseID string
-
-	RebID int64
-
 	XactMarked struct {
 		Xact        cluster.Xact
 		Interrupted bool
 	}
-
 	ErrXactExpired struct { // return it if called (right) after self-termination
 		msg string
 	}
+
+	BaseID string
+	RebID  int64
 )
 
 var (
-	_ cluster.XactID = XactBaseID("")
+	_ cluster.XactID = BaseID("")
 	_ cluster.XactID = RebID(0)
 )
+
+///////////
+// RebID //
+///////////
 
 func (id RebID) String() string { return fmt.Sprintf("g%d", id) }
 
@@ -78,17 +84,18 @@ compare:
 	return 0
 }
 
-func NewXactBase(id cluster.XactID, kind string) *XactBase {
-	cmn.Assert(kind != "")
-	xact := &XactBase{id: id, kind: kind, abrt: make(chan struct{})}
-	xact.setStartTime(time.Now())
-	return xact
-}
+//////////////
+// XactBase //
+//////////////
 
-func NewXactBaseBck(id, kind string, bck cmn.Bck) *XactBase {
-	xact := NewXactBase(XactBaseID(id), kind)
-	xact.bck = bck
-	return xact
+func NewXactBase(args Args) (xact *XactBase) {
+	debug.Assert(args.Kind != "")
+	xact = &XactBase{id: args.ID, kind: args.Kind, abrt: make(chan struct{})}
+	if args.Bck != nil {
+		xact.bck = *args.Bck
+	}
+	xact.setStartTime(time.Now())
+	return
 }
 
 //
@@ -216,15 +223,10 @@ func (xact *XactBase) Notif() (n cluster.Notif) {
 }
 
 func (xact *XactBase) AddNotif(n cluster.Notif) {
-	var ok bool
-	cmn.Assert(xact.notif == nil) // currently, "add" means "set"
-	xact.notif, ok = n.(*NotifXact)
-	cmn.Assert(ok)
-	cmn.Assert(xact.notif.Xact != nil)
-	cmn.Assert(xact.notif.F != nil)
-	if n.Upon(cluster.UponProgress) {
-		cmn.Assert(xact.notif.P != nil)
-	}
+	debug.Assert(xact.notif == nil) // currently, "add" means "set"
+	xact.notif = n.(*NotifXact)
+	debug.Assert(xact.notif.Xact != nil && xact.notif.F != nil)
+	debug.Assert(!n.Upon(cluster.UponProgress) || xact.notif.P != nil)
 }
 
 // TODO: Consider moving it to separate interface.
@@ -268,9 +270,9 @@ func (xact *XactBase) Stats() cluster.XactStats {
 	}
 }
 
-func (id XactBaseID) String() string           { return string(id) }
-func (id XactBaseID) Int() int64               { cmn.Assert(false); return 0 }
-func (id XactBaseID) Compare(other string) int { return strings.Compare(string(id), other) }
+func (id BaseID) String() string           { return string(id) }
+func (id BaseID) Int() int64               { cmn.Assert(false); return 0 }
+func (id BaseID) Compare(other string) int { return strings.Compare(string(id), other) }
 
 // errors
 

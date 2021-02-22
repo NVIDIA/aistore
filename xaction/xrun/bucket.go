@@ -86,8 +86,9 @@ func (p *BckRenameProvider) PostRenewHook(_ xreg.BucketEntry) {}
 
 func newBckRename(uuid, kind string, bck cmn.Bck, t cluster.Target,
 	bckFrom, bckTo *cluster.Bck, rebID xaction.RebID) *bckRename {
+	args := xaction.Args{ID: xaction.BaseID(uuid), Kind: kind, Bck: &bck}
 	return &bckRename{
-		XactBase: *xaction.NewXactBaseBck(uuid, kind, bck),
+		XactBase: *xaction.NewXactBase(args),
 		t:        t,
 		bckFrom:  bckFrom,
 		bckTo:    bckTo,
@@ -160,12 +161,13 @@ func (p *evictDeleteProvider) Start(bck cmn.Bck) error {
 func (p *evictDeleteProvider) Kind() string      { return p.kind }
 func (p *evictDeleteProvider) Get() cluster.Xact { return p.xact }
 
-func newEvictDelete(uuid, kind string, bck cmn.Bck, t cluster.Target, args *xreg.DeletePrefetchArgs) *evictDelete {
+func newEvictDelete(uuid, kind string, bck cmn.Bck, t cluster.Target, dpargs *xreg.DeletePrefetchArgs) *evictDelete {
+	xargs := xaction.Args{ID: xaction.BaseID(uuid), Kind: kind, Bck: &bck}
 	return &evictDelete{
 		listRangeBase: listRangeBase{
-			XactBase: *xaction.NewXactBaseBck(uuid, kind, bck),
+			XactBase: *xaction.NewXactBase(xargs),
 			t:        t,
-			args:     args,
+			args:     dpargs,
 		},
 	}
 }
@@ -214,12 +216,13 @@ func (p *PrefetchProvider) Start(bck cmn.Bck) error {
 func (*PrefetchProvider) Kind() string        { return cmn.ActPrefetch }
 func (p *PrefetchProvider) Get() cluster.Xact { return p.xact }
 
-func newPrefetch(uuid, kind string, bck cmn.Bck, t cluster.Target, args *xreg.DeletePrefetchArgs) *prefetch {
+func newPrefetch(uuid, kind string, bck cmn.Bck, t cluster.Target, dpargs *xreg.DeletePrefetchArgs) *prefetch {
+	xargs := xaction.Args{ID: xaction.BaseID(uuid), Kind: kind, Bck: &bck}
 	return &prefetch{
 		listRangeBase: listRangeBase{
-			XactBase: *xaction.NewXactBaseBck(uuid, kind, bck),
+			XactBase: *xaction.NewXactBase(xargs),
 			t:        t,
-			args:     args,
+			args:     dpargs,
 		},
 	}
 }

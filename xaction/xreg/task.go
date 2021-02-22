@@ -57,8 +57,9 @@ func (r *registry) renewBckSummary(ctx context.Context, t cluster.Target, bck *c
 }
 
 func (e *bckSummaryTaskEntry) Start(bck cmn.Bck) error {
+	args := xaction.Args{ID: xaction.BaseID(e.uuid), Kind: cmn.ActSummaryBck, Bck: &bck}
 	xact := &bckSummaryTask{
-		XactBase: *xaction.NewXactBaseBck(e.uuid, cmn.ActSummaryBck, bck),
+		XactBase: *xaction.NewXactBase(args),
 		t:        e.t,
 		msg:      e.msg,
 		ctx:      e.ctx,

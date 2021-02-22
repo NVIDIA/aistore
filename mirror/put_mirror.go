@@ -77,8 +77,10 @@ func runXactPut(lom *cluster.LOM, slab *memsys.Slab, t cluster.Target) (r *XactP
 	if err = fs.ValidateNCopies(t.Sname(), int(mirror.Copies)); err != nil {
 		return
 	}
+	bck := lom.Bucket()
+	args := xaction.Args{ID: xaction.BaseID(""), Kind: cmn.ActPutCopies, Bck: &bck}
 	r = &XactPut{
-		XactDemandBase: *xaction.NewXactDemandBaseBck(cmn.ActPutCopies, lom.Bucket()),
+		XactDemandBase: *xaction.NewXDB(args),
 		mirror:         mirror,
 		workCh:         make(chan cluster.LIF, mirror.Burst),
 	}

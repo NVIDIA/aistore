@@ -123,8 +123,9 @@ func (*XactProvider) New(args xreg.XactArgs) xreg.GlobalEntry {
 }
 
 func (p *XactProvider) Start(_ cmn.Bck) error {
+	args := xaction.Args{ID: xaction.BaseID(p.id), Kind: cmn.ActLRU}
 	p.xact = &Xaction{
-		XactDemandBase: *xaction.NewXactDemandBase(p.id, cmn.ActLRU, xactIdleTime),
+		XactDemandBase: *xaction.NewXDB(args, xactIdleTime),
 		Renewed:        make(chan struct{}, 10),
 		OkRemoveMisplaced: func() bool {
 			g, l := xreg.GetRebMarked(), xreg.GetResilverMarked()
