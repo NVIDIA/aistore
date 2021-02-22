@@ -33,8 +33,6 @@ const (
 
 	FmtErrUnmarshal      = "%s: failed to unmarshal %s (%s), err: %w"
 	FmtErrMorphUnmarshal = "%s: failed to unmarshal %s (%T), err: %w"
-	FmtErrNotExist       = "%s: %s %q does not exist"
-	FmtErrObjNotExist    = "%s: object %s/%s does not exist"
 	FmtErrUnsupported    = "%s: %s is not supported"
 	FmtErrUnknown        = "%s: unknown %s %q"
 	FmtErrFailed         = "%s: failed to %s %s, err: %v" // node: action object, error
@@ -428,6 +426,16 @@ func NewNotFoundError(format string, a ...interface{}) *ErrNotFound {
 
 func (e *ErrNotFound) Error() string { return e.what + " not found" }
 
+func (e *ErrNotFound) Is(target error) bool {
+	_, ok := target.(*ErrNotFound)
+	return ok
+}
+
+func (e *ErrNotFound) As(target error) bool {
+	_, ok := target.(*ErrNotFound)
+	return ok
+}
+
 func NewETLError(ctx *ETLErrorContext, format string, a ...interface{}) *ErrETL {
 	e := &ErrETL{
 		Reason: fmt.Sprintf(format, a...),
@@ -675,6 +683,7 @@ func (e *ErrHTTP) stackTrace() {
 //////////////////////////////
 
 // write error into http response
+// TODO: Check for error type and set `status` if not provided eg. `ErrNotFound`.
 func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int) {
 	status := http.StatusBadRequest
 	if len(opts) > 0 && opts[0] > status {

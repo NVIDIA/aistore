@@ -1384,7 +1384,7 @@ func (p *proxyrunner) reverseReqRemote(w http.ResponseWriter, r *http.Request, m
 	aisConf := v.(cmn.BackendConfAIS)
 	urls, exists := aisConf[remoteUUID]
 	if !exists {
-		err = fmt.Errorf(cmn.FmtErrNotExist, p.si, "remote UUID/alias", remoteUUID)
+		err = cmn.NewNotFoundError("remote UUID/alias %q", remoteUUID)
 		p.writeErr(w, r, err)
 		return err
 	}
@@ -1502,7 +1502,7 @@ func (p *proxyrunner) checkBckTaskResp(uuid string, results sliceResults) (allOK
 	}
 	freeCallResults(results)
 	if allNotFound {
-		err = fmt.Errorf(cmn.FmtErrNotExist, p.si, "task", uuid)
+		err = cmn.NewNotFoundError("task %q", uuid)
 	}
 	return
 }

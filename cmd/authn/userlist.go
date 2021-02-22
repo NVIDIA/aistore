@@ -215,7 +215,7 @@ func (m *userManager) delUser(userID string) error {
 func (m *userManager) delCluster(cluID string) error {
 	cid := m.cluLookup(cluID, cluID)
 	if cid == "" {
-		return fmt.Errorf(cmn.FmtErrNotExist, svcName, "cluster", cluID)
+		return cmn.NewNotFoundError("%s cluster %q", svcName, cluID)
 	}
 	return m.db.Delete(clustersCollection, cid)
 }
@@ -234,7 +234,7 @@ func (m *userManager) updateUser(userID string, updateReq *cmn.AuthUser) error {
 	uInfo := &cmn.AuthUser{}
 	err := m.db.Get(usersCollection, userID, uInfo)
 	if err != nil {
-		return fmt.Errorf(cmn.FmtErrNotExist, svcName, "user", userID)
+		return cmn.NewNotFoundError("%s user %q", svcName, userID)
 	}
 	if userID == adminID && len(updateReq.Roles) != 0 {
 		return errors.New("cannot change administrator's role")
@@ -260,7 +260,7 @@ func (m *userManager) updateRole(role string, updateReq *cmn.AuthRole) error {
 	rInfo := &cmn.AuthRole{}
 	err := m.db.Get(rolesCollection, role, rInfo)
 	if err != nil {
-		return fmt.Errorf(cmn.FmtErrNotExist, svcName, "role", role)
+		return cmn.NewNotFoundError("%s role %q", svcName, role)
 	}
 
 	if updateReq.Desc != "" {

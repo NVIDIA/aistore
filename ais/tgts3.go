@@ -6,7 +6,6 @@ package ais
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"path"
 	"strings"
@@ -244,7 +243,8 @@ func (t *targetrunner) headObjS3(w http.ResponseWriter, r *http.Request, items [
 
 	exists := err == nil
 	if !exists {
-		t.writeErrStatusf(w, r, http.StatusNotFound, cmn.FmtErrObjNotExist, t.si, bucket, objName)
+		err := cmn.NewNotFoundError("object %s/%s", bucket, objName)
+		t.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
 
@@ -276,7 +276,7 @@ func (t *targetrunner) delObjS3(w http.ResponseWriter, r *http.Request, items []
 	errCode, err := t.DeleteObject(context.Background(), lom, false)
 	if err != nil {
 		if errCode == http.StatusNotFound {
-			err := fmt.Errorf(cmn.FmtErrObjNotExist, t.si, lom.Bck(), lom.ObjName)
+			err := cmn.NewNotFoundError("object %s/%s", lom.Bck(), lom.ObjName)
 			t.writeErrSilent(w, r, err, http.StatusNotFound)
 		} else {
 			t.writeErrStatusf(w, r, errCode, "error deleting %s: %v", lom, err)

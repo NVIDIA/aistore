@@ -615,11 +615,10 @@ gfn:
 		err = fmt.Errorf(cmn.FmtErrFailed, tname, "EC-recover", goi.lom, ecErr)
 	}
 
-	s := fmt.Sprintf(cmn.FmtErrNotExist, tname, "object", goi.lom.FQN)
 	if err != nil {
-		err = fmt.Errorf("%s => [%v]", s, err)
+		err = fmt.Errorf("object %s/%s not found, err: %v", goi.lom.Bck(), goi.lom.ObjName, err)
 	} else {
-		err = errors.New(s)
+		err = cmn.NewNotFoundError("object %s/%s", goi.lom.Bck(), goi.lom.ObjName)
 	}
 	errCode = http.StatusNotFound
 	return

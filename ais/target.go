@@ -993,15 +993,15 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 
 	if checkExists || checkExistsAny {
 		if !exists {
-			invalidHandler(w, r, fmt.Errorf(cmn.FmtErrObjNotExist, t.si, bck, objName),
-				http.StatusNotFound)
+			err = cmn.NewNotFoundError("object %s/%s", bck, objName)
+			invalidHandler(w, r, err, http.StatusNotFound)
 		}
 		return
 	}
 	if lom.Bck().IsAIS() || exists { // && !lom.VerConf().Enabled) {
 		if !exists {
-			invalidHandler(w, r, fmt.Errorf(cmn.FmtErrObjNotExist, t.si, bck, objName),
-				http.StatusNotFound)
+			err = cmn.NewNotFoundError("object %s/%s", bck, objName)
+			invalidHandler(w, r, err, http.StatusNotFound)
 			return
 		}
 		lom.ToHTTPHdr(hdr)
@@ -1422,7 +1422,8 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	finfo, err := os.Stat(srcFQN)
 	if err != nil {
 		if os.IsNotExist(err) {
-			t.writeErrStatusf(w, r, http.StatusNotFound, cmn.FmtErrNotExist, t.si, "file", srcFQN)
+			err := cmn.NewNotFoundError("file %q", srcFQN)
+			t.writeErr(w, r, err, http.StatusNotFound)
 			return
 		}
 		t.writeErr(w, r, err)

@@ -6,7 +6,6 @@ package downloader
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"regexp"
@@ -334,7 +333,7 @@ func (d *Downloader) checkJob(req *request) (*downloadJobInfo, error) {
 	jInfo, err := dlStore.getJob(req.id)
 	if err != nil {
 		cmn.Assert(errors.Is(err, errJobNotFound))
-		err := fmt.Errorf(cmn.FmtErrNotExist, d.t.Snode(), "job", req.id)
+		err := cmn.NewNotFoundError("job %q", req.id)
 		req.writeErrResp(err, http.StatusNotFound)
 		return nil, err
 	}

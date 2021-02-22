@@ -398,11 +398,15 @@ func (a *authServ) httpSrvDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(apiItems) == 0 {
-		cmn.WriteErrMsg(w, r, "Cluster name or ID is not defined", http.StatusInternalServerError)
+		cmn.WriteErrMsg(w, r, "cluster name or ID is not defined", http.StatusInternalServerError)
 		return
 	}
 	if err := a.users.delCluster(apiItems[0]); err != nil {
-		cmn.WriteErr(w, r, err, http.StatusInternalServerError)
+		if errors.Is(err, &cmn.ErrNotFound{}) {
+			cmn.WriteErr(w, r, err, http.StatusNotFound)
+		} else {
+			cmn.WriteErr(w, r, err, http.StatusInternalServerError)
+		}
 	}
 }
 
@@ -414,10 +418,11 @@ func (a *authServ) httpSrvGet(w http.ResponseWriter, r *http.Request) {
 	var cluList *cmn.AuthClusterList
 	if len(apiItems) != 0 {
 		cid := apiItems[0]
+		// FIXME: This code will always produce an error as `cluList` is empty.
 		clu, ok := cluList.Clusters[cid]
 		if !ok {
-			msg := fmt.Sprintf("Cluster %q not found", cid)
-			cmn.WriteErrMsg(w, r, msg, http.StatusNotFound)
+			err := cmn.NewNotFoundError("%s cluster %q", svcName, cid)
+			cmn.WriteErr(w, r, err, http.StatusNotFound)
 			return
 		}
 		cluList = &cmn.AuthClusterList{
@@ -543,25 +548,30 @@ func (a *authServ) httpRolePut(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("Update role %s\n", role)
 	}
 	if err := a.users.updateRole(role, updateReq); err != nil {
-		cmn.WriteErr(w, r, err)
+		if errors.Is(err, &cmn.ErrNotFound{}) {
+			cmn.WriteErr(w, r, err, http.StatusNotFound)
+		} else {
+			cmn.WriteErr(w, r, err)
+		}
 	}
 }
 
 func (a *authServ) configHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
+	case http.MethodGet:
+		a.httpConfigGet(w, r)
 	case http.MethodPut:
 		a.httpConfigPut(w, r)
-	case http.MethodGet:
-		a.httpConfifGet(w, r)
 	default:
 		cmn.WriteErr405(w, r, http.MethodPut, http.MethodGet)
 	}
 }
 
-func (a *authServ) httpConfifGet(w http.ResponseWriter, r *http.Request) {
+func (a *authServ) httpConfigGet(w http.ResponseWriter, r *http.Request) {
 	if err := a.checkAuthorization(w, r); err != nil {
 		return
 	}
+	// TODO: `conf` could implement `MarshalJSON` and take lock inside.
 	conf.RLock()
 	defer conf.RUnlock()
 	a.writeJSON(w, conf, "config")
@@ -576,6 +586,7 @@ func (a *authServ) httpConfigPut(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErrMsg(w, r, "Invalid request")
 		return
 	}
+	// TODO: `conf` could take the lock inside the `ApplyUpdate`.
 	conf.Lock()
 	defer conf.Unlock()
 	if err := conf.ApplyUpdate(updateCfg); err != nil {
