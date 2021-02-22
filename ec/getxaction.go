@@ -314,7 +314,7 @@ func (r *XactGet) Stats() cluster.XactStats {
 		ErrCount:    st.DecodeErr,
 		AvgObjTime:  cmn.DurationJSON(st.ObjTime.Nanoseconds()),
 		AvgQueueLen: st.QueueLen,
-		IsIdle:      r.IsIdle(),
+		IsIdle:      r.Pending() == 0,
 	}
 	baseStats.ObjCountX = st.GetReq
 	return baseStats

@@ -17,6 +17,9 @@ type (
 		Compare(string) int // -1 = less, 0 = equal, +1 = greater
 	}
 
+	QuiRes int
+	QuiCB  func(elapsed time.Duration) QuiRes // see enum below
+
 	Xact interface {
 		Run()
 		ID() XactID
@@ -30,6 +33,7 @@ type (
 		Finished() bool
 		Aborted() bool
 		AbortedAfter(time.Duration) bool
+		Quiesce(time.Duration, QuiCB) QuiRes
 		ChanAbort() <-chan struct{}
 		Result() (interface{}, error)
 		Stats() XactStats
@@ -57,4 +61,12 @@ type (
 		Running() bool
 		Finished() bool
 	}
+)
+
+const (
+	QuiInactive = QuiRes(iota) // e.g., no pending requests, no messages received, etc.
+	QuiActive                  // active (e.g., receiving data)
+	QuiDone                    // all done
+	QuiAborted                 // aborted
+	QuiTimeout                 // timeout
 )

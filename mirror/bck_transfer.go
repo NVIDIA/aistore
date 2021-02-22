@@ -144,6 +144,12 @@ func (r *XactTransferBck) Run() {
 	r.xactBckBase.runJoggers()
 	glog.Infoln(r.String(), r.bckFrom.Bck, "=>", r.bckTo.Bck)
 	err := r.xactBckBase.waitDone()
+
+	if q := r.dm.Quiesce(cmn.GCO.Get().Timeout.CplaneOperation); q == cluster.QuiAborted {
+		if err == nil {
+			err = cmn.NewAbortedError(r.String())
+		}
+	}
 	r.dm.Close(err)
 	r.dm.UnregRecv()
 

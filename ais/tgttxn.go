@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	recvObjTrname = "recvobjs"
+	recvObjTrname = "recvobjs" // copy&transform transport endpoint prefix
 )
 
 // convenience structure to gather all (or most) of the relevant context in one place

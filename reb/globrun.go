@@ -1,4 +1,4 @@
-// Package reb provides resilvering and rebalancing functionality for the AIStore object storage.
+// Package reb provides local resilver and global rebalance for AIStore.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -391,33 +391,6 @@ func (reb *Manager) rebWaitAck(md *rebArgs) (errCnt int) {
 	return
 }
 
-// Waits until the following condition is true: no objects are received
-// during certain configurable (quiescent) interval of time.
-// if `cb` returns true the wait loop interrupts immediately. It is used,
-// e.g., to wait for EC batch to finish: no need to wait until timeout if
-// all targets have sent push notification that they are done with the batch.
-func (reb *Manager) waitQuiesce(md *rebArgs, maxWait time.Duration, cb func(md *rebArgs) bool) (aborted bool) {
-	var (
-		sleep     = md.config.Timeout.CplaneOperation
-		maxQuiet  = int(maxWait/sleep) + 1
-		quiescent int
-	)
-	aborted = reb.xact().Aborted()
-	for quiescent < maxQuiet && !aborted {
-		if !reb.laterx.CAS(true, false) {
-			quiescent++
-		} else {
-			quiescent = 0
-		}
-		if cb != nil && cb(md) {
-			break
-		}
-		aborted = reb.xact().AbortedAfter(sleep)
-	}
-
-	return aborted
-}
-
 // Wait until cb returns `true` or times out. Waits forever if `maxWait` is
 // omitted. The latter case is useful when it is unclear how much to wait.
 // Return true is xaction was aborted during wait loop.
@@ -449,10 +422,8 @@ func (reb *Manager) rebFini(md *rebArgs, err error) {
 		glog.Infof("finishing rebalance (reb_args: %s)", reb.logHdr(md))
 	}
 
-	// 10.5. keep at it... (can't close the streams as long as)
-	maxWait := md.config.Rebalance.Quiesce
-	aborted := reb.waitQuiesce(md, maxWait, reb.nodesQuiescent)
-	if !aborted {
+	// prior to closing the streams
+	if q := reb.quiesce(md, md.config.Rebalance.Quiesce, reb.nodesQuiescent); q != cluster.QuiAborted {
 		fs.RemoveMarker(fs.RebalanceMarker)
 	}
 	reb.endStreams(err)
@@ -678,7 +649,5 @@ func (rj *rebJogger) doSend(lom *cluster.LOM, tsi *cluster.Snode, roc cmn.ReadOp
 	o.Hdr.ObjAttrs.Version = lom.Version()
 	o.Callback, o.CmplArg = rj.objSentCallback, lom
 	rj.m.inQueue.Inc()
-	if err := rj.m.dm.Send(o, roc, tsi); err == nil {
-		rj.m.laterx.Store(true)
-	}
+	rj.m.dm.Send(o, roc, tsi)
 }

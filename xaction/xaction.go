@@ -102,15 +102,45 @@ func (xact *XactBase) Finished() bool             { return xact.eutime.Load() !=
 func (xact *XactBase) ChanAbort() <-chan struct{} { return xact.abrt }
 func (xact *XactBase) Aborted() bool              { return xact.aborted.Load() }
 
-func (xact *XactBase) AbortedAfter(dur time.Duration) (aborted bool) {
-	sleep := cmn.MinDuration(dur, 500*time.Millisecond)
-	for elapsed := time.Duration(0); elapsed < dur; elapsed += sleep {
+func (xact *XactBase) AbortedAfter(d time.Duration) (aborted bool) {
+	sleep := cmn.CalcProbeFreq(d)
+	aborted = xact.Aborted()
+	for elapsed := time.Duration(0); elapsed < d && !aborted; elapsed += sleep {
 		time.Sleep(sleep)
-		if xact.Aborted() {
-			return true
-		}
+		aborted = xact.Aborted()
 	}
 	return
+}
+
+// count all the way to duration; reset and adjust every time activity is detected
+func (xact *XactBase) Quiesce(d time.Duration, cb cluster.QuiCB) cluster.QuiRes {
+	var (
+		idle, total time.Duration
+		sleep       = cmn.CalcProbeFreq(d)
+		dur         = d
+	)
+	if xact.Aborted() {
+		return cluster.QuiAborted
+	}
+	for idle < dur {
+		time.Sleep(sleep)
+		if xact.Aborted() {
+			return cluster.QuiAborted
+		}
+		total += sleep
+		switch res := cb(total); res {
+		case cluster.QuiInactive:
+			idle += sleep
+		case cluster.QuiActive:
+			idle = 0                              // reset
+			dur = cmn.MinDuration(dur+sleep, 2*d) // bump up to 2x initial
+		case cluster.QuiDone:
+			return cluster.QuiDone
+		case cluster.QuiTimeout:
+			break
+		}
+	}
+	return cluster.QuiTimeout
 }
 
 func (xact *XactBase) String() string {

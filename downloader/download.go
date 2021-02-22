@@ -342,6 +342,6 @@ func (d *Downloader) checkJob(req *request) (*downloadJobInfo, error) {
 
 func (d *Downloader) Stats() cluster.XactStats {
 	baseStats := d.XactDemandBase.Stats().(*xaction.BaseXactStatsExt)
-	baseStats.Ext = &xaction.BaseXactDemandStatsExt{IsIdle: d.IsIdle()}
+	baseStats.Ext = &xaction.BaseXactDemandStatsExt{IsIdle: d.Pending() == 0}
 	return baseStats
 }

@@ -254,7 +254,7 @@ func (r *XactPut) Stats() cluster.XactStats {
 		DeleteCount:    st.DelReq,
 		AvgObjTime:     cmn.DurationJSON(st.ObjTime.Nanoseconds()),
 		AvgQueueLen:    st.QueueLen,
-		IsIdle:         r.IsIdle(),
+		IsIdle:         r.Pending() == 0,
 	}
 
 	baseStats.ObjCountX = st.PutReq + st.DelReq

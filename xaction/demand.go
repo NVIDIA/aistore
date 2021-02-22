@@ -15,9 +15,11 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 )
 
-// Default on-demand xaction idle timeout
-// (to confirm idle-ness we may in fact stay around for twice as much)
-var xactIdleTimeout = time.Minute
+// Default on-demand idle timeouts
+const (
+	totallyIdle = time.Minute // to confirm idle-ness we may in fact stay around for twice as much
+	likelyIdle  = 4 * time.Second
+)
 
 type (
 	//
@@ -56,7 +58,7 @@ type (
 
 // NOTE: call xaction.InitIdle in constructor after derived xaction initialized
 func NewXactDemandBaseBck(kind string, bck cmn.Bck, idleTimes ...time.Duration) *XactDemandBase {
-	idleTime := xactIdleTimeout
+	idleTime := totallyIdle
 	if len(idleTimes) != 0 {
 		idleTime = idleTimes[0]
 	}
@@ -72,8 +74,7 @@ func NewXactDemandBaseBck(kind string, bck cmn.Bck, idleTimes ...time.Duration) 
 // argument is already used up
 // NOTE: call xaction.InitIdle in constructor after derived xaction initialized
 func NewXactDemandBaseBckUUID(uuid, kind string, bck cmn.Bck, idleTimes ...time.Duration) *XactDemandBase {
-	cmn.Assert(uuid != "")
-	idleTime := xactIdleTimeout
+	idleTime := totallyIdle
 	if len(idleTimes) != 0 {
 		idleTime = idleTimes[0]
 	}
@@ -87,8 +88,10 @@ func NewXactDemandBaseBckUUID(uuid, kind string, bck cmn.Bck, idleTimes ...time.
 
 // NOTE: call xaction.InitIdle in constructor after derived xaction initialized
 func NewXactDemandBase(uuid, kind string, idleTimes ...time.Duration) *XactDemandBase {
-	var hkName string
-	idleTime := xactIdleTimeout
+	var (
+		hkName   string
+		idleTime = totallyIdle
+	)
 	if len(idleTimes) != 0 {
 		idleTime = idleTimes[0]
 	}
@@ -158,21 +161,6 @@ func (r *XactDemandBase) Stats() cluster.XactStats {
 	}
 }
 
-func (r *XactDemandBase) isQuiescent() bool {
-	const (
-		quiesceTime = 2 * time.Second
-		probes      = 4
-	)
-	sleepTime := quiesceTime / probes
-	for t := time.Duration(0); t < quiesceTime; t += sleepTime {
-		if !r.IsIdle() {
-			return false
-		}
-		time.Sleep(sleepTime)
-	}
-	return true
-}
-
 func (r *XactDemandBase) Abort() {
 	if !r.aborted.CAS(false, true) {
 		glog.Infof("already aborted: " + r.String())
@@ -195,4 +183,21 @@ func (r *XactDemandBase) Finish(err error) {
 		err = nil
 	}
 	r._setEndTime(err)
+}
+
+// private: on-demand quiescence
+
+func (r *XactDemandBase) quicb(elapsed time.Duration /*accum. wait time*/) cluster.QuiRes {
+	switch {
+	case elapsed >= likelyIdle:
+		return cluster.QuiTimeout
+	case !r.IsIdle():
+		return cluster.QuiActive
+	default:
+		return cluster.QuiInactive
+	}
+}
+
+func (r *XactDemandBase) isQuiescent() bool {
+	return r.Quiesce(likelyIdle, r.quicb) == cluster.QuiInactive
 }

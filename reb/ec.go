@@ -1,4 +1,4 @@
-// Package reb provides resilvering and rebalancing functionality for the AIStore object storage.
+// Package reb provides local resilver and global rebalance for AIStore.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -1195,16 +1195,12 @@ func (reb *Manager) hasFullObjMisplaced(obj *rebObject) bool {
 // Read CT from local drive and send to another target.
 // If destination is not defined the target sends its data to "default by HRW" target
 func (reb *Manager) sendLocalData(md *rebArgs, obj *rebObject, si ...*cluster.Snode) error {
-	reb.laterx.Store(true)
-	ct, ok := obj.locCT[reb.t.SID()]
-	cmn.Assert(ok)
 	var target *cluster.Snode
+	ct := obj.locCT[reb.t.SID()]
 	if len(si) != 0 {
 		target = si[0]
 	} else {
-		mainSI, ok := md.smap.Tmap[obj.mainDaemon]
-		cmn.Assert(ok)
-		target = mainSI
+		target = md.smap.Tmap[obj.mainDaemon]
 	}
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("%s sending a slice/replica #%d of %s to main %s", reb.t.Snode(), ct.SliceID, ct.ObjName, target)
@@ -1401,22 +1397,6 @@ func (reb *Manager) reRequest(md *rebArgs) {
 	}
 }
 
-// Ensures that no objects are stuck waiting for a slice from a remote
-// target. For each object that is marked objWaiting it rerequest slices
-// from the targets that have slices this taregt has not received yet.
-// Then it rebuilds the objects which full replicas must be on this target.
-func (reb *Manager) allCTReceived(md *rebArgs) bool {
-	toWait, toRebuild := reb.toWait(md.config.EC.BatchSize)
-	if toWait == 0 && toRebuild == 0 {
-		return true
-	}
-	if toWait != 0 {
-		reb.reRequest(md)
-	}
-	reb.rebuildReceived(md)
-	return true
-}
-
 // Returns true if all target have finished the current batch.
 func (reb *Manager) allNodesCompletedBatch(md *rebArgs) bool {
 	cnt := 0
@@ -1525,8 +1505,7 @@ func (reb *Manager) cleanupBatch(md *rebArgs) {
 // Wait for all targets to finish the current batch and then free allocated resources
 func (reb *Manager) finalizeBatch(md *rebArgs) error {
 	// First, wait for all slices the local target wants to receive
-	maxWait := md.config.Rebalance.Quiesce
-	if aborted := reb.waitQuiesce(md, maxWait, reb.allCTReceived); aborted {
+	if q := reb.quiesce(md, md.config.Rebalance.Quiesce, reb.allCTReceived); q == cluster.QuiAborted {
 		return cmn.NewAbortedError("finalize batch - all ct received")
 	}
 	// wait until all rebuilt slices are sent
@@ -1562,8 +1541,7 @@ func (reb *Manager) logNoECAck() {
 
 func (reb *Manager) waitECAck(md *rebArgs) {
 	logHdr := reb.logHdr(md)
-	sleep := md.config.Timeout.CplaneOperation // NOTE: TODO: used throughout; must be separately assigned and calibrated
-
+	sleep := md.config.Timeout.CplaneOperation
 	// loop without timeout - wait until all CTs put into transport
 	// queue are processed (either sent or failed)
 	for reb.ec.onAir.Load() > 0 {
@@ -1574,10 +1552,9 @@ func (reb *Manager) waitECAck(md *rebArgs) {
 		}
 	}
 	// short wait for cluster-wide quiescence
-	if aborted := reb.waitQuiesce(md, sleep, reb.nodesQuiescent); aborted {
+	if q := reb.quiesce(md, sleep, reb.nodesQuiescent); q == cluster.QuiAborted {
 		return
 	}
-
 	reb.logNoECAck()
 }
 

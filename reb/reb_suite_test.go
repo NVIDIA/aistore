@@ -1,4 +1,4 @@
-// Package ais provides core functionality for the AIStore object storage.
+// Package reb provides local resilver and global rebalance for AIStore.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */

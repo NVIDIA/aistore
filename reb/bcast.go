@@ -1,4 +1,4 @@
-// Package reb provides resilvering and rebalancing functionality for the AIStore object storage.
+// Package reb provides local resilver and global rebalance for AIStore.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -454,23 +454,4 @@ func (reb *Manager) waitForPushReqs(md *rebArgs, stage uint32, timeout ...time.D
 		curWait += sleep
 	}
 	return false
-}
-
-// Returns true if all targets in the cluster are quiescent: all
-// transport queues are empty
-func (reb *Manager) nodesQuiescent(md *rebArgs) bool {
-	quiescent := true
-	locStage := reb.stages.stage.Load()
-	for _, si := range md.smap.Tmap {
-		if si.ID() == reb.t.SID() && !reb.isQuiescent() {
-			quiescent = false
-			break
-		}
-		status, ok := reb.checkGlobStatus(si, locStage, md)
-		if !ok || !status.Quiescent {
-			quiescent = false
-			break
-		}
-	}
-	return quiescent
 }

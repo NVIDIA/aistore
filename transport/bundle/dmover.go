@@ -9,11 +9,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 )
@@ -37,10 +39,11 @@ type (
 			streams *Streams
 			client  transport.Client
 		}
+		config      *cmn.Config
 		mem         *memsys.MMSA
 		compression string // enum { cmn.CompressNever, ... }
 		xact        cluster.Xact
-		isOpen      atomic.Bool
+		opened      atomic.Bool
 		laterx      atomic.Bool
 		multiplier  int
 		sizePDU     int32
@@ -63,13 +66,11 @@ var _ cluster.DataMover = (*DataMover)(nil)
 // is saved to local drives(e.g, PUT the object to the Cloud as well).
 // For DMs that does not create new objects(e.g, rebalance), recvType should
 // be `Migrated`, and `RegularPut` for others(e.g, CopyBucket).
-func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, recvType cluster.RecvType, extra Extra) (*DataMover, error) {
-	var (
-		config = cmn.GCO.Get()
-		dm     = &DataMover{t: t, mem: t.MMSA()}
-	)
+func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, recvType cluster.RecvType,
+	extra Extra) (*DataMover, error) {
+	dm := &DataMover{t: t, config: cmn.GCO.Get(), mem: t.MMSA()}
 	if extra.Multiplier == 0 {
-		extra.Multiplier = int(config.Rebalance.Multiplier)
+		extra.Multiplier = int(dm.config.Rebalance.Multiplier)
 	}
 	if extra.Multiplier > 8 {
 		return nil, fmt.Errorf("invalid multiplier %d", extra.Multiplier)
@@ -87,13 +88,13 @@ func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, 
 	}
 	dm.data.trname, dm.data.recv = trname, recvCB
 	dm.data.net = cmn.NetworkPublic
-	if config.Net.UseIntraData {
+	if dm.config.Net.UseIntraData {
 		dm.data.net = cmn.NetworkIntraData
 	}
 	dm.data.client = transport.NewIntraDataClient()
 	// ack
 	dm.ack.net = cmn.NetworkPublic
-	if config.Net.UseIntraControl {
+	if dm.config.Net.UseIntraControl {
 		dm.ack.net = cmn.NetworkIntraControl
 	}
 	dm.ack.recv = extra.RecvAck
@@ -126,13 +127,12 @@ func (dm *DataMover) RegRecv() (err error) {
 
 func (dm *DataMover) Open() {
 	var (
-		config   = cmn.GCO.Get()
 		dataArgs = Args{
 			Network: dm.data.net,
 			Trname:  dm.data.trname,
 			Extra: &transport.Extra{
 				Compression: dm.compression,
-				Config:      config,
+				Config:      dm.config,
 				MMSA:        dm.mem,
 				SizePDU:     dm.sizePDU,
 			},
@@ -143,7 +143,7 @@ func (dm *DataMover) Open() {
 		ackArgs = Args{
 			Network:      dm.ack.net,
 			Trname:       dm.ack.trname,
-			Extra:        &transport.Extra{Config: config},
+			Extra:        &transport.Extra{Config: dm.config},
 			ManualResync: true,
 		}
 	)
@@ -151,12 +151,17 @@ func (dm *DataMover) Open() {
 	if dm.useACKs() {
 		dm.ack.streams = NewStreams(dm.t.Sowner(), dm.t.Snode(), dm.ack.client, ackArgs)
 	}
-	dm.isOpen.Store(true)
+	dm.opened.Store(true)
+}
+
+// quiesce *local* Rx
+func (dm *DataMover) Quiesce(d time.Duration) cluster.QuiRes {
+	return dm.xact.Quiesce(d, dm.quicb)
 }
 
 func (dm *DataMover) Close(err error) {
-	cmn.Assert(dm.isOpen.Load())
-	dm.data.streams.Close(err == nil) // err == nil: close gracefully via `fin` and abort otherwise
+	debug.Assert(dm.opened.Load())    // Open() must've been called
+	dm.data.streams.Close(err == nil) // err == nil: close gracefully via `fin`, otherwise abort
 	if err == nil {
 		dm.data.streams = nil // safe when closed gracefully
 	}
@@ -166,8 +171,10 @@ func (dm *DataMover) Close(err error) {
 }
 
 func (dm *DataMover) UnregRecv() {
-	_ = dm.waitQuiesce()
-
+	if !dm.opened.Load() {
+		return // e.g., 2PC (begin => abort) sequence with no Open
+	}
+	dm.Quiesce(dm.config.Rebalance.Quiesce)
 	if err := transport.Unhandle(dm.data.trname); err != nil {
 		glog.Error(err)
 	}
@@ -190,39 +197,19 @@ func (dm *DataMover) ACK(hdr transport.ObjHdr, cb transport.ObjSentCB, tsi *clus
 // private
 //
 
+func (dm *DataMover) quicb(_ time.Duration /*accum. sleep time*/) cluster.QuiRes {
+	if dm.laterx.CAS(true, false) {
+		return cluster.QuiActive
+	}
+	return cluster.QuiInactive
+}
+
 func (dm *DataMover) wrapRecvData(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
 	dm.laterx.Store(true)
 	dm.data.recv(w, hdr, object, err)
-	dm.laterx.Store(true)
 }
 
 func (dm *DataMover) wrapRecvACK(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
 	dm.laterx.Store(true)
 	dm.ack.recv(w, hdr, object, err)
-	dm.laterx.Store(true)
-}
-
-// NOTE: compare with reb.waitQuiesce where additional cluster-wide quiescent status is also enforced
-func (dm *DataMover) waitQuiesce() (aborted bool) {
-	if !dm.isOpen.Load() {
-		// nothing to quiesce when not open - e.g., 2PC (begin => abort) sequence
-		return true
-	}
-	var (
-		config    = cmn.GCO.Get()
-		sleep     = config.Timeout.CplaneOperation
-		maxWait   = config.Rebalance.Quiesce
-		maxQuiet  = cmn.MaxDuration(maxWait/sleep, 2)
-		quiescent int
-	)
-	cmn.Assert(dm.xact != nil)
-	for quiescent < int(maxQuiet) && !aborted {
-		if !dm.laterx.CAS(true, false) {
-			quiescent++
-		} else {
-			quiescent = 0
-		}
-		aborted = dm.xact.AbortedAfter(sleep)
-	}
-	return
 }
