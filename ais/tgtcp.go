@@ -707,6 +707,13 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 		glog.Errorf("%s - cannot start: %v", loghdr, err) // ditto
 		return
 	}
+	for _, tsi := range rmd.TargetIDs {
+		if smap.GetNode(tsi) == nil {
+			err = fmt.Errorf("%s (target_id from rmd) not present in %s", tsi, smap)
+			glog.Errorf("%s - cannot start: %v", loghdr, err) // ditto
+			return
+		}
+	}
 	notif := &xaction.NotifXact{
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 	}

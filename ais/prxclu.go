@@ -485,7 +485,10 @@ func (p *proxyrunner) _updPre(ctx *smapModifier, clone *smapX) error {
 
 func (p *proxyrunner) _updPost(ctx *smapModifier, clone *smapX) {
 	if !ctx.nsi.IsTarget() {
-		debug.Assert(ctx.nsi.IsProxy())
+		// RMD will be sent on proxy join to ensure that it is replicated.
+		// Doing this under smap lock to make sure no new joins happen that would
+		// update the rmd.
+		ctx.rmd = p.owner.rmd.get()
 		return
 	}
 	if err := p.canStartRebalance(); err != nil {
@@ -525,8 +528,8 @@ func (p *proxyrunner) _updFinal(ctx *smapModifier, clone *smapX) {
 	} else if ctx.nsi.IsProxy() {
 		// Send RMD to proxies to make sure that they have
 		// the latest one - newly joined can become primary in a second.
-		rmd := p.owner.rmd.get()
-		pairs = append(pairs, revsPair{rmd, aisMsg})
+		cmn.Assert(ctx.rmd != nil)
+		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
 	}
 
 	if len(tokens.Tokens) > 0 {
