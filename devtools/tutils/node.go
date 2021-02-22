@@ -6,6 +6,7 @@ package tutils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -305,6 +306,7 @@ func KillNode(node *cluster.Snode) (cmd RestoreCmd, err error) {
 		daemonID = node.ID()
 		port     = node.PublicNet.DaemonPort
 		pid      string
+		pidInt   int
 	)
 	cmd.Node = node
 	if containers.DockerRunning() {
@@ -317,8 +319,12 @@ func KillNode(node *cluster.Snode) (cmd RestoreCmd, err error) {
 	if err != nil {
 		return
 	}
-	_, err = exec.Command("kill", "-2", pid).CombinedOutput()
+	pidInt, err = strconv.Atoi(pid)
 	if err != nil {
+		return
+	}
+
+	if err = syscall.Kill(pidInt, syscall.SIGINT); err != nil {
 		return
 	}
 	// wait for the process to actually disappear
@@ -335,7 +341,7 @@ func KillNode(node *cluster.Snode) (cmd RestoreCmd, err error) {
 		time.Sleep(time.Second)
 	}
 
-	exec.Command("kill", "-9", pid).CombinedOutput()
+	syscall.Kill(pidInt, syscall.SIGKILL)
 	time.Sleep(time.Second)
 
 	if err != nil {
@@ -449,7 +455,11 @@ func DeployNode(t *testing.T, node *cluster.Snode, conf *cmn.Config, localConf *
 
 // CleanupNode kills the process.
 func CleanupNode(t *testing.T, pid int) {
-	_, err := exec.Command("kill", "-9", strconv.Itoa(pid)).CombinedOutput()
+	err := syscall.Kill(pid, syscall.SIGKILL)
+	// Ignore error if process is not found.
+	if errors.Is(err, syscall.ESRCH) {
+		return
+	}
 	tassert.CheckError(t, err)
 }
 
