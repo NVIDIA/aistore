@@ -1307,21 +1307,8 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 // HTTP err + spec message + code + stats //
 ////////////////////////////////////////////
 
-func _addCaller(r *http.Request, omsg string) (nmsg string) {
-	if strings.Contains(omsg, cmn.FromNodePrefix) {
-		return
-	}
-	if caller := r.Header.Get(cmn.HeaderCallerName); caller != "" {
-		nmsg = omsg + cmn.FromNodePrefix + caller
-	}
-	return
-}
-
 func (h *httprunner) writeErr(w http.ResponseWriter, r *http.Request, err error, errCode ...int) {
 	e, msg := cmn.Err2HTTPErr(err), err.Error()
-	if nmsg := _addCaller(r, msg); nmsg != "" {
-		msg = nmsg
-	}
 	if e != nil {
 		e.Message = msg
 		cmn.WriteErr(w, r, e, errCode...)
@@ -1332,9 +1319,6 @@ func (h *httprunner) writeErr(w http.ResponseWriter, r *http.Request, err error,
 }
 
 func (h *httprunner) writeErrMsg(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
-	if nmsg := _addCaller(r, msg); nmsg != "" {
-		msg = nmsg
-	}
 	cmn.WriteErrMsg(w, r, msg, errCode...)
 	h.statsT.AddErrorHTTP(r.Method, 1)
 }

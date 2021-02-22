@@ -29,7 +29,6 @@ import (
 
 const (
 	stackTracePrefix = "stack: ["
-	FromNodePrefix   = " from: "
 
 	FmtErrUnmarshal      = "%s: failed to unmarshal %s (%s), err: %w"
 	FmtErrMorphUnmarshal = "%s: failed to unmarshal %s (%T), err: %w"
@@ -121,6 +120,7 @@ type (
 		Method     string `json:"method"`
 		URLPath    string `json:"url_path"`
 		RemoteAddr string `json:"remote_addr"`
+		Caller     string `json:"caller"`
 		trace      []byte
 	}
 )
@@ -571,6 +571,9 @@ func NewHTTPErr(r *http.Request, msg string, errCode ...int) (e *ErrHTTP) {
 	e.Status, e.Message = status, msg
 	if r != nil {
 		e.Method, e.URLPath, e.RemoteAddr = r.Method, r.URL.Path, r.RemoteAddr
+		if caller := r.Header.Get(HeaderCallerName); caller != "" {
+			e.Caller = caller
+		}
 	}
 	return
 }
@@ -597,8 +600,9 @@ func Err2HTTPErr(err error) (httpErr *ErrHTTP) {
 	return
 }
 
-// E.g.: Bad Request: Bucket abc does not appear to be local or does not exist:
-// DELETE /v1/buckets/abc from 127.0.0.1:54064 (stack: [httpcommon.go:840 <- proxy.go:484 <- proxy.go:264])
+// Example:
+//  Bad Request: Bucket abc does not appear to be local or does not exist:
+//  DELETE /v1/buckets/abc from (127.0.0.1:54064, vhsjxq8000) stack: (httpcommon.go:840 <- proxy.go:484 <- proxy.go:264)
 func (e *ErrHTTP) String() (s string) {
 	s = http.StatusText(e.Status) + ": " + e.Message
 	if e.Method != "" || e.URLPath != "" {
@@ -610,8 +614,12 @@ func (e *ErrHTTP) String() (s string) {
 			s += " " + e.URLPath
 		}
 	}
-	if e.RemoteAddr != "" && !strings.Contains(e.Message, FromNodePrefix) {
-		s += " from " + e.RemoteAddr
+	if e.RemoteAddr != "" {
+		s += " from (" + e.RemoteAddr
+		if e.Caller != "" {
+			s += ", " + e.Caller
+		}
+		s += ")"
 	}
 	return s + " (" + string(e.trace) + ")"
 }
