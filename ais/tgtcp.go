@@ -868,7 +868,6 @@ func (t *targetrunner) BMDVersionFixup(r *http.Request, bck cmn.Bck, sleep bool)
 		caller      string
 		newBucketMD = &bucketMD{}
 	)
-	glog.Errorf("bmd fixup")
 	if sleep {
 		time.Sleep(200 * time.Millisecond)
 	}
