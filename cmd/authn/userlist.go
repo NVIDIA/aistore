@@ -184,6 +184,17 @@ func (m *userManager) cluLookup(cluID, cluAlias string) string {
 	return ""
 }
 
+// Get an existing cluster
+func (m *userManager) getCluster(cluID string) (*cmn.AuthCluster, error) {
+	cid := m.cluLookup(cluID, cluID)
+	if cid == "" {
+		return nil, cmn.NewNotFoundError("%s cluster %q", svcName, cluID)
+	}
+	clu := &cmn.AuthCluster{}
+	err := m.db.Get(clustersCollection, cid, clu)
+	return clu, err
+}
+
 // Registers a new cluster
 func (m *userManager) addCluster(info *cmn.AuthCluster) error {
 	if info.ID == "" {

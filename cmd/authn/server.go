@@ -418,15 +418,17 @@ func (a *authServ) httpSrvGet(w http.ResponseWriter, r *http.Request) {
 	var cluList *cmn.AuthClusterList
 	if len(apiItems) != 0 {
 		cid := apiItems[0]
-		// FIXME: This code will always produce an error as `cluList` is empty.
-		clu, ok := cluList.Clusters[cid]
-		if !ok {
-			err := cmn.NewNotFoundError("%s cluster %q", svcName, cid)
-			cmn.WriteErr(w, r, err, http.StatusNotFound)
+		clu, err := a.users.getCluster(cid)
+		if err != nil {
+			if errors.Is(err, &cmn.ErrNotFound{}) {
+				cmn.WriteErr(w, r, err, http.StatusNotFound)
+			} else {
+				cmn.WriteErr(w, r, err, http.StatusInternalServerError)
+			}
 			return
 		}
 		cluList = &cmn.AuthClusterList{
-			Clusters: map[string]*cmn.AuthCluster{cid: {ID: cid, URLs: clu.URLs}},
+			Clusters: map[string]*cmn.AuthCluster{clu.ID: clu},
 		}
 	} else {
 		clusters, err := a.users.clusterList()
@@ -571,7 +573,6 @@ func (a *authServ) httpConfigGet(w http.ResponseWriter, r *http.Request) {
 	if err := a.checkAuthorization(w, r); err != nil {
 		return
 	}
-	// TODO: `conf` could implement `MarshalJSON` and take lock inside.
 	conf.RLock()
 	defer conf.RUnlock()
 	a.writeJSON(w, conf, "config")
@@ -586,9 +587,6 @@ func (a *authServ) httpConfigPut(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErrMsg(w, r, "Invalid request")
 		return
 	}
-	// TODO: `conf` could take the lock inside the `ApplyUpdate`.
-	conf.Lock()
-	defer conf.Unlock()
 	if err := conf.ApplyUpdate(updateCfg); err != nil {
 		cmn.WriteErr(w, r, err)
 	}

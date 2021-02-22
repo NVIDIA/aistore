@@ -65,6 +65,8 @@ func (c *AuthNConfig) Secret() string {
 }
 
 func (c *AuthNConfig) ApplyUpdate(cu *AuthNConfigToUpdate) error {
+	c.Lock()
+	defer c.Unlock()
 	if cu.Server == nil {
 		return errors.New("configuration is empty")
 	}

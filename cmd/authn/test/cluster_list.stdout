@@ -6,3 +6,5 @@ CLUSTER ID      ALIAS   URLs
 CLUSTER ID      ALIAS   URLs
 ^.*srv1.*http.*$
 CLUSTER ID      ALIAS   URLs
+^.*srv1.*http.*$
+CLUSTER ID      ALIAS   URLs

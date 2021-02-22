@@ -1,0 +1,6 @@
+PROPERTY                 VALUE
+^.*expiration_time.*24h.*$
+PROPERTY                 VALUE
+^.*expiration_time.*30m.*$
+PROPERTY                 VALUE
+^.*expiration_time.*24h.*$
