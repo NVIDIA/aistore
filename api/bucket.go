@@ -339,7 +339,7 @@ func waitForAsyncReqComplete(reqParams ReqParams, action string, msg *cmn.Bucket
 // maximum number of objects returned (0 - return all objects in a bucket).
 func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObjects uint,
 	args ...*ProgressContext) (bckList *cmn.BucketList, err error) {
-	baseParams.Method = http.MethodPost
+	baseParams.Method = http.MethodGet
 	if smsg == nil {
 		smsg = &cmn.SelectMsg{}
 	}
@@ -434,7 +434,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 // On success the function updates `smsg.ContinuationToken`, so a client can reuse
 // the message to fetch the next page.
 func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg) (*cmn.BucketList, error) {
-	baseParams.Method = http.MethodPost
+	baseParams.Method = http.MethodGet
 	if smsg == nil {
 		smsg = &cmn.SelectMsg{}
 	}

@@ -316,7 +316,24 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 		}
 		p.listBuckets(w, r, cmn.QueryBcks(request.bck.Bck))
 	default:
-		p.writeErrf(w, r, "Invalid route /buckets/%s", request.items[0])
+		var (
+			bck *cluster.Bck
+			err error
+			msg cmn.ActionMsg
+		)
+		if cmn.ReadJSON(w, r, &msg) != nil {
+			return
+		}
+		if msg.Action != cmn.ActListObjects {
+			p.writeErrAct(w, r, msg.Action)
+			return
+		}
+		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: &msg, perms: cmn.AccessObjLIST, tryOnlyRem: true, queryBck: request.bck}
+		if bck, err = bckArgs.initAndTry(request.items[0]); err != nil {
+			return
+		}
+		begin := mono.NanoTime()
+		p.listObjects(w, r, bck, &msg, begin)
 	}
 }
 
@@ -652,7 +669,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 	if bck.Bck.IsRemoteAIS() {
 		// forward to remote AIS as is, with a few distinct exceptions
 		switch msg.Action {
-		case cmn.ActListObjects, cmn.ActInvalListCache:
+		case cmn.ActInvalListCache:
 			break
 		default:
 			p.reverseReqRemote(w, r, msg, bck.Bck)
@@ -812,9 +829,6 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			return
 		}
 		w.Write([]byte(xactID))
-	case cmn.ActListObjects:
-		begin := mono.NanoTime()
-		p.listObjects(w, r, bck, msg, begin)
 	case cmn.ActInvalListCache:
 		p.qm.c.invalidate(bck.Bck)
 	case cmn.ActSummaryBck:
@@ -1553,7 +1567,7 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allE
 	aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &smsg}, smap, nil)
 	args = allocBcastArgs()
 	args.req = cmn.ReqArgs{
-		Method: http.MethodPost,
+		Method: http.MethodGet,
 		Path:   cmn.URLPathBuckets.Join(bck.Name),
 		Query:  cmn.AddBckToQuery(nil, bck.Bck),
 		Body:   cmn.MustMarshal(aisMsg),
@@ -1620,7 +1634,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 		results    sliceResults
 	)
 	args.req = cmn.ReqArgs{
-		Method: http.MethodPost,
+		Method: http.MethodGet,
 		Path:   cmn.URLPathBuckets.Join(bck.Name),
 		Query:  cmn.AddBckToQuery(nil, bck.Bck),
 		Body:   cmn.MustMarshal(aisMsg),

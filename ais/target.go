@@ -419,26 +419,65 @@ func (t *targetrunner) ecHandler(w http.ResponseWriter, r *http.Request) {
 // httpbck* handlers //
 ///////////////////////
 
+func (t *targetrunner) handleListBuckets(w http.ResponseWriter, r *http.Request, request apiRequest) {
+	var (
+		query = r.URL.Query()
+		what  = query.Get(cmn.URLParamWhat)
+	)
+	if what == cmn.GetWhatBMD {
+		t.writeJSON(w, r, t.owner.bmd.get(), "get-what-bmd")
+	} else {
+		t.listBuckets(w, r, cmn.QueryBcks(request.bck.Bck))
+	}
+}
+
+func (t *targetrunner) handleListObjects(w http.ResponseWriter, r *http.Request, request apiRequest) {
+	msg := &aisMsg{}
+	if err := cmn.ReadJSON(w, r, msg); err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+	if msg.Action != cmn.ActListObjects {
+		t.writeErrAct(w, r, msg.Action)
+		return
+	}
+	t.ensureLatestSmap(msg, r)
+	if err := request.bck.Init(t.owner.bmd); err != nil {
+		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
+			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
+			err = request.bck.Init(t.owner.bmd)
+		}
+		if err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+	}
+	begin := mono.NanoTime()
+	if ok := t.listObjects(w, r, request.bck, msg); !ok {
+		return
+	}
+
+	delta := mono.Since(begin)
+	t.statsT.AddMany(
+		stats.NamedVal64{Name: stats.ListCount, Value: 1},
+		stats.NamedVal64{Name: stats.ListLatency, Value: int64(delta)},
+	)
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("LIST: %s, %s", request.bck, delta)
+	}
+}
+
 // GET /v1/buckets/bucket-name
 func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	request := apiRequest{after: 1, prefix: cmn.URLPathBuckets.L}
 	if err := t.parseAPIRequest(w, r, &request); err != nil {
 		return
 	}
-	switch request.items[0] {
-	case cmn.AllBuckets:
-		var (
-			query = r.URL.Query()
-			what  = query.Get(cmn.URLParamWhat)
-		)
-		if what == cmn.GetWhatBMD {
-			t.writeJSON(w, r, t.owner.bmd.get(), "get-what-bmd")
-		} else {
-			t.listBuckets(w, r, cmn.QueryBcks(request.bck.Bck))
-		}
-	default:
-		t.writeErrf(w, r, "Invalid route /buckets/%s", request.items[0])
+	if request.items[0] == cmn.AllBuckets {
+		t.handleListBuckets(w, r, request)
+		return
 	}
+	t.handleListObjects(w, r, request)
 }
 
 // DELETE { action } /v1/buckets/bucket-name
@@ -606,21 +645,6 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		args.UUID = msg.UUID
 		xact := xreg.RenewPrefetch(t, request.bck, args)
 		go xact.Run()
-	case cmn.ActListObjects:
-		// list the bucket and return
-		begin := mono.NanoTime()
-		if ok := t.listObjects(w, r, request.bck, msg); !ok {
-			return
-		}
-
-		delta := mono.Since(begin)
-		t.statsT.AddMany(
-			stats.NamedVal64{Name: stats.ListCount, Value: 1},
-			stats.NamedVal64{Name: stats.ListLatency, Value: int64(delta)},
-		)
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("LIST: %s, %s", request.bck, delta)
-		}
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
