@@ -4,7 +4,7 @@
 
 Init ETL with Pod YAML specification file. The `metadata.name` attribute in the specification is used as unique ID for ETL (ref: [here](/docs/etl.md#etl-name-specifications) for information on valid ETL name).
 
-Note: currently, only one ETL at a time is supported.
+Note: Currently, only one ETL can be run at a time. To run new ETLs, [stop any existing ETL](#stop-etl).
 
 ### Example
 
@@ -37,6 +37,8 @@ JGHEoo89gg
 
 Builds and initializes ETL from provided `CODE_FILE` that contains a transformation function named `transform`. The `--name` parameter is used to assign a user defined unique ID (ref: [here](/docs/etl.md#etl-name-specifications) for information on valid ETL name).
 The `transform` function must take `input_bytes` (raw bytes of the objects) as parameters and return the transformed object (also raw bytes that will be saved into a new object).
+
+Note: Currently, only one ETL can be run at a time. To run new ETLs, [stop any existing ETL](#stop-etl).
 
 > The ETL crashes if the function panics or throws an exception.
 > Therefore, error handling should be done inside the function.

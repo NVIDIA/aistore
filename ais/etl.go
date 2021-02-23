@@ -5,12 +5,12 @@
 package ais
 
 import (
-	"errors"
 	"io/ioutil"
 	"net/http"
 	"reflect"
 	"sort"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/etl"
 )
 
-var errETLID = errors.New("ETL ID cannot be empty")
+var startETL = atomic.NewBool(false)
 
 /////////////////
 // ETL: target //
@@ -288,34 +288,13 @@ func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: cmn.MustMarshal(msg)}
-	args.timeout = cmn.LongTimeout
-	results := p.bcastGroup(args)
-	freeBcastArgs(args)
-	for _, res := range results {
-		if res.err == nil {
-			continue
-		}
-		err = res.error()
-		glog.Error(err)
-	}
-	freeCallResults(results)
-	if err == nil {
-		// All init calls have succeeded, return UUID.
-		w.Write([]byte(msg.ID))
+	if p.forwardCP(w, r, nil, "initETL") {
 		return
 	}
 
-	// At least one `init` call has failed. Terminate all started ETL pods.
-	// (Termination calls may succeed for the targets that already succeeded in starting ETL,
-	//  or fail otherwise - ignore the failures).
-	argsTerm := allocBcastArgs()
-	argsTerm.req = cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathETLStop.Join(msg.ID)}
-	argsTerm.timeout = cmn.LongTimeout
-	p.bcastGroup(argsTerm)
-	freeBcastArgs(argsTerm)
-	p.writeErr(w, r, err)
+	if err = p.startETL(w, r, cmn.MustMarshal(msg), msg.ID); err != nil {
+		p.writeErr(w, r, err)
+	}
 }
 
 // POST /v1/etl/build
@@ -342,8 +321,27 @@ func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if p.forwardCP(w, r, nil, "buildETL") {
+		return
+	}
+
+	if err = p.startETL(w, r, cmn.MustMarshal(msg), msg.ID); err != nil {
+		p.writeErr(w, r, err)
+	}
+}
+
+// startETL broadcasts a build or init ETL request and ensures only one ETL is running
+func (p *proxyrunner) startETL(w http.ResponseWriter, r *http.Request, body []byte, msgID string) (err error) {
+	if !startETL.CAS(false, true) {
+		return cmn.ErrETLOnlyOne
+	}
+	defer startETL.CAS(true, false)
+	if err := p.ensureNoETLs(); err != nil {
+		return err
+	}
+
 	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: cmn.MustMarshal(msg)}
+	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: body}
 	args.timeout = cmn.LongTimeout
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
@@ -357,7 +355,7 @@ func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 	freeCallResults(results)
 	if err == nil {
 		// All init calls have succeeded, return UUID.
-		w.Write([]byte(msg.ID))
+		w.Write([]byte(msgID))
 		return
 	}
 
@@ -365,11 +363,23 @@ func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 	// (Termination calls may succeed for the targets that already succeeded in starting ETL,
 	//  or fail otherwise - ignore the failures).
 	argsTerm := allocBcastArgs()
-	argsTerm.req = cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathETLStop.Join(msg.ID)}
+	argsTerm.req = cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathETLStop.Join(msgID)}
 	argsTerm.timeout = cmn.LongTimeout
 	p.bcastGroup(argsTerm)
 	freeBcastArgs(argsTerm)
-	p.writeErr(w, r, err)
+	return err
+}
+
+// ensureOneETL makes sure only no ETLs are running
+func (p *proxyrunner) ensureNoETLs() error {
+	etls, err := p.listETLs()
+	if err != nil {
+		return err
+	}
+	if len(etls) > 0 {
+		return cmn.ErrETLOnlyOne
+	}
+	return nil
 }
 
 // GET /v1/etl/list
@@ -432,7 +442,7 @@ func (p *proxyrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 	}
 	uuid := apiItems[0]
 	if uuid == "" {
-		p.writeErr(w, r, errETLID)
+		p.writeErr(w, r, cmn.ErrETLMissingUUID)
 		return
 	}
 	var (
@@ -490,7 +500,7 @@ func (p *proxyrunner) healthETL(w http.ResponseWriter, r *http.Request) {
 	}
 	uuid := apiItems[0]
 	if uuid == "" {
-		p.writeErr(w, r, errETLID)
+		p.writeErr(w, r, cmn.ErrETLMissingUUID)
 		return
 	}
 	var (
@@ -527,7 +537,7 @@ func (p *proxyrunner) stopETL(w http.ResponseWriter, r *http.Request) {
 	}
 	uuid := apiItems[0]
 	if uuid == "" {
-		p.writeErr(w, r, errETLID)
+		p.writeErr(w, r, cmn.ErrETLMissingUUID)
 		return
 	}
 	args := allocBcastArgs()

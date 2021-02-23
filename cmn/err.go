@@ -131,6 +131,8 @@ var (
 	ErrForwarded      = errors.New("forwarded")
 
 	ErrETLMissingUUID = errors.New("ETL UUID can't be empty")
+	ErrETLOnlyOne     = errors.New(
+		"cannot run more than one etl, please stop the current ETL before starting another")
 )
 
 // EOF (to accommodate unsized streaming)

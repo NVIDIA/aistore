@@ -194,6 +194,12 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 		customEnv = opts[0].Env
 	}
 
+	// Make sure only one ETL is running.
+	if len(List()) > 0 {
+		err = cmn.ErrETLOnlyOne
+		return
+	}
+
 	errCtx = &cmn.ETLErrorContext{
 		TID:  t.SID(),
 		UUID: msg.ID,
