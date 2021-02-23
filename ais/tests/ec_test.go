@@ -432,18 +432,20 @@ func assertBucketSize(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objC
 
 func bucketSize(t *testing.T, baseParams api.BaseParams, bck cmn.Bck) int {
 	msg := &cmn.SelectMsg{Props: "size,status"}
-	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
+	objList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	return len(reslist.Entries)
+	return len(objList.Entries)
 }
 
 func putRandomFile(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objPath string, size int) {
 	r, err := readers.NewRandReader(int64(size), cmn.ChecksumNone)
 	tassert.CheckFatal(t, err)
-	defer r.Close()
-
-	putArgs := api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}
-	err = api.PutObject(putArgs)
+	err = api.PutObject(api.PutObjectArgs{
+		BaseParams: baseParams,
+		Bck:        bck,
+		Object:     objPath,
+		Reader:     r,
+	})
 	tassert.CheckFatal(t, err)
 }
 
@@ -609,10 +611,7 @@ func createECReplicas(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objN
 	tutils.Logf("Creating %s, size %8d\n", objPath, objSize)
 	r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
 	tassert.CheckFatal(t, err)
-	defer r.Close()
-
-	putArgs := api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}
-	err = api.PutObject(putArgs)
+	err = api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("waiting for %s\n", objPath)
@@ -640,10 +639,7 @@ func createECObject(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objNam
 	tutils.LogfCond(!o.silent, "Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
 	r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
 	tassert.CheckFatal(t, err)
-	defer r.Close()
-
-	putArgs := api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}
-	err = api.PutObject(putArgs)
+	err = api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
 	tassert.CheckFatal(t, err)
 
 	tutils.LogfCond(!o.silent, "waiting for %s\n", objPath)
@@ -685,10 +681,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 	tutils.LogfCond(!o.silent, "Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
 	r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
 	tassert.CheckFatal(t, err)
-	defer r.Close()
-
-	putArgs := api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}
-	err = api.PutObject(putArgs)
+	err = api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
 	tassert.CheckFatal(t, err)
 
 	tutils.LogfCond(!o.silent, "waiting for %s\n", objPath)
@@ -754,8 +747,8 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 	_, err = api.GetObject(baseParams, bck, objPath)
 	tassert.CheckFatal(t, err)
 
-	// For cloud buckets, due to performance reason, GFN is not used and
-	// EC is not called - object is reread from the cloud bucket instead
+	// For remote buckets, due to performance reason, GFN is not used and
+	// EC is not called - object is reread from the remote bucket instead
 	if doEC && bck.IsAIS() {
 		deadline := time.Now().Add(sleepRestoreTime)
 		var partsAfterRestore map[string]ecSliceMD
@@ -770,8 +763,8 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 	}
 }
 
-// Simple stress testing EC for Cloud buckets
-func TestECRestoreObjAndSliceCloud(t *testing.T) {
+// Simple stress testing EC for remote buckets
+func TestECRestoreObjAndSliceRemote(t *testing.T) {
 	var (
 		bck        = cliBck
 		proxyURL   = tutils.RandomProxyURL()
@@ -783,10 +776,11 @@ func TestECRestoreObjAndSliceCloud(t *testing.T) {
 		minTargets:  4,
 		objCount:    100,
 		concurrency: 8,
-		pattern:     "obj-rest-cloud-%04d",
+		pattern:     "obj-rest-remote-%04d",
 	}.init(t, proxyURL)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
+
 	initMountpaths(t, proxyURL)
 	if testing.Short() {
 		useDisks = []bool{false}
@@ -814,14 +808,14 @@ func TestECRestoreObjAndSliceCloud(t *testing.T) {
 					EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
 				})
 
-				wg := sync.WaitGroup{}
-
 				defer clearAllECObjects(t, bck, true, o)
+
+				wg := sync.WaitGroup{}
 				wg.Add(o.objCount)
 				for i := 0; i < o.objCount; i++ {
-					objName := fmt.Sprintf(o.pattern, i)
 					go func(i int) {
 						defer wg.Done()
+						objName := fmt.Sprintf(o.pattern, i)
 						createDamageRestoreECFile(t, baseParams, bck, objName, i, o)
 					}(i)
 				}
@@ -882,10 +876,11 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 				wg := sync.WaitGroup{}
 				wg.Add(o.objCount)
 				for i := 0; i < o.objCount; i++ {
-					go func(objName string, i int) {
+					go func(i int) {
 						defer wg.Done()
+						objName := fmt.Sprintf(o.pattern, i)
 						createDamageRestoreECFile(t, baseParams, bck, objName, i, o)
-					}(fmt.Sprintf(o.pattern, i), i)
+					}(i)
 				}
 				wg.Wait()
 				assertBucketSize(t, baseParams, bck, o.objCount)
@@ -902,10 +897,12 @@ func putECFile(baseParams api.BaseParams, bck cmn.Bck, objName string) error {
 	if err != nil {
 		return err
 	}
-	defer r.Close()
-
-	putArgs := api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}
-	return api.PutObject(putArgs)
+	return api.PutObject(api.PutObjectArgs{
+		BaseParams: baseParams,
+		Bck:        bck,
+		Object:     objPath,
+		Reader:     r,
+	})
 }
 
 // Returns path to main object and map of all object's slices and ioContext
@@ -1024,9 +1021,9 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(o.objCount)
 	for i := 0; i < o.objCount; i++ {
-		objName := fmt.Sprintf(o.pattern, i)
 		go func(i int) {
 			defer wg.Done()
+			objName := fmt.Sprintf(o.pattern, i)
 			createDamageRestoreECFile(t, baseParams, bck, objName, i, o)
 		}(i)
 	}
@@ -1046,11 +1043,11 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 
 	wg.Add(o.objCount)
 	for i := o.objCount; i < 2*o.objCount; i++ {
-		objName := fmt.Sprintf(o.pattern, i)
-		go func() {
+		go func(i int) {
 			defer wg.Done()
+			objName := fmt.Sprintf(o.pattern, i)
 			putRandomFile(t, baseParams, bck, objName, cmn.MiB)
-		}()
+		}(i)
 	}
 
 	wg.Wait()
@@ -1112,9 +1109,9 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	wg.Add(o.objCount)
 	for i := 0; i < o.objCount; i++ {
-		objName := fmt.Sprintf(o.pattern, i)
 		go func(i int) {
 			defer wg.Done()
+			objName := fmt.Sprintf(o.pattern, i)
 			createDamageRestoreECFile(t, baseParams, bck, objName, i, o)
 		}(i)
 	}
@@ -1122,9 +1119,11 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 
 	assertBucketSize(t, baseParams, bck, o.objCount)
 
-	abortCh := make(chan struct{}, 1)
-	numCreated := 0
-	wgPut := &sync.WaitGroup{}
+	var (
+		numCreated = 0
+		abortCh    = cmn.NewStopCh()
+		wgPut      = &sync.WaitGroup{}
+	)
 	wgPut.Add(1)
 
 	go func() {
@@ -1132,12 +1131,16 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 		defer wgPut.Done()
 		for {
 			select {
-			case <-abortCh:
+			case <-abortCh.Listen():
 				ticker.Stop()
 				return
 			case <-ticker.C:
 				objName := fmt.Sprintf(o.pattern, o.objCount+numCreated)
-				go putRandomFile(t, baseParams, bck, objName, cmn.KiB)
+				wgPut.Add(1)
+				go func() {
+					defer wgPut.Done()
+					putRandomFile(t, baseParams, bck, objName, cmn.KiB)
+				}()
 				numCreated++
 			}
 		}
@@ -1158,15 +1161,17 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	})
 	tassert.CheckError(t, err)
 	reqArgs := api.XactReqArgs{Kind: cmn.ActECEncode, Bck: bck, Latest: true}
-	api.WaitForXaction(baseParams, reqArgs)
+	_, err = api.WaitForXaction(baseParams, reqArgs)
+	tassert.CheckError(t, err)
 
-	close(abortCh)
+	abortCh.Close()
 	wgPut.Wait()
 
 	if t.Failed() {
 		t.FailNow()
 	}
-	// Disabling and enabling EC should not result in put's failing
+
+	// Disabling and enabling EC should not result in put's failing.
 	assertBucketSize(t, baseParams, bck, o.objCount+numCreated)
 }
 
@@ -1203,7 +1208,7 @@ func TestECStress(t *testing.T) {
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
 			if o.smap.CountActiveTargets() <= test.data+test.parity {
-				t.Skip("insufficient taregts")
+				t.Skip("insufficient targets")
 			}
 			o.parityCnt = test.parity
 			o.dataCnt = test.data
@@ -1211,10 +1216,10 @@ func TestECStress(t *testing.T) {
 			doECPutsAndCheck(t, baseParams, bck, o)
 
 			msg := &cmn.SelectMsg{Props: "size,status"}
-			reslist, err := api.ListObjects(baseParams, bck, msg, 0)
+			objList, err := api.ListObjects(baseParams, bck, msg, 0)
 			tassert.CheckFatal(t, err)
-			tassert.Fatalf(t, len(reslist.Entries) == o.objCount,
-				"Invalid number of objects: %d, expected %d", len(reslist.Entries), o.objCount)
+			tassert.Fatalf(t, len(objList.Entries) == o.objCount,
+				"Invalid number of objects: %d, expected %d", len(objList.Entries), o.objCount)
 		})
 	}
 }
@@ -1271,14 +1276,14 @@ func TestECStressManyBuckets(t *testing.T) {
 	wg.Wait()
 
 	msg := &cmn.SelectMsg{Props: "size,status"}
-	reslist, err := api.ListObjects(baseParams, bck1, msg, 0)
+	objList, err := api.ListObjects(baseParams, bck1, msg, 0)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(reslist.Entries) == o1.objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck1, len(reslist.Entries), o1.objCount)
+	tassert.Fatalf(t, len(objList.Entries) == o1.objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck1, len(objList.Entries), o1.objCount)
 
 	msg = &cmn.SelectMsg{Props: "size,status"}
-	reslist, err = api.ListObjects(baseParams, bck2, msg, 0)
+	objList, err = api.ListObjects(baseParams, bck2, msg, 0)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(reslist.Entries) == o2.objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck2, len(reslist.Entries), o2.objCount)
+	tassert.Fatalf(t, len(objList.Entries) == o2.objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck2, len(objList.Entries), o2.objCount)
 }
 
 // ExtraStress test to check that EC works as expected
@@ -1314,7 +1319,7 @@ func TestECExtraStress(t *testing.T) {
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
 			if o.smap.CountActiveTargets() <= test.data+test.parity {
-				t.Skip("insufficient taregts")
+				t.Skip("insufficient targets")
 			}
 			o.parityCnt = test.parity
 			o.dataCnt = test.data
@@ -1403,9 +1408,9 @@ func ecStressCore(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	t.Logf("Total test time %v\n", delta)
 
 	msg := &cmn.SelectMsg{Props: "size,status"}
-	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
+	objList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(reslist.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(reslist.Entries), o.objCount)
+	tassert.Fatalf(t, len(objList.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(objList.Entries), o.objCount)
 }
 
 // Quick check that EC keeps xattrs:
@@ -1457,9 +1462,7 @@ func TestECXattrs(t *testing.T) {
 		tutils.Logf("Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
 		r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
 		tassert.CheckFatal(t, err)
-		defer r.Close()
-		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}
-		err = api.PutObject(putArgs)
+		err = api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
 		tassert.CheckFatal(t, err)
 
 		tutils.Logf("waiting for %s\n", objPath)
@@ -1512,18 +1515,18 @@ func TestECXattrs(t *testing.T) {
 	}
 
 	msg := &cmn.SelectMsg{Props: "size,status,version"}
-	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
+	objList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
 	// check that all returned objects and their repicas have the same version
-	for _, e := range reslist.Entries {
+	for _, e := range objList.Entries {
 		if e.Version != finalVersion {
 			t.Errorf("%s[status=%d] must have version %s but it is %s\n", e.Name, e.Flags, finalVersion, e.Version)
 		}
 	}
 
-	if len(reslist.Entries) != o.objCount {
-		t.Fatalf("Invalid number of objects: %d, expected %d", len(reslist.Entries), 1)
+	if len(objList.Entries) != o.objCount {
+		t.Fatalf("Invalid number of objects: %d, expected %d", len(objList.Entries), 1)
 	}
 }
 
@@ -1562,8 +1565,6 @@ func TestECDestroyBucket(t *testing.T) {
 	sucCnt := atomic.NewInt64(0)
 
 	for i := 0; i < o.objCount; i++ {
-		objName := fmt.Sprintf(o.pattern, i)
-
 		o.sema.Acquire()
 		wg.Add(1)
 		go func(i int) {
@@ -1572,6 +1573,7 @@ func TestECDestroyBucket(t *testing.T) {
 				wg.Done()
 			}()
 
+			objName := fmt.Sprintf(o.pattern, i)
 			if i%10 == 0 {
 				tutils.Logf("ec object %s into bucket %s\n", objName, bck)
 			}
@@ -1607,9 +1609,9 @@ func TestECDestroyBucket(t *testing.T) {
 
 	// check if get requests are successful
 	msg := &cmn.SelectMsg{Props: "size,status,version"}
-	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
+	objList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, len(reslist.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(reslist.Entries), o.objCount)
+	tassert.Errorf(t, len(objList.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(objList.Entries), o.objCount)
 }
 
 // Lost target test:
@@ -1655,15 +1657,19 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	wg := &sync.WaitGroup{}
 
 	// 1. PUT objects
-	putOneObj := func(idx int, objName string) {
+	putOneObj := func(idx int) {
 		defer func() {
 			wg.Done()
 			o.sema.Release()
 		}()
 
-		start := time.Now()
-		totalCnt, objSize, sliceSize, doEC := randObjectSize(idx, smallEvery, o)
-		objPath := ecTestDir + objName
+		var (
+			start   = time.Now()
+			objName = fmt.Sprintf(o.pattern, idx)
+			objPath = ecTestDir + objName
+
+			totalCnt, objSize, sliceSize, doEC = randObjectSize(idx, smallEvery, o)
+		)
 		ecStr := "-"
 		if doEC {
 			ecStr = "EC"
@@ -1671,9 +1677,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 		tutils.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
 		r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
 		tassert.CheckFatal(t, err)
-		defer r.Close()
-		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}
-		err = api.PutObject(putArgs)
+		err = api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
 		tassert.CheckFatal(t, err)
 		t.Logf("Object %s put in %v", objName, time.Since(start))
 		start = time.Now()
@@ -1690,9 +1694,8 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 
 	wg.Add(o.objCount)
 	for i := 0; i < o.objCount; i++ {
-		objName := fmt.Sprintf(o.pattern, i)
 		o.sema.Acquire()
-		go putOneObj(i, objName)
+		go putOneObj(i)
 	}
 	wg.Wait()
 	if t.Failed() {
@@ -1712,9 +1715,9 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	// 4. Check that ListObjects returns correct number of items
 	tutils.Logln("DONE\nReading bucket list...")
 	msg := &cmn.SelectMsg{Props: "size,status,version"}
-	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
+	objList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, len(reslist.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(reslist.Entries), o.objCount)
+	tassert.Errorf(t, len(objList.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(objList.Entries), o.objCount)
 }
 
 func TestECEmergencyTargetForReplica(t *testing.T) {
@@ -1760,10 +1763,11 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	// PUT object
 	wg.Add(o.objCount)
 	for i := 0; i < o.objCount; i++ {
-		go func(objName string) {
+		go func(i int) {
 			defer wg.Done()
+			objName := fmt.Sprintf(o.pattern, i)
 			createECReplicas(t, baseParams, bck, objName, o)
-		}(fmt.Sprintf(o.pattern, i))
+		}(i)
 	}
 
 	wg.Wait()
@@ -1803,9 +1807,10 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 		return false
 	}
 
-	getOneObj := func(objName string) {
+	getOneObj := func(i int) {
 		defer wg.Done()
 
+		objName := fmt.Sprintf(o.pattern, i)
 		// 1) hack: calculate which targets stored a replica
 		cbck := cluster.NewBck(bck.Name, bck.Provider, cmn.NsGlobal)
 		targets, err := cluster.HrwTargetList(cbck.MakeUname(ecTestDir+objName), o.smap, o.parityCnt+1)
@@ -1843,8 +1848,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	tutils.Logln("Reading all objects...")
 	wg.Add(o.objCount)
 	for i := 0; i < o.objCount; i++ {
-		objName := fmt.Sprintf(o.pattern, i)
-		go getOneObj(objName)
+		go getOneObj(i)
 	}
 	wg.Wait()
 
@@ -1901,14 +1905,17 @@ func TestECEmergencyMpath(t *testing.T) {
 	wg := &sync.WaitGroup{}
 
 	// 1. PUT objects
-	putOneObj := func(idx int, objName string) {
+	putOneObj := func(idx int) {
 		defer func() {
 			wg.Done()
 			o.sema.Release()
 		}()
+		var (
+			objName = fmt.Sprintf(o.pattern, idx)
+			objPath = ecTestDir + objName
 
-		totalCnt, objSize, sliceSize, doEC := randObjectSize(idx, smallEvery, o)
-		objPath := ecTestDir + objName
+			totalCnt, objSize, sliceSize, doEC = randObjectSize(idx, smallEvery, o)
+		)
 		ecStr := "-"
 		if doEC {
 			ecStr = "EC"
@@ -1916,9 +1923,7 @@ func TestECEmergencyMpath(t *testing.T) {
 		tutils.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
 		r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
 		tassert.CheckFatal(t, err)
-		defer r.Close()
-		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}
-		err = api.PutObject(putArgs)
+		err = api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
 		tassert.CheckFatal(t, err)
 
 		foundParts, mainObjPath := waitForECFinishes(t, totalCnt, objSize, sliceSize, doEC, bck, objPath)
@@ -1931,9 +1936,8 @@ func TestECEmergencyMpath(t *testing.T) {
 
 	wg.Add(o.objCount)
 	for i := 0; i < o.objCount; i++ {
-		objName := fmt.Sprintf(o.pattern, i)
 		o.sema.Acquire()
-		go putOneObj(i, objName)
+		go putOneObj(i)
 	}
 	wg.Wait()
 	if t.Failed() {
@@ -1959,10 +1963,10 @@ func TestECEmergencyMpath(t *testing.T) {
 	// 4. Check that ListObjects returns correct number of items
 	tutils.Logf("DONE\nReading bucket list...\n")
 	msg := &cmn.SelectMsg{Props: "size,status,version"}
-	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
+	objList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	if len(reslist.Entries) != o.objCount {
-		t.Fatalf("Invalid number of objects: %d, expected %d", len(reslist.Entries), o.objCount)
+	if len(objList.Entries) != o.objCount {
+		t.Fatalf("Invalid number of objects: %d, expected %d", len(objList.Entries), o.objCount)
 	}
 }
 
@@ -2036,9 +2040,9 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	wg := sync.WaitGroup{}
 	wg.Add(o.objCount)
 	for i := 0; i < o.objCount; i++ {
-		objName := fmt.Sprintf(o.pattern, i)
 		go func(i int) {
 			defer wg.Done()
+			objName := fmt.Sprintf(o.pattern, i)
 			createECObject(t, baseParams, bck, objName, i, o)
 		}(i)
 	}
@@ -2049,9 +2053,9 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	}
 
 	msg := &cmn.SelectMsg{Props: cmn.GetPropsSize}
-	oldBucketList, err := api.ListObjects(baseParams, bck, msg, 0)
+	oldObjList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	tutils.Logf("%d objects created, starting rebalance\n", len(oldBucketList.Entries))
+	tutils.Logf("%d objects created, starting rebalance\n", len(oldObjList.Entries))
 
 	// Kill a random target
 	_, removedTarget := tutils.RemoveTarget(t, proxyURL, o.smap)
@@ -2069,12 +2073,12 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	tassert.CheckFatal(t, err)
 	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
 
-	newBucketList, err := api.ListObjects(baseParams, bck, msg, 0)
+	newObjList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	if len(oldBucketList.Entries) != len(newBucketList.Entries) {
-		for _, o := range oldBucketList.Entries {
+	if len(oldObjList.Entries) != len(newObjList.Entries) {
+		for _, o := range oldObjList.Entries {
 			found := false
-			for _, n := range newBucketList.Entries {
+			for _, n := range newObjList.Entries {
 				if n.Name == o.Name {
 					found = true
 					break
@@ -2085,10 +2089,10 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 			}
 		}
 		t.Fatalf("%d objects before rebalance, %d objects after",
-			len(oldBucketList.Entries), len(newBucketList.Entries))
+			len(oldObjList.Entries), len(newObjList.Entries))
 	}
 
-	for _, entry := range newBucketList.Entries {
+	for _, entry := range newObjList.Entries {
 		n, err := api.GetObject(baseParams, bck, entry.Name)
 		if err != nil {
 			t.Errorf("Failed to read %s: %v", entry.Name, err)
@@ -2128,11 +2132,11 @@ func TestECBucketEncode(t *testing.T) {
 		t.FailNow()
 	}
 
-	reslist, err := api.ListObjects(baseParams, m.bck, nil, 0)
+	objList, err := api.ListObjects(baseParams, m.bck, nil, 0)
 	tassert.CheckFatal(t, err)
-	tutils.Logf("Object count: %d\n", len(reslist.Entries))
-	if len(reslist.Entries) != m.num {
-		t.Fatalf("list_objects %s invalid number of files %d, expected %d", m.bck, len(reslist.Entries), m.num)
+	tutils.Logf("Object count: %d\n", len(objList.Entries))
+	if len(objList.Entries) != m.num {
+		t.Fatalf("list_objects %s invalid number of files %d, expected %d", m.bck, len(objList.Entries), m.num)
 	}
 
 	tutils.Logf("Enabling EC\n")
@@ -2152,13 +2156,13 @@ func TestECBucketEncode(t *testing.T) {
 	_, err = api.WaitForXaction(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
 
-	reslist, err = api.ListObjects(baseParams, m.bck, nil, 0)
+	objList, err = api.ListObjects(baseParams, m.bck, nil, 0)
 	tassert.CheckFatal(t, err)
 
-	if len(reslist.Entries) != m.num {
-		t.Fatalf("bucket %s: expected %d objects, got %d", m.bck, m.num, len(reslist.Entries))
+	if len(objList.Entries) != m.num {
+		t.Fatalf("bucket %s: expected %d objects, got %d", m.bck, m.num, len(objList.Entries))
 	}
-	tutils.Logf("Object counts after EC finishes: %d (%d)\n", len(reslist.Entries), (parityCnt+1)*m.num)
+	tutils.Logf("Object counts after EC finishes: %d (%d)\n", len(objList.Entries), (parityCnt+1)*m.num)
 	//
 	// TODO: support querying bucket for total number of entries with respect to mirroring and EC
 	//
@@ -2229,9 +2233,9 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	wg := sync.WaitGroup{}
 	wg.Add(o.objCount)
 	for i := 0; i < o.objCount; i++ {
-		objName := fmt.Sprintf(o.pattern, i)
 		go func(i int) {
 			defer wg.Done()
+			objName := fmt.Sprintf(o.pattern, i)
 			createECObject(t, baseParams, bckEC, objName, i, o)
 		}(i)
 	}
@@ -2347,9 +2351,9 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 
 	wg.Add(o.objCount)
 	for i := 0; i < o.objCount; i++ {
-		objName := fmt.Sprintf(o.pattern, i)
 		go func(i int) {
 			defer wg.Done()
+			objName := fmt.Sprintf(o.pattern, i)
 			createECObject(t, baseParams, bck, objName, i, o)
 		}(i)
 	}
@@ -2467,9 +2471,9 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	wg := sync.WaitGroup{}
 	wg.Add(o.objCount)
 	for i := 0; i < o.objCount; i++ {
-		objName := fmt.Sprintf(o.pattern, i)
 		go func(i int) {
 			defer wg.Done()
+			objName := fmt.Sprintf(o.pattern, i)
 			createECObject(t, baseParams, bckEC, objName, i, o)
 		}(i)
 	}
@@ -2564,9 +2568,9 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	wg := sync.WaitGroup{}
 	wg.Add(o.objCount)
 	for i := 0; i < o.objCount; i++ {
-		objName := fmt.Sprintf(o.pattern, i)
 		go func(i int) {
 			defer wg.Done()
+			objName := fmt.Sprintf(o.pattern, i)
 			createECObject(t, baseParams, bck, objName, i, o)
 		}(i)
 	}
@@ -2577,9 +2581,9 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	}
 
 	msg := &cmn.SelectMsg{Props: cmn.GetPropsSize}
-	bucketList, err := api.ListObjects(baseParams, bck, msg, 0)
+	objList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	tutils.Logf("%d objects created, removing %d mountpaths\n", len(bucketList.Entries), o.parityCnt)
+	tutils.Logf("%d objects created, removing %d mountpaths\n", len(objList.Entries), o.parityCnt)
 
 	allMpaths := tutils.GetTargetsMountpaths(t, o.smap, baseParams)
 	removed := make(map[string]*removedMpath, o.parityCnt)
@@ -2608,7 +2612,7 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 		}
 	}
 
-	for _, entry := range bucketList.Entries {
+	for _, entry := range objList.Entries {
 		_, err := api.GetObject(baseParams, bck, entry.Name)
 		tassert.CheckError(t, err)
 	}
