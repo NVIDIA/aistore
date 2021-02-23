@@ -47,8 +47,6 @@ import (
 const (
 	minEvictThresh = 10 * cmn.MiB
 	capCheckThresh = 256 * cmn.MiB // capacity checking threshold, when exceeded may result in lru throttling
-
-	xactIdleTime = 30 * time.Second
 )
 
 type (
@@ -123,9 +121,14 @@ func (*XactProvider) New(args xreg.XactArgs) xreg.GlobalEntry {
 }
 
 func (p *XactProvider) Start(_ cmn.Bck) error {
-	args := xaction.Args{ID: xaction.BaseID(p.id), Kind: cmn.ActLRU}
+	var (
+		args        = xaction.Args{ID: xaction.BaseID(p.id), Kind: cmn.ActLRU}
+		config      = cmn.GCO.Get()
+		totallyIdle = config.Timeout.MaxHostBusy
+		likelyIdle  = config.Timeout.MaxKeepalive
+	)
 	p.xact = &Xaction{
-		XactDemandBase: *xaction.NewXDB(args, xactIdleTime),
+		XactDemandBase: *xaction.NewXDB(args, totallyIdle, likelyIdle),
 		Renewed:        make(chan struct{}, 10),
 		OkRemoveMisplaced: func() bool {
 			g, l := xreg.GetRebMarked(), xreg.GetResilverMarked()

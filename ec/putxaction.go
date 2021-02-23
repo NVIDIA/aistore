@@ -40,11 +40,13 @@ var _ xaction.XactDemand = (*XactPut)(nil)
 func (*xactPutProvider) New(_ xreg.XactArgs) xreg.BucketEntry { return &xactPutProvider{} }
 func (p *xactPutProvider) Start(bck cmn.Bck) error {
 	var (
-		xec      = ECM.NewPutXact(bck)
-		idleTime = cmn.GCO.Get().Timeout.SendFile
-		args     = xaction.Args{ID: xaction.BaseID(""), Kind: p.Kind(), Bck: &bck}
+		xec         = ECM.NewPutXact(bck)
+		config      = cmn.GCO.Get()
+		totallyIdle = config.Timeout.SendFile
+		likelyIdle  = config.Timeout.MaxKeepalive
+		args        = xaction.Args{ID: xaction.BaseID(""), Kind: p.Kind(), Bck: &bck}
 	)
-	xec.XactDemandBase = *xaction.NewXDB(args, idleTime)
+	xec.XactDemandBase = *xaction.NewXDB(args, totallyIdle, likelyIdle)
 	xec.InitIdle()
 	p.xact = xec
 	go xec.Run()

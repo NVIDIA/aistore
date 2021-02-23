@@ -93,7 +93,9 @@ func (*xactProvider) Kind() string        { return cmn.ActListObjects }
 func (p *xactProvider) Get() cluster.Xact { return p.xact }
 
 func newXact(ctx context.Context, t cluster.Target, bck cmn.Bck, smsg *cmn.SelectMsg, uuid string) *Xact {
-	idleTime := cmn.GCO.Get().Timeout.SendFile
+	config := cmn.GCO.Get()
+	totallyIdle := config.Timeout.MaxHostBusy
+	likelyIdle := config.Timeout.MaxKeepalive
 	xact := &Xact{
 		ctx:      ctx,
 		t:        t,
@@ -106,7 +108,7 @@ func newXact(ctx context.Context, t cluster.Target, bck cmn.Bck, smsg *cmn.Selec
 	}
 	cmn.Assert(xact.bck.Props != nil)
 	args := xaction.Args{ID: xaction.BaseID(uuid), Kind: cmn.ActListObjects, Bck: &bck}
-	xact.XactDemandBase = *xaction.NewXDB(args, idleTime)
+	xact.XactDemandBase = *xaction.NewXDB(args, totallyIdle, likelyIdle)
 	xact.InitIdle()
 	return xact
 }

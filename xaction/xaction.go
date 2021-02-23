@@ -200,13 +200,6 @@ func (xact *XactBase) _setEndTime(err error) {
 		nl.OnFinished(n, err)
 	}
 
-	if xact.Kind() != cmn.ActListObjects || !cmn.IsErrAborted(err) {
-		debug.Infof("%s finished, err: %v", xact, err)
-		if err != nil {
-			glog.Errorf("%s finished with err: %v", xact, err)
-		}
-	}
-
 	xactDtor := XactsDtor[xact.kind]
 	if xactDtor.RefreshCap {
 		if cs, _ := fs.RefreshCapStatus(nil, nil); cs.Err != nil {

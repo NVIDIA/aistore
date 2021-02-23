@@ -7,6 +7,7 @@ package xreg_test
 import (
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -16,6 +17,15 @@ import (
 	"github.com/NVIDIA/aistore/xaction/xreg"
 	"github.com/NVIDIA/aistore/xaction/xrun"
 )
+
+func init() {
+	config := cmn.GCO.BeginUpdate()
+	config.Confdir = "/tmp/ais-tests"
+	config.Timeout.CplaneOperation = 2 * time.Second
+	config.Timeout.MaxKeepalive = 4 * time.Second
+	config.Timeout.MaxHostBusy = 20 * time.Second
+	cmn.GCO.CommitUpdate(config)
+}
 
 // Smoke tests for xactions
 func TestXactionRenewLRU(t *testing.T) {
