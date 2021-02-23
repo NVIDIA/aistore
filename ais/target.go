@@ -500,7 +500,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		} else if err := cmn.MorphMarshal(msg.Value, &listMsg); err == nil {
 			args.ListMsg = listMsg
 		} else {
-			t.writeErrActf(w, r, msg.Action, ", name %s, value %T", msg.Name, msg.Value)
+			t.writeErrf(w, r, "invalid value provided to %q action", msg.Action)
 			return
 		}
 		xact, err := xreg.RenewEvictDelete(t, request.bck, args)
@@ -600,7 +600,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		} else if err = cmn.MorphMarshal(msg.Value, &listMsg); err == nil {
 			args.ListMsg = listMsg
 		} else {
-			t.writeErrActf(w, r, msg.Action, ", name %s, value %T", msg.Name, msg.Value)
+			t.writeErrf(w, r, "invalid value provided to %q action", msg.Action)
 			return
 		}
 		args.UUID = msg.UUID

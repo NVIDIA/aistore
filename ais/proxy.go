@@ -1090,7 +1090,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 	freeBcastArgs(args)
 	for _, res := range results {
 		if res.err != nil {
-			err = res._error()
+			err = res.error()
 			freeCallResults(results)
 			return nil, "", err
 		}
@@ -1567,7 +1567,7 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allE
 	freeBcastArgs(args)
 	for _, res := range results {
 		if res.err != nil {
-			err = res._error()
+			err = res.error()
 			freeCallResults(results)
 			return nil, err
 		}
@@ -1648,7 +1648,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 			continue
 		}
 		if res.err != nil {
-			err = res._error()
+			err = res.error()
 			freeCallResults(results)
 			return nil, err
 		}
@@ -1742,7 +1742,7 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 		if res.err == nil {
 			continue
 		}
-		p.writeErr(w, r, res._error())
+		p.writeErr(w, r, res.error())
 		break
 	}
 	freeCallResults(results)
@@ -1769,7 +1769,7 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg,
 		if res.err == nil {
 			continue
 		}
-		err = res._errorf("%s failed to %q List/Range", res.si, msg.Action)
+		err = res.errorf("%s failed to %q List/Range", res.si, msg.Action)
 		break
 	}
 	freeCallResults(results)
@@ -2073,7 +2073,7 @@ func (p *proxyrunner) smapFromURL(baseURL string) (smap *smapX, err error) {
 	res := p.call(args)
 	defer _freeCallRes(res)
 	if res.err != nil {
-		err = res._errorf("failed to get Smap from %s", baseURL)
+		err = res.errorf("failed to get Smap from %s", baseURL)
 		return
 	}
 	smap = res.v.(*smapX)
@@ -2127,7 +2127,7 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 	p.owner.smap.put(newSmap)
 	res := p.registerToURL(primary.IntraControlNet.DirectURL, primary, cmn.DefaultTimeout, nil, false)
 	if res.err != nil {
-		p.writeErr(w, r, res._error())
+		p.writeErr(w, r, res.error())
 	}
 }
 

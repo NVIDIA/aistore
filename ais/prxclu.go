@@ -77,7 +77,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 			timeout: config.Timeout.CplaneOperation,
 		}
 		res := p.call(args)
-		er := res._error()
+		er := res.error()
 		_freeCallRes(res)
 		if er != nil {
 			p.writeErr(w, r, er)
@@ -163,7 +163,7 @@ func (p *proxyrunner) cluSysinfo(r *http.Request, timeout time.Duration, to int)
 	sysInfoMap := make(cmn.JSONRawMsgs, len(results))
 	for _, res := range results {
 		if res.err != nil {
-			err := res._error()
+			err := res.error()
 			freeCallResults(results)
 			return nil, err
 		}
@@ -223,7 +223,7 @@ func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, resu
 			continue
 		}
 		if res.err != nil {
-			p.writeErr(w, r, res._error())
+			p.writeErr(w, r, res.error())
 			freeCallResults(results)
 			return nil
 		}
@@ -402,7 +402,7 @@ func (p *proxyrunner) userRegisterNode(nsi *cluster.Snode, tag string) (errCode 
 		err = fmt.Errorf("failed to reach %s at %s:%s",
 			nsi, nsi.PublicNet.NodeHostname, nsi.PublicNet.DaemonPort)
 	} else {
-		err = res._errorf("%s: failed to %s %s", p.si, tag, nsi)
+		err = res.errorf("%s: failed to %s %s", p.si, tag, nsi)
 	}
 	errCode = res.status
 	return
@@ -695,7 +695,7 @@ func (p *proxyrunner) setConfig(w http.ResponseWriter, r *http.Request, msg *cmn
 		if res.err == nil {
 			continue
 		}
-		err := res._errorf("%s failed", cmn.ActSetConfig)
+		err := res.errorf("%s failed", cmn.ActSetConfig)
 		p.writeErr(w, r, err)
 		p.keepalive.onerr(res.err, res.status)
 		freeCallResults(results)
@@ -733,7 +733,7 @@ func (p *proxyrunner) xactStarStop(w http.ResponseWriter, r *http.Request, msg *
 		if res.err == nil {
 			continue
 		}
-		p.writeErr(w, r, res._error())
+		p.writeErr(w, r, res.error())
 		freeCallResults(results)
 		return
 	}
@@ -782,7 +782,7 @@ func (p *proxyrunner) resilverOne(w http.ResponseWriter, r *http.Request,
 		},
 	)
 	if res.err != nil {
-		p.writeErr(w, r, res._error())
+		p.writeErr(w, r, res.error())
 		return
 	}
 
@@ -828,7 +828,7 @@ func (p *proxyrunner) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *cm
 		args.si = psi
 		res := p.call(args)
 		if res.err != nil {
-			p.writeErr(w, r, res._error())
+			p.writeErr(w, r, res.error())
 		}
 		_freeCallRes(res)
 		break
@@ -948,7 +948,7 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 			if res.err == nil {
 				continue
 			}
-			p.writeErr(w, r, res._error())
+			p.writeErr(w, r, res.error())
 			p.keepalive.onerr(res.err, res.status)
 			freeCallResults(results)
 			return
@@ -1102,7 +1102,7 @@ func (p *proxyrunner) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 		if res.err == nil {
 			continue
 		}
-		err := res._errorf("node %s failed to set primary %s in the prepare phase", res.si, proxyid)
+		err := res.errorf("node %s failed to set primary %s in the prepare phase", res.si, proxyid)
 		p.writeErr(w, r, err)
 		freeCallResults(results)
 		return

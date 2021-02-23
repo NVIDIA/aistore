@@ -1308,13 +1308,7 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 ////////////////////////////////////////////
 
 func (h *httprunner) writeErr(w http.ResponseWriter, r *http.Request, err error, errCode ...int) {
-	e, msg := cmn.Err2HTTPErr(err), err.Error()
-	if e != nil {
-		e.Message = msg
-		cmn.WriteErr(w, r, e, errCode...)
-	} else {
-		cmn.WriteErrMsg(w, r, msg, errCode...)
-	}
+	cmn.WriteErr(w, r, err, errCode...)
 	h.statsT.AddErrorHTTP(r.Method, 1)
 }
 
@@ -1372,7 +1366,7 @@ func (h *httprunner) writeErrActf(w http.ResponseWriter, r *http.Request, action
 ////////////////
 
 // error helper for intra-cluster calls
-func (res *callResult) _error() error {
+func (res *callResult) error() error {
 	if res.err == nil {
 		return nil
 	}
@@ -1401,7 +1395,7 @@ func (res *callResult) _error() error {
 	return fmt.Errorf("%v[%s]", res.err, res.details)
 }
 
-func (res *callResult) _errorf(format string, a ...interface{}) error {
+func (res *callResult) errorf(format string, a ...interface{}) error {
 	debug.Assert(res.err != nil)
 	// add formatted
 	msg := fmt.Sprintf(format, a...)
@@ -1411,7 +1405,7 @@ func (res *callResult) _errorf(format string, a ...interface{}) error {
 	} else {
 		res.err = errors.New(msg + ": " + res.err.Error())
 	}
-	return res._error()
+	return res.error()
 }
 
 ///////////////////

@@ -101,7 +101,7 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, remoteH
 			continue
 		}
 		freeCallResults(results)
-		return c.bcastAbort(bck, res._error())
+		return c.bcastAbort(bck, res.error())
 	}
 	freeCallResults(results)
 
@@ -127,7 +127,7 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, remoteH
 		}
 		glog.Errorf("Failed to commit create-bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
 		p.undoCreateBucket(msg, bck)
-		err := res._error()
+		err := res.error()
 		freeCallResults(results)
 		return err
 	}
@@ -175,7 +175,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 		if res.err == nil {
 			continue
 		}
-		err = c.bcastAbort(bck, res._error())
+		err = c.bcastAbort(bck, res.error())
 		freeCallResults(results)
 		return
 	}
@@ -215,7 +215,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 		}
 		glog.Error(res.err) // commit must go thru
 		p.undoUpdateCopies(msg, bck, ctx.revertProps)
-		err = res._error()
+		err = res.error()
 		freeCallResults(results)
 		return
 	}
@@ -310,7 +310,7 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 		if res.err == nil {
 			continue
 		}
-		err = c.bcastAbort(bck, res._error())
+		err = c.bcastAbort(bck, res.error())
 		freeCallResults(results)
 		return
 	}
@@ -408,7 +408,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 		if res.err == nil {
 			continue
 		}
-		err = c.bcastAbort(bckFrom, res._error())
+		err = c.bcastAbort(bckFrom, res.error())
 		freeCallResults(results)
 		return
 	}
@@ -512,7 +512,7 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 		if res.err == nil {
 			continue
 		}
-		err = c.bcastAbort(bckFrom, res._error())
+		err = c.bcastAbort(bckFrom, res.error())
 		freeCallResults(results)
 		return
 	}
@@ -628,7 +628,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 		if res.err == nil {
 			continue
 		}
-		err = c.bcastAbort(bck, res._error())
+		err = c.bcastAbort(bck, res.error())
 		freeCallResults(results)
 		return
 	}
@@ -659,7 +659,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 			continue
 		}
 		glog.Error(res.err)
-		err = res._error()
+		err = res.error()
 		freeCallResults(results)
 		return
 	}
@@ -696,7 +696,7 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 		if res.err == nil {
 			continue
 		}
-		err = c.bcastAbort(si, res._error(), cmn.Target)
+		err = c.bcastAbort(si, res.error(), cmn.Target)
 		freeCallResults(results)
 		return
 	}
@@ -713,7 +713,7 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 	if msg.Action == cmn.ActDecommission || msg.Action == cmn.ActShutdownNode {
 		c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
 		res := p.call(callArgs{si: si, req: c.req, timeout: c.commitTimeout(waitmsync)})
-		err = res._error()
+		err = res.error()
 		_freeCallRes(res)
 		if err != nil {
 			glog.Error(err)
@@ -780,7 +780,7 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 		if res.err == nil {
 			continue
 		}
-		err := c.bcastAbort(bck, res._error())
+		err := c.bcastAbort(bck, res.error())
 		freeCallResults(results)
 		return err
 	}
@@ -808,7 +808,7 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 			continue
 		}
 		glog.Errorf("Failed to commit destroy-bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
-		err := res._error()
+		err := res.error()
 		freeCallResults(results)
 		return err
 	}

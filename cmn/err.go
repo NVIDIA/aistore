@@ -625,7 +625,7 @@ func (e *ErrHTTP) String() (s string) {
 }
 
 func (e *ErrHTTP) Error() string {
-	// Stop from escaping <, > ,and &
+	// Stop from escaping `<`, `>` and `&`.
 	buf := new(bytes.Buffer)
 	enc := jsoniter.NewEncoder(buf)
 	enc.SetEscapeHTML(false)
@@ -638,18 +638,18 @@ func (e *ErrHTTP) Error() string {
 func (e *ErrHTTP) write(w http.ResponseWriter, r *http.Request, silent bool) {
 	msg := e.Error()
 	if len(msg) > 0 {
-		// error strings should not be capitalized (lint)
+		// Error strings should not be capitalized (lint).
 		if c := msg[0]; c >= 'A' && c <= 'Z' {
 			msg = string(c+'a'-'A') + msg[1:]
 		}
 	}
 	if !strings.Contains(msg, stackTracePrefix) {
-		e.stackTrace()
+		e.populateStackTrace()
 	}
 	if !silent {
 		glog.Errorln(e.String())
 	}
-	// make sure that the caller is aware that we return JSON error
+	// Make sure that the caller is aware that we return JSON error.
 	w.Header().Set(HeaderContentType, ContentJSON)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if r.Method == http.MethodHead {
@@ -661,8 +661,9 @@ func (e *ErrHTTP) write(w http.ResponseWriter, r *http.Request, silent bool) {
 	}
 }
 
-func (e *ErrHTTP) stackTrace() {
+func (e *ErrHTTP) populateStackTrace() {
 	debug.Assert(len(e.trace) == 0)
+
 	buffer := bytes.NewBuffer(e.trace)
 	fmt.Fprint(buffer, stackTracePrefix)
 	for i := 1; i < 9; i++ {
@@ -690,34 +691,39 @@ func (e *ErrHTTP) stackTrace() {
 // invalid message handlers //
 //////////////////////////////
 
-// write error into http response
-// TODO: Check for error type and set `status` if not provided eg. `ErrNotFound`.
+// Write error into HTTP response.
 func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int) {
-	status := http.StatusBadRequest
-	if len(opts) > 0 && opts[0] > status {
-		status = opts[0]
-	}
 	if httpErr := Err2HTTPErr(err); httpErr != nil {
-		if status > http.StatusBadRequest || httpErr.Status == 0 {
-			httpErr.Status = status
+		status := http.StatusBadRequest
+		if len(opts) > 0 && opts[0] > status {
+			status = opts[0]
 		}
+		httpErr.Status = status
 		httpErr.write(w, r, len(opts) > 1 /*silent*/)
+	} else if errors.Is(err, &ErrNotFound{}) {
+		if len(opts) > 0 {
+			// Override the status code.
+			opts[0] = http.StatusNotFound
+		} else {
+			// Add status code if not set.
+			opts = append(opts, http.StatusNotFound)
+		}
+		WriteErrMsg(w, r, err.Error(), opts...)
 	} else {
 		WriteErrMsg(w, r, err.Error(), opts...)
 	}
 }
 
-// create ErrHTTP (based on `msg` and `opts`) and write it into http response
+// Create ErrHTTP (based on `msg` and `opts`) and write it into HTTP response.
 func WriteErrMsg(w http.ResponseWriter, r *http.Request, msg string, opts ...int) {
 	httpErr := NewHTTPErr(r, msg, opts...)
 	httpErr.write(w, r, len(opts) > 1 /*silent*/)
 	FreeHTTPErr(httpErr)
 }
 
-// 405 Method Not Allowed - see https://tools.ietf.org/html/rfc2616#section-10.4.6
+// 405 Method Not Allowed, see: https://tools.ietf.org/html/rfc2616#section-10.4.6
 func WriteErr405(w http.ResponseWriter, r *http.Request, methods ...string) {
-	allowed := strings.Join(methods, ", ")
-	w.Header().Set("Allow", allowed)
+	w.Header().Set("Allow", strings.Join(methods, ", "))
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
 	} else {

@@ -840,7 +840,7 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, rename
 		time.Sleep(timeout / 2)
 		res = t.call(args)
 		if res.err != nil {
-			err = res._errorf("%s: failed to GET(%q)", t.si, what)
+			err = res.errorf("%s: failed to GET(%q)", t.si, what)
 			return
 		}
 	}

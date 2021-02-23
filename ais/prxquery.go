@@ -69,7 +69,7 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		if res.err == nil {
 			continue
 		}
-		p.writeErr(w, r, res._error())
+		p.writeErr(w, r, res.error())
 		freeCallResults(results)
 		return
 	}
@@ -175,7 +175,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 			if res.status == http.StatusNotFound {
 				continue
 			}
-			p.writeErr(w, r, res._error())
+			p.writeErr(w, r, res.error())
 			freeCallResults(results)
 			return
 		}
@@ -202,7 +202,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 		freeBcastArgs(discardArgs)
 		for _, res := range discardResults {
 			if res.err != nil && res.status != http.StatusNotFound {
-				p.writeErr(w, r, res._error())
+				p.writeErr(w, r, res.error())
 				return
 			}
 		}
