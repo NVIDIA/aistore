@@ -24,7 +24,7 @@ import (
 // of being idle based on the simple determination of no activity for a (certain) while.
 
 const (
-	totallyIdle = time.Minute // to confirm idle-ness we may in fact stay around for twice as much
+	totallyIdle = time.Minute
 	likelyIdle  = 4 * time.Second
 )
 
@@ -41,7 +41,6 @@ type (
 	idle struct {
 		totally, likely time.Duration
 		ticks           *cmn.StopCh
-		isTotally       bool
 	}
 	XactDemandBase struct {
 		XactBase
@@ -83,21 +82,14 @@ func NewXDB(args Args, idleTimes ...time.Duration) *XactDemandBase {
 }
 
 func (r *XactDemandBase) InitIdle() {
+	r.active.Inc()
 	r.hkReg.Store(true)
 	hk.Reg(r.hkName, r.hkcb)
 }
 
 func (r *XactDemandBase) hkcb() time.Duration {
-	active := r.active.Swap(0)
-	if r.Pending() > 0 || active > 0 {
-		r.idle.isTotally = false // not idle
-	} else if active == 0 {
-		if r.idle.isTotally {
-			r.idle.ticks.Close() // idleness confirmed: send idle tick
-		} else {
-			// prepare to send idle tick
-			r.idle.isTotally = true
-		}
+	if r.active.Swap(0) == 0 {
+		r.idle.ticks.Close()
 	}
 	return r.idle.totally
 }
