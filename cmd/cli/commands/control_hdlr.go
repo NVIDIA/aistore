@@ -98,11 +98,11 @@ var (
 		},
 		{
 			Name:  commandStop,
-			Usage: "stops jobs running in the cluster",
+			Usage: "stop jobs running in the cluster",
 			Subcommands: []cli.Command{
 				{
 					Name:         subcmdStopXaction,
-					Usage:        "stops xactions",
+					Usage:        "stop an xaction",
 					ArgsUsage:    "XACTION_ID|XACTION_NAME [BUCKET_NAME]",
 					Description:  xactionDesc(false),
 					Flags:        stopCmdsFlags[subcmdStopXaction],
@@ -111,7 +111,7 @@ var (
 				},
 				{
 					Name:         subcmdStopDownload,
-					Usage:        "stops a download job with given ID",
+					Usage:        "stop a download job with given ID",
 					ArgsUsage:    jobIDArgument,
 					Flags:        stopCmdsFlags[subcmdStopDownload],
 					Action:       stopDownloadHandler,
@@ -119,7 +119,7 @@ var (
 				},
 				{
 					Name:         subcmdStopDsort,
-					Usage:        fmt.Sprintf("stops a %s job with given ID", cmn.DSortName),
+					Usage:        fmt.Sprintf("stop a %s job with given ID", cmn.DSortName),
 					ArgsUsage:    jobIDArgument,
 					Action:       stopDsortHandler,
 					BashComplete: dsortIDRunningCompletions,

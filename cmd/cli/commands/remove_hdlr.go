@@ -49,7 +49,7 @@ var (
 				},
 				{
 					Name:      subcmdRemoveObject,
-					Usage:     "remove object from bucket",
+					Usage:     "remove an object from the specified bucket",
 					ArgsUsage: optionalObjectsArgument,
 					Flags:     removeCmdsFlags[subcmdRemoveObject],
 					Action:    removeObjectHandler,
@@ -59,7 +59,7 @@ var (
 				},
 				{
 					Name:         subcmdRemoveNode,
-					Usage:        "remove node from cluster",
+					Usage:        "remove a node from cluster",
 					ArgsUsage:    daemonIDArgument,
 					Flags:        removeCmdsFlags[subcmdRemoveNode],
 					Action:       removeNodeHandler,

@@ -26,18 +26,18 @@ var (
 	attachCmds = []cli.Command{
 		{
 			Name:  commandAttach,
-			Usage: "attach remote cluster; attach mountpath",
+			Usage: "attach a remote cluster or mountpath",
 			Subcommands: []cli.Command{
 				{
 					Name:      subcmdAttachRemoteAIS,
-					Usage:     "attach remote cluster",
+					Usage:     "attach a remote cluster",
 					ArgsUsage: attachRemoteAISArgument,
 					Flags:     attachCmdsFlags[subcmdAttachRemoteAIS],
 					Action:    attachRemoteAISHandler,
 				},
 				{
 					Name:      subcmdAttachMountpath,
-					Usage:     "attach mountpath",
+					Usage:     "attach a mountpath",
 					ArgsUsage: attachMountpathArgument,
 					Flags:     attachCmdsFlags[subcmdAttachMountpath],
 					Action:    attachMountpathHandler,
@@ -53,18 +53,18 @@ var (
 	detachCmds = []cli.Command{
 		{
 			Name:  commandDetach,
-			Usage: "detach remote cluster; detach mountpath",
+			Usage: "detach a remote cluster or mountpath",
 			Subcommands: []cli.Command{
 				{
 					Name:      subcmdDetachRemoteAIS,
-					Usage:     "detach remote cluster",
+					Usage:     "detach a remote cluster",
 					ArgsUsage: detachRemoteAISArgument,
 					Flags:     detachCmdsFlags[subcmdDetachRemoteAIS],
 					Action:    detachRemoteAISHandler,
 				},
 				{
 					Name:      subcmdDetachMountpath,
-					Usage:     "detach mountpath",
+					Usage:     "detach a mountpath",
 					ArgsUsage: detachMountpathArgument,
 					Flags:     detachCmdsFlags[subcmdDetachMountpath],
 					Action:    detachMountpathHandler,

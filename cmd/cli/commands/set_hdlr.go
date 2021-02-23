@@ -46,7 +46,7 @@ var (
 				},
 				{
 					Name:         subcmdSetPrimary,
-					Usage:        "set new primary proxy",
+					Usage:        "set a new primary proxy",
 					ArgsUsage:    daemonIDArgument,
 					Flags:        setCmdsFlags[subcmdSetPrimary],
 					Action:       setPrimaryHandler,

@@ -29,13 +29,13 @@ var etlCmds = []cli.Command{
 		Subcommands: []cli.Command{
 			{
 				Name:      subcmdInit,
-				Usage:     "start ETL with YAML Pod specification",
+				Usage:     "start an ETL with YAML Pod specification",
 				ArgsUsage: "SPEC_FILE",
 				Action:    etlInitHandler,
 			},
 			{
 				Name:  subcmdBuild,
-				Usage: "start ETL with transformation source code",
+				Usage: "start an ETL with transformation source code",
 				Flags: []cli.Flag{
 					fromFileFlag,
 					depsFileFlag,
@@ -74,7 +74,7 @@ var etlCmds = []cli.Command{
 			},
 			{
 				Name:      subcmdBucket,
-				Usage:     "transform bucket and put results to another bucket",
+				Usage:     "transform bucket and put results into another bucket",
 				ArgsUsage: "ETL_ID SRC_BUCKET_NAME DST_BUCKET_NAME",
 				Action:    etlBucketHandler,
 				Flags: []cli.Flag{

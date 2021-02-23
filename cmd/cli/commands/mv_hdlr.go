@@ -26,7 +26,7 @@ var (
 			Subcommands: []cli.Command{
 				{
 					Name:         subcmdMvBucket,
-					Usage:        "mv ais bucket",
+					Usage:        "move an ais bucket",
 					ArgsUsage:    "BUCKET_NAME NEW_BUCKET_NAME",
 					Flags:        mvCmdsFlags[subcmdMvBucket],
 					Action:       mvBucketHandler,
@@ -34,7 +34,7 @@ var (
 				},
 				{
 					Name:         subcmdMvObject,
-					Usage:        "mv object in ais bucket",
+					Usage:        "move an object in an ais bucket",
 					ArgsUsage:    "BUCKET_NAME/OBJECT_NAME NEW_OBJECT_NAME",
 					Flags:        mvCmdsFlags[subcmdMvObject],
 					Action:       mvObjectHandler,

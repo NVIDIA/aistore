@@ -105,7 +105,7 @@ var (
 	showCmds = []cli.Command{
 		{
 			Name:  commandShow,
-			Usage: "show control info about entities in the cluster",
+			Usage: "show information about entities in the cluster",
 			Subcommands: []cli.Command{
 				{
 					Name:         subcmdShowBucket,
@@ -117,7 +117,7 @@ var (
 				},
 				{
 					Name:         subcmdShowDisk,
-					Usage:        "show disk stats for targets",
+					Usage:        "show disk statistics for targets",
 					ArgsUsage:    optionalTargetIDArgument,
 					Flags:        showCmdsFlags[subcmdShowDisk],
 					Action:       showDisksHandler,

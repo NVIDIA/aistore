@@ -32,11 +32,11 @@ var (
 	waitCmds = []cli.Command{
 		{
 			Name:  commandWait,
-			Usage: "wait for specific task to finish",
+			Usage: "wait for a specific task to finish",
 			Subcommands: []cli.Command{
 				{
 					Name:         subcmdWaitXaction,
-					Usage:        "wait for xaction to finish",
+					Usage:        "wait for an xaction to finish",
 					ArgsUsage:    "XACTION_ID|XACTION_NAME [BUCKET_NAME]",
 					Flags:        waitCmdsFlags[subcmdWaitXaction],
 					Action:       waitXactionHandler,
@@ -44,7 +44,7 @@ var (
 				},
 				{
 					Name:         subcmdWaitDownload,
-					Usage:        "wait for download to finish",
+					Usage:        "wait for a download to finish",
 					ArgsUsage:    jobIDArgument,
 					Flags:        waitCmdsFlags[subcmdWaitDownload],
 					Action:       waitDownloadHandler,

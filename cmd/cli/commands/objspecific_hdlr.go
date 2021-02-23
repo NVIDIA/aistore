@@ -62,7 +62,7 @@ var (
 	objectSpecificCmds = []cli.Command{
 		{
 			Name:         commandEvict,
-			Usage:        "evict objects from the cache",
+			Usage:        "evict objects that have been prefetched from cloud buckets",
 			ArgsUsage:    optionalObjectsArgument,
 			Flags:        objectSpecificCmdsFlags[commandEvict],
 			Action:       evictHandler,
@@ -78,7 +78,7 @@ var (
 		},
 		{
 			Name:         commandPut,
-			Usage:        "put the objects to the specified bucket",
+			Usage:        "put the objects into the specified bucket",
 			ArgsUsage:    putPromoteObjectArgument,
 			Flags:        objectSpecificCmdsFlags[commandPut],
 			Action:       putHandler,
@@ -94,14 +94,14 @@ var (
 		},
 		{
 			Name:      commandConcat,
-			Usage:     "concatenate multiple files one by one into new, single object to the specified bucket",
+			Usage:     "concatenate multiple files into a new, single object to the specified bucket",
 			ArgsUsage: concatObjectArgument,
 			Flags:     objectSpecificCmdsFlags[commandConcat],
 			Action:    concatHandler,
 		},
 		{
 			Name:         commandCat,
-			Usage:        "gets object from the specified bucket and prints it to STDOUT; alias for ais get BUCKET_NAME/OBJECT_NAME -",
+			Usage:        "print an object from the specified bucket to STDOUT",
 			ArgsUsage:    objectArgument,
 			Flags:        objectSpecificCmdsFlags[commandCat],
 			Action:       catHandler,

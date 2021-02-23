@@ -51,7 +51,7 @@ var (
 	authCmds = []cli.Command{
 		{
 			Name:  commandAuth,
-			Usage: "manage AutnN server",
+			Usage: "manage the authentication server",
 			Subcommands: []cli.Command{
 				{
 					Name:  subcmdAuthAdd,
