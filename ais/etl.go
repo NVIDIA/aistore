@@ -513,18 +513,17 @@ func (p *proxyrunner) healthETL(w http.ResponseWriter, r *http.Request) {
 	args.timeout = cmn.DefaultTimeout
 	args.fv = func() interface{} { return &etl.PodHealthMsg{} }
 	results = p.bcastGroup(args)
+	defer freeCallResults(results)
 	freeBcastArgs(args)
 
 	healths := make(etl.PodsHealthMsg, 0, len(results))
 	for _, res := range results {
 		if res.err != nil {
-			p.writeErr(w, r, res.error())
-			freeCallResults(results)
+			p.writeErr(w, r, res.error(), res.status)
 			return
 		}
 		healths = append(healths, res.v.(*etl.PodHealthMsg))
 	}
-	freeCallResults(results)
 	sort.SliceStable(healths, func(i, j int) bool { return healths[i].TargetID < healths[j].TargetID })
 	p.writeJSON(w, r, healths, "health-ETL")
 }
