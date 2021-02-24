@@ -457,11 +457,8 @@ func (reb *Manager) recvRegularAck(hdr transport.ObjHdr, unpacker *cmn.ByteUnpac
 	if glog.FastV(5, glog.SmoduleReb) {
 		glog.Infof("%s: ack from %s on %s", reb.t.Snode(), string(hdr.Opaque), lom)
 	}
-	lom.Lock(true)
-	if err := lom.Remove(); err != nil {
-		glog.Errorf("%s: error removing %s, err: %v", reb.t.Snode(), lom, err)
-	}
-	lom.Unlock(true)
+	// No immediate file deletion: let LRU cleanup the "misplaced" object
+	// TODO: mark the object "Deleted"
 	reb.delLomAck(lom)
 }
 

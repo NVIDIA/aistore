@@ -611,6 +611,7 @@ func (rj *rebJogger) _lwalk(lom *cluster.LOM) (err error) {
 }
 
 func (rj *rebJogger) prepSend(lom *cluster.LOM) (roc cmn.ReadOpenCloser, err error) {
+	clone := lom.Clone(lom.FQN)
 	lom.Lock(false)
 	if err = lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		goto retErr
@@ -625,11 +626,15 @@ func (rj *rebJogger) prepSend(lom *cluster.LOM) (roc cmn.ReadOpenCloser, err err
 	if roc, err = cmn.NewFileHandle(lom.FQN); err != nil {
 		goto retErr
 	}
-	roc = cmn.NewDeferROC(roc, func() { lom.Unlock(false) })
+	roc = cmn.NewDeferROC(roc, func() {
+		clone.Unlock(false)
+		cluster.FreeLOM(clone)
+	})
 	return
 
 retErr:
 	lom.Unlock(false)
+	cluster.FreeLOM(clone)
 	return nil, err
 }
 

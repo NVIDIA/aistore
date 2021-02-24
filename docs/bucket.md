@@ -460,6 +460,11 @@ $ curl -i -X PATCH  -H 'Content-Type: application/json' -d '{"action": "setbprop
 
 ListObjects API returns a page of object names and, optionally, their properties (including sizes, access time, checksums, and more), in addition to a token that serves as a cursor, or a marker for the *next* page retrieval.
 
+When a cluster is rebalancing, the returned list of objects can be incomplete due to objects are being migrated.
+The returned [result](#list-result) has non-zero value(the least significant bit is set to `1`) to indicate that the list was generated when the cluster was unstable.
+To get the correct list, either re-request the list after the rebalance ends or read the list with [the option](#list-options) `SelectMisplaced` enabled.
+In the latter case, the list may contain duplicated entries.
+
 When using proxy cache (experimental) immutability of a bucket is assumed between subsequent ListObjects request.
 If a bucket has been updated after ListObjects request, a user should call ListObjectsInvalidateCache API to get correct ListObjects results.
 This is the temporary requirement and will be removed in next AIS versions.
@@ -500,6 +505,17 @@ E.g, after rebalance the list can contain two entries for the same object:
 a misplaced one (from original location) and real one (from the new location).
 
  <a name="ft1">1</a>) The objects that exist in the Cloud but are not present in the AIStore cache will have their atime property empty (`""`). The atime (access time) property is supported for the objects that are present in the AIStore cache. [↩](#a1)
+
+### List result
+
+The result may contain all bucket objects(if a bucket is small) or only the current page. The struct includes fields:
+
+| Field | JSON Value | Description |
+| --- | --- | --- |
+| UUID | `uuid` | Unique ID of the listing operation. Pass it to all consecutive list requests to read the next page of objects. If UUID is empty, the server starts listing objects from the first page |
+| Entries | `entries` | A page of objects and their properties |
+| ContinuationToken | `continuation_token` | The token to request the next page of objects. Empty value means that it is the last page |
+| Flags | `flags` | Extra information - a bit-mask field. `0x0001` bit indicates that a rebalance was running at the time the list was generated |
 
 ## [experimental] Query Objects
 

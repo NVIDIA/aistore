@@ -1266,10 +1266,6 @@ func TestListObjectsCache(t *testing.T) {
 }
 
 func TestListObjectsWithRebalance(t *testing.T) {
-	// TODO: This test doesn't work as list objects doesn't correctly handle
-	//  objects which are yet to be migrated.
-	t.Skip("list objects does not work correctly with rebalance")
-
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
@@ -1305,7 +1301,11 @@ func TestListObjectsWithRebalance(t *testing.T) {
 			tutils.Logf("listing all objects, iter: %d\n", i)
 			bckList, err := api.ListObjects(baseParams, m.bck, nil, 0)
 			tassert.CheckFatal(t, err)
-			tassert.Errorf(t, len(bckList.Entries) == m.num, "entries mismatch (%d vs %d)", len(bckList.Entries), m.num)
+			if bckList.Flags == 0 {
+				tassert.Errorf(t, len(bckList.Entries) == m.num, "entries mismatch (%d vs %d)", len(bckList.Entries), m.num)
+			} else if len(bckList.Entries) != m.num {
+				tutils.Logf("List objects while rebalancing: %d vs %d\n", len(bckList.Entries), m.num)
+			}
 
 			time.Sleep(time.Second)
 		}

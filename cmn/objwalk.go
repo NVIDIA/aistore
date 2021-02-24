@@ -60,6 +60,7 @@ func ConcatObjLists(lists []*BucketList, maxSize uint) (objs *BucketList) {
 	objs.Entries = make([]*BucketEntry, 0)
 
 	for _, l := range lists {
+		objs.Flags |= l.Flags
 		objs.Entries = append(objs.Entries, l.Entries...)
 	}
 
@@ -102,6 +103,7 @@ func MergeObjLists(lists []*BucketList, maxSize uint) (objs *BucketList) {
 
 	objSet := make(map[string]*BucketEntry, len(bckList.Entries))
 	for _, l := range lists {
+		bckList.Flags |= l.Flags
 		if contiunationToken < l.ContinuationToken {
 			contiunationToken = l.ContinuationToken
 		}

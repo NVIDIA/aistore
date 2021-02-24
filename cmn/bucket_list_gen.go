@@ -292,6 +292,12 @@ func (z *BucketList) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "ContinuationToken")
 				return
 			}
+		case "Flags":
+			z.Flags, err = dc.ReadUint32()
+			if err != nil {
+				err = msgp.WrapError(err, "Flags")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -305,9 +311,9 @@ func (z *BucketList) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *BucketList) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 3
+	// map header, size 4
 	// write "UUID"
-	err = en.Append(0x83, 0xa4, 0x55, 0x55, 0x49, 0x44)
+	err = en.Append(0x84, 0xa4, 0x55, 0x55, 0x49, 0x44)
 	if err != nil {
 		return
 	}
@@ -350,6 +356,16 @@ func (z *BucketList) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "ContinuationToken")
 		return
 	}
+	// write "Flags"
+	err = en.Append(0xa5, 0x46, 0x6c, 0x61, 0x67, 0x73)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint32(z.Flags)
+	if err != nil {
+		err = msgp.WrapError(err, "Flags")
+		return
+	}
 	return
 }
 
@@ -363,6 +379,6 @@ func (z *BucketList) Msgsize() (s int) {
 			s += z.Entries[za0001].Msgsize()
 		}
 	}
-	s += 18 + msgp.StringPrefixSize + len(z.ContinuationToken)
+	s += 18 + msgp.StringPrefixSize + len(z.ContinuationToken) + 6 + msgp.Uint32Size
 	return
 }

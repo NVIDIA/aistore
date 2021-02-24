@@ -62,10 +62,15 @@ func (be *BucketEntry) CopyWithProps(propsSet StringSet) (ne *BucketEntry) {
 	return
 }
 
+const (
+	BckListFlagRebalance = (1 << iota) // List generated while rebalance was running
+)
+
 // BucketList represents the contents of a given bucket - somewhat analogous to the 'ls <bucket-name>'
 type BucketList struct {
 	UUID    string         `json:"uuid"`
 	Entries []*BucketEntry `json:"entries"`
 	// TODO: merge `UUID` into `ContinuationToken`
 	ContinuationToken string `json:"continuation_token"`
+	Flags             uint32 `json:"flags"` // extra information for a client, see BckListFlag*
 }

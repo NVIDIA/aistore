@@ -1535,6 +1535,7 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allE
 		token     = smsg.ContinuationToken
 		props     = smsg.PropsSet()
 		hasEnough bool
+		flags     uint32
 	)
 	if smsg.PageSize == 0 {
 		smsg.PageSize = cmn.DefaultListPageSizeAIS
@@ -1586,6 +1587,7 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allE
 			return nil, err
 		}
 		objList := res.v.(*cmn.BucketList)
+		flags |= objList.Flags
 		p.qm.b.set(smsg.UUID, res.si.ID(), objList.Entries, pageSize)
 	}
 	freeCallResults(results)
@@ -1611,6 +1613,7 @@ end:
 	allEntries = &cmn.BucketList{
 		UUID:    smsg.UUID,
 		Entries: entries,
+		Flags:   flags,
 	}
 	if uint(len(entries)) >= pageSize {
 		allEntries.ContinuationToken = entries[len(entries)-1].Name

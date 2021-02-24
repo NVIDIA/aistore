@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/objlist"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
@@ -66,6 +67,10 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 
 	debug.Assert(resp.Status == http.StatusOK)
 	debug.Assert(resp.BckList.UUID != "")
+
+	if fs.MarkerExists(fs.RebalanceMarker) || t.gfn.global.active() {
+		resp.BckList.Flags |= cmn.BckListFlagRebalance
+	}
 
 	return t.writeMsgPack(w, r, resp.BckList, "list_objects")
 }

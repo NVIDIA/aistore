@@ -402,6 +402,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 			return nil, err
 		}
 
+		bckList.Flags |= page.Flags
 		// The first iteration uses the `bckList` directly so there is no need to append.
 		if pageNum > 1 {
 			bckList.Entries = append(bckList.Entries, page.Entries...)
