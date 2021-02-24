@@ -346,8 +346,9 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	p.owner.smap.Lock()
 	smap, update, err := p.handleJoinKalive(nsi, regReq.Smap, tag, keepalive, flags)
 	if !isProxy && p.NodeStarted() {
-		// Short for `rebalance.Store(rebalance.Load() || regReq.Reb)`
-		p.owner.rmd.rebalance.CAS(false, regReq.Reb)
+		if p.owner.rmd.rebalance.CAS(false, regReq.Reb) && regReq.Reb {
+			glog.Errorf("%s: target %s reports interrupted rebalance", p.si, nsi)
+		}
 	}
 	p.owner.smap.Unlock()
 
@@ -485,14 +486,13 @@ func (p *proxyrunner) _updPre(ctx *smapModifier, clone *smapX) error {
 
 func (p *proxyrunner) _updPost(ctx *smapModifier, clone *smapX) {
 	if !ctx.nsi.IsTarget() {
-		// RMD will be sent on proxy join to ensure that it is replicated.
-		// Doing this under smap lock to make sure no new joins happen that would
-		// update the rmd.
+		// RMD is sent upon proxy joining to provide for its (RMD's) replication -
+		// done under Smap lock to serialize with respect to new joins.
 		ctx.rmd = p.owner.rmd.get()
 		return
 	}
 	if err := p.canStartRebalance(); err != nil {
-		glog.Error(err) // TODO: remove
+		glog.Warning(err)
 		return
 	}
 	// NOTE: trigger rebalance when target with the same ID already exists
@@ -574,7 +574,7 @@ func (p *proxyrunner) addOrUpdateNode(nsi, osi *cluster.Snode, keepalive bool) b
 
 func (p *proxyrunner) _perfRebPost(ctx *smapModifier, clone *smapX) {
 	if err := p.canStartRebalance(); err != nil {
-		glog.Error(err) // TODO: remove
+		glog.Warning(err)
 		return
 	}
 	if !ctx.skipReb && p.requiresRebalance(ctx.smap, clone) {
@@ -836,6 +836,7 @@ func (p *proxyrunner) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *cm
 }
 
 // gracefully remove node via cmn.ActStartMaintenance, cmn.ActDecommission, cmn.ActShutdownNode
+// TODO: support forceful (--force) removal
 func (p *proxyrunner) rmNode(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	var (
 		opts cmn.ActValDecommision
@@ -972,26 +973,24 @@ func (p *proxyrunner) removeAfterRebalance(nl nl.NotifListener, msg *cmn.ActionM
 	}
 }
 
-// Run rebalance and call a callback after the rebalance finishes
+// Run rebalance if permitted;
+// the method handles msg.Action == cmn.ActStartMaintenance | cmn.ActDecommission | cmn.ActShutdownNode
 func (p *proxyrunner) finalizeMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) (rebID xaction.RebID, err error) {
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("put %s under maintenance and rebalance: action %s", si, msg.Action)
-	}
-	if err = p.canStartRebalance(); err == nil {
-		goto updateRMD
-	}
-	if _, ok := err.(*errNotEnoughTargets); !ok {
-		return
-	}
-	if msg.Action == cmn.ActDecommission {
-		_, err = p.callRmSelf(msg, si, true /*skipReb*/)
-		return
-	}
-	err = nil
-	return
-
-updateRMD:
 	var cb nl.NotifCallback
+	if rerr := p.canStartRebalance(); rerr != nil {
+		// special case: removing the very last target
+		if _, ok := err.(*errNotEnoughTargets); ok {
+			if msg.Action == cmn.ActShutdownNode || msg.Action == cmn.ActDecommission {
+				_, err = p.callRmSelf(msg, si, true /*skipReb*/)
+				return
+			}
+		}
+		err = fmt.Errorf("%s: cannot perform %q %s: %w", p.si, msg.Action, si, rerr)
+		return
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%q %s and start rebalance", msg.Action, si)
+	}
 	if msg.Action == cmn.ActDecommission || msg.Action == cmn.ActShutdownNode {
 		cb = func(nl nl.NotifListener) { p.removeAfterRebalance(nl, msg, si) }
 	}
@@ -1259,4 +1258,61 @@ func (p *proxyrunner) _unregNodePre(ctx *smapModifier, clone *smapX) error {
 	clone.staffIC()
 	p.rproxy.nodes.Delete(ctx.sid)
 	return nil
+}
+
+////////////////////////
+// helpers: rebalance //
+////////////////////////
+
+func (p *proxyrunner) canStartRebalance() error {
+	smap := p.owner.smap.get()
+	if err := smap.validate(); err != nil {
+		debug.AssertNoErr(err)
+		return err
+	}
+	if !smap.IsPrimary(p.si) {
+		err := newErrNotPrimary(p.si, smap)
+		debug.AssertNoErr(err)
+		return err
+	}
+	// NOTE:
+	//      When cluster is starting up rebalance is handled elsewhere (see p.resumeReb).
+	//      In effect, all rebalance-triggering events including direct and indirect
+	//      user requests (such as shutdown, decommission, cnm.ActRebalance, etc.)
+	//      are not permitted and will fail.
+	if a, b := p.ClusterStarted(), p.owner.rmd.startup.Load(); !a || b {
+		return fmt.Errorf("%s primary is not ready yet to start rebalance (started=%t, starting-up=%t)",
+			p.si, a, b)
+	}
+	if smap.CountActiveTargets() < 2 {
+		return &errNotEnoughTargets{p.si, smap, 2}
+	}
+	return nil
+}
+
+func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
+	if cur.CountActiveTargets() < 2 {
+		return false
+	}
+	if cur.CountActiveTargets() > prev.CountActiveTargets() {
+		return true
+	}
+	if cur.CountTargets() > prev.CountTargets() {
+		return true
+	}
+	for _, si := range cur.Tmap {
+		if !prev.isPresent(si) {
+			return true
+		}
+	}
+	bmd := p.owner.bmd.get()
+	if bmd.IsECUsed() {
+		// If there is any target missing we must start rebalance.
+		for _, si := range prev.Tmap {
+			if !cur.isPresent(si) {
+				return true
+			}
+		}
+	}
+	return false
 }

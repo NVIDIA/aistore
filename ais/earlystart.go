@@ -182,9 +182,9 @@ func (p *proxyrunner) secondaryStartup(smap *smapX, primaryURLs ...string) error
 // discovers cluster-wide metadata, and resolve remaining conflicts.
 func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets int) {
 	var (
-		smap             = newSmap()
-		uuid, created    string
-		haveRegistratons bool
+		smap          = newSmap()
+		uuid, created string
+		haveJoins     bool
 	)
 
 	// 1: init Smap to accept reg-s
@@ -215,10 +215,10 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	}
 
 	smap = p.owner.smap.get()
-	haveRegistratons = smap.CountTargets() > 0 || smap.CountProxies() > 1
+	haveJoins = smap.CountTargets() > 0 || smap.CountProxies() > 1
 
 	// 2: merging local => boot
-	if haveRegistratons {
+	if haveJoins {
 		p.owner.smap.Lock()
 		var (
 			added int
@@ -310,19 +310,21 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		p.owner.bmd.put(bmd)
 	}
 
+	// 6.5. mark RMD as starting up to prevent joining targets from triggering rebalance
+	ok := p.owner.rmd.startup.CAS(false, true)
+	debug.Assert(ok)
+
 	// 7. metasync and startup as primary
 	var (
-		aisMsg = p.newAisMsg(&cmn.ActionMsg{Value: metaction2}, smap, bmd)
+		aisMsg = p.newAisMsgStr(metaction2, smap, bmd)
 		pairs  = []revsPair{{smap, aisMsg}, {bmd, aisMsg}}
 	)
 
 	// 8. metasync smap & bmd
 	wg := p.metasyncer.sync(pairs...)
 	wg.Wait()
-	glog.Infof("%s: metasync %s, %s", p.si, smap.StringEx(), bmd.StringEx())
-
-	glog.Infof("%s: primary & cluster startup complete", p.si)
 	p.markClusterStarted()
+	glog.Infof("%s: primary & cluster startup complete (%s, %s)", p.si, smap.StringEx(), bmd.StringEx())
 
 	// Clear regpool
 	p.reg.mtx.Lock()
@@ -331,47 +333,67 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 
 	// 9. resume rebalance if needed
 	if config.Rebalance.Enabled {
-		go p.resumeRebalanceIf(config)
+		p.resumeReb(smap, config)
 	}
+	p.owner.rmd.startup.Store(false)
 }
 
 // resume rebalance if needed
-func (p *proxyrunner) resumeRebalanceIf(config *cmn.Config) {
-	const retries = 10
+func (p *proxyrunner) resumeReb(smap *smapX, config *cmn.Config) {
 	var (
-		err   error
-		sleep = cmn.MaxDuration(config.Timeout.Startup/retries, config.Timeout.MaxKeepalive)
+		ver     = smap.version()
+		nojoins = config.Timeout.MaxHostBusy // initial quiet time with no new joins
+		sleep   = cmn.CalcProbeFreq(nojoins)
 	)
-	for i := 0; i < retries; i++ {
+	debug.AssertNoErr(smap.validate())
+until:
+	// until (last-Smap-update + nojoins)
+	for elapsed := time.Duration(0); elapsed < nojoins; {
 		time.Sleep(sleep)
-		if err = p.canStartRebalance(); err == nil {
-			break
+		elapsed += sleep
+		smap = p.owner.smap.get()
+		if !smap.IsPrimary(p.si) {
+			debug.AssertNoErr(newErrNotPrimary(p.si, smap))
+			return
+		}
+		if smap.version() != ver {
+			debug.Assert(smap.version() > ver)
+			elapsed, nojoins = 0, cmn.MinDuration(nojoins+sleep, config.Timeout.Startup)
+			ver = smap.version()
 		}
 	}
+	debug.AssertNoErr(smap.validate())
+	//
+	// NOTE: under Smap lock to serialize vs node joins (see httpclupost)
+	//
+	p.owner.smap.Lock()
 	if !p.owner.rmd.rebalance.CAS(true, false) {
-		// nothing to do
+		p.owner.smap.Unlock() // nothing to do
 		return
 	}
-	if err != nil {
-		// TODO: insist on rebalancing at a later time
-		p.owner.rmd.rebalance.CAS(false, true)
-		glog.Errorf("%s: cannot resume rebalance: %v", p.si, err)
-		return
+	smap = p.owner.smap.get()
+	if smap.version() != ver {
+		p.owner.smap.Unlock()
+		goto until
 	}
-	glog.Errorf("%s: rebalance did not finish, restarting...", p.si)
+	if smap.CountActiveTargets() < 2 {
+		err := &errNotEnoughTargets{p.si, smap, 2}
+		cmn.ExitLogf("%s: cannot resume global rebalance - %v", p.si, err)
+	}
 	var (
-		smap   = p.owner.smap.get()
-		bmd    = p.owner.bmd.get()
-		aisMsg = p.newAisMsg(&cmn.ActionMsg{Value: metaction3}, smap, bmd)
+		msg    = &cmn.ActionMsg{Action: cmn.ActRebalance, Value: metaction3}
+		aisMsg = p.newAisMsg(msg, smap, nil)
+		ctx    = &rmdModifier{
+			pre: func(_ *rmdModifier, clone *rebMD) { clone.Version += 100 },
+		}
 	)
-	aisMsg.Action = cmn.ActRebalance
-	ctx := &rmdModifier{
-		pre: func(_ *rmdModifier, clone *rebMD) { clone.Version += 100 },
-	}
 	rmd := p.owner.rmd.modify(ctx)
 	wg := p.metasyncer.sync(revsPair{rmd, aisMsg})
+	p.owner.rmd.startup.Store(false)
+	p.owner.smap.Unlock()
+
 	wg.Wait()
-	glog.Infof("%s: metasync %s, %s", p.si, smap.StringEx(), rmd.String())
+	glog.Errorf("%s: resuming global rebalance (%s, %s)", p.si, smap.StringEx(), rmd.String())
 }
 
 // maxVerSmap != nil iff there's a primary change _and_ the cluster has moved on

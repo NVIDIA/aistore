@@ -24,7 +24,6 @@ import (
 	"unicode"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -333,22 +332,6 @@ func (ss StringSet) All(xs ...string) bool {
 		}
 	}
 	return true
-}
-
-// Exitf writes formatted message to STDOUT and exits with non-zero status code.
-func Exitf(f string, a ...interface{}) {
-	fmt.Fprintf(os.Stderr, f, a...)
-	fmt.Fprintln(os.Stderr)
-	os.Exit(1)
-}
-
-// ExitLogf is wrapper around `Exitf` with `glog` logging. It should be used
-// instead `Exitf` if the `glog` was initialized.
-func ExitLogf(f string, a ...interface{}) {
-	glog.Errorln("Terminating...")
-	glog.Errorf(f, a...)
-	glog.Flush()
-	Exitf(f, a...)
 }
 
 // shallow copy

@@ -45,7 +45,8 @@ type (
 	rmdOwner struct {
 		sync.Mutex
 		rmd       atomic.Pointer
-		rebalance atomic.Bool // true: resume rebalance right after the cluster started up
+		rebalance atomic.Bool // whether to resume interrupted rebalance
+		startup   atomic.Bool // true when starting up
 	}
 )
 

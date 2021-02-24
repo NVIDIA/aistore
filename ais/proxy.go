@@ -2429,53 +2429,6 @@ func (p *proxyrunner) detectDaemonDuplicate(osi, nsi *cluster.Snode) bool {
 	return !nsi.Equals(si)
 }
 
-func (p *proxyrunner) canStartRebalance() error {
-	smap := p.owner.smap.get()
-	if err := smap.validate(); err != nil {
-		debug.AssertNoErr(err)
-		return err
-	}
-	if !smap.IsPrimary(p.si) {
-		err := newErrNotPrimary(p.si, smap)
-		debug.AssertNoErr(err)
-		return err
-	}
-	if !p.ClusterStarted() {
-		return fmt.Errorf("%s primary is not ready yet to start rebalance", p.si)
-	}
-	if smap.CountActiveTargets() < 2 {
-		return &errNotEnoughTargets{p.si, smap, 2}
-	}
-	return nil
-}
-
-func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
-	if cur.CountActiveTargets() < 2 {
-		return false
-	}
-	if cur.CountActiveTargets() > prev.CountActiveTargets() {
-		return true
-	}
-	if cur.CountTargets() > prev.CountTargets() {
-		return true
-	}
-	for _, si := range cur.Tmap {
-		if !prev.isPresent(si) {
-			return true
-		}
-	}
-	bmd := p.owner.bmd.get()
-	if bmd.IsECUsed() {
-		// If there is any target missing we must start rebalance.
-		for _, si := range prev.Tmap {
-			if !cur.isPresent(si) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func (p *proxyrunner) headRemoteBck(bck cmn.Bck, q url.Values) (header http.Header, statusCode int, err error) {
 	var (
 		tsi  *cluster.Snode
