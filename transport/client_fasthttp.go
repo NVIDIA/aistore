@@ -63,7 +63,9 @@ func (s *streamBase) do(body io.Reader) (err error) {
 	// do
 	err = s.client.Do(req, resp)
 	if err != nil {
-		glog.Errorf("%s: Error [%v]", s, err)
+		if verbose {
+			glog.Errorf("%s: Error [%v]", s, err)
+		}
 		return
 	}
 	// handle response & cleanup
