@@ -49,7 +49,7 @@ func (n nodesCnt) satisfied(actual int) bool {
 }
 
 func JoinCluster(proxyURL string, node *cluster.Snode) (string, error) {
-	return devtools.JoinCluster(devtoolsCtx, proxyURL, node, registerTimeout)
+	return devtools.JoinCluster(DevtoolsCtx, proxyURL, node, registerTimeout)
 }
 
 // TODO: There is duplication between `UnregisterNode` and `RemoveTarget` - when to use which?
@@ -283,7 +283,7 @@ func WaitForNewSmap(proxyURL string, prevVersion int64) (newSmap *cluster.Smap, 
 }
 
 func WaitMapVersionSync(timeout time.Time, smap *cluster.Smap, prevVersion int64, idsToIgnore cmn.StringSet) error {
-	return devtools.WaitMapVersionSync(devtoolsCtx, timeout, smap, prevVersion, idsToIgnore)
+	return devtools.WaitMapVersionSync(DevtoolsCtx, timeout, smap, prevVersion, idsToIgnore)
 }
 
 func GetTargetsMountpaths(t *testing.T, smap *cluster.Smap, params api.BaseParams) map[string][]string {

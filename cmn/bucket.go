@@ -134,10 +134,7 @@ func NormalizeProvider(provider string) (string, error) {
 
 // Parses "provider://@uuid#namespace/bucketName/objectName"
 func ParseBckObjectURI(objName string, query ...bool) (bck Bck, object string, err error) {
-	const (
-		bucketSepa = "/"
-	)
-
+	const bucketSepa = "/"
 	parts := strings.SplitN(objName, BckProviderSeparator, 2)
 
 	if len(parts) > 1 {

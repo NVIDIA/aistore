@@ -86,7 +86,7 @@ kubectl logs -f --max-log-requests $(( target_cnt + proxy_cnt )) -l 'type in (ai
 
 # Running kubernetes based tests
 echo "----- RUNNING K8S TESTS -----"
-AIS_ENDPOINT="$(minikube ip):8080" BUCKET=test RE="TestETL" make test-run
+AIS_ENDPOINT="$(minikube ip):8080" BUCKET="ais://test" RE="TestETL" make test-run
 exit_code=$?
 result=$((result + exit_code))
 echo "----- K8S TESTS FINISHED WITH: ${exit_code} -----"

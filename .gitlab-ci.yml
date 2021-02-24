@@ -84,7 +84,7 @@ test:short:
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
     - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\nn\nn\nn\nn\nn\n'
     - ais attach remote alias=http://127.0.0.1:11080 # attach to remote cluster
-    - BUCKET="test" make test-short
+    - BUCKET="ais://test" make test-short
     - FLAGS="--duration=10s" make test-aisloader
   <<: *gather_logs_def
 
@@ -107,7 +107,7 @@ test:authn:
     - make cli
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
     - ais auth login $AUTHN_SU_NAME -p $AUTHN_SU_PASS
-    - BUCKET="test" RE="TestAuth" make test-run
+    - BUCKET="ais://test" RE="TestAuth" make test-run
     - ais auth logout
 
 test:https:
@@ -243,7 +243,8 @@ test:kube-short:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
   script:
     - export NUM_TARGET=3
-    - ONE_NODE_MANY_ETLS="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; echo n; echo n; })
+    - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
+    - ONE_NODE_MANY_ETLS="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo y; echo n; echo n; echo n; })
     - status=0
     - RE="TestETL" TESTS_DIR="ais/tests" make test-short || status=$?
     - make kill
@@ -261,7 +262,8 @@ test:kube:
       allow_failure: true
   script:
     - export NUM_TARGET=5
-    - ONE_NODE_MANY_ETLS="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; echo n; echo n; })
+    - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
+    - ONE_NODE_MANY_ETLS="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo y; echo n; echo n; echo n; })
     - status=0
     - RE="TestETL" make test-run || status=$?
     - make kill
@@ -279,7 +281,8 @@ test:kube-single-target:
       allow_failure: true
   script:
     #  Do not set ONE_NODE_MANY_ETLS as we want to have a tests checking correctness with non-testing environment.
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; echo n; echo n; })
+    - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo y; echo n; echo n; echo n; })
     - status=0
     - RE="TestETL" make test-run || status=$?
     - make kill
@@ -300,6 +303,6 @@ test:kube-aisloader:
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
     - sleep 10 # Give some time for the cluster to stabilize.
     - status=0
-    - BUCKET="test" FLAGS="--duration=2m --etl" make test-aisloader || status=$?
+    - BUCKET="ais://test" FLAGS="--duration=2m --etl" make test-aisloader || status=$?
     - make kill
     - exit $status # TODO: hack to prevent pod hangs on failures

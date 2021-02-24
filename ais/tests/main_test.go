@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
 
@@ -46,6 +47,11 @@ func setBucket() (bck cmn.Bck, err error) {
 		}
 		bck.Provider = provider
 	}
+
+	if bck.Provider == "" {
+		bck.Provider = cmn.ProviderAIS
+	}
+
 	return bck, nil
 }
 
@@ -107,17 +113,35 @@ func initTestEnv() {
 func TestMain(m *testing.M) {
 	flag.Parse()
 
+	var (
+		err    error
+		exists bool
+	)
+
 	initTestEnv()
-	var err error
 	if cliBck, err = setBucket(); err == nil {
 		err = waitForCluster()
 	}
 
 	if err != nil {
-		tutils.Logln("FAIL: " + err.Error())
-		os.Exit(1)
+		goto fail
+	}
+
+	if !cliBck.IsAIS() {
+		exists, err = devtools.BckExists(tutils.DevtoolsCtx, tutils.GetPrimaryURL(), cliBck)
+		if err == nil && !exists {
+			err = fmt.Errorf("bucket %q does not exist, make sure that the cluster is compiled with selected provider", cliBck)
+		}
+		if err != nil {
+			goto fail
+		}
 	}
 
 	rand.Seed(time.Now().UnixNano())
 	m.Run()
+	return
+
+fail:
+	tutils.Logln("FAIL: " + err.Error())
+	os.Exit(1)
 }

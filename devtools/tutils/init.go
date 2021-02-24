@@ -75,7 +75,7 @@ var (
 
 	MMSA *memsys.MMSA
 
-	devtoolsCtx *devtools.Ctx
+	DevtoolsCtx *devtools.Ctx
 )
 
 func init() {
@@ -88,7 +88,7 @@ func init() {
 	transportArgs.SkipVerify = cmn.IsParseBool(os.Getenv(cmn.EnvVars.SkipVerifyCrt))
 	HTTPClient = cmn.NewClient(transportArgs)
 
-	devtoolsCtx = &devtools.Ctx{
+	DevtoolsCtx = &devtools.Ctx{
 		Client: HTTPClient,
 		Log:    Logf,
 	}

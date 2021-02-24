@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/containers"
+	"github.com/NVIDIA/aistore/devtools"
 	"github.com/NVIDIA/aistore/devtools/tutils/readers"
 	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 )
@@ -173,24 +174,24 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 	}
 }
 
+func BckExists(tb testing.TB, proxyURL string, bck cmn.Bck) bool {
+	exists, err := devtools.BckExists(DevtoolsCtx, proxyURL, bck)
+	tassert.CheckFatal(tb, err)
+	return exists
+}
+
 func isRemoteBucket(tb testing.TB, proxyURL string, bck cmn.Bck) bool {
 	if !bck.IsRemote() {
 		return false
 	}
-	baseParams := BaseAPIParams(proxyURL)
-	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(bck))
-	tassert.CheckFatal(tb, err)
-	return bcks.Contains(cmn.QueryBcks(bck))
+	return BckExists(tb, proxyURL, bck)
 }
 
 func isCloudBucket(tb testing.TB, proxyURL string, bck cmn.Bck) bool {
 	if !bck.IsCloud() {
 		return false
 	}
-	baseParams := BaseAPIParams(proxyURL)
-	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(bck))
-	tassert.CheckFatal(tb, err)
-	return bcks.Contains(cmn.QueryBcks(bck))
+	return BckExists(tb, proxyURL, bck)
 }
 
 func PutObjRR(baseParams api.BaseParams, bck cmn.Bck, objName string, objSize int64, cksumType string) error {

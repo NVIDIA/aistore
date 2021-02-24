@@ -206,7 +206,7 @@ func SetBackendBck(t *testing.T, baseParams api.BaseParams, srcBck, dstBck cmn.B
 }
 
 func UnregisterNode(proxyURL string, args *cmn.ActValDecommision) error {
-	return devtools.UnregisterNode(devtoolsCtx, proxyURL, args, registerTimeout)
+	return devtools.UnregisterNode(DevtoolsCtx, proxyURL, args, registerTimeout)
 }
 
 // Internal API to remove a node from Smap: use it to unregister MOCK targets/proxies
@@ -405,7 +405,7 @@ func BaseAPIParams(urls ...string) api.BaseParams {
 		u = RandomProxyURL()
 	}
 
-	return devtools.BaseAPIParams(devtoolsCtx, u)
+	return devtools.BaseAPIParams(DevtoolsCtx, u)
 }
 
 // waitForBucket waits until all targets ack having ais bucket created or deleted
