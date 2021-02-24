@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
@@ -31,6 +30,7 @@ const (
 	accessControlData      = accessNetIntraControl | accessNetIntraData
 	accessNetAll           = accessNetPublic | accessNetIntraData | accessNetIntraControl
 )
+const gconfFname = ".ais.conf"
 
 // Network access of handlers (Public, IntraControl, & IntraData)
 type netAccess int
@@ -232,21 +232,6 @@ func validateHostname(hostname string) (err error) {
 		return
 	}
 	_, err = getFQNIPv4(hostname)
-	return
-}
-
-////////////
-// config //
-////////////
-func cfgBeginUpdate() *cmn.Config { return cmn.GCO.BeginUpdate() }
-func cfgDiscardUpdate()           { cmn.GCO.DiscardUpdate() }
-
-func cfgCommitUpdate(config *cmn.Config, detail string) (err error) {
-	if err = jsp.SaveConfig(config); err != nil {
-		cmn.GCO.DiscardUpdate()
-		return fmt.Errorf("FATAL: failed writing config %s: %s, %v", cmn.GCO.GetGlobalConfigPath(), detail, err)
-	}
-	cmn.GCO.CommitUpdate(config)
 	return
 }
 

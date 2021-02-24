@@ -1976,7 +1976,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			p.writeErrf(w, r, "failed to parse configuration to update, err: %v", err)
 			return
 		}
-		if err := jsp.SetConfig(toUpdate, transient); err != nil {
+		if err := setConfig(toUpdate, transient); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
@@ -2027,7 +2027,7 @@ func (p *proxyrunner) daePathAction(w http.ResponseWriter, r *http.Request, acti
 			p.writeErr(w, r, err)
 			return
 		}
-		if err := jsp.SetConfig(toUpdate, transient); err != nil {
+		if err := setConfig(toUpdate, transient); err != nil {
 			p.writeErr(w, r, err)
 		}
 	case cmn.ActAttach, cmn.ActDetach:
@@ -2238,12 +2238,32 @@ func (p *proxyrunner) _becomeFinal(ctx *smapModifier, clone *smapX) {
 	var (
 		bmd   = p.owner.bmd.get()
 		rmd   = p.owner.rmd.get()
+		_     = p.ensureConfPrimaryURL()
 		msg   = p.newAisMsgStr(cmn.ActNewPrimary, clone, bmd)
 		pairs = []revsPair{{clone, msg}, {bmd, msg}, {rmd, msg}}
 	)
 	glog.Infof("%s: distributing (%s, %s, %s) with newly elected primary (self)", p.si, clone, bmd, rmd)
 	_ = p.metasyncer.sync(pairs...)
 	p.syncNewICOwners(ctx.smap, clone)
+}
+
+func (p *proxyrunner) ensureConfPrimaryURL() *globalConf {
+	smap := p.owner.smap.get()
+	conf := p.owner.conf.get()
+	debug.Assert(smap.isPrimary(p.si))
+	if newURL := smap.Primary.URL(cmn.NetworkPublic); conf.Proxy.PrimaryURL != newURL {
+		detail := conf.Proxy.PrimaryURL + " => " + newURL
+		err := p.owner.conf.modify(&cmn.ConfigToUpdate{
+			Proxy: &cmn.ProxyConfToUpdate{
+				PrimaryURL: &newURL,
+			},
+		}, detail)
+		if err != nil {
+			glog.Errorf("failed to modify global config, err: %v", err)
+		}
+		conf = p.owner.conf.get()
+	}
+	return conf
 }
 
 // [METHOD] /v1/tokens

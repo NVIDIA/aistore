@@ -481,14 +481,6 @@ func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX) (err error) {
 func (r *smapOwner) persist(newSmap *smapX) error {
 	debug.AssertMutexLocked(&r.Mutex)
 	config := cmn.GCO.Get()
-	if newURL := newSmap.Primary.PublicNet.DirectURL; config.Proxy.PrimaryURL != newURL {
-		config = cfgBeginUpdate() // clone
-		detail := config.Proxy.PrimaryURL + " => " + newURL
-		config.Proxy.PrimaryURL = newURL
-		if err := cfgCommitUpdate(config, detail); err != nil {
-			return err
-		}
-	}
 	smapPath := filepath.Join(config.Confdir, smapFname)
 	if err := jsp.Save(smapPath, newSmap, jsp.CCSign()); err != nil {
 		glog.Errorf("FATAL: error writing %s => %q: %v", newSmap, smapPath, err)

@@ -36,6 +36,12 @@ type Options struct {
 
 func Plain() Options      { return Options{} }
 func PlainLocal() Options { return Options{Local: true} }
+func CCSignLocal() Options {
+	opts := CCSign()
+	opts.Local = true
+	return opts
+}
+
 func CCSign() Options {
 	return Options{Compression: true, Checksum: true, Signature: true, Indent: false}
 }

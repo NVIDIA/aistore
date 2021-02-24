@@ -27,19 +27,17 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *cmn.Config) (er
 	}
 	config.SetRole(daeRole)
 
-	localConf := cmn.LocalConfig{}
-	_, err = Load(localConfPath, &localConf, Plain())
+	localConf := &cmn.LocalConfig{}
+	_, err = Load(localConfPath, localConf, Plain())
 	if err != nil {
 		return fmt.Errorf("failed to load local config %q, err: %v", localConfPath, err)
 	}
-	debug.AssertMsg(localConf.ConfigDir != "", "local configuration path not set")
 
-	if err = config.SetNetConf(localConf.Net); err != nil {
+	cmn.GCO.PutLocal(localConf)
+	if err = config.SetLocalConf(localConf); err != nil {
 		return
 	}
-	config.TestFSP = localConf.TestFSP
-	config.FSpaths = localConf.FSpaths
-	config.Confdir = localConf.ConfigDir
+
 	if err = cmn.CreateDir(config.Log.Dir); err != nil {
 		return fmt.Errorf("failed to create log dir %q, err: %v", config.Log.Dir, err)
 	}
@@ -55,16 +53,6 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *cmn.Config) (er
 		glog.MaxSize = cmn.MiB
 	}
 
-	differentIPs := config.Net.Hostname != config.Net.HostnameIntraControl
-	differentPorts := config.Net.L4.Port != config.Net.L4.PortIntraControl
-	config.Net.UseIntraControl = config.Net.HostnameIntraControl != "" &&
-		config.Net.L4.PortIntraControl != 0 && (differentIPs || differentPorts)
-
-	differentIPs = config.Net.Hostname != config.Net.HostnameIntraData
-	differentPorts = config.Net.L4.Port != config.Net.L4.PortIntraData
-	config.Net.UseIntraData = config.Net.HostnameIntraData != "" &&
-		config.Net.L4.PortIntraData != 0 && (differentIPs || differentPorts)
-
 	if err = cmn.SetLogLevel(config, config.Log.Level); err != nil {
 		return fmt.Errorf("failed to set log level = %s, err: %s", config.Log.Level, err)
 	}
@@ -72,20 +60,6 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *cmn.Config) (er
 		config.Log.Dir, config.Net.L4.Proto, config.Net.L4.Port, config.Log.Level)
 	glog.Infof("config_file: %q periodic.stats_time: %v", confPath, config.Periodic.StatsTime)
 	return
-}
-
-func SetConfig(toUpdate *cmn.ConfigToUpdate, transient bool) error {
-	config := cmn.GCO.BeginUpdate()
-	err := SetConfigInMem(toUpdate, config)
-	if transient || err != nil {
-		cmn.GCO.DiscardUpdate()
-		return err
-	}
-	if !transient {
-		SaveConfig(config)
-	}
-	cmn.GCO.CommitUpdate(config)
-	return nil
 }
 
 func SaveConfig(config *cmn.Config) error {

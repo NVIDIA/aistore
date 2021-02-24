@@ -140,7 +140,8 @@ func initDaemon(version, buildTime string) (rmain cmn.Runner) {
 		cmn.ExitLogf(str)
 	}
 	config = &cmn.Config{}
-	if err = jsp.LoadConfig(daemon.cli.globalConfPath, daemon.cli.localConfPath, daemon.cli.role, config); err != nil {
+	err = jsp.LoadConfig(daemon.cli.globalConfPath, daemon.cli.localConfPath, daemon.cli.role, config)
+	if err != nil {
 		cmn.ExitLogf("%v", err)
 	}
 	cmn.GCO.Put(config)
@@ -199,6 +200,7 @@ func initDaemon(version, buildTime string) (rmain cmn.Runner) {
 
 func initProxy() cmn.Runner {
 	p := &proxyrunner{}
+	p.initConfOwner(cmn.Proxy)
 	p.initSI(cmn.Proxy)
 
 	// Persist daemon ID on disk
@@ -245,7 +247,7 @@ func initTarget() cmn.Runner {
 		fs.DisableFsIDCheck()
 		t.testCachepathMounts()
 	}
-
+	t.initConfOwner(cmn.Target)
 	t.initSI(cmn.Target)
 	if err := fs.InitMpaths(t.si.ID()); err != nil {
 		cmn.ExitLogf("%v", err)

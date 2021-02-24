@@ -76,9 +76,10 @@ type (
 
 type (
 	globalConfigOwner struct {
-		mtx       sync.Mutex // mutex for protecting updates of config
-		c         atomic.Pointer
-		lmtx      sync.Mutex // mutex for protecting listeners
+		mtx       sync.Mutex     // mutex for protecting updates of config
+		c         atomic.Pointer // pointer to `Config`
+		lc        atomic.Pointer // pointer to `LocalConfig`
+		lmtx      sync.Mutex     // mutex for protecting listeners
 		listeners map[string]ConfigListener
 
 		confPath      atomic.Pointer
@@ -130,6 +131,7 @@ type (
 		DSort       DSortConf       `json:"distributed_sort"`
 		Compression CompressionConf `json:"compression"`
 		MDWrite     MDWritePolicy   `json:"md_write"`
+		Version     int64           `json:"config_version,string"` // instance version of config
 	}
 
 	LocalConfig struct {
@@ -618,6 +620,14 @@ func (gco *globalConfigOwner) Put(config *Config) {
 	gco.c.Store(unsafe.Pointer(config))
 }
 
+func (gco *globalConfigOwner) GetLocal() *LocalConfig {
+	return (*LocalConfig)(gco.lc.Load())
+}
+
+func (gco *globalConfigOwner) PutLocal(config *LocalConfig) {
+	gco.lc.Store(unsafe.Pointer(config))
+}
+
 // NOTE: CopyStruct is a shallow copy which is OK because Config has mostly values with read-only
 //       FSPaths and BackendConf being the only exceptions. May need a *proper* deep copy in the future.
 // NOTE: Cloning a large (and growing) structure may adversely affect performance.
@@ -774,7 +784,26 @@ func (c *Config) SetNetConf(conf LocalNetConfig) (err error) {
 			return fmt.Errorf("invalid %s port specified: %v", NetworkIntraData, err)
 		}
 	}
+
+	differentIPs := c.Net.Hostname != c.Net.HostnameIntraControl
+	differentPorts := c.Net.L4.Port != c.Net.L4.PortIntraControl
+	c.Net.UseIntraControl = c.Net.HostnameIntraControl != "" &&
+		c.Net.L4.PortIntraControl != 0 && (differentIPs || differentPorts)
+
+	differentIPs = c.Net.Hostname != c.Net.HostnameIntraData
+	differentPorts = c.Net.L4.Port != c.Net.L4.PortIntraData
+	c.Net.UseIntraData = c.Net.HostnameIntraData != "" &&
+		c.Net.L4.PortIntraData != 0 && (differentIPs || differentPorts)
+
 	return
+}
+
+func (c *Config) SetLocalConf(localConf *LocalConfig) error {
+	debug.AssertMsg(localConf.ConfigDir != "", "local configuration path not set")
+	c.TestFSP = localConf.TestFSP
+	c.FSpaths = localConf.FSpaths
+	c.Confdir = localConf.ConfigDir
+	return c.SetNetConf(localConf.Net)
 }
 
 func (c *Config) Apply(updateConf ConfigToUpdate) error {

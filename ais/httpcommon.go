@@ -158,6 +158,7 @@ type (
 			smap *smapOwner
 			bmd  bmdOwner
 			rmd  *rmdOwner
+			conf *configOwner
 		}
 		startup struct {
 			cluster atomic.Bool // determines if the cluster has started up
@@ -649,6 +650,16 @@ func newMuxers() cmn.HTTPMuxers {
 		m[v] = mux.NewServeMux()
 	}
 	return m
+}
+
+func (h *httprunner) initConfOwner(daemonType string) {
+	// check if global config exists
+	if h.owner.conf == nil {
+		h.owner.conf = newConfOwner(daemonType)
+	}
+	if err := h.owner.conf.load(); err != nil {
+		cmn.ExitLogf("Failed to initialize config owner, err: %v", err)
+	}
 }
 
 // initSI initializes this cluster.Snode
@@ -2009,6 +2020,7 @@ func (h *httprunner) newAisMsg(actionMsg *cmn.ActionMsg, smap *smapX, bmd *bucke
 }
 
 func (h *httprunner) attachDetach(w http.ResponseWriter, r *http.Request, action string) (err error) {
+	// TODO: Will be replaced and result will be metasynced
 	var (
 		query = r.URL.Query()
 		what  = query.Get(cmn.URLParamWhat)

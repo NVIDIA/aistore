@@ -314,13 +314,19 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	ok := p.owner.rmd.startup.CAS(false, true)
 	debug.Assert(ok)
 
-	// 7. metasync and startup as primary
+	// 7. initialize configMD
+	conf := p.ensureConfPrimaryURL()
+	if conf.Version == 0 {
+		conf.Version = 1
+		p.owner.conf.persist(conf)
+	}
+
+	// 8. metasync (smap & bmd) and startup as primary
+	// TODO: add config revs
 	var (
 		aisMsg = p.newAisMsgStr(metaction2, smap, bmd)
 		pairs  = []revsPair{{smap, aisMsg}, {bmd, aisMsg}}
 	)
-
-	// 8. metasync smap & bmd
 	wg := p.metasyncer.sync(pairs...)
 	wg.Wait()
 	p.markClusterStarted()

@@ -212,6 +212,13 @@ func MustMarshal(v interface{}) []byte {
 	return b
 }
 
+// MustLocalMarshal marshals v using JSON local externsion and panics if error occurs.
+func MustLocalMarshal(v interface{}) []byte {
+	b, err := JSONLocal.Marshal(v)
+	AssertNoErr(err)
+	return b
+}
+
 func MorphMarshal(data, v interface{}) error {
 	// `data` can be of type `map[string]interface{}` or just same type as `v`.
 	// Therefore, the easiest way is to marshal the `data` again and unmarshal it

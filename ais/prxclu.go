@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
@@ -648,11 +647,12 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			p.writeErrf(w, r, "%s: failed to parse value, err: %v", cmn.ActSetConfig, err)
 			return
 		}
-		transient := cmn.IsParseBool(r.URL.Query().Get(cmn.ActTransient))
-		if err := jsp.SetConfig(toUpdate, transient); err != nil {
+		// TODO: allow transient config updates
+		if err := p.owner.conf.modify(toUpdate, cmn.ActSetConfig); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
+		// TODO: replace with metasync
 		p.setConfig(w, r, msg, nil /*from query*/)
 	case cmn.ActShutdown:
 		glog.Infoln("Proxy-controlled cluster shutdown...")
@@ -925,18 +925,19 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 		// cluster-wide: designate a new primary proxy administratively
 		p.cluSetPrimary(w, r)
 	case cmn.ActSetConfig: // setconfig via query parameters and "?n1=v1&n2=v2..."
-		transient := cmn.IsParseBool(query.Get(cmn.ActTransient))
 		toUpdate := &cmn.ConfigToUpdate{}
 		if err := toUpdate.FillFromQuery(query); err != nil {
 			p.writeErrf(w, r, err.Error())
 			return
 		}
-		if err := jsp.SetConfig(toUpdate, transient); err != nil {
+		if err := p.owner.conf.modify(toUpdate, action); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
+		// TODO: replace with metasync
 		p.setConfig(w, r, nil, query)
 	case cmn.ActAttach, cmn.ActDetach:
+		// TODO: change to use global config + metasync
 		if err := p.attachDetach(w, r, action); err != nil {
 			return
 		}

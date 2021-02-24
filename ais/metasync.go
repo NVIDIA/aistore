@@ -24,6 +24,7 @@ const (
 	revsSmapTag = "Smap"
 	revsRMDTag  = "RMD"
 	revsBMDTag  = "BMD"
+	revsConfTag = "Conf"
 
 	revsTokenTag  = "token"
 	revsActionTag = "-action" // to make a pair (revs, action)

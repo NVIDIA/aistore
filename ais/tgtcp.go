@@ -163,7 +163,7 @@ func (t *targetrunner) daeputJSON(w http.ResponseWriter, r *http.Request) {
 			t.writeErrf(w, r, "failed to parse configuration to update, err: %v", err)
 			return
 		}
-		if err := jsp.SetConfig(toUpdate, transient); err != nil {
+		if err := setConfig(toUpdate, transient); err != nil {
 			t.writeErr(w, r, err)
 			return
 		}
@@ -200,7 +200,7 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiIt
 			t.writeErr(w, r, err)
 			return
 		}
-		if err := jsp.SetConfig(toUpdate, transient); err != nil {
+		if err := setConfig(toUpdate, transient); err != nil {
 			t.writeErr(w, r, err)
 			return
 		}
@@ -748,17 +748,19 @@ func (t *targetrunner) ensureLatestSmap(msg *aisMsg, r *http.Request) {
 // create local directories to test multiple fspaths
 func (t *targetrunner) testCachepathMounts() {
 	config := cmn.GCO.BeginUpdate()
-	config.FSpaths.Paths = make(cmn.StringSet, config.TestFSP.Count)
-	for i := 0; i < config.TestFSP.Count; i++ {
-		mpath := filepath.Join(config.TestFSP.Root, fmt.Sprintf("mp%d", i+1))
-		if config.TestFSP.Instance > 0 {
-			mpath = filepath.Join(mpath, strconv.Itoa(config.TestFSP.Instance))
+	configLocal := cmn.GCO.GetLocal()
+	configLocal.FSpaths.Paths = make(cmn.StringSet, configLocal.TestFSP.Count)
+	for i := 0; i < configLocal.TestFSP.Count; i++ {
+		mpath := filepath.Join(configLocal.TestFSP.Root, fmt.Sprintf("mp%d", i+1))
+		if configLocal.TestFSP.Instance > 0 {
+			mpath = filepath.Join(mpath, strconv.Itoa(configLocal.TestFSP.Instance))
 		}
 		if err := cmn.CreateDir(mpath); err != nil {
 			cmn.ExitLogf("Cannot create test cache dir %q, err: %s", mpath, err)
 		}
-		config.FSpaths.Paths.Add(mpath)
+		configLocal.FSpaths.Paths.Add(mpath)
 	}
+	config.SetLocalConf(configLocal)
 	cmn.GCO.CommitUpdate(config)
 }
 
