@@ -156,7 +156,7 @@ func testETLObject(t *testing.T, onlyLong bool, comm, transformer, inPath, outPa
 	tassert.Errorf(t, same, "file contents after transformation differ")
 }
 
-func testETLObjectCloud(t *testing.T, uuid string, onlyLong, cached bool) {
+func testETLObjectCloud(t *testing.T, bck cmn.Bck, uuid string, onlyLong, cached bool) {
 	// Always uses Echo transformation, as correctness of other transformations is checked in different tests.
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: onlyLong})
 
@@ -167,7 +167,7 @@ func testETLObjectCloud(t *testing.T, uuid string, onlyLong, cached bool) {
 
 	err = api.PutObject(api.PutObjectArgs{
 		BaseParams: baseParams,
-		Bck:        cliBck,
+		Bck:        bck,
 		Object:     objName,
 		Reader:     reader,
 	})
@@ -175,19 +175,19 @@ func testETLObjectCloud(t *testing.T, uuid string, onlyLong, cached bool) {
 
 	if !cached {
 		tutils.Logf("Evicting object %s\n", objName)
-		err := api.EvictObject(baseParams, cliBck, objName)
+		err := api.EvictObject(baseParams, bck, objName)
 		tassert.CheckFatal(t, err)
 	}
 
 	defer func() {
 		// Could bucket is not destroyed, remove created object instead.
-		err := api.DeleteObject(baseParams, cliBck, objName)
+		err := api.DeleteObject(baseParams, bck, objName)
 		tassert.CheckError(t, err)
 	}()
 
 	bf := bytes.NewBuffer(nil)
 	tutils.Logf("Read %q\n", uuid)
-	err = api.ETLObject(baseParams, uuid, cliBck, objName, bf)
+	err = api.ETLObject(baseParams, uuid, bck, objName, bf)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, bf.Len() == cmn.KiB, "Expected %d bytes, got %d", cmn.KiB, bf.Len())
 }
@@ -248,7 +248,7 @@ func TestETLObject(t *testing.T) {
 }
 
 func TestETLObjectCloud(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, RemoteBck: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Bck: cliBck, RequiredDeployment: tutils.ClusterTypeK8s, RemoteBck: true})
 	tutils.ETLCheckNoRunningContainers(t, baseParams)
 
 	// TODO: When a test is stable, make part of test cases onlyLong: true.
@@ -275,7 +275,7 @@ func TestETLObjectCloud(t *testing.T) {
 
 			for _, conf := range configs {
 				t.Run(fmt.Sprintf("%s/cached=%t", t.Name(), conf.cached), func(t *testing.T) {
-					testETLObjectCloud(t, uuid, conf.onlyLong, conf.cached)
+					testETLObjectCloud(t, cliBck, uuid, conf.onlyLong, conf.cached)
 				})
 			}
 		})
