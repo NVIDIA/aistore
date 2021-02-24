@@ -124,6 +124,7 @@ var _ = Describe("IterFields", func() {
 					"ec.enabled":       api.Bool(true),
 					"ec.parity_slices": api.Int(1024),
 					"ec.data_slices":   (*int)(nil),
+					"ec.batch_size":    (*int)(nil),
 					"ec.objsize_limit": (*int64)(nil),
 					"ec.compression":   (*string)(nil),
 					"ec.disk_only":     (*bool)(nil),

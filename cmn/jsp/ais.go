@@ -36,8 +36,9 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *cmn.Config) (er
 	if err = config.SetNetConf(localConf.Net); err != nil {
 		return
 	}
-
+	config.TestFSP = localConf.TestFSP
 	config.FSpaths = localConf.FSpaths
+	config.Confdir = localConf.ConfigDir
 	if err = cmn.CreateDir(config.Log.Dir); err != nil {
 		return fmt.Errorf("failed to create log dir %q, err: %v", config.Log.Dir, err)
 	}

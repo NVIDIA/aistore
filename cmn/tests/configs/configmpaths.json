@@ -1,4 +1,5 @@
 {
+    "confdir": "/fake/conf/dir",
     "net": {
         "hostname": "127.0.1.0",
         "hostname_intra_control": "127.0.2.0",
@@ -11,5 +12,10 @@
         "/tmp/ais/1": " ",
         "/tmp/ais/2": " ",
         "/tmp/ais/3": " "
+    },
+    "test_fspaths": {
+        "root":     "/tmp/ais",
+        "count":    0,
+        "instance": 0
     }
 }

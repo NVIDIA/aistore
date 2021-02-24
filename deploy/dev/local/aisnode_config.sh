@@ -10,7 +10,6 @@ done
 
 cat > $AIS_CONF_FILE <<EOL
 {
-	"confdir": "${AIS_CONF_DIR}",
 	"backend": {$(IFS=$','; echo "${backend_desc[*]}")},
 	"mirror": {
 		"copies":       2,
@@ -97,11 +96,6 @@ cat > $AIS_CONF_FILE <<EOL
 		"enabled":           true,
 		"validate_warm_get": false
 	},
-	"test_fspaths": {
-		"root":     "${TEST_FSPATH_ROOT:-/tmp/ais$NEXT_TIER/}",
-		"count":    ${TEST_FSPATH_COUNT:-0},
-		"instance": ${INSTANCE:-0}
-	},
 	"net": {
 		"l4": {
 			"proto":              "tcp",
@@ -159,6 +153,7 @@ EOL
 
 cat > $AIS_LOCAL_CONF_FILE <<EOL
 {
+	"confdir": "${AIS_CONF_DIR}",
 	"net": {
 		"hostname":                 "${HOSTNAME_LIST}",
 		"hostname_intra_control":   "${HOSTNAME_LIST_INTRA_CONTROL}",
@@ -169,6 +164,11 @@ cat > $AIS_LOCAL_CONF_FILE <<EOL
 	},
 	"fspaths": {
 		$AIS_FS_PATHS
+	},
+	"test_fspaths": {
+		"root":     "${TEST_FSPATH_ROOT:-/tmp/ais$NEXT_TIER/}",
+		"count":    ${TEST_FSPATH_COUNT:-0},
+		"instance": ${INSTANCE:-0}
 	}
 }
 EOL

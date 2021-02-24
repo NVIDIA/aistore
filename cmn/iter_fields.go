@@ -212,9 +212,13 @@ func copyProps(src, dst interface{}) {
 			continue
 		}
 
-		if dstValField.Kind() != reflect.Struct {
+		if dstValField.Kind() != reflect.Struct && dstValField.Kind() != reflect.Invalid {
 			// Set value for the field
-			dstValField.Set(srcValField.Elem())
+			if srcValField.Kind() != reflect.Ptr {
+				dstValField.Set(srcValField)
+			} else {
+				dstValField.Set(srcValField.Elem())
+			}
 		} else {
 			// Recurse into struct
 			copyProps(srcValField.Elem().Interface(), dstValField.Addr().Interface())

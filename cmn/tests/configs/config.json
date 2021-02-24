@@ -1,5 +1,4 @@
 {
-  "confdir": "/fake/conf/dir",
   "backend": {
     "ais": {
       "cluster-uuid": [
@@ -89,11 +88,6 @@
   "versioning": {
     "enabled":           true,
     "validate_warm_get": false
-  },
-  "test_fspaths": {
-    "root":     "/tmp/ais",
-    "count":    0,
-    "instance": 0
   },
   "net": {
     "l4": {

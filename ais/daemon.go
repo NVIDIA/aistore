@@ -155,7 +155,7 @@ func dryRunInit() {
 
 func initDaemon(version, build string) (rmain cmn.Runner) {
 	var (
-		config cmn.Config
+		config *cmn.Config
 		err    error
 	)
 	const (
@@ -188,10 +188,11 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 		cmn.ExitLogf(str)
 	}
 
-	if err = jsp.LoadConfig(daemon.cli.globalConfPath, daemon.cli.localConfPath, daemon.cli.role, &config); err != nil {
+	config = &cmn.Config{}
+	if err = jsp.LoadConfig(daemon.cli.globalConfPath, daemon.cli.localConfPath, daemon.cli.role, config); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
-	cmn.GCO.Put(&config)
+	cmn.GCO.Put(config)
 
 	// Examples overriding default configuration at a node startup via command line:
 	// 1) set client timeout to 13s and store the updated value on disk:
@@ -208,12 +209,12 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 		if err := toUpdate.FillFromKVS(kvs); err != nil {
 			cmn.ExitLogf(err.Error())
 		}
-		if err := jsp.SetConfigInMem(toUpdate, &config); err != nil {
+		if err := jsp.SetConfigInMem(toUpdate, config); err != nil {
 			cmn.ExitLogf("Failed to update config in memory: %v", err)
 		}
 	}
 	if !daemon.cli.transient {
-		if err = jsp.SaveConfig(&config); err != nil {
+		if err = jsp.SaveConfig(config); err != nil {
 			cmn.ExitLogf("Failed to save config: %v", err)
 		}
 	}

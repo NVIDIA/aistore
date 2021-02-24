@@ -104,7 +104,7 @@ type (
 	// nolint:maligned // no performance critical code
 	Config struct {
 		role        string          `list:"omit"` // Proxy or Target
-		Confdir     string          `json:"confdir"`
+		Confdir     string          `json:"confdir" local:"omit"`
 		Backend     BackendConf     `json:"backend"`
 		Mirror      MirrorConf      `json:"mirror"`
 		EC          ECConf          `json:"ec"`
@@ -121,7 +121,7 @@ type (
 		Cksum       CksumConf       `json:"checksum"`
 		Versioning  VersionConf     `json:"versioning"`
 		FSpaths     FSPathsConf     `json:"fspaths" local:"omit"`
-		TestFSP     TestfspathConf  `json:"test_fspaths"`
+		TestFSP     TestfspathConf  `json:"test_fspaths" local:"omit"`
 		Net         NetConf         `json:"net"`
 		FSHC        FSHCConf        `json:"fshc"`
 		Auth        AuthConf        `json:"auth"`
@@ -133,8 +133,10 @@ type (
 	}
 
 	LocalConfig struct {
-		Net     LocalNetConfig `json:"net"`
-		FSpaths FSPathsConf    `json:"fspaths"`
+		Net       LocalNetConfig `json:"net"`
+		FSpaths   FSPathsConf    `json:"fspaths"`
+		TestFSP   TestfspathConf `json:"test_fspaths"`
+		ConfigDir string         `json:"confdir"`
 	}
 
 	// Network config specific to node
@@ -149,6 +151,7 @@ type (
 
 	ConfigToUpdate struct {
 		Confdir     *string                  `json:"confdir"`
+		Backend     *BackendConf             `json:"backend"`
 		Mirror      *MirrorConfToUpdate      `json:"mirror"`
 		EC          *ECConfToUpdate          `json:"ec"`
 		Log         *LogConfToUpdate         `json:"log"`
@@ -170,6 +173,7 @@ type (
 		DSort       *DSortConfToUpdate       `json:"distributed_sort"`
 		Compression *CompressionConfToUpdate `json:"compression"`
 		MDWrite     *MDWritePolicy           `json:"md_write"`
+		Proxy       *ProxyConfToUpdate       `json:"proxy"`
 
 		// Logging
 		LogLevel *string `json:"log_level" copy:"skip"`
@@ -228,6 +232,7 @@ type (
 		Enabled      *bool   `json:"enabled"`
 		ObjSizeLimit *int64  `json:"objsize_limit"`
 		DataSlices   *int    `json:"data_slices"`
+		BatchSize    *int    `json:"batch_size"`
 		ParitySlices *int    `json:"parity_slices"`
 		Compression  *string `json:"compression"`
 		DiskOnly     *bool   `json:"disk_only"`
@@ -302,6 +307,12 @@ type (
 		OriginalURL  string `json:"original_url"`
 		DiscoveryURL string `json:"discovery_url"`
 		NonElectable bool   `json:"non_electable"`
+	}
+	ProxyConfToUpdate struct {
+		PrimaryURL   *string `json:"primary_url"`
+		OriginalURL  *string `json:"original_url"`
+		DiscoveryURL *string `json:"discovery_url"`
+		NonElectable *bool   `json:"non_electable"`
 	}
 	LRUConf struct {
 		// LowWM: used capacity low-watermark (% of total local storage capacity)
