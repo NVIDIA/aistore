@@ -374,6 +374,7 @@ func _addNodeDuplicateDaemonID(t *testing.T, nodeType string) {
 }
 
 func addNodeDuplicateIP(t *testing.T) {
+	t.Skip("Fails every so often and need to be fixed (#1093) - skipping")
 	for _, ty := range []string{cmn.Proxy, cmn.Target} {
 		t.Run(ty, func(t *testing.T) {
 			_addNodeDuplicateIP(t, ty)
