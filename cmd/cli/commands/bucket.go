@@ -320,9 +320,9 @@ func reformatBackendProps(nvs cmn.SimpleKVs) (err error) {
 		ok        bool
 	)
 
-	if v, ok = nvs[cmn.HeaderBackendBck]; ok {
-		delete(nvs, cmn.HeaderBackendBck)
-	} else if v, ok = nvs[cmn.HeaderBackendBckName]; !ok {
+	if v, ok = nvs[cmn.PropBackendBck]; ok {
+		delete(nvs, cmn.PropBackendBck)
+	} else if v, ok = nvs[cmn.PropBackendBckName]; !ok {
 		goto validate
 	}
 
@@ -332,20 +332,20 @@ func reformatBackendProps(nvs cmn.SimpleKVs) (err error) {
 			return err
 		}
 		if objName != "" {
-			return fmt.Errorf("invalid format of %q", cmn.HeaderBackendBck)
+			return fmt.Errorf("invalid format of %q", cmn.PropBackendBck)
 		}
 	}
 
-	nvs[cmn.HeaderBackendBckName] = originBck.Name
-	if v, ok = nvs[cmn.HeaderBackendBckProvider]; ok && v != "" {
-		nvs[cmn.HeaderBackendBckProvider], err = cmn.NormalizeProvider(v)
+	nvs[cmn.PropBackendBckName] = originBck.Name
+	if v, ok = nvs[cmn.PropBackendBckProvider]; ok && v != "" {
+		nvs[cmn.PropBackendBckProvider], err = cmn.NormalizeProvider(v)
 	} else {
-		nvs[cmn.HeaderBackendBckProvider] = originBck.Provider
+		nvs[cmn.PropBackendBckProvider] = originBck.Provider
 	}
 
 validate:
-	if nvs[cmn.HeaderBackendBckProvider] != "" && nvs[cmn.HeaderBackendBckName] == "" {
-		return fmt.Errorf("invalid format %q cannot be empty when %q is set", cmn.HeaderBackendBckName, cmn.HeaderBackendBckProvider)
+	if nvs[cmn.PropBackendBckProvider] != "" && nvs[cmn.PropBackendBckName] == "" {
+		return fmt.Errorf("invalid format %q cannot be empty when %q is set", cmn.PropBackendBckName, cmn.PropBackendBckProvider)
 	}
 	return err
 }

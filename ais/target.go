@@ -1055,8 +1055,9 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 		}
 	}
 	err = cmn.IterFields(objProps, func(tag string, field cmn.IterField) (err error, b bool) {
-		if hdr.Get(tag) == "" {
-			hdr.Set(tag, fmt.Sprintf("%v", field.Value()))
+		headerName := cmn.PropToHeader(tag)
+		if hdr.Get(headerName) == "" {
+			hdr.Set(headerName, fmt.Sprintf("%v", field.Value()))
 		}
 		return nil, false
 	})

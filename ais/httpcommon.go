@@ -1916,13 +1916,13 @@ func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header) {
 
 	finalProps := bck.Props.Clone()
 	cmn.IterFields(finalProps, func(fieldName string, field cmn.IterField) (error, bool) {
-		if fieldName == cmn.HeaderBucketVerEnabled {
+		if fieldName == cmn.PropBucketVerEnabled {
 			if hdr.Get(cmn.HeaderBucketVerEnabled) == "" {
 				verEnabled := field.Value().(bool)
 				hdr.Set(cmn.HeaderBucketVerEnabled, strconv.FormatBool(verEnabled))
 			}
 			return nil, false
-		} else if fieldName == cmn.HeaderBucketCreated {
+		} else if fieldName == cmn.PropBucketCreated {
 			created := time.Unix(0, field.Value().(int64))
 			hdr.Set(cmn.HeaderBucketCreated, created.Format(time.RFC3339))
 		}

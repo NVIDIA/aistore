@@ -34,7 +34,7 @@ const (
 var (
 	supportedBool = []string{"true", "false"}
 	propCmpls     = map[string][]string{
-		cmn.HeaderBucketAccessAttrs:           cmn.SupportedPermissions(),
+		cmn.PropBucketAccessAttrs:             cmn.SupportedPermissions(),
 		cmn.HeaderObjCksumType:                cmn.SupportedChecksums(),
 		"md_write":                            cmn.SupportedWritePolicy,
 		"ec.compression":                      cmn.SupportedCompression,
@@ -69,7 +69,7 @@ func lastValueIsAccess(c *cli.Context) bool {
 		return false
 	}
 	lastArg := c.Args()[c.NArg()-1]
-	for _, access := range propCmpls[cmn.HeaderBucketAccessAttrs] {
+	for _, access := range propCmpls[cmn.PropBucketAccessAttrs] {
 		if access == lastArg {
 			return true
 		}
@@ -81,7 +81,7 @@ func lastValueIsAccess(c *cli.Context) bool {
 func accessCompletions(c *cli.Context) bool {
 	typedList := c.Args()
 	printed := 0
-	for _, access := range propCmpls[cmn.HeaderBucketAccessAttrs] {
+	for _, access := range propCmpls[cmn.PropBucketAccessAttrs] {
 		found := false
 		for _, typed := range typedList {
 			if access == typed {

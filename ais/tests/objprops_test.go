@@ -410,7 +410,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 
 		newConfig := make(cmn.SimpleKVs)
 		if oldVersioning != versioning {
-			newConfig[cmn.HeaderBucketVerEnabled] = strconv.FormatBool(versioning)
+			newConfig[cmn.PropBucketVerEnabled] = strconv.FormatBool(versioning)
 		}
 		warmCheck := versioning
 		if oldChkVersion != warmCheck {
@@ -428,7 +428,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 				newConfig["versioning.validate_warm_get"] = strconv.FormatBool(oldWarmCheck)
 			}
 			if oldVersioning != versioning {
-				newConfig[cmn.HeaderBucketVerEnabled] = strconv.FormatBool(oldVersioning)
+				newConfig[cmn.PropBucketVerEnabled] = strconv.FormatBool(oldVersioning)
 			}
 			if len(newConfig) != 0 {
 				tutils.SetClusterConfig(t, newConfig)

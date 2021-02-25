@@ -413,6 +413,16 @@ func ExpandPath(path string) string {
 	return filepath.Clean(filepath.Join(currentUser.HomeDir, path[1:]))
 }
 
+// PropToHeader converts a property full name to an HTTP header tag name
+func PropToHeader(prop string) string {
+	if strings.HasPrefix(prop, HeaderPrefix) {
+		return prop
+	}
+	prop = strings.ReplaceAll(prop, ".", "-")
+	prop = strings.ReplaceAll(prop, "_", "-")
+	return HeaderPrefix + prop
+}
+
 /////////////
 // PARSING //
 /////////////

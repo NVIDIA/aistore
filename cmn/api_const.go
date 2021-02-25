@@ -105,52 +105,57 @@ const (
 	ActAbort  = "abort"
 )
 
-// Header Key enum - conventions:
-// - the constant equals the path of a value in BucketProps structure
-// - if a property is a root one, then the constant is just a lowercased property name
-// - if a property is nested, then its value is property's parent and property name separated with a dot
+// Header Key conventions:
+// - starts with a prefix "ais-"
+// - all words separated with "-": no dots and underscores
 const (
 	// bucket props
-	HeaderBucketProps       = "bucket_props"
-	HeaderOrigURLBck        = "original_url"       // see BucketProps.Extra.HTTP.OrigURLBck
-	HeaderCloudRegion       = "cloud_region"       // see BucketProps.Extra.AWS.CloudRegion
-	HeaderBucketVerEnabled  = "versioning.enabled" // Enable/disable object versioning in a bucket
-	HeaderBucketAccessAttrs = "access"             // Bucket access attributes
-	HeaderBucketCreated     = "created"            // Bucket creation time
+	HeaderPrefix           = "ais-"
+	HeaderBucketProps      = HeaderPrefix + "bucket-props"
+	HeaderOrigURLBck       = HeaderPrefix + "original-url"       // see BucketProps.Extra.HTTP.OrigURLBck
+	HeaderCloudRegion      = HeaderPrefix + "cloud-region"       // see BucketProps.Extra.AWS.CloudRegion
+	HeaderBucketVerEnabled = HeaderPrefix + "versioning-enabled" // Enable/disable object versioning in a bucket
 
-	HeaderBackendProvider = "provider"       // ProviderAmazon et al. - see cmn/bucket.go
-	HeaderRemoteOffline   = "remote.offline" // when accessing cached remote bucket with no backend connectivity
-
-	HeaderBackendBck         = "backend_bck"
-	HeaderBackendBckName     = HeaderBackendBck + ".name"
-	HeaderBackendBckProvider = HeaderBackendBck + "." + HeaderBackendProvider
+	HeaderBucketCreated   = HeaderPrefix + "created"        // Bucket creation time
+	HeaderBackendProvider = HeaderPrefix + "provider"       // ProviderAmazon et al. - see cmn/bucket.go
+	HeaderRemoteOffline   = HeaderPrefix + "remote-offline" // when accessing cached remote bucket with no backend connectivity
 
 	// object meta
-	HeaderObjCksumType = "checksum.type"  // Checksum Type, one of SupportedChecksums()
-	HeaderObjCksumVal  = "checksum.value" // Checksum Value
-	HeaderObjAtime     = "atime"          // Object access time
-	HeaderObjCustomMD  = "custom_md"      // Object custom metadata
-	HeaderObjSize      = "size"           // Object size (bytes)
-	HeaderObjVersion   = "version"        // Object version/generation - ais or Cloud
-	HeaderObjECMeta    = "ec_meta"        // Info about EC object/slice/replica
+	HeaderObjCksumType = HeaderPrefix + "checksum-type"  // Checksum Type, one of SupportedChecksums()
+	HeaderObjCksumVal  = HeaderPrefix + "checksum-value" // Checksum Value
+	HeaderObjAtime     = HeaderPrefix + "atime"          // Object access time
+	HeaderObjCustomMD  = HeaderPrefix + "custom-md"      // Object custom metadata
+	HeaderObjSize      = HeaderPrefix + "size"           // Object size (bytes)
+	HeaderObjVersion   = HeaderPrefix + "version"        // Object version/generation - ais or Cloud
+	HeaderObjECMeta    = HeaderPrefix + "ec-meta"        // Info about EC object/slice/replica
 
 	// intra-cluster: control
-	HeaderCallerID          = "caller.id" // it is a marker of intra-cluster request (see cmn.IsInternalReq)
-	HeaderPutterID          = "putter.id"
-	HeaderCallerName        = "caller.name"
-	HeaderCallerSmapVersion = "caller.smap.ver"
+	HeaderCallerID          = HeaderPrefix + "caller-id" // it is a marker of intra-cluster request (see cmn.IsInternalReq)
+	HeaderPutterID          = HeaderPrefix + "putter-id"
+	HeaderCallerName        = HeaderPrefix + "caller-name"
+	HeaderCallerSmapVersion = HeaderPrefix + "caller-smap-ver"
 
-	HeaderNodeID  = "node.id"
-	HeaderNodeURL = "node.url"
+	HeaderNodeID  = HeaderPrefix + "node-id"
+	HeaderNodeURL = HeaderPrefix + "node-url"
 
 	// custom
-	HeaderAppendHandle = "append.handle"
+	HeaderAppendHandle = HeaderPrefix + "append-handle"
 
 	// intra-cluster: streams
-	HeaderSessID   = "session.id"
-	HeaderCompress = "compress" // LZ4Compression, etc.
+	HeaderSessID   = HeaderPrefix + "session-id"
+	HeaderCompress = HeaderPrefix + "compress" // LZ4Compression, etc.
 
-	HeaderHandle = "handle"
+	HeaderHandle = HeaderPrefix + "handle"
+)
+
+// Configuration and bucket properties
+const (
+	PropBucketAccessAttrs  = "access"             // Bucket access attributes
+	PropBucketVerEnabled   = "versioning.enabled" // Enable/disable object versioning in a bucket
+	PropBucketCreated      = "created"            // Bucket creation time
+	PropBackendBck         = "backend_bck"
+	PropBackendBckName     = PropBackendBck + ".name"
+	PropBackendBckProvider = PropBackendBck + ".provider"
 )
 
 // supported compressions (alg-s)
@@ -159,6 +164,9 @@ const (
 )
 
 // URL Query "?name1=val1&name2=..."
+// Query parameter name conventions:
+// - contains only alpha-numeric characters
+// - words must be separated with underscrore "_"
 const (
 	// user/app API
 	URLParamWhat            = "what"         // "smap" | "bmd" | "config" | "stats" | "xaction" ...
@@ -189,8 +197,8 @@ const (
 	URLParamClusterInfo      = "cii" // true: Health to return ais.clusterInfo
 	URLParamRecvType         = "rtp" // to tell real PUT from migration PUT
 
-	URLParamAppendType   = "appendty"
-	URLParamAppendHandle = "handle"
+	URLParamAppendType   = "append_type"
+	URLParamAppendHandle = "append_handle"
 
 	// action (operation, transaction, task) UUID
 	URLParamUUID = "uuid"

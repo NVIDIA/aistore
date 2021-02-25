@@ -791,7 +791,7 @@ func makeBckPropPairs(values []string) (nvs cmn.SimpleKVs, err error) {
 		}
 		cmd = values[idx]
 		idx++
-		if cmd == cmn.HeaderBucketAccessAttrs {
+		if cmd == cmn.PropBucketAccessAttrs {
 			access, idx, err = parseBucketAccessValues(values, idx)
 			if err != nil {
 				return nil, err
@@ -1057,7 +1057,7 @@ func bckPropList(props *cmn.BucketProps, verbose bool) (propList []prop, err err
 	} else {
 		err = cmn.IterFields(props, func(uniqueTag string, field cmn.IterField) (err error, b bool) {
 			value := fmt.Sprintf("%v", field.Value())
-			if uniqueTag == cmn.HeaderBucketAccessAttrs {
+			if uniqueTag == cmn.PropBucketAccessAttrs {
 				value = props.Access.Describe()
 			}
 			propList = append(propList, prop{
