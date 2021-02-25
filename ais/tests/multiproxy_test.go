@@ -359,6 +359,7 @@ func _addNodeDuplicateDaemonID(t *testing.T, nodeType string) {
 
 	// Create local config for daemon.
 	localConf := &cmn.LocalConfig{}
+	localConf.ConfigDir = conf.Confdir
 	localConf.Net.PortStr = strconv.Itoa(conf.Net.L4.Port + portInc)
 	localConf.Net.PortIntraControlStr = strconv.Itoa(conf.Net.L4.PortIntraControl + portInc)
 	localConf.Net.PortIntraDataStr = strconv.Itoa(conf.Net.L4.PortIntraData + portInc)

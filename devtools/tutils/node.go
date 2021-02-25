@@ -427,6 +427,7 @@ func DeployNode(t *testing.T, node *cluster.Snode, conf *cmn.Config, localConf *
 
 	if localConf == nil {
 		localConf = &cmn.LocalConfig{}
+		localConf.ConfigDir = conf.Confdir
 		localConf.Net.PortStr = strconv.Itoa(conf.Net.L4.Port)
 		localConf.Net.PortIntraControlStr = strconv.Itoa(conf.Net.L4.PortIntraControl)
 		localConf.Net.PortIntraDataStr = strconv.Itoa(conf.Net.L4.PortIntraData)

@@ -32,6 +32,7 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *cmn.Config) (er
 	if err != nil {
 		return fmt.Errorf("failed to load local config %q, err: %v", localConfPath, err)
 	}
+	debug.AssertMsg(localConf.ConfigDir != "", "local configuration path not set")
 
 	if err = config.SetNetConf(localConf.Net); err != nil {
 		return
