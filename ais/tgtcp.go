@@ -930,6 +930,15 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 		caller = r.Header.Get(cmn.HeaderCallerName)
 	)
 
+	newConf, msgConf, err := t.extractConfig(payload, caller)
+	if err != nil {
+		errs = append(errs, err)
+	} else if newConf != nil {
+		if err = t.receiveConfig(newConf, msgConf, caller); err != nil && !isErrDowngrade(err) {
+			errs = append(errs, err)
+		}
+	}
+
 	newSmap, msgSmap, err := t.extractSmap(payload, caller)
 	if err != nil {
 		errs = append(errs, err)

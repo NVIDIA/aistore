@@ -37,14 +37,14 @@ type (
 		stopping  atomic.Bool // true when exiting
 	}
 	cliFlags struct {
-		localConfPath  string // path to local config
-		globalConfPath string // path to global config
-		role           string // proxy | target
-		daemonID       string // daemon ID to assign
-		confCustom     string // "key1=value1,key2=value2" formatted to override selected entries in config
-		ntargets       int    // expected number of targets in a starting-up cluster (proxy only)
-		skipStartup    bool   // determines if the proxy should skip waiting for targets
-		transient      bool   // false: make cmn.ConfigCLI settings permanent, true: leave them transient
+		localConfigPath  string // path to local config
+		globalConfigPath string // path to global config
+		role             string // proxy | target
+		daemonID         string // daemon ID to assign
+		confCustom       string // "key1=value1,key2=value2" formatted to override selected entries in config
+		ntargets         int    // expected number of targets in a starting-up cluster (proxy only)
+		skipStartup      bool   // determines if the proxy should skip waiting for targets
+		transient        bool   // false: make cmn.ConfigCLI settings permanent, true: leave them transient
 	}
 	rungroup struct {
 		rs    map[string]cmn.Runner
@@ -69,9 +69,9 @@ func init() {
 	flag.StringVar(&daemon.cli.daemonID, "daemon_id", "", "unique ID to be assigned to the AIS daemon")
 
 	// config itself and its command line overrides
-	flag.StringVar(&daemon.cli.globalConfPath, "config", "",
+	flag.StringVar(&daemon.cli.globalConfigPath, "config", "",
 		"config filename: local file that stores the global cluster configuration")
-	flag.StringVar(&daemon.cli.localConfPath, "local_config", "", "config filename: local file that stores daemon's local configuration")
+	flag.StringVar(&daemon.cli.localConfigPath, "local_config", "", "config filename: local file that stores daemon's local configuration")
 
 	flag.StringVar(&daemon.cli.confCustom, "config_custom", "",
 		"\"key1=value1,key2=value2\" formatted string to override selected entries in config")
@@ -129,18 +129,18 @@ func initDaemon(version, buildTime string) (rmain cmn.Runner) {
 			cmn.ExitLogf("Invalid object size: %d [%s]\n", daemon.dryRun.size, daemon.dryRun.sizeStr)
 		}
 	}
-	if daemon.cli.globalConfPath == "" {
+	if daemon.cli.globalConfigPath == "" {
 		str := fmt.Sprintf(confMsg, "config")
 		str += usageStr
 		cmn.ExitLogf(str)
 	}
-	if daemon.cli.localConfPath == "" {
+	if daemon.cli.localConfigPath == "" {
 		str := fmt.Sprintf(confMsg, "local-config")
 		str += usageStr
 		cmn.ExitLogf(str)
 	}
 	config = &cmn.Config{}
-	err = jsp.LoadConfig(daemon.cli.globalConfPath, daemon.cli.localConfPath, daemon.cli.role, config)
+	err = jsp.LoadConfig(daemon.cli.globalConfigPath, daemon.cli.localConfigPath, daemon.cli.role, config)
 	if err != nil {
 		cmn.ExitLogf("%v", err)
 	}

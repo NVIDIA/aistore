@@ -227,6 +227,11 @@ func MorphMarshal(data, v interface{}) error {
 	return JSON.Unmarshal(b, v)
 }
 
+func MustMorphMarshal(data, v interface{}) {
+	err := MorphMarshal(data, v)
+	AssertNoErr(err)
+}
+
 func (u *ReqArgs) URL() string {
 	url := JoinPath(u.Base, u.Path)
 	query := u.Query.Encode()

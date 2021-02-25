@@ -315,17 +315,19 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	debug.Assert(ok)
 
 	// 7. initialize configMD
-	conf := p.ensureConfPrimaryURL()
-	if conf.Version == 0 {
-		conf.Version = 1
-		p.owner.conf.persist(conf)
+	cfg := p.owner.config.get()
+	if cfg.Version == 0 {
+		// Implies, the global config object is created for the first time.
+		cfg = cfg.clone()
+		config.LastUpdated = time.Now().String()
+		p.owner.config.persist(cfg)
 	}
+	cfg = p.ensureConfigPrimaryURL()
 
-	// 8. metasync (smap & bmd) and startup as primary
-	// TODO: add config revs
+	// 8. metasync (smap, config & bmd) and startup as primary
 	var (
 		aisMsg = p.newAisMsgStr(metaction2, smap, bmd)
-		pairs  = []revsPair{{smap, aisMsg}, {bmd, aisMsg}}
+		pairs  = []revsPair{{smap, aisMsg}, {bmd, aisMsg}, {cfg, aisMsg}}
 	)
 	wg := p.metasyncer.sync(pairs...)
 	wg.Wait()

@@ -648,12 +648,12 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// TODO: allow transient config updates
-		if err := p.owner.conf.modify(toUpdate, cmn.ActSetConfig); err != nil {
+		if err := p.owner.config.modify(toUpdate, cmn.ActSetConfig); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		// TODO: replace with metasync
-		p.setConfig(w, r, msg, nil /*from query*/)
+		wg := p.metasyncer.sync(revsPair{p.owner.config.get(), p.newAisMsg(msg, nil, nil)})
+		wg.Wait()
 	case cmn.ActShutdown:
 		glog.Infoln("Proxy-controlled cluster shutdown...")
 		args := allocBcastArgs()
@@ -675,33 +675,6 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 	default:
 		p.writeErrAct(w, r, msg.Action)
 	}
-}
-
-func (p *proxyrunner) setConfig(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, query url.Values) {
-	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{Method: http.MethodPut, Query: query}
-	if query == nil {
-		debug.Assert(msg != nil)
-		args.req.Path = cmn.URLPathDaemon.S
-		args.req.Body = cmn.MustMarshal(msg)
-	} else {
-		debug.Assert(msg == nil)
-		args.req.Path = cmn.URLPathDaemonSetConf.S
-	}
-	args.to = cluster.AllNodes
-	results := p.bcastGroup(args)
-	freeBcastArgs(args)
-	for _, res := range results {
-		if res.err == nil {
-			continue
-		}
-		err := res.errorf("%s failed", cmn.ActSetConfig)
-		p.writeErr(w, r, err)
-		p.keepalive.onerr(res.err, res.status)
-		freeCallResults(results)
-		return
-	}
-	freeCallResults(results)
 }
 
 func (p *proxyrunner) xactStarStop(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
@@ -930,12 +903,12 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 			p.writeErrf(w, r, err.Error())
 			return
 		}
-		if err := p.owner.conf.modify(toUpdate, action); err != nil {
+		if err := p.owner.config.modify(toUpdate, action); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		// TODO: replace with metasync
-		p.setConfig(w, r, nil, query)
+		wg := p.metasyncer.sync(revsPair{p.owner.config.get(), p.newAisMsg(&cmn.ActionMsg{Action: action}, nil, nil)})
+		wg.Wait()
 	case cmn.ActAttach, cmn.ActDetach:
 		// TODO: change to use global config + metasync
 		if err := p.attachDetach(w, r, action); err != nil {

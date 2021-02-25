@@ -552,6 +552,15 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		caller = r.Header.Get(cmn.HeaderCallerName)
 	)
 
+	newConf, msgConf, err := p.extractConfig(payload, caller)
+	if err != nil {
+		errs = append(errs, err)
+	} else if newConf != nil {
+		if err = p.receiveConfig(newConf, msgConf, caller); err != nil && !isErrDowngrade(err) {
+			errs = append(errs, err)
+		}
+	}
+
 	newSmap, msgSmap, err := p.extractSmap(payload, caller)
 	if err != nil {
 		errs = append(errs, err)
@@ -2238,22 +2247,22 @@ func (p *proxyrunner) _becomeFinal(ctx *smapModifier, clone *smapX) {
 	var (
 		bmd   = p.owner.bmd.get()
 		rmd   = p.owner.rmd.get()
-		_     = p.ensureConfPrimaryURL()
+		conf  = p.ensureConfigPrimaryURL()
 		msg   = p.newAisMsgStr(cmn.ActNewPrimary, clone, bmd)
-		pairs = []revsPair{{clone, msg}, {bmd, msg}, {rmd, msg}}
+		pairs = []revsPair{{clone, msg}, {bmd, msg}, {rmd, msg}, {conf, msg}}
 	)
 	glog.Infof("%s: distributing (%s, %s, %s) with newly elected primary (self)", p.si, clone, bmd, rmd)
 	_ = p.metasyncer.sync(pairs...)
 	p.syncNewICOwners(ctx.smap, clone)
 }
 
-func (p *proxyrunner) ensureConfPrimaryURL() *globalConf {
+func (p *proxyrunner) ensureConfigPrimaryURL() *globalConfig {
 	smap := p.owner.smap.get()
-	conf := p.owner.conf.get()
+	conf := p.owner.config.get()
 	debug.Assert(smap.isPrimary(p.si))
 	if newURL := smap.Primary.URL(cmn.NetworkPublic); conf.Proxy.PrimaryURL != newURL {
 		detail := conf.Proxy.PrimaryURL + " => " + newURL
-		err := p.owner.conf.modify(&cmn.ConfigToUpdate{
+		err := p.owner.config.modify(&cmn.ConfigToUpdate{
 			Proxy: &cmn.ProxyConfToUpdate{
 				PrimaryURL: &newURL,
 			},
@@ -2261,7 +2270,7 @@ func (p *proxyrunner) ensureConfPrimaryURL() *globalConf {
 		if err != nil {
 			glog.Errorf("failed to modify global config, err: %v", err)
 		}
-		conf = p.owner.conf.get()
+		conf = p.owner.config.get()
 	}
 	return conf
 }

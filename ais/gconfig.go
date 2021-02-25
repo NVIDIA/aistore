@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -17,21 +18,33 @@ import (
 )
 
 type (
-	globalConf struct {
+	globalConfig struct {
 		cmn.Config
 	}
 	configOwner struct {
 		sync.Mutex
-		cmd        atomic.Pointer // pointer to globalConf
+		config     atomic.Pointer // pointer to globalConf
 		daemonType string
 	}
 )
 
-var _ revs = (*globalConf)(nil)
+var _ revs = (*globalConfig)(nil)
 
-func (r *globalConf) tag() string     { return revsConfTag }
-func (r *globalConf) version() int64  { return r.Version }
-func (r *globalConf) marshal() []byte { return cmn.MustLocalMarshal(r) }
+func (config *globalConfig) tag() string     { return revsConfTag }
+func (config *globalConfig) version() int64  { return config.Version }
+func (config *globalConfig) marshal() []byte { return cmn.MustLocalMarshal(config) }
+func (config *globalConfig) clone() *globalConfig {
+	clone := &globalConfig{}
+	cmn.MustMorphMarshal(config, clone)
+	return clone
+}
+
+func (config *globalConfig) String() string {
+	if config == nil {
+		return "Conf <nil>"
+	}
+	return fmt.Sprintf("Conf v%d", config.Version)
+}
 
 ////////////
 // config //
@@ -41,13 +54,14 @@ func newConfOwner(daemonType string) *configOwner {
 	return &configOwner{daemonType: daemonType}
 }
 
-func (co *configOwner) get() *globalConf {
-	return (*globalConf)(co.cmd.Load())
+func (co *configOwner) get() *globalConfig {
+	return (*globalConfig)(co.config.Load())
 }
 
-func (co *configOwner) put(cmd *globalConf) {
-	cmd.SetRole(co.daemonType)
-	co.cmd.Store(unsafe.Pointer(cmd))
+func (co *configOwner) put(config *globalConfig) {
+	cmn.Assert(config.MetaVersion != 0)
+	config.SetRole(co.daemonType)
+	co.config.Store(unsafe.Pointer(config))
 }
 
 func cfgBeginUpdate() *cmn.Config { return cmn.GCO.BeginUpdate() }
@@ -61,30 +75,29 @@ func cfgCommitUpdate(config *cmn.Config, detail string) (err error) {
 	return
 }
 
-// TODO: make it similar to other owner modifiers; ensure CoW
-// For now, we only support updating the global configuration - only done by primary.
+// Update the global config on primary proxy.
 func (co *configOwner) modify(toUpdate *cmn.ConfigToUpdate, detail string) error {
 	co.Lock()
 	defer co.Unlock()
-	conf := co.get()
-
-	err := jsp.SetConfigInMem(toUpdate, &conf.Config)
+	config := co.get().clone()
+	err := jsp.SetConfigInMem(toUpdate, &config.Config)
 	if err != nil {
 		return err
 	}
-	conf.Version++
-	if err = co.persist(conf); err != nil {
+	config.Version++
+	config.LastUpdated = time.Now().String()
+	if err = co.persist(config); err != nil {
 		return fmt.Errorf("FATAL: failed persist config for %q, err: %v", detail, err)
 	}
 	co.updateGCO()
 	return nil
 }
 
-func (co *configOwner) persist(conf *globalConf) error {
-	co.put(conf)
+func (co *configOwner) persist(config *globalConfig) error {
+	co.put(config)
 	local := cmn.GCO.GetLocal()
 	savePath := path.Join(local.ConfigDir, gconfFname)
-	if err := jsp.Save(savePath, conf, jsp.PlainLocal()); err != nil {
+	if err := jsp.Save(savePath, config, jsp.PlainLocal()); err != nil {
 		return err
 	}
 	return nil
@@ -92,21 +105,24 @@ func (co *configOwner) persist(conf *globalConf) error {
 
 func (co *configOwner) updateGCO() (err error) {
 	cmn.GCO.BeginUpdate()
-	conf := co.get()
-	conf.SetLocalConf(cmn.GCO.GetLocal())
-	if err = conf.Validate(); err != nil {
+	config := co.get().clone()
+	config.SetLocalConf(cmn.GCO.GetLocal())
+	if err = config.Validate(); err != nil {
 		return
 	}
-	cmn.GCO.CommitUpdate(&conf.Config)
+	cmn.GCO.CommitUpdate(&config.Config)
 	return
 }
 
 func (co *configOwner) load() (err error) {
 	localConf := cmn.GCO.GetLocal()
-	gconf := &globalConf{}
-	_, err = jsp.Load(path.Join(localConf.ConfigDir, gconfFname), gconf, jsp.Plain())
+	config := &globalConfig{}
+	_, err = jsp.Load(path.Join(localConf.ConfigDir, gconfFname), config, jsp.Plain())
 	if err == nil {
-		co.put(gconf)
+		if config.MetaVersion == 0 {
+			config.MetaVersion = cmn.MetaVersion
+		}
+		co.put(config)
 		return co.updateGCO()
 	}
 	if !os.IsNotExist(err) {
@@ -114,12 +130,13 @@ func (co *configOwner) load() (err error) {
 	}
 	// If gconf file is missing, assume conf provided through CLI as global.
 	// NOTE: We cannot use GCO.Get() here as cmn.GCO may also contain custom config.
-	conf := &globalConf{}
-	_, err = jsp.Load(cmn.GCO.GetGlobalConfigPath(), conf, jsp.Plain())
+	config = &globalConfig{}
+	_, err = jsp.Load(cmn.GCO.GetGlobalConfigPath(), config, jsp.Plain())
 	if err != nil {
 		return
 	}
-	co.put(conf)
+	config.MetaVersion = cmn.MetaVersion
+	co.put(config)
 	return
 }
 

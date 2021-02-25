@@ -37,6 +37,11 @@ const (
 	// EC
 	MinSliceCount = 1  // minimum number of data or parity slices
 	MaxSliceCount = 32 // maximum number of data or parity slices
+
+	// Config
+	// current formatting version
+	// (future changes in the config structure or its encoding will require a different version)
+	MetaVersion int64 = 1
 )
 
 const (
@@ -131,7 +136,9 @@ type (
 		DSort       DSortConf       `json:"distributed_sort"`
 		Compression CompressionConf `json:"compression"`
 		MDWrite     MDWritePolicy   `json:"md_write"`
+		LastUpdated string          `json:"lastupdate_time"`
 		Version     int64           `json:"config_version,string"` // instance version of config
+		MetaVersion int64           `json:"meta_version"`          // formatting version for backward compatibility
 	}
 
 	LocalConfig struct {

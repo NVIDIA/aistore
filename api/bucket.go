@@ -103,7 +103,6 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p *cmn
 		}
 		return
 	}
-
 	err = jsoniter.Unmarshal([]byte(resp.Header.Get(cmn.HeaderBucketProps)), &p)
 	return p, err
 }

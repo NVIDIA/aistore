@@ -131,6 +131,9 @@ type (
 			}
 			VoteInProgress bool `json:"vote_in_progress"`
 		} `json:"smap"`
+		Config struct {
+			Version int64 `json:"version,string"`
+		} `json:"config"`
 	}
 
 	// http server and http runner (common for proxy and target)
@@ -155,10 +158,10 @@ type (
 			data    *http.Client // http client to execute target <=> target GET & PUT (object)
 		}
 		owner struct {
-			smap *smapOwner
-			bmd  bmdOwner
-			rmd  *rmdOwner
-			conf *configOwner
+			smap   *smapOwner
+			bmd    bmdOwner
+			rmd    *rmdOwner
+			config *configOwner
 		}
 		startup struct {
 			cluster atomic.Bool // determines if the cluster has started up
@@ -654,10 +657,10 @@ func newMuxers() cmn.HTTPMuxers {
 
 func (h *httprunner) initConfOwner(daemonType string) {
 	// check if global config exists
-	if h.owner.conf == nil {
-		h.owner.conf = newConfOwner(daemonType)
+	if h.owner.config == nil {
+		h.owner.config = newConfOwner(daemonType)
 	}
-	if err := h.owner.conf.load(); err != nil {
+	if err := h.owner.config.load(); err != nil {
 		cmn.ExitLogf("Failed to initialize config owner, err: %v", err)
 	}
 }
@@ -1445,11 +1448,12 @@ func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.
 // NOTE: if `checkAll` is set to false, we stop making further requests once minPidConfirmations is achieved
 func (h *httprunner) bcastHealth(smap *smapX, checkAll ...bool) (maxCii *clusterInfo, cnt int) {
 	var (
-		query   = url.Values{cmn.URLParamClusterInfo: []string{"true"}}
-		timeout = cmn.GCO.Get().Timeout.CplaneOperation
-		mu      = &sync.RWMutex{}
-		nodemap = smap.Pmap
-		retried bool
+		query          = url.Values{cmn.URLParamClusterInfo: []string{"true"}}
+		timeout        = cmn.GCO.Get().Timeout.CplaneOperation
+		mu             = &sync.RWMutex{}
+		nodemap        = smap.Pmap
+		maxConfVersion int64
+		retried        bool
 	)
 	maxCii = &clusterInfo{}
 	maxCii.fillSmap(smap)
@@ -1492,6 +1496,10 @@ retry:
 			} else if maxCii.smapEqual(cii) {
 				cnt++
 			}
+			// TODO: Include confidence count for config
+			if maxConfVersion < cii.Config.Version {
+				maxConfVersion = cii.Config.Version
+			}
 			mu.Unlock()
 		}(si)
 	}
@@ -1503,6 +1511,7 @@ retry:
 		retried = true
 		goto retry
 	}
+	glog.Infof("max config version %d", maxConfVersion)
 	return
 }
 
@@ -1522,6 +1531,38 @@ func ciiToSmap(smap *smapX, body []byte, self, si *cluster.Snode) *clusterInfo {
 //////////////////////////
 // metasync Rx handlers //
 //////////////////////////
+
+func (h *httprunner) extractConfig(payload msPayload, caller string) (newConfig *globalConfig, msg *aisMsg, err error) {
+	if _, ok := payload[revsConfTag]; !ok {
+		return
+	}
+	newConfig, msg = &globalConfig{}, &aisMsg{}
+	confValue := payload[revsConfTag]
+	if err1 := jsoniter.Unmarshal(confValue, newConfig); err1 != nil {
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new Config", cmn.BytesHead(confValue), err1)
+		return
+	}
+	if msgValue, ok := payload[revsConfTag+revsActionTag]; ok {
+		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cmn.BytesHead(msgValue), err1)
+			return
+		}
+	}
+
+	conf := h.owner.config.get()
+	glog.Infof(
+		"[metasync] extract %s from %q (local: %s, action: %q, uuid: %q)",
+		newConfig, caller, conf, msg.Action, msg.UUID,
+	)
+
+	if newConfig.version() <= conf.version() {
+		if newConfig.version() < conf.version() {
+			err = newErrDowngrade(h.si, conf.String(), newConfig.String())
+		}
+		newConfig = nil
+	}
+	return
+}
 
 func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *smapX, msg *aisMsg, err error) {
 	if _, ok := payload[revsSmapTag]; !ok {
@@ -1649,6 +1690,24 @@ func (h *httprunner) extractBMD(payload msPayload, caller string) (newBMD *bucke
 		}
 		newBMD = nil
 	}
+	return
+}
+
+func (h *httprunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, caller string) (err error) {
+	glog.Infof(
+		"[metasync] receive %s from %q (action: %q, uuid: %q)",
+		newConfig, caller, msg.Action, msg.UUID,
+	)
+
+	h.owner.config.Lock()
+	conf := h.owner.config.get()
+	if newConfig.version() <= conf.version() {
+		h.owner.config.Unlock()
+		return newErrDowngrade(h.si, conf.String(), newConfig.String())
+	}
+	h.owner.config.persist(newConfig)
+	h.owner.config.Unlock()
+	h.owner.config.updateGCO()
 	return
 }
 
@@ -2120,12 +2179,14 @@ func (p *proxyrunner) rpErrHandler(w http.ResponseWriter, r *http.Request, err e
 
 func (cii *clusterInfo) fill(h *httprunner) {
 	var (
-		bmd  = h.owner.bmd.get()
-		smap = h.owner.smap.get()
+		bmd    = h.owner.bmd.get()
+		smap   = h.owner.smap.get()
+		config = h.owner.config.get()
 	)
 	cii.BMD.Version = bmd.version()
 	cii.BMD.UUID = bmd.UUID
 	cii.fillSmap(smap)
+	cii.Config.Version = config.version()
 }
 
 func (cii *clusterInfo) fillSmap(smap *smapX) {
