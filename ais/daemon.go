@@ -8,7 +8,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -26,16 +28,14 @@ import (
 )
 
 type (
-	// - selective disabling of a disk and/or network IO.
-	// - dry-run is initialized at startup and cannot be changed.
-	// - the values can be set via clivars or environment (environment will override clivars).
-	// - for details see README, section "Performance testing"
-	dryRunConfig struct {
-		sizeStr string // random content size used when disk IO is disabled (-dryobjsize/AIS_DRY_OBJ_SIZE)
-		size    int64  // as above converted to bytes from a string like '8m'
-		disk    bool   // dry-run disk (-nodiskio/AIS_NO_DISK_IO)
+	daemonCtx struct {
+		cli       cliFlags
+		dryRun    dryRunConfig
+		rg        *rungroup
+		version   string      // major.minor.build (see cmd/aisnode)
+		buildTime string      // YYYY-MM-DD HH:MM:SS-TZ
+		stopping  atomic.Bool // true when exiting
 	}
-
 	cliFlags struct {
 		localConfPath  string // path to local config
 		globalConfPath string // path to global config
@@ -46,68 +46,22 @@ type (
 		skipStartup    bool   // determines if the proxy should skip waiting for targets
 		transient      bool   // false: make cmn.ConfigCLI settings permanent, true: leave them transient
 	}
-
-	// daemon instance: proxy or storage target
-	daemonCtx struct {
-		cli      cliFlags
-		dryRun   dryRunConfig
-		rg       *rungroup
-		stopping atomic.Bool // true when exiting
-	}
-
 	rungroup struct {
 		rs    map[string]cmn.Runner
 		errCh chan error
 	}
+	// - selective disabling of a disk and/or network IO.
+	// - dry-run is initialized at startup and cannot be changed.
+	// - the values can be set via clivars or environment (environment will override clivars).
+	// - for details see README, section "Performance testing"
+	dryRunConfig struct {
+		sizeStr string // random content size used when disk IO is disabled (-dryobjsize/AIS_DRY_OBJ_SIZE)
+		size    int64  // as above converted to bytes from a string like '8m'
+		disk    bool   // dry-run disk (-nodiskio/AIS_NO_DISK_IO)
+	}
 )
 
-// globals
-var (
-	daemon = daemonCtx{}
-)
-
-func (g *rungroup) add(r cmn.Runner) {
-	cmn.Assert(r.Name() != "")
-	_, exists := g.rs[r.Name()]
-	cmn.Assert(!exists)
-
-	g.rs[r.Name()] = r
-}
-
-func (g *rungroup) run(mainRunner cmn.Runner) error {
-	var mainDone atomic.Bool
-	g.errCh = make(chan error, len(g.rs))
-	daemon.stopping.Store(false)
-	for _, r := range g.rs {
-		go func(r cmn.Runner) {
-			err := r.Run()
-			if err != nil {
-				glog.Warningf("runner [%s] exited with err [%v]", r.Name(), err)
-			}
-			if r.Name() == mainRunner.Name() {
-				mainDone.Store(true) // load it only once
-			}
-			g.errCh <- err
-		}(r)
-	}
-
-	// Stop all runners, target (or proxy) first.
-	err := <-g.errCh
-	daemon.stopping.Store(true)
-	if !mainDone.Load() {
-		mainRunner.Stop(err)
-	}
-	for _, r := range g.rs {
-		if r.Name() != mainRunner.Name() {
-			r.Stop(err)
-		}
-	}
-	// Wait for all terminations.
-	for i := 0; i < len(g.rs)-1; i++ {
-		<-g.errCh
-	}
-	return err
-}
+var daemon = daemonCtx{}
 
 func init() {
 	// role aka `DaemonType`
@@ -153,16 +107,15 @@ func dryRunInit() {
 	}
 }
 
-func initDaemon(version, build string) (rmain cmn.Runner) {
-	var (
-		config *cmn.Config
-		err    error
-	)
+func initDaemon(version, buildTime string) (rmain cmn.Runner) {
 	const (
 		usageStr = "Usage: aisnode -role=<proxy|target> -config=</dir/config.json> -local_config=</dir/local-config.json> ..."
 		confMsg  = "Missing `%s` flag pointing to configuration file (must be provided via command line)\n"
 	)
-
+	var (
+		config *cmn.Config
+		err    error
+	)
 	flag.Parse()
 	if daemon.cli.role != cmn.Proxy && daemon.cli.role != cmn.Target {
 		cmn.ExitLogf(
@@ -170,7 +123,6 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 			daemon.cli.role, cmn.Proxy, cmn.Target,
 		)
 	}
-
 	if daemon.dryRun.disk {
 		daemon.dryRun.size, err = cmn.S2B(daemon.dryRun.sizeStr)
 		if daemon.dryRun.size < 1 || err != nil {
@@ -187,7 +139,6 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 		str += usageStr
 		cmn.ExitLogf(str)
 	}
-
 	config = &cmn.Config{}
 	if err = jsp.LoadConfig(daemon.cli.globalConfPath, daemon.cli.localConfPath, daemon.cli.role, config); err != nil {
 		cmn.ExitLogf("%v", err)
@@ -196,11 +147,13 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 
 	// Examples overriding default configuration at a node startup via command line:
 	// 1) set client timeout to 13s and store the updated value on disk:
-	// $ aisnode -config=/etc/ais.json -local_config=/etc/ais_local.json -role=target -config_custom="client.client_timeout=13s"
+	// $ aisnode -config=/etc/ais.json -local_config=/etc/ais_local.json -role=target \
+	//   -config_custom="client.client_timeout=13s"
 	//
 	// 2) same as above except that the new timeout will remain transient
 	//    (won't persist across restarts):
-	// $ aisnode -config=/etc/ais.json -local_config=/etc/ais_local.json -role=target -transient=true -config_custom="client.client_timeout=13s"
+	// $ aisnode -config=/etc/ais.json -local_config=/etc/ais_local.json -role=target -transient=true \
+	//   -config_custom="client.client_timeout=13s"
 	if daemon.cli.confCustom != "" {
 		var (
 			toUpdate = &cmn.ConfigToUpdate{}
@@ -218,9 +171,8 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 			cmn.ExitLogf("Failed to save config: %v", err)
 		}
 	}
-
-	glog.Infof("git: %s | build-time: %s\n", version, build)
-
+	daemon.version, daemon.buildTime = version, buildTime
+	glog.Infof("| version: %s | build-time: %s |\n", version, buildTime)
 	debug.Errorln("starting with debug asserts/logs")
 
 	containerized := sys.Containerized()
@@ -328,10 +280,10 @@ func initTarget() cmn.Runner {
 }
 
 // Run is the 'main' where everything gets started
-func Run(version, build string) int {
+func Run(version, buildTime string) int {
 	defer glog.Flush() // always flush
 
-	rmain := initDaemon(version, build)
+	rmain := initDaemon(version, buildTime)
 	err := daemon.rg.run(rmain)
 
 	if err == nil {
@@ -350,4 +302,134 @@ func Run(version, build string) int {
 	}
 	glog.Errorf("Terminated with err: %s", err)
 	return 1
+}
+
+//////////////
+// rungroup //
+//////////////
+
+func (g *rungroup) add(r cmn.Runner) {
+	cmn.Assert(r.Name() != "")
+	_, exists := g.rs[r.Name()]
+	cmn.Assert(!exists)
+
+	g.rs[r.Name()] = r
+}
+
+func (g *rungroup) run(mainRunner cmn.Runner) error {
+	var mainDone atomic.Bool
+	g.errCh = make(chan error, len(g.rs))
+	daemon.stopping.Store(false)
+	for _, r := range g.rs {
+		go func(r cmn.Runner) {
+			err := r.Run()
+			if err != nil {
+				glog.Warningf("runner [%s] exited with err [%v]", r.Name(), err)
+			}
+			if r.Name() == mainRunner.Name() {
+				mainDone.Store(true) // load it only once
+			}
+			g.errCh <- err
+		}(r)
+	}
+
+	// Stop all runners, target (or proxy) first.
+	err := <-g.errCh
+	daemon.stopping.Store(true)
+	if !mainDone.Load() {
+		mainRunner.Stop(err)
+	}
+	for _, r := range g.rs {
+		if r.Name() != mainRunner.Name() {
+			r.Stop(err)
+		}
+	}
+	// Wait for all terminations.
+	for i := 0; i < len(g.rs)-1; i++ {
+		<-g.errCh
+	}
+	return err
+}
+
+///////////////
+// daemon ID //
+///////////////
+
+const (
+	daemonIDEnv  = "AIS_DAEMON_ID"
+	proxyIDFname = ".ais.proxy_id"
+)
+
+func initDaemonID(daemonType string, config *cmn.Config) (daemonID string) {
+	if daemon.cli.daemonID != "" {
+		return daemon.cli.daemonID
+	}
+	if daemonID = os.Getenv(daemonIDEnv); daemonID != "" {
+		glog.Infof("%s[%s] ID from env", daemonType, daemonID)
+		return
+	}
+	switch daemonType {
+	case cmn.Target:
+		daemonID = initTargetDaemonID(config)
+	case cmn.Proxy:
+		daemonID = initProxyDaemonID(config)
+	default:
+		cmn.AssertMsg(false, daemonType)
+	}
+	return daemonID
+}
+
+func generateDaemonID(daemonType string, config *cmn.Config) string {
+	if !config.TestingEnv() {
+		return cmn.GenDaemonID()
+	}
+	daemonID := cmn.RandStringStrong(4)
+	switch daemonType {
+	case cmn.Target:
+		return fmt.Sprintf("%st%d", daemonID, config.Net.L4.Port)
+	case cmn.Proxy:
+		return fmt.Sprintf("%sp%d", daemonID, config.Net.L4.Port)
+	}
+	cmn.AssertMsg(false, daemonType)
+	return ""
+}
+
+// proxy ID
+func initProxyDaemonID(config *cmn.Config) (daemonID string) {
+	if daemonID = readProxyDaemonID(config); daemonID != "" {
+		glog.Infof("p[%s] from %q", daemonID, proxyIDFname)
+		return
+	}
+	daemonID = generateDaemonID(cmn.Proxy, config)
+	cmn.Assert(daemonID != "")
+	glog.Infof("p[%s] ID randomly generated", daemonID)
+	return daemonID
+}
+
+func writeProxyDID(config *cmn.Config, id string) error {
+	return ioutil.WriteFile(filepath.Join(config.Confdir, proxyIDFname), []byte(id), cmn.PermRWR)
+}
+
+func readProxyDaemonID(config *cmn.Config) (id string) {
+	if b, err := ioutil.ReadFile(filepath.Join(config.Confdir, proxyIDFname)); err == nil {
+		id = string(b)
+	} else if !os.IsNotExist(err) {
+		glog.Error(err)
+	}
+	return
+}
+
+// target ID
+func initTargetDaemonID(config *cmn.Config) (daemonID string) {
+	var err error
+	if daemonID, err = fs.LoadDaemonID(config.FSpaths.Paths); err != nil {
+		cmn.ExitLogf("%v", err)
+	}
+	if daemonID != "" {
+		return
+	}
+	daemonID = generateDaemonID(cmn.Target, config)
+	cmn.Assert(daemonID != "")
+	glog.Infof("t[%s] ID randomly generated", daemonID)
+	return daemonID
 }

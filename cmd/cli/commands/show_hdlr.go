@@ -169,7 +169,7 @@ var (
 					Subcommands: []cli.Command{
 						{
 							Name:         subcmdSmap,
-							Usage:        "display an smap copy of a node",
+							Usage:        "show Smap (cluster map) of a specific node",
 							ArgsUsage:    optionalDaemonIDArgument,
 							Flags:        showCmdsFlags[subcmdSmap],
 							Action:       showSmapHandler,
@@ -424,11 +424,9 @@ func showSmapHandler(c *cli.Context) (err error) {
 		daemonID    = c.Args().First()
 		primarySmap *cluster.Smap
 	)
-
 	if primarySmap, err = fillMap(); err != nil {
 		return
 	}
-
 	return clusterSmap(c, primarySmap, daemonID, flagIsSet(c, jsonFlag))
 }
 

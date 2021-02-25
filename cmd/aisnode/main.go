@@ -8,14 +8,21 @@ import (
 	"os"
 
 	"github.com/NVIDIA/aistore/ais"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-// NOTE: these variables are set by ldflags
+// NOTE: (major.minor) version is updated manually at (each) release time;
+//       the other two variables are populated by the `make` (via ldflags)
+
+const version = "3.4"
+
 var (
-	version string
-	build   string
+	build     string
+	buildtime string
 )
 
 func main() {
-	os.Exit(ais.Run(version, build))
+	debug.AssertMsg(build != "", "missing build")
+	debug.AssertMsg(buildtime != "", "missing build time")
+	os.Exit(ais.Run(version+"."+build, buildtime))
 }

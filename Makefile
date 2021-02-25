@@ -44,12 +44,12 @@ endif
 ifeq ($(MODE),debug)
 	# Debug mode
 	GCFLAGS = -gcflags="all=-N -l"
-	LDFLAGS = -ldflags "-X 'main.version=$(VERSION)' -X 'main.build=$(BUILD)'"
+	LDFLAGS = -ldflags "-X 'main.build=$(VERSION)' -X 'main.buildtime=$(BUILD)'"
 	BUILD_TAGS += debug
 else
 	# Production mode
 	GCFLAGS =
-	LDFLAGS = -ldflags "-w -s -X 'main.version=$(VERSION)' -X 'main.build=$(BUILD)'"
+	LDFLAGS = -ldflags "-w -s -X 'main.build=$(VERSION)' -X 'main.buildtime=$(BUILD)'"
 endif
 
 ifdef ONE_NODE_MANY_ETLS

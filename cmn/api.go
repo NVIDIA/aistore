@@ -229,6 +229,33 @@ type (
 	}
 )
 
+// sysinfo
+type (
+	SysInfo struct {
+		MemUsed    uint64  `json:"mem_used"`
+		MemAvail   uint64  `json:"mem_avail"`
+		PctMemUsed float64 `json:"pct_mem_used"`
+		PctCPUUsed float64 `json:"pct_cpu_used"`
+	}
+	CapacityInfo struct {
+		Used    uint64  `json:"fs_used,string"`
+		Total   uint64  `json:"fs_capacity,string"`
+		PctUsed float64 `json:"pct_fs_used"`
+	}
+	TSysInfo struct {
+		SysInfo
+		CapacityInfo
+	}
+	ClusterSysInfo struct {
+		Proxy  map[string]*SysInfo  `json:"proxy"`
+		Target map[string]*TSysInfo `json:"target"`
+	}
+	ClusterSysInfoRaw struct {
+		Proxy  JSONRawMsgs `json:"proxy"`
+		Target JSONRawMsgs `json:"target"`
+	}
+)
+
 // GetPropsDefault is a list of default (most relevant) `GetProps*` options.
 // NOTE: do **NOT** forget update this array when a prop is added/removed.
 var GetPropsDefault = []string{

@@ -27,6 +27,8 @@ const (
 	headerRebalance  = "REBALANCE"
 	headerUptime     = "UPTIME"
 	headerStatus     = "STATUS"
+	headerVersion    = "VERSION"
+	headerBuildTime  = "BUILD TIME"
 )
 
 type (
@@ -116,6 +118,8 @@ func newTableProxies(ps map[string]*stats.DaemonStatus, smap *cluster.Smap, hide
 		{name: headerMemAvail},
 		{name: headerUptime},
 		{name: headerStatus, hide: hideStatus},
+		{name: headerVersion},
+		{name: headerBuildTime},
 	}
 
 	table := newTemplateTable(headers...)
@@ -127,6 +131,8 @@ func newTableProxies(ps map[string]*stats.DaemonStatus, smap *cluster.Smap, hide
 			cmn.UnsignedB2S(status.SysInfo.MemAvail, 2),
 			fmtDuration(extractStat(status.Stats, "up.ns.time")),
 			status.Status,
+			status.Version,
+			status.BuildTime,
 		}
 		cmn.AssertNoErr(table.addRows(row))
 	}
@@ -136,7 +142,7 @@ func newTableProxies(ps map[string]*stats.DaemonStatus, smap *cluster.Smap, hide
 // Targets table
 
 func NewTargetTable(targetStats *stats.DaemonStatus) *TemplateTable {
-	return newTableTargets(map[string]*stats.DaemonStatus{targetStats.Snode.ID(): targetStats}, false, false)
+	return newTableTargets(map[string]*stats.DaemonStatus{targetStats.Snode.ID(): targetStats}, false, false, true)
 }
 
 func NewTargetsTable(ds *DaemonStatusTemplateHelper, onlyTargets, verbose bool) *TemplateTable {
@@ -146,10 +152,10 @@ func NewTargetsTable(ds *DaemonStatusTemplateHelper, onlyTargets, verbose bool) 
 	}
 
 	hideDeployments := !verbose && len(deployments) <= 1
-	return newTableTargets(ds.Tmap, hideDeployments, len(ds.Tmap) > 1 && allNodesOnline(ds.Pmap))
+	return newTableTargets(ds.Tmap, hideDeployments, len(ds.Tmap) > 1 && allNodesOnline(ds.Pmap), !verbose)
 }
 
-func newTableTargets(ts map[string]*stats.DaemonStatus, hideDeployments, hideStatus bool) *TemplateTable {
+func newTableTargets(ts map[string]*stats.DaemonStatus, hideDeployments, hideStatus, hideBuildTime bool) *TemplateTable {
 	headers := []*header{
 		{name: headerTarget},
 		{name: headerDeployment, hide: hideDeployments},
@@ -161,6 +167,8 @@ func newTableTargets(ts map[string]*stats.DaemonStatus, hideDeployments, hideSta
 		{name: headerRebalance},
 		{name: headerUptime},
 		{name: headerStatus, hide: hideStatus},
+		{name: headerVersion},
+		{name: headerBuildTime, hide: hideBuildTime},
 	}
 
 	table := newTemplateTable(headers...)
@@ -176,6 +184,8 @@ func newTableTargets(ts map[string]*stats.DaemonStatus, hideDeployments, hideSta
 			fmtXactStatus(status.TStatus),
 			fmtDuration(extractStat(status.Stats, "up.ns.time")),
 			status.Status,
+			status.Version,
+			status.BuildTime,
 		}
 		cmn.AssertNoErr(table.addRows(row))
 	}

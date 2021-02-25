@@ -134,6 +134,8 @@ type (
 		TStatus     *TargetStatus  `json:"target_status,omitempty"`
 		Status      string         `json:"status"`
 		DeployedOn  string         `json:"deployment"`
+		Version     string         `json:"ais_version"` // major.minor.build
+		BuildTime   string         `json:"build_time"`  // YYYY-MM-DD HH:MM:SS-TZ
 	}
 )
 

@@ -1935,6 +1935,8 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			SysInfo:     sys.FetchSysInfo(),
 			Stats:       p.statsT.CoreStats(),
 			DeployedOn:  deploymentType(),
+			Version:     daemon.version,
+			BuildTime:   daemon.buildTime,
 		}
 
 		p.writeJSON(w, r, msg, what)
