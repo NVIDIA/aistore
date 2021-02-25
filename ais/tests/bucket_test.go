@@ -339,7 +339,22 @@ func TestResetBucketProps(t *testing.T) {
 			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
+		propsToUpdate = &cmn.BucketPropsToUpdate{
+			Cksum: &cmn.CksumConfToUpdate{
+				Type:            api.String(cmn.ChecksumNone),
+				ValidateWarmGet: api.Bool(true),
+				EnableReadRange: api.Bool(true),
+			},
+			EC: &cmn.ECConfToUpdate{
+				Enabled:      api.Bool(false),
+				DataSlices:   api.Int(1),
+				ParitySlices: api.Int(2),
+			},
+		}
 	)
+	tutils.CheckSkip(t, tutils.SkipTestArgs{
+		MinTargets: *propsToUpdate.EC.DataSlices + *propsToUpdate.EC.ParitySlices,
+	})
 
 	tutils.SetClusterConfig(t, cmn.SimpleKVs{"ec.enabled": "true"})
 	defer tutils.SetClusterConfig(t, cmn.SimpleKVs{
@@ -352,19 +367,6 @@ func TestResetBucketProps(t *testing.T) {
 
 	defaultProps, err := api.HeadBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
-
-	propsToUpdate := &cmn.BucketPropsToUpdate{
-		Cksum: &cmn.CksumConfToUpdate{
-			Type:            api.String(cmn.ChecksumNone),
-			ValidateWarmGet: api.Bool(true),
-			EnableReadRange: api.Bool(true),
-		},
-		EC: &cmn.ECConfToUpdate{
-			Enabled:      api.Bool(false),
-			DataSlices:   api.Int(1),
-			ParitySlices: api.Int(2),
-		},
-	}
 
 	_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
 	tassert.CheckFatal(t, err)
