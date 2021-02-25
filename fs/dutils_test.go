@@ -15,7 +15,7 @@ import (
 // test file for ios/dutils_linux.go
 // placed here because it requires fs to set up the testing environment
 
-func TestSearchValidMountPath(t *testing.T) {
+func TestMountpathSearchValid(t *testing.T) {
 	Init()
 
 	mpath := "/tmp/abc"
@@ -29,7 +29,7 @@ func TestSearchValidMountPath(t *testing.T) {
 	setAvailableMountPaths(oldMPs...)
 }
 
-func TestSearchInvalidMountPath(t *testing.T) {
+func TestMountpathSearchInvalid(t *testing.T) {
 	Init()
 
 	mpath := "/tmp/abc"
@@ -42,7 +42,7 @@ func TestSearchInvalidMountPath(t *testing.T) {
 	setAvailableMountPaths(oldMPs...)
 }
 
-func TestSearchWithNoMountPath(t *testing.T) {
+func TestMountpathSearchWhenNoAvailable(t *testing.T) {
 	Init()
 	oldMPs := setAvailableMountPaths("")
 	mpathInfo, _ := Path2MpathInfo("xabc")

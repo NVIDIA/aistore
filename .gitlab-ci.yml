@@ -246,7 +246,7 @@ test:kube-short:
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
     - ONE_NODE_MANY_ETLS="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo y; echo n; echo n; echo n; })
     - status=0
-    - RE="TestETL\|TestConfig" TESTS_DIR="ais/tests" make test-short || status=$?
+    - RE="TestETL\|TestConfig\|TestMountpath" TESTS_DIR="ais/tests" make test-short || status=$?
     - make kill
     - exit $status # TODO: hack to prevent pod hangs on failures
 
@@ -265,7 +265,7 @@ test:kube:
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
     - ONE_NODE_MANY_ETLS="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo y; echo n; echo n; echo n; })
     - status=0
-    - RE="TestETL\|TestConfig" make test-run || status=$?
+    - RE="TestETL\|TestConfig\|TestMountpath" make test-run || status=$?
     - make kill
     - exit $status # TODO: hack to prevent pod hangs on failures
 
@@ -284,7 +284,7 @@ test:kube-single-target:
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo y; echo n; echo n; echo n; })
     - status=0
-    - RE="TestETL\|TestConfig" make test-run || status=$?
+    - RE="TestETL\|TestConfig\|TestMountpath" make test-run || status=$?
     - make kill
     - exit $status # TODO: hack to prevent pod hangs on failures
 

@@ -810,7 +810,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 }
 
-func TestAddAndRemoveMountpath(t *testing.T) {
+func TestMountpathRemoveAndAdd(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
@@ -999,7 +999,7 @@ func TestLocalAndGlobalRebalanceAfterAddingMountpath(t *testing.T) {
 	m.ensureNoErrors()
 }
 
-func TestDisableAndEnableMountpath(t *testing.T) {
+func TestMountpathDisableAndEnable(t *testing.T) {
 	var (
 		m = ioContext{
 			t:               t,
