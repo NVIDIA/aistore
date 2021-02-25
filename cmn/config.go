@@ -1204,7 +1204,7 @@ func (c *FSPathsConf) MarshalJSON() (data []byte, err error) {
 
 func (c *FSPathsConf) Validate(contextConfig *Config) (err error) {
 	// Don't validate if testing environment
-	if contextConfig.TestingEnv() || contextConfig.role == Proxy {
+	if contextConfig.TestingEnv() || contextConfig.role != Target {
 		return nil
 	}
 

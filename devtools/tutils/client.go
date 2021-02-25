@@ -573,9 +573,9 @@ func GetDaemonStats(t *testing.T, u string) (stats map[string]interface{}) {
 	return
 }
 
-func GetDaemonConfig(t *testing.T, daeID string) *cmn.Config {
+func GetDaemonConfig(t *testing.T, daeID, daemonType string) *cmn.Config {
 	baseParams := BaseAPIParams()
-	config, err := api.GetDaemonConfig(baseParams, daeID)
+	config, err := api.GetDaemonConfig(baseParams, daeID, daemonType)
 	tassert.CheckFatal(t, err)
 	return config
 }
@@ -591,7 +591,7 @@ func getClusterConfig() (config *cmn.Config, err error) {
 	if err != nil {
 		return nil, err
 	}
-	return api.GetDaemonConfig(BaseAPIParams(proxyURL), primary.ID())
+	return api.GetDaemonConfig(BaseAPIParams(proxyURL), primary.ID(), cmn.Proxy)
 }
 
 func GetClusterConfig(t *testing.T) (config *cmn.Config) {

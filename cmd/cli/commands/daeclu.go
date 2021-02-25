@@ -172,6 +172,7 @@ func getDaemonConfig(c *cli.Context) error {
 		daemonID = c.Args().Get(0)
 		section  = c.Args().Get(1)
 		useJSON  = flagIsSet(c, jsonFlag)
+		node     *cluster.Snode
 	)
 
 	if c.NArg() == 0 {
@@ -182,11 +183,11 @@ func getDaemonConfig(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if smap.GetNode(daemonID) == nil {
+	if node = smap.GetNode(daemonID); node == nil {
 		return fmt.Errorf("%s does not exist in the cluster (see 'ais show cluster')", daemonID)
 	}
 
-	body, err := api.GetDaemonConfig(defaultAPIParams, daemonID)
+	body, err := api.GetDaemonConfig(defaultAPIParams, daemonID, node.DaemonType)
 	if err != nil {
 		return err
 	}

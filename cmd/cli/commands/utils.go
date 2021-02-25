@@ -298,7 +298,7 @@ func getClusterConfig() (*cmn.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := api.GetDaemonConfig(defaultAPIParams, si.DaemonID)
+	cfg, err := api.GetDaemonConfig(defaultAPIParams, si.DaemonID, si.DaemonType)
 	if err != nil {
 		return nil, err
 	}
@@ -436,7 +436,7 @@ func getPrefixFromPrimary() (string, error) {
 		return "", err
 	}
 
-	cfg, err := api.GetDaemonConfig(defaultAPIParams, smap.Primary.ID())
+	cfg, err := api.GetDaemonConfig(defaultAPIParams, smap.Primary.ID(), cmn.Proxy)
 	if err != nil {
 		return "", err
 	}
@@ -1148,7 +1148,7 @@ func defaultBckProps() (*cmn.BucketProps, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := api.GetDaemonConfig(defaultAPIParams, smap.Primary.ID())
+	cfg, err := api.GetDaemonConfig(defaultAPIParams, smap.Primary.ID(), cmn.Proxy)
 	if err != nil {
 		return nil, err
 	}
