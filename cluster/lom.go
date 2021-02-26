@@ -270,7 +270,7 @@ func (lom *LOM) NumCopies() int {
 	debug.AssertFunc(func() (ok bool) {
 		_, ok = lom.md.copies[lom.FQN]
 		if !ok {
-			glog.Errorf("%s: missing self (%s) in copies %v", lom, lom.FQN, lom.md.copies)
+			glog.Errorf("missing self (%s) in copies %v", lom.FQN, lom.md.copies)
 		}
 		return
 	})
