@@ -25,6 +25,16 @@ variables:
     paths: [ logs/ ]
     expire_in: 1 days
 
+.kube_long_exit_template: &kube_long_exit_def
+  after_script:
+    - make kill
+    - mkdir $CI_PROJECT_DIR/logs
+    - find /tmp/ais -type f -name "*log*" -exec cp {} $CI_PROJECT_DIR/logs/ \;
+  artifacts:
+    when: on_failure
+    paths: [ logs/ ]
+    expire_in: 1 days
+
 .default_only_template: &default_only_def
   only:
     - master
@@ -229,6 +239,8 @@ test:aisloader:
     NUM_PROXY: 1
     BUCKET: "gs://ais-ci-kube"
     GOOGLE_APPLICATION_CREDENTIALS: "/tmp/gcs.json"
+    RE: 'TestETL\|TestConfig\|TestMountpath'
+    TESTS_DIR: "ais/tests"
   before_script:
     - kubectl delete pods,services -l nvidia.com/ais-etl-name # TODO: this can be removed once the lifecycle of transformers is implemented.
 
@@ -245,10 +257,8 @@ test:kube-short:
     - export NUM_TARGET=3
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
     - ONE_NODE_MANY_ETLS="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo y; echo n; echo n; echo n; })
-    - status=0
-    - RE="TestETL\|TestConfig\|TestMountpath" TESTS_DIR="ais/tests" make test-short || status=$?
-    - make kill
-    - exit $status # TODO: hack to prevent pod hangs on failures
+    - make test-short
+    - status=$? make kill && exit $status
 
 test:kube:
   stage: test-long
@@ -264,10 +274,9 @@ test:kube:
     - export NUM_TARGET=5
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
     - ONE_NODE_MANY_ETLS="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo y; echo n; echo n; echo n; })
-    - status=0
-    - RE="TestETL\|TestConfig\|TestMountpath" make test-run || status=$?
-    - make kill
-    - exit $status # TODO: hack to prevent pod hangs on failures
+    - make test-run
+    - status=$? make kill && exit $status
+  <<: *kube_long_exit_def
 
 test:kube-single-target:
   stage: test-long
@@ -284,9 +293,9 @@ test:kube-single-target:
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo y; echo n; echo n; echo n; })
     - status=0
-    - RE="TestETL\|TestConfig\|TestMountpath" make test-run || status=$?
-    - make kill
-    - exit $status # TODO: hack to prevent pod hangs on failures
+    - make test-run
+    - status=$? make kill && exit $status
+  <<: *kube_long_exit_def
 
 test:kube-aisloader:
   stage: test-long
@@ -302,7 +311,5 @@ test:kube-aisloader:
     - make aisloader
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
     - sleep 10 # Give some time for the cluster to stabilize.
-    - status=0
-    - BUCKET="ais://test" FLAGS="--duration=2m --etl" make test-aisloader || status=$?
-    - make kill
-    - exit $status # TODO: hack to prevent pod hangs on failures
+    - BUCKET="ais://test" FLAGS="--duration=2m --etl" make test-aisloader
+    - status=$? make kill && exit $status

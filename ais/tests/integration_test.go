@@ -811,7 +811,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 }
 
 func TestMountpathRemoveAndAdd(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, MinTargets: 2})
 
 	var (
 		m = ioContext{

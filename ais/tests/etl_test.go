@@ -226,7 +226,7 @@ func checkETLStats(t *testing.T, xactID string, expectedObjCnt int, expectedByte
 
 func TestETLObject(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
-	tutils.ETLCheckNoRunningContainers(t, baseParams)
+	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	tests := []testObjConfig{
 		{transformer: tetl.Echo, comm: etl.RedirectCommType, onlyLong: true},
@@ -249,7 +249,7 @@ func TestETLObject(t *testing.T) {
 
 func TestETLObjectCloud(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Bck: cliBck, RequiredDeployment: tutils.ClusterTypeK8s, RemoteBck: true})
-	tutils.ETLCheckNoRunningContainers(t, baseParams)
+	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	// TODO: When a test is stable, make part of test cases onlyLong: true.
 	tcs := map[string][]*testCloudObjConfig{
@@ -284,7 +284,7 @@ func TestETLObjectCloud(t *testing.T) {
 
 func TestETLBucket(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
-	tutils.ETLCheckNoRunningContainers(t, baseParams)
+	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	var (
 		bck    = cmn.Bck{Name: "etloffline", Provider: cmn.ProviderAIS}
@@ -326,7 +326,7 @@ func TestETLBucket(t *testing.T) {
 
 func TestETLBuild(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
-	tutils.ETLCheckNoRunningContainers(t, baseParams)
+	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	const (
 		md5 = `
@@ -397,7 +397,7 @@ def transform(input_bytes: bytes) -> bytes:
 
 func TestETLBucketDryRun(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
-	tutils.ETLCheckNoRunningContainers(t, baseParams)
+	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	var (
 		bckFrom = cmn.Bck{Name: "etloffline", Provider: cmn.ProviderAIS}
@@ -442,7 +442,7 @@ func TestETLBucketDryRun(t *testing.T) {
 
 func TestETLSingleTransformerAtATime(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: true})
-	tutils.ETLCheckNoRunningContainers(t, baseParams)
+	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	output, err := exec.Command("bash", "-c", "kubectl get nodes | grep Ready | wc -l").CombinedOutput()
 	tassert.CheckFatal(t, err)
@@ -467,7 +467,7 @@ func TestETLSingleTransformerAtATime(t *testing.T) {
 
 func TestETLHealth(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: true})
-	tutils.ETLCheckNoRunningContainers(t, baseParams)
+	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	tutils.Logln("Starting ETL")
 	uuid, err := tetl.Init(baseParams, tetl.Echo, etl.RedirectCommType)

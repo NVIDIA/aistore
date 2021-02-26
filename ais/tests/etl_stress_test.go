@@ -19,7 +19,7 @@ import (
 
 func TestETLConnectionError(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: true})
-	tutils.ETLCheckNoRunningContainers(t, baseParams)
+	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	// ETL should survive occasional failures and successfully transform all objects.
 	const timeoutFunc = `
@@ -63,7 +63,7 @@ def transform(input_bytes):
 
 func TestETLBucketAbort(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: true})
-	tutils.ETLCheckNoRunningContainers(t, baseParams)
+	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	m := &ioContext{
 		t:         t,
@@ -90,7 +90,9 @@ func TestETLBucketAbort(t *testing.T) {
 
 func TestETLTargetDown(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, MinTargets: 2, Long: true})
-	tutils.ETLCheckNoRunningContainers(t, baseParams)
+	tetl.CheckNoRunningETLContainers(t, baseParams)
+	// Make sure at the very end that everything was cleaned up, after the cluster is restored.
+	t.Cleanup(func() { tetl.CheckNoRunningETLContainers(t, baseParams) })
 
 	m := &ioContext{
 		t:         t,
@@ -110,7 +112,9 @@ func TestETLTargetDown(t *testing.T) {
 
 	tutils.Logln("Unregistering a target")
 	unregistered := m.unregisterTarget()
-	t.Cleanup(func() { m.reregisterTarget(unregistered) })
+	t.Cleanup(func() {
+		m.reregisterTarget(unregistered)
+	})
 
 	err = tetl.WaitForAborted(baseParams, xactID, 5*time.Minute)
 	tassert.CheckFatal(t, err)
@@ -177,7 +181,7 @@ def transform(input_bytes):
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tutils.ETLCheckNoRunningContainers(t, baseParams)
+			tetl.CheckNoRunningETLContainers(t, baseParams)
 			var (
 				uuid string
 				err  error

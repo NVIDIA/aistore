@@ -126,7 +126,7 @@ func StopETL(t *testing.T, baseParams api.BaseParams, etlID string) {
 	tutils.Logf("Stopping ETL %q\n", etlID)
 
 	if err := api.ETLStop(baseParams, etlID); err != nil {
-		tutils.Logf("Stopping ETL %q failed; err %v\n", err)
+		tutils.Logf("Stopping ETL %q failed; err %v\n", etlID, err)
 	} else {
 		tutils.Logf("ETL %q stopped\n", etlID)
 	}
@@ -241,4 +241,10 @@ func ETLBucket(t *testing.T, baseParams api.BaseParams, fromBck, toBck cmn.Bck, 
 		tutils.DestroyBucket(t, baseParams.URL, toBck)
 	})
 	return xactID
+}
+
+func CheckNoRunningETLContainers(t *testing.T, params api.BaseParams) {
+	etls, err := api.ETLList(params)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(etls) == 0, "Expected no ETL running, got %+v", etls)
 }
