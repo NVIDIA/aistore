@@ -6,6 +6,7 @@ package ais
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path"
 	"sync"
@@ -33,6 +34,7 @@ type (
 
 		toUpdate *cmn.ConfigToUpdate
 		msg      *cmn.ActionMsg
+		query    url.Values
 		wait     bool
 	}
 )
@@ -74,7 +76,6 @@ func (co *configOwner) put(config *globalConfig) {
 }
 
 func cfgBeginUpdate() *cmn.Config { return cmn.GCO.BeginUpdate() }
-func cfgDiscardUpdate()           { cmn.GCO.DiscardUpdate() }
 func cfgCommitUpdate(config *cmn.Config, detail string) (err error) {
 	if err = jsp.SaveConfig(config); err != nil {
 		cmn.GCO.DiscardUpdate()

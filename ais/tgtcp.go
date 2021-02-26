@@ -204,18 +204,6 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiIt
 			t.writeErr(w, r, err)
 			return
 		}
-	case cmn.ActAttach, cmn.ActDetach:
-		action := apiItems[0]
-		if err := t.attachDetach(w, r, action); err != nil {
-			return
-		}
-		// NOTE: apply the entire config: add new and _refresh_ existing
-		aisConf, ok := cmn.GCO.Get().Backend.ProviderConf(cmn.ProviderAIS)
-		cmn.Assert(ok)
-		aisCloud := t.backend[cmn.ProviderAIS].(*backend.AISBackendProvider)
-		if err := aisCloud.Apply(aisConf, action); err != nil {
-			t.writeErr(w, r, err)
-		}
 	}
 }
 
@@ -977,6 +965,24 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 		t.writeErrf(w, r, "%v", errs)
 		return
 	}
+}
+
+func (t *targetrunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, caller string) (err error) {
+	err = t.httprunner.receiveConfig(newConfig, msg, caller)
+	if err != nil {
+		return
+	}
+	if msg.Action == cmn.ActAttach || msg.Action == cmn.ActDetach {
+		// NOTE: apply the entire config: add new and _refresh_ existing
+		aisConf, ok := newConfig.Backend.ProviderConf(cmn.ProviderAIS)
+		cmn.Assert(ok)
+		aisCloud := t.backend[cmn.ProviderAIS].(*backend.AISBackendProvider)
+		err = aisCloud.Apply(aisConf, msg.Action)
+		if err != nil {
+			glog.Errorf("%s: %v - proceeding anyway...", t.si, err)
+		}
+	}
+	return
 }
 
 // POST /v1/metasync

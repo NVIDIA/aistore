@@ -1706,8 +1706,8 @@ func (h *httprunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, caller 
 		return newErrDowngrade(h.si, conf.String(), newConfig.String())
 	}
 	h.owner.config.persist(newConfig)
-	h.owner.config.Unlock()
 	h.owner.config.updateGCO()
+	h.owner.config.Unlock()
 	return
 }
 
@@ -2076,91 +2076,6 @@ func (h *httprunner) newAisMsg(actionMsg *cmn.ActionMsg, smap *smapX, bmd *bucke
 		msg.UUID = uuid[0]
 	}
 	return msg
-}
-
-func (h *httprunner) attachDetach(w http.ResponseWriter, r *http.Request, action string) (err error) {
-	// TODO: Will be replaced and result will be metasynced
-	var (
-		query = r.URL.Query()
-		what  = query.Get(cmn.URLParamWhat)
-	)
-	if what != cmn.GetWhatRemoteAIS {
-		err = fmt.Errorf(fmtUnknownQue, what)
-		h.writeErr(w, r, err)
-		return
-	}
-	config := cfgBeginUpdate()
-	if err = h.attachDetachRemoteAIS(query, action, config); err != nil {
-		cfgDiscardUpdate()
-		h.writeErr(w, r, err)
-		return
-	}
-	if err = cfgCommitUpdate(config, action+": "+what); err != nil {
-		h.writeErr(w, r, err)
-	}
-	return
-}
-
-func (h *httprunner) attachDetachRemoteAIS(query url.Values, action string, config *cmn.Config) error {
-	var (
-		aisConf cmn.BackendConfAIS
-		errMsg  string
-		v, ok   = config.Backend.ProviderConf(cmn.ProviderAIS)
-		changed bool
-	)
-	if !ok {
-		if action == cmn.ActDetach {
-			return fmt.Errorf("%s: remote cluster config is empty", h.si)
-		}
-		aisConf = make(cmn.BackendConfAIS)
-	} else {
-		aisConf, ok = v.(cmn.BackendConfAIS)
-		cmn.Assert(ok)
-	}
-	// detach
-	if action == cmn.ActDetach {
-		for alias := range query {
-			if alias == cmn.URLParamWhat {
-				continue
-			}
-			if _, ok := aisConf[alias]; ok {
-				changed = true
-				delete(aisConf, alias)
-			}
-		}
-		if !changed {
-			errMsg = "remote cluster does not exist"
-		}
-		goto rret
-	}
-	// attach
-	for alias, urls := range query {
-		if alias == cmn.URLParamWhat {
-			continue
-		}
-		for _, u := range urls {
-			if _, err := url.ParseRequestURI(u); err != nil {
-				return fmt.Errorf("%s: cannot attach remote cluster: %v", h.si, err)
-			}
-			changed = true
-		}
-		if changed {
-			if confURLs, ok := aisConf[alias]; ok {
-				aisConf[alias] = append(confURLs, urls...)
-			} else {
-				aisConf[alias] = urls
-			}
-		}
-	}
-	if !changed {
-		errMsg = "empty URL list"
-	}
-rret:
-	if errMsg != "" {
-		return fmt.Errorf("%s: %s remote cluster: %s", h.si, action, errMsg)
-	}
-	config.Backend.ProviderConf(cmn.ProviderAIS, aisConf)
-	return nil
 }
 
 // Based on default error handler `defaultErrorHandler` in `httputil/reverseproxy.go`.

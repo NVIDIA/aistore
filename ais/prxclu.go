@@ -928,26 +928,101 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 		}
 		p.setConfig(w, r, toUpdate, &cmn.ActionMsg{Action: action})
 	case cmn.ActAttach, cmn.ActDetach:
-		// TODO: change to use global config + metasync
 		if err := p.attachDetach(w, r, action); err != nil {
 			return
 		}
-		args := allocBcastArgs()
-		args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.Join(action), Query: query}
-		args.to = cluster.AllNodes
-		results := p.bcastGroup(args)
-		freeBcastArgs(args)
-		for _, res := range results {
-			if res.err == nil {
-				continue
-			}
-			p.writeErr(w, r, res.error())
-			p.keepalive.onerr(res.err, res.status)
-			freeCallResults(results)
+	}
+}
+
+func (p *proxyrunner) attachDetach(w http.ResponseWriter, r *http.Request, action string) (err error) {
+	// TODO: Implement 3-PC
+	var (
+		query = r.URL.Query()
+		what  = query.Get(cmn.URLParamWhat)
+	)
+	if what != cmn.GetWhatRemoteAIS {
+		err = fmt.Errorf(fmtUnknownQue, what)
+		p.writeErr(w, r, err)
+		return
+	}
+
+	ctx := &configModifier{
+		pre:   p.attachDetachRemoteAIS,
+		final: p._syncConfFinal,
+		msg:   &cmn.ActionMsg{Action: action},
+		query: query,
+		wait:  true,
+	}
+
+	if err = p.owner.config.modify(ctx); err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	return
+}
+
+func (p *proxyrunner) attachDetachRemoteAIS(ctx *configModifier, config *globalConfig) (changed bool, err error) {
+	var (
+		aisConf cmn.BackendConfAIS
+		errMsg  string
+		action  = ctx.msg.Action
+		query   = ctx.query
+		v, ok   = config.Backend.ProviderConf(cmn.ProviderAIS)
+	)
+	if !ok {
+		if action == cmn.ActDetach {
+			err = fmt.Errorf("%s: remote cluster config is empty", p.si)
 			return
 		}
-		freeCallResults(results)
+		aisConf = make(cmn.BackendConfAIS)
+	} else {
+		aisConf, ok = v.(cmn.BackendConfAIS)
+		cmn.Assert(ok)
 	}
+	// detach
+	if action == cmn.ActDetach {
+		for alias := range query {
+			if alias == cmn.URLParamWhat {
+				continue
+			}
+			if _, ok := aisConf[alias]; ok {
+				changed = true
+				delete(aisConf, alias)
+			}
+		}
+		if !changed {
+			errMsg = "remote cluster does not exist"
+		}
+		goto rret
+	}
+	// attach
+	for alias, urls := range query {
+		if alias == cmn.URLParamWhat {
+			continue
+		}
+		for _, u := range urls {
+			if _, err := url.ParseRequestURI(u); err != nil {
+				return false, fmt.Errorf("%s: cannot attach remote cluster: %v", p.si, err)
+			}
+			changed = true
+		}
+		if changed {
+			if confURLs, ok := aisConf[alias]; ok {
+				aisConf[alias] = append(confURLs, urls...)
+			} else {
+				aisConf[alias] = urls
+			}
+		}
+	}
+	if !changed {
+		errMsg = "empty URL list"
+	}
+rret:
+	if errMsg != "" {
+		return false, fmt.Errorf("%s: %s remote cluster: %s", p.si, action, errMsg)
+	}
+	config.Backend.ProviderConf(cmn.ProviderAIS, aisConf)
+	return
 }
 
 // Callback: remove the node from the cluster if rebalance finished successfully

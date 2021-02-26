@@ -2039,8 +2039,6 @@ func (p *proxyrunner) daePathAction(w http.ResponseWriter, r *http.Request, acti
 		if err := setConfig(toUpdate, transient); err != nil {
 			p.writeErr(w, r, err)
 		}
-	case cmn.ActAttach, cmn.ActDetach:
-		_ = p.attachDetach(w, r, action)
 	}
 }
 
