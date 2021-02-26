@@ -7,6 +7,7 @@ package integration
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -302,6 +303,7 @@ func TestNodeShutdown(t *testing.T) {
 }
 
 func testNodeShutdown(t *testing.T, nodeType string) {
+	const nodeOffTimeout = 10 * time.Second
 	var (
 		proxyURL = tutils.GetPrimaryURL()
 		smap     = tutils.GetClusterMap(t, proxyURL)
@@ -325,18 +327,24 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 
 	tutils.Logf("Shutting down the node %s[%s]...\n", node, nodeType)
 	// 1. Shutdown a random node
-	cmd, err := tutils.ShutdownNode(t, baseParams, node)
+	pidStr, cmd, err := tutils.ShutdownNode(t, baseParams, node)
 	tassert.CheckFatal(t, err)
 	if nodeType == cmn.Target {
 		tutils.WaitForRebalanceToComplete(t, baseParams)
 	}
+	pid, err := strconv.Atoi(pidStr)
+	tassert.CheckError(t, err)
 
 	// 2. Make sure the node has been shut down
 	_, err = tutils.WaitForClusterStateActual(proxyURL, "shutdown node", smap.Version, origProxyCnt-pdc, origTargetCount-tdc, node.DaemonID)
 	tassert.CheckError(t, err)
 
+	// 3. Wait for the node is off
+	err = tutils.WaitForNodeToTerminate(pid, nodeOffTimeout)
+	tassert.CheckError(t, err)
+
 	tutils.Logf("Starting the node %s[%s]...\n", node, nodeType)
-	// 3. Start node again
+	// 4. Start node again
 	err = tutils.RestoreNode(cmd, false, nodeType)
 	tassert.CheckError(t, err)
 

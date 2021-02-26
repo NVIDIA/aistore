@@ -355,7 +355,7 @@ func KillNode(node *cluster.Snode) (cmd RestoreCmd, err error) {
 	return
 }
 
-func ShutdownNode(t *testing.T, baseParams api.BaseParams, node *cluster.Snode) (cmd RestoreCmd, err error) {
+func ShutdownNode(t *testing.T, baseParams api.BaseParams, node *cluster.Snode) (pid string, cmd RestoreCmd, err error) {
 	restoreNodesOnce.Do(func() {
 		initNodeCmd()
 	})
@@ -367,11 +367,11 @@ func ShutdownNode(t *testing.T, baseParams api.BaseParams, node *cluster.Snode) 
 	cmd.Node = node
 	if containers.DockerRunning() {
 		Logf("Stopping container %s\n", daemonID)
-		err := containers.StopContainer(daemonID)
-		return cmd, err
+		err = containers.StopContainer(daemonID)
+		return
 	}
 
-	_, cmd.Cmd, cmd.Args, err = getProcess(port)
+	pid, cmd.Cmd, cmd.Args, err = getProcess(port)
 	if err != nil {
 		return
 	}
