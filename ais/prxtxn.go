@@ -688,9 +688,20 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 	opts *cmn.ActValDecommision) (rebID xaction.RebID, err error) {
 	// 1. begin
 	var (
-		waitmsync = false
-		c         = p.prepTxnClient(msg, nil, waitmsync)
+		waitmsync  = false
+		c          = p.prepTxnClient(msg, nil, waitmsync)
+		rebEnabled = cmn.GCO.Get().Rebalance.Enabled
 	)
+
+	if si.IsTarget() && !opts.SkipRebalance && rebEnabled {
+		if err = p.canStartRebalance(); err != nil {
+			// special case: removing the very last target
+			if _, ok := err.(*errNotEnoughTargets); !ok {
+				return
+			}
+		}
+	}
+
 	results := c.bcast(cmn.ActBegin, c.timeout.netw)
 	for _, res := range results {
 		if res.err == nil {
@@ -722,8 +733,8 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 	}
 
 	// 4. Start rebalance
-	if !opts.SkipRebalance {
-		return p.finalizeMaintenance(msg, si)
+	if !opts.SkipRebalance && rebEnabled {
+		return p.rebalanceAndRmSelf(msg, si)
 	} else if msg.Action == cmn.ActDecommission {
 		_, err = p.callRmSelf(msg, si, true /*skipReb*/)
 	}

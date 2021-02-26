@@ -218,7 +218,10 @@ var allHTTPverbs = []string{
 	http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace,
 }
 
-var errShutdown = errors.New(cmn.ActShutdown)
+var (
+	errShutdown          = errors.New(cmn.ActShutdown)
+	errRebalanceDisabled = errors.New("rebalance is disabled")
+)
 
 // BMD uuid errs
 var errNoBMD = errors.New("no bucket metadata")

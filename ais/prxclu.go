@@ -743,7 +743,7 @@ func (p *proxyrunner) xactStarStop(w http.ResponseWriter, r *http.Request, msg *
 }
 
 func (p *proxyrunner) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
-	if err := p.canStartRebalance(); err != nil {
+	if err := p.canStartRebalance(); err != nil && err != errRebalanceDisabled {
 		p.writeErr(w, r, err)
 		return
 	}
@@ -1040,24 +1040,21 @@ func (p *proxyrunner) removeAfterRebalance(nl nl.NotifListener, msg *cmn.ActionM
 	}
 }
 
-// Run rebalance if permitted;
+// Run rebalance if needed; remove self from the cluster when rebalance finishes
 // the method handles msg.Action == cmn.ActStartMaintenance | cmn.ActDecommission | cmn.ActShutdownNode
-func (p *proxyrunner) finalizeMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) (rebID xaction.RebID, err error) {
-	var cb nl.NotifCallback
-	if rerr := p.canStartRebalance(); rerr != nil {
-		// special case: removing the very last target
-		if _, ok := err.(*errNotEnoughTargets); ok {
-			if msg.Action == cmn.ActShutdownNode || msg.Action == cmn.ActDecommission {
-				_, err = p.callRmSelf(msg, si, true /*skipReb*/)
-				return
-			}
+func (p *proxyrunner) rebalanceAndRmSelf(msg *cmn.ActionMsg, si *cluster.Snode) (rebID xaction.RebID, err error) {
+	smap := p.owner.smap.get()
+	if smap.CountActiveTargets() < 2 {
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("%q: removing the last target %s - no rebalance", msg.Action, si)
 		}
-		err = fmt.Errorf("%s: cannot perform %q %s: %w", p.si, msg.Action, si, rerr)
+		_, err = p.callRmSelf(msg, si, true /*skipReb*/)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%q %s and start rebalance", msg.Action, si)
 	}
+	var cb nl.NotifCallback
 	if msg.Action == cmn.ActDecommission || msg.Action == cmn.ActShutdownNode {
 		cb = func(nl nl.NotifListener) { p.removeAfterRebalance(nl, msg, si) }
 	}
@@ -1353,6 +1350,9 @@ func (p *proxyrunner) canStartRebalance() error {
 	}
 	if smap.CountActiveTargets() < 2 {
 		return &errNotEnoughTargets{p.si, smap, 2}
+	}
+	if !cmn.GCO.Get().Rebalance.Enabled {
+		return errRebalanceDisabled
 	}
 	return nil
 }
