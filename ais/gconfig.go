@@ -26,6 +26,15 @@ type (
 		config     atomic.Pointer // pointer to globalConf
 		daemonType string
 	}
+
+	configModifier struct {
+		pre   func(ctx *configModifier, clone *globalConfig) (updated bool, err error)
+		final func(ctx *configModifier, clone *globalConfig)
+
+		toUpdate *cmn.ConfigToUpdate
+		msg      *cmn.ActionMsg
+		wait     bool
+	}
 )
 
 var _ revs = (*globalConfig)(nil)
@@ -75,31 +84,45 @@ func cfgCommitUpdate(config *cmn.Config, detail string) (err error) {
 	return
 }
 
-// Update the global config on primary proxy.
-func (co *configOwner) modify(toUpdate *cmn.ConfigToUpdate, detail string) error {
+func (co *configOwner) runPre(ctx *configModifier) (clone *globalConfig, updated bool, err error) {
 	co.Lock()
 	defer co.Unlock()
-	config := co.get().clone()
-	err := jsp.SetConfigInMem(toUpdate, &config.Config)
-	if err != nil {
-		return err
+	clone = co.get().clone()
+	if updated, err = ctx.pre(ctx, clone); err != nil || !updated {
+		return
 	}
-	config.Version++
-	config.LastUpdated = time.Now().String()
-	if err = co.persist(config); err != nil {
-		return fmt.Errorf("FATAL: failed persist config for %q, err: %v", detail, err)
+	clone.Version++
+	clone.LastUpdated = time.Now().String()
+	if err := co.persist(clone); err != nil {
+		err = fmt.Errorf("FATAL: failed to persist %s: %v", clone, err)
+		return nil, false, err
 	}
 	co.updateGCO()
-	return nil
+	return
+}
+
+// Update the global config on primary proxy.
+func (co *configOwner) modify(ctx *configModifier) (err error) {
+	var (
+		config  *globalConfig
+		updated bool
+	)
+	if config, updated, err = co.runPre(ctx); err != nil || !updated {
+		return err
+	}
+	if ctx.final != nil {
+		ctx.final(ctx, config)
+	}
+	return
 }
 
 func (co *configOwner) persist(config *globalConfig) error {
-	co.put(config)
 	local := cmn.GCO.GetLocal()
 	savePath := path.Join(local.ConfigDir, gconfFname)
 	if err := jsp.Save(savePath, config, jsp.PlainLocal()); err != nil {
 		return err
 	}
+	co.put(config)
 	return nil
 }
 

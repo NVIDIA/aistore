@@ -2257,22 +2257,22 @@ func (p *proxyrunner) _becomeFinal(ctx *smapModifier, clone *smapX) {
 }
 
 func (p *proxyrunner) ensureConfigPrimaryURL() *globalConfig {
+	err := p.owner.config.modify(&configModifier{pre: p._primaryURLPre})
+	if err != nil {
+		glog.Errorf("failed to update primary URL, err: %v", err)
+	}
+	return p.owner.config.get()
+}
+
+func (p *proxyrunner) _primaryURLPre(ctx *configModifier, clone *globalConfig) (updated bool, err error) {
 	smap := p.owner.smap.get()
 	conf := p.owner.config.get()
 	debug.Assert(smap.isPrimary(p.si))
 	if newURL := smap.Primary.URL(cmn.NetworkPublic); conf.Proxy.PrimaryURL != newURL {
-		detail := conf.Proxy.PrimaryURL + " => " + newURL
-		err := p.owner.config.modify(&cmn.ConfigToUpdate{
-			Proxy: &cmn.ProxyConfToUpdate{
-				PrimaryURL: &newURL,
-			},
-		}, detail)
-		if err != nil {
-			glog.Errorf("failed to modify global config, err: %v", err)
-		}
-		conf = p.owner.config.get()
+		clone.Proxy.PrimaryURL = smap.Primary.URL(cmn.NetworkPublic)
+		updated = true
 	}
-	return conf
+	return
 }
 
 // [METHOD] /v1/tokens

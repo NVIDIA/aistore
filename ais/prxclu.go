@@ -647,13 +647,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			p.writeErrf(w, r, "%s: failed to parse value, err: %v", cmn.ActSetConfig, err)
 			return
 		}
-		// TODO: allow transient config updates
-		if err := p.owner.config.modify(toUpdate, cmn.ActSetConfig); err != nil {
-			p.writeErr(w, r, err)
-			return
-		}
-		wg := p.metasyncer.sync(revsPair{p.owner.config.get(), p.newAisMsg(msg, nil, nil)})
-		wg.Wait()
+		p.setConfig(w, r, toUpdate, msg)
 	case cmn.ActShutdown:
 		glog.Infoln("Proxy-controlled cluster shutdown...")
 		args := allocBcastArgs()
@@ -674,6 +668,35 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		p.stopMaintenance(w, r, msg)
 	default:
 		p.writeErrAct(w, r, msg.Action)
+	}
+}
+
+func (p *proxyrunner) setConfig(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToUpdate, msg *cmn.ActionMsg) {
+	ctx := &configModifier{
+		pre:      p._setConfPre,
+		final:    p._syncConfFinal,
+		msg:      msg,
+		toUpdate: toUpdate,
+		wait:     true,
+	}
+	// TODO: allow transient config updates
+	if err := p.owner.config.modify(ctx); err != nil {
+		p.writeErr(w, r, err)
+	}
+}
+
+func (p *proxyrunner) _setConfPre(ctx *configModifier, clone *globalConfig) (updated bool, err error) {
+	if err = clone.Apply(*ctx.toUpdate); err != nil {
+		return
+	}
+	updated = true
+	return
+}
+
+func (p *proxyrunner) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
+	wg := p.metasyncer.sync(revsPair{p.owner.config.get(), p.newAisMsg(ctx.msg, nil, nil)})
+	if ctx.wait {
+		wg.Wait()
 	}
 }
 
@@ -903,12 +926,7 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 			p.writeErrf(w, r, err.Error())
 			return
 		}
-		if err := p.owner.config.modify(toUpdate, action); err != nil {
-			p.writeErr(w, r, err)
-			return
-		}
-		wg := p.metasyncer.sync(revsPair{p.owner.config.get(), p.newAisMsg(&cmn.ActionMsg{Action: action}, nil, nil)})
-		wg.Wait()
+		p.setConfig(w, r, toUpdate, &cmn.ActionMsg{Action: action})
 	case cmn.ActAttach, cmn.ActDetach:
 		// TODO: change to use global config + metasync
 		if err := p.attachDetach(w, r, action); err != nil {
