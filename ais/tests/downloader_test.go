@@ -855,7 +855,9 @@ func TestDownloadMpathEvents(t *testing.T) {
 	tutils.Logf("Started large download job %s, meant to be aborted\n", id1)
 
 	// Abort just in case something goes wrong.
-	defer abortDownload(t, id1)
+	t.Cleanup(func() {
+		abortDownload(t, id1)
+	})
 
 	tutils.Logln("Wait a while for downloaders to pick the job as they start in goroutine")
 	time.Sleep(3 * time.Second)
@@ -880,7 +882,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 	}()
 
 	// Wait until downloader is aborted.
-	waitForDownloaderToFinish(t, baseParams, removeTarget.ID(), time.Second*30)
+	waitForDownloaderToFinish(t, baseParams, removeTarget.ID(), 30*time.Second)
 
 	// Downloader finished on required target, safe to abort the rest.
 	tutils.Logf("Aborting download job %s\n", id1)
@@ -1184,7 +1186,9 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 		Template: template,
 	})
 	tassert.CheckFatal(t, err)
-	defer abortDownload(t, id)
+	t.Cleanup(func() {
+		abortDownload(t, id)
+	})
 
 	tutils.Logln("waiting for checks...")
 	minConnectionLimitReached := false
@@ -1245,7 +1249,9 @@ func TestDownloadJobConcurrency(t *testing.T) {
 		Template: template,
 	})
 	tassert.CheckFatal(t, err)
-	defer abortDownload(t, id1)
+	t.Cleanup(func() {
+		abortDownload(t, id1)
+	})
 
 	tutils.Logln("Starting second download...")
 
@@ -1260,7 +1266,9 @@ func TestDownloadJobConcurrency(t *testing.T) {
 		Template: template,
 	})
 	tassert.CheckFatal(t, err)
-	defer abortDownload(t, id2)
+	t.Cleanup(func() {
+		abortDownload(t, id2)
+	})
 
 	tutils.Logln("Waiting for checks...")
 	var (
@@ -1332,7 +1340,9 @@ func TestDownloadJobBytesThrottling(t *testing.T) {
 		},
 	})
 	tassert.CheckFatal(t, err)
-	defer abortDownload(t, id)
+	t.Cleanup(func() {
+		abortDownload(t, id)
+	})
 
 	time.Sleep(10 * time.Second) // wait for downloader to download `softLimit` bytes
 

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -27,7 +28,8 @@ type (
 	dispatcher struct {
 		parent *Downloader
 
-		joggers map[string]*jogger // mpath -> jogger
+		startupSema startupSema        // Semaphore which synchronizes goroutines at dispatcher startup.
+		joggers     map[string]*jogger // mpath -> jogger
 
 		mtx      sync.RWMutex           // Protects map defined below.
 		abortJob map[string]*cmn.StopCh // jobID -> abort job chan
@@ -36,13 +38,20 @@ type (
 
 		stopCh *cmn.StopCh
 	}
+
+	startupSema struct {
+		started atomic.Bool
+	}
 )
 
 func newDispatcher(parent *Downloader) *dispatcher {
 	initInfoStore(parent.t.DB()) // it will be initialized only once
+
 	return &dispatcher{
-		parent:  parent,
-		joggers: make(map[string]*jogger, 8),
+		parent: parent,
+
+		startupSema: startupSema{},
+		joggers:     make(map[string]*jogger, 8),
 
 		downloadCh: make(chan DlJob),
 
@@ -63,6 +72,9 @@ func (d *dispatcher) run() (err error) {
 	for mpath := range availablePaths {
 		d.addJogger(mpath)
 	}
+
+	// Release semaphore and allow other goroutines to work.
+	d.startupSema.markStarted()
 
 Loop:
 	for {
@@ -103,10 +115,9 @@ Loop:
 			}
 		}
 	}
+
 	d.stop()
-	err = group.Wait()
-	d.parent.Finish(err)
-	return err
+	return group.Wait()
 }
 
 // stop running joggers
@@ -397,6 +408,10 @@ func (d *dispatcher) dispatchAdminReq(req *request) (resp interface{}, statusCod
 	debug.Infof("Dispatching admin request (id: %q, action: %q, onlyActive: %t)", req.id, req.action, req.onlyActive)
 	defer debug.Infof("Finished admin request (id: %q, action: %q, onlyActive: %t)", req.id, req.action, req.onlyActive)
 
+	// Need to make sure that the dispatcher has fully initialized and started,
+	// and it's ready for processing the requests.
+	d.startupSema.waitForStartup()
+
 	switch req.action {
 	case actStatus:
 		d.handleStatus(req)
@@ -521,5 +536,27 @@ func (d *dispatcher) waitFor(job DlJob) {
 		if !d.pending(job.ID()) {
 			break
 		}
+	}
+}
+
+func (ss *startupSema) markStarted() {
+	ss.started.Store(true)
+}
+
+func (ss *startupSema) waitForStartup() {
+	if ss.started.Load() {
+		return
+	}
+
+	const (
+		sleep   = 500 * time.Millisecond
+		timeout = 10 * time.Second
+	)
+	for slept := time.Duration(0); !ss.started.Load(); slept += sleep {
+		time.Sleep(sleep)
+
+		// If we are sleeping for more than `timeout` then there is something
+		// wrong. This should never happen even on the slowest machines.
+		cmn.AssertMsg(slept < timeout, "dispatcher takes impossible time to start")
 	}
 }
