@@ -7,6 +7,8 @@ package jsp
 
 import (
 	"fmt"
+	"os"
+	"path"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
@@ -32,17 +34,26 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *cmn.Config) (er
 	if err != nil {
 		return fmt.Errorf("failed to load local config %q, err: %v", localConfPath, err)
 	}
-
 	cmn.GCO.PutLocal(localConf)
 	if err = config.SetLocalConf(localConf); err != nil {
 		return
+	}
+
+	overrideConfig, err := LoadOverrideConfig(localConf.ConfigDir)
+	if err != nil {
+		return err
 	}
 
 	if err = cmn.CreateDir(config.Log.Dir); err != nil {
 		return fmt.Errorf("failed to create log dir %q, err: %v", config.Log.Dir, err)
 	}
 	glog.SetLogDir(config.Log.Dir)
-	if err = config.Validate(); err != nil {
+	if overrideConfig != nil {
+		err = config.Apply(*overrideConfig)
+	} else {
+		err = config.Validate()
+	}
+	if err != nil {
 		return
 	}
 
@@ -60,6 +71,19 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *cmn.Config) (er
 		config.Log.Dir, config.Net.L4.Proto, config.Net.L4.Port, config.Log.Level)
 	glog.Infof("config_file: %q periodic.stats_time: %v", confPath, config.Periodic.StatsTime)
 	return
+}
+
+func LoadOverrideConfig(configDir string) (config *cmn.ConfigToUpdate, err error) {
+	config = &cmn.ConfigToUpdate{}
+	_, err = Load(path.Join(configDir, cmn.OverrideConfigFname), config, Plain())
+	if os.IsNotExist(err) {
+		err = nil
+	}
+	return
+}
+
+func SaveOverrideConfig(configDir string, config *cmn.ConfigToUpdate) error {
+	return Save(path.Join(configDir, cmn.OverrideConfigFname), config, Plain())
 }
 
 func SaveConfig(config *cmn.Config) error {

@@ -313,7 +313,6 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 
 		origProxyCnt    = smap.CountActiveProxies()
 		origTargetCount = smap.CountActiveTargets()
-		origSmapVer     = smap.Version
 	)
 
 	if nodeType == cmn.Proxy {
@@ -336,7 +335,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	tassert.CheckError(t, err)
 
 	// 2. Make sure the node has been shut down
-	_, err = tutils.WaitForClusterStateActual(proxyURL, "shutdown node", smap.Version, origProxyCnt-pdc, origTargetCount-tdc, node.DaemonID)
+	smap, err = tutils.WaitForClusterStateActual(proxyURL, "shutdown node", smap.Version, origProxyCnt-pdc, origTargetCount-tdc, node.DaemonID)
 	tassert.CheckError(t, err)
 
 	// 3. Wait for the node is off
@@ -348,7 +347,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	err = tutils.RestoreNode(cmd, false, nodeType)
 	tassert.CheckError(t, err)
 
-	_, err = tutils.WaitForClusterState(proxyURL, "restart node", origSmapVer, origProxyCnt, origTargetCount)
+	_, err = tutils.WaitForClusterState(proxyURL, "restart node", smap.Version, origProxyCnt, origTargetCount)
 	tassert.CheckFatal(t, err)
 	if nodeType == cmn.Target {
 		tutils.WaitForRebalanceToComplete(t, baseParams)

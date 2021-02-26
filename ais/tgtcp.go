@@ -163,10 +163,7 @@ func (t *targetrunner) daeputJSON(w http.ResponseWriter, r *http.Request) {
 			t.writeErrf(w, r, "failed to parse configuration to update, err: %v", err)
 			return
 		}
-		if err := setConfig(toUpdate, transient); err != nil {
-			t.writeErr(w, r, err)
-			return
-		}
+		t.setDaemonConfig(w, r, toUpdate, transient)
 	case cmn.ActShutdown:
 		t.Stop(errShutdown)
 	default:
@@ -200,10 +197,7 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiIt
 			t.writeErr(w, r, err)
 			return
 		}
-		if err := setConfig(toUpdate, transient); err != nil {
-			t.writeErr(w, r, err)
-			return
-		}
+		t.setDaemonConfig(w, r, toUpdate, transient)
 	}
 }
 
@@ -735,7 +729,8 @@ func (t *targetrunner) ensureLatestSmap(msg *aisMsg, r *http.Request) {
 
 // create local directories to test multiple fspaths
 func (t *targetrunner) testCachepathMounts() {
-	config := cmn.GCO.BeginUpdate()
+	t.owner.config.Lock()
+	config := cmn.GCO.Clone()
 	configLocal := cmn.GCO.GetLocal()
 	configLocal.FSpaths.Paths = make(cmn.StringSet, configLocal.TestFSP.Count)
 	for i := 0; i < configLocal.TestFSP.Count; i++ {
@@ -749,7 +744,9 @@ func (t *targetrunner) testCachepathMounts() {
 		configLocal.FSpaths.Paths.Add(mpath)
 	}
 	config.SetLocalConf(configLocal)
-	cmn.GCO.CommitUpdate(config)
+	cmn.GCO.Put(config)
+	cmn.GCO.PutLocal(configLocal)
+	t.owner.config.Unlock()
 }
 
 func (t *targetrunner) detectMpathChanges() {

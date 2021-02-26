@@ -648,7 +648,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			p.writeErrf(w, r, "%s: failed to parse value, err: %v", cmn.ActSetConfig, err)
 			return
 		}
-		p.setConfig(w, r, toUpdate, msg)
+		p.setClusterConfig(w, r, toUpdate, msg)
 	case cmn.ActShutdown:
 		glog.Infoln("Proxy-controlled cluster shutdown...")
 		args := allocBcastArgs()
@@ -672,7 +672,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxyrunner) setConfig(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToUpdate, msg *cmn.ActionMsg) {
+func (p *proxyrunner) setClusterConfig(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToUpdate, msg *cmn.ActionMsg) {
 	ctx := &configModifier{
 		pre:      p._setConfPre,
 		final:    p._syncConfFinal,
@@ -930,7 +930,7 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 			p.writeErrf(w, r, err.Error())
 			return
 		}
-		p.setConfig(w, r, toUpdate, &cmn.ActionMsg{Action: action})
+		p.setClusterConfig(w, r, toUpdate, &cmn.ActionMsg{Action: action})
 	case cmn.ActAttach, cmn.ActDetach:
 		if err := p.attachDetach(w, r, action); err != nil {
 			return

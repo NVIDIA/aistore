@@ -67,11 +67,12 @@ func (r *remAISCluster) String() string {
 // apply new or updated (attach, detach) cmn.BackendConfAIS configuration
 func (m *AISBackendProvider) Apply(v interface{}, action string) error {
 	var (
-		cfg             = cmn.GCO.Get()
-		clusterConf, ok = v.(cmn.BackendConfAIS)
+		cfg         = cmn.GCO.Get()
+		clusterConf = cmn.BackendConfAIS{}
+		err         = cmn.MorphMarshal(v, &clusterConf)
 	)
-	if !ok {
-		return fmt.Errorf("invalid ais cloud config (%+v, %T)", v, v)
+	if err != nil {
+		return fmt.Errorf("invalid ais cloud config (%+v, %T), err: %v", v, v, err)
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()

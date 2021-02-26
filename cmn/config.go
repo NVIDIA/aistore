@@ -39,9 +39,7 @@ const (
 	MaxSliceCount = 32 // maximum number of data or parity slices
 
 	// Config
-	// current formatting version
-	// (future changes in the config structure or its encoding will require a different version)
-	MetaVersion int64 = 1
+	OverrideConfigFname = ".ais.override_config" // file containing override node config
 )
 
 const (
@@ -82,8 +80,9 @@ type (
 type (
 	globalConfigOwner struct {
 		mtx       sync.Mutex     // mutex for protecting updates of config
-		c         atomic.Pointer // pointer to `Config`
+		c         atomic.Pointer // pointer to `Config` (cluster + local + override config)
 		lc        atomic.Pointer // pointer to `LocalConfig`
+		oc        atomic.Pointer // pointer to `ConfigToUpdate`, override configuration on node
 		lmtx      sync.Mutex     // mutex for protecting listeners
 		listeners map[string]ConfigListener
 
@@ -138,7 +137,6 @@ type (
 		MDWrite     MDWritePolicy   `json:"md_write"`
 		LastUpdated string          `json:"lastupdate_time"`
 		Version     int64           `json:"config_version,string"` // instance version of config
-		MetaVersion int64           `json:"meta_version"`          // formatting version for backward compatibility
 	}
 
 	LocalConfig struct {
@@ -635,10 +633,18 @@ func (gco *globalConfigOwner) PutLocal(config *LocalConfig) {
 	gco.lc.Store(unsafe.Pointer(config))
 }
 
+func (gco *globalConfigOwner) GetOverrideConfig() *ConfigToUpdate {
+	return (*ConfigToUpdate)(gco.oc.Load())
+}
+
+func (gco *globalConfigOwner) PutOverrideConfig(config *ConfigToUpdate) {
+	gco.oc.Store(unsafe.Pointer(config))
+}
+
 // NOTE: CopyStruct is a shallow copy which is OK because Config has mostly values with read-only
 //       FSPaths and BackendConf being the only exceptions. May need a *proper* deep copy in the future.
 // NOTE: Cloning a large (and growing) structure may adversely affect performance.
-func (gco *globalConfigOwner) clone() *Config {
+func (gco *globalConfigOwner) Clone() *Config {
 	config := &Config{}
 
 	CopyStruct(config, gco.Get())
@@ -653,7 +659,7 @@ func (gco *globalConfigOwner) clone() *Config {
 // NOTE: `ais` package must use its own cfgBegin/Commit/DiscardUpdate functions
 func (gco *globalConfigOwner) BeginUpdate() *Config {
 	gco.mtx.Lock()
-	return gco.clone()
+	return gco.Clone()
 }
 
 // CommitUpdate finalizes config update and notifies listeners.
@@ -1369,6 +1375,10 @@ func (ctu *ConfigToUpdate) FillFromQuery(query url.Values) error {
 		return fmt.Errorf("no properties to update")
 	}
 	return nil
+}
+
+func (ctu *ConfigToUpdate) Merge(update *ConfigToUpdate) {
+	mergeProps(update, ctu)
 }
 
 // FillFromKVS populates `ConfigToUpdate` from key value pairs of the form `key=value`

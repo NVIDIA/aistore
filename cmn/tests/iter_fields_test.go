@@ -298,5 +298,71 @@ var _ = Describe("IterFields", func() {
 				"foo.bar": 2,
 			}),
 		)
+
+		DescribeTable("should error on update",
+			func(orig *cmn.ConfigToUpdate, merge *cmn.ConfigToUpdate, expected *cmn.ConfigToUpdate) {
+				orig.Merge(merge)
+				Expect(orig).To(Equal(expected))
+			},
+			Entry("override configuration", &cmn.ConfigToUpdate{
+				Mirror: &cmn.MirrorConfToUpdate{
+					Enabled: api.Bool(true),
+					Copies:  api.Int64(2),
+				},
+			}, &cmn.ConfigToUpdate{
+				Mirror: &cmn.MirrorConfToUpdate{
+					Enabled: api.Bool(false),
+				},
+			}, &cmn.ConfigToUpdate{
+				Mirror: &cmn.MirrorConfToUpdate{
+					Enabled: api.Bool(false),
+					Copies:  api.Int64(2),
+				},
+			}),
+
+			Entry("add new fields", &cmn.ConfigToUpdate{
+				Mirror: &cmn.MirrorConfToUpdate{
+					Enabled: api.Bool(true),
+					Copies:  api.Int64(2),
+				},
+			}, &cmn.ConfigToUpdate{
+				Mirror: &cmn.MirrorConfToUpdate{
+					Enabled: api.Bool(false),
+				},
+				EC: &cmn.ECConfToUpdate{
+					Enabled: api.Bool(true),
+				},
+			}, &cmn.ConfigToUpdate{
+				Mirror: &cmn.MirrorConfToUpdate{
+					Enabled: api.Bool(false),
+					Copies:  api.Int64(2),
+				},
+				EC: &cmn.ECConfToUpdate{
+					Enabled: api.Bool(true),
+				},
+			}),
+
+			Entry("nested fields", &cmn.ConfigToUpdate{
+				Net: &cmn.NetConfToUpdate{
+					L4: &cmn.L4ConfToUpdate{
+						Proto: api.String("http"),
+					},
+				},
+			}, &cmn.ConfigToUpdate{
+				Net: &cmn.NetConfToUpdate{
+					L4: &cmn.L4ConfToUpdate{
+						Proto:   api.String("http"),
+						PortStr: api.String("51080"),
+					},
+				},
+			}, &cmn.ConfigToUpdate{
+				Net: &cmn.NetConfToUpdate{
+					L4: &cmn.L4ConfToUpdate{
+						Proto:   api.String("http"),
+						PortStr: api.String("51080"),
+					},
+				},
+			}),
+		)
 	})
 })

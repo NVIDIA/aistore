@@ -226,6 +226,32 @@ func copyProps(src, dst interface{}) {
 	}
 }
 
+func mergeProps(src, dst interface{}) {
+	var (
+		srcVal = reflect.ValueOf(src).Elem()
+		dstVal = reflect.ValueOf(dst).Elem()
+	)
+
+	for i := 0; i < srcVal.NumField(); i++ {
+		var (
+			srcValField = srcVal.Field(i)
+			dstValField = dstVal.FieldByName(srcVal.Type().Field(i).Name)
+		)
+
+		if srcValField.IsNil() {
+			continue
+		}
+
+		if dstValField.IsNil() || (srcValField.Elem().Kind() != reflect.Struct && srcValField.Elem().Kind() != reflect.Invalid) {
+			dstValField.Set(srcValField)
+			continue
+		}
+
+		// Recurse into struct
+		mergeProps(srcValField.Interface(), dstValField.Interface())
+	}
+}
+
 ///////////
 // field //
 ///////////

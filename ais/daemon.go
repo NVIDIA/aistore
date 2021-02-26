@@ -166,12 +166,21 @@ func initDaemon(version, buildTime string) (rmain cmn.Runner) {
 		if err := jsp.SetConfigInMem(toUpdate, config); err != nil {
 			cmn.ExitLogf("Failed to update config in memory: %v", err)
 		}
-	}
-	if !daemon.cli.transient {
-		if err = jsp.SaveConfig(config); err != nil {
-			cmn.ExitLogf("Failed to save config: %v", err)
+
+		overrideConfig := cmn.GCO.GetOverrideConfig()
+		if overrideConfig == nil {
+			overrideConfig = toUpdate
+		} else {
+			overrideConfig.Merge(toUpdate)
+		}
+
+		if !daemon.cli.transient {
+			if err = jsp.SaveOverrideConfig(config.Confdir, overrideConfig); err != nil {
+				cmn.ExitLogf("Failed to save override config: %v", err)
+			}
 		}
 	}
+
 	daemon.version, daemon.buildTime = version, buildTime
 	glog.Infof("| version: %s | build-time: %s |\n", version, buildTime)
 	debug.Errorln("starting with debug asserts/logs")
@@ -239,6 +248,7 @@ func initTarget() cmn.Runner {
 
 	t := newTarget()
 
+	t.initConfOwner(cmn.Target)
 	// fs.Mountpaths must be inited prior to all runners that utilize them
 	// for mountpath definition, see fs/mountfs.go
 	config := cmn.GCO.Get()
@@ -247,7 +257,6 @@ func initTarget() cmn.Runner {
 		fs.DisableFsIDCheck()
 		t.testCachepathMounts()
 	}
-	t.initConfOwner(cmn.Target)
 	t.initSI(cmn.Target)
 	if err := fs.InitMpaths(t.si.ID()); err != nil {
 		cmn.ExitLogf("%v", err)

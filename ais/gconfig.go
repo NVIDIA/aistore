@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
@@ -70,19 +71,8 @@ func (co *configOwner) get() *globalConfig {
 }
 
 func (co *configOwner) put(config *globalConfig) {
-	cmn.Assert(config.MetaVersion != 0)
 	config.SetRole(co.daemonType)
 	co.config.Store(unsafe.Pointer(config))
-}
-
-func cfgBeginUpdate() *cmn.Config { return cmn.GCO.BeginUpdate() }
-func cfgCommitUpdate(config *cmn.Config, detail string) (err error) {
-	if err = jsp.SaveConfig(config); err != nil {
-		cmn.GCO.DiscardUpdate()
-		return fmt.Errorf("FATAL: failed writing config %s: %s, %v", cmn.GCO.GetGlobalConfigPath(), detail, err)
-	}
-	cmn.GCO.CommitUpdate(config)
-	return
 }
 
 func (co *configOwner) runPre(ctx *configModifier) (clone *globalConfig, updated bool, err error) {
@@ -127,25 +117,31 @@ func (co *configOwner) persist(config *globalConfig) error {
 	return nil
 }
 
+// PRECONDITION: `co` should be under lock.
 func (co *configOwner) updateGCO() (err error) {
-	cmn.GCO.BeginUpdate()
+	debug.AssertMutexLocked(&co.Mutex)
 	config := co.get().clone()
 	config.SetLocalConf(cmn.GCO.GetLocal())
-	if err = config.Validate(); err != nil {
+	override := cmn.GCO.GetOverrideConfig()
+	if override != nil {
+		err = config.Apply(*override)
+	} else {
+		err = config.Validate()
+	}
+	if err != nil {
 		return
 	}
-	cmn.GCO.CommitUpdate(&config.Config)
+	cmn.GCO.Put(&config.Config)
 	return
 }
 
 func (co *configOwner) load() (err error) {
+	co.Lock()
+	defer co.Unlock()
 	localConf := cmn.GCO.GetLocal()
 	config := &globalConfig{}
 	_, err = jsp.Load(path.Join(localConf.ConfigDir, gconfFname), config, jsp.Plain())
 	if err == nil {
-		if config.MetaVersion == 0 {
-			config.MetaVersion = cmn.MetaVersion
-		}
 		co.put(config)
 		return co.updateGCO()
 	}
@@ -159,19 +155,28 @@ func (co *configOwner) load() (err error) {
 	if err != nil {
 		return
 	}
-	config.MetaVersion = cmn.MetaVersion
 	co.put(config)
 	return
 }
 
-func setConfig(toUpdate *cmn.ConfigToUpdate, transient bool) error {
-	config := cfgBeginUpdate()
-	err := jsp.SetConfigInMem(toUpdate, config)
-	if transient || err != nil {
-		cmn.GCO.DiscardUpdate()
-		return err
+func (co *configOwner) modifyOverride(toUpdate *cmn.ConfigToUpdate) (err error) {
+	co.Lock()
+	defer co.Unlock()
+	clone := cmn.GCO.Clone()
+	err = jsp.SetConfigInMem(toUpdate, clone)
+	if err != nil {
+		return
 	}
-	_ = transient // Ignore transient for now
-	cfgCommitUpdate(config, "set config")
-	return nil
+	cmn.GCO.Put(clone)
+
+	override := cmn.GCO.GetOverrideConfig()
+	if override == nil {
+		override = toUpdate
+	} else {
+		override.Merge(toUpdate)
+	}
+
+	jsp.SaveOverrideConfig(clone.Confdir, override)
+	cmn.GCO.PutOverrideConfig(override)
+	return
 }

@@ -1985,7 +1985,8 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			p.writeErrf(w, r, "failed to parse configuration to update, err: %v", err)
 			return
 		}
-		if err := setConfig(toUpdate, transient); err != nil {
+		_ = transient // ignore for now
+		if err := p.owner.config.modifyOverride(toUpdate); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
@@ -2036,9 +2037,7 @@ func (p *proxyrunner) daePathAction(w http.ResponseWriter, r *http.Request, acti
 			p.writeErr(w, r, err)
 			return
 		}
-		if err := setConfig(toUpdate, transient); err != nil {
-			p.writeErr(w, r, err)
-		}
+		p.setDaemonConfig(w, r, toUpdate, transient)
 	}
 }
 

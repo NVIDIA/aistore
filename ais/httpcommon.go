@@ -30,6 +30,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
@@ -791,6 +792,20 @@ func (h *httprunner) tryLoadSmap() (_ *smapX, reliable bool) {
 		}
 	}
 	return smap, reliable
+}
+
+func (h *httprunner) setDaemonConfig(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToUpdate, transient bool) {
+	var err error
+	if transient {
+		clone := cmn.GCO.Clone()
+		err = jsp.SetConfigInMem(toUpdate, clone)
+		goto resp
+	}
+	err = h.owner.config.modifyOverride(toUpdate)
+resp:
+	if err != nil {
+		h.writeErr(w, r, err)
+	}
 }
 
 func (h *httprunner) run() error {
