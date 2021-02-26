@@ -6,7 +6,7 @@ AIS *xactions* run asynchronously, have one of the enumerated kinds, start/stop 
 
 ## Start xaction
 
-`ais start <XACTION_COMMAND> [arguments...]`
+`ais job start <XACTION_COMMAND> [arguments...]`
 
 Start xaction(s). Some xactions require additional arguments such as bucket name to execute.
 
@@ -18,7 +18,7 @@ Start xaction(s). Some xactions require additional arguments such as bucket name
 Starts LRU xaction on all nodes
 
 ```console
-$ ais start lru
+$ ais job start lru
 Started "lru" xaction.
 ```
 An administrator may choose to run LRU on a subset of buckets. This can be achieved by using the `--buckets` flag to provide a comma-separated list of buckets, for instance `--buckets bck1,gcp://bck2`, on which LRU needs to be performed.
@@ -26,12 +26,12 @@ Additionally, the `--force`(`-f`) option can be used to override the bucket's `l
 
 **Note:** To ensure safety, the force flag (`-f`) only works when a list of buckets is provided.
 ```console
-$ ais start lru --buckets ais://buck1,aws://buck2 -f
+$ ais job start lru --buckets ais://buck1,aws://buck2 -f
 ```
 
 ## Stop xaction
 
-`ais stop xaction XACTION_ID|XACTION_NAME [BUCKET_NAME]`
+`ais job stop xaction XACTION_ID|XACTION_NAME [BUCKET_NAME]`
 
 Stop xaction(s).
 The second argument is used to determine the bucket name if it is required.
@@ -43,13 +43,13 @@ The second argument is used to determine the bucket name if it is required.
 Stops currently running LRU xaction.
 
 ```console
-$ ais stop xaction lru
+$ ais job stop xaction lru
 Stopped "lru" xaction.
 ```
 
 ## Show xaction stats
 
-`ais show xaction [XACTION_ID|XACTION_NAME] [BUCKET_NAME]`
+`ais show job xaction [XACTION_ID|XACTION_NAME] [BUCKET_NAME]`
 
 Display details about `XACTION_ID` or `XACTION_NAME` xaction. If no arguments are given, displays details about all xactions.
 The second argument is used to determine the bucket name if it is required.
@@ -78,7 +78,7 @@ Output of this command differs from the generic xaction output.
 
 ## Wait for xaction
 
-`ais wait xaction XACTION_ID|XACTION_NAME [BUCKET_NAME]`
+`ais job wait xaction XACTION_ID|XACTION_NAME [BUCKET_NAME]`
 
 Wait for the `XACTION_ID` or `XACTION_NAME` xaction to finish.
 

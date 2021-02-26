@@ -13,8 +13,8 @@ Return commands containing the search word or synonym.
 
 ```command
 $ ais search object
-ais mv object
-ais rm object
+ais object mv
+ais object rm
 ais show object
 
 $ ais search create user
@@ -26,8 +26,8 @@ ais auth add user
 Search commands using `--regex` flag
 
 ```command 
-$ ais search --regex "set\s"
-ais set config
-ais set props
-ais set primary
+$ ais search --regex "mv|cp"
+ais bucket cp
+ais bucket mv
+ais object mv
 ```

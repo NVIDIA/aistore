@@ -82,9 +82,9 @@ Further:
 Examples first. The following two commands attach and then show remote cluster at the address`my.remote.ais:51080`:
 
 ```console
-$ ais attach remote alias111=http://my.remote.ais:51080
+$ ais cluster attach alias111=http://my.remote.ais:51080
 Remote cluster (alias111=http://my.remote.ais:51080) successfully attached
-$ ais show remote
+$ ais show remote-cluster
 UUID      URL                     Alias     Primary         Smap  Targets  Online
 eKyvPyHr  my.remote.ais:51080     alias111  p[80381p11080]  v27   10       yes
 ```
@@ -95,7 +95,7 @@ Notice two aspects of this:
 * the remote cluster does *not* have to be online at attachment time; offline or currently not reachable clusters are shown as follows:
 
 ```console
-$ ais show remote
+$ ais show remote-cluster
 UUID        URL                       Alias     Primary         Smap  Targets  Online
 eKyvPyHr    my.remote.ais:51080       alias111  p[primary1]     v27   10       no
 <alias222>  <other.remote.ais:51080>            n/a             n/a   n/a      no
@@ -106,8 +106,8 @@ Notice the difference between the first and the second lines in the printout abo
 To `detach` any of the previously configured association, simply run:
 
 ```console
-$ ais detach remote alias111
-$ ais show remote
+$ ais cluster detach alias111
+$ ais show remote-cluster
 UUID        URL                       Alias     Primary         Smap  Targets  Online
 <alias222>  <other.remote.ais:51080>            n/a             n/a   n/a      no
 ```
@@ -146,6 +146,6 @@ For more usage examples, please see [working with remote AIS bucket](bucket.md#c
 
 And one final comment:
 
-You can run `ais remote attach` and/or `ais show remote` CLI to *refresh* remote configuration: check availability and reload cluster maps.
-In other words, repeating the same `ais attach remote` command will have the side effect of refreshing all the currently configured attachments.
-Or, use `ais show remote` CLI for the same exact purpose.
+You can run `ais remote attach` and/or `ais show remote-cluster` CLI to *refresh* remote configuration: check availability and reload cluster maps.
+In other words, repeating the same `ais cluster attach` command will have the side effect of refreshing all the currently configured attachments.
+Or, use `ais show remote-cluster` CLI for the same exact purpose.

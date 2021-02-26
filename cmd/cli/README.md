@@ -84,7 +84,7 @@ $ ais --no-colors ls ais://bck --props all
 $ ais --no-colors ls --props all ais://bck
 
 # incorrect usage of a global option
-$ ais ls ais://bck --props all --no-colors
+$ ais bucket ls ais://bck --props all --no-colors
 ```
 
 ## AIS CLI Shell Autocomplete

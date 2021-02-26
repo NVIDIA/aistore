@@ -37,24 +37,24 @@ $ ais show mountpath
 
 ## Attach mountpath
 
-`ais attach mountpath DAEMON_ID=MOUNTPATH [DAEMONID=MOUNTPATH...]`
+`ais mountpath attach DAEMON_ID=MOUNTPATH [DAEMONID=MOUNTPATH...]`
 
 Attach a mountpath on a specified target to AIS storage.
 
 ### Examples
 
 ```console
-$ ais attach mountpath 12367t8080=/data/dir
+$ ais mountpath attach 12367t8080=/data/dir
 ```
 
 ## Detach mountpath
 
-`ais detach mountpath DAEMON_ID=MOUNTPATH [DAEMONID=MOUNTPATH...]`
+`ais mountpath detach DAEMON_ID=MOUNTPATH [DAEMONID=MOUNTPATH...]`
 
 Detach a mountpath on a specified target from AIS storage.
 
 ### Examples
 
 ```console
-$ ais detach mountpath 12367t8080=/data/dir
+$ ais mountpath detach 12367t8080=/data/dir
 ```

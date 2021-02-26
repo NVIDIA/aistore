@@ -143,7 +143,7 @@ deploy: ## Build 'aisnode' and deploy the specified numbers of local AIS proxies
 
 kill: ## Kill all locally deployed targets and proxies
 	@which ais >/dev/null || echo "Warning: missing CLI (ais) binary for proper graceful shutdown"
-	@ais stop cluster 2>/dev/null || true
+	@ais job stop cluster 2>/dev/null || true
 	@"$(DEPLOY_DIR)/kill.sh"
 
 clean: ## Remove all AIS related files and binaries

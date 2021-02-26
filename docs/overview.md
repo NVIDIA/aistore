@@ -183,7 +183,7 @@ Finally, AIS can *promote* files and directories to objects. The only requiremen
 Let's consider a quick example. Say, some (or all) of the deployed storage nodes contain a directory called `/tmp/mydata`. By running the following [CLI](/cmd/cli/README.md), we could make AIS objects (**one file = one object**) out of all files scattered across all nodes:
 
 ```console
-$ ais promote /tmp/mydata mybucket/ -r --keep=false
+$ ais object promote /tmp/mydata mybucket/ -r --keep=false
 ```
 
 In this example, `mybucket` would be the designated (destination) bucket.

@@ -78,9 +78,9 @@ For details, see [S3 compatibility](/docs/s3compat.md#s3-compatibility).
 To create an ais bucket with the name `yt8m`, rename it to `yt8m_extended` and delete it, run:
 
 ```console
-$ ais create bucket yt8m
-$ ais mv bucket ais://yt8m ais://yt8m_extended
-$ ais rm bucket ais://yt8m_extended
+$ ais bucket create yt8m
+$ ais bucket mv ais://yt8m ais://yt8m_extended
+$ ais bucket rm ais://yt8m_extended
 ```
 
 Please note that rename bucket is not an instant operation, especially if the bucket contains data. Follow the `rename` command tips to monitor when the operation completes.
@@ -93,11 +93,11 @@ The following example creates an attachment between two clusters, lists all remo
 
 ```console
 $ # Attach remote AIS cluster and assign it an alias `teamZ` (for convenience and for future reference):
-$ ais attach remote teamZ=http://cluster.ais.org:51080
+$ ais cluster attach teamZ=http://cluster.ais.org:51080
 Remote cluster (teamZ=http://cluster.ais.org:51080) successfully attached
 $
 $ # The cluster at http://cluster.ais.org:51080 is now persistently attached:
-$ ais show remote
+$ ais show remote-cluster
 UUID      URL                            Alias     Primary      Smap   Targets  Online
 MCBgkFqp  http://cluster.ais.org:51080   teamZ     p[primary]   v317   10       yes
 $
@@ -105,7 +105,7 @@ $ # List all buckets in all remote clusters
 $ # Notice the syntax: by convention, we use `@` to prefix remote cluster UUIDs, and so
 $ # `ais://@` translates as "AIS backend provider, any remote cluster"
 $
-$ ais ls ais://@
+$ ais bucket ls ais://@
 AIS Buckets (4)
 	  ais://@MCBgkFqp/imagenet
 	  ais://@MCBgkFqp/coco
@@ -115,7 +115,7 @@ $
 $ # List all buckets in the remote cluster with UUID = MCBgkFqp
 $ # Notice again the syntax: `ais://@some-string` translates as "remote AIS cluster with alias or UUID equal some-string"
 $
-$ ais ls ais://@MCBgkFqp
+$ ais bucket ls ais://@MCBgkFqp
 AIS Buckets (4)
 	  ais://@MCBgkFqp/imagenet
 	  ais://@MCBgkFqp/coco
@@ -123,7 +123,7 @@ AIS Buckets (4)
 	  ais://@MCBgkFqp/imagenet-inflated
 $
 $ # List all buckets with name matching the regex pattern "tes*"
-$ ais ls --regex "tes*"
+$ ais bucket ls --regex "tes*"
 AWS Buckets (3)
   aws://test1
   aws://test2
@@ -131,14 +131,14 @@ AWS Buckets (3)
 $
 $ # We can conveniently keep using our previously selected alias for the remote cluster -
 $ # The following lists selected remote bucket using the cluster's alias:
-$ ais ls ais://@teamZ/imagenet-augmented
+$ ais bucket ls ais://@teamZ/imagenet-augmented
 NAME              SIZE
 train-001.tgz     153.52KiB
 train-002.tgz     136.44KiB
 ...
 $
 $ # The same, but this time using the cluster's UUID:
-$ ais ls ais://@MCBgkFqp/imagenet-augmented
+$ ais bucket ls ais://@MCBgkFqp/imagenet-augmented
 NAME              SIZE
 train-001.tgz     153.52KiB
 train-002.tgz     136.44KiB
@@ -161,11 +161,11 @@ The example shows accessing a private GCP bucket and a public GCP one without us
 
 ```console
 $ # Listing objects of a private bucket
-$ ais ls gs://ais-ic
+$ ais bucket ls gs://ais-ic
 Bucket "gcp://ais-ic" does not exist
 $
 $ # Listing a public bucket
-$ ais ls gs://pub-images --limit 3
+$ ais bucket ls gs://pub-images --limit 3
 NAME                         SIZE
 images-shard.ipynb           101.94KiB
 images-train-000000.tar      964.77MiB
@@ -177,13 +177,13 @@ Run downloader to copy data from a public Cloud bucket to an AIS bucket and then
 Example shows how to download data from public Google storage:
 
 ```console
-$ ais create bucket ais://images
+$ ais bucket create ais://images
 "ais://images" bucket created
-$ ais start download "gs://pub-images/images-train-{000000..000001}.tar" ais://images/
+$ ais job start download "gs://pub-images/images-train-{000000..000001}.tar" ais://images/
 Z8WkHxwIrr
-Run `ais show download Z8WkHxwIrr` to monitor the progress of downloading.
-$ ais wait download Z8WkHxwIrr
-$ ais ls ais://images
+Run `ais show job download Z8WkHxwIrr` to monitor the progress of downloading.
+$ ais job wait download Z8WkHxwIrr
+$ ais bucket ls ais://images
 NAME                         SIZE
 images-train-000000.tar      964.77MiB
 images-train-000001.tar      964.74MiB
@@ -207,7 +207,7 @@ $ curl -sL --max-redirs 3 -x localhost:8080 --noproxy "$(curl -s localhost:8080/
 
 Alternatively, an object can also be downloaded using the `get` and `cat` CLI commands.
 ```console
-$ ais get -f http://storage.googleapis.com/minikube/minikube-0.7.iso.sha256 minikube-0.7.iso.sha256
+$ ais object get -f http://storage.googleapis.com/minikube/minikube-0.7.iso.sha256 minikube-0.7.iso.sha256
 ```
 
 The `--force`(`-f`) option skips bucket validation and automatically creates a new `ht://` bucket for the object if it doesn't exist.
@@ -216,14 +216,14 @@ This will cache shard object inside the AIStore cluster.
 We can confirm this by listing available buckets and checking the content:
 
 ```console
-$ ais ls
+$ ais bucket ls
 AIS Buckets (1)
   ais://local-bck
 AWS Buckets (1)
   aws://ais-test
 HTTP(S) Buckets (1)
   ht://ZDdhNTYxZTkyMzhkNjk3NA (http://storage.googleapis.com/minikube/)
-$ ais ls ht://ZDdhNTYxZTkyMzhkNjk3NA
+$ ais bucket ls ht://ZDdhNTYxZTkyMzhkNjk3NA
 NAME                                 SIZE
 minikube-0.6.iso.sha256	              65B
 ```
@@ -235,7 +235,7 @@ In our example, bucket `ht://ZDdhNTYxZTkyMzhkNjk3NA` will be associated with `ht
 Therefore, we can interchangeably use the associated URL for listing the bucket as show below.
 
 ```console
-$ ais ls http://storage.googleapis.com/minikube
+$ ais bucket ls http://storage.googleapis.com/minikube
 NAME                                  SIZE
 minikube-0.6.iso.sha256	              65B
 ```
@@ -245,8 +245,8 @@ minikube-0.6.iso.sha256	              65B
 Such connection between bucket and URL allows downloading content without providing URL again:
 
 ```console
-$ ais cat ht://ZDdhNTYxZTkyMzhkNjk3NA/minikube-0.7.iso.sha256 > /dev/null # cache another object
-$ ais ls ht://ZDdhNTYxZTkyMzhkNjk3NA
+$ ais object cat ht://ZDdhNTYxZTkyMzhkNjk3NA/minikube-0.7.iso.sha256 > /dev/null # cache another object
+$ ais bucket ls ht://ZDdhNTYxZTkyMzhkNjk3NA
 NAME                     SIZE
 minikube-0.6.iso.sha256  65B
 minikube-0.7.iso.sha256  65B
@@ -283,17 +283,17 @@ Example of HDFS provider configuration:
 
 After the HDFS is set up, and the binary is built with HDFS provider support we can see everything in action.
 ```console
-$ ais create bucket hdfs://yt8m --bucket-props="extra.hdfs.ref_directory=/part1/video"
+$ ais bucket create hdfs://yt8m --bucket-props="extra.hdfs.ref_directory=/part1/video"
 "hdfs://yt8m" bucket created
-$ ais ls hdfs://
+$ ais bucket ls hdfs://
 HDFS Buckets (1)
   hdfs://yt8m
-$ ais put 1.mp4 hdfs://yt8m/1.mp4
+$ ais object put 1.mp4 hdfs://yt8m/1.mp4
 PUT "1.mp4" into bucket "hdfs://yt8m"
-$ ais ls hdfs://yt8m
+$ ais bucket ls hdfs://yt8m
 NAME	 SIZE
 1.mp4	 76.31KiB
-$ ais get hdfs://yt8m/1.mp4 video.mp4
+$ ais object get hdfs://yt8m/1.mp4 video.mp4
 GET "1.mp4" from bucket "hdfs://yt8m" as "video.mp4" [76.31KiB]
 ```
 
@@ -312,13 +312,13 @@ Objects are prefetched or evicted using [List/Range Operations](batch.md#listran
 For example, to use a [list operation](batch.md#list) to prefetch 'o1', 'o2', and, 'o3' from Amazon S3 remote bucket `abc`, run:
 
 ```console
-$ ais start prefetch aws://abc --list o1,o2,o3
+$ ais job start prefetch aws://abc --list o1,o2,o3
 ```
 
 To use a [range operation](batch.md#range) to evict the 1000th to 2000th objects in the remote bucket `abc` from AIS, which names begin with the prefix `__tst/test-`, run:
 
 ```console
-$ ais evict aws://abc --template "__tst/test-{1000..2000}"
+$ ais bucket evict aws://abc --template "__tst/test-{1000..2000}"
 ```
 
 ### Evict Remote Bucket
@@ -332,11 +332,11 @@ In an evict bucket operation, AIS will remove all traces of the remote bucket wi
 For example, to evict `abc` remote bucket from the AIS cluster, run:
 
 ```console
-$ ais evict aws://abc
+$ ais bucket evict aws://abc
 ```
 
 Note: When an HDFS bucket is evicted, AIS will only delete objects stored in the cluster. AIS will retain the bucket's metadata to allow the bucket to re-register later.
-This behavior can be applied to other remote buckets by using the `--keep-md` flag with `ais evict`.
+This behavior can be applied to other remote buckets by using the `--keep-md` flag with `ais bucket evict`.
 
 ## Backend Bucket
 
@@ -354,9 +354,9 @@ However, the extra-copying involved may prove to be time and/or space consuming.
 For example:
 
 ```console
-$ ais create bucket abc
+$ ais bucket create abc
 "abc" bucket created
-$ ais set props ais://abc backend_bck=gcp://xyz
+$ ais bucket props ais://abc backend_bck=gcp://xyz
 Bucket props successfully updated
 ```
 
@@ -365,22 +365,22 @@ After that, you can access all objects from `gcp://xyz` via `ais://abc`. **On-de
 For example:
 
 ```console
-$ ais ls gcp://xyz
+$ ais bucket ls gcp://xyz
 NAME		 SIZE		 VERSION
 shard-0.tar	 2.50KiB	 1
 shard-1.tar	 2.50KiB	 1
-$ ais ls ais://abc
+$ ais bucket ls ais://abc
 NAME		 SIZE		 VERSION
 shard-0.tar	 2.50KiB	 1
 shard-1.tar	 2.50KiB	 1
-$ ais get ais://abc/shard-0.tar /dev/null # cache/prefetch cloud object
+$ ais object get ais://abc/shard-0.tar /dev/null # cache/prefetch cloud object
 "shard-0.tar" has the size 2.50KiB (2560 B)
-$ ais ls ais://abc --cached
+$ ais bucket ls ais://abc --cached
 NAME		 SIZE		 VERSION
 shard-0.tar	 2.50KiB	 1
-$ ais set props ais://abc backend_bck=none # disconnect backend bucket
+$ ais bucket props ais://abc backend_bck=none # disconnect backend bucket
 Bucket props successfully updated
-$ ais ls ais://abc
+$ ais bucket ls ais://abc
 NAME		 SIZE		 VERSION
 shard-0.tar	 2.50KiB	 1
 ```
@@ -408,25 +408,25 @@ The full list of bucket properties are:
 #### List bucket properties
 
 ```console
-$ ais show props mybucket
+$ ais show bucket-props mybucket
 ...
 $
 $ # Or, the same to get output in a (raw) JSON form:
-$ ais show props mybucket --json
+$ ais show bucket-props mybucket --json
 ...
 ```
 
 #### Enable erasure coding on a bucket
 
 ```console
-$ ais set props mybucket ec.enabled=true
+$ ais bucket props mybucket ec.enabled=true
 ```
 
 #### Enable object versioning and then list updated bucket properties
 
 ```console
-$ ais set props mybucket versioning.enabled=true
-$ ais show props mybucket
+$ ais bucket props mybucket versioning.enabled=true
+$ ais show bucket-props mybucket
 ...
 ```
 
@@ -445,7 +445,7 @@ Bucket access is controlled by a single 64-bit `access` value in the [Bucket Pro
 For instance, to make bucket `abc` read-only, execute the following [AIS CLI](../cmd/cli/README.md) command:
 
 ```console
-$ ais set props abc 'access=ro'
+$ ais bucket props abc 'access=ro'
 ```
 
 The same expressed via `curl` will look as follows:

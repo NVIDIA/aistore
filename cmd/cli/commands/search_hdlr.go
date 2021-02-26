@@ -24,15 +24,14 @@ var (
 	searchCommands []cli.Command
 
 	similarWords = map[string][]string{
-		commandAttach: {"mount"},
-		subcmdAuthAdd: {"register", "create"},
-		commandDetach: {"unmount", "umount"},
-		commandList:   {"list", "dir"},
-		commandSet:    {"update"},
-		commandShow:   {"view", "display"},
-		commandRemove: {"remove", "delete"},
-		commandCopy:   {"copy"},
-		commandGet:    {"fetch"},
+		subcmdAuthAdd:    {"register", "create"},
+		commandMountpath: {"mount", "unmount", "umount"},
+		commandList:      {"list", "dir"},
+		commandSet:       {"update"},
+		commandShow:      {"view", "display"},
+		commandRemove:    {"remove", "delete"},
+		commandCopy:      {"copy"},
+		commandGet:       {"fetch"},
 	}
 
 	// app state

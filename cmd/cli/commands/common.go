@@ -15,19 +15,26 @@ import (
 )
 
 const (
-	// Commands (top-level) - preferably verbs
-	commandAttach    = "attach"
+	// Commands (top-level) - preferably categories (nouns)
+	commandAdvanced  = "advanced"
 	commandAuth      = "auth"
+	commandBucket    = "bucket"
+	commandObject    = "object"
+	commandCluster   = "cluster"
+	commandMountpath = "mountpath"
+	commandJob       = "job"
+	commandShow      = "show"
+	commandSearch    = "search"
+	commandETL       = cmn.ETL
+
 	commandCat       = "cat"
 	commandConcat    = "concat"
 	commandCopy      = "cp"
 	commandCreate    = "create"
-	commandDetach    = "detach"
 	commandECEncode  = "ec-encode"
 	commandEvict     = "evict"
 	commandGenShards = "gen-shards"
 	commandGet       = "get"
-	commandJoin      = "join"
 	commandList      = "ls"
 	commandPrefetch  = cmn.ActPrefetch
 	commandPromote   = "promote"
@@ -35,69 +42,69 @@ const (
 	commandRemove    = "rm"
 	commandMv        = "mv"
 	commandSet       = "set"
-	commandSetCopies = "set-copies"
-	commandShow      = "show"
+	commandMirror    = "mirror"
 	commandStart     = cmn.ActXactStart
 	commandStop      = cmn.ActXactStop
 	commandWait      = "wait"
-	commandSearch    = "search"
-	commandETL       = cmn.ETL
 
-	// Subcommands - preferably nouns
-	subcmdDsort     = cmn.DSortNameLowercase
-	subcmdSmap      = cmn.GetWhatSmap
-	subcmdDisk      = cmn.GetWhatDiskStats
-	subcmdConfig    = cmn.GetWhatConfig
-	subcmdRebalance = cmn.ActRebalance
-	subcmdBucket    = "bucket"
-	subcmdObject    = "object"
-	subcmdProps     = "props"
-	subcmdDownload  = "download"
-	subcmdXaction   = "xaction"
-	subcmdNode      = "node"
-	subcmdProxy     = "proxy"
-	subcmdTarget    = "target"
-	subcmdRemoteAIS = cmn.GetWhatRemoteAIS
-	subcmdMountpath = "mountpath"
-	subcmdCluster   = "cluster"
-	subcmdPrimary   = "primary"
-	subcmdInit      = "init"
-	subcmdBuild     = "build"
-	subcmdList      = commandList
-	subcmdLogs      = "logs"
-	subcmdStop      = "stop"
-	subcmdLRU       = cmn.ActLRU
+	// Common Subcommands
+	// NOTE: second level subcommands are preferably verbs
+	subcmdDsort      = cmn.DSortNameLowercase
+	subcmdSmap       = cmn.GetWhatSmap
+	subcmdDisk       = cmn.GetWhatDiskStats
+	subcmdConfig     = cmn.GetWhatConfig
+	subcmdRebalance  = cmn.ActRebalance
+	subcmdBucket     = "bucket"
+	subcmdObject     = "object"
+	subcmdProps      = "props"
+	subcmdDownload   = "download"
+	subcmdXaction    = "xaction"
+	subcmdMountpath  = "mountpath"
+	subcmdCluster    = "cluster"
+	subcmdPrimary    = "set-primary"
+	subcmdInit       = "init"
+	subcmdBuild      = "build"
+	subcmdList       = commandList
+	subcmdLogs       = "logs"
+	subcmdStop       = "stop"
+	subcmdLRU        = cmn.ActLRU
+	subcmdMembership = "membership"
+	subcmdShutdown   = "shutdown"
+	subcmdAttach     = "attach"
+	subcmdDetach     = "detach"
+
+	// Cluster subcommands
+	subcmdCluAttach = subcmdAttach
+	subcmdCluDetach = subcmdDetach
+	subcmdCluConfig = "configure"
+
+	// Disk subcommands
+	subcmdDiskAttach = subcmdAttach
+	subcmdDiskDetach = subcmdDetach
+
+	// Node subcommands
+	subcmdJoin         = "join"
+	subcmdStartMaint   = "start-maintenance"
+	subcmdStopMaint    = "stop-maintenance"
+	subcmdDecommission = "decommission"
 
 	// Show subcommands
-	subcmdShowBucket    = subcmdBucket
 	subcmdShowDisk      = subcmdDisk
 	subcmdShowDownload  = subcmdDownload
 	subcmdShowDsort     = subcmdDsort
 	subcmdShowObject    = subcmdObject
 	subcmdShowXaction   = subcmdXaction
 	subcmdShowRebalance = subcmdRebalance
-	subcmdShowBckProps  = subcmdProps
+	subcmdShowBckProps  = "bucket-props"
 	subcmdShowConfig    = subcmdConfig
-	subcmdShowRemoteAIS = subcmdRemoteAIS
+	subcmdShowRemoteAIS = "remote-cluster"
 	subcmdShowCluster   = subcmdCluster
 	subcmdShowMpath     = subcmdMountpath
-
-	// Create subcommands
-	subcmdCreateBucket = subcmdBucket
-
-	// Mv subcommands
-	subcmdMvBucket = subcmdBucket
-	subcmdMvObject = subcmdObject
+	subcmdShowJob       = commandJob
 
 	// Remove subcommands
-	subcmdRemoveBucket   = subcmdBucket
-	subcmdRemoveObject   = subcmdObject
-	subcmdRemoveNode     = subcmdNode
 	subcmdRemoveDownload = subcmdDownload
 	subcmdRemoveDsort    = subcmdDsort
-
-	// Copy subcommands
-	subcmdCopyBucket = subcmdBucket
 
 	// Start subcommands
 	subcmdStartXaction  = subcmdXaction
@@ -108,22 +115,10 @@ const (
 	subcmdStopXaction  = subcmdXaction
 	subcmdStopDsort    = subcmdDsort
 	subcmdStopDownload = subcmdDownload
-	subcmdStopCluster  = subcmdCluster
 
-	// Set subcommand
-	subcmdSetConfig  = subcmdConfig
-	subcmdSetProps   = subcmdProps
-	subcmdSetPrimary = subcmdPrimary
-
-	// Attach/Detach subcommand
-	subcmdAttachRemoteAIS = subcmdRemoteAIS
-	subcmdAttachMountpath = subcmdMountpath
-	subcmdDetachRemoteAIS = subcmdRemoteAIS
-	subcmdDetachMountpath = subcmdMountpath
-
-	// Join subcommands
-	subcmdJoinProxy  = subcmdProxy
-	subcmdJoinTarget = subcmdTarget
+	// Bucket subcommands
+	subcmdSummary  = "summary"
+	subcmdSetProps = subcmdProps
 
 	// Wait subcommands
 	subcmdWaitXaction  = subcmdXaction
@@ -186,11 +181,11 @@ const (
 	optionalDaemonIDArgument = "[DAEMON_ID]"
 	optionalTargetIDArgument = "[TARGET_ID]"
 	showConfigArgument       = "DAEMON_ID [CONFIG_SECTION]"
-	setConfigArgument        = optionalDaemonIDArgument + " " + keyValuePairsArgument
+	cluConfigArgument        = optionalDaemonIDArgument + " " + keyValuePairsArgument
 	attachRemoteAISArgument  = aliasURLPairArgument
 	detachRemoteAISArgument  = aliasArgument
-	attachMountpathArgument  = daemonMountpathPairArgument
-	detachMountpathArgument  = daemonMountpathPairArgument
+	diskAttachArgument       = daemonMountpathPairArgument
+	diskDetachArgument       = daemonMountpathPairArgument
 	joinNodeArgument         = "IP:PORT " + optionalDaemonIDArgument
 	startDownloadArgument    = "SOURCE DESTINATION"
 	jsonSpecArgument         = "JSON_SPECIFICATION"
@@ -226,8 +221,8 @@ var (
 		Usage: "properties to return with object names, comma separated",
 		Value: cmn.GetPropsName + "," + cmn.GetPropsSize,
 	}
-	prefixFlag      = cli.StringFlag{Name: "prefix", Usage: "prefix for string matching"}
-	refreshFlag     = cli.DurationFlag{Name: "refresh", Usage: "refresh period", Value: refreshRateDefault}
+	prefixFlag      = cli.StringFlag{Name: "prefix", Usage: "list objects matching the given prefix"}
+	refreshFlag     = cli.DurationFlag{Name: "refresh", Usage: "refresh rate for monitoring", Value: refreshRateDefault}
 	regexFlag       = cli.StringFlag{Name: "regex", Usage: "regex pattern for matching"}
 	jsonFlag        = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}
 	noHeaderFlag    = cli.BoolFlag{Name: "no-headers,H", Usage: "display tables without headers"}
@@ -251,9 +246,9 @@ var (
 	// Bucket
 	startAfterFlag = cli.StringFlag{
 		Name:  "start-after",
-		Usage: "list objects alphabetically starting from the object after given provided key",
+		Usage: "list bucket's content alphabetically starting with the first name *after* the specified key",
 	}
-	objLimitFlag = cli.IntFlag{Name: "limit", Usage: "limit object count", Value: 0}
+	objLimitFlag = cli.IntFlag{Name: "limit", Usage: "limit object count", Value: 0} // TODO: specify default as unlimited
 	pageSizeFlag = cli.IntFlag{Name: "page-size", Usage: "maximum number of entries by list objects call", Value: 1000}
 	templateFlag = cli.StringFlag{Name: "template", Usage: "template for matching object names"}
 	copiesFlag   = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1, Required: true}
@@ -325,7 +320,6 @@ var (
 		Usage: "chunk size used for each request, can contain prefix 'b', 'KiB', 'MB'", Value: "10MB",
 	}
 	computeCksumFlag = cli.BoolFlag{Name: "compute-cksum", Usage: "compute the checksum with the type configured for the bucket"}
-	useCacheFlag     = cli.BoolFlag{Name: "use-cache", Usage: "use proxy cache to speed up list object request"}
 	checksumFlags    = getCksumFlags()
 
 	// AuthN
@@ -365,10 +359,14 @@ var (
 		Usage: "wait until the operation is finished",
 	}
 
-	// Maintenance
-	maintenanceModeFlag = cli.StringFlag{
-		Name: "mode", Required: true,
-		Usage: "node maintenance mode: start-maintenance, stop-maintenance, decommission, shutdown",
+	// Node
+	nodeTypeFlag = cli.StringFlag{
+		Name: "type", Required: true,
+		Usage: "node type: proxy or target",
+	}
+	shutdownFlag = cli.BoolFlag{
+		Name:  "shutdown",
+		Usage: "shutown the aisnode process after decommissioning",
 	}
 	noRebalanceFlag = cli.BoolFlag{
 		Name:  "no-rebalance",

@@ -1,6 +1,6 @@
 "ais://$BUCKET_1" bucket created
 "ais://$BUCKET_2" bucket created
 Bucket copy operation ("ais://$BUCKET_1" => "ais://$BUCKET_2") is in progress.
-To check the status, run: ais show xaction copybck ais://$BUCKET_2
+To check the status, run: ais show job xaction copybck ais://$BUCKET_2
 DAEMON ID	 ID	 KIND	 BUCKET	 OBJECTS	 BYTES	 START	 END	 ABORTED
 DAEMON ID	 ID	 KIND	 BUCKET	 OBJECTS	 BYTES	 START	 END	 ABORTED

@@ -1,6 +1,6 @@
 echo "0123456789" > $OBJECT_1.txt
-ais create bucket $BUCKET_1
-ais put $OBJECT_1.txt $BUCKET_1/object_1.txt
+ais bucket create $BUCKET_1
+ais object put $OBJECT_1.txt $BUCKET_1/object_1.txt
 rm -f $OBJECT_1.txt
 
-ais cat $BUCKET_1/object_1.txt
+ais object cat $BUCKET_1/object_1.txt

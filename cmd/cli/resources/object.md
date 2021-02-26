@@ -14,7 +14,7 @@
 
 ## GET object
 
-`ais get BUCKET_NAME/OBJECT_NAME [OUT_FILE]`
+`ais object get BUCKET_NAME/OBJECT_NAME [OUT_FILE]`
 
 Get an object from a bucket.  If a local file of the same name exists, the local file will be overwritten without confirmation.
 
@@ -36,7 +36,7 @@ Get an object from a bucket.  If a local file of the same name exists, the local
 Get the `imagenet_train-000010.tgz` object from the `imagenet` bucket and write it to a local file, `~/train-10.tgz`.
 
 ```console
-$ ais get imagenet/imagenet_train-000010.tgz ~/train-10.tgz
+$ ais object get imagenet/imagenet_train-000010.tgz ~/train-10.tgz
 GET "imagenet_train-000010.tgz" from bucket "imagenet" as "/home/user/train-10.tgz" [946.8MiB]
 ```
 
@@ -47,7 +47,7 @@ If `OUT_FILE` is omitted, the local file name is implied from the object name.
 Get the `imagenet_train-000010.tgz` object from the `imagenet` bucket and write it to a local file, `imagenet_train-000010.tgz`.
 
 ```console
-$ ais get imagenet/imagenet_train-000010.tgz
+$ ais object get imagenet/imagenet_train-000010.tgz
 GET "imagenet_train-000010.tgz" from bucket "imagenet" as "imagenet_train-000010.tgz" [946.8MiB]
 ```
 
@@ -56,7 +56,7 @@ GET "imagenet_train-000010.tgz" from bucket "imagenet" as "imagenet_train-000010
 Get the `imagenet_train-000010.tgz` object from the `imagenet` AWS bucket and write it to standard output.
 
 ```console
-$ ais get aws://imagenet/imagenet_train-000010.tgz -
+$ ais object get aws://imagenet/imagenet_train-000010.tgz -
 ```
 
 #### Check if object is cached
@@ -73,7 +73,7 @@ with arbitrary (per bucket configurable) levels of redundancy, etc. In short, th
 The following example checks whether `imagenet_train-000010.tgz` is "cached" in the bucket `imagenet`:
 
 ```console
-$ ais get --is-cached imagenet/imagenet_train-000010.tgz
+$ ais object get --is-cached imagenet/imagenet_train-000010.tgz
 Cached: true
 ```
 
@@ -82,16 +82,16 @@ Cached: true
 Get the contents of object `list.txt` from `texts` bucket starting from offset `1024` length `1024` and save it as `~/list.txt` file.
 
 ```console
-$ ais get --offset 1024 --length 1024 texts/list.txt ~/list.txt
+$ ais object get --offset 1024 --length 1024 texts/list.txt ~/list.txt
 Read 1.00KiB (1024 B)
 ```
 
 ## Print object content
 
-`ais cat BUCKET_NAME/OBJECT_NAME`
+`ais object cat BUCKET_NAME/OBJECT_NAME`
 
 Get `OBJECT_NAME` from bucket `BUCKET_NAME` and print it to standard output.
-Alias for `ais get BUCKET_NAME/OBJECT_NAME -`.
+Alias for `ais object get BUCKET_NAME/OBJECT_NAME -`.
 
 ### Options
 
@@ -108,7 +108,7 @@ Alias for `ais get BUCKET_NAME/OBJECT_NAME -`.
 Print content of `list.txt` from local bucket `texts` to the standard output.
 
 ```console
-$ ais cat texts/list.txt
+$ ais object cat texts/list.txt
 ```
 
 #### Read range
@@ -116,7 +116,7 @@ $ ais cat texts/list.txt
 Print content of object `list.txt` starting from offset `1024` length `1024` to the standard output.
 
 ```console
-$ ais cat texts/list.txt --offset 1024 --length 1024
+$ ais object cat texts/list.txt --offset 1024 --length 1024
 ```
 
 ## Show object properties
@@ -185,7 +185,7 @@ ec          2:2[replicated]
 
 ## PUT object
 
-`ais put -|FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup>[1](#ft1)</sup>
+`ais object put -|FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup>[1](#ft1)</sup>
 
 Put a file, an entire directory of files, or content from STDIN (`-`) into the specified bucket. If an object of the same name exists,
 the object will be overwritten without confirmation.
@@ -218,8 +218,8 @@ File masks and directory uploading are not supported in single-file upload mode.
 ### Object names
 
 PUT command handles two possible ways to specify resulting object name if source references single file:
-- Object name is not provided: `ais put path/to/(..)/file.go bucket/` creates object `file.go` in `bucket`
-- Explicit object name is provided: `ais put path/to/(..)/file.go bucket/path/to/object.go` creates object `path/to/object.go` in `bucket`
+- Object name is not provided: `ais object put path/to/(..)/file.go bucket/` creates object `file.go` in `bucket`
+- Explicit object name is provided: `ais object put path/to/(..)/file.go bucket/path/to/object.go` creates object `path/to/object.go` in `bucket`
 
 PUT command handles object naming with range syntax as follows:
 - Object names are file paths without longest common prefix of all files from source.
@@ -250,7 +250,7 @@ The current user HOME directory is `/home/user`.
 Put a single file `img1.tar` into local bucket `mybucket`, name it `img-set-1.tar`.
 
 ```bash
-$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar
+$ ais object put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
 ```
 
@@ -261,19 +261,19 @@ to override the default bucket checksum performed at the server side.
 
 
 ```bash
-$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --crc32c 0767345f
+$ ais object put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --crc32c 0767345f
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
 
-$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --md5 e91753513c7fc873467c1f3ca061fa70
+$ ais object put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --md5 e91753513c7fc873467c1f3ca061fa70
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
 
-$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --sha256 dc2bac3ba773b7bc52c20aa85e6ce3ae097dec870e7b9bda03671a1c434b7a5d
+$ ais object put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --sha256 dc2bac3ba773b7bc52c20aa85e6ce3ae097dec870e7b9bda03671a1c434b7a5d
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
 
-$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --sha512 e7da5269d4cd882deb8d7b7ca5cbf424047f56815fd7723123482e2931823a68d866627a449a55ca3a18f9c9ba7c8bb6219a028ba3ff5a5e905240907d087e40
+$ ais object put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --sha512 e7da5269d4cd882deb8d7b7ca5cbf424047f56815fd7723123482e2931823a68d866627a449a55ca3a18f9c9ba7c8bb6219a028ba3ff5a5e905240907d087e40
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
 
-$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --xxhash 05967d5390ac53b0
+$ ais object put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --xxhash 05967d5390ac53b0
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
 ```
 
@@ -281,7 +281,7 @@ Optionally, the user can choose to provide a `--compute-cksum` flag for the chec
 let the api take care of the computation.
 
 ```bash
-$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --compute-cksum
+$ ais object put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --compute-cksum
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
 ```
 
@@ -290,7 +290,7 @@ $ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --compute-cksum
 Put a single file `~/bck/img1.tar` into bucket `mybucket`, without explicit name.
 
 ```bash
-$ ais put "~/bck/img1.tar" mybucket/
+$ ais object put "~/bck/img1.tar" mybucket/
 # PUT /home/user/bck/img1.tar => mybucket/img-set-1.tar
 ```
 
@@ -302,7 +302,7 @@ Note that content is put in chunks what can have a slight overhead.
 `--chunk-size` allows for controlling the chunk size - the bigger the chunk size the better performance (but also higher memory usage).
 
 ```bash
-$ tar -xOzf ~/bck/img1.tar | ais put - ais://mybucket/img1-unpacked
+$ tar -xOzf ~/bck/img1.tar | ais object put - ais://mybucket/img1-unpacked
 # PUT /home/user/bck/img1.tar (as stdin) => ais://mybucket/img-unpacked
 ```
 
@@ -313,7 +313,7 @@ Put two objects, `/home/user/bck/img1.tar` and `/home/user/bck/img2.zip`, into t
 Note that the path `/home/user/bck` is a shortcut for `/home/user/bck/*` and that recursion is disabled by default.
 
 ```bash
-$ ais put "/home/user/bck" mybucket
+$ ais object put "/home/user/bck" mybucket
 # PUT /home/user/bck/img1.tar => img1.tar
 # PUT /home/user/bck/img2.tar => img2.zip
 ```
@@ -323,7 +323,7 @@ $ ais put "/home/user/bck" mybucket
 The same as above, but add `OBJECT_NAME` (`../subdir/`) prefix to objects names.
 
 ```bash
-$ ais put "/home/user/bck" mybucket/subdir/
+$ ais object put "/home/user/bck" mybucket/subdir/
 # PUT /home/user/bck/img1.tar => mybucket/subdir/img1.tar
 # PUT /home/user/bck/img2.tar => mybucket/subdir/img2.zip
 # PUT /home/user/bck/extra/img1.tar => mybucket/subdir/extra/img1.tar
@@ -335,7 +335,7 @@ $ ais put "/home/user/bck" mybucket/subdir/
 The same as above, but without trailing `/`.
 
 ```bash
-$ ais put "/home/user/bck" mybucket/subdir
+$ ais object put "/home/user/bck" mybucket/subdir
 # PUT /home/user/bck/img1.tar => mybucket/subdirimg1.tar
 # PUT /home/user/bck/img2.tar => mybucket/subdirimg2.zip
 # PUT /home/user/bck/extra/img1.tar => mybucket/subdirextra/img1.tar
@@ -347,7 +347,7 @@ $ ais put "/home/user/bck" mybucket/subdir
 Same as above, except that only files matching pattern `*.tar` are PUT, so the final bucket content is `tars/img1.tar` and `tars/extra/img1.tar`.
 
 ```bash
-$ ais put "~/bck/*.tar" mybucket/tars/
+$ ais object put "~/bck/*.tar" mybucket/tars/
 # PUT /home/user/bck/img1.tar => mybucket/tars/img1.tar
 # PUT /home/user/bck/extra/img1.tar => mybucket/tars/extra/img1.tar
 ```
@@ -359,7 +359,7 @@ They exclude the longest parent directory of path which doesn't contain a templa
 
 ```bash
 $ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
-$ ais put "~/dir/test{0..2}{0..2}.txt" mybucket -y
+$ ais object put "~/dir/test{0..2}{0..2}.txt" mybucket -y
 9 objects put into "mybucket" bucket
 # PUT /home/user/dir/test00.txt => mybucket/test00.txt and 8 more
 ```
@@ -370,7 +370,7 @@ Same as above, except object names have additional prefix `test${d1}${d2}.txt`.
 
 ```bash
 $ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
-$ ais put "~/dir/test{0..2}{0..2}.txt" mybucket/dir/ -y
+$ ais object put "~/dir/test{0..2}{0..2}.txt" mybucket/dir/ -y
 9 objects put into "mybucket" bucket
 # PUT /home/user/dir/test00.txt => mybucket/dir/test00.txt and 8 more
 ```
@@ -381,7 +381,7 @@ Preview the files that would be sent to the cluster, without really putting them
 
 ```console
 $ for d1 in {0..2}; do for d2 in {0..2}; mkdir -p ~/dir/test${d1}/dir && do echo "0" > ~/dir/test${d1}/dir/test${d2}.txt; done; done
-$ ais put "~/dir/test{0..2}/dir/test{0..2}.txt" mybucket --dry-run
+$ ais object put "~/dir/test{0..2}/dir/test{0..2}.txt" mybucket --dry-run
 [DRY RUN] No modifications on the cluster
 /home/user/dir/test0/dir/test0.txt => mybucket/test0/dir/test0.txt
 (...)
@@ -393,14 +393,14 @@ Put multiple directories into the cluster with range syntax.
 
 ```bash
 $ for d1 in {0..10}; do mkdir dir$d1 && for d2 in {0..2}; do echo "0" > dir$d1/test${d2}.txt; done; done
-$ ais put "dir{0..10}" mybucket -y
+$ ais object put "dir{0..10}" mybucket -y
 33 objects put into "mybucket" bucket
 # PUT "/home/user/dir0/test0.txt" => b/dir0/test0.txt and 32 more
 ```
 
 ## Promote files and directories
 
-`ais promote FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup>[1](#ft1)</sup>
+`ais object promote FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup>[1](#ft1)</sup>
 
 Promote **AIS-colocated** files and directories to AIS objects in a specified bucket.
 Colocation in the context means that the files in question are already located *inside* AIStore (bare-metal or virtual) storage servers (targets).
@@ -427,8 +427,8 @@ When the specified source references a directory or a tree of nested directories
 
 If the source references a single file, the resulting object name is set as follows:
 
-- Object name is not provided: `ais promote /path/to/(..)/file.go bucket/` promotes to object `file.go` in `bucket`
-- Explicit object name is provided: `ais promote /path/to/(..)/file.go bucket/path/to/object.go` promotes object `path/to/object.go` in `bucket`
+- Object name is not provided: `ais object promote /path/to/(..)/file.go bucket/` promotes to object `file.go` in `bucket`
+- Explicit object name is provided: `ais object promote /path/to/(..)/file.go bucket/path/to/object.go` promotes object `path/to/object.go` in `bucket`
 
 
 ### Examples
@@ -442,7 +442,7 @@ Notice that `keep` option is required - it cannot be omitted.
 Promote `/tmp/examples/example1.txt` without specified object name.
 
 ```bash
-$ ais promote /tmp/examples/example1.txt mybucket --keep=true
+$ ais object promote /tmp/examples/example1.txt mybucket --keep=true
 # PROMOTE /tmp/examples/example1.txt => mybucket/example1.txt
 ```
 
@@ -451,7 +451,7 @@ $ ais promote /tmp/examples/example1.txt mybucket --keep=true
 Promote /tmp/examples/example1.txt as object with name `example1.txt`.
 
 ```bash
-$ ais promote /tmp/examples/example1.txt mybucket/example1.txt --keep=true
+$ ais object promote /tmp/examples/example1.txt mybucket/example1.txt --keep=true
 # PROMOTE /tmp/examples/example1.txt => mybucket/example1.txt
 ```
 
@@ -461,7 +461,7 @@ Make AIS objects out of `/tmp/examples` files (**one file = one object**).
 `/tmp/examples` is a directory present on some (or all) of the deployed storage nodes.
 
 ```console
-$ ais promote /tmp/examples mybucket/ -r --keep=true
+$ ais object promote /tmp/examples mybucket/ -r --keep=true
 ```
 
 #### Promote directory with specifying custom prefix
@@ -469,7 +469,7 @@ $ ais promote /tmp/examples mybucket/ -r --keep=true
 Promote `/tmp/examples` files to AIS objects. Objects names will have `examples/` prefix.
 
 ```console
-$ ais promote /tmp/examples mybucket/examples/ -r --keep=false
+$ ais object promote /tmp/examples mybucket/examples/ -r --keep=false
 ```
 
 #### Promote invalid path
@@ -477,19 +477,19 @@ $ ais promote /tmp/examples mybucket/examples/ -r --keep=false
 Try to promote a file that does not exist.
 
 ```console
-$ ais create bucket testbucket
+$ ais bucket create testbucket
 testbucket bucket created
 $ ais show cluster
 TARGET          MEM USED %  MEM AVAIL   CAP USED %  CAP AVAIL   CPU USED %  REBALANCE
 1014646t8081    0.00%	    4.00GiB	    59%         375.026GiB  0.00%	    finished
 ...
-$ ais promote /target/1014646t8081/nonexistent/dir/ testbucket --target 1014646t8081 --keep=false
+$ ais object promote /target/1014646t8081/nonexistent/dir/ testbucket --target 1014646t8081 --keep=false
 (...) Bad Request: stat /target/1014646t8081/nonexistent/dir: no such file or directory
 ```
 
 ## Delete objects
 
-`ais rm object BUCKET_NAME/[OBJECT_NAME]...`
+`ais object rm BUCKET_NAME/[OBJECT_NAME]...`
 
 Delete an object or list/range of objects from the bucket.
 
@@ -513,7 +513,7 @@ See [List/Range Operations](../../../docs/batch.md#listrange-operation) for more
 Delete object `myobj.tgz` from bucket `mybucket`.
 
 ```console
-$ ais rm object ais://mybucket/myobj.tgz
+$ ais object rm ais://mybucket/myobj.tgz
 myobj.tgz deleted from ais://mybucket bucket
 ```
 
@@ -522,7 +522,7 @@ myobj.tgz deleted from ais://mybucket bucket
 Delete objects (`obj1`, `obj2`) from buckets (`aisbck`, `cloudbck`) respectively.
 
 ```console
-$ ais rm object aisbck/obj1.tgz cloudbck/obj2.tgz
+$ ais object rm aisbck/obj1.tgz cloudbck/obj2.tgz
 obj1.tgz deleted from aisbck bucket
 obj2.tgz deleted from cloudbck bucket
 ```
@@ -532,7 +532,7 @@ obj2.tgz deleted from cloudbck bucket
 Delete a list of objects (`obj1`, `obj2`, `obj3`) from bucket `mybucket`.
 
 ```console
-$ ais rm object mybucket --list "obj1,obj2,obj3"
+$ ais object rm mybucket --list "obj1,obj2,obj3"
 [obj1 obj2] removed from dsort-testing bucket
 ```
 
@@ -541,13 +541,13 @@ $ ais rm object mybucket --list "obj1,obj2,obj3"
 Delete all objects in range `001-003`, with prefix `test-`, from bucket `mybucket`.
 
 ```console
-$ ais rm object mybucket --template "test-{001..003}"
+$ ais object rm mybucket --template "test-{001..003}"
 removed files in the range 'test-{001..003}' from mybucket bucket
 ```
 
 ## Evict objects
 
-`ais evict BUCKET_NAME/[OBJECT_NAME]...`
+`ais bucket evict BUCKET_NAME/[OBJECT_NAME]...`
 
 [Evict](../../../docs/bucket.md#prefetchevict-objects) objects from a remote bucket.
 
@@ -572,21 +572,21 @@ See [List/Range Operations](../../../docs/batch.md#listrange-operation) for more
 Put `file.txt` object to `cloudbucket` bucket and evict it locally.
 
 ```console
-$ ais put file.txt cloudbucket/file.txt
+$ ais object put file.txt cloudbucket/file.txt
 PUT file.txt into bucket cloudbucket
-$ ais show bucket cloudbucket --cached # show only cloudbucket objects present in the AIS cluster
+$ ais bucket summary cloudbucket --cached # show only cloudbucket objects present in the AIS cluster
 NAME	           OBJECTS	 SIZE    USED %
 aws://cloudbucket  1             702B    0%
-$ ais evict cloudbucket/file.txt
+$ ais bucket evict cloudbucket/file.txt
 file.txt evicted from cloudbucket bucket
-$ ais show bucket cloudbucket --cached
+$ ais bucket summary cloudbucket --cached
 NAME	           OBJECTS	 SIZE    USED %
 aws://cloudbucket  0             0B      0%
 ```
 
 ## Prefetch objects
 
-`ais start prefetch BUCKET_NAME/ --list|--template <value>`
+`ais job start prefetch BUCKET_NAME/ --list|--template <value>`
 
 [Prefetch](../../../docs/bucket.md#prefetchevict-objects) objects from the remote bucket.
 
@@ -609,31 +609,31 @@ See [List/Range Operations](../../../docs/batch.md#listrange-operations) for mor
 Downloads copies of objects o1,o2,o3 from AWS bucket named `cloudbucket` and stores them in the AIS cluster
 
 ```console
-$ ais start prefetch aws://cloudbucket --list 'o1,o2,o3'
+$ ais job start prefetch aws://cloudbucket --list 'o1,o2,o3'
 ```
 
 ## Preload bucket
 
-`ais start preload BUCKET_NAME`
+`ais advanced preload BUCKET_NAME`
 
 Preload bucket's objects metadata into in-memory caches.
 
 ### Examples
 
 ```console
-$ ais start preload ais://bucket
+$ ais advanced preload ais://bucket
 ```
 
 ## Move object
 
-`ais mv object BUCKET_NAME/OBJECT_NAME NEW_OBJECT_NAME`
+`ais object mv BUCKET_NAME/OBJECT_NAME NEW_OBJECT_NAME`
 
 Move (rename) an object within an ais bucket.  Moving objects from one bucket to another bucket is not supported.
 If the `NEW_OBJECT_NAME` already exists, it will be overwritten without confirmation.
 
 ## Concat objects
 
-`ais concat DIRNAME|FILENAME [DIRNAME|FILENAME...] BUCKET/OBJECT_NAME`
+`ais object concat DIRNAME|FILENAME [DIRNAME|FILENAME...] BUCKET/OBJECT_NAME`
 
 Create an object in a bucket by concatenating the provided files in the order of the arguments provided.
 If an object of the same name exists, the object will be overwritten without confirmation.
@@ -655,7 +655,7 @@ Recursive iteration through directories and wildcards is supported in the same w
 In two separate requests sends `file1.txt` and `dir/file2.txt` to the cluster, concatenates the files keeping the order and saves them as `obj` in bucket `mybucket`.
 
 ```console
-$ ais concat file1.txt dir/file2.txt mybucket/obj
+$ ais object concat file1.txt dir/file2.txt mybucket/obj
 ```
 
 #### Concat with progress bar
@@ -663,7 +663,7 @@ $ ais concat file1.txt dir/file2.txt mybucket/obj
 Same as above, but additionally shows progress bar of sending the files to the cluster.
 
 ```console
-$ ais concat file1.txt dir/file2.txt mybucket/obj --progress
+$ ais object concat file1.txt dir/file2.txt mybucket/obj --progress
 ```
 
 #### Concat files from directories
@@ -671,5 +671,5 @@ $ ais concat file1.txt dir/file2.txt mybucket/obj --progress
 Creates `obj` in bucket `mybucket` which is concatenation of sorted files from `dirB` with sorted files from `dirA`.
 
 ```console
-$ ais concat dirB dirA mybucket/obj
+$ ais object concat dirB dirA mybucket/obj
 ```

@@ -1,18 +1,18 @@
-ais start dsort // FAIL "incorrect usage of "ais start dsort": missing arguments "job specification""
-ais start dsort '{}' -f "path" // FAIL "incorrect usage of "ais start dsort": multiple job specifications provided, expected one"
-ais start dsort -f /path/to/file.json // FAIL "open /path/to/file.json: no such file or directory"
-ais start dsort '{extension: .tar' // FAIL "failed to determine the type of the job specification"
+ais job start dsort // FAIL "incorrect usage of "ais job start dsort": missing arguments "job specification""
+ais job start dsort '{}' -f "path" // FAIL "incorrect usage of "ais job start dsort": multiple job specifications provided, expected one"
+ais job start dsort -f /path/to/file.json // FAIL "open /path/to/file.json: no such file or directory"
+ais job start dsort '{extension: .tar' // FAIL "failed to determine the type of the job specification"
 
-ais create bucket $BUCKET_1
+ais bucket create $BUCKET_1
 
 # JSON
 echo '{"extension": ".tar","bucket": "$BUCKET_1","input_format": "shard-{0..9}","output_format": "new-shard-{0000..1000}","output_shard_size": "10KB","description": "sort shards from 0 to 9","algorithm": {"kind": "alphanumeric"},"extended_metrics": true}' > /tmp/dsort.json
-ais start dsort -f /tmp/dsort.json // IGNORE
+ais job start dsort -f /tmp/dsort.json // IGNORE
 rm -f /tmp/dsort.json
-ais start dsort '{"extension": ".tar","bucket": "$BUCKET_1","input_format": "shard-{0..9}","output_format": "new-shard-{0000..1000}","output_shard_size": "10KB","description": "sort shards from 0 to 9","algorithm": {"kind": "alphanumeric"},"extended_metrics": true}' // SAVE_RESULT
-ais wait dsort $RESULT
+ais job start dsort '{"extension": ".tar","bucket": "$BUCKET_1","input_format": "shard-{0..9}","output_format": "new-shard-{0000..1000}","output_shard_size": "10KB","description": "sort shards from 0 to 9","algorithm": {"kind": "alphanumeric"},"extended_metrics": true}' // SAVE_RESULT
+ais job wait dsort $RESULT
 
 # YAML
 echo -e "extension: .tar\nbucket: $BUCKET_1\ninput_format: shard-{0..9}\noutput_format: new-shard-{0000..1000}\noutput_shard_size: 10KB\ndescription: sort shards from 0 to 9\nalgorithm:\n    kind: alphanumeric\nextended_metrics: true\n" > /tmp/dsort.yaml
-ais start dsort -f /tmp/dsort.yaml // IGNORE
+ais job start dsort -f /tmp/dsort.yaml // IGNORE
 rm -f /tmp/dsort.yaml

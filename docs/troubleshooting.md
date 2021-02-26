@@ -30,9 +30,9 @@ TARGET           MEM USED %    MEM AVAIL       CAP USED %      CAP AVAIL       C
 Since at any given time there's only one primary gateway, you may also find it useful to be able to designate a different one administratively. This is easy - example:
 
 ```console
-$ ais set primary <TAB>-<TAB>
+$ ais cluster set-primary <TAB>-<TAB>
 202446p8082  279128p8080  928059p8081
-$ ais set primary 279128p8080
+$ ais cluster set-primary 279128p8080
 279128p8080 has been set as a new primary proxy
 $ ais show cluster
 PROXY            MEM USED %    MEM AVAIL       UPTIME

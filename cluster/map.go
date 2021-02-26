@@ -33,11 +33,11 @@ const (
 	SnodeNonElectable = 1 << iota
 	SnodeIC
 	SnodeMaintenance
-	SnodeDecomission
+	SnodeDecommission
 )
 
 const (
-	SnodeMaintenanceMask SnodeFlags = SnodeMaintenance | SnodeDecomission
+	SnodeMaintenanceMask SnodeFlags = SnodeMaintenance | SnodeDecommission
 
 	icGroupSize = 3 // desirable gateway count in the Information Center
 )

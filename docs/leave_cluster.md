@@ -19,9 +19,9 @@ Two kinds of node removal are supported:
 To take a node out of the cluster temporary while keeping it in the cluster list, put a node under maintenance (CLI):
 
 ```console
-$ ais rm node 59262t8087 --mode=start-maintenance
+$ ais cluster membership start-maintenance 59262t8087
 Node "59262t8087" is under maintenance
-Started rebalance "g1", use 'ais show xaction g1' to monitor progress
+Started rebalance "g1", use 'ais show job xaction g1' to monitor progress
 ```
 
 If the node is a target, after a quick preparation, the cluster starts rebalance. When the rebalance finishes, it is safe to turn the node off.
@@ -29,7 +29,7 @@ If the node is a target, after a quick preparation, the cluster starts rebalance
 If the node does not contain any important data, rebalance can be skipped, so the node is safe to switch off in a short time after putting it under maintenance:
 
 ```console
-$ ais rm node 59262t8087 --mode=start-maintenance --no-rebalance
+$ ais cluster membership start-maintenance 59262t8087 --no-rebalance
 Node "59262t8087" is under maintenance
 ```
 
@@ -39,9 +39,9 @@ When maintenance is finished, you should notify the cluster that the node is rea
 After getting the notification, the cluster clears maintenance state and starts rebalance:
 
 ```console
-$ ais rm node 59262t8087 --mode=stop-maintenance
+$ ais cluster membership stop-maintenance 59262t8087
 Node "59262t8087" maintenance stopped
-Started rebalance "g3", use 'ais show xaction g3' to monitor progress
+Started rebalance "g3", use 'ais show job xaction g3' to monitor progress
 ```
 
 To skip automatic rebalance, provide flag `--no-rebalance`.
@@ -59,16 +59,16 @@ It is recommended to keep automatic rebalance running automatically, but in some
 To completely remove the node from the cluster, start the node decommissioning (CLI):
 
 ```console
-$ ais rm node 59262t8087 --mode=decommission
+$ ais cluster membership decommission 59262t8087
 Node "59262t8087" is under maintenance
-Started rebalance "g1", use 'ais show xaction g1' to monitor progress
+Started rebalance "g1", use 'ais show job xaction g1' to monitor progress
 ```
 
 When the rebalance finishes, the cluster removes the node automatically from the list.
 Disabling rebalance runs quick preparations and removes the node from the cluster immediately:
 
 ```console
-$ ais rm node 59262t8087 --mode=decommission --no-rebalance
+$ ais cluster membership decommission --no-rebalance 59262t8087
 Node "59262t8087" removed from the cluster
 ```
 
@@ -76,12 +76,12 @@ To also shutdown the node (i.e. stop running aisnode), set `mode` to `shutdown`.
 If the node is a target, the node will be shut down after the rebalance has finished. Otherwise if the node is a proxy, the node will shut down immediately.
 
 ```console
-$ ais rm node 59262t8087 --mode=shutdown
+$ ais cluster membership shutdown 59262t8087
 Node "59262t8087" is being shut down
-Started rebalance "g1", use 'ais show xaction g1' to monitor progress
+Started rebalance "g1", use 'ais show job xaction g1' to monitor progress
 ```
 
-Note that removing a node with rebalance disabled can be interrupted. If a node is removed by mistake, you have to join it manually with `ais join` command.
+Note that removing a node with rebalance disabled can be interrupted. If a node is removed by mistake, you have to join it manually with `ais cluster membership join` command.
 
 ### Interrupt node removal
 
@@ -91,9 +91,9 @@ While rebalance is running, the removal operation can be interrupted to get the 
 Rebalance starts automatically when a node is a target and flag `--no-rebalance` is not set after the node is registered at the cluster and the cluster clears node's maintenance state.
 
 ```console
-$ ais rm node 59262t8087 --mode=stop-maintenance
+$ ais cluster membership stop-maintenance 59262t8087
 Node "59262t8087" maintenance stopped
-Started rebalance "g3", use 'ais show xaction g3' to monitor progress
+Started rebalance "g3", use 'ais show job xaction g3' to monitor progress
 ```
 
 The node starts accepting all the requests after joining the cluster and after the cluster clears node's maintenance state. You do not have to wait until the rebalance is done.

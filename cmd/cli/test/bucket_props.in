@@ -1,15 +1,15 @@
-ais create bucket $BUCKET_1
-ais set props $BUCKET_1 'mirror.enabled=true' 'mirror.copies=2'
+ais bucket create $BUCKET_1
+ais bucket props $BUCKET_1 'mirror.enabled=true' 'mirror.copies=2'
 
-ais set props $BUCKET_1 'unknown.field' // FAIL "invalid property "unknown.field""
-ais set props $BUCKET_1 'unknown.field=true' // FAIL "unknown property "unknown.field""
-ais set props $BUCKET_1 'provider=ais' // FAIL "property "provider" is readonly"
+ais bucket props $BUCKET_1 'unknown.field' // FAIL "invalid property "unknown.field""
+ais bucket props $BUCKET_1 'unknown.field=true' // FAIL "unknown property "unknown.field""
+ais bucket props $BUCKET_1 'provider=ais' // FAIL "property "provider" is readonly"
 
-ais show props $BUCKET_1
-ais set props --reset $BUCKET_1
+ais show bucket-props $BUCKET_1
+ais bucket props --reset $BUCKET_1
 
-ais set props $BUCKET_1 '{"versioning": {"enabled": true, "validate_warm_get": true}}'
-ais show props $BUCKET_1
-ais show props $BUCKET_1 lru -v
+ais bucket props $BUCKET_1 '{"versioning": {"enabled": true, "validate_warm_get": true}}'
+ais show bucket-props $BUCKET_1
+ais show bucket-props $BUCKET_1 lru -v
 
-ais set props $BUCKET_1 '{"versioning": {"enabled": true, "validate_warm_get": true}}'
+ais bucket props $BUCKET_1 '{"versioning": {"enabled": true, "validate_warm_get": true}}'

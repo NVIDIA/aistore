@@ -14,7 +14,7 @@ import (
 
 var (
 	bucketSpecificCmdsFlags = map[string][]cli.Flag{
-		commandSetCopies: {
+		commandMirror: {
 			copiesFlag,
 		},
 		commandECEncode: {
@@ -25,16 +25,16 @@ var (
 
 	bucketSpecificCmds = []cli.Command{
 		{
-			Name:         commandSetCopies,
-			Usage:        "configure a bucket for n-way mirroring",
+			Name:         commandMirror,
+			Usage:        "configure and start mirroring a bucket",
 			ArgsUsage:    bucketArgument,
-			Flags:        bucketSpecificCmdsFlags[commandSetCopies],
+			Flags:        bucketSpecificCmdsFlags[commandMirror],
 			Action:       setCopiesHandler,
 			BashComplete: bucketCompletions(),
 		},
 		{
 			Name:         commandECEncode,
-			Usage:        "make all objects in a bucket erasure coded",
+			Usage:        "erasure code a bucket",
 			ArgsUsage:    bucketArgument,
 			Flags:        bucketSpecificCmdsFlags[commandECEncode],
 			Action:       ecEncodeHandler,

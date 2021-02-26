@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 
@@ -186,24 +185,18 @@ func (aisCLI *AISCLI) init(build, version string) {
 func (aisCLI *AISCLI) setupCommands() {
 	app := aisCLI.app
 
-	app.Commands = append(app.Commands, dSortCmds...)
-	app.Commands = append(app.Commands, helpCommand)
-	app.Commands = append(app.Commands, authCmds...)
-	app.Commands = append(app.Commands, listCmds...)
-	app.Commands = append(app.Commands, createCmds...)
-	app.Commands = append(app.Commands, mvCmds...)
-	app.Commands = append(app.Commands, removeCmds...)
-	app.Commands = append(app.Commands, copyCmds...)
-	app.Commands = append(app.Commands, setCmds...)
-	app.Commands = append(app.Commands, attachCmds...)
-	app.Commands = append(app.Commands, detachCmds...)
-	app.Commands = append(app.Commands, controlCmds...)
-	app.Commands = append(app.Commands, cluSpecificCmds...)
-	app.Commands = append(app.Commands, showCmds...)
-	app.Commands = append(app.Commands, waitCmds...)
-	app.Commands = append(app.Commands, objectSpecificCmds...)
+	// Note: order of `append`s is the order shown in "ais help"
+	app.Commands = append(app.Commands, bucketCmds...)
+	app.Commands = append(app.Commands, objectCmds...)
+	app.Commands = append(app.Commands, clusterCmds...)
+	app.Commands = append(app.Commands, mpathCmds...)
 	app.Commands = append(app.Commands, etlCmds...)
-	sort.Sort(cli.CommandsByName(app.Commands))
+	app.Commands = append(app.Commands, jobCmds...)
+	app.Commands = append(app.Commands, authCmds...)
+	app.Commands = append(app.Commands, showCmds...)
+	app.Commands = append(app.Commands, helpCommand)
+	app.Commands = append(app.Commands, advancedCmds...)
+	app.Commands = append(app.Commands, aliasCmds...)
 
 	setupCommandHelp(app.Commands)
 	aisCLI.enableSearch()
@@ -233,7 +226,7 @@ func setupCommandHelp(commands []cli.Command) {
 // This is a copy-paste from urfave/cli/help.go. It is done to remove the 'h' alias of the 'help' command
 var helpCommand = cli.Command{
 	Name:      "help",
-	Usage:     "show a list of commands or help for one command",
+	Usage:     "show a list of commands; show help for a given command",
 	ArgsUsage: "[COMMAND]",
 	Action: func(c *cli.Context) error {
 		args := c.Args()

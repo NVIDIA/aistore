@@ -26,7 +26,7 @@ For detailed overview, theory of operations, and supported checksumms, please se
 Example: configuring checksum properties for a bucket:
 
 ```console
-$ ais set props <bucket-name> checksum.validate_cold_get=true checksum.validate_warm_get=false checksum.type=xxhash checksum.enable_read_range=false
+$ ais bucket props <bucket-name> checksum.validate_cold_get=true checksum.validate_warm_get=false checksum.type=xxhash checksum.enable_read_range=false
 ```
 
 For more examples, please to refer to [supported checksums and brief theory of operations](checksum.md).
@@ -47,13 +47,13 @@ Overriding the global configuration can be achieved by specifying the fields of 
 Example of setting bucket properties:
 
 ```console
-$ ais set props <bucket-name> lru.lowwm=1 lru.highwm=100 lru.enabled=true
+$ ais bucket props <bucket-name> lru.lowwm=1 lru.highwm=100 lru.enabled=true
 ```
 
 To revert bucket's entire configuration back to global (configurable) defaults, use `"action":"resetbprops"` with the same PATCH endpoint, e.g.:
 
 ```console
-$ ais set props <bucket-name> --reset
+$ ais bucket props <bucket-name> --reset
 ```
 
 In effect, resetting bucket properties is equivalent to populating all properties with the values from the corresponding sections of the [global configuration](/deploy/dev/local/aisnode_config.sh).
@@ -87,13 +87,13 @@ Notes:
 Example of setting bucket properties:
 
 ```console
-$ ais set props ais://<bucket-name> lru.lowwm=1 lru.highwm=90 ec.enabled=true ec.data_slices=4 ec.parity_slices=2
+$ ais bucket props ais://<bucket-name> lru.lowwm=1 lru.highwm=90 ec.enabled=true ec.data_slices=4 ec.parity_slices=2
 ```
 
 To change only one EC property(e.g, enable or disable EC for a bucket) without touching other bucket properties, use the single set property API. Example of disabling EC:
 
 ```console
-$ ais set props ais://<bucket-name> ec.enabled=true
+$ ais bucket props ais://<bucket-name> ec.enabled=true
 ```
 
 or using AIS CLI utility:
@@ -101,14 +101,14 @@ or using AIS CLI utility:
 enable EC for a bucket with custom number of data and parity slices. It should be done using 2 commands: the first one changes the numbers while EC is disabled, and the second one enables EC with new slice count:
 
 ```console
-$ ais set props mybucket ec.data_slices=3 ec.parity_slices=3
-$ ais set props mybucket ec.enabled=true
+$ ais bucket props mybucket ec.data_slices=3 ec.parity_slices=3
+$ ais bucket props mybucket ec.enabled=true
 ```
 
 check that EC properties are applied:
 
 ```console
-$ ais show props mybucket
+$ ais show bucket-props mybucket
 Property        Value
 ========        =====
 Provider        ais
@@ -145,9 +145,9 @@ The service ensures is that for any given object there will be *no two replicas*
 The following example configures buckets a, b, and c to store n = 1, 2, and 3 object replicas, respectively:
 
 ```console
-$ ais set-copies --copies 1 ais://a
-$ ais set-copies --copies 2 ais://b
-$ ais set-copies --copies 3 ais://c
+$ ais job start mirror --copies 1 ais://a
+$ ais job start mirror --copies 2 ais://b
+$ ais job start mirror --copies 3 ais://c
 ```
 
 The operations (above) are in fact [extended actions](/xaction/README.md) that run asynchronously. Both Cloud and ais buckets are supported. You can monitor completion of those operations via generic [xaction API](/xaction/README.md).
@@ -165,15 +165,15 @@ Since object replicas are end-to-end protected by [checksums](#checksumming) all
 The following sequence creates a bucket named `abc`, PUTs an object into it and then converts it into a 3-way mirror:
 
 ```console
-$ ais create bucket abc
-$ ais put /tmp/obj1 ais://abc/obj1
-$ ais set-copies --copies 3 ais://abc
+$ ais bucket create abc
+$ ais object put /tmp/obj1 ais://abc/obj1
+$ ais job start mirror --copies 3 ais://abc
 ```
 
 The next command will redefine the `abc` bucket created in the previous example as a 2-way mirror - all objects that were previously stored in three replicas will now have only two (replicas):
 
 ```console
-$ ais set-copies --copies 2 ais://abc
+$ ais job start mirror --copies 2 ais://abc
 ```
 
 ## Data redundancy: summary of the available options (and considerations)
@@ -185,7 +185,7 @@ Any of the supported options can be utilized at any time (and without downtime) 
 3. **copying buckets**  - [Copy Bucket](/cmd/cli/resources/bucket.md#copy-bucket)
 4. **erasure coding** - [Erasure coding](#erasure-coding)
 
-For instance, you first could start with plain mirroring via `ais start set-copies N`, where N would be less or equal the number of target mountpaths (disks).
+For instance, you first could start with plain mirroring via `ais job start mirror BUCKET_NAME --copies N`, where N would be less or equal the number of target mountpaths (disks).
 
 > It is generally assumed (and also strongly recommended) that all storage servers (targets) in AIS cluster have the same number of disks and are otherwise identical.
 
@@ -200,7 +200,7 @@ Further, you could at some point in time decide to associate a given AIS bucket 
 Finally, you could erasure code (EC) a given bucket for `D + P` redundancy, where `D` and `P` are, respectively, the numbers of data and parity slices. For example:
 
 ```console
-$ ais start ec-encode -d 6 -p 4 abc
+$ ais job start ec-encode -d 6 -p 4 abc
 ```
 
 will erasure-code all objects in the `abc` bucket for the total of 10 slices stored on different AIS targets, plus 1 (one) full replica. In other words, this example requires at least `10 + 1 = 11` targets in the cluster.

@@ -1,15 +1,15 @@
-ais create bucket $BUCKET_1 $BUCKET_2
+ais bucket create $BUCKET_1 $BUCKET_2
 
 for d1 in {0..4}; do for d2 in {0..100}; do mkdir -p /tmp/rdir/test$d1/$d2 && echo -n $RANDOM > /tmp/rdir/test$d1/$d2/test.txt; done; done
-ais put "/tmp/rdir/test{0..4}/{0..100}/test.txt" $BUCKET_1 -y // IGNORE
+ais object put "/tmp/rdir/test{0..4}/{0..100}/test.txt" $BUCKET_1 -y // IGNORE
 
-ais cp bucket aiss://$BUCKET_1/ $BUCKET_2/ // FAIL "invalid backend provider "aiss""
-ais cp bucket $BUCKET_1/ aiss://$BUCKET_2/ // FAIL "invalid backend provider "aiss""
-ais cp bucket $BUCKET_1 $BUCKET_2
+ais bucket cp aiss://$BUCKET_1/ $BUCKET_2/ // FAIL "invalid backend provider "aiss""
+ais bucket cp $BUCKET_1/ aiss://$BUCKET_2/ // FAIL "invalid backend provider "aiss""
+ais bucket cp $BUCKET_1 $BUCKET_2
 
-ais wait xaction copybck $BUCKET_2
-ais show xaction copybck $BUCKET_1
-ais show xaction copybck
-ais show xaction copybck $BUCKET_3 // FAIL "bucket "ais://$BUCKET_3" does not exist"
+ais job wait xaction copybck $BUCKET_2
+ais show job xaction copybck $BUCKET_1
+ais show job xaction copybck
+ais show job xaction copybck $BUCKET_3 // FAIL "bucket "ais://$BUCKET_3" does not exist"
 
 rm -rf /tmp/rdir // IGNORE

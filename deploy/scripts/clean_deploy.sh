@@ -53,9 +53,9 @@ if [[ -n ${next_tier} ]]; then
   DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n2\nn\nn\nn\nn\nn\n'
   sleep 4
   if [[ -z ${AIS_USE_HTTPS} ]]; then
-    ais attach remote alias=http://127.0.0.1:11080
+    ais cluster attach alias=http://127.0.0.1:11080
   else
-    ais attach remote alias=https://127.0.0.1:11080
+    ais cluster attach alias=https://127.0.0.1:11080
   fi
 fi
 

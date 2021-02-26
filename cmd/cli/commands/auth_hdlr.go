@@ -51,7 +51,7 @@ var (
 	authCmds = []cli.Command{
 		{
 			Name:  commandAuth,
-			Usage: "manage the authentication server",
+			Usage: "add/remove/show users, manage user roles, manage access to remote clusters",
 			Subcommands: []cli.Command{
 				{
 					Name:  subcmdAuthAdd,
@@ -116,11 +116,12 @@ var (
 					},
 				},
 				{
-					Name: subcmdAuthUpdate,
+					Name:  subcmdAuthUpdate,
+					Usage: "update users and cluster configurations",
 					Subcommands: []cli.Command{
 						{
 							Name:      subcmdAuthCluster,
-							Usage:     "update registered cluster config",
+							Usage:     "update registered cluster configuration",
 							ArgsUsage: addAuthClusterArgument,
 							Action:    wrapAuthN(updateAuthClusterHandler),
 						},

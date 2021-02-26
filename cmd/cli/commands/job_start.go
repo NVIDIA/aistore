@@ -48,122 +48,43 @@ var (
 		},
 	}
 
-	stopCmdsFlags = map[string][]cli.Flag{
-		subcmdStopXaction:  {},
-		subcmdStopDownload: {},
-		subcmdStopDsort:    {},
-	}
-
-	controlCmds = []cli.Command{
-		{
-			Name:  commandStart,
-			Usage: "start jobs in the cluster",
-			Subcommands: []cli.Command{
-				{
-					Name:         commandPrefetch,
-					Usage:        "prefetch objects from cloud buckets",
-					ArgsUsage:    bucketArgument,
-					Flags:        startCmdsFlags[commandPrefetch],
-					Action:       prefetchHandler,
-					BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true}),
-				},
-				{
-					Name:         subcmdPreload,
-					Usage:        "preload objects metadata into in-memory caches",
-					ArgsUsage:    bucketArgument,
-					Action:       loadLomCacheHandler,
-					BashComplete: bucketCompletions(),
-				},
-				{
-					Name:      subcmdStartDownload,
-					Usage:     "start a download job (downloads objects from external source)",
-					ArgsUsage: startDownloadArgument,
-					Flags:     startCmdsFlags[subcmdStartDownload],
-					Action:    startDownloadHandler,
-				},
-				{
-					Name:      subcmdStartDsort,
-					Usage:     fmt.Sprintf("start a new %s job with given specification", cmn.DSortName),
-					ArgsUsage: jsonSpecArgument,
-					Flags:     startCmdsFlags[subcmdStartDsort],
-					Action:    startDsortHandler,
-				},
-				{
-					Name:   subcmdLRU,
-					Usage:  fmt.Sprintf("start an %q xaction", cmn.ActLRU),
-					Flags:  startCmdsFlags[subcmdLRU],
-					Action: startLRUHandler,
-				},
+	jobStartSubcmds = cli.Command{
+		Name:  commandStart,
+		Usage: "start jobs in the cluster",
+		Subcommands: []cli.Command{
+			{
+				Name:         commandPrefetch,
+				Usage:        "prefetch objects from cloud buckets",
+				ArgsUsage:    bucketArgument,
+				Flags:        startCmdsFlags[commandPrefetch],
+				Action:       prefetchHandler,
+				BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true}),
 			},
-		},
-		{
-			Name:  commandStop,
-			Usage: "stop jobs running in the cluster",
-			Subcommands: []cli.Command{
-				{
-					Name:         subcmdStopXaction,
-					Usage:        "stop an xaction",
-					ArgsUsage:    "XACTION_ID|XACTION_NAME [BUCKET_NAME]",
-					Description:  xactionDesc(false),
-					Flags:        stopCmdsFlags[subcmdStopXaction],
-					Action:       stopXactionHandler,
-					BashComplete: xactionCompletions(cmn.ActXactStop),
-				},
-				{
-					Name:         subcmdStopDownload,
-					Usage:        "stop a download job with given ID",
-					ArgsUsage:    jobIDArgument,
-					Flags:        stopCmdsFlags[subcmdStopDownload],
-					Action:       stopDownloadHandler,
-					BashComplete: downloadIDRunningCompletions,
-				},
-				{
-					Name:         subcmdStopDsort,
-					Usage:        fmt.Sprintf("stop a %s job with given ID", cmn.DSortName),
-					ArgsUsage:    jobIDArgument,
-					Action:       stopDsortHandler,
-					BashComplete: dsortIDRunningCompletions,
-				},
-				{
-					Name:   subcmdStopCluster,
-					Usage:  "shuts down the cluster",
-					Action: shutdownClusterHandler,
-				},
+			{
+				Name:      subcmdStartDownload,
+				Usage:     "start a download job (downloads objects from external source)",
+				ArgsUsage: startDownloadArgument,
+				Flags:     startCmdsFlags[subcmdStartDownload],
+				Action:    startDownloadHandler,
+			},
+			{
+				Name:      subcmdStartDsort,
+				Usage:     fmt.Sprintf("start a new %s job with given specification", cmn.DSortName),
+				ArgsUsage: jsonSpecArgument,
+				Flags:     startCmdsFlags[subcmdStartDsort],
+				Action:    startDsortHandler,
+			},
+			{
+				Name:   subcmdLRU,
+				Usage:  fmt.Sprintf("start an %q xaction", cmn.ActLRU),
+				Flags:  startCmdsFlags[subcmdLRU],
+				Action: startLRUHandler,
 			},
 		},
 	}
 )
 
-func init() {
-	controlCmds[0].Subcommands = append(controlCmds[0].Subcommands, bucketSpecificCmds...)
-	controlCmds[0].Subcommands = append(controlCmds[0].Subcommands, xactionCmds()...)
-}
-
-func xactionCmds() cli.Commands {
-	cmds := make(cli.Commands, 0)
-
-	splCmdKinds := make(cmn.StringSet)
-	// Add any xaction which requires a separate handler here.
-	splCmdKinds.Add(cmn.ActPrefetch, cmn.ActECEncode, cmn.ActMakeNCopies, cmn.ActLRU)
-
-	startable := listXactions(true)
-	for _, xact := range startable {
-		if splCmdKinds.Contains(xact) {
-			continue
-		}
-		cmd := cli.Command{
-			Name:   xact,
-			Usage:  fmt.Sprintf("start %s", xact),
-			Action: startXactionHandler,
-		}
-		if xaction.IsTypeBck(xact) {
-			cmd.ArgsUsage = bucketArgument
-			cmd.BashComplete = bucketCompletions()
-		}
-		cmds = append(cmds, cmd)
-	}
-	return cmds
-}
+// xaction
 
 func startXactionHandler(c *cli.Context) (err error) {
 	var (
@@ -217,39 +138,11 @@ func startXaction(c *cli.Context, xactKind string, bck cmn.Bck, sid string) (err
 	} else {
 		fmt.Fprintf(c.App.Writer, "Started %s\n", xactKind)
 	}
+
 	return
 }
 
-func stopXactionHandler(c *cli.Context) (err error) {
-	var sid string
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, "xaction name or id")
-	}
-
-	xactID, xactKind, bck, err := parseXactionFromArgs(c)
-	if err != nil {
-		return err
-	}
-
-	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck}
-	if err = api.AbortXaction(defaultAPIParams, xactArgs); err != nil {
-		return
-	}
-
-	if xactKind != "" && xactID != "" {
-		sid = fmt.Sprintf("%s, ID=%q", xactKind, xactID)
-	} else if xactKind != "" {
-		sid = xactKind
-	} else {
-		sid = fmt.Sprintf("xaction ID=%q", xactID)
-	}
-	if bck.IsEmpty() {
-		fmt.Fprintf(c.App.Writer, "Stopped %s\n", sid)
-	} else {
-		fmt.Fprintf(c.App.Writer, "Stopped %s, bucket=%s\n", sid, bck)
-	}
-	return
-}
+// downloader
 
 func startDownloadHandler(c *cli.Context) error {
 	var (
@@ -412,24 +305,54 @@ func startDownloadHandler(c *cli.Context) error {
 	}
 
 	fmt.Fprintln(c.App.Writer, id)
-	fmt.Fprintf(c.App.Writer, "Run `ais show download %s --progress` to monitor the progress.\n", id)
+	fmt.Fprintf(c.App.Writer, "Run `ais show job download %s --progress` to monitor the progress.\n", id)
+
+	if flagIsSet(c, progressBarFlag) {
+		pbDownload(c, id)
+	} else if flagIsSet(c, waitFlag) {
+		waitDownload(c, id)
+	}
+
 	return nil
 }
 
-func stopDownloadHandler(c *cli.Context) (err error) {
-	id := c.Args().First()
-
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, "download job ID")
+func pbDownload(c *cli.Context, id string) (err error) {
+	refreshRate := calcRefreshRate(c)
+	downloadingResult, err := newDownloaderPB(defaultAPIParams, id, refreshRate).run()
+	if err != nil {
+		return err
 	}
 
-	if err = api.AbortDownload(defaultAPIParams, id); err != nil {
-		return
-	}
-
-	fmt.Fprintf(c.App.Writer, "download job %q successfully stopped\n", id)
-	return
+	fmt.Fprintln(c.App.Writer, downloadingResult)
+	return nil
 }
+
+func waitDownload(c *cli.Context, id string) (err error) {
+	var (
+		aborted     bool
+		refreshRate = calcRefreshRate(c)
+	)
+
+	for {
+		resp, err := api.DownloadStatus(defaultAPIParams, id, true)
+		if err != nil {
+			return err
+		}
+
+		aborted = resp.Aborted
+		if aborted || resp.JobFinished() {
+			break
+		}
+		time.Sleep(refreshRate)
+	}
+
+	if aborted {
+		return fmt.Errorf("download job with id %q was aborted", id)
+	}
+	return nil
+}
+
+// dsort
 
 func startDsortHandler(c *cli.Context) (err error) {
 	var (
@@ -493,20 +416,7 @@ func startDsortHandler(c *cli.Context) (err error) {
 	return
 }
 
-func stopDsortHandler(c *cli.Context) (err error) {
-	id := c.Args().First()
-
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, cmn.DSortName+" job ID")
-	}
-
-	if err = api.AbortDSort(defaultAPIParams, id); err != nil {
-		return
-	}
-
-	fmt.Fprintf(c.App.Writer, "%s job %q successfully stopped\n", cmn.DSortName, id)
-	return
-}
+// LRU
 
 func startLRUHandler(c *cli.Context) (err error) {
 	if !flagIsSet(c, listBucketsFlag) {
@@ -542,11 +452,43 @@ func startLRUHandler(c *cli.Context) (err error) {
 	return
 }
 
-func shutdownClusterHandler(c *cli.Context) (err error) {
-	if err := api.ShutdownCluster(defaultAPIParams); err != nil {
-		return err
+// prefetch
+
+func prefetchHandler(c *cli.Context) (err error) {
+	var (
+		bck     cmn.Bck
+		objName string
+		objPath string
+	)
+
+	printDryRunHeader(c)
+
+	if c.NArg() == 0 {
+		return incorrectUsageMsg(c, "missing bucket name")
+	}
+	if c.NArg() > 1 {
+		return incorrectUsageMsg(c, "too many arguments")
+	}
+	objPath = c.Args().First()
+	if isWebURL(objPath) {
+		bck = parseURLtoBck(objPath)
+	} else if bck, objName, err = parseBckObjectURI(c, objPath); err != nil {
+		return
+	}
+	if bck.IsAIS() {
+		return fmt.Errorf("cannot prefetch from ais buckets (the operation applies to Cloud buckets only)")
+	}
+	if bck, _, err = validateBucket(c, bck, "", false); err != nil {
+		return
+	}
+	// FIXME: it can be easily handled
+	if objName != "" {
+		return incorrectUsageMsg(c, "object name not supported, use list flag or range flag")
 	}
 
-	fmt.Fprint(c.App.Writer, "All nodes in the cluster are being shut down.\n")
-	return
+	if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
+		return listOrRangeOp(c, commandPrefetch, bck)
+	}
+
+	return missingArgumentsError(c, "object list or range")
 }

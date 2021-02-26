@@ -53,11 +53,6 @@ const (
 	unitsArg = "UNITS"
 
 	incorrectCmdDistance = 3
-
-	maintenanceModeStart        = "start-maintenance"
-	maintenanceModeStop         = "stop-maintenance"
-	maintenanceModeDecommission = "decommission"
-	maintenanceModeShutdown     = "shutdown"
 )
 
 var (
@@ -272,7 +267,7 @@ func retrieveStatus(nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStat
 		obj, _ := api.GetDaemonStatus(defaultAPIParams, node)
 		if node.Flags.IsSet(cluster.SnodeMaintenance) {
 			obj.Status = "maintenance"
-		} else if node.Flags.IsSet(cluster.SnodeDecomission) {
+		} else if node.Flags.IsSet(cluster.SnodeDecommission) {
 			obj.Status = "decommission"
 		}
 		mu.Lock()
@@ -810,7 +805,7 @@ func makeBckPropPairs(values []string) (nvs cmn.SimpleKVs, err error) {
 func parseBckPropsFromContext(c *cli.Context) (props *cmn.BucketPropsToUpdate, err error) {
 	propArgs := c.Args().Tail()
 
-	if c.Command.Name == subcmdBucket {
+	if c.Command.Name == commandCreate {
 		inputProps := parseStrFlag(c, bucketPropsFlag)
 		if isJSON(inputProps) {
 			err = jsoniter.Unmarshal([]byte(inputProps), &props)
@@ -1033,7 +1028,7 @@ func newProgIndicator(objName string) *progIndicator {
 
 // get xaction progress message
 func xactProgressMsg(xactID string) string {
-	return fmt.Sprintf("use '%s %s %s %s' to monitor progress", cliName, commandShow, subcmdXaction, xactID)
+	return fmt.Sprintf("use '%s %s %s %s %s' to monitor progress", cliName, commandJob, commandShow, subcmdXaction, xactID)
 }
 
 func bckPropList(props *cmn.BucketProps, verbose bool) (propList []prop, err error) {

@@ -5,14 +5,14 @@
 2. `xxhash` can be overridden on a bucket level; the following [CLI](/cmd/cli/README.md) example configures bucket `abc` with `sha256` and bucket `xyz` without any checksum protection whatsoever:
 
 ```console
-$ ais set props ais://abc checksum.type  <TAB-TAB>
+$ ais bucket props ais://abc checksum.type  <TAB-TAB>
 crc32c   md5      none     sha256   sha512   xxhash
 
-$ ais set props ais://abc checksum.type sha256
+$ ais bucket props ais://abc checksum.type sha256
 Bucket props successfully updated
 "checksum.type" set to:"sha256" (was:"xxhash")
 
-$ ais set props ais://xyz checksum.type none
+$ ais bucket props ais://xyz checksum.type none
 Bucket props successfully updated
 "checksum.type" set to:"none" (was:"xxhash")
 ```

@@ -59,14 +59,14 @@ Most configuration options can be updated - on an individual (target or proxy) d
 
 * Set `periodic.stats_time` = 1 minute, `periodic.iostat_time_long` = 4 seconds (scope of the operation: entire **cluster**)
 ```console
-$ ais set config periodic.stats_time=1m disk.iostat_time_long=4s
+$ ais cluster config periodic.stats_time=1m disk.iostat_time_long=4s
 ```
 
 > AIS configuration includes a section called `disk`. The `disk` in turn contains several knobs - one of those knobs is `disk.iostat_time_long`, another - `disk.disk_util_low_wm`. To update one or both of those named variables on all or one of the clustered nodes, you could:
 
 * Set `disk.iostat_time_long` = 3 seconds, `disk.disk_util_low_wm` = 40 percent (scope of the operation: **one AIS node**)
 ```console
-$ ais set config <daemon-ID> periodic.stats_time=1m disk.iostat_time_long=4s
+$ ais cluster config <daemon-ID> periodic.stats_time=1m disk.iostat_time_long=4s
 ```
 
 For more examples and for alternative ways to format configuration-updating requests, please see [examples below](#examples).
@@ -244,7 +244,7 @@ $ curl -i -X PUT 'http://G/v1/daemon/setconfig?vmodule=ais/targ*=1'
 ```console
 $ ais show config 844974_8080 --json | jq '.timeout.list_timeout'
 "2m"
-$ ais set config timeout.list_timeout=5m
+$ ais cluster config timeout.list_timeout=5m
 Config has been updated successfully.
 $ ais show config 844974_8080 --json | jq '.timeout.list_timeout'
 "5m"

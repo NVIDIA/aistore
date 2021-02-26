@@ -42,13 +42,13 @@ Downloading jobs run asynchronously; you can monitor the progress of each specif
 The following example runs two jobs, each downloading 10 objects (gzipped tarballs in this case) from a given Google Cloud bucket:
 
 ```console
-$ ais start download "gs://lpr-imagenet/train-{0001..0010}.tgz" ais://imagenet
+$ ais job start download "gs://lpr-imagenet/train-{0001..0010}.tgz" ais://imagenet
 5JjIuGemR
-Run `ais show download 5JjIuGemR` to monitor the progress of downloading.
-$ ais start download "gs://lpr-imagenet/train-{0011..0020}.tgz" ais://imagenet
+Run `ais show job download 5JjIuGemR` to monitor the progress of downloading.
+$ ais job start download "gs://lpr-imagenet/train-{0011..0020}.tgz" ais://imagenet
 H9OjbW5FH
-Run `ais show download H9OjbW5FH` to monitor the progress of downloading.
-$ ais show download
+Run `ais show job download H9OjbW5FH` to monitor the progress of downloading.
+$ ais show job download
 JOB ID           STATUS          ERRORS  DESCRIPTION
 5JjIuGemR        Finished        0       https://storage.googleapis.com/lpr-imagenet/imagenet_train-{0001..0010}.tgz -> ais://imagenet
 H9OjbW5FH        Finished        0       https://storage.googleapis.com/lpr-imagenet/imagenet_train-{0011..0020}.tgz -> ais://imagenet
@@ -66,10 +66,10 @@ AIS Downloader supports 4 (four) request types:
 * **Backend** - given optional prefix and optional suffix, download matching objects from the specified remote bucket.
 
 > Prior to downloading, make sure destination bucket already exists.
-> To create a bucket using AIS CLI, run `ais create bucket`, for instance:
+> To create a bucket using AIS CLI, run `ais bucket create`, for instance:
 >
 > ```console
-> $ ais create bucket imagenet
+> $ ais bucket create imagenet
 > ```
 >
 > Also, see [AIS API](/docs/http_api.md) for details on how to create, destroy, and list storage buckets.

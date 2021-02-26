@@ -1,4 +1,4 @@
-ais gen-shards "ais://$BUCKET_1/tmp/shard-{0..4}.tar" --fcount 1 --fsize 1KB --conc 1 --cleanup // IGNORE
+ais advanced gen-shards "ais://$BUCKET_1/tmp/shard-{0..4}.tar" --fcount 1 --fsize 1KB --conc 1 --cleanup // IGNORE
 ais ls $BUCKET_1
 ais ls $BUCKET_1/
 ais ls $BUCKET_1
@@ -20,4 +20,4 @@ ais ls gcp:// // IGNORE
 ais ls cloud://$BUCKET_1/ // FAIL "invalid backend provider "cloud""
 ais ls aiss://$BUCKET_1 // FAIL "invalid backend provider "aiss""
 
-ais rm bucket $BUCKET_1
+ais bucket rm $BUCKET_1

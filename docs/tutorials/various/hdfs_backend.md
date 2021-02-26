@@ -107,9 +107,9 @@ Therefore, I can point my new bucket to `/yt8m` directory, and I should be able 
 Let's try it out.
 
 ```console
-$ ais create bucket hdfs://yt8m --bucket-props="extra.hdfs.ref_directory=/yt8m"
+$ ais bucket create hdfs://yt8m --bucket-props="extra.hdfs.ref_directory=/yt8m"
 "hdfs://yt8m" bucket created
-$ ais ls hdfs://yt8m
+$ ais bucket ls hdfs://yt8m
 NAME	 SIZE
 1.mp4	 76.31KiB
 2.mp4	 76.31KiB
@@ -123,7 +123,7 @@ Okay, we are ready to list all the files, but we also need to make sure that we 
 Otherwise, this whole stuff wouldn't be so interesting.
 
 ```console
-$ ais get hdfs://yt8m/1.mp4 video.mp4
+$ ais object get hdfs://yt8m/1.mp4 video.mp4
 GET "1.mp4" from bucket "hdfs://yt8m" as "video.mp4" [76.31KiB]
 $ ls -l | grep "video.mp4"
 .rw-r--r--  78k user 22 Jan 11:54 video.mp4

@@ -201,7 +201,7 @@ func getDaemonConfig(c *cli.Context) error {
 }
 
 // Sets config of specific daemon or cluster
-func setConfig(c *cli.Context) error {
+func cluConfig(c *cli.Context) error {
 	daemonID, nvs, err := daemonKeyValueArgs(c)
 	if err != nil {
 		return err

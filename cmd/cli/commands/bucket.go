@@ -30,7 +30,7 @@ const (
 	fmtXactFailed      = "%s operation (%q => %q) failed!\n"
 	fmtXactSucceeded   = "%s operation succeeded.\n"
 	fmtXactStarted     = "%s operation (%q => %q) is in progress...\n"
-	fmtXactStatusCheck = "%s operation (%q => %q) is in progress.\nTo check the status, run: ais show xaction %s %s\n"
+	fmtXactStatusCheck = "%s operation (%q => %q) is in progress.\nTo check the status, run: ais show job xaction %s %s\n"
 )
 
 func validateBucket(c *cli.Context, bck cmn.Bck, tag string, optional bool) (cmn.Bck, *cmn.BucketProps, error) {
@@ -198,8 +198,7 @@ func listObjects(c *cli.Context, bck cmn.Bck) error {
 		showUnmatched = flagIsSet(c, showUnmatchedFlag)
 
 		msg = &cmn.SelectMsg{
-			Prefix:   prefix,
-			UseCache: flagIsSet(c, useCacheFlag),
+			Prefix: prefix,
 		}
 	)
 

@@ -27,7 +27,7 @@ import (
 //    1. bucket is renamed (and the paths of the objects change)
 //    2. rebalance must be started to redistribute the objects to the targets
 //       depending on HRW
-// - when requested by the user - `ais start rebalance` or via HTTP API
+// - when requested by the user - `ais job start rebalance` or via HTTP API
 
 const (
 	rmdFname = ".ais.rmd" // rmd persistent file basename

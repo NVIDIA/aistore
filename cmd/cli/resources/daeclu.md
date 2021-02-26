@@ -96,11 +96,11 @@ Target		Disk	Read		Write		%Util
 
 ## Join a node
 
-`ais join proxy IP:PORT [DAEMON_ID]`
+`ais cluster membership join --type=proxy IP:PORT [DAEMON_ID]`
 
 Join a proxy in the cluster. If `DAEMON_ID` isn't given, it will be randomly generated.
 
-`ais join target IP:PORT [DAEMON_ID]`
+`ais cluster membership join --type=target IP:PORT [DAEMON_ID]`
 
 Join a target in the cluster. If `DAEMON_ID` isn't given, it will be randomly generated.
 
@@ -111,31 +111,35 @@ Join a target in the cluster. If `DAEMON_ID` isn't given, it will be randomly ge
 Join a proxy node with ID `23kfa10f` and socket address `192.168.0.185:8086`
 
 ```console
-$ ais join proxy 192.168.0.185:8086 23kfa10f
+$ ais cluster membership join --type=proxy 192.168.0.185:8086 23kfa10f
 Proxy with ID "23kfa10f" successfully joined the cluster.
 ```
 
 ## Remove a node
 
-`ais rm node DAEMON_ID --mode=OPERATION`
+`ais cluster membership start-maintenance DAEMON_ID`
+`ais cluster membership stop-maintenance DAEMON_ID`
 
-Remove an existing node from the cluster.
+Temporarily remove an existing node from the cluster.
+
+Starting maintenance puts the node in maintenance mode, and the cluster gradually transitions to
+operating without the specified node (which is labeled `maintenance` in the cluster map). Stopping
+maintenance will revert this.
+
+`ais cluster membership shutdown DAEMON_ID`
+
+Permanently remove an existing node from the cluster.
+
+Decommissioning a node will safely remove a node from the cluster by triggering a cluster-wide
+rebalance first. This can be avoided by specifying `--no-rebalance`.
+Additionally, specifying `--shutdown` will also stop the node's `aisnode process.
+
 
 ### Options
 
-Currently, `ais rm node` requires option `--mode=`(administrative operation) to be defined.
-
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--mode` | `string` | The type of administrative operation to temporarily (`start-maintenance`, `stop-maintenance`) or permanently (`decommission`, `shutdown`) remove a node from the cluster. One of: `start-maintenance`, `stop-maintenance`, `decommission`, `shutdown` | n/a |
-| `--no-rebalance` | `bool` | By default, `ais rm node --mode=...` triggers a global cluster-wide rebalance. The `--no-rebalance` flag disables automatic rebalance thus providing for the administrative option to rebalance the cluster manually at a later time. BEWARE: advanced usage only! | `false` |
-
-Further, the `--mode` values are:
-
-- `start-maintenance` - put a given node in maintenance mode. The operation results in cluster gradually transitioning to operating without the specified node (which is labeled `maintenance` in the cluster map).
-- `stop-maintenance` - take a node out of maintenance.
-- `decommission` - permanently remove a node from the cluster. While rebalance is running, the node still exists in the cluster map labeled `decommission`.
-- `shutdown` - decommission a node, then shut down its aisnode instance.
+| `--no-rebalance` | `bool` | By default, `ais cluster membership maintenance` and `ais cluster membership decommission` triggers a global cluster-wide rebalance. The `--no-rebalance` flag disables automatic rebalance thus providing for the administrative option to rebalance the cluster manually at a later time. BEWARE: advanced usage only! | `false` |
 
 ### Examples
 
@@ -144,8 +148,13 @@ Further, the `--mode` values are:
 Remove a proxy node with ID `23kfa10f` from the cluster.
 
 ```console
-$ ais rm node 23kfa10f
+$ ais cluster membership decommission 23kfa10f
 Node with ID "23kfa10f" has been successfully removed from the cluster.
+```
+
+To also end the `aisnode` process on a given node, specify the `--shutdown` flag:
+```console
+$ ais cluster membership shutdown 23kfa10f
 ```
 
 #### Temporarily put a node in maintenance
@@ -160,7 +169,7 @@ TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL      
 147665t8084      0.10%           31.28GiB        16%             2.458TiB        0.12%           -               70s
 165274t8087      0.10%           31.28GiB        16%             2.458TiB        0.12%           -               70s
 
-$ ais rm node 147665t8084 --mode=start-maintenance
+$ ais cluster membership start-maintenance 147665t8084
 $ ais show cluster
 PROXY            MEM USED %      MEM AVAIL       UPTIME
 202446p8082      0.09%           31.28GiB        70s
@@ -174,7 +183,7 @@ TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL      
 #### Take a node out of maintenance
 
 ```console
-$ ais rm node 147665t8084 --mode=stop-maintenance
+$ ais cluster membership stop-maintenance 147665t8084
 $ ais show cluster
 PROXY            MEM USED %      MEM AVAIL       UPTIME
 202446p8082      0.09%           31.28GiB        80s
@@ -216,7 +225,8 @@ LRU Config
 
 ## Set config
 
-`ais set config [DAEMON_ID] KEY=VALUE [KEY=VALUE...]`
+`ais cluster config KEY=VALUE [KEY=VALUE...]`
+`ais cluster config DAEMON_ID KEY=VALUE [KEY=VALUE...]`
 
 Set configuration for a specific daemon or the entire cluster by specifying key-value pairs.
 To set config for the entire cluster, omit the `DEAMON_ID` argument.
@@ -233,6 +243,6 @@ The latter case requires the key to be a fully-qualified name.
 Change `periodic.stats_time` and `disk.disk_util_low_wm` config values for the entire cluster.
 
 ```console
-$ ais set config periodic.stats_time 10s disk.disk_util_low_wm 40
+$ ais cluster config periodic.stats_time 10s disk.disk_util_low_wm 40
 Config has been updated successfully.
 ```

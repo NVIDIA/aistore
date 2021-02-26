@@ -118,10 +118,10 @@ Using [AIS CLI](../cli/README.md) create an ais bucket, download several objects
 and place them into the bucket:
 
 ```console
-$ ais create bucket mybucket
-$ ais start download "gs://lpr-vision/imagenet/imagenet_train-{000000..000010}.tgz" ais://mybucket/
+$ ais bucket create mybucket
+$ ais job start download "gs://lpr-vision/imagenet/imagenet_train-{000000..000010}.tgz" ais://mybucket/
 Ys78ND09g
-$ ais show download Ys78ND09g --progress # wait for download to finish
+$ ais show job download Ys78ND09g --progress # wait for download to finish
 ```
 
 Create an empty directory in your local filesystem:

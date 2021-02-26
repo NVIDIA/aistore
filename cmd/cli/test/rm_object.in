@@ -1,6 +1,6 @@
-ais create bucket $BUCKET
+ais bucket create $BUCKET
 echo "0123456789" > $OBJECT.txt
-ais put $OBJECT.txt $BUCKET/object.txt
+ais object put $OBJECT.txt $BUCKET/object.txt
 
-ais rm object $BUCKET/object.txt
-ais rm object $BUCKET/object.txt // FAIL "doesn't exist"
+ais object rm $BUCKET/object.txt
+ais object rm $BUCKET/object.txt // FAIL "doesn't exist"

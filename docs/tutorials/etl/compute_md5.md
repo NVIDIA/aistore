@@ -187,8 +187,8 @@ As expected, two more Pods are up and running - one for each target.
 Finally, we can use newly created Pods to transform the objects on the fly for us:
 
 ```console
-$ ais create bucket transform
-$ echo "some text :)" | ais put - transform/shard.in
+$ ais bucket create transform
+$ echo "some text :)" | ais object put - transform/shard.in
 $ ais etl object JGHEoo89gg transform/shard.in -
 393c6706efb128fbc442d3f7d084a426
 ```
@@ -198,8 +198,8 @@ Voila! The ETL container successfully computed the `md5` on the `transform/shard
 Alternatively, one can use the offline ETL feature to transform the whole bucket.
 
 ```console
-$ ais create bucket transform
-$ echo "some text :)" | ais put - transform/shard.in
+$ ais bucket create transform
+$ echo "some text :)" | ais object put - transform/shard.in
 $ ais etl bucket JGHEoo89gg ais://transform ais://transform-md5 --wait
 ```
 

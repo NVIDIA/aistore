@@ -136,7 +136,7 @@ func TestMaintenanceMD(t *testing.T) {
 	msg := &cmn.ActValDecommision{DaemonID: dcmTarget.ID(), SkipRebalance: true}
 	_, err := api.Decommission(baseParams, msg)
 	tassert.CheckError(t, err)
-	_, err = tutils.WaitForClusterState(proxyURL, "target decomission", smap.Version, smap.CountActiveProxies(),
+	_, err = tutils.WaitForClusterState(proxyURL, "target decommission", smap.Version, smap.CountActiveProxies(),
 		smap.CountTargets()-1)
 	tassert.CheckFatal(t, err)
 

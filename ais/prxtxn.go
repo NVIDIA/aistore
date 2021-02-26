@@ -769,7 +769,7 @@ func (p *proxyrunner) markMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) err
 	var flags cluster.SnodeFlags
 	switch msg.Action {
 	case cmn.ActDecommission, cmn.ActShutdownNode:
-		flags = cluster.SnodeDecomission
+		flags = cluster.SnodeDecommission
 	case cmn.ActStartMaintenance:
 		flags = cluster.SnodeMaintenance
 	default:

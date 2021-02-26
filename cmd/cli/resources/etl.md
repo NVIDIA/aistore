@@ -120,7 +120,7 @@ Transform every object from `src_bucket` with ETL and put new objects to `dst_bu
 ```console
 $ ais etl bucket JGHEoo89gg ais://src_bucket ais://dst_bucket
 MMi9l8Z11
-$ ais wait xaction MMi9l8Z11
+$ ais job wait xaction MMi9l8Z11
 ```
 
 #### Transform bucket with ETL
@@ -136,13 +136,13 @@ $ ais etl bucket JGHEoo89gg ais://src_bucket ais://dst_bucket --wait
 The same as above, but objects will have `etl-` prefix and objects with extension `.in1` will have `.out1` extension, objects with extension `.in2` will have `.out2` extension.
 
 ```console
-$ ais ls ais://src_bucket --props=name
+$ ais bucket ls ais://src_bucket --props=name
 NAME
 obj1.in1
 obj2.in2
 (...)
 $ ais etl bucket JGHEoo89gg ais://src_bucket ais://dst_bucket --ext="{'in1':'out1', 'in2':'out2'}" --prefix="etl-" --wait
-$ ais ls ais://dst_bucket --props=name
+$ ais bucket ls ais://dst_bucket --props=name
 NAME
 etl-obj1.out1
 etl-obj2.out2
@@ -155,7 +155,7 @@ Dry-run won't perform any actions but rather just show what would be transformed
 This is useful for preparing the actual run.
 
 ```console
-$ ais ls ais://src_bucket --props=name,size
+$ ais bucket ls ais://src_bucket --props=name,size
 NAME        SIZE
 obj1.in1    10MiB
 obj2.in2    10MiB

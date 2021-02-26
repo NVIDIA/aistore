@@ -404,6 +404,6 @@ func printDownloadStatus(w io.Writer, d downloader.DlStatusResp, verbose bool) {
 			}
 		}
 	} else if d.ErrorCnt > 0 {
-		fmt.Fprintf(w, "Errors (%d) occurred during the download. To see detailed info run `ais show download %s -v`\n", d.ErrorCnt, d.ID)
+		fmt.Fprintf(w, "Errors (%d) occurred during the download. To see detailed info run `ais show job download %s -v`\n", d.ErrorCnt, d.ID)
 	}
 }

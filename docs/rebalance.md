@@ -30,7 +30,7 @@ It might be easier and faster, though, to use [AIS CLI](../cmd/cli/README.md) - 
 1. Disable automated global rebalance (for instance, to perform maintenance or upgrade operations) and show resulting config in JSON on a randomly selected target:
 
 ```console
-$ ais set config rebalance.enabled=false
+$ ais cluster config rebalance.enabled=false
 config successfully updated
 
 $ ais show config 361179t8088 --json | grep -A 6  rebalance
@@ -48,7 +48,7 @@ $ ais show config 361179t8088 --json | grep -A 6  rebalance
 2. Re-enable automated global rebalance and show resulting config section as a simple `name/value` list:
 
 ```console
-$ ais set config rebalance.enabled=true
+$ ais cluster config rebalance.enabled=true
 config successfully updated
 
 $ ais show config <TAB-TAB>
@@ -89,7 +89,7 @@ DaemonID     RebID   ObjRcv  SizeRcv  ObjSent  SizeSent  StartTime       EndTime
 4. Since global rebalance is an [extended action (xaction)](/xaction/README.md), it can be also monitored via generic `show xaction` API:
 
 ```console
-$ ais show xaction rebalance
+$ ais show job xaction rebalance
 DAEMON ID        ID      KIND            BUCKET  OBJECTS         BYTES           START           END     ABORTED
 181883t8089      g2      rebalance       -       1058            1.27MiB         04-28 16:10:14  -       false
 ...
@@ -99,7 +99,7 @@ DAEMON ID        ID      KIND            BUCKET  OBJECTS         BYTES          
 
 
 ```console
-$ ais start rebalance
+$ ais job start rebalance
 ```
 
 ## Automated Resilvering
@@ -119,23 +119,23 @@ The one salient difference is that all object migrations are local (and, therefo
 Resilvering can be run on a specific target node or the entire cluster (when all targets execute resilvering in parallel).
 
 Similar to global rebalancing, resilvering is a managed *eXtended operation* or [xaction](ic.md).
-All xactions execute asyncrhonously and support a common set of documented APIs to start, terminate the xaction, inquire its progress, etc. The progress of resilvering can be monitored via `ais show xaction` CLI.
+All xactions execute asyncrhonously and support a common set of documented APIs to start, terminate the xaction, inquire its progress, etc. The progress of resilvering can be monitored via `ais show job xaction` CLI.
 
 Examples:
 
 ```console
-$ ais start resilver # all targets will be resilvered
-Started resilver "NGxmOthtE", use 'ais show xaction NGxmOthtE' to monitor progress
+$ ais advanced resilver # all targets will be resilvered
+Started resilver "NGxmOthtE", use 'ais show job xaction NGxmOthtE' to monitor progress
 
-$ ais start resilver BUQOt8086  # resilver a single node
-Started resilver "NGxmOthtE", use 'ais show xaction NGxmOthtE' to monitor progress
+$ ais advanced resilver BUQOt8086  # resilver a single node
+Started resilver "NGxmOthtE", use 'ais show job xaction NGxmOthtE' to monitor progress
 ```
 
 Automated resilvering can also be disabled. Just like with `rebalance`, the resulting config can be viewed through the CLI:
 NOTE: When automated resilvering is disabled, removing a mountpath may result in data loss.
 
 ```console
-$ ais set config resilver.enabled=false
+$ ais cluster config resilver.enabled=false
 config successfully updated
 
 $ ais show config 361179t8088 resilver --json | grep -A 2 resilver 
@@ -143,7 +143,7 @@ $ ais show config 361179t8088 resilver --json | grep -A 2 resilver
         "enabled": false
     },
 
-$ ais set config resilver.enabled=true
+$ ais cluster config resilver.enabled=true
 config successfully updated
 
 $ ais show config <TAB-TAB>

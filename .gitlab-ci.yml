@@ -93,7 +93,7 @@ test:short:
     - make aisfs cli aisloader
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
     - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\nn\nn\nn\nn\nn\n'
-    - ais attach remote alias=http://127.0.0.1:11080 # attach to remote cluster
+    - ais cluster attach alias=http://127.0.0.1:11080 # attach to remote cluster
     - BUCKET="ais://test" make test-short
     - FLAGS="--duration=10s" make test-aisloader
   <<: *gather_logs_def
@@ -143,7 +143,7 @@ test:https:
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
     - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\nn\nn\nn\nn\nn\n'
     - sleep 3
-    - ais attach remote alias=https://127.0.0.1:11080 # attach to remote cluster
+    - ais cluster attach alias=https://127.0.0.1:11080 # attach to remote cluster
     - make test-short
 
 test:long:
@@ -189,7 +189,7 @@ test:cloud:hdfs:
     - bash deploy/test/ci/setup_hdfs.sh
     - make aisfs cli
     - make deploy < <(printf "${NUM_TARGET}\n${NUM_PROXY}\n${FS_CNT}\nn\nn\nn\ny\nn\n")
-    - ais create bucket "${BUCKET}" --bucket-props="extra.hdfs.ref_directory=/"
+    - ais bucket create "${BUCKET}" --bucket-props="extra.hdfs.ref_directory=/"
     - make test-long
 
 test:soak:

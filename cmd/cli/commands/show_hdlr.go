@@ -40,11 +40,6 @@ type (
 
 var (
 	showCmdsFlags = map[string][]cli.Flag{
-		subcmdShowBucket: {
-			cachedFlag,
-			allFlag,
-			verboseFlag,
-		},
 		subcmdShowDisk: append(
 			longRunFlags,
 			jsonFlag,
@@ -107,126 +102,139 @@ var (
 			Name:  commandShow,
 			Usage: "show information about entities in the cluster",
 			Subcommands: []cli.Command{
-				{
-					Name:         subcmdShowBucket,
-					Usage:        "show bucket details",
-					ArgsUsage:    optionalBucketArgument,
-					Flags:        showCmdsFlags[subcmdShowBucket],
-					Action:       showBucketHandler,
-					BashComplete: bucketCompletions(),
-				},
-				{
-					Name:         subcmdShowDisk,
-					Usage:        "show disk statistics for targets",
-					ArgsUsage:    optionalTargetIDArgument,
-					Flags:        showCmdsFlags[subcmdShowDisk],
-					Action:       showDisksHandler,
-					BashComplete: daemonCompletions(completeTargets),
-				},
-				{
-					Name:         subcmdShowDownload,
-					Usage:        "show information about download jobs",
-					ArgsUsage:    optionalJobIDArgument,
-					Flags:        showCmdsFlags[subcmdShowDownload],
-					Action:       showDownloadsHandler,
-					BashComplete: downloadIDAllCompletions,
-				},
-				{
-					Name:      subcmdShowDsort,
-					Usage:     fmt.Sprintf("show information about %s jobs", cmn.DSortName),
-					ArgsUsage: optionalJobIDDaemonIDArgument,
-					Flags:     showCmdsFlags[subcmdShowDsort],
-					Action:    showDsortHandler,
-					BashComplete: func(c *cli.Context) {
-						if c.NArg() == 0 {
-							dsortIDAllCompletions(c)
-						}
-						if c.NArg() == 1 {
-							daemonCompletions(completeTargets)(c)
-						}
-					},
-				},
-				{
-					Name:         subcmdShowObject,
-					Usage:        "show object details",
-					ArgsUsage:    objectArgument,
-					Flags:        showCmdsFlags[subcmdShowObject],
-					Action:       showObjectHandler,
-					BashComplete: bucketCompletions(bckCompletionsOpts{separator: true}),
-				},
-				{
-					Name:      subcmdShowCluster,
-					Usage:     "show cluster details",
-					ArgsUsage: "[DAEMON_ID|DAEMON_TYPE]",
-					Flags:     showCmdsFlags[subcmdShowCluster],
-					Action:    showClusterHandler,
-					BashComplete: func(c *cli.Context) {
-						if c.NArg() == 0 {
-							fmt.Printf("%s\n%s\n%s\n", cmn.Proxy, cmn.Target, subcmdSmap)
-						}
-						daemonCompletions(completeAllDaemons)(c)
-					},
-					Subcommands: []cli.Command{
-						{
-							Name:         subcmdSmap,
-							Usage:        "show Smap (cluster map) of a specific node",
-							ArgsUsage:    optionalDaemonIDArgument,
-							Flags:        showCmdsFlags[subcmdSmap],
-							Action:       showSmapHandler,
-							BashComplete: daemonCompletions(completeAllDaemons),
-						},
-					},
-				},
-				{
-					Name:         subcmdShowXaction,
-					Usage:        "show xaction details",
-					ArgsUsage:    "[XACTION_ID|XACTION_NAME] [BUCKET_NAME]",
-					Description:  xactionDesc(false),
-					Flags:        showCmdsFlags[subcmdShowXaction],
-					Action:       showXactionHandler,
-					BashComplete: xactionCompletions(""),
-				},
-				{
-					Name:      subcmdShowRebalance,
-					Usage:     "show rebalance details",
-					ArgsUsage: noArguments,
-					Flags:     showCmdsFlags[subcmdShowRebalance],
-					Action:    showRebalanceHandler,
-				},
-				{
-					Name:         subcmdShowBckProps,
-					Usage:        "show bucket properties",
-					ArgsUsage:    bucketAndPropsArgument,
-					Flags:        showCmdsFlags[subcmdShowBckProps],
-					Action:       showBckPropsHandler,
-					BashComplete: bucketAndPropsCompletions,
-				},
-				{
-					Name:         subcmdShowConfig,
-					Usage:        "show daemon configuration",
-					ArgsUsage:    showConfigArgument,
-					Flags:        showCmdsFlags[subcmdShowConfig],
-					Action:       showConfigHandler,
-					BashComplete: daemonConfigSectionCompletions(false /* daemon optional */),
-				},
-				{
-					Name:         subcmdShowRemoteAIS,
-					Usage:        "show attached AIS clusters",
-					ArgsUsage:    "",
-					Flags:        showCmdsFlags[subcmdShowRemoteAIS],
-					Action:       showRemoteAISHandler,
-					BashComplete: daemonCompletions(completeTargets),
-				},
-				{
-					Name:         subcmdShowMpath,
-					Usage:        "show mountpath list for targets",
-					ArgsUsage:    optionalTargetIDArgument,
-					Flags:        showCmdsFlags[subcmdShowMpath],
-					Action:       showMpathHandler,
-					BashComplete: daemonCompletions(completeTargets),
-				},
+				showCmdDisk,
+				showCmdObject,
+				showCmdCluster,
+				showCmdRebalance,
+				showCmdBckProps,
+				showCmdConfig,
+				showCmdRemoteAIS,
+				showCmdMpath,
+				showCmdJob,
 			},
 		},
+	}
+
+	// define separately to allow for aliasing
+	showCmdDisk = cli.Command{
+		Name:         subcmdShowDisk,
+		Usage:        "show disk statistics for targets",
+		ArgsUsage:    optionalTargetIDArgument,
+		Flags:        showCmdsFlags[subcmdShowDisk],
+		Action:       showDisksHandler,
+		BashComplete: daemonCompletions(completeTargets),
+	}
+	showCmdObject = cli.Command{
+		Name:         subcmdShowObject,
+		Usage:        "show object details",
+		ArgsUsage:    objectArgument,
+		Flags:        showCmdsFlags[subcmdShowObject],
+		Action:       showObjectHandler,
+		BashComplete: bucketCompletions(bckCompletionsOpts{separator: true}),
+	}
+	showCmdCluster = cli.Command{
+		Name:      subcmdShowCluster,
+		Usage:     "show cluster details",
+		ArgsUsage: "[DAEMON_ID|DAEMON_TYPE]",
+		Flags:     showCmdsFlags[subcmdShowCluster],
+		Action:    showClusterHandler,
+		BashComplete: func(c *cli.Context) {
+			if c.NArg() == 0 {
+				fmt.Printf("%s\n%s\n%s\n", cmn.Proxy, cmn.Target, subcmdSmap)
+			}
+			daemonCompletions(completeAllDaemons)(c)
+		},
+		Subcommands: []cli.Command{
+			{
+				Name:         subcmdSmap,
+				Usage:        "show Smap (cluster map) of a specific node",
+				ArgsUsage:    optionalDaemonIDArgument,
+				Flags:        showCmdsFlags[subcmdSmap],
+				Action:       showSmapHandler,
+				BashComplete: daemonCompletions(completeAllDaemons),
+			},
+		},
+	}
+	showCmdRebalance = cli.Command{
+		Name:      subcmdShowRebalance,
+		Usage:     "show rebalance details",
+		ArgsUsage: noArguments,
+		Flags:     showCmdsFlags[subcmdShowRebalance],
+		Action:    showRebalanceHandler,
+	}
+	showCmdBckProps = cli.Command{
+		Name:         subcmdShowBckProps,
+		Usage:        "show bucket properties",
+		ArgsUsage:    bucketAndPropsArgument,
+		Flags:        showCmdsFlags[subcmdShowBckProps],
+		Action:       showBckPropsHandler,
+		BashComplete: bucketAndPropsCompletions,
+	}
+	showCmdConfig = cli.Command{
+		Name:         subcmdShowConfig,
+		Usage:        "show daemon configuration",
+		ArgsUsage:    showConfigArgument,
+		Flags:        showCmdsFlags[subcmdShowConfig],
+		Action:       showConfigHandler,
+		BashComplete: daemonConfigSectionCompletions(false /* daemon optional */),
+	}
+	showCmdRemoteAIS = cli.Command{
+		Name:         subcmdShowRemoteAIS,
+		Usage:        "show attached AIS clusters",
+		ArgsUsage:    "",
+		Flags:        showCmdsFlags[subcmdShowRemoteAIS],
+		Action:       showRemoteAISHandler,
+		BashComplete: daemonCompletions(completeTargets),
+	}
+	showCmdMpath = cli.Command{
+		Name:         subcmdShowMpath,
+		Usage:        "show mountpath list for targets",
+		ArgsUsage:    optionalTargetIDArgument,
+		Flags:        showCmdsFlags[subcmdShowMpath],
+		Action:       showMpathHandler,
+		BashComplete: daemonCompletions(completeTargets),
+	}
+
+	showCmdJob = cli.Command{
+		Name:  subcmdShowJob,
+		Usage: "show information about various jobs",
+		Subcommands: []cli.Command{
+			showCmdDownload,
+			showCmdDsort,
+			showCmdXaction,
+		},
+	}
+	showCmdDownload = cli.Command{
+		Name:         subcmdShowDownload,
+		Usage:        "show information about download jobs",
+		ArgsUsage:    optionalJobIDArgument,
+		Flags:        showCmdsFlags[subcmdShowDownload],
+		Action:       showDownloadsHandler,
+		BashComplete: downloadIDAllCompletions,
+	}
+	showCmdDsort = cli.Command{
+		Name:      subcmdShowDsort,
+		Usage:     fmt.Sprintf("show information about %s jobs", cmn.DSortName),
+		ArgsUsage: optionalJobIDDaemonIDArgument,
+		Flags:     showCmdsFlags[subcmdShowDsort],
+		Action:    showDsortHandler,
+		BashComplete: func(c *cli.Context) {
+			if c.NArg() == 0 {
+				dsortIDAllCompletions(c)
+			}
+			if c.NArg() == 1 {
+				daemonCompletions(completeTargets)(c)
+			}
+		},
+	}
+	showCmdXaction = cli.Command{
+		Name:         subcmdShowXaction,
+		Usage:        "show xaction details",
+		ArgsUsage:    "[XACTION_ID|XACTION_NAME] [BUCKET_NAME]",
+		Description:  xactionDesc(false),
+		Flags:        showCmdsFlags[subcmdShowXaction],
+		Action:       showXactionHandler,
+		BashComplete: xactionCompletions(""),
 	}
 )
 

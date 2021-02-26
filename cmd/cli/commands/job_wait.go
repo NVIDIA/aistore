@@ -29,35 +29,33 @@ var (
 		},
 	}
 
-	waitCmds = []cli.Command{
-		{
-			Name:  commandWait,
-			Usage: "wait for a specific task to finish",
-			Subcommands: []cli.Command{
-				{
-					Name:         subcmdWaitXaction,
-					Usage:        "wait for an xaction to finish",
-					ArgsUsage:    "XACTION_ID|XACTION_NAME [BUCKET_NAME]",
-					Flags:        waitCmdsFlags[subcmdWaitXaction],
-					Action:       waitXactionHandler,
-					BashComplete: xactionCompletions(""),
-				},
-				{
-					Name:         subcmdWaitDownload,
-					Usage:        "wait for a download to finish",
-					ArgsUsage:    jobIDArgument,
-					Flags:        waitCmdsFlags[subcmdWaitDownload],
-					Action:       waitDownloadHandler,
-					BashComplete: downloadIDRunningCompletions,
-				},
-				{
-					Name:         subcmdWaitDSort,
-					Usage:        fmt.Sprintf("wait for %s to finish", cmn.DSortName),
-					ArgsUsage:    jobIDArgument,
-					Flags:        waitCmdsFlags[subcmdWaitDSort],
-					Action:       waitDSortHandler,
-					BashComplete: dsortIDRunningCompletions,
-				},
+	jobWaitSubcmds = cli.Command{
+		Name:  commandWait,
+		Usage: "wait for a specific task to finish",
+		Subcommands: []cli.Command{
+			{
+				Name:         subcmdWaitXaction,
+				Usage:        "wait for an xaction to finish",
+				ArgsUsage:    "XACTION_ID|XACTION_NAME [BUCKET_NAME]",
+				Flags:        waitCmdsFlags[subcmdWaitXaction],
+				Action:       waitXactionHandler,
+				BashComplete: xactionCompletions(""),
+			},
+			{
+				Name:         subcmdWaitDownload,
+				Usage:        "wait for a download to finish",
+				ArgsUsage:    jobIDArgument,
+				Flags:        waitCmdsFlags[subcmdWaitDownload],
+				Action:       waitDownloadHandler,
+				BashComplete: downloadIDRunningCompletions,
+			},
+			{
+				Name:         subcmdWaitDSort,
+				Usage:        fmt.Sprintf("wait for %s to finish", cmn.DSortName),
+				ArgsUsage:    jobIDArgument,
+				Flags:        waitCmdsFlags[subcmdWaitDSort],
+				Action:       waitDSortHandler,
+				BashComplete: dsortIDRunningCompletions,
 			},
 		},
 	}

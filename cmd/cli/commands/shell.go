@@ -147,7 +147,7 @@ func daemonConfigSectionCompletions(daemonOptional bool) cli.BashCompleteFunc {
 	}
 }
 
-func setConfigCompletions(c *cli.Context) {
+func cluConfigCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
 		suggestDaemon(completeAllDaemons)
 	}
@@ -201,8 +201,8 @@ type bckCompletionsOpts struct {
 	provider              string
 
 	// Index in args array where first bucket name is.
-	// For command "ais ls bck1 bck2" value should be set to 0
-	// For command "ais put file bck1" value should be set to 1
+	// For command "ais bucket ls bck1 bck2" value should be set to 0
+	// For command "ais object put file bck1" value should be set to 1
 	firstBucketIdx int
 }
 

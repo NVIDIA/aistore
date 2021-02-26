@@ -4,7 +4,7 @@ For background and in-depth presentation, please see this [document](/dsort/READ
 
 ## Generate shards
 
-`ais gen-shards "BUCKET/TEMPLATE.EXT"`
+`ais advanced gen-shards "BUCKET/TEMPLATE.EXT"`
 
 Put randomly generated shards that can be used for dSort testing.
 The `TEMPLATE` must be bash-like brace expansion (see examples) and `.EXT` must be one of: `.tar`, `.tar.gz`.
@@ -28,9 +28,9 @@ Generate 10 shards each containing 100 files of size 256KB and put them inside `
 Shards will be named: `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar`.
 
 ```console
-$ ais gen-shards "ais://dsort-testing/shard-{0..9}.tar" --fsize 262144 --fcount 100
+$ ais advanced gen-shards "ais://dsort-testing/shard-{0..9}.tar" --fsize 262144 --fcount 100
 Shards created: 10/10 [==============================================================] 100 %
-$ ais ls ais://dsort-testing
+$ ais bucket ls ais://dsort-testing
 NAME		SIZE		VERSION
 shard-0.tar	25.05MiB	1
 shard-1.tar	25.05MiB	1
@@ -50,9 +50,9 @@ Generates 100 shards each containing 5 files of size 256KB and put them inside `
 Shards will be compressed and named: `super_shard_000_last.tgz`, `super_shard_001_last.tgz`, ..., `super_shard_099_last.tgz`
 
 ```console
-$ ais gen-shards "ais://dsort-testing/super_shard_{000..099}_last.tar" --fsize 262144 --cleanup
+$ ais advanced gen-shards "ais://dsort-testing/super_shard_{000..099}_last.tar" --fsize 262144 --cleanup
 Shards created: 100/100 [==============================================================] 100 %
-$ ais ls ais://dsort-testing
+$ ais bucket ls ais://dsort-testing
 NAME				SIZE	VERSION
 super_shard_000_last.tgz	1.25MiB	1
 super_shard_001_last.tgz	1.25MiB	1
@@ -67,7 +67,7 @@ super_shard_007_last.tgz	1.25MiB	1
 
 ## Start dSort job
 
-`ais start dsort JOB_SPEC` or `ais start dsort -f <PATH_TO_JOB_SPEC>`
+`ais job start dsort JOB_SPEC` or `ais job start dsort -f <PATH_TO_JOB_SPEC>`
 
 Start new dSort job with the provided specification.
 Specification should be provided by either argument or `-f` flag - providing both argument and flag will result in error.
@@ -141,7 +141,7 @@ Assuming that `dsort_spec.json` contains:
 You can start dSort job with:
 
 ```console
-$ ais start dsort -f dsort_spec.json
+$ ais job start dsort -f dsort_spec.json
 JGHEoo89gg
 ```
 
@@ -151,7 +151,7 @@ Command defined below starts basic shuffle job for **input** shards with names `
 Each of the **output** shards will have at least `10240` bytes (`10KB`) and will be named `new-shard-0000.tar`, `new-shard-0001.tar`, ...
 
 ```console
-$ ais start dsort -f - <<EOM
+$ ais job start dsort -f - <<EOM
 extension: .tar
 bucket: dsort-testing
 input_format: shard-{0..9}
@@ -202,7 +202,7 @@ shard-1.tar:
 You can run:
 
 ```console
-$ ais start dsort '{
+$ ais job start dsort '{
     "extension": ".tar",
     "bucket": "dsort-testing",
     "input_format": "shard-{0..9}",
@@ -232,7 +232,7 @@ shard-dogs-0.tar:
 
 ## Show dSort jobs and job status
 
-`ais show dsort [JOB_ID]`
+`ais show job dsort [JOB_ID]`
 
 Retrieve the status of the dSort with provided `JOB_ID` which is returned upon creation.
 Lists all dSort jobs if the `JOB_ID` argument is omitted.
@@ -254,7 +254,7 @@ Lists all dSort jobs if the `JOB_ID` argument is omitted.
 Shows all dSort jobs with descriptions starting with `sort ` prefix.
 
 ```console
-$ ais show dsort --regex "^sort (.*)"
+$ ais show job dsort --regex "^sort (.*)"
 JOB ID		 STATUS		 START		 FINISH			 DESCRIPTION
 nro_Y5h9n	 Finished	 03-16 11:39:07	 03-16 11:39:07 	 sort shards from 0 to 9
 Key_Y5h9n	 Finished	 03-16 11:39:23	 03-16 11:39:23 	 sort shards from 10 to 19
@@ -266,7 +266,7 @@ enq9Y5Aqn	 Finished	 03-16 11:39:34	 03-16 11:39:34 	 sort shards from 20 to 29
 Save newly fetched metrics of the dSort job with ID `5JjIuGemR` to `/tmp/dsort_run.txt` file every `500` milliseconds
 
 ```console
-$ ais show dsort 5JjIuGemR --refresh 500ms --log "/tmp/dsort_run.txt"
+$ ais show job dsort 5JjIuGemR --refresh 500ms --log "/tmp/dsort_run.txt"
 DSort job has finished successfully in 21.948806ms:
   Longest extraction:	1.49907ms
   Longest sorting:	8.288299ms
@@ -276,7 +276,7 @@ DSort job has finished successfully in 21.948806ms:
 #### Show only json metrics
 
 ```console
-$ ais show dsort 5JjIuGemR --json
+$ ais show job dsort 5JjIuGemR --json
 {
   "825090t8089": {
     "local_extraction": {
@@ -293,7 +293,7 @@ $ ais show dsort 5JjIuGemR --json
 #### Show only json metrics filtered by daemon id
 
 ```console
-$ ais show dsort 5JjIuGemR 766516t8087 --json
+$ ais show job dsort 5JjIuGemR 766516t8087 --json
 {
   "766516t8087": {
     "local_extraction": {
@@ -311,7 +311,7 @@ $ ais show dsort 5JjIuGemR 766516t8087 --json
 Show running status of meta sorting phase for all targets.
 
 ```console
-$ ais show dsort 5JjIuGemR --json | jq .[].meta_sorting.running
+$ ais show job dsort 5JjIuGemR --json | jq .[].meta_sorting.running
 false
 false
 true
@@ -321,7 +321,7 @@ false
 Show created shards in each target along with the target ids.
 
 ```console
-$ ais show dsort 5JjIuGemR --json | jq 'to_entries[] | [.key, .value.shard_creation.created_count]'
+$ ais show job dsort 5JjIuGemR --json | jq 'to_entries[] | [.key, .value.shard_creation.created_count]'
 [
   "766516t8087",
   "189"
@@ -347,19 +347,19 @@ $ ais show dsort 5JjIuGemR --json | jq 'to_entries[] | [.key, .value.shard_creat
 
 ## Stop dSort job
 
-`ais stop dsort JOB_ID`
+`ais job stop dsort JOB_ID`
 
 Stop the dSort job with given `JOB_ID`.
 
 ## Remove dSort job
 
-`ais rm dsort JOB_ID`
+`ais job rm dsort JOB_ID`
 
 Remove the finished dSort job with given `JOB_ID` from the job list.
 
 ## Wait for dSort job
 
-`ais wait dsort JOB_ID`
+`ais job wait dsort JOB_ID`
 
 Wait for the dSort job with given `JOB_ID` to finish.
 
