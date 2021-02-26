@@ -2519,7 +2519,12 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	tassert.CheckError(t, err)
 
 	tutils.Logf("Unregistering %s...\n", tgtGone.ID())
-	args = &cmn.ActValDecommision{DaemonID: tgtGone.ID(), Force: true}
+	err = api.AbortXaction(baseParams, xactArgs)
+	tassert.CheckError(t, err)
+	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	tassert.CheckError(t, err)
+
+	args = &cmn.ActValDecommision{DaemonID: tgtGone.ID()}
 	err = tutils.UnregisterNode(proxyURL, args)
 	tassert.CheckFatal(t, err)
 	defer tutils.JoinCluster(proxyURL, tgtGone)

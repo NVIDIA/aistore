@@ -1354,7 +1354,9 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 			df.start()
 
 			waitForDSortPhase(t, m.proxyURL, df.managerUUID, phase, func() {
-				target = m.unregisterTarget(true /*force*/)
+				// It may require calling AbortXaction(rebalance) &
+				// WaitForRebalanceToComplete() before unregistering
+				target = m.unregisterTarget()
 			})
 
 			tutils.Logln("waiting for distributed sort to finish up...")
@@ -1511,7 +1513,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 
 			df.init()
 
-			target := m.unregisterTarget(true /*force*/)
+			target := m.unregisterTarget()
 
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 

@@ -20,7 +20,7 @@ func unregisteredNodeHealth(t *testing.T, proxyURL string, si *cluster.Snode) {
 	tassert.CheckError(t, err)
 
 	smapOrig := tutils.GetClusterMap(t, proxyURL)
-	args := &cmn.ActValDecommision{DaemonID: si.DaemonID, SkipRebalance: true, Force: true}
+	args := &cmn.ActValDecommision{DaemonID: si.DaemonID, SkipRebalance: true}
 	err = tutils.UnregisterNode(proxyURL, args)
 	tassert.CheckFatal(t, err)
 	targetCount := smapOrig.CountActiveTargets()

@@ -522,16 +522,11 @@ func (m *ioContext) ensureNoErrors() {
 	}
 }
 
-func (m *ioContext) unregisterTarget(forceUnreg ...bool) *cluster.Snode {
-	var force bool
-	if len(forceUnreg) != 0 {
-		force = forceUnreg[0]
-	}
+func (m *ioContext) unregisterTarget() *cluster.Snode {
 	target, _ := m.smap.GetRandTarget()
 	tutils.Logf("Unregister target: %s\n", target.URL(cmn.NetworkPublic))
 	args := &cmn.ActValDecommision{
 		DaemonID:      target.ID(),
-		Force:         force,
 		SkipRebalance: true,
 	}
 	err := tutils.UnregisterNode(m.proxyURL, args)

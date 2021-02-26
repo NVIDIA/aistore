@@ -727,7 +727,7 @@ func TestGetDuringRebalance(t *testing.T) {
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
-	target := m.unregisterTarget(true /*force*/)
+	target := m.unregisterTarget()
 
 	m.puts()
 
@@ -772,7 +772,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 
 	// Unregister targets
 	for i := 0; i < unregisterTargetCount; i++ {
-		args := &cmn.ActValDecommision{DaemonID: targets[i].ID(), Force: true}
+		args := &cmn.ActValDecommision{DaemonID: targets[i].ID(), SkipRebalance: true}
 		err := tutils.UnregisterNode(m.proxyURL, args)
 		tassert.CheckError(t, err)
 	}

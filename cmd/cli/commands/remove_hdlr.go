@@ -24,7 +24,6 @@ var (
 		subcmdRemoveNode: {
 			maintenanceModeFlag,
 			noRebalanceFlag,
-			forceFlag,
 		},
 		subcmdRemoveDownload: {
 			allJobsFlag,
@@ -159,11 +158,7 @@ func removeNodeHandler(c *cli.Context) (err error) {
 		fmt.Fprintln(c.App.Writer, "Warning: Skipping Rebalance could lead to data loss! To rebalance the cluster manually at a later time, please run: `ais start rebalance`")
 	}
 
-	actValue := &cmn.ActValDecommision{
-		DaemonID:      sid,
-		SkipRebalance: skipRebalance,
-		Force:         flagIsSet(c, forceFlag),
-	}
+	actValue := &cmn.ActValDecommision{DaemonID: sid, SkipRebalance: skipRebalance}
 	switch mode {
 	case maintenanceModeStart:
 		id, err = api.StartMaintenance(defaultAPIParams, actValue)

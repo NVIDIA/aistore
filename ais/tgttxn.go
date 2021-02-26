@@ -624,15 +624,13 @@ func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
 		if err := cmn.MorphMarshal(c.msg.Value, &opts); err != nil {
 			return err
 		}
-		if !opts.Force {
-			g := xreg.GetRebMarked()
-			if g.Xact != nil && !g.Xact.Finished() {
-				return errors.New("cannot start maintenance: rebalance is in progress")
-			}
+		g := xreg.GetRebMarked()
+		if g.Xact != nil && !g.Xact.Finished() && !g.Xact.Aborted() {
+			return errors.New("cannot start maintenance: rebalance is in progress")
+		}
 
-			if cause := xreg.CheckBucketsBusy(); cause != nil {
-				return fmt.Errorf("cannot start maintenance: (xaction: %q) is in progress", cause.Get())
-			}
+		if cause := xreg.CheckBucketsBusy(); cause != nil {
+			return fmt.Errorf("cannot start maintenance: (xaction: %q) is in progress", cause.Get())
 		}
 		t.gfn.global.activateTimed()
 	case cmn.ActAbort:
