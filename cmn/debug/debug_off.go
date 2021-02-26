@@ -8,11 +8,6 @@ package debug
 
 import "sync"
 
-const (
-	MtxLocked  = 0
-	MtxRLocked = 0
-)
-
 func Enabled() bool                     { return false }
 func Errorln(a ...interface{})          {}
 func Errorf(f string, a ...interface{}) {}
@@ -26,5 +21,6 @@ func AssertMsg(cond bool, msg string)               {}
 func AssertNoErr(err error)                         {}
 func Assertf(cond bool, f string, a ...interface{}) {}
 
-func AssertMutexLocked(m *sync.Mutex)         {}
-func AssertRWMutex(m *sync.RWMutex, flag int) {}
+func AssertMutexLocked(m *sync.Mutex)      {}
+func AssertRWMutexLocked(m *sync.RWMutex)  {}
+func AssertRWMutexRLocked(m *sync.RWMutex) {}

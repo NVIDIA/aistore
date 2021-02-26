@@ -363,8 +363,6 @@ func (ci *cacheInterval) prepend(objs *cacheInterval) {
 
 // PRECONDITION: `c.mtx` must be at least rlocked.
 func (c *queryCache) findInterval(token string) *cacheInterval {
-	debug.AssertRWMutex(&c.mtx, debug.MtxLocked|debug.MtxRLocked)
-
 	// TODO: finding intervals should be faster than just walking.
 	for _, interval := range c.intervals {
 		if interval.contains(token) {
@@ -376,7 +374,7 @@ func (c *queryCache) findInterval(token string) *cacheInterval {
 
 // PRECONDITION: `c.mtx` must be locked.
 func (c *queryCache) merge(start, end, cur *cacheInterval) {
-	debug.AssertRWMutex(&c.mtx, debug.MtxLocked)
+	debug.AssertRWMutexLocked(&c.mtx)
 
 	if start == nil && end == nil {
 		c.intervals = append(c.intervals, cur)
@@ -400,7 +398,7 @@ func (c *queryCache) merge(start, end, cur *cacheInterval) {
 
 // PRECONDITION: `c.mtx` must be locked.
 func (c *queryCache) removeInterval(ci *cacheInterval) {
-	debug.AssertRWMutex(&c.mtx, debug.MtxLocked)
+	debug.AssertRWMutexLocked(&c.mtx)
 
 	// TODO: this should be faster
 	for idx := range c.intervals {

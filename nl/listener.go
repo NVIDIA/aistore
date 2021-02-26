@@ -163,8 +163,6 @@ func (nlb *NotifListenerBase) Err(locked bool) error {
 	if !locked {
 		nlb.RLock()
 		defer nlb.RUnlock()
-	} else {
-		debug.AssertRWMutex(&nlb.RWMutex, debug.MtxLocked|debug.MtxRLocked)
 	}
 	if nlb.ErrMsg == "" {
 		return nil
@@ -176,7 +174,7 @@ func (nlb *NotifListenerBase) Err(locked bool) error {
 }
 
 func (nlb *NotifListenerBase) SetStats(daeID string, stats interface{}) {
-	debug.AssertRWMutex(&nlb.RWMutex, debug.MtxLocked)
+	debug.AssertRWMutexLocked(&nlb.RWMutex)
 
 	_, ok := nlb.Srcs[daeID]
 	cmn.Assert(ok)
@@ -217,7 +215,7 @@ func (nlb *NotifListenerBase) NodesTardy(durs ...time.Duration) (nodes cluster.N
 }
 
 func (nlb *NotifListenerBase) Status() *NotifStatus {
-	debug.AssertRWMutex(&nlb.RWMutex, debug.MtxRLocked)
+	debug.AssertRWMutexRLocked(&nlb.RWMutex)
 
 	status := &NotifStatus{
 		UUID:     nlb.UUID(),

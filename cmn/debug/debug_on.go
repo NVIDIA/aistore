@@ -17,11 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 )
 
-const (
-	MtxLocked = 1 << (iota + 1)
-	MtxRLocked
-)
-
 func init() {
 	loadLogLevel()
 }
@@ -128,34 +123,20 @@ func Assertf(cond bool, f string, a ...interface{}) { AssertMsg(cond, fmt.Sprint
 
 func AssertMutexLocked(m *sync.Mutex) {
 	state := reflect.ValueOf(m).Elem().FieldByName("state")
-	if state.Int()&1 == 1 {
-		return
-	}
-	AssertMsg(false, "Mutex not locked")
+	AssertMsg(state.Int()&1 == 1, "Mutex not Locked")
 }
 
-func rwMtxLocked(m *sync.RWMutex) bool {
+func AssertRWMutexLocked(m *sync.RWMutex) {
 	state := reflect.ValueOf(m).Elem().FieldByName("w").FieldByName("state")
-	return state.Int()&1 == 1
+	AssertMsg(state.Int()&1 == 1, "RWMutex not Locked")
 }
 
-func rwMtxRLocked(m *sync.RWMutex) bool {
+func AssertRWMutexRLocked(m *sync.RWMutex) {
 	const maxReaders = 1 << 30 // Taken from `sync/rwmutex.go`.
 	rc := reflect.ValueOf(m).Elem().FieldByName("readerCount").Int()
 	// NOTE: As it's generally true that `rc > 0` the problem arises when writer
 	//  tries to lock the mutex. The writer announces it by manipulating `rc`
 	//  (to be specific, decreases `rc` by `maxReaders`). Therefore, to check if
 	//  there are any readers still holding lock we need to check both cases.
-	return rc > 0 || (0 > rc && rc > -maxReaders)
-}
-
-func AssertRWMutex(m *sync.RWMutex, flag int) {
-	var res bool
-	if flag&MtxLocked != 0 {
-		res = res || rwMtxLocked(m)
-	}
-	if flag&MtxRLocked != 0 {
-		res = res || rwMtxRLocked(m)
-	}
-	AssertMsg(res, "RWMutex not (R)Locked")
+	AssertMsg(rc > 0 || (0 > rc && rc > -maxReaders), "RWMutex not RLocked")
 }
