@@ -916,6 +916,9 @@ func (p *proxyrunner) stopMaintenance(w http.ResponseWriter, r *http.Request, ms
 
 func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action string) {
 	query := r.URL.Query()
+	if p.forwardCP(w, r, &cmn.ActionMsg{Action: action}, "") {
+		return
+	}
 	switch action {
 	case cmn.Proxy:
 		// cluster-wide: designate a new primary proxy administratively
