@@ -177,7 +177,7 @@ func killRestoreDiffIP(t *testing.T, nodeType string) {
 	tassert.CheckFatal(t, err)
 
 killRestore:
-	cfg := tutils.GetDaemonConfig(t, node.ID(), nodeType)
+	cfg := tutils.GetDaemonConfig(t, node)
 	cmd, err := tutils.KillNode(node)
 	tassert.CheckFatal(t, err)
 
@@ -355,7 +355,7 @@ func _addNodeDuplicateDaemonID(t *testing.T, nodeType string) {
 		node, err = smap.GetRandTarget()
 	}
 	tassert.CheckFatal(t, err)
-	conf := tutils.GetDaemonConfig(t, node.ID(), nodeType)
+	conf := tutils.GetDaemonConfig(t, node)
 
 	// Create local config for daemon.
 	localConf := &cmn.LocalConfig{}
@@ -404,7 +404,7 @@ func _addNodeDuplicateIP(t *testing.T, nodeType string) {
 		node, err = smap.GetRandTarget()
 	}
 	tassert.CheckFatal(t, err)
-	conf := tutils.GetDaemonConfig(t, node.ID(), nodeType)
+	conf := tutils.GetDaemonConfig(t, node)
 
 	// Make sure that the `DaemonID` is different.
 	node.DaemonID = "testing_" + cmn.RandString(10)

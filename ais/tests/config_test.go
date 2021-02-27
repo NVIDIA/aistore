@@ -86,9 +86,9 @@ func TestConfigGet(t *testing.T) {
 
 	proxy, err := smap.GetRandProxy(false)
 	tassert.CheckFatal(t, err)
-	tutils.GetDaemonConfig(t, proxy.DaemonID, proxy.DaemonType)
+	tutils.GetDaemonConfig(t, proxy)
 
 	target, err := smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
-	tutils.GetDaemonConfig(t, target.DaemonID, target.DaemonType)
+	tutils.GetDaemonConfig(t, target)
 }

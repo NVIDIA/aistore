@@ -257,8 +257,7 @@ func isClusterLocal() (isLocal bool, err error) {
 	if smap, err = api.GetClusterMap(baseParams); err != nil {
 		return
 	}
-	primaryID := smap.Primary.ID()
-	if config, err = api.GetDaemonConfig(baseParams, primaryID, cmn.Proxy); err != nil {
+	if config, err = api.GetDaemonConfig(baseParams, smap.Primary); err != nil {
 		return
 	}
 	fileData, err = ioutil.ReadFile(path.Join(config.Confdir, proxyIDFname))
@@ -269,6 +268,6 @@ func isClusterLocal() (isLocal bool, err error) {
 		return
 	}
 
-	isLocal = strings.TrimSpace(string(fileData)) == primaryID
+	isLocal = strings.TrimSpace(string(fileData)) == smap.Primary.ID()
 	return
 }

@@ -187,7 +187,7 @@ func getDaemonConfig(c *cli.Context) error {
 		return fmt.Errorf("%s does not exist in the cluster (see 'ais show cluster')", daemonID)
 	}
 
-	body, err := api.GetDaemonConfig(defaultAPIParams, daemonID, node.DaemonType)
+	body, err := api.GetDaemonConfig(defaultAPIParams, node)
 	if err != nil {
 		return err
 	}

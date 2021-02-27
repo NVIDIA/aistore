@@ -888,7 +888,7 @@ func initFS() {
 		tutils.Logf("ERROR: %v", err)
 	}
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	cfg, err := api.GetDaemonConfig(baseParams, primary.ID(), cmn.Proxy)
+	cfg, err := api.GetDaemonConfig(baseParams, primary)
 	if err != nil {
 		tutils.Logf("ERROR: %v", err)
 	}

@@ -85,19 +85,19 @@ func DisableMountpath(baseParams BaseParams, nodeID, mountpath string) error {
 }
 
 // GetDaemonConfig returns the configuration of a specific daemon in a cluster.
-func GetDaemonConfig(baseParams BaseParams, nodeID, daemonType string) (config *cmn.Config, err error) {
+func GetDaemonConfig(baseParams BaseParams, node *cluster.Snode) (config *cmn.Config, err error) {
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.S,
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatConfig}},
-		Header:     http.Header{cmn.HeaderNodeID: []string{nodeID}},
+		Header:     http.Header{cmn.HeaderNodeID: []string{node.ID()}},
 	}, &config)
 	if err != nil {
 		return nil, err
 	}
 	// Validate either as proxy or target.
-	config.SetRole(daemonType)
+	config.SetRole(node.Type())
 	err = config.Validate()
 	return config, err
 }
