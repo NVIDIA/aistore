@@ -512,8 +512,9 @@ func (p *proxyrunner) _updFinal(ctx *smapModifier, clone *smapX) {
 	var (
 		tokens = p.authn.revokedTokenList()
 		bmd    = p.owner.bmd.get()
+		config = p.owner.config.get()
 		aisMsg = p.newAisMsg(ctx.msg, clone, bmd)
-		pairs  = []revsPair{{clone, aisMsg}, {bmd, aisMsg}}
+		pairs  = []revsPair{{clone, aisMsg}, {bmd, aisMsg}, {config, aisMsg}}
 	)
 
 	if ctx.rmd != nil && ctx.nsi.IsTarget() {
