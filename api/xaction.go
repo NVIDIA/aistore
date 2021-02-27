@@ -32,14 +32,14 @@ type (
 	}
 
 	XactReqArgs struct {
-		ID      string
-		Kind    string    // Xaction kind, see: cmn.XactsDtor
-		Node    string    // Optional
-		Bck     cmn.Bck   // Optional bucket
-		Buckets []cmn.Bck // Optional: Xaction on list of buckets
-		Timeout time.Duration
-		Force   bool // Optional: force LRU
-		Latest  bool // Determines if we should get latest or all xactions
+		ID          string
+		Kind        string    // Xaction kind, see: cmn.XactsDtor
+		Node        string    // Optional
+		Bck         cmn.Bck   // Optional bucket
+		Buckets     []cmn.Bck // Optional: Xaction on list of buckets
+		Timeout     time.Duration
+		Force       bool // Optional: force LRU
+		OnlyRunning bool // Read only active xactions
 	}
 )
 
@@ -214,7 +214,7 @@ func QueryXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats Nodes
 		Kind: args.Kind,
 		Bck:  args.Bck,
 	}
-	if args.Latest {
+	if args.OnlyRunning {
 		msg.OnlyRunning = Bool(true)
 	}
 	baseParams.Method = http.MethodGet
@@ -235,7 +235,7 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *nl.Notif
 		Kind: args.Kind,
 		Bck:  args.Bck,
 	}
-	if args.Latest {
+	if args.OnlyRunning {
 		msg.OnlyRunning = Bool(true)
 	}
 

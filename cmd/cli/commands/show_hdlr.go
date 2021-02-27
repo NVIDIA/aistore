@@ -333,7 +333,7 @@ func showXactionHandler(c *cli.Context) (err error) {
 		latest = false
 	}
 
-	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck, Latest: latest}
+	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck, OnlyRunning: latest}
 	xactStats, err = api.QueryXactionStats(defaultAPIParams, xactArgs)
 
 	if err != nil {

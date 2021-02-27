@@ -469,7 +469,7 @@ func WaitForRebalanceToComplete(t testing.TB, baseParams api.BaseParams, timeout
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, Latest: true, Timeout: timeout}
+		xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: timeout}
 		if _, err := api.WaitForXaction(baseParams, xactArgs); err != nil {
 			if cmn.IsStatusNotFound(err) {
 				return
@@ -480,7 +480,7 @@ func WaitForRebalanceToComplete(t testing.TB, baseParams api.BaseParams, timeout
 
 	go func() {
 		defer wg.Done()
-		xactArgs := api.XactReqArgs{Kind: cmn.ActResilver, Latest: true, Timeout: timeout}
+		xactArgs := api.XactReqArgs{Kind: cmn.ActResilver, Timeout: timeout}
 		if _, err := api.WaitForXaction(baseParams, xactArgs); err != nil {
 			if cmn.IsStatusNotFound(err) {
 				return
@@ -501,7 +501,7 @@ func WaitForRebalanceByID(t *testing.T, baseParams api.BaseParams, rebID string,
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
 	}
-	xactArgs := api.XactReqArgs{ID: rebID, Kind: cmn.ActRebalance, Latest: true, Timeout: timeout}
+	xactArgs := api.XactReqArgs{ID: rebID, Kind: cmn.ActRebalance, Timeout: timeout}
 	_, err := api.WaitForXaction(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
 }

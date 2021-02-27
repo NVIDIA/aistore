@@ -500,7 +500,7 @@ func clearAllECObjects(t *testing.T, bck cmn.Bck, failOnDelErr bool, o *ecOption
 		}(idx)
 	}
 	wg.Wait()
-	reqArgs := api.XactReqArgs{Kind: cmn.ActECPut, Bck: bck, Latest: true}
+	reqArgs := api.XactReqArgs{Kind: cmn.ActECPut, Bck: bck}
 	api.WaitForXactionIdle(tutils.BaseAPIParams(proxyURL), reqArgs)
 }
 
@@ -1160,7 +1160,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckError(t, err)
-	reqArgs := api.XactReqArgs{Kind: cmn.ActECEncode, Bck: bck, Latest: true}
+	reqArgs := api.XactReqArgs{Kind: cmn.ActECEncode, Bck: bck}
 	_, err = api.WaitForXaction(baseParams, reqArgs)
 	tassert.CheckError(t, err)
 
