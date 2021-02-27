@@ -239,7 +239,7 @@ test:aisloader:
     NUM_PROXY: 1
     BUCKET: "gs://ais-ci-kube"
     GOOGLE_APPLICATION_CREDENTIALS: "/tmp/gcs.json"
-    RE: 'TestETL\|TestConfig\|TestMountpath'
+    RE: "TestETL|TestConfig|TestMountpath"
     TESTS_DIR: "ais/tests"
   before_script:
     - kubectl delete pods,services -l nvidia.com/ais-etl-name # TODO: this can be removed once the lifecycle of transformers is implemented.

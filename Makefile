@@ -202,10 +202,10 @@ test-envcheck:
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-env
 
 test-short: test-envcheck ## Run short tests (requires BUCKET variable to be set)
-	@RE=$(RE) BUCKET=$(BUCKET) TESTS_DIR=$(TESTS_DIR) AIS_ENDPOINT=$(AIS_ENDPOINT) $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-short
+	@RE="$(RE)" BUCKET="$(BUCKET)" TESTS_DIR="$(TESTS_DIR)" AIS_ENDPOINT="$(AIS_ENDPOINT)" $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-short
 
 test-long: test-envcheck ## Run all (long) tests (requires BUCKET variable to be set)
-	@BUCKET=$(BUCKET) TESTS_DIR=$(TESTS_DIR) AIS_ENDPOINT=$(AIS_ENDPOINT) $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-long
+	@BUCKET="$(BUCKET)" TESTS_DIR="$(TESTS_DIR)" AIS_ENDPOINT="$(AIS_ENDPOINT)" $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-long
 
 test-aisloader:
 	@./bench/aisloader/test/ci-test.sh $(FLAGS)
@@ -214,7 +214,7 @@ test-run: test-envcheck # runs tests matching a specific regex
 ifeq ($(RE),)
 	$(error missing environment variable: RE="testnameregex")
 endif
-	@RE=$(RE) BUCKET=$(BUCKET) TESTS_DIR=$(TESTS_DIR) AIS_ENDPOINT=$(AIS_ENDPOINT) $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-run
+	@RE="$(RE)" BUCKET="$(BUCKET)" TESTS_DIR="$(TESTS_DIR)" AIS_ENDPOINT="$(AIS_ENDPOINT)" $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-run
 
 test-docker: ## Run tests inside docker
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-docker

@@ -3,25 +3,24 @@
 run_tests() {
   SECONDS=0
 
-  if [[ -n "$RE" ]]; then
-    re_val="-run=${RE}"
+  if [[ -n "${RE}" ]]; then
+    re="-run=${RE}"
   fi
 
-  if [[ -z "$TESTS_DIR" ]]; then
-    tests_dir_val="${AISTORE_DIR}/..."
-  else
-    tests_dir_val="${AISTORE_DIR}/${TESTS_DIR}"
+  tests_dir="${AISTORE_DIR}/..."
+  if [[ -n "${TESTS_DIR}" ]]; then
+    tests_dir="${AISTORE_DIR}/${TESTS_DIR}"
   fi
 
-  timeout_val="2h"
-  if [[ -n "$SHORT" ]]; then
-    short_val="-short"
-    timeout_val="30m"
+  timeout="-timeout=2h"
+  if [[ -n "${SHORT}" ]]; then
+    short="-short"
+    timeout="-timeout=30m"
   fi
 
   failed_tests=$(
-    BUCKET=${BUCKET} AIS_ENDPOINT=${AIS_ENDPOINT} \
-      go test -v -p 1 -tags debug -parallel 4 -count 1 -timeout "${timeout_val}" ${short_val} ${re_val} ${tests_dir_val} 2>&1 \
+    BUCKET="${BUCKET}" AIS_ENDPOINT="${AIS_ENDPOINT}" \
+      go test -v -p 1 -tags debug -parallel 4 -count 1 ${timeout} ${short} ${re} "${tests_dir}" 2>&1 \
     | tee -a /dev/stderr \
     | grep -ae "^---FAIL: Bench\|^--- FAIL: Test\|^FAIL[[:space:]]github.com/NVIDIA/.*$"; \
     exit ${PIPESTATUS[0]} # Exit with the status of the first command in the pipe(line).
@@ -112,7 +111,7 @@ test-env)
     exit 0
   fi
 
-  if [[ $(ps aux | grep -v -e 'grep' | grep bin/aisnode) ]]; then
+  if [[ -n $(pgrep aisnode) ]]; then
     echo "AIStore running locally..." >&2
     exit 0
   fi
@@ -138,7 +137,7 @@ test-long)
   ;;
 
 test-run)
-  echo "Running test with regex..." >&2
+  echo "Running test with regex (${RE})..." >&2
   run_tests
   ;;
 
