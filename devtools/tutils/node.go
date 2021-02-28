@@ -199,7 +199,7 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 	smapChangeDeadline = timeStart.Add(2 * proxyChangeLatency)
 	opDeadline = timeStart.Add(3 * proxyChangeLatency)
 
-	Logf("Waiting for (p%d, t%d, version > v%d) %s\n", expPrx, expTgt, origVersion, reason)
+	Logf("Waiting for condition: (p%d, t%d, version > v%d), reason: %s\n", expPrx, expTgt, origVersion, reason)
 
 	var (
 		loopCnt    int
@@ -217,21 +217,19 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 			Logf("%v\n", err)
 			goto next
 		}
-
 		satisfied = expTgt.satisfied(smap.CountActiveTargets()) &&
 			expPrx.satisfied(smap.CountActiveProxies()) &&
 			smap.Version > origVersion
 		if !satisfied {
+			// Still polling http://127.0.0.1:8080, Smap v802(pid=gVqZp8082) (15s)
 			if d := time.Since(timeStart); d > 7*time.Second {
-				Logf("Still polling %s, %s(pid=%s) (%s)\n",
-					proxyURL, smap, smap.Primary.ID(), d.Truncate(time.Second))
+				Logf("Polling %s[%s] for (p%d, t%d, version > v%d)... (%v)\n",
+					proxyURL, smap.StringEx(), expPrx, expTgt, origVersion, d.Truncate(time.Second))
 			}
 		}
-
 		if smap.Version != lastVersion {
 			smapChangeDeadline = cmn.MinTime(time.Now().Add(proxyChangeLatency), opDeadline)
 		}
-
 		// if the primary's map changed to the state we want, wait for the map get populated
 		if satisfied {
 			syncedSmap := &cluster.Smap{}

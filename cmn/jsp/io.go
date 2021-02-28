@@ -37,38 +37,41 @@ func EncodeSGL(v interface{}, opts Options) *memsys.SGL {
 
 func Encode(ws cmn.WriterAt, v interface{}, opts Options) (err error) {
 	var (
-		cksumOffset int64
-		h           hash.Hash
-		w           io.Writer = ws
-		encoder     *jsoniter.Encoder
+		h       hash.Hash
+		w       io.Writer = ws
+		encoder *jsoniter.Encoder
+		off     int
 	)
+	debug.Assert(opts.Signature || opts.MetaVer == 0)
 	if opts.Signature {
-		var prefix [prefLen]byte
-
-		// 1st 64-bit word
-		copy(prefix[:], signature)
+		var (
+			prefix [prefLen]byte
+			flags  uint32
+		)
+		copy(prefix[:], signature) // [ 0 - 63 ]
 		l := len(signature)
-		cmn.Assert(l < prefLen/2)
-		prefix[l] = v2
+		debug.Assert(l < cmn.SizeofI64)
+		prefix[l] = cmn.MetaverJSP // current jsp version
+		off += cmn.SizeofI64
 
-		// 2nd 64-bit word
-		var packingInfo uint64
-		if opts.Compression {
-			packingInfo |= 1 << 0
+		binary.BigEndian.PutUint32(prefix[off:], opts.MetaVer) // [ 64 - 95 ]
+		off += cmn.SizeofI32
+
+		if opts.Compression { // [ 96 - 127 ]
+			flags |= 1 << 0
 		}
 		if opts.Checksum {
-			packingInfo |= 1 << 1
+			flags |= 1 << 1
 		}
-		binary.BigEndian.PutUint64(prefix[cmn.SizeofI64:], packingInfo)
+		binary.BigEndian.PutUint32(prefix[off:], flags)
+		off += cmn.SizeofI32
 
 		w.Write(prefix[:])
-
-		cksumOffset = int64(prefLen)
+		debug.Assert(off == prefLen)
 	}
 	if opts.Checksum {
-		// Reserve place for a checksum.
 		var cksum [sizeXXHash64]byte
-		w.Write(cksum[:])
+		w.Write(cksum[:]) // reserve for checksum
 	}
 	if opts.Compression {
 		zw := lz4.NewWriter(w)
@@ -93,7 +96,7 @@ func Encode(ws cmn.WriterAt, v interface{}, opts Options) (err error) {
 		return
 	}
 	if opts.Checksum {
-		if _, err := ws.WriteAt(h.Sum(nil), cksumOffset); err != nil {
+		if _, err := ws.WriteAt(h.Sum(nil), int64(off)); err != nil {
 			return err
 		}
 	}
@@ -105,7 +108,7 @@ func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) (chec
 		r             io.Reader = reader
 		expectedCksum uint64
 		h             hash.Hash
-		version       byte
+		jspVer        byte
 	)
 	defer cmn.Close(reader)
 	if opts.Signature {
@@ -114,19 +117,24 @@ func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) (chec
 			return
 		}
 		l := len(signature)
+		debug.Assert(l < cmn.SizeofI64)
 		if signature != string(prefix[:l]) {
 			err = fmt.Errorf("bad signature %q: %v", tag, string(prefix[:l]))
 			return
 		}
-		version = prefix[l]
-		if version != v2 {
-			err = fmt.Errorf("unsupported version %q: %x", tag, version)
+		jspVer = prefix[l]
+		if jspVer != cmn.MetaverJSP {
+			err = fmt.Errorf("unsupported jsp version %q: %d", tag, jspVer)
 			return
 		}
-
-		packingInfo := binary.BigEndian.Uint64(prefix[cmn.SizeofI64:])
-		opts.Compression = packingInfo&(1<<0) != 0
-		opts.Checksum = packingInfo&(1<<1) != 0
+		metaVer := binary.BigEndian.Uint32(prefix[cmn.SizeofI64:])
+		if metaVer != opts.MetaVer {
+			err = fmt.Errorf("wrong meta version %q: got %d, expected %d", tag, metaVer, opts.MetaVer)
+			return
+		}
+		flags := binary.BigEndian.Uint32(prefix[cmn.SizeofI64+cmn.SizeofI32:])
+		opts.Compression = flags&(1<<0) != 0
+		opts.Checksum = flags&(1<<1) != 0
 	}
 	if opts.Checksum {
 		var cksum [sizeXXHash64]byte

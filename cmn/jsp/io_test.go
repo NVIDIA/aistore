@@ -80,7 +80,7 @@ func TestDecodeAndEncode(t *testing.T) {
 		{name: "sign", v: makeRandStruct(), opts: jsp.Options{Signature: true}},
 		{name: "compress_cksum", v: makeRandStruct(), opts: jsp.Options{Compression: true, Checksum: true}},
 		{name: "cksum_sign", v: makeRandStruct(), opts: jsp.Options{Checksum: true, Signature: true}},
-		{name: "ccs", v: makeRandStruct(), opts: jsp.CCSign()},
+		{name: "ccs", v: makeRandStruct(), opts: jsp.CCSign(1)},
 		{
 			name: "special_char",
 			v:    testStruct{I: 10, S: "abc\ncd]}{", B: []byte{'a', 'b', '\n', 'c', 'd', ']', '}'}},
@@ -149,7 +149,7 @@ func BenchmarkEncode(b *testing.B) {
 		{name: "sign", v: makeStaticStruct(), opts: jsp.Options{Signature: true}},
 		{name: "cksum", v: makeStaticStruct(), opts: jsp.Options{Checksum: true}},
 		{name: "compress", v: makeStaticStruct(), opts: jsp.Options{Compression: true}},
-		{name: "ccs", v: makeStaticStruct(), opts: jsp.CCSign()},
+		{name: "ccs", v: makeStaticStruct(), opts: jsp.CCSign(7)},
 	}
 	for _, bench := range benches {
 		b.Run(bench.name, func(b *testing.B) {
@@ -181,7 +181,7 @@ func BenchmarkDecode(b *testing.B) {
 		{name: "sign", v: makeStaticStruct(), opts: jsp.Options{Signature: true}},
 		{name: "cksum", v: makeStaticStruct(), opts: jsp.Options{Checksum: true}},
 		{name: "compress", v: makeStaticStruct(), opts: jsp.Options{Compression: true}},
-		{name: "ccs", v: makeStaticStruct(), opts: jsp.CCSign()},
+		{name: "ccs", v: makeStaticStruct(), opts: jsp.CCSign(13)},
 	}
 	for _, bench := range benches {
 		b.Run(bench.name, func(b *testing.B) {

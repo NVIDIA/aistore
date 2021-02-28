@@ -69,7 +69,7 @@ func RemoveMarker(marker string) {
 func PersistOnMpaths(path, backupPath string, what interface{}, atMost int, opts ...jsp.Options) (cnt,
 	availCnt int) {
 	var (
-		options            = jsp.CksumSign()
+		options            = jsp.CksumSign(0 /*metaver*/)
 		availableMpaths, _ = Get()
 	)
 	availCnt = len(availableMpaths)
@@ -106,13 +106,11 @@ func PersistOnMpaths(path, backupPath string, what interface{}, atMost int, opts
 			}
 		}
 	}
-
 	debug.Func(func() {
 		expected := cmn.Min(atMost, availCnt)
 		debug.Assertf(cnt == expected, "expected %q to be persisted on %d mountpaths got %d instead",
 			path, expected, cnt)
 	})
-
 	return
 }
 

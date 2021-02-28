@@ -1665,7 +1665,7 @@ func TestICRebalance(t *testing.T) {
 	xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceStartTimeout}
 	api.WaitForXactionToStart(baseParams, xactArgs)
 
-	tutils.Logf("Killing: %s\n", icNode)
+	tutils.Logf("Killing %s\n", icNode)
 	// cmd and args are the original command line of how the proxy is started
 	cmd, err := tutils.KillNode(icNode)
 	tassert.CheckFatal(t, err)
@@ -1736,7 +1736,7 @@ func TestICDecommission(t *testing.T) {
 	}()
 
 	tassert.CheckFatal(t, err)
-	tutils.Logf("Killing: %s\n", icNode)
+	tutils.Logf("Killing %s\n", icNode)
 
 	// cmd and args are the original command line of how the proxy is started
 	cmd, err := tutils.KillNode(icNode)

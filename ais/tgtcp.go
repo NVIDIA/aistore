@@ -547,12 +547,10 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 		createErrs, destroyErrs string
 		bmd                     = t.owner.bmd.get()
 	)
-
 	glog.Infof(
 		"[metasync] receive %s from %q (action: %q, uuid: %q)",
 		newBMD.StringEx(), caller, msg.Action, msg.UUID,
 	)
-
 	t.owner.bmd.Lock()
 	bmd = t.owner.bmd.get()
 	curVer = bmd.version()
@@ -593,7 +591,11 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 		return
 	}
 	// accept the new one
-	t.owner.bmd.put(newBMD)
+	if err = t.owner.bmd.put(newBMD); err != nil {
+		t.owner.bmd.Unlock()
+		cmn.ExitLogf("%v", err)
+		return
+	}
 
 	// delete buckets dirs under lock, ignore errors
 	bmd.Range(nil, nil, func(obck *cluster.Bck) bool {

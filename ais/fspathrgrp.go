@@ -134,12 +134,14 @@ func (g *fsprungroup) delMpathEvent(action string, mpath *fs.MountpathInfo) {
 func (g *fsprungroup) redistributeMD() {
 	if !hasEnoughBMDCopies() {
 		g.t.owner.bmd.Lock()
-		g.t.owner.bmd.persist()
+		err := g.t.owner.bmd.persist()
 		g.t.owner.bmd.Unlock()
+		if err != nil {
+			cmn.ExitLogf("%v", err)
+		}
 	}
-
 	if _, err := fs.CreateNewVMD(g.t.si.ID()); err != nil {
-		cmn.ExitLogf("%v", err.Error())
+		cmn.ExitLogf("%v", err)
 	}
 }
 
@@ -150,7 +152,8 @@ func (g *fsprungroup) checkZeroMountpaths(action string) (disabled bool) {
 		return false
 	}
 	if err := g.t.disable(); err != nil {
-		glog.Errorf("%s the last available mountpath, failed to unregister target %s (self), err: %v", action, g.t.si, err)
+		glog.Errorf("%s the last available mountpath, failed to unregister target %s (self), err: %v",
+			action, g.t.si, err)
 	} else {
 		glog.Errorf("%s the last available mountpath and unregistered target %s (self)", action, g.t.si)
 	}

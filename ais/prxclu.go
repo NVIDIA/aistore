@@ -503,8 +503,13 @@ func (p *proxyrunner) _updPost(ctx *smapModifier, clone *smapX) {
 				clone.inc()
 			},
 		}
-		rmdClone := p.owner.rmd.modify(rmdCtx)
-		ctx.rmd = rmdClone
+		rmdClone, err := p.owner.rmd.modify(rmdCtx)
+		if err != nil {
+			glog.Error(err)
+			debug.AssertNoErr(err)
+		} else {
+			ctx.rmd = rmdClone
+		}
 	}
 }
 
@@ -583,8 +588,13 @@ func (p *proxyrunner) _perfRebPost(ctx *smapModifier, clone *smapX) {
 				clone.inc()
 			},
 		}
-		rmdClone := p.owner.rmd.modify(rmdCtx)
-		ctx.rmd = rmdClone
+		rmdClone, err := p.owner.rmd.modify(rmdCtx)
+		if err != nil {
+			glog.Error(err)
+			debug.AssertNoErr(err)
+		} else {
+			ctx.rmd = rmdClone
+		}
 	}
 }
 
@@ -754,7 +764,11 @@ func (p *proxyrunner) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
 		msg:   &cmn.ActionMsg{Action: cmn.ActRebalance},
 		smap:  p.owner.smap.get(),
 	}
-	rmdClone := p.owner.rmd.modify(rmdCtx)
+	rmdClone, err := p.owner.rmd.modify(rmdCtx)
+	if err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
 	w.Write([]byte(xaction.RebID(rmdClone.version()).String()))
 }
 
@@ -1072,8 +1086,13 @@ func (p *proxyrunner) rebalanceAndRmSelf(msg *cmn.ActionMsg, si *cluster.Snode) 
 		rebCB: cb,
 		wait:  true,
 	}
-	rmdClone := p.owner.rmd.modify(rmdCtx)
-	rebID = xaction.RebID(rmdClone.version())
+	rmdClone, err := p.owner.rmd.modify(rmdCtx)
+	if err != nil {
+		glog.Error(err)
+		debug.AssertNoErr(err)
+	} else {
+		rebID = xaction.RebID(rmdClone.version())
+	}
 	return
 }
 

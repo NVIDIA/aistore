@@ -14,10 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
-const (
-	vmdInitialVersion = 1
-	vmdCopies         = 3
-)
+const vmdCopies = 3
 
 type (
 	fsDeviceMD struct {
@@ -30,7 +27,6 @@ type (
 	VMD struct {
 		Devices  map[string]*fsDeviceMD `json:"devices"` // Mpath => MD
 		DaemonID string                 `json:"daemon_id"`
-		Version  uint                   `json:"version"` // formatting version for backward compatibility
 		cksum    *cmn.Cksum             // checksum of VMD
 	}
 )
@@ -38,21 +34,16 @@ type (
 func newVMD(expectedSize int) *VMD {
 	return &VMD{
 		Devices: make(map[string]*fsDeviceMD, expectedSize),
-		Version: vmdInitialVersion,
 	}
 }
 
-func CreateNewVMD(daemonID string) (*VMD, error) {
+func CreateNewVMD(daemonID string) (vmd *VMD, err error) {
 	mfs.mu.Lock()
 	defer mfs.mu.Unlock()
 
-	var (
-		available, disabled = Get()
-		vmd                 = newVMD(len(available))
-	)
-
+	available, disabled := Get()
+	vmd = newVMD(len(available))
 	vmd.DaemonID = daemonID
-
 	for _, mPath := range available {
 		vmd.Devices[mPath.Path] = &fsDeviceMD{
 			MountPath: mPath.Path,
@@ -60,7 +51,6 @@ func CreateNewVMD(daemonID string) (*VMD, error) {
 			Enabled:   true,
 		}
 	}
-
 	for _, mPath := range disabled {
 		vmd.Devices[mPath.Path] = &fsDeviceMD{
 			MountPath: mPath.Path,
@@ -68,7 +58,8 @@ func CreateNewVMD(daemonID string) (*VMD, error) {
 			Enabled:   false,
 		}
 	}
-	return vmd, vmd.persist()
+	err = vmd.persist()
+	return
 }
 
 // LoadVMD loads VMD from given paths:
@@ -78,21 +69,16 @@ func LoadVMD(mpaths cmn.StringSet) (mainVMD *VMD, err error) {
 	for path := range mpaths {
 		fpath := filepath.Join(path, VmdPersistedFileName)
 		vmd := newVMD(len(mpaths))
-		vmd.cksum, err = jsp.Load(fpath, vmd, jsp.CCSign())
+		vmd.cksum, err = jsp.Load(fpath, vmd, jsp.CCSign(cmn.MetaverVMD))
 		if err != nil && os.IsNotExist(err) {
 			continue
 		}
-
 		if err != nil {
 			err = newVMDLoadErr(path, err)
 			return nil, err
 		}
-
-		if err = vmd.Validate(); err != nil {
-			err = newVMDValidationErr(path, err)
-			return nil, err
-		}
-
+		cmn.Assert(vmd.cksum != nil)
+		cmn.Assert(vmd.DaemonID != "")
 		if mainVMD != nil {
 			if !mainVMD.cksum.Equal(vmd.cksum) {
 				err = newVMDMismatchErr(mainVMD, vmd, path)
@@ -109,28 +95,18 @@ func LoadVMD(mpaths cmn.StringSet) (mainVMD *VMD, err error) {
 	return mainVMD, nil
 }
 
-func (vmd VMD) persist() error {
-	// Checksum, compress and sign, as a VMD might be quite large.
-	if cnt, availMpaths := PersistOnMpaths(VmdPersistedFileName, "", vmd, vmdCopies, jsp.CCSign()); availMpaths == 0 {
-		glog.Errorf("failed to persist VMD no available mountpaths")
-	} else if cnt == 0 {
-		return fmt.Errorf("failed to persist VMD on any of mountpaths (%d)", availMpaths)
+func (vmd *VMD) persist() (err error) {
+	opts := jsp.CCSign(cmn.MetaverVMD) // checksum, compress, and sign
+	cnt, availCnt := PersistOnMpaths(VmdPersistedFileName, "", vmd, vmdCopies, opts)
+	if cnt > 0 {
+		return
 	}
-	return nil
-}
-
-func (vmd VMD) Validate() error {
-	// TODO: Add versions handling.
-	if vmd.Version != vmdInitialVersion {
-		return fmt.Errorf("invalid VMD version %q", vmd.Version)
+	if availCnt == 0 {
+		glog.Errorf("cannot store VMD: %v", ErrNoMountpaths)
+		return
 	}
-	cmn.Assert(vmd.cksum != nil)
-	cmn.Assert(vmd.DaemonID != "")
-	return nil
-}
-
-func (vmd VMD) HasPath(path string) (exists bool) {
-	_, exists = vmd.Devices[path]
+	err = fmt.Errorf("failed to store VMD on any of the mountpaths (%d)", availCnt)
+	glog.Error(err)
 	return
 }
 

@@ -1369,6 +1369,11 @@ func (h *httprunner) writeErrStatusf(w http.ResponseWriter, r *http.Request, err
 	h.writeErrMsg(w, r, fmt.Sprintf(format, a...), errCode)
 }
 
+func (h *httprunner) writeErrStatusSilentf(w http.ResponseWriter, r *http.Request, errCode int,
+	format string, a ...interface{}) {
+	h.writeErrSilent(w, r, fmt.Errorf(format, a...), errCode)
+}
+
 func (h *httprunner) writeErrf(w http.ResponseWriter, r *http.Request, format string, a ...interface{}) {
 	h.writeErrMsg(w, r, fmt.Sprintf(format, a...))
 }
@@ -1682,7 +1687,7 @@ func (h *httprunner) extractBMD(payload msPayload, caller string) (newBMD *bucke
 	newBMD, msg = &bucketMD{}, &aisMsg{}
 	bmdValue := payload[revsBMDTag]
 	if err1 := jsoniter.Unmarshal(bmdValue, newBMD); err1 != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, bmdTermName, cmn.BytesHead(bmdValue), err1)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, newBMD, cmn.BytesHead(bmdValue), err1)
 		return
 	}
 	if msgValue, ok := payload[revsBMDTag+revsActionTag]; ok {

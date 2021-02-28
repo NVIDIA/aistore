@@ -298,7 +298,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		}
 	}
 	if err := p.owner.smap.persist(smap); err != nil {
-		cmn.ExitLogf("FATAL: %s (primary), err: %v", p.si, err)
+		cmn.ExitLogf("%s (primary), err: %v", p.si, err)
 	}
 	p.owner.smap.Unlock()
 
@@ -307,7 +307,9 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	if bmd.Version == 0 {
 		bmd.Version = 1 // init BMD
 		bmd.UUID = smap.UUID
-		p.owner.bmd.put(bmd)
+		if err := p.owner.bmd.put(bmd); err != nil {
+			cmn.ExitLogf("%v", err)
+		}
 	}
 
 	// 6.5. mark RMD as starting up to prevent joining targets from triggering rebalance
@@ -395,7 +397,10 @@ until:
 			pre: func(_ *rmdModifier, clone *rebMD) { clone.Version += 100 },
 		}
 	)
-	rmd := p.owner.rmd.modify(ctx)
+	rmd, err := p.owner.rmd.modify(ctx)
+	if err != nil {
+		cmn.ExitLogf("%v", err)
+	}
 	wg := p.metasyncer.sync(revsPair{rmd, aisMsg})
 	p.owner.rmd.startup.Store(false)
 	p.owner.smap.Unlock()
@@ -465,7 +470,9 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 		bmd := p.owner.bmd.get()
 		if bmd == nil || bmd.version() < svm.BMD.version() {
 			glog.Infof("%s: override local %s with %s", p.si, bmd, svm.BMD)
-			p.owner.bmd.put(svm.BMD)
+			if err := p.owner.bmd.put(svm.BMD); err != nil {
+				cmn.ExitLogf("%v", err)
+			}
 		}
 		p.owner.bmd.Unlock()
 	}
@@ -495,7 +502,7 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 		if svm.Smap.version() > smap.version() {
 			if dupNode, err := svm.Smap.IsDuplicate(p.si); err != nil {
 				if !svm.Smap.IsPrimary(dupNode) {
-					cmn.ExitLogf("FATAL: %v", err)
+					cmn.ExitLogf("%v", err)
 				}
 				// If the primary in max-ver Smap version and current node only differ by `DaemonID`,
 				// overwrite the proxy entry with current `Snode` and proceed to merging Smap.
@@ -561,7 +568,7 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (svm SmapVoteMsg) {
 	glog.Infof("%s: slow path...", p.si)
 	if svm.BMD, err = resolveUUIDBMD(bmds); err != nil {
 		if _, split := err.(*errBmdUUIDSplit); split {
-			cmn.ExitLogf("FATAL: %s (primary), err: %v", p.si, err) // cluster integrity error
+			cmn.ExitLogf("%s (primary), err: %v", p.si, err) // cluster integrity error
 		}
 		glog.Error(err)
 	}

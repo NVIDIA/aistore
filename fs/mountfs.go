@@ -1019,13 +1019,6 @@ func newVMDLoadErr(mpath string, err error) *StorageIntegrityError {
 	}
 }
 
-func newVMDValidationErr(mpath string, err error) *StorageIntegrityError {
-	return &StorageIntegrityError{
-		code: siMetaCorrupted,
-		msg:  fmt.Sprintf("failed to validate VMD (%q), err: %v", mpath, err),
-	}
-}
-
 func newVMDMismatchErr(mainVMD, otherVMD *VMD, mpath string) *StorageIntegrityError {
 	return &StorageIntegrityError{
 		code: siMetaMismatch,

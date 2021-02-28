@@ -16,16 +16,16 @@ import (
 )
 
 const (
-	v2 = 2 // supported version
-)
-
-const (
 	signature = "aistore" // file signature
-	//                                            0 -------------- 63   64 --------------- 127
-	prefLen = 2 * cmn.SizeofI64 // 128bit prefix [ signature, version | flags and packing info ]
+	//                              0 ---------------- 63  64 ------ 95 | 96 ------ 127
+	prefLen = 2 * cmn.SizeofI64 // [ signature | jsp ver | meta version |   bit flags  ]
 )
 
 type Options struct {
+	// when non-zero, formatting version of the structure that's being (de)serialized
+	// (not to confuse with the jsp encoding version - see above)
+	MetaVer uint32
+
 	Compression bool // lz4 when [version == 1 || version == 2]
 	Checksum    bool // xxhash when [version == 1 || version == 2]
 	Signature   bool // when true, write 128bit prefix (of the layout shown above) at offset zero
@@ -36,18 +36,19 @@ type Options struct {
 
 func Plain() Options      { return Options{} }
 func PlainLocal() Options { return Options{Local: true} }
-func CCSignLocal() Options {
-	opts := CCSign()
+
+func CCSignLocal(metaver uint32) Options {
+	opts := CCSign(metaver)
 	opts.Local = true
 	return opts
 }
 
-func CCSign() Options {
-	return Options{Compression: true, Checksum: true, Signature: true, Indent: false}
+func CCSign(metaver uint32) Options {
+	return Options{MetaVer: metaver, Compression: true, Checksum: true, Signature: true, Indent: false}
 }
 
-func CksumSign() Options {
-	return Options{Checksum: true, Signature: true}
+func CksumSign(metaver uint32) Options {
+	return Options{MetaVer: metaver, Checksum: true, Signature: true}
 }
 
 //////////////////

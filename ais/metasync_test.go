@@ -47,30 +47,10 @@ type (
 		id      string
 		cnt     int
 	}
+
+	// helper for sorting []transportData
+	msgSortHelper []transportData
 )
-
-// helper for sorting []transportData
-type msgSortHelper []transportData
-
-func (m msgSortHelper) Len() int {
-	return len(m)
-}
-
-func (m msgSortHelper) Swap(i, j int) {
-	m[i], m[j] = m[j], m[i]
-}
-
-func (m msgSortHelper) Less(i, j int) bool {
-	if m[i].isProxy != m[j].isProxy {
-		return m[i].isProxy
-	}
-
-	if m[i].id != m[j].id {
-		return m[i].id < m[j].id
-	}
-
-	return m[i].cnt < m[j].cnt
-}
 
 // serverTCPAddr takes a string in format of "http://ip:port" and returns its ip and port
 func serverTCPAddr(u string) cluster.NetInfo {
@@ -501,7 +481,7 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 
 		select {
 		case <-timer.C:
-			t.Log("timed out") // TODO: the test is prone to race - refactor
+			t.Log("timed out")
 		case <-ch:
 		}
 
@@ -565,7 +545,7 @@ func TestMetaSyncData(t *testing.T) {
 			}
 
 			d := make(msPayload)
-			_, err := jsp.Decode(r.Body, &d, jsp.CCSign(), "")
+			_, err := jsp.Decode(r.Body, &d, jspMetasyncOpts, "")
 			ch <- data{d, err}
 		}
 
@@ -830,7 +810,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		chProxy := make(chan msPayload, 10)
 		fProxy := func(w http.ResponseWriter, r *http.Request) {
 			d := make(msPayload)
-			_, err := jsp.Decode(r.Body, &d, jsp.CCSign(), "")
+			_, err := jsp.Decode(r.Body, &d, jspMetasyncOpts, "")
 			cmn.AssertNoErr(err)
 			chProxy <- d
 		}
@@ -872,4 +852,28 @@ func TestMetaSyncReceive(t *testing.T) {
 func testSyncer(p *proxyrunner) (syncer *metasyncer) {
 	syncer = newMetasyncer(p)
 	return
+}
+
+///////////////////
+// msgSortHelper //
+///////////////////
+
+func (m msgSortHelper) Len() int {
+	return len(m)
+}
+
+func (m msgSortHelper) Swap(i, j int) {
+	m[i], m[j] = m[j], m[i]
+}
+
+func (m msgSortHelper) Less(i, j int) bool {
+	if m[i].isProxy != m[j].isProxy {
+		return m[i].isProxy
+	}
+
+	if m[i].id != m[j].id {
+		return m[i].id < m[j].id
+	}
+
+	return m[i].cnt < m[j].cnt
 }

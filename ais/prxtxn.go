@@ -51,11 +51,9 @@ type (
 func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, remoteHeader ...http.Header) error {
 	var (
 		bucketProps *cmn.BucketProps
-
-		nlp = bck.GetNameLockPair()
-		bmd = p.owner.bmd.get()
+		nlp         = bck.GetNameLockPair()
+		bmd         = p.owner.bmd.get()
 	)
-
 	if bck.Props != nil {
 		bucketProps = bck.Props
 	}
@@ -115,8 +113,10 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, remoteH
 		bcks:     []*cluster.Bck{bck},
 		setProps: bucketProps,
 	}
-	_, err := p.owner.bmd.modify(ctx)
-	cmn.AssertNoErr(err)
+	if _, err := p.owner.bmd.modify(ctx); err != nil {
+		debug.AssertNoErr(err)
+		return c.bcastAbort(bck, err)
+	}
 
 	// 4. commit
 	debug.Infof("Commit create-bucket (msg: %v, bck: %s)", msg, bck)
@@ -189,7 +189,6 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 			Copies:  &copies,
 		},
 	}
-
 	ctx := &bmdModifier{
 		pre:           p._mirrorBMDPre,
 		final:         p._syncBMDFinal,
@@ -199,7 +198,12 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 		propsToUpdate: updateProps,
 		bcks:          []*cluster.Bck{bck},
 	}
-	bmd, _ = p.owner.bmd.modify(ctx)
+	bmd, err = p.owner.bmd.modify(ctx)
+	if err != nil {
+		debug.AssertNoErr(err)
+		err = c.bcastAbort(bck, err)
+		return
+	}
 	c.msg.BMDVersion = bmd.version()
 
 	// 4. IC
@@ -329,6 +333,8 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 	}
 	bmd, err := p.owner.bmd.modify(ctx)
 	if err != nil {
+		debug.AssertNoErr(err)
+		err = c.bcastAbort(bck, err)
 		return "", err
 	}
 	c.msg.BMDVersion = bmd.version()
@@ -424,7 +430,12 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 		wait:  waitmsync,
 	}
 
-	bmd, _ = p.owner.bmd.modify(bmdCtx)
+	bmd, err = p.owner.bmd.modify(bmdCtx)
+	if err != nil {
+		debug.AssertNoErr(err)
+		err = c.bcastAbort(bckFrom, err)
+		return
+	}
 	c.msg.BMDVersion = bmd.version()
 
 	ctx := &rmdModifier{
@@ -433,8 +444,11 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 			clone.Resilver = cmn.GenUUID()
 		},
 	}
-
-	rmd := p.owner.rmd.modify(ctx)
+	rmd, err := p.owner.rmd.modify(ctx)
+	if err != nil {
+		glog.Error(err)
+		debug.AssertNoErr(err)
+	}
 	c.msg.RMDVersion = rmd.version()
 
 	// 4. IC
@@ -458,7 +472,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 
 	// Rely on metasync to register rebalance/resilver `nl` on all IC members.  See `p.receiveRMD`.
 	err = p.notifs.add(nl)
-	cmn.AssertNoErr(err)
+	debug.AssertNoErr(err)
 
 	// Register resilver `nl`
 	nl = xaction.NewXactNL(rmd.Resilver, cmn.ActResilver, &c.smap.Smap, nil)
@@ -466,7 +480,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 
 	// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
 	err = p.notifs.add(nl)
-	cmn.AssertNoErr(err)
+	debug.AssertNoErr(err)
 
 	wg.Wait()
 	return
@@ -528,7 +542,12 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 			bcks:  []*cluster.Bck{bckFrom, bckTo},
 			wait:  waitmsync,
 		}
-		bmd, _ = p.owner.bmd.modify(ctx)
+		bmd, err = p.owner.bmd.modify(ctx)
+		if err != nil {
+			debug.AssertNoErr(err)
+			err = c.bcastAbort(bckFrom, err)
+			return
+		}
 		c.msg.BMDVersion = bmd.version()
 		if !ctx.terminate {
 			c.req.Query.Set(cmn.URLParamWaitMetasync, "true")
@@ -599,7 +618,6 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 		err = errors.New("invalid number of slices")
 		return
 	}
-
 	if !nlp.TryLock(cmn.GCO.Get().Timeout.CplaneOperation / 2) {
 		err = cmn.NewErrorBucketIsBusy(bck.Bck)
 		return
@@ -644,7 +662,12 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 		txnID:         c.uuid,
 		propsToUpdate: &cmn.BucketPropsToUpdate{EC: ecConf},
 	}
-	bmd, _ := p.owner.bmd.modify(ctx)
+	bmd, err := p.owner.bmd.modify(ctx)
+	if err != nil {
+		debug.AssertNoErr(err)
+		err = c.bcastAbort(bck, err)
+		return
+	}
 	c.msg.BMDVersion = bmd.version()
 
 	// 5. IC
@@ -806,8 +829,8 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 		wait:  waitmsync,
 		bcks:  []*cluster.Bck{bck},
 	}
-	_, err := p.owner.bmd.modify(ctx)
-	if err != nil {
+	if _, err := p.owner.bmd.modify(ctx); err != nil {
+		debug.AssertNoErr(err)
 		return c.bcastAbort(bck, err)
 	}
 
@@ -925,7 +948,9 @@ func (p *proxyrunner) undoCreateBucket(msg *cmn.ActionMsg, bck *cluster.Bck) {
 		msg:   msg,
 		bcks:  []*cluster.Bck{bck},
 	}
-	p.owner.bmd.modify(ctx)
+	if _, err := p.owner.bmd.modify(ctx); err != nil {
+		cmn.AssertNoErr(err)
+	}
 }
 
 // rollback make-n-copies
@@ -937,7 +962,9 @@ func (p *proxyrunner) undoUpdateCopies(msg *cmn.ActionMsg, bck *cluster.Bck, pro
 		propsToUpdate: propsToUpdate,
 		bcks:          []*cluster.Bck{bck},
 	}
-	p.owner.bmd.modify(ctx)
+	if _, err := p.owner.bmd.modify(ctx); err != nil {
+		cmn.AssertNoErr(err)
+	}
 }
 
 // Make and validate new bucket props.

@@ -76,16 +76,21 @@ func newRMDOwner() *rmdOwner {
 	return rmdo
 }
 
-func (r *rmdOwner) persist(rmd *rebMD) {
-	rmdPathName := filepath.Join(cmn.GCO.Get().Confdir, rmdFname)
-	if err := jsp.Save(rmdPathName, rmd, jsp.CCSign()); err != nil {
-		glog.Errorf("error writing rmd to %s: %v", rmdPathName, err)
-	}
+func (r *rmdOwner) persist(rmd *rebMD) (err error) {
+	var (
+		rmdPathName = filepath.Join(cmn.GCO.Get().Confdir, rmdFname)
+		opts        = jsp.CCSign(cmn.MetaverRMD)
+	)
+	err = jsp.Save(rmdPathName, rmd, opts)
+	return
 }
 
 func (r *rmdOwner) load() {
-	var rmd cluster.RMD
-	_, err := jsp.Load(filepath.Join(cmn.GCO.Get().Confdir, rmdFname), &rmd, jsp.CCSign())
+	var (
+		rmd  cluster.RMD
+		opts = jsp.CCSign(cmn.MetaverRMD)
+	)
+	_, err := jsp.Load(filepath.Join(cmn.GCO.Get().Confdir, rmdFname), &rmd, opts)
 	if err == nil {
 		r.put(&rebMD{RMD: rmd})
 		return
@@ -97,21 +102,22 @@ func (r *rmdOwner) load() {
 
 func (r *rmdOwner) put(rmd *rebMD) { r.rmd.Store(unsafe.Pointer(rmd)) }
 func (r *rmdOwner) get() *rebMD    { return (*rebMD)(r.rmd.Load()) }
-func (r *rmdOwner) _runPre(ctx *rmdModifier) (clone *rebMD) {
+func (r *rmdOwner) _runPre(ctx *rmdModifier) (clone *rebMD, err error) {
 	r.Lock()
 	defer r.Unlock()
 	clone = r.get().clone()
 	clone.TargetIDs = nil
 	clone.Resilver = ""
 	ctx.pre(ctx, clone)
-	r.persist(clone)
-	r.put(clone)
+	if err = r.persist(clone); err == nil {
+		r.put(clone)
+	}
 	return
 }
 
-func (r *rmdOwner) modify(ctx *rmdModifier) (clone *rebMD) {
-	clone = r._runPre(ctx)
-	if ctx.final != nil {
+func (r *rmdOwner) modify(ctx *rmdModifier) (clone *rebMD, err error) {
+	clone, err = r._runPre(ctx)
+	if err == nil && ctx.final != nil {
 		ctx.final(ctx, clone)
 	}
 	return

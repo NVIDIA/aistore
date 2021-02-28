@@ -107,17 +107,17 @@ func main() {
 
 func dumpSmap() error {
 	smap := &cluster.Smap{}
-	return dumpMeta(smap, jsp.Options{Signature: true})
+	return dumpMeta(smap, jsp.CCSign(cmn.MetaverSmap))
 }
 
 func dumpBMD() error {
 	bmd := &cluster.BMD{}
-	return dumpMeta(bmd, jsp.Options{Signature: true})
+	return dumpMeta(bmd, jsp.CCSign(cmn.MetaverBMD))
 }
 
 func dumpRMD() error {
 	rmd := &cluster.RMD{}
-	return dumpMeta(rmd, jsp.Options{Signature: true})
+	return dumpMeta(rmd, jsp.CCSign(cmn.MetaverRMD))
 }
 
 func dumpMeta(v interface{}, opts jsp.Options) (err error) {
@@ -141,17 +141,17 @@ func dumpMeta(v interface{}, opts jsp.Options) (err error) {
 
 func compressSmap() error {
 	smap := &cluster.Smap{}
-	return compressMeta(smap, jsp.CCSign())
+	return compressMeta(smap, jsp.CCSign(cmn.MetaverSmap))
 }
 
 func compressBMD() error {
 	bmd := &cluster.BMD{}
-	return compressMeta(bmd, jsp.CCSign())
+	return compressMeta(bmd, jsp.CCSign(cmn.MetaverBMD))
 }
 
 func compressRMD() error {
 	rmd := &cluster.RMD{}
-	return compressMeta(rmd, jsp.CCSign())
+	return compressMeta(rmd, jsp.CCSign(cmn.MetaverRMD))
 }
 
 func compressMeta(v interface{}, opts jsp.Options) error {

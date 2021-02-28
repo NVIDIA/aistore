@@ -39,10 +39,7 @@ import (
 //     (note that version check must be protected by the same critical section)
 //
 
-const (
-	bmdTermName = "BMD" // display name
-	bmdCopies   = 2     // local copies
-)
+const bmdCopies = 2 // local copies
 
 type (
 	bucketMD struct {
@@ -56,8 +53,8 @@ type (
 
 		init()
 		get() (bmd *bucketMD)
-		put(bmd *bucketMD)
-		persist()
+		put(bmd *bucketMD) error
+		persist() error
 		modify(*bmdModifier) (*bucketMD, error)
 	}
 	bmdOwnerBase struct {
@@ -220,22 +217,24 @@ func newBMDOwnerPrx(config *cmn.Config) *bmdOwnerPrx {
 
 func (bo *bmdOwnerPrx) init() {
 	bmd := newBucketMD()
-	_, err := jsp.Load(bo.fpath, bmd, jsp.CCSign())
+	_, err := jsp.Load(bo.fpath, bmd, jsp.CCSign(cmn.MetaverBMD))
 	if err != nil && !os.IsNotExist(err) {
-		glog.Errorf("failed to load %s from %s, err: %v", bmdTermName, bo.fpath, err)
+		glog.Errorf("failed to load %s from %s, err: %v", bmd, bo.fpath, err)
 	}
 	bo._put(bmd)
 }
 
-func (bo *bmdOwnerPrx) put(bmd *bucketMD) {
+func (bo *bmdOwnerPrx) put(bmd *bucketMD) (err error) {
 	bo._put(bmd)
-	bo.persist()
+	return bo.persist()
 }
 
-func (bo *bmdOwnerPrx) persist() {
-	if err := jsp.Save(bo.fpath, bo.get(), jsp.CCSign()); err != nil {
-		glog.Errorf("failed to write %s as %s, err: %v", bmdTermName, bo.fpath, err)
+func (bo *bmdOwnerPrx) persist() (err error) {
+	bmd := bo.get()
+	if err = jsp.Save(bo.fpath, bmd, jsp.CCSign(cmn.MetaverBMD)); err != nil {
+		err = fmt.Errorf("failed to write %s as %s, err: %w", bmd, bo.fpath, err)
 	}
+	return
 }
 
 func (bo *bmdOwnerPrx) _pre(ctx *bmdModifier) (clone *bucketMD, err error) {
@@ -245,7 +244,7 @@ func (bo *bmdOwnerPrx) _pre(ctx *bmdModifier) (clone *bucketMD, err error) {
 	if err = ctx.pre(ctx, clone); err != nil || ctx.terminate {
 		return
 	}
-	bo.put(clone)
+	err = bo.put(clone)
 	return
 }
 
@@ -290,16 +289,25 @@ finalize:
 	bo._put(bmd)
 }
 
-func (bo *bmdOwnerTgt) put(bmd *bucketMD) {
+func (bo *bmdOwnerTgt) put(bmd *bucketMD) (err error) {
 	bo._put(bmd)
-	bo.persist()
+	return bo.persist()
 }
 
-func (bo *bmdOwnerTgt) persist() {
-	persistedOn, availMpaths := fs.PersistOnMpaths(fs.BmdPersistedFileName, fs.BmdPersistedPrevious, bo.get(), bmdCopies, jsp.CCSign())
-	if persistedOn == 0 {
-		glog.Errorf("Failed to store any %s on %d mpaths", bmdTermName, availMpaths)
+func (bo *bmdOwnerTgt) persist() (err error) {
+	bmd := bo.get()
+	opts := jsp.CCSign(cmn.MetaverBMD)
+	cnt, availCnt := fs.PersistOnMpaths(fs.BmdPersistedFileName, fs.BmdPersistedPrevious, bmd, bmdCopies, opts)
+	if cnt > 0 {
+		return
 	}
+	if availCnt == 0 {
+		glog.Errorf("Cannot store %s: %v", bmd, fs.ErrNoMountpaths)
+		return
+	}
+	err = fmt.Errorf("failed to store %s on any of the mountpaths (%d)", bmd, availCnt)
+	glog.Error(err)
+	return
 }
 
 func (bo *bmdOwnerTgt) modify(_ *bmdModifier) (*bucketMD, error) {
@@ -330,15 +338,14 @@ func loadBMDFromMpath(mpath *fs.MountpathInfo, path string) (bmd *bucketMD) {
 		fpath = filepath.Join(mpath.Path, path)
 		err   error
 	)
-
 	bmd = newBucketMD()
-	bmd.cksum, err = jsp.Load(fpath, bmd, jsp.CCSign())
+	bmd.cksum, err = jsp.Load(fpath, bmd, jsp.CCSign(cmn.MetaverBMD))
 	if err == nil {
 		return bmd
 	}
 	if !os.IsNotExist(err) {
 		// Should never be NotExist error as mpi should include only mpaths with relevant bmds stored.
-		glog.Errorf("failed to load %s from %s, err: %v", bmdTermName, fpath, err)
+		glog.Errorf("failed to load %s from %s, err: %v", bmd, fpath, err)
 	}
 	return nil
 }

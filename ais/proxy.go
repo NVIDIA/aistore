@@ -1214,13 +1214,12 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		bcks:       []*cluster.Bck{bck},
 		cloudProps: cloudProps,
 	}
-
 	_, err = p.owner.bmd.modify(ctx)
 	if err != nil {
+		debug.AssertNoErr(err)
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
-
 	p.bucketPropsToHdr(bck, w.Header())
 }
 
@@ -1872,8 +1871,8 @@ func (p *proxyrunner) handlePendingRenamedLB(renamedBucket string) {
 		msg:   &cmn.ActionMsg{Value: cmn.ActMoveBck},
 		bcks:  []*cluster.Bck{cluster.NewBck(renamedBucket, cmn.ProviderAIS, cmn.NsGlobal)},
 	}
-
-	p.owner.bmd.modify(ctx)
+	_, err := p.owner.bmd.modify(ctx)
+	debug.AssertNoErr(err)
 }
 
 func (p *proxyrunner) _pendingRnPre(ctx *bmdModifier, clone *bucketMD) error {
@@ -2431,7 +2430,8 @@ func (p *proxyrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, caller string) (
 		p.owner.bmd.Unlock()
 		return newErrDowngrade(p.si, bmd.String(), newBMD.String())
 	}
-	p.owner.bmd.put(newBMD)
+	err = p.owner.bmd.put(newBMD)
+	debug.AssertNoErr(err)
 	p.owner.bmd.Unlock()
 	return
 }

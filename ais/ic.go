@@ -210,7 +210,7 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 	})
 	if !exists {
 		smap := ic.p.owner.smap.get()
-		ic.p.writeErrStatusf(w, r, http.StatusNotFound, "%s, %s", smap.StrIC(ic.p.si), msg)
+		ic.p.writeErrStatusSilentf(w, r, http.StatusNotFound, "%s, %s", smap.StrIC(ic.p.si), msg)
 		return
 	}
 
