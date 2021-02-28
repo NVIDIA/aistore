@@ -300,12 +300,12 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 	m.puts()
 
 	if rtd.rename {
+		_, err := api.RenameBucket(baseParams, rtd.bck, rtd.renamedBck)
+		tassert.CheckFatal(t, err)
+
 		// Rename bucket fails when rebalance or resilver is running.
 		// Ensure rebalance or resilver isn't running before performing a rename.
 		tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
-
-		_, err := api.RenameBucket(baseParams, rtd.bck, rtd.renamedBck)
-		tassert.CheckFatal(t, err)
 
 		tutils.Logf("Renamed %s (obj_cnt: %d) => %s\n", rtd.bck, m.num, rtd.renamedBck)
 		if rtd.wait {
