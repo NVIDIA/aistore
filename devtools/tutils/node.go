@@ -418,24 +418,24 @@ func startNode(cmd string, args []string, asPrimary bool) (pid int, err error) {
 }
 
 func DeployNode(t *testing.T, node *cluster.Snode, conf *cmn.Config, localConf *cmn.LocalConfig) int {
-	conf.Confdir = t.TempDir()
+	conf.ConfigDir = t.TempDir()
 	conf.Log.Dir = t.TempDir()
 	conf.TestFSP.Root = t.TempDir()
 	conf.TestFSP.Instance = 42
 
 	if localConf == nil {
 		localConf = &cmn.LocalConfig{}
-		localConf.ConfigDir = conf.Confdir
+		localConf.ConfigDir = conf.ConfigDir
 		localConf.Net.PortStr = strconv.Itoa(conf.Net.L4.Port)
 		localConf.Net.PortIntraControlStr = strconv.Itoa(conf.Net.L4.PortIntraControl)
 		localConf.Net.PortIntraDataStr = strconv.Itoa(conf.Net.L4.PortIntraData)
 	}
 
-	localConfFile := path.Join(conf.Confdir, "ais_local.json")
+	localConfFile := path.Join(conf.ConfigDir, "ais_local.json")
 	err := jsp.Save(localConfFile, localConf, jsp.Plain())
 	tassert.CheckFatal(t, err)
 
-	configFile := path.Join(conf.Confdir, "ais.json")
+	configFile := path.Join(conf.ConfigDir, "ais.json")
 	err = jsp.Save(configFile, conf, jsp.Plain())
 	tassert.CheckFatal(t, err)
 

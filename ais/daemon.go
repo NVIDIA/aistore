@@ -175,7 +175,7 @@ func initDaemon(version, buildTime string) (rmain cmn.Runner) {
 		}
 
 		if !daemon.cli.transient {
-			if err = jsp.SaveOverrideConfig(config.Confdir, overrideConfig); err != nil {
+			if err = jsp.SaveOverrideConfig(config.ConfigDir, overrideConfig); err != nil {
 				cmn.ExitLogf("Failed to save override config: %v", err)
 			}
 		}
@@ -418,11 +418,11 @@ func initProxyDaemonID(config *cmn.Config) (daemonID string) {
 }
 
 func writeProxyDID(config *cmn.Config, id string) error {
-	return ioutil.WriteFile(filepath.Join(config.Confdir, proxyIDFname), []byte(id), cmn.PermRWR)
+	return ioutil.WriteFile(filepath.Join(config.ConfigDir, proxyIDFname), []byte(id), cmn.PermRWR)
 }
 
 func readProxyDaemonID(config *cmn.Config) (id string) {
-	if b, err := ioutil.ReadFile(filepath.Join(config.Confdir, proxyIDFname)); err == nil {
+	if b, err := ioutil.ReadFile(filepath.Join(config.ConfigDir, proxyIDFname)); err == nil {
 		id = string(b)
 	} else if !os.IsNotExist(err) {
 		glog.Error(err)

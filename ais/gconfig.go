@@ -121,7 +121,9 @@ func (co *configOwner) persist(config *globalConfig) error {
 func (co *configOwner) updateGCO() (err error) {
 	debug.AssertMutexLocked(&co.Mutex)
 	config := co.get().clone()
-	config.SetLocalConf(cmn.GCO.GetLocal())
+	if err := config.SetLocalConf(cmn.GCO.GetLocal()); err != nil {
+		return err
+	}
 	override := cmn.GCO.GetOverrideConfig()
 	if override != nil {
 		err = config.Apply(*override)
@@ -176,7 +178,7 @@ func (co *configOwner) modifyOverride(toUpdate *cmn.ConfigToUpdate) (err error) 
 		override.Merge(toUpdate)
 	}
 
-	jsp.SaveOverrideConfig(clone.Confdir, override)
+	jsp.SaveOverrideConfig(clone.ConfigDir, override)
 	cmn.GCO.PutOverrideConfig(override)
 	return
 }

@@ -752,8 +752,8 @@ func (t *targetrunner) testCachepathMounts() {
 }
 
 func (t *targetrunner) detectMpathChanges() {
-	const mountpathFname = "mpaths"
-	mpathconfigfqn := filepath.Join(cmn.GCO.Get().Confdir, mountpathFname)
+	const mpathFname = "mpaths"
+	mpathConfigFQN := filepath.Join(cmn.GCO.Get().ConfigDir, mpathFname)
 
 	type mfs struct {
 		Available cmn.StringSet `json:"available"`
@@ -777,9 +777,9 @@ func (t *targetrunner) detectMpathChanges() {
 		newfs.Disabled[mpath] = struct{}{}
 	}
 
-	if _, err := jsp.Load(mpathconfigfqn, &oldfs, jsp.Plain()); err != nil {
+	if _, err := jsp.Load(mpathConfigFQN, &oldfs, jsp.Plain()); err != nil {
 		if !os.IsNotExist(err) && err != io.EOF {
-			glog.Errorf("Failed to load old mpath config %q, err: %v", mpathconfigfqn, err)
+			glog.Errorf("Failed to load old mpath config %q, err: %v", mpathConfigFQN, err)
 		}
 		return
 	}
@@ -794,14 +794,14 @@ func (t *targetrunner) detectMpathChanges() {
 			newfs.Available.String(), newfs.Disabled.String(),
 		)
 
-		glog.Errorf("%s: detected change in the mountpath configuration at %s", t.si, mpathconfigfqn)
+		glog.Errorf("%s: detected change in the mountpath configuration at %s", t.si, mpathConfigFQN)
 		glog.Errorln("OLD: ====================")
 		glog.Errorln(oldfsPprint)
 		glog.Errorln("NEW: ====================")
 		glog.Errorln(newfsPprint)
 	}
 	// persist
-	if err := jsp.Save(mpathconfigfqn, newfs, jsp.Plain()); err != nil {
+	if err := jsp.Save(mpathConfigFQN, newfs, jsp.Plain()); err != nil {
 		glog.Errorf("Error writing config file: %v", err)
 	}
 }

@@ -34,7 +34,6 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *cmn.Config) (er
 	if err != nil {
 		return fmt.Errorf("failed to load local config %q, err: %v", localConfPath, err)
 	}
-	cmn.GCO.PutLocal(localConf)
 	if err = config.SetLocalConf(localConf); err != nil {
 		return
 	}
@@ -44,10 +43,6 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *cmn.Config) (er
 		return err
 	}
 
-	if err = cmn.CreateDir(config.Log.Dir); err != nil {
-		return fmt.Errorf("failed to create log dir %q, err: %v", config.Log.Dir, err)
-	}
-	glog.SetLogDir(config.Log.Dir)
 	if overrideConfig != nil {
 		err = config.Apply(*overrideConfig)
 	} else {
@@ -57,19 +52,26 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *cmn.Config) (er
 		return
 	}
 
+	if err = cmn.CreateDir(config.Log.Dir); err != nil {
+		return fmt.Errorf("failed to create log dir %q, err: %v", config.Log.Dir, err)
+	}
+	glog.SetLogDir(config.Log.Dir)
+
 	// glog rotate
 	glog.MaxSize = config.Log.MaxSize
 	if glog.MaxSize > cmn.GiB {
-		glog.Errorf("log.max_size %d exceeded 1GB, setting the default 1MB", glog.MaxSize)
+		glog.Warningf("log.max_size %d exceeded 1GB, setting the default 1MB", glog.MaxSize)
 		glog.MaxSize = cmn.MiB
 	}
 
 	if err = cmn.SetLogLevel(config, config.Log.Level); err != nil {
-		return fmt.Errorf("failed to set log level = %s, err: %s", config.Log.Level, err)
+		return fmt.Errorf("failed to set log level %q, err: %s", config.Log.Level, err)
 	}
 	glog.Infof("log.dir: %q; l4.proto: %s; port: %d; verbosity: %s",
 		config.Log.Dir, config.Net.L4.Proto, config.Net.L4.Port, config.Log.Level)
 	glog.Infof("config_file: %q periodic.stats_time: %v", confPath, config.Periodic.StatsTime)
+
+	cmn.GCO.PutLocal(localConf)
 	return
 }
 

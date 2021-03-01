@@ -31,7 +31,7 @@ var _ = Describe("ManagerGroup", func() {
 		Expect(err).ShouldNot(HaveOccurred())
 
 		config := cmn.GCO.BeginUpdate()
-		config.Confdir = testingConfigDir
+		config.ConfigDir = testingConfigDir
 		cmn.GCO.CommitUpdate(config)
 		db := dbdriver.NewDBMock()
 		mgrp = NewManagerGroup(db)

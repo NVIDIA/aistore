@@ -109,7 +109,7 @@ type (
 	// nolint:maligned // no performance critical code
 	Config struct {
 		role        string          `list:"omit"` // Proxy or Target
-		Confdir     string          `json:"confdir" local:"omit"`
+		ConfigDir   string          `json:"confdir" local:"omit"`
 		Backend     BackendConf     `json:"backend"`
 		Mirror      MirrorConf      `json:"mirror"`
 		EC          ECConf          `json:"ec"`
@@ -140,10 +140,10 @@ type (
 	}
 
 	LocalConfig struct {
+		ConfigDir string         `json:"confdir"`
 		Net       LocalNetConfig `json:"net"`
 		FSpaths   FSPathsConf    `json:"fspaths"`
 		TestFSP   TestfspathConf `json:"test_fspaths"`
-		ConfigDir string         `json:"confdir"`
 	}
 
 	// Network config specific to node
@@ -157,7 +157,7 @@ type (
 	}
 
 	ConfigToUpdate struct {
-		Confdir     *string                  `json:"confdir"`
+		ConfigDir   *string                  `json:"confdir"`
 		Backend     *BackendConf             `json:"backend"`
 		Mirror      *MirrorConfToUpdate      `json:"mirror"`
 		EC          *ECConfToUpdate          `json:"ec"`
@@ -733,6 +733,7 @@ var (
 	_ Validator = (*LRUConf)(nil)
 	_ Validator = (*MirrorConf)(nil)
 	_ Validator = (*ECConf)(nil)
+	_ Validator = (*LogConf)(nil)
 	_ Validator = (*VersionConf)(nil)
 	_ Validator = (*KeepaliveConf)(nil)
 	_ Validator = (*PeriodConf)(nil)
@@ -764,6 +765,12 @@ var (
 
 func (c *Config) Validate() error {
 	opts := IterOpts{VisitAll: true}
+
+	// FIXME: This should work.
+	//  if c.ConfigDir == "" {
+	//		 return errors.New("invalid confdir value (must be non-empty)")
+	//	}
+
 	return IterFields(c, func(tag string, field IterField) (err error, b bool) {
 		if v, ok := field.Value().(Validator); ok {
 			if err := v.Validate(c); err != nil {
@@ -812,10 +819,9 @@ func (c *Config) SetNetConf(conf LocalNetConfig) (err error) {
 }
 
 func (c *Config) SetLocalConf(localConf *LocalConfig) error {
-	debug.AssertMsg(localConf.ConfigDir != "", "local configuration path not set")
 	c.TestFSP = localConf.TestFSP
 	c.FSpaths = localConf.FSpaths
-	c.Confdir = localConf.ConfigDir
+	c.ConfigDir = localConf.ConfigDir
 	return c.SetNetConf(localConf.Net)
 }
 
@@ -1041,7 +1047,7 @@ func (c *ECConf) Validate(_ *Config) error {
 }
 
 func (c *ECConf) ValidateAsProps(args *ValidationArgs) error {
-	const insuffientNodes = "EC config (%d data, %d parity) slices requires at least %d targets (have %d)"
+	const insufficientNodes = "EC config (%d data, %d parity) slices requires at least %d targets (have %d)"
 	if !c.Enabled {
 		return nil
 	}
@@ -1050,10 +1056,17 @@ func (c *ECConf) ValidateAsProps(args *ValidationArgs) error {
 	}
 	required := c.RequiredEncodeTargets()
 	if c.ParitySlices > args.TargetCnt {
-		return fmt.Errorf(insuffientNodes, c.DataSlices, c.ParitySlices, required, args.TargetCnt)
+		return fmt.Errorf(insufficientNodes, c.DataSlices, c.ParitySlices, required, args.TargetCnt)
 	}
 	if args.TargetCnt < required {
-		return NewSoftError(fmt.Sprintf(insuffientNodes, c.DataSlices, c.ParitySlices, required, args.TargetCnt))
+		return NewSoftError(fmt.Sprintf(insufficientNodes, c.DataSlices, c.ParitySlices, required, args.TargetCnt))
+	}
+	return nil
+}
+
+func (c *LogConf) Validate(_ *Config) (err error) {
+	if c.Dir == "" {
+		return errors.New("invalid log.dir value (must be non-empty)")
 	}
 	return nil
 }
@@ -1245,6 +1258,9 @@ func (c *FSPathsConf) MarshalJSON() (data []byte, err error) {
 }
 
 func (c *FSPathsConf) Validate(contextConfig *Config) (err error) {
+	// FIXME: This assert fails on initialization.
+	//  Assertf(StringInSlice(contextConfig.role, []string{Proxy, Target}), "unexpected role: %q", contextConfig.role)
+
 	// Don't validate if testing environment
 	if contextConfig.TestingEnv() || contextConfig.role != Target {
 		return nil

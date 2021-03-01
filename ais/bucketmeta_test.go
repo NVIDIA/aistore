@@ -30,9 +30,9 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 	)
 
 	BeforeEach(func() {
-		// Set path for proxy (it uses Confdir)
+		// Set path for proxy (it uses ConfigDir)
 		config := cmn.GCO.BeginUpdate()
-		config.Confdir = mpath
+		config.ConfigDir = mpath
 		config.Cksum.Type = cmn.ChecksumXXHash
 		cmn.GCO.CommitUpdate(config)
 		cfg = cmn.GCO.Get()

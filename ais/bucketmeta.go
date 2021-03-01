@@ -212,7 +212,7 @@ func (bo *bmdOwnerBase) _put(bmd *bucketMD) {
 /////////////////
 
 func newBMDOwnerPrx(config *cmn.Config) *bmdOwnerPrx {
-	return &bmdOwnerPrx{fpath: filepath.Join(config.Confdir, fs.BmdPersistedFileName)}
+	return &bmdOwnerPrx{fpath: filepath.Join(config.ConfigDir, fs.BmdPersistedFileName)}
 }
 
 func (bo *bmdOwnerPrx) init() {

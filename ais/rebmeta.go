@@ -78,7 +78,7 @@ func newRMDOwner() *rmdOwner {
 
 func (r *rmdOwner) persist(rmd *rebMD) (err error) {
 	var (
-		rmdPathName = filepath.Join(cmn.GCO.Get().Confdir, rmdFname)
+		rmdPathName = filepath.Join(cmn.GCO.Get().ConfigDir, rmdFname)
 		opts        = jsp.CCSign(cmn.MetaverRMD)
 	)
 	err = jsp.Save(rmdPathName, rmd, opts)
@@ -90,7 +90,7 @@ func (r *rmdOwner) load() {
 		rmd  cluster.RMD
 		opts = jsp.CCSign(cmn.MetaverRMD)
 	)
-	_, err := jsp.Load(filepath.Join(cmn.GCO.Get().Confdir, rmdFname), &rmd, opts)
+	_, err := jsp.Load(filepath.Join(cmn.GCO.Get().ConfigDir, rmdFname), &rmd, opts)
 	if err == nil {
 		r.put(&rebMD{RMD: rmd})
 		return

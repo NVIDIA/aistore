@@ -260,7 +260,7 @@ func isClusterLocal() (isLocal bool, err error) {
 	if config, err = api.GetDaemonConfig(baseParams, smap.Primary); err != nil {
 		return
 	}
-	fileData, err = ioutil.ReadFile(path.Join(config.Confdir, proxyIDFname))
+	fileData, err = ioutil.ReadFile(path.Join(config.ConfigDir, proxyIDFname))
 	if err != nil {
 		if os.IsNotExist(err) {
 			err = nil

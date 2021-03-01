@@ -75,7 +75,7 @@ func newPrimary() *proxyrunner {
 	p.owner.smap.put(smap)
 
 	config := cmn.GCO.BeginUpdate()
-	config.Confdir = "/tmp/ais-tests"
+	config.ConfigDir = "/tmp/ais-tests"
 	config.Periodic.RetrySyncTime = time.Millisecond * 100
 	config.Keepalive.Proxy.Name = "heartbeat"
 	config.Keepalive.Proxy.IntervalStr = "as"

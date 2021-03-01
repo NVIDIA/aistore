@@ -20,7 +20,7 @@ import (
 
 func init() {
 	config := cmn.GCO.BeginUpdate()
-	config.Confdir = "/tmp/ais-tests"
+	config.ConfigDir = "/tmp/ais-tests"
 	config.Timeout.CplaneOperation = 2 * time.Second
 	config.Timeout.MaxKeepalive = 4 * time.Second
 	config.Timeout.MaxHostBusy = 20 * time.Second

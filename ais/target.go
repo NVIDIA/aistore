@@ -244,7 +244,7 @@ func (t *targetrunner) Run() error {
 		revokedTokens: make(map[string]bool),
 		version:       1,
 	}
-	driver, err := dbdriver.NewBuntDB(filepath.Join(config.Confdir, dbName))
+	driver, err := dbdriver.NewBuntDB(filepath.Join(config.ConfigDir, dbName))
 	if err != nil {
 		glog.Errorf("Failed to initialize DB: %v", err)
 		return err

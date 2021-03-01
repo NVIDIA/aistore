@@ -153,7 +153,7 @@ EOL
 
 cat > $AIS_LOCAL_CONF_FILE <<EOL
 {
-	"confdir": "${AIS_CONF_DIR}",
+	"confdir": "${AIS_CONF_DIR:-/etc/ais/}",
 	"net": {
 		"hostname":                 "${HOSTNAME_LIST}",
 		"hostname_intra_control":   "${HOSTNAME_LIST_INTRA_CONTROL}",

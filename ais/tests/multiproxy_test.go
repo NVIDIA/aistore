@@ -185,7 +185,7 @@ killRestore:
 	tassert.CheckFatal(t, err)
 
 	// Update local config ports.
-	localConfPath := path.Join(cfg.Confdir, "ais_local.json")
+	localConfPath := path.Join(cfg.ConfigDir, "ais_local.json")
 	localConf := &cmn.LocalConfig{}
 	_, err = jsp.Load(localConfPath, localConf, jsp.Plain())
 	tassert.CheckFatal(t, err)
@@ -359,7 +359,7 @@ func _addNodeDuplicateDaemonID(t *testing.T, nodeType string) {
 
 	// Create local config for daemon.
 	localConf := &cmn.LocalConfig{}
-	localConf.ConfigDir = conf.Confdir
+	localConf.ConfigDir = conf.ConfigDir
 	localConf.Net.PortStr = strconv.Itoa(conf.Net.L4.Port + portInc)
 	localConf.Net.PortIntraControlStr = strconv.Itoa(conf.Net.L4.PortIntraControl + portInc)
 	localConf.Net.PortIntraDataStr = strconv.Itoa(conf.Net.L4.PortIntraData + portInc)

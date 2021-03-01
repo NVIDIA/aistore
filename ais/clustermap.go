@@ -424,7 +424,7 @@ func newSmapOwner() *smapOwner {
 
 func (r *smapOwner) load(smap *smapX, config *cmn.Config) (loaded bool, err error) {
 	opts := jsp.CCSign(cmn.MetaverSmap)
-	_, err = jsp.Load(filepath.Join(config.Confdir, smapFname), smap, opts)
+	_, err = jsp.Load(filepath.Join(config.ConfigDir, smapFname), smap, opts)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return false, nil
@@ -483,7 +483,7 @@ func (r *smapOwner) persist(newSmap *smapX) (err error) {
 	debug.AssertMutexLocked(&r.Mutex)
 	var (
 		config   = cmn.GCO.Get()
-		smapPath = filepath.Join(config.Confdir, smapFname)
+		smapPath = filepath.Join(config.ConfigDir, smapFname)
 		opts     = jsp.CCSign(cmn.MetaverSmap)
 	)
 	err = jsp.Save(smapPath, newSmap, opts)
