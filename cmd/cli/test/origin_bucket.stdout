@@ -1,4 +1,4 @@
-"$BUCKET" bucket created
- PROPERTY               VALUE
+"ais://$BUCKET" bucket created
+PROPERTY               VALUE
 backend_bck.name
 backend_bck.provider

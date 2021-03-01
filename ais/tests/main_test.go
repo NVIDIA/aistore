@@ -25,33 +25,15 @@ var (
 )
 
 func setBucket() (bck cmn.Bck, err error) {
-	var (
-		bucket   = os.Getenv("BUCKET")
-		provider = os.Getenv("PROVIDER")
-	)
+	bucket := os.Getenv("BUCKET")
 	if bucket == "" {
-		bucket = cmn.RandString(7)
+		bucket = cmn.ProviderAIS + cmn.BckProviderSeparator + cmn.RandString(7)
 		tutils.Logf("Using BUCKET=%q\n", bucket)
 	}
 	bck, _, err = cmn.ParseBckObjectURI(bucket)
 	if err != nil {
 		return bck, fmt.Errorf("failed to parse 'BUCKET' env variable, err: %v", err)
 	}
-	if provider != "" {
-		if bck.Provider != "" && bck.Provider != provider {
-			return bck, fmt.Errorf("provider is set for both 'BUCKET' (%q) and 'PROVIDER' (%q) env variables",
-				bck, provider)
-		}
-		if err = cmn.ValidateProvider(provider); err != nil {
-			return bck, fmt.Errorf("%v (make sure 'PROVIDER' env variable is properly set)", err)
-		}
-		bck.Provider = provider
-	}
-
-	if bck.Provider == "" {
-		bck.Provider = cmn.ProviderAIS
-	}
-
 	return bck, nil
 }
 

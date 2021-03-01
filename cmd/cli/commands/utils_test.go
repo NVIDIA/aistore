@@ -298,6 +298,9 @@ func TestParseBckObjectURI(t *testing.T) {
 		expectedObj string
 	}{
 		{
+			uri: "",
+		},
+		{
 			uri:         "ais://",
 			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS},
 		},
@@ -307,7 +310,7 @@ func TestParseBckObjectURI(t *testing.T) {
 		},
 		{
 			uri:         "ais://@uuid#namespace/bucket/object",
-			expectedBck: cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
+			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket", Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
 			expectedObj: "object",
 		},
 		{
@@ -327,6 +330,10 @@ func TestParseBckObjectURI(t *testing.T) {
 			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS},
 		},
 		{
+			uri:         "@#",
+			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS},
+		},
+		{
 			uri:         "ais://@",
 			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS},
 		},
@@ -337,15 +344,28 @@ func TestParseBckObjectURI(t *testing.T) {
 		},
 		{
 			uri:         "ais://@#/bucket",
-			expectedBck: cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS},
+			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
 		},
 		{
 			uri:         "ais://@uuid#namespace/bucket",
-			expectedBck: cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
+			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket", Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
+		},
+		{
+			uri:         "@uuid#namespace",
+			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
 		},
 		{
 			uri:         "ais://bucket",
-			expectedBck: cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS},
+			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
+		},
+		{
+			uri:         "bucket",
+			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
+		},
+		{
+			uri:         "bucket/object",
+			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
+			expectedObj: "object",
 		},
 		{
 			uri:         "aws://",

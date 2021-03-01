@@ -3,7 +3,7 @@ ais mv bucket $BUCKET_1/ $BUCKET_2/ --wait
 ais mv bucket $BUCKET_2/ $BUCKET_1/
 ais gen-shards --bucket $BUCKET_3 --ext .tar --template="tmp/shard-{0..9}" --fcount 1 --fsize 1KB --conc 1 --cleanup // IGNORE
 ais mv bucket $BUCKET_1/ $BUCKET_3/ // FAIL "bucket "ais://$BUCKET_3" already exists"
-ais mv bucket $BUCKET_1/ $BUCKET_1/ // FAIL "cannot mv "$BUCKET_1" as "$BUCKET_1""
+ais mv bucket $BUCKET_1/ $BUCKET_1/ // FAIL "cannot mv "ais://$BUCKET_1" as "ais://$BUCKET_1""
 
 ais rm bucket $BUCKET_1
 ais rm bucket $BUCKET_3

@@ -10,6 +10,6 @@ ais cp bucket $BUCKET_1 $BUCKET_2
 ais wait xaction copybck $BUCKET_2
 ais show xaction copybck $BUCKET_1
 ais show xaction copybck
-ais show xaction copybck $BUCKET_3 // FAIL "bucket "$BUCKET_3" does not exist"
+ais show xaction copybck $BUCKET_3 // FAIL "bucket "ais://$BUCKET_3" does not exist"
 
 rm -rf /tmp/rdir // IGNORE

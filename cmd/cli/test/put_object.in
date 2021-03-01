@@ -1,7 +1,7 @@
 echo "0123456789" > $OBJECT_1.txt
 ais create bucket $BUCKET_1
 
-ais put $OBJECT_1.txt $BUCKET_2/object_1.txt // FAIL "bucket "$BUCKET_2" does not exist"
+ais put $OBJECT_1.txt $BUCKET_2/object_1.txt // FAIL "bucket "ais://$BUCKET_2" does not exist"
 ais put $OBJECT_1.txt cloud://$BUCKET_1/object_1.txt // FAIL "invalid backend provider "cloud""
 
 head -c 31971520 /dev/urandom | ais put - ais://$BUCKET_1/rand.txt

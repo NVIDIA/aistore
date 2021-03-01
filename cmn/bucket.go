@@ -119,12 +119,12 @@ func NormalizeProvider(provider string) (string, error) {
 	switch provider {
 	case "":
 		return "", nil
-	case GSScheme:
-		return ProviderGoogle, nil
 	case S3Scheme:
 		return ProviderAmazon, nil
 	case AZScheme:
 		return ProviderAzure, nil
+	case GSScheme:
+		return ProviderGoogle, nil
 	}
 	if err := ValidateProvider(provider); err != nil {
 		return "", err
@@ -132,7 +132,7 @@ func NormalizeProvider(provider string) (string, error) {
 	return provider, nil
 }
 
-// Parses "provider://@uuid#namespace/bucketName/objectName"
+// Parses "[provider://][@uuid#namespace][/][bucketName[/objectName]]"
 func ParseBckObjectURI(objName string, query ...bool) (bck Bck, object string, err error) {
 	const bucketSepa = "/"
 	parts := strings.SplitN(objName, BckProviderSeparator, 2)
@@ -153,6 +153,9 @@ func ParseBckObjectURI(objName string, query ...bool) (bck Bck, object string, e
 			return bck, "", err
 		}
 		if len(parts) == 1 {
+			if bck.Provider == "" {
+				bck.Provider = ProviderAIS // Always default to `ais://` provider.
+			}
 			isQuery := len(query) > 0 && query[0]
 			if parts[0] == string(NsUUIDPrefix) && isQuery {
 				// Case: "[provider://]@" (only valid if uri is query)
@@ -174,11 +177,13 @@ func ParseBckObjectURI(objName string, query ...bool) (bck Bck, object string, e
 		if err := ValidateBckName(bck.Name); err != nil {
 			return bck, "", err
 		}
+		if bck.Provider == "" {
+			bck.Provider = ProviderAIS // Always default to `ais://` provider.
+		}
 	}
 	if len(parts) > 1 {
 		object = parts[1]
 	}
-
 	return
 }
 

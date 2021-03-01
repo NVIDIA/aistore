@@ -87,11 +87,11 @@ func mvObjectHandler(c *cli.Context) (err error) {
 	if bck.Name == "" {
 		return incorrectUsageMsg(c, "no bucket specified for object %q", oldObj)
 	}
-	if bck.Provider != "" && !bck.IsAIS() {
+	if !bck.IsAIS() {
 		return incorrectUsageMsg(c, "provider %q not supported", bck.Provider)
 	}
 
-	if bckDst, objDst, err := parseBckObjectURI(c, newObj); err == nil && bckDst.Name != "" && bckDst.Provider != "" {
+	if bckDst, objDst, err := parseBckObjectURI(c, newObj); err == nil && bckDst.Name != "" {
 		if !bckDst.Equal(bck) {
 			return incorrectUsageMsg(c, "moving an object to another bucket(%s) is not supported", bckDst)
 		}
@@ -105,7 +105,6 @@ func mvObjectHandler(c *cli.Context) (err error) {
 		return incorrectUsageMsg(c, "source and destination are the same object")
 	}
 
-	bck.Provider = cmn.ProviderAIS
 	if err = api.RenameObject(defaultAPIParams, bck, oldObj, newObj); err != nil {
 		return
 	}

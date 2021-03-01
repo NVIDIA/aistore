@@ -107,13 +107,13 @@ func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
 	}
 
 	if !flagIsSet(c, waitFlag) {
-		fmt.Fprintf(c.App.Writer, fmtXactStatusCheck, operation, fromBck.Name, toBck.Name, cmn.ActMoveBck, toBck.Name)
+		fmt.Fprintf(c.App.Writer, fmtXactStatusCheck, operation, fromBck, toBck, cmn.ActMoveBck, toBck)
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, fmtXactStarted, operation, fromBck.Name, toBck.Name)
+	fmt.Fprintf(c.App.Writer, fmtXactStarted, operation, fromBck, toBck)
 	if err = waitForXactionCompletion(defaultAPIParams, api.XactReqArgs{ID: xactID}); err != nil {
-		fmt.Fprintf(c.App.Writer, fmtXactFailed, operation, fromBck.Name, toBck.Name)
+		fmt.Fprintf(c.App.Writer, fmtXactFailed, operation, fromBck, toBck)
 	} else {
 		fmt.Fprintf(c.App.Writer, fmtXactSucceeded, operation)
 	}
@@ -130,13 +130,13 @@ func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *cmn.CopyBckMsg) (er
 	}
 
 	if !flagIsSet(c, waitFlag) {
-		fmt.Fprintf(c.App.Writer, fmtXactStatusCheck, operation, fromBck.Name, toBck.Name, cmn.ActCopyBck, toBck.Name)
+		fmt.Fprintf(c.App.Writer, fmtXactStatusCheck, operation, fromBck, toBck, cmn.ActCopyBck, toBck)
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, fmtXactStarted, operation, fromBck.Name, toBck.Name)
+	fmt.Fprintf(c.App.Writer, fmtXactStarted, operation, fromBck, toBck)
 	if err = waitForXactionCompletion(defaultAPIParams, api.XactReqArgs{ID: xactID}); err != nil {
-		fmt.Fprintf(c.App.Writer, fmtXactFailed, operation, fromBck.Name, toBck.Name)
+		fmt.Fprintf(c.App.Writer, fmtXactFailed, operation, fromBck, toBck)
 	} else {
 		fmt.Fprintf(c.App.Writer, fmtXactSucceeded, operation)
 	}

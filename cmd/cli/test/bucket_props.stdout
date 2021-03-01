@@ -1,4 +1,4 @@
-"$BUCKET_1" bucket created
+"ais://$BUCKET_1" bucket created
 Bucket props successfully updated
 "mirror.enabled" set to:"true" (was:"false")
 PROPERTY	     VALUE
@@ -29,4 +29,4 @@ lru.enabled     		 true
 lru.highwm      		 90
 lru.lowwm       		 75
 lru.out_of_space         95
-Bucket "$BUCKET_1" already has the set props, nothing to do
+Bucket "ais://$BUCKET_1" already has the set props, nothing to do

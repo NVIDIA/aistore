@@ -6,12 +6,6 @@ To run all tests, make sure to deploy a AIStore cluster with at least 3 proxies/
 Then, cd to $GOPATH/src/github.com/NVIDIA/aistore and execute:
 
 ```console
-$ PROVIDER=<provider> BUCKET=<bucket_name> go test -v -p 1 -count 1 -timeout 1h ./...
-```
-
-or:
-
-```console
 $ BUCKET=<provider>://<bucket_name> go test -v -p 1 -count 1 -timeout 1h ./...
 ```
 
