@@ -1,4 +1,4 @@
-ais gen-shards --bucket $BUCKET_1 --ext .tar --template="tmp/shard-{0..4}" --fcount 1 --fsize 1KB --conc 1 --cleanup // IGNORE
+ais gen-shards "ais://$BUCKET_1/tmp/shard-{0..4}.tar" --fcount 1 --fsize 1KB --conc 1 --cleanup // IGNORE
 ais ls $BUCKET_1
 ais ls $BUCKET_1/
 ais ls $BUCKET_1

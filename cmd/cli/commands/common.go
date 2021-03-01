@@ -295,15 +295,9 @@ var (
 	progressIntervalFlag = cli.StringFlag{Name: "progress-interval", Value: downloader.DownloadProgressInterval.String(), Usage: "interval(in secs) at which progress will be monitored, e.g. '10s'"}
 
 	// dSort
-	dsortBucketFlag = cli.StringFlag{
-		Name:  "bucket",
-		Value: cmn.DSortNameLowercase + "-testing", Usage: "bucket where shards will be put",
-	}
-	dsortTemplateFlag = cli.StringFlag{Name: "template", Value: "shard-{0..9}", Usage: "template of input shard name"}
-	extFlag           = cli.StringFlag{Name: "ext", Value: ".tar", Usage: "extension for shards (either '.tar' or '.tgz')"}
-	fileSizeFlag      = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "single file size inside the shard"}
-	logFlag           = cli.StringFlag{Name: "log", Usage: "path to file where the metrics will be saved"}
-	cleanupFlag       = cli.BoolFlag{
+	fileSizeFlag = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "single file size inside the shard"}
+	logFlag      = cli.StringFlag{Name: "log", Usage: "path to file where the metrics will be saved"}
+	cleanupFlag  = cli.BoolFlag{
 		Name:  "cleanup",
 		Usage: "remove old bucket and create it again. WARNING: it removes all objects that were present in the old bucket",
 	}

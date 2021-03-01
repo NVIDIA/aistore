@@ -4,7 +4,7 @@ ais create bucket $BUCKET_2
 ais show bucket $BUCKET_1
 ais show bucket aiss://$BUCKET_1 // FAIL "invalid backend provider "aiss""
 
-ais gen-shards --bucket $BUCKET_1 --ext .tar --template="tmp/shard-{0..149}" --fcount 1 --fsize 1KB --conc 1 --cleanup // IGNORE
-ais gen-shards --bucket $BUCKET_2 --ext .tar --template="tmp/shard-{0..19}" --fcount 10 --fsize 1KB --conc 1 --cleanup // IGNORE
+ais gen-shards "ais://$BUCKET_1/tmp/shard-{0..149}.tar" --fcount 1 --fsize 1KB --conc 1 --cleanup // IGNORE
+ais gen-shards "ais://$BUCKET_2/tmp/shard-{0..19}.tar" --fcount 10 --fsize 1KB --conc 1 --cleanup // IGNORE
 ais show bucket $BUCKET_1
 ais show bucket $BUCKET_2

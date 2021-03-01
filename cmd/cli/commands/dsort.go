@@ -15,6 +15,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -40,9 +41,6 @@ var (
 
 	dSortCmdsFlags = map[string][]cli.Flag{
 		commandGenShards: {
-			extFlag,
-			dsortBucketFlag,
-			dsortTemplateFlag,
 			fileSizeFlag,
 			fileCountFlag,
 			cleanupFlag,
@@ -54,7 +52,7 @@ var (
 		{
 			Name:      commandGenShards,
 			Usage:     fmt.Sprintf("put randomly generated shards that can be used for %s testing", cmn.DSortName),
-			ArgsUsage: noArguments,
+			ArgsUsage: `"BUCKET/TEMPLATE.EXT"`,
 			Flags:     dSortCmdsFlags[commandGenShards],
 			Action:    genShardsHandler,
 		},
@@ -111,16 +109,14 @@ func createTar(w io.Writer, ext string, start, end, fileCnt int, fileSize int64)
 // Creates bucket if not exists. If exists uses it or deletes and creates new
 // one if cleanup flag was set.
 func setupBucket(c *cli.Context, bck cmn.Bck) error {
-	cleanup := flagIsSet(c, cleanupFlag)
-
 	exists, err := api.DoesBucketExist(defaultAPIParams, cmn.QueryBcks(bck))
 	if err != nil {
 		return err
 	}
 
+	cleanup := flagIsSet(c, cleanupFlag)
 	if exists && cleanup {
-		err := api.DestroyBucket(defaultAPIParams, bck)
-		if err != nil {
+		if err := api.DestroyBucket(defaultAPIParams, bck); err != nil {
 			return err
 		}
 	}
@@ -136,16 +132,26 @@ func setupBucket(c *cli.Context, bck cmn.Bck) error {
 
 func genShardsHandler(c *cli.Context) error {
 	var (
-		ext = parseStrFlag(c, extFlag)
-		bck = cmn.Bck{
-			Name: parseStrFlag(c, dsortBucketFlag),
-		}
-		template  = parseStrFlag(c, dsortTemplateFlag)
 		fileCnt   = parseIntFlag(c, fileCountFlag)
 		concLimit = parseIntFlag(c, concurrencyFlag)
-
-		fileSize int64
 	)
+
+	if c.NArg() == 0 {
+		return incorrectUsageMsg(c, "missing bucket and template")
+	} else if c.NArg() > 1 {
+		return incorrectUsageMsg(c, "too many arguments provided (make sure that provided argument is quoted to prevent bash brace expansion)")
+	}
+
+	// Expecting: "ais://bucket/shard-{00..99}.tar"
+	bck, object, err := parseBckObjectURI(c, c.Args()[0])
+	if err != nil {
+		return err
+	}
+	var (
+		ext      = filepath.Ext(object)
+		template = strings.TrimSuffix(object, ext)
+	)
+
 	fileSize, err := parseByteFlagToInt(c, fileSizeFlag)
 	if err != nil {
 		return err
@@ -170,22 +176,25 @@ func genShardsHandler(c *cli.Context) error {
 		return err
 	}
 
-	// Progress bar
-	text := "Shards created: "
-	progress := mpb.New(mpb.WithWidth(progressBarWidth))
-	bar := progress.AddBar(
-		pt.Count(),
-		mpb.PrependDecorators(
-			decor.Name(text, decor.WC{W: len(text) + 2, C: decor.DSyncWidthR}),
-			decor.CountersNoUnit("%d/%d", decor.WCSyncWidth),
-		),
-		mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)),
+	var (
+		// Progress bar
+		text     = "Shards created: "
+		progress = mpb.New(mpb.WithWidth(progressBarWidth))
+		bar      = progress.AddBar(
+			pt.Count(),
+			mpb.PrependDecorators(
+				decor.Name(text, decor.WC{W: len(text) + 2, C: decor.DSyncWidthR}),
+				decor.CountersNoUnit("%d/%d", decor.WCSyncWidth),
+			),
+			mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)),
+		)
+
+		concSemaphore = make(chan struct{}, concLimit)
+		group, ctx    = errgroup.WithContext(context.Background())
+		shardIt       = pt.Iter()
+		shardNum      = 0
 	)
 
-	concSemaphore := make(chan struct{}, concLimit)
-	group, ctx := errgroup.WithContext(context.Background())
-	shardIt := pt.Iter()
-	shardNum := 0
 CreateShards:
 	for shardName, hasNext := shardIt(); hasNext; shardName, hasNext = shardIt() {
 		select {
@@ -215,11 +224,7 @@ CreateShards:
 					Object:     name,
 					Reader:     sgl,
 				}
-				if err := api.PutObject(putArgs); err != nil {
-					return err
-				}
-
-				return nil
+				return api.PutObject(putArgs)
 			}
 		}(shardNum, shardName))
 		shardNum++

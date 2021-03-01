@@ -4,17 +4,17 @@ For background and in-depth presentation, please see this [document](/dsort/READ
 
 ## Generate shards
 
-`ais gen-shards --template <value> --fsize <value> --fcount <value>`
+`ais gen-shards "BUCKET/TEMPLATE.EXT"`
 
 Put randomly generated shards that can be used for dSort testing.
+The `TEMPLATE` must be bash-like brace expansion (see examples) and `.EXT` must be one of: `.tar`, `.tar.gz`.
+
+**Warning**: Remember to always quote the argument (`"..."`) otherwise the brace expansion will happen in terminal.
 
 ### Options
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--ext` | `string` | Extension for shards (either `.tar` or `.tgz`) | `.tar` |
-| `--bucket` | `string` | Bucket which shards will be put into | `dsort-testing` |
-| `--template` | `string` | Template of input shard name | `shard-{0..9}` |
 | `--fsize` | `string` | Single file size inside the shard, can end with size suffix (k, MB, GiB, ...) | `1024`  (`1KB`)|
 | `--fcount` | `int` | Number of files inside single shard | `5` |
 | `--cleanup` | `bool` | When set, the old bucket will be deleted and created again | `false` |
@@ -24,11 +24,11 @@ Put randomly generated shards that can be used for dSort testing.
 
 #### Generate shards with custom number of files and sizes
 
-Generate 10 shards each containing 100 files of size 256KB and put them inside `dsort-testing` bucket (creates it if it does not exist).
+Generate 10 shards each containing 100 files of size 256KB and put them inside `ais://dsort-testing` bucket (creates it if it does not exist).
 Shards will be named: `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar`.
 
 ```console
-$ ais gen-shards --fsize 262144 --fcount 100
+$ ais gen-shards "ais://dsort-testing/shard-{0..9}.tar" --fsize 262144 --fcount 100
 Shards created: 10/10 [==============================================================] 100 %
 $ ais ls ais://dsort-testing
 NAME		SIZE		VERSION
@@ -50,7 +50,7 @@ Generates 100 shards each containing 5 files of size 256KB and put them inside `
 Shards will be compressed and named: `super_shard_000_last.tgz`, `super_shard_001_last.tgz`, ..., `super_shard_099_last.tgz`
 
 ```console
-$ ais gen-shards --ext .tgz --template "super_shard_{000..099}_last" --fsize 262144 --cleanup
+$ ais gen-shards "ais://dsort-testing/super_shard_{000..099}_last.tar" --fsize 262144 --cleanup
 Shards created: 100/100 [==============================================================] 100 %
 $ ais ls ais://dsort-testing
 NAME				SIZE	VERSION
