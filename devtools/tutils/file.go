@@ -341,8 +341,12 @@ func RemoveMountPaths(t *testing.T, mpaths fs.MPI) {
 }
 
 func AddMpath(t *testing.T, path string) {
-	cmn.CreateDir(path) // Create directory if not exists
-	_, err := fs.Add(path, "daeID")
+	err := cmn.CreateDir(path) // Create directory if not exists
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() {
+		os.RemoveAll(path)
+	})
+	_, err = fs.Add(path, "daeID")
 	tassert.Errorf(t, err == nil, "Adding a mountpath %q failed, err %v", path, err)
 }
 

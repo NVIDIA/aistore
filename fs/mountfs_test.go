@@ -5,34 +5,36 @@
 package fs_test
 
 import (
-	"io/ioutil"
-	"os"
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/ios"
 )
 
 func TestMountpathAddNonExisting(t *testing.T) {
-	fs.Init()
+	initFS()
+
 	_, err := fs.Add("/nonexistingpath", "")
 	tassert.Errorf(t, err != nil, "adding non-existing mountpath succeeded")
 
 	tutils.AssertMountpathCount(t, 0, 0)
 }
 
+func TestMountpathAddExisting(t *testing.T) {
+	initFS()
+
+	tutils.AddMpath(t, "/tmp/abc")
+	tutils.AssertMountpathCount(t, 1, 0)
+}
+
 func TestMountpathAddValid(t *testing.T) {
-	fs.Init()
-	fs.DisableFsIDCheck()
+	initFS()
+
 	mpaths := []string{"/tmp/clouder", "/tmp/locals", "/tmp/locals/err"}
-
 	for _, mpath := range mpaths {
-		if _, err := os.Stat(mpath); os.IsNotExist(err) {
-			defer os.RemoveAll(mpath)
-		}
-
 		tutils.AddMpath(t, mpath)
 	}
 	tutils.AssertMountpathCount(t, 3, 0)
@@ -45,16 +47,8 @@ func TestMountpathAddValid(t *testing.T) {
 	tutils.AssertMountpathCount(t, 0, 0)
 }
 
-func TestMountpathAddExisting(t *testing.T) {
-	fs.Init()
-	mpath := "/tmp/abc"
-	tutils.AddMpath(t, mpath)
-	os.RemoveAll(mpath)
-	tutils.AssertMountpathCount(t, 1, 0)
-}
-
 func TestMountpathAddIncorrect(t *testing.T) {
-	fs.Init()
+	initFS()
 
 	_, err := fs.Add("tmp/not/absolute/path", "")
 	tassert.Errorf(t, err != nil, "expected adding incorrect mountpath to fail")
@@ -63,12 +57,9 @@ func TestMountpathAddIncorrect(t *testing.T) {
 }
 
 func TestMountpathAddAlreadyAdded(t *testing.T) {
-	fs.Init()
+	initFS()
 
 	mpath := "/tmp/abc"
-	cmn.CreateDir(mpath)
-	defer os.RemoveAll(mpath)
-
 	tutils.AddMpath(t, mpath)
 	tutils.AssertMountpathCount(t, 1, 0)
 
@@ -79,7 +70,7 @@ func TestMountpathAddAlreadyAdded(t *testing.T) {
 }
 
 func TestMountpathRemoveNonExisting(t *testing.T) {
-	fs.Init()
+	initFS()
 
 	removedMP, err := fs.Remove("/nonexistingpath")
 	tassert.Errorf(t, err != nil, "removing non-existing mountpath succeeded")
@@ -89,10 +80,10 @@ func TestMountpathRemoveNonExisting(t *testing.T) {
 }
 
 func TestMountpathRemoveExisting(t *testing.T) {
-	fs.Init()
+	initFS()
+
 	mpath := "/tmp/abc"
 	tutils.AddMpath(t, mpath)
-	defer os.RemoveAll(mpath)
 
 	removedMP, err := fs.Remove(mpath)
 	tassert.CheckError(t, err)
@@ -102,12 +93,13 @@ func TestMountpathRemoveExisting(t *testing.T) {
 }
 
 func TestMountpathRemoveDisabled(t *testing.T) {
-	fs.Init()
+	initFS()
+
 	mpath := "/tmp/abc"
 	tutils.AddMpath(t, mpath)
-	defer os.RemoveAll(mpath)
 
-	fs.Disable(mpath)
+	_, err := fs.Disable(mpath)
+	tassert.CheckFatal(t, err)
 	tutils.AssertMountpathCount(t, 0, 1)
 
 	removedMP, err := fs.Remove(mpath)
@@ -118,7 +110,7 @@ func TestMountpathRemoveDisabled(t *testing.T) {
 }
 
 func TestMountpathDisableNonExisting(t *testing.T) {
-	fs.Init()
+	initFS()
 
 	_, err := fs.Disable("/tmp")
 	tassert.Errorf(t, err != nil, "disabling non existing mountpath should not be successful")
@@ -127,10 +119,10 @@ func TestMountpathDisableNonExisting(t *testing.T) {
 }
 
 func TestMountpathDisableExisting(t *testing.T) {
-	fs.Init()
+	initFS()
+
 	mpath := "/tmp/abc"
 	tutils.AddMpath(t, mpath)
-	defer os.RemoveAll(mpath)
 
 	disabledMP, err := fs.Disable(mpath)
 	tassert.CheckFatal(t, err)
@@ -140,10 +132,10 @@ func TestMountpathDisableExisting(t *testing.T) {
 }
 
 func TestMountpathDisableAlreadyDisabled(t *testing.T) {
-	fs.Init()
+	initFS()
+
 	mpath := "/tmp/abc"
 	tutils.AddMpath(t, mpath)
-	defer os.RemoveAll(mpath)
 
 	disabledMP, err := fs.Disable(mpath)
 	tassert.CheckFatal(t, err)
@@ -165,10 +157,10 @@ func TestMountpathEnableNonExisting(t *testing.T) {
 }
 
 func TestMountpathEnableExistingButNotDisabled(t *testing.T) {
-	fs.Init()
+	initFS()
+
 	mpath := "/tmp/abc"
 	tutils.AddMpath(t, mpath)
-	defer os.RemoveAll(mpath)
 	enabledMP, err := fs.Enable(mpath)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, enabledMP == nil, "already enabled mountpath should not be enabled again")
@@ -177,10 +169,10 @@ func TestMountpathEnableExistingButNotDisabled(t *testing.T) {
 }
 
 func TestMountpathEnableExistingAndDisabled(t *testing.T) {
-	fs.Init()
+	initFS()
+
 	mpath := "/tmp/abc"
 	tutils.AddMpath(t, mpath)
-	defer os.RemoveAll(mpath)
 
 	disabledMP, err := fs.Disable(mpath)
 	tassert.CheckFatal(t, err)
@@ -194,10 +186,10 @@ func TestMountpathEnableExistingAndDisabled(t *testing.T) {
 }
 
 func TestMountpathEnableAlreadyEnabled(t *testing.T) {
-	fs.Init()
+	initFS()
+
 	mpath := "/tmp/abc"
 	tutils.AddMpath(t, mpath)
-	defer os.RemoveAll(mpath)
 
 	disabledMP, err := fs.Disable(mpath)
 	tassert.CheckFatal(t, err)
@@ -217,10 +209,10 @@ func TestMountpathEnableAlreadyEnabled(t *testing.T) {
 }
 
 func TestMountpathsAddMultipleWithSameFSID(t *testing.T) {
-	fs.Init()
+	fs.Init(ios.NewIOStaterMock())
+
 	mpath := "/tmp/abc"
 	tutils.AddMpath(t, mpath)
-	defer os.RemoveAll(mpath)
 
 	_, err := fs.Add("/", "")
 	tassert.Errorf(t, err != nil, "expected adding path with same FSID to be unsuccessful")
@@ -229,16 +221,11 @@ func TestMountpathsAddMultipleWithSameFSID(t *testing.T) {
 }
 
 func TestMountpathAddAndDisableMultiple(t *testing.T) {
-	fs.Init()
-	fs.DisableFsIDCheck()
+	initFS()
 
 	mp1, mp2 := "/tmp/mp1", "/tmp/mp2"
 	tutils.AddMpath(t, mp1)
 	tutils.AddMpath(t, mp2)
-	defer func() {
-		os.Remove(mp2)
-		os.Remove(mp1)
-	}()
 
 	tutils.AssertMountpathCount(t, 2, 0)
 
@@ -249,21 +236,19 @@ func TestMountpathAddAndDisableMultiple(t *testing.T) {
 }
 
 func TestMoveToTrash(t *testing.T) {
-	fs.Init()
-	mpathDir, err := ioutil.TempDir("", "")
-	tassert.CheckFatal(t, err)
-	tutils.AddMpath(t, mpathDir)
+	initFS()
 
-	defer os.RemoveAll(mpathDir)
+	mpath := t.TempDir()
+	tutils.AddMpath(t, mpath)
 
 	mpaths, _ := fs.Get()
-	mi := mpaths[mpathDir]
+	mi := mpaths[mpath]
 
 	// Initially trash directory should not exist.
 	tutils.CheckPathNotExists(t, mi.MakePathTrash())
 
 	// Removing path that don't exist is still good.
-	err = mi.MoveToTrash("/path/to/wonderland")
+	err := mi.MoveToTrash("/path/to/wonderland")
 	tassert.CheckFatal(t, err)
 
 	for i := 0; i < 5; i++ {
@@ -294,8 +279,7 @@ func TestMoveMarkers(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			fs.Init()
-			fs.DisableFsIDCheck()
+			initFS()
 
 			mpath := createMountpath(t)
 
@@ -314,6 +298,11 @@ func TestMoveMarkers(t *testing.T) {
 			tassert.Fatalf(t, exists, "marker does not exist")
 		})
 	}
+}
+
+func initFS() {
+	fs.Init(ios.NewIOStaterMock())
+	fs.DisableFsIDCheck()
 }
 
 func createMountpath(t *testing.T) *fs.MountpathInfo {
