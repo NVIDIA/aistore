@@ -350,3 +350,78 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 		tutils.WaitForRebalanceToComplete(t, baseParams)
 	}
 }
+
+func TestShutdownListObjects(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+
+	const nodeOffTimeout = 10 * time.Second
+	var (
+		bck = cmn.Bck{Name: "shutdown-list", Provider: cmn.ProviderAIS}
+		m   = &ioContext{
+			t:         t,
+			num:       1500,
+			fileSize:  cmn.KiB,
+			fixedSize: true,
+			bck:       bck,
+			proxyURL:  proxyURL,
+		}
+		proxyURL    = tutils.RandomProxyURL(t)
+		baseParams  = tutils.BaseAPIParams(proxyURL)
+		origEntries = make(map[string]*cmn.BucketEntry, 1500)
+	)
+
+	m.saveClusterState()
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+
+	m.puts()
+	// 1. Perform list-object and populate entries map.
+	msg := &cmn.SelectMsg{}
+	msg.AddProps(cmn.GetPropsChecksum, cmn.GetPropsCopies, cmn.GetPropsSize)
+	bckList, err := api.ListObjects(baseParams, bck, msg, 0)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(bckList.Entries) == m.num, "list-object should return %d objects - returned %d", m.num, len(bckList.Entries))
+	for _, entry := range bckList.Entries {
+		origEntries[entry.Name] = entry
+	}
+
+	// 2. Shut down a random target.
+	tsi, _ := m.smap.GetRandTarget()
+	pid, cmd, err := tutils.ShutdownNode(t, baseParams, tsi)
+	tassert.CheckFatal(t, err)
+
+	// Restore target after test is over.
+	t.Cleanup(func() {
+		err = tutils.RestoreNode(cmd, false, cmn.Target)
+		tassert.CheckFatal(t, err)
+		_, err = tutils.WaitForClusterState(proxyURL, "target is back",
+			m.smap.Version, m.smap.CountActiveProxies(), m.smap.CountActiveTargets()+1)
+		tassert.CheckFatal(t, err)
+		tutils.WaitForRebalanceToComplete(t, baseParams)
+	})
+
+	// Wait for reb, shutdown to complete.
+	tutils.WaitForRebalanceToComplete(t, baseParams)
+	tassert.CheckError(t, err)
+	m.smap, err = tutils.WaitForClusterStateActual(proxyURL, "target in maintenance",
+		m.smap.Version, m.smap.CountActiveProxies(), m.smap.CountActiveTargets()-1, tsi.ID())
+	tassert.CheckError(t, err)
+
+	// Wait for the node is off.
+	err = tutils.WaitForNodeToTerminate(pid, nodeOffTimeout)
+	tassert.CheckError(t, err)
+
+	// 3. Check if we can list all the objects.
+	tutils.Logln("Listing objects")
+	bckList, err = api.ListObjects(baseParams, bck, msg, 0)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, len(bckList.Entries) == m.num, "list-object should return %d objects - returned %d", m.num, len(bckList.Entries))
+	for _, entry := range bckList.Entries {
+		origEntry, ok := origEntries[entry.Name]
+		tassert.Errorf(t, ok, "object %s missing in original entries", entry.Name)
+		if entry.Version != origEntry.Version ||
+			entry.Flags != origEntry.Flags ||
+			entry.Copies != origEntry.Copies {
+			t.Errorf("some fields of object %q, don't match: %#v v/s %#v ", entry.Name, entry, origEntry)
+		}
+	}
+}
