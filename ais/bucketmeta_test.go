@@ -83,12 +83,12 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 				bowner.init()
 				bmd := bowner.get()
 				for _, signature := range []bool{false, true} {
-					for _, compression := range []bool{false, true} {
+					for _, compress := range []bool{false, true} {
 						for _, checksum := range []bool{false, true} {
 							opts := jsp.Options{
-								Compression: compression,
-								Checksum:    checksum,
-								Signature:   signature,
+								Compress:  compress,
+								Checksum:  checksum,
+								Signature: signature,
 							}
 							clone := bmd.clone()
 							bck := cluster.NewBck("abc"+cmn.GenTie(), cmn.ProviderAIS, cmn.NsGlobal)

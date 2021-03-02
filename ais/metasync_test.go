@@ -21,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
@@ -545,7 +544,7 @@ func TestMetaSyncData(t *testing.T) {
 			}
 
 			d := make(msPayload)
-			_, err := jsp.Decode(r.Body, &d, jspMetasyncOpts, "")
+			err := d.unmarshal(r.Body, "")
 			ch <- data{d, err}
 		}
 
@@ -810,7 +809,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		chProxy := make(chan msPayload, 10)
 		fProxy := func(w http.ResponseWriter, r *http.Request) {
 			d := make(msPayload)
-			_, err := jsp.Decode(r.Body, &d, jspMetasyncOpts, "")
+			err := d.unmarshal(r.Body, "")
 			cmn.AssertNoErr(err)
 			chProxy <- d
 		}

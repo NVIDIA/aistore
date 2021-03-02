@@ -1,0 +1,51 @@
+// Package jsp (JSON persistence) provides utilities to store and load arbitrary
+// JSON-encoded structures with optional checksumming and compression.
+/*
+ * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ */
+package jsp
+
+import "fmt"
+
+type (
+	ErrBadSignature struct {
+		tag      string
+		got      string
+		expected string
+	}
+	ErrVersion struct {
+		tag      string
+		got      uint32
+		expected uint32
+	}
+	ErrCompatibleVersion struct {
+		ErrVersion
+	}
+	ErrUnsupportedVersion struct {
+		ErrVersion
+	}
+)
+
+func (e *ErrBadSignature) Error() string {
+	return fmt.Sprintf("bad signature %q: got %s, expected %s", e.tag, e.got, e.expected)
+}
+
+func newErrVersion(tag string, got, expected uint32, compatibles ...uint32) error {
+	err := &ErrVersion{tag, got, expected}
+	for _, v := range compatibles {
+		if got == v {
+			return &ErrCompatibleVersion{*err}
+		}
+	}
+	return &ErrUnsupportedVersion{*err}
+}
+
+func (e *ErrVersion) Version() uint32 { return e.got }
+
+func (e *ErrUnsupportedVersion) Error() string {
+	return fmt.Sprintf("unsupported meta-version %q: got %d, expected %d", e.tag, e.got, e.expected)
+}
+
+func (e *ErrCompatibleVersion) Error() string {
+	return fmt.Sprintf("older compatible meta-version %q: got %d, expected %d", e.tag, e.got, e.expected)
+}

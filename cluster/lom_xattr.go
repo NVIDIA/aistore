@@ -36,10 +36,9 @@ import (
 // * metadata - the rest of the layout. The content of the metadata can vary depending
 //   on the version of the layout.
 
-const (
-	mdVersion       = 1 // the one and only currently supported version
-	mdCksumTyXXHash = 1 // the one and only currently supported checksum type == xxhash
-)
+// the one and only currently supported checksum type == xxhash;
+// NOTE: adding more checksums will likely require a new cmn.MetaverLOM version
+const mdCksumTyXXHash = 1
 
 const (
 	XattrLOM     = "user.ais.lom" // on-disk xattr name
@@ -237,7 +236,7 @@ func (md *lmeta) unmarshal(buf []byte) (err error) {
 	if len(buf) < prefLen {
 		return fmt.Errorf("%s: too short (%d)", invalid, len(buf))
 	}
-	if buf[0] != mdVersion {
+	if buf[0] != cmn.MetaverLOM {
 		return fmt.Errorf("%s: unknown version %d", invalid, buf[0])
 	}
 	if buf[1] != mdCksumTyXXHash {
@@ -364,7 +363,7 @@ func (md *lmeta) marshal(mm *memsys.MMSA, mdSize int64) (buf []byte) {
 	}
 
 	// checksum, prepend, and return
-	buf[0] = mdVersion
+	buf[0] = cmn.MetaverLOM
 	buf[1] = mdCksumTyXXHash
 	mdCksumValue := xxhash.Checksum64S(buf[prefLen:], cmn.MLCG32)
 	binary.BigEndian.PutUint64(buf[2:], mdCksumValue)

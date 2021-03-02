@@ -907,11 +907,10 @@ func (t *targetrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 // PUT /v1/metasync
 func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
 	payload := make(msPayload)
-	if _, err := jsp.Decode(r.Body, &payload, jspMetasyncOpts, "metasync put"); err != nil {
+	if err := payload.unmarshal(r.Body, "metasync put"); err != nil {
 		cmn.WriteErr(w, r, err)
 		return
 	}
-
 	var (
 		errs   []error
 		caller = r.Header.Get(cmn.HeaderCallerName)
@@ -987,7 +986,7 @@ func (t *targetrunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, calle
 // POST /v1/metasync
 func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Request) {
 	payload := make(msPayload)
-	if _, err := jsp.Decode(r.Body, &payload, jspMetasyncOpts, "metasync post"); err != nil {
+	if err := payload.unmarshal(r.Body, "metasync post"); err != nil {
 		cmn.WriteErr(w, r, err)
 		return
 	}

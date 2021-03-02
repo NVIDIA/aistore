@@ -24,11 +24,11 @@ const (
 type Options struct {
 	// when non-zero, formatting version of the structure that's being (de)serialized
 	// (not to confuse with the jsp encoding version - see above)
-	MetaVer uint32
+	Metaver uint32
 
-	Compression bool // lz4 when [version == 1 || version == 2]
-	Checksum    bool // xxhash when [version == 1 || version == 2]
-	Signature   bool // when true, write 128bit prefix (of the layout shown above) at offset zero
+	Compress  bool // lz4 when [version == 1 || version == 2]
+	Checksum  bool // xxhash when [version == 1 || version == 2]
+	Signature bool // when true, write 128bit prefix (of the layout shown above) at offset zero
 
 	Indent bool // Determines if the JSON should be indented. Useful for CLI config.
 	Local  bool // when true, use JSON local extension
@@ -44,11 +44,11 @@ func CCSignLocal(metaver uint32) Options {
 }
 
 func CCSign(metaver uint32) Options {
-	return Options{MetaVer: metaver, Compression: true, Checksum: true, Signature: true, Indent: false}
+	return Options{Metaver: metaver, Compress: true, Checksum: true, Signature: true, Indent: false}
 }
 
 func CksumSign(metaver uint32) Options {
-	return Options{MetaVer: metaver, Checksum: true, Signature: true}
+	return Options{Metaver: metaver, Checksum: true, Signature: true}
 }
 
 //////////////////

@@ -28,7 +28,9 @@ const (
 	MetaverRMD    = 1 // Rebalance MD (jsp)
 	MetaverVMD    = 1 // Volume MD (jsp)
 	MetaverConfig = 1 // Global Configuration (jsp)
-	MetaverAuth   = 1 // Authentication tokens (TODO: network only)
-	MetaverLOM    = 1 // LOM (object)
-	MetaverJSP    = 3 // `jsp` own encoding version
+	MetaverLOM    = 1 // LOM
+
+	MetaverMetasync = 1 // metasync over network formatting version (jsp)
+
+	MetaverJSP = 3 // `jsp` own encoding version
 )

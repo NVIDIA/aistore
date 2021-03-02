@@ -8,11 +8,11 @@ package jsp
 import (
 	"encoding/binary"
 	"encoding/hex"
-	"fmt"
 	"hash"
 	"io"
 	"io/ioutil"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
@@ -42,7 +42,7 @@ func Encode(ws cmn.WriterAt, v interface{}, opts Options) (err error) {
 		encoder *jsoniter.Encoder
 		off     int
 	)
-	debug.Assert(opts.Signature || opts.MetaVer == 0)
+	debug.Assert(opts.Signature || opts.Metaver == 0)
 	if opts.Signature {
 		var (
 			prefix [prefLen]byte
@@ -54,10 +54,10 @@ func Encode(ws cmn.WriterAt, v interface{}, opts Options) (err error) {
 		prefix[l] = cmn.MetaverJSP // current jsp version
 		off += cmn.SizeofI64
 
-		binary.BigEndian.PutUint32(prefix[off:], opts.MetaVer) // [ 64 - 95 ]
+		binary.BigEndian.PutUint32(prefix[off:], opts.Metaver) // [ 64 - 95 ]
 		off += cmn.SizeofI32
 
-		if opts.Compression { // [ 96 - 127 ]
+		if opts.Compress { // [ 96 - 127 ]
 			flags |= 1 << 0
 		}
 		if opts.Checksum {
@@ -73,7 +73,7 @@ func Encode(ws cmn.WriterAt, v interface{}, opts Options) (err error) {
 		var cksum [sizeXXHash64]byte
 		w.Write(cksum[:]) // reserve for checksum
 	}
-	if opts.Compression {
+	if opts.Compress {
 		zw := lz4.NewWriter(w)
 		zw.BlockMaxSize = lz4BufferSize
 		w = zw
@@ -112,28 +112,39 @@ func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) (chec
 	)
 	defer cmn.Close(reader)
 	if opts.Signature {
-		var prefix [prefLen]byte
+		var (
+			prefix  [prefLen]byte
+			metaVer uint32
+		)
 		if _, err = r.Read(prefix[:]); err != nil {
 			return
 		}
 		l := len(signature)
 		debug.Assert(l < cmn.SizeofI64)
 		if signature != string(prefix[:l]) {
-			err = fmt.Errorf("bad signature %q: %v", tag, string(prefix[:l]))
+			err = &ErrBadSignature{tag, string(prefix[:l]), signature}
 			return
 		}
 		jspVer = prefix[l]
 		if jspVer != cmn.MetaverJSP {
-			err = fmt.Errorf("unsupported jsp version %q: %d", tag, jspVer)
+			err = newErrVersion("jsp", uint32(jspVer), cmn.MetaverJSP, 2)
+			// NOTE: start jsp backward compatibility
+			if _, ok := err.(*ErrCompatibleVersion); ok {
+				glog.Errorf("%v - skipping meta-version check", err)
+				err = nil
+				goto skip
+			}
+			// NOTE: end jsp backward compatibility
 			return
 		}
-		metaVer := binary.BigEndian.Uint32(prefix[cmn.SizeofI64:])
-		if metaVer != opts.MetaVer {
-			err = fmt.Errorf("wrong meta version %q: got %d, expected %d", tag, metaVer, opts.MetaVer)
+		metaVer = binary.BigEndian.Uint32(prefix[cmn.SizeofI64:])
+		if metaVer != opts.Metaver {
+			err = newErrVersion(tag, metaVer, opts.Metaver)
 			return
 		}
+	skip:
 		flags := binary.BigEndian.Uint32(prefix[cmn.SizeofI64+cmn.SizeofI32:])
-		opts.Compression = flags&(1<<0) != 0
+		opts.Compress = flags&(1<<0) != 0
 		opts.Checksum = flags&(1<<1) != 0
 	}
 	if opts.Checksum {
@@ -143,7 +154,7 @@ func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) (chec
 		}
 		expectedCksum = binary.BigEndian.Uint64(cksum[:])
 	}
-	if opts.Compression {
+	if opts.Compress {
 		zr := lz4.NewReader(r)
 		zr.BlockMaxSize = lz4BufferSize
 		r = zr

@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 const (
@@ -95,14 +96,12 @@ const (
 //
 // ================================ end of TOO ==================================
 
-type revs interface {
-	tag() string         // tag of specific revs, look for: `revs*Tag`
-	version() int64      // version
-	marshal() (b []byte) // marshals the struct
-}
-
-// private types - used internally by the metasync
 type (
+	revs interface {
+		tag() string         // tag of specific revs, look for: `revs*Tag`
+		version() int64      // version
+		marshal() (b []byte) // marshals the struct
+	}
 	revsPair struct {
 		revs revs
 		msg  *aisMsg
@@ -116,9 +115,6 @@ type (
 	nodeRevs struct {
 		versions map[string]int64 // used to track daemon, tag => (versions) info
 	}
-
-	msPayload map[string][]byte // tag => revs' body
-
 	metasyncer struct {
 		p            *proxyrunner        // parent
 		nodesRevs    map[string]nodeRevs // sync-ed versions (cluster-wide, by DaemonID)
@@ -129,21 +125,18 @@ type (
 		retryTimer   *time.Timer         // timer to sync pending
 		timerStopped bool                // true if retryTimer has been stopped, false otherwise
 	}
+	msPayload map[string][]byte // tag => revs' body
 )
 
 // interface guard
 var _ cmn.Runner = (*metasyncer)(nil)
 
-var jspMetasyncOpts = jsp.Options{Signature: true, Checksum: true}
-
-//
-// inner helpers
-//
 func (req revsReq) isNil() bool { return len(req.pairs) == 0 }
 
-//
-// c-tor, register, and runner
-//
+////////////////
+// metasyncer //
+////////////////
+
 func newMetasyncer(p *proxyrunner) (y *metasyncer) {
 	y = &metasyncer{p: p}
 	y.lastSynced = make(map[string]revs)
@@ -160,6 +153,7 @@ func newMetasyncer(p *proxyrunner) (y *metasyncer) {
 }
 
 func (y *metasyncer) Name() string { return "metasyncer" }
+
 func (y *metasyncer) Run() error {
 	glog.Infof("Starting %s", y.Name())
 	for {
@@ -210,10 +204,6 @@ func (y *metasyncer) Stop(err error) {
 	close(y.stopCh)
 }
 
-//
-// methods (notify, sync, becomeNonPrimary) constistute internal API
-//
-
 // notify only targets - see bcastTo below
 func (y *metasyncer) notify(wait bool, pair revsPair) (failedCnt int) {
 	var (
@@ -258,10 +248,6 @@ func (y *metasyncer) becomeNonPrimary() {
 	y.workCh <- revsReq{}
 	glog.Infof("%s: becoming non-primary", y.p.si)
 }
-
-//
-// methods internal to metasync.go
-//
 
 // main method; see top of the file; returns number of "sync" failures
 func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
@@ -350,7 +336,7 @@ outer:
 	// step 3: b-cast
 	var (
 		urlPath = cmn.URLPathMetasync.S
-		body    = jsp.EncodeSGL(payload, jspMetasyncOpts)
+		body    = payload.marshal()
 		to      = cluster.AllNodes
 	)
 	defer body.Free()
@@ -521,7 +507,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 	}
 	var (
 		urlPath = cmn.URLPathMetasync.S
-		body    = jsp.EncodeSGL(payload, jspMetasyncOpts)
+		body    = payload.marshal()
 		args    = allocBcastArgs()
 	)
 	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, BodyR: body}
@@ -591,4 +577,19 @@ func (y *metasyncer) validateCoW() {
 			debug.AssertMsg(false, s)
 		}
 	}
+}
+
+///////////////////////////
+// metasync jsp encoding //
+///////////////////////////
+
+var msjspOpts = jsp.Options{Metaver: cmn.MetaverMetasync, Signature: true, Checksum: true}
+
+func (payload msPayload) marshal() *memsys.SGL {
+	return jsp.EncodeSGL(payload, msjspOpts)
+}
+
+func (payload msPayload) unmarshal(reader io.ReadCloser, tag string) (err error) {
+	_, err = jsp.Decode(reader, &payload, msjspOpts, tag)
+	return
 }
