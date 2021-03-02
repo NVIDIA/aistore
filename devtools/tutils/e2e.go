@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
@@ -67,6 +68,20 @@ func randomMountpath(target *cluster.Snode) string {
 	return mpaths.Available[rand.Intn(len(mpaths.Available))]
 }
 
+func retrieveBackendProviders() []string {
+	target := randomTarget()
+	config, err := api.GetDaemonConfig(BaseAPIParams(proxyURLReadOnly), target)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	set := cmn.NewStringSet()
+	for b := range config.Backend.Providers {
+		set.Add(b)
+	}
+	set.Add(cmn.ProviderAIS)
+	backends := set.Keys()
+	sort.Strings(backends)
+	return backends
+}
+
 func readContent(r io.Reader, ignoreEmpty bool) []string {
 	var (
 		scanner = bufio.NewScanner(r)
@@ -96,6 +111,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 		space      = regexp.MustCompile(`\s+`) // Used to replace all whitespace with single spaces.
 		target     = randomTarget()
 		mountpath  = randomMountpath(target)
+		backends   = retrieveBackendProviders()
 
 		inputFileName   = fileName + ".in"
 		outputFileName  = fileName + ".stdout"
@@ -116,6 +132,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 		s = strings.ReplaceAll(s, "$RANDOM_MOUNTPATH", mountpath)
 		s = strings.ReplaceAll(s, "$DIR", f.Dir)
 		s = strings.ReplaceAll(s, "$RESULT", lastResult)
+		s = strings.ReplaceAll(s, "$BACKENDS", strings.Join(backends, ","))
 		for k, v := range f.Vars {
 			s = strings.ReplaceAll(s, "$"+k, v)
 		}

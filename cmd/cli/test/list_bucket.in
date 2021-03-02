@@ -6,9 +6,18 @@ ais ls $BUCKET_1 --props=name,size,version
 ais ls $BUCKET_1 --props=name,name,size,size,version
 ais ls $BUCKET_1 --props=all
 ais ls ais://$BUCKET_1/
-ais ls cloud://$BUCKET_1/ // FAIL "invalid backend provider "cloud""
-ais ls aws://$BUCKET_1/ // FAIL "bucket "aws://$BUCKET_1" does not exist"
-ais ls gs:// // IGNORE
+
+ais ls | grep "Buckets" | awk {'print tolower($1)'} | paste -sd "," - // Gathers backend providers from headers.
+
 ais ls s3:// // IGNORE
+ais ls aws:// // IGNORE
+ais ls aws://$BUCKET_1/ // FAIL "bucket "aws://$BUCKET_1" does not exist"
+ais ls az:// // IGNORE
+ais ls azure:// // IGNORE
+ais ls gs:// // IGNORE
+ais ls gcp:// // IGNORE
+
+ais ls cloud://$BUCKET_1/ // FAIL "invalid backend provider "cloud""
 ais ls aiss://$BUCKET_1 // FAIL "invalid backend provider "aiss""
+
 ais rm bucket $BUCKET_1
