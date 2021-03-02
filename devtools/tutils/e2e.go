@@ -54,15 +54,16 @@ func destroyMatchingBuckets(subName string) (err error) {
 
 func randomTarget() *cluster.Snode {
 	smap, err := api.GetClusterMap(BaseAPIParams(proxyURLReadOnly))
-	cmn.AssertNoErr(err)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	si, err := smap.GetRandTarget()
-	cmn.AssertNoErr(err)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	return si
 }
 
 func randomMountpath(target *cluster.Snode) string {
 	mpaths, err := api.GetMountpaths(BaseAPIParams(proxyURLReadOnly), target)
-	cmn.AssertNoErr(err)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	gomega.Expect(len(mpaths.Available)).NotTo(gomega.Equal(0))
 	return mpaths.Available[rand.Intn(len(mpaths.Available))]
 }
 
