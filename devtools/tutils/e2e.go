@@ -77,7 +77,7 @@ func retrieveBackendProviders() []string {
 		set.Add(b)
 	}
 	set.Add(cmn.ProviderAIS)
-	backends := set.Keys()
+	backends := set.ToSlice()
 	sort.Strings(backends)
 	return backends
 }

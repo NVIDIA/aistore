@@ -88,7 +88,7 @@ func findCmdMultiKey(keys []string) []string {
 		resultSet = resultSet.Intersection(cmds)
 	}
 
-	result := resultSet.Keys()
+	result := resultSet.ToSlice()
 	sort.Strings(result)
 	return result
 }

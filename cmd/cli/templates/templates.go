@@ -260,7 +260,7 @@ var (
 		"JoinList":            fmtStringList,
 		"JoinListNL":          func(lst []string) string { return fmtStringListGeneric(lst, "\n") },
 		"FormatFeatureFlags":  fmtFeatureFlags,
-		"Deployments":         func(h DaemonStatusTemplateHelper) string { return strings.Join(h.Deployments().Keys(), ",") },
+		"Deployments":         func(h DaemonStatusTemplateHelper) string { return strings.Join(h.Deployments().ToSlice(), ",") },
 		"FormatACL":           fmtACL,
 	}
 
@@ -506,7 +506,7 @@ func daemonsDeployments(ds map[string]*stats.DaemonStatus) cmn.StringSet {
 
 func (h *DaemonStatusTemplateHelper) Deployments() cmn.StringSet {
 	p := daemonsDeployments(h.Pmap)
-	p.Add(daemonsDeployments(h.Tmap).Keys()...)
+	p.Add(daemonsDeployments(h.Tmap).ToSlice()...)
 	return p
 }
 

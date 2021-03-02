@@ -103,7 +103,7 @@ func NewProxyTable(proxyStats *stats.DaemonStatus, smap *cluster.Smap) *Template
 func NewProxiesTable(ds *DaemonStatusTemplateHelper, smap *cluster.Smap, onlyProxies, verbose bool) *TemplateTable {
 	deployments := daemonsDeployments(ds.Pmap)
 	if !onlyProxies {
-		deployments.Add(daemonsDeployments(ds.Tmap).Keys()...)
+		deployments.Add(daemonsDeployments(ds.Tmap).ToSlice()...)
 	}
 
 	hideDeployments := !verbose && len(deployments) <= 1
@@ -148,7 +148,7 @@ func NewTargetTable(targetStats *stats.DaemonStatus) *TemplateTable {
 func NewTargetsTable(ds *DaemonStatusTemplateHelper, onlyTargets, verbose bool) *TemplateTable {
 	deployments := daemonsDeployments(ds.Tmap)
 	if !onlyTargets {
-		deployments.Add(daemonsDeployments(ds.Pmap).Keys()...)
+		deployments.Add(daemonsDeployments(ds.Pmap).ToSlice()...)
 	}
 
 	hideDeployments := !verbose && len(deployments) <= 1

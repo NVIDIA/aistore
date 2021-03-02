@@ -243,7 +243,7 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 		}
 
 		if query.Provider == "" {
-			providers = cmn.Providers.Keys()
+			providers = cmn.Providers.ToSlice()
 		} else {
 			providers = []string{query.Provider}
 		}

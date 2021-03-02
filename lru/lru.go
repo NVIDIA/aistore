@@ -171,7 +171,7 @@ func Run(ini *InitLRU) {
 		}
 	}
 
-	providers = cmn.Providers.Keys()
+	providers = cmn.Providers.ToSlice()
 
 repeat:
 	xlru.XactDemandBase.IncPending()

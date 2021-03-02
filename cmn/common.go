@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/rand"
-	"net/url"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -201,22 +200,6 @@ func (e *jsonLocalExt) UpdateStructDescriptor(sd *jsoniter.StructDescriptor) {
 // SimpleKVs //
 ///////////////
 
-func NewSimpleKVs(entries ...SimpleKVsEntry) SimpleKVs {
-	kvs := make(SimpleKVs, len(entries))
-	for _, entry := range entries {
-		kvs[entry.Key] = entry.Value
-	}
-	return kvs
-}
-
-func NewSimpleKVsFromQuery(query url.Values) SimpleKVs {
-	kvs := make(SimpleKVs, len(query))
-	for key := range query {
-		kvs[key] = query.Get(key)
-	}
-	return kvs
-}
-
 func (kv SimpleKVs) Compare(other SimpleKVs) bool {
 	if len(kv) != len(other) {
 		return false
@@ -253,12 +236,12 @@ func NewStringSet(keys ...string) (ss StringSet) {
 }
 
 func (ss StringSet) String() string {
-	keys := ss.Keys()
+	keys := ss.ToSlice()
 	sort.Strings(keys)
 	return strings.Join(keys, ",")
 }
 
-func (ss StringSet) Keys() []string {
+func (ss StringSet) ToSlice() []string {
 	keys := make([]string, len(ss))
 	idx := 0
 	for key := range ss {
