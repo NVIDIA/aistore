@@ -18,14 +18,12 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/klauspost/reedsolomon"
 )
-
-// to avoid starving ecencode xaction, allow to run ecencode after every put batch
-const putBatchSize = 8
 
 type (
 	encodeCtx struct {
@@ -129,29 +127,11 @@ func (c *putJogger) processRequest(req *Request) {
 	}
 }
 
-func (c *putJogger) run() {
+func (c *putJogger) run(wg *sync.WaitGroup) {
 	glog.Infof("Started EC for mountpath: %s, bucket %s", c.mpath, c.parent.bck)
+	defer wg.Done()
 	c.buffer, c.slab = mm.Alloc()
-	putsDone := 0
-
 	for {
-		// first, process requests with high priority
-		select {
-		case req := <-c.putCh:
-			c.processRequest(req)
-			// repeat if there are more objects in the HIGH-priority queue
-			putsDone++
-			if putsDone < putBatchSize {
-				continue
-			}
-		case <-c.stopCh:
-			c.freeResources()
-			return
-		default:
-		}
-
-		putsDone = 0
-		// process all other requests
 		select {
 		case req := <-c.putCh:
 			c.processRequest(req)
@@ -173,7 +153,11 @@ func (c *putJogger) stop() {
 func (c *putJogger) ec(req *Request, lom *cluster.LOM) (err error) {
 	switch req.Action {
 	case ActSplit:
-		err = c.encode(req, lom)
+		if err = c.encode(req, lom); err != nil {
+			ctMeta := cluster.NewCTFromLOM(lom, MetaType)
+			errRm := cmn.RemoveFile(ctMeta.FQN())
+			debug.AssertNoErr(errRm)
+		}
 		c.parent.stats.updateEncodeTime(time.Since(req.tm), err != nil)
 	case ActDelete:
 		err = c.cleanup(lom)

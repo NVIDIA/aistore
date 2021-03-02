@@ -6,6 +6,7 @@ package ec
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -133,10 +134,19 @@ func (r *XactPut) dispatchRequest(req *Request, lom *cluster.LOM) error {
 func (r *XactPut) Run() {
 	glog.Infoln(r.String())
 
+	var wg sync.WaitGroup
 	for _, jog := range r.putJoggers {
-		go jog.run()
+		wg.Add(1)
+		go jog.run(&wg)
 	}
 
+	r.mainLoop()
+	wg.Wait()
+	// Don't close bundles, they are shared between different EC xactions
+	r.Finish(nil)
+}
+
+func (r *XactPut) mainLoop() {
 	var (
 		cfg    = cmn.GCO.Get()
 		ticker = time.NewTicker(cfg.Periodic.StatsTime)
@@ -145,18 +155,6 @@ func (r *XactPut) Run() {
 
 	// as of now all requests are equal. Some may get throttling later
 	for {
-		// Favor aborting the process, otherwise because of random choice
-		// `select` can choose a task from `r.ecCh` while `abort` awaits
-		// for execution.
-		// NOTE: next select should include the same `case`, too. Because
-		// it does not have `default` branch and may stuck
-		select {
-		case <-r.ChanAbort():
-			r.stop()
-			return
-		default:
-		}
-
 		select {
 		case <-ticker.C:
 			if glog.FastV(4, glog.SmoduleEC) {
@@ -199,10 +197,6 @@ func (r *XactPut) stop() {
 	for _, jog := range r.putJoggers {
 		jog.stop()
 	}
-
-	// Don't close bundles, they are shared between different EC xactions
-
-	r.Finish(nil)
 }
 
 // Encode schedules FQN for erasure coding process

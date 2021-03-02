@@ -1602,6 +1602,8 @@ func TestECDestroyBucket(t *testing.T) {
 
 	wg.Wait()
 	tutils.Logf("EC put files resulted in error in %d out of %d files\n", errCnt.Load(), o.objCount)
+	args := api.XactReqArgs{Kind: cmn.ActECPut}
+	api.WaitForXaction(baseParams, args)
 
 	// create bucket with the same name and check if puts are successful
 	newLocalBckWithProps(t, baseParams, bck, bckProps, o)

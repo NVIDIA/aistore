@@ -5,6 +5,7 @@
 package ec
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -207,7 +208,9 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object i
 			cluster.FreeLOM(lom)
 		}
 		if err != nil {
-			cmn.DrainReader(object)
+			if !errors.Is(err, io.ErrUnexpectedEOF) {
+				cmn.DrainReader(object)
+			}
 			glog.Error(err)
 			return
 		}
