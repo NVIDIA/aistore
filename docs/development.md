@@ -31,14 +31,14 @@ $ make help
 ### Clean deploy
 
 ```
-./clean_deploy.sh [--https] [--tier] [--debug PKG=LOG_LEVEL[,PKG=LOG_LEVEL]] [--cloud PROVIDER]
+./clean_deploy.sh [--ntargets TARGET_CNT] [--nproxies PROXY_CNT] [--https] [--tier] [--PROVIDER ...] [--debug PKG=LOG_LEVEL[,PKG=LOG_LEVEL]]
 ```
 
 Performs cleanup and then deploys a new instance of an AIS cluster.
 To make it even more convenient, consider setting up an alias:
 
 ```bash
-alias cais="bash ${GOPATH}/src/github.com/NVIDIA/aistore/deploy/scripts/bootstrap.sh clean-deploy --cloud 1"
+alias cais="bash ${GOPATH}/src/github.com/NVIDIA/aistore/deploy/scripts/bootstrap.sh clean-deploy --aws --gcp"
 ```
 
 #### Example usage
@@ -47,14 +47,16 @@ The command below starts a cluster with 5 proxies and 5 targets with GCP cloud e
 Remember to set `GOOGLE_APPLICATION_CREDENTIALS` env when using GCP cloud!
 
 ```console
-$ bash ./deploy/scripts/bootstrap.sh clean-deploy --cloud 2
+$ bash ./deploy/scripts/bootstrap.sh clean-deploy --gcp
 ```
 
 #### Options
 
 | Option | Description |
 | ------ | ----------- |
-| `--cloud PROVIDER` | Specifies a backend provider (the default provider is AIS) |
+| `--ntargets` | Number of targets to start (default: 5) |
+| `--nproxies` | Number of proxies to start (default: 5) |
+| `--PROVIDER` | Specifies the backend provider(s) eg. `--aws` |
 | `--tier` | Start AIS-behind-AIS cluster configuration |
 | `--https` | Start cluster with HTTPS enabled (*) |
 | `--debug PKG=LOG_LEVEL` | Change logging level of particular package(s) |
