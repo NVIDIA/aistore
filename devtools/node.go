@@ -43,24 +43,28 @@ func UnregisterNode(ctx *Ctx, proxyURL string, args *cmn.ActValDecommision, time
 	if err != nil {
 		return fmt.Errorf("api.GetClusterMap failed, err: %v", err)
 	}
-
 	if node != nil && smap.IsPrimary(node) {
 		return fmt.Errorf("unregistering primary proxy is not allowed")
 	}
-
 	if _, err := api.Decommission(baseParams, args); err != nil {
 		return err
 	}
-
 	// If node does not exist in cluster we should not wait for map version
 	// sync because update will not be scheduled.
 	if node != nil {
-		return WaitMapVersionSync(ctx, time.Now().Add(timeout), smap, smap.Version, cmn.NewStringSet(node.ID()))
+		return WaitMapVersionSync(
+			ctx,
+			time.Now().Add(timeout),
+			smap,
+			smap.Version,
+			cmn.NewStringSet(node.ID()),
+		)
 	}
 	return nil
 }
 
-func WaitMapVersionSync(ctx *Ctx, timeout time.Time, smap *cluster.Smap, prevVersion int64, idsToIgnore cmn.StringSet) error {
+func WaitMapVersionSync(ctx *Ctx, timeout time.Time, smap *cluster.Smap, prevVersion int64,
+	idsToIgnore cmn.StringSet) error {
 	ctx.Log("Waiting to sync Smap version > v%d, ignoring %+v\n", prevVersion, idsToIgnore)
 	checkAwaitingDaemon := func(smap *cluster.Smap, idsToIgnore cmn.StringSet) (string, string, bool) {
 		for _, d := range smap.Pmap {
@@ -97,12 +101,13 @@ func WaitMapVersionSync(ctx *Ctx, timeout time.Time, smap *cluster.Smap, prevVer
 			*smap = *daemonSmap // update smap for newer version
 			continue
 		}
-
 		if time.Now().After(timeout) {
-			return fmt.Errorf("timed out waiting for sync-ed Smap version > %d from %s (v%d)", prevVersion, url, smap.Version)
+			return fmt.Errorf("timed out waiting for sync-ed Smap version > %d from %s (v%d)",
+				prevVersion, url, smap.Version)
 		}
 		if daemonSmap != nil {
-			ctx.Log("waiting for Smap > v%d at %s (currently v%d)\n", prevVersion, sid, daemonSmap.Version)
+			ctx.Log("waiting for Smap > v%d at %s (currently v%d)\n",
+				prevVersion, sid, daemonSmap.Version)
 		}
 		prevSid = sid
 	}

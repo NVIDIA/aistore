@@ -245,7 +245,13 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 
 			idsToIgnore := cmn.NewStringSet(MockDaemonID, proxyID)
 			idsToIgnore.Add(syncIgnoreIDs...)
-			err = WaitMapVersionSync(smapChangeDeadline, syncedSmap, origVersion, idsToIgnore)
+			err = devtools.WaitMapVersionSync(
+				DevtoolsCtx,
+				smapChangeDeadline,
+				syncedSmap,
+				origVersion,
+				idsToIgnore,
+			)
 			if err != nil {
 				return nil, err
 			}
@@ -278,10 +284,6 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 
 func WaitForNewSmap(proxyURL string, prevVersion int64) (newSmap *cluster.Smap, err error) {
 	return WaitForClusterState(proxyURL, "new smap version", prevVersion, 0, 0)
-}
-
-func WaitMapVersionSync(timeout time.Time, smap *cluster.Smap, prevVersion int64, idsToIgnore cmn.StringSet) error {
-	return devtools.WaitMapVersionSync(DevtoolsCtx, timeout, smap, prevVersion, idsToIgnore)
 }
 
 func GetTargetsMountpaths(t *testing.T, smap *cluster.Smap, params api.BaseParams) map[string][]string {

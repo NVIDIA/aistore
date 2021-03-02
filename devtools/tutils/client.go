@@ -459,8 +459,7 @@ func WaitForRebalanceToComplete(t testing.TB, baseParams api.BaseParams, timeout
 		errCh   = make(chan error, 2)
 	)
 
-	err := WaitForRebalanceToStart(baseParams)
-	tassert.CheckFatal(t, err)
+	waitForRebalanceToStart(baseParams)
 
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
@@ -506,43 +505,29 @@ func WaitForRebalanceByID(t *testing.T, baseParams api.BaseParams, rebID string,
 	tassert.CheckFatal(t, err)
 }
 
-// WaitForRebalanceToStart waits until Rebalance or Resilver starts
-func WaitForRebalanceToStart(baseParams api.BaseParams) error {
+// waitForRebalanceToStart waits until Rebalance _or_ Resilver starts
+func waitForRebalanceToStart(baseParams api.BaseParams) {
 	const (
-		startTimeout      = 15 * time.Second
-		xactRetryInterval = time.Second
+		sleep   = time.Second
+		waitFor = 10 * sleep
 	)
-	ctx := context.Background()
-	var cancel context.CancelFunc
-	ctx, cancel = context.WithTimeout(ctx, startTimeout)
-	defer cancel()
-
-	args := api.XactReqArgs{Timeout: startTimeout}
-	// Remember that the function has found a finished xaction in case of
-	// it was called too late. Return `nil` for this case.
-	foundFinished := false
-	for {
-		for _, act := range []string{cmn.ActRebalance, cmn.ActResilver} {
-			args.Kind = act
+	var (
+		now      = time.Now()
+		deadline = now.Add(waitFor)
+		args     = api.XactReqArgs{Timeout: sleep, OnlyRunning: true}
+	)
+	for now.Before(deadline) {
+		for _, kind := range []string{cmn.ActRebalance, cmn.ActResilver} {
+			args.Kind = kind
 			status, err := api.GetXactionStatus(baseParams, args)
 			if err == nil {
 				if !status.Finished() {
-					return nil
+					return
 				}
-				foundFinished = true
 			}
 		}
-
-		time.Sleep(xactRetryInterval)
-		select {
-		case <-ctx.Done():
-			if foundFinished {
-				return nil
-			}
-			return ctx.Err()
-		default:
-			break
-		}
+		time.Sleep(sleep)
+		now = time.Now()
 	}
 }
 
