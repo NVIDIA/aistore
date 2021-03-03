@@ -95,7 +95,7 @@ const (
 	subcmdShowObject    = subcmdObject
 	subcmdShowXaction   = subcmdXaction
 	subcmdShowRebalance = subcmdRebalance
-	subcmdShowBckProps  = "bucket-props"
+	subcmdShowBucket    = subcmdBucket
 	subcmdShowConfig    = subcmdConfig
 	subcmdShowRemoteAIS = "remote-cluster"
 	subcmdShowCluster   = subcmdCluster

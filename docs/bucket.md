@@ -408,11 +408,11 @@ The full list of bucket properties are:
 #### List bucket properties
 
 ```console
-$ ais show bucket-props mybucket
+$ ais show bucket mybucket
 ...
 $
 $ # Or, the same to get output in a (raw) JSON form:
-$ ais show bucket-props mybucket --json
+$ ais show bucket mybucket --json
 ...
 ```
 
@@ -426,7 +426,7 @@ $ ais bucket props mybucket ec.enabled=true
 
 ```console
 $ ais bucket props mybucket versioning.enabled=true
-$ ais show bucket-props mybucket
+$ ais show bucket mybucket
 ...
 ```
 

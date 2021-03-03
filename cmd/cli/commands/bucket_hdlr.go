@@ -86,6 +86,7 @@ var (
 			Subcommands: []cli.Command{
 				bucketCmdList,
 				bucketCmdSummary,
+				makeAlias(showCmdBucket, "", true, commandShow),
 				{
 					Name:      commandCreate,
 					Usage:     "create ais buckets",
@@ -311,7 +312,7 @@ func setPropsHandler(c *cli.Context) (err error) {
 
 	if err = setBucketProps(c, bck, updateProps); err != nil {
 		helpMsg := fmt.Sprintf("To show bucket properties, run \"%s %s %s BUCKET_NAME -v\"",
-			cliName, commandShow, subcmdShowBckProps)
+			cliName, commandShow, subcmdShowBucket)
 		return newAdditionalInfoError(err, helpMsg)
 	}
 

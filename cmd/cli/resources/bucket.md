@@ -392,7 +392,7 @@ All options are required and must be greater than `0`.
 
 ## Show bucket props
 
-`ais show bucket-props BUCKET_NAME [PROP_PREFIX]`
+`ais show bucket BUCKET_NAME [PROP_PREFIX]`
 
 List [properties](../../../docs/bucket.md#properties-and-options) of the bucket.
 By default, condensed form of bucket props sections is presented.
@@ -414,7 +414,7 @@ Useful `PROP_PREFIX` are: `access, checksum, ec, lru, mirror, provider, versioni
 Show only `lru` section of bucket props for `bucket_name` bucket.
 
 ```console
-$ ais show bucket-props bucket_name
+$ ais show bucket bucket_name
 PROPERTY	 VALUE
 access		 GET,PUT,DELETE,HEAD,ColdGET
 checksum	 Type: xxhash | Validate: ColdGET
@@ -424,10 +424,10 @@ lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
 mirror		 Disabled
 provider	 ais
 versioning	 Enabled | Validate on WarmGET: no
-$ ais show bucket-props bucket_name lru
+$ ais show bucket bucket_name lru
 PROPERTY	 VALUE
 lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
-$ ais show bucket-props bucket_name lru -v
+$ ais show bucket bucket_name lru -v
 PROPERTY		 VALUE
 lru.capacity_upd_time	 10m
 lru.dont_evict_time	 120m
@@ -540,15 +540,15 @@ $ ais bucket create ais://bck --bucket-props "ec.enabled=true ec.data_slices=6 e
 $ # If the number of targets is less than or equal to ec.parity_slices even `--force` does not help
 
 $ ais bucket props ais://bck ec.enabled true ec.data_slices 6 ec.parity_slices 8
-EC config (6 data, 8 parity)slices requires at least 15 targets (have 6). To show bucket properties, run "ais show bucket-props BUCKET_NAME -v".
+EC config (6 data, 8 parity)slices requires at least 15 targets (have 6). To show bucket properties, run "ais show bucket BUCKET_NAME -v".
 
 $ ais bucket props ais://bck ec.enabled true ec.data_slices 6 ec.parity_slices 8 --force
-EC config (6 data, 8 parity)slices requires at least 15 targets (have 6). To show bucket properties, run "ais show bucket-props BUCKET_NAME -v".
+EC config (6 data, 8 parity)slices requires at least 15 targets (have 6). To show bucket properties, run "ais show bucket BUCKET_NAME -v".
 
 $ # Use force to enable EC if the number of target is sufficient to keep `ec.parity_slices+1` replicas
 
 $ ais bucket props ais://bck ec.enabled true ec.data_slices 6 ec.parity_slices 4
-EC config (6 data, 8 parity)slices requires at least 11 targets (have 6). To show bucket properties, run "ais show bucket-props BUCKET_NAME -v".
+EC config (6 data, 8 parity)slices requires at least 11 targets (have 6). To show bucket properties, run "ais show bucket BUCKET_NAME -v".
 
 $ ais bucket props ais://bck ec.enabled true ec.data_slices 6 ec.parity_slices 4 --force
 Bucket props successfully updated
@@ -566,7 +566,7 @@ Bucket props successfully updated
 "ec.enabled" set to:"true" (was:"false")
 
 $ ais bucket props ais://bck ec.objsize_limit 320000
-P[dBbfp8080]: once enabled, EC configuration can be only disabled but cannot change. To show bucket properties, run "ais show bucket-props BUCKET_NAME -v".
+P[dBbfp8080]: once enabled, EC configuration can be only disabled but cannot change. To show bucket properties, run "ais show bucket BUCKET_NAME -v".
 
 $ ais bucket props ais://bck ec.objsize_limit 320000 --force
 Bucket props successfully updated
@@ -618,7 +618,7 @@ Bucket props successfully updated
 ```
 
 ```console
-$ ais show bucket-props bucket_name
+$ ais show bucket bucket_name
 PROPERTY	 VALUE
 access		 GET,PUT,DELETE,HEAD,ColdGET
 checksum	 Type: xxhash | Validate: ColdGET
@@ -648,7 +648,7 @@ $ ais bucket props bucket_name '{
 Bucket props successfully updated
 "versioning.validate_warm_get" set to:"true" (was:"false")
 "mirror.enabled" set to:"true" (was:"false")
-$ ais show bucket-props bucket_name
+$ ais show bucket bucket_name
 PROPERTY	 VALUE
 access		 GET,PUT,DELETE,HEAD,ColdGET
 checksum	 Type: xxhash | Validate: ColdGET

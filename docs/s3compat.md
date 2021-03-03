@@ -90,7 +90,7 @@ To enable MD5 checksum, create a bucket with `MD5`:
 ```console
 $ ais bucket create ais://bck --bucket-props="checksum.type=md5"
 "ais://bck2" bucket created
-$ ais show bucket-props ais://bck | grep checksum
+$ ais show bucket ais://bck | grep checksum
 checksum         Type: md5 | Validate: ColdGET
 ```
 

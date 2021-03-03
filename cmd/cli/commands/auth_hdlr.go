@@ -48,15 +48,53 @@ var (
 		flagsAuthRoleShow:    {verboseFlag},
 		flagsAuthConfShow:    {jsonFlag},
 	}
+
+	// define separately to allow for aliasing (see alias_hdlr.go)
+	authCmdShow = cli.Command{
+		Name:  subcmdAuthShow,
+		Usage: "show entity in authn",
+		Subcommands: []cli.Command{
+			{
+				Name:      subcmdAuthCluster,
+				Usage:     "show registered clusters",
+				ArgsUsage: showAuthClusterArgument,
+				Action:    wrapAuthN(showAuthClusterHandler),
+			},
+			{
+				Name:         subcmdAuthRole,
+				Usage:        "show existing user roles",
+				ArgsUsage:    showAuthRoleArgument,
+				Flags:        authFlags[flagsAuthRoleShow],
+				Action:       wrapAuthN(showAuthRoleHandler),
+				BashComplete: oneRoleCompletions,
+			},
+			{
+				Name:      subcmdAuthUser,
+				Usage:     "show user list or user details",
+				Flags:     authFlags[flagsAuthUserShow],
+				ArgsUsage: showUserListArgument,
+				Action:    wrapAuthN(showUserHandler),
+			},
+			{
+				Name:   subcmdAuthConfig,
+				Usage:  "show AuthN server configuration",
+				Flags:  authFlags[flagsAuthConfShow],
+				Action: wrapAuthN(showAuthConfigHandler),
+			},
+		},
+	}
+
 	authCmds = []cli.Command{
 		{
 			Name:  commandAuth,
 			Usage: "add/remove/show users, manage user roles, manage access to remote clusters",
 			Subcommands: []cli.Command{
+				authCmdShow,
 				{
 					Name:  subcmdAuthAdd,
 					Usage: "add entity to auth",
 					Subcommands: []cli.Command{
+						authCmdShow,
 						{
 							Name:         subcmdAuthUser,
 							Usage:        "add a new user",
@@ -132,39 +170,6 @@ var (
 							Flags:        authFlags[subcmdAuthUser],
 							Action:       wrapAuthN(updateUserHandler),
 							BashComplete: multiRoleCompletions,
-						},
-					},
-				},
-				{
-					Name:  subcmdAuthShow,
-					Usage: "show entity in authn",
-					Subcommands: []cli.Command{
-						{
-							Name:      subcmdAuthCluster,
-							Usage:     "show registered clusters",
-							ArgsUsage: showAuthClusterArgument,
-							Action:    wrapAuthN(showAuthClusterHandler),
-						},
-						{
-							Name:         subcmdAuthRole,
-							Usage:        "show existing user roles",
-							ArgsUsage:    showAuthRoleArgument,
-							Flags:        authFlags[flagsAuthRoleShow],
-							Action:       wrapAuthN(showAuthRoleHandler),
-							BashComplete: oneRoleCompletions,
-						},
-						{
-							Name:      subcmdAuthUser,
-							Usage:     "show user list or user details",
-							Flags:     authFlags[flagsAuthUserShow],
-							ArgsUsage: showUserListArgument,
-							Action:    wrapAuthN(showUserHandler),
-						},
-						{
-							Name:   subcmdAuthConfig,
-							Usage:  "show AuthN server configuration",
-							Flags:  authFlags[flagsAuthConfShow],
-							Action: wrapAuthN(showAuthConfigHandler),
 						},
 					},
 				},

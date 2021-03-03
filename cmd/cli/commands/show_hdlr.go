@@ -82,7 +82,7 @@ var (
 			refreshFlag,
 			allXactionsFlag,
 		},
-		subcmdShowBckProps: {
+		subcmdShowBucket: {
 			jsonFlag,
 			verboseFlag,
 		},
@@ -100,13 +100,14 @@ var (
 	showCmds = []cli.Command{
 		{
 			Name:  commandShow,
-			Usage: "show information about entities in the cluster",
+			Usage: "show information about buckets, jobs, all other managed entities in the cluster and the cluster itself",
 			Subcommands: []cli.Command{
+				makeAlias(authCmdShow, "", true, commandAuth),
 				showCmdDisk,
 				showCmdObject,
 				showCmdCluster,
 				showCmdRebalance,
-				showCmdBckProps,
+				showCmdBucket,
 				showCmdConfig,
 				showCmdRemoteAIS,
 				showCmdMpath,
@@ -162,11 +163,11 @@ var (
 		Flags:     showCmdsFlags[subcmdShowRebalance],
 		Action:    showRebalanceHandler,
 	}
-	showCmdBckProps = cli.Command{
-		Name:         subcmdShowBckProps,
+	showCmdBucket = cli.Command{
+		Name:         subcmdShowBucket,
 		Usage:        "show bucket properties",
 		ArgsUsage:    bucketAndPropsArgument,
-		Flags:        showCmdsFlags[subcmdShowBckProps],
+		Flags:        showCmdsFlags[subcmdShowBucket],
 		Action:       showBckPropsHandler,
 		BashComplete: bucketAndPropsCompletions,
 	}
