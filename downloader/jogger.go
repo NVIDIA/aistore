@@ -133,7 +133,7 @@ func (j *jogger) abortJob(id string) {
 	j.parent.parent.SubPending(cnt)
 
 	// Abort currently running task, if belongs to a given job.
-	if j.task != nil && j.task.id() == id {
+	if j.task != nil && j.task.jobID() == id {
 		j.task.cancel()
 	}
 }
@@ -142,7 +142,7 @@ func (j *jogger) abortJob(id string) {
 // or still in queue), `false` otherwise.
 func (j *jogger) pending(id string) bool {
 	task := j.getTask()
-	return (task != nil && task.id() == id) || j.q.pending(id)
+	return (task != nil && task.jobID() == id) || j.q.pending(id)
 }
 
 func newQueue() *queue {
@@ -154,13 +154,13 @@ func newQueue() *queue {
 
 func (q *queue) putCh(t *singleObjectTask) (ok bool, ch chan<- *singleObjectTask) {
 	q.Lock()
-	if q.stopped() || q.exists(t.id(), t.uid()) {
+	if q.stopped() || q.exists(t.jobID(), t.uid()) {
 		// If task already exists or the queue was stopped we should just omit it
 		// hence return channel which immediately accepts and omits the task.
 		q.Unlock()
 		return false, make(chan *singleObjectTask, 1)
 	}
-	q.putToSet(t.id(), t.uid())
+	q.putToSet(t.jobID(), t.uid())
 	q.Unlock()
 
 	return true, q.ch
@@ -175,7 +175,7 @@ func (q *queue) get() (foundTask *singleObjectTask, skip bool) {
 
 	q.RLock()
 	defer q.RUnlock()
-	if !q.exists(t.id(), t.uid()) {
+	if !q.exists(t.jobID(), t.uid()) {
 		// The job was removed so we must skip tasks which no longer exist.
 		return t, true
 	}
@@ -192,8 +192,8 @@ func (q *queue) get() (foundTask *singleObjectTask, skip bool) {
 
 func (q *queue) delete(t *singleObjectTask) bool {
 	q.Lock()
-	exists := q.exists(t.id(), t.uid())
-	q.removeFromSet(t.id(), t.uid())
+	exists := q.exists(t.jobID(), t.uid())
+	q.removeFromSet(t.jobID(), t.uid())
 	q.Unlock()
 	return exists
 }

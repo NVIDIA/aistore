@@ -17,7 +17,8 @@ var errThrottlerStopped = errors.New("throttler has been stopped")
 
 type (
 	throttler struct {
-		sema *cmn.DynSemaphore
+		sema    *cmn.Semaphore
+		emptyCh chan struct{} // Empty, closed channel (set only if `sema == nil`).
 
 		maxBytesPerMinute int
 		capacityCh        chan int
@@ -40,7 +41,10 @@ type (
 func newThrottler(limits DlLimits) *throttler {
 	t := &throttler{}
 	if limits.Connections > 0 {
-		t.sema = cmn.NewDynSemaphore(limits.Connections)
+		t.sema = cmn.NewSemaphore(limits.Connections)
+	} else {
+		t.emptyCh = make(chan struct{})
+		close(t.emptyCh)
 	}
 	if limits.BytesPerHour > 0 {
 		t.initThroughputThrottling(limits.BytesPerHour / 60)
@@ -92,11 +96,11 @@ func (t *throttler) initThroughputThrottling(maxBytesPerMinute int) {
 	}()
 }
 
-func (t *throttler) acquire() {
+func (t *throttler) tryAcquire() <-chan struct{} {
 	if t.sema == nil {
-		return
+		return t.emptyCh
 	}
-	t.sema.Acquire()
+	return t.sema.TryAcquire()
 }
 
 func (t *throttler) release() {

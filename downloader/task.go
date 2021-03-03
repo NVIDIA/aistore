@@ -88,7 +88,7 @@ func (t *singleObjectTask) download() {
 		return
 	}
 
-	dlStore.incFinished(t.id())
+	dlStore.incFinished(t.jobID())
 
 	t.parent.statsT.AddMany(
 		stats.NamedVal64{Name: stats.DownloadSize, Value: t.currentSize.Load()},
@@ -238,15 +238,15 @@ func (t *singleObjectTask) markFailed(statusMsg string) {
 	t.cancel()
 	t.parent.statsT.Add(stats.ErrDownloadCount, 1)
 
-	dlStore.persistError(t.id(), t.obj.objName, statusMsg)
-	dlStore.incErrorCnt(t.id())
+	dlStore.persistError(t.jobID(), t.obj.objName, statusMsg)
+	dlStore.incErrorCnt(t.jobID())
 }
 
 func (t *singleObjectTask) persist() {
-	_ = dlStore.persistTaskInfo(t.id(), t.ToTaskDlInfo())
+	_ = dlStore.persistTaskInfo(t.jobID(), t.ToTaskDlInfo())
 }
 
-func (t *singleObjectTask) id() string { return t.job.ID() }
+func (t *singleObjectTask) jobID() string { return t.job.ID() }
 func (t *singleObjectTask) uid() string {
 	return fmt.Sprintf("%s|%s|%s|%v", t.obj.link, t.job.Bck(), t.obj.objName, t.obj.fromRemote)
 }
@@ -268,6 +268,6 @@ func (t *singleObjectTask) ToTaskDlInfo() TaskDlInfo {
 func (t *singleObjectTask) String() (str string) {
 	return fmt.Sprintf(
 		"{id: %q, obj_name: %q, link: %q, from_remote: %v, bucket: %q}",
-		t.id(), t.obj.objName, t.obj.link, t.obj.fromRemote, t.job.Bck(),
+		t.jobID(), t.obj.objName, t.obj.link, t.obj.fromRemote, t.job.Bck(),
 	)
 }

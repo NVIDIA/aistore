@@ -159,9 +159,11 @@ func (d *dispatcher) cleanUpAborted(jobID string) {
 
 func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 	defer func() {
+		debug.Infof("[downloader] Finished dispatching job %q, now waiting for it to finish and cleanup", job.ID())
 		d.waitFor(job)
 		d.cleanUpAborted(job.ID())
 		job.cleanup()
+		debug.Infof("[downloader] Job %q has fully finished", job.ID())
 	}()
 
 	if aborted := d.checkAborted(); aborted || d.checkAbortedJob(job) {
@@ -381,11 +383,10 @@ func (d *dispatcher) blockingDispatchDownloadSingle(task *singleObjectTask) (ok 
 
 	// NOTE: Throttle job before making jogger busy - we don't want to clog the
 	//  jogger as other tasks from other jobs can be already ready to download.
-	task.job.throttler().acquire()
-
-	// Firstly, check if the job was aborted when we were sleeping.
-	if d.checkAbortedJob(task.job) {
-		task.job.throttler().release()
+	select {
+	case <-task.job.throttler().tryAcquire():
+		break
+	case <-d.jobAbortedCh(task.job.ID()).Listen():
 		return true, nil
 	}
 
@@ -405,8 +406,8 @@ func (d *dispatcher) blockingDispatchDownloadSingle(task *singleObjectTask) (ok 
 }
 
 func (d *dispatcher) dispatchAdminReq(req *request) (resp interface{}, statusCode int, err error) {
-	debug.Infof("Dispatching admin request (id: %q, action: %q, onlyActive: %t)", req.id, req.action, req.onlyActive)
-	defer debug.Infof("Finished admin request (id: %q, action: %q, onlyActive: %t)", req.id, req.action, req.onlyActive)
+	debug.Infof("[downloader] Dispatching admin request (id: %q, action: %q, onlyActive: %t)", req.id, req.action, req.onlyActive)
+	defer debug.Infof("[downloader] Finished admin request (id: %q, action: %q, onlyActive: %t)", req.id, req.action, req.onlyActive)
 
 	// Need to make sure that the dispatcher has fully initialized and started,
 	// and it's ready for processing the requests.
@@ -510,7 +511,7 @@ func (d *dispatcher) activeTasks(reqID string) []TaskDlInfo {
 	currentTasks := make([]TaskDlInfo, 0, len(d.joggers))
 	for _, j := range d.joggers {
 		task := j.getTask()
-		if task != nil && task.id() == reqID {
+		if task != nil && task.jobID() == reqID {
 			currentTasks = append(currentTasks, task.ToTaskDlInfo())
 		}
 	}
