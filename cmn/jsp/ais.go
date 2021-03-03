@@ -27,8 +27,8 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *cmn.Config) (er
 	if err != nil {
 		return fmt.Errorf("failed to load config %q, err: %v", confPath, err)
 	}
-	config.SetRole(daeRole)
 
+	config.SetRole(daeRole)
 	_, err = Load(localConfPath, &config.LocalConfig, Plain())
 	if err != nil {
 		return fmt.Errorf("failed to load local config %q, err: %v", localConfPath, err)
@@ -40,7 +40,7 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *cmn.Config) (er
 	}
 
 	if overrideConfig != nil {
-		err = config.Apply(*overrideConfig)
+		err = config.Apply(*overrideConfig, cmn.Daemon)
 	} else {
 		err = config.Validate()
 	}
@@ -86,8 +86,7 @@ func SaveConfig(config *cmn.Config) error {
 	return Save(cmn.GCO.GetGlobalConfigPath(), config, PlainLocal())
 }
 
-func SetConfigInMem(toUpdate *cmn.ConfigToUpdate, config *cmn.Config) (err error) {
-	config.Apply(*toUpdate)
+func SetConfigInMem(toUpdate *cmn.ConfigToUpdate, config *cmn.Config, asType string) (err error) {
 	if toUpdate.Vmodule != nil {
 		if err := cmn.SetGLogVModule(*toUpdate.Vmodule); err != nil {
 			return fmt.Errorf("failed to set vmodule = %s, err: %v", *toUpdate.Vmodule, err)
@@ -98,6 +97,6 @@ func SetConfigInMem(toUpdate *cmn.ConfigToUpdate, config *cmn.Config) (err error
 			return fmt.Errorf("failed to set log level = %s, err: %v", *toUpdate.LogLevel, err)
 		}
 	}
-	err = config.Validate()
+	err = config.Apply(*toUpdate, asType)
 	return
 }

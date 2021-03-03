@@ -798,7 +798,7 @@ func (h *httprunner) setDaemonConfig(w http.ResponseWriter, r *http.Request, toU
 	var err error
 	if transient {
 		clone := cmn.GCO.Clone()
-		err = jsp.SetConfigInMem(toUpdate, clone)
+		err = jsp.SetConfigInMem(toUpdate, clone, cmn.Daemon)
 		goto resp
 	}
 	err = h.owner.config.modifyOverride(toUpdate)

@@ -698,7 +698,9 @@ func (p *proxyrunner) setClusterConfig(w http.ResponseWriter, r *http.Request, t
 }
 
 func (p *proxyrunner) _setConfPre(ctx *configModifier, clone *globalConfig) (updated bool, err error) {
-	clone.Apply(*ctx.toUpdate)
+	if err = clone.Apply(*ctx.toUpdate, cmn.Cluster); err != nil {
+		return
+	}
 	updated = true
 	return
 }

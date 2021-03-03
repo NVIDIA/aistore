@@ -124,7 +124,7 @@ func (co *configOwner) updateGCO() (err error) {
 	gco.ClusterConfig = config.ClusterConfig
 	override := cmn.GCO.GetOverrideConfig()
 	if override != nil {
-		err = gco.Apply(*override)
+		err = gco.Apply(*override, cmn.Daemon)
 	} else {
 		err = gco.Validate()
 	}
@@ -163,7 +163,7 @@ func (co *configOwner) modifyOverride(toUpdate *cmn.ConfigToUpdate) (err error) 
 	co.Lock()
 	defer co.Unlock()
 	clone := cmn.GCO.Clone()
-	err = jsp.SetConfigInMem(toUpdate, clone)
+	err = jsp.SetConfigInMem(toUpdate, clone, co.daemonType)
 	if err != nil {
 		return
 	}

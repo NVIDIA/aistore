@@ -548,7 +548,7 @@ func (bp *BucketProps) Validate(targetCnt int) error {
 }
 
 func (bp *BucketProps) Apply(propsToUpdate *BucketPropsToUpdate) {
-	copyProps(*propsToUpdate, bp)
+	copyProps(*propsToUpdate, bp, Daemon)
 }
 
 func NewBucketPropsToUpdate(nvs SimpleKVs) (props *BucketPropsToUpdate, err error) {

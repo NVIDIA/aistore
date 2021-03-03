@@ -112,21 +112,21 @@ type (
 	}
 	// nolint:maligned // no performance critical code
 	ClusterConfig struct {
-		Backend     BackendConf     `json:"backend"`
-		Mirror      MirrorConf      `json:"mirror"`
-		EC          ECConf          `json:"ec"`
+		Backend     BackendConf     `json:"backend" allow:"cluster"`
+		Mirror      MirrorConf      `json:"mirror" allow:"cluster"`
+		EC          ECConf          `json:"ec" allow:"cluster"`
 		Log         LogConf         `json:"log"`
 		Periodic    PeriodConf      `json:"periodic"`
 		Timeout     TimeoutConf     `json:"timeout"`
 		Client      ClientConf      `json:"client"`
-		Proxy       ProxyConf       `json:"proxy"`
+		Proxy       ProxyConf       `json:"proxy" allow:"cluster"`
 		LRU         LRUConf         `json:"lru"`
 		Disk        DiskConf        `json:"disk"`
-		Rebalance   RebalanceConf   `json:"rebalance"`
+		Rebalance   RebalanceConf   `json:"rebalance" allow:"cluster"`
 		Resilver    ResilverConf    `json:"resilver"`
-		Replication ReplicationConf `json:"replication"`
+		Replication ReplicationConf `json:"replication" allow:"cluster"`
 		Cksum       CksumConf       `json:"checksum"`
-		Versioning  VersionConf     `json:"versioning"`
+		Versioning  VersionConf     `json:"versioning" allow:"cluster"`
 		Net         NetConf         `json:"net"`
 		FSHC        FSHCConf        `json:"fshc"`
 		Auth        AuthConf        `json:"auth"`
@@ -758,8 +758,8 @@ func (c *Config) Validate() error {
 	if c.ConfigDir == "" {
 		return errors.New("invalid confdir value (must be non-empty)")
 	}
-	opts := IterOpts{VisitAll: true}
 
+	opts := IterOpts{VisitAll: true}
 	return IterFields(c, func(tag string, field IterField) (err error, b bool) {
 		if v, ok := field.Value().(Validator); ok {
 			if err := v.Validate(c); err != nil {
@@ -775,13 +775,16 @@ func (c *Config) SetRole(role string) {
 	c.role = role
 }
 
-func (c *Config) Apply(updateConf ConfigToUpdate) error {
-	c.ClusterConfig.Apply(updateConf)
+func (c *Config) Apply(updateConf ConfigToUpdate, asType string) (err error) {
+	err = c.ClusterConfig.Apply(updateConf, asType)
+	if err != nil {
+		return
+	}
 	return c.Validate()
 }
 
-func (c *ClusterConfig) Apply(updateConf ConfigToUpdate) {
-	copyProps(updateConf, c)
+func (c *ClusterConfig) Apply(updateConf ConfigToUpdate, asType string) error {
+	return copyProps(updateConf, c, asType)
 }
 
 // TestingEnv returns true if config is set to a development environment

@@ -9,6 +9,8 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 const (
@@ -197,11 +199,12 @@ func iterFields(prefix string, v interface{}, updf updateFunc, opts IterOpts) (d
 	return
 }
 
-func copyProps(src, dst interface{}) {
+func copyProps(src, dst interface{}, asType string) (err error) {
 	var (
 		srcVal = reflect.ValueOf(src)
 		dstVal = reflect.ValueOf(dst).Elem()
 	)
+	debug.Assertf(StringInSlice(asType, []string{Daemon, Cluster}), "unexpected config level: %s", asType)
 
 	for i := 0; i < srcVal.NumField(); i++ {
 		copyTag, ok := srcVal.Type().Field(i).Tag.Lookup("copy")
@@ -211,11 +214,19 @@ func copyProps(src, dst interface{}) {
 
 		var (
 			srcValField = srcVal.Field(i)
-			dstValField = dstVal.FieldByName(srcVal.Type().Field(i).Name)
+			fieldName   = srcVal.Type().Field(i).Name
+			dstValField = dstVal.FieldByName(fieldName)
 		)
 
 		if srcValField.IsNil() {
 			continue
+		}
+
+		t, ok := dstVal.Type().FieldByName(fieldName)
+		Assert(ok)
+		allowed := t.Tag.Get("allow")
+		if allowed != "" && allowed != asType {
+			return fmt.Errorf("setting property %s not allowed, as %q", fieldName, asType)
 		}
 
 		if dstValField.Kind() != reflect.Struct && dstValField.Kind() != reflect.Invalid {
@@ -227,9 +238,13 @@ func copyProps(src, dst interface{}) {
 			}
 		} else {
 			// Recurse into struct
-			copyProps(srcValField.Elem().Interface(), dstValField.Addr().Interface())
+			err = copyProps(srcValField.Elem().Interface(), dstValField.Addr().Interface(), asType)
+			if err != nil {
+				return
+			}
 		}
 	}
+	return
 }
 
 func mergeProps(src, dst interface{}) {

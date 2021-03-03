@@ -163,7 +163,7 @@ func initDaemon(version, buildTime string) (rmain cmn.Runner) {
 		if err := toUpdate.FillFromKVS(kvs); err != nil {
 			cmn.ExitLogf(err.Error())
 		}
-		if err := jsp.SetConfigInMem(toUpdate, config); err != nil {
+		if err := jsp.SetConfigInMem(toUpdate, config, cmn.Daemon); err != nil {
 			cmn.ExitLogf("Failed to update config in memory: %v", err)
 		}
 
