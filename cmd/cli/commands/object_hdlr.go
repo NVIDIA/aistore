@@ -83,7 +83,7 @@ var (
 			Subcommands: []cli.Command{
 				objectCmdGet,
 				objectCmdPut,
-				makeAlias(showCmdObject, "", true, commandShow), // alias for`ais show`
+				makeAlias(showCmdObject, "", true, commandShow), // alias for `ais show`
 				{
 					Name:      commandMv,
 					Usage:     "move an object in an ais bucket",

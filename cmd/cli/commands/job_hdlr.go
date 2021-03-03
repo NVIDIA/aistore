@@ -25,17 +25,7 @@ var (
 		jobStopSubcmds,
 		jobWaitSubcmds,
 		jobRemoveSubcmds,
-		jobShowSubcmds, // alias for `ais show`
-	}
-
-	jobShowSubcmds = cli.Command{
-		Name:  commandShow,
-		Usage: "show information about various jobs",
-		Subcommands: []cli.Command{
-			showCmdDownload,
-			showCmdDsort,
-			showCmdXaction,
-		},
+		makeAlias(showCmdJob, "", true, commandShow), // alias for `ais show`
 	}
 )
 

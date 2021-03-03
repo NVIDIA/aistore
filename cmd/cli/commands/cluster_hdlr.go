@@ -42,7 +42,7 @@ var (
 			Name:  commandCluster,
 			Usage: "monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc.",
 			Subcommands: []cli.Command{
-				makeAlias(showCmdCluster, "", true, commandShow), // alias for`ais show`
+				makeAlias(showCmdCluster, "", true, commandShow), // alias for `ais show`
 				{
 					Name:      subcmdCluAttach,
 					Usage:     "attach a remote ais cluster",

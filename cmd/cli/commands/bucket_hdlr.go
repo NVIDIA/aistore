@@ -86,7 +86,7 @@ var (
 			Subcommands: []cli.Command{
 				bucketCmdList,
 				bucketCmdSummary,
-				makeAlias(showCmdBucket, "", true, commandShow),
+				makeAlias(showCmdBucket, "", true, commandShow), // alias for `ais show`
 				{
 					Name:      commandCreate,
 					Usage:     "create ais buckets",

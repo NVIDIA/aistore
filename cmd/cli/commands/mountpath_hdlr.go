@@ -25,7 +25,7 @@ var (
 			Name:  commandMountpath,
 			Usage: "manage mountpaths (disks) in a given storage target",
 			Subcommands: []cli.Command{
-				makeAlias(showCmdMpath, "", true, commandShow), // alias for`ais show`
+				makeAlias(showCmdMpath, "", true, commandShow), // alias for `ais show`
 				{
 					Name:      subcmdDiskAttach,
 					Usage:     "attach a mountpath (i.e. disk or volume)",

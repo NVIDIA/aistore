@@ -102,7 +102,7 @@ var (
 			Name:  commandShow,
 			Usage: "show information about buckets, jobs, all other managed entities in the cluster and the cluster itself",
 			Subcommands: []cli.Command{
-				makeAlias(authCmdShow, "", true, commandAuth),
+				makeAlias(authCmdShow, "", true, commandAuth), // alias for `ais auth show`
 				showCmdDisk,
 				showCmdObject,
 				showCmdCluster,

@@ -29,6 +29,16 @@ func makeAlias(cmd cli.Command, aliasFor string, silentAlias bool, newName ...st
 		cmd.Category = "ALIASES"
 		cmd.Usage = fmt.Sprintf("(alias for \"%s\") %s", aliasFor, cmd.Usage)
 	}
-	cmd.HideHelp = true // help is already added to the original command
+
+	// help is already added to the original, remove from cmd and all subcmds
+	cmd.HideHelp = true
+	if len(cmd.Subcommands) != 0 {
+		aliasSubcmds := make([]cli.Command, len(cmd.Subcommands))
+		for i := range cmd.Subcommands {
+			aliasSubcmds[i] = makeAlias(cmd.Subcommands[i], "", true)
+		}
+		cmd.Subcommands = aliasSubcmds
+	}
+
 	return cmd
 }
