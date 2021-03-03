@@ -167,7 +167,7 @@ Configuration option `fspaths` specifies the list of local directories where sto
 
 > AIS [mountpath](./overview.md#terminology) is a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS utilizes to store user data and AIS metadata. A mountpath can be disabled and (re)enabled, automatically or administratively, at any point during runtime. In a given cluster, a total number of mountpaths would normally compute as a direct product of (number of storage targets) x (number of disks in each target).
 
-AIStore [HTTP API](/docs/http_api.md) makes it possible to list, add, remove, enable, and disable a `fspath` (and, therefore, the corresponding local filesystem) at runtime. Filesystem's health checker (FSHC) monitors the health of all local filesystems: a filesystem that "accumulates" I/O errors will be disabled and taken out, as far as the AIStore built-in mechanism of object distribution. For further details about FSHC, please refer to [FSHC readme](/health/fshc.md).
+AIStore [HTTP API](http_api.md) makes it possible to list, add, remove, enable, and disable a `fspath` (and, therefore, the corresponding local filesystem) at runtime. Filesystem's health checker (FSHC) monitors the health of all local filesystems: a filesystem that "accumulates" I/O errors will be disabled and taken out, as far as the AIStore built-in mechanism of object distribution. For further details about FSHC, please refer to [FSHC readme](/health/fshc.md).
 
 ## Disabling extended attributes
 
@@ -187,13 +187,13 @@ Please see [FSHC readme](/health/fshc.md) for further details.
 
 ## Networking
 
-In addition to user-accessible public network, AIStore will optionally make use of the two other networks: internal (or intra-cluster) and replication. If configured via the [net section of the configuration](/deploy/dev/local/aisnode_config.sh), the intra-cluster network is utilized for latency-sensitive control plane communications including keep-alive and [metasync](/docs/ha.md#metasync). The replication network is used, as the name implies, for a variety of replication workloads.
+In addition to user-accessible public network, AIStore will optionally make use of the two other networks: internal (or intra-cluster) and replication. If configured via the [net section of the configuration](/deploy/dev/local/aisnode_config.sh), the intra-cluster network is utilized for latency-sensitive control plane communications including keep-alive and [metasync](ha.md#metasync). The replication network is used, as the name implies, for a variety of replication workloads.
 
 All the 3 (three) networking options are enumerated [here](/cmn/network.go).
 
 ## Reverse proxy
 
-AIStore gateway can act as a reverse proxy vis-à-vis AIStore storage targets. This functionality is limited to GET requests only and must be used with caution and consideration. Related [configuration variable](/deploy/dev/local/aisnode_config.sh) is called `rproxy` - see sub-section `http` of the section `net`. For further details, please refer to [this readme](/docs/rproxy.md).
+AIStore gateway can act as a reverse proxy vis-à-vis AIStore storage targets. This functionality is limited to GET requests only and must be used with caution and consideration. Related [configuration variable](/deploy/dev/local/aisnode_config.sh) is called `rproxy` - see sub-section `http` of the section `net`. For further details, please refer to [this readme](rproxy.md).
 
 ## Curl examples
 

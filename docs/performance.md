@@ -18,9 +18,8 @@ Below you will find some tips and tricks to ensure that AIStore does deliver.
 # Performance tuning
 
 Articles you may find useful:
-
-* https://wiki.mikejung.biz/Ubuntu_Performance_Tuning <- good guide about general optimizations (some of them are described below)
-* https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/pdf/performance_tuning_guide/Red_Hat_Enterprise_Linux-7-Performance_Tuning_Guide-en-US.pdf <- detailed view on how to tune the RHEL lot of the tips and tricks apply for other Linux distributions
+* [Ubuntu Performance Tuning (archived)](https://web.archive.org/web/20190811180754/https://wiki.mikejung.biz/Ubuntu_Performance_Tuning) <- good guide about general optimizations (some of them are described below)
+* [RHEL 7 Performance Tuning Guide](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/pdf/performance_tuning_guide/Red_Hat_Enterprise_Linux-7-Performance_Tuning_Guide-en-US.pdf) <- detailed view on how to tune the RHEL lot of the tips and tricks apply for other Linux distributions
 
 ## CPU
 
@@ -45,7 +44,7 @@ Once the packages are installed (the step that will depend on your Linux distrib
 * Optimize TCP send buffer sizes on the target side (`net.core.rmem_max`, `net.ipv4.tcp_rmem`)
 * Optimize TCP receive buffer on the client (reading) side (`net.core.wmem_max`, `net.ipv4.tcp_wmem`)
 * `net.ipv4.tcp_mtu_probing = 2` # especially important in communication between client <-> proxy or client <-> target and if client has `mtu` set > 1500
-* Wait.. there is more: [all ip-sysctl configurations](https://www.cyberciti.biz/files/linux-kernel/Documentation/networking/ip-sysctl.txt)
+* Wait.. there is more: [all ip-sysctl configurations](https://wiki.linuxfoundation.org/networking/ip-sysctl)
 
 ### Smoke test
 
@@ -189,7 +188,7 @@ Metadata write policy - json tag `md_write` - was introduced specifically to sup
 
 # Performance testing
 
-[AIStore load generator](/docs/howto_benchmark.md) is a built-in tool to test performance. One of the most common questions that arise when analyzing performance results is whether the bottleneck is imposed by the hardware - namely, HDDs.
+[AIStore load generator](howto_benchmark.md) is a built-in tool to test performance. One of the most common questions that arise when analyzing performance results is whether the bottleneck is imposed by the hardware - namely, HDDs.
 
 To that end, AIStore supports switching off disk IO to, effectively, perform dry-run type benchmarking. This can be done by passing command-line arguments or by setting environment variables (see below).
 

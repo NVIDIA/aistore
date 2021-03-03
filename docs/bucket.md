@@ -43,7 +43,7 @@ All the [supported storage services](storage_svcs.md) equally apply to all stora
 | Kind | Description | Supported Storage Services |
 | --- | --- | --- |
 | AIS buckets | buckets that are **not** 3rd party backend-based. AIS buckets store user objects and support user-specified bucket properties (e.g., 3 copies). Unlike remote buckets, ais buckets can be created through the [RESTful API](http_api.md). Similar to remote buckets, ais buckets are distributed and balanced, content-wise, across the entire AIS cluster. | [Checksumming](storage_svcs.md#checksumming), [LRU (advanced usage)](storage_svcs.md#lru-for-local-buckets), [Erasure Coding](storage_svcs.md#erasure-coding), [Local Mirroring and Load Balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
-| remote buckets | When AIS is deployed as [fast tier](/docs/overview.md#fast-tier), buckets in the cloud storage can be viewed and accessed through the [RESTful API](http_api.md) in AIS, in the exact same way as ais buckets. When this happens, AIS creates local instances of said buckets which then serves as a cache. These are referred to as **3rd party backend-based buckets**. | [Checksumming](storage_svcs.md#checksumming), [LRU](storage_svcs.md#lru), [Erasure Coding](storage_svcs.md#erasure-coding), [Local mirroring and load balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
+| remote buckets | When AIS is deployed as [fast tier](overview.md#fast-tier), buckets in the cloud storage can be viewed and accessed through the [RESTful API](http_api.md) in AIS, in the exact same way as ais buckets. When this happens, AIS creates local instances of said buckets which then serves as a cache. These are referred to as **3rd party backend-based buckets**. | [Checksumming](storage_svcs.md#checksumming), [LRU](storage_svcs.md#lru), [Erasure Coding](storage_svcs.md#erasure-coding), [Local mirroring and load balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
 
 3rd party backend-based and AIS buckets support the same API with a few documented exceptions. Remote buckets can be *evicted* from AIS. AIS buckets are the only buckets that can be created, renamed, and deleted via the [RESTful API](http_api.md).
 
@@ -66,12 +66,12 @@ The rest of this document serves to further explain features and concepts specif
 
 AIS buckets are the AIStore-own distributed buckets that are not associated with any 3rd party Cloud.
 
-The [RESTful API](docs/http_api.md) can be used to create, rename and, destroy ais buckets.
+The [RESTful API](http_api.md) can be used to create, rename and, destroy ais buckets.
 
 New ais buckets must be given a unique name that does not duplicate any existing ais or remote bucket.
 
 If you are going to use an AIS bucket as an S3-compatible one, consider changing the bucket's checksum to `MD5`.
-For details, see [S3 compatibility](/docs/s3compat.md#s3-compatibility).
+For details, see [S3 compatibility](s3compat.md#s3-compatibility).
 
 ### CLI examples: create, rename and, destroy ais bucket
 
@@ -147,7 +147,7 @@ train-002.tgz     136.44KiB
 
 ## Remote Bucket
 
-Remote buckets are buckets that use 3rd party storage (AWS/GCP/Azure or HDFS) when AIS is deployed as [fast tier](/docs/overview.md#fast-tier).
+Remote buckets are buckets that use 3rd party storage (AWS/GCP/Azure or HDFS) when AIS is deployed as [fast tier](overview.md#fast-tier).
 Any reference to "Cloud buckets" refer to remote buckets that use a public cloud bucket as their backend (i.e. AWS/GCP/Azure, but not HDFS).
 
 > By default, AIS does not keep track of the remote buckets in its configuration map. However, if users modify the properties of the remote bucket, AIS will then keep track.
@@ -258,7 +258,7 @@ Hadoop and HDFS is well known and widely used software for distributed processin
 For years, it has been considered as a standard for big data.
 
 HDFS backend provider is a way to access files contained inside the HDFS cluster from AIStore.
-Here we will talk about standard configuration and usages (see also [full tutorial on HDFS provider](/docs/tutorials/various/hdfs_backend.md)).
+Here we will talk about standard configuration and usages (see also [full tutorial on HDFS provider](tutorials/various/hdfs_backend.md)).
 
 #### Configuration
 

@@ -120,7 +120,7 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
 * AIS CLI is an easy-to-use command-line management tool supporting a growing number of commands and options (one of the first ones you may want to try could be `ais show cluster` - show the state and status of an AIS cluster). The CLI is documented in the [readme](cmd/cli/README.md); getting started with it boils down to running `make cli` and following the prompts.
 * For more testing commands and options, please refer to the [testing README](ais/tests/README.md).
 * For `aisnode` command-line options, see: [command-line options](docs/command_line.md).
-* For helpful links and/or background on Go, AWS, GCP, and Deep Learning: [helpful links](docs/helpful-links.md).
+* For helpful links and/or background on Go, AWS, GCP, and Deep Learning: [helpful links](docs/helpful_links.md).
 * And again, run `make help` to find out how to build, run, and test AIStore and tools.
 
 ## Guides and References

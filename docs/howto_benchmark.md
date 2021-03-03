@@ -11,7 +11,7 @@ $ make aisloader
 $ $GOPATH/bin/aisloader
 ```
 
-Following in this document are a few *easy* usage examples and dry-run instructions. For detailed description and more examples, please see [aisloader readme](bench/aisloader.README.md).
+Following in this document are a few *easy* usage examples and dry-run instructions. For detailed description and more examples, please see [aisloader readme](bench/aisloader/README.md).
 
 ### Basic Examples
 

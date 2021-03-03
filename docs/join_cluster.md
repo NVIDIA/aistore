@@ -3,7 +3,7 @@
 
 ## Joining a Cluster
 
-First, some basic facts. AIStore clusters can be deployed with an arbitrary number of AIStore proxies. Each proxy/gateway implements RESTful API and provides full access to objects stored in the cluster. Each proxy collaborates with all other proxies to perform majority-voted HA failovers (section [Highly Available Control Plane](/docs/ha.md).
+First, some basic facts. AIStore clusters can be deployed with an arbitrary number of AIStore proxies. Each proxy/gateway implements RESTful API and provides full access to objects stored in the cluster. Each proxy collaborates with all other proxies to perform majority-voted HA failovers (section [Highly Available Control Plane](ha.md).
 
 There are some subtle differences between proxies, though. Two of them can be designated via [AIStore configuration](/deploy/dev/local/aisnode_config.sh)) as an *original* and a *discovery*. The *original* (located at the configurable `original_url`) is expected to point to the primary at the cluster initial deployment time.
 

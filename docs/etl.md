@@ -37,7 +37,7 @@ Technically, the service supports running user-provided ETL containers **and** c
 
 Note AIS-ETL (service) requires [Kubernetes](https://kubernetes.io).
 
-For getting-started details and numerous examples, please refer to rest of this document and the [playbooks directory](/docs/tutorials/README.md).
+For getting-started details and numerous examples, please refer to rest of this document and the [playbooks directory](tutorials/README.md).
 
 ## Getting Started
 
@@ -75,9 +75,9 @@ The example above uses [AIS CLI](/cmd/cli/README.md) to:
 
 > If you already have a running AIStore cluster deployed on Kubernetes, skip this section and go to the [Initialize ETL](#defining-and-initializing-etl) section.
 
-To deploy ETL-ready AIStore cluster, please refer to [Getting Started](/docs/getting_started.md).
+To deploy ETL-ready AIStore cluster, please refer to [Getting Started](getting_started.md).
 
-> Note that you have to choose one of the deployment types that supports Kubernetes - for example, [Cloud Deployment](/docs/getting_started.md#cloud-deployment).
+> Note that you have to choose one of the deployment types that supports Kubernetes - for example, [Cloud Deployment](getting_started.md#cloud-deployment).
 
 > During the AIStore on Kubernetes deployment, `HOSTNAME` environment variable, set by Kubernetes, **shouldn't** be overwritten - AIS target uses it to discover its Pod and Node name.
 > In some environments (like `minikube`) the `HOSTNAME` is not reliable and in such cases it's required to set `K8S_NODE_NAME` in Pod spec:
@@ -118,7 +118,7 @@ In effect, a user can skip the entire step of writing own Dockerfile and buildin
 
 > If you are familiar with [FasS](https://en.wikipedia.org/wiki/Function_as_a_service), then you probably will find this type of ETL initialization the most intuitive.
 
-For detailed step-by-step tutorial on `build` request, please see [ImageNet ETL playbook](/docs/tutorials/etl/etl_imagenet_pytorch.md).
+For detailed step-by-step tutorial on `build` request, please see [ImageNet ETL playbook](tutorials/etl/etl_imagenet_pytorch.md).
 
 #### `transform` function
 
@@ -151,7 +151,7 @@ Still, since the number of supported  *runtimes* will always remain somewhat lim
 It allows running any Docker image that implements certain requirements on communication with the cluster. 
 The 'init' request requires writing a Pod specification following specification requirements.
 
-For detailed step-by-step tutorial on `init` request, please see [MD5 ETL playbook](/docs/tutorials/etl/compute_md5.md).
+For detailed step-by-step tutorial on `init` request, please see [MD5 ETL playbook](tutorials/etl/compute_md5.md).
 
 #### Requirements
 

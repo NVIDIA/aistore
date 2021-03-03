@@ -112,7 +112,7 @@ $ make kill deploy <<< $'10\n3\n2\nn\nn\nn\nn\nn\n'
 
 > `make kill` will terminate local AIStore if it's already running.
 
-For more development options and tools, please refer to [development docs](docs/development.md).
+For more development options and tools, please refer to [development docs](development.md).
 
 Finally, the `go test` (above) will create an AIS bucket, configure it as a two-way mirror, generate thousands of random objects, read them all several times, and then destroy the replicas and eventually the bucket as well.
 
@@ -125,7 +125,7 @@ $ BUCKET=aws://myS3bucket go test ./tests -v -run=download
 
 ## Kubernetes Playground
 
-In our development and testing, we make use of [Minikube](https://kubernetes.io/docs/tutorials/hello-minikube/) and the capability, further documented [here](/deploy/dev/k8s/README.md), to run Kubernetes cluster on a single development machine. There's a distinct advantage that AIStore extensions that require Kubernetes - such as [Extract-Transform-Load](/docs/etl.md), for example - can be developed rather efficiently.
+In our development and testing, we make use of [Minikube](https://kubernetes.io/docs/tutorials/hello-minikube/) and the capability, further documented [here](/deploy/dev/k8s/README.md), to run Kubernetes cluster on a single development machine. There's a distinct advantage that AIStore extensions that require Kubernetes - such as [Extract-Transform-Load](etl.md), for example - can be developed rather efficiently.
 
 * [AIStore on Minikube](/deploy/dev/k8s/README.md)
 

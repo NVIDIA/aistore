@@ -22,8 +22,8 @@ The following is a quick summary:
 
 | Client | Reference | Build Tag | Default |
 |--- | --- | --- | ---|
-| `net/http` | [golang.org/pkg/net/http](golang.org/pkg/net/http) | `nethttp` | no |
-| `fasthttp` | [github.com/valyala/fasthttp](github.com/valyala/fasthttp) | n/a  | yes |
+| `net/http` | [golang.org/pkg/net/http](https://golang.org/pkg/net/http/) | `nethttp` | no |
+| `fasthttp` | [github.com/valyala/fasthttp](https://github.com/valyala/fasthttp) | n/a  | yes |
 
 To test with net/http, run:
 
