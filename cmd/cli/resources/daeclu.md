@@ -225,8 +225,8 @@ LRU Config
 
 ## Set config
 
-`ais cluster config KEY=VALUE [KEY=VALUE...]`
-`ais cluster config DAEMON_ID KEY=VALUE [KEY=VALUE...]`
+`ais cluster configure KEY=VALUE [KEY=VALUE...]`
+`ais cluster configure DAEMON_ID KEY=VALUE [KEY=VALUE...]`
 
 Set configuration for a specific daemon or the entire cluster by specifying key-value pairs.
 To set config for the entire cluster, omit the `DEAMON_ID` argument.
@@ -243,6 +243,6 @@ The latter case requires the key to be a fully-qualified name.
 Change `periodic.stats_time` and `disk.disk_util_low_wm` config values for the entire cluster.
 
 ```console
-$ ais cluster config periodic.stats_time 10s disk.disk_util_low_wm 40
+$ ais cluster configure periodic.stats_time 10s disk.disk_util_low_wm 40
 Config has been updated successfully.
 ```

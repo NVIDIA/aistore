@@ -22,6 +22,10 @@ var _ = Describe("IterFields", func() {
 			Foo Foo    `json:"foo"`
 			C   string `json:"c"`
 		}
+		barInline struct {
+			Foo `json:",inline"`
+			C   string `json:"c"`
+		}
 	)
 
 	Describe("IterFields", func() {
@@ -165,6 +169,23 @@ var _ = Describe("IterFields", func() {
 				"foo.b": 10,
 				"foo":   Foo{A: 3, B: 10},
 				"c":     "string",
+			}
+
+			got := make(map[string]interface{})
+			err := cmn.IterFields(v, func(tag string, field cmn.IterField) (error, bool) {
+				got[tag] = field.Value()
+				return nil, false
+			}, cmn.IterOpts{VisitAll: true})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(got).To(Equal(expected))
+		})
+
+		It("list inline fields", func() {
+			v := barInline{Foo: Foo{A: 3, B: 10}, C: "string"}
+			expected := map[string]interface{}{
+				"b": 10,
+				"":  Foo{A: 3, B: 10},
+				"c": "string",
 			}
 
 			got := make(map[string]interface{})

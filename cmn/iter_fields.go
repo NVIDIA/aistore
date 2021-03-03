@@ -15,6 +15,7 @@ const (
 	tagOmitempty = "omitempty" // the field must be omitted when empty (only for read-only walk)
 	tagOmit      = "omit"      // the field must be omitted
 	tagReadonly  = "readonly"  // the field can be only read
+	tagInline    = "inline"    // the fields of a struct are embedded into parent field keys
 )
 
 type (
@@ -94,6 +95,7 @@ func iterFields(prefix string, v interface{}, updf updateFunc, opts IterOpts) (d
 		var (
 			srcTyField  = srcVal.Type().Field(i)
 			srcValField = srcVal.Field(i)
+			isInline    bool
 		)
 
 		// Check if we need to skip given field.
@@ -103,9 +105,13 @@ func iterFields(prefix string, v interface{}, updf updateFunc, opts IterOpts) (d
 		}
 
 		jsonTag, jsonTagPresent := srcTyField.Tag.Lookup("json")
-		fieldName := strings.Split(jsonTag, ",")[0]
+		tags := strings.Split(jsonTag, ",")
+		fieldName := tags[0]
 		if fieldName == "-" {
 			continue
+		}
+		if len(tags) > 1 {
+			isInline = tags[1] == tagInline
 		}
 
 		// Determines if the pointer to struct was allocated.
@@ -162,7 +168,7 @@ func iterFields(prefix string, v interface{}, updf updateFunc, opts IterOpts) (d
 				dirtyField = field.dirty
 			}
 
-			if !strings.HasSuffix(p, ".") {
+			if !strings.HasSuffix(p, ".") && !isInline {
 				p += "."
 			}
 

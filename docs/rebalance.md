@@ -30,7 +30,7 @@ It might be easier and faster, though, to use [AIS CLI](../cmd/cli/README.md) - 
 1. Disable automated global rebalance (for instance, to perform maintenance or upgrade operations) and show resulting config in JSON on a randomly selected target:
 
 ```console
-$ ais cluster config rebalance.enabled=false
+$ ais cluster configure rebalance.enabled=false
 config successfully updated
 
 $ ais show config 361179t8088 --json | grep -A 6  rebalance
@@ -48,7 +48,7 @@ $ ais show config 361179t8088 --json | grep -A 6  rebalance
 2. Re-enable automated global rebalance and show resulting config section as a simple `name/value` list:
 
 ```console
-$ ais cluster config rebalance.enabled=true
+$ ais cluster configure rebalance.enabled=true
 config successfully updated
 
 $ ais show config <TAB-TAB>
@@ -135,7 +135,7 @@ Automated resilvering can also be disabled. Just like with `rebalance`, the resu
 NOTE: When automated resilvering is disabled, removing a mountpath may result in data loss.
 
 ```console
-$ ais cluster config resilver.enabled=false
+$ ais cluster configure resilver.enabled=false
 config successfully updated
 
 $ ais show config 361179t8088 resilver --json | grep -A 2 resilver 
@@ -143,7 +143,7 @@ $ ais show config 361179t8088 resilver --json | grep -A 2 resilver
         "enabled": false
     },
 
-$ ais cluster config resilver.enabled=true
+$ ais cluster configure resilver.enabled=true
 config successfully updated
 
 $ ais show config <TAB-TAB>
