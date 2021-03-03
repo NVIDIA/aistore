@@ -281,6 +281,11 @@ func (e *ErrInvalidBucketProvider) Error() string {
 	return fmt.Sprintf("%v, bucket %s", e.err, e.bck)
 }
 
+func (e *ErrInvalidBucketProvider) Is(target error) bool {
+	_, ok := target.(*ErrInvalidBucketProvider)
+	return ok
+}
+
 func NewErrorBucketIsBusy(bck Bck) *ErrBucketIsBusy {
 	return &ErrBucketIsBusy{bck: bck}
 }

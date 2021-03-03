@@ -84,10 +84,10 @@ The following table describes JSON/YAML keys which can be used in the specificat
 | `extension` | `string` | extension of input and output shards (either `.tar`, `.tgz` or `.zip`) | yes | |
 | `input_format` | `string` | name template for input shard | yes | |
 | `output_format` | `string` | name template for output shard | yes | |
-| `bucket` | `string` | bucket where shards objects are stored | yes | |
-| `provider` | `string` | backend provider (ais or cloud) | no | `"ais"` |
-| `output_bucket` | `string` | bucket where new output shards will be saved | no | same as `bucket` |
-| `output_provider` | `string` | determines whether the output bucket is ais or cloud | no | same as `provider` |
+| `bck.name` | `string` | bucket name where shards objects are stored | yes | |
+| `bck.provider` | `string` | bucket backend provider, see [docs](/docs/providers.md) | no | `"ais"` |
+| `output_bck.name` | `string` | bucket name where new output shards will be saved | no | same as `bck.name` |
+| `output_bck.provider` | `string` | bucket backend provider, see [docs](/docs/providers.md) | no | same as `bck.provider` |
 | `description` | `string` | description of dSort job | no | `""` |
 | `output_shard_size` | `string` | size (in bytes) of the output shard, can be in form of raw numbers `10240` or suffixed `10KB` | yes | |
 | `algorithm.kind` | `string` | determines which sorting algorithm dSort job uses, available are: `"alphanumeric"`, `"shuffle"`, `"content"` | no | `"alphanumeric"` |
@@ -126,7 +126,7 @@ Assuming that `dsort_spec.json` contains:
 ```json
 {
     "extension": ".tar",
-    "bucket": "dsort-testing",
+    "bck": {"name": "dsort-testing"},
     "input_format": "shard-{0..9}",
     "output_format": "new-shard-{0000..1000}",
     "output_shard_size": "10KB",
@@ -153,7 +153,8 @@ Each of the **output** shards will have at least `10240` bytes (`10KB`) and will
 ```console
 $ ais job start dsort -f - <<EOM
 extension: .tar
-bucket: dsort-testing
+bck:
+    name: dsort-testing
 input_format: shard-{0..9}
 output_format: new-shard-{0000..1000}
 output_shard_size: 10KB
@@ -204,7 +205,7 @@ You can run:
 ```console
 $ ais job start dsort '{
     "extension": ".tar",
-    "bucket": "dsort-testing",
+    "bck": {name: "dsort-testing"},
     "input_format": "shard-{0..9}",
     "output_shard_size": "200KB",
     "description": "pack records into categorized shards",

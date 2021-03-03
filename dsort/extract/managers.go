@@ -66,9 +66,7 @@ type (
 		Records *Records
 
 		t                   cluster.Target
-		daemonID            string
-		bucket              string
-		provider            string
+		bck                 cmn.Bck
 		extension           string
 		onDuplicatedRecords func(string) error
 
@@ -84,15 +82,13 @@ type (
 	}
 )
 
-func NewRecordManager(t cluster.Target, daemonID, bucket, provider, extension string, extractCreator ExtractCreator,
+func NewRecordManager(t cluster.Target, bck cmn.Bck, extension string, extractCreator ExtractCreator,
 	keyExtractor KeyExtractor, onDuplicatedRecords func(string) error) *RecordManager {
 	return &RecordManager{
 		Records: NewRecords(1000),
 
 		t:                   t,
-		daemonID:            daemonID,
-		bucket:              bucket,
-		provider:            provider,
+		bck:                 bck,
 		extension:           extension,
 		onDuplicatedRecords: onDuplicatedRecords,
 
@@ -199,7 +195,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 	rm.Records.Insert(&Record{
 		Key:      key,
 		Name:     recordUniqueName,
-		DaemonID: rm.daemonID,
+		DaemonID: rm.t.SID(),
 		Objects: []*RecordObj{{
 			ContentPath:    contentPath,
 			ObjectFileType: args.fileType,
@@ -268,7 +264,7 @@ func (rm *RecordManager) encodeRecordName(storeType, shardName, recordName strin
 		//  * fullContentPath = fqn to recordUniqueName with extension (eg. <bucket_fqn>/shard_1-record_name.cls)
 		recordExt := Ext(recordName)
 		contentPath := rm.genRecordUniqueName(shardName, recordName) + recordExt
-		ct, err := cluster.NewCTFromBO(rm.bucket, rm.provider, contentPath, nil)
+		ct, err := cluster.NewCTFromBO(rm.bck.Name, rm.bck.Provider, contentPath, nil)
 		cmn.Assert(err == nil)
 		return contentPath, ct.Make(filetype.DSortFileType)
 	default:
@@ -282,7 +278,7 @@ func (rm *RecordManager) FullContentPath(obj *RecordObj) string {
 	case OffsetStoreType:
 		// To convert contentPath to fullContentPath we need to make shard name
 		// full FQN.
-		ct, err := cluster.NewCTFromBO(rm.bucket, rm.provider, obj.ContentPath, nil)
+		ct, err := cluster.NewCTFromBO(rm.bck.Name, rm.bck.Provider, obj.ContentPath, nil)
 		cmn.Assert(err == nil)
 		return ct.Make(obj.ObjectFileType)
 	case SGLStoreType:
@@ -293,7 +289,7 @@ func (rm *RecordManager) FullContentPath(obj *RecordObj) string {
 		// To convert contentPath to fullContentPath we need to make record
 		// unique name full FQN.
 		contentPath := obj.ContentPath
-		ct, err := cluster.NewCTFromBO(rm.bucket, rm.provider, contentPath, nil)
+		ct, err := cluster.NewCTFromBO(rm.bck.Name, rm.bck.Provider, contentPath, nil)
 		cmn.Assert(err == nil)
 		return ct.Make(filetype.DSortFileType)
 	default:

@@ -213,10 +213,8 @@ func (df *dsortFramework) init() {
 func (df *dsortFramework) gen() dsort.RequestSpec {
 	return dsort.RequestSpec{
 		Description:         generateDSortDesc(),
-		Bucket:              df.m.bck.Name,
-		Provider:            df.m.bck.Provider,
-		OutputBucket:        df.outputBck.Name,
-		OutputProvider:      df.outputBck.Provider,
+		Bck:                 df.m.bck,
+		OutputBck:           df.outputBck,
 		Extension:           df.extension,
 		InputFormat:         df.inputTempl,
 		OutputFormat:        df.outputTempl,

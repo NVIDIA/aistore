@@ -28,7 +28,7 @@ var _ = Describe("RequestSpec", func() {
 	Context("requests specs which should pass", func() {
 		It("should parse minimal spec", func() {
 			rs := RequestSpec{
-				Bucket:          "test",
+				Bck:             cmn.Bck{Name: "test"},
 				Extension:       cmn.ExtTar,
 				InputFormat:     "prefix-{0010..0111..2}-suffix",
 				OutputFormat:    "prefix-{10..111}-suffix",
@@ -39,10 +39,10 @@ var _ = Describe("RequestSpec", func() {
 			parsed, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(parsed.Bucket).To(Equal("test"))
-			Expect(parsed.OutputBucket).To(Equal("test"))
-			Expect(parsed.Provider).To(Equal(cmn.ProviderAIS))
-			Expect(parsed.OutputProvider).To(Equal(cmn.ProviderAIS))
+			Expect(parsed.Bck.Name).To(Equal("test"))
+			Expect(parsed.Bck.Provider).To(Equal(cmn.ProviderAIS))
+			Expect(parsed.OutputBck.Name).To(Equal("test"))
+			Expect(parsed.OutputBck.Provider).To(Equal(cmn.ProviderAIS))
 			Expect(parsed.Extension).To(Equal(cmn.ExtTar))
 
 			Expect(parsed.InputFormat.Template).To(Equal(cmn.ParsedTemplate{
@@ -75,10 +75,8 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should set buckets correctly", func() {
 			rs := RequestSpec{
-				Bucket:          "test",
-				Provider:        cmn.ProviderAmazon,
-				OutputBucket:    "testing",
-				OutputProvider:  cmn.ProviderAmazon,
+				Bck:             cmn.Bck{Provider: cmn.ProviderAmazon, Name: "test"},
+				OutputBck:       cmn.Bck{Provider: cmn.ProviderAmazon, Name: "testing"},
 				Extension:       cmn.ExtTar,
 				InputFormat:     "prefix-{0010..0111..2}-suffix",
 				OutputFormat:    "prefix-{10..111}-suffix",
@@ -89,15 +87,16 @@ var _ = Describe("RequestSpec", func() {
 			parsed, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(parsed.Bucket).To(Equal("test"))
-			Expect(parsed.OutputBucket).To(Equal("testing"))
-			Expect(parsed.Provider).To(Equal(cmn.ProviderAmazon))
-			Expect(parsed.OutputProvider).To(Equal(cmn.ProviderAmazon))
+			Expect(parsed.Bck.Name).To(Equal("test"))
+			Expect(parsed.Bck.Provider).To(Equal(cmn.ProviderAmazon))
+			Expect(parsed.OutputBck.Name).To(Equal("testing"))
+			Expect(parsed.OutputBck.Provider).To(Equal(cmn.ProviderAmazon))
 		})
 
 		It("should parse spec with mem usage as bytes", func() {
 			rs := RequestSpec{
-				Bucket:          "test",
+				Bck: cmn.Bck{Name: "test"},
+
 				Extension:       cmn.ExtTar,
 				InputFormat:     "prefix-{0010..0111}-suffix",
 				OutputFormat:    "prefix-{0010..0111}-suffix",
@@ -114,7 +113,7 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should parse spec with .tgz extension", func() {
 			rs := RequestSpec{
-				Bucket:          "test",
+				Bck:             cmn.Bck{Name: "test"},
 				Extension:       cmn.ExtTgz,
 				InputFormat:     "prefix-{0010..0111}-suffix",
 				OutputFormat:    "prefix-{0010..0111}-suffix",
@@ -129,7 +128,7 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should parse spec with .tar.gz extension", func() {
 			rs := RequestSpec{
-				Bucket:          "test",
+				Bck:             cmn.Bck{Name: "test"},
 				Extension:       cmn.ExtTarTgz,
 				InputFormat:     "prefix-{0010..0111}-suffix",
 				OutputFormat:    "prefix-{0010..0111}-suffix",
@@ -144,7 +143,7 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should parse spec with .tar.gz extension", func() {
 			rs := RequestSpec{
-				Bucket:          "test",
+				Bck:             cmn.Bck{Name: "test"},
 				Extension:       cmn.ExtZip,
 				InputFormat:     "prefix-{0010..0111}-suffix",
 				OutputFormat:    "prefix-{0010..0111}-suffix",
@@ -159,7 +158,7 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should parse spec with %06d syntax", func() {
 			rs := RequestSpec{
-				Bucket:          "test",
+				Bck:             cmn.Bck{Name: "test"},
 				Extension:       cmn.ExtTgz,
 				InputFormat:     "prefix-{0010..0111}-suffix",
 				OutputFormat:    "prefix-%06d-suffix",
@@ -183,7 +182,7 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should parse spec with @ syntax", func() {
 			rs := RequestSpec{
-				Bucket:          "test",
+				Bck:             cmn.Bck{Name: "test"},
 				Extension:       cmn.ExtTgz,
 				InputFormat:     "prefix@0111-suffix",
 				OutputFormat:    "prefix-@000111-suffix",
@@ -219,7 +218,7 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should parse spec and set default conc limits", func() {
 			rs := RequestSpec{
-				Bucket:              "test",
+				Bck:                 cmn.Bck{Name: "test"},
 				Extension:           cmn.ExtTar,
 				InputFormat:         "prefix-{0010..0111}-suffix",
 				OutputFormat:        "prefix-{0010..0111}-suffix",
@@ -242,7 +241,7 @@ var _ = Describe("RequestSpec", func() {
 			cmn.GCO.CommitUpdate(cfg)
 
 			rs := RequestSpec{
-				Bucket:              "test",
+				Bck:                 cmn.Bck{Name: "test"},
 				Extension:           cmn.ExtTar,
 				InputFormat:         "prefix-{0010..0111}-suffix",
 				OutputFormat:        "prefix-{0010..0111}-suffix",
@@ -271,7 +270,7 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should pass when output shard is zero and bash or @ template is used for output format", func() {
 			rs := RequestSpec{
-				Bucket:       "test",
+				Bck:          cmn.Bck{Name: "test"},
 				Extension:    cmn.ExtTar,
 				InputFormat:  "prefix-{0010..0111..2}-suffix",
 				OutputFormat: "prefix-{10..111}-suffix",
@@ -281,7 +280,7 @@ var _ = Describe("RequestSpec", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 
 			rs = RequestSpec{
-				Bucket:       "test",
+				Bck:          cmn.Bck{Name: "test"},
 				Extension:    cmn.ExtTar,
 				InputFormat:  "prefix-{0010..0111..2}-suffix",
 				OutputFormat: "prefix-@111-suffix",
@@ -304,9 +303,32 @@ var _ = Describe("RequestSpec", func() {
 			Expect(err).To(Equal(errMissingBucket))
 		})
 
+		It("should fail due to invalid bucket provider", func() {
+			rs := RequestSpec{
+				Bck:       cmn.Bck{Provider: "invalid", Name: "test"},
+				Extension: ".txt",
+				Algorithm: SortAlgorithm{Kind: SortKindNone},
+			}
+			_, err := rs.Parse()
+			Expect(err).Should(HaveOccurred())
+			Expect(err).Should(MatchError(&cmn.ErrInvalidBucketProvider{}))
+		})
+
+		It("should fail due to invalid output bucket provider", func() {
+			rs := RequestSpec{
+				Bck:       cmn.Bck{Provider: cmn.ProviderAIS, Name: "test"},
+				OutputBck: cmn.Bck{Provider: "invalid", Name: "test"},
+				Extension: ".txt",
+				Algorithm: SortAlgorithm{Kind: SortKindNone},
+			}
+			_, err := rs.Parse()
+			Expect(err).Should(HaveOccurred())
+			Expect(err).Should(MatchError(&cmn.ErrInvalidBucketProvider{}))
+		})
+
 		It("should fail due to start after end in input format", func() {
 			rs := RequestSpec{
-				Bucket:          "test",
+				Bck:             cmn.Bck{Name: "test"},
 				Extension:       cmn.ExtTar,
 				OutputShardSize: "10KB",
 				InputFormat:     "prefix-{0112..0111}-suffix",
@@ -320,7 +342,7 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should fail due to start after end in output format", func() {
 			rs := RequestSpec{
-				Bucket:          "test",
+				Bck:             cmn.Bck{Name: "test"},
 				Extension:       cmn.ExtTar,
 				OutputShardSize: "10KB",
 				InputFormat:     "prefix-{0010..0111}-suffix",
@@ -334,7 +356,7 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should fail due invalid parentheses", func() {
 			rs := RequestSpec{
-				Bucket:          "test",
+				Bck:             cmn.Bck{Name: "test"},
 				Extension:       cmn.ExtTar,
 				OutputShardSize: "10KB",
 				InputFormat:     "prefix-}{0001..0111}-suffix",
@@ -348,7 +370,7 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should fail due to invalid extension", func() {
 			rs := RequestSpec{
-				Bucket:          "test",
+				Bck:             cmn.Bck{Name: "test"},
 				Extension:       ".jpg",
 				InputFormat:     "prefix-{0010..0111}-suffix",
 				OutputFormat:    "prefix-{0010..0111}-suffix",
@@ -362,7 +384,7 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should fail due to invalid mem usage specification", func() {
 			rs := RequestSpec{
-				Bucket:          "test",
+				Bck:             cmn.Bck{Name: "test"},
 				Extension:       cmn.ExtTar,
 				InputFormat:     "prefix-{0010..0111}-suffix",
 				OutputFormat:    "prefix-{0010..0111}-suffix",
@@ -377,7 +399,7 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should fail due to invalid mem usage percent specified", func() {
 			rs := RequestSpec{
-				Bucket:          "test",
+				Bck:             cmn.Bck{Name: "test"},
 				Extension:       cmn.ExtTar,
 				InputFormat:     "prefix-{0010..0111}-suffix",
 				OutputFormat:    "prefix-{0010..0111}-suffix",
@@ -392,7 +414,7 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should fail due to invalid mem usage bytes specified", func() {
 			rs := RequestSpec{
-				Bucket:          "test",
+				Bck:             cmn.Bck{Name: "test"},
 				Extension:       cmn.ExtTar,
 				InputFormat:     "prefix-{0010..0111}-suffix",
 				OutputFormat:    "prefix-{0010..0111}-suffix",
@@ -407,7 +429,7 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should fail due to invalid extract concurrency specified", func() {
 			rs := RequestSpec{
-				Bucket:              "test",
+				Bck:                 cmn.Bck{Name: "test"},
 				Extension:           cmn.ExtTar,
 				InputFormat:         "prefix-{0010..0111}-suffix",
 				OutputFormat:        "prefix-{0010..0111}-suffix",
@@ -422,7 +444,7 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should fail due to invalid create concurrency specified", func() {
 			rs := RequestSpec{
-				Bucket:             "test",
+				Bck:                cmn.Bck{Name: "test"},
 				Extension:          cmn.ExtTar,
 				InputFormat:        "prefix-{0010..0111}-suffix",
 				OutputFormat:       "prefix-{0010..0111}-suffix",
@@ -437,7 +459,7 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should fail due to invalid dsort config value", func() {
 			rs := RequestSpec{
-				Bucket:          "test",
+				Bck:             cmn.Bck{Name: "test"},
 				Extension:       cmn.ExtTar,
 				InputFormat:     "prefix-{0010..0111..2}-suffix",
 				OutputFormat:    "prefix-{10..111}-suffix",
@@ -452,7 +474,7 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should fail when output shard size is empty and output format is %06d", func() {
 			rs := RequestSpec{
-				Bucket:       "test",
+				Bck:          cmn.Bck{Name: "test"},
 				Extension:    cmn.ExtTar,
 				InputFormat:  "prefix-{0010..0111..2}-suffix",
 				OutputFormat: "prefix-%06d-suffix",

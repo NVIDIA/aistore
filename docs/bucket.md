@@ -1,7 +1,7 @@
 ## Table of Contents
 
 - [Bucket](#bucket)
-  - [Backend Provider](#bucket-provider)
+  - [Backend Provider](#backend-provider)
 - [AIS Bucket](#ais-bucket)
   - [CLI examples: create, rename and, destroy ais bucket](#cli-examples-create-rename-and-destroy-ais-bucket)
   - [CLI example: working with remote AIS bucket](#cli-example-working-with-remote-ais-bucket)

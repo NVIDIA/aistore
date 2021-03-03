@@ -70,16 +70,16 @@ type parsedOutputTemplate struct {
 // nolint:maligned // no performance critical code
 type RequestSpec struct {
 	// Required
-	Bucket          string `json:"bucket" yaml:"bucket"`
-	Extension       string `json:"extension" yaml:"extension"`
-	InputFormat     string `json:"input_format" yaml:"input_format"`
-	OutputFormat    string `json:"output_format" yaml:"output_format"`
-	OutputShardSize string `json:"output_shard_size" yaml:"output_shard_size"`
+	Bck             cmn.Bck `json:"bck" yaml:"bck"`
+	Extension       string  `json:"extension" yaml:"extension"`
+	InputFormat     string  `json:"input_format" yaml:"input_format"`
+	OutputFormat    string  `json:"output_format" yaml:"output_format"`
+	OutputShardSize string  `json:"output_shard_size" yaml:"output_shard_size"`
 
 	// Optional
 	Description string `json:"description" yaml:"description"`
-	// Default: same as `bucket` field
-	OutputBucket string `json:"output_bucket" yaml:"output_bucket"`
+	// Default: same as `bck` field
+	OutputBck cmn.Bck `json:"output_bck" yaml:"output_bck"`
 	// Default: alphanumeric, increasing
 	Algorithm SortAlgorithm `json:"algorithm" yaml:"algorithm"`
 	// Default: ""
@@ -88,10 +88,6 @@ type RequestSpec struct {
 	OrderFileSep string `json:"order_file_sep" yaml:"order_file_sep"`
 	// Default: "80%"
 	MaxMemUsage string `json:"max_mem_usage" yaml:"max_mem_usage"`
-	// Default: "ais"
-	Provider string `json:"provider" yaml:"provider"`
-	// Default: "ais"
-	OutputProvider string `json:"output_provider" yaml:"output_provider"`
 	// Default: calcMaxLimit()
 	ExtractConcMaxLimit int `json:"extract_concurrency_max_limit" yaml:"extract_concurrency_max_limit"`
 	// Default: calcMaxLimit()
@@ -110,11 +106,9 @@ type RequestSpec struct {
 
 // nolint:maligned // no performance critical code
 type ParsedRequestSpec struct {
-	Bucket              string                `json:"bucket"`
+	Bck                 cmn.Bck               `json:"bck"`
 	Description         string                `json:"description"`
-	OutputBucket        string                `json:"output_bucket"`
-	Provider            string                `json:"provider"`
-	OutputProvider      string                `json:"output_provider"`
+	OutputBck           cmn.Bck               `json:"output_bck"`
 	Extension           string                `json:"extension"`
 	OutputShardSize     int64                 `json:"output_shard_size,string"`
 	InputFormat         *parsedInputTemplate  `json:"input_format"`
@@ -158,22 +152,22 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 		parsedRS = &ParsedRequestSpec{}
 	)
 
-	if rs.Bucket == "" {
+	if rs.Bck.Name == "" {
 		return parsedRS, errMissingBucket
 	}
+	if rs.Bck.Provider == "" {
+		rs.Bck.Provider = cmn.ProviderAIS
+	}
+	if err := rs.Bck.Validate(); err != nil {
+		return parsedRS, err
+	}
 	parsedRS.Description = rs.Description
-	parsedRS.Bucket = rs.Bucket
-	parsedRS.OutputBucket = rs.OutputBucket
-	if parsedRS.OutputBucket == "" {
-		parsedRS.OutputBucket = parsedRS.Bucket
-	}
-	parsedRS.Provider = rs.Provider
-	if parsedRS.Provider == "" {
-		parsedRS.Provider = cmn.ProviderAIS
-	}
-	parsedRS.OutputProvider = rs.OutputProvider
-	if parsedRS.OutputProvider == "" {
-		parsedRS.OutputProvider = cmn.ProviderAIS
+	parsedRS.Bck = rs.Bck
+	parsedRS.OutputBck = rs.OutputBck
+	if parsedRS.OutputBck.IsEmpty() {
+		parsedRS.OutputBck = parsedRS.Bck
+	} else if err := rs.OutputBck.Validate(); err != nil {
+		return parsedRS, err
 	}
 
 	var err error

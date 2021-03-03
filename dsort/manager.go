@@ -479,8 +479,11 @@ func (m *Manager) setExtractCreator() (err error) {
 		m.extractCreator = extract.NopExtractCreator(extractCreator)
 	}
 
-	m.recManager = extract.NewRecordManager(m.ctx.t, m.ctx.node.DaemonID, m.rs.Bucket, m.rs.Provider,
-		m.rs.Extension, m.extractCreator, keyExtractor, onDuplicatedRecords)
+	m.recManager = extract.NewRecordManager(
+		m.ctx.t, m.rs.Bck,
+		m.rs.Extension, m.extractCreator,
+		keyExtractor, onDuplicatedRecords,
+	)
 
 	return nil
 }
