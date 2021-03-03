@@ -77,13 +77,14 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 		}
 		res := p.call(args)
 		er := res.error()
+		bt := res.bytes
 		_freeCallRes(res)
 		if er != nil {
 			p.writeErr(w, r, er)
 			return
 		}
 		// TODO: switch to writeJSON
-		p.writeJSONBytes(w, r, res.bytes, what)
+		p.writeJSONBytes(w, r, bt, what)
 	case cmn.GetWhatTargetIPs:
 		// Return comma-separated IPs of the targets.
 		// It can be used to easily fill the `--noproxy` parameter in cURL.
