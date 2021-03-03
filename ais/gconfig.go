@@ -21,7 +21,7 @@ import (
 
 type (
 	globalConfig struct {
-		cmn.Config
+		cmn.ClusterConfig
 	}
 	configOwner struct {
 		sync.Mutex
@@ -71,7 +71,6 @@ func (co *configOwner) get() *globalConfig {
 }
 
 func (co *configOwner) put(config *globalConfig) {
-	config.SetRole(co.daemonType)
 	co.config.Store(unsafe.Pointer(config))
 }
 
@@ -108,7 +107,7 @@ func (co *configOwner) modify(ctx *configModifier) (err error) {
 }
 
 func (co *configOwner) persist(config *globalConfig) error {
-	local := cmn.GCO.GetLocal()
+	local := cmn.GCO.Get()
 	savePath := path.Join(local.ConfigDir, gconfFname)
 	if err := jsp.Save(savePath, config, jsp.PlainLocal()); err != nil {
 		return err
@@ -120,27 +119,26 @@ func (co *configOwner) persist(config *globalConfig) error {
 // PRECONDITION: `co` should be under lock.
 func (co *configOwner) updateGCO() (err error) {
 	debug.AssertMutexLocked(&co.Mutex)
+	gco := cmn.GCO.Clone()
 	config := co.get().clone()
-	if err := config.SetLocalConf(cmn.GCO.GetLocal()); err != nil {
-		return err
-	}
+	gco.ClusterConfig = config.ClusterConfig
 	override := cmn.GCO.GetOverrideConfig()
 	if override != nil {
-		err = config.Apply(*override)
+		err = gco.Apply(*override)
 	} else {
-		err = config.Validate()
+		err = gco.Validate()
 	}
 	if err != nil {
 		return
 	}
-	cmn.GCO.Put(&config.Config)
+	cmn.GCO.Put(gco)
 	return
 }
 
 func (co *configOwner) load() (err error) {
 	co.Lock()
 	defer co.Unlock()
-	localConf := cmn.GCO.GetLocal()
+	localConf := cmn.GCO.Get()
 	config := &globalConfig{}
 	_, err = jsp.Load(path.Join(localConf.ConfigDir, gconfFname), config, jsp.Plain())
 	if err == nil {

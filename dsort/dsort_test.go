@@ -219,8 +219,8 @@ func (tctx *testContext) setup() {
 	fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 
 	config := cmn.GCO.BeginUpdate()
-	config.Net.UseIntraControl = false
-	config.Net.UseIntraData = false
+	config.HostNet.UseIntraControl = false
+	config.HostNet.UseIntraData = false
 	config.Disk.IostatTimeShort = 10 * time.Millisecond
 	cmn.GCO.CommitUpdate(config)
 

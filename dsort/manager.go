@@ -253,7 +253,7 @@ func (m *Manager) initStreams() error {
 	// Responses to the other targets are objects that is why we want to use
 	// intraData network.
 	respNetwork := cmn.NetworkIntraData
-	if !cfg.Net.UseIntraData {
+	if !cfg.HostNet.UseIntraData {
 		respNetwork = cmn.NetworkPublic
 	}
 

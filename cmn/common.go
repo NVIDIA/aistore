@@ -170,8 +170,6 @@ func init() {
 	GCO = &globalConfigOwner{listeners: make(map[string]ConfigListener, 4)}
 	config := &Config{}
 	GCO.c.Store(unsafe.Pointer(config))
-	local := &LocalConfig{}
-	GCO.PutLocal(local)
 
 	jsonConf := jsoniter.Config{
 		EscapeHTML:             false, // We don't send HTMLs.

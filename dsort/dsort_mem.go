@@ -204,13 +204,13 @@ func (ds *dsorterMem) start() error {
 	// utilize intraControl network.
 	config := cmn.GCO.Get()
 	reqNetwork := cmn.NetworkIntraControl
-	if !config.Net.UseIntraControl {
+	if !config.HostNet.UseIntraControl {
 		reqNetwork = cmn.NetworkPublic
 	}
 	// Responses to the other targets are objects that is why we want to use
 	// intraData network.
 	respNetwork := cmn.NetworkIntraData
-	if !config.Net.UseIntraData {
+	if !config.HostNet.UseIntraData {
 		respNetwork = cmn.NetworkPublic
 	}
 

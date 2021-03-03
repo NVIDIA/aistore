@@ -23,22 +23,18 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *cmn.Config) (er
 	debug.Assert(confPath != "" && localConfPath != "")
 	cmn.GCO.SetGlobalConfigPath(confPath)
 	cmn.GCO.SetLocalConfigPath(localConfPath)
-	_, err = Load(confPath, &config, PlainLocal())
+	_, err = Load(confPath, &config.ClusterConfig, PlainLocal())
 	if err != nil {
 		return fmt.Errorf("failed to load config %q, err: %v", confPath, err)
 	}
 	config.SetRole(daeRole)
 
-	localConf := &cmn.LocalConfig{}
-	_, err = Load(localConfPath, localConf, Plain())
+	_, err = Load(localConfPath, &config.LocalConfig, Plain())
 	if err != nil {
 		return fmt.Errorf("failed to load local config %q, err: %v", localConfPath, err)
 	}
-	if err = config.SetLocalConf(localConf); err != nil {
-		return
-	}
 
-	overrideConfig, err := LoadOverrideConfig(localConf.ConfigDir)
+	overrideConfig, err := LoadOverrideConfig(config.ConfigDir)
 	if err != nil {
 		return err
 	}
@@ -68,10 +64,8 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *cmn.Config) (er
 		return fmt.Errorf("failed to set log level %q, err: %s", config.Log.Level, err)
 	}
 	glog.Infof("log.dir: %q; l4.proto: %s; port: %d; verbosity: %s",
-		config.Log.Dir, config.Net.L4.Proto, config.Net.L4.Port, config.Log.Level)
+		config.Log.Dir, config.Net.L4.Proto, config.HostNet.Port, config.Log.Level)
 	glog.Infof("config_file: %q periodic.stats_time: %v", confPath, config.Periodic.StatsTime)
-
-	cmn.GCO.PutLocal(localConf)
 	return
 }
 

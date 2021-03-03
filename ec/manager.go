@@ -45,10 +45,10 @@ var ECM *Manager
 func initManager(t cluster.Target) error {
 	config := cmn.GCO.Get()
 	netReq, netResp := cmn.NetworkIntraControl, cmn.NetworkIntraData
-	if !config.Net.UseIntraControl {
+	if !config.HostNet.UseIntraControl {
 		netReq = cmn.NetworkPublic
 	}
-	if !config.Net.UseIntraData {
+	if !config.HostNet.UseIntraData {
 		netResp = cmn.NetworkPublic
 	}
 

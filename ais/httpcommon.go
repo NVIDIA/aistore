@@ -558,11 +558,11 @@ func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
 			h.registerPublicNetHandler(path, nh.h)
 			reg = true
 		}
-		if config.Net.UseIntraControl && nh.net.isSet(accessNetIntraControl) {
+		if config.HostNet.UseIntraControl && nh.net.isSet(accessNetIntraControl) {
 			h.registerIntraControlNetHandler(path, nh.h)
 			reg = true
 		}
-		if config.Net.UseIntraData && nh.net.isSet(accessNetIntraData) {
+		if config.HostNet.UseIntraData && nh.net.isSet(accessNetIntraData) {
 			h.registerIntraDataNetHandler(path, nh.h)
 			reg = true
 		}
@@ -570,14 +570,14 @@ func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
 			continue
 		}
 		// none of the above
-		if !config.Net.UseIntraControl && !config.Net.UseIntraData {
+		if !config.HostNet.UseIntraControl && !config.HostNet.UseIntraData {
 			// no intra-cluster networks: default to pub net
 			h.registerPublicNetHandler(path, nh.h)
-		} else if config.Net.UseIntraControl && nh.net.isSet(accessNetIntraData) {
+		} else if config.HostNet.UseIntraControl && nh.net.isSet(accessNetIntraData) {
 			// (not configured) data defaults to (configured) control
 			h.registerIntraControlNetHandler(path, nh.h)
 		} else {
-			cmn.Assert(config.Net.UseIntraData && nh.net.isSet(accessNetIntraControl))
+			cmn.Assert(config.HostNet.UseIntraData && nh.net.isSet(accessNetIntraControl))
 			// (not configured) control defaults to (configured) data
 			h.registerIntraDataNetHandler(path, nh.h)
 		}
@@ -633,12 +633,12 @@ func (h *httprunner) init(config *cmn.Config) {
 	muxers := newMuxers()
 	h.netServ.pub = &netServer{muxers: muxers, sndRcvBufSize: bufsize}
 	h.netServ.control = h.netServ.pub // by default, intra-control net is the same as public
-	if config.Net.UseIntraControl {
+	if config.HostNet.UseIntraControl {
 		muxers = newMuxers()
 		h.netServ.control = &netServer{muxers: muxers, sndRcvBufSize: 0}
 	}
 	h.netServ.data = h.netServ.control // by default, intra-data net is the same as intra-control
-	if config.Net.UseIntraData {
+	if config.HostNet.UseIntraData {
 		muxers = newMuxers()
 		h.netServ.data = &netServer{muxers: muxers, sndRcvBufSize: bufsize}
 	}
@@ -674,7 +674,7 @@ func (h *httprunner) initSI(daemonType string) {
 	var (
 		s                                        string
 		config                                   = cmn.GCO.Get()
-		port                                     = strconv.Itoa(config.Net.L4.Port)
+		port                                     = strconv.Itoa(config.HostNet.Port)
 		proto                                    = config.Net.HTTP.Proto
 		addrList, err                            = getLocalIPv4List()
 		k8sDetected                              = k8s.Detect() == nil
@@ -685,52 +685,52 @@ func (h *httprunner) initSI(daemonType string) {
 	}
 
 	// NOTE: In K8S deployment, public hostname could be LoadBalancer external IP, or a service DNS.
-	if k8sDetected && config.Net.Hostname != "" {
-		glog.Infof("detected K8S deployment, skipping hostname validation for %q", config.Net.Hostname)
-		pubAddr = *cluster.NewNetInfo(proto, config.Net.Hostname, port)
+	if k8sDetected && config.HostNet.Hostname != "" {
+		glog.Infof("detected K8S deployment, skipping hostname validation for %q", config.HostNet.Hostname)
+		pubAddr = *cluster.NewNetInfo(proto, config.HostNet.Hostname, port)
 	} else {
-		pubAddr, err = getNetInfo(addrList, proto, config.Net.Hostname, port)
+		pubAddr, err = getNetInfo(addrList, proto, config.HostNet.Hostname, port)
 	}
 
 	if err != nil {
 		cmn.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetworkPublic, err)
 	}
-	if config.Net.Hostname != "" {
-		s = " (config: " + config.Net.Hostname + ")"
+	if config.HostNet.Hostname != "" {
+		s = " (config: " + config.HostNet.Hostname + ")"
 	}
 	glog.Infof("%s (user) access: [%s]%s", cmn.NetworkPublic, pubAddr, s)
 
 	intraControlAddr = pubAddr
-	if config.Net.UseIntraControl {
-		intraControlAddr, err = getNetInfo(addrList, proto, config.Net.HostnameIntraControl, strconv.Itoa(config.Net.L4.PortIntraControl))
+	if config.HostNet.UseIntraControl {
+		intraControlAddr, err = getNetInfo(addrList, proto, config.HostNet.HostnameIntraControl, strconv.Itoa(config.HostNet.PortIntraControl))
 		if err != nil {
 			cmn.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetworkIntraControl, err)
 		}
 		s = ""
-		if config.Net.HostnameIntraControl != "" {
-			s = " (config: " + config.Net.HostnameIntraControl + ")"
+		if config.HostNet.HostnameIntraControl != "" {
+			s = " (config: " + config.HostNet.HostnameIntraControl + ")"
 		}
 		glog.Infof("%s access: [%s]%s", cmn.NetworkIntraControl, intraControlAddr, s)
 	}
 
 	intraDataAddr = pubAddr
-	if config.Net.UseIntraData {
-		intraDataAddr, err = getNetInfo(addrList, proto, config.Net.HostnameIntraData, strconv.Itoa(config.Net.L4.PortIntraData))
+	if config.HostNet.UseIntraData {
+		intraDataAddr, err = getNetInfo(addrList, proto, config.HostNet.HostnameIntraData, strconv.Itoa(config.HostNet.PortIntraData))
 		if err != nil {
 			cmn.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetworkIntraData, err)
 		}
 		s = ""
-		if config.Net.HostnameIntraData != "" {
-			s = " (config: " + config.Net.HostnameIntraData + ")"
+		if config.HostNet.HostnameIntraData != "" {
+			s = " (config: " + config.HostNet.HostnameIntraData + ")"
 		}
 		glog.Infof("%s access: [%s]%s", cmn.NetworkIntraData, intraDataAddr, s)
 	}
 
-	mustDiffer(pubAddr, config.Net.L4.Port, true,
-		intraControlAddr, config.Net.L4.PortIntraControl, config.Net.UseIntraControl, "pub/ctl")
-	mustDiffer(pubAddr, config.Net.L4.Port, true, intraDataAddr, config.Net.L4.PortIntraData, config.Net.UseIntraData, "pub/data")
-	mustDiffer(intraDataAddr, config.Net.L4.PortIntraData, config.Net.UseIntraData,
-		intraControlAddr, config.Net.L4.PortIntraControl, config.Net.UseIntraControl, "ctl/data")
+	mustDiffer(pubAddr, config.HostNet.Port, true,
+		intraControlAddr, config.HostNet.PortIntraControl, config.HostNet.UseIntraControl, "pub/ctl")
+	mustDiffer(pubAddr, config.HostNet.Port, true, intraDataAddr, config.HostNet.PortIntraData, config.HostNet.UseIntraData, "pub/data")
+	mustDiffer(intraDataAddr, config.HostNet.PortIntraData, config.HostNet.UseIntraData,
+		intraControlAddr, config.HostNet.PortIntraControl, config.HostNet.UseIntraControl, "ctl/data")
 
 	daemonID := initDaemonID(daemonType, config)
 	h.name = daemonType
@@ -815,22 +815,22 @@ func (h *httprunner) run() error {
 	// A wrapper to glog http.Server errors - otherwise
 	// os.Stderr would be used, as per golang.org/pkg/net/http/#Server
 	h.logger = log.New(&glogWriter{}, "net/http err: ", 0)
-	if config.Net.UseIntraControl || config.Net.UseIntraData {
+	if config.HostNet.UseIntraControl || config.HostNet.UseIntraData {
 		var errCh chan error
-		if config.Net.UseIntraControl && config.Net.UseIntraData {
+		if config.HostNet.UseIntraControl && config.HostNet.UseIntraData {
 			errCh = make(chan error, 3)
 		} else {
 			errCh = make(chan error, 2)
 		}
 
-		if config.Net.UseIntraControl {
+		if config.HostNet.UseIntraControl {
 			go func() {
 				addr := h.si.IntraControlNet.TCPEndpoint()
 				errCh <- h.netServ.control.listenAndServe(addr, h.logger)
 			}()
 		}
 
-		if config.Net.UseIntraData {
+		if config.HostNet.UseIntraData {
 			go func() {
 				addr := h.si.IntraDataNet.TCPEndpoint()
 				errCh <- h.netServ.data.listenAndServe(addr, h.logger)
@@ -878,10 +878,10 @@ func (h *httprunner) stop(rmFromSmap bool) {
 		time.Sleep(time.Second / 2)
 		h.netServ.pub.shutdown()
 		config := cmn.GCO.Get()
-		if config.Net.UseIntraControl {
+		if config.HostNet.UseIntraControl {
 			h.netServ.control.shutdown()
 		}
-		if config.Net.UseIntraData {
+		if config.HostNet.UseIntraData {
 			h.netServ.data.shutdown()
 		}
 		wg.Done()
@@ -1988,7 +1988,7 @@ func (h *httprunner) healthByExternalWD(w http.ResponseWriter, r *http.Request) 
 // TODO: Add other checks based on request e.g. `r.RemoteAddr`
 func (h *httprunner) ensureIntraControl(w http.ResponseWriter, r *http.Request) (isIntra bool) {
 	// When `config.UseIntraControl` is `false`, intra-control net is same as public net.
-	if !cmn.GCO.Get().Net.UseIntraControl {
+	if !cmn.GCO.Get().HostNet.UseIntraControl {
 		return true
 	}
 

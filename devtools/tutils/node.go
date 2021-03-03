@@ -421,9 +421,9 @@ func DeployNode(t *testing.T, node *cluster.Snode, conf *cmn.Config, localConf *
 	if localConf == nil {
 		localConf = &cmn.LocalConfig{}
 		localConf.ConfigDir = conf.ConfigDir
-		localConf.Net.PortStr = strconv.Itoa(conf.Net.L4.Port)
-		localConf.Net.PortIntraControlStr = strconv.Itoa(conf.Net.L4.PortIntraControl)
-		localConf.Net.PortIntraDataStr = strconv.Itoa(conf.Net.L4.PortIntraData)
+		localConf.HostNet.PortStr = strconv.Itoa(conf.HostNet.Port)
+		localConf.HostNet.PortIntraControlStr = strconv.Itoa(conf.HostNet.PortIntraControl)
+		localConf.HostNet.PortIntraDataStr = strconv.Itoa(conf.HostNet.PortIntraData)
 	}
 
 	localConfFile := path.Join(conf.ConfigDir, "ais_local.json")

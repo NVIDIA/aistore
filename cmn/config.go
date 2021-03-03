@@ -81,7 +81,6 @@ type (
 	globalConfigOwner struct {
 		mtx       sync.Mutex     // mutex for protecting updates of config
 		c         atomic.Pointer // pointer to `Config` (cluster + local + override config)
-		lc        atomic.Pointer // pointer to `LocalConfig`
 		oc        atomic.Pointer // pointer to `ConfigToUpdate`, override configuration on node
 		lmtx      sync.Mutex     // mutex for protecting listeners
 		listeners map[string]ConfigListener
@@ -106,10 +105,13 @@ type (
 	// joining the json tags with dot. Eg. when referring to `EC.Enabled` field
 	// one would need to write `ec.enabled`. For more info refer to `IterFields`.
 	//
-	// nolint:maligned // no performance critical code
 	Config struct {
-		role        string          `list:"omit"` // Proxy or Target
-		ConfigDir   string          `json:"confdir" local:"omit"`
+		role          string `list:"omit"` // Proxy or Target
+		ClusterConfig `json:",inline"`
+		LocalConfig   `json:",inline"`
+	}
+	// nolint:maligned // no performance critical code
+	ClusterConfig struct {
 		Backend     BackendConf     `json:"backend"`
 		Mirror      MirrorConf      `json:"mirror"`
 		EC          ECConf          `json:"ec"`
@@ -125,8 +127,6 @@ type (
 		Replication ReplicationConf `json:"replication"`
 		Cksum       CksumConf       `json:"checksum"`
 		Versioning  VersionConf     `json:"versioning"`
-		FSpaths     FSPathsConf     `json:"fspaths" local:"omit"`
-		TestFSP     TestfspathConf  `json:"test_fspaths" local:"omit"`
 		Net         NetConf         `json:"net"`
 		FSHC        FSHCConf        `json:"fshc"`
 		Auth        AuthConf        `json:"auth"`
@@ -141,7 +141,7 @@ type (
 
 	LocalConfig struct {
 		ConfigDir string         `json:"confdir"`
-		Net       LocalNetConfig `json:"net"`
+		HostNet   LocalNetConfig `json:"host_net"`
 		FSpaths   FSPathsConf    `json:"fspaths"`
 		TestFSP   TestfspathConf `json:"test_fspaths"`
 	}
@@ -154,6 +154,12 @@ type (
 		PortStr              string `json:"port"`               // listening port
 		PortIntraControlStr  string `json:"port_intra_control"` // listening port for intra control network
 		PortIntraDataStr     string `json:"port_intra_data"`    // listening port for intra data network
+		Port                 int    `json:"-"`
+		PortIntraControl     int    `json:"-"`
+		PortIntraData        int    `json:"-"`
+
+		UseIntraControl bool `json:"-"`
+		UseIntraData    bool `json:"-"`
 	}
 
 	ConfigToUpdate struct {
@@ -461,13 +467,8 @@ type (
 		Instance int    `json:"instance"`
 	}
 	NetConf struct {
-		Hostname             string   `json:"hostname" local:"omit"`
-		HostnameIntraControl string   `json:"hostname_intra_control" local:"omit"`
-		HostnameIntraData    string   `json:"hostname_intra_data" local:"omit"`
-		L4                   L4Conf   `json:"l4"`
-		HTTP                 HTTPConf `json:"http"`
-		UseIntraControl      bool     `json:"-"`
-		UseIntraData         bool     `json:"-"`
+		L4   L4Conf   `json:"l4"`
+		HTTP HTTPConf `json:"http"`
 	}
 	NetConfToUpdate struct {
 		L4   *L4ConfToUpdate   `json:"l4"`
@@ -475,11 +476,8 @@ type (
 	}
 
 	L4Conf struct {
-		Proto            string `json:"proto"`                                  // tcp, udp
-		Port             int    `json:"port,string" local:"omit"`               // listening port
-		PortIntraControl int    `json:"port_intra_control,string" local:"omit"` // listening port for intra control network
-		PortIntraData    int    `json:"port_intra_data,string" local:"omit"`    // listening port for intra data network
-		SndRcvBufSize    int    `json:"sndrcv_buf_size"`                        // SO_RCVBUF and SO_SNDBUF
+		Proto         string `json:"proto"`           // tcp, udp
+		SndRcvBufSize int    `json:"sndrcv_buf_size"` // SO_RCVBUF and SO_SNDBUF
 	}
 	L4ConfToUpdate struct {
 		Proto               *string `json:"proto"`              // tcp, udp
@@ -625,14 +623,6 @@ func (gco *globalConfigOwner) Put(config *Config) {
 	gco.c.Store(unsafe.Pointer(config))
 }
 
-func (gco *globalConfigOwner) GetLocal() *LocalConfig {
-	return (*LocalConfig)(gco.lc.Load())
-}
-
-func (gco *globalConfigOwner) PutLocal(config *LocalConfig) {
-	gco.lc.Store(unsafe.Pointer(config))
-}
-
 func (gco *globalConfigOwner) GetOverrideConfig() *ConfigToUpdate {
 	return (*ConfigToUpdate)(gco.oc.Load())
 }
@@ -747,6 +737,7 @@ var (
 	_ Validator = (*FSPathsConf)(nil)
 	_ Validator = (*TestfspathConf)(nil)
 	_ Validator = (*CompressionConf)(nil)
+	_ Validator = (*LocalNetConfig)(nil)
 
 	_ PropsValidator = (*CksumConf)(nil)
 	_ PropsValidator = (*LRUConf)(nil)
@@ -764,12 +755,10 @@ var (
 /////////////////////////////////
 
 func (c *Config) Validate() error {
+	if c.ConfigDir == "" {
+		return errors.New("invalid confdir value (must be non-empty)")
+	}
 	opts := IterOpts{VisitAll: true}
-
-	// FIXME: This should work.
-	//  if c.ConfigDir == "" {
-	//		 return errors.New("invalid confdir value (must be non-empty)")
-	//	}
 
 	return IterFields(c, func(tag string, field IterField) (err error, b bool) {
 		if v, ok := field.Value().(Validator); ok {
@@ -786,48 +775,13 @@ func (c *Config) SetRole(role string) {
 	c.role = role
 }
 
-func (c *Config) SetNetConf(conf LocalNetConfig) (err error) {
-	c.Net.Hostname = conf.Hostname
-	c.Net.HostnameIntraControl = conf.HostnameIntraControl
-	c.Net.HostnameIntraData = conf.HostnameIntraData
-	// Parse ports
-	if c.Net.L4.Port, err = ParsePort(conf.PortStr); err != nil {
-		return fmt.Errorf("invalid %s port specified: %v", NetworkPublic, err)
-	}
-	if conf.PortIntraControlStr != "" {
-		if c.Net.L4.PortIntraControl, err = ParsePort(conf.PortIntraControlStr); err != nil {
-			return fmt.Errorf("invalid %s port specified: %v", NetworkIntraControl, err)
-		}
-	}
-	if conf.PortIntraDataStr != "" {
-		if c.Net.L4.PortIntraData, err = ParsePort(conf.PortIntraDataStr); err != nil {
-			return fmt.Errorf("invalid %s port specified: %v", NetworkIntraData, err)
-		}
-	}
-
-	differentIPs := c.Net.Hostname != c.Net.HostnameIntraControl
-	differentPorts := c.Net.L4.Port != c.Net.L4.PortIntraControl
-	c.Net.UseIntraControl = c.Net.HostnameIntraControl != "" &&
-		c.Net.L4.PortIntraControl != 0 && (differentIPs || differentPorts)
-
-	differentIPs = c.Net.Hostname != c.Net.HostnameIntraData
-	differentPorts = c.Net.L4.Port != c.Net.L4.PortIntraData
-	c.Net.UseIntraData = c.Net.HostnameIntraData != "" &&
-		c.Net.L4.PortIntraData != 0 && (differentIPs || differentPorts)
-
-	return
-}
-
-func (c *Config) SetLocalConf(localConf *LocalConfig) error {
-	c.TestFSP = localConf.TestFSP
-	c.FSpaths = localConf.FSpaths
-	c.ConfigDir = localConf.ConfigDir
-	return c.SetNetConf(localConf.Net)
-}
-
 func (c *Config) Apply(updateConf ConfigToUpdate) error {
-	copyProps(updateConf, c)
+	c.ClusterConfig.Apply(updateConf)
 	return c.Validate()
+}
+
+func (c *ClusterConfig) Apply(updateConf ConfigToUpdate) {
+	copyProps(updateConf, c)
 }
 
 // TestingEnv returns true if config is set to a development environment
@@ -1156,7 +1110,10 @@ func (c *NetConf) Validate(_ *Config) (err error) {
 	if c.HTTP.UseHTTPS {
 		c.HTTP.Proto = httpsProto
 	}
+	return nil
+}
 
+func (c *LocalNetConfig) Validate(_ *Config) (err error) {
 	c.Hostname = strings.ReplaceAll(c.Hostname, " ", "")
 	c.HostnameIntraControl = strings.ReplaceAll(c.HostnameIntraControl, " ", "")
 	c.HostnameIntraData = strings.ReplaceAll(c.HostnameIntraData, " ", "")
@@ -1177,10 +1134,32 @@ func (c *NetConf) Validate(_ *Config) (err error) {
 				c.HostnameIntraControl, c.HostnameIntraData, addr)
 		}
 	}
-	if !c.HTTP.Chunked {
-		glog.Warningln("disabled chunked transfer may cause a slow down (see also: Content-Length)")
+
+	// Parse ports
+	if c.Port, err = ParsePort(c.PortStr); err != nil {
+		return fmt.Errorf("invalid %s port specified: %v", NetworkPublic, err)
 	}
-	return nil
+	if c.PortIntraControlStr != "" {
+		if c.PortIntraControl, err = ParsePort(c.PortIntraControlStr); err != nil {
+			return fmt.Errorf("invalid %s port specified: %v", NetworkIntraControl, err)
+		}
+	}
+	if c.PortIntraDataStr != "" {
+		if c.PortIntraData, err = ParsePort(c.PortIntraDataStr); err != nil {
+			return fmt.Errorf("invalid %s port specified: %v", NetworkIntraData, err)
+		}
+	}
+
+	differentIPs := c.Hostname != c.HostnameIntraControl
+	differentPorts := c.Port != c.PortIntraControl
+	c.UseIntraControl = c.HostnameIntraControl != "" &&
+		c.PortIntraControl != 0 && (differentIPs || differentPorts)
+
+	differentIPs = c.Hostname != c.HostnameIntraData
+	differentPorts = c.Port != c.PortIntraData
+	c.UseIntraData = c.HostnameIntraData != "" &&
+		c.PortIntraData != 0 && (differentIPs || differentPorts)
+	return
 }
 
 func (c *DownloaderConf) Validate(_ *Config) (err error) {
@@ -1258,8 +1237,7 @@ func (c *FSPathsConf) MarshalJSON() (data []byte, err error) {
 }
 
 func (c *FSPathsConf) Validate(contextConfig *Config) (err error) {
-	// FIXME: This assert fails on initialization.
-	//  Assertf(StringInSlice(contextConfig.role, []string{Proxy, Target}), "unexpected role: %q", contextConfig.role)
+	debug.Assertf(StringInSlice(contextConfig.role, []string{Proxy, Target}), "unexpected role: %q", contextConfig.role)
 
 	// Don't validate if testing environment
 	if contextConfig.TestingEnv() || contextConfig.role != Target {

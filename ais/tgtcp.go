@@ -42,7 +42,7 @@ func (t *targetrunner) initHostIP() {
 	}
 	var (
 		config  = cmn.GCO.Get()
-		port    = config.Net.L4.Port
+		port    = config.HostNet.Port
 		extAddr = net.ParseIP(hostIP)
 		extPort = port
 	)
@@ -57,10 +57,10 @@ func (t *targetrunner) initHostIP() {
 	glog.Infof("AIS_HOST_IP=%s; PubNetwork=%s", hostIP, t.si.URL(cmn.NetworkPublic))
 
 	// applies to intra-cluster networks unless separately defined
-	if !config.Net.UseIntraControl {
+	if !config.HostNet.UseIntraControl {
 		t.si.IntraControlNet = t.si.PublicNet
 	}
-	if !config.Net.UseIntraData {
+	if !config.HostNet.UseIntraData {
 		t.si.IntraDataNet = t.si.PublicNet
 	}
 }
@@ -733,21 +733,18 @@ func (t *targetrunner) ensureLatestSmap(msg *aisMsg, r *http.Request) {
 func (t *targetrunner) testCachepathMounts() {
 	t.owner.config.Lock()
 	config := cmn.GCO.Clone()
-	configLocal := cmn.GCO.GetLocal()
-	configLocal.FSpaths.Paths = make(cmn.StringSet, configLocal.TestFSP.Count)
-	for i := 0; i < configLocal.TestFSP.Count; i++ {
-		mpath := filepath.Join(configLocal.TestFSP.Root, fmt.Sprintf("mp%d", i+1))
-		if configLocal.TestFSP.Instance > 0 {
-			mpath = filepath.Join(mpath, strconv.Itoa(configLocal.TestFSP.Instance))
+	config.FSpaths.Paths = make(cmn.StringSet, config.TestFSP.Count)
+	for i := 0; i < config.TestFSP.Count; i++ {
+		mpath := filepath.Join(config.TestFSP.Root, fmt.Sprintf("mp%d", i+1))
+		if config.TestFSP.Instance > 0 {
+			mpath = filepath.Join(mpath, strconv.Itoa(config.TestFSP.Instance))
 		}
 		if err := cmn.CreateDir(mpath); err != nil {
 			cmn.ExitLogf("Cannot create test cache dir %q, err: %s", mpath, err)
 		}
-		configLocal.FSpaths.Paths.Add(mpath)
+		config.FSpaths.Paths.Add(mpath)
 	}
-	config.SetLocalConf(configLocal)
 	cmn.GCO.Put(config)
-	cmn.GCO.PutLocal(configLocal)
 	t.owner.config.Unlock()
 }
 

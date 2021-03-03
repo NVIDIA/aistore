@@ -88,13 +88,13 @@ func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, 
 	}
 	dm.data.trname, dm.data.recv = trname, recvCB
 	dm.data.net = cmn.NetworkPublic
-	if dm.config.Net.UseIntraData {
+	if dm.config.HostNet.UseIntraData {
 		dm.data.net = cmn.NetworkIntraData
 	}
 	dm.data.client = transport.NewIntraDataClient()
 	// ack
 	dm.ack.net = cmn.NetworkPublic
-	if dm.config.Net.UseIntraControl {
+	if dm.config.HostNet.UseIntraControl {
 		dm.ack.net = cmn.NetworkIntraControl
 	}
 	dm.ack.recv = extra.RecvAck

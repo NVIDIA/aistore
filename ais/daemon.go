@@ -397,9 +397,9 @@ func generateDaemonID(daemonType string, config *cmn.Config) string {
 	daemonID := cmn.RandStringStrong(4)
 	switch daemonType {
 	case cmn.Target:
-		return fmt.Sprintf("%st%d", daemonID, config.Net.L4.Port)
+		return fmt.Sprintf("%st%d", daemonID, config.HostNet.Port)
 	case cmn.Proxy:
-		return fmt.Sprintf("%sp%d", daemonID, config.Net.L4.Port)
+		return fmt.Sprintf("%sp%d", daemonID, config.HostNet.Port)
 	}
 	cmn.AssertMsg(false, daemonType)
 	return ""
