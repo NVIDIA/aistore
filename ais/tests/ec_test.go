@@ -161,7 +161,7 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 	tassert.Errorf(t, len(sliceList) == totalCnt, "Expected number of objects for %s/%s: %d, found: %d\n%+v",
 		bck, objPath, totalCnt, len(sliceList), sliceList)
 
-	if !bck.IsAIS() {
+	if !bck.IsAIS() && !bck.IsRemoteAIS() {
 		var ok bool
 		config := tutils.GetClusterConfig(t)
 		_, ok = config.Backend.Providers[bck.Provider]
@@ -188,7 +188,7 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 	}
 
 	metaCntMust := totalCnt / 2
-	tassert.Errorf(t, metaCnt == metaCntMust, "Number of metafiles mismatch: %d, expected %d", metaCnt, metaCntMust)
+	tassert.Errorf(t, metaCnt == metaCntMust, "Number of metafiles for %s mismatch: %d, expected %d", objPath, metaCnt, metaCntMust)
 }
 
 func waitForECFinishes(t *testing.T, totalCnt int, objSize, sliceSize int64, doEC bool, bck cmn.Bck, objName string) (
@@ -808,7 +808,11 @@ func TestECRestoreObjAndSliceRemote(t *testing.T) {
 					EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
 				})
 
-				defer clearAllECObjects(t, bck, true, o)
+				defer func() {
+					clearAllECObjects(t, bck, true, o)
+					reqArgs := api.XactReqArgs{Kind: cmn.ActECPut, Bck: bck}
+					api.WaitForXactionIdle(tutils.BaseAPIParams(proxyURL), reqArgs)
+				}()
 
 				wg := sync.WaitGroup{}
 				wg.Add(o.objCount)

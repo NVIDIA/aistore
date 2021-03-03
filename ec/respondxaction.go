@@ -131,7 +131,7 @@ func (r *XactRespond) trySendCT(iReq intraReq, bck *cluster.Bck, objName string)
 		glog.Infof("Received request for slice %d of %s", iReq.meta.SliceID, objName)
 	}
 	if iReq.isSlice {
-		ct, err := cluster.NewCTFromBO(bck.Bck.Name, bck.Bck.Provider, objName, r.t.Bowner(), SliceType)
+		ct, err := cluster.NewCTFromBO(bck.Bck, objName, r.t.Bowner(), SliceType)
 		if err != nil {
 			return err
 		}

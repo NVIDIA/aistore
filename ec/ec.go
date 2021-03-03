@@ -409,7 +409,7 @@ func validateBckBID(t cluster.Target, bck cmn.Bck, bid uint64) error {
 
 // Saves slice and its metafile
 func WriteSliceAndMeta(t cluster.Target, hdr transport.ObjHdr, args *WriteArgs) error {
-	ct, err := cluster.NewCTFromBO(hdr.Bck.Name, hdr.Bck.Provider, hdr.ObjName, t.Bowner(), SliceType)
+	ct, err := cluster.NewCTFromBO(hdr.Bck, hdr.ObjName, t.Bowner(), SliceType)
 	if err != nil {
 		return err
 	}

@@ -61,10 +61,10 @@ func NewCTFromFQN(fqn string, b Bowner) (ct *CT, err error) {
 	return
 }
 
-func NewCTFromBO(bckName, bckProvider, objName string, b Bowner, ctType ...string) (ct *CT, err error) {
+func NewCTFromBO(bck cmn.Bck, objName string, b Bowner, ctType ...string) (ct *CT, err error) {
 	ct = &CT{
 		objName: objName,
-		bck:     NewBck(bckName, bckProvider, cmn.NsGlobal),
+		bck:     NewBckEmbed(bck),
 	}
 	if b != nil {
 		if err = ct.bck.Init(b); err != nil {
