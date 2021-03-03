@@ -92,7 +92,7 @@ func (t *singleObjectTask) download() {
 
 	t.parent.statsT.AddMany(
 		stats.NamedVal64{Name: stats.DownloadSize, Value: t.currentSize.Load()},
-		stats.NamedVal64{Name: stats.DownloadLatency, Value: int64(t.started.Load().Sub(t.ended.Load()))},
+		stats.NamedVal64{Name: stats.DownloadLatency, Value: int64(t.ended.Load().Sub(t.started.Load()))},
 	)
 	t.parent.ObjectsInc()
 	t.parent.BytesAdd(t.currentSize.Load())
