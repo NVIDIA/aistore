@@ -326,7 +326,7 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 	}
 
 	err := group.Wait()
-	cmn.Assert(len(objNames) == int(putCnt.Load()))
+	cmn.Assert(err != nil || len(objNames) == int(putCnt.Load()))
 	return objNames, int(errCnt.Load()), err
 }
 
