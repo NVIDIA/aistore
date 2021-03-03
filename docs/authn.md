@@ -272,8 +272,8 @@ $ curl -L  http://PROXY/v1/buckets/* -X GET \
   -H "Authorization: Bearer eyJhbGciOiJI.eyJjcmVkcyI.T6r6790"
 
 {
-  "cloud": [ "image-net-set-1" ],
   "ais": [ "train-set-001", "train-set-002" ]
+  "gcp": [ "image-net-set-1" ],
 }
 ```
 

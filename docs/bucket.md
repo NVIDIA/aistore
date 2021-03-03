@@ -8,9 +8,6 @@
 - [Remote Bucket](#remote-bucket)
   - [Public Cloud Buckets](#public-cloud-buckets)
   - [Public HTTP(S) Datasets](#public-https-dataset)
-  - [HDFS Provider](#hdfs-provider)
-    - [Configuration](#configuration)
-    - [Usage](#usage)
   - [Prefetch/Evict Objects](#prefetchevict-objects)
   - [Evict Remote Bucket](#evict-remote-bucket)
 - [Backend Bucket](#backend-bucket)
@@ -49,12 +46,13 @@ All the [supported storage services](storage_svcs.md) equally apply to all stora
 
 ### Backend Provider
 
-[Backend Provider](./providers.md) is an abstraction, and, simultaneously, an API-supported option that allows to delineate between "remote" and "local" buckets with respect to a given (any given) AIS cluster. For complete definition and details, please refer to the [Backend Provider](./providers.md) document.
+[Backend Provider](./providers.md) is an abstraction, and, simultaneously, an API-supported option that allows to delineate between "remote" and "local" buckets with respect to a given (any given) AIS cluster. 
+For complete definition and details, please refer to the [backend provider document](./providers.md).
 
 Backend provider is realized as an optional parameter in the GET, PUT, APPEND, DELETE and [Range/List](batch.md) operations with supported enumerated values that include:
 * `ais` - for AIS buckets
 * `aws` or `s3` - for Amazon S3 buckets
-* `azure` - for Microsoft Azure Blob Storage buckets
+* `azure` or `az` - for Microsoft Azure Blob Storage buckets
 * `gcp` or `gs` - for Google Cloud Storage buckets
 * `hdfs` - for Hadoop/HDFS clusters
 * `ht` - for HTTP(S) based datasets
@@ -210,7 +208,7 @@ Alternatively, an object can also be downloaded using the `get` and `cat` CLI co
 $ ais object get -f http://storage.googleapis.com/minikube/minikube-0.7.iso.sha256 minikube-0.7.iso.sha256
 ```
 
-The `--force`(`-f`) option skips bucket validation and automatically creates a new `ht://` bucket for the object if it doesn't exist.
+The `--force` (`-f`) option skips bucket validation and automatically creates a new `ht://` bucket for the object if it doesn't exist.
 
 This will cache shard object inside the AIStore cluster.
 We can confirm this by listing available buckets and checking the content:
@@ -251,55 +249,6 @@ NAME                     SIZE
 minikube-0.6.iso.sha256  65B
 minikube-0.7.iso.sha256  65B
 ```
-
-### HDFS Provider
-
-Hadoop and HDFS is well known and widely used software for distributed processing of large datasets using MapReduce model.
-For years, it has been considered as a standard for big data.
-
-HDFS backend provider is a way to access files contained inside the HDFS cluster from AIStore.
-Here we will talk about standard configuration and usages (see also [full tutorial on HDFS provider](tutorials/various/hdfs_backend.md)).
-
-#### Configuration
-
-Before we jump to functionalities, let's first focus on configuration.
-AIStore needs to know the address of NameNode server and the username for the requests.
-Important note here is that the NameNode and DataNode addresses must be accessible from the AIStore, otherwise the connection will fail.
-
-Example of HDFS provider configuration:
-```json
-{
-  "user": "root",
-  "addresses": ["localhost:8020"],
-  "use_datanode_hostname": false
-}
-```
-
-* `user` specifies which HDFS user the client will act as.
-* `addresses` specifies the namenode(s) to connect to.
-* `use_datanode_hostname` specifies whether the client should connect to the datanodes via hostname (which is useful in multi-homed setups) or IP address, which may be required if DNS isn't available.
-
-#### Usage
-
-After the HDFS is set up, and the binary is built with HDFS provider support we can see everything in action.
-```console
-$ ais bucket create hdfs://yt8m --bucket-props="extra.hdfs.ref_directory=/part1/video"
-"hdfs://yt8m" bucket created
-$ ais bucket ls hdfs://
-HDFS Buckets (1)
-  hdfs://yt8m
-$ ais object put 1.mp4 hdfs://yt8m/1.mp4
-PUT "1.mp4" into bucket "hdfs://yt8m"
-$ ais bucket ls hdfs://yt8m
-NAME	 SIZE
-1.mp4	 76.31KiB
-$ ais object get hdfs://yt8m/1.mp4 video.mp4
-GET "1.mp4" from bucket "hdfs://yt8m" as "video.mp4" [76.31KiB]
-```
-
-The first thing to notice is `--bucket-props="extra.hdfs.ref_directory=/part1/video"`.
-Here we specify the **required** path the `hdfs://yt8m` bucket will refer to (the directory must exist on bucket creation).
-It means that when accessing object `hdfs://yt8m/1.mp4` the path will be resolved to `/part1/video/1.mp4` (`/part1/video` + `1.mp4`).
 
 ### Prefetch/Evict Objects
 
