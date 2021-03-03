@@ -215,6 +215,12 @@ const (
 
 // Flags
 var (
+	// Global
+	noColorFlag = cli.BoolFlag{
+		Name:  "no-color",
+		Usage: "disable colored output",
+	}
+
 	// Common
 	objPropsFlag = cli.StringFlag{
 		Name:  "props",

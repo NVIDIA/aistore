@@ -74,17 +74,22 @@ $ ais show cluster
 
 Besides a set of options specific for each command, AIS CLI provides global options:
 
-- `--no-colors` - by default AIS CLI displays messages with colors(e.g, errors are printed in red color). Colors are automatically disabled if CLI output is redirected or environment variable `TERM=dumb` is set. To disable colors in other cases, pass `--no-colors` to the application.
+- `--no-color` - by default AIS CLI displays messages with colors (e.g, errors are printed in red color).
+  Colors are automatically disabled if CLI output is redirected or environment variable `TERM=dumb` is set.
+  To disable colors in other cases, pass `--no-color` to the application.
 
-Please note that the place of a global options in the command line is fixed. Global options must follow the application name directly. At the same time, the location of a command-specific option is arbitrary: you can put them anywhere. Examples:
+Please note that the place of a global options in the command line is fixed.
+Global options must follow the application name directly.
+At the same time, the location of a command-specific option is arbitrary: you can put them anywhere.
+Examples:
 
 ```console
-# correct usage of global and command-specific options
-$ ais --no-colors ls ais://bck --props all
-$ ais --no-colors ls --props all ais://bck
-
-# incorrect usage of a global option
-$ ais bucket ls ais://bck --props all --no-colors
+$ # Correct usage of global and command-specific options.
+$ ais --no-color ls ais://bck --props all
+$ ais --no-color ls --props all ais://bck
+$
+$ # Incorrect usage of a global option.
+$ ais bucket ls ais://bck --props all --no-color
 ```
 
 ## AIS CLI Shell Autocomplete

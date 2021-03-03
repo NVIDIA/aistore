@@ -27,11 +27,7 @@ const (
 var (
 	// Global config object
 	cfg              *config.Config
-	unreachableRegex *regexp.Regexp = regexp.MustCompile("dial.*(timeout|refused)")
-	noColorFlag                     = cli.BoolFlag{
-		Name:  "no-colors",
-		Usage: "disable colored output",
-	}
+	unreachableRegex = regexp.MustCompile("dial.*(timeout|refused)")
 )
 
 // AISCLI represents an instance of an AIS command line interface
