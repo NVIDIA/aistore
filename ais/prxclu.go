@@ -476,7 +476,7 @@ func (p *proxyrunner) _updPre(ctx *smapModifier, clone *smapX) error {
 	ctx.exists = clone.putNode(ctx.nsi, ctx.flags)
 	if ctx.nsi.IsTarget() {
 		// Notify targets that they need to set up GFN
-		aisMsg := p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActStartGFN}, clone, nil)
+		aisMsg := p.newAmsgActVal(cmn.ActStartGFN, nil, clone)
 		notifyPairs := revsPair{clone, aisMsg}
 		_ = p.metasyncer.notify(true, notifyPairs)
 	}
@@ -519,7 +519,7 @@ func (p *proxyrunner) _updFinal(ctx *smapModifier, clone *smapX) {
 		tokens = p.authn.revokedTokenList()
 		bmd    = p.owner.bmd.get()
 		config = p.owner.config.get()
-		aisMsg = p.newAisMsg(ctx.msg, clone, bmd)
+		aisMsg = p.newAmsg(ctx.msg, clone, bmd)
 		pairs  = []revsPair{{clone, aisMsg}, {bmd, aisMsg}, {config, aisMsg}}
 	)
 
@@ -601,7 +601,7 @@ func (p *proxyrunner) _perfRebPost(ctx *smapModifier, clone *smapX) {
 
 func (p *proxyrunner) _syncFinal(ctx *smapModifier, clone *smapX) {
 	var (
-		aisMsg = p.newAisMsg(ctx.msg, clone, nil)
+		aisMsg = p.newAmsg(ctx.msg, clone, nil)
 		pairs  = []revsPair{{clone, aisMsg}}
 	)
 	if ctx.rmd != nil {
@@ -704,7 +704,7 @@ func (p *proxyrunner) _setConfPre(ctx *configModifier, clone *globalConfig) (upd
 }
 
 func (p *proxyrunner) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
-	wg := p.metasyncer.sync(revsPair{p.owner.config.get(), p.newAisMsg(ctx.msg, nil, nil)})
+	wg := p.metasyncer.sync(revsPair{p.owner.config.get(), p.newAmsg(ctx.msg, nil, nil)})
 	if ctx.wait {
 		wg.Wait()
 	}
@@ -1125,7 +1125,7 @@ func (p *proxyrunner) _cancelMaintPre(ctx *smapModifier, clone *smapX) error {
 }
 
 func (p *proxyrunner) _syncRMDFinal(ctx *rmdModifier, clone *rebMD) {
-	wg := p.metasyncer.sync(revsPair{clone, p.newAisMsg(ctx.msg, nil, nil)})
+	wg := p.metasyncer.sync(revsPair{clone, p.newAmsg(ctx.msg, nil, nil)})
 	nl := xaction.NewXactNL(xaction.RebID(clone.Version).String(),
 		cmn.ActRebalance, &ctx.smap.Smap, nil)
 	nl.SetOwner(equalIC)
@@ -1141,7 +1141,7 @@ func (p *proxyrunner) _syncRMDFinal(ctx *rmdModifier, clone *rebMD) {
 }
 
 func (p *proxyrunner) _syncBMDFinal(ctx *bmdModifier, clone *bucketMD) {
-	msg := p.newAisMsg(ctx.msg, ctx.smap, clone, ctx.txnID)
+	msg := p.newAmsg(ctx.msg, ctx.smap, clone, ctx.txnID)
 	wg := p.metasyncer.sync(revsPair{clone, msg})
 	if ctx.wait {
 		wg.Wait()

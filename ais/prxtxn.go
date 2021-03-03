@@ -918,7 +918,7 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck, waitms
 		uuid: cmn.GenUUID(),
 		smap: p.owner.smap.get(),
 	}
-	c.msg = p.newAisMsg(msg, c.smap, nil, c.uuid)
+	c.msg = p.newAmsg(msg, c.smap, nil, c.uuid)
 	body := cmn.MustMarshal(c.msg)
 
 	query := make(url.Values, 2)

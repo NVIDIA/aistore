@@ -29,7 +29,7 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	p.authn.updateRevokedList(tokenList)
 	if p.owner.smap.get().isPrimary(p.si) {
-		msg := p.newAisMsgStr(cmn.ActNewPrimary, nil, nil)
+		msg := p.newAmsgStr(cmn.ActNewPrimary, nil, nil)
 		_ = p.metasyncer.sync(revsPair{p.authn.revokedTokenList(), msg})
 	}
 }

@@ -100,7 +100,7 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 	t.gfn.global.activateTimed()
 
 	// BMD
-	msg := t.newAisMsgStr(cmn.ActRegTarget, regMeta.Smap, regMeta.BMD)
+	msg := t.newAmsgStr(cmn.ActRegTarget, regMeta.Smap, regMeta.BMD)
 	if err = t.receiveBMD(regMeta.BMD, msg, bucketMDRegister, caller); err != nil {
 		if isErrDowngrade(err) {
 			err = nil
@@ -849,7 +849,7 @@ func (t *targetrunner) smapVersionFixup(r *http.Request) {
 		glog.Error(err)
 		return
 	}
-	msg := t.newAisMsgStr("get-what="+cmn.GetWhatSmap, newSmap, nil)
+	msg := t.newAmsgStr("get-what="+cmn.GetWhatSmap, newSmap, nil)
 	if r != nil {
 		caller = r.Header.Get(cmn.HeaderCallerName)
 	}
@@ -870,7 +870,7 @@ func (t *targetrunner) BMDVersionFixup(r *http.Request, bck cmn.Bck, sleep bool)
 		glog.Error(err)
 		return
 	}
-	msg := t.newAisMsgStr("get-what="+cmn.GetWhatBMD, nil, newBucketMD)
+	msg := t.newAmsgStr("get-what="+cmn.GetWhatBMD, nil, newBucketMD)
 	if r != nil {
 		caller = r.Header.Get(cmn.HeaderCallerName)
 	}

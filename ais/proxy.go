@@ -203,7 +203,7 @@ func (p *proxyrunner) applyRegMeta(body []byte, caller string) (err error) {
 		return fmt.Errorf(cmn.FmtErrUnmarshal, p.si, "reg-meta", cmn.BytesHead(body), err)
 	}
 
-	msg := p.newAisMsgStr(cmn.ActRegTarget, regMeta.Smap, regMeta.BMD)
+	msg := p.newAmsgStr(cmn.ActRegTarget, regMeta.Smap, regMeta.BMD)
 
 	// BMD
 	if err = p.receiveBMD(regMeta.BMD, msg, caller); err != nil {
@@ -1076,7 +1076,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 		isNew, q = p.initAsyncQuery(bck, msg, cmn.GenUUID())
 		config   = cmn.GCO.Get()
 		smap     = p.owner.smap.get()
-		aisMsg   = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActSummaryBck, Value: msg}, smap, nil)
+		aisMsg   = p.newAmsgActVal(cmn.ActSummaryBck, msg, smap)
 		body     = cmn.MustMarshal(aisMsg)
 	)
 	args := allocBcastArgs()
@@ -1572,7 +1572,7 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allE
 	// what we have locally, so we don't re-request the objects.
 	smsg.ContinuationToken = p.qm.b.last(smsg.UUID, token)
 
-	aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &smsg}, smap, nil)
+	aisMsg = p.newAmsgActVal(cmn.ActListObjects, &smsg, smap)
 	args = allocBcastArgs()
 	args.req = cmn.ReqArgs{
 		Method: http.MethodGet,
@@ -1639,7 +1639,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 	var (
 		smap       = p.owner.smap.get()
 		reqTimeout = cmn.GCO.Get().Client.ListObjects
-		aisMsg     = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &smsg}, smap, nil)
+		aisMsg     = p.newAmsgActVal(cmn.ActListObjects, &smsg, smap)
 		args       = allocBcastArgs()
 		results    sliceResults
 	)
@@ -1776,7 +1776,7 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg,
 	query url.Values) (xactID string, err error) {
 	var (
 		smap   = p.owner.smap.get()
-		aisMsg = p.newAisMsg(msg, smap, nil, cmn.GenUUID())
+		aisMsg = p.newAmsg(msg, smap, nil, cmn.GenUUID())
 		body   = cmn.MustMarshal(aisMsg)
 		path   = cmn.URLPathBuckets.Join(bucket)
 	)
@@ -2243,7 +2243,7 @@ func (p *proxyrunner) _becomeFinal(ctx *smapModifier, clone *smapX) {
 		bmd   = p.owner.bmd.get()
 		rmd   = p.owner.rmd.get()
 		conf  = p.ensureConfigPrimaryURL()
-		msg   = p.newAisMsgStr(cmn.ActNewPrimary, clone, bmd)
+		msg   = p.newAmsgStr(cmn.ActNewPrimary, clone, bmd)
 		pairs = []revsPair{{clone, msg}, {bmd, msg}, {rmd, msg}, {conf, msg}}
 	)
 	glog.Infof("%s: distributing (%s, %s, %s) with newly elected primary (self)", p.si, clone, bmd, rmd)

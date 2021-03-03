@@ -312,7 +312,7 @@ loop:
 }
 
 func (pkr *proxyKeepaliveRunner) _final(ctx *smapModifier, clone *smapX) {
-	msg := pkr.p.newAisMsg(ctx.msg, clone, nil)
+	msg := pkr.p.newAmsg(ctx.msg, clone, nil)
 	_ = pkr.p.metasyncer.sync(revsPair{clone, msg})
 }
 

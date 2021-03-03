@@ -2079,11 +2079,15 @@ func newBckFromQueryUname(query url.Values, uparam string) (*cluster.Bck, error)
 // aisMsg helpers //
 ////////////////////
 
-func (h *httprunner) newAisMsgStr(msgStr string, smap *smapX, bmd *bucketMD) *aisMsg {
-	return h.newAisMsg(&cmn.ActionMsg{Value: msgStr}, smap, bmd)
+func (h *httprunner) newAmsgStr(msgStr string, smap *smapX, bmd *bucketMD) *aisMsg {
+	return h.newAmsg(&cmn.ActionMsg{Value: msgStr}, smap, bmd)
 }
 
-func (h *httprunner) newAisMsg(actionMsg *cmn.ActionMsg, smap *smapX, bmd *bucketMD, uuid ...string) *aisMsg {
+func (h *httprunner) newAmsgActVal(act string, val interface{}, smap *smapX) *aisMsg {
+	return h.newAmsg(&cmn.ActionMsg{Action: act, Value: val}, smap, nil)
+}
+
+func (h *httprunner) newAmsg(actionMsg *cmn.ActionMsg, smap *smapX, bmd *bucketMD, uuid ...string) *aisMsg {
 	msg := &aisMsg{ActionMsg: *actionMsg}
 	if smap != nil {
 		msg.SmapVersion = smap.Version

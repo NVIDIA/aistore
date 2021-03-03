@@ -497,7 +497,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 	var (
 		payload = make(msPayload, 2*len(y.lastSynced))
 		pairs   = make([]revsPair, 0, len(y.lastSynced))
-		msg     = y.p.newAisMsgStr("metasync: handle-pending", smap, nil) // NOTE: same msg for all revs
+		msg     = y.p.newAmsgStr("metasync: handle-pending", smap, nil) // NOTE: same msg for all revs
 		msgBody = cmn.MustMarshal(msg)
 	)
 	for tag, revs := range y.lastSynced {

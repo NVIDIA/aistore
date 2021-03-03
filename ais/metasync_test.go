@@ -281,7 +281,7 @@ func syncOnce(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpo
 	}
 
 	smap := primary.owner.smap.get()
-	msg := primary.newAisMsgStr("", smap, nil)
+	msg := primary.newAmsgStr("", smap, nil)
 	wg := syncer.sync(revsPair{smap, msg})
 	wg.Wait()
 	return []transportData{
@@ -308,7 +308,7 @@ func syncOnceWait(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]tra
 	}
 
 	smap := primary.owner.smap.get()
-	msg := primary.newAisMsgStr("", smap, nil)
+	msg := primary.newAmsgStr("", smap, nil)
 	wg := syncer.sync(revsPair{smap, msg})
 	wg.Wait()
 	if len(ch) != len(servers) {
@@ -337,7 +337,7 @@ func syncOnceNoWait(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]t
 	}
 
 	smap := primary.owner.smap.get()
-	msg := primary.newAisMsgStr("", smap, nil)
+	msg := primary.newAmsgStr("", smap, nil)
 	syncer.sync(revsPair{smap, msg})
 	if len(ch) == len(servers) {
 		t.Fatalf("sync call no wait returned after sync is completed")
@@ -366,7 +366,7 @@ func retry(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportD
 	}
 
 	smap := primary.owner.smap.get()
-	msg := primary.newAisMsgStr("", smap, nil)
+	msg := primary.newAmsgStr("", smap, nil)
 	wg := syncer.sync(revsPair{smap, msg})
 	wg.Wait()
 	return []transportData{
@@ -396,7 +396,7 @@ func multipleSync(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]tra
 	}
 
 	smap := primary.owner.smap.get()
-	msg := primary.newAisMsgStr("", smap, nil)
+	msg := primary.newAmsgStr("", smap, nil)
 	syncer.sync(revsPair{smap, msg}).Wait()
 
 	ctx := &smapModifier{
@@ -405,7 +405,7 @@ func multipleSync(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]tra
 			return nil
 		},
 		final: func(_ *smapModifier, clone *smapX) {
-			msg := primary.newAisMsgStr("", clone, nil)
+			msg := primary.newAmsgStr("", clone, nil)
 			syncer.sync(revsPair{clone, msg})
 		},
 	}
@@ -417,7 +417,7 @@ func multipleSync(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]tra
 			return nil
 		},
 		final: func(_ *smapModifier, clone *smapX) {
-			msg := primary.newAisMsgStr("", clone, nil)
+			msg := primary.newAmsgStr("", clone, nil)
 			syncer.sync(revsPair{clone, msg}).Wait()
 		},
 	}
@@ -490,7 +490,7 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 
 	// testcase #1: short delay
 	smap := primary.owner.smap.get()
-	msg := primary.newAisMsgStr("", smap, nil)
+	msg := primary.newAmsgStr("", smap, nil)
 	syncer.sync(revsPair{smap, msg})
 	time.Sleep(time.Millisecond)
 	// sync will return even though the sync actually failed, and there is no error return
@@ -503,7 +503,7 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 			return nil
 		},
 		final: func(_ *smapModifier, clone *smapX) {
-			msg := primary.newAisMsgStr("", clone, nil)
+			msg := primary.newAmsgStr("", clone, nil)
 			syncer.sync(revsPair{clone, msg})
 		},
 	}
@@ -655,7 +655,7 @@ func TestMetaSyncData(t *testing.T) {
 	bmdBody = bmd.marshal()
 
 	exp[revsBMDTag] = bmdBody
-	msg := primary.newAisMsgStr("", smap, bmd)
+	msg := primary.newAmsgStr("", smap, bmd)
 	syncer.sync(revsPair{bmd, msg})
 }
 
@@ -686,7 +686,7 @@ func TestMetaSyncMembership(t *testing.T) {
 		clone := primary.owner.smap.get().clone()
 		clone.addTarget(cluster.NewSnode(id, cmn.Target, addrInfo, addrInfo, addrInfo))
 		primary.owner.smap.put(clone)
-		msg := primary.newAisMsgStr("", clone, nil)
+		msg := primary.newAmsgStr("", clone, nil)
 		wg1 := syncer.sync(revsPair{clone, msg})
 		wg1.Wait()
 		time.Sleep(time.Millisecond * 300)
@@ -733,7 +733,7 @@ func TestMetaSyncMembership(t *testing.T) {
 		clone.addTarget(di)
 		primary.owner.smap.put(clone)
 		bmd := primary.owner.bmd.get()
-		msg := primary.newAisMsgStr("", clone, bmd)
+		msg := primary.newAmsgStr("", clone, bmd)
 		wg := syncer.sync(revsPair{bmd, msg})
 		wg.Wait()
 		<-ch
@@ -760,7 +760,7 @@ func TestMetaSyncMembership(t *testing.T) {
 		primary.owner.smap.put(clone)
 
 		bmd := primary.owner.bmd.get()
-		msg := primary.newAisMsgStr("", clone, bmd)
+		msg := primary.newAmsgStr("", clone, bmd)
 		wg := syncer.sync(revsPair{bmd, msg})
 		wg.Wait()
 		<-ch // target 1

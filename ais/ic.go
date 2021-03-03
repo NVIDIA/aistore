@@ -351,7 +351,7 @@ func (ic *ic) registerEqual(a regIC) {
 func (ic *ic) bcastListenIC(nl nl.NotifListener, smap *smapX) {
 	var (
 		actMsg = cmn.ActionMsg{Action: cmn.ActListenToNotif, Value: newNLMsg(nl)}
-		msg    = ic.p.newAisMsg(&actMsg, smap, nil)
+		msg    = ic.p.newAmsg(&actMsg, smap, nil)
 	)
 	cmn.Assert(nl.ActiveCount() > 0)
 	ic.p.bcastAsyncIC(msg)
@@ -364,8 +364,7 @@ func (ic *ic) sendOwnershipTbl(si *cluster.Snode) error {
 		}
 		return nil
 	}
-	actMsg := &cmn.ActionMsg{Action: cmn.ActMergeOwnershipTbl, Value: &ic.p.notifs}
-	msg := ic.p.newAisMsg(actMsg, nil, nil)
+	msg := ic.p.newAmsgActVal(cmn.ActMergeOwnershipTbl, &ic.p.notifs, nil)
 	result := ic.p.call(callArgs{
 		si: si,
 		req: cmn.ReqArgs{

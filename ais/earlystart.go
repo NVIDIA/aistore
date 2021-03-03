@@ -242,7 +242,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 
 		var (
 			bmd = p.owner.bmd.get()
-			msg = p.newAisMsgStr(metaction1, smap, bmd)
+			msg = p.newAmsgStr(metaction1, smap, bmd)
 		)
 		wg := p.metasyncer.sync(revsPair{smap, msg}, revsPair{bmd, msg})
 		wg.Wait()
@@ -328,7 +328,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 
 	// 8. metasync (smap, config & bmd) and startup as primary
 	var (
-		aisMsg = p.newAisMsgStr(metaction2, smap, bmd)
+		aisMsg = p.newAmsgStr(metaction2, smap, bmd)
 		pairs  = []revsPair{{smap, aisMsg}, {bmd, aisMsg}, {cfg, aisMsg}}
 	)
 	wg := p.metasyncer.sync(pairs...)
@@ -392,7 +392,7 @@ until:
 	}
 	var (
 		msg    = &cmn.ActionMsg{Action: cmn.ActRebalance, Value: metaction3}
-		aisMsg = p.newAisMsg(msg, smap, nil)
+		aisMsg = p.newAmsg(msg, smap, nil)
 		ctx    = &rmdModifier{
 			pre: func(_ *rmdModifier, clone *rebMD) { clone.Version += 100 },
 		}
