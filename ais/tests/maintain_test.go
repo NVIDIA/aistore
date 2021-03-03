@@ -7,7 +7,6 @@ package integration
 import (
 	"os"
 	"path/filepath"
-	"strconv"
 	"testing"
 	"time"
 
@@ -326,13 +325,11 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 
 	tutils.Logf("Shutting down the node %s[%s]...\n", node, nodeType)
 	// 1. Shutdown a random node
-	pidStr, cmd, err := tutils.ShutdownNode(t, baseParams, node)
+	pid, cmd, err := tutils.ShutdownNode(t, baseParams, node)
 	tassert.CheckFatal(t, err)
 	if nodeType == cmn.Target {
 		tutils.WaitForRebalanceToComplete(t, baseParams)
 	}
-	pid, err := strconv.Atoi(pidStr)
-	tassert.CheckError(t, err)
 
 	// 2. Make sure the node has been shut down
 	smap, err = tutils.WaitForClusterStateActual(proxyURL, "shutdown node", smap.Version, origProxyCnt-pdc, origTargetCount-tdc, node.DaemonID)

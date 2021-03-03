@@ -305,8 +305,7 @@ func KillNode(node *cluster.Snode) (cmd RestoreCmd, err error) {
 	var (
 		daemonID = node.ID()
 		port     = node.PublicNet.DaemonPort
-		pid      string
-		pidInt   int
+		pid      int
 	)
 	cmd.Node = node
 	if containers.DockerRunning() {
@@ -319,43 +318,37 @@ func KillNode(node *cluster.Snode) (cmd RestoreCmd, err error) {
 	if err != nil {
 		return
 	}
-	pidInt, err = strconv.Atoi(pid)
-	if err != nil {
-		return
-	}
 
-	if err = syscall.Kill(pidInt, syscall.SIGINT); err != nil {
+	if err = syscall.Kill(pid, syscall.SIGINT); err != nil {
 		return
 	}
 	// wait for the process to actually disappear
 	to := time.Now().Add(time.Second * 30)
 	for {
-		_, _, _, errpid := getProcess(port)
-		if errpid != nil {
+		if _, _, _, errPs := getProcess(port); errPs != nil {
 			break
 		}
 		if time.Now().After(to) {
-			err = fmt.Errorf("failed to kill -2 process pid=%s at port %s", pid, port)
+			err = fmt.Errorf("failed to 'kill -2' process (pid: %d, port: %s)", pid, port)
 			break
 		}
 		time.Sleep(time.Second)
 	}
 
-	syscall.Kill(pidInt, syscall.SIGKILL)
+	syscall.Kill(pid, syscall.SIGKILL)
 	time.Sleep(time.Second)
 
 	if err != nil {
-		_, _, _, errpid := getProcess(port)
-		if errpid != nil {
+		if _, _, _, errPs := getProcess(port); errPs != nil {
 			err = nil
 		} else {
-			err = fmt.Errorf("failed to kill -9 process pid=%s at port %s", pid, port)
+			err = fmt.Errorf("failed to 'kill -9' process (pid: %d, port: %s)", pid, port)
 		}
 	}
 	return
 }
 
-func ShutdownNode(t *testing.T, baseParams api.BaseParams, node *cluster.Snode) (pid string, cmd RestoreCmd, err error) {
+func ShutdownNode(_ *testing.T, baseParams api.BaseParams, node *cluster.Snode) (pid int, cmd RestoreCmd, err error) {
 	restoreNodesOnce.Do(func() {
 		initNodeCmd()
 	})
@@ -482,10 +475,10 @@ func getAISNodeCmd(t *testing.T) string {
 }
 
 // getPID uses 'lsof' to find the pid of the ais process listening on a port
-func getPID(port string) (string, error) {
+func getPID(port string) (int, error) {
 	output, err := exec.Command("lsof", []string{"-sTCP:LISTEN", "-i", ":" + port}...).CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("error executing LSOF command: %v", err)
+		return 0, fmt.Errorf("error executing LSOF command: %v", err)
 	}
 
 	// Skip lines before first appearance of "COMMAND"
@@ -497,27 +490,28 @@ func getPID(port string) (string, error) {
 		}
 	}
 
-	// second colume is the pid
-	return strings.Fields(lines[i+1])[1], nil
+	// Second column is the pid.
+	pid := strings.Fields(lines[i+1])[1]
+	return strconv.Atoi(pid)
 }
 
 // getProcess finds the ais process by 'lsof' using a port number, it finds the ais process's
 // original command line by 'ps', returns the command line for later to restart(restore) the process.
-func getProcess(port string) (string, string, []string, error) {
-	pid, err := getPID(port)
+func getProcess(port string) (pid int, cmd string, args []string, err error) {
+	pid, err = getPID(port)
 	if err != nil {
-		return "", "", nil, fmt.Errorf("error getting pid on port: %v", err)
+		return 0, "", nil, fmt.Errorf("error getting pid on port: %v", err)
 	}
 
-	output, err := exec.Command("ps", "-p", pid, "-o", "command").CombinedOutput()
+	output, err := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "command").CombinedOutput()
 	if err != nil {
-		return "", "", nil, fmt.Errorf("error executing PS command: %v", err)
+		return 0, "", nil, fmt.Errorf("error executing PS command: %v", err)
 	}
 
 	line := strings.Split(string(output), "\n")[1]
 	fields := strings.Fields(line)
 	if len(fields) == 0 {
-		return "", "", nil, fmt.Errorf("no returned fields")
+		return 0, "", nil, fmt.Errorf("no returned fields")
 	}
 
 	return pid, fields[0], fields[1:], nil
