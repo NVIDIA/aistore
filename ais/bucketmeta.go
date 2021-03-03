@@ -217,7 +217,7 @@ func newBMDOwnerPrx(config *cmn.Config) *bmdOwnerPrx {
 
 func (bo *bmdOwnerPrx) init() {
 	bmd := newBucketMD()
-	_, err := jsp.Load(bo.fpath, bmd, jsp.CCSign(cmn.MetaverBMD))
+	_, err := jsp.LoadMeta(bo.fpath, bmd)
 	if err != nil && !os.IsNotExist(err) {
 		glog.Errorf("failed to load %s from %s, err: %v", bmd, bo.fpath, err)
 	}
@@ -231,7 +231,7 @@ func (bo *bmdOwnerPrx) put(bmd *bucketMD) (err error) {
 
 func (bo *bmdOwnerPrx) persist() (err error) {
 	bmd := bo.get()
-	if err = jsp.Save(bo.fpath, bmd, jsp.CCSign(cmn.MetaverBMD)); err != nil {
+	if err = jsp.SaveMeta(bo.fpath, bmd); err != nil {
 		err = fmt.Errorf("failed to write %s as %s, err: %w", bmd, bo.fpath, err)
 	}
 	return
@@ -296,8 +296,7 @@ func (bo *bmdOwnerTgt) put(bmd *bucketMD) (err error) {
 
 func (bo *bmdOwnerTgt) persist() (err error) {
 	bmd := bo.get()
-	opts := jsp.CCSign(cmn.MetaverBMD)
-	cnt, availCnt := fs.PersistOnMpaths(fs.BmdPersistedFileName, fs.BmdPersistedPrevious, bmd, bmdCopies, opts)
+	cnt, availCnt := fs.PersistOnMpaths(fs.BmdPersistedFileName, fs.BmdPersistedPrevious, bmd, bmdCopies, bmd.Opts())
 	if cnt > 0 {
 		return
 	}
@@ -339,7 +338,7 @@ func loadBMDFromMpath(mpath *fs.MountpathInfo, path string) (bmd *bucketMD) {
 		err   error
 	)
 	bmd = newBucketMD()
-	bmd.cksum, err = jsp.Load(fpath, bmd, jsp.CCSign(cmn.MetaverBMD))
+	bmd.cksum, err = jsp.LoadMeta(fpath, bmd)
 	if err == nil {
 		return bmd
 	}

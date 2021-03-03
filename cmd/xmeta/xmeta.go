@@ -105,22 +105,11 @@ func main() {
 
 // "*Dump" routines expect AIS-formatted (smap, bmd, rmd)
 
-func dumpSmap() error {
-	smap := &cluster.Smap{}
-	return dumpMeta(smap, jsp.CCSign(cmn.MetaverSmap))
-}
+func dumpSmap() error { return dumpMeta(&cluster.Smap{}) }
+func dumpBMD() error  { return dumpMeta(&cluster.BMD{}) }
+func dumpRMD() error  { return dumpMeta(&cluster.RMD{}) }
 
-func dumpBMD() error {
-	bmd := &cluster.BMD{}
-	return dumpMeta(bmd, jsp.CCSign(cmn.MetaverBMD))
-}
-
-func dumpRMD() error {
-	rmd := &cluster.RMD{}
-	return dumpMeta(rmd, jsp.CCSign(cmn.MetaverRMD))
-}
-
-func dumpMeta(v interface{}, opts jsp.Options) (err error) {
+func dumpMeta(v jsp.Opts) (err error) {
 	f := os.Stdout
 	if flags.out != "" {
 		f, err = cmn.CreateFile(flags.out)
@@ -128,7 +117,7 @@ func dumpMeta(v interface{}, opts jsp.Options) (err error) {
 			return
 		}
 	}
-	_, err = jsp.Load(flags.in, v, opts)
+	_, err = jsp.LoadMeta(flags.in, v)
 	if err != nil {
 		return
 	}
@@ -139,27 +128,16 @@ func dumpMeta(v interface{}, opts jsp.Options) (err error) {
 
 // "*Compress" routines require output filename
 
-func compressSmap() error {
-	smap := &cluster.Smap{}
-	return compressMeta(smap, jsp.CCSign(cmn.MetaverSmap))
-}
+func compressSmap() error { return compressMeta(&cluster.Smap{}) }
+func compressBMD() error  { return compressMeta(&cluster.BMD{}) }
+func compressRMD() error  { return compressMeta(&cluster.RMD{}) }
 
-func compressBMD() error {
-	bmd := &cluster.BMD{}
-	return compressMeta(bmd, jsp.CCSign(cmn.MetaverBMD))
-}
-
-func compressRMD() error {
-	rmd := &cluster.RMD{}
-	return compressMeta(rmd, jsp.CCSign(cmn.MetaverRMD))
-}
-
-func compressMeta(v interface{}, opts jsp.Options) error {
+func compressMeta(v jsp.Opts) error {
 	if flags.out == "" {
 		return errors.New("output filename (the -out option) must be defined")
 	}
 	if _, err := jsp.Load(flags.in, v, jsp.Plain()); err != nil {
 		return err
 	}
-	return jsp.Save(flags.out, v, opts)
+	return jsp.SaveMeta(flags.out, v)
 }

@@ -288,6 +288,7 @@ func (ni *NetInfo) Equals(other NetInfo) bool {
 // Smap uniquely and solely defines the primary proxy
 //
 //===============================================================
+
 func (m *Smap) InitDigests() {
 	for _, node := range m.Tmap {
 		node.Digest()

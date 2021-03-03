@@ -729,7 +729,7 @@ func WriteErr405(w http.ResponseWriter, r *http.Request, methods ...string) {
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
 	} else {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 	}
 }
 

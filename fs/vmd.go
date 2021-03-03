@@ -31,6 +31,16 @@ type (
 	}
 )
 
+// interface guard
+var (
+	_ jsp.Opts = (*VMD)(nil)
+)
+
+var vmdJspOpts = jsp.CCSign(cmn.MetaverVMD)
+
+// as jsp.Opts
+func (*VMD) Opts() jsp.Options { return vmdJspOpts }
+
 func newVMD(expectedSize int) *VMD {
 	return &VMD{
 		Devices: make(map[string]*fsDeviceMD, expectedSize),
@@ -69,7 +79,7 @@ func LoadVMD(mpaths cmn.StringSet) (mainVMD *VMD, err error) {
 	for path := range mpaths {
 		fpath := filepath.Join(path, VmdPersistedFileName)
 		vmd := newVMD(len(mpaths))
-		vmd.cksum, err = jsp.Load(fpath, vmd, jsp.CCSign(cmn.MetaverVMD))
+		vmd.cksum, err = jsp.LoadMeta(fpath, vmd)
 		if err != nil && os.IsNotExist(err) {
 			continue
 		}
@@ -96,8 +106,7 @@ func LoadVMD(mpaths cmn.StringSet) (mainVMD *VMD, err error) {
 }
 
 func (vmd *VMD) persist() (err error) {
-	opts := jsp.CCSign(cmn.MetaverVMD) // checksum, compress, and sign
-	cnt, availCnt := PersistOnMpaths(VmdPersistedFileName, "", vmd, vmdCopies, opts)
+	cnt, availCnt := PersistOnMpaths(VmdPersistedFileName, "", vmd, vmdCopies, vmd.Opts())
 	if cnt > 0 {
 		return
 	}
