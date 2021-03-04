@@ -195,6 +195,7 @@ func (aisCLI *AISCLI) setupCommands() {
 	app.Commands = append(app.Commands, aliasCmds...)
 
 	setupCommandHelp(app.Commands)
+
 	aisCLI.enableSearch()
 }
 

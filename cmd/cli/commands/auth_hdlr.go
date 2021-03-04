@@ -94,7 +94,6 @@ var (
 					Name:  subcmdAuthAdd,
 					Usage: "add entity to auth",
 					Subcommands: []cli.Command{
-						authCmdShow,
 						{
 							Name:         subcmdAuthUser,
 							Usage:        "add a new user",
