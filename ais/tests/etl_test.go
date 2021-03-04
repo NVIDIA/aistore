@@ -20,9 +20,10 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/devtools/tutils/readers"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils/tetl"
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/etl/runtime"
@@ -129,11 +130,11 @@ func testETLObject(t *testing.T, onlyLong bool, comm, transformer, inPath, outPa
 		expectedOutputFileName = outPath
 	}
 
-	tutils.Logln("Creating bucket")
+	tlog.Logln("Creating bucket")
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	tutils.Logln("Putting object")
+	tlog.Logln("Putting object")
 	reader, err := readers.NewFileReaderFromFile(inputFileName, cmn.ChecksumNone)
 	tassert.CheckFatal(t, err)
 	tutils.PutObject(t, bck, objName, reader)
@@ -146,11 +147,11 @@ func testETLObject(t *testing.T, onlyLong bool, comm, transformer, inPath, outPa
 	tassert.CheckFatal(t, err)
 	defer fho.Close()
 
-	tutils.Logf("Read %q\n", uuid)
+	tlog.Logf("Read %q\n", uuid)
 	err = api.ETLObject(baseParams, uuid, bck, objName, fho)
 	tassert.CheckFatal(t, err)
 
-	tutils.Logln("Compare output")
+	tlog.Logln("Compare output")
 	same, err := fEq(outputFileName, expectedOutputFileName)
 	tassert.CheckError(t, err)
 	tassert.Errorf(t, same, "file contents after transformation differ")
@@ -161,7 +162,7 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, uuid string, onlyLong, cached
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: onlyLong})
 
 	objName := fmt.Sprintf("%s-%s-object", uuid, cmn.RandString(5))
-	tutils.Logln("Putting object")
+	tlog.Logln("Putting object")
 	reader, err := readers.NewRandReader(cmn.KiB, cmn.ChecksumNone)
 	tassert.CheckFatal(t, err)
 
@@ -174,7 +175,7 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, uuid string, onlyLong, cached
 	tassert.CheckFatal(t, err)
 
 	if !cached {
-		tutils.Logf("Evicting object %s\n", objName)
+		tlog.Logf("Evicting object %s\n", objName)
 		err := api.EvictObject(baseParams, bck, objName)
 		tassert.CheckFatal(t, err)
 	}
@@ -186,7 +187,7 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, uuid string, onlyLong, cached
 	}()
 
 	bf := bytes.NewBuffer(nil)
-	tutils.Logf("Read %q\n", uuid)
+	tlog.Logf("Read %q\n", uuid)
 	err = api.ETLObject(baseParams, uuid, bck, objName, bf)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, bf.Len() == cmn.KiB, "Expected %d bytes, got %d", cmn.KiB, bf.Len())
@@ -200,7 +201,7 @@ func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, fileS
 	)
 	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
-	tutils.Logf("Start offline ETL %q\n", uuid)
+	tlog.Logf("Start offline ETL %q\n", uuid)
 	xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{
 		ID:             uuid,
 		RequestTimeout: cmn.DurationJSON(requestTimeout),
@@ -305,11 +306,11 @@ func TestETLBucket(t *testing.T) {
 		}
 	)
 
-	tutils.Logln("Preparing source bucket")
+	tlog.Logln("Preparing source bucket")
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 	m.init()
 
-	tutils.Logln("Putting objects to source bucket")
+	tlog.Logln("Putting objects to source bucket")
 	m.puts()
 
 	for _, test := range tests {
@@ -370,12 +371,12 @@ def transform(input_bytes: bytes) -> bytes:
 		}
 	)
 
-	tutils.Logln("Preparing source bucket")
+	tlog.Logln("Preparing source bucket")
 	tutils.CreateFreshBucket(t, proxyURL, m.bck, nil)
 
 	m.init()
 
-	tutils.Logln("Putting objects to source bucket")
+	tlog.Logln("Putting objects to source bucket")
 	m.puts()
 
 	for _, test := range tests {
@@ -413,18 +414,18 @@ func TestETLBucketDryRun(t *testing.T) {
 		}
 	)
 
-	tutils.Logln("Preparing source bucket")
+	tlog.Logln("Preparing source bucket")
 	tutils.CreateFreshBucket(t, proxyURL, bckFrom, nil)
 	m.init()
 
-	tutils.Logln("Putting objects to source bucket")
+	tlog.Logln("Putting objects to source bucket")
 	m.puts()
 
 	uuid, err := tetl.Init(baseParams, tetl.Echo, etl.RevProxyCommType)
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
-	tutils.Logf("Start offline ETL %q\n", uuid)
+	tlog.Logf("Start offline ETL %q\n", uuid)
 	xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo,
 		&cmn.Bck2BckMsg{ID: uuid, CopyBckMsg: cmn.CopyBckMsg{DryRun: true}})
 	tassert.CheckFatal(t, err)
@@ -469,7 +470,7 @@ func TestETLHealth(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: true})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
-	tutils.Logln("Starting ETL")
+	tlog.Logln("Starting ETL")
 	uuid, err := tetl.Init(baseParams, tetl.Echo, etl.RedirectCommType)
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
@@ -490,16 +491,16 @@ func TestETLHealth(t *testing.T) {
 		healths, err = api.ETLHealth(baseParams, uuid)
 		if err == nil {
 			if len(healths) > 0 {
-				tutils.Logf("Successfully received metrics after %s\n", now.Sub(start))
+				tlog.Logf("Successfully received metrics after %s\n", now.Sub(start))
 				break
 			}
-			tutils.Logln("Unexpected empty health messages without error, retrying...")
+			tlog.Logln("Unexpected empty health messages without error, retrying...")
 			continue
 		}
 
 		httpErr, ok := err.(*cmn.ErrHTTP)
 		tassert.Fatalf(t, ok && httpErr.Status == http.StatusNotFound, "Unexpected error %v, expected 404", err)
-		tutils.Logf("ETL %q not found in metrics, retrying...\n", uuid)
+		tlog.Logf("ETL %q not found in metrics, retrying...\n", uuid)
 		time.Sleep(10 * time.Second)
 	}
 

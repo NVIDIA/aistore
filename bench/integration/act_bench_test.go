@@ -11,8 +11,9 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 )
 
 const (
@@ -39,7 +40,7 @@ var (
 )
 
 func fillBucket(tb testing.TB, proxyURL string, bck cmn.Bck, objSize uint64, objCount int) {
-	tutils.Logf("PUT %d objects of size %d into bucket %s...\n", objCount, objSize, bck)
+	tlog.Logf("PUT %d objects of size %d into bucket %s...\n", objCount, objSize, bck)
 	_, _, err := tutils.PutRandObjs(tutils.PutObjectsArgs{
 		ProxyURL:  proxyURL,
 		Bck:       bck,
@@ -117,7 +118,7 @@ func BenchmarkECRebalance(b *testing.B) {
 			tassert.CheckFatal(b, err)
 
 			args := &cmn.ActValDecommision{DaemonID: tgtLost.ID(), SkipRebalance: true}
-			err = tutils.UnregisterNode(proxyURL, args)
+			err = tutils.DecommissionNode(proxyURL, args)
 			tassert.CheckFatal(b, err)
 			fillBucket(b, proxyURL, bck, uint64(size), objCount)
 
@@ -168,7 +169,7 @@ func BenchmarkRebalance(b *testing.B) {
 		tassert.CheckFatal(b, err)
 
 		args := &cmn.ActValDecommision{DaemonID: tgtLost.ID(), SkipRebalance: true}
-		err = tutils.UnregisterNode(proxyURL, args)
+		err = tutils.DecommissionNode(proxyURL, args)
 		tassert.CheckFatal(b, err)
 		fillBucket(b, proxyURL, bck, uint64(size), objCount)
 

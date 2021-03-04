@@ -21,8 +21,9 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/devtools"
+	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils/readers"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/stats"
 	"golang.org/x/sync/errgroup"
 )
@@ -205,7 +206,30 @@ func SetBackendBck(t *testing.T, baseParams api.BaseParams, srcBck, dstBck cmn.B
 	tassert.CheckFatal(t, err)
 }
 
-func UnregisterNode(proxyURL string, args *cmn.ActValDecommision) error {
+func DecommissionTargetSkipRebWait(t *testing.T, proxyURL string, smap *cluster.Smap) (*cluster.Smap, *cluster.Snode) {
+	var (
+		removeTarget, _ = smap.GetRandTarget()
+		origTgtCnt      = smap.CountActiveTargets()
+		args            = &cmn.ActValDecommision{DaemonID: removeTarget.ID(), SkipRebalance: true}
+	)
+	err := DecommissionNode(proxyURL, args)
+	tassert.CheckFatal(t, err)
+	newSmap, err := WaitForClusterState(
+		proxyURL,
+		"target is gone",
+		smap.Version,
+		smap.CountActiveProxies(),
+		origTgtCnt-1,
+	)
+	tassert.CheckFatal(t, err)
+	newTgtCnt := newSmap.CountActiveTargets()
+	tassert.Fatalf(t, newTgtCnt == origTgtCnt-1,
+		"new smap expected to have 1 target less: %d (v%d) vs %d (v%d)", newTgtCnt, origTgtCnt,
+		newSmap.Version, smap.Version)
+	return newSmap, removeTarget
+}
+
+func DecommissionNode(proxyURL string, args *cmn.ActValDecommision) error {
 	return devtools.UnregisterNode(DevtoolsCtx, proxyURL, args, registerTimeout)
 }
 
@@ -366,7 +390,7 @@ func GetObjectAtime(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, object
 // WaitForDSortToFinish waits until all dSorts jobs finished without failure or
 // all jobs abort.
 func WaitForDSortToFinish(proxyURL, managerUUID string) (allAborted bool, err error) {
-	Logln("waiting for distributed sort to finish...")
+	tlog.Logln("waiting for distributed sort to finish...")
 
 	baseParams := BaseAPIParams(proxyURL)
 	deadline := time.Now().Add(dsortFinishTimeout)
@@ -464,7 +488,7 @@ func WaitForRebalanceToComplete(t testing.TB, baseParams api.BaseParams, timeout
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
 	}
-	Logf("Waiting for rebalance and resilver to complete (timeout: %v)...\n", timeout)
+	tlog.Logf("Waiting for rebalance and resilver to complete (timeout: %v)...\n", timeout)
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
@@ -654,12 +678,12 @@ func waitForStartup(baseParams api.BaseParams, ts ...testing.TB) (*cluster.Smap,
 		smap, err := api.GetClusterMap(baseParams)
 		if err != nil {
 			if api.HTTPStatus(err) == http.StatusServiceUnavailable {
-				Logln("waiting for the cluster to start up...")
+				tlog.Logln("waiting for the cluster to start up...")
 				time.Sleep(waitClusterStartup)
 				continue
 			}
 
-			Logf("unable to get usable cluster map, err: %v\n", err)
+			tlog.Logf("unable to get usable cluster map, err: %v\n", err)
 			if len(ts) > 0 {
 				tassert.CheckFatal(ts[0], err)
 			}

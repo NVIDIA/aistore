@@ -15,8 +15,9 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 )
 
 const (
@@ -106,10 +107,10 @@ func TestRProxyGCS(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	cmdline := genCURLCmdLine(resURL, proxyURL, smap.Tmap)
-	tutils.Logf("First time download via XML API: %s\n", cmdline)
+	tlog.Logf("First time download via XML API: %s\n", cmdline)
 	out, err := exec.Command("curl", cmdline...).CombinedOutput()
 	defer os.Remove(gcsTmpFile)
-	tutils.Logln(string(out))
+	tlog.Logln(string(out))
 	tassert.CheckFatal(t, err)
 
 	bckListNew, err := api.ListBuckets(baseParams, queryBck)
@@ -121,14 +122,14 @@ func TestRProxyGCS(t *testing.T) {
 	pathCached := findObjOnDisk(bck, gcsFilename)
 	tassert.Fatalf(t, pathCached != "", "object was not cached")
 
-	tutils.Logf("Cached at: %q\n", pathCached)
+	tlog.Logf("Cached at: %q\n", pathCached)
 	speedCold := extractSpeed(out)
 	tassert.Fatalf(t, speedCold != 0, "Failed to detect speed for cold download")
 
-	tutils.Logf("HTTP download\n")
+	tlog.Logf("HTTP download\n")
 	cmdline = genCURLCmdLine(resURL, proxyURL, smap.Tmap)
 	out, err = exec.Command("curl", cmdline...).CombinedOutput()
-	tutils.Logln(string(out))
+	tlog.Logln(string(out))
 	tassert.CheckFatal(t, err)
 	speedHTTP := extractSpeed(out)
 	tassert.Fatalf(t, speedHTTP != 0, "Failed to detect speed for HTTP download")
@@ -136,10 +137,10 @@ func TestRProxyGCS(t *testing.T) {
 	/*
 		TODO: uncomment when target supports HTTPS client
 
-		tutils.Logf("HTTPS download\n")
+		tlog.Logf("HTTPS download\n")
 		cmdline = genCURLCmdLine(true, true, proxyURL, smap.Tmap)
 		out, err = exec.Command("curl", cmdline...).CombinedOutput()
-		tutils.Logln(string(out))
+		tlog.Logln(string(out))
 		tassert.CheckFatal(t, err)
 		speedHTTPS := extractSpeed(out)
 		tassert.Fatalf(t, speedHTTPS != 0, "Failed to detect speed for HTTPS download")
@@ -150,9 +151,9 @@ func TestRProxyGCS(t *testing.T) {
 		tassert.CheckFatal(t, err)
 		defer tutils.DestroyBucket(t, proxyURL, bckHTTPS)
 
-		tutils.Logf("Check via JSON API\n")
+		tlog.Logf("Check via JSON API\n")
 		cmdline = genCURLCmdLine(false, false, proxyURL, smap.Tmap)
-		tutils.Logf("JSON: %s\n", cmdline)
+		tlog.Logf("JSON: %s\n", cmdline)
 		out, err = exec.Command("curl", cmdline...).CombinedOutput()
 		t.Log(string(out))
 		tassert.CheckFatal(t, err)
@@ -160,15 +161,15 @@ func TestRProxyGCS(t *testing.T) {
 		tassert.Fatalf(t, speedJSON != 0, "Failed to detect speed for JSON download")
 	*/
 
-	tutils.Logf("Cold download speed:   %s\n", cmn.B2S(speedCold, 1))
-	tutils.Logf("HTTP download speed:   %s\n", cmn.B2S(speedHTTP, 1))
+	tlog.Logf("Cold download speed:   %s\n", cmn.B2S(speedCold, 1))
+	tlog.Logf("HTTP download speed:   %s\n", cmn.B2S(speedHTTP, 1))
 	/*
 		TODO: uncomment when target supports HTTPS client
 
-		tutils.Logf("HTTPS download speed:  %s\n", cmn.B2S(speedHTTPS, 1))
-		tutils.Logf("JSON download speed:   %s\n", cmn.B2S(speedJSON, 1))
+		tlog.Logf("HTTPS download speed:  %s\n", cmn.B2S(speedHTTPS, 1))
+		tlog.Logf("JSON download speed:   %s\n", cmn.B2S(speedJSON, 1))
 	*/
-	tutils.Logf("HTTP (cached) is %.1f times faster than Cold\n", float64(speedHTTP)/float64(speedCold))
+	tlog.Logf("HTTP (cached) is %.1f times faster than Cold\n", float64(speedHTTP)/float64(speedCold))
 }
 
 func TestRProxyInvalidURL(t *testing.T) {

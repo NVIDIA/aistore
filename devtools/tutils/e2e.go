@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 )
@@ -141,7 +142,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 
 	defer func() {
 		if err := destroyMatchingBuckets(bucket); err != nil {
-			Logf("failed to remove buckets: %v", err)
+			tlog.Logf("failed to remove buckets: %v", err)
 		}
 
 		f, err := os.Open(cleanupFileName)

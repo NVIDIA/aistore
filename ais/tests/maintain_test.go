@@ -13,8 +13,9 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -78,7 +79,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 
 	// 2. Put a random target under maintenanace
 	tsi, _ := m.smap.GetRandTarget()
-	tutils.Logf("Put target maintenanace %s\n", tsi)
+	tlog.Logf("Put target maintenanace %s\n", tsi)
 	actVal := &cmn.ActValDecommision{DaemonID: tsi.ID(), SkipRebalance: false}
 	rebID, err := api.StartMaintenance(baseParams, actVal)
 	tassert.CheckFatal(t, err)
@@ -193,7 +194,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 
 	m.puts()
 	tsi, _ := m.smap.GetRandTarget()
-	tutils.Logf("Removing target %s\n", tsi)
+	tlog.Logf("Removing target %s\n", tsi)
 	restored := false
 	actVal.DaemonID = tsi.ID()
 	rebID, err := api.Decommission(baseParams, actVal)
@@ -205,7 +206,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 		}
 		tutils.ClearMaintenance(baseParams, tsi)
 	}()
-	tutils.Logf("Wait for rebalance %s\n", rebID)
+	tlog.Logf("Wait for rebalance %s\n", rebID)
 	args := api.XactReqArgs{ID: rebID, Kind: cmn.ActRebalance, Timeout: time.Minute}
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
@@ -254,7 +255,7 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	stopped := false
 
 	tsi, _ := m.smap.GetRandTarget()
-	tutils.Logf("Removing target %s\n", tsi)
+	tlog.Logf("Removing target %s\n", tsi)
 	restored := false
 	actVal.DaemonID = tsi.ID()
 	rebID, err := api.Decommission(baseParams, actVal)
@@ -269,7 +270,7 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 		}
 		tutils.ClearMaintenance(baseParams, tsi)
 	}()
-	tutils.Logf("Wait for rebalance %s\n", rebID)
+	tlog.Logf("Wait for rebalance %s\n", rebID)
 	args := api.XactReqArgs{ID: rebID, Kind: cmn.ActRebalance, Timeout: time.Minute}
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
@@ -323,7 +324,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	}
 	tassert.CheckFatal(t, err)
 
-	tutils.Logf("Shutting down the node %s[%s]...\n", node, nodeType)
+	tlog.Logf("Shutting down the node %s[%s]...\n", node, nodeType)
 	// 1. Shutdown a random node
 	pid, cmd, err := tutils.ShutdownNode(t, baseParams, node)
 	tassert.CheckFatal(t, err)
@@ -339,7 +340,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	err = tutils.WaitForNodeToTerminate(pid, nodeOffTimeout)
 	tassert.CheckError(t, err)
 
-	tutils.Logf("Starting the node %s[%s]...\n", node, nodeType)
+	tlog.Logf("Starting the node %s[%s]...\n", node, nodeType)
 	// 4. Start node again
 	err = tutils.RestoreNode(cmd, false, nodeType)
 	tassert.CheckError(t, err)
@@ -411,7 +412,7 @@ func TestShutdownListObjects(t *testing.T) {
 	tassert.CheckError(t, err)
 
 	// 3. Check if we can list all the objects.
-	tutils.Logln("Listing objects")
+	tlog.Logln("Listing objects")
 	bckList, err = api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(bckList.Entries) == m.num, "list-object should return %d objects - returned %d", m.num, len(bckList.Entries))

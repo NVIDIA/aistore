@@ -15,8 +15,9 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/etl"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -114,26 +115,26 @@ func GetTransformYaml(name string) ([]byte, error) {
 
 func StopETL(t *testing.T, baseParams api.BaseParams, etlID string) {
 	if t.Failed() {
-		tutils.Logln("Fetching logs from ETL containers")
+		tlog.Logln("Fetching logs from ETL containers")
 		if logMsgs, err := api.ETLLogs(baseParams, etlID); err == nil {
 			for _, msg := range logMsgs {
-				tutils.Logf("%s\n", msg.String(10*cmn.KiB))
+				tlog.Logf("%s\n", msg.String(10*cmn.KiB))
 			}
 		} else {
-			tutils.Logf("Error retrieving logs; err %v\n", err)
+			tlog.Logf("Error retrieving logs; err %v\n", err)
 		}
 	}
-	tutils.Logf("Stopping ETL %q\n", etlID)
+	tlog.Logf("Stopping ETL %q\n", etlID)
 
 	if err := api.ETLStop(baseParams, etlID); err != nil {
-		tutils.Logf("Stopping ETL %q failed; err %v\n", etlID, err)
+		tlog.Logf("Stopping ETL %q failed; err %v\n", etlID, err)
 	} else {
-		tutils.Logf("ETL %q stopped\n", etlID)
+		tlog.Logf("ETL %q stopped\n", etlID)
 	}
 }
 
 func WaitForContainersStopped(t *testing.T, baseParams api.BaseParams) {
-	tutils.Logln("Waiting for ETL containers to be stopped...")
+	tlog.Logln("Waiting for ETL containers to be stopped...")
 	var (
 		etls         etl.InfoList
 		stopDeadline = time.Now().Add(20 * time.Second)
@@ -145,10 +146,10 @@ func WaitForContainersStopped(t *testing.T, baseParams api.BaseParams) {
 		etls, err = api.ETLList(baseParams)
 		tassert.CheckFatal(t, err)
 		if len(etls) == 0 {
-			tutils.Logln("ETL containers stopped successfully")
+			tlog.Logln("ETL containers stopped successfully")
 			return
 		}
-		tutils.Logf("ETLs %+v still running, waiting %s... \n", etls, interval)
+		tlog.Logf("ETLs %+v still running, waiting %s... \n", etls, interval)
 		time.Sleep(interval)
 	}
 
@@ -171,18 +172,18 @@ func waitForXactDone(baseParams api.BaseParams, xactID string, timeout time.Dura
 
 	refreshInterval := time.Duration(timeout.Nanoseconds() / 20)
 
-	tutils.Logf("Waiting for ETL xaction to be %s...\n", action)
+	tlog.Logf("Waiting for ETL xaction to be %s...\n", action)
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBck, Timeout: timeout /* total timeout */}
 	status, err := api.WaitForXaction(baseParams, args, refreshInterval)
 	if err == nil {
 		if waitForAbort && !status.Aborted() {
 			return fmt.Errorf("expected ETL xaction to be aborted")
 		}
-		tutils.Logf("ETL xaction %s successfully\n", action)
+		tlog.Logf("ETL xaction %s successfully\n", action)
 		return nil
 	}
 	if abortErr := api.AbortXaction(baseParams, args); abortErr != nil {
-		tutils.Logf("Nested error: failed to abort ETL xaction upon wait failue; err %v\n", abortErr)
+		tlog.Logf("Nested error: failed to abort ETL xaction upon wait failue; err %v\n", abortErr)
 	}
 	return err
 }
@@ -200,12 +201,12 @@ func ReportXactionStatus(baseParams api.BaseParams, xactID string, stopCh *cmn.S
 				// Check number of objects transformed.
 				stats, err := api.GetXactionStatsByID(baseParams, xactID)
 				if err != nil {
-					tutils.Logf("Failed to get xaction stats; err %v\n", err)
+					tlog.Logf("Failed to get xaction stats; err %v\n", err)
 					continue
 				}
 				bps := float64(stats.BytesCount()) / time.Since(xactStart).Seconds()
 				bpsStr := fmt.Sprintf("%s/s", cmn.B2S(int64(bps), 2))
-				tutils.Logf("ETL %q already transformed %d/%d objects (%s) (%s)\n", xactID, stats.ObjCount(), totalObj, cmn.B2S(stats.BytesCount(), 2), bpsStr)
+				tlog.Logf("ETL %q already transformed %d/%d objects (%s) (%s)\n", xactID, stats.ObjCount(), totalObj, cmn.B2S(stats.BytesCount(), 2), bpsStr)
 			case <-stopCh.Listen():
 				return
 			}
@@ -214,7 +215,7 @@ func ReportXactionStatus(baseParams api.BaseParams, xactID string, stopCh *cmn.S
 }
 
 func Init(baseParams api.BaseParams, name, comm string) (string, error) {
-	tutils.Logln("Reading template")
+	tlog.Logln("Reading template")
 
 	spec, err := GetTransformYaml(name)
 	if err != nil {
@@ -230,7 +231,7 @@ func Init(baseParams api.BaseParams, name, comm string) (string, error) {
 	}
 
 	spec, _ = jsoniter.Marshal(pod)
-	tutils.Logln("Init ETL")
+	tlog.Logln("Init ETL")
 	return api.ETLInit(baseParams, spec)
 }
 

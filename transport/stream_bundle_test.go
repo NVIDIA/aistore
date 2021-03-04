@@ -19,8 +19,9 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 )
@@ -178,7 +179,7 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 		num++
 		size += objSize
 		if size-prevsize >= cmn.GiB {
-			tutils.Logf("%s: %d GiB\n", sb, size/cmn.GiB)
+			tlog.Logf("%s: %d GiB\n", sb, size/cmn.GiB)
 			prevsize = size
 		}
 	}

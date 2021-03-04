@@ -11,7 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/bench/aisloader/namegetter"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
+	"github.com/NVIDIA/aistore/devtools/tassert"
 )
 
 // Running these benchmarks with different objNamesSize returns different results

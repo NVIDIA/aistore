@@ -17,9 +17,10 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/devtools/tutils/readers"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/downloader"
 )
 
@@ -46,7 +47,7 @@ func clearDownloadList(t *testing.T) {
 
 	for _, v := range listDownload {
 		if v.JobRunning() {
-			tutils.Logf("Canceling: %v...\n", v.ID)
+			tlog.Logf("Canceling: %v...\n", v.ID)
 			err := api.AbortDownload(tutils.BaseAPIParams(), v.ID)
 			tassert.CheckFatal(t, err)
 		}
@@ -68,7 +69,7 @@ func clearDownloadList(t *testing.T) {
 	}
 
 	for _, v := range listDownload {
-		tutils.Logf("Removing: %v...\n", v.ID)
+		tlog.Logf("Removing: %v...\n", v.ID)
 		err := api.RemoveDownload(tutils.BaseAPIParams(), v.ID)
 		tassert.CheckFatal(t, err)
 	}
@@ -139,7 +140,7 @@ func downloaderCompleted(t *testing.T, targetID string, targetsStats api.NodesXa
 	downloaderStat, exists := targetsStats[targetID]
 	for _, xaction := range downloaderStat {
 		if xaction.Running() {
-			tutils.Logf("%s in progress for %s\n", xaction.Kind(), targetID)
+			tlog.Logf("%s in progress for %s\n", xaction.Kind(), targetID)
 			return false
 		}
 	}
@@ -155,7 +156,7 @@ func waitForDownloaderToFinish(t *testing.T, baseParams api.BaseParams, targetID
 		timeout = timeouts[0]
 	}
 
-	tutils.Logf("Waiting %s for downloader to finish\n", timeout)
+	tlog.Logf("Waiting %s for downloader to finish\n", timeout)
 	time.Sleep(time.Second * 2)
 
 	xactArgs := api.XactReqArgs{Kind: cmn.ActDownload}
@@ -165,7 +166,7 @@ func waitForDownloaderToFinish(t *testing.T, baseParams api.BaseParams, targetID
 		tassert.CheckFatal(t, err)
 
 		if downloaderCompleted(t, targetID, downloaderStats) {
-			tutils.Logf("Downloader has finished\n")
+			tlog.Logf("Downloader has finished\n")
 			return
 		}
 
@@ -514,7 +515,7 @@ func TestDownloadRemote(t *testing.T) {
 			tutils.CleanupRemoteBucket(t, proxyURL, test.srcBck, prefix)
 			defer tutils.CleanupRemoteBucket(t, proxyURL, test.srcBck, prefix)
 
-			tutils.Logln("putting objects into remote bucket...")
+			tlog.Logln("putting objects into remote bucket...")
 
 			expectedObjs := make([]string, 0, fileCnt)
 			for i := 0; i < fileCnt; i++ {
@@ -533,7 +534,7 @@ func TestDownloadRemote(t *testing.T) {
 				expectedObjs = append(expectedObjs, objName)
 			}
 
-			tutils.Logln("evicting remote bucket...")
+			tlog.Logln("evicting remote bucket...")
 			xactID, err := api.EvictList(baseParams, test.srcBck, expectedObjs)
 			tassert.CheckFatal(t, err)
 			args := api.XactReqArgs{ID: xactID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
@@ -545,7 +546,7 @@ func TestDownloadRemote(t *testing.T) {
 				tutils.SetBackendBck(t, baseParams, test.dstBck, test.srcBck)
 			}
 
-			tutils.Logln("starting remote download...")
+			tlog.Logln("starting remote download...")
 			id, err := api.DownloadWithParam(baseParams, downloader.DlTypeBackend, downloader.DlBackendBody{
 				DlBase: downloader.DlBase{
 					Bck:         test.dstBck,
@@ -556,7 +557,7 @@ func TestDownloadRemote(t *testing.T) {
 			})
 			tassert.CheckFatal(t, err)
 
-			tutils.Logln("wait for remote download...")
+			tlog.Logln("wait for remote download...")
 			waitForDownload(t, id, time.Minute)
 
 			objs, err := tutils.ListObjectNames(proxyURL, test.dstBck, prefix, 0)
@@ -564,14 +565,14 @@ func TestDownloadRemote(t *testing.T) {
 			tassert.Errorf(t, reflect.DeepEqual(objs, expectedObjs), "expected objs: %s, got: %s", expectedObjs, objs)
 
 			// Test cancellation
-			tutils.Logln("evicting remote bucket...")
+			tlog.Logln("evicting remote bucket...")
 			xactID, err = api.EvictList(baseParams, test.srcBck, expectedObjs)
 			tassert.CheckFatal(t, err)
 			args = api.XactReqArgs{ID: xactID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
 			_, err = api.WaitForXaction(baseParams, args)
 			tassert.CheckFatal(t, err)
 
-			tutils.Logln("starting remote download...")
+			tlog.Logln("starting remote download...")
 			id, err = api.DownloadWithParam(baseParams, downloader.DlTypeBackend, downloader.DlBackendBody{
 				DlBase: downloader.DlBase{
 					Bck:         test.dstBck,
@@ -584,7 +585,7 @@ func TestDownloadRemote(t *testing.T) {
 
 			time.Sleep(500 * time.Millisecond)
 
-			tutils.Logln("aborting remote download...")
+			tlog.Logln("aborting remote download...")
 			err = api.AbortDownload(baseParams, id)
 			tassert.CheckFatal(t, err)
 
@@ -852,14 +853,14 @@ func TestDownloadMpathEvents(t *testing.T) {
 
 	id1, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck, template)
 	tassert.CheckFatal(t, err)
-	tutils.Logf("Started large download job %s, meant to be aborted\n", id1)
+	tlog.Logf("Started large download job %s, meant to be aborted\n", id1)
 
 	// Abort just in case something goes wrong.
 	t.Cleanup(func() {
 		abortDownload(t, id1)
 	})
 
-	tutils.Logln("Wait a while for downloaders to pick the job as they start in goroutine")
+	tlog.Logln("Wait a while for downloaders to pick the job as they start in goroutine")
 	time.Sleep(3 * time.Second)
 
 	smap := tutils.GetClusterMap(t, proxyURL)
@@ -871,12 +872,12 @@ func TestDownloadMpathEvents(t *testing.T) {
 
 	mpathID := cmn.NowRand().Intn(len(mpathList.Available))
 	removeMpath := mpathList.Available[mpathID]
-	tutils.Logf("Disabling a mountpath %s at target: %s\n", removeMpath, removeTarget.ID())
+	tlog.Logf("Disabling a mountpath %s at target: %s\n", removeMpath, removeTarget.ID())
 	err = api.DisableMountpath(baseParams, removeTarget.ID(), removeMpath)
 	tassert.CheckFatal(t, err)
 
 	defer func() {
-		tutils.Logf("Enabling mountpath %s at target %s...\n", removeMpath, removeTarget.ID())
+		tlog.Logf("Enabling mountpath %s at target %s...\n", removeMpath, removeTarget.ID())
 		err = api.EnableMountpath(baseParams, removeTarget, removeMpath)
 		tassert.CheckFatal(t, err)
 	}()
@@ -885,7 +886,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 	waitForDownloaderToFinish(t, baseParams, removeTarget.ID(), 30*time.Second)
 
 	// Downloader finished on required target, safe to abort the rest.
-	tutils.Logf("Aborting download job %s\n", id1)
+	tlog.Logf("Aborting download job %s\n", id1)
 	abortDownload(t, id1)
 
 	objs, err := tutils.ListObjectNames(proxyURL, bck, "", 0)
@@ -894,7 +895,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 
 	id2, err := api.DownloadMulti(baseParams, generateDownloadDesc(), bck, m)
 	tassert.CheckFatal(t, err)
-	tutils.Logf("Started download job %s, waiting for it to finish\n", id2)
+	tlog.Logf("Started download job %s, waiting for it to finish\n", id2)
 
 	waitForDownload(t, id2, 2*time.Minute)
 	objs, err = tutils.ListObjectNames(proxyURL, bck, "", 0)
@@ -1111,7 +1112,7 @@ func TestDownloadSync(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 	tutils.SetBackendBck(t, baseParams, bck, m.bck)
 
-	tutils.Logln("1. initial sync of remote bucket...")
+	tlog.Logln("1. initial sync of remote bucket...")
 	dlBody.Sync = true
 	downloadObjectRemote(t, dlBody, m.num, 0)
 	downloadObjectRemote(t, dlBody, m.num, m.num)
@@ -1119,31 +1120,31 @@ func TestDownloadSync(t *testing.T) {
 	m.del(objsToDelete)
 
 	// Check that only deleted objects are replaced (deleted in this case).
-	tutils.Logln("2. re-syncing remote bucket...")
+	tlog.Logln("2. re-syncing remote bucket...")
 	downloadObjectRemote(t, dlBody, m.num, m.num-objsToDelete)
 	downloadObjectRemote(t, dlBody, m.num-objsToDelete, m.num-objsToDelete)
 
-	tutils.Logln("3. filling removed remote objects...")
+	tlog.Logln("3. filling removed remote objects...")
 	m.remoteRefill()
 
 	// Check that new objects are correctly downloaded.
-	tutils.Logln("4. re-syncing remote bucket...")
+	tlog.Logln("4. re-syncing remote bucket...")
 	downloadObjectRemote(t, dlBody, m.num, m.num-objsToDelete)
 	downloadObjectRemote(t, dlBody, m.num, m.num)
 	dlBody.Sync = false
 	downloadObjectRemote(t, dlBody, m.num, m.num)
 
-	tutils.Logln("5. overridding the objects and deleting some of them...")
+	tlog.Logln("5. overridding the objects and deleting some of them...")
 	m.remotePuts(false /*evict*/, true /*override*/)
 	m.del(objsToDelete)
 
 	// Check that all objects have been replaced.
-	tutils.Logln("6. re-syncing remote bucket...")
+	tlog.Logln("6. re-syncing remote bucket...")
 	dlBody.Sync = true
 	downloadObjectRemote(t, dlBody, m.num, 0)
 	downloadObjectRemote(t, dlBody, m.num-objsToDelete, m.num-objsToDelete)
 
-	tutils.Logln("7. check that syncing with prefix and suffix works")
+	tlog.Logln("7. check that syncing with prefix and suffix works")
 	dlBody.Prefix = "someprefix-"
 	dlBody.Suffix = ""
 	downloadObjectRemote(t, dlBody, 0, 0)
@@ -1190,7 +1191,7 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 		abortDownload(t, id)
 	})
 
-	tutils.Logln("waiting for checks...")
+	tlog.Logln("waiting for checks...")
 	minConnectionLimitReached := false
 	for i := 0; i < 10; i++ {
 		resp, err := api.DownloadStatus(baseParams, id)
@@ -1213,7 +1214,7 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 	}
 
 	tassert.Errorf(t, minConnectionLimitReached, "expected more connections than number of targets")
-	tutils.Logln("done waiting")
+	tlog.Logln("done waiting")
 }
 
 func TestDownloadJobConcurrency(t *testing.T) {
@@ -1235,7 +1236,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 	smap, err := api.GetClusterMap(baseParams)
 	tassert.CheckFatal(t, err)
 
-	tutils.Logln("Starting first download...")
+	tlog.Logln("Starting first download...")
 
 	id1, err := api.DownloadWithParam(baseParams, downloader.DlTypeRange, downloader.DlRangeBody{
 		DlBase: downloader.DlBase{
@@ -1253,7 +1254,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 		abortDownload(t, id1)
 	})
 
-	tutils.Logln("Starting second download...")
+	tlog.Logln("Starting second download...")
 
 	id2, err := api.DownloadWithParam(baseParams, downloader.DlTypeRange, downloader.DlRangeBody{
 		DlBase: downloader.DlBase{
@@ -1270,7 +1271,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 		abortDownload(t, id2)
 	})
 
-	tutils.Logln("Waiting for checks...")
+	tlog.Logln("Waiting for checks...")
 	var (
 		concurrentJobs bool
 		resp1, resp2   downloader.DlStatusResp
@@ -1298,7 +1299,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 	}
 
 	tassert.Errorf(t, concurrentJobs, "expected jobs to run concurrently")
-	tutils.Logln("Done waiting")
+	tlog.Logln("Done waiting")
 }
 
 // NOTE: Test may fail if the network is SUPER slow!!

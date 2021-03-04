@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -90,7 +91,7 @@ func init() {
 
 	DevtoolsCtx = &devtools.Ctx{
 		Client: HTTPClient,
-		Log:    Logf,
+		Log:    tlog.Logf,
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 )
 
 func JoinCluster(ctx *Ctx, proxyURL string, node *cluster.Snode, timeout time.Duration) (rebID string, err error) {
@@ -37,15 +38,22 @@ func JoinCluster(ctx *Ctx, proxyURL string, node *cluster.Snode, timeout time.Du
 // function cannot be used for MOCK nodes as they do not implement required
 // HTTP handlers. To unregister a mock, use `RemoveNodeFromSmap` instead.
 func UnregisterNode(ctx *Ctx, proxyURL string, args *cmn.ActValDecommision, timeout time.Duration) error {
-	baseParams := BaseAPIParams(ctx, proxyURL)
-	smap, err := api.GetClusterMap(baseParams)
-	node := smap.GetNode(args.DaemonID)
+	var (
+		baseParams = BaseAPIParams(ctx, proxyURL)
+		smap, err  = api.GetClusterMap(baseParams)
+		node       = smap.GetNode(args.DaemonID)
+		skipReb    string
+	)
 	if err != nil {
 		return fmt.Errorf("api.GetClusterMap failed, err: %v", err)
 	}
 	if node != nil && smap.IsPrimary(node) {
 		return fmt.Errorf("unregistering primary proxy is not allowed")
 	}
+	if args.SkipRebalance {
+		skipReb = " _skipping_ global rebalance"
+	}
+	tlog.Logf("Decommission %s from %s%s\n", node, smap, skipReb)
 	if _, err := api.Decommission(baseParams, args); err != nil {
 		return err
 	}

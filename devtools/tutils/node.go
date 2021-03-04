@@ -24,7 +24,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
+	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 )
 
 const (
@@ -52,38 +53,11 @@ func JoinCluster(proxyURL string, node *cluster.Snode) (string, error) {
 	return devtools.JoinCluster(DevtoolsCtx, proxyURL, node, registerTimeout)
 }
 
-// TODO: There is duplication between `UnregisterNode` and `RemoveTarget` - when to use which?
-func RemoveTarget(t *testing.T, proxyURL string, smap *cluster.Smap) (*cluster.Smap, *cluster.Snode) {
-	var (
-		removeTarget, _ = smap.GetRandTarget()
-		origTgtCnt      = smap.CountActiveTargets()
-		args            = &cmn.ActValDecommision{DaemonID: removeTarget.ID(), SkipRebalance: true}
-	)
-	Logf("Removing target %s from %s\n", removeTarget.ID(), smap)
-
-	err := UnregisterNode(proxyURL, args)
-	tassert.CheckFatal(t, err)
-	newSmap, err := WaitForClusterState(
-		proxyURL,
-		"target is gone",
-		smap.Version,
-		smap.CountActiveProxies(),
-		origTgtCnt-1,
-	)
-	tassert.CheckFatal(t, err)
-	newTgtCnt := newSmap.CountActiveTargets()
-	tassert.Fatalf(t, newTgtCnt == origTgtCnt-1,
-		"new smap expected to have 1 target less: %d (v%d) vs %d (v%d)", newTgtCnt, origTgtCnt,
-		newSmap.Version, smap.Version)
-
-	return newSmap, removeTarget
-}
-
 // TODO: There is duplication between `JoinCluster` and `RestoreTarget` - when to use which?
 func RestoreTarget(t *testing.T, proxyURL string, target *cluster.Snode) (rebID string, newSmap *cluster.Smap) {
 	smap := GetClusterMap(t, proxyURL)
 	tassert.Fatalf(t, smap.GetTarget(target.DaemonID) == nil, "unexpected target %s in smap", target.ID())
-	Logf("Reregistering target %s, current Smap: %s\n", target, smap.StringEx())
+	tlog.Logf("Reregistering target %s, current Smap: %s\n", target, smap.StringEx())
 	rebID, err := JoinCluster(proxyURL, target)
 	tassert.CheckFatal(t, err)
 	newSmap, err = WaitForClusterState(
@@ -172,7 +146,7 @@ func WaitForClusterStateActual(proxyURL, reason string, origVersion int64, proxy
 		if smap.CountTargets() == targetCnt && smap.CountProxies() == proxyCnt {
 			return smap, nil
 		}
-		Logf("Smap changed from %d to %d, but the number of proxies(%d/%d)/targets(%d/%d) is not reached",
+		tlog.Logf("Smap changed from %d to %d, but the number of proxies(%d/%d)/targets(%d/%d) is not reached",
 			origVersion, smap.Version, targetCnt, smap.CountTargets(), proxyCnt, smap.CountProxies())
 		origVersion = smap.Version
 	}
@@ -199,7 +173,7 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 	smapChangeDeadline = timeStart.Add(2 * proxyChangeLatency)
 	opDeadline = timeStart.Add(3 * proxyChangeLatency)
 
-	Logf("Waiting for condition: (p%d, t%d, version > v%d), reason: %s\n", expPrx, expTgt, origVersion, reason)
+	tlog.Logf("Waiting for condition: (p%d, t%d, version > v%d), reason: %s\n", expPrx, expTgt, origVersion, reason)
 
 	var (
 		loopCnt    int
@@ -214,7 +188,7 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 			if !cmn.IsErrConnectionRefused(err) {
 				return nil, err
 			}
-			Logf("%v\n", err)
+			tlog.Logf("%v\n", err)
 			goto next
 		}
 		satisfied = expTgt.satisfied(smap.CountActiveTargets()) &&
@@ -223,7 +197,7 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 		if !satisfied {
 			// Still polling http://127.0.0.1:8080, Smap v802(pid=gVqZp8082) (15s)
 			if d := time.Since(timeStart); d > 7*time.Second {
-				Logf("Polling %s[%s] for (p%d, t%d, version > v%d)... (%v)\n",
+				tlog.Logf("Polling %s[%s] for (p%d, t%d, version > v%d)... (%v)\n",
 					proxyURL, smap.StringEx(), expPrx, expTgt, origVersion, d.Truncate(time.Second))
 			}
 		}
@@ -263,7 +237,7 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 						fmt.Errorf("%s changed after sync (to %s) and does not satisfy the state",
 							smap, syncedSmap)
 				}
-				Logf("%s changed after sync (to %s) but satisfies the state\n", smap, syncedSmap)
+				tlog.Logf("%s changed after sync (to %s) but satisfies the state\n", smap, syncedSmap)
 			}
 
 			return smap, nil
@@ -309,7 +283,7 @@ func KillNode(node *cluster.Snode) (cmd RestoreCmd, err error) {
 	)
 	cmd.Node = node
 	if containers.DockerRunning() {
-		Logf("Stopping container %s\n", daemonID)
+		tlog.Logf("Stopping container %s\n", daemonID)
 		err := containers.StopContainer(daemonID)
 		return cmd, err
 	}
@@ -359,7 +333,7 @@ func ShutdownNode(_ *testing.T, baseParams api.BaseParams, node *cluster.Snode) 
 	)
 	cmd.Node = node
 	if containers.DockerRunning() {
-		Logf("Stopping container %s\n", daemonID)
+		tlog.Logf("Stopping container %s\n", daemonID)
 		err = containers.StopContainer(daemonID)
 		return
 	}
@@ -376,7 +350,7 @@ func ShutdownNode(_ *testing.T, baseParams api.BaseParams, node *cluster.Snode) 
 
 func RestoreNode(cmd RestoreCmd, asPrimary bool, tag string) error {
 	if containers.DockerRunning() {
-		Logf("Restarting %s container %s\n", tag, cmd)
+		tlog.Logf("Restarting %s container %s\n", tag, cmd)
 		return containers.RestartContainer(cmd.Node.ID())
 	}
 
@@ -384,7 +358,7 @@ func RestoreNode(cmd RestoreCmd, asPrimary bool, tag string) error {
 		cmd.Args = append(cmd.Args, "-daemon_id="+cmd.Node.ID())
 	}
 
-	Logf("Restoring %s: %s %+v\n", tag, cmd.Cmd, cmd.Args)
+	tlog.Logf("Restoring %s: %s %+v\n", tag, cmd.Cmd, cmd.Args)
 	_, err := startNode(cmd.Cmd, cmd.Args, asPrimary)
 	return err
 }
@@ -528,7 +502,7 @@ func WaitForNodeToTerminate(pid int, timeout ...time.Duration) error {
 		deadline = timeout[0]
 	}
 
-	Logf("Waiting for process ID %d to terminate", pid)
+	tlog.Logf("Waiting for process ID %d to terminate", pid)
 	var cancel context.CancelFunc
 	ctx, cancel = context.WithTimeout(ctx, deadline)
 	defer cancel()

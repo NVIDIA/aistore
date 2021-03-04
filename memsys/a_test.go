@@ -37,7 +37,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -136,7 +136,7 @@ func printMaxRingLen(mem *memsys.MMSA, c chan struct{}) {
 			return
 		case <-time.After(5 * time.Second):
 			if p := mem.MemPressure(); p > memsys.MemPressureLow {
-				tutils.Logf("memory pressure %s\n", memsys.MemPressureText(p))
+				tlog.Logf("memory pressure %s\n", memsys.MemPressureText(p))
 			}
 		}
 	}
@@ -148,9 +148,9 @@ func memstress(mem *memsys.MMSA, id int, ttl time.Duration, siz, tot int64, wg *
 	x := cmn.B2S(siz, 1) + "/" + cmn.B2S(tot, 1)
 	if id%100 == 0 && verbose {
 		if ttl > time.Millisecond {
-			tutils.Logf("%4d: %-19s ttl %v\n", id, x, ttl)
+			tlog.Logf("%4d: %-19s ttl %v\n", id, x, ttl)
 		} else {
-			tutils.Logf("%4d: %-19s\n", id, x)
+			tlog.Logf("%4d: %-19s\n", id, x)
 		}
 	}
 	started := time.Now()
@@ -171,7 +171,7 @@ func memstress(mem *memsys.MMSA, id int, ttl time.Duration, siz, tot int64, wg *
 		}
 	}
 	if id%100 == 0 && verbose {
-		tutils.Logf("%4d: done\n", id)
+		tlog.Logf("%4d: done\n", id)
 	}
 }
 

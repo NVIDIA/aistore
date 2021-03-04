@@ -21,9 +21,10 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/containers"
+	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/devtools/tutils/readers"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -228,7 +229,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	// Test corrupting the file contents.
 	objName := m.objNames[0]
 	fqn := findObjOnDisk(m.bck, objName)
-	tutils.Logf("Corrupting object data %q: %s\n", objName, fqn)
+	tlog.Logf("Corrupting object data %q: %s\n", objName, fqn)
 	err := ioutil.WriteFile(fqn, []byte("this file has been corrupted"), cmn.PermRWR)
 	tassert.CheckFatal(t, err)
 
@@ -307,7 +308,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 		_, err := api.RenameBucket(baseParams, rtd.bck, rtd.renamedBck)
 		tassert.CheckFatal(t, err)
 
-		tutils.Logf("Renamed %s (obj_cnt: %d) => %s\n", rtd.bck, m.num, rtd.renamedBck)
+		tlog.Logf("Renamed %s (obj_cnt: %d) => %s\n", rtd.bck, m.num, rtd.renamedBck)
 		if rtd.wait {
 			postRenameWaitAndCheck(t, baseParams, rtd, m.num, m.objNames)
 		}
@@ -328,7 +329,7 @@ func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regress
 	xactArgs := api.XactReqArgs{Kind: cmn.ActMoveBck, Bck: rtd.renamedBck, Timeout: rebalanceTimeout}
 	_, err := api.WaitForXaction(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
-	tutils.Logf("xaction (rename %s=>%s) done\n", rtd.bck, rtd.renamedBck)
+	tlog.Logf("xaction (rename %s=>%s) done\n", rtd.bck, rtd.renamedBck)
 
 	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(rtd.bck))
 	tassert.CheckFatal(t, err)
@@ -361,7 +362,7 @@ func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regress
 	if len(unique) != numPuts {
 		for _, name := range objNames {
 			if _, ok := unique[name]; !ok {
-				tutils.Logf("not found: %s\n", name)
+				tlog.Logf("not found: %s\n", name)
 			}
 		}
 		t.Fatalf("wrong number of objects in the bucket %s renamed as %s (before: %d. after: %d)",
@@ -400,7 +401,7 @@ func TestRenameObjects(t *testing.T) {
 
 		i++
 		if i%50 == 0 {
-			tutils.Logf("Renamed %s => %s\n", objName, newObjName)
+			tlog.Logf("Renamed %s => %s\n", objName, newObjName)
 		}
 	}
 
@@ -468,9 +469,9 @@ func TestReregisterMultipleTargets(t *testing.T) {
 
 	targets := m.smap.Tmap.ActiveNodes()
 	for i := 0; i < targetsToUnregister; i++ {
-		tutils.Logf("Unregistering target %s\n", targets[i].ID())
+		tlog.Logf("Unregistering target %s\n", targets[i].ID())
 		args := &cmn.ActValDecommision{DaemonID: targets[i].ID(), SkipRebalance: true}
-		err := tutils.UnregisterNode(m.proxyURL, args)
+		err := tutils.DecommissionNode(m.proxyURL, args)
 		tassert.CheckFatal(t, err)
 		removed[targets[i].ID()] = targets[i]
 	}
@@ -478,7 +479,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	smap, err := tutils.WaitForClusterState(proxyURL, "to remove targets",
 		m.smap.Version, m.originalProxyCount, m.originalTargetCount-targetsToUnregister)
 	tassert.CheckFatal(t, err)
-	tutils.Logf("The cluster now has %d target(s)\n", smap.CountActiveTargets())
+	tlog.Logf("The cluster now has %d target(s)\n", smap.CountActiveTargets())
 
 	// Step 2: PUT objects into a newly created bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
@@ -499,7 +500,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 		time.Sleep(5 * time.Second) // wait some time before reregistering next target
 	}
 	wg.Wait()
-	tutils.Logf("Stopping GETs...\n")
+	tlog.Logf("Stopping GETs...\n")
 	m.stopGets()
 
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
@@ -514,8 +515,8 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	}
 
 	// Step 5: Log rebalance stats
-	tutils.Logf("Rebalance sent     %s in %d files\n", cmn.B2S(bytesSent, 2), filesSent)
-	tutils.Logf("Rebalance received %s in %d files\n", cmn.B2S(bytesRecv, 2), filesRecv)
+	tlog.Logf("Rebalance sent     %s in %d files\n", cmn.B2S(bytesSent, 2), filesSent)
+	tlog.Logf("Rebalance received %s in %d files\n", cmn.B2S(bytesRecv, 2), filesRecv)
 
 	m.ensureNoErrors()
 	m.assertClusterState()
@@ -598,8 +599,8 @@ func TestLRU(t *testing.T) {
 		return
 	}
 
-	tutils.Logf("LRU: current min space usage in the cluster: %d%%\n", usedPct)
-	tutils.Logf("Setting 'lru.lowm=%d' and 'lru.highwm=%d'\n", lowWM, highWM)
+	tlog.Logf("LRU: current min space usage in the cluster: %d%%\n", usedPct)
+	tlog.Logf("Setting 'lru.lowm=%d' and 'lru.highwm=%d'\n", lowWM, highWM)
 
 	// All targets: set new watermarks; restore upon exit
 	oconfig := tutils.GetClusterConfig(t)
@@ -624,7 +625,7 @@ func TestLRU(t *testing.T) {
 		"lru.capacity_upd_time": "2s",
 	})
 
-	tutils.Logln("starting LRU...")
+	tlog.Logln("starting LRU...")
 	xactID, err := api.StartXaction(baseParams, api.XactReqArgs{Kind: cmn.ActLRU})
 	tassert.CheckFatal(t, err)
 
@@ -633,12 +634,12 @@ func TestLRU(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check results
-	tutils.Logln("checking the results...")
+	tlog.Logln("checking the results...")
 	cluStats = tutils.GetClusterStats(t, proxyURL)
 	for k, v := range cluStats.Target {
 		diffFilesEvicted := tutils.GetNamedTargetStats(v, "lru.evict.n") - filesEvicted[k]
 		diffBytesEvicted := tutils.GetNamedTargetStats(v, "lru.evict.size") - bytesEvicted[k]
-		tutils.Logf(
+		tlog.Logf(
 			"Target %s: evicted %d objects - %s (%dB) total\n",
 			k, diffFilesEvicted, cmn.B2S(diffBytesEvicted, 2), diffBytesEvicted,
 		)
@@ -670,7 +671,7 @@ func TestPrefetchList(t *testing.T) {
 	}
 
 	// 2. Evict those objects from the cache and prefetch them
-	tutils.Logf("Evicting and Prefetching %d objects\n", len(files))
+	tlog.Logf("Evicting and Prefetching %d objects\n", len(files))
 	xactID, err := api.EvictList(baseParams, bck, files)
 	if err != nil {
 		t.Error(err)
@@ -731,7 +732,7 @@ func TestDeleteList(t *testing.T) {
 		}
 		wg.Wait()
 		tassert.SelectErr(t, errCh, "put", true)
-		tutils.Logf("PUT done.\n")
+		tlog.Logf("PUT done.\n")
 
 		// 2. Delete the objects
 		xactID, err := api.DeleteList(baseParams, bck.Bck, files)
@@ -788,7 +789,7 @@ func TestPrefetchRange(t *testing.T) {
 	}
 
 	// 3. Evict those objects from the cache, and then prefetch them
-	tutils.Logf("Evicting and Prefetching %d objects\n", len(files))
+	tlog.Logf("Evicting and Prefetching %d objects\n", len(files))
 	rng := fmt.Sprintf("%s%s", prefetchPrefix, prefetchRange)
 	xactID, err := api.EvictRange(baseParams, bck, rng)
 	tassert.CheckError(t, err)
@@ -844,10 +845,10 @@ func TestDeleteRange(t *testing.T) {
 		}
 		wg.Wait()
 		tassert.SelectErr(t, errCh, "put", true)
-		tutils.Logf("PUT done.\n")
+		tlog.Logf("PUT done.\n")
 
 		// 2. Delete the small range of objects
-		tutils.Logf("Delete in range %s\n", smallrange)
+		tlog.Logf("Delete in range %s\n", smallrange)
 		xactID, err := api.DeleteRange(baseParams, bck.Bck, smallrange)
 		tassert.CheckError(t, err)
 		args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDelete, Timeout: rebalanceTimeout}
@@ -875,7 +876,7 @@ func TestDeleteRange(t *testing.T) {
 			}
 		}
 
-		tutils.Logf("Delete in range %s\n", bigrange)
+		tlog.Logf("Delete in range %s\n", bigrange)
 		// 4. Delete the big range of objects
 		xactID, err = api.DeleteRange(baseParams, bck.Bck, bigrange)
 		tassert.CheckError(t, err)
@@ -921,7 +922,7 @@ func TestStressDeleteRange(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	// 1. PUT
-	tutils.Logln("putting objects...")
+	tlog.Logln("putting objects...")
 	for i := 0; i < numReaders; i++ {
 		size := rand.Int63n(cmn.KiB*128) + cmn.KiB/3
 		tassert.CheckFatal(t, err)
@@ -953,7 +954,7 @@ func TestStressDeleteRange(t *testing.T) {
 	tassert.SelectErr(t, errCh, "put", true)
 
 	// 2. Delete a range of objects
-	tutils.Logf("Deleting objects in range: %s\n", partialRange)
+	tlog.Logf("Deleting objects in range: %s\n", partialRange)
 	xactID, err := api.DeleteRange(baseParams, bck, partialRange)
 	tassert.CheckError(t, err)
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDelete, Timeout: rebalanceTimeout}
@@ -985,7 +986,7 @@ func TestStressDeleteRange(t *testing.T) {
 	}
 
 	// 4. Delete the entire range of objects
-	tutils.Logf("Deleting objects in range: %s\n", fullRange)
+	tlog.Logf("Deleting objects in range: %s\n", fullRange)
 	xactID, err = api.DeleteRange(baseParams, bck, fullRange)
 	tassert.CheckError(t, err)
 	args = api.XactReqArgs{ID: xactID, Kind: cmn.ActDelete, Timeout: rebalanceTimeout}

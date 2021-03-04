@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/devtools"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
 
@@ -28,7 +29,7 @@ func setBucket() (bck cmn.Bck, err error) {
 	bucket := os.Getenv("BUCKET")
 	if bucket == "" {
 		bucket = cmn.ProviderAIS + cmn.BckProviderSeparator + cmn.RandString(7)
-		tutils.Logf("Using BUCKET=%q\n", bucket)
+		tlog.Logf("Using BUCKET=%q\n", bucket)
 	}
 	bck, _, err = cmn.ParseBckObjectURI(bucket)
 	if err != nil {
@@ -58,17 +59,17 @@ func waitForCluster() error {
 		}
 	}
 
-	tutils.Logln("Waiting for clustermap init...")
+	tlog.Logln("Waiting for clustermap init...")
 	_, err = tutils.WaitForClusterState(tutils.GetPrimaryURL(), "startup", -1, proxyCnt, targetCnt)
 	if err != nil {
 		return fmt.Errorf("error waiting for cluster startup, err: %v", err)
 	}
 
-	tutils.Logln("Waiting for primary proxy health check...")
+	tlog.Logln("Waiting for primary proxy health check...")
 	retry := 0
 	for {
 		if retry > 0 {
-			tutils.Logf("Pinging primary for health (#%d)...\n", retry+1)
+			tlog.Logf("Pinging primary for health (#%d)...\n", retry+1)
 		}
 		err = api.Health(tutils.BaseAPIParams(tutils.GetPrimaryURL()))
 		if err == nil {
@@ -81,7 +82,7 @@ func waitForCluster() error {
 		retry++
 		time.Sleep(sleep)
 	}
-	tutils.Logln("Cluster is ready")
+	tlog.Logln("Cluster is ready")
 	time.Sleep(2 * time.Second)
 	return nil
 }
@@ -124,6 +125,6 @@ func TestMain(m *testing.M) {
 	return
 
 fail:
-	tutils.Logln("FAIL: " + err.Error())
+	tlog.Logln("FAIL: " + err.Error())
 	os.Exit(1)
 }

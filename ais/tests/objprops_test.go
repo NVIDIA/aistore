@@ -13,9 +13,10 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/devtools/tutils/readers"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -34,7 +35,7 @@ func propsStats(t *testing.T, proxyURL string) (objChanged, bytesChanged int64) 
 func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions map[string]string,
 	msg *cmn.SelectMsg, versionEnabled bool, cksumType string) (newVersions map[string]string) {
 	newVersions = make(map[string]string, len(oldVersions))
-	tutils.Logf("Updating objects...\n")
+	tlog.Logf("Updating objects...\n")
 	r, err := readers.NewRandReader(int64(fileSize), cksumType)
 	if err != nil {
 		t.Errorf("Failed to create reader: %v", err)
@@ -68,7 +69,7 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions 
 		if ver, ok = oldVersions[m.Name]; !ok {
 			continue
 		}
-		tutils.Logf("Object %s new version %s\n", m.Name, m.Version)
+		tlog.Logf("Object %s new version %s\n", m.Name, m.Version)
 		newVersions[m.Name] = m.Version
 
 		if !m.CheckExists() && bck.IsRemote() {
@@ -92,7 +93,7 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions 
 
 func propsReadObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList map[string]string) {
 	versChanged, bytesChanged := propsStats(t, proxyURL)
-	tutils.Logf("Version mismatch stats before test. Objects: %d, bytes fetched: %d\n", versChanged, bytesChanged)
+	tlog.Logf("Version mismatch stats before test. Objects: %d, bytes fetched: %d\n", versChanged, bytesChanged)
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	for object := range objList {
@@ -104,7 +105,7 @@ func propsReadObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList map[st
 	}
 
 	versChangedFinal, bytesChangedFinal := propsStats(t, proxyURL)
-	tutils.Logf("Version mismatch stats after test. Objects: %d, bytes fetched: %d\n", versChangedFinal, bytesChangedFinal)
+	tlog.Logf("Version mismatch stats after test. Objects: %d, bytes fetched: %d\n", versChangedFinal, bytesChangedFinal)
 	if versChanged != versChangedFinal || bytesChanged != bytesChangedFinal {
 		t.Errorf("All objects must be retreived from the cache but cold get happened: %d times (%d bytes)",
 			versChangedFinal-versChanged, bytesChangedFinal-bytesChanged)
@@ -120,12 +121,12 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 	}
 	toEvictList := make([]string, 0, toEvict)
 	evictMap := make(map[string]bool, toEvict)
-	tutils.Logf("Evicting %v objects:\n", toEvict)
+	tlog.Logf("Evicting %v objects:\n", toEvict)
 
 	for fname := range objMap {
 		evictMap[fname] = true
 		toEvictList = append(toEvictList, fname)
-		tutils.Logf("    %s/%s\n", bck, fname)
+		tlog.Logf("    %s/%s\n", bck, fname)
 		if len(toEvictList) >= toEvict {
 			break
 		}
@@ -141,7 +142,7 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	tutils.Logf("Reading object list...\n")
+	tlog.Logf("Reading object list...\n")
 
 	// read a new object list and check that evicted objects do not have atime and cached==false
 	// version must be the same
@@ -155,7 +156,7 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 		if !ok {
 			continue
 		}
-		tutils.Logf("%s/%s [%d] - cached: [%v], atime [%v]\n", bck, m.Name, m.Flags, m.CheckExists(), m.Atime)
+		tlog.Logf("%s/%s [%d] - cached: [%v], atime [%v]\n", bck, m.Name, m.Flags, m.CheckExists(), m.Atime)
 
 		// invalid object: rebalance leftover or uploaded directly to target
 		if !m.IsStatusOK() {
@@ -188,9 +189,9 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 }
 
 func propsRecacheObjects(t *testing.T, proxyURL string, bck cmn.Bck, objs map[string]string, msg *cmn.SelectMsg, versionEnabled bool) {
-	tutils.Logf("Refetching objects...\n")
+	tlog.Logf("Refetching objects...\n")
 	propsReadObjects(t, proxyURL, bck, objs)
-	tutils.Logf("Checking objects properties after refetching...\n")
+	tlog.Logf("Checking objects properties after refetching...\n")
 	reslist := testListObjects(t, proxyURL, bck, msg)
 	if reslist == nil {
 		t.Fatalf("Unexpected error: no object in the bucket %s", bck)
@@ -238,9 +239,9 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 
 	removeTarget, _ := smap.GetRandTarget()
 
-	tutils.Logf("Removing a target: %s\n", removeTarget.ID())
+	tlog.Logf("Removing a target: %s\n", removeTarget.ID())
 	args := &cmn.ActValDecommision{DaemonID: removeTarget.ID(), SkipRebalance: true}
-	err := tutils.UnregisterNode(proxyURL, args)
+	err := tutils.DecommissionNode(proxyURL, args)
 	tassert.CheckFatal(t, err)
 	smap, err = tutils.WaitForClusterState(
 		proxyURL,
@@ -251,12 +252,12 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 	)
 	tassert.CheckError(t, err)
 
-	tutils.Logf("Target %s [%s] is removed\n", removeTarget.ID(), removeTarget.URL(cmn.NetworkPublic))
+	tlog.Logf("Target %s [%s] is removed\n", removeTarget.ID(), removeTarget.URL(cmn.NetworkPublic))
 
 	// rewrite objects and compare versions - they should change
 	newobjs := propsUpdateObjects(t, proxyURL, bck, objects, msg, versionEnabled, cksumType)
 
-	tutils.Logf("Reregistering target...\n")
+	tlog.Logf("Reregistering target...\n")
 	rebID, err := tutils.JoinCluster(proxyURL, removeTarget)
 	tassert.CheckFatal(t, err)
 	_, err = tutils.WaitForClusterState(
@@ -269,7 +270,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 	tassert.CheckFatal(t, err)
 	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
 
-	tutils.Logf("Reading file versions...\n")
+	tlog.Logf("Reading file versions...\n")
 	reslist := testListObjects(t, proxyURL, bck, msg)
 	if reslist == nil {
 		t.Fatalf("Unexpected error: no object in the bucket %s", bck)
@@ -301,7 +302,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 			continue
 		}
 
-		tutils.Logf("Object %s/%s, version before rebalance [%s], after [%s]\n", bck, m.Name, version, m.Version)
+		tlog.Logf("Object %s/%s, version before rebalance [%s], after [%s]\n", bck, m.Name, version, m.Version)
 		if version != m.Version {
 			t.Errorf("Object %s/%s version mismatch: existing [%s], expected [%s]", bck, m.Name, m.Version, version)
 		}
@@ -354,7 +355,7 @@ func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType str
 	// PUT objects must have all properties set: atime, cached, version
 	filesList := make(map[string]string)
 	for _, m := range reslist.Entries {
-		tutils.Logf("Initial version %s - %v\n", m.Name, m.Version)
+		tlog.Logf("Initial version %s - %v\n", m.Name, m.Version)
 
 		if !m.CheckExists() && bck.IsRemote() {
 			t.Errorf("Object %s/%s is not marked as cached one", bck, m.Name)
@@ -531,7 +532,7 @@ func TestObjProps(t *testing.T) {
 			bckProps, err := api.HeadBucket(baseParams, m.bck)
 			tassert.CheckFatal(t, err)
 
-			tutils.Logln("checking object props...")
+			tlog.Logln("checking object props...")
 			for _, objName := range m.objNames {
 				props, err := api.HeadObject(baseParams, m.bck, objName, test.checkExists)
 				if test.checkExists {

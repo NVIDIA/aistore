@@ -16,9 +16,10 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/devtools/tutils/readers"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 )
 
 const (
@@ -72,10 +73,10 @@ func (md *checkerMD) init() {
 	md.smap = tutils.GetClusterMap(md.t, md.proxyURL)
 
 	for targetID, tinfo := range md.smap.Tmap {
-		tutils.Logf("Target: %s\n", targetID)
+		tlog.Logf("Target: %s\n", targetID)
 		lst, err := api.GetMountpaths(md.baseParams, tinfo)
 		tassert.CheckFatal(md.t, err)
-		tutils.Logf("    Mountpaths: %v\n", lst)
+		tlog.Logf("    Mountpaths: %v\n", lst)
 
 		for _, fqn := range lst.Available {
 			md.mpList[fqn] = tinfo
@@ -131,7 +132,7 @@ func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath str
 				Size:       uint64(md.fileSize),
 			})
 			if err != nil {
-				tutils.Logf("%s: %v\n", objName, err)
+				tlog.Logf("%s: %v\n", objName, err)
 			}
 		}
 	case http.MethodGet:
@@ -171,10 +172,10 @@ func waitForMountpathChanges(t *testing.T, target *cluster.Snode, availLen, disa
 		time.Sleep(time.Millisecond * 100)
 	}
 	detectTime := time.Since(detectStart)
-	tutils.Logf("passed %v\n", detectTime)
+	tlog.Logf("passed %v\n", detectTime)
 
 	if len(newMpaths.Disabled) == disabledLen && len(newMpaths.Available) == availLen {
-		tutils.Logf("Check is successful in %v\n", detectTime)
+		tlog.Logf("Check is successful in %v\n", detectTime)
 		return true
 	}
 
@@ -182,7 +183,7 @@ func waitForMountpathChanges(t *testing.T, target *cluster.Snode, availLen, disa
 		return false
 	}
 
-	tutils.Logf("Current mpath list: %v\n", newMpaths)
+	tlog.Logf("Current mpath list: %v\n", newMpaths)
 	if len(newMpaths.Disabled) != disabledLen {
 		t.Errorf("Disabled mpath count mismatch, old count: %v, new list: %v",
 			disabledLen, newMpaths.Disabled)
@@ -224,7 +225,7 @@ func repairMountpath(t *testing.T, target *cluster.Snode, mpath string, availLen
 	// ask fschecker to check all mountpath - it should make disabled
 	// mountpath back to available list
 	api.EnableMountpath(baseParams, target, mpath)
-	tutils.Logln("Recheck mountpaths")
+	tlog.Logln("Recheck mountpaths")
 	detectStart := time.Now()
 	detectLimit := time.Now().Add(fshcDetectTimeMax)
 	var mpaths *cmn.MountpathList
@@ -262,7 +263,7 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	tutils.Logf("Testing mpath fail detection on %s\n", op)
+	tlog.Logf("Testing mpath fail detection on %s\n", op)
 	stopTime := time.Now().Add(fshcRunTimeMax)
 
 	p, err := api.HeadBucket(baseParams, bck)
@@ -319,7 +320,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 
 	tutils.CreateFreshBucket(t, md.proxyURL, md.bck, nil)
 	selectedTarget, selectedMpath, selectedMpathList := md.randomTargetMpath()
-	tutils.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
+	tlog.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
 	defer func() {
 		if err := api.RemoveMountpath(md.baseParams, selectedTarget.ID(), selectedMpath); err != nil {
 			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget, err)
@@ -340,7 +341,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 	md.runTestAsync(http.MethodGet, selectedTarget, selectedMpath, selectedMpathList, suffix)
 
 	// Checking that reading "bad" objects does not disable mpath if the mpath is OK
-	tutils.Logf("Reading non-existing objects: read is expected to fail but mountpath must be available\n")
+	tlog.Logf("Reading non-existing objects: read is expected to fail but mountpath must be available\n")
 	for n := 1; n < 10; n++ {
 		objName := fmt.Sprintf("%s/o%d", fshcDir, n)
 		if _, err := api.GetObject(md.baseParams, md.bck, objName); err == nil {
@@ -365,12 +366,12 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 		t.Fatal("No available mountpaths found")
 	}
 
-	tutils.Logf("*** Testing with disabled FSHC***\n")
+	tlog.Logf("*** Testing with disabled FSHC***\n")
 	tutils.SetClusterConfig(t, cmn.SimpleKVs{"fshc.enabled": "false"})
 	defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"fshc.enabled": "true"})
 
 	selectedTarget, selectedMpath, selectedMap := md.randomTargetMpath()
-	tutils.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
+	tlog.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
 	tutils.CreateFreshBucket(t, md.proxyURL, md.bck, nil)
 	defer func() {
 		if err := api.RemoveMountpath(md.baseParams, selectedTarget.ID(), selectedMpath); err != nil {
@@ -407,10 +408,10 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 	)
 
 	for targetID, tinfo := range smap.Tmap {
-		tutils.Logf("Target: %s\n", targetID)
+		tlog.Logf("Target: %s\n", targetID)
 		lst, err := api.GetMountpaths(baseParams, tinfo)
 		tassert.CheckFatal(t, err)
-		tutils.Logf("    Mountpaths: %v\n", lst)
+		tlog.Logf("    Mountpaths: %v\n", lst)
 
 		for _, fqn := range lst.Available {
 			mpList[fqn] = tinfo
@@ -473,7 +474,7 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 		t.Fatalf("Target %s does not have available mountpaths", target)
 	}
 
-	tutils.Logf("Removing all mountpaths from target: %s\n", target)
+	tlog.Logf("Removing all mountpaths from target: %s\n", target)
 	for _, mpath := range oldMpaths.Available {
 		err = api.DisableMountpath(baseParams, target.ID(), mpath)
 		tassert.CheckFatal(t, err)
@@ -482,7 +483,7 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 	smap, err = tutils.WaitForClusterState(proxyURL, "all mpath disabled", smap.Version, proxyCnt, targetCnt-1)
 	tassert.CheckFatal(t, err)
 
-	tutils.Logf("Restoring target %s mountpaths\n", target.ID())
+	tlog.Logf("Restoring target %s mountpaths\n", target.ID())
 	for _, mpath := range oldMpaths.Available {
 		err = api.EnableMountpath(baseParams, target, mpath)
 		tassert.CheckFatal(t, err)
@@ -519,7 +520,7 @@ func TestFSAddMPathRestartNode(t *testing.T) {
 	cmn.CreateDir(tmpMpath)
 	defer os.Remove(tmpMpath)
 
-	tutils.Logf("Adding a mount path to target: %s\n", target)
+	tlog.Logf("Adding a mount path to target: %s\n", target)
 	err = api.AddMountpath(baseParams, target, tmpMpath)
 	tassert.CheckFatal(t, err)
 	defer api.RemoveMountpath(baseParams, target.ID(), tmpMpath)
@@ -577,7 +578,7 @@ func TestFSDisableMpathRestart(t *testing.T) {
 
 	// 1. Disable mountpaths temporarily
 	mpath := oldMpaths.Available[0]
-	tutils.Logf("Disable mountpath on target %s\n", target.ID())
+	tlog.Logf("Disable mountpath on target %s\n", target.ID())
 	err = api.DisableMountpath(baseParams, target.ID(), mpath)
 	tassert.CheckFatal(t, err)
 	defer func() {
@@ -588,7 +589,7 @@ func TestFSDisableMpathRestart(t *testing.T) {
 	}()
 
 	// Kill and restore target
-	tutils.Logf("Killing target %s\n", target)
+	tlog.Logf("Killing target %s\n", target)
 	tcmd, err := tutils.KillNode(target)
 	tassert.CheckFatal(t, err)
 	smap, err = tutils.WaitForClusterState(proxyURL, "remove target", smap.Version, proxyCnt, targetCnt-1)

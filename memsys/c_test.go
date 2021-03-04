@@ -20,8 +20,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/NVIDIA/aistore/devtools/tutils"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
+	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -72,7 +72,7 @@ func TestSGLStressN(t *testing.T) {
 			tassert.CheckFatal(t, err)
 			for j := 0; j < objsize; j++ {
 				if bufW[j] != bufR[j] {
-					tutils.Logf("IN : %s\nOUT: %s\n", string(bufR), string(bufW))
+					tlog.Logf("IN : %s\nOUT: %s\n", string(bufR), string(bufW))
 					t.Errorf("Step %d failed", i)
 					return
 				}

@@ -21,9 +21,10 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/containers"
+	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/devtools/tutils/readers"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -230,7 +231,7 @@ func overwriteLomCache(mdwrite cmn.MDWritePolicy, t *testing.T) {
 		l := len(mpList.Available)
 		tassert.Fatalf(t, l >= 2, "%s has %d mountpaths, need at least 2", target, l)
 	}
-	tutils.Logf("Create %s(mirrored, md-write=never)\n", m.bck)
+	tlog.Logf("Create %s(mirrored, md-write=never)\n", m.bck)
 	propsToSet := &cmn.BucketPropsToUpdate{
 		Mirror:  &cmn.MirrorConfToUpdate{Enabled: api.Bool(true)},
 		MDWrite: api.MDWritePolicy(mdwrite),
@@ -240,14 +241,14 @@ func overwriteLomCache(mdwrite cmn.MDWritePolicy, t *testing.T) {
 	m.puts()
 	// TODO: must be able to wait for cmn.ActPutCopies
 
-	tutils.Logf("List %q\n", m.bck)
+	tlog.Logf("List %q\n", m.bck)
 	msg := &cmn.SelectMsg{Props: cmn.GetPropsName}
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(objList.Entries) == m.num, "expecting %d entries, have %d",
 		m.num, len(objList.Entries))
 
-	tutils.Logf("Overwrite %s objects with newer versions\n", m.bck)
+	tlog.Logf("Overwrite %s objects with newer versions\n", m.bck)
 	nsize := int64(m.fileSize) * 10
 	for _, entry := range objList.Entries {
 		reader, err := readers.NewRandReader(nsize, cmn.ChecksumNone)
@@ -262,7 +263,7 @@ func overwriteLomCache(mdwrite cmn.MDWritePolicy, t *testing.T) {
 	}
 	// TODO: wait for cmn.ActPutCopies
 
-	tutils.Logf("List %s new versions\n", m.bck)
+	tlog.Logf("List %s new versions\n", m.bck)
 	msg = &cmn.SelectMsg{}
 	msg.AddProps(cmn.GetPropsAll...)
 	objList, err = api.ListObjects(baseParams, m.bck, msg, 0)
@@ -483,13 +484,13 @@ func TestListObjectsRemoteBucketVersions(t *testing.T) {
 
 	m.puts()
 
-	tutils.Logf("Listing %q objects\n", m.bck)
+	tlog.Logf("Listing %q objects\n", m.bck)
 	msg := &cmn.SelectMsg{Prefix: m.prefix}
 	msg.AddProps(cmn.GetPropsVersion, cmn.GetPropsSize)
 	bckObjs, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
-	tutils.Logf("Checking %q object versions [total: %d]\n", m.bck, len(bckObjs.Entries))
+	tlog.Logf("Checking %q object versions [total: %d]\n", m.bck, len(bckObjs.Entries))
 	for _, entry := range bckObjs.Entries {
 		tassert.Errorf(t, entry.Size != 0, "object %s does not have size", entry.Name)
 		if !m.bck.IsHDFS() {
@@ -518,7 +519,7 @@ func TestListObjectsSmoke(t *testing.T) {
 		m.puts()
 
 		// Run couple iterations to see that we get deterministic results.
-		tutils.Logf("run %d list objects iterations\n", iters)
+		tlog.Logf("run %d list objects iterations\n", iters)
 		for iter := 0; iter < iters; iter++ {
 			objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 			tassert.CheckFatal(t, err)
@@ -557,7 +558,7 @@ func TestListObjectsGoBack(t *testing.T) {
 			entries         []*cmn.BucketEntry
 			expectedEntries []*cmn.BucketEntry
 		)
-		tutils.Logln("listing couple pages to move iterator on targets")
+		tlog.Logln("listing couple pages to move iterator on targets")
 		for page := 0; page < m.num/int(msg.PageSize); page++ {
 			tokens = append(tokens, msg.ContinuationToken)
 			objPage, err := api.ListObjectsPage(baseParams, m.bck, msg)
@@ -565,7 +566,7 @@ func TestListObjectsGoBack(t *testing.T) {
 			expectedEntries = append(expectedEntries, objPage.Entries...)
 		}
 
-		tutils.Logln("list bucket in reverse order")
+		tlog.Logln("list bucket in reverse order")
 
 		for i := len(tokens) - 1; i >= 0; i-- {
 			msg.ContinuationToken = tokens[i]
@@ -626,7 +627,7 @@ func TestListObjectsRerequestPage(t *testing.T) {
 			totalCnt = 0
 			msg      = &cmn.SelectMsg{PageSize: 10}
 		)
-		tutils.Logln("starting rerequesting routine...")
+		tlog.Logln("starting rerequesting routine...")
 		for {
 			prevToken := msg.ContinuationToken
 			for i := 0; i < rerequests; i++ {
@@ -669,7 +670,7 @@ func TestListObjectsStartAfter(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		middleObjName := objList.Entries[m.num/2-1].Name
-		tutils.Logf("start listing bucket after: %q...\n", middleObjName)
+		tlog.Logf("start listing bucket after: %q...\n", middleObjName)
 
 		msg := &cmn.SelectMsg{PageSize: 10, StartAfter: middleObjName}
 		objList, err = api.ListObjects(baseParams, m.bck, msg, 0)
@@ -721,7 +722,7 @@ func TestListObjectsProps(t *testing.T) {
 		}
 
 		for _, useCache := range []bool{false, true} {
-			tutils.Logf("[cache=%t] trying empty (default) subset of props...\n", useCache)
+			tlog.Logf("[cache=%t] trying empty (default) subset of props...\n", useCache)
 			checkProps(useCache, []string{}, func(entry *cmn.BucketEntry) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
 				tassert.Errorf(t, entry.Version == "", "version is set")
@@ -732,7 +733,7 @@ func TestListObjectsProps(t *testing.T) {
 				tassert.Errorf(t, entry.Copies == 0, "copies is set")
 			})
 
-			tutils.Logf("[cache=%t] trying default subset of props...\n", useCache)
+			tlog.Logf("[cache=%t] trying default subset of props...\n", useCache)
 			checkProps(useCache, cmn.GetPropsDefault, func(entry *cmn.BucketEntry) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
 				tassert.Errorf(t, entry.Version == "", "version is set")
@@ -743,7 +744,7 @@ func TestListObjectsProps(t *testing.T) {
 				tassert.Errorf(t, entry.Copies == 0, "copies is set")
 			})
 
-			tutils.Logf("[cache=%t] trying specific subset of props...\n", useCache)
+			tlog.Logf("[cache=%t] trying specific subset of props...\n", useCache)
 			checkProps(useCache, []string{cmn.GetPropsChecksum, cmn.GetPropsVersion, cmn.GetPropsCopies}, func(entry *cmn.BucketEntry) {
 				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
 				if bck.IsAIS() {
@@ -756,7 +757,7 @@ func TestListObjectsProps(t *testing.T) {
 				tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
 			})
 
-			tutils.Logf("[cache=%t] trying small subset of props...\n", useCache)
+			tlog.Logf("[cache=%t] trying small subset of props...\n", useCache)
 			checkProps(useCache, []string{cmn.GetPropsSize}, func(entry *cmn.BucketEntry) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
 
@@ -767,7 +768,7 @@ func TestListObjectsProps(t *testing.T) {
 				tassert.Errorf(t, entry.Copies == 0, "copies is set")
 			})
 
-			tutils.Logf("[cache=%t] trying all props...\n", useCache)
+			tlog.Logf("[cache=%t] trying all props...\n", useCache)
 			checkProps(useCache, cmn.GetPropsAll, func(entry *cmn.BucketEntry) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
 				if bck.IsAIS() {
@@ -800,7 +801,7 @@ func TestListObjectsRemoteCached(t *testing.T) {
 	m.init()
 
 	for _, evict := range []bool{false, true} {
-		tutils.Logf("list remote objects with evict=%t\n", evict)
+		tlog.Logf("list remote objects with evict=%t\n", evict)
 		m.remotePuts(evict)
 
 		msg := &cmn.SelectMsg{PageSize: 10, Flags: cmn.SelectCached}
@@ -965,7 +966,7 @@ func TestListObjects(t *testing.T) {
 
 			totalObjects := 0
 			for iter := 1; iter <= iterations; iter++ {
-				tutils.Logf("listing iteration: %d/%d (total_objs: %d)\n", iter, iterations, totalObjects)
+				tlog.Logf("listing iteration: %d/%d (total_objs: %d)\n", iter, iterations, totalObjects)
 				objectCount := rand.Intn(800) + 1010
 				totalObjects += objectCount
 				for wid := 0; wid < workerCount; wid++ {
@@ -1105,7 +1106,7 @@ func TestListObjectsPrefix(t *testing.T) {
 				tassert.CheckFatal(t, err)
 				customPage = bckProp.Provider != cmn.ProviderAzure
 
-				tutils.Logf("Cleaning up the remote bucket %s\n", bck)
+				tlog.Logf("Cleaning up the remote bucket %s\n", bck)
 				bckList, err := api.ListObjects(baseParams, bck, nil, 0)
 				tassert.CheckFatal(t, err)
 				for _, entry := range bckList.Entries {
@@ -1187,13 +1188,13 @@ func TestListObjectsPrefix(t *testing.T) {
 
 			for _, test := range tests {
 				if test.pageSize != 0 && !customPage {
-					tutils.Logf("Bucket %s does not support custom paging, skipping...\n", bck)
+					tlog.Logf("Bucket %s does not support custom paging, skipping...\n", bck)
 					continue
 				}
 				t.Run(test.name, func(t *testing.T) {
-					tutils.Logf("Prefix: %q, Expected objects: %d\n", test.prefix, test.expected)
+					tlog.Logf("Prefix: %q, Expected objects: %d\n", test.prefix, test.expected)
 					msg := &cmn.SelectMsg{PageSize: test.pageSize, Prefix: test.prefix}
-					tutils.Logf(
+					tlog.Logf(
 						"list_objects %s [prefix: %q, page_size: %d]\n",
 						bck, msg.Prefix, msg.PageSize,
 					)
@@ -1201,7 +1202,7 @@ func TestListObjectsPrefix(t *testing.T) {
 					bckList, err := api.ListObjects(baseParams, bck, msg, test.limit)
 					tassert.CheckFatal(t, err)
 
-					tutils.Logf("list_objects output: %d objects\n", len(bckList.Entries))
+					tlog.Logf("list_objects output: %d objects\n", len(bckList.Entries))
 
 					if len(bckList.Entries) != test.expected {
 						t.Errorf("returned %d objects instead of %d", len(bckList.Entries), test.expected)
@@ -1248,7 +1249,7 @@ func TestListObjectsCache(t *testing.T) {
 				objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 				tassert.CheckFatal(t, err)
 
-				tutils.Logf(
+				tlog.Logf(
 					"[iter: %d] cache: %5t, page_size: %d, time: %s\n",
 					iter, useCache, msg.PageSize, time.Since(started),
 				)
@@ -1300,13 +1301,13 @@ func TestListObjectsWithRebalance(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 15; i++ {
-			tutils.Logf("listing all objects, iter: %d\n", i)
+			tlog.Logf("listing all objects, iter: %d\n", i)
 			bckList, err := api.ListObjects(baseParams, m.bck, nil, 0)
 			tassert.CheckFatal(t, err)
 			if bckList.Flags == 0 {
 				tassert.Errorf(t, len(bckList.Entries) == m.num, "entries mismatch (%d vs %d)", len(bckList.Entries), m.num)
 			} else if len(bckList.Entries) != m.num {
-				tutils.Logf("List objects while rebalancing: %d vs %d\n", len(bckList.Entries), m.num)
+				tlog.Logf("List objects while rebalancing: %d vs %d\n", len(bckList.Entries), m.num)
 			}
 
 			time.Sleep(time.Second)
@@ -1337,7 +1338,7 @@ func TestBucketSingleProp(t *testing.T) {
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
-	tutils.Logf("Changing bucket %q properties...\n", m.bck)
+	tlog.Logf("Changing bucket %q properties...\n", m.bck)
 
 	// Enabling EC should set default value for number of slices if it is 0
 	_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
@@ -1583,7 +1584,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 }
 
 func makeNCopies(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, ncopies int) {
-	tutils.Logf("Set copies = %d\n", ncopies)
+	tlog.Logf("Set copies = %d\n", ncopies)
 
 	xactID, err := api.MakeNCopies(baseParams, bck, ncopies)
 	tassert.CheckFatal(t, err)
@@ -1704,7 +1705,7 @@ func TestRenameBucketEmpty(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Rename it
-	tutils.Logf("rename %s => %s\n", srcBck, dstBck)
+	tlog.Logf("rename %s => %s\n", srcBck, dstBck)
 	uuid, err := api.RenameBucket(baseParams, srcBck, dstBck)
 	tassert.CheckFatal(t, err)
 
@@ -1720,7 +1721,7 @@ func TestRenameBucketEmpty(t *testing.T) {
 		t.Error("new bucket not found in buckets list")
 	}
 
-	tutils.Logln("checking bucket props...")
+	tlog.Logln("checking bucket props...")
 	dstProps, err := api.HeadBucket(baseParams, dstBck)
 	tassert.CheckFatal(t, err)
 	if !srcProps.Equal(dstProps) {
@@ -1763,7 +1764,7 @@ func TestRenameBucketNonEmpty(t *testing.T) {
 	m.puts()
 
 	// Rename it
-	tutils.Logf("rename %s => %s\n", srcBck, dstBck)
+	tlog.Logf("rename %s => %s\n", srcBck, dstBck)
 	m.bck = dstBck
 	xactID, err := api.RenameBucket(baseParams, srcBck, dstBck)
 	tassert.CheckFatal(t, err)
@@ -1776,7 +1777,7 @@ func TestRenameBucketNonEmpty(t *testing.T) {
 	m.gets()
 	m.ensureNoErrors()
 
-	tutils.Logln("checking bucket props...")
+	tlog.Logln("checking bucket props...")
 	dstProps, err := api.HeadBucket(baseParams, dstBck)
 	tassert.CheckFatal(t, err)
 	if !srcProps.Equal(dstProps) {
@@ -1806,7 +1807,7 @@ func TestRenameBucketAlreadyExistingDst(t *testing.T) {
 	tutils.CreateFreshBucket(t, m.proxyURL, tmpBck, nil)
 
 	// Rename it
-	tutils.Logf("try rename %s => %s\n", m.bck, tmpBck)
+	tlog.Logf("try rename %s => %s\n", m.bck, tmpBck)
 	_, err := api.RenameBucket(baseParams, m.bck, tmpBck)
 	if err == nil {
 		t.Fatal("expected error on renaming already existing bucket")
@@ -1867,19 +1868,19 @@ func TestRenameBucketTwice(t *testing.T) {
 	m.puts()
 
 	// Rename to first destination
-	tutils.Logf("rename %s => %s\n", srcBck, dstBck1)
+	tlog.Logf("rename %s => %s\n", srcBck, dstBck1)
 	xactID, err := api.RenameBucket(baseParams, srcBck, dstBck1)
 	tassert.CheckFatal(t, err)
 
 	// Try to rename to first destination again - already in progress
-	tutils.Logf("try rename %s => %s\n", srcBck, dstBck1)
+	tlog.Logf("try rename %s => %s\n", srcBck, dstBck1)
 	_, err = api.RenameBucket(baseParams, srcBck, dstBck1)
 	if err == nil {
 		t.Error("multiple rename operations on same bucket should fail")
 	}
 
 	// Try to rename to second destination - this should fail
-	tutils.Logf("try rename %s => %s\n", srcBck, dstBck2)
+	tlog.Logf("try rename %s => %s\n", srcBck, dstBck2)
 	_, err = api.RenameBucket(baseParams, srcBck, dstBck2)
 	if err == nil {
 		t.Error("multiple rename operations on same bucket should fail")
@@ -1973,7 +1974,7 @@ func TestRenameBucketWithBackend(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !exists, "source bucket shouldn't exist")
 
-	tutils.Logln("checking bucket props...")
+	tlog.Logln("checking bucket props...")
 	dstProps, err := api.HeadBucket(baseParams, dstBck)
 	tassert.CheckFatal(t, err)
 
@@ -2149,7 +2150,7 @@ func TestCopyBucket(t *testing.T) {
 
 			xactIDs := make([]string, len(dstms))
 			for idx, dstm := range dstms {
-				tutils.Logf("copying %s => %s\n", srcm.bck, dstm.bck)
+				tlog.Logf("copying %s => %s\n", srcm.bck, dstm.bck)
 				uuid, err := api.CopyBucket(baseParams, srcm.bck, dstm.bck)
 				xactIDs[idx] = uuid
 				tassert.CheckFatal(t, err)
@@ -2166,7 +2167,7 @@ func TestCopyBucket(t *testing.T) {
 					continue
 				}
 
-				tutils.Logf("checking and comparing bucket %s props\n", dstm.bck)
+				tlog.Logf("checking and comparing bucket %s props\n", dstm.bck)
 				dstProps, err := api.HeadBucket(baseParams, dstm.bck)
 				tassert.CheckFatal(t, err)
 
@@ -2196,7 +2197,7 @@ func TestCopyBucket(t *testing.T) {
 			}
 
 			for _, dstm := range dstms {
-				tutils.Logf("checking and comparing objects of bucket %s\n", dstm.bck)
+				tlog.Logf("checking and comparing objects of bucket %s\n", dstm.bck)
 				expectedObjCount := srcm.num
 				if test.dstBckHasObjects {
 					expectedObjCount += dstm.num
@@ -2218,7 +2219,7 @@ func TestCopyBucket(t *testing.T) {
 					t.Fatalf("list_objects: dst %d != %d src", len(dstBckList.Entries), expectedObjCount)
 				}
 
-				tutils.Logf("verifying that %d copied objects have identical props\n", expectedObjCount)
+				tlog.Logf("verifying that %d copied objects have identical props\n", expectedObjCount)
 				for _, a := range srcBckList.Entries {
 					var found bool
 					for _, b := range dstBckList.Entries {
@@ -2260,11 +2261,11 @@ func TestCopyBucketSimple(t *testing.T) {
 		m.num = 10
 	}
 
-	tutils.Logln("Preparing a source bucket")
+	tlog.Logln("Preparing a source bucket")
 	tutils.CreateFreshBucket(t, proxyURL, srcBck, nil)
 	m.init()
 
-	tutils.Logln("Putting objects to the source bucket")
+	tlog.Logln("Putting objects to the source bucket")
 	m.puts()
 
 	t.Run("Stats", func(t *testing.T) { testCopyBucketStats(t, srcBck, m) })
@@ -2399,26 +2400,26 @@ func TestRenameAndCopyBucket(t *testing.T) {
 	m.puts()
 
 	// Rename to first destination
-	tutils.Logf("rename %s => %s\n", srcBck, dstBck1)
+	tlog.Logf("rename %s => %s\n", srcBck, dstBck1)
 	xactID, err := api.RenameBucket(baseParams, srcBck, dstBck1)
 	tassert.CheckFatal(t, err)
 
 	// Try to copy to first destination - rename in progress, both for srcBck and dstBck1
-	tutils.Logf("try copy %s => %s\n", srcBck, dstBck1)
+	tlog.Logf("try copy %s => %s\n", srcBck, dstBck1)
 	_, err = api.CopyBucket(baseParams, srcBck, dstBck1)
 	if err == nil {
 		t.Error("coping bucket that is under renaming did not fail")
 	}
 
 	// Try to copy to second destination - rename in progress for srcBck
-	tutils.Logf("try copy %s => %s\n", srcBck, dstBck2)
+	tlog.Logf("try copy %s => %s\n", srcBck, dstBck2)
 	_, err = api.CopyBucket(baseParams, srcBck, dstBck2)
 	if err == nil {
 		t.Error("coping bucket that is under renaming did not fail")
 	}
 
 	// Try to copy from dstBck1 to dstBck1 - rename in progress for dstBck1
-	tutils.Logf("try copy %s => %s\n", dstBck1, dstBck2)
+	tlog.Logf("try copy %s => %s\n", dstBck1, dstBck2)
 	_, err = api.CopyBucket(baseParams, srcBck, dstBck1)
 	if err == nil {
 		t.Error("coping bucket that is under renaming did not fail")
@@ -2479,26 +2480,26 @@ func TestCopyAndRenameBucket(t *testing.T) {
 	m.puts()
 
 	// Rename to first destination
-	tutils.Logf("copy %s => %s\n", srcBck, dstBck1)
+	tlog.Logf("copy %s => %s\n", srcBck, dstBck1)
 	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck1)
 	tassert.CheckFatal(t, err)
 
 	// Try to rename to first destination - copy in progress, both for srcBck and dstBck1
-	tutils.Logf("try rename %s => %s\n", srcBck, dstBck1)
+	tlog.Logf("try rename %s => %s\n", srcBck, dstBck1)
 	_, err = api.RenameBucket(baseParams, srcBck, dstBck1)
 	if err == nil {
 		t.Error("renaming bucket that is under coping did not fail")
 	}
 
 	// Try to rename to second destination - copy in progress for srcBck
-	tutils.Logf("try rename %s => %s\n", srcBck, dstBck2)
+	tlog.Logf("try rename %s => %s\n", srcBck, dstBck2)
 	_, err = api.RenameBucket(baseParams, srcBck, dstBck2)
 	if err == nil {
 		t.Error("renaming bucket that is under coping did not fail")
 	}
 
 	// Try to rename from dstBck1 to dstBck1 - rename in progress for dstBck1
-	tutils.Logf("try rename %s => %s\n", dstBck1, dstBck2)
+	tlog.Logf("try rename %s => %s\n", dstBck1, dstBck2)
 	_, err = api.RenameBucket(baseParams, srcBck, dstBck1)
 	if err == nil {
 		t.Error("renaming bucket that is under coping did not fail")
@@ -2655,7 +2656,7 @@ func TestAllChecksums(t *testing.T) {
 			t.Run(tag, func(t *testing.T) {
 				started := time.Now()
 				testWarmValidation(t, cksumType, mirrored, false)
-				tutils.Logf("Time: %v\n", time.Since(started))
+				tlog.Logf("Time: %v\n", time.Since(started))
 			})
 		}
 	}
@@ -2668,7 +2669,7 @@ func TestAllChecksums(t *testing.T) {
 		t.Run(tag, func(t *testing.T) {
 			started := time.Now()
 			testWarmValidation(t, cksumType, false, true)
-			tutils.Logf("Time: %v\n", time.Since(started))
+			tlog.Logf("Time: %v\n", time.Since(started))
 		})
 	}
 }
@@ -2770,9 +2771,9 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 
 	// read all
 	if cksumType != cmn.ChecksumNone {
-		tutils.Logf("Reading %q objects with checksum validation by AIS targets\n", m.bck)
+		tlog.Logf("Reading %q objects with checksum validation by AIS targets\n", m.bck)
 	} else {
-		tutils.Logf("Reading %q objects\n", m.bck)
+		tlog.Logf("Reading %q objects\n", m.bck)
 	}
 	m.gets()
 
@@ -2785,7 +2786,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	}
 
 	if cksumType != cmn.ChecksumNone {
-		tutils.Logf("Reading %d objects from %s with end-to-end %s validation\n", len(bckObjs.Entries), m.bck, cksumType)
+		tlog.Logf("Reading %d objects from %s with end-to-end %s validation\n", len(bckObjs.Entries), m.bck, cksumType)
 		wg := cmn.NewLimitedWaitGroup(40)
 
 		for _, entry := range bckObjs.Entries {
@@ -2801,7 +2802,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	}
 
 	if containers.DockerRunning() {
-		tutils.Logln("Skipping object corruption test in docker")
+		tlog.Logln("Skipping object corruption test in docker")
 		return
 	}
 
@@ -2813,7 +2814,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 			i -= numCorrupted
 		}
 		objCh := make(chan string, numCorrupted)
-		tutils.Logf("Corrupting %d objects\n", numCorrupted)
+		tlog.Logf("Corrupting %d objects\n", numCorrupted)
 		go func() {
 			for j := i; j < i+numCorrupted; j++ {
 				objName := bckObjs.Entries[j].Name
@@ -2925,7 +2926,7 @@ func TestBucketListAndSummary(t *testing.T) {
 				t.Fatal(test.provider)
 			}
 
-			tutils.Logln("checking objects...")
+			tlog.Logln("checking objects...")
 
 			if test.summary {
 				msg := &cmn.BucketSummaryMsg{Cached: test.cached, Fast: test.fast}

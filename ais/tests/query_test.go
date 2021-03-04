@@ -13,8 +13,8 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/query"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -222,7 +222,7 @@ func TestQueryWorkersTargetDown(t *testing.T) {
 	target, err := smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
 	args := &cmn.ActValDecommision{DaemonID: target.ID(), SkipRebalance: true}
-	err = tutils.UnregisterNode(proxyURL, args)
+	err = tutils.DecommissionNode(proxyURL, args)
 	tassert.CheckFatal(t, err)
 
 	defer func() {

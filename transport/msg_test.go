@@ -17,8 +17,8 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/devtools/tutils"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
+	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 )
@@ -92,12 +92,12 @@ func Test_MsgDryRun(t *testing.T) {
 				tsize += int64(msize)
 				if tsize-prevsize > total/2 {
 					prevsize = tsize
-					tutils.Logf("%s: %s\n", stream, cmn.B2S(tsize, 0))
+					tlog.Logf("%s: %s\n", stream, cmn.B2S(tsize, 0))
 				}
 			}
 			stream.Fin()
 		}(i)
 	}
 	wg.Wait()
-	tutils.Logf("total messages: %d\n", num.Load())
+	tlog.Logf("total messages: %d\n", num.Load())
 }

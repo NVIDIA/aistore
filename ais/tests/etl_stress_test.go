@@ -10,8 +10,9 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils/tetl"
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/etl/runtime"
@@ -45,11 +46,11 @@ def transform(input_bytes):
 		bck:      cmn.Bck{Name: "etl_build_connection_err", Provider: cmn.ProviderAIS},
 	}
 
-	tutils.Logln("Preparing source bucket")
+	tlog.Logln("Preparing source bucket")
 	tutils.CreateFreshBucket(t, proxyURL, m.bck, nil)
 
 	m.init()
-	tutils.Logln("Putting objects to source bucket")
+	tlog.Logln("Putting objects to source bucket")
 	m.puts()
 
 	uuid, err := api.ETLBuild(baseParams, etl.BuildMsg{
@@ -77,7 +78,7 @@ func TestETLBucketAbort(t *testing.T) {
 	err := api.WaitForXactionToStart(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	tutils.Logf("Aborting ETL xaction %q\n", xactID)
+	tlog.Logf("Aborting ETL xaction %q\n", xactID)
 	err = api.AbortXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 	err = tetl.WaitForAborted(baseParams, xactID, 5*time.Minute)
@@ -107,10 +108,10 @@ func TestETLTargetDown(t *testing.T) {
 	err := api.WaitForXactionToStart(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	tutils.Logln("Waiting for ETL to process a few objects...")
+	tlog.Logln("Waiting for ETL to process a few objects...")
 	time.Sleep(5 * time.Second)
 
-	tutils.Logln("Unregistering a target")
+	tlog.Logln("Unregistering a target")
 	unregistered := m.unregisterTarget()
 	t.Cleanup(func() {
 		m.reregisterTarget(unregistered)
@@ -172,11 +173,11 @@ def transform(input_bytes):
 		}
 	)
 
-	tutils.Logf("Preparing source bucket (%d objects, %s each)\n", m.num, cmn.B2S(int64(m.fileSize), 2))
+	tlog.Logf("Preparing source bucket (%d objects, %s each)\n", m.num, cmn.B2S(int64(m.fileSize), 2))
 	tutils.CreateFreshBucket(t, proxyURL, bckFrom, nil)
 	m.saveClusterState()
 
-	tutils.Logln("Putting objects to source bucket")
+	tlog.Logln("Putting objects to source bucket")
 	m.puts()
 
 	for _, test := range tests {
@@ -203,21 +204,21 @@ def transform(input_bytes):
 				tetl.WaitForContainersStopped(t, baseParams)
 			})
 
-			tutils.Logf("Start offline ETL %q\n", uuid)
+			tlog.Logf("Start offline ETL %q\n", uuid)
 			xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{
 				ID:             uuid,
 				RequestTimeout: cmn.DurationJSON(requestTimeout),
 			})
 			tetl.ReportXactionStatus(baseParams, xactID, etlDoneCh, 2*time.Minute, m.num)
 
-			tutils.Logln("Waiting for ETL to finish")
+			tlog.Logln("Waiting for ETL to finish")
 			err = tetl.WaitForFinished(baseParams, xactID, 15*time.Minute)
 			etlDoneCh.Close()
 			tassert.CheckFatal(t, err)
 
 			stats, err := api.GetXactionStatsByID(baseParams, xactID)
 			tassert.CheckFatal(t, err)
-			tutils.Logf("ETL Bucket took %s\n", stats.TotalRunningTime())
+			tlog.Logf("ETL Bucket took %s\n", stats.TotalRunningTime())
 
 			objList, err := api.ListObjects(baseParams, bckTo, nil, 0)
 			tassert.CheckFatal(t, err)
@@ -238,7 +239,7 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, name, comm string) (xactID s
 
 	m.bck = bckFrom
 
-	tutils.Logf("Preparing source bucket %q\n", bckFrom.String())
+	tlog.Logf("Preparing source bucket %q\n", bckFrom.String())
 	tutils.CreateFreshBucket(t, proxyURL, bckFrom, nil)
 	m.saveClusterState()
 
@@ -246,11 +247,11 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, name, comm string) (xactID s
 
 	etlID, err := tetl.Init(baseParams, name, comm)
 	tassert.CheckFatal(t, err)
-	tutils.Logf("ETL init successful (%q)\n", etlID)
+	tlog.Logf("ETL init successful (%q)\n", etlID)
 	t.Cleanup(func() {
 		tetl.StopETL(t, baseParams, etlID)
 	})
 
-	tutils.Logf("Start offline ETL %q => %q\n", etlID, bckTo.String())
+	tlog.Logf("Start offline ETL %q => %q\n", etlID, bckTo.String())
 	return tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: etlID})
 }

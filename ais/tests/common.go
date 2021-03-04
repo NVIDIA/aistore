@@ -18,9 +18,10 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/devtools/tutils/readers"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	jsoniter "github.com/json-iterator/go"
@@ -73,7 +74,7 @@ func (m *ioContext) saveClusterState() {
 	m.smap = tutils.GetClusterMap(m.t, m.proxyURL)
 	m.originalTargetCount = len(m.smap.Tmap)
 	m.originalProxyCount = len(m.smap.Pmap)
-	tutils.Logf("targets: %d, proxies: %d\n", m.originalTargetCount, m.originalProxyCount)
+	tlog.Logf("targets: %d, proxies: %d\n", m.originalTargetCount, m.originalProxyCount)
 }
 
 func (m *ioContext) init() {
@@ -156,7 +157,7 @@ func (m *ioContext) checkObjectDistribution(t *testing.T) {
 		requiredCount     = int64(rebalanceObjectDistributionTestCoef * (float64(m.num) / float64(m.originalTargetCount)))
 		targetObjectCount = make(map[string]int64)
 	)
-	tutils.Logf("Checking if each target has a required number of object in bucket %s...\n", m.bck)
+	tlog.Logf("Checking if each target has a required number of object in bucket %s...\n", m.bck)
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	bucketList, err := api.ListObjects(baseParams, m.bck, &cmn.SelectMsg{Props: cmn.GetTargetURL}, 0)
 	tassert.CheckFatal(t, err)
@@ -189,7 +190,7 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 	tassert.CheckFatal(m.t, err)
 
 	if !m.silent {
-		tutils.Logf("PUT %d objects into bucket %s...\n", m.num, m.bck)
+		tlog.Logf("PUT %d objects into bucket %s...\n", m.num, m.bck)
 	}
 
 	var ignoreErr bool
@@ -260,7 +261,7 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 	)
 
 	if !m.silent {
-		tutils.Logf("remote PUT %d objects into bucket %s...\n", objCnt, m.bck)
+		tlog.Logf("remote PUT %d objects into bucket %s...\n", objCnt, m.bck)
 	}
 
 	p, err := api.HeadBucket(baseParams, m.bck)
@@ -292,7 +293,7 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 	}
 	wg.Wait()
 	tassert.SelectErr(m.t, errCh, "put", true)
-	tutils.Logf("remote bucket %s: %d cached objects\n", m.bck, m.num)
+	tlog.Logf("remote bucket %s: %d cached objects\n", m.bck, m.num)
 
 	if evict {
 		m.evict()
@@ -311,7 +312,7 @@ func (m *ioContext) evict() {
 		m.t.Fatalf("list_objects err: %d != %d", len(objList.Entries), m.num)
 	}
 
-	tutils.Logf("evicting remote bucket %s...\n", m.bck)
+	tlog.Logf("evicting remote bucket %s...\n", m.bck)
 	err = api.EvictRemoteBucket(baseParams, m.bck, false)
 	tassert.CheckFatal(m.t, err)
 }
@@ -325,7 +326,7 @@ func (m *ioContext) remotePrefetch(prefetchCnt int) {
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
 
-	tutils.Logf("remote PREFETCH %d objects...\n", prefetchCnt)
+	tlog.Logf("remote PREFETCH %d objects...\n", prefetchCnt)
 
 	wg := &sync.WaitGroup{}
 	for idx, obj := range objList.Entries {
@@ -367,7 +368,7 @@ func (m *ioContext) del(cnt ...int) {
 		return
 	}
 
-	tutils.Logf("deleting %d objects...\n", len(toRemove))
+	tlog.Logf("deleting %d objects...\n", len(toRemove))
 
 	wg := cmn.NewLimitedWaitGroup(40)
 	for _, obj := range toRemove {
@@ -402,9 +403,9 @@ func (m *ioContext) get(baseParams api.BaseParams, idx, totalGets int, validate 
 	}
 	if idx > 0 && idx%5000 == 0 && !m.silent {
 		if totalGets > 0 {
-			tutils.Logf(" %d/%d GET requests completed...\n", idx, totalGets)
+			tlog.Logf(" %d/%d GET requests completed...\n", idx, totalGets)
 		} else {
-			tutils.Logf(" %d GET requests completed...\n", idx)
+			tlog.Logf(" %d GET requests completed...\n", idx)
 		}
 	}
 
@@ -430,9 +431,9 @@ func (m *ioContext) gets(withValidation ...bool) {
 
 	if !m.silent {
 		if m.numGetsEachFile == 1 {
-			tutils.Logf("GET each of the %d objects from bucket %s...\n", m.num, m.bck)
+			tlog.Logf("GET each of the %d objects from bucket %s...\n", m.num, m.bck)
 		} else {
-			tutils.Logf("GET each of the %d objects %d times from bucket %s...\n", m.num, m.numGetsEachFile, m.bck)
+			tlog.Logf("GET each of the %d objects %d times from bucket %s...\n", m.num, m.numGetsEachFile, m.bck)
 		}
 	}
 
@@ -499,7 +500,7 @@ func (m *ioContext) ensureNumCopies(expectedCopies int) {
 		total++
 		copiesToNumObjects[int(entry.Copies)]++
 	}
-	tutils.Logf("objects (total, copies) = (%d, %v)\n", total, copiesToNumObjects)
+	tlog.Logf("objects (total, copies) = (%d, %v)\n", total, copiesToNumObjects)
 	if total != m.num {
 		m.t.Fatalf("list_objects: expecting %d objects, got %d", m.num, total)
 	}
@@ -524,12 +525,12 @@ func (m *ioContext) ensureNoErrors() {
 
 func (m *ioContext) unregisterTarget() *cluster.Snode {
 	target, _ := m.smap.GetRandTarget()
-	tutils.Logf("Unregister target: %s\n", target.URL(cmn.NetworkPublic))
+	tlog.Logf("Unregister target: %s\n", target.URL(cmn.NetworkPublic))
 	args := &cmn.ActValDecommision{
 		DaemonID:      target.ID(),
 		SkipRebalance: true,
 	}
-	err := tutils.UnregisterNode(m.proxyURL, args)
+	err := tutils.DecommissionNode(m.proxyURL, args)
 	tassert.CheckFatal(m.t, err)
 	m.smap, err = tutils.WaitForClusterState(
 		m.proxyURL,
@@ -551,7 +552,7 @@ func (m *ioContext) reregisterTarget(target *cluster.Snode) (rebID string) {
 
 	var err error
 	// T1
-	tutils.Logf("Registering target %s...\n", target.ID())
+	tlog.Logf("Registering target %s...\n", target.ID())
 	rebID, err = tutils.JoinCluster(m.proxyURL, target)
 	tassert.CheckFatal(m.t, err)
 	baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
@@ -562,7 +563,7 @@ func (m *ioContext) reregisterTarget(target *cluster.Snode) (rebID string) {
 			// T2
 			smap = tutils.GetClusterMap(m.t, m.proxyURL)
 			if _, ok := smap.Tmap[target.ID()]; ok {
-				tutils.Logf("T2: registered target %s\n", target.ID())
+				tlog.Logf("T2: registered target %s\n", target.ID())
 			}
 		} else {
 			query := cmn.QueryBcks(m.bck)
@@ -575,7 +576,7 @@ func (m *ioContext) reregisterTarget(target *cluster.Snode) (rebID string) {
 			tassert.CheckFatal(m.t, err)
 			// T3
 			if proxyBcks.Equal(targetBcks) {
-				tutils.Logf("T3: registered target %s got updated with the new BMD\n", target.ID())
+				tlog.Logf("T3: registered target %s got updated with the new BMD\n", target.ID())
 				return
 			}
 		}
@@ -776,7 +777,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType str
 }
 
 func prefixLookupDefault(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string) {
-	tutils.Logf("Looking up for files in alphabetic order\n")
+	tlog.Logf("Looking up for files in alphabetic order\n")
 
 	var (
 		letters    = "abcdefghijklmnopqrstuvwxyz"
@@ -797,20 +798,20 @@ func prefixLookupDefault(t *testing.T, proxyURL string, bck cmn.Bck, fileNames [
 
 		if numFiles == realNumFiles {
 			if numFiles != 0 {
-				tutils.Logf("Found %v files starting with %q\n", numFiles, key)
+				tlog.Logf("Found %v files starting with %q\n", numFiles, key)
 			}
 		} else {
 			t.Errorf("Expected number of files with prefix %q is %v but found %v files", key, realNumFiles, numFiles)
-			tutils.Logf("Objects returned:\n")
+			tlog.Logf("Objects returned:\n")
 			for id, oo := range objList.Entries {
-				tutils.Logf("    %d[%d]. %s\n", i, id, oo.Name)
+				tlog.Logf("    %d[%d]. %s\n", i, id, oo.Name)
 			}
 		}
 	}
 }
 
 func prefixLookupCornerCases(t *testing.T, proxyURL string, bck cmn.Bck, objNames []string) {
-	tutils.Logf("Testing corner cases\n")
+	tlog.Logf("Testing corner cases\n")
 
 	tests := []struct {
 		title  string
@@ -833,7 +834,7 @@ func prefixLookupCornerCases(t *testing.T, proxyURL string, bck cmn.Bck, objName
 			}
 		}
 
-		tutils.Logf("%d. Prefix: %s [%s]\n", idx, test.title, p)
+		tlog.Logf("%d. Prefix: %s [%s]\n", idx, test.title, p)
 		msg := &cmn.SelectMsg{Prefix: p}
 		objList, err := api.ListObjects(baseParams, bck, msg, 0)
 		if err != nil {
@@ -844,9 +845,9 @@ func prefixLookupCornerCases(t *testing.T, proxyURL string, bck cmn.Bck, objName
 		if len(objList.Entries) != objCount {
 			t.Errorf("Expected number of objects with prefix %q is %d but found %d",
 				test.prefix, objCount, len(objList.Entries))
-			tutils.Logf("Objects returned:\n")
+			tlog.Logf("Objects returned:\n")
 			for id, oo := range objList.Entries {
-				tutils.Logf("    %d[%d]. %s\n", idx, id, oo.Name)
+				tlog.Logf("    %d[%d]. %s\n", idx, id, oo.Name)
 			}
 		}
 	}
@@ -875,7 +876,7 @@ func prefixCleanup(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []strin
 
 	select {
 	case e := <-errCh:
-		tutils.Logf("Failed to DEL: %s\n", e)
+		tlog.Logf("Failed to DEL: %s\n", e)
 		t.Fail()
 	default:
 	}
@@ -885,12 +886,12 @@ func initFS() {
 	proxyURL := tutils.GetPrimaryURL()
 	primary, err := tutils.GetPrimaryProxy(proxyURL)
 	if err != nil {
-		tutils.Logf("ERROR: %v", err)
+		tlog.Logf("ERROR: %v", err)
 	}
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	cfg, err := api.GetDaemonConfig(baseParams, primary)
 	if err != nil {
-		tutils.Logf("ERROR: %v", err)
+		tlog.Logf("ERROR: %v", err)
 	}
 
 	config := cmn.GCO.BeginUpdate()

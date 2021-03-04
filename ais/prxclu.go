@@ -1304,7 +1304,7 @@ func (p *proxyrunner) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb 
 			p.si, node, msg.Action, er, d)
 		time.Sleep(timeout / 2)
 	}
-	// NOTE: proceeeding anyway even if all retries fail
+	// NOTE: proceeding anyway even if all retries fail
 	return p.unregNode(msg, si, skipReb)
 }
 

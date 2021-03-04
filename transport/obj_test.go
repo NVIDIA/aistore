@@ -38,8 +38,9 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 )
@@ -226,7 +227,7 @@ func Test_OneStream(t *testing.T) {
 func Test_MultiStream(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
-	tutils.Logf("Duration %v\n", duration)
+	tlog.Logf("Duration %v\n", duration)
 	ts := httptest.NewServer(objmux)
 	defer ts.Close()
 
@@ -495,7 +496,7 @@ func Test_CompressedOne(t *testing.T) {
 		size += hdr.ObjAttrs.Size
 		if size-prevsize >= cmn.GiB*4 {
 			stats := stream.GetStats()
-			tutils.Logf("%s: %d GiB compression-ratio=%.2f\n", stream, size/cmn.GiB, stats.CompressionRatio())
+			tlog.Logf("%s: %d GiB compression-ratio=%.2f\n", stream, size/cmn.GiB, stats.CompressionRatio())
 			prevsize = size
 		}
 	}
@@ -547,7 +548,7 @@ func Test_DryRun(t *testing.T) {
 			size += hdr.ObjAttrs.Size
 			if size-prevsize >= cmn.GiB*100 {
 				prevsize = size
-				tutils.Logf("[dry]: %d GiB\n", size/cmn.GiB)
+				tlog.Logf("[dry]: %d GiB\n", size/cmn.GiB)
 			}
 		}
 	}
@@ -614,7 +615,7 @@ func Test_CompletionCount(t *testing.T) {
 		}
 	}
 	if numSent == numCompleted.Load() {
-		tutils.Logf("sent %d = %d completed, %d received\n", numSent, numCompleted.Load(), numReceived.Load())
+		tlog.Logf("sent %d = %d completed, %d received\n", numSent, numCompleted.Load(), numReceived.Load())
 	} else {
 		t.Fatalf("sent %d != %d completed\n", numSent, numCompleted.Load())
 	}
@@ -679,7 +680,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 			size += obj.Hdr.ObjAttrs.Size
 		}
 		if size-prevsize >= cmn.GiB*4 {
-			tutils.Logf("%s: %d GiB\n", stream, size/cmn.GiB)
+			tlog.Logf("%s: %d GiB\n", stream, size/cmn.GiB)
 			prevsize = size
 			if random.Int63()%7 == 0 {
 				time.Sleep(time.Second * 2) // simulate occasional timeout

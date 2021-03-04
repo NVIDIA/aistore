@@ -10,8 +10,8 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 )
 
 // health should respond with 200 even is node is unregistered
@@ -21,7 +21,7 @@ func unregisteredNodeHealth(t *testing.T, proxyURL string, si *cluster.Snode) {
 
 	smapOrig := tutils.GetClusterMap(t, proxyURL)
 	args := &cmn.ActValDecommision{DaemonID: si.DaemonID, SkipRebalance: true}
-	err = tutils.UnregisterNode(proxyURL, args)
+	err = tutils.DecommissionNode(proxyURL, args)
 	tassert.CheckFatal(t, err)
 	targetCount := smapOrig.CountActiveTargets()
 	proxyCount := smapOrig.CountActiveProxies()

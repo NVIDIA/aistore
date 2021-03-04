@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
+	"github.com/NVIDIA/aistore/devtools/tassert"
 )
 
 type discardEntriesTestCase struct {

@@ -25,9 +25,10 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/containers"
+	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/devtools/tutils/readers"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 )
 
 const (
@@ -317,7 +318,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	}
 
 	// PUT/GET/DEL Without ais bucket
-	tutils.Logf("Validating responses for non-existent ais bucket...\n")
+	tlog.Logf("Validating responses for non-existent ais bucket...\n")
 	err := api.PutObject(putArgsLocal)
 	if err == nil {
 		t.Fatalf("ais bucket %s does not exist: Expected an error.", bckLocal)
@@ -333,28 +334,28 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 		t.Fatalf("ais bucket %s does not exist: Expected an error.", bckLocal)
 	}
 
-	tutils.Logf("PrefetchList %d\n", len(files))
+	tlog.Logf("PrefetchList %d\n", len(files))
 	prefetchListID, err := api.PrefetchList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
 	args := api.XactReqArgs{ID: prefetchListID, Kind: cmn.ActPrefetch, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	tutils.Logf("PrefetchRange\n")
+	tlog.Logf("PrefetchRange\n")
 	prefetchRangeID, err := api.PrefetchRange(baseParams, bckRemote, objRange)
 	tassert.CheckFatal(t, err)
 	args = api.XactReqArgs{ID: prefetchRangeID, Kind: cmn.ActPrefetch, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	tutils.Logf("EvictList\n")
+	tlog.Logf("EvictList\n")
 	evictListID, err := api.EvictList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
 	args = api.XactReqArgs{ID: evictListID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	tutils.Logf("EvictRange\n")
+	tlog.Logf("EvictRange\n")
 	evictRangeID, err := api.EvictRange(baseParams, bckRemote, objRange)
 	tassert.CheckFatal(t, err)
 	args = api.XactReqArgs{ID: evictRangeID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
@@ -364,7 +365,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bckLocal, nil)
 
 	// PUT
-	tutils.Logf("Putting %s and %s into buckets...\n", fileName1, fileName2)
+	tlog.Logf("Putting %s and %s into buckets...\n", fileName1, fileName2)
 	err = api.PutObject(putArgsLocal)
 	tassert.CheckFatal(t, err)
 	putArgsLocal.Object = fileName2
@@ -378,7 +379,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check ais bucket has 2 objects
-	tutils.Logf("Validating ais bucket have %s and %s ...\n", fileName1, fileName2)
+	tlog.Logf("Validating ais bucket have %s and %s ...\n", fileName1, fileName2)
 	_, err = api.HeadObject(baseParams, bckLocal, fileName1)
 	tassert.CheckFatal(t, err)
 	_, err = api.HeadObject(baseParams, bckLocal, fileName2)
@@ -398,7 +399,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Deleting from cloud bucket
-	tutils.Logf("Deleting %s and %s from cloud bucket ...\n", fileName1, fileName2)
+	tlog.Logf("Deleting %s and %s from cloud bucket ...\n", fileName1, fileName2)
 	deleteID, err := api.DeleteList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
 	args = api.XactReqArgs{ID: deleteID, Kind: cmn.ActDelete, Timeout: rebalanceTimeout}
@@ -406,7 +407,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Deleting from ais bucket
-	tutils.Logf("Deleting %s and %s from ais bucket ...\n", fileName1, fileName2)
+	tlog.Logf("Deleting %s and %s from ais bucket ...\n", fileName1, fileName2)
 	deleteID, err = api.DeleteList(baseParams, bckLocal, files)
 	tassert.CheckFatal(t, err)
 	args = api.XactReqArgs{ID: deleteID, Kind: cmn.ActDelete, Timeout: rebalanceTimeout}
@@ -463,7 +464,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 	bucketPropsRemote := &cmn.BucketPropsToUpdate{}
 
 	// Put
-	tutils.Logf("Putting object (%s) into ais bucket %s...\n", fileName, bckLocal)
+	tlog.Logf("Putting object (%s) into ais bucket %s...\n", fileName, bckLocal)
 	putArgs := api.PutObjectArgs{
 		BaseParams: baseParams,
 		Bck:        bckLocal,
@@ -476,7 +477,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 	resLocal, err := api.ListObjects(baseParams, bckLocal, msg, 0)
 	tassert.CheckFatal(t, err)
 
-	tutils.Logf("Putting object (%s) into cloud bucket %s...\n", fileName, bckRemote)
+	tlog.Logf("Putting object (%s) into cloud bucket %s...\n", fileName, bckRemote)
 	putArgs = api.PutObjectArgs{
 		BaseParams: baseParams,
 		Bck:        bckRemote,
@@ -623,7 +624,7 @@ func Test_coldgetmd5(t *testing.T) {
 
 	start := time.Now()
 	m.gets(false /*withValidation*/)
-	tutils.Logf("GET %s without MD5 validation: %v\n", cmn.B2S(totalSize, 0), time.Since(start))
+	tlog.Logf("GET %s without MD5 validation: %v\n", cmn.B2S(totalSize, 0), time.Since(start))
 
 	m.evict()
 
@@ -638,7 +639,7 @@ func Test_coldgetmd5(t *testing.T) {
 
 	start = time.Now()
 	m.gets(true /*withValidation*/)
-	tutils.Logf("GET %s with MD5 validation:    %v\n", cmn.B2S(totalSize, 0), time.Since(start))
+	tlog.Logf("GET %s with MD5 validation:    %v\n", cmn.B2S(totalSize, 0), time.Since(start))
 }
 
 func TestHeadBucket(t *testing.T) {
@@ -749,9 +750,9 @@ func getMatchingKeys(t *testing.T, proxyURL string, bck cmn.Bck, regexMatch stri
 
 func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg) *cmn.BucketList {
 	if msg == nil {
-		tutils.Logf("LIST objects %s []\n", bck)
+		tlog.Logf("LIST objects %s []\n", bck)
 	} else {
-		tutils.Logf("LIST objects %s [prefix: %q, page_size: %d, cached: %t, token: %q]\n",
+		tlog.Logf("LIST objects %s [prefix: %q, page_size: %d, cached: %t, token: %q]\n",
 			bck, msg.Prefix, msg.PageSize, msg.IsFlagSet(cmn.SelectCached), msg.ContinuationToken)
 	}
 	baseParams := tutils.BaseAPIParams(proxyURL)
@@ -836,7 +837,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	oldFileInfo, _ := os.Stat(fqn)
 
 	// Test when the contents of the file are changed
-	tutils.Logf("Changing contents of the file [%s]: %s\n", objName, fqn)
+	tlog.Logf("Changing contents of the file [%s]: %s\n", objName, fqn)
 	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), cmn.PermRWR)
 	tassert.CheckFatal(t, err)
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, objName, fqn, oldFileInfo)
@@ -847,7 +848,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	tutils.CheckPathExists(t, fqn, false /*dir*/)
 	oldFileInfo, _ = os.Stat(fqn)
 
-	tutils.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
+	tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
 	err = tutils.SetXattrCksum(fqn, m.bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234"))
 	tassert.CheckError(t, err)
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, objName, fqn, oldFileInfo)
@@ -866,7 +867,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	tutils.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
+	tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
 	err = tutils.SetXattrCksum(fqn, m.bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"))
 	tassert.CheckError(t, err)
 
@@ -1006,7 +1007,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	// Test changing the file content.
 	objName := m.objNames[0]
 	fqn := findObjOnDisk(m.bck, objName)
-	tutils.Logf("Changing contents of the file [%s]: %s\n", objName, fqn)
+	tlog.Logf("Changing contents of the file [%s]: %s\n", objName, fqn)
 	err := ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), cmn.PermRWR)
 	tassert.CheckFatal(t, err)
 	executeTwoGETsForChecksumValidation(proxyURL, m.bck, objName, t)
@@ -1014,7 +1015,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	// Test changing the file xattr.
 	objName = m.objNames[1]
 	fqn = findObjOnDisk(m.bck, objName)
-	tutils.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
+	tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
 	err = tutils.SetXattrCksum(fqn, m.bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"))
 	tassert.CheckError(t, err)
 	executeTwoGETsForChecksumValidation(proxyURL, m.bck, objName, t)
@@ -1033,7 +1034,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	tutils.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
+	tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
 	err = tutils.SetXattrCksum(fqn, m.bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"))
 	tassert.CheckError(t, err)
 	_, err = api.GetObject(baseParams, m.bck, objName)
@@ -1079,7 +1080,7 @@ func TestRangeRead(t *testing.T) {
 		objName := m.objNames[0]
 
 		defer func() {
-			tutils.Logln("Cleaning up...")
+			tlog.Logln("Cleaning up...")
 			propsToUpdate := &cmn.BucketPropsToUpdate{
 				Cksum: &cmn.CksumConfToUpdate{
 					EnableReadRange: api.Bool(cksumProps.EnableReadRange),
@@ -1089,7 +1090,7 @@ func TestRangeRead(t *testing.T) {
 			tassert.CheckError(t, err)
 		}()
 
-		tutils.Logln("Testing valid cases.")
+		tlog.Logln("Testing valid cases.")
 		// Validate entire object checksum is being returned
 		if cksumProps.EnableReadRange {
 			propsToUpdate := &cmn.BucketPropsToUpdate{
@@ -1114,14 +1115,14 @@ func TestRangeRead(t *testing.T) {
 		}
 		testValidCases(t, proxyURL, bck.Bck, cksumProps.Type, m.fileSize, objName, false)
 
-		tutils.Logln("Testing valid cases (query).")
+		tlog.Logln("Testing valid cases (query).")
 		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=-1", 1)
 		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=0-", int64(m.fileSize))
 		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=10-", int64(m.fileSize-10))
 		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, fmt.Sprintf("bytes=-%d", m.fileSize), int64(m.fileSize))
 		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, fmt.Sprintf("bytes=-%d", m.fileSize+2), int64(m.fileSize))
 
-		tutils.Logln("Testing invalid cases (query).")
+		tlog.Logln("Testing invalid cases (query).")
 		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "potatoes=0-1")
 		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes")
 		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, fmt.Sprintf("bytes=%d-", m.fileSize+1))
@@ -1307,7 +1308,7 @@ func Test_checksum(t *testing.T) {
 
 	start := time.Now()
 	m.gets(false /*withValidate*/)
-	tutils.Logf("GET %s without any checksum validation: %v\n", cmn.B2S(totalSize, 0), time.Since(start))
+	tlog.Logf("GET %s without any checksum validation: %v\n", cmn.B2S(totalSize, 0), time.Since(start))
 
 	m.evict()
 
@@ -1322,7 +1323,7 @@ func Test_checksum(t *testing.T) {
 
 	start = time.Now()
 	m.gets(true /*withValidate*/)
-	tutils.Logf("GET %s and validate checksum: %v\n", cmn.B2S(totalSize, 0), time.Since(start))
+	tlog.Logf("GET %s and validate checksum: %v\n", cmn.B2S(totalSize, 0), time.Since(start))
 }
 
 func validateBucketProps(t *testing.T, expected *cmn.BucketPropsToUpdate, actual *cmn.BucketProps) {
@@ -1495,7 +1496,7 @@ func TestOperationsWithRanges(t *testing.T) {
 				}
 
 				for idx, test := range tests {
-					tutils.Logf("%d. %s; range: [%s]\n", idx+1, test.name, test.rangeStr)
+					tlog.Logf("%d. %s; range: [%s]\n", idx+1, test.name, test.rangeStr)
 
 					var (
 						err    error
@@ -1531,14 +1532,14 @@ func TestOperationsWithRanges(t *testing.T) {
 						continue
 					}
 
-					tutils.Logf("  %d objects have been deleted/evicted\n", test.delta)
+					tlog.Logf("  %d objects have been deleted/evicted\n", test.delta)
 				}
 
 				msg := &cmn.SelectMsg{Prefix: "test/"}
 				bckList, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
 				tassert.CheckFatal(t, err)
 
-				tutils.Logf("Cleaning up remaining objects...\n")
+				tlog.Logf("Cleaning up remaining objects...\n")
 				for _, obj := range bckList.Entries {
 					err := tutils.Del(proxyURL, bck.Bck, obj.Name, nil, nil, true /*silent*/)
 					tassert.CheckError(t, err)

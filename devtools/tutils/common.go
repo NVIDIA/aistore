@@ -16,15 +16,14 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools"
+	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils/readers"
-	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 )
 
 // TODO: remove hardcoding, should be same as `proxyIDFname` from `ais` package.
@@ -42,28 +41,6 @@ type SkipTestArgs struct {
 	CloudBck              bool
 	K8s                   bool
 	Local                 bool
-}
-
-func prependTime(msg string) string {
-	return fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05.000000"), msg)
-}
-
-func Logln(msg string) {
-	if testing.Verbose() {
-		fmt.Fprintln(os.Stdout, prependTime(msg))
-	}
-}
-
-func Logf(f string, a ...interface{}) {
-	if testing.Verbose() {
-		fmt.Fprintf(os.Stdout, prependTime(f), a...)
-	}
-}
-
-func LogfCond(cond bool, f string, a ...interface{}) {
-	if cond {
-		Logf(f, a...)
-	}
 }
 
 // Generates an object name that hashes to a different target than `baseName`.
