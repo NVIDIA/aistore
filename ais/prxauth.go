@@ -41,7 +41,7 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) validateToken(hdr http.Header) (*cmn.AuthToken, error) {
 	authToken := hdr.Get(cmn.HeaderAuthorization)
 	idx := strings.Index(authToken, " ")
-	if idx == -1 || authToken[:idx] != cmn.HeaderBearer {
+	if idx == -1 || authToken[:idx] != cmn.AuthenticationTypeBearer {
 		return nil, errInvalidToken
 	}
 

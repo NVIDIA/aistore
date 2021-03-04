@@ -222,7 +222,7 @@ func QueryXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats Nodes
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cmn.MustMarshal(msg),
-		Query:      url.Values{cmn.URLParamWhat: []string{cmn.QueryXactStats}},
+		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatQueryXactStats}},
 	}, &xactStats)
 	return xactStats, err
 }
@@ -343,7 +343,7 @@ func IsXactionIdle(baseParams BaseParams, args XactReqArgs) (idle bool, err erro
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cmn.MustMarshal(msg),
-		Query:      url.Values{cmn.URLParamWhat: []string{cmn.QueryXactStats}},
+		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatQueryXactStats}},
 	}, &xactStats)
 	if err != nil {
 		return false, err

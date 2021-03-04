@@ -56,7 +56,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 		p.queryClusterStats(w, r, what)
 	case cmn.GetWhatSysInfo:
 		p.queryClusterSysinfo(w, r, what)
-	case cmn.QueryXactStats:
+	case cmn.GetWhatQueryXactStats:
 		p.queryXaction(w, r, what)
 	case cmn.GetWhatStatus:
 		p.ic.writeStatus(w, r)
@@ -114,7 +114,7 @@ func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what 
 		query = r.URL.Query()
 	)
 	switch what {
-	case cmn.QueryXactStats:
+	case cmn.GetWhatQueryXactStats:
 		var xactMsg xaction.XactReqMsg
 		if err := cmn.ReadJSON(w, r, &xactMsg); err != nil {
 			return

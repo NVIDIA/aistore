@@ -157,11 +157,7 @@ func StartMaintenance(baseParams BaseParams, actValue *cmn.ActValDecommision) (i
 		Value:  actValue,
 	}
 	baseParams.Method = http.MethodPut
-	err = DoHTTPRequest(ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Cluster),
-		Body:       cmn.MustMarshal(msg),
-	}, &id)
+	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cmn.MustMarshal(msg)}, &id)
 	return id, err
 }
 

@@ -107,7 +107,7 @@ func (t *targetrunner) getXactByID(w http.ResponseWriter, r *http.Request, what,
 
 func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request, what string,
 	xactQuery xreg.XactFilter) {
-	if what != cmn.QueryXactStats {
+	if what != cmn.GetWhatQueryXactStats {
 		t.writeErrf(w, r, fmtUnknownQue, what)
 		return
 	}

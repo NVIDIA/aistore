@@ -295,10 +295,6 @@ func copyHeaders(src http.Header, dst *http.Header) {
 	}
 }
 
-func MakeHeaderAuthnToken(token string) string {
-	return HeaderBearer + " " + token
-}
-
 func (r HTTPRange) ContentRange(size int64) string {
 	return fmt.Sprintf("%s%d-%d/%d", HeaderContentRangeValPrefix, r.Start, r.Start+r.Length-1, size)
 }

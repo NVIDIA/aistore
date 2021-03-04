@@ -259,8 +259,12 @@ func getObjectOptParams(options GetObjectInput) (w io.Writer, q url.Values, hdr 
 
 func setAuthToken(r *http.Request, baseParams BaseParams) {
 	if baseParams.Token != "" {
-		r.Header.Set(cmn.HeaderAuthorization, cmn.MakeHeaderAuthnToken(baseParams.Token))
+		r.Header.Set(cmn.HeaderAuthorization, makeHeaderAuthnToken(baseParams.Token))
 	}
+}
+
+func makeHeaderAuthnToken(token string) string {
+	return cmn.AuthenticationTypeBearer + " " + token
 }
 
 func GetWhatRawQuery(getWhat, getProps string) string {

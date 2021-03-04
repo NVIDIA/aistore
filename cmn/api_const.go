@@ -24,11 +24,6 @@ const (
 	DSortNameLowercase = "dsort"
 )
 
-const (
-	AppendOp = "append"
-	FlushOp  = "flush"
-)
-
 // ActionMsg.Action
 // includes Xaction.Kind == ActionMsg.Action (when the action is asynchronous)
 const (
@@ -106,89 +101,114 @@ const (
 )
 
 // Header Key conventions:
-// - starts with a prefix "ais-"
-// - all words separated with "-": no dots and underscores
+//  - starts with a prefix "ais-",
+//  - all words separated with "-": no dots and underscores.
+
+// User/client header keys.
 const (
-	// bucket props
-	HeaderPrefix           = "ais-"
-	HeaderBucketProps      = HeaderPrefix + "bucket-props"
-	HeaderOrigURLBck       = HeaderPrefix + "original-url"       // see BucketProps.Extra.HTTP.OrigURLBck
-	HeaderCloudRegion      = HeaderPrefix + "cloud-region"       // see BucketProps.Extra.AWS.CloudRegion
-	HeaderBucketVerEnabled = HeaderPrefix + "versioning-enabled" // Enable/disable object versioning in a bucket
+	// Bucket props headers.
+	headerPrefix           = "ais-"
+	HeaderBucketProps      = headerPrefix + "bucket-props"
+	HeaderOrigURLBck       = headerPrefix + "original-url"       // See: BucketProps.Extra.HTTP.OrigURLBck
+	HeaderCloudRegion      = headerPrefix + "cloud-region"       // See: BucketProps.Extra.AWS.CloudRegion
+	HeaderBucketVerEnabled = headerPrefix + "versioning-enabled" // Enable/disable object versioning in a bucket.
 
-	HeaderBucketCreated   = HeaderPrefix + "created"        // Bucket creation time
-	HeaderBackendProvider = HeaderPrefix + "provider"       // ProviderAmazon et al. - see cmn/bucket.go
-	HeaderRemoteOffline   = HeaderPrefix + "remote-offline" // when accessing cached remote bucket with no backend connectivity
+	HeaderBucketCreated   = headerPrefix + "created"        // Bucket creation time.
+	HeaderBackendProvider = headerPrefix + "provider"       // ProviderAmazon et al. - see cmn/bucket.go.
+	HeaderRemoteOffline   = headerPrefix + "remote-offline" // When accessing cached remote bucket with no backend connectivity.
 
-	// object meta
-	HeaderObjCksumType = HeaderPrefix + "checksum-type"  // Checksum Type, one of SupportedChecksums()
-	HeaderObjCksumVal  = HeaderPrefix + "checksum-value" // Checksum Value
-	HeaderObjAtime     = HeaderPrefix + "atime"          // Object access time
-	HeaderObjCustomMD  = HeaderPrefix + "custom-md"      // Object custom metadata
-	HeaderObjSize      = HeaderPrefix + "size"           // Object size (bytes)
-	HeaderObjVersion   = HeaderPrefix + "version"        // Object version/generation - ais or Cloud
-	HeaderObjECMeta    = HeaderPrefix + "ec-meta"        // Info about EC object/slice/replica
+	// Object props headers.
+	HeaderObjCksumType = headerPrefix + "checksum-type"  // Checksum type, one of SupportedChecksums().
+	HeaderObjCksumVal  = headerPrefix + "checksum-value" // Checksum value.
+	HeaderObjAtime     = headerPrefix + "atime"          // Object access time.
+	HeaderObjCustomMD  = headerPrefix + "custom-md"      // Object custom metadata.
+	HeaderObjSize      = headerPrefix + "size"           // Object size (bytes).
+	HeaderObjVersion   = headerPrefix + "version"        // Object version/generation - ais or cloud.
+	HeaderObjECMeta    = headerPrefix + "ec-meta"        // Info about EC object/slice/replica.
 
-	// intra-cluster: control
-	HeaderCallerID          = HeaderPrefix + "caller-id" // it is a marker of intra-cluster request (see cmn.IsInternalReq)
-	HeaderPutterID          = HeaderPrefix + "putter-id"
-	HeaderCallerName        = HeaderPrefix + "caller-name"
-	HeaderCallerSmapVersion = HeaderPrefix + "caller-smap-ver"
+	// Append object header.
+	HeaderAppendHandle = headerPrefix + "append-handle"
 
-	HeaderNodeID  = HeaderPrefix + "node-id"
-	HeaderNodeURL = HeaderPrefix + "node-url"
+	// Query objects handle header.
+	HeaderHandle = headerPrefix + "query-handle"
 
-	// custom
-	HeaderAppendHandle = HeaderPrefix + "append-handle"
+	// Reverse proxy headers.
+	HeaderNodeID  = headerPrefix + "node-id"
+	HeaderNodeURL = headerPrefix + "node-url"
+)
 
-	// intra-cluster: streams
-	HeaderSessID   = HeaderPrefix + "session-id"
-	HeaderCompress = HeaderPrefix + "compress" // LZ4Compression, etc.
+// AuthN consts
+const (
+	HeaderAuthorization      = "Authorization" // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Authorization
+	AuthenticationTypeBearer = "Bearer"
+)
 
-	HeaderHandle = HeaderPrefix + "handle"
+// Internal header keys.
+const (
+	// Intra cluster headers.
+	HeaderCallerID          = headerPrefix + "caller-id" // Marker of intra-cluster request.
+	HeaderPutterID          = headerPrefix + "putter-id" // Marker of inter-cluster PUT object request.
+	HeaderCallerName        = headerPrefix + "caller-name"
+	HeaderCallerSmapVersion = headerPrefix + "caller-smap-ver"
+
+	// Stream related headers.
+	HeaderSessID   = headerPrefix + "session-id"
+	HeaderCompress = headerPrefix + "compress" // LZ4Compression, etc.
 )
 
 // Configuration and bucket properties
 const (
-	PropBucketAccessAttrs  = "access"             // Bucket access attributes
-	PropBucketVerEnabled   = "versioning.enabled" // Enable/disable object versioning in a bucket
-	PropBucketCreated      = "created"            // Bucket creation time
+	PropBucketAccessAttrs  = "access"             // Bucket access attributes.
+	PropBucketVerEnabled   = "versioning.enabled" // Enable/disable object versioning in a bucket.
+	PropBucketCreated      = "created"            // Bucket creation time.
 	PropBackendBck         = "backend_bck"
 	PropBackendBckName     = PropBackendBck + ".name"
 	PropBackendBckProvider = PropBackendBck + ".provider"
 )
 
-// supported compressions (alg-s)
+// HeaderCompress enum (supported compression algorithms)
 const (
 	LZ4Compression = "lz4"
 )
 
 // URL Query "?name1=val1&name2=..."
 // Query parameter name conventions:
-// - contains only alpha-numeric characters
-// - words must be separated with underscrore "_"
+//  - contains only alpha-numeric characters,
+//  - words must be separated with underscore "_".
+
+// User/client query params.
 const (
-	// user/app API
 	URLParamWhat            = "what"         // "smap" | "bmd" | "config" | "stats" | "xaction" ...
 	URLParamProps           = "props"        // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
 	URLParamCheckExists     = "check_cached" // true: check if object exists
 	URLParamHealthReadiness = "readiness"    // true: check if node can accept HTTP(S) requests
+	URLParamUUID            = "uuid"
+	URLParamRegex           = "regex" // dsort/downloader regex
 
+	// Bucket related query params.
 	URLParamProvider  = "provider" // backend provider
 	URLParamNamespace = "namespace"
 	URLParamBucket    = "bck"
 	URLParamBucketTo  = "bck_to"
 	URLParamKeepBckMD = "keep_md"
 
-	URLParamRegex = "regex" // dsort/downloader regex
-	// internal use
+	// Object related query params.
+	URLParamAppendType   = "append_type"
+	URLParamAppendHandle = "append_handle"
+
+	// HTTP bucket support.
+	URLParamOrigURL = "original_url"
+)
+
+// Internal query params.
+const (
 	URLParamCheckExistsAny   = "cea" // true: lookup object in all mountpaths (NOTE: compare with URLParamCheckExists)
-	URLParamProxyID          = "pid" // ID of the redirecting proxy
-	URLParamPrimaryCandidate = "can" // ID of the candidate for the primary proxy
+	URLParamProxyID          = "pid" // ID of the redirecting proxy.
+	URLParamPrimaryCandidate = "can" // ID of the candidate for the primary proxy.
 	URLParamForce            = "frc" // true: force the operation (e.g., shutdown primary and the entire cluster)
 	URLParamPrepare          = "prp" // true: request belongs to the "prepare" phase of the primary proxy election
 	URLParamNonElectable     = "nel" // true: proxy is non-electable for the primary role
-	URLParamUnixTime         = "utm" // Unix time: number of nanoseconds elapsed since 01/01/70 UTC
+	URLParamUnixTime         = "utm" // Unix time: number of nanoseconds elapsed since 01/01/70 UTC.
 	URLParamIsGFNRequest     = "gfn" // true if the request is a Get-From-Neighbor
 	URLParamSilent           = "sln" // true: destination should not log errors (HEAD request)
 	URLParamRebStatus        = "rbs" // true: get detailed rebalancing status
@@ -196,12 +216,6 @@ const (
 	URLParamTaskAction       = "tac" // "start", "status", "result"
 	URLParamClusterInfo      = "cii" // true: Health to return ais.clusterInfo
 	URLParamRecvType         = "rtp" // to tell real PUT from migration PUT
-
-	URLParamAppendType   = "append_type"
-	URLParamAppendHandle = "append_handle"
-
-	// action (operation, transaction, task) UUID
-	URLParamUUID = "uuid"
 
 	// dsort
 	URLParamTotalCompressedSize       = "tcs"
@@ -213,14 +227,17 @@ const (
 	URLParamHostTimeout  = "xht" // [begin, txn-done] timeout
 	URLParamWaitMetasync = "xwm" // true: wait for metasync (used only when there's an alternative)
 
-	// notification target's node ID (usually, the node that initiates the operation)
+	// Notification target's node ID (usually, the node that initiates the operation).
 	URLParamNotifyMe = "nft"
-
-	// HTTP bucket support
-	URLParamOrigURL = "original_url"
 )
 
-// enum: task action (cmn.URLParamTaskAction)
+// URLParamAppendType enum
+const (
+	AppendOp = "append"
+	FlushOp  = "flush"
+)
+
+// URLParamTaskAction enum
 const (
 	TaskStart  = Start
 	TaskStatus = "status"
@@ -228,23 +245,29 @@ const (
 )
 
 // URLParamWhat enum
+
+// User/client "what" values.
 const (
-	GetWhatConfig       = "config"
-	GetWhatSmap         = "smap"
 	GetWhatBMD          = "bmd"
-	GetWhatStats        = "stats"
-	GetWhatSmapVote     = "smapvote"
-	GetWhatMountpaths   = "mountpaths"
-	GetWhatSnode        = "snode"
-	GetWhatSysInfo      = "sysinfo"
-	GetWhatDiskStats    = "disk"
+	GetWhatConfig       = "config"
 	GetWhatDaemonStatus = "status"
+	GetWhatDiskStats    = "disk"
+	GetWhatMountpaths   = "mountpaths"
 	GetWhatRemoteAIS    = "remote"
-	GetWhatXactStats    = "getxstats" // stats(xaction-by-uuid)
-	QueryXactStats      = "qryxstats" // stats(all-matching-xactions)
-	GetWhatStatus       = "status"    // JTX status by uuid
-	GetWhatICBundle     = "ic_bundle"
+	GetWhatSmap         = "smap"
+	GetWhatSmapVote     = "smapvote"
+	GetWhatSnode        = "snode"
+	GetWhatStats        = "stats"
+	GetWhatStatus       = "status" // IC status by uuid.
+	GetWhatSysInfo      = "sysinfo"
 	GetWhatTargetIPs    = "target_ips"
+)
+
+// Internal "what" values.
+const (
+	GetWhatXactStats      = "getxstats" // stats: xaction by uuid
+	GetWhatQueryXactStats = "qryxstats" // stats: all matching xactions
+	GetWhatICBundle       = "ic_bundle"
 )
 
 // SelectMsg.TimeFormat enum
@@ -253,7 +276,7 @@ const (
 )
 
 // SelectMsg.Props enum
-// DO NOT forget update `GetPropsAll` constant when a prop is added/removed
+// NOTE: DO NOT forget update `GetPropsAll` constant when a prop is added/removed.
 const (
 	GetPropsName     = "name"
 	GetPropsSize     = "size"
@@ -267,18 +290,20 @@ const (
 	GetPropsEC       = "ec"
 )
 
-// BucketEntry.Status
-const (
-	ObjStatusOK = iota
-	ObjStatusMoved
-	ObjStatusDeleted // TODO: reserved for future when we introduce delayed delete of the object/bucket
-)
-
-// BucketEntry Flags constants
+// BucketEntry.Flags field
 const (
 	EntryStatusBits = 5                          // N bits
 	EntryStatusMask = (1 << EntryStatusBits) - 1 // mask for N low bits
-	EntryIsCached   = 1 << (EntryStatusBits + 1) // StatusMaskBits + 1
+)
+
+const (
+	// Status
+	ObjStatusOK = iota
+	ObjStatusMoved
+	ObjStatusDeleted // TODO: reserved for future when we introduce delayed delete of the object/bucket
+
+	// Flags
+	EntryIsCached = 1 << (EntryStatusBits + 1)
 )
 
 // List objects default page size
@@ -321,7 +346,6 @@ const (
 	UserRegister = "register" // node register by admin (manual)
 	AutoRegister = "autoreg"  // node register itself into the primary proxy (automatic)
 	Unregister   = "unregister"
-	Proxy        = "proxy"
 	Voteres      = "result"
 	VoteInit     = "init"
 	Mountpaths   = "mountpaths"
@@ -348,9 +372,6 @@ const (
 	Discard     = "discard"
 	WorkerOwner = "worker" // TODO: it should be removed once get-next-bytes endpoint is ready
 
-	// CLI
-	Target = "target"
-
 	// ETL
 	ETL       = "etl"
 	ETLInit   = Init
@@ -362,17 +383,15 @@ const (
 	ETLHealth = "health"
 )
 
-// enum: compression
+const (
+	Proxy  = "proxy"
+	Target = "target"
+)
+
+// Compression enum
 const (
 	CompressAlways = "always"
 	CompressNever  = "never"
-	CompressRatio  = "ratio=%d" // adaptive: min ratio that warrants compression
-)
-
-// AuthN consts
-const (
-	HeaderAuthorization = "Authorization"
-	HeaderBearer        = "Bearer"
 )
 
 // timeouts for intra-cluster requests

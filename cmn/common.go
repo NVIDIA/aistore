@@ -398,12 +398,12 @@ func ExpandPath(path string) string {
 
 // PropToHeader converts a property full name to an HTTP header tag name
 func PropToHeader(prop string) string {
-	if strings.HasPrefix(prop, HeaderPrefix) {
+	if strings.HasPrefix(prop, headerPrefix) {
 		return prop
 	}
 	prop = strings.ReplaceAll(prop, ".", "-")
 	prop = strings.ReplaceAll(prop, "_", "-")
-	return HeaderPrefix + prop
+	return headerPrefix + prop
 }
 
 /////////////
