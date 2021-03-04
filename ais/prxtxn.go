@@ -764,7 +764,7 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 	return
 }
 
-// Put a node under maintenance
+// Put node under maintenance
 func (p *proxyrunner) markMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) error {
 	var flags cluster.SnodeFlags
 	switch msg.Action {
@@ -776,11 +776,12 @@ func (p *proxyrunner) markMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) err
 		debug.AssertMsg(false, "invalid action: "+msg.Action)
 	}
 	ctx := &smapModifier{
-		pre:   p._markMaint,
-		final: p._syncFinal,
-		sid:   si.ID(),
-		flags: flags,
-		msg:   msg,
+		pre:      p._markMaint,
+		final:    p._syncFinal,
+		sid:      si.ID(),
+		flags:    flags,
+		msg:      msg,
+		isTarget: si.IsTarget(),
 	}
 	return p.owner.smap.modify(ctx)
 }

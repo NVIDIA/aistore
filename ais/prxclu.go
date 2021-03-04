@@ -579,11 +579,14 @@ func (p *proxyrunner) addOrUpdateNode(nsi, osi *cluster.Snode, keepalive bool) b
 }
 
 func (p *proxyrunner) _perfRebPost(ctx *smapModifier, clone *smapX) {
+	if ctx.skipReb {
+		return
+	}
 	if err := p.canStartRebalance(); err != nil {
 		glog.Warning(err)
 		return
 	}
-	if !ctx.skipReb && p.requiresRebalance(ctx.smap, clone) {
+	if p.requiresRebalance(ctx.smap, clone) {
 		rmdCtx := &rmdModifier{
 			pre: func(_ *rmdModifier, clone *rebMD) {
 				clone.inc()
@@ -599,6 +602,7 @@ func (p *proxyrunner) _perfRebPost(ctx *smapModifier, clone *smapX) {
 	}
 }
 
+// NOTE: when the change involves target node always wait for metasync to distribute updated Smap
 func (p *proxyrunner) _syncFinal(ctx *smapModifier, clone *smapX) {
 	var (
 		aisMsg = p.newAmsg(ctx.msg, clone, nil)
@@ -613,7 +617,10 @@ func (p *proxyrunner) _syncFinal(ctx *smapModifier, clone *smapX) {
 		cmn.AssertNoErr(err)
 		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
 	}
-	_ = p.metasyncer.sync(pairs...)
+	wg := p.metasyncer.sync(pairs...)
+	if ctx.isTarget {
+		wg.Wait()
+	}
 }
 
 /////////////////////
@@ -920,7 +927,7 @@ func (p *proxyrunner) stopMaintenance(w http.ResponseWriter, r *http.Request, ms
 		p.writeErrf(w, r, "node %q is not under maintenance", opts.DaemonID)
 		return
 	}
-	rebID, err := p.cancelMaintenance(msg, &opts)
+	rebID, err := p.cancelMaintenance(msg, si, &opts)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -1098,16 +1105,17 @@ func (p *proxyrunner) rebalanceAndRmSelf(msg *cmn.ActionMsg, si *cluster.Snode) 
 }
 
 // Stops rebalance if needed, do cleanup, and get the node back to the cluster.
-func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, opts *cmn.ActValDecommision) (rebID xaction.RebID,
+func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, si *cluster.Snode, opts *cmn.ActValDecommision) (rebID xaction.RebID,
 	err error) {
 	ctx := &smapModifier{
-		pre:     p._cancelMaintPre,
-		post:    p._perfRebPost,
-		final:   p._syncFinal,
-		sid:     opts.DaemonID,
-		skipReb: opts.SkipRebalance,
-		msg:     msg,
-		flags:   cluster.SnodeMaintenanceMask,
+		pre:      p._cancelMaintPre,
+		post:     p._perfRebPost,
+		final:    p._syncFinal,
+		sid:      opts.DaemonID,
+		skipReb:  opts.SkipRebalance,
+		msg:      msg,
+		flags:    cluster.SnodeMaintenanceMask,
+		isTarget: si.IsTarget(),
 	}
 	err = p.owner.smap.modify(ctx)
 	if ctx.rmd != nil {
@@ -1310,12 +1318,13 @@ func (p *proxyrunner) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb 
 
 func (p *proxyrunner) unregNode(msg *cmn.ActionMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
 	ctx := &smapModifier{
-		pre:     p._unregNodePre,
-		post:    p._perfRebPost,
-		final:   p._syncFinal,
-		msg:     msg,
-		sid:     si.ID(),
-		skipReb: skipReb,
+		pre:      p._unregNodePre,
+		post:     p._perfRebPost,
+		final:    p._syncFinal,
+		msg:      msg,
+		sid:      si.ID(),
+		skipReb:  skipReb,
+		isTarget: si.IsTarget(),
 	}
 	err = p.owner.smap.modify(ctx)
 	return ctx.status, err

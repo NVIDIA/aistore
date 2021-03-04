@@ -230,7 +230,7 @@ func DecommissionTargetSkipRebWait(t *testing.T, proxyURL string, smap *cluster.
 }
 
 func DecommissionNode(proxyURL string, args *cmn.ActValDecommision) error {
-	return devtools.UnregisterNode(DevtoolsCtx, proxyURL, args, registerTimeout)
+	return devtools.DecommissionNode(DevtoolsCtx, proxyURL, args, registerTimeout)
 }
 
 // Internal API to remove a node from Smap: use it to unregister MOCK targets/proxies

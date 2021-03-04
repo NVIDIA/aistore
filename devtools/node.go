@@ -37,7 +37,7 @@ func JoinCluster(ctx *Ctx, proxyURL string, node *cluster.Snode, timeout time.Du
 // before removing the node. Because node removal uses transactions, this
 // function cannot be used for MOCK nodes as they do not implement required
 // HTTP handlers. To unregister a mock, use `RemoveNodeFromSmap` instead.
-func UnregisterNode(ctx *Ctx, proxyURL string, args *cmn.ActValDecommision, timeout time.Duration) error {
+func DecommissionNode(ctx *Ctx, proxyURL string, args *cmn.ActValDecommision, timeout time.Duration) error {
 	var (
 		baseParams = BaseAPIParams(ctx, proxyURL)
 		smap, err  = api.GetClusterMap(baseParams)
