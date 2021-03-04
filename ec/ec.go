@@ -413,6 +413,8 @@ func WriteSliceAndMeta(t cluster.Target, hdr transport.ObjHdr, args *WriteArgs) 
 	if err != nil {
 		return err
 	}
+	ct.Lock(true)
+	defer ct.Unlock(true)
 	tmpFQN := ct.Make(fs.WorkfileType)
 	if err := ct.Write(t, args.Reader, hdr.ObjAttrs.Size, tmpFQN); err != nil {
 		return err

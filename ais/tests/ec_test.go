@@ -810,9 +810,15 @@ func TestECRestoreObjAndSliceRemote(t *testing.T) {
 				})
 
 				defer func() {
+					tlog.Logln("Wait for PUTs to finish...")
+					args := api.XactReqArgs{Kind: cmn.ActECPut}
+					err := api.WaitForXactionIdle(baseParams, args)
+					tassert.CheckError(t, err)
+
 					clearAllECObjects(t, bck, true, o)
 					reqArgs := api.XactReqArgs{Kind: cmn.ActECPut, Bck: bck}
-					api.WaitForXactionIdle(tutils.BaseAPIParams(proxyURL), reqArgs)
+					err = api.WaitForXactionIdle(baseParams, reqArgs)
+					tassert.CheckError(t, err)
 				}()
 
 				wg := sync.WaitGroup{}

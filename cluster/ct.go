@@ -21,6 +21,8 @@ type CT struct {
 	contentType string
 	bck         *Bck
 	mpathInfo   *fs.MountpathInfo
+	uname       string
+	digest      uint64
 }
 
 // interface guard
@@ -32,6 +34,25 @@ func (ct *CT) ContentType() string          { return ct.contentType }
 func (ct *CT) Bck() *Bck                    { return ct.bck }
 func (ct *CT) Bucket() cmn.Bck              { return ct.bck.Bucket() }
 func (ct *CT) MpathInfo() *fs.MountpathInfo { return ct.mpathInfo }
+
+func (ct *CT) Uname() string {
+	if ct.uname == "" {
+		ct.uname = ct.bck.MakeUname(ct.objName)
+	}
+	return ct.uname
+}
+
+func (ct *CT) Lock(exclusive bool) {
+	idx := hkIdx(ct.digest)
+	nlc := getLomLocker(idx)
+	nlc.Lock(ct.Uname(), exclusive)
+}
+
+func (ct *CT) Unlock(exclusive bool) {
+	idx := hkIdx(ct.digest)
+	nlc := getLomLocker(idx)
+	nlc.Unlock(ct.Uname(), exclusive)
+}
 
 // e.g.: generate workfile FQN from object FQN:
 //  ct, err := NewCTFromFQN(fqn, nil)
@@ -54,6 +75,7 @@ func NewCTFromFQN(fqn string, b Bowner) (ct *CT, err error) {
 		contentType: parsedFQN.ContentType,
 		bck:         &Bck{Bck: parsedFQN.Bck},
 		mpathInfo:   parsedFQN.MpathInfo,
+		digest:      parsedFQN.Digest,
 	}
 	if b != nil {
 		err = ct.bck.Init(b)
@@ -71,10 +93,12 @@ func NewCTFromBO(bck cmn.Bck, objName string, b Bowner, ctType ...string) (ct *C
 			return
 		}
 	}
-	ct.mpathInfo, _, err = HrwMpath(ct.bck.MakeUname(objName))
+	var digest uint64
+	ct.mpathInfo, digest, err = HrwMpath(ct.bck.MakeUname(objName))
 	if err != nil {
 		return
 	}
+	ct.digest = digest
 	if len(ctType) == 0 {
 		ct.contentType = fs.ObjectType
 	} else {
@@ -92,6 +116,7 @@ func NewCTFromLOM(lom *LOM, ctType string) *CT {
 		contentType: ctType,
 		bck:         lom.Bck(),
 		mpathInfo:   lom.mpathInfo,
+		digest:      lom.mpathDigest,
 	}
 }
 
@@ -103,6 +128,7 @@ func (ct *CT) Clone(ctType string) *CT {
 		contentType: ctType,
 		bck:         ct.bck,
 		mpathInfo:   ct.mpathInfo,
+		digest:      ct.digest,
 	}
 }
 

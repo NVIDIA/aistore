@@ -103,6 +103,13 @@ func (r *XactRespond) removeObjAndMeta(bck *cluster.Bck, objName string) error {
 		glog.Infof("Delete request for %s/%s", bck.Name, objName)
 	}
 
+	ct, err := cluster.NewCTFromBO(bck.Bck, objName, r.t.Bowner(), SliceType)
+	if err != nil {
+		return err
+	}
+	ct.Lock(true)
+	defer ct.Unlock(true)
+
 	// to be consistent with PUT, object's files are deleted in a reversed
 	// order: first Metafile is removed, then Replica/Slice
 	// Why: the main object is gone already, so we do not want any target
@@ -135,6 +142,8 @@ func (r *XactRespond) trySendCT(iReq intraReq, bck *cluster.Bck, objName string)
 		if err != nil {
 			return err
 		}
+		ct.Lock(false)
+		defer ct.Unlock(false)
 		fqn = ct.FQN()
 		metaFQN = ct.Make(MetaType)
 		if md, err = LoadMetadata(metaFQN); err != nil {

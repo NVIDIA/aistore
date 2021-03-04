@@ -780,8 +780,13 @@ func (lom *LOM) Clone(fqn string) *LOM {
 // 7) evict an entire bucket-load of LOM cache: cluster.EvictCache(bucket)
 // 8) periodic (lazy) eviction followed by access-time synchronization: see LomCacheRunner
 // =======================================================================================
+
+func hkIdx(digest uint64) int {
+	return int(digest & (cmn.MultiSyncMapCount - 1))
+}
+
 func (lom *LOM) Hkey() (string, int) {
-	return lom.md.uname, int(lom.mpathDigest & (cmn.MultiSyncMapCount - 1))
+	return lom.md.uname, hkIdx(lom.mpathDigest)
 }
 
 func (lom *LOM) Init(bck cmn.Bck) (err error) {
