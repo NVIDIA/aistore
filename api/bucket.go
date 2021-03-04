@@ -150,7 +150,7 @@ func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks,
 
 // CreateBucket sends a HTTP request to a proxy to create an AIS bucket with the given name.
 func CreateBucket(baseParams BaseParams, bck cmn.Bck, props *cmn.BucketPropsToUpdate) error {
-	if err := cmn.ValidateBckName(bck.Name); err != nil {
+	if err := bck.Validate(); err != nil {
 		return err
 	}
 	baseParams.Method = http.MethodPost
@@ -193,7 +193,7 @@ func DoesBucketExist(baseParams BaseParams, query cmn.QueryBcks) (bool, error) {
 //   bucket, etc.
 // * Copying multiple buckets to the same destination bucket is also permitted.
 func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, msgs ...*cmn.CopyBckMsg) (xactID string, err error) {
-	if err = cmn.ValidateBckName(toBck.Name); err != nil {
+	if err = toBck.Validate(); err != nil {
 		return
 	}
 	var msg *cmn.CopyBckMsg
@@ -214,7 +214,7 @@ func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, msgs ...*cmn.Copy
 
 // RenameBucket renames fromBck as toBck.
 func RenameBucket(baseParams BaseParams, fromBck, toBck cmn.Bck) (xactID string, err error) {
-	if err = cmn.ValidateBckName(toBck.Name); err != nil {
+	if err = toBck.Validate(); err != nil {
 		return
 	}
 	baseParams.Method = http.MethodPost

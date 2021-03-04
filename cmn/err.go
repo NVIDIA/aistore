@@ -49,7 +49,6 @@ type (
 
 	ErrInvalidBucketProvider struct {
 		bck Bck
-		err error
 	}
 	ErrCapacityExceeded struct {
 		totalBytes     uint64
@@ -273,12 +272,15 @@ func (e *ErrBucketDoesNotExist) Error() string {
 	return fmt.Sprintf("bucket %q does not exist", e.bck)
 }
 
-func NewErrorInvalidBucketProvider(bck Bck, err error) *ErrInvalidBucketProvider {
-	return &ErrInvalidBucketProvider{bck: bck, err: err}
+func NewErrorInvalidBucketProvider(bck Bck) *ErrInvalidBucketProvider {
+	return &ErrInvalidBucketProvider{bck: bck}
 }
 
 func (e *ErrInvalidBucketProvider) Error() string {
-	return fmt.Sprintf("%v, bucket %s", e.err, e.bck)
+	if e.bck.Name != "" {
+		return fmt.Sprintf("invalid backend provider %q (bucket: %s): must be one of [%s]", e.bck.Provider, e.bck, allProviders)
+	}
+	return fmt.Sprintf("invalid backend provider %q: must be one of [%s]", e.bck.Provider, allProviders)
 }
 
 func (e *ErrInvalidBucketProvider) Is(target error) bool {

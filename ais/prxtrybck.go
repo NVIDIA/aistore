@@ -176,8 +176,7 @@ func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode i
 		return
 	}
 
-	if err = cmn.ValidateProvider(args.queryBck.Provider); err != nil {
-		err = cmn.NewErrorInvalidBucketProvider(args.queryBck.Bck, err)
+	if err = args.queryBck.ValidateProvider(); err != nil {
 		errCode = http.StatusBadRequest
 		return
 	}

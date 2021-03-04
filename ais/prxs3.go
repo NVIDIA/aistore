@@ -140,7 +140,7 @@ func (p *proxyrunner) bckNamesToS3(w http.ResponseWriter) {
 // PUT s3/bck-name
 func (p *proxyrunner) putBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
-	if err := cmn.ValidateBckName(bucket); err != nil {
+	if err := bck.Validate(); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}

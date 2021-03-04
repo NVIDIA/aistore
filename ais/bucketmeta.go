@@ -115,7 +115,7 @@ func newClusterUUID() (uuid, created string) {
 //////////////
 
 func (m *bucketMD) add(bck *cluster.Bck, p *cmn.BucketProps) bool {
-	cmn.AssertNoErr(cmn.ValidateProvider(bck.Provider))
+	cmn.AssertNoErr(bck.ValidateProvider())
 	if _, present := m.Get(bck); present {
 		return false
 	}
@@ -140,7 +140,7 @@ func (m *bucketMD) del(bck *cluster.Bck) (deleted bool) {
 }
 
 func (m *bucketMD) set(bck *cluster.Bck, p *cmn.BucketProps) {
-	cmn.AssertNoErr(cmn.ValidateProvider(bck.Provider))
+	cmn.AssertNoErr(bck.ValidateProvider())
 	prevProps, present := m.Get(bck)
 	if !present {
 		cmn.Assertf(false, "%s: not present", bck)

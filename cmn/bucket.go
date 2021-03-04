@@ -174,7 +174,7 @@ func ParseBckObjectURI(objName string, query ...bool) (bck Bck, object string, e
 
 	bck.Name = parts[0]
 	if bck.Name != "" {
-		if err := ValidateBckName(bck.Name); err != nil {
+		if err := bck.ValidateName(); err != nil {
 			return bck, "", err
 		}
 		if bck.Provider == "" {
@@ -256,31 +256,46 @@ func (b Bck) Equal(other Bck) bool {
 	return b.Name == other.Name && b.Provider == other.Provider && b.Ns == other.Ns
 }
 
-func ValidateBckName(bucket string) (err error) {
-	const nameHelp = "may only contain letters, numbers, dashes (-), underscores (_), and dots (.)"
-	if bucket == "" || bucket == "." || !bucketReg.MatchString(bucket) {
-		return fmt.Errorf("bucket name %q is invalid: %v", bucket, nameHelp)
-	}
-	if strings.Contains(bucket, "..") {
-		return fmt.Errorf("bucket name %q cannot contain '..'", bucket)
-	}
-	return
-}
-
-func (b Bck) Valid() bool {
+func (b *Bck) Valid() bool {
 	return b.Validate() == nil
 }
 
-func (b Bck) Validate() error {
-	if err := ValidateBckName(b.Name); err != nil {
+func (b *Bck) Validate() error {
+	if err := b.ValidateName(); err != nil {
 		return err
 	}
 	provider, err := NormalizeProvider(b.Provider)
 	if err != nil {
-		return NewErrorInvalidBucketProvider(b, err)
+		return err
 	}
 	b.Provider = provider
 	return b.Ns.Validate()
+}
+
+func (b *Bck) ValidateName() (err error) {
+	const nameHelp = "may only contain letters, numbers, dashes (-), underscores (_), and dots (.)"
+	if b.Name == "" || b.Name == "." || !bucketReg.MatchString(b.Name) {
+		return fmt.Errorf("bucket name %q is invalid: %v", b.Name, nameHelp)
+	}
+	if strings.Contains(b.Name, "..") {
+		return fmt.Errorf("bucket name %q cannot contain '..'", b.Name)
+	}
+	return
+}
+
+func (b *Bck) ValidateProvider() error {
+	if _, ok := Providers[b.Provider]; ok {
+		return nil
+	}
+	return NewErrorInvalidBucketProvider(*b)
+}
+
+// FIXME: Remove duplication with `bck.ValidateProvider()`.
+func ValidateProvider(provider string) error {
+	if _, ok := Providers[provider]; ok {
+		return nil
+	}
+	return NewErrorInvalidBucketProvider(Bck{Provider: provider})
 }
 
 func (b Bck) String() string {
@@ -387,14 +402,7 @@ func (b Bck) IsCloud() bool {
 	return b.Provider == ProviderAmazon || b.Provider == ProviderAzure || b.Provider == ProviderGoogle
 }
 
-func (b Bck) HasProvider() bool { return ValidateProvider(b.Provider) == nil }
-
-func ValidateProvider(provider string) error {
-	if _, ok := Providers[provider]; ok {
-		return nil
-	}
-	return fmt.Errorf("invalid backend provider %q: must be one of [%s]", provider, allProviders)
-}
+func (b Bck) HasProvider() bool { return b.ValidateProvider() == nil }
 
 func (query QueryBcks) String() string     { return Bck(query).String() }
 func (query QueryBcks) IsAIS() bool        { return Bck(query).IsAIS() }

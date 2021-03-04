@@ -14,9 +14,9 @@ import (
 var _ = Describe("BMD", func() {
 	Describe("validateBucketName", func() {
 		DescribeTable("should accept bucket name",
-			func(bucket string) {
-				err := cmn.ValidateBckName(bucket)
-				Expect(err).NotTo(HaveOccurred())
+			func(bckName string) {
+				bck := cmn.Bck{Name: bckName}
+				Expect(bck.ValidateName()).NotTo(HaveOccurred())
 			},
 			Entry(
 				"regular name bucket",
@@ -33,9 +33,9 @@ var _ = Describe("BMD", func() {
 		)
 
 		DescribeTable("should reject bucket name",
-			func(bucket string) {
-				err := cmn.ValidateBckName(bucket)
-				Expect(err).To(HaveOccurred())
+			func(bckName string) {
+				bck := cmn.Bck{Name: bckName}
+				Expect(bck.ValidateName()).To(HaveOccurred())
 			},
 			Entry(
 				"empty bucket",

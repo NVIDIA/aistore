@@ -223,7 +223,7 @@ func allMpathCTpaths(opts *Options) (fqns []string, err error) {
 	bck := opts.Bck
 	for _, child := range children {
 		bck.Name = child
-		if cmn.ValidateBckName(bck.Name) != nil {
+		if err := bck.ValidateName(); err != nil {
 			continue
 		}
 		for _, ct := range opts.CTs {
@@ -241,7 +241,7 @@ func AllMpathBcks(opts *Options) (bcks []cmn.Bck, err error) {
 	bck := opts.Bck
 	for _, child := range children {
 		bck.Name = child
-		if cmn.ValidateBckName(bck.Name) != nil {
+		if err := bck.ValidateName(); err != nil {
 			continue
 		}
 		bcks = append(bcks, bck)

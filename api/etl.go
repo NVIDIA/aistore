@@ -67,7 +67,7 @@ func ETLObject(baseParams BaseParams, id string, bck cmn.Bck, objName string, w 
 }
 
 func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.Bck2BckMsg) (xactID string, err error) {
-	if err = cmn.ValidateBckName(toBck.Name); err != nil {
+	if err = toBck.Validate(); err != nil {
 		return
 	}
 	baseParams.Method = http.MethodPost
