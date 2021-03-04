@@ -46,8 +46,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 	var (
 		objArgs                api.GetObjectInput
 		bck                    cmn.Bck
-		object, origURL        string
-		fullObjName            = c.Args().Get(0)
+		objName                string
 		objLen, offset, length int64
 	)
 
@@ -55,34 +54,24 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		return missingArgumentsError(c, "object name in the form bucket/object", "output file")
 	}
 
-	if isWebURL(fullObjName) {
-		hbo, err := cmn.NewHTTPObjPath(fullObjName)
-		if err != nil {
-			return err
-		}
-		bck, object = hbo.Bck, hbo.ObjName
-		origURL = fullObjName
-	} else if bck, object, err = parseBckObjectURI(c, fullObjName); err != nil {
+	uri := c.Args().Get(0)
+	if bck, objName, err = parseBckObjectURI(c, uri); err != nil {
 		return
 	}
 
-	if origURL == "" || !flagIsSet(c, forceFlag) {
-		if bck, _, err = validateBucket(c, bck, fullObjName, false /* optional */); err != nil {
+	if !bck.IsHTTP() || !flagIsSet(c, forceFlag) {
+		if _, err = headBucket(bck); err != nil {
 			return
 		}
 	}
 
-	if object == "" {
-		return incorrectUsageMsg(c, "%q: missing object name", fullObjName)
-	}
-
 	if outFile == "" {
-		outFile = filepath.Base(object)
+		outFile = filepath.Base(objName)
 	}
 
 	// just check if object is cached, don't get object
 	if flagIsSet(c, isCachedFlag) {
-		return objectCheckExists(c, bck, object)
+		return objectCheckExists(c, bck, objName)
 	}
 
 	if flagIsSet(c, lengthFlag) != flagIsSet(c, offsetFlag) {
@@ -108,19 +97,19 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		objArgs = api.GetObjectInput{Writer: file, Header: hdr}
 	}
 
-	if origURL != "" {
+	if bck.IsHTTP() {
 		objArgs.Query = make(url.Values, 1)
-		objArgs.Query.Set(cmn.URLParamOrigURL, origURL)
+		objArgs.Query.Set(cmn.URLParamOrigURL, uri)
 	}
 
 	if flagIsSet(c, checksumFlag) {
-		objLen, err = api.GetObjectWithValidation(defaultAPIParams, bck, object, objArgs)
+		objLen, err = api.GetObjectWithValidation(defaultAPIParams, bck, objName, objArgs)
 	} else {
-		objLen, err = api.GetObject(defaultAPIParams, bck, object, objArgs)
+		objLen, err = api.GetObject(defaultAPIParams, bck, objName, objArgs)
 	}
 	if err != nil {
 		if cmn.IsStatusNotFound(err) {
-			return fmt.Errorf("object \"%s/%s\" does not exist", bck, object)
+			return fmt.Errorf("object \"%s/%s\" does not exist", bck, objName)
 		}
 		return
 	}
@@ -130,7 +119,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		return
 	}
 	if !silent {
-		fmt.Fprintf(c.App.Writer, "GET %q from bucket %q as %q [%s]\n", object, bck, outFile, cmn.B2S(objLen, 2))
+		fmt.Fprintf(c.App.Writer, "GET %q from bucket %q as %q [%s]\n", objName, bck, outFile, cmn.B2S(objLen, 2))
 	}
 	return
 }
@@ -813,16 +802,13 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 // Multiple object arguments handler
 func multiObjOp(c *cli.Context, command string) error {
 	// stops iterating if it encounters an error
-	for _, fullObjName := range c.Args() {
-		bck, objectName, err := parseBckObjectURI(c, fullObjName)
+	for _, uri := range c.Args() {
+		bck, objectName, err := parseBckObjectURI(c, uri)
 		if err != nil {
 			return err
 		}
-		if bck, _, err = validateBucket(c, bck, fullObjName, false); err != nil {
+		if _, err = headBucket(bck); err != nil {
 			return err
-		}
-		if objectName == "" {
-			return incorrectUsageMsg(c, "%q: missing object name", fullObjName)
 		}
 
 		switch command {

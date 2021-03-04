@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
@@ -55,7 +56,7 @@ var (
 		},
 		subcmdSummary: {
 			cachedFlag,
-			allFlag,
+			fastFlag,
 			verboseFlag,
 		},
 	}
@@ -75,7 +76,7 @@ var (
 		Usage:        "fetch and display bucket summary",
 		ArgsUsage:    optionalBucketArgument,
 		Flags:        bucketCmdsFlags[subcmdSummary],
-		Action:       showBucketHandler,
+		Action:       summaryBucketHandler,
 		BashComplete: bucketCompletions(),
 	}
 
@@ -156,33 +157,41 @@ func createBucketHandler(c *cli.Context) (err error) {
 		return err
 	}
 	for _, bck := range buckets {
-		err = createBucket(c, bck, props)
-		if err != nil {
+		if err := createBucket(c, bck, props); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func copyBucketHandler(c *cli.Context) (err error) {
-	bucketName, newBucketName, err := getOldNewBucketName(c)
-	if err != nil {
-		return err
-	}
-	fromBck, err := parseBckURI(c, bucketName)
-	if err != nil {
-		return err
-	}
-	if fromBck.Provider != "" && !fromBck.IsAIS() {
-		return incorrectUsageMsg(c, "only AIS bucket can be a source")
-	}
-	toBck, err := parseBckURI(c, newBucketName)
+func summaryBucketHandler(c *cli.Context) (err error) {
+	queryBcks, err := parseQueryBckURI(c, c.Args().First())
 	if err != nil {
 		return err
 	}
 
-	if fromBck.Equal(toBck) {
-		return incorrectUsageMsg(c, errFmtSameBucket, commandCopy, fromBck)
+	summaries, err := fetchSummaries(queryBcks, flagIsSet(c, fastFlag), flagIsSet(c, cachedFlag))
+	if err != nil {
+		return
+	}
+
+	tmpl := templates.BucketsSummariesTmpl
+	if flagIsSet(c, fastFlag) {
+		tmpl = templates.BucketsSummariesFastTmpl
+	}
+	return templates.DisplayOutput(summaries, c.App.Writer, tmpl)
+}
+
+func copyBucketHandler(c *cli.Context) (err error) {
+	bckFrom, bckTo, err := parseBcks(c)
+	if err != nil {
+		return err
+	}
+	if !bckFrom.IsAIS() {
+		return incorrectUsageMsg(c, "only AIS bucket can be a source")
+	}
+	if bckFrom.Equal(bckTo) {
+		return incorrectUsageMsg(c, errFmtSameBucket, commandCopy, bckTo)
 	}
 
 	msg := &cmn.CopyBckMsg{
@@ -197,28 +206,19 @@ func copyBucketHandler(c *cli.Context) (err error) {
 		fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
 	}
 
-	return copyBucket(c, fromBck, toBck, msg)
+	return copyBucket(c, bckFrom, bckTo, msg)
 }
 
 func mvBucketHandler(c *cli.Context) error {
-	bucketName, newBucketName, err := getOldNewBucketName(c)
+	bckFrom, bckTo, err := parseBcks(c)
 	if err != nil {
 		return err
 	}
-	bck, err := parseBckURI(c, bucketName)
-	if err != nil {
-		return err
-	}
-	newBck, err := parseBckURI(c, newBucketName)
-	if err != nil {
-		return err
+	if bckFrom.Equal(bckTo) {
+		return incorrectUsageMsg(c, errFmtSameBucket, commandMv, bckTo)
 	}
 
-	if bck.Equal(newBck) {
-		return incorrectUsageMsg(c, errFmtSameBucket, commandMv, bck)
-	}
-
-	return mvBucket(c, bck, newBck)
+	return mvBucket(c, bckFrom, bckTo)
 }
 
 func removeBucketHandler(c *cli.Context) (err error) {
@@ -230,55 +230,46 @@ func removeBucketHandler(c *cli.Context) (err error) {
 }
 
 func evictHandler(c *cli.Context) (err error) {
-	var (
-		bck     cmn.Bck
-		objName string
-	)
 	printDryRunHeader(c)
 
 	if c.NArg() == 0 {
 		return incorrectUsageMsg(c, "missing bucket name")
 	}
 
-	// bucket argument given by the user
+	// Bucket argument provided by the user.
 	if c.NArg() == 1 {
-		objPath := c.Args().First()
-		if isWebURL(objPath) {
-			bck = parseURLtoBck(objPath)
-		} else if bck, objName, err = parseBckObjectURI(c, objPath); err != nil {
-			return
+		uri := c.Args().First()
+		bck, objName, err := parseBckObjectURI(c, uri)
+		if err != nil {
+			return err
 		}
 
 		if bck.IsAIS() {
 			return fmt.Errorf("cannot evict ais buckets (the operation applies to Cloud buckets only)")
 		}
 
-		if bck, _, err = validateBucket(c, bck, "", false); err != nil {
-			return err
-		}
-
 		if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
 			if objName != "" {
 				return incorrectUsageMsg(c, "object name (%q) not supported when list or template flag provided", objName)
 			}
-			// list or range operation on a given bucket
+			// List or range operation on a given bucket.
 			return listOrRangeOp(c, commandEvict, bck)
 		}
 
 		if objName == "" {
-			// operation on a given bucket
+			// Operation on a given bucket.
 			return evictBucket(c, bck)
 		}
 
-		// evict single object from cloud bucket - multiObjOp will handle
+		// Evict single object from cloud bucket - multiObjOp will handle.
 	}
 
-	// list and range flags are invalid with object argument(s)
+	// List and range flags are invalid with object argument(s)
 	if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
 		return incorrectUsageMsg(c, "flags %q are invalid when object names provided", strings.Join([]string{listFlag.Name, templateFlag.Name}, ", "))
 	}
 
-	// object argument(s) given by the user; operation on given object(s)
+	// Object argument(s) given by the user; operation on given object(s).
 	return multiObjOp(c, commandEvict)
 }
 
@@ -286,11 +277,10 @@ func setPropsHandler(c *cli.Context) (err error) {
 	var origProps *cmn.BucketProps
 	bck, err := parseBckURI(c, c.Args().First())
 	if err != nil {
-		return
+		return err
 	}
-
-	if bck, origProps, err = validateBucket(c, bck, "", false); err != nil {
-		return
+	if origProps, err = headBucket(bck); err != nil {
+		return err
 	}
 
 	if flagIsSet(c, resetFlag) { // ignores all arguments, just resets bucket origProps
@@ -299,7 +289,7 @@ func setPropsHandler(c *cli.Context) (err error) {
 
 	updateProps, err := parseBckPropsFromContext(c)
 	if err != nil {
-		return
+		return err
 	}
 	updateProps.Force = flagIsSet(c, forceFlag)
 
@@ -307,7 +297,7 @@ func setPropsHandler(c *cli.Context) (err error) {
 	newProps.Apply(updateProps)
 	if newProps.Equal(origProps) { // Apply props and check for change
 		displayPropsEqMsg(c, bck)
-		return
+		return nil
 	}
 
 	if err = setBucketProps(c, bck, updateProps); err != nil {
@@ -317,7 +307,7 @@ func setPropsHandler(c *cli.Context) (err error) {
 	}
 
 	showDiff(c, origProps, newProps)
-	return
+	return nil
 }
 
 func displayPropsEqMsg(c *cli.Context, bck cmn.Bck) {
@@ -340,24 +330,13 @@ func showDiff(c *cli.Context, origProps, newProps *cmn.BucketProps) {
 }
 
 func defaultListHandler(c *cli.Context) (err error) {
-	var (
-		bck     cmn.Bck
-		objPath = c.Args().First()
-	)
-	if isWebURL(objPath) {
-		bck = parseURLtoBck(objPath)
-	} else if bck, err = parseBckURI(c, objPath, true /*query*/); err != nil {
-		return
+	queryBcks, err := parseQueryBckURI(c, c.Args().First())
+	if err != nil {
+		return err
 	}
 
-	if bck, _, err = validateBucket(c, bck, "ls", true); err != nil {
-		return
+	if queryBcks.Name == "" {
+		return listBucketNames(c, queryBcks)
 	}
-
-	if bck.Name == "" {
-		return listBucketNames(c, cmn.QueryBcks(bck))
-	}
-
-	bck.Name = strings.TrimSuffix(bck.Name, "/")
-	return listObjects(c, bck)
+	return listObjects(c, cmn.Bck(queryBcks))
 }

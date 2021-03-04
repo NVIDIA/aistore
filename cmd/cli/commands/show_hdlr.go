@@ -239,50 +239,6 @@ var (
 	}
 )
 
-func showBucketHandler(c *cli.Context) (err error) {
-	var (
-		bck     cmn.Bck
-		objPath = c.Args().First()
-	)
-
-	if isWebURL(objPath) {
-		bck = parseURLtoBck(objPath)
-	} else if bck, err = parseBckURI(c, objPath, true); err != nil {
-		return
-	}
-
-	var props *cmn.BucketProps
-	if bck, props, err = validateBucket(c, bck, "", true); err != nil {
-		return
-	}
-
-	summaries, err := fetchSummaries(cmn.QueryBcks(bck), flagIsSet(c, fastFlag), flagIsSet(c, cachedFlag))
-	if err != nil {
-		return
-	}
-
-	if flagIsSet(c, allFlag) && props != nil {
-		return displayAllProps(c, summaries[0], props)
-	}
-
-	tmpl := templates.BucketsSummariesTmpl
-	if flagIsSet(c, fastFlag) {
-		tmpl = templates.BucketsSummariesFastTmpl
-	}
-	return templates.DisplayOutput(summaries, c.App.Writer, tmpl)
-}
-
-func displayAllProps(c *cli.Context, summary cmn.BucketSummary, props *cmn.BucketProps) (err error) {
-	propList := bckSummaryList(summary, flagIsSet(c, fastFlag))
-	bckProp, err := bckPropList(props, flagIsSet(c, verboseFlag))
-	if err != nil {
-		return
-	}
-	propList = append(propList, bckProp...)
-
-	return templates.DisplayOutput(propList, c.App.Writer, templates.PropsSimpleTmpl)
-}
-
 func showDisksHandler(c *cli.Context) (err error) {
 	daemonID := c.Args().First()
 	if _, err = fillMap(); err != nil {
@@ -409,13 +365,10 @@ func showObjectHandler(c *cli.Context) (err error) {
 	}
 	bck, object, err := parseBckObjectURI(c, fullObjName)
 	if err != nil {
-		return
+		return err
 	}
-	if bck, _, err = validateBucket(c, bck, fullObjName, false); err != nil {
-		return
-	}
-	if object == "" {
-		return incorrectUsageMsg(c, "no object specified in %q", fullObjName)
+	if _, err := headBucket(bck); err != nil {
+		return err
 	}
 	return objectStats(c, bck, object)
 }

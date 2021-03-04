@@ -51,10 +51,10 @@ func setCopiesHandler(c *cli.Context) (err error) {
 	if bck, err = parseBckURI(c, c.Args().First()); err != nil {
 		return
 	}
-
-	if bck, p, err = validateBucket(c, bck, "", false); err != nil {
+	if p, err = headBucket(bck); err != nil {
 		return
 	}
+
 	copies := c.Int(copiesFlag.Name)
 	if p.Mirror.Copies == int64(copies) {
 		if copies > 1 && p.Mirror.Enabled {
@@ -76,10 +76,10 @@ func ecEncodeHandler(c *cli.Context) (err error) {
 	if bck, err = parseBckURI(c, c.Args().First()); err != nil {
 		return
 	}
-
-	if bck, p, err = validateBucket(c, bck, "", false); err != nil {
+	if p, err = headBucket(bck); err != nil {
 		return
 	}
+
 	dataSlices := c.Int(cleanFlag(dataSlicesFlag.Name))
 	paritySlices := c.Int(cleanFlag(paritySlicesFlag.Name))
 	if p.EC.Enabled {

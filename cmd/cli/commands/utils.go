@@ -391,36 +391,72 @@ func parseSource(rawURL string) (source dlSource, err error) {
 }
 
 func parseDest(c *cli.Context, uri string) (bck cmn.Bck, pathSuffix string, err error) {
-	bck, pathSuffix, err = parseBckObjectURI(c, uri)
+	bck, pathSuffix, err = parseBckObjectURI(c, uri, true /*optional objName*/)
 	if err != nil {
 		return
-	}
-	if bck.Name == "" {
-		err = fmt.Errorf("destination bucket name cannot be omitted")
+	} else if bck.IsHTTP() {
+		err = fmt.Errorf("http bucket is not supported as destination")
 		return
 	}
 	pathSuffix = strings.Trim(pathSuffix, "/")
 	return
 }
 
-func parseBckURI(c *cli.Context, bucketDef string, query ...bool) (bck cmn.Bck, err error) {
-	var objName string
-	bck, objName, err = parseBckObjectURI(c, bucketDef, query...)
+func parseBckURI(c *cli.Context, uri string) (cmn.Bck, error) {
+	if isWebURL(uri) {
+		bck := parseURLtoBck(uri)
+		return bck, nil
+	}
+	bck, objName, err := cmn.ParseBckObjectURI(uri)
 	if err != nil {
-		return
+		return bck, err
 	}
 	if objName != "" {
-		err = objectNameArgumentNotSupported(c, objName)
-		return
+		return bck, objectNameArgumentNotSupported(c, objName)
 	}
-
-	return
+	if bck.Name == "" {
+		return bck, incorrectUsageMsg(c, "%q: missing bucket name", uri)
+	} else if err := bck.Validate(); err != nil {
+		return bck, incorrectUsageError(c, err)
+	}
+	return bck, nil
 }
 
-func parseBckObjectURI(c *cli.Context, objName string, query ...bool) (bck cmn.Bck, object string, err error) {
-	bck, object, err = cmn.ParseBckObjectURI(objName, query...)
+func parseQueryBckURI(c *cli.Context, uri string) (cmn.QueryBcks, error) {
+	if isWebURL(uri) {
+		bck := parseURLtoBck(uri)
+		return cmn.QueryBcks(bck), nil
+	}
+	bck, objName, err := cmn.ParseBckObjectURI(uri, true /*query*/)
 	if err != nil {
-		return bck, object, incorrectUsageError(c, err)
+		return cmn.QueryBcks(bck), err
+	} else if objName != "" {
+		return cmn.QueryBcks(bck), objectNameArgumentNotSupported(c, objName)
+	}
+	return cmn.QueryBcks(bck), nil
+}
+
+func parseBckObjectURI(c *cli.Context, uri string, optObjName ...bool) (bck cmn.Bck, objName string, err error) {
+	if isWebURL(uri) {
+		hbo, err := cmn.NewHTTPObjPath(uri)
+		if err != nil {
+			return bck, objName, err
+		}
+		bck, objName = hbo.Bck, hbo.ObjName
+		goto validate
+	}
+	bck, objName, err = cmn.ParseBckObjectURI(uri)
+	if err != nil {
+		return bck, objName, incorrectUsageError(c, err)
+	}
+
+validate:
+	if bck.Name == "" {
+		return bck, objName, incorrectUsageMsg(c, "%q: missing bucket name", uri)
+	} else if err := bck.Validate(); err != nil {
+		return bck, objName, incorrectUsageError(c, err)
+	} else if objName == "" && (len(optObjName) == 0 || !optObjName[0]) {
+		return bck, objName, incorrectUsageMsg(c, "%q: missing object name", uri)
 	}
 	return
 }
@@ -603,21 +639,6 @@ func chooseTmpl(tmplShort, tmplLong string, useShort bool) string {
 	return tmplLong
 }
 
-func parseBck(c *cli.Context, uri string) (*cmn.Bck, error) {
-	if isWebURL(uri) {
-		bck := parseURLtoBck(uri)
-		return &bck, nil
-	}
-	bck, objName, err := cmn.ParseBckObjectURI(uri)
-	if err != nil {
-		return nil, err
-	}
-	if objName != "" {
-		return nil, objectNameArgumentNotSupported(c, objName)
-	}
-	return &bck, nil
-}
-
 func parseAliasURL(c *cli.Context) (alias, remAisURL string, err error) {
 	var parts []string
 	if c.NArg() == 0 {
@@ -642,7 +663,6 @@ ret:
 // Parses [XACTION_ID|XACTION_NAME] [BUCKET_NAME]
 func parseXactionFromArgs(c *cli.Context) (xactID, xactKind string, bck cmn.Bck, err error) {
 	xactKind = c.Args().Get(0)
-	bckName := c.Args().Get(1)
 	if !xaction.IsValid(xactKind) {
 		xactID = xactKind
 		xactKind = ""
@@ -653,12 +673,14 @@ func parseXactionFromArgs(c *cli.Context) (xactID, xactKind string, bck cmn.Bck,
 				fmt.Fprintf(c.App.ErrWriter, "Warning: %q is a global xaction, ignoring bucket name\n", xactKind)
 			}
 		case xaction.XactTypeBck:
-			bck, err = parseBckURI(c, bckName)
-			if err != nil {
-				return "", "", bck, err
-			}
-			if bck, _, err = validateBucket(c, bck, "", true); err != nil {
-				return "", "", bck, err
+			// Bucket is optional.
+			if uri := c.Args().Get(1); uri != "" {
+				if bck, err = parseBckURI(c, uri); err != nil {
+					return "", "", bck, err
+				}
+				if _, err = headBucket(bck); err != nil {
+					return "", "", bck, err
+				}
 			}
 		case xaction.XactTypeTask:
 			// TODO: we probably should not ignore bucket...
@@ -844,12 +866,12 @@ func bucketsFromArgsOrEnv(c *cli.Context) ([]cmn.Bck, error) {
 	bcks := make([]cmn.Bck, 0, len(bucketNames))
 
 	for _, bucket := range bucketNames {
-		bck, err := parseBck(c, bucket)
+		bck, err := parseBckURI(c, bucket)
 		if err != nil {
 			return nil, err
 		}
 		if bucket != "" {
-			bcks = append(bcks, *bck)
+			bcks = append(bcks, bck)
 		}
 	}
 
@@ -1066,19 +1088,6 @@ func bckPropList(props *cmn.BucketProps, verbose bool) (propList []prop, err err
 	sort.Slice(propList, func(i, j int) bool {
 		return propList[i].Name < propList[j].Name
 	})
-	return
-}
-
-func bckSummaryList(summary cmn.BucketSummary, approx bool) (propList []prop) {
-	var prefix string
-	if approx {
-		prefix = "Est. "
-	}
-	propList = []prop{
-		{Name: prefix + "objects", Value: strconv.FormatUint(summary.ObjCount, 10)},
-		{Name: prefix + "size", Value: cmn.UnsignedB2S(summary.Size, 2)},
-		{Name: prefix + "usage%", Value: fmt.Sprintf("%.2f", summary.UsedPct)},
-	}
 	return
 }
 

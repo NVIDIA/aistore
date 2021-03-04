@@ -57,7 +57,7 @@ var (
 				Usage:        "prefetch objects from cloud buckets",
 				ArgsUsage:    bucketArgument,
 				Flags:        startCmdsFlags[commandPrefetch],
-				Action:       prefetchHandler,
+				Action:       startPrefetchHandler,
 				BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true}),
 			},
 			{
@@ -119,7 +119,7 @@ func startXactionHandler(c *cli.Context) (err error) {
 
 func startXaction(c *cli.Context, xactKind string, bck cmn.Bck, sid string) (err error) {
 	if xaction.IsTypeBck(xactKind) {
-		if bck, _, err = validateBucket(c, bck, "", false); err != nil {
+		if _, err = headBucket(bck); err != nil {
 			return err
 		}
 	}
@@ -141,8 +141,6 @@ func startXaction(c *cli.Context, xactKind string, bck cmn.Bck, sid string) (err
 
 	return
 }
-
-// downloader
 
 func startDownloadHandler(c *cli.Context) error {
 	var (
@@ -352,8 +350,6 @@ func waitDownload(c *cli.Context, id string) (err error) {
 	return nil
 }
 
-// dsort
-
 func startDsortHandler(c *cli.Context) (err error) {
 	var (
 		id       string
@@ -416,8 +412,6 @@ func startDsortHandler(c *cli.Context) (err error) {
 	return
 }
 
-// LRU
-
 func startLRUHandler(c *cli.Context) (err error) {
 	if !flagIsSet(c, listBucketsFlag) {
 		return startXactionHandler(c)
@@ -452,15 +446,7 @@ func startLRUHandler(c *cli.Context) (err error) {
 	return
 }
 
-// prefetch
-
-func prefetchHandler(c *cli.Context) (err error) {
-	var (
-		bck     cmn.Bck
-		objName string
-		objPath string
-	)
-
+func startPrefetchHandler(c *cli.Context) (err error) {
 	printDryRunHeader(c)
 
 	if c.NArg() == 0 {
@@ -469,21 +455,15 @@ func prefetchHandler(c *cli.Context) (err error) {
 	if c.NArg() > 1 {
 		return incorrectUsageMsg(c, "too many arguments")
 	}
-	objPath = c.Args().First()
-	if isWebURL(objPath) {
-		bck = parseURLtoBck(objPath)
-	} else if bck, objName, err = parseBckObjectURI(c, objPath); err != nil {
+	bck, err := parseBckURI(c, c.Args().First())
+	if err != nil {
 		return
 	}
 	if bck.IsAIS() {
-		return fmt.Errorf("cannot prefetch from ais buckets (the operation applies to Cloud buckets only)")
+		return fmt.Errorf("cannot prefetch from ais buckets (the operation applies to cloud buckets only)")
 	}
-	if bck, _, err = validateBucket(c, bck, "", false); err != nil {
+	if _, err = headBucket(bck); err != nil {
 		return
-	}
-	// FIXME: it can be easily handled
-	if objName != "" {
-		return incorrectUsageMsg(c, "object name not supported, use list flag or range flag")
 	}
 
 	if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {

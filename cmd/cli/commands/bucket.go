@@ -33,27 +33,6 @@ const (
 	fmtXactStatusCheck = "%s operation (%q => %q) is in progress.\nTo check the status, run: ais show job xaction %s %s\n"
 )
 
-func validateBucket(c *cli.Context, bck cmn.Bck, tag string, optional bool) (cmn.Bck, *cmn.BucketProps, error) {
-	var (
-		p   *cmn.BucketProps
-		err error
-	)
-	bck.Name = cleanBucketName(bck.Name)
-	if bck.Name == "" {
-		if optional {
-			return bck, nil, nil
-		}
-		if tag != "" {
-			err = incorrectUsageMsg(c, "%q: missing bucket name", tag)
-		} else {
-			err = incorrectUsageMsg(c, "missing bucket name")
-		}
-		return bck, nil, err
-	}
-	p, err = headBucket(bck)
-	return bck, p, err
-}
-
 // Creates new ais bucket
 func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BucketPropsToUpdate) (err error) {
 	if err = api.CreateBucket(defaultAPIParams, bck, props); err != nil {
@@ -380,14 +359,10 @@ func showBucketProps(c *cli.Context) (err error) {
 	}
 
 	section := c.Args().Get(1)
-	objPath := c.Args().First()
-
-	if isWebURL(objPath) {
-		bck = parseURLtoBck(objPath)
-	} else if bck, err = parseBckURI(c, objPath); err != nil {
+	if bck, err = parseBckURI(c, c.Args().First()); err != nil {
 		return
 	}
-	if _, p, err = validateBucket(c, bck, "", false); err != nil {
+	if p, err = headBucket(bck); err != nil {
 		return
 	}
 	if flagIsSet(c, jsonFlag) {
@@ -468,18 +443,25 @@ func ecEncode(c *cli.Context, bck cmn.Bck, data, parity int) (err error) {
 	return
 }
 
-// This function returns bucket name and new bucket name based on arguments provided to the command.
+// This function returns buckets based on arguments provided to the command.
 // In case something is missing it also generates a meaningful error message.
-func getOldNewBucketName(c *cli.Context) (bucket, newBucket string, err error) {
+func parseBcks(c *cli.Context) (bckFrom, bckTo cmn.Bck, err error) {
 	if c.NArg() == 0 {
-		return "", "", missingArgumentsError(c, "bucket name", "new bucket name")
+		return bckFrom, bckTo, missingArgumentsError(c, "bucket name", "new bucket name")
 	}
 	if c.NArg() == 1 {
-		return "", "", missingArgumentsError(c, "new bucket name")
+		return bckFrom, bckTo, missingArgumentsError(c, "new bucket name")
 	}
 
-	bucket, newBucket = cleanBucketName(c.Args().Get(0)), cleanBucketName(c.Args().Get(1))
-	return
+	bcks := make([]cmn.Bck, 0, 2)
+	for i := 0; i < 2; i++ {
+		bck, err := parseBckURI(c, c.Args().Get(i))
+		if err != nil {
+			return bckFrom, bckTo, err
+		}
+		bcks = append(bcks, bck)
+	}
+	return bcks[0], bcks[1], nil
 }
 
 func printBucketNames(c *cli.Context, bucketNames cmn.BucketNames, showHeaders bool, matches bucketFilter) {
@@ -629,8 +611,4 @@ func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
 	}
 
 	return objFilter, nil
-}
-
-func cleanBucketName(bucket string) string {
-	return strings.TrimSuffix(bucket, "/")
 }

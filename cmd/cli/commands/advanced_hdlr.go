@@ -182,8 +182,7 @@ func loadLomCacheHandler(c *cli.Context) (err error) {
 
 	if c.NArg() == 0 {
 		return incorrectUsageMsg(c, "missing bucket name")
-	}
-	if c.NArg() > 1 {
+	} else if c.NArg() > 1 {
 		return incorrectUsageMsg(c, "too many arguments")
 	}
 

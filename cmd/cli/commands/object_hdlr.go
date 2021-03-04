@@ -178,23 +178,20 @@ func mvObjectHandler(c *cli.Context) (err error) {
 	return
 }
 
-func removeObjectHandler(c *cli.Context) error {
+func removeObjectHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return incorrectUsageMsg(c, "missing bucket name")
 	}
 
-	// single fullObjName provided. Either remove one object or listFlag/templateFlag provided
 	if c.NArg() == 1 {
-		bck, objName, err := parseBckObjectURI(c, c.Args().First())
+		uri := c.Args().First()
+		bck, objName, err := parseBckObjectURI(c, uri, true /* optional objName */)
 		if err != nil {
-			return err
-		}
-		if bck, _, err = validateBucket(c, bck, "", false); err != nil {
 			return err
 		}
 
 		if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
-			// list or range operation on a given bucket
+			// List or range operation on a given bucket.
 			return listOrRangeOp(c, commandRemove, bck)
 		}
 
@@ -206,13 +203,13 @@ func removeObjectHandler(c *cli.Context) error {
 		// ais rm BUCKET/OBJECT_NAME - pass, multiObjOp will handle it
 	}
 
-	// list and range flags are invalid with object argument(s)
+	// List and range flags are invalid with object argument(s).
 	if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
 		return incorrectUsageMsg(c, "flags %q are cannot be used together with object name arguments",
 			strings.Join([]string{listFlag.Name, templateFlag.Name}, ", "))
 	}
 
-	// object argument(s) given by the user; operation on given object(s)
+	// Object argument(s) given by the user; operation on given object(s).
 	return multiObjOp(c, commandRemove)
 }
 
@@ -223,11 +220,11 @@ func getHandler(c *cli.Context) (err error) {
 
 func putHandler(c *cli.Context) (err error) {
 	var (
-		bck         cmn.Bck
-		p           *cmn.BucketProps
-		objName     string
-		fileName    = c.Args().Get(0)
-		fullObjName = c.Args().Get(1)
+		bck      cmn.Bck
+		p        *cmn.BucketProps
+		objName  string
+		fileName = c.Args().Get(0)
+		uri      = c.Args().Get(1)
 	)
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "file to upload", "object name in the form bucket/[object]")
@@ -235,15 +232,12 @@ func putHandler(c *cli.Context) (err error) {
 	if c.NArg() < 2 {
 		return missingArgumentsError(c, "object name in the form bucket/[object]")
 	}
-	bck, objName, err = parseBckObjectURI(c, fullObjName)
-	if err != nil {
+	if bck, objName, err = parseBckObjectURI(c, uri, true /*optional objName*/); err != nil {
 		return
 	}
-
-	if bck, p, err = validateBucket(c, bck, fullObjName, false); err != nil {
-		return
+	if p, err = headBucket(bck); err != nil {
+		return err
 	}
-
 	return putObject(c, bck, objName, fileName, p.Cksum.Type)
 }
 
@@ -265,17 +259,12 @@ func concatHandler(c *cli.Context) (err error) {
 		fileNames[i] = c.Args().Get(i)
 	}
 
-	bck, objName, err = parseBckObjectURI(c, fullObjName)
-	if err != nil {
+	if bck, objName, err = parseBckObjectURI(c, fullObjName); err != nil {
 		return
 	}
-	if objName == "" {
-		return fmt.Errorf("object name is required")
-	}
-	if bck, _, err = validateBucket(c, bck, fullObjName, false); err != nil {
+	if _, err = headBucket(bck); err != nil {
 		return
 	}
-
 	return concatObject(c, bck, objName, fileNames)
 }
 
@@ -296,11 +285,10 @@ func promoteHandler(c *cli.Context) (err error) {
 		return incorrectUsageMsg(c, "promoted source (file or directory) must have an absolute path")
 	}
 
-	bck, objName, err = parseBckObjectURI(c, fullObjName)
-	if err != nil {
+	if bck, objName, err = parseBckObjectURI(c, fullObjName); err != nil {
 		return
 	}
-	if bck, _, err = validateBucket(c, bck, fullObjName, false); err != nil {
+	if _, err = headBucket(bck); err != nil {
 		return
 	}
 	return promoteFileOrDir(c, bck, objName, fqn)

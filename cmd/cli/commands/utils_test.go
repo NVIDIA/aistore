@@ -233,7 +233,7 @@ func TestParseDestInvalidURIs(t *testing.T) {
 	for _, test := range parseDestTests {
 		_, _, err := parseDest(&cli.Context{}, test)
 		if err == nil {
-			t.Errorf("expected error while parsing dest URI %s: %v", test, err)
+			t.Errorf("expected error while parsing dest URI %s", test)
 		}
 	}
 }
