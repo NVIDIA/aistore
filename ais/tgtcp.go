@@ -774,7 +774,7 @@ func (t *targetrunner) detectMpathChanges() {
 		newfs.Disabled[mpath] = struct{}{}
 	}
 
-	if _, err := jsp.Load(mpathConfigFQN, &oldfs, jsp.Plain()); err != nil {
+	if _, err := jsp.Load(mpathConfigFQN, &oldfs, cmn.Plain()); err != nil {
 		if !os.IsNotExist(err) && err != io.EOF {
 			glog.Errorf("Failed to load old mpath config %q, err: %v", mpathConfigFQN, err)
 		}
@@ -798,7 +798,7 @@ func (t *targetrunner) detectMpathChanges() {
 		glog.Errorln(newfsPprint)
 	}
 	// persist
-	if err := jsp.Save(mpathConfigFQN, newfs, jsp.Plain()); err != nil {
+	if err := jsp.Save(mpathConfigFQN, newfs, cmn.Plain()); err != nil {
 		glog.Errorf("Error writing config file: %v", err)
 	}
 }

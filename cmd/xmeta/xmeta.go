@@ -39,6 +39,9 @@ Examples:
 	xmeta -x -in=~/.ais0/.ais.rmd                     - extract RMD to STDOUT
 	xmeta -x -in=~/.ais0/.ais.rmd -out=/tmp/rmd.txt   - extract RMD to /tmp/rmd.txt
 	xmeta -in=/tmp/rmd.txt -out=/tmp/.ais.rmd         - format plain-text /tmp/rmd.txt
+	xmeta -x -in=~/.ais0/.ais.config                  - extract Config to STDOUT
+	xmeta -x -in=~/.ais0/.ais.config -out=/tmp/c.txt  - extract Config to /tmp/c.txt
+	xmeta -in=/tmp/c.txt -out=/tmp/.ais.config        - format plain-text /tmp/c.txt
 `
 )
 
@@ -75,6 +78,8 @@ func main() {
 			f, what = dumpBMD, "BMD"
 		} else if strings.Contains(in, "rmd") {
 			f, what = dumpRMD, "RMD"
+		} else if strings.Contains(in, "config") {
+			f, what = dumpConfig, "Global Config"
 		} else if err := dumpSmap(); err == nil {
 			return
 		} else {
@@ -88,6 +93,8 @@ func main() {
 			f, what = compressBMD, "BMD"
 		} else if strings.Contains(in, "rmd") {
 			f, what = compressRMD, "RMD"
+		} else if strings.Contains(in, "config") {
+			f, what = compressConfig, "Global Config"
 		} else if err := compressSmap(); err == nil {
 			return
 		} else {
@@ -105,11 +112,12 @@ func main() {
 
 // "*Dump" routines expect AIS-formatted (smap, bmd, rmd)
 
-func dumpSmap() error { return dumpMeta(&cluster.Smap{}) }
-func dumpBMD() error  { return dumpMeta(&cluster.BMD{}) }
-func dumpRMD() error  { return dumpMeta(&cluster.RMD{}) }
+func dumpSmap() error   { return dumpMeta(&cluster.Smap{}) }
+func dumpBMD() error    { return dumpMeta(&cluster.BMD{}) }
+func dumpRMD() error    { return dumpMeta(&cluster.RMD{}) }
+func dumpConfig() error { return dumpMeta(&cmn.ClusterConfig{}) }
 
-func dumpMeta(v jsp.Opts) (err error) {
+func dumpMeta(v cmn.GetJopts) (err error) {
 	f := os.Stdout
 	if flags.out != "" {
 		f, err = cmn.CreateFile(flags.out)
@@ -128,15 +136,16 @@ func dumpMeta(v jsp.Opts) (err error) {
 
 // "*Compress" routines require output filename
 
-func compressSmap() error { return compressMeta(&cluster.Smap{}) }
-func compressBMD() error  { return compressMeta(&cluster.BMD{}) }
-func compressRMD() error  { return compressMeta(&cluster.RMD{}) }
+func compressSmap() error   { return compressMeta(&cluster.Smap{}) }
+func compressBMD() error    { return compressMeta(&cluster.BMD{}) }
+func compressRMD() error    { return compressMeta(&cluster.RMD{}) }
+func compressConfig() error { return compressMeta(&cmn.ClusterConfig{}) }
 
-func compressMeta(v jsp.Opts) error {
+func compressMeta(v cmn.GetJopts) error {
 	if flags.out == "" {
 		return errors.New("output filename (the -out option) must be defined")
 	}
-	if _, err := jsp.Load(flags.in, v, jsp.Plain()); err != nil {
+	if _, err := jsp.Load(flags.in, v, cmn.Plain()); err != nil {
 		return err
 	}
 	return jsp.SaveMeta(flags.out, v)

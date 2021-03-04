@@ -599,8 +599,28 @@ type (
 	}
 )
 
-// GCO stands for global config owner which is responsible for updating
-// and notifying listeners about any changes in the config. Config is loaded
+////////////////////////////////////////////
+// config meta-versioning & serialization //
+////////////////////////////////////////////
+
+var (
+	_ GetJopts = (*ClusterConfig)(nil)
+	_ GetJopts = (*LocalConfig)(nil)
+	_ GetJopts = (*ConfigToUpdate)(nil)
+)
+
+var configJspOpts = Plain() // TODO -- FIXME: use CCSign(MetaverConfig)
+
+func (*ClusterConfig) GetJopts() Jopts  { return configJspOpts }
+func (*LocalConfig) GetJopts() Jopts    { return Plain() }
+func (*ConfigToUpdate) GetJopts() Jopts { return configJspOpts }
+
+///////////////////////
+// globalConfigOwner //
+///////////////////////
+
+// GCO (Global Config Owner) is responsible for updating and notifying
+// listeners about any changes in the config. Global Config is loaded
 // at startup and then can be accessed/updated by other services.
 var GCO *globalConfigOwner
 
@@ -610,10 +630,6 @@ var clientFeatureList = []struct {
 }{
 	{name: "DirectAccess", value: FeatureDirectAccess},
 }
-
-///////////////////////
-// globalConfigOwner //
-///////////////////////
 
 func (gco *globalConfigOwner) Get() *Config {
 	return (*Config)(gco.c.Load())

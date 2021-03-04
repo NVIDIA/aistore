@@ -39,7 +39,7 @@ func TestConfigFSPaths(t *testing.T) {
 	}()
 
 	var localConf cmn.LocalConfig
-	_, err := jsp.Load(localConfPath, &localConf, jsp.Plain())
+	_, err := jsp.LoadMeta(localConfPath, &localConf)
 	tassert.CheckFatal(t, err)
 	newConfig := cmn.Config{}
 	tassert.CheckFatal(t, jsp.LoadConfig(confPath, localConfPath, cmn.Target, &newConfig))

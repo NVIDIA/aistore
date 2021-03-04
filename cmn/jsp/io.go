@@ -26,7 +26,7 @@ const (
 	lz4BufferSize = 64 << 10
 )
 
-func EncodeSGL(v interface{}, opts Options) *memsys.SGL {
+func EncodeSGL(v interface{}, opts cmn.Jopts) *memsys.SGL {
 	// NOTE: `32 * cmn.KiB` value was estimated by deploying cluster with
 	//  32 targets and 32 proxies and creating 100 buckets.
 	sgl := memsys.DefaultPageMM().NewSGL(32 * cmn.KiB)
@@ -35,7 +35,7 @@ func EncodeSGL(v interface{}, opts Options) *memsys.SGL {
 	return sgl
 }
 
-func Encode(ws cmn.WriterAt, v interface{}, opts Options) (err error) {
+func Encode(ws cmn.WriterAt, v interface{}, opts cmn.Jopts) (err error) {
 	var (
 		h       hash.Hash
 		w       io.Writer = ws
@@ -103,7 +103,7 @@ func Encode(ws cmn.WriterAt, v interface{}, opts Options) (err error) {
 	return
 }
 
-func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) (checksum *cmn.Cksum, err error) {
+func Decode(reader io.ReadCloser, v interface{}, opts cmn.Jopts, tag string) (checksum *cmn.Cksum, err error) {
 	var (
 		r             io.Reader = reader
 		expectedCksum uint64

@@ -71,20 +71,20 @@ func TestDecodeAndEncode(t *testing.T) {
 	tests := []struct {
 		name string
 		v    testStruct
-		opts jsp.Options
+		opts cmn.Jopts
 	}{
-		{name: "empty", v: testStruct{}, opts: jsp.Options{}},
-		{name: "default", v: makeRandStruct(), opts: jsp.Options{}},
-		{name: "compress", v: makeRandStruct(), opts: jsp.Options{Compress: true}},
-		{name: "cksum", v: makeRandStruct(), opts: jsp.Options{Checksum: true}},
-		{name: "sign", v: makeRandStruct(), opts: jsp.Options{Signature: true}},
-		{name: "compress_cksum", v: makeRandStruct(), opts: jsp.Options{Compress: true, Checksum: true}},
-		{name: "cksum_sign", v: makeRandStruct(), opts: jsp.Options{Checksum: true, Signature: true}},
-		{name: "ccs", v: makeRandStruct(), opts: jsp.CCSign(1)},
+		{name: "empty", v: testStruct{}, opts: cmn.Jopts{}},
+		{name: "default", v: makeRandStruct(), opts: cmn.Jopts{}},
+		{name: "compress", v: makeRandStruct(), opts: cmn.Jopts{Compress: true}},
+		{name: "cksum", v: makeRandStruct(), opts: cmn.Jopts{Checksum: true}},
+		{name: "sign", v: makeRandStruct(), opts: cmn.Jopts{Signature: true}},
+		{name: "compress_cksum", v: makeRandStruct(), opts: cmn.Jopts{Compress: true, Checksum: true}},
+		{name: "cksum_sign", v: makeRandStruct(), opts: cmn.Jopts{Checksum: true, Signature: true}},
+		{name: "ccs", v: makeRandStruct(), opts: cmn.CCSign(1)},
 		{
 			name: "special_char",
 			v:    testStruct{I: 10, S: "abc\ncd]}{", B: []byte{'a', 'b', '\n', 'c', 'd', ']', '}'}},
-			opts: jsp.Options{Checksum: true},
+			opts: cmn.Jopts{Checksum: true},
 		},
 	}
 	for _, test := range tests {
@@ -121,7 +121,7 @@ func TestDecodeAndEncodeFuzz(t *testing.T) {
 	for i := 0; i < 10000; i++ {
 		var (
 			x, v string
-			opts = jsp.Options{Signature: true, Checksum: true}
+			opts = cmn.Jopts{Signature: true, Checksum: true}
 		)
 
 		x = cmn.RandString(i)
@@ -142,14 +142,14 @@ func BenchmarkEncode(b *testing.B) {
 	benches := []struct {
 		name string
 		v    testStruct
-		opts jsp.Options
+		opts cmn.Jopts
 	}{
-		{name: "empty", v: testStruct{}, opts: jsp.Options{}},
-		{name: "default", v: makeStaticStruct(), opts: jsp.Options{}},
-		{name: "sign", v: makeStaticStruct(), opts: jsp.Options{Signature: true}},
-		{name: "cksum", v: makeStaticStruct(), opts: jsp.Options{Checksum: true}},
-		{name: "compress", v: makeStaticStruct(), opts: jsp.Options{Compress: true}},
-		{name: "ccs", v: makeStaticStruct(), opts: jsp.CCSign(7)},
+		{name: "empty", v: testStruct{}, opts: cmn.Jopts{}},
+		{name: "default", v: makeStaticStruct(), opts: cmn.Jopts{}},
+		{name: "sign", v: makeStaticStruct(), opts: cmn.Jopts{Signature: true}},
+		{name: "cksum", v: makeStaticStruct(), opts: cmn.Jopts{Checksum: true}},
+		{name: "compress", v: makeStaticStruct(), opts: cmn.Jopts{Compress: true}},
+		{name: "ccs", v: makeStaticStruct(), opts: cmn.CCSign(7)},
 	}
 	for _, bench := range benches {
 		b.Run(bench.name, func(b *testing.B) {
@@ -174,14 +174,14 @@ func BenchmarkDecode(b *testing.B) {
 	benches := []struct {
 		name string
 		v    testStruct
-		opts jsp.Options
+		opts cmn.Jopts
 	}{
-		{name: "empty", v: testStruct{}, opts: jsp.Options{}},
-		{name: "default", v: makeStaticStruct(), opts: jsp.Options{}},
-		{name: "sign", v: makeStaticStruct(), opts: jsp.Options{Signature: true}},
-		{name: "cksum", v: makeStaticStruct(), opts: jsp.Options{Checksum: true}},
-		{name: "compress", v: makeStaticStruct(), opts: jsp.Options{Compress: true}},
-		{name: "ccs", v: makeStaticStruct(), opts: jsp.CCSign(13)},
+		{name: "empty", v: testStruct{}, opts: cmn.Jopts{}},
+		{name: "default", v: makeStaticStruct(), opts: cmn.Jopts{}},
+		{name: "sign", v: makeStaticStruct(), opts: cmn.Jopts{Signature: true}},
+		{name: "cksum", v: makeStaticStruct(), opts: cmn.Jopts{Checksum: true}},
+		{name: "compress", v: makeStaticStruct(), opts: cmn.Jopts{Compress: true}},
+		{name: "ccs", v: makeStaticStruct(), opts: cmn.CCSign(13)},
 	}
 	for _, bench := range benches {
 		b.Run(bench.name, func(b *testing.B) {

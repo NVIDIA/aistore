@@ -23,13 +23,18 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *cmn.Config) (er
 	debug.Assert(confPath != "" && localConfPath != "")
 	cmn.GCO.SetGlobalConfigPath(confPath)
 	cmn.GCO.SetLocalConfigPath(localConfPath)
-	_, err = Load(confPath, &config.ClusterConfig, PlainLocal())
-	if err != nil {
-		return fmt.Errorf("failed to load config %q, err: %v", confPath, err)
-	}
 
+	// NOTE: the following two "loads" are loading plain-text config
+	//       and are executed only once when the node starts up;
+	//       once started, the node can then reload the last
+	//       updated version of the (global|local) config
+	//       from the configured location
+	_, err = Load(confPath, &config.ClusterConfig, cmn.Plain())
+	if err != nil {
+		return fmt.Errorf("failed to load global config %q, err: %v", confPath, err)
+	}
 	config.SetRole(daeRole)
-	_, err = Load(localConfPath, &config.LocalConfig, Plain())
+	_, err = Load(localConfPath, &config.LocalConfig, cmn.Plain())
 	if err != nil {
 		return fmt.Errorf("failed to load local config %q, err: %v", localConfPath, err)
 	}
@@ -71,7 +76,7 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *cmn.Config) (er
 
 func LoadOverrideConfig(configDir string) (config *cmn.ConfigToUpdate, err error) {
 	config = &cmn.ConfigToUpdate{}
-	_, err = Load(path.Join(configDir, cmn.OverrideConfigFname), config, Plain())
+	_, err = LoadMeta(path.Join(configDir, cmn.OverrideConfigFname), config)
 	if os.IsNotExist(err) {
 		err = nil
 	}
@@ -79,11 +84,7 @@ func LoadOverrideConfig(configDir string) (config *cmn.ConfigToUpdate, err error
 }
 
 func SaveOverrideConfig(configDir string, config *cmn.ConfigToUpdate) error {
-	return Save(path.Join(configDir, cmn.OverrideConfigFname), config, Plain())
-}
-
-func SaveConfig(config *cmn.Config) error {
-	return Save(cmn.GCO.GetGlobalConfigPath(), config, PlainLocal())
+	return SaveMeta(path.Join(configDir, cmn.OverrideConfigFname), config)
 }
 
 func SetConfigInMem(toUpdate *cmn.ConfigToUpdate, config *cmn.Config, asType string) (err error) {

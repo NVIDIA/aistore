@@ -11,7 +11,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
 const (
@@ -66,10 +65,10 @@ func RemoveMarker(marker string) {
 // It does it on maximum `atMost` mountPaths. If `atMost == 0`, it does it on every mountpath.
 // If `backupPath != ""`, it removes files from `backupPath` and moves files from `path` to `backupPath`.
 // Returns how many times it has successfully stored a file.
-func PersistOnMpaths(path, backupPath string, what interface{}, atMost int, opts ...jsp.Options) (cnt,
+func PersistOnMpaths(path, backupPath string, what interface{}, atMost int, opts ...cmn.Jopts) (cnt,
 	availCnt int) {
 	var (
-		options            = jsp.CksumSign(0 /*metaver*/)
+		options            = cmn.CksumSign(0 /*metaver*/)
 		availableMpaths, _ = Get()
 	)
 	availCnt = len(availableMpaths)

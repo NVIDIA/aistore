@@ -85,7 +85,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 				for _, signature := range []bool{false, true} {
 					for _, compress := range []bool{false, true} {
 						for _, checksum := range []bool{false, true} {
-							opts := jsp.Options{
+							opts := cmn.Jopts{
 								Compress:  compress,
 								Checksum:  checksum,
 								Signature: signature,

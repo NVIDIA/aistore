@@ -583,7 +583,7 @@ func (y *metasyncer) validateCoW() {
 // metasync jsp encoding //
 ///////////////////////////
 
-var msjspOpts = jsp.Options{Metaver: cmn.MetaverMetasync, Signature: true, Checksum: true}
+var msjspOpts = cmn.Jopts{Metaver: cmn.MetaverMetasync, Signature: true, Checksum: true}
 
 func (payload msPayload) marshal() *memsys.SGL {
 	return jsp.EncodeSGL(payload, msjspOpts)

@@ -296,7 +296,7 @@ func (bo *bmdOwnerTgt) put(bmd *bucketMD) (err error) {
 
 func (bo *bmdOwnerTgt) persist() (err error) {
 	bmd := bo.get()
-	cnt, availCnt := fs.PersistOnMpaths(fs.BmdPersistedFileName, fs.BmdPersistedPrevious, bmd, bmdCopies, bmd.Opts())
+	cnt, availCnt := fs.PersistOnMpaths(fs.BmdPersistedFileName, fs.BmdPersistedPrevious, bmd, bmdCopies, bmd.GetJopts())
 	if cnt > 0 {
 		return
 	}

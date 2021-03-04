@@ -187,12 +187,12 @@ killRestore:
 	// Update local config ports.
 	localConfPath := path.Join(cfg.ConfigDir, "ais_local.json")
 	localConf := &cmn.LocalConfig{}
-	_, err = jsp.Load(localConfPath, localConf, jsp.Plain())
+	_, err = jsp.LoadMeta(localConfPath, localConf)
 	tassert.CheckFatal(t, err)
 	localConf.HostNet.PortStr = strconv.Itoa(cfg.HostNet.Port + portInc)
 	localConf.HostNet.PortIntraControlStr = strconv.Itoa(cfg.HostNet.PortIntraControl + portInc)
 	localConf.HostNet.PortIntraDataStr = strconv.Itoa(cfg.HostNet.PortIntraData + portInc)
-	err = jsp.Save(localConfPath, localConf, jsp.Plain())
+	err = jsp.SaveMeta(localConfPath, localConf)
 	tassert.CheckFatal(t, err)
 
 	err = tutils.RestoreNode(cmd, false, nodeType)

@@ -530,7 +530,7 @@ func damageMetadataCksum(t *testing.T, slicePath string) {
 	md, err := ec.LoadMetadata(metaFQN)
 	tassert.CheckFatal(t, err)
 	md.CksumValue = "01234"
-	err = jsp.Save(metaFQN, md, jsp.Plain())
+	err = jsp.Save(metaFQN, md, cmn.Plain())
 	tassert.CheckFatal(t, err)
 }
 

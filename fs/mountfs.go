@@ -223,7 +223,7 @@ func (mi *MountpathInfo) CreateMissingBckDirs(bck cmn.Bck) (err error) {
 	return
 }
 
-func (mi *MountpathInfo) StoreMD(path string, what interface{}, options jsp.Options) error {
+func (mi *MountpathInfo) StoreMD(path string, what interface{}, options cmn.Jopts) error {
 	fpath := filepath.Join(mi.Path, path)
 	if what == nil {
 		file, err := cmn.CreateFile(fpath)

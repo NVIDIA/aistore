@@ -6,22 +6,21 @@ package cluster
 
 import (
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
 // interface guards
 var (
-	_ jsp.Opts = (*Smap)(nil)
-	_ jsp.Opts = (*BMD)(nil)
-	_ jsp.Opts = (*RMD)(nil)
+	_ cmn.GetJopts = (*Smap)(nil)
+	_ cmn.GetJopts = (*BMD)(nil)
+	_ cmn.GetJopts = (*RMD)(nil)
 )
 
 var (
-	smapJspOpts = jsp.CCSign(cmn.MetaverSmap)
-	bmdJspOpts  = jsp.CCSign(cmn.MetaverBMD)
-	rmdJspOpts  = jsp.CCSign(cmn.MetaverRMD)
+	smapJspOpts = cmn.CCSign(cmn.MetaverSmap)
+	bmdJspOpts  = cmn.CCSign(cmn.MetaverBMD)
+	rmdJspOpts  = cmn.CCSign(cmn.MetaverRMD)
 )
 
-func (*Smap) Opts() jsp.Options { return smapJspOpts }
-func (*BMD) Opts() jsp.Options  { return bmdJspOpts }
-func (*RMD) Opts() jsp.Options  { return rmdJspOpts }
+func (*Smap) GetJopts() cmn.Jopts { return smapJspOpts }
+func (*BMD) GetJopts() cmn.Jopts  { return bmdJspOpts }
+func (*RMD) GetJopts() cmn.Jopts  { return rmdJspOpts }

@@ -44,7 +44,7 @@ func testPersistOnMpaths(t *testing.T, mpaths fs.MPI) {
 				path       = filepath.Join(mpath.Path, name)
 				foundValue = ""
 			)
-			_, err := jsp.Load(path, &foundValue, jsp.CksumSign(0))
+			_, err := jsp.Load(path, &foundValue, cmn.CksumSign(0))
 			if err != nil && !os.IsNotExist(err) {
 				t.Fatalf("Failed loading %q, err %v", path, err)
 			}
@@ -82,7 +82,7 @@ func testPersistOnMpathsWithBackup(t *testing.T, mpaths fs.MPI) {
 
 			// Load and check new value.
 			path := filepath.Join(mpath.Path, name)
-			_, err := jsp.Load(path, &foundValue, jsp.CksumSign(0))
+			_, err := jsp.Load(path, &foundValue, cmn.CksumSign(0))
 			tassert.Fatalf(t, err == nil || os.IsNotExist(err), "Failed loading %q, err %v", path, err)
 			if err == nil {
 				foundCnt++
@@ -92,7 +92,7 @@ func testPersistOnMpathsWithBackup(t *testing.T, mpaths fs.MPI) {
 
 			// Load and check old value
 			path = filepath.Join(mpath.Path, oldName)
-			if _, err = jsp.Load(path, &foundValue, jsp.CksumSign(0)); err == nil {
+			if _, err = jsp.Load(path, &foundValue, cmn.CksumSign(0)); err == nil {
 				oldFoundCnt++
 				tassert.Errorf(t, foundValue == value, "expected %q to be found, got %q", value, foundValue)
 				os.Remove(path)

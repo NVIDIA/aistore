@@ -109,7 +109,7 @@ func (co *configOwner) modify(ctx *configModifier) (err error) {
 func (co *configOwner) persist(config *globalConfig) error {
 	local := cmn.GCO.Get()
 	savePath := path.Join(local.ConfigDir, gconfFname)
-	if err := jsp.Save(savePath, config, jsp.PlainLocal()); err != nil {
+	if err := jsp.SaveMeta(savePath, config); err != nil {
 		return err
 	}
 	co.put(config)
@@ -140,7 +140,7 @@ func (co *configOwner) load() (err error) {
 	defer co.Unlock()
 	localConf := cmn.GCO.Get()
 	config := &globalConfig{}
-	_, err = jsp.Load(path.Join(localConf.ConfigDir, gconfFname), config, jsp.Plain())
+	_, err = jsp.LoadMeta(path.Join(localConf.ConfigDir, gconfFname), config)
 	if err == nil {
 		co.put(config)
 		return co.updateGCO()
@@ -151,7 +151,7 @@ func (co *configOwner) load() (err error) {
 	// If gconf file is missing, assume conf provided through CLI as global.
 	// NOTE: We cannot use GCO.Get() here as cmn.GCO may also contain custom config.
 	config = &globalConfig{}
-	_, err = jsp.Load(cmn.GCO.GetGlobalConfigPath(), config, jsp.Plain())
+	_, err = jsp.LoadMeta(cmn.GCO.GetGlobalConfigPath(), config)
 	if err != nil {
 		return
 	}
