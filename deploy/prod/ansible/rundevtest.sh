@@ -96,7 +96,7 @@ echo "----- K8S TESTS FINISHED WITH: ${exit_code} -----"
 
 # Clean docker images cache - it takes tens of GBs if not cleaned regularly.
 if docker -v ; then
-  docker image prune -a
+  docker image prune -a -f
 fi
 
 # Running long tests
