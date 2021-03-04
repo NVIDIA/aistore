@@ -30,7 +30,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
@@ -798,7 +797,7 @@ func (h *httprunner) setDaemonConfig(w http.ResponseWriter, r *http.Request, toU
 	var err error
 	if transient {
 		clone := cmn.GCO.Clone()
-		err = jsp.SetConfigInMem(toUpdate, clone, cmn.Daemon)
+		err = cmn.GCO.SetConfigInMem(toUpdate, clone, cmn.Daemon)
 		goto resp
 	}
 	err = h.owner.config.modifyOverride(toUpdate)
@@ -1728,8 +1727,8 @@ func (h *httprunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, caller 
 		h.owner.config.Unlock()
 		return newErrDowngrade(h.si, conf.String(), newConfig.String())
 	}
+	h.owner.config.updateGCO(newConfig)
 	h.owner.config.persist(newConfig)
-	h.owner.config.updateGCO()
 	h.owner.config.Unlock()
 	return
 }

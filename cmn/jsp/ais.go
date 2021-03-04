@@ -86,18 +86,3 @@ func LoadOverrideConfig(configDir string) (config *cmn.ConfigToUpdate, err error
 func SaveOverrideConfig(configDir string, config *cmn.ConfigToUpdate) error {
 	return SaveMeta(path.Join(configDir, cmn.OverrideConfigFname), config)
 }
-
-func SetConfigInMem(toUpdate *cmn.ConfigToUpdate, config *cmn.Config, asType string) (err error) {
-	if toUpdate.Vmodule != nil {
-		if err := cmn.SetGLogVModule(*toUpdate.Vmodule); err != nil {
-			return fmt.Errorf("failed to set vmodule = %s, err: %v", *toUpdate.Vmodule, err)
-		}
-	}
-	if toUpdate.LogLevel != nil {
-		if err := cmn.SetLogLevel(config, *toUpdate.LogLevel); err != nil {
-			return fmt.Errorf("failed to set log level = %s, err: %v", *toUpdate.LogLevel, err)
-		}
-	}
-	err = config.Apply(*toUpdate, asType)
-	return
-}

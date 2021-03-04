@@ -726,6 +726,37 @@ func (gco *globalConfigOwner) Unreg(key string) {
 	gco.lmtx.Unlock()
 }
 
+func (gco *globalConfigOwner) SetConfigInMem(toUpdate *ConfigToUpdate, config *Config, asType string) (err error) {
+	if toUpdate.Vmodule != nil {
+		if err := SetGLogVModule(*toUpdate.Vmodule); err != nil {
+			return fmt.Errorf("failed to set vmodule = %s, err: %v", *toUpdate.Vmodule, err)
+		}
+	}
+	if toUpdate.LogLevel != nil {
+		if err := SetLogLevel(config, *toUpdate.LogLevel); err != nil {
+			return fmt.Errorf("failed to set log level = %s, err: %v", *toUpdate.LogLevel, err)
+		}
+	}
+	err = config.Apply(*toUpdate, asType)
+	return
+}
+
+func (gco *globalConfigOwner) Update(cluConfig ClusterConfig) (err error) {
+	config := gco.Clone()
+	config.ClusterConfig = cluConfig
+	override := gco.GetOverrideConfig()
+	if override != nil {
+		err = config.Apply(*override, Daemon)
+	} else {
+		err = config.Validate()
+	}
+	if err != nil {
+		return
+	}
+	gco.Put(config)
+	return
+}
+
 var (
 	SupportedReactions = []string{IgnoreReaction, WarnReaction, AbortReaction}
 	supportedL4Protos  = []string{tcpProto}

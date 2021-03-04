@@ -81,13 +81,15 @@ func (co *configOwner) runPre(ctx *configModifier) (clone *globalConfig, updated
 	if updated, err = ctx.pre(ctx, clone); err != nil || !updated {
 		return
 	}
+	if err = co.updateGCO(clone); err != nil {
+		return
+	}
 	clone.Version++
 	clone.LastUpdated = time.Now().String()
 	if err := co.persist(clone); err != nil {
 		err = fmt.Errorf("FATAL: failed to persist %s: %v", clone, err)
 		return nil, false, err
 	}
-	co.updateGCO()
 	return
 }
 
@@ -117,22 +119,10 @@ func (co *configOwner) persist(config *globalConfig) error {
 }
 
 // PRECONDITION: `co` should be under lock.
-func (co *configOwner) updateGCO() (err error) {
+func (co *configOwner) updateGCO(newConfig *globalConfig) (err error) {
 	debug.AssertMutexLocked(&co.Mutex)
-	gco := cmn.GCO.Clone()
-	config := co.get().clone()
-	gco.ClusterConfig = config.ClusterConfig
-	override := cmn.GCO.GetOverrideConfig()
-	if override != nil {
-		err = gco.Apply(*override, cmn.Daemon)
-	} else {
-		err = gco.Validate()
-	}
-	if err != nil {
-		return
-	}
-	cmn.GCO.Put(gco)
-	return
+	// NOTE: GCO.Update may mutate the
+	return cmn.GCO.Update(newConfig.ClusterConfig)
 }
 
 func (co *configOwner) load() (err error) {
@@ -142,8 +132,11 @@ func (co *configOwner) load() (err error) {
 	config := &globalConfig{}
 	_, err = jsp.LoadMeta(path.Join(localConf.ConfigDir, gconfFname), config)
 	if err == nil {
+		if err = co.updateGCO(config); err != nil {
+			return
+		}
 		co.put(config)
-		return co.updateGCO()
+		return
 	}
 	if !os.IsNotExist(err) {
 		return
@@ -163,7 +156,7 @@ func (co *configOwner) modifyOverride(toUpdate *cmn.ConfigToUpdate) (err error) 
 	co.Lock()
 	defer co.Unlock()
 	clone := cmn.GCO.Clone()
-	err = jsp.SetConfigInMem(toUpdate, clone, co.daemonType)
+	err = cmn.GCO.SetConfigInMem(toUpdate, clone, co.daemonType)
 	if err != nil {
 		return
 	}

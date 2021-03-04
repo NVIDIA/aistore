@@ -1983,11 +1983,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			p.writeErrf(w, r, "failed to parse configuration to update, err: %v", err)
 			return
 		}
-		_ = transient // ignore for now
-		if err := p.owner.config.modifyOverride(toUpdate); err != nil {
-			p.writeErr(w, r, err)
-			return
-		}
+		p.setDaemonConfig(w, r, toUpdate, transient)
 	case cmn.ActShutdown:
 		smap := p.owner.smap.get()
 		isPrimary := smap.isPrimary(p.si)
