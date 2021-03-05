@@ -34,6 +34,15 @@ type (
 		xactReqBase
 		getJoggers map[string]*getJogger // mountpath joggers for GET
 	}
+
+	// Runtime EC statistics for restore xaction
+	ExtECGetStats struct {
+		AvgTime     cmn.DurationJSON `json:"ec.decode.time"`
+		ErrCount    int64            `json:"ec.decode.err.n,string"`
+		AvgObjTime  cmn.DurationJSON `json:"ec.obj.process.time"`
+		AvgQueueLen float64          `json:"ec.queue.len.n"`
+		IsIdle      bool             `json:"is_idle"`
+	}
 )
 
 // interface guard
@@ -128,31 +137,21 @@ func (r *XactGet) newGetJogger(mpath string) *getJogger {
 		parent: r,
 		mpath:  mpath,
 		client: client,
-		workCh: make(chan *Request, requestBufSizeFS),
-		stopCh: make(chan struct{}, 1),
+		workCh: make(chan *request, requestBufSizeFS),
+		stopCh: cmn.NewStopCh(),
 	}
 }
 
-func (r *XactGet) Do(req *Request, lom *cluster.LOM) error {
-	if req.Action != ActRestore {
-		return fmt.Errorf("invalid request's action %s for getxaction", req.Action)
-	}
-
-	r.stats.updateDecode()
-	return r.dispatchRequest(req, lom)
-}
-
-func (r *XactGet) dispatchRequest(req *Request, lom *cluster.LOM) error {
+func (r *XactGet) dispatchRequest(req *request, lom *cluster.LOM) error {
 	if !r.ecRequestsEnabled() {
-		err := fmt.Errorf("EC on bucket %s is being disabled, no EC requests accepted", r.bck)
 		if req.ErrCh != nil {
-			req.ErrCh <- err
+			req.ErrCh <- ErrorECDisabled
 			close(req.ErrCh)
 		}
-		return err
+		return ErrorECDisabled
 	}
 
-	cmn.Assert(req.Action == ActRestore)
+	debug.Assert(req.Action == ActRestore)
 
 	jogger, ok := r.getJoggers[lom.MpathInfo().Path]
 	cmn.AssertMsg(ok, "Invalid mountpath given in EC request")
@@ -211,13 +210,6 @@ func (r *XactGet) Run() {
 	}
 }
 
-func (r *XactGet) abortECRequestWhenDisabled(req *Request) {
-	if req.ErrCh != nil {
-		req.ErrCh <- fmt.Errorf("EC disabled, can't procced with the request on bucket %s", r.bck)
-		close(req.ErrCh)
-	}
-}
-
 func (r *XactGet) Stop(error) { r.Abort() }
 
 func (r *XactGet) stop() {
@@ -227,7 +219,6 @@ func (r *XactGet) stop() {
 	}
 
 	// Don't close bundles, they are shared between bucket's EC actions
-
 	r.Finish(nil)
 }
 
@@ -237,19 +228,16 @@ func (r *XactGet) stop() {
 // channel the error or nil. The caller may read the object after receiving
 // a nil value from channel but ecrunner keeps working - it reuploads all missing
 // slices or copies
-func (r *XactGet) Decode(req *Request, lom *cluster.LOM) {
+func (r *XactGet) decode(req *request, lom *cluster.LOM) {
+	debug.AssertMsg(req.Action == ActRestore, "invalid action for restore: "+req.Action)
+	r.stats.updateDecode()
 	req.putTime = time.Now()
 	req.tm = time.Now()
 
-	r.dispatchEncodingRequest(req, lom)
-}
-
-// Cleanup deletes all object slices or copies after the main object is removed
-func (r *XactGet) Cleanup(req *Request, lom *cluster.LOM) {
-	req.putTime = time.Now()
-	req.tm = time.Now()
-
-	r.dispatchEncodingRequest(req, lom)
+	if err := r.dispatchRequest(req, lom); err != nil {
+		glog.Errorf("Failed to restore %s: %v", lom, err)
+		freeReq(req)
+	}
 }
 
 // ClearRequests disables receiving new EC requests, they will be terminated with error
@@ -271,15 +259,6 @@ func (r *XactGet) EnableRequests() {
 	r.controlCh <- msg
 }
 
-func (r *XactGet) dispatchEncodingRequest(req *Request, lom *cluster.LOM) {
-	if !r.ecRequestsEnabled() {
-		r.abortECRequestWhenDisabled(req)
-		return
-	}
-
-	r.dispatchRequest(req, lom)
-}
-
 //
 // fsprunner methods
 //
@@ -299,14 +278,6 @@ func (r *XactGet) removeMpath(mpath string) {
 	cmn.AssertMsg(ok, "Mountpath unregister handler for EC called with invalid mountpath")
 	getJog.stop()
 	delete(r.getJoggers, mpath)
-}
-
-type ExtECGetStats struct {
-	AvgTime     cmn.DurationJSON `json:"ec.decode.time"`
-	ErrCount    int64            `json:"ec.decode.err.n,string"`
-	AvgObjTime  cmn.DurationJSON `json:"ec.obj.process.time"`
-	AvgQueueLen float64          `json:"ec.queue.len.n"`
-	IsIdle      bool             `json:"is_idle"`
 }
 
 func (r *XactGet) Stats() cluster.XactStats {

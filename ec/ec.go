@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -59,22 +60,9 @@ import (
 //
 //
 // EC local storage directories inside mountpaths:
-//		/obj/  - for main object and its replicas
-//		/ec/   - for object data and parity slices
-//		/meta/ - for metadata files
-//
-//
-// Metadata content:
-//		size - size of the original object (required for correct restoration)
-//		data - the number of data slices (unused if the object was replicated)
-//		parity - the number of parity slices
-//		copy - whether the object was replicated or erasure encoded
-//		chk - original object checksum (used to choose the correct slices when
-//			restoring the object, sort of versioning)
-//		sliceid - used if the object was encoded, the ordinal number of slice
-//			starting from 1 (0 means 'full copy' - either orignal object or
-//			its replica)
-//
+//		/%ob/ - for main object and its replicas
+//		/%ec/ - for object data and parity slices
+//		/%mt/ - for metadata files
 //
 // How protection works.
 //
@@ -139,10 +127,10 @@ const (
 
 type (
 	// request - structure to request an object to be EC'ed or restored
-	Request struct {
+	request struct {
 		LIF      cluster.LIF // object info
 		Action   string      // what to do with the object (see Act* consts)
-		ErrCh    chan error  // for final EC result
+		ErrCh    chan error  // for final EC result (used only in restore)
 		Callback cluster.OnFinishObj
 
 		putTime time.Time // time when the object is put into main queue
@@ -162,9 +150,7 @@ type (
 		CksumType  string    // object checksum type
 		CksumValue string    // object checksum value
 	}
-)
 
-type (
 	// keeps temporarily a slice of object data until it is sent to remote node
 	slice struct {
 		obj     cmn.ReadOpenCloser // the whole object or its replica
@@ -194,7 +180,34 @@ type (
 	}
 )
 
-// frees all allocated memory and removes slice's temporary file
+var (
+	emptyReq request
+	reqPool  sync.Pool
+	mm       *memsys.MMSA // memory manager and slab/SGL allocator
+
+	ErrorECDisabled          = errors.New("EC is disabled for bucket")
+	ErrorNoMetafile          = errors.New("no metafile")
+	ErrorNotFound            = errors.New("not found")
+	ErrorInsufficientTargets = errors.New("insufficient targets")
+)
+
+func allocateReq(action string, lif cluster.LIF) (req *request) {
+	if v := reqPool.Get(); v != nil {
+		req = v.(*request)
+	} else {
+		req = &request{}
+	}
+	req.Action = action
+	req.LIF = lif
+	return
+}
+
+func freeReq(req *request) {
+	*req = emptyReq
+	reqPool.Put(req)
+}
+
+// Free allocated memory and removes slice's temporary file
 func (s *slice) free() {
 	freeObject(s.obj)
 	s.obj = nil
@@ -217,7 +230,7 @@ func (s *slice) free() {
 	}
 }
 
-// decreases the number of links to the object (the initial number is set
+// Decrease the number of links to the object (the initial number is set
 // at slice creation time). If the number drops to zero the allocated
 // memory/temporary file is cleaned up
 func (s *slice) release() {
@@ -258,15 +271,6 @@ func (s *slice) reopenReader() (reader cmn.ReadOpenCloser, err error) {
 	}
 	return reader, err
 }
-
-var (
-	mm *memsys.MMSA // memory manager and slab/SGL allocator
-
-	ErrorECDisabled          = errors.New("EC is disabled for bucket")
-	ErrorNoMetafile          = errors.New("no metafile")
-	ErrorNotFound            = errors.New("not found")
-	ErrorInsufficientTargets = errors.New("insufficient targets")
-)
 
 func Init(t cluster.Target) {
 	mm = t.MMSA()

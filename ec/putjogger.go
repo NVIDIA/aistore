@@ -45,9 +45,9 @@ type (
 		buffer []byte
 		mpath  string
 
-		putCh  chan *Request // top priority operation (object PUT)
-		xactCh chan *Request // low priority operation (ec-encode)
-		stopCh chan struct{} // jogger management channel: to stop it
+		putCh  chan *request // top priority operation (object PUT)
+		xactCh chan *request // low priority operation (ec-encode)
+		stopCh *cmn.StopCh   // jogger management channel: to stop it
 
 		toDisk bool // use files or SGL
 	}
@@ -99,7 +99,7 @@ func (c *putJogger) freeResources() {
 	c.slab = nil
 }
 
-func (c *putJogger) processRequest(req *Request) {
+func (c *putJogger) processRequest(req *request) {
 	var memRequired int64
 	lom, err := req.LIF.LOM(c.parent.t.Bowner().Get())
 	defer cluster.FreeLOM(lom)
@@ -135,9 +135,11 @@ func (c *putJogger) run(wg *sync.WaitGroup) {
 		select {
 		case req := <-c.putCh:
 			c.processRequest(req)
+			freeReq(req)
 		case req := <-c.xactCh:
 			c.processRequest(req)
-		case <-c.stopCh:
+			freeReq(req)
+		case <-c.stopCh.Listen():
 			c.freeResources()
 			return
 		}
@@ -146,11 +148,10 @@ func (c *putJogger) run(wg *sync.WaitGroup) {
 
 func (c *putJogger) stop() {
 	glog.Infof("Stopping EC for mountpath: %s, bucket %s", c.mpath, c.parent.bck)
-	c.stopCh <- struct{}{}
-	close(c.stopCh)
+	c.stopCh.Close()
 }
 
-func (c *putJogger) ec(req *Request, lom *cluster.LOM) (err error) {
+func (c *putJogger) ec(req *request, lom *cluster.LOM) (err error) {
 	switch req.Action {
 	case ActSplit:
 		if err = c.encode(req, lom); err != nil {
@@ -166,10 +167,6 @@ func (c *putJogger) ec(req *Request, lom *cluster.LOM) (err error) {
 		err = fmt.Errorf("invalid EC action for putJogger: %v", req.Action)
 	}
 
-	if req.ErrCh != nil {
-		req.ErrCh <- err
-		close(req.ErrCh)
-	}
 	if err == nil {
 		c.parent.stats.updateObjTime(time.Since(req.putTime))
 	}
@@ -201,7 +198,7 @@ func (c *putJogger) splitAndDistribute(ctx *encodeCtx) error {
 }
 
 // calculates and stores data and parity slices
-func (c *putJogger) encode(req *Request, lom *cluster.LOM) error {
+func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 	var (
 		cksumValue, cksumType string
 		ecConf                = lom.Bprops().EC

@@ -33,8 +33,8 @@ type (
 		client *http.Client
 		mpath  string // Mountpath that the jogger manages
 
-		workCh chan *Request // Channel to request TOP priority operation (restore)
-		stopCh chan struct{} // Jogger management channel: to stop it
+		workCh chan *request // Channel to request TOP priority operation (restore)
+		stopCh *cmn.StopCh   // Jogger management channel: to stop it
 	}
 	restoreCtx struct {
 		lom      *cluster.LOM         // replica
@@ -65,7 +65,7 @@ func freeRestoreCtx(ctx *restoreCtx) {
 	restoreCtxPool.Put(ctx)
 }
 
-func (c *getJogger) newCtx(req *Request) (*restoreCtx, error) {
+func (c *getJogger) newCtx(req *request) (*restoreCtx, error) {
 	lom, err := req.LIF.LOM(c.parent.t.Bowner().Get())
 	ctx := allocRestoreCtx()
 	ctx.toDisk = useDisk(0 /*size of the original object is unknown*/)
@@ -95,7 +95,8 @@ func (c *getJogger) run() {
 			c.parent.IncPending()
 			c.ec(req)
 			c.parent.DecPending()
-		case <-c.stopCh:
+			freeReq(req)
+		case <-c.stopCh.Listen():
 			return
 		}
 	}
@@ -103,12 +104,11 @@ func (c *getJogger) run() {
 
 func (c *getJogger) stop() {
 	glog.Infof("stopping EC for mountpath: %s, bucket: %s", c.mpath, c.parent.bck)
-	c.stopCh <- struct{}{}
-	close(c.stopCh)
+	c.stopCh.Close()
 }
 
 // Finalize the EC restore: report an error to a caller, do housekeeping.
-func (c *getJogger) finalizeReq(req *Request, err error) {
+func (c *getJogger) finalizeReq(req *request, err error) {
 	if err != nil {
 		glog.Errorf("Error restoring %s: %v", req.LIF.Uname, err)
 	}
@@ -120,26 +120,18 @@ func (c *getJogger) finalizeReq(req *Request, err error) {
 	}
 }
 
-func (c *getJogger) ec(req *Request) {
-	var (
-		ctx *restoreCtx
-		err error
-	)
-	switch req.Action {
-	case ActRestore:
-		ctx, err = c.newCtx(req)
-		if err == nil {
-			err = c.restore(ctx)
-			c.parent.stats.updateDecodeTime(time.Since(req.tm), err != nil)
-		}
-		if err == nil {
-			c.parent.stats.updateObjTime(time.Since(req.putTime))
-			err = ctx.lom.Persist(true)
-		}
-		c.freeCtx(ctx)
-	default:
-		err = fmt.Errorf("invalid EC action for getJogger: %v", req.Action)
+func (c *getJogger) ec(req *request) {
+	debug.Assert(req.Action == ActRestore)
+	ctx, err := c.newCtx(req)
+	if err == nil {
+		err = c.restore(ctx)
+		c.parent.stats.updateDecodeTime(time.Since(req.tm), err != nil)
 	}
+	if err == nil {
+		c.parent.stats.updateObjTime(time.Since(req.putTime))
+		err = ctx.lom.Persist(true)
+	}
+	c.freeCtx(ctx)
 	c.finalizeReq(req, err)
 }
 

@@ -33,6 +33,20 @@ type (
 		xactReqBase
 		putJoggers map[string]*putJogger // mountpath joggers for PUT/DEL
 	}
+
+	// Runtime EC statistics for PUT xaction
+	ExtECPutStats struct {
+		AvgEncodeTime  cmn.DurationJSON `json:"ec.encode.time"`
+		AvgDeleteTime  cmn.DurationJSON `json:"ec.delete.time"`
+		EncodeCount    int64            `json:"ec.encode.n,string"`
+		DeleteCount    int64            `json:"ec.delete.n,string"`
+		EncodeSize     cmn.SizeJSON     `json:"ec.encode.size,string"`
+		EncodeErrCount int64            `json:"ec.encode.err.n,string"`
+		DeleteErrCount int64            `json:"ec.delete.err.n,string"`
+		AvgObjTime     cmn.DurationJSON `json:"ec.obj.process.time"`
+		AvgQueueLen    float64          `json:"ec.queue.len.n"`
+		IsIdle         bool             `json:"is_idle"`
+	}
 )
 
 // interface guard
@@ -87,13 +101,18 @@ func (r *XactPut) newPutJogger(mpath string) *putJogger {
 	return &putJogger{
 		parent: r,
 		mpath:  mpath,
-		putCh:  make(chan *Request, requestBufSizeFS),
-		xactCh: make(chan *Request, requestBufSizeEncode),
-		stopCh: make(chan struct{}, 1),
+		putCh:  make(chan *request, requestBufSizeFS),
+		xactCh: make(chan *request, requestBufSizeEncode),
+		stopCh: cmn.NewStopCh(),
 	}
 }
 
-func (r *XactPut) Do(req *Request, lom *cluster.LOM) error {
+func (r *XactPut) dispatchRequest(req *request, lom *cluster.LOM) error {
+	debug.AssertMsg(req.Action == ActDelete || req.Action == ActSplit, req.Action)
+	debug.AssertMsg(req.ErrCh == nil, "ecput does not support ErrCh")
+	if !r.ecRequestsEnabled() {
+		return ErrorECDisabled
+	}
 	switch req.Action {
 	case ActSplit:
 		r.stats.updateEncode(lom.Size())
@@ -102,20 +121,6 @@ func (r *XactPut) Do(req *Request, lom *cluster.LOM) error {
 	default:
 		return fmt.Errorf("invalid request's action %s for putxaction", req.Action)
 	}
-	return r.dispatchRequest(req, lom)
-}
-
-func (r *XactPut) dispatchRequest(req *Request, lom *cluster.LOM) error {
-	if !r.ecRequestsEnabled() {
-		err := fmt.Errorf("EC on bucket %s is being disabled, no EC requests accepted", r.bck)
-		if req.ErrCh != nil {
-			req.ErrCh <- err
-			close(req.ErrCh)
-		}
-		return err
-	}
-
-	debug.Assert(req.Action == ActDelete || req.Action == ActSplit)
 
 	jogger, ok := r.putJoggers[lom.MpathInfo().Path]
 	cmn.AssertMsg(ok, "Invalid mountpath given in EC request")
@@ -183,13 +188,6 @@ func (r *XactPut) mainLoop() {
 	}
 }
 
-func (r *XactPut) abortECRequestWhenDisabled(req *Request) {
-	if req.ErrCh != nil {
-		req.ErrCh <- fmt.Errorf("EC disabled, can't procced with the request on bucket %s", r.bck)
-		close(req.ErrCh)
-	}
-}
-
 func (r *XactPut) Stop(error) { r.Abort() }
 
 func (r *XactPut) stop() {
@@ -200,42 +198,24 @@ func (r *XactPut) stop() {
 }
 
 // Encode schedules FQN for erasure coding process
-func (r *XactPut) Encode(req *Request, lom *cluster.LOM) {
+func (r *XactPut) encode(req *request, lom *cluster.LOM) {
 	req.putTime = time.Now()
 	req.tm = time.Now()
-	if err := r.Do(req, lom); err != nil {
+	if err := r.dispatchRequest(req, lom); err != nil {
 		glog.Errorf("Failed to encode %s: %v", lom, err)
+		freeReq(req)
 	}
 }
 
 // Cleanup deletes all object slices or copies after the main object is removed
-func (r *XactPut) Cleanup(req *Request, lom *cluster.LOM) {
+func (r *XactPut) cleanup(req *request, lom *cluster.LOM) {
 	req.putTime = time.Now()
 	req.tm = time.Now()
 
-	r.dispatchDecodingRequest(req, lom)
-}
-
-func (r *XactPut) dispatchDecodingRequest(req *Request, lom *cluster.LOM) {
-	if !r.ecRequestsEnabled() {
-		r.abortECRequestWhenDisabled(req)
-		return
+	if err := r.dispatchRequest(req, lom); err != nil {
+		glog.Errorf("Failed to cleanup %s: %v", lom, err)
+		freeReq(req)
 	}
-
-	r.dispatchRequest(req, lom)
-}
-
-type ExtECPutStats struct {
-	AvgEncodeTime  cmn.DurationJSON `json:"ec.encode.time"`
-	AvgDeleteTime  cmn.DurationJSON `json:"ec.delete.time"`
-	EncodeCount    int64            `json:"ec.encode.n,string"`
-	DeleteCount    int64            `json:"ec.delete.n,string"`
-	EncodeSize     cmn.SizeJSON     `json:"ec.encode.size,string"`
-	EncodeErrCount int64            `json:"ec.encode.err.n,string"`
-	DeleteErrCount int64            `json:"ec.delete.err.n,string"`
-	AvgObjTime     cmn.DurationJSON `json:"ec.obj.process.time"`
-	AvgQueueLen    float64          `json:"ec.queue.len.n"`
-	IsIdle         bool             `json:"is_idle"`
 }
 
 func (r *XactPut) Stats() cluster.XactStats {
