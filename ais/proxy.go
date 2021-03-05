@@ -935,11 +935,9 @@ func (p *proxyrunner) hpostAllBuckets(w http.ResponseWriter, r *http.Request, ms
 
 	switch msg.Action {
 	case cmn.ActSummaryBck:
-		args := bckInitArgs{w: w, r: r, p: p, perms: cmn.AccessBckHEAD, msg: msg}
-		bck, errCode, err := args.init("")
-
-		// Empty bucket name with StatusNotFound implies query bucket - ignore error and proceed.
-		if err != nil && errCode != http.StatusNotFound && bck.Name == "" {
+		bck, err := newBckFromQuery("", r.URL.Query())
+		if err != nil {
+			p.writeErr(w, r, err)
 			return
 		}
 		p.bucketSummary(w, r, bck, msg)

@@ -574,13 +574,15 @@ func (t *targetrunner) httpbcksummary(w http.ResponseWriter, r *http.Request, ms
 	)
 	t.ensureLatestSmap(msg, r)
 	if len(apiItems) == 0 {
+		// Summary for query buckets.
 		bck, err = newBckFromQuery("", query)
 	} else {
+		// Summary for specific bucket.
 		bck, err = newBckFromQuery(apiItems[0], query)
-		if err != nil {
+		if err == nil {
 			if err = bck.Init(t.owner.bmd); err != nil {
 				if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
-					t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
+					t.BMDVersionFixup(r, cmn.Bck{}, true /*sleep*/)
 					err = bck.Init(t.owner.bmd)
 				}
 			}
