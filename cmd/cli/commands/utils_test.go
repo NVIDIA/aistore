@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/urfave/cli"
 )
 
@@ -289,115 +290,177 @@ func TestMakePairsErrors(t *testing.T) {
 	}
 }
 
-func TestParseBckObjectURI(t *testing.T) {
-	tests := []struct {
-		uri         string
-		query       bool
-		expectedErr bool
-		expectedBck cmn.Bck
-		expectedObj string
+func TestParseQueryBckURI(t *testing.T) {
+	positiveTests := []struct {
+		uri string
+		bck cmn.QueryBcks
 	}{
-		{
-			uri: "",
-		},
-		{
-			uri:         "ais://",
-			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS},
-		},
-		{
-			uri:         "ais://@uuid",
-			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.Ns{UUID: "uuid"}},
-		},
-		{
-			uri:         "ais://@uuid#namespace/bucket/object",
-			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket", Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
-			expectedObj: "object",
-		},
-		{
-			uri:         "ais://@uuid#",
-			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.Ns{UUID: "uuid"}},
-		},
-		{
-			uri:         "ais://@uuid#/",
-			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.Ns{UUID: "uuid"}},
-		},
-		{
-			uri:         "ais://@#/",
-			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS},
-		},
-		{
-			uri:         "ais://@#",
-			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS},
-		},
-		{
-			uri:         "@#",
-			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS},
-		},
-		{
-			uri:         "ais://@",
-			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS},
-		},
-		{
-			uri:         "ais://@",
-			query:       true,
-			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsAnyRemote},
-		},
-		{
-			uri:         "ais://@#/bucket",
-			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
-		},
-		{
-			uri:         "ais://@uuid#namespace/bucket",
-			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket", Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
-		},
-		{
-			uri:         "@uuid#namespace",
-			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
-		},
-		{
-			uri:         "ais://bucket",
-			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
-		},
-		{
-			uri:         "bucket",
-			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
-		},
-		{
-			uri:         "bucket/object",
-			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
-			expectedObj: "object",
-		},
-		{
-			uri:         "aws://",
-			expectedBck: cmn.Bck{Provider: cmn.ProviderAmazon},
-		},
-		{
-			uri:         "az:///",
-			expectedBck: cmn.Bck{Provider: cmn.ProviderAzure},
-		},
-		// errors
-		{uri: "ais://%something", expectedErr: true},
-		{uri: "aiss://", expectedErr: true},
-		{uri: "ais:/", expectedErr: true},
+		{uri: "", bck: cmn.QueryBcks{}},
+		{uri: "://", bck: cmn.QueryBcks{}},                                             // TODO: This shouldn't be allowed (#1090).
+		{uri: "bucket", bck: cmn.QueryBcks{Provider: cmn.ProviderAIS, Name: "bucket"}}, // TODO: This shouldn't be allowed (#1090).
+		{uri: "ais://", bck: cmn.QueryBcks{Provider: cmn.ProviderAIS}},
+		{uri: "ais://#ns", bck: cmn.QueryBcks{Provider: cmn.ProviderAIS, Ns: cmn.Ns{Name: "ns"}}},
+		{uri: "ais://@uuid", bck: cmn.QueryBcks{Provider: cmn.ProviderAIS, Ns: cmn.Ns{UUID: "uuid"}}},
+		{uri: "ais://@uuid#ns", bck: cmn.QueryBcks{Provider: cmn.ProviderAIS, Ns: cmn.Ns{Name: "ns", UUID: "uuid"}}},
+		{uri: "ais://bucket", bck: cmn.QueryBcks{Provider: cmn.ProviderAIS, Name: "bucket"}},
+		{uri: "hdfs://bucket", bck: cmn.QueryBcks{Provider: cmn.ProviderHDFS, Name: "bucket"}},
+		{uri: "ais://#ns/bucket", bck: cmn.QueryBcks{Provider: cmn.ProviderAIS, Name: "bucket", Ns: cmn.Ns{Name: "ns"}}},
+		{uri: "ais://@uuid#ns/bucket", bck: cmn.QueryBcks{Provider: cmn.ProviderAIS, Name: "bucket", Ns: cmn.Ns{Name: "ns", UUID: "uuid"}}},
+		{uri: "http://web.url/dataset", bck: cmn.QueryBcks{Provider: cmn.ProviderHTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
+		{uri: "https://web.url/dataset", bck: cmn.QueryBcks{Provider: cmn.ProviderHTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
+	}
+	for _, test := range positiveTests {
+		bck, err := parseQueryBckURI(&cli.Context{}, test.uri)
+		tassert.Errorf(t, err == nil, "failed on %s with err: %v", test.uri, err)
+		tassert.Errorf(t, test.bck.Equal(cmn.Bck(bck)), "failed on %s buckets are not equal (expected: %q, got: %q)", test.uri, test.bck, bck)
 	}
 
-	for _, test := range tests {
-		bck, obj, err := cmn.ParseBckObjectURI(test.uri, test.query)
-		if err == nil && test.expectedErr {
-			t.Errorf("expected error for input: %s", test.uri)
-			continue
-		} else if err != nil && !test.expectedErr {
-			t.Errorf("unpexpected error for input: %s, err: %v", test.uri, err)
-			continue
-		} else if err != nil && test.expectedErr {
-			continue
-		}
+	negativeTests := []struct {
+		uri string
+	}{
+		{uri: ":/"},
+		{uri: "aiss://"},
+		{uri: "aiss://bucket"},
+		{uri: "ais://bucket/objname"},
+		{uri: "ais:///objectname"},
+		{uri: "ftp://unsupported"},
+	}
+	for _, test := range negativeTests {
+		bck, err := parseQueryBckURI(&cli.Context{}, test.uri)
+		tassert.Errorf(t, err != nil, "expected error on %s (bck: %q)", test.uri, bck)
+	}
+}
 
-		if !bck.Equal(test.expectedBck) {
-			t.Errorf("buckets does not match got: %v, expected: %v (input: %s)", bck, test.expectedBck, test.uri)
-		}
-		if obj != test.expectedObj {
-			t.Errorf("object names does not match got: %s, expected: %s (input: %s)", obj, test.expectedObj, test.uri)
-		}
+func TestParseBckURI(t *testing.T) {
+	positiveTests := []struct {
+		uri string
+		bck cmn.Bck
+	}{
+		{uri: "bucket", bck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"}},    // TODO: This shouldn't be allowed (#1090).
+		{uri: "://bucket", bck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"}}, // TODO: This shouldn't be allowed (#1090).
+		{uri: "ais://bucket", bck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"}},
+		{uri: "hdfs://bucket", bck: cmn.Bck{Provider: cmn.ProviderHDFS, Name: "bucket"}},
+		{uri: "ais://#ns/bucket", bck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket", Ns: cmn.Ns{Name: "ns"}}},
+		{uri: "ais://@uuid#ns/bucket", bck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket", Ns: cmn.Ns{Name: "ns", UUID: "uuid"}}},
+		{uri: "http://web.url/dataset", bck: cmn.Bck{Provider: cmn.ProviderHTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
+		{uri: "https://web.url/dataset", bck: cmn.Bck{Provider: cmn.ProviderHTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
+	}
+	for _, test := range positiveTests {
+		bck, err := parseBckURI(&cli.Context{}, test.uri)
+		tassert.Errorf(t, err == nil, "failed on %s with err: %v", test.uri, err)
+		tassert.Errorf(t, test.bck.Equal(bck), "failed on %s buckets are not equal (expected: %q, got: %q)", test.uri, test.bck, bck)
+	}
+
+	negativeTests := []struct {
+		uri string
+	}{
+		{uri: ""},
+		{uri: "://"},
+		{uri: "ais://"},
+		{uri: "ais:///"},
+		{uri: "aiss://bucket"},
+		{uri: "ais://bucket/objname"},
+		{uri: "ais://#ns"},
+		{uri: "ais://@uuid#ns"},
+		{uri: "ais://@uuid"},
+		{uri: "ais:///objectname"},
+		{uri: "ftp://unsupported"},
+	}
+	for _, test := range negativeTests {
+		bck, err := parseBckURI(&cli.Context{}, test.uri)
+		tassert.Errorf(t, err != nil, "expected error on %s (bck: %q)", test.uri, bck)
+	}
+}
+
+func TestParseBckObjectURI(t *testing.T) {
+	positiveTests := []struct {
+		uri        string
+		optObjName bool
+
+		bck     cmn.Bck
+		objName string
+	}{
+		{ // TODO: This shouldn't be allowed (#1090).
+			uri: "bucket", optObjName: true,
+			bck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
+		},
+		{ // TODO: This shouldn't be allowed (#1090).
+			uri: "://bucket", optObjName: true,
+			bck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
+		},
+		{
+			uri: "ais://bucket", optObjName: true,
+			bck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
+		},
+		{
+			uri: "ais://bucket/object_name", optObjName: true,
+			bck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"}, objName: "object_name",
+		},
+		{
+			uri: "ais://bucket/object_name",
+			bck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"}, objName: "object_name",
+		},
+		{
+			uri: "hdfs://bucket/object_name/something",
+			bck: cmn.Bck{Provider: cmn.ProviderHDFS, Name: "bucket"}, objName: "object_name/something",
+		},
+		{
+			uri:     "ais://#ns/bucket/a/b/c",
+			bck:     cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket", Ns: cmn.Ns{Name: "ns"}},
+			objName: "a/b/c",
+		},
+		{
+			uri: "ais://#ns/bucket", optObjName: true,
+			bck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket", Ns: cmn.Ns{Name: "ns"}},
+		},
+		{
+			uri:     "ais://@uuid#ns/bucket/object",
+			bck:     cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket", Ns: cmn.Ns{Name: "ns", UUID: "uuid"}},
+			objName: "object",
+		},
+		{
+			uri:     "http://web.url/dataset/object_name",
+			bck:     cmn.Bck{Provider: cmn.ProviderHTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"},
+			objName: "object_name",
+		},
+		{
+			uri:     "https://web.url/dataset/object_name",
+			bck:     cmn.Bck{Provider: cmn.ProviderHTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"},
+			objName: "object_name",
+		},
+	}
+	for _, test := range positiveTests {
+		bck, objName, err := parseBckObjectURI(&cli.Context{}, test.uri, test.optObjName)
+		tassert.Errorf(t, err == nil, "failed on %s with err: %v", test.uri, err)
+		tassert.Errorf(t, test.bck.Equal(bck), "failed on %s buckets are not equal (expected: %q, got: %q)", test.uri, test.bck, bck)
+		tassert.Errorf(t, test.objName == objName, "failed on %s object names are not equal (expected: %q, got: %q)", test.uri, test.objName, objName)
+	}
+
+	negativeTests := []struct {
+		uri        string
+		optObjName bool
+	}{
+		{uri: ""},
+		{uri: "://"},
+		{uri: "://bucket"},
+		{uri: "://", optObjName: true},
+		{uri: "ais://"},
+		{uri: "ais:///"},
+		{uri: "aiss://bucket"},
+		{uri: "ais:///objectname"},
+		{uri: "ais:///objectname", optObjName: true},
+		{uri: "ais://#ns"},
+		{uri: "ais://#ns/bucket"},
+		{uri: "ais://@uuid"},
+		{uri: "ais://@uuid#ns"},
+		{uri: "ais://@uuid#ns/bucket"},
+		{uri: "ftp://unsupported"},
+		{uri: "bucket"},
+		{uri: "ais://bucket"},
+		{uri: "hdfs://bucket"},
+	}
+	for _, test := range negativeTests {
+		bck, objName, err := parseBckObjectURI(&cli.Context{}, test.uri, test.optObjName)
+		tassert.Errorf(t, err != nil, "expected error on %s (bck: %q, obj_name: %q)", test.uri, bck, objName)
 	}
 }
