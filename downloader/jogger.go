@@ -51,18 +51,23 @@ func newJogger(d *dispatcher, mpath string) *jogger {
 }
 
 func (j *jogger) jog() {
-	glog.Infof("Starting jogger for mpath %q.", j.mpath)
+	glog.Infof("[downloader] starting jogger for mpath %q", j.mpath)
 	for {
-		t, skip := j.q.get()
+		t := j.q.get()
 		if t == nil {
 			break
 		}
-		if skip {
+
+		j.mtx.Lock()
+		// Check if the tasks exists to ensure that the job wasn't removed while
+		// we waited on the queue. We must do it under jogger lock to ensure that
+		// there is no race between aborting job and marking it as being handled.
+		if !j.checkTaskExists(t) {
 			t.job.throttler().release()
+			j.mtx.Unlock()
 			continue
 		}
 
-		j.mtx.Lock()
 		if j.stopAgent {
 			// Jogger has been stopped so we must mark task as failed. We do not
 			// `break` here because we want to drain the queue, otherwise some
@@ -138,6 +143,12 @@ func (j *jogger) abortJob(id string) {
 	}
 }
 
+func (j *jogger) checkTaskExists(t *singleObjectTask) (exists bool) {
+	j.q.RLock()
+	defer j.q.RUnlock()
+	return j.q.exists(t.jobID(), t.uid())
+}
+
 // Returns `true` if there is any pending task for a given job (either running
 // or still in queue), `false` otherwise.
 func (j *jogger) pending(id string) bool {
@@ -166,18 +177,11 @@ func (q *queue) putCh(t *singleObjectTask) (ok bool, ch chan<- *singleObjectTask
 	return true, q.ch
 }
 
-// Get tries to find first task which was not yet Aborted
-func (q *queue) get() (foundTask *singleObjectTask, skip bool) {
+// get retrieves first task in the queue.
+func (q *queue) get() (foundTask *singleObjectTask) {
 	t, ok := <-q.ch
 	if !ok {
-		return nil, false
-	}
-
-	q.RLock()
-	defer q.RUnlock()
-	if !q.exists(t.jobID(), t.uid()) {
-		// The job was removed so we must skip tasks which no longer exist.
-		return t, true
+		return nil
 	}
 
 	// NOTE: We do not delete task here but postpone it until the task
@@ -187,7 +191,7 @@ func (q *queue) get() (foundTask *singleObjectTask, skip bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.downloadCtx = ctx
 	t.cancelFunc = cancel
-	return t, false
+	return t
 }
 
 func (q *queue) delete(t *singleObjectTask) bool {
@@ -213,7 +217,6 @@ func (q *queue) stopped() bool {
 // NOTE: Should be called under `q.RLock()`.
 func (q *queue) exists(jobID, requestUID string) bool {
 	jobM, ok := q.m[jobID]
-
 	if !ok {
 		return false
 	}
