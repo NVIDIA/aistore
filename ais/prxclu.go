@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -290,7 +291,13 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		p.reg.pool = append(p.reg.pool, regReq)
 		p.reg.mtx.Unlock()
 	}
+	// Note: The node ID is obtained from the node itself, api calls are not trusted.
+	// Any aisnode will either detect or generate an ID for itself during startup.
+	// For more, see initDaemonID() in ais/daemon.go.
 	nsi := regReq.SI
+	if userRegister {
+		nsi.DaemonID = p.getDaemonInfo(nsi).DaemonID
+	}
 	if err := nsi.Validate(); err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -371,10 +378,13 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		p.writeJSON(w, r, meta, path.Join(cmn.ActRegTarget, nsi.ID()) /* tag */)
 	}
 
-	// Return the rebalance ID when target is registered by user.
-	if !isProxy && userRegister {
-		rebID := p.updateAndDistribute(nsi, msg, nsi.Flags)
-		w.Write([]byte(rebID))
+	// Return the node ID and rebalance ID when target is registered by user.
+	if userRegister {
+		var rebID string
+		if !isProxy {
+			rebID = p.updateAndDistribute(nsi, msg, nsi.Flags)
+		}
+		p.writeJSON(w, r, api.JoinNodeResult{DaemonID: nsi.Name(), RebalanceID: rebID}, "")
 		return
 	}
 

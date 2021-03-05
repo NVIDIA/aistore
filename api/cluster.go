@@ -16,6 +16,13 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
+type (
+	JoinNodeResult struct {
+		DaemonID    string `json:"daemon_id"`
+		RebalanceID string `json:"rebalance_id"`
+	}
+)
+
 func GetProxyReadiness(params BaseParams) error {
 	params.Method = http.MethodGet
 	return DoHTTPRequest(ReqParams{
@@ -92,14 +99,15 @@ func GetRemoteAIS(baseParams BaseParams) (aisInfo cmn.BackendInfoAIS, err error)
 }
 
 // JoinCluster add a node to a cluster.
-func JoinCluster(baseParams BaseParams, nodeInfo *cluster.Snode) (rebID string, err error) {
+func JoinCluster(baseParams BaseParams, nodeInfo *cluster.Snode) (rebID, daemonID string, err error) {
+	var info JoinNodeResult
 	baseParams.Method = http.MethodPost
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathClusterUserReg.S,
 		Body:       cos.MustMarshal(nodeInfo),
-	}, &rebID)
-	return
+	}, &info)
+	return info.RebalanceID, info.DaemonID, err
 }
 
 // SetPrimaryProxy given a daemonID sets that corresponding proxy as the

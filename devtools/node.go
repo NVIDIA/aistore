@@ -21,7 +21,7 @@ func JoinCluster(ctx *Ctx, proxyURL string, node *cluster.Snode, timeout time.Du
 	if err != nil {
 		return "", err
 	}
-	if rebID, err = api.JoinCluster(baseParams, node); err != nil {
+	if rebID, _, err = api.JoinCluster(baseParams, node); err != nil {
 		return
 	}
 

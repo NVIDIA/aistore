@@ -187,7 +187,7 @@ const (
 	detachRemoteAISArgument  = aliasArgument
 	diskAttachArgument       = daemonMountpathPairArgument
 	diskDetachArgument       = daemonMountpathPairArgument
-	joinNodeArgument         = "IP:PORT " + optionalDaemonIDArgument
+	joinNodeArgument         = "IP:PORT"
 	startDownloadArgument    = "SOURCE DESTINATION"
 	jsonSpecArgument         = "JSON_SPECIFICATION"
 
@@ -366,9 +366,9 @@ var (
 	}
 
 	// Node
-	nodeTypeFlag = cli.StringFlag{
-		Name: "type", Required: true,
-		Usage: "node type: proxy or target",
+	roleFlag = cli.StringFlag{
+		Name: "role", Required: true,
+		Usage: "role of this AIS daemon: proxy or target",
 	}
 	shutdownFlag = cli.BoolFlag{
 		Name:  "shutdown",

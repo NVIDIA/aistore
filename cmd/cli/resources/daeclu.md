@@ -96,31 +96,34 @@ Target		Disk	Read		Write		%Util
 
 ## Join a node
 
-`ais cluster membership join --type=proxy IP:PORT [DAEMON_ID]`
+`ais cluster membership join --type=proxy IP:PORT`
 
-Join a proxy in the cluster. If `DAEMON_ID` isn't given, it will be randomly generated.
+Join a proxy to the cluster.
 
-`ais cluster membership join --type=target IP:PORT [DAEMON_ID]`
+`ais cluster membership join --type=target IP:PORT`
 
-Join a target in the cluster. If `DAEMON_ID` isn't given, it will be randomly generated.
+Join a target to the cluster.
+
+Note: The node will try to join the cluster using an ID it detects (either in the filesystem's xattrs or on disk) or generates for itself.
+If you would like to specify an ID, you can do so while starting the [`aisnode` executable](/docs/command_line.md).
 
 ### Examples
 
 #### Join node
 
-Join a proxy node with ID `23kfa10f` and socket address `192.168.0.185:8086`
+Join a proxy node with socket address `192.168.0.185:8086`
 
 ```console
-$ ais cluster membership join --type=proxy 192.168.0.185:8086 23kfa10f
+$ ais cluster membership join --type=proxy 192.168.0.185:8086
 Proxy with ID "23kfa10f" successfully joined the cluster.
 ```
 
 ## Remove a node
 
+Temporarily remove an existing node from the cluster:
+
 `ais cluster membership start-maintenance DAEMON_ID`
 `ais cluster membership stop-maintenance DAEMON_ID`
-
-Temporarily remove an existing node from the cluster.
 
 Starting maintenance puts the node in maintenance mode, and the cluster gradually transitions to
 operating without the specified node (which is labeled `maintenance` in the cluster map). Stopping
@@ -128,11 +131,16 @@ maintenance will revert this.
 
 `ais cluster membership shutdown DAEMON_ID`
 
-Permanently remove an existing node from the cluster.
+Shutting down a node will put the node in maintenance mode first, and then shut down the `aisnode`
+process on the node.
+
+
+Permanently remove an existing node from the cluster:
+
+`ais cluster membership decommission DAEMON_ID`
 
 Decommissioning a node will safely remove a node from the cluster by triggering a cluster-wide
 rebalance first. This can be avoided by specifying `--no-rebalance`.
-Additionally, specifying `--shutdown` will also stop the node's `aisnode process.
 
 
 ### Options
@@ -152,7 +160,7 @@ $ ais cluster membership decommission 23kfa10f
 Node with ID "23kfa10f" has been successfully removed from the cluster.
 ```
 
-To also end the `aisnode` process on a given node, specify the `--shutdown` flag:
+To also end the `aisnode` process on a given node, use the `shutdown` command:
 ```console
 $ ais cluster membership shutdown 23kfa10f
 ```
