@@ -2047,15 +2047,19 @@ func (h *httprunner) selectBMDBuckets(bmd *bucketMD, query cmn.QueryBcks) cmn.Bu
 }
 
 func newBckFromQuery(bckName string, query url.Values) (*cluster.Bck, error) {
-	provider, err := cmn.NormalizeProvider(query.Get(cmn.URLParamProvider))
-	if err != nil {
-		return nil, err
-	}
 	var (
+		provider  = query.Get(cmn.URLParamProvider)
 		namespace = cmn.ParseNsUname(query.Get(cmn.URLParamNamespace))
-		bck       = cluster.NewBck(bckName, provider, namespace)
+		bck       = cmn.Bck{Name: bckName, Provider: provider, Ns: namespace}
 	)
-	return bck, nil
+	// TODO: We should call `bck.Validate` here but this function is also used
+	//  for getting `cmn.QueryBcks` from query params.
+	if bck.Provider != "" {
+		if err := bck.ValidateProvider(); err != nil {
+			return nil, err
+		}
+	}
+	return cluster.NewBckEmbed(bck), nil
 }
 
 func newBckFromQueryUname(query url.Values, uparam string) (*cluster.Bck, error) {
@@ -2067,11 +2071,9 @@ func newBckFromQueryUname(query url.Values, uparam string) (*cluster.Bck, error)
 	if objName != "" {
 		return nil, fmt.Errorf("bucket %s: unexpected non-empty object name %q", bck, objName)
 	}
-	provider, err := cmn.NormalizeProvider(bck.Provider)
-	if err != nil {
+	if err := bck.Validate(); err != nil {
 		return nil, err
 	}
-	bck.Provider = provider
 	return cluster.NewBckEmbed(bck), nil
 }
 

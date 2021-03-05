@@ -718,10 +718,6 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			p.writeErrf(w, r, "cannot rename bucket %q, it is not an AIS bucket", bckFrom)
 			return
 		}
-		if err := bckTo.Validate(); err != nil {
-			p.writeErr(w, r, err)
-			return
-		}
 		if bckTo.IsRemote() {
 			p.writeErrf(w, r, "destination bucket %q must be an AIS bucket", bckTo)
 			return

@@ -48,10 +48,9 @@ func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.BucketProps) *Bck
 		props *cmn.BucketProps
 		err   error
 	)
+
 	provider, err = cmn.NormalizeProvider(provider)
-	if err != nil {
-		cos.AssertNoErr(err)
-	}
+	cos.AssertNoErr(err)
 
 	bck := cmn.Bck{Name: name, Provider: provider, Ns: ns}
 	if len(optProps) > 0 {
@@ -151,6 +150,10 @@ func (b *Bck) Init(bowner Bowner) (err error) {
 }
 
 func (b *Bck) InitNoBackend(bowner Bowner) (err error) {
+	if err := b.Validate(); err != nil {
+		return err
+	}
+
 	bmd := bowner.Get()
 	if b.Provider == "" {
 		bmd.initBckAnyProvider(b)

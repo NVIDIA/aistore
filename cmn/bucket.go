@@ -127,11 +127,12 @@ func NormalizeProvider(provider string) (string, error) {
 		return ProviderAzure, nil
 	case GSScheme:
 		return ProviderGoogle, nil
+	default:
+		if !isValidProvider(provider) {
+			return "", NewErrorInvalidBucketProvider(Bck{Provider: provider})
+		}
+		return provider, nil
 	}
-	if err := ValidateProvider(provider); err != nil {
-		return "", err
-	}
-	return provider, nil
 }
 
 // Parses "[provider://][@uuid#namespace][/][bucketName[/objectName]]"
@@ -286,18 +287,15 @@ func (b *Bck) ValidateName() (err error) {
 }
 
 func (b *Bck) ValidateProvider() error {
-	if _, ok := Providers[b.Provider]; ok {
+	if isValidProvider(b.Provider) {
 		return nil
 	}
 	return NewErrorInvalidBucketProvider(*b)
 }
 
-// FIXME: Remove duplication with `bck.ValidateProvider()`.
-func ValidateProvider(provider string) error {
-	if _, ok := Providers[provider]; ok {
-		return nil
-	}
-	return NewErrorInvalidBucketProvider(Bck{Provider: provider})
+func isValidProvider(provider string) bool {
+	_, exists := Providers[provider]
+	return exists
 }
 
 func (b Bck) String() string {

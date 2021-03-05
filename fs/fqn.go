@@ -60,12 +60,11 @@ func ParseFQN(fqn string) (parsed ParsedFQN, err error) {
 				err = fmt.Errorf("invalid fqn %s: bad provider %q", fqn, item)
 				return
 			}
-			item = item[1:]
-			if err = cmn.ValidateProvider(item); err != nil {
+			parsed.Bck.Provider = item[1:]
+			if err = parsed.Bck.ValidateProvider(); err != nil {
 				err = fmt.Errorf("invalid fqn %s, err: %v", fqn, err)
 				return
 			}
-			parsed.Bck.Provider = item
 		case 1: // namespace or bucket name
 			if item == "" {
 				err = fmt.Errorf("invalid fqn %s: bad bucket name (or namespace)", fqn)
