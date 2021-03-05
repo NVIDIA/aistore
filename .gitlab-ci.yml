@@ -192,18 +192,6 @@ test:cloud:hdfs:
     - ais bucket create "${BUCKET}" --bucket-props="extra.hdfs.ref_directory=/"
     - make test-long
 
-test:soak:
-  stage: test-long
-  tags:
-    - ais
-  timeout: 10m
-  only:
-    - schedules
-  script:
-    - make aisloader
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
-    - FLAGS="--short --rec-cycles=1" make test-soak
-
 test:aisloader:
   stage: test-long
   tags:
@@ -216,18 +204,6 @@ test:aisloader:
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
     - sleep 10 # make sure that cluster properly starts
     - FLAGS="--duration=5m" make test-aisloader
-
-# TODO: The job is for now disabled because it gets stuck on memsys benchmarks.
-#test:bench:
-#  stage: test-long
-#  tags:
-#    - ais
-#  only:
-#    - schedules
-#  script:
-#    - go get -u golang.org/x/tools/cmd/benchcmp
-#    - make test-bench
-
 
 # Kubernetes stages
 
