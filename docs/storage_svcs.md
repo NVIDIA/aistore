@@ -108,16 +108,9 @@ $ ais bucket props mybucket ec.enabled=true
 check that EC properties are applied:
 
 ```console
-$ ais show bucket mybucket
-Property        Value
-========        =====
-Provider        ais
-Access          GET,PUT,DELETE,HEAD,ColdGET
-Checksum        Type: xxhash | Validate: ColdGET
-Mirror          Disabled
-EC              3:3 (256KiB)
-LRU             Disabled
-Versioning      Disabled
+$ ais show bucket mybucket ec
+PROPERTY	 VALUE
+ec		 3:3 (256KiB)
 ```
 
 ### Limitations
