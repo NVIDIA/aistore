@@ -273,7 +273,7 @@ func TestMoveToTrash(t *testing.T) {
 func TestMoveMarkers(t *testing.T) {
 	tests := []struct {
 		name string
-		f    func(string) (*fs.MountpathInfo, error)
+		f    func(string, ...func()) (*fs.MountpathInfo, error)
 	}{
 		{name: "remove", f: fs.Remove},
 		{name: "disable", f: fs.Disable},

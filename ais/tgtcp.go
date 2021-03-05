@@ -86,12 +86,6 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 	if err = jsoniter.Unmarshal(body, &regMeta); err != nil {
 		return fmt.Errorf(cmn.FmtErrUnmarshal, t.si, "reg-meta", cmn.BytesHead(body), err)
 	}
-	if err = fs.SetDaemonIDXattrAllMpaths(t.si.ID()); err != nil {
-		cos.ExitLogf("%v", err)
-	}
-	if _, err = fs.CreateNewVMD(t.si.ID()); err != nil {
-		cos.ExitLogf("%v", err)
-	}
 
 	// There's a window of time between:
 	// a) target joining existing cluster and b) cluster starting to rebalance itself
@@ -336,6 +330,18 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 				t.writeErr(w, r, err)
 				return
 			}
+
+			// TODO: remove setting DaemonID and Create VMD logic.
+			// When a target is decommissioned, metadata (including VMD) is removed.
+			// In tests, if we restore the decommissioned target without restarting, we need to re-create VMD to ensure correct node behavior.
+			if err = fs.SetDaemonIDXattrAllMpaths(t.si.ID()); err != nil {
+				cos.ExitLogf("%v", err)
+			}
+
+			if _, err = fs.CreateNewVMD(t.si.ID()); err != nil {
+				cos.ExitLogf("%v", err)
+			}
+
 			caller := r.Header.Get(cmn.HeaderCallerName)
 			if err := t.applyRegMeta(body, caller); err != nil {
 				t.writeErr(w, r, err)

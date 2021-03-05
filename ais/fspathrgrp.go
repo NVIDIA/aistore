@@ -8,6 +8,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
@@ -36,7 +37,8 @@ func (g *fsprungroup) enableMountpath(mpath string) (enabled bool, err error) {
 		gfnActive    = g.t.gfn.local.Activate()
 		enabledMpath *fs.MountpathInfo
 	)
-	if enabledMpath, err = fs.Enable(mpath); err != nil || enabledMpath == nil {
+	enabledMpath, err = fs.Enable(mpath, g.redistributeMD)
+	if err != nil || enabledMpath == nil {
 		if !gfnActive {
 			g.t.gfn.local.Deactivate()
 		}
@@ -54,7 +56,8 @@ func (g *fsprungroup) disableMountpath(mpath string) (disabled bool, err error) 
 		gfnActive     = g.t.gfn.local.Activate()
 		disabledMpath *fs.MountpathInfo
 	)
-	if disabledMpath, err = fs.Disable(mpath); err != nil || disabledMpath == nil {
+	disabledMpath, err = fs.Disable(mpath, g.redistributeMD)
+	if err != nil || disabledMpath == nil {
 		if !gfnActive {
 			g.t.gfn.local.Deactivate()
 		}
@@ -72,7 +75,8 @@ func (g *fsprungroup) addMountpath(mpath string) (err error) {
 		gfnActive  = g.t.gfn.local.Activate()
 		addedMpath *fs.MountpathInfo
 	)
-	if addedMpath, err = fs.Add(mpath, g.t.si.ID()); err != nil || addedMpath == nil {
+	addedMpath, err = fs.Add(mpath, g.t.si.ID(), g.redistributeMD)
+	if err != nil || addedMpath == nil {
 		if !gfnActive {
 			g.t.gfn.local.Deactivate()
 		}
@@ -90,7 +94,8 @@ func (g *fsprungroup) removeMountpath(mpath string) (err error) {
 		gfnActive    = g.t.gfn.local.Activate()
 		removedMpath *fs.MountpathInfo
 	)
-	if removedMpath, err = fs.Remove(mpath); err != nil || removedMpath == nil {
+	removedMpath, err = fs.Remove(mpath, g.redistributeMD)
+	if err != nil || removedMpath == nil {
 		if !gfnActive {
 			g.t.gfn.local.Deactivate()
 		}
@@ -110,7 +115,6 @@ func (g *fsprungroup) addMpathEvent(action string, mpath *fs.MountpathInfo) {
 		xreg.RenewMakeNCopies(g.t, "add-mp")
 	}()
 
-	g.redistributeMD()
 	g.checkEnable(action, mpath.Path)
 }
 
@@ -118,8 +122,6 @@ func (g *fsprungroup) delMpathEvent(action string, mpath *fs.MountpathInfo) {
 	xreg.AbortAllMountpathsXactions()
 
 	go mpath.EvictLomCache()
-	g.redistributeMD()
-
 	if g.checkZeroMountpaths(action) {
 		return
 	}
@@ -134,14 +136,13 @@ func (g *fsprungroup) delMpathEvent(action string, mpath *fs.MountpathInfo) {
 
 func (g *fsprungroup) redistributeMD() {
 	if !hasEnoughBMDCopies() {
-		g.t.owner.bmd.Lock()
-		err := g.t.owner.bmd.persist()
-		g.t.owner.bmd.Unlock()
-		if err != nil {
+		if err := g.t.owner.bmd.persist(); err != nil {
+			debug.AssertNoErr(err)
 			cos.ExitLogf("%v", err)
 		}
 	}
 	if _, err := fs.CreateNewVMD(g.t.si.ID()); err != nil {
+		debug.AssertNoErr(err)
 		cos.ExitLogf("%v", err)
 	}
 }

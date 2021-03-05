@@ -49,9 +49,6 @@ func newVMD(expectedSize int) *VMD {
 }
 
 func CreateNewVMD(daemonID string) (vmd *VMD, err error) {
-	mfs.mu.Lock()
-	defer mfs.mu.Unlock()
-
 	available, disabled := Get()
 	vmd = newVMD(len(available))
 	vmd.DaemonID = daemonID
