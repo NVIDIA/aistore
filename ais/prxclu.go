@@ -520,9 +520,9 @@ func (p *proxyrunner) _updFinal(ctx *smapModifier, clone *smapX) {
 		bmd    = p.owner.bmd.get()
 		config = p.owner.config.get()
 		aisMsg = p.newAmsg(ctx.msg, clone, bmd)
-		pairs  = []revsPair{{clone, aisMsg}, {bmd, aisMsg}, {config, aisMsg}}
+		pairs  = make([]revsPair, 0, 5)
 	)
-
+	pairs = append(pairs, revsPair{clone, aisMsg}, revsPair{bmd, aisMsg}, revsPair{config, aisMsg})
 	if ctx.rmd != nil && ctx.nsi.IsTarget() {
 		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
 		nl := xaction.NewXactNL(xaction.RebID(ctx.rmd.version()).String(),
@@ -606,8 +606,9 @@ func (p *proxyrunner) _perfRebPost(ctx *smapModifier, clone *smapX) {
 func (p *proxyrunner) _syncFinal(ctx *smapModifier, clone *smapX) {
 	var (
 		aisMsg = p.newAmsg(ctx.msg, clone, nil)
-		pairs  = []revsPair{{clone, aisMsg}}
+		pairs  = make([]revsPair, 0, 2)
 	)
+	pairs = append(pairs, revsPair{clone, aisMsg})
 	if ctx.rmd != nil {
 		nl := xaction.NewXactNL(xaction.RebID(ctx.rmd.version()).String(),
 			cmn.ActRebalance, &clone.Smap, nil)

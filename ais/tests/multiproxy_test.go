@@ -23,10 +23,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/containers"
+	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
-	"github.com/NVIDIA/aistore/devtools/tutils/readers"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 )

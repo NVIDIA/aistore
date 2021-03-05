@@ -21,9 +21,9 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/devtools"
+	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/tutils/readers"
 	"github.com/NVIDIA/aistore/stats"
 	"golang.org/x/sync/errgroup"
 )

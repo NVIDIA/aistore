@@ -16,7 +16,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/devtools/tutils/archive"
+	"github.com/NVIDIA/aistore/devtools/archive"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/memsys"
 )

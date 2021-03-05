@@ -11,9 +11,9 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tetl"
 	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
-	"github.com/NVIDIA/aistore/devtools/tutils/tetl"
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/etl/runtime"
 )

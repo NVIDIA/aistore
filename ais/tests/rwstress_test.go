@@ -13,8 +13,8 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tutils"
-	"github.com/NVIDIA/aistore/devtools/tutils/readers"
 )
 
 const (
