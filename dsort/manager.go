@@ -310,14 +310,14 @@ func (m *Manager) cleanup() {
 	}
 
 	m.dsorter.cleanup()
-	glog.Infof("%s %s has started a cleanup", cmn.DSortName, m.ManagerUUID)
+	glog.Infof("[dsort] %s has started a cleanup", m.ManagerUUID)
 	now := time.Now()
 
 	defer func() {
 		m.state.cleaned = initiallyCleanedState
 		m.state.cleanWait.Signal()
 		m.unlock()
-		glog.Infof("%s %s finished cleanup in %v", cmn.DSortName, m.ManagerUUID, time.Since(now))
+		glog.Infof("[dsort] %s finished cleanup in %v", m.ManagerUUID, time.Since(now))
 	}()
 
 	cmn.Assertf(!m.inProgress(), "%s: was still in progress", m.ManagerUUID)
@@ -355,7 +355,7 @@ func (m *Manager) finalCleanup() {
 		}
 	}
 
-	glog.Infof("%s %s has started a final cleanup", cmn.DSortName, m.ManagerUUID)
+	glog.Infof("[dsort] %s has started a final cleanup", m.ManagerUUID)
 	now := time.Now()
 
 	if err := m.cleanupStreams(); err != nil {
@@ -383,7 +383,7 @@ func (m *Manager) finalCleanup() {
 	m.unlock()
 
 	m.mg.persist(m.ManagerUUID)
-	glog.Infof("%s %s finished final cleanup in %v", cmn.DSortName, m.ManagerUUID, time.Since(now))
+	glog.Infof("[dsort] %s finished final cleanup in %v", m.ManagerUUID, time.Since(now))
 }
 
 // abort stops currently running sort job and frees associated resources.
@@ -402,7 +402,7 @@ func (m *Manager) abort(errs ...error) {
 		m.Metrics.unlock()
 	}
 
-	glog.Infof("manager %s has been aborted", m.ManagerUUID)
+	glog.Infof("[dsort] %s has been aborted", m.ManagerUUID)
 	m.setAbortedTo(true)
 	inProgress := m.inProgress()
 	m.unlock()
@@ -410,11 +410,13 @@ func (m *Manager) abort(errs ...error) {
 	// If job has already finished we just free resources, otherwise we must wait
 	// for it to finish.
 	if inProgress {
+		debug.Infof("[dsort] %s is in progress, waiting for finish", m.ManagerUUID)
 		// Wait for dsorter to initialize all the resources.
 		m.waitDSorterToStart()
 
 		m.dsorter.onAbort()
 		m.waitForFinish()
+		debug.Infof("[dsort] %s was in progress and finished", m.ManagerUUID)
 	}
 
 	go func() {
@@ -662,11 +664,11 @@ func (m *Manager) makeRecvShardFunc() transport.ReceiveObj {
 		}
 		if err == nil {
 			if lom.Cksum() != nil && lom.Cksum().Equal(cksum) {
-				glog.Infof("shard (%s) already exists and checksums are equal, skipping", lom)
+				glog.V(4).Infof("[dsort] %s shard (%s) already exists and checksums are equal, skipping", m.ManagerUUID, lom)
 				cmn.DrainReader(object)
 				return
 			}
-			glog.Warningf("shard (%s) already exists, overriding", lom)
+			glog.Warningf("[dsort] %s shard (%s) already exists, overriding", m.ManagerUUID, lom)
 		}
 		started := time.Now()
 		lom.SetAtimeUnix(started.UnixNano())

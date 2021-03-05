@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
@@ -65,6 +66,7 @@ var js = jsoniter.ConfigFastest
 
 func (m *Manager) start() (err error) {
 	defer func() {
+		debug.Infof("[dsort] %s finished and setting progress to false", m.ManagerUUID)
 		m.lock()
 		m.setInProgressTo(false)
 		m.unlock()
@@ -80,6 +82,7 @@ func (m *Manager) start() (err error) {
 	}
 
 	// Phase 1.
+	glog.Infof("[dsort] %s started extraction stage", m.ManagerUUID)
 	if err := m.extractLocalShards(); err != nil {
 		return err
 	}
@@ -87,11 +90,12 @@ func (m *Manager) start() (err error) {
 	s := binary.BigEndian.Uint64(m.rs.TargetOrderSalt)
 	targetOrder := randomTargetOrder(s, m.smap.Tmap)
 	if glog.V(4) {
-		glog.Infof("final target in targetOrder => URL: %s, Daemon ID: %s",
+		glog.Infof("[dsort] %s final target in targetOrder => URL: %s, Daemon ID: %s", m.ManagerUUID,
 			targetOrder[len(targetOrder)-1].PublicNet.DirectURL, targetOrder[len(targetOrder)-1].DaemonID)
 	}
 
 	// Phase 2.
+	glog.Infof("[dsort] %s started sort stage", m.ManagerUUID)
 	curTargetIsFinal, err := m.participateInRecordDistribution(targetOrder)
 	if err != nil {
 		return err
@@ -108,11 +112,12 @@ func (m *Manager) start() (err error) {
 			avgCompressRatio := m.avgCompressionRatio()
 			shardSize = int64(float64(m.rs.OutputShardSize) / avgCompressRatio)
 			if glog.V(4) {
-				glog.Infof("estimated output shard size required before gzip compression: %d", shardSize)
+				glog.Infof("[dsort] %s estimated output shard size required before gzip compression: %d", m.ManagerUUID, shardSize)
 			}
 		}
 
 		// Phase 3.
+		glog.Infof("[dsort] %s started distribution shard metadata stage", m.ManagerUUID)
 		if err := m.distributeShardRecords(shardSize); err != nil {
 			return err
 		}
@@ -131,11 +136,12 @@ func (m *Manager) start() (err error) {
 
 	// After each target participates in the cluster-wide record distribution,
 	// start listening for the signal to start creating shards locally.
+	glog.Infof("[dsort] %s started creation stage", m.ManagerUUID)
 	if err := m.dsorter.createShardsLocally(); err != nil {
 		return err
 	}
 
-	glog.Infof("finished %s %s successfully", cmn.DSortName, m.ManagerUUID)
+	glog.Infof("[dsort] %s finished successfully", m.ManagerUUID)
 	return nil
 }
 
@@ -146,8 +152,7 @@ func (m *Manager) startDSorter() error {
 		return err
 	}
 
-	glog.Infof("starting %s %s with dsorter: %q", cmn.DSortName, m.ManagerUUID, m.dsorter.name())
-
+	glog.Infof("[dsort] %s starting with dsorter: %q", m.ManagerUUID, m.dsorter.name())
 	return m.dsorter.start()
 }
 
@@ -902,7 +907,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 	for err := range errCh {
 		return errors.Errorf("error while sending shards, err: %v", err)
 	}
-	glog.Infof("finished sending all shards")
+	glog.Infof("[dsort] %s finished sending all shards", m.ManagerUUID)
 	return nil
 }
 

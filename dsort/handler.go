@@ -92,7 +92,7 @@ func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, parsedRS *Par
 	// to not yet initialized target.
 
 	if glog.V(4) {
-		glog.Infof("[%s] broadcasting init request to all targets", managerUUID)
+		glog.Infof("[dsort] %s broadcasting init request to all targets", managerUUID)
 	}
 	path := cmn.URLPathdSortInit.Join(managerUUID)
 	responses := broadcast(http.MethodPost, path, nil, b, ctx.smapOwner.Get().Tmap)
@@ -101,7 +101,7 @@ func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, parsedRS *Par
 	}
 
 	if glog.V(4) {
-		glog.Infof("[%s] broadcasting start request to all targets", managerUUID)
+		glog.Infof("[dsort] %s broadcasting start request to all targets", managerUUID)
 	}
 	path = cmn.URLPathdSortStart.Join(managerUUID)
 	responses = broadcast(http.MethodPost, path, nil, nil, ctx.smapOwner.Get().Tmap)
@@ -444,7 +444,7 @@ func (m *Manager) startDSort() {
 		return
 	}
 
-	glog.Info("broadcasting finished ack to other targets")
+	glog.Infof("[dsort] %s broadcasting finished ack to other targets", m.ManagerUUID)
 	path := cmn.URLPathdSortAck.Join(m.ManagerUUID, m.ctx.node.DaemonID)
 	broadcast(http.MethodPut, path, nil, nil, ctx.smapOwner.Get().Tmap, ctx.node)
 }
@@ -572,7 +572,10 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 		dsortManager.recManager.EnqueueRecords(records)
 		dsortManager.incrementReceived()
 		if glog.V(4) {
-			glog.Infof("total times received records from another target: %d", dsortManager.received.count.Load())
+			glog.Infof(
+				"[dsort] %s total times received records from another target: %d",
+				dsortManager.ManagerUUID, dsortManager.received.count.Load(),
+			)
 		}
 	}
 }
