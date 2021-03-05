@@ -89,7 +89,6 @@ func runXactPut(lom *cluster.LOM, slab *memsys.Slab, t cluster.Target) (r *XactP
 	r.workers = mpather.NewWorkerGroup(&mpather.WorkerGroupOpts{
 		Callback:  r.workCb,
 		Slab:      slab,
-		BMD:       t.Bowner().Get(),
 		QueueSize: mirror.Burst,
 	})
 	// Run

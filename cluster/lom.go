@@ -139,7 +139,7 @@ func FreeLOM(lom *LOM) {
 /////////
 
 // LIF => LOF with a check for bucket existence
-func (lif *LIF) LOM(bmd *BMD) (lom *LOM, err error) {
+func (lif *LIF) LOM() (lom *LOM, err error) {
 	b, objName := cmn.ParseUname(lif.Uname)
 	lom = AllocLOM(objName)
 	if err = lom.Init(b); err != nil {

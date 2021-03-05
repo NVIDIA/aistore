@@ -69,7 +69,6 @@ func (lchk *lcHK) evictAll(d time.Duration) {
 	var (
 		caches               = lomCaches()
 		now                  = time.Now()
-		bmd                  = lchk.t.Bowner().Get()
 		evictedCnt, totalCnt int
 	)
 	defer lchk.running.Store(false)
@@ -89,7 +88,7 @@ func (lchk *lcHK) evictAll(d time.Duration) {
 			}
 			if mdTime > 0 && md.atime != md.atimefs {
 				lif := LIF{md.uname, md.bckID}
-				lom, err := lif.LOM(bmd)
+				lom, err := lif.LOM()
 				if err == nil {
 					lom.flushCold(md, atime)
 				}

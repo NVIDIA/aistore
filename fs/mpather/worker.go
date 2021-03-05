@@ -20,7 +20,6 @@ type (
 	WorkerGroupOpts struct {
 		Callback  func(lom *cluster.LOM, buf []byte)
 		Slab      *memsys.Slab
-		BMD       *cluster.BMD
 		QueueSize int
 	}
 
@@ -96,7 +95,7 @@ func (w *worker) work() error {
 	for {
 		select {
 		case lif := <-w.workCh:
-			lom, err := lif.LOM(w.opts.BMD)
+			lom, err := lif.LOM()
 			if err == nil {
 				err = lom.Load(false /*cache it*/, false)
 			}

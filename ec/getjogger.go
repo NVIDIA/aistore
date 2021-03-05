@@ -66,7 +66,7 @@ func freeRestoreCtx(ctx *restoreCtx) {
 }
 
 func (c *getJogger) newCtx(req *request) (*restoreCtx, error) {
-	lom, err := req.LIF.LOM(c.parent.t.Bowner().Get())
+	lom, err := req.LIF.LOM()
 	ctx := allocRestoreCtx()
 	ctx.toDisk = useDisk(0 /*size of the original object is unknown*/)
 	ctx.lom = lom

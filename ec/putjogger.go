@@ -101,7 +101,7 @@ func (c *putJogger) freeResources() {
 
 func (c *putJogger) processRequest(req *request) {
 	var memRequired int64
-	lom, err := req.LIF.LOM(c.parent.t.Bowner().Get())
+	lom, err := req.LIF.LOM()
 	defer cluster.FreeLOM(lom)
 	if err != nil {
 		return
