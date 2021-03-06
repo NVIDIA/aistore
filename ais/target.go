@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dbdriver"
@@ -190,7 +191,7 @@ func (gfn *globalGFN) abortTimed() {
 func (t *targetrunner) Run() error {
 	config := cmn.GCO.Get()
 	if err := t.si.Validate(); err != nil {
-		cmn.ExitLogf("%v", err)
+		cos.ExitLogf("%v", err)
 	}
 	t.httprunner.init(config)
 
@@ -202,10 +203,10 @@ func (t *targetrunner) Run() error {
 
 	// register object type and workfile type
 	if err := fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{}); err != nil {
-		cmn.ExitLogf("%v", err)
+		cos.ExitLogf("%v", err)
 	}
 	if err := fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{}); err != nil {
-		cmn.ExitLogf("%v", err)
+		cos.ExitLogf("%v", err)
 	}
 
 	dryRunInit()
@@ -250,7 +251,7 @@ func (t *targetrunner) Run() error {
 		return err
 	}
 	t.dbDriver = driver
-	defer cmn.Close(driver)
+	defer cos.Close(driver)
 
 	// transactions
 	t.transactions.init(t)
@@ -293,7 +294,7 @@ func (b backends) init(t *targetrunner) {
 
 	b[cmn.ProviderHTTP], _ = backend.NewHTTP(t, config)
 	if err := b.initExt(t); err != nil {
-		cmn.ExitLogf("%v", err)
+		cos.ExitLogf("%v", err)
 	}
 }
 
@@ -505,7 +506,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 
 	switch msg.Action {
 	case cmn.ActEvictRemoteBck:
-		keepMD := cmn.IsParseBool(r.URL.Query().Get(cmn.URLParamKeepBckMD))
+		keepMD := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamKeepBckMD))
 		// HDFS buckets will always keep metadata so they can re-register later
 		if request.bck.IsHDFS() || keepMD {
 			nlp := request.bck.GetNameLockPair()
@@ -653,7 +654,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/buckets/bucket-name
 func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	var (
-		bucketProps cmn.SimpleKVs
+		bucketProps cos.SimpleKVs
 		code        int
 		inBMD       = true
 		ctx         = context.Background()
@@ -677,7 +678,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s <= %s", r.Method, request.bck, pid)
 	}
 
-	cmn.Assert(!request.bck.IsAIS())
+	cos.Assert(!request.bck.IsAIS())
 
 	if request.bck.IsHTTP() {
 		originalURL := query.Get(cmn.URLParamOrigURL)
@@ -702,7 +703,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		glog.Warningf("%s: bucket %s, err: %v(%d)", t.si, request.bck, err, code)
-		bucketProps = make(cmn.SimpleKVs)
+		bucketProps = make(cos.SimpleKVs)
 		bucketProps[cmn.HeaderBackendProvider] = request.bck.Provider
 		bucketProps[cmn.HeaderRemoteOffline] = strconv.FormatBool(request.bck.IsRemote())
 	}
@@ -755,7 +756,7 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 	var (
 		ptime        = isRedirect(query)
 		config       = cmn.GCO.Get()
-		isGFNRequest = cmn.IsParseBool(query.Get(cmn.URLParamIsGFNRequest))
+		isGFNRequest = cos.IsParseBool(query.Get(cmn.URLParamIsGFNRequest))
 		started      = time.Now()
 	)
 
@@ -981,9 +982,9 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 		err            error
 		invalidHandler = t.writeErr
 		hdr            = w.Header()
-		checkExists    = cmn.IsParseBool(query.Get(cmn.URLParamCheckExists))
-		checkExistsAny = cmn.IsParseBool(query.Get(cmn.URLParamCheckExistsAny))
-		silent         = cmn.IsParseBool(query.Get(cmn.URLParamSilent))
+		checkExists    = cos.IsParseBool(query.Get(cmn.URLParamCheckExists))
+		checkExistsAny = cos.IsParseBool(query.Get(cmn.URLParamCheckExistsAny))
+		silent         = cos.IsParseBool(query.Get(cmn.URLParamSilent))
 	)
 	if silent {
 		invalidHandler = t.writeErrSilent
@@ -1061,7 +1062,7 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 		}
 		return nil, false
 	})
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 
 	if isETLRequest(query) {
 		// We don't know neither length of on-the-fly transformed object, nor checksum.
@@ -1141,7 +1142,7 @@ func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, bck *clu
 
 	w.Header().Set("Content-Length", strconv.FormatInt(finfo.Size(), 10))
 	_, err = io.Copy(w, file) // No need for `io.CopyBuffer` as `sendfile` syscall will be used.
-	cmn.Close(file)
+	cos.Close(file)
 	if err != nil {
 		glog.Errorf("Failed to send slice %s/%s: %v", bck, objName, err)
 	}
@@ -1155,7 +1156,7 @@ func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, bck *clu
 // remote object and local cache.
 // NOTE: Should be called only if the local copy exists.
 func (t *targetrunner) CheckRemoteVersion(ctx context.Context, lom *cluster.LOM) (vchanged bool, errCode int, err error) {
-	var objMeta cmn.SimpleKVs
+	var objMeta cos.SimpleKVs
 	objMeta, errCode, err = t.Backend(lom.Bck()).HeadObj(ctx, lom)
 	if err != nil {
 		err = fmt.Errorf(cmn.FmtErrFailed, t.si, "head metadata of", lom, err)
@@ -1241,7 +1242,7 @@ func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.
 		}
 	}
 	if cksumValue != "" {
-		aoi.cksum = cmn.NewCksum(cksumType, cksumValue)
+		aoi.cksum = cos.NewCksum(cksumType, cksumValue)
 	}
 	return aoi.appendObject()
 }
@@ -1266,7 +1267,7 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 		poi.t = t
 		poi.lom = lom
 		poi.r = r.Body
-		poi.cksumToUse = cmn.NewCksum(cksumType, cksumValue)
+		poi.cksumToUse = cos.NewCksum(cksumType, cksumValue)
 		poi.ctx = context.Background()
 		poi.workFQN = fs.CSM.GenContentFQN(lom, fs.WorkfileType, fs.WorkfilePut)
 	}
@@ -1352,7 +1353,7 @@ func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict
 				return 0, aisErr
 			}
 		} else if evict {
-			cmn.Assert(lom.Bck().IsRemote())
+			cos.Assert(lom.Bck().IsRemote())
 			t.statsT.AddMany(
 				stats.NamedVal64{Name: stats.LruEvictCount, Value: 1},
 				stats.NamedVal64{Name: stats.LruEvictSize, Value: size},
@@ -1517,7 +1518,7 @@ func (t *targetrunner) fsErr(err error, filepath string) {
 
 func (t *targetrunner) runResilver(id string, skipGlobMisplaced bool, notifs ...*xaction.NotifXact) {
 	if id == "" {
-		id = cmn.GenUUID()
+		id = cos.GenUUID()
 		regMsg := xactRegMsg{UUID: id, Kind: cmn.ActResilver, Srcs: []string{t.si.ID()}}
 		msg := t.newAmsgActVal(cmn.ActRegGlobalXaction, regMsg, nil)
 		t.bcastAsyncIC(msg)

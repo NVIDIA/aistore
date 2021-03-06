@@ -13,7 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -166,7 +166,7 @@ func (c Client) probeUDP() (err error) {
 		m.Value = i
 		c.appendMetric(m, sgl, "probe", 1)
 		bytes := sgl.Bytes()
-		cmn.Assert(msize > len(bytes))
+		cos.Assert(msize > len(bytes))
 		if _, erw := c.conn.Write(bytes); erw != nil {
 			err = erw
 			failcnt++
@@ -209,7 +209,7 @@ func (c Client) Send(bucket string, aggCnt int64, metrics ...Metric) {
 	}
 	if sgl.Len() > 0 {
 		bytes := sgl.Bytes()
-		msize = cmn.Max(msize, len(bytes))
+		msize = cos.Max(msize, len(bytes))
 		_, err := c.conn.Write(bytes)
 		if err != nil {
 			if cnt := errcnt.Inc(); cnt > maxNumErrs {
@@ -237,7 +237,7 @@ func (c Client) appendMetric(m Metric, sgl *memsys.SGL, bucket string, aggCnt in
 		prefix = "+"
 		t = "g"
 	default:
-		cmn.Assertf(false, "unknown type %+v", m.Type)
+		cos.Assertf(false, "unknown type %+v", m.Type)
 	}
 	if sgl.Len() > 0 {
 		sgl.Write([]byte{'\n'})
@@ -248,7 +248,7 @@ func (c Client) appendMetric(m Metric, sgl *memsys.SGL, bucket string, aggCnt in
 	} else {
 		_, err = fmt.Fprintf(sgl, "%s.%s.%s:%s%v|%s", c.prefix, bucket, m.Name, prefix, m.Value, t)
 	}
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 }
 
 func NewStatsdMetrics(start time.Time) Metrics {
@@ -263,8 +263,8 @@ func (ma *MetricAgg) Add(size int64, lat time.Duration) {
 	ma.cnt++
 	ma.latency += lat
 	ma.bytes += size
-	ma.minLatency = cmn.MinDuration(ma.minLatency, lat)
-	ma.maxLatency = cmn.MaxDuration(ma.maxLatency, lat)
+	ma.minLatency = cos.MinDuration(ma.minLatency, lat)
+	ma.maxLatency = cos.MaxDuration(ma.maxLatency, lat)
 }
 
 func (ma *MetricAgg) AddPending(pending int64) {
@@ -313,8 +313,8 @@ func (mgs *MetricLatsAgg) Add(name string, lat time.Duration) {
 	} else {
 		val.cnt++
 		val.latency += lat
-		val.maxLatency = cmn.MaxDuration(val.maxLatency, lat)
-		val.minLatency = cmn.MinDuration(val.minLatency, lat)
+		val.maxLatency = cos.MaxDuration(val.maxLatency, lat)
+		val.minLatency = cos.MinDuration(val.minLatency, lat)
 	}
 }
 
@@ -322,16 +322,16 @@ func (mcg *MetricConfigAgg) Add(lat, latProxy, latProxyConn time.Duration) {
 	mcg.cnt++
 
 	mcg.latency += lat
-	mcg.minLatency = cmn.MinDuration(mcg.minLatency, lat)
-	mcg.maxLatency = cmn.MaxDuration(mcg.maxLatency, lat)
+	mcg.minLatency = cos.MinDuration(mcg.minLatency, lat)
+	mcg.maxLatency = cos.MaxDuration(mcg.maxLatency, lat)
 
 	mcg.proxyLatency += lat
-	mcg.minProxyLatency = cmn.MinDuration(mcg.minProxyLatency, lat)
-	mcg.maxProxyLatency = cmn.MaxDuration(mcg.maxProxyLatency, lat)
+	mcg.minProxyLatency = cos.MinDuration(mcg.minProxyLatency, lat)
+	mcg.maxProxyLatency = cos.MaxDuration(mcg.maxProxyLatency, lat)
 
 	mcg.proxyConnLatency += lat
-	mcg.minProxyConnLatency = cmn.MinDuration(mcg.minProxyConnLatency, lat)
-	mcg.maxProxyConnLatency = cmn.MaxDuration(mcg.maxProxyConnLatency, lat)
+	mcg.minProxyConnLatency = cos.MinDuration(mcg.minProxyConnLatency, lat)
+	mcg.maxProxyConnLatency = cos.MaxDuration(mcg.maxProxyConnLatency, lat)
 }
 
 func (ma *MetricAgg) Send(c *Client, mType string, general []Metric, genAggCnt int64) {

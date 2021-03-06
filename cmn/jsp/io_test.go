@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/memsys"
@@ -41,15 +42,15 @@ func makeRandStruct() (ts testStruct) {
 	if rand.Intn(2) == 0 {
 		ts.I = rand.Int()
 	}
-	ts.S = cmn.RandString(rand.Intn(100))
+	ts.S = cos.RandString(rand.Intn(100))
 	if rand.Intn(2) == 0 {
-		ts.B = []byte(cmn.RandString(rand.Intn(200)))
+		ts.B = []byte(cos.RandString(rand.Intn(200)))
 	}
 	ts.ST.I64 = rand.Int63()
 	if rand.Intn(2) == 0 {
 		ts.M = make(map[string]string)
 		for i := 0; i < rand.Intn(100)+1; i++ {
-			ts.M[cmn.RandString(10)] = cmn.RandString(20)
+			ts.M[cos.RandString(10)] = cos.RandString(20)
 		}
 	}
 	return
@@ -57,12 +58,12 @@ func makeRandStruct() (ts testStruct) {
 
 func makeStaticStruct() (ts testStruct) {
 	ts.I = rand.Int()
-	ts.S = cmn.RandString(100)
-	ts.B = []byte(cmn.RandString(200))
+	ts.S = cos.RandString(100)
+	ts.B = []byte(cos.RandString(200))
 	ts.ST.I64 = rand.Int63()
 	ts.M = make(map[string]string, 10)
 	for i := 0; i < 10; i++ {
-		ts.M[cmn.RandString(10)] = cmn.RandString(20)
+		ts.M[cos.RandString(10)] = cos.RandString(20)
 	}
 	return
 }
@@ -91,7 +92,7 @@ func TestDecodeAndEncode(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			var (
 				v testStruct
-				b = memsys.DefaultPageMM().NewSGL(cmn.MiB)
+				b = memsys.DefaultPageMM().NewSGL(cos.MiB)
 			)
 			defer b.Free()
 
@@ -115,7 +116,7 @@ func TestDecodeAndEncode(t *testing.T) {
 }
 
 func TestDecodeAndEncodeFuzz(t *testing.T) {
-	b := memsys.DefaultPageMM().NewSGL(cmn.MiB)
+	b := memsys.DefaultPageMM().NewSGL(cos.MiB)
 	defer b.Free()
 
 	for i := 0; i < 10000; i++ {
@@ -124,7 +125,7 @@ func TestDecodeAndEncodeFuzz(t *testing.T) {
 			opts = cmn.Jopts{Signature: true, Checksum: true}
 		)
 
-		x = cmn.RandString(i)
+		x = cos.RandString(i)
 
 		err := jsp.Encode(b, x, opts)
 		tassert.CheckFatal(t, err)
@@ -153,7 +154,7 @@ func BenchmarkEncode(b *testing.B) {
 	}
 	for _, bench := range benches {
 		b.Run(bench.name, func(b *testing.B) {
-			body := memsys.DefaultPageMM().NewSGL(cmn.MiB)
+			body := memsys.DefaultPageMM().NewSGL(cos.MiB)
 			defer func() {
 				b.StopTimer()
 				body.Free()
@@ -185,7 +186,7 @@ func BenchmarkDecode(b *testing.B) {
 	}
 	for _, bench := range benches {
 		b.Run(bench.name, func(b *testing.B) {
-			sgl := memsys.DefaultPageMM().NewSGL(cmn.MiB)
+			sgl := memsys.DefaultPageMM().NewSGL(cos.MiB)
 			err := jsp.Encode(sgl, bench.v, bench.opts)
 			tassert.CheckFatal(b, err)
 			network, err := sgl.ReadAll()

@@ -13,7 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cmd/aisfs/ais"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/OneOfOne/xxhash"
 	"github.com/jacobsa/fuse/fuseops"
 	"github.com/jacobsa/fuse/fuseutil"
@@ -61,7 +61,7 @@ func newNsCache(bck ais.Bucket, cfg *ServerConfig) *namespaceCache {
 		bck: bck,
 		cfg: cfg,
 	}
-	c.m.Store(unsafe.Pointer(&cmn.MultiSyncMap{}))
+	c.m.Store(unsafe.Pointer(&cos.MultiSyncMap{}))
 	c.root = c.newDirEntry(dtAttrs{id: fuseops.RootInodeID, path: ""})
 	c.rootDirent = &fuseutil.Dirent{
 		Inode: c.root.ID(),
@@ -74,7 +74,7 @@ func newNsCache(bck ais.Bucket, cfg *ServerConfig) *namespaceCache {
 
 func (c *namespaceCache) newFileEntry(dta dtAttrs) nsEntry {
 	// Allow `nil` object only for `invalidInodeID`
-	cmn.Assert(dta.obj != nil || dta.id == invalidInodeID)
+	cos.Assert(dta.obj != nil || dta.id == invalidInodeID)
 	if dta.obj == nil {
 		dta.obj = ais.NewObject(dta.path, c.bck, 0)
 	}
@@ -99,7 +99,7 @@ func (c *namespaceCache) refresh() (bool, error) {
 			bck: c.bck,
 		}
 	)
-	newCache.m.Store(unsafe.Pointer(&cmn.MultiSyncMap{}))
+	newCache.m.Store(unsafe.Pointer(&cos.MultiSyncMap{}))
 
 	var (
 		objs      []*ais.Object
@@ -155,10 +155,10 @@ func (c *namespaceCache) add(ty entryType, dta dtAttrs) {
 
 	switch ty {
 	case entryFileTy:
-		cmn.Assert(!strings.HasSuffix(dta.path, separator))
+		cos.Assert(!strings.HasSuffix(dta.path, separator))
 		entry = c.newFileEntry(dta)
 	case entryDirTy:
-		cmn.Assert(strings.HasSuffix(dta.path, separator))
+		cos.Assert(strings.HasSuffix(dta.path, separator))
 		entry = c.newDirEntry(dta)
 	default:
 		panic(ty)
@@ -178,7 +178,7 @@ func (c *namespaceCache) remove(p string) {
 
 	// Slow path for directory - we also need to remove all entries with prefix `p`.
 	wg := &sync.WaitGroup{}
-	for i := 0; i < cmn.MultiSyncMapCount; i++ {
+	for i := 0; i < cos.MultiSyncMapCount; i++ {
 		wg.Add(1)
 		go func(i int) {
 			m := c.getCacheByIdx(i)
@@ -222,7 +222,7 @@ func (c *namespaceCache) listEntries(p string, cb func(nsEntry)) {
 		mtx sync.Mutex
 		wg  = &sync.WaitGroup{}
 	)
-	for i := 0; i < cmn.MultiSyncMapCount; i++ {
+	for i := 0; i < cos.MultiSyncMapCount; i++ {
 		wg.Add(1)
 		go func(i int) {
 			m := c.getCacheByIdx(i)
@@ -255,18 +255,18 @@ func (c *namespaceCache) listEntries(p string, cb func(nsEntry)) {
 
 func (c *namespaceCache) getCache(p string) *sync.Map {
 	h := xxhash.ChecksumString32(p)
-	return (*cmn.MultiSyncMap)(c.m.Load()).GetByHash(h)
+	return (*cos.MultiSyncMap)(c.m.Load()).GetByHash(h)
 }
 
 func (c *namespaceCache) getCacheByIdx(i int) *sync.Map {
-	return (*cmn.MultiSyncMap)(c.m.Load()).Get(i)
+	return (*cos.MultiSyncMap)(c.m.Load()).Get(i)
 }
 
 // splitEntryName splits the POSIX name into hierarchical arms. Each directory
 // finishes with slash ("/"). Example: "a/b/c" will be split into: ["a/","b/","c"]
 // whereas "a/b/c/" will be split into: ["a/", "b/", "c/"].
 func splitEntryName(name string) []string {
-	cmn.AssertMsg(name != "", name)
+	cos.AssertMsg(name != "", name)
 	arms := make([]string, 0, strings.Count(name, separator))
 	for {
 		idx := strings.Index(name, separator)

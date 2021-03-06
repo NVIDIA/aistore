@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/bench/soaktest/stats"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 type primTag struct {
@@ -57,7 +58,7 @@ func (rctx *RecipeContext) MakeBucket(bucketname string) {
 	go func() {
 		defer rctx.finishPrim(tag)
 		err := api.CreateBucket(soakcmn.BaseAPIParams(primaryURL), bckNamePrefix(bucketname), nil)
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 	}()
 }
 
@@ -66,7 +67,7 @@ func (rctx *RecipeContext) SetBucketProps(bucketname string, props *cmn.BucketPr
 	go func() {
 		defer rctx.finishPrim(tag)
 		_, err := api.SetBucketProps(soakcmn.BaseAPIParams(primaryURL), bckNamePrefix(bucketname), props)
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 	}()
 }
 
@@ -76,7 +77,7 @@ func (rctx *RecipeContext) Put(bucketname string, maxDuration time.Duration, pct
 	tag := rctx.startPrim("PUT")
 
 	if pctSize > 100 {
-		cmn.AssertNoErr(fmt.Errorf("attempted to use %v pct of recipe capacity", pctSize))
+		cos.AssertNoErr(fmt.Errorf("attempted to use %v pct of recipe capacity", pctSize))
 	}
 
 	primPutSize := int64(float64(recCapacity) / 100 * pctSize)
@@ -143,7 +144,7 @@ func (rctx *RecipeContext) Rename(bucketName, newName string) {
 	go func() {
 		defer rctx.finishPrim(tag)
 		_, err := api.RenameBucket(soakcmn.BaseAPIParams(primaryURL), bckNamePrefix(bucketName), bckNamePrefix(newName))
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 	}()
 }
 
@@ -152,7 +153,7 @@ func (rctx *RecipeContext) Destroy(bucketName string) {
 	go func() {
 		defer rctx.finishPrim(tag)
 		err := api.DestroyBucket(soakcmn.BaseAPIParams(primaryURL), bckNamePrefix(bucketName))
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 	}()
 }
 
@@ -171,11 +172,11 @@ func (rctx *RecipeContext) RemoveTarget(conds *PostConds, delay time.Duration) {
 			args := &cmn.ActValDecommision{DaemonID: v.ID(), SkipRebalance: true}
 			err := soakcmn.UnregisterNode(primaryURL, args)
 			rctx.targetMutex.Unlock()
-			cmn.AssertNoErr(err)
+			cos.AssertNoErr(err)
 			return
 		}
 		rctx.targetMutex.Unlock()
-		cmn.AssertNoErr(fmt.Errorf("no targets to remove"))
+		cos.AssertNoErr(fmt.Errorf("no targets to remove"))
 	}()
 }
 
@@ -195,11 +196,11 @@ func (rctx *RecipeContext) RestoreTarget(conds *PostConds, delay time.Duration) 
 			if !ok {
 				_, err := soakcmn.JoinCluster(primaryURL, v)
 				rctx.targetMutex.Unlock()
-				cmn.AssertNoErr(err)
+				cos.AssertNoErr(err)
 				return
 			}
 		}
 		rctx.targetMutex.Unlock()
-		cmn.AssertNoErr(fmt.Errorf("no targets to restore"))
+		cos.AssertNoErr(fmt.Errorf("no targets to restore"))
 	}()
 }

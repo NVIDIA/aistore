@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
@@ -80,7 +81,7 @@ func (e *transferBckProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 
 func (e *transferBckProvider) Start(_ cmn.Bck) error {
 	slab, err := e.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	e.xact = NewXactTransferBck(e.uuid, e.kind, e.args.BckFrom, e.args.BckTo, e.t, slab,
 		e.args.DM, e.args.DP, e.args.Meta)
 	return nil

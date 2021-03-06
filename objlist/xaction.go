@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/objwalk"
@@ -46,11 +47,11 @@ type (
 
 		workCh chan *cmn.SelectMsg // Incoming requests.
 		respCh chan *Resp          // Outgoing responses.
-		stopCh *cmn.StopCh         // Informs about stopped xaction.
+		stopCh *cos.StopCh         // Informs about stopped xaction.
 
 		objCache   chan *cmn.BucketEntry // local cache filled when idle
 		lastPage   []*cmn.BucketEntry    // last sent page and a little more
-		walkStopCh *cmn.StopCh           // to abort file walk
+		walkStopCh *cos.StopCh           // to abort file walk
 		token      string                // the continuation token for the last sent page (for re-requests)
 		nextToken  string                // continuation token returned by Cloud to get the next page
 		walkWg     sync.WaitGroup        // to wait until walk finishes
@@ -103,10 +104,10 @@ func newXact(ctx context.Context, t cluster.Target, bck cmn.Bck, smsg *cmn.Selec
 		msg:      smsg,
 		workCh:   make(chan *cmn.SelectMsg),
 		respCh:   make(chan *Resp),
-		stopCh:   cmn.NewStopCh(),
+		stopCh:   cos.NewStopCh(),
 		lastPage: make([]*cmn.BucketEntry, 0, cacheSize),
 	}
-	cmn.Assert(xact.bck.Props != nil)
+	cos.Assert(xact.bck.Props != nil)
 	args := xaction.Args{ID: xaction.BaseID(uuid), Kind: cmn.ActListObjects, Bck: &bck}
 	xact.XactDemandBase = *xaction.NewXDB(args, totallyIdle, likelyIdle)
 	xact.InitIdle()
@@ -148,7 +149,7 @@ func (r *Xact) initTraverse() {
 
 	r.objCache = make(chan *cmn.BucketEntry, cacheSize)
 	r.walkDone = false
-	r.walkStopCh = cmn.NewStopCh()
+	r.walkStopCh = cos.NewStopCh()
 	r.walkWg.Add(1)
 
 	go r.traverseBucket(r.msg.Clone())

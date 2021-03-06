@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/etl/runtime"
 )
@@ -16,7 +16,7 @@ import (
 func Build(t cluster.Target, msg BuildMsg) error {
 	// Initialize runtime.
 	r, exists := runtime.Runtimes[msg.Runtime]
-	cmn.Assert(exists) // Runtime should be checked in proxy during validation.
+	cos.Assert(exists) // Runtime should be checked in proxy during validation.
 
 	var (
 		// We clean up the `msg.ID` as K8s doesn't allow `_` and uppercase

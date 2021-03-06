@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
@@ -245,11 +246,11 @@ var (
 	}
 
 	funcMap = template.FuncMap{
-		"FormatBytesSigned":   cmn.B2S,
-		"FormatBytesUnsigned": cmn.UnsignedB2S,
+		"FormatBytesSigned":   cos.B2S,
+		"FormatBytesUnsigned": cos.UnsignedB2S,
 		"IsUnsetTime":         isUnsetTime,
 		"FormatTime":          fmtTime,
-		"FormatUnixNano":      func(t int64) string { return cmn.FormatUnixNano(t, "") },
+		"FormatUnixNano":      func(t int64) string { return cos.FormatUnixNano(t, "") },
 		"FormatEC":            FmtEC,
 		"FormatDur":           fmtDuration,
 		"FormatObjStatus":     fmtObjStatus,
@@ -496,15 +497,15 @@ func fmtFeatureFlags(flags cmn.FeatureFlags) string {
 	return fmt.Sprintf("%s(%s)", flags, flags.Describe())
 }
 
-func daemonsDeployments(ds map[string]*stats.DaemonStatus) cmn.StringSet {
-	deployments := cmn.NewStringSet()
+func daemonsDeployments(ds map[string]*stats.DaemonStatus) cos.StringSet {
+	deployments := cos.NewStringSet()
 	for _, s := range ds {
 		deployments.Add(s.DeployedOn)
 	}
 	return deployments
 }
 
-func (h *DaemonStatusTemplateHelper) Deployments() cmn.StringSet {
+func (h *DaemonStatusTemplateHelper) Deployments() cos.StringSet {
 	p := daemonsDeployments(h.Pmap)
 	p.Add(daemonsDeployments(h.Tmap).ToSlice()...)
 	return p

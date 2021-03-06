@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
@@ -185,7 +186,7 @@ func (dm *DataMover) UnregRecv() {
 	}
 }
 
-func (dm *DataMover) Send(obj *transport.Obj, roc cmn.ReadOpenCloser, tsi *cluster.Snode) error {
+func (dm *DataMover) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *cluster.Snode) error {
 	return dm.data.streams.Send(obj, roc, tsi)
 }
 

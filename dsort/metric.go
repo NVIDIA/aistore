@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -60,8 +60,8 @@ func (ts *TimeStats) updateTime(newTime time.Duration) {
 	t := newTime.Nanoseconds() / int64(time.Millisecond)
 	ts.Total += t
 	ts.Count++
-	ts.MinMs = cmn.MinI64(ts.MinMs, t)
-	ts.MaxMs = cmn.MaxI64(ts.MaxMs, t)
+	ts.MinMs = cos.MinI64(ts.MinMs, t)
+	ts.MaxMs = cos.MaxI64(ts.MaxMs, t)
 	ts.AvgMs = ts.Total / ts.Count
 }
 
@@ -76,8 +76,8 @@ func (tps *ThroughputStats) updateThroughput(size int64, dur time.Duration) {
 
 	tps.total += throughput
 	tps.count++
-	tps.MinTp = cmn.MinI64(tps.MinTp, throughput)
-	tps.MaxTp = cmn.MaxI64(tps.MaxTp, throughput)
+	tps.MinTp = cos.MinI64(tps.MinTp, throughput)
+	tps.MaxTp = cos.MaxI64(tps.MaxTp, throughput)
 	tps.AvgTp = tps.total / tps.count
 }
 
@@ -278,7 +278,7 @@ func (m *Metrics) Marshal() []byte {
 	m.lock()
 	b, err := jsoniter.Marshal(m)
 	m.unlock()
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	return b
 }
 
@@ -320,9 +320,9 @@ func (j *JobInfo) Aggregate(other *JobInfo) {
 	j.StartedTime = startTime(j.StartedTime, other.StartedTime)
 	j.FinishTime = stopTime(j.FinishTime, other.FinishTime)
 
-	j.ExtractedDuration = cmn.MaxDuration(j.ExtractedDuration, other.ExtractedDuration)
-	j.SortingDuration = cmn.MaxDuration(j.SortingDuration, other.SortingDuration)
-	j.CreationDuration = cmn.MaxDuration(j.CreationDuration, other.CreationDuration)
+	j.ExtractedDuration = cos.MaxDuration(j.ExtractedDuration, other.ExtractedDuration)
+	j.SortingDuration = cos.MaxDuration(j.SortingDuration, other.SortingDuration)
+	j.CreationDuration = cos.MaxDuration(j.CreationDuration, other.CreationDuration)
 
 	j.Aborted = j.Aborted || other.Aborted
 	j.Archived = j.Archived && other.Archived

@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/bench/soaktest/report"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 type PreConds struct {
@@ -60,7 +61,7 @@ func (rctx *RecipeContext) Pre(conds *PreConds) {
 		if missing {
 			eStr := cmn.MustMarshal(expBuckets)
 			aStr := cmn.MustMarshal(actBuckets)
-			cmn.AssertNoErr(fmt.Errorf("missing buckets in pre, expected: %v, actual: %v", string(eStr), string(aStr)))
+			cos.AssertNoErr(fmt.Errorf("missing buckets in pre, expected: %v, actual: %v", string(eStr), string(aStr)))
 		}
 
 		for _, bckName := range toDelete {
@@ -74,7 +75,7 @@ func (rctx *RecipeContext) Pre(conds *PreConds) {
 		smap := fetchSmap("pre")
 		actual := smap.CountTargets()
 		if actual < conds.NumTargets {
-			cmn.AssertNoErr(fmt.Errorf("too few targets in pre, required: %v, actual: %v", conds.NumTargets, actual))
+			cos.AssertNoErr(fmt.Errorf("too few targets in pre, required: %v, actual: %v", conds.NumTargets, actual))
 		}
 	}
 }

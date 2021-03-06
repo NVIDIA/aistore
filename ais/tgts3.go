@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/ais/s3compat"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 )
@@ -89,7 +90,7 @@ func (t *targetrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items [
 	}
 
 	var cksumValue string
-	if cksum := lom.Cksum(); cksum != nil && cksum.Type() == cmn.ChecksumMD5 {
+	if cksum := lom.Cksum(); cksum != nil && cksum.Type() == cos.ChecksumMD5 {
 		cksumValue = cksum.Value()
 	}
 	result := s3compat.CopyObjectResult{

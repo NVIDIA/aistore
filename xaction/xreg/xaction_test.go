@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/xaction"
@@ -38,7 +39,7 @@ func TestXactionRenewLRU(t *testing.T) {
 
 	xreg.RegisterGlobalXact(&lru.XactProvider{})
 	defer xreg.AbortAll()
-	cmn.InitShortID(0)
+	cos.InitShortID(0)
 
 	wg.Add(num)
 	for i := 0; i < num; i++ {
@@ -67,7 +68,7 @@ func TestXactionRenewPrefetch(t *testing.T) {
 		bmd = cluster.NewBaseBownerMock()
 		bck = cluster.NewBck(
 			"test", cmn.ProviderAIS, cmn.NsGlobal,
-			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}},
+			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}},
 		)
 		tMock = cluster.NewTargetMock(bmd)
 	)

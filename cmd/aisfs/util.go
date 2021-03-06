@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/aisfs/fs"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/urfave/cli"
 )
@@ -74,7 +75,7 @@ func discoverClusterURL(c *cli.Context) string {
 			return defaultAISDockerURL
 		}
 
-		cmn.AssertMsg(len(clustersIDs) > 0, "there should be at least one cluster running when docker is detected")
+		cos.AssertMsg(len(clustersIDs) > 0, "there should be at least one cluster running when docker is detected")
 		proxyGateway, err := containers.ClusterProxyURL(clustersIDs[0])
 		if err != nil {
 			fmt.Fprintf(c.App.ErrWriter, dockerErrMsgFmt, err, defaultAISDockerURL)
@@ -116,14 +117,14 @@ func (e *errUsage) Error() string {
 }
 
 func incorrectUsageError(err error) error {
-	cmn.Assert(err != nil)
+	cos.Assert(err != nil)
 	return &errUsage{
 		message: err.Error(),
 	}
 }
 
 func missingArgumentsError(missingArguments ...string) error {
-	cmn.Assert(len(missingArguments) > 0)
+	cos.Assert(len(missingArguments) > 0)
 	return &errUsage{
 		message: fmt.Sprintf("missing arguments: %s.", strings.Join(missingArguments, ", ")),
 	}

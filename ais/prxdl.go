@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/downloader"
 	jsoniter "github.com/json-iterator/go"
@@ -35,7 +36,7 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string,
 				if dlStatus, ok = status.(*downloader.DlStatusResp); !ok {
 					dlStatus = &downloader.DlStatusResp{}
 					err := cmn.MorphMarshal(status, dlStatus)
-					cmn.AssertNoErr(err)
+					cos.AssertNoErr(err)
 				}
 
 				resp = resp.Aggregate(*dlStatus)
@@ -118,7 +119,7 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string,
 		res := validResponses[0]
 		return res.bytes, res.status, res.err
 	default:
-		cmn.AssertMsg(false, method)
+		cos.AssertMsg(false, method)
 		return nil, http.StatusInternalServerError, nil
 	}
 }
@@ -241,7 +242,7 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	id := cmn.GenUUID()
+	id := cos.GenUUID()
 	smap := p.owner.smap.get()
 
 	if errCode, err := p.broadcastStartDownloadRequest(r, id, body); err != nil {

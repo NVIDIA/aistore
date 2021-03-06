@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -85,22 +86,22 @@ func podTransformCommType(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (string,
 }
 
 func validateCommType(commType string) error {
-	if !cmn.StringInSlice(commType, []string{PushCommType, RedirectCommType, RevProxyCommType}) {
+	if !cos.StringInSlice(commType, []string{PushCommType, RedirectCommType, RevProxyCommType}) {
 		return fmt.Errorf("unknown communication type: %q", commType)
 	}
 	return nil
 }
 
-func podTransformTimeout(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (cmn.DurationJSON, error) {
+func podTransformTimeout(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (cos.DurationJSON, error) {
 	if pod.Annotations == nil || pod.Annotations[waitTimeoutAnnotation] == "" {
 		return 0, nil
 	}
 
 	v, err := time.ParseDuration(pod.Annotations[waitTimeoutAnnotation])
 	if err != nil {
-		return cmn.DurationJSON(v), cmn.NewETLError(errCtx, err.Error()).WithPodName(pod.Name)
+		return cos.DurationJSON(v), cmn.NewETLError(errCtx, err.Error()).WithPodName(pod.Name)
 	}
-	return cmn.DurationJSON(v), nil
+	return cos.DurationJSON(v), nil
 }
 
 func ValidateSpec(spec []byte) (msg InitMsg, err error) {
@@ -113,7 +114,7 @@ func ValidateSpec(spec []byte) (msg InitMsg, err error) {
 	errCtx.ETLName = pod.GetName()
 	msg.ID = pod.GetName()
 
-	if err := cmn.ValidateID(msg.ID); err != nil {
+	if err := cos.ValidateID(msg.ID); err != nil {
 		err = fmt.Errorf("pod name not in valid ID format, err: %v", err)
 		return msg, err
 	}

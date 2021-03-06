@@ -5,7 +5,7 @@
 package ec
 
 import (
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -52,20 +52,20 @@ type (
 
 // interface guard
 var (
-	_ cmn.Unpacker = (*intraReq)(nil)
-	_ cmn.Packer   = (*intraReq)(nil)
+	_ cos.Unpacker = (*intraReq)(nil)
+	_ cos.Packer   = (*intraReq)(nil)
 )
 
 func (r *intraReq) PackedSize() int {
 	if r.meta == nil {
 		// int8(type)+sender(string)+int8+int8+ptr_marker
-		return cmn.SizeofLen + len(r.sender) + 4 + cmn.SizeofI64
+		return cos.SizeofLen + len(r.sender) + 4 + cos.SizeofI64
 	}
 	// int8(type)+sender(string)+int8+int8+ptr_marker+sizeof(meta)
-	return cmn.SizeofLen + len(r.sender) + r.meta.PackedSize() + 4 + cmn.SizeofI64
+	return cos.SizeofLen + len(r.sender) + r.meta.PackedSize() + 4 + cos.SizeofI64
 }
 
-func (r *intraReq) Pack(packer *cmn.BytePack) {
+func (r *intraReq) Pack(packer *cos.BytePack) {
 	packer.WriteByte(uint8(r.act))
 	packer.WriteString(r.sender)
 	packer.WriteBool(r.exists)
@@ -79,7 +79,7 @@ func (r *intraReq) Pack(packer *cmn.BytePack) {
 	}
 }
 
-func (r *intraReq) Unpack(unpacker *cmn.ByteUnpack) error {
+func (r *intraReq) Unpack(unpacker *cos.ByteUnpack) error {
 	var (
 		i   byte
 		err error
@@ -119,7 +119,7 @@ func (r *intraReq) NewPack(mm *memsys.MMSA) []byte {
 	if mm != nil {
 		buf, _ = mm.Alloc(int64(l))
 	}
-	packer := cmn.NewPacker(buf, l)
+	packer := cos.NewPacker(buf, l)
 	packer.WriteAny(r)
 	return packer.Bytes()
 }

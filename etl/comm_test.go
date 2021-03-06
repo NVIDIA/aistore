@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -30,14 +31,14 @@ var _ = Describe("CommunicatorTest", func() {
 		targetServer      *httptest.Server
 		proxyServer       *httptest.Server
 
-		dataSize      = int64(cmn.MiB * 50)
+		dataSize      = int64(cos.MiB * 50)
 		transformData = make([]byte, dataSize)
 
 		bck        = cmn.Bck{Name: "commBck", Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 		objName    = "commObj"
 		clusterBck = cluster.NewBck(
 			bck.Name, bck.Provider, bck.Ns,
-			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}},
+			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}},
 		)
 		bmdMock = cluster.NewBaseBownerMock(clusterBck)
 	)
@@ -52,7 +53,7 @@ var _ = Describe("CommunicatorTest", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		mpath := filepath.Join(tmpDir, "mpath")
-		err = cmn.CreateDir(mpath)
+		err = cos.CreateDir(mpath)
 		Expect(err).NotTo(HaveOccurred())
 		fs.Init()
 		fs.DisableFsIDCheck()
@@ -128,7 +129,7 @@ func createRandomFile(fileName string, size int64) error {
 	if _, err := rand.Read(b); err != nil {
 		return err
 	}
-	f, err := cmn.CreateFile(fileName)
+	f, err := cos.CreateFile(fileName)
 	if err != nil {
 		return err
 	}

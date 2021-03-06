@@ -15,7 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/ec"
@@ -32,7 +32,7 @@ func TestJoggerGroup(t *testing.T) {
 				{Type: fs.ObjectType, ContentCnt: 500},
 			},
 			MountpathsCnt: 10,
-			ObjectSize:    cmn.KiB,
+			ObjectSize:    cos.KiB,
 		}
 		out     = tutils.PrepareObjects(t, desc)
 		counter = atomic.NewInt32(0)
@@ -73,7 +73,7 @@ func TestJoggerGroupParallel(t *testing.T) {
 				{Type: fs.ObjectType, ContentCnt: objectsCnt},
 			},
 			MountpathsCnt: mpathsCnt,
-			ObjectSize:    cmn.KiB,
+			ObjectSize:    cos.KiB,
 		}
 		out     = tutils.PrepareObjects(t, desc)
 		counter *atomic.Int32
@@ -131,7 +131,7 @@ func TestJoggerGroupLoad(t *testing.T) {
 				{Type: fs.ObjectType, ContentCnt: 500},
 			},
 			MountpathsCnt: 10,
-			ObjectSize:    cmn.KiB,
+			ObjectSize:    cos.KiB,
 		}
 		out     = tutils.PrepareObjects(t, desc)
 		counter = atomic.NewInt32(0)
@@ -170,7 +170,7 @@ func TestJoggerGroupError(t *testing.T) {
 				{Type: fs.ObjectType, ContentCnt: 50},
 			},
 			MountpathsCnt: 4,
-			ObjectSize:    cmn.KiB,
+			ObjectSize:    cos.KiB,
 		}
 		out     = tutils.PrepareObjects(t, desc)
 		counter = atomic.NewInt32(0)
@@ -210,7 +210,7 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 				{Type: fs.ObjectType, ContentCnt: totalObjCnt},
 			},
 			MountpathsCnt: mpathsCnt,
-			ObjectSize:    cmn.KiB,
+			ObjectSize:    cos.KiB,
 		}
 		out = tutils.PrepareObjects(t, desc)
 
@@ -269,7 +269,7 @@ func TestJoggerGroupMultiContentTypes(t *testing.T) {
 				{Type: ec.MetaType, ContentCnt: 405},
 			},
 			MountpathsCnt: 10,
-			ObjectSize:    cmn.KiB,
+			ObjectSize:    cos.KiB,
 		}
 		out = tutils.PrepareObjects(t, desc)
 	)

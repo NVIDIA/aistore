@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -175,7 +176,7 @@ func (t *tarExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader, 
 			// we must have this `MkdirAll` before files.
 			continue
 		} else if header.Typeflag == tar.TypeReg {
-			data := cmn.NewSizedReader(tr, header.Size)
+			data := cos.NewSizedReader(tr, header.Size)
 
 			extractMethod := ExtractToMem
 			if toDisk {
@@ -224,7 +225,7 @@ func (t *tarExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadContent
 
 	defer func() {
 		rdReader.free()
-		cmn.Close(tw)
+		cos.Close(tw)
 	}()
 
 	for _, rec := range s.Records.All() {
@@ -262,7 +263,7 @@ func (t *tarExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadContent
 
 				needFlush = true
 			default:
-				cmn.AssertMsg(false, obj.StoreType)
+				cos.AssertMsg(false, obj.StoreType)
 			}
 
 			written += n

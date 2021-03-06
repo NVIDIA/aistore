@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
@@ -37,9 +38,9 @@ type (
 
 	// Runtime EC statistics for restore xaction
 	ExtECGetStats struct {
-		AvgTime     cmn.DurationJSON `json:"ec.decode.time"`
+		AvgTime     cos.DurationJSON `json:"ec.decode.time"`
 		ErrCount    int64            `json:"ec.decode.err.n,string"`
-		AvgObjTime  cmn.DurationJSON `json:"ec.obj.process.time"`
+		AvgObjTime  cos.DurationJSON `json:"ec.obj.process.time"`
 		AvgQueueLen float64          `json:"ec.queue.len.n"`
 		IsIdle      bool             `json:"is_idle"`
 	}
@@ -138,7 +139,7 @@ func (r *XactGet) newGetJogger(mpath string) *getJogger {
 		mpath:  mpath,
 		client: client,
 		workCh: make(chan *request, requestBufSizeFS),
-		stopCh: cmn.NewStopCh(),
+		stopCh: cos.NewStopCh(),
 	}
 }
 
@@ -154,7 +155,7 @@ func (r *XactGet) dispatchRequest(req *request, lom *cluster.LOM) error {
 	debug.Assert(req.Action == ActRestore)
 
 	jogger, ok := r.getJoggers[lom.MpathInfo().Path]
-	cmn.AssertMsg(ok, "Invalid mountpath given in EC request")
+	cos.AssertMsg(ok, "Invalid mountpath given in EC request")
 	r.stats.updateQueue(len(jogger.workCh))
 	jogger.workCh <- req
 	return nil
@@ -275,7 +276,7 @@ func (r *XactGet) addMpath(mpath string) {
 
 func (r *XactGet) removeMpath(mpath string) {
 	getJog, ok := r.getJoggers[mpath]
-	cmn.AssertMsg(ok, "Mountpath unregister handler for EC called with invalid mountpath")
+	cos.AssertMsg(ok, "Mountpath unregister handler for EC called with invalid mountpath")
 	getJog.stop()
 	delete(r.getJoggers, mpath)
 }
@@ -284,9 +285,9 @@ func (r *XactGet) Stats() cluster.XactStats {
 	baseStats := r.XactDemandBase.Stats().(*xaction.BaseXactStatsExt)
 	st := r.stats.stats()
 	baseStats.Ext = &ExtECGetStats{
-		AvgTime:     cmn.DurationJSON(st.DecodeTime.Nanoseconds()),
+		AvgTime:     cos.DurationJSON(st.DecodeTime.Nanoseconds()),
 		ErrCount:    st.DecodeErr,
-		AvgObjTime:  cmn.DurationJSON(st.ObjTime.Nanoseconds()),
+		AvgObjTime:  cos.DurationJSON(st.ObjTime.Nanoseconds()),
 		AvgQueueLen: st.QueueLen,
 		IsIdle:      r.Pending() == 0,
 	}

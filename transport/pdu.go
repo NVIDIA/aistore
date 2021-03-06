@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -57,7 +57,7 @@ func (pdu *pdu) free(mm *memsys.MMSA) {
 //////////
 
 func newSendPDU(buf []byte) (p *spdu) {
-	debug.Assert(len(buf) >= cmn.KiB && len(buf) <= MaxSizePDU)
+	debug.Assert(len(buf) >= cos.KiB && len(buf) <= MaxSizePDU)
 	p = &spdu{pdu{buf: buf}}
 	p.reset()
 	return

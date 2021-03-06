@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
@@ -331,7 +332,7 @@ func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType str
 			t:        t,
 			bck:      bck,
 			num:      15,
-			fileSize: cmn.KiB,
+			fileSize: cos.KiB,
 		}
 		proxyURL = tutils.RandomProxyURL()
 	)
@@ -409,7 +410,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 		oldChkVersion := config.Versioning.ValidateWarmGet
 		oldVersioning := config.Versioning.Enabled
 
-		newConfig := make(cmn.SimpleKVs)
+		newConfig := make(cos.SimpleKVs)
 		if oldVersioning != versioning {
 			newConfig[cmn.PropBucketVerEnabled] = strconv.FormatBool(versioning)
 		}
@@ -423,7 +424,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 
 		defer func() {
 			// restore configuration
-			newConfig := make(cmn.SimpleKVs)
+			newConfig := make(cos.SimpleKVs)
 			oldWarmCheck := oldChkVersion && oldVersioning
 			if oldWarmCheck != warmCheck {
 				newConfig["versioning.validate_warm_get"] = strconv.FormatBool(oldWarmCheck)

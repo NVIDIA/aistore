@@ -1,8 +1,8 @@
-// Package provides common low-level types and utilities for all aistore projects
+// Package cos provides common low-level types and utilities for all aistore projects
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package cmn
+package cos
 
 import (
 	"encoding/binary"
@@ -48,7 +48,7 @@ import (
 // 2. Add a method to a caller that calculates total pack size and allocates
 //    a buffer for packing. It is OK to just allocate/use a buffer with
 //    predefined big size.
-// 3. Write all data to the create packer (cmn.NewPacker)
+// 3. Write all data to the create packer (cos.NewPacker)
 // 4. When all data is written, get the packed data with `packer.Bytes()`.
 // 5. Send this value as a regular `[]byte` slice
 // NOTE: if you need to know how many bytes the packer contains, use

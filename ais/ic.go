@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xaction"
@@ -124,7 +125,7 @@ outer:
 				return true
 			}
 		}
-		cmn.Assertf(smap.IsIC(psi), "%s, %s", psi, smap.StrIC(ic.p.si))
+		cos.Assertf(smap.IsIC(psi), "%s, %s", psi, smap.StrIC(ic.p.si))
 	}
 	if owner == ic.p.si.ID() {
 		return
@@ -240,7 +241,7 @@ func (ic *ic) handler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		ic.handlePost(w, r)
 	default:
-		cmn.Assert(false)
+		cos.Assert(false)
 	}
 }
 
@@ -341,7 +342,7 @@ func (ic *ic) registerEqual(a regIC) {
 	}
 	if a.smap.IsIC(ic.p.si) {
 		err := ic.p.notifs.add(a.nl)
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 	}
 	if a.smap.ICCount() > 1 {
 		ic.bcastListenIC(a.nl, a.smap)
@@ -353,7 +354,7 @@ func (ic *ic) bcastListenIC(nl nl.NotifListener, smap *smapX) {
 		actMsg = cmn.ActionMsg{Action: cmn.ActListenToNotif, Value: newNLMsg(nl)}
 		msg    = ic.p.newAmsg(&actMsg, smap, nil)
 	)
-	cmn.Assert(nl.ActiveCount() > 0)
+	cos.Assert(nl.ActiveCount() > 0)
 	ic.p.bcastAsyncIC(msg)
 }
 
@@ -413,7 +414,7 @@ func (ic *ic) syncICBundle() error {
 		return err
 	}
 
-	cmn.Assertf(smap.UUID == bundle.Smap.UUID, "%s vs %s", smap.StringEx(), bundle.Smap.StringEx())
+	cos.Assertf(smap.UUID == bundle.Smap.UUID, "%s vs %s", smap.StringEx(), bundle.Smap.StringEx())
 
 	if err := ic.p.owner.smap.synchronize(ic.p.si, bundle.Smap); err != nil {
 		if !isErrDowngrade(err) {

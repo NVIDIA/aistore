@@ -7,7 +7,7 @@ package ais_test
 import (
 	"testing"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 func TestBytesToStr(t *testing.T) {
@@ -31,7 +31,7 @@ func TestBytesToStr(t *testing.T) {
 	}
 
 	for _, tst := range tests {
-		s := cmn.B2S(tst.val, tst.num)
+		s := cos.B2S(tst.val, tst.num)
 		if s != tst.str {
 			t.Errorf("Expected %s got %s", tst.str, s)
 		}
@@ -58,7 +58,7 @@ func TestStrToBytes(t *testing.T) {
 	}
 
 	for _, tst := range tests {
-		n, e := cmn.S2B(tst.str)
+		n, e := cos.S2B(tst.str)
 		if e != nil {
 			t.Errorf("Failed to convert %s: %v", tst.str, e)
 		}

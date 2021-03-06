@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
@@ -53,16 +54,16 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *cmn.Config) (er
 		return
 	}
 
-	if err = cmn.CreateDir(config.Log.Dir); err != nil {
+	if err = cos.CreateDir(config.Log.Dir); err != nil {
 		return fmt.Errorf("failed to create log dir %q, err: %v", config.Log.Dir, err)
 	}
 	glog.SetLogDir(config.Log.Dir)
 
 	// glog rotate
 	glog.MaxSize = config.Log.MaxSize
-	if glog.MaxSize > cmn.GiB {
+	if glog.MaxSize > cos.GiB {
 		glog.Warningf("log.max_size %d exceeded 1GB, setting the default 1MB", glog.MaxSize)
-		glog.MaxSize = cmn.MiB
+		glog.MaxSize = cos.MiB
 	}
 
 	if err = cmn.SetLogLevel(config, config.Log.Level); err != nil {

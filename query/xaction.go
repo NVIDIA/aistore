@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/objwalk/walkinfo"
 	"github.com/NVIDIA/aistore/xaction"
@@ -67,9 +68,9 @@ func (r *ObjectsListingXact) Run() {
 		r.fetchingDone = true
 	}()
 
-	cmn.Assert(r.query.ObjectsSource != nil)
-	cmn.Assert(r.query.BckSource != nil)
-	cmn.Assert(r.query.BckSource.Bck != nil)
+	cos.Assert(r.query.ObjectsSource != nil)
+	cos.Assert(r.query.BckSource != nil)
+	cos.Assert(r.query.BckSource.Bck != nil)
 
 	Registry.Put(r.ID().String(), r)
 
@@ -109,7 +110,7 @@ func (r *ObjectsListingXact) startFromTemplate() {
 		smap = r.t.Sowner().Get()
 	)
 
-	cmn.Assert(bck.IsAIS())
+	cos.Assert(bck.IsAIS())
 
 	for objName, hasNext := iter(); hasNext; objName, hasNext = iter() {
 		lom := &cluster.LOM{ObjName: objName}
@@ -152,8 +153,8 @@ func (r *ObjectsListingXact) startFromBck() {
 		r.stop()
 	}()
 
-	cmn.Assert(r.msg != nil)
-	cmn.Assert(r.ctx != nil)
+	cos.Assert(r.msg != nil)
+	cos.Assert(r.ctx != nil)
 
 	bck := r.query.BckSource.Bck
 
@@ -245,7 +246,7 @@ func (r *ObjectsListingXact) peekN(n uint) (result []*cmn.BucketEntry, err error
 		r.buff = append(r.buff, res.entry)
 	}
 
-	size := cmn.Min(int(n), len(r.buff))
+	size := cos.Min(int(n), len(r.buff))
 	if size == 0 {
 		size = len(r.buff)
 	}
@@ -255,7 +256,7 @@ func (r *ObjectsListingXact) peekN(n uint) (result []*cmn.BucketEntry, err error
 // Should be called with lock acquired.
 func (r *ObjectsListingXact) discardN(n uint) {
 	if len(r.buff) > 0 && n > 0 {
-		size := cmn.Min(int(n), len(r.buff))
+		size := cos.Min(int(n), len(r.buff))
 		r.lastDiscardedResult = r.buff[size-1].Name
 		r.buff = r.buff[size:]
 	}
@@ -314,7 +315,7 @@ func (r *ObjectsListingXact) Next() (entry *cmn.BucketEntry, err error) {
 	if len(res) == 0 {
 		return nil, err
 	}
-	cmn.Assert(len(res) == 1)
+	cos.Assert(len(res) == 1)
 	return res[0], err
 }
 

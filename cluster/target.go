@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
@@ -50,15 +51,15 @@ type BackendProvider interface {
 	MaxPageSize() uint
 
 	CreateBucket(ctx context.Context, bck *Bck) (errCode int, err error)
-	HeadBucket(ctx context.Context, bck *Bck) (bckProps cmn.SimpleKVs, errCode int, err error)
+	HeadBucket(ctx context.Context, bck *Bck) (bckProps cos.SimpleKVs, errCode int, err error)
 	ListObjects(ctx context.Context, bck *Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error)
 
 	ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error)
 
-	HeadObj(ctx context.Context, lom *LOM) (objMeta cmn.SimpleKVs, errCode int, err error)
+	HeadObj(ctx context.Context, lom *LOM) (objMeta cos.SimpleKVs, errCode int, err error)
 	// GetObj fetches and finalizes the object from the cloud.
 	GetObj(ctx context.Context, lom *LOM) (errCode int, err error)
-	GetObjReader(ctx context.Context, lom *LOM) (r io.ReadCloser, expectedCksum *cmn.Cksum, errCode int, err error)
+	GetObjReader(ctx context.Context, lom *LOM) (r io.ReadCloser, expectedCksum *cos.Cksum, errCode int, err error)
 	// PutObj sends object to the backend.
 	// It takes over of `r` reader and closes it, even on error.
 	PutObj(ctx context.Context, r io.ReadCloser, lom *LOM) (version string, errCode int, err error)
@@ -76,7 +77,7 @@ type (
 		Open()
 		Close(err error)
 		UnregRecv()
-		Send(obj *transport.Obj, roc cmn.ReadOpenCloser, tsi *Snode) error
+		Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *Snode) error
 		ACK(hdr transport.ObjHdr, cb transport.ObjSentCB, tsi *Snode) error
 		RecvType() RecvType
 	}
@@ -84,7 +85,7 @@ type (
 		Tag        string // Used to distinguish between different PUT operation.
 		Reader     io.ReadCloser
 		RecvType   RecvType
-		Cksum      *cmn.Cksum // Checksum to check.
+		Cksum      *cos.Cksum // Checksum to check.
 		Started    time.Time
 		SkipEncode bool // Do not run EC encode after finalizing.
 	}
@@ -97,7 +98,7 @@ type (
 		DryRun    bool
 	}
 	SendToParams struct {
-		Reader    cmn.ReadOpenCloser
+		Reader    cos.ReadOpenCloser
 		BckTo     *Bck
 		ObjNameTo string
 		Tsi       *Snode
@@ -109,7 +110,7 @@ type (
 		SrcFQN    string
 		Bck       *Bck
 		ObjName   string
-		Cksum     *cmn.Cksum
+		Cksum     *cos.Cksum
 		Overwrite bool
 		KeepOrig  bool
 	}

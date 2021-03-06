@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tidwall/buntdb"
 )
@@ -24,7 +25,7 @@ import (
 //   after previous compacting by `AutoShrinkPercentage`(50%)
 
 const (
-	autoShrinkSize = cmn.MiB
+	autoShrinkSize = cos.MiB
 	collectionSepa = "##"
 )
 

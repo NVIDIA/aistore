@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/xaction"
@@ -36,14 +37,14 @@ type (
 
 	// Runtime EC statistics for PUT xaction
 	ExtECPutStats struct {
-		AvgEncodeTime  cmn.DurationJSON `json:"ec.encode.time"`
-		AvgDeleteTime  cmn.DurationJSON `json:"ec.delete.time"`
+		AvgEncodeTime  cos.DurationJSON `json:"ec.encode.time"`
+		AvgDeleteTime  cos.DurationJSON `json:"ec.delete.time"`
 		EncodeCount    int64            `json:"ec.encode.n,string"`
 		DeleteCount    int64            `json:"ec.delete.n,string"`
-		EncodeSize     cmn.SizeJSON     `json:"ec.encode.size,string"`
+		EncodeSize     cos.SizeJSON     `json:"ec.encode.size,string"`
 		EncodeErrCount int64            `json:"ec.encode.err.n,string"`
 		DeleteErrCount int64            `json:"ec.delete.err.n,string"`
-		AvgObjTime     cmn.DurationJSON `json:"ec.obj.process.time"`
+		AvgObjTime     cos.DurationJSON `json:"ec.obj.process.time"`
 		AvgQueueLen    float64          `json:"ec.queue.len.n"`
 		IsIdle         bool             `json:"is_idle"`
 	}
@@ -103,7 +104,7 @@ func (r *XactPut) newPutJogger(mpath string) *putJogger {
 		mpath:  mpath,
 		putCh:  make(chan *request, requestBufSizeFS),
 		xactCh: make(chan *request, requestBufSizeEncode),
-		stopCh: cmn.NewStopCh(),
+		stopCh: cos.NewStopCh(),
 	}
 }
 
@@ -123,7 +124,7 @@ func (r *XactPut) dispatchRequest(req *request, lom *cluster.LOM) error {
 	}
 
 	jogger, ok := r.putJoggers[lom.MpathInfo().Path]
-	cmn.AssertMsg(ok, "Invalid mountpath given in EC request")
+	cos.AssertMsg(ok, "Invalid mountpath given in EC request")
 	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("ECPUT (bg queue = %d): dispatching object %s....", len(jogger.putCh), lom)
 	}
@@ -176,7 +177,7 @@ func (r *XactPut) mainLoop() {
 				r.setEcRequestsEnabled()
 				break
 			}
-			cmn.Assert(msg.Action == ActClearRequests)
+			cos.Assert(msg.Action == ActClearRequests)
 
 			r.setEcRequestsDisabled()
 			r.stop()
@@ -222,14 +223,14 @@ func (r *XactPut) Stats() cluster.XactStats {
 	baseStats := r.XactDemandBase.Stats().(*xaction.BaseXactStatsExt)
 	st := r.stats.stats()
 	baseStats.Ext = &ExtECPutStats{
-		AvgEncodeTime:  cmn.DurationJSON(st.EncodeTime.Nanoseconds()),
-		EncodeSize:     cmn.SizeJSON(st.EncodeSize),
+		AvgEncodeTime:  cos.DurationJSON(st.EncodeTime.Nanoseconds()),
+		EncodeSize:     cos.SizeJSON(st.EncodeSize),
 		EncodeCount:    st.PutReq,
 		EncodeErrCount: st.EncodeErr,
-		AvgDeleteTime:  cmn.DurationJSON(st.DeleteTime.Nanoseconds()),
+		AvgDeleteTime:  cos.DurationJSON(st.DeleteTime.Nanoseconds()),
 		DeleteErrCount: st.DeleteErr,
 		DeleteCount:    st.DelReq,
-		AvgObjTime:     cmn.DurationJSON(st.ObjTime.Nanoseconds()),
+		AvgObjTime:     cos.DurationJSON(st.ObjTime.Nanoseconds()),
 		AvgQueueLen:    st.QueueLen,
 		IsIdle:         r.Pending() == 0,
 	}

@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/query"
@@ -37,12 +38,12 @@ func TestQueryBck(t *testing.T) {
 		}
 		numObjects       = 1000
 		chunkSize        = 50
-		queryObjectNames = make(cmn.StringSet, numObjects-1)
+		queryObjectNames = make(cos.StringSet, numObjects-1)
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
-	putObjects := tutils.PutRR(t, baseParams, cmn.KiB, cmn.ChecksumNone, bck, "", numObjects)
+	putObjects := tutils.PutRR(t, baseParams, cos.KiB, cos.ChecksumNone, bck, "", numObjects)
 	sort.Strings(putObjects)
 	for _, obj := range putObjects {
 		queryObjectNames.Add(obj)
@@ -56,7 +57,7 @@ func TestQueryBck(t *testing.T) {
 		var (
 			// Get random proxy for next request to simulate load balancer.
 			baseParams   = tutils.BaseAPIParams()
-			requestedCnt = cmn.Min(chunkSize, objectsLeft)
+			requestedCnt = cos.Min(chunkSize, objectsLeft)
 		)
 		objects, err := api.NextQueryResults(baseParams, handle, uint(requestedCnt))
 		tassert.CheckFatal(t, err)
@@ -81,19 +82,19 @@ func TestQueryVersionFilter(t *testing.T) {
 			Provider: cmn.ProviderAIS,
 		}
 		numObjects       = 10
-		queryObjectNames = make(cmn.StringSet, numObjects-1)
+		queryObjectNames = make(cos.StringSet, numObjects-1)
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	objName := fmt.Sprintf("object-%d.txt", 0)
-	putRandomFile(t, baseParams, bck, objName, cmn.KiB)
+	putRandomFile(t, baseParams, bck, objName, cos.KiB)
 	// increase version of object-0.txt, so filter should discard it
-	putRandomFile(t, baseParams, bck, objName, cmn.KiB)
+	putRandomFile(t, baseParams, bck, objName, cos.KiB)
 	for i := 1; i < numObjects; i++ {
 		objName = fmt.Sprintf("object-%d.txt", i)
 		queryObjectNames.Add(objName)
-		putRandomFile(t, baseParams, bck, objName, cmn.KiB)
+		putRandomFile(t, baseParams, bck, objName, cos.KiB)
 	}
 
 	filter := query.VersionLEFilterMsg(1)
@@ -120,26 +121,26 @@ func TestQueryVersionAndAtime(t *testing.T) {
 			Provider: cmn.ProviderAIS,
 		}
 		numObjects       = 10
-		queryObjectNames = make(cmn.StringSet, numObjects-1)
+		queryObjectNames = make(cos.StringSet, numObjects-1)
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	objName := fmt.Sprintf("object-%d.txt", 0)
-	putRandomFile(t, baseParams, bck, objName, cmn.KiB)
+	putRandomFile(t, baseParams, bck, objName, cos.KiB)
 	// increase version of object-0.txt, so filter should discard it
-	putRandomFile(t, baseParams, bck, objName, cmn.KiB)
+	putRandomFile(t, baseParams, bck, objName, cos.KiB)
 	for i := 1; i < numObjects; i++ {
 		objName = fmt.Sprintf("object-%d.txt", i)
 		queryObjectNames.Add(objName)
-		putRandomFile(t, baseParams, bck, objName, cmn.KiB)
+		putRandomFile(t, baseParams, bck, objName, cos.KiB)
 	}
 
 	timestamp := time.Now()
 
 	// object with Atime > timestamp
 	objName = fmt.Sprintf("object-%d.txt", numObjects+1)
-	putRandomFile(t, baseParams, bck, objName, cmn.KiB)
+	putRandomFile(t, baseParams, bck, objName, cos.KiB)
 
 	filter := query.NewAndFilter(query.VersionLEFilterMsg(1), query.ATimeBeforeFilterMsg(timestamp))
 	handle, err := api.InitQuery(baseParams, "object-{0..100}.txt", bck, filter)
@@ -164,7 +165,7 @@ func TestQueryWorkersTargets(t *testing.T) {
 			Name:     "TESTQUERYWORKERBUCKET",
 			Provider: cmn.ProviderAIS,
 		}
-		smapDaemonIDs = cmn.StringSet{}
+		smapDaemonIDs = cos.StringSet{}
 		objName       = "object.txt"
 	)
 
@@ -176,7 +177,7 @@ func TestQueryWorkersTargets(t *testing.T) {
 		smapDaemonIDs.Add(t.DaemonID)
 	}
 
-	putRandomFile(t, baseParams, bck, objName, cmn.KiB)
+	putRandomFile(t, baseParams, bck, objName, cos.KiB)
 	handle, err := api.InitQuery(baseParams, "", bck, nil, uint(smap.CountActiveTargets()))
 	tassert.CheckFatal(t, err)
 	for i := 1; i <= smap.CountActiveTargets(); i++ {
@@ -200,7 +201,7 @@ func TestQueryWorkersTargetDown(t *testing.T) {
 			Name:     "TESTQUERYWORKERBUCKET",
 			Provider: cmn.ProviderAIS,
 		}
-		smapDaemonIDs = cmn.StringSet{}
+		smapDaemonIDs = cos.StringSet{}
 		objName       = "object.txt"
 	)
 
@@ -212,7 +213,7 @@ func TestQueryWorkersTargetDown(t *testing.T) {
 		smapDaemonIDs.Add(t.DaemonID)
 	}
 
-	putRandomFile(t, baseParams, bck, objName, cmn.KiB)
+	putRandomFile(t, baseParams, bck, objName, cos.KiB)
 	handle, err := api.InitQuery(baseParams, "", bck, nil, uint(smap.CountActiveTargets()))
 	tassert.CheckFatal(t, err)
 
@@ -252,7 +253,7 @@ func TestQuerySingleWorkerNext(t *testing.T) {
 		m          = ioContext{
 			t:        t,
 			num:      100,
-			fileSize: 5 * cmn.KiB,
+			fileSize: 5 * cos.KiB,
 		}
 	)
 

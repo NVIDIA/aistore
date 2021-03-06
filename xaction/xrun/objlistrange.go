@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
@@ -29,18 +30,18 @@ func isLocalObject(smap *cluster.Smap, b cmn.Bck, objName, sid string) (bool, er
 // 1. As bash-style: `file-{0..100}`
 // 2. As at-style: `file-@100`
 // 3. Falls back to just a prefix without number ranges
-func parseTemplate(template string) (cmn.ParsedTemplate, error) {
+func parseTemplate(template string) (cos.ParsedTemplate, error) {
 	if template == "" {
-		return cmn.ParsedTemplate{}, errors.New("empty range template")
+		return cos.ParsedTemplate{}, errors.New("empty range template")
 	}
 
-	if parsed, err := cmn.ParseBashTemplate(template); err == nil {
+	if parsed, err := cos.ParseBashTemplate(template); err == nil {
 		return parsed, nil
 	}
-	if parsed, err := cmn.ParseAtTemplate(template); err == nil {
+	if parsed, err := cos.ParseAtTemplate(template); err == nil {
 		return parsed, nil
 	}
-	return cmn.ParsedTemplate{Prefix: template}, nil
+	return cos.ParsedTemplate{Prefix: template}, nil
 }
 
 //
@@ -135,7 +136,7 @@ func (r *prefetch) iterateBucketRange(args *xreg.DeletePrefetchArgs) error {
 //
 
 func (r *listRangeBase) iterateRange(args *xreg.DeletePrefetchArgs, cb objCallback) error {
-	cmn.Assert(args.RangeMsg != nil)
+	cos.Assert(args.RangeMsg != nil)
 	pt, err := parseTemplate(args.RangeMsg.Template)
 	if err != nil {
 		return err
@@ -148,7 +149,7 @@ func (r *listRangeBase) iterateRange(args *xreg.DeletePrefetchArgs, cb objCallba
 	return r.iteratePrefix(args, smap, pt.Prefix, cb)
 }
 
-func (r *listRangeBase) iterateTemplate(args *xreg.DeletePrefetchArgs, smap *cluster.Smap, pt *cmn.ParsedTemplate, cb objCallback) error {
+func (r *listRangeBase) iterateTemplate(args *xreg.DeletePrefetchArgs, smap *cluster.Smap, pt *cos.ParsedTemplate, cb objCallback) error {
 	var (
 		getNext = pt.Iter()
 		sid     = r.t.SID()

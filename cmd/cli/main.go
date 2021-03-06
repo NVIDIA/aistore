@@ -9,7 +9,7 @@ import (
 	"os/signal"
 
 	"github.com/NVIDIA/aistore/cmd/cli/commands"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 const (
@@ -31,11 +31,11 @@ func main() {
 	dispatchInterruptHandler()
 
 	if err := commands.Init(); err != nil {
-		cmn.Exitf("%v", err)
+		cos.Exitf("%v", err)
 	}
 
 	aisCLI := commands.New(build, version)
 	if err := aisCLI.Run(os.Args); err != nil {
-		cmn.Exitf("%v", err)
+		cos.Exitf("%v", err)
 	}
 }

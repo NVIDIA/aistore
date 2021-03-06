@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/OneOfOne/xxhash"
@@ -135,7 +136,7 @@ func NewSnode(id, daeType string, publicNet, intraControlNet, intraDataNet NetIn
 
 func (d *Snode) Digest() uint64 {
 	if d.idDigest == 0 {
-		d.idDigest = xxhash.ChecksumString64S(d.ID(), cmn.MLCG32)
+		d.idDigest = xxhash.ChecksumString64S(d.ID(), cos.MLCG32)
 	}
 	return d.idDigest
 }
@@ -180,7 +181,7 @@ func (d *Snode) URL(network string) string {
 	case cmn.NetworkIntraData:
 		return d.IntraDataNet.DirectURL
 	default:
-		cmn.Assertf(false, "unknown network %q", network)
+		cos.Assertf(false, "unknown network %q", network)
 		return ""
 	}
 }
@@ -203,14 +204,14 @@ func (d *Snode) Validate() error {
 		return errors.New("invalid Snode: missing node " + d.NameEx())
 	}
 	if d.DaemonType != cmn.Proxy && d.DaemonType != cmn.Target {
-		cmn.Assertf(false, "invalid Snode type %q", d.DaemonType)
+		cos.Assertf(false, "invalid Snode type %q", d.DaemonType)
 	}
 	return nil
 }
 
 func (d *Snode) Clone() *Snode {
 	var dst Snode
-	cmn.CopyStruct(&dst, d)
+	cos.CopyStruct(&dst, d)
 	return &dst
 }
 

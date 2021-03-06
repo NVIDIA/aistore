@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/bench/aisloader/stats"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/stats/statsd"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -102,14 +103,14 @@ func prettyBytes(n int64) string {
 	if n <= 0 { // process special case that B2S do not cover
 		return "-"
 	}
-	return cmn.B2S(n, 1)
+	return cos.B2S(n, 1)
 }
 
 func prettySpeed(n int64) string {
 	if n <= 0 {
 		return "-"
 	}
-	return cmn.B2S(n, 2) + "/s"
+	return cos.B2S(n, 2) + "/s"
 }
 
 // prettyDuration converts an integer representing a time in nano second to a string

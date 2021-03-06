@@ -7,17 +7,17 @@ package tests
 import (
 	"testing"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 )
 
 func TestWordsDistance(t *testing.T) {
 	testCases := []struct{ expected, actual int }{
-		{0, cmn.DamerauLevenstheinDistance("test", "test")},
-		{1, cmn.DamerauLevenstheinDistance("tests", "test")},
-		{2, cmn.DamerauLevenstheinDistance("cp", "copy")},
-		{1, cmn.DamerauLevenstheinDistance("teet", "test")},
-		{1, cmn.DamerauLevenstheinDistance("test", "tset")},
+		{0, cos.DamerauLevenstheinDistance("test", "test")},
+		{1, cos.DamerauLevenstheinDistance("tests", "test")},
+		{2, cos.DamerauLevenstheinDistance("cp", "copy")},
+		{1, cos.DamerauLevenstheinDistance("teet", "test")},
+		{1, cos.DamerauLevenstheinDistance("test", "tset")},
 	}
 
 	for _, tc := range testCases {

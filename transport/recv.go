@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
@@ -360,7 +361,7 @@ func (obj *objReader) readPDU(b []byte) (n int, err error) {
 //
 
 func uniqueID(r *http.Request, sessID int64) uint64 {
-	x := xxhash.ChecksumString64S(r.RemoteAddr, cmn.MLCG32)
+	x := xxhash.ChecksumString64S(r.RemoteAddr, cos.MLCG32)
 	return (x&math.MaxUint32)<<32 | uint64(sessID)
 }
 

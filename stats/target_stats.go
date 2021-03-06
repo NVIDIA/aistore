@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats/statsd"
 )
@@ -221,7 +222,7 @@ func (r *Trunner) doAdd(nv NamedVal64) {
 	)
 
 	v, ok := s.Tracker[name]
-	cmn.Assertf(ok, "invalid stats name: %q", name)
+	cos.Assertf(ok, "invalid stats name: %q", name)
 
 	// most target stats can be handled by CoreStats.doAdd
 	// stats that track data IO are unique to target and are handled here

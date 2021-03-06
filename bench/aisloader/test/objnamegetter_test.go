@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/bench/aisloader/namegetter"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 )
 
@@ -33,7 +33,7 @@ func init() {
 
 func BenchmarkRandomUniqueNameGetter(b *testing.B) {
 	ng := &namegetter.RandomUniqueNameGetter{}
-	ng.Init(objNames, cmn.NowRand())
+	ng.Init(objNames, cos.NowRand())
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		ng.ObjName()
@@ -42,7 +42,7 @@ func BenchmarkRandomUniqueNameGetter(b *testing.B) {
 
 func BenchmarkRandomUniqueIterNameGetter(b *testing.B) {
 	ng := &namegetter.RandomUniqueIterNameGetter{}
-	ng.Init(objNames, cmn.NowRand())
+	ng.Init(objNames, cos.NowRand())
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		ng.ObjName()
@@ -51,7 +51,7 @@ func BenchmarkRandomUniqueIterNameGetter(b *testing.B) {
 
 func BenchmarkPermutationUniqueNameGetter(b *testing.B) {
 	ng := &namegetter.PermutationUniqueNameGetter{}
-	ng.Init(objNames, cmn.NowRand())
+	ng.Init(objNames, cos.NowRand())
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		ng.ObjName()
@@ -60,7 +60,7 @@ func BenchmarkPermutationUniqueNameGetter(b *testing.B) {
 
 func BenchmarkPermutationImprovedUniqueNameGetter(b *testing.B) {
 	ng := &namegetter.PermutationUniqueImprovedNameGetter{}
-	ng.Init(objNames, cmn.NowRand())
+	ng.Init(objNames, cos.NowRand())
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		ng.ObjName()
@@ -96,7 +96,7 @@ func TestPermutationUniqueImprovedNameGetter(t *testing.T) {
 }
 
 func checkGetsAllObjNames(t *testing.T, getter namegetter.ObjectNameGetter, name string) {
-	getter.Init(objNames, cmn.NowRand())
+	getter.Init(objNames, cos.NowRand())
 	m := make(map[string]struct{})
 
 	// Should visit every objectName once
@@ -118,7 +118,7 @@ func checkSmallSampleRandomness(t *testing.T, getter namegetter.ObjectNameGetter
 	s1 := make([]string, smallSampleSize)
 	s2 := make([]string, smallSampleSize)
 
-	rnd := cmn.NowRand()
+	rnd := cos.NowRand()
 
 	getter.Init(objNames, rnd)
 	for i := 0; i < smallSampleSize; i++ {

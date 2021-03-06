@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
@@ -31,7 +32,7 @@ func (tc testConfig) name() string {
 func createAndFillBucket(b *testing.B, objCnt uint) cmn.Bck {
 	const workerCount = 10
 	var (
-		bck        = cmn.Bck{Name: cmn.RandString(10), Provider: cmn.ProviderAIS}
+		bck        = cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS}
 		baseParams = tutils.BaseAPIParams()
 
 		wg              = &sync.WaitGroup{}
@@ -46,7 +47,7 @@ func createAndFillBucket(b *testing.B, objCnt uint) cmn.Bck {
 		go func() {
 			defer wg.Done()
 			objDir := tutils.RandomObjDir(10, 5)
-			tutils.PutRR(b, baseParams, 128, cmn.ChecksumXXHash, bck, objDir, objCntPerWorker)
+			tutils.PutRR(b, baseParams, 128, cos.ChecksumXXHash, bck, objDir, objCntPerWorker)
 		}()
 	}
 	wg.Wait()

@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -68,7 +69,7 @@ type (
 		PathDigest uint64
 
 		// LOM caches
-		lomCaches cmn.MultiSyncMap
+		lomCaches cos.MultiSyncMap
 
 		// bucket path cache
 		bpc struct {
@@ -139,7 +140,7 @@ func newMountpath(cleanPath, origPath string, fsid syscall.Fsid, fs string) *Mou
 		OrigPath:   origPath,
 		Fsid:       fsid,
 		FileSystem: fs,
-		PathDigest: xxhash.ChecksumString64S(cleanPath, cmn.MLCG32),
+		PathDigest: xxhash.ChecksumString64S(cleanPath, cos.MLCG32),
 	}
 	mi.bpc.m = make(map[uint64]string, 16)
 	return mi
@@ -152,7 +153,7 @@ func (mi *MountpathInfo) String() string {
 func (mi *MountpathInfo) LomCache(idx int) *sync.Map { return mi.lomCaches.Get(idx) }
 
 func (mi *MountpathInfo) EvictLomCache() {
-	for idx := 0; idx < cmn.MultiSyncMapCount; idx++ {
+	for idx := 0; idx < cos.MultiSyncMapCount; idx++ {
 		cache := mi.LomCache(idx)
 		cache.Range(func(key interface{}, _ interface{}) bool {
 			cache.Delete(key)
@@ -176,7 +177,7 @@ Retry:
 		trashDir = mi.MakePathTrash()
 		tmpDir   = filepath.Join(trashDir, fmt.Sprintf("$dir-%d", mono.NanoTime()))
 	)
-	if err := cmn.CreateDir(trashDir); err != nil {
+	if err := cos.CreateDir(trashDir); err != nil {
 		return err
 	}
 	if err := os.Rename(dir, tmpDir); err != nil {
@@ -216,7 +217,7 @@ func (mi *MountpathInfo) CreateMissingBckDirs(bck cmn.Bck) (err error) {
 		if err = Access(dir); err == nil {
 			continue
 		}
-		if err = cmn.CreateDir(dir); err != nil {
+		if err = cos.CreateDir(dir); err != nil {
 			return
 		}
 	}
@@ -226,7 +227,7 @@ func (mi *MountpathInfo) CreateMissingBckDirs(bck cmn.Bck) (err error) {
 func (mi *MountpathInfo) StoreMD(path string, what interface{}, options cmn.Jopts) error {
 	fpath := filepath.Join(mi.Path, path)
 	if what == nil {
-		file, err := cmn.CreateFile(fpath)
+		file, err := cos.CreateFile(fpath)
 		file.Close()
 		return err
 	}
@@ -260,7 +261,7 @@ func (mi *MountpathInfo) MoveMD(from, to string) bool {
 }
 
 func (mi *MountpathInfo) SetDaemonIDXattr(daeID string) error {
-	cmn.Assert(daeID != "")
+	cos.Assert(daeID != "")
 	// Validate if mountpath already has daemon ID set.
 	mpathDaeID, err := LoadDaemonIDXattr(mi.Path)
 	if err != nil {
@@ -398,7 +399,7 @@ func (mi *MountpathInfo) createBckDirs(bck cmn.Bck) (num int, err error) {
 				}
 				glog.Warning(err)
 			}
-		} else if err := cmn.CreateDir(dir); err != nil {
+		} else if err := cos.CreateDir(dir); err != nil {
 			return num, fmt.Errorf("bucket %s: failed to create directory %s: %w", bck, dir, err)
 		}
 		num++
@@ -723,7 +724,7 @@ func Enable(mpath string) (enabledMpath *MountpathInfo, err error) {
 		mfs.ios.AddMpath(cleanMpath, mp.FileSystem)
 		delete(disabledPaths, cleanMpath)
 		updatePaths(availablePaths, disabledPaths)
-		cmn.Assert(mp != nil)
+		cos.Assert(mp != nil)
 		return mp, nil
 	}
 
@@ -871,8 +872,9 @@ func moveMarkers(mpaths MPI, from *MountpathInfo) {
 					fromPath = filepath.Join(from.Path, markersDirName, fi.Name())
 					toPath   = filepath.Join(mpath.Path, markersDirName, fi.Name())
 				)
-				if _, _, err := cmn.CopyFile(fromPath, toPath, nil, cmn.ChecksumNone); err != nil && !os.IsNotExist(err) {
-					glog.Errorf("Failed to move marker to another mountpath (from: %q, to: %q, err: %v)", fromPath, toPath, err)
+				if _, _, err := cos.CopyFile(fromPath, toPath, nil, cos.ChecksumNone); err != nil && !os.IsNotExist(err) {
+					glog.Errorf("Failed to move marker to another mountpath (from: %q, to: %q, err: %v)",
+						fromPath, toPath, err)
 				}
 			}
 		}
@@ -911,7 +913,7 @@ func RefreshCapStatus(config *cmn.Config, mpcap MPCap) (cs CapStatus, err error)
 		}
 		cs.TotalUsed += c.Used
 		cs.TotalAvail += c.Avail
-		cs.PctMax = cmn.MaxI32(cs.PctMax, c.PctUsed)
+		cs.PctMax = cos.MaxI32(cs.PctMax, c.PctUsed)
 		cs.PctAvg += c.PctUsed
 		if mpcap != nil {
 			mpcap[path] = c
@@ -935,7 +937,7 @@ func RefreshCapStatus(config *cmn.Config, mpcap MPCap) (cs CapStatus, err error)
 func nextRefresh(config *cmn.Config) time.Duration {
 	var (
 		util = int64(mfs.capStatus.PctAvg) // NOTE: average not max
-		umin = cmn.MaxI64(config.LRU.HighWM-10, config.LRU.LowWM)
+		umin = cos.MaxI64(config.LRU.HighWM-10, config.LRU.LowWM)
 		umax = config.LRU.OOS
 		tmax = config.LRU.CapacityUpdTime
 		tmin = config.Periodic.StatsTime

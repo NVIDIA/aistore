@@ -10,7 +10,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/pkg/errors"
 )
 
@@ -83,7 +83,7 @@ type (
 // same Name. Since records should only differ on objects this is the thing that
 // is actually merged.
 func (r *Record) mergeObjects(other *Record) {
-	cmn.Assert(r.Name == other.Name)
+	cos.Assert(r.Name == other.Name)
 	if r.Key == nil && other.Key != nil {
 		r.Key = other.Key
 	}
@@ -160,7 +160,7 @@ func (r *Records) Insert(records ...*Record) {
 }
 
 func (r *Records) DeleteDup(name, ext string) {
-	cmn.Assert(r.Exists(name, ext))
+	cos.Assert(r.Exists(name, ext))
 	r.Lock()
 	if record, ok := r.m[name]; ok {
 		record.delete(ext)
@@ -240,7 +240,7 @@ func (r *Records) Less(i, j int, formatType string) (bool, error) {
 		return lhs.(string) < rhs.(string), nil
 	}
 
-	cmn.Assertf(false, "lhs: %v, rhs: %v, arr[i]: %v, arr[j]: %v", lhs, rhs, r.arr[i], r.arr[j])
+	cos.Assertf(false, "lhs: %v, rhs: %v, arr[i]: %v, arr[j]: %v", lhs, rhs, r.arr[i], r.arr[j])
 	return false, nil
 }
 
@@ -258,7 +258,7 @@ func (r *Records) RecordMemorySize() (size uint64) {
 		size += uint64(len(record.DaemonID))
 		size += uint64(len(record.Name))
 		size += uint64(unsafe.Sizeof(record.Key))
-		maxSize = cmn.MaxU64(maxSize, size)
+		maxSize = cos.MaxU64(maxSize, size)
 
 		// If there is record which has at least 1 record object we should get
 		// the estimate of it and return the size. Some records might not have

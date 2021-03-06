@@ -29,6 +29,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/memsys"
@@ -471,7 +472,7 @@ func (server *netServer) connStateListener(c net.Conn, cs http.ConnState) {
 		return
 	}
 	tcpconn, ok := c.(*net.TCPConn)
-	cmn.Assert(ok)
+	cos.Assert(ok)
 	rawconn, _ := tcpconn.SyscallConn()
 	args := cmn.TransportArgs{SndRcvBufSize: server.sndRcvBufSize}
 	rawconn.Control(args.ConnControl(rawconn))
@@ -550,9 +551,9 @@ func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
 		if nh.r[0] == '/' { // absolute path
 			path = nh.r
 		} else {
-			path = cmn.JoinWords(cmn.Version, nh.r)
+			path = cos.JoinWords(cmn.Version, nh.r)
 		}
-		cmn.Assert(nh.net != 0)
+		cos.Assert(nh.net != 0)
 		if nh.net.isSet(accessNetPublic) {
 			h.registerPublicNetHandler(path, nh.h)
 			reg = true
@@ -576,7 +577,7 @@ func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
 			// (not configured) data defaults to (configured) control
 			h.registerIntraControlNetHandler(path, nh.h)
 		} else {
-			cmn.Assert(config.HostNet.UseIntraData && nh.net.isSet(accessNetIntraControl))
+			cos.Assert(config.HostNet.UseIntraData && nh.net.isSet(accessNetIntraControl))
 			// (not configured) control defaults to (configured) data
 			h.registerIntraDataNetHandler(path, nh.h)
 		}
@@ -664,7 +665,7 @@ func (h *httprunner) initConfOwner(daemonType string) {
 		h.owner.config = newConfOwner(daemonType)
 	}
 	if err := h.owner.config.load(); err != nil {
-		cmn.ExitLogf("Failed to initialize config owner, err: %v", err)
+		cos.ExitLogf("Failed to initialize config owner, err: %v", err)
 	}
 }
 
@@ -680,7 +681,7 @@ func (h *httprunner) initSI(daemonType string) {
 		pubAddr, intraControlAddr, intraDataAddr cluster.NetInfo
 	)
 	if err != nil {
-		cmn.ExitLogf("Failed to get local IP addr list, err: %v", err)
+		cos.ExitLogf("Failed to get local IP addr list, err: %v", err)
 	}
 
 	// NOTE: In K8S deployment, public hostname could be LoadBalancer external IP, or a service DNS.
@@ -692,7 +693,7 @@ func (h *httprunner) initSI(daemonType string) {
 	}
 
 	if err != nil {
-		cmn.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetworkPublic, err)
+		cos.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetworkPublic, err)
 	}
 	if config.HostNet.Hostname != "" {
 		s = " (config: " + config.HostNet.Hostname + ")"
@@ -703,7 +704,7 @@ func (h *httprunner) initSI(daemonType string) {
 	if config.HostNet.UseIntraControl {
 		intraControlAddr, err = getNetInfo(addrList, proto, config.HostNet.HostnameIntraControl, strconv.Itoa(config.HostNet.PortIntraControl))
 		if err != nil {
-			cmn.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetworkIntraControl, err)
+			cos.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetworkIntraControl, err)
 		}
 		s = ""
 		if config.HostNet.HostnameIntraControl != "" {
@@ -716,7 +717,7 @@ func (h *httprunner) initSI(daemonType string) {
 	if config.HostNet.UseIntraData {
 		intraDataAddr, err = getNetInfo(addrList, proto, config.HostNet.HostnameIntraData, strconv.Itoa(config.HostNet.PortIntraData))
 		if err != nil {
-			cmn.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetworkIntraData, err)
+			cos.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetworkIntraData, err)
 		}
 		s = ""
 		if config.HostNet.HostnameIntraData != "" {
@@ -740,7 +741,7 @@ func (h *httprunner) initSI(daemonType string) {
 		intraControlAddr,
 		intraDataAddr,
 	)
-	cmn.InitShortID(h.si.Digest())
+	cos.InitShortID(h.si.Digest())
 }
 
 func mustDiffer(ip1 cluster.NetInfo, port1 int, use1 bool, ip2 cluster.NetInfo, port2 int, use2 bool, tag string) {
@@ -748,7 +749,7 @@ func mustDiffer(ip1 cluster.NetInfo, port1 int, use1 bool, ip2 cluster.NetInfo, 
 		return
 	}
 	if ip1.NodeHostname == ip2.NodeHostname && port1 == port2 {
-		cmn.ExitLogf("%s: cannot use the same IP:port (%s) for two networks", tag, ip1)
+		cos.ExitLogf("%s: cannot use the same IP:port (%s) for two networks", tag, ip1)
 	}
 }
 
@@ -906,7 +907,7 @@ func (h *httprunner) _call(si *cluster.Snode, bargs *bcastArgs) (res *callResult
 	cargs := callArgs{si: si, req: bargs.req, timeout: bargs.timeout}
 	cargs.req.Base = si.URL(bargs.network)
 	if bargs.req.BodyR != nil {
-		cargs.req.BodyR, _ = bargs.req.BodyR.(cmn.ReadOpenCloser).Open()
+		cargs.req.BodyR, _ = bargs.req.BodyR.(cos.ReadOpenCloser).Open()
 	}
 	if bargs.fv != nil {
 		cargs.v = bargs.fv()
@@ -927,7 +928,7 @@ func (h *httprunner) call(args callArgs) (res *callResult) {
 		res.si = args.si
 	}
 
-	cmn.Assert(args.si != nil || args.req.Base != "") // either we have si or base
+	cos.Assert(args.si != nil || args.req.Base != "") // either we have si or base
 	if args.req.Base == "" && args.si != nil {
 		args.req.Base = args.si.IntraControlNet.DirectURL // by default use intra-cluster control network
 	}
@@ -1007,7 +1008,7 @@ func (h *httprunner) call(args callArgs) (res *callResult) {
 
 	if args.v != nil {
 		if v, ok := args.v.(msgp.Decodable); ok {
-			buf, slab := h.smm.Alloc(10 * cmn.KiB)
+			buf, slab := h.smm.Alloc(10 * cos.KiB)
 			res.err = v.DecodeMsg(msgp.NewReaderBuf(resp.Body, buf))
 			slab.Free(buf)
 		} else {
@@ -1111,7 +1112,7 @@ func (h *httprunner) bcastGroup(args *bcastArgs) sliceResults {
 	debug.Assert(cmn.NetworkIsKnown(args.network))
 	if args.timeout == 0 {
 		args.timeout = cmn.GCO.Get().Timeout.CplaneOperation
-		cmn.Assert(args.timeout != 0)
+		cos.Assert(args.timeout != 0)
 	}
 
 	switch args.to {
@@ -1134,19 +1135,19 @@ func (h *httprunner) bcastGroup(args *bcastArgs) sliceResults {
 			args.nodeCount--
 		}
 	default:
-		cmn.Assert(false)
+		cos.Assert(false)
 	}
 	return h.bcastNodes(args)
 }
 
 // bcastNodes broadcasts a message to the specified destinations (`bargs.nodes`).
 // It then waits and collects all the responses (compare with bcastAsyncNodes).
-// Note that, if specified, `bargs.req.BodyR` must implement `cmn.ReadOpenCloser`.
+// Note that, if specified, `bargs.req.BodyR` must implement `cos.ReadOpenCloser`.
 func (h *httprunner) bcastNodes(bargs *bcastArgs) sliceResults {
 	var (
 		ch sliceResults
 		mu sync.Mutex
-		wg = cmn.NewLimitedWaitGroup(cluster.MaxBcastParallel(), bargs.nodeCount)
+		wg = cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), bargs.nodeCount)
 	)
 	if !bargs.async {
 		ch = allocSliceRes()
@@ -1230,7 +1231,7 @@ func (h *httprunner) checkRESTItems(w http.ResponseWriter, r *http.Request, item
 func (h *httprunner) writeMsgPack(w http.ResponseWriter, r *http.Request, v interface{}, tag string) (ok bool) {
 	var (
 		err       error
-		buf, slab = h.smm.Alloc(10 * cmn.KiB)
+		buf, slab = h.smm.Alloc(10 * cos.KiB)
 		mw        = msgp.NewWriterBuf(w, buf)
 	)
 	defer slab.Free(buf)
@@ -1248,7 +1249,7 @@ func (h *httprunner) writeMsgPack(w http.ResponseWriter, r *http.Request, v inte
 
 func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, v interface{}, tag string) (ok bool) {
 	_, isByteArray := v.([]byte)
-	cmn.Assert(!isByteArray)
+	cos.Assert(!isByteArray)
 
 	w.Header().Set(cmn.HeaderContentType, cmn.ContentJSON)
 	if err := jsoniter.NewEncoder(w).Encode(v); err != nil {
@@ -1481,7 +1482,7 @@ func (h *httprunner) bcastHealth(smap *smapX, checkAll ...bool) (maxCii *cluster
 	maxCii.fillSmap(smap)
 	debug.Assert(maxCii.Smap.Primary.ID != "" && maxCii.Smap.Version > 0 && smap.isValid())
 retry:
-	wg := cmn.NewLimitedWaitGroup(cluster.MaxBcastParallel(), len(nodemap))
+	wg := cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), len(nodemap))
 	for sid, si := range nodemap {
 		if sid == h.si.ID() {
 			continue
@@ -1621,12 +1622,12 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 	}
 	if err = smap.validateUUID(newSmap, h.si, nil, caller); err != nil {
 		if h.si.IsProxy() {
-			cmn.Assert(!smap.isPrimary(h.si))
+			cos.Assert(!smap.isPrimary(h.si))
 			// cluster integrity error: making exception for non-primary proxies
 			glog.Errorf("%s (non-primary): %v - proceeding to override Smap", h.si, err)
 			return
 		}
-		cmn.ExitLogf("%v", err) // otherwise, FATAL
+		cos.ExitLogf("%v", err) // otherwise, FATAL
 	}
 
 	glog.Infof(
@@ -1635,7 +1636,7 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 	)
 
 	_, sameOrigin, _, eq := smap.Compare(&newSmap.Smap)
-	cmn.Assert(sameOrigin)
+	cos.Assert(sameOrigin)
 	if newSmap.version() < curVer {
 		if !eq {
 			err = newErrDowngrade(h.si, smap.StringEx(), newSmap.StringEx())
@@ -1796,15 +1797,15 @@ func (h *httprunner) join(query url.Values, contactURLs ...string) (res *callRes
 	var (
 		config                   = cmn.GCO.Get()
 		candidates               = make([]string, 0, 4+len(contactURLs))
-		selfPublicURL, pubValid  = cmn.ParseURL(h.si.URL(cmn.NetworkPublic))
-		selfIntraURL, intraValid = cmn.ParseURL(h.si.URL(cmn.NetworkIntraControl))
+		selfPublicURL, pubValid  = cos.ParseURL(h.si.URL(cmn.NetworkPublic))
+		selfIntraURL, intraValid = cos.ParseURL(h.si.URL(cmn.NetworkIntraControl))
 		addCandidate             = func(url string) {
-			if u, valid := cmn.ParseURL(url); !valid ||
+			if u, valid := cos.ParseURL(url); !valid ||
 				u.Host == selfPublicURL.Host ||
 				u.Host == selfIntraURL.Host {
 				return
 			}
-			if cmn.StringInSlice(url, candidates) {
+			if cos.StringInSlice(url, candidates) {
 				return
 			}
 			candidates = append(candidates, url)
@@ -1897,7 +1898,7 @@ func (h *httprunner) sendKeepalive(timeout time.Duration) (status int, err error
 	res := h.registerToURL(primaryURL, psi, timeout, nil, true)
 	if res.err != nil {
 		if strings.Contains(res.err.Error(), ciePrefix) {
-			cmn.ExitLogf("%v", res.err) // FATAL: cluster integrity error (cie)
+			cos.ExitLogf("%v", res.err) // FATAL: cluster integrity error (cie)
 		}
 		status, err = res.status, res.err
 		_freeCallRes(res)
@@ -1960,7 +1961,7 @@ func (h *httprunner) healthByExternalWD(w http.ResponseWriter, r *http.Request) 
 	caller := r.Header.Get(cmn.HeaderCallerName)
 	// external (i.e. not intra-cluster) call
 	if callerID == "" && caller == "" {
-		readiness := cmn.IsParseBool(r.URL.Query().Get(cmn.URLParamHealthReadiness))
+		readiness := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamHealthReadiness))
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s: external health-ping from %s", h.si, r.RemoteAddr)
 		}

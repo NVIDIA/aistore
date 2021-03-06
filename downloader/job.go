@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/nl"
 )
 
@@ -143,13 +144,13 @@ func (j *baseDlJob) Notif() cluster.Notif { return j.notif }
 
 func (j *baseDlJob) AddNotif(n cluster.Notif, job DlJob) {
 	var ok bool
-	cmn.Assert(j.notif == nil) // currently, "add" means "set"
+	cos.Assert(j.notif == nil) // currently, "add" means "set"
 	j.notif, ok = n.(*NotifDownload)
-	cmn.Assert(ok)
+	cos.Assert(ok)
 	j.notif.DlJob = job
-	cmn.Assert(j.notif.F != nil)
+	cos.Assert(j.notif.F != nil)
 	if n.Upon(cluster.UponProgress) {
-		cmn.Assert(j.notif.P != nil)
+		cos.Assert(j.notif.P != nil)
 	}
 }
 
@@ -160,7 +161,7 @@ func (j *baseDlJob) ActiveStats() (*DlStatusResp, error) {
 	}
 	return resp.(*DlStatusResp), nil
 }
-func (j *baseDlJob) checkObj(string) bool  { cmn.Assert(false); return false }
+func (j *baseDlJob) checkObj(string) bool  { cos.Assert(false); return false }
 func (j *baseDlJob) throttler() *throttler { return j.t }
 func (j *baseDlJob) cleanup() {
 	j.throttler().stop()
@@ -206,7 +207,7 @@ func (j *sliceDlJob) genNext() (objs []dlObj, ok bool, err error) {
 
 func newMultiDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlMultiBody, dlXact *Downloader) (*multiDlJob, error) {
 	var (
-		objs cmn.SimpleKVs
+		objs cos.SimpleKVs
 		err  error
 	)
 	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, dlXact)
@@ -222,7 +223,7 @@ func newMultiDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlMul
 
 func newSingleDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlSingleBody, dlXact *Downloader) (*singleDlJob, error) {
 	var (
-		objs cmn.SimpleKVs
+		objs cos.SimpleKVs
 		err  error
 	)
 	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, dlXact)
@@ -236,7 +237,7 @@ func newSingleDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlSi
 	return &singleDlJob{sliceDlJob}, nil
 }
 
-func newSliceDlJob(t cluster.Target, bck *cluster.Bck, base *baseDlJob, objects cmn.SimpleKVs) (*sliceDlJob, error) {
+func newSliceDlJob(t cluster.Target, bck *cluster.Bck, base *baseDlJob, objects cos.SimpleKVs) (*sliceDlJob, error) {
 	objs, err := buildDlObjs(t, bck, objects)
 	if err != nil {
 		return nil, err
@@ -360,7 +361,7 @@ func newBackendDlJob(ctx context.Context, t cluster.Target, id string, bck *clus
 	return job, nil
 }
 
-func countObjects(t cluster.Target, pt cmn.ParsedTemplate, dir string, bck *cluster.Bck) (cnt int, err error) {
+func countObjects(t cluster.Target, pt cos.ParsedTemplate, dir string, bck *cluster.Bck) (cnt int, err error) {
 	var (
 		smap = t.Sowner().Get()
 		sid  = t.SID()
@@ -387,13 +388,13 @@ func countObjects(t cluster.Target, pt cmn.ParsedTemplate, dir string, bck *clus
 
 func newRangeDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlRangeBody, dlXact *Downloader) (*rangeDlJob, error) {
 	var (
-		pt  cmn.ParsedTemplate
+		pt  cos.ParsedTemplate
 		err error
 	)
 	// NOTE: Size of objects to be downloaded by a target will be unknown.
 	//  So proxy won't be able to sum sizes from all targets when calculating total size.
 	//  This should be taken care of somehow, as total is easy to know from range template anyway.
-	if pt, err = cmn.ParseBashTemplate(payload.Template); err != nil {
+	if pt, err = cos.ParseBashTemplate(payload.Template); err != nil {
 		return nil, err
 	}
 

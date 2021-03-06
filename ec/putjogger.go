@@ -17,7 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -29,13 +29,13 @@ type (
 	encodeCtx struct {
 		lom          *cluster.LOM     // replica
 		meta         *Metadata        //
-		fh           *cmn.FileHandle  // file handle for the replica
+		fh           *cos.FileHandle  // file handle for the replica
 		slices       []*slice         // all EC slices
 		sliceSize    int64            // calculated slice size
 		padSize      int64            // zero tail of the last object's data slice
 		dataSlices   int              // the number of data slices
 		paritySlices int              // the number of parity slices
-		cksums       []*cmn.CksumHash // checksums of parity slices (filled by reed-solomon)
+		cksums       []*cos.CksumHash // checksums of parity slices (filled by reed-solomon)
 	}
 
 	// a mountpath putJogger: processes PUT/DEL requests to one mountpath
@@ -47,7 +47,7 @@ type (
 
 		putCh  chan *request // top priority operation (object PUT)
 		xactCh chan *request // low priority operation (ec-encode)
-		stopCh *cmn.StopCh   // jogger management channel: to stop it
+		stopCh *cos.StopCh   // jogger management channel: to stop it
 
 		toDisk bool // use files or SGL
 	}
@@ -80,7 +80,7 @@ func (c *putJogger) newCtx(lom *cluster.LOM, meta *Metadata) (ctx *encodeCtx, er
 	ctx.slices = make([]*slice, totalCnt)
 	ctx.padSize = ctx.sliceSize*int64(ctx.dataSlices) - ctx.lom.Size()
 
-	ctx.fh, err = cmn.NewFileHandle(lom.FQN)
+	ctx.fh, err = cos.NewFileHandle(lom.FQN)
 	return ctx, err
 }
 
@@ -156,7 +156,7 @@ func (c *putJogger) ec(req *request, lom *cluster.LOM) (err error) {
 	case ActSplit:
 		if err = c.encode(req, lom); err != nil {
 			ctMeta := cluster.NewCTFromLOM(lom, MetaType)
-			errRm := cmn.RemoveFile(ctMeta.FQN())
+			errRm := cos.RemoveFile(ctMeta.FQN())
 			debug.AssertNoErr(errRm)
 		}
 		c.parent.stats.updateEncodeTime(time.Since(req.tm), err != nil)
@@ -267,7 +267,7 @@ func (c *putJogger) ctSendCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ inte
 // if exists and broadcast the request to other targets
 func (c *putJogger) cleanup(lom *cluster.LOM) error {
 	ctMeta := cluster.NewCTFromLOM(lom, MetaType)
-	if err := cmn.RemoveFile(ctMeta.FQN()); err != nil {
+	if err := cos.RemoveFile(ctMeta.FQN()); err != nil {
 		// logs the error but move on - notify all other target to do cleanup
 		glog.Errorf("Error removing metafile %q", ctMeta.FQN())
 	}
@@ -311,7 +311,7 @@ func checksumDataSlices(ctx *encodeCtx, cksmReaders []io.Reader, cksumType strin
 	buf, slab := mm.Alloc(ctx.sliceSize)
 	defer slab.Free(buf)
 	for i, reader := range cksmReaders {
-		_, cksum, err := cmn.CopyAndChecksum(ioutil.Discard, reader, buf, cksumType)
+		_, cksum, err := cos.CopyAndChecksum(ioutil.Discard, reader, buf, cksumType)
 		if err != nil {
 			return err
 		}
@@ -324,16 +324,16 @@ func checksumDataSlices(ctx *encodeCtx, cksmReaders []io.Reader, cksumType strin
 func generateSlicesToMemory(ctx *encodeCtx) error {
 	// writers are slices created by EC encoding process(memory is allocated)
 	conf := ctx.lom.CksumConf()
-	initSize := cmn.MinI64(ctx.sliceSize, cmn.MiB)
+	initSize := cos.MinI64(ctx.sliceSize, cos.MiB)
 	sliceWriters := make([]io.Writer, ctx.paritySlices)
 	for i := 0; i < ctx.paritySlices; i++ {
 		writer := mm.NewSGL(initSize)
 		ctx.slices[i+ctx.dataSlices] = &slice{obj: writer}
-		if conf.Type == cmn.ChecksumNone {
+		if conf.Type == cos.ChecksumNone {
 			sliceWriters[i] = writer
 		} else {
-			ctx.cksums[i] = cmn.NewCksumHash(conf.Type)
-			sliceWriters[i] = cmn.NewWriterMulti(writer, ctx.cksums[i].H)
+			ctx.cksums[i] = cos.NewCksumHash(conf.Type)
+			sliceWriters[i] = cos.NewWriterMulti(writer, ctx.cksums[i].H)
 		}
 	}
 
@@ -346,16 +346,16 @@ func initializeSlices(ctx *encodeCtx) (err error) {
 	sizeLeft := ctx.lom.Size()
 	for i := 0; i < ctx.dataSlices; i++ {
 		var (
-			reader     cmn.ReadOpenCloser
-			cksmReader cmn.ReadOpenCloser
+			reader     cos.ReadOpenCloser
+			cksmReader cos.ReadOpenCloser
 			offset     = int64(i) * ctx.sliceSize
 		)
 		if sizeLeft < ctx.sliceSize {
-			reader = cmn.NewSectionHandle(ctx.fh, offset, sizeLeft, ctx.padSize)
-			cksmReader = cmn.NewSectionHandle(ctx.fh, offset, sizeLeft, ctx.padSize)
+			reader = cos.NewSectionHandle(ctx.fh, offset, sizeLeft, ctx.padSize)
+			cksmReader = cos.NewSectionHandle(ctx.fh, offset, sizeLeft, ctx.padSize)
 		} else {
-			reader = cmn.NewSectionHandle(ctx.fh, offset, ctx.sliceSize, 0)
-			cksmReader = cmn.NewSectionHandle(ctx.fh, offset, ctx.sliceSize, 0)
+			reader = cos.NewSectionHandle(ctx.fh, offset, ctx.sliceSize, 0)
+			cksmReader = cos.NewSectionHandle(ctx.fh, offset, ctx.sliceSize, 0)
 		}
 		ctx.slices[i] = &slice{obj: ctx.fh, reader: reader}
 		cksmReaders[i] = cksmReader
@@ -364,8 +364,8 @@ func initializeSlices(ctx *encodeCtx) (err error) {
 
 	// We have established readers of data slices, we can already start calculating hashes for them
 	// during calculating parity slices and their hashes
-	if cksumType := ctx.lom.CksumConf().Type; cksumType != cmn.ChecksumNone {
-		ctx.cksums = make([]*cmn.CksumHash, ctx.paritySlices)
+	if cksumType := ctx.lom.CksumConf().Type; cksumType != cos.ChecksumNone {
+		ctx.cksums = make([]*cos.CksumHash, ctx.paritySlices)
 		err = checksumDataSlices(ctx, cksmReaders, cksumType)
 	}
 	return
@@ -386,7 +386,7 @@ func finalizeSlices(ctx *encodeCtx, writers []io.Writer) error {
 		return err
 	}
 
-	if cksumType := ctx.lom.CksumConf().Type; cksumType != cmn.ChecksumNone {
+	if cksumType := ctx.lom.CksumConf().Type; cksumType != cos.ChecksumNone {
 		for i := range ctx.cksums {
 			ctx.cksums[i].Finalize()
 			ctx.slices[i+ctx.dataSlices].cksum = ctx.cksums[i].Clone()
@@ -407,7 +407,7 @@ func generateSlicesToDisk(ctx *encodeCtx) error {
 			}
 			// writer can be only *os.File within this function
 			f := wr.(*os.File)
-			cmn.Close(f)
+			cos.Close(f)
 		}
 	}()
 
@@ -420,11 +420,11 @@ func generateSlicesToDisk(ctx *encodeCtx) error {
 		}
 		ctx.slices[i+ctx.dataSlices] = &slice{writer: writer, workFQN: workFQN}
 		writers[i] = writer
-		if conf.Type == cmn.ChecksumNone {
+		if conf.Type == cos.ChecksumNone {
 			sliceWriters[i] = writer
 		} else {
-			ctx.cksums[i] = cmn.NewCksumHash(conf.Type)
-			sliceWriters[i] = cmn.NewWriterMulti(writer, ctx.cksums[i].H)
+			ctx.cksums[i] = cos.NewCksumHash(conf.Type)
+			sliceWriters[i] = cos.NewWriterMulti(writer, ctx.cksums[i].H)
 		}
 	}
 
@@ -441,7 +441,7 @@ func (c *putJogger) sendSlice(ctx *encodeCtx, data *slice, node *cluster.Snode, 
 	}
 
 	mcopy := &Metadata{}
-	cmn.CopyStruct(mcopy, ctx.meta)
+	cos.CopyStruct(mcopy, ctx.meta)
 	mcopy.SliceID = idx + 1
 	mcopy.ObjVersion = ctx.lom.Version()
 	if ctx.slices[idx].cksum != nil {
@@ -489,7 +489,7 @@ func (c *putJogger) sendSlices(ctx *encodeCtx) error {
 	}
 
 	dataSlice := &slice{refCnt: *atomic.NewInt32(int32(ctx.dataSlices)), obj: ctx.fh}
-	toSend := cmn.Min(totalCnt, len(targets)-1)
+	toSend := cos.Min(totalCnt, len(targets)-1)
 
 	// If the slice is data one - no immediate cleanup is required because this
 	// slice is just a section reader of the entire file.

@@ -36,7 +36,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -56,7 +56,7 @@ func TestMain(t *testing.M) {
 	flag.Parse()
 
 	if duration, err = time.ParseDuration(d); err != nil {
-		cmn.Exitf("Invalid duration %q", d)
+		cos.Exitf("Invalid duration %q", d)
 	}
 
 	os.Exit(t.Run())
@@ -67,23 +67,23 @@ func Test_Sleep(t *testing.T) {
 		duration = 4 * time.Second
 	}
 
-	mem := &memsys.MMSA{TimeIval: time.Second * 20, MinFree: cmn.GiB, Name: "amem"}
+	mem := &memsys.MMSA{TimeIval: time.Second * 20, MinFree: cos.GiB, Name: "amem"}
 	err := mem.Init(false /*panicOnErr*/)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	wg := &sync.WaitGroup{}
-	random := cmn.NowRand()
+	random := cos.NowRand()
 	for i := 0; i < 100; i++ {
 		ttl := time.Duration(random.Int63n(int64(time.Millisecond*100))) + time.Millisecond
 		var siz, tot int64
 		if i%2 == 0 {
-			siz = random.Int63n(cmn.MiB*10) + cmn.KiB
+			siz = random.Int63n(cos.MiB*10) + cos.KiB
 		} else {
-			siz = random.Int63n(cmn.KiB*100) + cmn.KiB
+			siz = random.Int63n(cos.KiB*100) + cos.KiB
 		}
-		tot = random.Int63n(cmn.DivCeil(cmn.MiB*50, siz))*siz + cmn.KiB
+		tot = random.Int63n(cos.DivCeil(cos.MiB*50, siz))*siz + cos.KiB
 		wg.Add(1)
 		go memstress(mem, i, ttl, siz, tot, wg)
 	}
@@ -91,7 +91,7 @@ func Test_Sleep(t *testing.T) {
 	go printMaxRingLen(mem, c)
 	for i := 0; i < 7; i++ {
 		time.Sleep(duration / 8)
-		mem.FreeSpec(memsys.FreeSpec{IdleDuration: 1, MinSize: cmn.MiB})
+		mem.FreeSpec(memsys.FreeSpec{IdleDuration: 1, MinSize: cos.MiB})
 	}
 	wg.Wait()
 	close(c)
@@ -111,10 +111,10 @@ func Test_NoSleep(t *testing.T) {
 	go printStats(mem)
 
 	wg := &sync.WaitGroup{}
-	random := cmn.NowRand()
+	random := cos.NowRand()
 	for i := 0; i < 500; i++ {
-		siz := random.Int63n(cmn.MiB) + cmn.KiB
-		tot := random.Int63n(cmn.DivCeil(cmn.KiB*10, siz))*siz + cmn.KiB
+		siz := random.Int63n(cos.MiB) + cos.KiB
+		tot := random.Int63n(cos.DivCeil(cos.KiB*10, siz))*siz + cos.KiB
 		wg.Add(1)
 		go memstress(mem, i, time.Millisecond, siz, tot, wg)
 	}
@@ -122,7 +122,7 @@ func Test_NoSleep(t *testing.T) {
 	go printMaxRingLen(mem, c)
 	for i := 0; i < 7; i++ {
 		time.Sleep(duration / 8)
-		mem.FreeSpec(memsys.FreeSpec{Totally: true, ToOS: true, MinSize: cmn.MiB * 10})
+		mem.FreeSpec(memsys.FreeSpec{Totally: true, ToOS: true, MinSize: cos.MiB * 10})
 	}
 	wg.Wait()
 	close(c)
@@ -145,7 +145,7 @@ func printMaxRingLen(mem *memsys.MMSA, c chan struct{}) {
 func memstress(mem *memsys.MMSA, id int, ttl time.Duration, siz, tot int64, wg *sync.WaitGroup) {
 	defer wg.Done()
 	sgls := make([]*memsys.SGL, 0, 128)
-	x := cmn.B2S(siz, 1) + "/" + cmn.B2S(tot, 1)
+	x := cos.B2S(siz, 1) + "/" + cos.B2S(tot, 1)
 	if id%100 == 0 && verbose {
 		if ttl > time.Millisecond {
 			tlog.Logf("%4d: %-19s ttl %v\n", id, x, ttl)
@@ -181,7 +181,7 @@ func printStats(mem *memsys.MMSA) {
 		stats := mem.GetStats()
 		for i := 0; i < memsys.NumPageSlabs; i++ {
 			slab, err := mem.GetSlab(int64(i+1) * memsys.PageSize)
-			cmn.AssertNoErr(err)
+			cos.AssertNoErr(err)
 			x := ""
 			idle := stats.Idle[i]
 			if idle > 0 {

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
@@ -240,7 +241,7 @@ func TestParseFQN(t *testing.T) {
 
 			for _, mpath := range tt.mpaths {
 				if _, err := os.Stat(mpath); os.IsNotExist(err) {
-					cmn.CreateDir(mpath)
+					cos.CreateDir(mpath)
 					defer os.RemoveAll(mpath)
 				}
 				_, err := fs.Add(mpath, "daeID")
@@ -331,7 +332,7 @@ func TestMakeAndParseFQN(t *testing.T) {
 			fs.DisableFsIDCheck()
 
 			if _, err := os.Stat(tt.mpath); os.IsNotExist(err) {
-				cmn.CreateDir(tt.mpath)
+				cos.CreateDir(tt.mpath)
 				defer os.RemoveAll(tt.mpath)
 			}
 			_, err := fs.Add(tt.mpath, "daeID")
@@ -376,7 +377,7 @@ func BenchmarkParseFQN(b *testing.B) {
 
 	fs.Init(mios)
 	fs.DisableFsIDCheck()
-	cmn.CreateDir(mpath)
+	cos.CreateDir(mpath)
 	defer os.RemoveAll(mpath)
 	fs.Add(mpath, "daeID")
 	fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})

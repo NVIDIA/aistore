@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/xoshiro256"
 	"github.com/OneOfOne/xxhash"
@@ -20,7 +21,7 @@ import (
 func HrwTarget(uname string, smap *Smap, inMaintenance ...bool) (si *Snode, err error) {
 	var (
 		max             uint64
-		digest          = xxhash.ChecksumString64S(uname, cmn.MLCG32)
+		digest          = xxhash.ChecksumString64S(uname, cos.MLCG32)
 		skipMaintenance = true
 	)
 	if len(inMaintenance) != 0 {
@@ -91,7 +92,7 @@ func HrwTargetList(uname string, smap *Smap, count int) (sis Nodes, err error) {
 		err = fmt.Errorf("insufficient targets: required %d, available %d, %s", count, cnt, smap)
 		return
 	}
-	digest := xxhash.ChecksumString64S(uname, cmn.MLCG32)
+	digest := xxhash.ChecksumString64S(uname, cos.MLCG32)
 	hlist := newHrwList(count)
 
 	for _, tsi := range smap.Tmap {
@@ -135,7 +136,7 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, err error) {
 func HrwIC(smap *Smap, uuid string) (pi *Snode, err error) {
 	var (
 		max    uint64
-		digest = xxhash.ChecksumString64S(uuid, cmn.MLCG32)
+		digest = xxhash.ChecksumString64S(uuid, cos.MLCG32)
 	)
 	for _, psi := range smap.Pmap {
 		if psi.inMaintenance() || !psi.isIC() {
@@ -158,7 +159,7 @@ func HrwIC(smap *Smap, uuid string) (pi *Snode, err error) {
 func HrwTargetTask(uuid string, smap *Smap) (si *Snode, err error) {
 	var (
 		max    uint64
-		digest = xxhash.ChecksumString64S(uuid, cmn.MLCG32)
+		digest = xxhash.ChecksumString64S(uuid, cos.MLCG32)
 	)
 	for _, tsi := range smap.Tmap {
 		if tsi.inMaintenance() {
@@ -186,7 +187,7 @@ func HrwMpath(uname string) (mi *fs.MountpathInfo, digest uint64, err error) {
 		err = fs.ErrNoMountpaths
 		return
 	}
-	digest = xxhash.ChecksumString64S(uname, cmn.MLCG32)
+	digest = xxhash.ChecksumString64S(uname, cos.MLCG32)
 	for _, mpathInfo := range availablePaths {
 		cs := xoshiro256.Hash(mpathInfo.PathDigest ^ digest)
 		if cs >= max {

@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -177,7 +178,7 @@ func (ap *azureProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (er
 // HEAD BUCKET //
 /////////////////
 
-func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
+func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
 	var (
 		cloudBck = bck.RemoteBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
@@ -191,7 +192,7 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 		err := fmt.Errorf(cmn.FmtErrFailed, cmn.ProviderAzure, "read bucket", cloudBck.Name, strconv.Itoa(resp.StatusCode()))
 		return bckProps, resp.StatusCode(), err
 	}
-	bckProps = make(cmn.SimpleKVs, 2)
+	bckProps = make(cos.SimpleKVs, 2)
 	bckProps[cmn.HeaderBackendProvider] = cmn.ProviderAzure
 	bckProps[cmn.HeaderBucketVerEnabled] = "true"
 	return bckProps, http.StatusOK, nil
@@ -293,8 +294,8 @@ func (ap *azureProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buck
 // HEAD OBJECT //
 /////////////////
 
-func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, errCode int, err error) {
-	objMeta = make(cmn.SimpleKVs)
+func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cos.SimpleKVs, errCode int, err error) {
+	objMeta = make(cos.SimpleKVs)
 	var (
 		h        = cmn.BackendHelpers.Azure
 		cloudBck = lom.Bck().RemoteBck()
@@ -355,7 +356,7 @@ func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 // GET OBJ READER //
 ////////////////////
 
-func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (reader io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
+func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (reader io.ReadCloser, expectedCksm *cos.Cksum, errCode int, err error) {
 	var (
 		h        = cmn.BackendHelpers.Azure
 		cloudBck = lom.Bck().RemoteBck()
@@ -385,9 +386,9 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 	}
 
 	var (
-		cksumToUse *cmn.Cksum
+		cksumToUse *cos.Cksum
 		retryOpts  = azblob.RetryReaderOptions{MaxRetryRequests: 3}
-		customMD   = cmn.SimpleKVs{
+		customMD   = cos.SimpleKVs{
 			cluster.SourceObjMD: cluster.SourceAzureObjMD,
 		}
 	)
@@ -397,7 +398,7 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 	}
 	if v, ok := h.EncodeCksum(respProps.ContentMD5()); ok {
 		customMD[cluster.MD5ObjMD] = v
-		cksumToUse = cmn.NewCksum(cmn.ChecksumMD5, v)
+		cksumToUse = cos.NewCksum(cos.ChecksumMD5, v)
 	}
 
 	lom.SetCustomMD(customMD)
@@ -411,7 +412,7 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 ////////////////
 
 func (ap *azureProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
-	defer cmn.Close(r)
+	defer cos.Close(r)
 
 	var (
 		leaseID  string

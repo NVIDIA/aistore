@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
@@ -109,7 +110,7 @@ func (r *bckRename) Run() {
 	for !finished {
 		time.Sleep(10 * time.Second)
 		rebStats, err := xreg.GetStats(flt)
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 		for _, stat := range rebStats {
 			finished = finished || stat.Finished()
 		}

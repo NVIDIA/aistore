@@ -18,7 +18,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -86,8 +86,8 @@ type (
 		Numcur, Sizecur int64        // gets reset to zero upon each timeout
 		// internals
 		lid    string        // log prefix
-		lastCh *cmn.StopCh   // end of stream
-		stopCh *cmn.StopCh   // stop/abort stream
+		lastCh *cos.StopCh   // end of stream
+		stopCh *cos.StopCh   // stop/abort stream
 		postCh chan struct{} // to indicate that workCh has work
 		time   struct {
 			idleOut time.Duration // idle timeout
@@ -115,7 +115,7 @@ type (
 
 func newStreamBase(client Client, toURL string, extra *Extra) (s *streamBase) {
 	u, err := url.Parse(toURL)
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 
 	s = &streamBase{client: client, toURL: toURL}
 
@@ -131,8 +131,8 @@ func newStreamBase(client Client, toURL string, extra *Extra) (s *streamBase) {
 	s.trname = path.Base(u.Path)
 	s.lid = fmt.Sprintf("%s[%d]", s.trname, s.sessID)
 
-	s.lastCh = cmn.NewStopCh()
-	s.stopCh = cmn.NewStopCh()
+	s.lastCh = cos.NewStopCh()
+	s.stopCh = cos.NewStopCh()
 	s.postCh = make(chan struct{}, 1)
 
 	s.mm = memsys.DefaultPageMM()

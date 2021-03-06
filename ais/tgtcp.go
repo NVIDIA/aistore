@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/dsort"
@@ -48,7 +49,7 @@ func (t *targetrunner) initHostIP() {
 	)
 	if portStr := os.Getenv("AIS_HOST_PORT"); portStr != "" {
 		portNum, err := cmn.ParsePort(portStr)
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 		extPort = portNum
 	}
 	t.si.PublicNet.NodeHostname = extAddr.String()
@@ -86,10 +87,10 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 		return fmt.Errorf(cmn.FmtErrUnmarshal, t.si, "reg-meta", cmn.BytesHead(body), err)
 	}
 	if err = fs.SetDaemonIDXattrAllMpaths(t.si.ID()); err != nil {
-		cmn.ExitLogf("%v", err)
+		cos.ExitLogf("%v", err)
 	}
 	if _, err = fs.CreateNewVMD(t.si.ID()); err != nil {
-		cmn.ExitLogf("%v", err)
+		cos.ExitLogf("%v", err)
 	}
 
 	// There's a window of time between:
@@ -157,7 +158,7 @@ func (t *targetrunner) daeputJSON(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case cmn.ActSetConfig: // setconfig #2 - via action message
-		transient := cmn.IsParseBool(r.URL.Query().Get(cmn.ActTransient))
+		transient := cos.IsParseBool(r.URL.Query().Get(cmn.ActTransient))
 		toUpdate := &cmn.ConfigToUpdate{}
 		if err := cmn.MorphMarshal(msg.Value, toUpdate); err != nil {
 			t.writeErrf(w, r, "failed to parse configuration to update, err: %v", err)
@@ -190,7 +191,7 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiIt
 	case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
 		var (
 			query     = r.URL.Query()
-			transient = cmn.IsParseBool(query.Get(cmn.ActTransient))
+			transient = cos.IsParseBool(query.Get(cmn.ActTransient))
 			toUpdate  = &cmn.ConfigToUpdate{}
 		)
 		if err := toUpdate.FillFromQuery(query); err != nil {
@@ -214,7 +215,7 @@ func (t *targetrunner) daeSetPrimary(w http.ResponseWriter, r *http.Request, api
 	proxyID := apiItems[1]
 	query := r.URL.Query()
 	preparestr := query.Get(cmn.URLParamPrepare)
-	if prepare, err = cmn.ParseBool(preparestr); err != nil {
+	if prepare, err = cos.ParseBool(preparestr); err != nil {
 		t.writeErrf(w, r, "Failed to parse %s URL Parameter: %v", cmn.URLParamPrepare, err)
 		return
 	}
@@ -310,7 +311,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		clusterConf, ok := conf.(cmn.BackendConfAIS)
-		cmn.Assert(ok)
+		cos.Assert(ok)
 		aisCloud := t.backend[cmn.ProviderAIS].(*backend.AISBackendProvider)
 		t.writeJSON(w, r, aisCloud.GetInfo(clusterConf), httpdaeWhat)
 	default:
@@ -560,7 +561,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 	)
 	if err = bmd.validateUUID(newBMD, t.si, psi, ""); err != nil {
 		t.owner.bmd.Unlock()
-		cmn.ExitLogf("%v", err) // FATAL: cluster integrity error (cie)
+		cos.ExitLogf("%v", err) // FATAL: cluster integrity error (cie)
 		return
 	}
 	if newBMD.version() <= curVer {
@@ -593,7 +594,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 	// accept the new one
 	if err = t.owner.bmd.put(newBMD); err != nil {
 		t.owner.bmd.Unlock()
-		cmn.ExitLogf("%v", err)
+		cos.ExitLogf("%v", err)
 		return
 	}
 
@@ -733,14 +734,14 @@ func (t *targetrunner) ensureLatestSmap(msg *aisMsg, r *http.Request) {
 func (t *targetrunner) testCachepathMounts() {
 	t.owner.config.Lock()
 	config := cmn.GCO.Clone()
-	config.FSpaths.Paths = make(cmn.StringSet, config.TestFSP.Count)
+	config.FSpaths.Paths = make(cos.StringSet, config.TestFSP.Count)
 	for i := 0; i < config.TestFSP.Count; i++ {
 		mpath := filepath.Join(config.TestFSP.Root, fmt.Sprintf("mp%d", i+1))
 		if config.TestFSP.Instance > 0 {
 			mpath = filepath.Join(mpath, strconv.Itoa(config.TestFSP.Instance))
 		}
-		if err := cmn.CreateDir(mpath); err != nil {
-			cmn.ExitLogf("Cannot create test cache dir %q, err: %s", mpath, err)
+		if err := cos.CreateDir(mpath); err != nil {
+			cos.ExitLogf("Cannot create test cache dir %q, err: %s", mpath, err)
 		}
 		config.FSpaths.Paths.Add(mpath)
 	}
@@ -753,16 +754,16 @@ func (t *targetrunner) detectMpathChanges() {
 	mpathConfigFQN := filepath.Join(cmn.GCO.Get().ConfigDir, mpathFname)
 
 	type mfs struct {
-		Available cmn.StringSet `json:"available"`
-		Disabled  cmn.StringSet `json:"disabled"`
+		Available cos.StringSet `json:"available"`
+		Disabled  cos.StringSet `json:"disabled"`
 	}
 
 	// load old/prev and compare
 	var (
 		oldfs = mfs{}
 		newfs = mfs{
-			Available: make(cmn.StringSet),
-			Disabled:  make(cmn.StringSet),
+			Available: make(cos.StringSet),
+			Disabled:  make(cos.StringSet),
 		}
 	)
 
@@ -970,7 +971,7 @@ func (t *targetrunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, calle
 	if msg.Action == cmn.ActAttach || msg.Action == cmn.ActDetach {
 		// NOTE: apply the entire config: add new and _refresh_ existing
 		aisConf, ok := newConfig.Backend.ProviderConf(cmn.ProviderAIS)
-		cmn.Assert(ok)
+		cos.Assert(ok)
 		aisCloud := t.backend[cmn.ProviderAIS].(*backend.AISBackendProvider)
 		err = aisCloud.Apply(aisConf, msg.Action)
 		if err != nil {
@@ -1010,7 +1011,7 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// cluster info piggy-back
 	query := r.URL.Query()
-	getCii := cmn.IsParseBool(query.Get(cmn.URLParamClusterInfo))
+	getCii := cos.IsParseBool(query.Get(cmn.URLParamClusterInfo))
 	if getCii {
 		debug.Assert(query.Get(cmn.URLParamRebStatus) == "")
 		cii := &clusterInfo{}
@@ -1032,7 +1033,7 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 		glog.Warningf("%s[%s]: health-ping from node (%s, %s) with different Smap v%d",
 			t.si, smap.StringEx(), callerID, caller, callerSmapVer)
 	}
-	getRebStatus := cmn.IsParseBool(query.Get(cmn.URLParamRebStatus))
+	getRebStatus := cos.IsParseBool(query.Get(cmn.URLParamRebStatus))
 	if getRebStatus {
 		status := &reb.Status{}
 		t.rebManager.RebStatus(status)

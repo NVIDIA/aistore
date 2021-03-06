@@ -7,6 +7,7 @@ package tests
 import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -53,7 +54,7 @@ var _ = Describe("IterFields", func() {
 					},
 					LRU: cmn.LRUConf{},
 					Cksum: cmn.CksumConf{
-						Type: cmn.ChecksumXXHash,
+						Type: cos.ChecksumXXHash,
 					},
 					Extra: cmn.ExtraProps{
 						AWS: cmn.ExtraPropsAWS{CloudRegion: "us-central"},
@@ -82,7 +83,7 @@ var _ = Describe("IterFields", func() {
 					"versioning.enabled":           false,
 					"versioning.validate_warm_get": false,
 
-					"checksum.type":              cmn.ChecksumXXHash,
+					"checksum.type":              cos.ChecksumXXHash,
 					"checksum.validate_warm_get": false,
 					"checksum.validate_cold_get": false,
 					"checksum.validate_obj_move": false,
@@ -110,7 +111,7 @@ var _ = Describe("IterFields", func() {
 					},
 					LRU: &cmn.LRUConfToUpdate{},
 					Cksum: &cmn.CksumConfToUpdate{
-						Type: api.String(cmn.ChecksumXXHash),
+						Type: api.String(cos.ChecksumXXHash),
 					},
 					Access:  api.AccessAttrs(1024),
 					MDWrite: api.MDWritePolicy("never"),
@@ -136,7 +137,7 @@ var _ = Describe("IterFields", func() {
 					"versioning.enabled":           (*bool)(nil),
 					"versioning.validate_warm_get": (*bool)(nil),
 
-					"checksum.type":              api.String(cmn.ChecksumXXHash),
+					"checksum.type":              api.String(cos.ChecksumXXHash),
 					"checksum.validate_warm_get": (*bool)(nil),
 					"checksum.validate_cold_get": (*bool)(nil),
 					"checksum.validate_obj_move": (*bool)(nil),
@@ -227,7 +228,7 @@ var _ = Describe("IterFields", func() {
 
 					"versioning.enabled": false,
 
-					"checksum.type": cmn.ChecksumXXHash,
+					"checksum.type": cos.ChecksumXXHash,
 
 					"access":   "12", // type == uint64
 					"md_write": "never",
@@ -244,7 +245,7 @@ var _ = Describe("IterFields", func() {
 					},
 					LRU: cmn.LRUConf{},
 					Cksum: cmn.CksumConf{
-						Type: cmn.ChecksumXXHash,
+						Type: cos.ChecksumXXHash,
 					},
 					Versioning: cmn.VersionConf{
 						Enabled:         false,
@@ -272,7 +273,7 @@ var _ = Describe("IterFields", func() {
 
 					"versioning.enabled": false,
 
-					"checksum.type": cmn.ChecksumXXHash,
+					"checksum.type": cos.ChecksumXXHash,
 
 					"access":   "12", // type == uint64
 					"md_write": "never",
@@ -293,7 +294,7 @@ var _ = Describe("IterFields", func() {
 						Compression:  api.String(""),
 					},
 					Cksum: &cmn.CksumConfToUpdate{
-						Type:            api.String(cmn.ChecksumXXHash),
+						Type:            api.String(cos.ChecksumXXHash),
 						ValidateWarmGet: api.Bool(true),
 					},
 					Access:  api.AccessAttrs(12),

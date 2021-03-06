@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
@@ -27,7 +28,7 @@ type (
 	VMD struct {
 		Devices  map[string]*fsDeviceMD `json:"devices"` // Mpath => MD
 		DaemonID string                 `json:"daemon_id"`
-		cksum    *cmn.Cksum             // checksum of VMD
+		cksum    *cos.Cksum             // checksum of VMD
 	}
 )
 
@@ -75,7 +76,7 @@ func CreateNewVMD(daemonID string) (vmd *VMD, err error) {
 // LoadVMD loads VMD from given paths:
 // - Returns error in case of validation errors or failed to load existing VMD
 // - Returns nil if VMD not present on any path
-func LoadVMD(mpaths cmn.StringSet) (mainVMD *VMD, err error) {
+func LoadVMD(mpaths cos.StringSet) (mainVMD *VMD, err error) {
 	for path := range mpaths {
 		fpath := filepath.Join(path, VmdPersistedFileName)
 		vmd := newVMD(len(mpaths))
@@ -87,8 +88,8 @@ func LoadVMD(mpaths cmn.StringSet) (mainVMD *VMD, err error) {
 			err = newVMDLoadErr(path, err)
 			return nil, err
 		}
-		cmn.Assert(vmd.cksum != nil)
-		cmn.Assert(vmd.DaemonID != "")
+		cos.Assert(vmd.cksum != nil)
+		cos.Assert(vmd.DaemonID != "")
 		if mainVMD != nil {
 			if !mainVMD.cksum.Equal(vmd.cksum) {
 				err = newVMDMismatchErr(mainVMD, vmd, path)
@@ -120,7 +121,7 @@ func (vmd *VMD) persist() (err error) {
 }
 
 // LoadDaemonID loads the daemon ID present as xattr on given mount paths.
-func LoadDaemonID(mpaths cmn.StringSet) (mDaeID string, err error) {
+func LoadDaemonID(mpaths cos.StringSet) (mDaeID string, err error) {
 	for mp := range mpaths {
 		daeID, err := LoadDaemonIDXattr(mp)
 		if err != nil {

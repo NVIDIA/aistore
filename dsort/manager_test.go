@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
 	. "github.com/onsi/ginkgo"
@@ -32,7 +33,7 @@ var _ = Describe("Init", func() {
 		m := &Manager{ctx: dsortContext{t: cluster.NewTargetMock(nil)}}
 		m.lock()
 		defer m.unlock()
-		sr := &ParsedRequestSpec{Extension: cmn.ExtTar, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cmn.ParsedQuantity{Type: cmn.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
+		sr := &ParsedRequestSpec{Extension: cmn.ExtTar, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 		Expect(m.init(sr)).NotTo(HaveOccurred())
 		Expect(m.extractCreator.UsingCompression()).To(BeFalse())
 	})
@@ -41,7 +42,7 @@ var _ = Describe("Init", func() {
 		m := &Manager{ctx: dsortContext{t: cluster.NewTargetMock(nil)}}
 		m.lock()
 		defer m.unlock()
-		sr := &ParsedRequestSpec{Extension: cmn.ExtTarTgz, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cmn.ParsedQuantity{Type: cmn.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
+		sr := &ParsedRequestSpec{Extension: cmn.ExtTarTgz, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 		Expect(m.init(sr)).NotTo(HaveOccurred())
 		Expect(m.extractCreator.UsingCompression()).To(BeTrue())
 	})
@@ -50,7 +51,7 @@ var _ = Describe("Init", func() {
 		m := &Manager{ctx: dsortContext{t: cluster.NewTargetMock(nil)}}
 		m.lock()
 		defer m.unlock()
-		sr := &ParsedRequestSpec{Extension: cmn.ExtTgz, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cmn.ParsedQuantity{Type: cmn.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
+		sr := &ParsedRequestSpec{Extension: cmn.ExtTgz, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 		Expect(m.init(sr)).NotTo(HaveOccurred())
 		Expect(m.extractCreator.UsingCompression()).To(BeTrue())
 	})
@@ -59,7 +60,7 @@ var _ = Describe("Init", func() {
 		m := &Manager{ctx: dsortContext{t: cluster.NewTargetMock(nil)}}
 		m.lock()
 		defer m.unlock()
-		sr := &ParsedRequestSpec{Extension: cmn.ExtZip, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cmn.ParsedQuantity{Type: cmn.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
+		sr := &ParsedRequestSpec{Extension: cmn.ExtZip, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 		Expect(m.init(sr)).NotTo(HaveOccurred())
 		Expect(m.extractCreator.UsingCompression()).To(BeTrue())
 	})
@@ -98,7 +99,7 @@ func BenchmarkRecordsMarshal(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				w := ioutil.Discard
 				err := records.EncodeMsg(msgp.NewWriterBuf(w, buf))
-				cmn.AssertNoErr(err)
+				cos.AssertNoErr(err)
 			}
 		})
 	}
@@ -138,8 +139,8 @@ func BenchmarkRecordsUnmarshal(b *testing.B) {
 			)
 
 			err := records.EncodeMsg(w)
-			cmn.AssertNoErr(err)
-			cmn.AssertNoErr(w.Flush())
+			cos.AssertNoErr(err)
+			cos.AssertNoErr(w.Flush())
 
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
@@ -151,7 +152,7 @@ func BenchmarkRecordsUnmarshal(b *testing.B) {
 				b.StartTimer()
 
 				err := newRecords.DecodeMsg(msgp.NewReaderBuf(r, buf))
-				cmn.AssertNoErr(err)
+				cos.AssertNoErr(err)
 			}
 		})
 	}
@@ -187,7 +188,7 @@ func BenchmarkCreationPhaseMetadataMarshal(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				w := ioutil.Discard
 				err := md.EncodeMsg(msgp.NewWriterSize(w, serializationBufSize))
-				cmn.AssertNoErr(err)
+				cos.AssertNoErr(err)
 			}
 		})
 	}
@@ -223,8 +224,8 @@ func BenchmarkCreationPhaseMetadataUnmarshal(b *testing.B) {
 				network = bytes.NewBuffer(nil)
 				w       = msgp.NewWriter(network)
 			)
-			cmn.AssertNoErr(md.EncodeMsg(w))
-			cmn.AssertNoErr(w.Flush())
+			cos.AssertNoErr(md.EncodeMsg(w))
+			cos.AssertNoErr(w.Flush())
 
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
@@ -236,7 +237,7 @@ func BenchmarkCreationPhaseMetadataUnmarshal(b *testing.B) {
 				b.StartTimer()
 
 				err := newMD.DecodeMsg(msgp.NewReaderBuf(r, buf))
-				cmn.AssertNoErr(err)
+				cos.AssertNoErr(err)
 			}
 		})
 	}
@@ -259,19 +260,19 @@ func generateRecords(recordCnt, recordObjCnt int) *extract.Records {
 	records := extract.NewRecords(recordCnt)
 	for i := 0; i < recordCnt; i++ {
 		r := &extract.Record{
-			Key:      cmn.RandString(20),
-			Name:     cmn.RandString(30),
-			DaemonID: cmn.RandString(10),
+			Key:      cos.RandString(20),
+			Name:     cos.RandString(30),
+			DaemonID: cos.RandString(10),
 		}
 		for j := 0; j < recordObjCnt; j++ {
 			r.Objects = append(r.Objects, &extract.RecordObj{
-				ContentPath:    cmn.RandString(50),
+				ContentPath:    cos.RandString(50),
 				ObjectFileType: "abc",
 				StoreType:      "ab",
 				Offset:         rand.Int63(),
 				MetadataSize:   512,
 				Size:           rand.Int63(),
-				Extension:      "." + cmn.RandString(4),
+				Extension:      "." + cos.RandString(4),
 			})
 		}
 		records.Insert(r)

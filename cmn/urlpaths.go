@@ -1,15 +1,20 @@
-// Package cmn provides common low-level types and utilities for all aistore projects
+// Package cmn provides common constants, types, and utilities for AIS clients
+// and AIStore.
 /*
  * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
+
+import "github.com/NVIDIA/aistore/cmn/cos"
 
 type URLPath struct {
 	L []string
 	S string
 }
 
-func urlpath(words ...string) URLPath { return URLPath{L: words, S: JoinWords(words[0], words[1:]...)} }
+func urlpath(words ...string) URLPath {
+	return URLPath{L: words, S: cos.JoinWords(words[0], words[1:]...)}
+}
 
 var (
 	URLPathS3 = urlpath(S3) // URLPath{[]string{S3}, S3}
@@ -87,5 +92,5 @@ var (
 )
 
 func (u URLPath) Join(words ...string) string {
-	return JoinWords(u.S, words...)
+	return cos.JoinWords(u.S, words...)
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
@@ -55,7 +56,7 @@ func isRedirect(q url.Values) (delta string) {
 }
 
 func requestLatency(started time.Time, ptime string) (delta int64) {
-	pts, err := cmn.S2UnixNano(ptime)
+	pts, err := cos.S2UnixNano(ptime)
 	if err != nil {
 		glog.Errorf("unexpected: failed to convert %s to int, err: %v", ptime, err)
 		return

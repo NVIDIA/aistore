@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/dbdriver"
 )
@@ -32,7 +33,7 @@ var (
 
 // Set up glog with options from configuration file
 func updateLogOptions() error {
-	if err := cmn.CreateDir(conf.Log.Dir); err != nil {
+	if err := cos.CreateDir(conf.Log.Dir); err != nil {
 		return fmt.Errorf("failed to create log dir %q, err: %v", conf.Log.Dir, err)
 	}
 	glog.SetLogDir(conf.Log.Dir)
@@ -72,14 +73,14 @@ func main() {
 	}
 
 	if configPath == "" {
-		cmn.ExitLogf("Missing configuration file")
+		cos.ExitLogf("Missing configuration file")
 	}
 
 	if glog.V(4) {
 		glog.Infof("Reading configuration from %s", configPath)
 	}
 	if _, err = jsp.Load(configPath, conf, cmn.Plain()); err != nil {
-		cmn.ExitLogf("Failed to load configuration from %q: %v", configPath, err)
+		cos.ExitLogf("Failed to load configuration from %q: %v", configPath, err)
 	}
 	conf.Path = configPath
 	if val := os.Getenv(secretKeyEnvVar); val != "" {
@@ -87,21 +88,21 @@ func main() {
 	}
 
 	if err = updateLogOptions(); err != nil {
-		cmn.ExitLogf("Failed to set up logger: %v", err)
+		cos.ExitLogf("Failed to set up logger: %v", err)
 	}
 
 	dbPath := filepath.Join(conf.ConfDir, authDB)
 	driver, err := dbdriver.NewBuntDB(dbPath)
 	if err != nil {
-		cmn.ExitLogf("Failed to init local database: %v", err)
+		cos.ExitLogf("Failed to init local database: %v", err)
 	}
 	mgr, err := newUserManager(driver)
 	if err != nil {
-		cmn.ExitLogf("Failed to init user manager: %v", err)
+		cos.ExitLogf("Failed to init user manager: %v", err)
 	}
 
 	srv := newAuthServ(mgr)
 	if err := srv.run(); err != nil {
-		cmn.ExitLogf("Server failed: %v", err)
+		cos.ExitLogf("Server failed: %v", err)
 	}
 }

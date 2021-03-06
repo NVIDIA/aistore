@@ -10,21 +10,21 @@ import (
 	"io"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 var errThrottlerStopped = errors.New("throttler has been stopped")
 
 type (
 	throttler struct {
-		sema    *cmn.Semaphore
+		sema    *cos.Semaphore
 		emptyCh chan struct{} // Empty, closed channel (set only if `sema == nil`).
 
 		maxBytesPerMinute int
 		capacityCh        chan int
 		giveBackCh        chan int
 		ticker            *time.Ticker
-		stopCh            *cmn.StopCh
+		stopCh            *cos.StopCh
 	}
 
 	throughputThrottler interface {
@@ -41,7 +41,7 @@ type (
 func newThrottler(limits DlLimits) *throttler {
 	t := &throttler{}
 	if limits.Connections > 0 {
-		t.sema = cmn.NewSemaphore(limits.Connections)
+		t.sema = cos.NewSemaphore(limits.Connections)
 	} else {
 		t.emptyCh = make(chan struct{})
 		close(t.emptyCh)
@@ -57,7 +57,7 @@ func (t *throttler) initThroughputThrottling(maxBytesPerMinute int) {
 	t.capacityCh = make(chan int, 1)
 	t.giveBackCh = make(chan int, 1)
 	t.ticker = time.NewTicker(time.Minute)
-	t.stopCh = cmn.NewStopCh()
+	t.stopCh = cos.NewStopCh()
 	go func() {
 		defer func() {
 			t.ticker.Stop()

@@ -1,8 +1,8 @@
-// Package cmn provides common low-level types and utilities for all aistore projects
+// Package cos provides common low-level types and utilities for all aistore projects
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package cmn
+package cos
 
 import (
 	"flag"
@@ -37,6 +37,7 @@ func (b *BoolExt) Set(s string) (err error) {
 func (b *BoolExt) Get() interface{} { return b.Val }
 func (b *BoolExt) String() string   { return strconv.FormatBool(b.Val) }
 func (b *BoolExt) IsBoolFlag() bool { return true }
+
 func BoolExtVar(f *flag.FlagSet, p *BoolExt, name, usage string) {
 	f.Var(p, name, usage)
 }
@@ -50,6 +51,7 @@ func (d *DurationExt) Set(s string) (err error) {
 func (d *DurationExt) Get() interface{} { return d.Val }
 func (d *DurationExt) String() string   { return d.Val.String() }
 func (d *DurationExt) IsBoolFlag() bool { return false }
+
 func DurationExtVar(f *flag.FlagSet, p *DurationExt, name string, defValue time.Duration, usage string) {
 	p.Val = defValue
 	f.Var(p, name, usage)

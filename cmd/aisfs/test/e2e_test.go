@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
@@ -61,7 +62,7 @@ var _ = Describe("E2E FUSE Tests", func() {
 		proxyURL := tutils.GetPrimaryURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck = cmn.Bck{
-			Name:     cmn.RandString(10),
+			Name:     cos.RandString(10),
 			Provider: cmn.ProviderAIS,
 		}
 		fuseDir, err = ioutil.TempDir("/tmp", "")

@@ -15,7 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/bench/soaktest/report"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakprim"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 const (
@@ -118,12 +118,12 @@ func GetValidRecipeIDs() map[int]struct{} {
 
 func PrintRecipes() {
 	tmpl, err := template.New("List Template").Parse(recipeTmpl)
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 
 	w := new(tabwriter.Writer)
 	w.Init(os.Stdout, 0, 8, 0, '\t', 0)
 	err = tmpl.Execute(w, loadedRecipes)
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 
 	w.Flush()
 }

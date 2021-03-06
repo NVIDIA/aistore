@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
@@ -82,7 +83,7 @@ func newPrimary() *proxyrunner {
 	config.Timeout.MaxKeepalive = 4 * time.Second
 	config.Client.Timeout = 10 * time.Second
 	config.Client.TimeoutLong = 10 * time.Second
-	config.Cksum.Type = cmn.ChecksumXXHash
+	config.Cksum.Type = cos.ChecksumXXHash
 	cmn.GCO.CommitUpdate(config)
 	cmn.GCO.SetGlobalConfigPath("/tmp/ais-tests/ais.config")
 
@@ -110,7 +111,7 @@ func newSecondary(name string) *proxyrunner {
 	config.Keepalive.Proxy.IntervalStr = "as"
 	config.Timeout.CplaneOperation = 2 * time.Second
 	config.Timeout.MaxKeepalive = 4 * time.Second
-	config.Cksum.Type = cmn.ChecksumXXHash
+	config.Cksum.Type = cos.ChecksumXXHash
 	cmn.GCO.CommitUpdate(config)
 
 	o := newBMDOwnerPrx(cmn.GCO.Get())
@@ -161,22 +162,22 @@ func TestMetaSyncDeepCopy(t *testing.T) {
 	bmd := newBucketMD()
 	bmd.add(cluster.NewBck("bucket1", cmn.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
-			Type: cmn.ChecksumXXHash,
+			Type: cos.ChecksumXXHash,
 		},
 	})
 	bmd.add(cluster.NewBck("bucket2", cmn.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
-			Type: cmn.ChecksumXXHash,
+			Type: cos.ChecksumXXHash,
 		},
 	})
 	bmd.add(cluster.NewBck("bucket3", cmn.ProviderAmazon, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
-			Type: cmn.ChecksumXXHash,
+			Type: cos.ChecksumXXHash,
 		},
 	})
 	bmd.add(cluster.NewBck("bucket4", cmn.ProviderAmazon, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
-			Type: cmn.ChecksumXXHash,
+			Type: cos.ChecksumXXHash,
 		},
 	})
 
@@ -625,12 +626,12 @@ func TestMetaSyncData(t *testing.T) {
 	// sync bucketmd, fail target and retry
 	bmd.add(cluster.NewBck("bucket1", cmn.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
-			Type: cmn.ChecksumXXHash,
+			Type: cos.ChecksumXXHash,
 		},
 	})
 	bmd.add(cluster.NewBck("bucket2", cmn.ProviderAIS, cmn.NsGlobal), &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
-			Type: cmn.ChecksumXXHash,
+			Type: cos.ChecksumXXHash,
 		},
 	})
 	bmdBody := bmd.marshal()
@@ -648,7 +649,7 @@ func TestMetaSyncData(t *testing.T) {
 	// after rejecting a few sync requests
 	bmd = bmd.clone()
 	bprops := &cmn.BucketProps{
-		Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash},
+		Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash},
 		LRU:   cmn.GCO.Get().LRU,
 	}
 	bmd.add(cluster.NewBck("bucket3", cmn.ProviderAIS, cmn.NsGlobal), bprops)
@@ -810,7 +811,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		fProxy := func(w http.ResponseWriter, r *http.Request) {
 			d := make(msPayload)
 			err := d.unmarshal(r.Body, "")
-			cmn.AssertNoErr(err)
+			cos.AssertNoErr(err)
 			chProxy <- d
 		}
 

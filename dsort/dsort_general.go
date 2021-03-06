@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dsort/extract"
@@ -69,7 +70,7 @@ type (
 		w   io.Writer
 		n   int64
 		err error
-		wg  *cmn.TimeoutGroup
+		wg  *cos.TimeoutGroup
 	}
 
 	remoteRequest struct {
@@ -100,7 +101,7 @@ func newDSorterGeneral(m *Manager) (*dsorterGeneral, error) {
 func (ds *dsorterGeneral) newStreamWriter(pathToContents string, w io.Writer) *streamWriter {
 	writer := &streamWriter{
 		w:  w,
-		wg: cmn.NewTimeoutGroup(),
+		wg: cos.NewTimeoutGroup(),
 	}
 	writer.wg.Add(1)
 	ds.creationPhase.streamWriters.mu.Lock()
@@ -303,7 +304,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 			fullContentPath := ds.m.recManager.FullContentPath(obj)
 
 			if ds.m.rs.DryRun {
-				r := cmn.NopReader(obj.MetadataSize + obj.Size)
+				r := cos.NopReader(obj.MetadataSize + obj.Size)
 				written, err = io.CopyBuffer(w, r, buf)
 				return
 			}
@@ -315,7 +316,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 				if err != nil {
 					return written, errors.WithMessage(err, "(offset) open local content failed")
 				}
-				defer cmn.Close(f)
+				defer cos.Close(f)
 				_, err = f.Seek(obj.Offset-obj.MetadataSize, io.SeekStart)
 				if err != nil {
 					return written, errors.WithMessage(err, "(offset) seek local content failed")
@@ -324,10 +325,10 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 					return written, errors.WithMessage(err, "(offset) copy local content failed")
 				}
 			case extract.SGLStoreType:
-				cmn.Assert(buf == nil)
+				cos.Assert(buf == nil)
 
 				v, ok := ds.m.recManager.RecordContents().Load(fullContentPath)
-				cmn.AssertMsg(ok, fullContentPath)
+				cos.AssertMsg(ok, fullContentPath)
 				ds.m.recManager.RecordContents().Delete(fullContentPath)
 				sgl := v.(*memsys.SGL)
 				defer sgl.Free()
@@ -341,12 +342,12 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 				if err != nil {
 					return written, errors.WithMessage(err, "(disk) open local content failed")
 				}
-				defer cmn.Close(f)
+				defer cos.Close(f)
 				if n, err = io.CopyBuffer(w, f, buf); err != nil {
 					return written, errors.WithMessage(err, "(disk) copy local content failed")
 				}
 			default:
-				cmn.Assert(false)
+				cos.Assert(false)
 			}
 
 			debug.Assert(n > 0)
@@ -360,7 +361,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 				beforeRecv int64
 				beforeSend int64
 
-				wg      = cmn.NewTimeoutGroup()
+				wg      = cos.NewTimeoutGroup()
 				writer  = ds.newStreamWriter(rec.MakeUniqueName(obj), w)
 				metrics = ds.m.Metrics.Creation
 
@@ -457,7 +458,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 				} else if timed {
 					err = errors.Errorf("wait for remote content has timed out (%q was waiting for %q)", ds.m.ctx.node.DaemonID, daemonID)
 				} else {
-					cmn.AssertMsg(false, "pulled but not stopped or timed?!")
+					cos.AssertMsg(false, "pulled but not stopped or timed?!")
 				}
 				return 0, err
 			}
@@ -524,8 +525,8 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 		fullContentPath := ds.m.recManager.FullContentPath(req.RecordObj)
 
 		if ds.m.rs.DryRun {
-			lr := cmn.NopReader(req.RecordObj.MetadataSize + req.RecordObj.Size)
-			r := cmn.NopOpener(ioutil.NopCloser(lr))
+			lr := cos.NopReader(req.RecordObj.MetadataSize + req.RecordObj.Size)
+			r := cos.NopOpener(ioutil.NopCloser(lr))
 			o.Hdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
 			ds.streams.response.Send(o, r, fromNode)
 			return
@@ -535,7 +536,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 		case extract.OffsetStoreType:
 			o.Hdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
 			offset := req.RecordObj.Offset - req.RecordObj.MetadataSize
-			r, err := cmn.NewFileSectionHandle(fullContentPath, offset, o.Hdr.ObjAttrs.Size)
+			r, err := cos.NewFileSectionHandle(fullContentPath, offset, o.Hdr.ObjAttrs.Size)
 			if err != nil {
 				errHandler(err, fromNode, o)
 				return
@@ -543,27 +544,27 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 			ds.streams.response.Send(o, r, fromNode)
 		case extract.SGLStoreType:
 			v, ok := ds.m.recManager.RecordContents().Load(fullContentPath)
-			cmn.AssertMsg(ok, fullContentPath)
+			cos.AssertMsg(ok, fullContentPath)
 			ds.m.recManager.RecordContents().Delete(fullContentPath)
 			sgl := v.(*memsys.SGL)
 			o.Hdr.ObjAttrs.Size = sgl.Size()
 			ds.streams.response.Send(o, sgl, fromNode)
 		case extract.DiskStoreType:
-			f, err := cmn.NewFileHandle(fullContentPath)
+			f, err := cos.NewFileHandle(fullContentPath)
 			if err != nil {
 				errHandler(err, fromNode, o)
 				return
 			}
 			fi, err := f.Stat()
 			if err != nil {
-				cmn.Close(f)
+				cos.Close(f)
 				errHandler(err, fromNode, o)
 				return
 			}
 			o.Hdr.ObjAttrs.Size = fi.Size()
 			ds.streams.response.Send(o, f, fromNode)
 		default:
-			cmn.Assert(false)
+			cos.Assert(false)
 		}
 	}
 }
@@ -598,7 +599,7 @@ func (ds *dsorterGeneral) makeRecvResponseFunc() transport.ReceiveObj {
 			ds.m.abort(err)
 			return
 		}
-		defer cmn.DrainReader(object)
+		defer cos.DrainReader(object)
 
 		writer := ds.pullStreamWriter(hdr.ObjName)
 		if writer == nil { // was removed after timing out

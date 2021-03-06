@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/reb"
@@ -123,7 +124,7 @@ func (p *voteRetryMockTarget) votehdlr(w http.ResponseWriter, r *http.Request) {
 
 func (p *voteRetryMockTarget) healthdlr(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
-	getRebStatus := cmn.IsParseBool(query.Get(cmn.URLParamRebStatus))
+	getRebStatus := cos.IsParseBool(query.Get(cmn.URLParamRebStatus))
 	if getRebStatus {
 		status := &reb.Status{}
 		status.RebID = math.MaxInt64 // to abort t[MOCK] join triggered rebalance

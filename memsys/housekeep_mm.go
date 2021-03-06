@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/sys"
@@ -153,7 +153,7 @@ func (r *MMSA) getNextInterval(free, total uint64, swapping bool) time.Duration 
 		}
 	}
 	if changed && verbose {
-		glog.Infof("%s: timer %v, free %s", r.Name, r.duration, cmn.B2S(int64(free), 1))
+		glog.Infof("%s: timer %v, free %s", r.Name, r.duration, cos.B2S(int64(free), 1))
 	}
 	return r.duration
 }
@@ -219,7 +219,7 @@ func (r *MMSA) freeIdle(duration time.Duration) (freed int64) {
 			if x > 0 {
 				freed += x
 				if verbose {
-					glog.Infof("%s: idle for %v - reduced %s", s.tag, idle, cmn.B2S(x, 1))
+					glog.Infof("%s: idle for %v - reduced %s", s.tag, idle, cos.B2S(x, 1))
 				}
 			}
 		}
@@ -246,11 +246,11 @@ func (r *MMSA) doGC(free uint64, minsize int64, force, swapping bool) (gced bool
 	}
 	str := fmt.Sprintf(
 		"%s: GC(force: %t, swapping: %t); load: %.2f; free: %s; toGC: %s",
-		r.Name, force, swapping, avg.One, cmn.B2S(int64(free), 1), cmn.B2S(toGC, 2))
+		r.Name, force, swapping, avg.One, cos.B2S(int64(free), 1), cos.B2S(toGC, 2))
 	if force || swapping { // Heu #4
 		glog.Warning(str)
 		glog.Warning("freeing memory to OS...")
-		cmn.FreeMemToOS() // forces GC followed by an attempt to return memory to the OS
+		cos.FreeMemToOS() // forces GC followed by an attempt to return memory to the OS
 	} else { // Heu #5
 		glog.Infof(str)
 		runtime.GC()

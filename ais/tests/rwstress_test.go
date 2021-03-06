@@ -13,13 +13,14 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
 
 const (
 	rwdir    = "rwstress"
-	fileSize = 32 * cmn.KiB
+	fileSize = 32 * cos.KiB
 )
 
 type opRes struct {
@@ -31,7 +32,7 @@ type opRes struct {
 func generateRandomNames(fileCount int) {
 	fileNames = make([]string, fileCount)
 	for i := 0; i < fileCount; i++ {
-		fileNames[i] = cmn.RandString(20)
+		fileNames[i] = cos.RandString(20)
 	}
 }
 
@@ -50,7 +51,7 @@ func parallelOpLoop(bck cmn.Bck, cksumType string,
 	errCh chan opRes, opFunc func(string, string, cmn.Bck) opRes) {
 	var (
 		fileCount = len(fileNames)
-		wg        = cmn.NewLimitedWaitGroup(40)
+		wg        = cos.NewLimitedWaitGroup(40)
 	)
 	for i := 0; i < numLoops; i++ {
 		for idx := 0; idx < fileCount; idx++ {

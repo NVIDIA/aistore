@@ -8,7 +8,7 @@ import (
 	"crypto/rand"
 	"testing"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -20,17 +20,17 @@ import (
 
 func BenchmarkWRF(b *testing.B) {
 	tests := []struct{ payloadSz int64 }{
-		{cmn.MiB * 4},
-		{cmn.MiB},
-		{cmn.KiB * 128},
-		{cmn.KiB * 32},
-		{cmn.KiB * 4},
-		{cmn.KiB * 2},
-		{cmn.KiB},
+		{cos.MiB * 4},
+		{cos.MiB},
+		{cos.KiB * 128},
+		{cos.KiB * 32},
+		{cos.KiB * 4},
+		{cos.KiB * 2},
+		{cos.KiB},
 		{128},
 	}
 	for _, test := range tests {
-		name := cmn.B2S(test.payloadSz, 0)
+		name := cos.B2S(test.payloadSz, 0)
 		b.Run(name, func(b *testing.B) { wrf(b, test.payloadSz) })
 	}
 }
@@ -43,10 +43,10 @@ func wrf(b *testing.B, payloadSz int64) {
 	defer smm.Terminate()
 
 	// 2. equalize initial conditions
-	cmn.FreeMemToOS()
-	buf := make([]byte, cmn.KiB*128)
+	cos.FreeMemToOS()
+	buf := make([]byte, cos.KiB*128)
 	n, _ := rand.Read(buf)
-	cmn.Assert(n == cmn.KiB*128)
+	cos.Assert(n == cos.KiB*128)
 
 	// 3. select MMSA & slab for the specified payload size
 	mm, slab := gmm.SelectMemAndSlab(payloadSz)
@@ -60,11 +60,11 @@ func wrf(b *testing.B, payloadSz int64) {
 			sgl := mm.NewSGL(payloadSz, slabSize)
 			for sz := int64(0); sz < payloadSz; sz += slabSize {
 				n, _ := sgl.Write(buf[:slabSize])
-				cmn.Assert(n == int(slabSize))
+				cos.Assert(n == int(slabSize))
 			}
 			for sz := int64(0); sz < payloadSz; sz += slabSize {
 				n, _ := sgl.Read(buf[:slabSize])
-				cmn.Assert(n == int(slabSize))
+				cos.Assert(n == int(slabSize))
 			}
 			sgl.Free()
 		}

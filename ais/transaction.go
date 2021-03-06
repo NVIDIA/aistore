@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/transport/bundle"
@@ -146,7 +147,7 @@ func (txns *transactions) begin(txn txn) error {
 
 func (txns *transactions) find(uuid, act string) (txn txn, err error) {
 	var ok bool
-	cmn.Assert(act == "" /*simply find*/ || act == cmn.ActAbort || act == cmn.ActCommit)
+	cos.Assert(act == "" /*simply find*/ || act == cmn.ActAbort || act == cmn.ActCommit)
 	txns.Lock()
 	if txn, ok = txns.m[uuid]; !ok {
 		goto rerr
@@ -181,7 +182,7 @@ func (txns *transactions) commitBefore(caller string, msg *aisMsg) error {
 	}
 	txns.Unlock()
 	return fmt.Errorf("rendezvous record %s:%s already exists",
-		msg.UUID, cmn.FormatTimestamp(rndzvs.timestamp))
+		msg.UUID, cos.FormatTimestamp(rndzvs.timestamp))
 }
 
 func (txns *transactions) commitAfter(caller string, msg *aisMsg, err error, args ...interface{}) (errDone error) {
@@ -343,7 +344,7 @@ func (txn *txnBase) started(phase string, tm ...time.Time) (ts time.Time) {
 		}
 		ts = txn.phase.commit
 	default:
-		cmn.Assert(false)
+		cos.Assert(false)
 	}
 	return
 }
@@ -399,10 +400,10 @@ func (txn *txnBckBase) commit() { txn.cleanup() }
 func (txn *txnBckBase) String() string {
 	var (
 		res string
-		tm  = cmn.FormatTimestamp(txn.phase.begin)
+		tm  = cos.FormatTimestamp(txn.phase.begin)
 	)
 	if !txn.phase.commit.IsZero() {
-		tm += "-" + cmn.FormatTimestamp(txn.phase.commit)
+		tm += "-" + cos.FormatTimestamp(txn.phase.commit)
 	}
 	if done, err := txn.isDone(); done {
 		if err == nil {
@@ -468,7 +469,7 @@ func (txn *txnMakeNCopies) String() string {
 ///////////////////////
 
 func newTxnSetBucketProps(c *txnServerCtx, nprops *cmn.BucketProps) (txn *txnSetBucketProps) {
-	cmn.Assert(c.bck.Props != nil)
+	cos.Assert(c.bck.Props != nil)
 	bprops := c.bck.Props.Clone()
 	txn = &txnSetBucketProps{
 		*newTxnBckBase("spb", *c.bck),

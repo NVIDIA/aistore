@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/xaction"
@@ -488,7 +489,7 @@ func (r *registry) cleanUpFinished() time.Duration {
 			}
 		case xaction.XactTypeBck:
 			bck := cluster.NewBckEmbed(xact.Bck())
-			cmn.Assert(bck.HasProvider())
+			cos.Assert(bck.HasProvider())
 			entry := r.entries.findUnlocked(
 				XactFilter{Kind: entry.Kind(), Bck: bck, OnlyRunning: &onlyRunning})
 			if entry != nil && entry.Get().ID() == eID {

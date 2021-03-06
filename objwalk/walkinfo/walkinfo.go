@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -140,7 +141,7 @@ func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntr
 		Flags: objStatus | cmn.EntryIsCached,
 	}
 	if wi.needAtime() {
-		fileInfo.Atime = cmn.FormatUnixNano(lom.AtimeUnix(), wi.timeFormat)
+		fileInfo.Atime = cos.FormatUnixNano(lom.AtimeUnix(), wi.timeFormat)
 	}
 	if wi.needCksum() && lom.Cksum() != nil {
 		_, storedCksum := lom.Cksum().Get()

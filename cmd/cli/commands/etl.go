@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/fatih/color"
 	jsoniter "github.com/json-iterator/go"
@@ -156,7 +157,7 @@ func etlBuildHandler(c *cli.Context) (err error) {
 
 	msg.ID = parseStrFlag(c, etlUUID)
 	if msg.ID != "" {
-		if err = cmn.ValidateID(msg.ID); err != nil {
+		if err = cos.ValidateID(msg.ID); err != nil {
 			return
 		}
 		if err = etlExists(msg.ID); err != nil {
@@ -176,7 +177,7 @@ func etlBuildHandler(c *cli.Context) (err error) {
 	}
 
 	msg.Runtime = parseStrFlag(c, runtimeFlag)
-	msg.WaitTimeout = cmn.DurationJSON(parseDurationFlag(c, waitTimeoutFlag))
+	msg.WaitTimeout = cos.DurationJSON(parseDurationFlag(c, waitTimeoutFlag))
 
 	if err := msg.Validate(); err != nil {
 		return err
@@ -332,14 +333,14 @@ func etlBucketHandler(c *cli.Context) (err error) {
 
 	if flagIsSet(c, etlExtFlag) {
 		mapStr := parseStrFlag(c, etlExtFlag)
-		extMap := make(cmn.SimpleKVs, 1)
+		extMap := make(cos.SimpleKVs, 1)
 		if err = jsoniter.UnmarshalFromString(mapStr, &extMap); err != nil {
 			return fmt.Errorf("couldn't parse ext flag: %s", err.Error())
 		}
 		msg.Ext = extMap
 	}
 	if flagIsSet(c, etlBucketRequestTimeout) {
-		msg.RequestTimeout = cmn.DurationJSON(etlBucketRequestTimeout.Value)
+		msg.RequestTimeout = cos.DurationJSON(etlBucketRequestTimeout.Value)
 	}
 
 	xactID, err := api.ETLBucket(defaultAPIParams, fromBck, toBck, msg)
@@ -365,7 +366,7 @@ func etlBucketHandler(c *cli.Context) (err error) {
 	}
 
 	fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
-	fmt.Fprintf(c.App.Writer, "%d objects (%s) would have been put into bucket %s", stat.ObjCount(), cmn.B2S(stat.BytesCount(), 2), toBck.String())
+	fmt.Fprintf(c.App.Writer, "%d objects (%s) would have been put into bucket %s", stat.ObjCount(), cos.B2S(stat.BytesCount(), 2), toBck.String())
 	return nil
 }
 

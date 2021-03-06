@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -164,8 +164,8 @@ type LsBlk struct {
 	BlockDevices []BlockDevice `json:"blockdevices"`
 }
 
-func lsblkOutput2disks(lsblkOutputBytes []byte) (disks cmn.StringSet) {
-	disks = make(cmn.StringSet)
+func lsblkOutput2disks(lsblkOutputBytes []byte) (disks cos.StringSet) {
+	disks = make(cos.StringSet)
 	var lsBlkOutput LsBlk
 	err := jsoniter.Unmarshal(lsblkOutputBytes, &lsBlkOutput)
 	if err != nil {
@@ -178,7 +178,7 @@ func lsblkOutput2disks(lsblkOutputBytes []byte) (disks cmn.StringSet) {
 	return disks
 }
 
-func findDevDisks(devList []BlockDevice, disks cmn.StringSet) {
+func findDevDisks(devList []BlockDevice, disks cos.StringSet) {
 	for _, bd := range devList {
 		if !strings.HasPrefix(bd.Name, "loop") {
 			disks[bd.Name] = struct{}{}

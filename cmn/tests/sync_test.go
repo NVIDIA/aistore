@@ -10,11 +10,11 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 func TestTimeoutGroupSmoke(t *testing.T) {
-	wg := cmn.NewTimeoutGroup()
+	wg := cos.NewTimeoutGroup()
 	wg.Add(1)
 	wg.Done()
 	if wg.WaitTimeout(time.Second) {
@@ -23,7 +23,7 @@ func TestTimeoutGroupSmoke(t *testing.T) {
 }
 
 func TestTimeoutGroupWait(t *testing.T) {
-	wg := cmn.NewTimeoutGroup()
+	wg := cos.NewTimeoutGroup()
 	wg.Add(2)
 	wg.Done()
 	wg.Done()
@@ -31,7 +31,7 @@ func TestTimeoutGroupWait(t *testing.T) {
 }
 
 func TestTimeoutGroupGoroutines(t *testing.T) {
-	wg := cmn.NewTimeoutGroup()
+	wg := cos.NewTimeoutGroup()
 
 	for i := 0; i < 100000; i++ {
 		wg.Add(1)
@@ -47,7 +47,7 @@ func TestTimeoutGroupGoroutines(t *testing.T) {
 }
 
 func TestTimeoutGroupTimeout(t *testing.T) {
-	wg := cmn.NewTimeoutGroup()
+	wg := cos.NewTimeoutGroup()
 	wg.Add(1)
 
 	go func() {
@@ -65,7 +65,7 @@ func TestTimeoutGroupTimeout(t *testing.T) {
 }
 
 func TestTimeoutGroupStop(t *testing.T) {
-	wg := cmn.NewTimeoutGroup()
+	wg := cos.NewTimeoutGroup()
 	wg.Add(1)
 
 	go func() {
@@ -95,7 +95,7 @@ func TestTimeoutGroupStop(t *testing.T) {
 }
 
 func TestTimeoutGroupStopAndTimeout(t *testing.T) {
-	wg := cmn.NewTimeoutGroup()
+	wg := cos.NewTimeoutGroup()
 	wg.Add(1)
 
 	go func() {
@@ -119,7 +119,7 @@ func TestTimeoutGroupStopAndTimeout(t *testing.T) {
 }
 
 func TestSemaphore(t *testing.T) {
-	sema := cmn.NewSemaphore(2)
+	sema := cos.NewSemaphore(2)
 	sema.Acquire()
 	sema.Acquire()
 
@@ -142,7 +142,7 @@ func TestSemaphore(t *testing.T) {
 func TestDynSemaphore(t *testing.T) {
 	limit := 10
 
-	sema := cmn.NewDynSemaphore(limit)
+	sema := cos.NewDynSemaphore(limit)
 
 	var i atomic.Int32
 	wg := &sync.WaitGroup{}
@@ -165,7 +165,7 @@ func TestDynSemaphore(t *testing.T) {
 
 	res := int32(0)
 	for c := range ch {
-		res = cmn.MaxI32(res, c)
+		res = cos.MaxI32(res, c)
 	}
 
 	if int(res) != limit {

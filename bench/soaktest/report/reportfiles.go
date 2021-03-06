@@ -13,7 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/bench/soaktest/stats"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 // Static file, used for logging errors and stuff to report logs
@@ -43,14 +43,14 @@ func InitReportFiles() {
 	dir := soakcmn.Params.ReportDir
 
 	if dir == "" {
-		err := os.MkdirAll(DefaultDir, cmn.PermRWXRX)
-		cmn.AssertNoErr(err)
+		err := os.MkdirAll(DefaultDir, cos.PermRWXRX)
+		cos.AssertNoErr(err)
 		dir = DefaultDir
 	} else {
 		info, err := os.Stat(dir)
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 		if !info.IsDir() {
-			cmn.AssertNoErr(errors.New("%v is not a folder"))
+			cos.AssertNoErr(errors.New("%v is not a folder"))
 		}
 	}
 
@@ -75,11 +75,11 @@ func InitReportFiles() {
 	sysinfoWriter.Path = path.Join(dir, reportPath, fmt.Sprintf("sysinfo-%s.csv", suffix))
 
 	var err error
-	fsummary, err = cmn.CreateFile(fsummaryPath)
-	cmn.AssertNoErr(err)
+	fsummary, err = cos.CreateFile(fsummaryPath)
+	cos.AssertNoErr(err)
 
-	fdetail, err = cmn.CreateFile(fdetailPath)
-	cmn.AssertNoErr(err)
+	fdetail, err = cos.CreateFile(fdetailPath)
+	cos.AssertNoErr(err)
 
 	fmt.Printf("----- Writing Reports to Disk -----\n")
 	fmt.Printf("Summary Logs: %v\n", fsummaryPath)

@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/colinmarc/hdfs/v2"
@@ -36,7 +37,7 @@ var _ cluster.BackendProvider = (*hdfsProvider)(nil)
 
 func NewHDFS(t cluster.Target) (cluster.BackendProvider, error) {
 	providerConf, ok := cmn.GCO.Get().Backend.ProviderConf(cmn.ProviderHDFS)
-	cmn.Assert(ok)
+	cos.Assert(ok)
 	hdfsConf := providerConf.(cmn.BackendConfHDFS)
 
 	client, err := hdfs.NewClient(hdfs.ClientOptions{
@@ -96,12 +97,12 @@ func (hp *hdfsProvider) checkDirectoryExists(bck *cluster.Bck) (errCode int, err
 // HEAD BUCKET //
 /////////////////
 
-func (hp *hdfsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
+func (hp *hdfsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
 	if errCode, err = hp.checkDirectoryExists(bck); err != nil {
 		return
 	}
 
-	bckProps = make(cmn.SimpleKVs)
+	bckProps = make(cos.SimpleKVs)
 	bckProps[cmn.HeaderBackendProvider] = cmn.ProviderHDFS
 	bckProps[cmn.HeaderBucketVerEnabled] = "false"
 	return
@@ -118,7 +119,7 @@ func (hp *hdfsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *
 	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, msg.PageSize)}
 	err = hp.c.Walk(bck.Props.Extra.HDFS.RefDirectory, func(path string, fi os.FileInfo, err error) error {
 		if err != nil {
-			if cmn.IsEOF(err) {
+			if cos.IsEOF(err) {
 				return nil
 			}
 			return err
@@ -193,7 +194,7 @@ func skipDir(fi os.FileInfo) error {
 //////////////////
 
 func (hp *hdfsProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error) {
-	cmn.Assert(false)
+	cos.Assert(false)
 	return
 }
 
@@ -201,7 +202,7 @@ func (hp *hdfsProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (b
 // HEAD OBJECT //
 /////////////////
 
-func (hp *hdfsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, errCode int, err error) {
+func (hp *hdfsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cos.SimpleKVs, errCode int, err error) {
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
 	fr, err := hp.c.Open(filePath)
 	if err != nil {
@@ -209,7 +210,7 @@ func (hp *hdfsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta 
 		return nil, errCode, err
 	}
 
-	objMeta = make(cmn.SimpleKVs, 2)
+	objMeta = make(cos.SimpleKVs, 2)
 	objMeta[cmn.HeaderBackendProvider] = cmn.ProviderHDFS
 	objMeta[cmn.HeaderObjSize] = strconv.FormatInt(fr.Stat().Size(), 10)
 	objMeta[cluster.VersionObjMD] = ""
@@ -247,7 +248,7 @@ func (hp *hdfsProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode i
 // GET OBJ READER //
 ////////////////////
 
-func (hp *hdfsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
+func (hp *hdfsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cos.Cksum, errCode int, err error) {
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
 	fr, err := hp.c.Open(filePath)
 	if err != nil {
@@ -255,7 +256,7 @@ func (hp *hdfsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 		return
 	}
 
-	customMD := cmn.SimpleKVs{
+	customMD := cos.SimpleKVs{
 		cluster.SourceObjMD:  cluster.SourceHDFSObjMD,
 		cluster.VersionObjMD: "",
 	}
@@ -278,7 +279,7 @@ func (hp *hdfsProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluste
 		}
 
 		// Create any missing directories.
-		if err = hp.c.MkdirAll(filepath.Dir(filePath), cmn.PermRWXRX|os.ModeDir); err != nil {
+		if err = hp.c.MkdirAll(filepath.Dir(filePath), cos.PermRWXRX|os.ModeDir); err != nil {
 			goto finish
 		}
 
@@ -297,7 +298,7 @@ func (hp *hdfsProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluste
 	err = fw.Close()
 
 finish:
-	cmn.Close(r)
+	cos.Close(r)
 
 	// TODO: Cleanup if there was an error during `c.Create` or `io.Copy`. We need
 	//  to remove directories and file.

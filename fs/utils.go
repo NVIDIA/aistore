@@ -11,8 +11,10 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
+
+const maxNumCopies = 16
 
 var (
 	pid  int64 = 0xDEADBEEF   // pid of the current process
@@ -71,7 +73,7 @@ func IsDirEmpty(dir string) (names []string, empty bool, err error) {
 	if err != nil {
 		return nil, false, err
 	}
-	defer cmn.Close(f)
+	defer cos.Close(f)
 
 	// Try listing small number of files/dirs to do a quick emptiness check.
 	// If seems empty try a bigger sample to determine if it actually is.
@@ -89,7 +91,7 @@ func IsDirEmpty(dir string) (names []string, empty bool, err error) {
 			subDir := filepath.Join(dir, sub)
 			if finfo, erc := os.Stat(subDir); erc == nil {
 				if !finfo.IsDir() {
-					return names[:cmn.Min(8, len(names))], false, nil
+					return names[:cos.Min(8, len(names))], false, nil
 				}
 				dirs = append(dirs, subDir)
 			}
@@ -111,9 +113,9 @@ func IsDirEmpty(dir string) (names []string, empty bool, err error) {
 }
 
 func ValidateNCopies(tname string, copies int) (err error) {
-	if copies < 1 || copies > cmn.MaxNumCopies {
+	if copies < 1 || copies > maxNumCopies {
 		return fmt.Errorf("%s: invalid num copies %d, must be in [1, %d] range",
-			tname, copies, cmn.MaxNumCopies)
+			tname, copies, maxNumCopies)
 	}
 	availablePaths, _ := Get()
 	if num := len(availablePaths); num < copies {

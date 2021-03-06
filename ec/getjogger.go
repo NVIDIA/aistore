@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -34,7 +35,7 @@ type (
 		mpath  string // Mountpath that the jogger manages
 
 		workCh chan *request // Channel to request TOP priority operation (restore)
-		stopCh *cmn.StopCh   // Jogger management channel: to stop it
+		stopCh *cos.StopCh   // Jogger management channel: to stop it
 	}
 	restoreCtx struct {
 		lom      *cluster.LOM         // replica
@@ -138,7 +139,7 @@ func (c *getJogger) ec(req *request) {
 // The final step of replica restoration process: the main target detects which
 // nodes do not have replicas and then runs respective replications.
 // * reader - replica content to send to remote targets
-func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cmn.ReadOpenCloser) error {
+func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenCloser) error {
 	if err := ctx.lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		return err
 	}
@@ -166,12 +167,12 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cmn.ReadOpenClos
 		return nil
 	}
 
-	var srcReader cmn.ReadOpenCloser
+	var srcReader cos.ReadOpenCloser
 	switch r := reader.(type) {
 	case *memsys.SGL:
 		srcReader = memsys.NewReader(r)
-	case *cmn.FileHandle:
-		srcReader, err = cmn.NewFileHandle(ctx.lom.FQN)
+	case *cos.FileHandle:
+		srcReader, err = cos.NewFileHandle(ctx.lom.FQN)
 	default:
 		debug.Assertf(false, "unsupported reader type: %v", reader)
 		err = fmt.Errorf("unsupported reader type: %T", reader)
@@ -210,7 +211,7 @@ func (c *getJogger) restoreReplicatedFromMemory(ctx *restoreCtx) error {
 		uname := unique(node, ctx.lom.Bck(), ctx.lom.ObjName)
 		iReqBuf := c.parent.newIntraReq(reqGet, ctx.meta, ctx.lom.Bck()).NewPack(mm)
 
-		w := mm.NewSGL(cmn.KiB)
+		w := mm.NewSGL(cos.KiB)
 		if _, err := c.parent.readRemote(ctx.lom, node, uname, iReqBuf, w); err != nil {
 			glog.Errorf("%s failed to read from %s", c.parent.t.Snode(), node)
 			w.Free()
@@ -274,7 +275,7 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 		iReqBuf := c.parent.newIntraReq(reqGet, ctx.meta, ctx.lom.Bck()).NewPack(mm)
 		n, err = c.parent.readRemote(ctx.lom, node, uname, iReqBuf, w)
 		mm.Free(iReqBuf)
-		cmn.Close(w)
+		cos.Close(w)
 
 		if err == nil && n != 0 {
 			// A valid replica is found - break and do close file handle
@@ -283,7 +284,7 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 			break
 		}
 
-		errRm := cmn.RemoveFile(tmpFQN)
+		errRm := cos.RemoveFile(tmpFQN)
 		debug.AssertNoErr(errRm)
 	}
 	if glog.FastV(4, glog.SmoduleEC) {
@@ -293,7 +294,7 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 	if writer == nil {
 		return errors.New("failed to read a replica from any target")
 	}
-	if err := cmn.Rename(tmpFQN, objFQN); err != nil {
+	if err := cos.Rename(tmpFQN, objFQN); err != nil {
 		return err
 	}
 
@@ -307,7 +308,7 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 		return err
 	}
 
-	reader, err := cmn.NewFileHandle(objFQN)
+	reader, err := cos.NewFileHandle(objFQN)
 	if err != nil {
 		return err
 	}
@@ -322,7 +323,7 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 // all data and parity slices from targets in a cluster.
 func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 	var (
-		wgSlices = cmn.NewTimeoutGroup()
+		wgSlices = cos.NewTimeoutGroup()
 		sliceCnt = ctx.meta.Data + ctx.meta.Parity
 		daemons  = make([]string, 0, len(ctx.nodes)) // Targets to be requested for slices
 	)
@@ -353,7 +354,7 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 			}
 		} else {
 			writer = &slice{
-				writer: mm.NewSGL(cmn.KiB * 512),
+				writer: mm.NewSGL(cos.KiB * 512),
 				wg:     wgSlices,
 			}
 		}
@@ -394,7 +395,7 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 }
 
 func newSliceWriter(ctx *restoreCtx, writers []io.Writer, restored []*slice,
-	cksums []*cmn.CksumHash, cksumType string, idx int, sliceSize int64) error {
+	cksums []*cos.CksumHash, cksumType string, idx int, sliceSize int64) error {
 	if ctx.toDisk {
 		prefix := fmt.Sprintf("ec-rebuild-%d", idx)
 		fqn := fs.CSM.GenContentFQN(ctx.lom, fs.WorkfileType, prefix)
@@ -402,9 +403,9 @@ func newSliceWriter(ctx *restoreCtx, writers []io.Writer, restored []*slice,
 		if err != nil {
 			return err
 		}
-		if cksumType != cmn.ChecksumNone {
-			cksums[idx] = cmn.NewCksumHash(cksumType)
-			writers[idx] = cmn.NewWriterMulti(cksums[idx].H, file)
+		if cksumType != cos.ChecksumNone {
+			cksums[idx] = cos.NewCksumHash(cksumType)
+			writers[idx] = cos.NewWriterMulti(cksums[idx].H, file)
 		} else {
 			writers[idx] = file
 		}
@@ -412,9 +413,9 @@ func newSliceWriter(ctx *restoreCtx, writers []io.Writer, restored []*slice,
 	} else {
 		sgl := mm.NewSGL(sliceSize)
 		restored[idx] = &slice{obj: sgl, n: sliceSize}
-		if cksumType != cmn.ChecksumNone {
-			cksums[idx] = cmn.NewCksumHash(cksumType)
-			writers[idx] = cmn.NewWriterMulti(cksums[idx].H, sgl)
+		if cksumType != cos.ChecksumNone {
+			cksums[idx] = cos.NewCksumHash(cksumType)
+			writers[idx] = cos.NewWriterMulti(cksums[idx].H, sgl)
 		} else {
 			writers[idx] = sgl
 		}
@@ -426,14 +427,14 @@ func newSliceWriter(ctx *restoreCtx, writers []io.Writer, restored []*slice,
 	return nil
 }
 
-func checkSliceChecksum(reader io.Reader, recvCksm *cmn.Cksum, sliceSize int64, objName string) error {
+func checkSliceChecksum(reader io.Reader, recvCksm *cos.Cksum, sliceSize int64, objName string) error {
 	cksumType := recvCksm.Type()
-	if cksumType == cmn.ChecksumNone {
+	if cksumType == cos.ChecksumNone {
 		return nil
 	}
 
 	buf, slab := mm.Alloc(sliceSize)
-	_, actualCksm, err := cmn.CopyAndChecksum(ioutil.Discard, reader, buf, cksumType)
+	_, actualCksm, err := cos.CopyAndChecksum(ioutil.Discard, reader, buf, cksumType)
 	slab.Free(buf)
 
 	if err != nil {
@@ -441,7 +442,7 @@ func checkSliceChecksum(reader io.Reader, recvCksm *cmn.Cksum, sliceSize int64, 
 	}
 
 	if !actualCksm.Equal(recvCksm) {
-		return cmn.NewBadDataCksumError(recvCksm, &actualCksm.Cksum, objName)
+		return cos.NewBadDataCksumError(recvCksm, &actualCksm.Cksum, objName)
 	}
 	return nil
 }
@@ -455,7 +456,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 		readers   = make([]io.Reader, sliceCnt)
 		writers   = make([]io.Writer, sliceCnt)
 		restored  = make([]*slice, sliceCnt)
-		cksums    = make([]*cmn.CksumHash, sliceCnt)
+		cksums    = make([]*cos.CksumHash, sliceCnt)
 		conf      = ctx.lom.CksumConf()
 	)
 
@@ -485,8 +486,8 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 			readers[i] = memsys.NewReader(sgl)
 			cksmReader = memsys.NewReader(sgl)
 		} else if sl.workFQN != "" {
-			readers[i], err = cmn.NewFileHandle(sl.workFQN)
-			cksmReader, _ = cmn.NewFileHandle(sl.workFQN)
+			readers[i], err = cos.NewFileHandle(sl.workFQN)
+			cksmReader, _ = cos.NewFileHandle(sl.workFQN)
 			if err != nil {
 				break
 			}
@@ -542,7 +543,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 			if sgl, ok := ctx.slices[i].writer.(*memsys.SGL); ok {
 				srcReaders[i] = memsys.NewReader(sgl)
 			} else if ctx.slices[i].workFQN != "" {
-				srcReaders[i], err = cmn.NewFileHandle(ctx.slices[i].workFQN)
+				srcReaders[i], err = cos.NewFileHandle(ctx.slices[i].workFQN)
 				if err != nil {
 					return restored, err
 				}
@@ -557,7 +558,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 			version = restored[i].version
 		}
 		if restored[i].workFQN != "" {
-			srcReaders[i], err = cmn.NewFileHandle(restored[i].workFQN)
+			srcReaders[i], err = cos.NewFileHandle(restored[i].workFQN)
 			if err != nil {
 				return restored, err
 			}
@@ -590,7 +591,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 
 // Look for the first non-nil slice in the list starting from the index `start`.
 func getNextNonEmptySlice(slices []*slice, start int) (*slice, int) {
-	i := cmn.Max(0, start)
+	i := cos.Max(0, start)
 	for i < len(slices) && slices[i] == nil {
 		i++
 	}
@@ -673,12 +674,12 @@ func (c *getJogger) uploadRestoredSlices(ctx *restoreCtx, slices []*slice) error
 			sliceMeta.CksumType, sliceMeta.CksumValue = sl.cksum.Get()
 		}
 
-		var reader cmn.ReadOpenCloser
+		var reader cos.ReadOpenCloser
 		if sl.workFQN != "" {
-			reader, _ = cmn.NewFileHandle(sl.workFQN)
+			reader, _ = cos.NewFileHandle(sl.workFQN)
 		} else {
 			s, ok := sl.obj.(*memsys.SGL)
-			cmn.Assert(ok)
+			cos.Assert(ok)
 			reader = memsys.NewReader(s)
 		}
 		dataSrc := &dataSource{
@@ -800,7 +801,7 @@ func (c *getJogger) restore(ctx *restoreCtx) error {
 func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 	var (
 		tmap   = c.parent.smap.Get().Tmap
-		wg     = cmn.NewLimitedWaitGroup(cluster.MaxBcastParallel(), 8)
+		wg     = cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), 8)
 		mtx    = &sync.Mutex{}
 		chk    = make(map[string]int, len(tmap))
 		chkVal string

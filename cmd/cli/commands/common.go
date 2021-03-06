@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/urfave/cli"
 )
@@ -388,11 +389,11 @@ var (
 
 func getCksumFlags() []cli.Flag {
 	var (
-		checksums = cmn.SupportedChecksums()
+		checksums = cos.SupportedChecksums()
 		flags     = make([]cli.Flag, 0, len(checksums)-1)
 	)
 	for _, cksum := range checksums {
-		if cksum == cmn.ChecksumNone {
+		if cksum == cos.ChecksumNone {
 			continue
 		}
 		flags = append(flags, cli.StringFlag{

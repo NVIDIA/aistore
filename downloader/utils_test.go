@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/downloader"
@@ -50,7 +50,7 @@ func TestCompareObject(t *testing.T) {
 	)
 
 	// Modify local object to contain invalid (meta)data.
-	customMD := cmn.SimpleKVs{
+	customMD := cos.SimpleKVs{
 		cluster.SourceObjMD:  cluster.SourceGoogleObjMD,
 		cluster.CRC32CObjMD:  "bad",
 		cluster.VersionObjMD: "version",

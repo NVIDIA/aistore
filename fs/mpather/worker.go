@@ -10,6 +10,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -33,7 +34,7 @@ type (
 		opts      *WorkerGroupOpts
 		mpathInfo *fs.MountpathInfo
 		workCh    chan cluster.LIF
-		stopCh    *cmn.StopCh
+		stopCh    *cos.StopCh
 	}
 )
 
@@ -81,7 +82,7 @@ func newWorker(opts *WorkerGroupOpts, mpathInfo *fs.MountpathInfo) *worker {
 		opts:      opts,
 		mpathInfo: mpathInfo,
 		workCh:    make(chan cluster.LIF, opts.QueueSize),
-		stopCh:    cmn.NewStopCh(),
+		stopCh:    cos.NewStopCh(),
 	}
 }
 
@@ -110,7 +111,7 @@ func (w *worker) work() error {
 			// Make sure there is nothing in the `workCh` once we aborted.
 			// In case there is, this means that workers were not aborted correctly.
 			_, ok := <-w.workCh
-			cmn.Assert(!ok)
+			cos.Assert(!ok)
 
 			return cmn.NewAbortedError(w.String())
 		}

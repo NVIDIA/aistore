@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/filter"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
@@ -66,13 +67,13 @@ type (
 		statTracker stats.Tracker
 		filterGFN   *filter.Filter
 		smap        atomic.Pointer // new smap which will be soon live
-		lomacks     [cmn.MultiSyncMapCount]*lomAcks
+		lomacks     [cos.MultiSyncMapCount]*lomAcks
 		awaiting    struct {
 			mu      sync.Mutex
 			targets cluster.Nodes // targets for which we are waiting for
 			ts      int64         // last time we have recomputed
 		}
-		semaCh     *cmn.Semaphore
+		semaCh     *cos.Semaphore
 		beginStats atomic.Pointer // *stats.ExtRebalanceStats
 		xreb       atomic.Pointer // *xaction.Rebalance
 		stages     *nodeStages
@@ -134,7 +135,7 @@ func NewManager(t cluster.Target, config *cmn.Config, st stats.Tracker) *Manager
 	}
 	dm, err := bundle.NewDataMover(t, rebTrname, reb.recvObj, cluster.Migrated, dmExtra)
 	if err != nil {
-		cmn.ExitLogf("%v", err)
+		cos.ExitLogf("%v", err)
 	}
 	reb.dm = dm
 	reb.ec = newECData()
@@ -145,20 +146,20 @@ func NewManager(t cluster.Target, config *cmn.Config, st stats.Tracker) *Manager
 // NOTE: these receive handlers are statically present throughout: unreg never done
 func (reb *Manager) registerRecv() {
 	if err := reb.dm.RegRecv(); err != nil {
-		cmn.ExitLogf("%v", err)
+		cos.ExitLogf("%v", err)
 	}
 	if err := transport.HandleObjStream(rebPushTrname, reb.recvPush); err != nil {
-		cmn.ExitLogf("%v", err)
+		cos.ExitLogf("%v", err)
 	}
 	// serialization: one at a time
-	reb.semaCh = cmn.NewSemaphore(1)
+	reb.semaCh = cos.NewSemaphore(1)
 }
 
 func (reb *Manager) RebID() int64                              { return reb.rebID.Load() }
 func (reb *Manager) FilterAdd(uname []byte)                    { reb.filterGFN.Insert(uname) }
 func (reb *Manager) xact() *xrun.Rebalance                     { return (*xrun.Rebalance)(reb.xreb.Load()) }
 func (reb *Manager) setXact(xact *xrun.Rebalance)              { reb.xreb.Store(unsafe.Pointer(xact)) }
-func (reb *Manager) lomAcks() *[cmn.MultiSyncMapCount]*lomAcks { return &reb.lomacks }
+func (reb *Manager) lomAcks() *[cos.MultiSyncMapCount]*lomAcks { return &reb.lomacks }
 
 // TODO: lomAck.q[lom.Uname()] = lom.Bprops().BID and, subsequently, LIF => LOM reinit
 func (reb *Manager) addLomAck(lom *cluster.LOM) {
@@ -201,7 +202,7 @@ func (reb *Manager) getStats() (s *stats.ExtRebalanceStats) {
 }
 
 func (reb *Manager) beginStreams() {
-	cmn.Assert(reb.stages.stage.Load() == rebStageInit)
+	cos.Assert(reb.stages.stage.Load() == rebStageInit)
 
 	reb.dm.Open()
 	pushArgs := bundle.Args{Network: reb.dm.NetC(), Trname: rebPushTrname}
@@ -218,8 +219,8 @@ func (reb *Manager) endStreams(err error) {
 	}
 }
 
-func (reb *Manager) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacker *cmn.ByteUnpack, objReader io.Reader) {
-	defer cmn.DrainReader(objReader)
+func (reb *Manager) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacker *cos.ByteUnpack, objReader io.Reader) {
+	defer cos.DrainReader(objReader)
 
 	ack := &regularAck{}
 	if err := unpacker.ReadAny(ack); err != nil {
@@ -261,7 +262,7 @@ func (reb *Manager) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unp
 		Tag:      fs.WorkfilePut,
 		Reader:   ioutil.NopCloser(objReader),
 		RecvType: cluster.Migrated,
-		Cksum:    cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
+		Cksum:    cos.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
 		Started:  time.Now(),
 	}
 	if err := reb.t.PutObject(lom, params); err != nil {
@@ -309,7 +310,7 @@ func (reb *Manager) waitForSmap() (*cluster.Smap, error) {
 			maxwt  = config.Rebalance.DestRetryTime
 			curwt  time.Duration
 		)
-		maxwt = cmn.MinDuration(maxwt, config.Timeout.SendFile/3)
+		maxwt = cos.MinDuration(maxwt, config.Timeout.SendFile/3)
 		glog.Warningf("%s: waiting to start...", reb.t.Snode())
 		time.Sleep(sleep)
 		for curwt < maxwt {
@@ -340,7 +341,7 @@ func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.ObjHdr, objRead
 		return
 	}
 
-	unpacker := cmn.NewUnpacker(hdr.Opaque)
+	unpacker := cos.NewUnpacker(hdr.Opaque)
 	act, err := unpacker.ReadByte()
 	if err != nil {
 		glog.Errorf("Failed to read message type: %v", err)
@@ -419,7 +420,7 @@ func (reb *Manager) recvPush(_ http.ResponseWriter, hdr transport.ObjHdr, _ io.R
 	reb.stages.setStage(req.daemonID, req.stage, int64(req.batch))
 }
 
-func (reb *Manager) recvECAck(hdr transport.ObjHdr, unpacker *cmn.ByteUnpack) {
+func (reb *Manager) recvECAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
 	ack := &ecAck{}
 	if err := unpacker.ReadAny(ack); err != nil {
 		glog.Errorf("Failed to unmarshal EC ACK for %s/%s: %v", hdr.Bck, hdr.ObjName, err)
@@ -437,7 +438,7 @@ func (reb *Manager) recvECAck(hdr transport.ObjHdr, unpacker *cmn.ByteUnpack) {
 	reb.ec.ackCTs.remove(rt)
 }
 
-func (reb *Manager) recvRegularAck(hdr transport.ObjHdr, unpacker *cmn.ByteUnpack) {
+func (reb *Manager) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
 	ack := &regularAck{}
 	if err := unpacker.ReadAny(ack); err != nil {
 		glog.Errorf("Failed to parse acknowledge: %v", err)
@@ -468,7 +469,7 @@ func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.ObjHdr, _ io.Re
 		return
 	}
 
-	unpacker := cmn.NewUnpacker(hdr.Opaque)
+	unpacker := cos.NewUnpacker(hdr.Opaque)
 	act, err := unpacker.ReadByte()
 	if err != nil {
 		glog.Errorf("failed to read message type: %v", err)

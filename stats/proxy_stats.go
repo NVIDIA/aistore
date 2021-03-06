@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 type (
@@ -25,7 +26,7 @@ type (
 	}
 	ClusterStatsRaw struct {
 		Proxy  *CoreStats      `json:"proxy"`
-		Target cmn.JSONRawMsgs `json:"target"`
+		Target cos.JSONRawMsgs `json:"target"`
 	}
 )
 

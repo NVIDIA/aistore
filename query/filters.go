@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 type (
@@ -117,7 +117,7 @@ func extractObjectFilters(filter *FilterMsg) ([]cluster.ObjectFilter, error) {
 }
 
 func functionFilterMsgToObjectFilter(filterMsg *FilterMsg) (cluster.ObjectFilter, error) {
-	cmn.Assert(filterMsg.Type == FUNCTION)
+	cos.Assert(filterMsg.Type == FUNCTION)
 	var (
 		err error
 		v   []int64
@@ -137,12 +137,12 @@ func functionFilterMsgToObjectFilter(filterMsg *FilterMsg) (cluster.ObjectFilter
 		case ExtF:
 			return ExtFilter(filterMsg.Args[0]), nil
 		default:
-			cmn.Assert(false)
+			cos.Assert(false)
 			return nil, nil
 		}
 	}
-	cmn.Assert(fMeta.argsType == intArg)
-	v, err = cmn.StringSliceToIntSlice(filterMsg.Args)
+	cos.Assert(fMeta.argsType == intArg)
+	v, err = cos.StringSliceToIntSlice(filterMsg.Args)
 	if err != nil {
 		return nil, fmt.Errorf("%s failed: %v", filterMsg.FName, err)
 	}
@@ -167,7 +167,7 @@ func functionFilterMsgToObjectFilter(filterMsg *FilterMsg) (cluster.ObjectFilter
 	case VersionGeF:
 		return VersionGEFilter(int(v[0])), nil
 	default:
-		cmn.Assert(false)
+		cos.Assert(false)
 		return nil, nil
 	}
 }
@@ -182,7 +182,7 @@ func ATimeFilterMsg(after, before time.Time) *FilterMsg {
 	return &FilterMsg{
 		Type:  FUNCTION,
 		FName: AtimeF,
-		Args:  []string{cmn.I2S(after.UnixNano()), cmn.I2S(before.UnixNano())},
+		Args:  []string{cos.I2S(after.UnixNano()), cos.I2S(before.UnixNano())},
 	}
 }
 
@@ -196,7 +196,7 @@ func ATimeAfterFilterMsg(after time.Time) *FilterMsg {
 	return &FilterMsg{
 		Type:  FUNCTION,
 		FName: AtimeAfterF,
-		Args:  []string{cmn.I2S(after.UnixNano())},
+		Args:  []string{cos.I2S(after.UnixNano())},
 	}
 }
 
@@ -210,7 +210,7 @@ func ATimeBeforeFilterMsg(before time.Time) *FilterMsg {
 	return &FilterMsg{
 		Type:  FUNCTION,
 		FName: AtimeBeforeF,
-		Args:  []string{cmn.I2S(before.UnixNano())},
+		Args:  []string{cos.I2S(before.UnixNano())},
 	}
 }
 
@@ -224,7 +224,7 @@ func SizeFilterMsg(min, max int64) *FilterMsg {
 	return &FilterMsg{
 		Type:  FUNCTION,
 		FName: SizeF,
-		Args:  []string{cmn.I2S(min), cmn.I2S(max)},
+		Args:  []string{cos.I2S(min), cos.I2S(max)},
 	}
 }
 
@@ -236,7 +236,7 @@ func SizeLEFilterMsg(n int64) *FilterMsg {
 	return &FilterMsg{
 		Type:  FUNCTION,
 		FName: SizeLeF,
-		Args:  []string{cmn.I2S(n)},
+		Args:  []string{cos.I2S(n)},
 	}
 }
 
@@ -248,14 +248,14 @@ func SizeGEFilterMsg(n int64) *FilterMsg {
 	return &FilterMsg{
 		Type:  FUNCTION,
 		FName: SizeGeF,
-		Args:  []string{cmn.I2S(n)},
+		Args:  []string{cos.I2S(n)},
 	}
 }
 
 func VersionFilter(min, max int) cluster.ObjectFilter {
 	return func(lom *cluster.LOM) bool {
 		intVersion, err := strconv.Atoi(lom.Version())
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 		return intVersion >= min && intVersion <= max
 	}
 }
@@ -264,7 +264,7 @@ func VersionFilterMsg(min, max int64) *FilterMsg {
 	return &FilterMsg{
 		Type:  FUNCTION,
 		FName: VersionF,
-		Args:  []string{cmn.I2S(min), cmn.I2S(max)},
+		Args:  []string{cos.I2S(min), cos.I2S(max)},
 	}
 }
 
@@ -276,7 +276,7 @@ func VersionLEFilterMsg(n int64) *FilterMsg {
 	return &FilterMsg{
 		Type:  FUNCTION,
 		FName: VersionLeF,
-		Args:  []string{cmn.I2S(n)},
+		Args:  []string{cos.I2S(n)},
 	}
 }
 
@@ -288,7 +288,7 @@ func VersionGEFilterMsg(n int64) *FilterMsg {
 	return &FilterMsg{
 		Type:  FUNCTION,
 		FName: VersionGeF,
-		Args:  []string{cmn.I2S(n)},
+		Args:  []string{cos.I2S(n)},
 	}
 }
 

@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"golang.org/x/sync/errgroup"
@@ -60,7 +61,7 @@ type (
 		joggers map[string]*jogger
 
 		finishedCnt atomic.Uint32
-		finishedCh  *cmn.StopCh // Informs when all joggers have finished.
+		finishedCh  *cos.StopCh // Informs when all joggers have finished.
 	}
 
 	// jogger is being run on each mountpath and executes fs.Walk which call
@@ -72,7 +73,7 @@ type (
 		opts      *JoggerGroupOpts
 		mpathInfo *fs.MountpathInfo
 		config    *cmn.Config
-		stopCh    *cmn.StopCh
+		stopCh    *cos.StopCh
 		syncGroup *joggerSyncGroup
 
 		num int64
@@ -86,7 +87,7 @@ type (
 )
 
 func NewJoggerGroup(opts *JoggerGroupOpts) *JoggerGroup {
-	cmn.Assert(!opts.IncludeCopy || (opts.IncludeCopy && opts.DoLoad > noLoad))
+	cos.Assert(!opts.IncludeCopy || (opts.IncludeCopy && opts.DoLoad > noLoad))
 
 	var (
 		mpaths, _ = fs.Get()
@@ -101,7 +102,7 @@ func NewJoggerGroup(opts *JoggerGroupOpts) *JoggerGroup {
 	jg := &JoggerGroup{
 		wg:         wg,
 		joggers:    joggers,
-		finishedCh: cmn.NewStopCh(),
+		finishedCh: cos.NewStopCh(),
 	}
 	opts.onFinish = jg.markFinished
 	return jg
@@ -154,7 +155,7 @@ func newJogger(ctx context.Context, opts *JoggerGroupOpts, mpathInfo *fs.Mountpa
 		opts:      opts,
 		mpathInfo: mpathInfo,
 		config:    cmn.GCO.Get(),
-		stopCh:    cmn.NewStopCh(),
+		stopCh:    cos.NewStopCh(),
 		syncGroup: syncGroup,
 	}
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -28,8 +29,8 @@ type Metadata struct {
 
 // interface guard
 var (
-	_ cmn.Unpacker = (*Metadata)(nil)
-	_ cmn.Packer   = (*Metadata)(nil)
+	_ cos.Unpacker = (*Metadata)(nil)
+	_ cos.Packer   = (*Metadata)(nil)
 )
 
 // LoadMetadata loads and parses EC metadata from a file
@@ -49,7 +50,7 @@ func LoadMetadata(fqn string) (*Metadata, error) {
 
 func (md *Metadata) Clone() *Metadata {
 	clone := &Metadata{}
-	cmn.CopyStruct(clone, md)
+	cos.CopyStruct(clone, md)
 	return clone
 }
 
@@ -82,7 +83,7 @@ func ObjectMetadata(bck *cluster.Bck, objName string) (*Metadata, error) {
 	return LoadMetadata(fqn)
 }
 
-func (md *Metadata) Unpack(unpacker *cmn.ByteUnpack) (err error) {
+func (md *Metadata) Unpack(unpacker *cos.ByteUnpack) (err error) {
 	var i uint16
 	if md.Size, err = unpacker.ReadInt64(); err != nil {
 		return
@@ -115,7 +116,7 @@ func (md *Metadata) Unpack(unpacker *cmn.ByteUnpack) (err error) {
 	return
 }
 
-func (md *Metadata) Pack(packer *cmn.BytePack) {
+func (md *Metadata) Pack(packer *cos.BytePack) {
 	packer.WriteInt64(md.Size)
 	packer.WriteUint16(uint16(md.Data))
 	packer.WriteUint16(uint16(md.Parity))
@@ -130,6 +131,6 @@ func (md *Metadata) Pack(packer *cmn.BytePack) {
 // int16 is sufficient to keep Data,Parity, and SliceID, so:
 //    int64 + 3*int16 + bool + 4 strings
 func (md *Metadata) PackedSize() int {
-	return cmn.SizeofI64 + cmn.SizeofI16*3 + 1 + cmn.SizeofLen*4 +
+	return cos.SizeofI64 + cos.SizeofI16*3 + 1 + cos.SizeofLen*4 +
 		len(md.ObjCksum) + len(md.ObjVersion) + len(md.CksumType) + len(md.CksumValue)
 }

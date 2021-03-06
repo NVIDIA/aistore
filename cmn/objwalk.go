@@ -1,4 +1,5 @@
-// Package cmn provides common API constants and types, and low-level utilities for all aistore projects
+// Package cmn provides common constants, types, and utilities for AIS clients
+// and AIStore.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -7,6 +8,8 @@ package cmn
 import (
 	"sort"
 	"strings"
+
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 func SortBckEntries(bckEntries []*BucketEntry) {
@@ -115,12 +118,12 @@ func MergeObjLists(lists []*BucketList, maxSize uint) (objs *BucketList) {
 			}
 			// detect which list contains real information about the object
 			if !entry.CheckExists() && e.CheckExists() {
-				e.Version = Either(e.Version, entry.Version)
+				e.Version = cos.Either(e.Version, entry.Version)
 				objSet[e.Name] = e
 			} else {
 				// TargetURL maybe filled even if an object is not cached
-				entry.TargetURL = Either(entry.TargetURL, e.TargetURL)
-				entry.Version = Either(entry.Version, e.Version)
+				entry.TargetURL = cos.Either(entry.TargetURL, e.TargetURL)
+				entry.Version = cos.Either(entry.Version, e.Version)
 			}
 		}
 	}

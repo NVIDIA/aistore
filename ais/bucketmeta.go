@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/fs"
@@ -45,7 +46,7 @@ type (
 	bucketMD struct {
 		cluster.BMD
 		vstr  string     // itoa(Version), to have it handy for http redirects
-		cksum *cmn.Cksum // BMD checksum
+		cksum *cos.Cksum // BMD checksum
 	}
 	bmdOwner interface {
 		sync.Locker
@@ -107,7 +108,7 @@ func newBucketMD() *bucketMD {
 }
 
 func newClusterUUID() (uuid, created string) {
-	return cmn.GenUUID(), time.Now().String()
+	return cos.GenUUID(), time.Now().String()
 }
 
 //////////////
@@ -115,7 +116,7 @@ func newClusterUUID() (uuid, created string) {
 //////////////
 
 func (m *bucketMD) add(bck *cluster.Bck, p *cmn.BucketProps) bool {
-	cmn.AssertNoErr(bck.ValidateProvider())
+	cos.AssertNoErr(bck.ValidateProvider())
 	if _, present := m.Get(bck); present {
 		return false
 	}
@@ -140,12 +141,12 @@ func (m *bucketMD) del(bck *cluster.Bck) (deleted bool) {
 }
 
 func (m *bucketMD) set(bck *cluster.Bck, p *cmn.BucketProps) {
-	cmn.AssertNoErr(bck.ValidateProvider())
+	cos.AssertNoErr(bck.ValidateProvider())
 	prevProps, present := m.Get(bck)
 	if !present {
-		cmn.Assertf(false, "%s: not present", bck)
+		cos.Assertf(false, "%s: not present", bck)
 	}
-	cmn.Assert(prevProps.BID != 0)
+	cos.Assert(prevProps.BID != 0)
 
 	p.SetProvider(bck.Provider)
 	p.BID = prevProps.BID
@@ -169,7 +170,7 @@ func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *cluster.Snode, caller s
 	if nbmd == nil || nbmd.Version == 0 || m.Version == 0 {
 		return
 	}
-	if !cmn.IsValidUUID(m.UUID) || !cmn.IsValidUUID(nbmd.UUID) {
+	if !cos.IsValidUUID(m.UUID) || !cos.IsValidUUID(nbmd.UUID) {
 		return
 	}
 	if m.UUID == nbmd.UUID {
@@ -311,7 +312,7 @@ func (bo *bmdOwnerTgt) persist() (err error) {
 
 func (bo *bmdOwnerTgt) modify(_ *bmdModifier) (*bucketMD, error) {
 	// Method should not be used on targets.
-	cmn.Assert(false)
+	cos.Assert(false)
 	return nil, nil
 }
 
@@ -323,7 +324,7 @@ func loadBMD(mpaths fs.MPI, path string) (mainBMD *bucketMD) {
 		}
 		if mainBMD != nil {
 			if !mainBMD.cksum.Equal(bmd.cksum) {
-				cmn.ExitLogf("BMD is different (%q): %v vs %v", mpath, mainBMD, bmd)
+				cos.ExitLogf("BMD is different (%q): %v vs %v", mpath, mainBMD, bmd)
 			}
 			continue
 		}
@@ -369,7 +370,7 @@ func defaultBckProps(args bckPropsArgs) *cmn.BucketProps {
 		props        = cmn.DefaultBckProps(c)
 	)
 	debug.Assert(args.bck != nil)
-	debug.AssertNoErr(cmn.ValidateCksumType(c.Cksum.Type))
+	debug.AssertNoErr(cos.ValidateCksumType(c.Cksum.Type))
 	props.SetProvider(args.bck.Provider)
 
 	if args.bck.IsAIS() || args.bck.IsRemoteAIS() || args.bck.HasBackendBck() {
@@ -392,7 +393,7 @@ func defaultBckProps(args bckPropsArgs) *cmn.BucketProps {
 			skipValidate = true
 		}
 	} else {
-		cmn.Assert(false)
+		cos.Assert(false)
 	}
 
 	if !skipValidate {
@@ -403,7 +404,7 @@ func defaultBckProps(args bckPropsArgs) *cmn.BucketProps {
 }
 
 func mergeRemoteBckProps(props *cmn.BucketProps, header http.Header) *cmn.BucketProps {
-	cmn.Assert(len(header) > 0)
+	cos.Assert(len(header) > 0)
 	switch props.Provider {
 	case cmn.ProviderAmazon:
 		props.Extra.AWS.CloudRegion = header.Get(cmn.HeaderCloudRegion)
@@ -412,8 +413,8 @@ func mergeRemoteBckProps(props *cmn.BucketProps, header http.Header) *cmn.Bucket
 	}
 
 	if verStr := header.Get(cmn.HeaderBucketVerEnabled); verStr != "" {
-		versioning, err := cmn.ParseBool(verStr)
-		cmn.AssertNoErr(err)
+		versioning, err := cos.ParseBool(verStr)
+		cos.AssertNoErr(err)
 		props.Versioning.Enabled = versioning
 	}
 	return props

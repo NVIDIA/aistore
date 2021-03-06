@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
@@ -59,7 +60,7 @@ func (r *rebMD) marshal() []byte { return cmn.MustMarshal(r) }
 func (r *rebMD) inc()            { r.Version++ }
 func (r *rebMD) clone() *rebMD {
 	dst := &rebMD{}
-	cmn.CopyStruct(dst, r)
+	cos.CopyStruct(dst, r)
 	return dst
 }
 

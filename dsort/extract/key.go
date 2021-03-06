@@ -13,7 +13,7 @@ import (
 	"io/ioutil"
 	"strconv"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/pkg/errors"
 )
 
@@ -36,7 +36,7 @@ type (
 	}
 
 	KeyExtractor interface {
-		PrepareExtractor(name string, r cmn.ReadSizer, ext string) (cmn.ReadSizer, *SingleKeyExtractor, bool)
+		PrepareExtractor(name string, r cos.ReadSizer, ext string) (cos.ReadSizer, *SingleKeyExtractor, bool)
 
 		// ExtractKey extracts key from either name or reader (file/sgl)
 		ExtractKey(ske *SingleKeyExtractor) (interface{}, error)
@@ -63,7 +63,7 @@ func (ke *md5KeyExtractor) ExtractKey(ske *SingleKeyExtractor) (interface{}, err
 	return s, nil
 }
 
-func (ke *md5KeyExtractor) PrepareExtractor(name string, r cmn.ReadSizer, ext string) (cmn.ReadSizer, *SingleKeyExtractor, bool) {
+func (ke *md5KeyExtractor) PrepareExtractor(name string, r cos.ReadSizer, ext string) (cos.ReadSizer, *SingleKeyExtractor, bool) {
 	return r, &SingleKeyExtractor{name: name}, false
 }
 
@@ -71,7 +71,7 @@ func NewNameKeyExtractor() (KeyExtractor, error) {
 	return &nameKeyExtractor{}, nil
 }
 
-func (ke *nameKeyExtractor) PrepareExtractor(name string, r cmn.ReadSizer, ext string) (cmn.ReadSizer, *SingleKeyExtractor, bool) {
+func (ke *nameKeyExtractor) PrepareExtractor(name string, r cos.ReadSizer, ext string) (cos.ReadSizer, *SingleKeyExtractor, bool) {
 	return r, &SingleKeyExtractor{name: name}, false
 }
 
@@ -87,13 +87,13 @@ func NewContentKeyExtractor(ty, ext string) (KeyExtractor, error) {
 	return &contentKeyExtractor{ty: ty, ext: ext}, nil
 }
 
-func (ke *contentKeyExtractor) PrepareExtractor(name string, r cmn.ReadSizer, ext string) (cmn.ReadSizer, *SingleKeyExtractor, bool) {
+func (ke *contentKeyExtractor) PrepareExtractor(name string, r cos.ReadSizer, ext string) (cos.ReadSizer, *SingleKeyExtractor, bool) {
 	if ke.ext != ext {
 		return r, nil, false
 	}
 
 	buf := &bytes.Buffer{}
-	tee := cmn.NewSizedReader(io.TeeReader(r, buf), r.Size())
+	tee := cos.NewSizedReader(io.TeeReader(r, buf), r.Size())
 	return tee, &SingleKeyExtractor{name: name, buf: buf}, true
 }
 
@@ -122,7 +122,7 @@ func (ke *contentKeyExtractor) ExtractKey(ske *SingleKeyExtractor) (interface{},
 }
 
 func ValidateAlgorithmFormatType(ty string) error {
-	if !cmn.StringInSlice(ty, supportedFormatTypes) {
+	if !cos.StringInSlice(ty, supportedFormatTypes) {
 		return errInvalidAlgorithmFormatTypes
 	}
 

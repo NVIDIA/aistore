@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/urfave/cli"
 )
 
@@ -68,8 +68,8 @@ func populateKeyMapInvIdx() {
 	}
 }
 
-func findCmdByKey(key string) cmn.StringSet {
-	result := make(cmn.StringSet)
+func findCmdByKey(key string) cos.StringSet {
+	result := make(cos.StringSet)
 	if resKeys, ok := keywordMap[key]; ok {
 		for _, resKey := range resKeys {
 			for _, idx := range invIndex[resKey] {

@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
@@ -31,7 +32,7 @@ type (
 	rebJogger struct {
 		joggerBase
 		smap *cluster.Smap
-		sema *cmn.DynSemaphore
+		sema *cos.DynSemaphore
 		ver  int64
 	}
 	rebArgs struct {
@@ -197,7 +198,7 @@ func (reb *Manager) serialize(md *rebArgs) (newerRMD, alreadyRunning bool) {
 				glog.Warningf("%s: aborting older [%s]", logHdr, otherXreb)
 			}
 		}
-		cmn.Assert(!canRun)
+		cos.Assert(!canRun)
 		time.Sleep(sleep)
 	}
 }
@@ -290,9 +291,9 @@ func (reb *Manager) runNoEC(md *rebArgs) error {
 
 	wg := &sync.WaitGroup{}
 	for _, mpathInfo := range md.paths {
-		var sema *cmn.DynSemaphore
+		var sema *cos.DynSemaphore
 		if multiplier > 1 {
-			sema = cmn.NewDynSemaphore(int(multiplier))
+			sema = cos.NewDynSemaphore(int(multiplier))
 		}
 		rl := &rebJogger{
 			joggerBase: joggerBase{m: reb, xreb: &reb.xact().RebBase, wg: wg},
@@ -319,7 +320,7 @@ func (reb *Manager) rebWaitAck(md *rebArgs) (errCnt int) {
 	maxwt := md.config.Rebalance.DestRetryTime
 	cnt := 0
 	maxwt += time.Duration(int64(time.Minute) * int64(md.smap.CountTargets()/10))
-	maxwt = cmn.MinDuration(maxwt, md.config.Rebalance.DestRetryTime*2)
+	maxwt = cos.MinDuration(maxwt, md.config.Rebalance.DestRetryTime*2)
 
 	for {
 		curwt := time.Duration(0)
@@ -467,7 +468,7 @@ func (reb *Manager) RespHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErr405(w, r, http.MethodGet)
 		return
 	}
-	if !cmn.IsParseBool(query.Get(cmn.URLParamRebData)) {
+	if !cos.IsParseBool(query.Get(cmn.URLParamRebData)) {
 		s := fmt.Sprintf("invalid request: %q", cmn.URLParamRebData)
 		cmn.WriteErrMsg(w, r, s)
 		return
@@ -592,7 +593,7 @@ func (rj *rebJogger) _lwalk(lom *cluster.LOM) (err error) {
 		return cmn.ErrSkip
 	}
 	// prepare to send
-	var roc cmn.ReadOpenCloser
+	var roc cos.ReadOpenCloser
 	if roc, err = rj.prepSend(lom); err != nil {
 		return
 	}
@@ -610,7 +611,7 @@ func (rj *rebJogger) _lwalk(lom *cluster.LOM) (err error) {
 	return
 }
 
-func (rj *rebJogger) prepSend(lom *cluster.LOM) (roc cmn.ReadOpenCloser, err error) {
+func (rj *rebJogger) prepSend(lom *cluster.LOM) (roc cos.ReadOpenCloser, err error) {
 	clone := lom.Clone(lom.FQN)
 	lom.Lock(false)
 	if err = lom.Load(false /*cache it*/, true /*locked*/); err != nil {
@@ -623,10 +624,10 @@ func (rj *rebJogger) prepSend(lom *cluster.LOM) (roc cmn.ReadOpenCloser, err err
 	if _, err = lom.ComputeCksumIfMissing(); err != nil { // not persisting it locally
 		goto retErr
 	}
-	if roc, err = cmn.NewFileHandle(lom.FQN); err != nil {
+	if roc, err = cos.NewFileHandle(lom.FQN); err != nil {
 		goto retErr
 	}
-	roc = cmn.NewDeferROC(roc, func() {
+	roc = cos.NewDeferROC(roc, func() {
 		clone.Unlock(false)
 		cluster.FreeLOM(clone)
 	})
@@ -638,7 +639,7 @@ retErr:
 	return nil, err
 }
 
-func (rj *rebJogger) doSend(lom *cluster.LOM, tsi *cluster.Snode, roc cmn.ReadOpenCloser) {
+func (rj *rebJogger) doSend(lom *cluster.LOM, tsi *cluster.Snode, roc cos.ReadOpenCloser) {
 	var (
 		ack    = regularAck{rebID: rj.m.RebID(), daemonID: rj.m.t.SID()}
 		opaque = ack.NewPack(rj.m.t.SmallMMSA())

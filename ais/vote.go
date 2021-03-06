@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
@@ -198,12 +199,12 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode)
 }
 
 // Simple majority voting.
-func (p *proxyrunner) electAmongProxies(vr *VoteRecord) (winner bool, errors cmn.StringSet) {
+func (p *proxyrunner) electAmongProxies(vr *VoteRecord) (winner bool, errors cos.StringSet) {
 	var (
 		resCh = p.requestVotes(vr)
 		y, n  = 0, 0
 	)
-	errors = cmn.NewStringSet()
+	errors = cos.NewStringSet()
 
 	for res := range resCh {
 		if res.err != nil {
@@ -273,9 +274,9 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 	return resCh
 }
 
-func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) cmn.StringSet {
+func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) cos.StringSet {
 	var (
-		errors = cmn.NewStringSet()
+		errors = cos.NewStringSet()
 		msg    = &VoteResultMessage{
 			VoteResult{
 				Candidate: vr.Candidate,
@@ -351,7 +352,7 @@ func (h *httprunner) onPrimaryProxyFailure() {
 
 		// If this proxy is the next primary proxy candidate, it starts the election directly.
 		if nextPrimaryProxy.ID() == h.si.ID() {
-			cmn.Assert(h.si.IsProxy())
+			cos.Assert(h.si.IsProxy())
 			glog.Infof("%s: starting election (candidate = self)", h.si)
 			vr := &VoteRecord{
 				Candidate: nextPrimaryProxy.ID(),

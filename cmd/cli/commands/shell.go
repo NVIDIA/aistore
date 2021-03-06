@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/xaction"
@@ -35,7 +36,7 @@ var (
 	supportedBool = []string{"true", "false"}
 	propCmpls     = map[string][]string{
 		cmn.PropBucketAccessAttrs:             cmn.SupportedPermissions(),
-		cmn.HeaderObjCksumType:                cmn.SupportedChecksums(),
+		cmn.HeaderObjCksumType:                cos.SupportedChecksums(),
 		"md_write":                            cmn.SupportedWritePolicy,
 		"ec.compression":                      cmn.SupportedCompression,
 		"compression.checksum":                cmn.SupportedCompression,
@@ -183,7 +184,7 @@ func suggestUpdatableConfig(c *cli.Context) {
 	}
 	props := append(cmn.ConfigPropList(), cmn.ActTransient)
 	for _, prop := range props {
-		if !cmn.AnyHasPrefixInSlice(prop, c.Args()) {
+		if !cos.AnyHasPrefixInSlice(prop, c.Args()) {
 			fmt.Println(prop)
 		}
 	}
@@ -341,12 +342,12 @@ func manyBucketsCompletions(additionalCompletions []cli.BashCompleteFunc, firstB
 
 func propCompletions(c *cli.Context) {
 	err := cmn.IterFields(&cmn.BucketPropsToUpdate{}, func(tag string, _ cmn.IterField) (error, bool) {
-		if !cmn.AnyHasPrefixInSlice(tag, c.Args()) {
+		if !cos.AnyHasPrefixInSlice(tag, c.Args()) {
 			fmt.Println(tag)
 		}
 		return nil, false
 	})
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 }
 
 func bucketAndPropsCompletions(c *cli.Context) {
@@ -363,7 +364,7 @@ func bucketAndPropsCompletions(c *cli.Context) {
 			}
 			return nil, false
 		})
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 		sort.Strings(props)
 		for _, prop := range props {
 			fmt.Println(prop)
@@ -488,10 +489,10 @@ func roleCluPermCompletions(c *cli.Context) {
 		return
 	}
 	for _, clu := range cluList {
-		if cmn.StringInSlice(clu.ID, args) || cmn.StringInSlice(clu.Alias, args) {
+		if cos.StringInSlice(clu.ID, args) || cos.StringInSlice(clu.Alias, args) {
 			continue
 		}
-		fmt.Println(cmn.Either(clu.Alias, clu.ID))
+		fmt.Println(cos.Either(clu.Alias, clu.ID))
 	}
 }
 
@@ -522,7 +523,7 @@ func multiRoleCompletions(c *cli.Context) {
 
 	args := c.Args()[2:]
 	for _, role := range roleList {
-		if cmn.StringInSlice(role.Name, args) {
+		if cos.StringInSlice(role.Name, args) {
 			continue
 		}
 		fmt.Println(role.Name)
@@ -555,7 +556,7 @@ func oneClusterCompletions(c *cli.Context) {
 	}
 
 	for _, clu := range cluList {
-		fmt.Println(cmn.Either(clu.Alias, clu.ID))
+		fmt.Println(cos.Either(clu.Alias, clu.ID))
 	}
 }
 
@@ -574,14 +575,14 @@ func suggestUpdatableAuthNConfig(c *cli.Context) {
 	lastIsProp := c.NArg() != 0
 	if c.NArg() != 0 {
 		lastVal := c.Args().Get(c.NArg() - 1)
-		lastIsProp = cmn.StringInSlice(lastVal, props)
+		lastIsProp = cos.StringInSlice(lastVal, props)
 	}
 	if lastIsProp {
 		return
 	}
 
 	for _, prop := range props {
-		if !cmn.AnyHasPrefixInSlice(prop, c.Args()) {
+		if !cos.AnyHasPrefixInSlice(prop, c.Args()) {
 			fmt.Println(prop)
 		}
 	}

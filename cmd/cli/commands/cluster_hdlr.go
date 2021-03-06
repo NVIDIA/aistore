@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/urfave/cli"
 )
 
@@ -199,7 +200,7 @@ func joinNodeHandler(c *cli.Context) (err error) {
 	daemonID = c.Args().Get(1) // user-given ID
 	if daemonID == "" {
 		// default is a random generated string
-		daemonID = cmn.RandString(8)
+		daemonID = cos.RandString(8)
 	}
 
 	if prefix, err = getPrefixFromPrimary(); err != nil {
@@ -222,7 +223,7 @@ func joinNodeHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "%s with ID %q successfully joined the cluster\n", cmn.CapitalizeString(daemonType), daemonID)
+	fmt.Fprintf(c.App.Writer, "%s with ID %q successfully joined the cluster\n", cos.CapitalizeString(daemonType), daemonID)
 	return
 }
 

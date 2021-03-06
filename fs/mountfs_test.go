@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/fs"
@@ -319,14 +320,14 @@ func BenchmarkMakePathFQN(b *testing.B) {
 			Provider: cmn.ProviderAzure,
 			Ns:       cmn.Ns{Name: "name", UUID: "uuid"},
 		}
-		mi      = fs.MountpathInfo{Path: cmn.RandString(200)}
-		objName = cmn.RandString(15)
+		mi      = fs.MountpathInfo{Path: cos.RandString(200)}
+		objName = cos.RandString(15)
 	)
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		s := mi.MakePathFQN(bck, fs.ObjectType, objName)
-		cmn.Assert(len(s) > 0)
+		cos.Assert(len(s) > 0)
 	}
 }

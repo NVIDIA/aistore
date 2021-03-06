@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
@@ -73,7 +74,7 @@ func retrieveBackendProviders() []string {
 	target := randomTarget()
 	config, err := api.GetDaemonConfig(BaseAPIParams(proxyURLReadOnly), target)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
-	set := cmn.NewStringSet()
+	set := cos.NewStringSet()
 	for b := range config.Backend.Providers {
 		set.Add(b)
 	}
@@ -108,7 +109,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 		outs []string
 
 		lastResult = ""
-		bucket     = strings.ToLower(cmn.RandString(10))
+		bucket     = strings.ToLower(cos.RandString(10))
 		space      = regexp.MustCompile(`\s+`) // Used to replace all whitespace with single spaces.
 		target     = randomTarget()
 		mountpath  = randomMountpath(target)
@@ -193,12 +194,12 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 			}
 		} else if strings.HasPrefix(scmd, "// RUN") {
 			comment := strings.TrimSpace(strings.TrimPrefix(scmd, "// RUN"))
-			cmn.Assert(comment == "local-deployment")
+			cos.Assert(comment == "local-deployment")
 
 			// Skip running test if requires local deployment and the cluster
 			// is not in testing env.
 			config, err := getClusterConfig()
-			cmn.AssertNoErr(err)
+			cos.AssertNoErr(err)
 			if !config.TestingEnv() {
 				return
 			}

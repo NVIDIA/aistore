@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/downloader"
@@ -523,7 +524,7 @@ func (n *notifs) ListenSmapChanged() {
 	}
 	var (
 		remnl = make(map[string]nl.NotifListener)
-		remid = make(cmn.SimpleKVs)
+		remid = make(cos.SimpleKVs)
 	)
 	for uuid, nl := range n.nls.m {
 		nl.RLock()
@@ -552,7 +553,7 @@ func (n *notifs) ListenSmapChanged() {
 	}
 	n.fin.Lock()
 	for uuid, nl := range remnl {
-		cmn.Assert(nl.UUID() == uuid)
+		cos.Assert(nl.UUID() == uuid)
 		n.fin.add(nl, true /*locked*/)
 	}
 	n.fin.Unlock()

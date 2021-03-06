@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools/readers"
@@ -34,11 +35,11 @@ const (
 
 	ECPutTimeOut = time.Minute * 4 // maximum wait time after PUT to be sure that the object is EC'ed/replicated
 
-	ecObjLimit     = 256 * cmn.KiB
-	ecMinSmallSize = 32 * cmn.KiB
-	ecSmallDelta   = 200 * cmn.KiB
+	ecObjLimit     = 256 * cos.KiB
+	ecMinSmallSize = 32 * cos.KiB
+	ecSmallDelta   = 200 * cos.KiB
 	ecMinBigSize   = ecObjLimit * 2
-	ecBigDelta     = 10 * cmn.MiB
+	ecBigDelta     = 10 * cos.MiB
 )
 
 type ecSliceMD struct {
@@ -54,7 +55,7 @@ type ecOptions struct {
 	parityCnt   int
 	minTargets  int
 	pattern     string
-	sema        *cmn.DynSemaphore
+	sema        *cos.DynSemaphore
 	silent      bool
 	rnd         *rand.Rand
 	smap        *cluster.Smap
@@ -69,7 +70,7 @@ func (o ecOptions) init(t *testing.T, proxyURL string) *ecOptions {
 		t.Fatalf("insufficient number of targets, required at least %d targets", o.minTargets)
 	}
 	if o.concurrency > 0 {
-		o.sema = cmn.NewDynSemaphore(o.concurrency)
+		o.sema = cos.NewDynSemaphore(o.concurrency)
 	}
 	o.seed = time.Now().UnixNano()
 	o.rnd = rand.New(rand.NewSource(o.seed))
@@ -326,7 +327,7 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *e
 				}
 			}
 
-			r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
+			r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 			defer func() {
 				r.Close()
 				o.sema.Release()
@@ -422,7 +423,7 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *e
 		szTotal += sz
 	}
 	if szLen != 0 {
-		t.Logf("Average size of the bucket %s: %s\n", bck, cmn.B2S(szTotal/int64(szLen), 1))
+		t.Logf("Average size of the bucket %s: %s\n", bck, cos.B2S(szTotal/int64(szLen), 1))
 	}
 }
 
@@ -439,7 +440,7 @@ func bucketSize(t *testing.T, baseParams api.BaseParams, bck cmn.Bck) int {
 }
 
 func putRandomFile(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objPath string, size int) {
-	r, err := readers.NewRandReader(int64(size), cmn.ChecksumNone)
+	r, err := readers.NewRandReader(int64(size), cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
 	err = api.PutObject(api.PutObjectArgs{
 		BaseParams: baseParams,
@@ -610,7 +611,7 @@ func createECReplicas(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objN
 	objPath := ecTestDir + objName
 
 	tlog.Logf("Creating %s, size %8d\n", objPath, objSize)
-	r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
+	r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
 	err = api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
 	tassert.CheckFatal(t, err)
@@ -638,7 +639,7 @@ func createECObject(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objNam
 	}
 
 	tlog.LogfCond(!o.silent, "Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
-	r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
+	r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
 	err = api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
 	tassert.CheckFatal(t, err)
@@ -680,7 +681,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 		delStr = "obj+slice"
 	}
 	tlog.LogfCond(!o.silent, "Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
-	r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
+	r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
 	err = api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
 	tassert.CheckFatal(t, err)
@@ -792,10 +793,10 @@ func TestECRestoreObjAndSliceRemote(t *testing.T) {
 			testName := fmt.Sprintf("%s/disk_only/%t", test.name, useDisk)
 			t.Run(testName, func(t *testing.T) {
 				if useDisk {
-					tutils.SetClusterConfig(t, cmn.SimpleKVs{
+					tutils.SetClusterConfig(t, cos.SimpleKVs{
 						"ec.disk_only": fmt.Sprintf("%t", useDisk),
 					})
-					defer tutils.SetClusterConfig(t, cmn.SimpleKVs{
+					defer tutils.SetClusterConfig(t, cos.SimpleKVs{
 						"ec.disk_only": "false",
 					})
 				}
@@ -870,10 +871,10 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 			testName := fmt.Sprintf("%s/disk_only/%t", test.name, useDisk)
 			t.Run(testName, func(t *testing.T) {
 				if useDisk {
-					tutils.SetClusterConfig(t, cmn.SimpleKVs{
+					tutils.SetClusterConfig(t, cos.SimpleKVs{
 						"ec.disk_only": fmt.Sprintf("%t", useDisk),
 					})
-					defer tutils.SetClusterConfig(t, cmn.SimpleKVs{
+					defer tutils.SetClusterConfig(t, cos.SimpleKVs{
 						"ec.disk_only": "false",
 					})
 				}
@@ -904,7 +905,7 @@ func putECFile(baseParams api.BaseParams, bck cmn.Bck, objName string) error {
 	objSize := int64(ecMinBigSize * 2)
 	objPath := ecTestDir + objName
 
-	r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
+	r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 	if err != nil {
 		return err
 	}
@@ -1057,7 +1058,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			objName := fmt.Sprintf(o.pattern, i)
-			putRandomFile(t, baseParams, bck, objName, cmn.MiB)
+			putRandomFile(t, baseParams, bck, objName, cos.MiB)
 		}(i)
 	}
 
@@ -1132,7 +1133,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 
 	var (
 		numCreated = 0
-		abortCh    = cmn.NewStopCh()
+		abortCh    = cos.NewStopCh()
 		wgPut      = &sync.WaitGroup{}
 	)
 	wgPut.Add(1)
@@ -1150,7 +1151,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 				wgPut.Add(1)
 				go func() {
 					defer wgPut.Done()
-					putRandomFile(t, baseParams, bck, objName, cmn.KiB)
+					putRandomFile(t, baseParams, bck, objName, cos.KiB)
 				}()
 				numCreated++
 			}
@@ -1378,7 +1379,7 @@ func ecStressCore(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 			} else {
 				tlog.Logf("Object %s, size %9d[%9s]\n", objName, objSize, "-")
 			}
-			r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
+			r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 			tassert.Errorf(t, err == nil, "Failed to create reader: %v", err)
 			putArgs := api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r}
 			err = api.PutObject(putArgs)
@@ -1471,7 +1472,7 @@ func TestECXattrs(t *testing.T) {
 			ecStr = "EC"
 		}
 		tlog.Logf("Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
-		r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
+		r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 		tassert.CheckFatal(t, err)
 		err = api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
 		tassert.CheckFatal(t, err)
@@ -1688,7 +1689,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 			ecStr = "EC"
 		}
 		tlog.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
-		r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
+		r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 		tassert.CheckFatal(t, err)
 		err = api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
 		tassert.CheckFatal(t, err)
@@ -1933,7 +1934,7 @@ func TestECEmergencyMpath(t *testing.T) {
 			ecStr = "EC"
 		}
 		tlog.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
-		r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
+		r, err := readers.NewRandReader(objSize, cos.ChecksumNone)
 		tassert.CheckFatal(t, err)
 		err = api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objPath, Reader: r})
 		tassert.CheckFatal(t, err)
@@ -2504,7 +2505,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	tassert.CheckFatal(t, err)
 	registered = true
 
-	stopCh := cmn.NewStopCh()
+	stopCh := cos.NewStopCh()
 	wg.Add(1)
 	defer func() {
 		stopCh.Close()

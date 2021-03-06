@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/karrick/godirwalk"
@@ -154,13 +155,13 @@ func Walk(opts *Options) error {
 		err  error
 		ew   = &errCallbackWrapper{}
 	)
-	cmn.Assert(opts.ErrCallback == nil)   // `ErrCallback` is not used yet - using the default one below
+	cos.Assert(opts.ErrCallback == nil)   // `ErrCallback` is not used yet - using the default one below
 	opts.ErrCallback = ew.PathErrToAction // Default error callback halts on bucket-level and lom `errThreshold` errors
 
 	if opts.Dir != "" {
 		fqns = append(fqns, opts.Dir)
 	} else {
-		cmn.Assert(len(opts.CTs) > 0)
+		cos.Assert(len(opts.CTs) > 0)
 		if opts.Bck.Name != "" {
 			// walk specific content-types inside the bucket.
 			for _, ct := range opts.CTs {
@@ -287,7 +288,7 @@ func WalkBck(opts *WalkBckOptions) error {
 		mpathChs[i] = make(chan *walkEntry, mpathQueueSize)
 	}
 
-	cmn.Assert(opts.Mpath == nil)
+	cos.Assert(opts.Mpath == nil)
 	idx := 0
 	for _, mpath := range mpaths {
 		group.Go(func(idx int, mpath *MountpathInfo) func() error {
@@ -307,7 +308,7 @@ func WalkBck(opts *WalkBckOptions) error {
 	}
 
 	// TODO: handle case when `opts.Sorted == false`
-	cmn.Assert(opts.Sorted)
+	cos.Assert(opts.Sorted)
 	group.Go(func() error {
 		h := &objInfos{}
 		heap.Init(h)

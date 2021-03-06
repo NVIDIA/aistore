@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakprim"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools"
 )
@@ -33,11 +34,11 @@ const (
 	regPhaseDurationShortDefault = time.Second * 10
 	regPhaseDurationLongDefault  = time.Minute * 10
 
-	recMinFilesizeDefault = 300 * cmn.MiB
-	recMaxFilesizeDefault = 1 * cmn.GiB
+	recMinFilesizeDefault = 300 * cos.MiB
+	recMaxFilesizeDefault = 1 * cos.GiB
 
-	regMinFilesizeDefault = 700 * cmn.MiB
-	regMaxFilesizeDefault = 2 * cmn.GiB
+	regMinFilesizeDefault = 700 * cos.MiB
+	regMaxFilesizeDefault = 2 * cos.GiB
 )
 
 var (
@@ -106,8 +107,8 @@ func parseCmdLine() {
 	f.IntVar(&soakcmn.Params.NumCycles, "rec-cycles", 0, "Stop after cycling through all the recipes this many times, 0=infinite")
 	f.BoolVar(&soakcmn.Params.RecRegDisable, "rec-regdisable", false, "Disables running regression while recipe is running")
 	f.Float64Var(&soakcmn.Params.RecPctCapacity, "rec-pctcap", 0.9, "Pct (0-100) of total storage capacity allocated to recipes")
-	f.StringVar(&recMinFilesizeStr, "rec-minsize", "", fmt.Sprintf("Min filesize in recipes (default %s), can specify units with suffix", cmn.B2S(recMinFilesizeDefault, 2)))
-	f.StringVar(&recMaxFilesizeStr, "rec-maxsize", "", fmt.Sprintf("Max filesize in recipes (default %s), can specify units with suffix", cmn.B2S(recMaxFilesizeDefault, 2)))
+	f.StringVar(&recMinFilesizeStr, "rec-minsize", "", fmt.Sprintf("Min filesize in recipes (default %s), can specify units with suffix", cos.B2S(recMinFilesizeDefault, 2)))
+	f.StringVar(&recMaxFilesizeStr, "rec-maxsize", "", fmt.Sprintf("Max filesize in recipes (default %s), can specify units with suffix", cos.B2S(recMaxFilesizeDefault, 2)))
 	f.IntVar(&soakcmn.Params.RecPrimWorkers, "rec-primworkers", 1, "Number of workers that are run by a primitive within a recipe")
 
 	f.BoolVar(&soakcmn.Params.RegPhaseDisable, "reg-phasedisable", false, "Skips running regression phases, and just continuously run recipes")
@@ -115,8 +116,8 @@ func parseCmdLine() {
 	f.Float64Var(&soakcmn.Params.RegPctCapacity, "reg-pctcap", 2.0/5.0, "Pct (0-100) of total storage capacity allocated to regression")
 	f.DurationVar(&soakcmn.Params.RegSetupDuration, "reg-setupduration", time.Second*12, "The maximum amount of time to spend setting up the bucket for regression")
 	f.IntVar(&soakcmn.Params.RegSetupWorkers, "reg-setupworkers", 4, "Number of workers that is used to set up the bucket for regression")
-	f.StringVar(&regMinFilesizeStr, "reg-minsize", "", fmt.Sprintf("Min filesize in regression (default %s), can specify units with suffix", cmn.B2S(regMinFilesizeDefault, 2)))
-	f.StringVar(&regMaxFilesizeStr, "reg-maxsize", "", fmt.Sprintf("Max filesize in regression (default %s), can specify units with suffix", cmn.B2S(regMaxFilesizeDefault, 2)))
+	f.StringVar(&regMinFilesizeStr, "reg-minsize", "", fmt.Sprintf("Min filesize in regression (default %s), can specify units with suffix", cos.B2S(regMinFilesizeDefault, 2)))
+	f.StringVar(&regMaxFilesizeStr, "reg-maxsize", "", fmt.Sprintf("Max filesize in regression (default %s), can specify units with suffix", cos.B2S(regMaxFilesizeDefault, 2)))
 	f.IntVar(&soakcmn.Params.RegInstances, "reg-instances", 1, "Number of instances of regression per bucket")
 	f.IntVar(&soakcmn.Params.RegWorkers, "reg-workers", 1, "Number of workers that regression uses")
 
@@ -174,17 +175,17 @@ func main() {
 			if x != "" {
 				newID, err := strconv.Atoi(x)
 				if err != nil {
-					cmn.Exitf("Cannot parse RecipeID list: %v", recipeListStr)
+					cos.Exitf("Cannot parse RecipeID list: %v", recipeListStr)
 				}
 				if _, ok := valid[newID]; !ok {
-					cmn.Exitf("Invalid RecipeID: %v", newID)
+					cos.Exitf("Invalid RecipeID: %v", newID)
 				}
 				recipeList = append(recipeList, newID)
 			}
 		}
 
 		if len(recipeList) == 0 {
-			cmn.Exitf("RecipeID list empty")
+			cos.Exitf("RecipeID list empty")
 		}
 
 		// de-dup
@@ -200,12 +201,12 @@ func main() {
 			*outp = def
 		} else {
 			var err error
-			if *outp, err = cmn.S2B(inp); err != nil {
-				cmn.Exitf("%v is not a size", inp)
+			if *outp, err = cos.S2B(inp); err != nil {
+				cos.Exitf("%v is not a size", inp)
 			}
 		}
 		if *outp <= 0 {
-			cmn.Exitf("%v must be positive number", inp)
+			cos.Exitf("%v must be positive number", inp)
 		}
 	}
 
@@ -213,32 +214,32 @@ func main() {
 	checkFilesize(recMinFilesizeStr, recMinFilesizeDefault, &soakcmn.Params.RecMinFilesize)
 	checkFilesize(recMaxFilesizeStr, recMaxFilesizeDefault, &soakcmn.Params.RecMaxFilesize)
 	if soakcmn.Params.RecMaxFilesize < soakcmn.Params.RecMinFilesize {
-		cmn.Exitf("Recipe filesize: max %v must be at least min %v", recMaxFilesizeStr, recMinFilesizeStr)
+		cos.Exitf("Recipe filesize: max %v must be at least min %v", recMaxFilesizeStr, recMinFilesizeStr)
 	}
 
 	// Sanity check filesizes for regression
 	checkFilesize(regMinFilesizeStr, regMinFilesizeDefault, &soakcmn.Params.RegMinFilesize)
 	checkFilesize(regMaxFilesizeStr, regMaxFilesizeDefault, &soakcmn.Params.RegMaxFilesize)
 	if soakcmn.Params.RegMaxFilesize < soakcmn.Params.RegMinFilesize {
-		cmn.Exitf("Regression filesize: max %v must be at least min %v", regMaxFilesizeStr, regMinFilesizeStr)
+		cos.Exitf("Regression filesize: max %v must be at least min %v", regMaxFilesizeStr, regMinFilesizeStr)
 	}
 
 	// Sanity check for number of workers
 	if soakcmn.Params.RecPrimWorkers < 1 {
-		cmn.Exitf("rec-primworkers must be at least 1")
+		cos.Exitf("rec-primworkers must be at least 1")
 	}
 	if soakcmn.Params.RegSetupWorkers < 1 {
-		cmn.Exitf("reg-setupworkers must be at least 1")
+		cos.Exitf("reg-setupworkers must be at least 1")
 	}
 	if soakcmn.Params.RegWorkers < 1 {
-		cmn.Exitf("reg-workers must be at least 1")
+		cos.Exitf("reg-workers must be at least 1")
 	}
 
 	// Sanity check for ip and port
 	if soakcmn.Params.IP == "" && soakcmn.Params.Port == "" {
 		if containers.DockerRunning() {
 			dockerEnvFile := "/tmp/docker_ais/deploy.env"
-			envVars := cmn.ParseEnvVariables(dockerEnvFile)
+			envVars := cos.ParseEnvVariables(dockerEnvFile)
 			soakcmn.Params.IP = envVars["PRIMARY_HOST_IP"]
 			soakcmn.Params.Port = envVars["PORT"]
 		} else {
@@ -246,12 +247,12 @@ func main() {
 			soakcmn.Params.Port = "8080"
 		}
 	} else if soakcmn.Params.IP == "" {
-		cmn.Exitf("Port specified without IP")
+		cos.Exitf("Port specified without IP")
 	} else if soakcmn.Params.Port == "" {
-		cmn.Exitf("IP specified without port")
+		cos.Exitf("IP specified without port")
 	}
 	if err := devtools.PingURL(soakcmn.Params.IP + ":" + soakcmn.Params.Port); err != nil {
-		cmn.Exitf("Cannot connect to %s:%s, reason: %s", soakcmn.Params.IP, soakcmn.Params.Port, err)
+		cos.Exitf("Cannot connect to %s:%s, reason: %s", soakcmn.Params.IP, soakcmn.Params.Port, err)
 	}
 	soakprim.SetPrimaryURL()
 

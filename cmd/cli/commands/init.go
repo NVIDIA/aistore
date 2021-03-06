@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
@@ -35,7 +36,7 @@ func initClusterParams() {
 	defaultHTTPClient = cmn.NewClient(cmn.TransportArgs{
 		DialTimeout: cfg.Timeout.TCPTimeout,
 		Timeout:     cfg.Timeout.HTTPTimeout,
-		UseHTTPS:    cmn.IsHTTPS(clusterURL),
+		UseHTTPS:    cos.IsHTTPS(clusterURL),
 		SkipVerify:  cfg.Cluster.SkipVerifyCrt,
 
 		IdleConnsPerHost: 100,
@@ -46,7 +47,7 @@ func initClusterParams() {
 		authnHTTPClient = cmn.NewClient(cmn.TransportArgs{
 			DialTimeout: cfg.Timeout.TCPTimeout,
 			Timeout:     cfg.Timeout.HTTPTimeout,
-			UseHTTPS:    cmn.IsHTTPS(authnURL),
+			UseHTTPS:    cos.IsHTTPS(authnURL),
 			SkipVerify:  cfg.Cluster.SkipVerifyCrt,
 		})
 

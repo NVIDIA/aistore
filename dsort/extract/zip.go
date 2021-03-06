@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -144,16 +145,16 @@ func (z *zipExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader, 
 				shardName:     lom.ObjName,
 				fileType:      fs.ObjectType,
 				recordName:    header.Name,
-				r:             cmn.NewSizedReader(file, int64(header.UncompressedSize64)),
+				r:             cos.NewSizedReader(file, int64(header.UncompressedSize64)),
 				metadata:      bmeta,
 				extractMethod: extractMethod,
 				buf:           buf,
 			}
 			if size, err = extractor.ExtractRecordWithBuffer(args); err != nil {
-				cmn.Close(file)
+				cos.Close(file)
 				return extractedSize, extractedCount, err
 			}
-			cmn.Close(file)
+			cos.Close(file)
 		}
 
 		extractedSize += size
@@ -172,7 +173,7 @@ func NewZipExtractCreator(t cluster.Target) ExtractCreator {
 func (z *zipExtractCreator) CreateShard(s *Shard, w io.Writer, loadContent LoadContentFunc) (written int64, err error) {
 	var n int64
 	zw := zip.NewWriter(w)
-	defer cmn.Close(zw)
+	defer cos.Close(zw)
 
 	rdReader := newZipRecordDataReader(z.t)
 	for _, rec := range s.Records.All() {

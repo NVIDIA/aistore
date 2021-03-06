@@ -7,11 +7,11 @@ package nstlvl
 import (
 	"os/exec"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 func dropCaches() {
 	cmd := exec.Command("echo", "3", ">", "/proc/sys/vm/drop_caches") // https://www.kernel.org/doc/Documentation/sysctl/vm.txt
 	_, err := cmd.Output()
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 }

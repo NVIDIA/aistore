@@ -1,11 +1,12 @@
-// Package cmn provides common low-level types and utilities for all aistore projects
+// Package cos provides common low-level types and utilities for all aistore projects
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package cmn
+package cos
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -25,6 +26,16 @@ type (
 		Prefix string
 		Ranges []TemplateRange
 	}
+)
+
+var (
+	ErrInvalidFmtFormat  = errors.New("input 'fmt' format is invalid should be 'prefix-%06d-suffix")
+	ErrInvalidBashFormat = errors.New("input 'bash' format is invalid, should be 'prefix-{0001..0010..1}-suffix'")
+	ErrInvalidAtFormat   = errors.New("input 'at' format is invalid, should be 'prefix-@00100-suffix'")
+
+	ErrStartAfterEnd   = errors.New("'start' cannot be greater than 'end'")
+	ErrNegativeStart   = errors.New("'start' is negative")
+	ErrNonPositiveStep = errors.New("'step' is non positive number")
 )
 
 func (pt *ParsedTemplate) Count() int64 {

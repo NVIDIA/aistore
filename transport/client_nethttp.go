@@ -54,7 +54,7 @@ func (s *streamBase) do(body io.Reader) (err error) {
 		}
 		return
 	}
-	cmn.DrainReader(response.Body)
+	cos.DrainReader(response.Body)
 	response.Body.Close()
 	if s.streamer.compressed() {
 		s.streamer.resetCompression()

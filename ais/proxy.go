@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dsort"
@@ -48,7 +49,7 @@ const (
 
 type (
 	ClusterMountpathsRaw struct {
-		Targets cmn.JSONRawMsgs `json:"targets"`
+		Targets cos.JSONRawMsgs `json:"targets"`
 	}
 	reverseProxy struct {
 		cloud   *httputil.ReverseProxy // unmodified GET requests => storage.googleapis.com
@@ -91,7 +92,7 @@ func (p *proxyrunner) initClusterCIDR() {
 	if nodeCIDR := os.Getenv("AIS_CLUSTER_CIDR"); nodeCIDR != "" {
 		_, network, err := net.ParseCIDR(nodeCIDR)
 		p.si.LocalNet = network
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 		glog.Infof("local network: %+v", *network)
 	}
 }
@@ -482,7 +483,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			p.writeErrf(w, r, fmtNotRemote, bck.Name)
 			return
 		}
-		keepMD := cmn.IsParseBool(r.URL.Query().Get(cmn.URLParamKeepBckMD))
+		keepMD := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamKeepBckMD))
 		// HDFS buckets will always keep metadata so they can re-register later
 		if bck.IsHDFS() || keepMD {
 			if err := p.destroyBucketData(&msg, bck); err != nil {
@@ -626,7 +627,7 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// cluster info piggy-back
-	getCii := cmn.IsParseBool(r.URL.Query().Get(cmn.URLParamClusterInfo))
+	getCii := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamClusterInfo))
 	if getCii {
 		cii := &clusterInfo{}
 		cii.fill(&p.httprunner)
@@ -977,7 +978,7 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 	locationIsAIS := bck.IsAIS() || smsg.IsFlagSet(cmn.SelectCached)
 	if smsg.UUID == "" {
 		var nl nl.NotifListener
-		smsg.UUID = cmn.GenUUID()
+		smsg.UUID = cos.GenUUID()
 		if locationIsAIS || smsg.NeedLocalMD() {
 			nl = xaction.NewXactNL(smsg.UUID,
 				cmn.ActListObjects, &smap.Smap, nil, bck.Bck)
@@ -1009,7 +1010,7 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 		return
 	}
 
-	cmn.Assert(bckList != nil)
+	cos.Assert(bckList != nil)
 
 	if strings.Contains(r.Header.Get(cmn.HeaderAccept), cmn.ContentMsgPack) {
 		if !p.writeMsgPack(w, r, bckList, "list_objects") {
@@ -1073,7 +1074,7 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck 
 func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSummaryMsg) (
 	summaries cmn.BucketsSummaries, uuid string, err error) {
 	var (
-		isNew, q = p.initAsyncQuery(bck, msg, cmn.GenUUID())
+		isNew, q = p.initAsyncQuery(bck, msg, cos.GenUUID())
 		config   = cmn.GCO.Get()
 		smap     = p.owner.smap.get()
 		aisMsg   = p.newAmsgActVal(cmn.ActSummaryBck, msg, smap)
@@ -1347,7 +1348,7 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 	if primary.url != smap.Primary.PublicNet.DirectURL {
 		primary.url = smap.Primary.PublicNet.DirectURL
 		uparsed, err := url.Parse(smap.Primary.PublicNet.DirectURL)
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 		cfg := cmn.GCO.Get()
 		primary.rp = httputil.NewSingleHostReverseProxy(uparsed)
 		primary.rp.Transport = cmn.NewTransport(cmn.TransportArgs{
@@ -1378,7 +1379,7 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 // reverse-proxy request
 func (p *proxyrunner) reverseNodeRequest(w http.ResponseWriter, r *http.Request, si *cluster.Snode) {
 	parsedURL, err := url.Parse(si.URL(cmn.NetworkPublic))
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	p.reverseRequest(w, r, si.ID(), parsedURL)
 }
 
@@ -1410,7 +1411,7 @@ func (p *proxyrunner) reverseReqRemote(w http.ResponseWriter, r *http.Request, m
 		return err
 	}
 
-	cmn.Assert(len(urls) > 0)
+	cos.Assert(len(urls) > 0)
 	u, err := url.Parse(urls[0])
 	if err != nil {
 		p.writeErr(w, r, err)
@@ -1473,7 +1474,7 @@ func (p *proxyrunner) redirectURL(r *http.Request, si *cluster.Snode, ts time.Ti
 	}
 
 	query.Set(cmn.URLParamProxyID, p.si.ID())
-	query.Set(cmn.URLParamUnixTime, cmn.UnixNano2S(ts.UnixNano()))
+	query.Set(cmn.URLParamUnixTime, cos.UnixNano2S(ts.UnixNano()))
 	redirect += query.Encode()
 	return
 }
@@ -1599,7 +1600,7 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allE
 	}
 	freeCallResults(results)
 	entries, hasEnough = p.qm.b.get(smsg.UUID, token, pageSize)
-	cmn.Assert(hasEnough)
+	cos.Assert(hasEnough)
 
 endWithCache:
 	if smsg.UseCache {
@@ -1776,7 +1777,7 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg,
 	query url.Values) (xactID string, err error) {
 	var (
 		smap   = p.owner.smap.get()
-		aisMsg = p.newAmsg(msg, smap, nil, cmn.GenUUID())
+		aisMsg = p.newAmsg(msg, smap, nil, cos.GenUUID())
 		body   = cmn.MustMarshal(aisMsg)
 		path   = cmn.URLPathBuckets.Join(bucket)
 	)
@@ -1808,7 +1809,7 @@ func (p *proxyrunner) reverseHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// rewrite URL path (removing `cmn.Reverse`)
-	r.URL.Path = cmn.JoinWords(cmn.Version, apiItems[0])
+	r.URL.Path = cos.JoinWords(cmn.Version, apiItems[0])
 
 	nodeID := r.Header.Get(cmn.HeaderNodeID)
 	if nodeID == "" {
@@ -1977,7 +1978,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case cmn.ActSetConfig: // setconfig #2 - via action message
-		transient := cmn.IsParseBool(query.Get(cmn.ActTransient))
+		transient := cos.IsParseBool(query.Get(cmn.ActTransient))
 		toUpdate := &cmn.ConfigToUpdate{}
 		if err = cmn.MorphMarshal(msg.Value, toUpdate); err != nil {
 			p.writeErrf(w, r, "failed to parse configuration to update, err: %v", err)
@@ -1991,7 +1992,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			p.Stop(errShutdown)
 			return
 		}
-		force := cmn.IsParseBool(query.Get(cmn.URLParamForce))
+		force := cos.IsParseBool(query.Get(cmn.URLParamForce))
 		if !force {
 			p.writeErrf(w, r, "cannot shutdown primary %s (consider %s=true option)",
 				p.si, cmn.URLParamForce)
@@ -2024,7 +2025,7 @@ func (p *proxyrunner) daePathAction(w http.ResponseWriter, r *http.Request, acti
 	case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
 		var (
 			query     = r.URL.Query()
-			transient = cmn.IsParseBool(query.Get(cmn.ActTransient))
+			transient = cos.IsParseBool(query.Get(cmn.ActTransient))
 			toUpdate  = &cmn.ConfigToUpdate{}
 		)
 		if err := toUpdate.FillFromQuery(query); err != nil {
@@ -2160,7 +2161,7 @@ func (p *proxyrunner) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	proxyID := apiItems[1]
-	force := cmn.IsParseBool(query.Get(cmn.URLParamForce))
+	force := cos.IsParseBool(query.Get(cmn.URLParamForce))
 	// forceful primary change
 	if force && apiItems[0] == cmn.Proxy {
 		if smap := p.owner.smap.get(); !smap.isPrimary(p.si) {
@@ -2171,7 +2172,7 @@ func (p *proxyrunner) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	preparestr := query.Get(cmn.URLParamPrepare)
-	if prepare, err = cmn.ParseBool(preparestr); err != nil {
+	if prepare, err = cos.ParseBool(preparestr); err != nil {
 		p.writeErrf(w, r, "failed to parse %s URL parameter: %v", cmn.URLParamPrepare, err)
 		return
 	}
@@ -2211,12 +2212,12 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) {
 		sid:   proxyIDToRemove,
 	}
 	err := p.owner.smap.modify(ctx)
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 }
 
 func (p *proxyrunner) _becomePre(ctx *smapModifier, clone *smapX) error {
 	if !clone.isPresent(p.si) {
-		cmn.Assertf(false, "%s must always be present in the %s", p.si, clone.pp())
+		cos.Assertf(false, "%s must always be present in the %s", p.si, clone.pp())
 	}
 
 	if ctx.sid != "" && clone.containsID(ctx.sid) {
@@ -2372,13 +2373,13 @@ func (p *proxyrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err
 			cmn.ActRebalance, &smap.Smap, nil)
 		nl.SetOwner(equalIC)
 		err := p.notifs.add(nl)
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 
 		if newRMD.Resilver != "" {
 			nl = xaction.NewXactNL(newRMD.Resilver, cmn.ActResilver, &smap.Smap, nil)
 			nl.SetOwner(equalIC)
 			err := p.notifs.add(nl)
-			cmn.AssertNoErr(err)
+			cos.AssertNoErr(err)
 		}
 	}
 	return
@@ -2418,7 +2419,7 @@ func (p *proxyrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, caller string) (
 	p.owner.bmd.Lock()
 	bmd := p.owner.bmd.get()
 	if err = bmd.validateUUID(newBMD, p.si, nil, caller); err != nil {
-		cmn.Assert(!p.owner.smap.get().isPrimary(p.si))
+		cos.Assert(!p.owner.smap.get().isPrimary(p.si))
 		// cluster integrity error: making exception for non-primary proxies
 		glog.Errorf("%s (non-primary): %v - proceeding to override BMD", p.si, err)
 	} else if newBMD.version() <= bmd.version() {
@@ -2539,7 +2540,7 @@ func resolveUUIDBMD(bmds bmds) (*bucketMD, error) {
 			maxor[bmd.UUID] = bmd
 		}
 	}
-	cmn.Assert(len(maxor) == len(mlist)) // TODO: remove
+	cos.Assert(len(maxor) == len(mlist)) // TODO: remove
 	if len(maxor) == 0 {
 		return nil, errNoBMD
 	}
@@ -2564,7 +2565,7 @@ func resolveUUIDBMD(bmds bmds) (*bucketMD, error) {
 		err = &errTgtBmdUUIDDiffer{s}
 	}
 	bmd := maxor[uuid]
-	cmn.Assert(bmd.UUID != "")
+	cos.Assert(bmd.UUID != "")
 	return bmd, err
 }
 

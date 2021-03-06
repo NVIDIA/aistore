@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 const queueChSize = 1000
@@ -29,7 +29,7 @@ type (
 	// are dlTasks.
 	jogger struct {
 		mpath       string
-		terminateCh *cmn.StopCh // synchronizes termination
+		terminateCh *cos.StopCh // synchronizes termination
 		parent      *dispatcher
 
 		q *queue
@@ -46,7 +46,7 @@ func newJogger(d *dispatcher, mpath string) *jogger {
 		mpath:       mpath,
 		parent:      d,
 		q:           newQueue(),
-		terminateCh: cmn.NewStopCh(),
+		terminateCh: cos.NewStopCh(),
 	}
 }
 

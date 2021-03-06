@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
@@ -44,7 +45,7 @@ const (
 type (
 	rwConnection struct {
 		r   io.Reader
-		wgr *cmn.TimeoutGroup
+		wgr *cos.TimeoutGroup
 		// In case the reader is first to connect, the data is copied into SGL
 		// so that the reader will not block on the connection.
 		sgl *memsys.SGL
@@ -86,8 +87,8 @@ type (
 var _ dsorter = (*dsorterMem)(nil)
 
 func newRWConnection(r io.Reader, w io.Writer) *rwConnection {
-	cmn.Assert(r != nil || w != nil)
-	wgr := cmn.NewTimeoutGroup()
+	cos.Assert(r != nil || w != nil)
+	wgr := cos.NewTimeoutGroup()
 	wgr.Add(1)
 	wgw := &sync.WaitGroup{}
 	wgw.Add(1)
@@ -345,7 +346,7 @@ func (ds *dsorterMem) createShardsLocally() (err error) {
 	var (
 		wg     = &sync.WaitGroup{}
 		errCh  = make(chan error, 2)
-		stopCh = cmn.NewStopCh()
+		stopCh = cos.NewStopCh()
 	)
 	defer stopCh.Close()
 
@@ -491,7 +492,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 		beforeSend = mono.NanoTime()
 	}
 
-	cmn.Assert(ds.m.ctx.node.DaemonID == rec.DaemonID)
+	cos.Assert(ds.m.ctx.node.DaemonID == rec.DaemonID)
 
 	if local {
 		defer ds.m.decrementRef(1)
@@ -499,7 +500,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 
 	opaque := cmn.MustMarshal(req)
 	hdr := transport.ObjHdr{Opaque: opaque}
-	send := func(r cmn.ReadOpenCloser) (err error) {
+	send := func(r cos.ReadOpenCloser) (err error) {
 		if local {
 			err = ds.creationPhase.connector.connectReader(rec.MakeUniqueName(obj), r, hdr.ObjAttrs.Size)
 			if ds.m.Metrics.extended {
@@ -509,7 +510,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 				ds.m.Metrics.Creation.LocalSendStats.updateThroughput(hdr.ObjAttrs.Size, dur)
 				ds.m.Metrics.Creation.Unlock()
 			}
-			cmn.Close(r)
+			cos.Close(r)
 		} else {
 			o := transport.AllocSend()
 			o.Hdr = hdr
@@ -520,8 +521,8 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 	}
 
 	if ds.m.rs.DryRun {
-		lr := cmn.NopReader(obj.MetadataSize + obj.Size)
-		r := cmn.NopOpener(ioutil.NopCloser(lr))
+		lr := cos.NopReader(obj.MetadataSize + obj.Size)
+		r := cos.NopOpener(ioutil.NopCloser(lr))
 		hdr.ObjAttrs.Size = obj.MetadataSize + obj.Size
 		return send(r)
 	}
@@ -529,25 +530,25 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 	switch obj.StoreType {
 	case extract.OffsetStoreType:
 		hdr.ObjAttrs.Size = obj.MetadataSize + obj.Size
-		r, err := cmn.NewFileSectionHandle(fullContentPath, obj.Offset-obj.MetadataSize, hdr.ObjAttrs.Size)
+		r, err := cos.NewFileSectionHandle(fullContentPath, obj.Offset-obj.MetadataSize, hdr.ObjAttrs.Size)
 		if err != nil {
 			return err
 		}
 		return send(r)
 	case extract.DiskStoreType:
-		f, err := cmn.NewFileHandle(fullContentPath)
+		f, err := cos.NewFileHandle(fullContentPath)
 		if err != nil {
 			return err
 		}
 		fi, err := f.Stat()
 		if err != nil {
-			cmn.Close(f)
+			cos.Close(f)
 			return err
 		}
 		hdr.ObjAttrs.Size = fi.Size()
 		return send(f)
 	default:
-		cmn.Assert(false)
+		cos.Assert(false)
 		return nil
 	}
 }
@@ -561,9 +562,9 @@ func (ds *dsorterMem) makeRecvRequestFunc() transport.ReceiveObj {
 			ds.m.abort(err)
 			return
 		}
-		defer cmn.DrainReader(object)
+		defer cos.DrainReader(object)
 
-		unpacker := cmn.NewUnpacker(hdr.Opaque)
+		unpacker := cos.NewUnpacker(hdr.Opaque)
 		req := buildingShardInfo{}
 		if err := unpacker.ReadAny(&req); err != nil {
 			ds.m.abort(err)
@@ -586,7 +587,7 @@ func (ds *dsorterMem) makeRecvResponseFunc() transport.ReceiveObj {
 			ds.m.abort(err)
 			return
 		}
-		defer cmn.DrainReader(object)
+		defer cos.DrainReader(object)
 
 		req := RemoteResponse{}
 		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {

@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools"
@@ -85,8 +86,8 @@ func init() {
 	// Since tests do not have access to cluster configuration, the tests
 	// detect client type by the primary proxy URL passed by a user.
 	// Certificate check is always disabled.
-	transportArgs.UseHTTPS = cmn.IsHTTPS(envURL)
-	transportArgs.SkipVerify = cmn.IsParseBool(os.Getenv(cmn.EnvVars.SkipVerifyCrt))
+	transportArgs.UseHTTPS = cos.IsHTTPS(envURL)
+	transportArgs.SkipVerify = cos.IsParseBool(os.Getenv(cmn.EnvVars.SkipVerifyCrt))
 	HTTPClient = cmn.NewClient(transportArgs)
 
 	DevtoolsCtx = &devtools.Ctx{
@@ -103,7 +104,7 @@ func init() {
 func InitLocalCluster() {
 	var (
 		// Gets the fields from the .env file from which the docker was deployed
-		envVars = cmn.ParseEnvVariables(dockerEnvFile)
+		envVars = cos.ParseEnvVariables(dockerEnvFile)
 		// Host IP and port of primary cluster
 		primaryHostIP, port = envVars["PRIMARY_HOST_IP"], envVars["PORT"]
 
@@ -142,7 +143,7 @@ func InitLocalCluster() {
 			fmt.Printf("\t%s:\t%s\n", k, v)
 		}
 	}
-	cmn.Exitf("")
+	cos.Exitf("")
 }
 
 // InitCluster initializes the environment necessary for testing against an AIS cluster.
@@ -193,7 +194,7 @@ func initProxyURL() (err error) {
 func initPmap() {
 	baseParams := BaseAPIParams(proxyURLReadOnly)
 	smap, err := waitForStartup(baseParams)
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	pmapReadOnly = smap.Pmap
 }
 
@@ -221,7 +222,7 @@ func initRemoteCluster() {
 func initNodeCmd() {
 	baseParams := BaseAPIParams(proxyURLReadOnly)
 	smap, err := waitForStartup(baseParams)
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	restoreNodes = make(map[string]RestoreCmd, smap.CountProxies()+smap.CountTargets())
 	for _, node := range smap.Pmap {
 		restoreNodes[node.ID()] = getRestoreCmd(node)
@@ -234,7 +235,7 @@ func initNodeCmd() {
 
 func initAuthToken() {
 	home, err := os.UserHomeDir()
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	tokenPath := filepath.Join(home, ".ais", "token")
 
 	var token cmn.TokenMsg

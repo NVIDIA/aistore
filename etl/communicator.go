@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/memsys"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -40,7 +41,7 @@ type (
 		// Get() is driven by `OfflineDataProvider` - not to confuse with
 		// GET requests from users (such as training models and apps)
 		// to perform on-the-fly transformation.
-		Get(bck *cluster.Bck, objName string, ts ...time.Duration) (cmn.ReadCloseSizer, error)
+		Get(bck *cluster.Bck, objName string, ts ...time.Duration) (cos.ReadCloseSizer, error)
 	}
 
 	commArgs struct {
@@ -102,7 +103,7 @@ func makeCommunicator(args commArgs) Communicator {
 		return &redirectComm{baseComm: baseComm}
 	case RevProxyCommType:
 		transURL, err := url.Parse(baseComm.transformerURL)
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 		rp := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
 				// Replacing the `req.URL` host with ETL container host
@@ -117,7 +118,7 @@ func makeCommunicator(args commArgs) Communicator {
 		}
 		return &revProxyComm{baseComm: baseComm, rp: rp}
 	default:
-		cmn.AssertMsg(false, args.commType)
+		cos.AssertMsg(false, args.commType)
 	}
 	return nil
 }
@@ -130,7 +131,7 @@ func (c baseComm) SvcName() string { return c.podName /*pod name is same as serv
 // pushComm //
 //////////////
 
-func (pc *pushComm) doRequest(bck *cluster.Bck, objName string, ts ...time.Duration) (r cmn.ReadCloseSizer, err error) {
+func (pc *pushComm) doRequest(bck *cluster.Bck, objName string, ts ...time.Duration) (r cos.ReadCloseSizer, err error) {
 	lom := cluster.AllocLOM(objName)
 
 	defer cluster.FreeLOM(lom)
@@ -149,7 +150,7 @@ func (pc *pushComm) doRequest(bck *cluster.Bck, objName string, ts ...time.Durat
 	return
 }
 
-func (pc *pushComm) tryDoRequest(lom *cluster.LOM, ts ...time.Duration) (cmn.ReadCloseSizer, error) {
+func (pc *pushComm) tryDoRequest(lom *cluster.LOM, ts ...time.Duration) (cos.ReadCloseSizer, error) {
 	lom.Lock(false)
 	defer lom.Unlock(false)
 
@@ -158,7 +159,7 @@ func (pc *pushComm) tryDoRequest(lom *cluster.LOM, ts ...time.Duration) (cmn.Rea
 	}
 
 	// `fh` is closed by Do(req).
-	fh, err := cmn.NewFileHandle(lom.FQN)
+	fh, err := cos.NewFileHandle(lom.FQN)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +190,7 @@ finish:
 		}
 		return nil, err
 	}
-	return cmn.NewDeferRCS(cmn.NewSizedRC(resp.Body, resp.ContentLength), cleanup), nil
+	return cos.NewDeferRCS(cos.NewSizedRC(resp.Body, resp.ContentLength), cleanup), nil
 }
 
 func (pc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck, objName string) error {
@@ -210,7 +211,7 @@ func (pc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck,
 	return err
 }
 
-func (pc *pushComm) Get(bck *cluster.Bck, objName string, ts ...time.Duration) (cmn.ReadCloseSizer, error) {
+func (pc *pushComm) Get(bck *cluster.Bck, objName string, ts ...time.Duration) (cos.ReadCloseSizer, error) {
 	return pc.doRequest(bck, objName, ts...)
 }
 
@@ -219,13 +220,13 @@ func (pc *pushComm) Get(bck *cluster.Bck, objName string, ts ...time.Duration) (
 //////////////////
 
 func (rc *redirectComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
-	redirectURL := cmn.JoinPath(rc.transformerURL, transformerPath(bck, objName))
+	redirectURL := cos.JoinPath(rc.transformerURL, transformerPath(bck, objName))
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 	return nil
 }
 
-func (rc *redirectComm) Get(bck *cluster.Bck, objName string, ts ...time.Duration) (cmn.ReadCloseSizer, error) {
-	etlURL := cmn.JoinPath(rc.transformerURL, transformerPath(bck, objName))
+func (rc *redirectComm) Get(bck *cluster.Bck, objName string, ts ...time.Duration) (cos.ReadCloseSizer, error) {
+	etlURL := cos.JoinPath(rc.transformerURL, transformerPath(bck, objName))
 	return getWithTimeout(rc.t.DataClient(), etlURL, ts...)
 }
 
@@ -239,8 +240,8 @@ func (pc *revProxyComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.
 	return nil
 }
 
-func (pc *revProxyComm) Get(bck *cluster.Bck, objName string, ts ...time.Duration) (cmn.ReadCloseSizer, error) {
-	etlURL := cmn.JoinPath(pc.transformerURL, transformerPath(bck, objName))
+func (pc *revProxyComm) Get(bck *cluster.Bck, objName string, ts ...time.Duration) (cos.ReadCloseSizer, error) {
+	etlURL := cos.JoinPath(pc.transformerURL, transformerPath(bck, objName))
 	return getWithTimeout(pc.t.DataClient(), etlURL, ts...)
 }
 
@@ -259,10 +260,10 @@ func pruneQuery(rawQuery string) string {
 }
 
 func transformerPath(bck *cluster.Bck, objName string) string {
-	return cmn.JoinWords(bck.Name, objName)
+	return cos.JoinWords(bck.Name, objName)
 }
 
-func getWithTimeout(client *http.Client, url string, ts ...time.Duration) (r cmn.ReadCloseSizer, err error) {
+func getWithTimeout(client *http.Client, url string, ts ...time.Duration) (r cos.ReadCloseSizer, err error) {
 	var (
 		req     *http.Request
 		resp    *http.Response
@@ -286,6 +287,6 @@ finish:
 		}
 		return nil, err
 	}
-	r = cmn.NewDeferRCS(cmn.NewSizedRC(resp.Body, resp.ContentLength), cleanup)
+	r = cos.NewDeferRCS(cos.NewSizedRC(resp.Body, resp.ContentLength), cleanup)
 	return r, nil
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/etl"
 )
@@ -310,8 +311,8 @@ func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if msg.ID == "" {
-		msg.ID = cmn.GenUUID()
-	} else if err = cmn.ValidateID(msg.ID); err != nil {
+		msg.ID = cos.GenUUID()
+	} else if err = cos.ValidateID(msg.ID); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/transport"
 )
@@ -75,7 +76,7 @@ func NewStreams(sowner cluster.Sowner, lsnode *cluster.Snode, cl transport.Clien
 	if !cmn.NetworkIsKnown(sbArgs.Network) {
 		glog.Errorf("Unknown network %s, expecting one of: %v", sbArgs.Network, cmn.KnownNetworks)
 	}
-	cmn.Assert(sbArgs.Ntype == cluster.Targets || sbArgs.Ntype == cluster.Proxies || sbArgs.Ntype == cluster.AllNodes)
+	cos.Assert(sbArgs.Ntype == cluster.Targets || sbArgs.Ntype == cluster.Proxies || sbArgs.Ntype == cluster.AllNodes)
 	listeners := sowner.Listeners()
 	sb = &Streams{
 		sowner:       sowner,
@@ -105,7 +106,7 @@ func NewStreams(sowner cluster.Sowner, lsnode *cluster.Snode, cl transport.Clien
 		sb.lid = fmt.Sprintf("sb[%s=>%s/%s]", sb.lsnode.ID(), sb.network, sb.trname)
 	} else {
 		sb.lid = fmt.Sprintf("sb[%s=>%s/%s[%s]]", sb.lsnode.ID(), sb.network, sb.trname,
-			cmn.B2S(int64(sb.extra.Config.Compression.BlockMaxSize), 0))
+			cos.B2S(int64(sb.extra.Config.Compression.BlockMaxSize), 0))
 	}
 	// register this stream-bundle as Smap listener
 	if !sb.manualResync {
@@ -130,7 +131,7 @@ func (sb *Streams) Close(gracefully bool) {
 
 // when (nodes == nil) transmit via all established streams in a bundle
 // otherwise, restrict to the specified subset (nodes)
-func (sb *Streams) Send(obj *transport.Obj, roc cmn.ReadOpenCloser, nodes ...*cluster.Snode) (err error) {
+func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*cluster.Snode) (err error) {
 	streams := sb.get()
 	if len(streams) == 0 {
 		err = fmt.Errorf("no streams %s => .../%s", sb.lsnode, sb.trname)
@@ -193,9 +194,9 @@ func (sb *Streams) Send(obj *transport.Obj, roc cmn.ReadOpenCloser, nodes ...*cl
 	return
 }
 
-func _doCmpl(obj *transport.Obj, roc cmn.ReadOpenCloser, err error) {
+func _doCmpl(obj *transport.Obj, roc cos.ReadOpenCloser, err error) {
 	if roc != nil {
-		cmn.Close(roc)
+		cos.Close(roc)
 	}
 	if obj.Callback != nil {
 		obj.Callback(obj.Hdr, roc, obj.CmplArg, err)
@@ -237,7 +238,7 @@ func (sb *Streams) get() (bun bundle) {
 }
 
 // one obj, one stream
-func (sb *Streams) sendOne(obj *transport.Obj, roc cmn.ReadOpenCloser, robin *robin, reopen bool) error {
+func (sb *Streams) sendOne(obj *transport.Obj, roc cos.ReadOpenCloser, robin *robin, reopen bool) error {
 	one := transport.AllocSend()
 	*one = *obj
 	one.Reader = roc // reduce to io.ReadCloser
@@ -259,7 +260,7 @@ func (sb *Streams) sendOne(obj *transport.Obj, roc cmn.ReadOpenCloser, robin *ro
 }
 
 func (sb *Streams) apply(action int) {
-	cmn.Assert(action == closeFin || action == closeStop)
+	cos.Assert(action == closeFin || action == closeStop)
 	var (
 		streams = sb.get()
 		wg      = &sync.WaitGroup{}
@@ -303,14 +304,14 @@ func (sb *Streams) Resync() {
 		oldNodeMap = []cluster.NodeMap{sb.smap.Tmap, sb.smap.Pmap}
 		newNodeMap = []cluster.NodeMap{smap.Tmap, smap.Pmap}
 	default:
-		cmn.Assert(false)
+		cos.Assert(false)
 	}
 	added, removed := cluster.NodeMapDelta(oldNodeMap, newNodeMap)
 
 	obundle := sb.get()
 	l := len(added) - len(removed)
 	if obundle != nil {
-		l = cmn.Max(len(obundle), len(obundle)+l)
+		l = cos.Max(len(obundle), len(obundle)+l)
 	}
 	nbundle := make(map[string]*robin, l)
 	for id, robin := range obundle {

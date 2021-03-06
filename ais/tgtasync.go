@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/objlist"
@@ -100,7 +101,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 	var (
 		query      = r.URL.Query()
 		taskAction = query.Get(cmn.URLParamTaskAction)
-		silent     = cmn.IsParseBool(query.Get(cmn.URLParamSilent))
+		silent     = cos.IsParseBool(query.Get(cmn.URLParamSilent))
 		ctx        = context.Background()
 	)
 	if taskAction == cmn.TaskStart {

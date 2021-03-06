@@ -1,4 +1,5 @@
-// Package cmn provides common low-level types and utilities for all aistore projects
+// Package cmn provides common constants, types, and utilities for AIS clients
+// and AIStore.
 /*
  * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  */

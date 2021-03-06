@@ -15,13 +15,14 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 )
 
 var errInvalidTarget = errors.New("invalid target")
 
 // buildDlObjs returns list of objects that must be downloaded by target.
-func buildDlObjs(t cluster.Target, bck *cluster.Bck, objects cmn.SimpleKVs) ([]dlObj, error) {
+func buildDlObjs(t cluster.Target, bck *cluster.Bck, objects cos.SimpleKVs) ([]dlObj, error) {
 	var (
 		smap = t.Sowner().Get()
 		sid  = t.SID()
@@ -148,18 +149,18 @@ const (
 type (
 	remoteObjInfo struct {
 		size int64
-		md   cmn.SimpleKVs
+		md   cos.SimpleKVs
 	}
 )
 
 // Get file info if link points to GCP, S3 or Azure.
 func roiFromLink(link string, resp *http.Response) (roi remoteObjInfo) {
 	u, err := url.Parse(link)
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 
-	if cmn.IsGoogleStorageURL(u) || cmn.IsGoogleAPIURL(u) {
+	if cos.IsGoogleStorageURL(u) || cos.IsGoogleAPIURL(u) {
 		h := cmn.BackendHelpers.Google
-		roi.md = make(cmn.SimpleKVs, 3)
+		roi.md = make(cos.SimpleKVs, 3)
 		roi.md[cluster.SourceObjMD] = cluster.SourceGoogleObjMD
 		if v, ok := h.EncodeVersion(resp.Header.Get(gsVersionHeader)); ok {
 			roi.md[cluster.VersionObjMD] = v
@@ -167,18 +168,18 @@ func roiFromLink(link string, resp *http.Response) (roi remoteObjInfo) {
 		if hdr := resp.Header[http.CanonicalHeaderKey(gsCksumHeader)]; len(hdr) > 0 {
 			for cksumType, cksumValue := range parseGoogleCksumHeader(hdr) {
 				switch cksumType {
-				case cmn.ChecksumMD5:
+				case cos.ChecksumMD5:
 					roi.md[cluster.MD5ObjMD] = cksumValue
-				case cmn.ChecksumCRC32C:
+				case cos.ChecksumCRC32C:
 					roi.md[cluster.CRC32CObjMD] = cksumValue
 				default:
 					glog.Errorf("unimplemented cksum type for custom metadata: %s", cksumType)
 				}
 			}
 		}
-	} else if cmn.IsS3URL(link) {
+	} else if cos.IsS3URL(link) {
 		h := cmn.BackendHelpers.Amazon
-		roi.md = make(cmn.SimpleKVs, 3)
+		roi.md = make(cos.SimpleKVs, 3)
 		roi.md[cluster.SourceObjMD] = cluster.SourceAmazonObjMD
 		if v, ok := h.EncodeVersion(resp.Header.Get(s3VersionHeader)); ok {
 			roi.md[cluster.VersionObjMD] = v
@@ -186,9 +187,9 @@ func roiFromLink(link string, resp *http.Response) (roi remoteObjInfo) {
 		if v, ok := h.EncodeCksum(resp.Header.Get(s3CksumHeader)); ok {
 			roi.md[cluster.MD5ObjMD] = v
 		}
-	} else if cmn.IsAzureURL(u) {
+	} else if cos.IsAzureURL(u) {
 		h := cmn.BackendHelpers.Azure
-		roi.md = make(cmn.SimpleKVs, 1)
+		roi.md = make(cos.SimpleKVs, 1)
 		roi.md[cluster.SourceObjMD] = cluster.SourceAzureObjMD
 		if v, ok := h.EncodeVersion(resp.Header.Get(azVersionHeader)); ok {
 			roi.md[cluster.VersionObjMD] = v
@@ -197,22 +198,22 @@ func roiFromLink(link string, resp *http.Response) (roi remoteObjInfo) {
 			roi.md[cluster.MD5ObjMD] = v
 		}
 	} else {
-		roi.md = make(cmn.SimpleKVs, 1)
+		roi.md = make(cos.SimpleKVs, 1)
 		roi.md[cluster.SourceObjMD] = cluster.SourceWebObjMD
 	}
 	roi.size = resp.ContentLength
 	return
 }
 
-func parseGoogleCksumHeader(hdr []string) cmn.SimpleKVs {
+func parseGoogleCksumHeader(hdr []string) cos.SimpleKVs {
 	var (
 		h      = cmn.BackendHelpers.Google
-		cksums = make(cmn.SimpleKVs, 2)
+		cksums = make(cos.SimpleKVs, 2)
 	)
 	for _, v := range hdr {
 		entry := strings.SplitN(v, "=", 2)
-		cmn.Assert(len(entry) == 2)
-		cmn.AssertNoErr(cmn.ValidateCksumType(entry[0]))
+		cos.Assert(len(entry) == 2)
+		cos.AssertNoErr(cos.ValidateCksumType(entry[0]))
 		if v, ok := h.EncodeCksum(entry[1]); ok {
 			cksums[entry[0]] = v
 		}
@@ -231,12 +232,12 @@ func headLink(link string) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	cmn.Close(resp.Body)
+	cos.Close(resp.Body)
 	return resp, nil
 }
 
-func roiFromObjMeta(objMeta cmn.SimpleKVs) (roi remoteObjInfo) {
-	roi.md = make(cmn.SimpleKVs, 2)
+func roiFromObjMeta(objMeta cos.SimpleKVs) (roi remoteObjInfo) {
+	roi.md = make(cos.SimpleKVs, 2)
 	switch objMeta[cmn.HeaderBackendProvider] {
 	case cmn.ProviderGoogle:
 		roi.md[cluster.SourceObjMD] = cluster.SourceGoogleObjMD

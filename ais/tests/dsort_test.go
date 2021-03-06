@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools/archive"
 	"github.com/NVIDIA/aistore/devtools/readers"
@@ -185,7 +186,7 @@ func (df *dsortFramework) init() {
 	df.outputPrefix = df.outputTempl[:strings.Index(df.outputTempl, "-")+1]
 
 	if df.fileInTarballSize == 0 {
-		df.fileInTarballSize = cmn.KiB
+		df.fileInTarballSize = cos.KiB
 	}
 
 	if df.maxMemUsage == "" {
@@ -195,12 +196,12 @@ func (df *dsortFramework) init() {
 	df.tarballSize = df.fileInTarballCnt * df.fileInTarballSize
 	if df.outputShardSize == "-1" {
 		df.outputShardSize = ""
-		pt, err := cmn.ParseBashTemplate(df.outputTempl)
-		cmn.AssertNoErr(err)
+		pt, err := cos.ParseBashTemplate(df.outputTempl)
+		cos.AssertNoErr(err)
 		df.outputShardCnt = int(pt.Count())
 	} else {
 		outputShardSize := int64(10 * df.fileInTarballCnt * df.fileInTarballSize)
-		df.outputShardSize = cmn.B2S(outputShardSize, 0)
+		df.outputShardSize = cos.B2S(outputShardSize, 0)
 		df.outputShardCnt = (df.tarballCnt * df.tarballSize) / int(outputShardSize)
 	}
 
@@ -248,7 +249,7 @@ func (df *dsortFramework) start() {
 func (df *dsortFramework) createInputShards() {
 	const tmpDir = "/tmp"
 	var (
-		wg    = cmn.NewLimitedWaitGroup(40)
+		wg    = cos.NewLimitedWaitGroup(40)
 		errCh = make(chan error, df.tarballCnt)
 	)
 
@@ -279,7 +280,7 @@ func (df *dsortFramework) createInputShards() {
 			fqn := path + df.extension
 			defer os.Remove(fqn)
 
-			reader, err := readers.NewFileReaderFromFile(fqn, cmn.ChecksumNone)
+			reader, err := readers.NewFileReaderFromFile(fqn, cos.ChecksumNone)
 			tassert.CheckFatal(df.m.t, err)
 
 			tutils.Put(df.m.proxyURL, df.m.bck, filepath.Base(fqn), reader, errCh)
@@ -652,7 +653,7 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 					m:           m,
 					dsorterType: dsorterType,
 					outputBck: cmn.Bck{
-						Name:     cmn.RandString(15),
+						Name:     cos.RandString(15),
 						Provider: cmn.ProviderAIS,
 					},
 					tarballCnt:       1000,
@@ -740,7 +741,7 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 					m:           m,
 					dsorterType: dsorterType,
 					outputBck: cmn.Bck{
-						Name:     cmn.RandString(15),
+						Name:     cos.RandString(15),
 						Provider: cmn.ProviderAIS,
 					},
 					tarballCnt:       1000,
@@ -961,7 +962,7 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 			m:                 m,
 			dsorterType:       dsort.DSorterGeneralType,
 			tarballCnt:        500,
-			fileInTarballSize: cmn.MiB,
+			fileInTarballSize: cos.MiB,
 			fileInTarballCnt:  5,
 		}
 	)
@@ -974,13 +975,13 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 	df.createInputShards()
 
 	// Try to free all memory to get estimated actual used memory size
-	cmn.FreeMemToOS()
+	cos.FreeMemToOS()
 	time.Sleep(time.Second)
 
 	// Get current memory
 	mem, err := sys.Mem()
 	tassert.CheckFatal(t, err)
-	df.maxMemUsage = cmn.UnsignedB2S(mem.ActualUsed+500*cmn.MiB, 2)
+	df.maxMemUsage = cos.UnsignedB2S(mem.ActualUsed+500*cos.MiB, 2)
 
 	tlog.Logf("starting distributed sort with using memory and disk (max mem usage: %s)...\n", df.maxMemUsage)
 	df.start()
@@ -1022,7 +1023,7 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 			m:                 m,
 			dsorterType:       dsort.DSorterGeneralType,
 			tarballCnt:        400,
-			fileInTarballSize: cmn.MiB,
+			fileInTarballSize: cos.MiB,
 			fileInTarballCnt:  3,
 			extension:         ".tar.gz",
 		}
@@ -1036,13 +1037,13 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 	df.createInputShards()
 
 	// Try to free all memory to get estimated actual used memory size
-	cmn.FreeMemToOS()
+	cos.FreeMemToOS()
 	time.Sleep(time.Second)
 
 	// Get current memory
 	mem, err := sys.Mem()
 	tassert.CheckFatal(t, err)
-	df.maxMemUsage = cmn.UnsignedB2S(mem.ActualUsed+300*cmn.MiB, 2)
+	df.maxMemUsage = cos.UnsignedB2S(mem.ActualUsed+300*cos.MiB, 2)
 
 	tlog.Logf("starting distributed sort with using memory, disk and compression (max mem usage: %s)...\n", df.maxMemUsage)
 	df.start()
@@ -1423,7 +1424,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 								err := containers.DockerCreateMpathDir(0, mpath)
 								tassert.CheckFatal(t, err)
 							} else {
-								err := cmn.CreateDir(mpath)
+								err := cos.CreateDir(mpath)
 								tassert.CheckFatal(t, err)
 							}
 
@@ -1641,7 +1642,7 @@ func TestDistributedSortOnOOM(t *testing.T) {
 					m:                 m,
 					dsorterType:       dsorterType,
 					fileInTarballCnt:  200,
-					fileInTarballSize: 10 * cmn.MiB,
+					fileInTarballSize: 10 * cos.MiB,
 					maxMemUsage:       "80%",
 				}
 			)
@@ -1707,15 +1708,15 @@ func TestDistributedSortMissingShards(t *testing.T) {
 
 			switch scope {
 			case scopeConfig:
-				defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"distributed_sort.missing_shards": cmn.IgnoreReaction})
-				tutils.SetClusterConfig(t, cmn.SimpleKVs{"distributed_sort.missing_shards": reaction})
+				defer tutils.SetClusterConfig(t, cos.SimpleKVs{"distributed_sort.missing_shards": cmn.IgnoreReaction})
+				tutils.SetClusterConfig(t, cos.SimpleKVs{"distributed_sort.missing_shards": reaction})
 
 				tlog.Logf("changed `missing_shards` config to: %s\n", reaction)
 			case scopeSpec:
 				df.missingShards = reaction
 				tlog.Logf("set `missing_shards` in request spec to: %s\n", reaction)
 			default:
-				cmn.AssertMsg(false, scope)
+				cos.AssertMsg(false, scope)
 			}
 
 			df.init()
@@ -1765,15 +1766,15 @@ func TestDistributedSortDuplications(t *testing.T) {
 
 			switch scope {
 			case scopeConfig:
-				defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"distributed_sort.duplicated_records": cmn.AbortReaction})
-				tutils.SetClusterConfig(t, cmn.SimpleKVs{"distributed_sort.duplicated_records": reaction})
+				defer tutils.SetClusterConfig(t, cos.SimpleKVs{"distributed_sort.duplicated_records": cmn.AbortReaction})
+				tutils.SetClusterConfig(t, cos.SimpleKVs{"distributed_sort.duplicated_records": reaction})
 
 				tlog.Logf("changed `duplicated_records` config to: %s\n", reaction)
 			case scopeSpec:
 				df.duplicatedRecords = reaction
 				tlog.Logf("set `duplicated_records` in request spec to: %s\n", reaction)
 			default:
-				cmn.AssertMsg(false, scope)
+				cos.AssertMsg(false, scope)
 			}
 
 			df.init()
@@ -1804,7 +1805,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 					m:           m,
 					dsorterType: dsorterType,
 					outputBck: cmn.Bck{
-						Name:     cmn.RandString(15),
+						Name:     cos.RandString(15),
 						Provider: cmn.ProviderAIS,
 					},
 					tarballCnt:       100,

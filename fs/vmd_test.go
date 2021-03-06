@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/fs"
@@ -37,7 +37,7 @@ func testVMDCreate(t *testing.T, mpaths fs.MPI, daemonID string) {
 	tassert.Errorf(t, vmd.DaemonID == daemonID, "incorrect daemonID, expected %q, got %q", daemonID, vmd.DaemonID)
 	tassert.Errorf(t, len(vmd.Devices) == mpathsCnt, "expected %d devices found, got %d", mpathsCnt, len(vmd.Devices))
 
-	devicesSet := cmn.NewStringSet()
+	devicesSet := cos.NewStringSet()
 	for _, dev := range vmd.Devices {
 		devicesSet.Add(dev.MountPath)
 		_, ok := mpaths[dev.MountPath]
@@ -52,7 +52,7 @@ func testVMDPersist(t *testing.T, daemonID string) {
 	tassert.Fatalf(t, vmd != nil, "expected vmd to be created")
 
 	available, _ := fs.Get()
-	mps := make(cmn.StringSet, len(available))
+	mps := make(cos.StringSet, len(available))
 	for _, mp := range available {
 		mps.Add(mp.Path)
 	}

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -70,28 +71,28 @@ type (
 		maxLimit  int
 		lastUtils []int64
 		// Semaphore for function calls. On update it is swapped with a new one.
-		funcCallsSema *cmn.DynSemaphore
+		funcCallsSema *cos.DynSemaphore
 	}
 
 	concAdjuster struct {
 		mu sync.RWMutex
 
-		stopCh *cmn.StopCh
+		stopCh *cos.StopCh
 
 		defaultLimit int // default limit for new mpath adjusters
 		adjusters    map[string]*mpathAdjuster
 
 		// Determines how many goroutines should be allowed per one function call.
 		goroutineLimitCoef int
-		gorountinesSema    *cmn.DynSemaphore
+		gorountinesSema    *cos.DynSemaphore
 	}
 )
 
 func calcMaxLimit() int {
 	availablePaths, _ := fs.Get()
-	maxLimitPerDisk := cmn.Min(
+	maxLimitPerDisk := cos.Min(
 		maxConcFuncPerDiskLimit,
-		maxConcFuncPerDSortLimit/cmn.Max(len(availablePaths), 1),
+		maxConcFuncPerDSortLimit/cos.Max(len(availablePaths), 1),
 	)
 	return maxLimitPerDisk
 }
@@ -102,7 +103,7 @@ func newMpathAdjuster(limit, maxLimit int) *mpathAdjuster {
 		limit:         limit,
 		maxLimit:      maxLimit,
 		lastUtils:     make([]int64, 0, lastInfoCnt),
-		funcCallsSema: cmn.NewDynSemaphore(limit),
+		funcCallsSema: cos.NewDynSemaphore(limit),
 	}
 }
 
@@ -114,19 +115,19 @@ func newConcAdjuster(maxLimit, goroutineLimitCoef int) *concAdjuster {
 	if maxLimit == 0 {
 		maxLimit = calcMaxLimit()
 	}
-	limit = cmn.Min(limit, maxLimit)
+	limit = cos.Min(limit, maxLimit)
 	for _, mpathInfo := range availablePaths {
 		adjusters[mpathInfo.Path] = newMpathAdjuster(limit, maxLimit)
 	}
 
 	return &concAdjuster{
-		stopCh: cmn.NewStopCh(),
+		stopCh: cos.NewStopCh(),
 
 		defaultLimit: limit,
 		adjusters:    adjusters,
 
 		goroutineLimitCoef: goroutineLimitCoef,
-		gorountinesSema:    cmn.NewDynSemaphore(goroutineLimitCoef * len(availablePaths) * limit),
+		gorountinesSema:    cos.NewDynSemaphore(goroutineLimitCoef * len(availablePaths) * limit),
 	}
 }
 
@@ -229,7 +230,7 @@ func (adjuster *mpathAdjuster) recalc(newUtil int64, config *cmn.Config) (prevLi
 		adjuster.curBatchSize *= 2 * batchIncRatio
 	}
 
-	adjuster.curBatchSize = cmn.MinF64(adjuster.curBatchSize, maxBatchSize)
+	adjuster.curBatchSize = cos.MinF64(adjuster.curBatchSize, maxBatchSize)
 	if adjuster.limit < 1 {
 		adjuster.limit = 1
 	} else if adjuster.limit > adjuster.maxLimit {

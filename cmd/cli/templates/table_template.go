@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -128,13 +128,13 @@ func newTableProxies(ps map[string]*stats.DaemonStatus, smap *cluster.Smap, hide
 			fmtDaemonID(status.Snode.ID(), *smap),
 			status.DeployedOn,
 			fmt.Sprintf("%.2f%%", status.SysInfo.PctMemUsed),
-			cmn.UnsignedB2S(status.SysInfo.MemAvail, 2),
+			cos.UnsignedB2S(status.SysInfo.MemAvail, 2),
 			fmtDuration(extractStat(status.Stats, "up.ns.time")),
 			status.Status,
 			status.Version,
 			status.BuildTime,
 		}
-		cmn.AssertNoErr(table.addRows(row))
+		cos.AssertNoErr(table.addRows(row))
 	}
 	return table
 }
@@ -177,9 +177,9 @@ func newTableTargets(ts map[string]*stats.DaemonStatus, hideDeployments, hideSta
 			status.Snode.ID(),
 			status.DeployedOn,
 			fmt.Sprintf("%.2f%%", status.SysInfo.PctMemUsed),
-			cmn.UnsignedB2S(status.SysInfo.MemAvail, 2),
+			cos.UnsignedB2S(status.SysInfo.MemAvail, 2),
 			fmt.Sprintf("%.2f%%", calcCapPercentage(status)),
-			cmn.UnsignedB2S(calcCap(status), 3),
+			cos.UnsignedB2S(calcCap(status), 3),
 			fmt.Sprintf("%.2f%%", status.SysInfo.PctCPUUsed),
 			fmtXactStatus(status.TStatus),
 			fmtDuration(extractStat(status.Stats, "up.ns.time")),
@@ -187,7 +187,7 @@ func newTableTargets(ts map[string]*stats.DaemonStatus, hideDeployments, hideSta
 			status.Version,
 			status.BuildTime,
 		}
-		cmn.AssertNoErr(table.addRows(row))
+		cos.AssertNoErr(table.addRows(row))
 	}
 	return table
 }

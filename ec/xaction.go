@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
 )
@@ -133,7 +134,7 @@ func (r *xactECBase) newIntraReq(act intraReqType, meta *Metadata, bck *cluster.
 	return req
 }
 
-func (r *xactECBase) newSliceResponse(md *Metadata, attrs *transport.ObjectAttrs, fqn string) (reader cmn.ReadOpenCloser, err error) {
+func (r *xactECBase) newSliceResponse(md *Metadata, attrs *transport.ObjectAttrs, fqn string) (reader cos.ReadOpenCloser, err error) {
 	attrs.Version = md.ObjVersion
 	attrs.CksumType = md.CksumType
 	attrs.CksumValue = md.CksumValue
@@ -143,7 +144,7 @@ func (r *xactECBase) newSliceResponse(md *Metadata, attrs *transport.ObjectAttrs
 		return nil, err
 	}
 	attrs.Size = stat.Size()
-	reader, err = cmn.NewFileHandle(fqn)
+	reader, err = cos.NewFileHandle(fqn)
 	if err != nil {
 		glog.Warningf("Failed to read file stats: %s", err)
 		return nil, err
@@ -153,7 +154,7 @@ func (r *xactECBase) newSliceResponse(md *Metadata, attrs *transport.ObjectAttrs
 
 // replica/full object request
 func (r *xactECBase) newReplicaResponse(attrs *transport.ObjectAttrs, bck *cluster.Bck,
-	objName string) (reader cmn.ReadOpenCloser, err error) {
+	objName string) (reader cos.ReadOpenCloser, err error) {
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
 	err = lom.Init(bck.Bck)
@@ -165,7 +166,7 @@ func (r *xactECBase) newReplicaResponse(attrs *transport.ObjectAttrs, bck *clust
 		glog.Warning(err)
 		return nil, err
 	}
-	reader, err = cmn.NewFileHandle(lom.FQN)
+	reader, err = cos.NewFileHandle(lom.FQN)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +189,7 @@ func (r *xactECBase) newReplicaResponse(attrs *transport.ObjectAttrs, bck *clust
 func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck, objName, id string,
 	md *Metadata) (err error) {
 	var (
-		reader   cmn.ReadOpenCloser
+		reader   cos.ReadOpenCloser
 		objAttrs transport.ObjectAttrs
 	)
 	ireq := r.newIntraReq(act, nil, bck)
@@ -201,7 +202,7 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 		reader, err = r.newReplicaResponse(&objAttrs, bck, objName)
 		ireq.exists = err == nil
 	}
-	cmn.Assert((objAttrs.Size == 0 && reader == nil) || (objAttrs.Size != 0 && reader != nil))
+	cos.Assert((objAttrs.Size == 0 && reader == nil) || (objAttrs.Size != 0 && reader != nil))
 
 	rHdr := transport.ObjHdr{
 		Bck:      bck.Bck,
@@ -234,7 +235,7 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 //		- true - send lightweight request to all targets (usually reader is nil
 //			in this case)
 //	    - false - send a slice/replica/metadata to targets
-func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr, reader cmn.ReadOpenCloser,
+func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr, reader cos.ReadOpenCloser,
 	cb transport.ObjSentCB, isRequest bool) error {
 	nodes := cluster.AllocNodes(len(daemonIDs))
 	smap := r.smap.Get()
@@ -279,7 +280,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 	}
 	sw := &slice{
 		writer: writer,
-		wg:     cmn.NewTimeoutGroup(),
+		wg:     cos.NewTimeoutGroup(),
 		lom:    lom,
 	}
 
@@ -306,7 +307,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 	if sw.version != "" {
 		lom.SetVersion(sw.version)
 	}
-	if sw.cksum != nil && sw.cksum.Type() != cmn.ChecksumNone {
+	if sw.cksum != nil && sw.cksum.Type() != cos.ChecksumNone {
 		lom.SetCksum(sw.cksum)
 	}
 	lom.Uncache(true)
@@ -409,13 +410,13 @@ func (r *xactECBase) writerReceive(writer *slice, exists bool, objAttrs transpor
 		writer.wg.Done()
 		// drain the body, to avoid panic:
 		// http: panic serving: assertion failed: "expecting an error or EOF as the reason for failing to read
-		cmn.DrainReader(reader)
+		cos.DrainReader(reader)
 		return ErrorNotFound
 	}
 
 	buf, slab := mm.Alloc()
 	writer.n, err = io.CopyBuffer(writer.writer, reader, buf)
-	writer.cksum = cmn.NewCksum(objAttrs.CksumType, objAttrs.CksumValue)
+	writer.cksum = cos.NewCksum(objAttrs.CksumType, objAttrs.CksumValue)
 	if writer.version == "" && objAttrs.Version != "" {
 		writer.version = objAttrs.Version
 	}

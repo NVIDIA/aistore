@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
@@ -142,7 +143,7 @@ func newTargetMock(daemonID string, smap *testSmap) *targetNodeMock {
 		Algorithm: &SortAlgorithm{
 			FormatType: extract.FormatTypeString,
 		},
-		MaxMemUsage: cmn.ParsedQuantity{Type: cmn.QuantityPercent, Value: 0},
+		MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0},
 		DSorterType: DSorterGeneralType,
 	}
 
@@ -211,7 +212,7 @@ func (tctx *testContext) setup() {
 	mm = memsys.DefaultPageMM()
 
 	fs.Init()
-	err := cmn.CreateDir(testDir)
+	err := cos.CreateDir(testDir)
 	Expect(err).NotTo(HaveOccurred())
 	_, err = fs.Add(testDir, "daeID")
 	Expect(err).NotTo(HaveOccurred())
@@ -267,7 +268,7 @@ func (tctx *testContext) setup() {
 	bmdMock := cluster.NewBaseBownerMock(
 		cluster.NewBck(
 			testBucket, cmn.ProviderAIS, cmn.NsGlobal,
-			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}},
+			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}},
 		),
 	)
 	ctx.t = cluster.NewTargetMock(bmdMock)
@@ -447,7 +448,7 @@ var _ = Describe("Distributed Sort", func() {
 								FormatType: extract.FormatTypeString,
 							},
 							Extension:   cmn.ExtTar,
-							MaxMemUsage: cmn.ParsedQuantity{Type: cmn.QuantityPercent, Value: 0},
+							MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0},
 							DSorterType: DSorterGeneralType,
 						}
 						ctx.node = ctx.smapOwner.Get().Tmap[target.daemonID]

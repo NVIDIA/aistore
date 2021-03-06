@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -120,7 +121,7 @@ func dumpConfig() error { return dumpMeta(&cmn.ClusterConfig{}) }
 func dumpMeta(v cmn.GetJopts) (err error) {
 	f := os.Stdout
 	if flags.out != "" {
-		f, err = cmn.CreateFile(flags.out)
+		f, err = cos.CreateFile(flags.out)
 		if err != nil {
 			return
 		}

@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
@@ -54,7 +55,7 @@ func (p *proxyrunner) bootstrap() {
 	// 3. primary?
 	if primary {
 		if pid != "" { // takes precedence over everything else
-			cmn.Assert(pid == p.si.ID())
+			cos.Assert(pid == p.si.ID())
 		} else if reliable {
 			var cnt int // confirmation count
 			// double-check
@@ -92,7 +93,7 @@ func (p *proxyrunner) bootstrap() {
 		}
 	}
 	if err != nil {
-		cmn.ExitLogf("FATAL: %s (non-primary) failed to join cluster, err: %v", p.si, err)
+		cos.ExitLogf("FATAL: %s (non-primary) failed to join cluster, err: %v", p.si, err)
 	}
 }
 
@@ -112,11 +113,11 @@ func (p *proxyrunner) determineRole(loadedSmap *smapX) (pid string, primary bool
 		primary bool
 	}{
 		pid:     os.Getenv(cmn.EnvVars.PrimaryID),
-		primary: cmn.IsParseBool(os.Getenv(cmn.EnvVars.IsPrimary)),
+		primary: cos.IsParseBool(os.Getenv(cmn.EnvVars.IsPrimary)),
 	}
 
 	if envP.pid != "" && envP.primary && p.si.ID() != envP.pid {
-		cmn.ExitLogf(
+		cos.ExitLogf(
 			"FATAL: %s: invalid combination of %s=true & %s=%s",
 			p.si, cmn.EnvVars.IsPrimary, cmn.EnvVars.PrimaryID, envP.pid,
 		)
@@ -201,14 +202,14 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		maxVerSmap := p.acceptRegistrations(smap, loadedSmap, config, ntargets)
 		if maxVerSmap != nil {
 			if _, err := maxVerSmap.IsDuplicate(p.si); err != nil {
-				cmn.ExitLogf("FATAL: %v", err)
+				cos.ExitLogf("FATAL: %v", err)
 			}
 			maxVerSmap.Pmap[p.si.ID()] = p.si
 			p.owner.smap.put(maxVerSmap)
 			glog.Infof("%s: change-of-mind #1: registering with %s(%s)",
 				p.si, maxVerSmap.Primary.ID(), maxVerSmap.Primary.URL(cmn.NetworkIntraControl))
 			if err := p.secondaryStartup(maxVerSmap); err != nil {
-				cmn.ExitLogf("FATAL: %v", err)
+				cos.ExitLogf("FATAL: %v", err)
 			}
 			return
 		}
@@ -267,7 +268,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		p.owner.smap.Unlock()
 		glog.Infof("%s: registering with %s", p.si, smap.Primary.NameEx())
 		if err := p.secondaryStartup(smap); err != nil {
-			cmn.ExitLogf("FATAL: %v", err)
+			cos.ExitLogf("FATAL: %v", err)
 		}
 		return
 	}
@@ -275,7 +276,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	// 5:  persist and finalize w/ sync + BMD
 	if smap.UUID == "" {
 		if !daemon.cli.skipStartup && smap.CountTargets() == 0 {
-			cmn.ExitLogf("FATAL: %s cannot create a new cluster with no targets, %s", p.si, smap)
+			cos.ExitLogf("FATAL: %s cannot create a new cluster with no targets, %s", p.si, smap)
 		}
 		clone := smap.clone()
 		if uuid == "" {
@@ -298,7 +299,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		}
 	}
 	if err := p.owner.smap.persist(smap); err != nil {
-		cmn.ExitLogf("%s (primary), err: %v", p.si, err)
+		cos.ExitLogf("%s (primary), err: %v", p.si, err)
 	}
 	p.owner.smap.Unlock()
 
@@ -308,7 +309,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		bmd.Version = 1 // init BMD
 		bmd.UUID = smap.UUID
 		if err := p.owner.bmd.put(bmd); err != nil {
-			cmn.ExitLogf("%v", err)
+			cos.ExitLogf("%v", err)
 		}
 	}
 
@@ -353,7 +354,7 @@ func (p *proxyrunner) resumeReb(smap *smapX, config *cmn.Config) {
 	var (
 		ver     = smap.version()
 		nojoins = config.Timeout.MaxHostBusy // initial quiet time with no new joins
-		sleep   = cmn.CalcProbeFreq(nojoins)
+		sleep   = cos.CalcProbeFreq(nojoins)
 	)
 	debug.AssertNoErr(smap.validate())
 until:
@@ -368,7 +369,7 @@ until:
 		}
 		if smap.version() != ver {
 			debug.Assert(smap.version() > ver)
-			elapsed, nojoins = 0, cmn.MinDuration(nojoins+sleep, config.Timeout.Startup)
+			elapsed, nojoins = 0, cos.MinDuration(nojoins+sleep, config.Timeout.Startup)
 			ver = smap.version()
 		}
 	}
@@ -388,7 +389,7 @@ until:
 	}
 	if smap.CountActiveTargets() < 2 {
 		err := &errNotEnoughTargets{p.si, smap, 2}
-		cmn.ExitLogf("%s: cannot resume global rebalance - %v", p.si, err)
+		cos.ExitLogf("%s: cannot resume global rebalance - %v", p.si, err)
 	}
 	var (
 		msg    = &cmn.ActionMsg{Action: cmn.ActRebalance, Value: metaction3}
@@ -399,7 +400,7 @@ until:
 	)
 	rmd, err := p.owner.rmd.modify(ctx)
 	if err != nil {
-		cmn.ExitLogf("%v", err)
+		cos.ExitLogf("%v", err)
 	}
 	wg := p.metasyncer.sync(revsPair{rmd, aisMsg})
 	p.owner.rmd.startup.Store(false)
@@ -471,7 +472,7 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 		if bmd == nil || bmd.version() < svm.BMD.version() {
 			glog.Infof("%s: override local %s with %s", p.si, bmd, svm.BMD)
 			if err := p.owner.bmd.put(svm.BMD); err != nil {
-				cmn.ExitLogf("%v", err)
+				cos.ExitLogf("%v", err)
 			}
 		}
 		p.owner.bmd.Unlock()
@@ -493,7 +494,7 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 	smapUUID, sameUUID, sameVersion, eq := smap.Compare(&svm.Smap.Smap)
 	if !sameUUID {
 		// FATAL: cluster integrity error (cie)
-		cmn.ExitLogf("%s: split-brain uuid [%s %s] vs %s", ciError(10), p.si, smap.StringEx(), svm.Smap.StringEx())
+		cos.ExitLogf("%s: split-brain uuid [%s %s] vs %s", ciError(10), p.si, smap.StringEx(), svm.Smap.StringEx())
 	}
 	if eq && sameVersion {
 		return
@@ -502,7 +503,7 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 		if svm.Smap.version() > smap.version() {
 			if dupNode, err := svm.Smap.IsDuplicate(p.si); err != nil {
 				if !svm.Smap.IsPrimary(dupNode) {
-					cmn.ExitLogf("%v", err)
+					cos.ExitLogf("%v", err)
 				}
 				// If the primary in max-ver Smap version and current node only differ by `DaemonID`,
 				// overwrite the proxy entry with current `Snode` and proceed to merging Smap.
@@ -518,7 +519,7 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 			return
 		}
 		// FATAL: cluster integrity error (cie)
-		cmn.ExitLogf("%s: split-brain local [%s %s] vs %s", ciError(20), p.si, smap.StringEx(), svm.Smap.StringEx())
+		cos.ExitLogf("%s: split-brain local [%s %s] vs %s", ciError(20), p.si, smap.StringEx(), svm.Smap.StringEx())
 	}
 merge:
 	p.owner.smap.Lock()
@@ -527,12 +528,12 @@ merge:
 		glog.Infof("%s: merge local %s <== %s", p.si, clone, svm.Smap)
 		_, err := svm.Smap.merge(clone, false /*err if detected (IP, port) duplicates*/)
 		if err != nil {
-			cmn.ExitLogf("%s: %v vs %s", p.si, err, svm.Smap.StringEx())
+			cos.ExitLogf("%s: %v vs %s", p.si, err, svm.Smap.StringEx())
 		}
 	} else {
 		clone.UUID = smapUUID
 	}
-	clone.Version = cmn.MaxI64(clone.version(), svm.Smap.version()) + 1
+	clone.Version = cos.MaxI64(clone.version(), svm.Smap.version()) + 1
 	p.owner.smap.put(clone)
 	p.owner.smap.Unlock()
 	glog.Infof("%s: merged %s", p.si, clone.pp())
@@ -568,7 +569,7 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (svm SmapVoteMsg) {
 	glog.Infof("%s: slow path...", p.si)
 	if svm.BMD, err = resolveUUIDBMD(bmds); err != nil {
 		if _, split := err.(*errBmdUUIDSplit); split {
-			cmn.ExitLogf("%s (primary), err: %v", p.si, err) // cluster integrity error
+			cos.ExitLogf("%s (primary), err: %v", p.si, err) // cluster integrity error
 		}
 		glog.Error(err)
 	}
@@ -576,7 +577,7 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (svm SmapVoteMsg) {
 		if !si.IsTarget() {
 			continue
 		}
-		if !cmn.IsValidUUID(smap.UUID) {
+		if !cos.IsValidUUID(smap.UUID) {
 			continue
 		}
 		if suuid == "" {
@@ -586,7 +587,7 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (svm SmapVoteMsg) {
 			}
 		} else if suuid != smap.UUID {
 			// FATAL: cluster integrity error (cie)
-			cmn.ExitLogf("%s: split-brain [%s %s] vs [%s %s]", ciError(30), p.si, suuid, si, smap.UUID)
+			cos.ExitLogf("%s: split-brain [%s %s] vs [%s %s]", ciError(30), p.si, suuid, si, smap.UUID)
 		}
 	}
 	for _, smap := range smaps {
@@ -701,7 +702,7 @@ func (p *proxyrunner) discoverClusterUUID() (uuid, created string) {
 	var maxCnt int
 	counter := make(map[string]int) // UUID => count
 	for _, regReq := range p.reg.pool {
-		if regReq.Smap == nil || !cmn.IsValidUUID(regReq.Smap.UUID) {
+		if regReq.Smap == nil || !cos.IsValidUUID(regReq.Smap.UUID) {
 			continue
 		}
 		counter[regReq.Smap.UUID]++

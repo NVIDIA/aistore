@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/aws/aws-sdk-go/aws"
@@ -139,7 +140,7 @@ func (awsp *awsProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (er
 // HEAD BUCKET //
 /////////////////
 
-func (awsp *awsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
+func (awsp *awsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
 	var (
 		svc       *s3.S3
 		region    string
@@ -173,7 +174,7 @@ func (awsp *awsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 		return
 	}
 
-	bckProps = make(cmn.SimpleKVs, 3)
+	bckProps = make(cos.SimpleKVs, 3)
 	bckProps[cmn.HeaderBackendProvider] = cmn.ProviderAmazon
 	bckProps[cmn.HeaderCloudRegion] = region
 	bckProps[cmn.HeaderBucketVerEnabled] = strconv.FormatBool(
@@ -340,7 +341,7 @@ func (awsp *awsProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (
 // HEAD OBJECT //
 /////////////////
 
-func (awsp *awsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, errCode int, err error) {
+func (awsp *awsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cos.SimpleKVs, errCode int, err error) {
 	var (
 		svc      *s3.S3
 		h        = cmn.BackendHelpers.Amazon
@@ -359,7 +360,7 @@ func (awsp *awsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 		errCode, err = awsp.awsErrorToAISError(err, cloudBck)
 		return
 	}
-	objMeta = make(cmn.SimpleKVs, 3)
+	objMeta = make(cos.SimpleKVs, 3)
 	objMeta[cmn.HeaderBackendProvider] = cmn.ProviderAmazon
 	objMeta[cmn.HeaderObjSize] = strconv.FormatInt(*headOutput.ContentLength, 10)
 	if v, ok := h.EncodeVersion(headOutput.VersionId); ok {
@@ -404,10 +405,10 @@ func (awsp *awsProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 // GET OBJ READER //
 ////////////////////
 
-func (awsp *awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
+func (awsp *awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cos.Cksum, errCode int, err error) {
 	var (
 		svc      *s3.S3
-		cksum    *cmn.Cksum
+		cksum    *cos.Cksum
 		h        = cmn.BackendHelpers.Amazon
 		cloudBck = lom.Bck().RemoteBck()
 	)
@@ -429,11 +430,11 @@ func (awsp *awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r 
 	// Check if have custom metadata.
 	if cksumType, ok := obj.Metadata[awsChecksumType]; ok {
 		if cksumValue, ok := obj.Metadata[awsChecksumVal]; ok {
-			cksum = cmn.NewCksum(*cksumType, *cksumValue)
+			cksum = cos.NewCksum(*cksumType, *cksumValue)
 		}
 	}
 
-	customMD := cmn.SimpleKVs{
+	customMD := cos.SimpleKVs{
 		cluster.SourceObjMD: cluster.SourceAmazonObjMD,
 	}
 
@@ -442,7 +443,7 @@ func (awsp *awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r 
 		customMD[cluster.VersionObjMD] = v
 	}
 	if v, ok := h.EncodeCksum(obj.ETag); ok {
-		expectedCksm = cmn.NewCksum(cmn.ChecksumMD5, v)
+		expectedCksm = cos.NewCksum(cos.ChecksumMD5, v)
 		customMD[cluster.MD5ObjMD] = v
 	}
 	lom.SetCksum(cksum)
@@ -456,7 +457,7 @@ func (awsp *awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r 
 ////////////////
 
 func (awsp *awsProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
-	defer cmn.Close(r)
+	defer cos.Close(r)
 
 	var (
 		svc                   *s3.S3

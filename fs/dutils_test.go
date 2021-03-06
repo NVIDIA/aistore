@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 )
 
@@ -135,7 +136,7 @@ func setAvailableMountPaths(paths ...string) []string {
 
 func createDirs(dirs ...string) error {
 	for _, dir := range dirs {
-		err := cmn.CreateDir(dir)
+		err := cos.CreateDir(dir)
 		if err != nil {
 			return err
 		}

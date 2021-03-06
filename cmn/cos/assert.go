@@ -1,14 +1,16 @@
-// Package cmn provides common low-level types and utilities for all aistore projects.
+// Package cos provides common low-level types and utilities for all aistore projects.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package cmn
+package cos
 
 import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 )
+
+const assertMsg = "assertion failed"
 
 // NOTE: Not to be used in the datapath - consider instead one of the other flavors below.
 func Assertf(cond bool, f string, a ...interface{}) {

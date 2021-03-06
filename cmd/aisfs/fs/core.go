@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/aisfs/ais"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/jacobsa/fuse"
 	"github.com/jacobsa/fuse/fuseops"
@@ -112,7 +113,7 @@ func NewAISFileSystemServer(cfg *ServerConfig, errLog *log.Logger) (srv fuse.Ser
 	httpClient := cmn.NewClient(cmn.TransportArgs{
 		DialTimeout: cfg.TCPTimeout,
 		Timeout:     cfg.HTTPTimeout,
-		UseHTTPS:    cmn.IsHTTPS(cfg.AISURL),
+		UseHTTPS:    cos.IsHTTPS(cfg.AISURL),
 		SkipVerify:  cfg.SkipVerifyCrt,
 
 		IdleConnsPerHost: 100,

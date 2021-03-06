@@ -16,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
@@ -53,7 +54,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	// file system
-	cmn.CreateDir(testMountpath)
+	cos.CreateDir(testMountpath)
 	defer os.RemoveAll(testMountpath)
 	fs.Init()
 	fs.DisableFsIDCheck()
@@ -73,7 +74,7 @@ func TestMain(m *testing.M) {
 	bmd := newBucketMD()
 	bmd.add(bck, &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
-			Type: cmn.ChecksumNone,
+			Type: cos.ChecksumNone,
 		},
 	})
 	t.owner.bmd.put(bmd)
@@ -86,17 +87,17 @@ func BenchmarkObjPut(b *testing.B) {
 	benches := []struct {
 		fileSize int64
 	}{
-		{cmn.KiB},
-		{512 * cmn.KiB},
-		{cmn.MiB},
-		{2 * cmn.MiB},
-		{4 * cmn.MiB},
-		{8 * cmn.MiB},
-		{16 * cmn.MiB},
+		{cos.KiB},
+		{512 * cos.KiB},
+		{cos.MiB},
+		{2 * cos.MiB},
+		{4 * cos.MiB},
+		{8 * cos.MiB},
+		{16 * cos.MiB},
 	}
 
 	for _, bench := range benches {
-		b.Run(cmn.B2S(bench.fileSize, 2), func(b *testing.B) {
+		b.Run(cos.B2S(bench.fileSize, 2), func(b *testing.B) {
 			lom := cluster.AllocLOM("objname")
 			defer cluster.FreeLOM(lom)
 			err := lom.Init(cmn.Bck{Name: testBucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal})
@@ -107,7 +108,7 @@ func BenchmarkObjPut(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				b.StopTimer()
-				r, _ := readers.NewRandReader(bench.fileSize, cmn.ChecksumNone)
+				r, _ := readers.NewRandReader(bench.fileSize, cos.ChecksumNone)
 				poi := &putObjInfo{
 					started: time.Now(),
 					t:       t,
@@ -133,17 +134,17 @@ func BenchmarkObjAppend(b *testing.B) {
 	benches := []struct {
 		fileSize int64
 	}{
-		{fileSize: cmn.KiB},
-		{fileSize: 512 * cmn.KiB},
-		{fileSize: cmn.MiB},
-		{fileSize: 2 * cmn.MiB},
-		{fileSize: 4 * cmn.MiB},
-		{fileSize: 8 * cmn.MiB},
-		{fileSize: 16 * cmn.MiB},
+		{fileSize: cos.KiB},
+		{fileSize: 512 * cos.KiB},
+		{fileSize: cos.MiB},
+		{fileSize: 2 * cos.MiB},
+		{fileSize: 4 * cos.MiB},
+		{fileSize: 8 * cos.MiB},
+		{fileSize: 16 * cos.MiB},
 	}
 
 	for _, bench := range benches {
-		b.Run(cmn.B2S(bench.fileSize, 2), func(b *testing.B) {
+		b.Run(cos.B2S(bench.fileSize, 2), func(b *testing.B) {
 			lom := cluster.AllocLOM("objname")
 			defer cluster.FreeLOM(lom)
 			err := lom.Init(cmn.Bck{Name: testBucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal})
@@ -155,7 +156,7 @@ func BenchmarkObjAppend(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				b.StopTimer()
-				r, _ := readers.NewRandReader(bench.fileSize, cmn.ChecksumNone)
+				r, _ := readers.NewRandReader(bench.fileSize, cos.ChecksumNone)
 				aoi := &appendObjInfo{
 					started: time.Now(),
 					t:       t,
@@ -188,23 +189,23 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 		fileSize int64
 		chunked  bool
 	}{
-		{fileSize: cmn.KiB, chunked: false},
-		{fileSize: 512 * cmn.KiB, chunked: false},
-		{fileSize: cmn.MiB, chunked: false},
-		{fileSize: 2 * cmn.MiB, chunked: false},
-		{fileSize: 4 * cmn.MiB, chunked: false},
-		{fileSize: 16 * cmn.MiB, chunked: false},
+		{fileSize: cos.KiB, chunked: false},
+		{fileSize: 512 * cos.KiB, chunked: false},
+		{fileSize: cos.MiB, chunked: false},
+		{fileSize: 2 * cos.MiB, chunked: false},
+		{fileSize: 4 * cos.MiB, chunked: false},
+		{fileSize: 16 * cos.MiB, chunked: false},
 
-		{fileSize: cmn.KiB, chunked: true},
-		{fileSize: 512 * cmn.KiB, chunked: true},
-		{fileSize: cmn.MiB, chunked: true},
-		{fileSize: 2 * cmn.MiB, chunked: true},
-		{fileSize: 4 * cmn.MiB, chunked: true},
-		{fileSize: 16 * cmn.MiB, chunked: true},
+		{fileSize: cos.KiB, chunked: true},
+		{fileSize: 512 * cos.KiB, chunked: true},
+		{fileSize: cos.MiB, chunked: true},
+		{fileSize: 2 * cos.MiB, chunked: true},
+		{fileSize: 4 * cos.MiB, chunked: true},
+		{fileSize: 16 * cos.MiB, chunked: true},
 	}
 
 	for _, bench := range benches {
-		benchName := cmn.B2S(bench.fileSize, 2)
+		benchName := cos.B2S(bench.fileSize, 2)
 		if bench.chunked {
 			benchName += "-chunked"
 		}
@@ -216,7 +217,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 				b.Fatal(err)
 			}
 
-			r, _ := readers.NewRandReader(bench.fileSize, cmn.ChecksumNone)
+			r, _ := readers.NewRandReader(bench.fileSize, cos.ChecksumNone)
 			poi := &putObjInfo{
 				started: time.Now(),
 				t:       t,

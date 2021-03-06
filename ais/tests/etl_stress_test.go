@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tetl"
 	"github.com/NVIDIA/aistore/devtools/tlog"
@@ -42,7 +43,7 @@ def transform(input_bytes):
 	m := ioContext{
 		t:        t,
 		num:      10_000,
-		fileSize: cmn.KiB,
+		fileSize: cos.KiB,
 		bck:      cmn.Bck{Name: "etl_build_connection_err", Provider: cmn.ProviderAIS},
 	}
 
@@ -56,7 +57,7 @@ def transform(input_bytes):
 	uuid, err := api.ETLBuild(baseParams, etl.BuildMsg{
 		Code:        []byte(timeoutFunc),
 		Runtime:     runtime.Python3,
-		WaitTimeout: cmn.DurationJSON(5 * time.Minute),
+		WaitTimeout: cos.DurationJSON(5 * time.Minute),
 	})
 	tassert.CheckFatal(t, err)
 	testETLBucket(t, uuid, m.bck, m.num, 0 /*skip bytes check*/, 5*time.Minute)
@@ -133,12 +134,12 @@ def transform(input_bytes):
 
 	var (
 		bckFrom = cmn.Bck{Provider: cmn.ProviderAIS, Name: "etlbig"}
-		bckTo   = cmn.Bck{Provider: cmn.ProviderAIS, Name: "etlbigout-" + cmn.RandString(5)}
+		bckTo   = cmn.Bck{Provider: cmn.ProviderAIS, Name: "etlbigout-" + cos.RandString(5)}
 
 		m = ioContext{
 			t:         t,
 			num:       200_000,
-			fileSize:  20 * cmn.KiB, // 4Gib total
+			fileSize:  20 * cos.KiB, // 4Gib total
 			fixedSize: true,
 			bck:       bckFrom,
 		}
@@ -158,7 +159,7 @@ def transform(input_bytes):
 				buildDesc: etl.BuildMsg{
 					Code:        []byte(echoPythonTransform),
 					Runtime:     runtime.Python2,
-					WaitTimeout: cmn.DurationJSON(10 * time.Minute),
+					WaitTimeout: cos.DurationJSON(10 * time.Minute),
 				},
 			},
 			{
@@ -167,13 +168,13 @@ def transform(input_bytes):
 				buildDesc: etl.BuildMsg{
 					Code:        []byte(echoPythonTransform),
 					Runtime:     runtime.Python3,
-					WaitTimeout: cmn.DurationJSON(10 * time.Minute),
+					WaitTimeout: cos.DurationJSON(10 * time.Minute),
 				},
 			},
 		}
 	)
 
-	tlog.Logf("Preparing source bucket (%d objects, %s each)\n", m.num, cmn.B2S(int64(m.fileSize), 2))
+	tlog.Logf("Preparing source bucket (%d objects, %s each)\n", m.num, cos.B2S(int64(m.fileSize), 2))
 	tutils.CreateFreshBucket(t, proxyURL, bckFrom, nil)
 	m.saveClusterState()
 
@@ -187,7 +188,7 @@ def transform(input_bytes):
 				uuid string
 				err  error
 
-				etlDoneCh      = cmn.NewStopCh()
+				etlDoneCh      = cos.NewStopCh()
 				requestTimeout = 30 * time.Second
 			)
 			switch test.ty {
@@ -207,7 +208,7 @@ def transform(input_bytes):
 			tlog.Logf("Start offline ETL %q\n", uuid)
 			xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{
 				ID:             uuid,
-				RequestTimeout: cmn.DurationJSON(requestTimeout),
+				RequestTimeout: cos.DurationJSON(requestTimeout),
 			})
 			tetl.ReportXactionStatus(baseParams, xactID, etlDoneCh, 2*time.Minute, m.num)
 
@@ -233,8 +234,8 @@ def transform(input_bytes):
 // Responsible for cleaning all resources, except ETL xaction.
 func etlPrepareAndStart(t *testing.T, m *ioContext, name, comm string) (xactID string) {
 	var (
-		bckFrom = cmn.Bck{Name: "etl-in-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
-		bckTo   = cmn.Bck{Name: "etl-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
+		bckFrom = cmn.Bck{Name: "etl-in-" + cos.RandString(5), Provider: cmn.ProviderAIS}
+		bckTo   = cmn.Bck{Name: "etl-out-" + cos.RandString(5), Provider: cmn.ProviderAIS}
 	)
 
 	m.bck = bckFrom

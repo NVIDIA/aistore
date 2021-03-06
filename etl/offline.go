@@ -9,13 +9,14 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 type (
 	objMeta struct {
 		size    int64
 		atime   int64
-		cksum   *cmn.Cksum
+		cksum   *cos.Cksum
 		version string
 	}
 
@@ -34,9 +35,9 @@ var (
 
 func (om *objMeta) Size(_ ...bool) int64     { return om.size }
 func (om *objMeta) Version(_ ...bool) string { return om.version }
-func (om *objMeta) Cksum() *cmn.Cksum        { return om.cksum }
+func (om *objMeta) Cksum() *cos.Cksum        { return om.cksum }
 func (om *objMeta) AtimeUnix() int64         { return om.atime }
-func (*objMeta) CustomMD() cmn.SimpleKVs     { return nil }
+func (*objMeta) CustomMD() cos.SimpleKVs     { return nil }
 
 func NewOfflineDataProvider(msg *cmn.Bck2BckMsg) (*OfflineDataProvider, error) {
 	comm, err := GetCommunicator(msg.ID)
@@ -52,9 +53,9 @@ func NewOfflineDataProvider(msg *cmn.Bck2BckMsg) (*OfflineDataProvider, error) {
 }
 
 // Returns reader resulting from lom ETL transformation.
-func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cmn.ReadOpenCloser, cmn.ObjHeaderMetaProvider, error) {
+func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cmn.ObjHeaderMetaProvider, error) {
 	var (
-		r   cmn.ReadCloseSizer
+		r   cos.ReadCloseSizer
 		err error
 	)
 
@@ -80,8 +81,8 @@ func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cmn.ReadOpenCloser, cmn
 	om := &objMeta{
 		size:    r.Size(),
 		version: "",            // Object after ETL is a new object with a new version.
-		cksum:   cmn.NoneCksum, // TODO: Revisit and check if possible to have a checksum.
+		cksum:   cos.NoneCksum, // TODO: Revisit and check if possible to have a checksum.
 		atime:   lom.AtimeUnix(),
 	}
-	return cmn.NopOpener(r), om, nil
+	return cos.NopOpener(r), om, nil
 }

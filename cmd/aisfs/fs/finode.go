@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmd/aisfs/ais"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/jacobsa/fuse/fuseops"
 )
 
@@ -83,7 +83,7 @@ func (file *FileInode) UpdateAttributes(req *AttrUpdateReq) fuseops.InodeAttribu
 
 // REQUIRES_LOCK(file)
 func (file *FileInode) UpdateBackingObject(obj *ais.Object) {
-	cmn.Assert(obj != nil)
+	cos.Assert(obj != nil)
 	// Only update object if it is newer
 	if file.object.Atime.After(obj.Atime) {
 		return
@@ -118,7 +118,7 @@ func (file *FileInode) Load(w io.Writer, offset, length int64) (n int64, err err
 /////////////
 
 // REQUIRES_LOCK(file)
-func (file *FileInode) Write(r cmn.ReadOpenCloser, handle string, size int64) (string, error) {
+func (file *FileInode) Write(r cos.ReadOpenCloser, handle string, size int64) (string, error) {
 	newHandle, err := file.object.Append(r, handle, size)
 	if err != nil {
 		return newHandle, err
@@ -128,7 +128,7 @@ func (file *FileInode) Write(r cmn.ReadOpenCloser, handle string, size int64) (s
 }
 
 // REQUIRES_LOCK(file)
-func (file *FileInode) Flush(handle string, cksum *cmn.Cksum) error {
+func (file *FileInode) Flush(handle string, cksum *cos.Cksum) error {
 	err := file.object.Flush(handle, cksum)
 	if err != nil {
 		return err

@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
@@ -246,9 +247,9 @@ func MsgURLPath(trname string) string { return _urlPath(cmn.MsgStream, trname) }
 
 func _urlPath(endp, trname string) string {
 	if trname == "" {
-		return cmn.JoinWords(cmn.Version, endp)
+		return cos.JoinWords(cmn.Version, endp)
 	}
-	return cmn.JoinWords(cmn.Version, endp, trname)
+	return cos.JoinWords(cmn.Version, endp, trname)
 }
 
 func GetStats() (netstats map[string]EndpointStats, err error) {

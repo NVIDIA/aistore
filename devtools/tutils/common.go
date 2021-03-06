@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools"
 	"github.com/NVIDIA/aistore/devtools/readers"
@@ -64,7 +65,7 @@ func GenerateNotConflictingObjectName(baseName, newNamePrefix string, bck cmn.Bc
 func GenerateNonexistentBucketName(prefix string, baseParams api.BaseParams) (string, error) {
 	for i := 0; i < 100; i++ {
 		bck := cmn.Bck{
-			Name:     prefix + cmn.RandString(8),
+			Name:     prefix + cos.RandString(8),
 			Provider: cmn.ProviderAIS,
 		}
 		_, err := api.HeadBucket(baseParams, bck)
@@ -190,7 +191,7 @@ func PutRR(tb testing.TB, baseParams api.BaseParams, objSize int64, cksumType st
 	bck cmn.Bck, dir string, objCount int) []string {
 	objNames := make([]string, objCount)
 	for i := 0; i < objCount; i++ {
-		fname := cmn.RandString(20)
+		fname := cos.RandString(20)
 		objName := filepath.Join(dir, fname)
 		objNames[i] = objName
 		// FIXME: Separate RandReader per object created inside PutObjRR to workaround

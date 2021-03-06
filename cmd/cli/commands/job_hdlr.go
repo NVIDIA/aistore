@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/urfave/cli"
 )
@@ -38,7 +39,7 @@ func init() {
 func xactionCmds() cli.Commands {
 	cmds := make(cli.Commands, 0)
 
-	splCmdKinds := make(cmn.StringSet)
+	splCmdKinds := make(cos.StringSet)
 	// Add any xaction which requires a separate handler here.
 	splCmdKinds.Add(
 		cmn.ActPrefetch,

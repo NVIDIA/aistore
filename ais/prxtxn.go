@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
@@ -137,7 +138,7 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, remoteH
 
 func (p *proxyrunner) _createBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 	added := clone.add(ctx.bcks[0], ctx.setProps) // TODO: Bucket could be added during begin.
-	cmn.Assert(added)
+	cos.Assert(added)
 	return nil
 }
 
@@ -147,7 +148,7 @@ func (p *proxyrunner) _destroyBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 		return cmn.NewErrorBucketDoesNotExist(bck.Bck)
 	}
 	deleted := clone.del(bck)
-	cmn.Assert(deleted)
+	cos.Assert(deleted)
 	return nil
 }
 
@@ -233,7 +234,7 @@ func (p *proxyrunner) _mirrorBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 		bck             = ctx.bcks[0]
 		bprops, present = clone.Get(bck) // TODO: Bucket could be deleted during begin.
 	)
-	cmn.Assert(present)
+	cos.Assert(present)
 	nprops := bprops.Clone()
 	nprops.Apply(ctx.propsToUpdate)
 	ctx.revertProps = &cmn.BucketPropsToUpdate{
@@ -272,7 +273,7 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 
 		if !nprops.BackendBck.IsEmpty() {
 			// Makes sure that there will be no other forwarding to proxy.
-			cmn.Assert(p.owner.smap.get().isPrimary(p.si))
+			cos.Assert(p.owner.smap.get().isPrimary(p.si))
 			// Make sure that destination bucket exists.
 			backendBck := cluster.NewBckEmbed(nprops.BackendBck)
 			args := bckInitArgs{p: p, w: w, r: r, queryBck: backendBck, err: err, msg: msg}
@@ -300,7 +301,7 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 		}
 		nprops = defaultBckProps(bckPropsArgs{bck: bck, hdr: remoteBckProps})
 	default:
-		cmn.Assert(false)
+		cos.Assert(false)
 	}
 	// msg{propsToUpdate} => nmsg{nprops} and prep context(nmsg)
 	*nmsg = *msg
@@ -361,7 +362,7 @@ func (p *proxyrunner) _setPropsPre(ctx *bmdModifier, clone *bucketMD) (err error
 		bck             = ctx.bcks[0]
 		bprops, present = clone.Get(bck) // TODO: Bucket could be deleted during begin.
 	)
-	cmn.Assert(present)
+	cos.Assert(present)
 
 	if ctx.msg.Action == cmn.ActSetBprops {
 		bck.Props = bprops
@@ -441,7 +442,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	ctx := &rmdModifier{
 		pre: func(_ *rmdModifier, clone *rebMD) {
 			clone.inc()
-			clone.Resilver = cmn.GenUUID()
+			clone.Resilver = cos.GenUUID()
 		},
 	}
 	rmd, err := p.owner.rmd.modify(ctx)
@@ -492,12 +493,12 @@ func (p *proxyrunner) _renameBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 		bprops, present = clone.Get(bckFrom) // TODO: Bucket could be removed during begin.
 	)
 
-	cmn.Assert(present)
+	cos.Assert(present)
 	bckFrom.Props = bprops.Clone()
 	bckTo.Props = bprops.Clone()
 
 	added := clone.add(bckTo, bckTo.Props)
-	cmn.Assert(added)
+	cos.Assert(added)
 	bckFrom.Props.Renamed = cmn.ActMoveBck
 	clone.set(bckFrom, bckFrom.Props)
 	return nil
@@ -570,7 +571,7 @@ func (p *proxyrunner) _b2bBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 		bckFrom, bckTo  = ctx.bcks[0], ctx.bcks[1]
 		bprops, present = clone.Get(bckFrom) // TODO: Bucket could be removed during begin.
 	)
-	cmn.Assert(present)
+	cos.Assert(present)
 
 	// Skip destination bucket creation if it's dry run or it's already present.
 	if _, present = clone.Get(bckTo); present {
@@ -587,7 +588,7 @@ func (p *proxyrunner) _b2bBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 		bckTo.Props = defaultBckProps(bckPropsArgs{bck: bckTo})
 	}
 	added := clone.add(bckTo, bckTo.Props)
-	cmn.Assert(added)
+	cos.Assert(added)
 	return nil
 }
 
@@ -745,7 +746,7 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 	// 3. Commit
 	// NOTE: Call only the target that's being decommissioned (commit is a no-op for the rest)
 	if msg.Action == cmn.ActDecommission || msg.Action == cmn.ActShutdownNode {
-		c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
+		c.req.Path = cos.JoinWords(c.path, cmn.ActCommit)
 		res := p.call(callArgs{si: si, req: c.req, timeout: c.commitTimeout(waitmsync)})
 		err = res.error()
 		_freeCallRes(res)
@@ -887,10 +888,10 @@ func (c *txnClientCtx) commitTimeout(waitmsync bool) time.Duration {
 }
 
 func (c *txnClientCtx) bcast(phase string, timeout time.Duration) sliceResults {
-	c.req.Path = cmn.JoinWords(c.path, phase)
+	c.req.Path = cos.JoinWords(c.path, phase)
 	if phase != cmn.ActAbort {
 		now := time.Now()
-		c.req.Query.Set(cmn.URLParamUnixTime, cmn.UnixNano2S(now.UnixNano()))
+		c.req.Query.Set(cmn.URLParamUnixTime, cos.UnixNano2S(now.UnixNano()))
 	}
 
 	args := allocBcastArgs()
@@ -916,7 +917,7 @@ func (c *txnClientCtx) bcastAbort(val fmt.Stringer, err error, key ...string) er
 func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck, waitmsync bool) *txnClientCtx {
 	c := &txnClientCtx{
 		p:    p,
-		uuid: cmn.GenUUID(),
+		uuid: cos.GenUUID(),
 		smap: p.owner.smap.get(),
 	}
 	c.msg = p.newAmsg(msg, c.smap, nil, c.uuid)
@@ -932,10 +933,10 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck, waitms
 	config := cmn.GCO.Get()
 	c.timeout.netw = config.Timeout.MaxKeepalive
 	if !waitmsync { // when commit does not block behind metasync
-		query.Set(cmn.URLParamNetwTimeout, cmn.UnixNano2S(int64(c.timeout.netw)))
+		query.Set(cmn.URLParamNetwTimeout, cos.UnixNano2S(int64(c.timeout.netw)))
 	}
 	c.timeout.host = config.Timeout.MaxHostBusy
-	query.Set(cmn.URLParamHostTimeout, cmn.UnixNano2S(int64(c.timeout.host)))
+	query.Set(cmn.URLParamHostTimeout, cos.UnixNano2S(int64(c.timeout.host)))
 
 	c.req = cmn.ReqArgs{Method: http.MethodPost, Query: query, Body: body}
 	return c
@@ -950,7 +951,7 @@ func (p *proxyrunner) undoCreateBucket(msg *cmn.ActionMsg, bck *cluster.Bck) {
 		bcks:  []*cluster.Bck{bck},
 	}
 	if _, err := p.owner.bmd.modify(ctx); err != nil {
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 	}
 }
 
@@ -964,7 +965,7 @@ func (p *proxyrunner) undoUpdateCopies(msg *cmn.ActionMsg, bck *cluster.Bck, pro
 		bcks:          []*cluster.Bck{bck},
 	}
 	if _, err := p.owner.bmd.modify(ctx); err != nil {
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 	}
 }
 
@@ -1006,7 +1007,7 @@ func (p *proxyrunner) makeNewBckProps(bck *cluster.Bck, propsToUpdate *cmn.Bucke
 	}
 	if !bprops.Mirror.Enabled && nprops.Mirror.Enabled {
 		if nprops.Mirror.Copies == 1 {
-			nprops.Mirror.Copies = cmn.MaxI64(cfg.Mirror.Copies, 2)
+			nprops.Mirror.Copies = cos.MaxI64(cfg.Mirror.Copies, 2)
 		}
 	} else if nprops.Mirror.Copies == 1 {
 		nprops.Mirror.Enabled = false

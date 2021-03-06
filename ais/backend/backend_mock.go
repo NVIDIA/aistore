@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 type (
@@ -34,8 +35,8 @@ func (m *dummyBackendProvider) CreateBucket(ctx context.Context, bck *cluster.Bc
 	return creatingBucketNotSupportedErr("backend")
 }
 
-func (m *dummyBackendProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
-	return cmn.SimpleKVs{}, http.StatusNotFound, cmn.NewErrorRemoteBucketOffline(bck.Bck)
+func (m *dummyBackendProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
+	return cos.SimpleKVs{}, http.StatusNotFound, cmn.NewErrorRemoteBucketOffline(bck.Bck)
 }
 
 func (m *dummyBackendProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
@@ -47,15 +48,15 @@ func (m *dummyBackendProvider) ListBuckets(ctx context.Context, query cmn.QueryB
 	return cmn.BucketNames{}, 0, nil
 }
 
-func (m *dummyBackendProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, errCode int, err error) {
-	return cmn.SimpleKVs{}, http.StatusNotFound, cmn.NewErrorRemoteBucketDoesNotExist(lom.Bucket())
+func (m *dummyBackendProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cos.SimpleKVs, errCode int, err error) {
+	return cos.SimpleKVs{}, http.StatusNotFound, cmn.NewErrorRemoteBucketDoesNotExist(lom.Bucket())
 }
 
 func (m *dummyBackendProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
 	return http.StatusNotFound, cmn.NewErrorRemoteBucketDoesNotExist(lom.Bucket())
 }
 
-func (m *dummyBackendProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
+func (m *dummyBackendProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cos.Cksum, errCode int, err error) {
 	return nil, nil, 0, nil
 }
 

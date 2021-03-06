@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/stats"
@@ -198,7 +199,7 @@ func (pkr *proxyKeepaliveRunner) updateSmap() (stopped bool) {
 	)
 	pkr.openCh(daemonCnt)
 	// limit parallelism, here and elsewhere
-	wg := cmn.NewLimitedWaitGroup(cluster.MaxBcastParallel(), daemonCnt)
+	wg := cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), daemonCnt)
 	for _, daemons := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
 		for sid, si := range daemons {
 			if sid == p.si.ID() {

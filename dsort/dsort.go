@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dsort/extract"
@@ -123,7 +124,7 @@ func (m *Manager) start() (err error) {
 		}
 	}
 
-	cmn.FreeMemToOS()
+	cos.FreeMemToOS()
 
 	// Wait for signal to start shard creations. This will happen when manager
 	// notice that the specification for shards to be created locally was received.
@@ -219,7 +220,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 
 		reader := io.NewSectionReader(f, 0, lom.Size())
 		extractedSize, extractedCount, err := m.extractCreator.ExtractShard(lom, reader, m.recManager, toDisk)
-		cmn.Close(f)
+		cos.Close(f)
 
 		dur := mono.Since(beforeExtraction)
 
@@ -426,7 +427,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 			goto exit
 		}
 
-		file, err := cmn.NewFileHandle(lom.FQN)
+		file, err := cos.NewFileHandle(lom.FQN)
 		if err != nil {
 			return err
 		}
@@ -682,11 +683,11 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 	if err != nil {
 		return nil, err
 	}
-	resp, err := m.client.Do(req) // nolint:bodyclose // closed inside cmn.Close
+	resp, err := m.client.Do(req) // nolint:bodyclose // closed inside cos.Close
 	if err != nil {
 		return nil, err
 	}
-	defer cmn.Close(resp.Body)
+	defer cos.Close(resp.Body)
 
 	// TODO: handle very large files > GB - in case the file is very big we
 	// need to save file to the disk and operate on the file directly rather
@@ -852,7 +853,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 
 	m.recManager.Records.Drain()
 
-	wg := cmn.NewLimitedWaitGroup(cluster.MaxBcastParallel(), len(shardsToTarget))
+	wg := cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), len(shardsToTarget))
 	for si, s := range shardsToTarget {
 		wg.Add(1)
 		go func(si *cluster.Snode, s []*extract.Shard, order map[string]*extract.Shard) {

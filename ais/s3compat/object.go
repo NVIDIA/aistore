@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 const defaultLastModified = 0 // When an object was not accessed yet
@@ -74,7 +75,7 @@ func NewListObjectResult() *ListObjectResult {
 
 func (r *ListObjectResult) MustMarshal() []byte {
 	b, err := xml.Marshal(r)
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	return []byte(xml.Header + string(b))
 }
 
@@ -92,7 +93,7 @@ func entryToS3(entry *cmn.BucketEntry, smsg *cmn.SelectMsg) *ObjInfo {
 	// Some S3 clients do not tolerate empty or missing LastModified, so fill it
 	// with a zero time if the object was not accessed yet
 	if objInfo.LastModified == "" {
-		objInfo.LastModified = cmn.FormatUnixNano(defaultLastModified, smsg.TimeFormat)
+		objInfo.LastModified = cos.FormatUnixNano(defaultLastModified, smsg.TimeFormat)
 	}
 	return objInfo
 }
@@ -117,7 +118,7 @@ func lomCksum(lom *cluster.LOM) string {
 			return v
 		}
 	}
-	if cksum := lom.Cksum(); cksum != nil && cksum.Type() == cmn.ChecksumMD5 {
+	if cksum := lom.Cksum(); cksum != nil && cksum.Type() == cos.ChecksumMD5 {
 		return cksum.Value()
 	}
 	return ""
@@ -141,6 +142,6 @@ func SetETLHeader(header http.Header, lom *cluster.LOM) {
 
 func (r *CopyObjectResult) MustMarshal() []byte {
 	b, err := xml.Marshal(r)
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	return []byte(xml.Header + string(b))
 }

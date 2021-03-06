@@ -1,4 +1,5 @@
-// Package cmn provides common low-level types and utilities for all aistore projects
+// Package cmn provides common constants, types, and utilities for AIS clients
+// and AIStore.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -22,6 +23,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -127,7 +129,7 @@ func MatchRESTItems(unescapedPath string, itemsAfter int, splitAfter bool, items
 	if splitAfter {
 		split = strings.Split(escaped, "/")
 	} else {
-		split = strings.SplitN(escaped, "/", len(items)+Max(1, itemsAfter))
+		split = strings.SplitN(escaped, "/", len(items)+cos.Max(1, itemsAfter))
 	}
 	apiItems := split[:0] // filtering without allocation
 	for _, item := range split {
@@ -170,13 +172,13 @@ func ReadBytes(r *http.Request) (b []byte, err error) {
 			}
 		}
 	}
-	Close(r.Body)
+	cos.Close(r.Body)
 
 	return b, err
 }
 
 func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}, optional ...bool) error {
-	defer Close(r.Body)
+	defer cos.Close(r.Body)
 	if err := jsoniter.NewDecoder(r.Body).Decode(out); err != nil {
 		if len(optional) > 0 && optional[0] && err == io.EOF {
 			return nil
@@ -208,14 +210,14 @@ func WriteJSON(w http.ResponseWriter, v interface{}) error {
 // MustMarshal marshals v and panics if error occurs.
 func MustMarshal(v interface{}) []byte {
 	b, err := JSON.Marshal(v)
-	AssertNoErr(err)
+	cos.AssertNoErr(err)
 	return b
 }
 
 // MustLocalMarshal marshals v using JSON local externsion and panics if error occurs.
 func MustLocalMarshal(v interface{}) []byte {
 	b, err := JSONLocal.Marshal(v)
-	AssertNoErr(err)
+	cos.AssertNoErr(err)
 	return b
 }
 
@@ -229,11 +231,11 @@ func MorphMarshal(data, v interface{}) error {
 
 func MustMorphMarshal(data, v interface{}) {
 	err := MorphMarshal(data, v)
-	AssertNoErr(err)
+	cos.AssertNoErr(err)
 }
 
 func (u *ReqArgs) URL() string {
-	url := JoinPath(u.Base, u.Path)
+	url := cos.JoinPath(u.Base, u.Path)
 	query := u.Query.Encode()
 	if query != "" {
 		url += "?" + query
@@ -401,7 +403,7 @@ func ToHTTPHdr(meta ObjHeaderMetaProvider, hdrs ...http.Header) (hdr http.Header
 		hdr.Set(HeaderObjCksumVal, val)
 	}
 	if meta.AtimeUnix() != 0 {
-		hdr.Set(HeaderObjAtime, UnixNano2S(meta.AtimeUnix()))
+		hdr.Set(HeaderObjAtime, cos.UnixNano2S(meta.AtimeUnix()))
 	}
 	for k, v := range meta.CustomMD() {
 		hdr.Add(HeaderObjCustomMD, strings.Join([]string{k, v}, "="))
@@ -427,7 +429,7 @@ func (m HTTPMuxers) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func NetworkCallWithRetry(args *CallWithRetryArgs) (err error) {
-	Assert(args.SoftErr > 0 || args.HardErr > 0)
+	cos.Assert(args.SoftErr > 0 || args.HardErr > 0)
 	config := GCO.Get()
 
 	if args.Sleep == 0 {
@@ -471,7 +473,7 @@ func NetworkCallWithRetry(args *CallWithRetryArgs) (err error) {
 			hardErrCnt++
 		}
 		if args.BackOff && iter > 1 {
-			sleep = MinDuration(sleep+(args.Sleep/2), config.Timeout.MaxKeepalive)
+			sleep = cos.MinDuration(sleep+(args.Sleep/2), config.Timeout.MaxKeepalive)
 		}
 		if hardErrCnt > args.HardErr || softErrCnt > args.SoftErr {
 			break

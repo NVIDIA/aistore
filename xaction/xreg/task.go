@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/objwalk"
@@ -144,7 +145,7 @@ func (t *bckSummaryTask) Run() {
 			)
 
 			// Each bucket should have it's own copy of msg (we may update it).
-			cmn.CopyStruct(&msg, t.msg)
+			cos.CopyStruct(&msg, t.msg)
 			if bck.IsHTTP() {
 				msg.Cached = true
 			}

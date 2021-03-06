@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 // For container naming
@@ -96,9 +96,9 @@ func clustersMap() (map[int]int, error) {
 		matches := clusterRegex.FindStringSubmatch(line)
 		// first match the whole string, second number after ais prefix
 		// matched because of \d+ being inside parenthesis
-		cmn.Assert(len(matches) > 1)
+		cos.Assert(len(matches) > 1)
 		i, err := strconv.ParseInt(matches[1], 10, 32)
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 		m[int(i)]++
 	}
 

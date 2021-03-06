@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
@@ -169,7 +170,7 @@ type (
 var _ xaction.XactDemand = (*Downloader)(nil)
 
 func clientForURL(u string) *http.Client {
-	if cmn.IsHTTPS(u) {
+	if cos.IsHTTPS(u) {
 		return httpsClient
 	}
 	return httpClient
@@ -333,7 +334,7 @@ func (d *Downloader) ListJobs(regex *regexp.Regexp) (resp interface{}, statusCod
 func (d *Downloader) checkJob(req *request) (*downloadJobInfo, error) {
 	jInfo, err := dlStore.getJob(req.id)
 	if err != nil {
-		cmn.Assert(errors.Is(err, errJobNotFound))
+		cos.Assert(errors.Is(err, errJobNotFound))
 		err := cmn.NewNotFoundError("job %q", req.id)
 		req.writeErrResp(err, http.StatusNotFound)
 		return nil, err

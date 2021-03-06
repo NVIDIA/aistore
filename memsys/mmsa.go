@@ -16,7 +16,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/sys"
@@ -72,9 +72,9 @@ import (
 const readme = "https://github.com/NVIDIA/aistore/blob/master/memsys/README.md"
 
 const (
-	PageSize            = cmn.KiB * 4
+	PageSize            = cos.KiB * 4
 	DefaultBufSize      = PageSize * 8
-	DefaultSmallBufSize = cmn.KiB
+	DefaultSmallBufSize = cos.KiB
 )
 
 const (
@@ -88,7 +88,7 @@ const (
 
 // page slabs: pagesize increments up to MaxPageSlabSize
 const (
-	MaxPageSlabSize = 128 * cmn.KiB
+	MaxPageSlabSize = 128 * cos.KiB
 	PageSlabIncStep = PageSize
 	NumPageSlabs    = MaxPageSlabSize / PageSlabIncStep // = 32
 )
@@ -112,7 +112,7 @@ const NumStats = NumPageSlabs // NOTE: must be greater or equal NumSmallSlabs, o
 //	* MinPctTotal int           // same, via percentage of total
 //	* MinPctFree  int           // ditto, as % of free at init time
 //     (example:
-//         mm := &memsys.MMSA{MinPctTotal: 4, MinFree: cmn.GiB * 2}
+//         mm := &memsys.MMSA{MinPctTotal: 4, MinFree: cos.GiB * 2}
 //     )
 //  4) finally, if none of the above is specified, the constant `minMemFree` below is used
 //  Other important defaults are also commented below.
@@ -121,8 +121,8 @@ const (
 	minDepth      = 128                   // ring cap min; default ring growth increment
 	maxDepth      = 1024 * 24             // ring cap max
 	loadAvg       = 10                    // "idle" load average to deallocate Slabs when below
-	sizeToGC      = cmn.GiB * 2           // see heuristics ("Heu")
-	minMemFree    = cmn.GiB + cmn.MiB*256 // default minimum memory - see extended comment above
+	sizeToGC      = cos.GiB * 2           // see heuristics ("Heu")
+	minMemFree    = cos.GiB + cos.MiB*256 // default minimum memory - see extended comment above
 	memCheckAbove = 90 * time.Second      // default memory checking frequency when above low watermark
 	freeIdleMin   = memCheckAbove         // time to reduce an idle slab to a minimum depth (see mindepth)
 	freeIdleZero  = freeIdleMin * 2       // ... to zero
@@ -253,7 +253,7 @@ func DefaultSmallMM() *MMSA {
 
 // initialize new MMSA instance
 func (r *MMSA) Init(panicOnErr bool) (err error) {
-	cmn.Assert(r.Name != "")
+	cos.Assert(r.Name != "")
 	// 1. environment overrides defaults and MMSA{...} hard-codings
 	if err = r.env(); err != nil {
 		if panicOnErr {
@@ -267,7 +267,7 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 		if r.MinFree == 0 {
 			r.MinFree = x
 		} else {
-			r.MinFree = cmn.MinU64(r.MinFree, x)
+			r.MinFree = cos.MinU64(r.MinFree, x)
 		}
 	}
 	if r.MinPctFree > 0 {
@@ -275,17 +275,17 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 		if r.MinFree == 0 {
 			r.MinFree = x
 		} else {
-			r.MinFree = cmn.MinU64(r.MinFree, x)
+			r.MinFree = cos.MinU64(r.MinFree, x)
 		}
 	}
 	if r.MinFree == 0 {
 		r.MinFree = minMemFree
-	} else if r.MinFree < cmn.GiB { // warn invalid config
-		cmn.Printf("Warning: configured minimum free memory %s < %s (actual free %s)\n",
-			cmn.B2S(int64(r.MinFree), 2), cmn.B2S(minMemFree, 2), cmn.B2S(int64(mem.ActualFree), 1))
+	} else if r.MinFree < cos.GiB { // warn invalid config
+		cos.Printf("Warning: configured minimum free memory %s < %s (actual free %s)\n",
+			cos.B2S(int64(r.MinFree), 2), cos.B2S(minMemFree, 2), cos.B2S(int64(mem.ActualFree), 1))
 	}
 	// 3. validate actual
-	required, actual := cmn.B2S(int64(r.MinFree), 2), cmn.B2S(int64(mem.ActualFree), 2)
+	required, actual := cos.B2S(int64(r.MinFree), 2), cos.B2S(int64(mem.ActualFree), 2)
 	if mem.ActualFree < r.MinFree {
 		err = fmt.Errorf("insufficient free memory %s, minimum required %s (see %s for guidance)",
 			actual, required, readme)
@@ -293,8 +293,8 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 			panic(err)
 		}
 	}
-	x := cmn.MaxU64(r.MinFree*2, (r.MinFree+mem.ActualFree)/2)
-	r.lowWM = cmn.MinU64(x, r.MinFree*3) // Heu #1: hysteresis
+	x := cos.MaxU64(r.MinFree*2, (r.MinFree+mem.ActualFree)/2)
+	r.lowWM = cos.MinU64(x, r.MinFree*3) // Heu #1: hysteresis
 
 	// 4. timer
 	if r.TimeIval == 0 {
@@ -320,7 +320,7 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 		bufSize := r.slabIncStep * int64(i+1)
 		slab := &Slab{
 			m:       r,
-			tag:     r.Name + "." + cmn.B2S(bufSize, 0),
+			tag:     r.Name + "." + cos.B2S(bufSize, 0),
 			bufSize: bufSize,
 			get:     make([][]byte, 0, minDepth),
 			put:     make([][]byte, 0, minDepth),
@@ -384,11 +384,11 @@ func (r *MMSA) NewSGL(immediateSize int64, sbufSize ...int64) *SGL {
 	if len(sbufSize) > 0 {
 		var err error
 		slab, err = r.GetSlab(sbufSize[0])
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 	} else {
 		slab = r.slabForSGL(immediateSize)
 	}
-	n = cmn.DivCeil(immediateSize, slab.Size())
+	n = cos.DivCeil(immediateSize, slab.Size())
 	sgl = make([][]byte, n)
 
 	slab.muget.Lock()
@@ -571,7 +571,7 @@ func (r *MMSA) slabForSGL(immediateSize int64) *Slab {
 		slab, _ := r.GetSlab(immediateSize)
 		return slab
 	}
-	size := cmn.DivCeil(immediateSize, countThreshold)
+	size := cos.DivCeil(immediateSize, countThreshold)
 	for _, slab := range r.rings {
 		if slab.Size() >= size {
 			return slab
@@ -583,7 +583,7 @@ func (r *MMSA) slabForSGL(immediateSize int64) *Slab {
 func (r *MMSA) env() (err error) {
 	var minfree int64
 	if a := os.Getenv("AIS_MINMEM_FREE"); a != "" {
-		if minfree, err = cmn.S2B(a); err != nil {
+		if minfree, err = cos.S2B(a); err != nil {
 			return fmt.Errorf("cannot parse AIS_MINMEM_FREE %q", a)
 		}
 		r.MinFree = uint64(minfree)
@@ -661,9 +661,9 @@ func (s *Slab) reduce(todepth int, isIdle, force bool) (freed int64) {
 	cnt := lput - todepth
 	if isIdle {
 		if force {
-			cnt = cmn.Max(cnt, lput/2) // Heu #6
+			cnt = cos.Max(cnt, lput/2) // Heu #6
 		} else {
-			cnt = cmn.Min(cnt, lput/2) // Heu #7
+			cnt = cos.Min(cnt, lput/2) // Heu #7
 		}
 	}
 	if cnt > 0 {
@@ -685,9 +685,9 @@ func (s *Slab) reduce(todepth int, isIdle, force bool) (freed int64) {
 	cnt = lget - todepth
 	if isIdle {
 		if force {
-			cnt = cmn.Max(cnt, lget/2) // Heu #9
+			cnt = cos.Max(cnt, lget/2) // Heu #9
 		} else {
-			cnt = cmn.Min(cnt, lget/2) // Heu #10
+			cnt = cos.Min(cnt, lget/2) // Heu #10
 		}
 	}
 	if cnt > 0 {

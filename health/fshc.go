@@ -15,11 +15,12 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 )
 
 const (
-	fshcFileSize    = 10 * cmn.MiB // size of temporary file which will test writing and reading the mountpath
+	fshcFileSize    = 10 * cos.MiB // size of temporary file which will test writing and reading the mountpath
 	fshcMaxFileList = 100          // maximum number of files to read by Readdir
 )
 
@@ -35,7 +36,7 @@ type (
 	FSHC struct {
 		dispatcher fspathDispatcher // listener is notified upon mountpath events (disabled, etc.)
 		fileListCh chan string
-		stopCh     *cmn.StopCh
+		stopCh     *cos.StopCh
 	}
 )
 
@@ -50,7 +51,7 @@ func NewFSHC(dispatcher fspathDispatcher) *FSHC {
 	return &FSHC{
 		dispatcher: dispatcher,
 		fileListCh: make(chan string, 100),
-		stopCh:     cmn.NewStopCh(),
+		stopCh:     cos.NewStopCh(),
 	}
 }
 
@@ -156,8 +157,8 @@ func (f *FSHC) tryWriteFile(mountpath string, fileSize int64) error {
 		return nil
 	}
 
-	tmpFileName := filepath.Join(mpath.MakePathTrash(), "fshc-try-write-"+cmn.RandString(10))
-	tmpFile, err := cmn.CreateFile(tmpFileName)
+	tmpFileName := filepath.Join(mpath.MakePathTrash(), "fshc-try-write-"+cos.RandString(10))
+	tmpFile, err := cos.CreateFile(tmpFileName)
 	if err != nil {
 		return fmt.Errorf("failed to create %s, err: %w", ftag, err)
 	}
@@ -166,12 +167,12 @@ func (f *FSHC) tryWriteFile(mountpath string, fileSize int64) error {
 		if err := tmpFile.Close(); err != nil {
 			glog.Errorf("[fshc] Failed to close %s %q, err: %v", ftag, tmpFileName, err)
 		}
-		if err := cmn.RemoveFile(tmpFileName); err != nil {
+		if err := cos.RemoveFile(tmpFileName); err != nil {
 			glog.Errorf("[fshc] Failed to remove %s %q, err: %v", ftag, tmpFileName, err)
 		}
 	}()
 
-	if err = cmn.FloodWriter(tmpFile, fileSize); err != nil {
+	if err = cos.FloodWriter(tmpFile, fileSize); err != nil {
 		return fmt.Errorf("failed to write %s %q, err: %w", ftag, tmpFileName, err)
 	}
 	return nil

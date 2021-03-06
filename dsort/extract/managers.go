@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dsort/filetype"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/pkg/errors"
@@ -23,7 +24,7 @@ import (
 
 const (
 	// Extract methods
-	ExtractToMem cmn.Bits = 1 << iota
+	ExtractToMem cos.Bits = 1 << iota
 	ExtractToDisk
 	ExtractToWriter
 )
@@ -36,10 +37,10 @@ type (
 		shardName     string        // name of the original shard
 		fileType      string        // fs content type where the shard is located
 		recordName    string        // name of the current record
-		r             cmn.ReadSizer // body of the record
+		r             cos.ReadSizer // body of the record
 		w             io.Writer     // required when method is set to ExtractToWriter
 		metadata      []byte        // metadata of the record
-		extractMethod cmn.Bits      // method which needs to be used to extract a record
+		extractMethod cos.Bits      // method which needs to be used to extract a record
 		offset        int64         // offset of the body in the shard
 		buf           []byte        // helper buffer for `CopyBuffer` methods
 	}
@@ -124,7 +125,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 	}
 
 	if args.extractMethod.Has(ExtractToWriter) {
-		cmn.Assert(args.w != nil)
+		cos.Assert(args.w != nil)
 	}
 
 	r, ske, needRead := rm.keyExtractor.PrepareExtractor(args.recordName, args.r, ext)
@@ -171,17 +172,17 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 		contentPath, fullContentPath = rm.encodeRecordName(storeType, args.shardName, args.recordName)
 
 		var f *os.File
-		if f, err = cmn.CreateFile(fullContentPath); err != nil {
+		if f, err = cos.CreateFile(fullContentPath); err != nil {
 			return size, errors.WithStack(err)
 		}
 		if size, err = copyMetadataAndData(f, r, args.metadata, args.buf); err != nil {
-			cmn.Close(f)
+			cos.Close(f)
 			return size, errors.WithStack(err)
 		}
-		cmn.Close(f)
+		cos.Close(f)
 		rm.extractionPaths.Store(fullContentPath, struct{}{})
 	} else {
-		cmn.Assertf(false, "%d %d", args.extractMethod, args.extractMethod&ExtractToDisk)
+		cos.Assertf(false, "%d %d", args.extractMethod, args.extractMethod&ExtractToDisk)
 	}
 
 	var key interface{}
@@ -189,8 +190,8 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 		return size, errors.WithStack(err)
 	}
 
-	cmn.Assertf(contentPath != "", "shardName: %s; recordName: %s", args.shardName, args.recordName)
-	cmn.Assert(storeType != "")
+	cos.Assertf(contentPath != "", "shardName: %s; recordName: %s", args.shardName, args.recordName)
+	cos.Assert(storeType != "")
 
 	rm.Records.Insert(&Record{
 		Key:      key,
@@ -230,7 +231,7 @@ func (rm *RecordManager) MergeEnqueuedRecords() {
 
 		rm.Records.merge(records)
 	}
-	cmn.FreeMemToOS()
+	cos.FreeMemToOS()
 }
 
 func (rm *RecordManager) genRecordUniqueName(shardName, recordName string) string {
@@ -265,10 +266,10 @@ func (rm *RecordManager) encodeRecordName(storeType, shardName, recordName strin
 		recordExt := Ext(recordName)
 		contentPath := rm.genRecordUniqueName(shardName, recordName) + recordExt
 		ct, err := cluster.NewCTFromBO(rm.bck, contentPath, nil)
-		cmn.Assert(err == nil)
+		cos.Assert(err == nil)
 		return contentPath, ct.Make(filetype.DSortFileType)
 	default:
-		cmn.AssertMsg(false, storeType)
+		cos.AssertMsg(false, storeType)
 		return "", ""
 	}
 }
@@ -279,7 +280,7 @@ func (rm *RecordManager) FullContentPath(obj *RecordObj) string {
 		// To convert contentPath to fullContentPath we need to make shard name
 		// full FQN.
 		ct, err := cluster.NewCTFromBO(rm.bck, obj.ContentPath, nil)
-		cmn.Assert(err == nil)
+		cos.Assert(err == nil)
 		return ct.Make(obj.ObjectFileType)
 	case SGLStoreType:
 		// To convert contentPath to fullContentPath we need to add record
@@ -290,10 +291,10 @@ func (rm *RecordManager) FullContentPath(obj *RecordObj) string {
 		// unique name full FQN.
 		contentPath := obj.ContentPath
 		ct, err := cluster.NewCTFromBO(rm.bck, contentPath, nil)
-		cmn.Assert(err == nil)
+		cos.Assert(err == nil)
 		return ct.Make(filetype.DSortFileType)
 	default:
-		cmn.AssertMsg(false, obj.StoreType)
+		cos.AssertMsg(false, obj.StoreType)
 		return ""
 	}
 }
@@ -322,7 +323,7 @@ func (rm *RecordManager) ChangeStoreType(fullContentPath, newStoreType string, v
 	}
 	obj := record.Objects[idx]
 
-	cmn.Assert(obj.StoreType == SGLStoreType) // only SGLs are supported
+	cos.Assert(obj.StoreType == SGLStoreType) // only SGLs are supported
 
 	switch newStoreType {
 	case OffsetStoreType:
@@ -337,12 +338,12 @@ func (rm *RecordManager) ChangeStoreType(fullContentPath, newStoreType string, v
 		// problem).
 		rm.extractionPaths.Store(diskPath, struct{}{})
 
-		if _, err := cmn.SaveReader(diskPath, sgl, buf, cmn.ChecksumNone, -1, ""); err != nil {
+		if _, err := cos.SaveReader(diskPath, sgl, buf, cos.ChecksumNone, -1, ""); err != nil {
 			glog.Error(err)
 			return
 		}
 	default:
-		cmn.AssertMsg(false, newStoreType)
+		cos.AssertMsg(false, newStoreType)
 	}
 
 	obj.StoreType = newStoreType

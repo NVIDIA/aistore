@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/ais/s3compat"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -33,7 +34,7 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// TODO: Fix the hack, https://github.com/tensorflow/tensorflow/issues/41798
-	cmn.ReparseQuery(r)
+	cos.ReparseQuery(r)
 	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathS3.L)
 	if err != nil {
 		return
@@ -186,7 +187,7 @@ func (p *proxyrunner) delBckS3(w http.ResponseWriter, r *http.Request, bucket st
 // DEL s3/bck-name?delete
 // Delete list of objects
 func (p *proxyrunner) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket string) {
-	defer cmn.Close(r.Body)
+	defer cos.Close(r.Body)
 	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(p.owner.bmd); err != nil {
 		p.writeErr(w, r, err, http.StatusNotFound)
@@ -218,7 +219,7 @@ func (p *proxyrunner) delMultipleObjs(w http.ResponseWriter, r *http.Request, bu
 	// hack to make `doListRange` treat `listMsg` as `map[string]interface`
 	var msg2 cmn.ActionMsg
 	err := jsoniter.Unmarshal(bt, &msg2)
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	if _, err := p.doListRange(http.MethodDelete, bucket, &msg2, query); err != nil {
 		p.writeErr(w, r, err)
 	}
@@ -254,7 +255,7 @@ func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, bucket s
 		p.writeErr(w, r, err)
 		return
 	}
-	smsg := cmn.SelectMsg{UUID: cmn.GenUUID(), TimeFormat: time.RFC3339}
+	smsg := cmn.SelectMsg{UUID: cos.GenUUID(), TimeFormat: time.RFC3339}
 	smsg.AddProps(cmn.GetPropsSize, cmn.GetPropsChecksum, cmn.GetPropsAtime, cmn.GetPropsVersion)
 	s3compat.FillMsgFromS3Query(r.URL.Query(), &smsg)
 
@@ -511,7 +512,7 @@ func (p *proxyrunner) putBckVersioningS3(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	decoder := xml.NewDecoder(r.Body)
-	defer cmn.Close(r.Body)
+	defer cos.Close(r.Body)
 	vconf := &s3compat.VersioningConfiguration{}
 	if err := decoder.Decode(vconf); err != nil {
 		p.writeErr(w, r, err)

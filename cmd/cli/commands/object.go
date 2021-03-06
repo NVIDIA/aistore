@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
 	"github.com/vbauerster/mpb/v4/decor"
@@ -115,11 +116,11 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 	}
 
 	if flagIsSet(c, lengthFlag) {
-		fmt.Fprintf(c.App.ErrWriter, "Read %s (%d B)\n", cmn.B2S(objLen, 2), objLen)
+		fmt.Fprintf(c.App.ErrWriter, "Read %s (%d B)\n", cos.B2S(objLen, 2), objLen)
 		return
 	}
 	if !silent {
-		fmt.Fprintf(c.App.Writer, "GET %q from bucket %q as %q [%s]\n", objName, bck, outFile, cmn.B2S(objLen, 2))
+		fmt.Fprintf(c.App.Writer, "GET %q from bucket %q as %q [%s]\n", objName, bck, outFile, cos.B2S(objLen, 2))
 	}
 	return
 }
@@ -150,17 +151,17 @@ func promoteFileOrDir(c *cli.Context, bck cmn.Bck, objName, fqn string) (err err
 
 func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err error) {
 	var (
-		reader   cmn.ReadOpenCloser
+		reader   cos.ReadOpenCloser
 		progress *mpb.Progress
 		bars     []*mpb.Bar
-		cksum    *cmn.Cksum
+		cksum    *cos.Cksum
 	)
 	if flagIsSet(c, computeCksumFlag) {
 		bckProps, err := api.HeadBucket(defaultAPIParams, bck)
 		if err != nil {
 			return err
 		}
-		cksum = cmn.NewCksum(bckProps.Cksum.Type, "")
+		cksum = cos.NewCksum(bckProps.Cksum.Type, "")
 	} else {
 		cksums := parseChecksumFlags(c)
 		if len(cksums) > 1 {
@@ -170,7 +171,7 @@ func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err err
 			cksum = cksums[0]
 		}
 	}
-	fh, err := cmn.NewFileHandle(path)
+	fh, err := cos.NewFileHandle(path)
 	if err != nil {
 		return err
 	}
@@ -184,7 +185,7 @@ func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err err
 
 		progress, bars = simpleProgressBar(progressBarArgs{barType: sizeArg, barText: objName, total: fi.Size()})
 		readCallback := func(n int, _ error) { bars[0].IncrBy(n) }
-		reader = cmn.NewCallbackReadOpenCloser(fh, readCallback)
+		reader = cos.NewCallbackReadOpenCloser(fh, readCallback)
 	}
 	putArgs := api.PutObjectArgs{
 		BaseParams: defaultAPIParams,
@@ -206,7 +207,7 @@ func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err err
 func putSingleObjectChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, cksumType string) (err error) {
 	var (
 		handle string
-		cksum  = cmn.NewCksumHash(cksumType)
+		cksum  = cos.NewCksumHash(cksumType)
 		pi     = newProgIndicator(objName)
 	)
 	chunkSize, err := parseByteFlagToInt(c, chunkSizeFlag)
@@ -223,10 +224,10 @@ func putSingleObjectChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Re
 			b      = bytes.NewBuffer(nil)
 			n      int64
 			err    error
-			reader cmn.ReadOpenCloser
+			reader cos.ReadOpenCloser
 		)
-		if cksumType != cmn.ChecksumNone {
-			n, err = io.CopyN(cmn.NewWriterMulti(cksum.H, b), r, chunkSize)
+		if cksumType != cos.ChecksumNone {
+			n, err = io.CopyN(cos.NewWriterMulti(cksum.H, b), r, chunkSize)
 		} else {
 			n, err = io.CopyN(b, r, chunkSize)
 		}
@@ -236,10 +237,10 @@ func putSingleObjectChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Re
 		if n == 0 {
 			break
 		}
-		reader = cmn.NewByteHandle(b.Bytes())
+		reader = cos.NewByteHandle(b.Bytes())
 		if flagIsSet(c, progressBarFlag) {
 			actualChunkOffset := atomic.NewInt64(0)
-			reader = cmn.NewCallbackReadOpenCloser(reader, func(n int, _ error) {
+			reader = cos.NewCallbackReadOpenCloser(reader, func(n int, _ error) {
 				if n == 0 {
 					return
 				}
@@ -270,7 +271,7 @@ func putSingleObjectChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Re
 	if flagIsSet(c, progressBarFlag) {
 		pi.stop()
 	}
-	if cksumType != cmn.ChecksumNone {
+	if cksumType != cos.ChecksumNone {
 		cksum.Finalize()
 	}
 
@@ -283,7 +284,7 @@ func putSingleObjectChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Re
 	})
 }
 
-func putRangeObjects(c *cli.Context, pt cmn.ParsedTemplate, bck cmn.Bck, trimPrefix, subdirName string) (err error) {
+func putRangeObjects(c *cli.Context, pt cos.ParsedTemplate, bck cmn.Bck, trimPrefix, subdirName string) (err error) {
 	getNext := pt.Iter()
 	allFiles := make([]fileToObj, 0, pt.Count())
 	for file, hasNext := getNext(); hasNext; file, hasNext = getNext() {
@@ -317,7 +318,7 @@ func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) (err err
 		return nil
 	}
 
-	tmpl := templates.ExtensionTmpl + strconv.FormatInt(totalCount, 10) + "\t" + cmn.B2S(totalSize, 2) + "\n"
+	tmpl := templates.ExtensionTmpl + strconv.FormatInt(totalCount, 10) + "\t" + cos.B2S(totalSize, 2) + "\n"
 	if err = templates.DisplayOutput(extSizes, c.App.Writer, tmpl); err != nil {
 		return
 	}
@@ -355,9 +356,9 @@ func getPathFromFileName(fileName string) (path string, err error) {
 // Returns longest common prefix ending with '/' (exclusive) for objects in the template
 // /path/to/dir/test{0..10}/dir/another{0..10} => /path/to/dir
 // /path/to/prefix-@00001-gap-@100-suffix => /path/to
-func rangeTrimPrefix(pt cmn.ParsedTemplate) string {
+func rangeTrimPrefix(pt cos.ParsedTemplate) string {
 	sepaIndex := strings.LastIndex(pt.Prefix, string(os.PathSeparator))
-	cmn.Assert(sepaIndex >= 0)
+	cos.Assert(sepaIndex >= 0)
 	return pt.Prefix[:sepaIndex+1]
 }
 
@@ -387,8 +388,8 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName, cksumType string)
 		return err
 	}
 
-	var pt cmn.ParsedTemplate
-	if pt, err = cmn.ParseBashTemplate(path); err == nil {
+	var pt cos.ParsedTemplate
+	if pt, err = cos.ParseBashTemplate(path); err == nil {
 		return putRangeObjects(c, pt, bck, rangeTrimPrefix(pt), objName)
 	}
 	// if parse failed continue to other options
@@ -450,7 +451,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 	var handle string
 	for _, filesSlice := range filesToObj {
 		for _, f := range filesSlice {
-			fh, err := cmn.NewFileHandle(f.path)
+			fh, err := cos.NewFileHandle(f.path)
 			if err != nil {
 				return err
 			}
@@ -488,7 +489,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 		return fmt.Errorf("%v. Object not created", err)
 	}
 
-	_, _ = fmt.Fprintf(c.App.Writer, "COMPOSE %q [%s] into bucket %q\n", objName, cmn.B2S(totalSize, 2), bck)
+	_, _ = fmt.Fprintf(c.App.Writer, "COMPOSE %q [%s] into bucket %q\n", objName, cos.B2S(totalSize, 2), bck)
 
 	return nil
 }
@@ -522,7 +523,7 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 
 		errSb strings.Builder
 
-		wg          = cmn.NewLimitedWaitGroup(p.workerCnt)
+		wg          = cos.NewLimitedWaitGroup(p.workerCnt)
 		lastReport  = time.Now()
 		reportEvery = p.refresh
 	)
@@ -555,7 +556,7 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 		if !showProgress && time.Since(lastReport) > reportEvery {
 			fmt.Fprintf(
 				c.App.Writer, "Uploaded %d(%d%%) objects, %s (%d%%).\n",
-				total, 100*total/len(p.files), cmn.B2S(size, 1), 100*size/p.totalSize,
+				total, 100*total/len(p.files), cos.B2S(size, 1), 100*size/p.totalSize,
 			)
 			lastReport = time.Now()
 		}
@@ -567,7 +568,7 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 
 		defer finalizePut(f)
 
-		reader, err := cmn.NewFileHandle(f.path)
+		reader, err := cos.NewFileHandle(f.path)
 		if err != nil {
 			str := fmt.Sprintf("Failed to open file %q: %v\n", f.path, err)
 			if showProgress {
@@ -600,7 +601,7 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 				}
 			}
 		}
-		countReader := cmn.NewCallbackReadOpenCloser(reader, updateBar)
+		countReader := cos.NewCallbackReadOpenCloser(reader, updateBar)
 
 		putArgs := api.PutObjectArgs{BaseParams: defaultAPIParams, Bck: p.bck, Object: f.name, Reader: countReader}
 		if err := api.PutObject(putArgs); err != nil {
@@ -668,7 +669,7 @@ func objectStats(c *cli.Context, bck cmn.Bck, object string) error {
 
 	if len(propsFlag) == 0 {
 		selectedProps = cmn.GetPropsDefault
-	} else if cmn.StringInSlice("all", propsFlag) {
+	} else if cos.StringInSlice("all", propsFlag) {
 		selectedProps = cmn.GetPropsAll
 	} else {
 		selectedProps = propsFlag
@@ -748,12 +749,12 @@ func listOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	var (
 		rangeStr = parseStrFlag(c, templateFlag)
-		pt       cmn.ParsedTemplate
+		pt       cos.ParsedTemplate
 		xactID   string
 	)
 
 	if flagIsSet(c, dryRunFlag) {
-		pt, err = cmn.ParseBashTemplate(rangeStr)
+		pt, err = cos.ParseBashTemplate(rangeStr)
 		if err != nil {
 			fmt.Fprintf(c.App.Writer, "couldn't parse template %q locally; %s", rangeStr, err.Error())
 			return nil

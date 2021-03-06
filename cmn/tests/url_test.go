@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 )
 
@@ -22,7 +23,7 @@ func TestParseURLScheme(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		scheme, address := cmn.ParseURLScheme(tc.url)
+		scheme, address := cos.ParseURLScheme(tc.url)
 		tassert.Errorf(t, scheme == tc.expectedScheme, "expected scheme %s, got %s", tc.expectedScheme, scheme)
 		tassert.Errorf(t, address == tc.expectedAddress, "expected address %s, got %s", tc.expectedAddress, address)
 	}
@@ -45,7 +46,7 @@ func TestReparseQuery(t *testing.T) {
 	q.Add("versionID", versionID)
 	r.URL.RawQuery = q.Encode()
 
-	cmn.ReparseQuery(r)
+	cos.ReparseQuery(r)
 	actualVersionID, actualUUID := r.URL.Query().Get("versionID"), r.URL.Query().Get(cmn.URLParamUUID)
 	tassert.Errorf(t, actualVersionID == versionID, "expected versionID to be %q, got %q", versionID, actualVersionID)
 	tassert.Errorf(t, actualUUID == uuid, "expected %s to be %q, got %q", cmn.URLParamUUID, uuid, actualUUID)

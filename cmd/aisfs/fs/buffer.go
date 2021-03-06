@@ -8,7 +8,7 @@ import (
 	"errors"
 	"io"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -29,7 +29,7 @@ type (
 
 	writeBuffer struct {
 		sgl   *memsys.SGL
-		cksum *cmn.CksumHash
+		cksum *cos.CksumHash
 	}
 )
 
@@ -47,12 +47,12 @@ func (b *blockBuffer) BlockSize() int64 {
 }
 
 func (b *blockBuffer) Free() {
-	cmn.Assert(b.sgl != nil)
+	cos.Assert(b.sgl != nil)
 	b.sgl.Free()
 }
 
 func (b *blockBuffer) EnsureBlock(blockNo int64, loadBlock loadBlockFunc) (err error) {
-	cmn.Assert(b.sgl != nil)
+	cos.Assert(b.sgl != nil)
 	if !b.valid || b.blockNo != blockNo {
 		b.valid = true
 		b.blockNo = blockNo
@@ -66,7 +66,7 @@ func (b *blockBuffer) EnsureBlock(blockNo int64, loadBlock loadBlockFunc) (err e
 }
 
 func (b *blockBuffer) ReadAt(p []byte, offset int64) (n int, err error) {
-	cmn.Assert(b.sgl != nil)
+	cos.Assert(b.sgl != nil)
 	if !b.valid {
 		return 0, errors.New("invalid block")
 	}
@@ -78,11 +78,11 @@ func (b *blockBuffer) ReadAt(p []byte, offset int64) (n int, err error) {
 func newWriteBuffer(cksumType string) *writeBuffer {
 	return &writeBuffer{
 		sgl:   glMem2.NewSGL(maxBlockSize, maxBlockSize),
-		cksum: cmn.NewCksumHash(cksumType),
+		cksum: cos.NewCksumHash(cksumType),
 	}
 }
 
-func (b *writeBuffer) reader() cmn.ReadOpenCloser { return memsys.NewReader(b.sgl) }
+func (b *writeBuffer) reader() cos.ReadOpenCloser { return memsys.NewReader(b.sgl) }
 func (b *writeBuffer) size() int64                { return b.sgl.Size() }
 func (b *writeBuffer) reset()                     { b.sgl.Reset() }
 func (b *writeBuffer) free() {
@@ -92,11 +92,11 @@ func (b *writeBuffer) free() {
 
 func (b *writeBuffer) write(p []byte) (int, error) {
 	_, err := b.cksum.H.Write(p)
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	return b.sgl.Write(p)
 }
 
-func (b *writeBuffer) checksum() *cmn.Cksum {
+func (b *writeBuffer) checksum() *cos.Cksum {
 	b.cksum.Finalize()
 	return b.cksum.Clone()
 }

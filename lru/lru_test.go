@@ -16,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/lru"
@@ -36,8 +37,8 @@ const (
 	hwm                  = 80
 	lwm                  = 50
 	numberOfCreatedFiles = 45
-	fileSize             = 10 * cmn.MiB
-	blockSize            = cmn.KiB
+	fileSize             = 10 * cos.MiB
+	blockSize            = cos.KiB
 	basePath             = "/tmp/lru-tests"
 	bucketName           = "lru-bck"
 	bucketNameAnother    = bucketName + "-another"
@@ -78,7 +79,7 @@ func newTargetLRUMock() *cluster.TargetMock {
 			cluster.NewBck(
 				bucketName, cmn.ProviderAIS, cmn.NsGlobal,
 				&cmn.BucketProps{
-					Cksum:  cmn.CksumConf{Type: cmn.ChecksumNone},
+					Cksum:  cmn.CksumConf{Type: cos.ChecksumNone},
 					LRU:    cmn.LRUConf{Enabled: true},
 					Access: cmn.AccessAll,
 					BID:    0xa7b8c1d2,
@@ -87,7 +88,7 @@ func newTargetLRUMock() *cluster.TargetMock {
 			cluster.NewBck(
 				bucketNameAnother, cmn.ProviderAIS, cmn.NsGlobal,
 				&cmn.BucketProps{
-					Cksum:  cmn.CksumConf{Type: cmn.ChecksumNone},
+					Cksum:  cmn.CksumConf{Type: cos.ChecksumNone},
 					LRU:    cmn.LRUConf{Enabled: false},
 					Access: cmn.AccessAll,
 					BID:    0xf4e3d2c1,
@@ -100,7 +101,7 @@ func newTargetLRUMock() *cluster.TargetMock {
 }
 
 func newInitLRU(t cluster.Target) *lru.InitLRU {
-	args := xaction.Args{ID: xaction.BaseID(cmn.GenUUID()), Kind: cmn.ActLRU}
+	args := xaction.Args{ID: xaction.BaseID(cos.GenUUID()), Kind: cmn.ActLRU}
 	xlru := &lru.Xaction{
 		XactDemandBase: *xaction.NewXDB(args, 2*time.Second, time.Second),
 		Renewed:        make(chan struct{}, 8),
@@ -125,7 +126,7 @@ func initConfig() {
 }
 
 func createAndAddMountpath(path string) {
-	cmn.CreateDir(path)
+	cos.CreateDir(path)
 	fs.Init()
 	fs.Add(path, "daeID")
 
@@ -134,12 +135,12 @@ func createAndAddMountpath(path string) {
 }
 
 func getRandomFileName(fileCounter int) string {
-	return fmt.Sprintf("%v-%v.txt", cmn.RandString(13), fileCounter)
+	return fmt.Sprintf("%v-%v.txt", cos.RandString(13), fileCounter)
 }
 
 func saveRandomFile(filename string, size int64) {
 	buff := make([]byte, size)
-	_, err := cmn.SaveReader(filename, rand.Reader, buff, cmn.ChecksumNone, size, "")
+	_, err := cos.SaveReader(filename, rand.Reader, buff, cos.ChecksumNone, size, "")
 	Expect(err).NotTo(HaveOccurred())
 	lom := &cluster.LOM{FQN: filename}
 	err = lom.Init(cmn.Bck{})
@@ -164,7 +165,7 @@ func saveRandomFiles(filesPath string, filesNumber int) {
 }
 
 var _ = Describe("LRU tests", func() {
-	cmn.InitShortID(0)
+	cos.InitShortID(0)
 	Describe("Run", func() {
 		var (
 			t   *cluster.TargetMock
@@ -186,8 +187,8 @@ var _ = Describe("LRU tests", func() {
 			bckAnother = cmn.Bck{Name: bucketNameAnother, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 			filesPath = mpaths[basePath].MakePathCT(bck, fs.ObjectType)
 			fpAnother = mpaths[basePath].MakePathCT(bckAnother, fs.ObjectType)
-			cmn.CreateDir(filesPath)
-			cmn.CreateDir(fpAnother)
+			cos.CreateDir(filesPath)
+			cos.CreateDir(fpAnother)
 		})
 
 		AfterEach(func() {
@@ -236,12 +237,12 @@ var _ = Describe("LRU tests", func() {
 
 				oldFilesNames := namesFromFilesMetadatas(oldFiles)
 				for _, name := range files {
-					Expect(cmn.StringInSlice(name.Name(), oldFilesNames)).To(BeFalse())
+					Expect(cos.StringInSlice(name.Name(), oldFilesNames)).To(BeFalse())
 				}
 			})
 
 			It("should evict files of different sizes", func() {
-				const totalSize = 32 * cmn.MiB
+				const totalSize = 32 * cos.MiB
 
 				ini.GetFSStats = func(string) (blocks, bavail uint64, bsize int64, err error) {
 					bsize = blockSize
@@ -253,10 +254,10 @@ var _ = Describe("LRU tests", func() {
 
 				// files sum up to 32Mb
 				files := []fileMetadata{
-					{getRandomFileName(0), int64(4 * cmn.MiB)},
-					{getRandomFileName(1), int64(16 * cmn.MiB)},
-					{getRandomFileName(2), int64(4 * cmn.MiB)},
-					{getRandomFileName(3), int64(8 * cmn.MiB)},
+					{getRandomFileName(0), int64(4 * cos.MiB)},
+					{getRandomFileName(1), int64(16 * cos.MiB)},
+					{getRandomFileName(2), int64(4 * cos.MiB)},
+					{getRandomFileName(3), int64(8 * cos.MiB)},
 				}
 				saveRandomFilesWithMetadata(filesPath, files)
 
@@ -270,7 +271,7 @@ var _ = Describe("LRU tests", func() {
 
 				correctFilenamesLeft := namesFromFilesMetadatas(files[2:])
 				for _, name := range filesLeft {
-					Expect(cmn.StringInSlice(name.Name(), correctFilenamesLeft)).To(BeTrue())
+					Expect(cos.StringInSlice(name.Name(), correctFilenamesLeft)).To(BeTrue())
 				}
 			})
 

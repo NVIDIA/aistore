@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
@@ -36,7 +37,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 			t:               t,
 			num:             50000,
 			numGetsEachFile: 3,
-			fileSize:        10 * cmn.KiB,
+			fileSize:        10 * cos.KiB,
 		}
 		rebID string
 	)
@@ -158,7 +159,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 			t:               t,
 			num:             20000,
 			numGetsEachFile: 5,
-			fileSize:        cmn.KiB * 2,
+			fileSize:        cos.KiB * 2,
 		}
 		targetURL  string
 		targetID   string
@@ -885,7 +886,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		err := containers.DockerCreateMpathDir(0, newMountpath)
 		tassert.CheckFatal(t, err)
 	} else {
-		err := cmn.CreateDir(newMountpath)
+		err := cos.CreateDir(newMountpath)
 		tassert.CheckFatal(t, err)
 	}
 
@@ -961,7 +962,7 @@ func TestLocalAndGlobalRebalanceAfterAddingMountpath(t *testing.T) {
 		// Add new mountpath to all targets
 		for idx, target := range targets {
 			mountpath := filepath.Join(newMountpath, fmt.Sprintf("%d", idx))
-			cmn.CreateDir(mountpath)
+			cos.CreateDir(mountpath)
 			err := api.AddMountpath(baseParams, target, mountpath)
 			tassert.CheckFatal(t, err)
 		}
@@ -1012,7 +1013,7 @@ func TestMountpathDisableAndEnable(t *testing.T) {
 	oldMountpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 
-	disabled := make(cmn.StringSet)
+	disabled := make(cos.StringSet)
 	defer func() {
 		for mpath := range disabled {
 			err := api.EnableMountpath(baseParams, target, mpath)
@@ -1144,7 +1145,7 @@ func TestAtimeRebalance(t *testing.T) {
 	bucketList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
-	objNames := make(cmn.SimpleKVs, 10)
+	objNames := make(cos.SimpleKVs, 10)
 	for _, entry := range bucketList.Entries {
 		objNames[entry.Name] = entry.Atime
 	}

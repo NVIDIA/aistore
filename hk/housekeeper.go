@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
@@ -42,7 +43,7 @@ type (
 	timedActions []timedAction
 
 	housekeeper struct {
-		stopCh  *cmn.StopCh
+		stopCh  *cos.StopCh
 		sigCh   chan os.Signal
 		actions *timedActions
 		timer   *time.Timer
@@ -60,7 +61,7 @@ var _ cmn.Runner = (*housekeeper)(nil)
 func init() {
 	DefaultHK = &housekeeper{
 		workCh:  make(chan request, 512),
-		stopCh:  cmn.NewStopCh(),
+		stopCh:  cos.NewStopCh(),
 		sigCh:   make(chan os.Signal, 1),
 		actions: &timedActions{},
 	}
@@ -129,7 +130,7 @@ func (hk *housekeeper) Run() (err error) {
 			hk.updateTimer()
 		case req := <-hk.workCh:
 			if req.registering {
-				cmn.AssertMsg(req.f != nil, req.name)
+				cos.AssertMsg(req.f != nil, req.name)
 				initialInterval := req.initialInterval
 				if req.initialInterval == 0 {
 					initialInterval = req.f()

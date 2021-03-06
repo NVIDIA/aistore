@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 )
@@ -25,7 +26,7 @@ var (
 func init() {
 	// Set default expiration time to 30 minutes
 	if conf.Server.ExpirePeriod == 0 {
-		conf.Server.ExpirePeriod = cmn.DurationJSON(time.Minute * 30)
+		conf.Server.ExpirePeriod = cos.DurationJSON(time.Minute * 30)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 )
 
@@ -49,13 +50,13 @@ func TestConcatObjLists(t *testing.T) {
 				list := &cmn.BucketList{}
 				for i := 0; i < objCount; i++ {
 					list.Entries = append(list.Entries, &cmn.BucketEntry{
-						Name: cmn.RandString(5),
+						Name: cos.RandString(5),
 					})
 				}
 				lists = append(lists, list)
 				expectedObjCnt += len(list.Entries)
 			}
-			expectedObjCnt = cmn.Min(expectedObjCnt, int(test.maxSize))
+			expectedObjCnt = cos.Min(expectedObjCnt, int(test.maxSize))
 
 			objs := cmn.ConcatObjLists(lists, test.maxSize)
 			tassert.Errorf(

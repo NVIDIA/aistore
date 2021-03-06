@@ -1,4 +1,5 @@
-// Package cmn provides common low-level types and utilities for all aistore projects
+// Package cmn provides common constants, types, and utilities for AIS clients
+// and AIStore.
 /*
  * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  *
@@ -10,6 +11,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 type (
@@ -36,11 +39,11 @@ type (
 		Key         string `json:"server_key"`
 	}
 	AuthNServerConf struct {
-		Secret       string       `json:"secret"`
-		ExpirePeriod DurationJSON `json:"expiration_time"`
+		Secret       string           `json:"secret"`
+		ExpirePeriod cos.DurationJSON `json:"expiration_time"`
 	}
 	AuthNTimeoutConf struct {
-		Default DurationJSON `json:"default_timeout"`
+		Default cos.DurationJSON `json:"default_timeout"`
 	}
 
 	AuthNConfigToUpdate struct {
@@ -81,7 +84,7 @@ func (c *AuthNConfig) ApplyUpdate(cu *AuthNConfigToUpdate) error {
 		if err != nil {
 			return fmt.Errorf("invalid expire time format %s, err: %v", *cu.Server.ExpirePeriod, err)
 		}
-		c.Server.ExpirePeriod = DurationJSON(dur)
+		c.Server.ExpirePeriod = cos.DurationJSON(dur)
 	}
 	return nil
 }

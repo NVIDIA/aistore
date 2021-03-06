@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -113,7 +114,7 @@ func SetPrimaryProxy(baseParams BaseParams, newPrimaryID string) error {
 // SetClusterConfig given key-value pairs of cluster configuration parameters,
 // sets the cluster-wide configuration accordingly. Setting cluster-wide
 // configuration requires sending the request to a proxy.
-func SetClusterConfig(baseParams BaseParams, nvs cmn.SimpleKVs) error {
+func SetClusterConfig(baseParams BaseParams, nvs cos.SimpleKVs) error {
 	q := url.Values{}
 	for key, val := range nvs {
 		q.Add(key, val)

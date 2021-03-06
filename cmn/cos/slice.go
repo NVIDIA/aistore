@@ -1,8 +1,8 @@
-// Package cmn provides common low-level types and utilities for all aistore projects
+// Package cos provides common low-level types and utilities for all aistore projects
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package cmn
+package cos
 
 import "strings"
 
@@ -46,22 +46,4 @@ func AnyHasPrefixInSlice(prefix string, arr []string) bool {
 		}
 	}
 	return false
-}
-
-func DiscardFirstEntries(entries []*BucketEntry, n int) []*BucketEntry {
-	if n == 0 {
-		return entries
-	}
-	if n >= len(entries) {
-		return entries[:0]
-	}
-
-	toDiscard := Min(len(entries), n)
-
-	copy(entries, entries[toDiscard:])
-	for i := len(entries) - toDiscard; i < len(entries); i++ {
-		entries[i] = nil
-	}
-
-	return entries[:len(entries)-toDiscard]
 }

@@ -16,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 const longListTime = 10 * time.Second
@@ -156,8 +157,8 @@ func newTraceCtx() *traceCtx {
 }
 
 // PUT with HTTP trace
-func putWithTrace(proxyURL string, bck cmn.Bck, object string, cksum *cmn.Cksum,
-	reader cmn.ReadOpenCloser) (httpLatencies, error) {
+func putWithTrace(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum,
+	reader cos.ReadOpenCloser) (httpLatencies, error) {
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   proxyURL,
@@ -212,7 +213,7 @@ func putWithTrace(proxyURL string, bck cmn.Bck, object string, cksum *cmn.Cksum,
 //
 // Put executes PUT
 //
-func put(proxyURL string, bck cmn.Bck, object string, cksum *cmn.Cksum, reader cmn.ReadOpenCloser) error {
+func put(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum, reader cos.ReadOpenCloser) error {
 	var (
 		baseParams = api.BaseParams{
 			Client: httpClient,
@@ -266,7 +267,7 @@ func getDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, off
 	if err != nil {
 		return 0, err
 	}
-	defer cmn.Close(resp.Body)
+	defer cos.Close(resp.Body)
 
 	if validate {
 		hdrCksumValue = resp.Header.Get(cmn.HeaderObjCksumVal)
@@ -389,7 +390,7 @@ func discardResponse(r *http.Response, src string) (int64, error) {
 func readResponse(r *http.Response, w io.Writer, src, cksumType string) (int64, string, error) {
 	var (
 		n          int64
-		cksum      *cmn.CksumHash
+		cksum      *cos.CksumHash
 		err        error
 		cksumValue string
 	)
@@ -405,7 +406,7 @@ func readResponse(r *http.Response, w io.Writer, src, cksumType string) (int64, 
 	buf, slab := mmsa.Alloc()
 	defer slab.Free(buf)
 
-	n, cksum, err = cmn.CopyAndChecksum(w, r.Body, buf, cksumType)
+	n, cksum, err = cos.CopyAndChecksum(w, r.Body, buf, cksumType)
 	if err != nil {
 		return 0, "", fmt.Errorf("failed to read HTTP response, err: %v", err)
 	}

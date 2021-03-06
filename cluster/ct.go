@@ -8,6 +8,7 @@ import (
 	"io"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -134,7 +135,7 @@ func (ct *CT) Clone(ctType string) *CT {
 
 func (ct *CT) Make(toType string, pref ...string /*optional prefix*/) string {
 	var prefix string
-	cmn.Assert(toType != "")
+	cos.Assert(toType != "")
 
 	if len(pref) > 0 {
 		prefix = pref[0]
@@ -152,9 +153,9 @@ func (ct *CT) Write(t Target, reader io.Reader, size int64, workFQN ...string) (
 	}
 	buf, slab := t.MMSA().Alloc()
 	if len(workFQN) == 0 {
-		_, err = cmn.SaveReader(ct.fqn, reader, buf, cmn.ChecksumNone, size, "")
+		_, err = cos.SaveReader(ct.fqn, reader, buf, cos.ChecksumNone, size, "")
 	} else {
-		_, err = cmn.SaveReaderSafe(workFQN[0], ct.fqn, reader, buf, cmn.ChecksumNone, size, "")
+		_, err = cos.SaveReaderSafe(workFQN[0], ct.fqn, reader, buf, cos.ChecksumNone, size, "")
 	}
 	slab.Free(buf)
 	return err

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
@@ -29,8 +30,8 @@ func TestPersist(t *testing.T) {
 
 func testPersistOnMpaths(t *testing.T, mpaths fs.MPI) {
 	var (
-		name      = ".ais.testmarker" + cmn.RandString(3)
-		value     = "test-value-string" + cmn.RandString(3)
+		name      = ".ais.testmarker" + cos.RandString(3)
+		value     = "test-value-string" + cos.RandString(3)
 		mpathsCnt = len(mpaths)
 	)
 
@@ -61,9 +62,9 @@ func testPersistOnMpaths(t *testing.T, mpaths fs.MPI) {
 
 func testPersistOnMpathsWithBackup(t *testing.T, mpaths fs.MPI) {
 	var (
-		name      = ".ais.testmarker" + cmn.RandString(3)
+		name      = ".ais.testmarker" + cos.RandString(3)
 		oldName   = name + ".old"
-		value     = "test-value-string" + cmn.RandString(3)
+		value     = "test-value-string" + cos.RandString(3)
 		newValue  = value + "-new"
 		mpathsCnt = len(mpaths)
 	)
@@ -107,8 +108,8 @@ func testPersistOnMpathsWithBackup(t *testing.T, mpaths fs.MPI) {
 
 func testFindPersisted(t *testing.T, mpaths fs.MPI) {
 	var (
-		name      = ".ais.testmarker" + cmn.RandString(3)
-		value     = "test-value-string" + cmn.RandString(3)
+		name      = ".ais.testmarker" + cos.RandString(3)
+		value     = "test-value-string" + cos.RandString(3)
 		mpathsCnt = len(mpaths)
 	)
 
@@ -121,8 +122,8 @@ func testFindPersisted(t *testing.T, mpaths fs.MPI) {
 
 func testRemovePersisted(t *testing.T, mpaths fs.MPI) {
 	var (
-		name      = ".ais.testmarker" + cmn.RandString(3)
-		value     = "test-value-string" + cmn.RandString(3)
+		name      = ".ais.testmarker" + cos.RandString(3)
+		value     = "test-value-string" + cos.RandString(3)
 		mpathsCnt = len(mpaths)
 	)
 

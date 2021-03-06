@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 type (
@@ -16,7 +17,7 @@ type (
 	// Defines what to send to a target.
 	LomReaderProvider interface {
 		// Returned func() will be called after reading from reader is done.
-		Reader(lom *LOM) (reader cmn.ReadOpenCloser, objMeta cmn.ObjHeaderMetaProvider, err error)
+		Reader(lom *LOM) (reader cos.ReadOpenCloser, objMeta cmn.ObjHeaderMetaProvider, err error)
 	}
 
 	LomReader struct{}
@@ -25,17 +26,17 @@ type (
 // interface guard
 var _ LomReaderProvider = (*LomReader)(nil)
 
-func (r *LomReader) Reader(lom *LOM) (cmn.ReadOpenCloser, cmn.ObjHeaderMetaProvider, error) {
+func (r *LomReader) Reader(lom *LOM) (cos.ReadOpenCloser, cmn.ObjHeaderMetaProvider, error) {
 	var lomLoadErr, err error
 
 	lom.Lock(false)
 	if lomLoadErr = lom.Load(false /*cache it*/, true /*locked*/); lomLoadErr == nil {
-		var file *cmn.FileHandle
-		if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
+		var file *cos.FileHandle
+		if file, err = cos.NewFileHandle(lom.FQN); err != nil {
 			lom.Unlock(false)
 			return nil, nil, fmt.Errorf(cmn.FmtErrFailed, "LOMReader", "open", lom.FQN, err)
 		}
-		return cmn.NewDeferROC(file, func() { lom.Unlock(false) }), lom, nil
+		return cos.NewDeferROC(file, func() { lom.Unlock(false) }), lom, nil
 	}
 
 	// LOM loading error has occurred
@@ -52,5 +53,5 @@ func (r *LomReader) Reader(lom *LOM) (cmn.ReadOpenCloser, cmn.ObjHeaderMetaProvi
 	// Get object directly from a cloud, as it doesn't exist locally
 	// TODO: revisit versus global rebalancing
 	reader, _, _, err := T.Backend(lom.Bck()).GetObjReader(context.Background(), lom)
-	return cmn.NopOpener(reader), lom, err
+	return cos.NopOpener(reader), lom, err
 }

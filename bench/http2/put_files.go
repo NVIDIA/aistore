@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
@@ -66,10 +67,10 @@ func putSpecificFiles(fileSize uint64, numPuts int, bck cmn.Bck, pool chan func(
 		wg    = &sync.WaitGroup{}
 	)
 
-	cmn.CreateDir(smokeDir)
+	cos.CreateDir(smokeDir)
 
 	for i := 1; i < numPuts+1; i++ {
-		r, err := readers.NewRandReader(int64(fileSize), cmn.ChecksumXXHash)
+		r, err := readers.NewRandReader(int64(fileSize), cos.ChecksumXXHash)
 		if err != nil {
 			return err
 		}

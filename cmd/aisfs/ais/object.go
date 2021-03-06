@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 type Object struct {
@@ -37,7 +38,7 @@ func NewObject(objName string, bucket Bucket, sizes ...int64) *Object {
 
 func (obj *Object) Bck() cmn.Bck { return obj.bck }
 
-func (obj *Object) Put(r cmn.ReadOpenCloser) (err error) {
+func (obj *Object) Put(r cos.ReadOpenCloser) (err error) {
 	putArgs := api.PutObjectArgs{
 		BaseParams: obj.apiParams,
 		Bck:        obj.bck,
@@ -65,7 +66,7 @@ func (obj *Object) GetChunk(w io.Writer, offset, length int64) (n int64, err err
 	return
 }
 
-func (obj *Object) Append(r cmn.ReadOpenCloser, prevHandle string, size int64) (handle string, err error) {
+func (obj *Object) Append(r cos.ReadOpenCloser, prevHandle string, size int64) (handle string, err error) {
 	appendArgs := api.AppendArgs{
 		BaseParams: obj.apiParams,
 		Bck:        obj.bck,
@@ -81,7 +82,7 @@ func (obj *Object) Append(r cmn.ReadOpenCloser, prevHandle string, size int64) (
 	return handle, nil
 }
 
-func (obj *Object) Flush(handle string, cksum *cmn.Cksum) (err error) {
+func (obj *Object) Flush(handle string, cksum *cos.Cksum) (err error) {
 	flushArgs := api.FlushArgs{
 		BaseParams: obj.apiParams,
 		Bck:        obj.bck,

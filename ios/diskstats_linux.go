@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 // The "sectors" in question are the standard UNIX 512-byte sectors, not any device- or filesystem-specific block size
@@ -42,7 +42,7 @@ var _ diskBlockStat = dblockStat{}
 var blockStats = make(diskBlockStats, 10)
 
 // readDiskStats returns disk stats FIXME: optimize
-func readDiskStats(disks, sysfnames cmn.SimpleKVs) diskBlockStats {
+func readDiskStats(disks, sysfnames cos.SimpleKVs) diskBlockStats {
 	for d := range disks {
 		stat, ok := readSingleDiskStat(sysfnames[d])
 		if !ok {
@@ -90,7 +90,7 @@ func extractDiskStat(fields []string, offset int) dblockStat {
 func extractI64(field string) int64 {
 	val, err := strconv.ParseInt(field, 10, 64)
 	if err != nil {
-		cmn.Assertf(false, "failed to parse %q field to integer", field)
+		cos.Assertf(false, "failed to parse %q field to integer", field)
 	}
 	return val
 }

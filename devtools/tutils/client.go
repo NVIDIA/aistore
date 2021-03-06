@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
@@ -300,10 +301,10 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 	if args.WorkerCnt > 0 {
 		workerCnt = args.WorkerCnt
 	}
-	workerCnt = cmn.Min(workerCnt, args.ObjCnt)
+	workerCnt = cos.Min(workerCnt, args.ObjCnt)
 
 	for i := 0; i < args.ObjCnt; i++ {
-		objNames = append(objNames, path.Join(args.ObjPath, cmn.RandString(16)))
+		objNames = append(objNames, path.Join(args.ObjPath, cos.RandString(16)))
 	}
 	chunkSize := (len(objNames) + workerCnt - 1) / workerCnt
 	for i := 0; i < len(objNames); i += chunkSize {
@@ -312,17 +313,17 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 				for _, objName := range objNames[start:end] {
 					size := args.ObjSize
 					if size == 0 { // Size not specified so generate something.
-						size = uint64(cmn.NowRand().Intn(cmn.KiB)+1) * cmn.KiB
+						size = uint64(cos.NowRand().Intn(cos.KiB)+1) * cos.KiB
 					} else if !args.FixedSize { // Randomize object size.
-						size += uint64(rand.Int63n(cmn.KiB))
+						size += uint64(rand.Int63n(cos.KiB))
 					}
 
 					if args.CksumType == "" {
-						args.CksumType = cmn.ChecksumNone
+						args.CksumType = cos.ChecksumNone
 					}
 
 					reader, err := readers.NewRandReader(int64(size), args.CksumType)
-					cmn.AssertNoErr(err)
+					cos.AssertNoErr(err)
 
 					// We could PUT while creating files, but that makes it
 					// begin all the puts immediately (because creating random files is fast
@@ -346,16 +347,16 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 				}
 				return nil
 			}
-		}(i, cmn.Min(i+chunkSize, len(objNames))))
+		}(i, cos.Min(i+chunkSize, len(objNames))))
 	}
 
 	err := group.Wait()
-	cmn.Assert(err != nil || len(objNames) == int(putCnt.Load()))
+	cos.Assert(err != nil || len(objNames) == int(putCnt.Load()))
 	return objNames, int(errCnt.Load()), err
 }
 
 // Put an object into a cloud bucket and evict it afterwards - can be used to test cold GET
-func PutObjectInRemoteBucketWithoutCachingLocally(t *testing.T, bck cmn.Bck, object string, objContent cmn.ReadOpenCloser) {
+func PutObjectInRemoteBucketWithoutCachingLocally(t *testing.T, bck cmn.Bck, object string, objContent cos.ReadOpenCloser) {
 	baseParams := BaseAPIParams()
 
 	err := api.PutObject(api.PutObjectArgs{
@@ -609,7 +610,7 @@ func GetClusterConfig(t *testing.T) (config *cmn.Config) {
 	return config
 }
 
-func SetClusterConfig(t *testing.T, nvs cmn.SimpleKVs) {
+func SetClusterConfig(t *testing.T, nvs cos.SimpleKVs) {
 	proxyURL := GetPrimaryURL()
 	baseParams := BaseAPIParams(proxyURL)
 	err := api.SetClusterConfig(baseParams, nvs)

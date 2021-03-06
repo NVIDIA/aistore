@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
@@ -42,7 +43,7 @@ func createTar(w io.Writer, ext string, start, end, fileCnt int, fileSize int64)
 	var (
 		gzw       *gzip.Writer
 		tw        *tar.Writer
-		random    = cmn.NowRand()
+		random    = cos.NowRand()
 		buf       = make([]byte, fileSize)
 		randBytes = make([]byte, 10)
 	)
@@ -67,7 +68,7 @@ func createTar(w io.Writer, ext string, start, end, fileCnt int, fileSize int64)
 			Name:     name,
 			Uid:      os.Getuid(),
 			Gid:      os.Getgid(),
-			Mode:     int64(cmn.PermRWR),
+			Mode:     int64(cos.PermRWR),
 		}
 		if err := tw.WriteHeader(h); err != nil {
 			return err
@@ -234,7 +235,7 @@ func (b *dsortPB) updateBars(metrics map[string]*dsort.Metrics) bool {
 	for _, targetMetrics = range metrics {
 		phases[dsort.ExtractionPhase].progress += targetMetrics.Extraction.ExtractedCnt
 
-		phases[dsort.SortingPhase].progress = cmn.MaxI64(phases[dsort.SortingPhase].progress, targetMetrics.Sorting.RecvStats.Count)
+		phases[dsort.SortingPhase].progress = cos.MaxI64(phases[dsort.SortingPhase].progress, targetMetrics.Sorting.RecvStats.Count)
 
 		phases[dsort.CreationPhase].progress += targetMetrics.Creation.CreatedCnt
 		phases[dsort.CreationPhase].total += targetMetrics.Creation.ToCreate
@@ -362,23 +363,23 @@ func printCondensedStats(w io.Writer, id string) error {
 		aborted = aborted || tm.Aborted.Load()
 		finished = finished && tm.Creation.Finished
 
-		elapsedTime = cmn.MaxDuration(elapsedTime, tm.ElapsedTime())
+		elapsedTime = cos.MaxDuration(elapsedTime, tm.ElapsedTime())
 		if tm.Extraction.Finished {
-			extractionTime = cmn.MaxDuration(extractionTime, tm.Extraction.End.Sub(tm.Extraction.Start))
+			extractionTime = cos.MaxDuration(extractionTime, tm.Extraction.End.Sub(tm.Extraction.Start))
 		} else {
-			extractionTime = cmn.MaxDuration(extractionTime, time.Since(tm.Extraction.Start))
+			extractionTime = cos.MaxDuration(extractionTime, time.Since(tm.Extraction.Start))
 		}
 
 		if tm.Sorting.Finished {
-			sortingTime = cmn.MaxDuration(sortingTime, tm.Sorting.End.Sub(tm.Sorting.Start))
+			sortingTime = cos.MaxDuration(sortingTime, tm.Sorting.End.Sub(tm.Sorting.Start))
 		} else if tm.Sorting.Running {
-			sortingTime = cmn.MaxDuration(sortingTime, time.Since(tm.Sorting.Start))
+			sortingTime = cos.MaxDuration(sortingTime, time.Since(tm.Sorting.Start))
 		}
 
 		if tm.Creation.Finished {
-			creationTime = cmn.MaxDuration(creationTime, tm.Creation.End.Sub(tm.Creation.Start))
+			creationTime = cos.MaxDuration(creationTime, tm.Creation.End.Sub(tm.Creation.Start))
 		} else if tm.Creation.Running {
-			creationTime = cmn.MaxDuration(creationTime, time.Since(tm.Creation.Start))
+			creationTime = cos.MaxDuration(creationTime, time.Since(tm.Creation.Start))
 		}
 	}
 
@@ -478,7 +479,7 @@ func dsortJobStatus(c *cli.Context, id string) error {
 
 	rate := calcRefreshRate(c)
 	if logging {
-		file, err := cmn.CreateFile(c.String(logFlag.Name))
+		file, err := cos.CreateFile(c.String(logFlag.Name))
 		if err != nil {
 			return err
 		}

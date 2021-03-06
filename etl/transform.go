@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/xaction/xreg"
@@ -179,7 +180,7 @@ func cleanupEntities(errCtx *cmn.ETLErrorContext, podName, svcName string) (err 
 // * svcName - non-empty if at least one attempt of creating service was executed
 // * err - any error occurred which should be passed further.
 func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETLErrorContext, podName, svcName string, err error) {
-	cmn.Assert(k8s.NodeName != "") // Corresponding 'if' done at the beginning of the request.
+	cos.Assert(k8s.NodeName != "") // Corresponding 'if' done at the beginning of the request.
 	var (
 		pod             *corev1.Pod
 		svc             *corev1.Service
@@ -274,7 +275,7 @@ func checkETLConnection(socketAddr, podName string) error {
 			if err != nil {
 				return 0, err
 			}
-			cmn.Close(conn)
+			cos.Close(conn)
 			return 0, nil
 		},
 		SoftErr: 10,
@@ -542,7 +543,7 @@ func setPodEnvVariables(t cluster.Target, pod *corev1.Pod, customEnv map[string]
 // request (made by the Kubernetes itself) returns OK. If the Pod doesn't have
 // `readinessProbe` config specified the last step gets skipped.
 // NOTE: However, currently, we do require readinessProbe config in the ETL spec.
-func waitPodReady(errCtx *cmn.ETLErrorContext, pod *corev1.Pod, waitTimeout cmn.DurationJSON) error {
+func waitPodReady(errCtx *cmn.ETLErrorContext, pod *corev1.Pod, waitTimeout cos.DurationJSON) error {
 	var (
 		condition   *corev1.PodCondition
 		client, err = k8s.GetClient()

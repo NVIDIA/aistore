@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -78,8 +79,8 @@ func (j *DlJobInfo) Aggregate(rhs *DlJobInfo) {
 		j.StartedTime = rhs.StartedTime
 	}
 	// Compute max out of `FinishedTime` only when both are non-zero.
-	if !cmn.IsTimeZero(j.FinishedTime) {
-		if cmn.IsTimeZero(rhs.FinishedTime) {
+	if !cos.IsTimeZero(j.FinishedTime) {
+		if cos.IsTimeZero(rhs.FinishedTime) {
 			j.FinishedTime = rhs.FinishedTime
 		} else if j.FinishedTime.Before(rhs.FinishedTime) {
 			j.FinishedTime = rhs.FinishedTime
@@ -106,10 +107,10 @@ func (db *DlBody) UnmarshalJSON(b []byte) error {
 }
 
 func (j DlJobInfo) JobFinished() bool {
-	if cmn.IsTimeZero(j.FinishedTime) {
+	if cos.IsTimeZero(j.FinishedTime) {
 		return false
 	}
-	cmn.Assert(j.Aborted || (j.AllDispatched && j.ScheduledCnt == j.DoneCnt()))
+	cos.Assert(j.Aborted || (j.AllDispatched && j.ScheduledCnt == j.DoneCnt()))
 	return true
 }
 
@@ -130,7 +131,7 @@ func (j DlJobInfo) DoneCnt() int { return j.FinishedCnt + j.ErrorCnt }
 // PendingCnt returns number of tasks which are currently being processed.
 func (j DlJobInfo) PendingCnt() int {
 	pending := j.TotalCnt() - j.DoneCnt()
-	cmn.Assert(pending >= 0)
+	cos.Assert(pending >= 0)
 	return pending
 }
 
@@ -177,7 +178,7 @@ func (d *DlStatusResp) Aggregate(rhs DlStatusResp) *DlStatusResp {
 	if d == nil {
 		r := DlStatusResp{}
 		err := cmn.MorphMarshal(rhs, &r)
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 		return &r
 	}
 
@@ -306,8 +307,8 @@ func (b *DlSingleBody) Validate() error {
 	return nil
 }
 
-func (b *DlSingleBody) ExtractPayload() (cmn.SimpleKVs, error) {
-	objects := make(cmn.SimpleKVs, 1)
+func (b *DlSingleBody) ExtractPayload() (cos.SimpleKVs, error) {
+	objects := make(cos.SimpleKVs, 1)
 	objects[b.ObjName] = b.Link
 	return objects, nil
 }
@@ -367,8 +368,8 @@ func (b *DlMultiBody) Validate() error {
 	return nil
 }
 
-func (b *DlMultiBody) ExtractPayload() (cmn.SimpleKVs, error) {
-	objects := make(cmn.SimpleKVs, 10)
+func (b *DlMultiBody) ExtractPayload() (cos.SimpleKVs, error) {
+	objects := make(cos.SimpleKVs, 10)
 	switch ty := b.ObjectsPayload.(type) {
 	case map[string]interface{}:
 		for key, val := range ty {

@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
@@ -44,7 +45,7 @@ func (*mncProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 
 func (p *mncProvider) Start(bck cmn.Bck) error {
 	slab, err := p.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	p.xact = newXactMNC(bck, p.t, slab, p.uuid, p.copies)
 	return nil
 }

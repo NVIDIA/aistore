@@ -12,13 +12,14 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 const (
 	signature = "aistore" // file signature
 	//                              0 ---------------- 63  64 ------ 95 | 96 ------ 127
-	prefLen = 2 * cmn.SizeofI64 // [ signature | jsp ver | meta version |   bit flags  ]
+	prefLen = 2 * cos.SizeofI64 // [ signature | jsp ver | meta version |   bit flags  ]
 )
 
 //////////////////
@@ -32,9 +33,9 @@ func SaveMeta(filepath string, meta cmn.GetJopts) error {
 func Save(filepath string, v interface{}, opts cmn.Jopts) (err error) {
 	var (
 		file *os.File
-		tmp  = filepath + ".tmp." + cmn.GenTie()
+		tmp  = filepath + ".tmp." + cos.GenTie()
 	)
-	if file, err = cmn.CreateFile(tmp); err != nil {
+	if file, err = cos.CreateFile(tmp); err != nil {
 		return
 	}
 	defer func() {
@@ -44,7 +45,7 @@ func Save(filepath string, v interface{}, opts cmn.Jopts) (err error) {
 		}
 	}()
 	if err = Encode(file, v, opts); err != nil {
-		cmn.Close(file)
+		cos.Close(file)
 		return
 	}
 	if err = file.Close(); err != nil {
@@ -54,18 +55,18 @@ func Save(filepath string, v interface{}, opts cmn.Jopts) (err error) {
 	return
 }
 
-func LoadMeta(filepath string, meta cmn.GetJopts) (*cmn.Cksum, error) {
+func LoadMeta(filepath string, meta cmn.GetJopts) (*cos.Cksum, error) {
 	return Load(filepath, meta, meta.GetJopts())
 }
 
-func Load(filepath string, v interface{}, opts cmn.Jopts) (checksum *cmn.Cksum, err error) {
+func Load(filepath string, v interface{}, opts cmn.Jopts) (checksum *cos.Cksum, err error) {
 	var file *os.File
 	file, err = os.Open(filepath)
 	if err != nil {
 		return
 	}
 	checksum, err = Decode(file, v, opts, filepath)
-	if err != nil && errors.Is(err, &cmn.ErrBadCksum{}) {
+	if err != nil && errors.Is(err, &cos.ErrBadCksum{}) {
 		if errRm := os.Remove(filepath); errRm == nil {
 			if flag.Parsed() {
 				glog.Errorf("bad checksum: removing %s", filepath)

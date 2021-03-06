@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"golang.org/x/sys/unix"
 )
 
@@ -47,7 +47,7 @@ func GetDirSize(dirPath string) (uint64, error) {
 	out = out[:idx]
 	// `du` can return ',' as float separator what cannot be parsed properly.
 	out = strings.ReplaceAll(out, ",", ".")
-	size, err := cmn.S2B(out)
+	size, err := cos.S2B(out)
 	if err != nil || size < 0 {
 		return 0, fmt.Errorf("invalid output format from 'du' command, err: %v", err)
 	}

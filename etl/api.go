@@ -7,7 +7,7 @@ package etl
 import (
 	"fmt"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/etl/runtime"
 )
 
@@ -16,7 +16,7 @@ type (
 		ID          string           `json:"id"`
 		Spec        []byte           `json:"spec"`
 		CommType    string           `json:"communication_type"`
-		WaitTimeout cmn.DurationJSON `json:"wait_timeout"`
+		WaitTimeout cos.DurationJSON `json:"wait_timeout"`
 	}
 
 	BuildMsg struct {
@@ -24,7 +24,7 @@ type (
 		Code        []byte           `json:"code"`
 		Deps        []byte           `json:"dependencies"`
 		Runtime     string           `json:"runtime"`
-		WaitTimeout cmn.DurationJSON `json:"wait_timeout"`
+		WaitTimeout cos.DurationJSON `json:"wait_timeout"`
 	}
 
 	InfoList []Info

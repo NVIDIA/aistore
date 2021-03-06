@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/hk"
@@ -315,7 +316,7 @@ func (ci *cacheInterval) get(token string, objCnt uint, params reqParams) (entri
 	}
 	entries = entries[start:]
 
-	end := cmn.MinUint(uint(len(entries)), objCnt)
+	end := cos.MinUint(uint(len(entries)), objCnt)
 	if params.prefix != "" {
 		// Move `end-1` to last entry that starts with `params.prefix`.
 		for ; end > 0; end-- {
@@ -356,7 +357,7 @@ func (ci *cacheInterval) append(objs *cacheInterval) {
 }
 
 func (ci *cacheInterval) prepend(objs *cacheInterval) {
-	cmn.Assert(!objs.last)
+	cos.Assert(!objs.last)
 	objs.append(ci)
 	*ci = *objs
 }
@@ -392,7 +393,7 @@ func (c *queryCache) merge(start, end, cur *cacheInterval) {
 		start.append(end)
 		c.removeInterval(end)
 	} else {
-		cmn.Assert(false)
+		cos.Assert(false)
 	}
 }
 

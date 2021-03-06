@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
@@ -51,7 +52,7 @@ func TestObjectInvalidName(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams()
 		bck        = cmn.Bck{
-			Name:     cmn.RandString(10),
+			Name:     cos.RandString(10),
 			Provider: cmn.ProviderAIS,
 		}
 	)
@@ -87,7 +88,7 @@ func TestObjectInvalidName(t *testing.T) {
 		t.Run(test.op, func(t *testing.T) {
 			switch test.op {
 			case putOP:
-				reader, err := readers.NewRandReader(cmn.KiB, cmn.ChecksumNone)
+				reader, err := readers.NewRandReader(cos.KiB, cos.ChecksumNone)
 				tassert.CheckFatal(t, err)
 				err = api.PutObject(api.PutObjectArgs{
 					BaseParams: baseParams,
@@ -126,14 +127,14 @@ func TestRemoteBucketObject(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s:%v", test.ty, test.exists), func(t *testing.T) {
-			object := cmn.RandString(10)
+			object := cos.RandString(10)
 			if !test.exists {
-				bck.Name = cmn.RandString(10)
+				bck.Name = cos.RandString(10)
 			} else {
 				bck.Name = cliBck.Name
 			}
 
-			reader, err := readers.NewRandReader(cmn.KiB, cmn.ChecksumNone)
+			reader, err := readers.NewRandReader(cos.KiB, cos.ChecksumNone)
 			tassert.CheckFatal(t, err)
 
 			defer api.DeleteObject(baseParams, bck, object)
@@ -216,7 +217,7 @@ func TestHttpProviderObjectGet(t *testing.T) {
 }
 
 func TestAppendObject(t *testing.T) {
-	for _, cksumType := range cmn.SupportedChecksums() {
+	for _, cksumType := range cos.SupportedChecksums() {
 		t.Run(cksumType, func(t *testing.T) {
 			var (
 				proxyURL   = tutils.RandomProxyURL(t)
@@ -242,7 +243,7 @@ func TestAppendObject(t *testing.T) {
 			var (
 				err    error
 				handle string
-				cksum  = cmn.NewCksumHash(cksumType)
+				cksum  = cos.NewCksumHash(cksumType)
 			)
 			for _, body := range []string{objHead, objBody, objTail} {
 				args := api.AppendArgs{
@@ -250,7 +251,7 @@ func TestAppendObject(t *testing.T) {
 					Bck:        bck,
 					Object:     objName,
 					Handle:     handle,
-					Reader:     cmn.NewByteHandle([]byte(body)),
+					Reader:     cos.NewByteHandle([]byte(body)),
 				}
 				handle, err = api.AppendObject(args)
 				tassert.CheckFatal(t, err)
@@ -458,7 +459,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 
 	bucketPropsLocal := &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{
-			Type: api.String(cmn.ChecksumNone),
+			Type: api.String(cos.ChecksumNone),
 		},
 	}
 	bucketPropsRemote := &cmn.BucketPropsToUpdate{}
@@ -624,7 +625,7 @@ func Test_coldgetmd5(t *testing.T) {
 
 	start := time.Now()
 	m.gets(false /*withValidation*/)
-	tlog.Logf("GET %s without MD5 validation: %v\n", cmn.B2S(totalSize, 0), time.Since(start))
+	tlog.Logf("GET %s without MD5 validation: %v\n", cos.B2S(totalSize, 0), time.Since(start))
 
 	m.evict()
 
@@ -639,7 +640,7 @@ func Test_coldgetmd5(t *testing.T) {
 
 	start = time.Now()
 	m.gets(true /*withValidation*/)
-	tlog.Logf("GET %s with MD5 validation:    %v\n", cmn.B2S(totalSize, 0), time.Since(start))
+	tlog.Logf("GET %s with MD5 validation:    %v\n", cos.B2S(totalSize, 0), time.Since(start))
 }
 
 func TestHeadBucket(t *testing.T) {
@@ -777,7 +778,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 			t:        t,
 			bck:      cliBck,
 			num:      3,
-			fileSize: cmn.KiB,
+			fileSize: cos.KiB,
 		}
 
 		proxyURL   = tutils.RandomProxyURL(t)
@@ -798,7 +799,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	_ = cluster.NewTargetMock(cluster.NewBaseBownerMock(
 		cluster.NewBck(
 			m.bck.Name, m.bck.Provider, cmn.NsGlobal,
-			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}, Extra: p.Extra, BID: 0xa73b9f11},
+			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, Extra: p.Extra, BID: 0xa73b9f11},
 		),
 	))
 
@@ -838,7 +839,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 
 	// Test when the contents of the file are changed
 	tlog.Logf("Changing contents of the file [%s]: %s\n", objName, fqn)
-	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), cmn.PermRWR)
+	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), cos.PermRWR)
 	tassert.CheckFatal(t, err)
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, objName, fqn, oldFileInfo)
 
@@ -849,7 +850,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	oldFileInfo, _ = os.Stat(fqn)
 
 	tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
-	err = tutils.SetXattrCksum(fqn, m.bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234"))
+	err = tutils.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumXXHash, "01234"))
 	tassert.CheckError(t, err)
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, objName, fqn, oldFileInfo)
 
@@ -857,10 +858,10 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	objName = m.objNames[2]
 	fqn = findObjOnDisk(m.bck, objName)
 
-	if p.Cksum.Type != cmn.ChecksumNone {
+	if p.Cksum.Type != cos.ChecksumNone {
 		propsToUpdate := &cmn.BucketPropsToUpdate{
 			Cksum: &cmn.CksumConfToUpdate{
-				Type: api.String(cmn.ChecksumNone),
+				Type: api.String(cos.ChecksumNone),
 			},
 		}
 		_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
@@ -868,7 +869,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	}
 
 	tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
-	err = tutils.SetXattrCksum(fqn, m.bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"))
+	err = tutils.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumXXHash, "01234abcde"))
 	tassert.CheckError(t, err)
 
 	_, err = api.GetObject(baseParams, m.bck, objName)
@@ -963,11 +964,11 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 			t: t,
 			bck: cmn.Bck{
 				Provider: cmn.ProviderAIS,
-				Name:     cmn.RandString(15),
+				Name:     cos.RandString(15),
 				Props:    &cmn.BucketProps{BID: 2},
 			},
 			num:      3,
-			fileSize: cmn.KiB,
+			fileSize: cos.KiB,
 		}
 
 		proxyURL   = tutils.RandomProxyURL(t)
@@ -975,7 +976,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		_          = cluster.NewTargetMock(cluster.NewBaseBownerMock(
 			cluster.NewBck(
 				m.bck.Name, cmn.ProviderAIS, cmn.NsGlobal,
-				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}, BID: 1},
+				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, BID: 1},
 			),
 			cluster.NewBckEmbed(m.bck),
 		))
@@ -1008,7 +1009,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	objName := m.objNames[0]
 	fqn := findObjOnDisk(m.bck, objName)
 	tlog.Logf("Changing contents of the file [%s]: %s\n", objName, fqn)
-	err := ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), cmn.PermRWR)
+	err := ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), cos.PermRWR)
 	tassert.CheckFatal(t, err)
 	executeTwoGETsForChecksumValidation(proxyURL, m.bck, objName, t)
 
@@ -1016,7 +1017,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	objName = m.objNames[1]
 	fqn = findObjOnDisk(m.bck, objName)
 	tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
-	err = tutils.SetXattrCksum(fqn, m.bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"))
+	err = tutils.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumXXHash, "01234abcde"))
 	tassert.CheckError(t, err)
 	executeTwoGETsForChecksumValidation(proxyURL, m.bck, objName, t)
 
@@ -1024,10 +1025,10 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	objName = m.objNames[2]
 	fqn = findObjOnDisk(m.bck, objName)
 
-	if cksumConf.Type != cmn.ChecksumNone {
+	if cksumConf.Type != cos.ChecksumNone {
 		propsToUpdate := &cmn.BucketPropsToUpdate{
 			Cksum: &cmn.CksumConfToUpdate{
-				Type: api.String(cmn.ChecksumNone),
+				Type: api.String(cos.ChecksumNone),
 			},
 		}
 		_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
@@ -1035,7 +1036,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	}
 
 	tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
-	err = tutils.SetXattrCksum(fqn, m.bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"))
+	err = tutils.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumXXHash, "01234abcde"))
 	tassert.CheckError(t, err)
 	_, err = api.GetObject(baseParams, m.bck, objName)
 	tassert.CheckError(t, err)
@@ -1172,7 +1173,7 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, ob
 					t.Fatalf("Unable to open file: %s. Error:  %v", fqn, err)
 				}
 				defer file.Close()
-				_, cksum, err := cmn.CopyAndChecksum(ioutil.Discard, file, nil, cksumType)
+				_, cksum, err := cos.CopyAndChecksum(ioutil.Discard, file, nil, cksumType)
 				if err != nil {
 					t.Errorf("Unable to compute cksum of file: %s. Error:  %s", fqn, err)
 				}
@@ -1285,10 +1286,10 @@ func Test_checksum(t *testing.T) {
 	m.remotePuts(true /*evict*/)
 
 	// Disable checkum.
-	if p.Cksum.Type != cmn.ChecksumNone {
+	if p.Cksum.Type != cos.ChecksumNone {
 		propsToUpdate := &cmn.BucketPropsToUpdate{
 			Cksum: &cmn.CksumConfToUpdate{
-				Type: api.String(cmn.ChecksumNone),
+				Type: api.String(cos.ChecksumNone),
 			},
 		}
 		_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
@@ -1308,13 +1309,13 @@ func Test_checksum(t *testing.T) {
 
 	start := time.Now()
 	m.gets(false /*withValidate*/)
-	tlog.Logf("GET %s without any checksum validation: %v\n", cmn.B2S(totalSize, 0), time.Since(start))
+	tlog.Logf("GET %s without any checksum validation: %v\n", cos.B2S(totalSize, 0), time.Since(start))
 
 	m.evict()
 
 	propsToUpdate := &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{
-			Type:            api.String(cmn.ChecksumXXHash),
+			Type:            api.String(cos.ChecksumXXHash),
 			ValidateColdGet: api.Bool(true),
 		},
 	}
@@ -1323,7 +1324,7 @@ func Test_checksum(t *testing.T) {
 
 	start = time.Now()
 	m.gets(true /*withValidate*/)
-	tlog.Logf("GET %s and validate checksum: %v\n", cmn.B2S(totalSize, 0), time.Since(start))
+	tlog.Logf("GET %s and validate checksum: %v\n", cos.B2S(totalSize, 0), time.Since(start))
 }
 
 func validateBucketProps(t *testing.T, expected *cmn.BucketPropsToUpdate, actual *cmn.BucketProps) {
@@ -1350,7 +1351,7 @@ func corruptSingleBitInFile(t *testing.T, bck cmn.Bck, objName string) {
 	)
 	tassert.CheckFatal(t, err)
 	off := rand.Int63n(fi.Size())
-	file, err := os.OpenFile(fqn, os.O_RDWR, cmn.PermRWR)
+	file, err := os.OpenFile(fqn, os.O_RDWR, cos.PermRWR)
 	tassert.CheckFatal(t, err)
 	_, err = file.Seek(off, 0)
 	tassert.CheckFatal(t, err)
@@ -1383,15 +1384,15 @@ func TestPutObjectWithChecksum(t *testing.T) {
 		Bck:        bckLocal,
 		Reader:     readers.NewBytesReader(objData),
 	}
-	for _, cksumType := range cmn.SupportedChecksums() {
-		if cksumType == cmn.ChecksumNone {
+	for _, cksumType := range cos.SupportedChecksums() {
+		if cksumType == cos.ChecksumNone {
 			continue
 		}
 		fileName := basefileName + cksumType
-		hasher := cmn.NewCksumHash(cksumType)
+		hasher := cos.NewCksumHash(cksumType)
 		hasher.H.Write(objData)
 		cksumValue := hex.EncodeToString(hasher.H.Sum(nil))
-		putArgs.Cksum = cmn.NewCksum(cksumType, badCksumVal)
+		putArgs.Cksum = cos.NewCksum(cksumType, badCksumVal)
 		putArgs.Object = fileName
 		err := api.PutObject(putArgs)
 		if err == nil {
@@ -1401,7 +1402,7 @@ func TestPutObjectWithChecksum(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
 			t.Errorf("Object %s exists despite bad checksum", fileName)
 		}
-		putArgs.Cksum = cmn.NewCksum(cksumType, cksumValue)
+		putArgs.Cksum = cos.NewCksum(cksumType, cksumValue)
 		err = api.PutObject(putArgs)
 		if err != nil {
 			t.Errorf("Correct checksum provided, Err encountered %v", err)
@@ -1416,7 +1417,7 @@ func TestPutObjectWithChecksum(t *testing.T) {
 func TestOperationsWithRanges(t *testing.T) {
 	const (
 		objCnt  = 50 // NOTE: Must by positive multiple of 10.
-		objSize = cmn.KiB
+		objSize = cos.KiB
 	)
 	proxyURL := tutils.RandomProxyURL(t)
 

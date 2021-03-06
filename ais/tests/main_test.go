@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools"
 	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
@@ -28,7 +29,7 @@ var (
 func setBucket() (bck cmn.Bck, err error) {
 	bucket := os.Getenv("BUCKET")
 	if bucket == "" {
-		bucket = cmn.ProviderAIS + cmn.BckProviderSeparator + cmn.RandString(7)
+		bucket = cmn.ProviderAIS + cmn.BckProviderSeparator + cos.RandString(7)
 		tlog.Logf("Using BUCKET=%q\n", bucket)
 	}
 	bck, _, err = cmn.ParseBckObjectURI(bucket)

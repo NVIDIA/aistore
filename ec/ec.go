@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -122,7 +123,7 @@ const (
 
 	// EC switches to disk from SGL when memory pressure is high and the amount of
 	// memory required to encode an object exceeds the limit
-	objSizeHighMem = 50 * cmn.MiB
+	objSizeHighMem = 50 * cos.MiB
 )
 
 type (
@@ -153,15 +154,15 @@ type (
 
 	// keeps temporarily a slice of object data until it is sent to remote node
 	slice struct {
-		obj     cmn.ReadOpenCloser // the whole object or its replica
-		reader  cmn.ReadOpenCloser // used in encoding - a slice of `obj`
+		obj     cos.ReadOpenCloser // the whole object or its replica
+		reader  cos.ReadOpenCloser // used in encoding - a slice of `obj`
 		writer  io.Writer          // for parity slices and downloading slices from other targets when restoring
-		wg      *cmn.TimeoutGroup  // for synchronous download (for restore)
+		wg      *cos.TimeoutGroup  // for synchronous download (for restore)
 		lom     *cluster.LOM       // for xattrs
 		n       int64              // number of byte sent/received
 		refCnt  atomic.Int32       // number of references
 		workFQN string             // FQN for temporary slice/replica
-		cksum   *cmn.Cksum         // checksum of the slice
+		cksum   *cos.Cksum         // checksum of the slice
 		version string             // version of the remote object
 	}
 
@@ -171,7 +172,7 @@ type (
 	// allocated SGL is freed. This logic is required to send a set of
 	// sliceReaders that point to the same SGL (broadcasting data slices)
 	dataSource struct {
-		reader   cmn.ReadOpenCloser // a reader to sent to a remote target
+		reader   cos.ReadOpenCloser // a reader to sent to a remote target
 		size     int64              // size of the data
 		obj      *slice             // internal info about SGL slice
 		metadata *Metadata          // object's metadata
@@ -212,16 +213,16 @@ func (s *slice) free() {
 	freeObject(s.obj)
 	s.obj = nil
 	if s.reader != nil {
-		cmn.Close(s.reader)
+		cos.Close(s.reader)
 	}
 	if s.writer != nil {
 		switch w := s.writer.(type) {
 		case *os.File:
-			cmn.Close(w)
+			cos.Close(w)
 		case *memsys.SGL:
 			w.Free()
 		default:
-			cmn.Assertf(false, "%T", w)
+			cos.Assertf(false, "%T", w)
 		}
 	}
 	if s.workFQN != "" {
@@ -242,17 +243,17 @@ func (s *slice) release() {
 	}
 }
 
-func (s *slice) reopenReader() (reader cmn.ReadOpenCloser, err error) {
+func (s *slice) reopenReader() (reader cos.ReadOpenCloser, err error) {
 	if s.reader != nil {
 		var rc io.ReadCloser
 		reader = s.reader
 		switch r := reader.(type) {
 		case *memsys.Reader:
 			_, err = r.Seek(0, io.SeekStart)
-		case *cmn.SectionHandle:
+		case *cos.SectionHandle:
 			rc, err = r.Open()
 			if err == nil {
-				reader = rc.(cmn.ReadOpenCloser)
+				reader = rc.(cos.ReadOpenCloser)
 			}
 		default:
 			err = fmt.Errorf("unsupported reader type: %T", s.reader)
@@ -264,7 +265,7 @@ func (s *slice) reopenReader() (reader cmn.ReadOpenCloser, err error) {
 	if sgl, ok := s.obj.(*memsys.SGL); ok {
 		reader = memsys.NewReader(sgl)
 	} else if s.workFQN != "" {
-		reader, err = cmn.NewFileHandle(s.workFQN)
+		reader, err = cos.NewFileHandle(s.workFQN)
 	} else {
 		err = fmt.Errorf("unsupported obj type: %T", s.obj)
 		debug.Assertf(false, "unsupported obj type: %T", s.obj)
@@ -284,7 +285,7 @@ func Init(t cluster.Target) {
 	xreg.RegisterBucketXact(&xactBckEncodeProvider{})
 
 	if err := initManager(t); err != nil {
-		cmn.ExitLogf("Failed to init manager: %v", err)
+		cos.ExitLogf("Failed to init manager: %v", err)
 	}
 }
 
@@ -331,14 +332,14 @@ func freeObject(r interface{}) {
 		if handle != nil {
 			handle.Free()
 		}
-	case *cmn.FileHandle:
+	case *cos.FileHandle:
 		if handle != nil {
 			// few slices share the same handle, on error all release everything
 			_ = handle.Close()
 		}
 	case *os.File:
 		if handle != nil {
-			cmn.Close(handle)
+			cos.Close(handle)
 		}
 	default:
 		debug.Assertf(false, "invalid object type: %T", r)
@@ -365,11 +366,11 @@ func requestECMeta(bck cmn.Bck, objName string, si *cluster.Snode, client *http.
 		return nil, err
 	}
 	rq.URL.RawQuery = query.Encode()
-	resp, err := client.Do(rq) // nolint:bodyclose // closed inside cmn.Close
+	resp, err := client.Do(rq) // nolint:bodyclose // closed inside cos.Close
 	if err != nil {
 		return nil, err
 	}
-	defer cmn.Close(resp.Body)
+	defer cos.Close(resp.Body)
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, cmn.NewNotFoundError("object %s/%s", bck, objName)
 	} else if resp.StatusCode != http.StatusOK {
@@ -430,10 +431,10 @@ func WriteSliceAndMeta(t cluster.Target, hdr transport.ObjHdr, args *WriteArgs) 
 	}
 
 	if err != nil {
-		if rmErr := cmn.RemoveFile(ct.FQN()); rmErr != nil {
+		if rmErr := cos.RemoveFile(ct.FQN()); rmErr != nil {
 			glog.Errorf("nested error: save replica -> remove replica: %v", rmErr)
 		}
-		if rmErr := cmn.RemoveFile(ctMeta.FQN()); rmErr != nil {
+		if rmErr := cos.RemoveFile(ctMeta.FQN()); rmErr != nil {
 			glog.Errorf("nested error: save replica -> remove metafile: %v", rmErr)
 		}
 	}
@@ -453,8 +454,8 @@ func LomFromHeader(hdr transport.ObjHdr) (*cluster.LOM, error) {
 	if hdr.ObjAttrs.Atime != 0 {
 		lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
 	}
-	if hdr.ObjAttrs.CksumType != cmn.ChecksumNone && hdr.ObjAttrs.CksumValue != "" {
-		lom.SetCksum(cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue))
+	if hdr.ObjAttrs.CksumType != cos.ChecksumNone && hdr.ObjAttrs.CksumValue != "" {
+		lom.SetCksum(cos.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue))
 	}
 	return lom, nil
 }
@@ -465,8 +466,8 @@ func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) er
 	if err != nil {
 		return err
 	}
-	if args.CksumType != cmn.ChecksumNone && args.CksumValue != "" {
-		cksumHdr := cmn.NewCksum(args.CksumType, args.CksumValue)
+	if args.CksumType != cos.ChecksumNone && args.CksumValue != "" {
+		cksumHdr := cos.NewCksum(args.CksumType, args.CksumValue)
 		if !lom.Cksum().Equal(cksumHdr) {
 			return fmt.Errorf("mismatched hash for %s/%s, version %s, hash calculated %s/md %s",
 				lom.Bucket(), lom.ObjName, lom.Version(), cksumHdr, lom.Cksum())
@@ -479,10 +480,10 @@ func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) er
 	}
 
 	if err != nil {
-		if rmErr := cmn.RemoveFile(lom.FQN); rmErr != nil {
+		if rmErr := cos.RemoveFile(lom.FQN); rmErr != nil {
 			glog.Errorf("nested error: save replica -> remove replica: %v", rmErr)
 		}
-		if rmErr := cmn.RemoveFile(ctMeta.FQN()); rmErr != nil {
+		if rmErr := cos.RemoveFile(ctMeta.FQN()); rmErr != nil {
 			glog.Errorf("nested error: save replica -> remove metafile: %v", rmErr)
 		}
 	}

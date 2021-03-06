@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/memsys"
@@ -285,7 +286,7 @@ outer:
 		if tag == revsSmapTag {
 			if revsReqType == revsReqSync && revs.version() > smap.version() {
 				ers := fmt.Sprintf("FATAL: %s is newer than the current %s", detail, smap)
-				cmn.AssertMsg(false, ers)
+				cos.AssertMsg(false, ers)
 			}
 		}
 		// vs the last sync-ed: enforcing non-decremental versioning on the wire
@@ -363,7 +364,7 @@ outer:
 		}
 		glog.Warningf("%s: failed to sync %s, err: %v(%d)", y.p.si, res.si, res.err, res.status)
 		// in addition to "connection-refused" always retry newTargetID - the joining one
-		if cmn.IsErrConnectionRefused(res.err) || cmn.StringInSlice(res.si.ID(), newTargetIDs) {
+		if cmn.IsErrConnectionRefused(res.err) || cos.StringInSlice(res.si.ID(), newTargetIDs) {
 			if refused == nil {
 				refused = make(cluster.NodeMap, 2)
 			}

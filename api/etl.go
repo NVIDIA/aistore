@@ -10,6 +10,7 @@ import (
 	"net/url"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/etl"
 )
 
@@ -39,7 +40,7 @@ func ETLLogs(baseParams BaseParams, id string, targetID ...string) (logs etl.Pod
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPathETLLogs.Join(id)
 	if len(targetID) > 0 && targetID[0] != "" {
-		path = cmn.JoinWords(path, targetID[0])
+		path = cos.JoinWords(path, targetID[0])
 	}
 	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: path}, &logs)
 	return logs, err

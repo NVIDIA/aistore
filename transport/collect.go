@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 type (
@@ -23,7 +24,7 @@ type (
 		streams map[string]*streamBase
 		heap    []*streamBase
 		ticker  *time.Ticker
-		stopCh  *cmn.StopCh
+		stopCh  *cos.StopCh
 		ctrlCh  chan ctrl
 	}
 )
@@ -43,11 +44,11 @@ var _ cmn.Runner = (*StreamCollector)(nil)
 // 3. deactivates idle streams
 
 func Init() *StreamCollector {
-	cmn.Assert(gc == nil)
+	cos.Assert(gc == nil)
 
 	// real stream collector
 	gc = &collector{
-		stopCh:  cmn.NewStopCh(),
+		stopCh:  cos.NewStopCh(),
 		ctrlCh:  make(chan ctrl, 64),
 		streams: make(map[string]*streamBase, 64),
 		heap:    make([]*streamBase, 0, 64), // min-heap sorted by stream.time.ticks
@@ -61,8 +62,8 @@ func Init() *StreamCollector {
 func (sc *StreamCollector) Name() string { return "stream_collector" }
 
 func (sc *StreamCollector) Run() (err error) {
-	cmn.Printf("Intra-cluster networking: %s client", whichClient())
-	cmn.Printf("Starting %s", sc.Name())
+	cos.Printf("Intra-cluster networking: %s client", whichClient())
+	cos.Printf("Starting %s", sc.Name())
 	return gc.run()
 }
 
@@ -84,7 +85,7 @@ func (gc *collector) run() (err error) {
 			s, add := ctrl.s, ctrl.add
 			_, ok = gc.streams[s.lid]
 			if add {
-				cmn.AssertMsg(!ok, s.lid)
+				cos.AssertMsg(!ok, s.lid)
 				gc.streams[s.lid] = s
 				heap.Push(gc, s)
 			} else if ok {
@@ -134,7 +135,7 @@ func (gc *collector) Push(x interface{}) {
 
 func (gc *collector) update(s *streamBase, ticks int) {
 	s.time.ticks = ticks
-	cmn.Assert(s.time.ticks >= 0)
+	cos.Assert(s.time.ticks >= 0)
 	heap.Fix(gc, s.time.index)
 }
 

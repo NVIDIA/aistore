@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmd/aisfs/ais"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/jacobsa/fuse"
 	"github.com/jacobsa/fuse/fuseops"
 	"github.com/jacobsa/fuse/fuseutil"
@@ -108,7 +108,7 @@ func (dir *DirectoryInode) InvalidateInode(entryName string, isDir bool) {
 
 func (dir *DirectoryInode) LinkNewFile(fileName string) (*ais.Object, error) {
 	obj := ais.NewObject(fileName, dir.bucket)
-	err := obj.Put(cmn.NopOpener(ioutil.NopCloser(bytes.NewReader([]byte{}))))
+	err := obj.Put(cos.NopOpener(ioutil.NopCloser(bytes.NewReader([]byte{}))))
 	if err != nil {
 		obj = nil
 	}

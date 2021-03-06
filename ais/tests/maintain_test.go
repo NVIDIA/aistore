@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
@@ -53,7 +54,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 		m   = &ioContext{
 			t:         t,
 			num:       1500,
-			fileSize:  cmn.KiB,
+			fileSize:  cos.KiB,
 			fixedSize: true,
 			bck:       bck,
 			proxyURL:  proxyURL,
@@ -361,7 +362,7 @@ func TestShutdownListObjects(t *testing.T) {
 		m   = &ioContext{
 			t:         t,
 			num:       1500,
-			fileSize:  cmn.KiB,
+			fileSize:  cos.KiB,
 			fixedSize: true,
 			bck:       bck,
 			proxyURL:  proxyURL,

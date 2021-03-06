@@ -11,7 +11,7 @@ import (
 	"path"
 	"testing"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 func TestGetFSUsedPercentage(t *testing.T) {
@@ -70,7 +70,7 @@ func mkFile(t *testing.T, dir string) {
 	if err != nil {
 		t.Error(err)
 	}
-	f.Write(make([]byte, cmn.KiB))
+	f.Write(make([]byte, cos.KiB))
 	f.Close()
 }
 

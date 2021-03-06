@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/fs"
 	. "github.com/onsi/ginkgo"
@@ -33,7 +34,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 		// Set path for proxy (it uses ConfigDir)
 		config := cmn.GCO.BeginUpdate()
 		config.ConfigDir = mpath
-		config.Cksum.Type = cmn.ChecksumXXHash
+		config.Cksum.Type = cos.ChecksumXXHash
 		cmn.GCO.CommitUpdate(config)
 		cfg = cmn.GCO.Get()
 
@@ -91,7 +92,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 								Signature: signature,
 							}
 							clone := bmd.clone()
-							bck := cluster.NewBck("abc"+cmn.GenTie(), cmn.ProviderAIS, cmn.NsGlobal)
+							bck := cluster.NewBck("abc"+cos.GenTie(), cmn.ProviderAIS, cmn.NsGlobal)
 
 							// Add bucket and save.
 							clone.add(bck, defaultBckProps(bckPropsArgs{bck: bck}))

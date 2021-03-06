@@ -17,6 +17,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/memsys"
@@ -25,7 +26,7 @@ import (
 var baseParams api.BaseParams
 
 func TestPutFile(t *testing.T) {
-	err := putFile(1024, cmn.ChecksumXXHash)
+	err := putFile(1024, cos.ChecksumXXHash)
 	if err != nil {
 		t.Fatal("Put file failed", err)
 	}
@@ -35,14 +36,14 @@ func TestPutSG(t *testing.T) {
 	size := int64(10)
 	sgl := tutils.MMSA.NewSGL(size)
 	defer sgl.Free()
-	err := putSG(sgl, size, cmn.ChecksumXXHash)
+	err := putSG(sgl, size, cos.ChecksumXXHash)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
 func putFile(size int64, cksumType string) error {
-	fn := "ais-client-test-" + cmn.RandString(32)
+	fn := "ais-client-test-" + cos.RandString(32)
 	dir := "/tmp"
 	r, err := readers.NewFileReader(dir, fn, size, cksumType)
 	if err != nil {
@@ -93,7 +94,7 @@ func putSG(sgl *memsys.SGL, size int64, cksumType string) error {
 
 func BenchmarkPutFileWithHash1M(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		err := putFile(1024*1024, cmn.ChecksumXXHash)
+		err := putFile(1024*1024, cos.ChecksumXXHash)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -102,7 +103,7 @@ func BenchmarkPutFileWithHash1M(b *testing.B) {
 
 func BenchmarkPutRandWithHash1M(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		err := putRand(1024*1024, cmn.ChecksumXXHash)
+		err := putRand(1024*1024, cos.ChecksumXXHash)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -110,11 +111,11 @@ func BenchmarkPutRandWithHash1M(b *testing.B) {
 }
 
 func BenchmarkPutSGWithHash1M(b *testing.B) {
-	sgl := tutils.MMSA.NewSGL(cmn.MiB)
+	sgl := tutils.MMSA.NewSGL(cos.MiB)
 	defer sgl.Free()
 
 	for i := 0; i < b.N; i++ {
-		err := putSG(sgl, 1024*1024, cmn.ChecksumXXHash)
+		err := putSG(sgl, 1024*1024, cos.ChecksumXXHash)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -123,7 +124,7 @@ func BenchmarkPutSGWithHash1M(b *testing.B) {
 
 func BenchmarkPutFileNoHash1M(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		err := putFile(1024*1024, cmn.ChecksumNone)
+		err := putFile(1024*1024, cos.ChecksumNone)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -132,7 +133,7 @@ func BenchmarkPutFileNoHash1M(b *testing.B) {
 
 func BenchmarkPutRandNoHash1M(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		err := putRand(1024*1024, cmn.ChecksumNone)
+		err := putRand(1024*1024, cos.ChecksumNone)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -140,11 +141,11 @@ func BenchmarkPutRandNoHash1M(b *testing.B) {
 }
 
 func BenchmarkPutSGNoHash1M(b *testing.B) {
-	sgl := tutils.MMSA.NewSGL(cmn.MiB)
+	sgl := tutils.MMSA.NewSGL(cos.MiB)
 	defer sgl.Free()
 
 	for i := 0; i < b.N; i++ {
-		err := putSG(sgl, 1024*1024, cmn.ChecksumNone)
+		err := putSG(sgl, 1024*1024, cos.ChecksumNone)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -154,7 +155,7 @@ func BenchmarkPutSGNoHash1M(b *testing.B) {
 func BenchmarkPutFileWithHash1MParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			err := putFile(1024*1024, cmn.ChecksumXXHash)
+			err := putFile(1024*1024, cos.ChecksumXXHash)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -165,7 +166,7 @@ func BenchmarkPutFileWithHash1MParallel(b *testing.B) {
 func BenchmarkPutRandWithHash1MParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			err := putRand(1024*1024, cmn.ChecksumXXHash)
+			err := putRand(1024*1024, cos.ChecksumXXHash)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -175,11 +176,11 @@ func BenchmarkPutRandWithHash1MParallel(b *testing.B) {
 
 func BenchmarkPutSGWithHash1MParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
-		sgl := tutils.MMSA.NewSGL(cmn.MiB)
+		sgl := tutils.MMSA.NewSGL(cos.MiB)
 		defer sgl.Free()
 
 		for pb.Next() {
-			err := putSG(sgl, 1024*1024, cmn.ChecksumXXHash)
+			err := putSG(sgl, 1024*1024, cos.ChecksumXXHash)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -204,7 +205,7 @@ func TestMain(m *testing.M) {
 			cksumType  = r.Header.Get(cmn.HeaderObjCksumType)
 			cksumValue = r.Header.Get(cmn.HeaderObjCksumVal)
 		)
-		_, cksum, err := cmn.CopyAndChecksum(ioutil.Discard, r.Body, nil, cksumType)
+		_, cksum, err := cos.CopyAndChecksum(ioutil.Discard, r.Body, nil, cksumType)
 		if err != nil {
 			errCb(http.StatusBadRequest, "server failed to read, error %v", err)
 			return

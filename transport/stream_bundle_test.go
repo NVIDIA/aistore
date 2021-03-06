@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
@@ -44,38 +45,38 @@ func (listeners *slisteners) Unreg(cluster.Slistener)   {}
 func Test_Bundle(t *testing.T) {
 	tests := []struct {
 		name string
-		nvs  cmn.SimpleKVs
+		nvs  cos.SimpleKVs
 	}{
 		{
 			name: "not-compressed",
-			nvs: cmn.SimpleKVs{
+			nvs: cos.SimpleKVs{
 				"compression": cmn.CompressNever,
 			},
 		},
 		{
 			name: "not-compressed-unsized",
-			nvs: cmn.SimpleKVs{
+			nvs: cos.SimpleKVs{
 				"compression": cmn.CompressNever,
 				"unsized":     "yes",
 			},
 		},
 		{
 			name: "compress-block-1M",
-			nvs: cmn.SimpleKVs{
+			nvs: cos.SimpleKVs{
 				"compression": cmn.CompressAlways,
 				"block":       "1MiB",
 			},
 		},
 		{
 			name: "compress-block-256K",
-			nvs: cmn.SimpleKVs{
+			nvs: cos.SimpleKVs{
 				"compression": cmn.CompressAlways,
 				"block":       "256KiB",
 			},
 		},
 		{
 			name: "compress-block-256K-unsized",
-			nvs: cmn.SimpleKVs{
+			nvs: cos.SimpleKVs{
 				"compression": cmn.CompressAlways,
 				"block":       "256KiB",
 				"unsized":     "yes",
@@ -90,7 +91,7 @@ func Test_Bundle(t *testing.T) {
 	}
 }
 
-func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
+func testBundle(t *testing.T, nvs cos.SimpleKVs) {
 	var (
 		numCompleted atomic.Int64
 		MMSA         = tutils.MMSA
@@ -112,11 +113,11 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 	smap.Version = 1
 
 	receive := func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
-		if err != nil && !cmn.IsEOF(err) {
+		if err != nil && !cos.IsEOF(err) {
 			tassert.CheckFatal(t, err)
 		}
 		written, _ := io.Copy(ioutil.Discard, objReader)
-		cmn.Assert(written == hdr.ObjAttrs.Size || hdr.IsUnsized())
+		cos.Assert(written == hdr.ObjAttrs.Size || hdr.IsUnsized())
 	}
 	callback := func(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
 		numCompleted.Inc()
@@ -139,8 +140,8 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 		usePDU         bool
 	)
 	if nvs["compression"] != cmn.CompressNever {
-		v, _ := cmn.S2B(nvs["block"])
-		cmn.Assert(v == cmn.MiB || v == cmn.KiB*256 || v == cmn.KiB*64)
+		v, _ := cos.S2B(nvs["block"])
+		cos.Assert(v == cos.MiB || v == cos.KiB*256 || v == cos.KiB*64)
 		config := cmn.GCO.BeginUpdate()
 		config.Compression.BlockMaxSize = int(v)
 		cmn.GCO.CommitUpdate(config)
@@ -158,7 +159,7 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 	if testing.Short() {
 		numGs = 1
 	}
-	for size < cmn.GiB*numGs {
+	for size < cos.GiB*numGs {
 		var err error
 		hdr := genRandomHeader(random, usePDU)
 		objSize := hdr.ObjAttrs.Size
@@ -178,8 +179,8 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 		}
 		num++
 		size += objSize
-		if size-prevsize >= cmn.GiB {
-			tlog.Logf("%s: %d GiB\n", sb, size/cmn.GiB)
+		if size-prevsize >= cos.GiB {
+			tlog.Logf("%s: %d GiB\n", sb, size/cos.GiB)
 			prevsize = size
 		}
 	}

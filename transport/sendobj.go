@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/pierrec/lz4/v3"
@@ -56,7 +57,7 @@ var _ streamer = (*Stream)(nil)
 
 func (s *Stream) terminate() {
 	s.term.mu.Lock()
-	cmn.Assert(!s.term.terminated)
+	cos.Assert(!s.term.terminated)
 	s.term.terminated = true
 
 	s.Stop()
@@ -93,10 +94,10 @@ func (s *Stream) initCompression(extra *Extra) {
 	if s.lz4s.blockMaxSize >= memsys.MaxPageSlabSize {
 		s.lz4s.sgl = mem.NewSGL(memsys.MaxPageSlabSize, memsys.MaxPageSlabSize)
 	} else {
-		s.lz4s.sgl = mem.NewSGL(cmn.KiB*64, cmn.KiB*64)
+		s.lz4s.sgl = mem.NewSGL(cos.KiB*64, cos.KiB*64)
 	}
 
-	s.lid = fmt.Sprintf("%s[%d[%s]]", s.trname, s.sessID, cmn.B2S(int64(s.lz4s.blockMaxSize), 0))
+	s.lid = fmt.Sprintf("%s[%d[%s]]", s.trname, s.sessID, cos.B2S(int64(s.lz4s.blockMaxSize), 0))
 }
 
 func (s *Stream) compressed() bool { return s.lz4s.s == s }
@@ -142,7 +143,7 @@ func (s *Stream) doCmpl(obj *Obj, err error) {
 		debug.Assert(rc >= 0)
 	}
 	if obj.Reader != nil {
-		cmn.Close(obj.Reader) // NOTE: always closing
+		cos.Close(obj.Reader) // NOTE: always closing
 	}
 	// SCQ completion callback
 	if rc == 0 {
@@ -341,11 +342,11 @@ func (s *Stream) dryrun() {
 		if err == io.EOF {
 			break
 		}
-		cmn.AssertNoErr(err)
-		cmn.Assert(flags&msgFlag == 0)
+		cos.AssertNoErr(err)
+		cos.Assert(flags&msgFlag == 0)
 		obj, err := it.nextObj(s.String(), hlen)
 		if obj != nil {
-			cmn.DrainReader(obj) // TODO: recycle `objReader` here
+			cos.DrainReader(obj) // TODO: recycle `objReader` here
 			continue
 		}
 		if err != nil {

@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
@@ -224,7 +225,7 @@ func cluConfig(c *cli.Context) error {
 	return nil
 }
 
-func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err error) {
+func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cos.SimpleKVs, err error) {
 	if c.NArg() == 0 {
 		return "", nil, missingArgumentsError(c, "attribute name-value pairs")
 	}
@@ -238,7 +239,7 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err
 	// 2. name-value pair separated with space: `ais set log.level 5`. In this case
 	//		the first word is looked up in cmn.ConfigPropList
 	propList := cmn.ConfigPropList()
-	if cmn.StringInSlice(args.First(), propList) || strings.Contains(args.First(), keyAndValueSeparator) {
+	if cos.StringInSlice(args.First(), propList) || strings.Contains(args.First(), keyAndValueSeparator) {
 		daemonID = ""
 		kvs = args
 	} else {
@@ -269,7 +270,7 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err
 	}
 
 	for k := range nvs {
-		if !cmn.StringInSlice(k, propList) {
+		if !cos.StringInSlice(k, propList) {
 			return "", nil, fmt.Errorf("invalid property name %q", k)
 		}
 	}
@@ -376,8 +377,8 @@ func displayRebStats(tw *tabwriter.Writer, st *targetRebStats) {
 	fmt.Fprintf(tw,
 		"%s\t %s\t %d\t %s\t %d\t %s\t %s\t %s\t %t\n",
 		st.stats.ID(), st.targetID,
-		extRebStats.RebRxCount, cmn.B2S(extRebStats.RebRxSize, 2),
-		extRebStats.RebTxCount, cmn.B2S(extRebStats.RebTxSize, 2),
+		extRebStats.RebRxCount, cos.B2S(extRebStats.RebRxSize, 2),
+		extRebStats.RebTxCount, cos.B2S(extRebStats.RebTxSize, 2),
 		startTime, endTime, st.stats.Aborted(),
 	)
 }

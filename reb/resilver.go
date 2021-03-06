@@ -10,7 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
@@ -28,7 +28,7 @@ type (
 )
 
 func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xaction.NotifXact) {
-	cmn.Assert(id != "")
+	cos.Assert(id != "")
 
 	availablePaths, _ := fs.Get()
 	if len(availablePaths) < 2 {
@@ -51,7 +51,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xa
 	glog.Infoln(xact.String())
 
 	slab, err := reb.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 
 	jctx := &joggerCtx{xact: xact, t: reb.t}
 	jg := mpather.NewJoggerGroup(&mpather.JoggerGroupOpts{
@@ -106,7 +106,7 @@ func (rj *joggerCtx) moveSlice(ct *cluster.CT, buf []byte) {
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("Resilver moving %q -> %q", ct.FQN(), destFQN)
 	}
-	if _, _, err = cmn.CopyFile(ct.FQN(), destFQN, buf, cmn.ChecksumNone); err != nil {
+	if _, _, err = cos.CopyFile(ct.FQN(), destFQN, buf, cos.ChecksumNone); err != nil {
 		glog.Errorf("Failed to copy %q -> %q: %v. Rolling back", ct.FQN(), destFQN, err)
 		if err = os.Remove(destMetaFQN); err != nil {
 			glog.Warningf("Failed to cleanup metafile copy %q: %v", destMetaFQN, err)
@@ -131,7 +131,7 @@ func (rj *joggerCtx) moveECMeta(ct *cluster.CT, srcMpath, dstMpath *fs.Mountpath
 		return "", "", nil
 	}
 	dst := dstMpath.MakePathFQN(ct.Bucket(), ec.MetaType, ct.ObjectName())
-	_, _, err := cmn.CopyFile(src, dst, buf, cmn.ChecksumNone)
+	_, _, err := cos.CopyFile(src, dst, buf, cos.ChecksumNone)
 	if err == nil {
 		return src, dst, err
 	}
@@ -200,7 +200,7 @@ func (rj *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 }
 
 func (rj *joggerCtx) visitCT(ct *cluster.CT, buf []byte) (err error) {
-	cmn.Assert(ct.ContentType() == ec.SliceType)
+	cos.Assert(ct.ContentType() == ec.SliceType)
 	if !ct.Bck().Props.EC.Enabled {
 		// Since `%ec` directory is inside a bucket, it is safe to skip
 		// the entire `%ec` directory when EC is disabled for the bucket.

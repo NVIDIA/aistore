@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
@@ -228,7 +229,7 @@ func (s *CoreStats) get(name string) (val int64) {
 //
 func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
 	v, ok := s.Tracker[name]
-	cmn.Assertf(ok, "invalid stats name %q", name)
+	cos.Assertf(ok, "invalid stats name %q", name)
 	switch v.kind {
 	case KindLatency:
 		if strings.HasSuffix(name, ".ns") {
@@ -264,7 +265,7 @@ func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
 			v.Unlock()
 		}
 	default:
-		cmn.AssertMsg(false, v.kind)
+		cos.AssertMsg(false, v.kind)
 	}
 }
 
@@ -287,7 +288,7 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 			var throughput int64
 			v.Lock()
 			if v.Value > 0 {
-				throughput = v.Value / cmn.MaxI64(int64(s.statsTime.Seconds()), 1)
+				throughput = v.Value / cos.MaxI64(int64(s.statsTime.Seconds()), 1)
 				ctracker[name] = &copyValue{Value: throughput}
 				idle = false
 				v.Value = 0
@@ -350,7 +351,7 @@ func (s *CoreStats) initStatsD(node *cluster.Snode) {
 		}
 	}
 	if probeStr := os.Getenv("AIS_STATSD_PROBE"); probeStr != "" {
-		if probeBool, err := cmn.ParseBool(probeStr); err != nil {
+		if probeBool, err := cos.ParseBool(probeStr); err != nil {
 			glog.Error(err)
 		} else {
 			probe = probeBool
@@ -396,7 +397,7 @@ func (v *copyValue) UnmarshalJSON(b []byte) error       { return jsoniter.Unmars
 //
 
 func (tracker statsTracker) register(key, kind string, isCommon ...bool) {
-	cmn.Assertf(cmn.StringInSlice(kind, kinds), "invalid stats kind %q", kind)
+	cos.Assertf(cos.StringInSlice(kind, kinds), "invalid stats kind %q", kind)
 
 	tracker[key] = &statsValue{kind: kind}
 	if len(isCommon) > 0 {
@@ -527,9 +528,9 @@ func (r *statsRunner) Stop(err error) {
 }
 
 // common impl
-func (r *statsRunner) RegisterAll()               { cmn.Assert(false) } // NOTE: currently, proxy's stats == common and hardcoded
+func (r *statsRunner) RegisterAll()               { cos.Assert(false) } // NOTE: currently, proxy's stats == common and hardcoded
 func (r *statsRunner) Add(name string, val int64) { r.workCh <- NamedVal64{Name: name, Value: val} }
-func (r *statsRunner) Get(name string) int64      { cmn.Assert(false); return 0 }
+func (r *statsRunner) Get(name string) int64      { cos.Assert(false); return 0 }
 func (r *statsRunner) AddMany(nvs ...NamedVal64) {
 	for _, nv := range nvs {
 		r.workCh <- nv
@@ -547,7 +548,7 @@ func (r *statsRunner) removeLogs(config *cmn.Config) {
 	logfinfos, err := ioutil.ReadDir(config.Log.Dir)
 	if err != nil {
 		glog.Errorf("GC logs: cannot read log dir %s, err: %v", config.Log.Dir, err)
-		_ = cmn.CreateDir(config.Log.Dir) // FIXME: (local non-containerized + kill/restart under test)
+		_ = cos.CreateDir(config.Log.Dir) // FIXME: (local non-containerized + kill/restart under test)
 		return
 	}
 	// sample name ais.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
@@ -591,7 +592,7 @@ func (r *statsRunner) removeOlderLogs(tot, maxtotal int64, logdir, logtype strin
 	filteredInfos = filteredInfos[:l-1] // except the last = current
 	for _, logfi := range filteredInfos {
 		logfqn := filepath.Join(logdir, logfi.Name())
-		if err := cmn.RemoveFile(logfqn); err == nil {
+		if err := cos.RemoveFile(logfqn); err == nil {
 			tot -= logfi.Size()
 			glog.Infof("GC logs: removed %s", logfqn)
 			if tot < maxtotal {

@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -24,9 +24,9 @@ import (
 // $ GODEBUG=madvdontneed=1 go test -bench=BenchmarkLargeAllocMax -benchtime=30s -benchmem ./d256_test.go
 
 const (
-	largeobj = cmn.MiB * 8
-	smallobj = cmn.KiB * 512
-	largefil = cmn.GiB
+	largeobj = cos.MiB * 8
+	smallobj = cos.KiB * 512
+	largefil = cos.GiB
 )
 
 // largobj alloc
@@ -35,15 +35,15 @@ func BenchmarkLargeAllocMax(b *testing.B) {
 }
 
 func BenchmarkLargeAlloc128K(b *testing.B) {
-	benchAlloc(b, largeobj, cmn.KiB*128)
+	benchAlloc(b, largeobj, cos.KiB*128)
 }
 
 func BenchmarkLargeAlloc64K(b *testing.B) {
-	benchAlloc(b, largeobj, cmn.KiB*64)
+	benchAlloc(b, largeobj, cos.KiB*64)
 }
 
 func BenchmarkLargeAlloc32K(b *testing.B) {
-	benchAlloc(b, largeobj, cmn.KiB*32)
+	benchAlloc(b, largeobj, cos.KiB*32)
 }
 
 // smallobj alloc
@@ -52,15 +52,15 @@ func BenchmarkSmallAllocMax(b *testing.B) {
 }
 
 func BenchmarkSmallAlloc128K(b *testing.B) {
-	benchAlloc(b, smallobj, cmn.KiB*128)
+	benchAlloc(b, smallobj, cos.KiB*128)
 }
 
 func BenchmarkSmallAlloc64K(b *testing.B) {
-	benchAlloc(b, smallobj, cmn.KiB*64)
+	benchAlloc(b, smallobj, cos.KiB*64)
 }
 
 func BenchmarkSmallAlloc32K(b *testing.B) {
-	benchAlloc(b, smallobj, cmn.KiB*32)
+	benchAlloc(b, smallobj, cos.KiB*32)
 }
 
 func benchAlloc(b *testing.B, objsiz, sbufSize int64) {
@@ -72,7 +72,7 @@ func benchAlloc(b *testing.B, objsiz, sbufSize int64) {
 	}
 
 	// reset initial conditions & start b-timer
-	cmn.FreeMemToOS()
+	cos.FreeMemToOS()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -87,15 +87,15 @@ func BenchmarkLargeWriteMax(b *testing.B) {
 }
 
 func BenchmarkLargeWrite128K(b *testing.B) {
-	benchWrite(b, largeobj, cmn.KiB*128)
+	benchWrite(b, largeobj, cos.KiB*128)
 }
 
 func BenchmarkLargeWrite64K(b *testing.B) {
-	benchWrite(b, largeobj, cmn.KiB*64)
+	benchWrite(b, largeobj, cos.KiB*64)
 }
 
 func BenchmarkLargeWrite32K(b *testing.B) {
-	benchWrite(b, largeobj, cmn.KiB*32)
+	benchWrite(b, largeobj, cos.KiB*32)
 }
 
 // smallobj write
@@ -104,15 +104,15 @@ func BenchmarkSmallWriteMax(b *testing.B) {
 }
 
 func BenchmarkSmallWrite128K(b *testing.B) {
-	benchWrite(b, smallobj, cmn.KiB*128)
+	benchWrite(b, smallobj, cos.KiB*128)
 }
 
 func BenchmarkSmallWrite64K(b *testing.B) {
-	benchWrite(b, smallobj, cmn.KiB*64)
+	benchWrite(b, smallobj, cos.KiB*64)
 }
 
 func BenchmarkSmallWrite32K(b *testing.B) {
-	benchWrite(b, smallobj, cmn.KiB*32)
+	benchWrite(b, smallobj, cos.KiB*32)
 }
 
 func benchWrite(b *testing.B, objsiz, sbufSize int64) {
@@ -124,8 +124,8 @@ func benchWrite(b *testing.B, objsiz, sbufSize int64) {
 	}
 
 	// reset initial conditions & start b-timer
-	cmn.FreeMemToOS()
-	buf := make([]byte, cmn.KiB*128)
+	cos.FreeMemToOS()
+	buf := make([]byte, cos.KiB*128)
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -142,15 +142,15 @@ func BenchmarkLargeWRFMax(b *testing.B) {
 }
 
 func BenchmarkLargeWRF128K(b *testing.B) {
-	benchWRF(b, largeobj, cmn.KiB*128)
+	benchWRF(b, largeobj, cos.KiB*128)
 }
 
 func BenchmarkLargeWRF64K(b *testing.B) {
-	benchWRF(b, largeobj, cmn.KiB*64)
+	benchWRF(b, largeobj, cos.KiB*64)
 }
 
 func BenchmarkLargeWRF32K(b *testing.B) {
-	benchWRF(b, largeobj, cmn.KiB*32)
+	benchWRF(b, largeobj, cos.KiB*32)
 }
 
 // smallobj write => read => free
@@ -159,15 +159,15 @@ func BenchmarkSmallWRFMax(b *testing.B) {
 }
 
 func BenchmarkSmallWRF128K(b *testing.B) {
-	benchWRF(b, smallobj, cmn.KiB*128)
+	benchWRF(b, smallobj, cos.KiB*128)
 }
 
 func BenchmarkSmallWRF64K(b *testing.B) {
-	benchWRF(b, smallobj, cmn.KiB*64)
+	benchWRF(b, smallobj, cos.KiB*64)
 }
 
 func BenchmarkSmallWRF32K(b *testing.B) {
-	benchWRF(b, smallobj, cmn.KiB*32)
+	benchWRF(b, smallobj, cos.KiB*32)
 }
 
 func benchWRF(b *testing.B, objsiz, sbufSize int64) {
@@ -180,8 +180,8 @@ func benchWRF(b *testing.B, objsiz, sbufSize int64) {
 	}
 
 	// reset initial conditions
-	cmn.FreeMemToOS()
-	l := cmn.KiB * 128
+	cos.FreeMemToOS()
+	l := cos.KiB * 128
 	buf := make([]byte, l)
 
 	// delayed sgl.Free
@@ -199,11 +199,11 @@ func benchWRF(b *testing.B, objsiz, sbufSize int64) {
 		sgl := mem.NewSGL(objsiz, sbufSize)
 		for siz := 0; siz < int(objsiz); siz += l {
 			n, _ := sgl.Write(buf)
-			cmn.Assert(n == l)
+			cos.Assert(n == l)
 		}
 		for siz := 0; siz < int(objsiz); siz += l {
 			n, _ := sgl.Read(buf)
-			cmn.Assert(n == l)
+			cos.Assert(n == l)
 		}
 		select {
 		case cha <- sgl:
@@ -219,15 +219,15 @@ func BenchmarkLargeFileMax(b *testing.B) {
 }
 
 func BenchmarkLargeFile128K(b *testing.B) {
-	benchFile(b, cmn.KiB*128)
+	benchFile(b, cos.KiB*128)
 }
 
 func BenchmarkLargeFile64K(b *testing.B) {
-	benchFile(b, cmn.KiB*64)
+	benchFile(b, cos.KiB*64)
 }
 
 func BenchmarkLargeFile32K(b *testing.B) {
-	benchFile(b, cmn.KiB*32)
+	benchFile(b, cos.KiB*32)
 }
 
 func benchFile(b *testing.B, sbufSize int64) {
@@ -239,7 +239,7 @@ func benchFile(b *testing.B, sbufSize int64) {
 	}
 
 	// reset initial conditions
-	cmn.FreeMemToOS()
+	cos.FreeMemToOS()
 
 	file, err := ioutil.TempFile("/tmp", "")
 	if err != nil {
@@ -256,7 +256,7 @@ func benchFile(b *testing.B, sbufSize int64) {
 	}()
 
 	slab, err := mem.GetSlab(sbufSize)
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	buf := slab.Alloc()
 	defer slab.Free(buf)
 

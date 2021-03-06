@@ -11,7 +11,7 @@ import (
 	"io"
 	"math/rand"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -27,7 +27,7 @@ var _ = Describe("SGL", func() {
 
 	Describe("ReadFrom", func() {
 		It("should properly write to SGL using ReadFrom method", func() {
-			size := int64(11*cmn.MiB + 2*cmn.KiB + 123)
+			size := int64(11*cos.MiB + 2*cos.KiB + 123)
 			buf, r := randReader(size)
 
 			sgl := mm.NewSGL(0)
@@ -43,7 +43,7 @@ var _ = Describe("SGL", func() {
 		})
 
 		It("should properly write to SGL with big slab using ReadFrom method", func() {
-			size := int64(11*cmn.MiB + 2*cmn.KiB + 123)
+			size := int64(11*cos.MiB + 2*cos.KiB + 123)
 			buf, r := randReader(size)
 
 			sgl := mm.NewSGL(0, MaxPageSlabSize)
@@ -59,7 +59,7 @@ var _ = Describe("SGL", func() {
 		})
 
 		It("should properly write to preallocated SGL using ReadFrom method", func() {
-			size := int64(11*cmn.MiB + 2*cmn.KiB + 123)
+			size := int64(11*cos.MiB + 2*cos.KiB + 123)
 			buf, r := randReader(size)
 
 			sgl := mm.NewSGL(size)
@@ -75,7 +75,7 @@ var _ = Describe("SGL", func() {
 		})
 
 		It("should properly write multiple times to SGL using ReadFrom method", func() {
-			size := int64(11*cmn.MiB + 2*cmn.KiB + 123)
+			size := int64(11*cos.MiB + 2*cos.KiB + 123)
 			_, r := randReader(size)
 
 			sgl := mm.NewSGL(size)

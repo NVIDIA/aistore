@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/fs"
@@ -68,7 +69,7 @@ func (t *targetrunner) GFN(gfnType cluster.GFNType) cluster.GFN {
 	case cluster.GFNGlobal:
 		return &t.gfn.global
 	}
-	cmn.AssertMsg(false, "Invalid GFN type")
+	cos.AssertMsg(false, "Invalid GFN type")
 	return nil
 }
 
@@ -76,7 +77,7 @@ func (t *targetrunner) GFN(gfnType cluster.GFNType) cluster.GFN {
 func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
 	regToIC := id == ""
 	if regToIC {
-		id = cmn.GenUUID()
+		id = cos.GenUUID()
 	}
 
 	xlru := xreg.RenewLRU(id)
@@ -162,7 +163,7 @@ func (t *targetrunner) _sendPUT(lom *cluster.LOM, params *cluster.SendToParams) 
 	}
 	req, _, cancel, err := reqArgs.ReqWithTimeout(cmn.GCO.Get().Timeout.SendFile)
 	if err != nil {
-		cmn.Close(params.Reader)
+		cos.Close(params.Reader)
 		return fmt.Errorf("unexpected failure to create request, err: %w", err)
 	}
 	defer cancel()
@@ -170,7 +171,7 @@ func (t *targetrunner) _sendPUT(lom *cluster.LOM, params *cluster.SendToParams) 
 	if err != nil {
 		return fmt.Errorf(cmn.FmtErrFailed, t.si, "PUT to", reqArgs.URL(), err)
 	}
-	cmn.DrainReader(resp.Body)
+	cos.DrainReader(resp.Body)
 	resp.Body.Close()
 	return nil
 }
@@ -247,7 +248,7 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 			return 0, nil
 		}
 	default:
-		cmn.Assertf(false, "%v", ty)
+		cos.Assertf(false, "%v", ty)
 	}
 
 	if errCode, err = t.Backend(lom.Bck()).GetObj(ctx, lom); err != nil {
@@ -266,7 +267,7 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 		)
 		lom.DowngradeLock()
 	default:
-		cmn.Assertf(false, "%v", ty)
+		cos.Assertf(false, "%v", ty)
 	}
 	return
 }
@@ -306,7 +307,7 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 		freeSendParams(sendParams)
 		freeCopyObjInfo(coi)
 		if err == nil && !params.KeepOrig {
-			if err := cmn.RemoveFile(params.SrcFQN); err != nil {
+			if err := cos.RemoveFile(params.SrcFQN); err != nil {
 				glog.Errorf("[promote] Failed to remove source file %q, err: %v", params.SrcFQN, err)
 			}
 		}
@@ -330,7 +331,7 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 	}
 
 	var (
-		cksum    *cmn.CksumHash
+		cksum    *cos.CksumHash
 		fileSize int64
 		workFQN  string
 		poi      = &putObjInfo{t: t, lom: lom}
@@ -351,7 +352,7 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 		workFQN = fs.CSM.GenContentFQN(lom, fs.WorkfileType, fs.WorkfilePut)
 
 		buf, slab := t.gmm.Alloc()
-		fileSize, cksum, err = cmn.CopyFile(params.SrcFQN, workFQN, buf, lom.CksumConf().Type)
+		fileSize, cksum, err = cos.CopyFile(params.SrcFQN, workFQN, buf, lom.CksumConf().Type)
 		slab.Free(buf)
 		if err != nil {
 			return
@@ -380,18 +381,18 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 	}
 	if params.Cksum != nil && cksum != nil {
 		if !cksum.Equal(params.Cksum) {
-			err = cmn.NewBadDataCksumError(cksum.Clone(), params.Cksum, params.SrcFQN+" => "+lom.String())
+			err = cos.NewBadDataCksumError(cksum.Clone(), params.Cksum, params.SrcFQN+" => "+lom.String())
 			return
 		}
 	}
 
-	cmn.Assert(workFQN != "")
+	cos.Assert(workFQN != "")
 	poi.workFQN = workFQN
 	lom.SetSize(fileSize)
 	if _, err = poi.finalize(); err == nil {
 		nlom = lom
 		if !params.KeepOrig {
-			if err := cmn.RemoveFile(params.SrcFQN); err != nil {
+			if err := cos.RemoveFile(params.SrcFQN); err != nil {
 				glog.Errorf("[promote] Failed to remove source file %q, err: %v", params.SrcFQN, err)
 			}
 		}

@@ -1,4 +1,5 @@
-// Package provides common low-level types and utilities for all aistore projects
+// Package cmn provides common constants, types, and utilities for AIS clients
+// and AIStore.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -9,6 +10,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
@@ -95,10 +97,10 @@ type (
 		// same base name, but different extension, specifying this field might cause object overriding. This is because
 		// of resulting name conflict.
 		// TODO: this field might not be required when transformation on subset (template) of bucket is supported.
-		Ext SimpleKVs `json:"ext"`
+		Ext cos.SimpleKVs `json:"ext"`
 
-		ID             string       `json:"id,omitempty"`              // optional, ETL only
-		RequestTimeout DurationJSON `json:"request_timeout,omitempty"` // optional, ETL only
+		ID             string           `json:"id,omitempty"`              // optional, ETL only
+		RequestTimeout cos.DurationJSON `json:"request_timeout,omitempty"` // optional, ETL only
 
 		CopyBckMsg
 	}
@@ -250,8 +252,8 @@ type (
 		Target map[string]*TSysInfo `json:"target"`
 	}
 	ClusterSysInfoRaw struct {
-		Proxy  JSONRawMsgs `json:"proxy"`
-		Target JSONRawMsgs `json:"target"`
+		Proxy  cos.JSONRawMsgs `json:"proxy"`
+		Target cos.JSONRawMsgs `json:"target"`
 	}
 )
 
@@ -298,9 +300,9 @@ func (msg *SelectMsg) AddProps(propNames ...string) {
 	}
 }
 
-func (msg *SelectMsg) PropsSet() (s StringSet) {
+func (msg *SelectMsg) PropsSet() (s cos.StringSet) {
 	props := strings.Split(msg.Props, ",")
-	s = make(StringSet, len(props))
+	s = make(cos.StringSet, len(props))
 	for _, p := range props {
 		s.Add(p)
 	}
@@ -321,7 +323,7 @@ func (msg *SelectMsg) ListObjectsCacheID(bck Bck) string {
 
 func (msg *SelectMsg) Clone() *SelectMsg {
 	c := &SelectMsg{}
-	CopyStruct(c, msg)
+	cos.CopyStruct(c, msg)
 	return c
 }
 
@@ -381,7 +383,7 @@ func (c *VersionConf) String() string {
 }
 
 func (c *CksumConf) String() string {
-	if c.Type == ChecksumNone {
+	if c.Type == cos.ChecksumNone {
 		return "Disabled"
 	}
 
@@ -439,7 +441,7 @@ func (c *ECConf) String() string {
 		return "Disabled"
 	}
 	objSizeLimit := c.ObjSizeLimit
-	return fmt.Sprintf("%d:%d (%s)", c.DataSlices, c.ParitySlices, B2S(objSizeLimit, 0))
+	return fmt.Sprintf("%d:%d (%s)", c.DataSlices, c.ParitySlices, cos.B2S(objSizeLimit, 0))
 }
 
 func (c *ECConf) RequiredEncodeTargets() int {
@@ -476,7 +478,7 @@ func DefaultBckProps(cs ...*Config) *BucketProps {
 		c = cs[0]
 	} else { // only in tests
 		c = GCO.Get()
-		c.Cksum.Type = ChecksumXXHash
+		c.Cksum.Type = cos.ChecksumXXHash
 	}
 	return &BucketProps{
 		Cksum:      c.Cksum,
@@ -551,7 +553,7 @@ func (bp *BucketProps) Apply(propsToUpdate *BucketPropsToUpdate) {
 	copyProps(*propsToUpdate, bp, Daemon)
 }
 
-func NewBucketPropsToUpdate(nvs SimpleKVs) (props *BucketPropsToUpdate, err error) {
+func NewBucketPropsToUpdate(nvs cos.SimpleKVs) (props *BucketPropsToUpdate, err error) {
 	props = &BucketPropsToUpdate{}
 	for key, val := range nvs {
 		name, value := strings.ToLower(key), val

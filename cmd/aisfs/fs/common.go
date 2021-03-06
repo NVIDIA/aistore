@@ -10,7 +10,7 @@ import (
 	"runtime/debug"
 
 	"github.com/NVIDIA/aistore/cmd/aisfs/ais"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/jacobsa/fuse"
 	"github.com/jacobsa/fuse/fuseutil"
 )
@@ -37,13 +37,13 @@ func (res EntryLookupResult) NoEntry() bool {
 
 // IsDir checks if an entry maps to a directory.
 func (res EntryLookupResult) IsDir() bool {
-	cmn.Assert(res.Entry != nil)
+	cos.Assert(res.Entry != nil)
 	return res.Entry.Type == fuseutil.DT_Directory
 }
 
 // NoInode checks if inode number is known for an entry.
 func (res EntryLookupResult) NoInode() bool {
-	cmn.Assert(res.Entry != nil)
+	cos.Assert(res.Entry != nil)
 	return res.Entry.Inode == invalidInodeID
 }
 

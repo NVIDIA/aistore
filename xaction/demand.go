@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/hk"
 )
@@ -40,7 +41,7 @@ type (
 	}
 	idle struct {
 		totally, likely time.Duration
-		ticks           *cmn.StopCh
+		ticks           *cos.StopCh
 	}
 	XactDemandBase struct {
 		XactBase
@@ -70,14 +71,14 @@ func NewXDB(args Args, idleTimes ...time.Duration) *XactDemandBase {
 		debug.Assert(likely > time.Second/10)
 	}
 	if uuid == "" {
-		hkName = args.Kind + cmn.GenUUID()
+		hkName = args.Kind + cos.GenUUID()
 	} else {
 		hkName = args.Kind + "/" + uuid
 	}
 	return &XactDemandBase{
 		XactBase: *NewXactBase(args),
 		hkName:   hkName,
-		idle:     idle{totally: totally, likely: likely, ticks: cmn.NewStopCh()},
+		idle:     idle{totally: totally, likely: likely, ticks: cos.NewStopCh()},
 	}
 }
 

@@ -1,8 +1,8 @@
-// Package cmn provides common low-level types and utilities for all aistore projects
+// Package cos provides common low-level types and utilities for all aistore projects
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package cmn
+package cos
 
 import (
 	"crypto/md5"
@@ -21,10 +21,19 @@ import (
 //       doesn't implement BinaryMarshaler & BinaryUnmarshaler interfaces
 //       (see also https://golang.org/pkg/encoding)
 
+// checksums
+const (
+	ChecksumNone   = "none"
+	ChecksumXXHash = "xxhash"
+	ChecksumMD5    = "md5"
+	ChecksumCRC32C = "crc32c"
+	ChecksumSHA256 = "sha256" // crypto.SHA512_256 (SHA-2)
+	ChecksumSHA512 = "sha512" // crypto.SHA512 (SHA-2)
+)
+
 const (
 	badDataCksumPrefix = "BAD DATA CHECKSUM:"
 	badMetaCksumPrefix = "BAD META CHECKSUM:"
-	MLCG32             = 1103515245 // xxhash seed
 )
 
 type (

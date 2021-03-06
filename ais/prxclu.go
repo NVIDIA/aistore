@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
@@ -153,14 +154,14 @@ func (p *proxyrunner) queryClusterSysinfo(w http.ResponseWriter, r *http.Request
 	_ = p.writeJSON(w, r, out, what)
 }
 
-func (p *proxyrunner) cluSysinfo(r *http.Request, timeout time.Duration, to int) (cmn.JSONRawMsgs, error) {
+func (p *proxyrunner) cluSysinfo(r *http.Request, timeout time.Duration, to int) (cos.JSONRawMsgs, error) {
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{Method: r.Method, Path: cmn.URLPathDaemon.S, Query: r.URL.Query()}
 	args.timeout = timeout
 	args.to = to
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
-	sysInfoMap := make(cmn.JSONRawMsgs, len(results))
+	sysInfoMap := make(cos.JSONRawMsgs, len(results))
 	for _, res := range results {
 		if res.err != nil {
 			err := res.error()
@@ -196,7 +197,7 @@ func (p *proxyrunner) queryClusterMountpaths(w http.ResponseWriter, r *http.Requ
 
 // helper methods for querying targets
 
-func (p *proxyrunner) _queryTargets(w http.ResponseWriter, r *http.Request) cmn.JSONRawMsgs {
+func (p *proxyrunner) _queryTargets(w http.ResponseWriter, r *http.Request) cos.JSONRawMsgs {
 	var (
 		err  error
 		body []byte
@@ -216,8 +217,8 @@ func (p *proxyrunner) _queryTargets(w http.ResponseWriter, r *http.Request) cmn.
 	return p._queryResults(w, r, results)
 }
 
-func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, results sliceResults) cmn.JSONRawMsgs {
-	targetResults := make(cmn.JSONRawMsgs, len(results))
+func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, results sliceResults) cos.JSONRawMsgs {
+	targetResults := make(cos.JSONRawMsgs, len(results))
 	for _, res := range results {
 		if res.status == http.StatusNotFound {
 			continue
@@ -309,7 +310,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		msg = &cmn.ActionMsg{Action: cmn.ActRegProxy}
 
 		s := r.URL.Query().Get(cmn.URLParamNonElectable)
-		if nonElectable, err = cmn.ParseBool(s); err != nil {
+		if nonElectable, err = cos.ParseBool(s); err != nil {
 			glog.Errorf("%s: failed to parse %s for non-electability: %v", p.si, s, err)
 		}
 	}
@@ -530,11 +531,11 @@ func (p *proxyrunner) _updFinal(ctx *smapModifier, clone *smapX) {
 		nl.SetOwner(equalIC)
 		// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
 		err := p.notifs.add(nl)
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 	} else if ctx.nsi.IsProxy() {
 		// Send RMD to proxies to make sure that they have
 		// the latest one - newly joined can become primary in a second.
-		cmn.Assert(ctx.rmd != nil)
+		cos.Assert(ctx.rmd != nil)
 		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
 	}
 
@@ -615,7 +616,7 @@ func (p *proxyrunner) _syncFinal(ctx *smapModifier, clone *smapX) {
 		nl.SetOwner(equalIC)
 		// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
 		err := p.notifs.add(nl)
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
 	}
 	wg := p.metasyncer.sync(pairs...)
@@ -732,7 +733,7 @@ func (p *proxyrunner) xactStarStop(w http.ResponseWriter, r *http.Request, msg *
 			return
 		}
 
-		xactMsg.ID = cmn.GenUUID() // all other xact starts need an id
+		xactMsg.ID = cos.GenUUID() // all other xact starts need an id
 		if xactMsg.Kind == cmn.ActResilver && xactMsg.Node != "" {
 			p.resilverOne(w, r, msg, xactMsg)
 			return
@@ -1004,7 +1005,7 @@ func (p *proxyrunner) attachDetachRemoteAIS(ctx *configModifier, config *globalC
 		aisConf = make(cmn.BackendConfAIS)
 	} else {
 		aisConf, ok = v.(cmn.BackendConfAIS)
-		cmn.Assert(ok)
+		cos.Assert(ok)
 	}
 	// detach
 	if action == cmn.ActDetach {
@@ -1145,7 +1146,7 @@ func (p *proxyrunner) _syncRMDFinal(ctx *rmdModifier, clone *rebMD) {
 	}
 	// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
 	err := p.notifs.add(nl)
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	if ctx.wait {
 		wg.Wait()
 	}
@@ -1176,7 +1177,7 @@ func (p *proxyrunner) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if proxyid == p.si.ID() {
-		cmn.Assert(p.si.ID() == smap.Primary.ID()) // must be forwardCP-ed
+		cos.Assert(p.si.ID() == smap.Primary.ID()) // must be forwardCP-ed
 		glog.Warningf("Request to set primary to %s(self) - nothing to do", proxyid)
 		return
 	}
@@ -1228,7 +1229,7 @@ func (p *proxyrunner) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if res.si.ID() == proxyid {
-			cmn.ExitLogf("Commit phase failure: new primary %q returned err: %v", proxyid, res.err)
+			cos.ExitLogf("Commit phase failure: new primary %q returned err: %v", proxyid, res.err)
 		} else {
 			glog.Errorf("Commit phase failure: %s returned err %v when setting primary = %s",
 				res.si.ID(), res.err, proxyid)

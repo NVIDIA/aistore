@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
@@ -55,7 +56,7 @@ func RemoveMarker(marker string) {
 		markerPath = filepath.Join(markersDirName, marker)
 	)
 	for _, mpath := range mpaths {
-		if err := cmn.RemoveFile(filepath.Join(mpath.Path, markerPath)); err != nil {
+		if err := cos.RemoveFile(filepath.Join(mpath.Path, markerPath)); err != nil {
 			glog.Errorf("Failed to cleanup %q from %q, err: %v", markerPath, mpath.Path, err)
 		}
 	}
@@ -106,7 +107,7 @@ func PersistOnMpaths(path, backupPath string, what interface{}, atMost int, opts
 		}
 	}
 	debug.Func(func() {
-		expected := cmn.Min(atMost, availCnt)
+		expected := cos.Min(atMost, availCnt)
 		debug.Assertf(cnt == expected, "expected %q to be persisted on %d mountpaths got %d instead",
 			path, expected, cnt)
 	})

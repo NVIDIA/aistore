@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/OneOfOne/xxhash"
 )
@@ -38,7 +39,7 @@ var _ cmn.NLP = (*NameLockPair)(nil)
 var bckLocker nameLocker
 
 func initBckLocker() {
-	bckLocker = make(nameLocker, cmn.MultiSyncMapCount)
+	bckLocker = make(nameLocker, cos.MultiSyncMapCount)
 	bckLocker.init()
 }
 
@@ -49,7 +50,7 @@ func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.BucketProps) *Bck
 	)
 	provider, err = cmn.NormalizeProvider(provider)
 	if err != nil {
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 	}
 
 	bck := cmn.Bck{Name: name, Provider: provider, Ns: ns}
@@ -143,7 +144,7 @@ func (b *Bck) Init(bowner Bowner) (err error) {
 		return fmt.Errorf("bucket %s: invalid backend %s (not a Cloud bucket)", b, backend)
 	}
 	if err = backend.Init(bowner); err == nil {
-		cmn.Assert(!backend.HasBackendBck())
+		cos.Assert(!backend.HasBackendBck())
 	}
 	b.Props.BackendBck = backend.Bck
 	return
@@ -163,7 +164,7 @@ func (b *Bck) InitNoBackend(bowner Bowner) (err error) {
 			if present {
 				var (
 					origURL = b.Props.Extra.HTTP.OrigURLBck
-					bckName = cmn.OrigURLBck2Name(origURL)
+					bckName = cos.OrigURLBck2Name(origURL)
 				)
 				debug.Assertf(b.Name == bckName, "%s != %s; original_url: %s", b.Name, bckName, origURL)
 			}
@@ -215,8 +216,8 @@ func (b *Bck) checkAccess(bit cmn.AccessAttrs) (err error) {
 
 func (b *Bck) GetNameLockPair() (nlp *NameLockPair) {
 	nlp = &NameLockPair{uname: b.MakeUname("")}
-	hash := xxhash.ChecksumString64S(nlp.uname, cmn.MLCG32)
-	idx := int(hash & (cmn.MultiSyncMapCount - 1))
+	hash := xxhash.ChecksumString64S(nlp.uname, cos.MLCG32)
+	idx := int(hash & (cos.MultiSyncMapCount - 1))
 	nlp.nlc = &bckLocker[idx]
 	return
 }
@@ -241,7 +242,7 @@ func (nlp *NameLockPair) TryRLock(timeout time.Duration) (ok bool) {
 		timeout = nlpTryDefault
 	}
 	ok = nlp.withRetry(timeout, false)
-	cmn.Assert(!nlp.exclusive)
+	cos.Assert(!nlp.exclusive)
 	return
 }
 

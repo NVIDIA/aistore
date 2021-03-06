@@ -8,7 +8,7 @@ import (
 	"math/rand"
 	"sync"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 type ObjectNameGetter interface {
@@ -147,7 +147,7 @@ func (pung *PermutationUniqueNameGetter) Init(names []string, rnd *rand.Rand) {
 }
 
 func (pung *PermutationUniqueNameGetter) AddObjName(objName string) {
-	cmn.AssertMsg(false, "can't add object once PermutationUniqueNameGetter is initialized")
+	cos.AssertMsg(false, "can't add object once PermutationUniqueNameGetter is initialized")
 }
 
 func (pung *PermutationUniqueNameGetter) ObjName() string {
@@ -178,7 +178,7 @@ func (pung *PermutationUniqueImprovedNameGetter) Init(names []string, rnd *rand.
 }
 
 func (pung *PermutationUniqueImprovedNameGetter) AddObjName(objName string) {
-	cmn.AssertMsg(false, "can't add object once PermutationUniqueImprovedNameGetter is initialized")
+	cos.AssertMsg(false, "can't add object once PermutationUniqueImprovedNameGetter is initialized")
 }
 
 func (pung *PermutationUniqueImprovedNameGetter) ObjName() string {

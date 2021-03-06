@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/nl"
@@ -171,7 +172,7 @@ func (m *smapX) isValid() bool {
 		return false
 	}
 	if m.isPresent(m.Primary) {
-		cmn.Assert(m.Primary.ID() != "")
+		cos.Assert(m.Primary.ID() != "")
 		return true
 	}
 	return false
@@ -191,8 +192,8 @@ func (m *smapX) validate() error {
 	if !m.isPresent(m.Primary) {
 		return errors.New("primary not present")
 	}
-	cmn.Assert(m.Primary.ID() != "")
-	if !cmn.IsValidUUID(m.UUID) {
+	cos.Assert(m.Primary.ID() != "")
+	if !cos.IsValidUUID(m.UUID) {
 		return fmt.Errorf("invalid UUID %q", m.UUID)
 	}
 	return nil
@@ -226,7 +227,7 @@ func (m *smapX) containsID(id string) bool {
 
 func (m *smapX) addTarget(tsi *cluster.Snode) {
 	if m.containsID(tsi.ID()) {
-		cmn.Assertf(false, "FATAL: duplicate daemon ID: %q", tsi.ID())
+		cos.Assertf(false, "FATAL: duplicate daemon ID: %q", tsi.ID())
 	}
 	m.Tmap[tsi.ID()] = tsi
 	m.Version++
@@ -234,7 +235,7 @@ func (m *smapX) addTarget(tsi *cluster.Snode) {
 
 func (m *smapX) addProxy(psi *cluster.Snode) {
 	if m.containsID(psi.ID()) {
-		cmn.Assertf(false, "FATAL: duplicate daemon ID: %q", psi.ID())
+		cos.Assertf(false, "FATAL: duplicate daemon ID: %q", psi.ID())
 	}
 	m.Pmap[psi.ID()] = psi
 	m.Version++
@@ -242,7 +243,7 @@ func (m *smapX) addProxy(psi *cluster.Snode) {
 
 func (m *smapX) delTarget(sid string) {
 	if m.GetTarget(sid) == nil {
-		cmn.Assertf(false, "FATAL: target: %s is not in: %s", sid, m.pp())
+		cos.Assertf(false, "FATAL: target: %s is not in: %s", sid, m.pp())
 	}
 	delete(m.Tmap, sid)
 	m.Version++
@@ -250,7 +251,7 @@ func (m *smapX) delTarget(sid string) {
 
 func (m *smapX) delProxy(pid string) {
 	if m.GetProxy(pid) == nil {
-		cmn.Assertf(false, "FATAL: proxy: %s is not in: %s", pid, m.pp())
+		cos.Assertf(false, "FATAL: proxy: %s is not in: %s", pid, m.pp())
 	}
 	delete(m.Pmap, pid)
 	m.Version++
@@ -272,7 +273,7 @@ func (m *smapX) putNode(nsi *cluster.Snode, flags cluster.SnodeFlags) (exists bo
 			glog.Infof("joined %s (num proxies %d)", nsi, m.CountProxies())
 		}
 	} else {
-		cmn.Assert(nsi.IsTarget())
+		cos.Assert(nsi.IsTarget())
 		if m.GetTarget(id) != nil { // ditto
 			m.delTarget(id)
 			exists = true
@@ -292,7 +293,7 @@ func (m *smapX) clone() *smapX {
 }
 
 func (m *smapX) deepCopy(dst *smapX) {
-	cmn.CopyStruct(dst, m)
+	cos.CopyStruct(dst, m)
 	dst.init(m.CountTargets(), m.CountProxies())
 	for id, v := range m.Tmap {
 		dst.Tmap[id] = v.Clone()
@@ -398,7 +399,7 @@ func (m *smapX) _applyFlags(si *cluster.Snode, newFlags cluster.SnodeFlags) {
 // Must be called under lock and for smap clone
 func (m *smapX) setNodeFlags(sid string, flags cluster.SnodeFlags) {
 	si := m.GetNode(sid)
-	cmn.Assert(si != nil)
+	cos.Assert(si != nil)
 	newFlags := si.Flags.Set(flags)
 	if flags.IsAnySet(cluster.SnodeMaintenanceMask) {
 		newFlags = newFlags.Clear(cluster.SnodeIC)
@@ -409,7 +410,7 @@ func (m *smapX) setNodeFlags(sid string, flags cluster.SnodeFlags) {
 // Must be called under lock and for smap clone
 func (m *smapX) clearNodeFlags(id string, flags cluster.SnodeFlags) {
 	si := m.GetNode(id)
-	cmn.Assert(si != nil)
+	cos.Assert(si != nil)
 	m._applyFlags(si, si.Flags.Clear(flags))
 }
 
@@ -553,10 +554,10 @@ func (sls *smapLis) run() {
 }
 
 func (sls *smapLis) Reg(sl cluster.Slistener) {
-	cmn.Assert(sl.String() != "")
+	cos.Assert(sl.String() != "")
 	sls.Lock()
 	_, ok := sls.listeners[sl.String()]
-	cmn.Assert(!ok)
+	cos.Assert(!ok)
 	sls.listeners[sl.String()] = sl
 	if len(sls.listeners) == 1 {
 		sls.wg.Add(1)
@@ -570,7 +571,7 @@ func (sls *smapLis) Reg(sl cluster.Slistener) {
 func (sls *smapLis) Unreg(sl cluster.Slistener) {
 	sls.Lock()
 	_, ok := sls.listeners[sl.String()]
-	cmn.Assert(ok)
+	cos.Assert(ok)
 	delete(sls.listeners, sl.String())
 	if len(sls.listeners) == 0 {
 		sls.running.Store(false)
@@ -580,7 +581,7 @@ func (sls *smapLis) Unreg(sl cluster.Slistener) {
 }
 
 func (sls *smapLis) notify(ver int64) {
-	cmn.Assert(ver >= 0)
+	cos.Assert(ver >= 0)
 	if sls.running.Load() {
 		sls.postCh <- ver
 	}

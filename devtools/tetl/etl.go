@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
@@ -118,7 +119,7 @@ func StopETL(t *testing.T, baseParams api.BaseParams, etlID string) {
 		tlog.Logln("Fetching logs from ETL containers")
 		if logMsgs, err := api.ETLLogs(baseParams, etlID); err == nil {
 			for _, msg := range logMsgs {
-				tlog.Logf("%s\n", msg.String(10*cmn.KiB))
+				tlog.Logf("%s\n", msg.String(10*cos.KiB))
 			}
 		} else {
 			tlog.Logf("Error retrieving logs; err %v\n", err)
@@ -188,7 +189,7 @@ func waitForXactDone(baseParams api.BaseParams, xactID string, timeout time.Dura
 	return err
 }
 
-func ReportXactionStatus(baseParams api.BaseParams, xactID string, stopCh *cmn.StopCh, interval time.Duration, totalObj int) {
+func ReportXactionStatus(baseParams api.BaseParams, xactID string, stopCh *cos.StopCh, interval time.Duration, totalObj int) {
 	go func() {
 		var (
 			xactStart = time.Now()
@@ -205,8 +206,8 @@ func ReportXactionStatus(baseParams api.BaseParams, xactID string, stopCh *cmn.S
 					continue
 				}
 				bps := float64(stats.BytesCount()) / time.Since(xactStart).Seconds()
-				bpsStr := fmt.Sprintf("%s/s", cmn.B2S(int64(bps), 2))
-				tlog.Logf("ETL %q already transformed %d/%d objects (%s) (%s)\n", xactID, stats.ObjCount(), totalObj, cmn.B2S(stats.BytesCount(), 2), bpsStr)
+				bpsStr := fmt.Sprintf("%s/s", cos.B2S(int64(bps), 2))
+				tlog.Logf("ETL %q already transformed %d/%d objects (%s) (%s)\n", xactID, stats.ObjCount(), totalObj, cos.B2S(stats.BytesCount(), 2), bpsStr)
 			case <-stopCh.Listen():
 				return
 			}

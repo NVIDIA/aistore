@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/fatih/color"
 	"github.com/urfave/cli"
 	"k8s.io/apimachinery/pkg/util/duration"
@@ -191,7 +192,7 @@ func listObjects(c *cli.Context, bck cmn.Bck) error {
 		msg.SetFlag(cmn.SelectMisplaced)
 	}
 	props := strings.Split(parseStrFlag(c, objPropsFlag), ",")
-	if cmn.StringInSlice("all", props) {
+	if cos.StringInSlice("all", props) {
 		msg.AddProps(cmn.GetPropsAll...)
 	} else {
 		msg.AddProps(cmn.GetPropsName)
@@ -290,7 +291,7 @@ func fetchSummaries(query cmn.QueryBcks, fast, cached bool) (summaries cmn.Bucke
 //  * `backend_bck=gcp://bucket_name` with `backend_bck.name=bucket_name` and
 //    `backend_bck.provider=gcp` so they match the expected fields in structs.
 //  * `backend_bck=none` with `backend_bck.name=""` and `backend_bck.provider=""`.
-func reformatBackendProps(nvs cmn.SimpleKVs) (err error) {
+func reformatBackendProps(nvs cos.SimpleKVs) (err error) {
 	var (
 		originBck cmn.Bck
 		v         string
@@ -383,7 +384,7 @@ func printBckHeadTable(c *cli.Context, props, defProps *cmn.BucketProps, section
 	// List instead of map to keep properties in the same order always.
 	// All names are one word ones - for easier parsing.
 	propList, err := bckPropList(props, flagIsSet(c, verboseFlag))
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 
 	if section != "" {
 		tmpPropList := propList[:0]
@@ -397,7 +398,7 @@ func printBckHeadTable(c *cli.Context, props, defProps *cmn.BucketProps, section
 
 	if colored {
 		defList, err = bckPropList(defProps, flagIsSet(c, verboseFlag))
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 		highlight := color.New(color.FgCyan).SprintfFunc()
 		for idx, p := range propList {
 			for _, def := range defList {
@@ -596,12 +597,12 @@ func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
 	}
 
 	if bashTemplate := parseStrFlag(c, templateFlag); bashTemplate != "" {
-		pt, err := cmn.ParseBashTemplate(bashTemplate)
+		pt, err := cos.ParseBashTemplate(bashTemplate)
 		if err != nil {
 			return nil, err
 		}
 
-		matchingObjectNames := make(cmn.StringSet)
+		matchingObjectNames := make(cos.StringSet)
 
 		linksIt := pt.Iter()
 		for objName, hasNext := linksIt(); hasNext; objName, hasNext = linksIt() {

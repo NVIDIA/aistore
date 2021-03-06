@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
@@ -45,7 +46,7 @@ type (
 		r io.ReadCloser
 		// If available (not `none`), can be validated and will be stored with the object
 		// see `writeToFile` method
-		cksumToUse *cmn.Cksum
+		cksumToUse *cos.Cksum
 		// object size aka Content-Length
 		size int64
 		// Context used when putting the object which should be contained in
@@ -81,7 +82,7 @@ type (
 	handleInfo struct {
 		nodeID       string
 		filePath     string
-		partialCksum *cmn.CksumHash
+		partialCksum *cos.CksumHash
 	}
 
 	appendObjInfo struct {
@@ -97,7 +98,7 @@ type (
 		op string
 		hi handleInfo // Information contained in handle.
 
-		cksum *cmn.Cksum // Expected checksum of the final object.
+		cksum *cos.Cksum // Expected checksum of the final object.
 	}
 
 	copyObjInfo struct {
@@ -123,7 +124,7 @@ func (poi *putObjInfo) putObject() (errCode int, err error) {
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("%s is valid %s: PUT is a no-op", lom, poi.cksumToUse)
 			}
-			cmn.DrainReader(poi.r)
+			cos.DrainReader(poi.r)
 			return 0, nil
 		}
 	}
@@ -156,7 +157,7 @@ func (poi *putObjInfo) finalize() (errCode int, err error) {
 				err1 = err
 			}
 			poi.t.fsErr(err1, poi.workFQN)
-			if err2 := cmn.RemoveFile(poi.workFQN); err2 != nil {
+			if err2 := cos.RemoveFile(poi.workFQN); err2 != nil {
 				glog.Errorf("Nested error: %s => (remove %s => err: %v)", err1, poi.workFQN, err2)
 			}
 		}
@@ -213,7 +214,7 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 			}
 		}
 	}
-	if err = cmn.Rename(poi.workFQN, lom.FQN); err != nil {
+	if err = cos.Rename(poi.workFQN, lom.FQN); err != nil {
 		err = fmt.Errorf(cmn.FmtErrFailed, poi.t.si, "rename", lom, err)
 		return
 	}
@@ -235,7 +236,7 @@ func (poi *putObjInfo) putRemote() (version string, errCode int, err error) {
 		lom     = poi.lom
 		backend = poi.t.Backend(lom.Bck())
 	)
-	fh, err := cmn.NewFileHandle(poi.workFQN)
+	fh, err := cos.NewFileHandle(poi.workFQN)
 	if err != nil {
 		err = fmt.Errorf(cmn.FmtErrFailed, poi.t.Snode(), "open", poi.workFQN, err)
 		return
@@ -243,7 +244,7 @@ func (poi *putObjInfo) putRemote() (version string, errCode int, err error) {
 
 	version, errCode, err = backend.PutObj(poi.ctx, fh, lom)
 	if !lom.Bck().IsRemoteAIS() {
-		customMD := cmn.SimpleKVs{cluster.SourceObjMD: backend.Provider()}
+		customMD := cos.SimpleKVs{cluster.SourceObjMD: backend.Provider()}
 		if version != "" {
 			customMD[cluster.VersionObjMD] = version
 		}
@@ -264,9 +265,9 @@ func (poi *putObjInfo) writeToFile() (err error) {
 		writer  io.Writer
 		writers = make([]io.Writer, 0, 4)
 		cksums  = struct {
-			store *cmn.CksumHash // store with LOM
-			given *cmn.CksumHash // compute additionally
-			expct *cmn.Cksum     // and validate against `expct` if required/available
+			store *cos.CksumHash // store with LOM
+			given *cos.CksumHash // compute additionally
+			expct *cos.Cksum     // and validate against `expct` if required/available
 		}{}
 		conf = poi.lom.CksumConf()
 	)
@@ -276,7 +277,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	if file, err = poi.lom.CreateFile(poi.workFQN); err != nil {
 		return
 	}
-	writer = cmn.WriterOnly{Writer: file} // Hiding `ReadFrom` for `*os.File` introduced in Go1.15.
+	writer = cos.WriterOnly{Writer: file} // Hiding `ReadFrom` for `*os.File` introduced in Go1.15.
 	if poi.size == 0 {
 		buf, slab = poi.t.gmm.Alloc()
 	} else {
@@ -285,21 +286,21 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	// cleanup
 	defer func() { // free & cleanup on err
 		slab.Free(buf)
-		cmn.Close(reader)
+		cos.Close(reader)
 
 		if err != nil {
 			if nestedErr := file.Close(); nestedErr != nil {
 				glog.Errorf("Nested (%v): failed to close received object %s, err: %v",
 					err, poi.workFQN, nestedErr)
 			}
-			if nestedErr := cmn.RemoveFile(poi.workFQN); nestedErr != nil {
+			if nestedErr := cos.RemoveFile(poi.workFQN); nestedErr != nil {
 				glog.Errorf("Nested (%v): failed to remove %s, err: %v", err, poi.workFQN, nestedErr)
 			}
 		}
 	}()
 	// checksums
-	if conf.Type == cmn.ChecksumNone {
-		poi.lom.SetCksum(cmn.NoneCksum)
+	if conf.Type == cos.ChecksumNone {
+		poi.lom.SetCksum(cos.NoneCksum)
 		goto write
 	}
 	if poi.recvType == cluster.Migrated && !conf.ShouldValidate() && !poi.cksumToUse.IsEmpty() {
@@ -310,13 +311,13 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	}
 
 	// compute checksum and save it as part of the object metadata
-	cksums.store = cmn.NewCksumHash(conf.Type)
+	cksums.store = cos.NewCksumHash(conf.Type)
 	writers = append(writers, cksums.store.H)
 	if conf.ShouldValidate() && !poi.cksumToUse.IsEmpty() {
 		// if validate-cold-get and the cksum is provided we should also check md5 hash (aws, gcp)
 		// or if the object is migrated, and `conf.ValidateObjMove` we should check with existing checksum
 		cksums.expct = poi.cksumToUse
-		cksums.given = cmn.NewCksumHash(poi.cksumToUse.Type())
+		cksums.given = cos.NewCksumHash(poi.cksumToUse.Type())
 		writers = append(writers, cksums.given.H)
 	}
 
@@ -325,7 +326,7 @@ write:
 		written, err = io.CopyBuffer(writer, reader, buf)
 	} else {
 		writers = append(writers, writer)
-		written, err = io.CopyBuffer(cmn.NewWriterMulti(writers...), reader, buf)
+		written, err = io.CopyBuffer(cos.NewWriterMulti(writers...), reader, buf)
 	}
 	if err != nil {
 		return
@@ -334,7 +335,7 @@ write:
 	if cksums.given != nil {
 		cksums.given.Finalize()
 		if !cksums.given.Equal(cksums.expct) {
-			err = cmn.NewBadDataCksumError(cksums.expct, &cksums.given.Cksum, poi.lom.String())
+			err = cos.NewBadDataCksumError(cksums.expct, &cksums.given.Cksum, poi.lom.String())
 			poi.t.statsT.AddMany(
 				stats.NamedVal64{Name: stats.ErrCksumCount, Value: 1},
 				stats.NamedVal64{Name: stats.ErrCksumSize, Value: written},
@@ -479,7 +480,7 @@ retry:
 		return
 	}
 	code = http.StatusInternalServerError
-	if _, ok := err.(*cmn.ErrBadCksum); !ok {
+	if _, ok := err.(*cos.ErrBadCksum); !ok {
 		return
 	}
 	if !lom.Bck().IsAIS() {
@@ -504,7 +505,7 @@ retry:
 	//
 	// try to recover from BAD CHECKSUM
 	//
-	cmn.RemoveFile(lom.FQN) // TODO: ditto
+	cos.RemoveFile(lom.FQN) // TODO: ditto
 
 	if lom.HasCopies() {
 		retried = true
@@ -521,7 +522,7 @@ retry:
 	if lom.Bprops().EC.Enabled {
 		retried = true
 		goi.lom.Unlock(false)
-		cmn.RemoveFile(lom.FQN)
+		cos.RemoveFile(lom.FQN)
 		_, code, err = goi.tryRestoreObject()
 		goi.lom.Lock(false)
 		if err == nil {
@@ -679,7 +680,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry, sent bool, errCode int, er
 	)
 	defer func() {
 		if file != nil {
-			cmn.Close(file)
+			cos.Close(file)
 		}
 		if buf != nil {
 			slab.Free(buf)
@@ -691,7 +692,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry, sent bool, errCode int, er
 
 	// loopback if disk IO is disabled
 	if daemon.dryRun.disk {
-		if err = cmn.FloodWriter(goi.w, daemon.dryRun.size); err != nil {
+		if err = cos.FloodWriter(goi.w, daemon.dryRun.size); err != nil {
 			err = fmt.Errorf("dry-run: failed to send random response, err: %v", err)
 			errCode = http.StatusInternalServerError
 			goi.t.statsT.Add(stats.ErrGetCount, 1)
@@ -758,7 +759,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry, sent bool, errCode int, er
 	}
 
 	cksumConf := goi.lom.CksumConf()
-	cksumRange := cksumConf.Type != cmn.ChecksumNone && r != nil && cksumConf.EnableReadRange
+	cksumRange := cksumConf.Type != cos.ChecksumNone && r != nil && cksumConf.EnableReadRange
 
 	if hdr != nil {
 		if !goi.lom.Cksum().IsEmpty() && !cksumRange {
@@ -770,7 +771,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry, sent bool, errCode int, er
 			hdr.Set(cmn.HeaderObjVersion, goi.lom.Version())
 		}
 		hdr.Set(cmn.HeaderObjSize, strconv.FormatInt(goi.lom.Size(), 10))
-		hdr.Set(cmn.HeaderObjAtime, cmn.UnixNano2S(goi.lom.AtimeUnix()))
+		hdr.Set(cmn.HeaderObjAtime, cos.UnixNano2S(goi.lom.AtimeUnix()))
 		if r != nil {
 			hdr.Set(cmn.HeaderContentLength, strconv.FormatInt(r.Length, 10))
 		} else {
@@ -784,16 +785,16 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry, sent bool, errCode int, er
 		if goi.chunked {
 			// Explicitly hiding `ReadFrom` implemented for `http.ResponseWriter`
 			// so the `sendfile` syscall won't be used.
-			w = cmn.WriterOnly{Writer: goi.w}
+			w = cos.WriterOnly{Writer: goi.w}
 			buf, slab = goi.t.gmm.Alloc(goi.lom.Size())
 		}
 	} else {
 		buf, slab = goi.t.gmm.Alloc(r.Length)
 		reader = io.NewSectionReader(file, r.Start, r.Length)
 		if cksumRange {
-			var cksum *cmn.CksumHash
+			var cksum *cos.CksumHash
 			sgl = slab.MMSA().NewSGL(r.Length, slab.Size())
-			if _, cksum, err = cmn.CopyAndChecksum(sgl, reader, buf, cksumConf.Type); err != nil {
+			if _, cksum, err = cos.CopyAndChecksum(sgl, reader, buf, cksumConf.Type); err != nil {
 				return
 			}
 			hdr.Set(cmn.HeaderObjCksumVal, cksum.Value())
@@ -830,7 +831,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry, sent bool, errCode int, er
 
 	delta := time.Since(goi.started)
 	if glog.FastV(4, glog.SmoduleAIS) {
-		s := fmt.Sprintf("GET: %s(%s), %s", goi.lom, cmn.B2S(written, 1), delta)
+		s := fmt.Sprintf("GET: %s(%s), %s", goi.lom, cos.B2S(written, 1), delta)
 		if coldGet {
 			s += " (cold)"
 		}
@@ -860,14 +861,14 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 				errCode = http.StatusInternalServerError
 				return
 			}
-			aoi.hi.partialCksum = cmn.NewCksumHash(aoi.lom.CksumConf().Type)
+			aoi.hi.partialCksum = cos.NewCksumHash(aoi.lom.CksumConf().Type)
 		} else {
-			f, err = os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, cmn.PermRWR)
+			f, err = os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, cos.PermRWR)
 			if err != nil {
 				errCode = http.StatusInternalServerError
 				return
 			}
-			cmn.Assert(aoi.hi.partialCksum != nil)
+			cos.Assert(aoi.hi.partialCksum != nil)
 		}
 
 		var (
@@ -880,11 +881,11 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 			buf, slab = aoi.t.gmm.Alloc(aoi.size)
 		}
 
-		w := cmn.NewWriterMulti(f, aoi.hi.partialCksum.H)
+		w := cos.NewWriterMulti(f, aoi.hi.partialCksum.H)
 		_, err = io.CopyBuffer(w, aoi.r, buf)
 
 		slab.Free(buf)
-		cmn.Close(f)
+		cos.Close(f)
 		if err != nil {
 			errCode = http.StatusInternalServerError
 			return
@@ -897,11 +898,11 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 			errCode = http.StatusBadRequest
 			return
 		}
-		cmn.Assert(aoi.hi.partialCksum != nil)
+		cos.Assert(aoi.hi.partialCksum != nil)
 		aoi.hi.partialCksum.Finalize()
 		partialCksum := aoi.hi.partialCksum.Clone()
 		if aoi.cksum != nil && !partialCksum.Equal(aoi.cksum) {
-			err = cmn.NewBadDataCksumError(partialCksum, aoi.cksum)
+			err = cos.NewBadDataCksumError(partialCksum, aoi.cksum)
 			errCode = http.StatusInternalServerError
 			return
 		}
@@ -917,7 +918,7 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 			return "", 0, err
 		}
 	default:
-		cmn.AssertMsg(false, aoi.op)
+		cos.AssertMsg(false, aoi.op)
 	}
 
 	delta := time.Since(aoi.started)
@@ -939,7 +940,7 @@ func parseAppendHandle(handle string) (hi handleInfo, err error) {
 	if len(p) != 4 {
 		return hi, fmt.Errorf("invalid handle provided: %q", handle)
 	}
-	hi.partialCksum = cmn.NewCksumHash(p[2])
+	hi.partialCksum = cos.NewCksumHash(p[2])
 	buf, err := base64.StdEncoding.DecodeString(p[3])
 	if err != nil {
 		return hi, err
@@ -953,9 +954,9 @@ func parseAppendHandle(handle string) (hi handleInfo, err error) {
 	return
 }
 
-func combineAppendHandle(nodeID, filePath string, partialCksum *cmn.CksumHash) string {
+func combineAppendHandle(nodeID, filePath string, partialCksum *cos.CksumHash) string {
 	buf, err := partialCksum.H.(encoding.BinaryMarshaler).MarshalBinary()
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	cksumTy := partialCksum.Type()
 	cksumBinary := base64.StdEncoding.EncodeToString(buf)
 	return nodeID + "|" + filePath + "|" + cksumTy + "|" + cksumBinary
@@ -1061,7 +1062,7 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 // TODO: Make it possible to skip caching an object from a cloud bucket.
 func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int64, err error) {
 	var (
-		reader cmn.ReadOpenCloser
+		reader cos.ReadOpenCloser
 		si     = coi.t.si
 	)
 	debug.Assert(coi.DP != nil)
@@ -1121,8 +1122,8 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 }
 
 func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (size int64, err error) {
-	cmn.Assert(coi.DryRun)
-	cmn.Assert(coi.DP != nil)
+	cos.Assert(coi.DryRun)
+	cos.Assert(coi.DP != nil)
 
 	var reader io.ReadCloser
 	if reader, _, err = coi.DP.Reader(lom); err != nil {
@@ -1144,7 +1145,7 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 		// XXX: Kind of hacky way of determining if the `lom` is object or just
 		//  a regular file. Ideally, the parameter shouldn't be `lom` at all
 		//  but rather something more general like `cluster.CT`.
-		var reader cmn.ReadOpenCloser
+		var reader cos.ReadOpenCloser
 		if !coi.promoteFile {
 			lom.Lock(false)
 			if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
@@ -1155,16 +1156,16 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 				lom.Unlock(false)
 				return lom.Size(), nil
 			}
-			fh, err := cmn.NewFileHandle(lom.FQN)
+			fh, err := cos.NewFileHandle(lom.FQN)
 			if err != nil {
 				lom.Unlock(false)
 				return 0, fmt.Errorf(cmn.FmtErrFailed, coi.t.Snode(), "open", lom.FQN, err)
 			}
 			size = lom.Size()
-			reader = cmn.NewDeferROC(fh, func() { lom.Unlock(false) })
+			reader = cos.NewDeferROC(fh, func() { lom.Unlock(false) })
 		} else {
 			debug.Assert(!coi.DryRun)
-			fh, err := cmn.NewFileHandle(lom.FQN)
+			fh, err := cos.NewFileHandle(lom.FQN)
 			if err != nil {
 				return 0, fmt.Errorf(cmn.FmtErrFailed, coi.t.Snode(), "open", lom.FQN, err)
 			}
@@ -1185,7 +1186,7 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 		}
 		if coi.DryRun {
 			size, err = io.Copy(ioutil.Discard, params.Reader)
-			cmn.Close(params.Reader)
+			cos.Close(params.Reader)
 			return
 		}
 		// NOTE: return the current size as resulting (transformed) size may not be known.

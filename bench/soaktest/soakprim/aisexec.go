@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/bench/soaktest/stats"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -52,18 +53,18 @@ const (
 var aisloaderPath string
 
 func init() {
-	os.MkdirAll(soaktestDirname, cmn.PermRWXRX)
+	os.MkdirAll(soaktestDirname, cos.PermRWXRX)
 
 	// We expect the `aisloader` binary to be present in `$GOPATH/bin` directory.
 	aisloaderPath = filepath.Join(os.Getenv("GOPATH"), "bin", "aisloader")
 	_, err := os.Stat(aisloaderPath)
 	if err != nil {
-		cmn.ExitLogf("'aisloader' binary is not present in %q (err: %v)", aisloaderPath, err)
+		cos.ExitLogf("'aisloader' binary is not present in %q (err: %v)", aisloaderPath, err)
 	}
 }
 
 func AISExec(ch chan *stats.PrimitiveStat, opType string, bck cmn.Bck, numWorkers int, params *AISLoaderExecParams) {
-	filebasename := cmn.RandString(13)
+	filebasename := cos.RandString(13)
 	filename := path.Join(soaktestDirname, filebasename+".json")
 	defer os.Remove(filename)
 

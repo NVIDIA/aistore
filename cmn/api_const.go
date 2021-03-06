@@ -1,4 +1,5 @@
-// Package cmn provides common low-level types and utilities for all aistore projects
+// Package cmn provides common constants, types, and utilities for AIS clients
+// and AIStore.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -6,16 +7,6 @@ package cmn
 
 import (
 	"time"
-)
-
-// checksums
-const (
-	ChecksumNone   = "none"
-	ChecksumXXHash = "xxhash"
-	ChecksumMD5    = "md5"
-	ChecksumCRC32C = "crc32c"
-	ChecksumSHA256 = "sha256" // crypto.SHA512_256 (SHA-2)
-	ChecksumSHA512 = "sha512" // crypto.SHA512 (SHA-2)
 )
 
 // module names
@@ -268,11 +259,6 @@ const (
 	GetWhatXactStats      = "getxstats" // stats: xaction by uuid
 	GetWhatQueryXactStats = "qryxstats" // stats: all matching xactions
 	GetWhatICBundle       = "ic_bundle"
-)
-
-// SelectMsg.TimeFormat enum
-const (
-	RFC822 = time.RFC822
 )
 
 // SelectMsg.Props enum

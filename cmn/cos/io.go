@@ -1,12 +1,13 @@
-// Package cmn provides common low-level types and utilities for all aistore projects
+// Package cos provides common low-level types and utilities for all aistore projects
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package cmn
+package cos
 
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -119,6 +120,11 @@ var (
 	_ ReadOpenCloser = (*nopOpener)(nil)
 	_ ReadOpenCloser = (*ByteHandle)(nil)
 )
+
+// EOF (to accommodate unsized streaming)
+func IsEOF(err error) bool {
+	return err == io.ErrUnexpectedEOF || errors.Is(err, io.EOF)
+}
 
 ///////////////
 // nopReader //

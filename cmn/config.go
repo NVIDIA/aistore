@@ -1,4 +1,5 @@
-// Package cmn provides common low-level types and utilities for all aistore projects
+// Package cmn provides common constants, types, and utilities for AIS clients
+// and AIStore.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -20,6 +21,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -585,7 +587,7 @@ type (
 	}
 
 	FSPathsConf struct {
-		Paths StringSet `json:"paths,omitempty"`
+		Paths cos.StringSet `json:"paths,omitempty"`
 	}
 	// lz4 block and frame formats: http://fastcompression.blogspot.com/2013/04/lz4-streaming-format-final.html
 	CompressionConf struct {
@@ -653,7 +655,7 @@ func (gco *globalConfigOwner) PutOverrideConfig(config *ConfigToUpdate) {
 func (gco *globalConfigOwner) Clone() *Config {
 	config := &Config{}
 
-	CopyStruct(config, gco.Get())
+	cos.CopyStruct(config, gco.Get())
 	return config
 }
 
@@ -712,7 +714,7 @@ func (gco *globalConfigOwner) notifyListeners(oldConf *Config) {
 func (gco *globalConfigOwner) Reg(key string, cl ConfigListener) {
 	gco.lmtx.Lock()
 	_, ok := gco.listeners[key]
-	Assert(!ok)
+	cos.Assert(!ok)
 	gco.listeners[key] = cl
 	gco.lmtx.Unlock()
 }
@@ -721,7 +723,7 @@ func (gco *globalConfigOwner) Reg(key string, cl ConfigListener) {
 func (gco *globalConfigOwner) Unreg(key string) {
 	gco.lmtx.Lock()
 	_, ok := gco.listeners[key]
-	Assert(ok)
+	cos.Assert(ok)
 	delete(gco.listeners, key)
 	gco.lmtx.Unlock()
 }
@@ -917,7 +919,7 @@ func (c *BackendConf) setProvider(provider string) {
 	case ProviderAmazon, ProviderAzure, ProviderGoogle, ProviderHDFS:
 		ns = NsGlobal
 	default:
-		AssertMsg(false, "unknown backend provider "+provider)
+		cos.AssertMsg(false, "unknown backend provider "+provider)
 	}
 	if c.Providers == nil {
 		c.Providers = map[string]Ns{}
@@ -980,11 +982,11 @@ func (c *LRUConf) ValidateAsProps(args *ValidationArgs) (err error) {
 }
 
 func (c *CksumConf) Validate(_ *Config) (err error) {
-	return ValidateCksumType(c.Type)
+	return cos.ValidateCksumType(c.Type)
 }
 
 func (c *CksumConf) ValidateAsProps(args *ValidationArgs) (err error) {
-	return ValidateCksumType(c.Type)
+	return cos.ValidateCksumType(c.Type)
 }
 
 func (c *CksumConf) ShouldValidate() bool {
@@ -1151,7 +1153,7 @@ func (c *KeepaliveConf) Validate(_ *Config) (err error) {
 }
 
 func (c *NetConf) Validate(_ *Config) (err error) {
-	if !StringInSlice(c.L4.Proto, supportedL4Protos) {
+	if !cos.StringInSlice(c.L4.Proto, supportedL4Protos) {
 		return fmt.Errorf("l4 proto is not recognized %s, expected one of: %s",
 			c.L4.Proto, supportedL4Protos)
 	}
@@ -1225,7 +1227,7 @@ func (c *DSortConf) Validate(_ *Config) (err error) {
 
 func (c *DSortConf) ValidateWithOpts(_ *Config, allowEmpty bool) (err error) {
 	checkReaction := func(reaction string) bool {
-		return StringInSlice(reaction, SupportedReactions) || (allowEmpty && reaction == "")
+		return cos.StringInSlice(reaction, SupportedReactions) || (allowEmpty && reaction == "")
 	}
 
 	if !checkReaction(c.DuplicatedRecords) {
@@ -1245,7 +1247,7 @@ func (c *DSortConf) ValidateWithOpts(_ *Config, allowEmpty bool) (err error) {
 			c.EKMMissingKey, SupportedReactions)
 	}
 	if !allowEmpty {
-		if _, err := ParseQuantity(c.DefaultMaxMemUsage); err != nil {
+		if _, err := cos.ParseQuantity(c.DefaultMaxMemUsage); err != nil {
 			return fmt.Errorf("invalid distributed_sort.default_max_mem_usage: %s (err: %s)",
 				c.DefaultMaxMemUsage, err)
 		}
@@ -1253,7 +1255,7 @@ func (c *DSortConf) ValidateWithOpts(_ *Config, allowEmpty bool) (err error) {
 			return fmt.Errorf("invalid distributed_sort.call_timeout: %s", c.CallTimeoutStr)
 		}
 	}
-	if _, err := S2B(c.DSorterMemThreshold); err != nil && (!allowEmpty || c.DSorterMemThreshold != "") {
+	if _, err := cos.S2B(c.DSorterMemThreshold); err != nil && (!allowEmpty || c.DSorterMemThreshold != "") {
 		return fmt.Errorf("invalid distributed_sort.dsorter_mem_threshold: %s (err: %s)",
 			c.DSorterMemThreshold, err)
 	}
@@ -1287,7 +1289,7 @@ func (c *FSPathsConf) MarshalJSON() (data []byte, err error) {
 }
 
 func (c *FSPathsConf) Validate(contextConfig *Config) (err error) {
-	debug.Assertf(StringInSlice(contextConfig.role, []string{Proxy, Target}), "unexpected role: %q", contextConfig.role)
+	debug.Assertf(cos.StringInSlice(contextConfig.role, []string{Proxy, Target}), "unexpected role: %q", contextConfig.role)
 
 	// Don't validate if testing environment
 	if contextConfig.TestingEnv() || contextConfig.role != Target {
@@ -1341,8 +1343,8 @@ func ValidateMpath(mpath string) (string, error) {
 
 // NOTE: uncompressed block sizes - the enum currently supported by the github.com/pierrec/lz4
 func (c *CompressionConf) Validate(_ *Config) (err error) {
-	if c.BlockMaxSize != 64*KiB && c.BlockMaxSize != 256*KiB &&
-		c.BlockMaxSize != MiB && c.BlockMaxSize != 4*MiB {
+	if c.BlockMaxSize != 64*cos.KiB && c.BlockMaxSize != 256*cos.KiB &&
+		c.BlockMaxSize != cos.MiB && c.BlockMaxSize != 4*cos.MiB {
 		return fmt.Errorf("invalid compression.block_size %d", c.BlockMaxSize)
 	}
 	return nil
@@ -1356,14 +1358,6 @@ func KeepaliveRetryDuration(cs ...*Config) time.Duration {
 		c = GCO.Get()
 	}
 	return c.Timeout.CplaneOperation * time.Duration(c.Keepalive.RetryFactor)
-}
-
-func Printf(format string, a ...interface{}) {
-	if flag.Parsed() {
-		glog.InfoDepth(1, fmt.Sprintf(format, a...))
-	} else {
-		fmt.Printf(format+"\n", a...)
-	}
 }
 
 ///////////////////
@@ -1521,5 +1515,5 @@ func ipv4ListsEqual(alist, blist string) bool {
 	if len(al) == 0 || len(bl) == 0 || len(al) != len(bl) {
 		return false
 	}
-	return StrSlicesEqual(al, bl)
+	return cos.StrSlicesEqual(al, bl)
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/query"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
@@ -82,7 +83,7 @@ type (
 func RegisterBucketXact(entry BucketEntryProvider) { defaultReg.registerBucketXact(entry) }
 
 func (r *registry) registerBucketXact(entry BucketEntryProvider) {
-	cmn.Assert(xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeBck)
+	cos.Assert(xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeBck)
 
 	// It is expected that registrations happen at the init time. Therefore, it
 	// is safe to assume that no `RenewXYZ` will happen before all xactions
@@ -205,7 +206,7 @@ func RenewPutMirror(t cluster.Target, lom *cluster.LOM) cluster.Xact {
 
 func (r *registry) renewPutMirror(t cluster.Target, lom *cluster.LOM) cluster.Xact {
 	xact, err := r.renewBucketXact(cmn.ActPutCopies, lom.Bck(), XactArgs{T: t, Custom: lom})
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	return xact
 }
 
@@ -256,7 +257,7 @@ func (r *registry) renewPrefetch(t cluster.Target, bck *cluster.Bck, args *Delet
 		UUID:   args.UUID,
 		Custom: args,
 	})
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	return xact
 }
 
@@ -342,7 +343,7 @@ func RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery,
 
 func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery,
 	msg *cmn.SelectMsg) (cluster.Xact, bool, error) {
-	cmn.Assert(msg.UUID != "")
+	cos.Assert(msg.UUID != "")
 	if xact := query.Registry.Get(msg.UUID); xact != nil {
 		if xact.Aborted() {
 			query.Registry.Delete(msg.UUID)

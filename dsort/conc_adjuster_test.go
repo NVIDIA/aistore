@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	. "github.com/onsi/ginkgo"
@@ -39,7 +40,7 @@ func calcSemaLimit(acquire, release func()) int {
 
 	res := int32(0)
 	for c := range ch {
-		res = cmn.MaxI32(res, c)
+		res = cos.MaxI32(res, c)
 	}
 
 	return int(res)
@@ -49,7 +50,7 @@ var _ = Describe("newConcAdjuster", func() {
 	mios := ios.NewIOStaterMock()
 
 	BeforeEach(func() {
-		err := cmn.CreateDir(testingConfigDir)
+		err := cos.CreateDir(testingConfigDir)
 		Expect(err).ShouldNot(HaveOccurred())
 
 		fs.Init(mios)
@@ -111,7 +112,7 @@ var _ = Describe("newConcAdjuster", func() {
 			})
 
 			// If we get enough close we can just break
-			if cmn.Abs(curLimit-perfectLimit) <= 1 {
+			if cos.Abs(curLimit-perfectLimit) <= 1 {
 				break
 			}
 

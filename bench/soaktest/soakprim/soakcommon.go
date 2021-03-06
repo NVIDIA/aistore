@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 const (
@@ -224,7 +225,7 @@ func bckNameWithoutPrefix(bckName string) (res string) {
 func fetchBuckets(tag string) []string {
 	bcks, err := api.ListBuckets(soakcmn.BaseAPIParams(primaryURL), cmn.QueryBcks{Provider: cmn.ProviderAIS})
 	if err != nil {
-		cmn.AssertNoErr(fmt.Errorf("error fetching bucketnames for %v: %v", tag, err.Error()))
+		cos.AssertNoErr(fmt.Errorf("error fetching bucketnames for %v: %v", tag, err.Error()))
 	}
 
 	var res []string
@@ -241,7 +242,7 @@ func fetchBuckets(tag string) []string {
 func fetchSmap(tag string) *cluster.Smap {
 	smap, err := api.GetClusterMap(soakcmn.BaseAPIParams(primaryURL))
 	if err != nil {
-		cmn.Assertf(false, "failed to fetch smap for %s: %v", tag, err)
+		cos.Assertf(false, "failed to fetch smap for %s: %v", tag, err)
 	}
 	return smap
 }

@@ -16,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/xaction"
@@ -295,7 +296,7 @@ func startDownloadHandler(c *cli.Context) error {
 		}
 		id, err = api.DownloadWithParam(defaultAPIParams, dlType, payload)
 	default:
-		cmn.Assert(false)
+		cos.Assert(false)
 	}
 
 	if err != nil {
@@ -386,7 +387,7 @@ func startDsortHandler(c *cli.Context) (err error) {
 
 		var b bytes.Buffer
 		// Read at most 1MB so we don't blow up when reading a malicious file.
-		if _, err := io.CopyN(&b, r, cmn.MiB); err == nil {
+		if _, err := io.CopyN(&b, r, cos.MiB); err == nil {
 			return errors.New("file too big")
 		} else if err != io.EOF {
 			return err

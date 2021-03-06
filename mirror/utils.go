@@ -9,7 +9,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -87,7 +87,7 @@ func addCopies(lom *cluster.LOM, copies int, buf []byte) (size int64, err error)
 
 func findLeastUtilized(lom *cluster.LOM) (out *fs.MountpathInfo) {
 	var (
-		copiesMpath cmn.StringSet
+		copiesMpath cos.StringSet
 
 		minUtil    = int64(101)
 		mpathUtils = fs.GetAllMpathUtils()
@@ -95,7 +95,7 @@ func findLeastUtilized(lom *cluster.LOM) (out *fs.MountpathInfo) {
 	)
 
 	if lom.HasCopies() {
-		copiesMpath = make(cmn.StringSet)
+		copiesMpath = make(cos.StringSet)
 		for _, mpathInfo := range lom.GetCopies() {
 			copiesMpath.Add(mpathInfo.Path)
 		}

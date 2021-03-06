@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 // It is 2019-01-01, midnight in UnixNano. Used as creation date
@@ -75,7 +75,7 @@ func bckToS3(bck *cluster.Bck) *Bucket {
 
 func (r *ListBucketResult) MustMarshal() []byte {
 	b, err := xml.Marshal(r)
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	return []byte(xml.Header + string(b))
 }
 
@@ -92,7 +92,7 @@ func NewVersioningConfiguration(enabled bool) *VersioningConfiguration {
 
 func (r *VersioningConfiguration) MustMarshal() []byte {
 	b, err := xml.Marshal(r)
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	return []byte(xml.Header + string(b))
 }
 

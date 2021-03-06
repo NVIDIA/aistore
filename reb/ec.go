@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
@@ -123,7 +124,7 @@ type (
 		cts          ctList            // obj hash <-> list of CTs with the same hash
 		hrwTargets   []*cluster.Snode  // the list of targets that should have CT
 		rebuildSGLs  []*memsys.SGL     // temporary slices for [re]building EC
-		fh           *cmn.FileHandle   // main fh when building slices from existing main
+		fh           *cos.FileHandle   // main fh when building slices from existing main
 		sender       *cluster.Snode    // target responsible to send replicas over the cluster (first by HRW)
 		locCT        map[string]*rebCT // CT locations: maps daemonID to CT for faster check what nodes have the CT
 		ctExist      []bool            // marks existing CT: SliceID <=> Exists
@@ -294,7 +295,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) (err error) {
 	var (
 		lom       *cluster.LOM
 		parsedFQN fs.ParsedFQN
-		roc       cmn.ReadOpenCloser
+		roc       cos.ReadOpenCloser
 		fqn       = ct.realFQN
 	)
 	debug.Assert(ct.meta != nil)
@@ -322,14 +323,14 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) (err error) {
 		lom = nil // sending slice; TODO: rlock
 	}
 	// open
-	if roc, err = cmn.NewFileHandle(fqn); err != nil {
+	if roc, err = cos.NewFileHandle(fqn); err != nil {
 		if lom != nil {
 			lom.Unlock(false)
 			cluster.FreeLOM(lom)
 		}
 		return
 	} else if lom != nil {
-		roc = cmn.NewDeferROC(roc, func() {
+		roc = cos.NewDeferROC(roc, func() {
 			lom.Unlock(false)
 			cluster.FreeLOM(lom)
 		})
@@ -375,10 +376,10 @@ func (reb *Manager) transportECCB(_ transport.ObjHdr, _ io.ReadCloser, _ interfa
 // EC metadata is of main object, so its internal field SliceID must be
 // fixed prior to sending.
 // Use the function to send only slices (not for replicas/full object)
-func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
-	ct *rebCT, sliceID int, cksum *cmn.CksumHash, target *cluster.Snode, rt *retransmitCT) error {
-	cmn.AssertMsg(ct.meta != nil, ct.ObjName)
-	cmn.AssertMsg(ct.ObjSize != 0, ct.ObjName)
+func (reb *Manager) sendFromReader(reader cos.ReadOpenCloser,
+	ct *rebCT, sliceID int, cksum *cos.CksumHash, target *cluster.Snode, rt *retransmitCT) error {
+	cos.AssertMsg(ct.meta != nil, ct.ObjName)
+	cos.AssertMsg(ct.ObjSize != 0, ct.ObjName)
 	var (
 		newMeta = *ct.meta // copy of meta (flat struct of primitive types)
 		req     = pushReq{
@@ -427,7 +428,7 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 //   2. A CT is received and this target is not the default target (it
 //      means that the CTs came from default target after EC had been rebuilt)
 func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.ObjHdr) error {
-	cmn.Assert(req.md != nil)
+	cos.Assert(req.md != nil)
 	var (
 		err      error
 		bck      = cluster.NewBckEmbed(hdr.Bck)
@@ -477,7 +478,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Read
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("%s GOT CT for %s/%s from %s", reb.t.Snode(), hdr.Bck, hdr.ObjName, req.daemonID)
 	}
-	cmn.Assert(req.md != nil)
+	cos.Assert(req.md != nil)
 
 	reb.laterx.Store(true)
 	sliceID := req.md.SliceID
@@ -496,7 +497,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Read
 	obj.mtx.Lock()
 	defer obj.mtx.Unlock()
 	ct, ok := obj.locCT[req.daemonID]
-	cmn.Assertf(ok || sliceID != 0, "%s : %s", req.daemonID, uid)
+	cos.Assertf(ok || sliceID != 0, "%s : %s", req.daemonID, uid)
 	if !ok {
 		// Main target sends a rebuilt slice, need to receive it and save.
 		if glog.FastV(4, glog.SmoduleReb) {
@@ -515,11 +516,11 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Read
 		return nil
 	}
 	if ct.sgl != nil || obj.ready.Load() != objWaiting {
-		cmn.DrainReader(reader)
+		cos.DrainReader(reader)
 		glog.Infof(fmtErrCleanedUp, hdr.Bck, hdr.ObjName, sliceID)
 		return nil
 	}
-	size := cmn.MinI64(obj.objSize, cmn.MiB)
+	size := cos.MinI64(obj.objSize, cos.MiB)
 	ct.sgl = reb.t.MMSA().NewSGL(size)
 	ct.meta = req.md
 	n, err := io.Copy(ct.sgl, reader) // No need for `io.CopyBuffer` since SGL implements `io.ReaderFrom`.
@@ -538,8 +539,8 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Read
 		}
 		if hdr.ObjAttrs.CksumValue != cksum.Value() {
 			reb.statTracker.AddMany(stats.NamedVal64{Name: stats.ErrCksumCount, Value: 1})
-			return cmn.NewBadDataCksumError(
-				cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
+			return cos.NewBadDataCksumError(
+				cos.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
 				&cksum.Cksum,
 				"rebalance")
 		}
@@ -585,8 +586,8 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Read
 }
 
 // receiving EC CT or EC namespace
-func (reb *Manager) recvECData(hdr transport.ObjHdr, unpacker *cmn.ByteUnpack, reader io.Reader) {
-	defer cmn.DrainReader(reader)
+func (reb *Manager) recvECData(hdr transport.ObjHdr, unpacker *cos.ByteUnpack, reader io.Reader) {
+	defer cos.DrainReader(reader)
 
 	req := &pushReq{}
 	err := unpacker.ReadAny(req)
@@ -659,7 +660,7 @@ func (reb *Manager) mergeCTs(md *rebArgs) *globalCTList {
 					return nil
 				}
 				t, err := cluster.HrwTarget(b.MakeUname(ct.ObjName), md.smap)
-				cmn.Assert(err == nil)
+				cos.Assert(err == nil)
 				if local && t.ID() == localDaemon {
 					glog.Infof("skipping CT %d of %s (it must have main object)", ct.SliceID, ct.ObjName)
 					continue
@@ -903,7 +904,7 @@ func (reb *Manager) exchange(md *rebArgs) (err error) {
 				err = cmn.NewAbortedError("exchange")
 				goto ret
 			}
-			rd := cmn.NewByteHandle(body)
+			rd := cos.NewByteHandle(body)
 			if er1 := reb.dm.Send(o, rd, node); er1 != nil {
 				glog.Errorf("Failed to send CTs to node %s: %v", node.ID(), er1)
 				failed = append(failed, node)
@@ -928,7 +929,7 @@ ret:
 }
 
 func (reb *Manager) resilverSlice(fromFQN, toFQN string, buf []byte) error {
-	if _, _, err := cmn.CopyFile(fromFQN, toFQN, buf, cmn.ChecksumNone); err != nil {
+	if _, _, err := cos.CopyFile(fromFQN, toFQN, buf, cos.ChecksumNone); err != nil {
 		reb.t.FSHC(err, fromFQN)
 		reb.t.FSHC(err, toFQN)
 		return err
@@ -987,7 +988,7 @@ func (reb *Manager) resilverCT() error {
 
 		metaSrcFQN := mpathSrc.MpathInfo.MakePathFQN(mpathSrc.Bck, ec.MetaType, mpathSrc.ObjName)
 		metaDstFQN := mpathDst.MpathInfo.MakePathFQN(mpathDst.Bck, ec.MetaType, mpathDst.ObjName)
-		_, _, err = cmn.CopyFile(metaSrcFQN, metaDstFQN, buf, cmn.ChecksumNone)
+		_, _, err = cos.CopyFile(metaSrcFQN, metaDstFQN, buf, cos.ChecksumNone)
 		if err != nil {
 			return err
 		}
@@ -1024,7 +1025,7 @@ func (reb *Manager) resilverCT() error {
 func (reb *Manager) calcLocalProps(bck *cluster.Bck, obj *rebObject, smap *cluster.Smap, ecConfig *cmn.ECConf) (err error) {
 	localDaemon := reb.t.SID()
 	cts := obj.newest()
-	cmn.Assert(len(cts) != 0) // cannot happen
+	cos.Assert(len(cts) != 0) // cannot happen
 	mainSlice := cts[0]
 
 	obj.bck = mainSlice.Bck
@@ -1070,7 +1071,7 @@ func (reb *Manager) calcLocalProps(bck *cluster.Bck, obj *rebObject, smap *clust
 	ctFound := obj.foundCT()
 	obj.hasAllSlices = ctCnt >= obj.dataSlices+obj.paritySlices
 
-	genCount := cmn.Max(ctReq, len(smap.Tmap))
+	genCount := cos.Max(ctReq, len(smap.Tmap))
 	obj.hrwTargets, err = cluster.HrwTargetList(bck.MakeUname(obj.objName), smap, genCount)
 	if err != nil {
 		return err
@@ -1210,7 +1211,7 @@ func (reb *Manager) sendLocalData(md *rebArgs, obj *rebObject, si ...*cluster.Sn
 
 // Sends replica to the default target.
 func (reb *Manager) sendLocalReplica(md *rebArgs, obj *rebObject) error {
-	cmn.Assert(obj.sender != nil) // mustn't happen
+	cos.Assert(obj.sender != nil) // mustn't happen
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("%s object %s sender %s", reb.t.Snode(), obj.uid, obj.sender)
 	}
@@ -1221,7 +1222,7 @@ func (reb *Manager) sendLocalReplica(md *rebArgs, obj *rebObject) error {
 
 	sendTo := md.smap.Tmap[obj.mainDaemon]
 	ct, ok := obj.locCT[reb.t.SID()]
-	cmn.Assert(ok)
+	cos.Assert(ok)
 	if err := reb.sendFromDisk(ct, sendTo); err != nil {
 		return fmt.Errorf("failed to send %s: %v", ct.ObjName, err)
 	}
@@ -1271,17 +1272,17 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 	rq.Header.Add(cmn.HeaderCallerID, reb.t.SID())
 	rq.Header.Add(cmn.HeaderCallerName, reb.t.Sname())
 	rq.URL.RawQuery = qMeta.Encode()
-	if resp, slice.err = reb.ecClient.Do(rq); slice.err != nil { // nolint:bodyclose // closed inside cmn.Close
+	if resp, slice.err = reb.ecClient.Do(rq); slice.err != nil { // nolint:bodyclose // closed inside cos.Close
 		return
 	}
 	if resp.StatusCode != http.StatusOK {
-		cmn.Close(resp.Body)
+		cos.Close(resp.Body)
 		slice.err = fmt.Errorf("failed to read metadata, HTTP status: %d", resp.StatusCode)
 		return
 	}
 	metadata := ec.Metadata{}
 	slice.err = jsoniter.NewDecoder(resp.Body).Decode(&metadata)
-	defer cmn.Close(resp.Body)
+	defer cos.Close(resp.Body)
 	if slice.err != nil {
 		return
 	}
@@ -1299,12 +1300,12 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 	rq.Header.Add(cmn.HeaderCallerID, reb.t.SID())
 	rq.Header.Add(cmn.HeaderCallerName, reb.t.Sname())
 	rq.URL.RawQuery = qMeta.Encode()
-	if resp, slice.err = reb.ecClient.Do(rq); slice.err != nil { // nolint:bodyclose // closed inside cmn.Close
+	if resp, slice.err = reb.ecClient.Do(rq); slice.err != nil { // nolint:bodyclose // closed inside cos.Close
 		return
 	}
-	defer cmn.Close(resp.Body)
+	defer cos.Close(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		cmn.DrainReader(resp.Body)
+		cos.DrainReader(resp.Body)
 		slice.err = fmt.Errorf("failed to read slice, HTTP status: %d", resp.StatusCode)
 		return
 	}
@@ -1327,7 +1328,7 @@ func (reb *Manager) reRequestObj(md *rebArgs, obj *rebObject) error {
 		if rec.sgl != nil {
 			continue
 		}
-		rec.sgl = reb.t.MMSA().NewSGL(cmn.MinI64(obj.objSize, cmn.MiB))
+		rec.sgl = reb.t.MMSA().NewSGL(cos.MinI64(obj.objSize, cos.MiB))
 		toRequest[daemonID] = &sliceGetResp{sliceID: rec.SliceID, sgl: rec.sgl}
 	}
 	if len(toRequest) == 0 {
@@ -1335,7 +1336,7 @@ func (reb *Manager) reRequestObj(md *rebArgs, obj *rebObject) error {
 	}
 
 	// get missing slices
-	wg := cmn.NewLimitedWaitGroup(cluster.MaxBcastParallel(), len(toRequest))
+	wg := cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), len(toRequest))
 	for sid, slice := range toRequest {
 		debug.Assert(reb.t.SID() != sid)
 		si := md.smap.Tmap[sid]
@@ -1490,7 +1491,7 @@ func (reb *Manager) recoverObj(md *rebArgs, obj *rebObject) (err error) {
 		return nil
 	}
 
-	cmn.Assertf(obj.isMain && obj.mainHasAny && obj.mainSliceID == 0,
+	cos.Assertf(obj.isMain && obj.mainHasAny && obj.mainSliceID == 0,
 		"%s%s/%s: isMain %t - mainHasSome %t - mainID %d",
 		reb.t.Snode(), obj.bck, obj.objName, obj.isMain, obj.mainHasAny, obj.mainSliceID)
 	return nil
@@ -1560,7 +1561,7 @@ func (reb *Manager) waitECAck(md *rebArgs) {
 
 // Rebalances the current batch of broken objects
 func (reb *Manager) doBatch(md *rebArgs, batchCurr int64) error {
-	batchEnd := cmn.Min(int(batchCurr)+md.config.EC.BatchSize, len(reb.ec.broken))
+	batchEnd := cos.Min(int(batchCurr)+md.config.EC.BatchSize, len(reb.ec.broken))
 	for objIdx := int(batchCurr); objIdx < batchEnd; objIdx++ {
 		if reb.xact().Aborted() {
 			return cmn.NewAbortedError("rebalance batch")
@@ -1570,7 +1571,7 @@ func (reb *Manager) doBatch(md *rebArgs, batchCurr int64) error {
 		if glog.FastV(4, glog.SmoduleReb) {
 			glog.Infof("--- Starting object [%d] %s ---", objIdx, obj.uid)
 		}
-		cmn.Assert(len(obj.locCT) != 0) // cannot happen
+		cos.Assert(len(obj.locCT) != 0) // cannot happen
 
 		if err := reb.recoverObj(md, obj); err != nil {
 			return err
@@ -1629,7 +1630,7 @@ func (reb *Manager) releaseSGLs(md *rebArgs, objList []*rebObject) {
 			}
 			obj.rebuildSGLs = nil
 			if obj.fh != nil {
-				cmn.Close(obj.fh)
+				cos.Close(obj.fh)
 				obj.fh = nil
 			}
 			for _, ct := range obj.locCT {
@@ -1666,7 +1667,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, conf *cmn.CksumConf) error
 			continue
 		}
 		id := sl.SliceID - 1
-		cmn.AssertMsg(sl.SliceID != 0 && readers[id] == nil, obj.uid)
+		cos.AssertMsg(sl.SliceID != 0 && readers[id] == nil, obj.uid)
 		readers[id] = memsys.NewReader(sl.sgl)
 		rereaders[id] = memsys.NewReader(sl.sgl)
 		slicesFound++
@@ -1674,16 +1675,16 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, conf *cmn.CksumConf) error
 			meta = sl.meta
 		}
 	}
-	cmn.AssertMsg(meta != nil, obj.uid)
+	cos.AssertMsg(meta != nil, obj.uid)
 	// keep it for a while to be sure it does not happen
-	cmn.AssertMsg(meta.Size == obj.objSize, obj.uid)
+	cos.AssertMsg(meta.Size == obj.objSize, obj.uid)
 
 	ecMD := meta.Clone()
 	for i, rd := range readers {
 		if rd != nil {
 			continue
 		}
-		obj.rebuildSGLs[i] = reb.t.MMSA().NewSGL(cmn.MinI64(obj.sliceSize, cmn.MiB))
+		obj.rebuildSGLs[i] = reb.t.MMSA().NewSGL(cos.MinI64(obj.sliceSize, cos.MiB))
 		writers[i] = obj.rebuildSGLs[i]
 	}
 
@@ -1706,7 +1707,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, conf *cmn.CksumConf) error
 			srcReaders[i] = rereaders[i]
 			continue
 		}
-		cmn.Assert(obj.rebuildSGLs[i] != nil)
+		cos.Assert(obj.rebuildSGLs[i] != nil)
 		srcReaders[i] = memsys.NewReader(obj.rebuildSGLs[i])
 	}
 	src := io.MultiReader(srcReaders...)
@@ -1797,7 +1798,7 @@ func (reb *Manager) rebuildAndSend(obj *rebObject) error {
 		if s.SliceID != 0 || s.sgl == nil || s.sgl.Size() == 0 {
 			continue
 		}
-		cmn.AssertMsg(s.meta != nil, obj.uid)
+		cos.AssertMsg(s.meta != nil, obj.uid)
 		req := &pushReq{md: s.meta}
 		cksumType, cksumValue := s.meta.CksumType, s.meta.ObjCksum
 		if cksumType == "" && cksumValue != "" {
@@ -1826,9 +1827,9 @@ func (reb *Manager) rebuildAndSend(obj *rebObject) error {
 	return reb.rebuildFromSlices(obj, conf)
 }
 
-func checksumSlice(reader io.Reader, sliceSize int64, cksumType string, mem *memsys.MMSA) (cksum *cmn.CksumHash, err error) {
+func checksumSlice(reader io.Reader, sliceSize int64, cksumType string, mem *memsys.MMSA) (cksum *cos.CksumHash, err error) {
 	buf, slab := mem.Alloc(sliceSize)
-	_, cksum, err = cmn.CopyAndChecksum(ioutil.Discard, reader, buf, cksumType)
+	_, cksum, err = cos.CopyAndChecksum(ioutil.Discard, reader, buf, cksumType)
 	slab.Free(buf)
 	return
 }
@@ -1979,7 +1980,7 @@ func (so *rebObject) emptyTargets(skip *cluster.Snode, freeTargets cluster.Nodes
 ///////////
 
 func (ack *ackCT) add(rt *retransmitCT) {
-	cmn.Assert(rt.header.ObjName != "" && rt.header.Bck.Name != "")
+	cos.Assert(rt.header.ObjName != "" && rt.header.Bck.Name != "")
 	ack.mtx.Lock()
 	ack.ct = append(ack.ct, rt)
 	ack.mtx.Unlock()

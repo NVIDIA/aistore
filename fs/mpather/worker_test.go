@@ -11,7 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/fs"
@@ -25,7 +25,7 @@ func TestWorkerGroup(t *testing.T) {
 				{Type: fs.ObjectType, ContentCnt: 100},
 			},
 			MountpathsCnt: 10,
-			ObjectSize:    cmn.KiB,
+			ObjectSize:    cos.KiB,
 		}
 		out     = tutils.PrepareObjects(t, desc)
 		counter = atomic.NewInt32(0)

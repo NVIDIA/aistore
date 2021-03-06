@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 var (
@@ -45,13 +45,13 @@ func (w *StatWriter) writeHeadings(st Stat) {
 	headingsText := st.getHeadingsText()
 	headingsOrder := st.getHeadingsOrder()
 
-	cmn.Assert(len(headingsText) == len(headingsOrder))
+	cos.Assert(len(headingsText) == len(headingsOrder))
 
 	csvHeadings := make([]string, len(headingsOrder))
 	for idx, x := range headingsOrder {
 		var ok bool
 		csvHeadings[idx], ok = headingsText[x]
-		cmn.Assert(ok)
+		cos.Assert(ok)
 	}
 
 	w.file.WriteString(strings.Join(csvHeadings, ","))
@@ -70,8 +70,8 @@ func (w *StatWriter) writeContents(st Stat) {
 	for idx, x := range headingsOrder {
 		if item, ok := contents[x]; ok && !ignoreItem(item) {
 			var err error
-			csvData[idx], err = cmn.ConvertToString(item)
-			cmn.AssertNoErr(err)
+			csvData[idx], err = cos.ConvertToString(item)
+			cos.AssertNoErr(err)
 		}
 	}
 
@@ -81,8 +81,8 @@ func (w *StatWriter) writeContents(st Stat) {
 
 func (w *StatWriter) WriteStat(st Stat) {
 	if w.file == nil {
-		file, err := cmn.CreateFile(w.Path)
-		cmn.AssertNoErr(err)
+		file, err := cos.CreateFile(w.Path)
+		cos.AssertNoErr(err)
 		w.file = file
 
 		w.writeHeadings(st)

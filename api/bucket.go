@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -292,7 +293,7 @@ func EvictRemoteBucket(baseParams BaseParams, bck cmn.Bck, keepMD bool) error {
 // 4. If the destination returns status code StatusOK, it means the response
 //    contains the real data and the function returns the response to the caller
 func waitForAsyncReqComplete(reqParams ReqParams, action string, msg *cmn.BucketSummaryMsg, v interface{}) error {
-	cmn.Assert(action == cmn.ActSummaryBck)
+	cos.Assert(action == cmn.ActSummaryBck)
 	var (
 		uuid   string
 		sleep  = initialPollInterval
@@ -421,8 +422,8 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 			break
 		}
 
-		toRead = uint(cmn.Max(int(toRead)-len(page.Entries), 0))
-		cmn.Assert(page.UUID != "")
+		toRead = uint(cos.Max(int(toRead)-len(page.Entries), 0))
+		cos.Assert(page.UUID != "")
 		smsg.UUID = page.UUID
 		smsg.ContinuationToken = page.ContinuationToken
 	}

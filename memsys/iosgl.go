@@ -9,17 +9,17 @@ import (
 	"errors"
 	"io"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 // interface guard
 var (
-	_ cmn.WriterAt       = (*SGL)(nil)
+	_ cos.WriterAt       = (*SGL)(nil)
 	_ io.ReaderFrom      = (*SGL)(nil)
 	_ io.WriterTo        = (*SGL)(nil)
-	_ cmn.ReadOpenCloser = (*SGL)(nil)
-	_ cmn.ReadOpenCloser = (*Reader)(nil)
+	_ cos.ReadOpenCloser = (*SGL)(nil)
+	_ cos.ReadOpenCloser = (*Reader)(nil)
 )
 
 type (
@@ -84,7 +84,7 @@ func (z *SGL) WriteTo(dst io.Writer) (n int64, err error) {
 		toWrite = z.woff
 	)
 	for _, buf := range z.sgl {
-		l := cmn.MinI64(toWrite, int64(len(buf)))
+		l := cos.MinI64(toWrite, int64(len(buf)))
 		if l == 0 {
 			break
 		}
@@ -108,7 +108,7 @@ func (z *SGL) Write(p []byte) (n int, err error) {
 	}
 	idx, off, poff := z.woff/z.slab.Size(), z.woff%z.slab.Size(), 0
 	for wlen > 0 {
-		size := cmn.MinI64(z.slab.Size()-off, int64(wlen))
+		size := cos.MinI64(z.slab.Size()-off, int64(wlen))
 		buf := z.sgl[idx]
 		src := p[poff : poff+int(size)]
 		copy(buf[off:], src)
@@ -134,13 +134,13 @@ func (z *SGL) readAtOffset(b []byte, roffin int64) (n int, roff int64, err error
 	}
 	idx, off := int(roff/z.slab.Size()), roff%z.slab.Size()
 	buf := z.sgl[idx]
-	size := cmn.MinI64(int64(len(b)), z.woff-roff)
+	size := cos.MinI64(int64(len(b)), z.woff-roff)
 	n = copy(b[:size], buf[off:])
 	roff += int64(n)
 	for n < len(b) && idx < len(z.sgl)-1 {
 		idx++
 		buf = z.sgl[idx]
-		size = cmn.MinI64(int64(len(b)-n), z.woff-roff)
+		size = cos.MinI64(int64(len(b)-n), z.woff-roff)
 		n1 := copy(b[n:n+int(size)], buf)
 		roff += int64(n1)
 		n += n1
@@ -179,7 +179,7 @@ func (z *SGL) WriteAt(p []byte, off int64) (n int, err error) {
 func (z *SGL) Reset()     { z.woff, z.roff = 0, 0 }
 func (z *SGL) Len() int64 { return z.woff - z.roff }
 
-func (z *SGL) Open() (cmn.ReadOpenCloser, error) { return NewReader(z), nil }
+func (z *SGL) Open() (cos.ReadOpenCloser, error) { return NewReader(z), nil }
 
 func (z *SGL) Close() error { return nil }
 
@@ -192,7 +192,7 @@ func (z *SGL) Free() {
 }
 
 func (z *SGL) Bytes() (b []byte) {
-	cmn.Assert(z.roff == 0) // NOTE: done for existing limited use case
+	cos.Assert(z.roff == 0) // NOTE: done for existing limited use case
 	if z.woff >= z.slab.Size() {
 		b, _ = z.ReadAll()
 		return
@@ -207,7 +207,7 @@ func (z *SGL) Bytes() (b []byte) {
 
 func NewReader(z *SGL) *Reader { return &Reader{z, 0} }
 
-func (r *Reader) Open() (cmn.ReadOpenCloser, error) { return NewReader(r.z), nil }
+func (r *Reader) Open() (cos.ReadOpenCloser, error) { return NewReader(r.z), nil }
 
 func (r *Reader) Close() error { return nil }
 

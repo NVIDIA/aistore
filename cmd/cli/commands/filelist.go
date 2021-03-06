@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 type (
@@ -105,7 +106,7 @@ func fileTreeByMask(path, trimPrefix, appendPrefix, mask string) ([]fileToObj, e
 // object names, and recursive flag, returns the list of files that matches
 // criteria (file path, object name, size for every file)
 func generateFileList(path, trimPrefix, appendPrefix string, recursive bool) ([]fileToObj, error) {
-	cmn.Assert(trimPrefix == "" || strings.HasPrefix(path, trimPrefix))
+	cos.Assert(trimPrefix == "" || strings.HasPrefix(path, trimPrefix))
 
 	mask := ""
 	info, err := os.Stat(path)

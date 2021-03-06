@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dsort/extract"
 )
 
@@ -51,7 +52,7 @@ type parsedInputTemplate struct {
 	Type string `json:"type"`
 
 	// Used by 'bash' and 'at' template
-	Template cmn.ParsedTemplate `json:"template"`
+	Template cos.ParsedTemplate `json:"template"`
 
 	// Used by 'regex' template
 	Regex string `json:"regex"`
@@ -62,7 +63,7 @@ type parsedInputTemplate struct {
 
 type parsedOutputTemplate struct {
 	// Used by 'bash' and 'at' template
-	Template cmn.ParsedTemplate
+	Template cos.ParsedTemplate
 }
 
 // RequestSpec defines the user specification for requests to the endpoint /v1/sort.
@@ -116,7 +117,7 @@ type ParsedRequestSpec struct {
 	Algorithm           *SortAlgorithm        `json:"algorithm"`
 	OrderFileURL        string                `json:"order_file"`
 	OrderFileSep        string                `json:"order_file_sep"`
-	MaxMemUsage         cmn.ParsedQuantity    `json:"max_mem_usage"`
+	MaxMemUsage         cos.ParsedQuantity    `json:"max_mem_usage"`
 	TargetOrderSalt     []byte                `json:"target_order_salt"`
 	ExtractConcMaxLimit int                   `json:"extract_concurrency_max_limit"`
 	CreateConcMaxLimit  int                   `json:"create_concurrency_max_limit"`
@@ -181,7 +182,7 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	}
 	parsedRS.Extension = rs.Extension
 
-	parsedRS.OutputShardSize, err = cmn.S2B(rs.OutputShardSize)
+	parsedRS.OutputShardSize, err = cos.S2B(rs.OutputShardSize)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +225,7 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 		rs.MaxMemUsage = cfg.DefaultMaxMemUsage
 	}
 
-	parsedRS.MaxMemUsage, err = cmn.ParseQuantity(rs.MaxMemUsage)
+	parsedRS.MaxMemUsage, err = cos.ParseQuantity(rs.MaxMemUsage)
 	if err != nil {
 		return nil, err
 	}
@@ -269,16 +270,16 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 
 // validateExtension checks if extension is supported by dsort
 func validateExtension(ext string) bool {
-	return cmn.StringInSlice(ext, supportedExtensions)
+	return cos.StringInSlice(ext, supportedExtensions)
 }
 
 // parseInputFormat checks if input format was specified correctly
 func parseInputFormat(inputFormat string) (pit *parsedInputTemplate, err error) {
 	pit = &parsedInputTemplate{}
 	template := strings.TrimSpace(inputFormat)
-	if pit.Template, err = cmn.ParseBashTemplate(template); err == nil {
+	if pit.Template, err = cos.ParseBashTemplate(template); err == nil {
 		pit.Type = templBash
-	} else if pit.Template, err = cmn.ParseAtTemplate(template); err == nil {
+	} else if pit.Template, err = cos.ParseAtTemplate(template); err == nil {
 		pit.Type = templAt
 	} else {
 		return nil, errInvalidInputTemplateFormat
@@ -291,11 +292,11 @@ func parseInputFormat(inputFormat string) (pit *parsedInputTemplate, err error) 
 func parseOutputFormat(outputFormat string) (pot *parsedOutputTemplate, err error) {
 	pot = &parsedOutputTemplate{}
 	template := strings.TrimSpace(outputFormat)
-	if pot.Template, err = cmn.ParseFmtTemplate(template); err == nil {
+	if pot.Template, err = cos.ParseFmtTemplate(template); err == nil {
 		// Pass
-	} else if pot.Template, err = cmn.ParseBashTemplate(template); err == nil {
+	} else if pot.Template, err = cos.ParseBashTemplate(template); err == nil {
 		// Pass
-	} else if pot.Template, err = cmn.ParseAtTemplate(template); err == nil {
+	} else if pot.Template, err = cos.ParseAtTemplate(template); err == nil {
 		// Pass
 	} else {
 		return nil, errInvalidOutputTemplateFormat
@@ -305,7 +306,7 @@ func parseOutputFormat(outputFormat string) (pot *parsedOutputTemplate, err erro
 }
 
 func parseAlgorithm(algo SortAlgorithm) (parsedAlgo *SortAlgorithm, err error) {
-	if !cmn.StringInSlice(algo.Kind, supportedAlgorithms) {
+	if !cos.StringInSlice(algo.Kind, supportedAlgorithms) {
 		return nil, errInvalidAlgorithmKind
 	}
 

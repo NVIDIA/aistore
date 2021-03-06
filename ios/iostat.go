@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 )
@@ -23,9 +24,9 @@ type (
 	iostatContext struct {
 		mpathLock   sync.Mutex
 		mpath2disks map[string]fsDisks
-		disk2mpath  cmn.SimpleKVs
+		disk2mpath  cos.SimpleKVs
 		sorted      []string
-		disk2sysfn  cmn.SimpleKVs
+		disk2sysfn  cos.SimpleKVs
 		cache       atomic.Pointer
 		cacheHst    [16]*ioStatCache
 		cacheIdx    int
@@ -70,9 +71,9 @@ var _ IOStater = (*iostatContext)(nil)
 func NewIostatContext() IOStater {
 	ctx := &iostatContext{
 		mpath2disks: make(map[string]fsDisks, 10),
-		disk2mpath:  make(cmn.SimpleKVs, 10),
+		disk2mpath:  make(cos.SimpleKVs, 10),
 		sorted:      make([]string, 0, 10),
-		disk2sysfn:  make(cmn.SimpleKVs, 10),
+		disk2sysfn:  make(cos.SimpleKVs, 10),
 	}
 	for i := 0; i < len(ctx.cacheHst); i++ {
 		ctx.cacheHst[i] = newIostatCache()
@@ -122,14 +123,14 @@ func (ctx *iostatContext) AddMpath(mpath, fs string) {
 	}
 	if dd, ok := ctx.mpath2disks[mpath]; ok {
 		s := fmt.Sprintf("mountpath %s already added, disks %+v %+v", mpath, dd, fsdisks)
-		cmn.AssertMsg(false, s)
+		cos.AssertMsg(false, s)
 	}
 	ctx.mpath2disks[mpath] = fsdisks
 	for disk := range fsdisks {
 		if mp, ok := ctx.disk2mpath[disk]; ok && !config.TestingEnv() {
 			s := fmt.Sprintf("disk sharing is not permitted: mp %s, add fs %s mp %s, disk %s",
 				mp, fs, mpath, disk)
-			cmn.AssertMsg(false, s)
+			cos.AssertMsg(false, s)
 			return
 		}
 		ctx.disk2mpath[disk] = mpath
@@ -234,8 +235,8 @@ func (ctx *iostatContext) LogAppend(lines []string) []string {
 		if util == 0 {
 			continue
 		}
-		rbps := cmn.B2S(cache.diskRBps[disk], 0)
-		wbps := cmn.B2S(cache.diskWBps[disk], 0)
+		rbps := cos.B2S(cache.diskRBps[disk], 0)
+		wbps := cos.B2S(cache.diskWBps[disk], 0)
 		line := fmt.Sprintf("%s: %s/s, %s/s, %d%%", disk, rbps, wbps, util)
 		lines = append(lines, line)
 	}
@@ -267,10 +268,10 @@ func (ctx *iostatContext) refreshIostatCache() *ioStatCache {
 		expireTime = int64(config.Disk.IostatTimeShort)
 	} else { // use the maximum utilization to determine expiration time
 		var (
-			lowWM     = cmn.MaxI64(config.Disk.DiskUtilLowWM, 1)
-			highWM    = cmn.MinI64(config.Disk.DiskUtilHighWM, 100)
+			lowWM     = cos.MaxI64(config.Disk.DiskUtilLowWM, 1)
+			highWM    = cos.MinI64(config.Disk.DiskUtilHighWM, 100)
 			delta     = int64(config.Disk.IostatTimeLong - config.Disk.IostatTimeShort)
-			utilRatio = cmn.RatioPct(highWM, lowWM, maxUtil)
+			utilRatio = cos.RatioPct(highWM, lowWM, maxUtil)
 		)
 		utilRatio = (utilRatio + 5) / 10 * 10 // round to nearest tenth
 		expireTime = int64(config.Disk.IostatTimeShort) + delta*(100-utilRatio)/100
@@ -293,8 +294,8 @@ func (ctx *iostatContext) _refresh() (ncache *ioStatCache, maxUtil int64, missin
 		statsCache     = ctx.getStatsCache()
 		nowTs          = mono.NanoTime()
 		elapsed        = nowTs - statsCache.timestamp
-		elapsedSeconds = cmn.DivRound(elapsed, int64(time.Second))
-		elapsedMillis  = cmn.DivRound(elapsed, int64(time.Millisecond))
+		elapsedSeconds = cos.DivRound(elapsed, int64(time.Second))
+		elapsedMillis  = cos.DivRound(elapsed, int64(time.Millisecond))
 	)
 
 	ncache.timestamp = nowTs
@@ -338,14 +339,14 @@ func (ctx *iostatContext) _refresh() (ncache *ioStatCache, maxUtil int64, missin
 			// NOTE: On macOS computation of `diskUtil` is not accurate and can
 			//  sometimes exceed 100% which may cause some further inaccuracies.
 			//  That is why we need to clamp the value.
-			ncache.diskUtil[disk] = cmn.MinI64(100, cmn.DivRound(ioMs*100, elapsedMillis))
+			ncache.diskUtil[disk] = cos.MinI64(100, cos.DivRound(ioMs*100, elapsedMillis))
 		} else {
 			ncache.diskUtil[disk] = statsCache.diskUtil[disk]
 		}
 		ncache.mpathUtil[mpath] += ncache.diskUtil[disk]
 		if elapsedSeconds > 0 {
-			ncache.diskRBps[disk] = cmn.DivRound(readBytes, elapsedSeconds)
-			ncache.diskWBps[disk] = cmn.DivRound(writeBytes, elapsedSeconds)
+			ncache.diskRBps[disk] = cos.DivRound(readBytes, elapsedSeconds)
+			ncache.diskWBps[disk] = cos.DivRound(writeBytes, elapsedSeconds)
 		} else {
 			ncache.diskRBps[disk] = statsCache.diskRBps[disk]
 			ncache.diskWBps[disk] = statsCache.diskWBps[disk]
@@ -359,7 +360,7 @@ func (ctx *iostatContext) _refresh() (ncache *ioStatCache, maxUtil int64, missin
 
 		ncache.mpathUtil[mpath] = util
 		ncache.mpathUtilRO.Store(mpath, util)
-		maxUtil = cmn.MaxI64(maxUtil, util)
+		maxUtil = cos.MaxI64(maxUtil, util)
 	}
 	return
 }

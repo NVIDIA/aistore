@@ -9,6 +9,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/fs"
 	. "github.com/onsi/ginkgo"
@@ -27,8 +28,8 @@ var _ = Describe("Mirror", func() {
 		testObjectSize = 1234
 	)
 
-	_ = cmn.CreateDir(mpath)
-	_ = cmn.CreateDir(mpath2)
+	_ = cos.CreateDir(mpath)
+	_ = cos.CreateDir(mpath2)
 
 	config := cmn.GCO.BeginUpdate()
 	config.TestFSP.Count = 1
@@ -43,7 +44,7 @@ var _ = Describe("Mirror", func() {
 
 	var (
 		props = &cmn.BucketProps{
-			Cksum:  cmn.CksumConf{Type: cmn.ChecksumXXHash},
+			Cksum:  cmn.CksumConf{Type: cos.ChecksumXXHash},
 			LRU:    cmn.LRUConf{Enabled: true},
 			Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
 			BID:    1,
@@ -58,8 +59,8 @@ var _ = Describe("Mirror", func() {
 	)
 
 	BeforeEach(func() {
-		_ = cmn.CreateDir(mpath)
-		_ = cmn.CreateDir(mpath2)
+		_ = cos.CreateDir(mpath)
+		_ = cos.CreateDir(mpath2)
 		_ = cluster.NewTargetMock(bmdMock)
 	})
 
@@ -115,10 +116,10 @@ var _ = Describe("Mirror", func() {
 })
 
 func createTestFile(filePath, objName string, size int64) {
-	err := cmn.CreateDir(filePath)
+	err := cos.CreateDir(filePath)
 	Expect(err).ShouldNot(HaveOccurred())
 
-	r, err := readers.NewFileReader(filePath, objName, size, cmn.ChecksumNone)
+	r, err := readers.NewFileReader(filePath, objName, size, cos.ChecksumNone)
 	Expect(err).ShouldNot(HaveOccurred())
 	Expect(r.Close()).ShouldNot(HaveOccurred())
 }

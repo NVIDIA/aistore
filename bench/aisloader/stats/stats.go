@@ -8,7 +8,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 // HTTPReq is used for keeping track of http requests stats including number of ops, latency, throughput, etc.
@@ -38,8 +38,8 @@ func (s *HTTPReq) Add(size int64, delta time.Duration) {
 	s.cnt++
 	s.bytes += size
 	s.latency += delta
-	s.minLatency = cmn.MinDuration(s.minLatency, delta)
-	s.maxLatency = cmn.MaxDuration(s.maxLatency, delta)
+	s.minLatency = cos.MinDuration(s.minLatency, delta)
+	s.maxLatency = cos.MaxDuration(s.maxLatency, delta)
 }
 
 // AddErr increases the number of failed count by 1
@@ -106,6 +106,6 @@ func (s *HTTPReq) Aggregate(other HTTPReq) {
 	s.errs += other.errs
 	s.latency += other.latency
 
-	s.minLatency = cmn.MinDuration(s.minLatency, other.minLatency)
-	s.maxLatency = cmn.MaxDuration(s.maxLatency, other.maxLatency)
+	s.minLatency = cos.MinDuration(s.minLatency, other.minLatency)
+	s.maxLatency = cos.MaxDuration(s.maxLatency, other.maxLatency)
 }

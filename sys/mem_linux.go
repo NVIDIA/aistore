@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 // HostMem returns memory and swap stats for a host OS
@@ -23,7 +23,7 @@ func HostMem() (MemStat, error) {
 		if err != nil {
 			return
 		}
-		val *= cmn.KiB
+		val *= cos.KiB
 		switch name {
 		case "MemTotal":
 			mem.Total = val
@@ -40,7 +40,7 @@ func HostMem() (MemStat, error) {
 		}
 	}
 
-	err := cmn.ReadLines(hostMemPath, func(line string) error {
+	err := cos.ReadLines(hostMemPath, func(line string) error {
 		fields := strings.Split(line, ":")
 		if len(fields) != 2 {
 			return nil
@@ -70,7 +70,7 @@ func ContainerMem() (MemStat, error) {
 	if err != nil {
 		return mem, err
 	}
-	memLimit, err := cmn.ReadOneUint64(contMemLimitPath)
+	memLimit, err := cos.ReadOneUint64(contMemLimitPath)
 	if err != nil {
 		return mem, nil
 	}
@@ -83,7 +83,7 @@ func ContainerMem() (MemStat, error) {
 	}
 
 	// this one is approximate value that includes caches
-	memUsed, err := cmn.ReadOneUint64(contMemUsedPath)
+	memUsed, err := cos.ReadOneUint64(contMemUsedPath)
 	if err != nil {
 		return mem, nil
 	}
@@ -92,7 +92,7 @@ func ContainerMem() (MemStat, error) {
 	mem.Free = mem.Total - mem.Used
 
 	// calculate memory used for caches
-	err = cmn.ReadLines(contMemStatPath, func(line string) error {
+	err = cos.ReadLines(contMemStatPath, func(line string) error {
 		fields := strings.Fields(line)
 		if len(fields) < 2 {
 			return nil

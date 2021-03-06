@@ -11,13 +11,14 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
 
 const (
-	ecObjLimit    = 256 * cmn.KiB
+	ecObjLimit    = 256 * cos.KiB
 	ecTime        = 10 * time.Minute
 	rebalanceTime = 20 * time.Minute
 )
@@ -34,8 +35,8 @@ var (
 		{"EC 2:2", 2, 2},
 	}
 	objSizes = []int64{
-		8 * cmn.KiB, 128 * cmn.KiB, // only replicas
-		cmn.MiB, 8 * cmn.MiB, // only encoded
+		8 * cos.KiB, 128 * cos.KiB, // only replicas
+		cos.MiB, 8 * cos.MiB, // only encoded
 	}
 )
 
@@ -47,14 +48,14 @@ func fillBucket(tb testing.TB, proxyURL string, bck cmn.Bck, objSize uint64, obj
 		ObjCnt:    objCount,
 		ObjSize:   objSize,
 		FixedSize: true,
-		CksumType: cmn.ChecksumXXHash,
+		CksumType: cos.ChecksumXXHash,
 	})
 	tassert.CheckFatal(tb, err)
 }
 
 func BenchmarkECEncode(b *testing.B) {
 	const (
-		bckSize = cmn.GiB
+		bckSize = cos.GiB
 	)
 	var (
 		proxyURL   = tutils.RandomProxyURL()
@@ -93,7 +94,7 @@ func BenchmarkECEncode(b *testing.B) {
 
 func BenchmarkECRebalance(b *testing.B) {
 	const (
-		bckSize = 256 * cmn.MiB
+		bckSize = 256 * cos.MiB
 	)
 	var (
 		proxyURL   = tutils.RandomProxyURL()
@@ -102,7 +103,7 @@ func BenchmarkECRebalance(b *testing.B) {
 
 	for ecIdx, test := range ecTests {
 		for szIdx, size := range objSizes {
-			if size < 128*cmn.KiB {
+			if size < 128*cos.KiB {
 				continue
 			}
 			objCount := int(bckSize/size) + 1
@@ -148,7 +149,7 @@ func BenchmarkECRebalance(b *testing.B) {
 
 func BenchmarkRebalance(b *testing.B) {
 	const (
-		bckSize = cmn.GiB
+		bckSize = cos.GiB
 	)
 	var (
 		proxyURL   = tutils.RandomProxyURL()

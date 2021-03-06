@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 )
@@ -126,7 +127,7 @@ func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (cia cmn.Ba
 			info    = &cmn.RemoteAISInfo{}
 		)
 		client := httpClient
-		if cmn.IsHTTPS(remAis.url) {
+		if cos.IsHTTPS(remAis.url) {
 			client = httpsClient
 		}
 		info.URL = remAis.url
@@ -187,7 +188,7 @@ func (r *remAISCluster) init(alias string, confURLs []string, cfg *cmn.Config) (
 	)
 	for _, u := range confURLs {
 		client := httpClient
-		if cmn.IsHTTPS(u) {
+		if cos.IsHTTPS(u) {
 			client = httpsClient
 		}
 		if smap, err = api.GetClusterMap(api.BaseParams{Client: client, URL: u}); err != nil {
@@ -213,7 +214,7 @@ func (r *remAISCluster) init(alias string, confURLs []string, cfg *cmn.Config) (
 		return
 	}
 	r.smap, r.url = remSmap, url
-	if cmn.IsHTTPS(url) {
+	if cos.IsHTTPS(url) {
 		r.bp = api.BaseParams{Client: httpsClient, URL: url}
 	} else {
 		r.bp = api.BaseParams{Client: httpClient, URL: url}
@@ -279,7 +280,7 @@ func (m *AISBackendProvider) remoteCluster(uuid string) (*remAISCluster, error) 
 			return nil, cmn.NewNotFoundError("UUID or alias of a remote cluster %q", orig)
 		}
 		remAis, ok = m.remote[uuid]
-		cmn.Assert(ok)
+		cos.Assert(ok)
 	}
 	m.mu.RUnlock()
 	return remAis, nil
@@ -311,7 +312,7 @@ func (m *AISBackendProvider) CreateBucket(_ context.Context, _ *cluster.Bck) (er
 	return 0, nil
 }
 
-func (m *AISBackendProvider) HeadBucket(_ context.Context, remoteBck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
+func (m *AISBackendProvider) HeadBucket(_ context.Context, remoteBck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
 	debug.Assert(remoteBck.Provider == cmn.ProviderAIS)
 
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
@@ -324,7 +325,7 @@ func (m *AISBackendProvider) HeadBucket(_ context.Context, remoteBck *cluster.Bc
 		errCode, err = extractErrCode(err)
 		return bckProps, errCode, err
 	}
-	bckProps = make(cmn.SimpleKVs)
+	bckProps = make(cos.SimpleKVs)
 	err = cmn.IterFields(p, func(uniqueTag string, field cmn.IterField) (e error, b bool) {
 		bckProps[uniqueTag] = fmt.Sprintf("%v", field.Value())
 		return nil, false
@@ -401,7 +402,7 @@ func (m *AISBackendProvider) ListBuckets(_ context.Context, query cmn.QueryBcks)
 	return
 }
 
-func (m *AISBackendProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, errCode int, err error) {
+func (m *AISBackendProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta cos.SimpleKVs, errCode int, err error) {
 	remoteBck := lom.Bucket()
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
@@ -443,7 +444,7 @@ func (m *AISBackendProvider) GetObj(_ context.Context, lom *cluster.LOM) (errCod
 	return extractErrCode(err)
 }
 
-func (m *AISBackendProvider) GetObjReader(_ context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum,
+func (m *AISBackendProvider) GetObjReader(_ context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cos.Cksum,
 	errCode int, err error) {
 	remoteBck := lom.Bucket()
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
@@ -460,7 +461,7 @@ func (m *AISBackendProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *c
 	remoteBck := lom.Bucket()
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
-		cmn.Close(r)
+		cos.Close(r)
 		return "", errCode, err
 	}
 	var (
@@ -470,7 +471,7 @@ func (m *AISBackendProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *c
 			Bck:        bck,
 			Object:     lom.ObjName,
 			Cksum:      lom.Cksum(),
-			Reader:     r.(cmn.ReadOpenCloser),
+			Reader:     r.(cos.ReadOpenCloser),
 			Size:       uint64(lom.Size(true)), // It's special because it's still workfile.
 		}
 	)

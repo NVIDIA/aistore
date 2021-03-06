@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -96,7 +97,7 @@ func GetClusterAuthN(baseParams BaseParams, spec cmn.AuthCluster) ([]*cmn.AuthCl
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPathClusters.S
 	if spec.ID != "" {
-		path = cmn.JoinWords(path, spec.ID)
+		path = cos.JoinWords(path, spec.ID)
 	}
 	clusters := &cmn.AuthClusterList{}
 	err := DoHTTPRequest(ReqParams{
@@ -120,7 +121,7 @@ func GetRoleAuthN(baseParams BaseParams, roleID string) (*cmn.AuthRole, error) {
 	baseParams.Method = http.MethodGet
 	err := DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.URLPathRoles.S, roleID),
+		Path:       cos.JoinWords(cmn.URLPathRoles.S, roleID),
 	}, &rInfo)
 	return rInfo, err
 }
@@ -163,7 +164,7 @@ func GetUserAuthN(baseParams BaseParams, userID string) (*cmn.AuthUser, error) {
 	baseParams.Method = http.MethodGet
 	err := DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.URLPathUsers.S, userID),
+		Path:       cos.JoinWords(cmn.URLPathUsers.S, userID),
 	}, &uInfo)
 	return uInfo, err
 }

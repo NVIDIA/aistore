@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -53,7 +54,7 @@ var _ = Describe("LOM", func() {
 		mpath := fmt.Sprintf("%s/mpath%d", tmpDir, i)
 		mpaths = append(mpaths, mpath)
 		mis = append(mis, &fs.MountpathInfo{Path: mpath})
-		_ = cmn.CreateDir(mpath)
+		_ = cos.CreateDir(mpath)
 	}
 
 	config := cmn.GCO.BeginUpdate()
@@ -73,16 +74,16 @@ var _ = Describe("LOM", func() {
 		bmd = cluster.NewBaseBownerMock(
 			cluster.NewBck(
 				bucketLocalA, cmn.ProviderAIS, cmn.NsGlobal,
-				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumNone}, BID: 1},
+				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumNone}, BID: 1},
 			),
 			cluster.NewBck(
 				bucketLocalB, cmn.ProviderAIS, cmn.NsGlobal,
-				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}, LRU: cmn.LRUConf{Enabled: true}, BID: 2},
+				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, LRU: cmn.LRUConf{Enabled: true}, BID: 2},
 			),
 			cluster.NewBck(
 				bucketLocalC, cmn.ProviderAIS, cmn.NsGlobal,
 				&cmn.BucketProps{
-					Cksum:  cmn.CksumConf{Type: cmn.ChecksumXXHash},
+					Cksum:  cmn.CksumConf{Type: cos.ChecksumXXHash},
 					LRU:    cmn.LRUConf{Enabled: true},
 					Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
 					BID:    3,
@@ -328,7 +329,7 @@ var _ = Describe("LOM", func() {
 			testObjectName := "cksum-foldr/test-obj.ext"
 			// Bucket needs to have checksum enabled
 			localFQN := mis[0].MakePathFQN(localBckB, fs.ObjectType, testObjectName)
-			dummyCksm := cmn.NewCksum(cmn.ChecksumXXHash, "dummycksm")
+			dummyCksm := cos.NewCksum(cos.ChecksumXXHash, "dummycksm")
 
 			Describe("ComputeCksumIfMissing", func() {
 				It("should ignore if bucket checksum is none", func() {
@@ -359,7 +360,7 @@ var _ = Describe("LOM", func() {
 					cksum, err := lom.ComputeCksumIfMissing()
 					Expect(err).NotTo(HaveOccurred())
 					cksumType, cksumValue := cksum.Get()
-					Expect(cksumType).To(BeEquivalentTo(cmn.ChecksumXXHash))
+					Expect(cksumType).To(BeEquivalentTo(cos.ChecksumXXHash))
 					Expect(cksumValue).To(BeEquivalentTo(expectedChecksum))
 					Expect(lom.Cksum().Equal(cksum)).To(BeTrue())
 
@@ -367,7 +368,7 @@ var _ = Describe("LOM", func() {
 					err = newLom.Load(false, false)
 					Expect(err).NotTo(HaveOccurred())
 					cksumType, _ = newLom.Cksum().Get()
-					Expect(cksumType).To(BeEquivalentTo(cmn.ChecksumNone))
+					Expect(cksumType).To(BeEquivalentTo(cos.ChecksumNone))
 				})
 			})
 
@@ -391,7 +392,7 @@ var _ = Describe("LOM", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					cksumType, _ := fsLOM.Cksum().Get()
-					Expect(cksumType).To(BeEquivalentTo(cmn.ChecksumNone))
+					Expect(cksumType).To(BeEquivalentTo(cos.ChecksumNone))
 
 					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 					lom.Uncache(false)
@@ -420,7 +421,7 @@ var _ = Describe("LOM", func() {
 					lom := filePut(localFQN, testFileSize)
 					Expect(lom.ValidateMetaChecksum()).NotTo(HaveOccurred())
 
-					lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "wrong checksum"))
+					lom.SetCksum(cos.NewCksum(cos.ChecksumXXHash, "wrong checksum"))
 					lom.Persist()
 					Expect(lom.ValidateContentChecksum()).To(HaveOccurred())
 				})
@@ -429,7 +430,7 @@ var _ = Describe("LOM", func() {
 					lom := filePut(localFQN, testFileSize)
 					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 
-					Expect(ioutil.WriteFile(localFQN, []byte("wrong file"), cmn.PermRWR)).To(BeNil())
+					Expect(ioutil.WriteFile(localFQN, []byte("wrong file"), cos.PermRWR)).To(BeNil())
 
 					Expect(lom.ValidateContentChecksum()).To(HaveOccurred())
 				})
@@ -438,7 +439,7 @@ var _ = Describe("LOM", func() {
 					lom := filePut(localFQN, testFileSize)
 					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 
-					Expect(ioutil.WriteFile(localFQN, []byte("wrong file"), cmn.PermRWR)).To(BeNil())
+					Expect(ioutil.WriteFile(localFQN, []byte("wrong file"), cos.PermRWR)).To(BeNil())
 					Expect(lom.ValidateMetaChecksum()).NotTo(HaveOccurred())
 				})
 
@@ -446,7 +447,7 @@ var _ = Describe("LOM", func() {
 					lom := filePut(localFQN, testFileSize)
 					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 
-					lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "wrong checksum"))
+					lom.SetCksum(cos.NewCksum(cos.ChecksumXXHash, "wrong checksum"))
 					Expect(lom.ValidateMetaChecksum()).To(HaveOccurred())
 				})
 			})
@@ -473,7 +474,7 @@ var _ = Describe("LOM", func() {
 					Expect(err).ShouldNot(HaveOccurred())
 
 					cksumType, _ := fsLOM.Cksum().Get()
-					Expect(cksumType).To(BeEquivalentTo(cmn.ChecksumNone))
+					Expect(cksumType).To(BeEquivalentTo(cos.ChecksumNone))
 
 					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 					lom.Uncache(false)
@@ -508,7 +509,7 @@ var _ = Describe("LOM", func() {
 					lom := NewBasicLom(localFQN)
 					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 
-					err := ioutil.WriteFile(localFQN, []byte("wrong file"), cmn.PermRWR)
+					err := ioutil.WriteFile(localFQN, []byte("wrong file"), cos.PermRWR)
 					Expect(err).ShouldNot(HaveOccurred())
 
 					Expect(lom.ValidateContentChecksum()).To(HaveOccurred())
@@ -565,7 +566,7 @@ var _ = Describe("LOM", func() {
 
 			It("should correctly set and get custom metadata", func() {
 				lom := filePut(localFQN, 0)
-				lom.SetCustomMD(cmn.SimpleKVs{
+				lom.SetCustomMD(cos.SimpleKVs{
 					cluster.SourceObjMD:  cluster.SourceGoogleObjMD,
 					cluster.VersionObjMD: "version",
 					cluster.CRC32CObjMD:  "crc32",
@@ -604,7 +605,7 @@ var _ = Describe("LOM", func() {
 					return fqn
 				}
 			}
-			cmn.Assert(false)
+			cos.Assert(false)
 			return ""
 		}
 
@@ -786,7 +787,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.GetCopies()).To(And(HaveKey(mirrorFQNs[0]), HaveKey(mirrorFQNs[1])))
 
 				// Make one copy disappear.
-				cmn.RemoveFile(mirrorFQNs[1])
+				cos.RemoveFile(mirrorFQNs[1])
 
 				// Prepare another one (to trigger `syncMetaWithCopies`).
 				_ = prepareCopy(lom, mirrorFQNs[2], true)
@@ -1069,7 +1070,7 @@ func filePut(fqn string, size int) *cluster.LOM {
 
 func createTestFile(fqn string, size int) {
 	_ = os.Remove(fqn)
-	testFile, err := cmn.CreateFile(fqn)
+	testFile, err := cos.CreateFile(fqn)
 	Expect(err).ShouldNot(HaveOccurred())
 
 	if size > 0 {
@@ -1084,7 +1085,7 @@ func createTestFile(fqn string, size int) {
 
 func getTestFileHash(fqn string) (hash string) {
 	reader, _ := os.Open(fqn)
-	_, cksum, err := cmn.CopyAndChecksum(ioutil.Discard, reader, nil, cmn.ChecksumXXHash)
+	_, cksum, err := cos.CopyAndChecksum(ioutil.Discard, reader, nil, cos.ChecksumXXHash)
 	Expect(err).NotTo(HaveOccurred())
 	hash = cksum.Value()
 	reader.Close()

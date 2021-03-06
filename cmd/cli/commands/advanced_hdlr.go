@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
@@ -96,7 +97,7 @@ func genShardsHandler(c *cli.Context) error {
 	}
 
 	supportedExts := []string{".tar", ".tgz"}
-	if !cmn.StringInSlice(ext, supportedExts) {
+	if !cos.StringInSlice(ext, supportedExts) {
 		return fmt.Errorf("extension %q is invalid, should be one of %q", ext, strings.Join(supportedExts, ", "))
 	}
 
@@ -105,7 +106,7 @@ func genShardsHandler(c *cli.Context) error {
 		return err
 	}
 
-	pt, err := cmn.ParseBashTemplate(template)
+	pt, err := cos.ParseBashTemplate(template)
 	if err != nil {
 		return err
 	}

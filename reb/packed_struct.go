@@ -7,7 +7,7 @@ package reb
 import (
 	"fmt"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -43,15 +43,15 @@ type (
 
 // interface guard
 var (
-	_ cmn.Unpacker = (*regularAck)(nil)
-	_ cmn.Unpacker = (*ecAck)(nil)
-	_ cmn.Packer   = (*regularAck)(nil)
-	_ cmn.Packer   = (*ecAck)(nil)
-	_ cmn.Packer   = (*pushReq)(nil)
-	_ cmn.Unpacker = (*pushReq)(nil)
+	_ cos.Unpacker = (*regularAck)(nil)
+	_ cos.Unpacker = (*ecAck)(nil)
+	_ cos.Packer   = (*regularAck)(nil)
+	_ cos.Packer   = (*ecAck)(nil)
+	_ cos.Packer   = (*pushReq)(nil)
+	_ cos.Unpacker = (*pushReq)(nil)
 )
 
-func (rack *regularAck) Unpack(unpacker *cmn.ByteUnpack) (err error) {
+func (rack *regularAck) Unpack(unpacker *cos.ByteUnpack) (err error) {
 	if rack.rebID, err = unpacker.ReadInt64(); err != nil {
 		return
 	}
@@ -59,15 +59,15 @@ func (rack *regularAck) Unpack(unpacker *cmn.ByteUnpack) (err error) {
 	return
 }
 
-func (rack *regularAck) Pack(packer *cmn.BytePack) {
+func (rack *regularAck) Pack(packer *cos.BytePack) {
 	packer.WriteInt64(rack.rebID)
 	packer.WriteString(rack.daemonID)
 }
 
-func (rack *regularAck) NewPack(mm *memsys.MMSA) []byte { // TODO: consider adding as another cmn.Packer interface
+func (rack *regularAck) NewPack(mm *memsys.MMSA) []byte { // TODO: consider adding as another cos.Packer interface
 	l := rebMsgKindSize + rack.PackedSize()
 	buf, _ := mm.Alloc(int64(l))
-	packer := cmn.NewPacker(buf, l)
+	packer := cos.NewPacker(buf, l)
 	packer.WriteByte(rebMsgRegular)
 	packer.WriteAny(rack)
 	return packer.Bytes()
@@ -75,10 +75,10 @@ func (rack *regularAck) NewPack(mm *memsys.MMSA) []byte { // TODO: consider addi
 
 // rebID + length of DaemonID + Daemon
 func (rack *regularAck) PackedSize() int {
-	return cmn.SizeofI64 + cmn.SizeofLen + len(rack.daemonID)
+	return cos.SizeofI64 + cos.SizeofLen + len(rack.daemonID)
 }
 
-func (eack *ecAck) Unpack(unpacker *cmn.ByteUnpack) (err error) {
+func (eack *ecAck) Unpack(unpacker *cos.ByteUnpack) (err error) {
 	if eack.rebID, err = unpacker.ReadInt64(); err != nil {
 		return
 	}
@@ -89,7 +89,7 @@ func (eack *ecAck) Unpack(unpacker *cmn.ByteUnpack) (err error) {
 	return
 }
 
-func (eack *ecAck) Pack(packer *cmn.BytePack) {
+func (eack *ecAck) Pack(packer *cos.BytePack) {
 	packer.WriteInt64(eack.rebID)
 	packer.WriteUint16(eack.sliceID)
 	packer.WriteString(eack.daemonID)
@@ -103,7 +103,7 @@ func (eack *ecAck) NewPack(mm *memsys.MMSA) []byte {
 	if mm != nil {
 		buf, _ = mm.Alloc(int64(l))
 	}
-	packer := cmn.NewPacker(buf, l)
+	packer := cos.NewPacker(buf, l)
 	packer.WriteByte(rebMsgEC)
 	packer.WriteAny(eack)
 	return packer.Bytes()
@@ -111,12 +111,12 @@ func (eack *ecAck) NewPack(mm *memsys.MMSA) []byte {
 
 // rebID + sliceID + length of DaemonID + Daemon
 func (eack *ecAck) PackedSize() int {
-	return cmn.SizeofI64 + cmn.SizeofI16 + cmn.SizeofLen + len(eack.daemonID)
+	return cos.SizeofI64 + cos.SizeofI16 + cos.SizeofLen + len(eack.daemonID)
 }
 
 // int64*2 + int32 + string + marker + sizeof(ec.MD)
 func (req *pushReq) PackedSize() int {
-	total := cmn.SizeofLen + cmn.SizeofI64*2 + cmn.SizeofI32 +
+	total := cos.SizeofLen + cos.SizeofI64*2 + cos.SizeofI32 +
 		len(req.daemonID) + 1
 	if req.md != nil {
 		total += req.md.PackedSize()
@@ -124,7 +124,7 @@ func (req *pushReq) PackedSize() int {
 	return total
 }
 
-func (req *pushReq) Pack(packer *cmn.BytePack) {
+func (req *pushReq) Pack(packer *cos.BytePack) {
 	packer.WriteInt64(req.rebID)
 	packer.WriteUint64(uint64(req.batch))
 	packer.WriteUint32(req.stage)
@@ -145,13 +145,13 @@ func (req *pushReq) NewPack(mm *memsys.MMSA, kind byte) []byte {
 	if mm != nil {
 		buf, _ = mm.Alloc(int64(l))
 	}
-	packer := cmn.NewPacker(buf, l)
+	packer := cos.NewPacker(buf, l)
 	packer.WriteByte(kind)
 	packer.WriteAny(req)
 	return packer.Bytes()
 }
 
-func (req *pushReq) Unpack(unpacker *cmn.ByteUnpack) error {
+func (req *pushReq) Unpack(unpacker *cos.ByteUnpack) error {
 	var (
 		marker byte
 		err    error
@@ -196,7 +196,7 @@ func (reb *Manager) decodePushReq(buf []byte) (*pushReq, error) {
 		err error
 	)
 
-	unpacker := cmn.NewUnpacker(buf)
+	unpacker := cos.NewUnpacker(buf)
 	act, err := unpacker.ReadByte()
 	if err != nil {
 		return nil, err

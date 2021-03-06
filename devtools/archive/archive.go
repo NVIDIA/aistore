@@ -14,7 +14,7 @@ import (
 	"math/rand"
 	"strconv"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dsort/extract"
 )
 
@@ -84,7 +84,7 @@ func CreateTarWithRandomFiles(tarName string, gzipped bool, fileCnt, fileSize in
 
 	// set up the output file
 	name := tarName + extension
-	tarball, err := cmn.CreateFile(name)
+	tarball, err := cos.CreateFile(name)
 	if err != nil {
 		return err
 	}
@@ -163,7 +163,7 @@ func CreateTarWithCustomFiles(tarName string, fileCnt, fileSize int, customFileT
 	// set up the output file
 	extension := ".tar"
 	name := tarName + extension
-	tarball, err := cmn.CreateFile(name)
+	tarball, err := cos.CreateFile(name)
 	if err != nil {
 		return err
 	}
@@ -177,7 +177,7 @@ func CreateZipWithRandomFiles(zipName string, fileCnt, fileSize int) error {
 
 	extension := ".zip"
 	name := zipName + extension
-	z, err := cmn.CreateFile(name)
+	z, err := cos.CreateFile(name)
 	if err != nil {
 		return err
 	}

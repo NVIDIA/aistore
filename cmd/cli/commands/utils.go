@@ -28,6 +28,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
@@ -88,7 +89,7 @@ type (
 	}
 )
 
-func isWebURL(url string) bool { return cmn.IsHTTP(url) || cmn.IsHTTPS(url) }
+func isWebURL(url string) bool { return cos.IsHTTP(url) || cos.IsHTTPS(url) }
 
 func (e *errUsage) Error() string {
 	msg := helpMessage(e.helpTemplate, e.helpData)
@@ -114,7 +115,7 @@ func helpMessage(template string, data interface{}) string {
 }
 
 func incorrectUsageError(c *cli.Context, err error) error {
-	cmn.Assert(err != nil)
+	cos.Assert(err != nil)
 	return &errUsage{
 		context:      c,
 		message:      err.Error(),
@@ -144,11 +145,11 @@ func objectPropList(props *cmn.ObjectProps, selection []string) (propList []prop
 		case cmn.GetPropsName:
 			propValue = props.Bck.String() + "/" + props.Name
 		case cmn.GetPropsSize:
-			propValue = cmn.B2S(props.Size, 2)
+			propValue = cos.B2S(props.Size, 2)
 		case cmn.GetPropsChecksum:
 			propValue = templates.FmtChecksum(props.Checksum.Value)
 		case cmn.GetPropsAtime:
-			propValue = cmn.FormatUnixNano(props.Atime, "")
+			propValue = cos.FormatUnixNano(props.Atime, "")
 		case cmn.GetPropsVersion:
 			propValue = props.Version
 		case cmn.GetPropsCached:
@@ -171,7 +172,7 @@ func objectPropList(props *cmn.ObjectProps, selection []string) (propList []prop
 }
 
 func missingArgumentsError(c *cli.Context, missingArgs ...string) error {
-	cmn.Assert(len(missingArgs) > 0)
+	cos.Assert(len(missingArgs) > 0)
 	return &errUsage{
 		context:      c,
 		message:      fmt.Sprintf("missing arguments %q", strings.Join(missingArgs, ", ")),
@@ -192,7 +193,7 @@ func commandNotFoundError(c *cli.Context, cmd string) error {
 
 func didYouMeanMessage(c *cli.Context, cmd string) string {
 	closestCommand, distance := findClosestCommand(cmd, c.App.VisibleCommands())
-	if distance >= cmn.Max(incorrectCmdDistance, len(cmd)/2) {
+	if distance >= cos.Max(incorrectCmdDistance, len(cmd)/2) {
 		return ""
 	}
 
@@ -214,7 +215,7 @@ func findClosestCommand(cmd string, candidates []cli.Command) (result string, di
 		closestName string
 	)
 	for i := 0; i < len(candidates); i++ {
-		dist := cmn.DamerauLevenstheinDistance(cmd, candidates[i].Name)
+		dist := cos.DamerauLevenstheinDistance(cmd, candidates[i].Name)
 		if dist < minDist {
 			minDist = dist
 			closestName = candidates[i].Name
@@ -224,11 +225,11 @@ func findClosestCommand(cmd string, candidates []cli.Command) (result string, di
 }
 
 func (e *errAdditionalInfo) Error() string {
-	return fmt.Sprintf("%s. %s", e.baseErr.Error(), cmn.StrToSentence(e.additionalInfo))
+	return fmt.Sprintf("%s. %s", e.baseErr.Error(), cos.StrToSentence(e.additionalInfo))
 }
 
 func newAdditionalInfoError(err error, info string) error {
-	cmn.Assert(err != nil)
+	cos.Assert(err != nil)
 	return &errAdditionalInfo{
 		baseErr:        err,
 		additionalInfo: info,
@@ -519,18 +520,18 @@ func parseDurationFlag(c *cli.Context, flag cli.Flag) time.Duration {
 
 func parseByteFlagToInt(c *cli.Context, flag cli.Flag) (int64, error) {
 	flagValue := parseStrFlag(c, flag.(cli.StringFlag))
-	b, err := cmn.S2B(flagValue)
+	b, err := cos.S2B(flagValue)
 	if err != nil {
 		return 0, fmt.Errorf("%s (%s) is invalid, expected either a number or a number with a size suffix (kb, MB, GiB, ...)", flag.GetName(), flagValue)
 	}
 	return b, nil
 }
 
-func parseChecksumFlags(c *cli.Context) []*cmn.Cksum {
-	cksums := []*cmn.Cksum{}
+func parseChecksumFlags(c *cli.Context) []*cos.Cksum {
+	cksums := []*cos.Cksum{}
 	for _, ckflag := range checksumFlags {
 		if flagIsSet(c, ckflag) {
-			cksums = append(cksums, cmn.NewCksum(ckflag.GetName(), parseStrFlag(c, ckflag)))
+			cksums = append(cksums, cos.NewCksum(ckflag.GetName(), parseStrFlag(c, ckflag)))
 		}
 	}
 	return cksums
@@ -606,12 +607,12 @@ func makeList(list string) []string {
 }
 
 // Converts a list of "key value" and "key=value" into map
-func makePairs(args []string) (nvs cmn.SimpleKVs, err error) {
+func makePairs(args []string) (nvs cos.SimpleKVs, err error) {
 	var (
 		i  int
 		ll = len(args)
 	)
-	nvs = cmn.SimpleKVs{}
+	nvs = cos.SimpleKVs{}
 	for i < ll {
 		if args[i] != keyAndValueSeparator && strings.Contains(args[i], keyAndValueSeparator) {
 			pairs := strings.SplitN(args[i], keyAndValueSeparator, 2)
@@ -744,7 +745,7 @@ func parseBucketAccessValues(values []string, idx int) (access cmn.AccessAttrs, 
 	}
 	for newIdx = idx; newIdx < len(values); {
 		// Case: `access 0x342`
-		val, err = cmn.ParseHexOrUint(values[newIdx])
+		val, err = cos.ParseHexOrUint(values[newIdx])
 		if err == nil {
 			access |= cmn.AccessAttrs(val)
 			newIdx++
@@ -765,7 +766,7 @@ func parseBucketAccessValues(values []string, idx int) (access cmn.AccessAttrs, 
 }
 
 // TODO: support `allow` and `deny` verbs/operations on existing access permissions
-func makeBckPropPairs(values []string) (nvs cmn.SimpleKVs, err error) {
+func makeBckPropPairs(values []string) (nvs cos.SimpleKVs, err error) {
 	props := make([]string, 0, 20)
 	err = cmn.IterFields(&cmn.BucketPropsToUpdate{}, func(tag string, _ cmn.IterField) (error, bool) {
 		props = append(props, tag)
@@ -779,7 +780,7 @@ func makeBckPropPairs(values []string) (nvs cmn.SimpleKVs, err error) {
 		access cmn.AccessAttrs
 		cmd    string
 	)
-	nvs = make(cmn.SimpleKVs)
+	nvs = make(cos.SimpleKVs)
 	for idx := 0; idx < len(values); {
 		pos := strings.Index(values[idx], "=")
 		if pos > 0 {
@@ -793,7 +794,7 @@ func makeBckPropPairs(values []string) (nvs cmn.SimpleKVs, err error) {
 			idx++
 			continue
 		}
-		isCmd := cmn.StringInSlice(values[idx], props)
+		isCmd := cos.StringInSlice(values[idx], props)
 		if cmd != "" && isCmd {
 			return nil, fmt.Errorf("missing property %q value", cmd)
 		}
@@ -932,7 +933,7 @@ func determineClusterURL(cfg *config.Config) string {
 			return cfg.Cluster.DefaultDockerHost
 		}
 
-		cmn.AssertMsg(len(clustersIDs) > 0, "There should be at least one cluster running, when docker running detected.")
+		cos.AssertMsg(len(clustersIDs) > 0, "There should be at least one cluster running, when docker running detected.")
 
 		proxyGateway, err := containers.ClusterProxyURL(clustersIDs[0])
 		if err != nil {
@@ -971,7 +972,7 @@ func limitedLineWriter(w io.Writer, maxLines int, fmtStr string, args ...[]strin
 	}
 	minLen := math.MaxInt64
 	for _, a := range args {
-		minLen = cmn.Min(minLen, len(a))
+		minLen = cos.Min(minLen, len(a))
 	}
 
 	i := 0
@@ -1009,7 +1010,7 @@ func simpleProgressBar(args ...progressBarArgs) (*mpb.Progress, []*mpb.Bar) {
 		case sizeArg:
 			argDecorators = []decor.Decorator{decor.Name(a.barText, decor.WC{W: len(a.barText) + 1, C: decor.DidentRight}), decor.CountersKibiByte("% .2f / % .2f", decor.WCSyncWidth)}
 		default:
-			cmn.Assertf(false, "invalid argument: %s", a.barType)
+			cos.Assertf(false, "invalid argument: %s", a.barType)
 		}
 
 		options := append(
@@ -1041,7 +1042,7 @@ func (pi *progIndicator) stop() {
 
 func (pi *progIndicator) printProgress(incr int64) {
 	fmt.Print("\033[u\033[K")
-	fmt.Printf("Uploaded %s: %s", pi.objName, cmn.B2S(pi.sizeTransferred.Add(incr), 2))
+	fmt.Printf("Uploaded %s: %s", pi.objName, cos.B2S(pi.sizeTransferred.Add(incr), 2))
 }
 
 func newProgIndicator(objName string) *progIndicator {
@@ -1110,7 +1111,7 @@ func confirm(c *cli.Context, prompt string, warning ...string) (ok bool) {
 	var err error
 	for {
 		response := strings.ToLower(readValue(c, prompt))
-		if ok, err = cmn.ParseBool(response); err != nil {
+		if ok, err = cos.ParseBool(response); err != nil {
 			fmt.Println("Invalid input! Choose 'Y' for 'Yes' or 'N' for 'No'")
 			continue
 		}
@@ -1130,7 +1131,7 @@ func parseURLtoBck(strURL string) (bck cmn.Bck) {
 		strURL += "/"
 	}
 	bck.Provider = cmn.ProviderHTTP
-	bck.Name = cmn.OrigURLBck2Name(strURL)
+	bck.Name = cos.OrigURLBck2Name(strURL)
 	return
 }
 

@@ -1,4 +1,5 @@
-// Package cmn provides common low-level types and utilities for all aistore projects
+// Package cmn provides common constants, types, and utilities for AIS clients
+// and AIStore.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -12,6 +13,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
@@ -88,7 +90,7 @@ var (
 	// exclusively to AIS (provider) given that other Backend providers are remote by definition.
 	NsAnyRemote = Ns{UUID: string(NsUUIDPrefix)}
 
-	Providers = NewStringSet(
+	Providers = cos.NewStringSet(
 		ProviderAIS,
 		ProviderGoogle,
 		ProviderAmazon,
@@ -522,7 +524,7 @@ func NewHTTPObj(u *url.URL) *HTTPBckObj {
 	}
 	hbo.OrigURLBck, hbo.ObjName = filepath.Split(u.Path)
 	hbo.OrigURLBck = u.Scheme + "://" + u.Host + hbo.OrigURLBck
-	hbo.Bck.Name = OrigURLBck2Name(hbo.OrigURLBck)
+	hbo.Bck.Name = cos.OrigURLBck2Name(hbo.OrigURLBck)
 	return hbo
 }
 

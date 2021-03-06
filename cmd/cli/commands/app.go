@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/fatih/color"
 	"github.com/urfave/cli"
 )
@@ -117,7 +118,7 @@ func (aisCLI *AISCLI) handleCLIError(err error) error {
 	var (
 		red          = color.New(color.FgRed).SprintFunc()
 		prepareError = func(msg string) error {
-			msg = cmn.CapitalizeString(msg)
+			msg = cos.CapitalizeString(msg)
 			msg = strings.TrimRight(msg, "\n") // Remove newlines if any.
 			return errors.New(red(msg))
 		}

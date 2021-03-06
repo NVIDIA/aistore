@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
@@ -33,19 +33,19 @@ func TestConfig(t *testing.T) {
 			nperiodic.StatsTimeStr, configRegression["periodic.stats_time"])
 	} else {
 		o := operiodic.StatsTimeStr
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"periodic.stats_time": o})
+		tutils.SetClusterConfig(t, cos.SimpleKVs{"periodic.stats_time": o})
 	}
 	if nlruconfig.DontEvictTimeStr != configRegression["lru.dont_evict_time"] {
 		t.Errorf("DontEvictTime was not set properly: %v, should be: %v",
 			nlruconfig.DontEvictTimeStr, configRegression["lru.dont_evict_time"])
 	} else {
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"lru.dont_evict_time": olruconfig.DontEvictTimeStr})
+		tutils.SetClusterConfig(t, cos.SimpleKVs{"lru.dont_evict_time": olruconfig.DontEvictTimeStr})
 	}
 	if nlruconfig.CapacityUpdTimeStr != configRegression["lru.capacity_upd_time"] {
 		t.Errorf("CapacityUpdTime was not set properly: %v, should be: %v",
 			nlruconfig.CapacityUpdTimeStr, configRegression["lru.capacity_upd_time"])
 	} else {
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"lru.capacity_upd_time": olruconfig.CapacityUpdTimeStr})
+		tutils.SetClusterConfig(t, cos.SimpleKVs{"lru.capacity_upd_time": olruconfig.CapacityUpdTimeStr})
 	}
 	if hw, err := strconv.Atoi(configRegression["lru.highwm"]); err != nil {
 		t.Fatalf("Error parsing HighWM: %v", err)
@@ -53,11 +53,11 @@ func TestConfig(t *testing.T) {
 		t.Errorf("HighWatermark was not set properly: %d, should be: %d",
 			nlruconfig.HighWM, hw)
 	} else {
-		oldhwmStr, err := cmn.ConvertToString(olruconfig.HighWM)
+		oldhwmStr, err := cos.ConvertToString(olruconfig.HighWM)
 		if err != nil {
 			t.Fatalf("Error parsing HighWM: %v", err)
 		}
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"lru.highwm": oldhwmStr})
+		tutils.SetClusterConfig(t, cos.SimpleKVs{"lru.highwm": oldhwmStr})
 	}
 	if lw, err := strconv.Atoi(configRegression["lru.lowwm"]); err != nil {
 		t.Fatalf("Error parsing LowWM: %v", err)
@@ -65,19 +65,19 @@ func TestConfig(t *testing.T) {
 		t.Errorf("LowWatermark was not set properly: %d, should be: %d",
 			nlruconfig.LowWM, lw)
 	} else {
-		oldlwmStr, err := cmn.ConvertToString(olruconfig.LowWM)
+		oldlwmStr, err := cos.ConvertToString(olruconfig.LowWM)
 		if err != nil {
 			t.Fatalf("Error parsing LowWM: %v", err)
 		}
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"lru.lowwm": oldlwmStr})
+		tutils.SetClusterConfig(t, cos.SimpleKVs{"lru.lowwm": oldlwmStr})
 	}
-	if pt, err := cmn.ParseBool(configRegression["lru.enabled"]); err != nil {
+	if pt, err := cos.ParseBool(configRegression["lru.enabled"]); err != nil {
 		t.Fatalf("Error parsing lru.enabled: %v", err)
 	} else if nlruconfig.Enabled != pt {
 		t.Errorf("lru.enabled was not set properly: %v, should be %v",
 			nlruconfig.Enabled, pt)
 	} else {
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{"lru.enabled": fmt.Sprintf("%v", olruconfig.Enabled)})
+		tutils.SetClusterConfig(t, cos.SimpleKVs{"lru.enabled": fmt.Sprintf("%v", olruconfig.Enabled)})
 	}
 }
 

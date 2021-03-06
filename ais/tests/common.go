@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
@@ -31,7 +32,7 @@ const rebalanceObjectDistributionTestCoef = 0.3
 
 const (
 	prefixDir             = "filter"
-	largeFileSize         = 4 * cmn.MiB
+	largeFileSize         = 4 * cos.MiB
 	copyBucketTimeout     = 3 * time.Minute
 	rebalanceTimeout      = 5 * time.Minute
 	rebalanceStartTimeout = 10 * time.Second
@@ -84,7 +85,7 @@ func (m *ioContext) init() {
 		m.proxyURL = tutils.GetPrimaryURL()
 	}
 	if m.fileSize == 0 {
-		m.fileSize = cmn.KiB
+		m.fileSize = cos.KiB
 	}
 	if m.num > 0 {
 		m.objNames = make([]string, 0, m.num)
@@ -93,7 +94,7 @@ func (m *ioContext) init() {
 		m.controlCh = make(chan struct{}, m.otherTasksToTrigger)
 	}
 	if m.bck.Name == "" {
-		m.bck.Name = cmn.RandString(15)
+		m.bck.Name = cos.RandString(15)
 	}
 	if m.bck.Provider == "" {
 		m.bck.Provider = cmn.ProviderAIS
@@ -248,7 +249,7 @@ func (m *ioContext) remoteRefill() {
 	}
 
 	leftToFill := m.num - len(objList.Entries)
-	cmn.Assert(leftToFill > 0)
+	cos.Assert(leftToFill > 0)
 
 	m._remoteFill(leftToFill, false /*evict*/, false /*override*/)
 }
@@ -257,7 +258,7 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 	var (
 		baseParams = tutils.BaseAPIParams()
 		errCh      = make(chan error, objCnt)
-		wg         = cmn.NewLimitedWaitGroup(20)
+		wg         = cos.NewLimitedWaitGroup(20)
 	)
 
 	if !m.silent {
@@ -280,7 +281,7 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 		if override {
 			objName = m.objNames[i]
 		} else {
-			objName = fmt.Sprintf("%s%s%d", objPrefix, cmn.RandString(8), i)
+			objName = fmt.Sprintf("%s%s%d", objPrefix, cos.RandString(8), i)
 		}
 		wg.Add(1)
 		go func() {
@@ -370,7 +371,7 @@ func (m *ioContext) del(cnt ...int) {
 
 	tlog.Logf("deleting %d objects...\n", len(toRemove))
 
-	wg := cmn.NewLimitedWaitGroup(40)
+	wg := cos.NewLimitedWaitGroup(40)
 	for _, obj := range toRemove {
 		wg.Add(1)
 		go func(obj *cmn.BucketEntry) {
@@ -421,7 +422,7 @@ func (m *ioContext) gets(withValidation ...bool) {
 	var (
 		baseParams = tutils.BaseAPIParams()
 		totalGets  = m.num * m.numGetsEachFile
-		wg         = cmn.NewLimitedWaitGroup(50)
+		wg         = cos.NewLimitedWaitGroup(50)
 		validate   bool
 	)
 
@@ -451,7 +452,7 @@ func (m *ioContext) getsUntilStop() {
 	var (
 		idx        = 0
 		baseParams = tutils.BaseAPIParams()
-		wg         = cmn.NewLimitedWaitGroup(40)
+		wg         = cos.NewLimitedWaitGroup(40)
 	)
 	for {
 		select {
@@ -611,7 +612,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 	}{
 		{
 			name: "local",
-			bck:  cmn.Bck{Name: cmn.RandString(10), Provider: cmn.ProviderAIS},
+			bck:  cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS},
 		},
 		{
 			name: "remote",
@@ -624,7 +625,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 		{
 			name: "remote_ais",
 			bck: cmn.Bck{
-				Name:     cmn.RandString(10),
+				Name:     cos.RandString(10),
 				Provider: cmn.ProviderAIS, Ns: cmn.Ns{UUID: tutils.RemoteCluster.UUID},
 			},
 			skipArgs: tutils.SkipTestArgs{
@@ -633,7 +634,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 		},
 		{
 			name:       "backend",
-			bck:        cmn.Bck{Name: cmn.RandString(10), Provider: cmn.ProviderAIS},
+			bck:        cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS},
 			backendBck: cliBck,
 			skipArgs: tutils.SkipTestArgs{
 				Long:      true,
@@ -642,7 +643,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 		},
 		{
 			name: "local_3_copies",
-			bck:  cmn.Bck{Name: cmn.RandString(10), Provider: cmn.ProviderAIS},
+			bck:  cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS},
 			props: &cmn.BucketPropsToUpdate{
 				Mirror: &cmn.MirrorConfToUpdate{
 					Enabled: api.Bool(true),
@@ -652,7 +653,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 		},
 		{
 			name: "local_ec_2_2",
-			bck:  cmn.Bck{Name: cmn.RandString(10), Provider: cmn.ProviderAIS},
+			bck:  cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS},
 			props: &cmn.BucketPropsToUpdate{
 				EC: &cmn.ECConfToUpdate{
 					DataSlices:   api.Int(2),
@@ -726,7 +727,7 @@ func numberOfFilesWithPrefix(fileNames []string, namePrefix string) int {
 func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType string) []string {
 	const (
 		objCnt   = 100
-		fileSize = cmn.KiB
+		fileSize = cos.KiB
 	)
 
 	// Create specific files to test corner cases.
@@ -738,7 +739,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType str
 	)
 
 	for i := 0; i < objCnt; i++ {
-		fileName := cmn.RandString(20)
+		fileName := cos.RandString(20)
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 
 		// NOTE: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader.
@@ -860,7 +861,7 @@ func prefixLookup(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string
 
 func prefixCleanup(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string) {
 	var (
-		wg    = cmn.NewLimitedWaitGroup(40)
+		wg    = cos.NewLimitedWaitGroup(40)
 		errCh = make(chan error, len(fileNames))
 	)
 

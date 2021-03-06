@@ -13,5 +13,5 @@ import (
 func dropCaches() {
 	cmd := exec.Command("purge")
 	_, err := cmd.Output()
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 }

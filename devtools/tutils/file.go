@@ -20,6 +20,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/ec"
@@ -162,12 +163,12 @@ func GetFileInfosFromZipBuffer(buffer bytes.Buffer) ([]os.FileInfo, error) {
 func RandomObjDir(dirLen, maxDepth int) (dir string) {
 	depth := rand.Intn(maxDepth)
 	for i := 0; i < depth; i++ {
-		dir = filepath.Join(dir, cmn.RandString(dirLen))
+		dir = filepath.Join(dir, cos.RandString(dirLen))
 	}
 	return
 }
 
-func SetXattrCksum(fqn string, bck cmn.Bck, cksum *cmn.Cksum) error {
+func SetXattrCksum(fqn string, bck cmn.Bck, cksum *cos.Cksum) error {
 	lom := &cluster.LOM{FQN: fqn}
 	_ = lom.Init(bck)
 	_ = lom.LoadMetaFromFS()
@@ -235,11 +236,11 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 		mpathCnts = make(map[string]int, desc.MountpathsCnt)
 
 		bck = cmn.Bck{
-			Name:     cmn.RandString(10),
+			Name:     cos.RandString(10),
 			Provider: cmn.ProviderAIS,
 			Ns:       cmn.NsGlobal,
 			Props: &cmn.BucketProps{
-				Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash},
+				Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash},
 				BID:   0xa5b6e7d8,
 			},
 		}
@@ -279,12 +280,12 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 
 	for _, ct := range desc.CTs {
 		for i := 0; i < ct.ContentCnt; i++ {
-			fqn, _, err := cluster.HrwFQN(cluster.NewBckEmbed(bck), ct.Type, cmn.RandString(15))
+			fqn, _, err := cluster.HrwFQN(cluster.NewBckEmbed(bck), ct.Type, cos.RandString(15))
 			tassert.CheckFatal(t, err)
 
 			fqns[ct.Type] = append(fqns[ct.Type], fqn)
 
-			f, err := cmn.CreateFile(fqn)
+			f, err := cos.CreateFile(fqn)
 			tassert.CheckFatal(t, err)
 			_, _ = rand.Read(buf)
 			_, err = f.Write(buf)
@@ -307,7 +308,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 			case fs.WorkfileType, ec.SliceType, ec.MetaType:
 				break
 			default:
-				cmn.AssertMsg(false, "non-implemented type")
+				cos.AssertMsg(false, "non-implemented type")
 			}
 		}
 	}
@@ -341,7 +342,7 @@ func RemoveMountPaths(t *testing.T, mpaths fs.MPI) {
 }
 
 func AddMpath(t *testing.T, path string) {
-	err := cmn.CreateDir(path) // Create directory if not exists
+	err := cos.CreateDir(path) // Create directory if not exists
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() {
 		os.RemoveAll(path)

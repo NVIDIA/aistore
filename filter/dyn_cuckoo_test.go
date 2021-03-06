@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -25,7 +25,7 @@ var buckets = []string{
 }
 
 func randObjName(n int) []byte {
-	return []byte(buckets[rand.Intn(len(buckets))] + "/" + cmn.RandString(n))
+	return []byte(buckets[rand.Intn(len(buckets))] + "/" + cos.RandString(n))
 }
 
 func genKeys(keysNum int) [][]byte {

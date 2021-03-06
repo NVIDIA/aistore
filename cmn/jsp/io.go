@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/OneOfOne/xxhash"
@@ -22,20 +23,20 @@ import (
 )
 
 const (
-	sizeXXHash64  = cmn.SizeofI64
+	sizeXXHash64  = cos.SizeofI64
 	lz4BufferSize = 64 << 10
 )
 
 func EncodeSGL(v interface{}, opts cmn.Jopts) *memsys.SGL {
-	// NOTE: `32 * cmn.KiB` value was estimated by deploying cluster with
+	// NOTE: `32 * cos.KiB` value was estimated by deploying cluster with
 	//  32 targets and 32 proxies and creating 100 buckets.
-	sgl := memsys.DefaultPageMM().NewSGL(32 * cmn.KiB)
+	sgl := memsys.DefaultPageMM().NewSGL(32 * cos.KiB)
 	err := Encode(sgl, v, opts)
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	return sgl
 }
 
-func Encode(ws cmn.WriterAt, v interface{}, opts cmn.Jopts) (err error) {
+func Encode(ws cos.WriterAt, v interface{}, opts cmn.Jopts) (err error) {
 	var (
 		h       hash.Hash
 		w       io.Writer = ws
@@ -50,12 +51,12 @@ func Encode(ws cmn.WriterAt, v interface{}, opts cmn.Jopts) (err error) {
 		)
 		copy(prefix[:], signature) // [ 0 - 63 ]
 		l := len(signature)
-		debug.Assert(l < cmn.SizeofI64)
+		debug.Assert(l < cos.SizeofI64)
 		prefix[l] = cmn.MetaverJSP // current jsp version
-		off += cmn.SizeofI64
+		off += cos.SizeofI64
 
 		binary.BigEndian.PutUint32(prefix[off:], opts.Metaver) // [ 64 - 95 ]
-		off += cmn.SizeofI32
+		off += cos.SizeofI32
 
 		if opts.Compress { // [ 96 - 127 ]
 			flags |= 1 << 0
@@ -64,7 +65,7 @@ func Encode(ws cmn.WriterAt, v interface{}, opts cmn.Jopts) (err error) {
 			flags |= 1 << 1
 		}
 		binary.BigEndian.PutUint32(prefix[off:], flags)
-		off += cmn.SizeofI32
+		off += cos.SizeofI32
 
 		w.Write(prefix[:])
 		debug.Assert(off == prefLen)
@@ -81,7 +82,7 @@ func Encode(ws cmn.WriterAt, v interface{}, opts cmn.Jopts) (err error) {
 	}
 	if opts.Checksum {
 		h = xxhash.New64()
-		cmn.Assert(h.Size() == sizeXXHash64)
+		cos.Assert(h.Size() == sizeXXHash64)
 		w = io.MultiWriter(h, w)
 	}
 	if opts.Local {
@@ -103,14 +104,14 @@ func Encode(ws cmn.WriterAt, v interface{}, opts cmn.Jopts) (err error) {
 	return
 }
 
-func Decode(reader io.ReadCloser, v interface{}, opts cmn.Jopts, tag string) (checksum *cmn.Cksum, err error) {
+func Decode(reader io.ReadCloser, v interface{}, opts cmn.Jopts, tag string) (checksum *cos.Cksum, err error) {
 	var (
 		r             io.Reader = reader
 		expectedCksum uint64
 		h             hash.Hash
 		jspVer        byte
 	)
-	defer cmn.Close(reader)
+	defer cos.Close(reader)
 	if opts.Signature {
 		var (
 			prefix  [prefLen]byte
@@ -120,7 +121,7 @@ func Decode(reader io.ReadCloser, v interface{}, opts cmn.Jopts, tag string) (ch
 			return
 		}
 		l := len(signature)
-		debug.Assert(l < cmn.SizeofI64)
+		debug.Assert(l < cos.SizeofI64)
 		if signature != string(prefix[:l]) {
 			err = &ErrBadSignature{tag, string(prefix[:l]), signature}
 			return
@@ -137,13 +138,13 @@ func Decode(reader io.ReadCloser, v interface{}, opts cmn.Jopts, tag string) (ch
 			// NOTE: end jsp backward compatibility
 			return
 		}
-		metaVer = binary.BigEndian.Uint32(prefix[cmn.SizeofI64:])
+		metaVer = binary.BigEndian.Uint32(prefix[cos.SizeofI64:])
 		if metaVer != opts.Metaver {
 			err = newErrVersion(tag, metaVer, opts.Metaver)
 			return
 		}
 	skip:
-		flags := binary.BigEndian.Uint32(prefix[cmn.SizeofI64+cmn.SizeofI32:])
+		flags := binary.BigEndian.Uint32(prefix[cos.SizeofI64+cos.SizeofI32:])
 		opts.Compress = flags&(1<<0) != 0
 		opts.Checksum = flags&(1<<1) != 0
 	}
@@ -179,10 +180,10 @@ func Decode(reader io.ReadCloser, v interface{}, opts cmn.Jopts, tag string) (ch
 		actual := h.Sum(nil)
 		actualCksum := binary.BigEndian.Uint64(actual)
 		if expectedCksum != actualCksum {
-			err = cmn.NewBadMetaCksumError(expectedCksum, actualCksum, tag)
+			err = cos.NewBadMetaCksumError(expectedCksum, actualCksum, tag)
 			return
 		}
-		checksum = cmn.NewCksum(cmn.ChecksumXXHash, hex.EncodeToString(actual))
+		checksum = cos.NewCksum(cos.ChecksumXXHash, hex.EncodeToString(actual))
 	}
 	return
 }

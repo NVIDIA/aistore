@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction/xreg"
@@ -146,7 +147,7 @@ func (reb *Manager) nodesNotInStage(md *rebArgs, stage uint32) int {
 // main method
 func (reb *Manager) bcast(md *rebArgs, cb syncCallback) (errCnt int) {
 	var cnt atomic.Int32
-	wg := cmn.NewLimitedWaitGroup(cluster.MaxBcastParallel(), len(md.smap.Tmap))
+	wg := cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), len(md.smap.Tmap))
 	for _, tsi := range md.smap.Tmap {
 		if tsi.ID() == reb.t.SID() {
 			continue

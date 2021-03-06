@@ -9,7 +9,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/jacobsa/fuse/fuseops"
 )
@@ -192,7 +192,7 @@ func (fh *fileHandle) flush() error {
 
 	var (
 		err   error
-		cksum *cmn.Cksum
+		cksum *cos.Cksum
 	)
 
 	if fh.writeBuffer != nil && fh.writeBuffer.size() > 0 {

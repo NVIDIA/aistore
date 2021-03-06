@@ -7,6 +7,7 @@ package mirror
 import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
@@ -46,7 +47,7 @@ func newXactBckBase(id, kind string, bck cmn.Bck, opts *mpather.JoggerGroupOpts)
 //
 // as XactBck interface
 //
-func (r *xactBckBase) Run()                   { cmn.Assert(false) }
+func (r *xactBckBase) Run()                   { cos.Assert(false) }
 func (r *xactBckBase) DoneCh() chan struct{}  { return r.doneCh }
 func (r *xactBckBase) Target() cluster.Target { return r.t }
 

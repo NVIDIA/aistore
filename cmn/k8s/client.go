@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -217,7 +218,7 @@ func getMetricsClient() (*metrics.Clientset, error) {
 	if _defaultMetricsClient.err != nil {
 		return nil, _defaultMetricsClient.err
 	}
-	cmn.Assert(_defaultMetricsClient.client != nil)
+	cos.Assert(_defaultMetricsClient.client != nil)
 	return _defaultMetricsClient.client, nil
 }
 

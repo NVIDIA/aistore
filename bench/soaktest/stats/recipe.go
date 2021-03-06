@@ -7,7 +7,7 @@ package stats
 import (
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 // This is intended to summarize primitives within a recipe
@@ -38,7 +38,7 @@ func (rs *RecipeStats) Add(p *PrimitiveStat) {
 	if p.LatencyMin > 0 && (p.LatencyMin < rs.minLatency || rs.minLatency == 0) {
 		rs.minLatency = p.LatencyMin
 	}
-	rs.maxLatency = cmn.MaxDuration(rs.maxLatency, p.LatencyMax)
+	rs.maxLatency = cos.MaxDuration(rs.maxLatency, p.LatencyMax)
 
 	rs.requestCount += p.RequestCount
 	rs.totalSize += p.TotalSize

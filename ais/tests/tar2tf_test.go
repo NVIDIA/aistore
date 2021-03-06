@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tetl"
@@ -59,7 +60,7 @@ func TestETLTar2TFS3(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	// PUT TAR to the cluster
-	f, err := readers.NewFileReaderFromFile(tarPath, cmn.ChecksumXXHash)
+	f, err := readers.NewFileReaderFromFile(tarPath, cos.ChecksumXXHash)
 	tassert.CheckFatal(t, err)
 	putArgs := api.PutObjectArgs{
 		BaseParams: baseParams,
@@ -129,7 +130,7 @@ func TestETLTar2TFRanges(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	// PUT TAR to the cluster
-	f, err := readers.NewFileReaderFromFile(tarPath, cmn.ChecksumXXHash)
+	f, err := readers.NewFileReaderFromFile(tarPath, cos.ChecksumXXHash)
 	tassert.CheckFatal(t, err)
 	putArgs := api.PutObjectArgs{
 		BaseParams: baseParams,

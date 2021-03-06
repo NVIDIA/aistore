@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	jsoniter "github.com/json-iterator/go"
 	"google.golang.org/api/googleapi"
@@ -147,7 +148,7 @@ func (gcpp *gcpProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (er
 // HEAD BUCKET //
 /////////////////
 
-func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
+func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("head_bucket %s", bck.Name)
 	}
@@ -162,7 +163,7 @@ func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 		errCode, err = gcpp.gcpErrorToAISError(err, cloudBck)
 		return
 	}
-	bckProps = make(cmn.SimpleKVs)
+	bckProps = make(cos.SimpleKVs)
 	bckProps[cmn.HeaderBackendProvider] = cmn.ProviderGoogle
 	// GCP always generates a versionid for an object even if versioning is disabled.
 	// So, return that we can detect versionid change on getobj etc
@@ -275,7 +276,7 @@ func (gcpp *gcpProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (
 // HEAD OBJECT //
 /////////////////
 
-func (gcpp *gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, errCode int, err error) {
+func (gcpp *gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cos.SimpleKVs, errCode int, err error) {
 	gcpClient, gctx, err := gcpp.createClient(ctx)
 	if err != nil {
 		return
@@ -289,7 +290,7 @@ func (gcpp *gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 		errCode, err = gcpp.handleObjectError(gctx, gcpClient, err, cloudBck)
 		return
 	}
-	objMeta = make(cmn.SimpleKVs)
+	objMeta = make(cos.SimpleKVs)
 	objMeta[cmn.HeaderBackendProvider] = cmn.ProviderGoogle
 	objMeta[cmn.HeaderObjSize] = strconv.FormatInt(attrs.Size, 10)
 	if v, ok := h.EncodeVersion(attrs.Generation); ok {
@@ -337,7 +338,7 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 ///////////////////////
 
 func (gcpp *gcpProvider) GetObjReader(ctx context.Context,
-	lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
+	lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cos.Cksum, errCode int, err error) {
 	gcpClient, gctx, err := gcpp.createClient(ctx)
 	if err != nil {
 		bck := lom.Bucket()
@@ -355,13 +356,13 @@ func (gcpp *gcpProvider) GetObjReader(ctx context.Context,
 		return nil, nil, errCode, err
 	}
 
-	cksum := cmn.NewCksum(attrs.Metadata[gcpChecksumType], attrs.Metadata[gcpChecksumVal])
+	cksum := cos.NewCksum(attrs.Metadata[gcpChecksumType], attrs.Metadata[gcpChecksumVal])
 	rc, err := o.NewReader(gctx)
 	if err != nil {
 		return nil, nil, 0, err
 	}
 
-	customMD := cmn.SimpleKVs{
+	customMD := cos.SimpleKVs{
 		cluster.SourceObjMD: cluster.SourceGoogleObjMD,
 	}
 
@@ -370,7 +371,7 @@ func (gcpp *gcpProvider) GetObjReader(ctx context.Context,
 		customMD[cluster.VersionObjMD] = v
 	}
 	if v, ok := h.EncodeCksum(attrs.MD5); ok {
-		expectedCksm = cmn.NewCksum(cmn.ChecksumMD5, v)
+		expectedCksm = cos.NewCksum(cos.ChecksumMD5, v)
 		customMD[cluster.MD5ObjMD] = v
 	}
 	if v, ok := h.EncodeCksum(attrs.CRC32C); ok {
@@ -391,14 +392,14 @@ func (gcpp *gcpProvider) GetObjReader(ctx context.Context,
 func (gcpp *gcpProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
 	gcpClient, gctx, err := gcpp.createClient(ctx)
 	if err != nil {
-		cmn.Close(r)
+		cos.Close(r)
 		return
 	}
 
 	var (
 		h        = cmn.BackendHelpers.Google
 		cloudBck = lom.Bck().RemoteBck()
-		md       = make(cmn.SimpleKVs, 2)
+		md       = make(cos.SimpleKVs, 2)
 		gcpObj   = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
 		wc       = gcpObj.NewWriter(gctx)
 	)
@@ -409,7 +410,7 @@ func (gcpp *gcpProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *clust
 	buf, slab := gcpp.t.MMSA().Alloc()
 	written, err := io.CopyBuffer(wc, r, buf)
 	slab.Free(buf)
-	cmn.Close(r)
+	cos.Close(r)
 	if err != nil {
 		return
 	}

@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/query"
 )
 
@@ -42,7 +43,7 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// A target will return error if given handle already exists (though is very unlikely).
-	handle := cmn.GenUUID()
+	handle := cos.GenUUID()
 	header := http.Header{cmn.HeaderHandle: []string{handle}}
 	msg := &query.InitMsg{}
 	if err := cmn.ReadJSON(w, r, msg); err != nil {

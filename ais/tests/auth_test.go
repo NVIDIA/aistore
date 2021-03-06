@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
@@ -39,7 +40,7 @@ func TestAuthObj(t *testing.T) {
 	var (
 		unAuthBP, authBP = createBaseParams()
 		bck              = cmn.Bck{
-			Name: cmn.RandString(10),
+			Name: cos.RandString(10),
 		}
 	)
 
@@ -50,13 +51,13 @@ func TestAuthObj(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}()
 
-	r, _ := readers.NewRandReader(fileSize, cmn.ChecksumNone)
+	r, _ := readers.NewRandReader(fileSize, cos.ChecksumNone)
 	err = api.PutObject(api.PutObjectArgs{
 		BaseParams: unAuthBP,
 		Bck:        bck,
 		Reader:     r,
 		Size:       fileSize,
-		Object:     cmn.RandString(10),
+		Object:     cos.RandString(10),
 	})
 	expectUnauthorized(t, err)
 }
@@ -67,7 +68,7 @@ func TestAuthBck(t *testing.T) {
 	var (
 		unAuthBP, authBP = createBaseParams()
 		bck              = cmn.Bck{
-			Name: cmn.RandString(10),
+			Name: cos.RandString(10),
 		}
 	)
 

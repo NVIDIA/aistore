@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/nl"
@@ -110,7 +111,7 @@ func (xact *XactBase) ChanAbort() <-chan struct{} { return xact.abrt }
 func (xact *XactBase) Aborted() bool              { return xact.aborted.Load() }
 
 func (xact *XactBase) AbortedAfter(d time.Duration) (aborted bool) {
-	sleep := cmn.CalcProbeFreq(d)
+	sleep := cos.CalcProbeFreq(d)
 	aborted = xact.Aborted()
 	for elapsed := time.Duration(0); elapsed < d && !aborted; elapsed += sleep {
 		time.Sleep(sleep)
@@ -123,7 +124,7 @@ func (xact *XactBase) AbortedAfter(d time.Duration) (aborted bool) {
 func (xact *XactBase) Quiesce(d time.Duration, cb cluster.QuiCB) cluster.QuiRes {
 	var (
 		idle, total time.Duration
-		sleep       = cmn.CalcProbeFreq(d)
+		sleep       = cos.CalcProbeFreq(d)
 		dur         = d
 	)
 	if xact.Aborted() {
@@ -140,7 +141,7 @@ func (xact *XactBase) Quiesce(d time.Duration, cb cluster.QuiCB) cluster.QuiRes 
 			idle += sleep
 		case cluster.QuiActive:
 			idle = 0                              // reset
-			dur = cmn.MinDuration(dur+sleep, 2*d) // bump up to 2x initial
+			dur = cos.MinDuration(dur+sleep, 2*d) // bump up to 2x initial
 		case cluster.QuiDone:
 			return cluster.QuiDone
 		case cluster.QuiTimeout:
@@ -160,12 +161,12 @@ func (xact *XactBase) String() string {
 	}
 	var (
 		stime    = xact.StartTime()
-		stimestr = cmn.FormatTimestamp(stime)
+		stimestr = cos.FormatTimestamp(stime)
 		etime    = xact.EndTime()
 		d        = etime.Sub(stime)
 	)
 	return fmt.Sprintf("%s(%q) started %s ended %s (%v)",
-		prefix, xact.ID(), stimestr, cmn.FormatTimestamp(etime), d)
+		prefix, xact.ID(), stimestr, cos.FormatTimestamp(etime), d)
 }
 
 func (xact *XactBase) StartTime() time.Time {
@@ -264,7 +265,7 @@ func (xact *XactBase) Stats() cluster.XactStats {
 }
 
 func (id BaseID) String() string           { return string(id) }
-func (id BaseID) Int() int64               { cmn.Assert(false); return 0 }
+func (id BaseID) Int() int64               { cos.Assert(false); return 0 }
 func (id BaseID) Compare(other string) int { return strings.Compare(string(id), other) }
 
 // errors

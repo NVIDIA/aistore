@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 const ticks = 100 // C.sysconf(C._SC_CLK_TCK)
@@ -18,7 +18,7 @@ func procMem(pid int) (ProcMemStats, error) {
 	mem := ProcMemStats{}
 
 	procPath := fmt.Sprintf(hostProcessStatMemPath, pid)
-	line, err := cmn.ReadOneLine(procPath)
+	line, err := cos.ReadOneLine(procPath)
 	if err != nil {
 		return mem, err
 	}
@@ -47,7 +47,7 @@ func procCPU(pid int) (ProcCPUStats, error) {
 	cpu := ProcCPUStats{}
 
 	procPath := fmt.Sprintf(hostProcessStatCPUPath, pid)
-	line, err := cmn.ReadOneLine(procPath)
+	line, err := cos.ReadOneLine(procPath)
 	if err != nil {
 		return cpu, err
 	}

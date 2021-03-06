@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
@@ -65,7 +66,7 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 		m = ioContext{
 			t:         t,
 			num:       1000,
-			fileSize:  cmn.KiB,
+			fileSize:  cos.KiB,
 			fixedSize: true,
 		}
 
@@ -86,8 +87,8 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 	bl, err := api.ListObjects(baseParams, m.bck, msg, uint(m.num))
 	tassert.CheckFatal(t, err)
 
-	tutils.SetClusterConfig(t, cmn.SimpleKVs{"client.features": strconv.FormatUint(cmn.FeatureDirectAccess, 10)})
-	defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"client.features": "0"})
+	tutils.SetClusterConfig(t, cos.SimpleKVs{"client.features": strconv.FormatUint(cmn.FeatureDirectAccess, 10)})
+	defer tutils.SetClusterConfig(t, cos.SimpleKVs{"client.features": "0"})
 
 	if len(bl.Entries) != m.num {
 		t.Errorf("Expected %d bucket list entries, found %d\n", m.num, len(bl.Entries))
@@ -134,7 +135,7 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 			t:        t,
 			bck:      cliBck,
 			num:      100,
-			fileSize: cmn.KiB,
+			fileSize: cos.KiB,
 		}
 		targets    = make(map[string]struct{})
 		bck        = cliBck
@@ -157,8 +158,8 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 	bucketList, err := api.ListObjects(baseParams, bck, listObjectsMsg, 0)
 	tassert.CheckFatal(t, err)
 
-	tutils.SetClusterConfig(t, cmn.SimpleKVs{"client.features": strconv.FormatUint(cmn.FeatureDirectAccess, 10)})
-	defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"client.features": "0"})
+	tutils.SetClusterConfig(t, cos.SimpleKVs{"client.features": strconv.FormatUint(cmn.FeatureDirectAccess, 10)})
+	defer tutils.SetClusterConfig(t, cos.SimpleKVs{"client.features": "0"})
 
 	if len(bucketList.Entries) != m.num {
 		t.Errorf("Number of entries in bucket list [%d] must be equal to [%d]", len(bucketList.Entries), m.num)
@@ -208,7 +209,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		m = ioContext{
 			t:        t,
 			num:      1,
-			fileSize: cmn.KiB,
+			fileSize: cos.KiB,
 		}
 
 		proxyURL   = tutils.RandomProxyURL(t)
@@ -230,7 +231,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	objName := m.objNames[0]
 	fqn := findObjOnDisk(m.bck, objName)
 	tlog.Logf("Corrupting object data %q: %s\n", objName, fqn)
-	err := ioutil.WriteFile(fqn, []byte("this file has been corrupted"), cmn.PermRWR)
+	err := ioutil.WriteFile(fqn, []byte("this file has been corrupted"), cos.PermRWR)
 	tassert.CheckFatal(t, err)
 
 	_, err = api.GetObjectWithValidation(baseParams, m.bck, objName)
@@ -260,7 +261,7 @@ func TestRenameBucket(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		renamedBck = cmn.Bck{
-			Name:     bck.Name + "_" + cmn.GenTie(),
+			Name:     bck.Name + "_" + cos.GenTie(),
 			Provider: cmn.ProviderAIS,
 		}
 	)
@@ -292,7 +293,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 			t:        t,
 			bck:      rtd.bck,
 			num:      2036,
-			fileSize: cmn.KiB,
+			fileSize: cos.KiB,
 		}
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
@@ -515,8 +516,8 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	}
 
 	// Step 5: Log rebalance stats
-	tlog.Logf("Rebalance sent     %s in %d files\n", cmn.B2S(bytesSent, 2), filesSent)
-	tlog.Logf("Rebalance received %s in %d files\n", cmn.B2S(bytesRecv, 2), filesRecv)
+	tlog.Logf("Rebalance sent     %s in %d files\n", cos.B2S(bytesSent, 2), filesSent)
+	tlog.Logf("Rebalance received %s in %d files\n", cos.B2S(bytesRecv, 2), filesRecv)
 
 	m.ensureNoErrors()
 	m.assertClusterState()
@@ -586,7 +587,7 @@ func TestLRU(t *testing.T) {
 		filesEvicted[k] = tutils.GetNamedTargetStats(v, "lru.evict.n")
 		bytesEvicted[k] = tutils.GetNamedTargetStats(v, "lru.evict.size")
 		for _, c := range v.MPCap {
-			usedPct = cmn.MinI32(usedPct, c.PctUsed)
+			usedPct = cos.MinI32(usedPct, c.PctUsed)
 		}
 	}
 
@@ -605,9 +606,9 @@ func TestLRU(t *testing.T) {
 	// All targets: set new watermarks; restore upon exit
 	oconfig := tutils.GetClusterConfig(t)
 	defer func() {
-		lowWMStr, _ := cmn.ConvertToString(oconfig.LRU.LowWM)
-		highWMStr, _ := cmn.ConvertToString(oconfig.LRU.HighWM)
-		tutils.SetClusterConfig(t, cmn.SimpleKVs{
+		lowWMStr, _ := cos.ConvertToString(oconfig.LRU.LowWM)
+		highWMStr, _ := cos.ConvertToString(oconfig.LRU.HighWM)
+		tutils.SetClusterConfig(t, cos.SimpleKVs{
 			"lru.lowwm":             lowWMStr,
 			"lru.highwm":            highWMStr,
 			"lru.dont_evict_time":   oconfig.LRU.DontEvictTimeStr,
@@ -616,9 +617,9 @@ func TestLRU(t *testing.T) {
 	}()
 
 	// Cluster-wide reduce dont-evict-time
-	lowWMStr, _ := cmn.ConvertToString(lowWM)
-	highWMStr, _ := cmn.ConvertToString(highWM)
-	tutils.SetClusterConfig(t, cmn.SimpleKVs{
+	lowWMStr, _ := cos.ConvertToString(lowWM)
+	highWMStr, _ := cos.ConvertToString(highWM)
+	tutils.SetClusterConfig(t, cos.SimpleKVs{
 		"lru.lowwm":             lowWMStr,
 		"lru.highwm":            highWMStr,
 		"lru.dont_evict_time":   "0s",
@@ -641,7 +642,7 @@ func TestLRU(t *testing.T) {
 		diffBytesEvicted := tutils.GetNamedTargetStats(v, "lru.evict.size") - bytesEvicted[k]
 		tlog.Logf(
 			"Target %s: evicted %d objects - %s (%dB) total\n",
-			k, diffFilesEvicted, cmn.B2S(diffBytesEvicted, 2), diffBytesEvicted,
+			k, diffFilesEvicted, cos.B2S(diffBytesEvicted, 2), diffBytesEvicted,
 		)
 
 		if diffFilesEvicted == 0 {
@@ -766,7 +767,7 @@ func TestPrefetchRange(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
 
 	// 1. Parse arguments
-	pt, err := cmn.ParseBashTemplate(prefetchRange)
+	pt, err := cos.ParseBashTemplate(prefetchRange)
 	tassert.CheckFatal(t, err)
 	rangeMin, rangeMax = pt.Ranges[0].Start, pt.Ranges[0].End
 
@@ -924,7 +925,7 @@ func TestStressDeleteRange(t *testing.T) {
 	// 1. PUT
 	tlog.Logln("putting objects...")
 	for i := 0; i < numReaders; i++ {
-		size := rand.Int63n(cmn.KiB*128) + cmn.KiB/3
+		size := rand.Int63n(cos.KiB*128) + cos.KiB/3
 		tassert.CheckFatal(t, err)
 		reader, err := readers.NewRandReader(size, cksumType)
 		tassert.CheckFatal(t, err)

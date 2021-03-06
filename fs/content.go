@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 /*
@@ -174,7 +175,7 @@ func (wf *WorkfileContentResolver) PermToProcess() bool { return false }
 func (wf *WorkfileContentResolver) GenUniqueFQN(base, prefix string) string {
 	var (
 		dir, fname = filepath.Split(base)
-		tieBreaker = cmn.GenTie()
+		tieBreaker = cos.GenTie()
 	)
 	fname = prefix + "." + fname
 	base = filepath.Join(dir, fname)

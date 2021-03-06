@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 )
 
@@ -21,9 +21,9 @@ func TestUpgradeLock(t *testing.T) {
 			var (
 				n       = &nlc{}
 				wg      = &sync.WaitGroup{}
-				sema    = cmn.NewDynSemaphore(threadCnt)
+				sema    = cos.NewDynSemaphore(threadCnt)
 				counter = atomic.NewInt32(0)
-				uname   = cmn.RandString(10)
+				uname   = cos.RandString(10)
 			)
 			n.init()
 

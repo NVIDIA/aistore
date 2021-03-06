@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/objwalk/walkinfo"
 	"github.com/NVIDIA/aistore/query"
 )
@@ -41,11 +42,11 @@ func (w *Walk) DefaultLocalObjPage(msg *cmn.SelectMsg) (*cmn.BucketList, error) 
 		q      = query.NewQuery(objSrc, bckSrc, nil)
 	)
 
-	msg.UUID = cmn.GenUUID()
+	msg.UUID = cos.GenUUID()
 	xact := query.NewObjectsListing(w.ctx, w.t, q, msg)
 	go xact.Run()
 
-	cmn.Assert(!xact.TokenUnsatisfiable(msg.ContinuationToken))
+	cos.Assert(!xact.TokenUnsatisfiable(msg.ContinuationToken))
 	return LocalObjPage(xact, msg.PageSize)
 }
 
@@ -115,9 +116,9 @@ func (w *Walk) RemoteObjPage() (*cmn.BucketList, error) {
 		if needAtime {
 			if lom.AtimeUnix() < 0 {
 				// Prefetched object - return zero time
-				e.Atime = cmn.FormatUnixNano(0, w.msg.TimeFormat)
+				e.Atime = cos.FormatUnixNano(0, w.msg.TimeFormat)
 			} else {
-				e.Atime = cmn.FormatUnixNano(lom.AtimeUnix(), w.msg.TimeFormat)
+				e.Atime = cos.FormatUnixNano(lom.AtimeUnix(), w.msg.TimeFormat)
 			}
 		}
 		if needCksum && lom.Cksum() != nil {

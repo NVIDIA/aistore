@@ -14,7 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
@@ -195,7 +195,7 @@ func (b *downloaderPB) updateBars(downloadStatus downloader.DlStatusResp) {
 
 func (b *downloaderPB) updateFinishedFiles(fileStates []downloader.TaskDlInfo) {
 	// The finished files are those that are in b.states, but were not included in CurrentTasks of the status response
-	fileStatesMap := make(cmn.StringSet)
+	fileStatesMap := make(cos.StringSet)
 	for _, file := range fileStates {
 		fileStatesMap.Add(file.Name)
 	}
@@ -348,10 +348,10 @@ func printDownloadStatus(w io.Writer, d downloader.DlStatusResp, verbose bool) {
 	if d.JobFinished() {
 		if d.SkippedCnt > 0 {
 			fmt.Fprintf(w, "Done: %d file%s downloaded (skipped: %d), %d error%s\n",
-				d.FinishedCnt, cmn.NounEnding(d.FinishedCnt), d.SkippedCnt, d.ErrorCnt, cmn.NounEnding(d.ErrorCnt))
+				d.FinishedCnt, cos.NounEnding(d.FinishedCnt), d.SkippedCnt, d.ErrorCnt, cos.NounEnding(d.ErrorCnt))
 		} else {
 			fmt.Fprintf(w, "Done: %d file%s downloaded, %d error%s\n",
-				d.FinishedCnt, cmn.NounEnding(d.FinishedCnt), d.ErrorCnt, cmn.NounEnding(d.ErrorCnt))
+				d.FinishedCnt, cos.NounEnding(d.FinishedCnt), d.ErrorCnt, cos.NounEnding(d.ErrorCnt))
 		}
 
 		if verbose && len(d.Errs) > 0 {
@@ -390,10 +390,10 @@ func printDownloadStatus(w io.Writer, d downloader.DlStatusResp, verbose bool) {
 			for _, task := range d.CurrentTasks {
 				fmt.Fprintf(w, "\t%s: ", task.Name)
 				if task.Total == 0 {
-					fmt.Fprintln(w, cmn.B2S(task.Downloaded, 2))
+					fmt.Fprintln(w, cos.B2S(task.Downloaded, 2))
 				} else {
 					pctDownloaded := 100 * float64(task.Downloaded) / float64(task.Total)
-					fmt.Fprintf(w, "%s/%s (%.2f%%)\n", cmn.B2S(task.Downloaded, 2), cmn.B2S(task.Total, 2), pctDownloaded)
+					fmt.Fprintf(w, "%s/%s (%.2f%%)\n", cos.B2S(task.Downloaded, 2), cos.B2S(task.Total, 2), pctDownloaded)
 				}
 			}
 		}

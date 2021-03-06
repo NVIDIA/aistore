@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/fs"
 )
@@ -23,7 +24,7 @@ func initMountpaths(t *testing.T) {
 		os.RemoveAll(fsCheckerTmpDir)
 	})
 
-	cmn.CreateDir(fsCheckerTmpDir)
+	cos.CreateDir(fsCheckerTmpDir)
 
 	config := cmn.GCO.BeginUpdate()
 	config.TestFSP.Count = 1
@@ -34,7 +35,7 @@ func initMountpaths(t *testing.T) {
 	for i := 1; i <= 4; i++ {
 		mpath := fmt.Sprintf("%s/%d", fsCheckerTmpDir, i)
 
-		err := cmn.CreateDir(mpath)
+		err := cos.CreateDir(mpath)
 		tassert.CheckFatal(t, err)
 
 		_, err = fs.Add(mpath, "id")
@@ -64,7 +65,7 @@ func newMockFSDispatcher(mpathsToFail ...string) *MockFSDispatcher {
 }
 
 func (d *MockFSDispatcher) DisableMountpath(path, reason string) (disabled bool, err error) {
-	d.faultDetected = cmn.StringInSlice(path, d.faultyPaths)
+	d.faultDetected = cos.StringInSlice(path, d.faultyPaths)
 	if d.faultDetected {
 		return false, fmt.Errorf("fault detected: %s", reason)
 	}
@@ -87,7 +88,7 @@ func TestFSCheckerInaccessibleMountpath(t *testing.T) {
 		fshc       = NewFSHC(dispatcher)
 	)
 
-	_, _, exists := fshc.testMountpath(filePath, failedMpath, 4, cmn.KiB)
+	_, _, exists := fshc.testMountpath(filePath, failedMpath, 4, cos.KiB)
 	tassert.Errorf(t, !exists, "testing non-existing mountpath must fail")
 }
 
@@ -148,9 +149,9 @@ func TestFSCheckerTryReadFile(t *testing.T) {
 	)
 
 	// Create file with some content inside.
-	file, err := cmn.CreateFile(filePath)
+	file, err := cos.CreateFile(filePath)
 	tassert.CheckFatal(t, err)
-	err = cmn.FloodWriter(file, cmn.MiB)
+	err = cos.FloodWriter(file, cos.MiB)
 	file.Close()
 	tassert.CheckFatal(t, err)
 
@@ -168,6 +169,6 @@ func TestFSCheckerTryWriteFile(t *testing.T) {
 		mpath = fsCheckerTmpDir + "/1"
 	)
 
-	err := fshc.tryWriteFile(mpath, cmn.KiB)
+	err := fshc.tryWriteFile(mpath, cos.KiB)
 	tassert.CheckFatal(t, err)
 }

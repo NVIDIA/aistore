@@ -14,6 +14,7 @@ import (
 	"reflect"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -31,7 +32,7 @@ var _ = Describe("Common file", func() {
 	)
 
 	createFile := func(fqn string) {
-		file, err := cmn.CreateFile(fqn)
+		file, err := cos.CreateFile(fqn)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(file.Close()).NotTo(HaveOccurred())
 		Expect(fqn).To(BeARegularFile())
@@ -64,7 +65,7 @@ var _ = Describe("Common file", func() {
 
 		It("should correctly copy empty struct", func() {
 			var emptySructResult struct{}
-			cmn.CopyStruct(&emptySructResult, &struct{}{})
+			cos.CopyStruct(&emptySructResult, &struct{}{})
 
 			Expect(reflect.DeepEqual(struct{}{}, emptySructResult)).To(BeTrue())
 		})
@@ -73,7 +74,7 @@ var _ = Describe("Common file", func() {
 			loopNode := Tree{}
 			loopNode.left, loopNode.right, loopNode.value = &loopNode, &loopNode, 0
 			var copyLoopNode Tree
-			cmn.CopyStruct(&copyLoopNode, &loopNode)
+			cos.CopyStruct(&copyLoopNode, &loopNode)
 
 			Expect(loopNode).To(Equal(copyLoopNode))
 
@@ -87,7 +88,7 @@ var _ = Describe("Common file", func() {
 			right := Tree{nil, nil, 1}
 			root := Tree{&left, &right, 2}
 			var rootCopy Tree
-			cmn.CopyStruct(&rootCopy, &root)
+			cos.CopyStruct(&rootCopy, &root)
 
 			Expect(root).To(Equal(rootCopy))
 
@@ -103,7 +104,7 @@ var _ = Describe("Common file", func() {
 			nonPrimitive.m["two"] = 2
 			nonPrimitive.s = []int{1, 2}
 			var nonPrimitiveCopy NonPrimitiveStruct
-			cmn.CopyStruct(&nonPrimitiveCopy, &nonPrimitive)
+			cos.CopyStruct(&nonPrimitiveCopy, &nonPrimitive)
 
 			Expect(nonPrimitive).To(Equal(nonPrimitive))
 
@@ -119,7 +120,7 @@ var _ = Describe("Common file", func() {
 			const bytesToRead = 1000
 			byteBuffer := make([]byte, bytesToRead)
 
-			_, err := cmn.SaveReader(nonExistingFile, rand.Reader, byteBuffer, cmn.ChecksumNone, bytesToRead, "")
+			_, err := cos.SaveReader(nonExistingFile, rand.Reader, byteBuffer, cos.ChecksumNone, bytesToRead, "")
 			Expect(err).NotTo(HaveOccurred())
 
 			validateSaveReaderOutput(nonExistingFile, byteBuffer)
@@ -130,7 +131,7 @@ var _ = Describe("Common file", func() {
 			byteBuffer := make([]byte, bytesLimit*2)
 			reader := &io.LimitedReader{R: rand.Reader, N: bytesLimit}
 
-			_, err := cmn.SaveReader(nonExistingFile, reader, byteBuffer, cmn.ChecksumNone, -1, "")
+			_, err := cos.SaveReader(nonExistingFile, reader, byteBuffer, cos.ChecksumNone, -1, "")
 			Expect(err).NotTo(HaveOccurred())
 
 			validateSaveReaderOutput(nonExistingFile, byteBuffer[:bytesLimit])
@@ -150,23 +151,23 @@ var _ = Describe("Common file", func() {
 
 	Context("CreateDir", func() {
 		It("should successfully create directory", func() {
-			err := cmn.CreateDir(nonExistingPath)
+			err := cos.CreateDir(nonExistingPath)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(nonExistingPath).To(BeADirectory())
 		})
 
 		It("should not error when creating directory which already exists", func() {
-			err := cmn.CreateDir(nonExistingPath)
+			err := cos.CreateDir(nonExistingPath)
 			Expect(err).NotTo(HaveOccurred())
-			err = cmn.CreateDir(nonExistingPath)
+			err = cos.CreateDir(nonExistingPath)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(nonExistingPath).To(BeADirectory())
 		})
 
 		It("should error when directory is not valid", func() {
-			err := cmn.CreateDir("")
+			err := cos.CreateDir("")
 			Expect(err).To(HaveOccurred())
 		})
 	})
@@ -178,9 +179,9 @@ var _ = Describe("Common file", func() {
 		)
 
 		It("should copy file and preserve the content", func() {
-			_, err := cmn.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), cmn.ChecksumNone, 1000, "")
+			_, err := cos.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), cos.ChecksumNone, 1000, "")
 			Expect(err).NotTo(HaveOccurred())
-			_, _, err = cmn.CopyFile(srcFilename, dstFilename, make([]byte, 1000), cmn.ChecksumNone)
+			_, _, err = cos.CopyFile(srcFilename, dstFilename, make([]byte, 1000), cos.ChecksumNone)
 			Expect(err).NotTo(HaveOccurred())
 
 			srcData, err := ioutil.ReadFile(srcFilename)
@@ -193,10 +194,10 @@ var _ = Describe("Common file", func() {
 		})
 
 		It("should copy a object and compute its checksum", func() {
-			expectedCksum, err := cmn.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), cmn.ChecksumXXHash, 1000, "")
+			expectedCksum, err := cos.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), cos.ChecksumXXHash, 1000, "")
 			Expect(err).NotTo(HaveOccurred())
 
-			_, cksum, err := cmn.CopyFile(srcFilename, dstFilename, make([]byte, 1000), cmn.ChecksumXXHash)
+			_, cksum, err := cos.CopyFile(srcFilename, dstFilename, make([]byte, 1000), cos.ChecksumXXHash)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cksum).To(Equal(expectedCksum))
 
@@ -214,7 +215,7 @@ var _ = Describe("Common file", func() {
 		It("should not error when dst file does not exist", func() {
 			createFile(nonExistingFile)
 
-			err := cmn.Rename(nonExistingFile, nonExistingRenamedFile)
+			err := cos.Rename(nonExistingFile, nonExistingRenamedFile)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(nonExistingRenamedFile).To(BeARegularFile())
@@ -225,7 +226,7 @@ var _ = Describe("Common file", func() {
 			createFile(nonExistingFile)
 			createFile(nonExistingRenamedFile)
 
-			err := cmn.Rename(nonExistingFile, nonExistingRenamedFile)
+			err := cos.Rename(nonExistingFile, nonExistingRenamedFile)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(nonExistingRenamedFile).To(BeARegularFile())
@@ -233,7 +234,7 @@ var _ = Describe("Common file", func() {
 		})
 
 		It("should error when src does not exist", func() {
-			err := cmn.Rename("/some/non/existing/file.txt", "/tmp/file.txt")
+			err := cos.Rename("/some/non/existing/file.txt", "/tmp/file.txt")
 			Expect(err).To(HaveOccurred())
 		})
 	})
@@ -246,27 +247,27 @@ var _ = Describe("Common file", func() {
 		It("should remove regular file", func() {
 			createFile(nonExistingFile)
 
-			err := cmn.RemoveFile(nonExistingFile)
+			err := cos.RemoveFile(nonExistingFile)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(nonExistingFile).NotTo(BeAnExistingFile())
 		})
 
 		It("should not complain when regular file does not exist", func() {
-			err := cmn.RemoveFile("/some/non/existing/file.txt")
+			err := cos.RemoveFile("/some/non/existing/file.txt")
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
 	Context("ParseFmtTemplate", func() {
 		DescribeTable("parse fmt template without error",
-			func(template string, expectedPt cmn.ParsedTemplate) {
-				pt, err := cmn.ParseFmtTemplate(template)
+			func(template string, expectedPt cos.ParsedTemplate) {
+				pt, err := cos.ParseFmtTemplate(template)
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(pt).To(Equal(expectedPt))
 			},
-			Entry("simple", "%d", cmn.ParsedTemplate{
+			Entry("simple", "%d", cos.ParsedTemplate{
 				Prefix: "",
-				Ranges: []cmn.TemplateRange{{
+				Ranges: []cos.TemplateRange{{
 					Start:      0,
 					End:        math.MaxInt64 - 1,
 					Step:       1,
@@ -274,9 +275,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "",
 				}},
 			}),
-			Entry("with prefix", "prefix-%d", cmn.ParsedTemplate{
+			Entry("with prefix", "prefix-%d", cos.ParsedTemplate{
 				Prefix: "prefix-",
-				Ranges: []cmn.TemplateRange{{
+				Ranges: []cos.TemplateRange{{
 					Start:      0,
 					End:        math.MaxInt64 - 1,
 					Step:       1,
@@ -284,9 +285,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "",
 				}},
 			}),
-			Entry("with prefix and suffix", "prefix-%d-suffix", cmn.ParsedTemplate{
+			Entry("with prefix and suffix", "prefix-%d-suffix", cos.ParsedTemplate{
 				Prefix: "prefix-",
-				Ranges: []cmn.TemplateRange{{
+				Ranges: []cos.TemplateRange{{
 					Start:      0,
 					End:        math.MaxInt64 - 1,
 					Step:       1,
@@ -294,9 +295,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "-suffix",
 				}},
 			}),
-			Entry("with 0 digits", "prefix-%00d-suffix", cmn.ParsedTemplate{
+			Entry("with 0 digits", "prefix-%00d-suffix", cos.ParsedTemplate{
 				Prefix: "prefix-",
-				Ranges: []cmn.TemplateRange{{
+				Ranges: []cos.TemplateRange{{
 					Start:      0,
 					End:        math.MaxInt64 - 1,
 					Step:       1,
@@ -304,9 +305,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "-suffix",
 				}},
 			}),
-			Entry("with multiple digits", "prefix-%06d-suffix", cmn.ParsedTemplate{
+			Entry("with multiple digits", "prefix-%06d-suffix", cos.ParsedTemplate{
 				Prefix: "prefix-",
-				Ranges: []cmn.TemplateRange{{
+				Ranges: []cos.TemplateRange{{
 					Start:      0,
 					End:        math.MaxInt64 - 1,
 					Step:       1,
@@ -314,9 +315,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "-suffix",
 				}},
 			}),
-			Entry("with large number of digits", "prefix-%0152d-suffix", cmn.ParsedTemplate{
+			Entry("with large number of digits", "prefix-%0152d-suffix", cos.ParsedTemplate{
 				Prefix: "prefix-",
-				Ranges: []cmn.TemplateRange{{
+				Ranges: []cos.TemplateRange{{
 					Start:      0,
 					End:        math.MaxInt64 - 1,
 					Step:       1,
@@ -328,7 +329,7 @@ var _ = Describe("Common file", func() {
 
 		DescribeTable("parse fmt template with error",
 			func(template string) {
-				_, err := cmn.ParseFmtTemplate(template)
+				_, err := cos.ParseFmtTemplate(template)
 				Expect(err).Should(HaveOccurred())
 			},
 			Entry("missing %", "prefix-06d-suffix"),
@@ -347,14 +348,14 @@ var _ = Describe("Common file", func() {
 
 	Context("ParseBashTemplate", func() {
 		DescribeTable("parse bash template without error",
-			func(template string, expectedPt cmn.ParsedTemplate) {
-				pt, err := cmn.ParseBashTemplate(template)
+			func(template string, expectedPt cos.ParsedTemplate) {
+				pt, err := cos.ParseBashTemplate(template)
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(pt).To(Equal(expectedPt))
 			},
-			Entry("with step", "prefix-{0010..0111..2}-suffix", cmn.ParsedTemplate{
+			Entry("with step", "prefix-{0010..0111..2}-suffix", cos.ParsedTemplate{
 				Prefix: "prefix-",
-				Ranges: []cmn.TemplateRange{{
+				Ranges: []cos.TemplateRange{{
 					Start:      10,
 					End:        111,
 					Step:       2,
@@ -362,9 +363,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "-suffix",
 				}},
 			}),
-			Entry("without step and suffix", "prefix-{0010..0111}", cmn.ParsedTemplate{
+			Entry("without step and suffix", "prefix-{0010..0111}", cos.ParsedTemplate{
 				Prefix: "prefix-",
-				Ranges: []cmn.TemplateRange{{
+				Ranges: []cos.TemplateRange{{
 					Start:      10,
 					End:        111,
 					Step:       1,
@@ -372,9 +373,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "",
 				}},
 			}),
-			Entry("minimal", "{1..2}", cmn.ParsedTemplate{
+			Entry("minimal", "{1..2}", cos.ParsedTemplate{
 				Prefix: "",
-				Ranges: []cmn.TemplateRange{{
+				Ranges: []cos.TemplateRange{{
 					Start:      1,
 					End:        2,
 					Step:       1,
@@ -382,9 +383,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "",
 				}},
 			}),
-			Entry("minimal multiple digits", "{110..220..10}", cmn.ParsedTemplate{
+			Entry("minimal multiple digits", "{110..220..10}", cos.ParsedTemplate{
 				Prefix: "",
-				Ranges: []cmn.TemplateRange{{
+				Ranges: []cos.TemplateRange{{
 					Start:      110,
 					End:        220,
 					Step:       10,
@@ -392,9 +393,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "",
 				}},
 			}),
-			Entry("minimal with digit count", "{1..02}", cmn.ParsedTemplate{
+			Entry("minimal with digit count", "{1..02}", cos.ParsedTemplate{
 				Prefix: "",
-				Ranges: []cmn.TemplateRange{{
+				Ranges: []cos.TemplateRange{{
 					Start:      1,
 					End:        2,
 					Step:       1,
@@ -402,9 +403,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "",
 				}},
 			}),
-			Entry("minimal with special suffix", "{1..02}}", cmn.ParsedTemplate{
+			Entry("minimal with special suffix", "{1..02}}", cos.ParsedTemplate{
 				Prefix: "",
-				Ranges: []cmn.TemplateRange{{
+				Ranges: []cos.TemplateRange{{
 					Start:      1,
 					End:        2,
 					Step:       1,
@@ -412,9 +413,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "}",
 				}},
 			}),
-			Entry("multi-range", "prefix-{0010..0111..2}-gap-{10..12}-gap2-{0040..0099..4}-suffix", cmn.ParsedTemplate{
+			Entry("multi-range", "prefix-{0010..0111..2}-gap-{10..12}-gap2-{0040..0099..4}-suffix", cos.ParsedTemplate{
 				Prefix: "prefix-",
-				Ranges: []cmn.TemplateRange{
+				Ranges: []cos.TemplateRange{
 					{
 						Start:      10,
 						End:        111,
@@ -442,7 +443,7 @@ var _ = Describe("Common file", func() {
 
 		DescribeTable("parse bash template with error",
 			func(template string) {
-				_, err := cmn.ParseBashTemplate(template)
+				_, err := cos.ParseBashTemplate(template)
 				Expect(err).Should(HaveOccurred())
 			},
 			Entry("missing {", "prefix-0010..0111..2}-suffix"),
@@ -467,14 +468,14 @@ var _ = Describe("Common file", func() {
 
 	Context("ParseAtTemplate", func() {
 		DescribeTable("parse at template without error",
-			func(template string, expectedPt cmn.ParsedTemplate) {
-				pt, err := cmn.ParseAtTemplate(template)
+			func(template string, expectedPt cos.ParsedTemplate) {
+				pt, err := cos.ParseAtTemplate(template)
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(pt).To(Equal(expectedPt))
 			},
-			Entry("full featured template", "prefix-@010-suffix", cmn.ParsedTemplate{
+			Entry("full featured template", "prefix-@010-suffix", cos.ParsedTemplate{
 				Prefix: "prefix-",
-				Ranges: []cmn.TemplateRange{{
+				Ranges: []cos.TemplateRange{{
 					Start:      0,
 					End:        10,
 					Step:       1,
@@ -482,9 +483,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "-suffix",
 				}},
 			}),
-			Entry("minimal with prefix", "pref@9", cmn.ParsedTemplate{
+			Entry("minimal with prefix", "pref@9", cos.ParsedTemplate{
 				Prefix: "pref",
-				Ranges: []cmn.TemplateRange{{
+				Ranges: []cos.TemplateRange{{
 					Start:      0,
 					End:        9,
 					Step:       1,
@@ -492,9 +493,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "",
 				}},
 			}),
-			Entry("minimal", "@0010", cmn.ParsedTemplate{
+			Entry("minimal", "@0010", cos.ParsedTemplate{
 				Prefix: "",
-				Ranges: []cmn.TemplateRange{{
+				Ranges: []cos.TemplateRange{{
 					Start:      0,
 					End:        10,
 					Step:       1,
@@ -502,9 +503,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "",
 				}},
 			}),
-			Entry("multi-range", "pref@9-gap-@0100-suffix", cmn.ParsedTemplate{
+			Entry("multi-range", "pref@9-gap-@0100-suffix", cos.ParsedTemplate{
 				Prefix: "pref",
-				Ranges: []cmn.TemplateRange{
+				Ranges: []cos.TemplateRange{
 					{
 						Start:      0,
 						End:        9,
@@ -525,7 +526,7 @@ var _ = Describe("Common file", func() {
 
 		DescribeTable("parse at template with error",
 			func(template string) {
-				_, err := cmn.ParseAtTemplate(template)
+				_, err := cos.ParseAtTemplate(template)
 				Expect(err).Should(HaveOccurred())
 			},
 			Entry("missing @", "prefix-01-suffix"),
@@ -538,7 +539,7 @@ var _ = Describe("Common file", func() {
 	Context("ParsedTemplate", func() {
 		DescribeTable("iter method",
 			func(template string, expectedStrs ...string) {
-				pt, err := cmn.ParseBashTemplate(template)
+				pt, err := cos.ParseBashTemplate(template)
 				Expect(err).NotTo(HaveOccurred())
 
 				var (
@@ -570,20 +571,20 @@ var _ = Describe("Common file", func() {
 	Context("ParseQuantity", func() {
 		DescribeTable("parse quantity without error",
 			func(quantity, ty string, value int) {
-				pq, err := cmn.ParseQuantity(quantity)
+				pq, err := cos.ParseQuantity(quantity)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(pq).To(Equal(cmn.ParsedQuantity{Type: ty, Value: uint64(value)}))
+				Expect(pq).To(Equal(cos.ParsedQuantity{Type: ty, Value: uint64(value)}))
 			},
-			Entry("simple number", "80B", cmn.QuantityBytes, 80),
-			Entry("simple percent", "80%", cmn.QuantityPercent, 80),
-			Entry("number with spaces", "  8 0 KB  ", cmn.QuantityBytes, 80*cmn.KiB),
-			Entry("percent with spaces", "80 %", cmn.QuantityPercent, 80),
+			Entry("simple number", "80B", cos.QuantityBytes, 80),
+			Entry("simple percent", "80%", cos.QuantityPercent, 80),
+			Entry("number with spaces", "  8 0 KB  ", cos.QuantityBytes, 80*cos.KiB),
+			Entry("percent with spaces", "80 %", cos.QuantityPercent, 80),
 		)
 
 		DescribeTable("parse quantity with error",
 			func(template string) {
-				_, err := cmn.ParseQuantity(template)
+				_, err := cos.ParseQuantity(template)
 				Expect(err).Should(HaveOccurred())
 			},
 			Entry("contains alphabet", "a80B"),
@@ -602,19 +603,19 @@ var _ = Describe("Common file", func() {
 			errs := []string{"2", "enable", "nothing"}
 
 			for _, s := range trues {
-				v, err := cmn.ParseBool(s)
+				v, err := cos.ParseBool(s)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(v).To(BeTrue())
 			}
 
 			for _, s := range falses {
-				v, err := cmn.ParseBool(s)
+				v, err := cos.ParseBool(s)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(v).To(BeFalse())
 			}
 
 			for _, s := range errs {
-				_, err := cmn.ParseBool(s)
+				_, err := cos.ParseBool(s)
 				Expect(err).To(HaveOccurred())
 			}
 		})
@@ -623,7 +624,7 @@ var _ = Describe("Common file", func() {
 	Context("StrSlicesEqual", func() {
 		DescribeTable("parse quantity with error",
 			func(lhs, rhs []string, expected bool) {
-				Expect(cmn.StrSlicesEqual(lhs, rhs)).To(Equal(expected))
+				Expect(cos.StrSlicesEqual(lhs, rhs)).To(Equal(expected))
 			},
 			Entry("empty slices", []string{}, []string{}, true),
 			Entry("single item", []string{"one"}, []string{"one"}, true),

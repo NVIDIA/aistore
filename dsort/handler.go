@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
@@ -59,7 +60,7 @@ func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, parsedRS *Par
 		return
 	}
 
-	managerUUID := cmn.GenUUID()
+	managerUUID := cos.GenUUID()
 	checkResponses := func(responses []response) error {
 		for _, resp := range responses {
 			if resp.err == nil {
@@ -152,7 +153,7 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		var newMetrics []*JobInfo
 		err := jsoniter.Unmarshal(r.res, &newMetrics)
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 
 		for _, v := range newMetrics {
 			found := false
@@ -726,7 +727,7 @@ func broadcast(method, path string, urlParams url.Values, body []byte, nodes clu
 			return
 		}
 
-		resp, err := ctx.client.Do(req) // nolint:bodyclose // Closed inside `cmn.Close`.
+		resp, err := ctx.client.Do(req) // nolint:bodyclose // Closed inside `cos.Close`.
 		if err != nil {
 			responses[idx] = response{
 				si:         node,
@@ -736,7 +737,7 @@ func broadcast(method, path string, urlParams url.Values, body []byte, nodes clu
 			return
 		}
 		out, err := ioutil.ReadAll(resp.Body)
-		cmn.Close(resp.Body)
+		cos.Close(resp.Body)
 
 		responses[idx] = response{
 			si:         node,
@@ -798,8 +799,8 @@ func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
 		moreThanThreshold = true
 	)
 
-	dsorterMemThreshold, err := cmn.S2B(parsedRS.DSorterMemThreshold)
-	cmn.AssertNoErr(err)
+	dsorterMemThreshold, err := cos.S2B(parsedRS.DSorterMemThreshold)
+	cos.AssertNoErr(err)
 
 	query := make(url.Values)
 	query.Add(cmn.URLParamWhat, cmn.GetWhatDaemonStatus)

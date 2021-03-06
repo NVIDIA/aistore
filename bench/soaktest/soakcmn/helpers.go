@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools"
 )
 
@@ -31,8 +32,8 @@ var (
 
 func init() {
 	envURL := os.Getenv(cmn.EnvVars.Endpoint)
-	transportArgs.UseHTTPS = cmn.IsHTTPS(envURL)
-	transportArgs.SkipVerify = cmn.IsParseBool(os.Getenv(cmn.EnvVars.SkipVerifyCrt))
+	transportArgs.UseHTTPS = cos.IsHTTPS(envURL)
+	transportArgs.SkipVerify = cos.IsParseBool(os.Getenv(cmn.EnvVars.SkipVerifyCrt))
 	HTTPClient = cmn.NewClient(transportArgs)
 
 	devtoolsCtx = &devtools.Ctx{

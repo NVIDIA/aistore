@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/etl"
@@ -144,7 +145,7 @@ func (t *targetrunner) createBucket(c *txnServerCtx) error {
 	case cmn.ActCommit:
 		t._commitCreateDestroy(c)
 	default:
-		cmn.Assert(false)
+		cos.Assert(false)
 	}
 	return nil
 }
@@ -194,7 +195,7 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
 		txnMnc := txn.(*txnMakeNCopies)
-		cmn.Assert(txnMnc.newCopies == copies)
+		cos.Assert(txnMnc.newCopies == copies)
 
 		// wait for newBMD w/timeout
 		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
@@ -212,7 +213,7 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 		c.addNotif(xact) // notify upon completion
 		go xact.Run()
 	default:
-		cmn.Assert(false)
+		cos.Assert(false)
 	}
 	return nil
 }
@@ -299,7 +300,7 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 			go xact.Run()
 		}
 	default:
-		cmn.Assert(false)
+		cos.Assert(false)
 	}
 	return nil
 }
@@ -389,7 +390,7 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 		t.gfn.global.activateTimed()
 		go xact.Run()
 	default:
-		cmn.Assert(false)
+		cos.Assert(false)
 	}
 	return nil
 }
@@ -516,7 +517,7 @@ func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMs
 		c.addNotif(xact) // notify upon completion
 		go xact.Run()
 	default:
-		cmn.Assert(false)
+		cos.Assert(false)
 	}
 	return nil
 }
@@ -600,7 +601,7 @@ func (t *targetrunner) ecEncode(c *txnServerCtx) error {
 		c.addNotif(xact) // notify upon completion
 		go xact.Run()
 	default:
-		cmn.Assert(false)
+		cos.Assert(false)
 	}
 	return nil
 }
@@ -645,7 +646,7 @@ func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
 			fs.RemoveDaemonIDs()
 		}
 	default:
-		cmn.Assert(false)
+		cos.Assert(false)
 	}
 	return nil
 }
@@ -673,7 +674,7 @@ func (t *targetrunner) destroyBucket(c *txnServerCtx) error {
 	case cmn.ActCommit:
 		t._commitCreateDestroy(c)
 	default:
-		cmn.Assert(false)
+		cos.Assert(false)
 	}
 	return nil
 }
@@ -722,11 +723,11 @@ func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase
 		return c, nil
 	}
 	if tout := query.Get(cmn.URLParamNetwTimeout); tout != "" {
-		c.timeout.netw, err = cmn.S2Duration(tout)
+		c.timeout.netw, err = cos.S2Duration(tout)
 		debug.AssertNoErr(err)
 	}
 	if tout := query.Get(cmn.URLParamHostTimeout); tout != "" {
-		c.timeout.host, err = cmn.S2Duration(tout)
+		c.timeout.host, err = cos.S2Duration(tout)
 		debug.AssertNoErr(err)
 	}
 	c.query = query // operation-specific values, if any
@@ -770,11 +771,11 @@ func (c *txnServerCtx) addNotif(xact cluster.Xact) {
 
 func (c *txnServerCtx) recvObjDM(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
 	defer transport.FreeRecv(objReader)
-	if err != nil && !cmn.IsEOF(err) {
+	if err != nil && !cos.IsEOF(err) {
 		glog.Error(err)
 		return
 	}
-	defer cmn.DrainReader(objReader)
+	defer cos.DrainReader(objReader)
 	lom := cluster.AllocLOM(hdr.ObjName)
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(hdr.Bck); err != nil {
@@ -792,7 +793,7 @@ func (c *txnServerCtx) recvObjDM(w http.ResponseWriter, hdr transport.ObjHdr, ob
 		// that it must PUT the object to the Cloud as well after the local data are
 		// finalized in case of destination is Cloud.
 		RecvType: cluster.RegularPut,
-		Cksum:    cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
+		Cksum:    cos.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
 		Started:  time.Now(),
 	}
 	if err := c.t.PutObject(lom, params); err != nil {

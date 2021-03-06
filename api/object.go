@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ec"
 )
 
@@ -47,8 +48,8 @@ type PutObjectArgs struct {
 	BaseParams BaseParams
 	Bck        cmn.Bck
 	Object     string
-	Cksum      *cmn.Cksum
-	Reader     cmn.ReadOpenCloser
+	Cksum      *cos.Cksum
+	Reader     cos.ReadOpenCloser
 	Size       uint64 // optional
 }
 
@@ -68,7 +69,7 @@ type AppendArgs struct {
 	Bck        cmn.Bck
 	Object     string
 	Handle     string
-	Reader     cmn.ReadOpenCloser
+	Reader     cos.ReadOpenCloser
 	Size       int64
 }
 
@@ -77,7 +78,7 @@ type FlushArgs struct {
 	Bck        cmn.Bck
 	Object     string
 	Handle     string
-	Cksum      *cmn.Cksum
+	Cksum      *cos.Cksum
 }
 
 // HeadObject returns the size and version of the object specified by bucket/object.
@@ -136,7 +137,7 @@ func DeleteObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 // EvictObject evicts an object specified by bucket/object.
 func EvictObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 	baseParams.Method = http.MethodDelete
-	actMsg := cmn.ActionMsg{Action: cmn.ActEvictObjects, Name: cmn.JoinWords(bck.Name, object)}
+	actMsg := cmn.ActionMsg{Action: cmn.ActEvictObjects, Name: cos.JoinWords(bck.Name, object)}
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathObjects.Join(bck.Name, object),
@@ -184,7 +185,7 @@ func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string, options 
 	if len(options) != 0 {
 		var w io.Writer
 		w, q, hdr = getObjectOptParams(options[0])
-		cmn.Assert(w == nil)
+		cos.Assert(w == nil)
 	}
 
 	q = cmn.AddBckToQuery(q, bck)
@@ -291,11 +292,11 @@ func PutObject(args PutObjectArgs) (err error) {
 		req.GetBody = func() (io.ReadCloser, error) {
 			return args.Reader.Open()
 		}
-		if args.Cksum != nil && args.Cksum.Type() != cmn.ChecksumNone {
+		if args.Cksum != nil && args.Cksum.Type() != cos.ChecksumNone {
 			req.Header.Set(cmn.HeaderObjCksumType, args.Cksum.Type())
 			ckVal := args.Cksum.Value()
 			if ckVal == "" {
-				_, ckhash, err := cmn.CopyAndChecksum(ioutil.Discard, args.Reader, nil, args.Cksum.Type())
+				_, ckhash, err := cos.CopyAndChecksum(ioutil.Discard, args.Reader, nil, args.Cksum.Type())
 				if err != nil {
 					return nil, cmn.NewFailedToCreateHTTPRequest(err)
 				}
@@ -369,7 +370,7 @@ func FlushObject(args FlushArgs) (err error) {
 	query = cmn.AddBckToQuery(query, args.Bck)
 
 	var header http.Header
-	if args.Cksum != nil && args.Cksum.Type() != cmn.ChecksumNone {
+	if args.Cksum != nil && args.Cksum.Type() != cos.ChecksumNone {
 		header = make(http.Header)
 		header.Set(cmn.HeaderObjCksumType, args.Cksum.Type())
 		header.Set(cmn.HeaderObjCksumVal, args.Cksum.Value())
@@ -434,9 +435,9 @@ func DoReqWithRetry(client *http.Client, newRequest func(_ cmn.ReqArgs) (*http.R
 		req   *http.Request
 		sleep = httpRetrySleep
 	)
-	reader := reqArgs.BodyR.(cmn.ReadOpenCloser)
+	reader := reqArgs.BodyR.(cos.ReadOpenCloser)
 	if req, err = newRequest(reqArgs); err != nil {
-		cmn.Close(reader)
+		cos.Close(reader)
 		return
 	}
 	if resp, err = client.Do(req); !shouldRetryHTTP(err, resp) {
@@ -455,7 +456,7 @@ func DoReqWithRetry(client *http.Client, newRequest func(_ cmn.ReqArgs) (*http.R
 		reqArgs.BodyR = r
 
 		if req, err = newRequest(reqArgs); err != nil {
-			cmn.Close(reader)
+			cos.Close(reader)
 			return
 		}
 		if resp, err = client.Do(req); !shouldRetryHTTP(err, resp) {

@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
@@ -155,7 +156,7 @@ func (mgr *Manager) RestoreBckGetXact(bck *cluster.Bck) *XactGet {
 	xact := mgr.getBckXacts(bck.Name).Get()
 	if xact == nil || xact.Finished() {
 		x, err := xreg.RenewBucketXact(cmn.ActECGet, bck)
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 
 		xact = x.(*XactGet)
 		mgr.getBckXacts(bck.Name).SetGet(xact)
@@ -167,7 +168,7 @@ func (mgr *Manager) RestoreBckPutXact(bck *cluster.Bck) *XactPut {
 	xact := mgr.getBckXacts(bck.Name).Put()
 	if xact == nil || xact.Finished() {
 		x, err := xreg.RenewBucketXact(cmn.ActECPut, bck)
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 
 		xact = x.(*XactPut)
 		mgr.getBckXacts(bck.Name).SetPut(xact)
@@ -179,7 +180,7 @@ func (mgr *Manager) RestoreBckRespXact(bck *cluster.Bck) *XactRespond {
 	xact := mgr.getBckXacts(bck.Name).Req()
 	if xact == nil || xact.Finished() {
 		x, err := xreg.RenewBucketXact(cmn.ActECRespond, bck)
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 
 		xact = x.(*XactRespond)
 		mgr.getBckXacts(bck.Name).SetReq(xact)
@@ -215,7 +216,7 @@ func (mgr *Manager) recvRequest(w http.ResponseWriter, hdr transport.ObjHdr, obj
 		return
 	}
 
-	unpacker := cmn.NewUnpacker(hdr.Opaque)
+	unpacker := cos.NewUnpacker(hdr.Opaque)
 	iReq := intraReq{}
 	if err := unpacker.ReadAny(&iReq); err != nil {
 		glog.Errorf("failed to unmarshal request: %v", err)
@@ -250,22 +251,22 @@ func (mgr *Manager) recvResponse(w http.ResponseWriter, hdr transport.ObjHdr, ob
 	// check if the request is valid
 	if len(hdr.Opaque) == 0 {
 		glog.Error("empty request")
-		cmn.DrainReader(object)
+		cos.DrainReader(object)
 		return
 	}
 
-	unpacker := cmn.NewUnpacker(hdr.Opaque)
+	unpacker := cos.NewUnpacker(hdr.Opaque)
 	iReq := intraReq{}
 	if err := unpacker.ReadAny(&iReq); err != nil {
 		glog.Errorf("Failed to unmarshal request: %v", err)
-		cmn.DrainReader(object)
+		cos.DrainReader(object)
 		return
 	}
 	bck := cluster.NewBckEmbed(hdr.Bck)
 	if err = bck.Init(mgr.t.Bowner()); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); !ok { // is ais
 			glog.Error(err)
-			cmn.DrainReader(object)
+			cos.DrainReader(object)
 			return
 		}
 	}
@@ -278,7 +279,7 @@ func (mgr *Manager) recvResponse(w http.ResponseWriter, hdr transport.ObjHdr, ob
 		mgr.RestoreBckGetXact(bck).DispatchResp(iReq, bck, hdr.ObjName, hdr.ObjAttrs, object)
 	default:
 		glog.Errorf("unknown EC response action %d", iReq.act)
-		cmn.DrainReader(object)
+		cos.DrainReader(object)
 	}
 }
 
@@ -305,8 +306,8 @@ func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) er
 		return ErrorInsufficientTargets
 	}
 
-	cmn.Assert(lom.FQN != "")
-	cmn.Assert(lom.MpathInfo() != nil && lom.MpathInfo().Path != "")
+	cos.Assert(lom.FQN != "")
+	cos.Assert(lom.MpathInfo() != nil && lom.MpathInfo().Path != "")
 	spec, _ := fs.CSM.FileSpec(lom.FQN)
 	if spec != nil && !spec.PermToProcess() {
 		return nil
@@ -328,8 +329,8 @@ func (mgr *Manager) CleanupObject(lom *cluster.LOM) {
 	if !lom.Bprops().EC.Enabled {
 		return
 	}
-	cmn.Assert(lom.FQN != "")
-	cmn.Assert(lom.MpathInfo() != nil && lom.MpathInfo().Path != "")
+	cos.Assert(lom.FQN != "")
+	cos.Assert(lom.MpathInfo() != nil && lom.MpathInfo().Path != "")
 	req := allocateReq(ActDelete, lom.LIF())
 	mgr.RestoreBckPutXact(lom.Bck()).cleanup(req, lom)
 }
@@ -349,7 +350,7 @@ func (mgr *Manager) RestoreObject(lom *cluster.LOM) error {
 		return ErrorInsufficientTargets
 	}
 
-	cmn.Assert(lom.MpathInfo() != nil && lom.MpathInfo().Path != "")
+	cos.Assert(lom.MpathInfo() != nil && lom.MpathInfo().Path != "")
 	req := allocateReq(ActRestore, lom.LIF())
 	errCh := make(chan error) // unbuffered
 	req.ErrCh = errCh

@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 // isContainerized returns true if the application is running
@@ -21,7 +21,7 @@ import (
 // How to detect being inside a container:
 // https://stackoverflow.com/questions/20010199/how-to-determine-if-a-process-runs-inside-lxc-docker
 func isContainerized() (yes bool) {
-	err := cmn.ReadLines(rootProcess, func(line string) error {
+	err := cos.ReadLines(rootProcess, func(line string) error {
 		if strings.Contains(line, "docker") || strings.Contains(line, "lxc") || strings.Contains(line, "kube") {
 			yes = true
 			return io.EOF
@@ -42,7 +42,7 @@ func isContainerized() (yes bool) {
 func containerNumCPU() (int, error) {
 	var quota, period uint64
 
-	quotaInt, err := cmn.ReadOneInt64(contCPULimit)
+	quotaInt, err := cos.ReadOneInt64(contCPULimit)
 	if err != nil {
 		return 0, err
 	}
@@ -51,7 +51,7 @@ func containerNumCPU() (int, error) {
 		return runtime.NumCPU(), nil
 	}
 	quota = uint64(quotaInt)
-	period, err = cmn.ReadOneUint64(contCPUPeriod)
+	period, err = cos.ReadOneUint64(contCPUPeriod)
 	if err != nil {
 		return 0, err
 	}
@@ -61,14 +61,14 @@ func containerNumCPU() (int, error) {
 	}
 
 	approx := (quota + period - 1) / period
-	return int(cmn.MaxU64(approx, 1)), nil
+	return int(cos.MaxU64(approx, 1)), nil
 }
 
 // LoadAverage returns the system load average
 func LoadAverage() (avg LoadAvg, err error) {
 	avg = LoadAvg{}
 
-	line, err := cmn.ReadOneLine(hostLoadAvgPath)
+	line, err := cos.ReadOneLine(hostLoadAvgPath)
 	if err != nil {
 		return avg, err
 	}

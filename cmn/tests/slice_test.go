@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 )
 
@@ -41,7 +42,7 @@ func TestDiscardFirstEntries(t *testing.T) {
 		t.Logf("testcase %d/%d", len(tc.entries), tc.size)
 		original := append([]*cmn.BucketEntry(nil), tc.entries...)
 		entries := cmn.DiscardFirstEntries(tc.entries, tc.size)
-		expSize := cmn.Max(0, len(original)-tc.size)
+		expSize := cos.Max(0, len(original)-tc.size)
 		tassert.Errorf(t, len(entries) == expSize, "incorrect size. expected %d; got %d", expSize, len(entries))
 		if len(entries) > 0 {
 			tassert.Errorf(t, entries[0] == original[tc.size], "incorrect elements. expected %s, got %s", entries[0].Name, original[tc.size].Name)

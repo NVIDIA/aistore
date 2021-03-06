@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
@@ -46,9 +47,9 @@ type (
 		atime    int64
 		atimefs  int64
 		bckID    uint64
-		cksum    *cmn.Cksum // ReCache(ref)
+		cksum    *cos.Cksum // ReCache(ref)
 		copies   fs.MPI     // ditto
-		customMD cmn.SimpleKVs
+		customMD cos.SimpleKVs
 		dirty    bool
 	}
 	LOM struct {
@@ -92,7 +93,7 @@ func Init(t Target) {
 }
 
 func initLomLocker() {
-	lomLocker = make(nameLocker, cmn.MultiSyncMapCount)
+	lomLocker = make(nameLocker, cos.MultiSyncMapCount)
 	lomLocker.init()
 	maxLmeta.Store(xattrMaxSize)
 }
@@ -177,13 +178,13 @@ func (lom *LOM) Version(special ...bool) string {
 func (lom *LOM) Uname() string                { return lom.md.uname }
 func (lom *LOM) SetSize(size int64)           { lom.md.size = size }
 func (lom *LOM) SetVersion(ver string)        { lom.md.version = ver }
-func (lom *LOM) Cksum() *cmn.Cksum            { return lom.md.cksum }
-func (lom *LOM) SetCksum(cksum *cmn.Cksum)    { lom.md.cksum = cksum }
+func (lom *LOM) Cksum() *cos.Cksum            { return lom.md.cksum }
+func (lom *LOM) SetCksum(cksum *cos.Cksum)    { lom.md.cksum = cksum }
 func (lom *LOM) Atime() time.Time             { return time.Unix(0, lom.md.atime) }
 func (lom *LOM) AtimeUnix() int64             { return lom.md.atime }
 func (lom *LOM) SetAtimeUnix(tu int64)        { lom.md.atime = tu }
-func (lom *LOM) SetCustomMD(md cmn.SimpleKVs) { lom.md.customMD = md }
-func (lom *LOM) CustomMD() cmn.SimpleKVs      { return lom.md.customMD }
+func (lom *LOM) SetCustomMD(md cos.SimpleKVs) { lom.md.customMD = md }
+func (lom *LOM) CustomMD() cos.SimpleKVs      { return lom.md.customMD }
 func (lom *LOM) GetCustomMD(key string) (string, bool) {
 	value, exists := lom.md.customMD[key]
 	return value, exists
@@ -232,14 +233,14 @@ func (lom *LOM) FromHTTPHdr(hdr http.Header) {
 		lom.SetVersion(versionEntry)
 	}
 	if atimeEntry := hdr.Get(cmn.HeaderObjAtime); atimeEntry != "" {
-		atime, _ := cmn.S2UnixNano(atimeEntry)
+		atime, _ := cos.S2UnixNano(atimeEntry)
 		lom.SetAtimeUnix(atime)
 	}
 	if customMD := hdr[http.CanonicalHeaderKey(cmn.HeaderObjCustomMD)]; len(customMD) > 0 {
-		md := make(cmn.SimpleKVs, len(customMD)*2)
+		md := make(cos.SimpleKVs, len(customMD)*2)
 		for _, v := range customMD {
 			entry := strings.SplitN(v, "=", 2)
-			cmn.Assert(len(entry) == 2)
+			cos.Assert(len(entry) == 2)
 			md[entry[0]] = entry[1]
 		}
 		lom.SetCustomMD(md)
@@ -341,7 +342,7 @@ func (lom *LOM) DelCopies(copiesFQN ...string) (err error) {
 
 	// 3. Remove the copies
 	for _, copyFQN := range copiesFQN {
-		if err1 := cmn.RemoveFile(copyFQN); err1 != nil {
+		if err1 := cos.RemoveFile(copyFQN); err1 != nil {
 			glog.Error(err1) // TODO: LRU should take care of that later.
 			continue
 		}
@@ -371,7 +372,7 @@ func (lom *LOM) DelExtraCopies(fqn ...string) (removed bool, err error) {
 		if _, ok := lom.md.copies[copyFQN]; ok {
 			continue
 		}
-		if err1 := cmn.RemoveFile(copyFQN); err1 != nil {
+		if err1 := cos.RemoveFile(copyFQN); err1 != nil {
 			err = err1
 			continue
 		}
@@ -463,9 +464,9 @@ func (lom *LOM) _restore(fqn string, buf []byte) (dst *LOM, err error) {
 // NOTE: caller is responsible for locking
 func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	var (
-		dstCksum  *cmn.CksumHash
+		dstCksum  *cos.CksumHash
 		srcCksum  = lom.Cksum()
-		cksumType = cmn.ChecksumNone
+		cksumType = cos.ChecksumNone
 	)
 	if srcCksum != nil {
 		cksumType = srcCksum.Type()
@@ -496,21 +497,21 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	}
 
 	workFQN := fs.CSM.GenContentFQN(dst, fs.WorkfileType, fs.WorkfilePut)
-	_, dstCksum, err = cmn.CopyFile(lom.FQN, workFQN, buf, cksumType)
+	_, dstCksum, err = cos.CopyFile(lom.FQN, workFQN, buf, cksumType)
 	if err != nil {
 		return
 	}
 
-	if err = cmn.Rename(workFQN, dstFQN); err != nil {
-		if errRemove := cmn.RemoveFile(workFQN); errRemove != nil {
+	if err = cos.Rename(workFQN, dstFQN); err != nil {
+		if errRemove := cos.RemoveFile(workFQN); errRemove != nil {
 			glog.Errorf(fmtNestedErr, errRemove)
 		}
 		return
 	}
 
-	if cksumType != cmn.ChecksumNone {
+	if cksumType != cos.ChecksumNone {
 		if !dstCksum.Equal(lom.Cksum()) {
-			return nil, cmn.NewBadDataCksumError(&dstCksum.Cksum, lom.Cksum())
+			return nil, cos.NewBadDataCksumError(&dstCksum.Cksum, lom.Cksum())
 		}
 		dst.SetCksum(dstCksum.Clone())
 	}
@@ -558,7 +559,7 @@ func (lom *LOM) _string(b string) string {
 	if glog.FastV(4, glog.SmoduleCluster) {
 		s += fmt.Sprintf("(%s)", lom.FQN)
 		if lom.md.size != 0 {
-			s += " size=" + cmn.B2S(lom.md.size, 1)
+			s += " size=" + cos.B2S(lom.md.size, 1)
 		}
 		if lom.md.version != "" {
 			s += " ver=" + lom.md.version
@@ -637,7 +638,7 @@ func (lom *LOM) ValidateMetaChecksum() error {
 		md  *lmeta
 		err error
 	)
-	if lom.CksumConf().Type == cmn.ChecksumNone {
+	if lom.CksumConf().Type == cos.ChecksumNone {
 		return nil
 	}
 	md, err = lom.lmfs(false)
@@ -653,7 +654,7 @@ func (lom *LOM) ValidateMetaChecksum() error {
 	}
 	// different versions may have different checksums
 	if md.version == lom.md.version && !lom.md.cksum.Equal(md.cksum) {
-		err = cmn.NewBadDataCksumError(lom.md.cksum, md.cksum, lom.String())
+		err = cos.NewBadDataCksumError(lom.md.cksum, md.cksum, lom.String())
 		lom.Uncache(true /*delDirty*/)
 	}
 	return err
@@ -667,14 +668,14 @@ func (lom *LOM) ValidateContentChecksum() (err error) {
 		cksumType = lom.CksumConf().Type
 
 		cksums = struct {
-			stor *cmn.Cksum     // stored with LOM
-			comp *cmn.CksumHash // computed
+			stor *cos.Cksum     // stored with LOM
+			comp *cos.CksumHash // computed
 		}{stor: lom.md.cksum}
 
 		reloaded bool
 	)
 recomp:
-	if cksumType == cmn.ChecksumNone { // as far as do-no-checksum-checking bucket rules
+	if cksumType == cos.ChecksumNone { // as far as do-no-checksum-checking bucket rules
 		return
 	}
 	if !lom.md.cksum.IsEmpty() {
@@ -710,13 +711,13 @@ recomp:
 		}
 	}
 ex:
-	err = cmn.NewBadDataCksumError(&cksums.comp.Cksum, cksums.stor, lom.String())
+	err = cos.NewBadDataCksumError(&cksums.comp.Cksum, cksums.stor, lom.String())
 	lom.Uncache(true /*delDirty*/)
 	return
 }
 
-func (lom *LOM) ComputeCksumIfMissing() (cksum *cmn.Cksum, err error) {
-	var cksumHash *cmn.CksumHash
+func (lom *LOM) ComputeCksumIfMissing() (cksum *cos.Cksum, err error) {
+	var cksumHash *cos.CksumHash
 	if lom.md.cksum != nil {
 		cksum = lom.md.cksum
 		return
@@ -729,7 +730,7 @@ func (lom *LOM) ComputeCksumIfMissing() (cksum *cmn.Cksum, err error) {
 	return
 }
 
-func (lom *LOM) ComputeCksum(cksumTypes ...string) (cksum *cmn.CksumHash, err error) {
+func (lom *LOM) ComputeCksum(cksumTypes ...string) (cksum *cos.CksumHash, err error) {
 	var (
 		file      *os.File
 		cksumType string
@@ -739,15 +740,15 @@ func (lom *LOM) ComputeCksum(cksumTypes ...string) (cksum *cmn.CksumHash, err er
 	} else {
 		cksumType = lom.CksumConf().Type
 	}
-	if cksumType == cmn.ChecksumNone {
+	if cksumType == cos.ChecksumNone {
 		return
 	}
 	if file, err = os.Open(lom.FQN); err != nil {
 		return
 	}
 	// No need to allocate `buf` as `ioutil.Discard` has efficient `io.ReaderFrom` implementation.
-	_, cksum, err = cmn.CopyAndChecksum(ioutil.Discard, file, nil, cksumType)
-	cmn.Close(file)
+	_, cksum, err = cos.CopyAndChecksum(ioutil.Discard, file, nil, cksumType)
+	cos.Close(file)
 	if err != nil {
 		return nil, err
 	}
@@ -782,7 +783,7 @@ func (lom *LOM) Clone(fqn string) *LOM {
 // =======================================================================================
 
 func hkIdx(digest uint64) int {
-	return int(digest & (cmn.MultiSyncMapCount - 1))
+	return int(digest & (cos.MultiSyncMapCount - 1))
 }
 
 func (lom *LOM) Hkey() (string, int) {
@@ -965,9 +966,9 @@ func (lom *LOM) Remove() (err error) {
 		return exclusive || rc > 0
 	})
 	lom.Uncache(true /*delDirty*/)
-	err = cmn.RemoveFile(lom.FQN)
+	err = cos.RemoveFile(lom.FQN)
 	for copyFQN := range lom.md.copies {
-		if err := cmn.RemoveFile(copyFQN); err != nil {
+		if err := cos.RemoveFile(copyFQN); err != nil {
 			glog.Error(err)
 		}
 	}
@@ -1003,12 +1004,12 @@ func EvictLomCache(b *Bck) {
 func lomCaches() []*sync.Map {
 	var (
 		availablePaths, _ = fs.Get()
-		cachesCnt         = len(availablePaths) * cmn.MultiSyncMapCount
+		cachesCnt         = len(availablePaths) * cos.MultiSyncMapCount
 		caches            = make([]*sync.Map, cachesCnt)
 		i                 = 0
 	)
 	for _, mpathInfo := range availablePaths {
-		for idx := 0; idx < cmn.MultiSyncMapCount; idx++ {
+		for idx := 0; idx < cos.MultiSyncMapCount; idx++ {
 			caches[i] = mpathInfo.LomCache(idx)
 			i++
 		}
@@ -1079,7 +1080,7 @@ func (lom *LOM) Unlock(exclusive bool) {
 //
 
 func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
-	fh, err = os.OpenFile(fqn, os.O_CREATE|os.O_WRONLY, cmn.PermRWR)
+	fh, err = os.OpenFile(fqn, os.O_CREATE|os.O_WRONLY, cos.PermRWR)
 	if err == nil || !os.IsNotExist(err) {
 		return
 	}
@@ -1089,9 +1090,9 @@ func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
 		return nil, fmt.Errorf("%s: bucket directory %w", lom, err)
 	}
 	fdir := filepath.Dir(fqn)
-	if err = cmn.CreateDir(fdir); err != nil {
+	if err = cos.CreateDir(fdir); err != nil {
 		return
 	}
-	fh, err = os.OpenFile(fqn, os.O_CREATE|os.O_WRONLY, cmn.PermRWR)
+	fh, err = os.OpenFile(fqn, os.O_CREATE|os.O_WRONLY, cos.PermRWR)
 	return
 }

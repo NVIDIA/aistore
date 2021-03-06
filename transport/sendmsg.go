@@ -11,7 +11,7 @@ import (
 	"io/ioutil"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
@@ -34,7 +34,7 @@ var _ streamer = (*MsgStream)(nil)
 
 func (s *MsgStream) terminate() {
 	s.term.mu.Lock()
-	cmn.Assert(!s.term.terminated)
+	cos.Assert(!s.term.terminated)
 	s.term.terminated = true
 
 	s.Stop()
@@ -47,7 +47,7 @@ func (s *MsgStream) terminate() {
 func (s *MsgStream) abortPending(_ error, _ bool) {}
 func (s *MsgStream) errCmpl(err error)            {} // TODO
 func (s *MsgStream) compressed() bool             { return false }
-func (s *MsgStream) resetCompression()            { cmn.Assert(false) }
+func (s *MsgStream) resetCompression()            { cos.Assert(false) }
 
 func (s *MsgStream) doRequest() error {
 	s.Numcur, s.Sizecur = 0, 0
@@ -95,7 +95,7 @@ func (s *MsgStream) send(b []byte) (n int, err error) {
 	n = copy(b, s.header[s.msgoff.off:])
 	s.msgoff.off += n
 	if s.msgoff.off >= len(s.header) {
-		cmn.Assert(s.msgoff.off == len(s.header))
+		cos.Assert(s.msgoff.off == len(s.header))
 		s.stats.Offset.Add(int64(s.msgoff.off))
 		if verbose {
 			num := s.stats.Num.Load()
@@ -126,8 +126,8 @@ func (s *MsgStream) dryrun() {
 		if err == io.EOF {
 			break
 		}
-		cmn.AssertNoErr(err)
-		cmn.Assert(flags&msgFlag != 0)
+		cos.AssertNoErr(err)
+		cos.Assert(flags&msgFlag != 0)
 		_, _ = it.nextMsg(s.String(), hlen)
 		if err != nil {
 			break
@@ -178,6 +178,6 @@ func (msg *Msg) String() string {
 	if msg.IsIdleTick() {
 		return "smsg-tick"
 	}
-	l := cmn.Min(len(msg.Body), 16)
+	l := cos.Min(len(msg.Body), 16)
 	return fmt.Sprintf("smsg-[%s](len=%d)", msg.Body[:l], l)
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 const (
@@ -103,7 +104,7 @@ func (dr *DiffResolver) Start() {
 					return
 				}
 				if remote {
-					cmn.Assert(!dstOk || dst.Link == "") // destination must be remote as well
+					cos.Assert(!dstOk || dst.Link == "") // destination must be remote as well
 					dr.resultCh <- DiffResolverResult{
 						Action: DiffResolverDelete,
 						Src:    src,
@@ -150,7 +151,7 @@ func (dr *DiffResolver) PushSrc(v interface{}) {
 	case *cluster.LOM:
 		dr.srcCh <- x
 	default:
-		cmn.Assertf(false, "%T", x)
+		cos.Assertf(false, "%T", x)
 	}
 }
 
@@ -169,7 +170,7 @@ func (dr *DiffResolver) PushDst(v interface{}) {
 			Link:    x.Link,
 		}
 	default:
-		cmn.Assertf(false, "%T", x)
+		cos.Assertf(false, "%T", x)
 	}
 
 	dr.dstCh <- d

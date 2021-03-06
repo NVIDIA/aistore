@@ -20,6 +20,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tetl"
@@ -112,7 +113,7 @@ func testETLObject(t *testing.T, onlyLong bool, comm, transformer, inPath, outPa
 		inputFileName          = filepath.Join(testObjDir, "object.in")
 		expectedOutputFileName = filepath.Join(testObjDir, "object.out")
 
-		objName        = fmt.Sprintf("%s-%s-object", transformer, cmn.RandString(5))
+		objName        = fmt.Sprintf("%s-%s-object", transformer, cos.RandString(5))
 		outputFileName = filepath.Join(t.TempDir(), objName+".out")
 
 		uuid string
@@ -135,7 +136,7 @@ func testETLObject(t *testing.T, onlyLong bool, comm, transformer, inPath, outPa
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	tlog.Logln("Putting object")
-	reader, err := readers.NewFileReaderFromFile(inputFileName, cmn.ChecksumNone)
+	reader, err := readers.NewFileReaderFromFile(inputFileName, cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
 	tutils.PutObject(t, bck, objName, reader)
 
@@ -143,7 +144,7 @@ func testETLObject(t *testing.T, onlyLong bool, comm, transformer, inPath, outPa
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
-	fho, err := cmn.CreateFile(outputFileName)
+	fho, err := cos.CreateFile(outputFileName)
 	tassert.CheckFatal(t, err)
 	defer fho.Close()
 
@@ -161,9 +162,9 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, uuid string, onlyLong, cached
 	// Always uses Echo transformation, as correctness of other transformations is checked in different tests.
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: onlyLong})
 
-	objName := fmt.Sprintf("%s-%s-object", uuid, cmn.RandString(5))
+	objName := fmt.Sprintf("%s-%s-object", uuid, cos.RandString(5))
 	tlog.Logln("Putting object")
-	reader, err := readers.NewRandReader(cmn.KiB, cmn.ChecksumNone)
+	reader, err := readers.NewRandReader(cos.KiB, cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
 
 	err = api.PutObject(api.PutObjectArgs{
@@ -190,13 +191,13 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, uuid string, onlyLong, cached
 	tlog.Logf("Read %q\n", uuid)
 	err = api.ETLObject(baseParams, uuid, bck, objName, bf)
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, bf.Len() == cmn.KiB, "Expected %d bytes, got %d", cmn.KiB, bf.Len())
+	tassert.Errorf(t, bf.Len() == cos.KiB, "Expected %d bytes, got %d", cos.KiB, bf.Len())
 }
 
 // Responsible for cleaning ETL xaction, ETL containers, destination bucket.
 func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, fileSize uint64, timeout time.Duration) {
 	var (
-		bckTo          = cmn.Bck{Name: "etloffline-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
+		bckTo          = cmn.Bck{Name: "etloffline-out-" + cos.RandString(5), Provider: cmn.ProviderAIS}
 		requestTimeout = 30 * time.Second
 	)
 	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
@@ -204,7 +205,7 @@ func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, fileS
 	tlog.Logf("Start offline ETL %q\n", uuid)
 	xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{
 		ID:             uuid,
-		RequestTimeout: cmn.DurationJSON(requestTimeout),
+		RequestTimeout: cos.DurationJSON(requestTimeout),
 	})
 
 	err := tetl.WaitForFinished(baseParams, xactID, timeout)
@@ -387,7 +388,7 @@ def transform(input_bytes: bytes) -> bytes:
 				Code:        []byte(test.code),
 				Deps:        []byte(test.deps),
 				Runtime:     test.runtime,
-				WaitTimeout: cmn.DurationJSON(5 * time.Minute),
+				WaitTimeout: cos.DurationJSON(5 * time.Minute),
 			})
 			tassert.CheckFatal(t, err)
 
@@ -402,7 +403,7 @@ func TestETLBucketDryRun(t *testing.T) {
 
 	var (
 		bckFrom = cmn.Bck{Name: "etloffline", Provider: cmn.ProviderAIS}
-		bckTo   = cmn.Bck{Name: "etloffline-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
+		bckTo   = cmn.Bck{Name: "etloffline-out-" + cos.RandString(5), Provider: cmn.ProviderAIS}
 		objCnt  = 10
 
 		m = ioContext{

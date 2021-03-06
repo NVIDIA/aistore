@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -125,7 +126,7 @@ func GetDaemonStatus(baseParams BaseParams, node *cluster.Snode) (daeInfo *stats
 }
 
 // SetDaemonConfig, given key value pairs, sets the configuration accordingly for a specific node.
-func SetDaemonConfig(baseParams BaseParams, nodeID string, nvs cmn.SimpleKVs) error {
+func SetDaemonConfig(baseParams BaseParams, nodeID string, nvs cos.SimpleKVs) error {
 	baseParams.Method = http.MethodPut
 	query := url.Values{}
 	for key, val := range nvs {

@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
@@ -55,7 +56,7 @@ func newCheckerMD(t *testing.T) *checkerMD {
 			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		},
-		fileSize: 64 * cmn.KiB,
+		fileSize: 64 * cos.KiB,
 		mpList:   make(cluster.NodeMap, 10),
 		allMps:   make(map[*cluster.Snode]*cmn.MountpathList, 10),
 		chstop:   make(chan struct{}),
@@ -200,7 +201,7 @@ func waitForMountpathChanges(t *testing.T, target *cluster.Snode, availLen, disa
 // putting objects it recreates the mountpath and does not fail
 func breakMountpath(t *testing.T, mpath, suffix string) {
 	os.Rename(mpath, mpath+suffix)
-	f, err := os.OpenFile(mpath, os.O_CREATE|os.O_WRONLY, cmn.PermRWR)
+	f, err := os.OpenFile(mpath, os.O_CREATE|os.O_WRONLY, cos.PermRWR)
 	if err != nil {
 		t.Errorf("Failed to create file: %v", err)
 	}
@@ -220,7 +221,7 @@ func repairMountpath(t *testing.T, target *cluster.Snode, mpath string, availLen
 	// cleanup
 	// restore original mountpath
 	os.Remove(mpath)
-	cmn.Rename(mpath+suffix, mpath)
+	cos.Rename(mpath+suffix, mpath)
 
 	// ask fschecker to check all mountpath - it should make disabled
 	// mountpath back to available list
@@ -257,7 +258,7 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 	chstop chan struct{}, suffix string) {
 	defer wg.Done()
 
-	const fileSize = 64 * cmn.KiB
+	const fileSize = 64 * cos.KiB
 	var (
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -311,7 +312,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 
 	var (
 		md     = newCheckerMD(t)
-		suffix = "-" + cmn.RandString(5)
+		suffix = "-" + cos.RandString(5)
 	)
 
 	if md.origAvail == 0 {
@@ -359,7 +360,7 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 
 	var (
 		md     = newCheckerMD(t)
-		suffix = "-" + cmn.RandString(5)
+		suffix = "-" + cos.RandString(5)
 	)
 
 	if md.origAvail == 0 {
@@ -367,8 +368,8 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 	}
 
 	tlog.Logf("*** Testing with disabled FSHC***\n")
-	tutils.SetClusterConfig(t, cmn.SimpleKVs{"fshc.enabled": "false"})
-	defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"fshc.enabled": "true"})
+	tutils.SetClusterConfig(t, cos.SimpleKVs{"fshc.enabled": "false"})
+	defer tutils.SetClusterConfig(t, cos.SimpleKVs{"fshc.enabled": "true"})
 
 	selectedTarget, selectedMpath, selectedMap := md.randomTargetMpath()
 	tlog.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
@@ -517,7 +518,7 @@ func TestFSAddMPathRestartNode(t *testing.T) {
 	numMpaths := len(oldMpaths.Available)
 	tassert.Fatalf(t, numMpaths != 0, "target %s doesn't have available mountpaths", target)
 
-	cmn.CreateDir(tmpMpath)
+	cos.CreateDir(tmpMpath)
 	defer os.Remove(tmpMpath)
 
 	tlog.Logf("Adding a mount path to target: %s\n", target)

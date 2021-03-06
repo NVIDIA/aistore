@@ -13,6 +13,7 @@ import (
 	"net/url"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tinylib/msgp/msgp"
 )
@@ -144,7 +145,7 @@ func doHTTPRequestGetHTTPResp(reqParams ReqParams) (resp *http.Response, err err
 }
 
 func readResp(reqParams ReqParams, resp *http.Response, v interface{}) (*wrappedResp, error) {
-	defer cmn.DrainReader(resp.Body)
+	defer cos.DrainReader(resp.Body)
 
 	if err := checkResp(reqParams, resp); err != nil {
 		return nil, err
@@ -163,7 +164,7 @@ func readResp(reqParams ReqParams, resp *http.Response, v interface{}) (*wrapped
 		} else {
 			hdrCksumType := resp.Header.Get(cmn.HeaderObjCksumType)
 			// TODO: use MMSA
-			n, cksum, err := cmn.CopyAndChecksum(w, resp.Body, nil, hdrCksumType)
+			n, cksum, err := cos.CopyAndChecksum(w, resp.Body, nil, hdrCksumType)
 			if err != nil {
 				return nil, err
 			}
@@ -183,7 +184,7 @@ func readResp(reqParams ReqParams, resp *http.Response, v interface{}) (*wrapped
 		default:
 			if resp.StatusCode == http.StatusOK {
 				if resp.Header.Get(cmn.HeaderContentType) == cmn.ContentMsgPack {
-					r := msgp.NewReaderSize(resp.Body, 10*cmn.KiB)
+					r := msgp.NewReaderSize(resp.Body, 10*cos.KiB)
 					err = v.(msgp.Decodable).DecodeMsg(r)
 				} else {
 					err = jsoniter.NewDecoder(resp.Body).Decode(v)

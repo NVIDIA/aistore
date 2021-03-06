@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dsort/extract"
@@ -46,7 +47,7 @@ const (
 
 const (
 	// Size of the buffer used for serialization of the shards/records.
-	serializationBufSize = 10 * cmn.MiB
+	serializationBufSize = 10 * cos.MiB
 )
 
 var (
@@ -57,8 +58,8 @@ var (
 // interface guard
 var (
 	_ cluster.Slistener = (*Manager)(nil)
-	_ cmn.Packer        = (*buildingShardInfo)(nil)
-	_ cmn.Unpacker      = (*buildingShardInfo)(nil)
+	_ cos.Packer        = (*buildingShardInfo)(nil)
+	_ cos.Unpacker      = (*buildingShardInfo)(nil)
 )
 
 type (
@@ -147,7 +148,7 @@ func RegisterNode(smapOwner cluster.Sowner, bmdOwner cluster.Bowner, snode *clus
 	ctx.node = snode
 	ctx.t = t
 	ctx.stats = stats
-	cmn.Assert(mm == nil)
+	cos.Assert(mm == nil)
 
 	config := cmn.GCO.Get()
 	ctx.client = cmn.NewClient(cmn.TransportArgs{
@@ -159,9 +160,9 @@ func RegisterNode(smapOwner cluster.Sowner, bmdOwner cluster.Bowner, snode *clus
 	if ctx.node.IsTarget() {
 		mm = t.MMSA()
 		err := fs.CSM.RegisterContentType(filetype.DSortFileType, &filetype.DSortFile{})
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 		err = fs.CSM.RegisterContentType(filetype.DSortWorkfileType, &filetype.DSortFile{})
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 	}
 }
 
@@ -320,7 +321,7 @@ func (m *Manager) cleanup() {
 		glog.Infof("[dsort] %s finished cleanup in %v", m.ManagerUUID, time.Since(now))
 	}()
 
-	cmn.Assertf(!m.inProgress(), "%s: was still in progress", m.ManagerUUID)
+	cos.Assertf(!m.inProgress(), "%s: was still in progress", m.ManagerUUID)
 
 	m.extractCreator = nil
 	m.client = nil
@@ -433,7 +434,7 @@ func (m *Manager) setDSorter() (err error) {
 	case DSorterMemType:
 		m.dsorter = newDSorterMem(m)
 	default:
-		cmn.Assertf(false, "dsorter type is invalid: %q", m.rs.DSorterType)
+		cos.Assertf(false, "dsorter type is invalid: %q", m.rs.DSorterType)
 	}
 	m.dsorterStarted.Add(1)
 	return
@@ -472,7 +473,7 @@ func (m *Manager) setExtractCreator() (err error) {
 	case cmn.ExtZip:
 		extractCreator = extract.NewZipExtractCreator(m.ctx.t)
 	default:
-		cmn.Assertf(false, "unknown extension %s", m.rs.Extension)
+		cos.Assertf(false, "unknown extension %s", m.rs.Extension)
 	}
 
 	if !m.rs.DryRun {
@@ -652,7 +653,7 @@ func (m *Manager) makeRecvShardFunc() transport.ReceiveObj {
 		if m.aborted() {
 			return
 		}
-		cksum := cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)
+		cksum := cos.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)
 		lom := cluster.AllocLOM(hdr.ObjName)
 		defer cluster.FreeLOM(lom)
 		if err = lom.Init(hdr.Bck); err == nil {
@@ -665,7 +666,7 @@ func (m *Manager) makeRecvShardFunc() transport.ReceiveObj {
 		if err == nil {
 			if lom.Cksum() != nil && lom.Cksum().Equal(cksum) {
 				glog.V(4).Infof("[dsort] %s shard (%s) already exists and checksums are equal, skipping", m.ManagerUUID, lom)
-				cmn.DrainReader(object)
+				cos.DrainReader(object)
 				return
 			}
 			glog.Warningf("[dsort] %s shard (%s) already exists, overriding", m.ManagerUUID, lom)
@@ -702,12 +703,12 @@ func (m *Manager) doWithAbort(reqArgs *cmn.ReqArgs) error {
 		defer func() {
 			doneCh <- struct{}{}
 		}()
-		resp, err := m.client.Do(req) // nolint:bodyclose // closed inside cmn.Close
+		resp, err := m.client.Do(req) // nolint:bodyclose // closed inside cos.Close
 		if err != nil {
 			errCh <- err
 			return
 		}
-		defer cmn.Close(resp.Body)
+		defer cos.Close(resp.Body)
 
 		if resp.StatusCode >= http.StatusBadRequest {
 			b, err := ioutil.ReadAll(resp.Body)
@@ -778,36 +779,36 @@ func (m *Manager) react(reaction, msg string) error {
 	case cmn.AbortReaction:
 		return fmt.Errorf("%s", msg) // error will be reported on abort
 	default:
-		cmn.AssertMsg(false, reaction)
+		cos.AssertMsg(false, reaction)
 		return nil
 	}
 }
 
-func (bsi *buildingShardInfo) Unpack(unpacker *cmn.ByteUnpack) error {
+func (bsi *buildingShardInfo) Unpack(unpacker *cos.ByteUnpack) error {
 	var err error
 	bsi.shardName, err = unpacker.ReadString()
 	return err
 }
-func (bsi *buildingShardInfo) Pack(packer *cmn.BytePack) { packer.WriteString(bsi.shardName) }
-func (bsi *buildingShardInfo) PackedSize() int           { return cmn.SizeofLen + len(bsi.shardName) }
+func (bsi *buildingShardInfo) Pack(packer *cos.BytePack) { packer.WriteString(bsi.shardName) }
+func (bsi *buildingShardInfo) PackedSize() int           { return cos.SizeofLen + len(bsi.shardName) }
 func (bsi *buildingShardInfo) NewPack(mm *memsys.MMSA) []byte {
 	var (
 		size   = bsi.PackedSize()
 		buf, _ = mm.Alloc(int64(size))
-		packer = cmn.NewPacker(buf, size)
+		packer = cos.NewPacker(buf, size)
 	)
 	packer.WriteAny(bsi)
 	return packer.Bytes()
 }
 
-func calcMaxMemoryUsage(maxUsage cmn.ParsedQuantity, mem sys.MemStat) uint64 {
+func calcMaxMemoryUsage(maxUsage cos.ParsedQuantity, mem sys.MemStat) uint64 {
 	switch maxUsage.Type {
-	case cmn.QuantityPercent:
+	case cos.QuantityPercent:
 		return maxUsage.Value * (mem.Total / 100)
-	case cmn.QuantityBytes:
-		return cmn.MinU64(maxUsage.Value, mem.Total)
+	case cos.QuantityBytes:
+		return cos.MinU64(maxUsage.Value, mem.Total)
 	default:
-		cmn.Assertf(false, "mem usage type (%s) is not recognized.. something went wrong", maxUsage.Type)
+		cos.Assertf(false, "mem usage type (%s) is not recognized.. something went wrong", maxUsage.Type)
 		return 0
 	}
 }

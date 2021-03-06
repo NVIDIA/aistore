@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"golang.org/x/sync/errgroup"
@@ -32,11 +33,11 @@ type (
 		joggers     map[string]*jogger // mpath -> jogger
 
 		mtx      sync.RWMutex           // Protects map defined below.
-		abortJob map[string]*cmn.StopCh // jobID -> abort job chan
+		abortJob map[string]*cos.StopCh // jobID -> abort job chan
 
 		downloadCh chan DlJob
 
-		stopCh *cmn.StopCh
+		stopCh *cos.StopCh
 	}
 
 	startupSema struct {
@@ -55,8 +56,8 @@ func newDispatcher(parent *Downloader) *dispatcher {
 
 		downloadCh: make(chan DlJob),
 
-		stopCh:   cmn.NewStopCh(),
-		abortJob: make(map[string]*cmn.StopCh, 100),
+		stopCh:   cos.NewStopCh(),
+		abortJob: make(map[string]*cos.StopCh, 100),
 	}
 }
 
@@ -64,7 +65,7 @@ func (d *dispatcher) run() (err error) {
 	var (
 		// Number of concurrent job dispatches - it basically limits the number
 		// of goroutines so they won't go out of hand.
-		sema       = cmn.NewSemaphore(5 * fs.NumAvail())
+		sema       = cos.NewSemaphore(5 * fs.NumAvail())
 		group, ctx = errgroup.WithContext(context.Background())
 	)
 
@@ -92,7 +93,7 @@ Loop:
 			// all joggers are busy downloading the tasks (jobs with limits
 			// may not saturate the full downloader throughput).
 			d.mtx.Lock()
-			d.abortJob[job.ID()] = cmn.NewStopCh()
+			d.abortJob[job.ID()] = cos.NewStopCh()
 			d.mtx.Unlock()
 
 			select {
@@ -278,7 +279,7 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 				}
 			} else {
 				src := result.Src
-				cmn.Assert(result.Action == DiffResolverDelete)
+				cos.Assert(result.Action == DiffResolverDelete)
 				obj = dlObj{
 					objName:    src.ObjName,
 					link:       "",
@@ -305,7 +306,7 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 			}
 
 			if result.Action == DiffResolverDelete {
-				cmn.Assert(job.Sync())
+				cos.Assert(job.Sync())
 				if _, err := d.parent.t.EvictObject(result.Src); err != nil {
 					t.markFailed(err.Error())
 				} else {
@@ -325,7 +326,7 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 				return false
 			}
 		case DiffResolverSend:
-			cmn.Assert(job.Sync())
+			cos.Assert(job.Sync())
 		case DiffResolverEOF:
 			dlStore.setAllDispatched(job.ID(), true)
 			return true
@@ -333,7 +334,7 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 	}
 }
 
-func (d *dispatcher) jobAbortedCh(jobID string) *cmn.StopCh {
+func (d *dispatcher) jobAbortedCh(jobID string) *cos.StopCh {
 	d.mtx.RLock()
 	defer d.mtx.RUnlock()
 	if abCh, ok := d.abortJob[jobID]; ok {
@@ -341,7 +342,7 @@ func (d *dispatcher) jobAbortedCh(jobID string) *cmn.StopCh {
 	}
 
 	// Channel always sending something if entry in the map is missing.
-	abCh := cmn.NewStopCh()
+	abCh := cos.NewStopCh()
 	abCh.Close()
 	return abCh
 }
@@ -423,7 +424,7 @@ func (d *dispatcher) dispatchAdminReq(req *request) (resp interface{}, statusCod
 	case actList:
 		d.handleList(req)
 	default:
-		cmn.Assertf(false, "%v; %v", req, req.action)
+		cos.Assertf(false, "%v; %v", req, req.action)
 	}
 	r := req.response
 	return r.value, r.statusCode, r.err
@@ -558,6 +559,6 @@ func (ss *startupSema) waitForStartup() {
 
 		// If we are sleeping for more than `timeout` then there is something
 		// wrong. This should never happen even on the slowest machines.
-		cmn.AssertMsg(slept < timeout, "dispatcher takes impossible time to start")
+		cos.AssertMsg(slept < timeout, "dispatcher takes impossible time to start")
 	}
 }

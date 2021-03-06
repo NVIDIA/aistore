@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -109,7 +110,7 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 
 	// Set "User-Agent" header when doing requests to Google Cloud Storage.
 	// This should increase number of connections to GCS.
-	if cmn.IsGoogleStorageURL(req.URL) {
+	if cos.IsGoogleStorageURL(req.URL) {
 		req.Header.Add("User-Agent", cmn.GcsUA)
 	}
 
@@ -117,7 +118,7 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 	if err != nil {
 		return false, err
 	}
-	defer cmn.Close(resp.Body)
+	defer cos.Close(resp.Body)
 
 	if resp.StatusCode >= http.StatusBadRequest {
 		return false, cmn.NewHTTPErr(req, "", resp.StatusCode)

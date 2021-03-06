@@ -9,7 +9,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xoshiro256"
 )
@@ -25,7 +25,7 @@ const (
 	allFlags = msgFlag | pduFlag | lastPDU | firstPDU // NOTE: update when adding flags
 
 	// all 3 headers
-	sizeProtoHdr = cmn.SizeofI64 * 2
+	sizeProtoHdr = cos.SizeofI64 * 2
 )
 
 ////////////////////////////////
@@ -50,7 +50,7 @@ func insObjHeader(hbuf []byte, hdr *ObjHdr, usePDU bool) (off int) {
 	word1 := uint64(off-sizeProtoHdr) | flags
 	insUint64(0, hbuf, word1)
 	checksum := xoshiro256.Hash(word1)
-	insUint64(cmn.SizeofI64, hbuf, checksum)
+	insUint64(cos.SizeofI64, hbuf, checksum)
 	return
 }
 
@@ -61,7 +61,7 @@ func insMsg(hbuf []byte, msg *Msg) (off int) {
 	word1 := uint64(off-sizeProtoHdr) | msgFlag
 	insUint64(0, hbuf, word1)
 	checksum := xoshiro256.Hash(word1)
-	insUint64(cmn.SizeofI64, hbuf, checksum)
+	insUint64(cos.SizeofI64, hbuf, checksum)
 	return
 }
 
@@ -73,7 +73,7 @@ func (pdu *spdu) insHeader() {
 	}
 	insUint64(0, buf, word1)
 	checksum := xoshiro256.Hash(word1)
-	insUint64(cmn.SizeofI64, buf, checksum)
+	insUint64(cos.SizeofI64, buf, checksum)
 	pdu.done = true
 }
 
@@ -84,9 +84,9 @@ func insString(off int, to []byte, str string) int {
 func insByte(off int, to, b []byte) int {
 	l := len(b)
 	binary.BigEndian.PutUint64(to[off:], uint64(l))
-	off += cmn.SizeofI64
+	off += cos.SizeofI64
 	n := copy(to[off:], b)
-	cmn.Assert(n == l)
+	cos.Assert(n == l)
 	return off + l
 }
 
@@ -96,7 +96,7 @@ func insInt64(off int, to []byte, i int64) int {
 
 func insUint64(off int, to []byte, i uint64) int {
 	binary.BigEndian.PutUint64(to[off:], i)
-	return off + cmn.SizeofI64
+	return off + cos.SizeofI64
 }
 
 func insAttrs(off int, to []byte, attr ObjectAttrs) int {
@@ -153,7 +153,7 @@ func extString(off int, from []byte) (int, string) {
 
 func extByte(off int, from []byte) (int, []byte) {
 	l := int(binary.BigEndian.Uint64(from[off:]))
-	off += cmn.SizeofI64
+	off += cos.SizeofI64
 	return off + l, from[off : off+l]
 }
 
@@ -164,7 +164,7 @@ func extInt64(off int, from []byte) (int, int64) {
 
 func extUint64(off int, from []byte) (int, uint64) {
 	size := binary.BigEndian.Uint64(from[off:])
-	off += cmn.SizeofI64
+	off += cos.SizeofI64
 	return off, size
 }
 

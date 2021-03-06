@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 // =============Preamble================
@@ -207,7 +207,7 @@ func createList(nodeList []node, size int) (keys []int) {
 	keys = make([]int, 0, size)
 
 	for i := 0; i < size; i++ {
-		keys = append(keys, cmn.NowRand().Intn(nodeLen))
+		keys = append(keys, cos.NowRand().Intn(nodeLen))
 	}
 	return
 }

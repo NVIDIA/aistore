@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
@@ -56,7 +57,7 @@ func (*putMirrorProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 
 func (p *putMirrorProvider) Start(_ cmn.Bck) error {
 	slab, err := p.t.MMSA().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	xact, err := runXactPut(p.lom, slab, p.t)
 	if err != nil {
 		glog.Error(err)

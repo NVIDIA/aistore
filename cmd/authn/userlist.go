@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/dgrijalva/jwt-go"
 	jsoniter "github.com/json-iterator/go"
@@ -59,7 +60,7 @@ var (
 
 func encryptPassword(password string) string {
 	b, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	return hex.EncodeToString(b)
 }
 
@@ -481,7 +482,7 @@ func (m *userManager) userList() (map[string]*cmn.AuthUser, error) {
 	for _, str := range recs {
 		uInfo := &cmn.AuthUser{}
 		err := jsoniter.Unmarshal([]byte(str), uInfo)
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 		users[uInfo.ID] = uInfo
 	}
 	return users, nil
@@ -508,7 +509,7 @@ func (m *userManager) roleList() ([]*cmn.AuthRole, error) {
 // are not returned to a caller as it is not crucial.
 func (m *userManager) createRolesForCluster(clu *cmn.AuthCluster) {
 	for _, pr := range predefinedRoles {
-		suffix := cmn.Either(clu.Alias, clu.ID)
+		suffix := cos.Either(clu.Alias, clu.ID)
 		uid := pr.prefix + "-" + suffix
 		rInfo := &cmn.AuthRole{}
 		if err := m.db.Get(rolesCollection, uid, rInfo); err == nil {

@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 )
@@ -64,7 +65,7 @@ func (hp *httpProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (err
 	return creatingBucketNotSupportedErr(hp.Provider())
 }
 
-func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
+func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
 	// TODO: we should use `bck.RemoteBck()`.
 
 	origURL, err := getOriginalURL(ctx, bck, "")
@@ -95,7 +96,7 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 
 	resp.Body.Close()
 
-	bckProps = make(cmn.SimpleKVs)
+	bckProps = make(cos.SimpleKVs)
 	bckProps[cmn.HeaderBackendProvider] = cmn.ProviderHTTP
 	return
 }
@@ -119,13 +120,13 @@ func getOriginalURL(ctx context.Context, bck *cluster.Bck, objName string) (stri
 		origURL = bck.Props.Extra.HTTP.OrigURLBck
 		debug.Assert(origURL != "")
 		if objName != "" {
-			origURL = cmn.JoinPath(origURL, objName) // see `cmn.URL2BckObj`
+			origURL = cos.JoinPath(origURL, objName) // see `cmn.URL2BckObj`
 		}
 	}
 	return origURL, nil
 }
 
-func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, errCode int, err error) {
+func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cos.SimpleKVs, errCode int, err error) {
 	var (
 		h   = cmn.BackendHelpers.HTTP
 		bck = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().RemoteBck()`
@@ -146,7 +147,7 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta 
 	if resp.StatusCode != http.StatusOK {
 		return nil, resp.StatusCode, fmt.Errorf("error occurred: %v", resp.StatusCode)
 	}
-	objMeta = make(cmn.SimpleKVs, 2)
+	objMeta = make(cos.SimpleKVs, 2)
 	objMeta[cmn.HeaderBackendProvider] = cmn.ProviderHTTP
 	if resp.ContentLength >= 0 {
 		objMeta[cmn.HeaderObjSize] = strconv.FormatInt(resp.ContentLength, 10)
@@ -181,7 +182,7 @@ func (hp *httpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode i
 	return
 }
 
-func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
+func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cos.Cksum, errCode int, err error) {
 	var (
 		h   = cmn.BackendHelpers.HTTP
 		bck = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().RemoteBck()`
@@ -206,7 +207,7 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 		glog.Infof("[HTTP CLOUD][GET] success, size: %d", resp.ContentLength)
 	}
 
-	customMD := cmn.SimpleKVs{
+	customMD := cos.SimpleKVs{
 		cluster.SourceObjMD:  cluster.SourceHTTPObjMD,
 		cluster.OrigURLObjMD: origURL,
 	}

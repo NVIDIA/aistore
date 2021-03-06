@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
@@ -58,7 +59,7 @@ var (
 
 func (xact *RebBase) MarkDone()      { xact.wg.Done() }
 func (xact *RebBase) WaitForFinish() { xact.wg.Wait() }
-func (xact *RebBase) Run()           { cmn.Assert(false) }
+func (xact *RebBase) Run()           { cos.Assert(false) }
 
 func (xact *RebBase) String() string {
 	s := xact.XactBase.String()
@@ -192,4 +193,4 @@ func (*electionProvider) Kind() string                           { return cmn.Ac
 func (p *electionProvider) Get() cluster.Xact                    { return p.xact }
 func (p *electionProvider) PreRenewHook(_ xreg.GlobalEntry) bool { return true }
 func (p *electionProvider) PostRenewHook(_ xreg.GlobalEntry)     {}
-func (e *Election) Run()                                         { cmn.Assert(false) }
+func (e *Election) Run()                                         { cos.Assert(false) }

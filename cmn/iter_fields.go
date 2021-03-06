@@ -1,4 +1,5 @@
-// Package provides common low-level types and utilities for all aistore projects
+// Package cmn provides common constants, types, and utilities for AIS clients
+// and AIStore.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -10,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
@@ -143,7 +145,7 @@ func iterFields(prefix string, v interface{}, updf updateFunc, opts IterOpts) (d
 		var dirtyField bool
 		if srcValField.Kind() != reflect.Struct {
 			// We require that not-omitted fields have JSON tag.
-			Assert(jsonTagPresent)
+			cos.Assert(jsonTagPresent)
 
 			// Set value for the field
 			name := prefix + fieldName
@@ -204,7 +206,7 @@ func copyProps(src, dst interface{}, asType string) (err error) {
 		srcVal = reflect.ValueOf(src)
 		dstVal = reflect.ValueOf(dst).Elem()
 	)
-	debug.Assertf(StringInSlice(asType, []string{Daemon, Cluster}), "unexpected config level: %s", asType)
+	debug.Assertf(cos.StringInSlice(asType, []string{Daemon, Cluster}), "unexpected config level: %s", asType)
 
 	for i := 0; i < srcVal.NumField(); i++ {
 		copyTag, ok := srcVal.Type().Field(i).Tag.Lookup("copy")
@@ -223,7 +225,7 @@ func copyProps(src, dst interface{}, asType string) (err error) {
 		}
 
 		t, ok := dstVal.Type().FieldByName(fieldName)
-		Assert(ok)
+		cos.Assert(ok)
 		allowed := t.Tag.Get("allow")
 		if allowed != "" && allowed != asType {
 			return fmt.Errorf("setting property %s not allowed, as %q", fieldName, asType)
@@ -282,7 +284,7 @@ func (f *field) Value() interface{} {
 }
 
 func (f *field) SetValue(src interface{}, force ...bool) error {
-	Assert(!f.opts.OnlyRead)
+	cos.Assert(!f.opts.OnlyRead)
 
 	dst := f.v
 	if f.listTag == tagReadonly && (len(force) == 0 || !force[0]) {
@@ -302,7 +304,7 @@ func (f *field) SetValue(src interface{}, force ...bool) error {
 		case reflect.String:
 			dst.SetString(s)
 		case reflect.Bool:
-			n, err := ParseBool(s)
+			n, err := cos.ParseBool(s)
 			if err != nil {
 				return err
 			}
@@ -330,7 +332,7 @@ func (f *field) SetValue(src interface{}, force ...bool) error {
 			dst = dst.Elem()                        // dereference pointer
 			goto reflectDst
 		default:
-			AssertMsg(false, fmt.Sprintf("field.name: %s, field.type: %s", f.listTag, dst.Kind()))
+			cos.AssertMsg(false, fmt.Sprintf("field.name: %s, field.type: %s", f.listTag, dst.Kind()))
 		}
 	default:
 		if dst.Kind() == reflect.Ptr {

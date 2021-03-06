@@ -7,6 +7,7 @@ package xreg
 import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
 )
@@ -45,7 +46,7 @@ type (
 func RegisterGlobalXact(entry GlobalEntryProvider) { defaultReg.registerGlobalXact(entry) }
 
 func (r *registry) registerGlobalXact(entry GlobalEntryProvider) {
-	cmn.Assert(xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeGlobal)
+	cos.Assert(xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeGlobal)
 
 	// It is expected that registrations happen at the init time. Therefore, it
 	// is safe to assume that no `RenewXYZ` will happen before all xactions
@@ -74,7 +75,7 @@ func RenewResilver(id string) cluster.Xact { return defaultReg.renewResilver(id)
 func (r *registry) renewResilver(id string) cluster.Xact {
 	e := r.globalXacts[cmn.ActResilver].New(XactArgs{UUID: id})
 	res := r.renewGlobalXaction(e)
-	cmn.Assert(res.isNew) // resilver must be always preempted
+	cos.Assert(res.isNew) // resilver must be always preempted
 	return res.entry.Get()
 }
 

@@ -1,8 +1,11 @@
-// Package provides common low-level types and utilities for all aistore projects
+// Package cmn provides common constants, types, and utilities for AIS clients
+// and AIStore.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
+
+import "github.com/NVIDIA/aistore/cmn/cos"
 
 // BEWARE: change in this source MAY require re-running go generate ..
 
@@ -39,7 +42,7 @@ func (be *BucketEntry) IsStatusOK() bool {
 
 func (be *BucketEntry) String() string { return "{" + be.Name + "}" }
 
-func (be *BucketEntry) CopyWithProps(propsSet StringSet) (ne *BucketEntry) {
+func (be *BucketEntry) CopyWithProps(propsSet cos.StringSet) (ne *BucketEntry) {
 	ne = &BucketEntry{Name: be.Name}
 	if propsSet.Contains(GetPropsSize) {
 		ne.Size = be.Size

@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
@@ -45,8 +46,8 @@ import (
 
 // LRU defaults/tunables
 const (
-	minEvictThresh = 10 * cmn.MiB
-	capCheckThresh = 256 * cmn.MiB // capacity checking threshold, when exceeded may result in lru throttling
+	minEvictThresh = 10 * cos.MiB
+	capCheckThresh = 256 * cos.MiB // capacity checking threshold, when exceeded may result in lru throttling
 )
 
 type (
@@ -194,7 +195,7 @@ repeat:
 				return
 			}
 			if len(j.ini.Buckets) != 0 {
-				glog.Infof("[lru] %s: freeing-up %s", j, cmn.B2S(j.totalSize, 2))
+				glog.Infof("[lru] %s: freeing-up %s", j, cos.B2S(j.totalSize, 2))
 				err = j.jogBcks(j.ini.Buckets, j.ini.Force)
 			} else {
 				err = j.jog(providers)
@@ -237,7 +238,7 @@ repeat:
 // Xaction //
 /////////////
 
-func (r *Xaction) Run()   { cmn.Assert(false) }
+func (r *Xaction) Run()   { cos.Assert(false) }
 func (r *Xaction) Renew() { r.Renewed <- struct{}{} }
 func (r *Xaction) stop() {
 	r.XactDemandBase.Stop()
@@ -260,7 +261,7 @@ func (j *lruJ) String() string {
 func (j *lruJ) stop() { j.stopCh <- struct{}{} }
 
 func (j *lruJ) jog(providers []string) (err error) {
-	glog.Infof("%s: freeing-up %s", j, cmn.B2S(j.totalSize, 2))
+	glog.Infof("%s: freeing-up %s", j, cos.B2S(j.totalSize, 2))
 	for _, provider := range providers { // for each provider (NOTE: ordering is random)
 		var (
 			bcks []cmn.Bck
@@ -301,14 +302,14 @@ func (j *lruJ) jogBcks(bcks []cmn.Bck, force bool) (err error) {
 		if size, err = j.jogBck(); err != nil {
 			return
 		}
-		if size < cmn.KiB {
+		if size < cos.KiB {
 			continue
 		}
 		// recompute size-to-evict
 		if err = j.evictSize(); err != nil {
 			return
 		}
-		if j.totalSize < cmn.KiB {
+		if j.totalSize < cos.KiB {
 			return
 		}
 	}
@@ -433,7 +434,7 @@ func (j *lruJ) evict() (size int64, err error) {
 	for _, workfqn := range j.oldWork {
 		finfo, erw := os.Stat(workfqn)
 		if erw == nil {
-			if err := cmn.RemoveFile(workfqn); err != nil {
+			if err := cos.RemoveFile(workfqn); err != nil {
 				glog.Warningf("Failed to remove old work %q: %v", workfqn, err)
 			} else {
 				size += finfo.Size()
@@ -514,9 +515,9 @@ func (j *lruJ) _throttle(usedPct int64) (err error) {
 		return
 	}
 	// throttle self
-	ratioCapacity := cmn.Ratio(j.config.LRU.HighWM, j.config.LRU.LowWM, usedPct)
+	ratioCapacity := cos.Ratio(j.config.LRU.HighWM, j.config.LRU.LowWM, usedPct)
 	curr := fs.GetMpathUtil(j.mpathInfo.Path)
-	ratioUtilization := cmn.Ratio(j.config.Disk.DiskUtilHighWM, j.config.Disk.DiskUtilLowWM, curr)
+	ratioUtilization := cos.Ratio(j.config.Disk.DiskUtilHighWM, j.config.Disk.DiskUtilLowWM, curr)
 	if ratioUtilization > ratioCapacity {
 		if usedPct < (j.config.LRU.LowWM+j.config.LRU.HighWM)/2 {
 			j.throttle = true

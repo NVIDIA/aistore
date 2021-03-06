@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 // run with all defaults:
@@ -57,7 +57,7 @@ var benchCtx benchContext
 func init() {
 	flag.IntVar(&benchCtx.level, "level", 2, "initial (mountpath) nesting level")
 	flag.IntVar(&benchCtx.fileCount, "num", 1000, "number of files to generate (and then randomly read)")
-	flag.Int64Var(&benchCtx.fileSize, "size", cmn.KiB, "file/object size")
+	flag.Int64Var(&benchCtx.fileSize, "size", cos.KiB, "file/object size")
 	flag.StringVar(&benchCtx.dir, "dir", "/tmp", "top directory for generated files")
 	flag.BoolVar(&benchCtx.help, "usage", false, "show command-line options")
 }
@@ -74,7 +74,7 @@ func (bctx *benchContext) init() {
 	}
 	fmt.Printf("files: %d size: %d\n", bctx.fileCount, bctx.fileSize)
 	bctx.fileNames = make([]string, 0, bctx.fileCount)
-	bctx.rnd = cmn.NowRand()
+	bctx.rnd = cos.NowRand()
 	bctx.skipMod = skipModulo
 	if bctx.fileCount < skipModulo {
 		bctx.skipMod = bctx.fileCount/2 - 1
@@ -103,25 +103,25 @@ func benchNestedLevel(b *testing.B) {
 		}
 		fqn := benchCtx.fileNames[j]
 		file, err := os.Open(fqn)
-		cmn.AssertNoErr(err)
-		cmn.DrainReader(file)
-		cmn.Close(file)
+		cos.AssertNoErr(err)
+		cos.DrainReader(file)
+		cos.Close(file)
 	}
 }
 
 func (bctx *benchContext) createFiles(lvl int) {
 	var (
 		reader = &io.LimitedReader{R: bctx.rnd, N: bctx.fileSize}
-		buf    = make([]byte, 32*cmn.KiB)
+		buf    = make([]byte, 32*cos.KiB)
 	)
 	for i := 0; i < bctx.fileCount; i++ {
 		fileName := bctx.dir + dirs[:lvl*(dirNameLen+1)+1] + bctx.randNestName()
-		file, err := cmn.CreateFile(fileName)
-		cmn.AssertNoErr(err)
+		file, err := cos.CreateFile(fileName)
+		cos.AssertNoErr(err)
 		_, err = io.CopyBuffer(file, reader, buf)
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 		err = file.Close()
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 
 		reader.N = bctx.fileSize
 		bctx.fileNames = append(bctx.fileNames, fileName)
@@ -129,7 +129,7 @@ func (bctx *benchContext) createFiles(lvl int) {
 
 	cmd := exec.Command("sync")
 	_, err := cmd.Output()
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	time.Sleep(time.Second)
 
 	dropCaches()
@@ -139,10 +139,10 @@ func (bctx *benchContext) createFiles(lvl int) {
 
 func (bctx *benchContext) removeFiles() {
 	err := os.RemoveAll(bctx.dir + dirs[:dirNameLen+1])
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	bctx.fileNames = bctx.fileNames[:0]
 }
 
 func (bctx *benchContext) randNestName() string {
-	return cmn.RandString(fileNameLen)
+	return cos.RandString(fileNameLen)
 }

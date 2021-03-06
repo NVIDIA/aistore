@@ -1,4 +1,5 @@
-// Package cmn provides common low-level types and utilities for all aistore projects
+// Package cmn provides common constants, types, and utilities for AIS clients
+// and AIStore.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -9,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,6 +19,7 @@ import (
 	"syscall"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -133,11 +134,6 @@ var (
 	ErrETLOnlyOne     = errors.New(
 		"cannot run more than one etl, please stop the current ETL before starting another")
 )
-
-// EOF (to accommodate unsized streaming)
-func IsEOF(err error) bool {
-	return err == io.ErrUnexpectedEOF || errors.Is(err, io.EOF)
-}
 
 func IsErrAborted(err error) bool {
 	if _, ok := err.(*ErrAborted); ok {
@@ -324,7 +320,7 @@ func NewErrorCapacityExceeded(highWM int64, usedPct int32, totalBytesUsed, total
 }
 
 func (e *ErrCapacityExceeded) Error() string {
-	suffix := fmt.Sprintf("total used %s out of %s", B2S(int64(e.totalBytesUsed), 2), B2S(int64(e.totalBytes), 2))
+	suffix := fmt.Sprintf("total used %s out of %s", cos.B2S(int64(e.totalBytesUsed), 2), cos.B2S(int64(e.totalBytes), 2))
 	if e.oos {
 		return fmt.Sprintf("out of space: used %d%% of total capacity on at least one of the mountpaths (%s)",
 			e.usedPct, suffix)
@@ -367,7 +363,7 @@ func (e *ErrNoNodes) Error() string {
 	if e.role == Proxy {
 		return "no available proxies"
 	}
-	Assert(e.role == Target)
+	cos.Assert(e.role == Target)
 	return "no available targets"
 }
 
@@ -764,23 +760,4 @@ func FreeHTTPErr(a *ErrHTTP) {
 		a.trace = trace[:0]
 	}
 	errPool.Put(a)
-}
-
-//////////////////////////
-// Abnormal Termination //
-//////////////////////////
-
-// Exitf writes formatted message to STDOUT and exits with non-zero status code.
-func Exitf(f string, a ...interface{}) {
-	fmt.Fprintf(os.Stderr, f, a...)
-	fmt.Fprintln(os.Stderr)
-	os.Exit(1)
-}
-
-// ExitLogf is wrapper around `Exitf` with `glog` logging. It should be used
-// instead `Exitf` if the `glog` was initialized.
-func ExitLogf(f string, a ...interface{}) {
-	glog.Errorf("FATAL ERROR: "+f, a...)
-	glog.Flush()
-	Exitf(f, a...)
 }

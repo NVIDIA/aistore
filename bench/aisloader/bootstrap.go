@@ -58,6 +58,7 @@ import (
 	"github.com/NVIDIA/aistore/bench/aisloader/namegetter"
 	"github.com/NVIDIA/aistore/bench/aisloader/stats"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tetl"
@@ -122,8 +123,8 @@ type (
 		readOffStr           string // read offset
 		readLenStr           string // read length
 		subDir               string
-		duration             cmn.DurationExt // stop after the run for at least that much
-		cleanUp              cmn.BoolExt
+		duration             cos.DurationExt // stop after the run for at least that much
+		cleanUp              cos.BoolExt
 
 		bProps cmn.BucketProps
 
@@ -230,7 +231,7 @@ func (wo *workOrder) String() string {
 func loaderMaskFromTotalLoaders(totalLoaders uint64) uint {
 	// take first bigger power of 2, then take first bigger or equal number
 	// divisible by 4. This makes loaderID more visible in hex object name
-	return cmn.CeilAlign(cmn.FastLog2Ceil(totalLoaders), 4)
+	return cos.CeilAlign(cos.FastLog2Ceil(totalLoaders), 4)
 }
 
 func parseCmdLine() (params, error) {
@@ -250,7 +251,7 @@ func parseCmdLine() (params, error) {
 	f.StringVar(&ip, "ip", "localhost", "AIS proxy/gateway IP address or hostname")
 	f.StringVar(&port, "port", "8080", "AIS proxy/gateway port")
 
-	cmn.DurationExtVar(f, &p.duration, "duration", time.Minute,
+	cos.DurationExtVar(f, &p.duration, "duration", time.Minute,
 		"Benchmark duration (0 - run forever or until Ctrl-C). Note that if both duration and totalputsize are 0 (zeros), aisloader will have nothing to do.\n"+
 			"If not specified and totalputsize > 0, aisloader runs until totalputsize reached. Otherwise aisloader runs until first of duration and "+
 			"totalputsize reached")
@@ -259,7 +260,7 @@ func parseCmdLine() (params, error) {
 	f.IntVar(&p.putPct, "pctput", 0, "Percentage of PUTs in the aisloader-generated workload")
 	f.StringVar(&p.tmpDir, "tmpdir", "/tmp/ais", "Local directory to store temporary files")
 	f.StringVar(&p.putSizeUpperBoundStr, "totalputsize", "0", "Stop PUT workload once cumulative PUT size reaches or exceeds this value (can contain standard multiplicative suffix K, MB, GiB, etc.; 0 - unlimited")
-	cmn.BoolExtVar(f, &p.cleanUp, "cleanup", "true: remove bucket upon benchmark termination; default false for cloud buckets")
+	cos.BoolExtVar(f, &p.cleanUp, "cleanup", "true: remove bucket upon benchmark termination; default false for cloud buckets")
 	f.BoolVar(&p.verifyHash, "verifyhash", false, "true: checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata")
 	f.StringVar(&p.minSizeStr, "minsize", "", "Minimum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
 	f.StringVar(&p.maxSizeStr, "maxsize", "", "Maximum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
@@ -302,7 +303,7 @@ func parseCmdLine() (params, error) {
 	f.BoolVar(&p.stoppable, "stoppable", false, "true: stop upon CTRL-C")
 	f.BoolVar(&p.dryRun, "dry-run", false, "true: show the configuration and parameters that aisloader will use for benchmark")
 	f.BoolVar(&p.traceHTTP, "trace-http", false, "true: trace HTTP latencies") // see httpLatencies
-	f.StringVar(&p.cksumType, "cksum-type", cmn.ChecksumXXHash, "cksum type to use for put object requests")
+	f.StringVar(&p.cksumType, "cksum-type", cos.ChecksumXXHash, "cksum type to use for put object requests")
 
 	// ETL
 	f.StringVar(&p.etlName, "etl", "", "name of an ETL applied to each object on GET request. One of '', 'tar2tf', 'md5', 'echo'")
@@ -336,25 +337,25 @@ func parseCmdLine() (params, error) {
 	rnd = rand.New(rand.NewSource(p.seed))
 
 	if p.putSizeUpperBoundStr != "" {
-		if p.putSizeUpperBound, err = cmn.S2B(p.putSizeUpperBoundStr); err != nil {
+		if p.putSizeUpperBound, err = cos.S2B(p.putSizeUpperBoundStr); err != nil {
 			return params{}, fmt.Errorf("failed to parse total PUT size %s: %v", p.putSizeUpperBoundStr, err)
 		}
 	}
 
 	if p.minSizeStr != "" {
-		if p.minSize, err = cmn.S2B(p.minSizeStr); err != nil {
+		if p.minSize, err = cos.S2B(p.minSizeStr); err != nil {
 			return params{}, fmt.Errorf("failed to parse min size %s: %v", p.minSizeStr, err)
 		}
 	} else {
-		p.minSize = cmn.MiB
+		p.minSize = cos.MiB
 	}
 
 	if p.maxSizeStr != "" {
-		if p.maxSize, err = cmn.S2B(p.maxSizeStr); err != nil {
+		if p.maxSize, err = cos.S2B(p.maxSizeStr); err != nil {
 			return params{}, fmt.Errorf("failed to parse max size %s: %v", p.maxSizeStr, err)
 		}
 	} else {
-		p.maxSize = cmn.GiB
+		p.maxSize = cos.GiB
 	}
 
 	if !p.duration.IsSet && p.putSizeUpperBound != 0 {
@@ -377,12 +378,12 @@ func parseCmdLine() (params, error) {
 	}
 
 	if p.readOffStr != "" {
-		if p.readOff, err = cmn.S2B(p.readOffStr); err != nil {
+		if p.readOff, err = cos.S2B(p.readOffStr); err != nil {
 			return params{}, fmt.Errorf("failed to parse read offset %s: %v", p.readOffStr, err)
 		}
 	}
 	if p.readLenStr != "" {
-		if p.readLen, err = cmn.S2B(p.readLenStr); err != nil {
+		if p.readLen, err = cos.S2B(p.readLenStr); err != nil {
 			return params{}, fmt.Errorf("failed to parse read length %s: %v", p.readLenStr, err)
 		}
 	}
@@ -416,7 +417,7 @@ func parseCmdLine() (params, error) {
 				return params{}, fmt.Errorf("loaderIDHashLen has to be larger than 0 and smaller than 64")
 			}
 
-			suffixIDMaskLen = cmn.CeilAlign(p.loaderIDHashLen, 4)
+			suffixIDMaskLen = cos.CeilAlign(p.loaderIDHashLen, 4)
 			suffixID = getIDFromString(p.loaderID, suffixIDMaskLen)
 		} else {
 			// p.loaderCnt > 0
@@ -443,7 +444,7 @@ func parseCmdLine() (params, error) {
 		return params{}, fmt.Errorf("putshards should not exceed 100000")
 	}
 
-	if err := cmn.ValidateCksumType(p.cksumType); err != nil {
+	if err := cos.ValidateCksumType(p.cksumType); err != nil {
 		return params{}, err
 	}
 
@@ -530,7 +531,7 @@ func parseCmdLine() (params, error) {
 
 	traceHTTPSig.Store(p.traceHTTP)
 
-	scheme, address := cmn.ParseURLScheme(aisEndpoint)
+	scheme, address := cos.ParseURLScheme(aisEndpoint)
 	if scheme == "" {
 		scheme = "http"
 	}
@@ -600,7 +601,7 @@ func setupBucket(runParams *params) error {
 	}
 
 	if runParams.bck.Name == "" {
-		runParams.bck.Name = cmn.RandString(8)
+		runParams.bck.Name = cos.RandString(8)
 		fmt.Printf("New bucket name %q\n", runParams.bck.Name)
 	}
 
@@ -652,7 +653,7 @@ func setupBucket(runParams *params) error {
 }
 
 func getIDFromString(val string, hashLen uint) uint64 {
-	hash := xxhash.ChecksumString64S(val, cmn.MLCG32)
+	hash := xxhash.ChecksumString64S(val, cos.MLCG32)
 	// leave just right loaderIDHashLen bytes
 	hash <<= 64 - hashLen
 	hash >>= 64 - hashLen
@@ -693,7 +694,7 @@ func Start() error {
 	}
 
 	if runParams.usingFile {
-		if err := cmn.CreateDir(runParams.tmpDir + "/" + myName); err != nil {
+		if err := cos.CreateDir(runParams.tmpDir + "/" + myName); err != nil {
 			return fmt.Errorf("failed to create local test directory %q, err = %s", runParams.tmpDir, err.Error())
 		}
 	}
@@ -733,7 +734,7 @@ func Start() error {
 	if err != nil {
 		fmt.Printf("%s", "Failed to connect to StatsD server")
 		if runParams.statsdRequired {
-			cmn.Exitf("... aborting")
+			cos.Exitf("... aborting")
 		} else {
 			fmt.Println("... proceeding anyway")
 		}
@@ -781,7 +782,7 @@ func Start() error {
 	statsWriter := os.Stdout
 
 	if runParams.statsOutput != "" {
-		f, err := cmn.CreateFile(runParams.statsOutput)
+		f, err := cos.CreateFile(runParams.statsOutput)
 		if err != nil {
 			fmt.Println("Failed to create stats out file")
 		}
@@ -945,7 +946,7 @@ func generatePutObjectName() (string, error) {
 	}
 
 	if useRandomObjName {
-		comps[idx] = cmn.RandStringWithSrc(rnd, randomObjNameLen)
+		comps[idx] = cos.RandStringWithSrc(rnd, randomObjNameLen)
 		idx++
 	} else {
 		objectNumber := (cnt - 1) << suffixIDMaskLen
@@ -995,7 +996,7 @@ func postNewWorkOrder() (err error) {
 		}
 	}
 
-	cmn.Assert(wo != nil)
+	cos.Assert(wo != nil)
 	workOrders <- wo
 	return nil
 }
@@ -1115,7 +1116,7 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 	// Only clean up the objects if it's not AIS bucket (the whole bucket is
 	// removed if it's AIS)
 	if !runParams.bck.IsAIS() {
-		b := cmn.Min(t, runParams.batchSize)
+		b := cos.Min(t, runParams.batchSize)
 		n := t / b
 		for i := 0; i < n; i++ {
 			xactID, err := api.DeleteList(runParams.bp, runParams.bck, objs[i*b:(i+1)*b])

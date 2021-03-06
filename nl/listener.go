@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	jsoniter "github.com/json-iterator/go"
@@ -177,7 +178,7 @@ func (nlb *NotifListenerBase) SetStats(daeID string, stats interface{}) {
 	debug.AssertRWMutexLocked(&nlb.RWMutex)
 
 	_, ok := nlb.Srcs[daeID]
-	cmn.Assert(ok)
+	cos.Assert(ok)
 	nlb.Stats.Store(daeID, stats)
 	if nlb.lastUpdated == nil {
 		nlb.lastUpdated = make(map[string]int64, len(nlb.Srcs))
@@ -241,7 +242,7 @@ func (nlb *NotifListenerBase) String() string {
 		} else {
 			res = "-done"
 		}
-		tm = cmn.FormatTimestamp(time.Unix(0, tfin))
+		tm = cos.FormatTimestamp(time.Unix(0, tfin))
 		return fmt.Sprintf("%s-%s%s", hdr, tm, res)
 	}
 	if finCount > 0 {

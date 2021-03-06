@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/xaction"
 )
 
@@ -24,7 +25,7 @@ type (
 )
 
 func NewQueryListener(uuid string, smap *cluster.Smap, msg *InitMsg) (*NotifListenerQuery, error) {
-	cmn.Assert(uuid != "")
+	cos.Assert(uuid != "")
 	numNodes := len(smap.Tmap)
 	if msg.WorkersCnt != 0 && msg.WorkersCnt < uint(numNodes) {
 		// FIXME: this should not be necessary. Proxy could know that if worker's

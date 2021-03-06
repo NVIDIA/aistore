@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/dsort/filetype"
 	"github.com/NVIDIA/aistore/fs"
@@ -37,18 +38,18 @@ func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader
 	if err != nil {
 		return 0, 0, err
 	}
-	defer cmn.Close(gzr)
+	defer cos.Close(gzr)
 	tr := tar.NewReader(gzr)
 
 	// extract to .tar
-	f, err := cmn.CreateFile(workFQN)
+	f, err := cos.CreateFile(workFQN)
 	if err != nil {
 		return 0, 0, err
 	}
 	tw := tar.NewWriter(f)
 	defer func() {
-		cmn.Close(tw)
-		cmn.Close(f)
+		cos.Close(tw)
+		cos.Close(f)
 	}()
 
 	buf, slab := t.t.MMSA().Alloc(r.Size())
@@ -78,7 +79,7 @@ func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader
 			// we must have this `MkdirAll` before files.
 			continue
 		} else if header.Typeflag == tar.TypeReg {
-			data := cmn.NewSizedReader(tr, header.Size)
+			data := cos.NewSizedReader(tr, header.Size)
 
 			extractMethod := ExtractToMem
 			if toDisk {
@@ -130,8 +131,8 @@ func (t *targzExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadConte
 
 	defer func() {
 		rdReader.free()
-		cmn.Close(tw)
-		cmn.Close(gzw)
+		cos.Close(tw)
+		cos.Close(gzw)
 	}()
 
 	for _, rec := range s.Records.All() {
@@ -169,7 +170,7 @@ func (t *targzExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadConte
 
 				needFlush = true
 			default:
-				cmn.AssertMsg(false, obj.StoreType)
+				cos.AssertMsg(false, obj.StoreType)
 			}
 
 			written += n

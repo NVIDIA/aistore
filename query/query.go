@@ -9,12 +9,13 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 type (
 	ObjectsSource struct {
 		// regexp *regexp.Regexp // support in the future
-		Pt     *cmn.ParsedTemplate
+		Pt     *cos.ParsedTemplate
 		Prefix string
 	}
 
@@ -53,7 +54,7 @@ func (q *ObjectsQuery) Filter() cluster.ObjectFilter {
 }
 
 func TemplateObjSource(template string) (*ObjectsSource, error) {
-	pt, err := cmn.ParseBashTemplate(template)
+	pt, err := cos.ParseBashTemplate(template)
 	if err != nil {
 		return nil, err
 	}

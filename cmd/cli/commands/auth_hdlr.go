@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
@@ -299,7 +300,7 @@ func loginUserHandler(c *cli.Context) (err error) {
 	if tokenPath == "" {
 		tokenPath = filepath.Join(config.ConfigDirPath, tokenFile)
 	}
-	err = cmn.CreateDir(filepath.Dir(config.ConfigDirPath))
+	err = cos.CreateDir(filepath.Dir(config.ConfigDirPath))
 	if err != nil {
 		fmt.Fprintf(c.App.Writer, "Token:\n%s\n", token.Token)
 		return fmt.Errorf(tokenSaveFailFmt, err)

@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmd/aisfs/fs"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
@@ -20,7 +21,7 @@ const configDirName = fs.Name
 var defaultConfig = Config{
 	Cluster: ClusterConfig{
 		URL:           "http://127.0.0.1:8080",
-		SkipVerifyCrt: cmn.IsParseBool(os.Getenv(cmn.EnvVars.SkipVerifyCrt)),
+		SkipVerifyCrt: cos.IsParseBool(os.Getenv(cmn.EnvVars.SkipVerifyCrt)),
 	},
 	Timeout: TimeoutConfig{
 		TCPTimeoutStr:  "60s",
@@ -39,7 +40,7 @@ var defaultConfig = Config{
 	IO: IOConfig{
 		// Determines the size of chunks that we write with append. The only exception
 		// when we write less is Flush (end-of-file).
-		WriteBufSize: cmn.MiB,
+		WriteBufSize: cos.MiB,
 	},
 	// By default we allow unlimited memory to be used by the cache.
 	MemoryLimit: "0B",
@@ -101,7 +102,7 @@ func (c *Config) validate() (err error) {
 	if c.IO.WriteBufSize < 0 {
 		return fmt.Errorf("invalid io.write_buf_size value: %d: expected non-negative value", c.IO.WriteBufSize)
 	}
-	if v, err := cmn.S2B(c.MemoryLimit); err != nil {
+	if v, err := cos.S2B(c.MemoryLimit); err != nil {
 		return fmt.Errorf("invalid memory_limit value: %q: %v", c.MemoryLimit, err)
 	} else if v < 0 {
 		return fmt.Errorf("invalid memory_limit value: %q: expected non-negative value", c.MemoryLimit)
@@ -110,7 +111,7 @@ func (c *Config) validate() (err error) {
 }
 
 func (c *Config) writeTo(srvCfg *fs.ServerConfig) {
-	memoryLimit, _ := cmn.S2B(c.MemoryLimit)
+	memoryLimit, _ := cos.S2B(c.MemoryLimit)
 	srvCfg.SkipVerifyCrt = c.Cluster.SkipVerifyCrt
 	srvCfg.TCPTimeout = c.Timeout.TCPTimeout
 	srvCfg.HTTPTimeout = c.Timeout.HTTPTimeout

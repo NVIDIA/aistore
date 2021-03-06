@@ -14,7 +14,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/devtools/archive"
 	"github.com/NVIDIA/aistore/dsort/extract"
@@ -35,9 +35,9 @@ const (
 // Reader is the interface a client works with to read in data and send to a HTTP server
 type (
 	Reader interface {
-		cmn.ReadOpenCloser
+		cos.ReadOpenCloser
 		io.Seeker
-		Cksum() *cmn.Cksum
+		Cksum() *cos.Cksum
 	}
 
 	// randReader implements Reader.
@@ -47,7 +47,7 @@ type (
 		rnd    *rand.Rand
 		size   int64
 		offset int64
-		cksum  *cmn.Cksum
+		cksum  *cos.Cksum
 	}
 
 	// tarReader generates TAR (uncompressed) files as a io.Reader.
@@ -56,7 +56,7 @@ type (
 	tarReader struct {
 		b []byte
 		bytes.Reader
-		cksum *cmn.Cksum
+		cksum *cos.Cksum
 	}
 )
 
@@ -76,7 +76,7 @@ func (r *randReader) Read(buf []byte) (int, error) {
 	}
 
 	want := int64(len(buf))
-	n := cmn.MinI64(want, available)
+	n := cos.MinI64(want, available)
 	actual, err := r.rnd.Read(buf[:n])
 	if err != nil {
 		return 0, nil
@@ -88,7 +88,7 @@ func (r *randReader) Read(buf []byte) (int, error) {
 
 // Open implements the Reader interface.
 // Returns a new rand reader using the same seed.
-func (r *randReader) Open() (cmn.ReadOpenCloser, error) {
+func (r *randReader) Open() (cos.ReadOpenCloser, error) {
 	return &randReader{
 		seed:  r.seed,
 		rnd:   rand.New(rand.NewSource(r.seed)),
@@ -142,14 +142,14 @@ func (r *randReader) Seek(offset int64, whence int) (int64, error) {
 }
 
 // XXHash implements the Reader interface.
-func (r *randReader) Cksum() *cmn.Cksum {
+func (r *randReader) Cksum() *cos.Cksum {
 	return r.cksum
 }
 
 // NewRandReader returns a new randReader
 func NewRandReader(size int64, cksumType string) (Reader, error) {
 	var (
-		cksum *cmn.Cksum
+		cksum *cos.Cksum
 		err   error
 		seed  = mono.NanoTime()
 	)
@@ -161,8 +161,8 @@ func NewRandReader(size int64, cksumType string) (Reader, error) {
 	defer slab.Free(buf)
 	rand1 := rand.New(rand.NewSource(seed))
 	rr := &rrLimited{rand1, size, 0}
-	if cksumType != cmn.ChecksumNone {
-		_, cksumHash, err := cmn.CopyAndChecksum(ioutil.Discard, rr, buf, cksumType)
+	if cksumType != cos.ChecksumNone {
+		_, cksumHash, err := cos.CopyAndChecksum(ioutil.Discard, rr, buf, cksumType)
 		if err != nil {
 			return nil, err
 		}
@@ -184,7 +184,7 @@ type rrLimited struct {
 }
 
 func (rr *rrLimited) Read(p []byte) (n int, err error) {
-	rem := int(cmn.MinI64(rr.size-rr.off, int64(len(p))))
+	rem := int(cos.MinI64(rr.size-rr.off, int64(len(p))))
 	n, _ = rr.random.Read(p[:rem]) // never fails
 	rr.off += int64(n)
 	if rem < len(p) {
@@ -197,15 +197,15 @@ type fileReader struct {
 	*os.File
 	filePath string // Example: "/dir/ais/"
 	name     string // Example: "smoke/bGzhWKWoxHDSePnELftx"
-	cksum    *cmn.Cksum
+	cksum    *cos.Cksum
 }
 
 // interface guard
 var _ Reader = (*fileReader)(nil)
 
 // Open implements the Reader interface.
-func (r *fileReader) Open() (cmn.ReadOpenCloser, error) {
-	cksumType := cmn.ChecksumNone
+func (r *fileReader) Open() (cos.ReadOpenCloser, error) {
+	cksumType := cos.ChecksumNone
 	if r.cksum != nil {
 		cksumType = r.cksum.Type()
 	}
@@ -213,7 +213,7 @@ func (r *fileReader) Open() (cmn.ReadOpenCloser, error) {
 }
 
 // XXHash implements the Reader interface.
-func (r *fileReader) Cksum() *cmn.Cksum {
+func (r *fileReader) Cksum() *cos.Cksum {
 	return r.cksum
 }
 
@@ -221,24 +221,24 @@ func (r *fileReader) Cksum() *cmn.Cksum {
 // NOTE: Caller is responsible for closing.
 func NewFileReader(filepath, name string, size int64, cksumType string) (Reader, error) {
 	var (
-		cksum     *cmn.Cksum
-		cksumHash *cmn.CksumHash
+		cksum     *cos.Cksum
+		cksumHash *cos.CksumHash
 		fn        = path.Join(filepath, name)
-		f, err    = os.OpenFile(fn, os.O_RDWR|os.O_CREATE, cmn.PermRWR)
+		f, err    = os.OpenFile(fn, os.O_RDWR|os.O_CREATE, cos.PermRWR)
 	)
 	if err != nil {
 		return nil, err
 	}
 	if size == -1 {
 		// Assuming that the file already exists and contains data.
-		if cksumType != cmn.ChecksumNone {
+		if cksumType != cos.ChecksumNone {
 			buf, slab := mmsa.Alloc()
-			_, cksumHash, err = cmn.CopyAndChecksum(ioutil.Discard, f, buf, cksumType)
+			_, cksumHash, err = cos.CopyAndChecksum(ioutil.Discard, f, buf, cksumType)
 			slab.Free(buf)
 		}
 	} else {
 		// Populate the file with random data.
-		cksumHash, err = copyRandWithHash(f, size, cksumType, cmn.NowRand())
+		cksumHash, err = copyRandWithHash(f, size, cksumType, cos.NowRand())
 	}
 	if err != nil {
 		f.Close()
@@ -248,7 +248,7 @@ func NewFileReader(filepath, name string, size int64, cksumType string) (Reader,
 		f.Close()
 		return nil, err
 	}
-	if cksumType != cmn.ChecksumNone {
+	if cksumType != cos.ChecksumNone {
 		cksum = cksumHash.Clone()
 	}
 	return &fileReader{f, filepath, name, cksum}, nil
@@ -263,26 +263,26 @@ func NewFileReaderFromFile(fn, cksumType string) (Reader, error) {
 
 type sgReader struct {
 	memsys.Reader
-	cksum *cmn.Cksum
+	cksum *cos.Cksum
 }
 
 // interface guard
 var _ Reader = (*sgReader)(nil)
 
 // XXHash implements the Reader interface.
-func (r *sgReader) Cksum() *cmn.Cksum {
+func (r *sgReader) Cksum() *cos.Cksum {
 	return r.cksum
 }
 
 // NewSGReader returns a new sgReader
 func NewSGReader(sgl *memsys.SGL, size int64, cksumType string) (Reader, error) {
-	var cksum *cmn.Cksum
+	var cksum *cos.Cksum
 	if size > 0 {
-		cksumHash, err := copyRandWithHash(sgl, size, cksumType, cmn.NowRand())
+		cksumHash, err := copyRandWithHash(sgl, size, cksumType, cos.NowRand())
 		if err != nil {
 			return nil, err
 		}
-		if cksumType != cmn.ChecksumNone {
+		if cksumType != cos.ChecksumNone {
 			cksum = cksumHash.Clone()
 		}
 	}
@@ -297,7 +297,7 @@ type bytesReader struct {
 }
 
 // Open implements the Reader interface.
-func (r *bytesReader) Open() (cmn.ReadOpenCloser, error) {
+func (r *bytesReader) Open() (cos.ReadOpenCloser, error) {
 	return &bytesReader{bytes.NewBuffer(r.buf), r.buf}, nil
 }
 
@@ -306,7 +306,7 @@ func (r *bytesReader) Close() error {
 	return nil
 }
 
-func (r *bytesReader) Cksum() *cmn.Cksum {
+func (r *bytesReader) Cksum() *cos.Cksum {
 	return nil // niy
 }
 
@@ -349,32 +349,32 @@ func NewReader(p ParamReader, cksumType string) (Reader, error) {
 // copyRandWithHash reads data from random source and writes it to a writer while
 // optionally computing xxhash
 // See related: memsys_test.copyRand
-func copyRandWithHash(w io.Writer, size int64, cksumType string, rnd *rand.Rand) (*cmn.CksumHash, error) {
+func copyRandWithHash(w io.Writer, size int64, cksumType string, rnd *rand.Rand) (*cos.CksumHash, error) {
 	var (
-		cksum   *cmn.CksumHash
+		cksum   *cos.CksumHash
 		rem     = size
 		buf, s  = mmsa.Alloc()
 		blkSize = int64(len(buf))
 	)
 	defer s.Free(buf)
 
-	if cksumType != cmn.ChecksumNone {
-		cksum = cmn.NewCksumHash(cksumType)
+	if cksumType != cos.ChecksumNone {
+		cksum = cos.NewCksumHash(cksumType)
 	}
 	for i := int64(0); i <= size/blkSize; i++ {
-		n := int(cmn.MinI64(blkSize, rem))
+		n := int(cos.MinI64(blkSize, rem))
 		rnd.Read(buf[:n])
 		m, err := w.Write(buf[:n])
 		if err != nil {
 			return nil, err
 		}
-		if cksumType != cmn.ChecksumNone {
+		if cksumType != cos.ChecksumNone {
 			cksum.H.Write(buf[:m])
 		}
-		cmn.Assert(m == n)
+		cos.Assert(m == n)
 		rem -= int64(m)
 	}
-	if cksumType != cmn.ChecksumNone {
+	if cksumType != cos.ChecksumNone {
 		cksum.Finalize()
 	}
 	return cksum, nil
@@ -386,7 +386,7 @@ func (r *tarReader) Close() error {
 }
 
 // To implement Reader
-func (r *tarReader) Open() (cmn.ReadOpenCloser, error) {
+func (r *tarReader) Open() (cos.ReadOpenCloser, error) {
 	return &tarReader{
 		Reader: *bytes.NewReader(r.b),
 		cksum:  r.cksum,
@@ -394,22 +394,22 @@ func (r *tarReader) Open() (cmn.ReadOpenCloser, error) {
 	}, nil
 }
 
-func (r *tarReader) Cksum() *cmn.Cksum {
+func (r *tarReader) Cksum() *cos.Cksum {
 	return r.cksum
 }
 
 func NewTarReader(size int64, cksumType string) (r Reader, err error) {
 	var (
-		singleFileSize = cmn.MinI64(size, int64(cmn.KiB))
+		singleFileSize = cos.MinI64(size, int64(cos.KiB))
 		buff           = bytes.NewBuffer(nil)
 	)
 
-	err = archive.CreateTarWithCustomFilesToWriter(buff, cmn.Max(int(size/singleFileSize), 1), int(singleFileSize), extract.FormatTypeInt, ".cls", true)
+	err = archive.CreateTarWithCustomFilesToWriter(buff, cos.Max(int(size/singleFileSize), 1), int(singleFileSize), extract.FormatTypeInt, ".cls", true)
 	if err != nil {
 		return nil, err
 	}
 
-	cksum, err := cmn.ChecksumBytes(buff.Bytes(), cksumType)
+	cksum, err := cos.ChecksumBytes(buff.Bytes(), cksumType)
 	if err != nil {
 		return nil, err
 	}

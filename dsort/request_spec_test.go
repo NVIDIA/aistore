@@ -11,6 +11,7 @@ import (
 	"math"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -45,9 +46,9 @@ var _ = Describe("RequestSpec", func() {
 			Expect(parsed.OutputBck.Provider).To(Equal(cmn.ProviderAIS))
 			Expect(parsed.Extension).To(Equal(cmn.ExtTar))
 
-			Expect(parsed.InputFormat.Template).To(Equal(cmn.ParsedTemplate{
+			Expect(parsed.InputFormat.Template).To(Equal(cos.ParsedTemplate{
 				Prefix: "prefix-",
-				Ranges: []cmn.TemplateRange{{
+				Ranges: []cos.TemplateRange{{
 					Start:      10,
 					End:        111,
 					Step:       2,
@@ -56,9 +57,9 @@ var _ = Describe("RequestSpec", func() {
 				}},
 			}))
 
-			Expect(parsed.OutputFormat.Template).To(Equal(cmn.ParsedTemplate{
+			Expect(parsed.OutputFormat.Template).To(Equal(cos.ParsedTemplate{
 				Prefix: "prefix-",
-				Ranges: []cmn.TemplateRange{{
+				Ranges: []cos.TemplateRange{{
 					Start:      10,
 					End:        111,
 					Step:       1,
@@ -67,9 +68,9 @@ var _ = Describe("RequestSpec", func() {
 				}},
 			}))
 
-			Expect(parsed.OutputShardSize).To(BeEquivalentTo(10 * cmn.KiB))
+			Expect(parsed.OutputShardSize).To(BeEquivalentTo(10 * cos.KiB))
 
-			Expect(parsed.MaxMemUsage.Type).To(Equal(cmn.QuantityPercent))
+			Expect(parsed.MaxMemUsage.Type).To(Equal(cos.QuantityPercent))
 			Expect(parsed.MaxMemUsage.Value).To(BeEquivalentTo(80))
 		})
 
@@ -107,7 +108,7 @@ var _ = Describe("RequestSpec", func() {
 			parsed, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(parsed.MaxMemUsage.Type).To(Equal(cmn.QuantityBytes))
+			Expect(parsed.MaxMemUsage.Type).To(Equal(cos.QuantityBytes))
 			Expect(parsed.MaxMemUsage.Value).To(BeEquivalentTo(80 * 1024 * 1024 * 1024))
 		})
 
@@ -168,9 +169,9 @@ var _ = Describe("RequestSpec", func() {
 			parsed, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(parsed.OutputFormat.Template).To(Equal(cmn.ParsedTemplate{
+			Expect(parsed.OutputFormat.Template).To(Equal(cos.ParsedTemplate{
 				Prefix: "prefix-",
-				Ranges: []cmn.TemplateRange{{
+				Ranges: []cos.TemplateRange{{
 					Start:      0,
 					End:        math.MaxInt64 - 1,
 					Step:       1,
@@ -193,9 +194,9 @@ var _ = Describe("RequestSpec", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 
 			Expect(parsed.InputFormat.Type).To(Equal(templAt))
-			Expect(parsed.InputFormat.Template).To(Equal(cmn.ParsedTemplate{
+			Expect(parsed.InputFormat.Template).To(Equal(cos.ParsedTemplate{
 				Prefix: "prefix",
-				Ranges: []cmn.TemplateRange{{
+				Ranges: []cos.TemplateRange{{
 					Start:      0,
 					End:        111,
 					Step:       1,
@@ -204,9 +205,9 @@ var _ = Describe("RequestSpec", func() {
 				}},
 			}))
 
-			Expect(parsed.OutputFormat.Template).To(Equal(cmn.ParsedTemplate{
+			Expect(parsed.OutputFormat.Template).To(Equal(cos.ParsedTemplate{
 				Prefix: "prefix-",
-				Ranges: []cmn.TemplateRange{{
+				Ranges: []cos.TemplateRange{{
 					Start:      0,
 					End:        111,
 					Step:       1,
@@ -394,7 +395,7 @@ var _ = Describe("RequestSpec", func() {
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).To(Equal(cmn.ErrInvalidQuantityUsage))
+			Expect(err).To(Equal(cos.ErrInvalidQuantityUsage))
 		})
 
 		It("should fail due to invalid mem usage percent specified", func() {
@@ -409,7 +410,7 @@ var _ = Describe("RequestSpec", func() {
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).To(Equal(cmn.ErrInvalidQuantityPercent))
+			Expect(err).To(Equal(cos.ErrInvalidQuantityPercent))
 		})
 
 		It("should fail due to invalid mem usage bytes specified", func() {
@@ -424,7 +425,7 @@ var _ = Describe("RequestSpec", func() {
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).To(Equal(cmn.ErrInvalidQuantityUsage))
+			Expect(err).To(Equal(cos.ErrInvalidQuantityUsage))
 		})
 
 		It("should fail due to invalid extract concurrency specified", func() {

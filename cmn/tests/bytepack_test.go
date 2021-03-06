@@ -7,7 +7,7 @@ package tests
 import (
 	"testing"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 )
 
@@ -20,7 +20,7 @@ type pck struct {
 	parent *pck
 }
 
-func (p *pck) Pack(wr *cmn.BytePack) {
+func (p *pck) Pack(wr *cos.BytePack) {
 	// write POD and variable-length fields in turns
 	wr.WriteString(p.name)
 	wr.WriteInt64(p.id)
@@ -36,7 +36,7 @@ func (p *pck) Pack(wr *cmn.BytePack) {
 	}
 }
 
-func (p *pck) Unpack(rd *cmn.ByteUnpack) error {
+func (p *pck) Unpack(rd *cos.ByteUnpack) error {
 	var (
 		err    error
 		exists byte
@@ -73,9 +73,9 @@ func (p *pck) Unpack(rd *cmn.ByteUnpack) error {
 
 func (p *pck) PackedSize() int {
 	//    id              name&data len
-	sz := cmn.SizeofI64 + cmn.SizeofLen*2 +
+	sz := cos.SizeofI64 + cos.SizeofLen*2 +
 		// group        name len      data len      inner pointer marker
-		cmn.SizeofI16 + len(p.name) + len(p.data) + 1
+		cos.SizeofI16 + len(p.name) + len(p.data) + 1
 	if p.parent != nil {
 		// If inner struct is not `nil`, add its size to the total.
 		sz += p.parent.PackedSize()
@@ -105,14 +105,14 @@ func TestBytePackStruct(t *testing.T) {
 		},
 	}
 
-	packer := cmn.NewPacker(nil, first.PackedSize()+second.PackedSize())
+	packer := cos.NewPacker(nil, first.PackedSize()+second.PackedSize())
 	packer.WriteAny(first)
 	packer.WriteAny(second)
 
 	readFirst := &pck{}
 	readSecond := &pck{}
 	bytes := packer.Bytes()
-	unpacker := cmn.NewUnpacker(bytes)
+	unpacker := cos.NewUnpacker(bytes)
 	err := unpacker.ReadAny(readFirst)
 	tassert.CheckFatal(t, err)
 	err = unpacker.ReadAny(readSecond)
@@ -141,11 +141,11 @@ func TestBytePackStruct(t *testing.T) {
 }
 
 func BenchmarkPackWriteString(b *testing.B) {
-	p := cmn.NewPacker(nil, 90*b.N)
+	p := cos.NewPacker(nil, 90*b.N)
 
 	a := make([]string, 0, 1000)
 	for i := 0; i < 1000; i++ {
-		a = append(a, cmn.RandString(80))
+		a = append(a, cos.RandString(80))
 	}
 
 	b.ReportAllocs()

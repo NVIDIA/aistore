@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/urfave/cli"
 )
@@ -242,7 +243,7 @@ func TestParseDestInvalidURIs(t *testing.T) {
 func TestMakePairs(t *testing.T) {
 	makePairsTest := []struct {
 		input []string
-		nvs   cmn.SimpleKVs
+		nvs   cos.SimpleKVs
 	}{
 		{
 			[]string{"key1=value1", "key2=value2", "key3=value3"},

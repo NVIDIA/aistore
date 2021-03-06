@@ -7,6 +7,7 @@ package ais
 import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
@@ -137,11 +138,11 @@ func (g *fsprungroup) redistributeMD() {
 		err := g.t.owner.bmd.persist()
 		g.t.owner.bmd.Unlock()
 		if err != nil {
-			cmn.ExitLogf("%v", err)
+			cos.ExitLogf("%v", err)
 		}
 	}
 	if _, err := fs.CreateNewVMD(g.t.si.ID()); err != nil {
-		cmn.ExitLogf("%v", err)
+		cos.ExitLogf("%v", err)
 	}
 }
 

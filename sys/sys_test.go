@@ -13,12 +13,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 )
 
 func checkSkipOS(t *testing.T, os ...string) {
-	if cmn.StringInSlice(runtime.GOOS, os) {
+	if cos.StringInSlice(runtime.GOOS, os) {
 		t.Skipf("skipping test for %s platform", runtime.GOOS)
 	}
 }

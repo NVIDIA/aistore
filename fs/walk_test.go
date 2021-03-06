@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/fs"
@@ -51,7 +52,7 @@ func TestWalkBck(t *testing.T) {
 				mpath, err := ioutil.TempDir("", "testwalk")
 				tassert.CheckFatal(t, err)
 
-				err = cmn.CreateDir(mpath)
+				err = cos.CreateDir(mpath)
 				tassert.CheckFatal(t, err)
 
 				_, err = fs.Add(mpath, "daeID")
@@ -64,7 +65,7 @@ func TestWalkBck(t *testing.T) {
 			var fileNames []string
 			for _, mpath := range avail {
 				dir := mpath.MakePathCT(bck, fs.ObjectType)
-				err := cmn.CreateDir(dir)
+				err := cos.CreateDir(dir)
 				tassert.CheckFatal(t, err)
 
 				_, names := tutils.PrepareDirTree(t, tutils.DirTreeDesc{
@@ -138,7 +139,7 @@ func TestWalkBckSkipDir(t *testing.T) {
 		mpath, err := ioutil.TempDir("", "testwalk")
 		tassert.CheckFatal(t, err)
 
-		err = cmn.CreateDir(mpath)
+		err = cos.CreateDir(mpath)
 		tassert.CheckFatal(t, err)
 
 		_, err = fs.Add(mpath, "daeID")
@@ -149,7 +150,7 @@ func TestWalkBckSkipDir(t *testing.T) {
 	avail, _ := fs.Get()
 	for _, mpath := range avail {
 		dir := mpath.MakePathCT(bck, fs.ObjectType)
-		err := cmn.CreateDir(dir)
+		err := cos.CreateDir(dir)
 		tassert.CheckFatal(t, err)
 
 		totalFilesCnt := rand.Int()%100 + minObjectsCnt
@@ -178,7 +179,7 @@ func TestWalkBckSkipDir(t *testing.T) {
 			}
 			parsedFQN, err := fs.ParseFQN(fqn)
 			tassert.CheckError(t, err)
-			cmn.Assert(!mpaths[parsedFQN.MpathInfo.Path].done)
+			cos.Assert(!mpaths[parsedFQN.MpathInfo.Path].done)
 			if rand.Int()%10 == 0 {
 				mpaths[parsedFQN.MpathInfo.Path].done = true
 				return filepath.SkipDir

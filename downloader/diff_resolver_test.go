@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/downloader"
 )
@@ -186,7 +186,7 @@ func TestDiffResolver(t *testing.T) {
 				case downloader.DiffResolverEOF:
 					break
 				default:
-					cmn.Assertf(false, "%d", result.Action)
+					cos.Assertf(false, "%d", result.Action)
 				}
 			}
 

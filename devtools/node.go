@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tlog"
 )
 
@@ -27,7 +28,7 @@ func JoinCluster(ctx *Ctx, proxyURL string, node *cluster.Snode, timeout time.Du
 	// If node is already in cluster we should not wait for map version
 	// sync because update will not be scheduled
 	if node := smap.GetNode(node.ID()); node == nil {
-		err = WaitMapVersionSync(ctx, time.Now().Add(timeout), smap, smap.Version, cmn.NewStringSet())
+		err = WaitMapVersionSync(ctx, time.Now().Add(timeout), smap, smap.Version, cos.NewStringSet())
 		return
 	}
 	return
@@ -65,16 +66,16 @@ func DecommissionNode(ctx *Ctx, proxyURL string, args *cmn.ActValDecommision, ti
 			time.Now().Add(timeout),
 			smap,
 			smap.Version,
-			cmn.NewStringSet(node.ID()),
+			cos.NewStringSet(node.ID()),
 		)
 	}
 	return nil
 }
 
 func WaitMapVersionSync(ctx *Ctx, timeout time.Time, smap *cluster.Smap, prevVersion int64,
-	idsToIgnore cmn.StringSet) error {
+	idsToIgnore cos.StringSet) error {
 	ctx.Log("Waiting to sync Smap version > v%d, ignoring %+v\n", prevVersion, idsToIgnore)
-	checkAwaitingDaemon := func(smap *cluster.Smap, idsToIgnore cmn.StringSet) (string, string, bool) {
+	checkAwaitingDaemon := func(smap *cluster.Smap, idsToIgnore cos.StringSet) (string, string, bool) {
 		for _, d := range smap.Pmap {
 			if !idsToIgnore.Contains(d.ID()) {
 				return d.ID(), d.PublicNet.DirectURL, true

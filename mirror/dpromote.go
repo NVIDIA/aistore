@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
@@ -82,7 +83,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	}
 	if !r.params.Recursive {
 		fname, err := filepath.Rel(r.dir, fqn)
-		cmn.AssertNoErr(err)
+		cos.AssertNoErr(err)
 		if strings.ContainsRune(fname, filepath.Separator) {
 			return nil
 		}
@@ -90,7 +91,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	// NOTE: destination objName is:
 	// r.params.ObjName + filepath.Base(fqn) if promoting single file
 	// r.params.ObjName + strings.TrimPrefix(fileFqn, dirFqn) if promoting the whole directory
-	cmn.Assert(filepath.IsAbs(fqn))
+	cos.Assert(filepath.IsAbs(fqn))
 
 	bck := cluster.NewBckEmbed(r.Bck())
 	if err := bck.Init(r.t.Bowner()); err != nil {

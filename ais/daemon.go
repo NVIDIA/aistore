@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/fs"
@@ -91,12 +92,12 @@ func init() {
 // dry-run environment overrides dry-run clivars
 func dryRunInit() {
 	str := os.Getenv("AIS_NO_DISK_IO")
-	if b, err := cmn.ParseBool(str); err == nil {
+	if b, err := cos.ParseBool(str); err == nil {
 		daemon.dryRun.disk = b
 	}
 	str = os.Getenv("AIS_DRY_OBJ_SIZE")
 	if str != "" {
-		if size, err := cmn.S2B(str); size > 0 && err == nil {
+		if size, err := cos.S2B(str); size > 0 && err == nil {
 			daemon.dryRun.size = size
 		}
 	}
@@ -118,31 +119,31 @@ func initDaemon(version, buildTime string) (rmain cmn.Runner) {
 	)
 	flag.Parse()
 	if daemon.cli.role != cmn.Proxy && daemon.cli.role != cmn.Target {
-		cmn.ExitLogf(
+		cos.ExitLogf(
 			"Invalid value of flag `role`: %q, expected %q or %q",
 			daemon.cli.role, cmn.Proxy, cmn.Target,
 		)
 	}
 	if daemon.dryRun.disk {
-		daemon.dryRun.size, err = cmn.S2B(daemon.dryRun.sizeStr)
+		daemon.dryRun.size, err = cos.S2B(daemon.dryRun.sizeStr)
 		if daemon.dryRun.size < 1 || err != nil {
-			cmn.ExitLogf("Invalid object size: %d [%s]\n", daemon.dryRun.size, daemon.dryRun.sizeStr)
+			cos.ExitLogf("Invalid object size: %d [%s]\n", daemon.dryRun.size, daemon.dryRun.sizeStr)
 		}
 	}
 	if daemon.cli.globalConfigPath == "" {
 		str := fmt.Sprintf(confMsg, "config")
 		str += usageStr
-		cmn.ExitLogf(str)
+		cos.ExitLogf(str)
 	}
 	if daemon.cli.localConfigPath == "" {
 		str := fmt.Sprintf(confMsg, "local-config")
 		str += usageStr
-		cmn.ExitLogf(str)
+		cos.ExitLogf(str)
 	}
 	config = &cmn.Config{}
 	err = jsp.LoadConfig(daemon.cli.globalConfigPath, daemon.cli.localConfigPath, daemon.cli.role, config)
 	if err != nil {
-		cmn.ExitLogf("%v", err)
+		cos.ExitLogf("%v", err)
 	}
 	cmn.GCO.Put(config)
 
@@ -161,10 +162,10 @@ func initDaemon(version, buildTime string) (rmain cmn.Runner) {
 			kvs      = strings.Split(daemon.cli.confCustom, ",")
 		)
 		if err := toUpdate.FillFromKVS(kvs); err != nil {
-			cmn.ExitLogf(err.Error())
+			cos.ExitLogf(err.Error())
 		}
 		if err := cmn.GCO.SetConfigInMem(toUpdate, config, cmn.Daemon); err != nil {
-			cmn.ExitLogf("Failed to update config in memory: %v", err)
+			cos.ExitLogf("Failed to update config in memory: %v", err)
 		}
 
 		overrideConfig := cmn.GCO.GetOverrideConfig()
@@ -176,7 +177,7 @@ func initDaemon(version, buildTime string) (rmain cmn.Runner) {
 
 		if !daemon.cli.transient {
 			if err = jsp.SaveOverrideConfig(config.ConfigDir, overrideConfig); err != nil {
-				cmn.ExitLogf("Failed to save override config: %v", err)
+				cos.ExitLogf("Failed to save override config: %v", err)
 			}
 		}
 	}
@@ -193,7 +194,7 @@ func initDaemon(version, buildTime string) (rmain cmn.Runner) {
 	memStat, err := sys.Mem()
 	debug.AssertNoErr(err)
 	glog.Infof("Memory total: %s, free: %s(actual free %s)",
-		cmn.B2S(int64(memStat.Total), 0), cmn.B2S(int64(memStat.Free), 0), cmn.B2S(int64(memStat.ActualFree), 0))
+		cos.B2S(int64(memStat.Total), 0), cos.B2S(int64(memStat.Free), 0), cos.B2S(int64(memStat.ActualFree), 0))
 
 	// NOTE: Daemon terminations get executed in the same exact order as initializations below.
 	daemon.rg = &rungroup{rs: make(map[string]cmn.Runner, 8)}
@@ -214,7 +215,7 @@ func initProxy() cmn.Runner {
 
 	// Persist daemon ID on disk
 	if err := writeProxyDID(cmn.GCO.Get(), p.si.ID()); err != nil {
-		cmn.ExitLogf("%v", err)
+		cos.ExitLogf("%v", err)
 	}
 
 	p.initClusterCIDR()
@@ -259,7 +260,7 @@ func initTarget() cmn.Runner {
 	}
 	t.initSI(cmn.Target)
 	if err := fs.InitMpaths(t.si.ID()); err != nil {
-		cmn.ExitLogf("%v", err)
+		cos.ExitLogf("%v", err)
 	}
 
 	t.initHostIP()
@@ -285,7 +286,7 @@ func initTarget() cmn.Runner {
 	t.fshc = fshc
 
 	if err := ts.InitCapacity(); err != nil { // goes after fs.Init
-		cmn.ExitLogf("%s", err)
+		cos.ExitLogf("%s", err)
 	}
 	return t
 }
@@ -320,9 +321,9 @@ func Run(version, buildTime string) int {
 //////////////
 
 func (g *rungroup) add(r cmn.Runner) {
-	cmn.Assert(r.Name() != "")
+	cos.Assert(r.Name() != "")
 	_, exists := g.rs[r.Name()]
-	cmn.Assert(!exists)
+	cos.Assert(!exists)
 
 	g.rs[r.Name()] = r
 }
@@ -385,23 +386,23 @@ func initDaemonID(daemonType string, config *cmn.Config) (daemonID string) {
 	case cmn.Proxy:
 		daemonID = initProxyDaemonID(config)
 	default:
-		cmn.AssertMsg(false, daemonType)
+		cos.AssertMsg(false, daemonType)
 	}
 	return daemonID
 }
 
 func generateDaemonID(daemonType string, config *cmn.Config) string {
 	if !config.TestingEnv() {
-		return cmn.GenDaemonID()
+		return cos.GenDaemonID()
 	}
-	daemonID := cmn.RandStringStrong(4)
+	daemonID := cos.RandStringStrong(4)
 	switch daemonType {
 	case cmn.Target:
 		return fmt.Sprintf("%st%d", daemonID, config.HostNet.Port)
 	case cmn.Proxy:
 		return fmt.Sprintf("%sp%d", daemonID, config.HostNet.Port)
 	}
-	cmn.AssertMsg(false, daemonType)
+	cos.AssertMsg(false, daemonType)
 	return ""
 }
 
@@ -412,13 +413,13 @@ func initProxyDaemonID(config *cmn.Config) (daemonID string) {
 		return
 	}
 	daemonID = generateDaemonID(cmn.Proxy, config)
-	cmn.Assert(daemonID != "")
+	cos.Assert(daemonID != "")
 	glog.Infof("p[%s] ID randomly generated", daemonID)
 	return daemonID
 }
 
 func writeProxyDID(config *cmn.Config, id string) error {
-	return ioutil.WriteFile(filepath.Join(config.ConfigDir, proxyIDFname), []byte(id), cmn.PermRWR)
+	return ioutil.WriteFile(filepath.Join(config.ConfigDir, proxyIDFname), []byte(id), cos.PermRWR)
 }
 
 func readProxyDaemonID(config *cmn.Config) (id string) {
@@ -434,13 +435,13 @@ func readProxyDaemonID(config *cmn.Config) (id string) {
 func initTargetDaemonID(config *cmn.Config) (daemonID string) {
 	var err error
 	if daemonID, err = fs.LoadDaemonID(config.FSpaths.Paths); err != nil {
-		cmn.ExitLogf("%v", err)
+		cos.ExitLogf("%v", err)
 	}
 	if daemonID != "" {
 		return
 	}
 	daemonID = generateDaemonID(cmn.Target, config)
-	cmn.Assert(daemonID != "")
+	cos.Assert(daemonID != "")
 	glog.Infof("t[%s] ID randomly generated", daemonID)
 	return daemonID
 }

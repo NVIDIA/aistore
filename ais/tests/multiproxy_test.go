@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools/readers"
@@ -408,7 +409,7 @@ func _addNodeDuplicateIP(t *testing.T, nodeType string) {
 	conf := tutils.GetDaemonConfig(t, node)
 
 	// Make sure that the `DaemonID` is different.
-	node.DaemonID = "testing_" + cmn.RandString(10)
+	node.DaemonID = "testing_" + cos.RandString(10)
 
 	pid := tutils.DeployNode(t, node, conf, nil)
 	t.Cleanup(func() {
@@ -698,7 +699,7 @@ func proxyPutGetDelete(count int, proxyURL string, bck cmn.Bck, cksumType string
 		if err != nil {
 			return fmt.Errorf("error creating reader: %v", err)
 		}
-		fname := cmn.RandString(20)
+		fname := cos.RandString(20)
 		keyname := fmt.Sprintf("%s/%s", localBucketDir, fname)
 		putArgs := api.PutObjectArgs{
 			BaseParams: baseParams,
@@ -768,7 +769,7 @@ loop:
 			continue
 		}
 
-		fname := cmn.RandString(20)
+		fname := cos.RandString(20)
 		objName := fmt.Sprintf("%s/%s", localBucketDir, fname)
 		putArgs := api.PutObjectArgs{
 			BaseParams: baseParams,
@@ -838,7 +839,7 @@ func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
 	var (
 		config             = tutils.GetClusterConfig(t)
 		restoreCmd         = make([]tutils.RestoreCmd, 0, 3)
-		configDiscovery, _ = cmn.ParseURL(config.Proxy.DiscoveryURL)
+		configDiscovery, _ = cos.ParseURL(config.Proxy.DiscoveryURL)
 		proxyURL           string
 		randomKilled       bool
 	)
@@ -852,7 +853,7 @@ func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
 		if smap.IsPrimary(si) {
 			continue
 		}
-		publicURL, _ := cmn.ParseURL(si.URL(cmn.NetworkPublic))
+		publicURL, _ := cos.ParseURL(si.URL(cmn.NetworkPublic))
 		if publicURL.Host == configDiscovery.Host || configDiscovery.Port() == publicURL.Port() {
 			cmd, err := tutils.KillNode(si)
 			tassert.CheckFatal(t, err)
@@ -937,7 +938,7 @@ func proxyStress(t *testing.T) {
 		go putGetDelWorker(proxyURL, stopChs[i], proxyURLChs[i], errChs[i], &wg)
 
 		// stagger the workers so they don't always do the same operation at the same time
-		n := cmn.NowRand().Intn(999)
+		n := cos.NowRand().Intn(999)
 		time.Sleep(time.Duration(n+1) * time.Millisecond)
 	}
 
@@ -1105,7 +1106,7 @@ func hrwProxyTest(smap *cluster.Smap, idToSkip string) (pi string, err error) {
 			continue
 		}
 
-		cs := xxhash.ChecksumString64S(snode.ID(), cmn.MLCG32)
+		cs := xxhash.ChecksumString64S(snode.ID(), cos.MLCG32)
 		if cs > max {
 			max = cs
 			pi = id
@@ -1385,8 +1386,8 @@ func killRandNonPrimaryIC(t testing.TB, smap *cluster.Smap) (tutils.RestoreCmd, 
 	return cmd, smap
 }
 
-func icFromSmap(smap *cluster.Smap) cmn.StringSet {
-	lst := make(cmn.StringSet, smap.DefaultICSize())
+func icFromSmap(smap *cluster.Smap) cos.StringSet {
+	lst := make(cos.StringSet, smap.DefaultICSize())
 	for pid, psi := range smap.Pmap {
 		if smap.IsIC(psi) {
 			lst.Add(pid)
@@ -1578,7 +1579,7 @@ func icStressMonitorXactMultiICFail(t *testing.T) {
 		m = ioContext{
 			t:        t,
 			num:      1000,
-			fileSize: 50 * cmn.KiB,
+			fileSize: 50 * cos.KiB,
 		}
 		numCopyXacts = 20
 	)
@@ -1589,7 +1590,7 @@ func icStressMonitorXactMultiICFail(t *testing.T) {
 	m.puts()
 
 	// 2. Kill and restore random IC members in background
-	stopCh := cmn.NewStopCh()
+	stopCh := cos.NewStopCh()
 	krWg := &sync.WaitGroup{}
 	krWg.Add(1)
 	go killRestoreIC(t, smap, stopCh, krWg)
@@ -1613,7 +1614,7 @@ func icStressCachedXactions(t *testing.T) {
 		m = ioContext{
 			t:        t,
 			num:      5000,
-			fileSize: cmn.KiB,
+			fileSize: cos.KiB,
 		}
 
 		proxyURL        = tutils.GetPrimaryURL()
@@ -1626,7 +1627,7 @@ func icStressCachedXactions(t *testing.T) {
 	m.puts()
 
 	// 2. Kill and restore random IC members in background
-	stopCh := cmn.NewStopCh()
+	stopCh := cos.NewStopCh()
 	krWg := &sync.WaitGroup{}
 	krWg.Add(1)
 	go killRestoreIC(t, smap, stopCh, krWg)
@@ -1702,7 +1703,7 @@ func startCPBckAndWait(t testing.TB, srcBck cmn.Bck, count int) *sync.WaitGroup 
 }
 
 // Continuously kill and restore IC nodes
-func killRestoreIC(t *testing.T, smap *cluster.Smap, stopCh *cmn.StopCh, wg *sync.WaitGroup) {
+func killRestoreIC(t *testing.T, smap *cluster.Smap, stopCh *cos.StopCh, wg *sync.WaitGroup) {
 	var (
 		cmd      tutils.RestoreCmd
 		proxyURL = smap.Primary.URL(cmn.NetworkPublic)
@@ -1729,7 +1730,7 @@ func killRestoreIC(t *testing.T, smap *cluster.Smap, stopCh *cmn.StopCh, wg *syn
 
 // misc
 
-func getNewICMember(t testing.TB, oldMap, newMap cmn.StringSet) (daeID string) {
+func getNewICMember(t testing.TB, oldMap, newMap cos.StringSet) (daeID string) {
 	for sid := range newMap {
 		if _, ok := oldMap[sid]; !ok {
 			tassert.Errorf(t, daeID == "", "should change only one IC member")

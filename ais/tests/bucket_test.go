@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
@@ -47,7 +48,7 @@ func TestHTTPProviderBucket(t *testing.T) {
 	_, err = api.ListObjects(baseParams, bck, nil, 0)
 	tassert.Fatalf(t, err != nil, "expected error")
 
-	reader, _ := readers.NewRandReader(cmn.KiB, cmn.ChecksumNone)
+	reader, _ := readers.NewRandReader(cos.KiB, cos.ChecksumNone)
 	err = api.PutObject(api.PutObjectArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
@@ -120,11 +121,11 @@ func TestDefaultBucketProps(t *testing.T) {
 		}
 	)
 
-	tutils.SetClusterConfig(t, cmn.SimpleKVs{
+	tutils.SetClusterConfig(t, cos.SimpleKVs{
 		"ec.enabled":     "true",
 		"ec.data_slices": strconv.FormatUint(dataSlices, 10),
 	})
-	defer tutils.SetClusterConfig(t, cmn.SimpleKVs{
+	defer tutils.SetClusterConfig(t, cos.SimpleKVs{
 		"ec.enabled":       "false",
 		"ec.data_slices":   fmt.Sprintf("%d", globalConfig.EC.DataSlices),
 		"ec.parity_slices": fmt.Sprintf("%d", globalConfig.EC.ParitySlices),
@@ -153,7 +154,7 @@ func TestCreateWithBucketProps(t *testing.T) {
 	)
 	propsToSet := &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{
-			Type:            api.String(cmn.ChecksumMD5),
+			Type:            api.String(cos.ChecksumMD5),
 			ValidateWarmGet: api.Bool(true),
 			EnableReadRange: api.Bool(true),
 			ValidateColdGet: api.Bool(false),
@@ -178,7 +179,7 @@ func TestCreateRemoteBucket(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
 
 	if bck.IsHDFS() {
-		hdfsBck := cmn.Bck{Provider: cmn.ProviderHDFS, Name: cmn.RandString(10)}
+		hdfsBck := cmn.Bck{Provider: cmn.ProviderHDFS, Name: cos.RandString(10)}
 		err := api.CreateBucket(baseParams, hdfsBck, &cmn.BucketPropsToUpdate{
 			Extra: &cmn.ExtraToUpdate{
 				HDFS: &cmn.ExtraPropsHDFSToUpdate{RefDirectory: api.String("/")},
@@ -215,7 +216,7 @@ func overwriteLomCache(mdwrite cmn.MDWritePolicy, t *testing.T) {
 			num:       234,
 			fileSize:  73,
 			fixedSize: true,
-			prefix:    cmn.RandString(6) + "-",
+			prefix:    cos.RandString(6) + "-",
 		}
 		baseParams = tutils.BaseAPIParams()
 	)
@@ -251,7 +252,7 @@ func overwriteLomCache(mdwrite cmn.MDWritePolicy, t *testing.T) {
 	tlog.Logf("Overwrite %s objects with newer versions\n", m.bck)
 	nsize := int64(m.fileSize) * 10
 	for _, entry := range objList.Entries {
-		reader, err := readers.NewRandReader(nsize, cmn.ChecksumNone)
+		reader, err := readers.NewRandReader(nsize, cos.ChecksumNone)
 		tassert.CheckFatal(t, err)
 		err = api.PutObject(api.PutObjectArgs{
 			BaseParams: baseParams,
@@ -342,7 +343,7 @@ func TestResetBucketProps(t *testing.T) {
 		}
 		propsToUpdate = &cmn.BucketPropsToUpdate{
 			Cksum: &cmn.CksumConfToUpdate{
-				Type:            api.String(cmn.ChecksumNone),
+				Type:            api.String(cos.ChecksumNone),
 				ValidateWarmGet: api.Bool(true),
 				EnableReadRange: api.Bool(true),
 			},
@@ -357,8 +358,8 @@ func TestResetBucketProps(t *testing.T) {
 		MinTargets: *propsToUpdate.EC.DataSlices + *propsToUpdate.EC.ParitySlices,
 	})
 
-	tutils.SetClusterConfig(t, cmn.SimpleKVs{"ec.enabled": "true"})
-	defer tutils.SetClusterConfig(t, cmn.SimpleKVs{
+	tutils.SetClusterConfig(t, cos.SimpleKVs{"ec.enabled": "true"})
+	defer tutils.SetClusterConfig(t, cos.SimpleKVs{
 		"ec.enabled":       "false",
 		"ec.data_slices":   fmt.Sprintf("%d", globalConfig.EC.DataSlices),
 		"ec.parity_slices": fmt.Sprintf("%d", globalConfig.EC.ParitySlices),
@@ -466,7 +467,7 @@ func TestListObjectsRemoteBucketVersions(t *testing.T) {
 			bck:      cliBck,
 			num:      50,
 			fileSize: 128,
-			prefix:   cmn.RandString(6) + "-",
+			prefix:   cos.RandString(6) + "-",
 		}
 		baseParams = tutils.BaseAPIParams()
 	)
@@ -508,7 +509,7 @@ func TestListObjectsSmoke(t *testing.T) {
 				t:        t,
 				num:      100,
 				bck:      bck.Bck,
-				fileSize: 5 * cmn.KiB,
+				fileSize: 5 * cos.KiB,
 			}
 
 			iters = 5
@@ -839,7 +840,7 @@ func TestListObjectsRandProxy(t *testing.T) {
 				t:        t,
 				bck:      bck.Bck,
 				num:      rand.Intn(5000) + 1000,
-				fileSize: 5 * cmn.KiB,
+				fileSize: 5 * cos.KiB,
 			}
 
 			totalCnt = 0
@@ -1131,7 +1132,7 @@ func TestListObjectsPrefix(t *testing.T) {
 				objName := fmt.Sprintf("prefix/obj%d", i+1)
 				objNames = append(objNames, objName)
 
-				r, _ := readers.NewRandReader(fileSize, cmn.ChecksumNone)
+				r, _ := readers.NewRandReader(fileSize, cos.ChecksumNone)
 				err := api.PutObject(api.PutObjectArgs{
 					BaseParams: baseParams,
 					Bck:        bck,
@@ -1219,7 +1220,7 @@ func TestListObjectsCache(t *testing.T) {
 		m          = ioContext{
 			t:        t,
 			num:      rand.Intn(3000) + 1481,
-			fileSize: cmn.KiB,
+			fileSize: cos.KiB,
 		}
 		totalIters = 10
 	)
@@ -1323,7 +1324,7 @@ func TestBucketSingleProp(t *testing.T) {
 	const (
 		dataSlices      = 1
 		paritySlices    = 1
-		objLimit        = 300 * cmn.KiB
+		objLimit        = 300 * cos.KiB
 		mirrorThreshold = 15
 	)
 	var (
@@ -1529,7 +1530,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 		num:             10000,
 		numGetsEachFile: 5,
 		bck: cmn.Bck{
-			Name:     cmn.RandString(10),
+			Name:     cos.RandString(10),
 			Provider: cmn.ProviderAIS,
 		},
 	}
@@ -1541,7 +1542,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 
 	m.saveClusterState()
 
-	max := cmn.Max(numCopies...) + 1
+	max := cos.Max(numCopies...) + 1
 	skip := tutils.SkipTestArgs{MinMountpaths: max}
 	tutils.CheckSkip(t, skip)
 
@@ -1913,16 +1914,16 @@ func TestRenameBucketNonExistentSrc(t *testing.T) {
 		}
 		baseParams = tutils.BaseAPIParams()
 		dstBck     = cmn.Bck{
-			Name:     cmn.RandString(10),
+			Name:     cos.RandString(10),
 			Provider: cmn.ProviderAIS,
 		}
 		srcBcks = []cmn.Bck{
 			{
-				Name:     cmn.RandString(10),
+				Name:     cos.RandString(10),
 				Provider: cmn.ProviderAIS,
 			},
 			{
-				Name:     cmn.RandString(10),
+				Name:     cos.RandString(10),
 				Provider: cmn.ProviderAmazon,
 			},
 		}
@@ -2020,11 +2021,11 @@ func TestCopyBucket(t *testing.T) {
 
 	for _, test := range tests {
 		// Bucket must exist when we require it to have objects.
-		cmn.Assert(test.dstBckExist || !test.dstBckHasObjects)
+		cos.Assert(test.dstBckExist || !test.dstBckHasObjects)
 
 		// We only have 1 remote bucket available (cliBck), coping from the same bucket to the same bucket would fail.
 		// TODO: remove this limitation and add remote -> remote test cases.
-		cmn.Assert(!test.srcRemote || !test.dstRemote)
+		cos.Assert(!test.srcRemote || !test.dstRemote)
 
 		testName := fmt.Sprintf("src-remote=%t/dst-remote=%t/", test.srcRemote, test.dstRemote)
 		if test.dstBckExist {
@@ -2323,7 +2324,7 @@ func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
-		cpyPrefix = "cpyprefix" + cmn.RandString(5)
+		cpyPrefix = "cpyprefix" + cos.RandString(5)
 		dstBck    = cmn.Bck{Name: "cpybck_dst", Provider: cmn.ProviderAIS}
 	)
 
@@ -2345,7 +2346,7 @@ func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 
 func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-	dstBck := cmn.Bck{Name: "cpybck_dst" + cmn.RandString(5), Provider: cmn.ProviderAIS}
+	dstBck := cmn.Bck{Name: "cpybck_dst" + cos.RandString(5), Provider: cmn.ProviderAIS}
 
 	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &cmn.CopyBckMsg{DryRun: true})
 	tassert.CheckFatal(t, err)
@@ -2529,7 +2530,7 @@ func TestBackendBucket(t *testing.T) {
 	var (
 		remoteBck = cliBck
 		aisBck    = cmn.Bck{
-			Name:     cmn.RandString(10),
+			Name:     cos.RandString(10),
 			Provider: cmn.ProviderAIS,
 		}
 		m = ioContext{
@@ -2569,7 +2570,7 @@ func TestBackendBucket(t *testing.T) {
 	})
 	tassert.CheckFatal(t, err)
 	// Try putting one of the original remote objects, it should work.
-	err = tutils.PutObjRR(baseParams, aisBck, remoteObjList.Entries[0].Name, 128, cmn.ChecksumNone)
+	err = tutils.PutObjRR(baseParams, aisBck, remoteObjList.Entries[0].Name, 128, cos.ChecksumNone)
 	tassert.Errorf(t, err == nil, "expected err==nil (put to a BackendBck should be allowed via aisBck)")
 
 	p, err = api.HeadBucket(baseParams, aisBck)
@@ -2634,7 +2635,7 @@ func TestBackendBucket(t *testing.T) {
 	tassert.Fatalf(t, err != nil, "expected error (object should not exist)")
 
 	// Check that we cannot do put anymore.
-	err = tutils.PutObjRR(baseParams, aisBck, cachedObjName, 256, cmn.ChecksumNone)
+	err = tutils.PutObjRR(baseParams, aisBck, cachedObjName, 256, cos.ChecksumNone)
 	tassert.Errorf(t, err != nil, "expected err!=nil (put should not be allowed with objSrc!=BackendBck )")
 }
 
@@ -2643,10 +2644,10 @@ func TestBackendBucket(t *testing.T) {
 //
 
 func TestAllChecksums(t *testing.T) {
-	checksums := cmn.SupportedChecksums()
+	checksums := cos.SupportedChecksums()
 	for _, mirrored := range []bool{false, true} {
 		for _, cksumType := range checksums {
-			if testing.Short() && cksumType != cmn.ChecksumNone && cksumType != cmn.ChecksumXXHash {
+			if testing.Short() && cksumType != cos.ChecksumNone && cksumType != cos.ChecksumXXHash {
 				continue
 			}
 			tag := cksumType
@@ -2662,7 +2663,7 @@ func TestAllChecksums(t *testing.T) {
 	}
 
 	for _, cksumType := range checksums {
-		if testing.Short() && cksumType != cmn.ChecksumNone && cksumType != cmn.ChecksumXXHash {
+		if testing.Short() && cksumType != cos.ChecksumNone && cksumType != cos.ChecksumXXHash {
 			continue
 		}
 		tag := cksumType + "/EC"
@@ -2685,13 +2686,13 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 			t:               t,
 			num:             1000,
 			numGetsEachFile: 1,
-			fileSize:        uint64(cmn.KiB + rand.Int63n(cmn.KiB*10)),
+			fileSize:        uint64(cos.KiB + rand.Int63n(cos.KiB*10)),
 		}
 		numCorrupted = rand.Intn(m.num/100) + 2
 	)
 	if testing.Short() {
 		m.num = 40
-		m.fileSize = cmn.KiB
+		m.fileSize = cos.KiB
 		numCorrupted = 13
 	}
 
@@ -2723,7 +2724,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 				},
 				EC: &cmn.ECConfToUpdate{
 					Enabled:      api.Bool(true),
-					ObjSizeLimit: api.Int64(cmn.GiB), // only slices
+					ObjSizeLimit: api.Int64(cos.GiB), // only slices
 					DataSlices:   api.Int(1),
 					ParitySlices: api.Int(parityCnt),
 				},
@@ -2770,7 +2771,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	}
 
 	// read all
-	if cksumType != cmn.ChecksumNone {
+	if cksumType != cos.ChecksumNone {
 		tlog.Logf("Reading %q objects with checksum validation by AIS targets\n", m.bck)
 	} else {
 		tlog.Logf("Reading %q objects\n", m.bck)
@@ -2785,9 +2786,9 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 		return
 	}
 
-	if cksumType != cmn.ChecksumNone {
+	if cksumType != cos.ChecksumNone {
 		tlog.Logf("Reading %d objects from %s with end-to-end %s validation\n", len(bckObjs.Entries), m.bck, cksumType)
-		wg := cmn.NewLimitedWaitGroup(40)
+		wg := cos.NewLimitedWaitGroup(40)
 
 		for _, entry := range bckObjs.Entries {
 			wg.Add(1)
@@ -2826,12 +2827,12 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 			objName := <-objCh
 			_, err = api.GetObject(baseParams, m.bck, objName)
 			if mirrored || eced {
-				if err != nil && cksumType != cmn.ChecksumNone {
+				if err != nil && cksumType != cos.ChecksumNone {
 					t.Errorf("%s/%s corruption detected but not resolved, mirror=%t, ec=%t\n",
 						m.bck, objName, mirrored, eced)
 				}
 			} else {
-				if err == nil && cksumType != cmn.ChecksumNone {
+				if err == nil && cksumType != cos.ChecksumNone {
 					t.Errorf("%s/%s corruption undetected\n", m.bck, objName)
 				}
 			}
@@ -2890,7 +2891,7 @@ func TestBucketListAndSummary(t *testing.T) {
 				m = &ioContext{
 					t: t,
 					bck: cmn.Bck{
-						Name:     cmn.RandString(10),
+						Name:     cos.RandString(10),
 						Provider: test.provider,
 					},
 

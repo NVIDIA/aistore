@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 // update list of revoked token on all clusters
@@ -76,14 +77,14 @@ func (m *userManager) syncTokenList(cluster *cmn.AuthCluster) {
 func (m *userManager) proxyRequest(method, proxyURL, path string, injson []byte) error {
 	startRequest := time.Now()
 	for {
-		url := proxyURL + cmn.JoinWords(cmn.Version, path)
+		url := proxyURL + cos.JoinWords(cmn.Version, path)
 		request, err := http.NewRequest(method, url, bytes.NewBuffer(injson))
 		if err != nil {
 			return err
 		}
 
 		client := m.clientHTTP
-		if cmn.IsHTTPS(proxyURL) {
+		if cos.IsHTTPS(proxyURL) {
 			client = m.clientHTTPS
 		}
 		request.Header.Set(cmn.HeaderContentType, cmn.ContentJSON)

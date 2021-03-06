@@ -37,6 +37,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
@@ -72,7 +73,7 @@ func TestMain(t *testing.M) {
 	flag.StringVar(&d, "duration", "30s", "test duration")
 	flag.Parse()
 	if duration, err = time.ParseDuration(d); err != nil {
-		cmn.Exitf("Invalid duration %q", d)
+		cos.Exitf("Invalid duration %q", d)
 	}
 	MMSA = memsys.DefaultPageMM()
 
@@ -149,7 +150,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 		ObjAttrs: transport.ObjectAttrs{
 			Size:       sgl1.Size(),
 			Atime:      663346294,
-			CksumType:  cmn.ChecksumXXHash,
+			CksumType:  cos.ChecksumXXHash,
 			CksumValue: "hash",
 			Version:    "2",
 		},
@@ -171,7 +172,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 		ObjAttrs: transport.ObjectAttrs{
 			Size:       sgl2.Size(),
 			Atime:      663346294,
-			CksumType:  cmn.ChecksumXXHash,
+			CksumType:  cos.ChecksumXXHash,
 			CksumValue: "hash",
 			Version:    "2",
 		},
@@ -184,7 +185,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 
 func Example_obj() {
 	receive := func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
-		cmn.Assert(err == nil)
+		cos.Assert(err == nil)
 		object, err := ioutil.ReadAll(objReader)
 		if err != nil {
 			panic(err)
@@ -370,7 +371,7 @@ func Test_ObjAttrs(t *testing.T) {
 		{
 			Size:       1024,
 			Atime:      math.MaxInt64,
-			CksumType:  cmn.ChecksumXXHash,
+			CksumType:  cos.ChecksumXXHash,
 			CksumValue: "120421",
 			Version:    "102.44",
 		},
@@ -388,16 +389,16 @@ func Test_ObjAttrs(t *testing.T) {
 
 	var receivedCount atomic.Int64
 	recvFunc := func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
-		cmn.Assert(err == nil)
+		cos.Assert(err == nil)
 
 		idx := hdr.Opaque[0]
-		cmn.AssertMsg(hdr.Bck.IsAIS(), "expecting ais bucket")
-		cmn.Assertf(reflect.DeepEqual(testAttrs[idx], hdr.ObjAttrs),
+		cos.AssertMsg(hdr.Bck.IsAIS(), "expecting ais bucket")
+		cos.Assertf(reflect.DeepEqual(testAttrs[idx], hdr.ObjAttrs),
 			"attrs are not equal: %v; %v;", testAttrs[idx], hdr.ObjAttrs)
 
 		written, err := io.Copy(ioutil.Discard, objReader)
-		cmn.Assert(err == nil)
-		cmn.Assertf(written == hdr.ObjAttrs.Size, "written: %d, expected: %d", written, hdr.ObjAttrs.Size)
+		cos.Assert(err == nil)
+		cos.Assertf(written == hdr.ObjAttrs.Size, "written: %d, expected: %d", written, hdr.ObjAttrs.Size)
 
 		receivedCount.Inc()
 	}
@@ -439,15 +440,15 @@ func Test_ObjAttrs(t *testing.T) {
 }
 
 func receive10G(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
-	cmn.Assert(err == nil || cmn.IsEOF(err))
+	cos.Assert(err == nil || cos.IsEOF(err))
 	written, _ := io.Copy(ioutil.Discard, objReader)
-	cmn.Assert(written == hdr.ObjAttrs.Size)
+	cos.Assert(written == hdr.ObjAttrs.Size)
 }
 
 func Test_CompressedOne(t *testing.T) {
 	trname := "cmpr-one"
 	config := cmn.GCO.BeginUpdate()
-	config.Compression.BlockMaxSize = 256 * cmn.KiB
+	config.Compression.BlockMaxSize = 256 * cos.KiB
 	cmn.GCO.CommitUpdate(config)
 	if err := config.Compression.Validate(config); err != nil {
 		tassert.CheckFatal(t, err)
@@ -476,7 +477,7 @@ func Test_CompressedOne(t *testing.T) {
 	if testing.Short() {
 		numGs = 2
 	}
-	for size < cmn.GiB*numGs {
+	for size < cos.GiB*numGs {
 		if num%7 == 0 { // header-only
 			hdr.ObjAttrs.Size = 0
 			stream.Send(&transport.Obj{Hdr: hdr})
@@ -487,16 +488,16 @@ func Test_CompressedOne(t *testing.T) {
 				hdr.ObjAttrs.Size = int64(random.Intn(100) + 1)
 				reader = ioutil.NopCloser(&io.LimitedReader{R: random, N: hdr.ObjAttrs.Size}) // fully random to hinder compression
 			} else {
-				hdr.ObjAttrs.Size = int64(random.Intn(cmn.GiB) + 1)
+				hdr.ObjAttrs.Size = int64(random.Intn(cos.GiB) + 1)
 				reader = &randReader{buf: buf, hdr: hdr, clone: true}
 			}
 			stream.Send(&transport.Obj{Hdr: hdr, Reader: reader})
 		}
 		num++
 		size += hdr.ObjAttrs.Size
-		if size-prevsize >= cmn.GiB*4 {
+		if size-prevsize >= cos.GiB*4 {
 			stats := stream.GetStats()
-			tlog.Logf("%s: %d GiB compression-ratio=%.2f\n", stream, size/cmn.GiB, stats.CompressionRatio())
+			tlog.Logf("%s: %d GiB compression-ratio=%.2f\n", stream, size/cos.GiB, stats.CompressionRatio())
 			prevsize = size
 		}
 	}
@@ -521,34 +522,34 @@ func Test_DryRun(t *testing.T) {
 	stream := transport.NewObjStream(nil, "dummy/null", nil)
 
 	random := newRand(mono.NanoTime())
-	sgl := MMSA.NewSGL(cmn.MiB)
+	sgl := MMSA.NewSGL(cos.MiB)
 	defer sgl.Free()
-	buf, slab := MMSA.Alloc(cmn.KiB * 128)
+	buf, slab := MMSA.Alloc(cos.KiB * 128)
 	defer slab.Free(buf)
-	for sgl.Len() < cmn.MiB {
+	for sgl.Len() < cos.MiB {
 		random.Read(buf)
 		sgl.Write(buf)
 	}
 
 	size, num, prevsize := int64(0), 0, int64(0)
 	hdr := genStaticHeader()
-	total := int64(cmn.TiB)
+	total := int64(cos.TiB)
 	if testing.Short() {
-		total = cmn.TiB / 4
+		total = cos.TiB / 4
 	}
 
 	for size < total {
-		hdr.ObjAttrs.Size = cmn.KiB * 128
-		for i := int64(0); i < cmn.MiB/hdr.ObjAttrs.Size; i++ {
+		hdr.ObjAttrs.Size = cos.KiB * 128
+		for i := int64(0); i < cos.MiB/hdr.ObjAttrs.Size; i++ {
 			reader := memsys.NewReader(sgl)
 			reader.Seek(i*hdr.ObjAttrs.Size, io.SeekStart)
 
 			stream.Send(&transport.Obj{Hdr: hdr, Reader: reader})
 			num++
 			size += hdr.ObjAttrs.Size
-			if size-prevsize >= cmn.GiB*100 {
+			if size-prevsize >= cos.GiB*100 {
 				prevsize = size
-				tlog.Logf("[dry]: %d GiB\n", size/cmn.GiB)
+				tlog.Logf("[dry]: %d GiB\n", size/cos.GiB)
 			}
 		}
 	}
@@ -565,9 +566,9 @@ func Test_CompletionCount(t *testing.T) {
 	)
 
 	receive := func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
-		cmn.Assert(err == nil)
+		cos.Assert(err == nil)
 		written, _ := io.Copy(ioutil.Discard, objReader)
-		cmn.Assert(written == hdr.ObjAttrs.Size)
+		cos.Assert(written == hdr.ObjAttrs.Size)
 		numReceived.Inc()
 	}
 	callback := func(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
@@ -638,7 +639,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 
 	if compress {
 		config := cmn.GCO.BeginUpdate()
-		config.Compression.BlockMaxSize = cmn.KiB * 256
+		config.Compression.BlockMaxSize = cos.KiB * 256
 		cmn.GCO.CommitUpdate(config)
 		if err := config.Compression.Validate(config); err != nil {
 			tassert.CheckFatal(t, err)
@@ -679,8 +680,8 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 		} else {
 			size += obj.Hdr.ObjAttrs.Size
 		}
-		if size-prevsize >= cmn.GiB*4 {
-			tlog.Logf("%s: %d GiB\n", stream, size/cmn.GiB)
+		if size-prevsize >= cos.GiB*4 {
+			tlog.Logf("%s: %d GiB\n", stream, size/cos.GiB)
 			prevsize = size
 			if random.Int63()%7 == 0 {
 				time.Sleep(time.Second * 2) // simulate occasional timeout
@@ -710,9 +711,9 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 func makeRecvFunc(t *testing.T) (*int64, transport.ReceiveObj) {
 	totalReceived := new(int64)
 	return totalReceived, func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
-		cmn.Assert(err == nil || cmn.IsEOF(err))
+		cos.Assert(err == nil || cos.IsEOF(err))
 		written, err := io.Copy(ioutil.Discard, objReader)
-		if err != nil && !cmn.IsEOF(err) {
+		if err != nil && !cos.IsEOF(err) {
 			tassert.CheckFatal(t, err)
 		}
 		if written != hdr.ObjAttrs.Size && !hdr.IsUnsized() {
@@ -735,7 +736,7 @@ func genStaticHeader() (hdr transport.ObjHdr) {
 	}
 	hdr.ObjName = "b"
 	hdr.Opaque = []byte("c")
-	hdr.ObjAttrs.Size = cmn.GiB
+	hdr.ObjAttrs.Size = cos.GiB
 	return
 }
 
@@ -817,7 +818,7 @@ func (r *randReader) Read(p []byte) (n int, err error) {
 		if rem == 0 {
 			return n, io.EOF
 		}
-		l64 := cmn.MinI64(rem, int64(len(p)-n))
+		l64 := cos.MinI64(rem, int64(len(p)-n))
 		if l64 == 0 {
 			return
 		}
@@ -831,7 +832,7 @@ func (r *randReader) Read(p []byte) (n int, err error) {
 	}
 }
 
-func (r *randReader) Open() (cmn.ReadOpenCloser, error) {
+func (r *randReader) Open() (cos.ReadOpenCloser, error) {
 	buf := r.slab.Alloc()
 	copy(buf, r.buf)
 	r2 := randReader{buf: buf, hdr: r.hdr, slab: r.slab, offEOF: r.offEOF}

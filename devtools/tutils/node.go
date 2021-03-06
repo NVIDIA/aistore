@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools"
@@ -202,12 +203,12 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 			}
 		}
 		if smap.Version != lastVersion {
-			smapChangeDeadline = cmn.MinTime(time.Now().Add(proxyChangeLatency), opDeadline)
+			smapChangeDeadline = cos.MinTime(time.Now().Add(proxyChangeLatency), opDeadline)
 		}
 		// if the primary's map changed to the state we want, wait for the map get populated
 		if satisfied {
 			syncedSmap := &cluster.Smap{}
-			cmn.CopyStruct(syncedSmap, smap)
+			cos.CopyStruct(syncedSmap, smap)
 
 			// skip primary proxy and mock targets
 			var proxyID string
@@ -217,7 +218,7 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 				}
 			}
 
-			idsToIgnore := cmn.NewStringSet(MockDaemonID, proxyID)
+			idsToIgnore := cos.NewStringSet(MockDaemonID, proxyID)
 			idsToIgnore.Add(syncIgnoreIDs...)
 			err = devtools.WaitMapVersionSync(
 				DevtoolsCtx,
@@ -250,7 +251,7 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 			break
 		}
 		// sleep longer each iter (up to a certain limit)
-		time.Sleep(cmn.MinDuration(time.Second*time.Duration(loopCnt), time.Second*7))
+		time.Sleep(cos.MinDuration(time.Second*time.Duration(loopCnt), time.Second*7))
 	}
 
 	return nil, fmt.Errorf("timed out waiting for the cluster to stabilize")
@@ -354,7 +355,7 @@ func RestoreNode(cmd RestoreCmd, asPrimary bool, tag string) error {
 		return containers.RestartContainer(cmd.Node.ID())
 	}
 
-	if !cmn.AnyHasPrefixInSlice("-daemon_id", cmd.Args) {
+	if !cos.AnyHasPrefixInSlice("-daemon_id", cmd.Args) {
 		cmd.Args = append(cmd.Args, "-daemon_id="+cmd.Node.ID())
 	}
 
@@ -538,7 +539,7 @@ func getRestoreCmd(si *cluster.Snode) RestoreCmd {
 		return cmd
 	}
 	_, cmd.Cmd, cmd.Args, err = getProcess(si.PublicNet.DaemonPort)
-	cmn.AssertNoErr(err)
+	cos.AssertNoErr(err)
 	return cmd
 }
 

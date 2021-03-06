@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/OneOfOne/xxhash"
@@ -76,8 +77,8 @@ const (
 	SourceWebObjMD    = "web"
 
 	VersionObjMD = "v"
-	CRC32CObjMD  = cmn.ChecksumCRC32C
-	MD5ObjMD     = cmn.ChecksumMD5
+	CRC32CObjMD  = cos.ChecksumCRC32C
+	MD5ObjMD     = cos.ChecksumMD5
 
 	OrigURLObjMD = "orig_url"
 )
@@ -99,7 +100,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 		if err != syscall.ERANGE {
 			return
 		}
-		cmn.Assert(mdSize < xattrMaxSize)
+		cos.Assert(mdSize < xattrMaxSize)
 		// 2nd attempt: max-size
 		buf, slab = mm.Alloc(xattrMaxSize)
 		read, err = fs.GetXattrBuf(lom.FQN, XattrLOM, buf)
@@ -202,7 +203,7 @@ func (lom *LOM) marshal() (buf []byte, mm *memsys.MMSA) {
 	mm = T.SmallMMSA()
 	buf = lom.md.marshal(mm, lmsize)
 	size := int64(len(buf))
-	cmn.Assert(size <= xattrMaxSize)
+	cos.Assert(size <= xattrMaxSize)
 	lom._recomputeMdSize(size, lmsize)
 	return
 }
@@ -211,10 +212,10 @@ func (lom *LOM) _recomputeMdSize(size, mdSize int64) {
 	const grow = memsys.SmallSlabIncStep
 	var nsize int64
 	if size > mdSize {
-		nsize = cmn.MinI64(size+grow, xattrMaxSize)
+		nsize = cos.MinI64(size+grow, xattrMaxSize)
 		maxLmeta.CAS(mdSize, nsize)
 	} else if mdSize == xattrMaxSize && size < xattrMaxSize-grow {
-		nsize = cmn.MinI64(size+grow, (size+xattrMaxSize)/2)
+		nsize = cos.MinI64(size+grow, (size+xattrMaxSize)/2)
 		maxLmeta.CAS(mdSize, nsize)
 	}
 }
@@ -243,11 +244,11 @@ func (md *lmeta) unmarshal(buf []byte) (err error) {
 		return fmt.Errorf("%s: unknown checksum %d", invalid, buf[1])
 	}
 	payload = string(buf[prefLen:])
-	actualCksum = xxhash.Checksum64S(buf[prefLen:], cmn.MLCG32)
+	actualCksum = xxhash.Checksum64S(buf[prefLen:], cos.MLCG32)
 	expectedCksum = binary.BigEndian.Uint64(buf[2:])
 	if expectedCksum != actualCksum {
 		s := fmt.Sprintf("%v", md)
-		return cmn.NewBadMetaCksumError(expectedCksum, actualCksum, s)
+		return cos.NewBadMetaCksumError(expectedCksum, actualCksum, s)
 	}
 
 	for off := 0; !last; {
@@ -262,7 +263,7 @@ func (md *lmeta) unmarshal(buf []byte) (err error) {
 			record = payload[off : off+i]
 		}
 		key := int(binary.BigEndian.Uint16([]byte(record)))
-		val := record[cmn.SizeofI16:]
+		val := record[cos.SizeofI16:]
 		off += i + lenRecSepa
 		switch key {
 		case lomCksumValue:
@@ -313,7 +314,7 @@ func (md *lmeta) unmarshal(buf []byte) (err error) {
 			}
 		case lomCustomMD:
 			entries := strings.Split(val, customMDSepa)
-			md.customMD = make(cmn.SimpleKVs, len(entries)/2)
+			md.customMD = make(cos.SimpleKVs, len(entries)/2)
 			for i := 0; i < len(entries); i += 2 {
 				md.customMD[entries[i]] = entries[i+1]
 			}
@@ -324,7 +325,7 @@ func (md *lmeta) unmarshal(buf []byte) (err error) {
 	if haveCksumType != haveCksumValue {
 		return errors.New(invalid + " #7")
 	}
-	md.cksum = cmn.NewCksum(cksumType, cksumValue)
+	md.cksum = cos.NewCksum(cksumType, cksumValue)
 	if !haveSize {
 		return errors.New(invalid + " #8")
 	}
@@ -333,9 +334,9 @@ func (md *lmeta) unmarshal(buf []byte) (err error) {
 
 func (md *lmeta) marshal(mm *memsys.MMSA, mdSize int64) (buf []byte) {
 	var (
-		cksumType  = cmn.ChecksumNone
+		cksumType  = cos.ChecksumNone
 		cksumValue string
-		b8         [cmn.SizeofI64]byte
+		b8         [cos.SizeofI64]byte
 	)
 	buf, _ = mm.Alloc(mdSize)
 	buf = buf[:prefLen] // hold it for md-xattr checksum (below)
@@ -365,13 +366,13 @@ func (md *lmeta) marshal(mm *memsys.MMSA, mdSize int64) (buf []byte) {
 	// checksum, prepend, and return
 	buf[0] = cmn.MetaverLOM
 	buf[1] = mdCksumTyXXHash
-	mdCksumValue := xxhash.Checksum64S(buf[prefLen:], cmn.MLCG32)
+	mdCksumValue := xxhash.Checksum64S(buf[prefLen:], cos.MLCG32)
 	binary.BigEndian.PutUint64(buf[2:], mdCksumValue)
 	return
 }
 
 func _marshRecord(mm *memsys.MMSA, buf []byte, key int, value string, sepa bool) []byte {
-	var bkey [cmn.SizeofI16]byte
+	var bkey [cos.SizeofI16]byte
 	binary.BigEndian.PutUint16(bkey[:], uint16(key))
 	buf = mm.Append(buf, string(bkey[:]))
 	buf = mm.Append(buf, value)
@@ -387,7 +388,7 @@ func _marshCopies(mm *memsys.MMSA, buf []byte, copies fs.MPI) []byte {
 		num = len(copies)
 	)
 	for copyFQN := range copies {
-		cmn.Assert(copyFQN != "")
+		cos.Assert(copyFQN != "")
 		i++
 		buf = mm.Append(buf, copyFQN)
 		if i < num {
@@ -397,13 +398,13 @@ func _marshCopies(mm *memsys.MMSA, buf []byte, copies fs.MPI) []byte {
 	return buf
 }
 
-func _marshCustomMD(mm *memsys.MMSA, buf []byte, md cmn.SimpleKVs) []byte {
+func _marshCustomMD(mm *memsys.MMSA, buf []byte, md cos.SimpleKVs) []byte {
 	var (
 		i   int
 		num = len(md)
 	)
 	for k, v := range md {
-		cmn.Assert(k != "")
+		cos.Assert(k != "")
 		i++
 		buf = mm.Append(buf, k)
 		buf = mm.Append(buf, customMDSepa)

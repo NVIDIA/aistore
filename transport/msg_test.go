@@ -15,7 +15,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
@@ -62,7 +62,7 @@ func Test_MsgDryRun(t *testing.T) {
 
 	// fill in common shared read-only bug
 	random := newRand(mono.NanoTime())
-	buf, slab := MMSA.Alloc(cmn.MiB)
+	buf, slab := MMSA.Alloc(cos.MiB)
 	defer slab.Free(buf)
 	random.Read(buf)
 
@@ -74,9 +74,9 @@ func Test_MsgDryRun(t *testing.T) {
 			defer wg.Done()
 			myrand := newRand(int64(idx * idx))
 			tsize, prevsize, off := int64(0), int64(0), 0
-			total := int64(cmn.GiB * 4)
+			total := int64(cos.GiB * 4)
 			if testing.Short() {
-				total = cmn.GiB
+				total = cos.GiB
 			}
 			stream := transport.NewMsgStream(nil, "dry-msg"+strconv.Itoa(idx))
 			for tsize < total {
@@ -92,7 +92,7 @@ func Test_MsgDryRun(t *testing.T) {
 				tsize += int64(msize)
 				if tsize-prevsize > total/2 {
 					prevsize = tsize
-					tlog.Logf("%s: %s\n", stream, cmn.B2S(tsize, 0))
+					tlog.Logf("%s: %s\n", stream, cos.B2S(tsize, 0))
 				}
 			}
 			stream.Fin()

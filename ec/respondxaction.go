@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
@@ -188,7 +189,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object i
 			meta = iReq.meta
 		)
 		if meta == nil {
-			cmn.DrainReader(object)
+			cos.DrainReader(object)
 			glog.Errorf("%s no metadata in request for %s/%s", r.t.Snode(), hdr.Bck, hdr.ObjName)
 			return
 		}
@@ -218,7 +219,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object i
 		}
 		if err != nil {
 			if !errors.Is(err, io.ErrUnexpectedEOF) {
-				cmn.DrainReader(object)
+				cos.DrainReader(object)
 			}
 			glog.Error(err)
 			return

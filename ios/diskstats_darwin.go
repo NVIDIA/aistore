@@ -22,7 +22,7 @@ type dblockStat struct {
 var _ diskBlockStat = dblockStat{}
 
 // readDiskStats returns disk stats
-func readDiskStats(disks, _ cmn.SimpleKVs) diskBlockStats {
+func readDiskStats(disks, _ cos.SimpleKVs) diskBlockStats {
 	driveStats, err := iostat.ReadDriveStats()
 	if err != nil {
 		return diskBlockStats{}

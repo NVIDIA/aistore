@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
@@ -37,7 +38,7 @@ var _ = Describe("E2E AWS Compatibility Tests", func() {
 		params string
 	)
 
-	if value := os.Getenv(cmn.EnvVars.UseHTTPS); cmn.IsParseBool(value) {
+	if value := os.Getenv(cmn.EnvVars.UseHTTPS); cos.IsParseBool(value) {
 		host = "https://localhost:8080/s3"
 		params = "--no-check-certificate"
 	} else {

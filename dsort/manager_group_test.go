@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
@@ -23,11 +24,11 @@ const (
 var _ = Describe("ManagerGroup", func() {
 	var (
 		mgrp    *ManagerGroup
-		validRS = &ParsedRequestSpec{Extension: cmn.ExtTar, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cmn.ParsedQuantity{Type: cmn.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
+		validRS = &ParsedRequestSpec{Extension: cmn.ExtTar, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 	)
 
 	BeforeEach(func() {
-		err := cmn.CreateDir(testingConfigDir)
+		err := cos.CreateDir(testingConfigDir)
 		Expect(err).ShouldNot(HaveOccurred())
 
 		config := cmn.GCO.BeginUpdate()

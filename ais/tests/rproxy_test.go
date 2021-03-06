@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
@@ -55,7 +56,7 @@ func genObjURL(isSecure, isXML bool) (s string) {
 func genCURLCmdLine(resURL, proxyURL string, targets cluster.NodeMap) []string {
 	var noProxy []string
 	for _, t := range targets {
-		if !cmn.StringInSlice(t.PublicNet.NodeHostname, noProxy) {
+		if !cos.StringInSlice(t.PublicNet.NodeHostname, noProxy) {
 			noProxy = append(noProxy, t.PublicNet.NodeHostname)
 		}
 	}
@@ -79,7 +80,7 @@ func extractSpeed(out []byte) int64 {
 			continue
 		}
 		words := strings.Split(lines[i], " ")
-		if spd, err := cmn.S2B(words[len(words)-1]); err == nil {
+		if spd, err := cos.S2B(words[len(words)-1]); err == nil {
 			return spd
 		}
 	}
@@ -94,7 +95,7 @@ func TestRProxyGCS(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	if cmn.IsHTTPS(proxyURL) {
+	if cos.IsHTTPS(proxyURL) {
 		t.Skip("test doesn't work for HTTPS")
 	}
 
@@ -161,13 +162,13 @@ func TestRProxyGCS(t *testing.T) {
 		tassert.Fatalf(t, speedJSON != 0, "Failed to detect speed for JSON download")
 	*/
 
-	tlog.Logf("Cold download speed:   %s\n", cmn.B2S(speedCold, 1))
-	tlog.Logf("HTTP download speed:   %s\n", cmn.B2S(speedHTTP, 1))
+	tlog.Logf("Cold download speed:   %s\n", cos.B2S(speedCold, 1))
+	tlog.Logf("HTTP download speed:   %s\n", cos.B2S(speedHTTP, 1))
 	/*
 		TODO: uncomment when target supports HTTPS client
 
-		tlog.Logf("HTTPS download speed:  %s\n", cmn.B2S(speedHTTPS, 1))
-		tlog.Logf("JSON download speed:   %s\n", cmn.B2S(speedJSON, 1))
+		tlog.Logf("HTTPS download speed:  %s\n", cos.B2S(speedHTTPS, 1))
+		tlog.Logf("JSON download speed:   %s\n", cos.B2S(speedJSON, 1))
 	*/
 	tlog.Logf("HTTP (cached) is %.1f times faster than Cold\n", float64(speedHTTP)/float64(speedCold))
 }

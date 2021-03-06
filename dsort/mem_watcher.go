@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/sys"
 )
@@ -24,7 +24,7 @@ const (
 type singleMemoryWatcher struct {
 	wg     *sync.WaitGroup
 	ticker *time.Ticker
-	stopCh *cmn.StopCh
+	stopCh *cos.StopCh
 }
 
 // memoryWatcher is responsible for monitoring memory changes and decide
@@ -43,7 +43,7 @@ func newSingleMemoryWatcher(interval time.Duration) *singleMemoryWatcher {
 	return &singleMemoryWatcher{
 		wg:     &sync.WaitGroup{},
 		ticker: time.NewTicker(interval),
-		stopCh: cmn.NewStopCh(),
+		stopCh: cos.NewStopCh(),
 	}
 }
 
