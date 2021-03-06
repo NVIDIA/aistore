@@ -177,7 +177,7 @@ func (d DlJobInfos) Swap(i, j int) {
 func (d *DlStatusResp) Aggregate(rhs DlStatusResp) *DlStatusResp {
 	if d == nil {
 		r := DlStatusResp{}
-		err := cmn.MorphMarshal(rhs, &r)
+		err := cos.MorphMarshal(rhs, &r)
 		cos.AssertNoErr(err)
 		return &r
 	}

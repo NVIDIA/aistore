@@ -163,8 +163,8 @@ func (rctx *RecipeContext) PostRecipe() error {
 
 	smap := fetchSmap("PostRecipe")
 	if len(rctx.origTargets) != smap.CountActiveTargets() {
-		origTargStr := cmn.MustMarshal(rctx.origTargets)
-		newTargStr := cmn.MustMarshal(smap.Tmap)
+		origTargStr := cos.MustMarshal(rctx.origTargets)
+		newTargStr := cos.MustMarshal(smap.Tmap)
 
 		report.Writef(report.SummaryLevel,
 			"post recipe target count changed\n"+

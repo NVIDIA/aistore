@@ -35,7 +35,7 @@ type (
 /////////////
 
 // interface guard
-var _ cmn.Runner = (*Prunner)(nil)
+var _ cos.Runner = (*Prunner)(nil)
 
 func (r *Prunner) Run() error                  { return r.runcommon(r) }
 func (r *Prunner) CoreStats() *CoreStats       { return r.Core }
@@ -76,7 +76,7 @@ func (r *Prunner) GetWhatStats() interface{} {
 func (r *Prunner) log(uptime time.Duration) {
 	r.Core.UpdateUptime(uptime)
 	if idle := r.Core.copyT(r.ctracker, []string{"kalive", PostCount, Uptime}); !idle {
-		b := cmn.MustMarshal(r.ctracker)
+		b := cos.MustMarshal(r.ctracker)
 		glog.Infoln(string(b))
 	}
 }

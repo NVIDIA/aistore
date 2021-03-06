@@ -103,8 +103,8 @@ type KeepaliveTracker interface {
 
 // interface guard
 var (
-	_ cmn.Runner = (*targetKeepaliveRunner)(nil)
-	_ cmn.Runner = (*proxyKeepaliveRunner)(nil)
+	_ cos.Runner = (*targetKeepaliveRunner)(nil)
+	_ cos.Runner = (*proxyKeepaliveRunner)(nil)
 )
 
 func newTargetKeepaliveRunner(t *targetrunner, statsT stats.Tracker, startedUp *atomic.Bool) *targetKeepaliveRunner {

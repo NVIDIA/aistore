@@ -238,7 +238,7 @@ func (c *getJogger) restoreReplicatedFromMemory(ctx *restoreCtx) error {
 	ctx.lom.SetSize(writer.Size())
 	args := &WriteArgs{
 		Reader:     memsys.NewReader(writer),
-		MD:         cmn.MustMarshal(ctx.meta),
+		MD:         cos.MustMarshal(ctx.meta),
 		CksumType:  ctx.meta.CksumType,
 		CksumValue: ctx.meta.CksumValue,
 	}
@@ -302,7 +302,7 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 		return err
 	}
 
-	b := cmn.MustMarshal(ctx.meta)
+	b := cos.MustMarshal(ctx.meta)
 	ctMeta := cluster.NewCTFromLOM(ctx.lom, MetaType)
 	if err := ctMeta.Write(c.parent.t, bytes.NewReader(b), -1); err != nil {
 		return err

@@ -761,8 +761,8 @@ func (h *httprunner) detectNodeChanges(smap *smapX) error {
 		return fmt.Errorf("%s: not present in the loaded %s", h.si, smap)
 	}
 	if !snode.Equals(h.si) {
-		prev, _ := cmn.JSON.MarshalIndent(snode, "", " ")
-		curr, _ := cmn.JSON.MarshalIndent(h.si, "", " ")
+		prev, _ := cos.JSON.MarshalIndent(snode, "", " ")
+		curr, _ := cos.JSON.MarshalIndent(h.si, "", " ")
 		return fmt.Errorf(
 			"%s: detected a change in snode configuration (prev: %s, curr: %s)",
 			h.si, string(prev), string(curr),
@@ -1086,7 +1086,7 @@ func (h *httprunner) callerNotify(n cluster.Notif, err error, kind string) {
 	}
 
 	path := cmn.URLPathNotifs.Join(kind)
-	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: path, Body: cmn.MustMarshal(&msg)}
+	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: path, Body: cos.MustMarshal(&msg)}
 	args.network = cmn.NetworkIntraControl
 	args.timeout = cmn.GCO.Get().Timeout.MaxKeepalive
 	args.selected = nodes
@@ -1194,7 +1194,7 @@ func (h *httprunner) bcastAsyncIC(msg *aisMsg) {
 		smap = h.owner.smap.get()
 		args = allocBcastArgs()
 	)
-	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: cmn.URLPathIC.S, Body: cmn.MustMarshal(msg)}
+	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: cmn.URLPathIC.S, Body: cos.MustMarshal(msg)}
 	args.network = cmn.NetworkIntraControl
 	args.timeout = cmn.GCO.Get().Timeout.MaxKeepalive
 	for pid, psi := range smap.Pmap {
@@ -1875,7 +1875,7 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Dur
 		glob := xreg.GetRebMarked()
 		regReq.Reb = glob.Interrupted
 	}
-	info := cmn.MustMarshal(regReq)
+	info := cos.MustMarshal(regReq)
 	if keepalive {
 		path = cmn.URLPathClusterKalive.S
 	} else {
@@ -2024,7 +2024,7 @@ func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header) {
 		return nil, false
 	})
 
-	props := string(cmn.MustMarshal(finalProps))
+	props := string(cos.MustMarshal(finalProps))
 	hdr.Set(cmn.HeaderBucketProps, props)
 }
 

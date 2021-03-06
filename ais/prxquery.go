@@ -59,7 +59,7 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	args.req = cmn.ReqArgs{
 		Method: http.MethodPost,
 		Path:   cmn.URLPathQueryInit.S,
-		Body:   cmn.MustMarshal(msg),
+		Body:   cos.MustMarshal(msg),
 		Header: header,
 	}
 	args.timeout = cmn.DefaultTimeout
@@ -163,7 +163,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 	args.req = cmn.ReqArgs{
 		Method: http.MethodGet,
 		Path:   cmn.URLPathQueryPeek.S,
-		Body:   cmn.MustMarshal(msg),
+		Body:   cos.MustMarshal(msg),
 		Header: map[string][]string{cmn.HeaderAccept: {cmn.ContentMsgPack}},
 	}
 	args.timeout = cmn.LongTimeout

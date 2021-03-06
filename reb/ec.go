@@ -891,7 +891,7 @@ func (reb *Manager) exchange(md *rebArgs) (err error) {
 	}
 	var (
 		req    = pushReq{daemonID: reb.t.SID(), stage: rebStageECNamespace, rebID: rebID}
-		body   = cmn.MustMarshal(cts)
+		body   = cos.MustMarshal(cts)
 		opaque = req.NewPack(nil, rebMsgEC)
 		o      = transport.AllocSend()
 	)
@@ -1782,7 +1782,7 @@ func (reb *Manager) restoreObject(obj *rebObject, objMD *ec.Metadata, src io.Rea
 	lom.SetSize(obj.objSize)
 	args := &ec.WriteArgs{
 		Reader:    src,
-		MD:        cmn.MustMarshal(objMD),
+		MD:        cos.MustMarshal(objMD),
 		CksumType: lom.Bprops().Cksum.Type,
 	}
 	return ec.WriteReplicaAndMeta(reb.t, lom, args)

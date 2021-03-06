@@ -154,7 +154,7 @@ func (t *targetrunner) daeputJSON(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActSetConfig: // setconfig #2 - via action message
 		transient := cos.IsParseBool(r.URL.Query().Get(cmn.ActTransient))
 		toUpdate := &cmn.ConfigToUpdate{}
-		if err := cmn.MorphMarshal(msg.Value, toUpdate); err != nil {
+		if err := cos.MorphMarshal(msg.Value, toUpdate); err != nil {
 			t.writeErrf(w, r, "failed to parse configuration to update, err: %v", err)
 			return
 		}
@@ -781,7 +781,7 @@ func (t *targetrunner) detectMpathChanges() {
 		newfs.Disabled[mpath] = struct{}{}
 	}
 
-	if _, err := jsp.Load(mpathConfigFQN, &oldfs, cmn.Plain()); err != nil {
+	if _, err := jsp.Load(mpathConfigFQN, &oldfs, jsp.Plain()); err != nil {
 		if !os.IsNotExist(err) && err != io.EOF {
 			glog.Errorf("Failed to load old mpath config %q, err: %v", mpathConfigFQN, err)
 		}
@@ -805,7 +805,7 @@ func (t *targetrunner) detectMpathChanges() {
 		glog.Errorln(newfsPprint)
 	}
 	// persist
-	if err := jsp.Save(mpathConfigFQN, newfs, cmn.Plain()); err != nil {
+	if err := jsp.Save(mpathConfigFQN, newfs, jsp.Plain()); err != nil {
 		glog.Errorf("Error writing config file: %v", err)
 	}
 }

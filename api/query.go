@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/query"
 )
 
@@ -35,7 +36,7 @@ func InitQuery(baseParams BaseParams, objectsTemplate string, bck cmn.Bck, filte
 	err := DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathQueryInit.S,
-		Body:       cmn.MustMarshal(initMsg),
+		Body:       cos.MustMarshal(initMsg),
 	}, &handle)
 	return handle, err
 }
@@ -47,7 +48,7 @@ func NextQueryResults(baseParams BaseParams, handle string, size uint) ([]*cmn.B
 	err := DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathQueryNext.S,
-		Body:       cmn.MustMarshal(query.NextMsg{Handle: handle, Size: size}),
+		Body:       cos.MustMarshal(query.NextMsg{Handle: handle, Size: size}),
 	}, &objectsNames)
 
 	return objectsNames, err
@@ -58,7 +59,7 @@ func QueryWorkerTarget(baseParams BaseParams, handle string, workerID uint) (dae
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathQueryWorker.S,
-		Body:       cmn.MustMarshal(query.NextMsg{Handle: handle, WorkerID: workerID}),
+		Body:       cos.MustMarshal(query.NextMsg{Handle: handle, WorkerID: workerID}),
 	}, &daemonID)
 	return
 }

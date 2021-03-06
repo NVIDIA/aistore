@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/downloader"
 )
 
@@ -47,10 +48,11 @@ func DownloadRange(baseParams BaseParams, description string, bck cmn.Bck, templ
 
 func DownloadWithParam(baseParams BaseParams, dlt downloader.DlType, body interface{}) (string, error) {
 	baseParams.Method = http.MethodPost
+	msg := cos.MustMarshal(body)
 	return doDlDownloadRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDownload.S,
-		Body:       cmn.MustMarshal(downloader.DlBody{Type: dlt, RawMessage: cmn.MustMarshal(body)}),
+		Body:       cos.MustMarshal(downloader.DlBody{Type: dlt, RawMessage: msg}),
 	})
 }
 
@@ -96,7 +98,7 @@ func DownloadStatus(baseParams BaseParams, id string, onlyActiveTasks ...bool) (
 	return doDlStatusRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDownload.S,
-		Body:       cmn.MustMarshal(dlBody),
+		Body:       cos.MustMarshal(dlBody),
 	})
 }
 
@@ -108,7 +110,7 @@ func DownloadGetList(baseParams BaseParams, regex string) (dlList downloader.DlJ
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDownload.S,
-		Body:       cmn.MustMarshal(dlBody),
+		Body:       cos.MustMarshal(dlBody),
 	}, &dlList)
 	sort.Sort(dlList)
 	return dlList, err
@@ -122,7 +124,7 @@ func AbortDownload(baseParams BaseParams, id string) error {
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDownloadAbort.S,
-		Body:       cmn.MustMarshal(dlBody),
+		Body:       cos.MustMarshal(dlBody),
 	})
 }
 
@@ -134,7 +136,7 @@ func RemoveDownload(baseParams BaseParams, id string) error {
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDownloadRemove.S,
-		Body:       cmn.MustMarshal(dlBody),
+		Body:       cos.MustMarshal(dlBody),
 	})
 }
 

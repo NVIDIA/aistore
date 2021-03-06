@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
@@ -59,7 +60,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 		if cmn.ReadJSON(w, r, &msg) != nil {
 			return
 		}
-		if err := cmn.MorphMarshal(msg.Value, &xactMsg); err != nil {
+		if err := cos.MorphMarshal(msg.Value, &xactMsg); err != nil {
 			t.writeErr(w, r, err)
 			return
 		}

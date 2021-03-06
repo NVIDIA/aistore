@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -36,7 +36,7 @@ func (bd *DBMock) Close() error {
 }
 
 func (bd *DBMock) Set(collection, key string, object interface{}) error {
-	b := cmn.MustMarshal(object)
+	b := cos.MustMarshal(object)
 	return bd.SetString(collection, key, string(b))
 }
 

@@ -293,7 +293,7 @@ func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = p.startETL(w, r, cmn.MustMarshal(msg), msg.ID); err != nil {
+	if err = p.startETL(w, r, cos.MustMarshal(msg), msg.ID); err != nil {
 		p.writeErr(w, r, err)
 	}
 }
@@ -326,7 +326,7 @@ func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = p.startETL(w, r, cmn.MustMarshal(msg), msg.ID); err != nil {
+	if err = p.startETL(w, r, cos.MustMarshal(msg), msg.ID); err != nil {
 		p.writeErr(w, r, err)
 	}
 }

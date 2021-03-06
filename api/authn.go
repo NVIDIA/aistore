@@ -33,7 +33,7 @@ func AddUser(baseParams BaseParams, newUser *cmn.AuthUser) error {
 }
 
 func UpdateUser(baseParams BaseParams, newUser *cmn.AuthUser) error {
-	msg := cmn.MustMarshal(newUser)
+	msg := cos.MustMarshal(newUser)
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
@@ -57,7 +57,7 @@ func LoginUser(baseParams BaseParams, userID, pass string, expire *time.Duration
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathUsers.Join(userID),
-		Body:       cmn.MustMarshal(rec),
+		Body:       cos.MustMarshal(rec),
 	}, &token)
 	if err != nil {
 		return nil, err
@@ -70,13 +70,13 @@ func LoginUser(baseParams BaseParams, userID, pass string, expire *time.Duration
 }
 
 func RegisterClusterAuthN(baseParams BaseParams, cluSpec cmn.AuthCluster) error {
-	msg := cmn.MustMarshal(cluSpec)
+	msg := cos.MustMarshal(cluSpec)
 	baseParams.Method = http.MethodPost
 	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathClusters.S, Body: msg})
 }
 
 func UpdateClusterAuthN(baseParams BaseParams, cluSpec cmn.AuthCluster) error {
-	msg := cmn.MustMarshal(cluSpec)
+	msg := cos.MustMarshal(cluSpec)
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
@@ -170,7 +170,7 @@ func GetUserAuthN(baseParams BaseParams, userID string) (*cmn.AuthUser, error) {
 }
 
 func AddRoleAuthN(baseParams BaseParams, roleSpec *cmn.AuthRole) error {
-	msg := cmn.MustMarshal(roleSpec)
+	msg := cos.MustMarshal(roleSpec)
 	baseParams.Method = http.MethodPost
 	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathRoles.S, Body: msg})
 }
@@ -187,7 +187,7 @@ func RevokeToken(baseParams BaseParams, token string) error {
 	baseParams.Method = http.MethodDelete
 	msg := &cmn.TokenMsg{Token: token}
 	return DoHTTPRequest(ReqParams{
-		Body:       cmn.MustMarshal(msg),
+		Body:       cos.MustMarshal(msg),
 		BaseParams: baseParams,
 		Path:       cmn.URLPathTokens.S,
 	})
@@ -206,7 +206,7 @@ func GetAuthNConfig(baseParams BaseParams) (*cmn.AuthNConfig, error) {
 func SetAuthNConfig(baseParams BaseParams, conf *cmn.AuthNConfigToUpdate) error {
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
-		Body:       cmn.MustMarshal(conf),
+		Body:       cos.MustMarshal(conf),
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDaemon.S,
 	})

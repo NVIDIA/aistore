@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/nl"
@@ -158,7 +159,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if response != nil {
-		b := cmn.MustMarshal(response)
+		b := cos.MustMarshal(response)
 		if _, err := w.Write(b); err != nil {
 			glog.Errorf("Failed to write to HTTP response, err: %v", err)
 		}

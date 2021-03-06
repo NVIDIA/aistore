@@ -44,13 +44,13 @@ type (
 // SetBucketProps sets the properties of a bucket.
 // Validation of the properties passed in is performed by AIStore Proxy.
 func SetBucketProps(baseParams BaseParams, bck cmn.Bck, props *cmn.BucketPropsToUpdate, query ...url.Values) (string, error) {
-	b := cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActSetBprops, Value: props})
+	b := cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActSetBprops, Value: props})
 	return patchBucketProps(baseParams, bck, b, query...)
 }
 
 // ResetBucketProps resets the properties of a bucket to the global configuration.
 func ResetBucketProps(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (string, error) {
-	b := cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActResetBprops})
+	b := cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActResetBprops})
 	return patchBucketProps(baseParams, bck, b, query...)
 }
 
@@ -158,7 +158,7 @@ func CreateBucket(baseParams BaseParams, bck cmn.Bck, props *cmn.BucketPropsToUp
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(bck.Name),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActCreateBck, Value: props}),
+		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActCreateBck, Value: props}),
 		Query:      cmn.AddBckToQuery(nil, bck),
 	})
 }
@@ -169,7 +169,7 @@ func DestroyBucket(baseParams BaseParams, bck cmn.Bck) error {
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(bck.Name),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActDestroyBck}),
+		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActDestroyBck}),
 		Query:      cmn.AddBckToQuery(nil, bck),
 	})
 }
@@ -207,7 +207,7 @@ func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, msgs ...*cmn.Copy
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(fromBck.Name),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActCopyBck, Value: msg}),
+		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActCopyBck, Value: msg}),
 		Query:      q,
 	}, &xactID)
 	return
@@ -224,7 +224,7 @@ func RenameBucket(baseParams BaseParams, fromBck, toBck cmn.Bck) (xactID string,
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(fromBck.Name),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActMoveBck}),
+		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMoveBck}),
 		Query:      q,
 	}, &xactID)
 	return
@@ -277,7 +277,7 @@ func EvictRemoteBucket(baseParams BaseParams, bck cmn.Bck, keepMD bool) error {
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(bck.Name),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActEvictRemoteBck}),
+		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActEvictRemoteBck}),
 		Query:      cmn.AddBckToQuery(q, bck),
 	})
 }
@@ -302,7 +302,7 @@ func waitForAsyncReqComplete(reqParams ReqParams, action string, msg *cmn.Bucket
 	if reqParams.Query == nil {
 		reqParams.Query = url.Values{}
 	}
-	reqParams.Body = cmn.MustMarshal(actMsg)
+	reqParams.Body = cos.MustMarshal(actMsg)
 	resp, err := doHTTPRequestGetResp(reqParams, &uuid)
 	if err != nil {
 		return err
@@ -319,7 +319,7 @@ func waitForAsyncReqComplete(reqParams ReqParams, action string, msg *cmn.Bucket
 
 	// Poll async task for http.StatusOK completion
 	for {
-		reqParams.Body = cmn.MustMarshal(actMsg)
+		reqParams.Body = cos.MustMarshal(actMsg)
 		resp, err = doHTTPRequestGetResp(reqParams, v)
 		if err != nil {
 			return err
@@ -374,7 +374,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 			smsg.PageSize = toRead
 		}
 		actMsg := cmn.ActionMsg{Action: cmn.ActListObjects, Value: smsg}
-		reqParams.Body = cmn.MustMarshal(actMsg)
+		reqParams.Body = cos.MustMarshal(actMsg)
 		page := nextPage
 
 		if pageNum == 1 {
@@ -447,7 +447,7 @@ func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg) (*
 			Path:       cmn.URLPathBuckets.Join(bck.Name),
 			Header:     http.Header{cmn.HeaderAccept: []string{cmn.ContentMsgPack}},
 			Query:      cmn.AddBckToQuery(url.Values{}, bck),
-			Body:       cmn.MustMarshal(actMsg),
+			Body:       cos.MustMarshal(actMsg),
 		}
 	)
 
@@ -472,7 +472,7 @@ func ListObjectsInvalidateCache(params BaseParams, bck cmn.Bck) error {
 		Query:      cmn.AddBckToQuery(q, bck),
 		BaseParams: params,
 		Path:       path,
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActInvalListCache}),
+		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActInvalListCache}),
 	})
 }
 
@@ -490,7 +490,7 @@ func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action string, listR
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(bck.Name),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: action, Value: listRangeMsg}),
+		Body:       cos.MustMarshal(cmn.ActionMsg{Action: action, Value: listRangeMsg}),
 		Header: http.Header{
 			cmn.HeaderContentType: []string{cmn.ContentJSON},
 		},
@@ -502,7 +502,7 @@ func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action string, listR
 func ECEncodeBucket(baseParams BaseParams, bck cmn.Bck, data, parity int) (xactID string, err error) {
 	baseParams.Method = http.MethodPost
 	// Without `string` conversion it makes base64 from []byte in `Body`.
-	ecConf := string(cmn.MustMarshal(&cmn.ECConfToUpdate{
+	ecConf := string(cos.MustMarshal(&cmn.ECConfToUpdate{
 		DataSlices:   &data,
 		ParitySlices: &parity,
 		Enabled:      Bool(true),
@@ -510,7 +510,7 @@ func ECEncodeBucket(baseParams BaseParams, bck cmn.Bck, data, parity int) (xactI
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(bck.Name),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActECEncode, Value: ecConf}),
+		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActECEncode, Value: ecConf}),
 		Query:      cmn.AddBckToQuery(nil, bck),
 	}, &xactID)
 	return

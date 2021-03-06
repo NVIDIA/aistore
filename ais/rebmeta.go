@@ -56,7 +56,7 @@ var _ revs = (*rebMD)(nil)
 
 func (r *rebMD) tag() string     { return revsRMDTag }
 func (r *rebMD) version() int64  { return r.Version }
-func (r *rebMD) marshal() []byte { return cmn.MustMarshal(r) }
+func (r *rebMD) marshal() []byte { return cos.MustMarshal(r) }
 func (r *rebMD) inc()            { r.Version++ }
 func (r *rebMD) clone() *rebMD {
 	dst := &rebMD{}

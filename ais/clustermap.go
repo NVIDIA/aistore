@@ -161,7 +161,7 @@ func (m *smapX) addIC(psi *cluster.Snode) {
 
 func (m *smapX) tag() string         { return revsSmapTag }
 func (m *smapX) version() int64      { return m.Version }
-func (m *smapX) marshal() (b []byte) { return cmn.MustMarshal(m) }
+func (m *smapX) marshal() (b []byte) { return cos.MustMarshal(m) }
 
 // to be used exclusively at startup - compare with validate() below
 func (m *smapX) isValid() bool {

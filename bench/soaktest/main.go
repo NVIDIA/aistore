@@ -24,7 +24,6 @@ import (
 	"github.com/NVIDIA/aistore/bench/soaktest/scheduler"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakprim"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools"
@@ -157,7 +156,7 @@ func parseCmdLine() {
 }
 
 func writeParams() {
-	b := cmn.MustMarshal(soakcmn.Params)
+	b := cos.MustMarshal(soakcmn.Params)
 	report.Writef(report.SummaryLevel, "----- Started Soak With Params -----\n")
 	report.Writef(report.SummaryLevel, "%s\n", string(b))
 	report.Writef(report.SummaryLevel, "----- Started Soak With Params -----\n")

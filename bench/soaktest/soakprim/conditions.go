@@ -11,7 +11,6 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/bench/soaktest/report"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
@@ -59,8 +58,8 @@ func (rctx *RecipeContext) Pre(conds *PreConds) {
 		}
 
 		if missing {
-			eStr := cmn.MustMarshal(expBuckets)
-			aStr := cmn.MustMarshal(actBuckets)
+			eStr := cos.MustMarshal(expBuckets)
+			aStr := cos.MustMarshal(actBuckets)
 			cos.AssertNoErr(fmt.Errorf("missing buckets in pre, expected: %v, actual: %v", string(eStr), string(aStr)))
 		}
 

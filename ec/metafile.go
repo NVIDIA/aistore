@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -55,7 +54,7 @@ func (md *Metadata) Clone() *Metadata {
 }
 
 func (md *Metadata) Marshal() []byte {
-	return cmn.MustMarshal(md)
+	return cos.MustMarshal(md)
 }
 
 func MetaToString(md *Metadata) string {

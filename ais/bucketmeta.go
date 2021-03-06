@@ -195,7 +195,7 @@ func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *cluster.Snode, caller s
 //
 func (m *bucketMD) tag() string     { return revsBMDTag }
 func (m *bucketMD) version() int64  { return m.Version }
-func (m *bucketMD) marshal() []byte { return cmn.MustMarshal(m) }
+func (m *bucketMD) marshal() []byte { return cos.MustMarshal(m) }
 
 //////////////////
 // bmdOwnerBase //
@@ -297,7 +297,8 @@ func (bo *bmdOwnerTgt) put(bmd *bucketMD) (err error) {
 
 func (bo *bmdOwnerTgt) persist() (err error) {
 	bmd := bo.get()
-	cnt, availCnt := fs.PersistOnMpaths(fs.BmdPersistedFileName, fs.BmdPersistedPrevious, bmd, bmdCopies, bmd.GetJopts())
+	cnt, availCnt :=
+		fs.PersistOnMpaths(fs.BmdPersistedFileName, fs.BmdPersistedPrevious, bmd, bmdCopies, bmd.JspOpts())
 	if cnt > 0 {
 		return
 	}

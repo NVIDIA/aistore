@@ -128,7 +128,7 @@ func (p *voteRetryMockTarget) healthdlr(w http.ResponseWriter, r *http.Request) 
 	if getRebStatus {
 		status := &reb.Status{}
 		status.RebID = math.MaxInt64 // to abort t[MOCK] join triggered rebalance
-		body := cmn.MustMarshal(status)
+		body := cos.MustMarshal(status)
 		_, err := w.Write(body)
 		if err != nil {
 			p.errCh <- fmt.Errorf("error writing reb-status: %v", err)

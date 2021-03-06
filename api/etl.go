@@ -25,7 +25,7 @@ func ETLBuild(baseParams BaseParams, msg etl.BuildMsg) (id string, err error) {
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathETLBuild.S,
-		Body:       cmn.MustMarshal(msg),
+		Body:       cos.MustMarshal(msg),
 	}, &id)
 	return id, err
 }
@@ -77,7 +77,7 @@ func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.Bck2Bc
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(fromBck.Name),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActETLBck, Value: bckMsg}),
+		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActETLBck, Value: bckMsg}),
 		Query:      q,
 	}, &xactID)
 	return

@@ -24,7 +24,7 @@ func TestConfigTestEnv(t *testing.T) {
 	confPath := filepath.Join(thisFileDir(t), "configs", "config.json")
 	localConfPath := filepath.Join(thisFileDir(t), "configs", "confignet.json")
 	newConfig := cmn.Config{}
-	tassert.CheckFatal(t, jsp.LoadConfig(confPath, localConfPath, cmn.Proxy, &newConfig))
+	tassert.CheckFatal(t, cmn.LoadConfig(confPath, localConfPath, cmn.Proxy, &newConfig))
 }
 
 func TestConfigFSPaths(t *testing.T) {
@@ -42,7 +42,7 @@ func TestConfigFSPaths(t *testing.T) {
 	_, err := jsp.LoadMeta(localConfPath, &localConf)
 	tassert.CheckFatal(t, err)
 	newConfig := cmn.Config{}
-	tassert.CheckFatal(t, jsp.LoadConfig(confPath, localConfPath, cmn.Target, &newConfig))
+	tassert.CheckFatal(t, cmn.LoadConfig(confPath, localConfPath, cmn.Target, &newConfig))
 
 	mpaths := localConf.FSpaths.Paths
 	tassert.Fatalf(t, len(newConfig.FSpaths.Paths) == len(mpaths), "mountpath count %v != %v", len(newConfig.FSpaths.Paths), len(mpaths))

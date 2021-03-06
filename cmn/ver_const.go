@@ -5,6 +5,8 @@
  */
 package cmn
 
+import "github.com/NVIDIA/aistore/cmn/jsp"
+
 // ========================== IMPORTANT NOTE ==============================
 //
 // - (major.minor) version indicates the current version of AIS software
@@ -33,5 +35,5 @@ const (
 
 	MetaverMetasync = 1 // metasync over network formatting version (jsp)
 
-	MetaverJSP = 3 // `jsp` own encoding version
+	MetaverJSP = jsp.Metaver // `jsp` own encoding version
 )

@@ -9,6 +9,7 @@ import (
 	"net/url"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dsort"
 )
 
@@ -18,7 +19,7 @@ func StartDSort(baseParams BaseParams, rs dsort.RequestSpec) (string, error) {
 	err := DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathdSort.S,
-		Body:       cmn.MustMarshal(rs),
+		Body:       cos.MustMarshal(rs),
 	}, &id)
 	return id, err
 }

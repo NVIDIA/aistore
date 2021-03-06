@@ -7,15 +7,15 @@ package sys
 import (
 	"os"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-func FetchSysInfo() cmn.SysInfo {
+func FetchSysInfo() cos.SysInfo {
 	var (
 		osMem, _ = Mem()
 		proc, _  = ProcessStats(os.Getpid())
 	)
-	return cmn.SysInfo{
+	return cos.SysInfo{
 		MemAvail:   osMem.Total,
 		MemUsed:    proc.Mem.Resident,
 		PctMemUsed: float64(proc.Mem.Resident) * 100 / float64(osMem.Total),

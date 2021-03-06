@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/bench/soaktest/stats"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 // Uses the stats package to generate csv reports of the soaktest.
@@ -101,7 +102,7 @@ func (rctx *ReportContext) FlushRecipePhase() {
 		stat.RecipeName = rctx.currentRecipe
 		stat.RecipeNum = rctx.recipeNumber[stat.RecipeName]
 
-		b := cmn.MustMarshal(stat)
+		b := cos.MustMarshal(stat)
 		Writef(DetailLevel, string(b))
 
 		detailWriter.WriteStat(stat)

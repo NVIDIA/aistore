@@ -13,7 +13,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
@@ -27,14 +26,12 @@ type (
 		fmt.Stringer
 		Housekeep() time.Duration
 	}
-
 	request struct {
 		name            string
 		f               CleanupFunc
 		initialInterval time.Duration
 		registering     bool
 	}
-
 	timedAction struct {
 		name       string
 		f          CleanupFunc
@@ -56,7 +53,7 @@ type (
 var DefaultHK *housekeeper
 
 // interface guard
-var _ cmn.Runner = (*housekeeper)(nil)
+var _ cos.Runner = (*housekeeper)(nil)
 
 func init() {
 	DefaultHK = &housekeeper{
@@ -155,7 +152,7 @@ func (hk *housekeeper) Run() (err error) {
 		case s, ok := <-hk.sigCh:
 			if ok {
 				signal.Stop(hk.sigCh)
-				err := cmn.NewSignalError(s.(syscall.Signal))
+				err := cos.NewSignalError(s.(syscall.Signal))
 				hk.Stop(err)
 				return err
 			}

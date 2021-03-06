@@ -96,7 +96,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		err = t.renameBucket(c)
 	case cmn.ActCopyBck, cmn.ActETLBck:
 		bck2BckMsg := &cmn.Bck2BckMsg{}
-		if err := cmn.MorphMarshal(c.msg.Value, bck2BckMsg); err != nil {
+		if err := cos.MorphMarshal(c.msg.Value, bck2BckMsg); err != nil {
 			t.writeErr(w, r, err)
 			return
 		}
@@ -132,7 +132,7 @@ func (t *targetrunner) createBucket(c *txnServerCtx) error {
 		}
 		if c.msg.Action == cmn.ActCreateBck && c.bck.IsRemote() {
 			if c.msg.Value != nil {
-				if err := cmn.MorphMarshal(c.msg.Value, &c.bck.Props); err != nil {
+				if err := cos.MorphMarshal(c.msg.Value, &c.bck.Props); err != nil {
 					return err
 				}
 			}
@@ -307,7 +307,7 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 
 func (t *targetrunner) validateNprops(bck *cluster.Bck, msg *aisMsg) (nprops *cmn.BucketProps, err error) {
 	var (
-		body = cmn.MustMarshal(msg.Value)
+		body = cos.MustMarshal(msg.Value)
 		cs   = fs.GetCapStatus()
 	)
 	nprops = &cmn.BucketProps{}
@@ -622,7 +622,7 @@ func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
 	switch c.phase {
 	case cmn.ActBegin:
 		var opts cmn.ActValDecommision
-		if err := cmn.MorphMarshal(c.msg.Value, &opts); err != nil {
+		if err := cos.MorphMarshal(c.msg.Value, &opts); err != nil {
 			return err
 		}
 		g := xreg.GetRebMarked()
@@ -638,7 +638,7 @@ func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
 		t.gfn.global.abortTimed()
 	case cmn.ActCommit:
 		var opts cmn.ActValDecommision
-		if err := cmn.MorphMarshal(c.msg.Value, &opts); err != nil {
+		if err := cos.MorphMarshal(c.msg.Value, &opts); err != nil {
 			return err
 		}
 		if c.msg.Action == cmn.ActDecommission && opts.DaemonID == t.si.ID() {

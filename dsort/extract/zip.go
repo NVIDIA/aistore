@@ -9,7 +9,6 @@ import (
 	"io"
 
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
@@ -123,7 +122,7 @@ func (z *zipExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader, 
 			Comment: header.Comment,
 		}
 
-		bmeta := cmn.MustMarshal(metadata)
+		bmeta := cos.MustMarshal(metadata)
 
 		if f.FileInfo().IsDir() {
 			// We can safely ignore this case because we do `MkdirAll` anyway

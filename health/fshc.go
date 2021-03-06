@@ -45,7 +45,7 @@ type (
 //////////
 
 // interface guard
-var _ cmn.Runner = (*FSHC)(nil)
+var _ cos.Runner = (*FSHC)(nil)
 
 func NewFSHC(dispatcher fspathDispatcher) *FSHC {
 	return &FSHC{

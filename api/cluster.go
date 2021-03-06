@@ -96,7 +96,7 @@ func JoinCluster(baseParams BaseParams, nodeInfo *cluster.Snode) (rebID string, 
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathClusterUserReg.S,
-		Body:       cmn.MustMarshal(nodeInfo),
+		Body:       cos.MustMarshal(nodeInfo),
 	}, &rebID)
 	return
 }
@@ -131,7 +131,7 @@ func SetClusterConfigUsingMsg(baseParams BaseParams, configToUpdate *cmn.ConfigT
 		Value:  configToUpdate,
 	}
 	baseParams.Method = http.MethodPut
-	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cmn.MustMarshal(msg)})
+	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cos.MustMarshal(msg)})
 }
 
 func AttachRemoteAIS(baseParams BaseParams, alias, u string) error {
@@ -158,7 +158,7 @@ func StartMaintenance(baseParams BaseParams, actValue *cmn.ActValDecommision) (i
 		Value:  actValue,
 	}
 	baseParams.Method = http.MethodPut
-	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cmn.MustMarshal(msg)}, &id)
+	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cos.MustMarshal(msg)}, &id)
 	return id, err
 }
 
@@ -168,7 +168,7 @@ func Decommission(baseParams BaseParams, actValue *cmn.ActValDecommision) (id st
 		Value:  actValue,
 	}
 	baseParams.Method = http.MethodPut
-	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cmn.MustMarshal(msg)}, &id)
+	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cos.MustMarshal(msg)}, &id)
 	return id, err
 }
 
@@ -178,7 +178,7 @@ func StopMaintenance(baseParams BaseParams, actValue *cmn.ActValDecommision) (id
 		Value:  actValue,
 	}
 	baseParams.Method = http.MethodPut
-	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cmn.MustMarshal(msg)}, &id)
+	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cos.MustMarshal(msg)}, &id)
 	return id, err
 }
 
@@ -194,7 +194,7 @@ func ShutdownCluster(baseParams BaseParams) error {
 	err := DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
-		Body:       cmn.MustMarshal(msg),
+		Body:       cos.MustMarshal(msg),
 	})
 	return err
 }
@@ -206,6 +206,6 @@ func ShutdownNode(baseParams BaseParams, actValue *cmn.ActValDecommision) (id st
 		Value:  actValue,
 	}
 	baseParams.Method = http.MethodPut
-	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cmn.MustMarshal(msg)}, &id)
+	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cos.MustMarshal(msg)}, &id)
 	return id, err
 }

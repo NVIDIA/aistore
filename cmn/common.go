@@ -14,8 +14,6 @@ import (
 	"strings"
 	"time"
 	"unsafe"
-
-	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -36,22 +34,14 @@ const (
 )
 
 var (
-	// JSON is used to Marshal/Unmarshal API json messages and is initialized in init function.
-	JSON jsoniter.API
-	// JSONLocal is jsoniter API with `local` tag extension enabled
-	JSONLocal jsoniter.API
-
 	EnvVars = struct {
-		Endpoint string
-
-		IsPrimary string
-		PrimaryID string
-
+		Endpoint      string
+		IsPrimary     string
+		PrimaryID     string
 		SkipVerifyCrt string
 		UseHTTPS      string
-
-		NumTarget string
-		NumProxy  string
+		NumTarget     string
+		NumProxy      string
 	}{
 		Endpoint:      "AIS_ENDPOINT",
 		IsPrimary:     "AIS_IS_PRIMARY",
@@ -63,17 +53,7 @@ var (
 		NumTarget: "NUM_TARGET",
 		NumProxy:  "NUM_PROXY",
 	}
-)
 
-type (
-	// jsoniter extension to use `local` tag.
-	// supported flag  `local:"omit"` to omit a field while Marshal
-	jsonLocalExt struct {
-		jsoniter.DummyExtension
-	}
-)
-
-var (
 	bucketReg *regexp.Regexp
 	nsReg     *regexp.Regexp
 )
@@ -86,28 +66,6 @@ func init() {
 	GCO = &globalConfigOwner{listeners: make(map[string]ConfigListener, 4)}
 	config := &Config{}
 	GCO.c.Store(unsafe.Pointer(config))
-
-	jsonConf := jsoniter.Config{
-		EscapeHTML:             false, // We don't send HTMLs.
-		ValidateJsonRawMessage: false, // RawMessages are validated by morphing.
-		// Need to be sure that we have exactly the same struct as user requested.
-		DisallowUnknownFields: true,
-		SortMapKeys:           true,
-	}
-	// API related
-	JSON = jsonConf.Froze()
-	JSONLocal = jsonConf.Froze()
-	JSONLocal.RegisterExtension(&jsonLocalExt{})
-}
-
-func (e *jsonLocalExt) UpdateStructDescriptor(sd *jsoniter.StructDescriptor) {
-	for _, binding := range sd.Fields {
-		tag := binding.Field.Tag()
-		localTag := tag.Get("local")
-		if localTag == tagOmit {
-			binding.ToNames = []string{}
-		}
-	}
 }
 
 // WaitForFunc executes a function in goroutine and waits for it to finish.

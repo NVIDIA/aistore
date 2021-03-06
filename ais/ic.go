@@ -132,7 +132,7 @@ outer:
 	}
 	// otherwise, hand it over
 	if msg != nil {
-		body := cmn.MustMarshal(msg)
+		body := cos.MustMarshal(msg)
 		r.Body = ioutil.NopCloser(bytes.NewReader(body))
 	}
 	ic.p.reverseNodeRequest(w, r, psi)
@@ -230,7 +230,7 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// TODO: Also send stats, eg. progress when ready
-	w.Write(cmn.MustMarshal(nl.Status()))
+	w.Write(cos.MustMarshal(nl.Status()))
 }
 
 // verb /v1/ic
@@ -258,7 +258,7 @@ func (ic *ic) handleGet(w http.ResponseWriter, r *http.Request) {
 
 	switch what {
 	case cmn.GetWhatICBundle:
-		bundle := icBundle{Smap: smap, OwnershipTbl: cmn.MustMarshal(&ic.p.notifs)}
+		bundle := icBundle{Smap: smap, OwnershipTbl: cos.MustMarshal(&ic.p.notifs)}
 		ic.p.writeJSON(w, r, bundle, what)
 	default:
 		ic.p.writeErrf(w, r, fmtUnknownQue, what)
@@ -286,13 +286,13 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 
 	switch msg.Action {
 	case cmn.ActMergeOwnershipTbl:
-		if err := cmn.MorphMarshal(msg.Value, &ic.p.notifs); err != nil {
+		if err := cos.MorphMarshal(msg.Value, &ic.p.notifs); err != nil {
 			ic.p.writeErr(w, r, err)
 			return
 		}
 	case cmn.ActListenToNotif:
 		nlMsg := &notifListenMsg{}
-		if err := cmn.MorphMarshal(msg.Value, nlMsg); err != nil {
+		if err := cos.MorphMarshal(msg.Value, nlMsg); err != nil {
 			ic.p.writeErr(w, r, err)
 			return
 		}
@@ -307,7 +307,7 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 			tmap   cluster.NodeMap
 			err    error
 		)
-		if err = cmn.MorphMarshal(msg.Value, regMsg); err != nil {
+		if err = cos.MorphMarshal(msg.Value, regMsg); err != nil {
 			ic.p.writeErr(w, r, err)
 			return
 		}
@@ -371,7 +371,7 @@ func (ic *ic) sendOwnershipTbl(si *cluster.Snode) error {
 		req: cmn.ReqArgs{
 			Method: http.MethodPost,
 			Path:   cmn.URLPathIC.S,
-			Body:   cmn.MustMarshal(msg),
+			Body:   cos.MustMarshal(msg),
 		}, timeout: cmn.GCO.Get().Timeout.CplaneOperation,
 	},
 	)

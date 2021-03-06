@@ -130,7 +130,7 @@ type (
 		Snode       *cluster.Snode `json:"snode"`
 		Stats       *CoreStats     `json:"daemon_stats"`
 		Capacity    fs.MPCap       `json:"capacity"`
-		SysInfo     cmn.SysInfo    `json:"sys_info"`
+		SysInfo     cos.SysInfo    `json:"sys_info"`
 		SmapVersion int64          `json:"smap_version,string"`
 		TStatus     *TargetStatus  `json:"target_status,omitempty"`
 		Status      string         `json:"status"`

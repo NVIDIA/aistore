@@ -364,7 +364,7 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 
 func displayRebStats(tw *tabwriter.Writer, st *targetRebStats) {
 	extRebStats := &stats.ExtRebalanceStats{}
-	if err := cmn.MorphMarshal(st.stats.Ext, &extRebStats); err != nil {
+	if err := cos.MorphMarshal(st.stats.Ext, &extRebStats); err != nil {
 		return
 	}
 

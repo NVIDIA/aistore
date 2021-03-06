@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -23,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -606,16 +609,16 @@ type (
 ////////////////////////////////////////////
 
 var (
-	_ GetJopts = (*ClusterConfig)(nil)
-	_ GetJopts = (*LocalConfig)(nil)
-	_ GetJopts = (*ConfigToUpdate)(nil)
+	_ jsp.Opts = (*ClusterConfig)(nil)
+	_ jsp.Opts = (*LocalConfig)(nil)
+	_ jsp.Opts = (*ConfigToUpdate)(nil)
 )
 
-var configJspOpts = Plain() // TODO -- FIXME: use CCSign(MetaverConfig)
+var configJspOpts = jsp.Plain() // TODO -- FIXME: use CCSign(MetaverConfig)
 
-func (*ClusterConfig) GetJopts() Jopts  { return configJspOpts }
-func (*LocalConfig) GetJopts() Jopts    { return Plain() }
-func (*ConfigToUpdate) GetJopts() Jopts { return configJspOpts }
+func (*ClusterConfig) JspOpts() jsp.Options  { return configJspOpts }
+func (*LocalConfig) JspOpts() jsp.Options    { return jsp.Plain() }
+func (*ConfigToUpdate) JspOpts() jsp.Options { return configJspOpts }
 
 ///////////////////////
 // globalConfigOwner //
@@ -853,12 +856,12 @@ func (c *BackendConf) UnmarshalJSON(data []byte) error {
 }
 
 func (c *BackendConf) MarshalJSON() (data []byte, err error) {
-	return MustMarshal(c.Conf), nil
+	return cos.MustMarshal(c.Conf), nil
 }
 
 func (c *BackendConf) Validate(_ *Config) (err error) {
 	for provider := range c.Conf {
-		b := MustMarshal(c.Conf[provider])
+		b := cos.MustMarshal(c.Conf[provider])
 		switch provider {
 		case ProviderAIS:
 			var aisConf BackendConfAIS
@@ -1274,32 +1277,28 @@ func (c *FSPathsConf) UnmarshalJSON(data []byte) error {
 	for k := range m {
 		c.Paths[k] = struct{}{}
 	}
-
 	return nil
 }
 
 func (c *FSPathsConf) MarshalJSON() (data []byte, err error) {
 	m := make(map[string]string)
-
 	for k := range c.Paths {
 		m[k] = " "
 	}
-
-	return MustMarshal(m), nil
+	return cos.MustMarshal(m), nil
 }
 
 func (c *FSPathsConf) Validate(contextConfig *Config) (err error) {
-	debug.Assertf(cos.StringInSlice(contextConfig.role, []string{Proxy, Target}), "unexpected role: %q", contextConfig.role)
+	debug.Assertf(cos.StringInSlice(contextConfig.role, []string{Proxy, Target}),
+		"unexpected role: %q", contextConfig.role)
 
 	// Don't validate if testing environment
 	if contextConfig.TestingEnv() || contextConfig.role != Target {
 		return nil
 	}
-
 	if len(c.Paths) == 0 {
 		return fmt.Errorf("expected at least one mountpath in fspaths config")
 	}
-
 	cleanMpaths := make(map[string]struct{})
 
 	for k := range c.Paths {
@@ -1309,7 +1308,6 @@ func (c *FSPathsConf) Validate(contextConfig *Config) (err error) {
 		}
 		cleanMpaths[cleanMpath] = struct{}{}
 	}
-
 	c.Paths = cleanMpaths
 	return nil
 }
@@ -1516,4 +1514,77 @@ func ipv4ListsEqual(alist, blist string) bool {
 		return false
 	}
 	return cos.StrSlicesEqual(al, bl)
+}
+
+/////////
+// jsp //
+/////////
+
+func LoadConfig(confPath, localConfPath, daeRole string, config *Config) (err error) {
+	debug.Assert(confPath != "" && localConfPath != "")
+	GCO.SetGlobalConfigPath(confPath)
+	GCO.SetLocalConfigPath(localConfPath)
+
+	// NOTE: the following two "loads" are loading plain-text config
+	//       and are executed only once when the node starts up;
+	//       once started, the node can then reload the last
+	//       updated version of the (global|local) config
+	//       from the configured location
+	_, err = jsp.Load(confPath, &config.ClusterConfig, jsp.Plain())
+	if err != nil {
+		return fmt.Errorf("failed to load global config %q, err: %v", confPath, err)
+	}
+	config.SetRole(daeRole)
+	_, err = jsp.Load(localConfPath, &config.LocalConfig, jsp.Plain())
+	if err != nil {
+		return fmt.Errorf("failed to load local config %q, err: %v", localConfPath, err)
+	}
+
+	overrideConfig, err := loadOverrideConfig(config.ConfigDir)
+	if err != nil {
+		return err
+	}
+
+	if overrideConfig != nil {
+		GCO.PutOverrideConfig(overrideConfig)
+		err = config.Apply(*overrideConfig, Daemon)
+	} else {
+		err = config.Validate()
+	}
+	if err != nil {
+		return
+	}
+
+	if err = cos.CreateDir(config.Log.Dir); err != nil {
+		return fmt.Errorf("failed to create log dir %q, err: %v", config.Log.Dir, err)
+	}
+	glog.SetLogDir(config.Log.Dir)
+
+	// glog rotate
+	glog.MaxSize = config.Log.MaxSize
+	if glog.MaxSize > cos.GiB {
+		glog.Warningf("log.max_size %d exceeded 1GB, setting the default 1MB", glog.MaxSize)
+		glog.MaxSize = cos.MiB
+	}
+
+	if err = SetLogLevel(config, config.Log.Level); err != nil {
+		return fmt.Errorf("failed to set log level %q, err: %s", config.Log.Level, err)
+	}
+	glog.Infof("log.dir: %q; l4.proto: %s; port: %d; verbosity: %s",
+		config.Log.Dir, config.Net.L4.Proto, config.HostNet.Port, config.Log.Level)
+	glog.Infof("config_file: %q periodic.stats_time: %v", confPath, config.Periodic.StatsTime)
+	return
+}
+
+func SaveOverrideConfig(configDir string, config *ConfigToUpdate) error {
+	return jsp.SaveMeta(path.Join(configDir, OverrideConfigFname), config)
+}
+
+func loadOverrideConfig(configDir string) (config *ConfigToUpdate, err error) {
+	config = &ConfigToUpdate{}
+	_, err = jsp.LoadMeta(path.Join(configDir, OverrideConfigFname), config)
+	if os.IsNotExist(err) {
+		err = nil
+	}
+	return
 }

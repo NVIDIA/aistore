@@ -498,7 +498,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 		defer ds.m.decrementRef(1)
 	}
 
-	opaque := cmn.MustMarshal(req)
+	opaque := cos.MustMarshal(req)
 	hdr := transport.ObjHdr{Opaque: opaque}
 	send := func(r cos.ReadOpenCloser) (err error) {
 		if local {

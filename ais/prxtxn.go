@@ -460,7 +460,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 
 	// 5. commit
 	xactID = c.uuid
-	c.req.Body = cmn.MustMarshal(c.msg)
+	c.req.Body = cos.MustMarshal(c.msg)
 	_ = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
 
 	// 6. start rebalance and resilver
@@ -861,7 +861,7 @@ func (p *proxyrunner) destroyBucketData(msg *cmn.ActionMsg, bck *cluster.Bck) er
 	args.req = cmn.ReqArgs{
 		Method: http.MethodDelete,
 		Path:   cmn.URLPathBuckets.Join(bck.Name),
-		Body:   cmn.MustMarshal(msg),
+		Body:   cos.MustMarshal(msg),
 		Query:  query,
 	}
 	args.to = cluster.Targets
@@ -921,7 +921,7 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck, waitms
 		smap: p.owner.smap.get(),
 	}
 	c.msg = p.newAmsg(msg, c.smap, nil, c.uuid)
-	body := cmn.MustMarshal(c.msg)
+	body := cos.MustMarshal(c.msg)
 
 	query := make(url.Values, 2)
 	if bck == nil {

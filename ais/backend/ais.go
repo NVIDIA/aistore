@@ -70,7 +70,7 @@ func (m *AISBackendProvider) Apply(v interface{}, action string) error {
 	var (
 		cfg         = cmn.GCO.Get()
 		clusterConf = cmn.BackendConfAIS{}
-		err         = cmn.MorphMarshal(v, &clusterConf)
+		err         = cos.MorphMarshal(v, &clusterConf)
 	)
 	if err != nil {
 		return fmt.Errorf("invalid ais cloud config (%+v, %T), err: %v", v, v, err)

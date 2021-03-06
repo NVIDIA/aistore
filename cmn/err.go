@@ -39,9 +39,6 @@ const (
 )
 
 type (
-	ErrSignal struct {
-		signal syscall.Signal
-	}
 	ErrBucketAlreadyExists      struct{ bck Bck }
 	ErrRemoteBucketDoesNotExist struct{ bck Bck }
 	ErrRemoteBucketOffline      struct{ bck Bck }
@@ -221,17 +218,6 @@ func IsUnreachable(err error, status int) bool {
 ////////////////////////////
 // structured error types //
 ////////////////////////////
-
-func NewSignalError(s syscall.Signal) *ErrSignal {
-	return &ErrSignal{signal: s}
-}
-
-func (e *ErrSignal) Error() string {
-	return fmt.Sprintf("Signal %d", e.signal)
-}
-
-// https://tldp.org/LDP/abs/html/exitcodes.html
-func (e *ErrSignal) ExitCode() int { return 128 + int(e.signal) }
 
 func NewErrorBucketAlreadyExists(bck Bck) *ErrBucketAlreadyExists {
 	return &ErrBucketAlreadyExists{bck: bck}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xaction"
 )
@@ -172,7 +173,7 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
-		Body:       cmn.MustMarshal(msg),
+		Body:       cos.MustMarshal(msg),
 		Query:      cmn.AddBckToQuery(nil, args.Bck),
 	}, &id)
 	return id, err
@@ -192,7 +193,7 @@ func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
-		Body:       cmn.MustMarshal(msg),
+		Body:       cos.MustMarshal(msg),
 		Query:      cmn.AddBckToQuery(nil, args.Bck),
 	})
 }
@@ -221,7 +222,7 @@ func QueryXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats Nodes
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
-		Body:       cmn.MustMarshal(msg),
+		Body:       cos.MustMarshal(msg),
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatQueryXactStats}},
 	}, &xactStats)
 	return xactStats, err
@@ -243,7 +244,7 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *nl.Notif
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
-		Body:       cmn.MustMarshal(msg),
+		Body:       cos.MustMarshal(msg),
 		Query: url.Values{
 			cmn.URLParamWhat: []string{cmn.GetWhatStatus},
 		},
@@ -324,7 +325,7 @@ func MakeNCopies(baseParams BaseParams, bck cmn.Bck, copies int) (xactID string,
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(bck.Name),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActMakeNCopies, Value: copies}),
+		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMakeNCopies, Value: copies}),
 	}, &xactID)
 	return
 }
@@ -342,7 +343,7 @@ func IsXactionIdle(baseParams BaseParams, args XactReqArgs) (idle bool, err erro
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
-		Body:       cmn.MustMarshal(msg),
+		Body:       cos.MustMarshal(msg),
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatQueryXactStats}},
 	}, &xactStats)
 	if err != nil {
@@ -357,7 +358,7 @@ func IsXactionIdle(baseParams BaseParams, args XactReqArgs) (idle bool, err erro
 				continue
 			}
 			var baseExt xaction.BaseXactDemandStatsExt
-			if err := cmn.MorphMarshal(xactStat.Ext, &baseExt); err == nil {
+			if err := cos.MorphMarshal(xactStat.Ext, &baseExt); err == nil {
 				if !baseExt.IsIdle {
 					return false, nil
 				}

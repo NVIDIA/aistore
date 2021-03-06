@@ -171,7 +171,7 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	body := cmn.MustMarshal(resultList)
+	body := cos.MustMarshal(resultList)
 	if _, err := w.Write(body); err != nil {
 		glog.Error(err)
 		// When we fail write we cannot call InvalidHandler since it will be
@@ -641,7 +641,7 @@ func listSortHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	body := cmn.MustMarshal(Managers.List(regex))
+	body := cos.MustMarshal(Managers.List(regex))
 	if _, err := w.Write(body); err != nil {
 		glog.Error(err)
 		// When we fail write we cannot call InvalidHandler since it will be

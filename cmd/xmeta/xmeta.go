@@ -118,7 +118,7 @@ func dumpBMD() error    { return dumpMeta(&cluster.BMD{}) }
 func dumpRMD() error    { return dumpMeta(&cluster.RMD{}) }
 func dumpConfig() error { return dumpMeta(&cmn.ClusterConfig{}) }
 
-func dumpMeta(v cmn.GetJopts) (err error) {
+func dumpMeta(v jsp.Opts) (err error) {
 	f := os.Stdout
 	if flags.out != "" {
 		f, err = cos.CreateFile(flags.out)
@@ -142,11 +142,11 @@ func compressBMD() error    { return compressMeta(&cluster.BMD{}) }
 func compressRMD() error    { return compressMeta(&cluster.RMD{}) }
 func compressConfig() error { return compressMeta(&cmn.ClusterConfig{}) }
 
-func compressMeta(v cmn.GetJopts) error {
+func compressMeta(v jsp.Opts) error {
 	if flags.out == "" {
 		return errors.New("output filename (the -out option) must be defined")
 	}
-	if _, err := jsp.Load(flags.in, v, cmn.Plain()); err != nil {
+	if _, err := jsp.Load(flags.in, v, jsp.Plain()); err != nil {
 		return err
 	}
 	return jsp.SaveMeta(flags.out, v)

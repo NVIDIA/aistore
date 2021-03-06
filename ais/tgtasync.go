@@ -28,7 +28,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 	}
 
 	var msg *cmn.SelectMsg
-	if err := cmn.MorphMarshal(actionMsg.Value, &msg); err != nil {
+	if err := cos.MorphMarshal(actionMsg.Value, &msg); err != nil {
 		t.writeErrf(w, r, "unable to unmarshal 'value' in request to a cmn.SelectMsg: %v", actionMsg.Value)
 		return
 	}
@@ -84,7 +84,7 @@ func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck
 	}
 
 	var msg cmn.BucketSummaryMsg
-	if err := cmn.MorphMarshal(actionMsg.Value, &msg); err != nil {
+	if err := cos.MorphMarshal(actionMsg.Value, &msg); err != nil {
 		err := fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, "BucketSummaryMsg", actionMsg.Value, err)
 		t.writeErr(w, r, err)
 		return

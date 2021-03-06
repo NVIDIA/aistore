@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -61,7 +62,7 @@ func testAisMsgMarshal(t *testing.T, tc aismsgTestConf) {
 
 		if afterAisMsg.Value != nil {
 			bck := &cmn.Bck{}
-			err = cmn.MorphMarshal(afterAisMsg.Value, bck)
+			err = cos.MorphMarshal(afterAisMsg.Value, bck)
 			if err != nil {
 				t.Errorf("Morph marshal failed for aisMsg.Value: %v, err: %v", afterAisMsg.Value, err)
 			}

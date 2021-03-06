@@ -84,7 +84,7 @@ type (
 
 // interface guard
 var (
-	_ cmn.Runner = (*proxyrunner)(nil)
+	_ cos.Runner = (*proxyrunner)(nil)
 	_ electable  = (*proxyrunner)(nil)
 )
 
@@ -749,7 +749,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		)
 		switch msg.Action {
 		case cmn.ActETLBck:
-			if err := cmn.MorphMarshal(msg.Value, internalMsg); err != nil {
+			if err := cos.MorphMarshal(msg.Value, internalMsg); err != nil {
 				p.writeErrMsg(w, r, "request body can't be empty")
 				return
 			}
@@ -759,7 +759,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			}
 		case cmn.ActCopyBck:
 			cpyBckMsg := &cmn.CopyBckMsg{}
-			if err = cmn.MorphMarshal(msg.Value, cpyBckMsg); err != nil {
+			if err = cos.MorphMarshal(msg.Value, cpyBckMsg); err != nil {
 				return
 			}
 			internalMsg.DryRun = cpyBckMsg.DryRun
@@ -881,7 +881,7 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 	}
 	if msg.Value != nil {
 		propsToUpdate := cmn.BucketPropsToUpdate{}
-		if err := cmn.MorphMarshal(msg.Value, &propsToUpdate); err != nil {
+		if err := cos.MorphMarshal(msg.Value, &propsToUpdate); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
@@ -950,7 +950,7 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 		smsg    = cmn.SelectMsg{}
 		smap    = p.owner.smap.get()
 	)
-	if err := cmn.MorphMarshal(amsg.Value, &smsg); err != nil {
+	if err := cos.MorphMarshal(amsg.Value, &smsg); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
@@ -1038,7 +1038,7 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck 
 		summaries cmn.BucketsSummaries
 		smsg      = cmn.BucketSummaryMsg{}
 	)
-	listMsgJSON := cmn.MustMarshal(amsg.Value)
+	listMsgJSON := cos.MustMarshal(amsg.Value)
 	if err := jsoniter.Unmarshal(listMsgJSON, &smsg); err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -1072,7 +1072,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 		config   = cmn.GCO.Get()
 		smap     = p.owner.smap.get()
 		aisMsg   = p.newAmsgActVal(cmn.ActSummaryBck, msg, smap)
-		body     = cmn.MustMarshal(aisMsg)
+		body     = cos.MustMarshal(aisMsg)
 	)
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{
@@ -1334,7 +1334,7 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 		if len(origBody) > 0 && len(origBody[0]) > 0 {
 			body = origBody[0]
 		} else if msg != nil {
-			body = cmn.MustMarshal(msg)
+			body = cos.MustMarshal(msg)
 		}
 	}
 	primary := &p.rproxy.primary
@@ -1412,7 +1412,7 @@ func (p *proxyrunner) reverseReqRemote(w http.ResponseWriter, r *http.Request, m
 		return err
 	}
 	if msg != nil {
-		body := cmn.MustMarshal(msg)
+		body := cos.MustMarshal(msg)
 		r.Body = ioutil.NopCloser(bytes.NewReader(body))
 	}
 
@@ -1573,7 +1573,7 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allE
 		Method: http.MethodGet,
 		Path:   cmn.URLPathBuckets.Join(bck.Name),
 		Query:  cmn.AddBckToQuery(nil, bck.Bck),
-		Body:   cmn.MustMarshal(aisMsg),
+		Body:   cos.MustMarshal(aisMsg),
 	}
 	args.timeout = cmn.LongTimeout // TODO: should it be `Client.ListObjects`?
 	args.smap = smap
@@ -1642,7 +1642,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 		Method: http.MethodGet,
 		Path:   cmn.URLPathBuckets.Join(bck.Name),
 		Query:  cmn.AddBckToQuery(nil, bck.Bck),
-		Body:   cmn.MustMarshal(aisMsg),
+		Body:   cos.MustMarshal(aisMsg),
 	}
 	if smsg.NeedLocalMD() {
 		args.timeout = reqTimeout
@@ -1720,7 +1720,7 @@ func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *clu
 
 func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, msg *cmn.ActionMsg) {
 	promoteArgs := cmn.ActValPromote{}
-	if err := cmn.MorphMarshal(msg.Value, &promoteArgs); err != nil {
+	if err := cos.MorphMarshal(msg.Value, &promoteArgs); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
@@ -1751,7 +1751,7 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 	args.req = cmn.ReqArgs{
 		Method: http.MethodPost,
 		Path:   cmn.URLPathObjects.Join(bck.Name),
-		Body:   cmn.MustMarshal(msg),
+		Body:   cos.MustMarshal(msg),
 		Query:  query,
 	}
 	args.to = cluster.Targets
@@ -1772,7 +1772,7 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg,
 	var (
 		smap   = p.owner.smap.get()
 		aisMsg = p.newAmsg(msg, smap, nil, cos.GenUUID())
-		body   = cmn.MustMarshal(aisMsg)
+		body   = cos.MustMarshal(aisMsg)
 		path   = cmn.URLPathBuckets.Join(bucket)
 	)
 	nlb := xaction.NewXactNL(aisMsg.UUID, aisMsg.Action, &smap.Smap, nil)
@@ -1974,7 +1974,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActSetConfig: // setconfig #2 - via action message
 		transient := cos.IsParseBool(query.Get(cmn.ActTransient))
 		toUpdate := &cmn.ConfigToUpdate{}
-		if err = cmn.MorphMarshal(msg.Value, toUpdate); err != nil {
+		if err = cos.MorphMarshal(msg.Value, toUpdate); err != nil {
 			p.writeErrf(w, r, "failed to parse configuration to update, err: %v", err)
 			return
 		}

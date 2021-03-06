@@ -130,7 +130,7 @@ type (
 )
 
 // interface guard
-var _ cmn.Runner = (*metasyncer)(nil)
+var _ cos.Runner = (*metasyncer)(nil)
 
 func (req revsReq) isNil() bool { return len(req.pairs) == 0 }
 
@@ -323,7 +323,7 @@ outer:
 		y.lastSynced[tag] = revs
 		revsBody := revs.marshal()
 		debug.Func(func() { y.lastClone[tag] = revsBody })
-		msgJSON := cmn.MustMarshal(msg)
+		msgJSON := cos.MustMarshal(msg)
 
 		if tag == revsRMDTag {
 			md := revs.(*rebMD)
@@ -499,7 +499,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 		payload = make(msPayload, 2*len(y.lastSynced))
 		pairs   = make([]revsPair, 0, len(y.lastSynced))
 		msg     = y.p.newAmsgStr("metasync: handle-pending", smap, nil) // NOTE: same msg for all revs
-		msgBody = cmn.MustMarshal(msg)
+		msgBody = cos.MustMarshal(msg)
 	)
 	for tag, revs := range y.lastSynced {
 		payload[tag] = revs.marshal()
@@ -584,7 +584,7 @@ func (y *metasyncer) validateCoW() {
 // metasync jsp encoding //
 ///////////////////////////
 
-var msjspOpts = cmn.Jopts{Metaver: cmn.MetaverMetasync, Signature: true, Checksum: true}
+var msjspOpts = jsp.Options{Metaver: cmn.MetaverMetasync, Signature: true, Checksum: true}
 
 func (payload msPayload) marshal() *memsys.SGL {
 	return jsp.EncodeSGL(payload, msjspOpts)

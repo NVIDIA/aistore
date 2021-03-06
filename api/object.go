@@ -141,7 +141,7 @@ func EvictObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathObjects.Join(bck.Name, object),
-		Body:       cmn.MustMarshal(actMsg),
+		Body:       cos.MustMarshal(actMsg),
 	})
 }
 
@@ -394,7 +394,7 @@ func RenameObject(baseParams BaseParams, bck cmn.Bck, oldName, newName string) e
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathObjects.Join(bck.Name, oldName),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActRenameObject, Name: newName}),
+		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActRenameObject, Name: newName}),
 	})
 }
 
@@ -415,7 +415,7 @@ func PromoteFileOrDir(args *PromoteArgs) error {
 	return DoHTTPRequest(ReqParams{
 		BaseParams: args.BaseParams,
 		Path:       cmn.URLPathObjects.Join(args.Bck.Name),
-		Body:       cmn.MustMarshal(actMsg),
+		Body:       cos.MustMarshal(actMsg),
 		Query:      cmn.AddBckToQuery(nil, args.Bck),
 	})
 }

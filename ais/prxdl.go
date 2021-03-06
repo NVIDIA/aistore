@@ -35,7 +35,7 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string,
 				)
 				if dlStatus, ok = status.(*downloader.DlStatusResp); !ok {
 					dlStatus = &downloader.DlStatusResp{}
-					err := cmn.MorphMarshal(status, dlStatus)
+					err := cos.MorphMarshal(status, dlStatus)
 					cos.AssertNoErr(err)
 				}
 
@@ -43,13 +43,13 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string,
 				return true
 			})
 
-			respJSON := cmn.MustMarshal(resp)
+			respJSON := cos.MustMarshal(resp)
 			return respJSON, http.StatusOK, nil
 		}
 	}
 
 	var (
-		body = cmn.MustMarshal(msg)
+		body = cos.MustMarshal(msg)
 		args = allocBcastArgs()
 	)
 	args.req = cmn.ReqArgs{Method: method, Path: path, Body: body, Query: url.Values{}}
@@ -101,7 +101,7 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string,
 			for _, v := range aggregate {
 				listDownloads = append(listDownloads, v)
 			}
-			result := cmn.MustMarshal(listDownloads)
+			result := cos.MustMarshal(listDownloads)
 			return result, http.StatusOK, nil
 		}
 
@@ -113,7 +113,7 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string,
 			}
 			stResp = stResp.Aggregate(status)
 		}
-		body := cmn.MustMarshal(stResp)
+		body := cos.MustMarshal(stResp)
 		return body, http.StatusOK, nil
 	case http.MethodDelete:
 		res := validResponses[0]
@@ -281,7 +281,7 @@ func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *htt
 
 func (p *proxyrunner) respondWithID(w http.ResponseWriter, id string) {
 	w.Header().Set(cmn.HeaderContentType, cmn.ContentJSON)
-	b := cmn.MustMarshal(downloader.DlPostResp{ID: id})
+	b := cos.MustMarshal(downloader.DlPostResp{ID: id})
 	_, err := w.Write(b)
 	debug.AssertNoErr(err)
 }

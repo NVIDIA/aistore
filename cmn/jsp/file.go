@@ -11,7 +11,6 @@ import (
 	"os"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
@@ -20,17 +19,19 @@ const (
 	signature = "aistore" // file signature
 	//                              0 ---------------- 63  64 ------ 95 | 96 ------ 127
 	prefLen = 2 * cos.SizeofI64 // [ signature | jsp ver | meta version |   bit flags  ]
+
+	Metaver = 3 // current JSP version
 )
 
 //////////////////
 // main methods //
 //////////////////
 
-func SaveMeta(filepath string, meta cmn.GetJopts) error {
-	return Save(filepath, meta, meta.GetJopts())
+func SaveMeta(filepath string, meta Opts) error {
+	return Save(filepath, meta, meta.JspOpts())
 }
 
-func Save(filepath string, v interface{}, opts cmn.Jopts) (err error) {
+func Save(filepath string, v interface{}, opts Options) (err error) {
 	var (
 		file *os.File
 		tmp  = filepath + ".tmp." + cos.GenTie()
@@ -55,11 +56,11 @@ func Save(filepath string, v interface{}, opts cmn.Jopts) (err error) {
 	return
 }
 
-func LoadMeta(filepath string, meta cmn.GetJopts) (*cos.Cksum, error) {
-	return Load(filepath, meta, meta.GetJopts())
+func LoadMeta(filepath string, meta Opts) (*cos.Cksum, error) {
+	return Load(filepath, meta, meta.JspOpts())
 }
 
-func Load(filepath string, v interface{}, opts cmn.Jopts) (checksum *cos.Cksum, err error) {
+func Load(filepath string, v interface{}, opts Options) (checksum *cos.Cksum, err error) {
 	var file *os.File
 	file, err = os.Open(filepath)
 	if err != nil {

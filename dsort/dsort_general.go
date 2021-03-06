@@ -377,7 +377,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 				Record:    rec,
 				RecordObj: obj,
 			}
-			opaque := cmn.MustMarshal(req)
+			opaque := cos.MustMarshal(req)
 			o := transport.AllocSend()
 			o.Hdr = transport.ObjHdr{Opaque: opaque}
 			if ds.m.Metrics.extended {

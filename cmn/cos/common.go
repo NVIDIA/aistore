@@ -21,6 +21,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -40,11 +41,26 @@ const (
 	PermRWR       os.FileMode = 0o640 // POSIX perms
 	PermRWXRX     os.FileMode = 0o750
 	configDirMode             = PermRWXRX | os.ModeDir
+
+	JSONLocalTagOmit = "omit"
 )
 
 type (
 	StringSet map[string]struct{}
 	SimpleKVs map[string]string
+
+	SysInfo struct {
+		MemUsed    uint64  `json:"mem_used"`
+		MemAvail   uint64  `json:"mem_avail"`
+		PctMemUsed float64 `json:"pct_mem_used"`
+		PctCPUUsed float64 `json:"pct_cpu_used"`
+	}
+
+	// jsoniter extension to use `local` tag.
+	// supported flag  `local:"omit"` to omit a field while Marshal
+	jsonLocalExt struct {
+		jsoniter.DummyExtension
+	}
 )
 
 var toBiBytes = map[string]int64{
@@ -62,9 +78,68 @@ var toBiBytes = map[string]int64{
 	"TIB": TiB,
 }
 
+var (
+	// JSON is used to Marshal/Unmarshal API json messages and is initialized in init function.
+	JSON jsoniter.API
+	// JSONLocal is jsoniter API with `local` tag extension enabled
+	JSONLocal jsoniter.API
+)
+
 func init() {
 	rand.Seed(mono.NanoTime())
 	rtie.Store(1013)
+
+	jsonConf := jsoniter.Config{
+		EscapeHTML:             false, // We don't send HTMLs.
+		ValidateJsonRawMessage: false, // RawMessages are validated by morphing.
+		// Need to be sure that we have exactly the same struct as user requested.
+		DisallowUnknownFields: true,
+		SortMapKeys:           true,
+	}
+	JSON = jsonConf.Froze()
+	JSONLocal = jsonConf.Froze()
+	JSONLocal.RegisterExtension(&jsonLocalExt{})
+}
+
+//////////////////////
+// JSON & JSONLocal //
+//////////////////////
+
+func (e *jsonLocalExt) UpdateStructDescriptor(sd *jsoniter.StructDescriptor) {
+	for _, binding := range sd.Fields {
+		tag := binding.Field.Tag()
+		localTag := tag.Get("local")
+		if localTag == JSONLocalTagOmit {
+			binding.ToNames = []string{}
+		}
+	}
+}
+
+// MustMarshal marshals v and panics if error occurs.
+func MustMarshal(v interface{}) []byte {
+	b, err := JSON.Marshal(v)
+	AssertNoErr(err)
+	return b
+}
+
+// MustLocalMarshal marshals v using JSON local externsion and panics if error occurs.
+func MustLocalMarshal(v interface{}) []byte {
+	b, err := JSONLocal.Marshal(v)
+	AssertNoErr(err)
+	return b
+}
+
+func MorphMarshal(data, v interface{}) error {
+	// `data` can be of type `map[string]interface{}` or just same type as `v`.
+	// Therefore, the easiest way is to marshal the `data` again and unmarshal it
+	// with hope that every field will be set correctly.
+	b := MustMarshal(data)
+	return JSON.Unmarshal(b, v)
+}
+
+func MustMorphMarshal(data, v interface{}) {
+	err := MorphMarshal(data, v)
+	AssertNoErr(err)
 }
 
 /////////////

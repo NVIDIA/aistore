@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/health"
 	"github.com/NVIDIA/aistore/hk"
@@ -48,7 +47,7 @@ type (
 		transient        bool   // false: make cmn.ConfigCLI settings permanent, true: leave them transient
 	}
 	rungroup struct {
-		rs    map[string]cmn.Runner
+		rs    map[string]cos.Runner
 		errCh chan error
 	}
 	// - selective disabling of a disk and/or network IO.
@@ -108,7 +107,7 @@ func dryRunInit() {
 	}
 }
 
-func initDaemon(version, buildTime string) (rmain cmn.Runner) {
+func initDaemon(version, buildTime string) (rmain cos.Runner) {
 	const (
 		usageStr = "Usage: aisnode -role=<proxy|target> -config=</dir/config.json> -local_config=</dir/local-config.json> ..."
 		confMsg  = "Missing `%s` flag pointing to configuration file (must be provided via command line)\n"
@@ -141,7 +140,7 @@ func initDaemon(version, buildTime string) (rmain cmn.Runner) {
 		cos.ExitLogf(str)
 	}
 	config = &cmn.Config{}
-	err = jsp.LoadConfig(daemon.cli.globalConfigPath, daemon.cli.localConfigPath, daemon.cli.role, config)
+	err = cmn.LoadConfig(daemon.cli.globalConfigPath, daemon.cli.localConfigPath, daemon.cli.role, config)
 	if err != nil {
 		cos.ExitLogf("%v", err)
 	}
@@ -176,7 +175,7 @@ func initDaemon(version, buildTime string) (rmain cmn.Runner) {
 		}
 
 		if !daemon.cli.transient {
-			if err = jsp.SaveOverrideConfig(config.ConfigDir, overrideConfig); err != nil {
+			if err = cmn.SaveOverrideConfig(config.ConfigDir, overrideConfig); err != nil {
 				cos.ExitLogf("Failed to save override config: %v", err)
 			}
 		}
@@ -197,7 +196,7 @@ func initDaemon(version, buildTime string) (rmain cmn.Runner) {
 		cos.B2S(int64(memStat.Total), 0), cos.B2S(int64(memStat.Free), 0), cos.B2S(int64(memStat.ActualFree), 0))
 
 	// NOTE: Daemon terminations get executed in the same exact order as initializations below.
-	daemon.rg = &rungroup{rs: make(map[string]cmn.Runner, 8)}
+	daemon.rg = &rungroup{rs: make(map[string]cos.Runner, 8)}
 
 	daemon.rg.add(hk.DefaultHK)
 	if daemon.cli.role == cmn.Proxy {
@@ -208,7 +207,7 @@ func initDaemon(version, buildTime string) (rmain cmn.Runner) {
 	return
 }
 
-func initProxy() cmn.Runner {
+func initProxy() cos.Runner {
 	p := &proxyrunner{}
 	p.initConfOwner(cmn.Proxy)
 	p.initSI(cmn.Proxy)
@@ -243,7 +242,7 @@ func newTarget() *targetrunner {
 	return t
 }
 
-func initTarget() cmn.Runner {
+func initTarget() cos.Runner {
 	// Initialize filesystem/mountpaths manager.
 	fs.Init()
 
@@ -302,7 +301,7 @@ func Run(version, buildTime string) int {
 		glog.Infoln("Terminated OK")
 		return 0
 	}
-	if e, ok := err.(*cmn.ErrSignal); ok {
+	if e, ok := err.(*cos.ErrSignal); ok {
 		glog.Infof("Terminated OK (via signal: %v)\n", e)
 		return e.ExitCode()
 	}
@@ -320,7 +319,7 @@ func Run(version, buildTime string) int {
 // rungroup //
 //////////////
 
-func (g *rungroup) add(r cmn.Runner) {
+func (g *rungroup) add(r cos.Runner) {
 	cos.Assert(r.Name() != "")
 	_, exists := g.rs[r.Name()]
 	cos.Assert(!exists)
@@ -328,12 +327,12 @@ func (g *rungroup) add(r cmn.Runner) {
 	g.rs[r.Name()] = r
 }
 
-func (g *rungroup) run(mainRunner cmn.Runner) error {
+func (g *rungroup) run(mainRunner cos.Runner) error {
 	var mainDone atomic.Bool
 	g.errCh = make(chan error, len(g.rs))
 	daemon.stopping.Store(false)
 	for _, r := range g.rs {
-		go func(r cmn.Runner) {
+		go func(r cos.Runner) {
 			err := r.Run()
 			if err != nil {
 				glog.Warningf("runner [%s] exited with err [%v]", r.Name(), err)

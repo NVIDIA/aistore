@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -29,7 +30,7 @@ func BenchmarkActionMsgMarshal(b *testing.B) {
 		if err != nil {
 			b.Errorf("unmarshaling errored: %v", err)
 		}
-		err = cmn.MorphMarshal(msg2.Value, &cmn.RangeMsg{})
+		err = cos.MorphMarshal(msg2.Value, &cmn.RangeMsg{})
 		if err != nil {
 			b.Errorf("morph unmarshal errored: %v", err)
 		}

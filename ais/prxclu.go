@@ -120,7 +120,7 @@ func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what 
 		if err := cmn.ReadJSON(w, r, &xactMsg); err != nil {
 			return
 		}
-		body = cmn.MustMarshal(xactMsg)
+		body = cos.MustMarshal(xactMsg)
 	default:
 		p.writeErrStatusf(w, r, http.StatusBadRequest, "invalid `what`: %v", what)
 		return
@@ -385,7 +385,7 @@ func (p *proxyrunner) userRegisterNode(nsi *cluster.Snode, tag string) (errCode 
 		smap = p.owner.smap.get()
 		bmd  = p.owner.bmd.get()
 		meta = &nodeRegMeta{smap, bmd, p.si, false}
-		body = cmn.MustMarshal(meta)
+		body = cos.MustMarshal(meta)
 	)
 	if glog.FastV(3, glog.SmoduleAIS) {
 		glog.Infof("%s: %s %s => (%s)", p.si, tag, nsi, smap.StringEx())
@@ -664,7 +664,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 	switch msg.Action {
 	case cmn.ActSetConfig:
 		toUpdate := &cmn.ConfigToUpdate{}
-		if err := cmn.MorphMarshal(msg.Value, toUpdate); err != nil {
+		if err := cos.MorphMarshal(msg.Value, toUpdate); err != nil {
 			p.writeErrf(w, r, "%s: failed to parse value, err: %v", cmn.ActSetConfig, err)
 			return
 		}
@@ -672,7 +672,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActShutdown:
 		glog.Infoln("Proxy-controlled cluster shutdown...")
 		args := allocBcastArgs()
-		args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: cmn.MustMarshal(msg)}
+		args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: cos.MustMarshal(msg)}
 		args.to = cluster.AllNodes
 		_ = p.bcastGroup(args)
 		freeBcastArgs(args)
@@ -723,7 +723,7 @@ func (p *proxyrunner) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
 
 func (p *proxyrunner) xactStarStop(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	xactMsg := xaction.XactReqMsg{}
-	if err := cmn.MorphMarshal(msg.Value, &xactMsg); err != nil {
+	if err := cos.MorphMarshal(msg.Value, &xactMsg); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
@@ -740,7 +740,7 @@ func (p *proxyrunner) xactStarStop(w http.ResponseWriter, r *http.Request, msg *
 		}
 	}
 
-	body := cmn.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: xactMsg})
+	body := cos.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: xactMsg})
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathXactions.S, Body: body}
 	args.to = cluster.Targets
@@ -791,7 +791,7 @@ func (p *proxyrunner) resilverOne(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	body := cmn.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: xactMsg})
+	body := cos.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: xactMsg})
 	res := p.call(
 		callArgs{
 			si: si,
@@ -817,7 +817,7 @@ func (p *proxyrunner) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *cm
 		smap  = p.owner.smap.get()
 		dstID string
 	)
-	if err := cmn.MorphMarshal(msg.Value, &dstID); err != nil {
+	if err := cos.MorphMarshal(msg.Value, &dstID); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
@@ -839,7 +839,7 @@ func (p *proxyrunner) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *cm
 	}
 	// forward
 	args := callArgs{
-		req:     cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathCluster.S, Body: cmn.MustMarshal(msg)},
+		req:     cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathCluster.S, Body: cos.MustMarshal(msg)},
 		timeout: cmn.DefaultTimeout,
 	}
 	for pid, psi := range smap.Pmap {
@@ -867,7 +867,7 @@ func (p *proxyrunner) rmNode(w http.ResponseWriter, r *http.Request, msg *cmn.Ac
 		p.writeErr(w, r, err, http.StatusUnauthorized)
 		return
 	}
-	if err := cmn.MorphMarshal(msg.Value, &opts); err != nil {
+	if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
@@ -915,7 +915,7 @@ func (p *proxyrunner) stopMaintenance(w http.ResponseWriter, r *http.Request, ms
 		opts cmn.ActValDecommision
 		smap = p.owner.smap.get()
 	)
-	if err := cmn.MorphMarshal(msg.Value, &opts); err != nil {
+	if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
@@ -1295,7 +1295,7 @@ func (p *proxyrunner) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb 
 	}
 	switch msg.Action {
 	case cmn.ActShutdownNode:
-		body := cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActShutdown})
+		body := cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActShutdown})
 		args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: body}
 	case cmn.ActStartMaintenance, cmn.ActDecommission, testInitiatedRm:
 		args.req = cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathDaemonUnreg.S}

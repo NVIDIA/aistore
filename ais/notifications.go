@@ -675,7 +675,7 @@ func newNLMsg(nl nl.NotifListener) *notifListenMsg {
 
 func (n *notifListenMsg) MarshalJSON() (data []byte, err error) {
 	n.nl.RLock()
-	msg := jsonNL{Type: n.nl.Kind(), NL: cmn.MustMarshal(n.nl)}
+	msg := jsonNL{Type: n.nl.Kind(), NL: cos.MustMarshal(n.nl)}
 	n.nl.RUnlock()
 	return jsoniter.Marshal(msg)
 }

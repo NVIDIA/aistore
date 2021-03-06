@@ -23,7 +23,7 @@ func initAuthParams() {
 	if tokenPath == "" {
 		tokenPath = filepath.Join(config.ConfigDirPath, tokenFile)
 	}
-	_, err := jsp.Load(tokenPath, &loggedUserToken, cmn.Plain())
+	_, err := jsp.Load(tokenPath, &loggedUserToken, jsp.Plain())
 	if err != nil && custom {
 		fmt.Fprintf(os.Stderr, "Failed to read token from %q: %v\n", tokenPath, err)
 	}

@@ -207,33 +207,6 @@ func WriteJSON(w http.ResponseWriter, v interface{}) error {
 	return jsoniter.NewEncoder(w).Encode(v)
 }
 
-// MustMarshal marshals v and panics if error occurs.
-func MustMarshal(v interface{}) []byte {
-	b, err := JSON.Marshal(v)
-	cos.AssertNoErr(err)
-	return b
-}
-
-// MustLocalMarshal marshals v using JSON local externsion and panics if error occurs.
-func MustLocalMarshal(v interface{}) []byte {
-	b, err := JSONLocal.Marshal(v)
-	cos.AssertNoErr(err)
-	return b
-}
-
-func MorphMarshal(data, v interface{}) error {
-	// `data` can be of type `map[string]interface{}` or just same type as `v`.
-	// Therefore, the easiest way is to marshal the `data` again and unmarshal it
-	// with hope that every field will be set correctly.
-	b := MustMarshal(data)
-	return JSON.Unmarshal(b, v)
-}
-
-func MustMorphMarshal(data, v interface{}) {
-	err := MorphMarshal(data, v)
-	cos.AssertNoErr(err)
-}
-
 func (u *ReqArgs) URL() string {
 	url := cos.JoinPath(u.Base, u.Path)
 	query := u.Query.Encode()

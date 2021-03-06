@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
@@ -35,7 +34,7 @@ var (
 )
 
 // interface guard
-var _ cmn.Runner = (*StreamCollector)(nil)
+var _ cos.Runner = (*StreamCollector)(nil)
 
 // Stream Collector:
 // 1. controls stream activation (followed by connection establishment and HTTP PUT), and

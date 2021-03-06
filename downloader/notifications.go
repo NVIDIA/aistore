@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/nl"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -55,7 +56,7 @@ func (nd *NotifDownloadListerner) QueryArgs() cmn.ReqArgs {
 		ID: nd.UUID(),
 	}
 	args.Path = cmn.URLPathDownload.S
-	args.Body = cmn.MustMarshal(dlBody)
+	args.Body = cos.MustMarshal(dlBody)
 	return args
 }
 
@@ -65,7 +66,7 @@ func (nd *NotifDownloadListerner) AbortArgs() cmn.ReqArgs {
 		ID: nd.UUID(),
 	}
 	args.Path = cmn.URLPathDownloadAbort.S
-	args.Body = cmn.MustMarshal(dlBody)
+	args.Body = cos.MustMarshal(dlBody)
 	return args
 }
 
@@ -79,7 +80,7 @@ func (nd *NotifDownload) ToNotifMsg() cluster.NotifMsg {
 	if err != nil {
 		msg.ErrMsg = err.Error()
 	} else {
-		msg.Data = cmn.MustMarshal(stats)
+		msg.Data = cos.MustMarshal(stats)
 	}
 	return msg
 }

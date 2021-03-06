@@ -7,7 +7,6 @@ package dbdriver
 import (
 	"strings"
 
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tidwall/buntdb"
@@ -84,7 +83,7 @@ func (bd *BuntDriver) Close() error {
 }
 
 func (bd *BuntDriver) Set(collection, key string, object interface{}) error {
-	b := cmn.MustMarshal(object)
+	b := cos.MustMarshal(object)
 	err := bd.SetString(collection, key, string(b))
 	return buntToCommonErr(err, collection, key)
 }

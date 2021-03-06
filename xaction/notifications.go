@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/nl"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -67,7 +68,7 @@ func (nxb *NotifXactListener) AbortArgs() cmn.ReqArgs {
 		},
 	}
 	args := cmn.ReqArgs{Method: http.MethodPut}
-	args.Body = cmn.MustMarshal(msg)
+	args.Body = cos.MustMarshal(msg)
 	args.Path = cmn.URLPathXactions.S
 	return args
 }
@@ -79,6 +80,6 @@ func (nx *NotifXact) ToNotifMsg() cluster.NotifMsg {
 	return cluster.NotifMsg{
 		UUID: nx.Xact.ID().String(),
 		Kind: nx.Xact.Kind(),
-		Data: cmn.MustMarshal(nx.Xact.Stats()),
+		Data: cos.MustMarshal(nx.Xact.Stats()),
 	}
 }

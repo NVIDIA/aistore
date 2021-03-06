@@ -247,7 +247,7 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 	args.req = cmn.ReqArgs{
 		Method: http.MethodGet,
 		Path:   cmn.URLPathVoteProxy.S,
-		Body:   cmn.MustMarshal(&msg),
+		Body:   cos.MustMarshal(&msg),
 		Query:  q,
 	}
 	args.to = cluster.AllNodes
@@ -288,7 +288,7 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) cos.StringSet {
 		}
 	)
 	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathVoteVoteres.S, Body: cmn.MustMarshal(msg)}
+	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathVoteVoteres.S, Body: cos.MustMarshal(msg)}
 	args.to = cluster.AllNodes
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
@@ -505,7 +505,7 @@ func (h *httprunner) _votedPrimary(ctx *smapModifier, clone *smapX) error {
 
 func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *cluster.Snode) (err error) {
 	msg := VoteInitiationMessage{Request: *vr}
-	body := cmn.MustMarshal(&msg)
+	body := cos.MustMarshal(&msg)
 	args := callArgs{
 		si: nextPrimaryProxy,
 		req: cmn.ReqArgs{

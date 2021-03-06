@@ -20,7 +20,7 @@ import (
 // update list of revoked token on all clusters
 func (m *userManager) broadcastRevoked(token string) {
 	tokenList := ais.TokenList{Tokens: []string{token}}
-	body := cmn.MustMarshal(tokenList)
+	body := cos.MustMarshal(tokenList)
 	m.broadcast(http.MethodDelete, cmn.Tokens, body)
 }
 
@@ -61,7 +61,7 @@ func (m *userManager) syncTokenList(cluster *cmn.AuthCluster) {
 	if len(tokenList) == 0 {
 		return
 	}
-	body := cmn.MustMarshal(ais.TokenList{Tokens: tokenList})
+	body := cos.MustMarshal(ais.TokenList{Tokens: tokenList})
 	for _, u := range cluster.URLs {
 		if err = m.proxyRequest(http.MethodDelete, u, cmn.Tokens, body); err == nil {
 			break

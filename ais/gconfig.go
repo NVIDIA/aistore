@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
@@ -44,10 +45,10 @@ var _ revs = (*globalConfig)(nil)
 
 func (config *globalConfig) tag() string     { return revsConfTag }
 func (config *globalConfig) version() int64  { return config.Version }
-func (config *globalConfig) marshal() []byte { return cmn.MustLocalMarshal(config) }
+func (config *globalConfig) marshal() []byte { return cos.MustLocalMarshal(config) }
 func (config *globalConfig) clone() *globalConfig {
 	clone := &globalConfig{}
-	cmn.MustMorphMarshal(config, clone)
+	cos.MustMorphMarshal(config, clone)
 	return clone
 }
 
@@ -169,7 +170,7 @@ func (co *configOwner) modifyOverride(toUpdate *cmn.ConfigToUpdate) (err error) 
 		override.Merge(toUpdate)
 	}
 
-	jsp.SaveOverrideConfig(clone.ConfigDir, override)
+	cmn.SaveOverrideConfig(clone.ConfigDir, override)
 	cmn.GCO.PutOverrideConfig(override)
 	return
 }

@@ -92,7 +92,7 @@ type (
 )
 
 // interface guard
-var _ cmn.Runner = (*targetrunner)(nil)
+var _ cos.Runner = (*targetrunner)(nil)
 
 //////////////
 // base gfn //
@@ -535,9 +535,9 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			UUID:  msg.UUID,
 			Evict: msg.Action == cmn.ActEvictObjects,
 		}
-		if err := cmn.MorphMarshal(msg.Value, &rangeMsg); err == nil {
+		if err := cos.MorphMarshal(msg.Value, &rangeMsg); err == nil {
 			args.RangeMsg = rangeMsg
-		} else if err := cmn.MorphMarshal(msg.Value, &listMsg); err == nil {
+		} else if err := cos.MorphMarshal(msg.Value, &listMsg); err == nil {
 			args.ListMsg = listMsg
 		} else {
 			t.writeErrf(w, r, "invalid value provided to %q action", msg.Action)
@@ -637,9 +637,9 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			listMsg  = &cmn.ListMsg{}
 			args     = &xreg.DeletePrefetchArgs{Ctx: context.Background()}
 		)
-		if err = cmn.MorphMarshal(msg.Value, &rangeMsg); err == nil {
+		if err = cos.MorphMarshal(msg.Value, &rangeMsg); err == nil {
 			args.RangeMsg = rangeMsg
-		} else if err = cmn.MorphMarshal(msg.Value, &listMsg); err == nil {
+		} else if err = cos.MorphMarshal(msg.Value, &listMsg); err == nil {
 			args.ListMsg = listMsg
 		} else {
 			t.writeErrf(w, r, "invalid value provided to %q action", msg.Action)
@@ -1432,7 +1432,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	}
 
 	promoteArgs := cmn.ActValPromote{}
-	if err := cmn.MorphMarshal(msg.Value, &promoteArgs); err != nil {
+	if err := cos.MorphMarshal(msg.Value, &promoteArgs); err != nil {
 		return
 	}
 

@@ -44,7 +44,7 @@ func AddMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string) 
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.Join(cmn.Mountpaths),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathAdd, Value: mountpath}),
+		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathAdd, Value: mountpath}),
 		Header: http.Header{
 			cmn.HeaderNodeID:  []string{node.ID()},
 			cmn.HeaderNodeURL: []string{node.URL(cmn.NetworkPublic)},
@@ -57,7 +57,7 @@ func RemoveMountpath(baseParams BaseParams, nodeID, mountpath string) error {
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.Join(cmn.Mountpaths),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathRemove, Value: mountpath}),
+		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathRemove, Value: mountpath}),
 		Header:     http.Header{cmn.HeaderNodeID: []string{nodeID}},
 	})
 }
@@ -67,7 +67,7 @@ func EnableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.Join(cmn.Mountpaths),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathEnable, Value: mountpath}),
+		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathEnable, Value: mountpath}),
 		Header: http.Header{
 			cmn.HeaderNodeID:  []string{node.ID()},
 			cmn.HeaderNodeURL: []string{node.URL(cmn.NetworkPublic)},
@@ -80,7 +80,7 @@ func DisableMountpath(baseParams BaseParams, nodeID, mountpath string) error {
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.Join(cmn.Mountpaths),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathDisable, Value: mountpath}),
+		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathDisable, Value: mountpath}),
 		Header:     http.Header{cmn.HeaderNodeID: []string{nodeID}},
 	})
 }

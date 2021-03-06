@@ -13,7 +13,6 @@ import (
 	"io/ioutil"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
@@ -27,7 +26,7 @@ const (
 	lz4BufferSize = 64 << 10
 )
 
-func EncodeSGL(v interface{}, opts cmn.Jopts) *memsys.SGL {
+func EncodeSGL(v interface{}, opts Options) *memsys.SGL {
 	// NOTE: `32 * cos.KiB` value was estimated by deploying cluster with
 	//  32 targets and 32 proxies and creating 100 buckets.
 	sgl := memsys.DefaultPageMM().NewSGL(32 * cos.KiB)
@@ -36,7 +35,7 @@ func EncodeSGL(v interface{}, opts cmn.Jopts) *memsys.SGL {
 	return sgl
 }
 
-func Encode(ws cos.WriterAt, v interface{}, opts cmn.Jopts) (err error) {
+func Encode(ws cos.WriterAt, v interface{}, opts Options) (err error) {
 	var (
 		h       hash.Hash
 		w       io.Writer = ws
@@ -52,7 +51,7 @@ func Encode(ws cos.WriterAt, v interface{}, opts cmn.Jopts) (err error) {
 		copy(prefix[:], signature) // [ 0 - 63 ]
 		l := len(signature)
 		debug.Assert(l < cos.SizeofI64)
-		prefix[l] = cmn.MetaverJSP // current jsp version
+		prefix[l] = Metaver // current jsp version
 		off += cos.SizeofI64
 
 		binary.BigEndian.PutUint32(prefix[off:], opts.Metaver) // [ 64 - 95 ]
@@ -86,9 +85,9 @@ func Encode(ws cos.WriterAt, v interface{}, opts cmn.Jopts) (err error) {
 		w = io.MultiWriter(h, w)
 	}
 	if opts.Local {
-		encoder = cmn.JSONLocal.NewEncoder(w)
+		encoder = cos.JSONLocal.NewEncoder(w)
 	} else {
-		encoder = cmn.JSON.NewEncoder(w)
+		encoder = cos.JSON.NewEncoder(w)
 	}
 	if opts.Indent {
 		encoder.SetIndent("", "  ")
@@ -104,7 +103,7 @@ func Encode(ws cos.WriterAt, v interface{}, opts cmn.Jopts) (err error) {
 	return
 }
 
-func Decode(reader io.ReadCloser, v interface{}, opts cmn.Jopts, tag string) (checksum *cos.Cksum, err error) {
+func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) (checksum *cos.Cksum, err error) {
 	var (
 		r             io.Reader = reader
 		expectedCksum uint64
@@ -127,8 +126,8 @@ func Decode(reader io.ReadCloser, v interface{}, opts cmn.Jopts, tag string) (ch
 			return
 		}
 		jspVer = prefix[l]
-		if jspVer != cmn.MetaverJSP {
-			err = newErrVersion("jsp", uint32(jspVer), cmn.MetaverJSP, 2)
+		if jspVer != Metaver {
+			err = newErrVersion("jsp", uint32(jspVer), Metaver, 2)
 			// NOTE: start jsp backward compatibility
 			if _, ok := err.(*ErrCompatibleVersion); ok {
 				glog.Errorf("%v - skipping meta-version check", err)
@@ -164,7 +163,7 @@ func Decode(reader io.ReadCloser, v interface{}, opts cmn.Jopts, tag string) (ch
 		h = xxhash.New64()
 		r = io.TeeReader(r, h)
 	}
-	if err = cmn.JSON.NewDecoder(r).Decode(v); err != nil {
+	if err = cos.JSON.NewDecoder(r).Decode(v); err != nil {
 		return
 	}
 	if opts.Checksum {

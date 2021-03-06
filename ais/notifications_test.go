@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
@@ -107,9 +108,9 @@ var _ = Describe("Notifications xaction test", func() {
 		notifRequest = func(daeID, xactID, notifKind string, stats interface{}) *http.Request {
 			nm := cluster.NotifMsg{
 				UUID: xactID,
-				Data: cmn.MustMarshal(stats),
+				Data: cos.MustMarshal(stats),
 			}
-			body := bytes.NewBuffer(cmn.MustMarshal(nm))
+			body := bytes.NewBuffer(cos.MustMarshal(nm))
 			req := httptest.NewRequest(http.MethodPost, cmn.URLPathNotifs.Join(notifKind), body)
 			req.Header = make(http.Header)
 			req.Header.Add(cmn.HeaderCallerID, daeID)
@@ -143,7 +144,7 @@ var _ = Describe("Notifications xaction test", func() {
 		It("should add node to finished set on receiving finished stats", func() {
 			Expect(nl.FinCount()).To(BeEquivalentTo(0))
 			stats := finishedXact(xactID)
-			err := n.handleFinished(nl, targets[target1ID], cmn.MustMarshal(stats), nil)
+			err := n.handleFinished(nl, targets[target1ID], cos.MustMarshal(stats), nil)
 			Expect(err).To(BeNil())
 			Expect(nl.ActiveNotifiers().Contains(target1ID)).To(BeFalse())
 			Expect(nl.Finished()).To(BeFalse())
@@ -153,7 +154,7 @@ var _ = Describe("Notifications xaction test", func() {
 			Expect(nl.Err(false)).To(BeNil())
 			stats := finishedXact(xactID)
 			srcErr := errors.New("some error")
-			err := n.handleFinished(nl, targets[target1ID], cmn.MustMarshal(stats), srcErr)
+			err := n.handleFinished(nl, targets[target1ID], cos.MustMarshal(stats), srcErr)
 			Expect(err).To(BeNil())
 			Expect(srcErr).To(BeEquivalentTo(nl.Err(false)))
 			Expect(nl.ActiveNotifiers().Contains(target1ID)).To(BeFalse())
@@ -163,8 +164,8 @@ var _ = Describe("Notifications xaction test", func() {
 			Expect(nl.FinCount()).To(BeEquivalentTo(0))
 			n.add(nl)
 			stats := finishedXact(xactID)
-			n.handleFinished(nl, targets[target1ID], cmn.MustMarshal(stats), nil)
-			err := n.handleFinished(nl, targets[target2ID], cmn.MustMarshal(stats), nil)
+			n.handleFinished(nl, targets[target1ID], cos.MustMarshal(stats), nil)
+			err := n.handleFinished(nl, targets[target2ID], cos.MustMarshal(stats), nil)
 			Expect(err).To(BeNil())
 			Expect(nl.FinCount()).To(BeEquivalentTo(len(targets)))
 			Expect(nl.Finished()).To(BeTrue())
@@ -172,7 +173,7 @@ var _ = Describe("Notifications xaction test", func() {
 
 		It("should be done if xaction Aborted", func() {
 			stats := abortedXact(xactID)
-			err := n.handleFinished(nl, targets[target1ID], cmn.MustMarshal(stats), nil)
+			err := n.handleFinished(nl, targets[target1ID], cos.MustMarshal(stats), nil)
 			Expect(err).To(BeNil())
 			Expect(nl.Aborted()).To(BeTrue())
 			Expect(nl.Err(false)).NotTo(BeNil())
@@ -190,7 +191,7 @@ var _ = Describe("Notifications xaction test", func() {
 			statsProgress := baseXact(xactID, updatedObjCount, updatedByteCount)
 
 			// Handle fist set of stats
-			err := n.handleProgress(nl, targets[target1ID], cmn.MustMarshal(statsFirst), nil)
+			err := n.handleProgress(nl, targets[target1ID], cos.MustMarshal(statsFirst), nil)
 			Expect(err).To(BeNil())
 			val, _ := nl.NodeStats().Load(target1ID)
 			statsXact, ok := val.(*xaction.BaseXactStatsExt)
@@ -199,7 +200,7 @@ var _ = Describe("Notifications xaction test", func() {
 			Expect(statsXact.BytesCount()).To(BeEquivalentTo(initByteCount))
 
 			// Next a Finished notification with stats
-			err = n.handleFinished(nl, targets[target1ID], cmn.MustMarshal(statsProgress), nil)
+			err = n.handleFinished(nl, targets[target1ID], cos.MustMarshal(statsProgress), nil)
 			Expect(err).To(BeNil())
 			val, _ = nl.NodeStats().Load(target1ID)
 			statsXact, ok = val.(*xaction.BaseXactStatsExt)

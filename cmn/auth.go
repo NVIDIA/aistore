@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/dgrijalva/jwt-go"
 )
@@ -206,7 +207,7 @@ func DecryptToken(tokenStr, secret string) (*AuthToken, error) {
 		return nil, ErrInvalidToken
 	}
 	tInfo := &AuthToken{}
-	if err := MorphMarshal(claims, tInfo); err != nil {
+	if err := cos.MorphMarshal(claims, tInfo); err != nil {
 		return nil, ErrInvalidToken
 	}
 	if tInfo.Expires.Before(time.Now()) {

@@ -34,13 +34,13 @@ type (
 
 // interface guard
 var (
-	_ cmn.GetJopts = (*VMD)(nil)
+	_ jsp.Opts = (*VMD)(nil)
 )
 
-var vmdJspOpts = cmn.CCSign(cmn.MetaverVMD)
+var vmdJspOpts = jsp.CCSign(cmn.MetaverVMD)
 
-// as cmn.GetJopts
-func (*VMD) GetJopts() cmn.Jopts { return vmdJspOpts }
+// as jsp.GetOpts
+func (*VMD) JspOpts() jsp.Options { return vmdJspOpts }
 
 func newVMD(expectedSize int) *VMD {
 	return &VMD{
@@ -104,7 +104,7 @@ func LoadVMD(mpaths cos.StringSet) (mainVMD *VMD, err error) {
 }
 
 func (vmd *VMD) persist() (err error) {
-	cnt, availCnt := PersistOnMpaths(VmdPersistedFileName, "", vmd, vmdCopies, vmd.GetJopts())
+	cnt, availCnt := PersistOnMpaths(VmdPersistedFileName, "", vmd, vmdCopies, vmd.JspOpts())
 	if cnt > 0 {
 		return
 	}

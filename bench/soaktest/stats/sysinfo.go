@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 const (
@@ -17,7 +18,7 @@ const (
 
 // Tracks System Info Stats
 type SysInfoStat struct {
-	cmn.SysInfo
+	cos.SysInfo
 	cmn.CapacityInfo
 
 	Type      string    `json:"type"` // type (proxy|target)

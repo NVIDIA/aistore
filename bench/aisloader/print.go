@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/bench/aisloader/stats"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/stats/statsd"
 	jsoniter "github.com/json-iterator/go"
@@ -210,7 +209,7 @@ func writeStatsJSON(to io.Writer, s sts, withcomma ...bool) {
 		Cfg: jsonStatsFromReq(s.getConfig),
 	}
 
-	jsonOutput := cmn.MustMarshal(jStats)
+	jsonOutput := cos.MustMarshal(jStats)
 	fmt.Fprintf(to, "\n%s", string(jsonOutput))
 	// print comma by default
 	if len(withcomma) == 0 || withcomma[0] {

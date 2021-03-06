@@ -87,7 +87,7 @@ type (
 /////////////
 
 // interface guard
-var _ cmn.Runner = (*Trunner)(nil)
+var _ cos.Runner = (*Trunner)(nil)
 
 func (r *Trunner) Register(name, kind string)  { r.Core.Tracker.register(name, kind) }
 func (r *Trunner) Run() error                  { return r.runcommon(r) }
@@ -188,7 +188,7 @@ func (r *Trunner) log(uptime time.Duration) {
 	// copy stats, reset latencies
 	r.Core.UpdateUptime(uptime)
 	if idle := r.Core.copyT(r.ctracker, []string{"kalive", Uptime}); !idle {
-		b := cmn.MustMarshal(r.ctracker)
+		b := cos.MustMarshal(r.ctracker)
 		r.lines = append(r.lines, string(b))
 	}
 
@@ -199,7 +199,7 @@ func (r *Trunner) log(uptime time.Duration) {
 			go r.T.RunLRU("" /*uuid*/, false)
 		}
 		for mpath, fsCapacity := range r.MPCap {
-			b := cmn.MustMarshal(fsCapacity)
+			b := cos.MustMarshal(fsCapacity)
 			r.lines = append(r.lines, mpath+": "+string(b))
 		}
 	}

@@ -23,6 +23,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 type (
@@ -162,5 +163,5 @@ func (a *authManager) revokedTokenList() *TokenList {
 func (t *TokenList) tag() string    { return revsTokenTag }
 func (t *TokenList) version() int64 { return t.Version }
 func (t *TokenList) marshal() []byte {
-	return cmn.MustMarshal(t)
+	return cos.MustMarshal(t)
 }
