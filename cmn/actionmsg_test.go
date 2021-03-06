@@ -77,9 +77,9 @@ func TestActMsgRawUnmarshal(t *testing.T) {
 			},
 		},
 		{
-			action: ActListObjects,
+			action: ActList,
 			vals: []string{
-				`{"action":"listobj","value":{"props": "size"}}`,
+				`{"action":"list","value":{"props": "size"}}`,
 			},
 		},
 		{

@@ -420,67 +420,88 @@ func (t *targetrunner) ecHandler(w http.ResponseWriter, r *http.Request) {
 // httpbck* handlers //
 ///////////////////////
 
-func (t *targetrunner) handleListObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck) {
-	msg := &aisMsg{}
-	if err := cmn.ReadJSON(w, r, msg); err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
-	if msg.Action != cmn.ActListObjects {
-		t.writeErrAct(w, r, msg.Action)
-		return
-	}
-	t.ensureLatestSmap(msg, r)
-	if err := bck.Init(t.owner.bmd); err != nil {
-		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
-			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
-			err = bck.Init(t.owner.bmd)
-		}
-		if err != nil {
-			t.writeErr(w, r, err)
-			return
-		}
-	}
-	begin := mono.NanoTime()
-	if ok := t.listObjects(w, r, bck, msg); !ok {
-		return
-	}
-
-	delta := mono.Since(begin)
-	t.statsT.AddMany(
-		stats.NamedVal64{Name: stats.ListCount, Value: 1},
-		stats.NamedVal64{Name: stats.ListLatency, Value: int64(delta)},
-	)
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("LIST: %s, %s", bck, delta)
-	}
-}
-
-// GET /v1/buckets/bucket-name
+// GET /v1/buckets[/bucket-name]
 func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathBuckets.L)
+	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathBuckets.L)
 	if err != nil {
 		return
 	}
 
-	if apiItems[0] == cmn.AllBuckets {
-		var queryBcks cmn.QueryBcks
-		if queryBcks, err = newQueryBcksFromQuery(r.URL.Query()); err != nil {
-			t.writeErr(w, r, err)
-			return
-		}
-
-		t.listBuckets(w, r, queryBcks)
+	var msg aisMsg
+	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
 
-	var bck *cluster.Bck
-	if bck, err = newBckFromQuery(apiItems[0], r.URL.Query()); err != nil {
+	var bckName string
+	if len(apiItems) > 0 {
+		bckName = apiItems[0]
+	}
+
+	var queryBcks cmn.QueryBcks
+	if queryBcks, err = newQueryBcksFromQuery(bckName, r.URL.Query()); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
 
-	t.handleListObjects(w, r, bck)
+	switch msg.Action {
+	case cmn.ActList:
+		t.handleList(w, r, queryBcks, &msg)
+	case cmn.ActSummary:
+		t.handleSummary(w, r, queryBcks, &msg)
+	default:
+		t.writeErrAct(w, r, msg.Action)
+	}
+}
+
+func (t *targetrunner) handleList(w http.ResponseWriter, r *http.Request, queryBcks cmn.QueryBcks, msg *aisMsg) {
+	if queryBcks.Name == "" {
+		t.listBuckets(w, r, queryBcks)
+	} else {
+		t.ensureLatestSmap(msg, r)
+		bck := cluster.NewBckEmbed(cmn.Bck(queryBcks))
+		if err := bck.Init(t.owner.bmd); err != nil {
+			if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
+				t.BMDVersionFixup(r, cmn.Bck{}, true /*sleep*/)
+				err = bck.Init(t.owner.bmd)
+			}
+			if err != nil {
+				t.writeErr(w, r, err)
+				return
+			}
+		}
+		begin := mono.NanoTime()
+		if ok := t.listObjects(w, r, bck, msg); !ok {
+			return
+		}
+
+		delta := mono.Since(begin)
+		t.statsT.AddMany(
+			stats.NamedVal64{Name: stats.ListCount, Value: 1},
+			stats.NamedVal64{Name: stats.ListLatency, Value: int64(delta)},
+		)
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("LIST: %s, %s", bck, delta)
+		}
+	}
+}
+
+func (t *targetrunner) handleSummary(w http.ResponseWriter, r *http.Request, queryBcks cmn.QueryBcks, msg *aisMsg) {
+	bck := cluster.NewBckEmbed(cmn.Bck(queryBcks))
+	if bck.Name != "" {
+		// Ensure that the bucket exists.
+		if err := bck.Init(t.owner.bmd); err != nil {
+			if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
+				t.BMDVersionFixup(r, cmn.Bck{}, true /*sleep*/)
+				err = bck.Init(t.owner.bmd)
+			}
+			if err != nil {
+				t.writeErr(w, r, err)
+				return
+			}
+		}
+	}
+
+	t.bucketSummary(w, r, bck, msg)
 }
 
 // DELETE { action } /v1/buckets/bucket-name
@@ -565,42 +586,6 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) httpbcksummary(w http.ResponseWriter, r *http.Request, msg *aisMsg) {
-	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathBuckets.L)
-	if err != nil {
-		return
-	}
-	var (
-		bck   *cluster.Bck
-		query = r.URL.Query()
-	)
-	t.ensureLatestSmap(msg, r)
-	if len(apiItems) == 0 {
-		// Summary for query buckets.
-		var queryBcks cmn.QueryBcks
-		queryBcks, err = newQueryBcksFromQuery(query)
-		if err == nil {
-			bck = cluster.NewBckEmbed(cmn.Bck(queryBcks))
-		}
-	} else {
-		// Summary for specific bucket.
-		bck, err = newBckFromQuery(apiItems[0], query)
-		if err == nil {
-			if err = bck.Init(t.owner.bmd); err != nil {
-				if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
-					t.BMDVersionFixup(r, cmn.Bck{}, true /*sleep*/)
-					err = bck.Init(t.owner.bmd)
-				}
-			}
-		}
-	}
-	if err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
-	t.bucketSummary(w, r, bck, msg)
-}
-
 // POST /v1/buckets/bucket-name
 func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	msg := &aisMsg{}
@@ -608,11 +593,6 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		t.writeErr(w, r, err)
 		return
 	}
-	if msg.Action == cmn.ActSummaryBck {
-		t.httpbcksummary(w, r, msg)
-		return
-	}
-
 	request := &apiRequest{prefix: cmn.URLPathBuckets.L, after: 1}
 	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return

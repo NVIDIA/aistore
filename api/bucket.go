@@ -114,12 +114,13 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p *cmn
 func ListBuckets(baseParams BaseParams, queryBcks cmn.QueryBcks) (cmn.BucketNames, error) {
 	var (
 		bucketNames = cmn.BucketNames{}
-		path        = cmn.URLPathBuckets.Join(cmn.AllBuckets)
+		path        = cmn.URLPathBuckets.S
+		body        = cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActList})
 		query       = cmn.AddBckToQuery(nil, cmn.Bck(queryBcks))
 	)
 
 	baseParams.Method = http.MethodGet
-	err := DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: path, Query: query}, &bucketNames)
+	err := DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: path, Body: body, Query: query}, &bucketNames)
 	if err != nil {
 		return nil, err
 	}
@@ -133,8 +134,7 @@ func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks,
 	if msg == nil {
 		msg = &cmn.BucketSummaryMsg{}
 	}
-	baseParams.Method = http.MethodPost
-
+	baseParams.Method = http.MethodGet
 	reqParams := ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(query.Name),
@@ -142,7 +142,7 @@ func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks,
 		Query:      cmn.AddBckToQuery(nil, cmn.Bck(query)),
 	}
 	var summaries cmn.BucketsSummaries
-	if err := waitForAsyncReqComplete(reqParams, cmn.ActSummaryBck, msg, &summaries); err != nil {
+	if err := waitForAsyncReqComplete(reqParams, cmn.ActSummary, msg, &summaries); err != nil {
 		return nil, err
 	}
 	sort.Sort(summaries)
@@ -293,7 +293,7 @@ func EvictRemoteBucket(baseParams BaseParams, bck cmn.Bck, keepMD bool) error {
 // 4. If the destination returns status code StatusOK, it means the response
 //    contains the real data and the function returns the response to the caller
 func waitForAsyncReqComplete(reqParams ReqParams, action string, msg *cmn.BucketSummaryMsg, v interface{}) error {
-	cos.Assert(action == cmn.ActSummaryBck)
+	cos.Assert(action == cmn.ActSummary)
 	var (
 		uuid   string
 		sleep  = initialPollInterval
@@ -373,7 +373,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 		if !listAll {
 			smsg.PageSize = toRead
 		}
-		actMsg := cmn.ActionMsg{Action: cmn.ActListObjects, Value: smsg}
+		actMsg := cmn.ActionMsg{Action: cmn.ActList, Value: smsg}
 		reqParams.Body = cos.MustMarshal(actMsg)
 		page := nextPage
 
@@ -441,7 +441,7 @@ func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg) (*
 	}
 
 	var (
-		actMsg    = cmn.ActionMsg{Action: cmn.ActListObjects, Value: smsg}
+		actMsg    = cmn.ActionMsg{Action: cmn.ActList, Value: smsg}
 		reqParams = ReqParams{
 			BaseParams: baseParams,
 			Path:       cmn.URLPathBuckets.Join(bck.Name),

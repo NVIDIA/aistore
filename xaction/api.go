@@ -90,8 +90,8 @@ var XactsDtor = map[string]XactDescriptor{
 	cmn.ActPrefetch:       {Type: XactTypeBck, Access: cmn.AccessRW, Startable: true},
 	cmn.ActPromote:        {Type: XactTypeBck, Access: cmn.AccessPROMOTE, Startable: false, RefreshCap: true},
 	cmn.ActQueryObjects:   {Type: XactTypeBck, Access: cmn.AccessObjLIST, Startable: false, Metasync: false, Owned: true},
-	cmn.ActListObjects:    {Type: XactTypeBck, Access: cmn.AccessObjLIST, Startable: false, Metasync: false, Owned: true},
-	cmn.ActSummaryBck:     {Type: XactTypeTask, Access: cmn.AccessObjLIST | cmn.AccessBckHEAD, Startable: false, Metasync: false, Owned: true, Mountpath: true},
+	cmn.ActList:           {Type: XactTypeBck, Access: cmn.AccessObjLIST, Startable: false, Metasync: false, Owned: true},
+	cmn.ActSummary:        {Type: XactTypeTask, Access: cmn.AccessObjLIST | cmn.AccessBckHEAD, Startable: false, Metasync: false, Owned: true, Mountpath: true},
 	cmn.ActInvalListCache: {Type: XactTypeBck, Access: cmn.AccessObjLIST, Startable: false},
 }
 

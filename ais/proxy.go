@@ -301,51 +301,58 @@ func (p *proxyrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GET /v1/buckets/bucket-name
+// GET /v1/buckets[/bucket-name]
 func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathBuckets.L)
+	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathBuckets.L)
 	if err != nil {
 		return
 	}
 
-	switch apiItems[0] {
-	case cmn.AllBuckets:
+	var msg cmn.ActionMsg
+	if err := cmn.ReadJSON(w, r, &msg); err != nil {
+		return
+	}
+
+	var bckName string
+	if len(apiItems) > 0 {
+		bckName = apiItems[0]
+	}
+
+	var queryBcks cmn.QueryBcks
+	if queryBcks, err = newQueryBcksFromQuery(bckName, r.URL.Query()); err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+
+	switch msg.Action {
+	case cmn.ActList:
+		p.handleList(w, r, queryBcks, &msg)
+	case cmn.ActSummary:
+		p.bucketSummary(w, r, queryBcks, &msg)
+	default:
+		p.writeErrAct(w, r, msg.Action)
+	}
+}
+
+func (p *proxyrunner) handleList(w http.ResponseWriter, r *http.Request, queryBcks cmn.QueryBcks, msg *cmn.ActionMsg) {
+	if queryBcks.Name == "" {
 		if err := p.checkACL(r.Header, nil, cmn.AccessListBuckets); err != nil {
 			p.writeErr(w, r, err, http.StatusUnauthorized)
 			return
 		}
 
-		var queryBcks cmn.QueryBcks
-		if queryBcks, err = newQueryBcksFromQuery(r.URL.Query()); err != nil {
-			p.writeErr(w, r, err)
-			return
-		}
-
-		p.listBuckets(w, r, queryBcks)
-	default:
+		p.listBuckets(w, r, queryBcks, msg)
+	} else {
 		var (
 			bck *cluster.Bck
-			msg cmn.ActionMsg
+			err error
 		)
-		bckName := apiItems[0]
-		if bck, err = newBckFromQuery(bckName, r.URL.Query()); err != nil {
-			p.writeErr(w, r, err)
-			return
-		}
-
-		if err := cmn.ReadJSON(w, r, &msg); err != nil {
-			return
-		}
-		if msg.Action != cmn.ActListObjects {
-			p.writeErrAct(w, r, msg.Action)
-			return
-		}
-		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: &msg, perms: cmn.AccessObjLIST, tryOnlyRem: true, queryBck: bck}
-		if bck, err = bckArgs.initAndTry(bckName); err != nil {
+		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: msg, perms: cmn.AccessObjLIST, tryOnlyRem: true, queryBck: bck}
+		if bck, err = bckArgs.initAndTry(queryBcks.Name); err != nil {
 			return
 		}
 		begin := mono.NanoTime()
-		p.listObjects(w, r, bck, &msg, begin)
+		p.listObjects(w, r, bck, msg, begin)
 	}
 }
 
@@ -661,23 +668,18 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 // POST { action } /v1/buckets[/bucket-name]
 func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathBuckets.L)
+	apiItems, err := p.checkRESTItems(w, r, 1, true, cmn.URLPathBuckets.L)
 	if err != nil {
 		return
 	}
+
 	var msg cmn.ActionMsg
 	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
-	switch len(apiItems) {
-	case 0:
-		p.hpostAllBuckets(w, r, &msg)
-	case 1:
-		bucket := apiItems[0]
-		p.hpostBucket(w, r, &msg, bucket)
-	default:
-		p.writeErrAct(w, r, msg.Action)
-	}
+
+	bucket := apiItems[0]
+	p.hpostBucket(w, r, &msg, bucket)
 }
 
 func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, bucket string) {
@@ -848,8 +850,6 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		w.Write([]byte(xactID))
 	case cmn.ActInvalListCache:
 		p.qm.c.invalidate(bck.Bck)
-	case cmn.ActSummaryBck:
-		p.bucketSummary(w, r, cmn.QueryBcks(bck.Bck), msg)
 	case cmn.ActMakeNCopies:
 		var xactID string
 		if xactID, err = p.makeNCopies(msg, bck); err != nil {
@@ -935,25 +935,6 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
-func (p *proxyrunner) hpostAllBuckets(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
-	if err := p.checkACL(r.Header, nil, cmn.AccessListBuckets); err != nil {
-		p.writeErr(w, r, err, http.StatusUnauthorized)
-		return
-	}
-
-	switch msg.Action {
-	case cmn.ActSummaryBck:
-		queryBcks, err := newQueryBcksFromQuery(r.URL.Query())
-		if err != nil {
-			p.writeErr(w, r, err)
-			return
-		}
-		p.bucketSummary(w, r, queryBcks, msg)
-	default:
-		p.writeErrAct(w, r, msg.Action)
-	}
-}
-
 func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg *cmn.ActionMsg,
 	begin int64) {
 	var (
@@ -987,11 +968,11 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 		smsg.UUID = cos.GenUUID()
 		if locationIsAIS || smsg.NeedLocalMD() {
 			nl = xaction.NewXactNL(smsg.UUID,
-				cmn.ActListObjects, &smap.Smap, nil, bck.Bck)
+				cmn.ActList, &smap.Smap, nil, bck.Bck)
 		} else {
 			// random target to execute `list-objects` on a Cloud bucket
 			si, _ := smap.GetRandTarget()
-			nl = xaction.NewXactNL(smsg.UUID, cmn.ActListObjects,
+			nl = xaction.NewXactNL(smsg.UUID, cmn.ActList,
 				&smap.Smap, cluster.NodeMap{si.ID(): si}, bck.Bck)
 		}
 		nl.SetHrwOwner(&smap.Smap)
@@ -1083,15 +1064,14 @@ func (p *proxyrunner) gatherBucketSummary(bck cmn.QueryBcks, msg *cmn.BucketSumm
 		isNew, q = p.initAsyncQuery(cmn.Bck(bck), msg, cos.GenUUID())
 		config   = cmn.GCO.Get()
 		smap     = p.owner.smap.get()
-		aisMsg   = p.newAmsgActVal(cmn.ActSummaryBck, msg, smap)
-		body     = cos.MustMarshal(aisMsg)
+		aisMsg   = p.newAmsgActVal(cmn.ActSummary, msg, smap)
 	)
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{
-		Method: http.MethodPost,
+		Method: http.MethodGet,
 		Path:   cmn.URLPathBuckets.Join(bck.Name),
 		Query:  q,
-		Body:   body,
+		Body:   cos.MustMarshal(aisMsg),
 	}
 	args.smap = smap
 	args.timeout = config.Timeout.MaxHostBusy + config.Timeout.MaxKeepalive
@@ -1436,7 +1416,7 @@ func (p *proxyrunner) reverseReqRemote(w http.ResponseWriter, r *http.Request, m
 	return nil
 }
 
-func (p *proxyrunner) listBuckets(w http.ResponseWriter, r *http.Request, query cmn.QueryBcks) {
+func (p *proxyrunner) listBuckets(w http.ResponseWriter, r *http.Request, query cmn.QueryBcks, msg *cmn.ActionMsg) {
 	bmd := p.owner.bmd.get()
 	// HDFS doesn't support listing remote buckets (there are no remote buckets).
 	if query.IsAIS() || query.IsHDFS() {
@@ -1449,6 +1429,7 @@ func (p *proxyrunner) listBuckets(w http.ResponseWriter, r *http.Request, query 
 		p.writeErr(w, r, err)
 		return
 	}
+	r.Body = ioutil.NopCloser(bytes.NewBuffer(cos.MustMarshal(msg)))
 	p.reverseNodeRequest(w, r, si)
 }
 
@@ -1579,7 +1560,7 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allE
 	// what we have locally, so we don't re-request the objects.
 	smsg.ContinuationToken = p.qm.b.last(smsg.UUID, token)
 
-	aisMsg = p.newAmsgActVal(cmn.ActListObjects, &smsg, smap)
+	aisMsg = p.newAmsgActVal(cmn.ActList, &smsg, smap)
 	args = allocBcastArgs()
 	args.req = cmn.ReqArgs{
 		Method: http.MethodGet,
@@ -1646,7 +1627,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 	var (
 		smap       = p.owner.smap.get()
 		reqTimeout = cmn.GCO.Get().Client.ListObjects
-		aisMsg     = p.newAmsgActVal(cmn.ActListObjects, &smsg, smap)
+		aisMsg     = p.newAmsgActVal(cmn.ActList, &smsg, smap)
 		args       = allocBcastArgs()
 		results    sliceResults
 	)

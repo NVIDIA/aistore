@@ -33,10 +33,10 @@ const (
 	ActSetBprops      = "setbprops"
 	ActResetBprops    = "resetbprops"
 	ActResyncBprops   = "resyncbprops"
-	ActListObjects    = "listobj"
+	ActList           = "list"
 	ActQueryObjects   = "queryobj"
 	ActInvalListCache = "invallistobjcache"
-	ActSummaryBck     = "summarybck"
+	ActSummary        = "summary"
 	ActRenameObject   = "renameobj"
 	ActPromote        = "promote"
 	ActEvictObjects   = "evictobj"
@@ -335,7 +335,6 @@ const (
 	Voteres      = "result"
 	VoteInit     = "init"
 	Mountpaths   = "mountpaths"
-	AllBuckets   = "*"
 
 	// common
 	Init     = "init"

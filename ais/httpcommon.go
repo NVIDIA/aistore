@@ -2080,14 +2080,19 @@ func newBckFromQuery(bckName string, query url.Values) (*cluster.Bck, error) {
 	return cluster.NewBckEmbed(bck), nil
 }
 
-func newQueryBcksFromQuery(query url.Values) (cmn.QueryBcks, error) {
+func newQueryBcksFromQuery(bckName string, query url.Values) (cmn.QueryBcks, error) {
 	var (
 		provider  = query.Get(cmn.URLParamProvider)
 		namespace = cmn.ParseNsUname(query.Get(cmn.URLParamNamespace))
-		bck       = cmn.QueryBcks{Provider: provider, Ns: namespace}
+		bck       = cmn.QueryBcks{Name: bckName, Provider: provider, Ns: namespace}
 	)
 	if bck.Provider != "" {
 		if err := bck.ValidateProvider(); err != nil {
+			return bck, err
+		}
+	}
+	if bck.Name != "" {
+		if err := bck.ValidateName(); err != nil {
 			return bck, err
 		}
 	}

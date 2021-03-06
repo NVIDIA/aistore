@@ -137,7 +137,7 @@ func (r *XactDemandBase) Abort() {
 		glog.Infof("already aborted: " + r.String())
 		return
 	}
-	if r.Kind() != cmn.ActListObjects {
+	if r.Kind() != cmn.ActList {
 		if !r.likelyIdle() {
 			err = cmn.NewAbortedError(r.String())
 		}
@@ -152,7 +152,7 @@ func (r *XactDemandBase) Finish(err error) {
 		return
 	}
 	if cmn.IsErrAborted(err) {
-		if r.Kind() == cmn.ActListObjects || r.likelyIdle() {
+		if r.Kind() == cmn.ActList || r.likelyIdle() {
 			err = nil
 		}
 	}

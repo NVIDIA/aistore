@@ -90,7 +90,7 @@ func (p *xactProvider) Start(bck cmn.Bck) error {
 	p.xact = newXact(p.ctx, p.t, bck, p.msg, p.uuid)
 	return nil
 }
-func (*xactProvider) Kind() string        { return cmn.ActListObjects }
+func (*xactProvider) Kind() string        { return cmn.ActList }
 func (p *xactProvider) Get() cluster.Xact { return p.xact }
 
 func newXact(ctx context.Context, t cluster.Target, bck cmn.Bck, smsg *cmn.SelectMsg, uuid string) *Xact {
@@ -108,7 +108,7 @@ func newXact(ctx context.Context, t cluster.Target, bck cmn.Bck, smsg *cmn.Selec
 		lastPage: make([]*cmn.BucketEntry, 0, cacheSize),
 	}
 	cos.Assert(xact.bck.Props != nil)
-	args := xaction.Args{ID: xaction.BaseID(uuid), Kind: cmn.ActListObjects, Bck: &bck}
+	args := xaction.Args{ID: xaction.BaseID(uuid), Kind: cmn.ActList, Bck: &bck}
 	xact.XactDemandBase = *xaction.NewXDB(args, totallyIdle, likelyIdle)
 	xact.InitIdle()
 	return xact

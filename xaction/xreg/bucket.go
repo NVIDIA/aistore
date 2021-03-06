@@ -293,7 +293,7 @@ func (r *registry) renewObjList(t cluster.Target, bck *cluster.Bck, uuid string,
 	msg *cmn.SelectMsg) (xact cluster.Xact, isNew bool, err error) {
 	xact = r.getXact(uuid)
 	if xact == nil || xact.Finished() {
-		e := r.bckXacts[cmn.ActListObjects].New(XactArgs{
+		e := r.bckXacts[cmn.ActList].New(XactArgs{
 			Ctx:    context.Background(),
 			T:      t,
 			UUID:   uuid,
