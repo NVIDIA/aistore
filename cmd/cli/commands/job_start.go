@@ -94,25 +94,14 @@ func startXactionHandler(c *cli.Context) (err error) {
 	)
 
 	xactKind := c.Command.Name
-	if xaction.IsTypeBck(xactKind) && c.NArg() == 0 {
-		return missingArgumentsError(c, bucketArgument)
-	}
-
-	if xactKind == cmn.ActResilver && c.NArg() > 0 {
-		smap, err := api.GetClusterMap(defaultAPIParams)
-		if err != nil {
-			return err
-		}
-		sid = c.Args().First()
-
-		if node := smap.GetTarget(sid); node == nil {
-			return fmt.Errorf("node %q is not a target. Run 'ais show cluster target' to see a list of all targets", sid)
-		}
-	} else {
+	if xaction.IsTypeBck(xactKind) {
 		bck, err = parseBckURI(c, c.Args().First())
 		if err != nil {
 			return err
 		}
+	}
+	if sid, err = isResilverNode(c, xactKind); err != nil {
+		return err
 	}
 
 	return startXaction(c, xactKind, bck, sid)
@@ -140,6 +129,21 @@ func startXaction(c *cli.Context, xactKind string, bck cmn.Bck, sid string) (err
 		fmt.Fprintf(c.App.Writer, "Started %s\n", xactKind)
 	}
 
+	return
+}
+
+func isResilverNode(c *cli.Context, xactKind string) (sid string, err error) {
+	if xactKind != cmn.ActResilver || c.NArg() == 0 {
+		return "", nil
+	}
+	smap, err := api.GetClusterMap(defaultAPIParams)
+	if err != nil {
+		return "", err
+	}
+	sid = c.Args().First()
+	if node := smap.GetTarget(sid); node == nil {
+		return "", fmt.Errorf("node %q is not a target. Run 'ais show cluster target' to see a list of all targets", sid)
+	}
 	return
 }
 
