@@ -660,9 +660,6 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 		sliceDelPct      = 50              // %% of objects that have damaged body and a slice
 	)
 
-	o.sema.Acquire()
-	defer o.sema.Release()
-
 	delSlice := false // delete only main object
 	deletedFiles := 1
 	if o.dataCnt+o.parityCnt > 2 && o.rnd.Intn(100) < sliceDelPct {
@@ -776,7 +773,7 @@ func TestECRestoreObjAndSliceRemote(t *testing.T) {
 
 	o := ecOptions{
 		minTargets:  4,
-		objCount:    100,
+		objCount:    25,
 		concurrency: 8,
 		pattern:     "obj-rest-remote-%04d",
 	}.init(t, proxyURL)
@@ -825,8 +822,12 @@ func TestECRestoreObjAndSliceRemote(t *testing.T) {
 				wg := sync.WaitGroup{}
 				wg.Add(o.objCount)
 				for i := 0; i < o.objCount; i++ {
+					o.sema.Acquire()
 					go func(i int) {
-						defer wg.Done()
+						defer func() {
+							o.sema.Release()
+							wg.Done()
+						}()
 						objName := fmt.Sprintf(o.pattern, i)
 						createDamageRestoreECFile(t, baseParams, bck, objName, i, o)
 					}(i)
@@ -888,8 +889,12 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 				wg := sync.WaitGroup{}
 				wg.Add(o.objCount)
 				for i := 0; i < o.objCount; i++ {
+					o.sema.Acquire()
 					go func(i int) {
-						defer wg.Done()
+						defer func() {
+							o.sema.Release()
+							wg.Done()
+						}()
 						objName := fmt.Sprintf(o.pattern, i)
 						createDamageRestoreECFile(t, baseParams, bck, objName, i, o)
 					}(i)
@@ -1033,8 +1038,12 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(o.objCount)
 	for i := 0; i < o.objCount; i++ {
+		o.sema.Acquire()
 		go func(i int) {
-			defer wg.Done()
+			defer func() {
+				o.sema.Release()
+				wg.Done()
+			}()
 			objName := fmt.Sprintf(o.pattern, i)
 			createDamageRestoreECFile(t, baseParams, bck, objName, i, o)
 		}(i)
@@ -1079,8 +1088,12 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	wg.Add(o.objCount)
 	for i := 2 * o.objCount; i < 3*o.objCount; i++ {
 		objName := fmt.Sprintf(o.pattern, i)
+		o.sema.Acquire()
 		go func(i int) {
-			defer wg.Done()
+			defer func() {
+				o.sema.Release()
+				wg.Done()
+			}()
 			createDamageRestoreECFile(t, baseParams, bck, objName, i, o)
 		}(i)
 	}
@@ -1121,8 +1134,12 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	wg.Add(o.objCount)
 	for i := 0; i < o.objCount; i++ {
+		o.sema.Acquire()
 		go func(i int) {
-			defer wg.Done()
+			defer func() {
+				o.sema.Release()
+				wg.Done()
+			}()
 			objName := fmt.Sprintf(o.pattern, i)
 			createDamageRestoreECFile(t, baseParams, bck, objName, i, o)
 		}(i)
