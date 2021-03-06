@@ -303,33 +303,45 @@ func (p *proxyrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
-	request := apiRequest{after: 1, prefix: cmn.URLPathBuckets.L}
-	if err := p.parseAPIRequest(w, r, &request); err != nil {
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathBuckets.L)
+	if err != nil {
 		return
 	}
 
-	switch request.items[0] {
+	switch apiItems[0] {
 	case cmn.AllBuckets:
 		if err := p.checkACL(r.Header, nil, cmn.AccessListBuckets); err != nil {
 			p.writeErr(w, r, err, http.StatusUnauthorized)
 			return
 		}
-		p.listBuckets(w, r, cmn.QueryBcks(request.bck.Bck))
+
+		var queryBcks cmn.QueryBcks
+		if queryBcks, err = newQueryBcksFromQuery(r.URL.Query()); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+
+		p.listBuckets(w, r, queryBcks)
 	default:
 		var (
 			bck *cluster.Bck
-			err error
 			msg cmn.ActionMsg
 		)
-		if cmn.ReadJSON(w, r, &msg) != nil {
+		bckName := apiItems[0]
+		if bck, err = newBckFromQuery(bckName, r.URL.Query()); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+
+		if err := cmn.ReadJSON(w, r, &msg); err != nil {
 			return
 		}
 		if msg.Action != cmn.ActListObjects {
 			p.writeErrAct(w, r, msg.Action)
 			return
 		}
-		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: &msg, perms: cmn.AccessObjLIST, tryOnlyRem: true, queryBck: request.bck}
-		if bck, err = bckArgs.initAndTry(request.items[0]); err != nil {
+		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: &msg, perms: cmn.AccessObjLIST, tryOnlyRem: true, queryBck: bck}
+		if bck, err = bckArgs.initAndTry(bckName); err != nil {
 			return
 		}
 		begin := mono.NanoTime()
@@ -837,7 +849,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 	case cmn.ActInvalListCache:
 		p.qm.c.invalidate(bck.Bck)
 	case cmn.ActSummaryBck:
-		p.bucketSummary(w, r, bck, msg)
+		p.bucketSummary(w, r, cmn.QueryBcks(bck.Bck), msg)
 	case cmn.ActMakeNCopies:
 		var xactID string
 		if xactID, err = p.makeNCopies(msg, bck); err != nil {
@@ -931,12 +943,12 @@ func (p *proxyrunner) hpostAllBuckets(w http.ResponseWriter, r *http.Request, ms
 
 	switch msg.Action {
 	case cmn.ActSummaryBck:
-		bck, err := newBckFromQuery("", r.URL.Query())
+		queryBcks, err := newQueryBcksFromQuery(r.URL.Query())
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		p.bucketSummary(w, r, bck, msg)
+		p.bucketSummary(w, r, queryBcks, msg)
 	default:
 		p.writeErrAct(w, r, msg.Action)
 	}
@@ -1031,7 +1043,7 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 }
 
 // bucket == "": all buckets for a given provider
-func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg *cmn.ActionMsg) {
+func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck cmn.QueryBcks, amsg *cmn.ActionMsg) {
 	var (
 		err       error
 		uuid      string
@@ -1065,10 +1077,10 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck 
 	p.writeJSON(w, r, summaries, "bucket_summary")
 }
 
-func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSummaryMsg) (
+func (p *proxyrunner) gatherBucketSummary(bck cmn.QueryBcks, msg *cmn.BucketSummaryMsg) (
 	summaries cmn.BucketsSummaries, uuid string, err error) {
 	var (
-		isNew, q = p.initAsyncQuery(bck, msg, cos.GenUUID())
+		isNew, q = p.initAsyncQuery(cmn.Bck(bck), msg, cos.GenUUID())
 		config   = cmn.GCO.Get()
 		smap     = p.owner.smap.get()
 		aisMsg   = p.newAmsgActVal(cmn.ActSummaryBck, msg, smap)
@@ -1097,7 +1109,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 
 	// all targets are ready, prepare the final result
 	q = url.Values{}
-	q = cmn.AddBckToQuery(q, bck.Bck)
+	q = cmn.AddBckToQuery(q, cmn.Bck(bck))
 	q.Set(cmn.URLParamTaskAction, cmn.TaskResult)
 	q.Set(cmn.URLParamSilent, "true")
 	args.req.Query = q
@@ -1473,7 +1485,7 @@ func (p *proxyrunner) redirectURL(r *http.Request, si *cluster.Snode, ts time.Ti
 	return
 }
 
-func (p *proxyrunner) initAsyncQuery(bck *cluster.Bck, msg *cmn.BucketSummaryMsg, newTaskID string) (bool, url.Values) {
+func (p *proxyrunner) initAsyncQuery(bck cmn.Bck, msg *cmn.BucketSummaryMsg, newTaskID string) (bool, url.Values) {
 	isNew := msg.UUID == ""
 	q := url.Values{}
 	if isNew {
@@ -1491,7 +1503,7 @@ func (p *proxyrunner) initAsyncQuery(bck *cluster.Bck, msg *cmn.BucketSummaryMsg
 		}
 	}
 
-	q = cmn.AddBckToQuery(q, bck.Bck)
+	q = cmn.AddBckToQuery(q, bck)
 	return isNew, q
 }
 

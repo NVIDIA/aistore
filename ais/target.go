@@ -420,19 +420,7 @@ func (t *targetrunner) ecHandler(w http.ResponseWriter, r *http.Request) {
 // httpbck* handlers //
 ///////////////////////
 
-func (t *targetrunner) handleListBuckets(w http.ResponseWriter, r *http.Request, request apiRequest) {
-	var (
-		query = r.URL.Query()
-		what  = query.Get(cmn.URLParamWhat)
-	)
-	if what == cmn.GetWhatBMD {
-		t.writeJSON(w, r, t.owner.bmd.get(), "get-what-bmd")
-	} else {
-		t.listBuckets(w, r, cmn.QueryBcks(request.bck.Bck))
-	}
-}
-
-func (t *targetrunner) handleListObjects(w http.ResponseWriter, r *http.Request, request apiRequest) {
+func (t *targetrunner) handleListObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck) {
 	msg := &aisMsg{}
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		t.writeErr(w, r, err)
@@ -443,10 +431,10 @@ func (t *targetrunner) handleListObjects(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	t.ensureLatestSmap(msg, r)
-	if err := request.bck.Init(t.owner.bmd); err != nil {
+	if err := bck.Init(t.owner.bmd); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
-			err = request.bck.Init(t.owner.bmd)
+			err = bck.Init(t.owner.bmd)
 		}
 		if err != nil {
 			t.writeErr(w, r, err)
@@ -454,7 +442,7 @@ func (t *targetrunner) handleListObjects(w http.ResponseWriter, r *http.Request,
 		}
 	}
 	begin := mono.NanoTime()
-	if ok := t.listObjects(w, r, request.bck, msg); !ok {
+	if ok := t.listObjects(w, r, bck, msg); !ok {
 		return
 	}
 
@@ -464,21 +452,35 @@ func (t *targetrunner) handleListObjects(w http.ResponseWriter, r *http.Request,
 		stats.NamedVal64{Name: stats.ListLatency, Value: int64(delta)},
 	)
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("LIST: %s, %s", request.bck, delta)
+		glog.Infof("LIST: %s, %s", bck, delta)
 	}
 }
 
 // GET /v1/buckets/bucket-name
 func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
-	request := apiRequest{after: 1, prefix: cmn.URLPathBuckets.L}
-	if err := t.parseAPIRequest(w, r, &request); err != nil {
+	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathBuckets.L)
+	if err != nil {
 		return
 	}
-	if request.items[0] == cmn.AllBuckets {
-		t.handleListBuckets(w, r, request)
+
+	if apiItems[0] == cmn.AllBuckets {
+		var queryBcks cmn.QueryBcks
+		if queryBcks, err = newQueryBcksFromQuery(r.URL.Query()); err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+
+		t.listBuckets(w, r, queryBcks)
 		return
 	}
-	t.handleListObjects(w, r, request)
+
+	var bck *cluster.Bck
+	if bck, err = newBckFromQuery(apiItems[0], r.URL.Query()); err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+
+	t.handleListObjects(w, r, bck)
 }
 
 // DELETE { action } /v1/buckets/bucket-name
@@ -575,7 +577,11 @@ func (t *targetrunner) httpbcksummary(w http.ResponseWriter, r *http.Request, ms
 	t.ensureLatestSmap(msg, r)
 	if len(apiItems) == 0 {
 		// Summary for query buckets.
-		bck, err = newBckFromQuery("", query)
+		var queryBcks cmn.QueryBcks
+		queryBcks, err = newQueryBcksFromQuery(query)
+		if err == nil {
+			bck = cluster.NewBckEmbed(cmn.Bck(queryBcks))
+		}
 	} else {
 		// Summary for specific bucket.
 		bck, err = newBckFromQuery(apiItems[0], query)

@@ -404,11 +404,12 @@ func (b Bck) IsCloud() bool {
 
 func (b Bck) HasProvider() bool { return b.ValidateProvider() == nil }
 
-func (query QueryBcks) String() string     { return Bck(query).String() }
-func (query QueryBcks) IsAIS() bool        { return Bck(query).IsAIS() }
-func (query QueryBcks) IsHDFS() bool       { return Bck(query).IsHDFS() }
-func (query QueryBcks) IsRemoteAIS() bool  { return Bck(query).IsRemoteAIS() }
-func (query QueryBcks) Equal(bck Bck) bool { return Bck(query).Equal(bck) }
+func (query QueryBcks) String() string          { return Bck(query).String() }
+func (query QueryBcks) IsAIS() bool             { return Bck(query).IsAIS() }
+func (query QueryBcks) IsHDFS() bool            { return Bck(query).IsHDFS() }
+func (query QueryBcks) IsRemoteAIS() bool       { return Bck(query).IsRemoteAIS() }
+func (query QueryBcks) ValidateProvider() error { b := Bck(query); return b.ValidateProvider() }
+func (query QueryBcks) Equal(bck Bck) bool      { return Bck(query).Equal(bck) }
 func (query QueryBcks) Contains(other Bck) bool {
 	if query.Name != "" {
 		// NOTE: named bucket with no provider is assumed to be ais://

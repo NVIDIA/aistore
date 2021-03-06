@@ -508,9 +508,6 @@ func (h *httprunner) parseAPIRequest(w http.ResponseWriter, r *http.Request, arg
 	}
 	debug.Assert(len(args.items) > args.bckIdx)
 	bckName := args.items[args.bckIdx]
-	if bckName == cmn.AllBuckets {
-		bckName = ""
-	}
 	args.bck, err = newBckFromQuery(bckName, r.URL.Query())
 	if err == nil && args.msg != nil {
 		err = cmn.ReadJSON(w, r, args.msg)
@@ -2055,14 +2052,24 @@ func newBckFromQuery(bckName string, query url.Values) (*cluster.Bck, error) {
 		namespace = cmn.ParseNsUname(query.Get(cmn.URLParamNamespace))
 		bck       = cmn.Bck{Name: bckName, Provider: provider, Ns: namespace}
 	)
-	// TODO: We should call `bck.Validate` here but this function is also used
-	//  for getting `cmn.QueryBcks` from query params.
-	if bck.Provider != "" {
-		if err := bck.ValidateProvider(); err != nil {
-			return nil, err
-		}
+	if err := bck.Validate(); err != nil {
+		return nil, err
 	}
 	return cluster.NewBckEmbed(bck), nil
+}
+
+func newQueryBcksFromQuery(query url.Values) (cmn.QueryBcks, error) {
+	var (
+		provider  = query.Get(cmn.URLParamProvider)
+		namespace = cmn.ParseNsUname(query.Get(cmn.URLParamNamespace))
+		bck       = cmn.QueryBcks{Provider: provider, Ns: namespace}
+	)
+	if bck.Provider != "" {
+		if err := bck.ValidateProvider(); err != nil {
+			return bck, err
+		}
+	}
+	return bck, nil
 }
 
 func newBckFromQueryUname(query url.Values, uparam string) (*cluster.Bck, error) {
