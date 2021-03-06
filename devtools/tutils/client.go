@@ -617,6 +617,13 @@ func SetClusterConfig(t *testing.T, nvs cos.SimpleKVs) {
 	tassert.CheckFatal(t, err)
 }
 
+func SetClusterConfigUsingMsg(t *testing.T, toUpdate *cmn.ConfigToUpdate) {
+	proxyURL := GetPrimaryURL()
+	baseParams := BaseAPIParams(proxyURL)
+	err := api.SetClusterConfigUsingMsg(baseParams, toUpdate)
+	tassert.CheckFatal(t, err)
+}
+
 func isErrAcceptable(err error) bool {
 	if err == nil {
 		return true

@@ -9,6 +9,9 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
@@ -91,4 +94,144 @@ func TestConfigGet(t *testing.T) {
 	target, err := smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
 	tutils.GetDaemonConfig(t, target)
+}
+
+func TestConfigSetGlobal(t *testing.T) {
+	var ecCondition bool
+	smap := tutils.GetClusterMap(t, tutils.GetPrimaryURL())
+	config := tutils.GetClusterConfig(t)
+	check := func(snode *cluster.Snode, c *cmn.Config) {
+		tassert.Errorf(t, c.EC.Enabled == ecCondition, "%s expected 'ec.enabled' to be %v, got %v", snode, ecCondition, c.EC.Enabled)
+	}
+
+	ecCondition = !config.EC.Enabled
+	toUpdate := &cmn.ConfigToUpdate{EC: &cmn.ECConfToUpdate{
+		Enabled: api.Bool(ecCondition),
+	}}
+
+	tutils.SetClusterConfigUsingMsg(t, toUpdate)
+	checkConfig(t, smap, check)
+
+	// Reset config
+	ecCondition = config.EC.Enabled
+	tutils.SetClusterConfig(t, cos.SimpleKVs{
+		"ec.enabled": strconv.FormatBool(ecCondition),
+	})
+	checkConfig(t, smap, check)
+}
+
+func TestConfigFailOverrideClusterOnly(t *testing.T) {
+	var (
+		proxyURL   = tutils.GetPrimaryURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		smap       = tutils.GetClusterMap(t, proxyURL)
+		config     = tutils.GetClusterConfig(t)
+		proxy, err = smap.GetRandProxy(false)
+	)
+	tassert.CheckFatal(t, err)
+
+	// Try overriding cluster only config on a daemon
+	err = api.SetDaemonConfig(baseParams, proxy.DaemonID, cos.SimpleKVs{
+		"ec.enabled": strconv.FormatBool(!config.EC.Enabled),
+	})
+	tassert.Fatalf(t, err != nil, "expected error to occur when trying to override cluster only config")
+
+	daemonConfig := tutils.GetDaemonConfig(t, proxy)
+	tassert.Errorf(t, daemonConfig.EC.Enabled == config.EC.Enabled, "expected 'ec.enabled' to be %v, got: %v", config.EC.Enabled, daemonConfig.EC.Enabled)
+}
+
+func TestConfigOverrideAndRestart(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal, MinProxies: 2})
+	var (
+		proxyURL      = tutils.GetPrimaryURL()
+		baseParams    = tutils.BaseAPIParams(proxyURL)
+		smap          = tutils.GetClusterMap(t, proxyURL)
+		config        = tutils.GetClusterConfig(t)
+		proxy, err    = smap.GetRandProxy(true)
+		origProxyCnt  = smap.CountActiveProxies()
+		origTargetCnt = smap.CountActiveTargets()
+	)
+	tassert.CheckFatal(t, err)
+
+	// Override a cluster config on daemon
+	newLowWM := config.Disk.DiskUtilLowWM - 10
+	err = api.SetDaemonConfig(baseParams, proxy.DaemonID, cos.SimpleKVs{
+		"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM),
+	})
+	tassert.CheckFatal(t, err)
+
+	daemonConfig := tutils.GetDaemonConfig(t, proxy)
+	tassert.Errorf(t, daemonConfig.Disk.DiskUtilLowWM == newLowWM, "expected 'disk.disk_util_low_wm' to be %d, got: %d", newLowWM, daemonConfig.Disk.DiskUtilLowWM)
+
+	// Restart daemon and check if the config is persisted.
+	cmd, err := tutils.KillNode(proxy)
+	tassert.CheckFatal(t, err)
+	smap, err = tutils.WaitForClusterState(proxyURL, "kill node", smap.Version, origProxyCnt-1, origTargetCnt)
+	tassert.CheckError(t, err)
+	err = tutils.RestoreNode(cmd, false, cmn.Proxy)
+	tassert.CheckFatal(t, err)
+	_, err = tutils.WaitForClusterState(proxyURL, "restore node", smap.Version, origProxyCnt, origTargetCnt)
+	tassert.CheckFatal(t, err)
+
+	daemonConfig = tutils.GetDaemonConfig(t, proxy)
+	tassert.Fatalf(t, daemonConfig.Disk.DiskUtilLowWM == newLowWM, "expected 'disk.disk_util_low_wm' to be %d, got: %d", newLowWM, daemonConfig.Disk.DiskUtilLowWM)
+
+	// Reset node config.
+	err = api.SetDaemonConfig(baseParams, proxy.DaemonID, cos.SimpleKVs{
+		"disk.disk_util_low_wm": fmt.Sprintf("%d", config.Disk.DiskUtilLowWM),
+	})
+	tassert.CheckFatal(t, err)
+}
+
+func TestConfigSyncToNewNode(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal, MinProxies: 2})
+	var (
+		proxyURL      = tutils.GetPrimaryURL()
+		smap          = tutils.GetClusterMap(t, proxyURL)
+		config        = tutils.GetClusterConfig(t)
+		proxy, err    = smap.GetRandProxy(true)
+		origProxyCnt  = smap.CountActiveProxies()
+		origTargetCnt = smap.CountActiveTargets()
+	)
+	tassert.CheckFatal(t, err)
+	// 1. Kill a random proxy
+	// Restart daemon and check if the config is persisted.
+	cmd, err := tutils.KillNode(proxy)
+	tassert.CheckFatal(t, err)
+
+	t.Cleanup(func() {
+		tutils.SetClusterConfig(t, cos.SimpleKVs{
+			"ec.enabled": strconv.FormatBool(config.EC.Enabled),
+		})
+	})
+
+	smap, err = tutils.WaitForClusterState(proxyURL, "kill node", smap.Version, origProxyCnt-1, origTargetCnt)
+	tassert.CheckError(t, err)
+
+	// 2. After proxy is killed, update cluster configuration
+	newECEnabled := !config.EC.Enabled
+	tutils.SetClusterConfig(t, cos.SimpleKVs{
+		"ec.enabled": strconv.FormatBool(newECEnabled),
+	})
+
+	// 3. Restore killed proxy
+	err = tutils.RestoreNode(cmd, false, cmn.Proxy)
+	tassert.CheckFatal(t, err)
+	_, err = tutils.WaitForClusterState(proxyURL, "restore node", smap.Version, origProxyCnt, origTargetCnt)
+	tassert.CheckFatal(t, err)
+
+	// 4. Ensure the proxy has lastest updated config
+	daemonConfig := tutils.GetDaemonConfig(t, proxy)
+	tassert.Fatalf(t, daemonConfig.EC.Enabled == newECEnabled, "expected 'ec.Enabled' to be %v, got: %v", newECEnabled, daemonConfig.EC.Enabled)
+}
+
+func checkConfig(t *testing.T, smap *cluster.Smap, check func(*cluster.Snode, *cmn.Config)) {
+	for _, node := range smap.Pmap {
+		config := tutils.GetDaemonConfig(t, node)
+		check(node, config)
+	}
+	for _, node := range smap.Tmap {
+		config := tutils.GetDaemonConfig(t, node)
+		check(node, config)
+	}
 }

@@ -156,7 +156,7 @@ func (co *configOwner) modifyOverride(toUpdate *cmn.ConfigToUpdate) (err error) 
 	co.Lock()
 	defer co.Unlock()
 	clone := cmn.GCO.Clone()
-	err = cmn.GCO.SetConfigInMem(toUpdate, clone, co.daemonType)
+	err = cmn.GCO.SetConfigInMem(toUpdate, clone, cmn.Daemon)
 	if err != nil {
 		return
 	}

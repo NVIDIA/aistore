@@ -34,6 +34,7 @@ type SkipTestArgs struct {
 	Bck                   cmn.Bck
 	RequiredDeployment    ClusterType
 	MinTargets            int
+	MinProxies            int
 	MinMountpaths         int
 	RequiresRemoteCluster bool
 	RequiresAuth          bool
@@ -132,15 +133,24 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 		}
 	}
 
-	if args.MinTargets > 0 || args.MinMountpaths > 0 {
+	if args.MinTargets > 0 || args.MinMountpaths > 0 || args.MinProxies > 0 {
 		smap = GetClusterMap(tb, GetPrimaryURL())
 	}
+
 	if args.MinTargets > 0 {
 		if smap.CountTargets() < args.MinTargets {
 			tb.Skipf("%s requires at least %d targets (have %d)",
 				tb.Name(), args.MinTargets, smap.CountTargets())
 		}
 	}
+
+	if args.MinProxies > 0 {
+		if smap.CountProxies() < args.MinProxies {
+			tb.Skipf("%s requires at least %d proxies (have %d)",
+				tb.Name(), args.MinProxies, smap.CountProxies())
+		}
+	}
+
 	if args.MinMountpaths > 0 {
 		targets := smap.Tmap.ActiveNodes()
 		proxyURL := GetPrimaryURL()

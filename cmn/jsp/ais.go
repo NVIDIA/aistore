@@ -46,6 +46,7 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *cmn.Config) (er
 	}
 
 	if overrideConfig != nil {
+		cmn.GCO.PutOverrideConfig(overrideConfig)
 		err = config.Apply(*overrideConfig, cmn.Daemon)
 	} else {
 		err = config.Validate()
