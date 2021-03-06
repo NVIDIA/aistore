@@ -7,7 +7,7 @@ package nstlvl
 import (
 	"os/exec"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cos"
 )
 
 func dropCaches() {

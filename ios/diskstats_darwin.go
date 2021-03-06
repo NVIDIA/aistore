@@ -6,7 +6,7 @@
 package ios
 
 import (
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cos"
 	"github.com/lufia/iostat"
 )
 
