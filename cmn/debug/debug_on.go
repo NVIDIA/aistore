@@ -147,7 +147,7 @@ func AssertRWMutexRLocked(m *sync.RWMutex) {
 func Handlers() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
 		"/debug/vars":               expvar.Handler().ServeHTTP,
-		"/debug/pprof":              pprof.Index,
+		"/debug/pprof/":             pprof.Index,
 		"/debug/pprof/cmdline":      pprof.Cmdline,
 		"/debug/pprof/profile":      pprof.Profile,
 		"/debug/pprof/symbol":       pprof.Symbol,
