@@ -103,12 +103,14 @@ func (r *Record) exists(ext string) bool {
 	return r.find(ext) >= 0
 }
 
-func (r *Record) delete(ext string) {
+func (r *Record) delete(ext string) (deleted bool) {
 	foundIdx := r.find(ext)
 	if foundIdx >= 0 {
 		// NOTE: We are required to preserve the order.
 		r.Objects = append(r.Objects[:foundIdx], r.Objects[foundIdx+1:]...)
+		return true
 	}
+	return false
 }
 
 func (r *Record) TotalSize() int64 {
@@ -163,10 +165,11 @@ func (r *Records) DeleteDup(name, ext string) {
 	cos.Assert(r.Exists(name, ext))
 	r.Lock()
 	if record, ok := r.m[name]; ok {
-		record.delete(ext)
+		if record.delete(ext) {
+			r.totalObjectCount--
+		}
 	}
 	r.dups[name+ext] = struct{}{}
-	r.totalObjectCount--
 	r.Unlock()
 }
 
@@ -244,7 +247,7 @@ func (r *Records) Less(i, j int, formatType string) (bool, error) {
 	return false, nil
 }
 
-func (r *Records) objectCount() int {
+func (r *Records) TotalObjectCount() int {
 	return r.totalObjectCount
 }
 

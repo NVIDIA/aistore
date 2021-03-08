@@ -66,7 +66,7 @@ var _ = Describe("Records", func() {
 			})
 
 			Expect(records.Len()).To(Equal(1))
-			Expect(records.objectCount()).To(Equal(3))
+			Expect(records.TotalObjectCount()).To(Equal(3))
 			r := records.All()[0]
 			Expect(r.TotalSize()).To(BeEquivalentTo(len(r.Objects) * objectSize))
 
@@ -93,9 +93,59 @@ var _ = Describe("Records", func() {
 			})
 
 			Expect(records.Len()).To(Equal(1))
-			Expect(records.objectCount()).To(Equal(6))
+			Expect(records.TotalObjectCount()).To(Equal(6))
 			r = records.All()[0]
 			Expect(r.TotalSize()).To(BeEquivalentTo(len(r.Objects) * objectSize))
+		})
+
+		It("should delete record obj", func() {
+			records := NewRecords(0)
+			records.Insert(&Record{
+				Key:  "some_key",
+				Name: "some_key",
+				Objects: []*RecordObj{
+					{
+						MetadataSize: 10,
+						Size:         objectSize,
+						Extension:    ".cls",
+					},
+					{
+						MetadataSize: 10,
+						Size:         objectSize,
+						Extension:    ".txt",
+					},
+					{
+						MetadataSize: 10,
+						Size:         objectSize,
+						Extension:    ".jpg",
+					},
+				},
+			})
+
+			Expect(records.Len()).To(Equal(1))
+			Expect(records.TotalObjectCount()).To(Equal(3))
+			r := records.All()[0]
+			Expect(r.TotalSize()).To(BeEquivalentTo(3 * objectSize))
+
+			records.DeleteDup(r.Name, ".cls")
+
+			Expect(records.Len()).To(Equal(1))
+			Expect(records.TotalObjectCount()).To(Equal(2))
+			Expect(records.All()[0].TotalSize()).To(BeEquivalentTo(2 * objectSize))
+
+			// Repeated deletion should be no-op.
+			records.DeleteDup(r.Name, ".cls")
+
+			Expect(records.Len()).To(Equal(1))
+			Expect(records.TotalObjectCount()).To(Equal(2))
+			Expect(records.All()[0].TotalSize()).To(BeEquivalentTo(2 * objectSize))
+
+			// But deletion of other record object should succeed.
+			records.DeleteDup(r.Name, ".jpg")
+
+			Expect(records.Len()).To(Equal(1))
+			Expect(records.TotalObjectCount()).To(Equal(1))
+			Expect(records.All()[0].TotalSize()).To(BeEquivalentTo(objectSize))
 		})
 	})
 })

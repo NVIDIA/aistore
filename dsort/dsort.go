@@ -312,10 +312,7 @@ ExtractAllShards:
 	// We will no longer reserve any memory
 	m.dsorter.postExtraction()
 
-	metrics.Lock()
-	totalExtractedCount := metrics.ExtractedRecordCnt
-	metrics.Unlock()
-	m.incrementRef(totalExtractedCount)
+	m.incrementRef(int64(m.recManager.Records.TotalObjectCount()))
 	return nil
 }
 

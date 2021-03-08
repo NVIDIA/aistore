@@ -117,10 +117,10 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 		msg := fmt.Sprintf("record %q has been duplicated", args.recordName)
 		rm.Records.DeleteDup(recordUniqueName, ext)
 
-		// NOTE: there is no need to remove anything from `rm.extractionPaths`
-		// or `rm.contents` since it will be removed anyway in cleanup.
-		// Assumption is that there will be not much duplicates and we can live
-		// with a little bit more files/memory.
+		// NOTE: There is no need to remove anything from `rm.extractionPaths`
+		//  or `rm.contents` since it will be removed anyway in cleanup.
+		//  Assumption is that there will be not much duplicates and we can live
+		//  with a little bit more files/memory.
 		return 0, rm.onDuplicatedRecords(msg)
 	}
 
