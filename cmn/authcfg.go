@@ -17,13 +17,13 @@ import (
 
 type (
 	AuthNConfig struct {
-		mtx     sync.RWMutex     `list:"omit"` // for cmn.IterFields
-		Path    string           `json:"path"`
-		ConfDir string           `json:"confdir"`
-		Log     AuthNLogConf     `json:"log"`
-		Net     AuthNetConf      `json:"net"`
-		Server  AuthNServerConf  `json:"auth"`
-		Timeout AuthNTimeoutConf `json:"timeout"`
+		sync.RWMutex `list:"omit"`    // for cmn.IterFields
+		Path         string           `json:"path"`
+		ConfDir      string           `json:"confdir"`
+		Log          AuthNLogConf     `json:"log"`
+		Net          AuthNetConf      `json:"net"`
+		Server       AuthNServerConf  `json:"auth"`
+		Timeout      AuthNTimeoutConf `json:"timeout"`
 	}
 	AuthNLogConf struct {
 		Dir   string `json:"dir"`
@@ -45,7 +45,6 @@ type (
 	AuthNTimeoutConf struct {
 		Default cos.DurationJSON `json:"default_timeout"`
 	}
-
 	AuthNConfigToUpdate struct {
 		Server *AuthNServerConfToUpdate `json:"auth"`
 	}
@@ -55,16 +54,11 @@ type (
 	}
 )
 
-func (c *AuthNConfig) Lock()    { c.mtx.Lock() }
-func (c *AuthNConfig) RLock()   { c.mtx.RLock() }
-func (c *AuthNConfig) Unlock()  { c.mtx.Unlock() }
-func (c *AuthNConfig) RUnlock() { c.mtx.RUnlock() }
-
-func (c *AuthNConfig) Secret() string {
+func (c *AuthNConfig) Secret() (secret string) {
 	c.RLock()
-	secret := c.Server.Secret
+	secret = c.Server.Secret
 	c.RUnlock()
-	return secret
+	return
 }
 
 func (c *AuthNConfig) ApplyUpdate(cu *AuthNConfigToUpdate) error {
@@ -75,14 +69,14 @@ func (c *AuthNConfig) ApplyUpdate(cu *AuthNConfigToUpdate) error {
 	}
 	if cu.Server.Secret != nil {
 		if *cu.Server.Secret == "" {
-			return errors.New("empty secret")
+			return errors.New("secret not defined")
 		}
 		c.Server.Secret = *cu.Server.Secret
 	}
 	if cu.Server.ExpirePeriod != nil {
 		dur, err := time.ParseDuration(*cu.Server.ExpirePeriod)
 		if err != nil {
-			return fmt.Errorf("invalid expire time format %s, err: %v", *cu.Server.ExpirePeriod, err)
+			return fmt.Errorf("invalid time format %s, err: %v", *cu.Server.ExpirePeriod, err)
 		}
 		c.Server.ExpirePeriod = cos.DurationJSON(dur)
 	}

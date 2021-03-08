@@ -6,6 +6,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -38,6 +39,9 @@ const (
 	flagsAuthRoleShow    = "role_show"
 	flagsAuthConfShow    = "conf_show"
 )
+
+const authnUnreacable = `
+AuthN unreachable at %s. You may need to update AIS CLI configuration or environment variable %s`
 
 var (
 	authFlags = map[string][]cli.Flag{
@@ -208,10 +212,9 @@ var (
 // The function verifies that AuthN is up and running before doing the API call
 // and augments API errors if needed.
 func wrapAuthN(f cli.ActionFunc) cli.ActionFunc {
-	const authnUnreacable = "AuthN unreachable at %s. You may need to update AIS CLI configuration or environment variable %s"
 	return func(c *cli.Context) error {
 		if authnHTTPClient == nil {
-			return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
+			return errors.New("AuthN URL is not set") // nolint:golint // name of the service
 		}
 		err := f(c)
 		if err != nil && isUnreachableError(err) {

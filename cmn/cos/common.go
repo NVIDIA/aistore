@@ -333,22 +333,3 @@ func FreeMemToOS(d ...time.Duration) {
 	runtime.GC()
 	debug.FreeOSMemory()
 }
-
-//////////////////////////
-// Abnormal Termination //
-//////////////////////////
-
-// Exitf writes formatted message to STDOUT and exits with non-zero status code.
-func Exitf(f string, a ...interface{}) {
-	fmt.Fprintf(os.Stderr, f, a...)
-	fmt.Fprintln(os.Stderr)
-	os.Exit(1)
-}
-
-// ExitLogf is wrapper around `Exitf` with `glog` logging. It should be used
-// instead `Exitf` if the `glog` was initialized.
-func ExitLogf(f string, a ...interface{}) {
-	glog.Errorf("FATAL ERROR: "+f, a...)
-	glog.Flush()
-	Exitf(f, a...)
-}

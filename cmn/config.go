@@ -608,6 +608,7 @@ type (
 // config meta-versioning & serialization //
 ////////////////////////////////////////////
 
+// interface guards
 var (
 	_ jsp.Opts = (*ClusterConfig)(nil)
 	_ jsp.Opts = (*LocalConfig)(nil)

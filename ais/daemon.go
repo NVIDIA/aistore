@@ -27,6 +27,10 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 )
 
+const usecli = `
+   Usage:
+        aisnode -role=<proxy|target> -config=</dir/config.json> -local_config=</dir/local-config.json> ...`
+
 type (
 	daemonCtx struct {
 		cli       cliFlags
@@ -45,6 +49,7 @@ type (
 		ntargets         int    // expected number of targets in a starting-up cluster (proxy only)
 		skipStartup      bool   // determines if the proxy should skip waiting for targets
 		transient        bool   // false: make cmn.ConfigCLI settings permanent, true: leave them transient
+		usage            bool   // show usage and exit
 	}
 	rungroup struct {
 		rs    map[string]cos.Runner
@@ -76,12 +81,13 @@ func init() {
 	flag.StringVar(&daemon.cli.confCustom, "config_custom", "",
 		"\"key1=value1,key2=value2\" formatted string to override selected entries in config")
 
+	flag.IntVar(&daemon.cli.ntargets, "ntargets", 0, "number of storage targets to expect at startup (hint, proxy-only)")
+
 	flag.BoolVar(&daemon.cli.transient, "transient", false,
 		"false: apply command-line args to the configuration and save the latter to disk\ntrue: keep it transient (for this run only)")
-
 	flag.BoolVar(&daemon.cli.skipStartup, "skip_startup", false,
 		"determines if primary proxy should skip waiting for target registrations when starting up")
-	flag.IntVar(&daemon.cli.ntargets, "ntargets", 0, "number of storage targets to expect at startup (hint, proxy-only)")
+	flag.BoolVar(&daemon.cli.usage, "h", false, "show usage and exit")
 
 	// dry-run
 	flag.BoolVar(&daemon.dryRun.disk, "nodiskio", false, "dry-run: if true, no disk operations for GET and PUT")
@@ -108,36 +114,30 @@ func dryRunInit() {
 }
 
 func initDaemon(version, buildTime string) (rmain cos.Runner) {
-	const (
-		usageStr = "Usage: aisnode -role=<proxy|target> -config=</dir/config.json> -local_config=</dir/local-config.json> ..."
-		confMsg  = "Missing `%s` flag pointing to configuration file (must be provided via command line)\n"
-	)
+	const erfm = "Missing `%s` flag pointing to configuration file (must be provided via command line)\n"
 	var (
 		config *cmn.Config
 		err    error
 	)
 	flag.Parse()
+	if daemon.cli.usage || len(os.Args[1:]) == 0 {
+		flag.Usage()
+		cos.Exitf(usecli)
+	}
 	if daemon.cli.role != cmn.Proxy && daemon.cli.role != cmn.Target {
-		cos.ExitLogf(
-			"Invalid value of flag `role`: %q, expected %q or %q",
-			daemon.cli.role, cmn.Proxy, cmn.Target,
-		)
+		cos.ExitLogf("Invalid daemon's role %q, expecting %q or %q", daemon.cli.role, cmn.Proxy, cmn.Target)
 	}
 	if daemon.dryRun.disk {
 		daemon.dryRun.size, err = cos.S2B(daemon.dryRun.sizeStr)
 		if daemon.dryRun.size < 1 || err != nil {
-			cos.ExitLogf("Invalid object size: %d [%s]\n", daemon.dryRun.size, daemon.dryRun.sizeStr)
+			cos.ExitLogf("Invalid dry-run size: %d [%s]\n", daemon.dryRun.size, daemon.dryRun.sizeStr)
 		}
 	}
 	if daemon.cli.globalConfigPath == "" {
-		str := fmt.Sprintf(confMsg, "config")
-		str += usageStr
-		cos.ExitLogf(str)
+		cos.ExitLogf(erfm, "config")
 	}
 	if daemon.cli.localConfigPath == "" {
-		str := fmt.Sprintf(confMsg, "local-config")
-		str += usageStr
-		cos.ExitLogf(str)
+		cos.ExitLogf(erfm, "local-config")
 	}
 	config = &cmn.Config{}
 	err = cmn.LoadConfig(daemon.cli.globalConfigPath, daemon.cli.localConfigPath, daemon.cli.role, config)

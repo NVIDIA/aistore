@@ -26,12 +26,16 @@ import "github.com/NVIDIA/aistore/cmn/jsp"
 const AIStoreSoftwareVersion = "3.4"
 
 const (
-	MetaverSmap   = 1 // Smap (cluster map) formatting version (jsp)
-	MetaverBMD    = 1 // BMD (bucket metadata) --/-- (jsp)
-	MetaverRMD    = 1 // Rebalance MD (jsp)
-	MetaverVMD    = 1 // Volume MD (jsp)
-	MetaverConfig = 1 // Global Configuration (jsp)
-	MetaverLOM    = 1 // LOM
+	MetaverSmap = 1 // Smap (cluster map) formatting version (jsp)
+	MetaverBMD  = 1 // BMD (bucket metadata) --/-- (jsp)
+	MetaverRMD  = 1 // Rebalance MD (jsp)
+	MetaverVMD  = 1 // Volume MD (jsp)
+
+	MetaverLOM = 1 // LOM
+
+	MetaverConfig      = 1 // Global Configuration (jsp) // TODO -- FIXME: Plain() => CCSign(metaver)
+	MetaverAuthNConfig = 1 // Authn config (jsp) // ditto
+	MetaverAuthTokens  = 1 // Authn tokens (jsp) // ditto
 
 	MetaverMetasync = 1 // metasync over network formatting version (jsp)
 

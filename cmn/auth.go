@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/dgrijalva/jwt-go"
 )
 
@@ -23,8 +24,6 @@ const (
 )
 
 type (
-	// list of types used in AuthN and its API
-
 	// A registered user
 	AuthUser struct {
 		ID       string         `json:"id"`
@@ -64,16 +63,30 @@ type (
 	AuthClusterList struct {
 		Clusters map[string]*AuthCluster `json:"clusters,omitempty"`
 	}
-
 	LoginMsg struct {
 		Password  string         `json:"password"`
 		ExpiresIn *time.Duration `json:"expires_in"`
 	}
-
 	TokenMsg struct {
 		Token string `json:"token"`
 	}
 )
+
+/////////////////////
+// authn jsp stuff //
+/////////////////////
+var (
+	_ jsp.Opts = (*AuthNConfig)(nil)
+	_ jsp.Opts = (*TokenMsg)(nil)
+
+	authcfgJspOpts = jsp.Plain() // TODO -- FIXME: use CCSign(MetaverAuthNConfig)
+	authtokJspOpts = jsp.Plain() // ditto MetaverAuthTokens
+)
+
+func (*AuthNConfig) JspOpts() jsp.Options { return authcfgJspOpts }
+func (*TokenMsg) JspOpts() jsp.Options    { return authtokJspOpts }
+
+// authn api helpers and errors
 
 var (
 	ErrNoPermissions = errors.New("insufficient permissions")
