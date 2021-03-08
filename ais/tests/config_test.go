@@ -173,6 +173,9 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 	_, err = tutils.WaitForClusterState(proxyURL, "restore node", smap.Version, origProxyCnt, origTargetCnt)
 	tassert.CheckFatal(t, err)
 
+	err = tutils.WaitNodeReady(proxy.URL(cmn.NetworkPublic))
+	tassert.CheckError(t, err)
+
 	daemonConfig = tutils.GetDaemonConfig(t, proxy)
 	tassert.Fatalf(t, daemonConfig.Disk.DiskUtilLowWM == newLowWM, "expected 'disk.disk_util_low_wm' to be %d, got: %d", newLowWM, daemonConfig.Disk.DiskUtilLowWM)
 
@@ -219,6 +222,9 @@ func TestConfigSyncToNewNode(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	_, err = tutils.WaitForClusterState(proxyURL, "restore node", smap.Version, origProxyCnt, origTargetCnt)
 	tassert.CheckFatal(t, err)
+
+	err = tutils.WaitNodeReady(proxy.URL(cmn.NetworkPublic))
+	tassert.CheckError(t, err)
 
 	// 4. Ensure the proxy has lastest updated config
 	daemonConfig := tutils.GetDaemonConfig(t, proxy)
