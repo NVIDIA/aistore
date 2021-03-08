@@ -546,6 +546,9 @@ func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
 		path   string
 		config = cmn.GCO.Get()
 	)
+	for r, nh := range debug.Handlers() {
+		h.registerPublicNetHandler(r, nh)
+	}
 	for _, nh := range networkHandlers {
 		var reg bool
 		if nh.r[0] == '/' { // absolute path

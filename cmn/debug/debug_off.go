@@ -6,7 +6,10 @@
  */
 package debug
 
-import "sync"
+import (
+	"net/http"
+	"sync"
+)
 
 func Enabled() bool                     { return false }
 func Errorln(a ...interface{})          {}
@@ -24,3 +27,7 @@ func Assertf(cond bool, f string, a ...interface{}) {}
 func AssertMutexLocked(m *sync.Mutex)      {}
 func AssertRWMutexLocked(m *sync.RWMutex)  {}
 func AssertRWMutexRLocked(m *sync.RWMutex) {}
+
+func Handlers() map[string]http.HandlerFunc {
+	return nil
+}

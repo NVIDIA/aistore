@@ -7,7 +7,10 @@
 package debug
 
 import (
+	"expvar"
 	"fmt"
+	"net/http"
+	"net/http/pprof"
 	"os"
 	"reflect"
 	"strconv"
@@ -139,4 +142,18 @@ func AssertRWMutexRLocked(m *sync.RWMutex) {
 	//  (to be specific, decreases `rc` by `maxReaders`). Therefore, to check if
 	//  there are any readers still holding lock we need to check both cases.
 	AssertMsg(rc > 0 || (0 > rc && rc > -maxReaders), "RWMutex not RLocked")
+}
+
+func Handlers() map[string]http.HandlerFunc {
+	return map[string]http.HandlerFunc{
+		"/debug/vars":               expvar.Handler().ServeHTTP,
+		"/debug/pprof":              pprof.Index,
+		"/debug/pprof/cmdline":      pprof.Cmdline,
+		"/debug/pprof/profile":      pprof.Profile,
+		"/debug/pprof/symbol":       pprof.Symbol,
+		"/debug/pprof/block":        pprof.Handler("block").ServeHTTP,
+		"/debug/pprof/heap":         pprof.Handler("heap").ServeHTTP,
+		"/debug/pprof/goroutine":    pprof.Handler("goroutine").ServeHTTP,
+		"/debug/pprof/threadcreate": pprof.Handler("threadcreate").ServeHTTP,
+	}
 }
