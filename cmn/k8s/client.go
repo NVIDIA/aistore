@@ -39,6 +39,7 @@ type (
 
 		Logs(podName string) ([]byte, error)
 		Health(podName string) (cpuCores float64, freeMem int64, err error)
+		CheckMetricsAvailability() error
 	}
 
 	// defaultClient implements Client interface.
@@ -146,6 +147,11 @@ func (c *defaultClient) Logs(podName string) ([]byte, error) {
 	}
 	defer logStream.Close()
 	return ioutil.ReadAll(logStream)
+}
+
+func (c *defaultClient) CheckMetricsAvailability() error {
+	_, err := c.client.CoreV1().RESTClient().Get().AbsPath("/apis/metrics.k8s.io/v1beta1/pods").DoRaw(context.Background())
+	return err
 }
 
 func (c *defaultClient) Health(podName string) (cpuCores float64, freeMem int64, err error) {

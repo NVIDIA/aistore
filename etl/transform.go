@@ -398,11 +398,18 @@ func PodHealth(t cluster.Target, etlID string) (stats *PodHealthMsg, err error) 
 	}
 
 	cpuUsed, memUsed, err := client.Health(c.PodName())
+	if err != nil {
+		if metricsErr := client.CheckMetricsAvailability(); metricsErr != nil {
+			err = fmt.Errorf("%v; failed to fetch metrics from Kubernetes: %v", metricsErr, err)
+		}
+		return nil, err
+	}
+
 	return &PodHealthMsg{
 		TargetID: t.SID(),
 		CPU:      cpuUsed,
 		Mem:      memUsed,
-	}, err
+	}, nil
 }
 
 // Sets pods node affinity, so pod will be scheduled on the same node as a target creating it.
