@@ -122,7 +122,6 @@ func (co *configOwner) persist(config *globalConfig) error {
 // PRECONDITION: `co` should be under lock.
 func (co *configOwner) updateGCO(newConfig *globalConfig) (err error) {
 	debug.AssertMutexLocked(&co.Mutex)
-	// NOTE: GCO.Update may mutate the
 	return cmn.GCO.Update(newConfig.ClusterConfig)
 }
 
@@ -153,7 +152,7 @@ func (co *configOwner) load() (err error) {
 	return
 }
 
-func (co *configOwner) modifyOverride(toUpdate *cmn.ConfigToUpdate) (err error) {
+func (co *configOwner) modifyOverride(toUpdate *cmn.ConfigToUpdate, transient bool) (err error) {
 	co.Lock()
 	defer co.Unlock()
 	clone := cmn.GCO.Clone()
@@ -169,8 +168,9 @@ func (co *configOwner) modifyOverride(toUpdate *cmn.ConfigToUpdate) (err error) 
 	} else {
 		override.Merge(toUpdate)
 	}
-
-	cmn.SaveOverrideConfig(clone.ConfigDir, override)
+	if !transient {
+		cmn.SaveOverrideConfig(clone.ConfigDir, override)
+	}
 	cmn.GCO.PutOverrideConfig(override)
 	return
 }

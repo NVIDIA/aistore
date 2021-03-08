@@ -385,6 +385,11 @@ var (
 		listFlag,
 		templateFlag,
 	}
+
+	transientFlag = cli.BoolFlag{
+		Name:  "transient",
+		Usage: "to update config temporarily",
+	}
 )
 
 func getCksumFlags() []cli.Flag {

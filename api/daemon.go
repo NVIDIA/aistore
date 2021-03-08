@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -126,11 +127,14 @@ func GetDaemonStatus(baseParams BaseParams, node *cluster.Snode) (daeInfo *stats
 }
 
 // SetDaemonConfig, given key value pairs, sets the configuration accordingly for a specific node.
-func SetDaemonConfig(baseParams BaseParams, nodeID string, nvs cos.SimpleKVs) error {
+func SetDaemonConfig(baseParams BaseParams, nodeID string, nvs cos.SimpleKVs, transient ...bool) error {
 	baseParams.Method = http.MethodPut
 	query := url.Values{}
 	for key, val := range nvs {
 		query.Add(key, val)
+	}
+	if len(transient) > 0 {
+		query.Add(cmn.ActTransient, strconv.FormatBool(transient[0]))
 	}
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,

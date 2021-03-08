@@ -209,7 +209,7 @@ func cluConfig(c *cli.Context) error {
 	}
 
 	if daemonID == "" {
-		if err := api.SetClusterConfig(defaultAPIParams, nvs); err != nil {
+		if err := api.SetClusterConfig(defaultAPIParams, nvs, flagIsSet(c, transientFlag)); err != nil {
 			return err
 		}
 
@@ -217,7 +217,7 @@ func cluConfig(c *cli.Context) error {
 		return nil
 	}
 
-	if err := api.SetDaemonConfig(defaultAPIParams, daemonID, nvs); err != nil {
+	if err := api.SetDaemonConfig(defaultAPIParams, daemonID, nvs, flagIsSet(c, transientFlag)); err != nil {
 		return err
 	}
 

@@ -7,6 +7,7 @@ package api
 import (
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -114,10 +115,13 @@ func SetPrimaryProxy(baseParams BaseParams, newPrimaryID string) error {
 // SetClusterConfig given key-value pairs of cluster configuration parameters,
 // sets the cluster-wide configuration accordingly. Setting cluster-wide
 // configuration requires sending the request to a proxy.
-func SetClusterConfig(baseParams BaseParams, nvs cos.SimpleKVs) error {
+func SetClusterConfig(baseParams BaseParams, nvs cos.SimpleKVs, transient ...bool) error {
 	q := url.Values{}
 	for key, val := range nvs {
 		q.Add(key, val)
+	}
+	if len(transient) > 0 {
+		q.Add(cmn.ActTransient, strconv.FormatBool(transient[0]))
 	}
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathClusterSetConf.S, Query: q})
@@ -125,13 +129,17 @@ func SetClusterConfig(baseParams BaseParams, nvs cos.SimpleKVs) error {
 
 // SetClusterConfigUsingMsg sets the cluster-wide configuration
 // using the `cmn.ConfigToUpdate` parameter provided.
-func SetClusterConfigUsingMsg(baseParams BaseParams, configToUpdate *cmn.ConfigToUpdate) error {
+func SetClusterConfigUsingMsg(baseParams BaseParams, configToUpdate *cmn.ConfigToUpdate, transient ...bool) error {
+	q := url.Values{}
 	msg := cmn.ActionMsg{
 		Action: cmn.ActSetConfig,
 		Value:  configToUpdate,
 	}
+	if len(transient) > 0 {
+		q.Add(cmn.ActTransient, strconv.FormatBool(transient[0]))
+	}
 	baseParams.Method = http.MethodPut
-	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cos.MustMarshal(msg)})
+	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cos.MustMarshal(msg), Query: q})
 }
 
 func AttachRemoteAIS(baseParams BaseParams, alias, u string) error {

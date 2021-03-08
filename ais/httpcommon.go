@@ -794,18 +794,12 @@ func (h *httprunner) tryLoadSmap() (_ *smapX, reliable bool) {
 	return smap, reliable
 }
 
-func (h *httprunner) setDaemonConfig(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToUpdate, transient bool) {
-	var err error
-	if transient {
-		clone := cmn.GCO.Clone()
-		err = cmn.GCO.SetConfigInMem(toUpdate, clone, cmn.Daemon)
-		goto resp
-	}
-	err = h.owner.config.modifyOverride(toUpdate)
-resp:
+func (h *httprunner) setDaemonConfig(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToUpdate, transient bool) (err error) {
+	err = h.owner.config.modifyOverride(toUpdate, transient)
 	if err != nil {
 		h.writeErr(w, r, err)
 	}
+	return
 }
 
 func (h *httprunner) run() error {
@@ -1721,16 +1715,20 @@ func (h *httprunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, caller 
 		"[metasync] receive %s from %q (action: %q, uuid: %q)",
 		newConfig, caller, msg.Action, msg.UUID,
 	)
-
 	h.owner.config.Lock()
+	defer h.owner.config.Unlock()
+
 	conf := h.owner.config.get()
 	if newConfig.version() <= conf.version() {
-		h.owner.config.Unlock()
 		return newErrDowngrade(h.si, conf.String(), newConfig.String())
 	}
-	h.owner.config.updateGCO(newConfig)
-	h.owner.config.persist(newConfig)
-	h.owner.config.Unlock()
+
+	if err = h.owner.config.persist(newConfig); err != nil {
+		return
+	}
+
+	err = h.owner.config.updateGCO(newConfig)
+	debug.AssertNoErr(err)
 	return
 }
 

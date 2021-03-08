@@ -693,6 +693,11 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) setClusterConfig(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToUpdate, msg *cmn.ActionMsg) {
+	transient := cos.IsParseBool(r.URL.Query().Get(cmn.ActTransient))
+	if transient {
+		p.setTransientClusterConfig(w, r, toUpdate, msg)
+		return
+	}
 	ctx := &configModifier{
 		pre:      p._setConfPre,
 		final:    p._syncConfFinal,
@@ -700,10 +705,34 @@ func (p *proxyrunner) setClusterConfig(w http.ResponseWriter, r *http.Request, t
 		toUpdate: toUpdate,
 		wait:     true,
 	}
-	// TODO: allow transient config updates
 	if err := p.owner.config.modify(ctx); err != nil {
 		p.writeErr(w, r, err)
 	}
+}
+
+func (p *proxyrunner) setTransientClusterConfig(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToUpdate, msg *cmn.ActionMsg) {
+	if p.setDaemonConfig(w, r, toUpdate, true /* transient */) != nil {
+		return
+	}
+	q := url.Values{}
+	q.Add(cmn.ActTransient, "true")
+
+	msg.Value = toUpdate
+	body := cos.MustMarshal(msg)
+	args := allocBcastArgs()
+	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: body, Query: q}
+	args.to = cluster.AllNodes
+	results := p.bcastGroup(args)
+	freeBcastArgs(args)
+	for _, res := range results {
+		if res.err == nil {
+			continue
+		}
+		p.writeErr(w, r, res.error())
+		freeCallResults(results)
+		return
+	}
+	freeCallResults(results)
 }
 
 func (p *proxyrunner) _setConfPre(ctx *configModifier, clone *globalConfig) (updated bool, err error) {

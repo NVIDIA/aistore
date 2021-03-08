@@ -22,7 +22,9 @@ var (
 	clusterCmdsFlags = map[string][]cli.Flag{
 		subcmdCluAttach: {},
 		subcmdCluDetach: {},
-		subcmdCluConfig: {},
+		subcmdCluConfig: {
+			transientFlag,
+		},
 		subcmdShutdown:  {},
 		subcmdRebalance: {},
 		subcmdPrimary:   {},
