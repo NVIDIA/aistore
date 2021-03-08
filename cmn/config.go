@@ -74,7 +74,7 @@ type (
 	}
 
 	Validator interface {
-		Validate(c *Config) error
+		Validate() error
 	}
 	PropsValidator interface {
 		ValidateAsProps(args *ValidationArgs) error
@@ -786,8 +786,6 @@ var (
 	_ Validator = (*NetConf)(nil)
 	_ Validator = (*DownloaderConf)(nil)
 	_ Validator = (*DSortConf)(nil)
-	_ Validator = (*FSPathsConf)(nil)
-	_ Validator = (*TestfspathConf)(nil)
 	_ Validator = (*CompressionConf)(nil)
 	_ Validator = (*LocalNetConfig)(nil)
 
@@ -810,11 +808,18 @@ func (c *Config) Validate() error {
 	if c.ConfigDir == "" {
 		return errors.New("invalid confdir value (must be non-empty)")
 	}
-
+	// NOTE: these two validations require more context and so we call them explicitly;
+	//       the rest all implement generic interface
+	if err := c.LocalConfig.FSpaths.Validate(c); err != nil {
+		return err
+	}
+	if err := c.LocalConfig.TestFSP.Validate(c); err != nil {
+		return err
+	}
 	opts := IterOpts{VisitAll: true}
 	return IterFields(c, func(tag string, field IterField) (err error, b bool) {
 		if v, ok := field.Value().(Validator); ok {
-			if err := v.Validate(c); err != nil {
+			if err := v.Validate(); err != nil {
 				return err, false
 			}
 		}
@@ -859,7 +864,7 @@ func (c *BackendConf) MarshalJSON() (data []byte, err error) {
 	return cos.MustMarshal(c.Conf), nil
 }
 
-func (c *BackendConf) Validate(_ *Config) (err error) {
+func (c *BackendConf) Validate() (err error) {
 	for provider := range c.Conf {
 		b := cos.MustMarshal(c.Conf[provider])
 		switch provider {
@@ -938,7 +943,7 @@ func (c *BackendConf) ProviderConf(provider string, newConf ...interface{}) (con
 	return
 }
 
-func (c *DiskConf) Validate(_ *Config) (err error) {
+func (c *DiskConf) Validate() (err error) {
 	lwm, hwm, maxwm := c.DiskUtilLowWM, c.DiskUtilHighWM, c.DiskUtilMaxWM
 	if lwm <= 0 || hwm <= lwm || maxwm <= hwm || maxwm > 100 {
 		return fmt.Errorf("invalid (disk_util_lwm, disk_util_hwm, disk_util_maxwm) config %+v", c)
@@ -963,7 +968,7 @@ func (c *DiskConf) Validate(_ *Config) (err error) {
 	return nil
 }
 
-func (c *LRUConf) Validate(_ *Config) (err error) {
+func (c *LRUConf) Validate() (err error) {
 	lwm, hwm, oos := c.LowWM, c.HighWM, c.OOS
 	if lwm <= 0 || hwm < lwm || oos < hwm || oos > 100 {
 		return fmt.Errorf("invalid lru (lwm, hwm, oos) configuration (%d, %d, %d)", lwm, hwm, oos)
@@ -981,10 +986,10 @@ func (c *LRUConf) ValidateAsProps(args *ValidationArgs) (err error) {
 	if !c.Enabled {
 		return nil
 	}
-	return c.Validate(nil)
+	return c.Validate()
 }
 
-func (c *CksumConf) Validate(_ *Config) (err error) {
+func (c *CksumConf) Validate() (err error) {
 	return cos.ValidateCksumType(c.Type)
 }
 
@@ -996,14 +1001,14 @@ func (c *CksumConf) ShouldValidate() bool {
 	return c.ValidateColdGet || c.ValidateObjMove || c.ValidateWarmGet
 }
 
-func (c *VersionConf) Validate(_ *Config) error {
+func (c *VersionConf) Validate() error {
 	if !c.Enabled && c.ValidateWarmGet {
 		return errors.New("versioning.validate_warm_get requires versioning to be enabled")
 	}
 	return nil
 }
 
-func (c *MirrorConf) Validate(_ *Config) error {
+func (c *MirrorConf) Validate() error {
 	if c.UtilThresh < 0 || c.UtilThresh > 100 {
 		return fmt.Errorf("invalid mirror.util_thresh: %v (expected value in range [0, 100])",
 			c.UtilThresh)
@@ -1021,19 +1026,19 @@ func (c *MirrorConf) ValidateAsProps(args *ValidationArgs) error {
 	if !c.Enabled {
 		return nil
 	}
-	return c.Validate(nil)
+	return c.Validate()
 }
 
-func (c MDWritePolicy) Validate(_ *Config) (err error) {
+func (c MDWritePolicy) Validate() (err error) {
 	if c.IsImmediate() || c == WriteDelayed || c == WriteNever {
 		return
 	}
 	return fmt.Errorf("invalid md_write policy %q", c)
 }
 
-func (c MDWritePolicy) ValidateAsProps(_ *ValidationArgs) (err error) { return c.Validate(nil) }
+func (c MDWritePolicy) ValidateAsProps(_ *ValidationArgs) (err error) { return c.Validate() }
 
-func (c *ECConf) Validate(_ *Config) error {
+func (c *ECConf) Validate() error {
 	if c.ObjSizeLimit < 0 {
 		return fmt.Errorf("invalid ec.obj_size_limit: %d (expected >=0)", c.ObjSizeLimit)
 	}
@@ -1060,7 +1065,7 @@ func (c *ECConf) ValidateAsProps(args *ValidationArgs) error {
 	if !c.Enabled {
 		return nil
 	}
-	if err := c.Validate(nil); err != nil {
+	if err := c.Validate(); err != nil {
 		return err
 	}
 	required := c.RequiredEncodeTargets()
@@ -1073,14 +1078,14 @@ func (c *ECConf) ValidateAsProps(args *ValidationArgs) error {
 	return nil
 }
 
-func (c *LogConf) Validate(_ *Config) (err error) {
+func (c *LogConf) Validate() (err error) {
 	if c.Dir == "" {
 		return errors.New("invalid log.dir value (must be non-empty)")
 	}
 	return nil
 }
 
-func (c *TimeoutConf) Validate(_ *Config) (err error) {
+func (c *TimeoutConf) Validate() (err error) {
 	if c.MaxKeepalive, err = time.ParseDuration(c.MaxKeepaliveStr); err != nil {
 		return fmt.Errorf("invalid timeout.max_keepalive format %s, err %v", c.MaxKeepaliveStr, err)
 	}
@@ -1099,7 +1104,7 @@ func (c *TimeoutConf) Validate(_ *Config) (err error) {
 	return nil
 }
 
-func (c *ClientConf) Validate(_ *Config) (err error) {
+func (c *ClientConf) Validate() (err error) {
 	if c.Timeout, err = time.ParseDuration(c.TimeoutStr); err != nil {
 		return fmt.Errorf("invalid client.default format %s, err %v", c.TimeoutStr, err)
 	}
@@ -1112,7 +1117,7 @@ func (c *ClientConf) Validate(_ *Config) (err error) {
 	return nil
 }
 
-func (c *RebalanceConf) Validate(_ *Config) (err error) {
+func (c *RebalanceConf) Validate() (err error) {
 	if c.DestRetryTime, err = time.ParseDuration(c.DestRetryTimeStr); err != nil {
 		return fmt.Errorf("invalid rebalance.dest_retry_time format %s, err %v", c.DestRetryTimeStr, err)
 	}
@@ -1122,11 +1127,11 @@ func (c *RebalanceConf) Validate(_ *Config) (err error) {
 	return nil
 }
 
-func (c *ResilverConf) Validate(_ *Config) (err error) {
+func (c *ResilverConf) Validate() (err error) {
 	return nil // no validation required
 }
 
-func (c *PeriodConf) Validate(_ *Config) (err error) {
+func (c *PeriodConf) Validate() (err error) {
 	if c.StatsTime, err = time.ParseDuration(c.StatsTimeStr); err != nil {
 		return fmt.Errorf("invalid periodic.stats_time format %s, err %v", c.StatsTimeStr, err)
 	}
@@ -1139,7 +1144,7 @@ func (c *PeriodConf) Validate(_ *Config) (err error) {
 	return nil
 }
 
-func (c *KeepaliveConf) Validate(_ *Config) (err error) {
+func (c *KeepaliveConf) Validate() (err error) {
 	if c.Proxy.Interval, err = time.ParseDuration(c.Proxy.IntervalStr); err != nil {
 		return fmt.Errorf("invalid keepalivetracker.proxy.interval %s", c.Proxy.IntervalStr)
 	}
@@ -1155,7 +1160,7 @@ func (c *KeepaliveConf) Validate(_ *Config) (err error) {
 	return nil
 }
 
-func (c *NetConf) Validate(_ *Config) (err error) {
+func (c *NetConf) Validate() (err error) {
 	if !cos.StringInSlice(c.L4.Proto, supportedL4Protos) {
 		return fmt.Errorf("l4 proto is not recognized %s, expected one of: %s",
 			c.L4.Proto, supportedL4Protos)
@@ -1168,7 +1173,7 @@ func (c *NetConf) Validate(_ *Config) (err error) {
 	return nil
 }
 
-func (c *LocalNetConfig) Validate(_ *Config) (err error) {
+func (c *LocalNetConfig) Validate() (err error) {
 	c.Hostname = strings.ReplaceAll(c.Hostname, " ", "")
 	c.HostnameIntraControl = strings.ReplaceAll(c.HostnameIntraControl, " ", "")
 	c.HostnameIntraData = strings.ReplaceAll(c.HostnameIntraData, " ", "")
@@ -1217,14 +1222,14 @@ func (c *LocalNetConfig) Validate(_ *Config) (err error) {
 	return
 }
 
-func (c *DownloaderConf) Validate(_ *Config) (err error) {
+func (c *DownloaderConf) Validate() (err error) {
 	if c.Timeout, err = time.ParseDuration(c.TimeoutStr); err != nil {
 		return fmt.Errorf("invalid downloader.timeout %s", c.TimeoutStr)
 	}
 	return nil
 }
 
-func (c *DSortConf) Validate(_ *Config) (err error) {
+func (c *DSortConf) Validate() (err error) {
 	return c.ValidateWithOpts(nil, false)
 }
 
@@ -1340,7 +1345,7 @@ func ValidateMpath(mpath string) (string, error) {
 }
 
 // NOTE: uncompressed block sizes - the enum currently supported by the github.com/pierrec/lz4
-func (c *CompressionConf) Validate(_ *Config) (err error) {
+func (c *CompressionConf) Validate() (err error) {
 	if c.BlockMaxSize != 64*cos.KiB && c.BlockMaxSize != 256*cos.KiB &&
 		c.BlockMaxSize != cos.MiB && c.BlockMaxSize != 4*cos.MiB {
 		return fmt.Errorf("invalid compression.block_size %d", c.BlockMaxSize)

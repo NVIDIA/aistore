@@ -450,7 +450,7 @@ func Test_CompressedOne(t *testing.T) {
 	config := cmn.GCO.BeginUpdate()
 	config.Compression.BlockMaxSize = 256 * cos.KiB
 	cmn.GCO.CommitUpdate(config)
-	if err := config.Compression.Validate(config); err != nil {
+	if err := config.Compression.Validate(); err != nil {
 		tassert.CheckFatal(t, err)
 	}
 
@@ -641,7 +641,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 		config := cmn.GCO.BeginUpdate()
 		config.Compression.BlockMaxSize = cos.KiB * 256
 		cmn.GCO.CommitUpdate(config)
-		if err := config.Compression.Validate(config); err != nil {
+		if err := config.Compression.Validate(); err != nil {
 			tassert.CheckFatal(t, err)
 		}
 	}

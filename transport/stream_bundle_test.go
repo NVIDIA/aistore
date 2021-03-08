@@ -145,7 +145,7 @@ func testBundle(t *testing.T, nvs cos.SimpleKVs) {
 		config := cmn.GCO.BeginUpdate()
 		config.Compression.BlockMaxSize = int(v)
 		cmn.GCO.CommitUpdate(config)
-		if err := config.Compression.Validate(config); err != nil {
+		if err := config.Compression.Validate(); err != nil {
 			tassert.CheckFatal(t, err)
 		}
 	}
