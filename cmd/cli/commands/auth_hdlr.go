@@ -40,8 +40,7 @@ const (
 	flagsAuthConfShow    = "conf_show"
 )
 
-const authnUnreacable = `
-AuthN unreachable at %s. You may need to update AIS CLI configuration or environment variable %s`
+const authnUnreachable = `AuthN unreachable at %s. You may need to update AIS CLI configuration or environment variable %s`
 
 var (
 	authFlags = map[string][]cli.Flag{
@@ -218,7 +217,7 @@ func wrapAuthN(f cli.ActionFunc) cli.ActionFunc {
 		}
 		err := f(c)
 		if err != nil && isUnreachableError(err) {
-			err = fmt.Errorf(authnUnreacable, authParams.URL, authnServerURL)
+			err = fmt.Errorf(authnUnreachable, authParams.URL, authnServerURL)
 		}
 		return err
 	}
