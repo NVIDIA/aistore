@@ -129,7 +129,7 @@ func NormalizeProvider(provider string) (string, error) {
 		return ProviderGoogle, nil
 	default:
 		if !isValidProvider(provider) {
-			return "", NewErrorInvalidBucketProvider(Bck{Provider: provider})
+			return provider, NewErrorInvalidBucketProvider(Bck{Provider: provider})
 		}
 		return provider, nil
 	}
@@ -263,15 +263,14 @@ func (b *Bck) Valid() bool {
 	return b.Validate() == nil
 }
 
-func (b *Bck) Validate() error {
+func (b *Bck) Validate() (err error) {
 	if err := b.ValidateName(); err != nil {
 		return err
 	}
-	provider, err := NormalizeProvider(b.Provider)
+	b.Provider, err = NormalizeProvider(b.Provider)
 	if err != nil {
 		return err
 	}
-	b.Provider = provider
 	return b.Ns.Validate()
 }
 
@@ -404,13 +403,29 @@ func (b Bck) IsCloud() bool {
 
 func (b Bck) HasProvider() bool { return b.ValidateProvider() == nil }
 
-func (query QueryBcks) String() string          { return Bck(query).String() }
-func (query QueryBcks) IsAIS() bool             { return Bck(query).IsAIS() }
-func (query QueryBcks) IsHDFS() bool            { return Bck(query).IsHDFS() }
-func (query QueryBcks) IsRemoteAIS() bool       { return Bck(query).IsRemoteAIS() }
-func (query QueryBcks) ValidateName() error     { b := Bck(query); return b.ValidateName() }
-func (query QueryBcks) ValidateProvider() error { b := Bck(query); return b.ValidateProvider() }
-func (query QueryBcks) Equal(bck Bck) bool      { return Bck(query).Equal(bck) }
+func (query QueryBcks) String() string    { return Bck(query).String() }
+func (query QueryBcks) IsAIS() bool       { return Bck(query).IsAIS() }
+func (query QueryBcks) IsHDFS() bool      { return Bck(query).IsHDFS() }
+func (query QueryBcks) IsRemoteAIS() bool { return Bck(query).IsRemoteAIS() }
+func (query *QueryBcks) Validate() (err error) {
+	if query.Name != "" {
+		bck := Bck(*query)
+		if err := bck.ValidateName(); err != nil {
+			return err
+		}
+	}
+	if query.Provider != "" {
+		query.Provider, err = NormalizeProvider(query.Provider)
+		if err != nil {
+			return err
+		}
+	}
+	if query.Ns != NsGlobal && query.Ns != NsAnyRemote {
+		return query.Ns.Validate()
+	}
+	return nil
+}
+func (query QueryBcks) Equal(bck Bck) bool { return Bck(query).Equal(bck) }
 func (query QueryBcks) Contains(other Bck) bool {
 	if query.Name != "" {
 		// NOTE: named bucket with no provider is assumed to be ais://

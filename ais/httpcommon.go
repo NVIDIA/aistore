@@ -2086,15 +2086,8 @@ func newQueryBcksFromQuery(bckName string, query url.Values) (cmn.QueryBcks, err
 		namespace = cmn.ParseNsUname(query.Get(cmn.URLParamNamespace))
 		bck       = cmn.QueryBcks{Name: bckName, Provider: provider, Ns: namespace}
 	)
-	if bck.Provider != "" {
-		if err := bck.ValidateProvider(); err != nil {
-			return bck, err
-		}
-	}
-	if bck.Name != "" {
-		if err := bck.ValidateName(); err != nil {
-			return bck, err
-		}
+	if err := bck.Validate(); err != nil {
+		return bck, err
 	}
 	return bck, nil
 }
