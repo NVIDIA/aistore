@@ -259,13 +259,13 @@ func (m *smapX) delProxy(pid string) {
 
 func (m *smapX) putNode(nsi *cluster.Snode, flags cluster.SnodeFlags) (exists bool) {
 	id := nsi.ID()
+	nsi.Flags = flags
 	if nsi.IsProxy() {
 		if m.GetProxy(id) != nil {
 			m.delProxy(id)
 			exists = true
 		}
 		m.addProxy(nsi)
-		nsi.Flags = flags
 		if flags.IsSet(cluster.SnodeNonElectable) {
 			glog.Warningf("%s won't be electable", nsi)
 		}
@@ -462,6 +462,9 @@ func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX) (err error) {
 	}
 	r.Lock()
 	smap := r.Get()
+	if nsi := newSmap.GetNode(si.ID()); nsi != nil {
+		si.Flags = nsi.Flags
+	}
 	if smap != nil {
 		curVer, newVer := smap.Version, newSmap.version()
 		if newVer <= curVer {

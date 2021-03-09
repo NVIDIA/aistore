@@ -322,9 +322,12 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 	p.statsT.Add(stats.PostCount, 1)
 
-	var flags cluster.SnodeFlags
+	smap := p.owner.smap.get()
+	if osi := smap.GetNode(nsi.ID()); osi != nil {
+		nsi.Flags = osi.Flags
+	}
 	if nonElectable {
-		flags = cluster.SnodeNonElectable
+		nsi.Flags = nsi.Flags.Set(cluster.SnodeNonElectable)
 	}
 
 	if userRegister {
@@ -334,7 +337,6 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if selfRegister {
-		smap := p.owner.smap.get()
 		if osi := smap.GetNode(nsi.ID()); osi != nil && !osi.Equals(nsi) {
 			if p.detectDaemonDuplicate(osi, nsi) {
 				p.writeErrf(w, r, "duplicate node ID %q (%s, %s)", nsi.ID(), osi, nsi)
@@ -345,7 +347,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p.owner.smap.Lock()
-	smap, update, err := p.handleJoinKalive(nsi, regReq.Smap, tag, keepalive, flags)
+	smap, update, err := p.handleJoinKalive(nsi, regReq.Smap, tag, keepalive, nsi.Flags)
 	if !isProxy && p.NodeStarted() {
 		if p.owner.rmd.rebalance.CAS(false, regReq.Reb) && regReq.Reb {
 			glog.Errorf("%s: target %s reports interrupted rebalance", p.si, nsi)
@@ -371,12 +373,12 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 	// Return the rebalance ID when target is registered by user.
 	if !isProxy && userRegister {
-		rebID := p.updateAndDistribute(nsi, msg, flags)
+		rebID := p.updateAndDistribute(nsi, msg, nsi.Flags)
 		w.Write([]byte(rebID))
 		return
 	}
 
-	go p.updateAndDistribute(nsi, msg, flags)
+	go p.updateAndDistribute(nsi, msg, nsi.Flags)
 }
 
 // join(node) => cluster via API
