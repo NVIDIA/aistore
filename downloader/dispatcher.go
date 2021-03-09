@@ -145,7 +145,7 @@ func (d *dispatcher) addJogger(mpath string) {
 	d.joggers[mpath] = j
 }
 
-func (d *dispatcher) cleanUpAborted(jobID string) {
+func (d *dispatcher) cleanupJob(jobID string) {
 	d.mtx.Lock()
 	if ch, exists := d.abortJob[jobID]; exists {
 		ch.Close()
@@ -161,8 +161,10 @@ func (d *dispatcher) cleanUpAborted(jobID string) {
 func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 	defer func() {
 		debug.Infof("[downloader] Finished dispatching job %q, now waiting for it to finish and cleanup", job.ID())
-		d.waitFor(job)
-		d.cleanUpAborted(job.ID())
+		d.waitFor(job.ID())
+		debug.Infof("[downloader] Job %q has finished waiting for all tasks to finish", job.ID())
+		d.cleanupJob(job.ID())
+		debug.Infof("[downloader] Cleaned up after job %q", job.ID())
 		job.cleanup()
 		debug.Infof("[downloader] Job %q has fully finished", job.ID())
 	}()
@@ -523,9 +525,9 @@ func (d *dispatcher) activeTasks(reqID string) []TaskDlInfo {
 
 // pending returns `true` if any joggers has pending tasks for a given `reqID`,
 // `false` otherwise.
-func (d *dispatcher) pending(reqID string) bool {
+func (d *dispatcher) pending(jobID string) bool {
 	for _, j := range d.joggers {
-		if j.pending(reqID) {
+		if j.pending(jobID) {
 			return true
 		}
 	}
@@ -533,10 +535,10 @@ func (d *dispatcher) pending(reqID string) bool {
 }
 
 // PRECONDITION: All tasks should be dispatched.
-func (d *dispatcher) waitFor(job DlJob) {
+func (d *dispatcher) waitFor(jobID string) {
 	for ; ; time.Sleep(time.Second) {
-		if !d.pending(job.ID()) {
-			break
+		if !d.pending(jobID) {
+			return
 		}
 	}
 }

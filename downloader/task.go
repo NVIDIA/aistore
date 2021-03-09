@@ -51,15 +51,22 @@ type (
 		started atomic.Time
 		ended   atomic.Time
 
-		currentSize atomic.Int64 // the current size of the file (updated as the download progresses)
-		totalSize   atomic.Int64 // the total size of the file (nonzero only if Content-Length header was provided by the source of the file)
+		currentSize atomic.Int64 // The current size of the file (updated as the download progresses).
+		totalSize   atomic.Int64 // The total size of the file (nonzero only if Content-Length header was provided by the source of the file).
 
-		downloadCtx context.Context    // context with cancel function
-		cancelFunc  context.CancelFunc // used to cancel the download after the request commences
+		downloadCtx context.Context    // Context with cancel function.
+		cancel      context.CancelFunc // Used to cancel the download after the request commences.
 	}
 )
 
+func (t *singleObjectTask) init() {
+	// NOTE: `cancel` is called on abort or when download finishes.
+	t.downloadCtx, t.cancel = context.WithCancel(context.Background())
+}
+
 func (t *singleObjectTask) download() {
+	defer t.cancel()
+
 	lom := cluster.AllocLOM(t.obj.objName)
 	defer cluster.FreeLOM(lom)
 	err := lom.Init(t.job.Bck())
@@ -227,16 +234,9 @@ func (t *singleObjectTask) initialTimeout() time.Duration {
 	return timeout
 }
 
-func (t *singleObjectTask) cancel() {
-	if t.cancelFunc != nil {
-		t.cancelFunc()
-	}
-}
-
 // Probably we need to extend the persistent database (db.go) so that it will contain
 // also information about specific tasks.
 func (t *singleObjectTask) markFailed(statusMsg string) {
-	t.cancel()
 	t.parent.statsT.Add(stats.ErrDownloadCount, 1)
 
 	dlStore.persistError(t.jobID(), t.obj.objName, statusMsg)

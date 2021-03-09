@@ -73,8 +73,8 @@ import (
 //
 // When Dispatcher receives an abort request, it aborts running task or
 // if the task is scheduled but is not yet processed, then it is removed
-// from queue (see: put, get). If the task is running, cancelFunc is
-// invoked to cancel task's request.
+// from queue (see: put, get). If the task is running, `cancel` function is
+// invoked to abort task's request.
 //
 // ====== Status Updates ======
 //

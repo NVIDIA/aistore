@@ -5,7 +5,6 @@
 package downloader
 
 import (
-	"context"
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -75,11 +74,12 @@ func (j *jogger) jog() {
 			// counter won't be correct.
 			t.job.throttler().release()
 			t.markFailed(internalErrorMsg)
-
 			j.mtx.Unlock()
 			continue
 		}
+
 		j.task = t
+		j.task.init()
 		j.mtx.Unlock()
 
 		t.download()
@@ -165,15 +165,13 @@ func newQueue() *queue {
 
 func (q *queue) putCh(t *singleObjectTask) (ok bool, ch chan<- *singleObjectTask) {
 	q.Lock()
+	defer q.Unlock()
 	if q.stopped() || q.exists(t.jobID(), t.uid()) {
 		// If task already exists or the queue was stopped we should just omit it
 		// hence return channel which immediately accepts and omits the task.
-		q.Unlock()
 		return false, make(chan *singleObjectTask, 1)
 	}
 	q.putToSet(t.jobID(), t.uid())
-	q.Unlock()
-
 	return true, q.ch
 }
 
@@ -187,19 +185,14 @@ func (q *queue) get() (foundTask *singleObjectTask) {
 	// NOTE: We do not delete task here but postpone it until the task
 	//  has `Finished` to prevent situation where we put task which is
 	//  being downloaded.
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.downloadCtx = ctx
-	t.cancelFunc = cancel
 	return t
 }
 
 func (q *queue) delete(t *singleObjectTask) bool {
 	q.Lock()
-	exists := q.exists(t.jobID(), t.uid())
-	q.removeFromSet(t.jobID(), t.uid())
+	deleted := q.removeFromSet(t.jobID(), t.uid())
 	q.Unlock()
-	return exists
+	return deleted
 }
 
 func (q *queue) cleanup() {
@@ -209,12 +202,12 @@ func (q *queue) cleanup() {
 	q.Unlock()
 }
 
-// NOTE: Should be called under `q.RLock()`.
+// PRECONDITION: `q.RLock()` must be taken.
 func (q *queue) stopped() bool {
 	return q.m == nil || q.ch == nil
 }
 
-// NOTE: Should be called under `q.RLock()`.
+// PRECONDITION: `q.RLock()` must be taken.
 func (q *queue) exists(jobID, requestUID string) bool {
 	jobM, ok := q.m[jobID]
 	if !ok {
@@ -232,29 +225,29 @@ func (q *queue) pending(jobID string) bool {
 	return exists
 }
 
-// NOTE: Should be called under `q.Lock()`.
+// PRECONDITION: `q.Lock()` must be taken.
 func (q *queue) putToSet(jobID, requestUID string) {
 	if _, ok := q.m[jobID]; !ok {
 		q.m[jobID] = make(queueEntry)
 	}
-
 	q.m[jobID][requestUID] = struct{}{}
 }
 
-// NOTE: Should be called under `q.Lock()`.
-func (q *queue) removeFromSet(jobID, requestUID string) {
+// PRECONDITION: `q.Lock()` must be taken.
+func (q *queue) removeFromSet(jobID, requestUID string) (deleted bool) {
 	jobM, ok := q.m[jobID]
 	if !ok {
-		return
+		return false
 	}
 
 	if _, ok := jobM[requestUID]; ok {
 		delete(jobM, requestUID)
-
 		if len(jobM) == 0 {
 			delete(q.m, jobID)
 		}
+		return true
 	}
+	return false
 }
 
 func (q *queue) removeJob(id string) int {
