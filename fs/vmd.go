@@ -75,7 +75,7 @@ func CreateNewVMD(daemonID string) (vmd *VMD, err error) {
 // - Returns nil if VMD not present on any path
 func LoadVMD(mpaths cos.StringSet) (mainVMD *VMD, err error) {
 	for path := range mpaths {
-		fpath := filepath.Join(path, VmdPersistedFileName)
+		fpath := filepath.Join(path, cmn.VmdFname)
 		vmd := newVMD(len(mpaths))
 		vmd.cksum, err = jsp.LoadMeta(fpath, vmd)
 		if err != nil && os.IsNotExist(err) {
@@ -104,7 +104,7 @@ func LoadVMD(mpaths cos.StringSet) (mainVMD *VMD, err error) {
 }
 
 func (vmd *VMD) persist() (err error) {
-	cnt, availCnt := PersistOnMpaths(VmdPersistedFileName, "", vmd, vmdCopies, vmd.JspOpts())
+	cnt, availCnt := PersistOnMpaths(cmn.VmdFname, "", vmd, vmdCopies, vmd.JspOpts())
 	if cnt > 0 {
 		return
 	}

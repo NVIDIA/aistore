@@ -30,10 +30,6 @@ import (
 //       depending on HRW
 // - when requested by the user - `ais job start rebalance` or via HTTP API
 
-const (
-	rmdFname = ".ais.rmd" // rmd persistent file basename
-)
-
 type (
 	// rebMD is revs (see metasync) which is distributed by primary proxy to
 	// the targets. It is distributed when some kind of rebalance is required.
@@ -78,13 +74,13 @@ func newRMDOwner() *rmdOwner {
 }
 
 func (r *rmdOwner) persist(rmd *rebMD) error {
-	rmdPathName := filepath.Join(cmn.GCO.Get().ConfigDir, rmdFname)
+	rmdPathName := filepath.Join(cmn.GCO.Get().ConfigDir, cmn.RmdFname)
 	return jsp.SaveMeta(rmdPathName, rmd)
 }
 
 func (r *rmdOwner) load() {
 	rmd := &rebMD{}
-	_, err := jsp.LoadMeta(filepath.Join(cmn.GCO.Get().ConfigDir, rmdFname), rmd)
+	_, err := jsp.LoadMeta(filepath.Join(cmn.GCO.Get().ConfigDir, cmn.RmdFname), rmd)
 	if err == nil {
 		r.put(rmd)
 		return

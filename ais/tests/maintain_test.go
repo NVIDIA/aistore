@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
-	"github.com/NVIDIA/aistore/fs"
 )
 
 func TestMaintenanceOnOff(t *testing.T) {
@@ -163,7 +162,7 @@ func TestMaintenanceMD(t *testing.T) {
 func countVMDTargets(tsMpaths map[string][]string) (total int) {
 	for _, mpaths := range tsMpaths {
 		for _, mpath := range mpaths {
-			if _, err := os.Stat(filepath.Join(mpath, fs.VmdPersistedFileName)); err == nil {
+			if _, err := os.Stat(filepath.Join(mpath, cmn.VmdFname)); err == nil {
 				total++
 				break
 			}

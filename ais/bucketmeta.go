@@ -213,7 +213,7 @@ func (bo *bmdOwnerBase) _put(bmd *bucketMD) {
 /////////////////
 
 func newBMDOwnerPrx(config *cmn.Config) *bmdOwnerPrx {
-	return &bmdOwnerPrx{fpath: filepath.Join(config.ConfigDir, fs.BmdPersistedFileName)}
+	return &bmdOwnerPrx{fpath: filepath.Join(config.ConfigDir, cmn.BmdFname)}
 }
 
 func (bo *bmdOwnerPrx) init() {
@@ -273,13 +273,13 @@ func (bo *bmdOwnerTgt) init() {
 		bmd          *bucketMD
 	)
 
-	if bmd = loadBMD(available, fs.BmdPersistedFileName); bmd != nil {
-		glog.Infof("BMD loaded from %q", fs.BmdPersistedFileName)
+	if bmd = loadBMD(available, cmn.BmdFname); bmd != nil {
+		glog.Infof("BMD loaded from %q", cmn.BmdFname)
 		goto finalize
 	}
 
-	if bmd = loadBMD(available, fs.BmdPersistedPrevious); bmd != nil {
-		glog.Infof("BMD loaded from %q", fs.BmdPersistedPrevious)
+	if bmd = loadBMD(available, cmn.BmdPreviousFname); bmd != nil {
+		glog.Infof("BMD loaded from %q", cmn.BmdPreviousFname)
 		goto finalize
 	}
 
@@ -298,7 +298,7 @@ func (bo *bmdOwnerTgt) put(bmd *bucketMD) (err error) {
 func (bo *bmdOwnerTgt) persist() (err error) {
 	bmd := bo.get()
 	cnt, availCnt :=
-		fs.PersistOnMpaths(fs.BmdPersistedFileName, fs.BmdPersistedPrevious, bmd, bmdCopies, bmd.JspOpts())
+		fs.PersistOnMpaths(cmn.BmdFname, cmn.BmdPreviousFname, bmd, bmdCopies, bmd.JspOpts())
 	if cnt > 0 {
 		return
 	}
@@ -352,7 +352,7 @@ func loadBMDFromMpath(mpath *fs.MountpathInfo, path string) (bmd *bucketMD) {
 }
 
 func hasEnoughBMDCopies() bool {
-	return len(fs.FindPersisted(fs.BmdPersistedFileName)) >= bmdCopies
+	return len(fs.FindPersisted(cmn.BmdFname)) >= bmdCopies
 }
 
 //////////////////////////

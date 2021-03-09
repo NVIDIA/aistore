@@ -9,40 +9,29 @@ import (
 	"path/filepath"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
-const (
-	NodeRestartedMarker = "node_restarted"
-	RebalanceMarker     = "rebalance"
-	ResilverMarker      = "resilver"
-	markersDirName      = ".ais.markers"
-
-	BmdPersistedFileName = ".ais.bmd"
-	BmdPersistedPrevious = BmdPersistedFileName + ".prev" // previous version
-
-	VmdPersistedFileName = ".ais.vmd"
-)
-
 // List of AIS metadata files and directories (basenames only)
 var mdFilesDirs = []string{
-	markersDirName,
+	cmn.MarkersDirName,
 
-	BmdPersistedFileName,
-	BmdPersistedPrevious,
+	cmn.BmdFname,
+	cmn.BmdPreviousFname,
 
-	VmdPersistedFileName,
+	cmn.VmdFname,
 }
 
 func MarkerExists(marker string) bool {
-	markerPath := filepath.Join(markersDirName, marker)
+	markerPath := filepath.Join(cmn.MarkersDirName, marker)
 	return len(FindPersisted(markerPath)) > 0
 }
 
 func PersistMarker(marker string) error {
-	markerPath := filepath.Join(markersDirName, marker)
+	markerPath := filepath.Join(cmn.MarkersDirName, marker)
 	cnt, available := PersistOnMpaths(markerPath, "", nil, 1)
 	if cnt == 0 {
 		return fmt.Errorf("failed to persist marker %q (available mountPaths: %d)", marker, available)
@@ -53,7 +42,7 @@ func PersistMarker(marker string) error {
 func RemoveMarker(marker string) {
 	var (
 		mpaths, _  = Get()
-		markerPath = filepath.Join(markersDirName, marker)
+		markerPath = filepath.Join(cmn.MarkersDirName, marker)
 	)
 	for _, mpath := range mpaths {
 		if err := cos.RemoveFile(filepath.Join(mpath.Path, markerPath)); err != nil {

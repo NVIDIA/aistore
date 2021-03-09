@@ -367,8 +367,7 @@ func (g *rungroup) run(mainRunner cos.Runner) error {
 ///////////////
 
 const (
-	daemonIDEnv  = "AIS_DAEMON_ID"
-	proxyIDFname = ".ais.proxy_id"
+	daemonIDEnv = "AIS_DAEMON_ID"
 )
 
 func initDaemonID(daemonType string, config *cmn.Config) (daemonID string) {
@@ -408,7 +407,7 @@ func generateDaemonID(daemonType string, config *cmn.Config) string {
 // proxy ID
 func initProxyDaemonID(config *cmn.Config) (daemonID string) {
 	if daemonID = readProxyDaemonID(config); daemonID != "" {
-		glog.Infof("p[%s] from %q", daemonID, proxyIDFname)
+		glog.Infof("p[%s] from %q", daemonID, cmn.ProxyIDFname)
 		return
 	}
 	daemonID = generateDaemonID(cmn.Proxy, config)
@@ -418,11 +417,11 @@ func initProxyDaemonID(config *cmn.Config) (daemonID string) {
 }
 
 func writeProxyDID(config *cmn.Config, id string) error {
-	return ioutil.WriteFile(filepath.Join(config.ConfigDir, proxyIDFname), []byte(id), cos.PermRWR)
+	return ioutil.WriteFile(filepath.Join(config.ConfigDir, cmn.ProxyIDFname), []byte(id), cos.PermRWR)
 }
 
 func readProxyDaemonID(config *cmn.Config) (id string) {
-	if b, err := ioutil.ReadFile(filepath.Join(config.ConfigDir, proxyIDFname)); err == nil {
+	if b, err := ioutil.ReadFile(filepath.Join(config.ConfigDir, cmn.ProxyIDFname)); err == nil {
 		id = string(b)
 	} else if !os.IsNotExist(err) {
 		glog.Error(err)

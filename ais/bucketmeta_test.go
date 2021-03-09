@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
-	"github.com/NVIDIA/aistore/fs"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -113,7 +112,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 			})
 
 			It(fmt.Sprintf("should correctly detect bmd corruption %s", node), func() {
-				bmdFullPath := filepath.Join(mpath, fs.BmdPersistedFileName)
+				bmdFullPath := filepath.Join(mpath, cmn.BmdFname)
 				f, err := os.OpenFile(bmdFullPath, os.O_RDWR, 0)
 				Expect(err).NotTo(HaveOccurred())
 				_, err = f.WriteAt([]byte("xxxxxxxxxxxx"), 10)

@@ -238,7 +238,7 @@ func (reb *Manager) rebInit(md *rebArgs, notif *xaction.NotifXact) bool {
 	}
 
 	// 4. create persistent mark
-	err := fs.PersistMarker(fs.RebalanceMarker)
+	err := fs.PersistMarker(cmn.RebalanceMarker)
 	if err != nil {
 		glog.Errorf("Failed to create marker: %v", err)
 	}
@@ -425,7 +425,7 @@ func (reb *Manager) rebFini(md *rebArgs, err error) {
 
 	// prior to closing the streams
 	if q := reb.quiesce(md, md.config.Rebalance.Quiesce, reb.nodesQuiescent); q != cluster.QuiAborted {
-		fs.RemoveMarker(fs.RebalanceMarker)
+		fs.RemoveMarker(cmn.RebalanceMarker)
 	}
 	reb.endStreams(err)
 	reb.filterGFN.Reset()

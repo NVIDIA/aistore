@@ -43,8 +43,6 @@ import (
 //
 //=====================================================================
 
-const smapFname = ".ais.smap" // Smap basename
-
 type (
 	smapX struct {
 		cluster.Smap
@@ -425,7 +423,7 @@ func newSmapOwner() *smapOwner {
 }
 
 func (r *smapOwner) load(smap *smapX, config *cmn.Config) (loaded bool, err error) {
-	_, err = jsp.LoadMeta(filepath.Join(config.ConfigDir, smapFname), smap)
+	_, err = jsp.LoadMeta(filepath.Join(config.ConfigDir, cmn.SmapFname), smap)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return false, nil
@@ -486,7 +484,7 @@ func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX) (err error) {
 func (r *smapOwner) persist(newSmap *smapX) error {
 	debug.AssertMutexLocked(&r.Mutex)
 	config := cmn.GCO.Get()
-	return jsp.SaveMeta(filepath.Join(config.ConfigDir, smapFname), newSmap)
+	return jsp.SaveMeta(filepath.Join(config.ConfigDir, cmn.SmapFname), newSmap)
 }
 
 func (r *smapOwner) _runPre(ctx *smapModifier) (clone *smapX, err error) {

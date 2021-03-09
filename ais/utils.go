@@ -31,7 +31,6 @@ const (
 	accessControlData      = accessNetIntraControl | accessNetIntraData
 	accessNetAll           = accessNetPublic | accessNetIntraData | accessNetIntraControl
 )
-const gconfFname = ".ais.conf"
 
 // Network access of handlers (Public, IntraControl, & IntraData)
 type netAccess int

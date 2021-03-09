@@ -42,9 +42,6 @@ const (
 	// EC
 	MinSliceCount = 1  // minimum number of data or parity slices
 	MaxSliceCount = 32 // maximum number of data or parity slices
-
-	// Config
-	OverrideConfigFname = ".ais.override_config" // file containing override node config
 )
 
 const (
@@ -1537,15 +1534,16 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *Config) (err er
 	//       once started, the node can then reload the last
 	//       updated version of the (global|local) config
 	//       from the configured location
+	_, err = jsp.Load(localConfPath, &config.LocalConfig, jsp.Plain())
+	if err != nil {
+		return fmt.Errorf("failed to load local config %q, err: %v", localConfPath, err)
+	}
+
 	_, err = jsp.Load(confPath, &config.ClusterConfig, jsp.Plain())
 	if err != nil {
 		return fmt.Errorf("failed to load global config %q, err: %v", confPath, err)
 	}
 	config.SetRole(daeRole)
-	_, err = jsp.Load(localConfPath, &config.LocalConfig, jsp.Plain())
-	if err != nil {
-		return fmt.Errorf("failed to load local config %q, err: %v", localConfPath, err)
-	}
 
 	overrideConfig, err := loadOverrideConfig(config.ConfigDir)
 	if err != nil {

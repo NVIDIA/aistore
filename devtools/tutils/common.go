@@ -27,9 +27,6 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tassert"
 )
 
-// TODO: remove hardcoding, should be same as `proxyIDFname` from `ais` package.
-const proxyIDFname = ".ais.proxy_id"
-
 type SkipTestArgs struct {
 	Bck                   cmn.Bck
 	RequiredDeployment    ClusterType
@@ -248,7 +245,7 @@ func isClusterLocal() (isLocal bool, err error) {
 	if config, err = api.GetDaemonConfig(baseParams, smap.Primary); err != nil {
 		return
 	}
-	fileData, err = ioutil.ReadFile(path.Join(config.ConfigDir, proxyIDFname))
+	fileData, err = ioutil.ReadFile(path.Join(config.ConfigDir, cmn.ProxyIDFname))
 	if err != nil {
 		if os.IsNotExist(err) {
 			err = nil

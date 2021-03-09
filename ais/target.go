@@ -278,7 +278,7 @@ func (t *targetrunner) Run() error {
 
 	err = t.httprunner.run()
 	// NOTE: This must be done *after* `t.httprunner.run()` so we don't remove marker on panic.
-	fs.RemoveMarker(fs.NodeRestartedMarker)
+	fs.RemoveMarker(cmn.NodeRestartedMarker)
 	return err
 }
 
@@ -359,9 +359,9 @@ func (t *targetrunner) Stop(err error) {
 }
 
 func (t *targetrunner) checkRestarted() {
-	if fs.MarkerExists(fs.NodeRestartedMarker) {
+	if fs.MarkerExists(cmn.NodeRestartedMarker) {
 		t.statsT.Add(stats.RestartCount, 1)
-	} else if err := fs.PersistMarker(fs.NodeRestartedMarker); err != nil {
+	} else if err := fs.PersistMarker(cmn.NodeRestartedMarker); err != nil {
 		glog.Error(err)
 	}
 }

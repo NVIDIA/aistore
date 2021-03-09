@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
@@ -36,7 +37,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xa
 		return
 	}
 
-	if err := fs.PersistMarker(fs.ResilverMarker); err != nil {
+	if err := fs.PersistMarker(cmn.ResilverMarker); err != nil {
 		glog.Errorf("Failed to create resilver marker, err: %v", err)
 	}
 
@@ -73,7 +74,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xa
 			glog.Infof("Resilver (id=%q) aborted", id)
 		}
 	case <-jg.ListenFinished():
-		fs.RemoveMarker(fs.ResilverMarker)
+		fs.RemoveMarker(cmn.ResilverMarker)
 	}
 
 	reb.t.GFN(cluster.GFNLocal).Deactivate()

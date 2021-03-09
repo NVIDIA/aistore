@@ -869,7 +869,7 @@ func moveMarkers(mpaths MPI, from *MountpathInfo) {
 
 	for _, mpath := range mpaths {
 		var (
-			fromPath = filepath.Join(from.Path, markersDirName)
+			fromPath = filepath.Join(from.Path, cmn.MarkersDirName)
 			fis, err = ioutil.ReadDir(fromPath)
 		)
 		if err != nil && !os.IsNotExist(err) {
@@ -879,8 +879,8 @@ func moveMarkers(mpaths MPI, from *MountpathInfo) {
 				debug.Assert(!fi.IsDir()) // Markers should be the files.
 
 				var (
-					fromPath = filepath.Join(from.Path, markersDirName, fi.Name())
-					toPath   = filepath.Join(mpath.Path, markersDirName, fi.Name())
+					fromPath = filepath.Join(from.Path, cmn.MarkersDirName, fi.Name())
+					toPath   = filepath.Join(mpath.Path, cmn.MarkersDirName, fi.Name())
 				)
 				if _, _, err := cos.CopyFile(fromPath, toPath, nil, cos.ChecksumNone); err != nil && !os.IsNotExist(err) {
 					glog.Errorf("Failed to move marker to another mountpath (from: %q, to: %q, err: %v)",

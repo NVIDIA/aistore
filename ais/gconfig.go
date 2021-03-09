@@ -114,7 +114,7 @@ func (co *configOwner) modify(ctx *configModifier) (err error) {
 
 func (co *configOwner) persist(config *globalConfig) error {
 	local := cmn.GCO.Get()
-	savePath := path.Join(local.ConfigDir, gconfFname)
+	savePath := path.Join(local.ConfigDir, cmn.GlobalConfigFname)
 	if err := jsp.SaveMeta(savePath, config); err != nil {
 		return err
 	}
@@ -133,7 +133,7 @@ func (co *configOwner) load() (err error) {
 	defer co.Unlock()
 	localConf := cmn.GCO.Get()
 	config := &globalConfig{}
-	_, err = jsp.LoadMeta(path.Join(localConf.ConfigDir, gconfFname), config)
+	_, err = jsp.LoadMeta(path.Join(localConf.ConfigDir, cmn.GlobalConfigFname), config)
 	if err == nil {
 		if err = co.updateGCO(config); err != nil {
 			return
