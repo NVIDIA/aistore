@@ -1984,13 +1984,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case cmn.ActSetConfig: // setconfig #2 - via action message
-		transient := cos.IsParseBool(query.Get(cmn.ActTransient))
-		toUpdate := &cmn.ConfigToUpdate{}
-		if err = cos.MorphMarshal(msg.Value, toUpdate); err != nil {
-			p.writeErrf(w, r, "failed to parse configuration to update, err: %v", err)
-			return
-		}
-		p.setDaemonConfig(w, r, toUpdate, transient)
+		p.setDaemonConfigMsg(w, r, &msg)
 	case cmn.ActShutdown:
 		smap := p.owner.smap.get()
 		isPrimary := smap.isPrimary(p.si)
@@ -2029,16 +2023,7 @@ func (p *proxyrunner) daePathAction(w http.ResponseWriter, r *http.Request, acti
 		}
 		glog.Infof("%s: %s %s done", p.si, cmn.SyncSmap, newsmap)
 	case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
-		var (
-			query     = r.URL.Query()
-			transient = cos.IsParseBool(query.Get(cmn.ActTransient))
-			toUpdate  = &cmn.ConfigToUpdate{}
-		)
-		if err := toUpdate.FillFromQuery(query); err != nil {
-			p.writeErr(w, r, err)
-			return
-		}
-		p.setDaemonConfig(w, r, toUpdate, transient)
+		p.setDaemonConfigQuery(w, r)
 	}
 }
 

@@ -668,23 +668,24 @@ func (gco *globalConfigOwner) Clone() *Config {
 // we introduce locking mechanism which targets this problem.
 //
 // NOTE: BeginUpdate must be followed by CommitUpdate.
-// NOTE: `ais` package must use its own cfgBegin/Commit/DiscardUpdate functions
+// NOTE: `ais` package must use config-owner to modify config.
 func (gco *globalConfigOwner) BeginUpdate() *Config {
 	gco.mtx.Lock()
 	return gco.Clone()
 }
 
 // CommitUpdate finalizes config update and notifies listeners.
-// NOTE: `ais` package must use its own cfgBegin/Commit/DiscardUpdate functions
+// NOTE: `ais` package must use config-owner to modify config.
 func (gco *globalConfigOwner) CommitUpdate(config *Config) {
 	oldConf := gco.Get()
 	gco.c.Store(unsafe.Pointer(config))
 	gco.mtx.Unlock()
 
-	gco.notifyListeners(oldConf) // serializes via gco.lmtx
+	gco.NotifyListeners(oldConf) // serializes via gco.lmtx
 }
 
 // DiscardUpdate discards commit updates.
+// NOTE: `ais` package must use config-owner to modify config
 func (gco *globalConfigOwner) DiscardUpdate() {
 	gco.mtx.Unlock()
 }
@@ -705,7 +706,7 @@ func (gco *globalConfigOwner) GetGlobalConfigPath() (s string) {
 	return *(*string)(gco.confPath.Load())
 }
 
-func (gco *globalConfigOwner) notifyListeners(oldConf *Config) {
+func (gco *globalConfigOwner) NotifyListeners(oldConf *Config) {
 	gco.lmtx.Lock()
 	newConf := gco.Get()
 	for _, listener := range gco.listeners {

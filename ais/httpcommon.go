@@ -794,12 +794,34 @@ func (h *httprunner) tryLoadSmap() (_ *smapX, reliable bool) {
 	return smap, reliable
 }
 
-func (h *httprunner) setDaemonConfig(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToUpdate, transient bool) (err error) {
-	err = h.owner.config.modifyOverride(toUpdate, transient)
+func (h *httprunner) setDaemonConfigMsg(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
+	transient := cos.IsParseBool(r.URL.Query().Get(cmn.ActTransient))
+	toUpdate := &cmn.ConfigToUpdate{}
+	if err := cos.MorphMarshal(msg.Value, toUpdate); err != nil {
+		h.writeErrf(w, r, "failed to parse configuration to update, err: %v", err)
+		return
+	}
+
+	err := h.owner.config.setDaemonConfig(toUpdate, transient)
 	if err != nil {
 		h.writeErr(w, r, err)
 	}
-	return
+}
+
+func (h *httprunner) setDaemonConfigQuery(w http.ResponseWriter, r *http.Request) {
+	var (
+		query     = r.URL.Query()
+		transient = cos.IsParseBool(query.Get(cmn.ActTransient))
+		toUpdate  = &cmn.ConfigToUpdate{}
+	)
+	if err := toUpdate.FillFromQuery(query); err != nil {
+		h.writeErr(w, r, err)
+		return
+	}
+	err := h.owner.config.setDaemonConfig(toUpdate, transient)
+	if err != nil {
+		h.writeErr(w, r, err)
+	}
 }
 
 func (h *httprunner) run() error {
@@ -1716,19 +1738,21 @@ func (h *httprunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, caller 
 		newConfig, caller, msg.Action, msg.UUID,
 	)
 	h.owner.config.Lock()
-	defer h.owner.config.Unlock()
-
 	conf := h.owner.config.get()
 	if newConfig.version() <= conf.version() {
+		h.owner.config.Unlock()
 		return newErrDowngrade(h.si, conf.String(), newConfig.String())
 	}
 
 	if err = h.owner.config.persist(newConfig); err != nil {
 		return
 	}
-
+	oldGCO := cmn.GCO.Get()
 	err = h.owner.config.updateGCO(newConfig)
+	h.owner.config.Unlock()
 	debug.AssertNoErr(err)
+
+	cmn.GCO.NotifyListeners(oldGCO)
 	return
 }
 

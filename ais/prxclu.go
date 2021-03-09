@@ -711,7 +711,8 @@ func (p *proxyrunner) setClusterConfig(w http.ResponseWriter, r *http.Request, t
 }
 
 func (p *proxyrunner) setTransientClusterConfig(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToUpdate, msg *cmn.ActionMsg) {
-	if p.setDaemonConfig(w, r, toUpdate, true /* transient */) != nil {
+	if err := p.owner.config.setDaemonConfig(toUpdate, true /* transient */); err != nil {
+		p.writeErr(w, r, err)
 		return
 	}
 	q := url.Values{}

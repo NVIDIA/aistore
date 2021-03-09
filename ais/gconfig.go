@@ -34,10 +34,11 @@ type (
 		pre   func(ctx *configModifier, clone *globalConfig) (updated bool, err error)
 		final func(ctx *configModifier, clone *globalConfig)
 
-		toUpdate *cmn.ConfigToUpdate
-		msg      *cmn.ActionMsg
-		query    url.Values
-		wait     bool
+		oldConfig *cmn.Config
+		toUpdate  *cmn.ConfigToUpdate
+		msg       *cmn.ActionMsg
+		query     url.Values
+		wait      bool
 	}
 )
 
@@ -75,37 +76,39 @@ func (co *configOwner) put(config *globalConfig) {
 	co.config.Store(unsafe.Pointer(config))
 }
 
-func (co *configOwner) runPre(ctx *configModifier) (clone *globalConfig, updated bool, err error) {
+func (co *configOwner) runPre(ctx *configModifier) (clone *globalConfig, err error) {
 	co.Lock()
 	defer co.Unlock()
 	clone = co.get().clone()
-	if updated, err = ctx.pre(ctx, clone); err != nil || !updated {
-		return
+	if updated, err := ctx.pre(ctx, clone); err != nil || !updated {
+		return nil, err
 	}
+
+	ctx.oldConfig = cmn.GCO.Get()
 	if err = co.updateGCO(clone); err != nil {
+		clone = nil
 		return
 	}
+
 	clone.Version++
 	clone.LastUpdated = time.Now().String()
 	if err := co.persist(clone); err != nil {
 		err = fmt.Errorf("FATAL: failed to persist %s: %v", clone, err)
-		return nil, false, err
+		return nil, err
 	}
 	return
 }
 
 // Update the global config on primary proxy.
 func (co *configOwner) modify(ctx *configModifier) (err error) {
-	var (
-		config  *globalConfig
-		updated bool
-	)
-	if config, updated, err = co.runPre(ctx); err != nil || !updated {
+	var config *globalConfig
+	if config, err = co.runPre(ctx); err != nil || config == nil {
 		return err
 	}
 	if ctx.final != nil {
 		ctx.final(ctx, config)
 	}
+	cmn.GCO.NotifyListeners(ctx.oldConfig)
 	return
 }
 
@@ -152,15 +155,15 @@ func (co *configOwner) load() (err error) {
 	return
 }
 
-func (co *configOwner) modifyOverride(toUpdate *cmn.ConfigToUpdate, transient bool) (err error) {
+func (co *configOwner) setDaemonConfig(toUpdate *cmn.ConfigToUpdate, transient bool) (err error) {
 	co.Lock()
-	defer co.Unlock()
+	oldConfig := cmn.GCO.Get()
 	clone := cmn.GCO.Clone()
 	err = cmn.GCO.SetConfigInMem(toUpdate, clone, cmn.Daemon)
 	if err != nil {
+		co.Unlock()
 		return
 	}
-	cmn.GCO.Put(clone)
 
 	override := cmn.GCO.GetOverrideConfig()
 	if override == nil {
@@ -168,9 +171,17 @@ func (co *configOwner) modifyOverride(toUpdate *cmn.ConfigToUpdate, transient bo
 	} else {
 		override.Merge(toUpdate)
 	}
+
 	if !transient {
-		cmn.SaveOverrideConfig(clone.ConfigDir, override)
+		if err = cmn.SaveOverrideConfig(clone.ConfigDir, override); err != nil {
+			co.Unlock()
+			return
+		}
 	}
+
+	cmn.GCO.Put(clone)
 	cmn.GCO.PutOverrideConfig(override)
+	co.Unlock()
+	cmn.GCO.NotifyListeners(oldConfig)
 	return
 }

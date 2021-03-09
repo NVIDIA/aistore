@@ -152,13 +152,7 @@ func (t *targetrunner) daeputJSON(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case cmn.ActSetConfig: // setconfig #2 - via action message
-		transient := cos.IsParseBool(r.URL.Query().Get(cmn.ActTransient))
-		toUpdate := &cmn.ConfigToUpdate{}
-		if err := cos.MorphMarshal(msg.Value, toUpdate); err != nil {
-			t.writeErrf(w, r, "failed to parse configuration to update, err: %v", err)
-			return
-		}
-		t.setDaemonConfig(w, r, toUpdate, transient)
+		t.setDaemonConfigMsg(w, r, &msg)
 	case cmn.ActShutdown:
 		t.Stop(errShutdown)
 	default:
@@ -183,16 +177,7 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiIt
 	case cmn.Mountpaths:
 		t.handleMountpathReq(w, r)
 	case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
-		var (
-			query     = r.URL.Query()
-			transient = cos.IsParseBool(query.Get(cmn.ActTransient))
-			toUpdate  = &cmn.ConfigToUpdate{}
-		)
-		if err := toUpdate.FillFromQuery(query); err != nil {
-			t.writeErr(w, r, err)
-			return
-		}
-		t.setDaemonConfig(w, r, toUpdate, transient)
+		t.setDaemonConfigQuery(w, r)
 	}
 }
 
