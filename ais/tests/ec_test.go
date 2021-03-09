@@ -2247,12 +2247,13 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 
 	tlog.Logf("Unregistering %s...\n", tgtLost.ID())
 	args := &cmn.ActValDecommision{DaemonID: tgtLost.ID(), SkipRebalance: true}
-	err := tutils.DecommissionNode(proxyURL, args)
+	_, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 	registered := false
 	defer func() {
 		if !registered {
-			rebID, err := tutils.JoinCluster(proxyURL, tgtLost)
+			args := &cmn.ActValDecommision{DaemonID: tgtLost.ID()}
+			rebID, err := api.StopMaintenance(baseParams, args)
 			tassert.CheckError(t, err)
 			tutils.WaitForRebalanceByID(t, baseParams, rebID)
 		}
@@ -2293,7 +2294,8 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 		len(resECOld.Entries), bckEC, len(resRegOld.Entries), bckReg)
 
 	tlog.Logf("Registering node %s\n", tgtLost)
-	rebID, err := tutils.JoinCluster(proxyURL, tgtLost)
+	args = &cmn.ActValDecommision{DaemonID: tgtLost.ID()}
+	rebID, err := api.StopMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 	registered = true
 	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
@@ -2479,10 +2481,11 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 
 	tlog.Logf("Unregistering %s...\n", tgtLost.ID())
 	args := &cmn.ActValDecommision{DaemonID: tgtLost.ID(), SkipRebalance: true}
-	err := tutils.DecommissionNode(proxyURL, args)
+	_, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
-	_, err = tutils.WaitForClusterState(proxyURL, "to remove target", smap.Version, smap.CountActiveProxies(),
-		smap.CountActiveTargets()-1)
+	_, err = tutils.WaitForClusterState(proxyURL, "to remove target",
+		smap.Version, smap.CountActiveProxies(), smap.CountActiveTargets()-1)
+	tassert.CheckFatal(t, err)
 	registered := false
 
 	// FIXME: There are multiple defers calling JoinCluster, and it's very unclear what will happen when.
@@ -2490,10 +2493,11 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	// See: https://blog.golang.org/defer-panic-and-recover
 	defer func() {
 		if !registered {
-			_, err = tutils.JoinCluster(proxyURL, tgtLost)
+			args := &cmn.ActValDecommision{DaemonID: tgtLost.ID()}
+			rebID, err := api.StopMaintenance(baseParams, args)
 			tassert.CheckError(t, err)
+			tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
 		}
-		tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 	}()
 
 	// fill EC bucket
@@ -2518,7 +2522,8 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	tlog.Logf("Created %d objects in %s. Starting rebalance\n", len(resECOld.Entries), bckEC)
 
 	tlog.Logf("Registering node %s\n", tgtLost.ID())
-	_, err = tutils.JoinCluster(proxyURL, tgtLost)
+	args = &cmn.ActValDecommision{DaemonID: tgtLost.ID()}
+	_, err = api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 	registered = true
 
@@ -2554,14 +2559,18 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	tassert.CheckError(t, err)
 
 	args = &cmn.ActValDecommision{DaemonID: tgtGone.ID()}
-	err = tutils.DecommissionNode(proxyURL, args)
+	rebID, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
-	defer tutils.JoinCluster(proxyURL, tgtGone)
+	defer func() {
+		args = &cmn.ActValDecommision{DaemonID: tgtGone.ID()}
+		rebID, _ := api.StopMaintenance(baseParams, args)
+		tutils.WaitForRebalanceByID(t, baseParams, rebID)
+	}()
 
 	stopCh.Close()
 
 	tassert.CheckFatal(t, err)
-	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
 	tlog.Logln("Getting the number of objects after rebalance")
 	resECNew, err := api.ListObjects(baseParams, bckEC, msg, 0)
 	tassert.CheckFatal(t, err)
@@ -2577,7 +2586,6 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 		tassert.CheckError(t, err)
 	}
 
-	tutils.WaitForRebalanceToComplete(t, baseParams)
 	tlog.Logln("Getting the number of objects after reading")
 	resECNew, err = api.ListObjects(baseParams, bckEC, msg, 0)
 	tassert.CheckFatal(t, err)

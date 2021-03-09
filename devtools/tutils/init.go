@@ -225,11 +225,11 @@ func initNodeCmd() {
 	cos.AssertNoErr(err)
 	restoreNodes = make(map[string]RestoreCmd, smap.CountProxies()+smap.CountTargets())
 	for _, node := range smap.Pmap {
-		restoreNodes[node.ID()] = getRestoreCmd(node)
+		restoreNodes[node.ID()] = GetRestoreCmd(node)
 	}
 
 	for _, node := range smap.Tmap {
-		restoreNodes[node.ID()] = getRestoreCmd(node)
+		restoreNodes[node.ID()] = GetRestoreCmd(node)
 	}
 }
 

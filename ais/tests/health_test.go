@@ -21,7 +21,8 @@ func unregisteredNodeHealth(t *testing.T, proxyURL string, si *cluster.Snode) {
 
 	smapOrig := tutils.GetClusterMap(t, proxyURL)
 	args := &cmn.ActValDecommision{DaemonID: si.DaemonID, SkipRebalance: true}
-	err = tutils.DecommissionNode(proxyURL, args)
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	_, err = api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 	targetCount := smapOrig.CountActiveTargets()
 	proxyCount := smapOrig.CountActiveProxies()
@@ -33,13 +34,14 @@ func unregisteredNodeHealth(t *testing.T, proxyURL string, si *cluster.Snode) {
 	_, err = tutils.WaitForClusterState(proxyURL, "to decommission node", smapOrig.Version, proxyCount, targetCount)
 	tassert.CheckFatal(t, err)
 	defer func() {
-		rebID, err := tutils.JoinCluster(proxyURL, si)
+		val := &cmn.ActValDecommision{DaemonID: si.ID()}
+		rebID, err := api.StopMaintenance(baseParams, val)
 		tassert.CheckFatal(t, err)
 		_, err = tutils.WaitForClusterState(proxyURL, "to node join", smapOrig.Version, smapOrig.CountActiveProxies(),
 			smapOrig.CountActiveTargets())
 		tassert.CheckFatal(t, err)
 		if rebID != "" {
-			tutils.WaitForRebalanceByID(t, tutils.BaseAPIParams(proxyURL), rebID)
+			tutils.WaitForRebalanceByID(t, baseParams, rebID)
 		}
 	}()
 

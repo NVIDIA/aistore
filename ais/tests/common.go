@@ -73,8 +73,8 @@ type ioContext struct {
 func (m *ioContext) saveClusterState() {
 	m.init()
 	m.smap = tutils.GetClusterMap(m.t, m.proxyURL)
-	m.originalTargetCount = len(m.smap.Tmap)
-	m.originalProxyCount = len(m.smap.Pmap)
+	m.originalTargetCount = m.smap.CountActiveTargets()
+	m.originalProxyCount = m.smap.CountActiveProxies()
 	tlog.Logf("targets: %d, proxies: %d\n", m.originalTargetCount, m.originalProxyCount)
 }
 
@@ -531,7 +531,7 @@ func (m *ioContext) unregisterTarget() *cluster.Snode {
 		DaemonID:      target.ID(),
 		SkipRebalance: true,
 	}
-	err := tutils.DecommissionNode(m.proxyURL, args)
+	_, err := api.StartMaintenance(tutils.BaseAPIParams(m.proxyURL), args)
 	tassert.CheckFatal(m.t, err)
 	m.smap, err = tutils.WaitForClusterState(
 		m.proxyURL,
@@ -554,7 +554,8 @@ func (m *ioContext) reregisterTarget(target *cluster.Snode) (rebID string) {
 	var err error
 	// T1
 	tlog.Logf("Registering target %s...\n", target.ID())
-	rebID, err = tutils.JoinCluster(m.proxyURL, target)
+	args := &cmn.ActValDecommision{DaemonID: target.ID()}
+	rebID, err = api.StopMaintenance(tutils.BaseAPIParams(m.proxyURL), args)
 	tassert.CheckFatal(m.t, err)
 	baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
 	smap := tutils.GetClusterMap(m.t, m.proxyURL)

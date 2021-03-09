@@ -887,6 +887,26 @@ func (h *httprunner) run() error {
 	return h.netServ.pub.listenAndServe(addr, h.logger)
 }
 
+func (h *httprunner) stopHTTPServer() {
+	h.netServ.pub.shutdown()
+	config := cmn.GCO.Get()
+	if config.HostNet.UseIntraControl {
+		h.netServ.control.shutdown()
+	}
+	if config.HostNet.UseIntraData {
+		h.netServ.data.shutdown()
+	}
+}
+
+// Return true if node is unregistered because of decommission
+func (h *httprunner) isDecommissionUnreg(w http.ResponseWriter, r *http.Request) bool {
+	var msg cmn.ActionMsg
+	if err := cmn.ReadJSON(w, r, &msg, true /*optional*/); err != nil {
+		return false
+	}
+	return msg.Action == cmn.ActDecommission
+}
+
 // remove self from Smap (if required), terminate http, and wait (w/ timeout)
 // for running xactions to abort
 func (h *httprunner) stop(rmFromSmap bool) {
@@ -898,14 +918,7 @@ func (h *httprunner) stop(rmFromSmap bool) {
 	wg.Add(1)
 	go func() {
 		time.Sleep(time.Second / 2)
-		h.netServ.pub.shutdown()
-		config := cmn.GCO.Get()
-		if config.HostNet.UseIntraControl {
-			h.netServ.control.shutdown()
-		}
-		if config.HostNet.UseIntraData {
-			h.netServ.data.shutdown()
-		}
+		h.stopHTTPServer()
 		wg.Done()
 	}()
 	entry := xreg.GetRunning(xreg.XactFilter{})

@@ -472,7 +472,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	for i := 0; i < targetsToUnregister; i++ {
 		tlog.Logf("Unregistering target %s\n", targets[i].ID())
 		args := &cmn.ActValDecommision{DaemonID: targets[i].ID(), SkipRebalance: true}
-		err := tutils.DecommissionNode(m.proxyURL, args)
+		_, err := api.StartMaintenance(baseParams, args)
 		tassert.CheckFatal(t, err)
 		removed[targets[i].ID()] = targets[i]
 	}

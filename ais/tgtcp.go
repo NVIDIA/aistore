@@ -364,7 +364,7 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 		t.handleMountpathReq(w, r)
 		return
 	case cmn.Unregister:
-		t.handleUnregisterReq()
+		t.handleUnregisterReq(w, r)
 		return
 	default:
 		t.writeErrURL(w, r)
@@ -372,7 +372,7 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) handleUnregisterReq() {
+func (t *targetrunner) handleUnregisterReq(w http.ResponseWriter, r *http.Request) {
 	if glog.V(3) {
 		glog.Infoln("sending unregister on target keepalive control channel")
 	}
@@ -385,6 +385,11 @@ func (t *targetrunner) handleUnregisterReq() {
 
 	// Stop all xactions
 	xreg.AbortAll()
+
+	if !t.isDecommissionUnreg(w, r) {
+		return
+	}
+	t.stopHTTPServer()
 }
 
 func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request) {

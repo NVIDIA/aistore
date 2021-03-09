@@ -222,12 +222,12 @@ func TestQueryWorkersTargetDown(t *testing.T) {
 
 	target, err := smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
-	args := &cmn.ActValDecommision{DaemonID: target.ID(), SkipRebalance: true}
-	err = tutils.DecommissionNode(proxyURL, args)
+	argsMnt := &cmn.ActValDecommision{DaemonID: target.ID(), SkipRebalance: true}
+	_, err = api.StartMaintenance(baseParams, argsMnt)
 	tassert.CheckFatal(t, err)
 
 	defer func() {
-		rebID, err := tutils.JoinCluster(proxyURL, target)
+		rebID, err := api.StopMaintenance(baseParams, argsMnt)
 		tassert.CheckFatal(t, err)
 		args := api.XactReqArgs{ID: rebID, Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
 		_, err = api.WaitForXaction(baseParams, args)

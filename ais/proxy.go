@@ -2023,6 +2023,9 @@ func (p *proxyrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 
 		// Stop keepaliving
 		p.keepalive.send(kaUnregisterMsg)
+		if p.isDecommissionUnreg(w, r) {
+			p.stopHTTPServer()
+		}
 		return
 	default:
 		p.writeErrURL(w, r)

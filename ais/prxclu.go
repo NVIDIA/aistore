@@ -1334,7 +1334,8 @@ func (p *proxyrunner) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb 
 		body := cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActShutdown})
 		args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: body}
 	case cmn.ActStartMaintenance, cmn.ActDecommission, testInitiatedRm:
-		args.req = cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathDaemonUnreg.S}
+		body := cos.MustMarshal(cmn.ActionMsg{Action: msg.Action})
+		args.req = cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathDaemonUnreg.S, Body: body}
 	default:
 		debug.AssertMsg(false, "invalid action: "+msg.Action)
 	}

@@ -446,7 +446,7 @@ func getAISNodeCmd(t *testing.T) string {
 	proxyURL := RandomProxyURL()
 	proxy, err := GetPrimaryProxy(proxyURL)
 	tassert.CheckFatal(t, err)
-	rcmd := getRestoreCmd(proxy)
+	rcmd := GetRestoreCmd(proxy)
 	return rcmd.Cmd
 }
 
@@ -531,7 +531,7 @@ func WaitForNodeToTerminate(pid int, timeout ...time.Duration) error {
 	}
 }
 
-func getRestoreCmd(si *cluster.Snode) RestoreCmd {
+func GetRestoreCmd(si *cluster.Snode) RestoreCmd {
 	var (
 		err error
 		cmd = RestoreCmd{Node: si}
