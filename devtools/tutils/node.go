@@ -332,6 +332,7 @@ func ShutdownNode(_ *testing.T, baseParams api.BaseParams, node *cluster.Snode) 
 		daemonID = node.ID()
 		port     = node.PublicNet.DaemonPort
 	)
+	tlog.Logf("Shutting down %s\n", node.Name())
 	cmd.Node = node
 	if containers.DockerRunning() {
 		tlog.Logf("Stopping container %s\n", daemonID)
@@ -503,7 +504,7 @@ func WaitForNodeToTerminate(pid int, timeout ...time.Duration) error {
 		deadline = timeout[0]
 	}
 
-	tlog.Logf("Waiting for process ID %d to terminate", pid)
+	tlog.Logf("Waiting for process ID %d to terminate\n", pid)
 	var cancel context.CancelFunc
 	ctx, cancel = context.WithTimeout(ctx, deadline)
 	defer cancel()

@@ -769,9 +769,9 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 func (p *proxyrunner) markMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) error {
 	var flags cluster.SnodeFlags
 	switch msg.Action {
-	case cmn.ActDecommission, cmn.ActShutdownNode:
+	case cmn.ActDecommission:
 		flags = cluster.SnodeDecommission
-	case cmn.ActStartMaintenance:
+	case cmn.ActStartMaintenance, cmn.ActShutdownNode:
 		flags = cluster.SnodeMaintenance
 	default:
 		debug.AssertMsg(false, "invalid action: "+msg.Action)

@@ -324,29 +324,37 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	}
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("Shutting down the node %s[%s]...\n", node, nodeType)
-	// 1. Shutdown a random node
+	// 1. Shutdown a random node.
 	pid, cmd, err := tutils.ShutdownNode(t, baseParams, node)
 	tassert.CheckFatal(t, err)
 	if nodeType == cmn.Target {
 		tutils.WaitForRebalanceToComplete(t, baseParams)
 	}
 
-	// 2. Make sure the node has been shut down
-	smap, err = tutils.WaitForClusterStateActual(proxyURL, "shutdown node", smap.Version, origProxyCnt-pdc, origTargetCount-tdc, node.DaemonID)
-	tassert.CheckError(t, err)
-
-	// 3. Wait for the node is off
+	// 2. Make sure the node has been shut down.
 	err = tutils.WaitForNodeToTerminate(pid, nodeOffTimeout)
 	tassert.CheckError(t, err)
-
-	tlog.Logf("Starting the node %s[%s]...\n", node, nodeType)
-	// 4. Start node again
-	err = tutils.RestoreNode(cmd, false, nodeType)
+	_, err = tutils.WaitForClusterState(proxyURL, "shutdown node",
+		smap.Version, origProxyCnt-pdc, origTargetCount-tdc, node.DaemonID)
 	tassert.CheckError(t, err)
 
-	_, err = tutils.WaitForClusterState(proxyURL, "restart node", smap.Version, origProxyCnt, origTargetCount)
-	tassert.CheckFatal(t, err)
+	// 3. Start node again.
+	tlog.Logf("Starting the node %s[%s]...\n", node, nodeType)
+	err = tutils.RestoreNode(cmd, false, nodeType)
+	tassert.CheckError(t, err)
+	smap, err = tutils.WaitForClusterState(proxyURL, "restart node",
+		smap.Version, origProxyCnt-pdc, origTargetCount-tdc)
+	tassert.CheckError(t, err)
+	tassert.Errorf(t, smap.GetNode(node.DaemonID).Flags.IsSet(cluster.SnodeMaintenance),
+		"node should be in maintenance after starting")
+
+	// 4. Remove the node from maintenance.
+	_, err = api.StopMaintenance(baseParams, &cmn.ActValDecommision{DaemonID: node.DaemonID})
+	tassert.CheckError(t, err)
+	_, err = tutils.WaitForClusterState(proxyURL, "remove node from maintenance",
+		smap.Version, origProxyCnt, origTargetCount)
+	tassert.CheckError(t, err)
+
 	if nodeType == cmn.Target {
 		tutils.WaitForRebalanceToComplete(t, baseParams)
 	}
@@ -372,9 +380,10 @@ func TestShutdownListObjects(t *testing.T) {
 	)
 
 	m.saveClusterState()
+	origTargetCount := m.smap.CountActiveTargets()
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
-
 	m.puts()
+
 	// 1. Perform list-object and populate entries map.
 	msg := &cmn.SelectMsg{}
 	msg.AddProps(cmn.GetPropsChecksum, cmn.GetPropsCopies, cmn.GetPropsSize)
@@ -392,29 +401,36 @@ func TestShutdownListObjects(t *testing.T) {
 
 	// Restore target after test is over.
 	t.Cleanup(func() {
+		tlog.Logf("Restoring %s\n", tsi.Name())
 		err = tutils.RestoreNode(cmd, false, cmn.Target)
-		tassert.CheckFatal(t, err)
+		tassert.CheckError(t, err)
 		_, err = tutils.WaitForClusterState(proxyURL, "target is back",
-			m.smap.Version, m.smap.CountActiveProxies(), m.smap.CountActiveTargets()+1)
-		tassert.CheckFatal(t, err)
+			m.smap.Version, 0, origTargetCount-1)
+		tassert.CheckError(t, err)
+
+		// Remove the node from maintenance.
+		_, err = api.StopMaintenance(baseParams, &cmn.ActValDecommision{DaemonID: tsi.DaemonID})
+		tassert.CheckError(t, err)
+		_, err = tutils.WaitForClusterState(proxyURL, "remove node from maintenance",
+			m.smap.Version, 0, origTargetCount)
+		tassert.CheckError(t, err)
+
 		tutils.WaitForRebalanceToComplete(t, baseParams)
 	})
 
 	// Wait for reb, shutdown to complete.
 	tutils.WaitForRebalanceToComplete(t, baseParams)
 	tassert.CheckError(t, err)
-	m.smap, err = tutils.WaitForClusterStateActual(proxyURL, "target in maintenance",
-		m.smap.Version, m.smap.CountActiveProxies(), m.smap.CountActiveTargets()-1, tsi.ID())
-	tassert.CheckError(t, err)
-
-	// Wait for the node is off.
 	err = tutils.WaitForNodeToTerminate(pid, nodeOffTimeout)
+	tassert.CheckError(t, err)
+	m.smap, err = tutils.WaitForClusterState(proxyURL, "target in maintenance",
+		m.smap.Version, 0, origTargetCount-1, tsi.ID())
 	tassert.CheckError(t, err)
 
 	// 3. Check if we can list all the objects.
 	tlog.Logln("Listing objects")
 	bckList, err = api.ListObjects(baseParams, bck, msg, 0)
-	tassert.CheckFatal(t, err)
+	tassert.CheckError(t, err)
 	tassert.Errorf(t, len(bckList.Entries) == m.num, "list-object should return %d objects - returned %d", m.num, len(bckList.Entries))
 	for _, entry := range bckList.Entries {
 		origEntry, ok := origEntries[entry.Name]

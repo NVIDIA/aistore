@@ -1346,8 +1346,11 @@ func (p *proxyrunner) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb 
 			p.si, node, msg.Action, er, d)
 		time.Sleep(timeout / 2)
 	}
-	// NOTE: proceeding anyway even if all retries fail
-	return p.unregNode(msg, si, skipReb)
+	if msg.Action == cmn.ActDecommission {
+		// NOTE: proceeding anyway even if all retries fail
+		errCode, err = p.unregNode(msg, si, skipReb)
+	}
+	return
 }
 
 func (p *proxyrunner) unregNode(msg *cmn.ActionMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
