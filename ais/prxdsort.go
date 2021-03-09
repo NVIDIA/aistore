@@ -25,13 +25,13 @@ func (p *proxyrunner) proxyStartSortHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	bck := cluster.NewBckEmbed(parsedRS.Bck)
-	args := bckInitArgs{p: p, w: w, r: r, queryBck: bck, err: err, msg: nil, tryOnlyRem: true, perms: cmn.AccessObjLIST | cmn.AccessGET}
+	args := bckInitArgs{p: p, w: w, r: r, bck: bck, tryOnlyRem: true, perms: cmn.AccessObjLIST | cmn.AccessGET}
 	if _, err = args.initAndTry(bck.Name); err != nil {
 		return
 	}
 
 	bck = cluster.NewBckEmbed(parsedRS.OutputBck)
-	args = bckInitArgs{p: p, w: w, r: r, queryBck: bck, err: err, msg: nil, tryOnlyRem: true, perms: cmn.AccessPUT}
+	args = bckInitArgs{p: p, w: w, r: r, bck: bck, tryOnlyRem: true, perms: cmn.AccessPUT}
 	if _, err = args.initAndTry(bck.Name); err != nil {
 		return
 	}

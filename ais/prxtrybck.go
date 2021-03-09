@@ -22,9 +22,8 @@ type bckInitArgs struct {
 	r       *http.Request
 	reqBody []byte // request body of original request
 
-	queryBck *cluster.Bck
-	err      error
-	msg      *cmn.ActionMsg
+	bck *cluster.Bck
+	msg *cmn.ActionMsg
 
 	perms cmn.AccessAttrs // cmn.AccessGET, cmn.AccessPATCH etc.
 
@@ -39,16 +38,16 @@ type bckInitArgs struct {
 
 // init initializes bucket and checks access permissions.
 func (args *bckInitArgs) init(bucket string) (bck *cluster.Bck, errCode int, err error) {
-	if args.queryBck == nil {
+	if args.bck == nil {
 		query := args.r.URL.Query()
-		args.queryBck, err = newBckFromQuery(bucket, query)
+		args.bck, err = newBckFromQuery(bucket, query)
 		if err != nil {
 			errCode = http.StatusBadRequest
 			return
 		}
 	}
 
-	bck = args.queryBck
+	bck = args.bck
 	if err = args._checkRemoteBckPermissions(); err != nil {
 		errCode = http.StatusBadRequest
 		return
@@ -70,7 +69,7 @@ func (args *bckInitArgs) init(bucket string) (bck *cluster.Bck, errCode int, err
 		return
 	}
 
-	args.queryBck = bck
+	args.bck = bck
 	args.exists = true
 
 	// Check for msg.Action permission if permissions are not explicitly specified
@@ -87,7 +86,7 @@ func (args *bckInitArgs) init(bucket string) (bck *cluster.Bck, errCode int, err
 
 // TODO -- FIXME: A hack to check permissions specific to providers. Should automatically check based on providers.
 func (args *bckInitArgs) _checkRemoteBckPermissions() (err error) {
-	if !args.queryBck.IsRemote() {
+	if !args.bck.IsRemote() {
 		return
 	}
 
@@ -96,17 +95,17 @@ func (args *bckInitArgs) _checkRemoteBckPermissions() (err error) {
 	}
 
 	// HDFS buckets are allowed to be deleted.
-	if args.queryBck.IsHDFS() {
+	if args.bck.IsHDFS() {
 		return
 	}
 
 	// HTTP buckets should fail on PUT and bucket rename operations
-	if args.queryBck.IsHTTP() && args._requiresPermission(cmn.AccessPUT) {
+	if args.bck.IsHTTP() && args._requiresPermission(cmn.AccessPUT) {
 		goto retErr
 	}
 
 	// Destroy and Rename/Move are not permitted.
-	if args.queryBck.IsCloud() && args._requiresPermission(cmn.AccessDestroyBucket) && args.msg.Action == cmn.ActDestroyBck {
+	if args.bck.IsCloud() && args._requiresPermission(cmn.AccessDestroyBucket) && args.msg.Action == cmn.ActDestroyBck {
 		goto retErr
 	}
 
@@ -116,7 +115,7 @@ retErr:
 	if args.msg != nil {
 		op = fmt.Sprintf("operation %q", args.msg.Action)
 	}
-	err = fmt.Errorf(cmn.FmtErrUnsupported, args.queryBck, op)
+	err = fmt.Errorf(cmn.FmtErrUnsupported, args.bck, op)
 	return
 }
 
@@ -152,7 +151,10 @@ func (args *bckInitArgs) initAndTry(bucket string, origURLBck ...string) (bck *c
 		return
 	}
 
-	args.err = err
+	if !cmn.IsErrBucketNought(err) {
+		args.p.writeErr(args.w, args.r, err, http.StatusBadRequest)
+		return
+	}
 	bck, err = args.try(origURLBck...)
 	return
 }
@@ -170,21 +172,15 @@ func (args *bckInitArgs) try(origURLBck ...string) (bck *cluster.Bck, err error)
 //
 
 func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode int, err error) {
-	if args.err != nil && !cmn.IsErrBucketNought(args.err) {
-		err = args.err
-		errCode = http.StatusBadRequest
-		return
-	}
-
-	if err = args.queryBck.Validate(); err != nil {
+	if err = args.bck.Validate(); err != nil {
 		errCode = http.StatusBadRequest
 		return
 	}
 
 	// In case of HDFS if the bucket does not exist in BMD there is no point
 	// in checking if it exists remotely if we don't have `ref_directory`.
-	if args.queryBck.IsHDFS() {
-		err = cmn.NewErrorBucketDoesNotExist(args.queryBck.Bck)
+	if args.bck.IsHDFS() {
+		err = cmn.NewErrorBucketDoesNotExist(args.bck.Bck)
 		errCode = http.StatusNotFound
 		return
 	}
@@ -195,7 +191,7 @@ func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode i
 	}
 
 	// From this point on it's the primary - lookup via random target and try bucket add to BMD.
-	bck = args.queryBck
+	bck = args.bck
 	action := cmn.ActCreateBck
 
 	if bck.HasBackendBck() {
@@ -203,7 +199,7 @@ func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode i
 	}
 
 	if bck.IsAIS() {
-		glog.Warningf("%s: bucket %q doesn't exist, proceeding to create", args.p.si, args.queryBck.Bck)
+		glog.Warningf("%s: bucket %q doesn't exist, proceeding to create", args.p.si, args.bck.Bck)
 	}
 
 	var remoteProps http.Header
@@ -226,7 +222,7 @@ func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode i
 			}
 			remoteProps.Set(cmn.HeaderOrigURLBck, hbo.OrigURLBck)
 		} else {
-			err = fmt.Errorf("failed to initialize bucket %q: missing HTTP URL", args.queryBck)
+			err = fmt.Errorf("failed to initialize bucket %q: missing HTTP URL", args.bck)
 			errCode = http.StatusBadRequest
 			return
 		}
@@ -245,7 +241,7 @@ func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode i
 		err = fmt.Errorf("%s: unexpected failure to add remote %s, err: %v", args.p.si, bck, err)
 		errCode = http.StatusInternalServerError
 	}
-	bck = args.queryBck
+	bck = args.bck
 	return
 }
 

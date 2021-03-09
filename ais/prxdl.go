@@ -271,7 +271,7 @@ func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *htt
 		return
 	}
 	bck := cluster.NewBckEmbed(dlBase.Bck)
-	args := bckInitArgs{p: p, w: w, r: r, reqBody: body, queryBck: bck, perms: cmn.AccessRW}
+	args := bckInitArgs{p: p, w: w, r: r, reqBody: body, bck: bck, perms: cmn.AccessRW}
 	if _, err = args.initAndTry(bck.Name); err != nil {
 		return
 	}

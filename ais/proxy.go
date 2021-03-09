@@ -254,7 +254,7 @@ func (p *proxyrunner) parseAPIBckObj(w http.ResponseWriter, r *http.Request, bck
 	if err = p.parseAPIRequest(w, r, &request); err != nil {
 		return
 	}
-	bckArgs.queryBck = request.bck
+	bckArgs.bck = request.bck
 	bck, err = bckArgs.initAndTry(request.bck.Name, origURLBck...)
 	return bck, request.items[1], err
 }
@@ -347,7 +347,7 @@ func (p *proxyrunner) handleList(w http.ResponseWriter, r *http.Request, queryBc
 			bck *cluster.Bck
 			err error
 		)
-		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: msg, perms: cmn.AccessObjLIST, tryOnlyRem: true, queryBck: bck}
+		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: msg, perms: cmn.AccessObjLIST, tryOnlyRem: true, bck: bck}
 		if bck, err = bckArgs.initAndTry(queryBcks.Name); err != nil {
 			return
 		}
@@ -483,7 +483,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		perms = cmn.AccessObjDELETE
 	}
 
-	bckArgs := bckInitArgs{p: p, w: w, r: r, msg: &msg, perms: perms, tryOnlyRem: true, queryBck: bck}
+	bckArgs := bckInitArgs{p: p, w: w, r: r, msg: &msg, perms: perms, tryOnlyRem: true, bck: bck}
 	if msg.Action == cmn.ActEvictRemoteBck {
 		bck, errCode, err = bckArgs.init(bck.Name)
 		if errCode == http.StatusNotFound {
@@ -712,7 +712,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 	}
 
 	// Initialize bucket, try creating if it's a cloud bucket.
-	args := bckInitArgs{p: p, w: w, r: r, queryBck: bck, err: err, msg: msg, tryOnlyRem: true}
+	args := bckInitArgs{p: p, w: w, r: r, bck: bck, msg: msg, tryOnlyRem: true}
 	if bck, err = args.initAndTry(bck.Name); err != nil {
 		return
 	}
@@ -790,7 +790,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			return
 		}
 		var (
-			bckToArgs = bckInitArgs{p: p, w: w, r: r, queryBck: userBckTo, perms: cmn.AccessPUT}
+			bckToArgs = bckInitArgs{p: p, w: w, r: r, bck: userBckTo, perms: cmn.AccessPUT}
 			errCode   int
 		)
 		if bckTo, errCode, err = bckToArgs.init(userBckTo.Name); err != nil && errCode != http.StatusNotFound {
@@ -916,7 +916,7 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 						bck, backend, err)
 					return
 				}
-				args := bckInitArgs{p: p, w: w, r: r, queryBck: backend, err: err, msg: msg}
+				args := bckInitArgs{p: p, w: w, r: r, bck: backend, msg: msg}
 				if _, err = args.try(); err != nil {
 					return
 				}
@@ -1171,7 +1171,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	args := bckInitArgs{p: p, w: w, r: r, tryOnlyRem: true, queryBck: request.bck, perms: cmn.AccessBckHEAD}
+	args := bckInitArgs{p: p, w: w, r: r, tryOnlyRem: true, bck: request.bck, perms: cmn.AccessBckHEAD}
 	bck, err := args.initAndTry(request.bck.Name)
 	if err != nil {
 		return
@@ -1247,7 +1247,7 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	if propsToUpdate.Access != nil {
 		perms |= cmn.AccessBckSetACL
 	}
-	args := bckInitArgs{p: p, w: w, r: r, queryBck: bck, msg: msg, skipBackend: true, tryOnlyRem: true, perms: perms}
+	args := bckInitArgs{p: p, w: w, r: r, bck: bck, msg: msg, skipBackend: true, tryOnlyRem: true, perms: perms}
 	if bck, err = args.initAndTry(bck.Name); err != nil {
 		return
 	}
