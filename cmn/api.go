@@ -485,7 +485,7 @@ func DefaultBckProps(cs ...*Config) *BucketProps {
 }
 
 func (bp *BucketProps) SetProvider(provider string) {
-	debug.Assert(isValidProvider(provider))
+	debug.Assert(IsNormalizedProvider(provider))
 	bp.Provider = provider
 }
 
@@ -504,7 +504,7 @@ func (bp *BucketProps) Equal(other *BucketProps) (eq bool) {
 }
 
 func (bp *BucketProps) Validate(targetCnt int) error {
-	debug.Assert(isValidProvider(bp.Provider))
+	debug.Assert(IsNormalizedProvider(bp.Provider))
 	if !bp.BackendBck.IsEmpty() {
 		if bp.BackendBck.Provider == "" {
 			return fmt.Errorf("backend bucket %q: provider is empty", bp.BackendBck)

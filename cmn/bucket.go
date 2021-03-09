@@ -116,7 +116,15 @@ func ParseNsUname(s string) (n Ns) {
 	return
 }
 
-// Replace provider aliases with real provider names
+// IsNormalizedProvider returns true if the provider is in normalized
+// form (`aws`, `gcp`, etc.), not aliased (`s3`, `gs`, etc.). Only providers
+// registered in `Providers` set are considered normalized.
+func IsNormalizedProvider(provider string) bool {
+	_, exists := Providers[provider]
+	return exists
+}
+
+// NormalizeProvider replaces provider aliases with their normalized form/name.
 func NormalizeProvider(provider string) (string, error) {
 	switch provider {
 	case "":
@@ -128,7 +136,7 @@ func NormalizeProvider(provider string) (string, error) {
 	case GSScheme:
 		return ProviderGoogle, nil
 	default:
-		if !isValidProvider(provider) {
+		if !IsNormalizedProvider(provider) {
 			return provider, NewErrorInvalidBucketProvider(Bck{Provider: provider})
 		}
 		return provider, nil
@@ -285,18 +293,6 @@ func (b *Bck) ValidateName() (err error) {
 	return
 }
 
-func (b *Bck) ValidateProvider() error {
-	if isValidProvider(b.Provider) {
-		return nil
-	}
-	return NewErrorInvalidBucketProvider(*b)
-}
-
-func isValidProvider(provider string) bool {
-	_, exists := Providers[provider]
-	return exists
-}
-
 func (b Bck) String() string {
 	if b.Ns.IsGlobal() {
 		if b.Provider == "" {
@@ -401,7 +397,14 @@ func (b Bck) IsCloud() bool {
 	return b.Provider == ProviderAmazon || b.Provider == ProviderAzure || b.Provider == ProviderGoogle
 }
 
-func (b Bck) HasProvider() bool { return b.ValidateProvider() == nil }
+func (b Bck) HasProvider() bool {
+	if b.Provider != "" {
+		// If the provider is set it must be valid.
+		debug.Assert(IsNormalizedProvider(b.Provider))
+		return true
+	}
+	return false
+}
 
 func (query QueryBcks) String() string    { return Bck(query).String() }
 func (query QueryBcks) IsAIS() bool       { return Bck(query).IsAIS() }
