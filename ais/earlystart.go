@@ -506,6 +506,21 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 		}
 		p.owner.rmd.Unlock()
 	}
+
+	if svm.Config != nil {
+		p.owner.config.Lock()
+		config := cmn.GCO.Get()
+		if config.Version < svm.Config.version() {
+			glog.Infof("%s: override local %s with %s", p.si, config, svm.Config)
+			oldConfig := cmn.GCO.Get()
+			p.owner.config.updateGCO(svm.Config)
+			p.owner.config.Unlock()
+			cmn.GCO.NotifyListeners(oldConfig)
+		} else {
+			p.owner.config.Unlock()
+		}
+	}
+
 	if svm.Smap == nil || svm.Smap.version() == 0 {
 		glog.Infof("%s: no max-ver Smaps", p.si)
 		return
@@ -666,6 +681,13 @@ func (p *proxyrunner) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out
 				out.RMD = svm.RMD
 			} else if !slowp && out.RMD.Version < svm.RMD.Version { // 3. fast path max(version)
 				out.RMD = svm.RMD
+			}
+		}
+		if svm.Config != nil && svm.Config.version() > 0 {
+			if out.Config == nil { // 1. init
+				out.Config = svm.Config
+			} else if !slowp && out.Config.version() < svm.Config.version() { // 3. fast path max(version)
+				out.Config = svm.Config
 			}
 		}
 		if svm.Smap != nil && svm.VoteInProgress {

@@ -87,10 +87,11 @@ type (
 	// SmapVoteMsg contains cluster-wide MD and a boolean representing whether or not a vote is currently in proress.
 	// NOTE: exported for integration testing
 	SmapVoteMsg struct {
-		Smap           *smapX    `json:"smap"`
-		BMD            *bucketMD `json:"bucketmd"`
-		RMD            *rebMD    `json:"rmd"`
-		VoteInProgress bool      `json:"vote_in_progress"`
+		Smap           *smapX        `json:"smap"`
+		BMD            *bucketMD     `json:"bucketmd"`
+		RMD            *rebMD        `json:"rmd"`
+		Config         *globalConfig `json:"config"`
+		VoteInProgress bool          `json:"vote_in_progress"`
 	}
 
 	electable interface {
@@ -1359,6 +1360,11 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			Smap:           h.owner.smap.get(),
 			BMD:            h.owner.bmd.get(),
 			RMD:            h.owner.rmd.get(),
+		}
+		var err error
+		msg.Config, err = h.owner.config.get()
+		if err != nil {
+			glog.Errorf("failed to fetch cluster config, err: %v", err)
 		}
 		body = msg
 	case cmn.GetWhatSnode:
