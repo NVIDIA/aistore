@@ -723,7 +723,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 	switch msg.Action {
 	case cmn.ActMoveBck:
 		bckFrom := bck
-		bckTo, err := newBckFromQueryUname(query, cmn.URLParamBucketTo)
+		bckTo, err := newBckFromQueryUname(query, cmn.URLParamBucketTo, true /*required*/)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -780,7 +780,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			internalMsg.Prefix = cpyBckMsg.Prefix
 		}
 
-		userBckTo, err := newBckFromQueryUname(query, cmn.URLParamBucketTo)
+		userBckTo, err := newBckFromQueryUname(query, cmn.URLParamBucketTo, true /*required*/)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return

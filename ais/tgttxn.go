@@ -699,7 +699,7 @@ func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase
 			return c, err
 		}
 	}
-	c.bckTo, err = newBckFromQueryUname(query, cmn.URLParamBucketTo)
+	c.bckTo, err = newBckFromQueryUname(query, cmn.URLParamBucketTo, false /*required*/)
 	if err != nil {
 		return c, err
 	}

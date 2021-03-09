@@ -2099,9 +2099,12 @@ func newQueryBcksFromQuery(bckName string, query url.Values) (cmn.QueryBcks, err
 	return bck, nil
 }
 
-func newBckFromQueryUname(query url.Values, uparam string) (*cluster.Bck, error) {
+func newBckFromQueryUname(query url.Values, uparam string, required bool) (*cluster.Bck, error) {
 	uname := query.Get(uparam)
 	if uname == "" {
+		if required {
+			return nil, fmt.Errorf("missing %q query parameter", uparam)
+		}
 		return nil, nil
 	}
 	bck, objName := cmn.ParseUname(uname)
