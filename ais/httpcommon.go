@@ -659,16 +659,6 @@ func newMuxers() cmn.HTTPMuxers {
 	return m
 }
 
-func (h *httprunner) initConfOwner(daemonType string) {
-	// check if global config exists
-	if h.owner.config == nil {
-		h.owner.config = newConfOwner(daemonType)
-	}
-	if err := h.owner.config.load(); err != nil {
-		cos.ExitLogf("Failed to initialize config owner, err: %v", err)
-	}
-}
-
 // initSI initializes this cluster.Snode
 func (h *httprunner) initSI(daemonType string) {
 	var (
@@ -1588,15 +1578,15 @@ func (h *httprunner) extractConfig(payload msPayload, caller string) (newConfig 
 		}
 	}
 
-	conf := h.owner.config.get()
+	config := cmn.GCO.Get()
 	glog.Infof(
 		"[metasync] extract %s from %q (local: %s, action: %q, uuid: %q)",
-		newConfig, caller, conf, msg.Action, msg.UUID,
+		newConfig, caller, config, msg.Action, msg.UUID,
 	)
 
-	if newConfig.version() <= conf.version() {
-		if newConfig.version() < conf.version() {
-			err = newErrDowngrade(h.si, conf.String(), newConfig.String())
+	if newConfig.version() <= config.Version {
+		if newConfig.version() < config.Version {
+			err = newErrDowngrade(h.si, config.String(), newConfig.String())
 		}
 		newConfig = nil
 	}
@@ -1738,10 +1728,10 @@ func (h *httprunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, caller 
 		newConfig, caller, msg.Action, msg.UUID,
 	)
 	h.owner.config.Lock()
-	conf := h.owner.config.get()
-	if newConfig.version() <= conf.version() {
+	config := cmn.GCO.Get()
+	if newConfig.version() <= config.Version {
 		h.owner.config.Unlock()
-		return newErrDowngrade(h.si, conf.String(), newConfig.String())
+		return newErrDowngrade(h.si, config.String(), newConfig.String())
 	}
 
 	if err = h.owner.config.persist(newConfig); err != nil {
@@ -2156,14 +2146,13 @@ func (p *proxyrunner) rpErrHandler(w http.ResponseWriter, r *http.Request, err e
 
 func (cii *clusterInfo) fill(h *httprunner) {
 	var (
-		bmd    = h.owner.bmd.get()
-		smap   = h.owner.smap.get()
-		config = h.owner.config.get()
+		bmd  = h.owner.bmd.get()
+		smap = h.owner.smap.get()
 	)
 	cii.BMD.Version = bmd.version()
 	cii.BMD.UUID = bmd.UUID
 	cii.fillSmap(smap)
-	cii.Config.Version = config.version()
+	cii.Config.Version = h.owner.config.version()
 }
 
 func (cii *clusterInfo) fillSmap(smap *smapX) {

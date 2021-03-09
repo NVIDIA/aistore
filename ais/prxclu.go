@@ -521,11 +521,15 @@ func (p *proxyrunner) _updFinal(ctx *smapModifier, clone *smapX) {
 	var (
 		tokens = p.authn.revokedTokenList()
 		bmd    = p.owner.bmd.get()
-		config = p.owner.config.get()
 		aisMsg = p.newAmsg(ctx.msg, clone, bmd)
 		pairs  = make([]revsPair, 0, 5)
 	)
-	pairs = append(pairs, revsPair{clone, aisMsg}, revsPair{bmd, aisMsg}, revsPair{config, aisMsg})
+	if config, err := p.owner.config.get(); err != nil {
+		glog.Error(err)
+	} else if config != nil {
+		pairs = append(pairs, revsPair{config, aisMsg})
+	}
+	pairs = append(pairs, revsPair{clone, aisMsg}, revsPair{bmd, aisMsg})
 	if ctx.rmd != nil && ctx.nsi.IsTarget() {
 		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
 		nl := xaction.NewXactNL(xaction.RebID(ctx.rmd.version()).String(),
@@ -707,7 +711,7 @@ func (p *proxyrunner) setClusterConfig(w http.ResponseWriter, r *http.Request, t
 		toUpdate: toUpdate,
 		wait:     true,
 	}
-	if err := p.owner.config.modify(ctx); err != nil {
+	if _, err := p.owner.config.modify(ctx); err != nil {
 		p.writeErr(w, r, err)
 	}
 }
@@ -747,7 +751,7 @@ func (p *proxyrunner) _setConfPre(ctx *configModifier, clone *globalConfig) (upd
 }
 
 func (p *proxyrunner) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
-	wg := p.metasyncer.sync(revsPair{p.owner.config.get(), p.newAmsg(ctx.msg, nil, nil)})
+	wg := p.metasyncer.sync(revsPair{clone, p.newAmsg(ctx.msg, nil, nil)})
 	if ctx.wait {
 		wg.Wait()
 	}
@@ -1014,7 +1018,7 @@ func (p *proxyrunner) attachDetach(w http.ResponseWriter, r *http.Request, actio
 		wait:  true,
 	}
 
-	if err = p.owner.config.modify(ctx); err != nil {
+	if _, err = p.owner.config.modify(ctx); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}

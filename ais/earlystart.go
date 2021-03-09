@@ -317,20 +317,26 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	ok := p.owner.rmd.startup.CAS(false, true)
 	debug.Assert(ok)
 
+	var (
+		cluConfig *globalConfig
+		err       error
+	)
 	// 7. initialize configMD
-	cfg := p.owner.config.get()
-	if cfg.Version == 0 {
+	if p.owner.config.version() == 0 {
 		// Implies, the global config object is created for the first time.
-		cfg = cfg.clone()
-		config.LastUpdated = time.Now().String()
-		p.owner.config.persist(cfg)
+		cluConfig, err = p.initClusterConfig()
+	} else {
+		cluConfig, err = p.owner.config.get()
 	}
-	cfg = p.ensureConfigPrimaryURL()
+
+	if err != nil {
+		cos.ExitLogf("%v", err)
+	}
 
 	// 8. metasync (smap, config & bmd) and startup as primary
 	var (
 		aisMsg = p.newAmsgStr(metaction2, smap, bmd)
-		pairs  = []revsPair{{smap, aisMsg}, {bmd, aisMsg}, {cfg, aisMsg}}
+		pairs  = []revsPair{{smap, aisMsg}, {bmd, aisMsg}, {cluConfig, aisMsg}}
 	)
 	wg := p.metasyncer.sync(pairs...)
 	wg.Wait()
@@ -347,6 +353,20 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		p.resumeReb(smap, config)
 	}
 	p.owner.rmd.startup.Store(false)
+}
+
+func (p *proxyrunner) initClusterConfig() (config *globalConfig, err error) {
+	debug.Assert(p.owner.smap.get().isPrimary(p.si))
+
+	// Create cluster config with version=1 and set primary URL.
+	return p.owner.config.modify(&configModifier{
+		pre: func(ctx *configModifier, clone *globalConfig) (updated bool, err error) {
+			debug.Assert(clone.version() == 0)
+			clone.Proxy.PrimaryURL = p.si.URL(cmn.NetworkPublic)
+			updated = true
+			return
+		},
+	})
 }
 
 // resume rebalance if needed

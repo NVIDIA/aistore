@@ -209,7 +209,7 @@ func initDaemon(version, buildTime string) (rmain cos.Runner) {
 
 func initProxy() cos.Runner {
 	p := &proxyrunner{}
-	p.initConfOwner(cmn.Proxy)
+	p.owner.config = &configOwner{}
 	p.initSI(cmn.Proxy)
 
 	// Persist daemon ID on disk
@@ -245,10 +245,9 @@ func newTarget() *targetrunner {
 func initTarget() cos.Runner {
 	// Initialize filesystem/mountpaths manager.
 	fs.Init()
-
 	t := newTarget()
+	t.owner.config = &configOwner{}
 
-	t.initConfOwner(cmn.Target)
 	// fs.Mountpaths must be inited prior to all runners that utilize them
 	// for mountpath definition, see fs/mountfs.go
 	config := cmn.GCO.Get()

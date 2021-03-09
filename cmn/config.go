@@ -843,6 +843,13 @@ func (c *ClusterConfig) Apply(updateConf ConfigToUpdate, asType string) error {
 	return copyProps(updateConf, c, asType)
 }
 
+func (c *ClusterConfig) String() string {
+	if c == nil {
+		return "Conf <nil>"
+	}
+	return fmt.Sprintf("Conf v%d", c.Version)
+}
+
 // TestingEnv returns true if config is set to a development environment
 // where a single local filesystem is partitioned between all (locally running)
 // targets and is used for both local and Cloud buckets
@@ -1529,17 +1536,23 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *Config) (err er
 	GCO.SetGlobalConfigPath(confPath)
 	GCO.SetLocalConfigPath(localConfPath)
 
-	// NOTE: the following two "loads" are loading plain-text config
-	//       and are executed only once when the node starts up;
-	//       once started, the node can then reload the last
-	//       updated version of the (global|local) config
-	//       from the configured location
+	// Load local config as plain-text
 	_, err = jsp.Load(localConfPath, &config.LocalConfig, jsp.Plain())
 	if err != nil {
 		return fmt.Errorf("failed to load local config %q, err: %v", localConfPath, err)
 	}
 
-	_, err = jsp.Load(confPath, &config.ClusterConfig, jsp.Plain())
+	// NOTE: If last updated version of config doesn't exist in the configured location,
+	//       config from `confPath` is loaded as plain-text
+	//       and is only used when the node starts up;
+	//       once started, the node always relies on the last
+	//       updated version of the (global|local) config from the configured location
+
+	_, err = jsp.LoadMeta(path.Join(config.ConfigDir, GlobalConfigFname), &config.ClusterConfig)
+	if os.IsNotExist(err) {
+		glog.Infof("loading configuration from %q", confPath)
+		_, err = jsp.Load(confPath, &config.ClusterConfig, jsp.Plain())
+	}
 	if err != nil {
 		return fmt.Errorf("failed to load global config %q, err: %v", confPath, err)
 	}

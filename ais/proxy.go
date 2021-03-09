@@ -2211,28 +2211,34 @@ func (p *proxyrunner) _becomeFinal(ctx *smapModifier, clone *smapX) {
 	var (
 		bmd   = p.owner.bmd.get()
 		rmd   = p.owner.rmd.get()
-		conf  = p.ensureConfigPrimaryURL()
 		msg   = p.newAmsgStr(cmn.ActNewPrimary, clone, bmd)
-		pairs = []revsPair{{clone, msg}, {bmd, msg}, {rmd, msg}, {conf, msg}}
+		pairs = []revsPair{{clone, msg}, {bmd, msg}, {rmd, msg}}
 	)
+
+	config, err := p.ensureConfigPrimaryURL()
+	if err != nil {
+		glog.Error(err)
+	}
+	if config != nil {
+		pairs = append(pairs, revsPair{config, msg})
+	}
 	glog.Infof("%s: distributing (%s, %s, %s) with newly elected primary (self)", p.si, clone, bmd, rmd)
 	_ = p.metasyncer.sync(pairs...)
 	p.syncNewICOwners(ctx.smap, clone)
 }
 
-func (p *proxyrunner) ensureConfigPrimaryURL() *globalConfig {
-	err := p.owner.config.modify(&configModifier{pre: p._primaryURLPre})
+func (p *proxyrunner) ensureConfigPrimaryURL() (config *globalConfig, err error) {
+	config, err = p.owner.config.modify(&configModifier{pre: p._primaryURLPre})
 	if err != nil {
-		glog.Errorf("failed to update primary URL, err: %v", err)
+		err = fmt.Errorf("failed to update primary URL, err: %v", err)
 	}
-	return p.owner.config.get()
+	return
 }
 
 func (p *proxyrunner) _primaryURLPre(ctx *configModifier, clone *globalConfig) (updated bool, err error) {
 	smap := p.owner.smap.get()
-	conf := p.owner.config.get()
 	debug.Assert(smap.isPrimary(p.si))
-	if newURL := smap.Primary.URL(cmn.NetworkPublic); conf.Proxy.PrimaryURL != newURL {
+	if newURL := smap.Primary.URL(cmn.NetworkPublic); clone.Proxy.PrimaryURL != newURL {
 		clone.Proxy.PrimaryURL = smap.Primary.URL(cmn.NetworkPublic)
 		updated = true
 	}
