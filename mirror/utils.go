@@ -9,7 +9,6 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -67,53 +66,22 @@ func addCopies(lom *cluster.LOM, copies int, buf []byte) (size int64, err error)
 	//  While copying we may find out that some copies do not exist -
 	//  these copies will be removed and `NumCopies()` will decrease.
 	for lom.NumCopies() < copies {
-		if mi := findLeastUtilized(lom); mi != nil {
-			var clone *cluster.LOM
-			copyFQN := mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
-			if clone, err = lom.CopyObject(copyFQN, buf); err != nil {
-				glog.Errorln(err)
-				cluster.FreeLOM(clone)
-				return
-			}
-			size += lom.Size()
-			cluster.FreeLOM(clone)
-		} else {
+		var (
+			mi    *fs.MountpathInfo
+			clone *cluster.LOM
+		)
+		if mi = lom.BestMpath(); mi == nil {
 			err = fmt.Errorf("%s (copies=%d): cannot find dst mountpath", lom, lom.NumCopies())
 			return
 		}
-	}
-	return
-}
-
-func findLeastUtilized(lom *cluster.LOM) (out *fs.MountpathInfo) {
-	var (
-		copiesMpath cos.StringSet
-
-		minUtil    = int64(101)
-		mpathUtils = fs.GetAllMpathUtils()
-		mpaths, _  = fs.Get()
-	)
-
-	if lom.HasCopies() {
-		copiesMpath = make(cos.StringSet)
-		for _, mpathInfo := range lom.GetCopies() {
-			copiesMpath.Add(mpathInfo.Path)
+		copyFQN := mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
+		if clone, err = lom.CopyObject(copyFQN, buf); err != nil {
+			glog.Errorln(err)
+			cluster.FreeLOM(clone)
+			return
 		}
-	}
-
-	for mpath, mpathInfo := range mpaths {
-		if mpath == lom.MpathInfo().Path {
-			continue
-		}
-		if lom.HasCopies() {
-			if copiesMpath.Contains(mpath) { // Skip existing copies.
-				continue
-			}
-		}
-		if curUtil := mpathUtils.Util(mpath); curUtil < minUtil {
-			minUtil = curUtil
-			out = mpathInfo
-		}
+		size += lom.Size()
+		cluster.FreeLOM(clone)
 	}
 	return
 }

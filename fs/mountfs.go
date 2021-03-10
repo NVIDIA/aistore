@@ -28,12 +28,9 @@ import (
 )
 
 const (
-	uQuantum = 10 // each GET adds a "quantum" of utilization to the mountpath
-
 	TrashDir      = "$trash"
 	daemonIDXattr = "user.ais.daemon_id"
-
-	siePrefix = "storage integrity error: sie#"
+	siePrefix     = "storage integrity error: sie#"
 )
 
 const (
@@ -42,14 +39,6 @@ const (
 	siMetaMismatch
 	siMetaCorrupted
 	siMpathMissing
-)
-
-// globals
-var (
-	mfs      *MountedFS
-	mpathsRR sync.Map
-
-	ErrNoMountpaths = errors.New("no mountpaths")
 )
 
 // Terminology:
@@ -128,6 +117,12 @@ type (
 		msg  string
 		code int
 	}
+)
+
+var (
+	mfs *MountedFS
+
+	ErrNoMountpaths = errors.New("no mountpaths")
 )
 
 ///////////////////
@@ -529,37 +524,6 @@ func Decommission(mdOnly bool) {
 	if mdOnly {
 		RemoveDaemonIDs()
 	}
-}
-
-func LoadBalanceGET(objFQN, objMpath string, copies MPI) (fqn string) {
-	fqn = objFQN
-	var (
-		mpathUtils = GetAllMpathUtils()
-		minUtil    = mpathUtils.Util(objMpath)
-		v, _       = mpathsRR.LoadOrStore(objMpath, atomic.NewInt32(0))
-		minCounter = v.(*atomic.Int32)
-	)
-	for copyFQN, copyMPI := range copies {
-		if copyFQN == objFQN {
-			continue
-		}
-		var (
-			mpathUtil    = mpathUtils.Util(copyMPI.Path)
-			v, _         = mpathsRR.LoadOrStore(copyMPI.Path, atomic.NewInt32(0))
-			mpathCounter = v.(*atomic.Int32)
-		)
-		if mpathUtil < minUtil && mpathCounter.Load() <= minCounter.Load() {
-			fqn, minUtil, minCounter = copyFQN, mpathUtil, mpathCounter
-			continue
-		}
-		// NOTE: `uQuantum` heuristics
-		if mpathUtil+int64(mpathCounter.Load())*uQuantum < minUtil+int64(minCounter.Load())*uQuantum {
-			fqn, minUtil, minCounter = copyFQN, mpathUtil, mpathCounter
-		}
-	}
-	// NOTE: The counter could've been already incremented - ignoring for now
-	minCounter.Inc()
-	return
 }
 
 //////////////////////////////

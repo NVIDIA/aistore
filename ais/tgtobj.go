@@ -713,7 +713,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry, sent bool, errCode int, er
 	fqn := goi.lom.FQN
 	if !coldGet && !goi.isGFN {
 		// best-effort GET load balancing (see also mirror.findLeastUtilized())
-		fqn = goi.lom.LoadBalanceGET()
+		fqn = goi.lom.LBGet()
 	}
 	file, err = os.Open(fqn)
 	if err != nil {

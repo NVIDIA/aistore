@@ -601,13 +601,60 @@ func (lom *LOM) IncVersion() error {
 	return nil
 }
 
-// best-effort GET load balancing (see also mirror.findLeastUtilized())
-func (lom *LOM) LoadBalanceGET() (fqn string) {
+func (lom *LOM) LBGet() (fqn string) {
 	if !lom.HasCopies() {
 		return lom.FQN
 	}
-	fqn = fs.LoadBalanceGET(lom.FQN, lom.mpathInfo.Path, lom.GetCopies())
+	return lom.bestCopy()
+}
+
+// NOTE: reconsider counting GETs (and the associated overhead)
+//       vs ios.refreshIostatCache() (and the associated delay)
+func (lom *LOM) bestCopy() (fqn string) {
+	var (
+		mpathUtils = fs.GetAllMpathUtils()
+		minUtil    = mpathUtils.Util(lom.mpathInfo.Path)
+		copies     = lom.GetCopies()
+	)
+	fqn = lom.FQN
+	for copyFQN, copyMPI := range copies {
+		if copyFQN != lom.FQN {
+			if util := mpathUtils.Util(copyMPI.Path); util < minUtil {
+				fqn, minUtil = copyFQN, util
+			}
+		}
+	}
 	return
+}
+
+// returns the least utilized mountpath that does _not_ have a copy yet
+// (see also bestCopy above)
+func (lom *LOM) BestMpath() (mi *fs.MountpathInfo) {
+	var (
+		availablePaths, _ = fs.Get()
+		mpathUtils        = fs.GetAllMpathUtils()
+		minUtil           = int64(101)
+	)
+	for mpath, mpathInfo := range availablePaths {
+		if !lom.haveMpath(mpath) {
+			if util := mpathUtils.Util(mpath); util < minUtil {
+				minUtil, mi = util, mpathInfo
+			}
+		}
+	}
+	return
+}
+
+func (lom *LOM) haveMpath(mpath string) bool {
+	if len(lom.md.copies) == 0 {
+		return lom.mpathInfo.Path == mpath
+	}
+	for _, mi := range lom.md.copies {
+		if mi.Path == mpath {
+			return true
+		}
+	}
+	return false
 }
 
 // Returns stored checksum (if present) and computed checksum (if requested)
