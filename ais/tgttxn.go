@@ -641,9 +641,14 @@ func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
 		if err := cos.MorphMarshal(c.msg.Value, &opts); err != nil {
 			return err
 		}
-		if c.msg.Action == cmn.ActDecommission && opts.DaemonID == t.si.ID() {
-			fs.ClearMDOnAllMpaths()
-			fs.RemoveDaemonIDs()
+		if c.msg.Action == cmn.ActDecommission {
+			if opts.DaemonID != t.si.ID() {
+				err := fmt.Errorf("%s: invalid target ID %q", t.si, opts.DaemonID)
+				debug.AssertNoErr(err)
+				return err
+			}
+			mdOnly := true // TODO: provide via cmn.ActValDecommision
+			fs.Decommission(mdOnly)
 		}
 	default:
 		cos.Assert(false)

@@ -103,13 +103,6 @@ func PersistOnMpaths(path, backupPath string, what interface{}, atMost int, opts
 	return
 }
 
-func ClearMDOnAllMpaths() {
-	available, _ := Get()
-	for _, mpath := range available {
-		mpath.ClearMDs()
-	}
-}
-
 func RemoveDaemonIDs() {
 	available, disabled := Get()
 	for _, mpath := range available {

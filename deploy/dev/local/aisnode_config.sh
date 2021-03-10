@@ -25,7 +25,7 @@ cat > $AIS_CONF_FILE <<EOL
 		"compression":   "${COMPRESSION:-never}",
 		"enabled":       ${EC_ENABLED:-false},
 		"batch_size":    ${EC_BATCH_SIZE:-64},
-		"disk_only":      false
+		"disk_only":     false
 	},
 	"log": {
 		"level":     "${AIS_LOG_LEVEL:-3}",

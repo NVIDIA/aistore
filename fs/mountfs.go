@@ -508,6 +508,29 @@ func InitMpaths(tid string) error {
 	return err
 }
 
+func Decommission(mdOnly bool) {
+	available, disabled := Get()
+	allmpi := []MPI{available, disabled}
+	for idx, mpi := range allmpi {
+		if mdOnly { // NOTE: removing daemon ID below as well
+			for _, mi := range mpi {
+				mi.ClearMDs()
+			}
+		} else {
+			// NOTE: the entire content including user data, MDs, and daemon ID
+			for _, mi := range mpi {
+				if err := os.RemoveAll(mi.Path); err != nil && !os.IsNotExist(err) && idx == 0 {
+					// available is [0]
+					glog.Errorf("failed to cleanup available %s: %v", mi, err)
+				}
+			}
+		}
+	}
+	if mdOnly {
+		RemoveDaemonIDs()
+	}
+}
+
 func LoadBalanceGET(objFQN, objMpath string, copies MPI) (fqn string) {
 	fqn = objFQN
 	var (
@@ -861,36 +884,42 @@ func RenameBucketDirs(bidFrom uint64, bckFrom, bckTo cmn.Bck) (err error) {
 	return
 }
 
-func moveMarkers(mpaths MPI, from *MountpathInfo) {
-	// We assume that the `from` path is no longer in available mountpaths
-	// (it was disabled or removed).
-	_, ok := mpaths[from.Path]
-	debug.Assert(!ok)
-
-	for _, mpath := range mpaths {
-		var (
-			fromPath = filepath.Join(from.Path, cmn.MarkersDirName)
-			fis, err = ioutil.ReadDir(fromPath)
-		)
-		if err != nil && !os.IsNotExist(err) {
-			glog.Errorf("Failed to read directory content (dir: %q, err: %v)", fromPath, err)
-		} else {
-			for _, fi := range fis {
-				debug.Assert(!fi.IsDir()) // Markers should be the files.
-
-				var (
-					fromPath = filepath.Join(from.Path, cmn.MarkersDirName, fi.Name())
-					toPath   = filepath.Join(mpath.Path, cmn.MarkersDirName, fi.Name())
-				)
-				if _, _, err := cos.CopyFile(fromPath, toPath, nil, cos.ChecksumNone); err != nil && !os.IsNotExist(err) {
-					glog.Errorf("Failed to move marker to another mountpath (from: %q, to: %q, err: %v)",
-						fromPath, toPath, err)
-				}
-			}
+func moveMarkers(available MPI, from *MountpathInfo) {
+	var (
+		fromPath    = filepath.Join(from.Path, cmn.MarkersDirName)
+		finfos, err = ioutil.ReadDir(fromPath)
+	)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			glog.Errorf("Failed to read markers directory %q: %v", fromPath, err)
 		}
-		break
+		return
+	}
+	if len(finfos) == 0 {
+		return // no markers, nothing to do
 	}
 
+	// NOTE: `from` path must no longer be in the available mountpaths
+	_, ok := available[from.Path]
+	debug.AssertMsg(!ok, from.String())
+	for _, mpath := range available {
+		ok = true
+		for _, fi := range finfos {
+			debug.AssertMsg(!fi.IsDir(), cmn.MarkersDirName+"/"+fi.Name()) // marker is file
+			var (
+				fromPath = filepath.Join(from.Path, cmn.MarkersDirName, fi.Name())
+				toPath   = filepath.Join(mpath.Path, cmn.MarkersDirName, fi.Name())
+			)
+			_, _, err := cos.CopyFile(fromPath, toPath, nil, cos.ChecksumNone)
+			if err != nil && os.IsNotExist(err) {
+				glog.Errorf("Failed to move marker %q to %q: %v)", fromPath, toPath, err)
+				ok = false
+			}
+		}
+		if ok {
+			break
+		}
+	}
 	from.ClearMDs()
 }
 
