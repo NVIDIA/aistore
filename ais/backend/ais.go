@@ -309,6 +309,7 @@ func (m *AISBackendProvider) Provider() string  { return cmn.ProviderAIS }
 func (m *AISBackendProvider) MaxPageSize() uint { return cmn.DefaultListPageSizeAIS }
 
 func (m *AISBackendProvider) CreateBucket(_ context.Context, _ *cluster.Bck) (errCode int, err error) {
+	cos.Assert(false) // Bucket creation happens only with reverse proxy to AIS cluster.
 	return 0, nil
 }
 

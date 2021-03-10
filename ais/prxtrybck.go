@@ -203,7 +203,7 @@ func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode i
 	}
 
 	var remoteProps http.Header
-	if bck.IsCloud() || bck.IsHTTP() {
+	if bck.IsRemote() {
 		action = cmn.ActAddRemoteBck
 		if remoteProps, errCode, err = args._lookup(bck); err != nil {
 			bck = nil
@@ -234,10 +234,11 @@ func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode i
 			errCode = http.StatusConflict
 			return
 		}
+		return
 	}
-	// init the bucket after having successfully added it to the BMD
-	err = bck.Init(args.p.owner.bmd)
-	if err != nil {
+
+	// Init the bucket after having successfully added it to the BMD.
+	if err = bck.Init(args.p.owner.bmd); err != nil {
 		err = fmt.Errorf("%s: unexpected failure to add remote %s, err: %v", args.p.si, bck, err)
 		errCode = http.StatusInternalServerError
 	}

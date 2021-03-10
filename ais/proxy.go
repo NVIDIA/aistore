@@ -344,8 +344,8 @@ func (p *proxyrunner) handleList(w http.ResponseWriter, r *http.Request, queryBc
 		p.listBuckets(w, r, queryBcks, msg)
 	} else {
 		var (
-			bck *cluster.Bck
 			err error
+			bck = cluster.NewBckEmbed(cmn.Bck(queryBcks))
 		)
 		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: msg, perms: cmn.AccessObjLIST, tryOnlyRem: true, bck: bck}
 		if bck, err = bckArgs.initAndTry(queryBcks.Name); err != nil {

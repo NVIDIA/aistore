@@ -687,7 +687,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 				err = cmn.NewErrorRemoteBucketDoesNotExist(request.bck.Bck)
 				t.writeErrSilent(w, r, err, code)
 			} else {
-				err = fmt.Errorf("%s: bucket %s, err: %v", t.si, request.bck, err)
+				err = fmt.Errorf("failed to locate bucket %q, err: %v", request.bck, err)
 				t.writeErr(w, r, err, code)
 			}
 			return

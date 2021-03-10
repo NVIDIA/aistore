@@ -374,12 +374,8 @@ func defaultBckProps(args bckPropsArgs) *cmn.BucketProps {
 	debug.AssertNoErr(cos.ValidateCksumType(c.Cksum.Type))
 	props.SetProvider(args.bck.Provider)
 
-	if args.bck.IsAIS() || args.bck.IsRemoteAIS() || args.bck.HasBackendBck() {
+	if args.bck.IsAIS() || args.bck.HasBackendBck() {
 		debug.Assert(args.hdr == nil)
-	} else if args.bck.IsCloud() || args.bck.IsHTTP() {
-		debug.Assert(args.hdr != nil)
-		props.Versioning.Enabled = false
-		props = mergeRemoteBckProps(props, args.hdr)
 	} else if args.bck.IsHDFS() {
 		props.Versioning.Enabled = false
 		if args.hdr != nil {
@@ -393,6 +389,10 @@ func defaultBckProps(args bckPropsArgs) *cmn.BucketProps {
 			// the validate will fail so we must skip.
 			skipValidate = true
 		}
+	} else if args.bck.IsRemote() {
+		debug.Assert(args.hdr != nil)
+		props.Versioning.Enabled = false
+		props = mergeRemoteBckProps(props, args.hdr)
 	} else {
 		cos.Assert(false)
 	}
