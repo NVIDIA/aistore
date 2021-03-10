@@ -40,9 +40,9 @@ Examples:
 	xmeta -x -in=~/.ais0/.ais.rmd                     - extract RMD to STDOUT
 	xmeta -x -in=~/.ais0/.ais.rmd -out=/tmp/rmd.txt   - extract RMD to /tmp/rmd.txt
 	xmeta -in=/tmp/rmd.txt -out=/tmp/.ais.rmd         - format plain-text /tmp/rmd.txt
-	xmeta -x -in=~/.ais0/.ais.config                  - extract Config to STDOUT
-	xmeta -x -in=~/.ais0/.ais.config -out=/tmp/c.txt  - extract Config to /tmp/c.txt
-	xmeta -in=/tmp/c.txt -out=/tmp/.ais.config        - format plain-text /tmp/c.txt
+	xmeta -x -in=~/.ais0/.ais.conf                    - extract Config to STDOUT
+	xmeta -x -in=~/.ais0/.ais.conf -out=/tmp/conf.txt - extract Config to /tmp/c.txt
+	xmeta -in=/tmp/conf.txt -out=/tmp/.ais.conf       - format plain-text /tmp/c.txt
 `
 )
 
@@ -74,32 +74,32 @@ func main() {
 	if flags.extract {
 		verb = "extract"
 		if strings.Contains(in, "smap") {
-			f, what = dumpSmap, "Smap"
+			f, what = extractSmap, "Smap"
 		} else if strings.Contains(in, "bmd") {
-			f, what = dumpBMD, "BMD"
+			f, what = extractBMD, "BMD"
 		} else if strings.Contains(in, "rmd") {
-			f, what = dumpRMD, "RMD"
-		} else if strings.Contains(in, "config") {
-			f, what = dumpConfig, "Global Config"
-		} else if err := dumpSmap(); err == nil {
+			f, what = extractRMD, "RMD"
+		} else if strings.Contains(in, "conf") || strings.Contains(in, "ais.json") {
+			f, what = extractConfig, "Global Config"
+		} else if err := extractSmap(); err == nil {
 			return
 		} else {
-			f, what = dumpBMD, "BMD"
+			f, what = extractBMD, "BMD"
 		}
 	} else {
 		verb = "format"
 		if strings.Contains(in, "smap") {
-			f, what = compressSmap, "Smap"
+			f, what = formatSmap, "Smap"
 		} else if strings.Contains(in, "bmd") {
-			f, what = compressBMD, "BMD"
+			f, what = formatBMD, "BMD"
 		} else if strings.Contains(in, "rmd") {
-			f, what = compressRMD, "RMD"
-		} else if strings.Contains(in, "config") {
-			f, what = compressConfig, "Global Config"
-		} else if err := compressSmap(); err == nil {
+			f, what = formatRMD, "RMD"
+		} else if strings.Contains(in, "conf") || strings.Contains(in, "ais.json") {
+			f, what = formatConfig, "Global Config"
+		} else if err := formatSmap(); err == nil {
 			return
 		} else {
-			f, what = compressBMD, "BMD"
+			f, what = formatBMD, "BMD"
 		}
 	}
 	if err := f(); err != nil {
@@ -111,14 +111,14 @@ func main() {
 	}
 }
 
-// "*Dump" routines expect AIS-formatted (smap, bmd, rmd)
+// "extract*" routines expect AIS-formatted (smap, bmd, rmd, etc.)
 
-func dumpSmap() error   { return dumpMeta(&cluster.Smap{}) }
-func dumpBMD() error    { return dumpMeta(&cluster.BMD{}) }
-func dumpRMD() error    { return dumpMeta(&cluster.RMD{}) }
-func dumpConfig() error { return dumpMeta(&cmn.ClusterConfig{}) }
+func extractSmap() error   { return extractMeta(&cluster.Smap{}) }
+func extractBMD() error    { return extractMeta(&cluster.BMD{}) }
+func extractRMD() error    { return extractMeta(&cluster.RMD{}) }
+func extractConfig() error { return extractMeta(&cmn.ClusterConfig{}) }
 
-func dumpMeta(v jsp.Opts) (err error) {
+func extractMeta(v jsp.Opts) (err error) {
 	f := os.Stdout
 	if flags.out != "" {
 		f, err = cos.CreateFile(flags.out)
@@ -135,14 +135,14 @@ func dumpMeta(v jsp.Opts) (err error) {
 	return err
 }
 
-// "*Compress" routines require output filename
+// "format*" routines require output filename
 
-func compressSmap() error   { return compressMeta(&cluster.Smap{}) }
-func compressBMD() error    { return compressMeta(&cluster.BMD{}) }
-func compressRMD() error    { return compressMeta(&cluster.RMD{}) }
-func compressConfig() error { return compressMeta(&cmn.ClusterConfig{}) }
+func formatSmap() error   { return formatMeta(&cluster.Smap{}) }
+func formatBMD() error    { return formatMeta(&cluster.BMD{}) }
+func formatRMD() error    { return formatMeta(&cluster.RMD{}) }
+func formatConfig() error { return formatMeta(&cmn.ClusterConfig{}) }
 
-func compressMeta(v jsp.Opts) error {
+func formatMeta(v jsp.Opts) error {
 	if flags.out == "" {
 		return errors.New("output filename (the -out option) must be defined")
 	}

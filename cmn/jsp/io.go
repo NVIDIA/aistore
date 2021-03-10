@@ -42,7 +42,6 @@ func Encode(ws cos.WriterAt, v interface{}, opts Options) (err error) {
 		encoder *jsoniter.Encoder
 		off     int
 	)
-	debug.Assert(opts.Signature || opts.Metaver == 0)
 	if opts.Signature {
 		var (
 			prefix [prefLen]byte

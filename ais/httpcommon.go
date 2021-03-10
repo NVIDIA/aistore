@@ -673,7 +673,6 @@ func (h *httprunner) initSI(daemonType string) {
 	if err != nil {
 		cos.ExitLogf("Failed to get local IP addr list, err: %v", err)
 	}
-
 	// NOTE: In K8S deployment, public hostname could be LoadBalancer external IP, or a service DNS.
 	if k8sDetected && config.HostNet.Hostname != "" {
 		glog.Infof("detected K8S deployment, skipping hostname validation for %q", config.HostNet.Hostname)
@@ -681,7 +680,6 @@ func (h *httprunner) initSI(daemonType string) {
 	} else {
 		pubAddr, err = getNetInfo(addrList, proto, config.HostNet.Hostname, port)
 	}
-
 	if err != nil {
 		cos.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetworkPublic, err)
 	}
@@ -692,7 +690,8 @@ func (h *httprunner) initSI(daemonType string) {
 
 	intraControlAddr = pubAddr
 	if config.HostNet.UseIntraControl {
-		intraControlAddr, err = getNetInfo(addrList, proto, config.HostNet.HostnameIntraControl, strconv.Itoa(config.HostNet.PortIntraControl))
+		icport := strconv.Itoa(config.HostNet.PortIntraControl)
+		intraControlAddr, err = getNetInfo(addrList, proto, config.HostNet.HostnameIntraControl, icport)
 		if err != nil {
 			cos.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetworkIntraControl, err)
 		}
@@ -702,10 +701,10 @@ func (h *httprunner) initSI(daemonType string) {
 		}
 		glog.Infof("%s access: [%s]%s", cmn.NetworkIntraControl, intraControlAddr, s)
 	}
-
 	intraDataAddr = pubAddr
 	if config.HostNet.UseIntraData {
-		intraDataAddr, err = getNetInfo(addrList, proto, config.HostNet.HostnameIntraData, strconv.Itoa(config.HostNet.PortIntraData))
+		idport := strconv.Itoa(config.HostNet.PortIntraData)
+		intraDataAddr, err = getNetInfo(addrList, proto, config.HostNet.HostnameIntraData, idport)
 		if err != nil {
 			cos.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetworkIntraData, err)
 		}
@@ -715,13 +714,30 @@ func (h *httprunner) initSI(daemonType string) {
 		}
 		glog.Infof("%s access: [%s]%s", cmn.NetworkIntraData, intraDataAddr, s)
 	}
-
-	mustDiffer(pubAddr, config.HostNet.Port, true,
-		intraControlAddr, config.HostNet.PortIntraControl, config.HostNet.UseIntraControl, "pub/ctl")
-	mustDiffer(pubAddr, config.HostNet.Port, true, intraDataAddr, config.HostNet.PortIntraData, config.HostNet.UseIntraData, "pub/data")
-	mustDiffer(intraDataAddr, config.HostNet.PortIntraData, config.HostNet.UseIntraData,
-		intraControlAddr, config.HostNet.PortIntraControl, config.HostNet.UseIntraControl, "ctl/data")
-
+	mustDiffer(pubAddr,
+		config.HostNet.Port,
+		true,
+		intraControlAddr,
+		config.HostNet.PortIntraControl,
+		config.HostNet.UseIntraControl,
+		"pub/ctl",
+	)
+	mustDiffer(pubAddr,
+		config.HostNet.Port,
+		true,
+		intraDataAddr,
+		config.HostNet.PortIntraData,
+		config.HostNet.UseIntraData,
+		"pub/data",
+	)
+	mustDiffer(intraDataAddr,
+		config.HostNet.PortIntraData,
+		config.HostNet.UseIntraData,
+		intraControlAddr,
+		config.HostNet.PortIntraControl,
+		config.HostNet.UseIntraControl,
+		"ctl/data",
+	)
 	daemonID := initDaemonID(daemonType, config)
 	h.name = daemonType
 	h.si = cluster.NewSnode(

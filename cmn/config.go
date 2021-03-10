@@ -611,7 +611,7 @@ var (
 	_ jsp.Opts = (*ConfigToUpdate)(nil)
 )
 
-var configJspOpts = jsp.Plain() // TODO -- FIXME: use CCSign(MetaverConfig)
+var configJspOpts = jsp.CCSign(MetaverConfig)
 
 func (*ClusterConfig) JspOpts() jsp.Options  { return configJspOpts }
 func (*LocalConfig) JspOpts() jsp.Options    { return jsp.Plain() }
