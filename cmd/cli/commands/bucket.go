@@ -295,7 +295,6 @@ func reformatBackendProps(nvs cos.SimpleKVs) (err error) {
 	var (
 		originBck cmn.Bck
 		v         string
-		objName   string
 		ok        bool
 	)
 
@@ -306,12 +305,8 @@ func reformatBackendProps(nvs cos.SimpleKVs) (err error) {
 	}
 
 	if v != emptyOrigin {
-		originBck, objName, err = cmn.ParseBckObjectURI(v)
-		if err != nil {
-			return err
-		}
-		if objName != "" {
-			return fmt.Errorf("invalid format of %q", cmn.PropBackendBck)
+		if originBck, err = parseBckURI(nil, v); err != nil {
+			return fmt.Errorf("invalid format %q, err: %v", cmn.PropBackendBck, err)
 		}
 	}
 

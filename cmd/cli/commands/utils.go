@@ -115,7 +115,9 @@ func helpMessage(template string, data interface{}) string {
 }
 
 func incorrectUsageError(c *cli.Context, err error) error {
-	cos.Assert(err != nil)
+	if c == nil {
+		return err
+	}
 	return &errUsage{
 		context:      c,
 		message:      err.Error(),
@@ -125,9 +127,13 @@ func incorrectUsageError(c *cli.Context, err error) error {
 }
 
 func incorrectUsageMsg(c *cli.Context, fmtString string, args ...interface{}) error {
+	msg := fmt.Sprintf(fmtString, args...)
+	if c == nil {
+		return errors.New(msg)
+	}
 	return &errUsage{
 		context:      c,
-		message:      fmt.Sprintf(fmtString, args...),
+		message:      msg,
 		helpData:     c.Command,
 		helpTemplate: templates.ShortUsageTmpl,
 	}

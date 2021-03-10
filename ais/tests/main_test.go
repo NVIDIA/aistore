@@ -30,12 +30,14 @@ func setBucket() (bck cmn.Bck, err error) {
 	bucket := os.Getenv("BUCKET")
 	if bucket == "" {
 		bucket = cmn.ProviderAIS + cmn.BckProviderSeparator + cos.RandString(7)
-		tlog.Logf("Using BUCKET=%q\n", bucket)
 	}
 	bck, _, err = cmn.ParseBckObjectURI(bucket)
 	if err != nil {
 		return bck, fmt.Errorf("failed to parse 'BUCKET' env variable, err: %v", err)
+	} else if err := bck.Validate(); err != nil {
+		return bck, fmt.Errorf("failed to validate 'BUCKET' env variable, err: %v", err)
 	}
+	tlog.Logf("Using %q bucket\n", bck)
 	return bck, nil
 }
 
@@ -60,7 +62,7 @@ func waitForCluster() error {
 		}
 	}
 
-	tlog.Logln("Waiting for clustermap init...")
+	tlog.Logln("Waiting for cluster map init...")
 	_, err = tutils.WaitForClusterState(tutils.GetPrimaryURL(), "startup", -1, proxyCnt, targetCnt)
 	if err != nil {
 		return fmt.Errorf("error waiting for cluster startup, err: %v", err)
