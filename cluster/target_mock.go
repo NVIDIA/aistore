@@ -53,7 +53,7 @@ func (*TargetMock) Backend(_ *Bck) BackendProvider                              
 func (*TargetMock) GFN(_ GFNType) GFN                                           { return nil }
 func (*TargetMock) LookupRemoteSingle(_ *LOM, _ *Snode) bool                    { return false }
 func (*TargetMock) RebalanceNamespace(_ *Snode) ([]byte, int, error)            { return nil, 0, nil }
-func (*TargetMock) BMDVersionFixup(_ *http.Request, _ cmn.Bck, _ bool)          {}
+func (*TargetMock) BMDVersionFixup(r *http.Request, bck ...cmn.Bck)             {}
 
 func (*TargetMock) CopyObject(_ *LOM, _ *CopyObjectParams, _ bool) (int64, error) {
 	return 0, nil

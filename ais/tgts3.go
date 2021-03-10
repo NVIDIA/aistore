@@ -63,7 +63,7 @@ func (t *targetrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items [
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(bckSrc.Bck); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
-			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
+			t.BMDVersionFixup(r)
 			err = lom.Init(bckSrc.Bck)
 		}
 		if err != nil {
@@ -121,7 +121,7 @@ func (t *targetrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, it
 	defer cluster.FreeLOM(lom)
 	if err = lom.Init(bck.Bck); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
-			t.BMDVersionFixup(r, cmn.Bck{}, true /*sleep*/)
+			t.BMDVersionFixup(r)
 			err = lom.Init(bck.Bck)
 		}
 		if err != nil {
@@ -181,7 +181,7 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 	defer cluster.FreeLOM(lom)
 	if err = lom.Init(bck.Bck); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
-			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
+			t.BMDVersionFixup(r)
 			err = lom.Init(bck.Bck)
 		}
 		if err != nil {
@@ -228,7 +228,7 @@ func (t *targetrunner) headObjS3(w http.ResponseWriter, r *http.Request, items [
 	defer cluster.FreeLOM(lom)
 	if err = lom.Init(bck.Bck); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
-			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
+			t.BMDVersionFixup(r)
 			err = lom.Init(bck.Bck)
 		}
 		if err != nil {

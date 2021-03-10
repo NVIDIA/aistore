@@ -709,15 +709,14 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 	return
 }
 
-func (t *targetrunner) ensureLatestSmap(msg *aisMsg, r *http.Request) {
-	smap, smapVersion := t.owner.smap.Get(), msg.SmapVersion
-	if smap.Version < smapVersion {
-		glog.Errorf("%s: own %s < v%d - fetching latest for %v", t.si, smap, smapVersion, msg.Action)
-		t.smapVersionFixup(r)
-	} else if smap.Version > smapVersion {
-		// if metasync outraces the request, we end up here, just log it and continue
-		glog.Errorf("%s: own %s > v%d - encountered during %v", t.si, smap, smapVersion, msg.Action)
-		t.statsT.Add(stats.ErrMetadataCount, 1)
+func (t *targetrunner) ensureLatestBMD(msg *aisMsg, r *http.Request) {
+	bmd, bmdVersion := t.owner.bmd.Get(), msg.BMDVersion
+	if bmd.Version < bmdVersion {
+		glog.Errorf("%s: own %s < v%d - fetching latest bmd for %v", t.si, bmd, bmdVersion, msg.Action)
+		t.BMDVersionFixup(r)
+	} else if bmd.Version > bmdVersion {
+		// If metasync outraces the request, we end up here, just log it and continue.
+		glog.Warningf("%s: own %s > v%d - encountered during %v", t.si, bmd, bmdVersion, msg.Action)
 	}
 }
 
@@ -831,33 +830,16 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, rename
 	return
 }
 
-func (t *targetrunner) smapVersionFixup(r *http.Request) {
-	var (
-		newSmap = &smapX{}
-		caller  string
-	)
-	err := t.fetchPrimaryMD(cmn.GetWhatSmap, newSmap, "")
-	if err != nil {
-		glog.Error(err)
-		return
-	}
-	msg := t.newAmsgStr("get-what="+cmn.GetWhatSmap, newSmap, nil)
-	if r != nil {
-		caller = r.Header.Get(cmn.HeaderCallerName)
-	}
-	if err := t.receiveSmap(newSmap, msg, caller); err != nil && !isErrDowngrade(err) {
-		glog.Error(err)
-	}
-}
-
-func (t *targetrunner) BMDVersionFixup(r *http.Request, bck cmn.Bck, sleep bool) {
+func (t *targetrunner) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
 	var (
 		caller      string
+		bck         cmn.Bck
 		newBucketMD = &bucketMD{}
 	)
-	if sleep {
-		time.Sleep(200 * time.Millisecond)
+	if len(bcks) > 0 {
+		bck = bcks[0]
 	}
+	time.Sleep(200 * time.Millisecond)
 	if err := t.fetchPrimaryMD(cmn.GetWhatBMD, newBucketMD, bck.Name); err != nil {
 		glog.Error(err)
 		return

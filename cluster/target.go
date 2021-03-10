@@ -161,7 +161,7 @@ type Target interface {
 	GFN(gfnType GFNType) GFN
 
 	// Other.
-	BMDVersionFixup(r *http.Request, bck cmn.Bck, sleep bool)
+	BMDVersionFixup(r *http.Request, bck ...cmn.Bck)
 	RebalanceNamespace(si *Snode) (body []byte, errCode int, err error)
 	Health(si *Snode, timeout time.Duration, query url.Values) (body []byte, errCode int, err error)
 }

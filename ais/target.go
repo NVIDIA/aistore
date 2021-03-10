@@ -427,7 +427,7 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var msg aisMsg
+	msg := &aisMsg{}
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
@@ -443,11 +443,13 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	t.ensureLatestBMD(msg, r)
+
 	switch msg.Action {
 	case cmn.ActList:
-		t.handleList(w, r, queryBcks, &msg)
+		t.handleList(w, r, queryBcks, msg)
 	case cmn.ActSummary:
-		t.handleSummary(w, r, queryBcks, &msg)
+		t.handleSummary(w, r, queryBcks, msg)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
@@ -457,11 +459,10 @@ func (t *targetrunner) handleList(w http.ResponseWriter, r *http.Request, queryB
 	if queryBcks.Name == "" {
 		t.listBuckets(w, r, queryBcks)
 	} else {
-		t.ensureLatestSmap(msg, r)
 		bck := cluster.NewBckEmbed(cmn.Bck(queryBcks))
 		if err := bck.Init(t.owner.bmd); err != nil {
 			if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
-				t.BMDVersionFixup(r, cmn.Bck{}, true /*sleep*/)
+				t.BMDVersionFixup(r)
 				err = bck.Init(t.owner.bmd)
 			}
 			if err != nil {
@@ -491,7 +492,7 @@ func (t *targetrunner) handleSummary(w http.ResponseWriter, r *http.Request, que
 		// Ensure that the bucket exists.
 		if err := bck.Init(t.owner.bmd); err != nil {
 			if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
-				t.BMDVersionFixup(r, cmn.Bck{}, true /*sleep*/)
+				t.BMDVersionFixup(r)
 				err = bck.Init(t.owner.bmd)
 			}
 			if err != nil {
@@ -518,7 +519,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := request.bck.Init(t.owner.bmd); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
-			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
+			t.BMDVersionFixup(r)
 			err = request.bck.Init(t.owner.bmd)
 		}
 		if err != nil {
@@ -598,11 +599,11 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t.ensureLatestSmap(msg, r)
+	t.ensureLatestBMD(msg, r)
 
 	if err := request.bck.Init(t.owner.bmd); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
-			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
+			t.BMDVersionFixup(r)
 			err = request.bck.Init(t.owner.bmd)
 		}
 		if err != nil {
@@ -610,6 +611,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
 	switch msg.Action {
 	case cmn.ActPrefetch:
 		if !request.bck.IsRemote() {
@@ -757,7 +759,7 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(bck.Bck); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
-			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
+			t.BMDVersionFixup(r)
 			err = lom.Init(bck.Bck)
 		}
 		if err != nil {
@@ -831,7 +833,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 
 	if err := lom.Init(request.bck.Bck); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
-			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
+			t.BMDVersionFixup(r)
 			err = lom.Init(request.bck.Bck)
 		}
 		if err != nil {
@@ -1107,7 +1109,7 @@ func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, bck *clu
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(bck.Bck); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
-			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
+			t.BMDVersionFixup(r)
 			err = lom.Init(bck.Bck)
 		}
 		if err != nil {
@@ -1445,7 +1447,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	}
 	if err = request.bck.Init(t.owner.bmd); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); ok {
-			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
+			t.BMDVersionFixup(r)
 			err = request.bck.Init(t.owner.bmd)
 		}
 		if err != nil {
