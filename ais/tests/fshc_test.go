@@ -50,7 +50,6 @@ func newCheckerMD(t *testing.T) *checkerMD {
 	md := &checkerMD{
 		t:        t,
 		seed:     300,
-		numObjs:  100,
 		proxyURL: tutils.RandomProxyURL(),
 		bck: cmn.Bck{
 			Name:     testBucketName,
@@ -65,6 +64,8 @@ func newCheckerMD(t *testing.T) *checkerMD {
 	}
 
 	md.init()
+	md.numObjs = 20 * len(md.mpList)
+	tlog.Logf("Create %d objects[%d mountpaths] for test\n", md.numObjs, len(md.mpList))
 
 	return md
 }
