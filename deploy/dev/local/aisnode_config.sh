@@ -28,7 +28,6 @@ cat > $AIS_CONF_FILE <<EOL
 		"disk_only":      false
 	},
 	"log": {
-		"dir":       "${AIS_LOG_DIR:-/tmp/ais$NEXT_TIER/log}",
 		"level":     "${AIS_LOG_LEVEL:-3}",
 		"max_size":  4194304,
 		"max_total": 67108864
@@ -154,6 +153,7 @@ EOL
 cat > $AIS_LOCAL_CONF_FILE <<EOL
 {
 	"confdir": "${AIS_CONF_DIR:-/etc/ais/}",
+	"log_dir":       "${AIS_LOG_DIR:-/tmp/ais$NEXT_TIER/log}",
 	"host_net": {
 		"hostname":                 "${HOSTNAME_LIST}",
 		"hostname_intra_control":   "${HOSTNAME_LIST_INTRA_CONTROL}",

@@ -545,10 +545,10 @@ func (r *statsRunner) recycleLogs() time.Duration {
 
 func (r *statsRunner) removeLogs(config *cmn.Config) {
 	maxtotal := int64(config.Log.MaxTotal)
-	logfinfos, err := ioutil.ReadDir(config.Log.Dir)
+	logfinfos, err := ioutil.ReadDir(config.LogDir)
 	if err != nil {
-		glog.Errorf("GC logs: cannot read log dir %s, err: %v", config.Log.Dir, err)
-		_ = cos.CreateDir(config.Log.Dir) // FIXME: (local non-containerized + kill/restart under test)
+		glog.Errorf("GC logs: cannot read log dir %s, err: %v", config.LogDir, err)
+		_ = cos.CreateDir(config.LogDir) // FIXME: (local non-containerized + kill/restart under test)
 		return
 	}
 	// sample name ais.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
@@ -571,7 +571,7 @@ func (r *statsRunner) removeLogs(config *cmn.Config) {
 			}
 		}
 		if tot > maxtotal {
-			r.removeOlderLogs(tot, maxtotal, config.Log.Dir, logtype, infos)
+			r.removeOlderLogs(tot, maxtotal, config.LogDir, logtype, infos)
 		}
 	}
 }

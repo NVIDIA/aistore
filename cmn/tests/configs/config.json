@@ -26,7 +26,6 @@
     "enabled": false
   },
   "log": {
-    "dir":       "/tmp/ais1/log",
     "level":     "3",
     "max_size":  4194304,
     "max_total": 67108864

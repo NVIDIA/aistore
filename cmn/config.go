@@ -143,6 +143,7 @@ type (
 
 	LocalConfig struct {
 		ConfigDir string         `json:"confdir"`
+		LogDir    string         `json:"log_dir"`
 		HostNet   LocalNetConfig `json:"host_net"`
 		FSpaths   FSPathsConf    `json:"fspaths"`
 		TestFSP   TestfspathConf `json:"test_fspaths"`
@@ -252,7 +253,6 @@ type (
 		DiskOnly     *bool   `json:"disk_only,omitempty"`
 	}
 	LogConf struct {
-		Dir      string `json:"dir"`       // log directory
 		Level    string `json:"level"`     // log level aka verbosity
 		MaxSize  uint64 `json:"max_size"`  // size that triggers log rotation
 		MaxTotal uint64 `json:"max_total"` // max total size of all the logs in the log directory
@@ -773,7 +773,6 @@ var (
 	_ Validator = (*LRUConf)(nil)
 	_ Validator = (*MirrorConf)(nil)
 	_ Validator = (*ECConf)(nil)
-	_ Validator = (*LogConf)(nil)
 	_ Validator = (*VersionConf)(nil)
 	_ Validator = (*KeepaliveConf)(nil)
 	_ Validator = (*PeriodConf)(nil)
@@ -806,6 +805,10 @@ func (c *Config) Validate() error {
 	if c.ConfigDir == "" {
 		return errors.New("invalid confdir value (must be non-empty)")
 	}
+	if c.LogDir == "" {
+		return errors.New("invalid log dir value (must be non-empty)")
+	}
+
 	// NOTE: these two validations require more context and so we call them explicitly;
 	//       the rest all implement generic interface
 	if err := c.LocalConfig.FSpaths.Validate(c); err != nil {
@@ -1079,13 +1082,6 @@ func (c *ECConf) ValidateAsProps(args *ValidationArgs) error {
 	}
 	if args.TargetCnt < required {
 		return NewSoftError(fmt.Sprintf(insufficientNodes, c.DataSlices, c.ParitySlices, required, args.TargetCnt))
-	}
-	return nil
-}
-
-func (c *LogConf) Validate() (err error) {
-	if c.Dir == "" {
-		return errors.New("invalid log.dir value (must be non-empty)")
 	}
 	return nil
 }
@@ -1540,6 +1536,7 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *Config) (err er
 	if err != nil {
 		return fmt.Errorf("failed to load local config %q, err: %v", localConfPath, err)
 	}
+	glog.SetLogDir(config.LogDir)
 
 	// NOTE: If last updated version of config doesn't exist in the configured location,
 	//       config from `confPath` is loaded as plain-text
@@ -1572,10 +1569,9 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *Config) (err er
 		return
 	}
 
-	if err = cos.CreateDir(config.Log.Dir); err != nil {
-		return fmt.Errorf("failed to create log dir %q, err: %v", config.Log.Dir, err)
+	if err = cos.CreateDir(config.LogDir); err != nil {
+		return fmt.Errorf("failed to create log dir %q, err: %v", config.LogDir, err)
 	}
-	glog.SetLogDir(config.Log.Dir)
 
 	// glog rotate
 	glog.MaxSize = config.Log.MaxSize
@@ -1588,7 +1584,7 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *Config) (err er
 		return fmt.Errorf("failed to set log level %q, err: %s", config.Log.Level, err)
 	}
 	glog.Infof("log.dir: %q; l4.proto: %s; port: %d; verbosity: %s",
-		config.Log.Dir, config.Net.L4.Proto, config.HostNet.Port, config.Log.Level)
+		config.LogDir, config.Net.L4.Proto, config.HostNet.Port, config.Log.Level)
 	glog.Infof("config_file: %q periodic.stats_time: %v", confPath, config.Periodic.StatsTime)
 	return
 }

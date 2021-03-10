@@ -390,7 +390,7 @@ func startNode(cmd string, args []string, asPrimary bool) (pid int, err error) {
 
 func DeployNode(t *testing.T, node *cluster.Snode, conf *cmn.Config, localConf *cmn.LocalConfig) int {
 	conf.ConfigDir = t.TempDir()
-	conf.Log.Dir = t.TempDir()
+	conf.LogDir = t.TempDir()
 	conf.TestFSP.Root = t.TempDir()
 	conf.TestFSP.Instance = 42
 
