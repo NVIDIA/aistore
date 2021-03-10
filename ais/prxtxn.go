@@ -95,12 +95,12 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, remoteH
 	debug.Infof("Begin create-bucket (msg: %v, bck: %s)", msg, bck)
 	results := c.bcast(cmn.ActBegin, c.timeout.netw)
 	for _, res := range results {
-		err := res.err
-		if err == nil {
+		if res.err == nil {
 			continue
 		}
+		err := c.bcastAbort(bck, res.error())
 		freeCallResults(results)
-		return c.bcastAbort(bck, res.error())
+		return err
 	}
 	freeCallResults(results)
 

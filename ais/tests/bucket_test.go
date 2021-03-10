@@ -189,9 +189,25 @@ func TestCreateRemoteBucket(t *testing.T) {
 		err = api.DestroyBucket(baseParams, hdfsBck)
 		tassert.CheckFatal(t, err)
 	} else {
-		err := api.CreateBucket(baseParams, bck, nil)
-		tassert.Fatalf(t, err != nil, "expected error")
-		tassert.Fatalf(t, strings.Contains(err.Error(), "not supported"), "should contain 'not supported' message")
+		tests := []struct {
+			bck   cmn.Bck
+			props *cmn.BucketPropsToUpdate
+		}{
+			{bck: bck, props: nil},
+			{ // If cluster is not built with HDFS support, bucket creation should fail.
+				bck: cmn.Bck{Provider: cmn.ProviderHDFS, Name: cos.RandString(10)},
+				props: &cmn.BucketPropsToUpdate{
+					Extra: &cmn.ExtraToUpdate{
+						HDFS: &cmn.ExtraPropsHDFSToUpdate{RefDirectory: api.String("/")},
+					},
+				},
+			},
+		}
+		for _, test := range tests {
+			err := api.CreateBucket(baseParams, test.bck, test.props)
+			tassert.Fatalf(t, err != nil, "expected error")
+			tassert.Fatalf(t, strings.Contains(err.Error(), "not supported"), "should contain 'not supported' message")
+		}
 	}
 }
 
