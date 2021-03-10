@@ -152,7 +152,7 @@ func NewTargetsTable(ds *DaemonStatusTemplateHelper, onlyTargets, verbose bool) 
 	}
 
 	hideDeployments := !verbose && len(deployments) <= 1
-	return newTableTargets(ds.Tmap, hideDeployments, len(ds.Tmap) > 1 && allNodesOnline(ds.Pmap), !verbose)
+	return newTableTargets(ds.Tmap, hideDeployments, len(ds.Tmap) > 1 && allNodesOnline(ds.Tmap), !verbose)
 }
 
 func newTableTargets(ts map[string]*stats.DaemonStatus, hideDeployments, hideStatus, hideBuildTime bool) *TemplateTable {
