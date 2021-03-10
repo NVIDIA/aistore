@@ -165,34 +165,33 @@ type (
 	}
 
 	ConfigToUpdate struct {
-		ConfigDir   *string                  `json:"confdir"`
-		Backend     *BackendConf             `json:"backend"`
-		Mirror      *MirrorConfToUpdate      `json:"mirror"`
-		EC          *ECConfToUpdate          `json:"ec"`
-		Log         *LogConfToUpdate         `json:"log"`
-		Periodic    *PeriodConfToUpdate      `json:"periodic"`
-		Timeout     *TimeoutConfToUpdate     `json:"timeout"`
-		Client      *ClientConfToUpdate      `json:"client"`
-		LRU         *LRUConfToUpdate         `json:"lru"`
-		Disk        *DiskConfToUpdate        `json:"disk"`
-		Rebalance   *RebalanceConfToUpdate   `json:"rebalance"`
-		Resilver    *ResilverConfToUpdate    `json:"resilver"`
-		Replication *ReplicationConfToUpdate `json:"replication"`
-		Cksum       *CksumConfToUpdate       `json:"checksum"`
-		Versioning  *VersionConfToUpdate     `json:"versioning"`
-		Net         *NetConfToUpdate         `json:"net"`
-		FSHC        *FSHCConfToUpdate        `json:"fshc"`
-		Auth        *AuthConfToUpdate        `json:"auth"`
-		Keepalive   *KeepaliveConfToUpdate   `json:"keepalivetracker"`
-		Downloader  *DownloaderConfToUpdate  `json:"downloader"`
-		DSort       *DSortConfToUpdate       `json:"distributed_sort"`
-		Compression *CompressionConfToUpdate `json:"compression"`
-		MDWrite     *MDWritePolicy           `json:"md_write"`
-		Proxy       *ProxyConfToUpdate       `json:"proxy"`
+		Backend     *BackendConf             `json:"backend,omitempty"`
+		Mirror      *MirrorConfToUpdate      `json:"mirror,omitempty"`
+		EC          *ECConfToUpdate          `json:"ec,omitempty"`
+		Log         *LogConfToUpdate         `json:"log,omitempty"`
+		Periodic    *PeriodConfToUpdate      `json:"periodic,omitempty"`
+		Timeout     *TimeoutConfToUpdate     `json:"timeout,omitempty"`
+		Client      *ClientConfToUpdate      `json:"client,omitempty"`
+		LRU         *LRUConfToUpdate         `json:"lru,omitempty"`
+		Disk        *DiskConfToUpdate        `json:"disk,omitempty"`
+		Rebalance   *RebalanceConfToUpdate   `json:"rebalance,omitempty"`
+		Resilver    *ResilverConfToUpdate    `json:"resilver,omitempty"`
+		Replication *ReplicationConfToUpdate `json:"replication,omitempty"`
+		Cksum       *CksumConfToUpdate       `json:"checksum,omitempty"`
+		Versioning  *VersionConfToUpdate     `json:"versioning,omitempty"`
+		Net         *NetConfToUpdate         `json:"net,omitempty"`
+		FSHC        *FSHCConfToUpdate        `json:"fshc,omitempty"`
+		Auth        *AuthConfToUpdate        `json:"auth,omitempty"`
+		Keepalive   *KeepaliveConfToUpdate   `json:"keepalivetracker,omitempty"`
+		Downloader  *DownloaderConfToUpdate  `json:"downloader,omitempty"`
+		DSort       *DSortConfToUpdate       `json:"distributed_sort,omitempty"`
+		Compression *CompressionConfToUpdate `json:"compression,omitempty"`
+		MDWrite     *MDWritePolicy           `json:"md_write,omitempty"`
+		Proxy       *ProxyConfToUpdate       `json:"proxy,omitempty"`
 
 		// Logging
-		LogLevel *string `json:"log_level" copy:"skip"`
-		Vmodule  *string `json:"vmodule" copy:"skip"`
+		LogLevel *string `json:"log_level,omitempty" copy:"skip"`
+		Vmodule  *string `json:"vmodule,omitempty" copy:"skip"`
 	}
 
 	BackendConf struct {
@@ -228,11 +227,11 @@ type (
 		Enabled     bool  `json:"enabled"`      // will only generate local copies when set to true
 	}
 	MirrorConfToUpdate struct {
-		Copies      *int64 `json:"copies"`
-		Burst       *int   `json:"burst_buffer"`
-		UtilThresh  *int64 `json:"util_thresh"`
-		OptimizePUT *bool  `json:"optimize_put"`
-		Enabled     *bool  `json:"enabled"`
+		Copies      *int64 `json:"copies,omitempty"`
+		Burst       *int   `json:"burst_buffer,omitempty"`
+		UtilThresh  *int64 `json:"util_thresh,omitempty"`
+		OptimizePUT *bool  `json:"optimize_put,omitempty"`
+		Enabled     *bool  `json:"enabled,omitempty"`
 	}
 	ECConf struct {
 		ObjSizeLimit int64  `json:"objsize_limit"` // objects below this size are replicated instead of EC'ed
@@ -244,13 +243,13 @@ type (
 		DiskOnly     bool   `json:"disk_only"`     // if true, EC does not use SGL - data goes directly to drives
 	}
 	ECConfToUpdate struct {
-		Enabled      *bool   `json:"enabled"`
-		ObjSizeLimit *int64  `json:"objsize_limit"`
-		DataSlices   *int    `json:"data_slices"`
-		BatchSize    *int    `json:"batch_size"`
-		ParitySlices *int    `json:"parity_slices"`
-		Compression  *string `json:"compression"`
-		DiskOnly     *bool   `json:"disk_only"`
+		Enabled      *bool   `json:"enabled,omitempty"`
+		ObjSizeLimit *int64  `json:"objsize_limit,omitempty"`
+		DataSlices   *int    `json:"data_slices,omitempty"`
+		BatchSize    *int    `json:"batch_size,omitempty"`
+		ParitySlices *int    `json:"parity_slices,omitempty"`
+		Compression  *string `json:"compression,omitempty"`
+		DiskOnly     *bool   `json:"disk_only,omitempty"`
 	}
 	LogConf struct {
 		Dir      string `json:"dir"`       // log directory
@@ -259,10 +258,10 @@ type (
 		MaxTotal uint64 `json:"max_total"` // max total size of all the logs in the log directory
 	}
 	LogConfToUpdate struct {
-		Dir      *string `json:"dir"`       // log directory
-		Level    *string `json:"level"`     // log level aka verbosity
-		MaxSize  *uint64 `json:"max_size"`  // size that triggers log rotation
-		MaxTotal *uint64 `json:"max_total"` // max total size of all the logs in the log directory
+		Dir      *string `json:"dir,omitempty"`       // log directory
+		Level    *string `json:"level,omitempty"`     // log level aka verbosity
+		MaxSize  *uint64 `json:"max_size,omitempty"`  // size that triggers log rotation
+		MaxTotal *uint64 `json:"max_total,omitempty"` // max total size of all the logs in the log directory
 	}
 	PeriodConf struct {
 		StatsTimeStr     string `json:"stats_time"`
@@ -275,9 +274,9 @@ type (
 	}
 
 	PeriodConfToUpdate struct {
-		StatsTimeStr     *string `json:"stats_time"`
-		RetrySyncTimeStr *string `json:"retry_sync_time"`
-		NotifTimeStr     *string `json:"notif_time"`
+		StatsTimeStr     *string `json:"stats_time,omitempty"`
+		RetrySyncTimeStr *string `json:"retry_sync_time,omitempty"`
+		NotifTimeStr     *string `json:"notif_time,omitempty"`
 	}
 
 	// maximum intra-cluster latencies (in the increasing order)
@@ -295,11 +294,11 @@ type (
 	}
 
 	TimeoutConfToUpdate struct {
-		CplaneOperationStr *string `json:"cplane_operation"`
-		MaxKeepaliveStr    *string `json:"max_keepalive"`
-		MaxHostBusyStr     *string `json:"max_host_busy"`
-		StartupStr         *string `json:"startup_time"`
-		SendFileStr        *string `json:"send_file_time"`
+		CplaneOperationStr *string `json:"cplane_operation,omitempty"`
+		MaxKeepaliveStr    *string `json:"max_keepalive,omitempty"`
+		MaxHostBusyStr     *string `json:"max_host_busy,omitempty"`
+		StartupStr         *string `json:"startup_time,omitempty"`
+		SendFileStr        *string `json:"send_file_time,omitempty"`
 	}
 
 	ClientConf struct {
@@ -312,10 +311,10 @@ type (
 		Features       FeatureFlags  `json:"features,string"`
 	}
 	ClientConfToUpdate struct {
-		TimeoutStr     *string       `json:"client_timeout"`
-		TimeoutLongStr *string       `json:"client_long_timeout"`
-		ListObjectsStr *string       `json:"list_timeout"`
-		Features       *FeatureFlags `json:"features,string"`
+		TimeoutStr     *string       `json:"client_timeout,omitempty"`
+		TimeoutLongStr *string       `json:"client_long_timeout,omitempty"`
+		ListObjectsStr *string       `json:"list_timeout,omitempty"`
+		Features       *FeatureFlags `json:"features,string,omitempty"`
 	}
 	ProxyConf struct {
 		PrimaryURL   string `json:"primary_url"`
@@ -324,10 +323,10 @@ type (
 		NonElectable bool   `json:"non_electable"`
 	}
 	ProxyConfToUpdate struct {
-		PrimaryURL   *string `json:"primary_url"`
-		OriginalURL  *string `json:"original_url"`
-		DiscoveryURL *string `json:"discovery_url"`
-		NonElectable *bool   `json:"non_electable"`
+		PrimaryURL   *string `json:"primary_url,omitempty"`
+		OriginalURL  *string `json:"original_url,omitempty"`
+		DiscoveryURL *string `json:"discovery_url,omitempty"`
+		NonElectable *bool   `json:"non_electable,omitempty"`
 	}
 	LRUConf struct {
 		// LowWM: used capacity low-watermark (% of total local storage capacity)
@@ -360,12 +359,12 @@ type (
 		Enabled bool `json:"enabled"`
 	}
 	LRUConfToUpdate struct {
-		LowWM              *int64  `json:"lowwm"`
-		HighWM             *int64  `json:"highwm"`
-		OOS                *int64  `json:"out_of_space"`
-		DontEvictTimeStr   *string `json:"dont_evict_time"`
-		CapacityUpdTimeStr *string `json:"capacity_upd_time"`
-		Enabled            *bool   `json:"enabled"`
+		LowWM              *int64  `json:"lowwm,omitempty"`
+		HighWM             *int64  `json:"highwm,omitempty"`
+		OOS                *int64  `json:"out_of_space,omitempty"`
+		DontEvictTimeStr   *string `json:"dont_evict_time,omitempty"`
+		CapacityUpdTimeStr *string `json:"capacity_upd_time,omitempty"`
+		Enabled            *bool   `json:"enabled,omitempty"`
 	}
 	DiskConf struct {
 		DiskUtilLowWM   int64         `json:"disk_util_low_wm"`  // no throttling below
@@ -378,11 +377,11 @@ type (
 		IostatTimeShortStr string `json:"iostat_time_short"`
 	}
 	DiskConfToUpdate struct {
-		DiskUtilLowWM      *int64  `json:"disk_util_low_wm"`  // no throttling below
-		DiskUtilHighWM     *int64  `json:"disk_util_high_wm"` // throttle longer when above
-		DiskUtilMaxWM      *int64  `json:"disk_util_max_wm"`
-		IostatTimeLongStr  *string `json:"iostat_time_long"`
-		IostatTimeShortStr *string `json:"iostat_time_short"`
+		DiskUtilLowWM      *int64  `json:"disk_util_low_wm,omitempty"`  // no throttling below
+		DiskUtilHighWM     *int64  `json:"disk_util_high_wm,omitempty"` // throttle longer when above
+		DiskUtilMaxWM      *int64  `json:"disk_util_max_wm,omitempty"`
+		IostatTimeLongStr  *string `json:"iostat_time_long,omitempty"`
+		IostatTimeShortStr *string `json:"iostat_time_short,omitempty"`
 	}
 	RebalanceConf struct {
 		DestRetryTimeStr string        `json:"dest_retry_time"` // max wait for ACKs & neighbors to complete
@@ -395,11 +394,11 @@ type (
 	}
 
 	RebalanceConfToUpdate struct {
-		DestRetryTimeStr *string `json:"dest_retry_time"` // max wait for ACKs & neighbors to complete
-		QuiesceStr       *string `json:"quiescent"`       // max wait for no-obj before next stage/batch
-		Compression      *string `json:"compression"`     // see CompressAlways, etc. enum
-		Multiplier       *uint8  `json:"multiplier"`      // stream-bundle-and-jogger multiplier
-		Enabled          *bool   `json:"enabled"`         // true=auto-rebalance | manual rebalancing
+		DestRetryTimeStr *string `json:"dest_retry_time,omitempty"` // max wait for ACKs & neighbors to complete
+		QuiesceStr       *string `json:"quiescent,omitempty"`       // max wait for no-obj before next stage/batch
+		Compression      *string `json:"compression,omitempty"`     // see CompressAlways, etc. enum
+		Multiplier       *uint8  `json:"multiplier,omitempty"`      // stream-bundle-and-jogger multiplier
+		Enabled          *bool   `json:"enabled,omitempty"`         // true=auto-rebalance | manual rebalancing
 	}
 
 	ResilverConf struct {
@@ -407,7 +406,7 @@ type (
 	}
 
 	ResilverConfToUpdate struct {
-		Enabled *bool `json:"enabled"` // true=auto-resilver | manual resilvering
+		Enabled *bool `json:"enabled,omitempty"` // true=auto-resilver | manual resilvering
 	}
 
 	ReplicationConf struct {
@@ -417,9 +416,9 @@ type (
 	}
 
 	ReplicationConfToUpdate struct {
-		OnColdGet     *bool `json:"on_cold_get"`     // object replication on cold GET request
-		OnPut         *bool `json:"on_put"`          // object replication on PUT request
-		OnLRUEviction *bool `json:"on_lru_eviction"` // object replication on LRU eviction
+		OnColdGet     *bool `json:"on_cold_get,omitempty"`     // object replication on cold GET request
+		OnPut         *bool `json:"on_put,omitempty"`          // object replication on PUT request
+		OnLRUEviction *bool `json:"on_lru_eviction,omitempty"` // object replication on LRU eviction
 	}
 
 	CksumConf struct {
@@ -443,11 +442,11 @@ type (
 		EnableReadRange bool `json:"enable_read_range"`
 	}
 	CksumConfToUpdate struct {
-		Type            *string `json:"type"`
-		ValidateColdGet *bool   `json:"validate_cold_get"`
-		ValidateWarmGet *bool   `json:"validate_warm_get"`
-		ValidateObjMove *bool   `json:"validate_obj_move"`
-		EnableReadRange *bool   `json:"enable_read_range"`
+		Type            *string `json:"type,omitempty"`
+		ValidateColdGet *bool   `json:"validate_cold_get,omitempty"`
+		ValidateWarmGet *bool   `json:"validate_warm_get,omitempty"`
+		ValidateObjMove *bool   `json:"validate_obj_move,omitempty"`
+		EnableReadRange *bool   `json:"enable_read_range,omitempty"`
 	}
 
 	VersionConf struct {
@@ -459,8 +458,8 @@ type (
 	}
 
 	VersionConfToUpdate struct {
-		Enabled         *bool `json:"enabled"`
-		ValidateWarmGet *bool `json:"validate_warm_get"`
+		Enabled         *bool `json:"enabled,omitempty"`
+		ValidateWarmGet *bool `json:"validate_warm_get,omitempty"`
 	}
 
 	TestfspathConf struct {
@@ -473,8 +472,8 @@ type (
 		HTTP HTTPConf `json:"http"`
 	}
 	NetConfToUpdate struct {
-		L4   *L4ConfToUpdate   `json:"l4"`
-		HTTP *HTTPConfToUpdate `json:"http"`
+		L4   *L4ConfToUpdate   `json:"l4,omitempty"`
+		HTTP *HTTPConfToUpdate `json:"http,omitempty"`
 	}
 
 	L4Conf struct {
@@ -482,11 +481,11 @@ type (
 		SndRcvBufSize int    `json:"sndrcv_buf_size"` // SO_RCVBUF and SO_SNDBUF
 	}
 	L4ConfToUpdate struct {
-		Proto               *string `json:"proto"`              // tcp, udp
-		PortStr             *string `json:"port"`               // listening port
-		PortIntraControlStr *string `json:"port_intra_control"` // listening port for intra control network
-		PortIntraDataStr    *string `json:"port_intra_data"`    // listening port for intra data network
-		SndRcvBufSize       *int    `json:"sndrcv_buf_size"`    // SO_RCVBUF and SO_SNDBUF
+		Proto               *string `json:"proto,omitempty"`              // tcp, udp
+		PortStr             *string `json:"port,omitempty"`               // listening port
+		PortIntraControlStr *string `json:"port_intra_control,omitempty"` // listening port for intra control network
+		PortIntraDataStr    *string `json:"port_intra_data,omitempty"`    // listening port for intra data network
+		SndRcvBufSize       *int    `json:"sndrcv_buf_size,omitempty"`    // SO_RCVBUF and SO_SNDBUF
 	}
 	HTTPConf struct {
 		Proto       string `json:"-"`          // http or https (set depending on `UseHTTPS`)
@@ -502,13 +501,13 @@ type (
 		Chunked    bool `json:"chunked_transfer"` // https://tools.ietf.org/html/rfc7230#page-36
 	}
 	HTTPConfToUpdate struct {
-		Certificate     *string `json:"server_crt"` // HTTPS: openssl certificate
-		Key             *string `json:"server_key"` // HTTPS: openssl key
-		WriteBufferSize *int    `json:"write_buffer_size"`
-		ReadBufferSize  *int    `json:"read_buffer_size"`
-		UseHTTPS        *bool   `json:"use_https"` // use HTTPS instead of HTTP
-		SkipVerify      *bool   `json:"skip_verify"`
-		Chunked         *bool   `json:"chunked_transfer"` // https://tools.ietf.org/html/rfc7230#page-36
+		Certificate     *string `json:"server_crt,omitempty"` // HTTPS: openssl certificate
+		Key             *string `json:"server_key,omitempty"` // HTTPS: openssl key
+		WriteBufferSize *int    `json:"write_buffer_size,omitempty"`
+		ReadBufferSize  *int    `json:"read_buffer_size,omitempty"`
+		UseHTTPS        *bool   `json:"use_https,omitempty"` // use HTTPS instead of HTTP
+		SkipVerify      *bool   `json:"skip_verify,omitempty"`
+		Chunked         *bool   `json:"chunked_transfer,omitempty"` // https://tools.ietf.org/html/rfc7230#page-36
 	}
 	FSHCConf struct {
 		TestFileCount int  `json:"test_files"`  // number of files to read/write
@@ -516,17 +515,17 @@ type (
 		Enabled       bool `json:"enabled"`
 	}
 	FSHCConfToUpdate struct {
-		TestFileCount *int  `json:"test_files"`  // number of files to read/write
-		ErrorLimit    *int  `json:"error_limit"` // exceeding err limit causes disabling mountpath
-		Enabled       *bool `json:"enabled"`
+		TestFileCount *int  `json:"test_files,omitempty"`  // number of files to read/write
+		ErrorLimit    *int  `json:"error_limit,omitempty"` // exceeding err limit causes disabling mountpath
+		Enabled       *bool `json:"enabled,omitempty"`
 	}
 	AuthConf struct {
 		Secret  string `json:"secret"`
 		Enabled bool   `json:"enabled"`
 	}
 	AuthConfToUpdate struct {
-		Secret  *string `json:"secret"`
-		Enabled *bool   `json:"enabled"`
+		Secret  *string `json:"secret,omitempty"`
+		Enabled *bool   `json:"enabled,omitempty"`
 	}
 	// config for one keepalive tracker
 	// all type of trackers share the same struct, not all fields are used by all trackers
@@ -537,9 +536,9 @@ type (
 		Factor      uint8         `json:"factor"`   // only average
 	}
 	KeepaliveTrackerConfToUpdate struct {
-		IntervalStr *string `json:"interval"` // keepalive interval
-		Name        *string `json:"name"`     // "heartbeat", "average"
-		Factor      *uint8  `json:"factor"`   // only average
+		IntervalStr *string `json:"interval,omitempty"` // keepalive interval
+		Name        *string `json:"name,omitempty"`     // "heartbeat", "average"
+		Factor      *uint8  `json:"factor,omitempty"`   // only average
 	}
 
 	KeepaliveConf struct {
@@ -550,17 +549,17 @@ type (
 	}
 
 	KeepaliveConfToUpdate struct {
-		Proxy         *KeepaliveTrackerConfToUpdate `json:"proxy"`  // how proxy tracks target keepalives
-		Target        *KeepaliveTrackerConfToUpdate `json:"target"` // how target tracks primary proxies keepalives
-		RetryFactor   *uint8                        `json:"retry_factor"`
-		TimeoutFactor *uint8                        `json:"timeout_factor"`
+		Proxy         *KeepaliveTrackerConfToUpdate `json:"proxy,omitempty"`  // how proxy tracks target keepalives
+		Target        *KeepaliveTrackerConfToUpdate `json:"target,omitempty"` // how target tracks primary proxies keepalives
+		RetryFactor   *uint8                        `json:"retry_factor,omitempty"`
+		TimeoutFactor *uint8                        `json:"timeout_factor,omitempty"`
 	}
 	DownloaderConf struct {
 		TimeoutStr string        `json:"timeout"`
 		Timeout    time.Duration `json:"-"`
 	}
 	DownloaderConfToUpdate struct {
-		TimeoutStr *string `json:"timeout"`
+		TimeoutStr *string `json:"timeout,omitempty"`
 	}
 
 	DSortConf struct {
@@ -576,14 +575,14 @@ type (
 	}
 
 	DSortConfToUpdate struct {
-		DuplicatedRecords   *string `json:"duplicated_records"`
-		MissingShards       *string `json:"missing_shards"`
-		EKMMalformedLine    *string `json:"ekm_malformed_line"`
-		EKMMissingKey       *string `json:"ekm_missing_key"`
-		DefaultMaxMemUsage  *string `json:"default_max_mem_usage"`
-		CallTimeoutStr      *string `json:"call_timeout"`
-		Compression         *string `json:"compression"`
-		DSorterMemThreshold *string `json:"dsorter_mem_threshold"`
+		DuplicatedRecords   *string `json:"duplicated_records,omitempty"`
+		MissingShards       *string `json:"missing_shards,omitempty"`
+		EKMMalformedLine    *string `json:"ekm_malformed_line,omitempty"`
+		EKMMissingKey       *string `json:"ekm_missing_key,omitempty"`
+		DefaultMaxMemUsage  *string `json:"default_max_mem_usage,omitempty"`
+		CallTimeoutStr      *string `json:"call_timeout,omitempty"`
+		Compression         *string `json:"compression,omitempty"`
+		DSorterMemThreshold *string `json:"dsorter_mem_threshold,omitempty"`
 	}
 
 	FSPathsConf struct {
@@ -596,8 +595,8 @@ type (
 	}
 
 	CompressionConfToUpdate struct {
-		BlockMaxSize *int  `json:"block_size"`
-		Checksum     *bool `json:"checksum"`
+		BlockMaxSize *int  `json:"block_size,omitempty"`
+		Checksum     *bool `json:"checksum,omitempty"`
 	}
 )
 
