@@ -1,5 +1,3 @@
-"ais://$BUCKET_1" bucket created
-PUT "object_1.txt" into bucket "ais://$BUCKET_1"
 PROPERTY         VALUE
 ^atime(.*)$
 checksum         05967d5390ac53b0

@@ -1,3 +1,2 @@
-"ais://$BUCKET" bucket created
 PUT "object.txt" into bucket "ais://$BUCKET"
 "object.txt" deleted from "ais://$BUCKET" bucket

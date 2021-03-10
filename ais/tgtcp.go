@@ -1038,12 +1038,13 @@ func (t *targetrunner) lookupRemoteAll(lom *cluster.LOM, smap *smapX) *cluster.S
 	query := make(url.Values)
 	query.Set(cmn.URLParamSilent, "true")
 	query.Set(cmn.URLParamCheckExistsAny, "true") // lookup all mountpaths _and_ copy if misplaced
+	bck := lom.Bck().Bck
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{
 		Method: http.MethodHead,
 		Header: header,
-		Path:   cmn.URLPathObjects.Join(lom.BckName(), lom.ObjName),
-		Query:  query,
+		Path:   cmn.URLPathObjects.Join(bck.Name, lom.ObjName),
+		Query:  cmn.AddBckToQuery(query, bck),
 	}
 	args.ignoreMaintenance = true
 	args.smap = smap

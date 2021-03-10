@@ -201,7 +201,7 @@ func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, msgs ...*cmn.Copy
 	if len(msgs) > 0 && msgs[0] != nil {
 		msg = msgs[0]
 	}
-	q := cmn.AddBckUnameToQuery(nil, fromBck, cmn.URLParamBucket) // aka cmn.URLParamBucketFrom
+	q := cmn.AddBckToQuery(nil, fromBck)
 	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.URLParamBucketTo)
 	baseParams.Method = http.MethodPost
 	err = DoHTTPRequest(ReqParams{
@@ -219,7 +219,7 @@ func RenameBucket(baseParams BaseParams, fromBck, toBck cmn.Bck) (xactID string,
 		return
 	}
 	baseParams.Method = http.MethodPost
-	q := cmn.AddBckUnameToQuery(nil, fromBck, cmn.URLParamBucket) // aka cmn.URLParamBucketFrom
+	q := cmn.AddBckToQuery(nil, fromBck)
 	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.URLParamBucketTo)
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,

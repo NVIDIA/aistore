@@ -1546,8 +1546,8 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 		num:             10000,
 		numGetsEachFile: 5,
 		bck: cmn.Bck{
-			Name:     cos.RandString(10),
 			Provider: cmn.ProviderAIS,
+			Name:     cos.RandString(10),
 		},
 	}
 

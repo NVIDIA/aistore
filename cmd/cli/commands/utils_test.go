@@ -297,8 +297,6 @@ func TestParseQueryBckURI(t *testing.T) {
 		bck cmn.QueryBcks
 	}{
 		{uri: "", bck: cmn.QueryBcks{}},
-		{uri: "://", bck: cmn.QueryBcks{}},                                             // TODO: This shouldn't be allowed (#1090).
-		{uri: "bucket", bck: cmn.QueryBcks{Provider: cmn.ProviderAIS, Name: "bucket"}}, // TODO: This shouldn't be allowed (#1090).
 		{uri: "ais://", bck: cmn.QueryBcks{Provider: cmn.ProviderAIS}},
 		{uri: "ais://#ns", bck: cmn.QueryBcks{Provider: cmn.ProviderAIS, Ns: cmn.Ns{Name: "ns"}}},
 		{uri: "ais://@uuid", bck: cmn.QueryBcks{Provider: cmn.ProviderAIS, Ns: cmn.Ns{UUID: "uuid"}}},
@@ -319,7 +317,9 @@ func TestParseQueryBckURI(t *testing.T) {
 	negativeTests := []struct {
 		uri string
 	}{
+		{uri: "bucket"},
 		{uri: ":/"},
+		{uri: "://"},
 		{uri: "aiss://"},
 		{uri: "aiss://bucket"},
 		{uri: "ais://bucket/objname"},
@@ -337,8 +337,6 @@ func TestParseBckURI(t *testing.T) {
 		uri string
 		bck cmn.Bck
 	}{
-		{uri: "bucket", bck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"}},    // TODO: This shouldn't be allowed (#1090).
-		{uri: "://bucket", bck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"}}, // TODO: This shouldn't be allowed (#1090).
 		{uri: "ais://bucket", bck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"}},
 		{uri: "hdfs://bucket", bck: cmn.Bck{Provider: cmn.ProviderHDFS, Name: "bucket"}},
 		{uri: "ais://#ns/bucket", bck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket", Ns: cmn.Ns{Name: "ns"}}},
@@ -355,8 +353,10 @@ func TestParseBckURI(t *testing.T) {
 	negativeTests := []struct {
 		uri string
 	}{
+		{uri: "bucket"},
 		{uri: ""},
 		{uri: "://"},
+		{uri: "://bucket"},
 		{uri: "ais://"},
 		{uri: "ais:///"},
 		{uri: "aiss://bucket"},
@@ -381,29 +381,24 @@ func TestParseBckObjectURI(t *testing.T) {
 		bck     cmn.Bck
 		objName string
 	}{
-		{ // TODO: This shouldn't be allowed (#1090).
-			uri: "bucket", optObjName: true,
-			bck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
-		},
-		{ // TODO: This shouldn't be allowed (#1090).
-			uri: "://bucket", optObjName: true,
-			bck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
-		},
 		{
 			uri: "ais://bucket", optObjName: true,
 			bck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
 		},
 		{
 			uri: "ais://bucket/object_name", optObjName: true,
-			bck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"}, objName: "object_name",
+			bck:     cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
+			objName: "object_name",
 		},
 		{
-			uri: "ais://bucket/object_name",
-			bck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"}, objName: "object_name",
+			uri:     "ais://bucket/object_name",
+			bck:     cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
+			objName: "object_name",
 		},
 		{
-			uri: "hdfs://bucket/object_name/something",
-			bck: cmn.Bck{Provider: cmn.ProviderHDFS, Name: "bucket"}, objName: "object_name/something",
+			uri:     "hdfs://bucket/object_name/something",
+			bck:     cmn.Bck{Provider: cmn.ProviderHDFS, Name: "bucket"},
+			objName: "object_name/something",
 		},
 		{
 			uri:     "ais://#ns/bucket/a/b/c",
@@ -442,12 +437,17 @@ func TestParseBckObjectURI(t *testing.T) {
 		optObjName bool
 	}{
 		{uri: ""},
+		{uri: "bucket"},
+		{uri: "bucket", optObjName: true},
+		{uri: ":/"},
 		{uri: "://"},
-		{uri: "://bucket"},
 		{uri: "://", optObjName: true},
+		{uri: "://bucket"},
+		{uri: "://bucket", optObjName: true},
 		{uri: "ais://"},
 		{uri: "ais:///"},
 		{uri: "aiss://bucket"},
+		{uri: "ais://bucket"},
 		{uri: "ais:///objectname"},
 		{uri: "ais:///objectname", optObjName: true},
 		{uri: "ais://#ns"},
@@ -456,8 +456,6 @@ func TestParseBckObjectURI(t *testing.T) {
 		{uri: "ais://@uuid#ns"},
 		{uri: "ais://@uuid#ns/bucket"},
 		{uri: "ftp://unsupported"},
-		{uri: "bucket"},
-		{uri: "ais://bucket"},
 		{uri: "hdfs://bucket"},
 	}
 	for _, test := range negativeTests {

@@ -1,10 +1,10 @@
-ais bucket create $BUCKET
+ais bucket create ais://$BUCKET
 echo -n "0123456789" > $OBJECT_1.txt
 echo "abcdefghi" > $OBJECT_2.txt
 
-ais object concat $OBJECT_1.txt $OBJECT_2.txt $BUCKET/object.txt
+ais object concat $OBJECT_1.txt $OBJECT_2.txt ais://$BUCKET/object.txt
 
-ais object get $BUCKET/object.txt -
+ais object get ais://$BUCKET/object.txt -
 
 mkdir "$OBJECT_3-b"
 mkdir "$OBJECT_3-a"
@@ -15,5 +15,5 @@ echo -n "4" > $OBJECT_3-a/1.txt
 echo -n "3" > $OBJECT_3-a/0.txt
 echo "5" > $OBJECT_3.txt
 
-ais object concat $OBJECT_3-b $OBJECT_3-a $OBJECT_3.txt $BUCKET/object1.txt
-ais object get $BUCKET/object1.txt -
+ais object concat $OBJECT_3-b $OBJECT_3-a $OBJECT_3.txt ais://$BUCKET/object1.txt
+ais object get ais://$BUCKET/object1.txt -

@@ -1826,8 +1826,12 @@ func TestDistributedSortOrderFile(t *testing.T) {
 			m.saveClusterState()
 			m.expectTargets(3)
 
-			// Set URL for order file (points to the object in cluster)
-			df.orderFileURL = fmt.Sprintf("%s/%s/%s/%s/%s", proxyURL, cmn.Version, cmn.Objects, m.bck.Name, orderFileName)
+			// Set URL for order file (points to the object in cluster).
+			df.orderFileURL = fmt.Sprintf(
+				"%s/%s/%s/%s/%s?%s=%s",
+				proxyURL, cmn.Version, cmn.Objects, m.bck.Name, orderFileName,
+				cmn.URLParamProvider, cmn.ProviderAIS,
+			)
 
 			df.init()
 

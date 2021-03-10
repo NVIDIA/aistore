@@ -326,6 +326,7 @@ func MakeNCopies(baseParams BaseParams, bck cmn.Bck, copies int) (xactID string,
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(bck.Name),
 		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMakeNCopies, Value: copies}),
+		Query:      cmn.AddBckToQuery(nil, bck),
 	}, &xactID)
 	return
 }

@@ -67,34 +67,19 @@ var _ = Describe("Bck", func() {
 				NewBck("b", cmn.ProviderAIS, cmn.NsGlobal),
 			),
 			Entry(
-				"not matching local namespace",
-				NewBck("a", "", cmn.Ns{Name: "ns1"}),
-				NewBck("a", "", cmn.Ns{Name: "ns2"}),
+				"not matching namespace #1",
+				NewBck("a", cmn.ProviderAIS, cmn.Ns{UUID: "uuid", Name: "ns1"}),
+				NewBck("a", cmn.ProviderAIS, cmn.Ns{UUID: "uuid", Name: "ns2"}),
 			),
 			Entry(
-				"not matching cloud namespace #1",
-				NewBck("a", "", cmn.Ns{UUID: "uuid", Name: "ns1"}),
-				NewBck("a", "", cmn.Ns{UUID: "uuid", Name: "ns2"}),
-			),
-			Entry(
-				"not matching cloud namespace #2",
-				NewBck("a", "", cmn.Ns{UUID: "uuid1", Name: "ns"}),
-				NewBck("a", "", cmn.Ns{UUID: "uuid2", Name: "ns"}),
-			),
-			Entry(
-				"not matching providers",
-				NewBck("a", cmn.ProviderAIS, cmn.NsGlobal),
-				NewBck("a", "", cmn.NsGlobal),
+				"not matching namespace #2",
+				NewBck("a", cmn.ProviderAIS, cmn.Ns{UUID: "uuid1", Name: "ns"}),
+				NewBck("a", cmn.ProviderAIS, cmn.Ns{UUID: "uuid2", Name: "ns"}),
 			),
 			Entry(
 				"not matching providers #2",
 				NewBck("a", cmn.ProviderAIS, cmn.NsGlobal),
 				NewBck("a", cmn.ProviderAmazon, cmn.NsGlobal),
-			),
-			Entry(
-				"not matching providers #3",
-				NewBck("a", "", cmn.NsGlobal),
-				NewBck("a", cmn.ProviderAzure, cmn.NsGlobal),
 			),
 			Entry(
 				"not matching Backend providers #4",
@@ -113,11 +98,6 @@ var _ = Describe("Bck", func() {
 				a.Props, b.Props = &cmn.BucketProps{}, &cmn.BucketProps{}
 				Expect(a.Equal(b, true /*same BID*/, true /* same backend */)).To(BeTrue())
 			},
-			Entry(
-				"empty providers",
-				NewBck("a", "", cmn.NsGlobal),
-				NewBck("a", "", cmn.NsGlobal),
-			),
 			Entry(
 				"matching AIS providers",
 				NewBck("a", cmn.ProviderAIS, cmn.NsGlobal),

@@ -1,17 +1,17 @@
-ais bucket create $BUCKET_1
-ais bucket create --ignore-error  $BUCKET_1
-ais bucket create $BUCKET_1 // FAIL "bucket "ais://$BUCKET_1" already exists"
-ais bucket rm $BUCKET_1
-ais bucket rm $BUCKET_1  // FAIL "bucket "ais://$BUCKET_1" does not exist"
-ais bucket rm --ignore-error $BUCKET_1
-ais bucket create $BUCKET_1 --bucket-props="mirror.enabled=true mirror.copies=2"
-ais bucket rm $BUCKET_1
-ais bucket create $BUCKET_1 --bucket-props='{"mirror":{"enabled":true, "copies":2}}'
+ais bucket create ais://$BUCKET_1
+ais bucket create --ignore-error ais://$BUCKET_1
+ais bucket create ais://$BUCKET_1 // FAIL "bucket "ais://$BUCKET_1" already exists"
+ais bucket rm ais://$BUCKET_1
+ais bucket rm ais://$BUCKET_1  // FAIL "bucket "ais://$BUCKET_1" does not exist"
+ais bucket rm --ignore-error ais://$BUCKET_1
+ais bucket create ais://$BUCKET_1 --bucket-props="mirror.enabled=true mirror.copies=2"
+ais bucket rm ais://$BUCKET_1
+ais bucket create ais://$BUCKET_1 --bucket-props='{"mirror":{"enabled":true, "copies":2}}'
 
 
-ais bucket create $BUCKET_2/ # should ignore slash
-ais bucket create $BUCKET_2 // FAIL "bucket "ais://$BUCKET_2" already exists"
-ais bucket rm $BUCKET_2/ # should ignore slash
+ais bucket create ais://$BUCKET_2/ # should ignore slash
+ais bucket create ais://$BUCKET_2 // FAIL "bucket "ais://$BUCKET_2" already exists"
+ais bucket rm ais://$BUCKET_2/ # should ignore slash
 ais bucket create ais://$BUCKET_3
 ais bucket create cloud://$BUCKET_3 // FAIL "invalid backend provider "cloud""
 

@@ -100,22 +100,6 @@ var (
 	)
 )
 
-// Parses [@uuid][#namespace]. It does a little bit more than just parsing
-// a string from `Uname` so that logic can be reused in different places.
-func ParseNsUname(s string) (n Ns) {
-	if len(s) > 0 && s[0] == NsUUIDPrefix {
-		s = s[1:]
-	}
-	idx := strings.IndexByte(s, NsNamePrefix)
-	if idx == -1 {
-		n.UUID = s
-	} else {
-		n.UUID = s[:idx]
-		n.Name = s[idx+1:]
-	}
-	return
-}
-
 // IsNormalizedProvider returns true if the provider is in normalized
 // form (`aws`, `gcp`, etc.), not aliased (`s3`, `gs`, etc.). Only providers
 // registered in `Providers` set are considered normalized.
@@ -128,7 +112,7 @@ func IsNormalizedProvider(provider string) bool {
 func NormalizeProvider(provider string) (string, error) {
 	switch provider {
 	case "":
-		return "", nil
+		return ProviderAIS, nil
 	case S3Scheme:
 		return ProviderAmazon, nil
 	case AZScheme:
@@ -144,30 +128,32 @@ func NormalizeProvider(provider string) (string, error) {
 }
 
 // Parses "[provider://][@uuid#namespace][/][bucketName[/objectName]]"
-func ParseBckObjectURI(objName string, query ...bool) (bck Bck, object string, err error) {
+func ParseBckObjectURI(uri string, query ...bool) (bck Bck, objName string, err error) {
 	const bucketSepa = "/"
-	parts := strings.SplitN(objName, BckProviderSeparator, 2)
+	var (
+		isQuery = len(query) > 0 && query[0]
+		parts   = strings.SplitN(uri, BckProviderSeparator, 2)
+	)
 
-	if len(parts) > 1 {
+	if len(parts) > 1 && parts[0] != "" {
 		bck.Provider, err = NormalizeProvider(parts[0])
-		objName = parts[1]
+		uri = parts[1]
 	}
 
 	if err != nil {
 		return
 	}
 
-	parts = strings.SplitN(objName, bucketSepa, 2)
+	parts = strings.SplitN(uri, bucketSepa, 2)
 	if len(parts[0]) > 0 && (parts[0][0] == NsUUIDPrefix || parts[0][0] == NsNamePrefix) {
 		bck.Ns = ParseNsUname(parts[0])
 		if err := bck.Ns.Validate(); err != nil {
 			return bck, "", err
 		}
+		if !isQuery && bck.Provider == "" {
+			return bck, "", fmt.Errorf("provider cannot be empty when namespace has been provided. Did you mean: \"ais://%s\"?", bck.String())
+		}
 		if len(parts) == 1 {
-			if bck.Provider == "" {
-				bck.Provider = ProviderAIS // Always default to `ais://` provider.
-			}
-			isQuery := len(query) > 0 && query[0]
 			if parts[0] == string(NsUUIDPrefix) && isQuery {
 				// Case: "[provider://]@" (only valid if uri is query)
 				// We need to list buckets from all possible remote clusters
@@ -189,11 +175,11 @@ func ParseBckObjectURI(objName string, query ...bool) (bck Bck, object string, e
 			return bck, "", err
 		}
 		if bck.Provider == "" {
-			bck.Provider = ProviderAIS // Always default to `ais://` provider.
+			return bck, "", fmt.Errorf("provider cannot be empty when bucket name has been provided. Did you mean: \"ais://%s\"?", bck.String())
 		}
 	}
 	if len(parts) > 1 {
-		object = parts[1]
+		objName = parts[1]
 	}
 	return
 }
@@ -201,6 +187,22 @@ func ParseBckObjectURI(objName string, query ...bool) (bck Bck, object string, e
 ////////
 // Ns //
 ////////
+
+// Parses [@uuid][#namespace]. It does a little bit more than just parsing
+// a string from `Uname` so that logic can be reused in different places.
+func ParseNsUname(s string) (n Ns) {
+	if len(s) > 0 && s[0] == NsUUIDPrefix {
+		s = s[1:]
+	}
+	idx := strings.IndexByte(s, NsNamePrefix)
+	if idx == -1 {
+		n.UUID = s
+	} else {
+		n.UUID = s[:idx]
+		n.Name = s[idx+1:]
+	}
+	return
+}
 
 func (n Ns) String() string {
 	if n.IsGlobal() {

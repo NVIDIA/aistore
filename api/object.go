@@ -142,6 +142,7 @@ func EvictObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 		BaseParams: baseParams,
 		Path:       cmn.URLPathObjects.Join(bck.Name, object),
 		Body:       cos.MustMarshal(actMsg),
+		Query:      cmn.AddBckToQuery(nil, bck),
 	})
 }
 
@@ -161,12 +162,11 @@ func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...Get
 	if len(options) != 0 {
 		w, q, hdr = getObjectOptParams(options[0])
 	}
-	q = cmn.AddBckToQuery(q, bck)
 	baseParams.Method = http.MethodGet
 	resp, err := doHTTPRequestGetResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathObjects.Join(bck.Name, object),
-		Query:      q,
+		Query:      cmn.AddBckToQuery(q, bck),
 		Header:     hdr,
 	}, w)
 	if err != nil {
@@ -222,7 +222,7 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, 
 	resp, err := doHTTPRequestGetResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathObjects.Join(bck.Name, object),
-		Query:      q,
+		Query:      cmn.AddBckToQuery(q, bck),
 		Header:     hdr,
 		Validate:   true,
 	}, w)
@@ -387,14 +387,13 @@ func FlushObject(args FlushArgs) (err error) {
 
 // RenameObject renames object name from `oldName` to `newName`. Works only
 // across single, specified bucket.
-//
-// FIXME: handle backend provider - here and elsewhere
 func RenameObject(baseParams BaseParams, bck cmn.Bck, oldName, newName string) error {
 	baseParams.Method = http.MethodPost
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathObjects.Join(bck.Name, oldName),
 		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActRenameObject, Name: newName}),
+		Query:      cmn.AddBckToQuery(nil, bck),
 	})
 }
 

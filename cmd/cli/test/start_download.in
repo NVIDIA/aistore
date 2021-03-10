@@ -1,4 +1,4 @@
-ais bucket create $BUCKET
+ais bucket create ais://$BUCKET // IGNORE
 ais job rm download --all // IGNORE
 ais job start download gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz ais://$BUCKET // FAIL "too many arguments"
 

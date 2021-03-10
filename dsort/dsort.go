@@ -685,10 +685,16 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 		return nil, err
 	}
 	defer cos.Close(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf(
+			"unexpected status code (%d) when requesting order file from %q",
+			resp.StatusCode, m.rs.OrderFileURL,
+		)
+	}
 
 	// TODO: handle very large files > GB - in case the file is very big we
-	// need to save file to the disk and operate on the file directly rather
-	// than keeping everything in memory.
+	//  need to save file to the disk and operate on the file directly rather
+	//  than keeping everything in memory.
 
 	lineReader := bufio.NewReader(resp.Body)
 

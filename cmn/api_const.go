@@ -180,7 +180,6 @@ const (
 	// Bucket related query params.
 	URLParamProvider  = "provider" // backend provider
 	URLParamNamespace = "namespace"
-	URLParamBucket    = "bck"
 	URLParamBucketTo  = "bck_to"
 	URLParamKeepBckMD = "keep_md"
 

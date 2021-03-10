@@ -72,7 +72,7 @@ func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.Bck2Bc
 		return
 	}
 	baseParams.Method = http.MethodPost
-	q := cmn.AddBckUnameToQuery(nil, fromBck, cmn.URLParamBucket) // aka cmn.URLParamBucketFrom
+	q := cmn.AddBckToQuery(nil, fromBck)
 	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.URLParamBucketTo)
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,

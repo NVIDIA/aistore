@@ -1,6 +1,6 @@
 // RUN local-deployment
 
-ais bucket create $BUCKET // IGNORE
+ais bucket create ais://$BUCKET // IGNORE
 mkdir -p /tmp/prm && echo 012345 > /tmp/prm/obj && echo 012345 > /tmp/prm/discard
 ais object promote /tmp/prm/obj ais://$BUCKET/one/one --keep=true --target $RANDOM_TARGET
 ais object promote /tmp/prm/discard ais://$BUCKET/two/ --keep=false  --target $RANDOM_TARGET
@@ -12,4 +12,4 @@ ais object promote /tmp/prm/ ais://$BUCKET/sixth/ --keep=true --target $RANDOM_T
 ais bucket ls ais://$BUCKET
 
 rm -rf /tmp/prm // IGNORE
-ais bucket rm $BUCKET // IGNORE
+ais bucket rm ais://$BUCKET // IGNORE

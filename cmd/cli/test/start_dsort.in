@@ -3,7 +3,7 @@ ais job start dsort '{}' -f "path" // FAIL "incorrect usage of "ais job start ds
 ais job start dsort -f /path/to/file.json // FAIL "open /path/to/file.json: no such file or directory"
 ais job start dsort '{extension: .tar' // FAIL "failed to determine the type of the job specification"
 
-ais bucket create $BUCKET_1
+ais bucket create ais://$BUCKET_1 // IGNORE
 
 # JSON
 echo '{"extension": ".tar","bck": {name: "$BUCKET_1"},"input_format": "shard-{0..9}","output_format": "new-shard-{0000..1000}","output_shard_size": "10KB","description": "sort shards from 0 to 9","algorithm": {"kind": "alphanumeric"},"extended_metrics": true}' > /tmp/dsort.json

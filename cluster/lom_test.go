@@ -1004,20 +1004,8 @@ var _ = Describe("LOM", func() {
 			fs.Disable(mpaths[1]) // Ensure that it matches desiredCloudFQN
 			fs.Disable(mpaths[2]) // ditto
 
-			lomEmpty := &cluster.LOM{ObjName: testObject}
-			err := lomEmpty.Init(cmn.Bck{Name: sameBucketName})
-			Expect(err).NotTo(HaveOccurred())
-			err = lomEmpty.Load(false, false)
-			Expect(cmn.IsObjNotExist(err)).To(BeTrue())
-			Expect(lomEmpty.FQN).To(Equal(desiredLocalFQN))
-			Expect(lomEmpty.Uname()).To(Equal(lomEmpty.Bck().MakeUname(testObject)))
-			Expect(lomEmpty.Bck().Provider).To(Equal(cmn.ProviderAIS))
-			Expect(lomEmpty.MpathInfo().Path).To(Equal(mpaths[0]))
-			expectEqualBck(lomEmpty.Bucket(), localSameBck)
-			Expect(lomEmpty.ObjName).To(Equal(testObject))
-
 			lomLocal := &cluster.LOM{ObjName: testObject}
-			err = lomLocal.Init(cmn.Bck{Name: sameBucketName, Provider: cmn.ProviderAIS})
+			err := lomLocal.Init(cmn.Bck{Name: sameBucketName, Provider: cmn.ProviderAIS})
 			Expect(err).NotTo(HaveOccurred())
 			err = lomLocal.Load(false, false)
 			Expect(cmn.IsObjNotExist(err)).To(BeTrue())

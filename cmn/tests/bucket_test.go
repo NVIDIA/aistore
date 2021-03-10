@@ -50,10 +50,7 @@ func TestParseBckObjectURI(t *testing.T) {
 			uri:         "ais://@#",
 			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS},
 		},
-		{
-			uri:         "@#",
-			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS},
-		},
+
 		{
 			uri:         "ais://@",
 			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS},
@@ -64,29 +61,40 @@ func TestParseBckObjectURI(t *testing.T) {
 			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsAnyRemote},
 		},
 		{
+			uri:         "@uuid#namespace",
+			query:       true,
+			expectedBck: cmn.Bck{Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
+		},
+		{
+			uri:         "@",
+			query:       true,
+			expectedBck: cmn.Bck{Ns: cmn.NsAnyRemote},
+		},
+		{
+			uri:         "@#",
+			query:       true,
+			expectedBck: cmn.Bck{},
+		},
+		{
 			uri:         "ais://@#/bucket",
 			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
-		},
-		{
-			uri:         "ais://@uuid#namespace/bucket",
-			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket", Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
-		},
-		{
-			uri:         "@uuid#namespace",
-			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
 		},
 		{
 			uri:         "ais://bucket",
 			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
 		},
 		{
-			uri:         "bucket",
+			uri:         "ais://bucket/objname",
 			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
+			expectedObj: "objname",
 		},
 		{
-			uri:         "bucket/object",
+			uri:         "ais://@uuid#namespace/bucket",
+			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket", Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
+		},
+		{
+			uri:         "ais://bucket",
 			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
-			expectedObj: "object",
 		},
 		{
 			uri:         "aws://",
@@ -100,6 +108,12 @@ func TestParseBckObjectURI(t *testing.T) {
 		{uri: "ais://%something", expectedErr: true},
 		{uri: "aiss://", expectedErr: true},
 		{uri: "ais:/", expectedErr: true},
+		{uri: "bucket", expectedErr: true},
+		{uri: "bucket/object", expectedErr: true},
+		{uri: "@#", expectedErr: true},
+		{uri: "@uuid#namespace", expectedErr: true},
+		{uri: "@uuid#namespace/bucket", expectedErr: true},
+		{uri: "@uuid#namespace/bucket/object", expectedErr: true},
 	}
 
 	for _, test := range tests {
