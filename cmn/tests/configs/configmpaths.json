@@ -1,6 +1,6 @@
 {
     "confdir": "/fake/conf/dir",
-    "log_dir": "/fake/log/dir",
+    "log_dir": "/tmp/config_test_ais/log",
     "host_net": {
         "hostname": "127.0.1.0",
         "hostname_intra_control": "127.0.2.0",
