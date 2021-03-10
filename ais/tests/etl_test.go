@@ -270,13 +270,13 @@ func TestETLObjectCloud(t *testing.T) {
 	}
 
 	for comm, configs := range tcs {
-		t.Run(t.Name()+"/"+comm, func(t *testing.T) {
+		t.Run(comm, func(t *testing.T) {
 			uuid, err := tetl.Init(baseParams, tetl.Echo, comm)
 			tassert.CheckFatal(t, err)
 			t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
 			for _, conf := range configs {
-				t.Run(fmt.Sprintf("%s/cached=%t", t.Name(), conf.cached), func(t *testing.T) {
+				t.Run(fmt.Sprintf("cached=%t", conf.cached), func(t *testing.T) {
 					testETLObjectCloud(t, cliBck, uuid, conf.onlyLong, conf.cached)
 				})
 			}
