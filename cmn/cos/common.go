@@ -55,12 +55,6 @@ type (
 		PctMemUsed float64 `json:"pct_mem_used"`
 		PctCPUUsed float64 `json:"pct_cpu_used"`
 	}
-
-	// jsoniter extension to use `local` tag.
-	// supported flag  `local:"omit"` to omit a field while Marshal
-	jsonLocalExt struct {
-		jsoniter.DummyExtension
-	}
 )
 
 var toBiBytes = map[string]int64{
@@ -78,12 +72,8 @@ var toBiBytes = map[string]int64{
 	"TIB": TiB,
 }
 
-var (
-	// JSON is used to Marshal/Unmarshal API json messages and is initialized in init function.
-	JSON jsoniter.API
-	// JSONLocal is jsoniter API with `local` tag extension enabled
-	JSONLocal jsoniter.API
-)
+// JSON is used to Marshal/Unmarshal API json messages and is initialized in init function.
+var JSON jsoniter.API
 
 func init() {
 	rand.Seed(mono.NanoTime())
@@ -97,34 +87,15 @@ func init() {
 		SortMapKeys:           true,
 	}
 	JSON = jsonConf.Froze()
-	JSONLocal = jsonConf.Froze()
-	JSONLocal.RegisterExtension(&jsonLocalExt{})
 }
 
 //////////////////////
 // JSON & JSONLocal //
 //////////////////////
 
-func (e *jsonLocalExt) UpdateStructDescriptor(sd *jsoniter.StructDescriptor) {
-	for _, binding := range sd.Fields {
-		tag := binding.Field.Tag()
-		localTag := tag.Get("local")
-		if localTag == JSONLocalTagOmit {
-			binding.ToNames = []string{}
-		}
-	}
-}
-
 // MustMarshal marshals v and panics if error occurs.
 func MustMarshal(v interface{}) []byte {
 	b, err := JSON.Marshal(v)
-	AssertNoErr(err)
-	return b
-}
-
-// MustLocalMarshal marshals v using JSON local externsion and panics if error occurs.
-func MustLocalMarshal(v interface{}) []byte {
-	b, err := JSONLocal.Marshal(v)
 	AssertNoErr(err)
 	return b
 }

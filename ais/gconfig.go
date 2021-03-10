@@ -42,7 +42,7 @@ var _ revs = (*globalConfig)(nil)
 
 func (config *globalConfig) tag() string     { return revsConfTag }
 func (config *globalConfig) version() int64  { return config.Version }
-func (config *globalConfig) marshal() []byte { return cos.MustLocalMarshal(config) }
+func (config *globalConfig) marshal() []byte { return cos.MustMarshal(config) }
 
 ////////////
 // config //

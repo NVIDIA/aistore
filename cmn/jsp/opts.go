@@ -16,21 +16,13 @@ type (
 		Signature bool // when true, write 128bit prefix (of the layout shown above) at offset zero
 
 		Indent bool // Determines if the JSON should be indented. Useful for CLI config.
-		Local  bool // when true, use JSON local extension
 	}
 	Opts interface {
 		JspOpts() Options
 	}
 )
 
-func Plain() Options      { return Options{} }
-func PlainLocal() Options { return Options{Local: true} }
-
-func CCSignLocal(metaver uint32) Options {
-	opts := CCSign(metaver)
-	opts.Local = true
-	return opts
-}
+func Plain() Options { return Options{} }
 
 func CCSign(metaver uint32) Options {
 	return Options{Metaver: metaver, Compress: true, Checksum: true, Signature: true, Indent: false}

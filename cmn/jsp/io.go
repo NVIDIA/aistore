@@ -84,11 +84,8 @@ func Encode(ws cos.WriterAt, v interface{}, opts Options) (err error) {
 		cos.Assert(h.Size() == sizeXXHash64)
 		w = io.MultiWriter(h, w)
 	}
-	if opts.Local {
-		encoder = cos.JSONLocal.NewEncoder(w)
-	} else {
-		encoder = cos.JSON.NewEncoder(w)
-	}
+
+	encoder = cos.JSON.NewEncoder(w)
 	if opts.Indent {
 		encoder.SetIndent("", "  ")
 	}
