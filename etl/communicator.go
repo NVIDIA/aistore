@@ -235,7 +235,9 @@ func (rc *redirectComm) Get(bck *cluster.Bck, objName string, ts ...time.Duratio
 //////////////////
 
 func (pc *revProxyComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
-	r.URL.Path = transformerPath(bck, objName) // NOTE: using /bucket/object endpoint
+	path := transformerPath(bck, objName)
+	r.URL.Path, _ = url.PathUnescape(path) // `Path` must be unescaped otherwise it will be escaped again.
+	r.URL.RawPath = path                   // `RawPath` should be escaped version of `Path`.
 	pc.rp.ServeHTTP(w, r)
 	return nil
 }
@@ -259,8 +261,9 @@ func pruneQuery(rawQuery string) string {
 	return vals.Encode()
 }
 
+// TODO: Consider encoding bucket and object name without the necessity to escape.
 func transformerPath(bck *cluster.Bck, objName string) string {
-	return cos.JoinWords(bck.Name, objName)
+	return "/" + url.PathEscape(bck.MakeUname(objName))
 }
 
 func getWithTimeout(client *http.Client, url string, ts ...time.Duration) (r cos.ReadCloseSizer, err error) {

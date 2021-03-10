@@ -5,8 +5,10 @@
 package ais
 
 import (
+	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"reflect"
 	"sort"
 
@@ -181,38 +183,62 @@ func (t *targetrunner) healthETL(w http.ResponseWriter, r *http.Request) {
 	t.writeJSON(w, r, healthMsg, "health-ETL")
 }
 
-// GET /v1/etl/objects/<secret>/<bucket-name>/<object-name>
+func (t *targetrunner) etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (secret string, bck *cluster.Bck, objName string, err error) {
+	items, err := cmn.MatchRESTItems(r.URL.EscapedPath(), 2, false, cmn.URLPathETLObject.L)
+	if err != nil {
+		return secret, bck, objName, err
+	}
+	secret = items[0]
+	// Encoding is done in `transformerPath`.
+	uname, err := url.PathUnescape(items[1])
+	if err != nil {
+		return secret, bck, objName, err
+	}
+	var b cmn.Bck
+	b, objName = cmn.ParseUname(uname)
+	if err := b.Validate(); err != nil {
+		return secret, bck, objName, err
+	} else if objName == "" {
+		return secret, bck, objName, fmt.Errorf("object name is missing")
+	}
+	bck = cluster.NewBckEmbed(b)
+	return
+}
+
+// GET /v1/etl/objects/<secret>/<uname>
 //
 // getObjectETL handles GET requests from ETL containers (K8s Pods).
 // getObjectETL validates the secret that was injected into a Pod during its initialization.
 func (t *targetrunner) getObjectETL(w http.ResponseWriter, r *http.Request) {
-	request := &apiRequest{after: 3, prefix: cmn.URLPathETLObject.L, bckIdx: 1}
-	if err := t.parseAPIRequest(w, r, request); err != nil {
+	secret, bck, objName, err := t.etlParseObjectReq(w, r)
+	if err != nil {
+		t.writeErr(w, r, err)
 		return
 	}
-	if err := etl.CheckSecret(request.items[0]); err != nil {
+	if err := etl.CheckSecret(secret); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
 
-	t.getObject(w, r, r.URL.Query(), request.bck, request.items[2])
+	t.getObject(w, r, r.URL.Query(), bck, objName)
 }
 
-// HEAD /v1/etl/objects/<secret>/<bucket-name>/<object-name>
+// HEAD /v1/etl/objects/<secret>/<uname>
 //
 // headObjectETL handles HEAD requests from ETL containers (K8s Pods).
 // headObjectETL validates the secret that was injected into a Pod during its initialization.
 func (t *targetrunner) headObjectETL(w http.ResponseWriter, r *http.Request) {
-	request := &apiRequest{after: 3, prefix: cmn.URLPathETLObject.L, bckIdx: 1}
-	if err := t.parseAPIRequest(w, r, request); err != nil {
+	secret, bck, objName, err := t.etlParseObjectReq(w, r)
+	if err != nil {
+		t.writeErr(w, r, err)
 		return
 	}
-	if err := etl.CheckSecret(request.items[0]); err != nil {
+	if err := etl.CheckSecret(secret); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
 
-	t.headObject(w, r, r.URL.Query(), request.bck, request.items[2])
+	t.headObject(w, r, r.URL.Query(), bck, objName)
 }
 
 ////////////////

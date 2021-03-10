@@ -108,7 +108,7 @@ func readExamples(fileName string) (examples []*core.TFExample, err error) {
 
 func testETLObject(t *testing.T, onlyLong bool, comm, transformer, inPath, outPath string, fEq filesEqualFunc) {
 	var (
-		bck                    = cmn.Bck{Name: "etl-test", Provider: cmn.ProviderAIS}
+		bck                    = cmn.Bck{Provider: cmn.ProviderAIS, Name: "etl-test"}
 		testObjDir             = filepath.Join("data", "transformer", transformer)
 		inputFileName          = filepath.Join(testObjDir, "object.in")
 		expectedOutputFileName = filepath.Join(testObjDir, "object.out")
