@@ -204,9 +204,9 @@ TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL      
 
 ## Show config
 
-`ais show config DAEMON_ID [CONFIG_SECTION]`
+`ais show config [DAEMON_ID] [CONFIG_SECTION]`
 
-Display the configuration of `DAEMON_ID`. If `CONFIG_SECTION` is given, only that specific section will be shown.
+Display the cluster configuration, or daemon configuration of `DAEMON_ID`. If `CONFIG_SECTION` is given, only that specific section will be shown.
 
 ### Options
 

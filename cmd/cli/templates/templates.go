@@ -69,7 +69,7 @@ const (
 	DiskStatsFullTmpl = DiskStatsHeader + DiskStatBodyTmpl
 
 	// Config
-	DaemonConfTmpl = "PROPERTY\t VALUE\n{{range $item := .}}" +
+	ConfigTmpl = "PROPERTY\t VALUE\n{{range $item := .}}" +
 		"{{ $item.Name }}\t {{ $item.Value }}\n" +
 		"{{end}}\n"
 

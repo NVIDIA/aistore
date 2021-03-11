@@ -239,19 +239,20 @@ const (
 
 // User/client "what" values.
 const (
-	GetWhatBMD          = "bmd"
-	GetWhatConfig       = "config"
-	GetWhatDaemonStatus = "status"
-	GetWhatDiskStats    = "disk"
-	GetWhatMountpaths   = "mountpaths"
-	GetWhatRemoteAIS    = "remote"
-	GetWhatSmap         = "smap"
-	GetWhatSmapVote     = "smapvote"
-	GetWhatSnode        = "snode"
-	GetWhatStats        = "stats"
-	GetWhatStatus       = "status" // IC status by uuid.
-	GetWhatSysInfo      = "sysinfo"
-	GetWhatTargetIPs    = "target_ips"
+	GetWhatBMD           = "bmd"
+	GetWhatConfig        = "config"
+	GetWhatClusterConfig = "cluster_config"
+	GetWhatDaemonStatus  = "status"
+	GetWhatDiskStats     = "disk"
+	GetWhatMountpaths    = "mountpaths"
+	GetWhatRemoteAIS     = "remote"
+	GetWhatSmap          = "smap"
+	GetWhatSmapVote      = "smapvote"
+	GetWhatSnode         = "snode"
+	GetWhatStats         = "stats"
+	GetWhatStatus        = "status" // IC status by uuid.
+	GetWhatSysInfo       = "sysinfo"
+	GetWhatTargetIPs     = "target_ips"
 )
 
 // Internal "what" values.

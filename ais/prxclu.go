@@ -105,6 +105,14 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 			buf.WriteString(si.IntraDataNet.NodeHostname)
 		}
 		w.Write(buf.Bytes())
+
+	case cmn.GetWhatClusterConfig:
+		config, err := p.owner.config.get()
+		if err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+		p.writeJSON(w, r, config, what)
 	default:
 		p.writeErrf(w, r, fmtUnknownQue, what)
 	}

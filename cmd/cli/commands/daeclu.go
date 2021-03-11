@@ -167,6 +167,24 @@ func getDiskStats(targets map[string]*stats.DaemonStatus) ([]templates.DiskStats
 	return allStats, nil
 }
 
+func getClusterConfig(c *cli.Context) error {
+	var (
+		section = c.Args().First()
+		useJSON = flagIsSet(c, jsonFlag)
+	)
+
+	cluConfig, err := api.GetClusterConfig(defaultAPIParams)
+	if err != nil {
+		return err
+	}
+
+	if useJSON {
+		return templates.DisplayOutput(cluConfig, c.App.Writer, "", useJSON)
+	}
+	flat := flattenConfig(cluConfig, section)
+	return templates.DisplayOutput(flat, c.App.Writer, templates.ConfigTmpl, false)
+}
+
 // Displays the config of a daemon
 func getDaemonConfig(c *cli.Context) error {
 	var (
@@ -198,7 +216,7 @@ func getDaemonConfig(c *cli.Context) error {
 	}
 
 	flat := flattenConfig(body, section)
-	return templates.DisplayOutput(flat, c.App.Writer, templates.DaemonConfTmpl, false)
+	return templates.DisplayOutput(flat, c.App.Writer, templates.ConfigTmpl, false)
 }
 
 // Sets config of specific daemon or cluster

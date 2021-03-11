@@ -150,6 +150,21 @@ func SetClusterConfigUsingMsg(baseParams BaseParams, configToUpdate *cmn.ConfigT
 	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cos.MustMarshal(msg), Query: q})
 }
 
+// GetClusterConfig returns cluster-wide configuration
+func GetClusterConfig(baseParams BaseParams) (*cmn.ClusterConfig, error) {
+	cluConfig := &cmn.ClusterConfig{}
+	baseParams.Method = http.MethodGet
+	err := DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPathCluster.S,
+		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatClusterConfig}},
+	}, cluConfig)
+	if err != nil {
+		return nil, err
+	}
+	return cluConfig, nil
+}
+
 func AttachRemoteAIS(baseParams BaseParams, alias, u string) error {
 	q := make(url.Values)
 	q.Set(cmn.URLParamWhat, cmn.GetWhatRemoteAIS)

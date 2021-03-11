@@ -291,7 +291,7 @@ func retrieveStatus(nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStat
 }
 
 // Get config from random target.
-func getClusterConfig() (*cmn.Config, error) {
+func getRandTargetConfig() (*cmn.Config, error) {
 	smap, err := api.GetClusterMap(defaultAPIParams)
 	if err != nil {
 		return nil, err
@@ -305,6 +305,16 @@ func getClusterConfig() (*cmn.Config, error) {
 		return nil, err
 	}
 	return cfg, err
+}
+
+func isConfigProp(s string) bool {
+	props := cmn.ConfigPropList()
+	for _, p := range props {
+		if p == s || strings.HasPrefix(p, s+".") {
+			return true
+		}
+	}
+	return cos.StringInSlice(s, props)
 }
 
 //
@@ -1141,7 +1151,7 @@ func parseURLtoBck(strURL string) (bck cmn.Bck) {
 	return
 }
 
-func flattenConfig(cfg *cmn.Config, section string) []prop {
+func flattenConfig(cfg interface{}, section string) []prop {
 	flat := make([]prop, 0, 40)
 	cmn.IterFields(cfg, func(tag string, field cmn.IterField) (error, bool) {
 		if section == "" || strings.HasPrefix(tag, section) {

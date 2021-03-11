@@ -134,8 +134,11 @@ func daemonConfigSectionCompletions(daemonOptional bool) cli.BashCompleteFunc {
 			return
 		}
 
-		// Daemon already given as argument
 		if c.NArg() == 1 {
+			if isConfigProp(c.Args().First()) {
+				return
+			}
+			// Daemon already given as argument; suggest only config
 			suggestConfigSection()
 			return
 		}

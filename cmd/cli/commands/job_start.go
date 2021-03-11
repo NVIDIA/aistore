@@ -219,7 +219,7 @@ func startDownloadHandler(c *cli.Context) error {
 	} else if source.backend.bck.IsEmpty() {
 		dlType = downloader.DlTypeSingle
 	} else {
-		cfg, err := getClusterConfig()
+		cfg, err := getRandTargetConfig()
 		if err != nil {
 			return err
 		}
