@@ -143,3 +143,14 @@ func SetDaemonConfig(baseParams BaseParams, nodeID string, nvs cos.SimpleKVs, tr
 		Header:     http.Header{cmn.HeaderNodeID: []string{nodeID}},
 	})
 }
+
+// ResetDaemonConfig resets the configuration for a specific node to the cluster configuration.
+func ResetDaemonConfig(baseParams BaseParams, nodeID string) error {
+	baseParams.Method = http.MethodPut
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPathReverseDaemon.S,
+		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActResetConfig}),
+		Header:     http.Header{cmn.HeaderNodeID: []string{nodeID}},
+	})
+}

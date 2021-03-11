@@ -202,7 +202,7 @@ TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL      
 165274t8087      0.10%           31.28GiB        16%             2.458TiB        0.12%           -               80s
 ```
 
-## Show config
+## Show configuration
 
 `ais show config [DAEMON_ID] [CONFIG_SECTION]`
 
@@ -231,7 +231,7 @@ LRU Config
  Enabled:		true
 ```
 
-## Set config
+## Set configuration
 
 `ais cluster configure KEY=VALUE [KEY=VALUE...]`
 `ais cluster configure DAEMON_ID KEY=VALUE [KEY=VALUE...]`
@@ -253,4 +253,28 @@ Change `periodic.stats_time` and `disk.disk_util_low_wm` config values for the e
 ```console
 $ ais cluster configure periodic.stats_time 10s disk.disk_util_low_wm 40
 Config has been updated successfully.
+```
+
+## Reset configuration
+
+`ais cluster configure reset [DAEMON_ID]`
+
+Reset configuration for a specific daemon or the entire cluster back to the cluster configuration.
+That is, all local overrides will be removed and the cluster configuration will be applied to all nodes.
+To reset the configuration for the entire cluster, omit the `DEAMON_ID` argument.
+
+### Examples
+
+#### Reset configuration for all nodes
+
+```console
+$ ais cluster configure reset
+config successfully reset for all nodes
+```
+
+#### Reset configuration for one node
+
+```console
+$ ais cluster configure reset CMhHp8082 
+config for node "CMhHp8082" successfully reset
 ```

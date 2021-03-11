@@ -1966,6 +1966,10 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	switch msg.Action {
 	case cmn.ActSetConfig: // setconfig #2 - via action message
 		p.setDaemonConfigMsg(w, r, &msg)
+	case cmn.ActResetConfig:
+		if err := p.owner.config.resetDaemonConfig(); err != nil {
+			p.writeErr(w, r, err)
+		}
 	case cmn.ActShutdown:
 		smap := p.owner.smap.get()
 		isPrimary := smap.isPrimary(p.si)

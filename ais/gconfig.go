@@ -152,3 +152,23 @@ func (co *configOwner) setDaemonConfig(toUpdate *cmn.ConfigToUpdate, transient b
 	cmn.GCO.NotifyListeners(oldConfig)
 	return
 }
+
+func (co *configOwner) resetDaemonConfig() (err error) {
+	co.Lock()
+	oldConfig := cmn.GCO.Get()
+	config, err := co.get()
+	if err != nil {
+		co.Unlock()
+		return err
+	}
+	cmn.GCO.PutOverrideConfig(nil)
+	err = cos.RemoveFile(path.Join(oldConfig.ConfigDir, cmn.OverrideConfigFname))
+	if err != nil {
+		co.Unlock()
+		return
+	}
+	co.updateGCO(config)
+	co.Unlock()
+	cmn.GCO.NotifyListeners(oldConfig)
+	return
+}

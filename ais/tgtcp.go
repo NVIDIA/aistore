@@ -150,6 +150,10 @@ func (t *targetrunner) daeputJSON(w http.ResponseWriter, r *http.Request) {
 	switch msg.Action {
 	case cmn.ActSetConfig: // setconfig #2 - via action message
 		t.setDaemonConfigMsg(w, r, &msg)
+	case cmn.ActResetConfig:
+		if err := t.owner.config.resetDaemonConfig(); err != nil {
+			t.writeErr(w, r, err)
+		}
 	case cmn.ActShutdown:
 		t.Stop(errShutdown)
 	default:

@@ -150,6 +150,16 @@ func SetClusterConfigUsingMsg(baseParams BaseParams, configToUpdate *cmn.ConfigT
 	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cos.MustMarshal(msg), Query: q})
 }
 
+// ResetClusterConfig resets the configuration of all nodes to the cluster configuration
+func ResetClusterConfig(baseParams BaseParams) error {
+	baseParams.Method = http.MethodPut
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPathCluster.S,
+		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActResetConfig}),
+	})
+}
+
 // GetClusterConfig returns cluster-wide configuration
 func GetClusterConfig(baseParams BaseParams) (*cmn.ClusterConfig, error) {
 	cluConfig := &cmn.ClusterConfig{}

@@ -30,6 +30,7 @@ const (
 	ActCopyBck        = "copybck"
 	ActETLBck         = "etlbck"
 	ActSetConfig      = "setconfig"
+	ActResetConfig    = "resetconfig"
 	ActSetBprops      = "setbprops"
 	ActResetBprops    = "resetbprops"
 	ActResyncBprops   = "resyncbprops"

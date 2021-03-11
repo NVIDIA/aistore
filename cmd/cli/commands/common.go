@@ -78,6 +78,7 @@ const (
 	subcmdCluAttach = subcmdAttach
 	subcmdCluDetach = subcmdDetach
 	subcmdCluConfig = "configure"
+	subcmdReset     = "reset"
 
 	// Disk subcommands
 	subcmdDiskAttach = subcmdAttach

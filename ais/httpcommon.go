@@ -1248,6 +1248,24 @@ func (h *httprunner) bcastAsyncIC(msg *aisMsg) {
 	freeBcastArgs(args)
 }
 
+// bcastReqGroup broadcasts a ReqArgs to a specific group of nodes
+func (h *httprunner) bcastReqGroup(w http.ResponseWriter, r *http.Request, req cmn.ReqArgs, to int) {
+	args := allocBcastArgs()
+	args.req = req
+	args.to = to
+	results := h.bcastGroup(args)
+	freeBcastArgs(args)
+	for _, res := range results {
+		if res.err == nil {
+			continue
+		}
+		h.writeErr(w, r, res.error())
+		freeCallResults(results)
+		return
+	}
+	freeCallResults(results)
+}
+
 //////////////////////////////////
 // HTTP request parsing helpers //
 //////////////////////////////////

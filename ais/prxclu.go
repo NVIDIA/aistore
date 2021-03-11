@@ -705,6 +705,8 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		p.setClusterConfig(w, r, toUpdate, msg)
+	case cmn.ActResetConfig:
+		p.resetClusterConfig(w, r, msg)
 	case cmn.ActShutdown:
 		glog.Infoln("Proxy-controlled cluster shutdown...")
 		args := allocBcastArgs()
@@ -746,6 +748,16 @@ func (p *proxyrunner) setClusterConfig(w http.ResponseWriter, r *http.Request, t
 	}
 }
 
+func (p *proxyrunner) resetClusterConfig(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
+	if err := p.owner.config.resetDaemonConfig(); err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	body := cos.MustMarshal(msg)
+	req := cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: body}
+	p.bcastReqGroup(w, r, req, cluster.AllNodes)
+}
+
 func (p *proxyrunner) setTransientClusterConfig(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToUpdate, msg *cmn.ActionMsg) {
 	if err := p.owner.config.setDaemonConfig(toUpdate, true /* transient */); err != nil {
 		p.writeErr(w, r, err)
@@ -756,20 +768,8 @@ func (p *proxyrunner) setTransientClusterConfig(w http.ResponseWriter, r *http.R
 
 	msg.Value = toUpdate
 	body := cos.MustMarshal(msg)
-	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: body, Query: q}
-	args.to = cluster.AllNodes
-	results := p.bcastGroup(args)
-	freeBcastArgs(args)
-	for _, res := range results {
-		if res.err == nil {
-			continue
-		}
-		p.writeErr(w, r, res.error())
-		freeCallResults(results)
-		return
-	}
-	freeCallResults(results)
+	req := cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: body, Query: q}
+	p.bcastReqGroup(w, r, req, cluster.AllNodes)
 }
 
 func (p *proxyrunner) _setConfPre(ctx *configModifier, clone *globalConfig) (updated bool, err error) {

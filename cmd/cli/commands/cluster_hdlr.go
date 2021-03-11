@@ -74,6 +74,15 @@ var (
 					Flags:        clusterCmdsFlags[subcmdCluConfig],
 					Action:       cluConfigHandler,
 					BashComplete: cluConfigCompletions,
+					Subcommands: []cli.Command{
+						{
+							Name:         subcmdReset,
+							Usage:        "reset to cluster configuration on all nodes or a specific node",
+							ArgsUsage:    optionalDaemonIDArgument,
+							Action:       cluResetConfigHandler,
+							BashComplete: daemonCompletions(completeAllDaemons),
+						},
+					},
 				},
 				{
 					Name:   subcmdRebalance,
@@ -177,6 +186,25 @@ func cluConfigHandler(c *cli.Context) (err error) {
 		return
 	}
 	return cluConfig(c)
+}
+
+func cluResetConfigHandler(c *cli.Context) (err error) {
+	daemonID := c.Args().First()
+	if daemonID == "" {
+		if err := api.ResetClusterConfig(defaultAPIParams); err != nil {
+			return err
+		}
+
+		fmt.Fprintf(c.App.Writer, "config successfully reset for all nodes\n")
+		return nil
+	}
+
+	if err := api.ResetDaemonConfig(defaultAPIParams, daemonID); err != nil {
+		return err
+	}
+
+	fmt.Fprintf(c.App.Writer, "config for node %q successfully reset\n", daemonID)
+	return nil
 }
 
 func clusterShutdownHandler(c *cli.Context) (err error) {
