@@ -1743,11 +1743,13 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	objectsExist(t, baseParams, bck, o.pattern, o.objCount)
 
 	// 4. Check that ListObjects returns correct number of items
-	tlog.Logln("DONE\nReading bucket list...")
+	tlog.Logln("DONE")
+	tlog.Logln("Reading bucket list...")
 	msg := &cmn.SelectMsg{Props: "size,status,version"}
 	objList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(objList.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(objList.Entries), o.objCount)
+	tlog.Logln("DONE")
 }
 
 func TestECEmergencyTargetForReplica(t *testing.T) {

@@ -299,12 +299,17 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		p.reg.pool = append(p.reg.pool, regReq)
 		p.reg.mtx.Unlock()
 	}
-	// Note: The node ID is obtained from the node itself, api calls are not trusted.
-	// Any aisnode will either detect or generate an ID for itself during startup.
-	// For more, see initDaemonID() in ais/daemon.go.
+	// NOTE: The node ID is obtained from the node itself, API calls are not trusted.
+	//  Any aisnode will either detect or generate an ID for itself during startup.
+	//  For more, see `initDaemonID` in `ais/daemon.go`.
 	nsi := regReq.SI
 	if userRegister {
-		nsi.DaemonID = p.getDaemonInfo(nsi).DaemonID
+		si, err := p.getDaemonInfo(nsi)
+		if err != nil {
+			p.writeErrf(w, r, "failed to obtain daemon info from %q, err: %v", nsi.URL(cmn.NetworkPublic), err)
+			return
+		}
+		nsi.DaemonID = si.DaemonID
 	}
 	if err := nsi.Validate(); err != nil {
 		p.writeErr(w, r, err)
@@ -353,7 +358,10 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 	if selfRegister {
 		if osi := smap.GetNode(nsi.ID()); osi != nil && !osi.Equals(nsi) {
-			if p.detectDaemonDuplicate(osi, nsi) {
+			if duplicate, err := p.detectDaemonDuplicate(osi, nsi); err != nil {
+				p.writeErrf(w, r, "failed to obtain daemon info, err: %v", err)
+				return
+			} else if duplicate {
 				p.writeErrf(w, r, "duplicate node ID %q (%s, %s)", nsi.ID(), osi, nsi)
 				return
 			}
@@ -578,7 +586,11 @@ func (p *proxyrunner) addOrUpdateNode(nsi, osi *cluster.Snode, keepalive bool) b
 		}
 
 		if !osi.Equals(nsi) {
-			if p.detectDaemonDuplicate(osi, nsi) {
+			if duplicate, err := p.detectDaemonDuplicate(osi, nsi); err != nil {
+				glog.Errorf("%s: %s(%s) failed to obtain daemon info, err: %v",
+					p.si, nsi, nsi.PublicNet.DirectURL, err)
+				return false
+			} else if duplicate {
 				glog.Errorf("%s: %s(%s) is trying to register/keepalive with duplicate ID",
 					p.si, nsi, nsi.PublicNet.DirectURL)
 				return false

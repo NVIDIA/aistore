@@ -2415,13 +2415,16 @@ func (p *proxyrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, caller string) (
 
 // detectDaemonDuplicate queries osi for its daemon info in order to determine if info has changed
 // and is equal to nsi
-func (p *proxyrunner) detectDaemonDuplicate(osi, nsi *cluster.Snode) bool {
-	si := p.getDaemonInfo(osi)
-	return si != nil && !nsi.Equals(si)
+func (p *proxyrunner) detectDaemonDuplicate(osi, nsi *cluster.Snode) (bool, error) {
+	si, err := p.getDaemonInfo(osi)
+	if err != nil {
+		return false, err
+	}
+	return !nsi.Equals(si), nil
 }
 
 // getDaemonInfo queries osi for its daemon info and returns it.
-func (p *proxyrunner) getDaemonInfo(osi *cluster.Snode) (si *cluster.Snode) {
+func (p *proxyrunner) getDaemonInfo(osi *cluster.Snode) (si *cluster.Snode, err error) {
 	var (
 		args = callArgs{
 			si: osi,
@@ -2437,10 +2440,9 @@ func (p *proxyrunner) getDaemonInfo(osi *cluster.Snode) (si *cluster.Snode) {
 	)
 	defer _freeCallRes(res)
 	if res.err != nil {
-		return nil
+		return nil, res.err
 	}
-	si = res.v.(*cluster.Snode)
-	return
+	return res.v.(*cluster.Snode), nil
 }
 
 func (p *proxyrunner) headRemoteBck(bck cmn.Bck, q url.Values) (header http.Header, statusCode int, err error) {
