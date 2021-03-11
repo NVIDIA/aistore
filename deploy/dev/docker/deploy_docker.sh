@@ -349,7 +349,7 @@ if [ "$PROXY_CNT" -eq 0 ]; then
     fi
 fi
 
-AIS_FS_PATHS="\"\":\"\""
+AIS_FS_PATHS="\"\":{}"
 if [ "$FS_LIST" = "" ] && [ "$TEST_FSPATH_COUNT" -eq 0 ]; then
     echo Select
     echo  1: Local cache directories
@@ -375,7 +375,7 @@ if [ "$FS_LIST" != "" ] && [ "$TEST_FSPATH_COUNT" -eq 0 ]; then
     IFS=',' read -r -a array <<< "$FS_LIST"
     for element in "${array[@]}"
     do
-        AIS_FS_PATHS="$AIS_FS_PATHS,\"$element\" : \"\" "
+        AIS_FS_PATHS="$AIS_FS_PATHS,\"$element\" : {} "
     done
     AIS_FS_PATHS=${AIS_FS_PATHS#","}
 fi

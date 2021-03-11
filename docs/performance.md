@@ -2,17 +2,17 @@ AIStore is all about the performance.
 Below you will find some tips and tricks to ensure that AIStore does deliver.
 
 - [Performance tuning](#performance-tuning)
-    - [CPU](#cpu)
-    - [Network](#network)
-        - [Smoke test](#smoke-test)
-        - [Maximum open files](#maximum-open-files)
-    - [Storage](#storage)
-        - [Block settings](#block-settings)
-        - [Benchmarking disk](#benchmarking-disk)
-        - [Underlying filesystem](#underlying-filesystem)
-            - [noatime](#noatime)
-    - [Virtualization](#virtualization)
-    - [Metadata write policy](#metadata-write-policy)
+  - [CPU](#cpu)
+  - [Network](#network)
+    - [Smoke test](#smoke-test)
+    - [Maximum open files](#maximum-open-files)
+  - [Storage](#storage)
+    - [Block settings](#block-settings)
+    - [Benchmarking disk](#benchmarking-disk)
+    - [Underlying filesystem](#underlying-filesystem)
+      - [noatime](#noatime)
+  - [Virtualization](#virtualization)
+  - [Metadata write policy](#metadata-write-policy)
 - [Performance testing](#performance-testing)
 
 # Performance tuning
@@ -92,9 +92,9 @@ Storage-wise, each local `ais_local.json` config must be looking as follows:
         "port": "8080",
     },
     "fspaths": {
-        "/tmp/ais/1": " ",
-        "/tmp/ais/2": " ",
-        "/tmp/ais/3": " "
+        "/tmp/ais/1": {},
+        "/tmp/ais/2": {},
+        "/tmp/ais/3": {}
     }
 }
 ```

@@ -7,7 +7,7 @@
 ###################################
 
 test_fspath_cnt=0
-fspath="\"\":\"\""
+fspath="\"\":{}"
 
 echo "Select"
 echo " 1: Local cache directories"
@@ -24,7 +24,7 @@ elif [[ $cache_source -eq 2 ]]; then
    fspath=""
    IFS=',' read -r -a array <<< "$fsinfo"
    for element in "${array[@]}"; do
-      fspath="$fspath,\"$element\" : \"\" "
+      fspath="$fspath,\"$element\" : {} "
    done
    fspath=${fspath#","}
 fi

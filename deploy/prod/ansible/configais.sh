@@ -19,13 +19,13 @@ export MIRROR_UTIL_THRESH=15
 FSP=
 for disk in "$@"; do
     if [ -z "$FSP" ]; then
-	FSP='"/ais/'$disk'": " "'
+	FSP='"/ais/'$disk'": {}'
     else
-        FSP=$FSP', "/ais/'$disk'": " "'
+        FSP=$FSP', "/ais/'$disk'": {}'
     fi
 done
 echo AIS_FS_PATHS are $FSP
-#export AIS_FS_PATHS='"/ais/xvdb": " ", "/ais/xvdc": " ", "/ais/xvdd": " ", "/ais/xvde": " "'
+#export AIS_FS_PATHS='"/ais/xvdb": {}, "/ais/xvdc": {}, "/ais/xvdd": {}, "/ais/xvde": {}'
 export AIS_FS_PATHS=$FSP
 export HOSTNAME_LIST=$(awk -vORS=, '{ print $1 }' ./inventory/cluster.txt | sed 's/,$//')
 sudo rm -rf aisproxy.json || true

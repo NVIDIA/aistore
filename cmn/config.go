@@ -1271,27 +1271,18 @@ func (c *DSortConf) ValidateWithOpts(_ *Config, allowEmpty bool) (err error) {
 	return nil
 }
 
-// FIXME: change config to accept array of mpaths, not map of mpath -> " "
-func (c *FSPathsConf) UnmarshalJSON(data []byte) error {
-	m := make(map[string]string)
-	err := jsoniter.Unmarshal(data, &m)
+func (c *FSPathsConf) UnmarshalJSON(data []byte) (err error) {
+	m := cos.NewStringSet()
+	err = jsoniter.Unmarshal(data, &m)
 	if err != nil {
-		return err
+		return
 	}
-
-	c.Paths = make(map[string]struct{})
-	for k := range m {
-		c.Paths[k] = struct{}{}
-	}
-	return nil
+	c.Paths = m
+	return
 }
 
 func (c *FSPathsConf) MarshalJSON() (data []byte, err error) {
-	m := make(map[string]string)
-	for k := range c.Paths {
-		m[k] = " "
-	}
-	return cos.MustMarshal(m), nil
+	return cos.MustMarshal(c.Paths), nil
 }
 
 func (c *FSPathsConf) Validate(contextConfig *Config) (err error) {
