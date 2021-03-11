@@ -352,8 +352,6 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// unregister
-// remove mountpath
 func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathDaemon.L)
 	if err != nil {
@@ -378,6 +376,12 @@ func (t *targetrunner) handleUnregisterReq(w http.ResponseWriter, r *http.Reques
 		glog.Infoln("sending unregister on target keepalive control channel")
 	}
 
+	opts, ok, err := t.isDecommissionUnreg(w, r)
+	if err != nil {
+		cmn.WriteErr(w, r, err)
+		return
+	}
+
 	// Stop keepaliving
 	t.keepalive.send(kaUnregisterMsg)
 
@@ -387,9 +391,12 @@ func (t *targetrunner) handleUnregisterReq(w http.ResponseWriter, r *http.Reques
 	// Stop all xactions
 	xreg.AbortAll()
 
-	if !t.isDecommissionUnreg(w, r) {
+	if !ok {
 		return
 	}
+	mdOnly := !opts.CleanData
+	glog.Infof("%s: decommissioning, removing user data: %t", t.si, opts.CleanData)
+	fs.Decommission(mdOnly)
 	t.stopHTTPServer()
 }
 

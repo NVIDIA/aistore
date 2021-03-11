@@ -42,6 +42,7 @@ type (
 		Node *cluster.Snode
 		Cmd  string
 		Args []string
+		PID  int
 	}
 	ClusterType string
 )

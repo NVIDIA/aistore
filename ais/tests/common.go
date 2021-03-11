@@ -527,7 +527,7 @@ func (m *ioContext) ensureNoErrors() {
 func (m *ioContext) unregisterTarget() *cluster.Snode {
 	target, _ := m.smap.GetRandTarget()
 	tlog.Logf("Unregister target: %s\n", target.URL(cmn.NetworkPublic))
-	args := &cmn.ActValDecommision{
+	args := &cmn.ActValRmNode{
 		DaemonID:      target.ID(),
 		SkipRebalance: true,
 	}
@@ -554,7 +554,7 @@ func (m *ioContext) reregisterTarget(target *cluster.Snode) (rebID string) {
 	var err error
 	// T1
 	tlog.Logf("Registering target %s...\n", target.ID())
-	args := &cmn.ActValDecommision{DaemonID: target.ID()}
+	args := &cmn.ActValRmNode{DaemonID: target.ID()}
 	rebID, err = api.StopMaintenance(tutils.BaseAPIParams(m.proxyURL), args)
 	tassert.CheckFatal(m.t, err)
 	baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))

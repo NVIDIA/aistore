@@ -35,9 +35,10 @@ type (
 		Overwrite bool   `json:"overwrite"`
 		KeepOrig  bool   `json:"keep_original"`
 	}
-	ActValDecommision struct {
+	ActValRmNode struct {
 		DaemonID      string `json:"sid"`
 		SkipRebalance bool   `json:"skip_rebalance"`
+		CleanData     bool   `json:"clean_data"` // for decommission: remove user data
 	}
 
 	// TODO: `UUID` should be merged into `ContinuationToken`.

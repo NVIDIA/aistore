@@ -926,7 +926,7 @@ func (p *proxyrunner) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *cm
 // TODO: support forceful (--force) removal
 func (p *proxyrunner) rmNode(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	var (
-		opts cmn.ActValDecommision
+		opts cmn.ActValRmNode
 		smap = p.owner.smap.get()
 	)
 	if err := p.checkACL(r.Header, nil, cmn.AccessAdmin); err != nil {
@@ -978,7 +978,7 @@ func (p *proxyrunner) rmNode(w http.ResponseWriter, r *http.Request, msg *cmn.Ac
 
 func (p *proxyrunner) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	var (
-		opts cmn.ActValDecommision
+		opts cmn.ActValRmNode
 		smap = p.owner.smap.get()
 	)
 	if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
@@ -1173,7 +1173,7 @@ func (p *proxyrunner) rebalanceAndRmSelf(msg *cmn.ActionMsg, si *cluster.Snode) 
 }
 
 // Stops rebalance if needed, do cleanup, and get the node back to the cluster.
-func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, si *cluster.Snode, opts *cmn.ActValDecommision) (rebID xaction.RebID,
+func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, si *cluster.Snode, opts *cmn.ActValRmNode) (rebID xaction.RebID,
 	err error) {
 	ctx := &smapModifier{
 		pre:      p._cancelMaintPre,
@@ -1348,7 +1348,6 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 // Ask the node (`si`) to permanently or temporarily remove itself from the cluster, in
 // accordance with the specific `msg.Action` (that we also enumerate and assert below).
 func (p *proxyrunner) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
-	const retries = 2
 	var (
 		smap    = p.owner.smap.get()
 		node    = smap.GetNode(si.ID())
@@ -1364,22 +1363,18 @@ func (p *proxyrunner) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb 
 		body := cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActShutdown})
 		args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: body}
 	case cmn.ActStartMaintenance, cmn.ActDecommission, testInitiatedRm:
-		body := cos.MustMarshal(cmn.ActionMsg{Action: msg.Action})
+		body := cos.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: msg.Value})
 		args.req = cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathDaemonUnreg.S, Body: body}
 	default:
 		debug.AssertMsg(false, "invalid action: "+msg.Action)
 	}
 	glog.Infof("%s: removing node %s via %q", p.si, node, msg.Action)
-	for i := 0; i < retries; i++ {
-		res := p.call(args)
-		er, d := res.err, res.details
-		_freeCallRes(res)
-		if er == nil {
-			break
-		}
+	res := p.call(args)
+	er, d := res.err, res.details
+	_freeCallRes(res)
+	if er != nil {
 		glog.Warningf("%s: %s that is being removed via %q fails to respond: %v[%s]",
 			p.si, node, msg.Action, er, d)
-		time.Sleep(timeout / 2)
 	}
 	if msg.Action == cmn.ActDecommission {
 		// NOTE: proceeding anyway even if all retries fail

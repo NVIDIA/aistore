@@ -709,7 +709,7 @@ func (p *proxyrunner) _updatePropsBMDPre(ctx *bmdModifier, clone *bucketMD) erro
 
 // maintenance: { begin -- enable GFN -- commit -- start rebalance }
 func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
-	opts *cmn.ActValDecommision) (rebID xaction.RebID, err error) {
+	opts *cmn.ActValRmNode) (rebID xaction.RebID, err error) {
 	// 1. begin
 	var (
 		waitmsync  = false

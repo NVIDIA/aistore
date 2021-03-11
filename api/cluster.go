@@ -193,7 +193,7 @@ func DetachRemoteAIS(baseParams BaseParams, alias string) error {
 
 // Maintenance API
 //
-func StartMaintenance(baseParams BaseParams, actValue *cmn.ActValDecommision) (id string, err error) {
+func StartMaintenance(baseParams BaseParams, actValue *cmn.ActValRmNode) (id string, err error) {
 	msg := cmn.ActionMsg{
 		Action: cmn.ActStartMaintenance,
 		Value:  actValue,
@@ -203,7 +203,7 @@ func StartMaintenance(baseParams BaseParams, actValue *cmn.ActValDecommision) (i
 	return id, err
 }
 
-func Decommission(baseParams BaseParams, actValue *cmn.ActValDecommision) (id string, err error) {
+func Decommission(baseParams BaseParams, actValue *cmn.ActValRmNode) (id string, err error) {
 	msg := cmn.ActionMsg{
 		Action: cmn.ActDecommission,
 		Value:  actValue,
@@ -213,7 +213,7 @@ func Decommission(baseParams BaseParams, actValue *cmn.ActValDecommision) (id st
 	return id, err
 }
 
-func StopMaintenance(baseParams BaseParams, actValue *cmn.ActValDecommision) (id string, err error) {
+func StopMaintenance(baseParams BaseParams, actValue *cmn.ActValRmNode) (id string, err error) {
 	msg := cmn.ActionMsg{
 		Action: cmn.ActStopMaintenance,
 		Value:  actValue,
@@ -241,7 +241,7 @@ func ShutdownCluster(baseParams BaseParams) error {
 }
 
 // ShutdownNode shuts down a specific node
-func ShutdownNode(baseParams BaseParams, actValue *cmn.ActValDecommision) (id string, err error) {
+func ShutdownNode(baseParams BaseParams, actValue *cmn.ActValRmNode) (id string, err error) {
 	msg := cmn.ActionMsg{
 		Action: cmn.ActShutdownNode,
 		Value:  actValue,

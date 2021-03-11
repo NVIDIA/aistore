@@ -621,7 +621,7 @@ func (t *targetrunner) validateECEncode(bck *cluster.Bck, msg *aisMsg) (err erro
 func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
 	switch c.phase {
 	case cmn.ActBegin:
-		var opts cmn.ActValDecommision
+		var opts cmn.ActValRmNode
 		if err := cos.MorphMarshal(c.msg.Value, &opts); err != nil {
 			return err
 		}
@@ -637,7 +637,7 @@ func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
 	case cmn.ActAbort:
 		t.gfn.global.abortTimed()
 	case cmn.ActCommit:
-		var opts cmn.ActValDecommision
+		var opts cmn.ActValRmNode
 		if err := cos.MorphMarshal(c.msg.Value, &opts); err != nil {
 			return err
 		}
@@ -647,8 +647,6 @@ func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
 				debug.AssertNoErr(err)
 				return err
 			}
-			mdOnly := true // TODO: provide via cmn.ActValDecommision
-			fs.Decommission(mdOnly)
 		}
 	default:
 		cos.Assert(false)

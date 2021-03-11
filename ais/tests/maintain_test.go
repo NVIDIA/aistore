@@ -5,6 +5,7 @@
 package integration
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
@@ -24,7 +26,7 @@ func TestMaintenanceOnOff(t *testing.T) {
 	smap := tutils.GetClusterMap(t, proxyURL)
 
 	// Invalid target case
-	msg := &cmn.ActValDecommision{DaemonID: "fakeID", SkipRebalance: true}
+	msg := &cmn.ActValRmNode{DaemonID: "fakeID", SkipRebalance: true}
 	_, err := api.StartMaintenance(baseParams, msg)
 	tassert.Fatalf(t, err != nil, "Maintenance for invalid daemon ID succeeded")
 
@@ -80,7 +82,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 	// 2. Put a random target under maintenanace
 	tsi, _ := m.smap.GetRandTarget()
 	tlog.Logf("Put target maintenanace %s\n", tsi)
-	actVal := &cmn.ActValDecommision{DaemonID: tsi.ID(), SkipRebalance: false}
+	actVal := &cmn.ActValRmNode{DaemonID: tsi.ID(), SkipRebalance: false}
 	rebID, err := api.StartMaintenance(baseParams, actVal)
 	tassert.CheckFatal(t, err)
 
@@ -134,7 +136,7 @@ func TestMaintenanceMD(t *testing.T) {
 	)
 
 	cmd := tutils.GetRestoreCmd(dcmTarget)
-	msg := &cmn.ActValDecommision{DaemonID: dcmTarget.ID(), SkipRebalance: true}
+	msg := &cmn.ActValRmNode{DaemonID: dcmTarget.ID(), SkipRebalance: true}
 	_, err := api.Decommission(baseParams, msg)
 	tassert.CheckError(t, err)
 	_, err = tutils.WaitForClusterState(proxyURL, "target decommission", smap.Version, smap.CountActiveProxies(),
@@ -159,6 +161,100 @@ func TestMaintenanceMD(t *testing.T) {
 	tassert.Errorf(t, vmdTargets == smap.CountTargets(),
 		"expected VMD to be found on all %d targets after joining cluster, got %d",
 		smap.CountTargets(), vmdTargets)
+}
+
+func TestMaintenanceDecommissionRebalance(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal, Long: true})
+
+	var (
+		proxyURL   = tutils.RandomProxyURL(t)
+		smap       = tutils.GetClusterMap(t, proxyURL)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		objCount   = 100
+		objPath    = "ic-decomm/"
+		fileSize   = cos.KiB
+
+		dcmTarget, _    = smap.GetRandTarget()
+		origTargetCount = smap.CountTargets()
+		origProxyCount  = smap.CountActiveProxies()
+		bck             = cmn.Bck{Name: t.Name(), Provider: cmn.ProviderAIS}
+	)
+
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	for i := 0; i < objCount; i++ {
+		objName := fmt.Sprintf("%sobj%04d", objPath, i)
+		r, _ := readers.NewRandReader(int64(fileSize), cos.ChecksumXXHash)
+		err := api.PutObject(api.PutObjectArgs{
+			BaseParams: baseParams,
+			Bck:        bck,
+			Object:     objName,
+			Reader:     r,
+			Size:       uint64(fileSize),
+		})
+		tassert.CheckFatal(t, err)
+	}
+
+	cmd := tutils.GetRestoreCmd(dcmTarget)
+	msg := &cmn.ActValRmNode{DaemonID: dcmTarget.ID(), CleanData: true}
+	rebID, err := api.Decommission(baseParams, msg)
+	tassert.CheckError(t, err)
+	_, err = tutils.WaitForClusterState(proxyURL, "target decommission",
+		smap.Version, origProxyCount, origTargetCount-1, dcmTarget.ID())
+	tassert.CheckFatal(t, err)
+
+	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
+	msgList := &cmn.SelectMsg{Prefix: objPath}
+	bucketList, err := api.ListObjects(baseParams, bck, msgList, 0)
+	tassert.CheckError(t, err)
+	if bucketList != nil && len(bucketList.Entries) != objCount {
+		t.Errorf("Invalid number of objects: %d, expected %d", len(bucketList.Entries), objCount)
+	}
+
+	tlog.Logf("wait for node is gone...\n")
+	err = tutils.WaitForNodeToTerminate(cmd.PID, 10*time.Second)
+	tassert.CheckError(t, err)
+	// TODO: something is going on inside a cluster after the node is dead.
+	// If the test restarts the node immediately, the new node reports many
+	// `pipe broken` and `EOF` messages that results in rebalance fails and
+	// the test does as well. Adding a Sleep (10-20 seconds, 3 seconds is
+	// insufficient) fixes the test.
+	time.Sleep(time.Second * 10)
+
+	smap = tutils.GetClusterMap(t, proxyURL)
+	err = tutils.RestoreNode(cmd, false, "target")
+	tassert.CheckFatal(t, err)
+	smap, err = tutils.WaitForClusterState(proxyURL, "target restore",
+		smap.Version, 0, 0)
+	tassert.CheckFatal(t, err)
+
+	// If any node is in maintenance, cancel the maintenance mode
+	var dcm *cluster.Snode
+	for _, node := range smap.Tmap {
+		if smap.PresentInMaint(node) {
+			dcm = node
+			break
+		}
+	}
+	if dcm != nil {
+		tlog.Logf("Canceling maintenance for %s\n", dcm.ID())
+		args := api.XactReqArgs{Kind: cmn.ActRebalance}
+		err = api.AbortXaction(baseParams, args)
+		tassert.CheckError(t, err)
+		val := &cmn.ActValRmNode{DaemonID: dcm.ID()}
+		rebID, err = api.StopMaintenance(baseParams, val)
+		tassert.CheckError(t, err)
+		tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
+	} else {
+		args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
+		_, err = api.WaitForXaction(baseParams, args)
+		tassert.CheckError(t, err)
+	}
+
+	bucketList, err = api.ListObjects(baseParams, bck, msgList, 0)
+	tassert.CheckError(t, err)
+	if bucketList != nil && len(bucketList.Entries) != objCount {
+		t.Errorf("Invalid number of objects: %d, expected %d", len(bucketList.Entries), objCount)
+	}
 }
 
 func countVMDTargets(tsMpaths map[string][]string) (total int) {
@@ -186,7 +282,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 			numGetsEachFile: 1,
 			proxyURL:        proxyURL,
 		}
-		actVal     = &cmn.ActValDecommision{}
+		actVal     = &cmn.ActValRmNode{}
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
@@ -257,7 +353,7 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 			numGetsEachFile: 1,
 			proxyURL:        proxyURL,
 		}
-		actVal     = &cmn.ActValDecommision{}
+		actVal     = &cmn.ActValRmNode{}
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
@@ -376,7 +472,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 		"node should be in maintenance after starting")
 
 	// 4. Remove the node from maintenance.
-	_, err = api.StopMaintenance(baseParams, &cmn.ActValDecommision{DaemonID: node.DaemonID})
+	_, err = api.StopMaintenance(baseParams, &cmn.ActValRmNode{DaemonID: node.DaemonID})
 	tassert.CheckError(t, err)
 	_, err = tutils.WaitForClusterState(proxyURL, "remove node from maintenance",
 		smap.Version, origProxyCnt, origTargetCount)
@@ -436,7 +532,7 @@ func TestShutdownListObjects(t *testing.T) {
 		tassert.CheckError(t, err)
 
 		// Remove the node from maintenance.
-		_, err = api.StopMaintenance(baseParams, &cmn.ActValDecommision{DaemonID: tsi.DaemonID})
+		_, err = api.StopMaintenance(baseParams, &cmn.ActValRmNode{DaemonID: tsi.DaemonID})
 		tassert.CheckError(t, err)
 		_, err = tutils.WaitForClusterState(proxyURL, "remove node from maintenance",
 			m.smap.Version, 0, origTargetCount)

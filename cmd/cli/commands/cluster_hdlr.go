@@ -298,7 +298,7 @@ func nodeMaintenanceHandler(c *cli.Context) (err error) {
 		fmt.Fprintln(c.App.Writer, "Warning: Skipping Rebalance could lead to data loss! To rebalance the cluster manually at a later time, please run: `ais job start rebalance`")
 	}
 
-	actValue := &cmn.ActValDecommision{DaemonID: sid, SkipRebalance: skipRebalance}
+	actValue := &cmn.ActValRmNode{DaemonID: sid, SkipRebalance: skipRebalance}
 	switch action {
 	case subcmdStartMaint:
 		xactID, err = api.StartMaintenance(defaultAPIParams, actValue)

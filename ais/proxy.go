@@ -2012,32 +2012,28 @@ func (p *proxyrunner) daePathAction(w http.ResponseWriter, r *http.Request, acti
 	}
 }
 
-// unregister
 func (p *proxyrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathDaemon.L)
+	_, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathDaemonUnreg.L)
 	if err != nil {
 		return
 	}
 
-	switch apiItems[0] {
-	case cmn.Unregister:
-		if glog.V(3) {
-			glog.Infoln("sending unregister on proxy keepalive control channel")
-		}
+	if glog.V(3) {
+		glog.Infoln("sending unregister on proxy keepalive control channel")
+	}
 
-		// Stop keepaliving
-		p.keepalive.send(kaUnregisterMsg)
-		if p.isDecommissionUnreg(w, r) {
-			p.stopHTTPServer()
-		}
+	_, ok, err := p.isDecommissionUnreg(w, r)
+	if err != nil {
+		cmn.WriteErr(w, r, err)
 		return
-	default:
-		p.writeErrURL(w, r)
-		return
+	}
+	// Stop keepaliving
+	p.keepalive.send(kaUnregisterMsg)
+	if ok {
+		p.stopHTTPServer()
 	}
 }
 
-// register proxy
 func (p *proxyrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathDaemon.L)
 	if err != nil {

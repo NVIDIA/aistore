@@ -222,7 +222,7 @@ func TestQueryWorkersTargetDown(t *testing.T) {
 
 	target, err := smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
-	argsMnt := &cmn.ActValDecommision{DaemonID: target.ID(), SkipRebalance: true}
+	argsMnt := &cmn.ActValRmNode{DaemonID: target.ID(), SkipRebalance: true}
 	_, err = api.StartMaintenance(baseParams, argsMnt)
 	tassert.CheckFatal(t, err)
 

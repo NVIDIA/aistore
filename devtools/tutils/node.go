@@ -61,7 +61,7 @@ func JoinCluster(proxyURL string, node *cluster.Snode) (string, error) {
 func RestoreTarget(t *testing.T, proxyURL string, target *cluster.Snode) (rebID string, newSmap *cluster.Smap) {
 	smap := GetClusterMap(t, proxyURL)
 	tlog.Logf("Reregistering target %s, current Smap: %s\n", target, smap.StringEx())
-	val := &cmn.ActValDecommision{DaemonID: target.ID()}
+	val := &cmn.ActValRmNode{DaemonID: target.ID()}
 	rebID, err := api.StopMaintenance(BaseAPIParams(proxyURL), val)
 	tassert.CheckFatal(t, err)
 	newSmap, err = WaitForClusterState(
@@ -76,7 +76,7 @@ func RestoreTarget(t *testing.T, proxyURL string, target *cluster.Snode) (rebID 
 }
 
 func ClearMaintenance(baseParams api.BaseParams, tsi *cluster.Snode) {
-	val := &cmn.ActValDecommision{DaemonID: tsi.ID(), SkipRebalance: true}
+	val := &cmn.ActValRmNode{DaemonID: tsi.ID(), SkipRebalance: true}
 	// it can fail if the node is not under maintenance but it is OK
 	_, _ = api.StopMaintenance(baseParams, val)
 }
@@ -348,7 +348,7 @@ func ShutdownNode(_ *testing.T, baseParams api.BaseParams, node *cluster.Snode) 
 		return
 	}
 
-	actValue := &cmn.ActValDecommision{DaemonID: daemonID}
+	actValue := &cmn.ActValRmNode{DaemonID: daemonID}
 	_, err = api.ShutdownNode(baseParams, actValue)
 	return
 }
@@ -542,7 +542,7 @@ func GetRestoreCmd(si *cluster.Snode) RestoreCmd {
 	if containers.DockerRunning() {
 		return cmd
 	}
-	_, cmd.Cmd, cmd.Args, err = getProcess(si.PublicNet.DaemonPort)
+	cmd.PID, cmd.Cmd, cmd.Args, err = getProcess(si.PublicNet.DaemonPort)
 	cos.AssertNoErr(err)
 	return cmd
 }

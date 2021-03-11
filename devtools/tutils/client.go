@@ -211,7 +211,7 @@ func RmTargetSkipRebWait(t *testing.T, proxyURL string, smap *cluster.Smap) (*cl
 	var (
 		removeTarget, _ = smap.GetRandTarget()
 		origTgtCnt      = smap.CountActiveTargets()
-		args            = &cmn.ActValDecommision{DaemonID: removeTarget.ID(), SkipRebalance: true}
+		args            = &cmn.ActValRmNode{DaemonID: removeTarget.ID(), SkipRebalance: true}
 	)
 	_, err := api.StartMaintenance(BaseAPIParams(proxyURL), args)
 	tassert.CheckFatal(t, err)

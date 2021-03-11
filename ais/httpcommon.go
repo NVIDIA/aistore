@@ -900,12 +900,19 @@ func (h *httprunner) stopHTTPServer() {
 }
 
 // Return true if node is unregistered because of decommission
-func (h *httprunner) isDecommissionUnreg(w http.ResponseWriter, r *http.Request) bool {
+func (h *httprunner) isDecommissionUnreg(w http.ResponseWriter, r *http.Request) (*cmn.ActValRmNode, bool, error) {
 	var msg cmn.ActionMsg
 	if err := cmn.ReadJSON(w, r, &msg, true /*optional*/); err != nil {
-		return false
+		return nil, false, err
 	}
-	return msg.Action == cmn.ActDecommission
+	if msg.Action != cmn.ActDecommission {
+		return nil, false, nil
+	}
+	var opts cmn.ActValRmNode
+	if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
+		return nil, false, err
+	}
+	return &opts, true, nil
 }
 
 // remove self from Smap (if required), terminate http, and wait (w/ timeout)
