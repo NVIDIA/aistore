@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
@@ -203,6 +204,14 @@ var (
 
 func (s *CoreStats) init(size int) {
 	s.Tracker = make(statsTracker, size)
+	// NOTE:
+	// accessible in debug mode via host:port/debug/vars
+	// * all counters including errors
+	// * latencies including keepalive
+	// * mountpath capacities
+	// * mountpath (disk) utilizations (see ios)
+	// * total number of goroutines
+	debug.NewExpvar(glog.SmoduleStats)
 	s.Tracker.registerCommonStats()
 }
 
@@ -276,7 +285,9 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 		case KindLatency:
 			v.Lock()
 			if v.numSamples > 0 {
-				ctracker[name] = &copyValue{Value: v.Value / v.numSamples}
+				lat := v.Value / v.numSamples
+				ctracker[name] = &copyValue{Value: lat}
+				debug.SetExpvar(glog.SmoduleStats, name, lat)
 				if !match(name, idlePrefs) {
 					idle = false
 				}
@@ -305,6 +316,7 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 			if v.Value > 0 {
 				if prev, ok := ctracker[name]; !ok || prev.Value != v.Value {
 					ctracker[name] = &copyValue{Value: v.Value}
+					debug.SetExpvar(glog.SmoduleStats, name, v.Value)
 					if !match(name, idlePrefs) {
 						idle = false
 					}
@@ -313,8 +325,10 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 			v.RUnlock()
 		default:
 			ctracker[name] = &copyValue{Value: v.Value} // KindSpecial/KindDelta as is and wo/ lock
+			debug.SetExpvar(glog.SmoduleStats, name, v.Value)
 		}
 	}
+	debug.SetExpvar(glog.SmoduleStats, "num-goroutines", int64(runtime.NumGoroutine()))
 	return
 }
 
@@ -585,7 +599,7 @@ func (r *statsRunner) removeOlderLogs(tot, maxtotal int64, logdir, logtype strin
 	fiLess := func(i, j int) bool {
 		return filteredInfos[i].ModTime().Before(filteredInfos[j].ModTime())
 	}
-	if glog.V(3) {
+	if glog.FastV(4, glog.SmoduleStats) {
 		glog.Infof("GC logs: started")
 	}
 	sort.Slice(filteredInfos, fiLess)
@@ -594,7 +608,9 @@ func (r *statsRunner) removeOlderLogs(tot, maxtotal int64, logdir, logtype strin
 		logfqn := filepath.Join(logdir, logfi.Name())
 		if err := cos.RemoveFile(logfqn); err == nil {
 			tot -= logfi.Size()
-			glog.Infof("GC logs: removed %s", logfqn)
+			if glog.FastV(4, glog.SmoduleStats) {
+				glog.Infof("GC logs: removed %s", logfqn)
+			}
 			if tot < maxtotal {
 				break
 			}
@@ -602,7 +618,7 @@ func (r *statsRunner) removeOlderLogs(tot, maxtotal int64, logdir, logtype strin
 			glog.Errorf("GC logs: failed to remove %s", logfqn)
 		}
 	}
-	if glog.V(3) {
+	if glog.FastV(4, glog.SmoduleStats) {
 		glog.Infof("GC logs: done")
 	}
 }

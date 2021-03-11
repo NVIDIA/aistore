@@ -11,7 +11,9 @@ import (
 	"sync"
 )
 
-func Enabled() bool                     { return false }
+func NewExpvar(smodule uint8)                         {}
+func SetExpvar(smodule uint8, name string, val int64) {}
+
 func Errorln(a ...interface{})          {}
 func Errorf(f string, a ...interface{}) {}
 func Infof(f string, a ...interface{})  {}

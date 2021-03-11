@@ -20,62 +20,51 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 )
 
+var (
+	xmodules map[uint8]*expvar.Map
+
+	smodules = map[string]uint8{
+		"ais":       glog.SmoduleAIS,
+		"cluster":   glog.SmoduleCluster,
+		"fs":        glog.SmoduleFS,
+		"memsys":    glog.SmoduleMemsys,
+		"mirror":    glog.SmoduleMirror,
+		"reb":       glog.SmoduleReb,
+		"transport": glog.SmoduleTransport,
+		"ec":        glog.SmoduleEC,
+		"stats":     glog.SmoduleStats,
+		"ios":       glog.SmoduleIOS,
+	}
+)
+
 func init() {
+	xmodules = make(map[uint8]*expvar.Map, 2)
 	loadLogLevel()
 }
 
-func fatalMsg(f string, v ...interface{}) {
-	s := fmt.Sprintf(f, v...)
-	if s == "" || s[len(s)-1] != '\n' {
-		fmt.Fprintln(os.Stderr, s)
-	} else {
-		fmt.Fprint(os.Stderr, s)
+func NewExpvar(smodule uint8) {
+	var smod string
+	for k, v := range smodules {
+		if v == smodule {
+			smod = "ais." + k
+			break
+		}
 	}
-	os.Exit(1)
+	if smod == "" {
+		fatalMsg("invalid smodule %d - expecting %+v", smodule, smodules)
+	}
+	xmodules[smodule] = expvar.NewMap(smod)
 }
 
-// loadLogLevel sets debug verbosity for different packages based on
-// environment variables. It is to help enable asserts that were originally
-// used for testing/initial development and to set the verbosity of glog.
-func loadLogLevel() {
-	var (
-		opts    []string
-		modules = map[string]uint8{
-			"ais":       glog.SmoduleAIS,
-			"cluster":   glog.SmoduleCluster,
-			"fs":        glog.SmoduleFS,
-			"memsys":    glog.SmoduleMemsys,
-			"mirror":    glog.SmoduleMirror,
-			"reb":       glog.SmoduleReb,
-			"transport": glog.SmoduleTransport,
-			"ec":        glog.SmoduleEC,
-		}
-	)
-
-	// Input will be in the format of AIS_DEBUG=transport=4,memsys=3 (same as GODEBUG).
-	if val := os.Getenv("AIS_DEBUG"); val != "" {
-		opts = strings.Split(val, ",")
+func SetExpvar(smodule uint8, name string, val int64) {
+	m := xmodules[smodule]
+	v, ok := m.Get(name).(*expvar.Int)
+	if !ok {
+		v = new(expvar.Int)
+		m.Set(name, v)
 	}
-
-	for _, ele := range opts {
-		pair := strings.Split(ele, "=")
-		if len(pair) != 2 {
-			fatalMsg("failed to get module=level element: %q", ele)
-		}
-		module, level := pair[0], pair[1]
-		logModule, exists := modules[module]
-		if !exists {
-			fatalMsg("unknown module: %s", module)
-		}
-		logLvl, err := strconv.Atoi(level)
-		if err != nil || logLvl <= 0 {
-			fatalMsg("invalid verbosity level=%s, err: %s", level, err)
-		}
-		glog.SetV(logModule, glog.Level(logLvl))
-	}
+	v.Set(val)
 }
-
-func Enabled() bool { return true }
 
 func Errorln(a ...interface{}) {
 	if len(a) == 1 {
@@ -156,4 +145,45 @@ func Handlers() map[string]http.HandlerFunc {
 		"/debug/pprof/goroutine":    pprof.Handler("goroutine").ServeHTTP,
 		"/debug/pprof/threadcreate": pprof.Handler("threadcreate").ServeHTTP,
 	}
+}
+
+// loadLogLevel sets debug verbosity for different packages based on
+// environment variables. It is to help enable asserts that were originally
+// used for testing/initial development and to set the verbosity of glog.
+func loadLogLevel() {
+	var (
+		opts []string
+	)
+
+	// Input will be in the format of AIS_DEBUG=transport=4,memsys=3 (same as GODEBUG).
+	if val := os.Getenv("AIS_DEBUG"); val != "" {
+		opts = strings.Split(val, ",")
+	}
+
+	for _, ele := range opts {
+		pair := strings.Split(ele, "=")
+		if len(pair) != 2 {
+			fatalMsg("failed to get module=level element: %q", ele)
+		}
+		module, level := pair[0], pair[1]
+		logModule, exists := smodules[module]
+		if !exists {
+			fatalMsg("unknown module: %s", module)
+		}
+		logLvl, err := strconv.Atoi(level)
+		if err != nil || logLvl <= 0 {
+			fatalMsg("invalid verbosity level=%s, err: %s", level, err)
+		}
+		glog.SetV(logModule, glog.Level(logLvl))
+	}
+}
+
+func fatalMsg(f string, v ...interface{}) {
+	s := fmt.Sprintf(f, v...)
+	if s == "" || s[len(s)-1] != '\n' {
+		fmt.Fprintln(os.Stderr, s)
+	} else {
+		fmt.Fprint(os.Stderr, s)
+	}
+	os.Exit(1)
 }

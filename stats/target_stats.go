@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats/statsd"
 )
@@ -200,6 +201,7 @@ func (r *Trunner) log(uptime time.Duration) {
 		}
 		for mpath, fsCapacity := range r.MPCap {
 			b := cos.MustMarshal(fsCapacity)
+			debug.SetExpvar(glog.SmoduleStats, mpath+":cap%", int64(fsCapacity.PctUsed))
 			r.lines = append(r.lines, mpath+": "+string(b))
 		}
 	}

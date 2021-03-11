@@ -112,6 +112,7 @@ var severityName = []string{
 	errorLog:   "ERROR",
 }
 
+// NOTE: map in cmn/debug/debug_on.go
 const (
 	SmoduleTransport = iota
 	SmoduleAIS
@@ -121,6 +122,8 @@ const (
 	SmoduleFS
 	SmoduleReb
 	SmoduleEC
+	SmoduleStats
+	SmoduleIOS
 	// NOTE: guard to define the size of 'smodules' array - make sure it is always the last.
 	_smoduleLast
 )
