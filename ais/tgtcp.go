@@ -319,17 +319,6 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			// TODO: remove setting DaemonID and Create VMD logic.
-			// When a target is decommissioned, metadata (including VMD) is removed.
-			// In tests, if we restore the decommissioned target without restarting, we need to re-create VMD to ensure correct node behavior.
-			if err = fs.SetDaemonIDXattrAllMpaths(t.si.ID()); err != nil {
-				cos.ExitLogf("%v", err)
-			}
-
-			if _, err = fs.CreateNewVMD(t.si.ID()); err != nil {
-				cos.ExitLogf("%v", err)
-			}
-
 			caller := r.Header.Get(cmn.HeaderCallerName)
 			if err := t.applyRegMeta(body, caller); err != nil {
 				t.writeErr(w, r, err)

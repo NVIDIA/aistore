@@ -121,7 +121,6 @@ func TestMaintenanceListObjects(t *testing.T) {
 	}
 }
 
-// TODO: Run only with long tests when the test is stable.
 func TestMaintenanceMD(t *testing.T) {
 	// NOTE: This function requires local deployment as it checks local file system for VMDs.
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal})
@@ -135,10 +134,15 @@ func TestMaintenanceMD(t *testing.T) {
 		allTgtsMpaths = tutils.GetTargetsMountpaths(t, smap, baseParams)
 	)
 
+	t.Cleanup(func() {
+		args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
+		api.WaitForXaction(baseParams, args)
+	})
+
 	cmd := tutils.GetRestoreCmd(dcmTarget)
 	msg := &cmn.ActValRmNode{DaemonID: dcmTarget.ID(), SkipRebalance: true}
 	_, err := api.Decommission(baseParams, msg)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 	_, err = tutils.WaitForClusterState(proxyURL, "target decommission", smap.Version, smap.CountActiveProxies(),
 		smap.CountTargets()-1)
 	tassert.CheckFatal(t, err)
@@ -152,9 +156,6 @@ func TestMaintenanceMD(t *testing.T) {
 	_, err = tutils.WaitForClusterState(proxyURL, "target decommission",
 		smap.Version, smap.CountActiveProxies(), smap.CountTargets())
 	tassert.CheckFatal(t, err)
-	args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
-	_, err = api.WaitForXaction(baseParams, args)
-	tassert.CheckError(t, err)
 
 	smap = tutils.GetClusterMap(t, proxyURL)
 	vmdTargets = countVMDTargets(allTgtsMpaths)
