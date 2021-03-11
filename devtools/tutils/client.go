@@ -207,13 +207,13 @@ func SetBackendBck(t *testing.T, baseParams api.BaseParams, srcBck, dstBck cmn.B
 	tassert.CheckFatal(t, err)
 }
 
-func DecommissionTargetSkipRebWait(t *testing.T, proxyURL string, smap *cluster.Smap) (*cluster.Smap, *cluster.Snode) {
+func RmTargetSkipRebWait(t *testing.T, proxyURL string, smap *cluster.Smap) (*cluster.Smap, *cluster.Snode) {
 	var (
 		removeTarget, _ = smap.GetRandTarget()
 		origTgtCnt      = smap.CountActiveTargets()
 		args            = &cmn.ActValDecommision{DaemonID: removeTarget.ID(), SkipRebalance: true}
 	)
-	err := DecommissionNode(proxyURL, args)
+	_, err := api.StartMaintenance(BaseAPIParams(proxyURL), args)
 	tassert.CheckFatal(t, err)
 	newSmap, err := WaitForClusterState(
 		proxyURL,
@@ -230,18 +230,10 @@ func DecommissionTargetSkipRebWait(t *testing.T, proxyURL string, smap *cluster.
 	return newSmap, removeTarget
 }
 
-func DecommissionNode(proxyURL string, args *cmn.ActValDecommision) error {
-	return devtools.DecommissionNode(DevtoolsCtx, proxyURL, args, registerTimeout)
-}
-
-// Internal API to remove a node from Smap: use it to unregister MOCK targets/proxies
+// Internal API to remove a node from Smap: use it to unregister MOCK targets/proxies.
+// Use `JoinCluster` to attach node back.
 func RemoveNodeFromSmap(proxyURL, sid string) error {
-	baseParams := BaseAPIParams(proxyURL)
-	baseParams.Method = http.MethodDelete
-	return api.DoHTTPRequest(api.ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathClusterDaemon.Join(sid),
-	})
+	return devtools.RemoveNodeFromSmap(DevtoolsCtx, proxyURL, sid, time.Minute)
 }
 
 func WaitForObjectToBeDowloaded(baseParams api.BaseParams, bck cmn.Bck, objName string, timeout time.Duration) error {

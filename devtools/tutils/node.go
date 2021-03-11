@@ -50,16 +50,19 @@ func (n nodesCnt) satisfied(actual int) bool {
 	return int(n) == actual
 }
 
+// Add an alive node that is not in SMap to the cluster.
+// Use to add a new node to the cluster or get back a node removed by `RemoveNodeFromSmap`
 func JoinCluster(proxyURL string, node *cluster.Snode) (string, error) {
 	return devtools.JoinCluster(DevtoolsCtx, proxyURL, node, registerTimeout)
 }
 
-// TODO: There is duplication between `JoinCluster` and `RestoreTarget` - when to use which?
+// Restore a node put into maintenance: in this case the node is in
+// Smap and canceling maintenance gets the node back.
 func RestoreTarget(t *testing.T, proxyURL string, target *cluster.Snode) (rebID string, newSmap *cluster.Smap) {
 	smap := GetClusterMap(t, proxyURL)
-	tassert.Fatalf(t, smap.GetTarget(target.DaemonID) == nil, "unexpected target %s in smap", target.ID())
 	tlog.Logf("Reregistering target %s, current Smap: %s\n", target, smap.StringEx())
-	rebID, err := JoinCluster(proxyURL, target)
+	val := &cmn.ActValDecommision{DaemonID: target.ID()}
+	rebID, err := api.StopMaintenance(BaseAPIParams(proxyURL), val)
 	tassert.CheckFatal(t, err)
 	newSmap, err = WaitForClusterState(
 		proxyURL,

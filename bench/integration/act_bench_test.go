@@ -119,7 +119,7 @@ func BenchmarkECRebalance(b *testing.B) {
 			tassert.CheckFatal(b, err)
 
 			args := &cmn.ActValDecommision{DaemonID: tgtLost.ID(), SkipRebalance: true}
-			err = tutils.DecommissionNode(proxyURL, args)
+			_, err = api.StartMaintenance(baseParams, args)
 			tassert.CheckFatal(b, err)
 			fillBucket(b, proxyURL, bck, uint64(size), objCount)
 
@@ -139,7 +139,8 @@ func BenchmarkECRebalance(b *testing.B) {
 				_, err = api.WaitForXaction(baseParams, reqArgs)
 				tassert.CheckFatal(b, err)
 
-				_, err = tutils.JoinCluster(proxyURL, tgtLost)
+				args := &cmn.ActValDecommision{DaemonID: tgtLost.ID()}
+				_, err = api.StopMaintenance(baseParams, args)
 				tassert.CheckError(b, err)
 				tutils.WaitForRebalanceToComplete(b, baseParams, rebalanceTime)
 			})
@@ -170,12 +171,13 @@ func BenchmarkRebalance(b *testing.B) {
 		tassert.CheckFatal(b, err)
 
 		args := &cmn.ActValDecommision{DaemonID: tgtLost.ID(), SkipRebalance: true}
-		err = tutils.DecommissionNode(proxyURL, args)
+		_, err = api.StartMaintenance(baseParams, args)
 		tassert.CheckFatal(b, err)
 		fillBucket(b, proxyURL, bck, uint64(size), objCount)
 
 		b.Run("rebalance", func(b *testing.B) {
-			_, err = tutils.JoinCluster(proxyURL, tgtLost)
+			args := &cmn.ActValDecommision{DaemonID: tgtLost.ID()}
+			_, err := api.StopMaintenance(baseParams, args)
 			tassert.CheckError(b, err)
 			tutils.WaitForRebalanceToComplete(b, baseParams, rebalanceTime)
 		})

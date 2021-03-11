@@ -1733,9 +1733,11 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 		t.FailNow()
 	}
 
-	_, removedTarget := tutils.DecommissionTargetSkipRebWait(t, proxyURL, o.smap)
+	_, removedTarget := tutils.RmTargetSkipRebWait(t, proxyURL, o.smap)
 	defer func() {
-		rebID, _ := tutils.RestoreTarget(t, proxyURL, removedTarget)
+		val := &cmn.ActValDecommision{DaemonID: removedTarget.ID()}
+		rebID, err := api.StopMaintenance(baseParams, val)
+		tassert.CheckError(t, err)
 		tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
 	}()
 
@@ -1743,13 +1745,11 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	objectsExist(t, baseParams, bck, o.pattern, o.objCount)
 
 	// 4. Check that ListObjects returns correct number of items
-	tlog.Logln("DONE")
 	tlog.Logln("Reading bucket list...")
 	msg := &cmn.SelectMsg{Props: "size,status,version"}
 	objList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(objList.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(objList.Entries), o.objCount)
-	tlog.Logln("DONE")
 }
 
 func TestECEmergencyTargetForReplica(t *testing.T) {
@@ -1815,7 +1815,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 
 	for i := o.dataCnt - 1; i >= 0; i-- {
 		var removedTarget *cluster.Snode
-		smap, removedTarget = tutils.DecommissionTargetSkipRebWait(t, proxyURL, smap)
+		smap, removedTarget = tutils.RmTargetSkipRebWait(t, proxyURL, smap)
 		removedTargets = append(removedTargets, removedTarget)
 	}
 
@@ -2089,7 +2089,7 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	tassert.CheckFatal(t, err)
 	tlog.Logf("%d objects created, starting rebalance\n", len(oldObjList.Entries))
 
-	_, removedTarget := tutils.DecommissionTargetSkipRebWait(t, proxyURL, o.smap)
+	_, removedTarget := tutils.RmTargetSkipRebWait(t, proxyURL, o.smap)
 	defer func() {
 		rebID, _ := tutils.RestoreTarget(t, proxyURL, removedTarget)
 		tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
@@ -2525,7 +2525,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 
 	tlog.Logf("Registering node %s\n", tgtLost.ID())
 	args = &cmn.ActValDecommision{DaemonID: tgtLost.ID()}
-	_, err = api.StartMaintenance(baseParams, args)
+	_, err = api.StopMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 	registered = true
 
@@ -2573,6 +2573,11 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 
 	tassert.CheckFatal(t, err)
 	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
+	tlog.Logln("Reading objects")
+	for _, obj := range resECOld.Entries {
+		_, err := api.GetObject(baseParams, bckEC, obj.Name)
+		tassert.CheckError(t, err)
+	}
 	tlog.Logln("Getting the number of objects after rebalance")
 	resECNew, err := api.ListObjects(baseParams, bckEC, msg, 0)
 	tassert.CheckFatal(t, err)

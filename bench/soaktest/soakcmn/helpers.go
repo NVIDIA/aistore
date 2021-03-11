@@ -55,5 +55,5 @@ func JoinCluster(proxyURL string, node *cluster.Snode) (string, error) {
 }
 
 func UnregisterNode(proxyURL string, args *cmn.ActValDecommision) error {
-	return devtools.DecommissionNode(devtoolsCtx, proxyURL, args, registerTimeout)
+	return devtools.RemoveNodeFromSmap(devtoolsCtx, proxyURL, args.DaemonID, registerTimeout)
 }
