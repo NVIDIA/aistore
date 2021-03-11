@@ -115,7 +115,9 @@ func TestETLTargetDown(t *testing.T) {
 	tlog.Logln("Unregistering a target")
 	unregistered := m.unregisterTarget()
 	t.Cleanup(func() {
-		m.reregisterTarget(unregistered)
+		rebID := m.reregisterTarget(unregistered)
+		// ETL xactions from subsequent tests won't be allowed to start if a rebalance is still running.
+		tutils.WaitForRebalanceByID(t, baseParams, rebID, 30*time.Second)
 	})
 
 	err = tetl.WaitForAborted(baseParams, xactID, 5*time.Minute)
