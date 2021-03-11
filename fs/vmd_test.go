@@ -33,17 +33,15 @@ func testVMDCreate(t *testing.T, mpaths fs.MPI, daemonID string) {
 	)
 
 	tassert.Errorf(t, err == nil, "expected vmd to be created without error")
-	tassert.Errorf(t, vmd != nil, "expected vmd to be created")
+	tassert.Fatalf(t, vmd != nil, "expected vmd to be created")
 	tassert.Errorf(t, vmd.DaemonID == daemonID, "incorrect daemonID, expected %q, got %q", daemonID, vmd.DaemonID)
-	tassert.Errorf(t, len(vmd.Devices) == mpathsCnt, "expected %d devices found, got %d", mpathsCnt, len(vmd.Devices))
+	tassert.Errorf(t, len(vmd.Mountpaths) == mpathsCnt, "expected %d mpaths, got %d", mpathsCnt, len(vmd.Mountpaths))
 
-	devicesSet := cos.NewStringSet()
-	for _, dev := range vmd.Devices {
-		devicesSet.Add(dev.MountPath)
-		_, ok := mpaths[dev.MountPath]
-		tassert.Errorf(t, ok, "vmd has unknown %q mountpath", dev.MountPath)
+	for _, dev := range vmd.Mountpaths {
+		_, ok := mpaths[dev.Mountpath]
+		tassert.Errorf(t, ok, "vmd has unknown %q mountpath", dev.Mountpath)
 	}
-	tassert.Errorf(t, len(mpaths) == len(vmd.Devices), "expected devices set to have size %d, got %d", len(mpaths), len(vmd.Devices))
+	tassert.Errorf(t, len(mpaths) == len(vmd.Mountpaths), "expected mpath set to have size %d, got %d", len(mpaths), len(vmd.Mountpaths))
 }
 
 func testVMDPersist(t *testing.T, daemonID string) {
@@ -60,7 +58,6 @@ func testVMDPersist(t *testing.T, daemonID string) {
 	newVMD, err := fs.LoadVMD(mps)
 	tassert.Fatalf(t, err == nil, "expected no error while loading VMD")
 	tassert.Fatalf(t, newVMD != nil, "expected vmd to be not nil")
-	// TODO -- FIXME: Use checksum to compare
-	tassert.Errorf(t, vmd.DaemonID == newVMD.DaemonID, "expected VMDs to have same daemon ID. got: %s vs %s", vmd.DaemonID, newVMD.DaemonID)
-	tassert.Errorf(t, reflect.DeepEqual(vmd.Devices, newVMD.Devices), "expected VMDs to be equal. got: %+v vs %+v", vmd, newVMD)
+	tassert.Errorf(t, newVMD.DaemonID == vmd.DaemonID, "expected VMDs to have same daemon ID. got: %s vs %s", newVMD.DaemonID, vmd.DaemonID)
+	tassert.Errorf(t, reflect.DeepEqual(newVMD.Mountpaths, vmd.Mountpaths), "expected VMDs to be equal. got: %+v vs %+v", newVMD, vmd)
 }

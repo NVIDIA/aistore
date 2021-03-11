@@ -236,8 +236,6 @@ func (t *targetrunner) Run() error {
 		t.markClusterStarted()
 	}()
 
-	t.detectMpathChanges()
-
 	t.backend.init(t)
 
 	t.authn = &authManager{

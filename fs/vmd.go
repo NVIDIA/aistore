@@ -12,56 +12,90 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
 const vmdCopies = 3
 
+// FIXME: Change json tags (on-disk structure):
+//  * devices -> mountpaths
+//  * mpath -> mountpath
 type (
-	fsDeviceMD struct {
-		MountPath string `json:"mpath"`
+	fsMpathMD struct {
+		Mountpath string `json:"mpath"`
 		FsType    string `json:"fs_type"`
 		Enabled   bool   `json:"enabled"`
 	}
 
 	// Short for VolumeMetaData.
 	VMD struct {
-		Devices  map[string]*fsDeviceMD `json:"devices"` // Mpath => MD
-		DaemonID string                 `json:"daemon_id"`
-		cksum    *cos.Cksum             // checksum of VMD
+		Mountpaths map[string]*fsMpathMD `json:"devices"`   // mountpath => metadata
+		DaemonID   string                `json:"daemon_id"` // ID of the daemon to which the mountpaths belong(ed).
+		cksum      *cos.Cksum            // Checksum of loaded VMD.
 	}
 )
 
 // interface guard
-var (
-	_ jsp.Opts = (*VMD)(nil)
-)
+var _ jsp.Opts = (*VMD)(nil)
 
-var vmdJspOpts = jsp.CCSign(cmn.MetaverVMD)
-
-// as jsp.GetOpts
-func (*VMD) JspOpts() jsp.Options { return vmdJspOpts }
+func (*VMD) JspOpts() jsp.Options { return jsp.CCSign(cmn.MetaverVMD) }
 
 func newVMD(expectedSize int) *VMD {
 	return &VMD{
-		Devices: make(map[string]*fsDeviceMD, expectedSize),
+		Mountpaths: make(map[string]*fsMpathMD, expectedSize),
 	}
 }
+
+func (vmd *VMD) load(mpath string) (err error) {
+	fpath := filepath.Join(mpath, cmn.VmdFname)
+	if vmd.cksum, err = jsp.LoadMeta(fpath, vmd); err != nil {
+		return err
+	}
+	if vmd.DaemonID == "" {
+		debug.Assert(false) // Cannot happen in normal environment.
+		return fmt.Errorf("daemon id is empty for vmd on %q", mpath)
+	}
+	return nil
+}
+
+func (vmd *VMD) persist() (err error) {
+	cnt, availCnt := PersistOnMpaths(cmn.VmdFname, "", vmd, vmdCopies, vmd.JspOpts())
+	if cnt > 0 {
+		return
+	}
+	if availCnt == 0 {
+		glog.Errorf("cannot store VMD: %v", ErrNoMountpaths)
+		return
+	}
+	return fmt.Errorf("failed to store VMD on any of the mountpaths (%d)", availCnt)
+}
+
+func (vmd *VMD) equal(other *VMD) bool {
+	debug.Assert(vmd.cksum != nil)
+	debug.Assert(other.cksum != nil)
+	if vmd.DaemonID != other.DaemonID {
+		return false
+	}
+	return vmd.cksum.Equal(other.cksum)
+}
+
+func (vmd *VMD) String() string { return string(cos.MustMarshal(vmd)) }
 
 func CreateNewVMD(daemonID string) (vmd *VMD, err error) {
 	available, disabled := Get()
 	vmd = newVMD(len(available))
 	vmd.DaemonID = daemonID
 	for _, mPath := range available {
-		vmd.Devices[mPath.Path] = &fsDeviceMD{
-			MountPath: mPath.Path,
+		vmd.Mountpaths[mPath.Path] = &fsMpathMD{
+			Mountpath: mPath.Path,
 			FsType:    mPath.FileSystem,
 			Enabled:   true,
 		}
 	}
 	for _, mPath := range disabled {
-		vmd.Devices[mPath.Path] = &fsDeviceMD{
-			MountPath: mPath.Path,
+		vmd.Mountpaths[mPath.Path] = &fsMpathMD{
+			Mountpath: mPath.Path,
 			FsType:    mPath.FileSystem,
 			Enabled:   false,
 		}
@@ -75,9 +109,8 @@ func CreateNewVMD(daemonID string) (vmd *VMD, err error) {
 // - Returns nil if VMD not present on any path
 func LoadVMD(mpaths cos.StringSet) (mainVMD *VMD, err error) {
 	for path := range mpaths {
-		fpath := filepath.Join(path, cmn.VmdFname)
 		vmd := newVMD(len(mpaths))
-		vmd.cksum, err = jsp.LoadMeta(fpath, vmd)
+		err := vmd.load(path)
 		if err != nil && os.IsNotExist(err) {
 			continue
 		}
@@ -85,10 +118,8 @@ func LoadVMD(mpaths cos.StringSet) (mainVMD *VMD, err error) {
 			err = newVMDLoadErr(path, err)
 			return nil, err
 		}
-		cos.Assert(vmd.cksum != nil)
-		cos.Assert(vmd.DaemonID != "")
 		if mainVMD != nil {
-			if !mainVMD.cksum.Equal(vmd.cksum) {
+			if !vmd.equal(mainVMD) {
 				err = newVMDMismatchErr(mainVMD, vmd, path)
 				return nil, err
 			}
@@ -96,31 +127,16 @@ func LoadVMD(mpaths cos.StringSet) (mainVMD *VMD, err error) {
 		}
 		mainVMD = vmd
 	}
-
 	if mainVMD == nil {
-		glog.Infof("VMD not found on any of %d mountpaths", len(mpaths))
+		glog.Warningf("VMD not found on any of %d mountpaths", len(mpaths))
 	}
 	return mainVMD, nil
-}
-
-func (vmd *VMD) persist() (err error) {
-	cnt, availCnt := PersistOnMpaths(cmn.VmdFname, "", vmd, vmdCopies, vmd.JspOpts())
-	if cnt > 0 {
-		return
-	}
-	if availCnt == 0 {
-		glog.Errorf("cannot store VMD: %v", ErrNoMountpaths)
-		return
-	}
-	err = fmt.Errorf("failed to store VMD on any of the mountpaths (%d)", availCnt)
-	glog.Error(err)
-	return
 }
 
 // LoadDaemonID loads the daemon ID present as xattr on given mount paths.
 func LoadDaemonID(mpaths cos.StringSet) (mDaeID string, err error) {
 	for mp := range mpaths {
-		daeID, err := LoadDaemonIDXattr(mp)
+		daeID, err := loadDaemonIDXattr(mp)
 		if err != nil {
 			return "", err
 		}
@@ -138,7 +154,7 @@ func LoadDaemonID(mpaths cos.StringSet) (mDaeID string, err error) {
 	return
 }
 
-func LoadDaemonIDXattr(mpath string) (daeID string, err error) {
+func loadDaemonIDXattr(mpath string) (daeID string, err error) {
 	b, err := GetXattr(mpath, daemonIDXattr)
 	if err == nil {
 		daeID = string(b)

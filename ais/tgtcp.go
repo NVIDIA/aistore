@@ -7,13 +7,11 @@ package ais
 import (
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"time"
 
@@ -23,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
@@ -742,61 +739,6 @@ func (t *targetrunner) testCachepathMounts() {
 	}
 	cmn.GCO.Put(config)
 	t.owner.config.Unlock()
-}
-
-func (t *targetrunner) detectMpathChanges() {
-	const mpathFname = "mpaths"
-	mpathConfigFQN := filepath.Join(cmn.GCO.Get().ConfigDir, mpathFname)
-
-	type mfs struct {
-		Available cos.StringSet `json:"available"`
-		Disabled  cos.StringSet `json:"disabled"`
-	}
-
-	// load old/prev and compare
-	var (
-		oldfs = mfs{}
-		newfs = mfs{
-			Available: make(cos.StringSet),
-			Disabled:  make(cos.StringSet),
-		}
-	)
-
-	availablePaths, disabledPath := fs.Get()
-	for mpath := range availablePaths {
-		newfs.Available[mpath] = struct{}{}
-	}
-	for mpath := range disabledPath {
-		newfs.Disabled[mpath] = struct{}{}
-	}
-
-	if _, err := jsp.Load(mpathConfigFQN, &oldfs, jsp.Plain()); err != nil {
-		if !os.IsNotExist(err) && err != io.EOF {
-			glog.Errorf("Failed to load old mpath config %q, err: %v", mpathConfigFQN, err)
-		}
-		return
-	}
-
-	if !reflect.DeepEqual(oldfs, newfs) {
-		oldfsPprint := fmt.Sprintf(
-			"available: %v\ndisabled: %v",
-			oldfs.Available.String(), oldfs.Disabled.String(),
-		)
-		newfsPprint := fmt.Sprintf(
-			"available: %v\ndisabled: %v",
-			newfs.Available.String(), newfs.Disabled.String(),
-		)
-
-		glog.Errorf("%s: detected change in the mountpath configuration at %s", t.si, mpathConfigFQN)
-		glog.Errorln("OLD: ====================")
-		glog.Errorln(oldfsPprint)
-		glog.Errorln("NEW: ====================")
-		glog.Errorln(newfsPprint)
-	}
-	// persist
-	if err := jsp.Save(mpathConfigFQN, newfs, jsp.Plain()); err != nil {
-		glog.Errorf("Error writing config file: %v", err)
-	}
 }
 
 func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, renamed string) (err error) {

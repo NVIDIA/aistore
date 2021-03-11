@@ -30,7 +30,6 @@ import (
 const (
 	TrashDir      = "$trash"
 	daemonIDXattr = "user.ais.daemon_id"
-	siePrefix     = "storage integrity error: sie#"
 )
 
 const (
@@ -258,7 +257,7 @@ func (mi *MountpathInfo) MoveMD(from, to string) bool {
 func (mi *MountpathInfo) SetDaemonIDXattr(tid string) error {
 	cos.Assert(tid != "")
 	// Validate if mountpath already has daemon ID set.
-	mpathDaeID, err := LoadDaemonIDXattr(mi.Path)
+	mpathDaeID, err := loadDaemonIDXattr(mi.Path)
 	if err != nil {
 		return err
 	}
@@ -448,16 +447,12 @@ func Init(iostater ...ios.IOStater) {
 
 // InitMpaths prepares, validates, and adds configured mountpaths.
 func InitMpaths(tid string) error {
-	var (
-		config      = cmn.GCO.Get()
-		configPaths = config.FSpaths.Paths
-		vmd, err    = LoadVMD(configPaths)
-		changed     bool
-	)
+	configPaths := cmn.GCO.Get().FSpaths.Paths
 	if len(configPaths) == 0 {
 		// (usability) not to clutter the log with backtraces when starting up and validating config
 		return fmt.Errorf("no fspaths - see README => Configuration and/or fspaths section in the config.sh")
 	}
+	vmd, err := LoadVMD(configPaths)
 	if err != nil {
 		return err
 	}
@@ -474,26 +469,29 @@ func InitMpaths(tid string) error {
 		return newVMDIDMismatchErr(vmd.DaemonID, tid)
 	}
 
-	// Validate VMD with config FS
+	// Validate VMD with config FS.
+	var changed bool
 	for path := range configPaths {
-		// 1. Check if path is present in VMD paths.
-		device, exists := vmd.Devices[path]
-		if !exists {
+		// Check if config path is present in VMD paths.
+		var enabled bool
+		if mpath, exists := vmd.Mountpaths[path]; !exists {
 			changed = true
+			enabled = true
 			glog.Error(newVMDMissingMpathErr(path))
+		} else {
+			enabled = mpath.Enabled
 		}
 
-		enabled := device == nil || device.Enabled
 		if _, err := add(path, tid, enabled); err != nil {
 			return err
 		}
 	}
 
-	if len(vmd.Devices) > len(configPaths) {
-		for device := range vmd.Devices {
-			if !configPaths.Contains(device) {
+	if len(vmd.Mountpaths) > len(configPaths) {
+		for mpath := range vmd.Mountpaths {
+			if !configPaths.Contains(mpath) {
 				changed = true
-				glog.Error(newConfigMissingMpathErr(device))
+				glog.Error(newConfigMissingMpathErr(mpath))
 			}
 		}
 	}
@@ -986,27 +984,27 @@ func CapStatusAux() (fsInfo cmn.CapacityInfo) {
 ////////////////
 
 func (sie *StorageIntegrityError) Error() string {
-	return fmt.Sprintf("%s: %s", siError(sie.code), sie.msg)
+	return fmt.Sprintf("[%s]: %s", siError(sie.code), sie.msg)
 }
 
 func newMpathIDMismatchErr(mainDaeID, tid, mpath string) *StorageIntegrityError {
 	return &StorageIntegrityError{
 		code: siMpathIDMismatch,
-		msg:  fmt.Sprintf("DaemonIDs different (%q): %s vs %s", mpath, mainDaeID, tid),
+		msg:  fmt.Sprintf("DaemonIDs different (%q): %q vs %q", mpath, mainDaeID, tid),
 	}
 }
 
 func newVMDIDMismatchErr(vmdDaeID, tid string) *StorageIntegrityError {
 	return &StorageIntegrityError{
 		code: siTargetIDMismatch,
-		msg:  fmt.Sprintf("VMD and target DaemonID don't match: %s vs %s", vmdDaeID, tid),
+		msg:  fmt.Sprintf("VMD and target DaemonID don't match: %q vs %q", vmdDaeID, tid),
 	}
 }
 
 func newVMDMissingMpathErr(mpath string) *StorageIntegrityError {
 	return &StorageIntegrityError{
 		code: siMpathMissing,
-		msg:  fmt.Sprintf("mount path (%q) not in VMD", mpath),
+		msg:  fmt.Sprintf("mountpath %q not in VMD", mpath),
 	}
 }
 
@@ -1027,11 +1025,13 @@ func newVMDLoadErr(mpath string, err error) *StorageIntegrityError {
 func newVMDMismatchErr(mainVMD, otherVMD *VMD, mpath string) *StorageIntegrityError {
 	return &StorageIntegrityError{
 		code: siMetaMismatch,
-		msg:  fmt.Sprintf("VMD is different (%q): %v vs %v", mpath, mainVMD, otherVMD),
+		msg:  fmt.Sprintf("VMD is different (%q): %s vs %s", mpath, mainVMD, otherVMD),
 	}
 }
 
-func siError(num int) string {
-	const s = "[%s%d - for details, see %s/blob/master/docs/troubleshooting.md]"
-	return fmt.Sprintf(s, siePrefix, num, cmn.GithubHome)
+func siError(code int) string {
+	return fmt.Sprintf(
+		"storage integrity error: sie#%d - for details, see %s/blob/master/docs/troubleshooting.md",
+		code, cmn.GithubHome,
+	)
 }
