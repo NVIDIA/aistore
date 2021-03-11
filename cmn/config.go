@@ -1472,12 +1472,16 @@ func SetGLogVModule(v string) error {
 	return err
 }
 
-func ConfigPropList() []string {
+func ConfigPropList(scopes ...string) []string {
+	scope := Cluster
+	if len(scopes) > 0 {
+		scope = scopes[0]
+	}
 	propList := []string{"vmodule", "log_level", "log.level"}
-	IterFields(Config{}, func(tag string, field IterField) (error, bool) {
+	IterFields(Config{}, func(tag string, field IterField) (err error, p bool) {
 		propList = append(propList, tag)
-		return nil, false
-	})
+		return
+	}, IterOpts{Allowed: scope})
 	return propList
 }
 

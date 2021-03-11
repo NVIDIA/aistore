@@ -248,15 +248,18 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cos.SimpleKVs, err
 		return "", nil, missingArgumentsError(c, "attribute name-value pairs")
 	}
 
-	args := c.Args()
+	var (
+		args            = c.Args()
+		kvs             = args.Tail()
+		propList        = cmn.ConfigPropList()
+		daemonOnlyProps []string
+	)
 	daemonID = args.First()
-	kvs := args.Tail()
 
 	// Case when DAEMON_ID is not provided by the user:
 	// 1. name-value pair separated with '=': `ais set log.level=5`
 	// 2. name-value pair separated with space: `ais set log.level 5`. In this case
 	//		the first word is looked up in cmn.ConfigPropList
-	propList := cmn.ConfigPropList()
 	if cos.StringInSlice(args.First(), propList) || strings.Contains(args.First(), keyAndValueSeparator) {
 		daemonID = ""
 		kvs = args
@@ -277,6 +280,7 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cos.SimpleKVs, err
 			}
 			return "", nil, err
 		}
+		daemonOnlyProps = cmn.ConfigPropList(cmn.Daemon)
 	}
 
 	if len(kvs) == 0 {
@@ -290,6 +294,9 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cos.SimpleKVs, err
 	for k := range nvs {
 		if !cos.StringInSlice(k, propList) {
 			return "", nil, fmt.Errorf("invalid property name %q", k)
+		}
+		if daemonOnlyProps != nil && !cos.StringInSlice(k, daemonOnlyProps) {
+			return "", nil, fmt.Errorf("setting daemon configuration %q not allowed", k)
 		}
 	}
 

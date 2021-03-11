@@ -41,6 +41,8 @@ type (
 	}
 
 	IterOpts struct {
+		// Skip fields based on allowed tag
+		Allowed string
 		// Visits all the fields, not only the leaves.
 		VisitAll bool
 		// Determines whether this is only a read-only or write walk.
@@ -135,6 +137,13 @@ func iterFields(prefix string, v interface{}, updf updateFunc, opts IterOpts) (d
 		// Read-only walk skips empty (zero) fields.
 		if opts.OnlyRead && listTag == tagOmitempty && srcValField.IsZero() {
 			continue
+		}
+
+		if opts.Allowed != "" {
+			allowTag := srcTyField.Tag.Get("allow")
+			if allowTag != "" && allowTag != opts.Allowed {
+				continue
+			}
 		}
 
 		// If it's `interface{}` we must get concrete type.

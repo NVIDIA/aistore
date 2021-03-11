@@ -185,7 +185,12 @@ func suggestUpdatableConfig(c *cli.Context) {
 	if propValueCompletion(c) {
 		return
 	}
-	props := append(cmn.ConfigPropList(), cmn.ActTransient)
+	scope := cmn.Cluster
+	if c.NArg() > 0 && !isConfigProp(c.Args().First()) {
+		scope = cmn.Daemon
+	}
+
+	props := append(cmn.ConfigPropList(scope), cmn.ActTransient)
 	for _, prop := range props {
 		if !cos.AnyHasPrefixInSlice(prop, c.Args()) {
 			fmt.Println(prop)
