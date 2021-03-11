@@ -97,7 +97,7 @@ func (t *TemplateTable) Template(hideHeader bool) string {
 // Proxies table
 
 func NewProxyTable(proxyStats *stats.DaemonStatus, smap *cluster.Smap) *TemplateTable {
-	return newTableProxies(map[string]*stats.DaemonStatus{proxyStats.Snode.ID(): proxyStats}, smap, false, false)
+	return newTableProxies(map[string]*stats.DaemonStatus{proxyStats.Snode.ID(): proxyStats}, smap, false, false, false)
 }
 
 func NewProxiesTable(ds *DaemonStatusTemplateHelper, smap *cluster.Smap, onlyProxies, verbose bool) *TemplateTable {
@@ -105,21 +105,21 @@ func NewProxiesTable(ds *DaemonStatusTemplateHelper, smap *cluster.Smap, onlyPro
 	if !onlyProxies {
 		deployments.Add(daemonsDeployments(ds.Tmap).ToSlice()...)
 	}
-
-	hideDeployments := !verbose && len(deployments) <= 1
-	return newTableProxies(ds.Pmap, smap, hideDeployments, len(ds.Pmap) > 1 && allNodesOnline(ds.Pmap))
+	hideDeployments := len(deployments) <= 1
+	hideStatus := len(ds.Pmap) > 1 && allNodesOnline(ds.Pmap)
+	return newTableProxies(ds.Pmap, smap, hideDeployments, hideStatus, verbose)
 }
 
-func newTableProxies(ps map[string]*stats.DaemonStatus, smap *cluster.Smap, hideDeployments, hideStatus bool) *TemplateTable {
+func newTableProxies(ps map[string]*stats.DaemonStatus, smap *cluster.Smap, hideDeployments, hideStatus, verbose bool) *TemplateTable {
 	headers := []*header{
 		{name: headerProxy},
-		{name: headerDeployment, hide: hideDeployments},
 		{name: headerMemUsed},
 		{name: headerMemAvail},
 		{name: headerUptime},
-		{name: headerStatus, hide: hideStatus},
-		{name: headerVersion},
-		{name: headerBuildTime},
+		{name: headerDeployment, hide: !verbose && hideDeployments},
+		{name: headerStatus, hide: !verbose && hideStatus},
+		{name: headerVersion, hide: !verbose},
+		{name: headerBuildTime, hide: !verbose},
 	}
 
 	table := newTemplateTable(headers...)
@@ -142,7 +142,7 @@ func newTableProxies(ps map[string]*stats.DaemonStatus, smap *cluster.Smap, hide
 // Targets table
 
 func NewTargetTable(targetStats *stats.DaemonStatus) *TemplateTable {
-	return newTableTargets(map[string]*stats.DaemonStatus{targetStats.Snode.ID(): targetStats}, false, false, true)
+	return newTableTargets(map[string]*stats.DaemonStatus{targetStats.Snode.ID(): targetStats}, false, false, false)
 }
 
 func NewTargetsTable(ds *DaemonStatusTemplateHelper, onlyTargets, verbose bool) *TemplateTable {
@@ -150,15 +150,14 @@ func NewTargetsTable(ds *DaemonStatusTemplateHelper, onlyTargets, verbose bool) 
 	if !onlyTargets {
 		deployments.Add(daemonsDeployments(ds.Pmap).ToSlice()...)
 	}
-
-	hideDeployments := !verbose && len(deployments) <= 1
-	return newTableTargets(ds.Tmap, hideDeployments, len(ds.Tmap) > 1 && allNodesOnline(ds.Tmap), !verbose)
+	hideDeployments := len(deployments) <= 1
+	hideStatus := len(ds.Tmap) > 1 && allNodesOnline(ds.Tmap)
+	return newTableTargets(ds.Tmap, hideDeployments, hideStatus, verbose)
 }
 
-func newTableTargets(ts map[string]*stats.DaemonStatus, hideDeployments, hideStatus, hideBuildTime bool) *TemplateTable {
+func newTableTargets(ts map[string]*stats.DaemonStatus, hideDeployments, hideStatus, verbose bool) *TemplateTable {
 	headers := []*header{
 		{name: headerTarget},
-		{name: headerDeployment, hide: hideDeployments},
 		{name: headerMemUsed},
 		{name: headerMemAvail},
 		{name: headerCapUsed},
@@ -166,9 +165,10 @@ func newTableTargets(ts map[string]*stats.DaemonStatus, hideDeployments, hideSta
 		{name: headerCPUUsed},
 		{name: headerRebalance},
 		{name: headerUptime},
-		{name: headerStatus, hide: hideStatus},
-		{name: headerVersion},
-		{name: headerBuildTime, hide: hideBuildTime},
+		{name: headerDeployment, hide: !verbose && hideDeployments},
+		{name: headerStatus, hide: !verbose && hideStatus},
+		{name: headerVersion, hide: !verbose},
+		{name: headerBuildTime, hide: !verbose},
 	}
 
 	table := newTemplateTable(headers...)
