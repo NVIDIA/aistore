@@ -20,6 +20,8 @@ import (
 // Note: Run these tests on both K8s and local.
 // Minikube doesn't use TestingEnv which doesn't limit number of corner cases tested.
 
+const errWMConfigNotExpected = "expected 'disk.disk_util_low_wm' to be %d, got: %d"
+
 func TestConfig(t *testing.T) {
 	oconfig := tutils.GetClusterConfig(t)
 	olruconfig := oconfig.LRU
@@ -161,7 +163,7 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	daemonConfig := tutils.GetDaemonConfig(t, proxy)
-	tassert.Errorf(t, daemonConfig.Disk.DiskUtilLowWM == newLowWM, "expected 'disk.disk_util_low_wm' to be %d, got: %d", newLowWM, daemonConfig.Disk.DiskUtilLowWM)
+	tassert.Errorf(t, daemonConfig.Disk.DiskUtilLowWM == newLowWM, errWMConfigNotExpected, newLowWM, daemonConfig.Disk.DiskUtilLowWM)
 
 	// Restart daemon and check if the config is persisted.
 	cmd, err := tutils.KillNode(proxy)
@@ -177,7 +179,7 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 	tassert.CheckError(t, err)
 
 	daemonConfig = tutils.GetDaemonConfig(t, proxy)
-	tassert.Fatalf(t, daemonConfig.Disk.DiskUtilLowWM == newLowWM, "expected 'disk.disk_util_low_wm' to be %d, got: %d", newLowWM, daemonConfig.Disk.DiskUtilLowWM)
+	tassert.Fatalf(t, daemonConfig.Disk.DiskUtilLowWM == newLowWM, errWMConfigNotExpected, newLowWM, daemonConfig.Disk.DiskUtilLowWM)
 
 	// Reset node config.
 	err = api.SetDaemonConfig(baseParams, proxy.DaemonID, cos.SimpleKVs{
@@ -239,5 +241,73 @@ func checkConfig(t *testing.T, smap *cluster.Smap, check func(*cluster.Snode, *c
 	for _, node := range smap.Tmap {
 		config := tutils.GetDaemonConfig(t, node)
 		check(node, config)
+	}
+}
+
+func TestConfigOverrideAndResetDaemon(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal, MinProxies: 2})
+	var (
+		proxyURL   = tutils.GetPrimaryURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		smap       = tutils.GetClusterMap(t, proxyURL)
+		config     = tutils.GetClusterConfig(t)
+		proxy, err = smap.GetRandProxy(true)
+	)
+	tassert.CheckFatal(t, err)
+
+	// Override a cluster config on daemon
+	newLowWM := config.Disk.DiskUtilLowWM - 10
+	err = api.SetDaemonConfig(baseParams, proxy.DaemonID, cos.SimpleKVs{
+		"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM),
+	})
+	tassert.CheckFatal(t, err)
+
+	daemonConfig := tutils.GetDaemonConfig(t, proxy)
+	tassert.Errorf(t, daemonConfig.Disk.DiskUtilLowWM == newLowWM,
+		errWMConfigNotExpected, newLowWM, daemonConfig.Disk.DiskUtilLowWM)
+
+	// Reset daemon and check if the override is gone.
+	err = api.ResetDaemonConfig(baseParams, proxy.DaemonID)
+	tassert.CheckFatal(t, err)
+	daemonConfig = tutils.GetDaemonConfig(t, proxy)
+	tassert.Fatalf(t, daemonConfig.Disk.DiskUtilLowWM == config.Disk.DiskUtilLowWM,
+		errWMConfigNotExpected, config.Disk.DiskUtilLowWM, daemonConfig.Disk.DiskUtilLowWM)
+}
+
+func TestConfigOverrideAndResetCluster(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal, MinProxies: 2})
+	var (
+		proxyURL   = tutils.GetPrimaryURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		smap       = tutils.GetClusterMap(t, proxyURL)
+		config     = tutils.GetClusterConfig(t)
+		newLowWM   = config.Disk.DiskUtilLowWM - 10
+		proxy, err = smap.GetRandProxy(true)
+
+		daemonConfig *cmn.Config
+	)
+	tassert.CheckFatal(t, err)
+
+	// Override a cluster config on daemon and primary
+	primary, err := tutils.GetPrimaryProxy(proxyURL)
+	tassert.CheckFatal(t, err)
+	for _, node := range []*cluster.Snode{primary, proxy} {
+		err = api.SetDaemonConfig(baseParams, node.DaemonID, cos.SimpleKVs{
+			"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM),
+		})
+		tassert.CheckFatal(t, err)
+
+		daemonConfig = tutils.GetDaemonConfig(t, node)
+		tassert.Errorf(t, daemonConfig.Disk.DiskUtilLowWM == newLowWM,
+			errWMConfigNotExpected, newLowWM, daemonConfig.Disk.DiskUtilLowWM)
+	}
+
+	// Reset all daemons and check if the override is gone.
+	err = api.ResetClusterConfig(baseParams)
+	tassert.CheckFatal(t, err)
+	for _, node := range []*cluster.Snode{primary, proxy} {
+		daemonConfig = tutils.GetDaemonConfig(t, node)
+		tassert.Fatalf(t, daemonConfig.Disk.DiskUtilLowWM == config.Disk.DiskUtilLowWM,
+			errWMConfigNotExpected, config.Disk.DiskUtilLowWM, daemonConfig.Disk.DiskUtilLowWM)
 	}
 }

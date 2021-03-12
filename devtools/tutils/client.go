@@ -127,7 +127,7 @@ func GetPrimaryURL() string {
 	return primary.URL(cmn.NetworkPublic)
 }
 
-// GetPrimaryProxy returns the primary proxy's url of a cluster
+// GetPrimaryProxy returns the primary proxy
 func GetPrimaryProxy(proxyURL string) (*cluster.Snode, error) {
 	baseParams := BaseAPIParams(proxyURL)
 	smap, err := api.GetClusterMap(baseParams)
