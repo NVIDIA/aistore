@@ -60,7 +60,10 @@ func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, parsedRS *Par
 		return
 	}
 
-	managerUUID := cos.GenUUID()
+	var (
+		managerUUID = cos.GenUUID()
+		smap        = ctx.smapOwner.Get()
+	)
 	checkResponses := func(responses []response) error {
 		for _, resp := range responses {
 			if resp.err == nil {
@@ -70,7 +73,7 @@ func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, parsedRS *Par
 				managerUUID, resp.err.Error())
 
 			path := cmn.URLPathdSortAbort.Join(managerUUID)
-			broadcast(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get().Tmap)
+			broadcastTargets(http.MethodDelete, path, nil, nil, smap)
 
 			s := fmt.Sprintf("failed to execute start sort, err: %s, status: %d",
 				resp.err.Error(), resp.statusCode)
@@ -96,7 +99,7 @@ func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, parsedRS *Par
 		glog.Infof("[dsort] %s broadcasting init request to all targets", managerUUID)
 	}
 	path := cmn.URLPathdSortInit.Join(managerUUID)
-	responses := broadcast(http.MethodPost, path, nil, b, ctx.smapOwner.Get().Tmap)
+	responses := broadcastTargets(http.MethodPost, path, nil, b, smap)
 	if err := checkResponses(responses); err != nil {
 		return
 	}
@@ -105,7 +108,7 @@ func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, parsedRS *Par
 		glog.Infof("[dsort] %s broadcasting start request to all targets", managerUUID)
 	}
 	path = cmn.URLPathdSortStart.Join(managerUUID)
-	responses = broadcast(http.MethodPost, path, nil, nil, ctx.smapOwner.Get().Tmap)
+	responses = broadcastTargets(http.MethodPost, path, nil, nil, smap)
 	if err := checkResponses(responses); err != nil {
 		return
 	}
@@ -141,9 +144,8 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	targets := ctx.smapOwner.Get().Tmap
 	path := cmn.URLPathdSortList.S
-	responses := broadcast(http.MethodGet, path, query, nil, targets)
+	responses := broadcastTargets(http.MethodGet, path, query, nil, ctx.smapOwner.Get())
 
 	resultList := make([]*JobInfo, 0)
 	for _, r := range responses {
@@ -183,15 +185,15 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
 // GET /v1/sort?id=...
 func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		targets     = ctx.smapOwner.Get().Tmap
+		smap        = ctx.smapOwner.Get()
 		query       = r.URL.Query()
 		managerUUID = query.Get(cmn.URLParamUUID)
 		path        = cmn.URLPathdSortMetrics.Join(managerUUID)
-		responses   = broadcast(http.MethodGet, path, nil, nil, targets)
+		responses   = broadcastTargets(http.MethodGet, path, nil, nil, smap)
 	)
 
 	notFound := 0
-	allMetrics := make(map[string]*Metrics, len(targets))
+	allMetrics := make(map[string]*Metrics, smap.CountActiveTargets())
 	for _, resp := range responses {
 		if resp.statusCode == http.StatusNotFound {
 			// Probably new target which does not know anything about this dsort op.
@@ -238,7 +240,7 @@ func ProxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 		query       = r.URL.Query()
 		managerUUID = query.Get(cmn.URLParamUUID)
 		path        = cmn.URLPathdSortAbort.Join(managerUUID)
-		responses   = broadcast(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get().Tmap)
+		responses   = broadcastTargets(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get())
 	)
 	allNotFound := true
 	for _, resp := range responses {
@@ -270,11 +272,11 @@ func ProxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		targets     = ctx.smapOwner.Get().Tmap
+		smap        = ctx.smapOwner.Get()
 		query       = r.URL.Query()
 		managerUUID = query.Get(cmn.URLParamUUID)
 		path        = cmn.URLPathdSortMetrics.Join(managerUUID)
-		responses   = broadcast(http.MethodGet, path, nil, nil, targets)
+		responses   = broadcastTargets(http.MethodGet, path, nil, nil, smap)
 	)
 
 	// First, broadcast to see if process is cleaned up first
@@ -308,7 +310,7 @@ func ProxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Next, broadcast the remove once we've checked that all targets have run cleanup
 	path = cmn.URLPathdSortRemove.Join(managerUUID)
-	responses = broadcast(http.MethodDelete, path, nil, nil, targets)
+	responses = broadcastTargets(http.MethodDelete, path, nil, nil, smap)
 	var failed []string // nolint:prealloc // will remain not allocated when no errors
 	for _, r := range responses {
 		if r.statusCode == http.StatusOK {
@@ -436,7 +438,7 @@ func (m *Manager) startDSort() {
 
 			glog.Warning("broadcasting abort to other targets")
 			path := cmn.URLPathdSortAbort.Join(m.ManagerUUID)
-			broadcast(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get().Tmap, ctx.node)
+			broadcastTargets(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get(), ctx.node)
 		}
 	}
 
@@ -447,7 +449,7 @@ func (m *Manager) startDSort() {
 
 	glog.Infof("[dsort] %s broadcasting finished ack to other targets", m.ManagerUUID)
 	path := cmn.URLPathdSortAck.Join(m.ManagerUUID, m.ctx.node.DaemonID)
-	broadcast(http.MethodPut, path, nil, nil, ctx.smapOwner.Get().Tmap, ctx.node)
+	broadcastTargets(http.MethodPut, path, nil, nil, ctx.smapOwner.Get(), ctx.node)
 }
 
 // shardsHandler is the handler for the HTTP endpoint /v1/sort/shards.
@@ -701,9 +703,9 @@ func finishedAckHandler(w http.ResponseWriter, r *http.Request) {
 	dsortManager.updateFinishedAck(daemonID)
 }
 
-func broadcast(method, path string, urlParams url.Values, body []byte, nodes cluster.NodeMap, ignore ...*cluster.Snode) []response {
+func broadcastTargets(method, path string, urlParams url.Values, body []byte, smap *cluster.Smap, ignore ...*cluster.Snode) []response {
 	var (
-		responses = make([]response, len(nodes))
+		responses = make([]response, smap.CountActiveTargets())
 		wg        = &sync.WaitGroup{}
 	)
 
@@ -749,7 +751,10 @@ func broadcast(method, path string, urlParams url.Values, body []byte, nodes clu
 
 	idx := 0
 outer:
-	for _, node := range nodes {
+	for _, node := range smap.Tmap {
+		if smap.PresentInMaint(node) {
+			continue
+		}
 		for _, ignoreNode := range ignore {
 			if ignoreNode.Equals(node) {
 				continue outer
@@ -804,7 +809,7 @@ func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
 
 	query := make(url.Values)
 	query.Add(cmn.URLParamWhat, cmn.GetWhatDaemonStatus)
-	responses := broadcast(http.MethodGet, path, query, nil, ctx.smapOwner.Get().Tmap)
+	responses := broadcastTargets(http.MethodGet, path, query, nil, ctx.smapOwner.Get())
 	for _, response := range responses {
 		if response.err != nil {
 			return "", response.err

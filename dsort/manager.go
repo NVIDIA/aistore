@@ -233,7 +233,10 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	// another daemon we will remove it from the map until len(ack) == 0 (then
 	// we will know that all daemons have finished operation).
 	m.finishedAck.m = make(map[string]struct{}, targetCount)
-	for sid := range m.smap.Tmap {
+	for sid, si := range m.smap.Tmap {
+		if m.smap.PresentInMaint(si) {
+			continue
+		}
 		m.finishedAck.m[sid] = struct{}{}
 	}
 
@@ -746,8 +749,8 @@ func (m *Manager) ListenSmapChanged() {
 		// supported during the run.
 		//
 		// TODO: dSort should survive adding new target. For now it is
-		// not possible as rebalance deletes moved object - dSort needs
-		// to use `GetObject` method instead of relaying on simple `os.Open`
+		//  not possible as rebalance deletes moved object - dSort needs
+		//  to use `GetObject` method instead of relaying on simple `os.Open`.
 		err := errors.Errorf("number of target has changed during dSort run, aborting due to possible errors")
 		go m.abort(err)
 	}
