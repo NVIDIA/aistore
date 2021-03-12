@@ -138,7 +138,8 @@ type (
 		Compression CompressionConf `json:"compression"`
 		MDWrite     MDWritePolicy   `json:"md_write"`
 		LastUpdated string          `json:"lastupdate_time"`
-		Version     int64           `json:"config_version,string"` // instance version of config
+		UUID        string          `json:"uuid"`                  // immutable
+		Version     int64           `json:"config_version,string"` // version
 	}
 
 	LocalConfig struct {
@@ -849,7 +850,7 @@ func (c *ClusterConfig) String() string {
 	if c == nil {
 		return "Conf <nil>"
 	}
-	return fmt.Sprintf("Conf v%d", c.Version)
+	return fmt.Sprintf("Conf v%d[%s]", c.Version, c.UUID)
 }
 
 // TestingEnv returns true if config is set to a development environment

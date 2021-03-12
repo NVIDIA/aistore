@@ -324,7 +324,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	// 7. initialize configMD
 	if p.owner.config.version() == 0 {
 		// Implies, the global config object is created for the first time.
-		cluConfig, err = p.initClusterConfig()
+		cluConfig, err = p.initClusterConfig(smap.UUID)
 	} else {
 		cluConfig, err = p.owner.config.get()
 	}
@@ -355,14 +355,15 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	p.owner.rmd.startup.Store(false)
 }
 
-func (p *proxyrunner) initClusterConfig() (config *globalConfig, err error) {
+func (p *proxyrunner) initClusterConfig(uuid string) (config *globalConfig, err error) {
 	debug.Assert(p.owner.smap.get().isPrimary(p.si))
 
-	// Create cluster config with version=1 and set primary URL.
+	// Create version 1 of the cluster config and set primary URL.
 	return p.owner.config.modify(&configModifier{
 		pre: func(ctx *configModifier, clone *globalConfig) (updated bool, err error) {
 			debug.Assert(clone.version() == 0)
 			clone.Proxy.PrimaryURL = p.si.URL(cmn.NetworkPublic)
+			clone.UUID = uuid
 			updated = true
 			return
 		},
@@ -511,7 +512,16 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 		p.owner.config.Lock()
 		config := cmn.GCO.Get()
 		if config.Version < svm.Config.version() {
-			glog.Infof("%s: override local %s with %s", p.si, config, svm.Config)
+			if !cos.IsValidUUID(svm.Config.UUID) {
+				debug.AssertMsg(false, svm.Config.String())
+				cos.ExitLogf("%s: invalid config UUID: %s", p.si, svm.Config)
+			}
+			if cos.IsValidUUID(config.UUID) && config.UUID != svm.Config.UUID {
+				glog.Errorf("Warning: configs have different UUIDs: (%s, %s) vs %s - proceeding anyway",
+					p.si, config, svm.Config)
+			} else {
+				glog.Infof("%s: override local %s with %s", p.si, config, svm.Config)
+			}
 			oldConfig := cmn.GCO.Get()
 			p.owner.config.updateGCO(svm.Config)
 			p.owner.config.Unlock()
