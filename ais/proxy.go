@@ -2521,7 +2521,7 @@ func resolveUUIDBMD(bmds bmds) (*bucketMD, error) {
 		if bmd.Version == 0 {
 			continue
 		}
-		mlist[bmd.UUID] = append(mlist[bmd.UUID], nodeRegMeta{nil, bmd, si, false})
+		mlist[bmd.UUID] = append(mlist[bmd.UUID], nodeRegMeta{BMD: bmd, SI: si})
 
 		if rbmd, ok := maxor[bmd.UUID]; !ok {
 			maxor[bmd.UUID] = bmd

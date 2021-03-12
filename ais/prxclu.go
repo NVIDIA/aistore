@@ -370,7 +370,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p.owner.smap.Lock()
-	smap, update, err := p.handleJoinKalive(nsi, regReq.Smap, tag, keepalive, nsi.Flags)
+	update, err := p.handleJoinKalive(nsi, regReq.Smap, tag, keepalive, nsi.Flags)
 	if !isProxy && p.NodeStarted() {
 		if p.owner.rmd.rebalance.CAS(false, regReq.Reb) && regReq.Reb {
 			glog.Errorf("%s: target %s reports interrupted rebalance", p.si, nsi)
@@ -386,15 +386,17 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if !update {
 		return
 	}
-	// send the current Smap and BMD to self-registering target
-	if !isProxy && selfRegister {
+	// send the current Smap, BMD and global config to the self-registering node
+	if selfRegister {
 		glog.Infof("%s: %s %s (%s)...", p.si, tag, nsi, regReq.Smap)
-		bmd := p.owner.bmd.get()
-		meta := &nodeRegMeta{smap, bmd, p.si, false}
-		p.writeJSON(w, r, meta, path.Join(cmn.ActRegTarget, nsi.ID()) /* tag */)
+		meta, err := p.createNodeRegMeta()
+		if err != nil {
+			p.writeErr(w, r, err)
+		}
+		p.writeJSON(w, r, meta, path.Join(msg.Action, nsi.ID()) /* tag */)
 	}
 
-	// Return the node ID and rebalance ID when target is registered by user.
+	// Return the node ID and rebalance ID when the node is joined by user.
 	if userRegister {
 		var rebID string
 		if !isProxy {
@@ -403,20 +405,34 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		p.writeJSON(w, r, api.JoinNodeResult{DaemonID: nsi.Name(), RebalanceID: rebID}, "")
 		return
 	}
-
 	go p.updateAndDistribute(nsi, msg, nsi.Flags)
+}
+
+func (p *proxyrunner) createNodeRegMeta() (meta *nodeRegMeta, err error) {
+	smap := p.owner.smap.get()
+	bmd := p.owner.bmd.get()
+	config, err := p.owner.config.get()
+	if err != nil {
+		return
+	}
+	meta = &nodeRegMeta{
+		Smap:   smap,
+		BMD:    bmd,
+		SI:     p.si,
+		Config: config,
+	}
+	return
 }
 
 // join(node) => cluster via API
 func (p *proxyrunner) userRegisterNode(nsi *cluster.Snode, tag string) (errCode int, err error) {
-	var (
-		smap = p.owner.smap.get()
-		bmd  = p.owner.bmd.get()
-		meta = &nodeRegMeta{smap, bmd, p.si, false}
-		body = cos.MustMarshal(meta)
-	)
+	meta, err := p.createNodeRegMeta()
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	body := cos.MustMarshal(meta)
 	if glog.FastV(3, glog.SmoduleAIS) {
-		glog.Infof("%s: %s %s => (%s)", p.si, tag, nsi, smap.StringEx())
+		glog.Infof("%s: %s %s => (%s)", p.si, tag, nsi, p.owner.smap.get().StringEx())
 	}
 	args := callArgs{
 		si:      nsi,
@@ -440,9 +456,9 @@ func (p *proxyrunner) userRegisterNode(nsi *cluster.Snode, tag string) (errCode 
 
 // NOTE: under lock
 func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, tag string,
-	keepalive bool, flags cluster.SnodeFlags) (smap *smapX, update bool, err error) {
+	keepalive bool, flags cluster.SnodeFlags) (update bool, err error) {
 	debug.AssertMutexLocked(&p.owner.smap.Mutex)
-	smap = p.owner.smap.get()
+	smap := p.owner.smap.get()
 	if !smap.isPrimary(p.si) {
 		err = newErrNotPrimary(p.si, smap, fmt.Sprintf("cannot %s %s", tag, nsi))
 		return

@@ -100,10 +100,11 @@ type (
 
 	// two pieces of metadata a self-registering (joining) target wants to know right away
 	nodeRegMeta struct {
-		Smap *smapX         `json:"smap"`
-		BMD  *bucketMD      `json:"bmd"`
-		SI   *cluster.Snode `json:"si"`
-		Reb  bool           `json:"reb"`
+		Smap   *smapX         `json:"smap"`
+		BMD    *bucketMD      `json:"bmd"`
+		Config *globalConfig  `json:"config"`
+		SI     *cluster.Snode `json:"si"`
+		Reb    bool           `json:"reb"`
 	}
 
 	nodeRegPool []nodeRegMeta
