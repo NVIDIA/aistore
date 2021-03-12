@@ -25,7 +25,7 @@ variables:
     paths: [ logs/ ]
     expire_in: 1 days
 
-.kube_long_exit_template: &kube_long_exit_def
+.k8s_long_exit_template: &k8s_long_exit_def
   after_script:
     - make kill
     - mkdir $CI_PROJECT_DIR/logs
@@ -98,7 +98,7 @@ test:short:
     - FLAGS="--duration=10s" make test-aisloader
   <<: *gather_logs_def
 
-test:authn:
+test:short:authn:
   stage: test-short
   tags:
     - ais
@@ -120,7 +120,7 @@ test:authn:
     - BUCKET="ais://test" RE="TestAuth" make test-run
     - ais auth logout
 
-test:https:
+test:short:https:
   stage: test-short
   tags:
     - ais
@@ -136,7 +136,7 @@ test:https:
     AIS_SERVER_CRT: "$CI_PROJECT_DIR/localhost.crt"
     AIS_SERVER_KEY: "$CI_PROJECT_DIR/localhost.key"
     AIS_SKIP_VERIFY_CRT: "true"
-    BUCKET: "test"
+    BUCKET: "ais://ais-ci"
   script:
     - openssl req -x509 -out $AIS_SERVER_CRT -keyout $AIS_SERVER_KEY -newkey rsa:2048 -nodes -sha256 -subj '/CN=localhost' -extensions EXT -config <( printf "[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth")
     - make aisfs cli
@@ -150,13 +150,13 @@ test:long:
   <<: *test_long_def
   variables:
     NUM_PROXY: 6
-    BUCKET: "test"
+    BUCKET: "ais://ais-ci"
   script:
     - make aisfs cli
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
     - make test-long
 
-test:cloud:aws:
+test:long:aws:
   <<: *test_long_def
   variables:
     NUM_PROXY: 6
@@ -167,7 +167,7 @@ test:cloud:aws:
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; echo n; echo n; })
     - make test-long
 
-test:cloud:gcp:
+test:long:gcp:
   <<: *test_long_def
   variables:
     NUM_PROXY: 6
@@ -179,7 +179,7 @@ test:cloud:gcp:
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo y; echo n; echo n; echo n; })
     - make test-long
 
-test:cloud:hdfs:
+test:long:hdfs:
   image: aistore/ci:2.0-hdfs
   <<: *test_long_def
   variables:
@@ -192,7 +192,7 @@ test:cloud:hdfs:
     - ais bucket create "${BUCKET}" --bucket-props="extra.hdfs.ref_directory=/"
     - make test-long
 
-test:aisloader:
+test:long:aisloader:
   stage: test-long
   tags:
     - ais
@@ -207,9 +207,9 @@ test:aisloader:
 
 # Kubernetes stages
 
-.test_kube_template: &test_kube_def
+.test_k8s_template: &test_k8s_def
   tags:
-    - ais-kube
+    - ais-k8s
   variables:
     NUM_TARGET: 1
     NUM_PROXY: 1
@@ -223,9 +223,9 @@ test:aisloader:
     - git clone https://github.com/prometheus-operator/kube-prometheus.git
     - kubectl apply -f kube-prometheus/manifests/setup && kubectl apply -f kube-prometheus/manifests && rm -rf kube-prometheus
 
-test:kube-short:
+test:short:k8s:
   stage: test-short
-  <<: *test_kube_def
+  <<: *test_k8s_def
   timeout: 30m
   only:
     - merge_requests
@@ -239,13 +239,13 @@ test:kube-short:
     - make test-short
     - status=$? make kill && exit $status
 
-test:kube:
+test:long:k8s:
   stage: test-long
-  <<: *test_kube_def
+  <<: *test_k8s_def
   timeout: 2h
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
+    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
       when: manual
       allow_failure: true
@@ -255,15 +255,15 @@ test:kube:
     - ONE_NODE_MANY_ETLS="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo y; echo n; echo n; echo n; })
     - make test-run
     - status=$? make kill && exit $status
-  <<: *kube_long_exit_def
+  <<: *k8s_long_exit_def
 
-test:kube-single-target:
+test:long:k8s:single-target:
   stage: test-long
-  <<: *test_kube_def
+  <<: *test_k8s_def
   timeout: 2h
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
+    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
       when: manual
       allow_failure: true
@@ -274,15 +274,15 @@ test:kube-single-target:
     - status=0
     - make test-run
     - status=$? make kill && exit $status
-  <<: *kube_long_exit_def
+  <<: *k8s_long_exit_def
 
-test:kube-aisloader:
+test:long:k8s:aisloader:
   stage: test-long
-  <<: *test_kube_def
+  <<: *test_k8s_def
   timeout: 15m
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
+    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
       when: manual
       allow_failure: true
