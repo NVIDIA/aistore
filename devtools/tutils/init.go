@@ -226,10 +226,16 @@ func initNodeCmd() {
 	cos.AssertNoErr(err)
 	restoreNodes = make(map[string]RestoreCmd, smap.CountProxies()+smap.CountTargets())
 	for _, node := range smap.Pmap {
+		if node.ID() == MockDaemonID {
+			continue
+		}
 		restoreNodes[node.ID()] = GetRestoreCmd(node)
 	}
 
 	for _, node := range smap.Tmap {
+		if node.ID() == MockDaemonID {
+			continue
+		}
 		restoreNodes[node.ID()] = GetRestoreCmd(node)
 	}
 }
