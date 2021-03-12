@@ -370,15 +370,6 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 	err = tutils.RemoveNodeFromSmap(m.proxyURL, target2.ID())
 	tassert.CheckFatal(t, err)
 
-	_, err = tutils.WaitForClusterState(
-		m.proxyURL,
-		"to targets are removed",
-		m.smap.Version,
-		m.originalProxyCount,
-		m.originalTargetCount-2,
-	)
-	tassert.CheckFatal(m.t, err)
-
 	// Start putting objects into bucket
 	m.puts()
 

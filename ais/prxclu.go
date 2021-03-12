@@ -1363,7 +1363,11 @@ func (p *proxyrunner) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb 
 		body := cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActShutdown})
 		args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: body}
 	case cmn.ActStartMaintenance, cmn.ActDecommission, testInitiatedRm:
-		body := cos.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: msg.Value})
+		act := &cmn.ActionMsg{Action: msg.Action}
+		if msg.Action == cmn.ActDecommission {
+			act.Value = msg.Value
+		}
+		body := cos.MustMarshal(act)
 		args.req = cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathDaemonUnreg.S, Body: body}
 	default:
 		debug.AssertMsg(false, "invalid action: "+msg.Action)
@@ -1376,7 +1380,7 @@ func (p *proxyrunner) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb 
 		glog.Warningf("%s: %s that is being removed via %q fails to respond: %v[%s]",
 			p.si, node, msg.Action, er, d)
 	}
-	if msg.Action == cmn.ActDecommission {
+	if msg.Action == cmn.ActDecommission || msg.Action == testInitiatedRm {
 		// NOTE: proceeding anyway even if all retries fail
 		errCode, err = p.unregNode(msg, si, skipReb)
 	}
