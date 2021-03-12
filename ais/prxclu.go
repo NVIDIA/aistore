@@ -392,6 +392,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		meta, err := p.createNodeRegMeta()
 		if err != nil {
 			p.writeErr(w, r, err)
+			return
 		}
 		p.writeJSON(w, r, meta, path.Join(msg.Action, nsi.ID()) /* tag */)
 	}
@@ -1045,7 +1046,7 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 }
 
 func (p *proxyrunner) attachDetach(w http.ResponseWriter, r *http.Request, action string) (err error) {
-	// TODO: Implement 3-PC
+	// TODO: Implement `ActAttach` as transactions begin -- update locally -- metasync -- commit
 	var (
 		query = r.URL.Query()
 		what  = query.Get(cmn.URLParamWhat)
@@ -1079,15 +1080,15 @@ func (p *proxyrunner) attachDetachRemoteAIS(ctx *configModifier, config *globalC
 		query   = ctx.query
 		v, ok   = config.Backend.ProviderConf(cmn.ProviderAIS)
 	)
-	if !ok {
+	if !ok || v == nil {
 		if action == cmn.ActDetach {
 			err = fmt.Errorf("%s: remote cluster config is empty", p.si)
 			return
 		}
 		aisConf = make(cmn.BackendConfAIS)
 	} else {
-		aisConf, ok = v.(cmn.BackendConfAIS)
-		cos.Assert(ok)
+		aisConf = cmn.BackendConfAIS{}
+		cos.MustMorphMarshal(v, &aisConf)
 	}
 	// detach
 	if action == cmn.ActDetach {

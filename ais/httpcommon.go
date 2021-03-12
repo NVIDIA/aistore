@@ -900,6 +900,32 @@ func (h *httprunner) stopHTTPServer() {
 	}
 }
 
+// _applyRegMeta, applies nodeRegMeta received from primary to target/proxy.
+// See also targetrunner.applyRegMeta and proxyrunner.applyRegMeta for daemon specific apply implementations.
+func (h *httprunner) _applyRegMeta(body []byte, caller string) (regMeta nodeRegMeta, msg *aisMsg, err error) {
+	err = jsoniter.Unmarshal(body, &regMeta)
+	if err != nil {
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "reg-meta", cmn.BytesHead(body), err)
+		return
+	}
+	action := cmn.ActRegProxy
+	if h.si.IsTarget() {
+		action = cmn.ActRegTarget
+	}
+	msg = h.newAmsgStr(action, regMeta.Smap, regMeta.BMD)
+
+	if err = h.receiveConfig(regMeta.Config, msg, caller); err != nil {
+		if isErrDowngrade(err) {
+			err = nil
+		} else {
+			glog.Error(err)
+		}
+		// Received outdated/invalid config in regMeta, ignore by setting to `nil`.
+		regMeta.Config = nil
+	}
+	return
+}
+
 // Return true if node is unregistered because of decommission
 func (h *httprunner) isDecommissionUnreg(w http.ResponseWriter, r *http.Request) (*cmn.ActValRmNode, bool, error) {
 	var msg cmn.ActionMsg

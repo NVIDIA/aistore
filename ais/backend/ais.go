@@ -77,6 +77,7 @@ func (m *AISBackendProvider) Apply(v interface{}, action string) error {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	// detach
 	if action == cmn.ActDetach {
 		for alias, uuid := range m.alias {
@@ -89,6 +90,7 @@ func (m *AISBackendProvider) Apply(v interface{}, action string) error {
 		}
 		return nil
 	}
+
 	// init and attach
 	for alias, clusterURLs := range clusterConf {
 		remAis := &remAISCluster{}

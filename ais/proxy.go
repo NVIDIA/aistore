@@ -33,7 +33,6 @@ import (
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
-	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -198,14 +197,10 @@ func (p *proxyrunner) joinCluster(primaryURLs ...string) (status int, err error)
 }
 
 func (p *proxyrunner) applyRegMeta(body []byte, caller string) (err error) {
-	var regMeta nodeRegMeta
-	err = jsoniter.Unmarshal(body, &regMeta)
+	regMeta, msg, err := p._applyRegMeta(body, caller)
 	if err != nil {
-		return fmt.Errorf(cmn.FmtErrUnmarshal, p.si, "reg-meta", cmn.BytesHead(body), err)
+		return err
 	}
-
-	msg := p.newAmsgStr(cmn.ActRegTarget, regMeta.Smap, regMeta.BMD)
-
 	// BMD
 	if err = p.receiveBMD(regMeta.BMD, msg, caller); err != nil {
 		if !isErrDowngrade(err) {
@@ -1397,7 +1392,8 @@ func (p *proxyrunner) reverseReqRemote(w http.ResponseWriter, r *http.Request, m
 		return err
 	}
 
-	aisConf := v.(cmn.BackendConfAIS)
+	aisConf := cmn.BackendConfAIS{}
+	cos.MustMorphMarshal(v, &aisConf)
 	urls, exists := aisConf[remoteUUID]
 	if !exists {
 		err = cmn.NewNotFoundError("remote UUID/alias %q", remoteUUID)

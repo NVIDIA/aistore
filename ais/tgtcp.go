@@ -79,9 +79,9 @@ func (t *targetrunner) joinCluster(primaryURLs ...string) (status int, err error
 }
 
 func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
-	var regMeta nodeRegMeta
-	if err = jsoniter.Unmarshal(body, &regMeta); err != nil {
-		return fmt.Errorf(cmn.FmtErrUnmarshal, t.si, "reg-meta", cmn.BytesHead(body), err)
+	regMeta, msg, err := t._applyRegMeta(body, caller)
+	if err != nil {
+		return err
 	}
 
 	// There's a window of time between:
@@ -92,13 +92,17 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 	t.gfn.global.activateTimed()
 
 	// BMD
-	msg := t.newAmsgStr(cmn.ActRegTarget, regMeta.Smap, regMeta.BMD)
 	if err = t.receiveBMD(regMeta.BMD, msg, bucketMDRegister, caller); err != nil {
 		if isErrDowngrade(err) {
 			err = nil
 		} else {
 			glog.Error(err)
 		}
+	}
+
+	if regMeta.Config != nil {
+		// Initialize backends based on latest cluster configuration.
+		t.backend.init(t)
 	}
 
 	// Smap
