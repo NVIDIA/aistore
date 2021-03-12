@@ -1024,17 +1024,25 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 }
 
 // bucket == "": all buckets for a given provider
-func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck cmn.QueryBcks, amsg *cmn.ActionMsg) {
+func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, queryBcks cmn.QueryBcks, amsg *cmn.ActionMsg) {
 	var (
 		err       error
 		uuid      string
 		summaries cmn.BucketsSummaries
 		smsg      = cmn.BucketSummaryMsg{}
 	)
-	listMsgJSON := cos.MustMarshal(amsg.Value)
-	if err := jsoniter.Unmarshal(listMsgJSON, &smsg); err != nil {
+
+	if err := cos.MorphMarshal(amsg.Value, &smsg); err != nil {
 		p.writeErr(w, r, err)
 		return
+	}
+
+	if queryBcks.Name != "" {
+		bck := cluster.NewBckEmbed(cmn.Bck(queryBcks))
+		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: amsg, perms: cmn.AccessBckHEAD, tryOnlyRem: true, bck: bck}
+		if _, err = bckArgs.initAndTry(queryBcks.Name); err != nil {
+			return
+		}
 	}
 
 	id := r.URL.Query().Get(cmn.URLParamUUID)
@@ -1042,7 +1050,7 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck 
 		smsg.UUID = id
 	}
 
-	if summaries, uuid, err = p.gatherBucketSummary(bck, &smsg); err != nil {
+	if summaries, uuid, err = p.gatherBucketSummary(queryBcks, &smsg); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
