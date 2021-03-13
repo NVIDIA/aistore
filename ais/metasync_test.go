@@ -89,7 +89,7 @@ func newPrimary() *proxyrunner {
 
 	p.client.data = &http.Client{}
 	p.client.control = &http.Client{}
-	p.keepalive = newProxyKeepaliveRunner(p, tracker, atomic.NewBool(true))
+	p.keepalive = newProxyKeepalive(p, tracker, atomic.NewBool(true))
 
 	o := newBMDOwnerPrx(config)
 	o._put(newBucketMD())

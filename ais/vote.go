@@ -331,7 +331,7 @@ func (t *targetrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 // voting: common methods //
 ////////////////////////////
 
-func (h *httprunner) onPrimaryProxyFailure() {
+func (h *httprunner) onPrimaryFail() {
 	smap := h.owner.smap.get()
 	if smap.validate() != nil {
 		return

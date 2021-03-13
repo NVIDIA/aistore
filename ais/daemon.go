@@ -225,7 +225,7 @@ func initProxy() cos.Runner {
 	daemon.rg.add(ps)
 	p.statsT = ps
 
-	k := newProxyKeepaliveRunner(p, ps, startedUp)
+	k := newProxyKeepalive(p, ps, startedUp)
 	daemon.rg.add(k)
 	p.keepalive = k
 
@@ -269,7 +269,7 @@ func initTarget() cos.Runner {
 	daemon.rg.add(ts)
 	t.statsT = ts
 
-	k := newTargetKeepaliveRunner(t, ts, startedUp)
+	k := newTargetKeepalive(t, ts, startedUp)
 	daemon.rg.add(k)
 	t.keepalive = k
 

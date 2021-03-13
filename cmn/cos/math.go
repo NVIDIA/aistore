@@ -141,6 +141,13 @@ func Abs(a int) int {
 	return a
 }
 
+func AbsI64(a int64) int64 {
+	if a < 0 {
+		return -a
+	}
+	return a
+}
+
 func DivCeil(a, b int64) int64 {
 	d, r := a/b, a%b
 	if r > 0 {

@@ -58,7 +58,7 @@ var _ = Describe("Notifications xaction test", func() {
 			}
 			p.client.data = &http.Client{}
 			p.client.control = &http.Client{}
-			p.keepalive = newProxyKeepaliveRunner(p, tracker, atomic.NewBool(true))
+			p.keepalive = newProxyKeepalive(p, tracker, atomic.NewBool(true))
 			return p
 		}
 
