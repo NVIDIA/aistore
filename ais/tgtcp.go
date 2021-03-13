@@ -710,8 +710,8 @@ func (t *targetrunner) ensureLatestBMD(msg *aisMsg, r *http.Request) {
 	}
 }
 
-// create local directories to test multiple fspaths
-func (t *targetrunner) testCachepathMounts() {
+// Create local directories to test multiple fspaths.
+func (t *targetrunner) createLocalMountpaths() {
 	t.owner.config.Lock()
 	config := cmn.GCO.Clone()
 	config.FSpaths.Paths = make(cos.StringSet, config.TestFSP.Count)

@@ -18,20 +18,22 @@ import (
 
 const vmdCopies = 3
 
-// FIXME: Change json tags (on-disk structure):
-//  * devices -> mountpaths
-//  * mpath -> mountpath
 type (
 	fsMpathMD struct {
-		Mountpath string `json:"mpath"`
-		FsType    string `json:"fs_type"`
+		Mountpath string `json:"mountpath"`
 		Enabled   bool   `json:"enabled"`
+
+		Fs     string   `json:"fs"`
+		FsType string   `json:"fs_type"`
+		FsID   cos.FsID `json:"fs_id"`
+
+		Ext interface{} `json:"ext"` // Reserved for future extension.
 	}
 
 	// Short for VolumeMetaData.
 	VMD struct {
-		Mountpaths map[string]*fsMpathMD `json:"devices"`   // mountpath => metadata
-		DaemonID   string                `json:"daemon_id"` // ID of the daemon to which the mountpaths belong(ed).
+		Mountpaths map[string]*fsMpathMD `json:"mountpaths"` // mountpath => metadata
+		DaemonID   string                `json:"daemon_id"`  // ID of the daemon to which the mountpaths belong(ed).
 		cksum      *cos.Cksum            // Checksum of loaded VMD.
 	}
 )
@@ -86,19 +88,23 @@ func CreateNewVMD(daemonID string) (vmd *VMD, err error) {
 	available, disabled := Get()
 	vmd = newVMD(len(available))
 	vmd.DaemonID = daemonID
-	for _, mPath := range available {
-		vmd.Mountpaths[mPath.Path] = &fsMpathMD{
-			Mountpath: mPath.Path,
-			FsType:    mPath.FileSystem,
-			Enabled:   true,
+
+	addMountpath := func(mpath *MountpathInfo, enabled bool) {
+		vmd.Mountpaths[mpath.Path] = &fsMpathMD{
+			Mountpath: mpath.Path,
+			Enabled:   enabled,
+
+			Fs:     mpath.Fs,
+			FsType: mpath.FsType,
+			FsID:   mpath.FsID,
 		}
 	}
-	for _, mPath := range disabled {
-		vmd.Mountpaths[mPath.Path] = &fsMpathMD{
-			Mountpath: mPath.Path,
-			FsType:    mPath.FileSystem,
-			Enabled:   false,
-		}
+
+	for _, mpath := range available {
+		addMountpath(mpath, true /*enabled*/)
+	}
+	for _, mpath := range disabled {
+		addMountpath(mpath, false /*enabled*/)
 	}
 	err = vmd.persist()
 	return

@@ -207,9 +207,14 @@ func initDaemon(version, buildTime string) (rmain cos.Runner) {
 	return
 }
 
-func initProxy() cos.Runner {
+func newProxy() *proxyrunner {
 	p := &proxyrunner{}
 	p.owner.config = &configOwner{}
+	return p
+}
+
+func initProxy() cos.Runner {
+	p := newProxy()
 	p.initSI(cmn.Proxy)
 
 	// Persist daemon ID on disk
@@ -239,27 +244,15 @@ func newTarget() *targetrunner {
 	t := &targetrunner{backend: make(backends, 8)}
 	t.gfn.local.tag, t.gfn.global.tag = "local GFN", "global GFN"
 	t.owner.bmd = newBMDOwnerTgt()
+	t.owner.config = &configOwner{}
 	return t
 }
 
 func initTarget() cos.Runner {
-	// Initialize filesystem/mountpaths manager.
-	fs.Init()
 	t := newTarget()
-	t.owner.config = &configOwner{}
-
-	// fs.Mountpaths must be inited prior to all runners that utilize them
-	// for mountpath definition, see fs/mountfs.go
-	config := cmn.GCO.Get()
-	if config.TestingEnv() {
-		glog.Infof("Warning: configuring %d fspaths for testing", config.TestFSP.Count)
-		fs.DisableFsIDCheck()
-		t.testCachepathMounts()
-	}
 	t.initSI(cmn.Target)
-	if err := fs.InitMpaths(t.si.ID()); err != nil {
-		cos.ExitLogf("%v", err)
-	}
+
+	t.initFs()
 
 	t.initHostIP()
 	daemon.rg.add(t)

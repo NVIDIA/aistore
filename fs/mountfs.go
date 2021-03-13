@@ -51,10 +51,10 @@ type (
 	MountpathInfo struct {
 		Path     string // Cleaned OrigPath
 		OrigPath string // As entered by the user, must be used for logging / returning errors
-		Fsid     syscall.Fsid
 
-		FileSystem string
-		PathDigest uint64
+		FilesystemInfo // Additional information about the filesystem for a given mountpath.
+
+		PathDigest uint64 // Calculated from `Path` and used for HRW.
 
 		// LOM caches
 		lomCaches cos.MultiSyncMap
@@ -83,7 +83,7 @@ type (
 		// fsIDs is set in which we store fsids of mountpaths. This allows for
 		// determining if there are any duplications of file system - we allow
 		// only one mountpath per file system.
-		fsIDs map[syscall.Fsid]string
+		fsIDs map[cos.FsID]string
 		// checkFsID determines if we should actually check FSID when adding new
 		// mountpath. By default it is set to true.
 		checkFsID bool
@@ -128,20 +128,26 @@ var (
 // MountpathInfo //
 ///////////////////
 
-func newMountpath(cleanPath, origPath string, fsid syscall.Fsid, fs string) *MountpathInfo {
+func newMountpath(cleanPath, origPath string) (*MountpathInfo, error) {
+	fsInfo, err := makeFsInfo(cleanPath)
+	if err != nil {
+		return nil, err
+	}
+
 	mi := &MountpathInfo{
-		Path:       cleanPath,
-		OrigPath:   origPath,
-		Fsid:       fsid,
-		FileSystem: fs,
+		Path:     cleanPath,
+		OrigPath: origPath,
+
+		FilesystemInfo: fsInfo,
+
 		PathDigest: xxhash.ChecksumString64S(cleanPath, cos.MLCG32),
 	}
 	mi.bpc.m = make(map[uint64]string, 16)
-	return mi
+	return mi, nil
 }
 
 func (mi *MountpathInfo) String() string {
-	return fmt.Sprintf("mp[%s, fs=%s]", mi.Path, mi.FileSystem)
+	return fmt.Sprintf("mp[%s, fs=%s]", mi.Path, mi.Fs)
 }
 
 func (mi *MountpathInfo) LomCache(idx int) *sync.Map { return mi.lomCaches.Get(idx) }
@@ -437,7 +443,7 @@ func (mi *MountpathInfo) getCapacity(config *cmn.Config, refresh bool) (c Capaci
 
 // create a new singleton
 func Init(iostater ...ios.IOStater) {
-	mfs = &MountedFS{fsIDs: make(map[syscall.Fsid]string, 10), checkFsID: true}
+	mfs = &MountedFS{fsIDs: make(map[cos.FsID]string, 10), checkFsID: true}
 	if len(iostater) > 0 {
 		mfs.ios = iostater[0]
 	} else {
@@ -457,6 +463,8 @@ func InitMpaths(tid string) error {
 		return err
 	}
 	if vmd == nil {
+		glog.Infof("VMD not loaded, adding %d mountpaths from config", len(configPaths))
+
 		for path := range configPaths {
 			if _, err := Add(path, tid); err != nil {
 				return err
@@ -465,6 +473,9 @@ func InitMpaths(tid string) error {
 		_, err = CreateNewVMD(tid)
 		return err
 	}
+
+	glog.Infof("VMD loaded (mountpaths: %d), validating it with config (mountpaths: %d)", len(vmd.Mountpaths), len(configPaths))
+
 	if vmd.DaemonID != tid {
 		return newVMDIDMismatchErr(vmd.DaemonID, tid)
 	}
@@ -564,17 +575,11 @@ func add(mpath, tid string, enabled bool, cb ...func()) (*MountpathInfo, error) 
 	if err := Access(cleanMpath); err != nil {
 		return nil, cmn.NewNotFoundError("fspath %q", mpath)
 	}
-	statfs := syscall.Statfs_t{}
-	if err := syscall.Statfs(cleanMpath, &statfs); err != nil {
-		return nil, fmt.Errorf("cannot statfs fspath %q, err: %w", mpath, err)
-	}
 
-	fs, err := fqn2fsAtStartup(cleanMpath)
+	mp, err := newMountpath(cleanMpath, mpath)
 	if err != nil {
-		return nil, fmt.Errorf("cannot get filesystem: %v", err)
+		return nil, err
 	}
-
-	mp := newMountpath(cleanMpath, mpath, statfs.Fsid, fs)
 	mfs.mu.Lock()
 	defer mfs.mu.Unlock()
 
@@ -583,13 +588,13 @@ func add(mpath, tid string, enabled bool, cb ...func()) (*MountpathInfo, error) 
 		return nil, fmt.Errorf("tried to add already registered mountpath: %v", mp.Path)
 	}
 
-	if existingPath, exists := mfs.fsIDs[mp.Fsid]; exists && mfs.checkFsID {
+	if existingPath, exists := mfs.fsIDs[mp.FsID]; exists && mfs.checkFsID {
 		return nil, fmt.Errorf("tried to add path %v but same fsid (%v) was already registered by %v",
-			mpath, mp.Fsid, existingPath)
+			mpath, mp.FsID, existingPath)
 	}
 
 	if enabled {
-		mfs.ios.AddMpath(mp.Path, mp.FileSystem)
+		mfs.ios.AddMpath(mp.Path, mp.Fs)
 		if err := mp.SetDaemonIDXattr(tid); err != nil {
 			return nil, err
 		}
@@ -598,7 +603,7 @@ func add(mpath, tid string, enabled bool, cb ...func()) (*MountpathInfo, error) 
 		disabledPaths[mp.Path] = mp
 	}
 
-	mfs.fsIDs[mp.Fsid] = cleanMpath
+	mfs.fsIDs[mp.FsID] = cleanMpath
 	updatePaths(availablePaths, disabledPaths)
 
 	if len(cb) > 0 {
@@ -668,14 +673,14 @@ func Remove(mpath string, cb ...func()) (*MountpathInfo, error) {
 		}
 
 		delete(disabledPaths, cleanMpath)
-		delete(mfs.fsIDs, mpathInfo.Fsid)
+		delete(mfs.fsIDs, mpathInfo.FsID)
 		updatePaths(availablePaths, disabledPaths)
 		return mpathInfo, nil
 	}
 
 	mfs.ios.RemoveMpath(cleanMpath)
 	delete(availablePaths, cleanMpath)
-	delete(mfs.fsIDs, mpathInfo.Fsid)
+	delete(mfs.fsIDs, mpathInfo.FsID)
 
 	availCnt := len(availablePaths)
 	if availCnt == 0 {
@@ -710,7 +715,7 @@ func Enable(mpath string, cb ...func()) (enabledMpath *MountpathInfo, err error)
 	}
 	if mp, ok := disabledPaths[cleanMpath]; ok {
 		availablePaths[cleanMpath] = mp
-		mfs.ios.AddMpath(cleanMpath, mp.FileSystem)
+		mfs.ios.AddMpath(cleanMpath, mp.Fs)
 		delete(disabledPaths, cleanMpath)
 		updatePaths(availablePaths, disabledPaths)
 		cos.Assert(mp != nil)

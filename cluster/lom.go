@@ -554,7 +554,7 @@ func (lom *LOM) String() string { return lom._string(lom.bck.Name) }
 func (lom *LOM) _string(b string) string {
 	var (
 		a string
-		s = fmt.Sprintf("o[%s/%s fs=%s", b, lom.ObjName, lom.mpathInfo.FileSystem)
+		s = fmt.Sprintf("o[%s/%s fs=%s", b, lom.ObjName, lom.mpathInfo.Fs)
 	)
 	if glog.FastV(4, glog.SmoduleCluster) {
 		s += fmt.Sprintf("(%s)", lom.FQN)

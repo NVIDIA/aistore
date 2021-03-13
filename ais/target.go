@@ -188,6 +188,24 @@ func (gfn *globalGFN) abortTimed() {
 // target runner //
 ///////////////////
 
+func (t *targetrunner) initFs() {
+	// Initialize filesystem/mountpaths manager.
+	fs.Init()
+
+	// fs.Mountpaths must be inited prior to all runners that utilize them.
+	// For mountpath definition, see `fs/mountfs.go`.
+	config := cmn.GCO.Get()
+	if config.TestingEnv() {
+		glog.Warningf("Configuring %d fspaths for testing", config.TestFSP.Count)
+		fs.DisableFsIDCheck()
+		t.createLocalMountpaths()
+	}
+
+	if err := fs.InitMpaths(t.si.ID()); err != nil {
+		cos.ExitLogf("%v", err)
+	}
+}
+
 func (t *targetrunner) Run() error {
 	config := cmn.GCO.Get()
 	if err := t.si.Validate(); err != nil {
