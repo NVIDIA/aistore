@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/authn"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -486,7 +487,7 @@ func roleCluPermCompletions(c *cli.Context) {
 		return
 	}
 
-	cluList, err := api.GetClusterAuthN(authParams, cmn.AuthCluster{})
+	cluList, err := api.GetClusterAuthN(authParams, authn.Cluster{})
 	if err != nil {
 		return
 	}
@@ -558,7 +559,7 @@ func oneClusterCompletions(c *cli.Context) {
 		return
 	}
 
-	cluList, err := api.GetClusterAuthN(authParams, cmn.AuthCluster{})
+	cluList, err := api.GetClusterAuthN(authParams, authn.Cluster{})
 	if err != nil {
 		return
 	}
@@ -570,7 +571,7 @@ func oneClusterCompletions(c *cli.Context) {
 
 func authNConfigPropList() []string {
 	propList := []string{}
-	emptyCfg := cmn.AuthNConfigToUpdate{Server: &cmn.AuthNServerConfToUpdate{}}
+	emptyCfg := authn.ConfigToUpdate{Server: &authn.ServerConfToUpdate{}}
 	cmn.IterFields(emptyCfg, func(tag string, field cmn.IterField) (error, bool) {
 		propList = append(propList, tag)
 		return nil, false

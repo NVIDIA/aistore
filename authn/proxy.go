@@ -1,8 +1,8 @@
-// Package main - authorization server for AIStore. See README.md for more info.
+// Package authn - authorization server for AIStore.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  */
-package main
+package authn
 
 import (
 	"bytes"
@@ -12,21 +12,20 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/ais"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 // update list of revoked token on all clusters
-func (m *userManager) broadcastRevoked(token string) {
-	tokenList := ais.TokenList{Tokens: []string{token}}
+func (m *UserManager) broadcastRevoked(token string) {
+	tokenList := TokenList{Tokens: []string{token}}
 	body := cos.MustMarshal(tokenList)
 	m.broadcast(http.MethodDelete, cmn.Tokens, body)
 }
 
 // broadcast the request to all clusters. If a cluster has a few URLS,
 // it sends to the first working one. Clusters are processed in parallel.
-func (m *userManager) broadcast(method, path string, body []byte) {
+func (m *UserManager) broadcast(method, path string, body []byte) {
 	cluList, err := m.clusterList()
 	if err != nil {
 		glog.Errorf("Failed to read cluster list: %v", err)
@@ -35,7 +34,7 @@ func (m *userManager) broadcast(method, path string, body []byte) {
 	wg := &sync.WaitGroup{}
 	for _, clu := range cluList {
 		wg.Add(1)
-		go func(clu *cmn.AuthCluster) {
+		go func(clu *Cluster) {
 			defer wg.Done()
 			var err error
 			for _, u := range clu.URLs {
@@ -52,7 +51,7 @@ func (m *userManager) broadcast(method, path string, body []byte) {
 }
 
 // Send valid and non-expired revoked token list to a cluster.
-func (m *userManager) syncTokenList(cluster *cmn.AuthCluster) {
+func (m *UserManager) syncTokenList(cluster *Cluster) {
 	tokenList, err := m.generateRevokedTokenList()
 	if err != nil {
 		glog.Errorf("failed to sync token list with %q: %v", cluster.ID, err)
@@ -61,7 +60,7 @@ func (m *userManager) syncTokenList(cluster *cmn.AuthCluster) {
 	if len(tokenList) == 0 {
 		return
 	}
-	body := cos.MustMarshal(ais.TokenList{Tokens: tokenList})
+	body := cos.MustMarshal(TokenList{Tokens: tokenList})
 	for _, u := range cluster.URLs {
 		if err = m.proxyRequest(http.MethodDelete, u, cmn.Tokens, body); err == nil {
 			break
@@ -74,7 +73,7 @@ func (m *userManager) syncTokenList(cluster *cmn.AuthCluster) {
 }
 
 // Generic function to send everything to a proxy
-func (m *userManager) proxyRequest(method, proxyURL, path string, injson []byte) error {
+func (m *UserManager) proxyRequest(method, proxyURL, path string, injson []byte) error {
 	startRequest := time.Now()
 	for {
 		url := proxyURL + cos.JoinWords(cmn.Version, path)

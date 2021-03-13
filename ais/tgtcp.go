@@ -960,7 +960,7 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
-	tokenList := &TokenList{}
+	tokenList := &tokenList{}
 	if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathTokens.L); err != nil {
 		return
 	}

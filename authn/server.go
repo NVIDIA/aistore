@@ -1,8 +1,8 @@
 // Package main - authorization server for AIStore. See README.md for more info.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  */
-package main
+package authn
 
 import (
 	"errors"
@@ -27,14 +27,19 @@ func checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int, item
 //-------------------------------------
 // auth server
 //-------------------------------------
-type authServ struct {
+type Server struct {
 	mux   *http.ServeMux
 	h     *http.Server
-	users *userManager
+	users *UserManager
 }
 
-func newAuthServ(mgr *userManager) *authServ {
-	srv := &authServ{users: mgr}
+var (
+	svcName = "AuthN"
+	Conf    = &Config{}
+)
+
+func NewServer(mgr *UserManager) *Server {
+	srv := &Server{users: mgr}
 	srv.mux = http.NewServeMux()
 
 	return srv
@@ -46,15 +51,15 @@ func newAuthServ(mgr *userManager) *authServ {
 // Internal one: it can be only HTTP and supports only one function - check
 //	if a token is valid. Can be called, e.g, from a targer. Now it is not used
 //  and can be removed
-func (a *authServ) run() error {
+func (a *Server) Run() error {
 	// Run public server to manage users and generate tokens
-	portstring := fmt.Sprintf(":%d", conf.Net.HTTP.Port)
+	portstring := fmt.Sprintf(":%d", Conf.Net.HTTP.Port)
 	glog.Infof("Launching public server at %s", portstring)
 	a.registerPublicHandlers()
 
 	a.h = &http.Server{Addr: portstring, Handler: a.mux}
-	if conf.Net.HTTP.UseHTTPS {
-		if err := a.h.ListenAndServeTLS(conf.Net.HTTP.Certificate, conf.Net.HTTP.Key); err != nil {
+	if Conf.Net.HTTP.UseHTTPS {
+		if err := a.h.ListenAndServeTLS(Conf.Net.HTTP.Certificate, Conf.Net.HTTP.Key); err != nil {
 			if err != http.ErrServerClosed {
 				glog.Errorf("Terminated with err: %v", err)
 				return err
@@ -72,14 +77,14 @@ func (a *authServ) run() error {
 	return nil
 }
 
-func (a *authServ) registerHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
+func (a *Server) registerHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
 	a.mux.HandleFunc(path, handler)
 	if !strings.HasSuffix(path, "/") {
 		a.mux.HandleFunc(path+"/", handler)
 	}
 }
 
-func (a *authServ) registerPublicHandlers() {
+func (a *Server) registerPublicHandlers() {
 	a.registerHandler(cmn.URLPathUsers.S, a.userHandler)
 	a.registerHandler(cmn.URLPathTokens.S, a.tokenHandler)
 	a.registerHandler(cmn.URLPathClusters.S, a.clusterHandler)
@@ -87,7 +92,7 @@ func (a *authServ) registerPublicHandlers() {
 	a.registerHandler(cmn.URLPathDaemon.S, a.configHandler)
 }
 
-func (a *authServ) userHandler(w http.ResponseWriter, r *http.Request) {
+func (a *Server) userHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodDelete:
 		a.httpUserDel(w, r)
@@ -102,7 +107,7 @@ func (a *authServ) userHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *authServ) tokenHandler(w http.ResponseWriter, r *http.Request) {
+func (a *Server) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodDelete:
 		a.httpRevokeToken(w, r)
@@ -111,7 +116,7 @@ func (a *authServ) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *authServ) clusterHandler(w http.ResponseWriter, r *http.Request) {
+func (a *Server) clusterHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		a.httpSrvGet(w, r)
@@ -127,19 +132,19 @@ func (a *authServ) clusterHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // Deletes existing token, a.k.a log out
-func (a *authServ) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
+func (a *Server) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 	if _, err := checkRESTItems(w, r, 0, cmn.URLPathTokens.L); err != nil {
 		return
 	}
 
-	msg := &cmn.TokenMsg{}
+	msg := &TokenMsg{}
 	if err := cmn.ReadJSON(w, r, msg); err != nil || msg.Token == "" {
 		glog.Errorf("Failed to read request: %v\n", err)
 		return
 	}
 
-	secret := conf.Secret()
-	_, err := cmn.DecryptToken(msg.Token, secret)
+	secret := Conf.Secret()
+	_, err := DecryptToken(msg.Token, secret)
 	if err != nil {
 		cmn.WriteErr(w, r, err)
 		return
@@ -148,7 +153,7 @@ func (a *authServ) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 	a.users.revokeToken(msg.Token)
 }
 
-func (a *authServ) httpUserDel(w http.ResponseWriter, r *http.Request) {
+func (a *Server) httpUserDel(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathUsers.L)
 	if err != nil {
 		return
@@ -163,7 +168,7 @@ func (a *authServ) httpUserDel(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *authServ) httpUserPost(w http.ResponseWriter, r *http.Request) {
+func (a *Server) httpUserPost(w http.ResponseWriter, r *http.Request) {
 	if apiItems, err := checkRESTItems(w, r, 0, cmn.URLPathUsers.L); err != nil {
 		return
 	} else if len(apiItems) == 0 {
@@ -174,7 +179,7 @@ func (a *authServ) httpUserPost(w http.ResponseWriter, r *http.Request) {
 }
 
 // Updates user credentials
-func (a *authServ) httpUserPut(w http.ResponseWriter, r *http.Request) {
+func (a *Server) httpUserPut(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathUsers.L)
 	if err != nil {
 		return
@@ -184,7 +189,7 @@ func (a *authServ) httpUserPut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := apiItems[0]
-	updateReq := &cmn.AuthUser{}
+	updateReq := &User{}
 	err = jsoniter.NewDecoder(r.Body).Decode(updateReq)
 	if err != nil {
 		cmn.WriteErrMsg(w, r, "Invalid request")
@@ -201,12 +206,12 @@ func (a *authServ) httpUserPut(w http.ResponseWriter, r *http.Request) {
 }
 
 // Adds a new user to user list
-func (a *authServ) userAdd(w http.ResponseWriter, r *http.Request) {
+func (a *Server) userAdd(w http.ResponseWriter, r *http.Request) {
 	if err := a.checkAuthorization(w, r); err != nil {
 		return
 	}
 
-	info := &cmn.AuthUser{}
+	info := &User{}
 	if err := cmn.ReadJSON(w, r, info); err != nil {
 		glog.Errorf("Failed to read credentials: %v\n", err)
 		return
@@ -222,7 +227,7 @@ func (a *authServ) userAdd(w http.ResponseWriter, r *http.Request) {
 }
 
 // Returns list of users (without superusers)
-func (a *authServ) httpUserGet(w http.ResponseWriter, r *http.Request) {
+func (a *Server) httpUserGet(w http.ResponseWriter, r *http.Request) {
 	items, err := checkRESTItems(w, r, 0, cmn.URLPathUsers.L)
 	if err != nil {
 		return
@@ -233,7 +238,7 @@ func (a *authServ) httpUserGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var users map[string]*cmn.AuthUser
+	var users map[string]*User
 	if len(items) == 0 {
 		if users, err = a.users.userList(); err != nil {
 			cmn.WriteErr(w, r, err)
@@ -268,14 +273,14 @@ func (a *authServ) httpUserGet(w http.ResponseWriter, r *http.Request) {
 // Checks if the request header contains super-user credentials and they are
 // valid. Super-user is a user created at deployment time that cannot be
 // deleted/created via REST API
-func (a *authServ) checkAuthorization(w http.ResponseWriter, r *http.Request) error {
+func (a *Server) checkAuthorization(w http.ResponseWriter, r *http.Request) error {
 	s := strings.SplitN(r.Header.Get(cmn.HeaderAuthorization), " ", 2)
 	if len(s) != 2 {
 		cmn.WriteErrMsg(w, r, "Not authorized", http.StatusUnauthorized)
 		return fmt.Errorf("invalid header")
 	}
-	secret := conf.Secret()
-	token, err := cmn.DecryptToken(s[1], secret)
+	secret := Conf.Secret()
+	token, err := DecryptToken(s[1], secret)
 	if err != nil {
 		cmn.WriteErrMsg(w, r, "Not authorized", http.StatusUnauthorized)
 		return err
@@ -292,7 +297,7 @@ func (a *authServ) checkAuthorization(w http.ResponseWriter, r *http.Request) er
 // Generate a token for a user if provided credentials are valid.
 // If a token is already issued and it is not expired yet then the old
 // token is returned
-func (a *authServ) userLogin(w http.ResponseWriter, r *http.Request) {
+func (a *Server) userLogin(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathUsers.L)
@@ -300,7 +305,7 @@ func (a *authServ) userLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg := &cmn.LoginMsg{}
+	msg := &LoginMsg{}
 	if err = cmn.ReadJSON(w, r, msg); err != nil {
 		glog.Errorf("Failed to read request body: %v\n", err)
 		return
@@ -329,7 +334,7 @@ func (a *authServ) userLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // Borrowed from ais (modified cmn.InvalidHandler calls)
-func (a *authServ) writeJSON(w http.ResponseWriter, val interface{}, tag string) {
+func (a *Server) writeJSON(w http.ResponseWriter, val interface{}, tag string) {
 	w.Header().Set(cmn.HeaderContentType, cmn.ContentJSON)
 	var err error
 	if err = jsoniter.NewEncoder(w).Encode(val); err == nil {
@@ -339,7 +344,7 @@ func (a *authServ) writeJSON(w http.ResponseWriter, val interface{}, tag string)
 }
 
 // Borrowed from ais (modified cmn.InvalidHandler calls)
-func (a *authServ) writeBytes(w http.ResponseWriter, jsbytes []byte, tag string) {
+func (a *Server) writeBytes(w http.ResponseWriter, jsbytes []byte, tag string) {
 	w.Header().Set(cmn.HeaderContentType, cmn.ContentJSON)
 	var err error
 	if _, err = w.Write(jsbytes); err == nil {
@@ -348,7 +353,7 @@ func (a *authServ) writeBytes(w http.ResponseWriter, jsbytes []byte, tag string)
 	glog.Errorf("%s: failed to write json, err: %v", tag, err)
 }
 
-func (a *authServ) httpSrvPost(w http.ResponseWriter, r *http.Request) {
+func (a *Server) httpSrvPost(w http.ResponseWriter, r *http.Request) {
 	if _, err := checkRESTItems(w, r, 0, cmn.URLPathClusters.L); err != nil {
 		return
 	}
@@ -356,7 +361,7 @@ func (a *authServ) httpSrvPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cluConf := &cmn.AuthCluster{}
+	cluConf := &Cluster{}
 	if err := cmn.ReadJSON(w, r, cluConf); err != nil {
 		glog.Errorf("Failed to read request body: %v\n", err)
 		return
@@ -367,7 +372,7 @@ func (a *authServ) httpSrvPost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *authServ) httpSrvPut(w http.ResponseWriter, r *http.Request) {
+func (a *Server) httpSrvPut(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathClusters.L)
 	if err != nil {
 		return
@@ -377,7 +382,7 @@ func (a *authServ) httpSrvPut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cluID := apiItems[0]
-	cluConf := &cmn.AuthCluster{}
+	cluConf := &Cluster{}
 	if err := cmn.ReadJSON(w, r, cluConf); err != nil {
 		glog.Errorf("Failed to read request body: %v\n", err)
 		cmn.WriteErr(w, r, err, http.StatusInternalServerError)
@@ -388,7 +393,7 @@ func (a *authServ) httpSrvPut(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *authServ) httpSrvDelete(w http.ResponseWriter, r *http.Request) {
+func (a *Server) httpSrvDelete(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := checkRESTItems(w, r, 0, cmn.URLPathClusters.L)
 	if err != nil {
 		return
@@ -410,12 +415,12 @@ func (a *authServ) httpSrvDelete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *authServ) httpSrvGet(w http.ResponseWriter, r *http.Request) {
+func (a *Server) httpSrvGet(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := checkRESTItems(w, r, 0, cmn.URLPathClusters.L)
 	if err != nil {
 		return
 	}
-	var cluList *cmn.AuthClusterList
+	var cluList *ClusterList
 	if len(apiItems) != 0 {
 		cid := apiItems[0]
 		clu, err := a.users.getCluster(cid)
@@ -427,8 +432,8 @@ func (a *authServ) httpSrvGet(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		cluList = &cmn.AuthClusterList{
-			Clusters: map[string]*cmn.AuthCluster{clu.ID: clu},
+		cluList = &ClusterList{
+			Clusters: map[string]*Cluster{clu.ID: clu},
 		}
 	} else {
 		clusters, err := a.users.clusterList()
@@ -436,12 +441,12 @@ func (a *authServ) httpSrvGet(w http.ResponseWriter, r *http.Request) {
 			cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 			return
 		}
-		cluList = &cmn.AuthClusterList{Clusters: clusters}
+		cluList = &ClusterList{Clusters: clusters}
 	}
 	a.writeJSON(w, cluList, "auth")
 }
 
-func (a *authServ) roleHandler(w http.ResponseWriter, r *http.Request) {
+func (a *Server) roleHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
 		a.httpRolePost(w, r)
@@ -456,7 +461,7 @@ func (a *authServ) roleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *authServ) httpRoleGet(w http.ResponseWriter, r *http.Request) {
+func (a *Server) httpRoleGet(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := checkRESTItems(w, r, 0, cmn.URLPathRoles.L)
 	if err != nil {
 		return
@@ -494,7 +499,7 @@ func (a *authServ) httpRoleGet(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, role, "role")
 }
 
-func (a *authServ) httpRoleDel(w http.ResponseWriter, r *http.Request) {
+func (a *Server) httpRoleDel(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathRoles.L)
 	if err != nil {
 		return
@@ -509,7 +514,7 @@ func (a *authServ) httpRoleDel(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *authServ) httpRolePost(w http.ResponseWriter, r *http.Request) {
+func (a *Server) httpRolePost(w http.ResponseWriter, r *http.Request) {
 	_, err := checkRESTItems(w, r, 0, cmn.URLPathRoles.L)
 	if err != nil {
 		return
@@ -518,7 +523,7 @@ func (a *authServ) httpRolePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	info := &cmn.AuthRole{}
+	info := &Role{}
 	if err := cmn.ReadJSON(w, r, info); err != nil {
 		glog.Errorf("Failed to read role: %v", err)
 		return
@@ -529,7 +534,7 @@ func (a *authServ) httpRolePost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *authServ) httpRolePut(w http.ResponseWriter, r *http.Request) {
+func (a *Server) httpRolePut(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathRoles.L)
 	if err != nil {
 		return
@@ -539,7 +544,7 @@ func (a *authServ) httpRolePut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	role := apiItems[0]
-	updateReq := &cmn.AuthRole{}
+	updateReq := &Role{}
 	err = jsoniter.NewDecoder(r.Body).Decode(updateReq)
 	if err != nil {
 		cmn.WriteErrMsg(w, r, "Invalid request")
@@ -558,7 +563,7 @@ func (a *authServ) httpRolePut(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *authServ) configHandler(w http.ResponseWriter, r *http.Request) {
+func (a *Server) configHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		a.httpConfigGet(w, r)
@@ -569,25 +574,25 @@ func (a *authServ) configHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *authServ) httpConfigGet(w http.ResponseWriter, r *http.Request) {
+func (a *Server) httpConfigGet(w http.ResponseWriter, r *http.Request) {
 	if err := a.checkAuthorization(w, r); err != nil {
 		return
 	}
-	conf.RLock()
-	defer conf.RUnlock()
-	a.writeJSON(w, conf, "config")
+	Conf.RLock()
+	defer Conf.RUnlock()
+	a.writeJSON(w, Conf, "config")
 }
 
-func (a *authServ) httpConfigPut(w http.ResponseWriter, r *http.Request) {
+func (a *Server) httpConfigPut(w http.ResponseWriter, r *http.Request) {
 	if err := a.checkAuthorization(w, r); err != nil {
 		return
 	}
-	updateCfg := &cmn.AuthNConfigToUpdate{}
+	updateCfg := &ConfigToUpdate{}
 	if err := jsoniter.NewDecoder(r.Body).Decode(updateCfg); err != nil {
 		cmn.WriteErrMsg(w, r, "Invalid request")
 		return
 	}
-	if err := conf.ApplyUpdate(updateCfg); err != nil {
+	if err := Conf.ApplyUpdate(updateCfg); err != nil {
 		cmn.WriteErr(w, r, err)
 	}
 }

@@ -1,15 +1,14 @@
-// Package main - authorization server for AIStore. See README.md for more info.
+// Package authn - authorization server for AIStore.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  *
  */
-package main
+package authn
 
 import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/devtools/tassert"
@@ -25,14 +24,14 @@ var (
 
 func init() {
 	// Set default expiration time to 30 minutes
-	if conf.Server.ExpirePeriod == 0 {
-		conf.Server.ExpirePeriod = cos.DurationJSON(time.Minute * 30)
+	if Conf.Server.ExpirePeriod == 0 {
+		Conf.Server.ExpirePeriod = cos.DurationJSON(time.Minute * 30)
 	}
 }
 
-func createUsers(mgr *userManager, t *testing.T) {
+func createUsers(mgr *UserManager, t *testing.T) {
 	for idx := range users {
-		user := &cmn.AuthUser{ID: users[idx], Password: passs[idx], Roles: []string{cmn.AuthGuestRole}}
+		user := &User{ID: users[idx], Password: passs[idx], Roles: []string{GuestRole}}
 		err := mgr.addUser(user)
 		if err != nil {
 			t.Errorf("Failed to create a user %s: %v", users[idx], err)
@@ -52,7 +51,7 @@ func createUsers(mgr *userManager, t *testing.T) {
 	}
 }
 
-func deleteUsers(mgr *userManager, skipNotExist bool, t *testing.T) {
+func deleteUsers(mgr *UserManager, skipNotExist bool, t *testing.T) {
 	var err error
 	for _, username := range users {
 		err = mgr.delUser(username)
@@ -64,8 +63,8 @@ func deleteUsers(mgr *userManager, skipNotExist bool, t *testing.T) {
 	}
 }
 
-func testInvalidUser(mgr *userManager, t *testing.T) {
-	user := &cmn.AuthUser{ID: users[0], Password: passs[1], Roles: []string{cmn.AuthGuestRole}}
+func testInvalidUser(mgr *UserManager, t *testing.T) {
+	user := &User{ID: users[0], Password: passs[1], Roles: []string{GuestRole}}
 	err := mgr.addUser(user)
 	if err == nil {
 		t.Errorf("User with the existing name %s was created: %v", users[0], err)
@@ -78,12 +77,12 @@ func testInvalidUser(mgr *userManager, t *testing.T) {
 	}
 }
 
-func testUserDelete(mgr *userManager, t *testing.T) {
+func testUserDelete(mgr *UserManager, t *testing.T) {
 	const (
 		username = "newuser"
 		userpass = "newpass"
 	)
-	user := &cmn.AuthUser{ID: username, Password: userpass, Roles: []string{cmn.AuthGuestRole}}
+	user := &User{ID: username, Password: userpass, Roles: []string{GuestRole}}
 	err := mgr.addUser(user)
 	if err != nil {
 		t.Errorf("Failed to create a user %s: %v", username, err)
@@ -118,7 +117,7 @@ func testUserDelete(mgr *userManager, t *testing.T) {
 
 func TestManager(t *testing.T) {
 	driver := dbdriver.NewDBMock()
-	mgr, err := newUserManager(driver)
+	mgr, err := NewUserManager(driver)
 	tassert.CheckError(t, err)
 	createUsers(mgr, t)
 	testInvalidUser(mgr, t)
@@ -130,11 +129,11 @@ func TestToken(t *testing.T) {
 	var (
 		err    error
 		token  string
-		secret = conf.Server.Secret
+		secret = Conf.Server.Secret
 	)
 
 	driver := dbdriver.NewDBMock()
-	mgr, err := newUserManager(driver)
+	mgr, err := NewUserManager(driver)
 	tassert.CheckError(t, err)
 	createUsers(mgr, t)
 	defer deleteUsers(mgr, false, t)
@@ -145,7 +144,7 @@ func TestToken(t *testing.T) {
 	if err != nil || token == "" {
 		t.Errorf("Failed to generate token for %s: %v", users[1], err)
 	}
-	info, err := cmn.DecryptToken(token, secret)
+	info, err := DecryptToken(token, secret)
 	if err != nil {
 		t.Fatalf("Failed to decript token %v: %v", token, err)
 	}
@@ -161,11 +160,11 @@ func TestToken(t *testing.T) {
 
 	// expired token test
 	time.Sleep(shortExpiration)
-	_, err = cmn.DecryptToken(token, secret)
+	_, err = DecryptToken(token, secret)
 	if err == nil {
 		t.Fatalf("Token must be expired: %s", token)
 	}
-	if err != cmn.ErrTokenExpired {
+	if err != ErrTokenExpired {
 		t.Errorf("Invalid error(must be 'token expired'): %v", err)
 	}
 }

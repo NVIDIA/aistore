@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/authn"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -17,7 +18,7 @@ import (
 var errInvalidToken = errors.New("invalid token")
 
 func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
-	tokenList := &TokenList{}
+	tokenList := &tokenList{}
 	if _, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathTokens.L); err != nil {
 		return
 	}
@@ -38,7 +39,7 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 // Header format:
 //		'Authorization: Bearer <token>'
 // Returns: is auth enabled, decoded token, error
-func (p *proxyrunner) validateToken(hdr http.Header) (*cmn.AuthToken, error) {
+func (p *proxyrunner) validateToken(hdr http.Header) (*authn.Token, error) {
 	authToken := hdr.Get(cmn.HeaderAuthorization)
 	idx := strings.Index(authToken, " ")
 	if idx == -1 || authToken[:idx] != cmn.AuthenticationTypeBearer {
@@ -67,7 +68,7 @@ func (p *proxyrunner) checkACL(hdr http.Header, bck *cluster.Bck, ace cmn.Access
 		return nil
 	}
 	var (
-		token  *cmn.AuthToken
+		token  *authn.Token
 		cfg    = cmn.GCO.Get()
 		bucket *cmn.Bck
 		err    error

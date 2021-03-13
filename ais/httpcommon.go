@@ -1858,7 +1858,7 @@ func (h *httprunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, caller 
 	return
 }
 
-func (h *httprunner) extractRevokedTokenList(payload msPayload, caller string) (*TokenList, error) {
+func (h *httprunner) extractRevokedTokenList(payload msPayload, caller string) (*tokenList, error) {
 	var (
 		msg       aisMsg
 		bytes, ok = payload[revsTokenTag]
@@ -1873,7 +1873,7 @@ func (h *httprunner) extractRevokedTokenList(payload msPayload, caller string) (
 		}
 	}
 
-	tokenList := &TokenList{}
+	tokenList := &tokenList{}
 	if err := jsoniter.Unmarshal(bytes, tokenList); err != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "blocked token list", cmn.BytesHead(bytes), err)
 		return nil, err

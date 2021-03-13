@@ -10,6 +10,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/NVIDIA/aistore/authn"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
@@ -22,7 +23,7 @@ type (
 	}
 )
 
-func AddUser(baseParams BaseParams, newUser *cmn.AuthUser) error {
+func AddUser(baseParams BaseParams, newUser *authn.User) error {
 	msg, err := jsoniter.Marshal(newUser)
 	if err != nil {
 		return err
@@ -32,7 +33,7 @@ func AddUser(baseParams BaseParams, newUser *cmn.AuthUser) error {
 	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathUsers.S, Body: msg})
 }
 
-func UpdateUser(baseParams BaseParams, newUser *cmn.AuthUser) error {
+func UpdateUser(baseParams BaseParams, newUser *authn.User) error {
 	msg := cos.MustMarshal(newUser)
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
@@ -50,10 +51,10 @@ func DeleteUser(baseParams BaseParams, userID string) error {
 // Authorize a user and return a user token in case of success.
 // The token expires in `expire` time. If `expire` is `nil` the expiration
 // time is set by AuthN (default AuthN expiration time is 24 hours)
-func LoginUser(baseParams BaseParams, userID, pass string, expire *time.Duration) (token *cmn.TokenMsg, err error) {
+func LoginUser(baseParams BaseParams, userID, pass string, expire *time.Duration) (token *authn.TokenMsg, err error) {
 	baseParams.Method = http.MethodPost
 
-	rec := cmn.LoginMsg{Password: pass, ExpiresIn: expire}
+	rec := authn.LoginMsg{Password: pass, ExpiresIn: expire}
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathUsers.Join(userID),
@@ -69,13 +70,13 @@ func LoginUser(baseParams BaseParams, userID, pass string, expire *time.Duration
 	return token, nil
 }
 
-func RegisterClusterAuthN(baseParams BaseParams, cluSpec cmn.AuthCluster) error {
+func RegisterClusterAuthN(baseParams BaseParams, cluSpec authn.Cluster) error {
 	msg := cos.MustMarshal(cluSpec)
 	baseParams.Method = http.MethodPost
 	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathClusters.S, Body: msg})
 }
 
-func UpdateClusterAuthN(baseParams BaseParams, cluSpec cmn.AuthCluster) error {
+func UpdateClusterAuthN(baseParams BaseParams, cluSpec authn.Cluster) error {
 	msg := cos.MustMarshal(cluSpec)
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
@@ -85,7 +86,7 @@ func UpdateClusterAuthN(baseParams BaseParams, cluSpec cmn.AuthCluster) error {
 	})
 }
 
-func UnregisterClusterAuthN(baseParams BaseParams, spec cmn.AuthCluster) error {
+func UnregisterClusterAuthN(baseParams BaseParams, spec authn.Cluster) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
@@ -93,18 +94,18 @@ func UnregisterClusterAuthN(baseParams BaseParams, spec cmn.AuthCluster) error {
 	})
 }
 
-func GetClusterAuthN(baseParams BaseParams, spec cmn.AuthCluster) ([]*cmn.AuthCluster, error) {
+func GetClusterAuthN(baseParams BaseParams, spec authn.Cluster) ([]*authn.Cluster, error) {
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPathClusters.S
 	if spec.ID != "" {
 		path = cos.JoinWords(path, spec.ID)
 	}
-	clusters := &cmn.AuthClusterList{}
+	clusters := &authn.ClusterList{}
 	err := DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       path,
 	}, clusters)
-	rec := make([]*cmn.AuthCluster, 0, len(clusters.Clusters))
+	rec := make([]*authn.Cluster, 0, len(clusters.Clusters))
 	for _, clu := range clusters.Clusters {
 		rec = append(rec, clu)
 	}
@@ -113,11 +114,11 @@ func GetClusterAuthN(baseParams BaseParams, spec cmn.AuthCluster) ([]*cmn.AuthCl
 	return rec, err
 }
 
-func GetRoleAuthN(baseParams BaseParams, roleID string) (*cmn.AuthRole, error) {
+func GetRoleAuthN(baseParams BaseParams, roleID string) (*authn.Role, error) {
 	if roleID == "" {
 		return nil, errors.New("missing role ID")
 	}
-	rInfo := &cmn.AuthRole{}
+	rInfo := &authn.Role{}
 	baseParams.Method = http.MethodGet
 	err := DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
@@ -126,10 +127,10 @@ func GetRoleAuthN(baseParams BaseParams, roleID string) (*cmn.AuthRole, error) {
 	return rInfo, err
 }
 
-func GetRolesAuthN(baseParams BaseParams) ([]*cmn.AuthRole, error) {
+func GetRolesAuthN(baseParams BaseParams) ([]*authn.Role, error) {
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPathRoles.S
-	roles := make([]*cmn.AuthRole, 0)
+	roles := make([]*authn.Role, 0)
 	err := DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       path,
@@ -139,12 +140,12 @@ func GetRolesAuthN(baseParams BaseParams) ([]*cmn.AuthRole, error) {
 	return roles, err
 }
 
-func GetUsersAuthN(baseParams BaseParams) ([]*cmn.AuthUser, error) {
+func GetUsersAuthN(baseParams BaseParams) ([]*authn.User, error) {
 	baseParams.Method = http.MethodGet
-	users := make(map[string]*cmn.AuthUser, 4)
+	users := make(map[string]*authn.User, 4)
 	err := DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathUsers.S}, &users)
 
-	list := make([]*cmn.AuthUser, 0, len(users))
+	list := make([]*authn.User, 0, len(users))
 	for _, info := range users {
 		list = append(list, info)
 	}
@@ -156,11 +157,11 @@ func GetUsersAuthN(baseParams BaseParams) ([]*cmn.AuthUser, error) {
 	return list, err
 }
 
-func GetUserAuthN(baseParams BaseParams, userID string) (*cmn.AuthUser, error) {
+func GetUserAuthN(baseParams BaseParams, userID string) (*authn.User, error) {
 	if userID == "" {
 		return nil, errors.New("missing user ID")
 	}
-	uInfo := &cmn.AuthUser{}
+	uInfo := &authn.User{}
 	baseParams.Method = http.MethodGet
 	err := DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
@@ -169,7 +170,7 @@ func GetUserAuthN(baseParams BaseParams, userID string) (*cmn.AuthUser, error) {
 	return uInfo, err
 }
 
-func AddRoleAuthN(baseParams BaseParams, roleSpec *cmn.AuthRole) error {
+func AddRoleAuthN(baseParams BaseParams, roleSpec *authn.Role) error {
 	msg := cos.MustMarshal(roleSpec)
 	baseParams.Method = http.MethodPost
 	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathRoles.S, Body: msg})
@@ -185,7 +186,7 @@ func DeleteRoleAuthN(baseParams BaseParams, role string) error {
 
 func RevokeToken(baseParams BaseParams, token string) error {
 	baseParams.Method = http.MethodDelete
-	msg := &cmn.TokenMsg{Token: token}
+	msg := &authn.TokenMsg{Token: token}
 	return DoHTTPRequest(ReqParams{
 		Body:       cos.MustMarshal(msg),
 		BaseParams: baseParams,
@@ -193,8 +194,8 @@ func RevokeToken(baseParams BaseParams, token string) error {
 	})
 }
 
-func GetAuthNConfig(baseParams BaseParams) (*cmn.AuthNConfig, error) {
-	conf := &cmn.AuthNConfig{}
+func GetAuthNConfig(baseParams BaseParams) (*authn.Config, error) {
+	conf := &authn.Config{}
 	baseParams.Method = http.MethodGet
 	err := DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
@@ -203,7 +204,7 @@ func GetAuthNConfig(baseParams BaseParams) (*cmn.AuthNConfig, error) {
 	return conf, err
 }
 
-func SetAuthNConfig(baseParams BaseParams, conf *cmn.AuthNConfigToUpdate) error {
+func SetAuthNConfig(baseParams BaseParams, conf *authn.ConfigToUpdate) error {
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
 		Body:       cos.MustMarshal(conf),

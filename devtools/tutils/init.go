@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/authn"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -245,7 +246,7 @@ func initAuthToken() {
 	cos.AssertNoErr(err)
 	tokenPath := filepath.Join(home, ".ais", "token")
 
-	var token cmn.TokenMsg
+	var token authn.TokenMsg
 	jsp.LoadMeta(tokenPath, &token)
 
 	AuthToken = token.Token

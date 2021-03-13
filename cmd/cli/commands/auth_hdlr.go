@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/authn"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
@@ -204,7 +205,7 @@ var (
 		},
 	}
 
-	loggedUserToken cmn.TokenMsg
+	loggedUserToken authn.TokenMsg
 )
 
 // Use the function to wrap every AuthN handler that does API calls.
@@ -394,12 +395,12 @@ func deleteAuthClusterHandler(c *cli.Context) (err error) {
 	if cid == "" {
 		return missingArgumentsError(c, "cluster id")
 	}
-	cluSpec := cmn.AuthCluster{ID: cid}
+	cluSpec := authn.Cluster{ID: cid}
 	return api.UnregisterClusterAuthN(authParams, cluSpec)
 }
 
 func showAuthClusterHandler(c *cli.Context) (err error) {
-	cluSpec := cmn.AuthCluster{
+	cluSpec := authn.Cluster{
 		ID: c.Args().Get(0),
 	}
 	list, err := api.GetClusterAuthN(authParams, cluSpec)
@@ -427,7 +428,7 @@ func showAuthRoleHandler(c *cli.Context) (err error) {
 	}
 
 	if !flagIsSet(c, verboseFlag) {
-		return templates.DisplayOutput([]*cmn.AuthRole{rInfo}, c.App.Writer, templates.AuthNRoleTmpl)
+		return templates.DisplayOutput([]*authn.Role{rInfo}, c.App.Writer, templates.AuthNRoleTmpl)
 	}
 
 	return templates.DisplayOutput(rInfo, c.App.Writer, templates.AuthNRoleVerboseTmpl)
@@ -450,7 +451,7 @@ func showUserHandler(c *cli.Context) (err error) {
 	}
 
 	if !flagIsSet(c, verboseFlag) {
-		return templates.DisplayOutput([]*cmn.AuthUser{uInfo}, c.App.Writer, templates.AuthNUserTmpl)
+		return templates.DisplayOutput([]*authn.User{uInfo}, c.App.Writer, templates.AuthNUserTmpl)
 	}
 
 	return templates.DisplayOutput(uInfo, c.App.Writer, templates.AuthNUserVerboseTmpl)
@@ -470,7 +471,7 @@ func addAuthRoleHandler(c *cli.Context) (err error) {
 
 	cluster := args.Get(1)
 	alias := ""
-	cluList, err := api.GetClusterAuthN(authParams, cmn.AuthCluster{})
+	cluList, err := api.GetClusterAuthN(authParams, authn.Cluster{})
 	if err != nil {
 		return
 	}
@@ -500,14 +501,14 @@ func addAuthRoleHandler(c *cli.Context) (err error) {
 		perms |= p
 	}
 
-	cluPerms := []*cmn.AuthCluster{
+	cluPerms := []*authn.Cluster{
 		{
 			ID:     cluster,
 			Alias:  alias,
 			Access: perms,
 		},
 	}
-	rInfo := &cmn.AuthRole{
+	rInfo := &authn.Role{
 		Name:     role,
 		Desc:     parseStrFlag(c, descriptionFlag),
 		Clusters: cluPerms,
@@ -515,11 +516,11 @@ func addAuthRoleHandler(c *cli.Context) (err error) {
 	return api.AddRoleAuthN(authParams, rInfo)
 }
 
-func parseAuthUser(c *cli.Context, omitEmpty bool) *cmn.AuthUser {
+func parseAuthUser(c *cli.Context, omitEmpty bool) *authn.User {
 	username := cliAuthnUserName(c)
 	userpass := cliAuthnUserPassword(c, omitEmpty)
 	roles := c.Args().Tail()
-	user := &cmn.AuthUser{
+	user := &authn.User{
 		ID:       username,
 		Password: userpass,
 		Roles:    roles,
@@ -527,7 +528,7 @@ func parseAuthUser(c *cli.Context, omitEmpty bool) *cmn.AuthUser {
 	return user
 }
 
-func parseClusterSpecs(c *cli.Context) (cluSpec cmn.AuthCluster, err error) {
+func parseClusterSpecs(c *cli.Context) (cluSpec authn.Cluster, err error) {
 	cluSpec.URLs = make([]string, 0, 1)
 	for idx := 0; idx < c.NArg(); idx++ {
 		arg := c.Args().Get(idx)
@@ -555,7 +556,7 @@ func revokeTokenHandler(c *cli.Context) (err error) {
 		if err != nil {
 			return err
 		}
-		creds := &cmn.TokenMsg{}
+		creds := &authn.TokenMsg{}
 		if err = jsoniter.Unmarshal(bt, creds); err != nil {
 			return fmt.Errorf("invalid token file format")
 		}
@@ -584,8 +585,8 @@ func showAuthConfigHandler(c *cli.Context) (err error) {
 	return templates.DisplayOutput(list, c.App.Writer, templates.PropsSimpleTmpl, useJSON)
 }
 
-func authNConfigFromArgs(c *cli.Context) (conf *cmn.AuthNConfigToUpdate, err error) {
-	conf = &cmn.AuthNConfigToUpdate{Server: &cmn.AuthNServerConfToUpdate{}}
+func authNConfigFromArgs(c *cli.Context) (conf *authn.ConfigToUpdate, err error) {
+	conf = &authn.ConfigToUpdate{Server: &authn.ServerConfToUpdate{}}
 	items := c.Args()
 	for i := 0; i < len(items); {
 		name, value := items.Get(i), items.Get(i+1)

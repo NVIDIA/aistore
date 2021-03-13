@@ -1,10 +1,9 @@
-// Package cmn provides common constants, types, and utilities for AIS clients
-// and AIStore.
+// Package authn - authorization server for AIStore.
 /*
  * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  *
  */
-package cmn
+package authn
 
 import (
 	"errors"
@@ -16,20 +15,20 @@ import (
 )
 
 type (
-	AuthNConfig struct {
-		sync.RWMutex `list:"omit"`    // for cmn.IterFields
-		Path         string           `json:"path"`
-		ConfDir      string           `json:"confdir"`
-		Log          AuthNLogConf     `json:"log"`
-		Net          AuthNetConf      `json:"net"`
-		Server       AuthNServerConf  `json:"auth"`
-		Timeout      AuthNTimeoutConf `json:"timeout"`
+	Config struct {
+		sync.RWMutex `list:"omit"` // for cmn.IterFields
+		Path         string        `json:"path"`
+		ConfDir      string        `json:"confdir"`
+		Log          LogConf       `json:"log"`
+		Net          NetConf       `json:"net"`
+		Server       ServerConf    `json:"auth"`
+		Timeout      TimeoutConf   `json:"timeout"`
 	}
-	AuthNLogConf struct {
+	LogConf struct {
 		Dir   string `json:"dir"`
 		Level string `json:"level"`
 	}
-	AuthNetConf struct {
+	NetConf struct {
 		HTTP AuthNHTTPConf `json:"http"`
 	}
 	AuthNHTTPConf struct {
@@ -38,30 +37,35 @@ type (
 		Certificate string `json:"server_crt"`
 		Key         string `json:"server_key"`
 	}
-	AuthNServerConf struct {
+	ServerConf struct {
 		Secret       string           `json:"secret"`
 		ExpirePeriod cos.DurationJSON `json:"expiration_time"`
 	}
-	AuthNTimeoutConf struct {
+	TimeoutConf struct {
 		Default cos.DurationJSON `json:"default_timeout"`
 	}
-	AuthNConfigToUpdate struct {
-		Server *AuthNServerConfToUpdate `json:"auth"`
+	ConfigToUpdate struct {
+		Server *ServerConfToUpdate `json:"auth"`
 	}
-	AuthNServerConfToUpdate struct {
+	ServerConfToUpdate struct {
 		Secret       *string `json:"secret"`
 		ExpirePeriod *string `json:"expiration_time"`
 	}
+	// TokenList is a list of tokens pushed by authn
+	TokenList struct {
+		Tokens  []string `json:"tokens"`
+		Version int64    `json:"version,string"`
+	}
 )
 
-func (c *AuthNConfig) Secret() (secret string) {
+func (c *Config) Secret() (secret string) {
 	c.RLock()
 	secret = c.Server.Secret
 	c.RUnlock()
 	return
 }
 
-func (c *AuthNConfig) ApplyUpdate(cu *AuthNConfigToUpdate) error {
+func (c *Config) ApplyUpdate(cu *ConfigToUpdate) error {
 	c.Lock()
 	defer c.Unlock()
 	if cu.Server == nil {

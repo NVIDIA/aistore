@@ -22,18 +22,18 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/authn"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 type (
 	// TokenList is a list of tokens pushed by authn
-	TokenList struct {
-		Tokens  []string `json:"tokens"`
-		Version int64    `json:"version,string"`
+	tokenList struct {
+		authn.TokenList
 	}
 
-	authList map[string]*cmn.AuthToken
+	authList map[string]*authn.Token
 
 	authManager struct {
 		sync.Mutex
@@ -47,18 +47,18 @@ type (
 )
 
 // interface guard
-var _ revs = (*TokenList)(nil)
+var _ revs = (*tokenList)(nil)
 
 // Decrypts JWT token and returns all encrypted information.
 // Used by proxy and by AuthN.
-func decryptToken(tokenStr string) (*cmn.AuthToken, error) {
+func decryptToken(tokenStr string) (*authn.Token, error) {
 	secret := cmn.GCO.Get().Auth.Secret
-	return cmn.DecryptToken(tokenStr, secret)
+	return authn.DecryptToken(tokenStr, secret)
 }
 
 // Add tokens to list of invalid ones. After that it cleans up the list
 // from expired tokens
-func (a *authManager) updateRevokedList(tokens *TokenList) {
+func (a *authManager) updateRevokedList(tokens *tokenList) {
 	if tokens == nil {
 		return
 	}
@@ -95,11 +95,11 @@ func (a *authManager) updateRevokedList(tokens *TokenList) {
 //   - must not be expired
 //   - must have all mandatory fields: userID, creds, issued, expires
 // Returns decrypted token information if it is valid
-func (a *authManager) validateToken(token string) (ar *cmn.AuthToken, err error) {
+func (a *authManager) validateToken(token string) (ar *authn.Token, err error) {
 	a.Lock()
 
 	if _, ok := a.revokedTokens[token]; ok {
-		ar, err = nil, cmn.ErrInvalidToken
+		ar, err = nil, authn.ErrInvalidToken
 		a.Unlock()
 		return
 	}
@@ -113,20 +113,20 @@ func (a *authManager) validateToken(token string) (ar *cmn.AuthToken, err error)
 // was issued. Return error is the token expired or does not include all
 // mandatory fields
 // It is internal service function, so it does not lock anything
-func (a *authManager) extractTokenData(token string) (*cmn.AuthToken, error) {
+func (a *authManager) extractTokenData(token string) (*authn.Token, error) {
 	var err error
 
 	auth, ok := a.tokens[token]
 	if !ok || auth == nil {
 		if auth, err = decryptToken(token); err != nil {
 			glog.Errorf("Invalid token was received: %s", token)
-			return nil, cmn.ErrInvalidToken
+			return nil, authn.ErrInvalidToken
 		}
 		a.tokens[token] = auth
 	}
 
 	if auth == nil {
-		return nil, cmn.ErrInvalidToken
+		return nil, authn.ErrInvalidToken
 	}
 
 	if auth.Expires.Before(time.Now()) {
@@ -138,9 +138,9 @@ func (a *authManager) extractTokenData(token string) (*cmn.AuthToken, error) {
 	return auth, nil
 }
 
-func (a *authManager) revokedTokenList() *TokenList {
+func (a *authManager) revokedTokenList() *tokenList {
 	a.Lock()
-	tlist := &TokenList{
+	tlist := authn.TokenList{
 		Tokens:  make([]string, len(a.revokedTokens)),
 		Version: a.version,
 	}
@@ -152,7 +152,7 @@ func (a *authManager) revokedTokenList() *TokenList {
 	}
 
 	a.Unlock()
-	return tlist
+	return &tokenList{TokenList: tlist}
 }
 
 //
@@ -160,8 +160,8 @@ func (a *authManager) revokedTokenList() *TokenList {
 //
 // Token list doesn't need versioning: receivers keep adding received tokens to their internal lists
 //
-func (t *TokenList) tag() string    { return revsTokenTag }
-func (t *TokenList) version() int64 { return t.Version }
-func (t *TokenList) marshal() []byte {
+func (t *tokenList) tag() string    { return revsTokenTag }
+func (t *tokenList) version() int64 { return t.Version }
+func (t *tokenList) marshal() []byte {
 	return cos.MustMarshal(t)
 }

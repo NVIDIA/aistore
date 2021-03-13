@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/authn"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -111,7 +112,7 @@ func (p *proxyrunner) Run() error {
 	p.bootstrap()
 
 	p.authn = &authManager{
-		tokens:        make(map[string]*cmn.AuthToken),
+		tokens:        make(map[string]*authn.Token),
 		revokedTokens: make(map[string]bool),
 		version:       1,
 	}

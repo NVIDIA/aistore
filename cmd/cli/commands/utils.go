@@ -24,6 +24,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/authn"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
@@ -1190,7 +1191,7 @@ func waitForXactionCompletion(defaultAPIParams api.BaseParams, args api.XactReqA
 	return nil
 }
 
-func authNConfPairs(conf *cmn.AuthNConfig, prefix string) ([]prop, error) {
+func authNConfPairs(conf *authn.Config, prefix string) ([]prop, error) {
 	propList := make([]prop, 0, 8)
 	err := cmn.IterFields(conf, func(uniqueTag string, field cmn.IterField) (err error, b bool) {
 		if prefix != "" && !strings.HasPrefix(uniqueTag, prefix) {

@@ -1,15 +1,15 @@
-// Package cmn provides common constants, types, and utilities for AIS clients
-// and AIStore.
+// Package authn - authorization server for AIStore.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  */
-package cmn
+package authn
 
 import (
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
@@ -17,51 +17,51 @@ import (
 )
 
 const (
-	AuthAdminRole        = "Admin"
-	AuthClusterOwnerRole = "ClusterOwner"
-	AuthBucketOwnerRole  = "BucketOwner"
-	AuthGuestRole        = "Guest"
+	AdminRole        = "Admin"
+	ClusterOwnerRole = "ClusterOwner"
+	BucketOwnerRole  = "BucketOwner"
+	GuestRole        = "Guest"
 )
 
 type (
 	// A registered user
-	AuthUser struct {
-		ID       string         `json:"id"`
-		Password string         `json:"pass,omitempty"`
-		Roles    []string       `json:"roles"`
-		Clusters []*AuthCluster `json:"clusters"`
-		Buckets  []*AuthBucket  `json:"buckets"` // list of buckets with special permissions
+	User struct {
+		ID       string     `json:"id"`
+		Password string     `json:"pass,omitempty"`
+		Roles    []string   `json:"roles"`
+		Clusters []*Cluster `json:"clusters"`
+		Buckets  []*Bucket  `json:"buckets"` // list of buckets with special permissions
 	}
 	// Default permissions for a cluster
-	AuthCluster struct {
-		ID     string      `json:"id"`
-		Alias  string      `json:"alias,omitempty"`
-		Access AccessAttrs `json:"perm,string,omitempty"`
-		URLs   []string    `json:"urls,omitempty"`
+	Cluster struct {
+		ID     string          `json:"id"`
+		Alias  string          `json:"alias,omitempty"`
+		Access cmn.AccessAttrs `json:"perm,string,omitempty"`
+		URLs   []string        `json:"urls,omitempty"`
 	}
 	// Permissions for a single bucket
-	AuthBucket struct {
-		Bck    Bck         `json:"bck"`
-		Access AccessAttrs `json:"perm,string"`
+	Bucket struct {
+		Bck    cmn.Bck         `json:"bck"`
+		Access cmn.AccessAttrs `json:"perm,string"`
 	}
-	AuthRole struct {
-		Name     string         `json:"name"`
-		Desc     string         `json:"desc"`
-		Roles    []string       `json:"roles"`
-		Clusters []*AuthCluster `json:"clusters"`
-		Buckets  []*AuthBucket  `json:"buckets"`
-		IsAdmin  bool           `json:"admin"`
+	Role struct {
+		Name     string     `json:"name"`
+		Desc     string     `json:"desc"`
+		Roles    []string   `json:"roles"`
+		Clusters []*Cluster `json:"clusters"`
+		Buckets  []*Bucket  `json:"buckets"`
+		IsAdmin  bool       `json:"admin"`
 	}
-	AuthToken struct {
-		UserID   string         `json:"username"`
-		Expires  time.Time      `json:"expires"`
-		Token    string         `json:"token"`
-		Clusters []*AuthCluster `json:"clusters"`
-		Buckets  []*AuthBucket  `json:"buckets,omitempty"`
-		IsAdmin  bool           `json:"admin"`
+	Token struct {
+		UserID   string     `json:"username"`
+		Expires  time.Time  `json:"expires"`
+		Token    string     `json:"token"`
+		Clusters []*Cluster `json:"clusters"`
+		Buckets  []*Bucket  `json:"buckets,omitempty"`
+		IsAdmin  bool       `json:"admin"`
 	}
-	AuthClusterList struct {
-		Clusters map[string]*AuthCluster `json:"clusters,omitempty"`
+	ClusterList struct {
+		Clusters map[string]*Cluster `json:"clusters,omitempty"`
 	}
 	LoginMsg struct {
 		Password  string         `json:"password"`
@@ -76,15 +76,15 @@ type (
 // authn jsp stuff //
 /////////////////////
 var (
-	_ jsp.Opts = (*AuthNConfig)(nil)
+	_ jsp.Opts = (*Config)(nil)
 	_ jsp.Opts = (*TokenMsg)(nil)
 
 	authcfgJspOpts = jsp.Plain() // TODO -- FIXME: use CCSign(MetaverAuthNConfig)
-	authtokJspOpts = jsp.Plain() // ditto MetaverAuthTokens
+	authtokJspOpts = jsp.Plain() // ditto MetaverTokens
 )
 
-func (*AuthNConfig) JspOpts() jsp.Options { return authcfgJspOpts }
-func (*TokenMsg) JspOpts() jsp.Options    { return authtokJspOpts }
+func (*Config) JspOpts() jsp.Options   { return authcfgJspOpts }
+func (*TokenMsg) JspOpts() jsp.Options { return authtokJspOpts }
 
 // authn api helpers and errors
 
@@ -94,7 +94,7 @@ var (
 	ErrTokenExpired  = errors.New("token expired")
 )
 
-func (tk *AuthToken) aclForCluster(clusterID string) (perms AccessAttrs, ok bool) {
+func (tk *Token) aclForCluster(clusterID string) (perms cmn.AccessAttrs, ok bool) {
 	for _, pm := range tk.Clusters {
 		if pm.ID == clusterID {
 			return pm.Access, true
@@ -103,7 +103,7 @@ func (tk *AuthToken) aclForCluster(clusterID string) (perms AccessAttrs, ok bool
 	return 0, false
 }
 
-func (tk *AuthToken) aclForBucket(clusterID string, bck *Bck) (perms AccessAttrs, ok bool) {
+func (tk *Token) aclForBucket(clusterID string, bck *cmn.Bck) (perms cmn.AccessAttrs, ok bool) {
 	for _, b := range tk.Buckets {
 		tbBck := b.Bck
 		if tbBck.Ns.UUID != clusterID {
@@ -124,13 +124,13 @@ func (tk *AuthToken) aclForBucket(clusterID string, bck *Bck) (perms AccessAttrs
 // allows creating users, e.g, with read-only access to the entire cluster,
 // and read-write access to a single bucket.
 // Per-bucket ACL overrides cluster-wide one.
-func (tk *AuthToken) CheckPermissions(clusterID string, bck *Bck, perms AccessAttrs) error {
+func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms cmn.AccessAttrs) error {
 	if tk.IsAdmin {
 		return nil
 	}
 	debug.AssertMsg(perms != 0, "Empty permissions requested")
-	cluPerms := perms & AccessCluster
-	objPerms := perms &^ AccessCluster
+	cluPerms := perms & cmn.AccessCluster
+	objPerms := perms &^ cmn.AccessCluster
 	cluACL, cluOk := tk.aclForCluster(clusterID)
 	if cluPerms != 0 {
 		// Cluster-wide permissions requested
@@ -161,16 +161,16 @@ func (tk *AuthToken) CheckPermissions(clusterID string, bck *Bck, perms AccessAt
 	return nil
 }
 
-func (uInfo *AuthUser) IsAdmin() bool {
+func (uInfo *User) IsAdmin() bool {
 	for _, r := range uInfo.Roles {
-		if r == AuthAdminRole {
+		if r == AdminRole {
 			return true
 		}
 	}
 	return false
 }
 
-func MergeBckACLs(oldACLs, newACLs []*AuthBucket) []*AuthBucket {
+func MergeBckACLs(oldACLs, newACLs []*Bucket) []*Bucket {
 	for _, n := range newACLs {
 		found := false
 		for _, o := range oldACLs {
@@ -187,7 +187,7 @@ func MergeBckACLs(oldACLs, newACLs []*AuthBucket) []*AuthBucket {
 	return oldACLs
 }
 
-func MergeClusterACLs(oldACLs, newACLs []*AuthCluster) []*AuthCluster {
+func MergeClusterACLs(oldACLs, newACLs []*Cluster) []*Cluster {
 	for _, n := range newACLs {
 		found := false
 		for _, o := range oldACLs {
@@ -204,7 +204,7 @@ func MergeClusterACLs(oldACLs, newACLs []*AuthCluster) []*AuthCluster {
 	return oldACLs
 }
 
-func DecryptToken(tokenStr, secret string) (*AuthToken, error) {
+func DecryptToken(tokenStr, secret string) (*Token, error) {
 	token, err := jwt.Parse(tokenStr, func(tk *jwt.Token) (interface{}, error) {
 		if _, ok := tk.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", tk.Header["alg"])
@@ -219,7 +219,7 @@ func DecryptToken(tokenStr, secret string) (*AuthToken, error) {
 	if !ok || !token.Valid {
 		return nil, ErrInvalidToken
 	}
-	tInfo := &AuthToken{}
+	tInfo := &Token{}
 	if err := cos.MorphMarshal(claims, tInfo); err != nil {
 		return nil, ErrInvalidToken
 	}

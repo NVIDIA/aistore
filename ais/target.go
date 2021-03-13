@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/backend"
+	"github.com/NVIDIA/aistore/authn"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -257,7 +258,7 @@ func (t *targetrunner) Run() error {
 	t.backend.init(t)
 
 	t.authn = &authManager{
-		tokens:        make(map[string]*cmn.AuthToken),
+		tokens:        make(map[string]*authn.Token),
 		revokedTokens: make(map[string]bool),
 		version:       1,
 	}
