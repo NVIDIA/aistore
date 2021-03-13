@@ -100,16 +100,8 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 		}
 	}
 
-	if regMeta.Config != nil {
-		// Initialize backends based on latest cluster configuration.
-		t.backend.init(t)
-	}
-
 	// Smap
-	if regMeta.Smap == nil {
-		return
-	}
-	if err = t.owner.smap.synchronize(t.si, regMeta.Smap); err != nil {
+	if err = t.receiveSmap(regMeta.Smap, msg, caller, nil); err != nil {
 		if isErrDowngrade(err) {
 			err = nil
 		} else {
@@ -118,6 +110,9 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 	} else {
 		glog.Infof("%s: synch %s", t.si, t.owner.smap.get())
 	}
+
+	// Initialize backends based on latest cluster configuration.
+	t.backend.init(t)
 	return
 }
 
@@ -668,20 +663,6 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 	return
 }
 
-func (t *targetrunner) receiveSmap(newSmap *smapX, msg *aisMsg, caller string) (err error) {
-	glog.Infof(
-		"[metasync] receive %s from %q (primary: %s, action: %q, uuid: %q)",
-		newSmap.StringEx(), caller, newSmap.Primary, msg.Action, msg.UUID,
-	)
-
-	if !newSmap.isPresent(t.si) {
-		err = fmt.Errorf("%s: not finding self in the new %s", t.si, newSmap.StringEx())
-		glog.Warningf("Error: %s\n%s", err, newSmap.pp())
-		return
-	}
-	return t.owner.smap.synchronize(t.si, newSmap)
-}
-
 func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error) {
 	loghdr := fmt.Sprintf("[metasync] %s from %q (action: %q, uuid: %q)",
 		newRMD.String(), caller, msg.Action, msg.UUID)
@@ -865,7 +846,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		errs = append(errs, err)
 	} else if newSmap != nil {
-		if err := t.receiveSmap(newSmap, msgSmap, caller); err != nil && !isErrDowngrade(err) {
+		if err := t.receiveSmap(newSmap, msgSmap, caller, nil); err != nil && !isErrDowngrade(err) {
 			errs = append(errs, err)
 		}
 	}

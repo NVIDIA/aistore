@@ -914,6 +914,7 @@ func (h *httprunner) _applyRegMeta(body []byte, caller string) (regMeta nodeRegM
 	}
 	msg = h.newAmsgStr(action, regMeta.Smap, regMeta.BMD)
 
+	debug.Assert(regMeta.Config != nil)
 	if err = h.receiveConfig(regMeta.Config, msg, caller); err != nil {
 		if isErrDowngrade(err) {
 			err = nil
@@ -1805,6 +1806,33 @@ func (h *httprunner) extractBMD(payload msPayload, caller string) (newBMD *bucke
 			err = newErrDowngrade(h.si, bmd.StringEx(), newBMD.StringEx())
 		}
 		newBMD = nil
+	}
+	return
+}
+
+func (h *httprunner) receiveSmap(newSmap *smapX, msg *aisMsg,
+	caller string, cb func(newSmap *smapX, oldSmap *smapX)) (err error) {
+	if newSmap == nil {
+		return
+	}
+
+	smap := h.owner.smap.get()
+	glog.Infof(
+		"[metasync] receive %s from %q (local: %s, action: %q, uuid: %q)",
+		newSmap.StringEx(), caller, smap.StringEx(), msg.Action, msg.UUID,
+	)
+
+	if !newSmap.isPresent(h.si) {
+		err = fmt.Errorf("%s: not finding self in the new %s", h.si, newSmap.StringEx())
+		glog.Warningf("Error: %s\n%s", err, newSmap.pp())
+		return
+	}
+	err = h.owner.smap.synchronize(h.si, newSmap)
+	if err != nil {
+		return
+	}
+	if cb != nil {
+		cb(newSmap, smap)
 	}
 	return
 }

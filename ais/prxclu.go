@@ -386,6 +386,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if !update {
 		return
 	}
+
 	// send the current Smap, BMD and global config to the self-registering node
 	if selfRegister {
 		glog.Infof("%s: %s %s (%s)...", p.si, tag, nsi, regReq.Smap)
@@ -397,9 +398,10 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		p.writeJSON(w, r, meta, path.Join(msg.Action, nsi.ID()) /* tag */)
 	} else if userRegister {
 		// Return the node ID and rebalance ID when the node is joined by user.
-		var rebID string
-		if !isProxy {
-			rebID = p.updateAndDistribute(nsi, msg, nsi.Flags)
+		rebID, err := p.updateAndDistribute(nsi, msg, nsi.Flags)
+		if err != nil {
+			p.writeErr(w, r, err)
+			return
 		}
 		p.writeJSON(w, r, api.JoinNodeResult{DaemonID: nsi.Name(), RebalanceID: rebID}, "")
 		return
@@ -492,7 +494,7 @@ func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, tag s
 }
 
 func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg,
-	flags cluster.SnodeFlags) (xactID string) {
+	flags cluster.SnodeFlags) (xactID string, err error) {
 	ctx := &smapModifier{
 		pre:   p._updPre,
 		post:  p._updPost,
@@ -501,13 +503,13 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 		msg:   msg,
 		flags: flags,
 	}
-	err := p.owner.smap.modify(ctx)
+	err = p.owner.smap.modify(ctx)
 	if err != nil {
 		glog.Errorf("FATAL: %v", err)
 		return
 	}
 	if ctx.rmd != nil {
-		return xaction.RebID(ctx.rmd.Version).String()
+		xactID = xaction.RebID(ctx.rmd.Version).String()
 	}
 	return
 }
