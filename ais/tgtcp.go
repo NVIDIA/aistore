@@ -106,6 +106,9 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 	}
 
 	// Smap
+	if regMeta.Smap == nil {
+		return
+	}
 	if err = t.owner.smap.synchronize(t.si, regMeta.Smap); err != nil {
 		if isErrDowngrade(err) {
 			err = nil

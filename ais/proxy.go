@@ -211,6 +211,9 @@ func (p *proxyrunner) applyRegMeta(body []byte, caller string) (err error) {
 	}
 
 	// Smap
+	if regMeta.Smap == nil {
+		return
+	}
 	if err = p.receiveSmap(regMeta.Smap, msg, caller); err != nil {
 		if !isErrDowngrade(err) {
 			glog.Errorf(cmn.FmtErrFailed, p.si, "sync", regMeta.Smap, err)

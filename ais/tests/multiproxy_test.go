@@ -1561,7 +1561,9 @@ func icSinglePrimaryRevamp(t *testing.T) {
 		err = tutils.RestoreNode(cmd, false, "proxy")
 		tassert.CheckError(t, err)
 
-		_, err = tutils.WaitNodeAdded(baseParams, cmd.Node.ID())
+		smap, err = tutils.WaitForClusterState(proxyURL,
+			"restore node "+cmd.Node.ID(), smap.Version,
+			smap.CountActiveProxies()+1, smap.CountTargets())
 		tassert.CheckError(t, err)
 
 		baseParams = tutils.BaseAPIParams(cmd.Node.URL(cmn.NetworkPublic))

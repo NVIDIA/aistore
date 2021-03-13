@@ -395,10 +395,8 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		p.writeJSON(w, r, meta, path.Join(msg.Action, nsi.ID()) /* tag */)
-	}
-
-	// Return the node ID and rebalance ID when the node is joined by user.
-	if userRegister {
+	} else if userRegister {
+		// Return the node ID and rebalance ID when the node is joined by user.
 		var rebID string
 		if !isProxy {
 			rebID = p.updateAndDistribute(nsi, msg, nsi.Flags)
@@ -410,14 +408,13 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) createNodeRegMeta() (meta *nodeRegMeta, err error) {
-	smap := p.owner.smap.get()
 	bmd := p.owner.bmd.get()
 	config, err := p.owner.config.get()
 	if err != nil {
 		return
 	}
 	meta = &nodeRegMeta{
-		Smap:   smap,
+		Smap:   nil, // NOTE: Smap is undergoing changes and is about to get metasync-ed
 		BMD:    bmd,
 		SI:     p.si,
 		Config: config,
@@ -1266,6 +1263,11 @@ func (p *proxyrunner) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 	}
 	if smap.PresentInMaint(psi) {
 		p.writeErrf(w, r, "cannot set new primary: %s is under maintenance", psi)
+		return
+	}
+	if a, b := p.ClusterStarted(), p.owner.rmd.startup.Load(); !a || b {
+		p.writeErrf(w, r,
+			"%s primary is not ready yet to start rebalance (started=%t, starting-up=%t)", p.si, a, b)
 		return
 	}
 
