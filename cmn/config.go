@@ -81,19 +81,11 @@ type (
 
 type (
 	globalConfigOwner struct {
-		mtx       sync.Mutex     // mutex for protecting updates of config
-		c         atomic.Pointer // pointer to `Config` (cluster + local + override config)
-		oc        atomic.Pointer // pointer to `ConfigToUpdate`, override configuration on node
-		lmtx      sync.Mutex     // mutex for protecting listeners
-		listeners map[string]ConfigListener
-
+		mtx           sync.Mutex     // mutex for protecting updates of config
+		c             atomic.Pointer // pointer to `Config` (cluster + local + override config)
+		oc            atomic.Pointer // pointer to `ConfigToUpdate`, override configuration on node
 		confPath      atomic.Pointer
 		localConfPath atomic.Pointer
-	}
-	// ConfigListener is interface for listeners which require to be notified
-	// about config updates.
-	ConfigListener interface {
-		ConfigUpdate(oldConf, newConf *Config)
 	}
 )
 
@@ -674,11 +666,8 @@ func (gco *globalConfigOwner) BeginUpdate() *Config {
 // CommitUpdate finalizes config update and notifies listeners.
 // NOTE: `ais` package must use config-owner to modify config.
 func (gco *globalConfigOwner) CommitUpdate(config *Config) {
-	oldConf := gco.Get()
 	gco.c.Store(unsafe.Pointer(config))
 	gco.mtx.Unlock()
-
-	gco.NotifyListeners(oldConf) // serializes via gco.lmtx
 }
 
 // DiscardUpdate discards commit updates.
@@ -701,33 +690,6 @@ func (gco *globalConfigOwner) GetLocalConfigPath() (s string) {
 
 func (gco *globalConfigOwner) GetGlobalConfigPath() (s string) {
 	return *(*string)(gco.confPath.Load())
-}
-
-func (gco *globalConfigOwner) NotifyListeners(oldConf *Config) {
-	gco.lmtx.Lock()
-	newConf := gco.Get()
-	for _, listener := range gco.listeners {
-		listener.ConfigUpdate(oldConf, newConf)
-	}
-	gco.lmtx.Unlock()
-}
-
-// Reg allows listeners to sign up for notifications about config updates.
-func (gco *globalConfigOwner) Reg(key string, cl ConfigListener) {
-	gco.lmtx.Lock()
-	_, ok := gco.listeners[key]
-	cos.Assert(!ok)
-	gco.listeners[key] = cl
-	gco.lmtx.Unlock()
-}
-
-// Unreg
-func (gco *globalConfigOwner) Unreg(key string) {
-	gco.lmtx.Lock()
-	_, ok := gco.listeners[key]
-	cos.Assert(ok)
-	delete(gco.listeners, key)
-	gco.lmtx.Unlock()
 }
 
 func (gco *globalConfigOwner) SetConfigInMem(toUpdate *ConfigToUpdate, config *Config, asType string) (err error) {

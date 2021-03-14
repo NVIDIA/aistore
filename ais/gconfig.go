@@ -106,7 +106,6 @@ func (co *configOwner) modify(ctx *configModifier) (config *globalConfig, err er
 	if ctx.final != nil {
 		ctx.final(ctx, config)
 	}
-	cmn.GCO.NotifyListeners(ctx.oldConfig)
 	return
 }
 
@@ -124,7 +123,6 @@ func (co *configOwner) updateGCO(newConfig *globalConfig) (err error) {
 
 func (co *configOwner) setDaemonConfig(toUpdate *cmn.ConfigToUpdate, transient bool) (err error) {
 	co.Lock()
-	oldConfig := cmn.GCO.Get()
 	clone := cmn.GCO.Clone()
 	err = cmn.GCO.SetConfigInMem(toUpdate, clone, cmn.Daemon)
 	if err != nil {
@@ -149,7 +147,6 @@ func (co *configOwner) setDaemonConfig(toUpdate *cmn.ConfigToUpdate, transient b
 	cmn.GCO.Put(clone)
 	cmn.GCO.PutOverrideConfig(override)
 	co.Unlock()
-	cmn.GCO.NotifyListeners(oldConfig)
 	return
 }
 
@@ -169,6 +166,5 @@ func (co *configOwner) resetDaemonConfig() (err error) {
 	}
 	co.updateGCO(config)
 	co.Unlock()
-	cmn.GCO.NotifyListeners(oldConfig)
 	return
 }

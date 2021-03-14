@@ -1852,12 +1852,9 @@ func (h *httprunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, caller 
 	if err = h.owner.config.persist(newConfig); err != nil {
 		return
 	}
-	oldGCO := cmn.GCO.Get()
 	err = h.owner.config.updateGCO(newConfig)
 	h.owner.config.Unlock()
 	debug.AssertNoErr(err)
-
-	cmn.GCO.NotifyListeners(oldGCO)
 	return
 }
 

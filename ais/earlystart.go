@@ -522,13 +522,9 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 			} else {
 				glog.Infof("%s: override local %s with %s", p.si, config, svm.Config)
 			}
-			oldConfig := cmn.GCO.Get()
 			p.owner.config.updateGCO(svm.Config)
-			p.owner.config.Unlock()
-			cmn.GCO.NotifyListeners(oldConfig)
-		} else {
-			p.owner.config.Unlock()
 		}
+		p.owner.config.Unlock()
 	}
 
 	if svm.Smap == nil || svm.Smap.version() == 0 {

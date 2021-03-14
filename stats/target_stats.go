@@ -97,7 +97,7 @@ func (r *Trunner) Get(name string) (val int64) { return r.Core.get(name) }
 
 func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
 	r.Core = &CoreStats{}
-	r.Core.init(48) // and register common stats (target's own stats are registered elsewhere via the Register() above)
+	r.Core.init(48) // register common (target's own stats are Register()-ed elsewhere)
 	r.Core.initStatsD(t.Snode())
 
 	r.ctracker = make(copyTracker, 48) // these two are allocated once and only used in serial context
@@ -111,9 +111,6 @@ func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
 
 	r.statsRunner.stopCh = make(chan struct{}, 4)
 	r.statsRunner.workCh = make(chan NamedVal64, 256)
-
-	// subscribe to config changes
-	cmn.GCO.Reg(r.Name(), r)
 	return &r.statsRunner.startedUp
 }
 
@@ -167,14 +164,6 @@ func (r *Trunner) RegisterAll() {
 	r.Register(DSortCreationReqLatency, KindLatency)
 	r.Register(DSortCreationRespCount, KindCounter)
 	r.Register(DSortCreationRespLatency, KindLatency)
-}
-
-func (r *Trunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
-	r.statsRunner.ConfigUpdate(oldConf, newConf)
-	if oldConf.Periodic.StatsTime != newConf.Periodic.StatsTime {
-		r.Core.statsTime = newConf.Periodic.StatsTime
-	}
-	// TODO: fs.CapPeriodic()
 }
 
 func (r *Trunner) GetWhatStats() interface{} {
@@ -250,4 +239,8 @@ func (r *Trunner) doAdd(nv NamedVal64) {
 	v.Lock()
 	v.Value += value
 	v.Unlock()
+}
+
+func (r *Trunner) statsTime(newval time.Duration) {
+	r.Core.statsTime = newval
 }

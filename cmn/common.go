@@ -61,11 +61,8 @@ var (
 func init() {
 	bucketReg = regexp.MustCompile(`^[.a-zA-Z0-9_-]*$`)
 	nsReg = regexp.MustCompile(`^[a-zA-Z0-9_-]*$`)
-
-	// Config related
-	GCO = &globalConfigOwner{listeners: make(map[string]ConfigListener, 4)}
-	config := &Config{}
-	GCO.c.Store(unsafe.Pointer(config))
+	GCO = &globalConfigOwner{}
+	GCO.c.Store(unsafe.Pointer(&Config{}))
 }
 
 // WaitForFunc executes a function in goroutine and waits for it to finish.

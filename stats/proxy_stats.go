@@ -54,15 +54,7 @@ func (r *Prunner) Init(p cluster.Node) *atomic.Bool {
 
 	r.statsRunner.stopCh = make(chan struct{}, 4)
 	r.statsRunner.workCh = make(chan NamedVal64, 256)
-
-	// subscribe to config changes
-	cmn.GCO.Reg(r.name, r)
 	return &r.statsRunner.startedUp
-}
-
-func (r *Prunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
-	r.statsRunner.ConfigUpdate(oldConf, newConf)
-	r.Core.statsTime = newConf.Periodic.StatsTime
 }
 
 // TODO: fix the scope of the return type
@@ -72,7 +64,7 @@ func (r *Prunner) GetWhatStats() interface{} {
 	return ctracker
 }
 
-// statslogger interface impl
+// statsLogger interface impl
 func (r *Prunner) log(uptime time.Duration) {
 	r.Core.UpdateUptime(uptime)
 	if idle := r.Core.copyT(r.ctracker, []string{"kalive", PostCount, Uptime}); !idle {
@@ -84,4 +76,8 @@ func (r *Prunner) log(uptime time.Duration) {
 func (r *Prunner) doAdd(nv NamedVal64) {
 	s := r.Core
 	s.doAdd(nv.Name, nv.NameSuffix, nv.Value)
+}
+
+func (r *Prunner) statsTime(newval time.Duration) {
+	r.Core.statsTime = newval
 }

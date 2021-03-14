@@ -143,10 +143,9 @@ type (
 
 // interface guard
 var (
-	_ cmn.ConfigListener = (*statsRunner)(nil)
-	_ Tracker            = (*Prunner)(nil)
-	_ Tracker            = (*Trunner)(nil)
-	_ cluster.XactStats  = (*RebalanceTargetStats)(nil)
+	_ Tracker           = (*Prunner)(nil)
+	_ Tracker           = (*Trunner)(nil)
+	_ cluster.XactStats = (*RebalanceTargetStats)(nil)
 )
 
 //
@@ -157,9 +156,10 @@ type (
 	metric = statsd.Metric // type alias
 
 	// implemented by the stats runners
-	statslogger interface {
+	statsLogger interface {
 		log(uptime time.Duration)
 		doAdd(nv NamedVal64)
+		statsTime(newval time.Duration)
 	}
 	runnerHost interface {
 		ClusterStarted() bool
@@ -452,7 +452,7 @@ func (tracker statsTracker) registerCommonStats() {
 
 func (r *statsRunner) Name() string { return r.name }
 
-func (r *statsRunner) runcommon(logger statslogger) error {
+func (r *statsRunner) runcommon(logger statsLogger) error {
 	var (
 		i, j   time.Duration
 		ticker = time.NewTicker(startupSleep)
@@ -487,11 +487,13 @@ waitStartup:
 	}
 	ticker.Stop()
 
+	config = cmn.GCO.Get()
 	goMaxProcs := runtime.GOMAXPROCS(0)
 	glog.Infof("Starting %s", r.Name())
 	hk.Reg(r.Name()+".gc.logs", r.recycleLogs, logsMaxSizeCheckTime)
 
-	r.ticker = time.NewTicker(config.Periodic.StatsTime)
+	statsTime := config.Periodic.StatsTime
+	r.ticker = time.NewTicker(statsTime)
 	r.startedUp.Store(true)
 
 	startTime, checkNumGorHigh := mono.NanoTime(), int64(0)
@@ -504,20 +506,13 @@ waitStartup:
 		case <-r.ticker.C:
 			now := mono.NanoTime()
 			logger.log(time.Duration(now - startTime)) // uptime
-			if ngr := runtime.NumGoroutine(); ngr > goMaxProcs*numGorHigh {
-				if ngr >= goMaxProcs*numGorExtreme {
-					glog.Errorf("Extremely high number of goroutines: %d", ngr)
-				}
-				if checkNumGorHigh == 0 {
-					checkNumGorHigh = now
-				} else if time.Duration(now-checkNumGorHigh) > numGorHighCheckTime {
-					if ngr < goMaxProcs*numGorExtreme {
-						glog.Warningf("High number of goroutines: %d", ngr)
-					}
-					checkNumGorHigh = 0
-				}
-			} else {
-				checkNumGorHigh = 0
+			checkNumGorHigh = _whingeGoroutines(now, checkNumGorHigh, goMaxProcs)
+
+			config = cmn.GCO.Get()
+			if statsTime != config.Periodic.StatsTime {
+				statsTime = config.Periodic.StatsTime
+				r.ticker.Reset(statsTime)
+				logger.statsTime(statsTime)
 			}
 		case <-r.stopCh:
 			r.ticker.Stop()
@@ -526,14 +521,30 @@ waitStartup:
 	}
 }
 
-func (r *statsRunner) StartedUp() bool { return r.startedUp.Load() }
-
-func (r *statsRunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
-	if oldConf.Periodic.StatsTime != newConf.Periodic.StatsTime {
-		r.ticker.Stop()
-		r.ticker = time.NewTicker(newConf.Periodic.StatsTime)
+func _whingeGoroutines(now, checkNumGorHigh int64, goMaxProcs int) int64 {
+	var (
+		ngr     = runtime.NumGoroutine()
+		extreme bool
+	)
+	if ngr < goMaxProcs*numGorHigh {
+		return 0
 	}
+	if ngr >= goMaxProcs*numGorExtreme {
+		extreme = true
+		glog.Errorf("Extremely high number of goroutines: %d", ngr)
+	}
+	if checkNumGorHigh == 0 {
+		checkNumGorHigh = now
+	} else if time.Duration(now-checkNumGorHigh) > numGorHighCheckTime {
+		if !extreme {
+			glog.Warningf("High number of goroutines: %d", ngr)
+		}
+		checkNumGorHigh = 0
+	}
+	return checkNumGorHigh
 }
+
+func (r *statsRunner) StartedUp() bool { return r.startedUp.Load() }
 
 func (r *statsRunner) Stop(err error) {
 	glog.Infof("Stopping %s, err: %v", r.Name(), err)
