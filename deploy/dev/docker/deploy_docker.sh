@@ -349,7 +349,7 @@ if [ "$PROXY_CNT" -eq 0 ]; then
     fi
 fi
 
-AIS_FS_PATHS="\"\":{}"
+AIS_FS_PATHS=""
 if [ "$FS_LIST" = "" ] && [ "$TEST_FSPATH_COUNT" -eq 0 ]; then
     echo Select
     echo  1: Local cache directories

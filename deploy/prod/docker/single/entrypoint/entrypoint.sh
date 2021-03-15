@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export AIS_FS_PATHS=$(ls -d /ais/* | while read x; do echo -e "\"$x\": \"\""; done | paste -sd ",")
+export AIS_FS_PATHS=$(ls -d /ais/* | while read x; do echo -e "\"$x\": {}"; done | paste -sd ",")
 
 function start_node {
   # Required for `aisnode_config.sh`.

@@ -40,12 +40,9 @@ spec:
        mountPath: /tmp/
     ports:
       - containerPort: ${PORT}
-    # TODO: fix the workaround of AIS_FS_PATHS
     command: ["bash","-c"]
     args:
       - export PORT=${PORT} &&
-        export AIS_FS_PATHS="\"\"${AIS_FS_PATHS}\"\"" &&
-        export TEST_FSPATH_COUNT=${TEST_FSPATH_COUNT} &&
         export HOSTNAME_LIST=${HOSTNAME_LIST} &&
         export AIS_PRIMARY_URL=${AIS_PRIMARY_URL} &&
         export AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS}" &&

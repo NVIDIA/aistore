@@ -7,7 +7,7 @@
 ###################################
 
 test_fspath_cnt=0
-fspath="\"\":{}"
+fspath=""
 
 echo "Select"
 echo " 1: Local cache directories"
