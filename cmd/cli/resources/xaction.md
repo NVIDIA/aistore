@@ -31,7 +31,7 @@ $ ais job start lru --buckets ais://buck1,aws://buck2 -f
 
 ## Stop xaction
 
-`ais job stop xaction XACTION_ID|XACTION_NAME [BUCKET_NAME]`
+`ais job stop xaction XACTION_ID|XACTION_NAME [BUCKET]`
 
 Stop xaction(s).
 The second argument is used to determine the bucket name if it is required.
@@ -49,7 +49,7 @@ Stopped "lru" xaction.
 
 ## Show xaction stats
 
-`ais show job xaction [XACTION_ID|XACTION_NAME] [BUCKET_NAME]`
+`ais show job xaction [XACTION_ID|XACTION_NAME] [BUCKET]`
 
 Display details about `XACTION_ID` or `XACTION_NAME` xaction. If no arguments are given, displays details about all xactions.
 The second argument is used to determine the bucket name if it is required.
@@ -78,7 +78,7 @@ Output of this command differs from the generic xaction output.
 
 ## Wait for xaction
 
-`ais job wait xaction XACTION_ID|XACTION_NAME [BUCKET_NAME]`
+`ais job wait xaction XACTION_ID|XACTION_NAME [BUCKET]`
 
 Wait for the `XACTION_ID` or `XACTION_NAME` xaction to finish.
 

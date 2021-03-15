@@ -231,7 +231,7 @@ var (
 	showCmdXaction = cli.Command{
 		Name:         subcmdShowXaction,
 		Usage:        "show xaction details",
-		ArgsUsage:    "[XACTION_ID|XACTION_NAME] [BUCKET_NAME]",
+		ArgsUsage:    "[XACTION_ID|XACTION_NAME] [BUCKET]",
 		Description:  xactionDesc(false),
 		Flags:        showCmdsFlags[subcmdShowXaction],
 		Action:       showXactionHandler,

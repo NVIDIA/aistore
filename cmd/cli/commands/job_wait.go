@@ -36,7 +36,7 @@ var (
 			{
 				Name:         subcmdWaitXaction,
 				Usage:        "wait for an xaction to finish",
-				ArgsUsage:    "XACTION_ID|XACTION_NAME [BUCKET_NAME]",
+				ArgsUsage:    "XACTION_ID|XACTION_NAME [BUCKET]",
 				Flags:        waitCmdsFlags[subcmdWaitXaction],
 				Action:       waitXactionHandler,
 				BashComplete: xactionCompletions(""),

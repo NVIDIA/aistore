@@ -69,14 +69,14 @@ var etlCmds = []cli.Command{
 			{
 				Name:         subcmdObject,
 				Usage:        "transform an object",
-				ArgsUsage:    "ETL_ID BUCKET_NAME/OBJECT_NAME OUTPUT",
+				ArgsUsage:    "ETL_ID BUCKET/OBJECT_NAME OUTPUT",
 				Action:       etlObjectHandler,
 				BashComplete: etlIDCompletions,
 			},
 			{
 				Name:      subcmdBucket,
 				Usage:     "transform bucket and put results into another bucket",
-				ArgsUsage: "ETL_ID SRC_BUCKET_NAME DST_BUCKET_NAME",
+				ArgsUsage: "ETL_ID SRC_BUCKET DST_BUCKET",
 				Action:    etlBucketHandler,
 				Flags: []cli.Flag{
 					etlExtFlag,

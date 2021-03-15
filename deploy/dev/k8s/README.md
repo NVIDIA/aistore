@@ -249,7 +249,7 @@ NAME:
    ais etl object - transform object with given ETL
 
 USAGE:
-   ais etl object [command options] ETL_ID BUCKET_NAME/OBJECT_NAME OUTPUT
+   ais etl object [command options] ETL_ID BUCKET/OBJECT_NAME OUTPUT
 
 OPTIONS:
    --help, -h  show help

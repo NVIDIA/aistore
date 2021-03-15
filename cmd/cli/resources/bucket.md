@@ -1,22 +1,21 @@
-This section lists operations on *buckets*. For types of supported buckets (AIS, Cloud, backend, etc.) and many more examples, please refer to [buckets in-depth overview](/docs/bucket.md).
+This section lists operations on *buckets*. For types of supported buckets (AIS, Cloud, backend, etc.) and many more examples, please refer to [buckets in-depth overview](../../../docs/bucket.md).
 
 ## Create bucket
 
-`ais bucket create BUCKET_NAME [BUCKET_NAME...]`
+`ais bucket create BUCKET [BUCKET...]`
 
-Create an ais bucket or buckets.
+Create bucket(s).
 
 ### Examples
 
 #### Create AIS bucket
 
 Create buckets `bucket_name1` and `bucket_name2`, both with AIS provider.
-`bucket_name2`'s provider by default is set to `ais://`, see [backend provider info](../README.md#bucket-provider).
 
 ```console
-$ ais bucket create ais://bucket_name1 bucket_name2
+$ ais bucket create ais://bucket_name1 ais://bucket_name2
 "ais://bucket_name1" bucket created
-"bucket_name2" bucket created
+"ais://bucket_name2" bucket created
 ```
 
 #### Create AIS bucket in local namespace
@@ -43,19 +42,31 @@ Create bucket `bucket_name` in `ml` namespace of AIS remote cluster with `Bghort
 $ ais bucket create ais://@Bghort1l#ml/bucket_name
 "ais://@Bghort1l#ml/bucket_name" bucket created
 ```
+
 #### Create bucket with custom properties
 
 Create bucket `bucket_name` with custom properties specified.
 
 ```console
-#Key-value format
+$ # Key-value format
 $ ais bucket create ais://@Bghort1l/bucket_name --bucket-props="mirror.enabled=true mirror.copies=2"
 "ais://@Bghort1l/bucket_name" bucket created
-
-#JSON format
+$
+$ # JSON format
 $ ais bucket create ais://@Bghort1l/bucket_name --bucket-props='{"versioning": {"enabled": true, "validate_warm_get": true}}'
 "ais://@Bghort1l/bucket_name" bucket created
 ```
+
+#### Create HDFS bucket
+
+Create bucket `bucket_name` in HDFS backend with bucket pointing to `/yt8m` directory.
+More info about HDFS buckets can be found [here](../../../docs/providers.md#hdfs-provider).
+
+```console
+$ ais bucket create hdfs://bucket_name --bucket-props="extra.hdfs.ref_directory=/yt8m"
+"hdfs://bucket_name" bucket created
+```
+
 
 #### Incorrect buckets creation
 
@@ -72,17 +83,17 @@ Delete an ais bucket or buckets.
 
 ### Examples
 
-#### Remove local buckets
+#### Remove AIS buckets
 
-Remove local buckets `bucket_name1` and `bucket_name2`.
+Remove AIS buckets `bucket_name1` and `bucket_name2`.
 
 ```console
-$ ais bucket rm ais://bucket_name1 bucket_name2
+$ ais bucket rm ais://bucket_name1 ais://bucket_name2
 "ais://bucket_name1" bucket destroyed
-"bucket_name2" bucket destroyed
+"ais://bucket_name2" bucket destroyed
 ```
 
-#### Remove local bucket in local namespace
+#### Remove AIS bucket in local namespace
 
 Remove bucket `bucket_name` from `ml` namespace.
 
@@ -148,9 +159,9 @@ List all bucket names for the `ais` provider and `uuid#namespace` namespace.
 
 ## List object names
 
-`ais bucket ls BUCKET_NAME`
+`ais bucket ls BUCKET`
 
-List all objects contained in `BUCKET_NAME` bucket.
+List all objects contained in `BUCKET` bucket.
 
 ### Options
 
@@ -174,28 +185,7 @@ List all objects contained in `BUCKET_NAME` bucket.
 
 ### Examples
 
-#### With provider auto-detection
-
-List object names in the bucket `bucket_name`.
-Backend provider is auto-detected.
-
-```console
-$ ais bucket ls bucket_name
-NAME		SIZE		VERSION
-shard-0.tar	16.00KiB	1
-shard-1.tar	16.00KiB	1
-shard-10.tar	16.00KiB	1
-shard-2.tar	16.00KiB	1
-shard-3.tar	16.00KiB	1
-shard-4.tar	16.00KiB	1
-shard-5.tar	16.00KiB	1
-shard-6.tar	16.00KiB	1
-shard-7.tar	16.00KiB	1
-shard-8.tar	16.00KiB	1
-shard-9.tar	16.00KiB	1
-```
-
-#### From the specific provider
+#### From the specific bucket
 
 List objects in the AIS bucket `bucket_name`.
 
@@ -255,11 +245,11 @@ shard-1.tar	16.00KiB	1
 
 ## Evict remote bucket
 
-`ais bucket evict BUCKET_NAME`
+`ais bucket evict BUCKET`
 
-Evict a [remote bucket](../../../docs/bucket.md/#remote-bucket). It also resets the properties of the bucket (if changed).
+Evict a [remote bucket](../../../docs/bucket.md#remote-bucket). It also resets the properties of the bucket (if changed).
 All data from the remote bucket stored in the cluster will be removed, and AIS will stop keeping track of the remote bucket.
-Read more about this feature [here](../../../docs/bucket.md/#evict-remote-bucket).
+Read more about this feature [here](../../../docs/bucket.md#evict-remote-bucket).
 
 Various flags that can be used with this command are below.
 ```console
@@ -276,15 +266,15 @@ $ ais bucket evict --keep-md aws://abc/
 "aws://abc" bucket evicted
 ```
 
-Note: When an [HDFS bucket](../../../docs/bucket.md/#hdfs-provider) is evicted, AIS will only delete objects stored in the cluster.
+Note: When an [HDFS bucket](../../../docs/providers.md#hdfs-provider) is evicted, AIS will only delete objects stored in the cluster.
 AIS will retain the bucket's metadata to allow the bucket to re-register later.
 
 ## Move or Rename a bucket
 
-`ais bucket mv BUCKET_NAME NEW_BUCKET_NAME`
+`ais bucket mv BUCKET NEW_BUCKET`
 
-Move (ie. rename) an AIS bucket. If the `NEW_BUCKET_NAME` already exists, the `mv` operation will not proceed.
-
+Move (ie. rename) an AIS bucket.
+If the `NEW_BUCKET` already exists, the `mv` operation will not proceed.
 
 > Cloud bucket move is not supported.
 
@@ -295,16 +285,17 @@ Move (ie. rename) an AIS bucket. If the `NEW_BUCKET_NAME` already exists, the `m
 Move AIS bucket `bucket_name` to AIS bucket `new_bucket_name`.
 
 ```console
-$ ais bucket mv bucket_name new_bucket_name
-Moving bucket "bucket_name" to "new_bucket_name" in progress.
-To check the status, run: ais show job xaction mvlb new_bucket_name
+$ ais bucket mv ais://bucket_name ais://new_bucket_name
+Moving bucket "ais://bucket_name" to "ais://new_bucket_name" in progress.
+To check the status, run: ais show job xaction mvlb ais://new_bucket_name
 ```
 
 ## Copy bucket
 
-`ais bucket cp SRC_BUCKET_NAME DST_BUCKET_NAME`
+`ais bucket cp SRC_BUCKET DST_BUCKET`
 
-Copy an existing bucket to a new bucket. If destination bucket is a cloud bucket it has to exist.
+Copy an existing bucket to a new bucket.
+If destination bucket is a cloud bucket it has to exist.
 
 ### Options
 | Name | Type | Description | Default |
@@ -350,10 +341,10 @@ To check the status, run: ais show job xaction copybck aws://dst_bucket
 
 ## Show bucket summary
 
-`ais bucket summary [BUCKET_NAME]`
+`ais bucket summary [BUCKET]`
 
-Show aggregated information about objects in the bucket `BUCKET_NAME`.
-If `BUCKET_NAME` is omitted, shows information about all buckets.
+Show aggregated information about objects in the bucket `BUCKET`.
+If `BUCKET` is omitted, shows information about all buckets.
 
 ### Options
 
@@ -363,7 +354,7 @@ If `BUCKET_NAME` is omitted, shows information about all buckets.
 
 ## Make N copies
 
-`ais job start mirror BUCKET_NAME --copies <value>`
+`ais job start mirror BUCKET --copies <value>`
 
 Start an extended action to bring a given bucket to a certain redundancy level (`value` copies). Read more about this feature [here](../../../docs/storage_svcs.md#n-way-mirror).
 
@@ -375,7 +366,7 @@ Start an extended action to bring a given bucket to a certain redundancy level (
 
 ## Make all objects erasure coded
 
-`ais ec-encode BUCKET_NAME --data-slices <value> --parity-slices <value>`
+`ais ec-encode BUCKET --data-slices <value> --parity-slices <value>`
 
 Start an extended action that enables data protection for a given bucket and encodes all its objects.
 Erasure coding must be disabled for the bucket prior to running `ec-encode` extended action.
@@ -392,7 +383,7 @@ All options are required and must be greater than `0`.
 
 ## Show bucket props
 
-`ais show bucket BUCKET_NAME [PROP_PREFIX]`
+`ais show bucket BUCKET [PROP_PREFIX]`
 
 List [properties](../../../docs/bucket.md#properties-and-options) of the bucket.
 By default, condensed form of bucket props sections is presented.
@@ -414,7 +405,7 @@ Useful `PROP_PREFIX` are: `access, checksum, ec, lru, mirror, provider, versioni
 Show only `lru` section of bucket props for `bucket_name` bucket.
 
 ```console
-$ ais show bucket bucket_name
+$ ais show bucket ais://bucket_name
 PROPERTY	 VALUE
 access		 GET,PUT,DELETE,HEAD,ColdGET
 checksum	 Type: xxhash | Validate: ColdGET
@@ -424,7 +415,7 @@ lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
 mirror		 Disabled
 provider	 ais
 versioning	 Enabled | Validate on WarmGET: no
-$ ais show bucket bucket_name lru
+$ ais show bucket ais://bucket_name lru
 PROPERTY	 VALUE
 lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
 $ ais show bucket bucket_name lru -v
@@ -439,10 +430,10 @@ lru.out_of_space	 95
 
 ## Set bucket props
 
-`ais bucket props [OPTIONS] BUCKET_NAME JSON_SPECIFICATION|KEY=VALUE [KEY=VALUE...]`
+`ais bucket props [OPTIONS] BUCKET JSON_SPECIFICATION|KEY=VALUE [KEY=VALUE...]`
 
 Set bucket properties.
-For the available options, see [bucket-properties](../../../docs/bucket.md#properties-and-options).
+For the available options, see [bucket-properties](../../../docs/bucket.md#bucket-properties).
 
 If JSON_SPECIFICATION is used, **all** properties of the bucket are set based on the values in the JSON object.
 
@@ -470,7 +461,7 @@ When JSON specification is not used, some properties support user-friendly alias
 Set the `mirror.enabled` and `mirror.copies` properties to `true` and `2` respectively, for the bucket `bucket_name`
 
 ```console
-$ ais bucket props bucket_name 'mirror.enabled=true' 'mirror.copies=2'
+$ ais bucket props ais://bucket_name 'mirror.enabled=true' 'mirror.copies=2'
 Bucket props successfully updated
 "mirror.enabled" set to:"true" (was:"false")
 ```
@@ -481,7 +472,7 @@ Set read-only access to the bucket `bucket_name`.
 All PUT and DELETE requests will fail.
 
 ```console
-$ ais bucket props bucket_name 'access=ro'
+$ ais bucket props ais://bucket_name 'access=ro'
 Bucket props successfully updated
 "access" set to:"GET,HEAD-OBJECT,HEAD-BUCKET,LIST-OBJECTS" (was:"<PREV_ACCESS_LIST>")
 ```
@@ -503,19 +494,19 @@ It's like a symlink to a cloud bucket.
 The only difference is that all objects will be cached into `ais://bucket_name` (and reflected in the cloud as well) instead of `gcp://cloud_bucket`.
 
 ```console
-$ ais bucket props bucket_name backend_bck=gcp://cloud_bucket
+$ ais bucket props ais://bucket_name backend_bck=gcp://cloud_bucket
 Bucket props successfully updated
-"backend_bck.name" set to:"cloud_bucket" (was:"")
-"backend_bck.provider" set to:"gcp" (was:"")
+"backend_bck.name" set to: "cloud_bucket" (was: "")
+"backend_bck.provider" set to: "gcp" (was: "")
 ```
 
 To disconnect cloud bucket do:
 
 ```console
-$ ais bucket props bucket_name backend_bck=none
+$ ais bucket props ais://bucket_name backend_bck=none
 Bucket props successfully updated
-"backend_bck.name" set to:"" (was:"cloud_bucket")
-"backend_bck.provider" set to:"" (was:"gcp")
+"backend_bck.name" set to: "" (was: "cloud_bucket")
+"backend_bck.provider" set to: "" (was: "gcp")
 ```
 
 #### Ignore non-critical errors
@@ -533,27 +524,27 @@ In examples a cluster with 6 targets is used:
 $ # Creating a bucket
 $ ais bucket create ais://bck --bucket-props "ec.enabled=true ec.data_slices=6 ec.parity_slices=4"
 Create bucket "ais://bck" failed: EC config (6 data, 4 parity) slices requires at least 11 targets (have 6)
-
+$
 $ ais bucket create ais://bck --bucket-props "ec.enabled=true ec.data_slices=6 ec.parity_slices=4" --force
 "ais://bck" bucket created
-
+$
 $ # If the number of targets is less than or equal to ec.parity_slices even `--force` does not help
-
+$
 $ ais bucket props ais://bck ec.enabled true ec.data_slices 6 ec.parity_slices 8
-EC config (6 data, 8 parity)slices requires at least 15 targets (have 6). To show bucket properties, run "ais show bucket BUCKET_NAME -v".
-
+EC config (6 data, 8 parity)slices requires at least 15 targets (have 6). To show bucket properties, run "ais show bucket BUCKET -v".
+$
 $ ais bucket props ais://bck ec.enabled true ec.data_slices 6 ec.parity_slices 8 --force
-EC config (6 data, 8 parity)slices requires at least 15 targets (have 6). To show bucket properties, run "ais show bucket BUCKET_NAME -v".
-
+EC config (6 data, 8 parity)slices requires at least 15 targets (have 6). To show bucket properties, run "ais show bucket BUCKET -v".
+$
 $ # Use force to enable EC if the number of target is sufficient to keep `ec.parity_slices+1` replicas
-
+$
 $ ais bucket props ais://bck ec.enabled true ec.data_slices 6 ec.parity_slices 4
-EC config (6 data, 8 parity)slices requires at least 11 targets (have 6). To show bucket properties, run "ais show bucket BUCKET_NAME -v".
-
+EC config (6 data, 8 parity)slices requires at least 11 targets (have 6). To show bucket properties, run "ais show bucket BUCKET -v".
+$
 $ ais bucket props ais://bck ec.enabled true ec.data_slices 6 ec.parity_slices 4 --force
 Bucket props successfully updated
-"ec.enabled" set to:"true" (was:"false")
-"ec.parity_slices" set to:"4" (was:"2")
+"ec.enabled" set to: "true" (was: "false")
+"ec.parity_slices" set to: "4" (was: "2")
 ```
 
 Once erasure encoding is enabled for a bucket, the number of data and parity slices cannot be modified.
@@ -563,11 +554,11 @@ To avoid accidental modification when EC for a bucket is enabled, the option `--
 ```console
 $ ais bucket props ais://bck ec.enabled
 Bucket props successfully updated
-"ec.enabled" set to:"true" (was:"false")
-
+"ec.enabled" set to: "true" (was: "false")
+$
 $ ais bucket props ais://bck ec.objsize_limit 320000
-P[dBbfp8080]: once enabled, EC configuration can be only disabled but cannot change. To show bucket properties, run "ais show bucket BUCKET_NAME -v".
-
+P[dBbfp8080]: once enabled, EC configuration can be only disabled but cannot change. To show bucket properties, run "ais show bucket BUCKET -v".
+$
 $ ais bucket props ais://bck ec.objsize_limit 320000 --force
 Bucket props successfully updated
 "ec.objsize_limit" set to:"320000" (was:"262144")
@@ -578,7 +569,7 @@ Bucket props successfully updated
 Set **all** bucket properties for `bucket_name` bucket based on the provided JSON specification.
 
 ```bash
-$ ais bucket props bucket_name '{
+$ ais bucket props ais://bucket_name '{
     "provider": "ais",
     "versioning": {
       "enabled": true,
@@ -618,7 +609,7 @@ Bucket props successfully updated
 ```
 
 ```console
-$ ais show bucket bucket_name
+$ ais show bucket ais://bucket_name
 PROPERTY	 VALUE
 access		 GET,PUT,DELETE,HEAD,ColdGET
 checksum	 Type: xxhash | Validate: ColdGET
@@ -633,9 +624,9 @@ versioning	 Enabled | Validate on WarmGET: no
 If not all properties are mentioned in the JSON, the missing ones are set to zero values (empty / `false` / `nil`):
 
 ```bash
-$ ais bucket props --reset bucket_name
+$ ais bucket props --reset ais://bucket_name
 Bucket props successfully reset
-$ ais bucket props bucket_name '{
+$ ais bucket props ais://bucket_name '{
   "mirror": {
     "enabled": true,
     "copies": 2
@@ -646,8 +637,8 @@ $ ais bucket props bucket_name '{
   }
 }'
 Bucket props successfully updated
-"versioning.validate_warm_get" set to:"true" (was:"false")
-"mirror.enabled" set to:"true" (was:"false")
+"versioning.validate_warm_get" set to: "true" (was: "false")
+"mirror.enabled" set to: "true" (was: "false")
 $ ais show bucket bucket_name
 PROPERTY	 VALUE
 access		 GET,PUT,DELETE,HEAD,ColdGET

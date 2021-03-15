@@ -87,7 +87,7 @@ var (
 				{
 					Name:      commandMv,
 					Usage:     "move an object in an ais bucket",
-					ArgsUsage: "BUCKET_NAME/OBJECT_NAME NEW_OBJECT_NAME",
+					ArgsUsage: "BUCKET/OBJECT_NAME NEW_OBJECT_NAME",
 					Flags:     objectCmdsFlags[commandMv],
 					Action:    mvObjectHandler,
 					BashComplete: oldAndNewBucketCompletions(

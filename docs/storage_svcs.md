@@ -178,7 +178,7 @@ Any of the supported options can be utilized at any time (and without downtime) 
 3. **copying buckets**  - [Copy Bucket](/cmd/cli/resources/bucket.md#copy-bucket)
 4. **erasure coding** - [Erasure coding](#erasure-coding)
 
-For instance, you first could start with plain mirroring via `ais job start mirror BUCKET_NAME --copies N`, where N would be less or equal the number of target mountpaths (disks).
+For instance, you first could start with plain mirroring via `ais job start mirror BUCKET --copies N`, where N would be less or equal the number of target mountpaths (disks).
 
 > It is generally assumed (and also strongly recommended) that all storage servers (targets) in AIS cluster have the same number of disks and are otherwise identical.
 

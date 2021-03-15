@@ -165,18 +165,18 @@ const (
 	optionalJobIDDaemonIDArgument = "[JOB_ID [DAEMON_ID]]"
 
 	// Buckets
-	bucketArgument         = "BUCKET_NAME"
-	optionalBucketArgument = "[BUCKET_NAME]"
-	bucketsArgument        = "BUCKET_NAME [BUCKET_NAME...]"
+	bucketArgument         = "BUCKET"
+	optionalBucketArgument = "[BUCKET]"
+	bucketsArgument        = "BUCKET [BUCKET...]"
 	bucketPropsArgument    = bucketArgument + " " + jsonSpecArgument + "|" + keyValuePairsArgument
-	bucketAndPropsArgument = "BUCKET_NAME [PROP_PREFIX]"
+	bucketAndPropsArgument = "BUCKET [PROP_PREFIX]"
 
 	// Objects
-	getObjectArgument        = "BUCKET_NAME/OBJECT_NAME [OUT_FILE]"
-	putPromoteObjectArgument = "FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]"
-	concatObjectArgument     = "FILE|DIRECTORY [FILE|DIRECTORY...] BUCKET_NAME/OBJECT_NAME"
-	objectArgument           = "BUCKET_NAME/OBJECT_NAME"
-	optionalObjectsArgument  = "BUCKET_NAME/[OBJECT_NAME]..."
+	getObjectArgument        = "BUCKET/OBJECT_NAME [OUT_FILE]"
+	putPromoteObjectArgument = "FILE|DIRECTORY BUCKET/[OBJECT_NAME]"
+	concatObjectArgument     = "FILE|DIRECTORY [FILE|DIRECTORY...] BUCKET/OBJECT_NAME"
+	objectArgument           = "BUCKET/OBJECT_NAME"
+	optionalObjectsArgument  = "BUCKET/[OBJECT_NAME]..."
 
 	// Daemons
 	daemonIDArgument         = "DAEMON_ID"

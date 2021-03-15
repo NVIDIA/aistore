@@ -677,7 +677,7 @@ ret:
 	return
 }
 
-// Parses [XACTION_ID|XACTION_NAME] [BUCKET_NAME]
+// Parses [XACTION_ID|XACTION_NAME] [BUCKET]
 func parseXactionFromArgs(c *cli.Context) (xactID, xactKind string, bck cmn.Bck, err error) {
 	xactKind = c.Args().Get(0)
 	if !xaction.IsValid(xactKind) {

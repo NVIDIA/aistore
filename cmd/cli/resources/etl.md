@@ -109,7 +109,7 @@ $ cat output.txt
 
 ## Transform the whole bucket offline with the given ETL
 
-`ais etl bucket ETL_ID SRC_BUCKET_NAME DST_BUCKET_NAME`
+`ais etl bucket ETL_ID SRC_BUCKET DST_BUCKET`
 
 ### Examples
 

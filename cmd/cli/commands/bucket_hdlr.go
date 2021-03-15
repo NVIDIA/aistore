@@ -98,7 +98,7 @@ var (
 				{
 					Name:         commandCopy,
 					Usage:        "copy ais buckets in the cluster",
-					ArgsUsage:    "SRC_BUCKET_NAME DST_BUCKET_NAME",
+					ArgsUsage:    "SRC_BUCKET DST_BUCKET",
 					Flags:        bucketCmdsFlags[commandCopy],
 					Action:       copyBucketHandler,
 					BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),
@@ -106,7 +106,7 @@ var (
 				{
 					Name:         commandMv,
 					Usage:        "move an ais bucket",
-					ArgsUsage:    "BUCKET_NAME NEW_BUCKET_NAME",
+					ArgsUsage:    "BUCKET NEW_BUCKET",
 					Flags:        bucketCmdsFlags[commandMv],
 					Action:       mvBucketHandler,
 					BashComplete: oldAndNewBucketCompletions([]cli.BashCompleteFunc{}, false /* separator */, cmn.ProviderAIS),
@@ -301,7 +301,7 @@ func setPropsHandler(c *cli.Context) (err error) {
 	}
 
 	if err = setBucketProps(c, bck, updateProps); err != nil {
-		helpMsg := fmt.Sprintf("To show bucket properties, run \"%s %s %s BUCKET_NAME -v\"",
+		helpMsg := fmt.Sprintf("To show bucket properties, run \"%s %s %s BUCKET -v\"",
 			cliName, commandShow, subcmdShowBucket)
 		return newAdditionalInfoError(err, helpMsg)
 	}
@@ -324,7 +324,7 @@ func showDiff(c *cli.Context, origProps, newProps *cmn.BucketProps) {
 	newKV, _ := bckPropList(newProps, true)
 	for idx, prop := range newKV {
 		if origKV[idx].Value != prop.Value {
-			fmt.Fprintf(c.App.Writer, "%q set to:%q (was:%q)\n", prop.Name, prop.Value, origKV[idx].Value)
+			fmt.Fprintf(c.App.Writer, "%q set to: %q (was: %q)\n", prop.Name, prop.Value, origKV[idx].Value)
 		}
 	}
 }

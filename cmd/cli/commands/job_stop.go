@@ -27,7 +27,7 @@ var (
 			{
 				Name:         subcmdStopXaction,
 				Usage:        "stop an xaction",
-				ArgsUsage:    "XACTION_ID|XACTION_NAME [BUCKET_NAME]",
+				ArgsUsage:    "XACTION_ID|XACTION_NAME [BUCKET]",
 				Description:  xactionDesc(false),
 				Flags:        stopCmdsFlags[subcmdStopXaction],
 				Action:       stopXactionHandler,
