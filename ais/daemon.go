@@ -39,6 +39,11 @@ type (
 		version   string      // major.minor.build (see cmd/aisnode)
 		buildTime string      // YYYY-MM-DD HH:MM:SS-TZ
 		stopping  atomic.Bool // true when exiting
+
+		resilver struct {
+			required bool   // Determines if the resilver needs to be started.
+			reason   string // Reason why resilver needs to be run.
+		}
 	}
 	cliFlags struct {
 		localConfigPath  string // path to local config
@@ -253,8 +258,12 @@ func initTarget() cos.Runner {
 
 	t.initFs()
 	t.initSI(cmn.Target)
-	if err := fs.InitMpaths(t.si.ID()); err != nil {
+
+	if changed, err := fs.InitMpaths(t.si.ID()); err != nil {
 		cos.ExitLogf("%v", err)
+	} else if changed {
+		daemon.resilver.required = true
+		daemon.resilver.reason = "mountpaths differ from last run"
 	}
 
 	t.initHostIP()

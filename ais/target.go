@@ -277,9 +277,13 @@ func (t *targetrunner) Run() error {
 	ec.Init(t)
 
 	marked := xreg.GetResilverMarked()
-	if marked.Interrupted {
+	if marked.Interrupted || daemon.resilver.required {
 		go func() {
-			glog.Infoln("resuming resilver...")
+			if marked.Interrupted {
+				glog.Info("Resuming resilver...")
+			} else if daemon.resilver.required {
+				glog.Infof("Starting resilver, reason: %s", daemon.resilver.reason)
+			}
 			t.runResilver("", false /*skipGlobMisplaced*/)
 		}()
 	}

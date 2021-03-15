@@ -460,49 +460,48 @@ func Init(iostater ...ios.IOStater) {
 }
 
 // InitMpaths prepares, validates, and adds configured mountpaths.
-func InitMpaths(tid string) error {
+func InitMpaths(tid string) (changed bool, err error) {
 	configPaths := cmn.GCO.Get().FSpaths.Paths
 	if len(configPaths) == 0 {
 		// (usability) not to clutter the log with backtraces when starting up and validating config
-		return fmt.Errorf("no fspaths - see README => Configuration and/or fspaths section in the config.sh")
+		return false, fmt.Errorf("no fspaths - see README => Configuration and/or fspaths section in the config.sh")
 	}
 	vmd, err := LoadVMD(configPaths)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if vmd == nil {
 		glog.Infof("VMD not loaded, adding %d mountpaths from config", len(configPaths))
 
 		for path := range configPaths {
 			if _, err := Add(path, tid); err != nil {
-				return err
+				return false, err
 			}
 		}
 		_, err = CreateNewVMD(tid)
-		return err
+		return false, err
 	}
 
 	glog.Infof("VMD loaded (mountpaths: %d), validating it with config (mountpaths: %d)", len(vmd.Mountpaths), len(configPaths))
 
 	if vmd.DaemonID != tid {
-		return newVMDIDMismatchErr(vmd.DaemonID, tid)
+		return false, newVMDIDMismatchErr(vmd.DaemonID, tid)
 	}
 
 	// Validate VMD with config FS.
-	var changed bool
 	for path := range configPaths {
 		// Check if config path is present in VMD paths.
 		var enabled bool
 		if mpath, exists := vmd.Mountpaths[path]; !exists {
-			changed = true
 			enabled = true
+			changed = true
 			glog.Error(newVMDMissingMpathErr(path))
 		} else {
 			enabled = mpath.Enabled
 		}
 
 		if _, err := add(path, tid, enabled); err != nil {
-			return err
+			return changed, err
 		}
 	}
 
@@ -517,7 +516,7 @@ func InitMpaths(tid string) error {
 	if changed {
 		_, err = CreateNewVMD(tid)
 	}
-	return err
+	return changed, err
 }
 
 func Decommission(mdOnly bool) {
