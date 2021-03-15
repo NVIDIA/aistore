@@ -132,6 +132,7 @@ type (
 		LastUpdated string          `json:"lastupdate_time"`
 		UUID        string          `json:"uuid"`                  // immutable
 		Version     int64           `json:"config_version,string"` // version
+		Ext         interface{}     `json:"ext,omitempty"`         // within meta-version extensions
 	}
 
 	LocalConfig struct {
