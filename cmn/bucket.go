@@ -100,6 +100,38 @@ var (
 	)
 )
 
+////////////////
+// Validation //
+////////////////
+
+// Validation for buckets is split into 2 cases:
+//  1. Validation of concrete bucket, eg. get(bck, objName). In this case we
+//     require the bucket name to be set. If the provider is not set the default
+//     will be used, see `NormalizeProvider`.
+//     This case is handled in `newBckFromQuery` and `newBckFromQueryUname`. The
+//     CLI counterpart is `parseBckURI`.
+//  2. Validation of query buckets, eg. list(queryBcks). Here all parts of the
+//     bucket all optional.
+//     This case is handled in `newQueryBcksFromQuery`. The CLI counterpart is
+//     `parseQueryBckURI`.
+// These 2 cases have a slightly different logic for the validation but the
+// validation functions are always the same. Bucket name (`bck.ValidateName`)
+// and bucket namespace (`bck.Ns.Validate`) validation is quite straightforward
+// as we only need to check if the strings contain only valid characters. Bucket
+// provider validation on the other hand a little bit more tricky as we have so
+// called "normalized providers" and their aliases. Normalized providers are the
+// providers registered in `Providers` set. Almost any provider that is being
+// validated goes through `NormalizeProvider` which converts aliases to
+// normalized form or sets default provider if the provider is empty. But there
+// are cases where we already expect **only** the normalized providers, for
+// example in FQN parsing. For this case `IsNormalizedProvider` function must be
+// used.
+//
+// Similar concepts are applied when bucket is provided as URI,
+// eg. `ais://@uuid#ns/bucket_name`. URI form is heavily used by CLI. Parsing
+// is handled by `ParseBckObjectURI` which by itself doesn't do much validation.
+// The validation happens in aforementioned CLI specific parse functions.
+
 // IsNormalizedProvider returns true if the provider is in normalized
 // form (`aws`, `gcp`, etc.), not aliased (`s3`, `gs`, etc.). Only providers
 // registered in `Providers` set are considered normalized.
@@ -112,6 +144,7 @@ func IsNormalizedProvider(provider string) bool {
 func NormalizeProvider(provider string) (string, error) {
 	switch provider {
 	case "":
+		// NOTE: Here is place to change default provider.
 		return ProviderAIS, nil
 	case S3Scheme:
 		return ProviderAmazon, nil
