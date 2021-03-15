@@ -126,10 +126,10 @@ func newTableProxies(ps map[string]*stats.DaemonStatus, smap *cluster.Smap, hide
 	for _, status := range ps {
 		row := []string{
 			fmtDaemonID(status.Snode.ID(), *smap),
-			status.DeployedOn,
 			fmt.Sprintf("%.2f%%", status.SysInfo.PctMemUsed),
 			cos.UnsignedB2S(status.SysInfo.MemAvail, 2),
 			fmtDuration(extractStat(status.Stats, "up.ns.time")),
+			status.DeployedOn,
 			status.Status,
 			status.Version,
 			status.BuildTime,
@@ -175,7 +175,6 @@ func newTableTargets(ts map[string]*stats.DaemonStatus, hideDeployments, hideSta
 	for _, status := range ts {
 		row := []string{
 			status.Snode.ID(),
-			status.DeployedOn,
 			fmt.Sprintf("%.2f%%", status.SysInfo.PctMemUsed),
 			cos.UnsignedB2S(status.SysInfo.MemAvail, 2),
 			fmt.Sprintf("%.2f%%", calcCapPercentage(status)),
@@ -183,6 +182,7 @@ func newTableTargets(ts map[string]*stats.DaemonStatus, hideDeployments, hideSta
 			fmt.Sprintf("%.2f%%", status.SysInfo.PctCPUUsed),
 			fmtXactStatus(status.TStatus),
 			fmtDuration(extractStat(status.Stats, "up.ns.time")),
+			status.DeployedOn,
 			status.Status,
 			status.Version,
 			status.BuildTime,
