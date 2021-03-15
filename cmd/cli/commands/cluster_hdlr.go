@@ -42,7 +42,6 @@ var (
 			noRebalanceFlag,
 		},
 		subcmdDecommission: {
-			shutdownFlag,
 			noRebalanceFlag,
 		},
 	}

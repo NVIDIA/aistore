@@ -371,10 +371,6 @@ var (
 		Name: "role", Required: true,
 		Usage: "role of this AIS daemon: proxy or target",
 	}
-	shutdownFlag = cli.BoolFlag{
-		Name:  "shutdown",
-		Usage: "shutown the aisnode process after decommissioning",
-	}
 	noRebalanceFlag = cli.BoolFlag{
 		Name:  "no-rebalance",
 		Usage: "do not run rebalance after putting a node under maintenance",
