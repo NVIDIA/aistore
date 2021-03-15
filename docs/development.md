@@ -31,7 +31,7 @@ $ make help
 ### Clean deploy
 
 ```
-./clean_deploy.sh [--ntargets TARGET_CNT] [--nproxies PROXY_CNT] [--https] [--tier] [--PROVIDER ...] [--debug PKG=LOG_LEVEL[,PKG=LOG_LEVEL]]
+./clean_deploy.sh [--ntargets TARGET_CNT] [--nproxies PROXY_CNT] [--mountpoints MPOINT_CNT] [--https] [--tier] [--PROVIDER ...] [--debug PKG=LOG_LEVEL[,PKG=LOG_LEVEL]]
 ```
 
 Performs cleanup and then deploys a new instance of an AIS cluster.
@@ -56,7 +56,9 @@ $ bash ./deploy/scripts/bootstrap.sh clean-deploy --gcp
 | ------ | ----------- |
 | `--ntargets` | Number of targets to start (default: 5) |
 | `--nproxies` | Number of proxies to start (default: 5) |
-| `--PROVIDER` | Specifies the backend provider(s) eg. `--aws` |
+| `--mountpoints` | Number of mountpoints to use (default: 5) |
+| `--PROVIDER` | Specifies the backend provider(s). Can be: `--aws`, `--azure`, `--gcp`, `--hdfs` |
+| `--loopback` | Provision loopback devices |
 | `--tier` | Start AIS-behind-AIS cluster configuration |
 | `--https` | Start cluster with HTTPS enabled (*) |
 | `--debug PKG=LOG_LEVEL` | Change logging level of particular package(s) |

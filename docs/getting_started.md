@@ -100,17 +100,18 @@ Would you like to create loopback mount points: (y/n) ?
 n
 Building aisnode: version=df24df77 providers=
 ```
+> Notice the "Cloud" prompt above, and the fact that access to 3rd party Cloud storage is a deployment-time option.
 
 Or, you can run all the above in one shot non-interactively:
 
 ```console
-$ make kill deploy <<< $'10\n3\n2\nn\nn\nn\nn\nn\n'
+$ ./deploy/scripts/clean_deploy.sh
 ```
 
-> The example deploys 3 gateways and 10 targets, each with 2 local simulated filesystems.
-> Also notice the "Cloud" prompt above, and the fact that access to 3rd party Cloud storage is a deployment-time option.
+`clean_deploy.sh` deploys 5 gateways and 5 targets, each with 5 local simulated filesystems.
+[More details on using the script can be found here.](/docs/development.md#clean-deploy)
 
-> `make kill` will terminate local AIStore if it's already running.
+`make kill` will terminate local AIStore if it's already running.
 
 For more development options and tools, please refer to [development docs](development.md).
 
