@@ -7,8 +7,8 @@ package integration
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -22,20 +22,11 @@ import (
 )
 
 const (
-	// Public object name to download from Google Cloud Storage(GCS)
-	gcsFilename = "LT80400212013126LGN01_B10.TIF"
-	gcsObjXML   = "LT08/PRE/040/021/LT80400212013126LGN01/" + gcsFilename
-	// Public GCS bucket
-	gcsBck = "gcp-public-data-landsat"
-	// Without this query GCS returns only object's information
-	gcsQuery    = "?alt=media"
-	gcsHostJSON = "www.googleapis.com"
-	gcsHostXML  = "storage.googleapis.com"
-	gcsTmpFile  = "/tmp/rproxy_test_download.tiff"
+	// Public object name to download from Google Cloud Storage.
+	gcsBck      = "gcp-public-data-landsat"
+	gcsFilename = "LT08_L1GT_040021_20130506_20170310_01_T2_B10.TIF"
+	gcsObjXML   = "LT08/01/040/021/LT08_L1GT_040021_20130506_20170310_01_T2/" + gcsFilename
 )
-
-// reformat object name from XML to JSON API requirements
-var gcsObjJSON = strings.ReplaceAll(gcsObjXML, "/", "%2F")
 
 // generate URL to request object from GCS
 func genObjURL(isSecure, isXML bool) (s string) {
@@ -45,26 +36,29 @@ func genObjURL(isSecure, isXML bool) (s string) {
 		s = "http://"
 	}
 	if isXML {
-		s += fmt.Sprintf("%s/%s/%s", gcsHostXML, gcsBck, gcsObjXML)
+		s += fmt.Sprintf("storage.googleapis.com/%s/%s", gcsBck, gcsObjXML)
 	} else {
-		s += fmt.Sprintf("%s/storage/v1/b/%s/o/%s%s", gcsHostJSON, gcsBck, gcsObjJSON, gcsQuery)
+		// Reformat object name from XML to JSON API requirements.
+		gcsObjJSON := strings.ReplaceAll(gcsObjXML, "/", "%2F")
+		s += fmt.Sprintf("www.googleapis.com/storage/v1/b/%s/o/%s?alt=media", gcsBck, gcsObjJSON)
 	}
 	return s
 }
 
 // build command line for CURL
-func genCURLCmdLine(resURL, proxyURL string, targets cluster.NodeMap) []string {
+func genCURLCmdLine(t *testing.T, resURL, proxyURL string, targets cluster.NodeMap) []string {
 	var noProxy []string
 	for _, t := range targets {
 		if !cos.StringInSlice(t.PublicNet.NodeHostname, noProxy) {
 			noProxy = append(noProxy, t.PublicNet.NodeHostname)
 		}
 	}
+
 	// TODO:  "--proxy-insecure" requires `curl` 7.58.0+ and is needed when we USE_HTTPS (see #885)
 	return []string{
 		"-L", "-X", "GET",
 		resURL,
-		"-o", gcsTmpFile,
+		"-o", filepath.Join(t.TempDir(), "curl.file"),
 		"-x", proxyURL,
 		"--max-redirs", "3",
 		"--noproxy", strings.Join(noProxy, ","),
@@ -94,25 +88,20 @@ func TestRProxyGCS(t *testing.T) {
 		smap       = tutils.GetClusterMap(t, proxyURL)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
-	if true {
-		t.Skip("fails - see #1131 (http headers)")
-	}
+
 	if cos.IsHTTPS(proxyURL) {
 		t.Skip("test doesn't work for HTTPS")
 	}
 
 	initMountpaths(t, proxyURL)
-	// look for leftovers and cleanup if found
-	os.Remove(gcsTmpFile)
 	bck := cmn.Bck{Provider: cmn.ProviderHTTP}
 	queryBck := cmn.QueryBcks(bck)
 	bckList, err := api.ListBuckets(baseParams, queryBck)
 	tassert.CheckFatal(t, err)
 
-	cmdline := genCURLCmdLine(resURL, proxyURL, smap.Tmap)
+	cmdline := genCURLCmdLine(t, resURL, proxyURL, smap.Tmap)
 	tlog.Logf("First time download via XML API: %s\n", cmdline)
 	out, err := exec.Command("curl", cmdline...).CombinedOutput()
-	defer os.Remove(gcsTmpFile)
 	tlog.Logln(string(out))
 	tassert.CheckFatal(t, err)
 
@@ -130,7 +119,7 @@ func TestRProxyGCS(t *testing.T) {
 	tassert.Fatalf(t, speedCold != 0, "Failed to detect speed for cold download")
 
 	tlog.Logf("HTTP download\n")
-	cmdline = genCURLCmdLine(resURL, proxyURL, smap.Tmap)
+	cmdline = genCURLCmdLine(t, resURL, proxyURL, smap.Tmap)
 	out, err = exec.Command("curl", cmdline...).CombinedOutput()
 	tlog.Logln(string(out))
 	tassert.CheckFatal(t, err)
@@ -172,6 +161,8 @@ func TestRProxyGCS(t *testing.T) {
 		tlog.Logf("HTTPS download speed:  %s\n", cos.B2S(speedHTTPS, 1))
 		tlog.Logf("JSON download speed:   %s\n", cos.B2S(speedJSON, 1))
 	*/
+
+	tassert.Errorf(t, speedHTTP > speedCold, "cached download is slower than cold (cached: %d, cold: %d)", speedHTTP, speedCold)
 	tlog.Logf("HTTP (cached) is %.1f times faster than Cold\n", float64(speedHTTP)/float64(speedCold))
 }
 
