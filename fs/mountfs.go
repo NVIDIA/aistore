@@ -437,6 +437,14 @@ func (mi *MountpathInfo) getCapacity(config *cmn.Config, refresh bool) (c Capaci
 	return
 }
 
+func (m MPI) ToStringSet() cos.StringSet {
+	x := cos.NewStringSet()
+	for path := range m {
+		x.Add(path)
+	}
+	return x
+}
+
 ///////////////
 // MountedFS //
 ///////////////

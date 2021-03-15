@@ -27,13 +27,14 @@ type (
 		FsType string   `json:"fs_type"`
 		FsID   cos.FsID `json:"fs_id"`
 
-		Ext interface{} `json:"ext"` // Reserved for future extension.
+		Ext interface{} `json:"ext,omitempty"` // Reserved for future extension.
 	}
 
 	// Short for VolumeMetaData.
 	VMD struct {
-		Mountpaths map[string]*fsMpathMD `json:"mountpaths"` // mountpath => metadata
-		DaemonID   string                `json:"daemon_id"`  // ID of the daemon to which the mountpaths belong(ed).
+		Version    uint64                `json:"version,string"` // Version which tracks any updates happened to Mountpaths.
+		Mountpaths map[string]*fsMpathMD `json:"mountpaths"`     // mountpath => metadata
+		DaemonID   string                `json:"daemon_id"`      // ID of the daemon to which the mountpaths belong(ed).
 		cksum      *cos.Cksum            // Checksum of loaded VMD.
 	}
 )
@@ -76,18 +77,26 @@ func (vmd *VMD) persist() (err error) {
 func (vmd *VMD) equal(other *VMD) bool {
 	debug.Assert(vmd.cksum != nil)
 	debug.Assert(other.cksum != nil)
-	if vmd.DaemonID != other.DaemonID {
-		return false
-	}
-	return vmd.cksum.Equal(other.cksum)
+	return vmd.DaemonID == other.DaemonID &&
+		vmd.Version == other.Version &&
+		vmd.cksum.Equal(other.cksum)
 }
 
 func (vmd *VMD) String() string { return string(cos.MustMarshal(vmd)) }
 
 func CreateNewVMD(daemonID string) (vmd *VMD, err error) {
 	available, disabled := Get()
+
+	// Try to load the currently stored vmd to determine the version.
+	var curVersion uint64
+	vmd, _ = LoadVMD(available.ToStringSet())
+	if vmd != nil {
+		curVersion = vmd.Version
+	}
+
 	vmd = newVMD(len(available))
 	vmd.DaemonID = daemonID
+	vmd.Version = curVersion + 1 // Bump the version.
 
 	addMountpath := func(mpath *MountpathInfo, enabled bool) {
 		vmd.Mountpaths[mpath.Path] = &fsMpathMD{
@@ -124,14 +133,33 @@ func LoadVMD(mpaths cos.StringSet) (mainVMD *VMD, err error) {
 			err = newVMDLoadErr(path, err)
 			return nil, err
 		}
-		if mainVMD != nil {
+		if mainVMD == nil {
+			mainVMD = vmd
+		} else {
+			if vmd.DaemonID != mainVMD.DaemonID {
+				err = newVMDMismatchErr(mainVMD, vmd, path)
+				return nil, err
+			}
+
+			if vmd.Version > mainVMD.Version {
+				// If the `vmd` version is greater than current `mainVMD` we should
+				// just take the newer one that we trust.
+				mainVMD = vmd
+				glog.Warningf("Found vmd (on %q) which has greater version (%s vs %s)", path, mainVMD, vmd)
+				continue
+			} else if vmd.Version < mainVMD.Version {
+				// If the `vmd` version is lesser than current `mainVMD` we should
+				// just ignore it.
+				glog.Warningf("Found vmd (on %q) which has lesser version (%s vs %s)", path, vmd, mainVMD)
+				continue
+			}
+
+			// If the versions match check if the VMDs are equal (they should be).
 			if !vmd.equal(mainVMD) {
 				err = newVMDMismatchErr(mainVMD, vmd, path)
 				return nil, err
 			}
-			continue
 		}
-		mainVMD = vmd
 	}
 	if mainVMD == nil {
 		glog.Warningf("VMD not found on any of %d mountpaths", len(mpaths))
