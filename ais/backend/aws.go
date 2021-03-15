@@ -267,7 +267,7 @@ func (awsp *awsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 	if msg.WantProp(cmn.GetPropsVersion) {
 		var (
 			versions   = make(map[string]string, len(bckList.Entries))
-			keyMarker  = bckList.Entries[0].Name
+			keyMarker  = ""
 			lastMarker = bckList.Entries[len(bckList.Entries)-1].Name
 		)
 
