@@ -237,7 +237,7 @@ func copyProps(src, dst interface{}, asType string) (err error) {
 		cos.Assert(ok)
 		allowed := t.Tag.Get("allow")
 		if allowed != "" && allowed != asType {
-			return fmt.Errorf("setting property %s not allowed, as %q", fieldName, asType)
+			return fmt.Errorf("cannot set property %s with config level %q as %q", fieldName, allowed, asType)
 		}
 
 		if dstValField.Kind() != reflect.Struct && dstValField.Kind() != reflect.Invalid {
