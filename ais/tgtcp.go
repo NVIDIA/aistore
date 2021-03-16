@@ -541,14 +541,13 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 	var (
 		curVer                  int64
 		createErrs, destroyErrs string
-		bmd                     = t.owner.bmd.get()
 	)
 	glog.Infof(
 		"[metasync] receive %s from %q (action: %q, uuid: %q)",
 		newBMD.StringEx(), caller, msg.Action, msg.UUID,
 	)
 	t.owner.bmd.Lock()
-	bmd = t.owner.bmd.get()
+	bmd := t.owner.bmd.get()
 	curVer = bmd.version()
 	var (
 		bcksToDelete = make([]*cluster.Bck, 0, 4)

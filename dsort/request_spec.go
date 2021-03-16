@@ -245,7 +245,7 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	parsedRS.DryRun = rs.DryRun
 
 	// Check for values that override the global config.
-	if err := rs.DSortConf.ValidateWithOpts(nil, true); err != nil {
+	if err := rs.DSortConf.ValidateWithOpts(true); err != nil {
 		return nil, err
 	}
 	parsedRS.DSortConf = rs.DSortConf

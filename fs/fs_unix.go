@@ -48,20 +48,6 @@ func RemoveXattr(fqn, attrName string) (err error) {
 	return unix.Removexattr(fqn, attrName)
 }
 
-func CopyXattr(srcFQN, dstFQN, attrName string) error {
-	b, err := GetXattr(srcFQN, attrName)
-	if err != nil {
-		if err == syscall.ENODATA {
-			return nil
-		}
-		return err
-	}
-	if err := SetXattr(dstFQN, attrName, b); err != nil {
-		return err
-	}
-	return nil
-}
-
 //////////
 // misc //
 //////////

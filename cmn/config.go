@@ -954,7 +954,7 @@ func (c *LRUConf) Validate() (err error) {
 	return nil
 }
 
-func (c *LRUConf) ValidateAsProps(args *ValidationArgs) (err error) {
+func (c *LRUConf) ValidateAsProps(_ *ValidationArgs) (err error) {
 	if !c.Enabled {
 		return nil
 	}
@@ -965,8 +965,8 @@ func (c *CksumConf) Validate() (err error) {
 	return cos.ValidateCksumType(c.Type)
 }
 
-func (c *CksumConf) ValidateAsProps(args *ValidationArgs) (err error) {
-	return cos.ValidateCksumType(c.Type)
+func (c *CksumConf) ValidateAsProps(_ *ValidationArgs) (err error) {
+	return c.Validate()
 }
 
 func (c *CksumConf) ShouldValidate() bool {
@@ -994,7 +994,7 @@ func (c *MirrorConf) Validate() error {
 	return nil
 }
 
-func (c *MirrorConf) ValidateAsProps(args *ValidationArgs) error {
+func (c *MirrorConf) ValidateAsProps(_ *ValidationArgs) error {
 	if !c.Enabled {
 		return nil
 	}
@@ -1195,10 +1195,10 @@ func (c *DownloaderConf) Validate() (err error) {
 }
 
 func (c *DSortConf) Validate() (err error) {
-	return c.ValidateWithOpts(nil, false)
+	return c.ValidateWithOpts(false)
 }
 
-func (c *DSortConf) ValidateWithOpts(_ *Config, allowEmpty bool) (err error) {
+func (c *DSortConf) ValidateWithOpts(allowEmpty bool) (err error) {
 	checkReaction := func(reaction string) bool {
 		return cos.StringInSlice(reaction, SupportedReactions) || (allowEmpty && reaction == "")
 	}

@@ -619,26 +619,6 @@ func add(mpath, tid string, enabled bool, cb ...func()) (*MountpathInfo, error) 
 	return mp, nil
 }
 
-func SetDaemonIDXattrAllMpaths(tid string) (err error) {
-	available, disabled := Get()
-	for _, mPath := range available {
-		if err = mPath.SetDaemonIDXattr(tid); err != nil {
-			return
-		}
-	}
-
-	for _, mPath := range disabled {
-		if err = mPath.SetDaemonIDXattr(tid); err != nil {
-			if _, ok := err.(*os.SyscallError); ok {
-				glog.Error(err)
-				continue
-			}
-			return
-		}
-	}
-	return
-}
-
 // mountpathsCopy returns a shallow copy of current mountpaths
 func mountpathsCopy() (MPI, MPI) {
 	availablePaths, disabledPaths := Get()

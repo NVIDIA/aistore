@@ -1063,7 +1063,7 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int64, err error) {
 	var (
 		reader cos.ReadOpenCloser
-		si     = coi.t.si
+		si     *cluster.Snode
 	)
 	debug.Assert(coi.DP != nil)
 	if si, err = cluster.HrwTarget(coi.BckTo.MakeUname(objNameTo), coi.t.owner.smap.Get()); err != nil {

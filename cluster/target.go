@@ -165,8 +165,3 @@ type Target interface {
 	RebalanceNamespace(si *Snode) (body []byte, errCode int, err error)
 	Health(si *Snode, timeout time.Duration, query url.Values) (body []byte, errCode int, err error)
 }
-
-type RebManager interface {
-	RunResilver(id string, skipMisplaced bool)
-	RunRebalance(smap *Smap, rebID int64)
-}
