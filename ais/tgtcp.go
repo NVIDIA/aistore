@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -707,25 +706,6 @@ func (t *targetrunner) ensureLatestBMD(msg *aisMsg, r *http.Request) {
 		// If metasync outraces the request, we end up here, just log it and continue.
 		glog.Warningf("%s: own %s > v%d - encountered during %v", t.si, bmd, bmdVersion, msg.Action)
 	}
-}
-
-// Create local directories to test multiple fspaths.
-func (t *targetrunner) createLocalMountpaths() {
-	t.owner.config.Lock()
-	config := cmn.GCO.Clone()
-	config.FSpaths.Paths = make(cos.StringSet, config.TestFSP.Count)
-	for i := 0; i < config.TestFSP.Count; i++ {
-		mpath := filepath.Join(config.TestFSP.Root, fmt.Sprintf("mp%d", i+1))
-		if config.TestFSP.Instance > 0 {
-			mpath = filepath.Join(mpath, strconv.Itoa(config.TestFSP.Instance))
-		}
-		if err := cos.CreateDir(mpath); err != nil {
-			cos.ExitLogf("Cannot create test cache dir %q, err: %s", mpath, err)
-		}
-		config.FSpaths.Paths.Add(mpath)
-	}
-	cmn.GCO.Put(config)
-	t.owner.config.Unlock()
 }
 
 func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, renamed string) (err error) {

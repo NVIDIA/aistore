@@ -197,9 +197,15 @@ func (t *targetrunner) initFs() {
 	// For mountpath definition, see `fs/mountfs.go`.
 	config := cmn.GCO.Get()
 	if config.TestingEnv() {
-		glog.Warningf("Configuring %d fspaths for testing", config.TestFSP.Count)
+		glog.Warningf("Using %d mpaths for testing with disabled FsID check", config.TestFSP.Count)
 		fs.DisableFsIDCheck()
-		t.createLocalMountpaths()
+	}
+
+	if changed, err := fs.InitMpaths(t.si.ID()); err != nil {
+		cos.ExitLogf("%v", err)
+	} else if changed {
+		daemon.resilver.required = true
+		daemon.resilver.reason = "mountpaths differ from last run"
 	}
 }
 

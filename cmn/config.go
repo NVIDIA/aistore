@@ -773,8 +773,8 @@ func (c *Config) Validate() error {
 		return errors.New("invalid log dir value (must be non-empty)")
 	}
 
-	// NOTE: these two validations require more context and so we call them explicitly;
-	//       the rest all implement generic interface
+	// NOTE: These two validations require more context and so we call them explicitly;
+	//  The rest all implement generic interface.
 	if err := c.LocalConfig.FSpaths.Validate(c); err != nil {
 		return err
 	}
@@ -1253,7 +1253,7 @@ func (c *FSPathsConf) Validate(contextConfig *Config) (err error) {
 	debug.Assertf(cos.StringInSlice(contextConfig.role, []string{Proxy, Target}),
 		"unexpected role: %q", contextConfig.role)
 
-	// Don't validate if testing environment
+	// Don't validate in testing environment.
 	if contextConfig.TestingEnv() || contextConfig.role != Target {
 		return nil
 	}
@@ -1274,8 +1274,8 @@ func (c *FSPathsConf) Validate(contextConfig *Config) (err error) {
 }
 
 func (c *TestfspathConf) Validate(contextConfig *Config) (err error) {
-	// Don't validate rest when count is not > 0
-	if !contextConfig.TestingEnv() {
+	// Don't validate in production environment.
+	if !contextConfig.TestingEnv() || contextConfig.role != Target {
 		return nil
 	}
 
@@ -1285,6 +1285,15 @@ func (c *TestfspathConf) Validate(contextConfig *Config) (err error) {
 	}
 	c.Root = cleanMpath
 
+	// Configure `FSpaths.Paths` as all components, on load, refer to it.
+	contextConfig.FSpaths.Paths = make(cos.StringSet, c.Count)
+	for i := 0; i < c.Count; i++ {
+		mpath := filepath.Join(c.Root, fmt.Sprintf("mp%d", i+1))
+		if c.Instance > 0 {
+			mpath = filepath.Join(mpath, strconv.Itoa(c.Instance))
+		}
+		contextConfig.FSpaths.Paths.Add(mpath)
+	}
 	return nil
 }
 
@@ -1530,6 +1539,18 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *Config) (err er
 
 	if err = cos.CreateDir(config.LogDir); err != nil {
 		return fmt.Errorf("failed to create log dir %q, err: %v", config.LogDir, err)
+	}
+
+	if config.TestingEnv() && daeRole == Target {
+		// Creating directories which were filled in `config.Validate()`.
+		debug.Assert(config.TestFSP.Count == len(config.FSpaths.Paths))
+		for mpath := range config.FSpaths.Paths {
+			// If the `mpath` already exists (eg. it was not removed after kill)
+			// this call will be no-op.
+			if err := cos.CreateDir(mpath); err != nil {
+				return fmt.Errorf("failed to create %s mountpath in testing env, err: %v", mpath, err)
+			}
+		}
 	}
 
 	// glog rotate

@@ -255,16 +255,9 @@ func newTarget() *targetrunner {
 
 func initTarget() cos.Runner {
 	t := newTarget()
-
-	t.initFs()
 	t.initSI(cmn.Target)
 
-	if changed, err := fs.InitMpaths(t.si.ID()); err != nil {
-		cos.ExitLogf("%v", err)
-	} else if changed {
-		daemon.resilver.required = true
-		daemon.resilver.reason = "mountpaths differ from last run"
-	}
+	t.initFs()
 
 	t.initHostIP()
 	daemon.rg.add(t)
