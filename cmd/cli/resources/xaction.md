@@ -1,8 +1,14 @@
-# Xaction (Job) management
+# CLI Reference for Xaction (Job) management
 
 Batch operations that may take many seconds (minutes, hours) to execute are called eXtended actions or *xactions*.
 
 AIS *xactions* run asynchronously, have one of the enumerated kinds, start/stop times, and xaction-specific statistics. For more information, please refer to this [document](/xaction/README.md).
+
+## Table of Contents
+- [Start xaction](#start-xaction)
+- [Stop xaction](#stop-xaction)
+- [Show xaction stats](#show-xaction-stats)
+- [Wait for xaction](#wait-for-xaction)
 
 ## Start xaction
 
@@ -87,3 +93,17 @@ Wait for the `XACTION_ID` or `XACTION_NAME` xaction to finish.
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--refresh` | `duration` | Refresh rate | `1s` |
+
+## Distributed Sort
+
+`ais job start dsort`
+
+Run [dSort](/dsort/README.md).
+[Further reference for this command can be found here.](dsort.md)
+
+## Downloader
+
+`ais job start download`
+
+Run the AIS [Downloader](/dsort/README.md).
+[Further reference for this command can be found here.](downloader.md)

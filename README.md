@@ -131,7 +131,7 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
 - [CLI](cmd/cli/README.md)
   - [Create, destroy, list, and other operations on buckets](cmd/cli/resources/bucket.md)
   - [GET, PUT, APPEND, PROMOTE, and other operations on objects](cmd/cli/resources/object.md)
-  - [Cluster and Node management](cmd/cli/resources/daeclu.md)
+  - [Cluster and Node management](cmd/cli/resources/cluster.md)
   - [Mountpath (Disk) management](cmd/cli/resources/mpath.md)
   - [Attach, Detach, and monitor remote clusters](cmd/cli/resources/remote.md)
   - [Start, Stop, and monitor downloads](cmd/cli/resources/download.md)

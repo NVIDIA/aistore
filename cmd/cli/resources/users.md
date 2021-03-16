@@ -1,3 +1,6 @@
+# CLI Reference for the Authentication Server
+For more information and examples, please refer to [the AuthN documentation](/docs/authn.md).
+
 ## Table of contents
 
 - [User Account and Access management](#user-account-and-access-management)
@@ -86,7 +89,7 @@ If the role is omitted, the new user does not have any permissions. It may be us
 case a user needs access to one or a few buckets. Instead of creating a new role just
 for the user, register a user with an empty role and grant permissions to the required buckets.
 
-**Examples:**
+#### Examples
 
 ```console
 $ ais auth add user -p password user1

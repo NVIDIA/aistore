@@ -1,11 +1,28 @@
-# Cluster and Node (Daemon) management
+# CLI Reference for Cluster and Node (Daemon) management
+This section lists cluster and node management operations the AIS CLI, with `ais cluster`.
+
+## Table of Contents
+- [Cluster or Daemon status](#cluster-or-daemon-status)
+- [Show cluster map](#show-cluster-map)
+- [Show disk stats](#show-disk-stats)
+- [Join a node](#join-a-node)
+- [Remove a node](#remove-a-node)
+- [Show configuration](#show-configuration)
+- [Set configuration](#set-configuration)
+- [Reset configuration](#reset-configuration)
+- [Attach remote cluster](#attach-remote-cluster)
+- [Detach remote cluster](#detach-remote-cluster)
+- [Show remote clusters](#show-remote-clusters)
 
 ## Cluster or Daemon status
 
 `ais show cluster [DAEMON_TYPE|DAEMON_ID]`
 
-Return the status of the `DAEMON_TYPE` or `DAEMON_ID`. `DAEMON_TYPE` is either `proxy` or `target`.
-If `DAEMON_TYPE` is not set, it will return the status of all the daemons in the AIS cluster.
+Display information about `DAEMON_ID` or all nodes of `DAEMON_TYPE`. `DAEMON_TYPE` is either `proxy` or `target`.
+If nothing is set, information from all the daemons in the AIS cluster is displayed.
+
+> Note: Like many other `ais show` commands, `ais show cluster` is aliased to `ais cluster show` for ease of use.
+> Both of these commands are used interchangeably throughout the documentation.
 
 ### Options
 
@@ -16,12 +33,38 @@ If `DAEMON_TYPE` is not set, it will return the status of all the daemons in the
 | `--refresh` | `string` | Time duration between reports | `1s` |
 | `--no-headers` | `bool` | Display tables without headers | `false` |
 
+### Examples
+
+```console
+$ ais show cluster
+PROXY            MEM USED %      MEM AVAIL       UPTIME
+pufGp8080[P]     0.28%           15.43GiB        17m
+ETURp8083        0.26%           15.43GiB        17m
+sgahp8082        0.26%           15.43GiB        17m
+WEQRp8084        0.27%           15.43GiB        17m
+Watdp8081        0.26%           15.43GiB        17m
+
+TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %      REBALANCE       UPTIME
+iPbHt8088        0.28%           15.43GiB        14.00%          1.178TiB        0.13%           -               17m
+Zgmlt8085        0.28%           15.43GiB        14.00%          1.178TiB        0.13%           -               17m
+oQZCt8089        0.28%           15.43GiB        14.00%          1.178TiB        0.14%           -               17m
+dIzMt8086        0.28%           15.43GiB        14.00%          1.178TiB        0.13%           -               17m
+YodGt8087        0.28%           15.43GiB        14.00%          1.178TiB        0.14%           -               17m
+
+Summary:
+ Proxies:       5 (0 - unelectable)
+ Targets:       5
+ Primary Proxy: pufGp8080
+ Smap Version:  14
+ Deployment:    dev
+```
+
 ## Show cluster map
 
 `ais show cluster smap [DAEMON_ID]`
 
 Show a copy of the cluster map (smap) present on `DAEMON_ID`.
-If `DAEMON_ID` isn't given, it will show the smap of the daemon that the `AIS_ENDPOINT` points at.
+If `DAEMON_ID` is not set, it will show the smap of the daemon that the `AIS_ENDPOINT` points at.
 
 ### Options
 
@@ -33,27 +76,28 @@ If `DAEMON_ID` isn't given, it will show the smap of the daemon that the `AIS_EN
 
 #### Show smap from a given node
 
-Show smap copy of daemon with ID `26830p8083`.
+Show smap copy of daemon with ID `ETURp8083`.
 
 ```console
-$ ais show cluster smap 26830p8083
-DaemonID	 Type	 PublicURL
-26830p8083	 proxy	 http://192.168.0.178:8083
-638285p8080[P]	 proxy	 http://192.168.0.178:8080
-699197p8084	 proxy	 http://192.168.0.178:8084
-774822p8081	 proxy	 http://192.168.0.178:8081
-87405p8082	 proxy	 http://192.168.0.178:8082
+$ ais show cluster smap ETURp8083 
+DAEMON ID        TYPE    PUBLIC URL
+ETURp8083        proxy   http://127.0.0.1:8083
+WEQRp8084        proxy   http://127.0.0.1:8084
+Watdp8081        proxy   http://127.0.0.1:8081
+pufGp8080[P]     proxy   http://127.0.0.1:8080
+sgahp8082        proxy   http://127.0.0.1:8082
 
-DaemonID	 Type	 PublicURL
-130709t8088	 target	 http://192.168.0.178:8088
-613132t8085	 target	 http://192.168.0.178:8085
-634992t8087	 target	 http://192.168.0.178:8087
-792959t8089	 target	 http://192.168.0.178:8089
-870250t8086	 target	 http://192.168.0.178:8086
+DAEMON ID        TYPE    PUBLIC URL
+YodGt8087        target  http://127.0.0.1:8087
+Zgmlt8085        target  http://127.0.0.1:8085
+dIzMt8086        target  http://127.0.0.1:8086
+iPbHt8088        target  http://127.0.0.1:8088
+oQZCt8089        target  http://127.0.0.1:8089
 
 Non-Electable:
-
-PrimaryProxy: 638285p8080	 Proxies: 5	 Targets: 5	 Smap Version: 10
+     
+Primary Proxy: pufGp8080
+Proxies: 5       Targets: 5      Smap Version: 14
 ```
 
 ## Show disk stats
@@ -277,4 +321,75 @@ config successfully reset for all nodes
 ```console
 $ ais cluster configure reset CMhHp8082 
 config for node "CMhHp8082" successfully reset
+```
+
+## Attach remote cluster
+
+`ais cluster attach UUID=URL [UUID=URL...]`
+
+or
+
+`ais cluster attach ALIAS=URL [ALIAS=URL...]`
+
+Attach a remote AIS cluster to this one by the remote cluster public URL. Alias(a user-defined name) can be used instead of cluster UUID for convenience.
+For more details and background on *remote clustering*, please refer to this [document](/docs/providers.md).
+
+### Examples
+
+First cluster is attached by its UUID, the second one gets user-friendly alias.
+
+```console
+$ ais cluster attach a345e890=http://one.remote:51080 two=http://two.remote:51080`
+```
+
+## Detach remote cluster
+
+`ais cluster detach UUID|ALIAS`
+
+Detach a remote cluster from AIS storage by its alias or UUID.
+
+### Examples
+
+```console
+$ ais cluster detach two
+```
+
+## Show remote clusters
+
+`ais show remote-cluster`
+
+Show details about attached remote clusters.
+
+### Examples
+The following two commands attach and then show remote cluster at the address `my.remote.ais:51080`:
+
+```console
+$ ais cluster attach alias111=http://my.remote.ais:51080
+Remote cluster (alias111=http://my.remote.ais:51080) successfully attached
+$ ais show remote-cluster
+UUID      URL                     Alias     Primary         Smap  Targets  Online
+eKyvPyHr  my.remote.ais:51080     alias111  p[80381p11080]  v27   10       yes
+```
+
+Notice that:
+
+* user can assign an arbitrary name (aka alias) to a given remote cluster
+* the remote cluster does *not* have to be online at attachment time; offline or currently not reachable clusters are shown as follows:
+
+```console
+$ ais show remote-cluster
+UUID        URL                       Alias     Primary         Smap  Targets  Online
+eKyvPyHr    my.remote.ais:51080       alias111  p[primary1]     v27   10       no
+<alias222>  <other.remote.ais:51080>            n/a             n/a   n/a      no
+```
+
+Notice the difference between the first and the second lines in the printout above: while both clusters appear to be currently offline (see the rightmost column), the first one was accessible at some earlier time and therefore we do show that it has (in this example) 10 storage nodes and other details.
+
+To `detach` any of the previously configured association, simply run:
+
+```console
+$ ais cluster detach alias111
+$ ais show remote-cluster
+UUID        URL                       Alias     Primary         Smap  Targets  Online
+<alias222>  <other.remote.ais:51080>            n/a             n/a   n/a      no
 ```

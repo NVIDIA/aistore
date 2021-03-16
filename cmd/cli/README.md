@@ -109,7 +109,7 @@ To uninstall autocompletions, run `bash autocomplete/uninstall.sh`.
 
 - [Create, destroy, list, and other operations on buckets](resources/bucket.md)
 - [GET, PUT, APPEND, PROMOTE, and other operations on objects](resources/object.md)
-- [Cluster and Node management](resources/daeclu.md)
+- [Cluster and Node management](resources/cluster.md)
 - [Mountpath (Disk) management](resources/mpath.md)
 - [Attach, Detach, and monitor remote clusters](resources/remote.md)
 - [Start, Stop, and monitor downloads](resources/download.md)

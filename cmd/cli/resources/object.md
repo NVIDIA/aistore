@@ -1,5 +1,7 @@
-# GET, PUT, APPEND, PROMOTE, and other operations on objects
+# CLI Reference for Objects
+This section lists operations (such as GET, PUT, APPEND, PROMOTE) on *objects* using the AIS CLI, with `ais object`.
 
+## Table of Contents
 - [GET object](#get-object)
 - [Print object content](#print-object-content)
 - [Show object properties](#show-object-properties)
@@ -8,7 +10,6 @@
 - [Delete objects](#delete-objects)
 - [Evict objects](#evict-objects)
 - [Prefetch objects](#prefetch-objects)
-- [Preload objects](#preload-bucket)
 - [Move object](#move-object)
 - [Concat objects](#concat-objects)
 
@@ -121,7 +122,7 @@ $ ais object cat ais://texts/list.txt --offset 1024 --length 1024
 
 ## Show object properties
 
-`ais show object [--props PROP_LIST] BUCKET/OBJECT_NAME`
+`ais object show [--props PROP_LIST] BUCKET/OBJECT_NAME`
 
 Get object detailed information.
 `PROP_LIST` is a comma-separated list of properties to display.
@@ -139,6 +140,9 @@ Supported properties:
       `PARITY` - the number of parity slices, and `MODE` is protection mode selected for the object: `replicated` - object has `PARITY` replicas on other targets, 
       `encoded`  the object is erasure coded and other targets contains only encoded slices
 
+> Note: Like many other `ais show` commands, `ais show object` is aliased to `ais object show` for ease of use.
+> Both of these commands are used interchangeably throughout the documentation.
+
 ### Examples
 
 #### Show default object properties
@@ -146,7 +150,7 @@ Supported properties:
 Display default properties of object `list.txt` from bucket `texts`.
 
 ```console
-$ ais show object ais://texts/list.txt
+$ ais object show ais://texts/list.txt
 PROPERTY    VALUE
 checksum    2d61e9b8b299c41f
 size        7.63MiB
@@ -159,7 +163,7 @@ version     1
 Display all properties of object `list.txt` from bucket `texts`.
 
 ```console
-$ ais show object ais://texts/list.txt --props=all
+$ ais object show ais://texts/list.txt --props=all
 PROPERTY    VALUE
 name        provider://texts/list.txt
 checksum    2d61e9b8b299c41f
@@ -176,7 +180,7 @@ ec          1:1[replicated]
 Show only selected (`size,version,ec`) properties.
 
 ```console
-$ ais show object --props size,version,ec ais://texts/listx.txt
+$ ais object show --props size,version,ec ais://texts/listx.txt
 PROPERTY    VALUE
 size        7.63MiB
 version     1

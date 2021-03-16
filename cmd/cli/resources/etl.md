@@ -1,4 +1,16 @@
-## Init ETL
+# CLI Reference for ETLs
+This section lists ETL management operations the AIS CLI, with `ais etl`.
+For more information and examples, please refer to [the ETL documentation](/docs/etl.md).
+
+## Table of Contents
+- [Initialize ETL](#initialize-etl)
+- [Build ETL](#build-etl)
+- [List ETLs](#list-etls)
+- [View ETL Logs](#view-etl-logs)
+- [Stop an ETL](#stop-an-etl)
+- [Transform object on-the-fly with given ETL](#transform-object-on-the-fly-with-given-etl)
+- [Transform the whole bucket offline with the given ETL](#transform-the-whole-bucket-offline-with-the-given-etl)
+## Initialize ETL
 
 `ais etl init SPEC_FILE`
 
@@ -67,14 +79,14 @@ JGHEoo89gg
 
 Lists all available ETLs.
 
-## Logs ETL
+## View ETL Logs
 
 `ais etl logs ETL_ID [TARGET_ID]`
 
 Output logs produced by given ETL.
 It is possible to pass an additional parameter to specify a particular `TARGET_ID` from which the logs must be retrieved.
 
-## Stop ETL
+## Stop an ETL
 
 `ais etl stop ETL_ID`
 

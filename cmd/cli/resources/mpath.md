@@ -1,17 +1,26 @@
-# Mountpath (disk) management
+# CLI Reference for Mountpath (disk) management
+This section lists mountpath management operations the AIS CLI, with `ais mountpath`.
 
 A *mountpath* is a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS utilizes to store user data and AIS metadata. A mountpath can be disabled and (re)enabled, automatically or administratively, at any point during runtime. In a given cluster, a total number of mountpaths would normally compute as a direct product of (number of storage targets) x (number of disks in each target).
 
+## Table of Contents
+- [Show mountpaths](#show-mountpaths)
+- [Attach mountpath](#attach-mountpath)
+- [Detach mountpath](#detach-mountpath)
+
 ## Show mountpaths
 
-`ais show mountpath [DAEMON_ID]`
+`ais mountpath show [DAEMON_ID]`
 
 Show mountpaths for a given target or all targets.
+
+> Note: Like many other `ais show` commands, `ais show mountpath` is aliased to `ais mountpath show` for ease of use.
+> Both of these commands are used interchangeably throughout the documentation.
 
 ### Examples
 
 ```console
-$ ais show mountpath 12367t8085
+$ ais mountpath show 12367t8085
 247389t8085
         Available:
 			/tmp/ais/5/3
@@ -19,7 +28,7 @@ $ ais show mountpath 12367t8085
         Disabled:
 			/tmp/ais/5/2
 
-$ ais show mountpath
+$ ais mountpath show
 247389t8085
         Available:
 			/tmp/ais/5/3

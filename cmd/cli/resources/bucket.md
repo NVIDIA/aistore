@@ -1,4 +1,20 @@
-This section lists operations on *buckets*. For types of supported buckets (AIS, Cloud, backend, etc.) and many more examples, please refer to [buckets in-depth overview](../../../docs/bucket.md).
+# CLI Reference for Buckets
+This section lists operations on *buckets* using the AIS CLI, with `ais bucket`.
+For types of supported buckets (AIS, Cloud, backend, etc.) and many more examples, please refer to [buckets in-depth overview](../../../docs/bucket.md).
+
+## Table of Contents
+- [Create bucket](#create-bucket)
+- [Delete bucket](#delete-bucket)
+- [List bucket names](#list-bucket-names)
+- [List object names](#list-object-names)
+- [Evict remote bucket](#evict-remote-bucket)
+- [Move or Rename a bucket](#move-or-rename-a-bucket)
+- [Copy bucket](#copy-bucket)
+- [Show bucket summary](#show-bucket-summary)
+- [Make N copies](#make-n-copies)
+- [Make all objects erasure coded](#make-all-objects-erasure-coded)
+- [Show bucket props](#show-bucket-props)
+- [Set bucket props](#set-bucket-props)
 
 ## Create bucket
 
@@ -383,13 +399,16 @@ All options are required and must be greater than `0`.
 
 ## Show bucket props
 
-`ais show bucket BUCKET [PROP_PREFIX]`
+`ais bucket show BUCKET [PROP_PREFIX]`
 
 List [properties](../../../docs/bucket.md#properties-and-options) of the bucket.
 By default, condensed form of bucket props sections is presented.
 
 When `PROP_PREFIX` is set, only props that start with `PROP_PREFIX` will be displayed.
 Useful `PROP_PREFIX` are: `access, checksum, ec, lru, mirror, provider, versioning`.
+
+> Note: Like many other `ais show` commands, `ais show bucket` is aliased to `ais bucket show` for ease of use.
+> Both of these commands are used interchangeably throughout the documentation.
 
 ### Options
 
