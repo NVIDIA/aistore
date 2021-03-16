@@ -189,6 +189,58 @@ func (gfn *globalGFN) abortTimed() {
 // target runner //
 ///////////////////
 
+func (t *targetrunner) init(config *cmn.Config) {
+	t.initNetworks()
+	t.si.Init(t.initID(config), cmn.Target)
+
+	cos.InitShortID(t.si.Digest())
+
+	t.initFs()
+
+	t.initHostIP()
+	daemon.rg.add(t)
+
+	ts := &stats.Trunner{T: t} // iostat below
+	startedUp := ts.Init(t)
+	daemon.rg.add(ts)
+	t.statsT = ts
+
+	k := newTargetKeepalive(t, ts, startedUp)
+	daemon.rg.add(k)
+	t.keepalive = k
+
+	t.fsprg.init(t) // subgroup of the daemon.rg rungroup
+
+	// Stream Collector - a singleton object with responsibilities that include:
+	sc := transport.Init()
+	daemon.rg.add(sc)
+
+	fshc := health.NewFSHC(t)
+	daemon.rg.add(fshc)
+	t.fshc = fshc
+
+	if err := ts.InitCapacity(); err != nil { // goes after fs.Init
+		cos.ExitLogf("%s", err)
+	}
+}
+
+func (t *targetrunner) initID(config *cmn.Config) (tid string) {
+	var err error
+	if tid = envDaemonID(cmn.Target); tid != "" {
+		return
+	}
+	if tid, err = fs.LoadDaemonID(config.FSpaths.Paths); err != nil {
+		cos.ExitLogf("%v", err)
+	}
+	if tid != "" {
+		return
+	}
+	tid = generateDaemonID(cmn.Target, config)
+	cos.Assert(tid != "")
+	glog.Infof("t[%s] ID randomly generated", tid)
+	return
+}
+
 func (t *targetrunner) initFs() {
 	// Initialize filesystem/mountpaths manager.
 	fs.Init()

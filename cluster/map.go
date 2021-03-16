@@ -122,16 +122,17 @@ func (f SnodeFlags) IsAnySet(flags SnodeFlags) bool {
 ///////////
 
 func NewSnode(id, daeType string, publicNet, intraControlNet, intraDataNet NetInfo) (snode *Snode) {
-	snode = &Snode{
-		DaemonID:        id,
-		DaemonType:      daeType,
-		PublicNet:       publicNet,
-		IntraControlNet: intraControlNet,
-		IntraDataNet:    intraDataNet,
-	}
-	snode.setName()
-	snode.Digest()
+	snode = &Snode{PublicNet: publicNet, IntraControlNet: intraControlNet, IntraDataNet: intraDataNet}
+	snode.Init(id, daeType)
 	return
+}
+
+func (d *Snode) Init(id, daeType string) {
+	debug.Assert(d.DaemonID == "" && d.DaemonType == "")
+	debug.Assert(id != "" && daeType != "")
+	d.DaemonID, d.DaemonType = id, daeType
+	d.setName()
+	d.Digest()
 }
 
 func (d *Snode) Digest() uint64 {

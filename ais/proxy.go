@@ -97,6 +97,56 @@ func (p *proxyrunner) initClusterCIDR() {
 	}
 }
 
+func (p *proxyrunner) init(config *cmn.Config) {
+	p.initNetworks()
+	p.si.Init(p.initID(config), cmn.Proxy)
+
+	cos.InitShortID(p.si.Digest())
+	p.initClusterCIDR()
+	daemon.rg.add(p)
+
+	ps := &stats.Prunner{}
+	startedUp := ps.Init(p)
+	daemon.rg.add(ps)
+	p.statsT = ps
+
+	k := newProxyKeepalive(p, ps, startedUp)
+	daemon.rg.add(k)
+	p.keepalive = k
+
+	m := newMetasyncer(p)
+	daemon.rg.add(m)
+	p.metasyncer = m
+}
+
+func (p *proxyrunner) initID(config *cmn.Config) (pid string) {
+	if pid = envDaemonID(cmn.Proxy); pid != "" {
+		return
+	}
+	// try to read ID
+	if pid = readProxyID(config); pid != "" {
+		glog.Infof("p[%s] from %q", pid, cmn.ProxyIDFname)
+		return
+	}
+	pid = generateDaemonID(cmn.Proxy, config)
+	cos.Assert(pid != "")
+
+	// store ID on disk
+	err := ioutil.WriteFile(filepath.Join(config.ConfigDir, cmn.ProxyIDFname), []byte(pid), cos.PermRWR)
+	debug.AssertNoErr(err)
+	glog.Infof("p[%s] ID randomly generated", pid)
+	return
+}
+
+func readProxyID(config *cmn.Config) (id string) {
+	if b, err := ioutil.ReadFile(filepath.Join(config.ConfigDir, cmn.ProxyIDFname)); err == nil {
+		id = string(b)
+	} else if !os.IsNotExist(err) {
+		glog.Error(err)
+	}
+	return
+}
+
 // start proxy runner
 func (p *proxyrunner) Run() error {
 	config := cmn.GCO.Get()

@@ -62,11 +62,16 @@ func TestMain(m *testing.M) {
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 	// target
+	config := cmn.GCO.Get()
 	t = newTarget()
-	t.initSI(cmn.Target)
+	t.name = cmn.Target
+	t.initNetworks()
+	t.si.Init(t.initID(config), cmn.Target)
 
 	fs.Add(testMountpath, t.si.ID())
-	t.init(cmn.GCO.Get())
+
+	t.httprunner.init(config)
+
 	t.statsT = stats.NewTrackerMock()
 	cluster.Init(t)
 

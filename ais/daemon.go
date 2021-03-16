@@ -8,9 +8,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -19,12 +17,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/health"
 	"github.com/NVIDIA/aistore/hk"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
-	"github.com/NVIDIA/aistore/transport"
 )
 
 const usecli = `
@@ -118,7 +112,7 @@ func dryRunInit() {
 	}
 }
 
-func initDaemon(version, buildTime string) (rmain cos.Runner) {
+func initDaemon(version, buildTime string) cos.Runner {
 	const erfm = "Missing `%s` flag pointing to configuration file (must be provided via command line)\n"
 	var (
 		config *cmn.Config
@@ -200,90 +194,32 @@ func initDaemon(version, buildTime string) (rmain cos.Runner) {
 	glog.Infof("Memory total: %s, free: %s(actual free %s)",
 		cos.B2S(int64(memStat.Total), 0), cos.B2S(int64(memStat.Free), 0), cos.B2S(int64(memStat.ActualFree), 0))
 
-	// NOTE: Daemon terminations get executed in the same exact order as initializations below.
 	daemon.rg = &rungroup{rs: make(map[string]cos.Runner, 8)}
-
 	daemon.rg.add(hk.DefaultHK)
+
 	if daemon.cli.role == cmn.Proxy {
-		rmain = initProxy()
-	} else {
-		rmain = initTarget()
+		p := newProxy()
+		p.init(config)
+		return p
 	}
-	return
+	t := newTarget()
+	t.init(config)
+	return t
 }
 
 func newProxy() *proxyrunner {
 	p := &proxyrunner{}
+	p.name = cmn.Proxy
 	p.owner.config = &configOwner{}
-	return p
-}
-
-func initProxy() cos.Runner {
-	p := newProxy()
-	p.initSI(cmn.Proxy)
-
-	// Persist daemon ID on disk
-	if err := writeProxyDID(cmn.GCO.Get(), p.si.ID()); err != nil {
-		cos.ExitLogf("%v", err)
-	}
-
-	p.initClusterCIDR()
-	daemon.rg.add(p)
-
-	ps := &stats.Prunner{}
-	startedUp := ps.Init(p)
-	daemon.rg.add(ps)
-	p.statsT = ps
-
-	k := newProxyKeepalive(p, ps, startedUp)
-	daemon.rg.add(k)
-	p.keepalive = k
-
-	m := newMetasyncer(p)
-	daemon.rg.add(m)
-	p.metasyncer = m
 	return p
 }
 
 func newTarget() *targetrunner {
 	t := &targetrunner{backend: make(backends, 8)}
+	t.name = cmn.Target
 	t.gfn.local.tag, t.gfn.global.tag = "local GFN", "global GFN"
 	t.owner.bmd = newBMDOwnerTgt()
 	t.owner.config = &configOwner{}
-	return t
-}
-
-func initTarget() cos.Runner {
-	t := newTarget()
-	t.initSI(cmn.Target)
-
-	t.initFs()
-
-	t.initHostIP()
-	daemon.rg.add(t)
-
-	ts := &stats.Trunner{T: t} // iostat below
-	startedUp := ts.Init(t)
-	daemon.rg.add(ts)
-	t.statsT = ts
-
-	k := newTargetKeepalive(t, ts, startedUp)
-	daemon.rg.add(k)
-	t.keepalive = k
-
-	t.fsprg.init(t) // subgroup of the daemon.rg rungroup
-
-	// Stream Collector - a singleton object with responsibilities that include:
-	sc := transport.Init()
-	daemon.rg.add(sc)
-
-	fshc := health.NewFSHC(t)
-	daemon.rg.add(fshc)
-	t.fshc = fshc
-
-	if err := ts.InitCapacity(); err != nil { // goes after fs.Init
-		cos.ExitLogf("%s", err)
-	}
 	return t
 }
 
@@ -367,23 +303,15 @@ const (
 	daemonIDEnv = "AIS_DAEMON_ID"
 )
 
-func initDaemonID(daemonType string, config *cmn.Config) (daemonID string) {
+func envDaemonID(daemonType string) (daemonID string) {
 	if daemon.cli.daemonID != "" {
+		glog.Warningf("%s[%s] ID from command-line", daemonType, daemonID)
 		return daemon.cli.daemonID
 	}
 	if daemonID = os.Getenv(daemonIDEnv); daemonID != "" {
-		glog.Infof("%s[%s] ID from env", daemonType, daemonID)
-		return
+		glog.Warningf("%s[%s] ID from env", daemonType, daemonID)
 	}
-	switch daemonType {
-	case cmn.Target:
-		daemonID = initTargetDaemonID(config)
-	case cmn.Proxy:
-		daemonID = initProxyDaemonID(config)
-	default:
-		cos.AssertMsg(false, daemonType)
-	}
-	return daemonID
+	return
 }
 
 func generateDaemonID(daemonType string, config *cmn.Config) string {
@@ -399,44 +327,4 @@ func generateDaemonID(daemonType string, config *cmn.Config) string {
 	}
 	cos.AssertMsg(false, daemonType)
 	return ""
-}
-
-// proxy ID
-func initProxyDaemonID(config *cmn.Config) (daemonID string) {
-	if daemonID = readProxyDaemonID(config); daemonID != "" {
-		glog.Infof("p[%s] from %q", daemonID, cmn.ProxyIDFname)
-		return
-	}
-	daemonID = generateDaemonID(cmn.Proxy, config)
-	cos.Assert(daemonID != "")
-	glog.Infof("p[%s] ID randomly generated", daemonID)
-	return daemonID
-}
-
-func writeProxyDID(config *cmn.Config, id string) error {
-	return ioutil.WriteFile(filepath.Join(config.ConfigDir, cmn.ProxyIDFname), []byte(id), cos.PermRWR)
-}
-
-func readProxyDaemonID(config *cmn.Config) (id string) {
-	if b, err := ioutil.ReadFile(filepath.Join(config.ConfigDir, cmn.ProxyIDFname)); err == nil {
-		id = string(b)
-	} else if !os.IsNotExist(err) {
-		glog.Error(err)
-	}
-	return
-}
-
-// target ID
-func initTargetDaemonID(config *cmn.Config) (daemonID string) {
-	var err error
-	if daemonID, err = fs.LoadDaemonID(config.FSpaths.Paths); err != nil {
-		cos.ExitLogf("%v", err)
-	}
-	if daemonID != "" {
-		return
-	}
-	daemonID = generateDaemonID(cmn.Target, config)
-	cos.Assert(daemonID != "")
-	glog.Infof("t[%s] ID randomly generated", daemonID)
-	return daemonID
 }

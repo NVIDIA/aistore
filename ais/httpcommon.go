@@ -661,8 +661,7 @@ func newMuxers() cmn.HTTPMuxers {
 	return m
 }
 
-// initSI initializes this cluster.Snode
-func (h *httprunner) initSI(daemonType string) {
+func (h *httprunner) initNetworks() {
 	var (
 		s                                        string
 		config                                   = cmn.GCO.Get()
@@ -740,16 +739,11 @@ func (h *httprunner) initSI(daemonType string) {
 		config.HostNet.UseIntraControl,
 		"ctl/data",
 	)
-	daemonID := initDaemonID(daemonType, config)
-	h.name = daemonType
-	h.si = cluster.NewSnode(
-		daemonID,
-		daemonType,
-		pubAddr,
-		intraControlAddr,
-		intraDataAddr,
-	)
-	cos.InitShortID(h.si.Digest())
+	h.si = &cluster.Snode{
+		PublicNet:       pubAddr,
+		IntraControlNet: intraControlAddr,
+		IntraDataNet:    intraDataAddr,
+	}
 }
 
 func mustDiffer(ip1 cluster.NetInfo, port1 int, use1 bool, ip2 cluster.NetInfo, port2 int, use2 bool, tag string) {
