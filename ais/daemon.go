@@ -250,9 +250,12 @@ func newTarget() *targetrunner {
 
 func initTarget() cos.Runner {
 	t := newTarget()
-	t.initSI(cmn.Target)
 
 	t.initFs()
+	t.initSI(cmn.Target)
+	if err := fs.InitMpaths(t.si.ID()); err != nil {
+		cos.ExitLogf("%v", err)
+	}
 
 	t.initHostIP()
 	daemon.rg.add(t)

@@ -201,10 +201,6 @@ func (t *targetrunner) initFs() {
 		fs.DisableFsIDCheck()
 		t.createLocalMountpaths()
 	}
-
-	if err := fs.InitMpaths(t.si.ID()); err != nil {
-		cos.ExitLogf("%v", err)
-	}
 }
 
 func (t *targetrunner) Run() error {
