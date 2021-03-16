@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
 const minPidConfirmations = 3
@@ -317,18 +318,8 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	ok := p.owner.rmd.startup.CAS(false, true)
 	debug.Assert(ok)
 
-	var (
-		cluConfig *globalConfig
-		err       error
-	)
-	// 7. initialize configMD
-	if p.owner.config.version() == 0 {
-		// Implies, the global config object is created for the first time.
-		cluConfig, err = p.initClusterConfig(smap.UUID)
-	} else {
-		cluConfig, err = p.owner.config.get()
-	}
-
+	// 7. global config
+	cluConfig, err := p._config(smap.UUID)
 	if err != nil {
 		cos.ExitLogf("%v", err)
 	}
@@ -353,6 +344,39 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		p.resumeReb(smap, config)
 	}
 	p.owner.rmd.startup.Store(false)
+}
+
+func (p *proxyrunner) _config(uuid string) (config *globalConfig, err error) {
+	var (
+		c        cmn.ClusterConfig
+		confPath string
+	)
+	if p.owner.config.version() == 0 {
+		config, err = p.initClusterConfig(uuid)
+		return
+	}
+	config, err = p.owner.config.get()
+	if !daemon.cli.overrideBackends {
+		return
+	}
+	// load plain-text backends and compare
+	confPath = cmn.GCO.GetGlobalConfigPath()
+	_, err = jsp.Load(confPath, &c, jsp.Plain())
+	if err != nil {
+		return
+	}
+	if c.Backend.Equal(&config.Backend) {
+		return
+	}
+	// NOTE: support choosing remote backends at deployment time
+	config, err = p.owner.config.modify(&configModifier{
+		pre: func(ctx *configModifier, clone *globalConfig) (updated bool, err error) {
+			clone.Backend.Conf = c.Backend.Conf
+			updated = true
+			return
+		},
+	})
+	return
 }
 
 func (p *proxyrunner) initClusterConfig(uuid string) (config *globalConfig, err error) {

@@ -34,6 +34,7 @@ import (
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -248,9 +249,25 @@ func (p *proxyrunner) joinCluster(primaryURLs ...string) (status int, err error)
 }
 
 func (p *proxyrunner) applyRegMeta(body []byte, caller string) (err error) {
-	regMeta, msg, err := p._applyRegMeta(body, caller)
+	var regMeta nodeRegMeta
+	err = jsoniter.Unmarshal(body, &regMeta)
 	if err != nil {
-		return err
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, p.si, "reg-meta", cmn.BytesHead(body), err)
+		return
+	}
+	msg := p.newAmsgStr(cmn.ActRegProxy, regMeta.Smap, regMeta.BMD)
+
+	// Config
+	debug.Assert(regMeta.Config != nil)
+	if err = p.receiveConfig(regMeta.Config, msg, caller); err != nil {
+		if isErrDowngrade(err) {
+			err = nil
+		} else {
+			glog.Error(err)
+		}
+		// Received outdated/invalid config in regMeta, ignore by setting to `nil`.
+		regMeta.Config = nil
+		// fall through
 	}
 	// BMD
 	if err = p.receiveBMD(regMeta.BMD, msg, caller); err != nil {
@@ -260,7 +277,7 @@ func (p *proxyrunner) applyRegMeta(body []byte, caller string) (err error) {
 	} else {
 		glog.Infof("%s: synch %s", p.si, regMeta.BMD)
 	}
-
+	// Smap
 	if err = p.receiveSmap(regMeta.Smap, msg, caller, p.smapOnUpdate); err != nil {
 		if !isErrDowngrade(err) {
 			glog.Errorf(cmn.FmtErrFailed, p.si, "sync", regMeta.Smap, err)

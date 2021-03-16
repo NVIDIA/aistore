@@ -1456,7 +1456,6 @@ func (p *proxyrunner) _unregNodePre(ctx *smapModifier, clone *smapX) error {
 func (p *proxyrunner) canStartRebalance() error {
 	smap := p.owner.smap.get()
 	if err := smap.validate(); err != nil {
-		debug.AssertNoErr(err)
 		return err
 	}
 	if !smap.IsPrimary(p.si) {

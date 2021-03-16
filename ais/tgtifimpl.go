@@ -50,12 +50,11 @@ func (t *targetrunner) Backend(bck *cluster.Bck) cluster.BackendProvider {
 	if bck.Bck.IsHTTP() {
 		return t.backend[cmn.ProviderHTTP]
 	}
-	providerName := bck.Provider
+	provider := bck.Provider
 	if bck.Props != nil {
-		// TODO: simplify logic
-		providerName = bck.RemoteBck().Provider
+		provider = bck.RemoteBck().Provider
 	}
-	if ext, ok := t.backend[providerName]; ok {
+	if ext, ok := t.backend[provider]; ok {
 		return ext
 	}
 	c, _ := backend.NewDummyBackend(t)

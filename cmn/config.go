@@ -915,6 +915,18 @@ func (c *BackendConf) ProviderConf(provider string, newConf ...interface{}) (con
 	return
 }
 
+func (c *BackendConf) Equal(o *BackendConf) bool {
+	if len(o.Conf) != len(c.Conf) {
+		return false
+	}
+	for k := range o.Conf {
+		if _, ok := c.Conf[k]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
 func (c *DiskConf) Validate() (err error) {
 	lwm, hwm, maxwm := c.DiskUtilLowWM, c.DiskUtilHighWM, c.DiskUtilMaxWM
 	if lwm <= 0 || hwm <= lwm || maxwm <= hwm || maxwm > 100 {
@@ -1495,6 +1507,10 @@ func ipv4ListsEqual(alist, blist string) bool {
 /////////
 
 func LoadConfig(confPath, localConfPath, daeRole string, config *Config) (err error) {
+	var (
+		overrideConfig *ConfigToUpdate
+		initial        bool
+	)
 	debug.Assert(confPath != "" && localConfPath != "")
 	GCO.SetGlobalConfigPath(confPath)
 	GCO.SetLocalConfigPath(localConfPath)
@@ -1511,20 +1527,21 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *Config) (err er
 	//       and is only used when the node starts up;
 	//       once started, the node always relies on the last
 	//       updated version of the (global|local) config from the configured location
-
 	_, err = jsp.LoadMeta(path.Join(config.ConfigDir, GlobalConfigFname), &config.ClusterConfig)
 	if os.IsNotExist(err) {
 		glog.Infof("loading configuration from %q", confPath)
 		_, err = jsp.Load(confPath, &config.ClusterConfig, jsp.Plain())
+		initial = true
 	}
 	if err != nil {
 		return fmt.Errorf("failed to load global config %q, err: %v", confPath, err)
 	}
-	config.SetRole(daeRole)
+	debug.Assert(initial && config.Version == 0 || !initial && config.Version > 0)
 
-	overrideConfig, err := loadOverrideConfig(config.ConfigDir)
+	config.SetRole(daeRole)
+	overrideConfig, err = loadOverrideConfig(config.ConfigDir)
 	if err != nil {
-		return err
+		return
 	}
 
 	if overrideConfig != nil {

@@ -260,7 +260,8 @@ func NewErrorInvalidBucketProvider(bck Bck) *ErrInvalidBucketProvider {
 
 func (e *ErrInvalidBucketProvider) Error() string {
 	if e.bck.Name != "" {
-		return fmt.Sprintf("invalid backend provider %q (bucket: %s): must be one of [%s]", e.bck.Provider, e.bck, allProviders)
+		return fmt.Sprintf("invalid backend provider %q for bucket %s: must be one of [%s]",
+			e.bck.Provider, e.bck, allProviders)
 	}
 	return fmt.Sprintf("invalid backend provider %q: must be one of [%s]", e.bck.Provider, allProviders)
 }

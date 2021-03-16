@@ -185,6 +185,67 @@ func (gfn *globalGFN) abortTimed() {
 	}
 }
 
+//////////////
+// backends //
+//////////////
+
+func (b backends) init(t *targetrunner) {
+	config := cmn.GCO.Get()
+	ais := backend.NewAIS(t)
+	b[cmn.ProviderAIS] = ais // ais cloud is always present
+	if aisConf, ok := config.Backend.ProviderConf(cmn.ProviderAIS); ok {
+		if err := ais.Apply(aisConf, "init"); err != nil {
+			glog.Errorf("%s: %v - proceeding to start anyway...", t.si, err)
+		}
+	}
+
+	b[cmn.ProviderHTTP], _ = backend.NewHTTP(t, config)
+	if err := b.initExt(t); err != nil {
+		cos.ExitLogf("%v", err)
+	}
+}
+
+// 3rd part cloud: empty stubs unless populated via build tags
+// NOTE: write access to backends - other than target startup is also invoked
+//       via primary startup (see earlystart for "choosing remote backends")
+func (b backends) initExt(t *targetrunner) (err error) {
+	config := cmn.GCO.Get()
+	for provider := range b {
+		if provider == cmn.ProviderHTTP || provider == cmn.ProviderAIS { // always present
+			continue
+		}
+		if _, ok := config.Backend.Providers[provider]; !ok {
+			delete(b, provider)
+		}
+	}
+	for provider := range config.Backend.Providers {
+		switch provider {
+		case cmn.ProviderAmazon:
+			if _, ok := b[provider]; !ok {
+				b[provider], err = backend.NewAWS(t)
+			}
+		case cmn.ProviderAzure:
+			if _, ok := b[provider]; !ok {
+				b[provider], err = backend.NewAzure(t)
+			}
+		case cmn.ProviderGoogle:
+			if _, ok := b[provider]; !ok {
+				b[provider], err = backend.NewGCP(t)
+			}
+		case cmn.ProviderHDFS:
+			if _, ok := b[provider]; !ok {
+				b[provider], err = backend.NewHDFS(t)
+			}
+		default:
+			err = fmt.Errorf(cmn.FmtErrUnknown, t.si, "backend provider", provider)
+		}
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
 ///////////////////
 // target runner //
 ///////////////////
@@ -355,45 +416,6 @@ func (t *targetrunner) Run() error {
 	// NOTE: This must be done *after* `t.httprunner.run()` so we don't remove marker on panic.
 	fs.RemoveMarker(cmn.NodeRestartedMarker)
 	return err
-}
-
-func (b backends) init(t *targetrunner) {
-	config := cmn.GCO.Get()
-	ais := backend.NewAIS(t)
-	b[cmn.ProviderAIS] = ais // ais cloud is always present
-	if aisConf, ok := config.Backend.ProviderConf(cmn.ProviderAIS); ok {
-		if err := ais.Apply(aisConf, "init"); err != nil {
-			glog.Errorf("%s: %v - proceeding to start anyway...", t.si, err)
-		}
-	}
-
-	b[cmn.ProviderHTTP], _ = backend.NewHTTP(t, config)
-	if err := b.initExt(t); err != nil {
-		cos.ExitLogf("%v", err)
-	}
-}
-
-// 3rd part cloud: empty stubs unless populated via build tags
-func (b backends) initExt(t *targetrunner) (err error) {
-	config := cmn.GCO.Get()
-	for provider := range config.Backend.Providers {
-		switch provider {
-		case cmn.ProviderAmazon:
-			b[provider], err = backend.NewAWS(t)
-		case cmn.ProviderAzure:
-			b[provider], err = backend.NewAzure(t)
-		case cmn.ProviderGoogle:
-			b[provider], err = backend.NewGCP(t)
-		case cmn.ProviderHDFS:
-			b[provider], err = backend.NewHDFS(t)
-		default:
-			err = fmt.Errorf(cmn.FmtErrUnknown, t.si, "backend provider", provider)
-		}
-		if err != nil {
-			return
-		}
-	}
-	return
 }
 
 func (t *targetrunner) initRecvHandlers() {

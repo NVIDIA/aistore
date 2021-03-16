@@ -48,6 +48,7 @@ type (
 		ntargets         int    // expected number of targets in a starting-up cluster (proxy only)
 		skipStartup      bool   // determines if the proxy should skip waiting for targets
 		transient        bool   // false: make cmn.ConfigCLI settings permanent, true: leave them transient
+		overrideBackends bool   // if true primary will metasync backends from deployment-time plain-text config
 		usage            bool   // show usage and exit
 	}
 	rungroup struct {
@@ -87,6 +88,7 @@ func init() {
 	flag.BoolVar(&daemon.cli.skipStartup, "skip_startup", false,
 		"determines if primary proxy should skip waiting for target registrations when starting up")
 	flag.BoolVar(&daemon.cli.usage, "h", false, "show usage and exit")
+	flag.BoolVar(&daemon.cli.overrideBackends, "override_backends", false, "set remote backends at deployment time")
 
 	// dry-run
 	flag.BoolVar(&daemon.dryRun.disk, "nodiskio", false, "dry-run: if true, no disk operations for GET and PUT")

@@ -78,9 +78,25 @@ func (t *targetrunner) joinCluster(primaryURLs ...string) (status int, err error
 }
 
 func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
-	regMeta, msg, err := t._applyRegMeta(body, caller)
+	var regMeta nodeRegMeta
+	err = jsoniter.Unmarshal(body, &regMeta)
 	if err != nil {
-		return err
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, t.si, "reg-meta", cmn.BytesHead(body), err)
+		return
+	}
+	msg := t.newAmsgStr(cmn.ActRegTarget, regMeta.Smap, regMeta.BMD)
+
+	// Config
+	debug.Assert(regMeta.Config != nil)
+	if err = t.receiveConfig(regMeta.Config, msg, caller); err != nil {
+		if isErrDowngrade(err) {
+			err = nil
+		} else {
+			glog.Error(err)
+		}
+		// Received outdated/invalid config in regMeta, ignore by setting to `nil`.
+		regMeta.Config = nil
+		// fall through
 	}
 
 	// There's a window of time between:
@@ -98,7 +114,6 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 			glog.Error(err)
 		}
 	}
-
 	// Smap
 	if err = t.receiveSmap(regMeta.Smap, msg, caller, nil); err != nil {
 		if isErrDowngrade(err) {
@@ -109,9 +124,6 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 	} else {
 		glog.Infof("%s: synch %s", t.si, t.owner.smap.get())
 	}
-
-	// Initialize backends based on latest cluster configuration.
-	t.backend.init(t)
 	return
 }
 
@@ -851,6 +863,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 }
 
 func (t *targetrunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, caller string) (err error) {
+	oldConfig := cmn.GCO.Get()
 	err = t.httprunner.receiveConfig(newConfig, msg, caller)
 	if err != nil {
 		return
@@ -864,6 +877,11 @@ func (t *targetrunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, calle
 		if err != nil {
 			glog.Errorf("%s: %v - proceeding anyway...", t.si, err)
 		}
+	} else if !newConfig.Backend.Equal(&oldConfig.Backend) {
+		// NOTE: support choosing remote backends at deployment time
+		//       (can only happen at cluster/primary startup - see earlystart)
+		glog.Errorf("Warning: remote backends seem to differ (%s, %s) - re-applying...", newConfig, oldConfig)
+		t.backend.initExt(t)
 	}
 	return
 }
