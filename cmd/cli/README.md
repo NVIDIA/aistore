@@ -50,7 +50,8 @@ The content of the file presents as follows:
   },
   "auth": {
     "url": "http://127.0.0.1:52001"
-  }
+  },
+  "default_provider": "ais"
 }
 ```
 
@@ -144,6 +145,7 @@ To add a new resource to a new command,
 
 Provider's syntax `provider://BUCKET_NAME` (referred as `BUCKET`) works across all commands.
 For more details, please refer to each specific command's documentation.
+Provider can be omitted if the `default_provider` config value is set (in such case the config value will be used implicitly).
 
 Supported backend providers currently include:
 * `ais://` - AIStore provider

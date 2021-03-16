@@ -54,13 +54,15 @@ func init() {
 		Auth: AuthConfig{
 			URL: fmt.Sprintf(urlFmt, proto, defaultAISIP, defaultAuthNPort),
 		},
+		DefaultProvider: cmn.ProviderAIS,
 	}
 }
 
 type Config struct {
-	Cluster ClusterConfig `json:"cluster"`
-	Timeout TimeoutConfig `json:"timeout"`
-	Auth    AuthConfig    `json:"auth"`
+	Cluster         ClusterConfig `json:"cluster"`
+	Timeout         TimeoutConfig `json:"timeout"`
+	Auth            AuthConfig    `json:"auth"`
+	DefaultProvider string        `json:"default_provider,omitempty"`
 }
 
 type ClusterConfig struct {
@@ -87,6 +89,9 @@ func (c *Config) validate() (err error) {
 	}
 	if c.Timeout.HTTPTimeout, err = time.ParseDuration(c.Timeout.HTTPTimeoutStr); err != nil {
 		return fmt.Errorf("invalid timeout.http_timeout format %q: %v", c.Timeout.HTTPTimeoutStr, err)
+	}
+	if c.DefaultProvider != "" && !cmn.IsNormalizedProvider(c.DefaultProvider) {
+		return fmt.Errorf("invalid default_provider value %q, expected one of [%s]", c.DefaultProvider, cmn.Providers)
 	}
 	return nil
 }

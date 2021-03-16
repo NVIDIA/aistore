@@ -420,12 +420,16 @@ func parseDest(c *cli.Context, uri string) (bck cmn.Bck, pathSuffix string, err 
 	return
 }
 
-func parseBckURI(c *cli.Context, uri string) (cmn.Bck, error) {
+func parseBckURI(c *cli.Context, uri string, requireProviderInURI ...bool) (cmn.Bck, error) {
 	if isWebURL(uri) {
 		bck := parseURLtoBck(uri)
 		return bck, nil
 	}
-	bck, objName, err := cmn.ParseBckObjectURI(uri)
+	opts := cmn.ParseURIOpts{}
+	if cfg != nil && (len(requireProviderInURI) == 0 || !requireProviderInURI[0]) {
+		opts.DefaultProvider = cfg.DefaultProvider
+	}
+	bck, objName, err := cmn.ParseBckObjectURI(uri, opts)
 	if err != nil {
 		return bck, err
 	}
@@ -445,7 +449,7 @@ func parseQueryBckURI(c *cli.Context, uri string) (cmn.QueryBcks, error) {
 		bck := parseURLtoBck(uri)
 		return cmn.QueryBcks(bck), nil
 	}
-	bck, objName, err := cmn.ParseBckObjectURI(uri, true /*query*/)
+	bck, objName, err := cmn.ParseBckObjectURI(uri, cmn.ParseURIOpts{IsQuery: true})
 	if err != nil {
 		return cmn.QueryBcks(bck), err
 	} else if objName != "" {
@@ -455,6 +459,7 @@ func parseQueryBckURI(c *cli.Context, uri string) (cmn.QueryBcks, error) {
 }
 
 func parseBckObjectURI(c *cli.Context, uri string, optObjName ...bool) (bck cmn.Bck, objName string, err error) {
+	opts := cmn.ParseURIOpts{}
 	if isWebURL(uri) {
 		hbo, err := cmn.NewHTTPObjPath(uri)
 		if err != nil {
@@ -463,7 +468,10 @@ func parseBckObjectURI(c *cli.Context, uri string, optObjName ...bool) (bck cmn.
 		bck, objName = hbo.Bck, hbo.ObjName
 		goto validate
 	}
-	bck, objName, err = cmn.ParseBckObjectURI(uri)
+	if cfg != nil {
+		opts.DefaultProvider = cfg.DefaultProvider
+	}
+	bck, objName, err = cmn.ParseBckObjectURI(uri, opts)
 	if err != nil {
 		return bck, objName, incorrectUsageError(c, err)
 	}

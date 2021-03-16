@@ -31,7 +31,7 @@ func setBucket() (bck cmn.Bck, err error) {
 	if bucket == "" {
 		bucket = cmn.ProviderAIS + cmn.BckProviderSeparator + cos.RandString(7)
 	}
-	bck, _, err = cmn.ParseBckObjectURI(bucket)
+	bck, _, err = cmn.ParseBckObjectURI(bucket, cmn.ParseURIOpts{})
 	if err != nil {
 		return bck, fmt.Errorf("failed to parse 'BUCKET' env variable, err: %v", err)
 	} else if err := bck.Validate(); err != nil {

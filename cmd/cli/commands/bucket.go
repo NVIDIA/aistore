@@ -305,7 +305,7 @@ func reformatBackendProps(nvs cos.SimpleKVs) (err error) {
 	}
 
 	if v != emptyOrigin {
-		if originBck, err = parseBckURI(nil, v); err != nil {
+		if originBck, err = parseBckURI(nil, v, true /*requireProviderInURI*/); err != nil {
 			return fmt.Errorf("invalid format %q, err: %v", cmn.PropBackendBck, err)
 		}
 	}

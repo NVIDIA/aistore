@@ -8,13 +8,14 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/tassert"
 )
 
 func TestParseBckObjectURI(t *testing.T) {
-	tests := []struct {
-		uri         string
-		query       bool
-		expectedErr bool
+	positiveTests := []struct {
+		uri  string
+		opts cmn.ParseURIOpts
+
 		expectedBck cmn.Bck
 		expectedObj string
 	}{
@@ -50,29 +51,28 @@ func TestParseBckObjectURI(t *testing.T) {
 			uri:         "ais://@#",
 			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS},
 		},
-
 		{
 			uri:         "ais://@",
 			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS},
 		},
 		{
 			uri:         "ais://@",
-			query:       true,
+			opts:        cmn.ParseURIOpts{IsQuery: true},
 			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsAnyRemote},
 		},
 		{
 			uri:         "@uuid#namespace",
-			query:       true,
+			opts:        cmn.ParseURIOpts{IsQuery: true},
 			expectedBck: cmn.Bck{Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
 		},
 		{
 			uri:         "@",
-			query:       true,
+			opts:        cmn.ParseURIOpts{IsQuery: true},
 			expectedBck: cmn.Bck{Ns: cmn.NsAnyRemote},
 		},
 		{
 			uri:         "@#",
-			query:       true,
+			opts:        cmn.ParseURIOpts{IsQuery: true},
 			expectedBck: cmn.Bck{},
 		},
 		{
@@ -84,6 +84,16 @@ func TestParseBckObjectURI(t *testing.T) {
 			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
 		},
 		{
+			uri:         "bucket",
+			opts:        cmn.ParseURIOpts{DefaultProvider: cmn.ProviderAIS},
+			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
+		},
+		{
+			uri:         "bucket",
+			opts:        cmn.ParseURIOpts{DefaultProvider: cmn.ProviderAmazon},
+			expectedBck: cmn.Bck{Provider: cmn.ProviderAmazon, Name: "bucket"},
+		},
+		{
 			uri:         "ais://bucket/objname",
 			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"},
 			expectedObj: "objname",
@@ -91,6 +101,11 @@ func TestParseBckObjectURI(t *testing.T) {
 		{
 			uri:         "ais://@uuid#namespace/bucket",
 			expectedBck: cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket", Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
+		},
+		{
+			uri:         "@uuid#namespace/bucket",
+			opts:        cmn.ParseURIOpts{DefaultProvider: cmn.ProviderAmazon},
+			expectedBck: cmn.Bck{Provider: cmn.ProviderAmazon, Name: "bucket", Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
 		},
 		{
 			uri:         "ais://bucket",
@@ -104,29 +119,11 @@ func TestParseBckObjectURI(t *testing.T) {
 			uri:         "az:///",
 			expectedBck: cmn.Bck{Provider: cmn.ProviderAzure},
 		},
-		// errors
-		{uri: "ais://%something", expectedErr: true},
-		{uri: "aiss://", expectedErr: true},
-		{uri: "ais:/", expectedErr: true},
-		{uri: "bucket", expectedErr: true},
-		{uri: "bucket/object", expectedErr: true},
-		{uri: "@#", expectedErr: true},
-		{uri: "@uuid#namespace", expectedErr: true},
-		{uri: "@uuid#namespace/bucket", expectedErr: true},
-		{uri: "@uuid#namespace/bucket/object", expectedErr: true},
 	}
 
-	for _, test := range tests {
-		bck, obj, err := cmn.ParseBckObjectURI(test.uri, test.query)
-		if err == nil && test.expectedErr {
-			t.Errorf("expected error for input: %s", test.uri)
-			continue
-		} else if err != nil && !test.expectedErr {
-			t.Errorf("unpexpected error for input: %s, err: %v", test.uri, err)
-			continue
-		} else if err != nil && test.expectedErr {
-			continue
-		}
+	for _, test := range positiveTests {
+		bck, obj, err := cmn.ParseBckObjectURI(test.uri, test.opts)
+		tassert.Errorf(t, err == nil, "unexpected error for input: %s, err: %v", test.uri, err)
 
 		if !bck.Equal(test.expectedBck) {
 			t.Errorf("buckets does not match got: %v, expected: %v (input: %s)", bck, test.expectedBck, test.uri)
@@ -134,5 +131,25 @@ func TestParseBckObjectURI(t *testing.T) {
 		if obj != test.expectedObj {
 			t.Errorf("object names does not match got: %s, expected: %s (input: %s)", obj, test.expectedObj, test.uri)
 		}
+	}
+
+	negativeTests := []struct {
+		uri  string
+		opts cmn.ParseURIOpts
+	}{
+		{uri: "ais://%something"},
+		{uri: "aiss://"},
+		{uri: "ais:/"},
+		{uri: "bucket"},
+		{uri: "bucket/object"},
+		{uri: "@#"},
+		{uri: "@uuid#namespace"},
+		{uri: "@uuid#namespace/bucket"},
+		{uri: "@uuid#namespace/bucket/object"},
+	}
+
+	for _, test := range negativeTests {
+		_, _, err := cmn.ParseBckObjectURI(test.uri, test.opts)
+		tassert.Errorf(t, err != nil, "expected error for input: %s", test.uri)
 	}
 }

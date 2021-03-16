@@ -160,17 +160,22 @@ func NormalizeProvider(provider string) (string, error) {
 	}
 }
 
-// Parses "[provider://][@uuid#namespace][/][bucketName[/objectName]]"
-func ParseBckObjectURI(uri string, query ...bool) (bck Bck, objName string, err error) {
-	const bucketSepa = "/"
-	var (
-		isQuery = len(query) > 0 && query[0]
-		parts   = strings.SplitN(uri, BckProviderSeparator, 2)
-	)
+type ParseURIOpts struct {
+	IsQuery         bool   // Determines if the URI should be parsed as query.
+	DefaultProvider string // If set the provider will be used as provider.
+}
 
+// Parses "[provider://][@uuid#namespace][/][bucketName[/objectName]]"
+func ParseBckObjectURI(uri string, opts ParseURIOpts) (bck Bck, objName string, err error) {
+	debug.Assert(opts.DefaultProvider == "" || IsNormalizedProvider(opts.DefaultProvider))
+
+	const bucketSepa = "/"
+	parts := strings.SplitN(uri, BckProviderSeparator, 2)
 	if len(parts) > 1 && parts[0] != "" {
 		bck.Provider, err = NormalizeProvider(parts[0])
 		uri = parts[1]
+	} else if !opts.IsQuery {
+		bck.Provider = opts.DefaultProvider
 	}
 
 	if err != nil {
@@ -183,11 +188,11 @@ func ParseBckObjectURI(uri string, query ...bool) (bck Bck, objName string, err 
 		if err := bck.Ns.Validate(); err != nil {
 			return bck, "", err
 		}
-		if !isQuery && bck.Provider == "" {
+		if !opts.IsQuery && bck.Provider == "" {
 			return bck, "", fmt.Errorf("provider cannot be empty when namespace has been provided. Did you mean: \"ais://%s\"?", bck.String())
 		}
 		if len(parts) == 1 {
-			if parts[0] == string(NsUUIDPrefix) && isQuery {
+			if parts[0] == string(NsUUIDPrefix) && opts.IsQuery {
 				// Case: "[provider://]@" (only valid if uri is query)
 				// We need to list buckets from all possible remote clusters
 				bck.Ns = NsAnyRemote
