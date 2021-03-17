@@ -71,17 +71,22 @@ var _ = Describe("E2E FUSE Tests", func() {
 		err = api.CreateBucket(baseParams, bck, nil)
 		Expect(err).NotTo(HaveOccurred())
 
-		out, err := exec.Command("aisfs", bck.Name, fuseDir).Output()
-		if err != nil {
-			stderr := ""
-			if ee, ok := err.(*exec.ExitError); ok {
-				stderr = string(ee.Stderr)
+		// Retry couple times to start `aisfs`.
+		for i := 0; i < 3; i++ {
+			out, err := exec.Command("aisfs", bck.Name, fuseDir).Output()
+			if err != nil {
+				stderr := ""
+				if ee, ok := err.(*exec.ExitError); ok {
+					stderr = string(ee.Stderr)
+				}
+				Skip(fmt.Sprintf("failed to run 'aisfs': %s (stderr: %s), err: %v", out, stderr, err))
 			}
-			Skip(fmt.Sprintf("failed to run 'aisfs': %s (stderr: %s), err: %v", out, stderr, err))
-		}
 
-		// Ensure that `aisfs` is running.
-		err = exec.Command("pidof", "aisfs").Run()
+			// Ensure that `aisfs` is running.
+			if err = exec.Command("pgrep", "-x", "aisfs").Run(); err == nil {
+				break
+			}
+		}
 		Expect(err).NotTo(HaveOccurred(), "'aisfs' is not running after being started")
 
 		f = &tutils.E2EFramework{Dir: fuseDir}
