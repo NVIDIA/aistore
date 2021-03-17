@@ -7,7 +7,6 @@ package integration
 import (
 	"fmt"
 	"net/http"
-	"sync"
 	"testing"
 
 	"github.com/NVIDIA/aistore/api"
@@ -139,14 +138,21 @@ func cleanRWStress(bck cmn.Bck, cksumType string) {
 
 func parallelPutGetStress(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+		if bck.IsRemote() {
+			switch bck.RemoteBck().Provider {
+			case cmn.ProviderGoogle:
+				t.Skip("Stress test is unavailable for GCP")
+			case cmn.ProviderHDFS:
+				t.Skip("HDFS backend does not correctly handle overwriting files (#1135)")
+			}
+		}
+
 		var (
 			errChanSize = numLoops * numFiles * 2
 			errCh       = make(chan opRes, errChanSize)
 			cksumType   = bck.Props.Cksum.Type
 		)
-		if bck.IsCloud() && bck.RemoteBck().Provider == cmn.ProviderGoogle {
-			t.Skip("Stress test is unavailable for GCP")
-		}
+
 		initRWStress(t, bck.Bck, cksumType)
 		parallelOpLoop(bck.Bck, cksumType, errCh, opPut)
 		parallelOpLoop(bck.Bck, cksumType, errCh, opGet)
@@ -159,17 +165,22 @@ func parallelPutGetStress(t *testing.T) {
 func multiOpStress(opNames ...string) func(t *testing.T) {
 	return func(t *testing.T) {
 		runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+			if bck.IsRemote() {
+				switch bck.RemoteBck().Provider {
+				case cmn.ProviderGoogle:
+					t.Skip("Stress test is unavailable for GCP")
+				case cmn.ProviderHDFS:
+					t.Skip("HDFS backend does not correctly handle overwriting files (#1135)")
+				}
+			}
+
 			var (
 				errChanSize = numLoops * numFiles * 3
 				errCh       = make(chan opRes, errChanSize)
 				cksumType   = bck.Props.Cksum.Type
 			)
-			if bck.IsCloud() && bck.RemoteBck().Provider == cmn.ProviderGoogle {
-				t.Skip("Stress test is unavailable for GCP")
-			}
-			var wg sync.WaitGroup
+
 			parallelOpLoop(bck.Bck, cksumType, errCh, multiOp(opNames...))
-			wg.Wait()
 			close(errCh)
 			reportErr(t, errCh, true)
 			cleanRWStress(bck.Bck, cksumType)
