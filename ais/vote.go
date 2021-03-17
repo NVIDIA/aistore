@@ -565,8 +565,3 @@ func (h *httprunner) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 	}
 	return nextPrimaryProxy.ID() == daemonID, nil
 }
-
-// test-only
-func NewVoteMsg(inp bool) SmapVoteMsg {
-	return SmapVoteMsg{VoteInProgress: inp, Smap: &smapX{cluster.Smap{Version: 1}}}
-}

@@ -248,50 +248,52 @@ func (p *proxyrunner) joinCluster(primaryURLs ...string) (status int, err error)
 	return
 }
 
-func (p *proxyrunner) applyRegMeta(body []byte, caller string) (err error) {
-	var regMeta nodeRegMeta
-	err = jsoniter.Unmarshal(body, &regMeta)
-	if err != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, p.si, "reg-meta", cmn.BytesHead(body), err)
-		return
+func (p *proxyrunner) applyRegMeta(body []byte, caller string) error {
+	var regMeta cluMeta
+	if err := jsoniter.Unmarshal(body, &regMeta); err != nil {
+		return fmt.Errorf(cmn.FmtErrUnmarshal, p.si, "reg-meta", cmn.BytesHead(body), err)
 	}
-	msg := p.newAmsgStr(cmn.ActRegProxy, regMeta.Smap, regMeta.BMD)
+	return p.receiveCluMeta(&regMeta, cmn.ActRegProxy, caller)
+}
+
+func (p *proxyrunner) receiveCluMeta(cluMeta *cluMeta, action, caller string) (err error) {
+	msg := p.newAmsgStr(action, cluMeta.Smap, cluMeta.BMD)
 
 	// Config
-	debug.Assert(regMeta.Config != nil)
-	if err = p.receiveConfig(regMeta.Config, msg, caller); err != nil {
+	debug.Assert(cluMeta.Config != nil)
+	if err = p.receiveConfig(cluMeta.Config, msg, caller); err != nil {
 		if isErrDowngrade(err) {
 			err = nil
 		} else {
 			glog.Error(err)
 		}
-		// Received outdated/invalid config in regMeta, ignore by setting to `nil`.
-		regMeta.Config = nil
+		// Received outdated/invalid config in cluMeta, ignore by setting to `nil`.
+		cluMeta.Config = nil
 		// fall through
 	}
-
-	if err = p.receiveSmap(regMeta.Smap, msg, caller, p.smapOnUpdate); err != nil {
+	// Smap
+	if err = p.receiveSmap(cluMeta.Smap, msg, caller, p.smapOnUpdate); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Errorf(cmn.FmtErrFailed, p.si, "sync", regMeta.Smap, err)
+			glog.Errorf(cmn.FmtErrFailed, p.si, "sync", cluMeta.Smap, err)
 		}
 	} else {
-		glog.Infof("%s: synch %s", p.si, regMeta.Smap)
+		glog.Infof("%s: synch %s", p.si, cluMeta.Smap)
 	}
-
-	if err = p.receiveBMD(regMeta.BMD, msg, caller); err != nil {
+	// BMD
+	if err = p.receiveBMD(cluMeta.BMD, msg, caller); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Errorf(cmn.FmtErrFailed, p.si, "sync", regMeta.BMD, err)
+			glog.Errorf(cmn.FmtErrFailed, p.si, "sync", cluMeta.BMD, err)
 		}
 	} else {
-		glog.Infof("%s: synch %s", p.si, regMeta.BMD)
+		glog.Infof("%s: synch %s", p.si, cluMeta.BMD)
 	}
-
-	if err = p.receiveRMD(regMeta.RMD, msg, caller); err != nil {
+	// RMD
+	if err = p.receiveRMD(cluMeta.RMD, msg, caller); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Errorf(cmn.FmtErrFailed, p.si, "sync", regMeta.RMD, err)
+			glog.Errorf(cmn.FmtErrFailed, p.si, "sync", cluMeta.RMD, err)
 		}
 	} else {
-		glog.Infof("%s: synch %s", p.si, regMeta.RMD)
+		glog.Infof("%s: synch %s", p.si, cluMeta.RMD)
 	}
 	return
 }
@@ -2206,16 +2208,14 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 }
 
 func (p *proxyrunner) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
-	var (
-		prepare bool
-		query   = r.URL.Query()
-	)
 	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.URLPathDaemon.L)
 	if err != nil {
 		return
 	}
 	proxyID := apiItems[1]
+	query := r.URL.Query()
 	force := cos.IsParseBool(query.Get(cmn.URLParamForce))
+
 	// forceful primary change
 	if force && apiItems[0] == cmn.Proxy {
 		if smap := p.owner.smap.get(); !smap.isPrimary(p.si) {
@@ -2224,9 +2224,8 @@ func (p *proxyrunner) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 		p.forcefulJoin(w, r, proxyID)
 		return
 	}
-
-	preparestr := query.Get(cmn.URLParamPrepare)
-	if prepare, err = cos.ParseBool(preparestr); err != nil {
+	prepare, err := cos.ParseBool(query.Get(cmn.URLParamPrepare))
+	if err != nil {
 		p.writeErrf(w, r, "failed to parse %s URL parameter: %v", cmn.URLParamPrepare, err)
 		return
 	}
@@ -2234,6 +2233,16 @@ func (p *proxyrunner) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r,
 			errors.New("expecting 'cluster' (RESTful) resource when designating primary proxy via API"))
 		return
+	}
+	if prepare {
+		var cluMeta cluMeta
+		if err := cmn.ReadJSON(w, r, &cluMeta); err != nil {
+			return
+		}
+		if err := p.receiveCluMeta(&cluMeta, "set-primary", cluMeta.SI.String()); err != nil {
+			p.writeErrf(w, r, "failed to receive clu-meta: %v", err)
+			return
+		}
 	}
 	if p.si.ID() == proxyID {
 		if !prepare {
@@ -2426,7 +2435,7 @@ func (p *proxyrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err
 	p.owner.rmd.put(newRMD)
 	p.owner.rmd.Unlock()
 
-	// Register `nl` for rebalance is metasynced.
+	// Register `nl` for rebalance/resilver
 	smap := p.owner.smap.get()
 	if smap.IsIC(p.si) && smap.CountActiveTargets() > 0 {
 		nl := xaction.NewXactNL(xaction.RebID(newRMD.Version).String(),
@@ -2580,15 +2589,15 @@ func (rp *reverseProxy) loadOrStore(uuid string, u *url.URL, errHdlr func(w http
 
 func resolveUUIDBMD(bmds bmds) (*bucketMD, error) {
 	var (
-		mlist = make(map[string][]nodeRegMeta) // uuid => list(targetRegMeta)
-		maxor = make(map[string]*bucketMD)     // uuid => max-ver BMD
+		mlist = make(map[string][]cluMeta) // uuid => list(targetRegMeta)
+		maxor = make(map[string]*bucketMD) // uuid => max-ver BMD
 	)
 	// results => (mlist, maxor)
 	for si, bmd := range bmds {
 		if bmd.Version == 0 {
 			continue
 		}
-		mlist[bmd.UUID] = append(mlist[bmd.UUID], nodeRegMeta{BMD: bmd, SI: si})
+		mlist[bmd.UUID] = append(mlist[bmd.UUID], cluMeta{BMD: bmd, SI: si})
 
 		if rbmd, ok := maxor[bmd.UUID]; !ok {
 			maxor[bmd.UUID] = bmd

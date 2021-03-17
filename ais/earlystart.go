@@ -604,7 +604,7 @@ merge:
 	glog.Infof("%s: merged %s", p.si, clone.pp())
 }
 
-func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (svm SmapVoteMsg) {
+func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (svm cluMeta) {
 	var (
 		err         error
 		suuid       string
@@ -668,7 +668,7 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (svm SmapVoteMsg) {
 	return
 }
 
-func (p *proxyrunner) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out SmapVoteMsg, done, slowp bool) {
+func (p *proxyrunner) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out cluMeta, done, slowp bool) {
 	var (
 		borigin, sorigin string
 		args             = allocBcastArgs()
@@ -679,7 +679,7 @@ func (p *proxyrunner) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out
 	}
 	args.smap = bcastSmap
 	args.to = cluster.AllNodes
-	args.fv = func() interface{} { return &SmapVoteMsg{} }
+	args.fv = func() interface{} { return &cluMeta{} }
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
 	done = true
@@ -694,7 +694,7 @@ func (p *proxyrunner) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out
 			done = false
 			continue
 		}
-		svm, ok := res.v.(*SmapVoteMsg)
+		svm, ok := res.v.(*cluMeta)
 		debug.Assert(ok)
 		if svm.BMD != nil && svm.BMD.version() > 0 {
 			if out.BMD == nil { // 1. init

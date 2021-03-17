@@ -78,7 +78,7 @@ func (t *targetrunner) joinCluster(primaryURLs ...string) (status int, err error
 }
 
 func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
-	var regMeta nodeRegMeta
+	var regMeta cluMeta
 	err = jsoniter.Unmarshal(body, &regMeta)
 	if err != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, t.si, "reg-meta", cmn.BytesHead(body), err)

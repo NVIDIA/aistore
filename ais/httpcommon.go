@@ -84,40 +84,18 @@ type (
 		net netAccess        // handler network access
 	}
 
-	// SmapVoteMsg contains cluster-wide MD and a boolean representing whether or not a vote is currently in proress.
-	// NOTE: exported for integration testing
-	SmapVoteMsg struct {
-		Smap           *smapX        `json:"smap"`
-		BMD            *bucketMD     `json:"bucketmd"`
-		RMD            *rebMD        `json:"rmd"`
-		Config         *globalConfig `json:"config"`
-		VoteInProgress bool          `json:"vote_in_progress"`
+	// cluster-wide control information - replicated, versioned, and synchronized
+	// usages: primary election, join-cluster
+	cluMeta struct {
+		Smap           *smapX         `json:"smap"`
+		BMD            *bucketMD      `json:"bmd"`
+		RMD            *rebMD         `json:"rmd"`
+		Config         *globalConfig  `json:"config"`
+		SI             *cluster.Snode `json:"si"`
+		Reb            bool           `json:"rebalancing"`
+		VoteInProgress bool           `json:"voting"`
 	}
-
-	electable interface {
-		proxyElection(vr *VoteRecord, primary *cluster.Snode)
-	}
-
-	// two pieces of metadata a self-registering (joining) target wants to know right away
-	nodeRegMeta struct {
-		Smap   *smapX         `json:"smap"`
-		BMD    *bucketMD      `json:"bmd"`
-		RMD    *rebMD         `json:"rmd"`
-		Config *globalConfig  `json:"config"`
-		SI     *cluster.Snode `json:"si"`
-		Reb    bool           `json:"reb"`
-	}
-
-	nodeRegPool []nodeRegMeta
-
-	// aisMsg is an extended ActionMsg with extra information for node <=> node control plane communications
-	aisMsg struct {
-		cmn.ActionMsg
-		SmapVersion int64  `json:"smapversion,string"`
-		BMDVersion  int64  `json:"bmdversion,string"`
-		RMDVersion  int64  `json:"rmdversion,string"`
-		UUID        string `json:"uuid"` // cluster-wide ID of this action (operation, transaction)
-	}
+	nodeRegPool []cluMeta
 
 	// node <=> node cluster-info exchange
 	clusterInfo struct {
@@ -141,6 +119,19 @@ type (
 		Config struct {
 			Version int64 `json:"version,string"`
 		} `json:"config"`
+	}
+
+	electable interface {
+		proxyElection(vr *VoteRecord, primary *cluster.Snode)
+	}
+
+	// aisMsg is an extended ActionMsg with extra information for node <=> node control plane communications
+	aisMsg struct {
+		cmn.ActionMsg
+		SmapVersion int64  `json:"smapversion,string"`
+		BMDVersion  int64  `json:"bmdversion,string"`
+		RMDVersion  int64  `json:"rmdversion,string"`
+		UUID        string `json:"uuid"` // cluster-wide ID of this action (operation, transaction)
 	}
 
 	// http server and http runner (common for proxy and target)
@@ -378,12 +369,6 @@ func (r *glogWriter) Write(p []byte) (int, error) {
 	glog.Errorln(string(stacktrace))
 	return len(p), nil
 }
-
-/////////////////
-// clusterInfo //
-/////////////////
-
-func (cii *clusterInfo) String() string { return fmt.Sprintf("%+v", *cii) }
 
 ///////////////
 // netServer //
@@ -1379,7 +1364,7 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		body = h.owner.bmd.get()
 	case cmn.GetWhatSmapVote:
 		xact := xreg.GetXactRunning(cmn.ActElection)
-		msg := SmapVoteMsg{
+		msg := cluMeta{
 			VoteInProgress: xact != nil,
 			Smap:           h.owner.smap.get(),
 			BMD:            h.owner.bmd.get(),
@@ -1529,6 +1514,12 @@ func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.
 	_freeCallRes(res)
 	return
 }
+
+/////////////////
+// clusterInfo //
+/////////////////
+
+func (cii *clusterInfo) String() string { return fmt.Sprintf("%+v", *cii) }
 
 // uses provided Smap and an extended version of the Health(clusterInfo) internal API
 // to discover a better Smap (ie., more current), if exists
@@ -1962,13 +1953,13 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Dur
 	keepalive bool) *callResult {
 	var (
 		path   string
-		regReq = nodeRegMeta{SI: h.si}
+		regReq = cluMeta{SI: h.si}
 	)
 	if h.si.IsTarget() && !keepalive {
 		regReq.BMD = h.owner.bmd.get()
 		regReq.Smap = h.owner.smap.get()
-		glob := xreg.GetRebMarked()
-		regReq.Reb = glob.Interrupted
+		rebMarked := xreg.GetRebMarked()
+		regReq.Reb = rebMarked.Interrupted
 	}
 	if !keepalive {
 		regReq.RMD = h.owner.rmd.get()

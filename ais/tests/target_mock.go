@@ -98,6 +98,15 @@ type voteRetryMockTarget struct {
 	errCh          chan error
 }
 
+type cluMetaRedux struct {
+	Smap           *cluster.Smap
+	VoteInProgress bool `json:"voting"`
+}
+
+func newVoteMsg(inp bool) cluMetaRedux {
+	return cluMetaRedux{VoteInProgress: inp, Smap: &cluster.Smap{Version: 1}}
+}
+
 func (*voteRetryMockTarget) filehdlr(w http.ResponseWriter, r *http.Request) {
 	// Ignore all file requests
 }
@@ -105,7 +114,7 @@ func (*voteRetryMockTarget) filehdlr(w http.ResponseWriter, r *http.Request) {
 func (p *voteRetryMockTarget) daemonhdlr(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		msg := ais.NewVoteMsg(p.voteInProgress) // treat all Get requests as requests for a VoteMsg
+		msg := newVoteMsg(p.voteInProgress) // treat all Get requests as requests for a VoteMsg
 		jsbytes, err := jsoniter.Marshal(msg)
 		if err == nil {
 			_, err = w.Write(jsbytes)

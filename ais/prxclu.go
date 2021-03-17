@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
 ////////////////////////////
@@ -253,7 +254,7 @@ func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, resu
 
 func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	var (
-		regReq                                nodeRegMeta
+		regReq                                cluMeta
 		tag                                   string
 		keepalive, userRegister, selfRegister bool
 		nonElectable                          bool
@@ -387,10 +388,10 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// send the current Smap, BMD and global config to the self-registering node
+	// send clu-meta to the self-registering node
 	if selfRegister {
 		glog.Infof("%s: %s %s (%s)...", p.si, tag, nsi, regReq.Smap)
-		meta, err := p.createNodeRegMeta()
+		meta, err := p.cluMeta(true /*skip smap*/)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -409,25 +410,32 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	go p.updateAndDistribute(nsi, msg, nsi.Flags)
 }
 
-func (p *proxyrunner) createNodeRegMeta() (meta *nodeRegMeta, err error) {
-	bmd := p.owner.bmd.get()
-	config, err := p.owner.config.get()
+func (p *proxyrunner) cluMeta(skipSmap bool) (*cluMeta, error) {
+	var (
+		smap        *smapX
+		config, err = p.owner.config.get()
+	)
 	if err != nil {
-		return
+		return nil, err
 	}
-	meta = &nodeRegMeta{
-		Smap:   nil, // NOTE: Smap is undergoing changes and is about to get metasync-ed
-		BMD:    bmd,
-		RMD:    p.owner.rmd.get(),
-		Config: config,
-		SI:     p.si,
+	if !skipSmap { // NOTE: skip when Smap is undergoing changes and is about to get metasync-ed
+		smap = p.owner.smap.get()
 	}
-	return
+	xele := xreg.GetXactRunning(cmn.ActElection)
+	return &cluMeta{
+		Smap:           smap,
+		BMD:            p.owner.bmd.get(),
+		RMD:            p.owner.rmd.get(),
+		Config:         config,
+		SI:             p.si,
+		Reb:            false, // TODO -- FIXME
+		VoteInProgress: xele != nil,
+	}, nil
 }
 
 // join(node) => cluster via API
 func (p *proxyrunner) userRegisterNode(nsi *cluster.Snode, tag string) (errCode int, err error) {
-	meta, err := p.createNodeRegMeta()
+	meta, err := p.cluMeta(true /*skip smap*/)
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
@@ -464,7 +472,6 @@ func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, tag s
 		err = newErrNotPrimary(p.si, smap, fmt.Sprintf("cannot %s %s", tag, nsi))
 		return
 	}
-
 	if nsi.IsProxy() {
 		osi := smap.GetProxy(nsi.ID())
 		if !p.addOrUpdateNode(nsi, osi, keepalive) {
@@ -601,7 +608,6 @@ func (p *proxyrunner) addOrUpdateNode(nsi, osi *cluster.Snode, keepalive bool) b
 			glog.Warningf("register/keepalive %s: adding back to the cluster map", nsi)
 			return true
 		}
-
 		if !osi.Equals(nsi) {
 			if duplicate, err := p.detectDaemonDuplicate(osi, nsi); err != nil {
 				glog.Errorf("%s: %s(%s) failed to obtain daemon info, err: %v",
@@ -615,7 +621,6 @@ func (p *proxyrunner) addOrUpdateNode(nsi, osi *cluster.Snode, keepalive bool) b
 			glog.Warningf("%s: renewing registration %s (info changed!)", p.si, nsi)
 			return true
 		}
-
 		p.keepalive.heardFrom(nsi.ID(), !keepalive /* reset */)
 		return false
 	}
@@ -1280,6 +1285,12 @@ func (p *proxyrunner) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 	q.Set(cmn.URLParamPrepare, "true")
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, Query: q}
+	if cluMeta, err := p.cluMeta(true); err == nil {
+		args.req.Body = cos.MustMarshal(cluMeta)
+	} else {
+		p.writeErr(w, r, err)
+		return
+	}
 	args.to = cluster.AllNodes
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)

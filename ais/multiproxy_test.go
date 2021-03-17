@@ -68,7 +68,7 @@ func discoverServerDefaultHandler(sv, lv int64) *httptest.Server {
 	bmdVersion := lv
 	return httptest.NewServer(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
-			msg := SmapVoteMsg{
+			msg := cluMeta{
 				VoteInProgress: false,
 				Smap:           &smapX{cluster.Smap{Version: smapVersion}},
 				BMD:            &bucketMD{BMD: cluster.BMD{Version: bmdVersion}},
@@ -87,7 +87,7 @@ func discoverServerVoteOnceHandler(sv, lv int64) *httptest.Server {
 	bmdVersion := lv
 	f := func(w http.ResponseWriter, r *http.Request) {
 		cnt++
-		msg := SmapVoteMsg{
+		msg := cluMeta{
 			VoteInProgress: cnt == 1,
 			Smap:           &smapX{cluster.Smap{Version: smapVersion}},
 			BMD:            &bucketMD{BMD: cluster.BMD{Version: bmdVersion}},
@@ -108,7 +108,7 @@ func discoverServerFailTwiceHandler(sv, lv int64) *httptest.Server {
 	f := func(w http.ResponseWriter, r *http.Request) {
 		cnt++
 		if cnt > 2 {
-			msg := SmapVoteMsg{
+			msg := cluMeta{
 				VoteInProgress: false,
 				Smap:           &smapX{cluster.Smap{Version: smapVersion}},
 				BMD:            &bucketMD{BMD: cluster.BMD{Version: bmdVersion}},
@@ -136,7 +136,7 @@ func discoverServerAlwaysFailHandler(sv, lv int64) *httptest.Server {
 func discoverServerVoteInProgressHandler(sv, lv int64) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
-			msg := SmapVoteMsg{
+			msg := cluMeta{
 				VoteInProgress: true,
 				Smap:           &smapX{cluster.Smap{Version: 12345}},
 				BMD:            &bucketMD{BMD: cluster.BMD{Version: 67890}},
