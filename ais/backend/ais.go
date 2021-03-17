@@ -415,8 +415,9 @@ func (m *AISBackendProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMe
 	p, err := api.HeadObject(aisCluster.bp, bck, lom.ObjName)
 	if err != nil {
 		errCode, err = extractErrCode(err)
-		return objMeta, errCode, err
+		return nil, errCode, err
 	}
+	objMeta = make(cos.SimpleKVs)
 	err = cmn.IterFields(p, func(uniqueTag string, field cmn.IterField) (e error, b bool) {
 		objMeta[uniqueTag] = fmt.Sprintf("%v", field.Value())
 		return nil, false
