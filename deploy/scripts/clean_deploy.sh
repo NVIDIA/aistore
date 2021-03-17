@@ -2,7 +2,25 @@
 
 set -e
 
-root_dir="$GOPATH/src/github.com/NVIDIA/aistore"
+function retry {
+  local n=1
+  local max=5
+  local delay=5
+  while true; do
+    "$@" && break || {
+      if [[ $n -lt $max ]]; then
+        ((n++))
+        echo "Command failed. Attempt $n/$max:"
+        sleep $delay;
+      else
+        echo "The command has failed after $n attempts." >&2
+        exit 1
+      fi
+    }
+  done
+}
+
+root_dir="$(cd "$(dirname "$0")/../../"; pwd -P)"
 
 # Default values
 aws_provider="n"
@@ -36,8 +54,8 @@ while (( "$#" )); do
     --https)
       export AIS_USE_HTTPS="true"
       export AIS_SKIP_VERIFY_CRT="true"
-      export AIS_SERVER_CRT="$HOME/localhost.crt"
-      export AIS_SERVER_KEY="$HOME/localhost.key"
+      export AIS_SERVER_CRT="${AIS_SERVER_CRT:$HOME/localhost.crt}"
+      export AIS_SERVER_KEY="${AIS_SERVER_KEY:$HOME/localhost.key}"
       shift
       ;;
     *) echo "fatal: unknown argument '${1}'"; exit 1;;
@@ -51,16 +69,16 @@ make clean
 
 echo -e "${targets}\n${proxies}\n${mpoints}\n${aws_provider}\n${gcp_provider}\n${azure_provider}\n${hdfs_provider}\n${loopback}\n" | make deploy
 
-make aisfs cli
+make -j8 authn aisloader aisfs cli 1>/dev/null # Build binaries in parallel
 
 if [[ -n ${next_tier} ]]; then
-  DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n2\nn\nn\nn\nn\nn\n'
-  sleep 4
-  if [[ -z ${AIS_USE_HTTPS} ]]; then
-    ais cluster attach alias=http://127.0.0.1:11080
-  else
-    ais cluster attach alias=https://127.0.0.1:11080
+  DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\nn\nn\nn\nn\nn\n'
+  tier_endpoint="http://127.0.0.1:11080"
+  if [[ -n ${AIS_USE_HTTPS} ]]; then
+    tier_endpoint="https://127.0.0.1:11080"
   fi
+  sleep 5
+  retry ais cluster attach alias="${tier_endpoint}"
 fi
 
 popd

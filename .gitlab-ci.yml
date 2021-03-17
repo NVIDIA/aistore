@@ -89,12 +89,11 @@ test:short:
   except:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
+  variables:
+    BUCKET: "ais://test"
   script:
-    - make aisfs cli aisloader
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
-    - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\nn\nn\nn\nn\nn\n'
-    - ais cluster attach alias=http://127.0.0.1:11080 # attach to remote cluster
-    - BUCKET="ais://test" make test-short
+    - deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT --tier
+    - make test-short
     - FLAGS="--duration=10s" make test-aisloader
   <<: *gather_logs_def
 
@@ -110,14 +109,15 @@ test:short:authn:
       allow_failure: true
   variables:
     AUTH_ENABLED: "true"
-    AUTHN_URL: "http://localhost:52001"
     AUTHN_SU_NAME: "admin"
     AUTHN_SU_PASS: "admin"
+    AUTHN_URL: "http://localhost:52001"
+    BUCKET: "ais://test"
+    RE: "TestAuth"
   script:
-    - make cli
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
+    - deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT
     - ais auth login $AUTHN_SU_NAME -p $AUTHN_SU_PASS
-    - BUCKET="ais://test" RE="TestAuth" make test-run
+    - make test-run
     - ais auth logout
 
 test:short:https:
@@ -131,19 +131,15 @@ test:short:https:
       when: manual
       allow_failure: true
   variables:
-    AIS_ENDPOINT: "https://localhost:8080"
     AIS_USE_HTTPS: "true"
+    AIS_SKIP_VERIFY_CRT: "true"
     AIS_SERVER_CRT: "$CI_PROJECT_DIR/localhost.crt"
     AIS_SERVER_KEY: "$CI_PROJECT_DIR/localhost.key"
-    AIS_SKIP_VERIFY_CRT: "true"
+    AIS_ENDPOINT: "https://localhost:8080"
     BUCKET: "ais://ais-ci"
   script:
     - openssl req -x509 -out $AIS_SERVER_CRT -keyout $AIS_SERVER_KEY -newkey rsa:2048 -nodes -sha256 -subj '/CN=localhost' -extensions EXT -config <( printf "[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth")
-    - make aisfs cli
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
-    - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\nn\nn\nn\nn\nn\n'
-    - sleep 3
-    - ais cluster attach alias=https://127.0.0.1:11080 # attach to remote cluster
+    - deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT --tier --https
     - make test-short
 
 test:long:
@@ -152,31 +148,28 @@ test:long:
     NUM_PROXY: 6
     BUCKET: "ais://ais-ci"
   script:
-    - make aisfs cli
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
+    - deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT
     - make test-long
 
 test:long:aws:
   <<: *test_long_def
   variables:
     NUM_PROXY: 6
-    BUCKET: "aws://ais-ci"
     AWS_REGION: "us-east-2"
+    BUCKET: "aws://ais-ci"
   script:
-    - make aisfs cli
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; echo n; echo n; })
+    - deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT --aws
     - make test-long
 
 test:long:gcp:
   <<: *test_long_def
   variables:
     NUM_PROXY: 6
-    BUCKET: "gs://ais-ci"
     GOOGLE_APPLICATION_CREDENTIALS: "/tmp/gcs.json"
+    BUCKET: "gs://ais-ci"
   script:
-    - make aisfs cli
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo y; echo n; echo n; echo n; })
+    - deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT --gcp
     - make test-long
 
 test:long:hdfs:
@@ -187,8 +180,7 @@ test:long:hdfs:
     BUCKET: "hdfs://ais-ci"
   script:
     - bash deploy/test/ci/setup_hdfs.sh
-    - make aisfs cli
-    - make deploy < <(printf "${NUM_TARGET}\n${NUM_PROXY}\n${FS_CNT}\nn\nn\nn\ny\nn\n")
+    - deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT --hdfs
     - ais bucket create "${BUCKET}" --bucket-props="extra.hdfs.ref_directory=/"
     - make test-long
 
@@ -200,8 +192,7 @@ test:long:aisloader:
   only:
     - schedules
   script:
-    - make aisloader
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
+    - deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT
     - sleep 10 # make sure that cluster properly starts
     - FLAGS="--duration=5m" make test-aisloader
 
@@ -213,8 +204,8 @@ test:long:aisloader:
   variables:
     NUM_TARGET: 1
     NUM_PROXY: 1
-    BUCKET: "gs://ais-ci-kube"
     GOOGLE_APPLICATION_CREDENTIALS: "/tmp/gcs.json"
+    BUCKET: "gs://ais-ci-kube"
     RE: "TestETL|TestConfig|TestMountpath"
     TESTS_DIR: "ais/tests"
   before_script:
@@ -235,7 +226,7 @@ test:short:k8s:
   script:
     - export NUM_TARGET=3
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
-    - ONE_NODE_MANY_ETLS="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo y; echo n; echo n; echo n; })
+    - ONE_NODE_MANY_ETLS="1" deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT --gcp
     - make test-short
     - status=$? make kill && exit $status
 
@@ -252,7 +243,7 @@ test:long:k8s:
   script:
     - export NUM_TARGET=5
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
-    - ONE_NODE_MANY_ETLS="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo y; echo n; echo n; echo n; })
+    - ONE_NODE_MANY_ETLS="1" deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT --gcp
     - make test-run
     - status=$? make kill && exit $status
   <<: *k8s_long_exit_def
@@ -270,7 +261,7 @@ test:long:k8s:single-target:
   script:
     #  Do not set ONE_NODE_MANY_ETLS as we want to have a tests checking correctness with non-testing environment.
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo y; echo n; echo n; echo n; })
+    - deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT --gcp
     - status=0
     - make test-run
     - status=$? make kill && exit $status
@@ -287,8 +278,7 @@ test:long:k8s:aisloader:
       when: manual
       allow_failure: true
   script:
-    - make aisloader
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
+    - deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT
     - sleep 10 # Give some time for the cluster to stabilize.
     - BUCKET="ais://test" FLAGS="--duration=2m --etl" make test-aisloader
     - status=$? make kill && exit $status
