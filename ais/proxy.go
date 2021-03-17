@@ -269,7 +269,15 @@ func (p *proxyrunner) applyRegMeta(body []byte, caller string) (err error) {
 		regMeta.Config = nil
 		// fall through
 	}
-	// BMD
+
+	if err = p.receiveSmap(regMeta.Smap, msg, caller, p.smapOnUpdate); err != nil {
+		if !isErrDowngrade(err) {
+			glog.Errorf(cmn.FmtErrFailed, p.si, "sync", regMeta.Smap, err)
+		}
+	} else {
+		glog.Infof("%s: synch %s", p.si, regMeta.Smap)
+	}
+
 	if err = p.receiveBMD(regMeta.BMD, msg, caller); err != nil {
 		if !isErrDowngrade(err) {
 			glog.Errorf(cmn.FmtErrFailed, p.si, "sync", regMeta.BMD, err)
@@ -277,13 +285,13 @@ func (p *proxyrunner) applyRegMeta(body []byte, caller string) (err error) {
 	} else {
 		glog.Infof("%s: synch %s", p.si, regMeta.BMD)
 	}
-	// Smap
-	if err = p.receiveSmap(regMeta.Smap, msg, caller, p.smapOnUpdate); err != nil {
+
+	if err = p.receiveRMD(regMeta.RMD, msg, caller); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Errorf(cmn.FmtErrFailed, p.si, "sync", regMeta.Smap, err)
+			glog.Errorf(cmn.FmtErrFailed, p.si, "sync", regMeta.RMD, err)
 		}
 	} else {
-		glog.Infof("%s: synch %s", p.si, regMeta.Smap)
+		glog.Infof("%s: synch %s", p.si, regMeta.RMD)
 	}
 	return
 }

@@ -102,6 +102,7 @@ type (
 	nodeRegMeta struct {
 		Smap   *smapX         `json:"smap"`
 		BMD    *bucketMD      `json:"bmd"`
+		RMD    *rebMD         `json:"rmd"`
 		Config *globalConfig  `json:"config"`
 		SI     *cluster.Snode `json:"si"`
 		Reb    bool           `json:"reb"`
@@ -112,18 +113,14 @@ type (
 	// aisMsg is an extended ActionMsg with extra information for node <=> node control plane communications
 	aisMsg struct {
 		cmn.ActionMsg
-		BMDVersion  int64  `json:"bmdversion,string"`
 		SmapVersion int64  `json:"smapversion,string"`
+		BMDVersion  int64  `json:"bmdversion,string"`
 		RMDVersion  int64  `json:"rmdversion,string"`
 		UUID        string `json:"uuid"` // cluster-wide ID of this action (operation, transaction)
 	}
 
 	// node <=> node cluster-info exchange
 	clusterInfo struct {
-		BMD struct {
-			Version int64  `json:"version,string"`
-			UUID    string `json:"uuid"`
-		} `json:"bmd"`
 		Smap struct {
 			Version int64  `json:"version,string"`
 			UUID    string `json:"uuid"`
@@ -134,6 +131,13 @@ type (
 			}
 			VoteInProgress bool `json:"vote_in_progress"`
 		} `json:"smap"`
+		BMD struct {
+			Version int64  `json:"version,string"`
+			UUID    string `json:"uuid"`
+		} `json:"bmd"`
+		RMD struct {
+			Version int64 `json:"version,string"`
+		} `json:"rmd"`
 		Config struct {
 			Version int64 `json:"version,string"`
 		} `json:"config"`
@@ -1966,6 +1970,9 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Dur
 		glob := xreg.GetRebMarked()
 		regReq.Reb = glob.Interrupted
 	}
+	if !keepalive {
+		regReq.RMD = h.owner.rmd.get()
+	}
 	info := cos.MustMarshal(regReq)
 	if keepalive {
 		path = cmn.URLPathClusterKalive.S
@@ -2225,12 +2232,14 @@ func (p *proxyrunner) rpErrHandler(w http.ResponseWriter, r *http.Request, err e
 
 func (cii *clusterInfo) fill(h *httprunner) {
 	var (
-		bmd  = h.owner.bmd.get()
 		smap = h.owner.smap.get()
+		bmd  = h.owner.bmd.get()
+		rmd  = h.owner.rmd.get()
 	)
+	cii.fillSmap(smap)
 	cii.BMD.Version = bmd.version()
 	cii.BMD.UUID = bmd.UUID
-	cii.fillSmap(smap)
+	cii.RMD.Version = rmd.Version
 	cii.Config.Version = h.owner.config.version()
 }
 

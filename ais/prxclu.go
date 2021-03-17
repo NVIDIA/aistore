@@ -418,8 +418,9 @@ func (p *proxyrunner) createNodeRegMeta() (meta *nodeRegMeta, err error) {
 	meta = &nodeRegMeta{
 		Smap:   nil, // NOTE: Smap is undergoing changes and is about to get metasync-ed
 		BMD:    bmd,
-		SI:     p.si,
+		RMD:    p.owner.rmd.get(),
 		Config: config,
+		SI:     p.si,
 	}
 	return
 }
