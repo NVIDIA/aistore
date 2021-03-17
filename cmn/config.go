@@ -915,12 +915,39 @@ func (c *BackendConf) ProviderConf(provider string, newConf ...interface{}) (con
 	return
 }
 
-func (c *BackendConf) Equal(o *BackendConf) bool {
+func (c *BackendConf) EqualClouds(o *BackendConf) bool {
 	if len(o.Conf) != len(c.Conf) {
 		return false
 	}
 	for k := range o.Conf {
 		if _, ok := c.Conf[k]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func (c *BackendConf) EqualRemAIS(o *BackendConf) bool {
+	var oldRemotes, newRemotes BackendConfAIS
+	oais, oko := o.Conf[ProviderAIS]
+	nais, okn := c.Conf[ProviderAIS]
+	if !oko && !okn {
+		return true
+	}
+	if oko != okn {
+		return false
+	}
+	erro := cos.MorphMarshal(oais, &oldRemotes)
+	errn := cos.MorphMarshal(nais, &newRemotes)
+	if erro != nil || errn != nil {
+		glog.Errorf("Failed to compare remote AIS backends: %v, %v", erro, errn)
+		return errn != nil // equal since cannot make use
+	}
+	if len(oldRemotes) != len(newRemotes) {
+		return false
+	}
+	for k := range oldRemotes {
+		if _, ok := newRemotes[k]; !ok {
 			return false
 		}
 	}

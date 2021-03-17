@@ -862,13 +862,15 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// NOTE: support choosing remote backends at deployment time (see earlystart)
 func (t *targetrunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, caller string) (err error) {
 	oldConfig := cmn.GCO.Get()
 	err = t.httprunner.receiveConfig(newConfig, msg, caller)
 	if err != nil {
 		return
 	}
-	if msg.Action == cmn.ActAttach || msg.Action == cmn.ActDetach {
+	if msg.Action == cmn.ActAttach || msg.Action == cmn.ActDetach ||
+		!newConfig.Backend.EqualRemAIS(&oldConfig.Backend) {
 		// NOTE: apply the entire config: add new and _refresh_ existing
 		aisConf, ok := newConfig.Backend.ProviderConf(cmn.ProviderAIS)
 		cos.Assert(ok)
@@ -877,9 +879,8 @@ func (t *targetrunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, calle
 		if err != nil {
 			glog.Errorf("%s: %v - proceeding anyway...", t.si, err)
 		}
-	} else if !newConfig.Backend.Equal(&oldConfig.Backend) {
-		// NOTE: support choosing remote backends at deployment time
-		//       (can only happen at cluster/primary startup - see earlystart)
+	}
+	if !newConfig.Backend.EqualClouds(&oldConfig.Backend) {
 		glog.Errorf("Warning: remote backends seem to differ (%s, %s) - re-applying...", newConfig, oldConfig)
 		t.backend.initExt(t)
 	}

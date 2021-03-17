@@ -365,7 +365,7 @@ func (p *proxyrunner) _config(uuid string) (config *globalConfig, err error) {
 	if err != nil {
 		return
 	}
-	if c.Backend.Equal(&config.Backend) {
+	if c.Backend.EqualClouds(&config.Backend) && c.Backend.EqualRemAIS(&config.Backend) {
 		return
 	}
 	// NOTE: support choosing remote backends at deployment time
