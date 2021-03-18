@@ -66,28 +66,12 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatMountpaths:
 		p.queryClusterMountpaths(w, r, what)
 	case cmn.GetWhatRemoteAIS:
-		config := cmn.GCO.Get()
-		smap := p.owner.smap.get()
-		si, err := smap.GetRandTarget()
+		remoteAIS, err := p.getRemoteAISInfo()
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		args := callArgs{
-			si:      si,
-			req:     cmn.ReqArgs{Method: r.Method, Path: cmn.URLPathDaemon.S, Query: query},
-			timeout: config.Timeout.CplaneOperation,
-		}
-		res := p.call(args)
-		er := res.error()
-		bt := res.bytes
-		_freeCallRes(res)
-		if er != nil {
-			p.writeErr(w, r, er)
-			return
-		}
-		// TODO: switch to writeJSON
-		p.writeJSONBytes(w, r, bt, what)
+		p.writeJSON(w, r, remoteAIS, what)
 	case cmn.GetWhatTargetIPs:
 		// Return comma-separated IPs of the targets.
 		// It can be used to easily fill the `--noproxy` parameter in cURL.
@@ -162,6 +146,33 @@ func (p *proxyrunner) queryClusterSysinfo(w http.ResponseWriter, r *http.Request
 	}
 	out.Target = targetResults
 	_ = p.writeJSON(w, r, out, what)
+}
+
+func (p *proxyrunner) getRemoteAISInfo() (*cmn.BackendInfoAIS, error) {
+	config := cmn.GCO.Get()
+	smap := p.owner.smap.get()
+	si, err := smap.GetRandTarget()
+	if err != nil {
+		return nil, err
+	}
+	remoteInfo := &cmn.BackendInfoAIS{}
+	args := callArgs{
+		si: si,
+		req: cmn.ReqArgs{
+			Method: http.MethodGet,
+			Path:   cmn.URLPathDaemon.S,
+			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatRemoteAIS}},
+		},
+		timeout: config.Timeout.CplaneOperation,
+		v:       remoteInfo,
+	}
+	res := p.call(args)
+	err = res.error()
+	_freeCallRes(res)
+	if err != nil {
+		return nil, err
+	}
+	return remoteInfo, nil
 }
 
 func (p *proxyrunner) cluSysinfo(r *http.Request, timeout time.Duration, to int) (cos.JSONRawMsgs, error) {

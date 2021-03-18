@@ -1487,7 +1487,11 @@ func (p *proxyrunner) reverseReqRemote(w http.ResponseWriter, r *http.Request, m
 	if !exists {
 		// TODO: this is a temp workaround - proxy should store UUIDs
 		// and aliases, not just aliases (see #1136)
-		remoteAlias := p.remoteUUIDtoAlias(remoteUUID)
+		aisInfo, err := p.getRemoteAISInfo()
+		var remoteAlias *cmn.RemoteAISInfo
+		if err == nil {
+			remoteAlias = (*aisInfo)[remoteUUID]
+		}
 		if remoteAlias != nil {
 			urls, exists = aisConf[remoteAlias.Alias]
 		}
@@ -1515,32 +1519,6 @@ func (p *proxyrunner) reverseReqRemote(w http.ResponseWriter, r *http.Request, m
 	r.URL.RawQuery = query.Encode()
 	p.reverseRequest(w, r, remoteUUID, u)
 	return nil
-}
-
-// TODO: this is a temp workaround - proxy should store UUIDs
-// and aliases, not just aliases (see #1136)
-func (p *proxyrunner) remoteUUIDtoAlias(remoteUUID string) *cmn.RemoteAISInfo {
-	var aisInfo cmn.BackendInfoAIS
-	smap := p.owner.smap.get()
-	si, err := smap.GetRandTarget()
-	if err != nil {
-		return nil
-	}
-	args := callArgs{
-		si:      si,
-		timeout: cmn.DefaultTimeout,
-		req: cmn.ReqArgs{
-			Method: http.MethodGet,
-			Path:   cmn.URLPathDaemon.S,
-			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatRemoteAIS}},
-		},
-		v: &aisInfo,
-	}
-	res := p.call(args)
-	if res.err != nil {
-		return nil
-	}
-	return aisInfo[remoteUUID]
 }
 
 func (p *proxyrunner) listBuckets(w http.ResponseWriter, r *http.Request, query cmn.QueryBcks, msg *cmn.ActionMsg) {

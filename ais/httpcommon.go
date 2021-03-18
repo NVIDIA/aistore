@@ -1321,15 +1321,6 @@ func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, v interfa
 	return true
 }
 
-func (h *httprunner) writeJSONBytes(w http.ResponseWriter, r *http.Request, bytes []byte, tag string) (ok bool) {
-	w.Header().Set(cmn.HeaderContentType, cmn.ContentJSON)
-	if _, err := w.Write(bytes); err != nil {
-		h.handleWriteError(r, tag, err)
-		return false
-	}
-	return true
-}
-
 func (h *httprunner) handleWriteError(r *http.Request, tag string, err error) {
 	msg := fmt.Sprintf("%s: failed to write bytes, err: %v", tag, err)
 	if _, file, line, ok := runtime.Caller(1); ok {
