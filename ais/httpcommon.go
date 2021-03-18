@@ -200,6 +200,11 @@ type (
 		smap   *smapX
 		detail string
 	}
+
+	errNoUnregister struct {
+		detail string
+	}
+
 	// apiRequest
 	apiRequest struct {
 		prefix []string     // in: URL must start with these items
@@ -216,10 +221,7 @@ var allHTTPverbs = []string{
 	http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace,
 }
 
-var (
-	errShutdown          = errors.New(cmn.ActShutdown)
-	errRebalanceDisabled = errors.New("rebalance is disabled")
-)
+var errRebalanceDisabled = errors.New("rebalance is disabled")
 
 // BMD uuid errs
 var errNoBMD = errors.New("no bucket metadata")
@@ -230,6 +232,20 @@ func (e *errPrxBmdUUIDDiffer) Error() string { return e.detail }
 func (e *errSmapUUIDDiffer) Error() string   { return e.detail }
 func (e *errNodeNotFound) Error() string {
 	return fmt.Sprintf("%s: %s node %s (not present in the %s)", e.si, e.msg, e.id, e.smap)
+}
+
+//////////////////////
+// errNoUnregister //
+////////////////////
+
+func (e *errNoUnregister) Error() string { return e.detail }
+
+func isErrNoUnregister(err error) bool {
+	if _, ok := err.(*errNoUnregister); ok {
+		return true
+	}
+	enu := &errNoUnregister{}
+	return errors.As(err, &enu)
 }
 
 //////////////////

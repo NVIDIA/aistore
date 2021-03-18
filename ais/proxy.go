@@ -314,7 +314,7 @@ func (p *proxyrunner) Stop(err error) {
 	}
 	f("Stopping %s%s, err: %v", p.si, s, err)
 	xreg.AbortAll()
-	p.httprunner.stop(!isPrimary && smap.isValid() && err != errShutdown /* rm from Smap*/)
+	p.httprunner.stop(!isPrimary && smap.isValid() && !isErrNoUnregister(err) /* rm from Smap*/)
 }
 
 ////////////////////////////////////////
@@ -2072,7 +2072,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		smap := p.owner.smap.get()
 		isPrimary := smap.isPrimary(p.si)
 		if !isPrimary {
-			p.Stop(errShutdown)
+			p.Stop(&errNoUnregister{msg.Action})
 			return
 		}
 		force := cos.IsParseBool(query.Get(cmn.URLParamForce))
@@ -2140,7 +2140,7 @@ func (p *proxyrunner) unreg(isDecommission bool) {
 	if err != nil {
 		glog.Errorf("%s: failed to cleanup config dir, err: %v", p.si, err)
 	}
-	p.stopHTTPServer()
+	p.Stop(&errNoUnregister{cmn.ActDecommission})
 }
 
 func (p *proxyrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {

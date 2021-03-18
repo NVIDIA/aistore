@@ -169,7 +169,7 @@ func (t *targetrunner) daeputJSON(w http.ResponseWriter, r *http.Request) {
 			t.writeErr(w, r, err)
 		}
 	case cmn.ActShutdown:
-		t.Stop(errShutdown)
+		t.Stop(&errNoUnregister{msg.Action})
 	case cmn.ActDecommission:
 		if !t.ensureIntraPrimaryCall(w, r) {
 			return
@@ -419,7 +419,7 @@ func (t *targetrunner) unreg(isDecommission, cleanData bool) {
 	if err != nil {
 		glog.Errorf("failed to delete database, err: %v", err)
 	}
-	t.stopHTTPServer()
+	t.Stop(&errNoUnregister{cmn.ActDecommission})
 }
 
 func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request) {
