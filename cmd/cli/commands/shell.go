@@ -303,7 +303,7 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 
 		if withProviders {
 			for _, p := range providers {
-				fmt.Printf("%s\\://", p)
+				fmt.Printf("%s\\://\n", p)
 			}
 		}
 
