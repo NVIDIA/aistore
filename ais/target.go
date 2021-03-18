@@ -189,7 +189,7 @@ func (gfn *globalGFN) abortTimed() {
 // backends //
 //////////////
 
-func (b backends) init(t *targetrunner) {
+func (b backends) init(t *targetrunner, starting bool) {
 	config := cmn.GCO.Get()
 	ais := backend.NewAIS(t)
 	b[cmn.ProviderAIS] = ais // ais cloud is always present
@@ -200,7 +200,7 @@ func (b backends) init(t *targetrunner) {
 	}
 
 	b[cmn.ProviderHTTP], _ = backend.NewHTTP(t, config)
-	if err := b.initExt(t); err != nil {
+	if err := b.initExt(t, starting); err != nil {
 		cos.ExitLogf("%v", err)
 	}
 }
@@ -208,39 +208,50 @@ func (b backends) init(t *targetrunner) {
 // 3rd part cloud: empty stubs unless populated via build tags
 // NOTE: write access to backends - other than target startup is also invoked
 //       via primary startup (see earlystart for "choosing remote backends")
-func (b backends) initExt(t *targetrunner) (err error) {
+func (b backends) initExt(t *targetrunner, starting bool) (err error) {
 	config := cmn.GCO.Get()
 	for provider := range b {
 		if provider == cmn.ProviderHTTP || provider == cmn.ProviderAIS { // always present
 			continue
 		}
 		if _, ok := config.Backend.Providers[provider]; !ok {
+			if !starting {
+				glog.Errorf("Warning: %s: delete %q backend", t.si, provider)
+			}
 			delete(b, provider)
 		}
 	}
 	for provider := range config.Backend.Providers {
+		var add string
 		switch provider {
 		case cmn.ProviderAmazon:
 			if _, ok := b[provider]; !ok {
 				b[provider], err = backend.NewAWS(t)
+				add = provider
 			}
 		case cmn.ProviderAzure:
 			if _, ok := b[provider]; !ok {
 				b[provider], err = backend.NewAzure(t)
+				add = provider
 			}
 		case cmn.ProviderGoogle:
 			if _, ok := b[provider]; !ok {
 				b[provider], err = backend.NewGCP(t)
+				add = provider
 			}
 		case cmn.ProviderHDFS:
 			if _, ok := b[provider]; !ok {
 				b[provider], err = backend.NewHDFS(t)
+				add = provider
 			}
 		default:
 			err = fmt.Errorf(cmn.FmtErrUnknown, t.si, "backend provider", provider)
 		}
 		if err != nil {
 			return
+		}
+		if add != "" && !starting {
+			glog.Errorf("Warning: %s: add %q backend", t.si, add)
 		}
 	}
 	return
@@ -372,7 +383,7 @@ func (t *targetrunner) Run() error {
 		t.markClusterStarted()
 	}()
 
-	t.backend.init(t)
+	t.backend.init(t, true /*starting*/)
 
 	t.authn = &authManager{
 		tokens:        make(map[string]*authn.Token),

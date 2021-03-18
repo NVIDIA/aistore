@@ -862,15 +862,17 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// NOTE: support choosing remote backends at deployment time (see earlystart)
 func (t *targetrunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, caller string) (err error) {
 	oldConfig := cmn.GCO.Get()
 	err = t.httprunner.receiveConfig(newConfig, msg, caller)
 	if err != nil {
 		return
 	}
-	if msg.Action == cmn.ActAttach || msg.Action == cmn.ActDetach ||
-		!newConfig.Backend.EqualRemAIS(&oldConfig.Backend) {
+	if !t.NodeStarted() { // starting up
+		debug.Assert(msg.Action != cmn.ActAttach && msg.Action != cmn.ActDetach)
+		return
+	}
+	if msg.Action == cmn.ActAttach || msg.Action == cmn.ActDetach {
 		// NOTE: apply the entire config: add new and _refresh_ existing
 		aisConf, ok := newConfig.Backend.ProviderConf(cmn.ProviderAIS)
 		cos.Assert(ok)
@@ -879,10 +881,17 @@ func (t *targetrunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, calle
 		if err != nil {
 			glog.Errorf("%s: %v - proceeding anyway...", t.si, err)
 		}
+		return
 	}
+	if !newConfig.Backend.EqualRemAIS(&oldConfig.Backend) {
+		t.backend.init(t, false /*starting*/) // re-init from scratch
+		return
+	}
+	// NOTE: primary command-line flag `-override_backends` allows to choose
+	//       cloud backends (and HDFS) at deployment time
+	//       (via build tags) - see earlystart
 	if !newConfig.Backend.EqualClouds(&oldConfig.Backend) {
-		glog.Errorf("Warning: remote backends seem to differ (%s, %s) - re-applying...", newConfig, oldConfig)
-		t.backend.initExt(t)
+		t.backend.initExt(t, false /*starting*/)
 	}
 	return
 }

@@ -365,10 +365,11 @@ func (p *proxyrunner) _config(uuid string) (config *globalConfig, err error) {
 	if err != nil {
 		return
 	}
-	if c.Backend.EqualClouds(&config.Backend) && c.Backend.EqualRemAIS(&config.Backend) {
+	if c.Backend.EqualClouds(&config.Backend) {
 		return
 	}
-	// NOTE: support choosing remote backends at deployment time
+	// NOTE: primary command-line flag `-override_backends` allows to choose
+	//       Cloud providers (and HDFS) at deployment time
 	config, err = p.owner.config.modify(&configModifier{
 		pre: func(ctx *configModifier, clone *globalConfig) (updated bool, err error) {
 			clone.Backend.Conf = c.Backend.Conf
