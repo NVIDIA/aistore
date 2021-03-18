@@ -239,7 +239,7 @@ func evictHandler(c *cli.Context) (err error) {
 	// Bucket argument provided by the user.
 	if c.NArg() == 1 {
 		uri := c.Args().First()
-		bck, objName, err := parseBckObjectURI(c, uri)
+		bck, objName, err := parseBckObjectURI(c, uri, true)
 		if err != nil {
 			return err
 		}

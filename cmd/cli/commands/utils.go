@@ -1145,8 +1145,8 @@ func confirm(c *cli.Context, prompt string, warning ...string) (ok bool) {
 }
 
 func ensureHasProvider(bck cmn.Bck, cmd string) error {
-	if !bck.IsHTTP() && !bck.IsCloud() {
-		return fmt.Errorf("missing backend provider for %q", cmd)
+	if !cmn.IsNormalizedProvider(bck.Provider) {
+		return fmt.Errorf("missing backend provider in bucket %q for command %q", bck, cmd)
 	}
 	return nil
 }
