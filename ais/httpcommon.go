@@ -92,10 +92,19 @@ type (
 		RMD            *rebMD         `json:"rmd"`
 		Config         *globalConfig  `json:"config"`
 		SI             *cluster.Snode `json:"si"`
-		Reb            bool           `json:"rebalancing"`
+		RebInterrupted bool           `json:"reb_interrupted"`
 		VoteInProgress bool           `json:"voting"`
 	}
 	nodeRegPool []cluMeta
+
+	// what data to omit when sending request/response (join-cluster, kalive)
+	cmetaFillOpt struct {
+		skipSmap      bool
+		skipBMD       bool
+		skipRMD       bool
+		skipConfig    bool
+		fillRebMarker bool
+	}
 
 	// node <=> node cluster-info exchange
 	clusterInfo struct {
@@ -523,6 +532,37 @@ func (h *httprunner) parseAPIRequest(w http.ResponseWriter, r *http.Request, arg
 		h.writeErr(w, r, err)
 	}
 	return err
+}
+
+func (h *httprunner) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
+	xele := xreg.GetXactRunning(cmn.ActElection)
+	cm := &cluMeta{
+		SI:             h.si,
+		VoteInProgress: xele != nil,
+	}
+
+	if !opts.skipConfig {
+		var err error
+		cm.Config, err = h.owner.config.get()
+		if err != nil {
+			return nil, err
+		}
+	}
+	// NOTE: skip when is undergoing changes and is about to get metasync-ed
+	if !opts.skipSmap {
+		cm.Smap = h.owner.smap.get()
+	}
+	if !opts.skipBMD {
+		cm.BMD = h.owner.bmd.get()
+	}
+	if !opts.skipRMD {
+		cm.RMD = h.owner.rmd.get()
+	}
+	if h.si.IsTarget() && opts.fillRebMarker {
+		rebMarked := xreg.GetRebMarked()
+		cm.RebInterrupted = rebMarked.Interrupted
+	}
+	return cm, nil
 }
 
 // usage: [API call => handler => ClusterStartedWithRetry ]
@@ -1371,19 +1411,11 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatBMD:
 		body = h.owner.bmd.get()
 	case cmn.GetWhatSmapVote:
-		xact := xreg.GetXactRunning(cmn.ActElection)
-		msg := cluMeta{
-			VoteInProgress: xact != nil,
-			Smap:           h.owner.smap.get(),
-			BMD:            h.owner.bmd.get(),
-			RMD:            h.owner.rmd.get(),
-		}
 		var err error
-		msg.Config, err = h.owner.config.get()
+		body, err = h.cluMeta(cmetaFillOpt{})
 		if err != nil {
 			glog.Errorf("failed to fetch cluster config, err: %v", err)
 		}
-		body = msg
 	case cmn.GetWhatSnode:
 		body = h.si
 	default:
@@ -1960,17 +1992,21 @@ func (h *httprunner) join(query url.Values, contactURLs ...string) (res *callRes
 func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Duration, query url.Values,
 	keepalive bool) *callResult {
 	var (
-		path   string
-		regReq = cluMeta{SI: h.si}
+		path          string
+		skipPrxKalive = h.si.IsProxy() || keepalive
+		opts          = cmetaFillOpt{
+			skipSmap:      skipPrxKalive,
+			skipBMD:       skipPrxKalive,
+			skipRMD:       keepalive,
+			skipConfig:    keepalive,
+			fillRebMarker: !keepalive,
+		}
 	)
-	if h.si.IsTarget() && !keepalive {
-		regReq.BMD = h.owner.bmd.get()
-		regReq.Smap = h.owner.smap.get()
-		rebMarked := xreg.GetRebMarked()
-		regReq.Reb = rebMarked.Interrupted
-	}
-	if !keepalive {
-		regReq.RMD = h.owner.rmd.get()
+	regReq, err := h.cluMeta(opts)
+	if err != nil {
+		res := allocCallRes()
+		res.err = err
+		return res
 	}
 	info := cos.MustMarshal(regReq)
 	if keepalive {

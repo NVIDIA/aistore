@@ -2119,6 +2119,8 @@ func (p *proxyrunner) daePathAction(w http.ResponseWriter, r *http.Request, acti
 		glog.Infof("%s: %s %s done", p.si, cmn.SyncSmap, newsmap)
 	case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
 		p.setDaemonConfigQuery(w, r)
+	default:
+		p.writeErrAct(w, r, action)
 	}
 }
 

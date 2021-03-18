@@ -23,7 +23,6 @@ import (
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
 ////////////////////////////
@@ -384,7 +383,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	p.owner.smap.Lock()
 	update, err := p.handleJoinKalive(nsi, regReq.Smap, tag, keepalive, nsi.Flags)
 	if !isProxy && p.NodeStarted() {
-		if p.owner.rmd.rebalance.CAS(false, regReq.Reb) && regReq.Reb {
+		if p.owner.rmd.rebalance.CAS(false, regReq.RebInterrupted) && regReq.RebInterrupted {
 			glog.Errorf("%s: target %s reports interrupted rebalance", p.si, nsi)
 		}
 	}
@@ -402,7 +401,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	// send clu-meta to the self-registering node
 	if selfRegister {
 		glog.Infof("%s: %s %s (%s)...", p.si, tag, nsi, regReq.Smap)
-		meta, err := p.cluMeta(true /*skip smap*/)
+		meta, err := p.cluMeta(cmetaFillOpt{skipSmap: true})
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -421,32 +420,9 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	go p.updateAndDistribute(nsi, msg, nsi.Flags)
 }
 
-func (p *proxyrunner) cluMeta(skipSmap bool) (*cluMeta, error) {
-	var (
-		smap        *smapX
-		config, err = p.owner.config.get()
-	)
-	if err != nil {
-		return nil, err
-	}
-	if !skipSmap { // NOTE: skip when Smap is undergoing changes and is about to get metasync-ed
-		smap = p.owner.smap.get()
-	}
-	xele := xreg.GetXactRunning(cmn.ActElection)
-	return &cluMeta{
-		Smap:           smap,
-		BMD:            p.owner.bmd.get(),
-		RMD:            p.owner.rmd.get(),
-		Config:         config,
-		SI:             p.si,
-		Reb:            false, // TODO -- FIXME
-		VoteInProgress: xele != nil,
-	}, nil
-}
-
 // join(node) => cluster via API
 func (p *proxyrunner) userRegisterNode(nsi *cluster.Snode, tag string) (errCode int, err error) {
-	meta, err := p.cluMeta(true /*skip smap*/)
+	meta, err := p.cluMeta(cmetaFillOpt{skipSmap: true})
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
@@ -1302,7 +1278,7 @@ func (p *proxyrunner) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 	q.Set(cmn.URLParamPrepare, "true")
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, Query: q}
-	if cluMeta, err := p.cluMeta(true); err == nil {
+	if cluMeta, err := p.cluMeta(cmetaFillOpt{skipSmap: true}); err == nil {
 		args.req.Body = cos.MustMarshal(cluMeta)
 	} else {
 		p.writeErr(w, r, err)

@@ -126,6 +126,7 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 		glog.Infof("%s: synch %s", t.si, t.owner.smap.get())
 	}
 	return
+	// Do not receive RMD: `receiveRMD` runs extra jobs and checks specific for metasync.
 }
 
 // [METHOD] /v1/daemon
@@ -389,7 +390,7 @@ func (t *targetrunner) handleUnregisterReq(w http.ResponseWriter, r *http.Reques
 		cmn.WriteErr(w, r, err)
 		return
 	}
-	t.unreg(ok, opts.CleanData)
+	t.unreg(ok, opts != nil && opts.CleanData)
 }
 
 func (t *targetrunner) unreg(isDecommission, cleanData bool) {
@@ -712,6 +713,7 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 			return
 		}
 	}
+
 	notif := &xaction.NotifXact{
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 	}
@@ -726,6 +728,7 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 		glog.Infof("%s - ... and resilver", loghdr)
 		go t.runResilver(newRMD.Resilver, true /*skipGlobMisplaced*/)
 	}
+	t.owner.rmd.put(newRMD)
 	return
 }
 
@@ -796,16 +799,6 @@ func (t *targetrunner) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
 	}
 	if err := t.receiveBMD(newBucketMD, msg, bucketMDFixup, caller); err != nil && !isErrDowngrade(err) {
 		glog.Error(err)
-	}
-}
-
-// handler for: /v1/tokens
-func (t *targetrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodDelete:
-		t.httpTokenDelete(w, r)
-	default:
-		cmn.WriteErr405(w, r, http.MethodDelete)
 	}
 }
 
@@ -883,15 +876,6 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 				retErr = err
 			}
 		}
-	}
-	// auth tokens
-	revokedTokens, err := t.extractRevokedTokenList(payload, caller)
-	if err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
-	if revokedTokens != nil {
-		t.authn.updateRevokedList(revokedTokens)
 	}
 	if retErr != nil {
 		t.writeErr(w, r, retErr)
@@ -1000,19 +984,6 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	} else if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s: health-ping from %s", t.si, caller)
 	}
-}
-
-func (t *targetrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
-	tokenList := &tokenList{}
-	if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathTokens.L); err != nil {
-		return
-	}
-
-	if err := cmn.ReadJSON(w, r, tokenList); err != nil {
-		return
-	}
-
-	t.authn.updateRevokedList(tokenList)
 }
 
 // unregisters the target and marks it as disabled by an internal event

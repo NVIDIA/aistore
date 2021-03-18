@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/backend"
-	"github.com/NVIDIA/aistore/authn"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -79,7 +78,6 @@ type (
 		httprunner
 		backend      backends
 		fshc         *health.FSHC
-		authn        *authManager
 		fsprg        fsprungroup
 		rebManager   *reb.Manager
 		dbDriver     dbdriver.Driver
@@ -385,11 +383,6 @@ func (t *targetrunner) Run() error {
 
 	t.backend.init(t, true /*starting*/)
 
-	t.authn = &authManager{
-		tokens:        make(map[string]*authn.Token),
-		revokedTokens: make(map[string]bool),
-		version:       1,
-	}
 	driver, err := dbdriver.NewBuntDB(filepath.Join(config.ConfigDir, dbName))
 	if err != nil {
 		glog.Errorf("Failed to initialize DB: %v", err)
@@ -444,7 +437,6 @@ func (t *targetrunner) initRecvHandlers() {
 		{r: cmn.Vote, h: t.voteHandler, net: accessNetIntraControl},
 		{r: cmn.Txn, h: t.txnHandler, net: accessNetIntraControl},
 		{r: cmn.ObjStream, h: transport.RxAnyStream, net: accessNetAll},
-		{r: cmn.Tokens, h: t.tokenHandler, net: accessNetPublic},
 
 		{r: cmn.Download, h: t.downloadHandler, net: accessNetIntraControl},
 		{r: cmn.Sort, h: dsort.SortHandler, net: accessControlData},
