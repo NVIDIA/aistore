@@ -453,35 +453,46 @@ func TestObjPropsVersion(t *testing.T) {
 }
 
 func TestObjProps(t *testing.T) {
+	const (
+		typeLocal     = "local"
+		typeRemoteAIS = "remoteAIS"
+		typeCloud     = "cloud"
+	)
 	var (
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
 		tests = []struct {
+			bucketType  string
 			checkExists bool
 			verEnabled  bool
-			cloud       bool
 			evict       bool
 		}{
-			{checkExists: true, cloud: false},
-			{checkExists: true, cloud: true, evict: false},
-			{checkExists: true, cloud: true, evict: true},
+			{checkExists: true, bucketType: typeLocal},
+			{checkExists: true, bucketType: typeCloud, evict: false},
+			{checkExists: true, bucketType: typeCloud, evict: true},
 
-			{checkExists: false, verEnabled: false, cloud: false},
-			{checkExists: false, verEnabled: true, cloud: false},
+			{checkExists: false, verEnabled: false, bucketType: typeLocal},
+			{checkExists: false, verEnabled: true, bucketType: typeLocal},
 
-			{checkExists: false, verEnabled: false, cloud: true, evict: false},
-			{checkExists: false, verEnabled: false, cloud: true, evict: true},
+			{checkExists: false, verEnabled: false, bucketType: typeRemoteAIS, evict: false},
+			{checkExists: false, verEnabled: false, bucketType: typeRemoteAIS, evict: true},
+
+			{checkExists: false, verEnabled: false, bucketType: typeLocal},
+			{checkExists: false, verEnabled: true, bucketType: typeLocal},
+
+			{checkExists: false, verEnabled: false, bucketType: typeCloud, evict: false},
+			{checkExists: false, verEnabled: false, bucketType: typeCloud, evict: true},
 			// valid only if the cloud bucket has versioning enabled
-			{checkExists: false, verEnabled: true, cloud: true, evict: false},
-			{checkExists: false, verEnabled: true, cloud: true, evict: true},
+			{checkExists: false, verEnabled: true, bucketType: typeCloud, evict: false},
+			{checkExists: false, verEnabled: true, bucketType: typeCloud, evict: true},
 		}
 	)
 
 	for _, test := range tests {
 		name := fmt.Sprintf(
-			"checkExists=%t/verEnabled=%t/cloud=%t/evict=%t",
-			test.checkExists, test.verEnabled, test.cloud, test.evict,
+			"checkExists=%t/verEnabled=%t/type=%s/evict=%t",
+			test.checkExists, test.verEnabled, test.bucketType, test.evict,
 		)
 		t.Run(name, func(t *testing.T) {
 			m := ioContext{
@@ -493,112 +504,118 @@ func TestObjProps(t *testing.T) {
 
 			m.init()
 
-			if test.cloud {
+			switch test.bucketType {
+			case typeCloud:
 				m.bck = cliBck
 				tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: m.bck})
-			} else {
+			case typeLocal:
 				tutils.CreateFreshBucket(t, proxyURL, m.bck, nil)
-			}
+			case typeRemoteAIS:
+				tutils.CheckSkip(t, tutils.SkipTestArgs{RequiresRemoteCluster: true})
+				m.bck.Ns.UUID = tutils.RemoteCluster.UUID
+				tutils.CreateFreshBucket(t, proxyURL, m.bck, nil)
+			default:
+				tassert.CheckFatal(t, fmt.Errorf("unknown type %q", test.bucketType))
 
-			defaultBckProp, err := api.HeadBucket(baseParams, m.bck)
-			tassert.CheckFatal(t, err)
-
-			_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
-				Versioning: &cmn.VersionConfToUpdate{
-					Enabled: api.Bool(test.verEnabled),
-				},
-			})
-			if test.cloud && test.verEnabled != defaultBckProp.Versioning.Enabled {
-				s := "versioned"
-				if !defaultBckProp.Versioning.Enabled {
-					s = "unversioned"
-				}
-				tassert.Errorf(
-					t, err != nil,
-					"Cloud bucket %s is %s - expecting set-props to fail", m.bck, s)
-			} else {
+				defaultBckProp, err := api.HeadBucket(baseParams, m.bck)
 				tassert.CheckFatal(t, err)
-			}
-			if test.cloud {
-				m.remotePuts(test.evict)
-				defer api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
+
+				_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 					Versioning: &cmn.VersionConfToUpdate{
-						Enabled: api.Bool(defaultBckProp.Versioning.Enabled),
+						Enabled: api.Bool(test.verEnabled),
 					},
 				})
-			} else {
-				m.puts()
-				m.gets() // set the access time
-			}
-
-			bckProps, err := api.HeadBucket(baseParams, m.bck)
-			tassert.CheckFatal(t, err)
-
-			tlog.Logln("checking object props...")
-			for _, objName := range m.objNames {
-				props, err := api.HeadObject(baseParams, m.bck, objName, test.checkExists)
-				if test.checkExists {
-					if test.cloud && test.evict {
-						tassert.Fatalf(t, err != nil, "object should be marked as 'not exists' (it is not cached)")
-					} else {
-						tassert.CheckFatal(t, err)
+				if test.bucketType == typeCloud && test.verEnabled != defaultBckProp.Versioning.Enabled {
+					s := "versioned"
+					if !defaultBckProp.Versioning.Enabled {
+						s = "unversioned"
 					}
-					tassert.Errorf(t, props == nil, "props should be empty")
-					continue
+					tassert.Errorf(
+						t, err != nil,
+						"Cloud bucket %s is %s - expecting set-props to fail", m.bck, s)
+				} else {
+					tassert.CheckFatal(t, err)
 				}
+				if test.bucketType == typeCloud {
+					m.remotePuts(test.evict)
+					defer api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
+						Versioning: &cmn.VersionConfToUpdate{
+							Enabled: api.Bool(defaultBckProp.Versioning.Enabled),
+						},
+					})
+				} else {
+					m.puts()
+					m.gets() // set the access time
+				}
+
+				bckProps, err := api.HeadBucket(baseParams, m.bck)
 				tassert.CheckFatal(t, err)
 
-				tassert.Errorf(
-					t, props.Bck.Provider == bckProps.Provider,
-					"expected provider (%s) to be %s", props.Bck.Provider, bckProps.Provider,
-				)
-				tassert.Errorf(
-					t, uint64(props.Size) == m.fileSize,
-					"object size (%d) is different than expected (%d)", props.Size, m.fileSize,
-				)
-				if test.cloud {
-					if test.evict {
-						tassert.Errorf(t, !props.Present, "object should not be present (not cached)")
-					} else {
-						tassert.Errorf(t, props.Present, "object should be present (cached)")
+				tlog.Logln("checking object props...")
+				for _, objName := range m.objNames {
+					props, err := api.HeadObject(baseParams, m.bck, objName, test.checkExists)
+					if test.checkExists {
+						if test.bucketType != typeLocal && test.evict {
+							tassert.Fatalf(t, err != nil, "object should be marked as 'not exists' (it is not cached)")
+						} else {
+							tassert.CheckFatal(t, err)
+						}
+						tassert.Errorf(t, props == nil, "props should be empty")
+						continue
 					}
-					if defaultBckProp.Versioning.Enabled && (test.verEnabled || test.evict) {
-						tassert.Errorf(t, props.Version != "", "cloud object version should not be empty")
-					} else {
-						tassert.Errorf(t, props.Version == "" ||
-							test.cloud && defaultBckProp.Versioning.Enabled,
-							"cloud object version should be empty")
-					}
-					if test.evict {
-						tassert.Errorf(t, props.Atime == 0, "expected access time to be empty (not cached)")
-					} else {
-						tassert.Errorf(t, props.Atime != 0, "expected access time to be set (cached)")
-					}
-				} else {
-					tassert.Errorf(t, props.Present, "object seems to be not present")
+					tassert.CheckFatal(t, err)
+
 					tassert.Errorf(
-						t, props.NumCopies == 1,
-						"number of copies (%d) is different than 1", props.NumCopies,
+						t, props.Bck.Provider == bckProps.Provider,
+						"expected provider (%s) to be %s", props.Bck.Provider, bckProps.Provider,
 					)
-					if test.verEnabled {
-						tassert.Errorf(
-							t, props.Version == "1",
-							"object version (%s) different than expected (1)", props.Version,
-						)
+					tassert.Errorf(
+						t, uint64(props.Size) == m.fileSize,
+						"object size (%d) is different than expected (%d)", props.Size, m.fileSize,
+					)
+					if test.bucketType != typeLocal {
+						if test.evict {
+							tassert.Errorf(t, !props.Present, "object should not be present (not cached)")
+						} else {
+							tassert.Errorf(t, props.Present, "object should be present (cached)")
+						}
+						if defaultBckProp.Versioning.Enabled && (test.verEnabled || test.evict) {
+							tassert.Errorf(t, props.Version != "", "cloud object version should not be empty")
+						} else {
+							tassert.Errorf(t, props.Version == "" || defaultBckProp.Versioning.Enabled,
+								"cloud object version should be empty")
+						}
+						if test.evict {
+							tassert.Errorf(t, props.Atime == 0, "expected access time to be empty (not cached)")
+						} else {
+							tassert.Errorf(t, props.Atime != 0, "expected access time to be set (cached)")
+						}
 					} else {
-						tassert.Errorf(t, props.Version == "", "object version should be empty")
+						tassert.Errorf(t, props.Present, "object seems to be not present")
+						tassert.Errorf(
+							t, props.NumCopies == 1,
+							"number of copies (%d) is different than 1", props.NumCopies,
+						)
+						if test.verEnabled {
+							tassert.Errorf(
+								t, props.Version == "1",
+								"object version (%s) different than expected (1)", props.Version,
+							)
+						} else {
+							tassert.Errorf(t, props.Version == "", "object version should be empty")
+						}
+						tassert.Errorf(t, props.Atime != 0, "expected access time to be set")
 					}
-					tassert.Errorf(t, props.Atime != 0, "expected access time to be set")
+					tassert.Errorf(t, !props.IsECCopy, "expected object not to be ec copy")
+					tassert.Errorf(
+						t, props.DataSlices == 0,
+						"expected data slices (%d) to be 0", props.DataSlices,
+					)
+					tassert.Errorf(
+						t, props.ParitySlices == 0,
+						"expected parity slices (%d) to be 0", props.ParitySlices,
+					)
 				}
-				tassert.Errorf(t, !props.IsECCopy, "expected object not to be ec copy")
-				tassert.Errorf(
-					t, props.DataSlices == 0,
-					"expected data slices (%d) to be 0", props.DataSlices,
-				)
-				tassert.Errorf(
-					t, props.ParitySlices == 0,
-					"expected parity slices (%d) to be 0", props.ParitySlices,
-				)
 			}
 		})
 	}

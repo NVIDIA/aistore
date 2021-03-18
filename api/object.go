@@ -114,6 +114,7 @@ func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists .
 		objProps.ParitySlices = md.Parity
 		objProps.IsECCopy = md.IsCopy
 	}
+
 	err = cmn.IterFields(objProps, func(tag string, field cmn.IterField) (error, bool) {
 		headerName := cmn.PropToHeader(tag)
 		return field.SetValue(resp.Header.Get(headerName), true /*force*/), false

@@ -405,7 +405,7 @@ func (m *AISBackendProvider) ListBuckets(_ context.Context, query cmn.QueryBcks)
 	return
 }
 
-func (m *AISBackendProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta cos.SimpleKVs, errCode int, err error) {
+func (m *AISBackendProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objHdrMeta cos.SimpleKVs, errCode int, err error) {
 	remoteBck := lom.Bucket()
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
@@ -417,13 +417,14 @@ func (m *AISBackendProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMe
 		errCode, err = extractErrCode(err)
 		return nil, errCode, err
 	}
-	objMeta = make(cos.SimpleKVs)
-	err = cmn.IterFields(p, func(uniqueTag string, field cmn.IterField) (e error, b bool) {
-		objMeta[uniqueTag] = fmt.Sprintf("%v", field.Value())
+	objHdrMeta = make(cos.SimpleKVs)
+	err = cmn.IterFields(p, func(tag string, field cmn.IterField) (e error, b bool) {
+		headerName := cmn.PropToHeader(tag)
+		objHdrMeta[headerName] = fmt.Sprintf("%v", field.Value())
 		return nil, false
 	})
 	debug.AssertNoErr(err)
-	return objMeta, 0, nil
+	return objHdrMeta, 0, nil
 }
 
 func (m *AISBackendProvider) GetObj(_ context.Context, lom *cluster.LOM) (errCode int, err error) {
