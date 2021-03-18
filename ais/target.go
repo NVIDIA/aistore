@@ -352,11 +352,13 @@ func (t *targetrunner) Run() error {
 	if !reliable {
 		smap = newSmap()
 	}
-	// Insert self and always proceed starting up.
+
+	// Add self to cluster map
 	smap.Tmap[t.si.ID()] = t.si
 	t.owner.smap.put(smap)
 
-	// Try joining the cluster.
+	// Join cluster
+	debug.Assert(!t.NodeStarted())
 	if status, err := t.joinCluster(); err != nil {
 		glog.Errorf("%s failed to join cluster (status: %d, err: %v)", t.si, status, err)
 		glog.Errorf("%s is terminating", t.si)

@@ -163,7 +163,7 @@ type (
 		}
 		startup struct {
 			cluster atomic.Bool // determines if the cluster has started up
-			node    atomic.Time // determines time when the node started up
+			node    atomic.Bool // determines time when the node started up
 		}
 		gmm                 *memsys.MMSA // system pagesize-based memory manager and slab allocator
 		smm                 *memsys.MMSA // system MMSA for small-size allocations
@@ -523,11 +523,12 @@ func (h *httprunner) ClusterStartedWithRetry() bool {
 	}
 	return h.startup.cluster.Load()
 }
-func (h *httprunner) ClusterStarted() bool       { return h.startup.cluster.Load() }
-func (h *httprunner) NodeStarted() bool          { return !h.startup.node.Load().IsZero() }
-func (h *httprunner) NodeStartedTime() time.Time { return h.startup.node.Load() }
-func (h *httprunner) markClusterStarted()        { h.startup.cluster.Store(true) }
-func (h *httprunner) markNodeStarted()           { h.startup.node.Store(time.Now()) }
+
+func (h *httprunner) ClusterStarted() bool { return h.startup.cluster.Load() }
+func (h *httprunner) markClusterStarted()  { h.startup.cluster.Store(true) }
+
+func (h *httprunner) NodeStarted() bool { return h.startup.node.Load() }
+func (h *httprunner) markNodeStarted()  { h.startup.node.Store(true) }
 
 func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
 	var (

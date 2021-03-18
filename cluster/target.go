@@ -123,7 +123,6 @@ type Node interface {
 
 	ClusterStarted() bool
 	NodeStarted() bool
-	NodeStartedTime() time.Time
 
 	DataClient() *http.Client
 }
