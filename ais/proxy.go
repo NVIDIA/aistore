@@ -617,7 +617,10 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 }
 
 // PUT /v1/metasync
+// NOTE: compare with receiveCluMeta()
+// NOTE: compare with t.metasyncHandlerPut
 func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
+	var retErr error
 	if r.Method != http.MethodPut {
 		cmn.WriteErr405(w, r, http.MethodPut)
 		return
@@ -637,58 +640,67 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErr(w, r, err)
 		return
 	}
+	caller := r.Header.Get(cmn.HeaderCallerName)
 
-	var (
-		errs   []error
-		caller = r.Header.Get(cmn.HeaderCallerName)
-	)
-
+	// Config
 	newConf, msgConf, err := p.extractConfig(payload, caller)
 	if err != nil {
-		errs = append(errs, err)
-	} else if newConf != nil {
-		if err = p.receiveConfig(newConf, msgConf, caller); err != nil && !isErrDowngrade(err) {
-			errs = append(errs, err)
-		}
+		p.writeErr(w, r, err)
+		return
 	}
-
+	if newConf != nil {
+		retErr = p.receiveConfig(newConf, msgConf, caller)
+	}
+	// Smap
 	newSmap, msgSmap, err := p.extractSmap(payload, caller)
 	if err != nil {
-		errs = append(errs, err)
-	} else if newSmap != nil {
-		if err = p.receiveSmap(newSmap, msgSmap, caller, p.smapOnUpdate); err != nil && !isErrDowngrade(err) {
-			errs = append(errs, err)
+		p.writeErr(w, r, err)
+		return
+	}
+	if newSmap != nil {
+		if err = p.receiveSmap(newSmap, msgSmap, caller, p.smapOnUpdate); err != nil {
+			if isErrDowngrade(retErr) && !isErrDowngrade(err) {
+				retErr = err
+			}
 		}
 	}
-
-	newRMD, msgRMD, err := p.extractRMD(payload, caller)
-	if err != nil {
-		errs = append(errs, err)
-	} else if newRMD != nil {
-		if err = p.receiveRMD(newRMD, msgRMD, caller); err != nil {
-			errs = append(errs, err)
-		}
-	}
-
+	// BMD
 	newBMD, msgBMD, err := p.extractBMD(payload, caller)
 	if err != nil {
-		errs = append(errs, err)
-	} else if newBMD != nil {
-		if err = p.receiveBMD(newBMD, msgBMD, caller); err != nil && !isErrDowngrade(err) {
-			errs = append(errs, err)
+		p.writeErr(w, r, err)
+		return
+	}
+	if newBMD != nil {
+		if err = p.receiveBMD(newBMD, msgBMD, caller); err != nil {
+			if isErrDowngrade(retErr) && !isErrDowngrade(err) {
+				retErr = err
+			}
 		}
 	}
-
+	// RMD
+	newRMD, msgRMD, err := p.extractRMD(payload, caller)
+	if err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	if newRMD != nil {
+		if err = p.receiveRMD(newRMD, msgRMD, caller); err != nil {
+			if isErrDowngrade(retErr) && !isErrDowngrade(err) {
+				retErr = err
+			}
+		}
+	}
+	// auth tokens
 	revokedTokens, err := p.extractRevokedTokenList(payload, caller)
 	if err != nil {
-		errs = append(errs, err)
-	} else {
+		p.writeErr(w, r, err)
+		return
+	}
+	if revokedTokens != nil {
 		p.authn.updateRevokedList(revokedTokens)
 	}
-
-	if len(errs) > 0 {
-		p.writeErrf(w, r, "%v", errs)
-		return
+	if retErr != nil {
+		p.writeErr(w, r, retErr)
 	}
 }
 

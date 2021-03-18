@@ -19,14 +19,14 @@ const (
 // includes Xaction.Kind == ActionMsg.Action (when the action is asynchronous)
 const (
 	ActShutdown       = "shutdown"
-	ActDecommission   = "decommission" // Decommission all deamons in cluster
+	ActDecommission   = "decommission" // decommission all nodes in the cluster (cleanup system data)
 	ActRebalance      = "rebalance"
 	ActResilver       = "resilver"
 	ActLRU            = "lru"
 	ActCreateBck      = "create_bck"
-	ActDestroyBck     = "destroy_bck"     // Destroy bucket data and metadata
-	ActAddRemoteBck   = "add_remotebck"   // Register (existing) remote bucket into AIS
-	ActEvictRemoteBck = "evict_remotebck" // Evict remote bucket's data; TODO cleanup BMD as well
+	ActDestroyBck     = "destroy_bck"     // destroy bucket data and metadata
+	ActAddRemoteBck   = "add_remotebck"   // register (existing) remote bucket into AIS
+	ActEvictRemoteBck = "evict_remotebck" // evict remote bucket's data
 	ActMoveBck        = "move_bck"
 	ActCopyBck        = "copybck"
 	ActETLBck         = "etlbck"
@@ -62,7 +62,7 @@ const (
 	// Node maintenance
 	ActStartMaintenance = "startmaintenance"  // put into maintenance state
 	ActStopMaintenance  = "stopmaintenance"   // cancel maintenance state
-	ActDecommissionNode = "decommission_node" // start rebalance and remove node from Smap when it finishes
+	ActDecommissionNode = "decommission_node" // start rebalance and, when done, remove node from Smap
 	ActShutdownNode     = "shutdown_node"     // shutdown a specific node
 	// IC
 	ActSendOwnershipTbl  = "ic_send_ownership_tbl"

@@ -822,63 +822,79 @@ func (t *targetrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // PUT /v1/metasync
+// TODO: excepting small difference around receiveSmap and ReceiveBMD
+//       the code is identical to p.metasyncHandler() - not reducing it to
+//       one is lack of polymorphism to execute target-specific
+//       receive* while adding interfaces won't do enough.
+// NOTE: compare with receiveCluMeta() and friends
 func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
+	var retErr error
 	payload := make(msPayload)
 	if err := payload.unmarshal(r.Body, "metasync put"); err != nil {
 		cmn.WriteErr(w, r, err)
 		return
 	}
-	var (
-		errs   []error
-		caller = r.Header.Get(cmn.HeaderCallerName)
-	)
+	caller := r.Header.Get(cmn.HeaderCallerName)
 
+	// Config
 	newConf, msgConf, err := t.extractConfig(payload, caller)
 	if err != nil {
-		errs = append(errs, err)
-	} else if newConf != nil {
-		if err = t.receiveConfig(newConf, msgConf, caller); err != nil && !isErrDowngrade(err) {
-			errs = append(errs, err)
-		}
+		t.writeErr(w, r, err)
+		return
 	}
-
+	if newConf != nil {
+		retErr = t.receiveConfig(newConf, msgConf, caller)
+	}
+	// Smap
 	newSmap, msgSmap, err := t.extractSmap(payload, caller)
 	if err != nil {
-		errs = append(errs, err)
-	} else if newSmap != nil {
-		if err := t.receiveSmap(newSmap, msgSmap, caller, nil); err != nil && !isErrDowngrade(err) {
-			errs = append(errs, err)
+		t.writeErr(w, r, err)
+		return
+	}
+	if newSmap != nil {
+		if err = t.receiveSmap(newSmap, msgSmap, caller, nil); err != nil {
+			if isErrDowngrade(retErr) && !isErrDowngrade(err) {
+				retErr = err
+			}
 		}
 	}
-
+	// BMD
 	newBMD, msgBMD, err := t.extractBMD(payload, caller)
 	if err != nil {
-		errs = append(errs, err)
-	} else if newBMD != nil {
-		if err := t.receiveBMD(newBMD, msgBMD, bucketMDReceive, caller); err != nil && !isErrDowngrade(err) {
-			errs = append(errs, err)
+		t.writeErr(w, r, err)
+		return
+	}
+	if newBMD != nil {
+		if err = t.receiveBMD(newBMD, msgBMD, bucketMDReceive, caller); err != nil {
+			if isErrDowngrade(retErr) && !isErrDowngrade(err) {
+				retErr = err
+			}
 		}
 	}
-
+	// RMD
 	newRMD, msgRMD, err := t.extractRMD(payload, caller)
 	if err != nil {
-		errs = append(errs, err)
-	} else if newRMD != nil {
-		if err := t.receiveRMD(newRMD, msgRMD, caller); err != nil {
-			errs = append(errs, err)
+		t.writeErr(w, r, err)
+		return
+	}
+	if newRMD != nil {
+		if err = t.receiveRMD(newRMD, msgRMD, caller); err != nil {
+			if isErrDowngrade(retErr) && !isErrDowngrade(err) {
+				retErr = err
+			}
 		}
 	}
-
+	// auth tokens
 	revokedTokens, err := t.extractRevokedTokenList(payload, caller)
 	if err != nil {
-		errs = append(errs, err)
-	} else {
+		t.writeErr(w, r, err)
+		return
+	}
+	if revokedTokens != nil {
 		t.authn.updateRevokedList(revokedTokens)
 	}
-
-	if len(errs) > 0 {
-		t.writeErrf(w, r, "%v", errs)
-		return
+	if retErr != nil {
+		t.writeErr(w, r, retErr)
 	}
 }
 
