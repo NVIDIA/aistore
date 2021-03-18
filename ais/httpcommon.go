@@ -2108,49 +2108,83 @@ func (h *httprunner) healthByExternalWD(w http.ResponseWriter, r *http.Request) 
 		return true
 	}
 
-	debug.Assert(isIntraCall(r.Header))
+	debug.Assert(h.isIntraCall(r.Header))
 
 	// Intra cluster health ping
-	if !h.ensureIntraControl(w, r) {
+	if !h.ensureIntraControl(w, r, false /* from primary */) {
 		responded = true
 	}
 	return
 }
 
+func (h *httprunner) _isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
+	var (
+		callerID      = hdr.Get(cmn.HeaderCallerID)
+		callerName    = hdr.Get(cmn.HeaderCallerName)
+		callerSmapVer = hdr.Get(cmn.HeaderCallerSmapVersion)
+	)
+
+	isExpected := hdr != nil && callerID != "" && callerName != ""
+	if !isExpected {
+		return fmt.Errorf("%s: expected %s request", h.si, cmn.NetworkIntraControl)
+	}
+
+	var (
+		smap        = h.owner.smap.get()
+		verInt, _   = strconv.ParseInt(callerSmapVer, 10, 64)
+		greaterSmap = verInt > smap.version()
+		caller      = smap.GetNode(callerID)
+	)
+	isExpected = caller != nil && (!fromPrimary || smap.isPrimary(caller))
+	if isExpected {
+		return
+	}
+
+	// NOTE: If we receive request from a node which has greater smap version,
+	// we trust it even if we aren't able validate the intra control call.
+	if greaterSmap {
+		glog.Errorf("smap-self(v%d) < smap-caller(v%s); expected condition not satisfied with local smap...", smap.version(), callerSmapVer)
+		return
+	}
+
+	if caller == nil {
+		// If caller smap is not set, assume request from fresh node and proceed.
+		if verInt == 0 && !fromPrimary {
+			return nil
+		}
+		return fmt.Errorf("%s: expected %s from a valid node", h.si, cmn.NetworkIntraControl)
+	}
+	return fmt.Errorf("%s: expected %s from primary (not %s)", h.si, cmn.NetworkIntraControl, caller)
+}
+
+//
+// request validation helpers
+//
+func (h *httprunner) isIntraCall(hdr http.Header) (isIntra bool) {
+	err := h._isIntraCall(hdr, false /*from primary*/)
+	return err == nil
+}
+
 // Determine if the request is intra-control. For now, using the http.Server handling the request.
 // TODO: Add other checks based on request e.g. `r.RemoteAddr`
-func (h *httprunner) ensureIntraControl(w http.ResponseWriter, r *http.Request) (isIntra bool) {
-	if isIntraCall(r.Header) {
-		// When `config.UseIntraControl` is `false`, intra-control net is same as public net.
-		if !cmn.GCO.Get().HostNet.UseIntraControl {
-			return true
-		}
+func (h *httprunner) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyPrimary bool) (isIntra bool) {
+	err := h._isIntraCall(r.Header, onlyPrimary)
+	if err != nil {
+		h.writeErr(w, r, err)
+		return
+	}
+	// When `config.UseIntraControl` is `false`, intra-control net is same as public net.
+	if !cmn.GCO.Get().HostNet.UseIntraControl {
+		return true
+	}
 
-		intraAddr := h.si.IntraControlNet.TCPEndpoint()
-		srvAddr := r.Context().Value(http.ServerContextKey).(*http.Server).Addr
-		if srvAddr == intraAddr {
-			return true
-		}
+	intraAddr := h.si.IntraControlNet.TCPEndpoint()
+	srvAddr := r.Context().Value(http.ServerContextKey).(*http.Server).Addr
+	if srvAddr == intraAddr {
+		return true
 	}
 
 	h.writeErrf(w, r, "%s: expected %s request", h.si, cmn.NetworkIntraControl)
-	return
-}
-
-// Determine if the request is intra-control from primary proxy.
-func (h *httprunner) ensureIntraPrimaryCall(w http.ResponseWriter, r *http.Request) (ok bool) {
-	if !h.ensureIntraControl(w, r) {
-		return
-	}
-	var (
-		smap       = h.owner.smap.get()
-		callerID   = r.Header.Get(cmn.HeaderCallerID)
-		callerNode = smap.GetProxy(callerID)
-	)
-	ok = callerNode != nil && smap.isPrimary(callerNode)
-	if !ok {
-		h.writeErrf(w, r, "requesting node %s, should be primary", callerNode)
-	}
 	return
 }
 

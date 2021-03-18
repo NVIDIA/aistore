@@ -830,7 +830,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		request  = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
 	)
 
-	if !isIntraCall(r.Header) && ptime == "" && !features.IsSet(cmn.FeatureDirectAccess) {
+	if !t.isIntraCall(r.Header) && ptime == "" && !features.IsSet(cmn.FeatureDirectAccess) {
 		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
 			t.si, r.Method, r.RemoteAddr)
 		return
@@ -1034,7 +1034,7 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		}
 		t.renameObject(w, r, &msg)
 	case cmn.ActPromote:
-		if isRedirect(query) == "" && !isIntraCall(r.Header) {
+		if isRedirect(query) == "" && !t.isIntraCall(r.Header) {
 			t.writeErrf(w, r, "%s: %s-%s(obj) is expected to be redirected or intra-called",
 				t.si, r.Method, msg.Action)
 			return
@@ -1055,7 +1055,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		query    = r.URL.Query()
 		request  = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
 	)
-	if isRedirect(query) == "" && !isIntraCall(r.Header) && !features.IsSet(cmn.FeatureDirectAccess) {
+	if isRedirect(query) == "" && !t.isIntraCall(r.Header) && !features.IsSet(cmn.FeatureDirectAccess) {
 		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
 			t.si, r.Method, r.RemoteAddr)
 		return

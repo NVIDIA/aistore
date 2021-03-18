@@ -41,12 +41,6 @@ func (na netAccess) isSet(flag netAccess) bool {
 	return na&flag == flag
 }
 
-//
-// request validation helpers - TODO: optionally, check node IDs vs Smap
-//
-func isIntraCall(hdr http.Header) bool {
-	return hdr != nil && hdr.Get(cmn.HeaderCallerID) != "" && hdr.Get(cmn.HeaderCallerName) != ""
-}
 func isIntraPut(hdr http.Header) bool { return hdr != nil && hdr.Get(cmn.HeaderPutterID) != "" }
 
 func isRedirect(q url.Values) (delta string) {

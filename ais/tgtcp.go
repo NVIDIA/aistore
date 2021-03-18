@@ -170,9 +170,12 @@ func (t *targetrunner) daeputJSON(w http.ResponseWriter, r *http.Request) {
 			t.writeErr(w, r, err)
 		}
 	case cmn.ActShutdown:
+		if !t.ensureIntraControl(w, r, true /* from primary */) {
+			return
+		}
 		t.Stop(&errNoUnregister{msg.Action})
 	case cmn.ActDecommission:
-		if !t.ensureIntraPrimaryCall(w, r) {
+		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
 		t.unreg(true /* decommission */, true /* clean data */)

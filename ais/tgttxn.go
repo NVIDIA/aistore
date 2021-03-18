@@ -62,6 +62,11 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErr405(w, r, http.MethodPost)
 		return
 	}
+
+	if !t.ensureIntraControl(w, r, true /* from primary */) {
+		return
+	}
+
 	msg := &aisMsg{}
 	if cmn.ReadJSON(w, r, msg) != nil {
 		return

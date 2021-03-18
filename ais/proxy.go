@@ -646,6 +646,7 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+
 	payload := make(msPayload)
 	if err := payload.unmarshal(r.Body, "metasync put"); err != nil {
 		cmn.WriteErr(w, r, err)
@@ -2103,7 +2104,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			p.writeErr(w, r, err)
 		}
 	case cmn.ActDecommission:
-		if !p.ensureIntraPrimaryCall(w, r) {
+		if !p.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
 		p.unreg(true /* decommission */)
@@ -2111,6 +2112,9 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		smap := p.owner.smap.get()
 		isPrimary := smap.isPrimary(p.si)
 		if !isPrimary {
+			if !p.ensureIntraControl(w, r, true /* from primary */) {
+				return
+			}
 			p.Stop(&errNoUnregister{msg.Action})
 			return
 		}

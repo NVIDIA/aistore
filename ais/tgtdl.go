@@ -24,6 +24,10 @@ import (
 // NOTE: This request is internal so we can have asserts there.
 // [METHOD] /v1/download
 func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
+	if !t.ensureIntraControl(w, r, false /* from primary */) {
+		return
+	}
+
 	var (
 		response   interface{}
 		respErr    error

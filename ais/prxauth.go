@@ -64,7 +64,7 @@ func (p *proxyrunner) validateToken(hdr http.Header) (*authn.Token, error) {
 //   - read-only access to a bucket is always granted
 //   - PATCH cannot be forbidden
 func (p *proxyrunner) checkACL(hdr http.Header, bck *cluster.Bck, ace cmn.AccessAttrs) error {
-	if isIntraCall(hdr) {
+	if p.isIntraCall(hdr) {
 		return nil
 	}
 	var (
