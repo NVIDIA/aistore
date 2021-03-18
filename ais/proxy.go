@@ -2051,6 +2051,11 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		if err := p.owner.config.resetDaemonConfig(); err != nil {
 			p.writeErr(w, r, err)
 		}
+	case cmn.ActDecommission:
+		if !p.ensureIntraPrimaryCall(w, r) {
+			return
+		}
+		p.unreg(true /* decommission */)
 	case cmn.ActShutdown:
 		smap := p.owner.smap.get()
 		isPrimary := smap.isPrimary(p.si)
@@ -2108,11 +2113,22 @@ func (p *proxyrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErr(w, r, err)
 		return
 	}
+	p.unreg(ok /*decommission*/)
+}
+
+func (p *proxyrunner) unreg(isDecommission bool) {
 	// Stop keepaliving
 	p.keepalive.send(kaUnregisterMsg)
-	if ok {
-		p.stopHTTPServer()
+	if !isDecommission {
+		return
 	}
+
+	// When decommissioning always cleanup all system meta-data.
+	err := cleanupConfigDir()
+	if err != nil {
+		glog.Errorf("%s: failed to cleanup config dir, err: %v", p.si, err)
+	}
+	p.stopHTTPServer()
 }
 
 func (p *proxyrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {

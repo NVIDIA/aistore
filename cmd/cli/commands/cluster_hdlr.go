@@ -104,6 +104,11 @@ var (
 					Action: clusterShutdownHandler,
 				},
 				{
+					Name:   subcmdDecommission,
+					Usage:  "decommission entire cluster",
+					Action: clusterDecommissionHandler,
+				},
+				{
 					Name:  subcmdMembership,
 					Usage: "manage members of the ais cluster",
 					Subcommands: []cli.Command{
@@ -212,6 +217,15 @@ func clusterShutdownHandler(c *cli.Context) (err error) {
 	}
 
 	fmt.Fprint(c.App.Writer, "All nodes in the cluster are being shut down.\n")
+	return
+}
+
+func clusterDecommissionHandler(c *cli.Context) (err error) {
+	if err := api.DecommissionCluster(defaultAPIParams); err != nil {
+		return err
+	}
+
+	fmt.Fprint(c.App.Writer, "All nodes in the cluster are being decommissioned.\n")
 	return
 }
 

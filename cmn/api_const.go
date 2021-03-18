@@ -19,6 +19,7 @@ const (
 // includes Xaction.Kind == ActionMsg.Action (when the action is asynchronous)
 const (
 	ActShutdown       = "shutdown"
+	ActDecommission   = "decommission" // Decommission all deamons in cluster
 	ActRebalance      = "rebalance"
 	ActResilver       = "resilver"
 	ActLRU            = "lru"
@@ -59,10 +60,10 @@ const (
 	ActAttach         = "attach"
 	ActDetach         = "detach"
 	// Node maintenance
-	ActStartMaintenance = "startmaintenance" // put into maintenance state
-	ActStopMaintenance  = "stopmaintenance"  // cancel maintenance state
-	ActDecommission     = "decommission"     // start rebalance and remove node from Smap when it finishes
-	ActShutdownNode     = "shutdown_node"    // shutdown a specific node
+	ActStartMaintenance = "startmaintenance"  // put into maintenance state
+	ActStopMaintenance  = "stopmaintenance"   // cancel maintenance state
+	ActDecommissionNode = "decommission_node" // start rebalance and remove node from Smap when it finishes
+	ActShutdownNode     = "shutdown_node"     // shutdown a specific node
 	// IC
 	ActSendOwnershipTbl  = "ic_send_ownership_tbl"
 	ActListenToNotif     = "watch_xaction"

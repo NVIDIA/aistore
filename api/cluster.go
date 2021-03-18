@@ -205,7 +205,7 @@ func StartMaintenance(baseParams BaseParams, actValue *cmn.ActValRmNode) (id str
 
 func Decommission(baseParams BaseParams, actValue *cmn.ActValRmNode) (id string, err error) {
 	msg := cmn.ActionMsg{
-		Action: cmn.ActDecommission,
+		Action: cmn.ActDecommissionNode,
 		Value:  actValue,
 	}
 	baseParams.Method = http.MethodPut
@@ -237,6 +237,21 @@ func ShutdownCluster(baseParams BaseParams) error {
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
 	})
+	return err
+}
+
+// DecommissionCluster decommissions whole cluster
+func DecommissionCluster(baseParams BaseParams) error {
+	msg := cmn.ActionMsg{Action: cmn.ActDecommission}
+	baseParams.Method = http.MethodPut
+	err := DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPathCluster.S,
+		Body:       cos.MustMarshal(msg),
+	})
+	if cos.IsEOF(err) {
+		err = nil
+	}
 	return err
 }
 

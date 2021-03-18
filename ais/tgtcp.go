@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -169,6 +170,11 @@ func (t *targetrunner) daeputJSON(w http.ResponseWriter, r *http.Request) {
 		}
 	case cmn.ActShutdown:
 		t.Stop(errShutdown)
+	case cmn.ActDecommission:
+		if !t.ensureIntraPrimaryCall(w, r) {
+			return
+		}
+		t.unreg(true /* decommission */, true /* clean data */)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
@@ -383,7 +389,10 @@ func (t *targetrunner) handleUnregisterReq(w http.ResponseWriter, r *http.Reques
 		cmn.WriteErr(w, r, err)
 		return
 	}
+	t.unreg(ok, opts.CleanData)
+}
 
+func (t *targetrunner) unreg(isDecommission, cleanData bool) {
 	// Stop keepaliving
 	t.keepalive.send(kaUnregisterMsg)
 
@@ -393,12 +402,23 @@ func (t *targetrunner) handleUnregisterReq(w http.ResponseWriter, r *http.Reques
 	// Stop all xactions
 	xreg.AbortAll()
 
-	if !ok {
+	if !isDecommission {
 		return
 	}
-	mdOnly := !opts.CleanData
-	glog.Infof("%s: decommissioning, removing user data: %t", t.si, opts.CleanData)
+	mdOnly := !cleanData
+	glog.Infof("%s: decommissioning, removing user data: %t", t.si, cleanData)
 	fs.Decommission(mdOnly)
+
+	// When decommissioning always cleanup all system meta-data.
+	err := cleanupConfigDir()
+	if err != nil {
+		glog.Errorf("%s: failed to cleanup config dir, err: %v", t.si, err)
+	}
+	// Delete DB file.
+	err = cos.RemoveFile(filepath.Join(cmn.GCO.Get().ConfigDir, dbName))
+	if err != nil {
+		glog.Errorf("failed to delete database, err: %v", err)
+	}
 	t.stopHTTPServer()
 }
 

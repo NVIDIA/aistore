@@ -745,7 +745,7 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 
 	// 3. Commit
 	// NOTE: Call only the target that's being decommissioned (commit is a no-op for the rest)
-	if msg.Action == cmn.ActDecommission || msg.Action == cmn.ActShutdownNode {
+	if msg.Action == cmn.ActDecommissionNode || msg.Action == cmn.ActShutdownNode {
 		c.req.Path = cos.JoinWords(c.path, cmn.ActCommit)
 		res := p.call(callArgs{si: si, req: c.req, timeout: c.commitTimeout(waitmsync)})
 		err = res.error()
@@ -759,7 +759,7 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 	// 4. Start rebalance
 	if !opts.SkipRebalance && rebEnabled {
 		return p.rebalanceAndRmSelf(msg, si)
-	} else if msg.Action == cmn.ActDecommission {
+	} else if msg.Action == cmn.ActDecommissionNode {
 		_, err = p.callRmSelf(msg, si, true /*skipReb*/)
 	}
 	return
@@ -769,7 +769,7 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 func (p *proxyrunner) markMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) error {
 	var flags cluster.SnodeFlags
 	switch msg.Action {
-	case cmn.ActDecommission:
+	case cmn.ActDecommissionNode:
 		flags = cluster.SnodeDecommission
 	case cmn.ActStartMaintenance, cmn.ActShutdownNode:
 		flags = cluster.SnodeMaintenance

@@ -890,7 +890,7 @@ func (h *httprunner) isDecommissionUnreg(w http.ResponseWriter, r *http.Request)
 	if err := cmn.ReadJSON(w, r, &msg, true /*optional*/); err != nil {
 		return nil, false, err
 	}
-	if msg.Action != cmn.ActDecommission {
+	if msg.Action != cmn.ActDecommissionNode {
 		return nil, false, nil
 	}
 	var opts cmn.ActValRmNode
@@ -2077,18 +2077,37 @@ func (h *httprunner) healthByExternalWD(w http.ResponseWriter, r *http.Request) 
 // Determine if the request is intra-control. For now, using the http.Server handling the request.
 // TODO: Add other checks based on request e.g. `r.RemoteAddr`
 func (h *httprunner) ensureIntraControl(w http.ResponseWriter, r *http.Request) (isIntra bool) {
-	// When `config.UseIntraControl` is `false`, intra-control net is same as public net.
-	if !cmn.GCO.Get().HostNet.UseIntraControl {
-		return true
-	}
+	if isIntraCall(r.Header) {
+		// When `config.UseIntraControl` is `false`, intra-control net is same as public net.
+		if !cmn.GCO.Get().HostNet.UseIntraControl {
+			return true
+		}
 
-	intraAddr := h.si.IntraControlNet.TCPEndpoint()
-	srvAddr := r.Context().Value(http.ServerContextKey).(*http.Server).Addr
-	if srvAddr == intraAddr {
-		return true
+		intraAddr := h.si.IntraControlNet.TCPEndpoint()
+		srvAddr := r.Context().Value(http.ServerContextKey).(*http.Server).Addr
+		if srvAddr == intraAddr {
+			return true
+		}
 	}
 
 	h.writeErrf(w, r, "%s: expected %s request", h.si, cmn.NetworkIntraControl)
+	return
+}
+
+// Determine if the request is intra-control from primary proxy.
+func (h *httprunner) ensureIntraPrimaryCall(w http.ResponseWriter, r *http.Request) (ok bool) {
+	if !h.ensureIntraControl(w, r) {
+		return
+	}
+	var (
+		smap       = h.owner.smap.get()
+		callerID   = r.Header.Get(cmn.HeaderCallerID)
+		callerNode = smap.GetProxy(callerID)
+	)
+	ok = callerNode != nil && smap.isPrimary(callerNode)
+	if !ok {
+		h.writeErrf(w, r, "requesting node %s, should be primary", callerNode)
+	}
 	return
 }
 

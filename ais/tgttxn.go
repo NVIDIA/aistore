@@ -107,7 +107,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	case cmn.ActECEncode:
 		err = t.ecEncode(c)
-	case cmn.ActStartMaintenance, cmn.ActDecommission, cmn.ActShutdownNode:
+	case cmn.ActStartMaintenance, cmn.ActDecommissionNode, cmn.ActShutdownNode:
 		err = t.startMaintenance(c)
 	case cmn.ActDestroyBck, cmn.ActEvictRemoteBck:
 		err = t.destroyBucket(c)
@@ -641,7 +641,7 @@ func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
 		if err := cos.MorphMarshal(c.msg.Value, &opts); err != nil {
 			return err
 		}
-		if c.msg.Action == cmn.ActDecommission {
+		if c.msg.Action == cmn.ActDecommissionNode {
 			if opts.DaemonID != t.si.ID() {
 				err := fmt.Errorf("%s: invalid target ID %q", t.si, opts.DaemonID)
 				debug.AssertNoErr(err)

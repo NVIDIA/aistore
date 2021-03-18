@@ -9,6 +9,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -288,4 +290,14 @@ func deploymentType() string {
 		return "dev"
 	}
 	return runtime.GOOS
+}
+
+func cleanupConfigDir() (err error) {
+	config := cmn.GCO.Get()
+	return filepath.Walk(config.ConfigDir, func(path string, info os.FileInfo, err error) error {
+		if !strings.HasPrefix(info.Name(), ".ais") || info.IsDir() {
+			return nil
+		}
+		return cos.RemoveFile(path)
+	})
 }

@@ -729,21 +729,27 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		p.setClusterConfig(w, r, toUpdate, msg)
 	case cmn.ActResetConfig:
 		p.resetClusterConfig(w, r, msg)
-	case cmn.ActShutdown:
-		glog.Infoln("Proxy-controlled cluster shutdown...")
+	case cmn.ActShutdown, cmn.ActDecommission:
+		glog.Infoln("Proxy-controlled cluster decommission/shutdown...")
 		args := allocBcastArgs()
 		args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: cos.MustMarshal(msg)}
 		args.to = cluster.AllNodes
 		_ = p.bcastGroup(args)
 		freeBcastArgs(args)
-
-		time.Sleep(time.Second)
-		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+		// Send response to request before shutdown/decommission
+		go func() {
+			time.Sleep(time.Second)
+			if msg.Action == cmn.ActShutdown {
+				_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+				return
+			}
+			p.unreg(true /*decommission*/)
+		}()
 	case cmn.ActXactStart, cmn.ActXactStop:
 		p.xactStarStop(w, r, msg)
 	case cmn.ActSendOwnershipTbl:
 		p.sendOwnTbl(w, r, msg)
-	case cmn.ActStartMaintenance, cmn.ActDecommission, cmn.ActShutdownNode:
+	case cmn.ActStartMaintenance, cmn.ActDecommissionNode, cmn.ActShutdownNode:
 		p.rmNode(w, r, msg)
 	case cmn.ActStopMaintenance:
 		p.stopMaintenance(w, r, msg)
@@ -979,7 +985,7 @@ func (p *proxyrunner) rmNode(w http.ResponseWriter, r *http.Request, msg *cmn.Ac
 			p.writeErrf(w, r, cmn.FmtErrFailed, p.si, msg.Action, si, err)
 			return
 		}
-		if msg.Action == cmn.ActDecommission || msg.Action == cmn.ActShutdownNode {
+		if msg.Action == cmn.ActDecommissionNode || msg.Action == cmn.ActShutdownNode {
 			errCode, err := p.callRmSelf(msg, si, true /*skipReb*/)
 			if err != nil {
 				p.writeErrStatusf(w, r, errCode, cmn.FmtErrFailed, p.si, msg.Action, si, err)
@@ -1171,7 +1177,7 @@ func (p *proxyrunner) rebalanceAndRmSelf(msg *cmn.ActionMsg, si *cluster.Snode) 
 		glog.Infof("%q %s and start rebalance", msg.Action, si)
 	}
 	var cb nl.NotifCallback
-	if msg.Action == cmn.ActDecommission || msg.Action == cmn.ActShutdownNode {
+	if msg.Action == cmn.ActDecommissionNode || msg.Action == cmn.ActShutdownNode {
 		cb = func(nl nl.NotifListener) { p.removeAfterRebalance(nl, msg, si) }
 	}
 	rmdCtx := &rmdModifier{
@@ -1395,9 +1401,9 @@ func (p *proxyrunner) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb 
 	case cmn.ActShutdownNode:
 		body := cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActShutdown})
 		args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: body}
-	case cmn.ActStartMaintenance, cmn.ActDecommission, testInitiatedRm:
+	case cmn.ActStartMaintenance, cmn.ActDecommissionNode, testInitiatedRm:
 		act := &cmn.ActionMsg{Action: msg.Action}
-		if msg.Action == cmn.ActDecommission {
+		if msg.Action == cmn.ActDecommissionNode {
 			act.Value = msg.Value
 		}
 		body := cos.MustMarshal(act)
@@ -1413,7 +1419,7 @@ func (p *proxyrunner) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb 
 		glog.Warningf("%s: %s that is being removed via %q fails to respond: %v[%s]",
 			p.si, node, msg.Action, er, d)
 	}
-	if msg.Action == cmn.ActDecommission || msg.Action == testInitiatedRm {
+	if msg.Action == cmn.ActDecommissionNode || msg.Action == testInitiatedRm {
 		// NOTE: proceeding anyway even if all retries fail
 		errCode, err = p.unregNode(msg, si, skipReb)
 	}
