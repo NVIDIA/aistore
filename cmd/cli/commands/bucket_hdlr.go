@@ -243,11 +243,6 @@ func evictHandler(c *cli.Context) (err error) {
 		if err != nil {
 			return err
 		}
-
-		if bck.IsAIS() {
-			return fmt.Errorf("cannot evict ais buckets (the operation applies to Cloud buckets only)")
-		}
-
 		if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
 			if objName != "" {
 				return incorrectUsageMsg(c, "object name (%q) not supported when list or template flag provided", objName)
@@ -255,7 +250,6 @@ func evictHandler(c *cli.Context) (err error) {
 			// List or range operation on a given bucket.
 			return listOrRangeOp(c, commandEvict, bck)
 		}
-
 		if objName == "" {
 			// Operation on a given bucket.
 			return evictBucket(c, bck)

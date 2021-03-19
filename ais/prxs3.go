@@ -522,7 +522,13 @@ func (p *proxyrunner) putBckVersioningS3(w http.ResponseWriter, r *http.Request,
 	propsToUpdate := cmn.BucketPropsToUpdate{
 		Versioning: &cmn.VersionConfToUpdate{Enabled: &enabled},
 	}
-	if _, err := p.setBucketProps(w, r, msg, bck, &propsToUpdate); err != nil {
+	// make and validate new props
+	nprops, err := p.makeNewBckProps(bck, &propsToUpdate)
+	if err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	if _, err := p.setBucketProps(msg, bck, nprops); err != nil {
 		p.writeErr(w, r, err)
 	}
 }

@@ -213,7 +213,7 @@ func ParseBckObjectURI(uri string, opts ParseURIOpts) (bck Bck, objName string, 
 			return bck, "", err
 		}
 		if bck.Provider == "" {
-			return bck, "", fmt.Errorf("provider cannot be empty when bucket name has been provided. Did you mean: \"ais://%s\"?", bck.String())
+			return bck, "", fmt.Errorf("provider cannot be empty - did you mean: \"ais://%s\"?", bck.String())
 		}
 	}
 	if len(parts) > 1 {

@@ -248,13 +248,7 @@ func (p *proxyrunner) _mirrorBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 }
 
 // set-bucket-props: { confirm existence -- begin -- apply props -- metasync -- commit }
-func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, bck *cluster.Bck,
-	propsToUpdate *cmn.BucketPropsToUpdate) (xactID string, err error) {
-	var (
-		nprops *cmn.BucketProps   // complete version of bucket props containing propsToUpdate changes
-		nmsg   = &cmn.ActionMsg{} // with nprops
-	)
-
+func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck, nprops *cmn.BucketProps) (xactID string, err error) {
 	// 1. confirm existence
 	bprops, present := p.owner.bmd.get().Get(bck)
 	if !present {
@@ -266,26 +260,7 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 	// 2. begin
 	switch msg.Action {
 	case cmn.ActSetBprops:
-		// make and validate new props
-		if nprops, err = p.makeNewBckProps(bck, propsToUpdate); err != nil {
-			return
-		}
-
-		if !nprops.BackendBck.IsEmpty() {
-			// Makes sure that there will be no other forwarding to proxy.
-			cos.Assert(p.owner.smap.get().isPrimary(p.si))
-			// Make sure that destination bucket exists.
-			backendBck := cluster.NewBckEmbed(nprops.BackendBck)
-			args := bckInitArgs{p: p, w: w, r: r, bck: backendBck, msg: msg}
-			if _, err = args.initAndTry(backendBck.Name); err != nil {
-				return
-			}
-		}
-
-		// Make sure that backend bucket was initialized correctly.
-		if err = p.checkBackendBck(nprops); err != nil {
-			return
-		}
+		// do nothing here (caller's responsible for validation)
 	case cmn.ActResetBprops:
 		var remoteBckProps http.Header
 		if bck.IsRemote() {
@@ -304,11 +279,11 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 		cos.Assert(false)
 	}
 	// msg{propsToUpdate} => nmsg{nprops} and prep context(nmsg)
-	*nmsg = *msg
+	nmsg := *msg
 	nmsg.Value = nprops
 	var (
 		waitmsync = true
-		c         = p.prepTxnClient(nmsg, bck, waitmsync)
+		c         = p.prepTxnClient(&nmsg, bck, waitmsync)
 	)
 	results := c.bcast(cmn.ActBegin, c.timeout.netw)
 	for _, res := range results {
@@ -323,14 +298,13 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 
 	// 3. update BMD locally & metasync updated BMD
 	ctx := &bmdModifier{
-		pre:           p._setPropsPre,
-		final:         p._syncBMDFinal,
-		wait:          waitmsync,
-		msg:           msg,
-		txnID:         c.uuid,
-		setProps:      nprops,
-		propsToUpdate: propsToUpdate,
-		bcks:          []*cluster.Bck{bck},
+		pre:      p._setPropsPre,
+		final:    p._syncBMDFinal,
+		wait:     waitmsync,
+		msg:      msg,
+		txnID:    c.uuid,
+		setProps: nprops,
+		bcks:     []*cluster.Bck{bck},
 	}
 	bmd, err := p.owner.bmd.modify(ctx)
 	if err != nil {
@@ -363,24 +337,13 @@ func (p *proxyrunner) _setPropsPre(ctx *bmdModifier, clone *bucketMD) (err error
 		bprops, present = clone.Get(bck) // TODO: Bucket could be deleted during begin.
 	)
 	cos.Assert(present)
-
 	if ctx.msg.Action == cmn.ActSetBprops {
 		bck.Props = bprops
-		ctx.setProps, err = p.makeNewBckProps(bck, ctx.propsToUpdate)
-		if err != nil {
-			return err
-		}
-
-		// BackendBck (if present) should be already locally available (see cmn.ActSetBprops).
-		if err := p.checkBackendBck(ctx.setProps); err != nil {
-			return err
-		}
 	} else {
 		targetCnt := p.owner.smap.Get().CountActiveTargets()
 		debug.Assert(ctx.setProps != nil)
 		debug.AssertNoErr(ctx.setProps.Validate(targetCnt))
 	}
-
 	ctx.needReMirror = reMirror(bprops, ctx.setProps)
 	ctx.needReEC = reEC(bprops, ctx.setProps, bck)
 	clone.set(bck, ctx.setProps)
@@ -1037,7 +1000,7 @@ func _versioning(v bool) string {
 	return "disabled"
 }
 
-func (p *proxyrunner) checkBackendBck(nprops *cmn.BucketProps) (err error) {
+func (p *proxyrunner) initBackendProp(nprops *cmn.BucketProps) (err error) {
 	if nprops.BackendBck.IsEmpty() {
 		return
 	}
@@ -1045,7 +1008,6 @@ func (p *proxyrunner) checkBackendBck(nprops *cmn.BucketProps) (err error) {
 	if err = backend.InitNoBackend(p.owner.bmd); err != nil {
 		return
 	}
-
 	// NOTE: backend versioning override
 	nprops.Versioning.Enabled = backend.Props.Versioning.Enabled
 	return

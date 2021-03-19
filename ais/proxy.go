@@ -1335,6 +1335,8 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	var (
 		err           error
 		propsToUpdate cmn.BucketPropsToUpdate
+		xactID        string
+		nprops        *cmn.BucketProps // complete instance of bucket props with propsToUpdate changes
 		msg           = &cmn.ActionMsg{Value: &propsToUpdate}
 		request       = &apiRequest{after: 1, prefix: cmn.URLPathBuckets.L, msg: &msg}
 	)
@@ -1344,7 +1346,6 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	if p.forwardCP(w, r, msg, "httpbckpatch") {
 		return
 	}
-
 	bck := request.bck
 	perms := cmn.AccessPATCH
 	if propsToUpdate.Access != nil {
@@ -1354,14 +1355,29 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	if bck, err = args.initAndTry(bck.Name); err != nil {
 		return
 	}
-
 	if err = p.checkAction(msg, cmn.ActSetBprops, cmn.ActResetBprops); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
-
-	var xactID string
-	if xactID, err = p.setBucketProps(w, r, msg, bck, &propsToUpdate); err != nil {
+	// make and validate new props
+	if nprops, err = p.makeNewBckProps(bck, &propsToUpdate); err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	if !nprops.BackendBck.IsEmpty() {
+		// backend must exist
+		backendBck := cluster.NewBckEmbed(nprops.BackendBck)
+		args := bckInitArgs{p: p, w: w, r: r, bck: backendBck, msg: msg}
+		if _, err = args.initAndTry(backendBck.Name); err != nil {
+			return
+		}
+		// init and validate
+		if err = p.initBackendProp(nprops); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+	}
+	if xactID, err = p.setBucketProps(msg, bck, nprops); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
