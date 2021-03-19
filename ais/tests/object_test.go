@@ -877,15 +877,29 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 }
 
 func TestEvictRemoteBucket(t *testing.T) {
-	t.Run("KeepMD", func(t *testing.T) { testEvictRemoteBucket(t, true) })
-	t.Run("DeleteMD", func(t *testing.T) { testEvictRemoteBucket(t, false) })
+	t.Run("Cloud/KeepMD", func(t *testing.T) { testEvictRemoteBucket(t, cliBck, true) })
+	t.Run("Cloud/DeleteMD", func(t *testing.T) { testEvictRemoteBucket(t, cliBck, false) })
+	t.Run("RemoteAIS", testEvictRemoteAISBucket)
 }
 
-func testEvictRemoteBucket(t *testing.T, keepMD bool) {
+func testEvictRemoteAISBucket(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiresRemoteCluster: true})
+	bck := cmn.Bck{
+		Name:     cos.RandString(10),
+		Provider: cmn.ProviderAIS,
+		Ns: cmn.Ns{
+			UUID: tutils.RemoteCluster.UUID,
+		},
+	}
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	testEvictRemoteBucket(t, bck, false)
+}
+
+func testEvictRemoteBucket(t *testing.T, bck cmn.Bck, keepMD bool) {
 	var (
 		m = ioContext{
 			t:        t,
-			bck:      cliBck,
+			bck:      bck,
 			num:      5,
 			fileSize: largeFileSize,
 		}
@@ -893,10 +907,7 @@ func testEvictRemoteBucket(t *testing.T, keepMD bool) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	// TODO: This only works for cloud buckets because `EvictBucket` removes
-	//  bucket from BMD (see #1050 for more info).
-	tutils.CheckSkip(t, tutils.SkipTestArgs{CloudBck: true, Bck: m.bck})
-
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 	m.saveClusterState()
 
 	t.Cleanup(func() {

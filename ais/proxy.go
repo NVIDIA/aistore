@@ -570,7 +570,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 
 	switch msg.Action {
 	case cmn.ActEvictRemoteBck:
-		if bck.IsAIS() {
+		if !bck.IsRemote() {
 			p.writeErrf(w, r, fmtNotRemote, bck.Name)
 			return
 		}
@@ -582,15 +582,26 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		fallthrough // fallthrough
+		if p.forwardCP(w, r, &msg, bck.Name) {
+			return
+		}
+		if err := p.destroyBucket(&msg, bck); err != nil {
+			p.writeErr(w, r, err)
+		}
 	case cmn.ActDestroyBck:
 		if p.forwardCP(w, r, &msg, bck.Name) {
 			return
 		}
 		if bck.IsRemoteAIS() {
-			if err := p.reverseReqRemote(w, r, &msg, bck.Bck); err != nil {
-				return
+			if err := p.destroyBucket(&msg, bck); err != nil {
+				if _, ok := err.(*cmn.ErrBucketDoesNotExist); !ok {
+					p.writeErr(w, r, err)
+					return
+				}
 			}
+			// After successful removal of local copy of a bucket, remove the bucket from remote.
+			p.reverseReqRemote(w, r, &msg, bck.Bck)
+			return
 		}
 		if err := p.destroyBucket(&msg, bck); err != nil {
 			if _, ok := err.(*cmn.ErrBucketDoesNotExist); ok { // race

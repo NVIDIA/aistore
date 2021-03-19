@@ -211,6 +211,42 @@ func TestCreateRemoteBucket(t *testing.T) {
 	}
 }
 
+func TestCreateDestroyRemoteAISBucket(t *testing.T) {
+	t.Run("withObjects", func(t *testing.T) { testCreateDestroyRemoteAISBucket(t, true) })
+	t.Run("withoutObjects", func(t *testing.T) { testCreateDestroyRemoteAISBucket(t, false) })
+}
+
+func testCreateDestroyRemoteAISBucket(t *testing.T, withObjects bool) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiresRemoteCluster: true})
+	bck := cmn.Bck{
+		Name:     cos.RandString(10),
+		Provider: cmn.ProviderAIS,
+		Ns: cmn.Ns{
+			UUID: tutils.RemoteCluster.UUID,
+		},
+	}
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	_, err := api.HeadBucket(baseParams, bck)
+	tassert.CheckFatal(t, err)
+	if withObjects {
+		m := ioContext{
+			t:         t,
+			num:       1000,
+			fileSize:  cos.KiB,
+			fixedSize: true,
+			bck:       bck,
+		}
+		m.init()
+		m.puts()
+	}
+
+	err = api.DestroyBucket(baseParams, bck)
+	tassert.CheckFatal(t, err)
+	names, err := api.ListBuckets(baseParams, cmn.QueryBcks(bck))
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, !names.Contains(cmn.QueryBcks(bck)), "expected bucket to not be listed")
+}
+
 func TestOverwriteLomCache(t *testing.T) {
 	for _, mdwrite := range []cmn.MDWritePolicy{cmn.WriteImmediate, cmn.WriteNever} {
 		name := string(mdwrite)
