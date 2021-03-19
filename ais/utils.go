@@ -145,11 +145,14 @@ func selectConfiguredHostname(addrlist []*localIPv4Info, configuredList []string
 	for i, host := range configuredList {
 		if net.ParseIP(host) != nil {
 			ipv4 = strings.TrimSpace(host)
-		} else if ip, err := getFQNIPv4(host); err == nil {
-			ipv4 = ip.String()
 		} else {
-			glog.Errorf("failed to parse hostname %q", host)
-			continue
+			glog.Warningf("failed to parse IP for hostname %q", host)
+			ip, err := resolveHostIPv4(host)
+			if err != nil {
+				glog.Errorf("failed to get IPv4 for host=%q; err %v", host, err)
+				continue
+			}
+			ipv4 = ip.String()
 		}
 		for _, localaddr := range addrlist {
 			if i == 0 {
@@ -216,8 +219,8 @@ func getNetInfo(addrList []*localIPv4Info, proto, configuredIPv4s, port string) 
 	return
 }
 
-func getFQNIPv4(fqn string) (net.IP, error) {
-	ips, err := net.LookupIP(fqn)
+func resolveHostIPv4(hostName string) (net.IP, error) {
+	ips, err := net.LookupIP(hostName)
 	if err != nil {
 		return nil, err
 	}
@@ -226,14 +229,14 @@ func getFQNIPv4(fqn string) (net.IP, error) {
 			return ip, nil
 		}
 	}
-	return nil, fmt.Errorf("failed to get IPv4 for FQN %s", fqn)
+	return nil, fmt.Errorf("failed to find non-empty IPv4 in list %v (hostName=%q)", ips, hostName)
 }
 
 func validateHostname(hostname string) (err error) {
 	if net.ParseIP(hostname) != nil {
 		return
 	}
-	_, err = getFQNIPv4(hostname)
+	_, err = resolveHostIPv4(hostname)
 	return
 }
 
