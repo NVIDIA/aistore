@@ -15,7 +15,7 @@
 
 ## CLI: Getting Started
 
-<img src="/docs/images/ais2.13.gif" width="100%">
+[![AIStore CLI Demo](./images/cli-demo-400.png)](https://youtu.be/VPIhQm2sMD8 "AIStore CLI Demo (Youtube video)")
 
 # Deployment: Google Cloud
 

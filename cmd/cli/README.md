@@ -19,7 +19,7 @@ In addition, CLI provides dataset management commands, commands to read and writ
 
 **TL;DR**: see section [CLI reference](#cli-reference) below to quickly locate useful commands. There's also a (structured as a reference) list CLI resources with numerous examples and usage guides that we constantly keep updating.
 
-<img src="/docs/images/ais2.13.gif" alt="CLI-playback" width="900">
+[![AIStore CLI Demo](./images/cli-demo-400.png)](https://youtu.be/VPIhQm2sMD8 "AIStore CLI Demo (Youtube video)")
 
 ## Getting Started
 
