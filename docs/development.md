@@ -31,14 +31,14 @@ $ make help
 ### Clean deploy
 
 ```
-./clean_deploy.sh [--ntargets TARGET_CNT] [--nproxies PROXY_CNT] [--mountpoints MPOINT_CNT] [--https] [--tier] [--PROVIDER ...] [--debug PKG=LOG_LEVEL[,PKG=LOG_LEVEL]]
+./clean_deploy.sh [--ntargets TARGET_CNT] [--nproxies PROXY_CNT] [--mountpoints MPOINT_CNT] [--https] [--deploy local|remote|both] [--remote-alias REMOTE_ALIAS] [--PROVIDER ...] [--debug PKG=LOG_LEVEL[,PKG=LOG_LEVEL]]
 ```
 
 Performs cleanup and then deploys a new instance of an AIS cluster.
 To make it even more convenient, consider setting up an alias:
 
 ```bash
-alias cais="bash ${GOPATH}/src/github.com/NVIDIA/aistore/deploy/scripts/bootstrap.sh clean-deploy --aws --gcp"
+alias cais="bash ${GOPATH}/src/github.com/NVIDIA/aistore/deploy/scripts/clean-deploy --aws --gcp"
 ```
 
 #### Example usage
@@ -47,7 +47,17 @@ The command below starts a cluster with 5 proxies and 5 targets with GCP cloud e
 Remember to set `GOOGLE_APPLICATION_CREDENTIALS` env when using GCP cloud!
 
 ```console
-$ bash ./deploy/scripts/bootstrap.sh clean-deploy --gcp
+$ bash ./deploy/scripts/clean-deploy --gcp
+```
+
+The example below deploys:
+- a simulated remote cluster with alias "remoteAIS"
+- 3 targets
+- 3 proxies
+- with aws support
+
+```console
+$ bash ./deploy/scripts/clean-deploy --deployment all --remote-alias remoteAIS -ntargets 3 -nproxies 3 --aws
 ```
 
 #### Options
@@ -59,7 +69,8 @@ $ bash ./deploy/scripts/bootstrap.sh clean-deploy --gcp
 | `--mountpoints` | Number of mountpoints to use (default: 5) |
 | `--PROVIDER` | Specifies the backend provider(s). Can be: `--aws`, `--azure`, `--gcp`, `--hdfs` |
 | `--loopback` | Provision loopback devices |
-| `--tier` | Start AIS-behind-AIS cluster configuration |
+| `--deployment` | Choose which AIS cluster to deploy. `local` to deploy only one AIS cluster, `remote` to only start an AIS-behind-AIS cluster, and `all` to deploy both the local and remote clusters. |
+| `--remote-alias` | Alias to assign to the remote cluster |
 | `--https` | Start cluster with HTTPS enabled (*) |
 | `--debug PKG=LOG_LEVEL` | Change logging level of particular package(s) |
 

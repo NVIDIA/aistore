@@ -92,7 +92,7 @@ test:short:
   variables:
     BUCKET: "ais://test"
   script:
-    - deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT --tier
+    - deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT --deployment all
     - make test-short
     - FLAGS="--duration=10s" make test-aisloader
   <<: *gather_logs_def
@@ -139,7 +139,7 @@ test:short:https:
     BUCKET: "ais://ais-ci"
   script:
     - openssl req -x509 -out $AIS_SERVER_CRT -keyout $AIS_SERVER_KEY -newkey rsa:2048 -nodes -sha256 -subj '/CN=localhost' -extensions EXT -config <( printf "[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth")
-    - deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT --tier --https
+    - deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT --deployment all --https
     - make test-short
 
 test:long:

@@ -64,21 +64,28 @@ The following [video](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Devel
 
 [![AIStore Developer Playground](./images/dev-playground-400.png)](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube video)")
 
+### Deployment Script
+
 Assuming that [Go](https://golang.org/dl/) toolchain is already installed, the steps to deploy AIS locally on a single development machine are:
 
 ```console
 $ cd $GOPATH/src
 $ go get -v github.com/NVIDIA/aistore/ais
 $ cd github.com/NVIDIA/aistore
-$ make deploy
-$ go test ./tests -v -run=Mirror
+$ ./deploy/scripts/clean_deploy.sh
 ```
-
 where:
 
 * `go get` installs sources and dependencies under your [$GOPATH](https://golang.org/cmd/go/#hdr-GOPATH_environment_variable).
-* `make deploy` deploys AIStore daemons locally and interactively, for example:
+* [`clean_deploy.sh`](/docs/development.md#clean-deploy) builds various AIStore binaries (such as `aisnode` and `cli`)
+and then deploys a local cluster with 5 proxies and 5 targets by default.
 
+To specify the number of simulated nodes, you can run `clean_deploy.sh --nproxies 3 --ntargets 3`. To see more options 
+that `clean_deploy.sh` provides, [refer to its documentation](/docs/development.md#clean-deploy)
+
+### Manual Deployment
+
+You can also run `make deploy` in the root directory of the repository to deploy a cluster:
 ```console
 $ make deploy
 Enter number of storage targets:
@@ -102,26 +109,25 @@ Building aisnode: version=df24df77 providers=
 ```
 > Notice the "Cloud" prompt above, and the fact that access to 3rd party Cloud storage is a deployment-time option.
 
-Or, you can run all the above in one shot non-interactively:
-
-```console
-$ ./deploy/scripts/clean_deploy.sh
-```
-
-`clean_deploy.sh` deploys 5 gateways and 5 targets, each with 5 local simulated filesystems.
-[More details on using the script can be found here.](/docs/development.md#clean-deploy)
-
 `make kill` will terminate local AIStore if it's already running.
 
-For more development options and tools, please refer to [development docs](development.md).
+For more development options and tools, please refer to the [development docs](/docs/development.md).
 
-Finally, the `go test` (above) will create an AIS bucket, configure it as a two-way mirror, generate thousands of random objects, read them all several times, and then destroy the replicas and eventually the bucket as well.
+### Testing your cluster
+
+To make sure your cluster was deployed correctly, you can run some tests. For example:
+
+```console
+$ go test ./ais/tests -v -run=Mirror
+```
+
+The `go test` above will create an AIS bucket, configure it as a two-way mirror, generate thousands of random objects, read them all several times, and then destroy the replicas and eventually the bucket as well.
 
 Alternatively, if you happen to have Amazon and/or Google Cloud account, make sure to specify the corresponding (S3 or GCS) bucket name when running `go test` commands.
 For example, the following will download objects from your (presumably) S3 bucket and distribute them across AIStore:
 
 ```console
-$ BUCKET=aws://myS3bucket go test ./tests -v -run=download
+$ BUCKET=aws://myS3bucket go test ./ais/tests -v -run=download
 ```
 
 ## Kubernetes Playground
