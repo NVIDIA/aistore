@@ -723,15 +723,11 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		args.to = cluster.AllNodes
 		_ = p.bcastGroup(args)
 		freeBcastArgs(args)
-		// Send response to request before shutdown/decommission
-		go func() {
-			time.Sleep(time.Second)
-			if msg.Action == cmn.ActShutdown {
-				_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
-				return
-			}
-			p.unreg(true /*decommission*/)
-		}()
+		if msg.Action == cmn.ActShutdown {
+			_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+			return
+		}
+		p.unreg(true /*decommission*/)
 	case cmn.ActXactStart, cmn.ActXactStop:
 		p.xactStarStop(w, r, msg)
 	case cmn.ActSendOwnershipTbl:
