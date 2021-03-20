@@ -1352,7 +1352,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	}
 	var errCode int
 	if p.isIntraCall(r.Header) {
-		if cid := r.Header.Get(cmn.HeaderCallerID); cid == sid {
+		if cid := r.Header.Get(cmn.HdrCallerID); cid == sid {
 			errCode, err = p.unregNode(&cmn.ActionMsg{Action: "self-initiated-removal"}, node, false /*skipReb*/)
 		} else {
 			err = fmt.Errorf("expecting self-initiated removal (%s != %s)", cid, sid)

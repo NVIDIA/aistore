@@ -408,12 +408,12 @@ func mergeRemoteBckProps(props *cmn.BucketProps, header http.Header) *cmn.Bucket
 	cos.Assert(len(header) > 0)
 	switch props.Provider {
 	case cmn.ProviderAmazon:
-		props.Extra.AWS.CloudRegion = header.Get(cmn.HeaderCloudRegion)
+		props.Extra.AWS.CloudRegion = header.Get(cmn.HdrCloudRegion)
 	case cmn.ProviderHTTP:
-		props.Extra.HTTP.OrigURLBck = header.Get(cmn.HeaderOrigURLBck)
+		props.Extra.HTTP.OrigURLBck = header.Get(cmn.HdrOrigURLBck)
 	}
 
-	if verStr := header.Get(cmn.HeaderBucketVerEnabled); verStr != "" {
+	if verStr := header.Get(cmn.HdrBucketVerEnabled); verStr != "" {
 		versioning, err := cos.ParseBool(verStr)
 		cos.AssertNoErr(err)
 		props.Versioning.Enabled = versioning

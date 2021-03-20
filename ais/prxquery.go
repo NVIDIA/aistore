@@ -44,7 +44,7 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 
 	// A target will return error if given handle already exists (though is very unlikely).
 	handle := cos.GenUUID()
-	header := http.Header{cmn.HeaderHandle: []string{handle}}
+	header := http.Header{cmn.HdrHandle: []string{handle}}
 	msg := &query.InitMsg{}
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		return
@@ -164,7 +164,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 		Method: http.MethodGet,
 		Path:   cmn.URLPathQueryPeek.S,
 		Body:   cos.MustMarshal(msg),
-		Header: map[string][]string{cmn.HeaderAccept: {cmn.ContentMsgPack}},
+		Header: map[string][]string{cmn.HdrAccept: {cmn.ContentMsgPack}},
 	}
 	args.timeout = cmn.LongTimeout
 	args.fv = func() interface{} { return &cmn.BucketList{} }

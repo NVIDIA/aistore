@@ -796,11 +796,11 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		}
 		glog.Warningf("%s: bucket %s, err: %v(%d)", t.si, request.bck, err, code)
 		bucketProps = make(cos.SimpleKVs)
-		bucketProps[cmn.HeaderBackendProvider] = request.bck.Provider
-		bucketProps[cmn.HeaderRemoteOffline] = strconv.FormatBool(request.bck.IsRemote())
+		bucketProps[cmn.HdrBackendProvider] = request.bck.Provider
+		bucketProps[cmn.HdrRemoteOffline] = strconv.FormatBool(request.bck.IsRemote())
 	}
 	for k, v := range bucketProps {
-		if k == cmn.HeaderBucketVerEnabled && request.bck.Props != nil {
+		if k == cmn.HdrBucketVerEnabled && request.bck.Props != nil {
 			if curr := strconv.FormatBool(request.bck.VersionConf().Enabled); curr != v {
 				// e.g., change via vendor-provided CLI and similar
 				glog.Errorf("%s: %s versioning got out of sync: %s != %s", t.si, request.bck, v, curr)
@@ -880,7 +880,7 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 		goi.lom = lom
 		goi.w = w
 		goi.ctx = context.Background()
-		goi.ranges = cmn.RangesQuery{Range: r.Header.Get(cmn.HeaderRange), Size: 0}
+		goi.ranges = cmn.RangesQuery{Range: r.Header.Get(cmn.HdrRange), Size: 0}
 		goi.isGFN = isGFNRequest
 		goi.chunked = config.Net.HTTP.Chunked
 	}
@@ -970,7 +970,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		if handle, errCode, err := t.doAppend(r, lom, started); err != nil {
 			t.writeErr(w, r, err, errCode)
 		} else {
-			w.Header().Set(cmn.HeaderAppendHandle, handle)
+			w.Header().Set(cmn.HdrAppendHandle, handle)
 		}
 	}
 }
@@ -1143,7 +1143,7 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 		objProps.NumCopies = lom.NumCopies()
 		if lom.Bck().Props.EC.Enabled {
 			if md, err := ec.ObjectMetadata(lom.Bck(), objName); err == nil {
-				hdr.Set(cmn.HeaderObjECMeta, ec.MetaToString(md))
+				hdr.Set(cmn.HdrObjECMeta, ec.MetaToString(md))
 			}
 		}
 	}
@@ -1158,10 +1158,10 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 
 	if isETLRequest(query) {
 		// We don't know neither length of on-the-fly transformed object, nor checksum.
-		hdr.Del(cmn.HeaderContentLength)
+		hdr.Del(cmn.HdrContentLength)
 		hdr.Del(cmn.GetPropsChecksum)
-		hdr.Del(cmn.HeaderObjCksumVal)
-		hdr.Del(cmn.HeaderObjCksumType)
+		hdr.Del(cmn.HdrObjCksumVal)
+		hdr.Del(cmn.HdrObjCksumType)
 	}
 }
 
@@ -1254,7 +1254,7 @@ func (t *targetrunner) CheckRemoteVersion(ctx context.Context, lom *cluster.LOM)
 		err = fmt.Errorf(cmn.FmtErrFailed, t.si, "head metadata of", lom, err)
 		return
 	}
-	if remoteVersion, ok := objMeta[cmn.HeaderObjVersion]; ok {
+	if remoteVersion, ok := objMeta[cmn.HdrObjVersion]; ok {
 		if lom.Version() != remoteVersion {
 			glog.Infof("%s: version changed from %s to %s", lom, lom.Version(), remoteVersion)
 			vchanged = true
@@ -1308,8 +1308,8 @@ func (t *targetrunner) _listBcks(query cmn.QueryBcks, cfg *cmn.Config) (names cm
 
 func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.Time) (newHandle string, errCode int, err error) {
 	var (
-		cksumValue    = r.Header.Get(cmn.HeaderObjCksumVal)
-		cksumType     = r.Header.Get(cmn.HeaderObjCksumType)
+		cksumValue    = r.Header.Get(cmn.HdrObjCksumVal)
+		cksumType     = r.Header.Get(cmn.HdrObjCksumType)
 		contentLength = r.Header.Get("Content-Length")
 		query         = r.URL.Query()
 		handle        = query.Get(cmn.URLParamAppendHandle)
@@ -1348,8 +1348,8 @@ func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.
 func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Time) (errCode int, err error) {
 	var (
 		header     = r.Header
-		cksumType  = header.Get(cmn.HeaderObjCksumType)
-		cksumValue = header.Get(cmn.HeaderObjCksumVal)
+		cksumType  = header.Get(cmn.HdrObjCksumType)
+		cksumValue = header.Get(cmn.HdrObjCksumVal)
 		recvType   = r.URL.Query().Get(cmn.URLParamRecvType)
 	)
 	lom.FromHTTPHdr(header) // TODO: check that values parsed here are not coming from the user

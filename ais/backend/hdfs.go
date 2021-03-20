@@ -103,8 +103,8 @@ func (hp *hdfsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 	}
 
 	bckProps = make(cos.SimpleKVs)
-	bckProps[cmn.HeaderBackendProvider] = cmn.ProviderHDFS
-	bckProps[cmn.HeaderBucketVerEnabled] = "false"
+	bckProps[cmn.HdrBackendProvider] = cmn.ProviderHDFS
+	bckProps[cmn.HdrBucketVerEnabled] = "false"
 	return
 }
 
@@ -211,8 +211,8 @@ func (hp *hdfsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta 
 	}
 
 	objMeta = make(cos.SimpleKVs, 2)
-	objMeta[cmn.HeaderBackendProvider] = cmn.ProviderHDFS
-	objMeta[cmn.HeaderObjSize] = strconv.FormatInt(fr.Stat().Size(), 10)
+	objMeta[cmn.HdrBackendProvider] = cmn.ProviderHDFS
+	objMeta[cmn.HdrObjSize] = strconv.FormatInt(fr.Stat().Size(), 10)
 	objMeta[cluster.VersionObjMD] = ""
 
 	if glog.FastV(4, glog.SmoduleAIS) {

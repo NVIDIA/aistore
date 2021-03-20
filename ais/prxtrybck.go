@@ -213,20 +213,20 @@ func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode i
 
 	if bck.IsHTTP() {
 		if len(origURLBck) > 0 {
-			remoteProps.Set(cmn.HeaderOrigURLBck, origURLBck[0])
+			remoteProps.Set(cmn.HdrOrigURLBck, origURLBck[0])
 		} else if origURL := args.r.URL.Query().Get(cmn.URLParamOrigURL); origURL != "" {
 			hbo, err := cmn.NewHTTPObjPath(origURL)
 			if err != nil {
 				errCode = http.StatusBadRequest
 				return bck, errCode, err
 			}
-			remoteProps.Set(cmn.HeaderOrigURLBck, hbo.OrigURLBck)
+			remoteProps.Set(cmn.HdrOrigURLBck, hbo.OrigURLBck)
 		} else {
 			err = fmt.Errorf("failed to initialize bucket %q: missing HTTP URL", args.bck)
 			errCode = http.StatusBadRequest
 			return
 		}
-		debug.Assert(remoteProps.Get(cmn.HeaderOrigURLBck) != "")
+		debug.Assert(remoteProps.Get(cmn.HdrOrigURLBck) != "")
 	}
 
 	if err = args.p.createBucket(&cmn.ActionMsg{Action: action}, bck, remoteProps); err != nil {

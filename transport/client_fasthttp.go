@@ -57,9 +57,9 @@ func (s *streamBase) do(body io.Reader) (err error) {
 	req.SetRequestURI(s.toURL)
 	req.SetBodyStream(body, -1)
 	if s.streamer.compressed() {
-		req.Header.Set(cmn.HeaderCompress, cmn.LZ4Compression)
+		req.Header.Set(cmn.HdrCompress, cmn.LZ4Compression)
 	}
-	req.Header.Set(cmn.HeaderSessID, strconv.FormatInt(s.sessID, 10))
+	req.Header.Set(cmn.HdrSessID, strconv.FormatInt(s.sessID, 10))
 	// do
 	err = s.client.Do(req, resp)
 	if err != nil {

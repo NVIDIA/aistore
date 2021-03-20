@@ -43,9 +43,9 @@ func (s *streamBase) do(body io.Reader) (err error) {
 		return
 	}
 	if s.streamer.compressed() {
-		request.Header.Set(cmn.HeaderCompress, cmn.LZ4Compression)
+		request.Header.Set(cmn.HdrCompress, cmn.LZ4Compression)
 	}
-	request.Header.Set(cmn.HeaderSessID, strconv.FormatInt(s.sessID, 10))
+	request.Header.Set(cmn.HdrSessID, strconv.FormatInt(s.sessID, 10))
 
 	response, err = s.client.Do(request)
 	if err != nil {

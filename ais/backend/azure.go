@@ -193,8 +193,8 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 		return bckProps, resp.StatusCode(), err
 	}
 	bckProps = make(cos.SimpleKVs, 2)
-	bckProps[cmn.HeaderBackendProvider] = cmn.ProviderAzure
-	bckProps[cmn.HeaderBucketVerEnabled] = "true"
+	bckProps[cmn.HdrBackendProvider] = cmn.ProviderAzure
+	bckProps[cmn.HdrBucketVerEnabled] = "true"
 	return bckProps, http.StatusOK, nil
 }
 
@@ -311,12 +311,12 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 		err := fmt.Errorf(cmn.FmtErrFailed, cmn.ProviderAzure, "get object props of", cloudBck.Name+"/"+lom.ObjName, strconv.Itoa(resp.StatusCode()))
 		return objMeta, resp.StatusCode(), err
 	}
-	objMeta[cmn.HeaderObjSize] = strconv.FormatInt(resp.ContentLength(), 10)
-	objMeta[cmn.HeaderBackendProvider] = cmn.ProviderAzure
+	objMeta[cmn.HdrObjSize] = strconv.FormatInt(resp.ContentLength(), 10)
+	objMeta[cmn.HdrBackendProvider] = cmn.ProviderAzure
 	// Simulate object versioning:
 	// Azure provider does not have real versioning, but it has ETag.
 	if v, ok := h.EncodeVersion(string(resp.ETag())); ok {
-		objMeta[cmn.HeaderObjVersion] = v
+		objMeta[cmn.HdrObjVersion] = v
 	}
 	if v, ok := h.EncodeCksum(resp.ContentMD5()); ok {
 		objMeta[cluster.MD5ObjMD] = v

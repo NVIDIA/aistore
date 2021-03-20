@@ -175,9 +175,9 @@ func (awsp *awsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 	}
 
 	bckProps = make(cos.SimpleKVs, 3)
-	bckProps[cmn.HeaderBackendProvider] = cmn.ProviderAmazon
-	bckProps[cmn.HeaderCloudRegion] = region
-	bckProps[cmn.HeaderBucketVerEnabled] = strconv.FormatBool(
+	bckProps[cmn.HdrBackendProvider] = cmn.ProviderAmazon
+	bckProps[cmn.HdrCloudRegion] = region
+	bckProps[cmn.HdrBucketVerEnabled] = strconv.FormatBool(
 		result.Status != nil && *result.Status == s3.BucketVersioningStatusEnabled,
 	)
 	return
@@ -361,10 +361,10 @@ func (awsp *awsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 		return
 	}
 	objMeta = make(cos.SimpleKVs, 3)
-	objMeta[cmn.HeaderBackendProvider] = cmn.ProviderAmazon
-	objMeta[cmn.HeaderObjSize] = strconv.FormatInt(*headOutput.ContentLength, 10)
+	objMeta[cmn.HdrBackendProvider] = cmn.ProviderAmazon
+	objMeta[cmn.HdrObjSize] = strconv.FormatInt(*headOutput.ContentLength, 10)
 	if v, ok := h.EncodeVersion(headOutput.VersionId); ok {
-		objMeta[cmn.HeaderObjVersion] = v
+		objMeta[cmn.HdrObjVersion] = v
 	}
 	if v, ok := h.EncodeCksum(headOutput.ETag); ok {
 		objMeta[cluster.MD5ObjMD] = v

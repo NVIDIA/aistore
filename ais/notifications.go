@@ -252,7 +252,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 		nl       nl.NotifListener
 		errMsg   error
 		uuid     string
-		tid      = r.Header.Get(cmn.HeaderCallerID) // sender node ID
+		tid      = r.Header.Get(cmn.HdrCallerID) // sender node ID
 		exists   bool
 	)
 	if r.Method != http.MethodPost {

@@ -100,53 +100,53 @@ const (
 // User/client header keys.
 const (
 	// Bucket props headers.
-	headerPrefix           = "ais-"
-	HeaderBucketProps      = headerPrefix + "bucket-props"
-	HeaderOrigURLBck       = headerPrefix + "original-url"       // See: BucketProps.Extra.HTTP.OrigURLBck
-	HeaderCloudRegion      = headerPrefix + "cloud-region"       // See: BucketProps.Extra.AWS.CloudRegion
-	HeaderBucketVerEnabled = headerPrefix + "versioning-enabled" // Enable/disable object versioning in a bucket.
+	headerPrefix        = "ais-"
+	HdrBucketProps      = headerPrefix + "bucket-props"
+	HdrOrigURLBck       = headerPrefix + "original-url"       // See: BucketProps.Extra.HTTP.OrigURLBck
+	HdrCloudRegion      = headerPrefix + "cloud-region"       // See: BucketProps.Extra.AWS.CloudRegion
+	HdrBucketVerEnabled = headerPrefix + "versioning-enabled" // Enable/disable object versioning in a bucket.
 
-	HeaderBucketCreated   = headerPrefix + "created"        // Bucket creation time.
-	HeaderBackendProvider = headerPrefix + "provider"       // ProviderAmazon et al. - see cmn/bucket.go.
-	HeaderRemoteOffline   = headerPrefix + "remote-offline" // When accessing cached remote bucket with no backend connectivity.
+	HdrBucketCreated   = headerPrefix + "created"        // Bucket creation time.
+	HdrBackendProvider = headerPrefix + "provider"       // ProviderAmazon et al. - see cmn/bucket.go.
+	HdrRemoteOffline   = headerPrefix + "remote-offline" // When accessing cached remote bucket with no backend connectivity.
 
 	// Object props headers.
-	HeaderObjCksumType = headerPrefix + "checksum-type"  // Checksum type, one of SupportedChecksums().
-	HeaderObjCksumVal  = headerPrefix + "checksum-value" // Checksum value.
-	HeaderObjAtime     = headerPrefix + "atime"          // Object access time.
-	HeaderObjCustomMD  = headerPrefix + "custom-md"      // Object custom metadata.
-	HeaderObjSize      = headerPrefix + "size"           // Object size (bytes).
-	HeaderObjVersion   = headerPrefix + "version"        // Object version/generation - ais or cloud.
-	HeaderObjECMeta    = headerPrefix + "ec-meta"        // Info about EC object/slice/replica.
+	HdrObjCksumType = headerPrefix + "checksum-type"  // Checksum type, one of SupportedChecksums().
+	HdrObjCksumVal  = headerPrefix + "checksum-value" // Checksum value.
+	HdrObjAtime     = headerPrefix + "atime"          // Object access time.
+	HdrObjCustomMD  = headerPrefix + "custom-md"      // Object custom metadata.
+	HdrObjSize      = headerPrefix + "size"           // Object size (bytes).
+	HdrObjVersion   = headerPrefix + "version"        // Object version/generation - ais or cloud.
+	HdrObjECMeta    = headerPrefix + "ec-meta"        // Info about EC object/slice/replica.
 
 	// Append object header.
-	HeaderAppendHandle = headerPrefix + "append-handle"
+	HdrAppendHandle = headerPrefix + "append-handle"
 
 	// Query objects handle header.
-	HeaderHandle = headerPrefix + "query-handle"
+	HdrHandle = headerPrefix + "query-handle"
 
 	// Reverse proxy headers.
-	HeaderNodeID  = headerPrefix + "node-id"
-	HeaderNodeURL = headerPrefix + "node-url"
+	HdrNodeID  = headerPrefix + "node-id"
+	HdrNodeURL = headerPrefix + "node-url"
 )
 
 // AuthN consts
 const (
-	HeaderAuthorization      = "Authorization" // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Authorization
+	HdrAuthorization         = "Authorization" // https://developer.mozilla.org/en-US/docs/Web/HTTP/Hdrs/Authorization
 	AuthenticationTypeBearer = "Bearer"
 )
 
 // Internal header keys.
 const (
 	// Intra cluster headers.
-	HeaderCallerID          = headerPrefix + "caller-id" // Marker of intra-cluster request.
-	HeaderPutterID          = headerPrefix + "putter-id" // Marker of inter-cluster PUT object request.
-	HeaderCallerName        = headerPrefix + "caller-name"
-	HeaderCallerSmapVersion = headerPrefix + "caller-smap-ver"
+	HdrCallerID          = headerPrefix + "caller-id" // Marker of intra-cluster request.
+	HdrPutterID          = headerPrefix + "putter-id" // Marker of inter-cluster PUT object request.
+	HdrCallerName        = headerPrefix + "caller-name"
+	HdrCallerSmapVersion = headerPrefix + "caller-smap-ver"
 
 	// Stream related headers.
-	HeaderSessID   = headerPrefix + "session-id"
-	HeaderCompress = headerPrefix + "compress" // LZ4Compression, etc.
+	HdrSessID   = headerPrefix + "session-id"
+	HdrCompress = headerPrefix + "compress" // LZ4Compression, etc.
 )
 
 // Configuration and bucket properties

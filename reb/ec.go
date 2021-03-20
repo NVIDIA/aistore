@@ -1269,8 +1269,8 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 	if rq, slice.err = http.NewRequest(http.MethodGet, urlPath, nil); slice.err != nil {
 		return
 	}
-	rq.Header.Add(cmn.HeaderCallerID, reb.t.SID())
-	rq.Header.Add(cmn.HeaderCallerName, reb.t.Sname())
+	rq.Header.Add(cmn.HdrCallerID, reb.t.SID())
+	rq.Header.Add(cmn.HdrCallerName, reb.t.Sname())
 	rq.URL.RawQuery = qMeta.Encode()
 	if resp, slice.err = reb.ecClient.Do(rq); slice.err != nil { // nolint:bodyclose // closed inside cos.Close
 		return
@@ -1297,8 +1297,8 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 	if rq, slice.err = http.NewRequest(http.MethodGet, urlPath, nil); slice.err != nil {
 		return
 	}
-	rq.Header.Add(cmn.HeaderCallerID, reb.t.SID())
-	rq.Header.Add(cmn.HeaderCallerName, reb.t.Sname())
+	rq.Header.Add(cmn.HdrCallerID, reb.t.SID())
+	rq.Header.Add(cmn.HdrCallerName, reb.t.Sname())
 	rq.URL.RawQuery = qMeta.Encode()
 	if resp, slice.err = reb.ecClient.Do(rq); slice.err != nil { // nolint:bodyclose // closed inside cos.Close
 		return

@@ -627,8 +627,8 @@ gfn:
 
 func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 	header := make(http.Header)
-	header.Add(cmn.HeaderCallerID, goi.t.SID())
-	header.Add(cmn.HeaderCallerName, goi.t.Sname())
+	header.Add(cmn.HdrCallerID, goi.t.SID())
+	header.Add(cmn.HdrCallerName, goi.t.Sname())
 	query := url.Values{}
 	query.Set(cmn.URLParamIsGFNRequest, "true")
 	query = cmn.AddBckToQuery(query, lom.Bucket())
@@ -740,7 +740,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry, sent bool, errCode int, er
 		ranges, err := cmn.ParseMultiRange(goi.ranges.Range, size)
 		if err != nil {
 			if err == cmn.ErrNoOverlap {
-				hdr.Set(cmn.HeaderContentRange, fmt.Sprintf("%s*/%d", cmn.HeaderContentRangeValPrefix, size))
+				hdr.Set(cmn.HdrContentRange, fmt.Sprintf("%s*/%d", cmn.HdrContentRangeValPrefix, size))
 			}
 			return false, sent, http.StatusRequestedRangeNotSatisfiable, err
 		}
@@ -753,8 +753,8 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry, sent bool, errCode int, er
 			}
 			r = &ranges[0]
 
-			hdr.Set(cmn.HeaderAcceptRanges, "bytes")
-			hdr.Set(cmn.HeaderContentRange, r.ContentRange(size))
+			hdr.Set(cmn.HdrAcceptRanges, "bytes")
+			hdr.Set(cmn.HdrContentRange, r.ContentRange(size))
 		}
 	}
 
@@ -764,18 +764,18 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry, sent bool, errCode int, er
 	if hdr != nil {
 		if !goi.lom.Cksum().IsEmpty() && !cksumRange {
 			cksumType, cksumValue := goi.lom.Cksum().Get()
-			hdr.Set(cmn.HeaderObjCksumType, cksumType)
-			hdr.Set(cmn.HeaderObjCksumVal, cksumValue)
+			hdr.Set(cmn.HdrObjCksumType, cksumType)
+			hdr.Set(cmn.HdrObjCksumVal, cksumValue)
 		}
 		if goi.lom.Version() != "" {
-			hdr.Set(cmn.HeaderObjVersion, goi.lom.Version())
+			hdr.Set(cmn.HdrObjVersion, goi.lom.Version())
 		}
-		hdr.Set(cmn.HeaderObjSize, strconv.FormatInt(goi.lom.Size(), 10))
-		hdr.Set(cmn.HeaderObjAtime, cos.UnixNano2S(goi.lom.AtimeUnix()))
+		hdr.Set(cmn.HdrObjSize, strconv.FormatInt(goi.lom.Size(), 10))
+		hdr.Set(cmn.HdrObjAtime, cos.UnixNano2S(goi.lom.AtimeUnix()))
 		if r != nil {
-			hdr.Set(cmn.HeaderContentLength, strconv.FormatInt(r.Length, 10))
+			hdr.Set(cmn.HdrContentLength, strconv.FormatInt(r.Length, 10))
 		} else {
-			hdr.Set(cmn.HeaderContentLength, strconv.FormatInt(size, 10))
+			hdr.Set(cmn.HdrContentLength, strconv.FormatInt(size, 10))
 		}
 	}
 
@@ -797,8 +797,8 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry, sent bool, errCode int, er
 			if _, cksum, err = cos.CopyAndChecksum(sgl, reader, buf, cksumConf.Type); err != nil {
 				return
 			}
-			hdr.Set(cmn.HeaderObjCksumVal, cksum.Value())
-			hdr.Set(cmn.HeaderObjCksumType, cksumConf.Type)
+			hdr.Set(cmn.HdrObjCksumVal, cksum.Value())
+			hdr.Set(cmn.HdrObjCksumType, cksumConf.Type)
 			reader = io.NewSectionReader(file, r.Start, r.Length)
 		}
 	}

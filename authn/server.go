@@ -274,7 +274,7 @@ func (a *Server) httpUserGet(w http.ResponseWriter, r *http.Request) {
 // valid. Super-user is a user created at deployment time that cannot be
 // deleted/created via REST API
 func (a *Server) checkAuthorization(w http.ResponseWriter, r *http.Request) error {
-	s := strings.SplitN(r.Header.Get(cmn.HeaderAuthorization), " ", 2)
+	s := strings.SplitN(r.Header.Get(cmn.HdrAuthorization), " ", 2)
 	if len(s) != 2 {
 		cmn.WriteErrMsg(w, r, "Not authorized", http.StatusUnauthorized)
 		return fmt.Errorf("invalid header")
@@ -335,7 +335,7 @@ func (a *Server) userLogin(w http.ResponseWriter, r *http.Request) {
 
 // Borrowed from ais (modified cmn.InvalidHandler calls)
 func (a *Server) writeJSON(w http.ResponseWriter, val interface{}, tag string) {
-	w.Header().Set(cmn.HeaderContentType, cmn.ContentJSON)
+	w.Header().Set(cmn.HdrContentType, cmn.ContentJSON)
 	var err error
 	if err = jsoniter.NewEncoder(w).Encode(val); err == nil {
 		return
@@ -345,7 +345,7 @@ func (a *Server) writeJSON(w http.ResponseWriter, val interface{}, tag string) {
 
 // Borrowed from ais (modified cmn.InvalidHandler calls)
 func (a *Server) writeBytes(w http.ResponseWriter, jsbytes []byte, tag string) {
-	w.Header().Set(cmn.HeaderContentType, cmn.ContentJSON)
+	w.Header().Set(cmn.HdrContentType, cmn.ContentJSON)
 	var err error
 	if _, err = w.Write(jsbytes); err == nil {
 		return

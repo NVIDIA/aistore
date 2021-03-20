@@ -181,7 +181,7 @@ func (pc *pushComm) tryDoRequest(lom *cluster.LOM, ts ...time.Duration) (cos.Rea
 	}
 
 	req.ContentLength = lom.Size()
-	req.Header.Set(cmn.HeaderContentType, cmn.ContentBinary)
+	req.Header.Set(cmn.HdrContentType, cmn.ContentBinary)
 	resp, err = pc.t.DataClient().Do(req) // nolint:bodyclose // Closed by the caller.
 finish:
 	if err != nil {

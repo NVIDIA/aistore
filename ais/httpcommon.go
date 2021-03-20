@@ -1060,10 +1060,10 @@ func (h *httprunner) call(args callArgs) (res *callResult) {
 		return
 	}
 
-	req.Header.Set(cmn.HeaderCallerID, h.si.ID())
-	req.Header.Set(cmn.HeaderCallerName, h.si.Name())
+	req.Header.Set(cmn.HdrCallerID, h.si.ID())
+	req.Header.Set(cmn.HdrCallerName, h.si.Name())
 	if smap := h.owner.smap.get(); smap.validate() == nil {
-		req.Header.Set(cmn.HeaderCallerSmapVersion, strconv.FormatInt(smap.version(), 10))
+		req.Header.Set(cmn.HdrCallerSmapVersion, strconv.FormatInt(smap.version(), 10))
 	}
 
 	resp, res.err = client.Do(req)
@@ -1079,7 +1079,7 @@ func (h *httprunner) call(args callArgs) (res *callResult) {
 	// err == nil && bad status: resp.Body contains the error message
 	if res.status >= http.StatusBadRequest {
 		if args.req.Method == http.MethodHead {
-			msg := resp.Header.Get(cmn.HeaderError)
+			msg := resp.Header.Get(cmn.HdrError)
 			res.err = cmn.S2HTTPErr(req, msg, res.status)
 		} else {
 			var b bytes.Buffer
@@ -1338,7 +1338,7 @@ func (h *httprunner) writeMsgPack(w http.ResponseWriter, r *http.Request, v inte
 	)
 	defer slab.Free(buf)
 
-	w.Header().Set(cmn.HeaderContentType, cmn.ContentMsgPack)
+	w.Header().Set(cmn.HdrContentType, cmn.ContentMsgPack)
 	if err = v.(msgp.Encodable).EncodeMsg(mw); err == nil {
 		err = mw.Flush()
 	}
@@ -1353,7 +1353,7 @@ func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, v interfa
 	_, isByteArray := v.([]byte)
 	cos.Assert(!isByteArray)
 
-	w.Header().Set(cmn.HeaderContentType, cmn.ContentJSON)
+	w.Header().Set(cmn.HdrContentType, cmn.ContentJSON)
 	if err := jsoniter.NewEncoder(w).Encode(v); err != nil {
 		h.handleWriteError(r, tag, err)
 		return false
@@ -2090,8 +2090,8 @@ func (h *httprunner) unregisterSelf(ignoreErr bool) (err error) {
 }
 
 func (h *httprunner) healthByExternalWD(w http.ResponseWriter, r *http.Request) (responded bool) {
-	callerID := r.Header.Get(cmn.HeaderCallerID)
-	caller := r.Header.Get(cmn.HeaderCallerName)
+	callerID := r.Header.Get(cmn.HdrCallerID)
+	caller := r.Header.Get(cmn.HdrCallerName)
 	// external (i.e. not intra-cluster) call
 	if callerID == "" && caller == "" {
 		readiness := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamHealthReadiness))
@@ -2121,9 +2121,9 @@ func (h *httprunner) _isIntraCall(hdr http.Header, fromPrimary bool) (err error)
 	debug.Assert(hdr != nil)
 	var (
 		smap       = h.owner.smap.get()
-		callerID   = hdr.Get(cmn.HeaderCallerID)
-		callerName = hdr.Get(cmn.HeaderCallerName)
-		callerSver = hdr.Get(cmn.HeaderCallerSmapVersion)
+		callerID   = hdr.Get(cmn.HdrCallerID)
+		callerName = hdr.Get(cmn.HdrCallerName)
+		callerSver = hdr.Get(cmn.HdrCallerSmapVersion)
 		callerVer  int64
 		erP        error
 	)
@@ -2197,14 +2197,14 @@ func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header) {
 	finalProps := bck.Props.Clone()
 	cmn.IterFields(finalProps, func(fieldName string, field cmn.IterField) (error, bool) {
 		if fieldName == cmn.PropBucketVerEnabled {
-			if hdr.Get(cmn.HeaderBucketVerEnabled) == "" {
+			if hdr.Get(cmn.HdrBucketVerEnabled) == "" {
 				verEnabled := field.Value().(bool)
-				hdr.Set(cmn.HeaderBucketVerEnabled, strconv.FormatBool(verEnabled))
+				hdr.Set(cmn.HdrBucketVerEnabled, strconv.FormatBool(verEnabled))
 			}
 			return nil, false
 		} else if fieldName == cmn.PropBucketCreated {
 			created := time.Unix(0, field.Value().(int64))
-			hdr.Set(cmn.HeaderBucketCreated, created.Format(time.RFC3339))
+			hdr.Set(cmn.HdrBucketCreated, created.Format(time.RFC3339))
 		}
 
 		hdr.Set(fieldName, fmt.Sprintf("%v", field.Value()))
@@ -2212,7 +2212,7 @@ func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header) {
 	})
 
 	props := string(cos.MustMarshal(finalProps))
-	hdr.Set(cmn.HeaderBucketProps, props)
+	hdr.Set(cmn.HdrBucketProps, props)
 }
 
 func (h *httprunner) selectBMDBuckets(bmd *bucketMD, query cmn.QueryBcks) cmn.BucketNames {
@@ -2308,7 +2308,7 @@ func (h *httprunner) newAmsg(actionMsg *cmn.ActionMsg, smap *smapX, bmd *bucketM
 // Based on default error handler `defaultErrorHandler` in `httputil/reverseproxy.go`.
 func (p *proxyrunner) rpErrHandler(w http.ResponseWriter, r *http.Request, err error) {
 	msg := fmt.Sprintf("%s: rproxy err %v, req: %s %s", p.si, err, r.Method, r.URL.Path)
-	if caller := r.Header.Get(cmn.HeaderCallerName); caller != "" {
+	if caller := r.Header.Get(cmn.HdrCallerName); caller != "" {
 		msg += " (from " + caller + ")"
 	}
 	glog.Errorln(msg)

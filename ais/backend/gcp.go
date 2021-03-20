@@ -164,10 +164,10 @@ func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 		return
 	}
 	bckProps = make(cos.SimpleKVs)
-	bckProps[cmn.HeaderBackendProvider] = cmn.ProviderGoogle
+	bckProps[cmn.HdrBackendProvider] = cmn.ProviderGoogle
 	// GCP always generates a versionid for an object even if versioning is disabled.
 	// So, return that we can detect versionid change on getobj etc
-	bckProps[cmn.HeaderBucketVerEnabled] = "true"
+	bckProps[cmn.HdrBucketVerEnabled] = "true"
 	return
 }
 
@@ -291,10 +291,10 @@ func (gcpp *gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 		return
 	}
 	objMeta = make(cos.SimpleKVs)
-	objMeta[cmn.HeaderBackendProvider] = cmn.ProviderGoogle
-	objMeta[cmn.HeaderObjSize] = strconv.FormatInt(attrs.Size, 10)
+	objMeta[cmn.HdrBackendProvider] = cmn.ProviderGoogle
+	objMeta[cmn.HdrObjSize] = strconv.FormatInt(attrs.Size, 10)
 	if v, ok := h.EncodeVersion(attrs.Generation); ok {
-		objMeta[cmn.HeaderObjVersion] = v
+		objMeta[cmn.HdrObjVersion] = v
 	}
 	if v, ok := h.EncodeCksum(attrs.MD5); ok {
 		objMeta[cluster.MD5ObjMD] = v

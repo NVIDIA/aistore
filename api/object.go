@@ -105,7 +105,7 @@ func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists .
 	}
 
 	objProps := &cmn.ObjectProps{}
-	if ecStr := resp.Header.Get(cmn.HeaderObjECMeta); ecStr != "" {
+	if ecStr := resp.Header.Get(cmn.HdrObjECMeta); ecStr != "" {
 		md, err := ec.StringToMeta(ecStr)
 		if err != nil {
 			return nil, err
@@ -231,7 +231,7 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, 
 		return 0, err
 	}
 
-	hdrCksumValue := resp.Header.Get(cmn.HeaderObjCksumVal)
+	hdrCksumValue := resp.Header.Get(cmn.HdrObjCksumVal)
 	if resp.cksumValue != hdrCksumValue {
 		return 0, cmn.NewInvalidCksumError(hdrCksumValue, resp.cksumValue)
 	}
@@ -294,7 +294,7 @@ func PutObject(args PutObjectArgs) (err error) {
 			return args.Reader.Open()
 		}
 		if args.Cksum != nil && args.Cksum.Type() != cos.ChecksumNone {
-			req.Header.Set(cmn.HeaderObjCksumType, args.Cksum.Type())
+			req.Header.Set(cmn.HdrObjCksumType, args.Cksum.Type())
 			ckVal := args.Cksum.Value()
 			if ckVal == "" {
 				_, ckhash, err := cos.CopyAndChecksum(ioutil.Discard, args.Reader, nil, args.Cksum.Type())
@@ -303,7 +303,7 @@ func PutObject(args PutObjectArgs) (err error) {
 				}
 				ckVal = hex.EncodeToString(ckhash.Sum())
 			}
-			req.Header.Set(cmn.HeaderObjCksumVal, ckVal)
+			req.Header.Set(cmn.HdrObjCksumVal, ckVal)
 		}
 		if args.Size != 0 {
 			req.ContentLength = int64(args.Size) // as per https://tools.ietf.org/html/rfc7230#section-3.3.2
@@ -359,7 +359,7 @@ func AppendObject(args AppendArgs) (handle string, err error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to %s, err: %v", http.MethodPut, err)
 	}
-	return resp.Header.Get(cmn.HeaderAppendHandle), err
+	return resp.Header.Get(cmn.HdrAppendHandle), err
 }
 
 // FlushObject should occur once all appends have finished successfully.
@@ -373,8 +373,8 @@ func FlushObject(args FlushArgs) (err error) {
 	var header http.Header
 	if args.Cksum != nil && args.Cksum.Type() != cos.ChecksumNone {
 		header = make(http.Header)
-		header.Set(cmn.HeaderObjCksumType, args.Cksum.Type())
-		header.Set(cmn.HeaderObjCksumVal, args.Cksum.Value())
+		header.Set(cmn.HdrObjCksumType, args.Cksum.Type())
+		header.Set(cmn.HdrObjCksumVal, args.Cksum.Value())
 	}
 
 	args.BaseParams.Method = http.MethodPut

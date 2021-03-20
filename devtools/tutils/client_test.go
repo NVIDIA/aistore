@@ -202,8 +202,8 @@ func TestMain(m *testing.M) {
 
 		// Verify checksum.
 		var (
-			cksumType  = r.Header.Get(cmn.HeaderObjCksumType)
-			cksumValue = r.Header.Get(cmn.HeaderObjCksumVal)
+			cksumType  = r.Header.Get(cmn.HdrObjCksumType)
+			cksumValue = r.Header.Get(cmn.HdrObjCksumVal)
 		)
 		_, cksum, err := cos.CopyAndChecksum(ioutil.Discard, r.Body, nil, cksumType)
 		if err != nil {

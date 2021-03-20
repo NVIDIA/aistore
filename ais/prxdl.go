@@ -280,7 +280,7 @@ func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *htt
 }
 
 func (p *proxyrunner) respondWithID(w http.ResponseWriter, id string) {
-	w.Header().Set(cmn.HeaderContentType, cmn.ContentJSON)
+	w.Header().Set(cmn.HdrContentType, cmn.ContentJSON)
 	b := cos.MustMarshal(downloader.DlPostResp{ID: id})
 	_, err := w.Write(b)
 	debug.AssertNoErr(err)

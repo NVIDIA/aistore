@@ -104,7 +104,7 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p *cmn
 		}
 		return
 	}
-	err = jsoniter.Unmarshal([]byte(resp.Header.Get(cmn.HeaderBucketProps)), &p)
+	err = jsoniter.Unmarshal([]byte(resp.Header.Get(cmn.HdrBucketProps)), &p)
 	return p, err
 }
 
@@ -138,7 +138,7 @@ func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks,
 	reqParams := ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(query.Name),
-		Header:     http.Header{cmn.HeaderContentType: []string{cmn.ContentJSON}},
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		Query:      cmn.AddBckToQuery(nil, cmn.Bck(query)),
 	}
 	var summaries cmn.BucketsSummaries
@@ -350,7 +350,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 		ctx *ProgressContext
 
 		path      = cmn.URLPathBuckets.Join(bck.Name)
-		hdr       = http.Header{cmn.HeaderAccept: []string{cmn.ContentMsgPack}}
+		hdr       = http.Header{cmn.HdrAccept: []string{cmn.ContentMsgPack}}
 		q         = cmn.AddBckToQuery(url.Values{}, bck)
 		reqParams = ReqParams{BaseParams: baseParams, Path: path, Header: hdr, Query: q}
 
@@ -445,7 +445,7 @@ func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg) (*
 		reqParams = ReqParams{
 			BaseParams: baseParams,
 			Path:       cmn.URLPathBuckets.Join(bck.Name),
-			Header:     http.Header{cmn.HeaderAccept: []string{cmn.ContentMsgPack}},
+			Header:     http.Header{cmn.HdrAccept: []string{cmn.ContentMsgPack}},
 			Query:      cmn.AddBckToQuery(url.Values{}, bck),
 			Body:       cos.MustMarshal(actMsg),
 		}
@@ -492,7 +492,7 @@ func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action string, listR
 		Path:       cmn.URLPathBuckets.Join(bck.Name),
 		Body:       cos.MustMarshal(cmn.ActionMsg{Action: action, Value: listRangeMsg}),
 		Header: http.Header{
-			cmn.HeaderContentType: []string{cmn.ContentJSON},
+			cmn.HdrContentType: []string{cmn.ContentJSON},
 		},
 		Query: cmn.AddBckToQuery(nil, bck),
 	}, &xactID)

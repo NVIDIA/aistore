@@ -89,15 +89,15 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 	}
 
 	// TODO: improve validation - check `content-type` header
-	if resp.Header.Get(cmn.HeaderETag) == "" {
-		err = fmt.Errorf("invalid resource - missing header %s", cmn.HeaderETag)
+	if resp.Header.Get(cmn.HdrETag) == "" {
+		err = fmt.Errorf("invalid resource - missing header %s", cmn.HdrETag)
 		return nil, http.StatusBadRequest, err
 	}
 
 	resp.Body.Close()
 
 	bckProps = make(cos.SimpleKVs)
-	bckProps[cmn.HeaderBackendProvider] = cmn.ProviderHTTP
+	bckProps[cmn.HdrBackendProvider] = cmn.ProviderHTTP
 	return
 }
 
@@ -148,11 +148,11 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta 
 		return nil, resp.StatusCode, fmt.Errorf("error occurred: %v", resp.StatusCode)
 	}
 	objMeta = make(cos.SimpleKVs, 2)
-	objMeta[cmn.HeaderBackendProvider] = cmn.ProviderHTTP
+	objMeta[cmn.HdrBackendProvider] = cmn.ProviderHTTP
 	if resp.ContentLength >= 0 {
-		objMeta[cmn.HeaderObjSize] = strconv.FormatInt(resp.ContentLength, 10)
+		objMeta[cmn.HdrObjSize] = strconv.FormatInt(resp.ContentLength, 10)
 	}
-	if v, ok := h.EncodeVersion(resp.Header.Get(cmn.HeaderETag)); ok {
+	if v, ok := h.EncodeVersion(resp.Header.Get(cmn.HdrETag)); ok {
 		objMeta[cluster.VersionObjMD] = v
 	}
 
@@ -211,7 +211,7 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 		cluster.SourceObjMD:  cluster.SourceHTTPObjMD,
 		cluster.OrigURLObjMD: origURL,
 	}
-	if v, ok := h.EncodeVersion(resp.Header.Get(cmn.HeaderETag)); ok {
+	if v, ok := h.EncodeVersion(resp.Header.Get(cmn.HdrETag)); ok {
 		customMD[cluster.VersionObjMD] = v
 	}
 

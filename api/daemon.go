@@ -33,8 +33,8 @@ func GetMountpaths(baseParams BaseParams, node *cluster.Snode) (mpl *cmn.Mountpa
 		Path:       cmn.URLPathReverseDaemon.S,
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatMountpaths}},
 		Header: http.Header{
-			cmn.HeaderNodeID:  []string{node.ID()},
-			cmn.HeaderNodeURL: []string{node.URL(cmn.NetworkPublic)},
+			cmn.HdrNodeID:  []string{node.ID()},
+			cmn.HdrNodeURL: []string{node.URL(cmn.NetworkPublic)},
 		},
 	}, &mpl)
 	return mpl, err
@@ -47,8 +47,8 @@ func AddMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string) 
 		Path:       cmn.URLPathReverseDaemon.Join(cmn.Mountpaths),
 		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathAdd, Value: mountpath}),
 		Header: http.Header{
-			cmn.HeaderNodeID:  []string{node.ID()},
-			cmn.HeaderNodeURL: []string{node.URL(cmn.NetworkPublic)},
+			cmn.HdrNodeID:  []string{node.ID()},
+			cmn.HdrNodeURL: []string{node.URL(cmn.NetworkPublic)},
 		},
 	})
 }
@@ -59,7 +59,7 @@ func RemoveMountpath(baseParams BaseParams, nodeID, mountpath string) error {
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.Join(cmn.Mountpaths),
 		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathRemove, Value: mountpath}),
-		Header:     http.Header{cmn.HeaderNodeID: []string{nodeID}},
+		Header:     http.Header{cmn.HdrNodeID: []string{nodeID}},
 	})
 }
 
@@ -70,8 +70,8 @@ func EnableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 		Path:       cmn.URLPathReverseDaemon.Join(cmn.Mountpaths),
 		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathEnable, Value: mountpath}),
 		Header: http.Header{
-			cmn.HeaderNodeID:  []string{node.ID()},
-			cmn.HeaderNodeURL: []string{node.URL(cmn.NetworkPublic)},
+			cmn.HdrNodeID:  []string{node.ID()},
+			cmn.HdrNodeURL: []string{node.URL(cmn.NetworkPublic)},
 		},
 	})
 }
@@ -82,7 +82,7 @@ func DisableMountpath(baseParams BaseParams, nodeID, mountpath string) error {
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.Join(cmn.Mountpaths),
 		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathDisable, Value: mountpath}),
-		Header:     http.Header{cmn.HeaderNodeID: []string{nodeID}},
+		Header:     http.Header{cmn.HdrNodeID: []string{nodeID}},
 	})
 }
 
@@ -93,7 +93,7 @@ func GetDaemonConfig(baseParams BaseParams, node *cluster.Snode) (config *cmn.Co
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.S,
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatConfig}},
-		Header:     http.Header{cmn.HeaderNodeID: []string{node.ID()}},
+		Header:     http.Header{cmn.HdrNodeID: []string{node.ID()}},
 	}, &config)
 	if err != nil {
 		return nil, err
@@ -111,7 +111,7 @@ func GetDaemonStatus(baseParams BaseParams, node *cluster.Snode) (daeInfo *stats
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.S,
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatDaemonStatus}},
-		Header:     http.Header{cmn.HeaderNodeID: []string{node.ID()}},
+		Header:     http.Header{cmn.HdrNodeID: []string{node.ID()}},
 	}, &daeInfo)
 	if err == nil {
 		daeInfo.Status = StatusOnline
@@ -140,7 +140,7 @@ func SetDaemonConfig(baseParams BaseParams, nodeID string, nvs cos.SimpleKVs, tr
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.Join(cmn.ActSetConfig),
 		Query:      query,
-		Header:     http.Header{cmn.HeaderNodeID: []string{nodeID}},
+		Header:     http.Header{cmn.HdrNodeID: []string{nodeID}},
 	})
 }
 
@@ -151,6 +151,6 @@ func ResetDaemonConfig(baseParams BaseParams, nodeID string) error {
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.S,
 		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActResetConfig}),
-		Header:     http.Header{cmn.HeaderNodeID: []string{nodeID}},
+		Header:     http.Header{cmn.HdrNodeID: []string{nodeID}},
 	})
 }

@@ -42,7 +42,7 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var (
-		handle = r.Header.Get(cmn.HeaderHandle) // TODO: should it be from header or from body?
+		handle = r.Header.Get(cmn.HdrHandle) // TODO: should it be from header or from body?
 		msg    = &query.InitMsg{}
 	)
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
@@ -144,7 +144,7 @@ func (t *targetrunner) httpquerygetobjects(w http.ResponseWriter, r *http.Reques
 	}
 
 	objList := &cmn.BucketList{Entries: entries}
-	if strings.Contains(r.Header.Get(cmn.HeaderAccept), cmn.ContentMsgPack) {
+	if strings.Contains(r.Header.Get(cmn.HdrAccept), cmn.ContentMsgPack) {
 		t.writeMsgPack(w, r, objList, "query_objects")
 		return
 	}

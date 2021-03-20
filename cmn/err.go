@@ -563,7 +563,7 @@ func NewHTTPErr(r *http.Request, msg string, errCode ...int) (e *ErrHTTP) {
 	e.Status, e.Message = status, msg
 	if r != nil {
 		e.Method, e.URLPath, e.RemoteAddr = r.Method, r.URL.Path, r.RemoteAddr
-		if caller := r.Header.Get(HeaderCallerName); caller != "" {
+		if caller := r.Header.Get(HdrCallerName); caller != "" {
 			e.Caller = caller
 		}
 	}
@@ -642,10 +642,10 @@ func (e *ErrHTTP) write(w http.ResponseWriter, r *http.Request, silent bool) {
 		glog.Errorln(e.String())
 	}
 	// Make sure that the caller is aware that we return JSON error.
-	w.Header().Set(HeaderContentType, ContentJSON)
+	w.Header().Set(HdrContentType, ContentJSON)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if r.Method == http.MethodHead {
-		w.Header().Set(HeaderError, e.Error())
+		w.Header().Set(HdrError, e.Error())
 		w.WriteHeader(e.Status)
 	} else {
 		w.WriteHeader(e.Status)

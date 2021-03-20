@@ -134,7 +134,7 @@ func (p *proxyrunner) bckNamesToS3(w http.ResponseWriter) {
 	})
 
 	b := resp.MustMarshal()
-	w.Header().Set(cmn.HeaderContentType, cmn.ContentXML)
+	w.Header().Set(cmn.HdrContentType, cmn.ContentXML)
 	w.Write(b)
 }
 
@@ -278,7 +278,7 @@ func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, bucket s
 	resp.ContinuationToken = smsg.ContinuationToken
 	resp.FillFromAisBckList(objList, &smsg)
 	b := resp.MustMarshal()
-	w.Header().Set(cmn.HeaderContentType, cmn.ContentXML)
+	w.Header().Set(cmn.HdrContentType, cmn.ContentXML)
 	w.Write(b)
 }
 
@@ -335,8 +335,8 @@ func (p *proxyrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items []
 func s3Redirect(w http.ResponseWriter, url, bck string) {
 	h := w.Header()
 
-	h.Set(cmn.HeaderLocation, url)
-	h.Set(cmn.HeaderContentType, "text/xml; charset=utf-8")
+	h.Set(cmn.HdrLocation, url)
+	h.Set(cmn.HdrContentType, "text/xml; charset=utf-8")
 	w.WriteHeader(http.StatusTemporaryRedirect)
 	fmt.Fprint(w, s3compat.MakeRedirectBody(url, bck))
 }
@@ -491,7 +491,7 @@ func (p *proxyrunner) getBckVersioningS3(w http.ResponseWriter, r *http.Request,
 	}
 	resp := s3compat.NewVersioningConfiguration(bck.Props.Versioning.Enabled)
 	b := resp.MustMarshal()
-	w.Header().Set(cmn.HeaderContentType, cmn.ContentXML)
+	w.Header().Set(cmn.HdrContentType, cmn.ContentXML)
 	w.Write(b)
 }
 

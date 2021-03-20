@@ -28,17 +28,17 @@ import (
 )
 
 const (
-	HeaderRange                 = "Range" // Ref: https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35
-	HeaderRangeValPrefix        = "bytes="
-	HeaderContentRange          = "Content-Range"
-	HeaderContentRangeValPrefix = "bytes " // Ref: https://tools.ietf.org/html/rfc7233#section-4.2
-	HeaderAcceptRanges          = "Accept-Ranges"
-	HeaderContentType           = "Content-Type"
-	HeaderContentLength         = "Content-Length"
-	HeaderAccept                = "Accept"
-	HeaderLocation              = "Location"
-	HeaderETag                  = "ETag" // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag
-	HeaderError                 = "Header-Error"
+	HdrRange                 = "Range" // Ref: https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35
+	HdrRangeValPrefix        = "bytes="
+	HdrContentRange          = "Content-Range"
+	HdrContentRangeValPrefix = "bytes " // Ref: https://tools.ietf.org/html/rfc7233#section-4.2
+	HdrAcceptRanges          = "Accept-Ranges"
+	HdrContentType           = "Content-Type"
+	HdrContentLength         = "Content-Length"
+	HdrAccept                = "Accept"
+	HdrLocation              = "Location"
+	HdrETag                  = "ETag" // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Hdrs/ETag
+	HdrError                 = "Hdr-Error"
 )
 
 // Ref: https://www.iana.org/assignments/media-types/media-types.xhtml
@@ -199,7 +199,7 @@ func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}, optional 
 // In other cases, `v` is encoded to JSON and then passed.
 // The function returns an error if writing to the response fails.
 func WriteJSON(w http.ResponseWriter, v interface{}) error {
-	w.Header().Set(HeaderContentType, ContentJSON)
+	w.Header().Set(HdrContentType, ContentJSON)
 	if b, ok := v.([]byte); ok {
 		_, err := w.Write(b)
 		return err
@@ -240,7 +240,7 @@ func (u *ReqArgs) ReqWithCancel() (*http.Request, context.Context, context.Cance
 		return nil, nil, nil, err
 	}
 	if u.Method == http.MethodPost || u.Method == http.MethodPut {
-		req.Header.Set(HeaderContentType, ContentJSON)
+		req.Header.Set(HdrContentType, ContentJSON)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	req = req.WithContext(ctx)
@@ -253,7 +253,7 @@ func (u *ReqArgs) ReqWithTimeout(timeout time.Duration) (*http.Request, context.
 		return nil, nil, nil, err
 	}
 	if u.Method == http.MethodPost || u.Method == http.MethodPut {
-		req.Header.Set(HeaderContentType, ContentJSON)
+		req.Header.Set(HdrContentType, ContentJSON)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	req = req.WithContext(ctx)
@@ -271,7 +271,7 @@ func copyHeaders(src http.Header, dst *http.Header) {
 }
 
 func (r HTTPRange) ContentRange(size int64) string {
-	return fmt.Sprintf("%s%d-%d/%d", HeaderContentRangeValPrefix, r.Start, r.Start+r.Length-1, size)
+	return fmt.Sprintf("%s%d-%d/%d", HdrContentRangeValPrefix, r.Start, r.Start+r.Length-1, size)
 }
 
 // ParseMultiRange parses a Range header string as per RFC 7233.
@@ -281,12 +281,12 @@ func ParseMultiRange(s string, size int64) (ranges []HTTPRange, err error) {
 		return nil, nil // header not present
 	}
 
-	if !strings.HasPrefix(s, HeaderRangeValPrefix) {
+	if !strings.HasPrefix(s, HdrRangeValPrefix) {
 		return nil, errors.New("invalid range")
 	}
 
 	noOverlap := false
-	for _, ra := range strings.Split(s[len(HeaderRangeValPrefix):], ",") {
+	for _, ra := range strings.Split(s[len(HdrRangeValPrefix):], ",") {
 		ra = strings.TrimSpace(ra)
 		if ra == "" {
 			continue
@@ -360,7 +360,7 @@ func RangeHdr(start, length int64) (hdr http.Header) {
 		return hdr
 	}
 	hdr = make(http.Header, 1)
-	hdr.Add(HeaderRange, fmt.Sprintf("%s%d-%d", HeaderRangeValPrefix, start, start+length-1))
+	hdr.Add(HdrRange, fmt.Sprintf("%s%d-%d", HdrRangeValPrefix, start, start+length-1))
 	return
 }
 
@@ -372,14 +372,14 @@ func ToHTTPHdr(meta ObjHeaderMetaProvider, hdrs ...http.Header) (hdr http.Header
 	}
 	if !meta.Cksum().IsEmpty() {
 		ty, val := meta.Cksum().Get()
-		hdr.Set(HeaderObjCksumType, ty)
-		hdr.Set(HeaderObjCksumVal, val)
+		hdr.Set(HdrObjCksumType, ty)
+		hdr.Set(HdrObjCksumVal, val)
 	}
 	if meta.AtimeUnix() != 0 {
-		hdr.Set(HeaderObjAtime, cos.UnixNano2S(meta.AtimeUnix()))
+		hdr.Set(HdrObjAtime, cos.UnixNano2S(meta.AtimeUnix()))
 	}
 	for k, v := range meta.CustomMD() {
-		hdr.Add(HeaderObjCustomMD, strings.Join([]string{k, v}, "="))
+		hdr.Add(HdrObjCustomMD, strings.Join([]string{k, v}, "="))
 	}
 	return hdr
 }

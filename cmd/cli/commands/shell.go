@@ -37,7 +37,7 @@ var (
 	supportedBool = []string{"true", "false"}
 	propCmpls     = map[string][]string{
 		cmn.PropBucketAccessAttrs:             cmn.SupportedPermissions(),
-		cmn.HeaderObjCksumType:                cos.SupportedChecksums(),
+		cmn.HdrObjCksumType:                   cos.SupportedChecksums(),
 		"md_write":                            cmn.SupportedWritePolicy,
 		"ec.compression":                      cmn.SupportedCompression,
 		"compression.checksum":                cmn.SupportedCompression,

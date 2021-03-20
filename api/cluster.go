@@ -50,7 +50,7 @@ func GetNodeClusterMap(baseParams BaseParams, nodeID string) (smap *cluster.Smap
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.S,
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}},
-		Header:     http.Header{cmn.HeaderNodeID: []string{nodeID}},
+		Header:     http.Header{cmn.HdrNodeID: []string{nodeID}},
 	}, &smap)
 	return
 }
@@ -83,7 +83,7 @@ func GetTargetDiskStats(baseParams BaseParams, targetID string) (diskStats map[s
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.S,
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatDiskStats}},
-		Header:     http.Header{cmn.HeaderNodeID: []string{targetID}},
+		Header:     http.Header{cmn.HdrNodeID: []string{targetID}},
 	}, &diskStats)
 	return
 }

@@ -196,7 +196,7 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 		goi.lom = lom
 		goi.w = w
 		goi.ctx = context.Background()
-		goi.ranges = cmn.RangesQuery{Range: r.Header.Get(cmn.HeaderRange), Size: objSize}
+		goi.ranges = cmn.RangesQuery{Range: r.Header.Get(cmn.HdrRange), Size: objSize}
 	}
 	if sent, errCode, err := goi.getObject(); err != nil {
 		if sent {

@@ -461,7 +461,7 @@ func (reb *Manager) rebFini(md *rebArgs, err error) {
 
 func (reb *Manager) RespHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		caller = r.Header.Get(cmn.HeaderCallerName)
+		caller = r.Header.Get(cmn.HdrCallerName)
 		query  = r.URL.Query()
 	)
 	if r.Method != http.MethodGet {

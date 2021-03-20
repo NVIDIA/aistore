@@ -217,10 +217,10 @@ func (lom *LOM) loaded() bool { return lom.md.bckID != 0 }
 func (lom *LOM) ToHTTPHdr(hdr http.Header) http.Header {
 	cmn.ToHTTPHdr(lom, hdr)
 	if n := lom.md.size; n > 0 {
-		hdr.Set(cmn.HeaderContentLength, strconv.FormatInt(n, 10))
+		hdr.Set(cmn.HdrContentLength, strconv.FormatInt(n, 10))
 	}
 	if v := lom.md.version; v != "" {
-		hdr.Set(cmn.HeaderObjVersion, v)
+		hdr.Set(cmn.HdrObjVersion, v)
 	}
 	return hdr
 }
@@ -229,14 +229,14 @@ func (lom *LOM) FromHTTPHdr(hdr http.Header) {
 	// NOTE: not setting received checksum into the LOM
 	// to preserve its own local checksum
 
-	if versionEntry := hdr.Get(cmn.HeaderObjVersion); versionEntry != "" {
+	if versionEntry := hdr.Get(cmn.HdrObjVersion); versionEntry != "" {
 		lom.SetVersion(versionEntry)
 	}
-	if atimeEntry := hdr.Get(cmn.HeaderObjAtime); atimeEntry != "" {
+	if atimeEntry := hdr.Get(cmn.HdrObjAtime); atimeEntry != "" {
 		atime, _ := cos.S2UnixNano(atimeEntry)
 		lom.SetAtimeUnix(atime)
 	}
-	if customMD := hdr[http.CanonicalHeaderKey(cmn.HeaderObjCustomMD)]; len(customMD) > 0 {
+	if customMD := hdr[http.CanonicalHeaderKey(cmn.HdrObjCustomMD)]; len(customMD) > 0 {
 		md := make(cos.SimpleKVs, len(customMD)*2)
 		for _, v := range customMD {
 			entry := strings.SplitN(v, "=", 2)

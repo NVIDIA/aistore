@@ -86,7 +86,7 @@ func (m *UserManager) proxyRequest(method, proxyURL, path string, injson []byte)
 		if cos.IsHTTPS(proxyURL) {
 			client = m.clientHTTPS
 		}
-		request.Header.Set(cmn.HeaderContentType, cmn.ContentJSON)
+		request.Header.Set(cmn.HdrContentType, cmn.ContentJSON)
 		response, err := client.Do(request)
 		var respCode int
 		if response != nil {

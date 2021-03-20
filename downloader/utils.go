@@ -238,7 +238,7 @@ func headLink(link string) (*http.Response, error) {
 
 func roiFromObjMeta(objMeta cos.SimpleKVs) (roi remoteObjInfo) {
 	roi.md = make(cos.SimpleKVs, 2)
-	switch objMeta[cmn.HeaderBackendProvider] {
+	switch objMeta[cmn.HdrBackendProvider] {
 	case cmn.ProviderGoogle:
 		roi.md[cluster.SourceObjMD] = cluster.SourceGoogleObjMD
 	case cmn.ProviderAmazon:
@@ -248,7 +248,7 @@ func roiFromObjMeta(objMeta cos.SimpleKVs) (roi remoteObjInfo) {
 	default:
 		return
 	}
-	if v, ok := objMeta[cmn.HeaderObjVersion]; ok {
+	if v, ok := objMeta[cmn.HdrObjVersion]; ok {
 		roi.md[cluster.VersionObjMD] = v
 	}
 	if v, ok := objMeta[cluster.MD5ObjMD]; ok {
@@ -257,7 +257,7 @@ func roiFromObjMeta(objMeta cos.SimpleKVs) (roi remoteObjInfo) {
 	if v, ok := objMeta[cluster.CRC32CObjMD]; ok {
 		roi.md[cluster.CRC32CObjMD] = v
 	}
-	if v := objMeta[cmn.HeaderObjSize]; v != "" {
+	if v := objMeta[cmn.HdrObjSize]; v != "" {
 		roi.size, _ = strconv.ParseInt(v, 10, 64)
 	}
 	return

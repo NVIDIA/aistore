@@ -41,7 +41,7 @@ func (na netAccess) isSet(flag netAccess) bool {
 	return na&flag == flag
 }
 
-func isIntraPut(hdr http.Header) bool { return hdr != nil && hdr.Get(cmn.HeaderPutterID) != "" }
+func isIntraPut(hdr http.Header) bool { return hdr != nil && hdr.Get(cmn.HdrPutterID) != "" }
 
 func isRedirect(q url.Values) (delta string) {
 	if len(q) == 0 || q.Get(cmn.URLParamProxyID) == "" {

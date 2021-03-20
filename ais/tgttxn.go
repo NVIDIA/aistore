@@ -698,8 +698,8 @@ func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase
 		c     = &txnServerCtx{}
 	)
 	c.msg = msg
-	c.callerName = r.Header.Get(cmn.HeaderCallerName)
-	c.callerID = r.Header.Get(cmn.HeaderCallerID)
+	c.callerName = r.Header.Get(cmn.HdrCallerName)
+	c.callerID = r.Header.Get(cmn.HdrCallerID)
 	c.phase = phase
 
 	if bucket != "" {

@@ -162,7 +162,7 @@ func readResp(reqParams ReqParams, resp *http.Response, v interface{}) (*wrapped
 			}
 			wresp.n = n
 		} else {
-			hdrCksumType := resp.Header.Get(cmn.HeaderObjCksumType)
+			hdrCksumType := resp.Header.Get(cmn.HdrObjCksumType)
 			// TODO: use MMSA
 			n, cksum, err := cos.CopyAndChecksum(w, resp.Body, nil, hdrCksumType)
 			if err != nil {
@@ -183,7 +183,7 @@ func readResp(reqParams ReqParams, resp *http.Response, v interface{}) (*wrapped
 			*t = string(b)
 		default:
 			if resp.StatusCode == http.StatusOK {
-				if resp.Header.Get(cmn.HeaderContentType) == cmn.ContentMsgPack {
+				if resp.Header.Get(cmn.HdrContentType) == cmn.ContentMsgPack {
 					r := msgp.NewReaderSize(resp.Body, 10*cos.KiB)
 					err = v.(msgp.Decodable).DecodeMsg(r)
 				} else {
@@ -203,7 +203,7 @@ func checkResp(reqParams ReqParams, resp *http.Response) error {
 		return nil
 	}
 	if reqParams.BaseParams.Method == http.MethodHead {
-		if msg := resp.Header.Get(cmn.HeaderError); msg != "" {
+		if msg := resp.Header.Get(cmn.HdrError); msg != "" {
 			httpErr := cmn.NewHTTPErr(nil, msg, resp.StatusCode)
 			httpErr.Method, httpErr.URLPath = reqParams.BaseParams.Method, reqParams.Path
 			return httpErr
@@ -260,7 +260,7 @@ func getObjectOptParams(options GetObjectInput) (w io.Writer, q url.Values, hdr 
 
 func setAuthToken(r *http.Request, baseParams BaseParams) {
 	if baseParams.Token != "" {
-		r.Header.Set(cmn.HeaderAuthorization, makeHeaderAuthnToken(baseParams.Token))
+		r.Header.Set(cmn.HdrAuthorization, makeHeaderAuthnToken(baseParams.Token))
 	}
 }
 

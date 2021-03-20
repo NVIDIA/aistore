@@ -85,13 +85,13 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	}
 	mu.RUnlock()
 	// compression
-	if compressionType := r.Header.Get(cmn.HeaderCompress); compressionType != "" {
+	if compressionType := r.Header.Get(cmn.HdrCompress); compressionType != "" {
 		debug.Assert(compressionType == cmn.LZ4Compression)
 		lz4Reader = lz4.NewReader(r.Body)
 		reader = lz4Reader
 	}
 	// session
-	sessID, err := strconv.ParseInt(r.Header.Get(cmn.HeaderSessID), 10, 64)
+	sessID, err := strconv.ParseInt(r.Header.Get(cmn.HdrSessID), 10, 64)
 	if err != nil || sessID == 0 {
 		cmn.WriteErr(w, r, fmt.Errorf("%s[:%d]: invalid session ID, err %v", trname, sessID, err))
 		return

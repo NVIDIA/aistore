@@ -129,14 +129,14 @@ func SetHeaderFromLOM(header http.Header, lom *cluster.LOM, size int64) {
 		header.Set(headerETag, cksumValue)
 	}
 	header.Set(headerAtime, FormatTime(lom.Atime()))
-	header.Set(cmn.HeaderContentLength, strconv.FormatInt(size, 10))
-	header.Set(cmn.HeaderContentType, cmn.ContentBinary)
+	header.Set(cmn.HdrContentLength, strconv.FormatInt(size, 10))
+	header.Set(cmn.HdrContentType, cmn.ContentBinary)
 	header.Set(headerVersion, lom.Version())
 }
 
 func SetETLHeader(header http.Header, lom *cluster.LOM) {
 	header.Set(headerAtime, FormatTime(lom.Atime()))
-	header.Set(cmn.HeaderContentType, cmn.ContentBinary)
+	header.Set(cmn.HdrContentType, cmn.ContentBinary)
 	header.Set(headerVersion, lom.Version())
 }
 

@@ -144,13 +144,13 @@ func (t *targetrunner) _sendPUT(lom *cluster.LOM, params *cluster.SendToParams) 
 	} else {
 		hdr = cmn.ToHTTPHdr(params.HdrMeta)
 		if size := params.HdrMeta.Size(); size > 0 {
-			hdr.Set(cmn.HeaderContentLength, strconv.FormatInt(size, 10))
+			hdr.Set(cmn.HdrContentLength, strconv.FormatInt(size, 10))
 		}
 		if version := params.HdrMeta.Version(); version != "" {
-			hdr.Set(cmn.HeaderObjVersion, version)
+			hdr.Set(cmn.HdrObjVersion, version)
 		}
 	}
-	hdr.Set(cmn.HeaderPutterID, t.si.ID())
+	hdr.Set(cmn.HdrPutterID, t.si.ID())
 	query.Set(cmn.URLParamRecvType, strconv.Itoa(int(cluster.Migrated)))
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,

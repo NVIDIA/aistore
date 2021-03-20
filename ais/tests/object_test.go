@@ -1230,7 +1230,7 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, ob
 func verifyValidRangesQuery(t *testing.T, proxyURL string, bck cmn.Bck, objName, rangeQuery string, expectedLength int64) {
 	var (
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		hdr        = http.Header{cmn.HeaderRange: {rangeQuery}}
+		hdr        = http.Header{cmn.HdrRange: {rangeQuery}}
 		options    = api.GetObjectInput{Header: hdr}
 	)
 	resp, n, err := api.GetObjectWithResp(baseParams, bck, objName, options) // nolint:bodyclose // it's closed inside
@@ -1245,19 +1245,19 @@ func verifyValidRangesQuery(t *testing.T, proxyURL string, bck cmn.Bck, objName,
 		"number of bytes received is different than expected (expected: %d, got: %d)",
 		expectedLength, n,
 	)
-	acceptRanges := resp.Header.Get(cmn.HeaderAcceptRanges)
+	acceptRanges := resp.Header.Get(cmn.HdrAcceptRanges)
 	tassert.Errorf(
 		t, acceptRanges == "bytes",
-		"%q header is not set correctly: %s", cmn.HeaderAcceptRanges, acceptRanges,
+		"%q header is not set correctly: %s", cmn.HdrAcceptRanges, acceptRanges,
 	)
-	contentRange := resp.Header.Get(cmn.HeaderContentRange)
-	tassert.Errorf(t, contentRange != "", "%q header should be set", cmn.HeaderContentRange)
+	contentRange := resp.Header.Get(cmn.HdrContentRange)
+	tassert.Errorf(t, contentRange != "", "%q header should be set", cmn.HdrContentRange)
 }
 
 func verifyInvalidRangesQuery(t *testing.T, proxyURL string, bck cmn.Bck, objName, rangeQuery string) {
 	var (
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		hdr        = http.Header{cmn.HeaderRange: {rangeQuery}}
+		hdr        = http.Header{cmn.HdrRange: {rangeQuery}}
 		options    = api.GetObjectInput{Header: hdr}
 	)
 	_, err := api.GetObjectWithValidation(baseParams, bck, objName, options)

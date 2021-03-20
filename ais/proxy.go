@@ -652,7 +652,7 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErr(w, r, err)
 		return
 	}
-	caller := r.Header.Get(cmn.HeaderCallerName)
+	caller := r.Header.Get(cmn.HdrCallerName)
 
 	// Config
 	newConf, msgConf, err := p.extractConfig(payload, caller)
@@ -1095,7 +1095,7 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 
 	cos.Assert(bckList != nil)
 
-	if strings.Contains(r.Header.Get(cmn.HeaderAccept), cmn.ContentMsgPack) {
+	if strings.Contains(r.Header.Get(cmn.HdrAccept), cmn.ContentMsgPack) {
 		if !p.writeMsgPack(w, r, bckList, "list_objects") {
 			return
 		}
@@ -1931,7 +1931,7 @@ func (p *proxyrunner) reverseHandler(w http.ResponseWriter, r *http.Request) {
 	// rewrite URL path (removing `cmn.Reverse`)
 	r.URL.Path = cos.JoinWords(cmn.Version, apiItems[0])
 
-	nodeID := r.Header.Get(cmn.HeaderNodeID)
+	nodeID := r.Header.Get(cmn.HdrNodeID)
 	if nodeID == "" {
 		p.writeErrMsg(w, r, "missing node ID")
 		return
@@ -1947,7 +1947,7 @@ func (p *proxyrunner) reverseHandler(w http.ResponseWriter, r *http.Request) {
 	// special case where we need to contact target which is not part of the
 	// cluster eg. mountpaths: when target is not part of the cluster after
 	// removing all mountpaths.
-	nodeURL := r.Header.Get(cmn.HeaderNodeURL)
+	nodeURL := r.Header.Get(cmn.HdrNodeURL)
 	if nodeURL == "" {
 		err = &errNodeNotFound{"cannot rproxy", nodeID, p.si, smap}
 		p.writeErr(w, r, err, http.StatusNotFound)
@@ -2203,7 +2203,7 @@ func (p *proxyrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err)
 		return
 	}
-	caller := r.Header.Get(cmn.HeaderCallerName)
+	caller := r.Header.Get(cmn.HdrCallerName)
 	if err := p.applyRegMeta(body, caller); err != nil {
 		p.writeErr(w, r, err)
 	}

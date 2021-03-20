@@ -180,8 +180,8 @@ func putWithTrace(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum,
 			return reader.Open()
 		}
 		if cksum != nil {
-			req.Header.Set(cmn.HeaderObjCksumType, cksum.Type())
-			req.Header.Set(cmn.HeaderObjCksumVal, cksum.Value())
+			req.Header.Set(cmn.HdrObjCksumType, cksum.Type())
+			req.Header.Set(cmn.HdrObjCksumVal, cksum.Value())
 		}
 
 		request = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))
@@ -270,8 +270,8 @@ func getDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, off
 	defer cos.Close(resp.Body)
 
 	if validate {
-		hdrCksumValue = resp.Header.Get(cmn.HeaderObjCksumVal)
-		hdrCksumType = resp.Header.Get(cmn.HeaderObjCksumType)
+		hdrCksumValue = resp.Header.Get(cmn.HdrObjCksumVal)
+		hdrCksumType = resp.Header.Get(cmn.HdrObjCksumType)
 	}
 	src := fmt.Sprintf("GET (object %s from bucket %s)", objName, bck)
 	n, cksumValue, err := readResponse(resp, ioutil.Discard, src, hdrCksumType)
@@ -305,8 +305,8 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool
 
 	tctx.tr.tsHTTPEnd = time.Now()
 	if validate {
-		hdrCksumValue = resp.Header.Get(cmn.HeaderObjCksumVal)
-		hdrCksumType = resp.Header.Get(cmn.HeaderObjCksumType)
+		hdrCksumValue = resp.Header.Get(cmn.HdrObjCksumVal)
+		hdrCksumType = resp.Header.Get(cmn.HdrObjCksumType)
 	}
 
 	src := fmt.Sprintf("GET (object %s from bucket %s)", objName, bck)

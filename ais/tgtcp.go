@@ -340,7 +340,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			caller := r.Header.Get(cmn.HeaderCallerName)
+			caller := r.Header.Get(cmn.HdrCallerName)
 			if err := t.applyRegMeta(body, caller); err != nil {
 				t.writeErr(w, r, err)
 			}
@@ -798,7 +798,7 @@ func (t *targetrunner) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
 	}
 	msg := t.newAmsgStr("get-what="+cmn.GetWhatBMD, nil, newBucketMD)
 	if r != nil {
-		caller = r.Header.Get(cmn.HeaderCallerName)
+		caller = r.Header.Get(cmn.HdrCallerName)
 	}
 	if err := t.receiveBMD(newBucketMD, msg, bucketMDFixup, caller); err != nil && !isErrDowngrade(err) {
 		glog.Error(err)
@@ -830,7 +830,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 		cmn.WriteErr(w, r, err)
 		return
 	}
-	caller := r.Header.Get(cmn.HeaderCallerName)
+	caller := r.Header.Get(cmn.HdrCallerName)
 
 	// Config
 	newConf, msgConf, err := t.extractConfig(payload, caller)
@@ -926,7 +926,7 @@ func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Reques
 		cmn.WriteErr(w, r, err)
 		return
 	}
-	caller := r.Header.Get(cmn.HeaderCallerName)
+	caller := r.Header.Get(cmn.HdrCallerName)
 	newSmap, msg, err := t.extractSmap(payload, caller)
 	if err != nil {
 		t.writeErr(w, r, err)
@@ -964,9 +964,9 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// return ok plus optional reb info
-	callerID := r.Header.Get(cmn.HeaderCallerID)
-	caller := r.Header.Get(cmn.HeaderCallerName)
-	callerSmapVer, _ := strconv.ParseInt(r.Header.Get(cmn.HeaderCallerSmapVersion), 10, 64)
+	callerID := r.Header.Get(cmn.HdrCallerID)
+	caller := r.Header.Get(cmn.HdrCallerName)
+	callerSmapVer, _ := strconv.ParseInt(r.Header.Get(cmn.HdrCallerSmapVersion), 10, 64)
 	if smap.version() != callerSmapVer {
 		glog.Warningf("%s[%s]: health-ping from node (%s, %s) with different Smap v%d",
 			t.si, smap.StringEx(), callerID, caller, callerSmapVer)
@@ -1026,8 +1026,8 @@ func (t *targetrunner) enable() error {
 // lookupRemoteSingle sends the message to the given target to see if it has the specific object.
 func (t *targetrunner) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 	header := make(http.Header)
-	header.Add(cmn.HeaderCallerID, t.SID())
-	header.Add(cmn.HeaderCallerName, t.Sname())
+	header.Add(cmn.HdrCallerID, t.SID())
+	header.Add(cmn.HdrCallerName, t.Sname())
 	query := make(url.Values)
 	query.Set(cmn.URLParamSilent, "true")
 	args := callArgs{
@@ -1050,8 +1050,8 @@ func (t *targetrunner) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) 
 // have the specific object.
 func (t *targetrunner) lookupRemoteAll(lom *cluster.LOM, smap *smapX) *cluster.Snode {
 	header := make(http.Header)
-	header.Add(cmn.HeaderCallerID, t.SID())
-	header.Add(cmn.HeaderCallerName, t.Sname())
+	header.Add(cmn.HdrCallerID, t.SID())
+	header.Add(cmn.HdrCallerName, t.Sname())
 	query := make(url.Values)
 	query.Set(cmn.URLParamSilent, "true")
 	query.Set(cmn.URLParamCheckExistsAny, "true") // lookup all mountpaths _and_ copy if misplaced

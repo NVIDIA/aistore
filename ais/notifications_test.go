@@ -113,7 +113,7 @@ var _ = Describe("Notifications xaction test", func() {
 			body := bytes.NewBuffer(cos.MustMarshal(nm))
 			req := httptest.NewRequest(http.MethodPost, cmn.URLPathNotifs.Join(notifKind), body)
 			req.Header = make(http.Header)
-			req.Header.Add(cmn.HeaderCallerID, daeID)
+			req.Header.Add(cmn.HdrCallerID, daeID)
 			return req
 		}
 
