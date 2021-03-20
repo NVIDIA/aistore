@@ -2118,43 +2118,44 @@ func (h *httprunner) healthByExternalWD(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *httprunner) _isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
+	debug.Assert(hdr != nil)
 	var (
-		callerID      = hdr.Get(cmn.HeaderCallerID)
-		callerName    = hdr.Get(cmn.HeaderCallerName)
-		callerSmapVer = hdr.Get(cmn.HeaderCallerSmapVersion)
+		smap       = h.owner.smap.get()
+		callerID   = hdr.Get(cmn.HeaderCallerID)
+		callerName = hdr.Get(cmn.HeaderCallerName)
+		callerSver = hdr.Get(cmn.HeaderCallerSmapVersion)
+		callerVer  int64
+		erP        error
 	)
-
-	isExpected := hdr != nil && callerID != "" && callerName != ""
-	if !isExpected {
+	if ok := callerID != "" && callerName != ""; !ok {
 		return fmt.Errorf("%s: expected %s request", h.si, cmn.NetworkIntraControl)
 	}
-
-	var (
-		smap        = h.owner.smap.get()
-		verInt, _   = strconv.ParseInt(callerSmapVer, 10, 64)
-		greaterSmap = verInt > smap.version()
-		caller      = smap.GetNode(callerID)
-	)
-	isExpected = caller != nil && (!fromPrimary || smap.isPrimary(caller))
-	if isExpected {
+	if callerSver != "" {
+		callerVer, erP = strconv.ParseInt(callerSver, 10, 64)
+		if erP != nil {
+			debug.AssertNoErr(erP)
+			glog.Error(erP)
+			return
+		}
+	}
+	caller := smap.GetNode(callerID)
+	if ok := caller != nil && (!fromPrimary || smap.isPrimary(caller)); ok {
 		return
 	}
-
-	// NOTE: If we receive request from a node which has greater smap version,
-	// we trust it even if we aren't able validate the intra control call.
-	if greaterSmap {
-		glog.Errorf("smap-self(v%d) < smap-caller(v%s); expected condition not satisfied with local smap...", smap.version(), callerSmapVer)
+	// NOTE: even if we are not able to validate the request we still trust it
+	//       when the sender's Smap is more current.
+	if callerVer > smap.version() {
+		glog.Errorf("%s: %s < caller-Smap(v%s) - proceeding anyway...", h.si, smap, callerSver)
 		return
 	}
-
 	if caller == nil {
-		// If caller smap is not set, assume request from fresh node and proceed.
-		if verInt == 0 && !fromPrimary {
+		// caller's Smap is not set: assume request from a newly joined and proceed.
+		if callerVer == 0 && !fromPrimary {
 			return nil
 		}
-		return fmt.Errorf("%s: expected %s from a valid node", h.si, cmn.NetworkIntraControl)
+		return fmt.Errorf("%s: expected %s from a valid node, %s", h.si, cmn.NetworkIntraControl, smap)
 	}
-	return fmt.Errorf("%s: expected %s from primary (not %s)", h.si, cmn.NetworkIntraControl, caller)
+	return fmt.Errorf("%s: expected %s from primary (and not %s), %s", h.si, cmn.NetworkIntraControl, caller, smap)
 }
 
 //
