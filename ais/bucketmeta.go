@@ -157,13 +157,9 @@ func (m *bucketMD) set(bck *cluster.Bck, p *cmn.BucketProps) {
 
 func (m *bucketMD) clone() *bucketMD {
 	dst := &bucketMD{}
-	m.deepCopy(dst)
-	return dst
-}
-
-func (m *bucketMD) deepCopy(dst *bucketMD) {
-	dst.vstr = m.vstr
 	m.DeepCopy(&dst.BMD)
+	dst.vstr = m.vstr
+	return dst
 }
 
 func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *cluster.Snode, caller string) (err error) {

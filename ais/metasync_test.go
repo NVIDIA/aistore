@@ -181,9 +181,7 @@ func TestMetaSyncDeepCopy(t *testing.T) {
 		},
 	})
 
-	clone := &bucketMD{}
-	bmd.deepCopy(clone)
-
+	clone := bmd.clone()
 	s1 := string(cos.MustMarshal(bmd))
 	s2 := string(cos.MustMarshal(clone))
 	if s1 == "" || s2 == "" || s1 != s2 {

@@ -1062,8 +1062,8 @@ func (h *httprunner) call(args callArgs) (res *callResult) {
 
 	req.Header.Set(cmn.HdrCallerID, h.si.ID())
 	req.Header.Set(cmn.HdrCallerName, h.si.Name())
-	if smap := h.owner.smap.get(); smap.validate() == nil {
-		req.Header.Set(cmn.HdrCallerSmapVersion, strconv.FormatInt(smap.version(), 10))
+	if smap := h.owner.smap.get(); smap != nil && smap.vstr != "" {
+		req.Header.Set(cmn.HdrCallerSmapVersion, smap.vstr)
 	}
 
 	resp, res.err = client.Do(req)
@@ -2092,7 +2092,7 @@ func (h *httprunner) unregisterSelf(ignoreErr bool) (err error) {
 func (h *httprunner) healthByExternalWD(w http.ResponseWriter, r *http.Request) (responded bool) {
 	callerID := r.Header.Get(cmn.HdrCallerID)
 	caller := r.Header.Get(cmn.HdrCallerName)
-	// external (i.e. not intra-cluster) call
+	// external call
 	if callerID == "" && caller == "" {
 		readiness := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamHealthReadiness))
 		if glog.FastV(4, glog.SmoduleAIS) {
@@ -2107,85 +2107,10 @@ func (h *httprunner) healthByExternalWD(w http.ResponseWriter, r *http.Request) 
 		// TODO: establish the fact that we are healthy...
 		return true
 	}
-
-	debug.Assert(h.isIntraCall(r.Header))
-
-	// Intra cluster health ping
+	// intra-cluster health ping
 	if !h.ensureIntraControl(w, r, false /* from primary */) {
 		responded = true
 	}
-	return
-}
-
-func (h *httprunner) _isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
-	debug.Assert(hdr != nil)
-	var (
-		smap       = h.owner.smap.get()
-		callerID   = hdr.Get(cmn.HdrCallerID)
-		callerName = hdr.Get(cmn.HdrCallerName)
-		callerSver = hdr.Get(cmn.HdrCallerSmapVersion)
-		callerVer  int64
-		erP        error
-	)
-	if ok := callerID != "" && callerName != ""; !ok {
-		return fmt.Errorf("%s: expected %s request", h.si, cmn.NetworkIntraControl)
-	}
-	if callerSver != "" {
-		callerVer, erP = strconv.ParseInt(callerSver, 10, 64)
-		if erP != nil {
-			debug.AssertNoErr(erP)
-			glog.Error(erP)
-			return
-		}
-	}
-	caller := smap.GetNode(callerID)
-	if ok := caller != nil && (!fromPrimary || smap.isPrimary(caller)); ok {
-		return
-	}
-	// NOTE: even if we are not able to validate the request we still trust it
-	//       when the sender's Smap is more current.
-	if callerVer > smap.version() {
-		glog.Errorf("%s: %s < caller-Smap(v%s) - proceeding anyway...", h.si, smap, callerSver)
-		return
-	}
-	if caller == nil {
-		// caller's Smap is not set: assume request from a newly joined and proceed.
-		if callerVer == 0 && !fromPrimary {
-			return nil
-		}
-		return fmt.Errorf("%s: expected %s from a valid node, %s", h.si, cmn.NetworkIntraControl, smap)
-	}
-	return fmt.Errorf("%s: expected %s from primary (and not %s), %s", h.si, cmn.NetworkIntraControl, caller, smap)
-}
-
-//
-// request validation helpers
-//
-func (h *httprunner) isIntraCall(hdr http.Header) (isIntra bool) {
-	err := h._isIntraCall(hdr, false /*from primary*/)
-	return err == nil
-}
-
-// Determine if the request is intra-control. For now, using the http.Server handling the request.
-// TODO: Add other checks based on request e.g. `r.RemoteAddr`
-func (h *httprunner) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyPrimary bool) (isIntra bool) {
-	err := h._isIntraCall(r.Header, onlyPrimary)
-	if err != nil {
-		h.writeErr(w, r, err)
-		return
-	}
-	// When `config.UseIntraControl` is `false`, intra-control net is same as public net.
-	if !cmn.GCO.Get().HostNet.UseIntraControl {
-		return true
-	}
-
-	intraAddr := h.si.IntraControlNet.TCPEndpoint()
-	srvAddr := r.Context().Value(http.ServerContextKey).(*http.Server).Addr
-	if srvAddr == intraAddr {
-		return true
-	}
-
-	h.writeErrf(w, r, "%s: expected %s request", h.si, cmn.NetworkIntraControl)
 	return
 }
 
@@ -2273,6 +2198,78 @@ func newBckFromQueryUname(query url.Values, uparam string, required bool) (*clus
 		return nil, err
 	}
 	return cluster.NewBckEmbed(bck), nil
+}
+
+//////////////////////////////////////
+// intra-cluster request validation //
+//////////////////////////////////////
+
+func (h *httprunner) _isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
+	debug.Assert(hdr != nil)
+	var (
+		smap       = h.owner.smap.get()
+		callerID   = hdr.Get(cmn.HdrCallerID)
+		callerName = hdr.Get(cmn.HdrCallerName)
+		callerSver = hdr.Get(cmn.HdrCallerSmapVersion)
+		callerVer  int64
+		erP        error
+	)
+	if ok := callerID != "" && callerName != ""; !ok {
+		return fmt.Errorf("%s: expected %s request", h.si, cmn.NetworkIntraControl)
+	}
+	if !smap.isValid() {
+		return
+	}
+	caller := smap.GetNode(callerID)
+	if ok := caller != nil && (!fromPrimary || smap.isPrimary(caller)); ok {
+		return
+	}
+	// NOTE: even if we are not able to validate the request we still trust it
+	//       when the sender's Smap is more current.
+	if callerSver != smap.vstr && callerSver != "" {
+		callerVer, erP = strconv.ParseInt(callerSver, 10, 64)
+		if erP != nil {
+			debug.AssertNoErr(erP)
+			glog.Error(erP)
+			return
+		}
+		if callerVer > smap.version() {
+			glog.Errorf("%s: %s < caller-Smap(v%s) - proceeding anyway...", h.si, smap, callerSver)
+			return
+		}
+	}
+	if caller == nil {
+		// caller's Smap is not set: assume request from a newly joined node and proceed.
+		if callerSver == "" && !fromPrimary {
+			return nil
+		}
+		return fmt.Errorf("%s: expected %s from a valid node, %s", h.si, cmn.NetworkIntraControl, smap)
+	}
+	return fmt.Errorf("%s: expected %s from primary (and not %s), %s", h.si, cmn.NetworkIntraControl, caller, smap)
+}
+
+func (h *httprunner) isIntraCall(hdr http.Header) (isIntra bool) {
+	err := h._isIntraCall(hdr, false /*from primary*/)
+	return err == nil
+}
+
+func (h *httprunner) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyPrimary bool) (isIntra bool) {
+	err := h._isIntraCall(r.Header, onlyPrimary)
+	if err != nil {
+		h.writeErr(w, r, err)
+		return
+	}
+	if !cmn.GCO.Get().HostNet.UseIntraControl {
+		return true // intra-control == pub
+	}
+	// NOTE: not checking r.RemoteAddr
+	intraAddr := h.si.IntraControlNet.TCPEndpoint()
+	srvAddr := r.Context().Value(http.ServerContextKey).(*http.Server).Addr
+	if srvAddr == intraAddr {
+		return true
+	}
+	h.writeErrf(w, r, "%s: expected %s request", h.si, cmn.NetworkIntraControl)
+	return
 }
 
 ////////////////////

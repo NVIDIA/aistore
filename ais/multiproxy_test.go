@@ -70,7 +70,7 @@ func discoverServerDefaultHandler(sv, lv int64) *httptest.Server {
 		func(w http.ResponseWriter, r *http.Request) {
 			msg := cluMeta{
 				VoteInProgress: false,
-				Smap:           &smapX{cluster.Smap{Version: smapVersion}},
+				Smap:           &smapX{Smap: cluster.Smap{Version: smapVersion}},
 				BMD:            &bucketMD{BMD: cluster.BMD{Version: bmdVersion}},
 			}
 			b, _ := jsoniter.Marshal(msg)
@@ -89,7 +89,7 @@ func discoverServerVoteOnceHandler(sv, lv int64) *httptest.Server {
 		cnt++
 		msg := cluMeta{
 			VoteInProgress: cnt == 1,
-			Smap:           &smapX{cluster.Smap{Version: smapVersion}},
+			Smap:           &smapX{Smap: cluster.Smap{Version: smapVersion}},
 			BMD:            &bucketMD{BMD: cluster.BMD{Version: bmdVersion}},
 		}
 		b, _ := jsoniter.Marshal(msg)
@@ -110,7 +110,7 @@ func discoverServerFailTwiceHandler(sv, lv int64) *httptest.Server {
 		if cnt > 2 {
 			msg := cluMeta{
 				VoteInProgress: false,
-				Smap:           &smapX{cluster.Smap{Version: smapVersion}},
+				Smap:           &smapX{Smap: cluster.Smap{Version: smapVersion}},
 				BMD:            &bucketMD{BMD: cluster.BMD{Version: bmdVersion}},
 			}
 			b, _ := jsoniter.Marshal(msg)
@@ -138,7 +138,7 @@ func discoverServerVoteInProgressHandler(sv, lv int64) *httptest.Server {
 		func(w http.ResponseWriter, r *http.Request) {
 			msg := cluMeta{
 				VoteInProgress: true,
-				Smap:           &smapX{cluster.Smap{Version: 12345}},
+				Smap:           &smapX{Smap: cluster.Smap{Version: 12345}},
 				BMD:            &bucketMD{BMD: cluster.BMD{Version: 67890}},
 			}
 			b, _ := jsoniter.Marshal(msg)

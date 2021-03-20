@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"unsafe"
 
@@ -46,6 +47,7 @@ import (
 type (
 	smapX struct {
 		cluster.Smap
+		vstr string // itoa(Version)
 	}
 	smapOwner struct {
 		sync.Mutex
@@ -286,12 +288,8 @@ func (m *smapX) putNode(nsi *cluster.Snode, flags cluster.SnodeFlags) (exists bo
 
 func (m *smapX) clone() *smapX {
 	dst := &smapX{}
-	m.deepCopy(dst)
-	return dst
-}
-
-func (m *smapX) deepCopy(dst *smapX) {
 	cos.CopyStruct(dst, m)
+	debug.Assert(dst.vstr == m.vstr)
 	dst.init(m.CountTargets(), m.CountProxies())
 	for id, v := range m.Tmap {
 		dst.Tmap[id] = v.Clone()
@@ -300,6 +298,7 @@ func (m *smapX) deepCopy(dst *smapX) {
 		dst.Pmap[id] = v.Clone()
 	}
 	dst.Primary = dst.GetProxy(m.Primary.ID())
+	return dst
 }
 
 func (m *smapX) merge(dst *smapX, override bool) (added int, err error) {
@@ -440,11 +439,12 @@ func (r *smapOwner) Get() *cluster.Smap               { return &r.get().Smap }
 func (r *smapOwner) Listeners() cluster.SmapListeners { return r.listeners }
 
 //
-// private to the package
+// private
 //
 
 func (r *smapOwner) put(smap *smapX) {
 	smap.InitDigests()
+	smap.vstr = strconv.FormatInt(smap.Version, 10)
 	r.smap.Store(unsafe.Pointer(smap))
 	r.listeners.notify(smap.version())
 }
