@@ -364,10 +364,10 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 
 	// Unregister targets.
 	tlog.Logf("Unregister targets: %s and %s\n", target1.URL(cmn.NetworkPublic), target2.URL(cmn.NetworkPublic))
-	err := tutils.RemoveNodeFromSmap(m.proxyURL, target1.ID())
+	cmd1, err := tutils.KillNode(target1)
 	tassert.CheckFatal(t, err)
 	time.Sleep(time.Second)
-	err = tutils.RemoveNodeFromSmap(m.proxyURL, target2.ID())
+	cmd2, err := tutils.KillNode(target2)
 	tassert.CheckFatal(t, err)
 
 	// Start putting objects into bucket
@@ -384,14 +384,14 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 	// and join 2 targets in parallel
 	time.Sleep(time.Second)
 	tlog.Logf("Register 1st target %s\n", target1.URL(cmn.NetworkPublic))
-	_, err = tutils.JoinCluster(m.proxyURL, target1)
+	err = tutils.RestoreNode(cmd1, false, "the 1st target")
 	tassert.CheckFatal(t, err)
 
 	// random sleep between the first and the second join
 	time.Sleep(time.Duration(rand.Intn(3)+1) * time.Second)
 
 	tlog.Logf("Register 2nd target %s\n", target2.URL(cmn.NetworkPublic))
-	rebID, err := tutils.JoinCluster(m.proxyURL, target2)
+	err = tutils.RestoreNode(cmd2, false, "the 2nd target")
 	tassert.CheckFatal(t, err)
 
 	_, err = tutils.WaitForClusterState(
@@ -405,7 +405,7 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 
 	// wait for the rebalance to finish
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
+	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	// wait for the reads to run out
 	wg.Wait()

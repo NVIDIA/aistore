@@ -2239,7 +2239,7 @@ func (h *httprunner) _isIntraCall(hdr http.Header, fromPrimary bool) (err error)
 	}
 	if caller == nil {
 		// caller's Smap is not set: assume request from a newly joined node and proceed.
-		if callerSver == "" && !fromPrimary {
+		if !fromPrimary {
 			return nil
 		}
 		return fmt.Errorf("%s: expected %s from a valid node, %s", h.si, cmn.NetworkIntraControl, smap)
