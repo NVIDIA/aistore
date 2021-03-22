@@ -11,7 +11,7 @@
 
 ## CLI: Top-level Commands
 
-<img src="/docs/images/ais3.1.gif" width="100%">
+<img src="/docs/images/cli-overview.gif" width="100%">
 
 ## CLI: Getting Started
 

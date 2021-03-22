@@ -241,7 +241,7 @@ where `G` (above) denotes a `hostname:port` address of any AIS gateway (for deve
 
 One salient feature of AIS CLI is its Bash style [auto-completions](../cmd/cli/README.md#ais-cli-shell-auto-complete) that allow users to easily navigate supported operations and options by simply pressing the TAB key:
 
-<img src="images/ais3.1.gif" alt="CLI-tab" width="900" height="130">
+<img src="images/cli-overview.gif" alt="CLI-tab" width="900" height="130">
 
 AIS CLI is currently quickly developing. For more information, please see the project's own [README](../cmd/cli/README.md).
 
