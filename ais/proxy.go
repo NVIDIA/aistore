@@ -257,7 +257,7 @@ func (p *proxyrunner) applyRegMeta(body []byte, caller string) error {
 }
 
 func (p *proxyrunner) receiveCluMeta(cluMeta *cluMeta, action, caller string) (err error) {
-	msg := p.newAmsgStr(action, cluMeta.Smap, cluMeta.BMD)
+	msg := p.newAmsgStr(action, cluMeta.BMD)
 
 	// Config
 	debug.Assert(cluMeta.Config != nil)
@@ -1168,7 +1168,7 @@ func (p *proxyrunner) gatherBucketSummary(bck cmn.QueryBcks, msg *cmn.BucketSumm
 		isNew, q = p.initAsyncQuery(cmn.Bck(bck), msg, cos.GenUUID())
 		config   = cmn.GCO.Get()
 		smap     = p.owner.smap.get()
-		aisMsg   = p.newAmsgActVal(cmn.ActSummary, msg, smap)
+		aisMsg   = p.newAmsgActVal(cmn.ActSummary, msg)
 	)
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{
@@ -1693,7 +1693,7 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allE
 	// what we have locally, so we don't re-request the objects.
 	smsg.ContinuationToken = p.qm.b.last(smsg.UUID, token)
 
-	aisMsg = p.newAmsgActVal(cmn.ActList, &smsg, smap)
+	aisMsg = p.newAmsgActVal(cmn.ActList, &smsg)
 	args = allocBcastArgs()
 	args.req = cmn.ReqArgs{
 		Method: http.MethodGet,
@@ -1760,7 +1760,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 	var (
 		smap       = p.owner.smap.get()
 		reqTimeout = cmn.GCO.Get().Client.ListObjects
-		aisMsg     = p.newAmsgActVal(cmn.ActList, &smsg, smap)
+		aisMsg     = p.newAmsgActVal(cmn.ActList, &smsg)
 		args       = allocBcastArgs()
 		results    sliceResults
 	)
@@ -1897,7 +1897,7 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg,
 	query url.Values) (xactID string, err error) {
 	var (
 		smap   = p.owner.smap.get()
-		aisMsg = p.newAmsg(msg, smap, nil, cos.GenUUID())
+		aisMsg = p.newAmsg(msg, nil, cos.GenUUID())
 		body   = cos.MustMarshal(aisMsg)
 		path   = cmn.URLPathBuckets.Join(bucket)
 	)
@@ -2375,10 +2375,9 @@ func (p *proxyrunner) _becomeFinal(ctx *smapModifier, clone *smapX) {
 	var (
 		bmd   = p.owner.bmd.get()
 		rmd   = p.owner.rmd.get()
-		msg   = p.newAmsgStr(cmn.ActNewPrimary, clone, bmd)
+		msg   = p.newAmsgStr(cmn.ActNewPrimary, bmd)
 		pairs = []revsPair{{clone, msg}, {bmd, msg}, {rmd, msg}}
 	)
-
 	config, err := p.ensureConfigPrimaryURL()
 	if err != nil {
 		glog.Error(err)

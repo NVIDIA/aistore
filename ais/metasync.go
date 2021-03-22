@@ -445,8 +445,8 @@ func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refus
 
 // pending (map), if requested, contains only those daemons that need
 // to get at least one of the most recently sync-ed tag-ed revs
-func (y *metasyncer) pending() (pending cluster.NodeMap, smap *smapX) {
-	smap = y.p.owner.smap.get()
+func (y *metasyncer) pending() (pending cluster.NodeMap) {
+	smap := y.p.owner.smap.get()
 	if !smap.isPrimary(y.p.si) {
 		y.becomeNonPrimary()
 		return
@@ -490,7 +490,7 @@ func (y *metasyncer) pending() (pending cluster.NodeMap, smap *smapX) {
 // gets invoked when retryTimer fires; returns updated number of still pending
 // using MethodPut since revsReqType here is always revsReqSync
 func (y *metasyncer) handlePending() (failedCnt int) {
-	pending, smap := y.pending()
+	pending := y.pending()
 	if len(pending) == 0 {
 		glog.Infof("no pending revs - all good")
 		return
@@ -498,7 +498,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 	var (
 		payload = make(msPayload, 2*len(y.lastSynced))
 		pairs   = make([]revsPair, 0, len(y.lastSynced))
-		msg     = y.p.newAmsgStr("metasync: handle-pending", smap, nil) // NOTE: same msg for all revs
+		msg     = y.p.newAmsgStr("metasync: handle-pending", nil) // NOTE: same msg for all revs
 		msgBody = cos.MustMarshal(msg)
 	)
 	for tag, revs := range y.lastSynced {

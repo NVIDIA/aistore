@@ -86,7 +86,7 @@ func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
 
 	if regToIC && xlru.ID().String() == id {
 		regMsg := xactRegMsg{UUID: id, Kind: cmn.ActLRU, Srcs: []string{t.si.ID()}}
-		msg := t.newAmsgActVal(cmn.ActRegGlobalXaction, regMsg, nil)
+		msg := t.newAmsgActVal(cmn.ActRegGlobalXaction, regMsg)
 		t.bcastAsyncIC(msg)
 	}
 

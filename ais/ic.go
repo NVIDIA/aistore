@@ -63,7 +63,6 @@ func (ic *ic) init(p *proxyrunner) {
 	ic.p = p
 }
 
-// TODO -- FIXME: add redirect-to-owner capability to support list/query caching
 func (ic *ic) reverseToOwner(w http.ResponseWriter, r *http.Request, uuid string, msg interface{}) (reversedOrFailed bool) {
 	retry := true
 begin:
@@ -302,10 +301,10 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 		}
 	case cmn.ActRegGlobalXaction:
 		var (
-			regMsg = &xactRegMsg{}
-			ver    = smap.Version
-			tmap   cluster.NodeMap
-			err    error
+			regMsg     = &xactRegMsg{}
+			tmap       cluster.NodeMap
+			callerSver = r.Header.Get(cmn.HdrCallerSmapVersion)
+			err        error
 		)
 		if err = cos.MorphMarshal(msg.Value, regMsg); err != nil {
 			ic.p.writeErr(w, r, err)
@@ -313,14 +312,9 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 		}
 		debug.Assert(len(regMsg.Srcs) != 0)
 		withRetry(func() bool {
-			if smap.Version < msg.SmapVersion || err != nil {
-				smap = ic.p.owner.smap.get()
-			}
-			if smap.Version == ver && err != nil {
-				return false
-			}
+			smap = ic.p.owner.smap.get()
 			tmap, err = smap.NewTmap(regMsg.Srcs)
-			return err == nil
+			return err == nil && callerSver == smap.vstr
 		})
 		if err != nil {
 			ic.p.writeErrStatusf(w, r, http.StatusNotFound, "%s: failed to %q: %v", ic.p.si, msg.Action, err)
@@ -345,14 +339,14 @@ func (ic *ic) registerEqual(a regIC) {
 		cos.AssertNoErr(err)
 	}
 	if a.smap.ICCount() > 1 {
-		ic.bcastListenIC(a.nl, a.smap)
+		ic.bcastListenIC(a.nl)
 	}
 }
 
-func (ic *ic) bcastListenIC(nl nl.NotifListener, smap *smapX) {
+func (ic *ic) bcastListenIC(nl nl.NotifListener) {
 	var (
 		actMsg = cmn.ActionMsg{Action: cmn.ActListenToNotif, Value: newNLMsg(nl)}
-		msg    = ic.p.newAmsg(&actMsg, smap, nil)
+		msg    = ic.p.newAmsg(&actMsg, nil)
 	)
 	cos.Assert(nl.ActiveCount() > 0)
 	ic.p.bcastAsyncIC(msg)
@@ -365,7 +359,7 @@ func (ic *ic) sendOwnershipTbl(si *cluster.Snode) error {
 		}
 		return nil
 	}
-	msg := ic.p.newAmsgActVal(cmn.ActMergeOwnershipTbl, &ic.p.notifs, nil)
+	msg := ic.p.newAmsgActVal(cmn.ActMergeOwnershipTbl, &ic.p.notifs)
 	result := ic.p.call(callArgs{
 		si: si,
 		req: cmn.ReqArgs{

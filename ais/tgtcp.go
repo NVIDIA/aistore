@@ -85,7 +85,7 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, t.si, "reg-meta", cmn.BytesHead(body), err)
 		return
 	}
-	msg := t.newAmsgStr(cmn.ActRegTarget, regMeta.Smap, regMeta.BMD)
+	msg := t.newAmsgStr(cmn.ActRegTarget, regMeta.BMD)
 
 	// Config
 	debug.Assert(regMeta.Config != nil)
@@ -796,7 +796,7 @@ func (t *targetrunner) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
 		glog.Error(err)
 		return
 	}
-	msg := t.newAmsgStr("get-what="+cmn.GetWhatBMD, nil, newBucketMD)
+	msg := t.newAmsgStr("get-what="+cmn.GetWhatBMD, newBucketMD)
 	if r != nil {
 		caller = r.Header.Get(cmn.HdrCallerName)
 	}

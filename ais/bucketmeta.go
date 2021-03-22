@@ -72,7 +72,6 @@ type (
 		pre   func(*bmdModifier, *bucketMD) error
 		final func(*bmdModifier, *bucketMD)
 
-		smap  *smapX
 		msg   *cmn.ActionMsg
 		txnID string // transaction UUID
 		bcks  []*cluster.Bck

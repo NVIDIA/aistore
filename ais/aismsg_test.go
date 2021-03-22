@@ -46,7 +46,6 @@ func testAisMsgMarshal(t *testing.T, tc aismsgTestConf) {
 		if tc.restPropsPresent {
 			beforeMsg.BMDVersion = 12
 			beforeMsg.RMDVersion = 34
-			beforeMsg.SmapVersion = 56
 			beforeMsg.UUID = "outer-uuid"
 		}
 		b, err := jsoniter.Marshal(beforeMsg)

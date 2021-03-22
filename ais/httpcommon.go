@@ -137,10 +137,9 @@ type (
 	// aisMsg is an extended ActionMsg with extra information for node <=> node control plane communications
 	aisMsg struct {
 		cmn.ActionMsg
-		SmapVersion int64  `json:"smapversion,string"`
-		BMDVersion  int64  `json:"bmdversion,string"`
-		RMDVersion  int64  `json:"rmdversion,string"`
-		UUID        string `json:"uuid"` // cluster-wide ID of this action (operation, transaction)
+		BMDVersion int64  `json:"bmdversion,string"`
+		RMDVersion int64  `json:"rmdversion,string"`
+		UUID       string `json:"uuid"` // cluster-wide ID of this action (operation, transaction)
 	}
 
 	// http server and http runner (common for proxy and target)
@@ -2276,21 +2275,16 @@ func (h *httprunner) ensureIntraControl(w http.ResponseWriter, r *http.Request, 
 // aisMsg helpers //
 ////////////////////
 
-func (h *httprunner) newAmsgStr(msgStr string, smap *smapX, bmd *bucketMD) *aisMsg {
-	return h.newAmsg(&cmn.ActionMsg{Value: msgStr}, smap, bmd)
+func (h *httprunner) newAmsgStr(msgStr string, bmd *bucketMD) *aisMsg {
+	return h.newAmsg(&cmn.ActionMsg{Value: msgStr}, bmd)
 }
 
-func (h *httprunner) newAmsgActVal(act string, val interface{}, smap *smapX) *aisMsg {
-	return h.newAmsg(&cmn.ActionMsg{Action: act, Value: val}, smap, nil)
+func (h *httprunner) newAmsgActVal(act string, val interface{}) *aisMsg {
+	return h.newAmsg(&cmn.ActionMsg{Action: act, Value: val}, nil)
 }
 
-func (h *httprunner) newAmsg(actionMsg *cmn.ActionMsg, smap *smapX, bmd *bucketMD, uuid ...string) *aisMsg {
+func (h *httprunner) newAmsg(actionMsg *cmn.ActionMsg, bmd *bucketMD, uuid ...string) *aisMsg {
 	msg := &aisMsg{ActionMsg: *actionMsg}
-	if smap != nil {
-		msg.SmapVersion = smap.Version
-	} else {
-		msg.SmapVersion = h.owner.smap.Get().Version
-	}
 	if bmd != nil {
 		msg.BMDVersion = bmd.Version
 	} else {
