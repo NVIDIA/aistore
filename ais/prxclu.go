@@ -727,7 +727,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 			return
 		}
-		p.unreg(true /*decommission*/)
+		p.unreg(msg.Action)
 	case cmn.ActXactStart, cmn.ActXactStop:
 		p.xactStarStop(w, r, msg)
 	case cmn.ActSendOwnershipTbl:

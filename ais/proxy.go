@@ -2107,7 +2107,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		if !p.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
-		p.unreg(true /* decommission */)
+		p.unreg(msg.Action)
 	case cmn.ActShutdown:
 		smap := p.owner.smap.get()
 		isPrimary := smap.isPrimary(p.si)
@@ -2165,27 +2165,32 @@ func (p *proxyrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 		glog.Infoln("sending unregister on proxy keepalive control channel")
 	}
 
-	_, ok, err := p.isDecommissionUnreg(w, r)
+	_, action, err := p.parseUnregMsg(w, r)
 	if err != nil {
 		cmn.WriteErr(w, r, err)
 		return
 	}
-	p.unreg(ok /*decommission*/)
+	p.unreg(action)
 }
 
-func (p *proxyrunner) unreg(isDecommission bool) {
+func (p *proxyrunner) unreg(action string) {
 	// Stop keepaliving
 	p.keepalive.send(kaUnregisterMsg)
-	if !isDecommission {
+
+	// In case of maintenance, we only stop the keepalive daemon,
+	// the HTTPServer is still active and accepts requests.
+	if action == cmn.ActStartMaintenance {
 		return
 	}
 
-	// When decommissioning always cleanup all system meta-data.
-	err := cleanupConfigDir()
-	if err != nil {
-		glog.Errorf("%s: failed to cleanup config dir, err: %v", p.si, err)
+	if action == cmn.ActDecommission || action == cmn.ActDecommissionNode {
+		// When decommissioning always cleanup all system meta-data.
+		err := cleanupConfigDir()
+		if err != nil {
+			glog.Errorf("%s: failed to cleanup config dir, err: %v", p.si, err)
+		}
 	}
-	p.Stop(&errNoUnregister{cmn.ActDecommission})
+	p.Stop(&errNoUnregister{action})
 }
 
 func (p *proxyrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {

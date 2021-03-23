@@ -169,16 +169,11 @@ func (t *targetrunner) daeputJSON(w http.ResponseWriter, r *http.Request) {
 		if err := t.owner.config.resetDaemonConfig(); err != nil {
 			t.writeErr(w, r, err)
 		}
-	case cmn.ActShutdown:
+	case cmn.ActShutdown, cmn.ActDecommission:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
-		t.Stop(&errNoUnregister{msg.Action})
-	case cmn.ActDecommission:
-		if !t.ensureIntraControl(w, r, true /* from primary */) {
-			return
-		}
-		t.unreg(true /* decommission */, true /* clean data */)
+		t.unreg(msg.Action, msg.Action == cmn.ActDecommission /* clean data */)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
@@ -388,15 +383,15 @@ func (t *targetrunner) handleUnregisterReq(w http.ResponseWriter, r *http.Reques
 		glog.Infoln("sending unregister on target keepalive control channel")
 	}
 
-	opts, ok, err := t.isDecommissionUnreg(w, r)
+	opts, action, err := t.parseUnregMsg(w, r)
 	if err != nil {
 		cmn.WriteErr(w, r, err)
 		return
 	}
-	t.unreg(ok, opts != nil && opts.CleanData)
+	t.unreg(action, opts != nil && opts.CleanData)
 }
 
-func (t *targetrunner) unreg(isDecommission, cleanData bool) {
+func (t *targetrunner) unreg(action string, cleanupData bool) {
 	// Stop keepaliving
 	t.keepalive.send(kaUnregisterMsg)
 
@@ -406,14 +401,23 @@ func (t *targetrunner) unreg(isDecommission, cleanData bool) {
 	// Stop all xactions
 	xreg.AbortAll()
 
-	if !isDecommission {
+	// In case of maintenance, we only stop the keepalive daemon,
+	// the HTTPServer is still active and accepts requests.
+	if action == cmn.ActStartMaintenance {
 		return
 	}
-	mdOnly := !cleanData
-	glog.Infof("%s: decommissioning, removing user data: %t", t.si, cleanData)
+
+	if action == cmn.ActShutdown {
+		t.Stop(&errNoUnregister{action})
+		return
+	}
+
+	// When action is decommission, cleanup all the (meta)data
+	// before stopping the targetrunner.
+	mdOnly := !cleanupData
+	glog.Infof("%s: decommissioning, removing user data: %t", t.si, cleanupData)
 	fs.Decommission(mdOnly)
 
-	// When decommissioning always cleanup all system meta-data.
 	err := cleanupConfigDir()
 	if err != nil {
 		glog.Errorf("%s: failed to cleanup config dir, err: %v", t.si, err)
@@ -423,7 +427,7 @@ func (t *targetrunner) unreg(isDecommission, cleanData bool) {
 	if err != nil {
 		glog.Errorf("failed to delete database, err: %v", err)
 	}
-	t.Stop(&errNoUnregister{cmn.ActDecommission})
+	t.Stop(&errNoUnregister{action})
 }
 
 func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request) {

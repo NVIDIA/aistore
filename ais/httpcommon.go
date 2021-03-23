@@ -939,20 +939,23 @@ func (h *httprunner) stopHTTPServer() {
 	}
 }
 
-// Return true if node is unregistered because of decommission
-func (h *httprunner) isDecommissionUnreg(w http.ResponseWriter, r *http.Request) (*cmn.ActValRmNode, bool, error) {
+// Return unregister node options with action type.
+func (h *httprunner) parseUnregMsg(w http.ResponseWriter, r *http.Request) (*cmn.ActValRmNode, string, error) {
 	var msg cmn.ActionMsg
 	if err := cmn.ReadJSON(w, r, &msg, true /*optional*/); err != nil {
-		return nil, false, err
+		return nil, "", err
 	}
-	if msg.Action != cmn.ActDecommissionNode {
-		return nil, false, nil
+	// NOTE: proxies don't use the unregister options so we return immediately without
+	//       unmarshalling the `msg.Value`.
+	if msg.Action != cmn.ActDecommissionNode || h.si.IsProxy() {
+		return nil, msg.Action, nil
 	}
+
 	var opts cmn.ActValRmNode
 	if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
-		return nil, false, err
+		return nil, msg.Action, err
 	}
-	return &opts, true, nil
+	return &opts, msg.Action, nil
 }
 
 // remove self from Smap (if required), terminate http, and wait (w/ timeout)
