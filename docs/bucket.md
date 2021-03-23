@@ -46,7 +46,7 @@ All the [supported storage services](storage_svcs.md) equally apply to all stora
 
 ### Backend Provider
 
-[Backend Provider](./providers.md) is an abstraction, and, simultaneously, an API-supported option that allows to delineate between "remote" and "local" buckets with respect to a given (any given) AIS cluster. 
+[Backend Provider](./providers.md) is an abstraction, and, simultaneously, an API-supported option that allows to delineate between "remote" and "local" buckets with respect to a given (any given) AIS cluster.
 For complete definition and details, please refer to the [backend provider document](./providers.md).
 
 Backend provider is realized as an optional parameter in the GET, PUT, APPEND, DELETE and [Range/List](batch.md) operations with supported enumerated values that include:
@@ -64,9 +64,9 @@ The rest of this document serves to further explain features and concepts specif
 
 AIS buckets are the AIStore-own distributed buckets that are not associated with any 3rd party Cloud.
 
-The [RESTful API](http_api.md) can be used to create, rename and, destroy ais buckets.
+The [RESTful API](http_api.md) can be used to create, copy, rename and, destroy ais buckets.
 
-New ais buckets must be given a unique name that does not duplicate any existing ais or remote bucket.
+New ais buckets must be given a unique name that does not duplicate any existing ais bucket.
 
 If you are going to use an AIS bucket as an S3-compatible one, consider changing the bucket's checksum to `MD5`.
 For details, see [S3 compatibility](s3compat.md#s3-compatibility).
@@ -85,7 +85,7 @@ Please note that rename bucket is not an instant operation, especially if the bu
 
 ### CLI example: working with remote AIS bucket
 
-AIS clusters can be attached to each other, thus forming a global (and globally accessible) namespace of all individually hosted datasets. For background and details on AIS multi-clustering, please refer to this [document](providers.md).
+AIS clusters can be attached to each other, thus forming a global (and globally accessible) namespace of all individually hosted datasets. For background and details on AIS multi-clustering, please refer to this [document](providers.md#remote-ais-cluster).
 
 The following example creates an attachment between two clusters, lists all remote buckets, and then list objects in one of those remote buckets (see comments inline):
 

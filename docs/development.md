@@ -54,7 +54,7 @@ The example below deploys:
 - a simulated remote cluster with alias "remoteAIS"
 - 3 targets
 - 3 proxies
-- with aws support
+- with AWS support
 
 ```console
 $ bash ./deploy/scripts/clean-deploy --deployment all --remote-alias remoteAIS -ntargets 3 -nproxies 3 --aws
