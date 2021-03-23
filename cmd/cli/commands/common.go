@@ -179,18 +179,19 @@ const (
 	optionalObjectsArgument  = "BUCKET/[OBJECT_NAME]..."
 
 	// Daemons
-	daemonIDArgument         = "DAEMON_ID"
-	optionalDaemonIDArgument = "[DAEMON_ID]"
-	optionalTargetIDArgument = "[TARGET_ID]"
-	showConfigArgument       = "[DAEMON_ID] [CONFIG_SECTION]"
-	cluConfigArgument        = optionalDaemonIDArgument + " " + keyValuePairsArgument
-	attachRemoteAISArgument  = aliasURLPairArgument
-	detachRemoteAISArgument  = aliasArgument
-	diskAttachArgument       = daemonMountpathPairArgument
-	diskDetachArgument       = daemonMountpathPairArgument
-	joinNodeArgument         = "IP:PORT"
-	startDownloadArgument    = "SOURCE DESTINATION"
-	jsonSpecArgument         = "JSON_SPECIFICATION"
+	daemonIDArgument          = "DAEMON_ID"
+	optionalDaemonIDArgument  = "[DAEMON_ID]"
+	optionalTargetIDArgument  = "[TARGET_ID]"
+	showConfigArgument        = "DAEMON_ID [CONFIG_SECTION]"
+	showClusterConfigArgument = "[CONFIG_SECTION]"
+	cluConfigArgument         = optionalDaemonIDArgument + " " + keyValuePairsArgument
+	attachRemoteAISArgument   = aliasURLPairArgument
+	detachRemoteAISArgument   = aliasArgument
+	diskAttachArgument        = daemonMountpathPairArgument
+	diskDetachArgument        = daemonMountpathPairArgument
+	joinNodeArgument          = "IP:PORT"
+	startDownloadArgument     = "SOURCE DESTINATION"
+	jsonSpecArgument          = "JSON_SPECIFICATION"
 
 	// Xactions
 	xactionArgument = "XACTION_NAME"

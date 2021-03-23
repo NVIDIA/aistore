@@ -73,6 +73,10 @@ const (
 		"{{ $item.Name }}\t {{ $item.Value }}\n" +
 		"{{end}}\n"
 
+	ConfigDiffTmpl = "PROPERTY\t VALUE\t DEFAULT\n{{range $item := .}}" +
+		"{{ $item.Name }}\t {{ $item.Current }}\t {{ $item.Old }}\n" +
+		"{{end}}\n"
+
 	PropsSimpleTmpl = "PROPERTY\t VALUE\n" +
 		"{{range $p := . }}" +
 		"{{$p.Name}}\t {{$p.Value}}\n" +

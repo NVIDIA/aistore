@@ -136,12 +136,12 @@ var (
 	showCmdCluster = cli.Command{
 		Name:      subcmdShowCluster,
 		Usage:     "show cluster details",
-		ArgsUsage: "[DAEMON_ID|DAEMON_TYPE]",
+		ArgsUsage: "[DAEMON_ID|DAEMON_TYPE|smap|config]",
 		Flags:     showCmdsFlags[subcmdShowCluster],
 		Action:    showClusterHandler,
 		BashComplete: func(c *cli.Context) {
 			if c.NArg() == 0 {
-				fmt.Printf("%s\n%s\n%s\n", cmn.Proxy, cmn.Target, subcmdSmap)
+				fmt.Printf("%s\n%s\n%s\n%s\n", cmn.Proxy, cmn.Target, subcmdSmap, subcmdConfig)
 			}
 			daemonCompletions(completeAllDaemons)(c)
 		},
@@ -153,6 +153,13 @@ var (
 				Flags:        showCmdsFlags[subcmdSmap],
 				Action:       showSmapHandler,
 				BashComplete: daemonCompletions(completeAllDaemons),
+			},
+			{
+				Name:      subcmdShowConfig,
+				Usage:     "show cluster configuration",
+				ArgsUsage: showClusterConfigArgument,
+				Flags:     showCmdsFlags[subcmdShowConfig],
+				Action:    showClusterConfigHandler,
 			},
 		},
 	}
@@ -173,11 +180,11 @@ var (
 	}
 	showCmdConfig = cli.Command{
 		Name:         subcmdShowConfig,
-		Usage:        "show cluster or daemon configuration",
+		Usage:        "show daemon configuration",
 		ArgsUsage:    showConfigArgument,
 		Flags:        showCmdsFlags[subcmdShowConfig],
-		Action:       showConfigHandler,
-		BashComplete: daemonConfigSectionCompletions(true /* daemon optional */),
+		Action:       showDaemonConfigHandler,
+		BashComplete: daemonConfigSectionCompletions(false /* daemon not optional */),
 	}
 	showCmdRemoteAIS = cli.Command{
 		Name:         subcmdShowRemoteAIS,
@@ -392,13 +399,16 @@ func showSmapHandler(c *cli.Context) (err error) {
 	return clusterSmap(c, primarySmap, daemonID, flagIsSet(c, jsonFlag))
 }
 
-func showConfigHandler(c *cli.Context) (err error) {
+func showClusterConfigHandler(c *cli.Context) (err error) {
 	if _, err = fillMap(); err != nil {
 		return
 	}
-	args := c.Args()
-	if c.NArg() == 0 || isConfigProp(args.First()) {
-		return getClusterConfig(c)
+	return getClusterConfig(c)
+}
+
+func showDaemonConfigHandler(c *cli.Context) (err error) {
+	if _, err = fillMap(); err != nil {
+		return
 	}
 	return getDaemonConfig(c)
 }

@@ -88,6 +88,11 @@ type (
 		Name  string
 		Value string
 	}
+	propDiff struct {
+		Name    string
+		Current string
+		Old     string
+	}
 )
 
 func isWebURL(url string) bool { return cos.IsHTTP(url) || cos.IsHTTPS(url) }
@@ -1169,6 +1174,29 @@ func flattenConfig(cfg interface{}, section string) []prop {
 		return nil, false
 	})
 	return flat
+}
+
+func diffConfigs(actual, original []prop) []propDiff {
+	diff := make([]propDiff, 0, len(actual))
+	for _, a := range actual {
+		item := propDiff{Name: a.Name, Current: a.Value, Old: "N/A"}
+		for _, o := range original {
+			if o.Name != a.Name {
+				continue
+			}
+			if o.Value == a.Value {
+				item.Old = "-"
+			} else {
+				item.Old = o.Value
+			}
+			break
+		}
+		diff = append(diff, item)
+	}
+	sort.Slice(diff, func(i, j int) bool {
+		return diff[i].Name < diff[j].Name
+	})
+	return diff
 }
 
 // First, request cluster's config from the primary node that contains

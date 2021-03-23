@@ -215,8 +215,14 @@ func getDaemonConfig(c *cli.Context) error {
 		return templates.DisplayOutput(body, c.App.Writer, "", useJSON)
 	}
 
-	flat := flattenConfig(body, section)
-	return templates.DisplayOutput(flat, c.App.Writer, templates.ConfigTmpl, false)
+	cluConf, err := api.GetClusterConfig(defaultAPIParams)
+	if err != nil {
+		return err
+	}
+	flatDaemon := flattenConfig(body, section)
+	flatCluster := flattenConfig(cluConf, section)
+	flatDiff := diffConfigs(flatDaemon, flatCluster)
+	return templates.DisplayOutput(flatDiff, c.App.Writer, templates.ConfigDiffTmpl, false)
 }
 
 // Sets config of specific daemon or cluster

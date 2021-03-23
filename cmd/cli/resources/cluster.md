@@ -79,7 +79,7 @@ If `DAEMON_ID` is not set, it will show the smap of the daemon that the `AIS_END
 Show smap copy of daemon with ID `ETURp8083`.
 
 ```console
-$ ais show cluster smap ETURp8083 
+$ ais show cluster smap ETURp8083
 DAEMON ID        TYPE    PUBLIC URL
 ETURp8083        proxy   http://127.0.0.1:8083
 WEQRp8084        proxy   http://127.0.0.1:8084
@@ -95,7 +95,7 @@ iPbHt8088        target  http://127.0.0.1:8088
 oQZCt8089        target  http://127.0.0.1:8089
 
 Non-Electable:
-     
+
 Primary Proxy: pufGp8080
 Proxies: 5       Targets: 5      Smap Version: 14
 ```
@@ -248,11 +248,34 @@ TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL      
 
 ## Show configuration
 
-`ais show config [DAEMON_ID] [CONFIG_SECTION]`
+A daemon configuration consists of two parts:
 
-Display the cluster configuration, or daemon configuration of `DAEMON_ID`. If `CONFIG_SECTION` is given, only that specific section will be shown.
+- global cluster configuration which is the same across the cluster
+- local daemon configuration which overrides the cluster one.
 
-### Options
+### Cluster configuration
+
+`ais show cluster config [CONFIG_SECTION]`
+
+Display the cluster configuration. If `CONFIG_SECTION` is given, only that specific section will be shown.
+
+#### Options
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--json, -j` | `bool` | Output in JSON format | `false` |
+
+### Daemon configuration
+
+`ais show config DAEMON_ID [CONFIG_SECTION]`
+
+Display the actual daemon configuration. If `CONFIG_SECTION` is given, only that specific section will be shown.
+The output includes extra column with global values. Some values in the column have special meaning:
+
+- `-` - the local and global values are the same, the option is not overridden
+- `N/A` - the option is local-only and does not exist in global config
+
+#### Options
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -260,19 +283,34 @@ Display the cluster configuration, or daemon configuration of `DAEMON_ID`. If `C
 
 ### Examples
 
-#### Show LRU config section
+#### Show daemon LRU config section
 
-Display only the LRU config section of the node with ID `23kfa10f`
+Display only the LRU config section of the node with ID `Gpuut8085`
 
 ```console
-$ ais show config 23kfa10f lru
-LRU Config
- Low WM:		75
- High WM:		90
- Out-of-Space:		95
- Don't Evict Time:	120m
- Capacity Update Time:	10m
- Enabled:		true
+$ ais show config Gpuut8085 lru -v
+PROPERTY                 VALUE   DEFAULT
+lru.capacity_upd_time    10m     -
+lru.dont_evict_time      120m    -
+lru.enabled              false   true
+lru.highwm               90      -
+lru.lowwm                75      -
+lru.out_of_space         95      -
+```
+
+#### Show cluster LRU config section
+
+Display only the LRU config section of the global config
+
+```console
+$ ais show cluster config lru
+PROPERTY                 VALUE
+lru.lowwm                75
+lru.highwm               90
+lru.out_of_space         95
+lru.dont_evict_time      120m
+lru.capacity_upd_time    10m
+lru.enabled              true
 ```
 
 ## Set configuration
@@ -319,7 +357,7 @@ config successfully reset for all nodes
 #### Reset configuration for one node
 
 ```console
-$ ais cluster configure reset CMhHp8082 
+$ ais cluster configure reset CMhHp8082
 config for node "CMhHp8082" successfully reset
 ```
 
