@@ -5,6 +5,7 @@
 FROM golang:1.15 AS builder
 
 ARG mode
+ARG providers
 
 ENV GOPATH="/go"
 ENV PATH="${GOPATH}/bin:${PATH}"
@@ -12,7 +13,9 @@ ENV PATH="${GOPATH}/bin:${PATH}"
 RUN mkdir -p /go/src/github.com/NVIDIA/aistore
 WORKDIR /go/src/github.com/NVIDIA/aistore
 COPY . .
-RUN MODE=${mode} AIS_BACKEND_PROVIDERS="ais aws azure gcp hdfs" make node cli xmeta
+
+
+RUN MODE=${mode} AIS_BACKEND_PROVIDERS=${providers:-"aws gcp"} make node cli xmeta
 
 FROM ubuntu:18.04
 

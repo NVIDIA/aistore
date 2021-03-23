@@ -14,13 +14,14 @@ build:
 	$(DOCKER) build --quiet \
 		-f Dockerfile \
 		-t $(IMAGE_REPO):$(IMAGE_TAG) \
+		--build-arg providers=$(AIS_BACKEND_PROVIDERS) \
 		"../../../../."
 
 build_debug:
 	$(DOCKER) build --quiet \
 		-f Dockerfile \
 		-t $(IMAGE_REPO):$(IMAGE_TAG)-debug \
-		--build-arg mode="debug" \
+		--build-arg mode="debug" --build-arg providers=$(AIS_BACKEND_PROVIDERS) \
 		"../../../../."
 
 push:
