@@ -140,6 +140,10 @@ func initDaemon(version, buildTime string) cos.Runner {
 	if daemon.cli.localConfigPath == "" {
 		cos.ExitLogf(erfm, "local-config")
 	}
+
+	// Cleanup shutdown marker if exists.
+	deleteShutdownMarker()
+
 	config = &cmn.Config{}
 	err = cmn.LoadConfig(daemon.cli.globalConfigPath, daemon.cli.localConfigPath, daemon.cli.role, config)
 	if err != nil {

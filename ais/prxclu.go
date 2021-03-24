@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"syscall"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -723,10 +722,6 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		args.to = cluster.AllNodes
 		_ = p.bcastGroup(args)
 		freeBcastArgs(args)
-		if msg.Action == cmn.ActShutdown {
-			_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
-			return
-		}
 		p.unreg(msg.Action)
 	case cmn.ActXactStart, cmn.ActXactStop:
 		p.xactStarStop(w, r, msg)

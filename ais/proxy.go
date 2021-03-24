@@ -2115,6 +2115,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			if !p.ensureIntraControl(w, r, true /* from primary */) {
 				return
 			}
+			writeShutdownMarker()
 			p.Stop(&errNoUnregister{msg.Action})
 			return
 		}
@@ -2190,6 +2191,7 @@ func (p *proxyrunner) unreg(action string) {
 			glog.Errorf("%s: failed to cleanup config dir, err: %v", p.si, err)
 		}
 	}
+	writeShutdownMarker()
 	p.Stop(&errNoUnregister{action})
 }
 

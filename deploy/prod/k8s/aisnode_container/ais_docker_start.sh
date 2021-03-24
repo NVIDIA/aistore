@@ -137,9 +137,16 @@ do
     # XXX Needs some log rotation etc in time, just a quick fix for
     # now.
     #
-    cat /var/log/ais/aisnode.INFO >> /etc/ais/INFO.agg
-    cat /var/log/ais/aisnode.ERROR >> /etc/ais/ERROR.agg
-    cat /var/log/ais/aisnode.WARNING >> /etc/ais/WARNING.agg
+    cat /var/log/ais/aisnode.INFO >> /etc/ais/INFO.agg || true
+    cat /var/log/ais/aisnode.ERROR >> /etc/ais/ERROR.agg || true
+    cat /var/log/ais/aisnode.WARNING >> /etc/ais/WARNING.agg || true
+
+    # If the shutdown marker is present wait for the container to receive kill signal.
+    # This is to ensure that the ais deamon scheduled to terminate isn't restarted by K8s.
+    while [[ -f /var/ais_config/.ais.shutdown ]]; do
+        echo "Waiting to receive kill signal"
+        sleep 10
+    done
 
     # Exit now if aisnode received SIGINT (see preStop lifecycle hook)
     [[ $rc -eq $((128 + 2)) ]] && exit 0
@@ -155,5 +162,4 @@ do
         echo "Waiting for /etc/ais/debug_wait to disappear"
         sleep 10
     done
-
 done

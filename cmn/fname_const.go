@@ -17,6 +17,7 @@ const (
 	BmdPreviousFname = BmdFname + ".prev" // bmd previous version
 	VmdFname         = ".ais.vmd"         // vmd persistent file basename
 
+	ShutdownMarker      = ".ais.shutdown"
 	MarkersDirName      = ".ais.markers"
 	ResilverMarker      = "resilver"
 	RebalanceMarker     = "rebalance"

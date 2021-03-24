@@ -298,3 +298,27 @@ func cleanupConfigDir() (err error) {
 		return cos.RemoveFile(path)
 	})
 }
+
+func writeShutdownMarker() {
+	markerDir := os.Getenv(cmn.EnvVars.ShutdownMarkerPath)
+	if markerDir == "" {
+		if k8s.Detect() == nil {
+			glog.Warningf("marker directory not specified, skipping writing shutdown marker")
+		}
+		return
+	}
+	f, err := cos.CreateFile(filepath.Join(markerDir, cmn.ShutdownMarker))
+	if err != nil {
+		glog.Errorf("failed to create shutdown marker, %v", err)
+	}
+	if f != nil {
+		f.Close()
+	}
+}
+
+func deleteShutdownMarker() {
+	markerDir := os.Getenv(cmn.EnvVars.ShutdownMarkerPath)
+	if markerDir != "" {
+		cos.RemoveFile(filepath.Join(markerDir, cmn.ShutdownMarker))
+	}
+}

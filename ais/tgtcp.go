@@ -407,6 +407,7 @@ func (t *targetrunner) unreg(action string, cleanupData bool) {
 		return
 	}
 
+	writeShutdownMarker()
 	if action == cmn.ActShutdown {
 		t.Stop(&errNoUnregister{action})
 		return

@@ -35,19 +35,21 @@ const (
 
 var (
 	EnvVars = struct {
-		Endpoint      string
-		IsPrimary     string
-		PrimaryID     string
-		SkipVerifyCrt string
-		UseHTTPS      string
-		NumTarget     string
-		NumProxy      string
+		Endpoint           string
+		ShutdownMarkerPath string
+		IsPrimary          string
+		PrimaryID          string
+		SkipVerifyCrt      string
+		UseHTTPS           string
+		NumTarget          string
+		NumProxy           string
 	}{
-		Endpoint:      "AIS_ENDPOINT",
-		IsPrimary:     "AIS_IS_PRIMARY",
-		PrimaryID:     "AIS_PRIMARY_ID",
-		SkipVerifyCrt: "AIS_SKIP_VERIFY_CRT",
-		UseHTTPS:      "AIS_USE_HTTPS",
+		Endpoint:           "AIS_ENDPOINT",
+		IsPrimary:          "AIS_IS_PRIMARY",
+		PrimaryID:          "AIS_PRIMARY_ID",
+		SkipVerifyCrt:      "AIS_SKIP_VERIFY_CRT",
+		UseHTTPS:           "AIS_USE_HTTPS",
+		ShutdownMarkerPath: "AIS_SHUTDOWN_MARKER_PATH",
 
 		// Env variables used for tests or CI
 		NumTarget: "NUM_TARGET",
