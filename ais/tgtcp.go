@@ -403,7 +403,7 @@ func (t *targetrunner) unreg(action string, cleanupData bool) {
 
 	// In case of maintenance, we only stop the keepalive daemon,
 	// the HTTPServer is still active and accepts requests.
-	if action == cmn.ActStartMaintenance {
+	if action == cmn.ActStartMaintenance || action == testInitiatedRm {
 		return
 	}
 
