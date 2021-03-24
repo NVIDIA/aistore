@@ -37,6 +37,7 @@ import (
 const (
 	fmtNestedErr      = "nested err: %v"
 	lomInitialVersion = "1"
+	lomDirtyMask      = uint64(1 << 63)
 )
 
 type (
@@ -45,12 +46,11 @@ type (
 		version  string
 		size     int64
 		atime    int64
-		atimefs  int64
-		bckID    uint64
+		atimefs  uint64     // high bit is reserved for `dirty`
+		bckID    uint64     // see ais/bucketmeta
 		cksum    *cos.Cksum // ReCache(ref)
 		copies   fs.MPI     // ditto
 		customMD cos.SimpleKVs
-		dirty    bool
 	}
 	LOM struct {
 		md          lmeta             // local persistent metadata
@@ -397,7 +397,7 @@ func (lom *LOM) syncMetaWithCopies() (err error) {
 		return exclusive
 	})
 	if !lom.WritePolicy().IsImmediate() {
-		lom.md.dirty = true
+		lom.md.makeDirty()
 		return nil
 	}
 	for {
@@ -963,7 +963,7 @@ func (lom *LOM) Uncache(delDirty bool) {
 	}
 	if md, ok := lcache.Load(hkey); ok {
 		lmeta := md.(*lmeta)
-		if lmeta.dirty {
+		if lmeta.isDirty() {
 			return
 		}
 	}
@@ -1002,7 +1002,8 @@ beg:
 	}
 	atime := ios.GetATime(finfo)
 	lom.md.atime = atime.UnixNano()
-	lom.md.atimefs = lom.md.atime
+	debug.Assert(lom.md.atime > 0)
+	lom.md.atimefs = uint64(lom.md.atime)
 	return
 }
 

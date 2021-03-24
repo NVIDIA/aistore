@@ -73,7 +73,7 @@ func (lchk *lcHK) evictAll(d time.Duration) {
 	)
 	defer lchk.running.Store(false)
 
-	// one cache at a time (TODO -- FIXME: throttle via mountpath.IsIdle())
+	// one cache at a time (TODO: throttle via mountpath.IsIdle())
 	for _, cache := range caches {
 		f := func(hkey, value interface{}) bool {
 			md := value.(*lmeta)
@@ -86,7 +86,8 @@ func (lchk *lcHK) evictAll(d time.Duration) {
 			if now.Sub(atime) < d {
 				return true
 			}
-			if mdTime > 0 && md.atime != md.atimefs {
+			atimefs := md.atimefs & ^lomDirtyMask
+			if md.atime > 0 && atimefs != uint64(md.atime) {
 				lif := LIF{md.uname, md.bckID}
 				lom, err := lif.LOM()
 				if err == nil {

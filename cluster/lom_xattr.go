@@ -130,7 +130,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 
 func (lom *LOM) Persist(stores ...bool) (err error) {
 	if !lom.WritePolicy().IsImmediate() {
-		lom.md.dirty = true
+		lom.md.makeDirty()
 		lom.ReCache(true)
 		return
 	}
@@ -142,6 +142,7 @@ func (lom *LOM) Persist(stores ...bool) (err error) {
 		if len(stores) > 0 {
 			store = stores[0]
 		}
+		lom.md.clearDirty()
 		lom.ReCache(store)
 		lom.md.bckID = lom.Bprops().BID
 	}
@@ -171,7 +172,7 @@ func (lom *LOM) flushCold(md *lmeta, atime time.Time) {
 	if err := lom.flushAtime(atime); err != nil {
 		return
 	}
-	if !md.dirty || lom.WritePolicy() == cmn.WriteNever {
+	if !md.isDirty() || lom.WritePolicy() == cmn.WriteNever {
 		return
 	}
 	lom.md = *md
@@ -220,9 +221,13 @@ func (lom *LOM) _recomputeMdSize(size, mdSize int64) {
 	}
 }
 
-//
-// lmeta
-//
+///////////
+// lmeta //
+///////////
+
+func (md *lmeta) makeDirty()    { md.atimefs |= lomDirtyMask }
+func (md *lmeta) clearDirty()   { md.atimefs &= ^lomDirtyMask }
+func (md *lmeta) isDirty() bool { return md.atimefs&lomDirtyMask == lomDirtyMask }
 
 func (md *lmeta) unmarshal(buf []byte) (err error) {
 	const invalid = "invalid lmeta"
