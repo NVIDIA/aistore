@@ -41,6 +41,17 @@ variables:
     - merge_requests
     - schedules
 
+.test_short_template: &test_short_def
+  stage: test-short
+  tags:
+    - ais
+  timeout: 20m
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
+      when: manual
+      allow_failure: true
+
 .test_long_template: &test_long_def
   stage: test-long
   tags:
@@ -98,15 +109,7 @@ test:short:
   <<: *gather_logs_def
 
 test:short:authn:
-  stage: test-short
-  tags:
-    - ais
-  timeout: 20m
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
-      when: manual
-      allow_failure: true
+  <<: *test_short_def
   variables:
     AUTH_ENABLED: "true"
     AUTHN_SU_NAME: "admin"
@@ -121,15 +124,7 @@ test:short:authn:
     - ais auth logout
 
 test:short:https:
-  stage: test-short
-  tags:
-    - ais
-  timeout: 20m
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
-      when: manual
-      allow_failure: true
+  <<: *test_short_def
   variables:
     AIS_USE_HTTPS: "true"
     AIS_SKIP_VERIFY_CRT: "true"
@@ -140,6 +135,16 @@ test:short:https:
   script:
     - openssl req -x509 -out $AIS_SERVER_CRT -keyout $AIS_SERVER_KEY -newkey rsa:2048 -nodes -sha256 -subj '/CN=localhost' -extensions EXT -config <( printf "[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth")
     - deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT --deployment all --https
+    - make test-short
+
+test:short:s3rproxy:
+  <<: *test_short_def
+  variables:
+    BUCKET: "ais://ais-ci"
+    TAGS: "s3rproxy" 
+    RE: "S3"
+  script:
+    - deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT
     - make test-short
 
 test:long:

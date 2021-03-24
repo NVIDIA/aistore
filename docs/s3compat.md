@@ -1,10 +1,14 @@
 ## Table of Contents
-
 - [Overview](#overview)
 - [Client Configuration](#client-configuration)
 - [S3 Compatibility](#s3-compatibility)
+  - [Object checksum](#object-checksum)
+  - [Last modification time](#last-modification-time)
 - [Examples](#examples)
+  - [Create a bucket](#create-a-bucket)
+  - [Remove a bucket](#remove-a-bucket)
 - [TensorFlow Demo](#tensorflow-demo)
+- [Boto3 Compatibility](#boto3-compatibility)
 
 ## Overview
 
@@ -175,3 +179,14 @@ S3_ENDPOINT=10.0.0.20:8080/s3 S3_USE_HTTPS=0 python mnist.py
 Here is the screencast of the TF training in action:
 
 <img src="/docs/images/ais-s3-tf.gif" alt="TF training in action">
+
+## Boto3 Compatibility
+
+Some S3 related libraries do not support HTTP Redirects, such as boto3.
+For such use cases, the AIS cluster will have to be deployed such reverse proxying is always used.
+
+To do this, add the build tag `s3rproxy` to `go build`.
+If using `make deploy` or another build script, specify the environment variable `TAGS="s3rproxy"`.
+
+Note that doing this will severely reduce performance, since your data requests
+will have to flow through proxy nodes instead of coming directly from a target node.

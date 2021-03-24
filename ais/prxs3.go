@@ -7,7 +7,6 @@ package ais
 import (
 	"encoding/xml"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"path"
@@ -329,16 +328,7 @@ func (p *proxyrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items []
 		glog.Infof("AISS3 COPY: %s %s/%s => %s/%v %s", r.Method, bckSrc, objName, bckDst, items, si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
-	s3Redirect(w, redirectURL, bckDst.Name)
-}
-
-func s3Redirect(w http.ResponseWriter, url, bck string) {
-	h := w.Header()
-
-	h.Set(cmn.HdrLocation, url)
-	h.Set(cmn.HdrContentType, "text/xml; charset=utf-8")
-	w.WriteHeader(http.StatusTemporaryRedirect)
-	fmt.Fprint(w, s3compat.MakeRedirectBody(url, bck))
+	p.s3Redirect(w, r, si, redirectURL, bckDst.Name)
 }
 
 // PUT s3/bckName/objName - without extra info in request header
@@ -372,7 +362,7 @@ func (p *proxyrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, ite
 		glog.Infof("AISS3: %s %s/%s => %s", r.Method, bck, objName, si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
-	s3Redirect(w, redirectURL, bck.Name)
+	p.s3Redirect(w, r, si, redirectURL, bck.Name)
 }
 
 // PUT s3/bckName/objName
@@ -416,7 +406,7 @@ func (p *proxyrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []s
 		glog.Infof("AISS3: %s %s/%s => %s", r.Method, bck, objName, si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
-	s3Redirect(w, redirectURL, bck.Name)
+	p.s3Redirect(w, r, si, redirectURL, bck.Name)
 }
 
 func (p *proxyrunner) headObjS3(w http.ResponseWriter, r *http.Request, items []string) {
@@ -445,7 +435,7 @@ func (p *proxyrunner) headObjS3(w http.ResponseWriter, r *http.Request, items []
 		glog.Infof("AISS3 %s %s/%s => %s", r.Method, bucket, objName, si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
-	s3Redirect(w, redirectURL, bck.Name)
+	p.s3Redirect(w, r, si, redirectURL, bck.Name)
 }
 
 // DEL s3/bckName/objName
@@ -479,7 +469,7 @@ func (p *proxyrunner) delObjS3(w http.ResponseWriter, r *http.Request, items []s
 		glog.Infof("AISS3: %s %s/%s => %s", r.Method, bck, objName, si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
-	s3Redirect(w, redirectURL, bck.Name)
+	p.s3Redirect(w, r, si, redirectURL, bck.Name)
 }
 
 // GET s3/bk-name?versioning

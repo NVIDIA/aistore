@@ -5,6 +5,8 @@
 package s3compat
 
 import (
+	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -45,11 +47,15 @@ func ExtractEndpoint(path string) string {
 	return ep
 }
 
-func MakeRedirectBody(newPath, bucket string) string {
-	ep := ExtractEndpoint(newPath)
+func SendRedirect(w http.ResponseWriter, redirectURL, bucket string) {
+	h := w.Header()
+	h.Set(cmn.HdrLocation, redirectURL)
+	h.Set(cmn.HdrContentType, "text/xml; charset=utf-8")
+	w.WriteHeader(http.StatusTemporaryRedirect)
+	ep := ExtractEndpoint(redirectURL)
 	body := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
 		"<Error><Code>TemporaryRedirect</Code><Message>Redirect</Message>" +
 		"<Endpoint>" + ep + "</Endpoint>" +
 		"<Bucket>" + bucket + "</Bucket></Error>"
-	return body
+	fmt.Fprint(w, body)
 }

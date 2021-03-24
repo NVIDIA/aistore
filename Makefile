@@ -16,7 +16,7 @@ ifdef GOBIN
 	BUILD_DEST = $(GOBIN)
 endif
 ifdef TAGS
-	BUILD_TAGS = "$(AIS_BACKEND_PROVIDERS) $(TAGS)"
+	BUILD_TAGS = $(AIS_BACKEND_PROVIDERS) $(TAGS)
 else
 	BUILD_TAGS = $(AIS_BACKEND_PROVIDERS)
 endif
@@ -205,7 +205,7 @@ test-short: test-envcheck ## Run short tests (requires BUCKET variable to be set
 	@RE="$(RE)" BUCKET="$(BUCKET)" TESTS_DIR="$(TESTS_DIR)" AIS_ENDPOINT="$(AIS_ENDPOINT)" $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-short
 
 test-long: test-envcheck ## Run all (long) tests (requires BUCKET variable to be set)
-	@BUCKET="$(BUCKET)" TESTS_DIR="$(TESTS_DIR)" AIS_ENDPOINT="$(AIS_ENDPOINT)" $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-long
+	@RE="$(RE)" BUCKET="$(BUCKET)" TESTS_DIR="$(TESTS_DIR)" AIS_ENDPOINT="$(AIS_ENDPOINT)" $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-long
 
 test-aisloader:
 	@./bench/aisloader/test/ci-test.sh $(FLAGS)
