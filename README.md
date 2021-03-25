@@ -18,9 +18,9 @@ The ability to scale linearly with each added disk was, and remains, one of the 
 * [Amazon S3 API](https://docs.aws.amazon.com/s3/index.html) to run unmodified S3 apps;
 * FUSE client (`aisfs`) to access AIS objects as files;
 * arbitrary number of extremely lightweight access points;
-* easy-to-use CLI that supports [TAB auto-completions](cmd/cli/README.md);
+* easy-to-use [CLI](https://www.youtube.com/watch?v=VPIhQm2sMD8&ab_channel=AIStore) based on [auto-completions](cmd/cli/README.md);
 * automated cluster rebalancing upon: changes in cluster membership, drive failures and attachments, bucket renames;
-* N-way mirroring (RAID-1), Reed–Solomon erasure coding, end-to-end data protection.
+* [N-way mirroring (RAID-1), Reed–Solomon erasure coding, end-to-end data protection](/docs/storage_svcs.md).
 * [ETL offload](/docs/etl.md): running user-defined extract-transform-load workloads on (and by) performance-optimized storage cluster;
 
 Also, AIStore:
@@ -28,7 +28,11 @@ Also, AIStore:
 * can be deployed on any commodity hardware;
 * supports single-command infrastructure and software deployment on Google Cloud Platform via [ais-k8s GitHub repo](https://github.com/NVIDIA/ais-k8s);
 * supports Amazon S3, Google Cloud, and Microsoft Azure backends (and all S3, GCS, and Azure-compliant object storages);
-* provides unified global namespace across (ad-hoc) connected AIS clusters;
+* can ad-hoc attach and "see" (read, write, list, cache, evict) datasets hosted by other AIS clusters;
+* provides unified global namespace across multiple backends:
+
+<img src="docs/images/backends.png" alt="AIStore" width="360">
+
 * can be used as a fast cache for GCS and S3; can be populated on-demand and/or via `prefetch` and `download` APIs;
 * can be used as a standalone highly-available protected storage;
 * includes MapReduce extension for massively parallel resharding of very large datasets;
@@ -36,7 +40,9 @@ Also, AIStore:
 
 AIS runs natively on Kubernetes and features open format - thus, the freedom to copy or move your data from AIS at any time using the familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
 
-For AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](docs/overview.md) (where you can also find six alternative ways to work with existing datasets). Videos and **animated presentations** can be found at [videos](docs/videos.md). To get started with AIS, please click on [Getting Started](/docs/getting_started.md).
+For AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](docs/overview.md) (where you can also find six alternative ways to work with existing datasets). Videos and **animated presentations** can be found at [videos](docs/videos.md).
+
+To get started with AIS, please click on [Getting Started](/docs/getting_started.md).
 
 **Table of Contents**
 

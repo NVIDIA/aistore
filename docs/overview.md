@@ -13,7 +13,9 @@ Also, for insights and specific requirements from a deep-learning perspective, p
 
 The rest of this document is structured as follows:
 
-- [Block Diagrams](#block-diagrams)
+- [At-a-Glance](#at-a-glance)
+- [ETL](#etl)
+- [Recently Added](#recently-added)
 - [Design Philosophy](#design-philosophy)
 - [Key Concepts and Diagrams](#key-concepts-and-diagrams)
 - [Traffic Patterns](#traffic-patterns)
@@ -29,24 +31,37 @@ The rest of this document is structured as follows:
 - [AIS no-limitations principle](#ais-no-limitations-principle)
 
 
-## Block Diagrams
+## At-a-Glance
 
-Following is a high-level architecture with an emphasis on supported (frontend and backend) APIs and the capability to scale-out horizontally. The picture also tries to make the point that AIStore aggregates arbitrary numbers of storage servers with local drives,  whereby each drive is formatted with a local filesystem (e. g., xfs or zfs).
+Following is a high-level block diagram with an emphasis on supported (frontend and backend) APIs and the capability to scale-out horizontally. The picture also tries to make the point that AIStore aggregates arbitrary numbers of storage servers with local drives,  whereby each drive is formatted with a local filesystem (e. g., xfs or zfs).
 
-<img src="images/ais-block.png" alt="New in 3.1" width="700">
+<img src="images/ais-block.png" alt="At-a-Glance" width="600">
 
-Most recently added capabilities include:
+## ETL
 
-- (**new**) [ETL offload](/etl/README.md): support for running custom extract-transform-load workloads on (and by) storage cluster;
-- (**new**) TensorFlow integration to support existing training clients that use S3 API - done via `tar2tf` ETL offload that handles on the fly TFRecord/tf.Example conversion;
+AIStore is a hyper-converged architecture tailored specifically to run AI apps. To that end, we are supporting [ETL offload](/etl/README.md): the capability to run custom extract-transform-load workloads close to data on (and by) the storage cluster:
 
 <img src="images/etl-v3.3.png" width="450">
 
+For background and further references, see:
+
+* [Extract, Transform, Load with AIStore](etl.md)
+* [AIS-ETL introduction and a Jupyter notebook walk-through](https://www.youtube.com/watch?v=4PHkqTSE0ls)
+
+## Recently Added
+
+- (**new**) [AIS Kubernetes Operator](https://github.com/NVIDIA/ais-k8s)
+- (**new**) DNS hostnames - public and intra-cluster networks;
+- (**new**) HDFS backend;
+- (**new**) Cluster and node shutdown and decommission (API, CLI);
+- bucket ACLs, users and roles, bucket and cluster level permissions;
+- [CLI](videos.md#cli-top-level-commands) (category, action, subject) auto-completions;
+- (**new**) Metadata and system data versioning and backward compatibility;
 - List objects v2: optimized `list-objects` to greatly reduce response times;
 - (**new**) Query objects: extends `list-objects` with advanced filtering capabilities;
 - (**new**) Downloader:  an option to keep AIS bucket in-sync with a (downloaded) destination;
-- (**new**) When used as HTTP Proxy (e. g., via `http_proxy=AIS_ENDPOINT`) and given HTTP(S) URLs, AIStore will on the fly create a bucket to store and cache HTTP(S) - based resources;
-- and more - see https://github.com/NVIDIA/aistore/releases.
+- (**new**) Build-time option to run AIS cluster in a reverese-proxy mode;
+- and more (for details, see https://github.com/NVIDIA/aistore/releases).
 
 In addition to AIS (native) REST API and CLI with extended capabilities to manipulate distributed content, AIStore also supports a growing list of [Backend providers](providers.md).
 
