@@ -616,18 +616,6 @@ Downloads copies of objects o1,o2,o3 from AWS bucket named `cloudbucket` and sto
 $ ais job start prefetch aws://cloudbucket --list 'o1,o2,o3'
 ```
 
-## Preload bucket
-
-`ais advanced preload BUCKET`
-
-Preload bucket's objects metadata into in-memory caches.
-
-### Examples
-
-```console
-$ ais advanced preload ais://bucket
-```
-
 ## Move object
 
 `ais object mv BUCKET/OBJECT_NAME NEW_OBJECT_NAME`

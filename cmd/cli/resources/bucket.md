@@ -1,6 +1,6 @@
 # CLI Reference for Buckets
 This section lists operations on *buckets* using the AIS CLI, with `ais bucket`.
-For types of supported buckets (AIS, Cloud, backend, etc.) and many more examples, please refer to [buckets in-depth overview](../../../docs/bucket.md).
+For types of supported buckets (AIS, Cloud, backend, etc.) and many more examples, please see the [in-depth overview of buckets](/docs/bucket.md).
 
 ## Table of Contents
 - [Create bucket](#create-bucket)
@@ -11,10 +11,10 @@ For types of supported buckets (AIS, Cloud, backend, etc.) and many more example
 - [Move or Rename a bucket](#move-or-rename-a-bucket)
 - [Copy bucket](#copy-bucket)
 - [Show bucket summary](#show-bucket-summary)
-- [Make N copies](#make-n-copies)
-- [Make all objects erasure coded](#make-all-objects-erasure-coded)
-- [Show bucket props](#show-bucket-props)
-- [Set bucket props](#set-bucket-props)
+- [Start N-way Mirroring](#start-n-way-mirroring)
+- [Start Erasure Coding](#start-erasure-coding)
+- [Show bucket properties](#show-bucket-properties)
+- [Set bucket properties](#set-bucket-properties)
 
 ## Create bucket
 
@@ -76,7 +76,7 @@ $ ais bucket create ais://@Bghort1l/bucket_name --bucket-props='{"versioning": {
 #### Create HDFS bucket
 
 Create bucket `bucket_name` in HDFS backend with bucket pointing to `/yt8m` directory.
-More info about HDFS buckets can be found [here](../../../docs/providers.md#hdfs-provider).
+More info about HDFS buckets can be found [here](/docs/providers.md#hdfs-provider).
 
 ```console
 $ ais bucket create hdfs://bucket_name --bucket-props="extra.hdfs.ref_directory=/yt8m"
@@ -263,9 +263,9 @@ shard-1.tar	16.00KiB	1
 
 `ais bucket evict BUCKET`
 
-Evict a [remote bucket](../../../docs/bucket.md#remote-bucket). It also resets the properties of the bucket (if changed).
+Evict a [remote bucket](/docs/bucket.md#remote-bucket). It also resets the properties of the bucket (if changed).
 All data from the remote bucket stored in the cluster will be removed, and AIS will stop keeping track of the remote bucket.
-Read more about this feature [here](../../../docs/bucket.md#evict-remote-bucket).
+Read more about this feature [here](/docs/bucket.md#evict-remote-bucket).
 
 Various flags that can be used with this command are below.
 ```console
@@ -282,7 +282,7 @@ $ ais bucket evict --keep-md aws://abc/
 "aws://abc" bucket evicted
 ```
 
-Note: When an [HDFS bucket](../../../docs/providers.md#hdfs-provider) is evicted, AIS will only delete objects stored in the cluster.
+Note: When an [HDFS bucket](/docs/providers.md#hdfs-provider) is evicted, AIS will only delete objects stored in the cluster.
 AIS will retain the bucket's metadata to allow the bucket to re-register later.
 
 ## Move or Rename a bucket
@@ -368,11 +368,11 @@ If `BUCKET` is omitted, shows information about all buckets.
 | --- | --- | --- | --- |
 | `--fast` | `bool` | Enforce using faster methods to find out the buckets' details. The output may not be accurate. | `false`
 
-## Make N copies
+## Start N-way Mirroring
 
 `ais job start mirror BUCKET --copies <value>`
 
-Start an extended action to bring a given bucket to a certain redundancy level (`value` copies). Read more about this feature [here](../../../docs/storage_svcs.md#n-way-mirror).
+Start an extended action to bring a given bucket to a certain redundancy level (`value` copies). Read more about this feature [here](/docs/storage_svcs.md#n-way-mirror).
 
 ### Options
 
@@ -380,13 +380,13 @@ Start an extended action to bring a given bucket to a certain redundancy level (
 | --- | --- | --- | --- |
 | `--copies` | `int` | Number of copies | `1` |
 
-## Make all objects erasure coded
+## Start Erasure Coding
 
 `ais ec-encode BUCKET --data-slices <value> --parity-slices <value>`
 
 Start an extended action that enables data protection for a given bucket and encodes all its objects.
 Erasure coding must be disabled for the bucket prior to running `ec-encode` extended action.
-Read more about this feature [here](../../../docs/storage_svcs.md#erasure-coding).
+Read more about this feature [here](/docs/storage_svcs.md#erasure-coding).
 
 ### Options
 
@@ -397,11 +397,11 @@ Read more about this feature [here](../../../docs/storage_svcs.md#erasure-coding
 
 All options are required and must be greater than `0`.
 
-## Show bucket props
+## Show bucket properties
 
 `ais bucket show BUCKET [PROP_PREFIX]`
 
-List [properties](../../../docs/bucket.md#properties-and-options) of the bucket.
+List [properties](/docs/bucket.md#properties-and-options) of the bucket.
 By default, condensed form of bucket props sections is presented.
 
 When `PROP_PREFIX` is set, only props that start with `PROP_PREFIX` will be displayed.
@@ -447,12 +447,12 @@ lru.lowwm		 75
 lru.out_of_space	 95
 ```
 
-## Set bucket props
+## Set bucket properties
 
 `ais bucket props [OPTIONS] BUCKET JSON_SPECIFICATION|KEY=VALUE [KEY=VALUE...]`
 
 Set bucket properties.
-For the available options, see [bucket-properties](../../../docs/bucket.md#bucket-properties).
+For the available options, see [bucket-properties](/docs/bucket.md#bucket-properties).
 
 If JSON_SPECIFICATION is used, **all** properties of the bucket are set based on the values in the JSON object.
 

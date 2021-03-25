@@ -44,12 +44,6 @@ var (
 					Action:    genShardsHandler,
 				},
 				{
-					Name:   cmn.ActLoadLomCache,
-					Usage:  "load object metadata into memory",
-					Flags:  startCmdsFlags[subcmdStartXaction],
-					Action: startXactionHandler,
-				},
-				{
 					Name:         cmn.ActResilver,
 					Usage:        "start resilvering objects across all drives on one or all targets",
 					ArgsUsage:    optionalTargetIDArgument,

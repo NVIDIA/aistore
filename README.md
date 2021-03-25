@@ -142,7 +142,7 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
   - [Attach, Detach, and monitor remote clusters](cmd/cli/resources/remote.md)
   - [Start, Stop, and monitor downloads](cmd/cli/resources/download.md)
   - [Distributed Sort](cmd/cli/resources/dsort.md)
-  - [User account and access management](cmd/cli/resources/users.md)
+  - [User account and access management](cmd/cli/resources/auth.md)
   - [Xaction (Job) management](cmd/cli/resources/xaction.md)
 - [ETL with AIStore](docs/etl.md)
 - [On-Disk Layout](docs/on-disk-layout.md)

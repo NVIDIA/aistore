@@ -9,6 +9,8 @@ AIS *xactions* run asynchronously, have one of the enumerated kinds, start/stop 
 - [Stop xaction](#stop-xaction)
 - [Show xaction stats](#show-xaction-stats)
 - [Wait for xaction](#wait-for-xaction)
+- [Distributed Sort](#distributed-sort)
+- [Downloader](#downloader)
 
 ## Start xaction
 

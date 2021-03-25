@@ -108,44 +108,52 @@ To uninstall autocompletions, run `bash autocomplete/uninstall.sh`.
 
 ## CLI reference
 
-- [Create, destroy, list, and other operations on buckets](resources/bucket.md)
-- [GET, PUT, APPEND, PROMOTE, and other operations on objects](resources/object.md)
-- [Cluster and Node management](resources/cluster.md)
-- [Mountpath (Disk) management](resources/mpath.md)
-- [Attach, Detach, and monitor remote clusters](resources/remote.md)
-- [Start, Stop, and monitor downloads](resources/download.md)
-- [Distributed Sort](resources/dsort.md)
-- [User account and access management](resources/users.md)
-- [Xaction (Job) management](resources/xaction.md)
-- [Search CLI Commands](resources/search.md)
+| Command | Use Case |
+|---------|----------|
+| [`ais bucket`](resources/bucket.md) | create/destroy buckets, list bucket's content, show existing buckets and their properties |
+| [`ais object`](resources/object.md) | PUT (write), GET (read), list, move (rename) and other operations on objects in a given bucket |
+| [`ais cluster`](resources/cluster.md) | monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc. |
+| [`ais mountpath`](resources/mpath.md) | manage mountpaths (disks) in a given storage target |
+| [`ais etl`](resources/etl.md) | execute custom transformations on objects |
+| `ais job` | query and manage jobs (aka extended actions or xactions) |
+| [`ais auth`](resources/auth.md) | add/remove/show users, manage user roles, manage access to remote clusters |
+| `ais show` | show information about buckets, jobs, all other managed entities in the cluster and the cluster itself |
+| [`ais advanced`](resources/advanced.md) | special commands intended for development and advanced usage |
+| [`ais search`](resources/search.md) | search ais commands |
+
+Other documentation:
+- [Attach, Detach, and monitor remote clusters](resources/remote.md) |
+- [Start, Stop, and monitor downloads](resources/download.md) |
+- [Distributed Sort](resources/dsort.md) |
+- [Xaction (Job) management](resources/xaction.md) |
 
 ## Info For Developers
 
-The CLI uses [urfave/cli](https://github.com/urfave/cli) framework.
+AIS CLI utilizes [urfave/cli](https://github.com/urfave/cli/blob/master/docs/v1/manual.md) open-source framework.
 
 ### Adding New Commands
 
-Currently, the CLI has the format of `ais <command> <resource>`.
+Currently, the CLI has the format of `ais <resource> <command>`.
 
-To add a new resource to an existing command,
+To add a new command to an existing resource:
 
-1. Create a subcommand entry for the resource in the command object
-2. Create an entry in the command's flag map for the new resource
+1. Create a subcommand entry for the command in the resource object
+2. Create an entry in the command's flag map for the new command
 3. Register flags in the subcommand object
 4. Register the handler function (named `XXXHandler`) in the subcommand object
 
-To add a new resource to a new command,
+To add a new resource:
 
-1. Create a new Go file (named `xxx_hdlr.go`) with the name of the new command and follow the format of existing files
-2. Once the new command and subcommands are implemented, make sure to register the new command with the CLI (see `setupCommands()` in `app.go`)
+1. Create a new Go file (named `xxx_hdlr.go`) with the name of the new resource and follow the format of existing files
+2. Once the new resource and its commands are implemented, make sure to register the new resource with the CLI (see `setupCommands()` in `app.go`)
 
 ## Default flag and argument values via environment variables
 
 #### Backend Provider
 
-Provider's syntax `provider://BUCKET_NAME` (referred as `BUCKET`) works across all commands.
+The syntax `provider://BUCKET_NAME` (referred to as `BUCKET` in help messages) works across all commands.
 For more details, please refer to each specific command's documentation.
-Provider can be omitted if the `default_provider` config value is set (in such case the config value will be used implicitly).
+`provider://` can be omitted if the `default_provider` config value is set (in such case the config value will be used implicitly).
 
 Supported backend providers currently include:
 * `ais://` - AIStore provider
@@ -156,4 +164,5 @@ Supported backend providers currently include:
 * `ht://` (\* see below) - HTTP(S) datasets
 
 > See also: [Backend Providers](/docs/providers.md)
+> 
 > See also: [Buckets](/docs/bucket.md)
