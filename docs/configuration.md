@@ -154,6 +154,24 @@ Configuration option `fspaths` specifies the list of local directories where sto
 
 AIStore [HTTP API](http_api.md) makes it possible to list, add, remove, enable, and disable a `fspath` (and, therefore, the corresponding local filesystem) at runtime. Filesystem's health checker (FSHC) monitors the health of all local filesystems: a filesystem that "accumulates" I/O errors will be disabled and taken out, as far as the AIStore built-in mechanism of object distribution. For further details about FSHC, please refer to [FSHC readme](/health/fshc.md).
 
+## Disabling extended attributes
+
+To make sure that AIStore does not utilize xattrs, configure `checksum.type`=`none`, `versioning.enabled`=`true`,
+and `md_write`=`never` for all targets in a AIStore cluster.
+This can be done via the [common configuration "part"](/deploy/dev/local/aisnode_config.sh) that'd be further used to deploy the cluster.
+
+Extended attributes can be disabled on per bucket basis. To do this, turn off saving metadata to disks (CLI):
+
+```console
+$ ais bucket props ais://mybucket md_write=never
+Bucket props successfully updated
+"md_write" set to: "never" (was: "")
+```
+
+Disable extended attributes only if you need fast and **temporary** storage.
+Without xattrs, a node loses its objects after the node reboots.
+If extended attributes are disabled globally when deploying a cluster, node IDs are not permanent and a node can change its ID after it restarts.
+
 ## Enabling HTTPS
 
 To switch from HTTP protocol to an encrypted HTTPS, configure `net.http.use_https`=`true` and modify `net.http.server_crt` and `net.http.server_key` values so they point to your OpenSSL certificate and key files respectively (see [AIStore configuration](/deploy/dev/local/aisnode_config.sh)).

@@ -602,10 +602,13 @@ func add(mpath, tid string, enabled bool, cb ...func()) (*MountpathInfo, error) 
 
 	if enabled {
 		mfs.ios.AddMpath(mp.Path, mp.Fs)
-		if err := mp.SetDaemonIDXattr(tid); err != nil {
-			return nil, err
-		}
 		availablePaths[mp.Path] = mp
+		config := cmn.GCO.Get()
+		if config.MDWrite != cmn.WriteNever {
+			if err := mp.SetDaemonIDXattr(tid); err != nil {
+				return nil, err
+			}
+		}
 	} else {
 		disabledPaths[mp.Path] = mp
 	}

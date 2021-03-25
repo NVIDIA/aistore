@@ -482,6 +482,7 @@ func DefaultBckProps(cs ...*Config) *BucketProps {
 		Versioning: c.Versioning,
 		Access:     AccessAll,
 		EC:         c.EC,
+		MDWrite:    c.MDWrite,
 	}
 }
 
