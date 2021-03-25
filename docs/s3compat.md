@@ -186,11 +186,9 @@ Some HTTP clients and client-side libraries do not follow HTTP redirects, and Am
 
 To circumvent the limitation, we provided a special build tag: `s3rproxy`. Building `aisnode` executable with this tag causes each AIS proxy to become, effectively, reverse proxy vis-a-vis the rest clustered nodes.
 
-In other words, `aisnode` binary can be built with `s3rproxy` tag
-
 > **NOTE**: reverse-proxying datapath requests might adversely affect performance! It is, therefore, strongly recommended _not_ to use `s3rproxy` build tag, if possible.
 
-To build with this tag enabled, simply specify the environment variable `TAGS="s3rproxy"`, for example:
+To build with `s3rproxy` tag (or any other supported build tag), simply specify the `TAGS` environment variable, for example:
 
 ```console
 $ TAGS=s3rproxy make deploy
