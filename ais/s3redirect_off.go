@@ -1,4 +1,4 @@
-// +build alwaysrproxy s3rproxy
+// +build s3rproxy
 
 // Package ais provides core functionality for the AIStore object storage.
 /*
@@ -14,13 +14,17 @@ import (
 )
 
 func init() {
-	glog.Errorln("Warning: Using the `s3rproxy` build tag will reduce performance for s3 requests!")
+	glog.Errorln("Warning *****")
+	glog.Errorln("Warning: reverse-proxying datapath requests might adversely affect performance!")
+	glog.Errorln("Warning *****")
 }
 
-// If `alwaysrproxy` or `s3rproxy` is specified, s3Redirect() will perform a
-// reverse proxy request to the target instead of returning a redirect to the
-// target. This will significantly impact performance, but allows for better
-// compatibility with services that do not support redirection.
-func (p *proxyrunner) s3Redirect(w http.ResponseWriter, r *http.Request, si *cluster.Snode, redirectURL, bck string) {
+// Perform reverse-proxy request to a designated clustered node.
+// NOTE: it is strongly recommended _not_ to use `s3rproxy` build tag, if possible.
+// See also:
+// * docs/s3compat.md
+// * Makefile (for `s3rproxy` build tag)
+// * ais/s3redirect_on.go
+func (p *proxyrunner) s3Redirect(w http.ResponseWriter, r *http.Request, si *cluster.Snode, _, _ string) {
 	p.reverseNodeRequest(w, r, si)
 }

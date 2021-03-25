@@ -141,7 +141,7 @@ test:short:s3rproxy:
   <<: *test_short_def
   variables:
     BUCKET: "ais://ais-ci"
-    TAGS: "s3rproxy" 
+    TAGS: "s3rproxy"
     RE: "S3"
   script:
     - deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT

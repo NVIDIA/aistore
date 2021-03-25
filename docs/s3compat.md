@@ -182,11 +182,18 @@ Here is the screencast of the TF training in action:
 
 ## Boto3 Compatibility
 
-Some S3 related libraries do not support HTTP Redirects, such as boto3.
-For such use cases, the AIS cluster will have to be deployed such reverse proxying is always used.
+Some HTTP clients and client-side libraries do not follow HTTP redirects, and Amazon's [boto3](https://github.com/boto/boto3) happens to be one of those (libraries).
 
-To do this, add the build tag `s3rproxy` to `go build`.
-If using `make deploy` or another build script, specify the environment variable `TAGS="s3rproxy"`.
+To circumvent the limitation, we provided a special build tag: `s3rproxy`. Building `aisnode` executable with this tag causes each AIS proxy to become, effectively, reverse proxy vis-a-vis the rest clustered nodes.
 
-Note that doing this will severely reduce performance, since your data requests
-will have to flow through proxy nodes instead of coming directly from a target node.
+In other words, `aisnode` binary can be built with `s3rproxy` tag
+
+> **NOTE**: reverse-proxying datapath requests might adversely affect performance! It is, therefore, strongly recommended _not_ to use `s3rproxy` build tag, if possible.
+
+To build with this tag enabled, simply specify the environment variable `TAGS="s3rproxy"`, for example:
+
+```console
+$ TAGS=s3rproxy make deploy
+```
+
+See Makefile in the root directory for further details.
