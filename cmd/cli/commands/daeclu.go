@@ -167,12 +167,8 @@ func getDiskStats(targets map[string]*stats.DaemonStatus) ([]templates.DiskStats
 	return allStats, nil
 }
 
-func getClusterConfig(c *cli.Context) error {
-	var (
-		section = c.Args().First()
-		useJSON = flagIsSet(c, jsonFlag)
-	)
-
+func getClusterConfig(c *cli.Context, section string) error {
+	useJSON := flagIsSet(c, jsonFlag)
 	cluConfig, err := api.GetClusterConfig(defaultAPIParams)
 	if err != nil {
 		return err
@@ -195,7 +191,7 @@ func getDaemonConfig(c *cli.Context) error {
 	)
 
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, "daemon ID")
+		return missingArgumentsError(c, "'cluster' or daemon ID")
 	}
 
 	smap, err := api.GetClusterMap(defaultAPIParams)

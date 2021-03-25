@@ -180,11 +180,11 @@ var (
 	}
 	showCmdConfig = cli.Command{
 		Name:         subcmdShowConfig,
-		Usage:        "show daemon configuration",
+		Usage:        "show daemon or cluster configuration",
 		ArgsUsage:    showConfigArgument,
 		Flags:        showCmdsFlags[subcmdShowConfig],
 		Action:       showDaemonConfigHandler,
-		BashComplete: daemonConfigSectionCompletions(false /* daemon not optional */),
+		BashComplete: daemonConfigSectionCompletions,
 	}
 	showCmdRemoteAIS = cli.Command{
 		Name:         subcmdShowRemoteAIS,
@@ -403,12 +403,15 @@ func showClusterConfigHandler(c *cli.Context) (err error) {
 	if _, err = fillMap(); err != nil {
 		return
 	}
-	return getClusterConfig(c)
+	return getClusterConfig(c, c.Args().First())
 }
 
 func showDaemonConfigHandler(c *cli.Context) (err error) {
 	if _, err = fillMap(); err != nil {
 		return
+	}
+	if c.Args().First() == subcmdCluster {
+		return getClusterConfig(c, c.Args().Get(1))
 	}
 	return getDaemonConfig(c)
 }

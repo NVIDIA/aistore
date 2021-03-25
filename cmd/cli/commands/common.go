@@ -182,7 +182,7 @@ const (
 	daemonIDArgument          = "DAEMON_ID"
 	optionalDaemonIDArgument  = "[DAEMON_ID]"
 	optionalTargetIDArgument  = "[TARGET_ID]"
-	showConfigArgument        = "DAEMON_ID [CONFIG_SECTION]"
+	showConfigArgument        = "cluster|DAEMON_ID [CONFIG_SECTION]"
 	showClusterConfigArgument = "[CONFIG_SECTION]"
 	cluConfigArgument         = optionalDaemonIDArgument + " " + keyValuePairsArgument
 	attachRemoteAISArgument   = aliasURLPairArgument

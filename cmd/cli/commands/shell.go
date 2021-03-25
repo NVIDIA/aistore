@@ -128,28 +128,21 @@ func daemonCompletions(what daemonKindCompletion) cli.BashCompleteFunc {
 	}
 }
 
-func daemonConfigSectionCompletions(daemonOptional bool) cli.BashCompleteFunc {
-	return func(c *cli.Context) {
-		// Daemon and config already given as arguments
-		if c.NArg() >= 2 {
-			return
-		}
-
-		if c.NArg() == 1 {
-			if isConfigProp(c.Args().First()) {
-				return
-			}
-			// Daemon already given as argument; suggest only config
-			suggestConfigSection()
-			return
-		}
-
-		// No arguments given
-		suggestDaemon(completeAllDaemons)
-		if daemonOptional {
-			suggestConfigSection()
-		}
+func daemonConfigSectionCompletions(c *cli.Context) {
+	// Daemon and config already given as arguments
+	if c.NArg() >= 2 {
+		return
 	}
+
+	if c.NArg() == 1 {
+		// Daemon already given as argument; suggest only config
+		suggestConfigSection()
+		return
+	}
+
+	// No arguments given
+	fmt.Println(subcmdCluster)
+	suggestDaemon(completeAllDaemons)
 }
 
 func cluConfigCompletions(c *cli.Context) {
