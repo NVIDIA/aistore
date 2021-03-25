@@ -62,12 +62,13 @@ type (
 
 	// Snode - a node (gateway or target) in a cluster
 	Snode struct {
-		DaemonID        string     `json:"daemon_id"`
-		DaemonType      string     `json:"daemon_type"`       // enum: "target" or "proxy"
-		PublicNet       NetInfo    `json:"public_net"`        // cmn.NetworkPublic
-		IntraControlNet NetInfo    `json:"intra_control_net"` // cmn.NetworkIntraControl
-		IntraDataNet    NetInfo    `json:"intra_data_net"`    // cmn.NetworkIntraData
-		Flags           SnodeFlags `json:"flags"`             // enum cmn.Snode*
+		DaemonID        string      `json:"daemon_id"`
+		DaemonType      string      `json:"daemon_type"`       // enum: "target" or "proxy"
+		PublicNet       NetInfo     `json:"public_net"`        // cmn.NetworkPublic
+		IntraControlNet NetInfo     `json:"intra_control_net"` // cmn.NetworkIntraControl
+		IntraDataNet    NetInfo     `json:"intra_data_net"`    // cmn.NetworkIntraData
+		Flags           SnodeFlags  `json:"flags"`             // enum cmn.Snode*
+		Ext             interface{} `json:"ext,omitempty"`     // within meta-version extensions
 		idDigest        uint64
 		name            string
 		LocalNet        *net.IPNet `json:"-"`
@@ -76,12 +77,13 @@ type (
 	NodeMap map[string]*Snode // map of Snodes: DaemonID => Snodes
 
 	Smap struct {
-		Tmap         NodeMap `json:"tmap"`           // targetID -> targetInfo
-		Pmap         NodeMap `json:"pmap"`           // proxyID -> proxyInfo
-		Primary      *Snode  `json:"proxy_si"`       // (json tag preserved for back. compat.)
-		Version      int64   `json:"version,string"` // version
-		UUID         string  `json:"uuid"`           // UUID (assigned once at creation time)
-		CreationTime string  `json:"creation_time"`  // creation time
+		Tmap         NodeMap     `json:"tmap"`           // targetID -> targetInfo
+		Pmap         NodeMap     `json:"pmap"`           // proxyID -> proxyInfo
+		Primary      *Snode      `json:"proxy_si"`       // (json tag preserved for back. compat.)
+		Version      int64       `json:"version,string"` // version
+		UUID         string      `json:"uuid"`           // UUID (assigned once at creation time)
+		CreationTime string      `json:"creation_time"`  // creation time
+		Ext          interface{} `json:"ext,omitempty"`  // within meta-version extensions
 	}
 
 	// Smap on-change listeners
