@@ -175,6 +175,21 @@ func GetClusterConfig(baseParams BaseParams) (*cmn.ClusterConfig, error) {
 	return cluConfig, nil
 }
 
+// GetBMD returns bucket metadata
+func GetBMD(baseParams BaseParams) (*cluster.BMD, error) {
+	bmd := &cluster.BMD{}
+	baseParams.Method = http.MethodGet
+	err := DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPathCluster.S,
+		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatBMD}},
+	}, bmd)
+	if err != nil {
+		return nil, err
+	}
+	return bmd, nil
+}
+
 func AttachRemoteAIS(baseParams BaseParams, alias, u string) error {
 	q := make(url.Values)
 	q.Set(cmn.URLParamWhat, cmn.GetWhatRemoteAIS)

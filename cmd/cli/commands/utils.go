@@ -810,7 +810,7 @@ func makeBckPropPairs(values []string) (nvs cos.SimpleKVs, err error) {
 		access cmn.AccessAttrs
 		cmd    string
 	)
-	nvs = make(cos.SimpleKVs)
+	nvs = make(cos.SimpleKVs, 8)
 	for idx := 0; idx < len(values); {
 		pos := strings.Index(values[idx], "=")
 		if pos > 0 {

@@ -61,14 +61,14 @@ var (
 				},
 				{
 					Name:      subcmdCluDetach,
-					Usage:     "detach a remote ais cluster",
+					Usage:     "detach remote ais cluster",
 					ArgsUsage: detachRemoteAISArgument,
 					Flags:     clusterCmdsFlags[subcmdDetach],
 					Action:    detachRemoteAISHandler,
 				},
 				{
 					Name:         subcmdCluConfig,
-					Usage:        "configure the cluster or a specific node",
+					Usage:        "configure cluster or a specific node",
 					ArgsUsage:    cluConfigArgument,
 					Flags:        clusterCmdsFlags[subcmdCluConfig],
 					Action:       cluConfigHandler,
@@ -85,7 +85,7 @@ var (
 				},
 				{
 					Name:   subcmdRebalance,
-					Usage:  "rebalance data among targets in the cluster",
+					Usage:  "rebalance data among storage targets in the cluster",
 					Flags:  clusterCmdsFlags[subcmdRebalance],
 					Action: startXactionHandler,
 				},
@@ -99,7 +99,7 @@ var (
 				},
 				{
 					Name:   subcmdShutdown,
-					Usage:  "shut down the cluster",
+					Usage:  "shutdown cluster",
 					Flags:  clusterCmdsFlags[subcmdShutdown],
 					Action: clusterShutdownHandler,
 				},
@@ -110,7 +110,7 @@ var (
 				},
 				{
 					Name:  subcmdMembership,
-					Usage: "manage members of the ais cluster",
+					Usage: "manage cluster membership",
 					Subcommands: []cli.Command{
 						{
 							Name:      subcmdJoin,

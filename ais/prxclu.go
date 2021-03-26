@@ -96,6 +96,8 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		p.writeJSON(w, r, config, what)
+	case cmn.GetWhatBMD, cmn.GetWhatSmapVote, cmn.GetWhatSnode, cmn.GetWhatSmap:
+		p.httprunner.httpdaeget(w, r)
 	default:
 		p.writeErrf(w, r, fmtUnknownQue, what)
 	}

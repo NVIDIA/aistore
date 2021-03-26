@@ -52,6 +52,7 @@ const (
 	// NOTE: second level subcommands are preferably verbs
 	subcmdDsort      = cmn.DSortNameLowercase
 	subcmdSmap       = cmn.GetWhatSmap
+	subcmdBMD        = cmn.GetWhatBMD
 	subcmdDisk       = cmn.GetWhatDiskStats
 	subcmdConfig     = cmn.GetWhatConfig
 	subcmdRebalance  = cmn.ActRebalance

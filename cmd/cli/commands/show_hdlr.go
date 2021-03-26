@@ -72,6 +72,9 @@ var (
 		subcmdSmap: {
 			jsonFlag,
 		},
+		subcmdBMD: {
+			jsonFlag,
+		},
 		subcmdShowXaction: {
 			jsonFlag,
 			allXactionsFlag,
@@ -136,22 +139,30 @@ var (
 	showCmdCluster = cli.Command{
 		Name:      subcmdShowCluster,
 		Usage:     "show cluster details",
-		ArgsUsage: "[DAEMON_ID|DAEMON_TYPE|smap|config]",
+		ArgsUsage: "[DAEMON_ID|DAEMON_TYPE|smap|bmd|config]",
 		Flags:     showCmdsFlags[subcmdShowCluster],
 		Action:    showClusterHandler,
 		BashComplete: func(c *cli.Context) {
 			if c.NArg() == 0 {
-				fmt.Printf("%s\n%s\n%s\n%s\n", cmn.Proxy, cmn.Target, subcmdSmap, subcmdConfig)
+				fmt.Printf("%s\n%s\n%s\n%s\n%s\n", cmn.Proxy, cmn.Target, subcmdSmap, subcmdBMD, subcmdConfig)
 			}
 			daemonCompletions(completeAllDaemons)(c)
 		},
 		Subcommands: []cli.Command{
 			{
 				Name:         subcmdSmap,
-				Usage:        "show Smap (cluster map) of a specific node",
+				Usage:        "show Smap (cluster map)",
 				ArgsUsage:    optionalDaemonIDArgument,
 				Flags:        showCmdsFlags[subcmdSmap],
 				Action:       showSmapHandler,
+				BashComplete: daemonCompletions(completeAllDaemons),
+			},
+			{
+				Name:         subcmdBMD,
+				Usage:        "show BMD (bucket metadata)",
+				ArgsUsage:    optionalDaemonIDArgument,
+				Flags:        showCmdsFlags[subcmdBMD],
+				Action:       showBMDHandler,
 				BashComplete: daemonCompletions(completeAllDaemons),
 			},
 			{
@@ -397,6 +408,13 @@ func showSmapHandler(c *cli.Context) (err error) {
 		return
 	}
 	return clusterSmap(c, primarySmap, daemonID, flagIsSet(c, jsonFlag))
+}
+
+func showBMDHandler(c *cli.Context) (err error) {
+	if _, err = fillMap(); err != nil {
+		return
+	}
+	return getBMD(c)
 }
 
 func showClusterConfigHandler(c *cli.Context) (err error) {

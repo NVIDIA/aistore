@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -39,24 +40,22 @@ type (
 )
 
 var (
-	proxy  = make(map[string]*stats.DaemonStatus)
-	target = make(map[string]*stats.DaemonStatus)
+	proxy  = make(map[string]*stats.DaemonStatus, 8)
+	target = make(map[string]*stats.DaemonStatus, 8)
 )
 
-// Displays smap of single daemon
+// Gets Smap from a given node (`daemonID`) and displays it
 func clusterSmap(c *cli.Context, primarySmap *cluster.Smap, daemonID string, useJSON bool) error {
 	var (
 		smap = primarySmap
 		err  error
 	)
-
 	if daemonID != "" {
 		smap, err = api.GetNodeClusterMap(defaultAPIParams, daemonID)
 		if err != nil {
 			return err
 		}
 	}
-
 	extendedURLs := false
 	for _, m := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
 		for _, v := range m {
@@ -65,7 +64,6 @@ func clusterSmap(c *cli.Context, primarySmap *cluster.Smap, daemonID string, use
 			}
 		}
 	}
-
 	body := templates.SmapTemplateHelper{
 		Smap:         smap,
 		ExtendedURLs: extendedURLs,
@@ -73,7 +71,47 @@ func clusterSmap(c *cli.Context, primarySmap *cluster.Smap, daemonID string, use
 	return templates.DisplayOutput(body, c.App.Writer, templates.SmapTmpl, useJSON)
 }
 
-// Displays the status of the cluster or daemon
+func getBMD(c *cli.Context) error {
+	useJSON := flagIsSet(c, jsonFlag)
+	bmd, err := api.GetBMD(defaultAPIParams)
+	if err != nil {
+		return err
+	}
+	if useJSON {
+		return templates.DisplayOutput(bmd, c.App.Writer, "", useJSON)
+	}
+
+	tw := &tabwriter.Writer{}
+	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
+	if !flagIsSet(c, noHeaderFlag) {
+		fmt.Fprintln(tw, "PROVIDER\tNAMESPACE\tNAME\tBACKEND\tCOPIES\tEC(D/P, minsize)\tCREATED")
+	}
+	for provider, namespaces := range bmd.Providers {
+		for nsUname, buckets := range namespaces {
+			ns := cmn.ParseNsUname(nsUname)
+			for bucket, props := range buckets {
+				var copies, ec string
+				if props.Mirror.Enabled {
+					copies = strconv.Itoa(int(props.Mirror.Copies))
+				}
+				if props.EC.Enabled {
+					ec = fmt.Sprintf("%d/%d, %s", props.EC.DataSlices,
+						props.EC.ParitySlices, cos.B2S(props.EC.ObjSizeLimit, 0))
+				}
+				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+					provider, ns, bucket, props.BackendBck, copies, ec,
+					cos.FormatUnixNano(props.Created, ""))
+			}
+		}
+	}
+	tw.Flush()
+	fmt.Fprintln(c.App.Writer)
+	fmt.Fprintf(c.App.Writer, "Version:\t%d\n", bmd.Version)
+	fmt.Fprintf(c.App.Writer, "UUID:\t\t%s\n", bmd.UUID)
+	return nil
+}
+
+// Displays the status of the cluster or node
 func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, useJSON, hideHeader, verbose bool) error {
 	body := templates.StatusTemplateHelper{
 		Smap: smap,
@@ -82,7 +120,6 @@ func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, us
 			Tmap: target,
 		},
 	}
-
 	if res, proxyOK := proxy[daemonID]; proxyOK {
 		return templates.DisplayOutput(res, c.App.Writer, templates.NewProxyTable(res, smap).Template(hideHeader), useJSON)
 	} else if res, targetOK := target[daemonID]; targetOK {
@@ -105,7 +142,8 @@ func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, us
 // Displays the disk stats of a target
 func daemonDiskStats(c *cli.Context, daemonID string, useJSON, hideHeader bool) error {
 	if _, ok := proxy[daemonID]; ok {
-		return fmt.Errorf("daemon with ID %q is a proxy, but \"%s %s %s\" works only for targets", daemonID, cliName, commandShow, subcmdShowDisk)
+		return fmt.Errorf("daemon with ID %q is a proxy, but \"%s %s %s\" works only for targets",
+			daemonID, cliName, commandShow, subcmdShowDisk)
 	}
 	if _, ok := target[daemonID]; daemonID != "" && !ok {
 		return fmt.Errorf("target ID %q invalid - no such target", daemonID)
@@ -156,14 +194,13 @@ func getDiskStats(targets map[string]*stats.DaemonStatus) ([]templates.DiskStats
 	if err != nil {
 		return nil, err
 	}
-
 	for diskStats := range statsCh {
 		targetID := diskStats.targetID
 		for diskName, diskStat := range diskStats.stats {
-			allStats = append(allStats, templates.DiskStatsTemplateHelper{TargetID: targetID, DiskName: diskName, Stat: diskStat})
+			allStats = append(allStats,
+				templates.DiskStatsTemplateHelper{TargetID: targetID, DiskName: diskName, Stat: diskStat})
 		}
 	}
-
 	return allStats, nil
 }
 
@@ -173,7 +210,6 @@ func getClusterConfig(c *cli.Context, section string) error {
 	if err != nil {
 		return err
 	}
-
 	if useJSON {
 		return templates.DisplayOutput(cluConfig, c.App.Writer, "", useJSON)
 	}
