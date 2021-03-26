@@ -15,6 +15,7 @@ For types of supported buckets (AIS, Cloud, backend, etc.) and many more example
 - [Start Erasure Coding](#start-erasure-coding)
 - [Show bucket properties](#show-bucket-properties)
 - [Set bucket properties](#set-bucket-properties)
+- [Show bucket metadata](#show-bucket-metadata)
 
 ## Create bucket
 
@@ -668,4 +669,23 @@ lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
 mirror		 2 copies
 provider	 ais
 versioning	 Enabled | Validate on WarmGET: yes
+```
+
+## Show bucket metadata
+
+`ais show cluster bmd`
+
+Show bucket metadata (BMD).
+
+### Examples
+
+```console
+$ ais show cluster bmd
+PROVIDER  NAMESPACE  NAME        BACKEND  COPIES  EC(D/P, minsize)  CREATED
+ais                  test                 2                         25 Mar 21 18:28 PDT
+ais                  validation                                     25 Mar 21 18:29 PDT
+ais                  train                                          25 Mar 21 18:28 PDT
+
+Version:        9
+UUID:           jcUfFDyTN
 ```

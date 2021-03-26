@@ -2,6 +2,14 @@
 
 For background and in-depth presentation, please see this [document](/dsort/README.md).
 
+## Table of Contents
+- [Generate Shards](#generate-shards)
+- [Start dSort job](#start-dsort-job)
+- [Show dSort jobs and job status](#show-dsort-jobs-and-job-status)
+- [Stop dSort job](#stop-dsort-job)
+- [Remove dSort job](#remove-dsort-job)
+- [Wait for dSort job](#wait-for-dsort-job)
+
 ## Generate Shards
 
 `ais advanced gen-shards "BUCKET/TEMPLATE.EXT"`

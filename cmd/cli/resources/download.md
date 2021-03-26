@@ -2,6 +2,13 @@
 
 AIS Downloader is intended for downloading massive numbers of files (objects) and datasets from both Cloud Storage (buckets) and Internet. For details and background, please see the [downloader's own readme](/downloader/README.md).
 
+## Table of Contents
+- [Start download job](#start-download-job)
+- [Stop download job](#stop-download-job)
+- [Remove download job](#remove-download-job)
+- [Show download jobs and job status](#show-download-jobs-and-job-status)
+- [Wait for download job](#wait-for-download-job)
+
 ## Start download job
 
 `ais job start download SOURCE DESTINATION`

@@ -110,22 +110,23 @@ To uninstall autocompletions, run `bash autocomplete/uninstall.sh`.
 
 | Command | Use Case |
 |---------|----------|
-| [`ais bucket`](resources/bucket.md) | create/destroy buckets, list bucket's content, show existing buckets and their properties |
+| [`ais bucket`](resources/bucket.md) | Create/destroy buckets, list bucket's content, show existing buckets and their properties |
 | [`ais object`](resources/object.md) | PUT (write), GET (read), list, move (rename) and other operations on objects in a given bucket |
-| [`ais cluster`](resources/cluster.md) | monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc. |
-| [`ais mountpath`](resources/mpath.md) | manage mountpaths (disks) in a given storage target |
-| [`ais etl`](resources/etl.md) | execute custom transformations on objects |
-| `ais job` | query and manage jobs (aka extended actions or xactions) |
-| [`ais auth`](resources/auth.md) | add/remove/show users, manage user roles, manage access to remote clusters |
-| `ais show` | show information about buckets, jobs, all other managed entities in the cluster and the cluster itself |
-| [`ais advanced`](resources/advanced.md) | special commands intended for development and advanced usage |
-| [`ais search`](resources/search.md) | search ais commands |
+| [`ais cluster`](resources/cluster.md) | Monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc. |
+| [`ais mountpath`](resources/mpath.md) | Manage mountpaths (disks) in a given storage target |
+| [`ais etl`](resources/etl.md) | Execute custom transformations on objects |
+| [`ais job`](resources/job.md) | Query and manage jobs (aka extended actions or xactions) |
+| [`ais auth`](resources/auth.md) | Add/remove/show users, manage user roles, manage access to remote clusters |
+| [`ais show`](resources/show.md) | Show information about buckets, jobs, all other managed entities in the cluster and the cluster itself |
+| [`ais advanced`](resources/advanced.md) | Special commands intended for development and advanced usage |
+| [`ais search`](resources/search.md) | Search ais commands |
 
-Other documentation:
-- [Attach, Detach, and monitor remote clusters](resources/remote.md) |
-- [Start, Stop, and monitor downloads](resources/download.md) |
-- [Distributed Sort](resources/dsort.md) |
-- [Xaction (Job) management](resources/xaction.md) |
+Other CLI documentation:
+- [Attach, Detach, and monitor remote clusters](resources/remote.md)
+- [Start, Stop, and monitor downloads](resources/download.md)
+- [Distributed Sort](resources/dsort.md)
+
+> Note: In CLI docs, the terms "xaction" and "job" are used interchangeably.
 
 ## Info For Developers
 

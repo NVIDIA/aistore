@@ -5,10 +5,24 @@ For more information and examples, please refer to [the AuthN documentation](/do
 
 - [User Account and Access management](#user-account-and-access-management)
 - [Token management](#token-management)
-	- [Generate a token for CLI](#generate-a-token-for-cli)
-	- [Generate a token to a file](#generate-a-token-to-a-file)
-	- [Revoke a token](#revoke-a-token)
+  - [Generate a token for CLI](#generate-a-token-for-cli)
+  - [Generate a token to a file](#generate-a-token-to-a-file)
+  - [Revoke a token](#revoke-a-token)
 - [Command List](#command-list)
+  - [Register new user](#register-new-user)
+  - [Update user](#update-user)
+  - [Unregister existing user](#unregister-existing-user)
+  - [List registered users](#list-registered-users)
+  - [Add a new role](#add-a-new-role)
+  - [List existing roles](#list-existing-roles)
+  - [Log in to AIS cluster](#log-in-to-ais-cluster)
+  - [Log out](#log-out)
+  - [Register new cluster](#register-new-cluster)
+  - [Update existing cluster](#update-existing-cluster)
+  - [Unregister existing cluster](#unregister-existing-cluster)
+  - [List registered clusters](#list-registered-clusters)
+  - [Show AuthN server configuration](#show-authn-server-configuration)
+  - [Change AuthN server configuration](#change-authn-server-configuration)
 
 ## User Account and Access management
 

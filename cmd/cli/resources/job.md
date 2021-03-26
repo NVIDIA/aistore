@@ -1,6 +1,7 @@
-# CLI Reference for Xaction (Job) management
+# CLI Reference for Job (xaction) management
 
-Batch operations that may take many seconds (minutes, hours) to execute are called eXtended actions or *xactions*.
+Batch operations that run asynchronously and may take many seconds (minutes, or even hours) to execute are called eXtended actions or xactions.
+> Note: In CLI docs, the terms "xaction" and "job" are used interchangeably.
 
 AIS *xactions* run asynchronously, have one of the enumerated kinds, start/stop times, and xaction-specific statistics. For more information, please refer to this [document](/xaction/README.md).
 
@@ -12,12 +13,15 @@ AIS *xactions* run asynchronously, have one of the enumerated kinds, start/stop 
 - [Distributed Sort](#distributed-sort)
 - [Downloader](#downloader)
 
-## Start xaction
+## Start Jobs
 
-`ais job start <XACTION_COMMAND> [arguments...]`
+`ais job start <JOB_NAME> [arguments...]`
 
-Start xaction(s). Some xactions require additional arguments such as bucket name to execute.
+Start a certain job. Some jobs require additional arguments such as bucket name to execute.
 
+Note: `job start download|dsort` have slightly different options. Please see their documentation for more:
+* [`job start download`](download.md#start-download-job)
+* [`job start dsort`](dsort.md#start-dsort-job)
 
 ### Examples
 
@@ -37,12 +41,18 @@ Additionally, the `--force`(`-f`) option can be used to override the bucket's `l
 $ ais job start lru --buckets ais://buck1,aws://buck2 -f
 ```
 
-## Stop xaction
+## Stop Jobs
 
 `ais job stop xaction XACTION_ID|XACTION_NAME [BUCKET]`
 
-Stop xaction(s).
-The second argument is used to determine the bucket name if it is required.
+Stop a job. The bucket argument is used to determine the bucket name if it is required.
+
+`ais job stop download JOB_ID`
+`ais job stop dsort JOB_ID`
+
+Note: `job stop download|dsort` have slightly different options. Please see their documentation for more:
+* [`job stop download`](download.md#stop-download-job)
+* [`job stop dsort`](dsort.md#stop-dsort-job)
 
 ### Examples
 
@@ -55,12 +65,16 @@ $ ais job stop xaction lru
 Stopped "lru" xaction.
 ```
 
-## Show xaction stats
+## Show Job statistics
 
 `ais show job xaction [XACTION_ID|XACTION_NAME] [BUCKET]`
 
 Display details about `XACTION_ID` or `XACTION_NAME` xaction. If no arguments are given, displays details about all xactions.
 The second argument is used to determine the bucket name if it is required.
+
+Note: `job show download|dsort` have slightly different options. Please see their documentation for more:
+* [`job show download`](download.md#show-download-jobs-and-job-status)
+* [`job show dsort`](dsort.md#show-dsort-jobs-and-job-status)
 
 ### Options
 
@@ -75,7 +89,7 @@ Certain extended actions have additional CLI. In particular, rebalance stats can
 
 `ais show rebalance`
 
-Display details about the last rebalane xaction.
+Display details about the most recent rebalance xaction.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -84,11 +98,15 @@ Display details about the last rebalane xaction.
 
 Output of this command differs from the generic xaction output.
 
-## Wait for xaction
+## Wait for Jobs
 
 `ais job wait xaction XACTION_ID|XACTION_NAME [BUCKET]`
 
 Wait for the `XACTION_ID` or `XACTION_NAME` xaction to finish.
+
+Note: `job wait download|dsort` have slightly different options. Please see their documentation for more:
+* [`job wait download`](download.md#wait-for-download-job)
+* [`job wait dsort`](dsort.md#wait-for-dsort-job)
 
 ### Options
 
