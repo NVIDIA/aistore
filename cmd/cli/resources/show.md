@@ -1,8 +1,7 @@
 # CLI Reference for `show` commands
 
-AIS CLI allows users to easily view various details about the cluster with the `show` command.
+AIS CLI `show` command can universally be used to view summaries and details on cluster and its nodes, buckets and objects, running and finished jobs - in short, _all_ managed entities (see below). The command is a "hub" for all information-viewing commands that are currently supported.
 
-The `ais show` command serves as a hub for all information-viewing commands that are supported.
 Note that some of these commands (such as `ais show cluster` and `ais show job`) are aliased to their respective top-level commands for ease of use. This means that running `ais show cluster` is equivalent to running `ais cluster show`.
 
 ## Table of Contents
@@ -20,9 +19,16 @@ Note that some of these commands (such as `ais show cluster` and `ais show job`)
 The following commands have aliases. In other words, they can be accessed through `ais show <command>` and also `ais <command> show`.
 
 ## `ais show auth`
-Show information about entities (cluster, roles, users, config) related to authentication.
+The following subcommands are currently supported:
 
-[Refer to `ais auth` documentation for more.](auth.md#command-list) 
+```console
+   cluster  show registered clusters
+   role     show existing user roles
+   user     show users or user details
+   config   show AuthN server configuration
+```
+
+[Refer to `ais auth` documentation for more.](auth.md#command-list)
 
 ## `ais show bucket`
 Show bucket properties.
@@ -51,7 +57,7 @@ Show information about various jobs.
 
 ---
 
-The following commands do not have any aliases. In other words, they can only be accessed through `ais show <command>`
+The following commands do not have any built-in aliases (in other words, they can only be accessed through `ais show <command>`).
 
 ## `ais show disk`
 Show disk statistics for targets.
@@ -89,7 +95,7 @@ g1       kiuvt8091   0              0B          0              0B          03-25
 g1       oGvbt8090   0              0B          0              0B          03-25 17:33:54   -          false
 g1       xZntt8087   0              0B          0              0B          03-25 17:33:54   -          false
 
-$ ais show rebalance      
+$ ais show rebalance
 REB ID   DAEMON ID   OBJECTS RECV   SIZE RECV   OBJECTS SENT   SIZE SENT   START TIME       END TIME         ABORTED
 g1       CASGt8088   0              0B          0              0B          03-25 17:33:54   03-25 17:34:09   false
 g1       DMwvt8089   0              0B          0              0B          03-25 17:33:54   03-25 17:34:08   false
