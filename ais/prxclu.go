@@ -288,20 +288,17 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		if cmn.ReadJSON(w, r, &regReq.SI) != nil {
 			return
 		}
-		tag = "user-register"
-		userRegister = true
+		tag, userRegister = "user-register", true
 	case cmn.Keepalive:
 		if cmn.ReadJSON(w, r, &regReq) != nil {
 			return
 		}
-		tag = "keepalive"
-		keepalive = true
+		tag, keepalive = "keepalive", true
 	case cmn.AutoRegister: // node self-register
 		if cmn.ReadJSON(w, r, &regReq) != nil {
 			return
 		}
-		tag = "join"
-		selfRegister = true
+		tag, selfRegister = "join", true
 	default:
 		p.writeErrURL(w, r)
 		return
@@ -472,7 +469,7 @@ func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, tag s
 		}
 	}
 	// check for cluster integrity errors (cie)
-	if err = smap.validateUUID(regSmap, p.si, nsi, ""); err != nil {
+	if err = smap.validateUUID(p.si, regSmap, nsi.String(), 80 /* ciError */); err != nil {
 		return
 	}
 	// no further checks join when cluster's starting up

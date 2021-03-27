@@ -1711,14 +1711,10 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 		err = fmt.Errorf("%s: not finding ourselves in %s", h.si, newSmap)
 		return
 	}
-	if err = smap.validateUUID(newSmap, h.si, nil, caller); err != nil {
-		if h.si.IsProxy() {
-			cos.Assert(!smap.isPrimary(h.si))
-			// cluster integrity error: making exception for non-primary proxies
-			glog.Errorf("%s (non-primary): %v - proceeding to override Smap", h.si, err)
-			return
-		}
-		cos.ExitLogf("%v", err) // otherwise, FATAL
+
+	// FATAL: cluster integrity error
+	if err = smap.validateUUID(h.si, newSmap, caller, 50 /* ciError */); err != nil {
+		return
 	}
 
 	glog.Infof(

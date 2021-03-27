@@ -49,7 +49,10 @@ func (p *proxyrunner) bootstrap() {
 	smap, reliable := p.tryLoadSmap()
 	if !reliable {
 		smap = nil
+	} else {
+		glog.Infof("%s: loaded %s", p.si, smap.StringEx())
 	}
+
 	// 2. make the preliminary/primary decision
 	pid, primary = p.determineRole(smap)
 
@@ -194,6 +197,9 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	si := p.si.Clone()
 	smap.Primary = si
 	smap.addProxy(si)
+	if loadedSmap != nil {
+		smap.UUID = loadedSmap.UUID
+	}
 	p.owner.smap.put(smap)
 	p.owner.smap.Unlock()
 
@@ -790,7 +796,7 @@ func (p *proxyrunner) discoverClusterUUID() (uuid, created string) {
 			uuids += id + "(cnt-" + strconv.Itoa(cnt) + ") vs "
 		}
 		uuids = strings.TrimRight(uuids, "vs ")
-		glog.Errorf("%s: smap UUIDs don't match %s", ciError(10), uuids)
+		glog.Errorf("%s: Smap UUIDs do not match %s", ciError(10), uuids)
 	}
 
 	if (maxCnt > 0 && len(counter) == 1) || maxCnt > minPidConfirmations {

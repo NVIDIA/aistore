@@ -355,25 +355,22 @@ func (m *smapX) handleDuplicateNode(nsi *cluster.Snode, del bool) (err error) {
 	return
 }
 
-func (m *smapX) validateUUID(newSmap *smapX, si, nsi *cluster.Snode, caller string) (err error) {
-	if newSmap == nil || newSmap.Version == 0 {
+func (m *smapX) validateUUID(si *cluster.Snode, newSmap *smapX, caller string, cieNum int) (err error) {
+	if m == nil || newSmap == nil || newSmap.Version == 0 {
 		return
 	}
-	if m.UUID == "" || newSmap.UUID == "" {
+	if !cos.IsValidUUID(m.UUID) || !cos.IsValidUUID(newSmap.UUID) {
 		return
 	}
 	if m.UUID == newSmap.UUID {
 		return
 	}
-	nsiname := caller
-	if nsi != nil {
-		nsiname = nsi.Name()
-	} else if nsiname == "" {
-		nsiname = "???"
+	// cluster integrity error (cie)
+	if caller == "" {
+		caller = "???"
 	}
-	// FATAL: cluster integrity error (cie)
-	s := fmt.Sprintf("%s: Smaps have different uuids: [%s: %s] vs [%s: %s]",
-		ciError(50), si, m.StringEx(), nsiname, newSmap.StringEx())
+	s := fmt.Sprintf("%s: Smaps have different UUIDs: local [%s, %s] vs from [%s, %s]",
+		ciError(cieNum), si, m.StringEx(), caller, newSmap.StringEx())
 	err = &errSmapUUIDDiffer{s}
 	return
 }

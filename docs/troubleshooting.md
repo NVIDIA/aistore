@@ -63,6 +63,7 @@ In many cases, the entirety of a troubleshooting step boils down to cleaning up 
 | `cie#50` | Non-primary proxy or storage target: when receiving an updated cluster map that conflicts with the local copy. Primary proxy: when a joining node's Smap does not pass the validation. | In both cases, the node is not permitted to join (or is removed from) the cluster. |
 | `cie#60` | When a primary proxy (gateway) is starting up, it uses its own local Smap to query other nodes for cluster-wide metadata. | The error is specific to bucket metadata and is triggered when there are two or more versions that are mutually incompatible. |
 | `cie#70` | Same as above. | Same as above, except that there's a simple majority of nodes that have one of the BMD versions. |
+| `cie#80` | Joining existing cluster | When node tries to join a cluster we do compare the node's local copy of the map with the existing one. The error, effectively, indicates that according to the node's own cluster map it must be a member of a different cluster. |
 
 ## Storage Integrity Error
 
