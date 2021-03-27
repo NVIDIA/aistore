@@ -807,14 +807,8 @@ func (h *httprunner) detectNodeChanges(smap *smapX) error {
 	if snode == nil {
 		return fmt.Errorf("%s: not present in the loaded %s", h.si, smap)
 	}
-	if !snode.Equals(h.si) {
-		prev, _ := cos.JSON.MarshalIndent(snode, "", " ")
-		curr, _ := cos.JSON.MarshalIndent(h.si, "", " ")
-		return fmt.Errorf(
-			"%s: detected a change in snode configuration (prev: %s, curr: %s)",
-			h.si, string(prev), string(curr),
-		)
-	}
+	// In case of node restarts and changes its IP, it better to trust the Smap
+	// and to connect to any node from old Smap using local cluster UUID.
 	return nil
 }
 
