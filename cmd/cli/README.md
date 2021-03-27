@@ -6,12 +6,28 @@ redirect_from:
  - cmd/cli/README.md/
 ---
 
+# Table of content
+
+- [Getting Started](#getting-started)
+- [Using AIS CLI](#using-ais-cli)
+	- [Config](#config)
+	- [First steps](#first-steps)
+	- [Global options](#global-options)
+- [AIS CLI Shell Autocomplete](#ais-cli-shell-autocomplete)
+	- [Installing](#installing)
+	- [Uninstalling](#uninstalling)
+- [CLI reference](#cli-reference)
+- [Info For Developers](#info-for-developers)
+	- [Adding New Commands](#adding-new-commands)
+- [Default flag and argument values via environment variables](#default-flag-and-argument-values-via-environment-variables)
+
+
 AIS CLI (command-line interface) is intended to easily control and monitor every aspect of the AIS cluster life-cycle.
 In addition, CLI provides dataset management commands, commands to read and write data, and more.
 
 **TL;DR**: see section [CLI reference](#cli-reference) below to quickly locate useful commands. There's also a (structured as a reference) list CLI resources with numerous examples and usage guides that we constantly keep updating.
 
-<img src="/aistore/docs/images/ais2.13.gif" alt="CLI-playback" width="900">
+[![AIStore CLI Demo](./images/cli-demo-400.png)](https://youtu.be/VPIhQm2sMD8 "AIStore CLI Demo (Youtube video)")
 
 ## Getting Started
 
@@ -42,7 +58,8 @@ The content of the file presents as follows:
   },
   "auth": {
     "url": "http://127.0.0.1:52001"
-  }
+  },
+  "default_provider": "ais"
 }
 ```
 
@@ -62,6 +79,28 @@ To check if the CLI can correctly contact the cluster and to get cluster status,
 $ ais show cluster
 ```
 
+### Global options
+
+Besides a set of options specific for each command, AIS CLI provides global options:
+
+- `--no-color` - by default AIS CLI displays messages with colors (e.g, errors are printed in red color).
+  Colors are automatically disabled if CLI output is redirected or environment variable `TERM=dumb` is set.
+  To disable colors in other cases, pass `--no-color` to the application.
+
+Please note that the place of a global options in the command line is fixed.
+Global options must follow the application name directly.
+At the same time, the location of a command-specific option is arbitrary: you can put them anywhere.
+Examples:
+
+```console
+$ # Correct usage of global and command-specific options.
+$ ais --no-color ls ais://bck --props all
+$ ais --no-color ls --props all ais://bck
+$
+$ # Incorrect usage of a global option.
+$ ais bucket ls ais://bck --props all --no-color
+```
+
 ## AIS CLI Shell Autocomplete
 
 The CLI tool supports `bash` and `zsh` auto-complete functionality.
@@ -77,44 +116,62 @@ To uninstall autocompletions, run `bash autocomplete/uninstall.sh`.
 
 ## CLI reference
 
-- [Create, destroy, list, and other operations on buckets](resources/bucket.md)
-- [GET, PUT, APPEND, PROMOTE, and other operations on objects](resources/object.md)
-- [Cluster and Node management](resources/daeclu.md)
-- [Mountpath (Disk) management](resources/mpath.md)
+| Command | Use Case |
+|---------|----------|
+| [`ais bucket`](resources/bucket.md) | Create/destroy buckets, list bucket's content, show existing buckets and their properties |
+| [`ais object`](resources/object.md) | PUT (write), GET (read), list, move (rename) and other operations on objects in a given bucket |
+| [`ais cluster`](resources/cluster.md) | Monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc. |
+| [`ais mountpath`](resources/mpath.md) | Manage mountpaths (disks) in a given storage target |
+| [`ais etl`](resources/etl.md) | Execute custom transformations on objects |
+| [`ais job`](resources/job.md) | Query and manage jobs (aka extended actions or xactions) |
+| [`ais auth`](resources/auth.md) | Add/remove/show users, manage user roles, manage access to remote clusters |
+| [`ais show`](resources/show.md) | Show information about buckets, jobs, all other managed entities in the cluster and the cluster itself |
+| [`ais advanced`](resources/advanced.md) | Special commands intended for development and advanced usage |
+| [`ais search`](resources/search.md) | Search ais commands |
+
+Other CLI documentation:
 - [Attach, Detach, and monitor remote clusters](resources/remote.md)
 - [Start, Stop, and monitor downloads](resources/download.md)
 - [Distributed Sort](resources/dsort.md)
-- [User account and access management](resources/users.md)
-- [Xaction (Job) management](resources/xaction.md)
-- [Search CLI Commands](resources/search.md)
+
+> Note: In CLI docs, the terms "xaction" and "job" are used interchangeably.
 
 ## Info For Developers
 
-The CLI uses [urfave/cli](https://github.com/urfave/cli) framework.
+AIS CLI utilizes [urfave/cli](https://github.com/urfave/cli/blob/master/docs/v1/manual.md) open-source framework.
 
 ### Adding New Commands
 
-Currently, the CLI has the format of `ais <command> <resource>`.
+Currently, the CLI has the format of `ais <resource> <command>`.
 
-To add a new resource to an existing command,
+To add a new command to an existing resource:
 
-1. Create a subcommand entry for the resource in the command object
-2. Create an entry in the command's flag map for the new resource
+1. Create a subcommand entry for the command in the resource object
+2. Create an entry in the command's flag map for the new command
 3. Register flags in the subcommand object
 4. Register the handler function (named `XXXHandler`) in the subcommand object
 
-To add a new resource to a new command,
+To add a new resource:
 
-1. Create a new Go file (named `xxx_hdlr.go`) with the name of the new command and follow the format of existing files
-2. Once the new command and subcommands are implemented, make sure to register the new command with the CLI (see `setupCommands()` in `app.go`)
+1. Create a new Go file (named `xxx_hdlr.go`) with the name of the new resource and follow the format of existing files
+2. Once the new resource and its commands are implemented, make sure to register the new resource with the CLI (see `setupCommands()` in `app.go`)
 
 ## Default flag and argument values via environment variables
 
-#### Bucket Provider
+#### Backend Provider
 
-Provider syntax `[provider://]BUCKET_NAME` is valid CLI-wide, meaning that every command supporting `BUCKET_NAME` argument
-also supports provider syntax. For more details refer to each command's documentation.
+The syntax `provider://BUCKET_NAME` (referred to as `BUCKET` in help messages) works across all commands.
+For more details, please refer to each specific command's documentation.
+`provider://` can be omitted if the `default_provider` config value is set (in such case the config value will be used implicitly).
 
-Allowed values: `''` (autodetect provider), `ais` (local cluster), `aws` (Amazon Web Services), `gcp` (Google Cloud Platform),
-`azure` (Microsoft Azure), `cloud` (anonymous - cloud provider determined automatically).
-Additionally `provider://` syntax supports aliases `s3` (for `aws`), `gs` (for `gcp`) and `az` (for `azure`).
+Supported backend providers currently include:
+* `ais://` - AIStore provider
+* `aws://` or `s3://` - Amazon Web Services
+* `azure://` or `az://` - Azure Blob Storage
+* `gcp://` or `gs://` - Google Cloud Storage
+* `hdfs://` - HDFS Storage
+* `ht://` (\* see below) - HTTP(S) datasets
+
+> See also: [Backend Providers](/aistore/docs/providers.md)
+> 
+> See also: [Buckets](/aistore/docs/bucket.md)

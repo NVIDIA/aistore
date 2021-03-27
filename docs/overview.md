@@ -21,7 +21,9 @@ Also, for insights and specific requirements from a deep-learning perspective, p
 
 The rest of this document is structured as follows:
 
-- [Block Diagrams](#block-diagrams)
+- [At-a-Glance](#at-a-glance)
+- [ETL](#etl)
+- [Recently Added](#recently-added)
 - [Design Philosophy](#design-philosophy)
 - [Key Concepts and Diagrams](#key-concepts-and-diagrams)
 - [Traffic Patterns](#traffic-patterns)
@@ -34,31 +36,44 @@ The rest of this document is structured as follows:
 - [dSort](#dsort)
 - [CLI](#cli)
 - [Python Client](#python-client)
-- [AIS Limitations](#ais-limitations)
+- [AIS no-limitations principle](#ais-no-limitations-principle)
 
 
-## Block Diagrams
+## At-a-Glance
 
-Following is a high-level architecture with an emphasis on supported (frontend and backend) APIs and the capability to scale-out horizontally. The picture also tries to make the point that AIStore aggregates arbitrary numbers of storage servers with local drives,  whereby each drive is formatted with a local filesystem (e. g., xfs or zfs).
+Following is a high-level block diagram with an emphasis on supported (frontend and backend) APIs and the capability to scale-out horizontally. The picture also tries to make the point that AIStore aggregates arbitrary numbers of storage servers with local drives,  whereby each drive is formatted with a local filesystem (e. g., xfs or zfs).
 
-<img src="images/ais-block.png" alt="New in 3.1" width="700">
+<img src="images/ais-block.png" alt="At-a-Glance" width="600">
 
-Most recently added capabilities include:
+## ETL
 
-- (**new**) [ETL offload](/aistore/etl/README.md): support for running custom extract-transform-load workloads on (and by) storage cluster;
-- (**new**) TensorFlow integration to support existing training clients that use S3 API - done via `tar2tf` ETL offload that handles on the fly TFRecord/tf.Example conversion;
+AIStore is a hyper-converged architecture tailored specifically to run AI apps. To that end, we are supporting [ETL offload](/aistore/etl/README.md): the capability to run custom extract-transform-load workloads close to data on (and by) the storage cluster:
 
 <img src="images/etl-v3.3.png" width="450">
 
+For background and further references, see:
+
+* [Extract, Transform, Load with AIStore](etl.md)
+* [AIS-ETL introduction and a Jupyter notebook walk-through](https://www.youtube.com/watch?v=4PHkqTSE0ls)
+
+## Recently Added
+
+- (**new**) [AIS Kubernetes Operator](https://github.com/NVIDIA/ais-k8s)
+- (**new**) DNS hostnames - public and intra-cluster networks;
+- (**new**) HDFS backend;
+- (**new**) Cluster and node shutdown and decommission (API, CLI);
+- bucket ACLs, users and roles, bucket and cluster level permissions;
+- [CLI](videos.md#cli-top-level-commands) (category, action, subject) auto-completions;
+- (**new**) Metadata and system data versioning and backward compatibility;
 - List objects v2: optimized `list-objects` to greatly reduce response times;
 - (**new**) Query objects: extends `list-objects` with advanced filtering capabilities;
 - (**new**) Downloader:  an option to keep AIS bucket in-sync with a (downloaded) destination;
-- (**new**) When used as HTTP Proxy (e. g., via `http_proxy=AIS_ENDPOINT`) and given HTTP(S) URLs, AIStore will on the fly create a bucket to store and cache HTTP(S) - based resources;
-- and more - see https://github.com/NVIDIA/aistore/releases.
+- (**new**) Build-time option to run AIS cluster in a reverese-proxy mode;
+- and more (for details, see https://github.com/NVIDIA/aistore/releases).
 
-In addition to AIS (native) REST API and CLI with extended capabilities to manipulate distributed content, AIStore also supports a growing list of [Cloud providers](providers.md).
+In addition to AIS (native) REST API and CLI with extended capabilities to manipulate distributed content, AIStore also supports a growing list of [Backend providers](providers.md).
 
-Each specific capability is separately documented elsewhere. In particular, supported cloud providers and *unified global namespace* are described [here](providers.md).
+Each specific capability is separately documented elsewhere. In particular, supported backend providers and *unified global namespace* are described [here](providers.md).
 
 ## Design Philosophy
 
@@ -85,7 +100,7 @@ The diagram depicting AIS clustered node follows below, and makes the point that
 
 <img src="images/ais-host-20-block.png" alt="One AIS machine" width="400">
 
-AIS can be deployed as a self-contained standalone persistent storage cluster and as a fast tier in front of existing Amazon S3 and Google Cloud (GCP) storage. The built-in caching mechanism provides LRU replacement policy on a per-bucket basis while taking into account configurable high and low capacity watermarks (see [LRU](storage_svcs.md#lru) for details). AWS/GCP integration is *turnkey* and boils down to provisioning AIS targets with credentials to access Cloud-based buckets.
+AIS can be deployed as a self-contained standalone persistent storage cluster or a fast tier in front of any of the supported backends including Amazon S3 and Google Cloud (GCP). The built-in caching mechanism provides LRU replacement policy on a per-bucket basis while taking into account configurable high and low capacity watermarks (see [LRU](storage_svcs.md#lru) for details). AWS/GCP integration is *turnkey* and boils down to provisioning AIS targets with credentials to access Cloud-based buckets.
 
 If (compute + storage) rack is a *unit of deployment*, it may as well look as follows:
 
@@ -97,7 +112,7 @@ Finally, AIS target provides a number of storage services with [S3-like RESTful 
 
 ## Terminology
 
-* [Cloud Provider](./providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
+* [Backend Provider](./providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
 
 * [Unified Global Namespace](./providers.md) - AIS clusters *attached* to each other, effectively, form a super-cluster providing unified global namespace whereby all buckets and all objects of all included clusters are uniformly accessible via any and all individual access points (of those clusters).
 
@@ -135,7 +150,7 @@ Notwithstanding, AIS stores and then maintains object replicas, erasure-coded sl
 
 ## Existing Datasets
 
-One common way to use AIStore includes the most basic step: populating it with an existing dataset, or datasets from Cloud buckets (AWS, Google Cloud and Azure) or any vanilla HTTP(S) resources. To this end, AIS provides 6 (six) easy ways ranging from the (conventional) on-demand caching to (advanced) *promoting* of colocated files and directories:
+One common way to use AIStore includes the most basic step: populating it with an existing dataset, or datasets from remote buckets (AWS, Google Cloud, Azure, or HDFS) or any vanilla HTTP(S) resources. To this end, AIS provides 6 (six) easy ways ranging from the (conventional) on-demand caching to (advanced) *promoting* of colocated files and directories:
 
 1. [Cold GET](#existing-datasets-cold-get)
 2. [Prefetch](#existing-datasets-batch-prefetch)
@@ -158,7 +173,7 @@ In all other cases, AIS will service the GET request without going to Cloud.
 
 ### Existing Datasets: Batch Prefetch
 
-Alternatively or in parallel, you can also *prefetch* a flexibly-defined *list* or *range* of objects from any given Cloud bucket, as described in [this readme](batch.md).
+Alternatively or in parallel, you can also *prefetch* a flexibly-defined *list* or *range* of objects from any given remote bucket, as described in [this readme](batch.md).
 
 ### Existing Datasets: integrated Downloader
 
@@ -191,7 +206,7 @@ Finally, AIS can *promote* files and directories to objects. The only requiremen
 Let's consider a quick example. Say, some (or all) of the deployed storage nodes contain a directory called `/tmp/mydata`. By running the following [CLI](/aistore/cmd/cli/README.md), we could make AIS objects (**one file = one object**) out of all files scattered across all nodes:
 
 ```console
-$ ais promote /tmp/mydata mybucket/ -r --keep=false
+$ ais object promote /tmp/mydata mybucket/ -r --keep=false
 ```
 
 In this example, `mybucket` would be the designated (destination) bucket.
@@ -232,7 +247,7 @@ Most notably, AIStore provides **[dSort](../dsort/README.md)** - a MapReduce lay
 
 ## dSort
 
-DSort “views” AIS objects as named shards that comprise archived key/value data. In its 1.0 realization, dSort supports tar, zip, and tar-gzip formats and a variety of built-in sorting algorithms; it is designed, though, to incorporate other popular archival formats including tf.Record and tf.Example ([TensorFlow](https://www.tensorflow.org/tutorials/load_data/tf-records)) and [MessagePack](https://msgpack.org/index.html). The user runs dSort by specifying an input dataset, by-key or by-value (i.e., by content) sorting algorithm, and a desired size of the resulting shards. The rest is done automatically and in parallel by the AIS storage targets, with no part of the processing that’d involve a single-host centralization and with dSort stage and progress-within-stage that can be monitored via user-friendly statistics.
+DSort “views” AIS objects as named shards that comprise archived key/value data. In its 1.0 realization, dSort supports tar, zip, and tar-gzip formats and a variety of built-in sorting algorithms; it is designed, though, to incorporate other popular archival formats including tf.Record and tf.Example ([TensorFlow](https://www.tensorflow.org/tutorials/load_data/tfrecord)) and [MessagePack](https://msgpack.org/index.html). The user runs dSort by specifying an input dataset, by-key or by-value (i.e., by content) sorting algorithm, and a desired size of the resulting shards. The rest is done automatically and in parallel by the AIS storage targets, with no part of the processing that’d involve a single-host centralization and with dSort stage and progress-within-stage that can be monitored via user-friendly statistics.
 
 By design, dSort tightly integrates with the AIS-object to take full advantage of the combined clustered CPU and IOPS. Each dSort job (note that multiple jobs can execute in parallel) generates a massively-parallel intra-cluster workload where each AIS target communicates with all other targets and executes a proportional "piece" of a job. This ultimately results in a *transformed* dataset optimized for subsequent training and inference by deep learning apps.
 
@@ -249,81 +264,16 @@ where `G` (above) denotes a `hostname:port` address of any AIS gateway (for deve
 
 One salient feature of AIS CLI is its Bash style [auto-completions](../cmd/cli/README.md#ais-cli-shell-auto-complete) that allow users to easily navigate supported operations and options by simply pressing the TAB key:
 
-<img src="images/ais3.1.gif" alt="CLI-tab" width="900" height="130">
+<img src="images/cli-overview.gif" alt="CLI-tab" width="900" height="130">
 
 AIS CLI is currently quickly developing. For more information, please see the project's own [README](../cmd/cli/README.md).
 
-## Python Client
-
-AIStore provides an easy way to generate a python client package for simplified integration. The user can, after following a few simple steps, import the generated package and start communicating with AIS via its [RESTful API](http_api.md). The generated package will cover the entire functionality of the API.
-
-> Background: [OpenAPI Generator](https://github.com/openapitools/openapi-generator) is a tool that generates python client packages for simplified integration with RESTful APIs. We use OpenAPI Generator to generate the python client package using the [OpenAPI Specification](https://swagger.io/docs/specification/about/) file located [here](../openapi/openapi.yaml).
-
-To get started with the python client package, you need to first generate the client package. These instructions can also be found [here](../openapi/README.md#how-to-generate-package).
-
-1. Obtain the latest openapi-generator jar by running the following command:
-
-```console
-$ wget http://central.maven.org/maven2/org/openapitools/openapi-generator-cli/3.3.4/openapi-generator-cli-3.3.4.jar -O openapi-generator-cli.jar
-```
-
-2. Run the following commands:
-
-```console
-$ cd <path_to_repo>
-$ java -jar </path/to/openapi-generator-cli.jar> generate -i openapi/openapi.yaml -c openapi/config.json -g python -o ./python/api-client/
-```
-
-3. Install `pip` - a package management system used to install and manage software packages written in Python. Visit the [installation page](https://pip.pypa.io/en/stable/installing/) for instructions on how to install `pip`.
-
-4. Install required Python packages using `pip` and requirement files located in `python/api-client` directory:
-
-```console
-$ pip install -r python/api-client/requirements.txt
-$ pip install -r python/api-client/test-requirements.txt
-```
-
-These steps should produce the python client package, which will be located [here](../python/api-client).
-
-Should you have any difficulty generating the python client package with these instructions, please open a ticket, and we will provide further assistance.
-
-Once the package is generated, it can be installed as follows, these commands can also be found [here](../openapi/README.md#how-to-install).
-
-```console
-$ cd <path_to_repo>/python/api-client
-$ pip uninstall ais_client #uninstalls any previous versions
-$ pip install .
-```
-
-Now you're ready to import the package in python and use it to communicate with AIS.
-
-For example, this script will display a map of your AIS cluster.
-
-```python
-import ais_client
-# Some aliases for functions in the package
-openapi_models = ais_client.models
-openapi_params = openapi_models.InputParameters
-openapi_actions = openapi_models.Actions
-
-configuration = ais_client.Configuration()
-configuration.debug = False
-proxy_url = 'localhost:8080' #Change this to the ip of any proxy in your AIS cluster, ex: 172.50.0.2:8080
-configuration.host = 'http://%s/v1/' % proxy_url
-proxyClient = ais_client.ApiClient(configuration)
-
-daemon_api = ais_client.api.daemon_api.DaemonApi(proxyClient)
-print(daemon_api.get(openapi_models.GetWhat.SMAP))
-```
-
-There's a lot more that the python client package can do. Be sure to read [the complete guide on using the package](../openapi/README.md#how-to-use-package).
-
-## AIS Limitations
+## AIS no-limitations principle
 There are **no** designed-in limitations on the:
 
 * object sizes
 * total number of objects and buckets in AIS cluster
-* the number of objects in a single AIS bucket
-* numbers of gateways and storage targets in AIS cluster
+* number of objects in a single AIS bucket
+* numbers of gateways (proxies) and storage targets in AIS cluster
 
 Ultimately, the limit on object size may be imposed by a local filesystem of choice and a physical disk capacity. While limit on the cluster size - by the capacity of the hosting AIStore Data Center. But as far as AIS itself, it does not impose any limitations whatsoever.

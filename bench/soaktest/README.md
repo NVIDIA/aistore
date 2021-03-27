@@ -6,7 +6,7 @@ redirect_from:
  - bench/soaktest/README.md/
 ---
 
-Soak Testing (also referred to as endurance testing) is defined [here](https://www.katalon.com/resources-center/blog/soak-testing/) as a test where the system is "evaluated to see whether it could perform well under a significant load for an extended period, thereby measuring its reaction and analyzing its behavior under sustained use".
+[Soak Testing](https://en.wikipedia.org/wiki/Soak_testing) (also referred to as endurance testing) is a practice where a system is evaluated to see whether it could perform well under a significant load for an extended period, thereby measuring its reaction and analyzing its behavior under sustained use.
 
 `soaktest.sh` is the script that builds and runs a Soak Test executable (SK for short) on a currently running AIS cluster.
 

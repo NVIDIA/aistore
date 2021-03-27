@@ -25,7 +25,7 @@ A cluster deployed in `debug` mode will produce a log like this:
 ```
 
 As this only enables general debug asserts and logs it is also possible to enable verbose logging per package.
-To do that deploy cluster with eg. `AIS_DEBUG="fs=4,reb=4"` what means that packages `fs` and `reb` will have logging level set to `4` (generally used for verbose logging). 
+To do that deploy cluster with eg. `AIS_DEBUG="fs=4,reb=4"` what means that packages `fs` and `reb` will have logging level set to `4` (generally used for verbose logging).
 
 ## Scripts
 
@@ -39,14 +39,14 @@ $ make help
 ### Clean deploy
 
 ```
-./clean_deploy.sh [--https] [--tier] [--debug PKG=LOG_LEVEL[,PKG=LOG_LEVEL]] [--cloud PROVIDER]
+./clean_deploy.sh [--ntargets TARGET_CNT] [--nproxies PROXY_CNT] [--mountpoints MPOINT_CNT] [--https] [--deploy local|remote|both] [--remote-alias REMOTE_ALIAS] [--PROVIDER ...] [--debug PKG=LOG_LEVEL[,PKG=LOG_LEVEL]]
 ```
 
 Performs cleanup and then deploys a new instance of an AIS cluster.
 To make it even more convenient, consider setting up an alias:
 
 ```bash
-alias cais="bash ${GOPATH}/src/github.com/NVIDIA/aistore/deploy/scripts/bootstrap.sh clean-deploy --cloud 1"
+alias cais="bash ${GOPATH}/src/github.com/NVIDIA/aistore/deploy/scripts/clean-deploy --aws --gcp"
 ```
 
 #### Example usage
@@ -55,15 +55,30 @@ The command below starts a cluster with 5 proxies and 5 targets with GCP cloud e
 Remember to set `GOOGLE_APPLICATION_CREDENTIALS` env when using GCP cloud!
 
 ```console
-$ bash ./deploy/scripts/bootstrap.sh clean-deploy --cloud 2
+$ bash ./deploy/scripts/clean-deploy --gcp
+```
+
+The example below deploys:
+- a simulated remote cluster with alias "remoteAIS"
+- 3 targets
+- 3 proxies
+- with AWS support
+
+```console
+$ bash ./deploy/scripts/clean-deploy --deployment all --remote-alias remoteAIS -ntargets 3 -nproxies 3 --aws
 ```
 
 #### Options
 
 | Option | Description |
 | ------ | ----------- |
-| `--cloud PROVIDER` | Specifies a cloud provider (by default, cloud provider is disabled) |
-| `--tier` | Start AIS-behind-AIS cluster configuration |
+| `--ntargets` | Number of targets to start (default: 5) |
+| `--nproxies` | Number of proxies to start (default: 5) |
+| `--mountpoints` | Number of mountpoints to use (default: 5) |
+| `--PROVIDER` | Specifies the backend provider(s). Can be: `--aws`, `--azure`, `--gcp`, `--hdfs` |
+| `--loopback` | Provision loopback devices |
+| `--deployment` | Choose which AIS cluster to deploy. `local` to deploy only one AIS cluster, `remote` to only start an AIS-behind-AIS cluster, and `all` to deploy both the local and remote clusters. |
+| `--remote-alias` | Alias to assign to the remote cluster |
 | `--https` | Start cluster with HTTPS enabled (*) |
 | `--debug PKG=LOG_LEVEL` | Change logging level of particular package(s) |
 

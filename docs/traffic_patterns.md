@@ -23,7 +23,7 @@ redirect_from:
     2. Select a storage target as an HRW function of the `(cluster map, bucket, object)` triplet, where HRW stands for [Highest Random Weight](https://en.wikipedia.org/wiki/Rendezvous_hashing);
        note that since HRW is a consistent hashing mechanism, the output of the computation will be (consistently) the same for the same `(bucket, object)` pair and cluster configuration.
     3. Redirect the request to the selected target.
-3. The target parses the bucket and object from the (redirected) request and determines whether the bucket is an AIS bucket, or a Cloud-based bucket.
+3. The target parses the bucket and object from the (redirected) request and determines whether the bucket is an AIS bucket or provided by one of the supported 3rd party backends.
 4. The target then determines a `mountpath` (and therefore, a local filesystem) that will be used to perform the I/O operation.
    This time, the target computes HRW (configured mountpaths, bucket, object) on the input that, in addition to the same `(bucket, object)` pair includes all currently active/enabled mountpaths.
 5. Once the highest-randomly-weighted `mountpath` is selected, the target then forms a fully-qualified name to perform the local read/write operation.
@@ -60,7 +60,7 @@ Beyond these 5 (five) common steps the similarity between `GET` and `PUT` reques
 
 In contrast with the Read and Write datapath, `list-objects` flow "engages" all targets in the cluster (and, effectively, all clustered disks). To optimize (memory and networking-wise) and speed-up the processing, AIS employs a number of (designed-in) caching and buffering techniques:
 
-1. Client sends an API request to any AIStore proxy/gateway to receive a new *page* of listed objects (a typical page size is 1000 - for a Cloud bucket, 10K - for an AIS bucket).
+1. Client sends an API request to any AIStore proxy/gateway to receive a new *page* of listed objects (a typical page size is 1000 - for a remote bucket, 10K - for an AIS bucket).
 2. The proxy then checks if the requested page can be served from:
    1. A *cache* - that may have been populated by the previous `list-objects` requests.
    2. A *buffer* - when targets send more `list-objects` entries than requested proxy *buffers* the entries and then uses those *buffers* to serve subsequent requests.

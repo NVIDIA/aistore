@@ -9,6 +9,8 @@ redirect_from:
 # Table of contents
 
 - [CLI](#cli)
+  - [Top-level Commands](#top-level-commands)
+  - [Getting Started](#getting-started)
 - [Deployment: Google Cloud](#deployment-google-cloud)
 - [Minimal All-In-One Standalone Docker](#minimal-all-in-one-standalone-docker)
 - [Extract, Transform, Load](#extract-transform-load)
@@ -17,13 +19,13 @@ redirect_from:
 
 # CLI
 
-## CLI: Top-level Commands
+## Top-level Commands
 
-<img src="/aistore/docs/images/ais3.1.gif" width="100%">
+<img src="/aistore/docs/images/cli-overview.gif" width="100%">
 
-## CLI: Getting Started
+## Getting Started
 
-<img src="/aistore/docs/images/ais2.13.gif" width="100%">
+[![AIStore CLI Demo](./images/cli-demo-400.png)](https://youtu.be/VPIhQm2sMD8 "AIStore CLI Demo (Youtube video)")
 
 # Deployment: Google Cloud
 

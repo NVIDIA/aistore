@@ -72,21 +72,28 @@ The following [video](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Devel
 
 [![AIStore Developer Playground](./images/dev-playground-400.png)](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube video)")
 
+### Deployment Script
+
 Assuming that [Go](https://golang.org/dl/) toolchain is already installed, the steps to deploy AIS locally on a single development machine are:
 
 ```console
 $ cd $GOPATH/src
 $ go get -v github.com/NVIDIA/aistore/ais
 $ cd github.com/NVIDIA/aistore
-$ make deploy
-$ go test ./tests -v -run=Mirror
+$ ./deploy/scripts/clean_deploy.sh
 ```
-
 where:
 
 * `go get` installs sources and dependencies under your [$GOPATH](https://golang.org/cmd/go/#hdr-GOPATH_environment_variable).
-* `make deploy` deploys AIStore daemons locally and interactively, for example:
+* [`clean_deploy.sh`](/aistore/docs/development.md#clean-deploy) builds various AIStore binaries (such as `aisnode` and `cli`)
+and then deploys a local cluster with 5 proxies and 5 targets by default.
 
+To specify the number of simulated nodes, you can run `clean_deploy.sh --nproxies 3 --ntargets 3`. To see more options 
+that `clean_deploy.sh` provides, [refer to its documentation](/aistore/docs/development.md#clean-deploy)
+
+### Manual Deployment
+
+You can also run `make deploy` in the root directory of the repository to deploy a cluster:
 ```console
 $ make deploy
 Enter number of storage targets:
@@ -95,43 +102,45 @@ Enter number of proxies (gateways):
 3
 Number of local cache directories (enter 0 to use preconfigured filesystems):
 2
-Select cloud providers:
+Select backend providers:
 Amazon S3: (y/n) ?
 n
 Google Cloud Storage: (y/n) ?
 n
 Azure: (y/n) ?
 n
+HDFS: (y/n) ?
+n
 Would you like to create loopback mount points: (y/n) ?
 n
 Building aisnode: version=df24df77 providers=
 ```
+> Notice the "Cloud" prompt above, and the fact that access to 3rd party Cloud storage is a deployment-time option.
 
-Or, you can run all the above in one shot non-interactively:
+`make kill` will terminate local AIStore if it's already running.
+
+For more development options and tools, please refer to the [development docs](/aistore/docs/development.md).
+
+### Testing your cluster
+
+To make sure your cluster was deployed correctly, you can run some tests. For example:
 
 ```console
-$ make kill deploy <<< $'10\n3\n2\nn\nn\nn\nn\n'
+$ go test ./ais/tests -v -run=Mirror
 ```
 
-> The example deploys 3 gateways and 10 targets, each with 2 local simulated filesystems.
-> Also notice the "Cloud" prompt above, and the fact that access to 3rd party Cloud storage is a deployment-time option.
-
-> `make kill` will terminate local AIStore if it's already running.
-
-For more development options and tools, please refer to [development docs](docs/development.md).
-
-Finally, the `go test` (above) will create an AIS bucket, configure it as a two-way mirror, generate thousands of random objects, read them all several times, and then destroy the replicas and eventually the bucket as well.
+The `go test` above will create an AIS bucket, configure it as a two-way mirror, generate thousands of random objects, read them all several times, and then destroy the replicas and eventually the bucket as well.
 
 Alternatively, if you happen to have Amazon and/or Google Cloud account, make sure to specify the corresponding (S3 or GCS) bucket name when running `go test` commands.
 For example, the following will download objects from your (presumably) S3 bucket and distribute them across AIStore:
 
 ```console
-$ BUCKET=aws://myS3bucket go test ./tests -v -run=download
+$ BUCKET=aws://myS3bucket go test ./ais/tests -v -run=download
 ```
 
 ## Kubernetes Playground
 
-In our development and testing, we make use of [Minikube](https://kubernetes.io/docs/tutorials/hello-minikube/) and the capability, further documented [here](/aistore/deploy/dev/k8s/README.md), to run Kubernetes cluster on a single development machine. There's a distinct advantage that AIStore extensions that require Kubernetes - such as [Extract-Transform-Load](/aistore/docs/etl.md), for example - can be developed rather efficiently.
+In our development and testing, we make use of [Minikube](https://kubernetes.io/docs/tutorials/hello-minikube/) and the capability, further documented [here](/aistore/deploy/dev/k8s/README.md), to run Kubernetes cluster on a single development machine. There's a distinct advantage that AIStore extensions that require Kubernetes - such as [Extract-Transform-Load](etl.md), for example - can be developed rather efficiently.
 
 * [AIStore on Minikube](/aistore/deploy/dev/k8s/README.md)
 
@@ -148,7 +157,7 @@ $ openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt -days 10
 2. Deploy cluster (4 targets, 1 gateway, 6 mountpaths, Google Cloud):
 
 ```console
-$ AIS_USE_HTTPS=true AIS_SKIP_VERIFY_CRT=true make kill deploy <<< $'4\n1\n6\nn\ny\nn\n'
+$ AIS_USE_HTTPS=true AIS_SKIP_VERIFY_CRT=true make kill deploy <<< $'4\n1\n6\nn\ny\nn\nn\nn\n'
 ```
 
 3. Run tests (both examples below list the names of buckets accessible for you in Google Cloud):

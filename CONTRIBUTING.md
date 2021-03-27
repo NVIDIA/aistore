@@ -6,6 +6,27 @@ redirect_from:
  - /CONTRIBUTING.md/
 ---
 
+## AIStore Open Source Contribution Requirements
+
+All contributors must "sign-off" on each commit. This certifies that each contribution is that contributor's original work per the following Developer Certificate of Origin.
+
+Commits that are not signed-off cannot be accepted or merged.
+
+Commits can be signed off by using the `git` command's `--signoff` (or `-s`) option:
+
+```bash
+$ git commit -s -m "Add new feature"
+```
+
+This will append the following type of footer to the commit message:
+
+```
+Signed-off-by: Your Name <your@email.com>
+```
+
+---
+
+```
 Developer Certificate of Origin
 Version 1.1
 
@@ -43,3 +64,4 @@ By making a contribution to this project, I certify that:
     personal information I submit with it, including my sign-off) is
     maintained indefinitely and may be redistributed consistent with
     this project or the open source license(s) involved.
+```

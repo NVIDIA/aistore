@@ -14,16 +14,10 @@ To run all tests, make sure to deploy a AIStore cluster with at least 3 proxies/
 Then, cd to $GOPATH/src/github.com/NVIDIA/aistore and execute:
 
 ```console
-$ PROVIDER=<provider> BUCKET=<bucket_name> go test -v -p 1 -count 1 -timeout 1h ./...
-```
-
-or:
-
-```console
 $ BUCKET=<provider>://<bucket_name> go test -v -p 1 -count 1 -timeout 1h ./...
 ```
 
-- provider: Cloud provider AWS (="aws"), GCP (="gcp") or AZURE(="az") (note that some of the tests require access to the Cloud; optional if included in bucket name).
+- provider: Backend provider AWS (="aws"), GCP (="gcp") or AZURE(="az") (note that some of the tests require access to the Cloud; optional if included in bucket name).
 - bucket_name: Cloud-based bucket backed by AWS or GCP (note that some of the tests require access to the Cloud).
 - -timeout 1h: to make sure the test runs are not terminated by the Go default 10 minute timeout.
 - -p 1: run tests sequentially; since all tests share the same bucket, we sometimes can't allow them to run in parallel.

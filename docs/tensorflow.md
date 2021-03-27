@@ -15,7 +15,7 @@ redirect_from:
 
 AIS cluster provides out-of-the-box integration with TensorFlow TFRecord format
 
-- Creating TensorFlow datasets from TFRecords stored in AIS cluster with `tf.data.TFRecordDataset` API. See [S3 compatibility docs](/aistore/docs/s3compat.md)
+- Creating TensorFlow datasets from TFRecords stored in AIS cluster with `tf.data.TFRecordDataset` API. See [S3 compatibility docs](s3compat.md)
 - Creating TensorFlow datasets from *TAR* files stored in AIS cluster with `tf.data.TFRecordDataset` API.
 The conversion is executed remotely, on the fly in the cluster.
 

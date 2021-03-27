@@ -27,9 +27,9 @@ The ability to scale linearly with each added disk was, and remains, one of the 
 * [Amazon S3 API](https://docs.aws.amazon.com/s3/index.html) to run unmodified S3 apps;
 * FUSE client (`aisfs`) to access AIS objects as files;
 * arbitrary number of extremely lightweight access points;
-* easy-to-use CLI that supports [TAB auto-completions](cmd/cli/README.md);
+* easy-to-use [CLI](https://www.youtube.com/watch?v=VPIhQm2sMD8&ab_channel=AIStore) based on [auto-completions](cmd/cli/README.md);
 * automated cluster rebalancing upon: changes in cluster membership, drive failures and attachments, bucket renames;
-* N-way mirroring (RAID-1), Reed–Solomon erasure coding, end-to-end data protection.
+* [N-way mirroring (RAID-1), Reed–Solomon erasure coding, end-to-end data protection](/aistore/docs/storage_svcs.md).
 * [ETL offload](/aistore/docs/etl.md): running user-defined extract-transform-load workloads on (and by) performance-optimized storage cluster;
 
 Also, AIStore:
@@ -37,7 +37,11 @@ Also, AIStore:
 * can be deployed on any commodity hardware;
 * supports single-command infrastructure and software deployment on Google Cloud Platform via [ais-k8s GitHub repo](https://github.com/NVIDIA/ais-k8s);
 * supports Amazon S3, Google Cloud, and Microsoft Azure backends (and all S3, GCS, and Azure-compliant object storages);
-* provides unified global namespace across (ad-hoc) connected AIS clusters;
+* can ad-hoc attach and "see" (read, write, list, cache, evict) datasets hosted by other AIS clusters;
+* provides unified global namespace across multiple backends:
+
+<img src="docs/images/backends.png" alt="AIStore" width="360">
+
 * can be used as a fast cache for GCS and S3; can be populated on-demand and/or via `prefetch` and `download` APIs;
 * can be used as a standalone highly-available protected storage;
 * includes MapReduce extension for massively parallel resharding of very large datasets;
@@ -45,7 +49,9 @@ Also, AIStore:
 
 AIS runs natively on Kubernetes and features open format - thus, the freedom to copy or move your data from AIS at any time using the familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
 
-For AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](docs/overview.md) (where you can also find six alternative ways to work with existing datasets). Videos and **animated presentations** can be found at [videos](docs/videos.md). To get started with AIS, please click on [Getting Started](/aistore/docs/getting_started.md).
+For AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](docs/overview.md) (where you can also find six alternative ways to work with existing datasets). Videos and **animated presentations** can be found at [videos](docs/videos.md).
+
+To get started with AIS, please click on [Getting Started](/aistore/docs/getting_started.md).
 
 **Table of Contents**
 
@@ -65,7 +71,7 @@ AIStore supports numerous deployment options covering a spectrum from a single-l
 
 | Deployment option | Targeted audience and objective |
 | --- | ---|
-| [Local playground](docs/getting_started.md#local-playground-and-development-deployment) | AIS developers and development, Linux or Mac OS |
+| [Local playground](docs/getting_started.md#local-playground) | AIS developers and development, Linux or Mac OS |
 | Minimal production-ready deployment | This option utilizes preinstalled docker image and is targeting first-time users or researchers (who could immediately start training their models on smaller datasets) |
 | [Easy automated GCP/GKE deployment](docs/getting_started.md#cloud-deployment) | Developers, first-time users, AI researchers |
 | [Large-scale production deployment](https://github.com/NVIDIA/ais-k8s) | Requires Kubernetes and is provided (documented, automated) via a separate repository: [ais-k8s](https://github.com/NVIDIA/ais-k8s) |
@@ -118,35 +124,35 @@ AIS production deployment, in particular, requires careful consideration of at l
 
 with the corresponding [JSON names](/aistore/deploy/dev/local/aisnode_config.sh), respectively:
 
-* `ipv4`
-* `ipv4_intra_control`
-* `ipv4_intra_data`
+* `hostname`
+* `hostname_intra_control`
+* `hostname_intra_data`
 
 ## Assorted Tips
 
-* To enable an optional AIStore authentication server, execute `$ AUTH_ENABLED=true make deploy`. For information on AuthN server, please see [AuthN documentation](cmd/authn/README.md).
+* To enable an optional AIStore authentication server, execute `$ AUTH_ENABLED=true make deploy`. For information on AuthN server, please see [AuthN documentation](docs/authn.md).
 * In addition to AIStore - the storage cluster, you can also deploy [aisfs](cmd/aisfs/README.md) - to access AIS objects as files, and [AIS CLI](cmd/cli/README.md) - to monitor, configure and manage AIS nodes and buckets.
 * AIS CLI is an easy-to-use command-line management tool supporting a growing number of commands and options (one of the first ones you may want to try could be `ais show cluster` - show the state and status of an AIS cluster). The CLI is documented in the [readme](cmd/cli/README.md); getting started with it boils down to running `make cli` and following the prompts.
 * For more testing commands and options, please refer to the [testing README](ais/tests/README.md).
 * For `aisnode` command-line options, see: [command-line options](docs/command_line.md).
-* For helpful links and/or background on Go, AWS, GCP, and Deep Learning: [helpful links](docs/helpful-links.md).
+* For helpful links and/or background on Go, AWS, GCP, and Deep Learning: [helpful links](docs/helpful_links.md).
 * And again, run `make help` to find out how to build, run, and test AIStore and tools.
 
 ## Guides and References
 
 - [AIS Overview](docs/overview.md)
-- [Playbooks](docs/playbooks/README.md)
+- [Tutorials](docs/tutorials/README.md)
 - [Videos](docs/videos.md)
 - [CLI](cmd/cli/README.md)
   - [Create, destroy, list, and other operations on buckets](cmd/cli/resources/bucket.md)
   - [GET, PUT, APPEND, PROMOTE, and other operations on objects](cmd/cli/resources/object.md)
-  - [Cluster and Node management](cmd/cli/resources/daeclu.md)
+  - [Cluster and Node management](cmd/cli/resources/cluster.md)
   - [Mountpath (Disk) management](cmd/cli/resources/mpath.md)
   - [Attach, Detach, and monitor remote clusters](cmd/cli/resources/remote.md)
   - [Start, Stop, and monitor downloads](cmd/cli/resources/download.md)
   - [Distributed Sort](cmd/cli/resources/dsort.md)
-  - [User account and access management](cmd/cli/resources/users.md)
-  - [Xaction (Job) management](cmd/cli/resources/xaction.md)
+  - [User account and access management](cmd/cli/resources/auth.md)
+  - [Job (xaction) management](cmd/cli/resources/job.md)
 - [ETL with AIStore](docs/etl.md)
 - [On-Disk Layout](docs/on-disk-layout.md)
 - [System Files](docs/sysfiles.md)
@@ -167,7 +173,7 @@ with the corresponding [JSON names](/aistore/deploy/dev/local/aisnode_config.sh)
 - [Performance: Tuning and Testing](docs/performance.md)
 - [Rebalance](docs/rebalance.md)
 - [Storage Services](docs/storage_svcs.md)
-- [Extended Actions](xaction/README.md)
+- [Extended Actions (xactions)](xaction/README.md)
 - [Integrated Internet Downloader](downloader/README.md)
 - [Docker for AIS developers](docs/docker_main.md)
 - [Troubleshooting Cluster Operation](docs/troubleshooting.md)
@@ -181,7 +187,6 @@ with the corresponding [JSON names](/aistore/deploy/dev/local/aisnode_config.sh)
 - [Package `memsys`](memsys/README.md)
 - [Package `transport`](transport/README.md)
 - [Package `dSort`](dsort/README.md)
-- [Package `openapi`](openapi/README.md)
 
 ## License
 

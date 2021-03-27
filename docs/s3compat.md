@@ -7,12 +7,16 @@ redirect_from:
 ---
 
 ## Table of Contents
-
 - [Overview](#overview)
 - [Client Configuration](#client-configuration)
 - [S3 Compatibility](#s3-compatibility)
+  - [Object checksum](#object-checksum)
+  - [Last modification time](#last-modification-time)
 - [Examples](#examples)
+  - [Create a bucket](#create-a-bucket)
+  - [Remove a bucket](#remove-a-bucket)
 - [TensorFlow Demo](#tensorflow-demo)
+- [Boto3 Compatibility](#boto3-compatibility)
 
 ## Overview
 
@@ -96,16 +100,16 @@ If checksums differ, the client raises the error "MD5 sum mismatch".
 To enable MD5 checksum, create a bucket with `MD5`:
 
 ```console
-$ ais create bucket ais://bck --bucket-props="checksum.type=md5"
+$ ais bucket create ais://bck --bucket-props="checksum.type=md5"
 "ais://bck2" bucket created
-$ ais show props ais://bck | grep checksum
+$ ais show bucket ais://bck | grep checksum
 checksum         Type: md5 | Validate: ColdGET
 ```
 
 or change bucket's checksum type **before** putting objects to the bucket:
 
 ```console
-$ ais set props ais://bck checksum.type=md5
+$ ais bucket props ais://bck checksum.type=md5
 Bucket props successfully updated
 "checksum.type" set to:"md5" (was:"xxhash")
 ```
@@ -120,17 +124,17 @@ Example when access time is undefined (not set):
 
 ```console
 # create an AIS bucket with AWS backend bucket
-$ ais create ais://bck
-$ ais set props ais://bck backend_bck=aws://bckaws
-$ ais set props ais://bck checksum.type=md5
+$ ais bucket create ais://bck
+$ ais bucket props ais://bck backend_bck=aws://bckaws
+$ ais bucket props ais://bck checksum.type=md5
 
 # put an object with ais - it affects access time
-$ ais put object.txt ais://bck/obj-ais
+$ ais object put object.txt ais://bck/obj-ais
 
 # put another object with s3cmd - the object bypasses ais, so no access time in list
 $ s3cmd put object.txt s3://bck/obj-aws --host=localhost:8080 --host-bucket="localhost:8080/s3/%(bucket)"
 
-$ ais ls ais://bck --props checksum,size,atime
+$ ais bucket ls ais://bck --props checksum,size,atime
 NAME            CHECKSUM                                SIZE            ATIME
 obj-ais         a103a20a4e8a207fe7ba25eeb2634c96        69.99KiB        08 Dec 20 11:25 PST
 obj-aws         a103a20a4e8a207fe7ba25eeb2634c96        69.99KiB
@@ -148,13 +152,13 @@ Use any S3 client to access an AIS bucket. Examples below use standard AWS CLI. 
 
 ```shell
 # check that AIS cluster has no buckets, and create a new one
-$ ais ls ais://
+$ ais bucket ls ais://
 AIS Buckets (0)
 $ s3cmd --host http://localhost:8080/s3 s3 mb s3://bck1
 make_bucket: bck1
 
 # check that the bucket appears everywhere
-$ ais ls ais://
+$ ais bucket ls ais://
 AIS Buckets (1)
 ```
 
@@ -183,3 +187,19 @@ S3_ENDPOINT=10.0.0.20:8080/s3 S3_USE_HTTPS=0 python mnist.py
 Here is the screencast of the TF training in action:
 
 <img src="/aistore/docs/images/ais-s3-tf.gif" alt="TF training in action">
+
+## Boto3 Compatibility
+
+Some HTTP clients and client-side libraries do not follow HTTP redirects, and Amazon's [boto3](https://github.com/boto/boto3) happens to be one of those (libraries).
+
+To circumvent the limitation, we provided a special build tag: `s3rproxy`. Building `aisnode` executable with this tag causes each AIS proxy to become, effectively, reverse proxy vis-a-vis the rest clustered nodes.
+
+> **NOTE**: reverse-proxying datapath requests might adversely affect performance! It is, therefore, strongly recommended _not_ to use `s3rproxy` build tag, if possible.
+
+To build with `s3rproxy` tag (or any other supported build tag), simply specify the `TAGS` environment variable, for example:
+
+```console
+$ TAGS=s3rproxy make deploy
+```
+
+See Makefile in the root directory for further details.

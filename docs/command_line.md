@@ -14,7 +14,9 @@ AIS proxy and AIS target (executables) both support the following command-line a
   -role string
         the role of this AIS daemon: proxy | target (***)
   -config string
-        config filename: local file that stores configuration of this daemon (***)
+        config filename: local file that stores the global cluster configuration (***)
+  -local_config string
+        config filename: local file that stores daemon's local configuration
   -daemon_id string
         unique ID to be assigned to the AIS daemon
   -alsologtostderr
@@ -49,7 +51,7 @@ $ $GOPATH/bin/aisnode --help
 Example command-line:
 
 ```console
-$ $GOPATH/bin/aisnode -config=/etc/ais.json -role=target -daemon_id=aistarget1
+$ $GOPATH/bin/aisnode -config=/etc/ais.json -local_config=/etc/ais_local.json -role=target -daemon_id=aistarget1
 ```
 
-Above command starts a target deamon using the config provided in the path `/etc/ais.json` and assigns it a unique daemon ID `aistarget1`.
+Above command starts a target daemon with daemon ID `aistarget1` using the global and local config from paths `/etc/ais.json` and `/etc/ais_local.json` respectively.

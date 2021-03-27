@@ -46,7 +46,7 @@ says, it is given as an input for the dSort operation. Output on the other hand
 is something that is the result of the operation. Output shards can differ from
 input shards in many ways: size, number of objects, names etc.
 
-Shards are assumed to be already on AIStore cluster or somewhere in the cloud bucket
+Shards are assumed to be already on AIStore cluster or somewhere in a remote bucket
 so that AIStore can access them. Output shards will always be placed in the same
 bucket and directory as the input shards - accessing them after completed dSort,
 is the same as input shards but of course with different names.

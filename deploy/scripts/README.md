@@ -50,6 +50,8 @@ Development-only. Performs several useful commands including shutdown of a local
 $ ./clean_deploy.sh <directory used for $AIS_DIR>
 ```
 
+[More details on usage can be found here.](/aistore/docs/development.md#clean-deploy)
+
 ## boostrap.sh
 
 Used internally by almost all our [Makefile](/aistore/Makefile) commands.

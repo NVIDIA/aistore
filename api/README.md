@@ -207,17 +207,17 @@ Error from AIStore in completing the request
 ___
 
 #### ListBuckets
-Given the url of an AIS gateway, `ListBuckets` returns the names of all existing local and cloud buckets
+Given the url of an AIS gateway, `ListBuckets` returns the names of all existing local and remote buckets
 
 ##### Parameters
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
 | proxyURL   | string       | URL of the proxy (gateway)                                                            |
-| provider   | string       | One of "" (empty), "cloud", "ais", "aws", "gcp", or "azure". If the value is empty, returns all bucket names. Otherwise, returns only "cloud" or "ais" buckets.|
+| provider   | string       | "ais" or one of the supported backend providers: "ais", "gcp", "aws", "azure", "http", "hdfs". If the provider value is empty, returns *all* bucket names. |
 
 ##### Return
-Two lists: one for the names of ais buckets, and the other for the names of cloud buckets
+Two lists: one for the names of ais buckets, and the other for the names of remote buckets
 
 Error from AIStore in completing the request
 ___
@@ -237,8 +237,8 @@ ___
 
 #### CopyBucket
 Copies existing `fromBck` bucket to the destination `toBck` thus, effectively, creating a copy of the `fromBck`.
-* AIS will create `toBck` on the fly, but only if the destination bucket does not exist and is provided by AIStore (note that Cloud-based `toBck` must exist for the copy operation to be successful)
-* There are no limitations on copying buckets across Cloud providers: you can copy AIS bucket to (or from) AWS bucket, and the latter to Google or Azure bucket, etc.
+* AIS will create `toBck` on the fly, but only if the destination bucket does not exist and is provided by AIStore (note that non-AIS `toBck` must exist for the copy operation to be successful)
+* There are no limitations on copying buckets across Backend providers: you can copy AIS bucket to (or from) AWS bucket, and the latter to Google or Azure bucket, etc.
 * Copying multiple buckets to the same destination bucket is also permitted.
 
 ##### Parameters
@@ -278,8 +278,8 @@ Removes an ais bucket using its name as the identifier
 Error from AIStore in completing the request
 ___
 
-#### EvictCloudBucket
-Evicts a cloud bucket using its name as the identifier
+#### EvictRemoteBucket
+Evicts a remote bucket using its name as the identifier
 
 ##### Parameters
 | Name       | Type         | Description                                                                           |
@@ -336,7 +336,7 @@ Returns the size and version of an object identified by a combination of its buc
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
 | proxyURL   | string       | URL of the proxy (gateway)                                                            |
 | bucket     | string       | Name of the bucket storing the object                                                 |
-| provider   | string       | Cloud provider, one of: "", "cloud", "ais", "gcp", "aws". If not specified (""), AIS determines the value by checking bucket metadata |
+| provider   | string       | "ais" (default, can be omitted) or one of the supported backend providers: "ais", "gcp", "aws", "azure", "http", "hdfs". |
 | object     | string       | Name of the object                                                                    |
 
 ##### Return
@@ -397,7 +397,7 @@ Creates an object from the body of the `cmn.ReadOpenCloser` argument and puts it
 | httpClient | *http.Client       | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
 | proxyURL   | string             | URL of the proxy (gateway)                                                            |
 | Bucket     | string             | Name of the bucket storing the object                                                 |
-| Provider   | string             | Cloud provider, one of: "", "cloud", "ais", "gcp", "aws". If not specified (""), AIS determines it by checking bucket metadata |
+| Provider   | string             | "ais" (default, can be omitted) or one of the supported backend providers: "ais", "gcp", "aws", "azure", "hdfs". |
 | Object     | string             | Name of the object                                                                    |
 | Hash       | string             | Hash computed for the object                                                          |
 | Reader     | cmn.ReadOpenCloser | Interface used to read the bytes of object data                                       |
@@ -447,7 +447,7 @@ Deletes an object identified by the combination of its bucket and object name
 | proxyURL   | string       | URL of the proxy (gateway)                                                            |
 | bucket     | string       | Name of the bucket storing the object                                                 |
 | object     | string       | Name of the object to be replicated                                                   |
-| provider   | string       | Cloud provider, one of "", "cloud", "ais". Other supported values include "aws" and "gcp", for Amazon and Google clouds, respectively |
+| provider   | string       | "ais" (default, can be omitted) or one of the supported backend providers: "ais", "gcp", "aws", "azure", "hdfs". |
 
 ##### Return
 Error from AIStore in completing the request
@@ -480,7 +480,7 @@ ___
 ### URL Query Values
 | Name | Fields | Description |
 | --- | --- | --- |
-| provider | "", "cloud", "ais" | Cloud provider - "cloud" or "ais". Other supported values include "gcp" and "aws", for Amazon and Google clouds, respectively. If omitted, provider of the bucket is determined by checking bucket metadata |
+| provider | Backend provider | "ais" (default, can be omitted) or one of the supported backend providers: "ais", "gcp", "aws", "azure", "http", "hdfs". |
 
 ## Basic API Workflow
 A sample demo of the APIs listed above:

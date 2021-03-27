@@ -8,7 +8,7 @@ redirect_from:
 
 ## Why Downloader?
 
-It probably won't be much of an exaggeration to say that the majority of popular AI datasets are available on the Internet and public Clouds.
+It probably won't be much of an exaggeration to say that the majority of popular AI datasets are available on the Internet and public remote buckets.
 Those datasets are often growing in size, thus continuously providing a wealth of information to research and analyze.
 
 It is, therefore, appropriate to ask a follow-up question: how to efficiently work with those datasets?
@@ -22,20 +22,23 @@ AIS cluster can be easily deployed on any commodity hardware, and AIS **download
 
 ## Features
 
-> By way of background, AIStore supports a number of [3rd party Cloud providers](/aistore/docs/providers.md) and utilizes the providers' SDKs to access the corresponding Clouds. For Amazon S3, that would be `aws-sdk-go` SDK, for Azure - `azure-storage-blob-go`, and so on. Each SDK can be **conditionally linked** into AIS executable - the decision (to link or not to link) is made prior to deployment.
+> By way of background, AIStore supports a number of [3rd party Backend providers](/aistore/docs/providers.md) and utilizes the providers' SDKs to access the corresponding backends.
+> For Amazon S3, that would be `aws-sdk-go` SDK, for Azure - `azure-storage-blob-go`, and so on.
+> Each SDK can be **conditionally linked** into AIS executable - the decision (to link or not to link) is made prior to deployment.
 
-This has a certain implication for the Downloader. Namely:
+This has a certain implication for the Downloader.
+Namely:
 
-Downloadable source can be both an Internet link (or links) or a Cloud bucket accessible via the corresponding Cloud SDK.
+Downloadable source can be both an Internet link (or links) or a remote bucket accessible via the corresponding backend implementation.
 You can, for instance, download a Google Cloud bucket via its Internet location that would look something like: `https://www.googleapis.com/storage/.../bucket-name/...`.
 
 However.
-When downloading a Cloud bucket (**any** Cloud bucket), it is always **preferable** to have the corresponding SDK linked-in.
+When downloading a remote bucket (**any** remote bucket), it is always **preferable** to have the corresponding SDK linked-in.
 Downloader will then detect the SDK "presence" at runtime and use a wider range of options available via this SDK.
 
 Other supported features include:
 
-* Can download a single file (object), a range, an entire bucket, **and** a virtual directory in a given Cloud bucket.
+* Can download a single file (object), a range, an entire bucket, **and** a virtual directory in a given remote bucket.
 * Easy to use with [command line interface](/aistore/cmd/cli/resources/download.md).
 * Versioning and checksum support allows for an optimal download of the same source location multiple times to *incrementally* update AIS destination with source changes (if any).
 
@@ -47,13 +50,13 @@ Downloading jobs run asynchronously; you can monitor the progress of each specif
 The following example runs two jobs, each downloading 10 objects (gzipped tarballs in this case) from a given Google Cloud bucket:
 
 ```console
-$ ais start download "gs://lpr-imagenet/train-{0001..0010}.tgz" ais://imagenet
+$ ais job start download "gs://lpr-imagenet/train-{0001..0010}.tgz" ais://imagenet
 5JjIuGemR
-Run `ais show download 5JjIuGemR` to monitor the progress of downloading.
-$ ais start download "gs://lpr-imagenet/train-{0011..0020}.tgz" ais://imagenet
+Run `ais show job download 5JjIuGemR` to monitor the progress of downloading.
+$ ais job start download "gs://lpr-imagenet/train-{0011..0020}.tgz" ais://imagenet
 H9OjbW5FH
-Run `ais show download H9OjbW5FH` to monitor the progress of downloading.
-$ ais show download
+Run `ais show job download H9OjbW5FH` to monitor the progress of downloading.
+$ ais show job download
 JOB ID           STATUS          ERRORS  DESCRIPTION
 5JjIuGemR        Finished        0       https://storage.googleapis.com/lpr-imagenet/imagenet_train-{0001..0010}.tgz -> ais://imagenet
 H9OjbW5FH        Finished        0       https://storage.googleapis.com/lpr-imagenet/imagenet_train-{0011..0020}.tgz -> ais://imagenet
@@ -68,13 +71,13 @@ AIS Downloader supports 4 (four) request types:
 * **Single** - download a single object.
 * **Multi** - download multiple objects provided by JSON map (string -> string) or list of strings.
 * **Range** - download multiple objects based on a given naming pattern.
-* **Cloud** - given optional prefix and optional suffix, download matching objects from the specified cloud bucket.
+* **Backend** - given optional prefix and optional suffix, download matching objects from the specified remote bucket.
 
 > Prior to downloading, make sure destination bucket already exists.
-> To create a bucket using AIS CLI, run `ais create bucket`, for instance:
+> To create a bucket using AIS CLI, run `ais bucket create`, for instance:
 >
 > ```console
-> $ ais create bucket imagenet
+> $ ais bucket create imagenet
 > ```
 >
 > Also, see [AIS API](/aistore/docs/http_api.md) for details on how to create, destroy, and list storage buckets.
@@ -89,7 +92,7 @@ The rest of this document is structured around supported *types of downloading j
 - [Single (object) download](#single-download)
 - [Multi (object) download](#multi-download)
 - [Range (object) download](#range-download)
-- [Cloud download](#cloud-download)
+- [Backend download](#backend-download)
 - [Aborting](#aborting)
 - [Status (of the download)](#status)
 - [List of downloads](#list-of-downloads)
@@ -245,29 +248,29 @@ $ curl -Lig -H 'Content-Type: application/json' -d '{
 
 **Tip:** use `-g` option in curl to turn off URL globbing parser - it will allow to use `{` and `}` without escaping them.
 
-## Cloud download
+## Backend download
 
-A *cloud* download prefetches multiple objects which names match provided prefix and suffix and are contained in a given cloud bucket.
+A *backend* download prefetches multiple objects which names match provided prefix and suffix and are contained in a given remote bucket.
 
 ### Request JSON Parameters
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
 `bucket.name` | `string` | Bucket where the downloaded object is saved to. | No |
-`bucket.provider` | `string` | Determines the provider of the bucket. By default, locality is determined automatically. | Yes |
+`bucket.provider` | `string` | Determines the provider of the bucket. | Yes |
 `bucket.namespace` | `string` | Determines the namespace of the bucket. | Yes |
 `description` | `string` | Description for the download request. | Yes |
-`sync` | `bool` | Synchronizes the cloud bucket: downloads new or updated objects (regular download) + checks and deletes cached objects if they are no longer present in the cloud. | Yes |
+`sync` | `bool` | Synchronizes the remote bucket: downloads new or updated objects (regular download) + checks and deletes cached objects if they are no longer present in the remote bucket. | Yes |
 `prefix` | `string` | Prefix of the objects names to download. | Yes |
 `suffix` | `string` | Suffix of the objects names to download. | Yes |
 
 ### Sample Request
 
-#### Download objects from cloud bucket
+#### Download objects from a remote bucket
 
 ```bash
 $ curl -Liv -H 'Content-Type: application/json' -d '{
-  "type": "cloud",
+  "type": "backend",
   "bucket": {"name": "lpr-vision", "provider": "gcp"},
   "prefix": "imagenet/imagenet_train-",
   "suffix": ".tgz"
