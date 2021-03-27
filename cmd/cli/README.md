@@ -42,7 +42,8 @@ The content of the file presents as follows:
   "cluster": {
     "url": "http://127.0.0.1:8080",
     "default_ais_host": "http://127.0.0.1:8080",
-    "default_docker_host": "http://172.50.0.2:8080"
+    "default_docker_host": "http://172.50.0.2:8080",
+    "skip_verify_crt": false
   },
   "timeout": {
     "tcp_timeout": "60s",
@@ -50,6 +51,11 @@ The content of the file presents as follows:
   },
   "auth": {
     "url": "http://127.0.0.1:52001"
+  },
+  "aliases": {
+    "get": "object get",
+    "ls": "bucket ls",
+    "put": "object put"
   },
   "default_provider": "ais"
 }

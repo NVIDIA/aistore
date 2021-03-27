@@ -28,6 +28,12 @@ const (
 var (
 	ConfigDirPath string
 	defaultConfig Config
+
+	defaultAliasConfig = AliasConfig{
+		"get": "object get",
+		"put": "object put",
+		"ls":  "bucket ls",
+	}
 )
 
 func init() {
@@ -55,6 +61,11 @@ func init() {
 			URL: fmt.Sprintf(urlFmt, proto, defaultAISIP, defaultAuthNPort),
 		},
 		DefaultProvider: cmn.ProviderAIS,
+		Aliases: AliasConfig{
+			"get": "object get",
+			"put": "object put",
+			"ls":  "bucket ls",
+		},
 	}
 }
 
@@ -62,6 +73,7 @@ type Config struct {
 	Cluster         ClusterConfig `json:"cluster"`
 	Timeout         TimeoutConfig `json:"timeout"`
 	Auth            AuthConfig    `json:"auth"`
+	Aliases         AliasConfig   `json:"aliases"`
 	DefaultProvider string        `json:"default_provider,omitempty"`
 }
 
@@ -83,6 +95,8 @@ type AuthConfig struct {
 	URL string `json:"url"`
 }
 
+type AliasConfig map[string]string
+
 func (c *Config) validate() (err error) {
 	if c.Timeout.TCPTimeout, err = time.ParseDuration(c.Timeout.TCPTimeoutStr); err != nil {
 		return fmt.Errorf("invalid timeout.tcp_timeout format %q: %v", c.Timeout.TCPTimeoutStr, err)
@@ -92,6 +106,9 @@ func (c *Config) validate() (err error) {
 	}
 	if c.DefaultProvider != "" && !cmn.IsNormalizedProvider(c.DefaultProvider) {
 		return fmt.Errorf("invalid default_provider value %q, expected one of [%s]", c.DefaultProvider, cmn.Providers)
+	}
+	if c.Aliases == nil {
+		c.Aliases = defaultAliasConfig
 	}
 	return nil
 }
@@ -104,11 +121,7 @@ func Load() (*Config, error) {
 		}
 
 		// Use default config in case of error.
-		cfg = &defaultConfig
-		err = jsp.SaveAppConfig(ConfigDirPath, configFileName, cfg)
-		if err != nil {
-			err = fmt.Errorf("failed to generate config file: %v", err)
-		}
+		err = Save(&defaultConfig)
 		return cfg, err
 	}
 
@@ -116,4 +129,12 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	return cfg, nil
+}
+
+func Save(cfg *Config) error {
+	err := jsp.SaveAppConfig(ConfigDirPath, configFileName, cfg)
+	if err != nil {
+		return fmt.Errorf("failed to save config file: %v", err)
+	}
+	return nil
 }

@@ -194,7 +194,8 @@ func (aisCLI *AISCLI) setupCommands() {
 	app.Commands = append(app.Commands, showCmds...)
 	app.Commands = append(app.Commands, helpCommand)
 	app.Commands = append(app.Commands, advancedCmds...)
-	app.Commands = append(app.Commands, aliasCmds...)
+	app.Commands = append(app.Commands, aisCLI.initAliases()...)
+	app.Commands = append(app.Commands, aisCLI.getAliasCmd())
 
 	setupCommandHelp(app.Commands)
 

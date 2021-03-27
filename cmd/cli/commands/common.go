@@ -48,6 +48,7 @@ const (
 	commandStart     = cmn.ActXactStart
 	commandStop      = cmn.ActXactStop
 	commandWait      = "wait"
+	commandAlias     = "alias"
 
 	// Common Subcommands
 	// NOTE: second level subcommands are preferably verbs
@@ -214,6 +215,9 @@ const (
 	addAuthRoleArgument       = "ROLE [CLUSTER_ID PERMISSION ...]"
 	deleteRoleArgument        = "ROLE"
 	deleteTokenArgument       = "TOKEN | TOKEN_FILE"
+
+	// Alias
+	aliasCmdArgument = "AIS_COMMAND"
 
 	// Search
 	searchArgument = "KEYWORD [KEYWORD...]"
@@ -390,6 +394,12 @@ var (
 	transientFlag = cli.BoolFlag{
 		Name:  "transient",
 		Usage: "to update config temporarily",
+	}
+
+	// Alias
+	aliasFlag = cli.StringFlag{
+		Name: "as", Required: true,
+		Usage: "alias for an AIS CLI command, must be one word e.g. 'bck' or 'show-clu'",
 	}
 )
 
