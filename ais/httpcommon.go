@@ -800,16 +800,15 @@ func mustDiffer(ip1 cluster.NetInfo, port1 int, use1 bool, ip2 cluster.NetInfo, 
 	}
 }
 
-// detectNodeChanges is called at startup. Given loaded Smap, checks whether
-// `h.si` is present and whether any information has changed.
-func (h *httprunner) detectNodeChanges(smap *smapX) error {
-	snode := smap.GetNode(h.si.ID())
-	if snode == nil {
-		return fmt.Errorf("%s: not present in the loaded %s", h.si, smap)
+// detectNodeChanges is called at startup. Given loaded Smap, it checks whether
+// this node ID is present. NOTE: we are _not_ enforcing node's (`h.si`)
+// immutability - in particular, the node's IPs that, in fact, may change upon
+// restart in certain environments.
+func (h *httprunner) detectNodeChanges(smap *smapX) (err error) {
+	if smap.GetNode(h.si.ID()) == nil {
+		err = fmt.Errorf("%s: not present in the loaded %s", h.si, smap)
 	}
-	// In case of node restarts and changes its IP, it better to trust the Smap
-	// and to connect to any node from old Smap using local cluster UUID.
-	return nil
+	return
 }
 
 func (h *httprunner) tryLoadSmap() (_ *smapX, reliable bool) {
