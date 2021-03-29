@@ -42,23 +42,13 @@ AIS runs natively on Kubernetes and features open format - thus, the freedom to 
 
 For AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](docs/overview.md) (where you can also find six alternative ways to work with existing datasets). Videos and **animated presentations** can be found at [videos](docs/videos.md).
 
-To get started with AIS, please click on [Getting Started](/docs/getting_started.md).
+Finally, [getting started](/docs/getting_started.md) with AIS takes only a few minutes.
 
-**Table of Contents**
+## Deployment options
 
-- [Introduction](#introduction)
-- [Monitoring](#monitoring)
-- [Configuration](#configuration)
-- [Amazon S3 compatibility](docs/s3compat.md)
-- [TensorFlow integration](docs/tensorflow.md)
-- [Guides and References](#guides-and-references)
-- [Assorted Tips](#assorted-tips)
-- [Selected Package READMEs](#selected-package-readmes)
+There is a vast spectrum of possible deployments - primarily due to the fact that the essential prerequisites boil down to having Linux with a disk. This results in a practically unlimited set of options from all-in-one (AIS gateway + AIS target) docker container to a petascale bare-metal cluster of any size, and from a single development VM or workstation to multiple racks of high-end servers.
 
-## Introduction
-
-AIStore supports numerous deployment options covering a spectrum from a single-laptop to petascale bare-metal clusters of any size. This includes:
-
+The table below contains a few concrete examples:
 
 | Deployment option | Targeted audience and objective |
 | --- | ---|
@@ -67,31 +57,32 @@ AIStore supports numerous deployment options covering a spectrum from a single-l
 | [Easy automated GCP/GKE deployment](docs/getting_started.md#cloud-deployment) | Developers, first-time users, AI researchers |
 | [Large-scale production deployment](https://github.com/NVIDIA/ais-k8s) | Requires Kubernetes and is provided (documented, automated) via a separate repository: [ais-k8s](https://github.com/NVIDIA/ais-k8s) |
 
-For detailed information on these and other supported options, and for a step-by-step instruction, please refer to [Getting Started](/docs/getting_started.md).
+Further, there's the capability referred to as [global namespace](providers.md#remote-ais-cluster). Simply put, as long as there’s HTTP connectivity, AIS clusters can be easily interconnected to “see” - i.e., *list*, *read*, *write*, *cache*, *evict* - each other's datasets. This ad-hoc capability, in turn, makes it possible to start small and gradually/incrementally build high-performance shared storage comprising petabytes.
 
-## Monitoring
+> For more discussion on supported deployments, please refer to [Getting Started](/docs/getting_started.md).
 
-As is usually the case with storage clusters, there are multiple ways to monitor their performance.
+## Observability
 
-> AIStore includes `aisloader` - the tool to stress-test and benchmark storage performance. For background, command-line options, and usage, please see [Load Generator](bench/aisloader/README.md) and [How To Benchmark AIStore](docs/howto_benchmark.md).
+There are multiple ways to monitor all aspects of AIS operation.
 
-For starters, AIS collects and logs a fairly large and growing number of counters that describe all aspects of its operation, including (but not limited to) those that reflect cluster recovery/rebalancing, all [extended long-running operations](xaction/README.md), and, of course, object storage transactions.
+For starters, AIS collects, logs, and reports via [StatsD](https://github.com/etsy/statsd) a fairly large and growing number of counters, latencies and throughputs including (but not limited to) those stats that reflect cluster recovery and global rebalancing, all [extended long-running operations](xaction/README.md), and, of course, the basic read, write, list transactions, and more.
 
-In particular:
+> Logging interval is called `stats_time` (default `10s`) and is [configurable](docs/configuration.md) on the level of both each specific node and the entire cluster.
 
-* For dSort monitoring, please see [dSort](dsort/README.md)
-* For Downloader monitoring, please see [Internet Downloader](downloader/README.md)
+In particular, all [eXtended actions](xaction/README.md) support generic [API](api/xaction.go) and [CLI](cmd/cli/resources/job.md#show-job-statistics) to show both common counters (byte and object numbers) as well as operation-specific extended statistics.
 
-The logging interval is called `stats_time` (default `10s`) and is [configurable](docs/configuration.md) on the level of both each specific node and the entire cluster.
+> Batch operations that may take many seconds (minutes, sometimes hours) to execute are called *eXtended actions* or *xactions*. Examples include erasure coding or n-way mirroring a dataset, resharding and reshuffling a dataset, and many more.
 
-However. Speaking of ways to monitor AIS remotely, the two most obvious ones would be:
+In addition, AIS subsystems integrate their own, subsystem-specific, stats - e.g.:
 
-* [AIS CLI](cmd/cli/README.md)
-* Graphite/Grafana
+* [dSort](dsort/README.md)
+* [Downloader](downloader/README.md)
 
-As far as Graphite/Grafana, AIS integrates with these popular backends via [StatsD](https://github.com/etsy/statsd) - the *daemon for easy but powerful stats aggregation*. StatsD can be connected to Graphite, which then can be used as a data source for Grafana to get a visual overview of the statistics and metrics.
+Finally, global rebalance (that gets triggered by any membership changes - nodes joining, leaving, going down, etc.) can be further "visualized" via `ais show rebalance` CLI.
 
-> The scripts for easy deployment of both Graphite and Grafana are included (see below).
+As far as Graphite/Grafana and Prometheus, AIS integrates with these popular backends via [StatsD](https://github.com/etsy/statsd) - the *daemon for easy but powerful stats aggregation*.
+
+> Scripts for easy deployment of both Graphite and Grafana are included (see below). StatsD can be connected to Graphite, which then can be used as a data source for Grafana to get a visual overview of the statistics and metrics. The same is true for Prometheus that is available for easy integration via its [official exporter](https://github.com/prometheus/statsd_exporter).
 
 > For local non-containerized deployments, use `./deploy/dev/local/deploy_grafana.sh` to start Graphite and Grafana containers.
 > Local deployment scripts will automatically "notice" the presence of the containers and will send statistics to the Graphite.
@@ -103,11 +94,45 @@ In both of these cases, Grafana will be accessible at [localhost:3000](http://lo
 
 > For information on AIS statistics, please see [Statistics, Collected Metrics, Visualization](docs/metrics.md)
 
-## Configuration
+> AIStore includes `aisloader` - the tool to stress-test and benchmark storage performance. For background, command-line options, and usage, please see [Load Generator](bench/aisloader/README.md) and [How To Benchmark AIStore](docs/howto_benchmark.md).
 
-AIS configuration is consolidated in a single [JSON template](/deploy/dev/local/aisnode_config.sh) where the configuration sections and the knobs within those sections must be self-explanatory, whereby the majority of those (except maybe just a few) have pre-assigned default values. The configuration template serves as a **single source for all deployment-specific configurations**, examples of which can be found under the folder that consolidates both [containerized-development and production deployment scripts](deploy).
+## Debug-Mode Observability
 
-AIS production deployment, in particular, requires careful consideration of at least some of the configurable aspects. For example, AIS supports 3 (three) logical networks and will, therefore, benefit, performance-wise, if provisioned with up to 3 isolated physical networks or VLANs. The logical networks are:
+For development and, more generally, for any non-production deployments AIS supports [building with debug](Makefile), for instance:
+
+```sh
+$ MODE=debug make deploy
+```
+
+As usual, debug builds incorporate more runtime checks and extra logging. But in addition AIS debug build provides a special **API endpoint** at `hostname:port/debug/vars` that can be accessed (via browser or Curl) at any time to display the current values of:
+
+* all stats counters (including error counters)
+* all latencies including keepalive
+* mountpath capacities
+* mountpath (disk) utilizations
+* total number of goroutines
+* memory stats
+
+and more.
+
+> Notation `hostname:port` stands for TCP endpoint of *any* deployed AIS node, gateway or storage target.
+
+Example output:
+
+```console
+# curl hostname:port/debug/vars
+{
+"ais.ios": {"/ais/mp1:util%": 20, "/ais/mp2:util%": 23, "/ais/mp3:util%": 22, "/ais/mp4:util%": 25},
+"ais.stats": {"kalive.ns": 735065, "lst.n": 45, "lst.ns": 2892015, "num-goroutines": 27, "put.n": 1762, "put.ns": 1141380, "put.redir.ns": 16596465, "up.ns.time": 30012389406},
+"cmdline": ["/bin/aisnode","-config=.ais/ais.json","-local_config=.ais/ais_local.json","-role=target"],
+"memstats": {"Alloc":43209256,"TotalAlloc":57770120,"Sys":75056128,"Lookups":0,"Mallocs":215893,"Frees":103090,"HeapAlloc":43209256, ...}
+...
+}
+```
+
+## Networking
+
+As usual, production configuration requires careful consideration. For example, AIS supports 3 (**three**) logical networks and will, therefore, benefit, performance-wise, if provisioned with up to 3 isolated physical networks or VLANs. The logical networks are:
 
 * user (aka public)
 * intra-cluster control
@@ -118,6 +143,8 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
 * `hostname`
 * `hostname_intra_control`
 * `hostname_intra_data`
+
+> For AIS Kubernetes deployments we recommended [Cilium](https://cilium.io) CNI.
 
 ## Assorted Tips
 
@@ -171,6 +198,7 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
 
 ## Selected Package READMEs
 
+- [Package `aisloader`](bench/aisloader/README.md)
 - [Package `api`](api/README.md)
 - [Package `cli`](cmd/cli/README.md)
 - [Package `fuse`](cmd/aisfs/README.md)
@@ -178,6 +206,9 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
 - [Package `memsys`](memsys/README.md)
 - [Package `transport`](transport/README.md)
 - [Package `dSort`](dsort/README.md)
+- [Package `etl`](etl/README.md)
+- [Package `xaction`](xaction/README.md)
+- [Package `xmeta`](cmd/xmeta/README.md)
 
 ## License
 
