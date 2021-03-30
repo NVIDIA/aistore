@@ -90,6 +90,7 @@ var (
 			verboseFlag,
 		},
 		subcmdShowConfig: {
+			allConfigFlag,
 			jsonFlag,
 		},
 		subcmdShowRemoteAIS: {
@@ -437,6 +438,10 @@ func showClusterConfigHandler(c *cli.Context) (err error) {
 }
 
 func showDaemonConfigHandler(c *cli.Context) (err error) {
+	if c.Args().Get(1) == "" && !flagIsSet(c, allConfigFlag) {
+		cli.ShowSubcommandHelp(c)
+		return fmt.Errorf("must specify --all or a configuration prefix")
+	}
 	if _, err = fillMap(); err != nil {
 		return
 	}

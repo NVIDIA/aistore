@@ -50,7 +50,7 @@ Unlike global configuration that is replicated across all nodes there is also a 
 
 Example
 ```console
-# ais show config CCDpt8088 --json | tail -20
+# ais show config CCDpt8088 --all --json | tail -20
     "lastupdate_time": "2021-03-20 18:00:20.393881867 -0700 PDT m=+2907.143584987",
     "uuid": "ZzCknLkMi",
     "config_version": "3",
@@ -343,11 +343,11 @@ $ curl -i -X PUT 'http://T/v1/daemon/setconfig?vmodule=ais/targ*=1'
 [AIS CLI](../cmd/cli/README.md) is an integrated management-and-monitoring command line tool. The following CLI command sequence, first - finds out all AIS knobs that contain substring "time" in their names, second - modifies `list_timeout` from 2 minutes to 5 minutes, and finally, displays the modified value:
 
 ```console
-$ ais show config 844974_8080 --json | jq '.timeout.list_timeout'
+$ ais show config --all 844974_8080 --json | jq '.timeout.list_timeout'
 "2m"
 $ ais config cluster timeout.list_timeout=5m
 Config has been updated successfully.
-$ ais show config 844974_8080 --json | jq '.timeout.list_timeout'
+$ ais show config --all 844974_8080 --json | jq '.timeout.list_timeout'
 "5m"
 ```
 

@@ -186,7 +186,7 @@ const (
 	daemonIDArgument          = "DAEMON_ID"
 	optionalDaemonIDArgument  = "[DAEMON_ID]"
 	optionalTargetIDArgument  = "[TARGET_ID]"
-	showConfigArgument        = "cluster|DAEMON_ID [CONFIG_SECTION]"
+	showConfigArgument        = "cluster|DAEMON_ID [CONFIG_PREFIX]"
 	showClusterConfigArgument = "[CONFIG_SECTION]"
 	nodeConfigArgument        = daemonIDArgument + " " + keyValuePairsArgument
 	attachRemoteAISArgument   = aliasURLPairArgument
@@ -253,7 +253,8 @@ var (
 	bucketPropsFlag = cli.StringFlag{Name: "bucket-props", Usage: "value represents custom properties of a bucket"}
 	forceFlag       = cli.BoolFlag{Name: "force,f", Usage: "force an action"}
 
-	allXactionsFlag = cli.BoolTFlag{Name: "all", Usage: "show all xactions including finished"}
+	allXactionsFlag = cli.BoolTFlag{Name: "all", Usage: "show all xactions, including finished"}
+	allConfigFlag   = cli.BoolTFlag{Name: "all", Usage: "show all configurations"}
 	allItemsFlag    = cli.BoolTFlag{Name: "all", Usage: "list all items"} // TODO: differentiate bucket names vs objects
 	allJobsFlag     = cli.BoolTFlag{Name: "all", Usage: "remove all finished jobs"}
 	allETLStopFlag  = cli.BoolTFlag{Name: "all", Usage: "stop all ETLs"}

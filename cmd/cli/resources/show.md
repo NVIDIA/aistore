@@ -67,7 +67,7 @@ Show disk statistics for targets.
 ## `ais show config`
 Show daemon configuration.
 
-[Refer to `ais cluster` documentation for more.](cluster.md#show-configuration)
+[Refer to `ais cluster` documentation for more.](config.md##show-configuration)
 
 ## `ais show remote-cluster`
 Show information about attached AIS clusters.

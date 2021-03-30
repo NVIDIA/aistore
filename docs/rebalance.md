@@ -33,7 +33,7 @@ It might be easier and faster, though, to use [AIS CLI](../cmd/cli/README.md) - 
 $ ais config cluster rebalance.enabled=false
 config successfully updated
 
-$ ais show config 361179t8088 --json | grep -A 6  rebalance
+$ ais show config 361179t8088 --all --json | grep -A 6  rebalance
 
     "rebalance": {
         "dest_retry_time": "2m",
@@ -55,11 +55,12 @@ $ ais show config <TAB-TAB>
 125210p8082   181883t8089   249630t8087   361179t8088   477343p8081   675515t8084   70681p8080    782227p8083   840083t8086   911875t8085
 
 $ ais show config 840083t8086 rebalance
-Rebalance Config
- Destination Retry Time:        2m
- Enabled:                       true
- Multiplier:                    4
- Compression:                   never
+PROPERTY                         VALUE   DEFAULT
+rebalance.compression            never   -
+rebalance.dest_retry_time        2m      -
+rebalance.enabled                true    -
+rebalance.multiplier             2       -
+rebalance.quiescent              10s     -
 ```
 
 3. Monitoring: notice per-target statistics and the `EndTime` column

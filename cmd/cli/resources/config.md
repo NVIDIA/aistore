@@ -16,21 +16,22 @@ A daemon configuration consists of two parts:
 
 ### Cluster configuration
 
-`ais show cluster config [CONFIG_SECTION]`
+`ais show cluster config [CONFIG_PREFIX]`
 
-Display the cluster configuration. If `CONFIG_SECTION` is given, only that specific section will be shown.
+Display the cluster configuration. If `CONFIG_PREFIX` is given, only that configurations matching the prefix will be shown.
 
 #### Options
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
+| `--all` | `bool` | Show all configuration values | `false` |
 | `--json, -j` | `bool` | Output in JSON format | `false` |
 
 ### Daemon configuration
 
-`ais show config DAEMON_ID [CONFIG_SECTION]`
+`ais show config DAEMON_ID [CONFIG_PREFIX]`
 
-Display the actual daemon configuration. If `CONFIG_SECTION` is given, only that specific section will be shown.
+Display the actual daemon configuration. If `CONFIG_PREFIX` is given, only that configurations matching the prefix will be shown.
 The output includes extra column with global values. Some values in the column have special meaning:
 
 - `-` - the local and global values are the same, the option is not overridden
@@ -40,6 +41,7 @@ The output includes extra column with global values. Some values in the column h
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
+| `--all` | `bool` | Show all configuration values | `false` |
 | `--json, -j` | `bool` | Output in JSON format | `false` |
 
 ### Examples
