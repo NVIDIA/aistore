@@ -372,7 +372,19 @@ func showXactionHandler(c *cli.Context) (err error) {
 		Verbose: flagIsSet(c, verboseFlag),
 	}
 
-	return templates.DisplayOutput(ctx, c.App.Writer, templates.XactionsBodyTmpl, flagIsSet(c, jsonFlag))
+	useJSON := flagIsSet(c, jsonFlag)
+	if useJSON {
+		return templates.DisplayOutput(ctx, c.App.Writer, templates.XactionsBodyTmpl, useJSON)
+	}
+
+	switch xactKind {
+	case cmn.ActECGet:
+		return templates.DisplayOutput(ctx, c.App.Writer, templates.XactionECGetBodyTmpl, useJSON)
+	case cmn.ActECPut:
+		return templates.DisplayOutput(ctx, c.App.Writer, templates.XactionECPutBodyTmpl, useJSON)
+	default:
+		return templates.DisplayOutput(ctx, c.App.Writer, templates.XactionsBodyTmpl, useJSON)
+	}
 }
 
 func showObjectHandler(c *cli.Context) (err error) {

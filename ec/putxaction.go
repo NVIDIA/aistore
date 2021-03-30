@@ -41,7 +41,7 @@ type (
 		AvgDeleteTime  cos.DurationJSON `json:"ec.delete.time"`
 		EncodeCount    int64            `json:"ec.encode.n,string"`
 		DeleteCount    int64            `json:"ec.delete.n,string"`
-		EncodeSize     cos.SizeJSON     `json:"ec.encode.size,string"`
+		EncodeSize     int64            `json:"ec.encode.size,string"`
 		EncodeErrCount int64            `json:"ec.encode.err.n,string"`
 		DeleteErrCount int64            `json:"ec.delete.err.n,string"`
 		AvgObjTime     cos.DurationJSON `json:"ec.obj.process.time"`
@@ -224,7 +224,7 @@ func (r *XactPut) Stats() cluster.XactStats {
 	st := r.stats.stats()
 	baseStats.Ext = &ExtECPutStats{
 		AvgEncodeTime:  cos.DurationJSON(st.EncodeTime.Nanoseconds()),
-		EncodeSize:     cos.SizeJSON(st.EncodeSize),
+		EncodeSize:     st.EncodeSize,
 		EncodeCount:    st.PutReq,
 		EncodeErrCount: st.EncodeErr,
 		AvgDeleteTime:  cos.DurationJSON(st.DeleteTime.Nanoseconds()),

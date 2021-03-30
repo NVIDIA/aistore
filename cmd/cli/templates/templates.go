@@ -16,8 +16,10 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"k8s.io/apimachinery/pkg/util/duration"
@@ -121,6 +123,43 @@ const (
 		"{{end}}\n" +
 		"{{end}}" +
 		"{{end}}{{end}}"
+
+	XactionECGetStatsHeader = "NODE\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t START\t END\t ABORTED\n"
+	XactionECGetBodyTmpl    = XactionECGetStatsHeader +
+		"{{range $daemon := $.Stats }}" + XactionECGetBody + "{{end}}"
+	XactionECGetBody      = "{{range $key, $xact := $daemon.Stats}}" + XactionECGetStatsBody + "{{end}}"
+	XactionECGetStatsBody = "{{ $daemon.DaemonID }}\t " +
+		"{{if $xact.BckX.Name}}{{$xact.BckX.Name}}{{else}}-{{end}}\t " +
+		"{{if (eq $xact.ObjCountX 0) }}-{{else}}{{$xact.ObjCountX}}{{end}}\t " +
+		"{{if (eq $xact.BytesCountX 0) }}-{{else}}{{FormatBytesSigned $xact.BytesCountX 2}}{{end}}\t " +
+
+		"{{ $ext := ExtECGetStats $xact }}" +
+		"{{if (eq $ext.ErrCount 0) }}-{{else}}{{$ext.ErrCount}}{{end}}\t " +
+		"{{if (eq $ext.AvgQueueLen 0.0) }}-{{else}}{{ FormatFloat $ext.AvgQueueLen}}{{end}}\t " +
+		"{{if (eq $ext.AvgObjTime 0) }}-{{else}}{{FormatMilli $ext.AvgObjTime}}{{end}}\t " +
+
+		"{{FormatTime $xact.StartTimeX}}\t " +
+		"{{if (IsUnsetTime $xact.EndTimeX)}}-{{else}}{{FormatTime $xact.EndTimeX}}{{end}}\t " +
+		"{{$xact.AbortedX}}\n"
+
+	XactionECPutStatsHeader = "NODE\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t ENC TIME\t START\t END\t ABORTED\n"
+	XactionECPutBodyTmpl    = XactionECPutStatsHeader +
+		"{{range $daemon := $.Stats }}" + XactionECPutBody + "{{end}}"
+	XactionECPutBody      = "{{range $key, $xact := $daemon.Stats}}" + XactionECPutStatsBody + "{{end}}"
+	XactionECPutStatsBody = "{{ $daemon.DaemonID }}\t " +
+		"{{if $xact.BckX.Name}}{{$xact.BckX.Name}}{{else}}-{{end}}\t " +
+		"{{if (eq $xact.ObjCountX 0) }}-{{else}}{{$xact.ObjCountX}}{{end}}\t " +
+		"{{if (eq $xact.BytesCountX 0) }}-{{else}}{{FormatBytesSigned $xact.BytesCountX 2}}{{end}}\t " +
+
+		"{{ $ext := ExtECPutStats $xact }}" +
+		"{{if (eq $ext.EncodeErrCount 0) }}-{{else}}{{$ext.EncodeErrCount}}{{end}}\t " +
+		"{{if (eq $ext.AvgQueueLen 0.0) }}-{{else}}{{ FormatFloat $ext.AvgQueueLen}}{{end}}\t " +
+		"{{if (eq $ext.AvgObjTime 0) }}-{{else}}{{FormatMilli $ext.AvgObjTime}}{{end}}\t " +
+		"{{if (eq $ext.AvgEncodeTime 0) }}-{{else}}{{FormatMilli $ext.AvgEncodeTime}}{{end}}\t " +
+
+		"{{FormatTime $xact.StartTimeX}}\t " +
+		"{{if (IsUnsetTime $xact.EndTimeX)}}-{{else}}{{FormatTime $xact.EndTimeX}}{{end}}\t " +
+		"{{$xact.AbortedX}}\n"
 
 	// Buckets templates
 	BucketsSummariesFastTmpl = "NAME\t EST. OBJECTS\t EST. SIZE\t EST. USED %\n" + bucketsSummariesBody
@@ -262,11 +301,14 @@ var (
 		"FormatDaemonID":      fmtDaemonID,
 		"FormatFloat":         func(f float64) string { return fmt.Sprintf("%.2f", f) },
 		"FormatBool":          FmtBool,
+		"FormatMilli":         fmtMilli,
 		"JoinList":            fmtStringList,
 		"JoinListNL":          func(lst []string) string { return fmtStringListGeneric(lst, "\n") },
 		"FormatFeatureFlags":  fmtFeatureFlags,
 		"Deployments":         func(h DaemonStatusTemplateHelper) string { return strings.Join(h.Deployments().ToSlice(), ",") },
 		"FormatACL":           fmtACL,
+		"ExtECGetStats":       extECGetStats,
+		"ExtECPutStats":       extECPutStats,
 	}
 
 	HelpTemplateFuncMap = template.FuncMap{
@@ -520,4 +562,24 @@ func fmtACL(acl cmn.AccessAttrs) string {
 		return "-"
 	}
 	return acl.Describe()
+}
+
+func extECGetStats(base *xaction.BaseXactStatsExt) *ec.ExtECGetStats {
+	ecGet := &ec.ExtECGetStats{}
+	if err := cos.MorphMarshal(base.Ext, ecGet); err != nil {
+		return &ec.ExtECGetStats{}
+	}
+	return ecGet
+}
+
+func extECPutStats(base *xaction.BaseXactStatsExt) *ec.ExtECPutStats {
+	ecPut := &ec.ExtECPutStats{}
+	if err := cos.MorphMarshal(base.Ext, ecPut); err != nil {
+		return &ec.ExtECPutStats{}
+	}
+	return ecPut
+}
+
+func fmtMilli(val cos.DurationJSON) string {
+	return cos.FormatMilli(time.Duration(val))
 }

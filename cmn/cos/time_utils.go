@@ -5,6 +5,7 @@
 package cos
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 )
@@ -39,4 +40,19 @@ func CalcProbeFreq(dur time.Duration) time.Duration {
 	sleep := MinDuration(dur/10, time.Second)
 	sleep = MaxDuration(dur/100, sleep)
 	return MaxDuration(sleep, 10*time.Millisecond)
+}
+
+// FormatMilli returns a duration formatted as milliseconds. For values bigger
+// than millisecond, it returns an integer number "#ms". For values smaller than
+// millisecond, the function returns fractional number "0.##ms"
+func FormatMilli(tm time.Duration) string {
+	milli := tm.Milliseconds()
+	if milli > 0 {
+		return fmt.Sprintf("%dms", milli)
+	}
+	micro := tm.Microseconds()
+	if micro == 0 {
+		return "0"
+	}
+	return fmt.Sprintf("%.2fms", float64(micro)/1000.0)
 }
