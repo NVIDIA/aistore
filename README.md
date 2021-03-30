@@ -130,9 +130,15 @@ Example output:
 }
 ```
 
-## Networking
+## AIStore Configuration
 
-As usual, production configuration requires careful consideration. For example, AIS supports 3 (**three**) logical networks and will, therefore, benefit, performance-wise, if provisioned with up to 3 isolated physical networks or VLANs. The logical networks are:
+Configuration consists of cluster-wide (global) defaults and node-specific values - the latter includes node's own hostnames (or IP addresses) and mountpaths (disks).
+
+Optionally and in addition, there's also a node-specific "config override" - a set of values that were changed for this node from global (inherited) defaults.
+
+[AIS configuration](docs/configuration.md) is further described and illustrated in this [readme](docs/configuration.md).
+
+It is important to note that configuring cluster for production requires careful consideration. For example, AIS supports 3 (**three**) logical networks and will, therefore, benefit, performance-wise, if provisioned with up to 3 isolated physical networks or VLANs. The logical networks are:
 
 * user (aka public)
 * intra-cluster control

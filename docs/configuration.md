@@ -1,7 +1,107 @@
-## Table of Contents
+## AIStore Configuration
 
-- [Runtime configuration](#runtime-configuration)
-- [Configuration persistence](#configuration-persistence)
+The first thing to keep in mind when talking about AIS configuration is that there are 3 (three) separate, and separately maintained, pieces:
+
+1. Cluster configuration that comprises global defaults
+2. Node (local) configuration
+3. Node's local overrides of global defaults
+
+Specifically:
+
+### 1. Cluster Config
+
+In the documentation and in the code we can say "global configuration" or "cluster configuration" - these terms are interchangable. The point, though, is that global config is replicated, versioned, checksummed, compressed, and - most importantly - applies to the entire cluster, all current (and future) node members.
+
+Typically, when we deploy a new AIS cluster, we use configuration template that contains all the defaults - see, for example, [JSON template](/deploy/dev/local/aisnode_config.sh). Configuration sections in this template, and the knobs within those sections, must be self-explanatory, and the majority of those, except maybe just a few, have pre-assigned default values.
+
+To show and/or change global config, simply type one of:
+
+```console
+# 1. show cluster config
+$ ais show cluster config
+
+# 2. show cluster config in JSON format
+$ ais show cluster config --json
+
+# 3. show cluster-wide defaults for all variables prefixed with "time"
+$ ais show cluster time
+PROPERTY                         VALUE
+timeout.cplane_operation         2s
+timeout.max_keepalive            4s
+timeout.max_host_busy            20s
+timeout.startup_time             1m
+timeout.send_file_time           5m
+
+# 4. for all nodes in the cluster set startup timeout to 2 minutes
+$ ais cluster configure timeout.startup_time=2m
+```
+
+### 2. Node (local) configuration
+
+Unlike global configuration that is replicated across all nodes there is also a node-specific configuration comprising:
+
+* local config and log directories
+* network configuration, including node's hostname(s) or IP addresses
+* node's mountpaths
+
+> Terminology: *mountpath* is a triplet **(local filesystem, disks this LFS utilizes, directory where AIS will store its metadata and user data)**. The following "share-nothing" rules are enforced: different mountpaths use different local filesystems, whereby each local FS uses its own disks.
+
+> Separately, since AIS supports n-way mirroring and erasure coding, we strongly recommend not using LVM and hardware RAID. Rather, there must be a simple 1-to-1 relationship: one local FS - one non-partitioned disk.
+
+Example
+```console
+# ais show config CCDpt8088 --json | tail -20
+    "lastupdate_time": "2021-03-20 18:00:20.393881867 -0700 PDT m=+2907.143584987",
+    "uuid": "ZzCknLkMi",
+    "config_version": "3",
+    "confdir": "/ais",
+    "log_dir": "/tmp/ais/log",
+    "host_net": {
+        "hostname": "",
+        "hostname_intra_control": "",
+        "hostname_intra_data": "",
+        "port": "51081",
+        "port_intra_control": "51082",
+        "port_intra_data": "51083"
+    },
+    "fspaths": {"/ais/mp1":{},"/ais/mp2":{},"/ais/mp3":{},"/ais/mp4":{}},
+    "test_fspaths": {
+        "root": "/tmp/ais",
+        "count": 0,
+        "instance": 0
+    }
+```
+
+3. Node's local overrides of global defaults
+
+Finally, each clustered node can individually override *inherited* defaults. For example:
+
+```console
+# ais show config CCDpt8088 timeout
+PROPERTY                         VALUE   DEFAULT
+timeout.cplane_operation         2s      -
+timeout.max_host_busy            20s     -
+timeout.max_keepalive            4s      -
+timeout.send_file_time           5m      -
+timeout.startup_time             1m      -
+
+# ais cluster configure CCDpt8088 timeout.startup_time=2m
+config for node "CCDpt8088" successfully updated
+
+# ais show config CCDpt8088 timeout
+PROPERTY                         VALUE   DEFAULT
+timeout.cplane_operation         2s      -
+timeout.max_host_busy            20s     -
+timeout.max_keepalive            4s      -
+timeout.send_file_time           5m      -
+timeout.startup_time             2m      1m
+```
+
+Notice the `DEFAULT` column above where `-` indicates that the corresponding value is inherited and remains unchanged.
+
+Rest of this document is structured as follows:
+
+- [Basics](#basics)
 - [Startup override](#startup-override)
 - [Managing mountpaths](#managing-mountpaths)
 - [Disabling extended attributes](#disabling-extended-attributes)
@@ -11,8 +111,6 @@
 - [Reverse proxy](#reverse-proxy)
 - [Curl examples](#curl-examples)
 - [CLI examples](#cli-examples)
-
-AIS configuration is consolidated in a single [JSON template](/deploy/dev/local/aisnode_config.sh) where the configuration sections and the knobs within those sections must be self-explanatory, and the majority of those, except maybe just a few, have pre-assigned default values. The configuration template serves as a single source for all deployment-specific configurations, examples of which can be found under [/deploy](the folder that consolidates containerized-development and production deployment scripts).
 
 AIS production deployment, in particular, requires careful consideration of at least some of the configurable aspects. For example, AIS supports 3 (three) logical networks and will, therefore, benefit, performance-wise, if provisioned with up to 3 isolated physical networks or VLANs. The logical networks are: user (aka public), intra-cluster control, and intra-cluster data - the corresponding JSON names are, respectively: `hostname`, `hostname_intra_control`, and `hostname_intra_data`.
 
@@ -34,7 +132,7 @@ An example of 12 fspaths (and 12 local filesystems) follows below:
 
 <img src="images/example-12-fspaths-config.png" alt="Example: 12 fspaths" width="160">
 
-## Runtime configuration
+## Basics
 
 First, some basic facts:
 
