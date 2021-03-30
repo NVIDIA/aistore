@@ -10,7 +10,7 @@ Specifically:
 
 ### 1. Cluster Config
 
-In the documentation and in the code we can say "global configuration" or "cluster configuration" - these terms are interchangable. The point, though, is that global config is replicated, versioned, checksummed, compressed, and - most importantly - applies to the entire cluster, all current (and future) node members.
+In the documentation and in the code we can say "global configuration" or, same, "cluster configuration". The point, though, is that global config is replicated, versioned, checksummed, compressed, and - most importantly - applies to the entire cluster, all current (and future) node members.
 
 Typically, when we deploy a new AIS cluster, we use configuration template that contains all the defaults - see, for example, [JSON template](/deploy/dev/local/aisnode_config.sh). Configuration sections in this template, and the knobs within those sections, must be self-explanatory, and the majority of those, except maybe just a few, have pre-assigned default values.
 
