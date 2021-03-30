@@ -32,7 +32,7 @@ const (
 	nonElectableSuffix = "[-]"
 
 	// Smap
-	SmapHeader = "DAEMON ID\t TYPE\t PUBLIC URL" +
+	SmapHeader = "NODE\t TYPE\t PUBLIC URL" +
 		"{{ if (eq $.ExtendedURLs true) }}\t INTRA CONTROL URL\t INTRA DATA URL{{end}}" +
 		"\n"
 	SmapBody = "{{FormatDaemonID $value.ID $.Smap}}\t {{$value.DaemonType}}\t {{$value.PublicNet.DirectURL}}" +
@@ -103,7 +103,7 @@ const (
 	XactionsBodyTmpl     = XactionsBaseBodyTmpl + XactionsExtBodyTmpl
 	XactionsBaseBodyTmpl = XactionStatsHeader +
 		"{{range $daemon := $.Stats }}" + XactionBody + "{{end}}"
-	XactionStatsHeader = "DAEMON ID\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t ABORTED\n"
+	XactionStatsHeader = "NODE\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t ABORTED\n"
 	XactionBody        = "{{range $key, $xact := $daemon.Stats}}" + XactionStatsBody + "{{end}}" +
 		"{{if $daemon.Stats}}\t \t \t \t \t \t \t \t{{if $.Verbose}} \t {{end}}\n{{end}}"
 	XactionStatsBody = "{{ $daemon.DaemonID }}\t " +
@@ -117,7 +117,7 @@ const (
 		"{{$xact.AbortedX}}\n"
 	XactionsExtBodyTmpl = "{{if $.Verbose }}" + // if not nil
 		"\n{{range $daemon := $.Stats }}" +
-		"{{if $daemon.Stats}}DAEMON ID\t {{$daemon.DaemonID}}\n" +
+		"{{if $daemon.Stats}}NODE\t {{$daemon.DaemonID}}\n" +
 		"{{range $key, $xact := $daemon.Stats}}" +
 		"{{range $name,$val := $xact.Ext}}{{ $name }}\t {{$val}}\n{{end}}" +
 		"{{end}}\n" +

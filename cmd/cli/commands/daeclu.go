@@ -385,7 +385,7 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 
 		// NOTE: If changing header do not forget to change `colCount` couple
 		//  lines below and `displayRebStats` logic.
-		fmt.Fprintln(tw, "REB ID\t DAEMON ID\t OBJECTS RECV\t SIZE RECV\t OBJECTS SENT\t SIZE SENT\t START TIME\t END TIME\t ABORTED")
+		fmt.Fprintln(tw, "REB ID\t NODE\t OBJECTS RECV\t SIZE RECV\t OBJECTS SENT\t SIZE SENT\t START TIME\t END TIME\t ABORTED")
 		prevID := ""
 		for _, sts := range allStats {
 			if flagIsSet(c, allXactionsFlag) {

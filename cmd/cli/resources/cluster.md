@@ -77,14 +77,14 @@ Show smap copy of daemon with ID `ETURp8083`.
 
 ```console
 $ ais show cluster smap ETURp8083
-DAEMON ID        TYPE    PUBLIC URL
+NODE             TYPE    PUBLIC URL
 ETURp8083        proxy   http://127.0.0.1:8083
 WEQRp8084        proxy   http://127.0.0.1:8084
 Watdp8081        proxy   http://127.0.0.1:8081
 pufGp8080[P]     proxy   http://127.0.0.1:8080
 sgahp8082        proxy   http://127.0.0.1:8082
 
-DAEMON ID        TYPE    PUBLIC URL
+NODE             TYPE    PUBLIC URL
 YodGt8087        target  http://127.0.0.1:8087
 Zgmlt8085        target  http://127.0.0.1:8085
 dIzMt8086        target  http://127.0.0.1:8086

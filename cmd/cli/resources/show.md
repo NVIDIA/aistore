@@ -87,7 +87,7 @@ Display details about the most recent rebalance xaction.
 
 ```console
 $ ais show rebalance
-REB ID   DAEMON ID   OBJECTS RECV   SIZE RECV   OBJECTS SENT   SIZE SENT   START TIME       END TIME   ABORTED
+REB ID   NODE        OBJECTS RECV   SIZE RECV   OBJECTS SENT   SIZE SENT   START TIME       END TIME   ABORTED
 g1       CASGt8088   0              0B          0              0B          03-25 17:33:54   -          false
 g1       DMwvt8089   0              0B          0              0B          03-25 17:33:54   -          false
 g1       ejpCt8086   0              0B          0              0B          03-25 17:33:54   -          false
@@ -96,7 +96,7 @@ g1       oGvbt8090   0              0B          0              0B          03-25
 g1       xZntt8087   0              0B          0              0B          03-25 17:33:54   -          false
 
 $ ais show rebalance
-REB ID   DAEMON ID   OBJECTS RECV   SIZE RECV   OBJECTS SENT   SIZE SENT   START TIME       END TIME         ABORTED
+REB ID   NODE        OBJECTS RECV   SIZE RECV   OBJECTS SENT   SIZE SENT   START TIME       END TIME         ABORTED
 g1       CASGt8088   0              0B          0              0B          03-25 17:33:54   03-25 17:34:09   false
 g1       DMwvt8089   0              0B          0              0B          03-25 17:33:54   03-25 17:34:08   false
 g1       ejpCt8086   0              0B          0              0B          03-25 17:33:54   03-25 17:34:08   false

@@ -90,7 +90,7 @@ DaemonID     RebID   ObjRcv  SizeRcv  ObjSent  SizeSent  StartTime       EndTime
 
 ```console
 $ ais show job xaction rebalance
-DAEMON ID        ID      KIND            BUCKET  OBJECTS         BYTES           START           END     ABORTED
+NODE             ID      KIND            BUCKET  OBJECTS         BYTES           START           END     ABORTED
 181883t8089      g2      rebalance       -       1058            1.27MiB         04-28 16:10:14  -       false
 ...
 ```
@@ -138,7 +138,7 @@ NOTE: When automated resilvering is disabled, removing a mountpath may result in
 $ ais config cluster resilver.enabled=false
 config successfully updated
 
-$ ais show config 361179t8088 resilver --json | grep -A 2 resilver 
+$ ais show config 361179t8088 resilver --json | grep -A 2 resilver
     "resilver": {
         "enabled": false
     },
