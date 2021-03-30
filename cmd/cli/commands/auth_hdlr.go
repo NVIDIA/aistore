@@ -89,116 +89,114 @@ var (
 		},
 	}
 
-	authCmds = []cli.Command{
-		{
-			Name:  commandAuth,
-			Usage: "add/remove/show users, manage user roles, manage access to remote clusters",
-			Subcommands: []cli.Command{
-				authCmdShow,
-				{
-					Name:  subcmdAuthAdd,
-					Usage: "add entity to auth",
-					Subcommands: []cli.Command{
-						{
-							Name:         subcmdAuthUser,
-							Usage:        "add a new user",
-							ArgsUsage:    addUserArgument,
-							Flags:        authFlags[subcmdAuthUser],
-							Action:       wrapAuthN(addUserHandler),
-							BashComplete: multiRoleCompletions,
-						},
-						{
-							Name:      subcmdAuthCluster,
-							Usage:     "register a new cluster",
-							ArgsUsage: addAuthClusterArgument,
-							Action:    wrapAuthN(addAuthClusterHandler),
-						},
-						{
-							Name:         subcmdAuthRole,
-							Usage:        "create a new role",
-							ArgsUsage:    addAuthRoleArgument,
-							Flags:        authFlags[flagsAuthRoleAdd],
-							Action:       wrapAuthN(addAuthRoleHandler),
-							BashComplete: roleCluPermCompletions,
-						},
+	authCmd = cli.Command{
+		Name:  commandAuth,
+		Usage: "add/remove/show users, manage user roles, manage access to remote clusters",
+		Subcommands: []cli.Command{
+			authCmdShow,
+			{
+				Name:  subcmdAuthAdd,
+				Usage: "add entity to auth",
+				Subcommands: []cli.Command{
+					{
+						Name:         subcmdAuthUser,
+						Usage:        "add a new user",
+						ArgsUsage:    addUserArgument,
+						Flags:        authFlags[subcmdAuthUser],
+						Action:       wrapAuthN(addUserHandler),
+						BashComplete: multiRoleCompletions,
+					},
+					{
+						Name:      subcmdAuthCluster,
+						Usage:     "register a new cluster",
+						ArgsUsage: addAuthClusterArgument,
+						Action:    wrapAuthN(addAuthClusterHandler),
+					},
+					{
+						Name:         subcmdAuthRole,
+						Usage:        "create a new role",
+						ArgsUsage:    addAuthRoleArgument,
+						Flags:        authFlags[flagsAuthRoleAdd],
+						Action:       wrapAuthN(addAuthRoleHandler),
+						BashComplete: roleCluPermCompletions,
 					},
 				},
-				{
-					Name:  subcmdAuthRemove,
-					Usage: "remove entity from auth",
-					Subcommands: []cli.Command{
-						{
-							Name:         subcmdAuthUser,
-							Usage:        "remove an existing user",
-							ArgsUsage:    deleteUserArgument,
-							Action:       wrapAuthN(deleteUserHandler),
-							BashComplete: oneUserCompletions,
-						},
-						{
-							Name:         subcmdAuthCluster,
-							Usage:        "unregister a cluster",
-							ArgsUsage:    deleteAuthClusterArgument,
-							Action:       wrapAuthN(deleteAuthClusterHandler),
-							BashComplete: oneClusterCompletions,
-						},
-						{
-							Name:         subcmdAuthRole,
-							Usage:        "remove an existing role",
-							ArgsUsage:    deleteRoleArgument,
-							Action:       wrapAuthN(deleteRoleHandler),
-							BashComplete: oneRoleCompletions,
-						},
-						{
-							Name:      subcmdAuthToken,
-							Usage:     "revoke an authorization token",
-							Flags:     authFlags[flagsAuthRevokeToken],
-							ArgsUsage: deleteTokenArgument,
-							Action:    wrapAuthN(revokeTokenHandler),
-						},
+			},
+			{
+				Name:  subcmdAuthRemove,
+				Usage: "remove entity from auth",
+				Subcommands: []cli.Command{
+					{
+						Name:         subcmdAuthUser,
+						Usage:        "remove an existing user",
+						ArgsUsage:    deleteUserArgument,
+						Action:       wrapAuthN(deleteUserHandler),
+						BashComplete: oneUserCompletions,
+					},
+					{
+						Name:         subcmdAuthCluster,
+						Usage:        "unregister a cluster",
+						ArgsUsage:    deleteAuthClusterArgument,
+						Action:       wrapAuthN(deleteAuthClusterHandler),
+						BashComplete: oneClusterCompletions,
+					},
+					{
+						Name:         subcmdAuthRole,
+						Usage:        "remove an existing role",
+						ArgsUsage:    deleteRoleArgument,
+						Action:       wrapAuthN(deleteRoleHandler),
+						BashComplete: oneRoleCompletions,
+					},
+					{
+						Name:      subcmdAuthToken,
+						Usage:     "revoke an authorization token",
+						Flags:     authFlags[flagsAuthRevokeToken],
+						ArgsUsage: deleteTokenArgument,
+						Action:    wrapAuthN(revokeTokenHandler),
 					},
 				},
-				{
-					Name:  subcmdAuthUpdate,
-					Usage: "update users and cluster configurations",
-					Subcommands: []cli.Command{
-						{
-							Name:      subcmdAuthCluster,
-							Usage:     "update registered cluster configuration",
-							ArgsUsage: addAuthClusterArgument,
-							Action:    wrapAuthN(updateAuthClusterHandler),
-						},
-						{
-							Name:         subcmdAuthUser,
-							Usage:        "update an existing user",
-							ArgsUsage:    addUserArgument,
-							Flags:        authFlags[subcmdAuthUser],
-							Action:       wrapAuthN(updateUserHandler),
-							BashComplete: multiRoleCompletions,
-						},
+			},
+			{
+				Name:  subcmdAuthUpdate,
+				Usage: "update users and cluster configurations",
+				Subcommands: []cli.Command{
+					{
+						Name:      subcmdAuthCluster,
+						Usage:     "update registered cluster configuration",
+						ArgsUsage: addAuthClusterArgument,
+						Action:    wrapAuthN(updateAuthClusterHandler),
+					},
+					{
+						Name:         subcmdAuthUser,
+						Usage:        "update an existing user",
+						ArgsUsage:    addUserArgument,
+						Flags:        authFlags[subcmdAuthUser],
+						Action:       wrapAuthN(updateUserHandler),
+						BashComplete: multiRoleCompletions,
 					},
 				},
-				{
-					Name:      subcmdAuthLogin,
-					Usage:     "log in with existing user credentials",
-					Flags:     authFlags[flagsAuthUserLogin],
-					ArgsUsage: userLoginArgument,
-					Action:    wrapAuthN(loginUserHandler),
-				},
-				{
-					Name:   subcmdAuthLogout,
-					Usage:  "log out",
-					Action: wrapAuthN(logoutUserHandler),
-				},
-				{
-					Name:  subcmdAuthSet,
-					Usage: "set entity properties",
-					Subcommands: []cli.Command{
-						{
-							Name:         subcmdAuthConfig,
-							Usage:        "set AuthN server configuration",
-							Action:       wrapAuthN(setAuthConfigHandler),
-							BashComplete: suggestUpdatableAuthNConfig,
-						},
+			},
+			{
+				Name:      subcmdAuthLogin,
+				Usage:     "log in with existing user credentials",
+				Flags:     authFlags[flagsAuthUserLogin],
+				ArgsUsage: userLoginArgument,
+				Action:    wrapAuthN(loginUserHandler),
+			},
+			{
+				Name:   subcmdAuthLogout,
+				Usage:  "log out",
+				Action: wrapAuthN(logoutUserHandler),
+			},
+			{
+				Name:  subcmdAuthSet,
+				Usage: "set entity properties",
+				Subcommands: []cli.Command{
+					{
+						Name:         subcmdAuthConfig,
+						Usage:        "set AuthN server configuration",
+						Action:       wrapAuthN(setAuthConfigHandler),
+						BashComplete: suggestUpdatableAuthNConfig,
 					},
 				},
 			},

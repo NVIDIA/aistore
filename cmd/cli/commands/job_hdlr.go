@@ -15,11 +15,11 @@ import (
 )
 
 var (
-	jobCmds = []cli.Command{{
+	jobCmd = cli.Command{
 		Name:        commandJob,
 		Usage:       "query and manage jobs (aka extended actions or xactions)",
 		Subcommands: jobSubcmds,
-	}}
+	}
 
 	jobSubcmds = []cli.Command{
 		jobStartSubcmds,

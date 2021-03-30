@@ -182,23 +182,24 @@ func (aisCLI *AISCLI) init(build, version string) {
 func (aisCLI *AISCLI) setupCommands() {
 	app := aisCLI.app
 
-	// Note: order of `append`s is the order shown in "ais help"
-	app.Commands = append(app.Commands, bucketCmds...)
-	app.Commands = append(app.Commands, objectCmds...)
-	app.Commands = append(app.Commands, clusterCmds...)
-	app.Commands = append(app.Commands, configCmds...)
-	app.Commands = append(app.Commands, mpathCmds...)
-	app.Commands = append(app.Commands, etlCmds...)
-	app.Commands = append(app.Commands, jobCmds...)
-	app.Commands = append(app.Commands, authCmds...)
-	app.Commands = append(app.Commands, showCmds...)
-	app.Commands = append(app.Commands, helpCommand)
-	app.Commands = append(app.Commands, advancedCmds...)
+	// Note: order of commands below is the order shown in "ais help"
+	app.Commands = []cli.Command{
+		bucketCmd,
+		objectCmd,
+		clusterCmd,
+		configCmd,
+		mpathCmd,
+		etlCmd,
+		jobCmd,
+		authCmd,
+		showCmd,
+		helpCommand,
+		advancedCmd,
+		aisCLI.getAliasCmd(),
+	}
+
 	app.Commands = append(app.Commands, aisCLI.initAliases()...)
-	app.Commands = append(app.Commands, aisCLI.getAliasCmd())
-
 	setupCommandHelp(app.Commands)
-
 	aisCLI.enableSearch()
 }
 

@@ -46,93 +46,91 @@ var (
 		},
 	}
 
-	clusterCmds = []cli.Command{
-		{
-			Name:  commandCluster,
-			Usage: "monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc.",
-			Subcommands: []cli.Command{
-				makeAlias(showCmdCluster, "", true, commandShow), // alias for `ais show`
-				{
-					Name:      subcmdCluAttach,
-					Usage:     "attach a remote ais cluster",
-					ArgsUsage: attachRemoteAISArgument,
-					Flags:     clusterCmdsFlags[subcmdAttach],
-					Action:    attachRemoteAISHandler,
-				},
-				{
-					Name:      subcmdCluDetach,
-					Usage:     "detach remote ais cluster",
-					ArgsUsage: detachRemoteAISArgument,
-					Flags:     clusterCmdsFlags[subcmdDetach],
-					Action:    detachRemoteAISHandler,
-				},
-				{
-					Name:   subcmdRebalance,
-					Usage:  "rebalance data among storage targets in the cluster",
-					Flags:  clusterCmdsFlags[subcmdRebalance],
-					Action: startXactionHandler,
-				},
-				{
-					Name:         subcmdPrimary,
-					Usage:        "set a new primary proxy",
-					ArgsUsage:    daemonIDArgument,
-					Flags:        clusterCmdsFlags[subcmdPrimary],
-					Action:       setPrimaryHandler,
-					BashComplete: daemonCompletions(completeProxies),
-				},
-				{
-					Name:   subcmdShutdown,
-					Usage:  "shutdown cluster",
-					Flags:  clusterCmdsFlags[subcmdShutdown],
-					Action: clusterShutdownHandler,
-				},
-				{
-					Name:   subcmdDecommission,
-					Usage:  "decommission entire cluster",
-					Action: clusterDecommissionHandler,
-				},
-				{
-					Name:  subcmdMembership,
-					Usage: "manage cluster membership",
-					Subcommands: []cli.Command{
-						{
-							Name:      subcmdJoin,
-							Usage:     "add a node to the cluster",
-							ArgsUsage: joinNodeArgument,
-							Flags:     clusterCmdsFlags[subcmdJoin],
-							Action:    joinNodeHandler,
-						},
-						{
-							Name:         subcmdStartMaint,
-							Usage:        "mark a node to be under \"maintenance\"",
-							ArgsUsage:    daemonIDArgument,
-							Flags:        clusterCmdsFlags[subcmdStartMaint],
-							Action:       nodeMaintenanceHandler,
-							BashComplete: daemonCompletions(completeAllDaemons),
-						},
-						{
-							Name:         subcmdStopMaint,
-							Usage:        "remove a node from \"maintenance\"",
-							ArgsUsage:    daemonIDArgument,
-							Action:       nodeMaintenanceHandler,
-							BashComplete: daemonCompletions(completeAllDaemons),
-						},
-						{
-							Name:         subcmdDecommission,
-							Usage:        "safely remove a node in the cluster",
-							ArgsUsage:    daemonIDArgument,
-							Flags:        clusterCmdsFlags[subcmdDecommission],
-							Action:       nodeMaintenanceHandler,
-							BashComplete: daemonCompletions(completeAllDaemons),
-						},
-						{
-							Name:         subcmdShutdown,
-							Usage:        "shutdown a node in the cluster",
-							ArgsUsage:    daemonIDArgument,
-							Flags:        clusterCmdsFlags[subcmdDecommission],
-							Action:       nodeMaintenanceHandler,
-							BashComplete: daemonCompletions(completeAllDaemons),
-						},
+	clusterCmd = cli.Command{
+		Name:  commandCluster,
+		Usage: "monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc.",
+		Subcommands: []cli.Command{
+			makeAlias(showCmdCluster, "", true, commandShow), // alias for `ais show`
+			{
+				Name:      subcmdCluAttach,
+				Usage:     "attach a remote ais cluster",
+				ArgsUsage: attachRemoteAISArgument,
+				Flags:     clusterCmdsFlags[subcmdAttach],
+				Action:    attachRemoteAISHandler,
+			},
+			{
+				Name:      subcmdCluDetach,
+				Usage:     "detach remote ais cluster",
+				ArgsUsage: detachRemoteAISArgument,
+				Flags:     clusterCmdsFlags[subcmdDetach],
+				Action:    detachRemoteAISHandler,
+			},
+			{
+				Name:   subcmdRebalance,
+				Usage:  "rebalance data among storage targets in the cluster",
+				Flags:  clusterCmdsFlags[subcmdRebalance],
+				Action: startXactionHandler,
+			},
+			{
+				Name:         subcmdPrimary,
+				Usage:        "set a new primary proxy",
+				ArgsUsage:    daemonIDArgument,
+				Flags:        clusterCmdsFlags[subcmdPrimary],
+				Action:       setPrimaryHandler,
+				BashComplete: daemonCompletions(completeProxies),
+			},
+			{
+				Name:   subcmdShutdown,
+				Usage:  "shutdown cluster",
+				Flags:  clusterCmdsFlags[subcmdShutdown],
+				Action: clusterShutdownHandler,
+			},
+			{
+				Name:   subcmdDecommission,
+				Usage:  "decommission entire cluster",
+				Action: clusterDecommissionHandler,
+			},
+			{
+				Name:  subcmdMembership,
+				Usage: "manage cluster membership",
+				Subcommands: []cli.Command{
+					{
+						Name:      subcmdJoin,
+						Usage:     "add a node to the cluster",
+						ArgsUsage: joinNodeArgument,
+						Flags:     clusterCmdsFlags[subcmdJoin],
+						Action:    joinNodeHandler,
+					},
+					{
+						Name:         subcmdStartMaint,
+						Usage:        "mark a node to be under \"maintenance\"",
+						ArgsUsage:    daemonIDArgument,
+						Flags:        clusterCmdsFlags[subcmdStartMaint],
+						Action:       nodeMaintenanceHandler,
+						BashComplete: daemonCompletions(completeAllDaemons),
+					},
+					{
+						Name:         subcmdStopMaint,
+						Usage:        "remove a node from \"maintenance\"",
+						ArgsUsage:    daemonIDArgument,
+						Action:       nodeMaintenanceHandler,
+						BashComplete: daemonCompletions(completeAllDaemons),
+					},
+					{
+						Name:         subcmdDecommission,
+						Usage:        "safely remove a node in the cluster",
+						ArgsUsage:    daemonIDArgument,
+						Flags:        clusterCmdsFlags[subcmdDecommission],
+						Action:       nodeMaintenanceHandler,
+						BashComplete: daemonCompletions(completeAllDaemons),
+					},
+					{
+						Name:         subcmdShutdown,
+						Usage:        "shutdown a node in the cluster",
+						ArgsUsage:    daemonIDArgument,
+						Flags:        clusterCmdsFlags[subcmdDecommission],
+						Action:       nodeMaintenanceHandler,
+						BashComplete: daemonCompletions(completeAllDaemons),
 					},
 				},
 			},

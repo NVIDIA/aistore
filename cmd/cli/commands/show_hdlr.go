@@ -101,22 +101,20 @@ var (
 		},
 	}
 
-	showCmds = []cli.Command{
-		{
-			Name:  commandShow,
-			Usage: "show information about buckets, jobs, all other managed entities in the cluster and the cluster itself",
-			Subcommands: []cli.Command{
-				makeAlias(authCmdShow, "", true, commandAuth), // alias for `ais auth show`
-				showCmdDisk,
-				showCmdObject,
-				showCmdCluster,
-				showCmdRebalance,
-				showCmdBucket,
-				showCmdConfig,
-				showCmdRemoteAIS,
-				showCmdMpath,
-				showCmdJob,
-			},
+	showCmd = cli.Command{
+		Name:  commandShow,
+		Usage: "show information about buckets, jobs, all other managed entities in the cluster and the cluster itself",
+		Subcommands: []cli.Command{
+			makeAlias(authCmdShow, "", true, commandAuth), // alias for `ais auth show`
+			showCmdDisk,
+			showCmdObject,
+			showCmdCluster,
+			showCmdRebalance,
+			showCmdBucket,
+			showCmdConfig,
+			showCmdRemoteAIS,
+			showCmdMpath,
+			showCmdJob,
 		},
 	}
 
@@ -438,7 +436,7 @@ func showClusterConfigHandler(c *cli.Context) (err error) {
 }
 
 func showDaemonConfigHandler(c *cli.Context) (err error) {
-	if c.Args().Get(1) == "" && !flagIsSet(c, allConfigFlag) {
+	if c.Args().Get(1) == "" && !flagIsSet(c, allConfigFlag) && !flagIsSet(c, jsonFlag) {
 		cli.ShowSubcommandHelp(c)
 		return fmt.Errorf("must specify --all or a configuration prefix")
 	}

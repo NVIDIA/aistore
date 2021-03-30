@@ -50,7 +50,7 @@ Unlike global configuration that is replicated across all nodes there is also a 
 
 Example
 ```console
-# ais show config CCDpt8088 --all --json | tail -20
+# ais show config CCDpt8088 --json | tail -20
     "lastupdate_time": "2021-03-20 18:00:20.393881867 -0700 PDT m=+2907.143584987",
     "uuid": "ZzCknLkMi",
     "config_version": "3",

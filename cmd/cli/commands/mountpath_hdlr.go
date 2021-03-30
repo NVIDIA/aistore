@@ -20,26 +20,24 @@ var (
 		subcmdDiskDetach: {},
 	}
 
-	mpathCmds = []cli.Command{
-		{
-			Name:  commandMountpath,
-			Usage: "manage mountpaths (disks) in a given storage target",
-			Subcommands: []cli.Command{
-				makeAlias(showCmdMpath, "", true, commandShow), // alias for `ais show`
-				{
-					Name:      subcmdDiskAttach,
-					Usage:     "attach a mountpath (i.e. disk or volume)",
-					ArgsUsage: diskAttachArgument,
-					Flags:     mpathCmdsFlags[subcmdDiskAttach],
-					Action:    diskAttachHandler,
-				},
-				{
-					Name:      subcmdDiskDetach,
-					Usage:     "detach a mountpath",
-					ArgsUsage: diskDetachArgument,
-					Flags:     mpathCmdsFlags[subcmdDiskDetach],
-					Action:    diskDetachHandler,
-				},
+	mpathCmd = cli.Command{
+		Name:  commandMountpath,
+		Usage: "manage mountpaths (disks) in a given storage target",
+		Subcommands: []cli.Command{
+			makeAlias(showCmdMpath, "", true, commandShow), // alias for `ais show`
+			{
+				Name:      subcmdDiskAttach,
+				Usage:     "attach a mountpath (i.e. disk or volume)",
+				ArgsUsage: diskAttachArgument,
+				Flags:     mpathCmdsFlags[subcmdDiskAttach],
+				Action:    diskAttachHandler,
+			},
+			{
+				Name:      subcmdDiskDetach,
+				Usage:     "detach a mountpath",
+				ArgsUsage: diskDetachArgument,
+				Flags:     mpathCmdsFlags[subcmdDiskDetach],
+				Action:    diskDetachHandler,
 			},
 		},
 	}

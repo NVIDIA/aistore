@@ -31,33 +31,31 @@ var (
 		},
 	}
 
-	advancedCmds = []cli.Command{
-		{
-			Name:  commandAdvanced,
-			Usage: "special commands intended for development and advanced usage",
-			Subcommands: []cli.Command{
-				{
-					Name:      commandGenShards,
-					Usage:     fmt.Sprintf("put randomly generated shards that can be used for %s testing", cmn.DSortName),
-					ArgsUsage: `"BUCKET/TEMPLATE.EXT"`,
-					Flags:     advancedCmdsFlags[commandGenShards],
-					Action:    genShardsHandler,
-				},
-				{
-					Name:         cmn.ActResilver,
-					Usage:        "start resilvering objects across all drives on one or all targets",
-					ArgsUsage:    optionalTargetIDArgument,
-					Flags:        startCmdsFlags[subcmdStartXaction],
-					Action:       startXactionHandler,
-					BashComplete: daemonCompletions(completeTargets),
-				},
-				{
-					Name:         subcmdPreload,
-					Usage:        "preload object metadata into in-memory cache",
-					ArgsUsage:    bucketArgument,
-					Action:       loadLomCacheHandler,
-					BashComplete: bucketCompletions(),
-				},
+	advancedCmd = cli.Command{
+		Name:  commandAdvanced,
+		Usage: "special commands intended for development and advanced usage",
+		Subcommands: []cli.Command{
+			{
+				Name:      commandGenShards,
+				Usage:     fmt.Sprintf("put randomly generated shards that can be used for %s testing", cmn.DSortName),
+				ArgsUsage: `"BUCKET/TEMPLATE.EXT"`,
+				Flags:     advancedCmdsFlags[commandGenShards],
+				Action:    genShardsHandler,
+			},
+			{
+				Name:         cmn.ActResilver,
+				Usage:        "start resilvering objects across all drives on one or all targets",
+				ArgsUsage:    optionalTargetIDArgument,
+				Flags:        startCmdsFlags[subcmdStartXaction],
+				Action:       startXactionHandler,
+				BashComplete: daemonCompletions(completeTargets),
+			},
+			{
+				Name:         subcmdPreload,
+				Usage:        "preload object metadata into in-memory cache",
+				ArgsUsage:    bucketArgument,
+				Action:       loadLomCacheHandler,
+				BashComplete: bucketCompletions(),
 			},
 		},
 	}

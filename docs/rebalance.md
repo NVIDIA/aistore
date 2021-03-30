@@ -33,7 +33,7 @@ It might be easier and faster, though, to use [AIS CLI](../cmd/cli/README.md) - 
 $ ais config cluster rebalance.enabled=false
 config successfully updated
 
-$ ais show config 361179t8088 --all --json | grep -A 6  rebalance
+$ ais show config 361179t8088 --json | grep -A 6  rebalance
 
     "rebalance": {
         "dest_retry_time": "2m",

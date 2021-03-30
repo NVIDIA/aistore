@@ -76,56 +76,54 @@ var (
 		BashComplete: putPromoteObjectCompletions,
 	}
 
-	objectCmds = []cli.Command{
-		{
-			Name:  commandObject,
-			Usage: "PUT (write), GET (read), list, move (rename) and other operations on objects in a given bucket",
-			Subcommands: []cli.Command{
-				objectCmdGet,
-				objectCmdPut,
-				makeAlias(showCmdObject, "", true, commandShow), // alias for `ais show`
-				{
-					Name:      commandMv,
-					Usage:     "move an object in an ais bucket",
-					ArgsUsage: "BUCKET/OBJECT_NAME NEW_OBJECT_NAME",
-					Flags:     objectCmdsFlags[commandMv],
-					Action:    mvObjectHandler,
-					BashComplete: oldAndNewBucketCompletions(
-						[]cli.BashCompleteFunc{}, true /* separator */, cmn.ProviderAIS),
-				},
-				{
-					Name:      commandRemove,
-					Usage:     "remove an object from the specified bucket",
-					ArgsUsage: optionalObjectsArgument,
-					Flags:     objectCmdsFlags[commandRemove],
-					Action:    removeObjectHandler,
-					BashComplete: bucketCompletions(bckCompletionsOpts{
-						multiple: true, separator: true,
-					}),
-				},
-				{
-					Name:         commandPromote,
-					Usage:        "promote AIStore-local files and directories to objects",
-					ArgsUsage:    putPromoteObjectArgument,
-					Flags:        objectCmdsFlags[commandPromote],
-					Action:       promoteHandler,
-					BashComplete: putPromoteObjectCompletions,
-				},
-				{
-					Name:      commandConcat,
-					Usage:     "concatenate multiple files into a new, single object to the specified bucket",
-					ArgsUsage: concatObjectArgument,
-					Flags:     objectCmdsFlags[commandConcat],
-					Action:    concatHandler,
-				},
-				{
-					Name:         commandCat,
-					Usage:        "print an object from the specified bucket to STDOUT",
-					ArgsUsage:    objectArgument,
-					Flags:        objectCmdsFlags[commandCat],
-					Action:       catHandler,
-					BashComplete: bucketCompletions(bckCompletionsOpts{separator: true}),
-				},
+	objectCmd = cli.Command{
+		Name:  commandObject,
+		Usage: "PUT (write), GET (read), list, move (rename) and other operations on objects in a given bucket",
+		Subcommands: []cli.Command{
+			objectCmdGet,
+			objectCmdPut,
+			makeAlias(showCmdObject, "", true, commandShow), // alias for `ais show`
+			{
+				Name:      commandMv,
+				Usage:     "move an object in an ais bucket",
+				ArgsUsage: "BUCKET/OBJECT_NAME NEW_OBJECT_NAME",
+				Flags:     objectCmdsFlags[commandMv],
+				Action:    mvObjectHandler,
+				BashComplete: oldAndNewBucketCompletions(
+					[]cli.BashCompleteFunc{}, true /* separator */, cmn.ProviderAIS),
+			},
+			{
+				Name:      commandRemove,
+				Usage:     "remove an object from the specified bucket",
+				ArgsUsage: optionalObjectsArgument,
+				Flags:     objectCmdsFlags[commandRemove],
+				Action:    removeObjectHandler,
+				BashComplete: bucketCompletions(bckCompletionsOpts{
+					multiple: true, separator: true,
+				}),
+			},
+			{
+				Name:         commandPromote,
+				Usage:        "promote AIStore-local files and directories to objects",
+				ArgsUsage:    putPromoteObjectArgument,
+				Flags:        objectCmdsFlags[commandPromote],
+				Action:       promoteHandler,
+				BashComplete: putPromoteObjectCompletions,
+			},
+			{
+				Name:      commandConcat,
+				Usage:     "concatenate multiple files into a new, single object to the specified bucket",
+				ArgsUsage: concatObjectArgument,
+				Flags:     objectCmdsFlags[commandConcat],
+				Action:    concatHandler,
+			},
+			{
+				Name:         commandCat,
+				Usage:        "print an object from the specified bucket to STDOUT",
+				ArgsUsage:    objectArgument,
+				Flags:        objectCmdsFlags[commandCat],
+				Action:       catHandler,
+				BashComplete: bucketCompletions(bckCompletionsOpts{separator: true}),
 			},
 		},
 	}

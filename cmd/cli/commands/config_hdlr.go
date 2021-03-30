@@ -18,35 +18,33 @@ var (
 		subcmdNode:    {transientFlag},
 	}
 
-	configCmds = []cli.Command{
-		{
-			Name:  commandConfig,
-			Usage: "set local/global AIS cluster configurations",
-			Subcommands: []cli.Command{
-				makeAlias(showCmdConfig, "", true, commandShow), // alias for `ais show`
-				{
-					Name:         subcmdCluster,
-					Usage:        "configure cluster",
-					ArgsUsage:    keyValuePairsArgument,
-					Flags:        configCmdsFlags[subcmdCluster],
-					Action:       cluConfigHandler,
-					BashComplete: suggestUpdatableConfig,
-				},
-				{
-					Name:         subcmdNode,
-					Usage:        "configure a specific node",
-					ArgsUsage:    nodeConfigArgument,
-					Flags:        configCmdsFlags[subcmdNode],
-					Action:       cluConfigHandler,
-					BashComplete: cluConfigCompletions,
-				},
-				{
-					Name:         subcmdReset,
-					Usage:        "reset to cluster configuration on all nodes or a specific node",
-					ArgsUsage:    optionalDaemonIDArgument,
-					Action:       cluResetConfigHandler,
-					BashComplete: daemonCompletions(completeAllDaemons),
-				},
+	configCmd = cli.Command{
+		Name:  commandConfig,
+		Usage: "set local/global AIS cluster configurations",
+		Subcommands: []cli.Command{
+			makeAlias(showCmdConfig, "", true, commandShow), // alias for `ais show`
+			{
+				Name:         subcmdCluster,
+				Usage:        "configure cluster",
+				ArgsUsage:    keyValuePairsArgument,
+				Flags:        configCmdsFlags[subcmdCluster],
+				Action:       cluConfigHandler,
+				BashComplete: suggestUpdatableConfig,
+			},
+			{
+				Name:         subcmdNode,
+				Usage:        "configure a specific node",
+				ArgsUsage:    nodeConfigArgument,
+				Flags:        configCmdsFlags[subcmdNode],
+				Action:       cluConfigHandler,
+				BashComplete: cluConfigCompletions,
+			},
+			{
+				Name:         subcmdReset,
+				Usage:        "reset to cluster configuration on all nodes or a specific node",
+				ArgsUsage:    optionalDaemonIDArgument,
+				Action:       cluResetConfigHandler,
+				BashComplete: daemonCompletions(completeAllDaemons),
 			},
 		},
 	}

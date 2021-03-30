@@ -80,63 +80,61 @@ var (
 		BashComplete: bucketCompletions(),
 	}
 
-	bucketCmds = []cli.Command{
-		{
-			Name:  commandBucket,
-			Usage: "create/destroy buckets, list bucket's content, show existing buckets and their properties",
-			Subcommands: []cli.Command{
-				bucketCmdList,
-				bucketCmdSummary,
-				makeAlias(showCmdBucket, "", true, commandShow), // alias for `ais show`
-				{
-					Name:      commandCreate,
-					Usage:     "create ais buckets",
-					ArgsUsage: bucketsArgument,
-					Flags:     bucketCmdsFlags[commandCreate],
-					Action:    createBucketHandler,
-				},
-				{
-					Name:         commandCopy,
-					Usage:        "copy ais buckets in the cluster",
-					ArgsUsage:    "SRC_BUCKET DST_BUCKET",
-					Flags:        bucketCmdsFlags[commandCopy],
-					Action:       copyBucketHandler,
-					BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),
-				},
-				{
-					Name:         commandMv,
-					Usage:        "move an ais bucket",
-					ArgsUsage:    "BUCKET NEW_BUCKET",
-					Flags:        bucketCmdsFlags[commandMv],
-					Action:       mvBucketHandler,
-					BashComplete: oldAndNewBucketCompletions([]cli.BashCompleteFunc{}, false /* separator */, cmn.ProviderAIS),
-				},
-				{
-					Name:      commandRemove,
-					Usage:     "remove ais buckets",
-					ArgsUsage: bucketsArgument,
-					Flags:     bucketCmdsFlags[commandRemove],
-					Action:    removeBucketHandler,
-					BashComplete: bucketCompletions(bckCompletionsOpts{
-						multiple: true, provider: cmn.ProviderAIS,
-					}),
-				},
-				{
-					Name:         commandEvict,
-					Usage:        "evict buckets or objects prefetched from cloud buckets",
-					ArgsUsage:    optionalObjectsArgument,
-					Flags:        bucketCmdsFlags[commandEvict],
-					Action:       evictHandler,
-					BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true}),
-				},
-				{
-					Name:         subcmdSetProps,
-					Usage:        "update or reset bucket properties",
-					ArgsUsage:    bucketPropsArgument,
-					Flags:        bucketCmdsFlags[subcmdSetProps],
-					Action:       setPropsHandler,
-					BashComplete: bucketCompletions(bckCompletionsOpts{additionalCompletions: []cli.BashCompleteFunc{propCompletions}}),
-				},
+	bucketCmd = cli.Command{
+		Name:  commandBucket,
+		Usage: "create/destroy buckets, list bucket's content, show existing buckets and their properties",
+		Subcommands: []cli.Command{
+			bucketCmdList,
+			bucketCmdSummary,
+			makeAlias(showCmdBucket, "", true, commandShow), // alias for `ais show`
+			{
+				Name:      commandCreate,
+				Usage:     "create ais buckets",
+				ArgsUsage: bucketsArgument,
+				Flags:     bucketCmdsFlags[commandCreate],
+				Action:    createBucketHandler,
+			},
+			{
+				Name:         commandCopy,
+				Usage:        "copy ais buckets in the cluster",
+				ArgsUsage:    "SRC_BUCKET DST_BUCKET",
+				Flags:        bucketCmdsFlags[commandCopy],
+				Action:       copyBucketHandler,
+				BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),
+			},
+			{
+				Name:         commandMv,
+				Usage:        "move an ais bucket",
+				ArgsUsage:    "BUCKET NEW_BUCKET",
+				Flags:        bucketCmdsFlags[commandMv],
+				Action:       mvBucketHandler,
+				BashComplete: oldAndNewBucketCompletions([]cli.BashCompleteFunc{}, false /* separator */, cmn.ProviderAIS),
+			},
+			{
+				Name:      commandRemove,
+				Usage:     "remove ais buckets",
+				ArgsUsage: bucketsArgument,
+				Flags:     bucketCmdsFlags[commandRemove],
+				Action:    removeBucketHandler,
+				BashComplete: bucketCompletions(bckCompletionsOpts{
+					multiple: true, provider: cmn.ProviderAIS,
+				}),
+			},
+			{
+				Name:         commandEvict,
+				Usage:        "evict buckets or objects prefetched from cloud buckets",
+				ArgsUsage:    optionalObjectsArgument,
+				Flags:        bucketCmdsFlags[commandEvict],
+				Action:       evictHandler,
+				BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true}),
+			},
+			{
+				Name:         subcmdSetProps,
+				Usage:        "update or reset bucket properties",
+				ArgsUsage:    bucketPropsArgument,
+				Flags:        bucketCmdsFlags[subcmdSetProps],
+				Action:       setPropsHandler,
+				BashComplete: bucketCompletions(bckCompletionsOpts{additionalCompletions: []cli.BashCompleteFunc{propCompletions}}),
 			},
 		},
 	}
