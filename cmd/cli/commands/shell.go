@@ -148,8 +148,9 @@ func daemonConfigSectionCompletions(c *cli.Context) {
 func cluConfigCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
 		suggestDaemon(completeAllDaemons)
+	} else {
+		suggestUpdatableConfig(c)
 	}
-	suggestUpdatableConfig(c)
 }
 
 func suggestDaemon(what daemonKindCompletion) {

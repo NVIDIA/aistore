@@ -22,6 +22,7 @@ const (
 	commandBucket    = "bucket"
 	commandObject    = "object"
 	commandCluster   = "cluster"
+	commandConfig    = "config"
 	commandMountpath = "mountpath"
 	commandJob       = "job"
 	commandShow      = "show"
@@ -62,7 +63,8 @@ const (
 	subcmdDownload   = "download"
 	subcmdXaction    = "xaction"
 	subcmdMountpath  = "mountpath"
-	subcmdCluster    = "cluster"
+	subcmdCluster    = commandCluster
+	subcmdNode       = "node"
 	subcmdPrimary    = "set-primary"
 	subcmdInit       = "init"
 	subcmdBuild      = "build"
@@ -185,7 +187,7 @@ const (
 	optionalTargetIDArgument  = "[TARGET_ID]"
 	showConfigArgument        = "cluster|DAEMON_ID [CONFIG_SECTION]"
 	showClusterConfigArgument = "[CONFIG_SECTION]"
-	cluConfigArgument         = optionalDaemonIDArgument + " " + keyValuePairsArgument
+	nodeConfigArgument        = daemonIDArgument + " " + keyValuePairsArgument
 	attachRemoteAISArgument   = aliasURLPairArgument
 	detachRemoteAISArgument   = aliasArgument
 	diskAttachArgument        = daemonMountpathPairArgument

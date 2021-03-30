@@ -113,6 +113,7 @@ To uninstall autocompletions, run `bash autocomplete/uninstall.sh`.
 | [`ais bucket`](resources/bucket.md) | Create/destroy buckets, list bucket's content, show existing buckets and their properties |
 | [`ais object`](resources/object.md) | PUT (write), GET (read), list, move (rename) and other operations on objects in a given bucket |
 | [`ais cluster`](resources/cluster.md) | Monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc. |
+| [`ais config`](resources/config.md) | Set local/global AIS cluster configurations |
 | [`ais mountpath`](resources/mpath.md) | Manage mountpaths (disks) in a given storage target |
 | [`ais etl`](resources/etl.md) | Execute custom transformations on objects |
 | [`ais job`](resources/job.md) | Query and manage jobs (aka extended actions or xactions) |

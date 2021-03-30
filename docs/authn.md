@@ -97,10 +97,10 @@ To start AuthN manually, perform the following steps:
 
 ```console
 $ # Change the secret
-$ ais cluster configure auth.secret SECRET
+$ ais config cluster auth.secret SECRET
 
 $ # Enable cluster-wide authorization
-$ ais cluster configure auth.enabled true
+$ ais config cluster auth.enabled true
 
 $ # Register the cluster at AuthN to receive AuthN messages (e.g, revoked token list)
 $ # ais auth add cluster CLUSTER_ALIAS CLUSTER-URL-LIST

@@ -186,6 +186,7 @@ func (aisCLI *AISCLI) setupCommands() {
 	app.Commands = append(app.Commands, bucketCmds...)
 	app.Commands = append(app.Commands, objectCmds...)
 	app.Commands = append(app.Commands, clusterCmds...)
+	app.Commands = append(app.Commands, configCmds...)
 	app.Commands = append(app.Commands, mpathCmds...)
 	app.Commands = append(app.Commands, etlCmds...)
 	app.Commands = append(app.Commands, jobCmds...)

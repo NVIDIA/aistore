@@ -247,7 +247,7 @@ $ curl -i -X PUT 'http://T/v1/daemon/setconfig?vmodule=ais/targ*=1'
 ```console
 $ ais show config 844974_8080 --json | jq '.timeout.list_timeout'
 "2m"
-$ ais cluster configure timeout.list_timeout=5m
+$ ais config cluster timeout.list_timeout=5m
 Config has been updated successfully.
 $ ais show config 844974_8080 --json | jq '.timeout.list_timeout'
 "5m"
@@ -259,7 +259,7 @@ The example above demonstrates cluster-wide configuration update but note: singl
 * Set `periodic.stats_time` = 1 minute, `periodic.iostat_time_long` = 4 seconds
 
 ```console
-$ ais cluster configure periodic.stats_time=1m disk.iostat_time_long=4s
+$ ais config cluster periodic.stats_time=1m disk.iostat_time_long=4s
 ```
 
 #### Single-node operation (single node)
@@ -267,5 +267,5 @@ AIS configuration includes a section called `disk`. The `disk` in turn contains 
 * Set `disk.iostat_time_long` = 3 seconds, `disk.disk_util_low_wm` = 40 percent on daemon with ID `target1`
 
 ```console
-$ ais cluster configure target1 periodic.stats_time=1m disk.iostat_time_long=4s
+$ ais config node target1 periodic.stats_time=1m disk.iostat_time_long=4s
 ```
