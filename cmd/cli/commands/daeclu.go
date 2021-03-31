@@ -225,11 +225,6 @@ func getDaemonConfig(c *cli.Context) error {
 		useJSON  = flagIsSet(c, jsonFlag)
 		node     *cluster.Snode
 	)
-
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, "'cluster' or daemon ID")
-	}
-
 	smap, err := api.GetClusterMap(defaultAPIParams)
 	if err != nil {
 		return err
@@ -251,10 +246,22 @@ func getDaemonConfig(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	flatDaemon := flattenConfig(body, section)
-	flatCluster := flattenConfig(cluConf, section)
-	flatDiff := diffConfigs(flatDaemon, flatCluster)
-	return templates.DisplayOutput(flatDiff, c.App.Writer, templates.ConfigDiffTmpl, false)
+
+	data := struct {
+		ClusterConfig []propDiff
+		LocalConfig   []prop
+	}{}
+
+	filter := parseStrFlag(c, configTypeFlag)
+	if filter == "all" || filter == "local" {
+		data.LocalConfig = flattenConfig(body.LocalConfig, section)
+	}
+	if filter == "all" || filter == "cluster" {
+		flatDaemon := flattenConfig(body.ClusterConfig, section)
+		flatCluster := flattenConfig(cluConf, section)
+		data.ClusterConfig = diffConfigs(flatDaemon, flatCluster)
+	}
+	return templates.DisplayOutput(data, c.App.Writer, templates.DaemonConfigTmpl, false)
 }
 
 // Sets config of specific daemon or cluster

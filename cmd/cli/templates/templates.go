@@ -75,9 +75,13 @@ const (
 		"{{ $item.Name }}\t {{ $item.Value }}\n" +
 		"{{end}}\n"
 
-	ConfigDiffTmpl = "PROPERTY\t VALUE\t DEFAULT\n{{range $item := .}}" +
+	DaemonConfigTmpl = "{{ if .ClusterConfig }}PROPERTY\t VALUE\t DEFAULT\n{{range $item := .ClusterConfig }}" +
 		"{{ $item.Name }}\t {{ $item.Current }}\t {{ $item.Old }}\n" +
-		"{{end}}\n"
+		"{{end}}\n{{end}}" +
+		"{{ if .LocalConfig }}PROPERTY\t VALUE\n" +
+		"{{range $item := .LocalConfig }}" +
+		"{{ $item.Name }}\t {{ $item.Value }}\n" +
+		"{{end}}\n{{end}}"
 
 	PropsSimpleTmpl = "PROPERTY\t VALUE\n" +
 		"{{range $p := . }}" +

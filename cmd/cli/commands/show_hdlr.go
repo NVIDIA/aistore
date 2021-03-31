@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/urfave/cli"
 )
@@ -90,7 +91,7 @@ var (
 			verboseFlag,
 		},
 		subcmdShowConfig: {
-			allConfigFlag,
+			configTypeFlag,
 			jsonFlag,
 		},
 		subcmdShowRemoteAIS: {
@@ -436,10 +437,18 @@ func showClusterConfigHandler(c *cli.Context) (err error) {
 }
 
 func showDaemonConfigHandler(c *cli.Context) (err error) {
-	if c.Args().Get(1) == "" && !flagIsSet(c, allConfigFlag) && !flagIsSet(c, jsonFlag) {
-		cli.ShowSubcommandHelp(c)
-		return fmt.Errorf("must specify --all or a configuration prefix")
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, "'cluster' or daemon ID")
 	}
+	if c.Args().Get(1) == "" && !flagIsSet(c, configTypeFlag) && !flagIsSet(c, jsonFlag) {
+		cli.ShowSubcommandHelp(c)
+		return fmt.Errorf("must specify --type or a configuration prefix")
+	}
+	filter := parseStrFlag(c, configTypeFlag)
+	if !cos.NewStringSet("all", "cluster", "local", "").Contains(filter) {
+		return fmt.Errorf("invalid value provided for --type, expected one of: 'all','cluster','local'")
+	}
+
 	if _, err = fillMap(); err != nil {
 		return
 	}
