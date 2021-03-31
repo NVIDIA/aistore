@@ -2089,19 +2089,15 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	tassert.CheckFatal(t, err)
 	tlog.Logf("%d objects created, starting rebalance\n", len(oldObjList.Entries))
 
-	_, removedTarget := tutils.RmTargetSkipRebWait(t, proxyURL, o.smap)
+	removedTarget, err := o.smap.GetRandTarget()
+	tassert.CheckFatal(t, err)
+	args := &cmn.ActValRmNode{DaemonID: removedTarget.ID()}
+	rebID, err := api.StartMaintenance(baseParams, args)
+	tassert.CheckFatal(t, err)
 	defer func() {
 		rebID, _ := tutils.RestoreTarget(t, proxyURL, removedTarget)
 		tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
 	}()
-
-	// Initiate rebalance
-	args := api.XactReqArgs{
-		Kind: cmn.ActRebalance,
-		Bck:  bck,
-	}
-	rebID, err := api.StartXaction(baseParams, args)
-	tassert.CheckFatal(t, err)
 	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
 
 	newObjList, err := api.ListObjects(baseParams, bck, msg, 0)
