@@ -29,7 +29,7 @@ var (
 	ConfigDirPath string
 	defaultConfig Config
 
-	defaultAliasConfig = AliasConfig{
+	DefaultAliasConfig = AliasConfig{
 		"get": "object get",
 		"put": "object put",
 		"ls":  "bucket ls",
@@ -61,11 +61,7 @@ func init() {
 			URL: fmt.Sprintf(urlFmt, proto, defaultAISIP, defaultAuthNPort),
 		},
 		DefaultProvider: cmn.ProviderAIS,
-		Aliases: AliasConfig{
-			"get": "object get",
-			"put": "object put",
-			"ls":  "bucket ls",
-		},
+		Aliases:         DefaultAliasConfig,
 	}
 }
 
@@ -108,7 +104,7 @@ func (c *Config) validate() (err error) {
 		return fmt.Errorf("invalid default_provider value %q, expected one of [%s]", c.DefaultProvider, cmn.Providers)
 	}
 	if c.Aliases == nil {
-		c.Aliases = defaultAliasConfig
+		c.Aliases = DefaultAliasConfig
 	}
 	return nil
 }

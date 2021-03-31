@@ -315,6 +315,10 @@ var (
 		"ExtECPutStats":       extECPutStats,
 	}
 
+	AliasTemplate = "ALIAS\tCOMMAND\n{{range $alias, $command := .}}" +
+		"{{ $alias }}\t{{ $command }}\n" +
+		"{{end}}"
+
 	HelpTemplateFuncMap = template.FuncMap{
 		"FlagName": func(f cli.Flag) string { return strings.SplitN(f.GetName(), ",", 2)[0] },
 		"Mod":      func(a, mod int) int { return a % mod },

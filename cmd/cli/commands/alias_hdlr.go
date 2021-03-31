@@ -7,32 +7,61 @@ package commands
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmd/cli/config"
+	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/urfave/cli"
 )
+
+const invalidAlias = "alias must start with a letter and can only contain letters, numbers, hyphens (-), and underscores (_)"
 
 func (aisCLI *AISCLI) getAliasCmd() cli.Command {
 	return cli.Command{
 		Name:      commandAlias,
 		Usage:     "create top-level alias to a CLI command",
 		ArgsUsage: aliasCmdArgument,
-		Flags:     []cli.Flag{aliasFlag},
+		Flags:     []cli.Flag{resetAliasFlag},
 		Action:    aisCLI.aliasHandler,
 	}
 }
 
 func (aisCLI *AISCLI) aliasHandler(c *cli.Context) (err error) {
-	args := c.Args()
-	orig := strings.Join(args, " ")
-	alias := parseStrFlag(c, aliasFlag)
-	if cmd := aisCLI.resolveCmd(args); cmd == nil {
-		return fmt.Errorf("command %q not found", orig)
+	if flagIsSet(c, resetAliasFlag) {
+		return resetAliases(c)
+	}
+	if !c.Args().Present() {
+		return listAliases(c)
+	}
+	return aisCLI.addAlias(c)
+}
+
+func listAliases(c *cli.Context) (err error) {
+	return templates.DisplayOutput(cfg.Aliases, c.App.Writer, templates.AliasTemplate)
+}
+
+func resetAliases(c *cli.Context) (err error) {
+	cfg.Aliases = config.DefaultAliasConfig
+	if err := config.Save(cfg); err != nil {
+		return err
 	}
 
-	if len(strings.Split(alias, " ")) != 1 {
-		return fmt.Errorf("multi-word aliases are not supported- please use only one word for your alias")
+	fmt.Fprintln(c.App.Writer, "aliases reset to default")
+	return
+}
+
+func (aisCLI *AISCLI) addAlias(c *cli.Context) (err error) {
+	var (
+		input = strings.Split(strings.Join(c.Args(), " "), "=")
+		alias = input[0]
+		orig  = input[1]
+	)
+	if !validateAlias(alias) {
+		return fmt.Errorf(invalidAlias)
+	}
+	if cmd := aisCLI.resolveCmd(orig); cmd == nil {
+		return fmt.Errorf("command %q not found", orig)
 	}
 
 	cfg.Aliases[alias] = orig
@@ -47,8 +76,7 @@ func (aisCLI *AISCLI) aliasHandler(c *cli.Context) (err error) {
 // initAliases reads cfg.Aliases and returns all aliases.
 func (aisCLI *AISCLI) initAliases() (aliasCmds []cli.Command) {
 	for alias, orig := range cfg.Aliases {
-		origArgs := strings.Split(orig, " ")
-		cmd := aisCLI.resolveCmd(cli.Args(origArgs))
+		cmd := aisCLI.resolveCmd(orig)
 
 		if cmd != nil {
 			aliasCmds = append(aliasCmds, makeAlias(*cmd, orig, false, alias))
@@ -58,15 +86,21 @@ func (aisCLI *AISCLI) initAliases() (aliasCmds []cli.Command) {
 	return
 }
 
+func validateAlias(alias string) (matched bool) {
+	matched, _ = regexp.MatchString(`^[a-zA-Z][a-zA-Z0-9_-]*$`, alias)
+	return
+}
+
 // resolveCmd() traverses the command tree and returns the cli.Command matching `args`
 // similar to cli.App.Command(), but looking through subcommands as well.
-func (aisCLI *AISCLI) resolveCmd(args cli.Args) *cli.Command {
-	if !args.Present() {
+func (aisCLI *AISCLI) resolveCmd(command string) *cli.Command {
+	if command == "" {
 		return nil
 	}
 	var (
 		app      = aisCLI.app
-		toplevel = args.First()
+		args     = strings.Split(command, " ")
+		toplevel = args[0]
 		tlCmd    = app.Command(toplevel)
 	)
 	if len(args) == 1 {
@@ -74,21 +108,20 @@ func (aisCLI *AISCLI) resolveCmd(args cli.Args) *cli.Command {
 	}
 
 	currCmd := tlCmd
-	for _, input := range args.Tail() {
+	for _, token := range args[1:] {
 		consumed := false
 		for i := range currCmd.Subcommands {
 			c := &currCmd.Subcommands[i]
-			if c.HasName(input) {
+			if c.HasName(token) {
 				currCmd = c
 				consumed = true
 				break
 			}
 		}
 		if !consumed {
-			return currCmd
+			return nil
 		}
 	}
-
 	return currCmd
 }
 

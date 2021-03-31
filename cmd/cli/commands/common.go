@@ -400,9 +400,9 @@ var (
 	}
 
 	// Alias
-	aliasFlag = cli.StringFlag{
-		Name: "as", Required: true,
-		Usage: "alias for an AIS CLI command, must be one word e.g. 'bck' or 'show-clu'",
+	resetAliasFlag = cli.BoolFlag{
+		Name:  "reset",
+		Usage: "remove all custom aliases and reset to default",
 	}
 )
 
