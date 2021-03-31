@@ -1,8 +1,8 @@
 # Getting Started
 
-You could run AIS on a single Linux or Mac machine. Or, you could quickly deploy your first AIS cluster on [GCP/GKE](https://cloud.google.com/kubernetes-engine) cloud. This document introduces these and other supported options and provides quick links for further information.
+AIStore runs on a single Linux or Mac machine. Bare-metal Kubernetes and [GCP/GKE](https://cloud.google.com/kubernetes-engine) Cloud-based deployments are also supported. There are numerous other options.
 
-Generally, when deciding how to deploy a system like AIS with so many options to choose from, a good place to start would be answering the following two fundamental questions:
+Generally, when deciding how to deploy a system like AIS with so many possibilities to choose from, a good place to start would be answering the following two fundamental questions:
 
 * what's the dataset size, or sizes?
 * what hardware will I use?
@@ -26,8 +26,7 @@ AIStore runs on commodity Linux machines with no special hardware requirements w
 
 Depending on your Linux distribution, you may or may not have `gcc`, `sysstat`, and/or `attr` packages.
 
-The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes), or xattrs, is a long time POSIX legacy and is supported by all mainstream filesystems with no exceptions.
-Unfortunately, extended attributes (xattrs) may not always be enabled (by the Linux distribution you are using) in the Linux kernel configurations - the fact that can be easily found out by running `setfattr` command.
+The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes), or `xattrs`, is a long time POSIX legacy supported by all mainstream filesystems with no exceptions. Unfortunately, `xattrs` may not always be enabled in the Linux kernel configurations - the fact that can be easily found out by running `setfattr` command.
 
 > If disabled, please make sure to enable xattrs in your Linux kernel configuration.
 
@@ -36,20 +35,17 @@ Unfortunately, extended attributes (xattrs) may not always be enabled (by the Li
 MacOS/Darwin is also supported, albeit for development only.
 Certain capabilities related to querying the state-and-status of local hardware resources (memory, CPU, disks) may be missing, which is why we **strongly** recommend Linux for production deployments.
 
-## Cloud Deployment
+## Kubernetes Deployments
 
-[AIS-K8s GitHub repository](https://github.com/NVIDIA/ais-k8s/blob/master/terraform/README.md) provides the (single-line) command to deploy Kubernetes cluster and the underlying infrastructure with AIStore cluster running inside. The only requirement is having a few dependencies installed (e.g., `helm`) and a Cloud account.
+For any Kubernetes deployments (including, of course, production deployments) please use a separate and dedicated [AIS-K8s GitHub](https://github.com/NVIDIA/ais-k8s/blob/master/docs/README.md) repository. The repo contains [Helm Charts](https://github.com/NVIDIA/ais-k8s/tree/master/helm/ais/charts) and detailed [Playbooks](https://github.com/NVIDIA/ais-k8s/tree/master/playbooks) that cover a variety of use cases and configurations.
 
-The following GIF presents a flow of this deployment.
-  
+In particular, [AIS-K8s GitHub repository](https://github.com/NVIDIA/ais-k8s/blob/master/terraform/README.md) provides a single-line command to deploy Kubernetes cluster and the underlying infrastructure with AIStore cluster running inside (see below). The only requirement is having a few dependencies preinstalled (in particular, `helm`) and a Cloud account.
+
+The following GIF illustrates steps to deploy AIS on Google Cloud Platform (GCP):
+
 <img src="/docs/images/ais-k8s-deploy.gif" alt="Kubernetes cloud deployment" width="100%">
 
-> If you already have a Kubernetes cluster deployed in the cloud, and you need more customization, refer to [Kubernetes production deployment](#kubernetes-production-deployment).
-
-## Production Deployment: Kubernetes
-
-This type of deployment is described in [AIS-K8s GitHub repo](https://github.com/NVIDIA/ais-k8s/blob/master/docs/README.md) containing all necessary information.
-It includes Helm Charts and dedicated documentation for different use cases and configurations.
+Finally, the [repository](https://github.com/NVIDIA/ais-k8s) hosts [Kubernetes Operator](https://github.com/NVIDIA/ais-k8s/tree/master/operator) project that will eventually replace Helm charts and will become the main deployment, lifecycle, and operation management "vehicle" for AIStore.
 
 ## Minimal all-in-one-docker Deployment
 
