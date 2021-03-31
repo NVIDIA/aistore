@@ -31,14 +31,21 @@ loopback="n"
 targets=5
 proxies=5
 mpoints=5
-next_tier="local"
-remotealias="rmtais"
-usage="$(basename "$0") - locally deploy AIS clusters for development
-options:
-  -h             Show this help text
+deployment="local"
+remote_alias="rmtais"
+cleanup="false"
+
+usage="NAME:
+  $(basename "$0") - locally deploy AIS clusters for development
+
+USAGE:
+  ./clean_deploy.sh [options...]
+
+OPTIONS:
   --ntargets     Number of targets to start (default: 5)
   --nproxies     Number of proxies to start (default: 5)
   --mountpoints  Number of mountpoints to use (default: 5)
+  --cleanup      Perform cleanup of data and metadata (default: not set)
   --deployment   Choose which AIS cluster to deploy. One of: 'local', 'remote', 'all' (default: 'local')
   --remote-alias Alias to assign to the remote cluster (default: 'rmtais')
   --aws          Builds support for aws as a backend provider
@@ -49,25 +56,28 @@ options:
   --dir          The root directory of the aistore repository
   --debug        Change the logging level of particular package(s)
   --https        Start cluster with HTTPS enabled
+  -h, --help     Show this help text
 "
 
 export MODE="debug" # By default start in debug mode
 
 while (( "$#" )); do
   case "${1}" in
-    -h) echo "$usage"; exit;;
+    -h|--help) echo -n "${usage}"; exit;;
+
     --aws)   aws_provider="y";   shift;;
     --azure) azure_provider="y"; shift;;
     --gcp)   gcp_provider="y";   shift;;
     --hdfs)  hdfs_provider="y";  shift;;
-    --loopback)  loopback="y";  shift;;
+    --loopback) loopback="y";  shift;;
     --dir) root_dir=$2; shift; shift;;
     --debug) export AIS_DEBUG=$2; shift; shift;;
-    --deployment) next_tier=$2; shift; shift;;
-    --remote-alias) remotealias=$2; shift; shift;;
+    --deployment) deployment=$2; shift; shift;;
+    --remote-alias) remote_alias=$2; shift; shift;;
     --ntargets) targets=$2; shift; shift;;
     --nproxies) proxies=$2; shift; shift;;
     --mountpoints) mpoints=$2; shift; shift;;
+    --cleanup) cleanup="true"; shift;;
     --https)
       export AIS_USE_HTTPS="true"
       export AIS_SKIP_VERIFY_CRT="true"
@@ -79,32 +89,40 @@ while (( "$#" )); do
   esac
 done
 
-case "${next_tier}" in
+case "${deployment}" in
   local|remote|all)
     ;;
   *)
-    echo "unknown --deployment argument, defaulting to 'local'"
-    next_tier="local";;
+    echo "fatal: unknown --deployment argument value '${deployment}' (expected one of: 'local', 'remote', 'all')"
+    exit 1
+    ;;
 esac
 
-pushd ${root_dir}
+pushd "${root_dir}" 1>/dev/null
 
 make kill
-# make clean
-if [[ ${next_tier} == "local" || ${next_tier} == "all" ]]; then
+if [[ ${cleanup} == "true" ]]; then
+  make clean
+fi
+
+if [[ ${deployment} == "local" || ${deployment} == "all" ]]; then
   echo -e "${targets}\n${proxies}\n${mpoints}\n${aws_provider}\n${gcp_provider}\n${azure_provider}\n${hdfs_provider}\n${loopback}\n" | make deploy
 fi
 
 make -j8 authn aisloader aisfs cli 1>/dev/null # Build binaries in parallel
 
-if [[ ${next_tier} == "remote" || ${next_tier} == "all" ]]; then
+if [[ ${deployment} == "remote" || ${deployment} == "all" ]]; then
   DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\nn\nn\nn\nn\nn\n'
-  tier_endpoint="http://127.0.0.1:11080"
-  if [[ -n ${AIS_USE_HTTPS} ]]; then
-    tier_endpoint="https://127.0.0.1:11080"
+
+  # Do not try attach remote cluster if the main cluster did not start.
+  if [[ ${deployment} == "all" ]]; then
+    tier_endpoint="http://127.0.0.1:11080"
+    if [[ -n ${AIS_USE_HTTPS} ]]; then
+      tier_endpoint="https://127.0.0.1:11080"
+    fi
+    sleep 5
+    retry ais cluster attach "${remote_alias}=${tier_endpoint}"
   fi
-  sleep 5
-  retry ais cluster attach ${remotealias}="${tier_endpoint}"
 fi
 
-popd
+popd 1>/dev/null
