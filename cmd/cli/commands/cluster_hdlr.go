@@ -16,8 +16,6 @@ import (
 	"github.com/urfave/cli"
 )
 
-// TODO: remote detach: use showRemoteAISHandler() to populate completions
-
 const (
 	fmtRebalanceStarted = "Started rebalance %q, use 'ais show job xaction %s' to monitor progress\n"
 
@@ -59,11 +57,12 @@ var (
 				Action:    attachRemoteAISHandler,
 			},
 			{
-				Name:      subcmdCluDetach,
-				Usage:     "detach remote ais cluster",
-				ArgsUsage: detachRemoteAISArgument,
-				Flags:     clusterCmdsFlags[subcmdDetach],
-				Action:    detachRemoteAISHandler,
+				Name:         subcmdCluDetach,
+				Usage:        "detach remote ais cluster",
+				ArgsUsage:    detachRemoteAISArgument,
+				Flags:        clusterCmdsFlags[subcmdDetach],
+				Action:       detachRemoteAISHandler,
+				BashComplete: suggestRemote,
 			},
 			{
 				Name:   subcmdRebalance,

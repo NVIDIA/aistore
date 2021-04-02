@@ -590,3 +590,16 @@ func suggestUpdatableAuthNConfig(c *cli.Context) {
 		}
 	}
 }
+
+func suggestRemote(c *cli.Context) {
+	aisCloudInfo, err := api.GetRemoteAIS(defaultAPIParams)
+	if err != nil {
+		return
+	}
+	for uuid, info := range aisCloudInfo {
+		fmt.Println(uuid)
+		if info.Alias != "" {
+			fmt.Println(info.Alias)
+		}
+	}
+}
