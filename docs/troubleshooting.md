@@ -1,6 +1,6 @@
 ## Introduction
 
-This text is intended to help troubleshooting AIStore operation. Easy-to-use TAB-completion based [CLI](../cmd/cli/README.md) is one of the first tools to consider, and of the first commands would be the one that shows the state of the cluster:
+This text is intended to help troubleshooting AIStore operation. Easy-to-use TAB-completion based [CLI](/cmd/cli/README.md) is one of the first tools to consider, and of the first commands would be the one that shows the state of the cluster:
 
 ```console
 $ ais show cluster <TAB>-<TAB>
@@ -74,7 +74,7 @@ storage integrity error: sie#30 ... :
 VMD is different ("/tmp/ais/7/3/.ais.vmd"): &{...} vs &{...}
 ```
 
-Each AIStore target maintains a list of configured mountpaths ([more here](./overview.md)) and their properties. This metadata is maintained across mountpath-changing events (such as disk faults and new attachments). It is also persisted and replicated across available mountpaths.
+Each AIStore target maintains a list of configured mountpaths ([more here](overview.md)) and their properties. This metadata is maintained across mountpath-changing events (such as disk faults and new attachments). It is also persisted and replicated across available mountpaths.
 
 In addition, AIS target also stores its unique Node ID (aka `DaemonID`). This ID gets generated when the server joins an AIS cluster the first time and never changes during the server’s lifetime. The Node ID is recorded into each mountpath.
  

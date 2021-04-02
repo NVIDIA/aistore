@@ -43,17 +43,17 @@ Show object details.
 ## `ais show cluster`
 Show cluster details.
 
-[Refer to `ais cluster` documentation for more.](cluster.md#)
+[Refer to `ais cluster` documentation for more.](cluster.md#cluster-or-daemon-status)
 
 ## `ais show mountpath`
 Show mountpath list for targets.
 
-[Refer to `ais mountpath` documentation for more.](mountpath.md#)
+[Refer to `ais mountpath` documentation for more.](mpath.md#show-mountpaths)
 
 ## `ais show job`
 Show information about various jobs.
 
-[Refer to `ais job` documentation for more.](job.md#)
+[Refer to `ais job` documentation for more.](job.md#show-job-statistics)
 
 ---
 

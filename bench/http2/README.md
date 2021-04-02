@@ -25,7 +25,7 @@ $ ./http1_bench localhost:8081 local_benchmark_bucket 100 5
 ```
 
 ### Helpers
-1. [put_files.go](./put_files.go) puts a given number of files with a given size into AIStore. It has five command-line parameters:
+1. [put_files.go](put_files.go) puts a given number of files with a given size into AIStore. It has five command-line parameters:
 
 - `-url`: the URL of the AIStore proxy (default: http://localhost:8080)
 - `-files`: the number of files to put (default: 10)
@@ -33,7 +33,7 @@ $ ./http1_bench localhost:8081 local_benchmark_bucket 100 5
 - `-bucket`: the name of the bucket to put them in (default: local_benchmark_bucket)
 - `-workers`: The number of workers to use to put files (default: 10)
 
-2. [create_local_bucket](./create_local_bucket) creates an ais bucket in AIStore. It takes one parameter:
+2. [create_local_bucket](create_local_bucket) creates an ais bucket in AIStore. It takes one parameter:
 
 - B: The ais bucket to create
 
@@ -48,4 +48,4 @@ $ go run put_files.go -files 80 -filesize 50 -bucket local_benchmark_bucket -wor
 
 - Read chunk size cannot be modified
 - Redirects are not followed by nghttp2, so the benchmark must be pointed directly to one target
-- [server_push_http2_bench](./server_push_http2_bench) uses only one concurrent client
+- [server_push_http2_bench](server_push_http2_bench) uses only one concurrent client

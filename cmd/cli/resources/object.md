@@ -508,7 +508,7 @@ Delete an object or list/range of objects from the bucket.
 - List and template deletions expect only a bucket name
 - If OBJECT_NAMEs are given, CLI sends a separate request for each object
 
-See [List/Range Operations](../../../docs/batch.md#listrange-operation) for more details.
+See [List/Range Operations](/docs/batch.md#listrange-operation) for more details.
 
 ### Examples
 
@@ -553,7 +553,7 @@ removed files in the range 'test-{001..003}' from ais://mybucket bucket
 
 `ais bucket evict BUCKET/[OBJECT_NAME]...`
 
-[Evict](../../../docs/bucket.md#prefetchevict-objects) objects from a remote bucket.
+[Evict](/docs/bucket.md#prefetchevict-objects) objects from a remote bucket.
 
 ### Options
 
@@ -567,7 +567,7 @@ removed files in the range 'test-{001..003}' from ais://mybucket bucket
 - List and template evictions expect only a bucket name
 - If OBJECT_NAMEs are given, CLI sends a separate request for each object
 
-See [List/Range Operations](../../../docs/batch.md#listrange-operations) for more details.
+See [List/Range Operations](/docs/batch.md#listrange-operations) for more details.
 
 ### Examples
 
@@ -592,7 +592,7 @@ aws://cloudbucket  0             0B      0%
 
 `ais job start prefetch BUCKET/ --list|--template <value>`
 
-[Prefetch](../../../docs/bucket.md#prefetchevict-objects) objects from the remote bucket.
+[Prefetch](/docs/bucket.md#prefetchevict-objects) objects from the remote bucket.
 
 ### Options
 
@@ -604,7 +604,7 @@ aws://cloudbucket  0             0B      0%
 
 Options `--list` and `--template` are mutually exclusive.
 
-See [List/Range Operations](../../../docs/batch.md#listrange-operations) for more details.
+See [List/Range Operations](/docs/batch.md#listrange-operations) for more details.
 
 ### Examples
 

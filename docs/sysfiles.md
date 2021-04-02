@@ -13,7 +13,7 @@ The second category of *system files and directories* includes:
 
 | Name | Type | Node | Brief Description | Description |
 | ---- | ---- | ---- | ----------------- | ----------- |
-| `.ais.bmd` | file | gateway | Buckets Metadata | Names and properties of all buckets, including replicated [remote buckets](./providers.md) and [remote AIStore](./providers.md) buckets |
+| `.ais.bmd` | file | gateway | Buckets Metadata | Names and properties of all buckets, including replicated [remote buckets](providers.md#cloud-object-storage) and [remote AIStore](providers.md#remote-ais-cluster) buckets |
 | `.ais.smap` | file | gateway and target | Cluster Map | Description of whole cluster which includes IDs and IPs of all the nodes. |
 | `.ais.rmd` | file | storage target | Rebalancing State | Used internally to make sure that cluster-wide rebalancing runs to completion in presence of all possible events including cluster membership changes and cluster restarts. |
 | `.ais.markers/` | dir | storage target | Persistent state markers | Used for many purposes like determining node restart or rebalance/resilver abort. The role of the markers is to survive potential node's process crash (eg. due to power outage or mistake). |

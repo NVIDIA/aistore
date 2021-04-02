@@ -163,4 +163,4 @@ All latency metrics are in milliseconds, all sizes are always in bytes.
 
 A somewhat outdated example of how these metrics show up in the Grafana dashboard follows:
 
-![AIS loader metrics](images/aisloader-statsd-grafana.png)
+![AIS loader metrics](/docs/images/aisloader-statsd-grafana.png)

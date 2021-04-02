@@ -17,7 +17,7 @@
 
 ## Getting Started
 
-[![AIStore CLI Demo](./images/cli-demo-400.png)](https://youtu.be/VPIhQm2sMD8 "AIStore CLI Demo (Youtube video)")
+[![AIStore CLI Demo](/docs/images/cli-demo-400.png)](https://youtu.be/VPIhQm2sMD8 "AIStore CLI Demo (Youtube video)")
 
 # Deployment: Google Cloud
 
@@ -33,7 +33,7 @@
 
 This section comprises a number of videos illustrating different aspects of the AIS-ETL extension. A good place to start, though, would be the following [comprehensive introduction and a Jupyter notebook walk-through](https://www.youtube.com/watch?v=4PHkqTSE0ls):
 
-[![AIStore ETL Getting Started](./images/etl-getting-started-400.png)](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL Getting Started (Youtube video)")
+[![AIStore ETL Getting Started](/docs/images/etl-getting-started-400.png)](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL Getting Started (Youtube video)")
 
 ## ETL build: ImageNet Transformation
 
@@ -49,4 +49,4 @@ This section comprises a number of videos illustrating different aspects of the 
 
 # Developer Playground
 
-[![AIStore Developer Playground](./images/dev-playground-400.png)](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube video)")
+[![AIStore Developer Playground](/docs/images/dev-playground-400.png)](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube video)")

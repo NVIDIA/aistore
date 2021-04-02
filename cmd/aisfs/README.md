@@ -21,7 +21,7 @@ which in turn invokes the corresponding AISFS instance responsible for POSIX to
 REST API mapping of the request. A communication diagram is shown in the figure
 below.
 
-![aisfs-high-level-architecture](images/aisfs-high-level-architecture.png)
+![aisfs-high-level-architecture](/cmd/aisfs/images/aisfs-high-level-architecture.png)
 
 > Clearly, there is a lot of data transfer involved between kernel space and user
 space. This "up-and-down" communication between the kernel and user processes
@@ -66,7 +66,7 @@ When the space required to cache the entire directory hierarchy and file names i
 * `fuse.ko` FUSE kernel module
 * `fusermount` mount CLI utility
 * [Go 1.15](https://golang.org/dl/) or later
-* Running [AIStore](../../README.md) cluster
+* Running [AIStore](/README.md) cluster
 
 Depending on your Linux distribution, you may or may not already have `fuse.ko`
 and `fusermount` installed on your system. If you are using Ubuntu 18.04 LTS,
@@ -107,14 +107,14 @@ $ aisfs --help
 ### Quick Local Setup
 
 To quickly set up and try `aisfs` on your local machine, first
-deploy an AIStore cluster (for more info see AIStore [README](../../README.md)):
+deploy an AIStore cluster (for more info see AIStore [README](/README.md)):
 
 ```console
 $ cd $GOPATH/src/github.com/NVIDIA/aistore
 $ make deploy
 ```
 
-Using [AIS CLI](../cli/README.md) create an ais bucket, download several objects
+Using [AIS CLI](/cmd/cli/README.md) create an ais bucket, download several objects
 and place them into the bucket:
 
 ```console

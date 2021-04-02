@@ -54,9 +54,9 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 
 > Combined, all these elements tell the following story. They specify the most generic action (e.g., GET) and designate the target aka "resource" of this action: e. g., an entire cluster or a given AIS node. Further, they may also include context-specific and query string encoded control message to, for instance, distinguish between getting system statistics (`?what=stats`) versus system configuration (`?what=config`).
 
-> For developers and first-time users: if you deployed AIS locally having followed [these instructions](../README.md#local-non-containerized) then most likely you will have `http://localhost:8080` as the primary proxy, and generally, `http://localhost:808x` for all locally-deployed AIS daemons.
+> For developers and first-time users: if you deployed AIS locally having followed [these instructions](/README.md#local-non-containerized) then most likely you will have `http://localhost:8080` as the primary proxy, and generally, `http://localhost:808x` for all locally-deployed AIS daemons.
 
-> The reference below is "formulated" in `curl` - i.e., using `curl` command lines. It is possible, however, and often much easier (and, therefore, **preferable**), to execute the same operations using [AIS CLI](../cmd/cli/README.md).
+> The reference below is "formulated" in `curl` - i.e., using `curl` command lines. It is possible, however, and often much easier (and, therefore, **preferable**), to execute the same operations using [AIS CLI](/cmd/cli/README.md).
 
 ### API Reference
 
@@ -67,10 +67,10 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | Register proxy (gateway) | POST /v1/cluster/register | `curl -i -X POST -H 'Content-Type: application/json' -d '{"daemon_type": "proxy", "node_ip_addr": "172.16.175.41", "daemon_port": "8083", "direct_url": "http://172.16.175.41:8083"}' 'http://localhost:8083/v1/cluster/register'` |
 | Set primary proxy | PUT /v1/cluster/proxy/new primary-proxy-id | `curl -i -X PUT 'http://G-primary/v1/cluster/proxy/26869:8080'` |
 | Force-Set primary proxy | PUT /v1/daemon/proxy/proxyID | `curl -i -X PUT -G 'http://G-primary/v1/daemon/proxy/23ef189ed'  --data-urlencode "frc=true" --data-urlencode "can=http://G-new-designated-primary"`  <sup id="a6">[6](#ft6)</sup>|
-| Set AIS node configuration **via JSON message** | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' 'http://G-or-T/v1/daemon'`<br>• For the list of named options, see [runtime configuration](./configuration.md#runtime-configuration) |
-| Set AIS node configuration **via URL query** | PUT /v1/daemon/setconfig/?name1=value1&name2=value2&... | `curl -i -X PUT 'http://G-or-T/v1/daemon/setconfig?stats_time=33s&log.loglevel=4'`<br>• Allows to update multiple values in one shot<br>• For the list of named configuration options, see [runtime configuration](./configuration.md#runtime-configuration) |
-| Set cluster-wide configuration **via JSON message** (proxy) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' 'http://G/v1/cluster'`<br>• Note below the alternative way to update cluster configuration<br>• For the list of named options, see [runtime configuration](./configuration.md#runtime-configuration) |
-| Set cluster-wide configuration **via URL query** | PUT /v1/cluster/setconfig/?name1=value1&name2=value2&... | `curl -i -X PUT 'http://G/v1/cluster/setconfig?stats_time=33s&log.loglevel=4'`<br>• Allows to update multiple values in one shot<br>• For the list of named configuration options, see [runtime configuration](./configuration.md#runtime-configuration) |
+| Set AIS node configuration **via JSON message** | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' 'http://G-or-T/v1/daemon'`<br>• For the list of named options, see [runtime configuration](configuration.md#runtime-configuration) |
+| Set AIS node configuration **via URL query** | PUT /v1/daemon/setconfig/?name1=value1&name2=value2&... | `curl -i -X PUT 'http://G-or-T/v1/daemon/setconfig?stats_time=33s&log.loglevel=4'`<br>• Allows to update multiple values in one shot<br>• For the list of named configuration options, see [runtime configuration](configuration.md#runtime-configuration) |
+| Set cluster-wide configuration **via JSON message** (proxy) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' 'http://G/v1/cluster'`<br>• Note below the alternative way to update cluster configuration<br>• For the list of named options, see [runtime configuration](configuration.md#runtime-configuration) |
+| Set cluster-wide configuration **via URL query** | PUT /v1/cluster/setconfig/?name1=value1&name2=value2&... | `curl -i -X PUT 'http://G/v1/cluster/setconfig?stats_time=33s&log.loglevel=4'`<br>• Allows to update multiple values in one shot<br>• For the list of named configuration options, see [runtime configuration](configuration.md#runtime-configuration) |
 | Reset AIS node configuration | PUT {"action": "resetconfig"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "resetconfig"}' 'http://G-or-T/v1/daemon'` |
 | Reset cluster-wide configuration | PUT {"action": "resetconfig"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "resetconfig"}' 'http://G/v1/cluster'` |
 | Shutdown a given ais cluster (target or proxy) | PUT {"action": "shutdown_node", "value": {"sid": daemonID}} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown_node", "value": {"sid": "43888:8083"}}' 'http://G/v1/cluster'` |
@@ -137,17 +137,17 @@ ___
 
 Any storage bucket that AIS handles may originate in a 3rd party Cloud, or in another AIS cluster, or - the 3rd option - be created (and subsequently filled-in) in the AIS itself. But what if there's a pair of buckets, a Cloud-based and, separately, an AIS bucket that happen to share the same name? To resolve all potential naming, and (arguably, more importantly) partition namespace with respect to both physical isolation and QoS, AIS introduces the concept of *provider*.
 
-* [Backend Provider](./providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
+* [Backend Provider](providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
 
-> Backend provider is realized as an optional parameter across all AIStore APIs that handle access to user data and bucket configuration. The list (of those APIs) includes GET, PUT, DELETE and [Range/List](batch.md) operations. For supported backend providers, please refer to [Providers](./providers.md) and/or [Buckets: introduction and detailed overview](bucket.md) documents.
+> Backend provider is realized as an optional parameter across all AIStore APIs that handle access to user data and bucket configuration. The list (of those APIs) includes GET, PUT, DELETE and [Range/List](batch.md) operations. For supported backend providers, please refer to [Providers](providers.md) and/or [Buckets: introduction and detailed overview](bucket.md) documents.
 
 Curl example: `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?provider=ais'`
 
 For even more information, CLI examples, and the most recent updates, please see:
-- [Backend Providers](./providers.md)
+- [Backend Providers](providers.md)
 - [CLI: operations on buckets](/cmd/cli/resources/bucket.md)
 - [CLI: operations on objects](/cmd/cli/resources/object.md)
-- [On-Disk Layout](./on-disk-layout.md)
+- [On-Disk Layout](on-disk-layout.md)
 
 #### Supported APIs
 
