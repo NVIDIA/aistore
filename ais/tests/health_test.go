@@ -77,7 +77,6 @@ func TestTargetHealth(t *testing.T) {
 	)
 	tsi, err := smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, tsi != nil, "no targets")
 	err = api.Health(tutils.BaseAPIParams(tsi.PublicNet.DirectURL))
 	tassert.CheckFatal(t, err)
 }

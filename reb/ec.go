@@ -1675,7 +1675,6 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, conf *cmn.CksumConf) error
 			meta = sl.meta
 		}
 	}
-	cos.AssertMsg(meta != nil, obj.uid)
 	// keep it for a while to be sure it does not happen
 	cos.AssertMsg(meta.Size == obj.objSize, obj.uid)
 

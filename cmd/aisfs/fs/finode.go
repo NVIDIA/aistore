@@ -83,7 +83,6 @@ func (file *FileInode) UpdateAttributes(req *AttrUpdateReq) fuseops.InodeAttribu
 
 // REQUIRES_LOCK(file)
 func (file *FileInode) UpdateBackingObject(obj *ais.Object) {
-	cos.Assert(obj != nil)
 	// Only update object if it is newer
 	if file.object.Atime.After(obj.Atime) {
 		return

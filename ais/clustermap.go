@@ -393,7 +393,6 @@ func (m *smapX) _applyFlags(si *cluster.Snode, newFlags cluster.SnodeFlags) {
 // Must be called under lock and for smap clone
 func (m *smapX) setNodeFlags(sid string, flags cluster.SnodeFlags) {
 	si := m.GetNode(sid)
-	cos.Assert(si != nil)
 	newFlags := si.Flags.Set(flags)
 	if flags.IsAnySet(cluster.SnodeMaintenanceMask) {
 		newFlags = newFlags.Clear(cluster.SnodeIC)
@@ -404,7 +403,6 @@ func (m *smapX) setNodeFlags(sid string, flags cluster.SnodeFlags) {
 // Must be called under lock and for smap clone
 func (m *smapX) clearNodeFlags(id string, flags cluster.SnodeFlags) {
 	si := m.GetNode(id)
-	cos.Assert(si != nil)
 	m._applyFlags(si, si.Flags.Clear(flags))
 }
 

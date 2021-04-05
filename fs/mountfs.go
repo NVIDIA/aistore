@@ -708,7 +708,6 @@ func Enable(mpath string, cb ...func()) (enabledMpath *MountpathInfo, err error)
 		mfs.ios.AddMpath(cleanMpath, mp.Fs)
 		delete(disabledPaths, cleanMpath)
 		updatePaths(availablePaths, disabledPaths)
-		cos.Assert(mp != nil)
 		if len(cb) > 0 {
 			cb[0]()
 		}
