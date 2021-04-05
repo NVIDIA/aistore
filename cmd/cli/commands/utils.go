@@ -30,6 +30,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
@@ -1081,10 +1082,11 @@ func newProgIndicator(objName string) *progIndicator {
 
 // get xaction progress message
 func xactProgressMsg(xactID string) string {
-	return fmt.Sprintf("use '%s %s %s %s %s' to monitor progress", cliName, commandJob, commandShow, subcmdXaction, xactID)
+	return fmt.Sprintf("use '%s %s %s %s %s' to monitor progress",
+		cliName, commandJob, commandShow, subcmdXaction, xactID)
 }
 
-func bckPropList(props *cmn.BucketProps, verbose bool) (propList []prop, err error) {
+func bckPropList(props *cmn.BucketProps, verbose bool) (propList []prop) {
 	if !verbose {
 		propList = []prop{
 			{"created", time.Unix(0, props.Created).Format(time.RFC3339)},
@@ -1103,7 +1105,7 @@ func bckPropList(props *cmn.BucketProps, verbose bool) (propList []prop, err err
 			}
 		}
 	} else {
-		err = cmn.IterFields(props, func(uniqueTag string, field cmn.IterField) (err error, b bool) {
+		err := cmn.IterFields(props, func(uniqueTag string, field cmn.IterField) (error, bool) {
 			value := fmt.Sprintf("%v", field.Value())
 			if uniqueTag == cmn.PropBucketAccessAttrs {
 				value = props.Access.Describe()
@@ -1114,6 +1116,7 @@ func bckPropList(props *cmn.BucketProps, verbose bool) (propList []prop, err err
 			})
 			return nil, false
 		})
+		debug.AssertNoErr(err)
 	}
 
 	sort.Slice(propList, func(i, j int) bool {
@@ -1229,7 +1232,7 @@ func waitForXactionCompletion(defaultAPIParams api.BaseParams, args api.XactReqA
 
 func authNConfPairs(conf *authn.Config, prefix string) ([]prop, error) {
 	propList := make([]prop, 0, 8)
-	err := cmn.IterFields(conf, func(uniqueTag string, field cmn.IterField) (err error, b bool) {
+	err := cmn.IterFields(conf, func(uniqueTag string, field cmn.IterField) (error, bool) {
 		if prefix != "" && !strings.HasPrefix(uniqueTag, prefix) {
 			return nil, false
 		}

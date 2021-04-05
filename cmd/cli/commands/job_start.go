@@ -311,12 +311,12 @@ func startDownloadHandler(c *cli.Context) error {
 	fmt.Fprintf(c.App.Writer, "Run `ais show job download %s --progress` to monitor the progress.\n", id)
 
 	if flagIsSet(c, progressBarFlag) {
-		pbDownload(c, id)
+		err = pbDownload(c, id)
 	} else if flagIsSet(c, waitFlag) {
-		waitDownload(c, id)
+		err = waitDownload(c, id)
 	}
 
-	return nil
+	return err
 }
 
 func pbDownload(c *cli.Context, id string) (err error) {
