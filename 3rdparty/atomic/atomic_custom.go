@@ -19,8 +19,8 @@ func (*noCopy) Unlock() {}
 
 // Float32 is an atomic wrapper around float32.
 type Float32 struct {
-	noCopy noCopy
-	v      uint32
+	_ noCopy
+	v uint32
 }
 
 // NewFloat32 creates a Float32.

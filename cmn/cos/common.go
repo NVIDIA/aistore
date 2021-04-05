@@ -117,7 +117,11 @@ func MustMorphMarshal(data, v interface{}) {
 // PARSING //
 /////////////
 
-func IsParseBool(s string) (yes bool) { yes, _ = ParseBool(s); return }
+func IsParseBool(s string) bool {
+	yes, err := ParseBool(s)
+	_ = err // error means false
+	return yes
+}
 
 // ParseBool converts string to bool (case-insensitive):
 //   y, yes, on -> true

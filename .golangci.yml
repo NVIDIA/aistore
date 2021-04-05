@@ -18,7 +18,6 @@ linters:
     - gosimple
     - govet
     - ineffassign
-    - maligned
     - misspell
     - nolintlint
     - prealloc

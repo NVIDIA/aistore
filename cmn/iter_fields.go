@@ -235,9 +235,11 @@ func copyProps(src, dst interface{}, asType string) (err error) {
 
 		t, ok := dstVal.Type().FieldByName(fieldName)
 		cos.Assert(ok)
+		// NOTE: the tag is used exclusively to enforce local vs global scope of the config var
 		allowed := t.Tag.Get("allow")
 		if allowed != "" && allowed != asType {
-			return fmt.Errorf("cannot set property %s with config level %q as %q", fieldName, allowed, asType)
+			return fmt.Errorf("cannot set property %s with config level %q as %q",
+				fieldName, allowed, asType)
 		}
 
 		if dstValField.Kind() != reflect.Struct && dstValField.Kind() != reflect.Invalid {

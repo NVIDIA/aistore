@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 )
 
@@ -120,29 +121,26 @@ func setAvailableMountPaths(paths ...string) []string {
 	}
 
 	for _, mpathInfo := range availablePaths {
-		Remove(mpathInfo.Path)
+		_, err := Remove(mpathInfo.Path)
+		debug.AssertNoErr(err)
 	}
 
 	for _, path := range paths {
 		if path == "" {
 			continue
 		}
-
-		Add(path, "daeID")
+		_, err := Add(path, "daeID")
+		_ = err
 	}
 
 	return oldPaths
 }
 
-func createDirs(dirs ...string) error {
+func createDirs(dirs ...string) {
 	for _, dir := range dirs {
 		err := cos.CreateDir(dir)
-		if err != nil {
-			return err
-		}
+		debug.AssertNoErr(err)
 	}
-
-	return nil
 }
 
 func removeDirs(dirs ...string) {

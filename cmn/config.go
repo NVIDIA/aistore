@@ -1481,10 +1481,11 @@ func ConfigPropList(scopes ...string) []string {
 		scope = scopes[0]
 	}
 	propList := []string{"vmodule", "log_level", "log.level"}
-	IterFields(Config{}, func(tag string, field IterField) (err error, p bool) {
+	err := IterFields(Config{}, func(tag string, _ IterField) (err error, b bool) {
 		propList = append(propList, tag)
 		return
 	}, IterOpts{Allowed: scope})
+	debug.AssertNoErr(err)
 	return propList
 }
 

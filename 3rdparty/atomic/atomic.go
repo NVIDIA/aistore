@@ -82,8 +82,8 @@ func (i *Int32) Swap(n int32) int32 {
 
 // Int64 is an atomic wrapper around an int64.
 type Int64 struct {
-	noCopy noCopy
-	v      int64
+	_ noCopy
+	v int64
 }
 
 // NewInt64 creates an Int64.
@@ -133,8 +133,8 @@ func (i *Int64) Swap(n int64) int64 {
 
 // Uint32 is an atomic wrapper around an uint32.
 type Uint32 struct {
-	noCopy noCopy
-	v      uint32
+	_ noCopy
+	v uint32
 }
 
 // NewUint32 creates a Uint32.
@@ -184,8 +184,8 @@ func (i *Uint32) Swap(n uint32) uint32 {
 
 // Uint64 is an atomic wrapper around a uint64.
 type Uint64 struct {
-	noCopy noCopy
-	v      uint64
+	_ noCopy
+	v uint64
 }
 
 // NewUint64 creates a Uint64.
@@ -235,8 +235,8 @@ func (i *Uint64) Swap(n uint64) uint64 {
 
 // Bool is an atomic Boolean.
 type Bool struct {
-	noCopy noCopy
-	v      uint32
+	_ noCopy
+	v uint32
 }
 
 // interface guard
@@ -301,8 +301,8 @@ func boolToInt(b bool) uint32 {
 
 // Float64 is an atomic wrapper around float64.
 type Float64 struct {
-	noCopy noCopy
-	v      uint64
+	_ noCopy
+	v uint64
 }
 
 // NewFloat64 creates a Float64.
@@ -328,8 +328,8 @@ func (f *Float64) CAS(old, new float64) bool {
 // Duration is an atomic wrapper around time.Duration
 // https://godoc.org/time#Duration
 type Duration struct {
-	noCopy noCopy
-	v      Int64
+	_ noCopy
+	v Int64
 }
 
 // NewDuration creates a Duration.
@@ -370,8 +370,8 @@ func (d *Duration) CAS(old, new time.Duration) bool {
 // Time is an atomic wrapper around time.Time
 // https://godoc.org/time#Time
 type Time struct {
-	noCopy noCopy
-	v      Int64
+	_ noCopy
+	v Int64
 }
 
 // interface guard
@@ -411,6 +411,6 @@ func (d *Time) UnmarshalJSON(data []byte) error {
 // Value shadows the type of the same name from sync/atomic
 // https://godoc.org/sync/atomic#Value
 type Value struct {
-	noCopy noCopy
+	_ noCopy
 	atomic.Value
 }
