@@ -134,7 +134,7 @@ func (rj *joggerCtx) moveECMeta(ct *cluster.CT, srcMpath, dstMpath *fs.Mountpath
 	dst := dstMpath.MakePathFQN(ct.Bucket(), ec.MetaType, ct.ObjectName())
 	_, _, err := cos.CopyFile(src, dst, buf, cos.ChecksumNone)
 	if err == nil {
-		return src, dst, err
+		return src, dst, nil
 	}
 	if os.IsNotExist(err) {
 		err = nil

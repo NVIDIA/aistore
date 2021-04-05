@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/bench/aisloader/stats"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats/statsd"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -217,8 +218,13 @@ func writeStatsJSON(to io.Writer, s sts, withcomma ...bool) {
 	}
 }
 
+func fprintf(w io.Writer, format string, a ...interface{}) {
+	_, err := fmt.Fprintf(w, format, a...)
+	debug.AssertNoErr(err)
+}
+
 func writeHumanReadibleIntervalStats(to io.Writer, s, t sts) {
-	p := fmt.Fprintf
+	p := fprintf
 	pn := prettyNumber
 	pb := prettyBytes
 	ps := prettySpeed
@@ -262,7 +268,7 @@ func writeHumanReadibleIntervalStats(to io.Writer, s, t sts) {
 }
 
 func writeHumanReadibleFinalStats(to io.Writer, t sts) {
-	p := fmt.Fprintf
+	p := fprintf
 	pn := prettyNumber
 	pb := prettyBytes
 	ps := prettySpeed

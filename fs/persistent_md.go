@@ -106,14 +106,12 @@ func PersistOnMpaths(path, backupPath string, what interface{}, atMost int, opts
 func RemoveDaemonIDs() {
 	available, disabled := Get()
 	for _, mpath := range available {
-		if err := RemoveXattr(mpath.Path, daemonIDXattr); err != nil {
-			glog.Warning(err)
-		}
+		err := removeXattr(mpath.Path, daemonIDXattr)
+		debug.AssertNoErr(err)
 	}
 	for _, mpath := range disabled {
-		if err := RemoveXattr(mpath.Path, daemonIDXattr); err != nil {
-			glog.Warning(err)
-		}
+		err := removeXattr(mpath.Path, daemonIDXattr)
+		debug.AssertNoErr(err)
 	}
 }
 

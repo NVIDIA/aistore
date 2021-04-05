@@ -105,11 +105,11 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 
 	// Step 3.
 	_, newPrimaryURL, err := chooseNextProxy(m.smap)
+	tassert.CheckFatal(t, err)
 	// use a new proxyURL because primaryCrashElectRestart has a side-effect:
 	// it changes the primary proxy. Without the change tutils.PutRandObjs is
 	// failing while the current primary is restarting and rejoining
 	m.proxyURL = newPrimaryURL
-	tassert.CheckFatal(t, err)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -1083,7 +1083,8 @@ func TestForwardCP(t *testing.T) {
 
 	// Step 2.
 	origID, origURL := m.smap.Primary.ID(), m.smap.Primary.PublicNet.DirectURL
-	nextProxyID, nextProxyURL, _ := chooseNextProxy(m.smap)
+	nextProxyID, nextProxyURL, err := chooseNextProxy(m.smap)
+	tassert.CheckFatal(t, err)
 
 	tutils.CreateFreshBucket(t, nextProxyURL, m.bck, nil)
 	tlog.Logf("Created bucket %s via non-primary %s\n", m.bck, nextProxyID)

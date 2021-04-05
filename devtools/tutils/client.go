@@ -582,9 +582,10 @@ func GetDaemonConfig(t *testing.T, node *cluster.Snode) *cmn.Config {
 	return config
 }
 
-func GetClusterMap(tb testing.TB, url string) (smap *cluster.Smap) {
-	smap, _ = waitForStartup(BaseAPIParams(url), tb)
-	return
+func GetClusterMap(tb testing.TB, url string) *cluster.Smap {
+	smap, err := waitForStartup(BaseAPIParams(url), tb)
+	_ = err // the caller must check smap for nil
+	return smap
 }
 
 func getClusterConfig() (config *cmn.Config, err error) {

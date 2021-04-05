@@ -640,16 +640,18 @@ func mountpathsCopy() (MPI, MPI) {
 // Remove removes mountpaths from the target's mountpaths. It searches
 // for the mountpath in `available` and, if not found, in `disabled`.
 func Remove(mpath string, cb ...func()) (*MountpathInfo, error) {
-	mfs.mu.Lock()
-	defer mfs.mu.Unlock()
-
 	cleanMpath, err := cmn.ValidateMpath(mpath)
 	if err != nil {
 		return nil, err
 	}
 
+	mfs.mu.Lock()
+	defer mfs.mu.Unlock()
+
 	// Clear daemonID xattr if set
-	RemoveXattr(mpath, daemonIDXattr)
+	if err := removeXattr(cleanMpath, daemonIDXattr); err != nil {
+		return nil, err
+	}
 
 	var (
 		exists    bool

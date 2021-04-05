@@ -85,11 +85,16 @@ func (vmd *VMD) equal(other *VMD) bool {
 func (vmd *VMD) String() string { return string(cos.MustMarshal(vmd)) }
 
 func CreateNewVMD(daemonID string) (vmd *VMD, err error) {
-	available, disabled := Get()
-
+	var (
+		curVersion          uint64
+		available, disabled = Get()
+	)
 	// Try to load the currently stored vmd to determine the version.
-	var curVersion uint64
-	vmd, _ = LoadVMD(available.ToStringSet())
+	vmd, err = LoadVMD(available.ToStringSet())
+	if err != nil {
+		glog.Warning(err) // TODO: handle
+		err = nil
+	}
 	if vmd != nil {
 		curVersion = vmd.Version
 	}
@@ -120,8 +125,8 @@ func CreateNewVMD(daemonID string) (vmd *VMD, err error) {
 }
 
 // LoadVMD loads VMD from given paths:
-// - Returns error in case of validation errors or failed to load existing VMD
-// - Returns nil if VMD not present on any path
+// - Returns nil if VMD does not exist
+// - Returns error on failure to validate or load existing VMD
 func LoadVMD(mpaths cos.StringSet) (mainVMD *VMD, err error) {
 	for path := range mpaths {
 		vmd := newVMD(len(mpaths))
@@ -145,12 +150,14 @@ func LoadVMD(mpaths cos.StringSet) (mainVMD *VMD, err error) {
 				// If the `vmd` version is greater than current `mainVMD` we should
 				// just take the newer one that we trust.
 				mainVMD = vmd
-				glog.Warningf("Found vmd (on %q) which has greater version (%s vs %s)", path, mainVMD, vmd)
+				glog.Warningf("Found vmd (on %q) which has greater version (%s vs %s)",
+					path, mainVMD, vmd)
 				continue
 			} else if vmd.Version < mainVMD.Version {
 				// If the `vmd` version is lesser than current `mainVMD` we should
 				// just ignore it.
-				glog.Warningf("Found vmd (on %q) which has lesser version (%s vs %s)", path, vmd, mainVMD)
+				glog.Warningf("Found vmd (on %q) which has lesser version (%s vs %s)",
+					path, vmd, mainVMD)
 				continue
 			}
 
@@ -162,7 +169,7 @@ func LoadVMD(mpaths cos.StringSet) (mainVMD *VMD, err error) {
 		}
 	}
 	if mainVMD == nil {
-		glog.Warningf("VMD not found on any of %d mountpaths", len(mpaths))
+		glog.Warningf("VMD not found (num=%d)", len(mpaths))
 	}
 	return mainVMD, nil
 }

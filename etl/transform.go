@@ -179,7 +179,8 @@ func cleanupEntities(errCtx *cmn.ETLErrorContext, podName, svcName string) (err 
 // * podName - non-empty if at least one attempt of creating pod was executed
 // * svcName - non-empty if at least one attempt of creating service was executed
 // * err - any error occurred which should be passed further.
-func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETLErrorContext, podName, svcName string, err error) {
+func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETLErrorContext,
+	podName, svcName string, err error) {
 	cos.Assert(k8s.NodeName != "") // Corresponding 'if' done at the beginning of the request.
 	var (
 		pod             *corev1.Pod
@@ -215,7 +216,8 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 	errCtx.SvcName = svc.Name
 
 	// 1. Cleanup previously started entities (if any).
-	_ = cleanupEntities(errCtx, pod.Name, svc.Name)
+	errCleanup := cleanupEntities(errCtx, pod.Name, svc.Name)
+	debug.AssertNoErr(errCleanup)
 
 	// 2. Creating service.
 	svcName = svc.GetName()

@@ -67,7 +67,9 @@ func init() {
 
 func Terminate() {
 	defer func() {
-		recover() // Prevents panic from double close of RunningCh
+		if r := recover(); r != nil { // Prevents panic from double close of RunningCh
+			fmt.Println("Recovered", r)
+		}
 	}()
 	Terminated = true
 	close(RunningCh)

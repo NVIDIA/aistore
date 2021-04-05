@@ -526,12 +526,14 @@ func targetRejoin(t *testing.T) {
 
 // crashAndFastRestore kills the primary and restores it before a new leader is elected
 func crashAndFastRestore(t *testing.T) {
+	var err error
 	proxyURL := tutils.RandomProxyURL(t)
 	smap := tutils.GetClusterMap(t, proxyURL)
 	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTargets(), smap.CountActiveProxies())
 
 	// Make sure proxyURL is not primary URL.
-	_, proxyURL, _ = chooseNextProxy(smap)
+	_, proxyURL, err = chooseNextProxy(smap)
+	tassert.CheckFatal(t, err)
 	oldPrimaryID := smap.Primary.ID()
 	tlog.Logf("The current primary %s, Smap version %d\n", oldPrimaryID, smap.Version)
 

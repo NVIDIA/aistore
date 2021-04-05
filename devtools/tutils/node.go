@@ -578,7 +578,8 @@ func EnsureOrigClusterState(t *testing.T) {
 
 		if containers.DockerRunning() {
 			if node == nil {
-				RestoreNode(cmd, false, cmd.Node.Type())
+				err := RestoreNode(cmd, false, cmd.Node.Type())
+				tassert.CheckError(t, err)
 				updated = true
 			}
 			continue
