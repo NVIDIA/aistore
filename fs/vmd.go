@@ -37,6 +37,12 @@ type (
 		DaemonID   string                `json:"daemon_id"`      // ID of the daemon to which the mountpaths belong(ed).
 		cksum      *cos.Cksum            // Checksum of loaded VMD.
 	}
+
+	// errors
+	StorageIntegrityError struct {
+		msg  string
+		code int
+	}
 )
 
 // interface guard
@@ -90,7 +96,7 @@ func CreateNewVMD(daemonID string) (vmd *VMD, err error) {
 		available, disabled = Get()
 	)
 	// Try to load the currently stored vmd to determine the version.
-	vmd, err = LoadVMD(available.ToStringSet())
+	vmd, err = LoadVMD(available)
 	if err != nil {
 		glog.Warning(err) // TODO: handle
 		err = nil
@@ -124,54 +130,67 @@ func CreateNewVMD(daemonID string) (vmd *VMD, err error) {
 	return
 }
 
-// LoadVMD loads VMD from given paths:
+// initVMD and LoadVMD loads VMD from given paths (aside: no templates, etc.):
 // - Returns nil if VMD does not exist
 // - Returns error on failure to validate or load existing VMD
-func LoadVMD(mpaths cos.StringSet) (mainVMD *VMD, err error) {
-	for path := range mpaths {
-		vmd := newVMD(len(mpaths))
-		err := vmd.load(path)
-		if err != nil && os.IsNotExist(err) {
-			continue
-		}
+func initVMD(fspaths cos.StringSet) (vmd *VMD, err error) {
+	l := len(fspaths)
+	for mpath := range fspaths {
+		var v *VMD
+		v, err = _loadVMD(vmd, mpath, l)
 		if err != nil {
-			err = newVMDLoadErr(path, err)
-			return nil, err
+			return
 		}
-		if mainVMD == nil {
-			mainVMD = vmd
-		} else {
-			if vmd.DaemonID != mainVMD.DaemonID {
-				err = newVMDMismatchErr(mainVMD, vmd, path)
-				return nil, err
-			}
-
-			if vmd.Version > mainVMD.Version {
-				// If the `vmd` version is greater than current `mainVMD` we should
-				// just take the newer one that we trust.
-				mainVMD = vmd
-				glog.Warningf("Found vmd (on %q) which has greater version (%s vs %s)",
-					path, mainVMD, vmd)
-				continue
-			} else if vmd.Version < mainVMD.Version {
-				// If the `vmd` version is lesser than current `mainVMD` we should
-				// just ignore it.
-				glog.Warningf("Found vmd (on %q) which has lesser version (%s vs %s)",
-					path, vmd, mainVMD)
-				continue
-			}
-
-			// If the versions match check if the VMDs are equal (they should be).
-			if !vmd.equal(mainVMD) {
-				err = newVMDMismatchErr(mainVMD, vmd, path)
-				return nil, err
-			}
+		if v != nil {
+			vmd = v
 		}
 	}
-	if mainVMD == nil {
-		glog.Warningf("VMD not found (num=%d)", len(mpaths))
+	return vmd, nil
+}
+
+func LoadVMD(available MPI) (vmd *VMD, err error) {
+	l := len(available)
+	for mpath := range available {
+		var v *VMD
+		v, err = _loadVMD(vmd, mpath, l)
+		if err != nil {
+			return
+		}
+		if v != nil {
+			vmd = v
+		}
 	}
-	return mainVMD, nil
+	return vmd, nil
+}
+
+func _loadVMD(vmd *VMD, mpath string, l int) (*VMD, error) {
+	var (
+		v   = newVMD(l)
+		err = v.load(mpath)
+	)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		err = newVMDLoadErr(mpath, err)
+		return nil, err
+	}
+	if vmd == nil {
+		return v, nil
+	}
+	if v.DaemonID != vmd.DaemonID {
+		return nil, newMpathIDMismatchErr(v.DaemonID, vmd.DaemonID, mpath)
+	}
+	if v.Version > vmd.Version { // NOTE: take the newer
+		glog.Warningf("%s (on %q) version greater than %s", v, mpath, vmd)
+		return v, nil
+	}
+	if v.Version < vmd.Version { // NOTE: ignore the older
+		glog.Warningf("%s (on %q) version lesser than %s", v, mpath, vmd)
+	} else if !v.equal(vmd) { // NOTE: must be identical
+		err = newVMDMismatchErr(vmd, v, mpath)
+	}
+	return nil, err
 }
 
 // LoadDaemonID loads the daemon ID present as xattr on given mount paths.
@@ -205,4 +224,61 @@ func loadDaemonIDXattr(mpath string) (daeID string, err error) {
 		err = nil
 	}
 	return
+}
+
+////////////
+// errors //
+////////////
+
+func (sie *StorageIntegrityError) Error() string {
+	return fmt.Sprintf("[%s]: %s", siError(sie.code), sie.msg)
+}
+
+func newMpathIDMismatchErr(mainDaeID, tid, mpath string) *StorageIntegrityError {
+	return &StorageIntegrityError{
+		code: siMpathIDMismatch,
+		msg:  fmt.Sprintf("target ID mismatch: %q vs %q (%q)", mainDaeID, tid, mpath),
+	}
+}
+
+func newVMDIDMismatchErr(vmd *VMD, tid string) *StorageIntegrityError {
+	return &StorageIntegrityError{
+		code: siTargetIDMismatch,
+		msg:  fmt.Sprintf("%s has a different target ID: %q != %q", vmd, vmd.DaemonID, tid),
+	}
+}
+
+func newVMDMissingMpathErr(mpath string) *StorageIntegrityError {
+	return &StorageIntegrityError{
+		code: siMpathMissing,
+		msg:  fmt.Sprintf("mountpath %q not in VMD", mpath),
+	}
+}
+
+func newConfigMissingMpathErr(mpath string) *StorageIntegrityError {
+	return &StorageIntegrityError{
+		code: siMpathMissing,
+		msg:  fmt.Sprintf("mountpath %q in VMD but not in the config", mpath),
+	}
+}
+
+func newVMDLoadErr(mpath string, err error) *StorageIntegrityError {
+	return &StorageIntegrityError{
+		code: siMetaCorrupted,
+		msg:  fmt.Sprintf("failed to load VMD from %q: %v", mpath, err),
+	}
+}
+
+func newVMDMismatchErr(mainVMD, otherVMD *VMD, mpath string) *StorageIntegrityError {
+	return &StorageIntegrityError{
+		code: siMetaMismatch,
+		msg:  fmt.Sprintf("VMD mismatch: %s vs %s (%q)", mainVMD, otherVMD, mpath),
+	}
+}
+
+func siError(code int) string {
+	return fmt.Sprintf(
+		"storage integrity error: sie#%d - for details, see %s/blob/master/docs/troubleshooting.md",
+		code, cmn.GithubHome,
+	)
 }

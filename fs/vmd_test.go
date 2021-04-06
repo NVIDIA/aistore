@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/fs"
@@ -49,12 +48,7 @@ func testVMDPersist(t *testing.T, daemonID string) {
 	tassert.CheckFatal(t, err)
 
 	available, _ := fs.Get()
-	mps := make(cos.StringSet, len(available))
-	for _, mp := range available {
-		mps.Add(mp.Path)
-	}
-
-	newVMD, err := fs.LoadVMD(mps)
+	newVMD, err := fs.LoadVMD(available)
 	tassert.Fatalf(t, err == nil, "expected no error while loading VMD")
 	tassert.Errorf(t, newVMD.DaemonID == vmd.DaemonID,
 		"expected VMDs to have same daemon ID. got: %s vs %s", newVMD.DaemonID, vmd.DaemonID)

@@ -110,12 +110,6 @@ type (
 		Err        error
 		OOS        bool
 	}
-
-	// errors
-	StorageIntegrityError struct {
-		msg  string
-		code int
-	}
 )
 
 var (
@@ -437,14 +431,6 @@ func (mi *MountpathInfo) getCapacity(config *cmn.Config, refresh bool) (c Capaci
 	return
 }
 
-func (m MPI) ToStringSet() cos.StringSet {
-	x := cos.NewStringSet()
-	for path := range m {
-		x.Add(path)
-	}
-	return x
-}
-
 ///////////////
 // MountedFS //
 ///////////////
@@ -466,7 +452,7 @@ func InitMpaths(tid string) (changed bool, err error) {
 		// (usability) not to clutter the log with backtraces when starting up and validating config
 		return false, fmt.Errorf("no fspaths - see README => Configuration and/or fspaths section in the config.sh")
 	}
-	vmd, err := LoadVMD(configPaths)
+	vmd, err := initVMD(configPaths)
 	if err != nil {
 		return false, err
 	}
@@ -485,7 +471,7 @@ func InitMpaths(tid string) (changed bool, err error) {
 	glog.Infof("VMD loaded (mountpaths: %d), validating it with config (mountpaths: %d)", len(vmd.Mountpaths), len(configPaths))
 
 	if vmd.DaemonID != tid {
-		return false, newVMDIDMismatchErr(vmd.DaemonID, tid)
+		return false, newVMDIDMismatchErr(vmd, tid)
 	}
 
 	// Validate VMD with config FS.
@@ -973,61 +959,4 @@ func CapStatusAux() (fsInfo cmn.CapacityInfo) {
 	fsInfo.Total = cs.TotalUsed + cs.TotalAvail
 	fsInfo.PctUsed = float64(cs.PctAvg)
 	return
-}
-
-////////////////
-// errors     //
-////////////////
-
-func (sie *StorageIntegrityError) Error() string {
-	return fmt.Sprintf("[%s]: %s", siError(sie.code), sie.msg)
-}
-
-func newMpathIDMismatchErr(mainDaeID, tid, mpath string) *StorageIntegrityError {
-	return &StorageIntegrityError{
-		code: siMpathIDMismatch,
-		msg:  fmt.Sprintf("DaemonIDs different (%q): %q vs %q", mpath, mainDaeID, tid),
-	}
-}
-
-func newVMDIDMismatchErr(vmdDaeID, tid string) *StorageIntegrityError {
-	return &StorageIntegrityError{
-		code: siTargetIDMismatch,
-		msg:  fmt.Sprintf("VMD and target DaemonID don't match: %q vs %q", vmdDaeID, tid),
-	}
-}
-
-func newVMDMissingMpathErr(mpath string) *StorageIntegrityError {
-	return &StorageIntegrityError{
-		code: siMpathMissing,
-		msg:  fmt.Sprintf("mountpath %q not in VMD", mpath),
-	}
-}
-
-func newConfigMissingMpathErr(mpath string) *StorageIntegrityError {
-	return &StorageIntegrityError{
-		code: siMpathMissing,
-		msg:  fmt.Sprintf("mountpath %q in VMD but not in config", mpath),
-	}
-}
-
-func newVMDLoadErr(mpath string, err error) *StorageIntegrityError {
-	return &StorageIntegrityError{
-		code: siMetaCorrupted,
-		msg:  fmt.Sprintf("failed to read VMD (%q), err: %v", mpath, err),
-	}
-}
-
-func newVMDMismatchErr(mainVMD, otherVMD *VMD, mpath string) *StorageIntegrityError {
-	return &StorageIntegrityError{
-		code: siMetaMismatch,
-		msg:  fmt.Sprintf("VMD is different (%q): %s vs %s", mpath, mainVMD, otherVMD),
-	}
-}
-
-func siError(code int) string {
-	return fmt.Sprintf(
-		"storage integrity error: sie#%d - for details, see %s/blob/master/docs/troubleshooting.md",
-		code, cmn.GithubHome,
-	)
 }
