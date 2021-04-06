@@ -42,6 +42,7 @@ type (
 
 // via GET /v1/health (cmn.Health)
 func (reb *Manager) RebStatus(status *Status) {
+	reb.RLock()
 	var (
 		targets    cluster.Nodes
 		config     = cmn.GCO.Get()
@@ -66,12 +67,13 @@ func (reb *Manager) RebStatus(status *Status) {
 	if rsmap != nil {
 		status.RebVersion = rsmap.Version
 	}
-	// stats
 	beginStats := (*stats.ExtRebalanceStats)(reb.beginStats.Load())
+	curStats := reb.getStats()
+	reb.RUnlock()
+	// stats
 	if beginStats == nil {
 		return
 	}
-	curStats := reb.getStats()
 	status.StatsDelta.RebTxCount = curStats.RebTxCount - beginStats.RebTxCount
 	status.StatsDelta.RebTxSize = curStats.RebTxSize - beginStats.RebTxSize
 	status.StatsDelta.RebRxCount = curStats.RebRxCount - beginStats.RebRxCount
@@ -117,7 +119,6 @@ func (reb *Manager) RebStatus(status *Status) {
 	}
 ret:
 	reb.awaiting.mu.Unlock()
-	status.Stage = reb.stages.stage.Load()
 }
 
 // returns the number of targets that have not reached `stage` yet. It is

@@ -221,8 +221,8 @@ func (reb *Manager) rebInit(md *rebArgs, notif *xaction.NotifXact) bool {
 		reb.cleanupEC()
 	}
 
+	reb.Lock()
 	reb.setXact(xact.(*xrun.Rebalance))
-	defer reb.xact().MarkDone()
 
 	// 3. init streams and data structures
 	reb.beginStats.Store(unsafe.Pointer(reb.getStats()))
@@ -247,6 +247,9 @@ func (reb *Manager) rebInit(md *rebArgs, notif *xaction.NotifXact) bool {
 	reb.smap.Store(unsafe.Pointer(md.smap))
 	reb.rebID.Store(md.id)
 	reb.stages.cleanup()
+
+	reb.xact().MarkDone()
+	reb.Unlock()
 	glog.Infof("%s: %s", reb.logHdr(md), reb.xact().String())
 	return true
 }

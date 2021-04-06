@@ -61,6 +61,7 @@ type (
 	}
 
 	Manager struct {
+		sync.RWMutex
 		t           cluster.Target
 		dm          *bundle.DataMover
 		pushes      *bundle.Streams // broadcast notifications
