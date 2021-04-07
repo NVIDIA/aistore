@@ -173,13 +173,14 @@ func (r *Trunner) GetWhatStats() interface{} {
 }
 
 func (r *Trunner) log(uptime time.Duration) {
-	r.lines = r.lines[:0]
+	r.lines = r.lines[:0] // TODO: reuse lines as []byte buffers
 
 	// copy stats, reset latencies
 	r.Core.UpdateUptime(uptime)
 	if idle := r.Core.copyT(r.ctracker, []string{"kalive", Uptime}); !idle {
-		b := cos.MustMarshal(r.ctracker)
-		r.lines = append(r.lines, string(b))
+		ln, err := cos.MarshalToString(r.ctracker)
+		debug.AssertNoErr(err)
+		r.lines = append(r.lines, ln)
 	}
 
 	// 2. capacity
@@ -189,9 +190,10 @@ func (r *Trunner) log(uptime time.Duration) {
 			go r.T.RunLRU("" /*uuid*/, false)
 		}
 		for mpath, fsCapacity := range r.MPCap {
-			b := cos.MustMarshal(fsCapacity)
+			ln, err := cos.MarshalToString(fsCapacity)
+			debug.AssertNoErr(err)
 			debug.SetExpvar(glog.SmoduleStats, mpath+":cap%", int64(fsCapacity.PctUsed))
-			r.lines = append(r.lines, mpath+": "+string(b))
+			r.lines = append(r.lines, mpath+": "+ln)
 		}
 	}
 

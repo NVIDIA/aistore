@@ -93,6 +93,8 @@ func init() {
 // JSON & JSONLocal //
 //////////////////////
 
+func MarshalToString(v interface{}) (string, error) { return JSON.MarshalToString(v) }
+
 // MustMarshal marshals v and panics if error occurs.
 func MustMarshal(v interface{}) []byte {
 	b, err := JSON.Marshal(v)

@@ -474,7 +474,7 @@ func InitMpaths(tid string) (changed bool, err error) {
 		return false, newVMDIDMismatchErr(vmd, tid)
 	}
 
-	// Validate VMD with config FS.
+	// Validate VMD versus config
 	for path := range configPaths {
 		// Check if config path is present in VMD paths.
 		var enabled bool

@@ -7,7 +7,7 @@ package ios
 
 import (
 	"fmt"
-	"sort"
+	"strconv"
 	"sync"
 	"time"
 	"unsafe"
@@ -25,7 +25,6 @@ type (
 		sync.RWMutex
 		mpath2disks map[string]fsDisks
 		disk2mpath  cos.SimpleKVs
-		sorted      []string
 		disk2sysfn  cos.SimpleKVs
 		cache       atomic.Pointer
 		cacheHst    [16]*ioStatCache
@@ -77,7 +76,6 @@ func NewIostatContext() IOStater {
 	ctx := &iostatContext{
 		mpath2disks: make(map[string]fsDisks, 10),
 		disk2mpath:  make(cos.SimpleKVs, 10),
-		sorted:      make([]string, 0, 10),
 		disk2sysfn:  make(cos.SimpleKVs, 10),
 	}
 	for i := 0; i < len(ctx.cacheHst); i++ {
@@ -140,14 +138,11 @@ func (ctx *iostatContext) AddMpath(mpath, fs string) {
 		}
 		ctx.disk2mpath[disk] = mpath
 	}
-	ctx.sorted = ctx.sorted[:0]
 	for disk := range ctx.disk2mpath {
-		ctx.sorted = append(ctx.sorted, disk)
 		if _, ok := ctx.disk2sysfn[disk]; !ok {
 			ctx.disk2sysfn[disk] = fmt.Sprintf("/sys/class/block/%v/stat", disk)
 		}
 	}
-	sort.Strings(ctx.sorted) // log
 	if len(ctx.disk2sysfn) != len(ctx.disk2mpath) {
 		for disk := range ctx.disk2sysfn {
 			if _, ok := ctx.disk2mpath[disk]; !ok {
@@ -233,18 +228,27 @@ func (ctx *iostatContext) GetSelectedDiskStats() (m map[string]*SelectedDiskStat
 func (ctx *iostatContext) LogAppend(lines []string) []string {
 	cache := ctx.refreshIostatCache()
 	ctx.RLock()
-	for _, disk := range ctx.sorted {
+	for disk := range ctx.disk2mpath {
 		if _, ok := cache.diskIOms[disk]; !ok {
 			continue
 		}
-		util := cache.diskUtil[disk]
+		util := int(cache.diskUtil[disk])
 		if util == 0 {
 			continue
 		}
 		rbps := cos.B2S(cache.diskRBps[disk], 0)
 		wbps := cos.B2S(cache.diskWBps[disk], 0)
-		line := fmt.Sprintf("%s: %s/s, %s/s, %d%%", disk, rbps, wbps, util)
-		lines = append(lines, line)
+		l := len(disk) + len(rbps) + len(wbps) + 32
+		buf := make([]byte, 0, l)
+		buf = append(buf, disk...)
+		buf = append(buf, ": "...)
+		buf = append(buf, rbps...)
+		buf = append(buf, "/s, "...)
+		buf = append(buf, wbps...)
+		buf = append(buf, "/s, "...)
+		buf = append(buf, strconv.Itoa(util)...)
+		buf = append(buf, "%"...)
+		lines = append(lines, *(*string)(unsafe.Pointer(&buf)))
 	}
 	ctx.RUnlock()
 	return lines

@@ -133,19 +133,12 @@ func CreateNewVMD(daemonID string) (vmd *VMD, err error) {
 // initVMD and LoadVMD loads VMD from given paths (aside: no templates, etc.):
 // - Returns nil if VMD does not exist
 // - Returns error on failure to validate or load existing VMD
-func initVMD(fspaths cos.StringSet) (vmd *VMD, err error) {
-	l := len(fspaths)
+func initVMD(fspaths cos.StringSet) (*VMD, error) {
+	available := make(MPI, len(fspaths)) // strictly to satisfy LoadVMD (below)
 	for mpath := range fspaths {
-		var v *VMD
-		v, err = _loadVMD(vmd, mpath, l)
-		if err != nil {
-			return
-		}
-		if v != nil {
-			vmd = v
-		}
+		available[mpath] = nil
 	}
-	return vmd, nil
+	return LoadVMD(available)
 }
 
 func LoadVMD(available MPI) (vmd *VMD, err error) {
