@@ -606,7 +606,7 @@ func (p *proxyrunner) addOrUpdateNode(nsi, osi *cluster.Snode, keepalive bool) b
 			glog.Warningf("%s: renewing registration %s (info changed!)", p.si, nsi)
 			return true
 		}
-		p.keepalive.heardFrom(nsi.ID(), !keepalive /* reset */)
+		p.keepalive.heardFrom(nsi.ID(), false /*reset*/)
 		return false
 	}
 	if osi != nil {

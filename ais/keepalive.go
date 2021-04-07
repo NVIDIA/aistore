@@ -69,7 +69,6 @@ type keepalive struct {
 	// cached config
 	maxKeepalive int64
 	interval     time.Duration
-	factor       uint8
 }
 
 type timeoutTracker struct {
@@ -97,6 +96,8 @@ type KeepaliveTracker interface {
 	// TimedOut returns true if the 'id` server did not respond - an indication that the server
 	// could be down
 	TimedOut(id string) bool
+
+	changed(factor uint8, interval time.Duration) bool
 }
 
 // interface guard
@@ -473,10 +474,10 @@ func (k *keepalive) Run() error {
 
 func (k *keepalive) configUpdate(maxKeepalive time.Duration, cfg *cmn.KeepaliveTrackerConf) {
 	k.maxKeepalive = maxKeepalive.Nanoseconds()
-	if k.factor == cfg.Factor && k.interval == cfg.Interval {
+	if !k.kt.changed(cfg.Factor, cfg.Interval) {
 		return
 	}
-	k.factor, k.interval = cfg.Factor, cfg.Interval
+	k.interval = cfg.Interval
 	k.kt = newKeepaliveTracker(cfg)
 }
 
@@ -644,6 +645,10 @@ func (hb *HBTracker) TimedOut(id string) bool {
 	return !ok || mono.Since(t) > hb.interval
 }
 
+func (hb *HBTracker) changed(_ uint8, interval time.Duration) bool {
+	return hb.interval != interval
+}
+
 ////////////////
 // AvgTracker //
 ////////////////
@@ -706,4 +711,8 @@ func (a *AvgTracker) TimedOut(id string) bool {
 		return false
 	}
 	return int64(mono.Since(rec.last)/time.Millisecond) > int64(a.factor)*rec.avg()
+}
+
+func (a *AvgTracker) changed(factor uint8, _ time.Duration) bool {
+	return a.factor != factor
 }
