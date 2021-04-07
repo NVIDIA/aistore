@@ -22,7 +22,7 @@ import (
 
 type (
 	iostatContext struct {
-		mpathLock   sync.Mutex
+		sync.RWMutex
 		mpath2disks map[string]fsDisks
 		disk2mpath  cos.SimpleKVs
 		sorted      []string
@@ -117,8 +117,8 @@ func (x *MpathsUtils) Store(mpath string, util int64) {
 }
 
 func (ctx *iostatContext) AddMpath(mpath, fs string) {
-	ctx.mpathLock.Lock()
-	defer ctx.mpathLock.Unlock()
+	ctx.Lock()
+	defer ctx.Unlock()
 
 	config := cmn.GCO.Get()
 	fsdisks := fs2disks(fs)
@@ -189,8 +189,8 @@ func (ctx *iostatContext) removeMpathDisk(mpath, disk string) {
 }
 
 func (ctx *iostatContext) RemoveMpath(mpath string) {
-	ctx.mpathLock.Lock()
-	defer ctx.mpathLock.Unlock()
+	ctx.Lock()
+	defer ctx.Unlock()
 
 	config := cmn.GCO.Get()
 	oldDisks, ok := ctx.mpath2disks[mpath]
@@ -232,6 +232,7 @@ func (ctx *iostatContext) GetSelectedDiskStats() (m map[string]*SelectedDiskStat
 
 func (ctx *iostatContext) LogAppend(lines []string) []string {
 	cache := ctx.refreshIostatCache()
+	ctx.RLock()
 	for _, disk := range ctx.sorted {
 		if _, ok := cache.diskIOms[disk]; !ok {
 			continue
@@ -245,6 +246,7 @@ func (ctx *iostatContext) LogAppend(lines []string) []string {
 		line := fmt.Sprintf("%s: %s/s, %s/s, %d%%", disk, rbps, wbps, util)
 		lines = append(lines, line)
 	}
+	ctx.RUnlock()
 	return lines
 }
 
@@ -288,8 +290,8 @@ func (ctx *iostatContext) refreshIostatCache() *ioStatCache {
 }
 
 func (ctx *iostatContext) _refresh() (ncache *ioStatCache, maxUtil int64, missingInfo bool) {
-	ctx.mpathLock.Lock()
-	defer ctx.mpathLock.Unlock()
+	ctx.Lock()
+	defer ctx.Unlock()
 
 	ctx.cacheIdx++
 	ctx.cacheIdx %= len(ctx.cacheHst)
