@@ -315,7 +315,8 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if userRegister {
 		si, err := p.getDaemonInfo(nsi)
 		if err != nil {
-			p.writeErrf(w, r, "failed to obtain daemon info from %q, err: %v", nsi.URL(cmn.NetworkPublic), err)
+			p.writeErrf(w, r, "failed to obtain daemon info from %q, err: %v",
+				nsi.URL(cmn.NetworkPublic), err)
 			return
 		}
 		nsi.DaemonID = si.DaemonID
@@ -451,10 +452,9 @@ func (p *proxyrunner) userRegisterNode(nsi *cluster.Snode, tag string) (errCode 
 // NOTE: under lock
 func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, tag string,
 	keepalive bool, flags cluster.SnodeFlags) (update bool, err error) {
-	debug.AssertMutexLocked(&p.owner.smap.Mutex)
 	smap := p.owner.smap.get()
 	if !smap.isPrimary(p.si) {
-		err = newErrNotPrimary(p.si, smap, fmt.Sprintf("cannot %s %s", tag, nsi))
+		err = newErrNotPrimary(p.si, smap, "cannot "+tag+" "+nsi.String())
 		return
 	}
 	if nsi.IsProxy() {
