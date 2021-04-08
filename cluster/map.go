@@ -67,11 +67,12 @@ type (
 		PublicNet       NetInfo     `json:"public_net"`        // cmn.NetworkPublic
 		IntraControlNet NetInfo     `json:"intra_control_net"` // cmn.NetworkIntraControl
 		IntraDataNet    NetInfo     `json:"intra_data_net"`    // cmn.NetworkIntraData
-		Flags           SnodeFlags  `json:"flags"`             // enum cmn.Snode*
+		Flags           SnodeFlags  `json:"flags"`             // enum { SnodeNonElectable, SnodeIC, ... }
 		Ext             interface{} `json:"ext,omitempty"`     // within meta-version extensions
-		idDigest        uint64
-		name            string
-		LocalNet        *net.IPNet `json:"-"`
+		// runtime
+		idDigest uint64
+		name     string
+		LocalNet *net.IPNet `json:"-"`
 	}
 	Nodes   []*Snode          // slice of Snodes
 	NodeMap map[string]*Snode // map of Snodes: DaemonID => Snodes

@@ -455,7 +455,8 @@ func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX) (err error) {
 	}
 	r.Lock()
 	smap := r.Get()
-	if nsi := newSmap.GetNode(si.ID()); nsi != nil {
+	if nsi := newSmap.GetNode(si.ID()); nsi != nil && si.Flags != nsi.Flags {
+		glog.Warningf("%s changing flags from %b to %b", si, si.Flags, nsi.Flags)
 		si.Flags = nsi.Flags
 	}
 	if smap != nil {

@@ -539,7 +539,6 @@ func (h *httprunner) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
 		SI:             h.si,
 		VoteInProgress: xele != nil,
 	}
-
 	if !opts.skipConfig {
 		var err error
 		cm.Config, err = h.owner.config.get()
@@ -547,7 +546,7 @@ func (h *httprunner) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
 			return nil, err
 		}
 	}
-	// NOTE: skip when is undergoing changes and is about to get metasync-ed
+	// don't send Smap when it is undergoing changes (and is about to get metasync-ed)
 	if !opts.skipSmap {
 		cm.Smap = h.owner.smap.get()
 	}
