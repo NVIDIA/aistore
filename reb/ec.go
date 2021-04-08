@@ -354,7 +354,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) (err error) {
 		o.Hdr.ObjAttrs.Size = ec.SliceSize(ct.ObjSize, int(ct.DataSlices))
 	}
 	reb.ec.onAir.Inc()
-	o.Hdr.Opaque = req.NewPack(nil, rebMsgEC)
+	o.Hdr.Opaque = req.NewPack(rebMsgEC)
 	o.Callback = reb.transportECCB
 	if err = reb.dm.Send(o, roc, target); err != nil {
 		err = fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
@@ -397,7 +397,7 @@ func (reb *Manager) sendFromReader(reader cos.ReadOpenCloser,
 		ObjAttrs: transport.ObjectAttrs{Size: size},
 	}
 	newMeta.SliceID = sliceID
-	o.Hdr.Opaque = req.NewPack(nil, rebMsgEC)
+	o.Hdr.Opaque = req.NewPack(rebMsgEC)
 	if cksum != nil {
 		o.Hdr.ObjAttrs.CksumValue = cksum.Value()
 		o.Hdr.ObjAttrs.CksumType = cksum.Type()
@@ -573,7 +573,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Read
 		tsi  = smap.GetTarget(req.daemonID)
 		ack  = &ecAck{sliceID: uint16(sliceID), daemonID: reb.t.SID()}
 	)
-	hdr.Opaque = ack.NewPack(nil)
+	hdr.Opaque = ack.NewPack()
 	hdr.ObjAttrs.Size = 0
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("Sending ACK for %s/%s to %s", hdr.Bck, hdr.ObjName, tsi.ID())
@@ -892,7 +892,7 @@ func (reb *Manager) exchange(md *rebArgs) (err error) {
 	var (
 		req    = pushReq{daemonID: reb.t.SID(), stage: rebStageECNamespace, rebID: rebID}
 		body   = cos.MustMarshal(cts)
-		opaque = req.NewPack(nil, rebMsgEC)
+		opaque = req.NewPack(rebMsgEC)
 		o      = transport.AllocSend()
 	)
 	o.Hdr.ObjAttrs = transport.ObjectAttrs{Size: int64(len(body))}

@@ -31,12 +31,7 @@ func AllocSend() (obj *Obj) {
 }
 
 func FreeSend(obj *Obj) { // <== sendobj & stream_bundle
-	opaque := obj.Hdr.Opaque
-	if opaque != nil {
-		opaque = opaque[:0]
-	}
 	*obj = sobj0
-	obj.Hdr.Opaque = opaque
 	sendPool.Put(obj)
 }
 

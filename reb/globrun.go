@@ -644,7 +644,7 @@ func (rj *rebJogger) doSend(lom *cluster.LOM, tsi *cluster.Snode, roc cos.ReadOp
 	var (
 		ack    = regularAck{rebID: rj.m.RebID(), daemonID: rj.m.t.SID()}
 		o      = transport.AllocSend()
-		opaque = ack.NewPack(o.Hdr.Opaque)
+		opaque = ack.NewPack()
 	)
 	o.Hdr.Bck = lom.Bucket()
 	o.Hdr.ObjName = lom.ObjName

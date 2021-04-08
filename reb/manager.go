@@ -286,7 +286,7 @@ func (reb *Manager) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unp
 	}
 	if stage := reb.stages.stage.Load(); stage < rebStageFinStreams && stage != rebStageInactive {
 		ack := &regularAck{rebID: reb.RebID(), daemonID: reb.t.SID()}
-		hdr.Opaque = ack.NewPack(hdr.Opaque)
+		hdr.Opaque = ack.NewPack()
 		hdr.ObjAttrs.Size = 0
 		if err := reb.dm.ACK(hdr, nil, tsi); err != nil {
 			glog.Error(err) // TODO: collapse same-type errors e.g. "src-id=>network: destination mismatch"
@@ -366,7 +366,7 @@ func (reb *Manager) changeStage(newStage uint32, batchID int64) {
 		}
 		hdr = transport.ObjHdr{}
 	)
-	hdr.Opaque = reb.encodePushReq(&req, nil)
+	hdr.Opaque = reb.encodePushReq(&req)
 	// second, notify all
 	if err := reb.pushes.Send(&transport.Obj{Hdr: hdr}, nil); err != nil {
 		glog.Warningf("Failed to broadcast ack %s: %v", stages[newStage], err)
@@ -556,7 +556,7 @@ func (reb *Manager) abortRebalance() {
 		}
 		hdr = transport.ObjHdr{}
 	)
-	hdr.Opaque = reb.encodePushReq(&req, nil)
+	hdr.Opaque = reb.encodePushReq(&req)
 	if err := reb.pushes.Send(&transport.Obj{Hdr: hdr}, nil); err != nil {
 		glog.Errorf("Failed to broadcast abort notification: %v", err)
 	}

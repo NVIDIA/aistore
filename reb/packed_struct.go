@@ -63,12 +63,9 @@ func (rack *regularAck) Pack(packer *cos.BytePack) {
 	packer.WriteString(rack.daemonID)
 }
 
-func (rack *regularAck) NewPack(buf []byte) []byte { // TODO: consider adding as another cos.Packer interface
+func (rack *regularAck) NewPack() []byte { // TODO: consider adding as another cos.Packer interface
 	l := rebMsgKindSize + rack.PackedSize()
-	if l <= cap(buf) {
-		buf = nil
-	}
-	packer := cos.NewPacker(buf, l)
+	packer := cos.NewPacker(nil, l)
 	packer.WriteByte(rebMsgRegular)
 	packer.WriteAny(rack)
 	return packer.Bytes()
@@ -96,12 +93,9 @@ func (eack *ecAck) Pack(packer *cos.BytePack) {
 	packer.WriteString(eack.daemonID)
 }
 
-func (eack *ecAck) NewPack(buf []byte) []byte {
+func (eack *ecAck) NewPack() []byte {
 	l := rebMsgKindSize + eack.PackedSize()
-	if l <= cap(buf) {
-		buf = nil
-	}
-	packer := cos.NewPacker(buf, l)
+	packer := cos.NewPacker(nil, l)
 	packer.WriteByte(rebMsgEC)
 	packer.WriteAny(eack)
 	return packer.Bytes()
@@ -135,12 +129,9 @@ func (req *pushReq) Pack(packer *cos.BytePack) {
 	}
 }
 
-func (req *pushReq) NewPack(buf []byte, kind byte) []byte {
+func (req *pushReq) NewPack(kind byte) []byte {
 	l := rebMsgKindSize + req.PackedSize()
-	if l <= cap(buf) {
-		buf = nil
-	}
-	packer := cos.NewPacker(buf, l)
+	packer := cos.NewPacker(nil, l)
 	packer.WriteByte(kind)
 	packer.WriteAny(req)
 	return packer.Bytes()
@@ -177,25 +168,20 @@ func (req *pushReq) Unpack(unpacker *cos.ByteUnpack) error {
 	return unpacker.ReadAny(req.md)
 }
 
-// At this moment there is only one push notification request kind,
-// so there is no need for a caller to read the first byte and decide
-// which unpacker to call.
-// The function below is to simplify sending/receiving push notifications
-func (reb *Manager) encodePushReq(req *pushReq, buf []byte) []byte {
-	return req.NewPack(buf, rebMsgPushStage)
+func (reb *Manager) encodePushReq(req *pushReq) []byte {
+	return req.NewPack(rebMsgPushStage)
 }
 
 func (reb *Manager) decodePushReq(buf []byte) (*pushReq, error) {
 	var (
-		req = &pushReq{}
-		err error
+		req      = &pushReq{}
+		unpacker = cos.NewUnpacker(buf)
+		act, err = unpacker.ReadByte()
 	)
-
-	unpacker := cos.NewUnpacker(buf)
-	act, err := unpacker.ReadByte()
 	if err != nil {
 		return nil, err
 	}
+	// at the moment, there is only one kind of push notifications (see above)
 	if act != rebMsgPushStage {
 		return nil, fmt.Errorf("expected %d (push notification), got %d", rebMsgPushStage, act)
 	}
