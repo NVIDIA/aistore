@@ -285,21 +285,13 @@ func (reb *Manager) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unp
 		return
 	}
 	if stage := reb.stages.stage.Load(); stage < rebStageFinStreams && stage != rebStageInactive {
-		var (
-			ack = &regularAck{rebID: reb.RebID(), daemonID: reb.t.SID()}
-			mm  = reb.t.SmallMMSA()
-		)
-		hdr.Opaque = ack.NewPack(mm)
+		ack := &regularAck{rebID: reb.RebID(), daemonID: reb.t.SID()}
+		hdr.Opaque = ack.NewPack(hdr.Opaque)
 		hdr.ObjAttrs.Size = 0
-		if err := reb.dm.ACK(hdr, reb.rackSentCallback, tsi); err != nil {
-			mm.Free(hdr.Opaque)
+		if err := reb.dm.ACK(hdr, nil, tsi); err != nil {
 			glog.Error(err) // TODO: collapse same-type errors e.g. "src-id=>network: destination mismatch"
 		}
 	}
-}
-
-func (reb *Manager) rackSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
-	reb.t.SmallMMSA().Free(hdr.Opaque)
 }
 
 func (reb *Manager) waitForSmap() (*cluster.Smap, error) {
@@ -373,17 +365,12 @@ func (reb *Manager) changeStage(newStage uint32, batchID int64) {
 			rebID: reb.rebID.Load(), batch: int(batchID),
 		}
 		hdr = transport.ObjHdr{}
-		mm  = reb.t.SmallMMSA()
 	)
-	hdr.Opaque = reb.encodePushReq(&req, mm)
+	hdr.Opaque = reb.encodePushReq(&req, nil)
 	// second, notify all
-	if err := reb.pushes.Send(&transport.Obj{Hdr: hdr, Callback: reb.pushSentCallback}, nil); err != nil {
+	if err := reb.pushes.Send(&transport.Obj{Hdr: hdr}, nil); err != nil {
 		glog.Warningf("Failed to broadcast ack %s: %v", stages[newStage], err)
 	}
-}
-
-func (reb *Manager) pushSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
-	reb.t.SmallMMSA().Free(hdr.Opaque)
 }
 
 func (reb *Manager) recvPush(_ http.ResponseWriter, hdr transport.ObjHdr, _ io.Reader, err error) {
@@ -568,10 +555,9 @@ func (reb *Manager) abortRebalance() {
 			stage:    rebStageAbort,
 		}
 		hdr = transport.ObjHdr{}
-		mm  = reb.t.SmallMMSA()
 	)
-	hdr.Opaque = reb.encodePushReq(&req, mm)
-	if err := reb.pushes.Send(&transport.Obj{Hdr: hdr, Callback: reb.pushSentCallback}, nil); err != nil {
+	hdr.Opaque = reb.encodePushReq(&req, nil)
+	if err := reb.pushes.Send(&transport.Obj{Hdr: hdr}, nil); err != nil {
 		glog.Errorf("Failed to broadcast abort notification: %v", err)
 	}
 }

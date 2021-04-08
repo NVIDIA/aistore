@@ -9,7 +9,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ec"
-	"github.com/NVIDIA/aistore/memsys"
 )
 
 // Rebalance message types (for ACK or sending files)
@@ -64,9 +63,11 @@ func (rack *regularAck) Pack(packer *cos.BytePack) {
 	packer.WriteString(rack.daemonID)
 }
 
-func (rack *regularAck) NewPack(mm *memsys.MMSA) []byte { // TODO: consider adding as another cos.Packer interface
+func (rack *regularAck) NewPack(buf []byte) []byte { // TODO: consider adding as another cos.Packer interface
 	l := rebMsgKindSize + rack.PackedSize()
-	buf, _ := mm.Alloc(int64(l))
+	if l <= cap(buf) {
+		buf = nil
+	}
 	packer := cos.NewPacker(buf, l)
 	packer.WriteByte(rebMsgRegular)
 	packer.WriteAny(rack)
@@ -95,13 +96,10 @@ func (eack *ecAck) Pack(packer *cos.BytePack) {
 	packer.WriteString(eack.daemonID)
 }
 
-func (eack *ecAck) NewPack(mm *memsys.MMSA) []byte {
-	var (
-		buf []byte
-		l   = rebMsgKindSize + eack.PackedSize()
-	)
-	if mm != nil {
-		buf, _ = mm.Alloc(int64(l))
+func (eack *ecAck) NewPack(buf []byte) []byte {
+	l := rebMsgKindSize + eack.PackedSize()
+	if l <= cap(buf) {
+		buf = nil
 	}
 	packer := cos.NewPacker(buf, l)
 	packer.WriteByte(rebMsgEC)
@@ -137,13 +135,10 @@ func (req *pushReq) Pack(packer *cos.BytePack) {
 	}
 }
 
-func (req *pushReq) NewPack(mm *memsys.MMSA, kind byte) []byte {
-	var (
-		buf []byte
-		l   = rebMsgKindSize + req.PackedSize()
-	)
-	if mm != nil {
-		buf, _ = mm.Alloc(int64(l))
+func (req *pushReq) NewPack(buf []byte, kind byte) []byte {
+	l := rebMsgKindSize + req.PackedSize()
+	if l <= cap(buf) {
+		buf = nil
 	}
 	packer := cos.NewPacker(buf, l)
 	packer.WriteByte(kind)
@@ -186,8 +181,8 @@ func (req *pushReq) Unpack(unpacker *cos.ByteUnpack) error {
 // so there is no need for a caller to read the first byte and decide
 // which unpacker to call.
 // The function below is to simplify sending/receiving push notifications
-func (reb *Manager) encodePushReq(req *pushReq, mm *memsys.MMSA) []byte {
-	return req.NewPack(mm, rebMsgPushStage)
+func (reb *Manager) encodePushReq(req *pushReq, buf []byte) []byte {
+	return req.NewPack(buf, rebMsgPushStage)
 }
 
 func (reb *Manager) decodePushReq(buf []byte) (*pushReq, error) {

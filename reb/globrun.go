@@ -535,8 +535,6 @@ func (rj *rebJogger) jog(mpathInfo *fs.MountpathInfo) {
 // send completion
 func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, arg interface{}, err error) {
 	rj.m.inQueue.Dec()
-
-	rj.m.t.SmallMMSA().Free(hdr.Opaque)
 	if err != nil {
 		rj.m.delLomAck(arg.(*cluster.LOM))
 		si := rj.m.t.Snode()
@@ -645,8 +643,8 @@ retErr:
 func (rj *rebJogger) doSend(lom *cluster.LOM, tsi *cluster.Snode, roc cos.ReadOpenCloser) {
 	var (
 		ack    = regularAck{rebID: rj.m.RebID(), daemonID: rj.m.t.SID()}
-		opaque = ack.NewPack(rj.m.t.SmallMMSA())
 		o      = transport.AllocSend()
+		opaque = ack.NewPack(o.Hdr.Opaque)
 	)
 	o.Hdr.Bck = lom.Bucket()
 	o.Hdr.ObjName = lom.ObjName
