@@ -687,7 +687,7 @@ func (n *notifListenMsg) UnmarshalJSON(data []byte) (err error) {
 	}
 	if t.Type == cmn.ActQueryObjects {
 		n.nl = &query.NotifListenerQuery{}
-	} else if isDLType(t.Type) {
+	} else if isDLType(downloader.DlType(t.Type)) {
 		n.nl = &downloader.NotifDownloadListerner{}
 	} else {
 		n.nl = &xaction.NotifXactListener{}
@@ -695,11 +695,11 @@ func (n *notifListenMsg) UnmarshalJSON(data []byte) (err error) {
 	return jsoniter.Unmarshal(t.NL, &n.nl)
 }
 
-func isDLType(t string) bool {
-	return t == string(downloader.DlTypeMulti) ||
-		t == string(downloader.DlTypeBackend) ||
-		t == string(downloader.DlTypeSingle) ||
-		t == string(downloader.DlTypeRange)
+func isDLType(t downloader.DlType) bool {
+	return t == downloader.DlTypeMulti ||
+		t == downloader.DlTypeBackend ||
+		t == downloader.DlTypeSingle ||
+		t == downloader.DlTypeRange
 }
 
 //
