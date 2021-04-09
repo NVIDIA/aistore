@@ -24,7 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 )
 
 const (
@@ -224,7 +224,7 @@ func wrapAuthN(f cli.ActionFunc) cli.ActionFunc {
 
 func readMasked(c *cli.Context, prompt string) string {
 	fmt.Fprintf(c.App.Writer, prompt+": ")
-	bytePass, err := terminal.ReadPassword(0)
+	bytePass, err := term.ReadPassword(0)
 	if err != nil {
 		return ""
 	}
