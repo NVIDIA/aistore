@@ -380,14 +380,28 @@ func (r *MMSA) NewSGL(immediateSize int64, sbufSize ...int64) *SGL {
 		slab *Slab
 		n    int64
 		sgl  [][]byte
+		err  error
 	)
+	// 1. slab
 	if len(sbufSize) > 0 {
-		var err error
 		slab, err = r.GetSlab(sbufSize[0])
-		cos.AssertNoErr(err)
+	} else if immediateSize <= r.maxSlabSize {
+		// NOTE allocate imm. size in one shot when below max
+		if immediateSize == 0 {
+			if !r.Small {
+				immediateSize = DefaultBufSize
+			} else {
+				immediateSize = DefaultSmallBufSize
+			}
+		}
+		i := cos.DivCeil(immediateSize, r.slabIncStep)
+		slab = r.rings[i-1]
 	} else {
-		slab = r.slabForSGL(immediateSize)
+		slab = r._large2slab(immediateSize)
 	}
+	debug.AssertNoErr(err)
+
+	// 2. sgl
 	n = cos.DivCeil(immediateSize, slab.Size())
 	sgl = make([][]byte, n)
 
@@ -560,17 +574,8 @@ func (s *Slab) Free(bufs ...[]byte) {
 // PRIVATE METHODS //
 /////////////////////
 
-// select a slab for SGL given its immediate size to allocate
-func (r *MMSA) slabForSGL(immediateSize int64) *Slab {
-	if immediateSize == 0 {
-		if !r.Small {
-			immediateSize = DefaultBufSize
-		} else {
-			immediateSize = DefaultSmallBufSize
-		}
-		slab, _ := r.GetSlab(immediateSize)
-		return slab
-	}
+// select slab for SGL given a large immediate size to allocate
+func (r *MMSA) _large2slab(immediateSize int64) *Slab {
 	size := cos.DivCeil(immediateSize, countThreshold)
 	for _, slab := range r.rings {
 		if slab.Size() >= size {
