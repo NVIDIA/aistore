@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 const defaultLastModified = 0 // When an object was not accessed yet
@@ -73,10 +74,10 @@ func NewListObjectResult() *ListObjectResult {
 	}
 }
 
-func (r *ListObjectResult) MustMarshal() []byte {
-	b, err := xml.Marshal(r)
+func (r *ListObjectResult) MustMarshal(sgl *memsys.SGL) {
+	sgl.Write([]byte(xml.Header))
+	err := xml.NewEncoder(sgl).Encode(r)
 	cos.AssertNoErr(err)
-	return []byte(xml.Header + string(b))
 }
 
 func (r *ListObjectResult) Add(entry *cmn.BucketEntry, smsg *cmn.SelectMsg) {
@@ -140,8 +141,8 @@ func SetETLHeader(header http.Header, lom *cluster.LOM) {
 	header.Set(headerVersion, lom.Version())
 }
 
-func (r *CopyObjectResult) MustMarshal() []byte {
-	b, err := xml.Marshal(r)
+func (r *CopyObjectResult) MustMarshal(sgl *memsys.SGL) {
+	sgl.Write([]byte(xml.Header))
+	err := xml.NewEncoder(sgl).Encode(r)
 	cos.AssertNoErr(err)
-	return []byte(xml.Header + string(b))
 }

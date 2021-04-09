@@ -95,6 +95,12 @@ func init() {
 
 func MarshalToString(v interface{}) (string, error) { return JSON.MarshalToString(v) }
 
+func MustMarshalToString(v interface{}) string {
+	s, err := JSON.MarshalToString(v)
+	AssertNoErr(err)
+	return s
+}
+
 // MustMarshal marshals v and panics if error occurs.
 func MustMarshal(v interface{}) []byte {
 	b, err := JSON.Marshal(v)

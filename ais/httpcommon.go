@@ -2126,7 +2126,7 @@ func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header) {
 		return nil, false
 	})
 
-	props := string(cos.MustMarshal(finalProps))
+	props := cos.MustMarshalToString(finalProps)
 	hdr.Set(cmn.HdrBucketProps, props)
 }
 

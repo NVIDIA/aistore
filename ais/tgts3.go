@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 // PUT s3/bckName/objName
@@ -97,7 +98,11 @@ func (t *targetrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items [
 		LastModified: s3compat.FormatTime(lom.Atime()),
 		ETag:         cksumValue,
 	}
-	w.Write(result.MustMarshal())
+	sgl := memsys.DefaultPageMM().NewSGL(0)
+	result.MustMarshal(sgl)
+	w.Header().Set(cmn.HdrContentType, cmn.ContentXML)
+	sgl.WriteTo(w)
+	sgl.Free()
 }
 
 func (t *targetrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, items []string) {

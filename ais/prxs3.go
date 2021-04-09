@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -120,10 +121,11 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 
 // GET s3/
 func (p *proxyrunner) bckNamesToS3(w http.ResponseWriter) {
-	bmd := p.owner.bmd.get()
-	query := cmn.QueryBcks{Provider: cmn.ProviderAIS}
-	cp := &query.Provider
-
+	var (
+		bmd   = p.owner.bmd.get()
+		query = cmn.QueryBcks{Provider: cmn.ProviderAIS}
+		cp    = &query.Provider
+	)
 	resp := s3compat.NewListBucketResult()
 	bmd.Range(cp, nil, func(bck *cluster.Bck) bool {
 		if query.Equal(bck.Bck) || query.Contains(bck.Bck) {
@@ -131,10 +133,11 @@ func (p *proxyrunner) bckNamesToS3(w http.ResponseWriter) {
 		}
 		return false
 	})
-
-	b := resp.MustMarshal()
+	sgl := memsys.DefaultPageMM().NewSGL(0)
+	resp.MustMarshal(sgl)
 	w.Header().Set(cmn.HdrContentType, cmn.ContentXML)
-	w.Write(b)
+	sgl.WriteTo(w)
+	sgl.Free()
 }
 
 // PUT s3/bck-name
@@ -276,9 +279,11 @@ func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, bucket s
 	resp := s3compat.NewListObjectResult()
 	resp.ContinuationToken = smsg.ContinuationToken
 	resp.FillFromAisBckList(objList, &smsg)
-	b := resp.MustMarshal()
+	sgl := memsys.DefaultPageMM().NewSGL(0)
+	resp.MustMarshal(sgl)
 	w.Header().Set(cmn.HdrContentType, cmn.ContentXML)
-	w.Write(b)
+	sgl.WriteTo(w)
+	sgl.Free()
 }
 
 // PUT s3/bckName/objName - with HeaderObjSrc in request header - a source
@@ -480,9 +485,11 @@ func (p *proxyrunner) getBckVersioningS3(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	resp := s3compat.NewVersioningConfiguration(bck.Props.Versioning.Enabled)
-	b := resp.MustMarshal()
+	sgl := memsys.DefaultPageMM().NewSGL(0)
+	resp.MustMarshal(sgl)
 	w.Header().Set(cmn.HdrContentType, cmn.ContentXML)
-	w.Write(b)
+	sgl.WriteTo(w)
+	sgl.Free()
 }
 
 // PUT s3/bk-name?versioning

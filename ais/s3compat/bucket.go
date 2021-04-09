@@ -10,11 +10,8 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/memsys"
 )
-
-// It is 2019-01-01, midnight in UnixNano. Used as creation date
-// for buckets that do not have creation date(created with older AIS)
-var defaultDate = time.Unix(0, 1546300800000000000)
 
 type (
 	// List bucket response
@@ -51,8 +48,8 @@ type (
 func NewListBucketResult() *ListBucketResult {
 	return &ListBucketResult{
 		Ns: s3Namespace,
-		Owner: BckOwner{ // TODO:
-			ID:   "1",
+		Owner: BckOwner{
+			ID:   "1", // NOTE: to satisfy s3 (not used on our side)
 			Name: "ais",
 		},
 		Buckets: make([]*Bucket, 0),
@@ -61,22 +58,16 @@ func NewListBucketResult() *ListBucketResult {
 
 func bckToS3(bck *cluster.Bck) *Bucket {
 	created := time.Unix(0, bck.Props.Created)
-	if created.Before(defaultDate) {
-		// TODO: it is for existing buckets. Their creation time is zero,
-		// and AWS CLI complains about "date out of range".
-		// Without `Created` AWS CLI complains that field not found.
-		created = defaultDate
-	}
 	return &Bucket{
 		Name:    bck.Name,
 		Created: created.Format(time.RFC3339),
 	}
 }
 
-func (r *ListBucketResult) MustMarshal() []byte {
-	b, err := xml.Marshal(r)
+func (r *ListBucketResult) MustMarshal(sgl *memsys.SGL) {
+	sgl.Write([]byte(xml.Header))
+	err := xml.NewEncoder(sgl).Encode(r)
 	cos.AssertNoErr(err)
-	return []byte(xml.Header + string(b))
 }
 
 func (r *ListBucketResult) Add(bck *cluster.Bck) {
@@ -90,10 +81,10 @@ func NewVersioningConfiguration(enabled bool) *VersioningConfiguration {
 	return &VersioningConfiguration{Status: versioningDisabled}
 }
 
-func (r *VersioningConfiguration) MustMarshal() []byte {
-	b, err := xml.Marshal(r)
+func (r *VersioningConfiguration) MustMarshal(sgl *memsys.SGL) {
+	sgl.Write([]byte(xml.Header))
+	err := xml.NewEncoder(sgl).Encode(r)
 	cos.AssertNoErr(err)
-	return []byte(xml.Header + string(b))
 }
 
 func (r *VersioningConfiguration) Enabled() bool {
