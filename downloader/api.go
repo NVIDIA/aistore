@@ -67,6 +67,11 @@ type (
 	}
 )
 
+func IsType(a string) bool {
+	b := DlType(a)
+	return b == DlTypeMulti || b == DlTypeBackend || b == DlTypeSingle || b == DlTypeRange
+}
+
 func (j *DlJobInfo) Aggregate(rhs *DlJobInfo) {
 	j.FinishedCnt += rhs.FinishedCnt
 	j.ScheduledCnt += rhs.ScheduledCnt
