@@ -379,7 +379,6 @@ func (r *MMSA) NewSGL(immediateSize int64, sbufSize ...int64) *SGL {
 	var (
 		slab *Slab
 		n    int64
-		sgl  [][]byte
 		err  error
 	)
 	// 1. slab
@@ -402,15 +401,20 @@ func (r *MMSA) NewSGL(immediateSize int64, sbufSize ...int64) *SGL {
 	debug.AssertNoErr(err)
 
 	// 2. sgl
+	z := _allocSGL()
+	z.slab = slab
 	n = cos.DivCeil(immediateSize, slab.Size())
-	sgl = make([][]byte, n)
-
+	if cap(z.sgl) < int(n) {
+		z.sgl = make([][]byte, n)
+	} else {
+		z.sgl = z.sgl[:n]
+	}
 	slab.muget.Lock()
 	for i := 0; i < int(n); i++ {
-		sgl[i] = slab._alloc()
+		z.sgl[i] = slab._alloc()
 	}
 	slab.muget.Unlock()
-	return &SGL{sgl: sgl, slab: slab}
+	return z
 }
 
 // returns an estimate for the current memory pressured expressed as one of the enumerated values

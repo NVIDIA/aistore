@@ -8,6 +8,7 @@ package memsys
 import (
 	"errors"
 	"io"
+	"sync"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -36,6 +37,31 @@ type (
 		roff int64
 	}
 )
+
+/////////////
+// sglPool //
+/////////////
+
+var (
+	sglPool sync.Pool
+	sgl0    SGL
+)
+
+func _allocSGL() (z *SGL) {
+	if v := sglPool.Get(); v != nil {
+		z = v.(*SGL)
+	} else {
+		z = &SGL{}
+	}
+	return
+}
+
+func _freeSGL(z *SGL) {
+	sgl := z.sgl[:0]
+	*z = sgl0
+	z.sgl = sgl
+	sglPool.Put(z)
+}
 
 // SGL implements io.ReadWriteCloser  + Reset (see https://golang.org/pkg/io/#ReadWriteCloser)
 //
@@ -186,9 +212,7 @@ func (z *SGL) Close() error { return nil }
 func (z *SGL) Free() {
 	debug.Assert(z.slab != nil)
 	z.slab.Free(z.sgl...)
-	z.sgl = z.sgl[:0]
-	z.sgl, z.slab = nil, nil
-	z.woff = 0xDEADBEEF
+	_freeSGL(z)
 }
 
 func (z *SGL) Bytes() (b []byte) {
