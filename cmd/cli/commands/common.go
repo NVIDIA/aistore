@@ -285,6 +285,9 @@ var (
 	// Config
 	configTypeFlag = cli.StringFlag{Name: "type", Usage: "show the specified configuration, one of: 'all','cluster','local'"}
 
+	// Log severity (cmn.LogInfo, ....) enum
+	logSevFlag = cli.StringFlag{Name: "severity", Usage: "show the specified log, one of: 'i[nfo]','w[arning]','e[rror]'"}
+
 	// Daeclu
 	countFlag = cli.IntFlag{Name: "count", Usage: "total number of generated reports", Value: countDefault}
 

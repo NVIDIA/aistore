@@ -101,7 +101,9 @@ var (
 		subcmdShowMpath: {
 			jsonFlag,
 		},
-		subcmdShowLog: {},
+		subcmdShowLog: {
+			logSevFlag,
+		},
 	}
 
 	showCmd = cli.Command{
@@ -482,12 +484,17 @@ func showDaemonLogHandler(c *cli.Context) (err error) {
 		return fmt.Errorf("%s does not exist (see 'ais show cluster')", sid)
 	}
 
-	hdr := cmn.RangeHdr(0, 0)                                  // TODO
-	args := api.GetObjectInput{Writer: os.Stdout, Header: hdr} // TODO
-
-	loglength, err := api.GetDaemonLog(defaultAPIParams, node, args)
-	_ = loglength // TODO
-	return
+	sev := strings.ToLower(parseStrFlag(c, logSevFlag))
+	if sev != "" {
+		switch sev[0] {
+		case cmn.LogInfo[0], cmn.LogWarn[0], cmn.LogErr[0]:
+		default:
+			return fmt.Errorf("invalid log severity, expecting empty or one of: %s, %s, %s",
+				cmn.LogInfo, cmn.LogWarn, cmn.LogErr)
+		}
+	}
+	args := api.GetLogInput{Writer: os.Stdout, Severity: sev}
+	return api.GetDaemonLog(defaultAPIParams, node, args)
 }
 
 func showRemoteAISHandler(c *cli.Context) (err error) {

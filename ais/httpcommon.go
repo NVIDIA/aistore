@@ -1414,11 +1414,12 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatSnode:
 		body = h.si
 	case cmn.GetWhatLog:
-		var (
-			config    = cmn.GCO.Get()
-			log       = filepath.Join(config.LogDir, glog.InfoLogName()) // symlink
-			file, err = os.Open(log)
-		)
+		log, err := _sev2logname(r)
+		if err != nil {
+			h.writeErr(w, r, err)
+			return
+		}
+		file, err := os.Open(log)
 		if err != nil {
 			errCode := http.StatusInternalServerError
 			if os.IsNotExist(err) {
@@ -1440,6 +1441,27 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.writeJSON(w, r, body, "httpdaeget-"+what)
+}
+
+func _sev2logname(r *http.Request) (log string, err error) {
+	dir := cmn.GCO.Get().LogDir
+	sev := r.URL.Query().Get(cmn.URLParamSev)
+	if sev == "" {
+		log = filepath.Join(dir, glog.InfoLogName()) // symlink
+		return
+	}
+	v := strings.ToLower(sev)
+	switch v[0] {
+	case cmn.LogInfo[0]:
+		log = filepath.Join(dir, glog.InfoLogName())
+	case cmn.LogWarn[0]:
+		log = filepath.Join(dir, glog.WarnLogName())
+	case cmn.LogErr[0]:
+		log = filepath.Join(dir, glog.ErrLogName())
+	default:
+		err = fmt.Errorf("unknown log severity %q", sev)
+	}
+	return
 }
 
 ////////////////////////////////////////////

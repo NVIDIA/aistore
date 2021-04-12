@@ -100,6 +100,8 @@ func logName(tag string, t time.Time) (name, link string) {
 }
 
 func InfoLogName() string { return program + ".INFO" }
+func WarnLogName() string { return program + ".WARNING" }
+func ErrLogName() string  { return program + ".ERROR" }
 
 var onceLogDirs sync.Once
 

@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -23,6 +24,11 @@ const (
 	StatusOffline  = "offline"
 	StatusTimedOut = "timed out"
 )
+
+type GetLogInput struct {
+	Writer   io.Writer
+	Severity string // one of: {cmn.LogInfo, ...}
+}
 
 // GetMountpaths given the direct public URL of the target, returns its
 // mountpaths or error.
@@ -105,19 +111,21 @@ func GetDaemonConfig(baseParams BaseParams, node *cluster.Snode) (config *cmn.Co
 }
 
 // GetDaemonLog returns log of a specific daemon in a cluster.
-func GetDaemonLog(baseParams BaseParams, node *cluster.Snode, args GetObjectInput) (n int64, err error) {
+func GetDaemonLog(baseParams BaseParams, node *cluster.Snode, args GetLogInput) (err error) {
 	w := args.Writer
+	q := url.Values{}
+	q.Set(cmn.URLParamWhat, cmn.GetWhatLog)
+	if args.Severity != "" {
+		q.Set(cmn.URLParamSev, args.Severity)
+	}
 	baseParams.Method = http.MethodGet
-	resp, err := doHTTPRequestGetResp(ReqParams{
+	_, err = doHTTPRequestGetResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.S,
-		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatLog}},
+		Query:      q,
 		Header:     http.Header{cmn.HdrNodeID: []string{node.ID()}},
 	}, w)
-	if err != nil {
-		return 0, err
-	}
-	return resp.n, nil
+	return
 }
 
 // GetDaemonStatus returns information about specific node in a cluster.

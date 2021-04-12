@@ -553,7 +553,8 @@ func parseByteFlagToInt(c *cli.Context, flag cli.Flag) (int64, error) {
 	flagValue := parseStrFlag(c, flag.(cli.StringFlag))
 	b, err := cos.S2B(flagValue)
 	if err != nil {
-		return 0, fmt.Errorf("%s (%s) is invalid, expected either a number or a number with a size suffix (kb, MB, GiB, ...)", flag.GetName(), flagValue)
+		return 0, fmt.Errorf("%s (%s) is invalid, expected either a number or a number with a size suffix (kb, MB, GiB, ...)",
+			flag.GetName(), flagValue)
 	}
 	return b, nil
 }

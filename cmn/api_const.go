@@ -190,6 +190,9 @@ const (
 
 	// HTTP bucket support.
 	URLParamOrigURL = "original_url"
+
+	// Log severity
+	URLParamSev = "severity" // see { LogInfo, ...} enum
 )
 
 // Internal query params.
@@ -262,6 +265,13 @@ const (
 	GetWhatXactStats      = "getxstats" // stats: xaction by uuid
 	GetWhatQueryXactStats = "qryxstats" // stats: all matching xactions
 	GetWhatICBundle       = "ic_bundle"
+)
+
+// URLParamSev enum
+const (
+	LogInfo = "info"
+	LogWarn = "warning"
+	LogErr  = "error"
 )
 
 // SelectMsg.Props enum
