@@ -2025,7 +2025,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			p.handlePendingRenamedLB(renamedBucket)
 		}
 		fallthrough // fallthrough
-	case cmn.GetWhatConfig, cmn.GetWhatSmapVote, cmn.GetWhatSnode:
+	case cmn.GetWhatConfig, cmn.GetWhatSmapVote, cmn.GetWhatSnode, cmn.GetWhatLog:
 		p.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatStats:
 		ws := p.statsT.GetWhatStats()

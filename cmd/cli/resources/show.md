@@ -15,6 +15,7 @@ Note that some of these commands (such as `ais show cluster` and `ais show job`)
 - [`ais show config`](#ais-show-config)
 - [`ais show remote-cluster`](#ais-show-remote-cluster)
 - [`ais show rebalance`](#ais-show-rebalance)
+- [`ais show log`](#ais-show-log)
 
 The following commands have aliases. In other words, they can be accessed through `ais show <command>` and also `ais <command> show`.
 
@@ -105,4 +106,27 @@ g1       oGvbt8090   0              0B          0              0B          03-25
 g1       xZntt8087   0              0B          0              0B          03-25 17:33:54   03-25 17:34:09   false
 
 Rebalance completed.
+```
+
+## `ais show log`
+
+Show log of a specified node.
+
+### Example
+
+```console
+# Use auto-completions to select a node (run `ais show cluster` to show details)
+$ ais show log <TAB-TAB>
+... OqlWpgwrY ...
+
+# Use `less` (for instance) to search, scroll or page up and down, etc.
+$ ais show log OqlWpgwrY | less
+
+Log file created at: 2021/04/11 10:58:38
+Running on machine: u18044
+Binary: Built with gc go1.15.3 for linux/amd64
+Log line format: L hh:mm:ss.uuuuuu file:line] msg
+I 10:58:38.122973 config.go:1611 log.dir: "/ais/log"; l4.proto: tcp; port: 51080; verbosity: 3
+...
+:
 ```

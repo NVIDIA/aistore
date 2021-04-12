@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"runtime"
 	rdebug "runtime/debug"
@@ -1412,6 +1413,28 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		}
 	case cmn.GetWhatSnode:
 		body = h.si
+	case cmn.GetWhatLog:
+		var (
+			config    = cmn.GCO.Get()
+			log       = filepath.Join(config.LogDir, glog.InfoLogName()) // symlink
+			file, err = os.Open(log)
+		)
+		if err != nil {
+			errCode := http.StatusInternalServerError
+			if os.IsNotExist(err) {
+				errCode = http.StatusNotFound
+			}
+			h.writeErr(w, r, err, errCode)
+			return
+		}
+		buf, slab := h.gmm.Alloc()
+		if written, err := io.CopyBuffer(w, file, buf); err != nil {
+			// at this point, http err must be already on its way
+			glog.Errorf("failed to read %s: %v (written=%d)", log, err, written)
+		}
+		cos.Close(file)
+		slab.Free(buf)
+		return
 	default:
 		h.writeErrf(w, r, "invalid GET /daemon request: unrecognized what=%s", what)
 		return

@@ -99,6 +99,8 @@ func logName(tag string, t time.Time) (name, link string) {
 	return name, program + "." + tag
 }
 
+func InfoLogName() string { return program + ".INFO" }
+
 var onceLogDirs sync.Once
 
 // create creates a new log file and returns the file and its filename, which

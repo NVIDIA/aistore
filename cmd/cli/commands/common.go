@@ -57,6 +57,7 @@ const (
 	subcmdBMD        = cmn.GetWhatBMD
 	subcmdDisk       = cmn.GetWhatDiskStats
 	subcmdConfig     = cmn.GetWhatConfig
+	subcmdLog        = cmn.GetWhatLog
 	subcmdRebalance  = cmn.ActRebalance
 	subcmdBucket     = "bucket"
 	subcmdObject     = "object"
@@ -103,6 +104,7 @@ const (
 	subcmdShowRebalance = subcmdRebalance
 	subcmdShowBucket    = subcmdBucket
 	subcmdShowConfig    = subcmdConfig
+	subcmdShowLog       = subcmdLog
 	subcmdShowRemoteAIS = "remote-cluster"
 	subcmdShowCluster   = subcmdCluster
 	subcmdShowMpath     = subcmdMountpath

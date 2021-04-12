@@ -254,6 +254,7 @@ const (
 	GetWhatStatus        = "status" // IC status by uuid.
 	GetWhatSysInfo       = "sysinfo"
 	GetWhatTargetIPs     = "target_ips"
+	GetWhatLog           = "log"
 )
 
 // Internal "what" values.

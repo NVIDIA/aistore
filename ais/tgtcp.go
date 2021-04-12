@@ -247,7 +247,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	getWhat := r.URL.Query().Get(cmn.URLParamWhat)
 	httpdaeWhat := "httpdaeget-" + getWhat
 	switch getWhat {
-	case cmn.GetWhatConfig, cmn.GetWhatSmap, cmn.GetWhatBMD, cmn.GetWhatSmapVote, cmn.GetWhatSnode:
+	case cmn.GetWhatConfig, cmn.GetWhatSmap, cmn.GetWhatBMD, cmn.GetWhatSmapVote, cmn.GetWhatSnode, cmn.GetWhatLog:
 		t.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatSysInfo:
 		tsysinfo := cmn.TSysInfo{

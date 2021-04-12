@@ -7,6 +7,7 @@ package commands
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -100,6 +101,7 @@ var (
 		subcmdShowMpath: {
 			jsonFlag,
 		},
+		subcmdShowLog: {},
 	}
 
 	showCmd = cli.Command{
@@ -116,6 +118,7 @@ var (
 			showCmdRemoteAIS,
 			showCmdMpath,
 			showCmdJob,
+			showCmdLog,
 		},
 	}
 
@@ -205,6 +208,14 @@ var (
 		Action:       showRemoteAISHandler,
 		BashComplete: daemonCompletions(completeTargets),
 	}
+	showCmdLog = cli.Command{
+		Name:         subcmdShowLog,
+		Usage:        "show daemon log",
+		ArgsUsage:    daemonIDArgument,
+		Flags:        showCmdsFlags[subcmdShowLog],
+		Action:       showDaemonLogHandler,
+		BashComplete: daemonCompletions(completeAllDaemons),
+	}
 	showCmdMpath = cli.Command{
 		Name:         subcmdShowMpath,
 		Usage:        "show mountpath list for targets",
@@ -213,7 +224,6 @@ var (
 		Action:       showMpathHandler,
 		BashComplete: daemonCompletions(completeTargets),
 	}
-
 	showCmdJob = cli.Command{
 		Name:  subcmdShowJob,
 		Usage: "show information about various jobs",
@@ -456,6 +466,28 @@ func showDaemonConfigHandler(c *cli.Context) (err error) {
 		return getClusterConfig(c, c.Args().Get(1))
 	}
 	return getDaemonConfig(c)
+}
+
+func showDaemonLogHandler(c *cli.Context) (err error) {
+	if c.NArg() < 1 {
+		return missingArgumentsError(c, "daemon ID")
+	}
+	smap, err := api.GetClusterMap(defaultAPIParams)
+	if err != nil {
+		return err
+	}
+	sid := c.Args().First()
+	node := smap.GetNode(sid)
+	if node == nil {
+		return fmt.Errorf("%s does not exist (see 'ais show cluster')", sid)
+	}
+
+	hdr := cmn.RangeHdr(0, 0)                                  // TODO
+	args := api.GetObjectInput{Writer: os.Stdout, Header: hdr} // TODO
+
+	loglength, err := api.GetDaemonLog(defaultAPIParams, node, args)
+	_ = loglength // TODO
+	return
 }
 
 func showRemoteAISHandler(c *cli.Context) (err error) {
