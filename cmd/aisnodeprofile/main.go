@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/NVIDIA/aistore/ais"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
@@ -23,8 +24,8 @@ var (
 
 // NOTE: these variables are set by ldflags
 var (
-	version string
-	build   string
+	build     string
+	buildtime string
 )
 
 func main() {
@@ -47,7 +48,7 @@ func run() int {
 		defer pprof.StopCPUProfile()
 	}
 
-	exitCode := ais.Run(version, build)
+	exitCode := ais.Run(cmn.AIStoreSoftwareVersion+"."+build, buildtime)
 
 	if s := *memProfile; s != "" {
 		*memProfile = s + "." + strconv.Itoa(syscall.Getpid())
