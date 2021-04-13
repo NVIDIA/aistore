@@ -23,6 +23,10 @@ import (
 const (
 	cliName  = "ais"
 	metadata = "md"
+	cliDescr = `If [Tab] completion doesn't work:
+   * download https://github.com/NVIDIA/aistore/tree/master/cmd/cli/autocomplete
+   * and run 'install.sh'.
+   For more information, please refer to https://github.com/NVIDIA/aistore/blob/master/cmd/cli/README.md`
 )
 
 var (
@@ -170,7 +174,7 @@ func (aisCLI *AISCLI) init(build, version string) {
 	app.Writer = aisCLI.outWriter
 	app.ErrWriter = aisCLI.errWriter
 	app.Before = onBeforeCommand // to disable colors if `no-colors' is set
-
+	app.Description = cliDescr
 	cli.VersionFlag = cli.BoolFlag{
 		Name:  "version, V",
 		Usage: "print only the version",
