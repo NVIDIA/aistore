@@ -53,7 +53,7 @@ const (
 	// Cluster info //
 	//////////////////
 
-	ClusterSummary = "Summary:\n Proxies:\t{{len .Smap.Pmap}} ({{ .Smap.CountNonElectable }} - unelectable)\n " +
+	ClusterSummary = "Summary:\n Proxies:\t{{len .Smap.Pmap}} ({{ .Smap.CountNonElectable }} unelectable)\n " +
 		"Targets:\t{{len .Smap.Tmap}}\n Primary Proxy:\t{{.Smap.Primary.ID}}\n Smap Version:\t{{.Smap.Version}}\n " +
 		"Deployment:\t{{ ( Deployments .Status) }}\n"
 

@@ -35,13 +35,13 @@ Hwbmt8085        0.31%           15.43GiB        14.00%          1.951TiB       
 DMwvt8089        0.37%           15.43GiB        14.00%          1.951TiB        0.11%           -               24h
 
 Summary:
- Proxies:       5 (0 - unelectable)
+ Proxies:       5 (0 unelectable)
  Targets:       5
  Primary Proxy: WSLop8080
  Smap Version:  43
  Deployment:    dev
 
-$ ais sc CASGt8088 
+$ ais sc CASGt8088
 TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %      REBALANCE       UPTIME  DEPLOYMENT        STATUS
 CASGt8088        0.35%           15.43GiB        14.00%          1.951TiB        0.11%           -               24h     dev      online
 ```
