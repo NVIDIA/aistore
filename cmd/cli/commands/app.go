@@ -33,6 +33,7 @@ var (
 	// Global config object
 	cfg              *config.Config
 	unreachableRegex = regexp.MustCompile("dial.*(timeout|refused)")
+	k8sDetected      bool
 )
 
 // AISCLI represents an instance of an AIS command line interface
@@ -202,6 +203,9 @@ func (aisCLI *AISCLI) setupCommands() {
 		aisCLI.getAliasCmd(),
 	}
 
+	if k8sDetected {
+		app.Commands = append(app.Commands, k8sCmd)
+	}
 	app.Commands = append(app.Commands, aisCLI.initAliases()...)
 	setupCommandHelp(app.Commands)
 	aisCLI.enableSearch()

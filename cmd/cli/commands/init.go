@@ -7,6 +7,7 @@ package commands
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 
@@ -65,12 +66,19 @@ func initClusterParams() {
 	}
 }
 
+func detectK8s() bool {
+	cmd := exec.Command("which", "kubectl")
+	err := cmd.Run()
+	return err == nil
+}
+
 func Init() (err error) {
 	unreachableRegex = regexp.MustCompile("dial.*(timeout|refused)")
 	cfg, err = config.Load()
 	if err != nil {
 		return err
 	}
+	k8sDetected = detectK8s()
 	initClusterParams()
 	return nil
 }

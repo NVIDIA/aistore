@@ -150,6 +150,11 @@ const (
 	// Warm up subcommands
 	subcmdPreload = "preload"
 
+	// k8s subcommans
+	subcmdK8s        = "kubectl"
+	subcmdK8sSvc     = "svc"
+	subcmdK8sCluster = commandCluster
+
 	// Default values for long running operations
 	refreshRateDefault = time.Second
 	countDefault       = 1
