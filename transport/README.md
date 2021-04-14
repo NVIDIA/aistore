@@ -23,8 +23,8 @@ Package `transport` provides streaming object-based transport over HTTP for mass
 
 The package includes build-time support for two alternative http clients:
 
-* standard [net/http](golang.org/pkg/net/http)
-* 3rd party [github.com/valyala/fasthttp](github.com/valyala/fasthttp) aka "fasthttp"
+* standard [net/http](https://golang.org/pkg/net/http/)
+* 3rd party [github.com/valyala/fasthttp](https://github.com/valyala/fasthttp) aka "fasthttp"
 
 The following is a quick summary:
 

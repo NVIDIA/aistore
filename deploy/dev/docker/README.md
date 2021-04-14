@@ -179,7 +179,7 @@ Thus, to see the `/tmp/ais` folder of container `ais${i}\_${target,proxy}\_${j}`
 
 ## Extra configuration
 
-It is possible that default settings do not work in specific cases, e.g, default networks cannot be used by AIStore container (default is `172.50.0.0/24` subnet). To fix this you can tune up variables in [deployment script](deploy/dev/docker/deploy_docker.sh).
+It is possible that default settings do not work in specific cases, e.g, default networks cannot be used by AIStore container (default is `172.50.0.0/24` subnet). To fix this you can tune up variables in [deployment script](/aistore/deploy/dev/docker/deploy_docker.sh).
 
 Useful script variables:
 

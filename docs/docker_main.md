@@ -141,7 +141,7 @@ Please note that if you are running the service for the first time, the image bu
 
 List all of the running containers using `docker ps`. Many commands require the CONTAINER ID or NAME fields. Example output:
 
-![docker ps](images/docker_ps.png)
+![docker ps](/aistore/docs/images/docker_ps.png)
 
 ### List All Containers
 
@@ -279,7 +279,7 @@ $ docker rmi $(docker images -q -a)
 
 Following is a super-simple presentation to showcase some of the AIS capabilities.
 
-In [Docker playground](../deploy/dev/docker/playground), you can find the scripts to download different popular AI datasets (e.g., MNIST and ImageNet). The datasets are downloaded with the AIS-integrated [Downloader](../downloader/README.md) that stores all downloaded objects directly into the AIStore.
+In [Docker playground](/aistore/deploy/dev/docker/playground), you can find the scripts to download different popular AI datasets (e.g., MNIST and ImageNet). The datasets are downloaded with the AIS-integrated [Downloader](/aistore/downloader/README.md) that stores all downloaded objects directly into the AIStore.
 
 During the download, you can monitor:
 

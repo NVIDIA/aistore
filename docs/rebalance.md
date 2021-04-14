@@ -31,14 +31,14 @@ Incoming GET requests for the objects that haven't yet migrated (or are being mo
 The (rebalancing) target that must (according to the new cluster map) have the object but doesn't, will locate its "neighbor", get the object, and satisfy the original GET request transparently from the user.
 
 Similar to all other AIS modules and sub-systems, global rebalance is controlled and monitored via the documented [RESTful API](http_api.md).
-It might be easier and faster, though, to use [AIS CLI](../cmd/cli/README.md) - see next section.
+It might be easier and faster, though, to use [AIS CLI](/aistore/cmd/cli/README.md) - see next section.
 
 ## CLI: usage examples
 
 1. Disable automated global rebalance (for instance, to perform maintenance or upgrade operations) and show resulting config in JSON on a randomly selected target:
 
 ```console
-$ ais cluster configure rebalance.enabled=false
+$ ais config cluster rebalance.enabled=false
 config successfully updated
 
 $ ais show config 361179t8088 --json | grep -A 6  rebalance
@@ -56,18 +56,19 @@ $ ais show config 361179t8088 --json | grep -A 6  rebalance
 2. Re-enable automated global rebalance and show resulting config section as a simple `name/value` list:
 
 ```console
-$ ais cluster configure rebalance.enabled=true
+$ ais config cluster rebalance.enabled=true
 config successfully updated
 
 $ ais show config <TAB-TAB>
 125210p8082   181883t8089   249630t8087   361179t8088   477343p8081   675515t8084   70681p8080    782227p8083   840083t8086   911875t8085
 
 $ ais show config 840083t8086 rebalance
-Rebalance Config
- Destination Retry Time:        2m
- Enabled:                       true
- Multiplier:                    4
- Compression:                   never
+PROPERTY                         VALUE   DEFAULT
+rebalance.compression            never   -
+rebalance.dest_retry_time        2m      -
+rebalance.enabled                true    -
+rebalance.multiplier             2       -
+rebalance.quiescent              10s     -
 ```
 
 3. Monitoring: notice per-target statistics and the `EndTime` column
@@ -98,7 +99,7 @@ DaemonID     RebID   ObjRcv  SizeRcv  ObjSent  SizeSent  StartTime       EndTime
 
 ```console
 $ ais show job xaction rebalance
-DAEMON ID        ID      KIND            BUCKET  OBJECTS         BYTES           START           END     ABORTED
+NODE             ID      KIND            BUCKET  OBJECTS         BYTES           START           END     ABORTED
 181883t8089      g2      rebalance       -       1058            1.27MiB         04-28 16:10:14  -       false
 ...
 ```
@@ -112,11 +113,11 @@ $ ais job start rebalance
 
 ## Automated Resilvering
 
-While rebalance (previous section) takes care of the cluster *grow* and *shrink* events, resilver, as the name implies, is responsible for the [mountpath](./overview.md#terminology) *added* and [mountpath](./overview.md#terminology) *removed* events handled locally within (and by) each storage target.
+While rebalance (previous section) takes care of the cluster *grow* and *shrink* events, resilver, as the name implies, is responsible for the [mountpath](overview.md#terminology) *added* and [mountpath](overview.md#terminology) *removed* events handled locally within (and by) each storage target.
 
 In other words, global rebalance handles scaling (up and down) of the entire AIS cluster while automated *resilvering* takes care of disk attachments and disk faults within a given storage node.
 
-* A [mountpath](./overview.md#terminology) is a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS utilizes to store user data and AIS metadata. A mountpath can be disabled and (re)enabled, automatically or administratively, at any point during runtime. In a given cluster, a total number of mountpaths would normally compute as a direct product of `(number of storage targets) x (number of disks in each target)`.
+* A [mountpath](overview.md#terminology) is a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS utilizes to store user data and AIS metadata. A mountpath can be disabled and (re)enabled, automatically or administratively, at any point during runtime. In a given cluster, a total number of mountpaths would normally compute as a direct product of `(number of storage targets) x (number of disks in each target)`.
 
 As stated, mountpath removal can be done administratively (via API) or be triggered by a disk fault (see [filesystem health checking](/aistore/health/fshc.md).
 Irrespectively of the original cause, mountpath-level events activate resilver that in many ways performs the same set of steps as the rebalance.
@@ -143,15 +144,15 @@ Automated resilvering can also be disabled. Just like with `rebalance`, the resu
 NOTE: When automated resilvering is disabled, removing a mountpath may result in data loss.
 
 ```console
-$ ais cluster configure resilver.enabled=false
+$ ais config cluster resilver.enabled=false
 config successfully updated
 
-$ ais show config 361179t8088 resilver --json | grep -A 2 resilver 
+$ ais show config 361179t8088 resilver --json | grep -A 2 resilver
     "resilver": {
         "enabled": false
     },
 
-$ ais cluster configure resilver.enabled=true
+$ ais config cluster resilver.enabled=true
 config successfully updated
 
 $ ais show config <TAB-TAB>

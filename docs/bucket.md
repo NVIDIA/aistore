@@ -54,8 +54,8 @@ All the [supported storage services](storage_svcs.md) equally apply to all stora
 
 ### Backend Provider
 
-[Backend Provider](./providers.md) is an abstraction, and, simultaneously, an API-supported option that allows to delineate between "remote" and "local" buckets with respect to a given (any given) AIS cluster.
-For complete definition and details, please refer to the [backend provider document](./providers.md).
+[Backend Provider](providers.md) is an abstraction, and, simultaneously, an API-supported option that allows to delineate between "remote" and "local" buckets with respect to a given (any given) AIS cluster.
+For complete definition and details, please refer to the [backend provider document](providers.md).
 
 Backend provider is realized as an optional parameter in the GET, PUT, APPEND, DELETE and [Range/List](batch.md) operations with supported enumerated values that include:
 * `ais` - for AIS buckets
@@ -389,7 +389,7 @@ $ ais show bucket mybucket
 
 ## Bucket Access Attributes
 
-Bucket access is controlled by a single 64-bit `access` value in the [Bucket Properties structure](../cmn/api.go), whereby its bits have the following mapping as far as allowed (or denied) operations:
+Bucket access is controlled by a single 64-bit `access` value in the [Bucket Properties structure](/aistore/cmn/api.go), whereby its bits have the following mapping as far as allowed (or denied) operations:
 
 | Operation | Bit Mask |
 | --- | --- |
@@ -399,7 +399,7 @@ Bucket access is controlled by a single 64-bit `access` value in the [Bucket Pro
 | Cold GET | 0x8 |
 | DELETE | 0x16 |
 
-For instance, to make bucket `abc` read-only, execute the following [AIS CLI](../cmd/cli/README.md) command:
+For instance, to make bucket `abc` read-only, execute the following [AIS CLI](/aistore/cmd/cli/README.md) command:
 
 ```console
 $ ais bucket props abc 'access=ro'
@@ -481,14 +481,14 @@ Alongside listing names and properties of the objects, it also allows filtering 
 
 At the high level, the idea is that a proxy dispatches a request to targets which produce output that is returned and combined by the proxy.
 
-![](images/query_high.png)
+![](/aistore/docs/images/query_high.png)
 
 *(Proxy combines and sorts the outputs returned from targets)*
 
 
 When target receives a request from the proxy, it then traverses disks applying the filters and selections on each of the object.
 
-![](images/query_target.png)
+![](/aistore/docs/images/query_target.png)
 
 *(Objects marked as green pass all the filtering and selection whereas objects marked red don't)*
 

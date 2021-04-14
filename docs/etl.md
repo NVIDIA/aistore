@@ -45,13 +45,13 @@ Technically, the service supports running user-provided ETL containers **and** c
 
 Note AIS-ETL (service) requires [Kubernetes](https://kubernetes.io).
 
-For getting-started details and numerous examples, please refer to rest of this document and the [playbooks directory](tutorials/README.md).
+For getting-started details and numerous examples, please refer to rest of this document and the [playbooks directory](/aistore/docs/tutorials/README.md).
 
 ## Getting Started
 
 The following [video](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL Getting Started (Youtube video)") demonstrates AIStore's ETL feature using Jupyter Notebook.
 
-[![AIStore ETL Getting Started](./images/etl-getting-started-400.png)](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL Getting Started (Youtube video)")
+[![AIStore ETL Getting Started](/aistore/docs/images/etl-getting-started-400.png)](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL Getting Started (Youtube video)")
 
 ## Inline ETL example
 
@@ -126,7 +126,7 @@ In effect, a user can skip the entire step of writing own Dockerfile and buildin
 
 > If you are familiar with [FasS](https://en.wikipedia.org/wiki/Function_as_a_service), then you probably will find this type of ETL initialization the most intuitive.
 
-For detailed step-by-step tutorial on `build` request, please see [ImageNet ETL playbook](tutorials/etl/etl_imagenet_pytorch.md).
+For detailed step-by-step tutorial on `build` request, please see [ImageNet ETL playbook](/aistore/docs/tutorials/etl/etl_imagenet_pytorch.md).
 
 #### `transform` function
 
@@ -159,7 +159,7 @@ Still, since the number of supported  *runtimes* will always remain somewhat lim
 It allows running any Docker image that implements certain requirements on communication with the cluster. 
 The 'init' request requires writing a Pod specification following specification requirements.
 
-For detailed step-by-step tutorial on `init` request, please see [MD5 ETL playbook](tutorials/etl/compute_md5.md).
+For detailed step-by-step tutorial on `init` request, please see [MD5 ETL playbook](/aistore/docs/tutorials/etl/compute_md5.md).
 
 #### Requirements
 

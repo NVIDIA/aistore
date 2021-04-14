@@ -16,7 +16,8 @@ AIS *xactions* run asynchronously, have one of the enumerated kinds, start/stop 
 ## Table of Contents
 - [Start xaction](#start-xaction)
 - [Stop xaction](#stop-xaction)
-- [Show xaction stats](#show-xaction-stats)
+- [Show job statistics](#show-job-statistics)
+	- [Show Job Extended Statistics](#show-job-extended-statistics)
 - [Wait for xaction](#wait-for-xaction)
 - [Distributed Sort](#distributed-sort)
 - [Downloader](#downloader)
@@ -73,7 +74,7 @@ $ ais job stop xaction lru
 Stopped "lru" xaction.
 ```
 
-## Show Job statistics
+## Show Job Statistics
 
 `ais show job xaction [XACTION_ID|XACTION_NAME] [BUCKET]`
 
@@ -83,6 +84,36 @@ The second argument is used to determine the bucket name if it is required.
 Note: `job show download|dsort` have slightly different options. Please see their documentation for more:
 * [`job show download`](download.md#show-download-jobs-and-job-status)
 * [`job show dsort`](dsort.md#show-dsort-jobs-and-job-status)
+
+### Show Job Extended Statistics
+
+All jobs show the number of processed objects(column `OBJECTS`) and the total size of the data(column `BYTES`).
+Both values are cumulative for the entire xaction life-time.
+Some jobs provide extended statistics and it is available when you show information about a certain xaction name.
+
+#### Show EC Encoding Statistics
+
+The output contains a few extra columns:
+
+- `ERRORS` - the total number of objects EC failed to encode
+- `QUEUE` - the average length of working queue: the average number of objects waiting in the queue when a new EC encode request received. Values close to `0` mean that every object was processed immediately after the request had been received
+- `AVG TIME` - the average total processing time for an object: from the moment the object is put to the working queue and to the moment the last encoded slice is sent to another target
+- `ENC TIME` - the average amount of time spent on encoding an object.
+
+The extended statistics may give a hint what is the possible bottleneck:
+
+- high values in `QUEUE` - EC is congested and does not have time to process all incoming requests
+- low values in `QUEUE` and `ENC TIME`, but high ones in `AVG TIME` may mean that the network is slow and a lot of time spent on sending the encoded slices
+- low values in `QUEUE`, and `ENC TIME` close to `AVG TIME` may mean that the local hardware is overloaded: either local drives or CPUs are overloaded.
+
+#### Show EC Restoring Statistics
+Show information about EC restore requests.
+
+The output contains a few extra columns:
+
+- `ERRORS` - the total number of objects EC failed to restore
+- `QUEUE` - the average length of working queue: the average number of objects waiting in the queue when a new EC encode request received. Values close to `0` mean that every object was processed immediately after the request had been received
+- `AVG TIME` - the average total processing time for an object: from the moment the object is put to the working queue and to the moment the last encoded slice is sent to another target
 
 ### Options
 

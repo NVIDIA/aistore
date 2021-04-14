@@ -27,7 +27,7 @@ In addition, CLI provides dataset management commands, commands to read and writ
 
 **TL;DR**: see section [CLI reference](#cli-reference) below to quickly locate useful commands. There's also a (structured as a reference) list CLI resources with numerous examples and usage guides that we constantly keep updating.
 
-[![AIStore CLI Demo](./images/cli-demo-400.png)](https://youtu.be/VPIhQm2sMD8 "AIStore CLI Demo (Youtube video)")
+[![AIStore CLI Demo](/aistore/docs/images/cli-demo-400.png)](https://youtu.be/VPIhQm2sMD8 "AIStore CLI Demo (Youtube video)")
 
 ## Getting Started
 
@@ -50,7 +50,8 @@ The content of the file presents as follows:
   "cluster": {
     "url": "http://127.0.0.1:8080",
     "default_ais_host": "http://127.0.0.1:8080",
-    "default_docker_host": "http://172.50.0.2:8080"
+    "default_docker_host": "http://172.50.0.2:8080",
+    "skip_verify_crt": false
   },
   "timeout": {
     "tcp_timeout": "60s",
@@ -58,6 +59,11 @@ The content of the file presents as follows:
   },
   "auth": {
     "url": "http://127.0.0.1:52001"
+  },
+  "aliases": {
+    "get": "object get",
+    "ls": "bucket ls",
+    "put": "object put"
   },
   "default_provider": "ais"
 }
@@ -118,21 +124,22 @@ To uninstall autocompletions, run `bash autocomplete/uninstall.sh`.
 
 | Command | Use Case |
 |---------|----------|
-| [`ais bucket`](resources/bucket.md) | Create/destroy buckets, list bucket's content, show existing buckets and their properties |
-| [`ais object`](resources/object.md) | PUT (write), GET (read), list, move (rename) and other operations on objects in a given bucket |
-| [`ais cluster`](resources/cluster.md) | Monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc. |
-| [`ais mountpath`](resources/mpath.md) | Manage mountpaths (disks) in a given storage target |
-| [`ais etl`](resources/etl.md) | Execute custom transformations on objects |
-| [`ais job`](resources/job.md) | Query and manage jobs (aka extended actions or xactions) |
-| [`ais auth`](resources/auth.md) | Add/remove/show users, manage user roles, manage access to remote clusters |
-| [`ais show`](resources/show.md) | Show information about buckets, jobs, all other managed entities in the cluster and the cluster itself |
-| [`ais advanced`](resources/advanced.md) | Special commands intended for development and advanced usage |
-| [`ais search`](resources/search.md) | Search ais commands |
+| [`ais bucket`](/aistore/cmd/cli/resources/bucket.md) | Create/destroy buckets, list bucket's content, show existing buckets and their properties |
+| [`ais object`](/aistore/cmd/cli/resources/object.md) | PUT (write), GET (read), list, move (rename) and other operations on objects in a given bucket |
+| [`ais cluster`](/aistore/cmd/cli/resources/cluster.md) | Monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc. |
+| [`ais config`](/aistore/cmd/cli/resources/config.md) | Set local/global AIS cluster configurations |
+| [`ais mountpath`](/aistore/cmd/cli/resources/mpath.md) | Manage mountpaths (disks) in a given storage target |
+| [`ais etl`](/aistore/cmd/cli/resources/etl.md) | Execute custom transformations on objects |
+| [`ais job`](/aistore/cmd/cli/resources/job.md) | Query and manage jobs (aka extended actions or xactions) |
+| [`ais auth`](/aistore/cmd/cli/resources/auth.md) | Add/remove/show users, manage user roles, manage access to remote clusters |
+| [`ais show`](/aistore/cmd/cli/resources/show.md) | Show information about buckets, jobs, all other managed entities in the cluster and the cluster itself |
+| [`ais advanced`](/aistore/cmd/cli/resources/advanced.md) | Special commands intended for development and advanced usage |
+| [`ais search`](/aistore/cmd/cli/resources/search.md) | Search ais commands |
 
 Other CLI documentation:
-- [Attach, Detach, and monitor remote clusters](resources/remote.md)
-- [Start, Stop, and monitor downloads](resources/download.md)
-- [Distributed Sort](resources/dsort.md)
+- [Attach, Detach, and monitor remote clusters](/aistore/cmd/cli/resources/remote.md)
+- [Start, Stop, and monitor downloads](/aistore/cmd/cli/resources/download.md)
+- [Distributed Sort](/aistore/cmd/cli/resources/dsort.md)
 
 > Note: In CLI docs, the terms "xaction" and "job" are used interchangeably.
 

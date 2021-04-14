@@ -112,11 +112,11 @@ Finally, AIS target provides a number of storage services with [S3-like RESTful 
 
 ## Terminology
 
-* [Backend Provider](./providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
+* [Backend Provider](providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
 
-* [Unified Global Namespace](./providers.md) - AIS clusters *attached* to each other, effectively, form a super-cluster providing unified global namespace whereby all buckets and all objects of all included clusters are uniformly accessible via any and all individual access points (of those clusters).
+* [Unified Global Namespace](providers.md) - AIS clusters *attached* to each other, effectively, form a super-cluster providing unified global namespace whereby all buckets and all objects of all included clusters are uniformly accessible via any and all individual access points (of those clusters).
 
-* [Mountpath](./configuration.md) - a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS utilizes to store user data and AIS metadata. A mountpath can be disabled and (re)enabled, automatically or administratively, at any point during runtime. In a given cluster, a total number of mountpaths would normally compute as a direct product of (number of storage targets) x (number of disks in each target).
+* [Mountpath](configuration.md) - a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS utilizes to store user data and AIS metadata. A mountpath can be disabled and (re)enabled, automatically or administratively, at any point during runtime. In a given cluster, a total number of mountpaths would normally compute as a direct product of (number of storage targets) x (number of disks in each target).
 
 ## Traffic Patterns
 
@@ -142,7 +142,7 @@ AIS targets utilize local Linux filesystems including (but not limited to) xfs, 
 
 Notwithstanding, AIS stores and then maintains object replicas, erasure-coded slices, bucket metadata - in short, a variety of local and global-scope (persistent) structures - for details, please refer to:
 
-- [On-Disk Layout](./on-disk-layout.md)
+- [On-Disk Layout](on-disk-layout.md)
 
 > **You can access your data with and without AIS, and without any need to *convert* or *export/import*, etc. - at any time! Your data is stored in its original native format using user-given object names. Your data can be migrated out of AIS at any time as well, and, again, without any dependency whatsoever on the AIS itself.**
 
@@ -179,7 +179,7 @@ Alternatively or in parallel, you can also *prefetch* a flexibly-defined *list* 
 
 But what if the dataset in question exists in the form of (vanilla) HTTP/HTTPS URL(s)? What if there's a popular bucket in, say, Google Cloud that contains images that you'd like to bring over into your Data Center and make available locally for AI researchers?
 
-For these and similar use cases we have [AIS Downloader](../downloader/README.md) - an integrated tool that can execute massive download requests, track their progress, and populate AIStore directly from the Internet.
+For these and similar use cases we have [AIS Downloader](/aistore/downloader/README.md) - an integrated tool that can execute massive download requests, track their progress, and populate AIStore directly from the Internet.
 
 ### Existing Datasets: HTTP(S) Datasets
 
@@ -235,7 +235,7 @@ As a fast tier, AIS populates itself on demand (via *cold* GETs) and/or via its 
 ## Other Services
 
 The (quickly growing) list of services includes (but is not limited to):
-* [health monitoring and recovery](../health/fshc.md)
+* [health monitoring and recovery](/aistore/health/fshc.md)
 * [range read](http_api.md)
 * [dry-run (to measure raw network and disk performance)](performance.md#performance-testing)
 * performance and capacity monitoring with full observability via StatsD/Grafana
@@ -243,7 +243,7 @@ The (quickly growing) list of services includes (but is not limited to):
 
 > Load balancing consists in optimal selection of a local object replica and, therefore, requires buckets configured for [local mirroring](storage_svcs.md#read-load-balancing).
 
-Most notably, AIStore provides **[dSort](../dsort/README.md)** - a MapReduce layer that performs a wide variety of user-defined merge/sort *transformations* on large datasets used for/by deep learning applications.
+Most notably, AIStore provides **[dSort](/aistore/dsort/README.md)** - a MapReduce layer that performs a wide variety of user-defined merge/sort *transformations* on large datasets used for/by deep learning applications.
 
 ## dSort
 
@@ -253,7 +253,7 @@ By design, dSort tightly integrates with the AIS-object to take full advantage o
 
 ## CLI
 
-AIStore includes an easy-to-use management-and-monitoring facility called [AIS CLI](../cmd/cli/README.md). Once [installed](../cmd/cli/README.md#getting-started), to start using it, simply execute:
+AIStore includes an easy-to-use management-and-monitoring facility called [AIS CLI](/aistore/cmd/cli/README.md). Once [installed](/aistore/cmd/cli/README.md#getting-started), to start using it, simply execute:
 
  ```console
 $ export AIS_ENDPOINT=http://G
@@ -262,11 +262,11 @@ $ ais --help
 
 where `G` (above) denotes a `hostname:port` address of any AIS gateway (for developers it'll often be `localhost:8080`). Needless to say, the "exporting" must be done only once.
 
-One salient feature of AIS CLI is its Bash style [auto-completions](../cmd/cli/README.md#ais-cli-shell-auto-complete) that allow users to easily navigate supported operations and options by simply pressing the TAB key:
+One salient feature of AIS CLI is its Bash style [auto-completions](/aistore/cmd/cli/README.md#ais-cli-shell-auto-complete) that allow users to easily navigate supported operations and options by simply pressing the TAB key:
 
 <img src="images/cli-overview.gif" alt="CLI-tab" width="900" height="130">
 
-AIS CLI is currently quickly developing. For more information, please see the project's own [README](../cmd/cli/README.md).
+AIS CLI is currently quickly developing. For more information, please see the project's own [README](/aistore/cmd/cli/README.md).
 
 ## AIS no-limitations principle
 There are **no** designed-in limitations on the:
