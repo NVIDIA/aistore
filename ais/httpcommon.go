@@ -145,6 +145,7 @@ type (
 
 	// http server and http runner (common for proxy and target)
 	netServer struct {
+		sync.Mutex
 		s             *http.Server
 		muxers        cmn.HTTPMuxers
 		sndRcvBufSize int
@@ -449,13 +450,11 @@ func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (server *netServer) listenAndServe(addr string, logger *log.Logger) error {
-	config := cmn.GCO.Get()
-
-	// Optimization: use "slow" HTTP handler only if the cluster works in Cloud
-	// reverse proxy mode. Without the optimization every HTTP request would
-	// spend time on getting and parsing global configuration, string
-	// comparison and branching
-	var httpHandler http.Handler = server.muxers
+	var (
+		httpHandler http.Handler = server.muxers
+		config                   = cmn.GCO.Get()
+	)
+	server.Lock()
 	server.s = &http.Server{
 		Addr:     addr,
 		Handler:  httpHandler,
@@ -464,6 +463,7 @@ func (server *netServer) listenAndServe(addr string, logger *log.Logger) error {
 	if server.sndRcvBufSize > 0 && !config.Net.HTTP.UseHTTPS {
 		server.s.ConnState = server.connStateListener // setsockopt; see also cmn.NewTransport
 	}
+	server.Unlock()
 	if config.Net.HTTP.UseHTTPS {
 		if err := server.s.ListenAndServeTLS(config.Net.HTTP.Certificate, config.Net.HTTP.Key); err != nil {
 			if err != http.ErrServerClosed {
@@ -479,7 +479,6 @@ func (server *netServer) listenAndServe(addr string, logger *log.Logger) error {
 			}
 		}
 	}
-
 	return nil
 }
 
@@ -495,6 +494,8 @@ func (server *netServer) connStateListener(c net.Conn, cs http.ConnState) {
 }
 
 func (server *netServer) shutdown() {
+	server.Lock()
+	defer server.Unlock()
 	if server.s == nil {
 		return
 	}
