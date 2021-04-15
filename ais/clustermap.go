@@ -390,7 +390,7 @@ func (m *smapX) _applyFlags(si *cluster.Snode, newFlags cluster.SnodeFlags) {
 	m.Version++
 }
 
-// Must be called under lock and for smap clone
+// Must be called under lock
 func (m *smapX) setNodeFlags(sid string, flags cluster.SnodeFlags) {
 	si := m.GetNode(sid)
 	newFlags := si.Flags.Set(flags)
@@ -400,7 +400,7 @@ func (m *smapX) setNodeFlags(sid string, flags cluster.SnodeFlags) {
 	m._applyFlags(si, newFlags)
 }
 
-// Must be called under lock and for smap clone
+// Must be called under lock
 func (m *smapX) clearNodeFlags(id string, flags cluster.SnodeFlags) {
 	si := m.GetNode(id)
 	m._applyFlags(si, si.Flags.Clear(flags))
@@ -477,8 +477,8 @@ func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX) (err error) {
 	return
 }
 
+// Must be called under lock
 func (r *smapOwner) persist(newSmap *smapX) error {
-	debug.AssertMutexLocked(&r.Mutex)
 	config := cmn.GCO.Get()
 	return jsp.SaveMeta(filepath.Join(config.ConfigDir, cmn.SmapFname), newSmap)
 }
