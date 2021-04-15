@@ -547,11 +547,9 @@ func (s *Slab) Alloc() (buf []byte) {
 }
 
 func (s *Slab) Free(bufs ...[]byte) {
-	// NOTE: races are expected between getting length of the `s.put` slice
-	// and putting something in it. But since `maxdepth` is not hard limit,
-	// we cannot ever exceed we are trading this check in favor of maybe bigger
-	// slices. Also freeing buffers to the same slab at the same point in time
-	// is rather unusual we don't expect this happen often.
+	// NOTE: races are expected between getting the length of the `s.put` slice
+	// and putting into it. Since `maxdepth` is not a hard limit, we are trading
+	// this check in favor for maybe bigger slices.
 	if len(s.put) < maxDepth {
 		s.muput.Lock()
 		for _, buf := range bufs {

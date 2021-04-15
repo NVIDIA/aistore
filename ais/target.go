@@ -436,7 +436,7 @@ func (t *targetrunner) initRecvHandlers() {
 		{r: cmn.EC, h: t.ecHandler, net: accessNetIntraData},
 		{r: cmn.Vote, h: t.voteHandler, net: accessNetIntraControl},
 		{r: cmn.Txn, h: t.txnHandler, net: accessNetIntraControl},
-		{r: cmn.ObjStream, h: transport.RxAnyStream, net: accessNetAll},
+		{r: cmn.ObjStream, h: transport.RxAnyStream, net: accessNetIntraData},
 
 		{r: cmn.Download, h: t.downloadHandler, net: accessNetIntraControl},
 		{r: cmn.Sort, h: dsort.SortHandler, net: accessControlData},

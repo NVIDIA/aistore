@@ -144,6 +144,8 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 				// err => err; EOF => (unsized => EOF, otherwise => nil)
 				h.rxObj(w, obj.hdr, obj, eofOK(err, unsized))
 				stats.Num.Inc()
+				// NOTE: `GORACE` may erroneously trigger at this point vs. objReader.Read
+				// below incrementing the offset - disabling `recvPool` makes it go away
 				stats.Size.Add(obj.off)
 				if eofOK(err) == nil {
 					continue
