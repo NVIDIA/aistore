@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pierrec/lz4/v3"
@@ -25,15 +24,6 @@ const (
 	sizeXXHash64  = cos.SizeofI64
 	lz4BufferSize = 64 << 10
 )
-
-func EncodeSGL(v interface{}, opts Options) *memsys.SGL {
-	// NOTE: `32 * cos.KiB` value was estimated by deploying cluster with
-	//  32 targets and 32 proxies and creating 100 buckets.
-	sgl := memsys.DefaultPageMM().NewSGL(32 * cos.KiB)
-	err := Encode(sgl, v, opts)
-	cos.AssertNoErr(err)
-	return sgl
-}
 
 func Encode(ws cos.WriterAt, v interface{}, opts Options) (err error) {
 	var (

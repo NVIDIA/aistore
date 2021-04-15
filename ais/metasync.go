@@ -337,7 +337,7 @@ outer:
 	// step 3: b-cast
 	var (
 		urlPath = cmn.URLPathMetasync.S
-		body    = payload.marshal()
+		body    = payload.marshal(y.p.gmm)
 		to      = cluster.AllNodes
 	)
 	defer body.Free()
@@ -508,7 +508,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 	}
 	var (
 		urlPath = cmn.URLPathMetasync.S
-		body    = payload.marshal()
+		body    = payload.marshal(y.p.gmm)
 		args    = allocBcastArgs()
 	)
 	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, BodyR: body}
@@ -584,10 +584,17 @@ func (y *metasyncer) validateCoW() {
 // metasync jsp encoding //
 ///////////////////////////
 
-var msjspOpts = jsp.Options{Metaver: cmn.MetaverMetasync, Signature: true, Checksum: true}
+var (
+	msjspOpts = jsp.Options{Metaver: cmn.MetaverMetasync, Signature: true, Checksum: true}
+	msimmSize int64
+)
 
-func (payload msPayload) marshal() *memsys.SGL {
-	return jsp.EncodeSGL(payload, msjspOpts)
+func (payload msPayload) marshal(mm *memsys.MMSA) (sgl *memsys.SGL) {
+	sgl = mm.NewSGL(msimmSize)
+	err := jsp.Encode(sgl, payload, msjspOpts)
+	cos.AssertNoErr(err)
+	msimmSize = cos.MaxI64(msimmSize, sgl.Len())
+	return sgl
 }
 
 func (payload msPayload) unmarshal(reader io.ReadCloser, tag string) (err error) {

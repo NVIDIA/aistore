@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -94,6 +95,8 @@ func newPrimary() *proxyrunner {
 	o := newBMDOwnerPrx(config)
 	o._put(newBucketMD())
 	p.owner.bmd = o
+
+	p.gmm = memsys.DefaultPageMM()
 	return p
 }
 
