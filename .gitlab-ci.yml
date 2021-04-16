@@ -73,8 +73,13 @@ build:linux:
   timeout: 5m
   <<: *default_only_def
   script:
-    - AIS_BACKEND_PROVIDERS="ais aws azure gcp hdfs" make node
-    - AIS_BACKEND_PROVIDERS="" MODE="" make node # build one node without debug assert (to see if it compiles)
+    - MODE="" make node # Build node without backends in production mode.
+    - MODE="debug" make node # Build node without backends in debug mode.
+    - AIS_BACKEND_PROVIDERS="ais aws azure gcp hdfs" MODE="" make node # Build with all backends (production mode).
+    - AIS_BACKEND_PROVIDERS="ais aws azure gcp hdfs" MODE="debug" make node # Build with all backends (debug mode).
+    - MEM_PROFILE="/tmp/mem" CPU_PROFILE="/tmp/cpu" make node # Build with profile.
+    - TAGS="nethttp" make node # Build with net/http transport support (fasthttp is used by default).
+    - TAGS="s3rproxy" make node # Build with reverse proxy support (redirect is used by default).
     - make authn
     - make aisfs
     - make cli
