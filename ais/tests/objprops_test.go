@@ -251,7 +251,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 		smap.CountActiveProxies(),
 		smap.CountActiveTargets()-1,
 	)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 
 	tlog.Logf("Target %s [%s] is removed\n", removeTarget.ID(), removeTarget.URL(cmn.NetworkPublic))
 
