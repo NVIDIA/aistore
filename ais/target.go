@@ -440,7 +440,7 @@ func (t *targetrunner) initRecvHandlers() {
 
 		{r: cmn.Download, h: t.downloadHandler, net: accessNetIntraControl},
 		{r: cmn.Sort, h: dsort.SortHandler, net: accessControlData},
-		{r: cmn.ETL, h: t.etlHandler, net: accessNetPublicControl},
+		{r: cmn.ETL, h: t.etlHandler, net: accessNetIntraControl},
 		{r: cmn.Query, h: t.queryHandler, net: accessNetPublicControl},
 
 		{r: "/" + cmn.S3, h: t.s3Handler, net: accessNetPublicData},
