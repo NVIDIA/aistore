@@ -57,8 +57,16 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 			p.bckNamesToS3(w)
 			return
 		}
+		q := r.URL.Query()
+		_, lifecycle := q[s3compat.URLParamLifecycle]
+		_, policy := q[s3compat.URLParamPolicy]
+		_, cors := q[s3compat.URLParamCORS]
+		_, acl := q[s3compat.URLParamACL]
+		if lifecycle || policy || cors || acl {
+			p.unsupported(w, r, apiItems[0])
+			return
+		}
 		if len(apiItems) == 1 {
-			q := r.URL.Query()
 			_, versioning := q[s3compat.URLParamVersioning]
 			if versioning {
 				p.getBckVersioningS3(w, r, apiItems[0])
@@ -415,7 +423,6 @@ func (p *proxyrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []s
 }
 
 func (p *proxyrunner) headObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	started := time.Now()
 	if len(items) < 2 {
 		p.writeErr(w, r, errS3Obj)
 		return
@@ -439,8 +446,8 @@ func (p *proxyrunner) headObjS3(w http.ResponseWriter, r *http.Request, items []
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("AISS3 %s %s/%s => %s", r.Method, bucket, objName, si)
 	}
-	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
-	p.s3Redirect(w, r, si, redirectURL, bck.Name)
+
+	p.reverseNodeRequest(w, r, si)
 }
 
 // DEL s3/bckName/objName
@@ -490,6 +497,16 @@ func (p *proxyrunner) getBckVersioningS3(w http.ResponseWriter, r *http.Request,
 	w.Header().Set(cmn.HdrContentType, cmn.ContentXML)
 	sgl.WriteTo(w)
 	sgl.Free()
+}
+
+// GET s3/bk-name?lifecycle|cors|policy|acl
+func (p *proxyrunner) unsupported(w http.ResponseWriter, r *http.Request, bucket string) {
+	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
+	if err := bck.Init(p.owner.bmd); err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // PUT s3/bk-name?versioning

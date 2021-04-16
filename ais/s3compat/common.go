@@ -8,11 +8,16 @@ const (
 	AISRegion = "ais"
 	AISSever  = "AIS"
 
-	// versioning
-	URLParamVersioning  = "versioning" // URL parameter
+	// AWS URL params
+	URLParamVersioning  = "versioning"
+	URLParamLifecycle   = "lifecycle"
+	URLParamCORS        = "cors"
+	URLParamPolicy      = "policy"
+	URLParamACL         = "acl"
 	URLParamMultiDelete = "delete"
-	versioningEnabled   = "Enabled"
-	versioningDisabled  = "Suspended"
+
+	versioningEnabled  = "Enabled"
+	versioningDisabled = "Suspended"
 
 	s3Namespace = "http://s3.amazonaws.com/doc/2006-03-01"
 	// TODO: can it be omitted? // storageClass = "STANDARD"
