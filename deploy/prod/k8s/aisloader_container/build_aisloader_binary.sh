@@ -25,7 +25,7 @@ function check_go_version {
 
     gover=$(go version)
     echo "Using $gobin $gover" >&2
-    [[ $gover =~ go1.15 ]] || whinge "Go version 1.15.* is required"
+    [[ $gover =~ go1.16 ]] || whinge "Go version 1.16.* is required"
 }
 
 if (( $# < 1 )); then

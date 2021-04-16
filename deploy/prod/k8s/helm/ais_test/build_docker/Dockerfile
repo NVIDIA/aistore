@@ -1,6 +1,6 @@
 FROM ubuntu:xenial
 
-ENV GOLANG_VERSION 1.15
+ENV GOLANG_VERSION 1.16
 
 ENV PATH   /usr/local/go/bin:$PATH
 ENV HOME   /root/

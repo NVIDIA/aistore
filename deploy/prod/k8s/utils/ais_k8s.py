@@ -15,6 +15,7 @@
 #
 
 # pylint: disable=unused-variable
+# pylint: disable=consider-using-generator
 from __future__ import print_function
 import ais_client
 import datetime, os, sys, threading

@@ -1,9 +1,9 @@
 #
 # Dockerfile to build Datascience stack
-# using the official jupyter notebook image as base 
+# using the official jupyter notebook image as base
 #
 
-FROM golang:1.15 AS builder
+FROM golang:1.16 AS builder
 
 ENV GOPATH="/go"
 ENV PATH="${GOPATH}/bin:${PATH}"
@@ -22,9 +22,9 @@ RUN pip install --quiet --no-cache-dir torch==1.7.1+cpu \
 
 USER root
 
-RUN apt-get update -y && apt-get --no-install-recommends -y install \ 
+RUN apt-get update -y && apt-get --no-install-recommends -y install \
     curl \
-    git \ 
+    git \
     wget && \
     rm -rf /var/lib/apt/lists/*
 
