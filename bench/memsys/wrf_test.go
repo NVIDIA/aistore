@@ -15,8 +15,8 @@ import (
 // 1. Run with all defaults:
 // $ go test -bench=. -benchmem
 //
-// 2. Run each bench for 10s with the immediate release of freed pages:
-// $ GODEBUG=madvdontneed=1 go test -bench=. -benchtime=10s -benchmem
+// 2. Run each bench for 10s:
+// $ go test -bench=. -benchtime=10s -benchmem
 
 func BenchmarkWRF(b *testing.B) {
 	tests := []struct{ payloadSz int64 }{

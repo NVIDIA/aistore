@@ -20,8 +20,8 @@ import (
 // 1. Run with all defaults:
 // $ go test -bench=. -benchmem ./d256_test.go
 //
-// 2. Use GODEBUG=madvdontneed=1 and run a given benchmark for 10s:
-// $ GODEBUG=madvdontneed=1 go test -bench=BenchmarkLargeAllocMax -benchtime=30s -benchmem ./d256_test.go
+// 2. Run a given bench for 30s:
+// $ go test -bench=BenchmarkLargeAllocMax -benchtime=30s -benchmem ./d256_test.go
 
 const (
 	largeobj = cos.MiB * 8

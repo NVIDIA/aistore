@@ -950,7 +950,7 @@ func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
 	)
 }
 
-// NOTE: Running cluster without `GODEBUG=madvdontneed=1` makes this test flaky.
+// TODO: check this test once transitioned to Go 1.16 (in re: `GODEBUG=madvdontneed=1`)
 func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 

@@ -22,9 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/sys"
 )
 
-// Important: see README.md for the NOTE on `GODEBUG=madvdontneed=1`
-// and the associated OOM vs page-faults tradeoff.
-
 // ============== Memory Manager Slab Allocator (MMSA) ===========================
 //
 // MMSA is, simultaneously, a Slab and SGL allocator, and a memory manager

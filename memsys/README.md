@@ -11,15 +11,16 @@ MMSA includes a "house-keeping" part to monitor system resources,
 adjust Slab sizes based on their respective usages, and incrementally
 deallocate idle Slabs. To that end, MMSA utilizes `housekeep` (project and runner).
 
-## GODEBUG=madvdontneed=1
+## Go 1.16 GODEBUG=madvdontneed=1
 
-There are two fundamentally different ways to build `aisnode` executable:
+**NOTE 04/2021**: the default behavior has changed again reverting to the original Go 1.11:
 
-1. with `GODEBUG=madvdontneed=1`
-2. and without.
+* see https://golang.org/doc/go1.16#runtime
 
-Building with `GODEBUG=madvdontneed=1` may have a profound effect on the memory-freeing
-behavior by the Go runtime. Here's how the original decision is explained in the Go 1.12 release notes:
+## Go 1.12 through Go 1.15 GODEBUG=madvdontneed=1
+
+When using these particular Go versions, consider building with `GODEBUG=madvdontneed=1`.
+For in-depth background, see:
 
 * https://golang.org/doc/go1.12#runtime
 
@@ -35,7 +36,7 @@ There's much more on the topic at:
 * https://github.com/golang/go/issues/22439
 * https://github.com/golang/go/issues/28466
 * https://github.com/golang/go/issues/33376
-...
+
 
 ## Construction
 
@@ -46,7 +47,7 @@ A typical initialization sequence includes steps, e.g.:
     ```go
     mm := &memsys.MMSA{Name: ..., TimeIval: ..., MinPctFree: ..., Name: ...}
     ```
-    
+
     **Note** that with the only exception of `Name` all the rest member variables (above) have their system defaults and can be omitted.
 
 2. Initialize:
