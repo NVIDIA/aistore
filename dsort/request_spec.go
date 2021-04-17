@@ -67,8 +67,6 @@ type parsedOutputTemplate struct {
 }
 
 // RequestSpec defines the user specification for requests to the endpoint /v1/sort.
-//
-// nolint:maligned // no performance critical code
 type RequestSpec struct {
 	// Required
 	Bck             cmn.Bck `json:"bck" yaml:"bck"`
@@ -105,7 +103,6 @@ type RequestSpec struct {
 	cmn.DSortConf
 }
 
-// nolint:maligned // no performance critical code
 type ParsedRequestSpec struct {
 	Bck                 cmn.Bck               `json:"bck"`
 	Description         string                `json:"description"`

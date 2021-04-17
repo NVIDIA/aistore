@@ -12,7 +12,6 @@ import (
 )
 
 func TestMatchRESTItems(t *testing.T) {
-	// nolint:maligned // no performance critical code
 	tests := []struct {
 		name string
 

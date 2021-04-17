@@ -56,7 +56,6 @@ type (
 		algorithms []string
 	}
 
-	// nolint:maligned // no performance critical code
 	dsortFramework struct {
 		m *ioContext
 

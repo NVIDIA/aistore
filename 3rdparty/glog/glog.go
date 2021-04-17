@@ -435,8 +435,6 @@ func Flush() {
 }
 
 // loggingT collects all the global state of the logging setup.
-//
-// nolint:maligned // no performance critical code
 type loggingT struct {
 	// Boolean flags. Not handled atomically because the flag.Value interface
 	// does not let us avoid the =true, and that shorthand is necessary for

@@ -81,10 +81,10 @@ spell)
   echo "Running spell check..." >&2
   case $2 in
   --fix)
-    ${GOPATH}/bin/misspell -w -locale=US ${AISTORE_DIR}
+    ${GOPATH}/bin/misspell -i "importas" -w -locale=US ${AISTORE_DIR}
     ;;
   *)
-    ${GOPATH}/bin/misspell -error -locale=US ${AISTORE_DIR}
+    ${GOPATH}/bin/misspell -i "importas" -error -locale=US ${AISTORE_DIR}
     ;;
   esac
   ;;

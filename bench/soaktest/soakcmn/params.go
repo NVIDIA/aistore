@@ -8,7 +8,6 @@ import "time"
 
 var Params SoakParams
 
-// nolint:maligned // no performance critical code
 type SoakParams struct {
 	// specifying the primary proxy
 	IP   string

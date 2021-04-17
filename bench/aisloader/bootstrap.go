@@ -95,7 +95,6 @@ type (
 		cksumType string
 	}
 
-	// nolint:maligned // no performance critical code
 	params struct {
 		seed              int64 // random seed; UnixNano() if omitted
 		putSizeUpperBound int64

@@ -264,7 +264,6 @@ func EnsureObjectsExist(t *testing.T, params api.BaseParams, bck cmn.Bck, object
 	}
 }
 
-// nolint:maligned // no performance critical code
 type PutObjectsArgs struct {
 	ProxyURL string
 

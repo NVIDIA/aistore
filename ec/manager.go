@@ -23,7 +23,6 @@ import (
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
-// nolint:maligned // no performance critical code
 type Manager struct {
 	sync.RWMutex
 

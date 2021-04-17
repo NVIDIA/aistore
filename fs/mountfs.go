@@ -185,9 +185,7 @@ Retry:
 			// Someone removed `dir` before `os.Rename`, nothing more to do.
 			return nil
 		}
-		if err != nil {
-			return err
-		}
+		return err
 	}
 	// TODO: remove and make it work when the space is extremely constrained (J)
 	debug.Func(func() {

@@ -6,6 +6,7 @@ package soakprim
 
 import (
 	"fmt"
+	"os"
 	"sort"
 
 	"github.com/NVIDIA/aistore/api"
@@ -28,7 +29,7 @@ func (rctx *RecipeContext) Pre(conds *PreConds) {
 	defer func() {
 		if Terminated {
 			report.Writef(report.SummaryLevel, "User terminated in pre ...")
-			panic(nil)
+			os.Exit(1)
 		}
 	}()
 
@@ -86,7 +87,7 @@ func (rctx *RecipeContext) Post(conds *PostConds) {
 
 		if Terminated {
 			report.Writef(report.SummaryLevel, "User terminated in post ...\n")
-			panic(nil)
+			os.Exit(1)
 		}
 	}()
 

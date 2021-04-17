@@ -95,16 +95,17 @@ type (
 
 // TODO: try to remove duplication *Conf v/s *ToUpdate structs
 type (
+	// Config encapsulates all configuration values used by a given daemon.
+	//
 	// Naming convention for setting/getting the particular fields is defined as
 	// joining the json tags with dot. Eg. when referring to `EC.Enabled` field
 	// one would need to write `ec.enabled`. For more info refer to `IterFields`.
-	//
 	Config struct {
 		role          string `list:"omit"` // Proxy or Target
 		ClusterConfig `json:",inline"`
 		LocalConfig   `json:",inline"`
 	}
-	// nolint:maligned // no performance critical code
+
 	ClusterConfig struct {
 		Backend     BackendConf     `json:"backend" allow:"cluster"`
 		Mirror      MirrorConf      `json:"mirror" allow:"cluster"`

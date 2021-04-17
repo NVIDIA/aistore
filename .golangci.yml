@@ -5,6 +5,7 @@ linters:
     - asciicheck
     - bodyclose
     - deadcode
+    - durationcheck
     - errcheck
     - exportloopref
     - gci
@@ -14,9 +15,11 @@ linters:
     - goheader
     - goimports
     - golint
+    - gomoddirectives
     - goprintffuncname
     - gosimple
     - govet
+    - importas
     - ineffassign
     - misspell
     - nolintlint
@@ -33,6 +36,10 @@ linters:
 
     # See: https://golangci-lint.run/usage/linters/
     #
+    # TODO: Following linters should be enabled at some:
+    # - ifshort
+    # - nilerr
+    #
     # Following linters produce false positives (enable only when needed):
     # - goconst
     # - godot
@@ -43,32 +50,37 @@ linters:
     # - structcheck - doesn't handle embedded structs
     #
     # Following linters are not really helpful:
+    # - cyclop
     # - exhaustive
+    # - forbidigo
+    # - forcetypeassert
     # - interfacer
     # - nlreturn
     # - noctx
+    # - predeclared
     # - testpackage
+    # - thelper
     # - tparallel
     # - wrapcheck
 
 linters-settings:
   govet:
+    enable-all: true
     disable:
-      - shadow # reports a lot of false-positives and conflicts with other linters
+      - fieldalignment # TODO: Enable, for now reports a lot of problems.
+      - shadow # Reports a lot of false-positives and conflicts with other linters.
     settings:
-      printf: # analyzer name, run `go tool vet help` to see all analyzers
-        funcs: # run `go tool vet help printf` to see available settings for `printf` analyzer
-          - (github.com/NVIDIA/aistore/3rdparty/glog).Infof
-          - (github.com/NVIDIA/aistore/3rdparty/glog).Warningf
-          - (github.com/NVIDIA/aistore/3rdparty/glog).Errorf
-          - (github.com/NVIDIA/aistore/3rdparty/glog).Fatalf
-          - (github.com/NVIDIA/tutils/tassert).Errorf
-          - (github.com/NVIDIA/tutils/tassert).Fatalf
-          - (github.com/NVIDIA/cmn/debug).Assertf
-          - (github.com/NVIDIA/cmn/debug).Errorf
-          - (github.com/NVIDIA/cmn/debug).Infof
-          - (github.com/NVIDIA/cmn).Exitf
-          - (github.com/NVIDIA/cmn).ExitLogf
+      printf: # Analyzer name, run `go tool vet help` to see all analyzers.
+        funcs: # Run `go tool vet help printf` to see available settings for `printf` analyzer.
+          - github.com/NVIDIA/aistore/3rdparty/glog.Infof
+          - github.com/NVIDIA/aistore/3rdparty/glog.Warningf
+          - github.com/NVIDIA/aistore/3rdparty/glog.Errorf
+          - github.com/NVIDIA/aistore/3rdparty/glog.Fatalf
+          - github.com/NVIDIA/aistore/cmn/debug.Assertf
+          - github.com/NVIDIA/aistore/cmn/debug.Errorf
+          - github.com/NVIDIA/aistore/cmn/debug.Infof
+          - github.com/NVIDIA/aistore/cmn/cos.Exitf
+          - github.com/NVIDIA/aistore/cmn/cos.ExitLogf
   golint:
     min-confidence: 0
   errcheck:

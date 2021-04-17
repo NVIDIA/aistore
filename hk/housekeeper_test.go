@@ -156,7 +156,7 @@ var _ = Describe("Housekeeper", func() {
 
 		for i := 0; i < actionCnt; i++ {
 			durs = append(durs, action{
-				d:       50*time.Millisecond + 40*time.Duration(i)*time.Millisecond,
+				d:       50*time.Millisecond + time.Duration(40*i)*time.Millisecond,
 				origIdx: i,
 			})
 			fired[i] = -1
