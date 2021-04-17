@@ -206,7 +206,7 @@ func (reb *Manager) beginStreams() {
 	cos.Assert(reb.stages.stage.Load() == rebStageInit)
 
 	reb.dm.Open()
-	pushArgs := bundle.Args{Network: reb.dm.NetC(), Trname: rebPushTrname}
+	pushArgs := bundle.Args{Net: reb.dm.NetC(), Trname: rebPushTrname}
 	reb.pushes = bundle.NewStreams(reb.t.Sowner(), reb.t.Snode(), transport.NewIntraDataClient(), pushArgs)
 
 	reb.laterx.Store(false)

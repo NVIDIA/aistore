@@ -56,12 +56,12 @@ type (
 	bundle map[string]*robin // stream "bundle" indexed by DaemonID
 
 	Args struct {
-		Network      string
-		Trname       string
-		Extra        *transport.Extra
-		Ntype        int // cluster.Target (0) by default
-		Multiplier   int
-		ManualResync bool // auto-resync by default
+		Net          string           // one of cmn.KnownNetworks, empty defaults to cmn.NetworkIntraData
+		Trname       string           // transport (flow) name
+		Extra        *transport.Extra // additional parameters
+		Ntype        int              // cluster.Target (0) by default
+		Multiplier   int              // so-many TCP connections per Rx endpoint, with round-robin
+		ManualResync bool             // auto-resync by default
 	}
 )
 
@@ -73,10 +73,13 @@ var _ cluster.Slistener = (*Streams)(nil)
 //
 
 func NewStreams(sowner cluster.Sowner, lsnode *cluster.Snode, cl transport.Client, sbArgs Args) (sb *Streams) {
-	if !cmn.NetworkIsKnown(sbArgs.Network) {
-		glog.Errorf("Unknown network %s, expecting one of: %v", sbArgs.Network, cmn.KnownNetworks)
+	if sbArgs.Net == "" {
+		sbArgs.Net = cmn.NetworkIntraData
+	} else {
+		debug.Assertf(cmn.NetworkIsKnown(sbArgs.Net), "Unknown network %s, expecting one of: %v",
+			sbArgs.Net, cmn.KnownNetworks)
 	}
-	cos.Assert(sbArgs.Ntype == cluster.Targets || sbArgs.Ntype == cluster.Proxies || sbArgs.Ntype == cluster.AllNodes)
+	debug.Assert(sbArgs.Ntype == cluster.Targets || sbArgs.Ntype == cluster.Proxies || sbArgs.Ntype == cluster.AllNodes)
 	listeners := sowner.Listeners()
 	sb = &Streams{
 		sowner:       sowner,
@@ -84,7 +87,7 @@ func NewStreams(sowner cluster.Sowner, lsnode *cluster.Snode, cl transport.Clien
 		smaplock:     &sync.Mutex{},
 		lsnode:       lsnode,
 		client:       cl,
-		network:      sbArgs.Network,
+		network:      sbArgs.Net,
 		trname:       sbArgs.Trname,
 		rxNodeType:   sbArgs.Ntype,
 		multiplier:   sbArgs.Multiplier,

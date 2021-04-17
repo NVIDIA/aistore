@@ -867,7 +867,6 @@ func (h *httprunner) setDaemonConfigQuery(w http.ResponseWriter, r *http.Request
 
 func (h *httprunner) run() error {
 	config := cmn.GCO.Get()
-	testingEnv := config.TestingEnv()
 
 	// A wrapper to glog http.Server errors - otherwise
 	// os.Stderr would be used, as per golang.org/pkg/net/http/#Server
@@ -879,47 +878,40 @@ func (h *httprunner) run() error {
 		} else {
 			errCh = make(chan error, 2)
 		}
-
 		if config.HostNet.UseIntraControl {
 			go func() {
 				addr := h.si.IntraControlNet.TCPEndpoint()
 				errCh <- h.netServ.control.listenAndServe(addr, h.logger)
 			}()
 		}
-
 		if config.HostNet.UseIntraData {
 			go func() {
 				addr := h.si.IntraDataNet.TCPEndpoint()
 				errCh <- h.netServ.data.listenAndServe(addr, h.logger)
 			}()
 		}
-
 		go func() {
-			addr := ":" + h.si.PublicNet.DaemonPort
-			if testingEnv {
-				// On testing environment just listen on specified `ip:port`.
-				// On production env and K8S listen on `*:port`
-				addr = h.si.PublicNet.NodeHostname + addr
-			}
+			addr := h.pubListeningAddr(config)
 			errCh <- h.netServ.pub.listenAndServe(addr, h.logger)
 		}()
-
 		return <-errCh
 	}
 
+	addr := h.pubListeningAddr(config)
+	return h.netServ.pub.listenAndServe(addr, h.logger)
+}
+
+// testing environment excluding Kubernetes: listen on `host:port`
+// otherwise (including production):         listen on `*:port`
+func (h *httprunner) pubListeningAddr(config *cmn.Config) string {
 	var (
-		addr        string
+		testingEnv  = config.TestingEnv()
 		k8sDetected = k8s.Detect() == nil
 	)
 	if testingEnv && !k8sDetected {
-		// On testing environment just listen on specified `ip:port`.
-		addr = h.si.PublicNet.TCPEndpoint()
-	} else {
-		// When configured or in production env, when only public net is configured,
-		// listen on `*:port`.
-		addr = ":" + h.si.PublicNet.DaemonPort
+		return h.si.PublicNet.TCPEndpoint()
 	}
-	return h.netServ.pub.listenAndServe(addr, h.logger)
+	return ":" + h.si.PublicNet.DaemonPort
 }
 
 func (h *httprunner) stopHTTPServer() {

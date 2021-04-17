@@ -748,7 +748,6 @@ var (
 	_ Validator = (*DownloaderConf)(nil)
 	_ Validator = (*DSortConf)(nil)
 	_ Validator = (*CompressionConf)(nil)
-	_ Validator = (*LocalNetConfig)(nil)
 
 	_ PropsValidator = (*CksumConf)(nil)
 	_ PropsValidator = (*LRUConf)(nil)
@@ -774,13 +773,17 @@ func (c *Config) Validate() error {
 	}
 
 	// NOTE: These two validations require more context and so we call them explicitly;
-	//  The rest all implement generic interface.
+	//       The rest all implement generic interface.
+	if err := c.LocalConfig.HostNet.Validate(c); err != nil {
+		return err
+	}
 	if err := c.LocalConfig.FSpaths.Validate(c); err != nil {
 		return err
 	}
 	if err := c.LocalConfig.TestFSP.Validate(c); err != nil {
 		return err
 	}
+
 	opts := IterOpts{VisitAll: true}
 	return IterFields(c, func(tag string, field IterField) (err error, b bool) {
 		if v, ok := field.Value().(Validator); ok {
@@ -1177,7 +1180,7 @@ func (c *NetConf) Validate() (err error) {
 	return nil
 }
 
-func (c *LocalNetConfig) Validate() (err error) {
+func (c *LocalNetConfig) Validate(contextConfig *Config) (err error) {
 	c.Hostname = strings.ReplaceAll(c.Hostname, " ", "")
 	c.HostnameIntraControl = strings.ReplaceAll(c.HostnameIntraControl, " ", "")
 	c.HostnameIntraData = strings.ReplaceAll(c.HostnameIntraData, " ", "")
@@ -1214,14 +1217,15 @@ func (c *LocalNetConfig) Validate() (err error) {
 		}
 	}
 
+	// NOTE: intra-cluster networks
 	differentIPs := c.Hostname != c.HostnameIntraControl
 	differentPorts := c.Port != c.PortIntraControl
-	c.UseIntraControl = c.HostnameIntraControl != "" &&
+	c.UseIntraControl = (contextConfig.TestingEnv() || c.HostnameIntraControl != "") &&
 		c.PortIntraControl != 0 && (differentIPs || differentPorts)
 
 	differentIPs = c.Hostname != c.HostnameIntraData
 	differentPorts = c.Port != c.PortIntraData
-	c.UseIntraData = c.HostnameIntraData != "" &&
+	c.UseIntraData = (contextConfig.TestingEnv() || c.HostnameIntraData != "") &&
 		c.PortIntraData != 0 && (differentIPs || differentPorts)
 	return
 }

@@ -133,15 +133,9 @@ func (ds *dsorterGeneral) start() error {
 	// utilize intraControl network.
 	config := cmn.GCO.Get()
 	reqNetwork := cmn.NetworkIntraControl
-	if !config.HostNet.UseIntraControl {
-		reqNetwork = cmn.NetworkPublic
-	}
 	// Responses to the other targets are objects that is why we want to use
 	// intraData network.
 	respNetwork := cmn.NetworkIntraData
-	if !config.HostNet.UseIntraData {
-		respNetwork = cmn.NetworkPublic
-	}
 
 	client := transport.NewIntraDataClient()
 
@@ -153,7 +147,7 @@ func (ds *dsorterGeneral) start() error {
 	trname := fmt.Sprintf(recvReqStreamNameFmt, ds.m.ManagerUUID)
 	reqSbArgs := bundle.Args{
 		Multiplier: 20,
-		Network:    reqNetwork,
+		Net:        reqNetwork,
 		Trname:     trname,
 		Ntype:      cluster.Targets,
 	}
@@ -164,7 +158,7 @@ func (ds *dsorterGeneral) start() error {
 	trname = fmt.Sprintf(recvRespStreamNameFmt, ds.m.ManagerUUID)
 	respSbArgs := bundle.Args{
 		Multiplier: streamMultiplier,
-		Network:    respNetwork,
+		Net:        respNetwork,
 		Trname:     trname,
 		Ntype:      cluster.Targets,
 		Extra: &transport.Extra{

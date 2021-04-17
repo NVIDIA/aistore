@@ -6,7 +6,6 @@ stages:
   - test-long
 
 variables:
-  AIS_NODE_FLAGS: "-skip_startup"
   MODE: debug # run tests with debug asserts
   NUM_TARGET: 5
   NUM_PROXY: 5

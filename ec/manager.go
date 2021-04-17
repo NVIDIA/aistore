@@ -44,18 +44,11 @@ type Manager struct {
 var ECM *Manager
 
 func initManager(t cluster.Target) error {
-	config := cmn.GCO.Get()
-	netReq, netResp := cmn.NetworkIntraControl, cmn.NetworkIntraData
-	if !config.HostNet.UseIntraControl {
-		netReq = cmn.NetworkPublic
-	}
-	if !config.HostNet.UseIntraData {
-		netResp = cmn.NetworkPublic
-	}
-
-	sowner := t.Sowner()
-	smap := sowner.Get()
-
+	var (
+		netReq, netResp = cmn.NetworkIntraControl, cmn.NetworkIntraData
+		sowner          = t.Sowner()
+		smap            = sowner.Get()
+	)
 	ECM = &Manager{
 		netReq:    netReq,
 		netResp:   netResp,
@@ -108,14 +101,14 @@ func (mgr *Manager) initECBundles() error {
 	reqSbArgs := bundle.Args{
 		Multiplier: bundle.Multiplier,
 		Extra:      &extraReq,
-		Network:    mgr.netReq,
+		Net:        mgr.netReq,
 		Trname:     ReqStreamName,
 	}
 
 	respSbArgs := bundle.Args{
 		Multiplier: bundle.Multiplier,
 		Trname:     RespStreamName,
-		Network:    mgr.netResp,
+		Net:        mgr.netResp,
 		Extra:      &transport.Extra{Compression: compression},
 	}
 

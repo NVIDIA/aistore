@@ -29,14 +29,14 @@ type (
 		data struct {
 			trname  string
 			recv    transport.ReceiveObj
-			net     string
+			net     string // one of cmn.KnownNetworks, empty defaults to cmn.NetworkIntraData
 			streams *Streams
 			client  transport.Client
 		}
 		ack struct {
 			trname  string
 			recv    transport.ReceiveObj
-			net     string
+			net     string // one of cmn.KnownNetworks, empty defaults to cmn.NetworkIntraControl
 			streams *Streams
 			client  transport.Client
 		}
@@ -88,14 +88,12 @@ func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, 
 		return nil, fmt.Errorf("invalid compression %q", extra.Compression)
 	}
 	dm.data.trname, dm.data.recv = trname, recvCB
-	dm.data.net = cmn.NetworkPublic
-	if dm.config.HostNet.UseIntraData {
+	if dm.data.net == "" {
 		dm.data.net = cmn.NetworkIntraData
 	}
 	dm.data.client = transport.NewIntraDataClient()
 	// ack
-	dm.ack.net = cmn.NetworkPublic
-	if dm.config.HostNet.UseIntraControl {
+	if dm.ack.net == "" {
 		dm.ack.net = cmn.NetworkIntraControl
 	}
 	dm.ack.recv = extra.RecvAck
@@ -129,8 +127,8 @@ func (dm *DataMover) RegRecv() (err error) {
 func (dm *DataMover) Open() {
 	var (
 		dataArgs = Args{
-			Network: dm.data.net,
-			Trname:  dm.data.trname,
+			Net:    dm.data.net,
+			Trname: dm.data.trname,
 			Extra: &transport.Extra{
 				Compression: dm.compression,
 				Config:      dm.config,
@@ -142,7 +140,7 @@ func (dm *DataMover) Open() {
 			ManualResync: true,
 		}
 		ackArgs = Args{
-			Network:      dm.ack.net,
+			Net:          dm.ack.net,
 			Trname:       dm.ack.trname,
 			Extra:        &transport.Extra{Config: dm.config},
 			ManualResync: true,

@@ -154,7 +154,7 @@ func testBundle(t *testing.T, nvs cos.SimpleKVs) {
 	}
 	_, _ = random.Read(wbuf)
 	sb := bundle.NewStreams(sowner, &lsnode, httpclient,
-		bundle.Args{Network: network, Trname: trname, Multiplier: multiplier, Extra: extra})
+		bundle.Args{Net: network, Trname: trname, Multiplier: multiplier, Extra: extra})
 	var numGs int64 = 6
 	if testing.Short() {
 		numGs = 1
