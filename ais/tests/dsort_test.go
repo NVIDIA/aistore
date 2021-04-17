@@ -949,7 +949,6 @@ func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
 	)
 }
 
-// TODO: check this test once transitioned to Go 1.16 (in re: `GODEBUG=madvdontneed=1`)
 func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
@@ -1009,8 +1008,6 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 	df.checkOutputShards(5)
 }
 
-// NOTE: Running cluster without `GODEBUG=madvdontneed=1` makes this test flaky.
-//  For now, we only log (without failing) if expected conditions are not met.
 func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
@@ -1023,7 +1020,7 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 			dsorterType:       dsort.DSorterGeneralType,
 			tarballCnt:        400,
 			fileInTarballSize: cos.MiB,
-			fileInTarballCnt:  3,
+			fileInTarballCnt:  5,
 			extension:         ".tar.gz",
 		}
 	)
@@ -1062,10 +1059,10 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 	}
 
 	if extractedToDisk == 0 {
-		tlog.Logln("WARNING: All extractions by all targets were done exclusively into memory")
+		t.Error("all extractions by all targets were done exclusively into memory")
 	}
 	if extractedToDisk == extractedTotal {
-		tlog.Logln("WARNING: All extractions by all targets were done exclusively into disk")
+		t.Error("all extractions by all targets were done exclusively into disk")
 	}
 
 	df.checkOutputShards(5)
