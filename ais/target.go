@@ -427,7 +427,7 @@ func (t *targetrunner) Run() error {
 func (t *targetrunner) initRecvHandlers() {
 	networkHandlers := []networkHandler{
 		{r: cmn.Buckets, h: t.bucketHandler, net: accessNetAll},
-		{r: cmn.Objects, h: t.objectHandler, net: accessNetPublicData},
+		{r: cmn.Objects, h: t.objectHandler, net: accessNetAll},
 		{r: cmn.Daemon, h: t.daemonHandler, net: accessNetPublicControl},
 		{r: cmn.Metasync, h: t.metasyncHandler, net: accessNetIntraControl},
 		{r: cmn.Health, h: t.healthHandler, net: accessNetPublicControl},
