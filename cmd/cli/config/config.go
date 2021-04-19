@@ -118,6 +118,7 @@ func Load() (*Config, error) {
 
 		// Use default config in case of error.
 		err = Save(&defaultConfig)
+		cfg := &defaultConfig
 		return cfg, err
 	}
 
