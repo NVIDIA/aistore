@@ -79,9 +79,9 @@ func TestMaintenanceListObjects(t *testing.T) {
 		origEntries[entry.Name] = entry
 	}
 
-	// 2. Put a random target under maintenanace
+	// 2. Put a random target under maintenance
 	tsi, _ := m.smap.GetRandTarget()
-	tlog.Logf("Put target maintenanace %s\n", tsi)
+	tlog.Logf("Put target maintenance %s\n", tsi)
 	actVal := &cmn.ActValRmNode{DaemonID: tsi.ID(), SkipRebalance: false}
 	rebID, err := api.StartMaintenance(baseParams, actVal)
 	tassert.CheckFatal(t, err)
