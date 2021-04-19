@@ -587,6 +587,14 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 		newBMD.StringEx(), caller, msg.Action, msg.UUID,
 	)
 	t.owner.bmd.Lock()
+
+	if daemon.stopping.Load() {
+		t.owner.bmd.Unlock()
+		err = errors.New(t.si.String() + " is stopping...")
+		glog.Error(err)
+		return
+	}
+
 	bmd := t.owner.bmd.get()
 	curVer = bmd.version()
 	var (

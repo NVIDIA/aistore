@@ -451,6 +451,11 @@ func (t *targetrunner) initRecvHandlers() {
 
 // stop gracefully
 func (t *targetrunner) Stop(err error) {
+	// NOTE: serialize vs t._recvBMD()
+	t.owner.bmd.Lock()
+	daemon.stopping.Store(true)
+	t.owner.bmd.Unlock()
+
 	f := glog.Infof
 	if err != nil {
 		f = glog.Warningf
