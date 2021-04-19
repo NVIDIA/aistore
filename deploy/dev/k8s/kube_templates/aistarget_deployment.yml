@@ -48,6 +48,8 @@ spec:
     # TODO: fix the workaround of AIS_FS_PATHS
     args:
       - export PORT=${PORT} &&
+        export PORT_INTRA_CONTROL=${PORT_INTRA_CONTROL} &&
+        export PORT_INTRA_DATA=${PORT_INTRA_DATA} &&
         export AIS_FS_PATHS=${AIS_FS_PATHS} &&
         export AIS_PRIMARY_URL=${AIS_PRIMARY_URL} &&
         export HOSTNAME_LIST=${HOSTNAME_LIST} &&

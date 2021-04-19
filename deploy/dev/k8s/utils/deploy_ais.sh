@@ -60,6 +60,8 @@ echo "Starting target deployment..."
 for i in $(seq 0 $((TARGET_CNT-1))); do
   export POD_NAME="ais-target-${i}"
   export PORT=$((9090+i))
+  export PORT_INTRA_CONTROL=$((9080+i))
+  export PORT_INTRA_DATA=$((10080+i))
   export TARGET_POS_NUM=$i
   # Prepare directory for target's hostpath
   (minikube ssh "sudo mkdir -p /tmp/${TARGET_POS_NUM}")

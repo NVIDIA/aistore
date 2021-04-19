@@ -20,7 +20,7 @@ function start_node {
 
   AIS_IS_PRIMARY="true" bin/aisnode \
     -config=${AIS_CONF_FILE} \
-    -local_config=${AIS_LOCAL_CONF_FILE}
+    -local_config=${AIS_LOCAL_CONF_FILE} \
     -role=$1 \
     -ntargets=1 \
     &
