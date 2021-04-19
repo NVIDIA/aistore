@@ -772,7 +772,14 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 	var (
 		waitmsync = true
 		c         = p.prepTxnClient(actMsg, bck, waitmsync)
+		config    = cmn.GCO.Get()
 	)
+	// NOTE: testing only: to avoid premature aborts when loopback devices get 100% utilized
+	//       (under heavy writing)
+	if config.TestingEnv() {
+		c.timeout.netw = config.Timeout.MaxHostBusy + config.Timeout.MaxHostBusy/2
+		c.timeout.host = c.timeout.netw
+	}
 	debug.Infof("Begin destroy-bucket (msg: %v, bck: %s)", msg, bck)
 	results := c.bcast(cmn.ActBegin, c.timeout.netw)
 	for _, res := range results {
