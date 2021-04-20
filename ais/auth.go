@@ -160,8 +160,8 @@ func (a *authManager) revokedTokenList() *tokenList {
 //
 // Token list doesn't need versioning: receivers keep adding received tokens to their internal lists
 //
-func (t *tokenList) tag() string    { return revsTokenTag }
-func (t *tokenList) version() int64 { return t.Version }
-func (t *tokenList) marshal() []byte {
-	return cos.MustMarshal(t)
-}
+func (t *tokenList) tag() string             { return revsTokenTag }
+func (t *tokenList) version() int64          { return t.Version }
+func (t *tokenList) marshal() []byte         { return cos.MustMarshal(t) }
+func (t *tokenList) jit(_ *proxyrunner) revs { return t }
+func (t *tokenList) String() string          { return fmt.Sprintf("TokenList v%d", t.Version) }

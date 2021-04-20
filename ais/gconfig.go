@@ -40,9 +40,10 @@ type (
 
 var _ revs = (*globalConfig)(nil)
 
-func (config *globalConfig) tag() string     { return revsConfTag }
-func (config *globalConfig) version() int64  { return config.Version }
-func (config *globalConfig) marshal() []byte { return cos.MustMarshal(config) }
+func (config *globalConfig) tag() string             { return revsConfTag }
+func (config *globalConfig) version() int64          { return config.Version }
+func (config *globalConfig) marshal() []byte         { return cos.MustMarshal(config) }
+func (config *globalConfig) jit(p *proxyrunner) revs { g, _ := p.owner.config.get(); return g }
 
 ////////////
 // config //

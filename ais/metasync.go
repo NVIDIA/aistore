@@ -99,9 +99,11 @@ const (
 
 type (
 	revs interface {
-		tag() string         // tag of specific revs, look for: `revs*Tag`
-		version() int64      // version
-		marshal() (b []byte) // marshals the struct
+		tag() string             // enum { revsSmapTag, ... }
+		version() int64          // the version
+		marshal() (b []byte)     // marshals the revs
+		jit(p *proxyrunner) revs // current (just-in-time) instance
+		String() string          // smap.String(), etc.
 	}
 	revsPair struct {
 		revs revs
@@ -258,68 +260,37 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 		newTargetIDs []string
 		smap         = y.p.owner.smap.get()
 		config       = cmn.GCO.Get()
-		pairsToSend  = pairs[:0] // share original slice
 	)
 	if daemon.stopping.Load() {
 		return
 	}
-	newCnt := y.countNewMembers(smap)
 
 	// step 1: validation & enforcement (CoW, non-decremental versioning, duplication)
-	debug.Func(func() {
-		y.validateCoW()
-		debug.Assertf(revsReqType == revsReqNotify || revsReqType == revsReqSync,
-			"unknown request type: %d", revsReqType)
-	})
+	debug.Func(func() { y.validateCoW() })
 	if revsReqType == revsReqNotify {
 		method = http.MethodPost
 	} else {
+		debug.Assert(revsReqType == revsReqSync)
 		method = http.MethodPut
-	}
-outer:
-	for _, pair := range pairs {
-		var (
-			revs, msg, tag = pair.revs, pair.msg, pair.revs.tag()
-			detail         = fmt.Sprintf("[%s, action=%s, version=%d]", tag, msg.Action, revs.version())
-		)
-		// vs current Smap
-		if tag == revsSmapTag {
-			if revsReqType == revsReqSync && revs.version() > smap.version() {
-				ers := fmt.Sprintf("FATAL: %s is newer than the current %s", detail, smap)
-				cos.AssertMsg(false, ers)
-			}
-		}
-		// vs the last sync-ed: enforcing non-decremental versioning on the wire
-		switch lversion := y.lastVersion(tag); {
-		case lversion == revs.version():
-			if newCnt == 0 {
-				glog.Warningf("%s: %s duplicated - already sync-ed or pending", y.p.si, detail)
-			}
-			glog.Infof("%s: %s duplicated - proceeding to sync %d new member(s)", y.p.si, detail, newCnt)
-		case lversion > revs.version():
-			s := fmt.Sprintf("%s: older %s: < current v%d", y.p.si, detail, lversion)
-			if msg.UUID == "" {
-				glog.Errorln(s + " - skipping")
-				continue outer
-			}
-			glog.Warning(s) // NOTE: supporting transactional logic
-		}
-
-		pairsToSend = append(pairsToSend, pair)
-	}
-	if len(pairsToSend) == 0 {
-		return
 	}
 
 	// step 2: build payload and update last sync-ed
-	payload := make(msPayload, 2*len(pairsToSend))
-	for _, pair := range pairsToSend {
+	payload := make(msPayload, 2*len(pairs))
+	for _, pair := range pairs {
 		revs, msg, tag, s := pair.revs, pair.msg, pair.revs.tag(), ""
+		jitRevs := revs.jit(y.p)
+		debug.Assertf(revsReqType == revsReqNotify || revs.version() <= jitRevs.version(),
+			"%s cannot be newer than jit %s", revs, jitRevs)
 		if msg.Action != "" {
 			s = ", action " + msg.Action
 		}
-		glog.Infof("%s: sync %s v%d%s", y.p.si, tag, revs.version(), s)
-
+		// just-in-time: making exception for BMD (and associated bucket-level transactions)
+		if jitRevs.version() > revs.version() && tag != revsBMDTag {
+			glog.Infof("%s: sync newer %s v%d%s (skipping %s)", y.p.si, tag, jitRevs.version(), s, revs)
+			revs = jitRevs
+		} else {
+			glog.Infof("%s: sync %s v%d%s", y.p.si, tag, revs.version(), s)
+		}
 		y.lastSynced[tag] = revs
 		revsBody := revs.marshal()
 		debug.Func(func() { y.lastClone[tag] = revsBody })
@@ -358,7 +329,7 @@ outer:
 	for _, res := range results {
 		if res.err == nil {
 			if revsReqType == revsReqSync {
-				y.syncDone(res.si, pairsToSend)
+				y.syncDone(res.si, pairs)
 			}
 			continue
 		}
@@ -386,7 +357,7 @@ outer:
 			return
 		}
 
-		y.handleRefused(method, urlPath, body, refused, pairsToSend, config)
+		y.handleRefused(method, urlPath, body, refused, pairs, config)
 	}
 	// step 6: housekeep and return new pending
 	smap = y.p.owner.smap.get()
@@ -469,8 +440,7 @@ func (y *metasyncer) pending() (pending cluster.NodeMap) {
 						inSync = false
 						break
 					} else if v > revs.version() {
-						// skip older versions
-						// TODO -- FIXME: don't skip sending aisMsg associated with revs
+						// skip older versions (TODO: don't skip sending associated aisMsg)
 						glog.Errorf("v: %d; revs.version: %d", v, revs.version())
 					}
 				}
@@ -540,30 +510,6 @@ func (y *metasyncer) isPrimary() (err error) {
 	}
 	err = newErrNotPrimary(y.p.si, smap)
 	glog.Error(err)
-	return
-}
-
-func (y *metasyncer) lastVersion(tag string) int64 {
-	if revs, ok := y.lastSynced[tag]; ok {
-		return revs.version()
-	}
-	return 0
-}
-
-func (y *metasyncer) countNewMembers(smap *smapX) (count int) {
-	if len(y.nodesRevs) == 0 {
-		y.nodesRevs = make(map[string]nodeRevs, smap.Count())
-	}
-	for _, serverMap := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
-		for _, si := range serverMap {
-			if si.ID() == y.p.si.ID() {
-				continue
-			}
-			if _, ok := y.nodesRevs[si.ID()]; !ok {
-				count++
-			}
-		}
-	}
 	return
 }
 

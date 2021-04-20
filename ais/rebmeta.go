@@ -50,10 +50,12 @@ type (
 // interface guard
 var _ revs = (*rebMD)(nil)
 
-func (r *rebMD) tag() string     { return revsRMDTag }
-func (r *rebMD) version() int64  { return r.Version }
-func (r *rebMD) marshal() []byte { return cos.MustMarshal(r) }
-func (r *rebMD) inc()            { r.Version++ }
+func (r *rebMD) tag() string             { return revsRMDTag }
+func (r *rebMD) version() int64          { return r.Version }
+func (r *rebMD) marshal() []byte         { return cos.MustMarshal(r) }
+func (r *rebMD) jit(p *proxyrunner) revs { return p.owner.rmd.get() }
+
+func (r *rebMD) inc() { r.Version++ }
 func (r *rebMD) clone() *rebMD {
 	dst := &rebMD{}
 	cos.CopyStruct(dst, r)

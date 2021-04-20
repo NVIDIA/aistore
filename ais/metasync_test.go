@@ -635,6 +635,7 @@ func TestMetaSyncData(t *testing.T) {
 			Type: cos.ChecksumXXHash,
 		},
 	})
+	primary.owner.bmd.put(bmd)
 	bmdBody := bmd.marshal()
 
 	exp[revsBMDTag] = bmdBody
@@ -654,6 +655,7 @@ func TestMetaSyncData(t *testing.T) {
 		LRU:   cmn.GCO.Get().LRU,
 	}
 	bmd.add(cluster.NewBck("bucket3", cmn.ProviderAIS, cmn.NsGlobal), bprops)
+	primary.owner.bmd.put(bmd)
 	bmdBody = bmd.marshal()
 
 	exp[revsBMDTag] = bmdBody

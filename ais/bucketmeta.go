@@ -188,9 +188,10 @@ func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *cluster.Snode, caller s
 //
 // Implementation of revs interface
 //
-func (m *bucketMD) tag() string     { return revsBMDTag }
-func (m *bucketMD) version() int64  { return m.Version }
-func (m *bucketMD) marshal() []byte { return cos.MustMarshal(m) }
+func (m *bucketMD) tag() string             { return revsBMDTag }
+func (m *bucketMD) version() int64          { return m.Version }
+func (m *bucketMD) marshal() []byte         { return cos.MustMarshal(m) }
+func (m *bucketMD) jit(p *proxyrunner) revs { return p.owner.bmd.get() }
 
 //////////////////
 // bmdOwnerBase //
