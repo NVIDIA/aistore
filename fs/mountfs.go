@@ -375,10 +375,16 @@ func (mi *MountpathInfo) makeDelPathBck(bck cmn.Bck, bid uint64) string {
 }
 
 // Creates all CT directories for a given (mountpath, bck) - NOTE handling of empty dirs
-func (mi *MountpathInfo) createBckDirs(bck cmn.Bck) (num int, err error) {
+func (mi *MountpathInfo) createBckDirs(bck cmn.Bck, nilbmd bool) (num int, err error) {
 	for contentType := range CSM.RegisteredContentTypes {
 		dir := mi.MakePathCT(bck, contentType)
 		if err := Access(dir); err == nil {
+			if nilbmd {
+				// NOTE: e.g., has been decommissioned without proper cleanup, and rejoined
+				glog.Errorf("bucket %s: directory %s already exists but local BMD is nil - skipping...",
+					bck, dir)
+				continue
+			}
 			names, empty, errEmpty := IsDirEmpty(dir)
 			if errEmpty != nil {
 				return num, errEmpty
@@ -389,7 +395,7 @@ func (mi *MountpathInfo) createBckDirs(bck cmn.Bck) (num int, err error) {
 				if contentType != WorkfileType {
 					return num, err
 				}
-				glog.Warning(err)
+				glog.Error(err)
 			}
 		} else if err := cos.CreateDir(dir); err != nil {
 			return num, fmt.Errorf("bucket %s: failed to create directory %s: %w", bck, dir, err)
@@ -756,14 +762,14 @@ func Get() (MPI, MPI) {
 	return *availablePaths, *disabledPaths
 }
 
-func CreateBucket(op string, bck cmn.Bck) (errs []error) {
+func CreateBucket(op string, bck cmn.Bck, nilbmd bool) (errs []error) {
 	var (
 		availablePaths, _ = Get()
 		totalDirs         = len(availablePaths) * len(CSM.RegisteredContentTypes)
 		totalCreatedDirs  int
 	)
 	for _, mi := range availablePaths {
-		num, err := mi.createBckDirs(bck)
+		num, err := mi.createBckDirs(bck, nilbmd)
 		if err != nil {
 			errs = append(errs, err)
 		} else {

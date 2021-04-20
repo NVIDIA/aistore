@@ -83,7 +83,7 @@ func TestMain(m *testing.M) {
 		},
 	})
 	t.owner.bmd.put(bmd)
-	fs.CreateBucket("test", bck.Bck)
+	fs.CreateBucket("test", bck.Bck, false /*nilbmd*/)
 
 	m.Run()
 }

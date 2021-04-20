@@ -619,7 +619,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 		if _, present := bmd.Get(bck); present {
 			return false
 		}
-		errs := fs.CreateBucket("recv-bmd-"+msg.Action, bck.Bck)
+		errs := fs.CreateBucket("recv-bmd-"+msg.Action, bck.Bck, bmd.version() == 0 /*nilbmd*/)
 		for _, err := range errs {
 			createErrs += "[" + err.Error() + "]"
 		}
