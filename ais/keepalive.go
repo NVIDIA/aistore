@@ -522,7 +522,7 @@ func (k *keepalive) register(sendKeepalive func(time.Duration) (int, error), pri
 				glog.Warningf("%s: keepalive failed after %d attempts, removing from Smap", hname, i)
 				return true
 			}
-			if cmn.IsUnreachable(err, status) || cos.IsEOF(err) {
+			if cmn.IsUnreachable(err, status) {
 				continue
 			}
 			s := fmt.Sprintf("%s: unexpected response %v(%T,%d)", hname, err, err, status)
