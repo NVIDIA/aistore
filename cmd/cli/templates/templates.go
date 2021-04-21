@@ -65,7 +65,7 @@ const (
 		"{{ $stat := $value.Stat }}" +
 		"{{ FormatBytesSigned $stat.RBps 2 }}/s\t " +
 		"{{ FormatBytesSigned $stat.WBps 2 }}/s\t " +
-		"{{ $stat.Util }}\n"
+		"{{ $stat.Util }}%\n"
 
 	DiskStatBodyTmpl  = "{{ range $key, $value := . }}" + DiskStatsBody + "{{ end }}"
 	DiskStatsFullTmpl = DiskStatsHeader + DiskStatBodyTmpl

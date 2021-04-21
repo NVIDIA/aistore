@@ -201,6 +201,17 @@ func getDiskStats(targets map[string]*stats.DaemonStatus) ([]templates.DiskStats
 				templates.DiskStatsTemplateHelper{TargetID: targetID, DiskName: diskName, Stat: diskStat})
 		}
 	}
+
+	sort.Slice(allStats, func(i, j int) bool {
+		if allStats[i].TargetID != allStats[j].TargetID {
+			return allStats[i].TargetID < allStats[j].TargetID
+		}
+		if allStats[i].DiskName != allStats[j].DiskName {
+			return allStats[i].DiskName < allStats[j].DiskName
+		}
+		return allStats[i].Stat.Util > allStats[j].Stat.Util
+	})
+
 	return allStats, nil
 }
 
