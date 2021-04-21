@@ -109,10 +109,10 @@ func (pdu *rpdu) readHdr(loghdr string) (err error) {
 	pdu.last = pdu.flags&lastPDU != 0
 	pdu.woff = sizeProtoHdr
 	debug.Func(func() {
-		debug.Infof("%d(%s)", pdu.plen, fl2s(pdu.flags))
-		debug.Assert(pdu.flags&pduFlag != 0)
-		debug.Assert(pdu.plen <= MaxSizePDU)
-		debug.Assert(pdu.plen > 0 || (pdu.plen == 0 && pdu.flags&lastPDU != 0))
+		detail := fmt.Sprintf("plen=%d(flags=%s)", pdu.plen, fl2s(pdu.flags))
+		debug.AssertMsg(pdu.flags&pduFlag != 0, detail)
+		debug.AssertMsg(pdu.plen <= MaxSizePDU, detail)
+		debug.AssertMsg(pdu.plen > 0 || (pdu.plen == 0 && pdu.flags&lastPDU != 0), detail)
 	})
 	return
 }
