@@ -275,15 +275,20 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 		iReqBuf := c.parent.newIntraReq(reqGet, ctx.meta, ctx.lom.Bck()).NewPack(mm)
 		n, err = c.parent.readRemote(ctx.lom, node, uname, iReqBuf, w)
 		mm.Free(iReqBuf)
-		cos.Close(w)
 
 		if err == nil && n != 0 {
 			// A valid replica is found - break and do close file handle
+			err = cos.FlushClose(w)
+			if err != nil {
+				glog.Errorf("Failed to flush and close: %v", err)
+				break
+			}
 			ctx.lom.SetSize(n)
 			writer = w
 			break
 		}
 
+		cos.Close(w)
 		errRm := cos.RemoveFile(tmpFQN)
 		debug.AssertNoErr(errRm)
 	}

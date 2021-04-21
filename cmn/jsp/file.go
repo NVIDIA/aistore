@@ -49,7 +49,7 @@ func Save(filepath string, v interface{}, opts Options) (err error) {
 		cos.Close(file)
 		return
 	}
-	if err = file.Close(); err != nil {
+	if err = cos.FlushClose(file); err != nil {
 		return
 	}
 	err = os.Rename(tmp, filepath)

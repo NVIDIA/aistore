@@ -424,11 +424,15 @@ func CopyFile(src, dst string, buf []byte, cksumType string) (written int64, cks
 		return
 	}
 	written, cksum, err = CopyAndChecksum(dstFile, srcFile, buf, cksumType)
-	if err != nil {
-		glog.Errorf("Failed to copy %s -> %s: %v", src, dst, err)
-	}
-	Close(dstFile)
 	Close(srcFile)
+	if err != nil {
+		glog.Errorf("Failed to copy %s => %s: %v", src, dst, err)
+		Close(dstFile)
+		return
+	}
+	if err = FlushClose(dstFile); err != nil {
+		glog.Errorf("Failed to flush and close %s: %v", dst, err)
+	}
 	return
 }
 
@@ -592,6 +596,14 @@ func DrainReader(r io.Reader) {
 func FloodWriter(w io.Writer, n int64) error {
 	_, err := io.CopyN(w, NowRand(), n)
 	return err
+}
+
+func FlushClose(file *os.File) (err error) {
+	err = fflush(file)
+	debug.AssertNoErr(err)
+	err = file.Close()
+	debug.AssertNoErr(err)
+	return
 }
 
 func Close(closer io.Closer) {

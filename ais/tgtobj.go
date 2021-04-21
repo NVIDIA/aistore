@@ -349,8 +349,8 @@ write:
 		cksums.store.Finalize()
 		poi.lom.SetCksum(&cksums.store.Cksum)
 	}
-	if err = file.Close(); err != nil {
-		return fmt.Errorf(cmn.FmtErrFailed, poi.t.si, "close received", poi.workFQN, err)
+	if err = cos.FlushClose(file); err != nil {
+		return fmt.Errorf(cmn.FmtErrFailed, poi.t.si, "close poi temp", poi.workFQN, err)
 	}
 	return nil
 }
