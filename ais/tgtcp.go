@@ -407,6 +407,11 @@ func (t *targetrunner) unreg(action string, cleanupData bool) {
 		return
 	}
 
+	// NOTE: vs metasync
+	t.regstate.Lock()
+	daemon.stopping.Store(true)
+	t.regstate.Unlock()
+
 	writeShutdownMarker()
 	if action == cmn.ActShutdown {
 		t.Stop(&errNoUnregister{action})
@@ -587,14 +592,6 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 		newBMD.StringEx(), caller, msg.Action, msg.UUID,
 	)
 	t.owner.bmd.Lock()
-
-	if daemon.stopping.Load() {
-		t.owner.bmd.Unlock()
-		err = errors.New(t.si.String() + " is stopping...")
-		glog.Error(err)
-		return
-	}
-
 	bmd := t.owner.bmd.get()
 	curVer = bmd.version()
 	var (
@@ -813,6 +810,11 @@ func (t *targetrunner) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
 	if r != nil {
 		caller = r.Header.Get(cmn.HdrCallerName)
 	}
+	t.regstate.Lock()
+	defer t.regstate.Unlock()
+	if daemon.stopping.Load() {
+		return
+	}
 	if err := t.receiveBMD(newBucketMD, msg, bucketMDFixup, caller); err != nil && !isErrDowngrade(err) {
 		glog.Error(err)
 	}
@@ -820,6 +822,12 @@ func (t *targetrunner) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
 
 // [METHOD] /v1/metasync
 func (t *targetrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
+	t.regstate.Lock()
+	defer t.regstate.Unlock()
+	if daemon.stopping.Load() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
 	switch r.Method {
 	case http.MethodPut:
 		t.metasyncHandlerPut(w, r)

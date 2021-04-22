@@ -451,10 +451,10 @@ func (t *targetrunner) initRecvHandlers() {
 
 // stop gracefully
 func (t *targetrunner) Stop(err error) {
-	// NOTE: serialize vs t._recvBMD()
-	t.owner.bmd.Lock()
+	// NOTE: vs metasync
+	t.regstate.Lock()
 	daemon.stopping.Store(true)
-	t.owner.bmd.Unlock()
+	t.regstate.Unlock()
 
 	f := glog.Infof
 	if err != nil {
