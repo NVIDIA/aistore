@@ -606,6 +606,11 @@ func FloodWriter(w io.Writer, n int64) error {
 	return err
 }
 
+func Close(closer io.Closer) {
+	err := closer.Close()
+	debug.AssertNoErr(err)
+}
+
 func FlushClose(file *os.File) (err error) {
 	err = fflush(file)
 	debug.AssertNoErr(err)
@@ -614,7 +619,18 @@ func FlushClose(file *os.File) (err error) {
 	return
 }
 
-func Close(closer io.Closer) {
-	err := closer.Close()
-	debug.AssertNoErr(err)
+// NOTE:
+// - file.Close() is implementation dependent as far as flushing dirty buffers;
+// - journaling filesystems, such as xfs, generally provide better guarantees but, again, not 100%
+// - see discussion at https://lwn.net/Articles/788938;
+// - going forward, some sort of `rename_barrier()` would be a much better alternative
+// - doesn't work in testing environment - currently disabled, see #1141 and comments
+
+const fsyncDisabled = true
+
+func fflush(file *os.File) (err error) {
+	if fsyncDisabled {
+		return
+	}
+	return file.Sync()
 }
