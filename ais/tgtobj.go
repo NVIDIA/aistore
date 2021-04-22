@@ -287,15 +287,17 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	defer func() { // free & cleanup on err
 		slab.Free(buf)
 		cos.Close(reader)
-
-		if err != nil {
+		if err == nil {
+			return
+		}
+		if file != nil {
 			if nestedErr := file.Close(); nestedErr != nil {
 				glog.Errorf("Nested (%v): failed to close received object %s, err: %v",
 					err, poi.workFQN, nestedErr)
 			}
-			if nestedErr := cos.RemoveFile(poi.workFQN); nestedErr != nil {
-				glog.Errorf("Nested (%v): failed to remove %s, err: %v", err, poi.workFQN, nestedErr)
-			}
+		}
+		if nestedErr := cos.RemoveFile(poi.workFQN); nestedErr != nil {
+			glog.Errorf("Nested (%v): failed to remove %s, err: %v", err, poi.workFQN, nestedErr)
 		}
 	}()
 	// checksums
@@ -343,16 +345,18 @@ write:
 			return
 		}
 	}
+	if err = cos.FlushClose(file); err != nil {
+		err = fmt.Errorf(cmn.FmtErrFailed, poi.t.si, "close poi temp", poi.workFQN, err)
+		file = nil // see defer
+		return
+	}
 	// ok
 	poi.lom.SetSize(written)
 	if cksums.store != nil {
 		cksums.store.Finalize()
 		poi.lom.SetCksum(&cksums.store.Cksum)
 	}
-	if err = cos.FlushClose(file); err != nil {
-		return fmt.Errorf(cmn.FmtErrFailed, poi.t.si, "close poi temp", poi.workFQN, err)
-	}
-	return nil
+	return
 }
 
 ////////////////

@@ -12,7 +12,6 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 const (
@@ -40,16 +39,20 @@ func Save(filepath string, v interface{}, opts Options) (err error) {
 		return
 	}
 	defer func() {
-		if err != nil {
-			errRm := os.Remove(tmp)
-			debug.AssertNoErr(errRm)
+		if err == nil {
+			return
+		}
+		if nestedErr := cos.RemoveFile(tmp); nestedErr != nil {
+			glog.Errorf("Nested (%v): failed to remove %s, err: %v", err, tmp, nestedErr)
 		}
 	}()
 	if err = Encode(file, v, opts); err != nil {
+		glog.Errorf("Failed to encode %v => %s: %v", v, filepath, err)
 		cos.Close(file)
 		return
 	}
 	if err = cos.FlushClose(file); err != nil {
+		glog.Errorf("Failed to flush and close %s: %v", tmp, err)
 		return
 	}
 	err = os.Rename(tmp, filepath)

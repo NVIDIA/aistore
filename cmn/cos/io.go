@@ -425,6 +425,14 @@ func CopyFile(src, dst string, buf []byte, cksumType string) (written int64, cks
 	}
 	written, cksum, err = CopyAndChecksum(dstFile, srcFile, buf, cksumType)
 	Close(srcFile)
+	defer func() {
+		if err == nil {
+			return
+		}
+		if nestedErr := RemoveFile(dst); nestedErr != nil {
+			glog.Errorf("Nested (%v): failed to remove %s, err: %v", err, dst, nestedErr)
+		}
+	}()
 	if err != nil {
 		glog.Errorf("Failed to copy %s => %s: %v", src, dst, err)
 		Close(dstFile)
