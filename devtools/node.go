@@ -29,13 +29,13 @@ func JoinCluster(ctx *Ctx, proxyURL string, node *cluster.Snode, timeout time.Du
 	// If node is already in cluster we should not wait for map version
 	// sync because update will not be scheduled
 	if node := smap.GetNode(node.ID()); node == nil {
-		err = WaitMapVersionSync(ctx, time.Now().Add(timeout), smap, smap.Version, cos.NewStringSet())
+		err = WaitMapVersionSync(baseParams, ctx, time.Now().Add(timeout), smap, smap.Version, cos.NewStringSet())
 		return
 	}
 	return
 }
 
-func WaitMapVersionSync(ctx *Ctx, timeout time.Time, smap *cluster.Smap, prevVersion int64,
+func WaitMapVersionSync(baseParams api.BaseParams, ctx *Ctx, timeout time.Time, smap *cluster.Smap, prevVersion int64,
 	idsToIgnore cos.StringSet) error {
 	ctx.Log("Waiting to sync Smap version > v%d, ignoring %+v\n", prevVersion, idsToIgnore)
 	checkAwaitingDaemon := func(smap *cluster.Smap, idsToIgnore cos.StringSet) (string, string, bool) {
@@ -61,10 +61,9 @@ func WaitMapVersionSync(ctx *Ctx, timeout time.Time, smap *cluster.Smap, prevVer
 		if sid == prevSid {
 			time.Sleep(time.Second)
 		}
-		baseParams := BaseAPIParams(ctx, url)
-		daemonSmap, err := api.GetClusterMap(baseParams)
-		// NOTE: Retry if node returns `http.StatusServiceUnavailable`
-		if err != nil && !cmn.IsErrConnectionRefused(err) && !cmn.IsStatusServiceUnavailable(err) {
+		daemonSmap, err := api.GetNodeClusterMap(baseParams, sid)
+		// NOTE: Retry if node returns `http.StatusServiceUnavailable` or `http.StatusBadGateway`
+		if err != nil && !cmn.IsErrConnectionRefused(err) && !cmn.IsStatusServiceUnavailable(err) && !cmn.IsStatusBadGateway(err) {
 			return err
 		}
 
@@ -114,6 +113,7 @@ func RemoveNodeFromSmap(ctx *Ctx, proxyURL, sid string, timeout time.Duration) e
 	// sync because update will not be scheduled.
 	if node != nil {
 		return WaitMapVersionSync(
+			baseParams,
 			ctx,
 			time.Now().Add(timeout),
 			smap,

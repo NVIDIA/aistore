@@ -224,6 +224,7 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 			idsToIgnore := cos.NewStringSet(MockDaemonID, proxyID)
 			idsToIgnore.Add(syncIgnoreIDs...)
 			err = devtools.WaitMapVersionSync(
+				baseParams,
 				DevtoolsCtx,
 				smapChangeDeadline,
 				syncedSmap,
