@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 // Rebalance metadata is distributed to start rebalance. We must do it:
@@ -50,12 +51,15 @@ type (
 // interface guard
 var _ revs = (*rebMD)(nil)
 
+// as revs
 func (r *rebMD) tag() string             { return revsRMDTag }
 func (r *rebMD) version() int64          { return r.Version }
 func (r *rebMD) marshal() []byte         { return cos.MustMarshal(r) }
 func (r *rebMD) jit(p *proxyrunner) revs { return p.owner.rmd.get() }
+func (r *rebMD) sgl() *memsys.SGL        { return nil }
 
 func (r *rebMD) inc() { r.Version++ }
+
 func (r *rebMD) clone() *rebMD {
 	dst := &rebMD{}
 	cos.CopyStruct(dst, r)

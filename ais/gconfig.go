@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 type (
@@ -38,12 +39,15 @@ type (
 	}
 )
 
+// interface guard
 var _ revs = (*globalConfig)(nil)
 
+// as revs
 func (config *globalConfig) tag() string             { return revsConfTag }
 func (config *globalConfig) version() int64          { return config.Version }
 func (config *globalConfig) marshal() []byte         { return cos.MustMarshal(config) }
 func (config *globalConfig) jit(p *proxyrunner) revs { g, _ := p.owner.config.get(); return g }
+func (config *globalConfig) sgl() *memsys.SGL        { return nil }
 
 ////////////
 // config //
@@ -70,8 +74,8 @@ func (co *configOwner) runPre(ctx *configModifier) (clone *globalConfig, err err
 	if err != nil {
 		return
 	}
-
-	// NOTE: config `nil` implies missing cluster config. We need to use the config provided through CLI to generate cluster config.
+	// NOTE: config `nil` implies missing cluster config.
+	//        We need to use the config provided through CLI to generate cluster config.
 	if clone == nil {
 		clone = &globalConfig{}
 		_, err = jsp.Load(cmn.GCO.GetGlobalConfigPath(), clone, jsp.Plain())

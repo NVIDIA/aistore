@@ -32,6 +32,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
@@ -1721,10 +1722,12 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 	}
 	newSmap, msg = &smapX{}, &aisMsg{}
 	smapValue := payload[revsSmapTag]
-	if err1 := jsoniter.Unmarshal(smapValue, newSmap); err1 != nil {
+	reader := bytes.NewBuffer(smapValue)
+	if _, err1 := jsp.Decode(ioutil.NopCloser(reader), newSmap, newSmap.JspOpts(), "extractSmap"); err1 != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new Smap", cmn.BytesHead(smapValue), err1)
 		return
 	}
+
 	if msgValue, ok := payload[revsSmapTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
 			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cmn.BytesHead(msgValue), err1)

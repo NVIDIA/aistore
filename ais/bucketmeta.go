@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 // NOTE: to access bucket metadata and related structures, external
@@ -185,13 +186,12 @@ func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *cluster.Snode, caller s
 	return
 }
 
-//
-// Implementation of revs interface
-//
+// as revs
 func (m *bucketMD) tag() string             { return revsBMDTag }
 func (m *bucketMD) version() int64          { return m.Version }
 func (m *bucketMD) marshal() []byte         { return cos.MustMarshal(m) }
 func (m *bucketMD) jit(p *proxyrunner) revs { return p.owner.bmd.get() }
+func (m *bucketMD) sgl() *memsys.SGL        { return nil }
 
 //////////////////
 // bmdOwnerBase //

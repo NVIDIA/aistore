@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/authn"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 type (
@@ -155,13 +156,10 @@ func (a *authManager) revokedTokenList() *tokenList {
 	return &tokenList{TokenList: tlist}
 }
 
-//
-// Implementation of revs interface
-//
-// Token list doesn't need versioning: receivers keep adding received tokens to their internal lists
-//
+// as revs
 func (t *tokenList) tag() string             { return revsTokenTag }
-func (t *tokenList) version() int64          { return t.Version }
+func (t *tokenList) version() int64          { return t.Version } // no versioning: receivers keep adding tokens to their lists
 func (t *tokenList) marshal() []byte         { return cos.MustMarshal(t) }
 func (t *tokenList) jit(_ *proxyrunner) revs { return t }
+func (t *tokenList) sgl() *memsys.SGL        { return nil }
 func (t *tokenList) String() string          { return fmt.Sprintf("TokenList v%d", t.Version) }

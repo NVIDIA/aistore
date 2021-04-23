@@ -572,17 +572,17 @@ func (p *proxyrunner) _updFinal(ctx *smapModifier, clone *smapX) {
 		nl.SetOwner(equalIC)
 		// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
 		err := p.notifs.add(nl)
-		cos.AssertNoErr(err)
+		debug.AssertNoErr(err)
 	} else if ctx.nsi.IsProxy() {
 		// Send RMD to proxies to make sure that they have
 		// the latest one - newly joined can become primary in a second.
 		cos.Assert(ctx.rmd != nil)
 		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
 	}
-
 	if len(tokens.Tokens) > 0 {
 		pairs = append(pairs, revsPair{tokens, aisMsg})
 	}
+	debug.Assert(clone._sgl != nil)
 	_ = p.metasyncer.sync(pairs...)
 	p.syncNewICOwners(ctx.smap, clone)
 }
@@ -659,9 +659,10 @@ func (p *proxyrunner) _syncFinal(ctx *smapModifier, clone *smapX) {
 		nl.SetOwner(equalIC)
 		// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
 		err := p.notifs.add(nl)
-		cos.AssertNoErr(err)
+		debug.AssertNoErr(err)
 		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
 	}
+	debug.Assert(clone._sgl != nil)
 	wg := p.metasyncer.sync(pairs...)
 	if ctx.isTarget {
 		wg.Wait()

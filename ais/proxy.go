@@ -2393,6 +2393,7 @@ func (p *proxyrunner) _becomeFinal(ctx *smapModifier, clone *smapX) {
 		pairs = append(pairs, revsPair{config, msg})
 	}
 	glog.Infof("%s: distributing (%s, %s, %s) with newly elected primary (self)", p.si, clone, bmd, rmd)
+	debug.Assert(clone._sgl != nil)
 	_ = p.metasyncer.sync(pairs...)
 	p.syncNewICOwners(ctx.smap, clone)
 }

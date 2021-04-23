@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 const (
@@ -26,11 +27,11 @@ const (
 // main methods //
 //////////////////
 
-func SaveMeta(filepath string, meta Opts) error {
-	return Save(filepath, meta, meta.JspOpts())
+func SaveMeta(filepath string, meta Opts, sgl ...*memsys.SGL) error { // TODO: non-variadic
+	return Save(filepath, meta, meta.JspOpts(), sgl...)
 }
 
-func Save(filepath string, v interface{}, opts Options) (err error) {
+func Save(filepath string, v interface{}, opts Options, sgl ...*memsys.SGL) (err error) { // TODO: non-variadic
 	var (
 		file *os.File
 		tmp  = filepath + ".tmp." + cos.GenTie()
@@ -46,8 +47,13 @@ func Save(filepath string, v interface{}, opts Options) (err error) {
 			glog.Errorf("Nested (%v): failed to remove %s, err: %v", err, tmp, nestedErr)
 		}
 	}()
-	if err = Encode(file, v, opts); err != nil {
-		glog.Errorf("Failed to encode %v => %s: %v", v, filepath, err)
+	if len(sgl) > 0 && sgl[0] != nil {
+		_, err = sgl[0].WriteTo(file)
+	} else {
+		err = Encode(file, v, opts)
+	}
+	if err != nil {
+		glog.Errorf("Failed to encode %s: %v", filepath, err)
 		cos.Close(file)
 		return
 	}

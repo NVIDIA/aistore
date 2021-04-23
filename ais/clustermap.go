@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/nl"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -47,12 +48,14 @@ import (
 type (
 	smapX struct {
 		cluster.Smap
-		vstr string // itoa(Version)
+		vstr string      // itoa(Version)
+		_sgl *memsys.SGL // jsp-formatted
 	}
 	smapOwner struct {
 		sync.Mutex
 		smap      atomic.Pointer
 		listeners *smapLis
+		immSize   int64
 	}
 	smapLis struct {
 		sync.RWMutex
@@ -97,6 +100,24 @@ var (
 	_ cluster.Sowner        = (*smapOwner)(nil)
 	_ cluster.SmapListeners = (*smapLis)(nil)
 )
+
+// as revs
+func (m *smapX) tag() string             { return revsSmapTag }
+func (m *smapX) version() int64          { return m.Version }
+func (m *smapX) jit(p *proxyrunner) revs { return p.owner.smap.get() }
+func (m *smapX) sgl() *memsys.SGL        { return m._sgl }
+
+func (m *smapX) marshal() []byte {
+	m._sgl = m._encode(0)
+	return m._sgl.Bytes()
+}
+
+func (m *smapX) _encode(immSize int64) (sgl *memsys.SGL) {
+	sgl = memsys.DefaultPageMM().NewSGL(immSize)
+	err := jsp.Encode(sgl, m, m.JspOpts())
+	debug.AssertNoErr(err)
+	return
+}
 
 ///////////
 // smapX //
@@ -158,11 +179,6 @@ func (m *smapX) addIC(psi *cluster.Snode) {
 		m.setNodeFlags(psi.ID(), cluster.SnodeIC)
 	}
 }
-
-func (m *smapX) tag() string             { return revsSmapTag }
-func (m *smapX) version() int64          { return m.Version }
-func (m *smapX) marshal() (b []byte)     { return cos.MustMarshal(m) }
-func (m *smapX) jit(p *proxyrunner) revs { return p.owner.smap.get() }
 
 // to be used exclusively at startup - compare with validate() below
 func (m *smapX) isValid() bool {
@@ -299,6 +315,7 @@ func (m *smapX) clone() *smapX {
 		dst.Pmap[id] = v.Clone()
 	}
 	dst.Primary = dst.GetProxy(m.Primary.ID())
+	dst._sgl = nil
 	return dst
 }
 
@@ -481,7 +498,7 @@ func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX) (err error) {
 // Must be called under lock
 func (r *smapOwner) persist(newSmap *smapX) error {
 	config := cmn.GCO.Get()
-	return jsp.SaveMeta(filepath.Join(config.ConfigDir, cmn.SmapFname), newSmap)
+	return jsp.SaveMeta(filepath.Join(config.ConfigDir, cmn.SmapFname), newSmap, newSmap._sgl)
 }
 
 func (r *smapOwner) _runPre(ctx *smapModifier) (clone *smapX, err error) {
@@ -492,9 +509,17 @@ func (r *smapOwner) _runPre(ctx *smapModifier) (clone *smapX, err error) {
 	if err = ctx.pre(ctx, clone); err != nil {
 		return
 	}
+	sgl := clone._encode(r.immSize)
+	r.immSize = cos.MaxI64(r.immSize, sgl.Len())
 	if err := r.persist(clone); err != nil {
+		sgl.Free()
 		err = fmt.Errorf("failed to persist %s: %v", clone, err)
 		return nil, err
+	}
+	if ctx.final == nil {
+		sgl.Free()
+	} else {
+		clone._sgl = sgl
 	}
 	r.put(clone)
 	if ctx.post != nil {
@@ -503,7 +528,7 @@ func (r *smapOwner) _runPre(ctx *smapModifier) (clone *smapX, err error) {
 	return
 }
 
-func (r *smapOwner) modify(ctx *smapModifier) (err error) {
+func (r *smapOwner) modify(ctx *smapModifier) error {
 	clone, err := r._runPre(ctx)
 	if err != nil {
 		return err

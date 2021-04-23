@@ -23,15 +23,14 @@ import (
 )
 
 const (
-	revsSmapTag = "Smap"
-	revsRMDTag  = "RMD"
-	revsBMDTag  = "BMD"
-	revsConfTag = "Conf"
+	revsSmapTag  = "Smap"
+	revsRMDTag   = "RMD"
+	revsBMDTag   = "BMD"
+	revsConfTag  = "Conf"
+	revsTokenTag = "token"
 
-	revsTokenTag  = "token"
-	revsActionTag = "-action" // to make a pair (revs, action)
-
-	revsMaxTags = 4
+	revsMaxTags   = 5
+	revsActionTag = "-action" // prefix revs tag
 )
 
 const (
@@ -103,6 +102,7 @@ type (
 		version() int64          // the version
 		marshal() (b []byte)     // marshals the revs
 		jit(p *proxyrunner) revs // current (just-in-time) instance
+		sgl() *memsys.SGL        // jsp-encoded SGL
 		String() string          // smap.String(), etc.
 	}
 	revsPair struct {
@@ -115,20 +115,22 @@ type (
 		failedCnt *atomic.Int32
 		reqType   int // enum: revsReqSync, etc.
 	}
-	nodeRevs struct {
-		versions map[string]int64 // used to track daemon, tag => (versions) info
-	}
+	msPayload map[string][]byte     // tag => revs' body
+	ndRevs    map[string]int64      // tag => version (see nodesRevs)
+	tagl      map[int64]*memsys.SGL // version => SGL jsp-formatted
+
+	// main
 	metasyncer struct {
-		p            *proxyrunner        // parent
-		nodesRevs    map[string]nodeRevs // sync-ed versions (cluster-wide, by DaemonID)
-		lastSynced   map[string]revs     // last/current sync-ed
-		lastClone    msPayload           // to enforce CoW
-		stopCh       chan struct{}       // stop channel
-		workCh       chan revsReq        // work channel
-		retryTimer   *time.Timer         // timer to sync pending
-		timerStopped bool                // true if retryTimer has been stopped, false otherwise
+		p            *proxyrunner      // parent
+		nodesRevs    map[string]ndRevs // cluster-wide node ID => ndRevs sync-ed
+		sgls         map[string]tagl   // tag => (version => SGL)
+		lastSynced   map[string]revs   // tag => revs last/current sync-ed
+		lastClone    msPayload         // debug to enforce CoW
+		stopCh       chan struct{}     // stop channel
+		workCh       chan revsReq      // work channel
+		retryTimer   *time.Timer       // timer to sync pending
+		timerStopped bool              // true if retryTimer has been stopped, false otherwise
 	}
-	msPayload map[string][]byte // tag => revs' body
 )
 
 // interface guard
@@ -142,12 +144,13 @@ func (req revsReq) isNil() bool { return len(req.pairs) == 0 }
 
 func newMetasyncer(p *proxyrunner) (y *metasyncer) {
 	y = &metasyncer{p: p}
-	y.lastSynced = make(map[string]revs)
+	y.nodesRevs = make(map[string]ndRevs, 8)
+	y.inigls()
+	y.lastSynced = make(map[string]revs, revsMaxTags)
 	y.lastClone = make(msPayload)
-	y.nodesRevs = make(map[string]nodeRevs)
 
 	y.stopCh = make(chan struct{}, 1)
-	y.workCh = make(chan revsReq, 8)
+	y.workCh = make(chan revsReq, 32)
 
 	y.retryTimer = time.NewTimer(time.Hour)
 	y.retryTimer.Stop()
@@ -167,7 +170,8 @@ func (y *metasyncer) Run() error {
 				break
 			}
 			if revsReq.isNil() { // <== see becomeNonPrimary()
-				y.nodesRevs = make(map[string]nodeRevs)
+				y.nodesRevs = make(map[string]ndRevs)
+				y.free()
 				y.lastSynced = make(map[string]revs)
 				y.lastClone = make(msPayload)
 				y.retryTimer.Stop()
@@ -277,8 +281,11 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 	// step 2: build payload and update last sync-ed
 	payload := make(msPayload, 2*len(pairs))
 	for _, pair := range pairs {
-		revs, msg, tag, s := pair.revs, pair.msg, pair.revs.tag(), ""
-		jitRevs := revs.jit(y.p)
+		var (
+			revs, msg, tag, s = pair.revs, pair.msg, pair.revs.tag(), ""
+			jitRevs           = revs.jit(y.p)
+			revsBody          []byte
+		)
 		debug.Assertf(revsReqType == revsReqNotify || revs.version() <= jitRevs.version(),
 			"%s cannot be newer than jit %s", revs, jitRevs)
 		if msg.Action != "" {
@@ -292,7 +299,19 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 			glog.Infof("%s: sync %s v%d%s", y.p.si, tag, revs.version(), s)
 		}
 		y.lastSynced[tag] = revs
-		revsBody := revs.marshal()
+		if sgl := revs.sgl(); sgl != nil {
+			// fast path
+			y.addnew(revs)
+			revsBody = sgl.Bytes()
+			y.delold(revs)
+		} else {
+			// slow path
+			revsBody = revs.marshal()
+			if sgl := revs.sgl(); sgl != nil {
+				y.addnew(revs)
+				y.delold(revs)
+			}
+		}
 		debug.Func(func() { y.lastClone[tag] = revsBody })
 		msgJSON := cos.MustMarshal(msg)
 
@@ -373,7 +392,7 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 
 // keeping track of per-daemon versioning - TODO: extend to take care of aisMsg where pairs may be empty
 func (y *metasyncer) syncDone(si *cluster.Snode, pairs []revsPair) {
-	rvd, ok := y.nodesRevs[si.ID()]
+	ndr, ok := y.nodesRevs[si.ID()]
 	smap := y.p.owner.smap.get()
 	if smap.GetNodeNotMaint(si.ID()) == nil {
 		if ok {
@@ -382,12 +401,12 @@ func (y *metasyncer) syncDone(si *cluster.Snode, pairs []revsPair) {
 		return
 	}
 	if !ok {
-		rvd = nodeRevs{versions: make(map[string]int64, revsMaxTags)}
-		y.nodesRevs[si.ID()] = rvd
+		ndr = make(map[string]int64, revsMaxTags)
+		y.nodesRevs[si.ID()] = ndr
 	}
 	for _, revsPair := range pairs {
 		revs := revsPair.revs
-		rvd.versions[revs.tag()] = revs.version()
+		ndr[revs.tag()] = revs.version()
 	}
 }
 
@@ -427,15 +446,13 @@ func (y *metasyncer) pending() (pending cluster.NodeMap) {
 			if si.ID() == y.p.si.ID() {
 				continue
 			}
-			rvd, ok := y.nodesRevs[si.ID()]
+			ndr, ok := y.nodesRevs[si.ID()]
 			if !ok {
-				y.nodesRevs[si.ID()] = nodeRevs{
-					versions: make(map[string]int64, revsMaxTags),
-				}
+				y.nodesRevs[si.ID()] = make(map[string]int64, revsMaxTags)
 			} else {
 				inSync := true
 				for tag, revs := range y.lastSynced {
-					v, ok := rvd.versions[tag]
+					v, ok := ndr[tag]
 					if !ok || v < revs.version() {
 						inSync = false
 						break
@@ -472,7 +489,14 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 		msgBody = cos.MustMarshal(msg)
 	)
 	for tag, revs := range y.lastSynced {
-		payload[tag] = revs.marshal()
+		if sgl := y.getver(revs); sgl != nil {
+			payload[tag] = sgl.Bytes()
+		} else {
+			payload[tag] = revs.marshal()
+			if sgl := revs.sgl(); sgl != nil {
+				y.addnew(revs)
+			}
+		}
 		payload[tag+revsActionTag] = msgBody
 		pairs = append(pairs, revsPair{revs, msg})
 	}
@@ -522,6 +546,63 @@ func (y *metasyncer) validateCoW() {
 			s := fmt.Sprintf("CoW violation: previously sync-ed %s v%d has been updated in-place",
 				tag, revs.version())
 			debug.AssertMsg(false, s)
+		}
+	}
+}
+
+////////////
+// y.sgls //
+////////////
+
+func (y *metasyncer) inigls() {
+	y.sgls = make(map[string]tagl, revsMaxTags)
+	y.sgls[revsSmapTag] = tagl{}
+	y.sgls[revsBMDTag] = tagl{}
+	y.sgls[revsConfTag] = tagl{}
+}
+
+func (y *metasyncer) free() {
+	for _, tagl := range y.sgls {
+		for _, sgl := range tagl {
+			sgl.Free()
+		}
+	}
+	y.inigls()
+}
+
+func (y *metasyncer) addnew(revs revs) {
+	vgl, ok := y.sgls[revs.tag()]
+	if !ok {
+		vgl = tagl{}
+		y.sgls[revs.tag()] = vgl
+	}
+	if sgl, ok := vgl[revs.version()]; ok {
+		// free duplicate (created previously via "slow path")
+		if sgl != revs.sgl() {
+			debug.Assert(sgl.Len() == revs.sgl().Len())
+			sgl.Free()
+		}
+	}
+	vgl[revs.version()] = revs.sgl()
+}
+
+func (y *metasyncer) getver(revs revs) (sgl *memsys.SGL) {
+	vgl, ok := y.sgls[revs.tag()]
+	if !ok {
+		return
+	}
+	return vgl[revs.version()]
+}
+
+func (y *metasyncer) delold(revs revs) {
+	vgl, ok := y.sgls[revs.tag()]
+	if !ok {
+		return
+	}
+	for v, sgl := range vgl {
+		if v < revs.version() {
+			sgl.Free()
+			delete(vgl, v)
 		}
 	}
 }
