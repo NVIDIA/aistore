@@ -15,7 +15,7 @@ The ability to scale linearly with each added disk was, and remains, one of the 
 
 * scale-out with no downtime and no limitation;
 * comprehensive HTTP REST API to GET and PUT objects, create, destroy, list and configure buckets, and more;
-* [Amazon S3 API](https://docs.aws.amazon.com/s3/index.html) to run unmodified S3 apps;
+* [Amazon S3 API](docs/s3compat.md) to run unmodified S3 clients and apps;
 * FUSE client (`aisfs`) to access AIS objects as files;
 * arbitrary number of extremely lightweight access points;
 * easy-to-use [CLI](https://www.youtube.com/watch?v=VPIhQm2sMD8&ab_channel=AIStore) based on [auto-completions](/cmd/cli/README.md);
@@ -167,6 +167,7 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
 - [AIS Overview](/docs/overview.md)
 - [Tutorials](/docs/tutorials/README.md)
 - [Videos](/docs/videos.md)
+- [S3 compatibility](/docs/s3compat.md)
 - [CLI](/cmd/cli/README.md)
   - [Create, destroy, list, and other operations on buckets](/cmd/cli/resources/bucket.md)
   - [GET, PUT, APPEND, PROMOTE, and other operations on objects](/cmd/cli/resources/object.md)
