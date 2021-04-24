@@ -34,7 +34,7 @@ and a few more. The following table summarizes S3 APIs and provides the correspo
 
 | API | AIS CLI and comments | [s3cmd](https://github.com/s3tools/s3cmd) | [aws CLI](https://aws.amazon.com/cli) |
 | --- | --- | --- | --- |
-| Create bucket | `ais bucket create ais://bck` but **do not forget to turn MD5 checksum on**: `ais bucket props ais://bck checksum.type=md5` | `s3cmd mb` | `aws s3 mb` |
+| Create bucket | `ais bucket create ais://bck` (note: consider using S3 default `md5` checksum - see [discussion](#object-checksum) and examples below) | `s3cmd mb` | `aws s3 mb` |
 | Head bucket | `ais bucket show ais://bck` | `s3cmd info s3://bck` | `aws s3api head-bucket` |
 | Destroy bucket (aka "remove bucket") | `ais bucket rm ais://bck` | `s3cmd rb`, `aws s3 rb` ||
 | List buckets | `ais ls ais://` | `s3cmd ls s3://` | `aws s3 ls s3://` |
@@ -48,8 +48,8 @@ and a few more. The following table summarizes S3 APIs and provides the correspo
 | Last modification time | AIS always stores only one - the last - version of an object. Therefore, we track creation **and** last access time but not "modification time". | - | - |
 | Bucket creation time | `ais bucket show ais://bck` | `s3cmd` displays creation time via `ls` subcommand: `s3cmd ls s3://` | - |
 | Versioning | AIS tracks and updates versioning information but only for the **latest** object version. Versioning is enabled by default; to disable, run: `ais bucket props ais://bck versioning.enabled=false` | - | `aws s3api get/put-bucket-versioning` |
+| ACL | Limited support; AIS provides an extensive set of configurable permissions - see `ais bucket props ais://bck access` and `ais auth` and the corresponding documentation | - | - |
 | Multipart (upload, download) | **Not supported** | - | - |
-| ACL | **S3 ACLs are not supported.** However,`ais` supports its own extensive set of per-bucket permissions: `ais bucket props ais://bck access` | - | - |
 | Retention Policy | **Not supported** | - | - |
 | CORS| **Not supported** | - | - |
 | Website endpoints | **Not supported** | - | - |
