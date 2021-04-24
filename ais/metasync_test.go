@@ -68,7 +68,7 @@ func newPrimary() *proxyrunner {
 		smap    = newSmap()
 	)
 
-	p.owner.smap = newSmapOwner()
+	p.owner.smap = newSmapOwner(cmn.GCO.Get())
 	p.si = cluster.NewSnode("primary", cmn.Proxy, cluster.NetInfo{}, cluster.NetInfo{}, cluster.NetInfo{})
 
 	smap.addProxy(p.si)
@@ -103,7 +103,7 @@ func newPrimary() *proxyrunner {
 func newSecondary(name string) *proxyrunner {
 	p := &proxyrunner{}
 	p.si = cluster.NewSnode(name, cmn.Proxy, cluster.NetInfo{}, cluster.NetInfo{}, cluster.NetInfo{})
-	p.owner.smap = newSmapOwner()
+	p.owner.smap = newSmapOwner(cmn.GCO.Get())
 	p.owner.smap.put(newSmap())
 	p.client.data = &http.Client{}
 	p.client.control = &http.Client{}

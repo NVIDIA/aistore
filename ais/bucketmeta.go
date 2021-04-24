@@ -46,8 +46,9 @@ const bmdCopies = 2 // local copies
 type (
 	bucketMD struct {
 		cluster.BMD
-		vstr  string     // itoa(Version), to have it handy for http redirects
-		cksum *cos.Cksum // BMD checksum
+		vstr  string      // itoa(Version), to have it handy for http redirects
+		cksum *cos.Cksum  // BMD checksum
+		_sgl  *memsys.SGL // jsp-formatted
 	}
 	bmdOwner interface {
 		sync.Locker
@@ -61,7 +62,8 @@ type (
 	}
 	bmdOwnerBase struct {
 		sync.Mutex
-		bmd atomic.Pointer
+		bmd     atomic.Pointer
+		immSize int64
 	}
 	bmdOwnerPrx struct {
 		bmdOwnerBase
@@ -157,8 +159,26 @@ func (m *bucketMD) set(bck *cluster.Bck, p *cmn.BucketProps) {
 
 func (m *bucketMD) clone() *bucketMD {
 	dst := &bucketMD{}
-	m.DeepCopy(&dst.BMD)
+
+	// deep copy
+	*dst = *m
+	dst.Providers = make(cluster.Providers, len(m.Providers))
+	for provider, namespaces := range m.Providers {
+		dstNamespaces := make(cluster.Namespaces, len(namespaces))
+		for ns, buckets := range namespaces {
+			dstBuckets := make(cluster.Buckets, len(buckets))
+			for name, p := range buckets {
+				dstProps := &cmn.BucketProps{}
+				*dstProps = *p
+				dstBuckets[name] = dstProps
+			}
+			dstNamespaces[ns] = dstBuckets
+		}
+		dst.Providers[provider] = dstNamespaces
+	}
+
 	dst.vstr = m.vstr
+	dst._sgl = nil
 	return dst
 }
 
@@ -189,9 +209,20 @@ func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *cluster.Snode, caller s
 // as revs
 func (m *bucketMD) tag() string             { return revsBMDTag }
 func (m *bucketMD) version() int64          { return m.Version }
-func (m *bucketMD) marshal() []byte         { return cos.MustMarshal(m) }
 func (m *bucketMD) jit(p *proxyrunner) revs { return p.owner.bmd.get() }
-func (m *bucketMD) sgl() *memsys.SGL        { return nil }
+func (m *bucketMD) sgl() *memsys.SGL        { return m._sgl }
+
+func (m *bucketMD) marshal() []byte {
+	m._sgl = m._encode(0)
+	return m._sgl.Bytes()
+}
+
+func (m *bucketMD) _encode(immSize int64) (sgl *memsys.SGL) {
+	sgl = memsys.DefaultPageMM().NewSGL(immSize)
+	err := jsp.Encode(sgl, m, m.JspOpts())
+	debug.AssertNoErr(err)
+	return
+}
 
 //////////////////
 // bmdOwnerBase //
@@ -228,10 +259,9 @@ func (bo *bmdOwnerPrx) put(bmd *bucketMD) (err error) {
 
 func (bo *bmdOwnerPrx) persist() (err error) {
 	bmd := bo.get()
-	if err = jsp.SaveMeta(bo.fpath, bmd); err != nil {
-		err = fmt.Errorf("failed to write %s as %s, err: %w", bmd, bo.fpath, err)
-	}
-	return
+	bmd._sgl = bmd._encode(bo.immSize)
+	bo.immSize = cos.MaxI64(bo.immSize, bmd._sgl.Len())
+	return jsp.SaveMeta(bo.fpath, bmd, bmd._sgl)
 }
 
 func (bo *bmdOwnerPrx) _pre(ctx *bmdModifier) (clone *bucketMD, err error) {
@@ -241,7 +271,10 @@ func (bo *bmdOwnerPrx) _pre(ctx *bmdModifier) (clone *bucketMD, err error) {
 	if err = ctx.pre(ctx, clone); err != nil || ctx.terminate {
 		return
 	}
-	err = bo.put(clone)
+	if err = bo.put(clone); err != nil && clone._sgl != nil {
+		clone._sgl.Free()
+		clone._sgl = nil
+	}
 	return
 }
 
@@ -251,6 +284,9 @@ func (bo *bmdOwnerPrx) modify(ctx *bmdModifier) (clone *bucketMD, err error) {
 	}
 	if ctx.final != nil {
 		ctx.final(ctx, clone)
+	} else if clone._sgl != nil {
+		clone._sgl.Free()
+		clone._sgl = nil
 	}
 	return
 }

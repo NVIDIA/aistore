@@ -56,6 +56,7 @@ type (
 		smap      atomic.Pointer
 		listeners *smapLis
 		immSize   int64
+		fpath     string
 	}
 	smapLis struct {
 		sync.RWMutex
@@ -428,14 +429,15 @@ func (m *smapX) clearNodeFlags(id string, flags cluster.SnodeFlags) {
 // smapOwner //
 ///////////////
 
-func newSmapOwner() *smapOwner {
+func newSmapOwner(config *cmn.Config) *smapOwner {
 	return &smapOwner{
 		listeners: newSmapListeners(),
+		fpath:     filepath.Join(config.ConfigDir, cmn.SmapFname),
 	}
 }
 
-func (r *smapOwner) load(smap *smapX, config *cmn.Config) (loaded bool, err error) {
-	_, err = jsp.LoadMeta(filepath.Join(config.ConfigDir, cmn.SmapFname), smap)
+func (r *smapOwner) load(smap *smapX) (loaded bool, err error) {
+	_, err = jsp.LoadMeta(r.fpath, smap)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return false, nil
@@ -497,8 +499,7 @@ func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX) (err error) {
 
 // Must be called under lock
 func (r *smapOwner) persist(newSmap *smapX) error {
-	config := cmn.GCO.Get()
-	return jsp.SaveMeta(filepath.Join(config.ConfigDir, cmn.SmapFname), newSmap, newSmap._sgl)
+	return jsp.SaveMeta(r.fpath, newSmap, newSmap._sgl)
 }
 
 func (r *smapOwner) _runPre(ctx *smapModifier) (clone *smapX, err error) {

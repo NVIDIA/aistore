@@ -69,7 +69,7 @@ var _ = Describe("Notifications xaction test", func() {
 				fin: newListeners(),
 			}
 			smap := &smapX{Smap: cluster.Smap{Version: 1}}
-			n.p.httprunner.owner.smap = newSmapOwner()
+			n.p.httprunner.owner.smap = newSmapOwner(cmn.GCO.Get())
 			n.p.httprunner.owner.smap.put(smap)
 			n.p.httprunner.startup.cluster = *atomic.NewBool(true)
 			return n

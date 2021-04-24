@@ -692,7 +692,7 @@ func (h *httprunner) init(config *cmn.Config) {
 		h.netServ.data = &netServer{muxers: muxers, sndRcvBufSize: bufsize}
 	}
 
-	h.owner.smap = newSmapOwner()
+	h.owner.smap = newSmapOwner(config)
 	h.owner.rmd = newRMDOwner()
 	h.owner.rmd.load()
 
@@ -815,9 +815,8 @@ func (h *httprunner) detectNodeChanges(smap *smapX) (err error) {
 
 func (h *httprunner) tryLoadSmap() (_ *smapX, reliable bool) {
 	var (
-		config      = cmn.GCO.Get()
 		smap        = newSmap()
-		loaded, err = h.owner.smap.load(smap, config)
+		loaded, err = h.owner.smap.load(smap)
 	)
 	if err != nil {
 		glog.Errorf("Failed to load Smap (err: %v)", err)
@@ -1813,10 +1812,12 @@ func (h *httprunner) extractBMD(payload msPayload, caller string) (newBMD *bucke
 	}
 	newBMD, msg = &bucketMD{}, &aisMsg{}
 	bmdValue := payload[revsBMDTag]
-	if err1 := jsoniter.Unmarshal(bmdValue, newBMD); err1 != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, newBMD, cmn.BytesHead(bmdValue), err1)
+	reader := bytes.NewBuffer(bmdValue)
+	if _, err1 := jsp.Decode(ioutil.NopCloser(reader), newBMD, newBMD.JspOpts(), "extractBMD"); err1 != nil {
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new Smap", cmn.BytesHead(bmdValue), err1)
 		return
 	}
+
 	if msgValue, ok := payload[revsBMDTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
 			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cmn.BytesHead(msgValue), err1)

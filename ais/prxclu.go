@@ -1225,6 +1225,7 @@ func (p *proxyrunner) _syncRMDFinal(ctx *rmdModifier, clone *rebMD) {
 }
 
 func (p *proxyrunner) _syncBMDFinal(ctx *bmdModifier, clone *bucketMD) {
+	debug.Assert(clone._sgl != nil)
 	msg := p.newAmsg(ctx.msg, clone, ctx.txnID)
 	wg := p.metasyncer.sync(revsPair{clone, msg})
 	if ctx.wait {

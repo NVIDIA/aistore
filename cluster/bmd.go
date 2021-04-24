@@ -184,24 +184,6 @@ func (m *BMD) Range(providerQuery *string, nsQuery *cmn.Ns, callback func(*Bck) 
 	}
 }
 
-func (m *BMD) DeepCopy(dst *BMD) {
-	*dst = *m
-	dst.Providers = make(Providers, len(m.Providers))
-	for provider, namespaces := range m.Providers {
-		dstNamespaces := make(Namespaces, len(namespaces))
-		for ns, buckets := range namespaces {
-			dstBuckets := make(Buckets, len(buckets))
-			for name, p := range buckets {
-				dstProps := &cmn.BucketProps{}
-				*dstProps = *p
-				dstBuckets[name] = dstProps
-			}
-			dstNamespaces[ns] = dstBuckets
-		}
-		dst.Providers[provider] = dstNamespaces
-	}
-}
-
 /////////////////////
 // private methods //
 /////////////////////

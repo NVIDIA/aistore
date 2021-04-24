@@ -53,7 +53,7 @@ func newDiscoverServerPrimary() *proxyrunner {
 	config.Cksum.Type = cos.ChecksumXXHash
 	cmn.GCO.CommitUpdate(config)
 
-	p.owner.smap = newSmapOwner()
+	p.owner.smap = newSmapOwner(config)
 	p.owner.smap.put(newSmap())
 	owner := newBMDOwnerPrx(config)
 	owner._put(newBucketMD())
