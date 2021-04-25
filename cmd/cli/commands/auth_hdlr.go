@@ -306,7 +306,7 @@ func loginUserHandler(c *cli.Context) (err error) {
 		fmt.Fprintf(c.App.Writer, "Token:\n%s\n", token.Token)
 		return fmt.Errorf(tokenSaveFailFmt, err)
 	}
-	err = jsp.Save(tokenPath, token, jsp.Plain())
+	err = jsp.Save(tokenPath, token, jsp.Plain(), nil)
 	if err != nil {
 		fmt.Fprintf(c.App.Writer, "Token:\n%s\n", token.Token)
 		return fmt.Errorf(tokenSaveFailFmt, err)

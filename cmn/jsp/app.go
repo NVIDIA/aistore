@@ -38,5 +38,5 @@ func LoadAppConfig(configDir, configFileName string, v interface{}) (err error) 
 func SaveAppConfig(configDir, configFileName string, v interface{}) (err error) {
 	// Check if config dir exists; if not, create one with default config.
 	configFilePath := filepath.Join(configDir, configFileName)
-	return Save(configFilePath, v, Options{Indent: true})
+	return Save(configFilePath, v, Options{Indent: true}, nil /*sgl*/)
 }

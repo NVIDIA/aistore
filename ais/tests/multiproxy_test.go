@@ -194,7 +194,7 @@ killRestore:
 	localConf.HostNet.PortStr = strconv.Itoa(cfg.HostNet.Port + portInc)
 	localConf.HostNet.PortIntraControlStr = strconv.Itoa(cfg.HostNet.PortIntraControl + portInc)
 	localConf.HostNet.PortIntraDataStr = strconv.Itoa(cfg.HostNet.PortIntraData + portInc)
-	err = jsp.SaveMeta(localConfPath, localConf)
+	err = jsp.SaveMeta(localConfPath, localConf, nil)
 	tassert.CheckFatal(t, err)
 
 	err = tutils.RestoreNode(cmd, false, nodeType)

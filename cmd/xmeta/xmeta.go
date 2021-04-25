@@ -149,5 +149,5 @@ func formatMeta(v jsp.Opts) error {
 	if _, err := jsp.Load(flags.in, v, jsp.Plain()); err != nil {
 		return err
 	}
-	return jsp.SaveMeta(flags.out, v)
+	return jsp.SaveMeta(flags.out, v, nil)
 }

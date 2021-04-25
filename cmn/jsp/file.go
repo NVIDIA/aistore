@@ -27,11 +27,11 @@ const (
 // main methods //
 //////////////////
 
-func SaveMeta(filepath string, meta Opts, sgl ...*memsys.SGL) error { // TODO: non-variadic
-	return Save(filepath, meta, meta.JspOpts(), sgl...)
+func SaveMeta(filepath string, meta Opts, sgl *memsys.SGL) error {
+	return Save(filepath, meta, meta.JspOpts(), sgl)
 }
 
-func Save(filepath string, v interface{}, opts Options, sgl ...*memsys.SGL) (err error) { // TODO: non-variadic
+func Save(filepath string, v interface{}, opts Options, sgl *memsys.SGL) (err error) {
 	var (
 		file *os.File
 		tmp  = filepath + ".tmp." + cos.GenTie()
@@ -47,8 +47,8 @@ func Save(filepath string, v interface{}, opts Options, sgl ...*memsys.SGL) (err
 			glog.Errorf("Nested (%v): failed to remove %s, err: %v", err, tmp, nestedErr)
 		}
 	}()
-	if len(sgl) > 0 && sgl[0] != nil {
-		_, err = sgl[0].WriteTo(file)
+	if sgl != nil {
+		_, err = sgl.WriteTo(file)
 	} else {
 		err = Encode(file, v, opts)
 	}

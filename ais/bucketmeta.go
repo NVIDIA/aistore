@@ -254,15 +254,12 @@ func (bo *bmdOwnerPrx) init() {
 
 func (bo *bmdOwnerPrx) put(bmd *bucketMD) (err error) {
 	bo._put(bmd)
-	return bo.persist()
-}
-
-func (bo *bmdOwnerPrx) persist() (err error) {
-	bmd := bo.get()
 	bmd._sgl = bmd._encode(bo.immSize)
 	bo.immSize = cos.MaxI64(bo.immSize, bmd._sgl.Len())
 	return jsp.SaveMeta(bo.fpath, bmd, bmd._sgl)
 }
+
+func (bo *bmdOwnerPrx) persist() (err error) { debug.Assert(false); return }
 
 func (bo *bmdOwnerPrx) _pre(ctx *bmdModifier) (clone *bucketMD, err error) {
 	bo.Lock()
@@ -329,8 +326,10 @@ func (bo *bmdOwnerTgt) put(bmd *bucketMD) (err error) {
 
 func (bo *bmdOwnerTgt) persist() (err error) {
 	bmd := bo.get()
-	cnt, availCnt :=
-		fs.PersistOnMpaths(cmn.BmdFname, cmn.BmdPreviousFname, bmd, bmdCopies, bmd.JspOpts())
+	sgl := bmd._encode(bo.immSize)
+	defer sgl.Free()
+	bo.immSize = cos.MaxI64(bo.immSize, sgl.Len())
+	cnt, availCnt := fs.PersistOnMpaths(cmn.BmdFname, cmn.BmdPreviousFname, bmd, bmdCopies, sgl)
 	if cnt > 0 {
 		return
 	}
@@ -383,9 +382,7 @@ func loadBMDFromMpath(mpath *fs.MountpathInfo, path string) (bmd *bucketMD) {
 	return nil
 }
 
-func hasEnoughBMDCopies() bool {
-	return len(fs.FindPersisted(cmn.BmdFname)) >= bmdCopies
-}
+func hasEnoughBMDCopies() bool { return fs.CountPersisted(cmn.BmdFname) >= bmdCopies }
 
 //////////////////////////
 // default bucket props //

@@ -407,11 +407,11 @@ func DeployNode(t *testing.T, node *cluster.Snode, conf *cmn.Config, localConf *
 	}
 
 	localConfFile := path.Join(conf.ConfigDir, "ais_local.json")
-	err := jsp.SaveMeta(localConfFile, localConf)
+	err := jsp.SaveMeta(localConfFile, localConf, nil)
 	tassert.CheckFatal(t, err)
 
 	configFile := path.Join(conf.ConfigDir, "ais.json")
-	err = jsp.SaveMeta(configFile, &conf.ClusterConfig)
+	err = jsp.SaveMeta(configFile, &conf.ClusterConfig, nil)
 	tassert.CheckFatal(t, err)
 
 	args := []string{

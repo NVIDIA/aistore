@@ -95,7 +95,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 
 							// Add bucket and save.
 							clone.add(bck, defaultBckProps(bckPropsArgs{bck: bck}))
-							err := jsp.Save(testpath, clone, opts)
+							err := jsp.Save(testpath, clone, opts, nil)
 							Expect(err).NotTo(HaveOccurred())
 
 							// Load elsewhere and check.

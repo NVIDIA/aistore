@@ -1620,7 +1620,7 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *Config) (err er
 }
 
 func SaveOverrideConfig(configDir string, config *ConfigToUpdate) error {
-	return jsp.SaveMeta(path.Join(configDir, OverrideConfigFname), config)
+	return jsp.SaveMeta(path.Join(configDir, OverrideConfigFname), config, nil)
 }
 
 func loadOverrideConfig(configDir string) (config *ConfigToUpdate, err error) {

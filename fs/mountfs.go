@@ -21,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/OneOfOne/xxhash"
@@ -216,14 +215,16 @@ func (mi *MountpathInfo) CreateMissingBckDirs(bck cmn.Bck) (err error) {
 	return
 }
 
-func (mi *MountpathInfo) StoreMD(path string, what interface{}, options jsp.Options) error {
-	fpath := filepath.Join(mi.Path, path)
-	if what == nil {
-		file, err := cos.CreateFile(fpath)
-		file.Close()
-		return err
+func (mi *MountpathInfo) move(from, to string) bool {
+	var (
+		fromPath = filepath.Join(mi.Path, from)
+		toPath   = filepath.Join(mi.Path, to)
+	)
+	err := os.Rename(fromPath, toPath)
+	if err != nil && !os.IsNotExist(err) {
+		glog.Error(err)
 	}
-	return jsp.Save(fpath, what, options)
+	return err == nil
 }
 
 func (mi *MountpathInfo) ClearMDs() {
@@ -238,18 +239,6 @@ func (mi *MountpathInfo) Remove(path string) error {
 		return err
 	}
 	return nil
-}
-
-func (mi *MountpathInfo) MoveMD(from, to string) bool {
-	var (
-		fromPath = filepath.Join(mi.Path, from)
-		toPath   = filepath.Join(mi.Path, to)
-	)
-	err := os.Rename(fromPath, toPath)
-	if err != nil && !os.IsNotExist(err) {
-		glog.Error(err)
-	}
-	return err == nil
 }
 
 func (mi *MountpathInfo) SetDaemonIDXattr(tid string) error {

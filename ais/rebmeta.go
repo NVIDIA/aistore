@@ -81,7 +81,7 @@ func newRMDOwner() *rmdOwner {
 
 func (r *rmdOwner) persist(rmd *rebMD) error {
 	rmdPathName := filepath.Join(cmn.GCO.Get().ConfigDir, cmn.RmdFname)
-	return jsp.SaveMeta(rmdPathName, rmd)
+	return jsp.SaveMeta(rmdPathName, rmd, nil /*sgl*/)
 }
 
 func (r *rmdOwner) load() {

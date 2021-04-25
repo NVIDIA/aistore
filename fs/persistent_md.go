@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 // List of AIS metadata files and directories (basenames only)
@@ -27,26 +28,50 @@ var mdFilesDirs = []string{
 
 func MarkerExists(marker string) bool {
 	markerPath := filepath.Join(cmn.MarkersDirName, marker)
-	return len(FindPersisted(markerPath)) > 0
+	return CountPersisted(markerPath) > 0
 }
 
 func PersistMarker(marker string) error {
-	markerPath := filepath.Join(cmn.MarkersDirName, marker)
-	cnt, available := PersistOnMpaths(markerPath, "", nil, 1)
+	const numMarkers = 1
+	var (
+		relname            = filepath.Join(cmn.MarkersDirName, marker)
+		availableMpaths, _ = Get()
+		cnt                int
+	)
+	for _, mi := range availableMpaths {
+		fpath := filepath.Join(mi.Path, relname)
+		if err := Access(fpath); err == nil {
+			cnt++
+			if cnt > numMarkers {
+				if err := cos.RemoveFile(fpath); err != nil {
+					glog.Errorf("Failed to cleanup %q marker: %v", fpath, err)
+				} else {
+					cnt--
+				}
+			}
+		} else if cnt < numMarkers {
+			if file, err := cos.CreateFile(fpath); err == nil {
+				file.Close()
+				cnt++
+			} else {
+				glog.Errorf("Failed to create %q marker: %v", fpath, err)
+			}
+		}
+	}
 	if cnt == 0 {
-		return fmt.Errorf("failed to persist marker %q (available mountPaths: %d)", marker, available)
+		return fmt.Errorf("failed to persist %q marker (%d)", marker, len(availableMpaths))
 	}
 	return nil
 }
 
 func RemoveMarker(marker string) {
 	var (
-		mpaths, _  = Get()
-		markerPath = filepath.Join(cmn.MarkersDirName, marker)
+		availableMpaths, _ = Get()
+		relname            = filepath.Join(cmn.MarkersDirName, marker)
 	)
-	for _, mpath := range mpaths {
-		if err := cos.RemoveFile(filepath.Join(mpath.Path, markerPath)); err != nil {
-			glog.Errorf("Failed to cleanup %q from %q, err: %v", markerPath, mpath.Path, err)
+	for _, mi := range availableMpaths {
+		if err := cos.RemoveFile(filepath.Join(mi.Path, relname)); err != nil {
+			glog.Errorf("Failed to cleanup %q from %q: %v", relname, mi.Path, err)
 		}
 	}
 }
@@ -55,42 +80,33 @@ func RemoveMarker(marker string) {
 // It does it on maximum `atMost` mountPaths. If `atMost == 0`, it does it on every mountpath.
 // If `backupPath != ""`, it removes files from `backupPath` and moves files from `path` to `backupPath`.
 // Returns how many times it has successfully stored a file.
-func PersistOnMpaths(path, backupPath string, what interface{}, atMost int, opts ...jsp.Options) (cnt,
-	availCnt int) {
-	var (
-		options            = jsp.CksumSign(0 /*metaver*/)
-		availableMpaths, _ = Get()
-	)
+func PersistOnMpaths(fname, backupName string, meta jsp.Opts, atMost int, sgl *memsys.SGL) (cnt, availCnt int) {
+	availableMpaths, _ := Get()
 	availCnt = len(availableMpaths)
 	if atMost == 0 {
 		atMost = availCnt
 	}
-	if len(opts) > 0 {
-		options = opts[0]
-	}
+	for _, mi := range availableMpaths {
+		var moved bool
 
-	for _, mpath := range availableMpaths {
-		moved := false
-
-		// 1. (Optional) Move currently stored in `path` to `backupPath`.
-		if backupPath != "" {
-			moved = mpath.MoveMD(path, backupPath)
-		} else if err := mpath.Remove(path); err != nil {
+		// 1. (Optional) Move/rename fname to backupName.
+		if backupName != "" {
+			moved = mi.move(fname, backupName)
+		} else if err := mi.Remove(fname); err != nil {
 			glog.Error(err)
 		}
-
-		// 2. Persist `what` on `path`.
+		// 2. Persist meta as fname.
 		if cnt < atMost {
-			if err := mpath.StoreMD(path, what, options); err != nil {
-				glog.Errorf("Failed to persist %q on %q, err: %v", path, mpath, err)
+			fpath := filepath.Join(mi.Path, fname)
+			if err := jsp.SaveMeta(fpath, meta, sgl); err != nil {
+				glog.Errorf("Failed to persist %q on %q, err: %v", fname, mi, err)
 			} else {
 				cnt++
 			}
 		}
-
-		// 3. (Optional) Clean up very old versions of persisted data - only if they were not updated.
-		if backupPath != "" && !moved {
-			if err := mpath.Remove(backupPath); err != nil {
+		// 3. (Optional) Cleanup old.
+		if backupName != "" && !moved {
+			if err := mi.Remove(backupName); err != nil {
 				glog.Error(err)
 			}
 		}
@@ -98,33 +114,30 @@ func PersistOnMpaths(path, backupPath string, what interface{}, atMost int, opts
 	debug.Func(func() {
 		expected := cos.Min(atMost, availCnt)
 		debug.Assertf(cnt == expected, "expected %q to be persisted on %d mountpaths got %d instead",
-			path, expected, cnt)
+			fname, expected, cnt)
 	})
 	return
 }
 
 func RemoveDaemonIDs() {
 	available, disabled := Get()
-	for _, mpath := range available {
-		err := removeXattr(mpath.Path, daemonIDXattr)
+	for _, mi := range available {
+		err := removeXattr(mi.Path, daemonIDXattr)
 		debug.AssertNoErr(err)
 	}
-	for _, mpath := range disabled {
-		err := removeXattr(mpath.Path, daemonIDXattr)
+	for _, mi := range disabled {
+		err := removeXattr(mi.Path, daemonIDXattr)
 		debug.AssertNoErr(err)
 	}
 }
 
-func FindPersisted(path string) MPI {
-	var (
-		avail, _ = Get()
-		mpaths   = make(MPI, len(avail))
-	)
-	for mpath, mpathInfo := range avail {
-		fpath := filepath.Join(mpath, path)
+func CountPersisted(fname string) (cnt int) {
+	available, _ := Get()
+	for mpath := range available {
+		fpath := filepath.Join(mpath, fname)
 		if err := Access(fpath); err == nil {
-			mpaths[mpath] = mpathInfo
+			cnt++
 		}
 	}
-	return mpaths
+	return
 }
