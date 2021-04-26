@@ -81,34 +81,27 @@ func RemoveMarker(marker string) {
 // If `backupPath != ""`, it removes files from `backupPath` and moves files from `path` to `backupPath`.
 // Returns how many times it has successfully stored a file.
 func PersistOnMpaths(fname, backupName string, meta jsp.Opts, atMost int, sgl *memsys.SGL) (cnt, availCnt int) {
-	availableMpaths, _ := Get()
+	var (
+		availableMpaths, _ = Get()
+		bcnt               int
+	)
 	availCnt = len(availableMpaths)
-	if atMost == 0 {
+	debug.Assert(atMost > 0)
+	if atMost > availCnt {
 		atMost = availCnt
 	}
 	for _, mi := range availableMpaths {
-		var moved bool
-
-		// 1. (Optional) Move/rename fname to backupName.
 		if backupName != "" {
-			moved = mi.move(fname, backupName)
-		} else if err := mi.Remove(fname); err != nil {
-			glog.Error(err)
+			bcnt = mi.backupAtmost(fname, backupName, bcnt, atMost)
 		}
-		// 2. Persist meta as fname.
-		if cnt < atMost {
-			fpath := filepath.Join(mi.Path, fname)
-			if err := jsp.SaveMeta(fpath, meta, sgl); err != nil {
-				glog.Errorf("Failed to persist %q on %q, err: %v", fname, mi, err)
-			} else {
-				cnt++
-			}
+		if cnt >= atMost {
+			continue
 		}
-		// 3. (Optional) Cleanup old.
-		if backupName != "" && !moved {
-			if err := mi.Remove(backupName); err != nil {
-				glog.Error(err)
-			}
+		fpath := filepath.Join(mi.Path, fname)
+		if err := jsp.SaveMeta(fpath, meta, sgl); err != nil {
+			glog.Errorf("Failed to persist %q on %q, err: %v", fname, mi, err)
+		} else {
+			cnt++
 		}
 	}
 	debug.Func(func() {

@@ -215,16 +215,26 @@ func (mi *MountpathInfo) CreateMissingBckDirs(bck cmn.Bck) (err error) {
 	return
 }
 
-func (mi *MountpathInfo) move(from, to string) bool {
+func (mi *MountpathInfo) backupAtmost(from, backup string, bcnt, atMost int) (newBcnt int) {
 	var (
 		fromPath = filepath.Join(mi.Path, from)
-		toPath   = filepath.Join(mi.Path, to)
+		toPath   = filepath.Join(mi.Path, backup)
 	)
-	err := os.Rename(fromPath, toPath)
-	if err != nil && !os.IsNotExist(err) {
-		glog.Error(err)
+	newBcnt = bcnt
+	if bcnt >= atMost {
+		os.RemoveAll(toPath)
+		return
 	}
-	return err == nil
+	if Access(fromPath) != nil {
+		return
+	}
+	if err := os.Rename(fromPath, toPath); err != nil {
+		glog.Error(err)
+		os.RemoveAll(fromPath)
+	} else {
+		newBcnt = bcnt + 1
+	}
+	return
 }
 
 func (mi *MountpathInfo) ClearMDs() {
