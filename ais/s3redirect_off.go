@@ -7,16 +7,17 @@
 package ais
 
 import (
+	"fmt"
 	"net/http"
+	"os"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 )
 
 func init() {
-	glog.Errorln("Warning *****")
-	glog.Errorln("Warning: reverse-proxying datapath requests might adversely affect performance!")
-	glog.Errorln("Warning *****")
+	fmt.Fprintln(os.Stderr, "Warning *****")
+	fmt.Fprintln(os.Stderr, "Warning: reverse-proxying datapath requests might adversely affect performance!")
+	fmt.Fprintln(os.Stderr, "Warning *****")
 }
 
 // Perform reverse-proxy request to a designated clustered node.
