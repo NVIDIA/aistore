@@ -102,7 +102,7 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := p.owner.smap.synchronize(p.si, newsmap); err != nil {
+	if err := p.owner.smap.synchronize(p.si, newsmap, nil /*ms payload*/); err != nil {
 		if isErrDowngrade(err) {
 			psi := newsmap.GetProxy(msg.Request.Candidate)
 			psi2 := p.owner.smap.get().GetProxy(msg.Request.Candidate)
@@ -422,7 +422,7 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.owner.smap.synchronize(h.si, newsmap); err != nil {
+	if err := h.owner.smap.synchronize(h.si, newsmap, nil /*ms payload*/); err != nil {
 		// double-checking errDowngrade
 		if isErrDowngrade(err) {
 			newsmap2 := h.owner.smap.get()

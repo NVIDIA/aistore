@@ -6,6 +6,7 @@ package fs
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -14,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
-	"github.com/NVIDIA/aistore/memsys"
 )
 
 // List of AIS metadata files and directories (basenames only)
@@ -81,7 +81,7 @@ func RemoveMarker(marker string) {
 // It does it on maximum `atMost` mountPaths. If `atMost == 0`, it does it on every mountpath.
 // If `backupPath != ""`, it removes files from `backupPath` and moves files from `path` to `backupPath`.
 // Returns how many times it has successfully stored a file.
-func PersistOnMpaths(fname, backupName string, meta jsp.Opts, atMost int, sgl *memsys.SGL) (cnt, availCnt int) {
+func PersistOnMpaths(fname, backupName string, meta jsp.Opts, atMost int, wto io.WriterTo) (cnt, availCnt int) {
 	var (
 		availableMpaths, _ = Get()
 		bcnt               int
@@ -100,7 +100,7 @@ func PersistOnMpaths(fname, backupName string, meta jsp.Opts, atMost int, sgl *m
 		if cnt >= atMost {
 			continue
 		}
-		if err := jsp.SaveMeta(fpath, meta, sgl); err != nil {
+		if err := jsp.SaveMeta(fpath, meta, wto); err != nil {
 			glog.Errorf("Failed to persist %q on %q, err: %v", fname, mi, err)
 		} else {
 			cnt++

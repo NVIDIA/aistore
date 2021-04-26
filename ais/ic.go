@@ -410,7 +410,7 @@ func (ic *ic) syncICBundle() error {
 
 	cos.Assertf(smap.UUID == bundle.Smap.UUID, "%s vs %s", smap.StringEx(), bundle.Smap.StringEx())
 
-	if err := ic.p.owner.smap.synchronize(ic.p.si, bundle.Smap); err != nil {
+	if err := ic.p.owner.smap.synchronize(ic.p.si, bundle.Smap, nil /*ms payload*/); err != nil {
 		if !isErrDowngrade(err) {
 			glog.Errorf(cmn.FmtErrFailed, ic.p.si, "sync", bundle.Smap, err)
 		}

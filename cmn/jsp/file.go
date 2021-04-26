@@ -8,11 +8,13 @@ package jsp
 import (
 	"errors"
 	"flag"
+	"io"
 	"os"
+	"reflect"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 const (
@@ -27,11 +29,11 @@ const (
 // main methods //
 //////////////////
 
-func SaveMeta(filepath string, meta Opts, sgl *memsys.SGL) error {
-	return Save(filepath, meta, meta.JspOpts(), sgl)
+func SaveMeta(filepath string, meta Opts, wto io.WriterTo) error {
+	return Save(filepath, meta, meta.JspOpts(), wto)
 }
 
-func Save(filepath string, v interface{}, opts Options, sgl *memsys.SGL) (err error) {
+func Save(filepath string, v interface{}, opts Options, wto io.WriterTo) (err error) {
 	var (
 		file *os.File
 		tmp  = filepath + ".tmp." + cos.GenTie()
@@ -47,9 +49,10 @@ func Save(filepath string, v interface{}, opts Options, sgl *memsys.SGL) (err er
 			glog.Errorf("Nested (%v): failed to remove %s, err: %v", err, tmp, nestedErr)
 		}
 	}()
-	if sgl != nil {
-		_, err = sgl.WriteTo(file)
+	if wto != nil && !reflect.ValueOf(wto).IsNil() {
+		_, err = wto.WriteTo(file)
 	} else {
+		debug.Assert(v != nil)
 		err = Encode(file, v, opts)
 	}
 	if err != nil {

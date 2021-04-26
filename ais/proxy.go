@@ -272,7 +272,7 @@ func (p *proxyrunner) receiveCluMeta(cluMeta *cluMeta, action, caller string) (e
 		// fall through
 	}
 	// Smap
-	if err = p.receiveSmap(cluMeta.Smap, msg, caller, p.smapOnUpdate); err != nil {
+	if err = p.receiveSmap(cluMeta.Smap, msg, nil /*ms payload*/, caller, p.smapOnUpdate); err != nil {
 		if !isErrDowngrade(err) {
 			glog.Errorf(cmn.FmtErrFailed, p.si, "sync", cluMeta.Smap, err)
 		}
@@ -670,7 +670,7 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if newSmap != nil {
-		if err = p.receiveSmap(newSmap, msgSmap, caller, p.smapOnUpdate); err != nil {
+		if err = p.receiveSmap(newSmap, msgSmap, payload, caller, p.smapOnUpdate); err != nil {
 			if isErrDowngrade(retErr) && !isErrDowngrade(err) {
 				retErr = err
 			}
@@ -2144,7 +2144,7 @@ func (p *proxyrunner) daePathAction(w http.ResponseWriter, r *http.Request, acti
 			p.writeErrf(w, r, "%s: invalid %s: %v", p.si, newsmap, err)
 			return
 		}
-		if err := p.owner.smap.synchronize(p.si, newsmap); err != nil {
+		if err := p.owner.smap.synchronize(p.si, newsmap, nil /*ms payload*/); err != nil {
 			p.writeErrf(w, r, cmn.FmtErrFailed, p.si, "sync", newsmap, err)
 			return
 		}

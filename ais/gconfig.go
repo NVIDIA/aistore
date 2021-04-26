@@ -117,7 +117,7 @@ func (co *configOwner) modify(ctx *configModifier) (config *globalConfig, err er
 func (co *configOwner) persist(config *globalConfig) error {
 	local := cmn.GCO.Get()
 	savePath := path.Join(local.ConfigDir, cmn.GlobalConfigFname)
-	return jsp.SaveMeta(savePath, config, nil /*sgl*/)
+	return jsp.SaveMeta(savePath, config, nil /*wto*/)
 }
 
 // PRECONDITION: `co` should be under lock.

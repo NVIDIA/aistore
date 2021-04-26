@@ -1844,7 +1844,7 @@ func (h *httprunner) extractBMD(payload msPayload, caller string) (newBMD *bucke
 	return
 }
 
-func (h *httprunner) receiveSmap(newSmap *smapX, msg *aisMsg,
+func (h *httprunner) receiveSmap(newSmap *smapX, msg *aisMsg, payload msPayload,
 	caller string, cb func(newSmap *smapX, oldSmap *smapX)) (err error) {
 	if newSmap == nil {
 		return
@@ -1861,7 +1861,7 @@ func (h *httprunner) receiveSmap(newSmap *smapX, msg *aisMsg,
 		glog.Warningf("Error: %s\n%s", err, newSmap.pp())
 		return
 	}
-	err = h.owner.smap.synchronize(h.si, newSmap)
+	err = h.owner.smap.synchronize(h.si, newSmap, payload)
 	if err != nil {
 		return
 	}

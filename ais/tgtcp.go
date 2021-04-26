@@ -116,7 +116,7 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 		}
 	}
 	// Smap
-	if err = t.receiveSmap(regMeta.Smap, msg, caller, nil); err != nil {
+	if err = t.receiveSmap(regMeta.Smap, msg, nil /*ms payload*/, caller, nil); err != nil {
 		if isErrDowngrade(err) {
 			err = nil
 		} else {
@@ -189,7 +189,7 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiIt
 		if cmn.ReadJSON(w, r, newsmap) != nil {
 			return
 		}
-		if err := t.owner.smap.synchronize(t.si, newsmap); err != nil {
+		if err := t.owner.smap.synchronize(t.si, newsmap, nil /*ms payload*/); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrFailed, t.si, "sync", newsmap, err)
 		}
 		glog.Infof("%s: %s %s done", t.si, cmn.SyncSmap, newsmap)
@@ -869,7 +869,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if newSmap != nil {
-		if err = t.receiveSmap(newSmap, msgSmap, caller, nil); err != nil {
+		if err = t.receiveSmap(newSmap, msgSmap, payload, caller, nil); err != nil {
 			if isErrDowngrade(retErr) && !isErrDowngrade(err) {
 				retErr = err
 			}

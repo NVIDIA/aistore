@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -468,7 +469,7 @@ func (r *smapOwner) get() (smap *smapX) {
 	return (*smapX)(r.smap.Load())
 }
 
-func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX) (err error) {
+func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX, payload msPayload) (err error) {
 	if err = newSmap.validate(); err != nil {
 		debug.Assertf(false, "%s: %s is invalid: %v", si, newSmap, err)
 		return
@@ -490,10 +491,31 @@ func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX) (err error) {
 			return
 		}
 	}
-	if err = r.persist(newSmap); err == nil {
+	if !r.persistBytes(payload) {
+		err = r.persist(newSmap)
+	}
+	if err == nil {
 		r.put(newSmap)
 	}
 	r.Unlock()
+	return
+}
+
+// write metasync-sent bytes directly (no json)
+func (r *smapOwner) persistBytes(payload msPayload) (done bool) {
+	if payload == nil {
+		return
+	}
+	smapValue := payload[revsSmapTag]
+	if smapValue == nil {
+		return
+	}
+	var (
+		smap *cluster.Smap
+		wto  = bytes.NewBuffer(smapValue)
+		err  = jsp.SaveMeta(r.fpath, smap, wto)
+	)
+	done = err == nil
 	return
 }
 
