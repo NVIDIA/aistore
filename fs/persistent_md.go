@@ -6,6 +6,7 @@ package fs
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -94,10 +95,11 @@ func PersistOnMpaths(fname, backupName string, meta jsp.Opts, atMost int, sgl *m
 		if backupName != "" {
 			bcnt = mi.backupAtmost(fname, backupName, bcnt, atMost)
 		}
+		fpath := filepath.Join(mi.Path, fname)
+		os.Remove(fpath)
 		if cnt >= atMost {
 			continue
 		}
-		fpath := filepath.Join(mi.Path, fname)
 		if err := jsp.SaveMeta(fpath, meta, sgl); err != nil {
 			glog.Errorf("Failed to persist %q on %q, err: %v", fname, mi, err)
 		} else {
