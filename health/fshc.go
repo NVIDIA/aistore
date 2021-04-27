@@ -130,7 +130,7 @@ func (f *FSHC) runMpathTest(mpath, filepath string) {
 
 // reads the entire file content
 func (f *FSHC) tryReadFile(fqn string) error {
-	file, err := os.Open(fqn)
+	file, err := fs.DirectOpen(fqn, os.O_RDONLY, 0)
 	if err != nil {
 		return err
 	}
@@ -157,8 +157,12 @@ func (f *FSHC) tryWriteFile(mountpath string, fileSize int64) error {
 		return nil
 	}
 
-	tmpFileName := filepath.Join(mpath.MakePathTrash(), "fshc-try-write-"+cos.RandString(10))
-	tmpFile, err := cos.CreateFile(tmpFileName)
+	pathTrash := mpath.MakePathTrash()
+	if err := cos.CreateDir(pathTrash); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", pathTrash, err)
+	}
+	tmpFileName := filepath.Join(pathTrash, "fshc-try-write-"+cos.RandString(10))
+	tmpFile, err := fs.DirectOpen(tmpFileName, os.O_RDWR|os.O_CREATE|os.O_TRUNC, cos.PermRWR)
 	if err != nil {
 		return fmt.Errorf("failed to create %s, err: %w", ftag, err)
 	}
@@ -174,6 +178,9 @@ func (f *FSHC) tryWriteFile(mountpath string, fileSize int64) error {
 
 	if err = cos.FloodWriter(tmpFile, fileSize); err != nil {
 		return fmt.Errorf("failed to write %s %q, err: %w", ftag, tmpFileName, err)
+	}
+	if err = tmpFile.Sync(); err != nil {
+		return fmt.Errorf("failed to sync %s %q, err: %w", ftag, tmpFileName, err)
 	}
 	return nil
 }
