@@ -276,6 +276,10 @@ func (bo *bmdOwnerPrx) putPersist(bmd *bucketMD, payload msPayload) (err error) 
 		bmd._sgl = bmd._encode(bo.immSize)
 		bo.immSize = cos.MaxI64(bo.immSize, bmd._sgl.Len())
 		err = jsp.SaveMeta(bo.fpath, bmd, bmd._sgl)
+		if err != nil {
+			bmd._sgl.Free()
+			bmd._sgl = nil
+		}
 	}
 	if err == nil {
 		bo.put(bmd)
@@ -292,10 +296,7 @@ func (bo *bmdOwnerPrx) _pre(ctx *bmdModifier) (clone *bucketMD, err error) {
 	if err = ctx.pre(ctx, clone); err != nil || ctx.terminate {
 		return
 	}
-	if err = bo.putPersist(clone, nil); err != nil && clone._sgl != nil {
-		clone._sgl.Free()
-		clone._sgl = nil
-	}
+	err = bo.putPersist(clone, nil)
 	return
 }
 

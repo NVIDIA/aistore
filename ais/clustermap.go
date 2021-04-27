@@ -122,6 +122,11 @@ func (m *smapX) _encode(immSize int64) (sgl *memsys.SGL) {
 	return
 }
 
+func (m *smapX) _free() {
+	m._sgl.Free()
+	m._sgl = nil
+}
+
 ///////////
 // smapX //
 ///////////
@@ -537,17 +542,15 @@ func (r *smapOwner) _runPre(ctx *smapModifier) (clone *smapX, err error) {
 	if err = ctx.pre(ctx, clone); err != nil {
 		return
 	}
-	sgl := clone._encode(r.immSize)
-	r.immSize = cos.MaxI64(r.immSize, sgl.Len())
+	clone._sgl = clone._encode(r.immSize)
+	r.immSize = cos.MaxI64(r.immSize, clone._sgl.Len())
 	if err := r.persist(clone); err != nil {
-		sgl.Free()
+		clone._free()
 		err = fmt.Errorf("failed to persist %s: %v", clone, err)
 		return nil, err
 	}
 	if ctx.final == nil {
-		sgl.Free()
-	} else {
-		clone._sgl = sgl
+		clone._free()
 	}
 	r.put(clone)
 	if ctx.post != nil {
