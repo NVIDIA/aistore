@@ -65,6 +65,9 @@ git reset --hard $branch
 git status
 git log | head -5
 
+testetl=${TEST_ETL:-y}
+if [[ "${testetl,,}" == y* ]]; then
+
 # Setting up minikube for the running kubernetes based tests.
 pushd deploy/dev/k8s
 echo "Deploying Minikube"
@@ -98,6 +101,8 @@ echo "----- K8S TESTS FINISHED WITH: ${exit_code} -----"
 if docker -v ; then
   docker image prune -a -f
 fi
+
+fi # TEST_ETL
 
 # Running long tests
 deploy ${TARGET_COUNT:-6} ${PROXY_COUNT:-6} ${MPATH_COUNT:-4} ${USE_AWS:-y} ${USE_GCP:-y} ${USE_AZURE:-n} ${USE_HDFS:-n} ${USE_LOOPBACK:-y}
