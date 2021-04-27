@@ -1689,17 +1689,18 @@ func (h *httprunner) extractConfig(payload msPayload, caller string) (newConfig 
 	}
 	newConfig, msg = &globalConfig{}, &aisMsg{}
 	confValue := payload[revsConfTag]
-	if err1 := jsoniter.Unmarshal(confValue, newConfig); err1 != nil {
+	reader := bytes.NewBuffer(confValue)
+	if _, err1 := jsp.Decode(ioutil.NopCloser(reader), newConfig, newConfig.JspOpts(), "extractConfig"); err1 != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new Config", cmn.BytesHead(confValue), err1)
 		return
 	}
+
 	if msgValue, ok := payload[revsConfTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
 			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cmn.BytesHead(msgValue), err1)
 			return
 		}
 	}
-
 	config := cmn.GCO.Get()
 	glog.Infof(
 		"[metasync] extract %s from %q (local: %s, action: %q, uuid: %q)",
@@ -1784,6 +1785,7 @@ func (h *httprunner) extractRMD(payload msPayload, caller string) (newRMD *rebMD
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new RMD", cmn.BytesHead(rmdValue), err1)
 		return
 	}
+
 	if msgValue, ok := payload[revsRMDTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
 			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cmn.BytesHead(msgValue), err1)

@@ -6,9 +6,10 @@ package ais
 
 import (
 	"fmt"
+	"io"
 	"net/url"
 	"os"
-	"path"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -22,9 +23,11 @@ import (
 type (
 	globalConfig struct {
 		cmn.ClusterConfig
+		_sgl *memsys.SGL // jsp-formatted
 	}
 	configOwner struct {
 		sync.Mutex
+		immSize int64
 	}
 
 	configModifier struct {
@@ -45,9 +48,20 @@ var _ revs = (*globalConfig)(nil)
 // as revs
 func (config *globalConfig) tag() string             { return revsConfTag }
 func (config *globalConfig) version() int64          { return config.Version }
-func (config *globalConfig) marshal() []byte         { return cos.MustMarshal(config) }
 func (config *globalConfig) jit(p *proxyrunner) revs { g, _ := p.owner.config.get(); return g }
-func (config *globalConfig) sgl() *memsys.SGL        { return nil }
+func (config *globalConfig) sgl() *memsys.SGL        { return config._sgl }
+
+func (config *globalConfig) marshal() []byte {
+	config._sgl = config._encode(0)
+	return config._sgl.Bytes()
+}
+
+func (config *globalConfig) _encode(immSize int64) (sgl *memsys.SGL) {
+	sgl = memsys.DefaultPageMM().NewSGL(immSize)
+	err := jsp.Encode(sgl, config, config.JspOpts())
+	debug.AssertNoErr(err)
+	return
+}
 
 ////////////
 // config //
@@ -56,7 +70,7 @@ func (config *globalConfig) sgl() *memsys.SGL        { return nil }
 func (co *configOwner) get() (*globalConfig, error) {
 	gco := cmn.GCO.Get()
 	config := &globalConfig{}
-	_, err := jsp.LoadMeta(path.Join(gco.ConfigDir, cmn.GlobalConfigFname), config)
+	_, err := jsp.LoadMeta(filepath.Join(gco.ConfigDir, cmn.GlobalConfigFname), config)
 	if os.IsNotExist(err) {
 		return nil, nil
 	}
@@ -96,7 +110,11 @@ func (co *configOwner) runPre(ctx *configModifier) (clone *globalConfig, err err
 
 	clone.Version++
 	clone.LastUpdated = time.Now().String()
+	clone._sgl = clone._encode(co.immSize)
+	co.immSize = cos.MaxI64(co.immSize, clone._sgl.Len())
 	if err := co.persist(clone); err != nil {
+		clone._sgl.Free()
+		clone._sgl = nil
 		err = fmt.Errorf("FATAL: failed to persist %s: %v", clone, err)
 		return nil, err
 	}
@@ -115,9 +133,15 @@ func (co *configOwner) modify(ctx *configModifier) (config *globalConfig, err er
 }
 
 func (co *configOwner) persist(config *globalConfig) error {
-	local := cmn.GCO.Get()
-	savePath := path.Join(local.ConfigDir, cmn.GlobalConfigFname)
-	return jsp.SaveMeta(savePath, config, nil /*wto*/)
+	var (
+		wto      io.WriterTo
+		local    = cmn.GCO.Get()
+		savePath = filepath.Join(local.ConfigDir, cmn.GlobalConfigFname) // TODO -- FIXME: fpath
+	)
+	if config._sgl != nil {
+		wto = config._sgl
+	}
+	return jsp.SaveMeta(savePath, config, wto)
 }
 
 // PRECONDITION: `co` should be under lock.
@@ -164,7 +188,7 @@ func (co *configOwner) resetDaemonConfig() (err error) {
 		return err
 	}
 	cmn.GCO.PutOverrideConfig(nil)
-	err = cos.RemoveFile(path.Join(oldConfig.ConfigDir, cmn.OverrideConfigFname))
+	err = cos.RemoveFile(filepath.Join(oldConfig.ConfigDir, cmn.OverrideConfigFname))
 	if err != nil {
 		co.Unlock()
 		return

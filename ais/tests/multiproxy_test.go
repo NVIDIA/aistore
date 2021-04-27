@@ -10,7 +10,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
-	"path"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -187,7 +187,7 @@ killRestore:
 	tassert.CheckFatal(t, err)
 
 	// Update local config ports.
-	localConfPath := path.Join(cfg.ConfigDir, "ais_local.json")
+	localConfPath := filepath.Join(cfg.ConfigDir, "ais_local.json")
 	localConf := &cmn.LocalConfig{}
 	_, err = jsp.LoadMeta(localConfPath, localConf)
 	tassert.CheckFatal(t, err)

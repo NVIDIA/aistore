@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -245,7 +244,7 @@ func isClusterLocal() (isLocal bool, err error) {
 	if config, err = api.GetDaemonConfig(baseParams, smap.Primary); err != nil {
 		return
 	}
-	fileData, err = ioutil.ReadFile(path.Join(config.ConfigDir, cmn.ProxyIDFname))
+	fileData, err = ioutil.ReadFile(filepath.Join(config.ConfigDir, cmn.ProxyIDFname))
 	if err != nil {
 		if os.IsNotExist(err) {
 			err = nil

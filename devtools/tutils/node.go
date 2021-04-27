@@ -11,7 +11,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -406,11 +406,11 @@ func DeployNode(t *testing.T, node *cluster.Snode, conf *cmn.Config, localConf *
 		localConf.HostNet.PortIntraDataStr = strconv.Itoa(conf.HostNet.PortIntraData)
 	}
 
-	localConfFile := path.Join(conf.ConfigDir, "ais_local.json")
+	localConfFile := filepath.Join(conf.ConfigDir, "ais_local.json")
 	err := jsp.SaveMeta(localConfFile, localConf, nil)
 	tassert.CheckFatal(t, err)
 
-	configFile := path.Join(conf.ConfigDir, "ais.json")
+	configFile := filepath.Join(conf.ConfigDir, "ais.json")
 	err = jsp.SaveMeta(configFile, &conf.ClusterConfig, nil)
 	tassert.CheckFatal(t, err)
 

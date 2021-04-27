@@ -1560,7 +1560,7 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *Config) (err er
 	//       and is only used when the node starts up;
 	//       once started, the node always relies on the last
 	//       updated version of the (global|local) config from the configured location
-	_, err = jsp.LoadMeta(path.Join(config.ConfigDir, GlobalConfigFname), &config.ClusterConfig)
+	_, err = jsp.LoadMeta(filepath.Join(config.ConfigDir, GlobalConfigFname), &config.ClusterConfig)
 	if os.IsNotExist(err) {
 		glog.Infof("loading configuration from %q", confPath)
 		_, err = jsp.Load(confPath, &config.ClusterConfig, jsp.Plain())
