@@ -93,7 +93,7 @@ func newPrimary() *proxyrunner {
 	p.keepalive = newProxyKeepalive(p, tracker, atomic.NewBool(true))
 
 	o := newBMDOwnerPrx(config)
-	o._put(newBucketMD())
+	o.put(newBucketMD())
 	p.owner.bmd = o
 
 	p.gmm = memsys.DefaultPageMM()
@@ -118,7 +118,7 @@ func newSecondary(name string) *proxyrunner {
 	cmn.GCO.CommitUpdate(config)
 
 	o := newBMDOwnerPrx(cmn.GCO.Get())
-	o._put(newBucketMD())
+	o.put(newBucketMD())
 	p.owner.bmd = o
 	return p
 }
@@ -635,7 +635,7 @@ func TestMetaSyncData(t *testing.T) {
 			Type: cos.ChecksumXXHash,
 		},
 	})
-	primary.owner.bmd.put(bmd)
+	primary.owner.bmd.putPersist(bmd, nil)
 	bmdBody := bmd.marshal()
 
 	exp[revsBMDTag] = bmdBody
@@ -655,7 +655,7 @@ func TestMetaSyncData(t *testing.T) {
 		LRU:   cmn.GCO.Get().LRU,
 	}
 	bmd.add(cluster.NewBck("bucket3", cmn.ProviderAIS, cmn.NsGlobal), bprops)
-	primary.owner.bmd.put(bmd)
+	primary.owner.bmd.putPersist(bmd, nil)
 	bmdBody = bmd.marshal()
 
 	exp[revsBMDTag] = bmdBody

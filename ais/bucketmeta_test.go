@@ -71,7 +71,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 
 			BeforeEach(func() {
 				bowner = makeBMDOwner()
-				bowner.put(bmd)
+				bowner.putPersist(bmd, nil)
 			})
 
 			It(fmt.Sprintf("should correctly load bmd for %s", node), func() {

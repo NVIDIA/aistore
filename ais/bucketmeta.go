@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"os"
@@ -56,8 +57,8 @@ type (
 
 		init()
 		get() (bmd *bucketMD)
-		put(bmd *bucketMD) error
-		persist() error
+		putPersist(bmd *bucketMD, payload msPayload) error
+		persist(clone *bucketMD, payload msPayload) error
 		modify(*bmdModifier) (*bucketMD, error)
 	}
 	bmdOwnerBase struct {
@@ -230,9 +231,27 @@ func (m *bucketMD) _encode(immSize int64) (sgl *memsys.SGL) {
 
 func (bo *bmdOwnerBase) Get() *cluster.BMD    { return &bo.get().BMD }
 func (bo *bmdOwnerBase) get() (bmd *bucketMD) { return (*bucketMD)(bo.bmd.Load()) }
-func (bo *bmdOwnerBase) _put(bmd *bucketMD) {
+func (bo *bmdOwnerBase) put(bmd *bucketMD) {
 	bmd.vstr = strconv.FormatInt(bmd.Version, 10)
 	bo.bmd.Store(unsafe.Pointer(bmd))
+}
+
+// write metasync-sent bytes directly (no json)
+func (bo *bmdOwnerBase) persistBytes(payload msPayload, fpath string) (done bool) {
+	if payload == nil {
+		return
+	}
+	bmdValue := payload[revsBMDTag]
+	if bmdValue == nil {
+		return
+	}
+	var (
+		bmd *cluster.BMD
+		wto = bytes.NewBuffer(bmdValue)
+		err = jsp.SaveMeta(fpath, bmd, wto)
+	)
+	done = err == nil
+	return
 }
 
 /////////////////
@@ -249,17 +268,22 @@ func (bo *bmdOwnerPrx) init() {
 	if err != nil && !os.IsNotExist(err) {
 		glog.Errorf("failed to load %s from %s, err: %v", bmd, bo.fpath, err)
 	}
-	bo._put(bmd)
+	bo.put(bmd)
 }
 
-func (bo *bmdOwnerPrx) put(bmd *bucketMD) (err error) {
-	bo._put(bmd)
-	bmd._sgl = bmd._encode(bo.immSize)
-	bo.immSize = cos.MaxI64(bo.immSize, bmd._sgl.Len())
-	return jsp.SaveMeta(bo.fpath, bmd, bmd._sgl)
+func (bo *bmdOwnerPrx) putPersist(bmd *bucketMD, payload msPayload) (err error) {
+	if !bo.persistBytes(payload, bo.fpath) {
+		bmd._sgl = bmd._encode(bo.immSize)
+		bo.immSize = cos.MaxI64(bo.immSize, bmd._sgl.Len())
+		err = jsp.SaveMeta(bo.fpath, bmd, bmd._sgl)
+	}
+	if err == nil {
+		bo.put(bmd)
+	}
+	return
 }
 
-func (bo *bmdOwnerPrx) persist() (err error) { debug.Assert(false); return }
+func (bo *bmdOwnerPrx) persist(_ *bucketMD, _ msPayload) (err error) { debug.Assert(false); return }
 
 func (bo *bmdOwnerPrx) _pre(ctx *bmdModifier) (clone *bucketMD, err error) {
 	bo.Lock()
@@ -268,7 +292,7 @@ func (bo *bmdOwnerPrx) _pre(ctx *bmdModifier) (clone *bucketMD, err error) {
 	if err = ctx.pre(ctx, clone); err != nil || ctx.terminate {
 		return
 	}
-	if err = bo.put(clone); err != nil && clone._sgl != nil {
+	if err = bo.putPersist(clone, nil); err != nil && clone._sgl != nil {
 		clone._sgl.Free()
 		clone._sgl = nil
 	}
@@ -316,28 +340,40 @@ func (bo *bmdOwnerTgt) init() {
 	glog.Info("BMD freshly created")
 
 finalize:
-	bo._put(bmd)
+	bo.put(bmd)
 }
 
-func (bo *bmdOwnerTgt) put(bmd *bucketMD) (err error) {
-	bo._put(bmd)
-	return bo.persist()
+func (bo *bmdOwnerTgt) putPersist(bmd *bucketMD, payload msPayload) (err error) {
+	if err = bo.persist(bmd, payload); err == nil {
+		bo.put(bmd)
+	}
+	return
 }
 
-func (bo *bmdOwnerTgt) persist() (err error) {
-	bmd := bo.get()
-	sgl := bmd._encode(bo.immSize)
-	defer sgl.Free()
-	bo.immSize = cos.MaxI64(bo.immSize, sgl.Len())
-	cnt, availCnt := fs.PersistOnMpaths(cmn.BmdFname, cmn.BmdPreviousFname, bmd, bmdCopies, sgl)
+func (bo *bmdOwnerTgt) persist(clone *bucketMD, payload msPayload) (err error) {
+	var (
+		b   []byte
+		sgl *memsys.SGL
+	)
+	if payload != nil {
+		if bmdValue := payload[revsBMDTag]; bmdValue != nil {
+			b = bmdValue
+		}
+	}
+	if b == nil {
+		sgl = clone._encode(bo.immSize)
+		bo.immSize = cos.MaxI64(bo.immSize, sgl.Len())
+		defer sgl.Free()
+	}
+	cnt, availCnt := fs.PersistOnMpaths(cmn.BmdFname, cmn.BmdPreviousFname, clone, bmdCopies, b, sgl)
 	if cnt > 0 {
 		return
 	}
 	if availCnt == 0 {
-		glog.Errorf("Cannot store %s: %v", bmd, fs.ErrNoMountpaths)
+		glog.Errorf("Cannot store %s: %v", clone, fs.ErrNoMountpaths)
 		return
 	}
-	err = fmt.Errorf("failed to store %s on any of the mountpaths (%d)", bmd, availCnt)
+	err = fmt.Errorf("failed to store %s on any of the mountpaths (%d)", clone, availCnt)
 	glog.Error(err)
 	return
 }

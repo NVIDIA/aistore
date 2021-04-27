@@ -314,7 +314,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	if bmd.Version == 0 {
 		bmd.Version = 1 // init BMD
 		bmd.UUID = smap.UUID
-		if err := p.owner.bmd.put(bmd); err != nil {
+		if err := p.owner.bmd.putPersist(bmd, nil); err != nil {
 			cos.ExitLogf("%v", err)
 		}
 	}
@@ -522,7 +522,7 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 		bmd := p.owner.bmd.get()
 		if bmd == nil || bmd.version() < svm.BMD.version() {
 			glog.Infof("%s: override local %s with %s", p.si, bmd, svm.BMD)
-			if err := p.owner.bmd.put(svm.BMD); err != nil {
+			if err := p.owner.bmd.putPersist(svm.BMD, nil); err != nil {
 				cos.ExitLogf("%v", err)
 			}
 		}

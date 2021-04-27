@@ -69,7 +69,7 @@ func (vmd *VMD) load(mpath string) (err error) {
 }
 
 func (vmd *VMD) persist() (err error) {
-	cnt, availCnt := PersistOnMpaths(cmn.VmdFname, "", vmd, vmdCopies, nil /*wto*/)
+	cnt, availCnt := PersistOnMpaths(cmn.VmdFname, "", vmd, vmdCopies, nil, nil /*wto*/)
 	if cnt > 0 {
 		return
 	}

@@ -136,7 +136,8 @@ func (g *fsprungroup) delMpathEvent(action string, mpath *fs.MountpathInfo) {
 
 func (g *fsprungroup) redistributeMD() {
 	if !hasEnoughBMDCopies() {
-		if err := g.t.owner.bmd.persist(); err != nil {
+		bo := g.t.owner.bmd
+		if err := bo.persist(bo.get(), nil); err != nil {
 			debug.AssertNoErr(err)
 			cos.ExitLogf("%v", err)
 		}

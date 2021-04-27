@@ -82,7 +82,7 @@ func TestMain(m *testing.M) {
 			Type: cos.ChecksumNone,
 		},
 	})
-	t.owner.bmd.put(bmd)
+	t.owner.bmd.putPersist(bmd, nil)
 	fs.CreateBucket("test", bck.Bck, false /*nilbmd*/)
 
 	m.Run()

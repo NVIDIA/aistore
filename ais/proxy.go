@@ -280,7 +280,7 @@ func (p *proxyrunner) receiveCluMeta(cluMeta *cluMeta, action, caller string) (e
 		glog.Infof("%s: synch %s", p.si, cluMeta.Smap)
 	}
 	// BMD
-	if err = p.receiveBMD(cluMeta.BMD, msg, caller); err != nil {
+	if err = p.receiveBMD(cluMeta.BMD, msg, nil, caller); err != nil {
 		if !isErrDowngrade(err) {
 			glog.Errorf(cmn.FmtErrFailed, p.si, "sync", cluMeta.BMD, err)
 		}
@@ -683,7 +683,7 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if newBMD != nil {
-		if err = p.receiveBMD(newBMD, msgBMD, caller); err != nil {
+		if err = p.receiveBMD(newBMD, msgBMD, payload, caller); err != nil {
 			if isErrDowngrade(retErr) && !isErrDowngrade(err) {
 				retErr = err
 			}
@@ -2547,7 +2547,7 @@ func (p *proxyrunner) smapOnUpdate(newSmap, oldSmap *smapX) {
 	p.syncNewICOwners(oldSmap, newSmap)
 }
 
-func (p *proxyrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, caller string) (err error) {
+func (p *proxyrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, caller string) (err error) {
 	glog.Infof(
 		"[metasync] receive %s from %q (action: %q, uuid: %q)",
 		newBMD.String(), caller, msg.Action, msg.UUID,
@@ -2563,7 +2563,7 @@ func (p *proxyrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, caller string) (
 		p.owner.bmd.Unlock()
 		return newErrDowngrade(p.si, bmd.String(), newBMD.String())
 	}
-	err = p.owner.bmd.put(newBMD)
+	err = p.owner.bmd.putPersist(newBMD, payload)
 	debug.AssertNoErr(err)
 	p.owner.bmd.Unlock()
 	return

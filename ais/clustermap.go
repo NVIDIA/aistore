@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -521,7 +522,11 @@ func (r *smapOwner) persistBytes(payload msPayload) (done bool) {
 
 // Must be called under lock
 func (r *smapOwner) persist(newSmap *smapX) error {
-	return jsp.SaveMeta(r.fpath, newSmap, newSmap._sgl)
+	var wto io.WriterTo
+	if newSmap._sgl != nil {
+		wto = newSmap._sgl
+	}
+	return jsp.SaveMeta(r.fpath, newSmap, wto)
 }
 
 func (r *smapOwner) _runPre(ctx *smapModifier) (clone *smapX, err error) {

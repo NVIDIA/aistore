@@ -104,6 +104,7 @@ func (z *SGL) ReadFrom(r io.Reader) (n int64, err error) {
 	}
 }
 
+// NOTE: not advancing roff here - see usage
 func (z *SGL) WriteTo(dst io.Writer) (n int64, err error) {
 	var (
 		n0      int
@@ -114,7 +115,6 @@ func (z *SGL) WriteTo(dst io.Writer) (n int64, err error) {
 		if l == 0 {
 			break
 		}
-
 		n0, err = dst.Write(buf[:l])
 		n += int64(n0)
 		toWrite -= l

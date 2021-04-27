@@ -10,7 +10,6 @@ import (
 	"flag"
 	"io"
 	"os"
-	"reflect"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -49,7 +48,7 @@ func Save(filepath string, v interface{}, opts Options, wto io.WriterTo) (err er
 			glog.Errorf("Nested (%v): failed to remove %s, err: %v", err, tmp, nestedErr)
 		}
 	}()
-	if wto != nil && !reflect.ValueOf(wto).IsNil() {
+	if wto != nil {
 		_, err = wto.WriteTo(file)
 	} else {
 		debug.Assert(v != nil)

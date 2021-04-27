@@ -108,7 +108,7 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 	t.gfn.global.activateTimed()
 
 	// BMD
-	if err = t.receiveBMD(regMeta.BMD, msg, bucketMDRegister, caller); err != nil {
+	if err = t.receiveBMD(regMeta.BMD, msg, nil /*ms payload */, bucketMDRegister, caller); err != nil {
 		if isErrDowngrade(err) {
 			err = nil
 		} else {
@@ -562,9 +562,9 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been removed", mountpath))
 }
 
-func (t *targetrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, tag, caller string) (err error) {
+func (t *targetrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag, caller string) (err error) {
 	if msg.UUID == "" {
-		err = t._recvBMD(newBMD, msg, tag, caller)
+		err = t._recvBMD(newBMD, msg, payload, tag, caller)
 		return
 	}
 	// before -- do -- after
@@ -574,7 +574,7 @@ func (t *targetrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, tag, caller str
 		return
 	}
 
-	err = t._recvBMD(newBMD, msg, tag, caller)
+	err = t._recvBMD(newBMD, msg, payload, tag, caller)
 	if errDone := t.transactions.commitAfter(caller, msg, err, newBMD); errDone != nil {
 		err = fmt.Errorf("%s: unexpected commit-after, %s, err: %v", t.si, newBMD, errDone)
 		glog.Error(err)
@@ -582,7 +582,7 @@ func (t *targetrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, tag, caller str
 	return
 }
 
-func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller string) (err error) {
+func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag, caller string) (err error) {
 	var (
 		curVer                  int64
 		createErrs, destroyErrs string
@@ -631,7 +631,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 		return
 	}
 	// accept the new one
-	if err = t.owner.bmd.put(newBMD); err != nil {
+	if err = t.owner.bmd.putPersist(newBMD, payload); err != nil {
 		t.owner.bmd.Unlock()
 		cos.ExitLogf("%v", err)
 		return
@@ -815,7 +815,7 @@ func (t *targetrunner) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
 	if daemon.stopping.Load() {
 		return
 	}
-	if err := t.receiveBMD(newBucketMD, msg, bucketMDFixup, caller); err != nil && !isErrDowngrade(err) {
+	if err := t.receiveBMD(newBucketMD, msg, nil, bucketMDFixup, caller); err != nil && !isErrDowngrade(err) {
 		glog.Error(err)
 	}
 }
@@ -882,7 +882,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if newBMD != nil {
-		if err = t.receiveBMD(newBMD, msgBMD, bucketMDReceive, caller); err != nil {
+		if err = t.receiveBMD(newBMD, msgBMD, payload, bucketMDReceive, caller); err != nil {
 			if isErrDowngrade(retErr) && !isErrDowngrade(err) {
 				retErr = err
 			}

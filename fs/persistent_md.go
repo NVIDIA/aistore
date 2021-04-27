@@ -5,6 +5,7 @@
 package fs
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 // List of AIS metadata files and directories (basenames only)
@@ -81,8 +83,9 @@ func RemoveMarker(marker string) {
 // It does it on maximum `atMost` mountPaths. If `atMost == 0`, it does it on every mountpath.
 // If `backupPath != ""`, it removes files from `backupPath` and moves files from `path` to `backupPath`.
 // Returns how many times it has successfully stored a file.
-func PersistOnMpaths(fname, backupName string, meta jsp.Opts, atMost int, wto io.WriterTo) (cnt, availCnt int) {
+func PersistOnMpaths(fname, backupName string, meta jsp.Opts, atMost int, b []byte, sgl *memsys.SGL) (cnt, availCnt int) {
 	var (
+		wto                io.WriterTo
 		availableMpaths, _ = Get()
 		bcnt               int
 	)
@@ -99,6 +102,11 @@ func PersistOnMpaths(fname, backupName string, meta jsp.Opts, atMost int, wto io
 		os.Remove(fpath)
 		if cnt >= atMost {
 			continue
+		}
+		if b != nil {
+			wto = bytes.NewBuffer(b)
+		} else if sgl != nil {
+			wto = sgl // not reopening - see sgl.WriteTo()
 		}
 		if err := jsp.SaveMeta(fpath, meta, wto); err != nil {
 			glog.Errorf("Failed to persist %q on %q, err: %v", fname, mi, err)

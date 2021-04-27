@@ -56,7 +56,7 @@ func newDiscoverServerPrimary() *proxyrunner {
 	p.owner.smap = newSmapOwner(config)
 	p.owner.smap.put(newSmap())
 	owner := newBMDOwnerPrx(config)
-	owner._put(newBucketMD())
+	owner.put(newBucketMD())
 	p.owner.bmd = owner
 	p.keepalive = newProxyKeepalive(p, tracker, atomic.NewBool(true))
 	return p
