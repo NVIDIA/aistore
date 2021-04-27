@@ -65,12 +65,11 @@ git reset --hard $branch
 git status
 git log | head -5
 
-testetl=${TEST_ETL:-y}
-if [[ "${testetl,,}" == y* ]]; then
+if [[ "${TEST_ETL,,}" == y* ]]; then
 
 # Setting up minikube for the running kubernetes based tests.
 pushd deploy/dev/k8s
-echo "Deploying Minikube"
+echo "Deploying Minikube ========================================================"
 { echo y; echo y; } | ./utils/deploy_minikube.sh
 
 
