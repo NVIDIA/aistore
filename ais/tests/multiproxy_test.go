@@ -1330,10 +1330,9 @@ func primaryAndNextCrash(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	tlog.Logln("Checking current primary")
+	tlog.Logf("Checking current primary, %s\n", smap.StringEx())
 	if smap.Primary.ID() != finalPrimaryID {
-		t.Errorf("Expected primary %s but real primary is %s",
-			finalPrimaryID, smap.Primary.ID())
+		t.Errorf("Expected primary %s but real primary is %s", finalPrimaryID, smap.Primary.ID())
 	}
 
 	// restore next and prev primaries in the reversed order

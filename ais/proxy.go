@@ -754,10 +754,19 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	// non-primary will keep returning 503 until cluster starts up
-	if !smap.isPrimary(p.si) && !p.ClusterStarted() {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		return
+	if !smap.isPrimary(p.si) {
+		// non-primary will keep returning 503 until cluster starts up
+		if !p.ClusterStarted() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		// fail ask-primary request
+		askPrimary := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamAskPrimary))
+		if askPrimary {
+			caller := r.Header.Get(cmn.HdrCallerName)
+			p.writeErrf(w, r, "%s: health-of-primary request, caller %s, %s", p.si, caller, smap.StringEx())
+			return
+		}
 	}
 	w.WriteHeader(http.StatusOK)
 }

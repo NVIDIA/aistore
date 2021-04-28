@@ -377,7 +377,17 @@ func (t *targetrunner) Run() error {
 	t.markNodeStarted()
 
 	go func() {
-		t.pollClusterStarted(config.Timeout.CplaneOperation)
+		smap := t.owner.smap.get()
+		cii := t.pollClusterStarted(config, smap.Primary)
+		if daemon.stopping.Load() {
+			return
+		}
+		if cii != nil {
+			if status, err := t.joinCluster(cii.Smap.Primary.CtrlURL, cii.Smap.Primary.PubURL); err != nil {
+				glog.Errorf("%s failed to re-join cluster (status: %d, err: %v)", t.si, status, err)
+				return
+			}
+		}
 		t.markClusterStarted()
 	}()
 

@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
@@ -70,6 +71,10 @@ func (p *proxyrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	if !p.NodeStarted() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
 	switch {
 	case r.Method == http.MethodGet && apiItems[0] == cmn.Proxy:
 		p.httpproxyvote(w, r)
@@ -92,40 +97,50 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
-	newsmap := msg.Request.Smap
-	if err := newsmap.validate(); err != nil {
-		p.writeErrf(w, r, "%s: invalid %s in the Vote Request, err: %v", p.si, newsmap, err)
-		return
-	}
-	if !newsmap.isPresent(p.si) {
-		p.writeErrf(w, r, "%s: not present in the Vote Request, %s", p.si, newsmap)
+	newSmap := msg.Request.Smap
+	if err := newSmap.validate(); err != nil {
+		p.writeErrf(w, r, "%s: invalid %s in the Vote Request, err: %v", p.si, newSmap, err)
 		return
 	}
 
-	if err := p.owner.smap.synchronize(p.si, newsmap, nil /*ms payload*/); err != nil {
+	smap := p.owner.smap.get()
+	caller := r.Header.Get(cmn.HdrCallerName)
+	glog.Infof("[vote] receive %s from %q (local: %s)", newSmap.StringEx(), caller, smap.StringEx())
+
+	if !newSmap.isPresent(p.si) {
+		p.writeErrf(w, r, "%s: not present in the Vote Request, %s", p.si, newSmap)
+		return
+	}
+	debug.Assert(!newSmap.isPrimary(p.si))
+
+	if err := p.owner.smap.synchronize(p.si, newSmap, nil /*ms payload*/); err != nil {
 		if isErrDowngrade(err) {
-			psi := newsmap.GetProxy(msg.Request.Candidate)
+			psi := newSmap.GetProxy(msg.Request.Candidate)
 			psi2 := p.owner.smap.get().GetProxy(msg.Request.Candidate)
 			if psi2.Equals(psi) {
 				err = nil
 			}
 		}
 		if err != nil {
-			p.writeErrf(w, r, cmn.FmtErrFailed, p.si, "sync", newsmap, err)
+			p.writeErrf(w, r, cmn.FmtErrFailed, p.si, "sync", newSmap, err)
 			return
 		}
 	}
 
-	smap := p.owner.smap.get()
+	smap = p.owner.smap.get()
 	psi, err := cluster.HrwProxy(&smap.Smap, smap.Primary.ID())
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
 
-	// proceed with election iff this proxy is actually the next in line
+	// proceed with election iff:
 	if psi.ID() != p.si.ID() {
-		glog.Warningf("%s: not next in line, received: %s", p.si, psi)
+		glog.Warningf("%s: not next in line %s", p.si, psi)
+		return
+	} else if !p.ClusterStarted() {
+		glog.Warningf("%s: not ready yet to be elected - starting up", p.si)
+		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 
@@ -162,11 +177,12 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode)
 	var (
 		err    = context.DeadlineExceeded
 		config = cmn.GCO.Get()
+		query  = url.Values{cmn.URLParamAskPrimary: []string{"true"}}
 	)
 	// 1. ping current primary
 	for i := time.Duration(2); i >= 1 && err != nil; i-- {
 		timeout := config.Timeout.CplaneOperation / i
-		_, _, err = p.Health(curPrimary, timeout, nil)
+		_, _, err = p.Health(curPrimary, timeout, query /*ask primary*/)
 	}
 	if err == nil {
 		// move back to idle
@@ -179,8 +195,7 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode)
 	glog.Info("Moving to election state phase 1 (prepare)")
 	elected, votingErrors := p.electAmongProxies(vr)
 	if !elected {
-		glog.Errorf("Election phase 1 (prepare) failed: primary remains %s, moving back to idle",
-			curPrimary)
+		glog.Errorf("Election phase 1 (prepare) failed: primary remains %s, moving back to idle", curPrimary)
 		return
 	}
 
@@ -337,7 +352,7 @@ func (h *httprunner) onPrimaryFail() {
 		return
 	}
 	clone := smap.clone()
-	glog.Infof("%s: primary %s has failed", h.si, clone.Primary.NameEx())
+	glog.Infof("%s: primary %s has FAILED", h.si, clone.Primary)
 
 	for {
 		// use HRW ordering
@@ -346,9 +361,7 @@ func (h *httprunner) onPrimaryFail() {
 			glog.Errorf("%s: failed to execute HRW selection, err: %v", h.si, err)
 			return
 		}
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: trying %s as the primary candidate", h.si, nextPrimaryProxy.ID())
-		}
+		glog.Infof("%s: trying %s as the primary candidate", h.si, nextPrimaryProxy.ID())
 
 		// If this proxy is the next primary proxy candidate, it starts the election directly.
 		if nextPrimaryProxy.ID() == h.si.ID() {
@@ -379,6 +392,8 @@ func (h *httprunner) onPrimaryFail() {
 
 		// No response from the candidate (or it failed to start election) - remove
 		// it from the Smap and try the next candidate
+		// TODO: handle http.StatusServiceUnavailable from the candidate that is currently starting up
+		//       (see httpRequestNewPrimary)
 		if clone.GetProxy(nextPrimaryProxy.ID()) != nil {
 			clone.delProxy(nextPrimaryProxy.ID())
 		}
@@ -410,29 +425,29 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		h.writeErrf(w, r, "%s: candidate %q _is_ the current primary, %s", h.si, candidate, smap)
 		return
 	}
-	newsmap := msg.Record.Smap
-	psi := newsmap.GetProxy(candidate)
+	newSmap := msg.Record.Smap
+	psi := newSmap.GetProxy(candidate)
 	if psi == nil {
 		h.writeErrf(w, r, "%s: candidate %q not present in the VoteRecord %s",
-			h.si, candidate, newsmap)
+			h.si, candidate, newSmap)
 		return
 	}
-	if !newsmap.isPresent(h.si) {
-		h.writeErrf(w, r, "%s: not present in the VoteRecord %s", h.si, newsmap)
+	if !newSmap.isPresent(h.si) {
+		h.writeErrf(w, r, "%s: not present in the VoteRecord %s", h.si, newSmap)
 		return
 	}
 
-	if err := h.owner.smap.synchronize(h.si, newsmap, nil /*ms payload*/); err != nil {
+	if err := h.owner.smap.synchronize(h.si, newSmap, nil /*ms payload*/); err != nil {
 		// double-checking errDowngrade
 		if isErrDowngrade(err) {
-			newsmap2 := h.owner.smap.get()
-			psi2 := newsmap2.GetProxy(candidate)
+			newSmap2 := h.owner.smap.get()
+			psi2 := newSmap2.GetProxy(candidate)
 			if psi2.Equals(psi) {
 				err = nil // not an error - can vote Yes
 			}
 		}
 		if err != nil {
-			glog.Errorf("%s: failed to synch %s, err %v - voting No", h.si, newsmap, err)
+			glog.Errorf("%s: failed to synch %s, err %v - voting No", h.si, newSmap, err)
 			if _, err := w.Write([]byte(VoteNo)); err != nil {
 				glog.Errorf("%s: failed to write a No vote: %v", h.si, err)
 			}

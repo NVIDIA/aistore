@@ -173,8 +173,17 @@ func (p *proxyrunner) secondaryStartup(smap *smapX, primaryURLs ...string) error
 	p.markNodeStarted()
 
 	go func() {
-		p.pollClusterStarted(cmn.GCO.Get().Timeout.CplaneOperation)
-		glog.Infof("%s: non-primary & cluster startup complete, %s", p.si, smap.StringEx())
+		config := cmn.GCO.Get()
+		cii := p.pollClusterStarted(config, smap.Primary)
+		if daemon.stopping.Load() {
+			return
+		}
+		if cii != nil {
+			if status, err := p.joinCluster(cii.Smap.Primary.CtrlURL, cii.Smap.Primary.PubURL); err != nil {
+				glog.Errorf("%s failed to re-join cluster (status: %d, err: %v)", p.si, status, err)
+				return
+			}
+		}
 		p.markClusterStarted()
 	}()
 
@@ -272,7 +281,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	smap = p.owner.smap.get()
 	if !smap.isPrimary(p.si) {
 		p.owner.smap.Unlock()
-		glog.Infof("%s: registering with %s", p.si, smap.Primary.NameEx())
+		glog.Infof("%s: registering with primary %s", p.si, smap.Primary)
 		if err := p.secondaryStartup(smap); err != nil {
 			cos.ExitLogf("FATAL: %v", err)
 		}

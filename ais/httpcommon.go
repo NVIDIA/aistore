@@ -2086,15 +2086,53 @@ func (h *httprunner) getPrimaryURLAndSI() (url string, psi *cluster.Snode) {
 	return
 }
 
-func (h *httprunner) pollClusterStarted(timeout time.Duration) {
-	for i := 1; ; i++ {
-		time.Sleep(time.Duration(i) * time.Second)
+func (h *httprunner) pollClusterStarted(config *cmn.Config, psi *cluster.Snode) (maxCii *clusterInfo) {
+	var (
+		sleep, total, rediscover time.Duration
+		healthTimeout            = config.Timeout.CplaneOperation
+		query                    = url.Values{cmn.URLParamAskPrimary: []string{"true"}}
+	)
+	for {
+		sleep = cos.MinDuration(config.Timeout.MaxKeepalive, sleep+time.Second)
+		time.Sleep(sleep)
+		total += sleep
+		rediscover += sleep
+		if daemon.stopping.Load() {
+			return
+		}
 		smap := h.owner.smap.get()
 		if smap.validate() != nil {
 			continue
 		}
-		if _, _, err := h.Health(smap.Primary, timeout, nil); err == nil {
-			break
+		if h.si.IsProxy() && smap.isPrimary(h.si) { // TODO: unlikely - see httpRequestNewPrimary
+			glog.Warningf("%s: started as a non-primary and got ELECTED during startup", h.si)
+			return
+		}
+		if _, _, err := h.Health(smap.Primary, healthTimeout, query /*ask primary*/); err == nil {
+			if h.si.IsProxy() {
+				glog.Infof("%s: non-primary & cluster startup complete, %s", h.si, smap.StringEx())
+			} else {
+				glog.Infof("%s: cluster startup ok, %s", h.si, smap.StringEx())
+			}
+			return
+		}
+		if rediscover >= config.Timeout.Startup/2 {
+			rediscover = 0
+			if cii, cnt := h.bcastHealth(smap); cii.Smap.Version > smap.version() {
+				var pid string
+				if psi != nil {
+					pid = psi.ID()
+				}
+				if cii.Smap.Primary.ID != pid && cnt >= minPidConfirmations {
+					glog.Warningf("%s: change of primary %s => %s - must rejoin",
+						h.si, pid, cii.Smap.Primary.ID)
+					maxCii = cii
+					return
+				}
+			}
+		}
+		if total > config.Timeout.Startup {
+			glog.Errorf("%s: cluster startup is taking unusually long time...", h.si)
 		}
 	}
 }

@@ -167,7 +167,7 @@ func (d *Snode) String() string {
 	return d.Name()
 }
 
-func (d *Snode) NameEx() string {
+func (d *Snode) nameNets() string {
 	if d.PublicNet.DirectURL != d.IntraControlNet.DirectURL ||
 		d.PublicNet.DirectURL != d.IntraDataNet.DirectURL {
 		return fmt.Sprintf("%s(pub: %s, control: %s, data: %s)", d.Name(),
@@ -205,7 +205,7 @@ func (d *Snode) Validate() error {
 		return errors.New("invalid Snode: nil")
 	}
 	if d.ID() == "" {
-		return errors.New("invalid Snode: missing node " + d.NameEx())
+		return errors.New("invalid Snode: missing node " + d.nameNets())
 	}
 	if d.DaemonType != cmn.Proxy && d.DaemonType != cmn.Target {
 		cos.Assertf(false, "invalid Snode type %q", d.DaemonType)

@@ -210,6 +210,7 @@ const (
 	URLParamRebData          = "rbd" // true: get EC rebalance data (pulling data if push way fails)
 	URLParamTaskAction       = "tac" // "start", "status", "result"
 	URLParamClusterInfo      = "cii" // true: Health to return ais.clusterInfo
+	URLParamAskPrimary       = "apr" // true: inquiring health of a (what I think must be) primary
 	URLParamRecvType         = "rtp" // to tell real PUT from migration PUT
 
 	// dsort

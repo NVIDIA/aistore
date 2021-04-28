@@ -63,8 +63,8 @@ func (t *targetrunner) initHostIP() {
 	}
 }
 
-func (t *targetrunner) joinCluster(primaryURLs ...string) (status int, err error) {
-	res := t.join(nil, primaryURLs...)
+func (t *targetrunner) joinCluster(_ ...string) (status int, err error) {
+	res := t.join(nil)
 	defer _freeCallRes(res)
 	if res.err != nil {
 		status, err = res.status, res.err
