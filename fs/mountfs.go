@@ -382,6 +382,7 @@ func (mi *MountpathInfo) createBckDirs(bck cmn.Bck, nilbmd bool) (num int, err e
 				// NOTE: e.g., has been decommissioned without proper cleanup, and rejoined
 				glog.Errorf("bucket %s: directory %s already exists but local BMD is nil - skipping...",
 					bck, dir)
+				num++
 				continue
 			}
 			names, empty, errEmpty := IsDirEmpty(dir)
