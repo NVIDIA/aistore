@@ -6,6 +6,7 @@ package fs
 
 import (
 	"fmt"
+	"os"
 	"syscall"
 )
 
@@ -35,7 +36,7 @@ func makeFsInfo(mpath string) (fsInfo FilesystemInfo, err error) {
 
 // DirectOpen opens a file with direct disk access(with OS caching disabled)
 func DirectOpen(path string, flag int, perm os.FileMode) (*os.File, error) {
-	file, err := os.OpenFile(name, flag, perm)
+	file, err := os.OpenFile(path, flag, perm)
 	if err != nil {
 		return file, err
 	}
