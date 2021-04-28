@@ -7,12 +7,15 @@
 package debug
 
 import (
+	"bytes"
 	"expvar"
 	"fmt"
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"path/filepath"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -84,34 +87,62 @@ func Infof(f string, a ...interface{}) {
 
 func Func(f func()) { f() }
 
+func _panic(a ...interface{}) {
+	var msg = "DEBUG PANIC: "
+	if len(a) > 0 {
+		msg += fmt.Sprint(a...)
+	}
+	buffer := bytes.NewBuffer(make([]byte, 0, 1024))
+	fmt.Fprint(buffer, msg)
+	for i := 2; i < 9; i++ {
+		if _, file, line, ok := runtime.Caller(i); !ok {
+			break
+		} else {
+			if !strings.Contains(file, "aistore") {
+				break
+			}
+			f := filepath.Base(file)
+			if buffer.Len() > len(msg) {
+				buffer.WriteString(" <- ")
+			}
+			fmt.Fprintf(buffer, "%s:%d", f, line)
+		}
+	}
+	glog.Errorf("%s", buffer.Bytes())
+	glog.Flush()
+	panic(msg)
+}
+
 func Assert(cond bool, a ...interface{}) {
 	if !cond {
-		glog.Flush()
-		if len(a) > 0 {
-			panic("DEBUG PANIC: " + fmt.Sprint(a...))
-		} else {
-			panic("DEBUG PANIC")
-		}
+		_panic(a...)
 	}
 }
 
-func AssertFunc(f func() bool, a ...interface{}) { Assert(f(), a...) }
+func AssertFunc(f func() bool, a ...interface{}) {
+	if !f() {
+		_panic(a...)
+	}
+}
 
 func AssertMsg(cond bool, msg string) {
 	if !cond {
-		glog.Flush()
-		panic("DEBUG PANIC: " + msg)
+		_panic(msg)
 	}
 }
 
 func AssertNoErr(err error) {
 	if err != nil {
-		glog.Flush()
-		panic(err)
+		_panic(err)
 	}
 }
 
-func Assertf(cond bool, f string, a ...interface{}) { AssertMsg(cond, fmt.Sprintf(f, a...)) }
+func Assertf(cond bool, f string, a ...interface{}) {
+	if !cond {
+		msg := fmt.Sprintf(f, a...)
+		_panic(msg)
+	}
+}
 
 func AssertMutexLocked(m *sync.Mutex) {
 	state := reflect.ValueOf(m).Elem().FieldByName("state")
