@@ -7,8 +7,6 @@ package ais
 import (
 	"net/url"
 	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -248,18 +246,15 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 				clone.Version = clone.Version + int64(added) + 1
 			}
 		}
-		glog.Infof("%s: initial %s, curr %s, added=%d", p.si, loadedSmap, clone.StringEx(), added)
-		if clone.UUID == "" {
-			uuid, created = p.discoverClusterUUID()
-			clone.UUID, clone.CreationTime = uuid, created
-		}
+		bmd := p.owner.bmd.get()
+		glog.Infof("%s: initial %s (curr %s, added=%d), initial %s", p.si, loadedSmap, clone.StringEx(), added, bmd.StringEx())
+		uuid, created, bmd = p.regpoolMaxVer(clone, bmd)
+		clone.UUID, clone.CreationTime = uuid, created
+		glog.Infof("%s: regpool %s %s", p.si, clone.StringEx(), bmd.StringEx())
 		smap = clone
 		p.owner.smap.put(clone)
 		p.owner.smap.Unlock()
-		var (
-			bmd = p.owner.bmd.get()
-			msg = p.newAmsgStr(metaction1, bmd)
-		)
+		msg := p.newAmsgStr(metaction1, bmd)
 		wg := p.metasyncer.sync(revsPair{smap, msg}, revsPair{bmd, msg})
 		wg.Wait()
 	} else {
@@ -780,37 +775,49 @@ func (p *proxyrunner) bcastMaxVerBestEffort(smap *smapX) *smapX {
 	return nil
 }
 
-func (p *proxyrunner) discoverClusterUUID() (uuid, created string) {
+func (p *proxyrunner) regpoolMaxVer(smap *smapX, bmd *bucketMD) (uuid, created string, maxverBMD *bucketMD) {
+	maxverSmap := smap
+	maxverBMD = bmd
 	p.reg.mtx.RLock()
 	defer p.reg.mtx.RUnlock()
 	if len(p.reg.pool) == 0 {
-		return newClusterUUID()
-	}
-	var maxCnt int
-	counter := make(map[string]int) // UUID => count
-	for _, regReq := range p.reg.pool {
-		if regReq.Smap == nil || !cos.IsValidUUID(regReq.Smap.UUID) {
-			continue
-		}
-		counter[regReq.Smap.UUID]++
-		if maxCnt < counter[regReq.Smap.UUID] {
-			maxCnt = counter[regReq.Smap.UUID]
-			uuid, created = regReq.Smap.UUID, regReq.Smap.CreationTime
-		}
-	}
-
-	if len(counter) > 1 {
-		var uuids string
-		for id, cnt := range counter {
-			uuids += id + "(cnt-" + strconv.Itoa(cnt) + ") vs "
-		}
-		uuids = strings.TrimRight(uuids, "vs ")
-		glog.Errorf("%s: Smap UUIDs do not match %s", ciError(10), uuids)
-	}
-
-	if (maxCnt > 0 && len(counter) == 1) || maxCnt > minPidConfirmations {
-		glog.Infof("%s: rediscovered cluster UUID %s at conf. count %d", p.si, uuid, maxCnt)
+		uuid, created = newClusterUUID()
 		return
 	}
-	return newClusterUUID()
+	for _, regReq := range p.reg.pool {
+		if regReq.Smap != nil && regReq.Smap.version() > 0 && cos.IsValidUUID(regReq.Smap.UUID) {
+			if maxverSmap != nil && maxverSmap.version() > 0 {
+				if cos.IsValidUUID(maxverSmap.UUID) && maxverSmap.UUID != regReq.Smap.UUID {
+					cos.ExitLogf("%s: Smap UUIDs don't match: [%s %s]i vs %s", ciError(10),
+						p.si, maxverSmap.StringEx(), regReq.Smap.StringEx())
+				}
+			}
+			if maxverSmap == nil || maxverSmap.version() < regReq.Smap.version() {
+				maxverSmap = regReq.Smap
+			}
+		}
+		if regReq.BMD != nil && regReq.BMD.version() > 0 && cos.IsValidUUID(regReq.BMD.UUID) {
+			if maxverBMD != nil && maxverBMD.version() > 0 {
+				if cos.IsValidUUID(maxverBMD.UUID) && maxverBMD.UUID != regReq.BMD.UUID {
+					cos.ExitLogf("%s: BMD UUIDs don't match: [%s %s]i vs %s", ciError(10),
+						p.si, maxverBMD.StringEx(), regReq.BMD.StringEx())
+				}
+			}
+			if maxverBMD == nil || maxverBMD.version() < regReq.BMD.version() {
+				maxverBMD = regReq.BMD
+			}
+		}
+	}
+	if maxverSmap == nil || maxverSmap.version() == 0 || !cos.IsValidUUID(maxverSmap.UUID) {
+		uuid, created = newClusterUUID()
+	} else {
+		uuid, created = maxverSmap.UUID, maxverSmap.CreationTime
+	}
+	if maxverBMD != bmd {
+		if err := p.owner.bmd.putPersist(maxverBMD, nil); err != nil {
+			cos.ExitLogf("FATAL: %v", err)
+		}
+		glog.Infof("%s: discovered via regpool and stored %s", p.si, maxverBMD.StringEx())
+	}
+	return
 }

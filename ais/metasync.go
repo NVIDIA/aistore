@@ -286,8 +286,6 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 			jitRevs           = revs.jit(y.p)
 			revsBody          []byte
 		)
-		debug.Assertf(jitRevs == nil || revsReqType == revsReqNotify || revs.version() <= jitRevs.version(),
-			"%s cannot be newer than jit %s", revs, jitRevs)
 		if msg.Action != "" {
 			s = ", action " + msg.Action
 		}

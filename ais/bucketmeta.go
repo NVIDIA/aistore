@@ -265,8 +265,12 @@ func newBMDOwnerPrx(config *cmn.Config) *bmdOwnerPrx {
 func (bo *bmdOwnerPrx) init() {
 	bmd := newBucketMD()
 	_, err := jsp.LoadMeta(bo.fpath, bmd)
-	if err != nil && !os.IsNotExist(err) {
-		glog.Errorf("failed to load %s from %s, err: %v", bmd, bo.fpath, err)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			glog.Errorf("failed to load %s from %s, err: %v", bmd, bo.fpath, err)
+		} else {
+			glog.Infof("%s does not exist at %s - initializing", bmd, bo.fpath)
+		}
 	}
 	bo.put(bmd)
 }
@@ -328,17 +332,17 @@ func (bo *bmdOwnerTgt) init() {
 	)
 
 	if bmd = loadBMD(available, cmn.BmdFname); bmd != nil {
-		glog.Infof("BMD loaded from %q", cmn.BmdFname)
+		glog.Infof("loaded %s", bmd)
 		goto finalize
 	}
 
 	if bmd = loadBMD(available, cmn.BmdPreviousFname); bmd != nil {
-		glog.Infof("BMD loaded from %q", cmn.BmdPreviousFname)
+		glog.Errorf("loaded previous version of the %s (%q)", bmd, cmn.BmdPreviousFname)
 		goto finalize
 	}
 
 	bmd = newBucketMD()
-	glog.Info("BMD freshly created")
+	glog.Warningf("initializing new %s", bmd)
 
 finalize:
 	bo.put(bmd)
