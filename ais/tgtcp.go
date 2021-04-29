@@ -89,7 +89,7 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 
 	// Config
 	debug.Assert(regMeta.Config != nil)
-	if err = t.receiveConfig(regMeta.Config, msg, caller); err != nil {
+	if err = t.receiveConfig(regMeta.Config, msg, nil, caller); err != nil {
 		if isErrDowngrade(err) {
 			err = nil
 		} else {
@@ -860,7 +860,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if newConf != nil {
-		retErr = t.receiveConfig(newConf, msgConf, caller)
+		retErr = t.receiveConfig(newConf, msgConf, payload, caller)
 	}
 	// Smap
 	newSmap, msgSmap, err := t.extractSmap(payload, caller)
@@ -906,9 +906,9 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 	}
 }
 
-func (t *targetrunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, caller string) (err error) {
+func (t *targetrunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPayload, caller string) (err error) {
 	oldConfig := cmn.GCO.Get()
-	err = t.httprunner.receiveConfig(newConfig, msg, caller)
+	err = t.httprunner.receiveConfig(newConfig, msg, payload, caller)
 	if err != nil {
 		return
 	}

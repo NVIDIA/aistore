@@ -63,7 +63,8 @@ func TestMain(m *testing.M) {
 
 	// target
 	config := cmn.GCO.Get()
-	t = newTarget()
+	co := newConfigOwner(config)
+	t = newTarget(co)
 	t.name = cmn.Target
 	t.initNetworks()
 	t.si.Init(t.initID(config), cmn.Target)

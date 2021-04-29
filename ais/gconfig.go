@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/url"
@@ -13,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -27,7 +29,8 @@ type (
 	}
 	configOwner struct {
 		sync.Mutex
-		immSize int64
+		immSize     int64
+		globalFpath string
 	}
 
 	configModifier struct {
@@ -63,23 +66,32 @@ func (config *globalConfig) _encode(immSize int64) (sgl *memsys.SGL) {
 	return
 }
 
-////////////
-// config //
-////////////
+/////////////////
+// configOwner //
+/////////////////
 
-func (co *configOwner) get() (*globalConfig, error) {
-	gco := cmn.GCO.Get()
-	config := &globalConfig{}
-	_, err := jsp.LoadMeta(filepath.Join(gco.ConfigDir, cmn.GlobalConfigFname), config)
-	if os.IsNotExist(err) {
-		return nil, nil
+func newConfigOwner(config *cmn.Config) (co *configOwner) {
+	co = &configOwner{}
+	co.globalFpath = filepath.Join(config.ConfigDir, cmn.GlobalConfigFname)
+	return
+}
+
+// NOTE: loading every time - not keeping global replicated config in memory
+func (co *configOwner) get() (clone *globalConfig, err error) {
+	clone = &globalConfig{}
+	if _, err = jsp.LoadMeta(co.globalFpath, clone); err == nil {
+		return
 	}
-	return config, err
+	clone = nil
+	if os.IsNotExist(err) {
+		err = nil
+	} else {
+		glog.Errorf("failed to load global config from %s: %v", co.globalFpath, err)
+	}
+	return
 }
 
-func (co *configOwner) version() int64 {
-	return cmn.GCO.Get().Version
-}
+func (co *configOwner) version() int64 { return cmn.GCO.Get().Version }
 
 func (co *configOwner) runPre(ctx *configModifier) (clone *globalConfig, err error) {
 	co.Lock()
@@ -88,8 +100,8 @@ func (co *configOwner) runPre(ctx *configModifier) (clone *globalConfig, err err
 	if err != nil {
 		return
 	}
-	// NOTE: config `nil` implies missing cluster config.
-	//        We need to use the config provided through CLI to generate cluster config.
+	// NOTE: config `nil` implies missing cluster config - use the config provided through CLI
+	//       to initiate one.
 	if clone == nil {
 		clone = &globalConfig{}
 		_, err = jsp.Load(cmn.GCO.GetGlobalConfigPath(), clone, jsp.Plain())
@@ -112,7 +124,7 @@ func (co *configOwner) runPre(ctx *configModifier) (clone *globalConfig, err err
 	clone.LastUpdated = time.Now().String()
 	clone._sgl = clone._encode(co.immSize)
 	co.immSize = cos.MaxI64(co.immSize, clone._sgl.Len())
-	if err := co.persist(clone); err != nil {
+	if err := co.persist(clone, nil); err != nil {
 		clone._sgl.Free()
 		clone._sgl = nil
 		err = fmt.Errorf("FATAL: failed to persist %s: %v", clone, err)
@@ -132,16 +144,37 @@ func (co *configOwner) modify(ctx *configModifier) (config *globalConfig, err er
 	return
 }
 
-func (co *configOwner) persist(config *globalConfig) error {
-	var (
-		wto      io.WriterTo
-		local    = cmn.GCO.Get()
-		savePath = filepath.Join(local.ConfigDir, cmn.GlobalConfigFname) // TODO -- FIXME: fpath
-	)
-	if config._sgl != nil {
-		wto = config._sgl
+func (co *configOwner) persist(clone *globalConfig, payload msPayload) error {
+	if co.persistBytes(payload, co.globalFpath) {
+		return nil
 	}
-	return jsp.SaveMeta(savePath, config, wto)
+	var wto io.WriterTo
+	if clone._sgl != nil {
+		wto = clone._sgl
+	} else {
+		sgl := clone._encode(co.immSize)
+		co.immSize = cos.MaxI64(co.immSize, sgl.Len())
+		defer sgl.Free()
+		wto = sgl
+	}
+	return jsp.SaveMeta(co.globalFpath, clone, wto)
+}
+
+func (co *configOwner) persistBytes(payload msPayload, globalFpath string) (done bool) {
+	if payload == nil {
+		return
+	}
+	confValue := payload[revsConfTag]
+	if confValue == nil {
+		return
+	}
+	var (
+		config globalConfig
+		wto    = bytes.NewBuffer(confValue)
+		err    = jsp.SaveMeta(globalFpath, &config, wto)
+	)
+	done = err == nil
+	return
 }
 
 // PRECONDITION: `co` should be under lock.

@@ -261,7 +261,7 @@ func (p *proxyrunner) receiveCluMeta(cluMeta *cluMeta, action, caller string) (e
 
 	// Config
 	debug.Assert(cluMeta.Config != nil)
-	if err = p.receiveConfig(cluMeta.Config, msg, caller); err != nil {
+	if err = p.receiveConfig(cluMeta.Config, msg, nil, caller); err != nil {
 		if isErrDowngrade(err) {
 			err = nil
 		} else {
@@ -661,7 +661,7 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if newConf != nil {
-		retErr = p.receiveConfig(newConf, msgConf, caller)
+		retErr = p.receiveConfig(newConf, msgConf, payload, caller)
 	}
 	// Smap
 	newSmap, msgSmap, err := p.extractSmap(payload, caller)

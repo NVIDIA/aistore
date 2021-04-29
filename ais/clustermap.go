@@ -530,6 +530,11 @@ func (r *smapOwner) persist(newSmap *smapX) error {
 	var wto io.WriterTo
 	if newSmap._sgl != nil {
 		wto = newSmap._sgl
+	} else {
+		sgl := newSmap._encode(r.immSize)
+		r.immSize = cos.MaxI64(r.immSize, sgl.Len())
+		defer sgl.Free()
+		wto = sgl
 	}
 	return jsp.SaveMeta(r.fpath, newSmap, wto)
 }

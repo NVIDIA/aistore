@@ -81,11 +81,10 @@ type (
 
 type (
 	globalConfigOwner struct {
-		mtx           sync.Mutex     // mutex for protecting updates of config
-		c             atomic.Pointer // pointer to `Config` (cluster + local + override config)
-		oc            atomic.Pointer // pointer to `ConfigToUpdate`, override configuration on node
-		confPath      atomic.Pointer
-		localConfPath atomic.Pointer
+		mtx      sync.Mutex     // mutex for protecting updates of config
+		c        atomic.Pointer // pointer to `Config` (cluster + local + override config)
+		oc       atomic.Pointer // pointer to `ConfigToUpdate`, override configuration on node
+		confPath atomic.Pointer
 	}
 )
 
@@ -680,14 +679,6 @@ func (gco *globalConfigOwner) DiscardUpdate() {
 
 func (gco *globalConfigOwner) SetGlobalConfigPath(path string) {
 	gco.confPath.Store(unsafe.Pointer(&path))
-}
-
-func (gco *globalConfigOwner) SetLocalConfigPath(path string) {
-	gco.localConfPath.Store(unsafe.Pointer(&path))
-}
-
-func (gco *globalConfigOwner) GetLocalConfigPath() (s string) {
-	return *(*string)(gco.localConfPath.Load())
 }
 
 func (gco *globalConfigOwner) GetGlobalConfigPath() (s string) {
@@ -1546,7 +1537,6 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *Config) (err er
 	)
 	debug.Assert(confPath != "" && localConfPath != "")
 	GCO.SetGlobalConfigPath(confPath)
-	GCO.SetLocalConfigPath(localConfPath)
 
 	// Load local config as plain-text
 	_, err = jsp.Load(localConfPath, &config.LocalConfig, jsp.Plain())
@@ -1556,13 +1546,14 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *Config) (err er
 	glog.SetLogDir(config.LogDir)
 
 	// NOTE: If last updated version of config doesn't exist in the configured location,
-	//       config from `confPath` is loaded as plain-text
+	//       global config from `confPath` is loaded as plain-text
 	//       and is only used when the node starts up;
 	//       once started, the node always relies on the last
 	//       updated version of the (global|local) config from the configured location
-	_, err = jsp.LoadMeta(filepath.Join(config.ConfigDir, GlobalConfigFname), &config.ClusterConfig)
+	globalFpath := filepath.Join(config.ConfigDir, GlobalConfigFname)
+	_, err = jsp.LoadMeta(globalFpath, &config.ClusterConfig)
 	if os.IsNotExist(err) {
-		glog.Infof("loading configuration from %q", confPath)
+		glog.Warningf("loading plain-text (initial) global config from %q", confPath)
 		_, err = jsp.Load(confPath, &config.ClusterConfig, jsp.Plain())
 		initial = true
 	}

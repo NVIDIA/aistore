@@ -203,29 +203,30 @@ func initDaemon(version, buildTime string) cos.Runner {
 	daemon.rg = &rungroup{rs: make(map[string]cos.Runner, 8)}
 	daemon.rg.add(hk.DefaultHK)
 
+	co := newConfigOwner(config)
 	if daemon.cli.role == cmn.Proxy {
-		p := newProxy()
+		p := newProxy(co)
 		p.init(config)
 		return p
 	}
-	t := newTarget()
+	t := newTarget(co)
 	t.init(config)
 	return t
 }
 
-func newProxy() *proxyrunner {
+func newProxy(co *configOwner) *proxyrunner {
 	p := &proxyrunner{}
 	p.name = cmn.Proxy
-	p.owner.config = &configOwner{}
+	p.owner.config = co
 	return p
 }
 
-func newTarget() *targetrunner {
+func newTarget(co *configOwner) *targetrunner {
 	t := &targetrunner{backend: make(backends, 8)}
 	t.name = cmn.Target
 	t.gfn.local.tag, t.gfn.global.tag = "local GFN", "global GFN"
 	t.owner.bmd = newBMDOwnerTgt()
-	t.owner.config = &configOwner{}
+	t.owner.config = co
 	return t
 }
 

@@ -1873,7 +1873,7 @@ func (h *httprunner) receiveSmap(newSmap *smapX, msg *aisMsg, payload msPayload,
 	return
 }
 
-func (h *httprunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, caller string) (err error) {
+func (h *httprunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPayload, caller string) (err error) {
 	glog.Infof(
 		"[metasync] receive %s from %q (action: %q, uuid: %q)",
 		newConfig, caller, msg.Action, msg.UUID,
@@ -1885,7 +1885,7 @@ func (h *httprunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, caller 
 		return newErrDowngrade(h.si, config.String(), newConfig.String())
 	}
 
-	if err = h.owner.config.persist(newConfig); err != nil {
+	if err = h.owner.config.persist(newConfig, payload); err != nil {
 		return
 	}
 	err = h.owner.config.updateGCO(newConfig)
