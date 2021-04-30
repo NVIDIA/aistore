@@ -1683,6 +1683,18 @@ func ciiToSmap(smap *smapX, body []byte, self, si *cluster.Snode) *clusterInfo {
 // metasync Rx handlers //
 //////////////////////////
 
+func _msdetail(ver int64, msg *aisMsg, caller string) (d string) {
+	if caller != "" {
+		d = " from " + caller
+	}
+	if msg.Action != "" || msg.UUID != "" {
+		d += fmt.Sprintf(" (local: v%d, action: %q, uuid: %q)", ver, msg.Action, msg.UUID)
+	} else {
+		d += fmt.Sprintf(" (local: v%d)", ver)
+	}
+	return
+}
+
 func (h *httprunner) extractConfig(payload msPayload, caller string) (newConfig *globalConfig, msg *aisMsg, err error) {
 	if _, ok := payload[revsConfTag]; !ok {
 		return
@@ -1702,10 +1714,7 @@ func (h *httprunner) extractConfig(payload msPayload, caller string) (newConfig 
 		}
 	}
 	config := cmn.GCO.Get()
-	glog.Infof(
-		"[metasync] extract %s from %q (local: %s, action: %q, uuid: %q)",
-		newConfig, caller, config, msg.Action, msg.UUID,
-	)
+	glog.Infof("extract %s%s", newConfig, _msdetail(config.Version, msg, caller))
 
 	if newConfig.version() <= config.Version {
 		if newConfig.version() < config.Version {
@@ -1757,10 +1766,7 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 		return
 	}
 
-	glog.Infof(
-		"[metasync] extract %s from %q (local: %s, action: %q, uuid: %q)",
-		newSmap.StringEx(), caller, smap.StringEx(), msg.Action, msg.UUID,
-	)
+	glog.Infof("extract %s%s", newSmap, _msdetail(smap.Version, msg, caller))
 
 	_, sameOrigin, _, eq := smap.Compare(&newSmap.Smap)
 	cos.Assert(sameOrigin)
@@ -1794,10 +1800,7 @@ func (h *httprunner) extractRMD(payload msPayload, caller string) (newRMD *rebMD
 	}
 
 	rmd := h.owner.rmd.get()
-	glog.Infof(
-		"[metasync] extract %s from %q (local: %s, action: %q, uuid: %q)",
-		newRMD.String(), caller, rmd.String(), msg.Action, msg.UUID,
-	)
+	glog.Infof("extract %s%s", newRMD, _msdetail(rmd.Version, msg, caller))
 
 	if newRMD.version() <= rmd.version() {
 		if newRMD.version() < rmd.version() {
@@ -1828,10 +1831,7 @@ func (h *httprunner) extractBMD(payload msPayload, caller string) (newBMD *bucke
 	}
 
 	bmd := h.owner.bmd.get()
-	glog.Infof(
-		"[metasync] extract %s from %q (local: %s, action: %q, uuid: %q)",
-		newBMD.StringEx(), caller, bmd.StringEx(), msg.Action, msg.UUID,
-	)
+	glog.Infof("extract %s%s", newBMD, _msdetail(bmd.Version, msg, caller))
 
 	// skip older iff not transactional - see t.receiveBMD()
 	if h.si.IsTarget() && msg.UUID != "" {
@@ -1851,13 +1851,8 @@ func (h *httprunner) receiveSmap(newSmap *smapX, msg *aisMsg, payload msPayload,
 	if newSmap == nil {
 		return
 	}
-
 	smap := h.owner.smap.get()
-	glog.Infof(
-		"[metasync] receive %s from %q (local: %s, action: %q, uuid: %q)",
-		newSmap.StringEx(), caller, smap.StringEx(), msg.Action, msg.UUID,
-	)
-
+	glog.Infof("receive %s%s", newSmap.StringEx(), _msdetail(smap.Version, msg, caller))
 	if !newSmap.isPresent(h.si) {
 		err = fmt.Errorf("%s: not finding self in the new %s", h.si, newSmap.StringEx())
 		glog.Warningf("Error: %s\n%s", err, newSmap.pp())
@@ -1874,13 +1869,12 @@ func (h *httprunner) receiveSmap(newSmap *smapX, msg *aisMsg, payload msPayload,
 }
 
 func (h *httprunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPayload, caller string) (err error) {
-	glog.Infof(
-		"[metasync] receive %s from %q (action: %q, uuid: %q)",
-		newConfig, caller, msg.Action, msg.UUID,
-	)
+	config := cmn.GCO.Get()
+	glog.Infof("receive %s%s", newConfig, _msdetail(config.Version, msg, caller))
+
 	h.owner.config.Lock()
 	defer h.owner.config.Unlock()
-	config := cmn.GCO.Get()
+	config = cmn.GCO.Get()
 	if newConfig.version() <= config.Version {
 		if newConfig.version() == config.Version {
 			return
@@ -1909,18 +1903,13 @@ func (h *httprunner) extractRevokedTokenList(payload msPayload, caller string) (
 			return nil, err
 		}
 	}
-
 	tokenList := &tokenList{}
 	if err := jsoniter.Unmarshal(bytes, tokenList); err != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "blocked token list", cmn.BytesHead(bytes), err)
 		return nil, err
 	}
-
-	glog.Infof(
-		"[metasync] extract token list from %q (count: %d, action: %q, uuid: %q)",
-		caller, len(tokenList.Tokens), msg.Action, msg.UUID,
-	)
-
+	glog.Infof("extract token list from %q (count: %d, action: %q, uuid: %q)", caller,
+		len(tokenList.Tokens), msg.Action, msg.UUID)
 	return tokenList, nil
 }
 

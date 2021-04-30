@@ -70,6 +70,9 @@ func (r *rebMD) String() string {
 	if r == nil {
 		return "RMD <nil>"
 	}
+	if len(r.TargetIDs) == 0 && r.Resilver == "" {
+		return fmt.Sprintf("RMD v%d", r.Version)
+	}
 	return fmt.Sprintf("RMD v%d(%v, %s)", r.Version, r.TargetIDs, r.Resilver)
 }
 

@@ -587,12 +587,11 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload
 		curVer                  int64
 		createErrs, destroyErrs string
 	)
-	glog.Infof(
-		"[metasync] receive %s from %q (action: %q, uuid: %q)",
-		newBMD.StringEx(), caller, msg.Action, msg.UUID,
-	)
-	t.owner.bmd.Lock()
 	bmd := t.owner.bmd.get()
+	glog.Infof("receive %s%s", newBMD.StringEx(), _msdetail(bmd.Version, msg, caller))
+
+	t.owner.bmd.Lock()
+	bmd = t.owner.bmd.get()
 	curVer = bmd.version()
 	var (
 		bcksToDelete = make([]*cluster.Bck, 0, 4)
@@ -626,7 +625,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload
 	// NOTE: create-dir errors are _not_ ignored
 	if createErrs != "" {
 		t.owner.bmd.Unlock()
-		glog.Errorf("[metasync] failed to receive BMD, create errs: %s", createErrs)
+		glog.Errorf("Failed to receive BMD: %s", createErrs)
 		err = errors.New(createErrs)
 		return
 	}
@@ -669,7 +668,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload
 
 	if destroyErrs != "" {
 		// TODO: revisit error handling
-		glog.Errorf("[metasync] failed to receive BMD, destroy errs: %s", destroyErrs)
+		glog.Errorf("Failed to receive BMD: %s", destroyErrs)
 	}
 
 	// evict LOM cache
@@ -684,7 +683,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload
 	if tag != bucketMDRegister {
 		// ecmanager will get updated BMD upon its init()
 		if err := ec.ECM.BucketsMDChanged(); err != nil {
-			glog.Errorf("[metasync] Failed to initialize EC manager: %v", err)
+			glog.Errorf("Failed to initialize EC manager: %v", err)
 		}
 	}
 
@@ -697,48 +696,45 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload
 }
 
 func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error) {
-	loghdr := fmt.Sprintf("[metasync] %s from %q (action: %q, uuid: %q)",
-		newRMD.String(), caller, msg.Action, msg.UUID)
+	rmd := t.owner.rmd.get()
+	glog.Infof("receive %s%s", newRMD, _msdetail(rmd.Version, msg, caller))
+
 	t.owner.rmd.Lock()
 	defer t.owner.rmd.Unlock()
 
-	rmd := t.owner.rmd.get()
-	if newRMD.Version < rmd.Version {
-		return newErrDowngrade(t.si, rmd.String(), newRMD.String())
-	} else if newRMD.Version == rmd.Version {
+	rmd = t.owner.rmd.get()
+	if newRMD.Version <= rmd.Version {
+		if newRMD.Version < rmd.Version {
+			err = newErrDowngrade(t.si, rmd.String(), newRMD.String())
+		}
 		return
 	}
-
 	smap := t.owner.smap.get()
 	if err = smap.validate(); err != nil {
-		glog.Errorf("%s: cannot start rebalance %s: %v", t.si, loghdr, err) // TODO: remove
 		return
 	}
 	if smap.GetNode(t.si.ID()) == nil {
-		err = fmt.Errorf("%s (self) not present in %s", t.si, smap)
-		glog.Errorf("%s - cannot start: %v", loghdr, err) // ditto
+		err = fmt.Errorf("%s (self) not present in %s", t.si, smap.StringEx())
 		return
 	}
 	for _, tsi := range rmd.TargetIDs {
 		if smap.GetNode(tsi) == nil {
-			err = fmt.Errorf("%s (target_id from rmd) not present in %s", tsi, smap)
-			glog.Errorf("%s - cannot start: %v", loghdr, err) // ditto
-			return
+			glog.Warningf("%s: %s (target_id) not present in %s (old %s, new %s)",
+				t.si, tsi, smap.StringEx(), rmd, newRMD)
 		}
 	}
-
 	notif := &xaction.NotifXact{
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 	}
 	if msg.Action == cmn.ActRebalance {
-		glog.Infof("%s - starting user-requested rebalance", loghdr)
+		glog.Infof("%s: starting user-requested rebalance", t.si)
 		go t.rebManager.RunRebalance(&smap.Smap, newRMD.Version, notif)
 		return
 	}
-	glog.Infof("%s - starting automated rebalance", loghdr)
+	glog.Infof("%s: starting auto-rebalance", t.si)
 	go t.rebManager.RunRebalance(&smap.Smap, newRMD.Version, notif)
 	if newRMD.Resilver != "" {
-		glog.Infof("%s - ... and resilver", loghdr)
+		glog.Infof("%s: ... and resilver", t.si)
 		go t.runResilver(newRMD.Resilver, true /*skipGlobMisplaced*/)
 	}
 	t.owner.rmd.put(newRMD)

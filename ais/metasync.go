@@ -517,10 +517,10 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 	for _, res := range results {
 		if res.err == nil {
 			y.syncDone(res.si, pairs)
-			glog.Infof("%s: handle-pending: sync-ed %s => %s", y.p.si, log, res.si)
+			glog.Infof("%s: handle-pending: sync-ed %v => %s", y.p.si, log, res.si)
 		} else {
 			failedCnt++
-			glog.Warningf("%s: handle-pending: failing to sync %s => %s, err: %v(%d)",
+			glog.Warningf("%s: handle-pending: failing to sync %v => %s, err: %v(%d)",
 				y.p.si, log, res.si, res.err, res.status)
 		}
 	}

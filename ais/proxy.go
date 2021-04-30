@@ -2508,12 +2508,10 @@ func (p *proxyrunner) httpCloudHandler(w http.ResponseWriter, r *http.Request) {
 /////////////////
 
 func (p *proxyrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error) {
-	glog.Infof(
-		"[metasync] receive %s from %q (action: %q, uuid: %q)",
-		newRMD.String(), caller, msg.Action, msg.UUID,
-	)
-	p.owner.rmd.Lock()
 	rmd := p.owner.rmd.get()
+	glog.Infof("receive %s%s", newRMD, _msdetail(rmd.Version, msg, caller))
+	p.owner.rmd.Lock()
+	rmd = p.owner.rmd.get()
 	if newRMD.version() <= rmd.version() {
 		p.owner.rmd.Unlock()
 		if newRMD.version() < rmd.version() {
@@ -2557,13 +2555,11 @@ func (p *proxyrunner) smapOnUpdate(newSmap, oldSmap *smapX) {
 }
 
 func (p *proxyrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, caller string) (err error) {
-	glog.Infof(
-		"[metasync] receive %s from %q (action: %q, uuid: %q)",
-		newBMD.String(), caller, msg.Action, msg.UUID,
-	)
+	bmd := p.owner.bmd.get()
+	glog.Infof("receive %s%s", newBMD, _msdetail(bmd.Version, msg, caller))
 
 	p.owner.bmd.Lock()
-	bmd := p.owner.bmd.get()
+	bmd = p.owner.bmd.get()
 	if err = bmd.validateUUID(newBMD, p.si, nil, caller); err != nil {
 		cos.Assert(!p.owner.smap.get().isPrimary(p.si))
 		// cluster integrity error: making exception for non-primary proxies
