@@ -133,7 +133,7 @@ type (
 	}
 
 	electable interface {
-		proxyElection(vr *VoteRecord, primary *cluster.Snode)
+		proxyElection(vr *VoteRecord)
 	}
 
 	// aisMsg is an extended ActionMsg with extra information for node <=> node control plane communications

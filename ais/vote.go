@@ -5,10 +5,10 @@
 package ais
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/url"
+	"runtime"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -154,14 +154,14 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 	vr.Smap = p.owner.smap.get()
 
 	// election should be started in a goroutine as it must not hang the http handler
-	go p.proxyElection(vr, vr.Smap.Primary)
+	go p.proxyElection(vr)
 }
 
 // Election Functions
 
-func (p *proxyrunner) proxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
+func (p *proxyrunner) proxyElection(vr *VoteRecord) {
 	if p.owner.smap.get().isPrimary(p.si) {
-		glog.Infoln("Already in primary state")
+		glog.Infof("%s: am already in primary state", p.si)
 		return
 	}
 	xele := xreg.RenewElection()
@@ -169,27 +169,46 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
 		return
 	}
 	glog.Infoln(xele.String())
-	p.doProxyElection(vr, curPrimary)
+	p.doProxyElection(vr)
 	xele.Finish(nil)
 }
 
-func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
+func (p *proxyrunner) doProxyElection(vr *VoteRecord) {
 	var (
-		err    = context.DeadlineExceeded
-		config = cmn.GCO.Get()
-		query  = url.Values{cmn.URLParamAskPrimary: []string{"true"}}
+		err        error
+		curPrimary = vr.Smap.Primary
+		config     = cmn.GCO.Get()
+		timeout    = config.Timeout.CplaneOperation / 2
 	)
-	// 1. ping current primary
-	for i := time.Duration(2); i >= 1 && err != nil; i-- {
-		timeout := config.Timeout.CplaneOperation / i
-		_, _, err = p.Health(curPrimary, timeout, query /*ask primary*/)
+	// 1. ping current primary (not using cmn.URLParamAskPrimary as it might be transitioning)
+	for i := 0; i < 2; i++ {
+		if i > 0 {
+			runtime.Gosched()
+		}
+		smap := p.owner.smap.get()
+		if smap.version() > vr.Smap.version() {
+			glog.Warningf("%s: %s updated from %s, moving back to idle", p.si, smap, vr.Smap)
+			return
+		}
+		_, _, err = p.Health(curPrimary, timeout, nil /*ask primary*/)
+		if err == nil {
+			break
+		}
+		timeout = config.Timeout.CplaneOperation
 	}
 	if err == nil {
 		// move back to idle
-		glog.Infof("Current primary %s is up, moving back to idle", curPrimary)
+		query := url.Values{cmn.URLParamAskPrimary: []string{"true"}}
+		_, _, err = p.Health(curPrimary, timeout, query /*ask primary*/)
+		if err == nil {
+			glog.Infof("%s: current primary %s is up, moving back to idle", p.si, curPrimary)
+		} else {
+			glog.Errorf("%s: current primary(?) %s responds but does not consider itself primary",
+				p.si, curPrimary)
+		}
 		return
 	}
-	glog.Infof("Primary %s is confirmed down (err: %v)", curPrimary, err)
+	glog.Infof("%s: primary %s is confirmed down: %v", p.si, curPrimary, err)
 
 	// 2. election phase 1
 	glog.Info("Moving to election state phase 1 (prepare)")
@@ -374,7 +393,7 @@ func (h *httprunner) onPrimaryFail() {
 				Initiator: h.si.ID(),
 			}
 			vr.Smap = clone
-			h.electable.proxyElection(vr, clone.Primary)
+			h.electable.proxyElection(vr)
 			return
 		}
 
