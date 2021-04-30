@@ -481,10 +481,12 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 		return
 	}
 	var (
-		payload = make(msPayload, 2*len(y.lastSynced))
-		pairs   = make([]revsPair, 0, len(y.lastSynced))
+		l       = len(y.lastSynced)
+		payload = make(msPayload, 2*l)
+		pairs   = make([]revsPair, 0, l)
 		msg     = y.p.newAmsgStr("metasync: handle-pending", nil) // NOTE: same msg for all revs
 		msgBody = cos.MustMarshal(msg)
+		log     = make([]string, 0, l)
 	)
 	for tag, revs := range y.lastSynced {
 		if sgl := y.getver(revs); sgl != nil {
@@ -497,6 +499,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 		}
 		payload[tag+revsActionTag] = msgBody
 		pairs = append(pairs, revsPair{revs, msg})
+		log = append(log, revs.String())
 	}
 	var (
 		urlPath = cmn.URLPathMetasync.S
@@ -514,11 +517,11 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 	for _, res := range results {
 		if res.err == nil {
 			y.syncDone(res.si, pairs)
-			glog.Infof("%s: handle-pending: sync-ed %s", y.p.si, res.si)
+			glog.Infof("%s: handle-pending: sync-ed %s => %s", y.p.si, log, res.si)
 		} else {
 			failedCnt++
-			glog.Warningf("%s: handle-pending: failing to sync %s, err: %v (%d)",
-				y.p.si, res.si, res.err, res.status)
+			glog.Warningf("%s: handle-pending: failing to sync %s => %s, err: %v(%d)",
+				y.p.si, log, res.si, res.err, res.status)
 		}
 	}
 	freeCallResults(results)

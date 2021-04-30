@@ -92,7 +92,6 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, remoteH
 		waitmsync = true // commit blocks behind metasync
 		c         = p.prepTxnClient(msg, bck, waitmsync)
 	)
-	debug.Infof("Begin create-bucket (msg: %v, bck: %s)", msg, bck)
 	results := c.bcast(cmn.ActBegin, c.timeout.netw)
 	for _, res := range results {
 		if res.err == nil {
@@ -120,7 +119,6 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, remoteH
 	}
 
 	// 4. commit
-	debug.Infof("Commit create-bucket (msg: %v, bck: %s)", msg, bck)
 	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
 	for _, res := range results {
 		if res.err == nil {
@@ -780,7 +778,6 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 		c.timeout.netw = config.Timeout.MaxHostBusy + config.Timeout.MaxHostBusy/2
 		c.timeout.host = c.timeout.netw
 	}
-	debug.Infof("Begin destroy-bucket (msg: %v, bck: %s)", msg, bck)
 	results := c.bcast(cmn.ActBegin, c.timeout.netw)
 	for _, res := range results {
 		if res.err == nil {
@@ -807,7 +804,6 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 	}
 
 	// 3. Commit
-	debug.Infof("Commit destroy-bucket (msg: %v, bck: %s)", msg, bck)
 	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
 	for _, res := range results {
 		if res.err == nil {

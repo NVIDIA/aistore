@@ -778,17 +778,20 @@ func (p *proxyrunner) bcastMaxVerBestEffort(smap *smapX) *smapX {
 func (p *proxyrunner) regpoolMaxVer(smap *smapX, bmd *bucketMD) (uuid, created string, maxverBMD *bucketMD) {
 	maxverSmap := smap
 	maxverBMD = bmd
+	rmd := p.owner.rmd.get()
+	maxverRMD := rmd
+
 	p.reg.mtx.RLock()
 	defer p.reg.mtx.RUnlock()
 	if len(p.reg.pool) == 0 {
-		uuid, created = newClusterUUID()
-		return
+		goto ret
 	}
+
 	for _, regReq := range p.reg.pool {
 		if regReq.Smap != nil && regReq.Smap.version() > 0 && cos.IsValidUUID(regReq.Smap.UUID) {
 			if maxverSmap != nil && maxverSmap.version() > 0 {
 				if cos.IsValidUUID(maxverSmap.UUID) && maxverSmap.UUID != regReq.Smap.UUID {
-					cos.ExitLogf("%s: Smap UUIDs don't match: [%s %s]i vs %s", ciError(10),
+					cos.ExitLogf("%s: Smap UUIDs don't match: [%s %s] vs %s", ciError(10),
 						p.si, maxverSmap.StringEx(), regReq.Smap.StringEx())
 				}
 			}
@@ -799,7 +802,7 @@ func (p *proxyrunner) regpoolMaxVer(smap *smapX, bmd *bucketMD) (uuid, created s
 		if regReq.BMD != nil && regReq.BMD.version() > 0 && cos.IsValidUUID(regReq.BMD.UUID) {
 			if maxverBMD != nil && maxverBMD.version() > 0 {
 				if cos.IsValidUUID(maxverBMD.UUID) && maxverBMD.UUID != regReq.BMD.UUID {
-					cos.ExitLogf("%s: BMD UUIDs don't match: [%s %s]i vs %s", ciError(10),
+					cos.ExitLogf("%s: BMD UUIDs don't match: [%s %s] vs %s", ciError(10),
 						p.si, maxverBMD.StringEx(), regReq.BMD.StringEx())
 				}
 			}
@@ -807,17 +810,28 @@ func (p *proxyrunner) regpoolMaxVer(smap *smapX, bmd *bucketMD) (uuid, created s
 				maxverBMD = regReq.BMD
 			}
 		}
-	}
-	if maxverSmap == nil || maxverSmap.version() == 0 || !cos.IsValidUUID(maxverSmap.UUID) {
-		uuid, created = newClusterUUID()
-	} else {
-		uuid, created = maxverSmap.UUID, maxverSmap.CreationTime
+		if regReq.RMD != nil && regReq.RMD.version() > 0 {
+			if maxverRMD == nil || maxverRMD.version() < regReq.RMD.version() {
+				maxverRMD = regReq.RMD
+			}
+		}
 	}
 	if maxverBMD != bmd {
 		if err := p.owner.bmd.putPersist(maxverBMD, nil); err != nil {
 			cos.ExitLogf("FATAL: %v", err)
 		}
 		glog.Infof("%s: discovered via regpool and stored %s", p.si, maxverBMD.StringEx())
+	}
+	if maxverRMD != rmd {
+		p.owner.rmd.put(maxverRMD)
+		glog.Infof("%s: discovered via regpool and put %s", p.si, maxverRMD)
+	}
+ret:
+	if maxverSmap == nil || maxverSmap.version() == 0 || !cos.IsValidUUID(maxverSmap.UUID) {
+		uuid, created = newClusterUUID()
+		glog.Infof("%s: new cluster [%s]", p.si, uuid)
+	} else {
+		uuid, created = maxverSmap.UUID, maxverSmap.CreationTime
 	}
 	return
 }

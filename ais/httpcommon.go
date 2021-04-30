@@ -1879,17 +1879,18 @@ func (h *httprunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload
 		newConfig, caller, msg.Action, msg.UUID,
 	)
 	h.owner.config.Lock()
+	defer h.owner.config.Unlock()
 	config := cmn.GCO.Get()
 	if newConfig.version() <= config.Version {
-		h.owner.config.Unlock()
+		if newConfig.version() == config.Version {
+			return
+		}
 		return newErrDowngrade(h.si, config.String(), newConfig.String())
 	}
-
 	if err = h.owner.config.persist(newConfig, payload); err != nil {
 		return
 	}
 	err = h.owner.config.updateGCO(newConfig)
-	h.owner.config.Unlock()
 	debug.AssertNoErr(err)
 	return
 }
