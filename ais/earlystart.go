@@ -234,11 +234,12 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 
 	// 2: merging local => boot
 	if haveJoins {
-		p.owner.smap.Lock()
 		var (
-			added int
-			clone = p.owner.smap.get().clone()
+			before, after cluMeta
+			added         int
 		)
+		p.owner.smap.Lock()
+		clone := p.owner.smap.get().clone()
 		if loadedSmap != nil {
 			added, _ = clone.merge(loadedSmap, true /*override (IP, port) duplicates*/)
 			clone = loadedSmap
@@ -246,16 +247,22 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 				clone.Version = clone.Version + int64(added) + 1
 			}
 		}
-		bmd := p.owner.bmd.get()
-		glog.Infof("%s: initial %s (curr %s, added=%d), initial %s", p.si, loadedSmap, clone.StringEx(), added, bmd.StringEx())
-		uuid, created, bmd = p.regpoolMaxVer(clone, bmd)
+		// NOTE: use regpool to try to upgrade all the four revs: Smap, BMD, RMD, and global Config
+		before.Smap, before.BMD, before.RMD = clone, p.owner.bmd.get(), p.owner.rmd.get()
+		before.Config, _ = p.owner.config.get()
+		uuid, created = p.regpoolMaxVer(&before, &after)
 		clone.UUID, clone.CreationTime = uuid, created
-		glog.Infof("%s: regpool %s %s", p.si, clone.StringEx(), bmd.StringEx())
 		smap = clone
 		p.owner.smap.put(clone)
 		p.owner.smap.Unlock()
-		msg := p.newAmsgStr(metaction1, bmd)
-		wg := p.metasyncer.sync(revsPair{smap, msg}, revsPair{bmd, msg})
+
+		msg := p.newAmsgStr(metaction1, after.BMD)
+		wg := p.metasyncer.sync(revsPair{smap, msg}, revsPair{after.BMD, msg})
+
+		glog.Infof("%s: loaded %s (merged %s, added %d), loaded %s, %s, %s", p.si, loadedSmap, before.Smap.StringEx(),
+			added, before.BMD.StringEx(), before.RMD, before.Config)
+		glog.Infof("%s: regpool %s, %s, %s, %s", p.si, clone.StringEx(), after.BMD.StringEx(), after.RMD, after.Config)
+
 		wg.Wait()
 	} else {
 		glog.Infof("%s: no registrations yet", p.si)
@@ -345,6 +352,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 
 	// Clear regpool
 	p.reg.mtx.Lock()
+	p.reg.pool = p.reg.pool[:0]
 	p.reg.pool = nil
 	p.reg.mtx.Unlock()
 
@@ -355,6 +363,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	p.owner.rmd.startup.Store(false)
 }
 
+// NOTE: `-override_backends` option (cli.overrideBackends)
 func (p *proxyrunner) _config(uuid string) (config *globalConfig, err error) {
 	var (
 		c        cmn.ClusterConfig
@@ -775,63 +784,73 @@ func (p *proxyrunner) bcastMaxVerBestEffort(smap *smapX) *smapX {
 	return nil
 }
 
-func (p *proxyrunner) regpoolMaxVer(smap *smapX, bmd *bucketMD) (uuid, created string, maxverBMD *bucketMD) {
-	maxverSmap := smap
-	maxverBMD = bmd
-	rmd := p.owner.rmd.get()
-	maxverRMD := rmd
+func (p *proxyrunner) regpoolMaxVer(before, after *cluMeta) (uuid, created string) {
+	*after = *before
 
 	p.reg.mtx.RLock()
 	defer p.reg.mtx.RUnlock()
 	if len(p.reg.pool) == 0 {
 		goto ret
 	}
-
 	for _, regReq := range p.reg.pool {
 		if regReq.Smap != nil && regReq.Smap.version() > 0 && cos.IsValidUUID(regReq.Smap.UUID) {
-			if maxverSmap != nil && maxverSmap.version() > 0 {
-				if cos.IsValidUUID(maxverSmap.UUID) && maxverSmap.UUID != regReq.Smap.UUID {
+			if after.Smap != nil && after.Smap.version() > 0 {
+				if cos.IsValidUUID(after.Smap.UUID) && after.Smap.UUID != regReq.Smap.UUID {
 					cos.ExitLogf("%s: Smap UUIDs don't match: [%s %s] vs %s", ciError(10),
-						p.si, maxverSmap.StringEx(), regReq.Smap.StringEx())
+						p.si, after.Smap.StringEx(), regReq.Smap.StringEx())
 				}
 			}
-			if maxverSmap == nil || maxverSmap.version() < regReq.Smap.version() {
-				maxverSmap = regReq.Smap
+			if after.Smap == nil || after.Smap.version() < regReq.Smap.version() {
+				after.Smap = regReq.Smap
 			}
 		}
 		if regReq.BMD != nil && regReq.BMD.version() > 0 && cos.IsValidUUID(regReq.BMD.UUID) {
-			if maxverBMD != nil && maxverBMD.version() > 0 {
-				if cos.IsValidUUID(maxverBMD.UUID) && maxverBMD.UUID != regReq.BMD.UUID {
+			if after.BMD != nil && after.BMD.version() > 0 {
+				if cos.IsValidUUID(after.BMD.UUID) && after.BMD.UUID != regReq.BMD.UUID {
 					cos.ExitLogf("%s: BMD UUIDs don't match: [%s %s] vs %s", ciError(10),
-						p.si, maxverBMD.StringEx(), regReq.BMD.StringEx())
+						p.si, after.BMD.StringEx(), regReq.BMD.StringEx())
 				}
 			}
-			if maxverBMD == nil || maxverBMD.version() < regReq.BMD.version() {
-				maxverBMD = regReq.BMD
+			if after.BMD == nil || after.BMD.version() < regReq.BMD.version() {
+				after.BMD = regReq.BMD
 			}
 		}
 		if regReq.RMD != nil && regReq.RMD.version() > 0 {
-			if maxverRMD == nil || maxverRMD.version() < regReq.RMD.version() {
-				maxverRMD = regReq.RMD
+			if after.RMD == nil || after.RMD.version() < regReq.RMD.version() {
+				after.RMD = regReq.RMD
+			}
+		}
+		if regReq.Config != nil && regReq.Config.version() > 0 && cos.IsValidUUID(regReq.Config.UUID) {
+			if after.Config != nil && after.Config.version() > 0 {
+				if cos.IsValidUUID(after.Config.UUID) && after.Config.UUID != regReq.Config.UUID {
+					cos.ExitLogf("%s: Global Config UUIDs don't match: [%s %s] vs %s", ciError(10),
+						p.si, after.Config, regReq.Config)
+				}
+			}
+			if after.Config == nil || after.Config.version() < regReq.Config.version() {
+				after.Config = regReq.Config
 			}
 		}
 	}
-	if maxverBMD != bmd {
-		if err := p.owner.bmd.putPersist(maxverBMD, nil); err != nil {
+	if after.BMD != before.BMD {
+		if err := p.owner.bmd.putPersist(after.BMD, nil); err != nil {
 			cos.ExitLogf("FATAL: %v", err)
 		}
-		glog.Infof("%s: discovered via regpool and stored %s", p.si, maxverBMD.StringEx())
 	}
-	if maxverRMD != rmd {
-		p.owner.rmd.put(maxverRMD)
-		glog.Infof("%s: discovered via regpool and put %s", p.si, maxverRMD)
+	if after.RMD != before.RMD {
+		p.owner.rmd.put(after.RMD)
+	}
+	if after.Config != before.Config {
+		if err := p.owner.config.updateGCO(after.Config); err != nil {
+			cos.ExitLogf("FATAL: %v", err)
+		}
 	}
 ret:
-	if maxverSmap == nil || maxverSmap.version() == 0 || !cos.IsValidUUID(maxverSmap.UUID) {
+	if after.Smap == nil || after.Smap.version() == 0 || !cos.IsValidUUID(after.Smap.UUID) {
 		uuid, created = newClusterUUID()
 		glog.Infof("%s: new cluster [%s]", p.si, uuid)
 	} else {
-		uuid, created = maxverSmap.UUID, maxverSmap.CreationTime
+		uuid, created = after.Smap.UUID, after.Smap.CreationTime
 	}
 	return
 }

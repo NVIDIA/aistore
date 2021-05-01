@@ -177,10 +177,8 @@ func (co *configOwner) persistBytes(payload msPayload, globalFpath string) (done
 	return
 }
 
-// PRECONDITION: `co` should be under lock.
 func (co *configOwner) updateGCO(newConfig *globalConfig) (err error) {
-	debug.AssertMutexLocked(&co.Mutex)
-	return cmn.GCO.Update(newConfig.ClusterConfig)
+	return cmn.GCO.Update(&newConfig.ClusterConfig)
 }
 
 func (co *configOwner) setDaemonConfig(toUpdate *cmn.ConfigToUpdate, transient bool) (err error) {

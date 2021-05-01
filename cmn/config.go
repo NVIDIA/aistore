@@ -700,9 +700,9 @@ func (gco *globalConfigOwner) SetConfigInMem(toUpdate *ConfigToUpdate, config *C
 	return
 }
 
-func (gco *globalConfigOwner) Update(cluConfig ClusterConfig) (err error) {
+func (gco *globalConfigOwner) Update(cluConfig *ClusterConfig) (err error) {
 	config := gco.Clone()
-	config.ClusterConfig = cluConfig
+	config.ClusterConfig = *cluConfig
 	override := gco.GetOverrideConfig()
 	if override != nil {
 		err = config.Apply(*override, Daemon)
