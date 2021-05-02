@@ -839,67 +839,49 @@ func (t *targetrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 //       the code is identical to p.metasyncHandler() - not reducing it to
 //       one is lack of polymorphism to execute target-specific
 //       receive* while adding interfaces won't do enough.
-// NOTE: compare with receiveCluMeta() and friends
+// NOTE: compare with receiveCluMeta() and p.metasyncHandlerPut
 func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
-	var retErr error
+	var (
+		err = &errMsync{}
+		cii = &err.Cii
+	)
+	if r.Method != http.MethodPut {
+		cmn.WriteErr405(w, r, http.MethodPut)
+		return
+	}
 	payload := make(msPayload)
-	if err := payload.unmarshal(r.Body, "metasync put"); err != nil {
-		cmn.WriteErr(w, r, err)
+	if errP := payload.unmarshal(r.Body, "metasync put"); errP != nil {
+		cmn.WriteErr(w, r, errP)
 		return
 	}
-	caller := r.Header.Get(cmn.HdrCallerName)
-
-	// Config
-	newConf, msgConf, err := t.extractConfig(payload, caller)
-	if err != nil {
-		t.writeErr(w, r, err)
+	// 1. extract
+	var (
+		caller                    = r.Header.Get(cmn.HdrCallerName)
+		newConf, msgConf, errConf = t.extractConfig(payload, caller)
+		newSmap, msgSmap, errSmap = t.extractSmap(payload, caller)
+		newBMD, msgBMD, errBMD    = t.extractBMD(payload, caller)
+		newRMD, msgRMD, errRMD    = t.extractRMD(payload, caller)
+	)
+	// 2. apply
+	if errConf == nil && newConf != nil {
+		errConf = t.receiveConfig(newConf, msgConf, payload, caller)
+	}
+	if errSmap == nil && newSmap != nil {
+		errSmap = t.receiveSmap(newSmap, msgSmap, payload, caller, nil)
+	}
+	if errBMD == nil && newBMD != nil {
+		errBMD = t.receiveBMD(newBMD, msgBMD, payload, bucketMDReceive, caller)
+	}
+	if errRMD == nil && newRMD != nil {
+		errRMD = t.receiveRMD(newRMD, msgRMD, caller)
+	}
+	// 3. respond
+	if errConf == nil && errSmap == nil && errBMD == nil && errRMD == nil {
 		return
 	}
-	if newConf != nil {
-		retErr = t.receiveConfig(newConf, msgConf, payload, caller)
-	}
-	// Smap
-	newSmap, msgSmap, err := t.extractSmap(payload, caller)
-	if err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
-	if newSmap != nil {
-		if err = t.receiveSmap(newSmap, msgSmap, payload, caller, nil); err != nil {
-			if isErrDowngrade(retErr) && !isErrDowngrade(err) {
-				retErr = err
-			}
-		}
-	}
-	// BMD
-	newBMD, msgBMD, err := t.extractBMD(payload, caller)
-	if err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
-	if newBMD != nil {
-		if err = t.receiveBMD(newBMD, msgBMD, payload, bucketMDReceive, caller); err != nil {
-			if isErrDowngrade(retErr) && !isErrDowngrade(err) {
-				retErr = err
-			}
-		}
-	}
-	// RMD
-	newRMD, msgRMD, err := t.extractRMD(payload, caller)
-	if err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
-	if newRMD != nil {
-		if err = t.receiveRMD(newRMD, msgRMD, caller); err != nil {
-			if isErrDowngrade(retErr) && !isErrDowngrade(err) {
-				retErr = err
-			}
-		}
-	}
-	if retErr != nil {
-		t.writeErr(w, r, retErr)
-	}
+	cii.fill(&t.httprunner)
+	err.message(errConf, errSmap, errBMD, errRMD, nil)
+	t.writeErr(w, r, errors.New(cos.MustMarshalToString(err)), http.StatusConflict)
 }
 
 func (t *targetrunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPayload, caller string) (err error) {

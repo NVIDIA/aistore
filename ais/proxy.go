@@ -631,7 +631,10 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 // NOTE: compare with receiveCluMeta()
 // NOTE: compare with t.metasyncHandlerPut
 func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
-	var retErr error
+	var (
+		err = &errMsync{}
+		cii = &err.Cii
+	)
 	if r.Method != http.MethodPut {
 		cmn.WriteErr405(w, r, http.MethodPut)
 		return
@@ -639,81 +642,53 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	smap := p.owner.smap.get()
 	if smap.isPrimary(p.si) {
 		const txt = "is primary, cannot be on the receiving side of metasync"
+		cii.fill(&p.httprunner)
 		if xact := xreg.GetXactRunning(cmn.ActElection); xact != nil {
-			p.writeErrf(w, r, "%s: %s [%s, %s]", p.si, txt, smap, xact)
+			err.Message = fmt.Sprintf("%s: %s [%s, %s]", p.si, txt, smap, xact)
 		} else {
-			p.writeErrf(w, r, "%s: %s, %s", p.si, txt, smap)
+			err.Message = fmt.Sprintf("%s: %s, %s", p.si, txt, smap)
 		}
+		cii.fill(&p.httprunner)
+		p.writeErr(w, r, errors.New(cos.MustMarshalToString(err)), http.StatusConflict)
 		return
 	}
-
 	payload := make(msPayload)
-	if err := payload.unmarshal(r.Body, "metasync put"); err != nil {
-		cmn.WriteErr(w, r, err)
+	if errP := payload.unmarshal(r.Body, "metasync put"); errP != nil {
+		cmn.WriteErr(w, r, errP)
 		return
 	}
-	caller := r.Header.Get(cmn.HdrCallerName)
-
-	// Config
-	newConf, msgConf, err := p.extractConfig(payload, caller)
-	if err != nil {
-		p.writeErr(w, r, err)
-		return
+	// 1. extract
+	var (
+		caller                    = r.Header.Get(cmn.HdrCallerName)
+		newConf, msgConf, errConf = p.extractConfig(payload, caller)
+		newSmap, msgSmap, errSmap = p.extractSmap(payload, caller)
+		newBMD, msgBMD, errBMD    = p.extractBMD(payload, caller)
+		newRMD, msgRMD, errRMD    = p.extractRMD(payload, caller)
+		revokedTokens, errTokens  = p.extractRevokedTokenList(payload, caller)
+	)
+	// 2. apply
+	if errConf == nil && newConf != nil {
+		errConf = p.receiveConfig(newConf, msgConf, payload, caller)
 	}
-	if newConf != nil {
-		retErr = p.receiveConfig(newConf, msgConf, payload, caller)
+	if errSmap == nil && newSmap != nil {
+		errSmap = p.receiveSmap(newSmap, msgSmap, payload, caller, p.smapOnUpdate)
 	}
-	// Smap
-	newSmap, msgSmap, err := p.extractSmap(payload, caller)
-	if err != nil {
-		p.writeErr(w, r, err)
-		return
+	if errBMD == nil && newBMD != nil {
+		errBMD = p.receiveBMD(newBMD, msgBMD, payload, caller)
 	}
-	if newSmap != nil {
-		if err = p.receiveSmap(newSmap, msgSmap, payload, caller, p.smapOnUpdate); err != nil {
-			if isErrDowngrade(retErr) && !isErrDowngrade(err) {
-				retErr = err
-			}
-		}
+	if errRMD == nil && newRMD != nil {
+		errRMD = p.receiveRMD(newRMD, msgRMD, caller)
 	}
-	// BMD
-	newBMD, msgBMD, err := p.extractBMD(payload, caller)
-	if err != nil {
-		p.writeErr(w, r, err)
-		return
-	}
-	if newBMD != nil {
-		if err = p.receiveBMD(newBMD, msgBMD, payload, caller); err != nil {
-			if isErrDowngrade(retErr) && !isErrDowngrade(err) {
-				retErr = err
-			}
-		}
-	}
-	// RMD
-	newRMD, msgRMD, err := p.extractRMD(payload, caller)
-	if err != nil {
-		p.writeErr(w, r, err)
-		return
-	}
-	if newRMD != nil {
-		if err = p.receiveRMD(newRMD, msgRMD, caller); err != nil {
-			if isErrDowngrade(retErr) && !isErrDowngrade(err) {
-				retErr = err
-			}
-		}
-	}
-	// auth tokens
-	revokedTokens, err := p.extractRevokedTokenList(payload, caller)
-	if err != nil {
-		p.writeErr(w, r, err)
-		return
-	}
-	if revokedTokens != nil {
+	if errTokens == nil && revokedTokens != nil {
 		p.authn.updateRevokedList(revokedTokens)
 	}
-	if retErr != nil {
-		p.writeErr(w, r, retErr)
+	// 3. respond
+	if errConf == nil && errSmap == nil && errBMD == nil && errRMD == nil && errTokens == nil {
+		return
 	}
+	cii.fill(&p.httprunner)
+	err.message(errConf, errSmap, errBMD, errRMD, errTokens)
+	p.writeErr(w, r, errors.New(cos.MustMarshalToString(err)), http.StatusConflict)
 }
 
 func (p *proxyrunner) syncNewICOwners(smap, newSmap *smapX) {

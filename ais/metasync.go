@@ -20,39 +20,19 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/memsys"
+	jsoniter "github.com/json-iterator/go"
 )
 
-const (
-	revsSmapTag  = "Smap"
-	revsRMDTag   = "RMD"
-	revsBMDTag   = "BMD"
-	revsConfTag  = "Conf"
-	revsTokenTag = "token"
-
-	revsMaxTags   = 5
-	revsActionTag = "-action" // prefix revs tag
-)
-
-const (
-	revsReqSync = iota
-	revsReqNotify
-)
-
-// ===================== Theory Of Operations (TOO) =============================
-//
-// The metasync API exposed to the rest of the code includes two methods:
+// Metasync provides two methods to the rest of the `ais` code:
 // * sync - to synchronize cluster-level metadata (the main method)
 // * becomeNonPrimary - to be called when the current primary becomes non-primary
 //
-// All other methods (and the metasync's own state) are private and internal to
-// the metasync.
+// All other methods and the metasync's own state are private and internal.
 //
-// The main internal method, doSync, does most of the metasync-ing job and is
-// commented with its 6 steps executed in a single serial context.
+// Method called doSync does most of the work and is commented in its step-wise
+// execution.
 //
-// The job itself consists in synchronoizing REVS across a AIStore cluster.
-//
-// REVS (interface below) stands for REplicated, Versioned and Shared/Synchronized.
+// REVS (see interface below) stands for REplicated, Versioned and Shared/Synchronized.
 //
 // A REVS is an object that represents a certain kind of cluster-wide metadata and
 // must be consistently replicated across the entire cluster. To that end, the
@@ -93,8 +73,24 @@ const (
 // On the receiving side, the payload (see above) gets extracted, validated,
 // version-compared, and the corresponding Rx handler gets invoked
 // with additional information that includes the per-replica action message.
-//
-// ================================ end of TOO ==================================
+
+const (
+	revsSmapTag  = "Smap"
+	revsRMDTag   = "RMD"
+	revsBMDTag   = "BMD"
+	revsConfTag  = "Conf"
+	revsTokenTag = "token"
+
+	revsMaxTags   = 5
+	revsActionTag = "-action" // prefix revs tag
+)
+
+const (
+	revsReqSync = iota
+	revsReqNotify
+)
+
+const faisync = "failing to sync"
 
 type (
 	revs interface {
@@ -130,6 +126,11 @@ type (
 		workCh       chan revsReq      // work channel
 		retryTimer   *time.Timer       // timer to sync pending
 		timerStopped bool              // true if retryTimer has been stopped, false otherwise
+	}
+	// metasync Rx structured error
+	errMsync struct {
+		Message string      `json:"message"`
+		Cii     clusterInfo `json:"cii"`
 	}
 )
 
@@ -350,7 +351,8 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 			}
 			continue
 		}
-		glog.Warningf("%s: failed to sync %s, err: %v(%d)", y.p.si, res.si, res.err, res.status)
+		// failing to sync
+		glog.Warningf("%s: %s %s, err: %v(%d)", y.p.si, faisync, res.si, res.err, res.status)
 		// in addition to "connection-refused" always retry newTargetID - the joining one
 		if cmn.IsErrConnectionRefused(res.err) || cos.StringInSlice(res.si.ID(), newTargetIDs) {
 			if refused == nil {
@@ -422,11 +424,16 @@ func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refus
 		if res.err == nil {
 			delete(refused, res.si.ID())
 			y.syncDone(res.si, pairs)
-			glog.Infof("%s: handle-refused: sync-ed %s", y.p.si, res.si)
-		} else {
-			glog.Warningf("%s: handle-refused: failing to sync %s, err: %v (%d)",
-				y.p.si, res.si, res.err, res.status)
+			continue
 		}
+		// failing to sync
+		if res.status == http.StatusConflict {
+			if e := err2MsyncErr(res.err); e != nil {
+				glog.Warningf("%s [hr]: %s %s, err: %s [%v]", y.p.si, faisync, res.si, e.Message, e.Cii)
+				continue
+			}
+		}
+		glog.Warningf("%s [hr]: %s %s, err: %v(%d)", y.p.si, faisync, res.si, res.err, res.status)
 	}
 	freeCallResults(results)
 }
@@ -486,7 +493,6 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 		pairs   = make([]revsPair, 0, l)
 		msg     = y.p.newAmsgStr("metasync: handle-pending", nil) // NOTE: same msg for all revs
 		msgBody = cos.MustMarshal(msg)
-		log     = make([]string, 0, l)
 	)
 	for tag, revs := range y.lastSynced {
 		if sgl := y.getver(revs); sgl != nil {
@@ -499,7 +505,6 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 		}
 		payload[tag+revsActionTag] = msgBody
 		pairs = append(pairs, revsPair{revs, msg})
-		log = append(log, revs.String())
 	}
 	var (
 		urlPath = cmn.URLPathMetasync.S
@@ -517,12 +522,18 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 	for _, res := range results {
 		if res.err == nil {
 			y.syncDone(res.si, pairs)
-			glog.Infof("%s: handle-pending: sync-ed %v => %s", y.p.si, log, res.si)
-		} else {
-			failedCnt++
-			glog.Warningf("%s: handle-pending: failing to sync %v => %s, err: %v(%d)",
-				y.p.si, log, res.si, res.err, res.status)
+			glog.Infof("%s [hp]: sync-ed %s", y.p.si, res.si)
+			continue
 		}
+		failedCnt++
+		// failing to sync
+		if res.status == http.StatusConflict {
+			if e := err2MsyncErr(res.err); e != nil {
+				glog.Warningf("%s [hp]: %s %s, err: %s [%v]", y.p.si, faisync, res.si, e.Message, e.Cii)
+				continue
+			}
+		}
+		glog.Warningf("%s [hp]: %s %s, err: %v(%d)", y.p.si, faisync, res.si, res.err, res.status)
 	}
 	freeCallResults(results)
 	return
@@ -627,5 +638,28 @@ func (payload msPayload) marshal(mm *memsys.MMSA) (sgl *memsys.SGL) {
 
 func (payload msPayload) unmarshal(reader io.ReadCloser, tag string) (err error) {
 	_, err = jsp.Decode(reader, &payload, msjspOpts, tag)
+	return
+}
+
+//////////////
+// errMsync //
+//////////////
+func (e *errMsync) Error() string { return e.Message }
+
+func (e *errMsync) message(errs ...error) {
+	var filtered []error
+	for _, err := range errs {
+		if err != nil {
+			filtered = append(filtered, err)
+		}
+	}
+	e.Message = fmt.Sprintf("%v", filtered)
+}
+
+func err2MsyncErr(err error) (e *errMsync) {
+	ee := errMsync{}
+	if errP := jsoniter.UnmarshalFromString(err.Error(), &ee); errP == nil {
+		return &ee
+	}
 	return
 }
