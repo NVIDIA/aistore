@@ -219,7 +219,6 @@ func (y *metasyncer) notify(wait bool, pair revsPair) (failedCnt int) {
 		req             = revsReq{pairs: []revsPair{pair}}
 	)
 	if y.isPrimary() != nil {
-		debug.Assert(false)
 		return
 	}
 	if wait {
@@ -253,6 +252,17 @@ func (y *metasyncer) sync(pairs ...revsPair) *sync.WaitGroup {
 
 // become non-primary (to serialize cleanup of the internal state and stop the timer)
 func (y *metasyncer) becomeNonPrimary() {
+drain:
+	for {
+		select {
+		case revsReq, ok := <-y.workCh:
+			if ok && revsReq.wg != nil {
+				revsReq.wg.Done()
+			}
+		default:
+			break drain
+		}
+	}
 	y.workCh <- revsReq{}
 	glog.Infof("%s: becoming non-primary", y.p.si)
 }
@@ -376,7 +386,7 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 			return
 		}
 
-		y.handleRefused(method, urlPath, body, refused, pairs, config)
+		y.handleRefused(method, urlPath, body, refused, pairs, smap, config)
 	}
 	// step 6: housekeep and return new pending
 	smap = y.p.owner.smap.get()
@@ -411,7 +421,7 @@ func (y *metasyncer) syncDone(si *cluster.Snode, pairs []revsPair) {
 }
 
 func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refused cluster.NodeMap,
-	pairs []revsPair, config *cmn.Config) {
+	pairs []revsPair, smap *smapX, config *cmn.Config) {
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{Method: method, Path: urlPath, BodyR: body}
 	args.network = cmn.NetworkIntraControl
@@ -429,6 +439,10 @@ func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refus
 		// failing to sync
 		if res.status == http.StatusConflict {
 			if e := err2MsyncErr(res.err); e != nil {
+				if !y.remainPrimary(e, res.si, smap) {
+					freeCallResults(results)
+					return
+				}
 				glog.Warningf("%s [hr]: %s %s, err: %s [%v]", y.p.si, faisync, res.si, e.Message, e.Cii)
 				continue
 			}
@@ -440,8 +454,8 @@ func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refus
 
 // pending (map), if requested, contains only those daemons that need
 // to get at least one of the most recently sync-ed tag-ed revs
-func (y *metasyncer) pending() (pending cluster.NodeMap) {
-	smap := y.p.owner.smap.get()
+func (y *metasyncer) _pending() (pending cluster.NodeMap, smap *smapX) {
+	smap = y.p.owner.smap.get()
 	if !smap.isPrimary(y.p.si) {
 		y.becomeNonPrimary()
 		return
@@ -482,7 +496,7 @@ func (y *metasyncer) pending() (pending cluster.NodeMap) {
 // gets invoked when retryTimer fires; returns updated number of still pending
 // using MethodPut since revsReqType here is always revsReqSync
 func (y *metasyncer) handlePending() (failedCnt int) {
-	pending := y.pending()
+	pending, smap := y._pending()
 	if len(pending) == 0 {
 		glog.Infof("no pending revs - all good")
 		return
@@ -522,13 +536,17 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 	for _, res := range results {
 		if res.err == nil {
 			y.syncDone(res.si, pairs)
-			glog.Infof("%s [hp]: sync-ed %s", y.p.si, res.si)
 			continue
 		}
 		failedCnt++
 		// failing to sync
 		if res.status == http.StatusConflict {
 			if e := err2MsyncErr(res.err); e != nil {
+				if !y.remainPrimary(e, res.si, smap) {
+					// return zero so that the caller stops retrying (y.retryTimer)
+					freeCallResults(results)
+					return 0
+				}
 				glog.Warningf("%s [hp]: %s %s, err: %s [%v]", y.p.si, faisync, res.si, e.Message, e.Cii)
 				continue
 			}
@@ -537,6 +555,29 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 	}
 	freeCallResults(results)
 	return
+}
+
+// cie and isPrimary checks versus remote clusterInfo
+func (y *metasyncer) remainPrimary(e *errMsync, from *cluster.Snode, smap *smapX) bool /*yes*/ {
+	if e.Cii.Smap.UUID != smap.UUID {
+		// FATAL: cluster integrity error (cie) - TODO: handle rogue nodes
+		cos.ExitLogf("%s: split-brain uuid [%s %s] vs %v from %s", ciError(90), y.p.si, smap.StringEx(),
+			e.Cii, from)
+	}
+	if e.Cii.Smap.Primary.ID == "" || e.Cii.Smap.Primary.ID == y.p.si.ID() {
+		return true
+	}
+	if e.Cii.Smap.Version > smap.Version {
+		glog.Warningf("%s: detected primary change: %s vs %s [%v] from %s", y.p.si, smap.StringEx(),
+			e.Message, e.Cii, from)
+		y.becomeNonPrimary()
+		return false
+	}
+	if e.Cii.Smap.Version < smap.Version {
+		return true
+	}
+	glog.Errorf("%s: [%s %s] vs %v from %s", ciError(90), y.p.si, smap.StringEx(), e.Cii, from)
+	return true // TODO: iffy; may need to do more
 }
 
 func (y *metasyncer) isPrimary() (err error) {
