@@ -526,6 +526,9 @@ func (k *keepalive) register(sendKeepalive func(time.Duration) (int, error), pri
 			if cmn.IsUnreachable(err, status) {
 				continue
 			}
+			if daemon.stopping.Load() {
+				return true
+			}
 			s := fmt.Sprintf("%s: unexpected response %v(%T,%d)", hname, err, err, status)
 			debug.AssertMsg(false, s)
 			glog.Warningln(s)

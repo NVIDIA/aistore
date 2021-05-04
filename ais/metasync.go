@@ -559,6 +559,9 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 
 // cie and isPrimary checks versus remote clusterInfo
 func (y *metasyncer) remainPrimary(e *errMsync, from *cluster.Snode, smap *smapX) bool /*yes*/ {
+	if !cos.IsValidUUID(e.Cii.Smap.UUID) || e.Cii.Smap.Version == 0 {
+		return true
+	}
 	if e.Cii.Smap.UUID != smap.UUID {
 		// FATAL: cluster integrity error (cie) - TODO: handle rogue nodes
 		cos.ExitLogf("%s: split-brain uuid [%s %s] vs %v from %s", ciError(90), y.p.si, smap.StringEx(),

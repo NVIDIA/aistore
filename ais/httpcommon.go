@@ -118,7 +118,6 @@ type (
 				CtrlURL string `json:"control_url"`
 				ID      string `json:"id"`
 			}
-			VoteInProgress bool `json:"vote_in_progress"`
 		} `json:"smap"`
 		BMD struct {
 			Version int64  `json:"version,string"`
@@ -130,6 +129,11 @@ type (
 		Config struct {
 			Version int64 `json:"version,string"`
 		} `json:"config"`
+		Flags struct {
+			VoteInProgress bool `json:"vote_in_progress"`
+			ClusterStarted bool `json:"cluster_started"`
+			NodeStarted    bool `json:"node_started"`
+		} `json:"flags"`
 	}
 
 	electable interface {
@@ -1638,7 +1642,7 @@ retry:
 			mu.Lock()
 			if maxCii.Smap.Version < cii.Smap.Version {
 				// reset the confirmation count iff there's a disagreement on primary ID
-				if maxCii.Smap.Primary.ID != cii.Smap.Primary.ID || cii.Smap.VoteInProgress {
+				if maxCii.Smap.Primary.ID != cii.Smap.Primary.ID || cii.Flags.VoteInProgress {
 					cnt = 1
 				} else {
 					cnt++
@@ -2384,6 +2388,8 @@ func (cii *clusterInfo) fill(h *httprunner) {
 	cii.BMD.UUID = bmd.UUID
 	cii.RMD.Version = rmd.Version
 	cii.Config.Version = h.owner.config.version()
+	cii.Flags.ClusterStarted = h.ClusterStarted()
+	cii.Flags.NodeStarted = h.NodeStarted()
 }
 
 func (cii *clusterInfo) fillSmap(smap *smapX) {
@@ -2393,7 +2399,7 @@ func (cii *clusterInfo) fillSmap(smap *smapX) {
 	cii.Smap.Primary.PubURL = smap.Primary.URL(cmn.NetworkPublic)
 	cii.Smap.Primary.ID = smap.Primary.ID()
 	xact := xreg.GetXactRunning(cmn.ActElection)
-	cii.Smap.VoteInProgress = xact != nil
+	cii.Flags.VoteInProgress = xact != nil
 }
 
 func (cii *clusterInfo) smapEqual(other *clusterInfo) (ok bool) {

@@ -250,10 +250,11 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		// NOTE: use regpool to try to upgrade all the four revs: Smap, BMD, RMD, and global Config
 		before.Smap, before.BMD, before.RMD = clone, p.owner.bmd.get(), p.owner.rmd.get()
 		before.Config, _ = p.owner.config.get()
-		uuid, created = p.regpoolMaxVer(&before, &after)
-		clone.UUID, clone.CreationTime = uuid, created
-		smap = clone
-		p.owner.smap.put(clone)
+
+		smap = p.regpoolMaxVer(&before, &after)
+
+		uuid, created = smap.UUID, smap.CreationTime
+		p.owner.smap.put(smap)
 		p.owner.smap.Unlock()
 
 		msg := p.newAmsgStr(metaction1, after.BMD)
@@ -261,7 +262,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 
 		glog.Infof("%s: loaded %s (merged %s, added %d), loaded %s, %s, %s", p.si, loadedSmap, before.Smap.StringEx(),
 			added, before.BMD.StringEx(), before.RMD, before.Config)
-		glog.Infof("%s: regpool %s, %s, %s, %s", p.si, clone.StringEx(), after.BMD.StringEx(), after.RMD, after.Config)
+		glog.Infof("%s: regpool %s, %s, %s, %s", p.si, smap.StringEx(), after.BMD.StringEx(), after.RMD, after.Config)
 
 		wg.Wait()
 	} else {
@@ -784,7 +785,7 @@ func (p *proxyrunner) bcastMaxVerBestEffort(smap *smapX) *smapX {
 	return nil
 }
 
-func (p *proxyrunner) regpoolMaxVer(before, after *cluMeta) (uuid, created string) {
+func (p *proxyrunner) regpoolMaxVer(before, after *cluMeta) (smap *smapX) {
 	*after = *before
 
 	p.reg.mtx.RLock()
@@ -841,16 +842,54 @@ func (p *proxyrunner) regpoolMaxVer(before, after *cluMeta) (uuid, created strin
 		p.owner.rmd.put(after.RMD)
 	}
 	if after.Config != before.Config {
-		if err := p.owner.config.updateGCO(after.Config); err != nil {
+		var err error
+		after.Config, err = p.owner.config.modify(&configModifier{
+			pre: func(ctx *configModifier, clone *globalConfig) (updated bool, err error) {
+				*clone = *after.Config
+				updated = true
+				return
+			},
+		})
+		if err != nil {
 			cos.ExitLogf("FATAL: %v", err)
 		}
 	}
 ret:
-	if after.Smap == nil || after.Smap.version() == 0 || !cos.IsValidUUID(after.Smap.UUID) {
-		uuid, created = newClusterUUID()
-		glog.Infof("%s: new cluster [%s]", p.si, uuid)
-	} else {
-		uuid, created = after.Smap.UUID, after.Smap.CreationTime
+	if after.Smap.version() == 0 || !cos.IsValidUUID(after.Smap.UUID) {
+		after.Smap.UUID, after.Smap.CreationTime = newClusterUUID()
+		glog.Infof("%s: new cluster [%s]", p.si, after.Smap.UUID)
+		return after.Smap
 	}
-	return
+	if before.Smap == after.Smap {
+		return after.Smap
+	}
+
+	debug.Assert(before.Smap.version() < after.Smap.version())
+	// not interfering with elections
+	if after.VoteInProgress {
+		glog.Errorf("%s: primary differ: %s vs. newer %s (voting = YES)", p.si,
+			before.Smap.StringEx(), after.Smap.StringEx())
+		before.Smap.UUID, before.Smap.CreationTime = after.Smap.UUID, after.Smap.CreationTime
+		return before.Smap
+	}
+	// trusting & taking over (have joins)
+	var err error
+	glog.Warningf("%s: primary differ: %s vs. newer %s - taking over as PRIMARY...", p.si,
+		before.Smap.StringEx(), after.Smap.StringEx())
+	clone := after.Smap.clone()
+	clone.Primary = p.si
+	clone.Pmap[p.si.ID()] = p.si
+	clone.Version += 100
+	after.Config, err = p.owner.config.modify(&configModifier{
+		pre: func(ctx *configModifier, clone *globalConfig) (updated bool, err error) {
+			clone.Proxy.PrimaryURL = p.si.URL(cmn.NetworkPublic)
+			clone.Version++
+			updated = true
+			return
+		},
+	})
+	if err != nil {
+		cos.ExitLogf("FATAL: %v", err)
+	}
+	return clone
 }
