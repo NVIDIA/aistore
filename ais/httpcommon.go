@@ -1710,7 +1710,6 @@ func (h *httprunner) extractConfig(payload msPayload, caller string) (newConfig 
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new Config", cmn.BytesHead(confValue), err1)
 		return
 	}
-
 	if msgValue, ok := payload[revsConfTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
 			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cmn.BytesHead(msgValue), err1)
@@ -1718,8 +1717,9 @@ func (h *httprunner) extractConfig(payload msPayload, caller string) (newConfig 
 		}
 	}
 	config := cmn.GCO.Get()
-	glog.Infof("extract %s%s", newConfig, _msdetail(config.Version, msg, caller))
-
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("extract %s%s", newConfig, _msdetail(config.Version, msg, caller))
+	}
 	if newConfig.version() <= config.Version {
 		if newConfig.version() < config.Version {
 			err = newErrDowngrade(h.si, config.String(), newConfig.String())
@@ -1740,7 +1740,6 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new Smap", cmn.BytesHead(smapValue), err1)
 		return
 	}
-
 	if msgValue, ok := payload[revsSmapTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
 			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cmn.BytesHead(msgValue), err1)
@@ -1764,16 +1763,14 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 		err = fmt.Errorf("%s: not finding ourselves in %s", h.si, newSmap)
 		return
 	}
-
-	// FATAL: cluster integrity error
 	if err = smap.validateUUID(h.si, newSmap, caller, 50 /* ciError */); err != nil {
-		return
+		return // FATAL: cluster integrity error
 	}
-
-	glog.Infof("extract %s%s", newSmap, _msdetail(smap.Version, msg, caller))
-
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("extract %s%s", newSmap, _msdetail(smap.Version, msg, caller))
+	}
 	_, sameOrigin, _, eq := smap.Compare(&newSmap.Smap)
-	cos.Assert(sameOrigin)
+	debug.Assert(sameOrigin)
 	if newSmap.version() < curVer {
 		if !eq {
 			err = newErrDowngrade(h.si, smap.StringEx(), newSmap.StringEx())
@@ -1795,17 +1792,16 @@ func (h *httprunner) extractRMD(payload msPayload, caller string) (newRMD *rebMD
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new RMD", cmn.BytesHead(rmdValue), err1)
 		return
 	}
-
 	if msgValue, ok := payload[revsRMDTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
 			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cmn.BytesHead(msgValue), err1)
 			return
 		}
 	}
-
 	rmd := h.owner.rmd.get()
-	glog.Infof("extract %s%s", newRMD, _msdetail(rmd.Version, msg, caller))
-
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("extract %s%s", newRMD, _msdetail(rmd.Version, msg, caller))
+	}
 	if newRMD.version() <= rmd.version() {
 		if newRMD.version() < rmd.version() {
 			err = newErrDowngrade(h.si, rmd.String(), newRMD.String())
@@ -1826,17 +1822,16 @@ func (h *httprunner) extractBMD(payload msPayload, caller string) (newBMD *bucke
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new Smap", cmn.BytesHead(bmdValue), err1)
 		return
 	}
-
 	if msgValue, ok := payload[revsBMDTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
 			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cmn.BytesHead(msgValue), err1)
 			return
 		}
 	}
-
 	bmd := h.owner.bmd.get()
-	glog.Infof("extract %s%s", newBMD, _msdetail(bmd.Version, msg, caller))
-
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("extract %s%s", newBMD, _msdetail(bmd.Version, msg, caller))
+	}
 	// skip older iff not transactional - see t.receiveBMD()
 	if h.si.IsTarget() && msg.UUID != "" {
 		return

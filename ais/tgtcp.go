@@ -108,7 +108,7 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 	t.gfn.global.activateTimed()
 
 	// BMD
-	if err = t.receiveBMD(regMeta.BMD, msg, nil /*ms payload */, bucketMDRegister, caller); err != nil {
+	if err = t.receiveBMD(regMeta.BMD, msg, nil /*ms payload */, bucketMDRegister, caller, true /*silent*/); err != nil {
 		if isErrDowngrade(err) {
 			err = nil
 		} else {
@@ -562,81 +562,80 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been removed", mountpath))
 }
 
-func (t *targetrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag, caller string) (err error) {
+func (t *targetrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag, caller string, silent bool) (err error) {
+	var (
+		bmd    = t.owner.bmd.get()
+		rmbcks = make([]*cluster.Bck, 0, 4)
+	)
+	glog.Infof("receive %s%s", newBMD.StringEx(), _msdetail(bmd.Version, msg, caller))
 	if msg.UUID == "" {
-		err = t._recvBMD(newBMD, msg, payload, tag, caller)
+		if err = t._applyBMD(newBMD, msg, payload, rmbcks); err == nil {
+			t._postBMD(tag, rmbcks)
+		}
 		return
 	}
 	// before -- do -- after
 	if errDone := t.transactions.commitBefore(caller, msg); errDone != nil {
-		err = fmt.Errorf("%s: unexpected commit-before, %s, err: %v", t.si, newBMD, errDone)
-		glog.Error(err)
+		err = fmt.Errorf("%s commit-before %s, errDone: %v", t.si, newBMD, errDone)
+		if !silent {
+			glog.Error(err)
+		}
 		return
 	}
-
-	err = t._recvBMD(newBMD, msg, payload, tag, caller)
+	if err = t._applyBMD(newBMD, msg, payload, rmbcks); err == nil {
+		t._postBMD(tag, rmbcks)
+	}
 	if errDone := t.transactions.commitAfter(caller, msg, err, newBMD); errDone != nil {
-		err = fmt.Errorf("%s: unexpected commit-after, %s, err: %v", t.si, newBMD, errDone)
-		glog.Error(err)
+		err = fmt.Errorf("%s commit-after %s, err: %v, errDone: %v", t.si, newBMD, err, errDone)
+		if !silent {
+			glog.Error(err)
+		}
 	}
 	return
 }
 
-func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag, caller string) (err error) {
+// apply under lock
+func (t *targetrunner) _applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, rmbcks []*cluster.Bck) (err error) {
 	var (
-		curVer                  int64
-		createErrs, destroyErrs string
+		createErrs, destroyErrs []error
+		_, psi                  = t.getPrimaryURLAndSI()
 	)
-	bmd := t.owner.bmd.get()
-	glog.Infof("receive %s%s", newBMD.StringEx(), _msdetail(bmd.Version, msg, caller))
-
 	t.owner.bmd.Lock()
-	bmd = t.owner.bmd.get()
-	curVer = bmd.version()
-	var (
-		bcksToDelete = make([]*cluster.Bck, 0, 4)
-		_, psi       = t.getPrimaryURLAndSI()
-	)
+	defer t.owner.bmd.Unlock()
+
+	bmd := t.owner.bmd.get()
 	if err = bmd.validateUUID(newBMD, t.si, psi, ""); err != nil {
-		t.owner.bmd.Unlock()
 		cos.ExitLogf("%v", err) // FATAL: cluster integrity error (cie)
 		return
 	}
-	if newBMD.version() <= curVer {
-		t.owner.bmd.Unlock()
-		if newBMD.version() < curVer {
+	if v := bmd.version(); newBMD.version() <= v {
+		if newBMD.version() < v {
 			err = newErrDowngrade(t.si, bmd.StringEx(), newBMD.StringEx())
 		}
 		return
 	}
 
-	// create buckets dirs under lock
+	// 1. create
 	newBMD.Range(nil, nil, func(bck *cluster.Bck) bool {
 		if _, present := bmd.Get(bck); present {
 			return false
 		}
 		errs := fs.CreateBucket("recv-bmd-"+msg.Action, bck.Bck, bmd.version() == 0 /*nilbmd*/)
-		for _, err := range errs {
-			createErrs += "[" + err.Error() + "]"
-		}
+		createErrs = append(createErrs, errs...)
 		return false
 	})
-
-	// NOTE: create-dir errors are _not_ ignored
-	if createErrs != "" {
-		t.owner.bmd.Unlock()
-		glog.Errorf("Failed to receive BMD: %s", createErrs)
-		err = errors.New(createErrs)
+	if len(createErrs) > 0 {
+		err = fmt.Errorf("%s: failed to receive %s: %v", t.si, newBMD, createErrs)
 		return
 	}
-	// accept the new one
+
+	// 2. persist
 	if err = t.owner.bmd.putPersist(newBMD, payload); err != nil {
-		t.owner.bmd.Unlock()
 		cos.ExitLogf("%v", err)
 		return
 	}
 
-	// delete buckets dirs under lock, ignore errors
+	// 3. delete, ignore errors
 	bmd.Range(nil, nil, func(obck *cluster.Bck) bool {
 		var present bool
 		newBMD.Range(nil, nil, func(nbck *cluster.Bck) bool {
@@ -654,31 +653,28 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload
 			return true
 		})
 		if !present {
-			bcksToDelete = append(bcksToDelete, obck)
-			// TODO: revisit error handling.
-			// Consider performing DestroyBuckets asynchronously outside `bmd.Lock()`.
-			if err := fs.DestroyBucket("recv-bmd-"+msg.Action, obck.Bck, obck.Props.BID); err != nil {
-				destroyErrs += "[" + err.Error() + "]"
+			rmbcks = append(rmbcks, obck)
+			if errD := fs.DestroyBucket("recv-bmd-"+msg.Action, obck.Bck, obck.Props.BID); errD != nil {
+				destroyErrs = append(destroyErrs, errD)
 			}
 		}
 		return false
 	})
-
-	t.owner.bmd.Unlock()
-
-	if destroyErrs != "" {
-		// TODO: revisit error handling
-		glog.Errorf("Failed to receive BMD: %s", destroyErrs)
+	if len(destroyErrs) > 0 {
+		glog.Errorf("%s: failed to cleanup destroyed buckets: %v", t.si, destroyErrs)
 	}
+	return
+}
 
+func (t *targetrunner) _postBMD(tag string, rmbcks []*cluster.Bck) {
 	// evict LOM cache
-	if len(bcksToDelete) > 0 {
-		xreg.AbortAllBuckets(bcksToDelete...)
+	if len(rmbcks) > 0 {
+		xreg.AbortAllBuckets(rmbcks...)
 		go func(bcks ...*cluster.Bck) {
 			for _, b := range bcks {
 				cluster.EvictLomCache(b)
 			}
-		}(bcksToDelete...)
+		}(rmbcks...)
 	}
 	if tag != bucketMDRegister {
 		// ecmanager will get updated BMD upon its init()
@@ -686,13 +682,10 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload
 			glog.Errorf("Failed to initialize EC manager: %v", err)
 		}
 	}
-
 	// refresh used/avail capacity and run LRU if need be (in part, to remove $trash)
 	if _, err := fs.RefreshCapStatus(nil, nil); err != nil {
 		go t.RunLRU("" /*uuid*/, false)
 	}
-
-	return
 }
 
 func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error) {
@@ -744,11 +737,11 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 func (t *targetrunner) ensureLatestBMD(msg *aisMsg, r *http.Request) {
 	bmd, bmdVersion := t.owner.bmd.Get(), msg.BMDVersion
 	if bmd.Version < bmdVersion {
-		glog.Errorf("%s: own %s < v%d - fetching latest bmd for %v", t.si, bmd, bmdVersion, msg.Action)
+		glog.Errorf("%s: local %s < v%d, action %q - fetching latest...", t.si, bmd, bmdVersion, msg.Action)
 		t.BMDVersionFixup(r)
 	} else if bmd.Version > bmdVersion {
 		// If metasync outraces the request, we end up here, just log it and continue.
-		glog.Warningf("%s: own %s > v%d - encountered during %v", t.si, bmd, bmdVersion, msg.Action)
+		glog.Warningf("%s: local %s > v%d, action %q", t.si, bmd, bmdVersion, msg.Action)
 	}
 }
 
@@ -811,7 +804,7 @@ func (t *targetrunner) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
 	if daemon.stopping.Load() {
 		return
 	}
-	if err := t.receiveBMD(newBucketMD, msg, nil, bucketMDFixup, caller); err != nil && !isErrDowngrade(err) {
+	if err := t.receiveBMD(newBucketMD, msg, nil, bucketMDFixup, caller, true /*silent*/); err != nil && !isErrDowngrade(err) {
 		glog.Error(err)
 	}
 }
@@ -870,7 +863,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 		errSmap = t.receiveSmap(newSmap, msgSmap, payload, caller, nil)
 	}
 	if errBMD == nil && newBMD != nil {
-		errBMD = t.receiveBMD(newBMD, msgBMD, payload, bucketMDReceive, caller)
+		errBMD = t.receiveBMD(newBMD, msgBMD, payload, bucketMDReceive, caller, false /*silent*/)
 	}
 	if errRMD == nil && newRMD != nil {
 		errRMD = t.receiveRMD(newRMD, msgRMD, caller)

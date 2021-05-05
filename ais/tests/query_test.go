@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/query"
 	jsoniter "github.com/json-iterator/go"
@@ -147,6 +148,7 @@ func TestQueryVersionAndAtime(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	objectsNames, err := api.NextQueryResults(baseParams, handle, uint(numObjects))
+	tlog.Logf("bck %v, handle %q, err %v\n", bck, handle, err) // DEBUG
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(objectsNames) == numObjects-1, "expected %d to be returned, got %d", numObjects-1, len(objectsNames))
 	for _, object := range objectsNames {
