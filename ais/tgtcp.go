@@ -564,12 +564,12 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 
 func (t *targetrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag, caller string, silent bool) (err error) {
 	var (
+		rmbcks []*cluster.Bck
 		bmd    = t.owner.bmd.get()
-		rmbcks = make([]*cluster.Bck, 0, 4)
 	)
 	glog.Infof("receive %s%s", newBMD.StringEx(), _msdetail(bmd.Version, msg, caller))
 	if msg.UUID == "" {
-		if err = t._applyBMD(newBMD, msg, payload, rmbcks); err == nil {
+		if rmbcks, err = t._applyBMD(newBMD, msg, payload); err == nil {
 			t._postBMD(tag, rmbcks)
 		}
 		return
@@ -582,7 +582,7 @@ func (t *targetrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPaylo
 		}
 		return
 	}
-	if err = t._applyBMD(newBMD, msg, payload, rmbcks); err == nil {
+	if rmbcks, err = t._applyBMD(newBMD, msg, payload); err == nil {
 		t._postBMD(tag, rmbcks)
 	}
 	if errDone := t.transactions.commitAfter(caller, msg, err, newBMD); errDone != nil {
@@ -595,7 +595,7 @@ func (t *targetrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPaylo
 }
 
 // apply under lock
-func (t *targetrunner) _applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, rmbcks []*cluster.Bck) (err error) {
+func (t *targetrunner) _applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload) (rmbcks []*cluster.Bck, err error) {
 	var (
 		createErrs, destroyErrs []error
 		_, psi                  = t.getPrimaryURLAndSI()

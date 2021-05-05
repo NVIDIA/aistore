@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -21,18 +22,17 @@ import (
 
 type (
 	ObjectsListingXact struct {
-		xaction.XactBase // ID() serves as well as a query handle
-		t                cluster.Target
-		ctx              context.Context
-		msg              *cmn.SelectMsg
-		timer            *time.Timer
-		mtx              sync.Mutex
-		buff             []*cmn.BucketEntry
-		fetchingDone     bool
-
+		xaction.XactBase    // ID() serves as well as a query handle
+		t                   cluster.Target
+		ctx                 context.Context
+		msg                 *cmn.SelectMsg
+		timer               *time.Timer
+		mtx                 sync.Mutex
+		buff                []*cmn.BucketEntry
 		query               *ObjectsQuery
 		resultCh            chan *Result
 		lastDiscardedResult string
+		fetchingDone        atomic.Bool
 	}
 
 	Result struct {
@@ -65,7 +65,7 @@ func (r *ObjectsListingXact) stop() {
 
 func (r *ObjectsListingXact) Run() {
 	defer func() {
-		r.fetchingDone = true
+		r.fetchingDone.Store(true)
 	}()
 
 	cos.Assert(r.query.ObjectsSource != nil)
@@ -261,7 +261,7 @@ func (r *ObjectsListingXact) discardN(n uint) {
 		r.buff = r.buff[size:]
 	}
 
-	if r.fetchingDone && len(r.buff) == 0 {
+	if r.fetchingDone.Load() && len(r.buff) == 0 {
 		Registry.Delete(r.ID().String())
 		r.Finish(nil)
 	}

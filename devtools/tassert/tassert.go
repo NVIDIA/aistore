@@ -42,11 +42,16 @@ func CheckError(tb testing.TB, err error) {
 	}
 }
 
-func CheckResp(tb testing.TB, client *http.Client, req *http.Request, statusCode int) {
+func CheckResp(tb testing.TB, client *http.Client, req *http.Request, statusCode ...int) {
 	resp, err := client.Do(req)
 	CheckFatal(tb, err)
 	resp.Body.Close()
-	Errorf(tb, resp.StatusCode == statusCode, "expected %d status code, got %d", statusCode, resp.StatusCode)
+	for _, code := range statusCode {
+		if resp.StatusCode == code {
+			return
+		}
+	}
+	Errorf(tb, false, "expected %v status code, got %d", statusCode, resp.StatusCode)
 }
 
 func Fatalf(tb testing.TB, cond bool, msg string, args ...interface{}) {

@@ -183,7 +183,7 @@ func TestRProxyInvalidURL(t *testing.T) {
 		url        string
 		statusCode int
 	}{
-		{url: "http://archive.ics.uci.edu/ml/datasets/Abalone", statusCode: http.StatusForbidden},
+		{url: "http://archive.ics.uci.edu/ml/datasets/Abalone", statusCode: http.StatusBadRequest},
 		{url: "http://storage.googleapis.com/kubernetes-release/release", statusCode: http.StatusNotFound},
 		{url: "http://invalid.invaliddomain.com/test/webpage.txt", statusCode: http.StatusBadRequest}, // Invalid domain
 	}
@@ -195,7 +195,7 @@ func TestRProxyInvalidURL(t *testing.T) {
 
 		req, err := http.NewRequest(http.MethodGet, test.url, nil)
 		tassert.CheckFatal(t, err)
-		tassert.CheckResp(t, client, req, test.statusCode)
+		tassert.CheckResp(t, client, req, test.statusCode, http.StatusForbidden)
 
 		_, err = api.HeadBucket(baseParams, hbo.Bck)
 		tassert.Errorf(t, err != nil, "shouldn't create bucket (%s) for invalid resource URL", hbo.Bck)
