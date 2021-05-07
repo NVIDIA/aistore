@@ -161,8 +161,8 @@ func NormalizeProvider(provider string) (string, error) {
 }
 
 type ParseURIOpts struct {
-	IsQuery         bool   // Determines if the URI should be parsed as query.
 	DefaultProvider string // If set the provider will be used as provider.
+	IsQuery         bool   // Determines if the URI should be parsed as query.
 }
 
 // Parses "[provider://][@uuid#namespace][/][bucketName[/objectName]]"

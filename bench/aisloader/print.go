@@ -22,18 +22,20 @@ import (
 var examples = `
 1. Cleanup (i.e., empty) existing bucket:
 
-	$ aisloader -bucket=nvais -duration 0s -totalputsize=0 # by default cleanup=true
-	$ aisloader -bucket=nvais -provider=aws -cleanup=true -duration 0s -totalputsize=0
+	$ aisloader -bucket=ais://abc -duration 0s -totalputsize=0 # by default cleanup=true
+	$ aisloader -bucket=mybucket -provider=aws -cleanup=true -duration 0s -totalputsize=0
 
 2. Time-based 100% PUT into ais bucket. Upon exit the bucket is emptied (by default):
 
-	$ aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -provider=local
+	$ aisloader -bucket=abc -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -provider=ais
 
-3. Timed (for 1h) 100% GET from a Cloud bucket, no cleanup:
+3. Timed (for 1h) 100% GET from an AWS S3 bucket, no cleanup:
 
 	$ aisloader -bucket=nvaws -duration 1h -numworkers=30 -pctput=0 -provider=aws -cleanup=false
+   or, same:
+	$ aisloader -bucket=s3://nvaws -duration 1h -numworkers=30 -pctput=0 -cleanup=false
 
-4. Mixed 30%/70% PUT and GET of variable-size objects to/from a Cloud bucket.
+4. Mixed 30%/70% PUT and GET of variable-size objects to/from an AWS S3 bucket.
    PUT will generate random object names and is limited by the 10GB total size.
    Cleanup is not disabled, which means that upon completion all generated objects will be deleted:
 
@@ -41,15 +43,15 @@ var examples = `
 
 5. PUT 1GB total into an ais bucket with cleanup disabled, object size = 1MB, duration unlimited:
 
-	$ aisloader -bucket=nvais -cleanup=false -totalputsize=1G -duration=0 -minsize=1MB -maxsize=1MB -numworkers=8 -pctput=100 -provider=ais
+	$ aisloader -bucket=ais://abc -cleanup=false -totalputsize=1G -duration=0 -minsize=1MB -maxsize=1MB -numworkers=8 -pctput=100
 
 6. 100% GET from an ais bucket:
 
-	$ aisloader -bucket=nvais -duration 5s -numworkers=3 -pctput=0 -provider=ais
+	$ aisloader -bucket=ais://abc -duration 5s -numworkers=3 -pctput=0
 
 7. PUT 2000 objects named as 'aisloader/hex({0..2000}{loaderid})':
 
-	$ aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000 -objNamePrefix="aisloader"
+	$ aisloader -bucket=ais://abc -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000 -objNamePrefix="aisloader"
 
 8. Use random object names and loaderID to report statistics:
 

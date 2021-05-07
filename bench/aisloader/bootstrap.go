@@ -14,13 +14,13 @@
 //    Delete all objects in a given Cloud-based bucket:
 //    b) aisloader -bucket=aws://nvais -cleanup=true -duration 0s -totalputsize=0
 // 2. Timed (for 1h) 100% GET from a Cloud bucket, no cleanup:
-//    aisloader -bucket=nvaws -duration 1h -numworkers=30 -pctput=0 -provider=cloud -cleanup=false
+//    aisloader -bucket=aws://mybucket -duration 1h -numworkers=30 -pctput=0 -cleanup=false
 // 3. Time-based PUT into ais bucket, random objects names:
-//    aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -provider=ais
+//    aisloader -bucket=abc -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -provider=ais
 // 4. Mixed 30% PUT and 70% GET to/from a Cloud bucket. PUT will generate random object names and is limited by 10GB total size:
-//    aisloader -bucket=gs://nvgs -duration 0s -numworkers=3 -minsize=1MB -maxsize=1MB -pctput=30 -provider=cloud -totalputsize=10G
+//    aisloader -bucket=gs://nvgs -duration 0s -numworkers=3 -minsize=1MB -maxsize=1MB -pctput=30 -totalputsize=10G
 // 5. PUT 2000 objects with names that look like hex({0..2000}{loaderid})
-//    aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000
+//    aisloader -bucket=ais://abc -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000
 // 6. Use random object names and loaderID for reporting stats
 //    aisloader -loaderid=10
 // 7. PUT objects with names based on loaderID and total number of loaders; names: hex({0..}{loaderid})
@@ -246,7 +246,8 @@ func parseCmdLine() (params, error) {
 	f.DurationVar(&transportArgs.Timeout, "timeout", 10*time.Minute, "Client HTTP timeout - used in LIST/GET/PUT/DELETE")
 	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval in seconds to print performance counters; 0 - disabled")
 	f.StringVar(&p.bck.Name, "bucket", "", "Bucket name. If empty, a bucket with random name will be created")
-	f.StringVar(&p.bck.Provider, "provider", cmn.ProviderAIS, "ais - for AIS bucket, \"aws\", \"azure\", \"gcp\", \"hdfs\"  for Azure, Amazon, Google, and HDFS clouds respectively")
+	f.StringVar(&p.bck.Provider, "provider", cmn.ProviderAIS,
+		"ais - for AIS bucket, \"aws\", \"azure\", \"gcp\", \"hdfs\"  for Azure, Amazon, Google, and HDFS clouds respectively")
 	f.StringVar(&ip, "ip", "localhost", "AIS proxy/gateway IP address or hostname")
 	f.StringVar(&port, "port", "8080", "AIS proxy/gateway port")
 
@@ -258,9 +259,11 @@ func parseCmdLine() (params, error) {
 	f.IntVar(&p.numWorkers, "numworkers", 10, "Number of goroutine workers operating on AIS in parallel")
 	f.IntVar(&p.putPct, "pctput", 0, "Percentage of PUTs in the aisloader-generated workload")
 	f.StringVar(&p.tmpDir, "tmpdir", "/tmp/ais", "Local directory to store temporary files")
-	f.StringVar(&p.putSizeUpperBoundStr, "totalputsize", "0", "Stop PUT workload once cumulative PUT size reaches or exceeds this value (can contain standard multiplicative suffix K, MB, GiB, etc.; 0 - unlimited")
+	f.StringVar(&p.putSizeUpperBoundStr, "totalputsize", "0",
+		"Stop PUT workload once cumulative PUT size reaches or exceeds this value (can contain standard multiplicative suffix K, MB, GiB, etc.; 0 - unlimited")
 	cos.BoolExtVar(f, &p.cleanUp, "cleanup", "true: remove bucket upon benchmark termination; default false for cloud buckets")
-	f.BoolVar(&p.verifyHash, "verifyhash", false, "true: checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata")
+	f.BoolVar(&p.verifyHash, "verifyhash", false,
+		"true: checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata")
 	f.StringVar(&p.minSizeStr, "minsize", "", "Minimum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
 	f.StringVar(&p.maxSizeStr, "maxsize", "", "Maximum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
 	f.StringVar(&p.readerType, "readertype", readers.ReaderTypeSG,
@@ -292,12 +295,14 @@ func parseCmdLine() (params, error) {
 		"true: generate object names of 32 random characters. This option is ignored when loadernum is defined")
 	f.StringVar(&p.subDir, "subdir", "", "Virtual destination directory for all aisloader-generated objects")
 	f.Uint64Var(&p.putShards, "putshards", 0, "Spread generated objects over this many subdirectories (max 100k)")
-	f.BoolVar(&p.uniqueGETs, "uniquegets", true, "true: GET objects randomly and equally. Meaning, make sure *not* to GET some objects more frequently than the others")
+	f.BoolVar(&p.uniqueGETs, "uniquegets", true,
+		"true: GET objects randomly and equally. Meaning, make sure *not* to GET some objects more frequently than the others")
 
 	//
 	// advanced usage
 	//
-	f.BoolVar(&p.getConfig, "getconfig", false, "true: generate control plane load by reading AIS proxy configuration (that is, instead of reading/writing data exercise control path)")
+	f.BoolVar(&p.getConfig, "getconfig", false,
+		"true: generate control plane load by reading AIS proxy configuration (that is, instead of reading/writing data exercise control path)")
 	f.StringVar(&p.statsOutput, "stats-output", "", "filename to log statistics (empty string translates as standard output (default))")
 	f.BoolVar(&p.stoppable, "stoppable", false, "true: stop upon CTRL-C")
 	f.BoolVar(&p.dryRun, "dry-run", false, "true: show the configuration and parameters that aisloader will use for benchmark")
@@ -602,6 +607,16 @@ func setupBucket(runParams *params) error {
 	if runParams.bck.Name == "" {
 		runParams.bck.Name = cos.RandString(8)
 		fmt.Printf("New bucket name %q\n", runParams.bck.Name)
+	} else if bck, objName, err := cmn.ParseBckObjectURI(runParams.bck.Name, cmn.ParseURIOpts{}); err == nil {
+		if objName != "" {
+			return fmt.Errorf("expecting bucket name or a bucket URI with no object name in it: %s => [%v, %s]",
+				runParams.bck, bck, objName)
+		}
+		if runParams.bck.Provider != "" && runParams.bck.Provider != bck.Provider {
+			fmt.Printf("Warning: redundant provider via both parsed bucket URI %v and the command line %s\n",
+				bck, runParams.bck.Provider)
+		}
+		runParams.bck = bck
 	}
 
 	exists, err := api.DoesBucketExist(runParams.bp, cmn.QueryBcks(runParams.bck))
