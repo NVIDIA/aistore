@@ -283,7 +283,7 @@ func promoteHandler(c *cli.Context) (err error) {
 		return incorrectUsageMsg(c, "promoted source (file or directory) must have an absolute path")
 	}
 
-	if bck, objName, err = parseBckObjectURI(c, fullObjName); err != nil {
+	if bck, objName, err = parseBckObjectURI(c, fullObjName, true /*optObjName*/); err != nil {
 		return
 	}
 	if _, err = headBucket(bck); err != nil {
