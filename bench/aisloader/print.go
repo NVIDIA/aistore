@@ -20,14 +20,14 @@ import (
 )
 
 var examples = `
-1. Cleanup (i.e., empty) existing bucket:
+1. Cleanup (i.e., destroy) an existing bucket:
 
-	$ aisloader -bucket=ais://abc -duration 0s -totalputsize=0 # by default cleanup=true
+	$ aisloader -bucket=ais://abc -duration 0s -totalputsize=0 -cleanup=true
 	$ aisloader -bucket=mybucket -provider=aws -cleanup=true -duration 0s -totalputsize=0
 
-2. Time-based 100% PUT into ais bucket. Upon exit the bucket is emptied (by default):
+2. Time-based 100% PUT into ais bucket with complete cleanup upon exit:
 
-	$ aisloader -bucket=abc -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -provider=ais
+	$ aisloader -bucket=ais://abc -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 --cleanup=true
 
 3. Timed (for 1h) 100% GET from an AWS S3 bucket, no cleanup:
 
@@ -36,22 +36,24 @@ var examples = `
 	$ aisloader -bucket=s3://nvaws -duration 1h -numworkers=30 -pctput=0 -cleanup=false
 
 4. Mixed 30%/70% PUT and GET of variable-size objects to/from an AWS S3 bucket.
-   PUT will generate random object names and is limited by the 10GB total size.
-   Cleanup is not disabled, which means that upon completion all generated objects will be deleted:
+   PUT will generate random object names and the duration is limited only by the total size (10GB).
+   Cleanup enabled - upon completion all generated objects and the bucket itself will be deleted:
 
-	$ aisloader -bucket=nvaws -duration 0s -numworkers=3 -minsize=1024 -maxsize=1MB -pctput=30 -provider=aws -totalputsize=10G
+	$ aisloader -bucket=s3://nvaws -duration 0s -cleanup=true -numworkers=3 -minsize=1024 -maxsize=1MB -pctput=30 -totalputsize=10G
 
 5. PUT 1GB total into an ais bucket with cleanup disabled, object size = 1MB, duration unlimited:
 
 	$ aisloader -bucket=ais://abc -cleanup=false -totalputsize=1G -duration=0 -minsize=1MB -maxsize=1MB -numworkers=8 -pctput=100
 
-6. 100% GET from an ais bucket:
+6. 100% GET from an ais bucket (no cleanup):
 
-	$ aisloader -bucket=ais://abc -duration 5s -numworkers=3 -pctput=0
+	$ aisloader -bucket=ais://abc -duration 5s -numworkers=3 -pctput=0 -cleanup=false
+  or, same:
+	$ aisloader -bucket=abc -provider=ais -duration 5s -numworkers=3 -pctput=0 -cleanup=false
 
-7. PUT 2000 objects named as 'aisloader/hex({0..2000}{loaderid})':
+7. PUT 2000 objects named as 'aisloader/hex({0..2000}{loaderid})', cleanup upon exit:
 
-	$ aisloader -bucket=ais://abc -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000 -objNamePrefix="aisloader"
+	$ aisloader -bucket=ais://abc -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000 -objNamePrefix="aisloader" -cleanup=true
 
 8. Use random object names and loaderID to report statistics:
 

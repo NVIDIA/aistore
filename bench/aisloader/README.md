@@ -35,7 +35,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -bprops | `json` | JSON string formatted as per the SetBucketProps API and containing bucket properties to apply | `""` |
 | -bucket | `string` | Bucket name. Bucket will be created if doesn't exist. If empty, aisloader generates a new random bucket name | `""` |
 | -check-statsd | `bool` | true: prior to benchmark make sure that StatsD is reachable | `false` |
-| -cleanup | `bool` | true: remove all created objects upon benchmark termination | `true` |
+| -cleanup | `bool` | true: remove bucket upon benchmark termination | `n/a` (required) |
 | -dry-run | `bool` | show the configuration and parameters that aisloader will use | `false` |
 | -duration | `string`, `int` | Benchmark duration (0 - run forever or until Ctrl-C, default 1m). Note that if both duration and totalputsize are zeros, aisloader will have nothing to do | `1m` |
 | -getconfig | `bool` | true: generate control plane load by reading AIS proxy configuration (that is, instead of reading/writing data exercise control path) | `false` |
@@ -101,13 +101,13 @@ You can choose a percentage of writing (versus reading) by setting the option `-
 Example with a mixed PUT=30% and GET=70% load:
 
 ```console
-$ aisloader -bucket=abc -duration 5m -pctput=30
+$ aisloader -bucket=ais://abc -duration 5m -pctput=30 -cleanup=true
 ```
 
 Example 100% PUT:
 
 ```console
-$ aisloader -bucket=abc -duration 5m -pctput=100
+$ aisloader -bucket=abc -duration 5m -pctput=100 -cleanup=true
 ```
 
 The duration in both examples above is set to 5 minutes.
@@ -125,22 +125,22 @@ For convenience, both options support size suffixes: `k` - for KiB, `m` - for Mi
 Example that reads a 32MiB segment at 1KB offset from each object stored in the bucket "abc":
 
 ```console
-$ aisloader -bucket=abc -duration 5m -cleanup=false -readoff=1024 -readlen=32m
+$ aisloader -bucket=ais://abc -duration 5m -cleanup=false -readoff=1024 -readlen=32m
 ```
 
 The test (above) will run for 5 minutes and will not "cleanup" after itself (next section).
 
 #### Cleanup
 
-By default, `aisloader` deletes all the data after completing its run. But what if, for instance, you'd want to test reads (`pctput=0`) after having populated the cluster via 100% PUT.
+**NOTE**: `-cleanup` is a mandatory option defining whether to destroy bucket upon completion of the benchmark.
 
-In this and similar cases, disable automatic cleanup by passing the option `cleanup=false`.
+The option must be specified in the command line.
 
 Example:
 
 ```console
-$ aisloader -bucket=abc -pctput=100 -totalputsize=16348 -cleanup=false
-$ aisloader -bucket=abc -duration 1h -pctput=0 -cleanup=true
+$ aisloader -bucket=ais://abc -pctput=100 -totalputsize=16348 -cleanup=false
+$ aisloader -bucket=ais://abc -duration 1h -pctput=0 -cleanup=true
 ```
 
 The first line in this example above fills the bucket "abc" with 16MiB of random data. The second - uses existing data to test read performance for 1 hour, and then removes all data.
@@ -231,22 +231,22 @@ Time      OP    Count                 	Total Bytes           	Latency(min, avg, 
 01:52:54 Clean up done
 ```
 
-2. Time-based 100% PUT into ais bucket. Upon exit the bucket is emptied (by default):
+2. Time-based 100% PUT into ais bucket. Upon exit the bucket is destroyed:
 
 ```console
-$ aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -provider=ais
+$ aisloader -bucket=nvais -duration 10s -cleanup=true -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -provider=ais
 ```
 
 3. Timed (for 1h) 100% GET from a Cloud bucket, no cleanup:
 
 ```console
-$ aisloader -bucket=nvaws -duration 1h -numworkers=30 -pctput=0 -provider=cloud -cleanup=false
+$ aisloader -bucket=aws://nvaws -duration 1h -numworkers=30 -pctput=0 -cleanup=false
 ```
 
-4. Mixed 30%/70% PUT and GET of variable-size objects to/from a Cloud bucket. PUT will generate random object names and is limited by the 10GB total size. Cleanup is not disabled, which means that upon completion all generated objects will be deleted:
+4. Mixed 30%/70% PUT and GET of variable-size objects to/from a Cloud bucket. PUT will generate random object names and is limited by the 10GB total size. Cleanup enabled - upon completion all generated objects and the bucket itself will be deleted:
 
 ```console
-$ aisloader -bucket=nvaws -duration 0s -numworkers=3 -minsize=1024 -maxsize=1MB -pctput=30 -provider=cloud -totalputsize=10G
+$ aisloader -bucket=s3://nvaws -duration 0s -cleanup=true -numworkers=3 -minsize=1024 -maxsize=1MB -pctput=30 -totalputsize=10G
 ```
 
 5. PUT 1GB total into an ais bucket with cleanup disabled, object size = 1MB, duration unlimited:
@@ -258,13 +258,13 @@ $ aisloader -bucket=nvais -cleanup=false -totalputsize=1G -duration=0 -minsize=1
 6. 100% GET from an ais bucket:
 
 ```console
-$ aisloader -bucket=nvais -duration 5s -numworkers=3 -pctput=0 -provider=ais
+$ aisloader -bucket=nvais -duration 5s -numworkers=3 -pctput=0 -provider=ais -cleanup=false
 ```
 
 7. PUT 2000 objects named as `aisloader/hex({0..2000}{loaderid})`:
 
 ```console
-$ aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000 -objNamePrefix="aisloader"
+$ aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000 -objNamePrefix="aisloader" -cleanup=false
 ```
 
 8. Use random object names and loaderID to report statistics:
@@ -296,7 +296,7 @@ $ aisloader -loaderid=loaderstring -loaderidhashlen=8 -getloaderid (0xdb)
 12. Destroy existing ais bucket. If the bucket is Cloud-based, delete all objects:
 
 ```console
-$ aisloader -bucket=nvais -duration 0s -totalputsize=0
+$ aisloader -bucket=nvais -duration 0s -totalputsize=0 -cleanup=true
 ```
 
 13. Generate load on a cluster listening on custom IP address and port:
@@ -326,7 +326,7 @@ $ aisloader -bucket=my_ais_bucket -duration=10s -pctput=100 -provider=ais -reade
 17. Generate load on `tar2tf` ETL. New ETL is started and then stopped at the end. TAR files are PUT to the cluster. Only available when cluster is deployed on Kubernetes.
 
 ```console
-$ aisloader -bucket=my_ais_bucket -duration=10s -pctput=100 -provider=ais -readertype=tar -etl=tar2tf
+$ aisloader -bucket=my_ais_bucket -duration=10s -pctput=100 -provider=ais -readertype=tar -etl=tar2tf -cleanup=false
 ```
 
 ## Collecting stats

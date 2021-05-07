@@ -10,17 +10,17 @@
 
 // Examples:
 // 1. Destroy existing ais bucket:
-//    a) aisloader -bucket=ais://abc -duration 0s -totalputsize=0
-//    Delete all objects in a given Cloud-based bucket:
+//    a) aisloader -bucket=ais://abc -duration 0s -totalputsize=0 -cleanup=true
+//    Delete all objects in a given AWS-based bucket:
 //    b) aisloader -bucket=aws://nvais -cleanup=true -duration 0s -totalputsize=0
-// 2. Timed (for 1h) 100% GET from a Cloud bucket, no cleanup:
+// 2. Timed (for 1h) 100% GET from a Cloud bucket (no cleanup):
 //    aisloader -bucket=aws://mybucket -duration 1h -numworkers=30 -pctput=0 -cleanup=false
 // 3. Time-based PUT into ais bucket, random objects names:
-//    aisloader -bucket=abc -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -provider=ais
+//    aisloader -bucket=abc -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -provider=ais -cleanup=true
 // 4. Mixed 30% PUT and 70% GET to/from a Cloud bucket. PUT will generate random object names and is limited by 10GB total size:
-//    aisloader -bucket=gs://nvgs -duration 0s -numworkers=3 -minsize=1MB -maxsize=1MB -pctput=30 -totalputsize=10G
+//    aisloader -bucket=gs://nvgs -duration 0s -numworkers=3 -minsize=1MB -maxsize=1MB -pctput=30 -totalputsize=10G -cleanup=false
 // 5. PUT 2000 objects with names that look like hex({0..2000}{loaderid})
-//    aisloader -bucket=ais://abc -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000
+//    aisloader -bucket=ais://abc -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000 -cleanup=false
 // 6. Use random object names and loaderID for reporting stats
 //    aisloader -loaderid=10
 // 7. PUT objects with names based on loaderID and total number of loaders; names: hex({0..}{loaderid})
@@ -245,7 +245,7 @@ func parseCmdLine() (params, error) {
 	f.BoolVar(&flagVersion, "version", false, "Show aisloader version")
 	f.DurationVar(&transportArgs.Timeout, "timeout", 10*time.Minute, "Client HTTP timeout - used in LIST/GET/PUT/DELETE")
 	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval in seconds to print performance counters; 0 - disabled")
-	f.StringVar(&p.bck.Name, "bucket", "", "Bucket name. If empty, a bucket with random name will be created")
+	f.StringVar(&p.bck.Name, "bucket", "", "Bucket name or bucket URI. If empty, a bucket with random name will be created")
 	f.StringVar(&p.bck.Provider, "provider", cmn.ProviderAIS,
 		"ais - for AIS bucket, \"aws\", \"azure\", \"gcp\", \"hdfs\"  for Azure, Amazon, Google, and HDFS clouds respectively")
 	f.StringVar(&ip, "ip", "localhost", "AIS proxy/gateway IP address or hostname")
@@ -261,7 +261,7 @@ func parseCmdLine() (params, error) {
 	f.StringVar(&p.tmpDir, "tmpdir", "/tmp/ais", "Local directory to store temporary files")
 	f.StringVar(&p.putSizeUpperBoundStr, "totalputsize", "0",
 		"Stop PUT workload once cumulative PUT size reaches or exceeds this value (can contain standard multiplicative suffix K, MB, GiB, etc.; 0 - unlimited")
-	cos.BoolExtVar(f, &p.cleanUp, "cleanup", "true: remove bucket upon benchmark termination; default false for cloud buckets")
+	cos.BoolExtVar(f, &p.cleanUp, "cleanup", "true: remove bucket upon benchmark termination (mandatory: must be specified)")
 	f.BoolVar(&p.verifyHash, "verifyhash", false,
 		"true: checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata")
 	f.StringVar(&p.minSizeStr, "minsize", "", "Minimum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
@@ -331,6 +331,11 @@ func parseCmdLine() (params, error) {
 		fmt.Printf("version %s, build %s\n", version, build)
 		os.Exit(0)
 	}
+	if !p.cleanUp.IsSet && p.bck.Name != "" {
+		fmt.Println("\nNote: `-cleanup` is a mandatory (required) option defining whether to destroy bucket upon completion of the benchmark.")
+		fmt.Println("      The option must be specified in the command line.")
+		os.Exit(1)
+	}
 
 	p.usingSG = p.readerType == readers.ReaderTypeSG
 	p.usingFile = p.readerType == readers.ReaderTypeFile
@@ -362,10 +367,14 @@ func parseCmdLine() (params, error) {
 		p.maxSize = cos.GiB
 	}
 
-	if !p.duration.IsSet && p.putSizeUpperBound != 0 {
-		// user specified putSizeUpperBound, but not duration, override default 1 minute
-		// and run aisloader until putSizeUpperBound is reached
-		p.duration.Val = time.Duration(math.MaxInt64)
+	if !p.duration.IsSet {
+		if p.putSizeUpperBound != 0 {
+			// user specified putSizeUpperBound, but not duration, override default 1 minute
+			// and run aisloader until putSizeUpperBound is reached
+			p.duration.Val = time.Duration(math.MaxInt64)
+		} else {
+			fmt.Printf("\nDuration not specified - running for %v\n\n", p.duration.Val)
+		}
 	}
 
 	// Sanity check
@@ -522,10 +531,6 @@ func parseCmdLine() (params, error) {
 					p.bProps.Mirror.Copies)
 			}
 		}
-	}
-
-	if !p.cleanUp.IsSet {
-		p.cleanUp.Val = p.bck.IsAIS()
 	}
 
 	aisEndpoint = "http://" + ip + ":" + port
@@ -736,7 +741,8 @@ func Start() error {
 	}
 
 	if runParams.cleanUp.Val {
-		fmt.Printf("BEWARE: cleanup is enabled, bucket %s will be destroyed after the run!\n", runParams.bck)
+		fmt.Printf("BEWARE: cleanup is enabled, bucket %s will be destroyed after the run!\n\n", runParams.bck)
+		time.Sleep(time.Second)
 	}
 
 	host, err := os.Hostname()
