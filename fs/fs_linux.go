@@ -40,7 +40,7 @@ func makeFsInfo(mpath string) (fsInfo FilesystemInfo, err error) {
 	return FilesystemInfo{Fs: fs, FsType: fsType, FsID: fsStats.Fsid.X__val}, nil
 }
 
-// DirectOpen opens a file with direct disk access(with OS caching disabled)
+// DirectOpen opens a file with direct disk access (with OS caching disabled).
 func DirectOpen(path string, flag int, perm os.FileMode) (*os.File, error) {
 	return os.OpenFile(path, syscall.O_DIRECT|flag, perm)
 }

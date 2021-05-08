@@ -34,7 +34,7 @@ func makeFsInfo(mpath string) (fsInfo FilesystemInfo, err error) {
 	}, nil
 }
 
-// DirectOpen opens a file with direct disk access(with OS caching disabled)
+// DirectOpen opens a file with direct disk access (with OS caching disabled).
 func DirectOpen(path string, flag int, perm os.FileMode) (*os.File, error) {
 	file, err := os.OpenFile(path, flag, perm)
 	if err != nil {
@@ -42,10 +42,10 @@ func DirectOpen(path string, flag int, perm os.FileMode) (*os.File, error) {
 	}
 
 	// Non-zero F_NOCACHE = caching off
-	_, _, e1 := syscall.Syscall(syscall.SYS_FCNTL, uintptr(file.Fd()), syscall.F_NOCACHE, 1)
-	if e1 != 0 {
+	_, _, errno := syscall.Syscall(syscall.SYS_FCNTL, file.Fd(), syscall.F_NOCACHE, 1)
+	if errno != 0 {
 		file.Close()
-		return nil, fmt.Errorf("Failed to set F_NOCACHE: %s", e1)
+		return nil, fmt.Errorf("failed to set F_NOCACHE: %s", errno)
 	}
 
 	return file, nil
