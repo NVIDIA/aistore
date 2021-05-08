@@ -11,33 +11,6 @@ MMSA includes a "house-keeping" part to monitor system resources,
 adjust Slab sizes based on their respective usages, and incrementally
 deallocate idle Slabs. To that end, MMSA utilizes `housekeep` (project and runner).
 
-## Go 1.16 GODEBUG=madvdontneed=1
-
-**NOTE 04/2021**: the default behavior has changed again reverting to the original Go 1.11:
-
-* see https://golang.org/doc/go1.16#runtime
-
-## Go 1.12 through Go 1.15 GODEBUG=madvdontneed=1
-
-When using these particular Go versions, consider building with `GODEBUG=madvdontneed=1`.
-For in-depth background, see:
-
-* https://golang.org/doc/go1.12#runtime
-
-Notice, though, that lazy reclaiming of the freed memory pages does not prevent Linux kernel
-from killing a process upon OOM - which is unfortunate considering that it is the kernel
-in the first place that controls when and how to drive the reclaiming.
-
-Hence, the ultimate tradeoff: OOM (and premature death) versus page faults (and the overhead).
-
-There's much more on the topic at:
-
-* https://golang.org/src/runtime/mem_linux.go (and look for `madvise` syscall)
-* https://github.com/golang/go/issues/22439
-* https://github.com/golang/go/issues/28466
-* https://github.com/golang/go/issues/33376
-
-
 ## Construction
 
 A typical initialization sequence includes steps, e.g.:

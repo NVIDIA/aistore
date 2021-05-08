@@ -104,12 +104,6 @@ ARGS="-config=/etc/ais/$(basename -- $AIS_CONF_FILE) -local_config=/etc/ais/$(ba
 $is_primary && ARGS+=" -ntargets=$TARGETS"
 echo "aisnode args: $ARGS"
 
-# See https://golang.org/doc/go1.12#runtime
-# See https://golang.org/doc/go1.16#runtime
-# when using Go 1.12 through Goi 1.15 uncomment this line to force Go runtime
-# to release freed memory to the system:
-# export GODEBUG="madvdontneed=1"
-
 while :
 do
     if [[ -e /usr/local/bin/aisnode ]]; then

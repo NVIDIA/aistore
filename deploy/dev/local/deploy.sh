@@ -9,12 +9,6 @@
 #
 ############################################
 
-# See https://golang.org/doc/go1.12#runtime
-# See https://golang.org/doc/go1.16#runtime
-# when using Go 1.12 through Goi 1.15 uncomment this line to force Go runtime
-# to release freed memory to the system:
-# export GODEBUG="madvdontneed=1"
-
 AISTORE_DIR=$(cd "$(dirname "$0")/../../../"; pwd -P) # absolute path to aistore directory
 source $AISTORE_DIR/deploy/dev/utils.sh
 AIS_USE_HTTPS=${AIS_USE_HTTPS:-false}
