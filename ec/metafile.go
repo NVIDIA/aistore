@@ -6,7 +6,7 @@ package ec
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -34,7 +34,7 @@ var (
 
 // LoadMetadata loads and parses EC metadata from a file
 func LoadMetadata(fqn string) (*Metadata, error) {
-	b, err := ioutil.ReadFile(fqn)
+	b, err := os.ReadFile(fqn)
 	if err != nil {
 		return nil, err
 	}

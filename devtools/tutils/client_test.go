@@ -8,7 +8,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -191,7 +190,7 @@ func BenchmarkPutSGWithHash1MParallel(b *testing.B) {
 func TestMain(m *testing.M) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
-			io.Copy(ioutil.Discard, bufio.NewReader(r.Body))
+			io.Copy(io.Discard, bufio.NewReader(r.Body))
 			r.Body.Close()
 		}()
 
@@ -205,7 +204,7 @@ func TestMain(m *testing.M) {
 			cksumType  = r.Header.Get(cmn.HdrObjCksumType)
 			cksumValue = r.Header.Get(cmn.HdrObjCksumVal)
 		)
-		_, cksum, err := cos.CopyAndChecksum(ioutil.Discard, r.Body, nil, cksumType)
+		_, cksum, err := cos.CopyAndChecksum(io.Discard, r.Body, nil, cksumType)
 		if err != nil {
 			errCb(http.StatusBadRequest, "server failed to read, error %v", err)
 			return

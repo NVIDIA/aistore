@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -133,14 +132,14 @@ func (p *proxyrunner) initID(config *cmn.Config) (pid string) {
 	cos.Assert(pid != "")
 
 	// store ID on disk
-	err := ioutil.WriteFile(filepath.Join(config.ConfigDir, cmn.ProxyIDFname), []byte(pid), cos.PermRWR)
+	err := os.WriteFile(filepath.Join(config.ConfigDir, cmn.ProxyIDFname), []byte(pid), cos.PermRWR)
 	debug.AssertNoErr(err)
 	glog.Infof("p[%s] ID randomly generated", pid)
 	return
 }
 
 func readProxyID(config *cmn.Config) (id string) {
-	if b, err := ioutil.ReadFile(filepath.Join(config.ConfigDir, cmn.ProxyIDFname)); err == nil {
+	if b, err := os.ReadFile(filepath.Join(config.ConfigDir, cmn.ProxyIDFname)); err == nil {
 		id = string(b)
 	} else if !os.IsNotExist(err) {
 		glog.Error(err)
@@ -1450,11 +1449,11 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 	primary.Unlock()
 	if len(body) > 0 {
 		debug.AssertFunc(func() bool {
-			l, _ := io.Copy(ioutil.Discard, r.Body)
+			l, _ := io.Copy(io.Discard, r.Body)
 			return l == 0
 		})
 
-		r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+		r.Body = io.NopCloser(bytes.NewBuffer(body))
 		r.ContentLength = int64(len(body)) // Directly setting `Content-Length` header.
 	}
 	if msg != nil {
@@ -1522,7 +1521,7 @@ func (p *proxyrunner) reverseReqRemote(w http.ResponseWriter, r *http.Request, m
 	}
 	if msg != nil {
 		body := cos.MustMarshal(msg)
-		r.Body = ioutil.NopCloser(bytes.NewReader(body))
+		r.Body = io.NopCloser(bytes.NewReader(body))
 	}
 
 	bck.Ns.UUID = ""
@@ -1546,7 +1545,7 @@ func (p *proxyrunner) listBuckets(w http.ResponseWriter, r *http.Request, query 
 		p.writeErr(w, r, err)
 		return
 	}
-	r.Body = ioutil.NopCloser(bytes.NewBuffer(cos.MustMarshal(msg)))
+	r.Body = io.NopCloser(bytes.NewBuffer(cos.MustMarshal(msg)))
 	p.reverseNodeRequest(w, r, si)
 }
 

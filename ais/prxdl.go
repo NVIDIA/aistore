@@ -5,7 +5,7 @@
 package ais
 
 import (
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -222,7 +222,7 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if body, err = ioutil.ReadAll(r.Body); err != nil {
+	if body, err = io.ReadAll(r.Body); err != nil {
 		p.writeErrStatusf(w, r, http.StatusInternalServerError,
 			"Error starting download: %v.", err.Error())
 		return

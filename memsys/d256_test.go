@@ -8,7 +8,6 @@ package memsys_test
 
 import (
 	"io"
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -241,7 +240,7 @@ func benchFile(b *testing.B, sbufSize int64) {
 	// reset initial conditions
 	cos.FreeMemToOS()
 
-	file, err := ioutil.TempFile("/tmp", "")
+	file, err := os.CreateTemp("/tmp", "")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -267,7 +266,7 @@ func benchFile(b *testing.B, sbufSize int64) {
 	b.ResetTimer() // start timing it
 	for i := 0; i < b.N; i++ {
 		file.Seek(0, io.SeekStart)
-		n, _ := io.CopyBuffer(ioutil.Discard, file, buf)
+		n, _ := io.CopyBuffer(io.Discard, file, buf)
 		if n != largefil {
 			b.Fatal(n, largefil)
 		}

@@ -6,7 +6,6 @@
 package ios
 
 import (
-	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -25,7 +24,7 @@ func TestGetFSUsedPercentage(t *testing.T) {
 }
 
 func TestGetDirSize(t *testing.T) {
-	name, err := ioutil.TempDir("/tmp", t.Name())
+	name, err := os.MkdirTemp("/tmp", t.Name())
 	if err != nil {
 		t.Error(err)
 	}
@@ -43,7 +42,7 @@ func TestGetDirSize(t *testing.T) {
 }
 
 func TestGetFilesCount(t *testing.T) {
-	name, err := ioutil.TempDir("/tmp", t.Name())
+	name, err := os.MkdirTemp("/tmp", t.Name())
 	if err != nil {
 		t.Error(err)
 	}
@@ -51,7 +50,7 @@ func TestGetFilesCount(t *testing.T) {
 
 	checkFileCount(t, name, 0)
 
-	nameInside, err := ioutil.TempDir(name, "")
+	nameInside, err := os.MkdirTemp(name, "")
 	if err != nil {
 		t.Error(err)
 	}

@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -196,19 +195,19 @@ func CheckPathNotExists(t *testing.T, path string) {
 
 func PrepareDirTree(tb testing.TB, desc DirTreeDesc) (string, []string) {
 	fileNames := make([]string, 0, 100)
-	topDirName, err := ioutil.TempDir(desc.InitDir, "")
+	topDirName, err := os.MkdirTemp(desc.InitDir, "")
 	tassert.CheckFatal(tb, err)
 
 	nestedDirectoryName := topDirName
 	for depth := 1; depth <= desc.Depth; depth++ {
 		names := make([]string, 0, desc.Dirs)
 		for i := 1; i <= desc.Dirs; i++ {
-			name, err := ioutil.TempDir(nestedDirectoryName, "")
+			name, err := os.MkdirTemp(nestedDirectoryName, "")
 			tassert.CheckFatal(tb, err)
 			names = append(names, name)
 		}
 		for i := 1; i <= desc.Files; i++ {
-			f, err := ioutil.TempFile(nestedDirectoryName, "")
+			f, err := os.CreateTemp(nestedDirectoryName, "")
 			tassert.CheckFatal(tb, err)
 			fileNames = append(fileNames, f.Name())
 			f.Close()
@@ -221,7 +220,7 @@ func PrepareDirTree(tb testing.TB, desc DirTreeDesc) (string, []string) {
 	}
 
 	if !desc.Empty {
-		f, err := ioutil.TempFile(nestedDirectoryName, "")
+		f, err := os.CreateTemp(nestedDirectoryName, "")
 		tassert.CheckFatal(tb, err)
 		fileNames = append(fileNames, f.Name())
 		f.Close()
@@ -260,7 +259,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 	dir := t.TempDir()
 
 	for i := 0; i < desc.MountpathsCnt; i++ {
-		mpath, err := ioutil.TempDir(dir, "")
+		mpath, err := os.MkdirTemp(dir, "")
 		tassert.CheckFatal(t, err)
 		mp, err := fs.Add(mpath, "daeID")
 		tassert.CheckFatal(t, err)
@@ -364,11 +363,11 @@ func AssertMountpathCount(t *testing.T, availableCount, disabledCount int) {
 }
 
 func FilesEqual(file1, file2 string) (bool, error) {
-	f1, err := ioutil.ReadFile(file1)
+	f1, err := os.ReadFile(file1)
 	if err != nil {
 		return false, err
 	}
-	f2, err := ioutil.ReadFile(file2)
+	f2, err := os.ReadFile(file2)
 	if err != nil {
 		return false, err
 	}

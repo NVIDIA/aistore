@@ -8,7 +8,6 @@ package transport
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -118,7 +117,7 @@ func (s *MsgStream) inSend() bool { return s.msgoff.ins == inHdr }
 
 func (s *MsgStream) dryrun() {
 	var (
-		body = ioutil.NopCloser(s)
+		body = io.NopCloser(s)
 		it   = iterator{trname: s.trname, body: body, headerBuf: make([]byte, maxHeaderSize)}
 	)
 	for {

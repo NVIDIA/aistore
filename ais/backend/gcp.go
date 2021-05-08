@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"strconv"
@@ -53,7 +52,7 @@ func readCredFile() (projectID string) {
 	if err != nil {
 		return
 	}
-	b, err := ioutil.ReadAll(credFile)
+	b, err := io.ReadAll(credFile)
 	credFile.Close()
 	if err != nil {
 		return

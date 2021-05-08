@@ -5,7 +5,7 @@
 package api
 
 import (
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 
@@ -15,7 +15,7 @@ import (
 // s3/<bucket-name>/<object-name>
 func GetObjectS3(baseParams BaseParams, bck cmn.Bck, objectName string, options ...GetObjectInput) (n int64, err error) {
 	var (
-		w   = ioutil.Discard
+		w   = io.Discard
 		q   url.Values
 		hdr http.Header
 	)

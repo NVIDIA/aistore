@@ -7,7 +7,6 @@ package ais
 import (
 	"flag"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
@@ -42,7 +41,7 @@ type (
 
 func newDiscardRW() *discardRW {
 	return &discardRW{
-		w: ioutil.Discard,
+		w: io.Discard,
 	}
 }
 
@@ -240,7 +239,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 				b.Fatal(err)
 			}
 
-			w := ioutil.Discard
+			w := io.Discard
 			if !bench.chunked {
 				w = newDiscardRW()
 			}

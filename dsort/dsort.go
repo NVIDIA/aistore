@@ -11,7 +11,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"net/http"
 	"net/url"
@@ -370,7 +369,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 				n = lom.Size()
 			}
 		} else {
-			n, err = io.Copy(ioutil.Discard, r)
+			n, err = io.Copy(io.Discard, r)
 		}
 		errCh <- err
 		wg.Done()

@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"io/ioutil"
 	"strconv"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -102,7 +101,7 @@ func (ke *contentKeyExtractor) ExtractKey(ske *SingleKeyExtractor) (interface{},
 		return nil, nil
 	}
 
-	b, err := ioutil.ReadAll(ske.buf)
+	b, err := io.ReadAll(ske.buf)
 	ske.buf = nil
 	if err != nil {
 		return nil, err

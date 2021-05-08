@@ -7,7 +7,6 @@ package reb
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -619,7 +618,7 @@ func (reb *Manager) recvECData(hdr transport.ObjHdr, unpacker *cos.ByteUnpack, r
 		return
 	}
 
-	b, err := ioutil.ReadAll(reader)
+	b, err := io.ReadAll(reader)
 	if err != nil {
 		glog.Errorf("failed to read data from %s: %v", req.daemonID, err)
 		return
@@ -1828,7 +1827,7 @@ func (reb *Manager) rebuildAndSend(obj *rebObject) error {
 
 func checksumSlice(reader io.Reader, sliceSize int64, cksumType string, mem *memsys.MMSA) (cksum *cos.CksumHash, err error) {
 	buf, slab := mem.Alloc(sliceSize)
-	_, cksum, err = cos.CopyAndChecksum(ioutil.Discard, reader, buf, cksumType)
+	_, cksum, err = cos.CopyAndChecksum(io.Discard, reader, buf, cksumType)
 	slab.Free(buf)
 	return
 }

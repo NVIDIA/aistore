@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path"
@@ -128,7 +127,7 @@ func (r *randReader) Seek(offset int64, whence int) (int64, error) {
 
 	r.rnd = rand.New(rand.NewSource(r.seed))
 	r.offset = 0
-	actual, err := io.CopyN(ioutil.Discard, r, abs)
+	actual, err := io.CopyN(io.Discard, r, abs)
 	if err != nil {
 		return 0, err
 	}
@@ -162,7 +161,7 @@ func NewRandReader(size int64, cksumType string) (Reader, error) {
 	rand1 := rand.New(rand.NewSource(seed))
 	rr := &rrLimited{rand1, size, 0}
 	if cksumType != cos.ChecksumNone {
-		_, cksumHash, err := cos.CopyAndChecksum(ioutil.Discard, rr, buf, cksumType)
+		_, cksumHash, err := cos.CopyAndChecksum(io.Discard, rr, buf, cksumType)
 		if err != nil {
 			return nil, err
 		}
@@ -233,7 +232,7 @@ func NewFileReader(filepath, name string, size int64, cksumType string) (Reader,
 		// Assuming that the file already exists and contains data.
 		if cksumType != cos.ChecksumNone {
 			buf, slab := mmsa.Alloc()
-			_, cksumHash, err = cos.CopyAndChecksum(ioutil.Discard, f, buf, cksumType)
+			_, cksumHash, err = cos.CopyAndChecksum(io.Discard, f, buf, cksumType)
 			slab.Free(buf)
 		}
 	} else {

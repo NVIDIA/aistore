@@ -6,7 +6,6 @@ package test
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -65,7 +64,7 @@ var _ = Describe("E2E FUSE Tests", func() {
 			Name:     cos.RandString(10),
 			Provider: cmn.ProviderAIS,
 		}
-		fuseDir, err = ioutil.TempDir("/tmp", "")
+		fuseDir, err = os.MkdirTemp("/tmp", "")
 		Expect(err).NotTo(HaveOccurred())
 
 		err = api.CreateBucket(baseParams, bck, nil)

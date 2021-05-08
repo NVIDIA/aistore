@@ -21,7 +21,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"math/rand"
 	"net/http"
@@ -95,7 +94,7 @@ func TestMain(t *testing.M) {
 
 func Example_headers() {
 	f := func(w http.ResponseWriter, r *http.Request) {
-		body, err := ioutil.ReadAll(r.Body)
+		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			panic(err)
 		}
@@ -186,7 +185,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 func Example_obj() {
 	receive := func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
 		cos.Assert(err == nil)
-		object, err := ioutil.ReadAll(objReader)
+		object, err := io.ReadAll(objReader)
 		if err != nil {
 			panic(err)
 		}
@@ -396,7 +395,7 @@ func Test_ObjAttrs(t *testing.T) {
 		cos.Assertf(reflect.DeepEqual(testAttrs[idx], hdr.ObjAttrs),
 			"attrs are not equal: %v; %v;", testAttrs[idx], hdr.ObjAttrs)
 
-		written, err := io.Copy(ioutil.Discard, objReader)
+		written, err := io.Copy(io.Discard, objReader)
 		cos.Assert(err == nil)
 		cos.Assertf(written == hdr.ObjAttrs.Size, "written: %d, expected: %d", written, hdr.ObjAttrs.Size)
 
@@ -441,7 +440,7 @@ func Test_ObjAttrs(t *testing.T) {
 
 func receive10G(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
 	cos.Assert(err == nil || cos.IsEOF(err))
-	written, _ := io.Copy(ioutil.Discard, objReader)
+	written, _ := io.Copy(io.Discard, objReader)
 	cos.Assert(written == hdr.ObjAttrs.Size)
 }
 
@@ -486,7 +485,7 @@ func Test_CompressedOne(t *testing.T) {
 			var reader io.ReadCloser
 			if num%3 == 0 {
 				hdr.ObjAttrs.Size = int64(random.Intn(100) + 1)
-				reader = ioutil.NopCloser(&io.LimitedReader{R: random, N: hdr.ObjAttrs.Size}) // fully random to hinder compression
+				reader = io.NopCloser(&io.LimitedReader{R: random, N: hdr.ObjAttrs.Size}) // fully random to hinder compression
 			} else {
 				hdr.ObjAttrs.Size = int64(random.Intn(cos.GiB) + 1)
 				reader = &randReader{buf: buf, hdr: hdr, clone: true}
@@ -567,7 +566,7 @@ func Test_CompletionCount(t *testing.T) {
 
 	receive := func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
 		cos.Assert(err == nil)
-		written, _ := io.Copy(ioutil.Discard, objReader)
+		written, _ := io.Copy(io.Discard, objReader)
 		cos.Assert(written == hdr.ObjAttrs.Size)
 		numReceived.Inc()
 	}
@@ -712,7 +711,7 @@ func makeRecvFunc(t *testing.T) (*int64, transport.ReceiveObj) {
 	totalReceived := new(int64)
 	return totalReceived, func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
 		cos.Assert(err == nil || cos.IsEOF(err))
-		written, err := io.Copy(ioutil.Discard, objReader)
+		written, err := io.Copy(io.Discard, objReader)
 		if err != nil && !cos.IsEOF(err) {
 			tassert.CheckFatal(t, err)
 		}

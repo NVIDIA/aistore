@@ -8,7 +8,6 @@ package transport_test
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -116,7 +115,7 @@ func testBundle(t *testing.T, nvs cos.SimpleKVs) {
 		if err != nil && !cos.IsEOF(err) {
 			tassert.CheckFatal(t, err)
 		}
-		written, _ := io.Copy(ioutil.Discard, objReader)
+		written, _ := io.Copy(io.Discard, objReader)
 		cos.Assert(written == hdr.ObjAttrs.Size || hdr.IsUnsized())
 	}
 	callback := func(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {

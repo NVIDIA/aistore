@@ -8,7 +8,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -121,7 +120,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 	)
 
 	// Create random file.
-	tmpFile, err := ioutil.TempFile("", "e2e-")
+	tmpFile, err := os.CreateTemp("", "e2e-")
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	object := tmpFile.Name()
 	tmpFile.Close()

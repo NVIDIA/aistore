@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -1099,7 +1098,7 @@ func (h *httprunner) call(args callArgs) (res *callResult) {
 		}
 		res.v = args.v
 	} else {
-		res.bytes, res.err = ioutil.ReadAll(resp.Body)
+		res.bytes, res.err = io.ReadAll(resp.Body)
 		if res.err != nil {
 			res.details = fmt.Sprintf(
 				"failed to HTTP-call %s (%s %s), read response err: %v",
@@ -1706,7 +1705,7 @@ func (h *httprunner) extractConfig(payload msPayload, caller string) (newConfig 
 	newConfig, msg = &globalConfig{}, &aisMsg{}
 	confValue := payload[revsConfTag]
 	reader := bytes.NewBuffer(confValue)
-	if _, err1 := jsp.Decode(ioutil.NopCloser(reader), newConfig, newConfig.JspOpts(), "extractConfig"); err1 != nil {
+	if _, err1 := jsp.Decode(io.NopCloser(reader), newConfig, newConfig.JspOpts(), "extractConfig"); err1 != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new Config", cmn.BytesHead(confValue), err1)
 		return
 	}
@@ -1736,7 +1735,7 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 	newSmap, msg = &smapX{}, &aisMsg{}
 	smapValue := payload[revsSmapTag]
 	reader := bytes.NewBuffer(smapValue)
-	if _, err1 := jsp.Decode(ioutil.NopCloser(reader), newSmap, newSmap.JspOpts(), "extractSmap"); err1 != nil {
+	if _, err1 := jsp.Decode(io.NopCloser(reader), newSmap, newSmap.JspOpts(), "extractSmap"); err1 != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new Smap", cmn.BytesHead(smapValue), err1)
 		return
 	}
@@ -1818,7 +1817,7 @@ func (h *httprunner) extractBMD(payload msPayload, caller string) (newBMD *bucke
 	newBMD, msg = &bucketMD{}, &aisMsg{}
 	bmdValue := payload[revsBMDTag]
 	reader := bytes.NewBuffer(bmdValue)
-	if _, err1 := jsp.Decode(ioutil.NopCloser(reader), newBMD, newBMD.JspOpts(), "extractBMD"); err1 != nil {
+	if _, err1 := jsp.Decode(io.NopCloser(reader), newBMD, newBMD.JspOpts(), "extractBMD"); err1 != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new Smap", cmn.BytesHead(bmdValue), err1)
 		return
 	}

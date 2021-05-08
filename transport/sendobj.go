@@ -8,7 +8,6 @@ package transport
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"runtime"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -334,7 +333,7 @@ func (s *Stream) inSend() bool { return s.sendoff.ins >= inHdr || s.sendoff.ins 
 
 func (s *Stream) dryrun() {
 	var (
-		body = ioutil.NopCloser(s)
+		body = io.NopCloser(s)
 		it   = iterator{trname: s.trname, body: body, headerBuf: make([]byte, maxHeaderSize)}
 	)
 	for {

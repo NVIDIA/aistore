@@ -38,7 +38,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math"
 	"math/rand"
 	"net/http"
@@ -470,7 +470,7 @@ func parseCmdLine() (params, error) {
 		if err != nil {
 			return params{}, err
 		}
-		etlSpec, err = ioutil.ReadAll(fh)
+		etlSpec, err = io.ReadAll(fh)
 		fh.Close()
 		if err != nil {
 			return params{}, err

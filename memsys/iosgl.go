@@ -178,7 +178,7 @@ func (z *SGL) readAtOffset(b []byte, roffin int64) (n int, roff int64, err error
 }
 
 // ReadAll is a convenience method and an optimized alternative to the generic
-// ioutil.ReadAll. Similarly to the latter, a successful call returns err == nil,
+// io.ReadAll. Similarly to the latter, a successful call returns err == nil,
 // not err == EOF. The difference, though, is that the method always succeeds.
 // NOTE: intended usage includes testing code and debug.
 func (z *SGL) ReadAll() (b []byte, err error) {

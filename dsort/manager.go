@@ -7,7 +7,6 @@ package dsort
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"sync"
@@ -672,7 +671,7 @@ func (m *Manager) makeRecvShardFunc() transport.ReceiveObj {
 		}
 		started := time.Now()
 		lom.SetAtimeUnix(started.UnixNano())
-		rc := ioutil.NopCloser(object)
+		rc := io.NopCloser(object)
 
 		params := cluster.PutObjectParams{
 			Tag:     filetype.WorkfileRecvShard,
@@ -710,7 +709,7 @@ func (m *Manager) doWithAbort(reqArgs *cmn.ReqArgs) error {
 		defer cos.Close(resp.Body)
 
 		if resp.StatusCode >= http.StatusBadRequest {
-			b, err := ioutil.ReadAll(resp.Body)
+			b, err := io.ReadAll(resp.Body)
 			if err != nil {
 				errCh <- err
 			} else {

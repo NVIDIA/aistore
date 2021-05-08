@@ -6,7 +6,7 @@ package fs
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"path"
 	"time"
 
@@ -108,7 +108,7 @@ func (dir *DirectoryInode) InvalidateInode(entryName string, isDir bool) {
 
 func (dir *DirectoryInode) LinkNewFile(fileName string) (*ais.Object, error) {
 	obj := ais.NewObject(fileName, dir.bucket)
-	err := obj.Put(cos.NopOpener(ioutil.NopCloser(bytes.NewReader([]byte{}))))
+	err := obj.Put(cos.NopOpener(io.NopCloser(bytes.NewReader([]byte{}))))
 	if err != nil {
 		obj = nil
 	}

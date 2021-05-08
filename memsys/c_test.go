@@ -16,7 +16,6 @@ package memsys_test
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"sync"
 	"testing"
 
@@ -68,7 +67,7 @@ func TestSGLStressN(t *testing.T) {
 
 			// read SGL from destination and compare with the original
 			var bufW []byte
-			bufW, err = ioutil.ReadAll(memsys.NewReader(sglW))
+			bufW, err = io.ReadAll(memsys.NewReader(sglW))
 			tassert.CheckFatal(t, err)
 			for j := 0; j < objsize; j++ {
 				if bufW[j] != bufR[j] {

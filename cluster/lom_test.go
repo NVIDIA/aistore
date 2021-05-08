@@ -7,7 +7,7 @@ package cluster_test
 import (
 	"crypto/rand"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -430,7 +430,7 @@ var _ = Describe("LOM", func() {
 					lom := filePut(localFQN, testFileSize)
 					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 
-					Expect(ioutil.WriteFile(localFQN, []byte("wrong file"), cos.PermRWR)).To(BeNil())
+					Expect(os.WriteFile(localFQN, []byte("wrong file"), cos.PermRWR)).To(BeNil())
 
 					Expect(lom.ValidateContentChecksum()).To(HaveOccurred())
 				})
@@ -439,7 +439,7 @@ var _ = Describe("LOM", func() {
 					lom := filePut(localFQN, testFileSize)
 					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 
-					Expect(ioutil.WriteFile(localFQN, []byte("wrong file"), cos.PermRWR)).To(BeNil())
+					Expect(os.WriteFile(localFQN, []byte("wrong file"), cos.PermRWR)).To(BeNil())
 					Expect(lom.ValidateMetaChecksum()).NotTo(HaveOccurred())
 				})
 
@@ -509,7 +509,7 @@ var _ = Describe("LOM", func() {
 					lom := NewBasicLom(localFQN)
 					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 
-					err := ioutil.WriteFile(localFQN, []byte("wrong file"), cos.PermRWR)
+					err := os.WriteFile(localFQN, []byte("wrong file"), cos.PermRWR)
 					Expect(err).ShouldNot(HaveOccurred())
 
 					Expect(lom.ValidateContentChecksum()).To(HaveOccurred())
@@ -1073,7 +1073,7 @@ func createTestFile(fqn string, size int) {
 
 func getTestFileHash(fqn string) (hash string) {
 	reader, _ := os.Open(fqn)
-	_, cksum, err := cos.CopyAndChecksum(ioutil.Discard, reader, nil, cos.ChecksumXXHash)
+	_, cksum, err := cos.CopyAndChecksum(io.Discard, reader, nil, cos.ChecksumXXHash)
 	Expect(err).NotTo(HaveOccurred())
 	hash = cksum.Value()
 	reader.Close()

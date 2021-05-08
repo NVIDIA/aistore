@@ -10,7 +10,6 @@ package transport
 import (
 	"crypto/tls"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"strconv"
@@ -69,7 +68,7 @@ func (s *streamBase) do(body io.Reader) (err error) {
 		return
 	}
 	// handle response & cleanup
-	resp.BodyWriteTo(ioutil.Discard)
+	resp.BodyWriteTo(io.Discard)
 	fasthttp.ReleaseRequest(req)
 	fasthttp.ReleaseResponse(resp)
 	if s.streamer.compressed() {

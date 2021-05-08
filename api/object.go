@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -30,7 +29,7 @@ const (
 
 // GetObjectInput is used to hold optional parameters for GetObject and GetObjectWithValidation
 type GetObjectInput struct {
-	// If not specified otherwise, the Writer field defaults to ioutil.Discard
+	// If not specified otherwise, the Writer field defaults to io.Discard
 	Writer io.Writer
 	// Map of strings as keys and string slices as values used for url formulation
 	Query url.Values
@@ -156,7 +155,7 @@ func EvictObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 // `io.Copy` is used internally to copy response bytes from the request to the writer.
 func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (n int64, err error) {
 	var (
-		w   = ioutil.Discard
+		w   = io.Discard
 		q   url.Values
 		hdr http.Header
 	)
@@ -211,7 +210,7 @@ func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string, options 
 // are different.
 func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (n int64, err error) {
 	var (
-		w   = ioutil.Discard
+		w   = io.Discard
 		q   url.Values
 		hdr http.Header
 	)
@@ -247,7 +246,7 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, 
 // `io.Copy` is used internally to copy response bytes from the request to the writer.
 func GetObjectWithResp(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (*http.Response, int64, error) {
 	var (
-		w   = ioutil.Discard
+		w   = io.Discard
 		q   url.Values
 		hdr http.Header
 	)
@@ -297,7 +296,7 @@ func PutObject(args PutObjectArgs) (err error) {
 			req.Header.Set(cmn.HdrObjCksumType, args.Cksum.Type())
 			ckVal := args.Cksum.Value()
 			if ckVal == "" {
-				_, ckhash, err := cos.CopyAndChecksum(ioutil.Discard, args.Reader, nil, args.Cksum.Type())
+				_, ckhash, err := cos.CopyAndChecksum(io.Discard, args.Reader, nil, args.Cksum.Type())
 				if err != nil {
 					return nil, cmn.NewFailedToCreateHTTPRequest(err)
 				}

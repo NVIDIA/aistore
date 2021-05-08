@@ -7,7 +7,6 @@ package reb
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"sync"
@@ -261,7 +260,7 @@ func (reb *Manager) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unp
 
 	params := cluster.PutObjectParams{
 		Tag:      fs.WorkfilePut,
-		Reader:   ioutil.NopCloser(objReader),
+		Reader:   io.NopCloser(objReader),
 		RecvType: cluster.Migrated,
 		Cksum:    cos.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
 		Started:  time.Now(),

@@ -232,7 +232,7 @@ func (b *bench) epoch() {
 				if err != nil {
 					panic(err)
 				}
-				read, err := io.Copy(ioutil.Discard, f) // drain the reader
+				read, err := io.Copy(io.Discard, f) // drain the reader
 				if err != nil {
 					panic(err)
 				}

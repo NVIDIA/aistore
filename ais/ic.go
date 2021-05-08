@@ -6,7 +6,7 @@ package ais
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -132,7 +132,7 @@ outer:
 	// otherwise, hand it over
 	if msg != nil {
 		body := cos.MustMarshal(msg)
-		r.Body = ioutil.NopCloser(bytes.NewReader(body))
+		r.Body = io.NopCloser(bytes.NewReader(body))
 	}
 	ic.p.reverseNodeRequest(w, r, psi)
 	return true

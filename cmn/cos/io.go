@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -540,7 +539,7 @@ func ReadOneInt64(filename string) (int64, error) {
 // Read a file line by line and call a callback for each line until the file
 // ends or a callback returns io.EOF
 func ReadLines(filename string, cb func(string) error) error {
-	b, err := ioutil.ReadFile(filename)
+	b, err := os.ReadFile(filename)
 	if err != nil {
 		return err
 	}
@@ -573,7 +572,7 @@ func CopyAndChecksum(w io.Writer, r io.Reader, buf []byte, cksumType string) (n 
 	}
 	cksum = NewCksumHash(cksumType)
 	var mw io.Writer = cksum.H
-	if w != ioutil.Discard {
+	if w != io.Discard {
 		mw = NewWriterMulti(cksum.H, w)
 	}
 	n, err = io.CopyBuffer(mw, r, buf)
@@ -583,7 +582,7 @@ func CopyAndChecksum(w io.Writer, r io.Reader, buf []byte, cksumType string) (n 
 
 // ChecksumBytes computes checksum of given bytes using additional buffer.
 func ChecksumBytes(b []byte, cksumType string) (cksum *Cksum, err error) {
-	_, hash, err := CopyAndChecksum(ioutil.Discard, bytes.NewReader(b), nil, cksumType)
+	_, hash, err := CopyAndChecksum(io.Discard, bytes.NewReader(b), nil, cksumType)
 	if err != nil {
 		return nil, err
 	}
@@ -591,9 +590,9 @@ func ChecksumBytes(b []byte, cksumType string) (cksum *Cksum, err error) {
 }
 
 // DrainReader reads and discards all the data from a reader.
-// No need for `io.CopyBuffer` as `ioutil.Discard` has efficient `io.ReaderFrom` implementation.
+// No need for `io.CopyBuffer` as `io.Discard` has efficient `io.ReaderFrom` implementation.
 func DrainReader(r io.Reader) {
-	_, err := io.Copy(ioutil.Discard, r)
+	_, err := io.Copy(io.Discard, r)
 	if err == nil || IsEOF(err) {
 		return
 	}

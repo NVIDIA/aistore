@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"sync"
 	"time"
@@ -311,7 +310,7 @@ func checksumDataSlices(ctx *encodeCtx, cksmReaders []io.Reader, cksumType strin
 	buf, slab := mm.Alloc(ctx.sliceSize)
 	defer slab.Free(buf)
 	for i, reader := range cksmReaders {
-		_, cksum, err := cos.CopyAndChecksum(ioutil.Discard, reader, buf, cksumType)
+		_, cksum, err := cos.CopyAndChecksum(io.Discard, reader, buf, cksumType)
 		if err != nil {
 			return err
 		}

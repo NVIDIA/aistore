@@ -7,8 +7,8 @@ package integration
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
+	"os"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -231,7 +231,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	objName := m.objNames[0]
 	fqn := findObjOnDisk(m.bck, objName)
 	tlog.Logf("Corrupting object data %q: %s\n", objName, fqn)
-	err := ioutil.WriteFile(fqn, []byte("this file has been corrupted"), cos.PermRWR)
+	err := os.WriteFile(fqn, []byte("this file has been corrupted"), cos.PermRWR)
 	tassert.CheckFatal(t, err)
 
 	_, err = api.GetObjectWithValidation(baseParams, m.bck, objName)

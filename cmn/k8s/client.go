@@ -7,7 +7,7 @@ package k8s
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -146,7 +146,7 @@ func (c *defaultClient) Logs(podName string) ([]byte, error) {
 		return nil, err
 	}
 	defer logStream.Close()
-	return ioutil.ReadAll(logStream)
+	return io.ReadAll(logStream)
 }
 
 func (c *defaultClient) CheckMetricsAvailability() error {
@@ -259,7 +259,7 @@ func _namespace() (namespace string) {
 	if namespace = os.Getenv("POD_NAMESPACE"); namespace != "" {
 		return
 	}
-	if ns, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace"); err == nil {
+	if ns, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace"); err == nil {
 		if namespace = strings.TrimSpace(string(ns)); len(namespace) > 0 {
 			return
 		}

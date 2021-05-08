@@ -9,7 +9,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"sync"
 
@@ -516,7 +515,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 
 	if ds.m.rs.DryRun {
 		lr := cos.NopReader(obj.MetadataSize + obj.Size)
-		r := cos.NopOpener(ioutil.NopCloser(lr))
+		r := cos.NopOpener(io.NopCloser(lr))
 		hdr.ObjAttrs.Size = obj.MetadataSize + obj.Size
 		return send(r)
 	}

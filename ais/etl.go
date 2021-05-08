@@ -6,7 +6,7 @@ package ais
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -302,7 +302,7 @@ func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	spec, err := ioutil.ReadAll(r.Body)
+	spec, err := io.ReadAll(r.Body)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return

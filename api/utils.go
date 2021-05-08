@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 
@@ -179,7 +178,7 @@ func readResp(reqParams ReqParams, resp *http.Response, v interface{}) (*wrapped
 		case *string:
 			// In some places like dSort, the response is just a string (id).
 			var b []byte
-			b, err = ioutil.ReadAll(resp.Body)
+			b, err = io.ReadAll(resp.Body)
 			*t = string(b)
 		default:
 			if resp.StatusCode == http.StatusOK {
@@ -211,7 +210,7 @@ func checkResp(reqParams ReqParams, resp *http.Response) error {
 	}
 	var (
 		httpErr *cmn.ErrHTTP
-		msg, _  = ioutil.ReadAll(resp.Body)
+		msg, _  = io.ReadAll(resp.Body)
 	)
 	if reqParams.BaseParams.Method != http.MethodHead && resp.StatusCode != http.StatusServiceUnavailable {
 		if jsonErr := jsoniter.Unmarshal(msg, &httpErr); jsonErr == nil {
@@ -245,7 +244,7 @@ func setRequestOptParams(req *http.Request, reqParams ReqParams) {
 }
 
 func getObjectOptParams(options GetObjectInput) (w io.Writer, q url.Values, hdr http.Header) {
-	w = ioutil.Discard
+	w = io.Discard
 	if options.Writer != nil {
 		w = options.Writer
 	}

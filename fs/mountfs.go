@@ -7,7 +7,6 @@ package fs
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -835,7 +834,7 @@ func RenameBucketDirs(bidFrom uint64, bckFrom, bckTo cmn.Bck) (err error) {
 func moveMarkers(available MPI, from *MountpathInfo) {
 	var (
 		fromPath    = filepath.Join(from.Path, cmn.MarkersDirName)
-		finfos, err = ioutil.ReadDir(fromPath)
+		finfos, err = os.ReadDir(fromPath)
 	)
 	if err != nil {
 		if !os.IsNotExist(err) {

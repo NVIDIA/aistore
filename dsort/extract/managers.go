@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 	"sync"
@@ -157,7 +156,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 		// If extractor was initialized we need to read the content, since it
 		// may contain information about the sorting/shuffling key.
 		if needRead || args.w != nil {
-			dst := ioutil.Discard
+			dst := io.Discard
 			if args.w != nil {
 				dst = args.w
 			}

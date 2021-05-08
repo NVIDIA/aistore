@@ -6,7 +6,7 @@ package cluster
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -793,8 +793,8 @@ func (lom *LOM) ComputeCksum(cksumTypes ...string) (cksum *cos.CksumHash, err er
 	if file, err = os.Open(lom.FQN); err != nil {
 		return
 	}
-	// No need to allocate `buf` as `ioutil.Discard` has efficient `io.ReaderFrom` implementation.
-	_, cksum, err = cos.CopyAndChecksum(ioutil.Discard, file, nil, cksumType)
+	// No need to allocate `buf` as `io.Discard` has efficient `io.ReaderFrom` implementation.
+	_, cksum, err = cos.CopyAndChecksum(io.Discard, file, nil, cksumType)
 	cos.Close(file)
 	if err != nil {
 		return nil, err

@@ -8,7 +8,6 @@ package commands
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -550,7 +549,7 @@ func revokeTokenHandler(c *cli.Context) (err error) {
 		return fmt.Errorf("defined either a token or token filename")
 	}
 	if tokenFile != "" {
-		bt, err := ioutil.ReadFile(tokenFile)
+		bt, err := os.ReadFile(tokenFile)
 		if err != nil {
 			return err
 		}

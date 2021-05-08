@@ -6,7 +6,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -156,7 +155,7 @@ func prepareLogFileTmpDir(prefix, bucket string) (*log.Logger, error) {
 		err         error
 	)
 
-	file, err = ioutil.TempFile(tmpDir, buildFileNamePrefix(bucket))
+	file, err = os.CreateTemp(tmpDir, buildFileNamePrefix(bucket))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create log file in temp directory: %v", err)
 	}

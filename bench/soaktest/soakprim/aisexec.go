@@ -7,7 +7,6 @@ package soakprim
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -121,7 +120,7 @@ func AISExec(ch chan *stats.PrimitiveStat, opType string, bck cmn.Bck, numWorker
 		return
 	}
 
-	result, err := ioutil.ReadFile(filename)
+	result, err := os.ReadFile(filename)
 	if err != nil {
 		report.Writef(report.SummaryLevel, "error reading ais results from %v\n", filename)
 		ch <- &stats.PrimitiveStat{Fatal: true, AISLoaderStat: stats.AISLoaderStat{StartTime: time.Now()}}

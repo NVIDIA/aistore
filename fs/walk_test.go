@@ -5,7 +5,6 @@
 package fs_test
 
 import (
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -49,7 +48,7 @@ func TestWalkBck(t *testing.T) {
 			}()
 
 			for i := 0; i < test.mpathCnt; i++ {
-				mpath, err := ioutil.TempDir("", "testwalk")
+				mpath, err := os.MkdirTemp("", "testwalk")
 				tassert.CheckFatal(t, err)
 
 				err = cos.CreateDir(mpath)
@@ -136,7 +135,7 @@ func TestWalkBckSkipDir(t *testing.T) {
 	}()
 
 	for i := 0; i < mpathCnt; i++ {
-		mpath, err := ioutil.TempDir("", "testwalk")
+		mpath, err := os.MkdirTemp("", "testwalk")
 		tassert.CheckFatal(t, err)
 
 		err = cos.CreateDir(mpath)
@@ -155,7 +154,7 @@ func TestWalkBckSkipDir(t *testing.T) {
 
 		totalFilesCnt := rand.Int()%100 + minObjectsCnt
 		for i := 0; i < totalFilesCnt; i++ {
-			f, err := ioutil.TempFile(dir, "")
+			f, err := os.CreateTemp(dir, "")
 			tassert.CheckFatal(t, err)
 			f.Close()
 		}

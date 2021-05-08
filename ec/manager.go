@@ -7,7 +7,6 @@ package ec
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"sync"
 	"unsafe"
@@ -218,7 +217,7 @@ func (mgr *Manager) recvRequest(w http.ResponseWriter, hdr transport.ObjHdr, obj
 	// command requests should not have a body, but if it has,
 	// the body must be drained to avoid errors
 	if hdr.ObjAttrs.Size != 0 {
-		if _, err := ioutil.ReadAll(object); err != nil {
+		if _, err := io.ReadAll(object); err != nil {
 			glog.Errorf("failed to read request body: %v", err)
 			return
 		}

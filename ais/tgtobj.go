@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -1134,7 +1133,7 @@ func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (size int64, err erro
 		return 0, err
 	}
 	defer reader.Close()
-	return io.Copy(ioutil.Discard, reader)
+	return io.Copy(io.Discard, reader)
 }
 
 // PUT object onto designated target
@@ -1189,7 +1188,7 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 			return
 		}
 		if coi.DryRun {
-			size, err = io.Copy(ioutil.Discard, params.Reader)
+			size, err = io.Copy(io.Discard, params.Reader)
 			cos.Close(params.Reader)
 			return
 		}

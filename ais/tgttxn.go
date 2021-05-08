@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -795,7 +794,7 @@ func (c *txnServerCtx) recvObjDM(w http.ResponseWriter, hdr transport.ObjHdr, ob
 
 	params := cluster.PutObjectParams{
 		Tag:    fs.WorkfilePut,
-		Reader: ioutil.NopCloser(objReader),
+		Reader: io.NopCloser(objReader),
 		// Transaction is used only by CopyBucket and ETL. In both cases new objects
 		// are created at the destination. Setting `RegularPut` type informs `c.t.PutObject`
 		// that it must PUT the object to the Cloud as well after the local data are

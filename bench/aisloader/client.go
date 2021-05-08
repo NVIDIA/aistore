@@ -8,7 +8,6 @@ package aisloader
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
@@ -274,7 +273,7 @@ func getDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, off
 		hdrCksumType = resp.Header.Get(cmn.HdrObjCksumType)
 	}
 	src := fmt.Sprintf("GET (object %s from bucket %s)", objName, bck)
-	n, cksumValue, err := readResponse(resp, ioutil.Discard, src, hdrCksumType)
+	n, cksumValue, err := readResponse(resp, io.Discard, src, hdrCksumType)
 	if err != nil {
 		return 0, err
 	}
@@ -310,7 +309,7 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool
 	}
 
 	src := fmt.Sprintf("GET (object %s from bucket %s)", objName, bck)
-	n, cksumValue, err := readResponse(resp, ioutil.Discard, src, hdrCksumType)
+	n, cksumValue, err := readResponse(resp, io.Discard, src, hdrCksumType)
 	if err != nil {
 		return 0, httpLatencies{}, err
 	}
@@ -383,7 +382,7 @@ func listObjectNames(baseParams api.BaseParams, bck cmn.Bck, prefix string) ([]s
 }
 
 func discardResponse(r *http.Response, src string) (int64, error) {
-	n, _, err := readResponse(r, ioutil.Discard, src, "")
+	n, _, err := readResponse(r, io.Discard, src, "")
 	return n, err
 }
 
@@ -396,7 +395,7 @@ func readResponse(r *http.Response, w io.Writer, src, cksumType string) (int64, 
 	)
 
 	if r.StatusCode >= http.StatusBadRequest {
-		bytes, err := ioutil.ReadAll(r.Body)
+		bytes, err := io.ReadAll(r.Body)
 		if err == nil {
 			return 0, "", fmt.Errorf("bad status %d from %s, response: %s", r.StatusCode, src, string(bytes))
 		}

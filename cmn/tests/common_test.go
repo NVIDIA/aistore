@@ -7,7 +7,6 @@ package tests
 import (
 	"crypto/rand"
 	"io"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -41,7 +40,7 @@ var _ = Describe("Common file", func() {
 	validateSaveReaderOutput := func(fqn string, sourceData []byte) {
 		Expect(fqn).To(BeARegularFile())
 
-		data, err := ioutil.ReadFile(fqn)
+		data, err := os.ReadFile(fqn)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(reflect.DeepEqual(data, sourceData)).To(BeTrue())
 	}
@@ -184,10 +183,10 @@ var _ = Describe("Common file", func() {
 			_, _, err = cos.CopyFile(srcFilename, dstFilename, make([]byte, 1000), cos.ChecksumNone)
 			Expect(err).NotTo(HaveOccurred())
 
-			srcData, err := ioutil.ReadFile(srcFilename)
+			srcData, err := os.ReadFile(srcFilename)
 			Expect(err).NotTo(HaveOccurred())
 
-			dstData, err := ioutil.ReadFile(dstFilename)
+			dstData, err := os.ReadFile(dstFilename)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(srcData).To(Equal(dstData))
@@ -201,10 +200,10 @@ var _ = Describe("Common file", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cksum).To(Equal(expectedCksum))
 
-			srcData, err := ioutil.ReadFile(srcFilename)
+			srcData, err := os.ReadFile(srcFilename)
 			Expect(err).NotTo(HaveOccurred())
 
-			dstData, err := ioutil.ReadFile(dstFilename)
+			dstData, err := os.ReadFile(dstFilename)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(srcData).To(Equal(dstData))

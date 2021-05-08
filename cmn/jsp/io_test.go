@@ -8,7 +8,7 @@ package jsp_test
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"reflect"
 	"testing"
@@ -198,7 +198,7 @@ func BenchmarkDecode(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				var (
 					v testStruct
-					r = ioutil.NopCloser(bytes.NewReader(network))
+					r = io.NopCloser(bytes.NewReader(network))
 				)
 				_, err := jsp.Decode(r, &v, bench.opts, "benchmark")
 				tassert.CheckFatal(b, err)

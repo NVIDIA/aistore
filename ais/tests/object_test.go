@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -839,7 +838,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 
 	// Test when the contents of the file are changed
 	tlog.Logf("Changing contents of the file [%s]: %s\n", objName, fqn)
-	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), cos.PermRWR)
+	err = os.WriteFile(fqn, []byte("Contents of this file have been changed."), cos.PermRWR)
 	tassert.CheckFatal(t, err)
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, objName, fqn, oldFileInfo)
 
@@ -1020,7 +1019,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	objName := m.objNames[0]
 	fqn := findObjOnDisk(m.bck, objName)
 	tlog.Logf("Changing contents of the file [%s]: %s\n", objName, fqn)
-	err := ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), cos.PermRWR)
+	err := os.WriteFile(fqn, []byte("Contents of this file have been changed."), cos.PermRWR)
 	tassert.CheckFatal(t, err)
 	executeTwoGETsForChecksumValidation(proxyURL, m.bck, objName, t)
 
@@ -1184,7 +1183,7 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, ob
 					t.Fatalf("Unable to open file: %s. Error:  %v", fqn, err)
 				}
 				defer file.Close()
-				_, cksum, err := cos.CopyAndChecksum(ioutil.Discard, file, nil, cksumType)
+				_, cksum, err := cos.CopyAndChecksum(io.Discard, file, nil, cksumType)
 				if err != nil {
 					t.Errorf("Unable to compute cksum of file: %s. Error:  %s", fqn, err)
 				}

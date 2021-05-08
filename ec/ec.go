@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -386,7 +385,7 @@ func WriteObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int6
 	if size > 0 {
 		reader = io.LimitReader(reader, size)
 	}
-	readCloser := ioutil.NopCloser(reader)
+	readCloser := io.NopCloser(reader)
 	bdir := lom.MpathInfo().MakePathBck(lom.Bucket())
 	if err := fs.Access(bdir); err != nil {
 		return err

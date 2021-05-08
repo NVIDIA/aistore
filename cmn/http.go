@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"html"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -162,7 +161,7 @@ func MatchRESTItems(unescapedPath string, itemsAfter int, splitAfter bool, items
 func ReadBytes(r *http.Request) (b []byte, err error) {
 	var e error
 
-	b, e = ioutil.ReadAll(r.Body)
+	b, e = io.ReadAll(r.Body)
 	if e != nil {
 		err = fmt.Errorf("failed to read %s request, err: %v", r.Method, e)
 		if e == io.EOF {

@@ -7,7 +7,6 @@ package tutils
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -244,7 +243,7 @@ func isClusterLocal() (isLocal bool, err error) {
 	if config, err = api.GetDaemonConfig(baseParams, smap.Primary); err != nil {
 		return
 	}
-	fileData, err = ioutil.ReadFile(filepath.Join(config.ConfigDir, cmn.ProxyIDFname))
+	fileData, err = os.ReadFile(filepath.Join(config.ConfigDir, cmn.ProxyIDFname))
 	if err != nil {
 		if os.IsNotExist(err) {
 			err = nil

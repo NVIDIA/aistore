@@ -8,7 +8,6 @@ package lru_test
 import (
 	"crypto/rand"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -205,7 +204,7 @@ var _ = Describe("LRU tests", func() {
 
 				lru.Run(ini)
 
-				files, err := ioutil.ReadDir(filesPath)
+				files, err := os.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
 				numberOfFilesLeft := len(files)
 
@@ -231,7 +230,7 @@ var _ = Describe("LRU tests", func() {
 
 				lru.Run(ini)
 
-				files, err := ioutil.ReadDir(filesPath)
+				files, err := os.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(files)).To(Equal(3))
 
@@ -265,7 +264,7 @@ var _ = Describe("LRU tests", func() {
 				// Those files are 4Mb file and 16Mb file
 				lru.Run(ini)
 
-				filesLeft, err := ioutil.ReadDir(filesPath)
+				filesLeft, err := os.ReadDir(filesPath)
 				Expect(len(filesLeft)).To(Equal(2))
 				Expect(err).NotTo(HaveOccurred())
 
@@ -283,9 +282,9 @@ var _ = Describe("LRU tests", func() {
 				ini.Force = true // Ignore LRU enabled
 				lru.Run(ini)
 
-				files, err := ioutil.ReadDir(filesPath)
+				files, err := os.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
-				filesAnother, err := ioutil.ReadDir(fpAnother)
+				filesAnother, err := os.ReadDir(fpAnother)
 				Expect(err).NotTo(HaveOccurred())
 
 				numFilesLeft := len(files)
@@ -315,7 +314,7 @@ var _ = Describe("LRU tests", func() {
 
 				lru.Run(ini)
 
-				files, err := ioutil.ReadDir(filesPath)
+				files, err := os.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(files)).To(Equal(numberOfFiles))
 			})
@@ -332,7 +331,7 @@ var _ = Describe("LRU tests", func() {
 
 				lru.Run(ini)
 
-				files, err := ioutil.ReadDir(filesPath)
+				files, err := os.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(files)).To(Equal(numberOfFiles))
 			})
@@ -343,7 +342,7 @@ var _ = Describe("LRU tests", func() {
 				ini.Buckets = []cmn.Bck{bckAnother} // bckAnother has LRU disabled
 				lru.Run(ini)
 
-				filesAnother, err := ioutil.ReadDir(fpAnother)
+				filesAnother, err := os.ReadDir(fpAnother)
 				Expect(err).NotTo(HaveOccurred())
 
 				numFilesLeft := len(filesAnother)
@@ -365,13 +364,13 @@ var _ = Describe("LRU tests", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(filesPath).NotTo(BeADirectory())
 
-				files, err := ioutil.ReadDir(mpath.MakePathTrash())
+				files, err := os.ReadDir(mpath.MakePathTrash())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(files)).To(Equal(1))
 
 				lru.Run(ini)
 
-				files, err = ioutil.ReadDir(mpath.MakePathTrash())
+				files, err = os.ReadDir(mpath.MakePathTrash())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(files)).To(Equal(0))
 			})

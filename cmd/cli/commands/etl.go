@@ -8,7 +8,6 @@ package commands
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
@@ -122,7 +121,7 @@ func etlInitHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, "SPEC_FILE")
 	}
-	spec, err := ioutil.ReadFile(c.Args()[0])
+	spec, err := os.ReadFile(c.Args()[0])
 	if err != nil {
 		return err
 	}
@@ -163,13 +162,13 @@ func etlBuildHandler(c *cli.Context) (err error) {
 		}
 	}
 
-	if msg.Code, err = ioutil.ReadFile(fromFile); err != nil {
+	if msg.Code, err = os.ReadFile(fromFile); err != nil {
 		return fmt.Errorf("failed to read file: %q, err: %v", fromFile, err)
 	}
 
 	depsFile := parseStrFlag(c, depsFileFlag)
 	if depsFile != "" {
-		if msg.Deps, err = ioutil.ReadFile(depsFile); err != nil {
+		if msg.Deps, err = os.ReadFile(depsFile); err != nil {
 			return fmt.Errorf("failed to read file: %q, err: %v", depsFile, err)
 		}
 	}

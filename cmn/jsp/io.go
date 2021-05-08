@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"hash"
 	"io"
-	"io/ioutil"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -156,7 +155,7 @@ func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) (chec
 		// We have already parsed `v` but there is still the possibility that `\n` remains
 		// not read. Therefore, we read it to include it into the final checksum.
 		var b []byte
-		if b, err = ioutil.ReadAll(r); err != nil {
+		if b, err = io.ReadAll(r); err != nil {
 			return
 		}
 		// To be sure that this is exactly the case...

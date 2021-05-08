@@ -7,7 +7,7 @@ package dsort
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -371,7 +371,7 @@ func initSortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var rs *ParsedRequestSpec
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		cmn.WriteErr(w, r, fmt.Errorf("could not read request body, err: %w", err))
 		return
@@ -738,7 +738,7 @@ func broadcastTargets(method, path string, urlParams url.Values, body []byte, sm
 			}
 			return
 		}
-		out, err := ioutil.ReadAll(resp.Body)
+		out, err := io.ReadAll(resp.Body)
 		cos.Close(resp.Body)
 
 		responses[idx] = response{

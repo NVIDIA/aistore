@@ -8,7 +8,7 @@ package dsort
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"testing"
 
@@ -97,7 +97,7 @@ func BenchmarkRecordsMarshal(b *testing.B) {
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				w := ioutil.Discard
+				w := io.Discard
 				err := records.EncodeMsg(msgp.NewWriterBuf(w, buf))
 				cos.AssertNoErr(err)
 			}
@@ -186,7 +186,7 @@ func BenchmarkCreationPhaseMetadataMarshal(b *testing.B) {
 
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				w := ioutil.Discard
+				w := io.Discard
 				err := md.EncodeMsg(msgp.NewWriterSize(w, serializationBufSize))
 				cos.AssertNoErr(err)
 			}

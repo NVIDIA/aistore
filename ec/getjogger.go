@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"sync"
@@ -439,7 +438,7 @@ func checkSliceChecksum(reader io.Reader, recvCksm *cos.Cksum, sliceSize int64, 
 	}
 
 	buf, slab := mm.Alloc(sliceSize)
-	_, actualCksm, err := cos.CopyAndChecksum(ioutil.Discard, reader, buf, cksumType)
+	_, actualCksm, err := cos.CopyAndChecksum(io.Discard, reader, buf, cksumType)
 	slab.Free(buf)
 
 	if err != nil {

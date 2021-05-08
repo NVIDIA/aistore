@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -134,7 +133,7 @@ func (f *FSHC) tryReadFile(fqn string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(ioutil.Discard, file); err != nil {
+	if _, err := io.Copy(io.Discard, file); err != nil {
 		_ = file.Close()
 		return err
 	}

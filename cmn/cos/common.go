@@ -7,7 +7,6 @@ package cos
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"reflect"
@@ -155,7 +154,7 @@ func ParseBool(s string) (value bool, err error) {
 func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
 	m := map[string]string{}
 	dlim := "="
-	data, err := ioutil.ReadFile(fpath)
+	data, err := os.ReadFile(fpath)
 	if err != nil {
 		return nil
 	}

@@ -9,7 +9,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"sync"
@@ -520,7 +519,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 
 		if ds.m.rs.DryRun {
 			lr := cos.NopReader(req.RecordObj.MetadataSize + req.RecordObj.Size)
-			r := cos.NopOpener(ioutil.NopCloser(lr))
+			r := cos.NopOpener(io.NopCloser(lr))
 			o.Hdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
 			ds.streams.response.Send(o, r, fromNode)
 			return
