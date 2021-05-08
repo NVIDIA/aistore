@@ -147,6 +147,9 @@ issues:
     - linters: gocritic
       text: "block doesn't have definitions" # Sometimes blocks are useful for better readability.
 
+    - linters: golint
+      source: "embed" # Justification for `import _ "embed"` is not needed.
+
   # Set to 0 to disable limit
   max-same-issues: 0
   max-per-linter: 0
