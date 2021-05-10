@@ -104,10 +104,8 @@ func GetDaemonConfig(baseParams BaseParams, node *cluster.Snode) (config *cmn.Co
 	if err != nil {
 		return nil, err
 	}
-	// Validate either as proxy or target.
 	config.SetRole(node.Type())
-	err = config.Validate()
-	return config, err
+	return config, nil
 }
 
 // GetDaemonLog returns log of a specific daemon in a cluster.
