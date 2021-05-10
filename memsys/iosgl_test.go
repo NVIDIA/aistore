@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"io"
 	"math/rand"
+	"testing/iotest"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	. "github.com/onsi/ginkgo"
@@ -24,6 +25,14 @@ var _ = Describe("SGL", func() {
 		rand.Read(buf)
 		return buf, bytes.NewBuffer(buf)
 	}
+
+	It("should perform write and read for SGL", func() {
+		sgl := mm.NewSGL(0)
+		err := cos.FloodWriter(sgl, 10*cos.MiB)
+		Expect(err).ToNot(HaveOccurred())
+		err = iotest.TestReader(sgl, sgl.Bytes())
+		Expect(err).ToNot(HaveOccurred())
+	})
 
 	Describe("ReadFrom", func() {
 		It("should properly write to SGL using ReadFrom method", func() {
