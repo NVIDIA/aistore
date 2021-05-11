@@ -170,6 +170,7 @@ type (
 		stopCh    chan struct{}
 		workCh    chan NamedVal64
 		ticker    *time.Ticker
+		Core      *CoreStats  `json:"core"`
 		ctracker  copyTracker // to avoid making it at runtime
 		daemon    runnerHost
 		startedUp atomic.Bool
@@ -582,6 +583,7 @@ func (r *statsRunner) StartedUp() bool { return r.startedUp.Load() }
 func (r *statsRunner) Stop(err error) {
 	glog.Infof("Stopping %s, err: %v", r.Name(), err)
 	r.stopCh <- struct{}{}
+	r.Core.statsdC.Close()
 	close(r.stopCh)
 }
 

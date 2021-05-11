@@ -71,7 +71,6 @@ type (
 	Trunner struct {
 		statsRunner
 		T     cluster.Target `json:"-"`
-		Core  *CoreStats     `json:"core"`
 		MPCap fs.MPCap       `json:"capacity"`
 		lines []string
 	}

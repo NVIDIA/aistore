@@ -18,7 +18,6 @@ import (
 type (
 	Prunner struct {
 		statsRunner
-		Core *CoreStats `json:"core"`
 	}
 	ClusterStats struct {
 		Proxy  *CoreStats          `json:"proxy"`
