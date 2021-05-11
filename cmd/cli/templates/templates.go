@@ -172,6 +172,12 @@ const (
 		"{{$v.Bck}}\t {{$v.ObjCount}}\t {{FormatBytesUnsigned $v.Size 2}}\t {{FormatFloat $v.UsedPct}}%\n" +
 		"{{end}}"
 
+	// Bucket summary validate templates
+	BucketSummaryValidateTmpl = "BUCKET\t OBJECTS\t MISPLACED\t MISSING COPIES\n" + bucketSummaryValidateBody
+	bucketSummaryValidateBody = "{{range $v := . }}" +
+		"{{$v.Name}}\t {{$v.ObjectCnt}}\t {{$v.Misplaced}}\t {{$v.MissingCopies}}\n" +
+		"{{end}}"
+
 	// For `object put` mass uploader. A caller adds to the template
 	// total count and size. That is why the template ends with \t
 	ExtensionTmpl = "Files to upload:\nEXTENSION\t COUNT\t SIZE\n" +

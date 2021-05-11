@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
@@ -57,6 +58,7 @@ var (
 		subcmdSummary: {
 			cachedFlag,
 			fastFlag,
+			validateFlag,
 			verboseFlag,
 		},
 	}
@@ -162,22 +164,102 @@ func createBucketHandler(c *cli.Context) (err error) {
 	return nil
 }
 
+func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
+	type bucketHealth struct {
+		Name          string
+		ObjectCnt     uint64
+		Misplaced     uint64
+		MissingCopies uint64
+	}
+	bckList, err := api.ListBuckets(defaultAPIParams, queryBcks)
+	if err != nil {
+		return
+	}
+	bckSums := make([]*bucketHealth, 0)
+	msg := &cmn.SelectMsg{Flags: cmn.SelectMisplaced}
+	msg.AddProps(cmn.GetPropsCopies)
+	for _, bck := range bckList {
+		if queryBcks.Name != "" && !queryBcks.Equal(bck) {
+			continue
+		}
+		var (
+			p       *cmn.BucketProps
+			objList *cmn.BucketList
+			obj     *cmn.BucketEntry
+		)
+		if p, err = headBucket(bck); err != nil {
+			return
+		}
+		copies := int16(p.Mirror.Copies)
+		stats := &bucketHealth{Name: bck.String()}
+		objList, err = api.ListObjects(defaultAPIParams, bck, msg, 0)
+		if err != nil {
+			return err
+		}
+
+		updateStats := func(obj *cmn.BucketEntry) {
+			if obj == nil {
+				return
+			}
+			stats.ObjectCnt++
+			if !obj.IsStatusOK() {
+				stats.Misplaced++
+			} else if obj.Copies != copies {
+				stats.MissingCopies++
+			}
+		}
+
+		for _, entry := range objList.Entries {
+			if obj == nil {
+				obj = entry
+				continue
+			}
+			if obj.Name == entry.Name {
+				if entry.IsStatusOK() {
+					obj = entry
+				}
+				continue
+			}
+			updateStats(obj)
+			obj = entry
+		}
+		updateStats(obj)
+
+		bckSums = append(bckSums, stats)
+	}
+	return templates.DisplayOutput(bckSums, c.App.Writer, templates.BucketSummaryValidateTmpl)
+}
+
+func showObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
+	fValidate := func() error {
+		return checkObjectHealth(c, queryBcks)
+	}
+	return cmn.WaitForFunc(fValidate, longCommandTime)
+}
+
+func showBucketSizes(c *cli.Context, queryBcks cmn.QueryBcks) error {
+	summaries, err := fetchSummaries(queryBcks, flagIsSet(c, fastFlag), flagIsSet(c, cachedFlag))
+	if err != nil {
+		return err
+	}
+	tmpl := templates.BucketsSummariesTmpl
+	if flagIsSet(c, fastFlag) {
+		tmpl = templates.BucketsSummariesFastTmpl
+	}
+	return templates.DisplayOutput(summaries, c.App.Writer, tmpl)
+}
+
 func summaryBucketHandler(c *cli.Context) (err error) {
 	queryBcks, err := parseQueryBckURI(c, c.Args().First())
 	if err != nil {
 		return err
 	}
 
-	summaries, err := fetchSummaries(queryBcks, flagIsSet(c, fastFlag), flagIsSet(c, cachedFlag))
-	if err != nil {
-		return
+	if flagIsSet(c, validateFlag) {
+		return showObjectHealth(c, queryBcks)
 	}
 
-	tmpl := templates.BucketsSummariesTmpl
-	if flagIsSet(c, fastFlag) {
-		tmpl = templates.BucketsSummariesFastTmpl
-	}
-	return templates.DisplayOutput(summaries, c.App.Writer, tmpl)
+	return showBucketSizes(c, queryBcks)
 }
 
 func copyBucketHandler(c *cli.Context) (err error) {

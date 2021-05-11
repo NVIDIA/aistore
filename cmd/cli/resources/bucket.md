@@ -363,11 +363,21 @@ To check the status, run: ais show job xaction copybck aws://dst_bucket
 Show aggregated information about objects in the bucket `BUCKET`.
 If `BUCKET` is omitted, shows information about all buckets.
 
+When `--validate` option is used, the command may take a lot of time.
+In this mode it reads the list of all objects in buckets to get detailed information.
+After validating a bucket, it displays the total number of objects(including misplaced ones),
+the number of misplaced, and the number of objects with insufficient number of copies.
+Note that for a remote bucket, insuffient number of copies also means that the object has never been read,
+so AIS does not have a copy on local drives yet. In other words, for remote buckets it may be OK to have non-zero
+number of objects with missing copies.
+Non-zero number of misplaced objects may mean the bucket needs rebalancing.
+
 ### Options
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--fast` | `bool` | Enforce using faster methods to find out the buckets' details. The output may not be accurate. | `false`
+| `--validate` | `bool` | Check objects for errors: misplaced, insufficient number of copies etc | `false`
 
 ## Start N-way Mirroring
 

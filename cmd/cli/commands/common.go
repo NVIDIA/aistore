@@ -286,6 +286,7 @@ var (
 	dataSlicesFlag    = cli.IntFlag{Name: "data-slices,data,d", Usage: "number of data slices", Required: true}
 	paritySlicesFlag  = cli.IntFlag{Name: "parity-slices,parity,p", Usage: "number of parity slices", Required: true}
 	listBucketsFlag   = cli.StringFlag{Name: "buckets", Usage: "comma-separated list of bucket names, eg. 'b1,b2,b3'"}
+	validateFlag      = cli.BoolFlag{Name: "validate", Usage: "check objects health"}
 
 	// Config
 	configTypeFlag = cli.StringFlag{Name: "type", Usage: "show the specified configuration, one of: 'all','cluster','local'"}
