@@ -104,7 +104,11 @@ func GetDaemonConfig(baseParams BaseParams, node *cluster.Snode) (config *cmn.Co
 	if err != nil {
 		return nil, err
 	}
-	config.SetRole(node.Type())
+	// FIXME: transform backend structures on the client side
+	// - as a side effect, config.Backend validation populates non-JSON structs that client can utilize;
+	// - secondly, HDFS networking, etc.
+	// TODO: revise and remove
+	_ = config.Backend.Validate()
 	return config, nil
 }
 
