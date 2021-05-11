@@ -135,6 +135,7 @@ func doHTTPRequestGetHTTPResp(reqParams ReqParams) (resp *http.Response, err err
 		SoftErr:   httpMaxRetries,
 		Sleep:     httpRetrySleep,
 		BackOff:   true,
+		IsClient:  true,
 	})
 
 	if err != nil {

@@ -164,11 +164,12 @@ func InitCluster(proxyURL string, clusterType ClusterType) (err error) {
 func initProxyURL() (err error) {
 	// Discover if a proxy is ready to accept requests.
 	err = cmn.NetworkCallWithRetry(&cmn.CallWithRetryArgs{
-		Call:    func() (int, error) { return 0, GetProxyReadiness(proxyURLReadOnly) },
-		SoftErr: 5,
-		HardErr: 5,
-		Sleep:   5 * time.Second,
-		Action:  fmt.Sprintf("check proxy readiness at %s", proxyURLReadOnly),
+		Call:     func() (int, error) { return 0, GetProxyReadiness(proxyURLReadOnly) },
+		SoftErr:  5,
+		HardErr:  5,
+		Sleep:    5 * time.Second,
+		Action:   fmt.Sprintf("check proxy readiness at %s", proxyURLReadOnly),
+		IsClient: true,
 	})
 	if err != nil {
 		err = fmt.Errorf("failed to successfully check readiness of a proxy at %s; err %v", proxyURLReadOnly, err)

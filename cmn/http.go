@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -87,8 +88,9 @@ type (
 		HardErr uint // How many retries on any other error.
 		Sleep   time.Duration
 
-		BackOff   bool // If requests should be retried less and less often.
 		Verbosity int  // Determine the verbosity level.
+		BackOff   bool // If requests should be retried less and less often.
+		IsClient  bool // true: client (e.g. tutils, etc.)
 	}
 )
 
@@ -401,11 +403,16 @@ func (m HTTPMuxers) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func NetworkCallWithRetry(args *CallWithRetryArgs) (err error) {
-	cos.Assert(args.SoftErr > 0 || args.HardErr > 0)
-	config := GCO.Get()
+	debug.Assert(args.SoftErr > 0 || args.HardErr > 0)
 
 	if args.Sleep == 0 {
-		args.Sleep = config.Timeout.CplaneOperation / 4
+		if args.IsClient {
+			args.Sleep = time.Second / 2
+		} else {
+			config := GCO.Get()
+			debug.Assert(config.Timeout.CplaneOperation > 0)
+			args.Sleep = config.Timeout.CplaneOperation / 4
+		}
 	}
 
 	callerStr := ""
@@ -445,7 +452,13 @@ func NetworkCallWithRetry(args *CallWithRetryArgs) (err error) {
 			hardErrCnt++
 		}
 		if args.BackOff && iter > 1 {
-			sleep = cos.MinDuration(sleep+(args.Sleep/2), config.Timeout.MaxKeepalive)
+			if args.IsClient {
+				sleep = cos.MinDuration(sleep+(args.Sleep/2), 4*time.Second)
+			} else {
+				config := GCO.Get()
+				debug.Assert(config.Timeout.MaxKeepalive > 0)
+				sleep = cos.MinDuration(sleep+(args.Sleep/2), config.Timeout.MaxKeepalive)
+			}
 		}
 		if hardErrCnt > args.HardErr || softErrCnt > args.SoftErr {
 			break

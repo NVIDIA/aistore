@@ -74,8 +74,9 @@ func GetTransformYaml(name string) ([]byte, error) {
 			resp, err = client.Get(links[name]) // nolint:bodyclose // closed after returning from NetworkCallWithRetry().
 			return
 		},
-		SoftErr: 3,
-		HardErr: 1,
+		SoftErr:  3,
+		HardErr:  1,
+		IsClient: true,
 	})
 	if err != nil {
 		return nil, err
