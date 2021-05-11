@@ -158,7 +158,7 @@ type (
 		put       stats.HTTPReq
 		get       stats.HTTPReq
 		getConfig stats.HTTPReq
-		statsd    statsd.Metrics
+		statsd    stats.Metrics
 	}
 
 	jsonStats struct {
@@ -593,7 +593,7 @@ func newStats(t time.Time) sts {
 		put:       stats.NewHTTPReq(t),
 		get:       stats.NewHTTPReq(t),
 		getConfig: stats.NewHTTPReq(t),
-		statsd:    statsd.NewStatsdMetrics(t),
+		statsd:    stats.NewStatsdMetrics(t),
 	}
 }
 
@@ -1034,7 +1034,7 @@ func completeWorkOrder(wo *workOrder) {
 	delta := timeDelta(wo.end, wo.start)
 
 	if wo.err == nil && traceHTTPSig.Load() {
-		var lat *statsd.MetricLatsAgg
+		var lat *stats.MetricLatsAgg
 		switch wo.op {
 		case opGet:
 			lat = &intervalStats.statsd.GetLat

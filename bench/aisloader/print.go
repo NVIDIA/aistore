@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/bench/aisloader/stats"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/stats/statsd"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -168,7 +167,7 @@ func finalizeStats(to io.Writer) {
 	postWriteStats(to, runParams.jsonFormat)
 
 	// reset gauges, otherwise they would stay at last send value
-	statsd.ResetMetricsGauges(&statsdC)
+	stats.ResetMetricsGauges(&statsdC)
 }
 
 func writeFinalStats(to io.Writer, jsonFormat bool, s sts) {
