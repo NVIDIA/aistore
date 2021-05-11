@@ -6,7 +6,6 @@
 package stats
 
 import (
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -16,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/stats/statsd"
 )
 
 // Naming Convention:
@@ -206,41 +204,15 @@ func (r *Trunner) log(uptime time.Duration) {
 	}
 }
 
-// NOTE the naming conventions (above)
 func (r *Trunner) doAdd(nv NamedVal64) {
 	var (
 		s     = r.Core
 		name  = nv.Name
 		value = nv.Value
 	)
-
-	v, ok := s.Tracker[name]
-	cos.Assertf(ok, "invalid stats name: %q", name)
-
-	// most target stats can be handled by CoreStats.doAdd
-	// stats that track data IO are unique to target and are handled here
-	// .size stats, as of 2.x and beyond, is one of them
-	if !strings.HasSuffix(name, ".size") {
-		s.doAdd(name, nv.NameSuffix, value)
-		return
-	}
-
-	// target only suffix
-	nroot := strings.TrimSuffix(name, ".size")
-	metricType := statsd.Counter
-
-	if nroot == "dl" {
-		metricType = statsd.PersistentCounter
-	}
-
-	s.statsdC.Send(nroot, 1,
-		metric{Type: metricType, Name: "bytes", Value: value},
-		metric{Type: metricType, Name: "count", Value: 1},
-	)
-
-	v.Lock()
-	v.Value += value
-	v.Unlock()
+	_, ok := s.Tracker[name]
+	debug.Assertf(ok, "invalid stats name: %q", name)
+	s.doAdd(name, nv.NameSuffix, value)
 }
 
 func (r *Trunner) statsTime(newval time.Duration) {

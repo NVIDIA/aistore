@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -46,12 +46,18 @@ const (
 	count   = "count"
 )
 
+const (
+	numErrsLog    = 100 // inc num errors to glog error
+	numTestProbes = 10  // num UDP probes at startup (optional)
+)
+
 type (
 	// Client implements a StatsD client
 	Client struct {
 		conn   *net.UDPConn
-		prefix string
-		opened bool // true if the connection with StatsD is successfully opened
+		server *net.UDPAddr // resolved StatsD server addr
+		prefix string       // e.g. aistarget<ID>
+		opened bool         // true if the connection with StatsD is successfully opened
 	}
 
 	// Metric is a generic structure for all type of StatsD metrics
@@ -112,79 +118,70 @@ type (
 )
 
 var (
-	smm    *memsys.MMSA
-	errcnt atomic.Int64
-	msize  int = memsys.DefaultSmallBufSize
+	smm           *memsys.MMSA
+	errcnt, msize int64
 )
 
-// max counts: number of UDP probes at startup and number of errors at runtime
-const (
-	maxNumErrs    = 100
-	NumTestProbes = 4
-)
-
-// New returns a client after resolving server and self's address and dialed the server
-// Caller needs to call close
+// New returns a UDP client that we then use to send metrics to the specified IP:port
 func New(ip string, port int, prefix string, probe bool) (Client, error) {
+	c, err := net.ListenPacket("udp", ":0")
+	if err != nil {
+		return Client{}, err
+	}
+	conn, ok := c.(*net.UDPConn)
+	debug.Assert(ok)
 	server, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", ip, port))
 	if err != nil {
+		conn.Close()
 		return Client{}, err
 	}
-
-	self, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
-	if err != nil {
-		return Client{}, err
-	}
-
-	conn, err := net.DialUDP("udp", self, server)
-	if err != nil {
-		return Client{}, err
-	}
-
 	smm = memsys.DefaultSmallMM()
-	c := Client{conn, prefix, true /*opened*/}
+	client := Client{conn, server, prefix, true /*opened*/}
 	if !probe {
-		return c, nil
+		return client, nil
 	}
-	if err := c.probeUDP(); err != nil {
-		glog.Warningf("Starting up without StatsD (err: %v)", err)
+	if err := client.probeUDP(); err != nil {
+		conn.Close()
 		return Client{}, err
 	}
-	return c, nil
+	return client, nil
 }
 
 // NOTE: a single failed probe disables StatsD for the entire runtime
 func (c Client) probeUDP() (err error) {
 	var (
-		sgl     = smm.NewSGL(int64(msize))
-		m       = Metric{Type: Counter, Name: "counter", Value: 1}
-		failcnt int
+		sgl = smm.NewSGL(0)
+		m   = Metric{Type: Counter, Name: "counter", Value: 1}
+		cnt int
 	)
 	defer sgl.Free()
-	for i := 1; i <= NumTestProbes; i++ {
+	for i := 1; i <= numTestProbes; i++ {
 		sgl.Reset()
 		m.Value = i
 		c.appendMetric(m, sgl, "probe", 1)
 		bytes := sgl.Bytes()
-		cos.Assert(msize > len(bytes))
-		if _, erw := c.conn.Write(bytes); erw != nil {
+		n, erw := c.conn.WriteToUDP(bytes, c.server)
+		if erw != nil {
 			err = erw
-			failcnt++
+			cnt++
+		} else if n == 0 {
+			cnt++
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if failcnt <= 1 {
-		return nil
+	if cnt == 0 {
+		return
 	}
+	err = fmt.Errorf("failed to probe %v (%d/%d)", err, cnt, numTestProbes)
 	return
 }
 
 // Close closes the UDP connection
 func (c Client) Close() error {
 	if c.opened {
+		c.opened = false
 		return c.conn.Close()
 	}
-
 	return nil
 }
 
@@ -197,26 +194,23 @@ func (c Client) Send(bucket string, aggCnt int64, metrics ...Metric) {
 	if !c.opened {
 		return
 	}
-	if aggCnt == 0 {
-		return // nothing aggregated
-	}
-	sgl := smm.NewSGL(int64(msize))
+	sgl := smm.NewSGL(msize)
 	defer sgl.Free()
 
 	bucket = strings.ReplaceAll(bucket, ":", "_")
 	for _, m := range metrics {
 		c.appendMetric(m, sgl, bucket, aggCnt)
 	}
-	if sgl.Len() > 0 {
-		bytes := sgl.Bytes()
-		msize = cos.Max(msize, len(bytes))
-		_, err := c.conn.Write(bytes)
-		if err != nil {
-			if cnt := errcnt.Inc(); cnt > maxNumErrs {
-				glog.Errorf("Sending to StatsD failed: %v (%d)", err, cnt)
-				c.conn.Close()
-				c.opened = false
-			}
+	debug.Assert(sgl.Len() > 0)
+	if l := sgl.Len(); l > msize {
+		msize = l
+	}
+	bytes := sgl.Bytes()
+	n, erw := c.conn.WriteToUDP(bytes, c.server)
+	if erw != nil || n == 0 {
+		errcnt++
+		if errcnt&numErrsLog == 0 {
+			glog.Errorf("StatsD: %v(%d) %d", erw, n, errcnt)
 		}
 	}
 }
@@ -237,7 +231,7 @@ func (c Client) appendMetric(m Metric, sgl *memsys.SGL, bucket string, aggCnt in
 		prefix = "+"
 		t = "g"
 	default:
-		cos.Assertf(false, "unknown type %+v", m.Type)
+		debug.Assertf(false, "unknown type %+v", m.Type)
 	}
 	if sgl.Len() > 0 {
 		sgl.Write([]byte{'\n'})
@@ -248,7 +242,7 @@ func (c Client) appendMetric(m Metric, sgl *memsys.SGL, bucket string, aggCnt in
 	} else {
 		_, err = fmt.Fprintf(sgl, "%s.%s.%s:%s%v|%s", c.prefix, bucket, m.Name, prefix, m.Value, t)
 	}
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 }
 
 func NewStatsdMetrics(start time.Time) Metrics {
@@ -341,9 +335,8 @@ func (ma *MetricAgg) Send(c *Client, mType string, general []Metric, genAggCnt i
 		Name:  count,
 		Value: ma.cnt,
 	})
-
 	// don't send anything when cnt == 0 -> no data aggregated
-	if ma.cnt != 0 {
+	if ma.cnt > 0 {
 		c.Send(mType, ma.cnt, Metric{
 			Type:  Gauge,
 			Name:  pending,
@@ -372,8 +365,7 @@ func (ma *MetricAgg) Send(c *Client, mType string, general []Metric, genAggCnt i
 			Value: ma.Throughput(endTime),
 		})
 	}
-
-	if len(general) != 0 {
+	if len(general) != 0 && genAggCnt > 0 {
 		c.Send(mType, genAggCnt, general...)
 	}
 }
@@ -383,7 +375,6 @@ func (mcg *MetricConfigAgg) Send(c *Client) {
 	if mcg.cnt == 0 {
 		return
 	}
-
 	c.Send(getConfig, 1,
 		Metric{
 			Type:  Counter,
@@ -410,10 +401,11 @@ func (mcg *MetricConfigAgg) Send(c *Client) {
 }
 
 func (m *Metrics) SendAll(c *Client) {
-	generalMetricsGet := make([]Metric, 0, len(m.GetLat.metrics))
-	generalMetricsPut := make([]Metric, 0, len(m.PutLat.metrics))
-	var aggCntGet, aggCntPut int64
-
+	var (
+		aggCntGet, aggCntPut int64
+		generalMetricsGet    = make([]Metric, 0, len(m.GetLat.metrics))
+		generalMetricsPut    = make([]Metric, 0, len(m.PutLat.metrics))
+	)
 	for _, m := range m.GetLat.metrics {
 		generalMetricsGet = append(generalMetricsGet, Metric{
 			Type:  Timer,

@@ -101,7 +101,7 @@ type (
 	}
 	NamedVal64 struct {
 		Name       string
-		NameSuffix string
+		NameSuffix string // forces immediate send when non-empty (see NOTE below)
 		Value      int64
 	}
 	CoreStats struct {
@@ -238,20 +238,9 @@ func (s *CoreStats) get(name string) (val int64) {
 //
 func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
 	v, ok := s.Tracker[name]
-	cos.Assertf(ok, "invalid stats name %q", name)
+	debug.Assertf(ok, "invalid stats name %q", name)
 	switch v.kind {
 	case KindLatency:
-		if strings.HasSuffix(name, ".ns") {
-			nroot := strings.TrimSuffix(name, ".ns")
-			if nameSuffix != "" {
-				nroot += "." + nameSuffix
-			}
-			s.statsdC.Send(nroot, 1, metric{
-				Type:  statsd.Timer,
-				Name:  "latency",
-				Value: float64(time.Duration(val) / time.Millisecond),
-			})
-		}
 		v.Lock()
 		v.numSamples++
 		v.cumulative += val
@@ -263,18 +252,21 @@ func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
 		v.Value += val
 		v.Unlock()
 	case KindCounter:
-		if strings.HasSuffix(name, ".n") {
+		v.Lock()
+		v.Value += val
+		v.Unlock()
+		// NOTE:
+		// - currently only counters;
+		// - non-empty suffix forces an immediate Tx with no aggregation (see below);
+		// - suffix is an arbitrary string that can be defined at runtime;
+		// - e.g. usage: per-mountpath error counters.
+		if nameSuffix != "" {
 			nroot := strings.TrimSuffix(name, ".n")
-			if nameSuffix != "" {
-				nroot += "." + nameSuffix
-			}
+			nroot += "." + nameSuffix
 			s.statsdC.Send(nroot, 1, metric{Type: statsd.Counter, Name: "count", Value: val})
-			v.Lock()
-			v.Value += val
-			v.Unlock()
 		}
 	default:
-		cos.AssertMsg(false, v.kind)
+		debug.AssertMsg(false, v.kind)
 	}
 }
 
@@ -283,9 +275,10 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 	for name, v := range s.Tracker {
 		switch v.kind {
 		case KindLatency:
+			var lat int64
 			v.Lock()
 			if v.numSamples > 0 {
-				lat := v.Value / v.numSamples
+				lat = v.Value / v.numSamples
 				ctracker[name] = &copyValue{Value: lat}
 				debug.SetExpvar(glog.SmoduleStats, name, lat)
 				if !match(name, idlePrefs) {
@@ -295,6 +288,16 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 			v.Value = 0
 			v.numSamples = 0
 			v.Unlock()
+			// NOTE: ns to ms and don't report zeros
+			millis := cos.DivRound(lat, int64(time.Millisecond))
+			if millis > 0 && strings.HasSuffix(name, ".ns") {
+				nroot := strings.TrimSuffix(name, ".ns")
+				s.statsdC.Send(nroot, 1, metric{
+					Type:  statsd.Timer,
+					Name:  "latency",
+					Value: float64(millis),
+				})
+			}
 		case KindThroughput:
 			var throughput int64
 			v.Lock()
@@ -312,17 +315,38 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 				)
 			}
 		case KindCounter:
+			var cnt int64
 			v.RLock()
 			if v.Value > 0 {
-				if prev, ok := ctracker[name]; !ok || prev.Value != v.Value {
-					ctracker[name] = &copyValue{Value: v.Value}
-					debug.SetExpvar(glog.SmoduleStats, name, v.Value)
+				cnt = v.Value
+				if prev, ok := ctracker[name]; !ok || prev.Value != cnt {
+					ctracker[name] = &copyValue{Value: cnt}
+					debug.SetExpvar(glog.SmoduleStats, name, cnt)
 					if !match(name, idlePrefs) {
 						idle = false
 					}
+				} else {
+					cnt = 0
 				}
 			}
 			v.RUnlock()
+			if cnt > 0 {
+				if strings.HasSuffix(name, ".size") {
+					// target only suffix
+					nroot := strings.TrimSuffix(name, ".size")
+					metricType := statsd.Counter
+					if nroot == "dl" {
+						metricType = statsd.PersistentCounter
+					}
+					s.statsdC.Send(nroot, 1,
+						metric{Type: metricType, Name: "bytes", Value: cnt},
+					)
+				} else {
+					nroot := strings.TrimSuffix(name, ".n")
+					s.statsdC.Send(nroot, 1,
+						metric{Type: statsd.Counter, Name: "count", Value: cnt})
+				}
+			}
 		default:
 			ctracker[name] = &copyValue{Value: v.Value} // KindSpecial/KindDelta as is and wo/ lock
 			debug.SetExpvar(glog.SmoduleStats, name, v.Value)
@@ -354,8 +378,8 @@ func (s *CoreStats) copyCumulative(ctracker copyTracker) {
 func (s *CoreStats) initStatsD(node *cluster.Snode) {
 	var (
 		suffix = strings.ReplaceAll(node.ID(), ":", "_")
-		port   = 8125 // StatsD default port, see https://github.com/etsy/stats
-		probe  = true // test-probe StatsD server at init time
+		port   = 8125  // StatsD default port, see https://github.com/etsy/stats
+		probe  = false // test-probe StatsD server at init time
 	)
 	if portStr := os.Getenv("AIS_STATSD_PORT"); portStr != "" {
 		if portNum, err := cmn.ParsePort(portStr); err != nil {
@@ -371,7 +395,10 @@ func (s *CoreStats) initStatsD(node *cluster.Snode) {
 			probe = probeBool
 		}
 	}
-	statsD, _ := statsd.New("localhost", port, "ais"+node.Type()+"."+suffix, probe)
+	statsD, err := statsd.New("localhost", port, "ais"+node.Type()+"."+suffix, probe)
+	if err != nil {
+		glog.Errorf("Starting up without StatsD: %v", err)
+	}
 	s.statsdC = &statsD
 }
 
@@ -411,11 +438,17 @@ func (v *copyValue) UnmarshalJSON(b []byte) error       { return jsoniter.Unmars
 //
 
 func (tracker statsTracker) register(key, kind string, isCommon ...bool) {
-	cos.Assertf(cos.StringInSlice(kind, kinds), "invalid stats kind %q", kind)
+	debug.Assertf(cos.StringInSlice(kind, kinds), "invalid stats kind %q", kind)
 
 	tracker[key] = &statsValue{kind: kind}
 	if len(isCommon) > 0 {
 		tracker[key].isCommon = isCommon[0]
+	}
+	if kind == KindCounter {
+		debug.AssertMsg(strings.HasSuffix(key, ".n") || strings.HasSuffix(key, ".size"), key)
+	}
+	if kind == KindLatency {
+		debug.AssertMsg(strings.Contains(key, ".ns"), key)
 	}
 }
 
@@ -446,9 +479,9 @@ func (tracker statsTracker) registerCommonStats() {
 	tracker.register(Uptime, KindSpecial, true)
 }
 
-//
-// statsunner
-//
+////////////////
+// statsunner //
+////////////////
 
 func (r *statsRunner) Name() string { return r.name }
 
@@ -553,9 +586,11 @@ func (r *statsRunner) Stop(err error) {
 }
 
 // common impl
-func (r *statsRunner) RegisterAll()               { cos.Assert(false) } // NOTE: currently, proxy's stats == common and hardcoded
+// NOTE: currently, proxy's stats == common and hardcoded
+func (r *statsRunner) RegisterAll()               { cos.Assert(false) }
 func (r *statsRunner) Add(name string, val int64) { r.workCh <- NamedVal64{Name: name, Value: val} }
 func (r *statsRunner) Get(name string) int64      { cos.Assert(false); return 0 }
+
 func (r *statsRunner) AddMany(nvs ...NamedVal64) {
 	for _, nv := range nvs {
 		r.workCh <- nv

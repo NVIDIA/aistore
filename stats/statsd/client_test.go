@@ -70,7 +70,7 @@ func TestClient(t *testing.T) {
 
 	// drain accumulated probes
 	buf := make([]byte, 256)
-	for i := 0; i < statsd.NumTestProbes; i++ {
+	for i := 0; i < 10; i++ {
 		_, _, err := s.ReadFromUDP(buf)
 		if err != nil {
 			t.Fatal("Failed to read probe", err)
