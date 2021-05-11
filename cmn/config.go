@@ -148,12 +148,9 @@ type (
 		Hostname             string `json:"hostname"`
 		HostnameIntraControl string `json:"hostname_intra_control"`
 		HostnameIntraData    string `json:"hostname_intra_data"`
-		PortStr              string `json:"port"`               // listening port
-		PortIntraControlStr  string `json:"port_intra_control"` // listening port for intra control network
-		PortIntraDataStr     string `json:"port_intra_data"`    // listening port for intra data network
-		Port                 int    `json:"-"`
-		PortIntraControl     int    `json:"-"`
-		PortIntraData        int    `json:"-"`
+		Port                 int    `json:"port,string"`               // listening port
+		PortIntraControl     int    `json:"port_intra_control,string"` // listening port for intra control network
+		PortIntraData        int    `json:"port_intra_data,string"`    // listening port for intra data network
 
 		UseIntraControl bool `json:"-"`
 		UseIntraData    bool `json:"-"`
@@ -1195,16 +1192,16 @@ func (c *LocalNetConfig) Validate(contextConfig *Config) (err error) {
 	}
 
 	// Parse ports
-	if c.Port, err = ParsePort(c.PortStr); err != nil {
+	if _, err := ValidatePort(c.Port); err != nil {
 		return fmt.Errorf("invalid %s port specified: %v", NetworkPublic, err)
 	}
-	if c.PortIntraControlStr != "" {
-		if c.PortIntraControl, err = ParsePort(c.PortIntraControlStr); err != nil {
+	if c.PortIntraControl != 0 {
+		if _, err := ValidatePort(c.PortIntraControl); err != nil {
 			return fmt.Errorf("invalid %s port specified: %v", NetworkIntraControl, err)
 		}
 	}
-	if c.PortIntraDataStr != "" {
-		if c.PortIntraData, err = ParsePort(c.PortIntraDataStr); err != nil {
+	if c.PortIntraData != 0 {
+		if _, err := ValidatePort(c.PortIntraData); err != nil {
 			return fmt.Errorf("invalid %s port specified: %v", NetworkIntraData, err)
 		}
 	}

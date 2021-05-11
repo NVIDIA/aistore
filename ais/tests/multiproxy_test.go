@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -191,9 +190,9 @@ killRestore:
 	localConf := &cmn.LocalConfig{}
 	_, err = jsp.LoadMeta(localConfPath, localConf)
 	tassert.CheckFatal(t, err)
-	localConf.HostNet.PortStr = strconv.Itoa(cfg.HostNet.Port + portInc)
-	localConf.HostNet.PortIntraControlStr = strconv.Itoa(cfg.HostNet.PortIntraControl + portInc)
-	localConf.HostNet.PortIntraDataStr = strconv.Itoa(cfg.HostNet.PortIntraData + portInc)
+	localConf.HostNet.Port = cfg.HostNet.Port + portInc
+	localConf.HostNet.PortIntraControl = cfg.HostNet.PortIntraControl + portInc
+	localConf.HostNet.PortIntraData = cfg.HostNet.PortIntraData + portInc
 	err = jsp.SaveMeta(localConfPath, localConf, nil)
 	tassert.CheckFatal(t, err)
 
@@ -362,9 +361,9 @@ func _addNodeDuplicateDaemonID(t *testing.T, nodeType string) {
 	// Create local config for daemon.
 	localConf := &cmn.LocalConfig{}
 	localConf.ConfigDir = conf.ConfigDir
-	localConf.HostNet.PortStr = strconv.Itoa(conf.HostNet.Port + portInc)
-	localConf.HostNet.PortIntraControlStr = strconv.Itoa(conf.HostNet.PortIntraControl + portInc)
-	localConf.HostNet.PortIntraDataStr = strconv.Itoa(conf.HostNet.PortIntraData + portInc)
+	localConf.HostNet.Port = conf.HostNet.Port + portInc
+	localConf.HostNet.PortIntraControl = conf.HostNet.PortIntraControl + portInc
+	localConf.HostNet.PortIntraData = conf.HostNet.PortIntraData + portInc
 
 	// start with different config but same daemon ID
 	pid := tutils.DeployNode(t, node, conf, localConf)
