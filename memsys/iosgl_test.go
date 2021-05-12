@@ -34,6 +34,22 @@ var _ = Describe("SGL", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 
+	It("should properly write to SGL using WriteByte method", func() {
+		size := int64(cos.MiB)
+		buf, _ := randReader(size)
+
+		sgl := mm.NewSGL(cos.KiB)
+
+		for i := int64(0); i < size; i++ {
+			err := sgl.WriteByte(buf[i])
+			Expect(err).ToNot(HaveOccurred())
+		}
+		b, err := sgl.ReadAll()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(b).To(HaveLen(int(size)))
+		Expect(b).To(BeEquivalentTo(buf))
+	})
+
 	Describe("ReadFrom", func() {
 		It("should properly write to SGL using ReadFrom method", func() {
 			size := int64(11*cos.MiB + 2*cos.KiB + 123)

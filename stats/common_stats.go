@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats/statsd"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
@@ -108,6 +109,7 @@ type (
 		Tracker   statsTracker
 		statsdC   *statsd.Client
 		statsTime time.Duration
+		sgl       *memsys.SGL
 	}
 
 	RebalanceTargetStats struct {
@@ -214,6 +216,9 @@ func (s *CoreStats) init(size int) {
 	// * total number of goroutines
 	debug.NewExpvar(glog.SmoduleStats)
 	s.Tracker.registerCommonStats()
+
+	// reusable sgl => (udp) => StatsD
+	s.sgl = memsys.DefaultPageMM().NewSGL(memsys.PageSize)
 }
 
 func (s *CoreStats) UpdateUptime(d time.Duration) {
@@ -272,7 +277,9 @@ func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
 }
 
 func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) {
+	var newline bool
 	idle = true
+	s.sgl.Reset()
 	for name, v := range s.Tracker {
 		switch v.kind {
 		case KindLatency:
@@ -293,11 +300,15 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 			millis := cos.DivRound(lat, int64(time.Millisecond))
 			if millis > 0 && strings.HasSuffix(name, ".ns") {
 				nroot := strings.TrimSuffix(name, ".ns")
-				s.statsdC.Send(nroot, 1, metric{
-					Type:  statsd.Timer,
-					Name:  "latency",
-					Value: float64(millis),
-				})
+				s.statsdC.AppendMetric(
+					nroot,
+					metric{
+						Type:  statsd.Timer,
+						Name:  "latency",
+						Value: float64(millis),
+					},
+					s.sgl, newline)
+				newline = true
 			}
 		case KindThroughput:
 			var throughput int64
@@ -311,9 +322,12 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 			v.Unlock()
 			if throughput > 0 {
 				nroot := strings.TrimSuffix(name, ".bps")
-				s.statsdC.Send(nroot, 1,
+				s.statsdC.AppendMetric(
+					nroot,
 					metric{Type: statsd.Gauge, Name: "throughput", Value: throughput},
+					s.sgl, newline,
 				)
+				newline = true
 			}
 		case KindCounter:
 			var cnt int64
@@ -339,13 +353,20 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 					if nroot == "dl" {
 						metricType = statsd.PersistentCounter
 					}
-					s.statsdC.Send(nroot, 1,
+					s.statsdC.AppendMetric(
+						nroot,
 						metric{Type: metricType, Name: "bytes", Value: cnt},
+						s.sgl, newline,
 					)
+					newline = true
 				} else {
 					nroot := strings.TrimSuffix(name, ".n")
-					s.statsdC.Send(nroot, 1,
-						metric{Type: statsd.Counter, Name: "count", Value: cnt})
+					s.statsdC.AppendMetric(
+						nroot,
+						metric{Type: statsd.Counter, Name: "count", Value: cnt},
+						s.sgl, newline,
+					)
+					newline = true
 				}
 			}
 		default:
@@ -353,6 +374,8 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 			debug.SetExpvar(glog.SmoduleStats, name, v.Value)
 		}
 	}
+	s.statsdC.SendSGL(s.sgl)
+
 	debug.SetExpvar(glog.SmoduleStats, "num-goroutines", int64(runtime.NumGoroutine()))
 	return
 }

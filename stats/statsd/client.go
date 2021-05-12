@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -93,7 +94,7 @@ func (c Client) probeUDP() (err error) {
 	for i := 1; i <= numTestProbes; i++ {
 		sgl.Reset()
 		m.Value = i
-		c.appendMetric(m, sgl, "probe", 1)
+		c.appendM(m, sgl, "probe", 1)
 		bytes := sgl.Bytes()
 		n, erw := c.conn.WriteToUDP(bytes, c.server)
 		if erw != nil {
@@ -134,23 +135,47 @@ func (c Client) Send(bucket string, aggCnt int64, metrics ...Metric) {
 
 	bucket = strings.ReplaceAll(bucket, ":", "_")
 	for _, m := range metrics {
-		c.appendMetric(m, sgl, bucket, aggCnt)
+		c.appendM(m, sgl, bucket, aggCnt)
 	}
-	debug.Assert(sgl.Len() > 0)
-	if l := sgl.Len(); l > msize {
-		msize = l
+	l := sgl.Len()
+	msize = cos.MaxI64(msize, l)
+	bytes := sgl.Bytes()
+	c.write(bytes, int(l))
+}
+
+func (c Client) SendSGL(sgl *memsys.SGL) {
+	l := sgl.Len()
+	debug.Assert(l < sgl.Slab().Size())
+	if !c.opened || l == 0 {
+		return
 	}
 	bytes := sgl.Bytes()
-	n, erw := c.conn.WriteToUDP(bytes, c.server)
-	if erw != nil || n == 0 {
+	c.write(bytes, int(l))
+}
+
+func (c Client) write(bytes []byte, l int) {
+	n, err := c.conn.WriteToUDP(bytes, c.server)
+	if err != nil || n < l {
 		errcnt++
 		if errcnt%numErrsLog == 0 {
-			glog.Errorf("StatsD: %v(%d) %d", erw, n, errcnt)
+			glog.Errorf("StatsD: %v(%d/%d) %d", err, n, l, errcnt)
 		}
 	}
 }
 
-func (c Client) appendMetric(m Metric, sgl *memsys.SGL, bucket string, aggCnt int64) {
+// TODO: MTU size limitation
+func (c Client) AppendMetric(bucket string, m Metric, sgl *memsys.SGL, newline bool) {
+	if !c.opened {
+		return
+	}
+	if newline {
+		sgl.WriteByte('\n')
+	}
+	bucket = strings.ReplaceAll(bucket, ":", "_")
+	c.appendM(m, sgl, bucket, 1)
+}
+
+func (c Client) appendM(m Metric, sgl *memsys.SGL, bucket string, aggCnt int64) {
 	var (
 		t, prefix string
 		err       error

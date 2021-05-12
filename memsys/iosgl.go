@@ -128,8 +128,7 @@ func (z *SGL) WriteTo(dst io.Writer) (n int64, err error) {
 
 func (z *SGL) Write(p []byte) (n int, err error) {
 	wlen := len(p)
-	needtot := z.woff + int64(wlen)
-	if needtot > z.Cap() {
+	if needtot := z.woff + int64(wlen); needtot > z.Cap() {
 		z.grow(needtot)
 	}
 	idx, off, poff := z.woff/z.slab.Size(), z.woff%z.slab.Size(), 0
@@ -145,6 +144,17 @@ func (z *SGL) Write(p []byte) (n int, err error) {
 		poff += int(size)
 	}
 	return len(p), nil
+}
+
+func (z *SGL) WriteByte(c byte) error {
+	if needtot := z.woff + 1; needtot > z.Cap() {
+		z.grow(needtot)
+	}
+	idx, off := z.woff/z.slab.Size(), z.woff%z.slab.Size()
+	buf := z.sgl[idx]
+	buf[off] = c
+	z.woff++
+	return nil
 }
 
 func (z *SGL) Read(b []byte) (n int, err error) {
