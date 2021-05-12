@@ -366,22 +366,21 @@ var _ = Describe("IterFields", func() {
 
 			Entry("nested fields", &cmn.ConfigToUpdate{
 				Net: &cmn.NetConfToUpdate{
-					L4: &cmn.L4ConfToUpdate{
-						Proto: api.String("http"),
+					HTTP: &cmn.HTTPConfToUpdate{
+						Certificate: api.String("secret"),
 					},
 				},
 			}, &cmn.ConfigToUpdate{
 				Net: &cmn.NetConfToUpdate{
-					L4: &cmn.L4ConfToUpdate{
-						Proto:   api.String("http"),
-						PortStr: api.String("51080"),
+					HTTP: &cmn.HTTPConfToUpdate{
+						UseHTTPS: api.Bool(true),
 					},
 				},
 			}, &cmn.ConfigToUpdate{
 				Net: &cmn.NetConfToUpdate{
-					L4: &cmn.L4ConfToUpdate{
-						Proto:   api.String("http"),
-						PortStr: api.String("51080"),
+					HTTP: &cmn.HTTPConfToUpdate{
+						Certificate: api.String("secret"),
+						UseHTTPS:    api.Bool(true),
 					},
 				},
 			}),
