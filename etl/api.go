@@ -13,18 +13,18 @@ import (
 
 type (
 	InitMsg struct {
-		ID          string           `json:"id"`
-		Spec        []byte           `json:"spec"`
-		CommType    string           `json:"communication_type"`
-		WaitTimeout cos.DurationJSON `json:"wait_timeout"`
+		ID          string       `json:"id"`
+		Spec        []byte       `json:"spec"`
+		CommType    string       `json:"communication_type"`
+		WaitTimeout cos.Duration `json:"wait_timeout"`
 	}
 
 	BuildMsg struct {
-		ID          string           `json:"id"`
-		Code        []byte           `json:"code"`
-		Deps        []byte           `json:"dependencies"`
-		Runtime     string           `json:"runtime"`
-		WaitTimeout cos.DurationJSON `json:"wait_timeout"`
+		ID          string       `json:"id"`
+		Code        []byte       `json:"code"`
+		Deps        []byte       `json:"dependencies"`
+		Runtime     string       `json:"runtime"`
+		WaitTimeout cos.Duration `json:"wait_timeout"`
 	}
 
 	InfoList []Info

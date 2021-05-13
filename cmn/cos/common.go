@@ -54,6 +54,8 @@ type (
 		PctMemUsed float64 `json:"pct_mem_used"`
 		PctCPUUsed float64 `json:"pct_cpu_used"`
 	}
+
+	JSONRawMsgs map[string]jsoniter.RawMessage
 )
 
 var toBiBytes = map[string]int64{

@@ -100,8 +100,8 @@ type (
 		// TODO: this field might not be required when transformation on subset (template) of bucket is supported.
 		Ext cos.SimpleKVs `json:"ext"`
 
-		ID             string           `json:"id,omitempty"`              // optional, ETL only
-		RequestTimeout cos.DurationJSON `json:"request_timeout,omitempty"` // optional, ETL only
+		ID             string       `json:"id,omitempty"`              // optional, ETL only
+		RequestTimeout cos.Duration `json:"request_timeout,omitempty"` // optional, ETL only
 
 		CopyBckMsg
 	}

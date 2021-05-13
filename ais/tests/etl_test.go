@@ -205,7 +205,7 @@ func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, fileS
 	tlog.Logf("Start offline ETL %q\n", uuid)
 	xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{
 		ID:             uuid,
-		RequestTimeout: cos.DurationJSON(requestTimeout),
+		RequestTimeout: cos.Duration(requestTimeout),
 	})
 
 	err := tetl.WaitForFinished(baseParams, xactID, timeout)
@@ -388,7 +388,7 @@ def transform(input_bytes: bytes) -> bytes:
 				Code:        []byte(test.code),
 				Deps:        []byte(test.deps),
 				Runtime:     test.runtime,
-				WaitTimeout: cos.DurationJSON(5 * time.Minute),
+				WaitTimeout: cos.Duration(5 * time.Minute),
 			})
 			tassert.CheckFatal(t, err)
 

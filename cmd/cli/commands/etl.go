@@ -174,7 +174,7 @@ func etlBuildHandler(c *cli.Context) (err error) {
 	}
 
 	msg.Runtime = parseStrFlag(c, runtimeFlag)
-	msg.WaitTimeout = cos.DurationJSON(parseDurationFlag(c, waitTimeoutFlag))
+	msg.WaitTimeout = cos.Duration(parseDurationFlag(c, waitTimeoutFlag))
 
 	if err := msg.Validate(); err != nil {
 		return err
@@ -337,7 +337,7 @@ func etlBucketHandler(c *cli.Context) (err error) {
 		msg.Ext = extMap
 	}
 	if flagIsSet(c, etlBucketRequestTimeout) {
-		msg.RequestTimeout = cos.DurationJSON(etlBucketRequestTimeout.Value)
+		msg.RequestTimeout = cos.Duration(etlBucketRequestTimeout.Value)
 	}
 
 	xactID, err := api.ETLBucket(defaultAPIParams, fromBck, toBck, msg)

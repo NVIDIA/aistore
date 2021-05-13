@@ -38,11 +38,11 @@ type (
 
 	// Runtime EC statistics for restore xaction
 	ExtECGetStats struct {
-		AvgTime     cos.DurationJSON `json:"ec.decode.time"`
-		ErrCount    int64            `json:"ec.decode.err.n,string"`
-		AvgObjTime  cos.DurationJSON `json:"ec.obj.process.time"`
-		AvgQueueLen float64          `json:"ec.queue.len.n"`
-		IsIdle      bool             `json:"is_idle"`
+		AvgTime     cos.Duration `json:"ec.decode.time"`
+		ErrCount    int64        `json:"ec.decode.err.n,string"`
+		AvgObjTime  cos.Duration `json:"ec.obj.process.time"`
+		AvgQueueLen float64      `json:"ec.queue.len.n"`
+		IsIdle      bool         `json:"is_idle"`
 	}
 )
 
@@ -285,9 +285,9 @@ func (r *XactGet) Stats() cluster.XactStats {
 	baseStats := r.XactDemandBase.Stats().(*xaction.BaseXactStatsExt)
 	st := r.stats.stats()
 	baseStats.Ext = &ExtECGetStats{
-		AvgTime:     cos.DurationJSON(st.DecodeTime.Nanoseconds()),
+		AvgTime:     cos.Duration(st.DecodeTime.Nanoseconds()),
 		ErrCount:    st.DecodeErr,
-		AvgObjTime:  cos.DurationJSON(st.ObjTime.Nanoseconds()),
+		AvgObjTime:  cos.Duration(st.ObjTime.Nanoseconds()),
 		AvgQueueLen: st.QueueLen,
 		IsIdle:      r.Pending() == 0,
 	}

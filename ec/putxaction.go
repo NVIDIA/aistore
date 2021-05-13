@@ -37,16 +37,16 @@ type (
 
 	// Runtime EC statistics for PUT xaction
 	ExtECPutStats struct {
-		AvgEncodeTime  cos.DurationJSON `json:"ec.encode.time"`
-		AvgDeleteTime  cos.DurationJSON `json:"ec.delete.time"`
-		EncodeCount    int64            `json:"ec.encode.n,string"`
-		DeleteCount    int64            `json:"ec.delete.n,string"`
-		EncodeSize     int64            `json:"ec.encode.size,string"`
-		EncodeErrCount int64            `json:"ec.encode.err.n,string"`
-		DeleteErrCount int64            `json:"ec.delete.err.n,string"`
-		AvgObjTime     cos.DurationJSON `json:"ec.obj.process.time"`
-		AvgQueueLen    float64          `json:"ec.queue.len.n"`
-		IsIdle         bool             `json:"is_idle"`
+		AvgEncodeTime  cos.Duration `json:"ec.encode.time"`
+		AvgDeleteTime  cos.Duration `json:"ec.delete.time"`
+		EncodeCount    int64        `json:"ec.encode.n,string"`
+		DeleteCount    int64        `json:"ec.delete.n,string"`
+		EncodeSize     int64        `json:"ec.encode.size,string"`
+		EncodeErrCount int64        `json:"ec.encode.err.n,string"`
+		DeleteErrCount int64        `json:"ec.delete.err.n,string"`
+		AvgObjTime     cos.Duration `json:"ec.obj.process.time"`
+		AvgQueueLen    float64      `json:"ec.queue.len.n"`
+		IsIdle         bool         `json:"is_idle"`
 	}
 )
 
@@ -223,14 +223,14 @@ func (r *XactPut) Stats() cluster.XactStats {
 	baseStats := r.XactDemandBase.Stats().(*xaction.BaseXactStatsExt)
 	st := r.stats.stats()
 	baseStats.Ext = &ExtECPutStats{
-		AvgEncodeTime:  cos.DurationJSON(st.EncodeTime.Nanoseconds()),
+		AvgEncodeTime:  cos.Duration(st.EncodeTime.Nanoseconds()),
 		EncodeSize:     st.EncodeSize,
 		EncodeCount:    st.PutReq,
 		EncodeErrCount: st.EncodeErr,
-		AvgDeleteTime:  cos.DurationJSON(st.DeleteTime.Nanoseconds()),
+		AvgDeleteTime:  cos.Duration(st.DeleteTime.Nanoseconds()),
 		DeleteErrCount: st.DeleteErr,
 		DeleteCount:    st.DelReq,
-		AvgObjTime:     cos.DurationJSON(st.ObjTime.Nanoseconds()),
+		AvgObjTime:     cos.Duration(st.ObjTime.Nanoseconds()),
 		AvgQueueLen:    st.QueueLen,
 		IsIdle:         r.Pending() == 0,
 	}

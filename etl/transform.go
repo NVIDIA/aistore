@@ -552,7 +552,7 @@ func setPodEnvVariables(t cluster.Target, pod *corev1.Pod, customEnv map[string]
 // request (made by the Kubernetes itself) returns OK. If the Pod doesn't have
 // `readinessProbe` config specified the last step gets skipped.
 // NOTE: However, currently, we do require readinessProbe config in the ETL spec.
-func waitPodReady(errCtx *cmn.ETLErrorContext, pod *corev1.Pod, waitTimeout cos.DurationJSON) error {
+func waitPodReady(errCtx *cmn.ETLErrorContext, pod *corev1.Pod, waitTimeout cos.Duration) error {
 	var (
 		condition   *corev1.PodCondition
 		client, err = k8s.GetClient()

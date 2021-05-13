@@ -594,6 +594,6 @@ func extECPutStats(base *xaction.BaseXactStatsExt) *ec.ExtECPutStats {
 	return ecPut
 }
 
-func fmtMilli(val cos.DurationJSON) string {
+func fmtMilli(val cos.Duration) string {
 	return cos.FormatMilli(time.Duration(val))
 }

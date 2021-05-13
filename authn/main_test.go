@@ -25,7 +25,7 @@ var (
 func init() {
 	// Set default expiration time to 30 minutes
 	if Conf.Server.ExpirePeriod == 0 {
-		Conf.Server.ExpirePeriod = cos.DurationJSON(time.Minute * 30)
+		Conf.Server.ExpirePeriod = cos.Duration(time.Minute * 30)
 	}
 }
 

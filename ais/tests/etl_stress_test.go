@@ -57,7 +57,7 @@ def transform(input_bytes):
 	uuid, err := api.ETLBuild(baseParams, etl.BuildMsg{
 		Code:        []byte(timeoutFunc),
 		Runtime:     runtime.Python3,
-		WaitTimeout: cos.DurationJSON(5 * time.Minute),
+		WaitTimeout: cos.Duration(5 * time.Minute),
 	})
 	tassert.CheckFatal(t, err)
 	testETLBucket(t, uuid, m.bck, m.num, 0 /*skip bytes check*/, 5*time.Minute)
@@ -161,7 +161,7 @@ def transform(input_bytes):
 				buildDesc: etl.BuildMsg{
 					Code:        []byte(echoPythonTransform),
 					Runtime:     runtime.Python2,
-					WaitTimeout: cos.DurationJSON(10 * time.Minute),
+					WaitTimeout: cos.Duration(10 * time.Minute),
 				},
 			},
 			{
@@ -170,7 +170,7 @@ def transform(input_bytes):
 				buildDesc: etl.BuildMsg{
 					Code:        []byte(echoPythonTransform),
 					Runtime:     runtime.Python3,
-					WaitTimeout: cos.DurationJSON(10 * time.Minute),
+					WaitTimeout: cos.Duration(10 * time.Minute),
 				},
 			},
 		}
@@ -210,7 +210,7 @@ def transform(input_bytes):
 			tlog.Logf("Start offline ETL %q\n", uuid)
 			xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{
 				ID:             uuid,
-				RequestTimeout: cos.DurationJSON(requestTimeout),
+				RequestTimeout: cos.Duration(requestTimeout),
 			})
 			tetl.ReportXactionStatus(baseParams, xactID, etlDoneCh, 2*time.Minute, m.num)
 

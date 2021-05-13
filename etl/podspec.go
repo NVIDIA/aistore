@@ -92,16 +92,16 @@ func validateCommType(commType string) error {
 	return nil
 }
 
-func podTransformTimeout(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (cos.DurationJSON, error) {
+func podTransformTimeout(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (cos.Duration, error) {
 	if pod.Annotations == nil || pod.Annotations[waitTimeoutAnnotation] == "" {
 		return 0, nil
 	}
 
 	v, err := time.ParseDuration(pod.Annotations[waitTimeoutAnnotation])
 	if err != nil {
-		return cos.DurationJSON(v), cmn.NewETLError(errCtx, err.Error()).WithPodName(pod.Name)
+		return cos.Duration(v), cmn.NewETLError(errCtx, err.Error()).WithPodName(pod.Name)
 	}
-	return cos.DurationJSON(v), nil
+	return cos.Duration(v), nil
 }
 
 func ValidateSpec(spec []byte) (msg InitMsg, err error) {

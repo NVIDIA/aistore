@@ -38,11 +38,11 @@ type (
 		Key         string `json:"server_key"`
 	}
 	ServerConf struct {
-		Secret       string           `json:"secret"`
-		ExpirePeriod cos.DurationJSON `json:"expiration_time"`
+		Secret       string       `json:"secret"`
+		ExpirePeriod cos.Duration `json:"expiration_time"`
 	}
 	TimeoutConf struct {
-		Default cos.DurationJSON `json:"default_timeout"`
+		Default cos.Duration `json:"default_timeout"`
 	}
 	ConfigToUpdate struct {
 		Server *ServerConfToUpdate `json:"auth"`
@@ -82,7 +82,7 @@ func (c *Config) ApplyUpdate(cu *ConfigToUpdate) error {
 		if err != nil {
 			return fmt.Errorf("invalid time format %s, err: %v", *cu.Server.ExpirePeriod, err)
 		}
-		c.Server.ExpirePeriod = cos.DurationJSON(dur)
+		c.Server.ExpirePeriod = cos.Duration(dur)
 	}
 	return nil
 }
