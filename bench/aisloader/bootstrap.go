@@ -136,18 +136,17 @@ type (
 		loaderIDHashLen   uint
 		numEpochs         uint
 
-		getLoaderID    bool
-		randomObjName  bool
-		uniqueGETs     bool
-		verifyHash     bool // verify xxhash during get
-		usingSG        bool
-		usingFile      bool
-		getConfig      bool // true: load control plane (read proxy config)
-		jsonFormat     bool
-		stoppable      bool // true: terminate by Ctrl-C
-		statsdRequired bool
-		dryRun         bool // true: print configuration and parameters that aisloader will use at runtime
-		traceHTTP      bool // true: trace http latencies as per httpLatencies & https://golang.org/pkg/net/http/httptrace
+		getLoaderID   bool
+		randomObjName bool
+		uniqueGETs    bool
+		verifyHash    bool // verify xxhash during get
+		usingSG       bool
+		usingFile     bool
+		getConfig     bool // true: load control plane (read proxy config)
+		jsonFormat    bool
+		stoppable     bool // true: terminate by Ctrl-C
+		dryRun        bool // true: print configuration and parameters that aisloader will use at runtime
+		traceHTTP     bool // true: trace http latencies as per httpLatencies & https://golang.org/pkg/net/http/httptrace
 
 		etlName     string // name of a ETL to apply to each object. Omitted when etlSpecPath specified.
 		etlSpecPath string // Path to a ETL spec to apply to each object.
@@ -271,12 +270,11 @@ func parseCmdLine() (params, error) {
 	f.StringVar(&p.loaderID, "loaderid", "0", "ID to identify a loader among multiple concurrent instances")
 	f.StringVar(&p.statsdIP, "statsdip", "localhost", "StatsD IP address or hostname")
 	f.IntVar(&p.statsdPort, "statsdport", 8125, "StatsD UDP port")
-	f.BoolVar(&p.statsdRequired, "check-statsd", false, "true: StatsD is required and must be reachable")
-	f.BoolVar(&p.statsdProbe, "test-probe StatsD server prior to benchmarks", true, "true: prior to benchmark make sure that StatsD is reachable")
+	f.BoolVar(&p.statsdProbe, "test-probe StatsD server prior to benchmarks", false, "when enabled probes StatsD server prior to running")
 	f.IntVar(&p.batchSize, "batchsize", 100, "Batch size to list and delete")
 	f.StringVar(&p.bPropsStr, "bprops", "", "JSON string formatted as per the SetBucketProps API and containing bucket properties to apply")
 	f.Int64Var(&p.seed, "seed", 0, "Random seed to achieve deterministic reproducible results (0 - use current time in nanoseconds)")
-	f.BoolVar(&p.jsonFormat, "json", false, "true: print the output in JSON")
+	f.BoolVar(&p.jsonFormat, "json", false, "Defines whether to print output in JSON format")
 	f.StringVar(&p.readOffStr, "readoff", "", "Read range offset (can contain multiplicative suffix K, MB, GiB, etc.)")
 	f.StringVar(&p.readLenStr, "readlen", "", "Read range length (can contain multiplicative suffix; 0 - GET full object)")
 	f.Uint64Var(&p.maxputs, "maxputs", 0, "Maximum number of objects to PUT")
@@ -741,7 +739,7 @@ func Start() error {
 	}
 
 	if runParams.cleanUp.Val {
-		fmt.Printf("BEWARE: cleanup is enabled, bucket %s will be destroyed after the run!\n\n", runParams.bck)
+		fmt.Printf("BEWARE: cleanup is enabled, bucket %s will be destroyed upon termination!\n\n", runParams.bck)
 		time.Sleep(time.Second)
 	}
 
@@ -753,11 +751,7 @@ func Start() error {
 	statsdC, err = statsd.New(runParams.statsdIP, runParams.statsdPort, prefixC, runParams.statsdProbe)
 	if err != nil {
 		fmt.Printf("%s", "Failed to connect to StatsD server")
-		if runParams.statsdRequired {
-			cos.Exitf("... aborting")
-		} else {
-			fmt.Println("... proceeding anyway")
-		}
+		time.Sleep(time.Second)
 	}
 	defer statsdC.Close()
 
