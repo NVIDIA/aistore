@@ -95,8 +95,8 @@ func (p *xactProvider) Get() cluster.Xact { return p.xact }
 
 func newXact(ctx context.Context, t cluster.Target, bck cmn.Bck, smsg *cmn.SelectMsg, uuid string) *Xact {
 	config := cmn.GCO.Get()
-	totallyIdle := config.Timeout.MaxHostBusy
-	likelyIdle := config.Timeout.MaxKeepalive
+	totallyIdle := config.Timeout.MaxHostBusy.D()
+	likelyIdle := config.Timeout.MaxKeepalive.D()
 	xact := &Xact{
 		ctx:      ctx,
 		t:        t,

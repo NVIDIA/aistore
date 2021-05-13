@@ -387,7 +387,7 @@ func (n *notifs) done(nl nl.NotifListener) {
 		args := allocBcastArgs()
 		args.req = nl.AbortArgs()
 		args.network = cmn.NetworkIntraControl
-		args.timeout = config.Timeout.MaxKeepalive
+		args.timeout = config.Timeout.MaxKeepalive.D()
 		args.nodes = []cluster.NodeMap{nl.Notifiers()}
 		args.nodeCount = len(args.nodes[0])
 		args.async = true
@@ -433,20 +433,19 @@ func (n *notifs) housekeep() time.Duration {
 
 func (n *notifs) syncStats(nl nl.NotifListener, dur ...time.Duration) {
 	var (
-		progressInterval = cmn.GCO.Get().Periodic.NotifTime
+		config           = cmn.GCO.Get()
+		progressInterval = config.Periodic.NotifTime.D()
 		done             bool
 	)
-
 	nl.RLock()
 	nodesTardy, syncRequired := nl.NodesTardy(dur...)
 	nl.RUnlock()
 	if !syncRequired {
 		return
 	}
-
 	args := allocBcastArgs()
 	args.network = cmn.NetworkIntraControl
-	args.timeout = cmn.GCO.Get().Timeout.MaxHostBusy
+	args.timeout = config.Timeout.MaxHostBusy.D()
 	args.req = nl.QueryArgs() // nodes to fetch stats from
 	args.nodes = []cluster.NodeMap{nodesTardy}
 	args.nodeCount = len(args.nodes[0])

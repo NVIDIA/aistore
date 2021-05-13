@@ -77,13 +77,13 @@ func newPrimary() *proxyrunner {
 
 	config := cmn.GCO.BeginUpdate()
 	config.ConfigDir = "/tmp/ais-tests"
-	config.Periodic.RetrySyncTime = time.Millisecond * 100
+	config.Periodic.RetrySyncTime = cos.Duration(time.Millisecond * 100)
 	config.Keepalive.Proxy.Name = "heartbeat"
-	config.Keepalive.Proxy.IntervalStr = "3s"
-	config.Timeout.CplaneOperation = 2 * time.Second
-	config.Timeout.MaxKeepalive = 4 * time.Second
-	config.Client.Timeout = 10 * time.Second
-	config.Client.TimeoutLong = 10 * time.Second
+	config.Keepalive.Proxy.Interval = cos.Duration(3 * time.Second)
+	config.Timeout.CplaneOperation = cos.Duration(2 * time.Second)
+	config.Timeout.MaxKeepalive = cos.Duration(4 * time.Second)
+	config.Client.Timeout = cos.Duration(10 * time.Second)
+	config.Client.TimeoutLong = cos.Duration(10 * time.Second)
 	config.Cksum.Type = cos.ChecksumXXHash
 	cmn.GCO.CommitUpdate(config)
 	cmn.GCO.SetGlobalConfigPath("/tmp/ais-tests/ais.config")
@@ -109,11 +109,11 @@ func newSecondary(name string) *proxyrunner {
 	p.client.control = &http.Client{}
 
 	config := cmn.GCO.BeginUpdate()
-	config.Periodic.RetrySyncTime = time.Millisecond * 100
+	config.Periodic.RetrySyncTime = cos.Duration(100 * time.Millisecond)
 	config.Keepalive.Proxy.Name = "heartbeat"
-	config.Keepalive.Proxy.IntervalStr = "3s"
-	config.Timeout.CplaneOperation = 2 * time.Second
-	config.Timeout.MaxKeepalive = 4 * time.Second
+	config.Keepalive.Proxy.Interval = cos.Duration(3 * time.Second)
+	config.Timeout.CplaneOperation = cos.Duration(2 * time.Second)
+	config.Timeout.MaxKeepalive = cos.Duration(4 * time.Second)
 	config.Cksum.Type = cos.ChecksumXXHash
 	cmn.GCO.CommitUpdate(config)
 

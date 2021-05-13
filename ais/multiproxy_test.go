@@ -45,11 +45,11 @@ func newDiscoverServerPrimary() *proxyrunner {
 
 	config := cmn.GCO.BeginUpdate()
 	config.Keepalive.Proxy.Name = "heartbeat"
-	config.Timeout.Startup = 4 * time.Second
-	config.Timeout.CplaneOperation = 2 * time.Second
-	config.Timeout.MaxKeepalive = 4 * time.Second
-	config.Client.Timeout = 10 * time.Second
-	config.Client.TimeoutLong = 10 * time.Second
+	config.Timeout.Startup = cos.Duration(4 * time.Second)
+	config.Timeout.CplaneOperation = cos.Duration(2 * time.Second)
+	config.Timeout.MaxKeepalive = cos.Duration(4 * time.Second)
+	config.Client.Timeout = cos.Duration(10 * time.Second)
+	config.Client.TimeoutLong = cos.Duration(10 * time.Second)
 	config.Cksum.Type = cos.ChecksumXXHash
 	cmn.GCO.CommitUpdate(config)
 

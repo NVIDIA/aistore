@@ -171,7 +171,7 @@ func waitForDownloaderToFinish(t *testing.T, baseParams api.BaseParams, targetID
 			return
 		}
 
-		if timeout.Nanoseconds() != 0 && time.Since(start) > timeout {
+		if timeout != 0 && time.Since(start) > timeout {
 			tassert.Fatalf(t, false, "downloader has not finished before %s", timeout)
 			return
 		}

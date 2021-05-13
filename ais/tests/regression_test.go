@@ -611,8 +611,8 @@ func TestLRU(t *testing.T) {
 		tutils.SetClusterConfig(t, cos.SimpleKVs{
 			"lru.lowwm":             lowWMStr,
 			"lru.highwm":            highWMStr,
-			"lru.dont_evict_time":   oconfig.LRU.DontEvictTimeStr,
-			"lru.capacity_upd_time": oconfig.LRU.CapacityUpdTimeStr,
+			"lru.dont_evict_time":   fmt.Sprintf("%v", oconfig.LRU.DontEvictTime),
+			"lru.capacity_upd_time": fmt.Sprintf("%v", oconfig.LRU.CapacityUpdTime),
 		})
 	}()
 

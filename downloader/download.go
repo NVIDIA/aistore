@@ -276,7 +276,7 @@ func (d *Downloader) Download(dJob DlJob) (resp interface{}, statusCode int, err
 	d.IncPending()
 	defer d.DecPending()
 	dlStore.setJob(dJob.ID(), dJob)
-
+	config := cmn.GCO.Get()
 	select {
 	case d.dispatcher.downloadCh <- dJob:
 		return nil, http.StatusOK, nil
@@ -284,7 +284,7 @@ func (d *Downloader) Download(dJob DlJob) (resp interface{}, statusCode int, err
 		select {
 		case d.dispatcher.downloadCh <- dJob:
 			return nil, http.StatusOK, nil
-		case <-time.After(cmn.GCO.Get().Timeout.CplaneOperation):
+		case <-time.After(config.Timeout.CplaneOperation.D()):
 			return "downloader job queue is full", http.StatusTooManyRequests, nil
 		}
 	}

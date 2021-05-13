@@ -418,7 +418,7 @@ func (p *proxyrunner) initClusterConfig(uuid string) (config *globalConfig, err 
 func (p *proxyrunner) resumeReb(smap *smapX, config *cmn.Config) {
 	var (
 		ver     = smap.version()
-		nojoins = config.Timeout.MaxHostBusy // initial quiet time with no new joins
+		nojoins = config.Timeout.MaxHostBusy.D() // initial quiet time with no new joins
 		sleep   = cos.CalcProbeFreq(nojoins)
 	)
 	debug.AssertNoErr(smap.validate())
@@ -434,7 +434,7 @@ until:
 		}
 		if smap.version() != ver {
 			debug.Assert(smap.version() > ver)
-			elapsed, nojoins = 0, cos.MinDuration(nojoins+sleep, config.Timeout.Startup)
+			elapsed, nojoins = 0, cos.MinDuration(nojoins+sleep, config.Timeout.Startup.D())
 			ver = smap.version()
 		}
 	}
@@ -480,7 +480,7 @@ func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.C
 	ntargets int) (maxVerSmap *smapX) {
 	const quiescentIter = 4 // Number of iterations to consider the cluster quiescent.
 	var (
-		deadlineTime         = config.Timeout.Startup
+		deadlineTime         = config.Timeout.Startup.D()
 		checkClusterInterval = deadlineTime / quiescentIter
 		sleepDuration        = checkClusterInterval / 5
 
@@ -630,7 +630,7 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (svm cluMeta) {
 		suuid       string
 		config      = cmn.GCO.Get()
 		now         = time.Now()
-		deadline    = now.Add(config.Timeout.Startup)
+		deadline    = now.Add(config.Timeout.Startup.D())
 		l           = bcastSmap.Count()
 		bmds        = make(bmds, l)
 		smaps       = make(smaps, l)
@@ -646,7 +646,7 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (svm cluMeta) {
 		if done || last {
 			break
 		}
-		time.Sleep(config.Timeout.CplaneOperation)
+		time.Sleep(config.Timeout.CplaneOperation.D())
 	}
 	if !slowp {
 		return

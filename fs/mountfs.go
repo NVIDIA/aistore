@@ -925,11 +925,11 @@ func nextRefresh(config *cmn.Config) time.Duration {
 		util = int64(mfs.capStatus.PctAvg) // NOTE: average not max
 		umin = cos.MaxI64(config.LRU.HighWM-10, config.LRU.LowWM)
 		umax = config.LRU.OOS
-		tmax = config.LRU.CapacityUpdTime
-		tmin = time.Duration(config.Periodic.StatsTime)
+		tmax = config.LRU.CapacityUpdTime.D()
+		tmin = config.Periodic.StatsTime.D()
 	)
 	if util <= umin {
-		return config.LRU.CapacityUpdTime
+		return tmax
 	}
 	if util >= umax {
 		return tmin

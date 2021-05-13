@@ -173,7 +173,7 @@ func (dm *DataMover) UnregRecv() {
 	if !dm.opened.Load() {
 		return // e.g., 2PC (begin => abort) sequence with no Open
 	}
-	dm.Quiesce(dm.config.Rebalance.Quiesce)
+	dm.Quiesce(dm.config.Rebalance.Quiesce.D())
 	if err := transport.Unhandle(dm.data.trname); err != nil {
 		glog.Error(err)
 	}

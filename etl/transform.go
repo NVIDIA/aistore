@@ -270,7 +270,8 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 }
 
 func checkETLConnection(socketAddr, podName string) error {
-	probeInterval := cmn.GCO.Get().Timeout.MaxKeepalive
+	config := cmn.GCO.Get()
+	probeInterval := config.Timeout.MaxKeepalive.D()
 	err := cmn.NetworkCallWithRetry(&cmn.CallWithRetryArgs{
 		Call: func() (int, error) {
 			conn, err := net.DialTimeout("tcp", socketAddr, probeInterval)

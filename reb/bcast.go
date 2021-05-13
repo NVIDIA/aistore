@@ -171,11 +171,11 @@ func (reb *Manager) bcast(md *rebArgs, cb syncCallback) (errCnt int) {
 func (reb *Manager) pingTarget(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 	var (
 		ver    = md.smap.Version
-		sleep  = md.config.Timeout.CplaneOperation
+		sleep  = md.config.Timeout.CplaneOperation.D()
 		logHdr = reb.logHdr(md)
 	)
 	for i := 0; i < 4; i++ {
-		_, code, err := reb.t.Health(tsi, md.config.Timeout.MaxKeepalive, nil)
+		_, code, err := reb.t.Health(tsi, md.config.Timeout.MaxKeepalive.D(), nil)
 		if err == nil {
 			if i > 0 {
 				glog.Infof("%s: %s is online", logHdr, tsi)
@@ -200,8 +200,8 @@ func (reb *Manager) pingTarget(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 // wait for target to get ready to receive objects (type syncCallback)
 func (reb *Manager) rxReady(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 	var (
-		sleep  = md.config.Timeout.CplaneOperation * 2
-		maxwt  = md.config.Rebalance.DestRetryTime + md.config.Rebalance.DestRetryTime/2
+		sleep  = md.config.Timeout.CplaneOperation.D() * 2
+		maxwt  = md.config.Rebalance.DestRetryTime.D() + md.config.Rebalance.DestRetryTime.D()/2
 		curwt  time.Duration
 		logHdr = reb.logHdr(md)
 	)
@@ -228,8 +228,8 @@ func (reb *Manager) rxReady(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 // separately check whether it is waiting for my ACKs
 func (reb *Manager) waitFinExtended(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 	var (
-		sleep      = md.config.Timeout.CplaneOperation
-		maxwt      = md.config.Rebalance.DestRetryTime
+		sleep      = md.config.Timeout.CplaneOperation.D()
+		maxwt      = md.config.Rebalance.DestRetryTime.D()
 		sleepRetry = cmn.KeepaliveRetryDuration(md.config)
 		logHdr     = reb.logHdr(md)
 		curwt      time.Duration
@@ -342,8 +342,8 @@ func (reb *Manager) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md 
 
 // a generic wait loop for a stage when the target should just wait without extra actions
 func (reb *Manager) waitStage(si *cluster.Snode, md *rebArgs, stage uint32) bool {
-	sleep := md.config.Timeout.CplaneOperation * 2
-	maxwt := md.config.Rebalance.DestRetryTime + md.config.Rebalance.DestRetryTime/2
+	sleep := md.config.Timeout.CplaneOperation.D() * 2
+	maxwt := md.config.Rebalance.DestRetryTime.D() + md.config.Rebalance.DestRetryTime.D()/2
 	curwt := time.Duration(0)
 	for curwt < maxwt {
 		if reb.stages.isInStage(si, stage) {
@@ -385,9 +385,9 @@ func (reb *Manager) waitECCleanup(si *cluster.Snode, md *rebArgs) bool {
 // Returns `true` if a target has sent its namespace or the xaction
 // has been aborted (indicating no need for extra pull requests).
 func (reb *Manager) waitECData(si *cluster.Snode, md *rebArgs) bool {
-	sleep := md.config.Timeout.CplaneOperation * 2
+	sleep := md.config.Timeout.CplaneOperation.D() * 2
 	locStage := uint32(rebStageECDetect)
-	maxwt := md.config.Rebalance.DestRetryTime + md.config.Rebalance.DestRetryTime/2
+	maxwt := md.config.Rebalance.DestRetryTime.D() + md.config.Rebalance.DestRetryTime.D()/2
 	curwt := time.Duration(0)
 
 	for curwt < maxwt {
@@ -439,7 +439,7 @@ func (reb *Manager) waitForPushReqs(md *rebArgs, stage uint32, timeout ...time.D
 	const defaultWaitTime = time.Minute
 	maxMissing := len(md.smap.Tmap) / 2
 	curWait := time.Duration(0)
-	sleep := md.config.Timeout.CplaneOperation * 2
+	sleep := md.config.Timeout.CplaneOperation.D() * 2
 	maxWait := defaultWaitTime
 	if len(timeout) != 0 {
 		maxWait = timeout[0]

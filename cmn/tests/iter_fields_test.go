@@ -93,8 +93,8 @@ var _ = Describe("IterFields", func() {
 					"lru.lowwm":             int64(0),
 					"lru.highwm":            int64(0),
 					"lru.out_of_space":      int64(0),
-					"lru.dont_evict_time":   "",
-					"lru.capacity_upd_time": "",
+					"lru.dont_evict_time":   cos.Duration(0),
+					"lru.capacity_upd_time": cos.Duration(0),
 
 					"extra.aws.cloud_region": "us-central",
 
@@ -146,8 +146,8 @@ var _ = Describe("IterFields", func() {
 					"lru.enabled":           (*bool)(nil),
 					"lru.lowwm":             (*int64)(nil),
 					"lru.highwm":            (*int64)(nil),
-					"lru.dont_evict_time":   (*string)(nil),
-					"lru.capacity_upd_time": (*string)(nil),
+					"lru.dont_evict_time":   (*cos.Duration)(nil),
+					"lru.capacity_upd_time": (*cos.Duration)(nil),
 					"lru.out_of_space":      (*int64)(nil),
 
 					"access":   api.AccessAttrs(1024),

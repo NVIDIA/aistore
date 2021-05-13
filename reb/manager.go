@@ -116,7 +116,7 @@ var stages = map[uint32]string{
 
 func NewManager(t cluster.Target, config *cmn.Config, st stats.Tracker) *Manager {
 	ecClient := cmn.NewClient(cmn.TransportArgs{
-		Timeout:    config.Client.Timeout,
+		Timeout:    config.Client.Timeout.D(),
 		UseHTTPS:   config.Net.HTTP.UseHTTPS,
 		SkipVerify: config.Net.HTTP.SkipVerify,
 	})
@@ -298,11 +298,11 @@ func (reb *Manager) waitForSmap() (*cluster.Smap, error) {
 	if smap == nil {
 		var (
 			config = cmn.GCO.Get()
-			sleep  = config.Timeout.CplaneOperation
-			maxwt  = config.Rebalance.DestRetryTime
+			sleep  = config.Timeout.CplaneOperation.D()
+			maxwt  = config.Rebalance.DestRetryTime.D()
 			curwt  time.Duration
 		)
-		maxwt = cos.MinDuration(maxwt, config.Timeout.SendFile/3)
+		maxwt = cos.MinDuration(maxwt, config.Timeout.SendFile.D()/3)
 		glog.Warningf("%s: waiting to start...", reb.t.Snode())
 		time.Sleep(sleep)
 		for curwt < maxwt {

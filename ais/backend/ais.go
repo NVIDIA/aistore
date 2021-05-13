@@ -113,9 +113,9 @@ func (m *AISBackendProvider) Apply(v interface{}, action string) error {
 func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (cia cmn.BackendInfoAIS) {
 	var (
 		cfg         = cmn.GCO.Get()
-		httpClient  = cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout})
+		httpClient  = cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout.D()})
 		httpsClient = cmn.NewClient(cmn.TransportArgs{
-			Timeout:    cfg.Client.Timeout,
+			Timeout:    cfg.Client.Timeout.D(),
 			UseHTTPS:   true,
 			SkipVerify: cfg.Net.HTTP.SkipVerify,
 		})
@@ -181,9 +181,9 @@ func (r *remAISCluster) init(alias string, confURLs []string, cfg *cmn.Config) (
 	var (
 		url           string
 		remSmap, smap *cluster.Smap
-		httpClient    = cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout})
+		httpClient    = cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout.D()})
 		httpsClient   = cmn.NewClient(cmn.TransportArgs{
-			Timeout:    cfg.Client.Timeout,
+			Timeout:    cfg.Client.Timeout.D(),
 			UseHTTPS:   true,
 			SkipVerify: cfg.Net.HTTP.SkipVerify,
 		})

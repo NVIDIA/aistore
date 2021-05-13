@@ -876,7 +876,7 @@ func (reb *Manager) exchange(md *rebArgs) (err error) {
 		failed  = cluster.AllocNodes(len(md.smap.Tmap))
 		emptyCT = make([]*rebCT, 0)
 		config  = cmn.GCO.Get()
-		sleep   = config.Timeout.MaxKeepalive // delay between retries
+		sleep   = config.Timeout.MaxKeepalive.D() // delay between retries
 	)
 	for _, node := range md.smap.Tmap {
 		if node.ID() == reb.t.SID() {
@@ -1505,7 +1505,7 @@ func (reb *Manager) cleanupBatch(md *rebArgs) {
 // Wait for all targets to finish the current batch and then free allocated resources
 func (reb *Manager) finalizeBatch(md *rebArgs) error {
 	// First, wait for all slices the local target wants to receive
-	if q := reb.quiesce(md, md.config.Rebalance.Quiesce, reb.allCTReceived); q == cluster.QuiAborted {
+	if q := reb.quiesce(md, md.config.Rebalance.Quiesce.D(), reb.allCTReceived); q == cluster.QuiAborted {
 		return cmn.NewAbortedError("finalize batch - all ct received")
 	}
 	// wait until all rebuilt slices are sent
@@ -1541,7 +1541,7 @@ func (reb *Manager) logNoECAck() {
 
 func (reb *Manager) waitECAck(md *rebArgs) {
 	logHdr := reb.logHdr(md)
-	sleep := md.config.Timeout.CplaneOperation
+	sleep := md.config.Timeout.CplaneOperation.D()
 	// loop without timeout - wait until all CTs put into transport
 	// queue are processed (either sent or failed)
 	for reb.ec.onAir.Load() > 0 {

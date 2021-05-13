@@ -151,7 +151,7 @@ func (reb *Manager) rebPreInit(md *rebArgs) bool {
 
 func (reb *Manager) serialize(md *rebArgs) (newerRMD, alreadyRunning bool) {
 	var (
-		sleep  = md.config.Timeout.CplaneOperation
+		sleep  = md.config.Timeout.CplaneOperation.D()
 		canRun bool
 	)
 	for {
@@ -319,11 +319,11 @@ func (reb *Manager) runNoEC(md *rebArgs) error {
 func (reb *Manager) rebWaitAck(md *rebArgs) (errCnt int) {
 	reb.changeStage(rebStageWaitAck, 0)
 	logHdr := reb.logHdr(md)
-	sleep := md.config.Timeout.CplaneOperation // NOTE: TODO: used throughout; must be separately assigned and calibrated
-	maxwt := md.config.Rebalance.DestRetryTime
+	sleep := md.config.Timeout.CplaneOperation.D() // NOTE: TODO: used throughout; must be separately assigned and calibrated
+	maxwt := md.config.Rebalance.DestRetryTime.D()
 	cnt := 0
 	maxwt += time.Duration(int64(time.Minute) * int64(md.smap.CountTargets()/10))
-	maxwt = cos.MinDuration(maxwt, md.config.Rebalance.DestRetryTime*2)
+	maxwt = cos.MinDuration(maxwt, md.config.Rebalance.DestRetryTime.D()*2)
 
 	for {
 		curwt := time.Duration(0)
@@ -400,10 +400,9 @@ func (reb *Manager) rebWaitAck(md *rebArgs) (errCnt int) {
 // Return true is xaction was aborted during wait loop.
 func (reb *Manager) waitEvent(md *rebArgs, cb func(md *rebArgs) bool, maxWait ...time.Duration) bool {
 	var (
-		sleep   = md.config.Timeout.CplaneOperation
-		waited  = time.Duration(0)
-		toWait  = time.Duration(0)
-		aborted = reb.xact().Aborted()
+		waited, toWait time.Duration
+		sleep          = md.config.Timeout.CplaneOperation.D()
+		aborted        = reb.xact().Aborted()
 	)
 	if len(maxWait) != 0 {
 		toWait = maxWait[0]
@@ -427,7 +426,7 @@ func (reb *Manager) rebFini(md *rebArgs, err error) {
 	}
 
 	// prior to closing the streams
-	if q := reb.quiesce(md, md.config.Rebalance.Quiesce, reb.nodesQuiescent); q != cluster.QuiAborted {
+	if q := reb.quiesce(md, md.config.Rebalance.Quiesce.D(), reb.nodesQuiescent); q != cluster.QuiAborted {
 		fs.RemoveMarker(cmn.RebalanceMarker)
 	}
 	reb.endStreams(err)

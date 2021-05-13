@@ -22,9 +22,9 @@ import (
 func init() {
 	config := cmn.GCO.BeginUpdate()
 	config.ConfigDir = "/tmp/ais-tests"
-	config.Timeout.CplaneOperation = 2 * time.Second
-	config.Timeout.MaxKeepalive = 4 * time.Second
-	config.Timeout.MaxHostBusy = 20 * time.Second
+	config.Timeout.CplaneOperation = cos.Duration(2 * time.Second)
+	config.Timeout.MaxKeepalive = cos.Duration(4 * time.Second)
+	config.Timeout.MaxHostBusy = cos.Duration(20 * time.Second)
 	cmn.GCO.CommitUpdate(config)
 }
 

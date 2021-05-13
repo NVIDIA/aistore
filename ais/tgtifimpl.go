@@ -160,7 +160,8 @@ func (t *targetrunner) _sendPUT(lom *cluster.LOM, params *cluster.SendToParams) 
 		Header: hdr,
 		BodyR:  params.Reader,
 	}
-	req, _, cancel, err := reqArgs.ReqWithTimeout(cmn.GCO.Get().Timeout.SendFile)
+	config := cmn.GCO.Get()
+	req, _, cancel, err := reqArgs.ReqWithTimeout(config.Timeout.SendFile.D())
 	if err != nil {
 		cos.Close(params.Reader)
 		return fmt.Errorf("unexpected failure to create request, err: %w", err)

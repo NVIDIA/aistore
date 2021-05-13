@@ -125,8 +125,8 @@ func (p *XactProvider) Start(_ cmn.Bck) error {
 	var (
 		args        = xaction.Args{ID: xaction.BaseID(p.id), Kind: cmn.ActLRU}
 		config      = cmn.GCO.Get()
-		totallyIdle = config.Timeout.MaxHostBusy
-		likelyIdle  = config.Timeout.MaxKeepalive
+		totallyIdle = config.Timeout.MaxHostBusy.D()
+		likelyIdle  = config.Timeout.MaxKeepalive.D()
 	)
 	p.xact = &Xaction{
 		XactDemandBase: *xaction.NewXDB(args, totallyIdle, likelyIdle),

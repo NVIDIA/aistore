@@ -227,7 +227,8 @@ func (t *singleObjectTask) downloadRemote(lom *cluster.LOM) error {
 }
 
 func (t *singleObjectTask) initialTimeout() time.Duration {
-	timeout := cmn.GCO.Get().Downloader.Timeout
+	config := cmn.GCO.Get()
+	timeout := config.Downloader.Timeout.D()
 	if t.job.Timeout() != 0 {
 		timeout = t.job.Timeout()
 	}

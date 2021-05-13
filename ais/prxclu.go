@@ -131,7 +131,8 @@ func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what 
 }
 
 func (p *proxyrunner) queryClusterSysinfo(w http.ResponseWriter, r *http.Request, what string) {
-	timeout := cmn.GCO.Get().Client.Timeout
+	config := cmn.GCO.Get()
+	timeout := config.Client.Timeout.D()
 	proxyResults, err := p.cluSysinfo(r, timeout, cluster.Proxies)
 	if err != nil {
 		p.writeErr(w, r, err)
@@ -163,7 +164,7 @@ func (p *proxyrunner) getRemoteAISInfo() (*cmn.BackendInfoAIS, error) {
 			Path:   cmn.URLPathDaemon.S,
 			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatRemoteAIS}},
 		},
-		timeout: config.Timeout.CplaneOperation,
+		timeout: config.Timeout.CplaneOperation.D(),
 		v:       remoteInfo,
 	}
 	res := p.call(args)
@@ -230,9 +231,10 @@ func (p *proxyrunner) _queryTargets(w http.ResponseWriter, r *http.Request) cos.
 			return nil
 		}
 	}
+	config := cmn.GCO.Get()
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{Method: r.Method, Path: cmn.URLPathDaemon.S, Query: r.URL.Query(), Body: body}
-	args.timeout = cmn.GCO.Get().Timeout.MaxKeepalive
+	args.timeout = config.Timeout.MaxKeepalive.D()
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
 	return p._queryResults(w, r, results)
@@ -429,10 +431,11 @@ func (p *proxyrunner) userRegisterNode(nsi *cluster.Snode, tag string) (errCode 
 	if glog.FastV(3, glog.SmoduleAIS) {
 		glog.Infof("%s: %s %s => (%s)", p.si, tag, nsi, p.owner.smap.get().StringEx())
 	}
+	config := cmn.GCO.Get()
 	args := callArgs{
 		si:      nsi,
 		req:     cmn.ReqArgs{Method: http.MethodPost, Path: cmn.URLPathDaemonUserReg.S, Body: body},
-		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
+		timeout: config.Timeout.CplaneOperation.D(),
 	}
 	res := p.call(args)
 	defer _freeCallRes(res)
@@ -1367,9 +1370,10 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 // accordance with the specific `msg.Action` (that we also enumerate and assert below).
 func (p *proxyrunner) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
 	var (
+		config  = cmn.GCO.Get()
 		smap    = p.owner.smap.get()
 		node    = smap.GetNode(si.ID())
-		timeout = cmn.GCO.Get().Timeout.CplaneOperation
+		timeout = config.Timeout.CplaneOperation.D()
 		args    = callArgs{si: node, timeout: timeout}
 	)
 	if node == nil {

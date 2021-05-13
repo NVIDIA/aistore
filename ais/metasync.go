@@ -187,13 +187,13 @@ func (y *metasyncer) Run() error {
 				revsReq.wg.Done()
 			}
 			if failedCnt > 0 && y.timerStopped {
-				y.retryTimer.Reset(config.Periodic.RetrySyncTime)
+				y.retryTimer.Reset(config.Periodic.RetrySyncTime.D())
 				y.timerStopped = false
 			}
 		case <-y.retryTimer.C:
 			failedCnt := y.handlePending()
 			if failedCnt > 0 {
-				y.retryTimer.Reset(config.Periodic.RetrySyncTime)
+				y.retryTimer.Reset(config.Periodic.RetrySyncTime.D())
 				y.timerStopped = false
 			} else {
 				y.timerStopped = true
@@ -347,7 +347,7 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{Method: method, Path: urlPath, BodyR: body}
 	args.smap = smap
-	args.timeout = config.Timeout.MaxKeepalive // making exception for this critical op
+	args.timeout = config.Timeout.MaxKeepalive.D() // making exception for this critical op
 	args.to = to
 	args.ignoreMaintenance = true
 	results := y.p.bcastGroup(args)
@@ -379,7 +379,7 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 		if len(refused) == 0 {
 			break
 		}
-		time.Sleep(config.Timeout.CplaneOperation)
+		time.Sleep(config.Timeout.CplaneOperation.D())
 		smap = y.p.owner.smap.get()
 		if !smap.isPrimary(y.p.si) {
 			y.becomeNonPrimary()
@@ -425,7 +425,7 @@ func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refus
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{Method: method, Path: urlPath, BodyR: body}
 	args.network = cmn.NetworkIntraControl
-	args.timeout = config.Timeout.MaxKeepalive
+	args.timeout = config.Timeout.MaxKeepalive.D()
 	args.nodes = []cluster.NodeMap{refused}
 	args.nodeCount = len(refused)
 	results := y.p.bcastNodes(args)
@@ -521,13 +521,14 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 		pairs = append(pairs, revsPair{revs, msg})
 	}
 	var (
+		config  = cmn.GCO.Get()
 		urlPath = cmn.URLPathMetasync.S
 		body    = payload.marshal(y.p.gmm)
 		args    = allocBcastArgs()
 	)
 	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, BodyR: body}
 	args.network = cmn.NetworkIntraControl
-	args.timeout = cmn.GCO.Get().Timeout.MaxKeepalive
+	args.timeout = config.Timeout.MaxKeepalive.D()
 	args.nodes = []cluster.NodeMap{pending}
 	args.nodeCount = len(pending)
 	defer body.Free()

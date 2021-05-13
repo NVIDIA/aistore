@@ -758,7 +758,8 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, rename
 	}
 	path := cmn.URLPathDaemon.S
 	url := psi.URL(cmn.NetworkIntraControl)
-	timeout := cmn.GCO.Get().Timeout.CplaneOperation
+	config := cmn.GCO.Get()
+	timeout := config.Timeout.CplaneOperation.D()
 	args := callArgs{
 		si:      psi,
 		req:     cmn.ReqArgs{Method: http.MethodGet, Base: url, Path: path, Query: q},
@@ -1022,6 +1023,7 @@ func (t *targetrunner) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) 
 	header.Add(cmn.HdrCallerName, t.Sname())
 	query := make(url.Values)
 	query.Set(cmn.URLParamSilent, "true")
+	config := cmn.GCO.Get()
 	args := callArgs{
 		si: tsi,
 		req: cmn.ReqArgs{
@@ -1031,7 +1033,7 @@ func (t *targetrunner) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) 
 			Path:   cmn.URLPathObjects.Join(lom.BckName(), lom.ObjName),
 			Query:  query,
 		},
-		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
+		timeout: config.Timeout.CplaneOperation.D(),
 	}
 	res := t.call(args)
 	ok = res.err == nil

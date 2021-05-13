@@ -54,8 +54,8 @@ func (p *xactGetProvider) Start(bck cmn.Bck) error {
 	var (
 		xec         = ECM.NewGetXact(bck)
 		config      = cmn.GCO.Get()
-		totallyIdle = config.Timeout.SendFile
-		likelyIdle  = config.Timeout.MaxKeepalive
+		totallyIdle = config.Timeout.SendFile.D()
+		likelyIdle  = config.Timeout.MaxKeepalive.D()
 		args        = xaction.Args{ID: xaction.BaseID(""), Kind: p.Kind(), Bck: &bck}
 	)
 	xec.XactDemandBase = *xaction.NewXDB(args, totallyIdle, likelyIdle)
@@ -130,7 +130,7 @@ func (r *XactGet) DispatchResp(iReq intraReq, bck *cluster.Bck, objName string, 
 func (r *XactGet) newGetJogger(mpath string) *getJogger {
 	config := cmn.GCO.Get()
 	client := cmn.NewClient(cmn.TransportArgs{
-		Timeout:    config.Client.Timeout,
+		Timeout:    config.Client.Timeout.D(),
 		UseHTTPS:   config.Net.HTTP.UseHTTPS,
 		SkipVerify: config.Net.HTTP.SkipVerify,
 	})
@@ -285,9 +285,9 @@ func (r *XactGet) Stats() cluster.XactStats {
 	baseStats := r.XactDemandBase.Stats().(*xaction.BaseXactStatsExt)
 	st := r.stats.stats()
 	baseStats.Ext = &ExtECGetStats{
-		AvgTime:     cos.Duration(st.DecodeTime.Nanoseconds()),
+		AvgTime:     cos.Duration(st.DecodeTime),
 		ErrCount:    st.DecodeErr,
-		AvgObjTime:  cos.Duration(st.ObjTime.Nanoseconds()),
+		AvgObjTime:  cos.Duration(st.ObjTime),
 		AvgQueueLen: st.QueueLen,
 		IsIdle:      r.Pending() == 0,
 	}

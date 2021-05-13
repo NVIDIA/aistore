@@ -58,8 +58,8 @@ func (p *xactPutProvider) Start(bck cmn.Bck) error {
 	var (
 		xec         = ECM.NewPutXact(bck)
 		config      = cmn.GCO.Get()
-		totallyIdle = config.Timeout.SendFile
-		likelyIdle  = config.Timeout.MaxKeepalive
+		totallyIdle = config.Timeout.SendFile.D()
+		likelyIdle  = config.Timeout.MaxKeepalive.D()
 		args        = xaction.Args{ID: xaction.BaseID(""), Kind: p.Kind(), Bck: &bck}
 	)
 	xec.XactDemandBase = *xaction.NewXDB(args, totallyIdle, likelyIdle)
@@ -223,14 +223,14 @@ func (r *XactPut) Stats() cluster.XactStats {
 	baseStats := r.XactDemandBase.Stats().(*xaction.BaseXactStatsExt)
 	st := r.stats.stats()
 	baseStats.Ext = &ExtECPutStats{
-		AvgEncodeTime:  cos.Duration(st.EncodeTime.Nanoseconds()),
+		AvgEncodeTime:  cos.Duration(st.EncodeTime),
 		EncodeSize:     st.EncodeSize,
 		EncodeCount:    st.PutReq,
 		EncodeErrCount: st.EncodeErr,
-		AvgDeleteTime:  cos.Duration(st.DeleteTime.Nanoseconds()),
+		AvgDeleteTime:  cos.Duration(st.DeleteTime),
 		DeleteErrCount: st.DeleteErr,
 		DeleteCount:    st.DelReq,
-		AvgObjTime:     cos.Duration(st.ObjTime.Nanoseconds()),
+		AvgObjTime:     cos.Duration(st.ObjTime),
 		AvgQueueLen:    st.QueueLen,
 		IsIdle:         r.Pending() == 0,
 	}

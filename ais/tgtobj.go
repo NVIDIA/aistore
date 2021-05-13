@@ -642,7 +642,8 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 		Path:   cmn.URLPathObjects.Join(lom.BckName(), lom.ObjName),
 		Query:  query,
 	}
-	req, _, cancel, err := reqArgs.ReqWithTimeout(cmn.GCO.Get().Timeout.SendFile)
+	config := cmn.GCO.Get()
+	req, _, cancel, err := reqArgs.ReqWithTimeout(config.Timeout.SendFile.D())
 	if err != nil {
 		glog.Errorf("failed to create request, err: %v", err)
 		return

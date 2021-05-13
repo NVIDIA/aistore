@@ -136,7 +136,7 @@ func (ca *concAdjuster) start() {
 }
 
 func (ca *concAdjuster) run() {
-	ticker := time.NewTicker(cmn.GCO.Get().Disk.IostatTimeShort)
+	ticker := time.NewTicker(cmn.GCO.Get().Disk.IostatTimeShort.D())
 	defer ticker.Stop()
 	for {
 		select {

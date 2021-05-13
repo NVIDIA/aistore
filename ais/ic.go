@@ -177,7 +177,8 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 		msg      = &xaction.XactReqMsg{}
 		bck      *cluster.Bck
 		nl       nl.NotifListener
-		interval = cmn.GCO.Get().Periodic.NotifTime
+		config   = cmn.GCO.Get()
+		interval = config.Periodic.NotifTime.D()
 		exists   bool
 	)
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
@@ -359,6 +360,7 @@ func (ic *ic) sendOwnershipTbl(si *cluster.Snode) error {
 		}
 		return nil
 	}
+	config := cmn.GCO.Get()
 	msg := ic.p.newAmsgActVal(cmn.ActMergeOwnershipTbl, &ic.p.notifs)
 	result := ic.p.call(callArgs{
 		si: si,
@@ -366,7 +368,7 @@ func (ic *ic) sendOwnershipTbl(si *cluster.Snode) error {
 			Method: http.MethodPost,
 			Path:   cmn.URLPathIC.S,
 			Body:   cos.MustMarshal(msg),
-		}, timeout: cmn.GCO.Get().Timeout.CplaneOperation,
+		}, timeout: config.Timeout.CplaneOperation.D(),
 	},
 	)
 	return result.err
@@ -386,7 +388,7 @@ func (ic *ic) syncICBundle() error {
 	if si.Equals(ic.p.si) {
 		return nil
 	}
-
+	config := cmn.GCO.Get()
 	result := ic.p.call(callArgs{
 		si: si,
 		req: cmn.ReqArgs{
@@ -394,7 +396,7 @@ func (ic *ic) syncICBundle() error {
 			Path:   cmn.URLPathIC.S,
 			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatICBundle}},
 		},
-		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
+		timeout: config.Timeout.CplaneOperation.D(),
 	})
 	if result.err != nil {
 		// TODO: Handle error. Should try calling another IC member maybe.

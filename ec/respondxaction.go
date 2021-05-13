@@ -49,8 +49,8 @@ func (p *xactRespondProvider) Start(bck cmn.Bck) error {
 	var (
 		xec         = ECM.NewRespondXact(bck)
 		config      = cmn.GCO.Get()
-		totallyIdle = config.Timeout.SendFile
-		likelyIdle  = config.Timeout.MaxKeepalive
+		totallyIdle = config.Timeout.SendFile.D()
+		likelyIdle  = config.Timeout.MaxKeepalive.D()
 		args        = xaction.Args{ID: xaction.BaseID(""), Kind: p.Kind(), Bck: &bck}
 	)
 	xec.XactDemandBase = *xaction.NewXDB(args, totallyIdle, likelyIdle)

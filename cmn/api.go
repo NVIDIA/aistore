@@ -405,8 +405,8 @@ func (c *LRUConf) String() string {
 	if !c.Enabled {
 		return "Disabled"
 	}
-	return fmt.Sprintf("Watermarks: %d%%/%d%% | Do not evict time: %s | OOS: %v%%",
-		c.LowWM, c.HighWM, c.DontEvictTimeStr, c.OOS)
+	return fmt.Sprintf("Watermarks: %d%%/%d%% | Do not evict time: %v | OOS: %v%%",
+		c.LowWM, c.HighWM, c.DontEvictTime, c.OOS)
 }
 
 func (c *MirrorConf) String() string {

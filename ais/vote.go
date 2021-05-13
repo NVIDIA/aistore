@@ -178,7 +178,7 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord) {
 		err        error
 		curPrimary = vr.Smap.Primary
 		config     = cmn.GCO.Get()
-		timeout    = config.Timeout.CplaneOperation / 2
+		timeout    = config.Timeout.CplaneOperation.D() / 2
 	)
 	// 1. ping current primary (not using cmn.URLParamAskPrimary as it might be transitioning)
 	for i := 0; i < 2; i++ {
@@ -194,7 +194,7 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord) {
 		if err == nil {
 			break
 		}
-		timeout = config.Timeout.CplaneOperation
+		timeout = config.Timeout.CplaneOperation.D()
 	}
 	if err == nil {
 		// move back to idle
@@ -556,7 +556,8 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *c
 	if err == nil {
 		return
 	}
-	sleepTime := cmn.GCO.Get().Timeout.CplaneOperation
+	config := cmn.GCO.Get()
+	sleepTime := config.Timeout.CplaneOperation.D()
 	if cmn.IsErrConnectionRefused(err) {
 		for i := 0; i < 2; i++ {
 			time.Sleep(sleepTime)

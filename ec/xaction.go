@@ -295,7 +295,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 		return 0, err
 	}
 	c := cmn.GCO.Get()
-	if sw.wg.WaitTimeout(c.Timeout.SendFile) {
+	if sw.wg.WaitTimeout(c.Timeout.SendFile.D()) {
 		r.unregWriter(uname)
 		return 0, fmt.Errorf("timed out waiting for %s is read", uname)
 	}

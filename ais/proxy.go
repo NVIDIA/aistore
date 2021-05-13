@@ -1161,7 +1161,7 @@ func (p *proxyrunner) gatherBucketSummary(bck cmn.QueryBcks, msg *cmn.BucketSumm
 		Body:   cos.MustMarshal(aisMsg),
 	}
 	args.smap = smap
-	args.timeout = config.Timeout.MaxHostBusy + config.Timeout.MaxKeepalive
+	args.timeout = config.Timeout.MaxHostBusy.D() + config.Timeout.MaxKeepalive.D()
 	results := p.bcastGroup(args)
 	allOK, _, err := p.checkBckTaskResp(msg.UUID, results)
 	if err != nil {
@@ -1742,7 +1742,8 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 	}
 	var (
 		smap       = p.owner.smap.get()
-		reqTimeout = cmn.GCO.Get().Client.ListObjects
+		config     = cmn.GCO.Get()
+		reqTimeout = config.Client.ListObjects.D()
 		aisMsg     = p.newAmsgActVal(cmn.ActList, &smsg)
 		args       = allocBcastArgs()
 		results    sliceResults
@@ -2018,8 +2019,9 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatSmap:
 		const max = 16
 		var (
-			smap  = p.owner.smap.get()
-			sleep = cmn.GCO.Get().Timeout.CplaneOperation / 2
+			smap   = p.owner.smap.get()
+			config = cmn.GCO.Get()
+			sleep  = config.Timeout.CplaneOperation.D() / 2
 		)
 		for i := 0; smap.validate() != nil && i < max; i++ {
 			if !p.NodeStarted() {
@@ -2561,14 +2563,15 @@ func (p *proxyrunner) detectDaemonDuplicate(osi, nsi *cluster.Snode) (bool, erro
 // getDaemonInfo queries osi for its daemon info and returns it.
 func (p *proxyrunner) getDaemonInfo(osi *cluster.Snode) (si *cluster.Snode, err error) {
 	var (
-		args = callArgs{
+		config = cmn.GCO.Get()
+		args   = callArgs{
 			si: osi,
 			req: cmn.ReqArgs{
 				Method: http.MethodGet,
 				Path:   cmn.URLPathDaemon.S,
 				Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSnode}},
 			},
-			timeout: cmn.GCO.Get().Timeout.CplaneOperation,
+			timeout: config.Timeout.CplaneOperation.D(),
 			v:       &cluster.Snode{},
 		}
 		res = p.call(args)
@@ -2628,7 +2631,6 @@ func (rp *reverseProxy) loadOrStore(uuid string, u *url.URL, errHdlr func(w http
 			return shrp.rp
 		}
 	}
-
 	cfg := cmn.GCO.Get()
 	rproxy := httputil.NewSingleHostReverseProxy(u)
 	rproxy.Transport = cmn.NewTransport(cmn.TransportArgs{

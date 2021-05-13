@@ -34,14 +34,14 @@ var _ cluster.BackendProvider = (*httpProvider)(nil)
 func NewHTTP(t cluster.Target, config *cmn.Config) (cluster.BackendProvider, error) {
 	hp := &httpProvider{t: t}
 	hp.httpClient = cmn.NewClient(cmn.TransportArgs{
-		Timeout:         config.Client.TimeoutLong,
+		Timeout:         config.Client.TimeoutLong.D(),
 		WriteBufferSize: config.Net.HTTP.WriteBufferSize,
 		ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
 		UseHTTPS:        false,
 		SkipVerify:      config.Net.HTTP.SkipVerify,
 	})
 	hp.httpsClient = cmn.NewClient(cmn.TransportArgs{
-		Timeout:         config.Client.TimeoutLong,
+		Timeout:         config.Client.TimeoutLong.D(),
 		WriteBufferSize: config.Net.HTTP.WriteBufferSize,
 		ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
 		UseHTTPS:        true,

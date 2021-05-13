@@ -391,7 +391,7 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 		return err
 	}
 	conf := cmn.GCO.Get()
-	if wgSlices.WaitTimeout(conf.Timeout.SendFile) {
+	if wgSlices.WaitTimeout(conf.Timeout.SendFile.D()) {
 		glog.Errorf("%s timed out waiting for %s slices", c.parent.t.Snode(), ctx.lom)
 	}
 	mm.Free(request)

@@ -57,7 +57,7 @@ var _ = Describe("newConcAdjuster", func() {
 		_, _ = fs.Add(testingConfigDir, "daeID")
 
 		config := cmn.GCO.BeginUpdate()
-		config.Disk.IostatTimeShort = 10 * time.Millisecond
+		config.Disk.IostatTimeShort = cos.Duration(10 * time.Millisecond)
 		config.Disk.DiskUtilLowWM = 70
 		config.Disk.DiskUtilHighWM = 80
 		config.Disk.DiskUtilMaxWM = 95

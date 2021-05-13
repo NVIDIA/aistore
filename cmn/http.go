@@ -411,7 +411,7 @@ func NetworkCallWithRetry(args *CallWithRetryArgs) (err error) {
 		} else {
 			config := GCO.Get()
 			debug.Assert(config.Timeout.CplaneOperation > 0)
-			args.Sleep = config.Timeout.CplaneOperation / 4
+			args.Sleep = config.Timeout.CplaneOperation.D() / 4
 		}
 	}
 
@@ -457,7 +457,7 @@ func NetworkCallWithRetry(args *CallWithRetryArgs) (err error) {
 			} else {
 				config := GCO.Get()
 				debug.Assert(config.Timeout.MaxKeepalive > 0)
-				sleep = cos.MinDuration(sleep+(args.Sleep/2), config.Timeout.MaxKeepalive)
+				sleep = cos.MinDuration(sleep+(args.Sleep/2), config.Timeout.MaxKeepalive.D())
 			}
 		}
 		if hardErrCnt > args.HardErr || softErrCnt > args.SoftErr {

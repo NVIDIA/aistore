@@ -151,7 +151,7 @@ func RegisterNode(smapOwner cluster.Sowner, bmdOwner cluster.Bowner, snode *clus
 
 	config := cmn.GCO.Get()
 	ctx.client = cmn.NewClient(cmn.TransportArgs{
-		Timeout:    config.Timeout.MaxHostBusy,
+		Timeout:    config.Timeout.MaxHostBusy.D(),
 		UseHTTPS:   config.Net.HTTP.UseHTTPS,
 		SkipVerify: config.Net.HTTP.SkipVerify,
 	})
@@ -243,7 +243,7 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	m.setAbortedTo(false)
 	m.state.cleanWait = sync.NewCond(&m.mu)
 
-	m.callTimeout = cmn.GCO.Get().DSort.CallTimeout
+	m.callTimeout = config.DSort.CallTimeout.D()
 	return nil
 }
 

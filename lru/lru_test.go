@@ -322,7 +322,7 @@ var _ = Describe("LRU tests", func() {
 			It("should do nothing if dontevict time was not reached", func() {
 				const numberOfFiles = 6
 				config := cmn.GCO.BeginUpdate()
-				config.LRU.DontEvictTime = 5 * time.Minute
+				config.LRU.DontEvictTime = cos.Duration(5 * time.Minute)
 				cmn.GCO.CommitUpdate(config)
 
 				ini.GetFSStats = getMockGetFSStats(numberOfFiles)

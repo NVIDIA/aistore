@@ -5,6 +5,7 @@
 package cos
 
 import (
+	"strings"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
@@ -13,8 +14,16 @@ import (
 type Duration time.Duration // NOTE: the type name is used in iter-fields to parse
 
 func (d Duration) D() time.Duration             { return time.Duration(d) }
-func (d Duration) String() string               { return time.Duration(d).String() }
 func (d Duration) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(d.String()) }
+
+func (d Duration) String() (s string) {
+	s = time.Duration(d).String()
+	// see related: https://github.com/golang/go/issues/39064
+	if strings.HasSuffix(s, "m0s") {
+		s = s[:len(s)-2]
+	}
+	return
+}
 
 func (d *Duration) UnmarshalJSON(b []byte) (err error) {
 	var (

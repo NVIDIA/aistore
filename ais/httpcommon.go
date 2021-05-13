@@ -503,8 +503,8 @@ func (server *netServer) shutdown() {
 	if server.s == nil {
 		return
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), cmn.GCO.Get().Timeout.MaxHostBusy)
+	config := cmn.GCO.Get()
+	ctx, cancel := context.WithTimeout(context.Background(), config.Timeout.MaxHostBusy.D())
 	if err := server.s.Shutdown(ctx); err != nil {
 		glog.Infof("Stopped server, err: %v", err)
 	}
@@ -665,12 +665,12 @@ func (h *httprunner) registerIntraDataNetHandler(path string, handler func(http.
 
 func (h *httprunner) init(config *cmn.Config) {
 	h.client.control = cmn.NewClient(cmn.TransportArgs{
-		Timeout:    config.Client.Timeout,
+		Timeout:    config.Client.Timeout.D(),
 		UseHTTPS:   config.Net.HTTP.UseHTTPS,
 		SkipVerify: config.Net.HTTP.SkipVerify,
 	})
 	h.client.data = cmn.NewClient(cmn.TransportArgs{
-		Timeout:         config.Client.TimeoutLong,
+		Timeout:         config.Client.TimeoutLong.D(),
 		WriteBufferSize: config.Net.HTTP.WriteBufferSize,
 		ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
 		UseHTTPS:        config.Net.HTTP.UseHTTPS,
@@ -1030,7 +1030,8 @@ func (h *httprunner) call(args callArgs) (res *callResult) {
 	default:
 		var cancel context.CancelFunc
 		if args.timeout == 0 {
-			args.timeout = cmn.GCO.Get().Timeout.CplaneOperation
+			config := cmn.GCO.Get()
+			args.timeout = config.Timeout.CplaneOperation.D()
 		}
 		req, _, cancel, res.err = args.req.ReqWithTimeout(args.timeout)
 		if res.err != nil {
@@ -1159,11 +1160,11 @@ func (h *httprunner) callerNotify(n cluster.Notif, err error, kind string) {
 		glog.Errorf("%s: have no nodes to send notification %s", h.si, &msg)
 		return
 	}
-
+	config := cmn.GCO.Get()
 	path := cmn.URLPathNotifs.Join(kind)
 	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: path, Body: cos.MustMarshal(&msg)}
 	args.network = cmn.NetworkIntraControl
-	args.timeout = cmn.GCO.Get().Timeout.MaxKeepalive
+	args.timeout = config.Timeout.MaxKeepalive.D()
 	args.selected = nodes
 	args.nodeCount = len(nodes)
 	args.async = true
@@ -1186,8 +1187,9 @@ func (h *httprunner) bcastGroup(args *bcastArgs) sliceResults {
 	}
 	debug.Assert(cmn.NetworkIsKnown(args.network))
 	if args.timeout == 0 {
-		args.timeout = cmn.GCO.Get().Timeout.CplaneOperation
-		cos.Assert(args.timeout != 0)
+		config := cmn.GCO.Get()
+		args.timeout = config.Timeout.CplaneOperation.D()
+		debug.Assert(args.timeout != 0)
 	}
 
 	switch args.to {
@@ -1265,13 +1267,14 @@ func (h *httprunner) bcastNodes(bargs *bcastArgs) sliceResults {
 
 func (h *httprunner) bcastAsyncIC(msg *aisMsg) {
 	var (
-		wg   = &sync.WaitGroup{}
-		smap = h.owner.smap.get()
-		args = allocBcastArgs()
+		wg     = &sync.WaitGroup{}
+		smap   = h.owner.smap.get()
+		args   = allocBcastArgs()
+		config = cmn.GCO.Get()
 	)
 	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: cmn.URLPathIC.S, Body: cos.MustMarshal(msg)}
 	args.network = cmn.NetworkIntraControl
-	args.timeout = cmn.GCO.Get().Timeout.MaxKeepalive
+	args.timeout = config.Timeout.MaxKeepalive.D()
 	for pid, psi := range smap.Pmap {
 		if pid == h.si.ID() || !smap.IsIC(psi) || smap.GetNodeNotMaint(pid) == nil {
 			continue
@@ -1603,7 +1606,8 @@ func (cii *clusterInfo) String() string { return fmt.Sprintf("%+v", *cii) }
 func (h *httprunner) bcastHealth(smap *smapX, checkAll ...bool) (maxCii *clusterInfo, cnt int) {
 	var (
 		query          = url.Values{cmn.URLParamClusterInfo: []string{"true"}}
-		timeout        = cmn.GCO.Get().Timeout.CplaneOperation
+		config         = cmn.GCO.Get()
+		timeout        = config.Timeout.CplaneOperation.D()
 		mu             = &sync.RWMutex{}
 		nodemap        = smap.Pmap
 		maxConfVersion int64
@@ -2077,11 +2081,11 @@ func (h *httprunner) getPrimaryURLAndSI() (url string, psi *cluster.Snode) {
 func (h *httprunner) pollClusterStarted(config *cmn.Config, psi *cluster.Snode) (maxCii *clusterInfo) {
 	var (
 		sleep, total, rediscover time.Duration
-		healthTimeout            = config.Timeout.CplaneOperation
+		healthTimeout            = config.Timeout.CplaneOperation.D()
 		query                    = url.Values{cmn.URLParamAskPrimary: []string{"true"}}
 	)
 	for {
-		sleep = cos.MinDuration(config.Timeout.MaxKeepalive, sleep+time.Second)
+		sleep = cos.MinDuration(config.Timeout.MaxKeepalive.D(), sleep+time.Second)
 		time.Sleep(sleep)
 		total += sleep
 		rediscover += sleep
@@ -2104,7 +2108,7 @@ func (h *httprunner) pollClusterStarted(config *cmn.Config, psi *cluster.Snode) 
 			}
 			return
 		}
-		if rediscover >= config.Timeout.Startup/2 {
+		if rediscover >= config.Timeout.Startup.D()/2 {
 			rediscover = 0
 			if cii, cnt := h.bcastHealth(smap); cii.Smap.Version > smap.version() {
 				var pid string
@@ -2119,7 +2123,7 @@ func (h *httprunner) pollClusterStarted(config *cmn.Config, psi *cluster.Snode) 
 				}
 			}
 		}
-		if total > config.Timeout.Startup {
+		if total > config.Timeout.Startup.D() {
 			glog.Errorf("%s: cluster startup is taking unusually long time...", h.si)
 		}
 	}

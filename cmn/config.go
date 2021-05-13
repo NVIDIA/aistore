@@ -257,56 +257,43 @@ type (
 	}
 
 	PeriodConf struct {
-		StatsTime        cos.Duration `json:"stats_time"`
-		RetrySyncTimeStr string       `json:"retry_sync_time"`
-		NotifTimeStr     string       `json:"notif_time"`
-		// omit
-		RetrySyncTime time.Duration `json:"-"`
-		NotifTime     time.Duration `json:"-"`
+		StatsTime     cos.Duration `json:"stats_time"`
+		RetrySyncTime cos.Duration `json:"retry_sync_time"`
+		NotifTime     cos.Duration `json:"notif_time"`
 	}
 	PeriodConfToUpdate struct {
-		StatsTime        *cos.Duration `json:"stats_time,omitempty"`
-		RetrySyncTimeStr *string       `json:"retry_sync_time,omitempty"`
-		NotifTimeStr     *string       `json:"notif_time,omitempty"`
+		StatsTime     *cos.Duration `json:"stats_time,omitempty"`
+		RetrySyncTime *cos.Duration `json:"retry_sync_time,omitempty"`
+		NotifTime     *cos.Duration `json:"notif_time,omitempty"`
 	}
 
 	// maximum intra-cluster latencies (in the increasing order)
 	TimeoutConf struct {
-		CplaneOperationStr string `json:"cplane_operation"`
-		MaxKeepaliveStr    string `json:"max_keepalive"`
-		MaxHostBusyStr     string `json:"max_host_busy"`
-		StartupStr         string `json:"startup_time"`
-		SendFileStr        string `json:"send_file_time"`
-		// omit
-		CplaneOperation time.Duration `json:"-"`
-		MaxKeepalive    time.Duration `json:"-"`
-		MaxHostBusy     time.Duration `json:"-"`
-		Startup         time.Duration `json:"-"`
-		SendFile        time.Duration `json:"-"`
+		CplaneOperation cos.Duration `json:"cplane_operation"`
+		MaxKeepalive    cos.Duration `json:"max_keepalive"`
+		MaxHostBusy     cos.Duration `json:"max_host_busy"`
+		Startup         cos.Duration `json:"startup_time"`
+		SendFile        cos.Duration `json:"send_file_time"`
 	}
 	TimeoutConfToUpdate struct {
-		CplaneOperationStr *string `json:"cplane_operation,omitempty"`
-		MaxKeepaliveStr    *string `json:"max_keepalive,omitempty"`
-		MaxHostBusyStr     *string `json:"max_host_busy,omitempty"`
-		StartupStr         *string `json:"startup_time,omitempty"`
-		SendFileStr        *string `json:"send_file_time,omitempty"`
+		CplaneOperation *cos.Duration `json:"cplane_operation,omitempty"`
+		MaxKeepalive    *cos.Duration `json:"max_keepalive,omitempty"`
+		MaxHostBusy     *cos.Duration `json:"max_host_busy,omitempty"`
+		Startup         *cos.Duration `json:"startup_time,omitempty"`
+		SendFile        *cos.Duration `json:"send_file_time,omitempty"`
 	}
 
 	ClientConf struct {
-		TimeoutStr     string       `json:"client_timeout"`
-		TimeoutLongStr string       `json:"client_long_timeout"`
-		ListObjectsStr string       `json:"list_timeout"`
-		Features       FeatureFlags `json:"features,string"`
-		// omit
-		Timeout     time.Duration `json:"-"`
-		TimeoutLong time.Duration `json:"-"`
-		ListObjects time.Duration `json:"-"`
+		Timeout     cos.Duration `json:"client_timeout"`
+		TimeoutLong cos.Duration `json:"client_long_timeout"`
+		ListObjects cos.Duration `json:"list_timeout"`
+		Features    FeatureFlags `json:"features,string"`
 	}
 	ClientConfToUpdate struct {
-		TimeoutStr     *string       `json:"client_timeout,omitempty"`
-		TimeoutLongStr *string       `json:"client_long_timeout,omitempty"`
-		ListObjectsStr *string       `json:"list_timeout,omitempty"`
-		Features       *FeatureFlags `json:"features,string,omitempty"`
+		Timeout     *cos.Duration `json:"client_timeout,omitempty"`
+		TimeoutLong *cos.Duration `json:"client_long_timeout,omitempty"`
+		ListObjects *cos.Duration `json:"list_timeout,omitempty"`
+		Features    *FeatureFlags `json:"features,string,omitempty"`
 	}
 
 	ProxyConf struct {
@@ -338,62 +325,51 @@ type (
 
 		// DontEvictTimeStr denotes the period of time during which eviction of an object
 		// is forbidden [atime, atime + DontEvictTime]
-		DontEvictTimeStr string `json:"dont_evict_time"`
-
-		// DontEvictTime is the parsed value of DontEvictTimeStr
-		DontEvictTime time.Duration `json:"-"`
+		DontEvictTime cos.Duration `json:"dont_evict_time"`
 
 		// CapacityUpdTimeStr denotes the frequency at which AIStore updates local capacity utilization
-		CapacityUpdTimeStr string `json:"capacity_upd_time"`
-
-		// CapacityUpdTime is the parsed value of CapacityUpdTimeStr
-		CapacityUpdTime time.Duration `json:"-"`
+		CapacityUpdTime cos.Duration `json:"capacity_upd_time"`
 
 		// Enabled: LRU will only run when set to true
 		Enabled bool `json:"enabled"`
 	}
 	LRUConfToUpdate struct {
-		LowWM              *int64  `json:"lowwm,omitempty"`
-		HighWM             *int64  `json:"highwm,omitempty"`
-		OOS                *int64  `json:"out_of_space,omitempty"`
-		DontEvictTimeStr   *string `json:"dont_evict_time,omitempty"`
-		CapacityUpdTimeStr *string `json:"capacity_upd_time,omitempty"`
-		Enabled            *bool   `json:"enabled,omitempty"`
+		LowWM           *int64        `json:"lowwm,omitempty"`
+		HighWM          *int64        `json:"highwm,omitempty"`
+		OOS             *int64        `json:"out_of_space,omitempty"`
+		DontEvictTime   *cos.Duration `json:"dont_evict_time,omitempty"`
+		CapacityUpdTime *cos.Duration `json:"capacity_upd_time,omitempty"`
+		Enabled         *bool         `json:"enabled,omitempty"`
 	}
 
 	DiskConf struct {
-		DiskUtilLowWM      int64  `json:"disk_util_low_wm"`  // no throttling below
-		DiskUtilHighWM     int64  `json:"disk_util_high_wm"` // throttle longer when above
-		DiskUtilMaxWM      int64  `json:"disk_util_max_wm"`
-		IostatTimeLongStr  string `json:"iostat_time_long"`
-		IostatTimeShortStr string `json:"iostat_time_short"`
-		// omit
-		IostatTimeLong  time.Duration `json:"-"`
-		IostatTimeShort time.Duration `json:"-"`
+		DiskUtilLowWM   int64        `json:"disk_util_low_wm"`  // no throttling below
+		DiskUtilHighWM  int64        `json:"disk_util_high_wm"` // throttle longer when above
+		DiskUtilMaxWM   int64        `json:"disk_util_max_wm"`
+		IostatTimeLong  cos.Duration `json:"iostat_time_long"`
+		IostatTimeShort cos.Duration `json:"iostat_time_short"`
 	}
 	DiskConfToUpdate struct {
-		DiskUtilLowWM      *int64  `json:"disk_util_low_wm,omitempty"`  // no throttling below
-		DiskUtilHighWM     *int64  `json:"disk_util_high_wm,omitempty"` // throttle longer when above
-		DiskUtilMaxWM      *int64  `json:"disk_util_max_wm,omitempty"`
-		IostatTimeLongStr  *string `json:"iostat_time_long,omitempty"`
-		IostatTimeShortStr *string `json:"iostat_time_short,omitempty"`
+		DiskUtilLowWM   *int64        `json:"disk_util_low_wm,omitempty"`
+		DiskUtilHighWM  *int64        `json:"disk_util_high_wm,omitempty"`
+		DiskUtilMaxWM   *int64        `json:"disk_util_max_wm,omitempty"`
+		IostatTimeLong  *cos.Duration `json:"iostat_time_long,omitempty"`
+		IostatTimeShort *cos.Duration `json:"iostat_time_short,omitempty"`
 	}
 
 	RebalanceConf struct {
-		DestRetryTimeStr string        `json:"dest_retry_time"` // max wait for ACKs & neighbors to complete
-		Quiesce          time.Duration `json:"-"`               // (runtime)
-		QuiesceStr       string        `json:"quiescent"`       // max wait for no-obj before next stage/batch
-		DestRetryTime    time.Duration `json:"-"`               // (runtime)
-		Compression      string        `json:"compression"`     // see CompressAlways, etc. enum
-		Multiplier       uint8         `json:"multiplier"`      // stream-bundle-and-jogger multiplier
-		Enabled          bool          `json:"enabled"`         // true=auto-rebalance | manual rebalancing
+		DestRetryTime cos.Duration `json:"dest_retry_time"` // max wait for ACKs & neighbors to complete
+		Quiesce       cos.Duration `json:"quiescent"`       // max wait for no-obj before next stage/batch
+		Compression   string       `json:"compression"`     // see CompressAlways, etc. enum
+		Multiplier    uint8        `json:"multiplier"`      // stream-bundle-and-jogger multiplier
+		Enabled       bool         `json:"enabled"`         // true=auto-rebalance | manual rebalancing
 	}
 	RebalanceConfToUpdate struct {
-		DestRetryTimeStr *string `json:"dest_retry_time,omitempty"`
-		QuiesceStr       *string `json:"quiescent,omitempty"`
-		Compression      *string `json:"compression,omitempty"`
-		Multiplier       *uint8  `json:"multiplier,omitempty"`
-		Enabled          *bool   `json:"enabled,omitempty"`
+		DestRetryTime *cos.Duration `json:"dest_retry_time,omitempty"`
+		Quiesce       *cos.Duration `json:"quiescent,omitempty"`
+		Compression   *string       `json:"compression,omitempty"`
+		Multiplier    *uint8        `json:"multiplier,omitempty"`
+		Enabled       *bool         `json:"enabled,omitempty"`
 	}
 
 	ResilverConf struct {
@@ -505,15 +481,14 @@ type (
 	// config for one keepalive tracker
 	// all type of trackers share the same struct, not all fields are used by all trackers
 	KeepaliveTrackerConf struct {
-		IntervalStr string        `json:"interval"` // keepalive interval
-		Interval    time.Duration `json:"-"`        // (runtime)
-		Name        string        `json:"name"`     // "heartbeat", "average"
-		Factor      uint8         `json:"factor"`   // only average
+		Interval cos.Duration `json:"interval"` // keepalive interval
+		Name     string       `json:"name"`     // "heartbeat", "average"
+		Factor   uint8        `json:"factor"`   // only average
 	}
 	KeepaliveTrackerConfToUpdate struct {
-		IntervalStr *string `json:"interval,omitempty"`
-		Name        *string `json:"name,omitempty"`
-		Factor      *uint8  `json:"factor,omitempty"`
+		Interval *cos.Duration `json:"interval,omitempty"`
+		Name     *string       `json:"name,omitempty"`
+		Factor   *uint8        `json:"factor,omitempty"`
 	}
 
 	KeepaliveConf struct {
@@ -530,34 +505,31 @@ type (
 	}
 
 	DownloaderConf struct {
-		TimeoutStr string        `json:"timeout"`
-		Timeout    time.Duration `json:"-"`
+		Timeout cos.Duration `json:"timeout"`
 	}
 	DownloaderConfToUpdate struct {
-		TimeoutStr *string `json:"timeout,omitempty"`
+		Timeout *cos.Duration `json:"timeout,omitempty"`
 	}
 
 	DSortConf struct {
-		DuplicatedRecords   string `json:"duplicated_records"`
-		MissingShards       string `json:"missing_shards"`
-		EKMMalformedLine    string `json:"ekm_malformed_line"`
-		EKMMissingKey       string `json:"ekm_missing_key"`
-		DefaultMaxMemUsage  string `json:"default_max_mem_usage"`
-		CallTimeoutStr      string `json:"call_timeout"`
-		Compression         string `json:"compression"` // enum { CompressAlways, ... }
-		DSorterMemThreshold string `json:"dsorter_mem_threshold"`
-		// omit
-		CallTimeout time.Duration `json:"-"` // time to wait for other target
+		DuplicatedRecords   string       `json:"duplicated_records"`
+		MissingShards       string       `json:"missing_shards"`
+		EKMMalformedLine    string       `json:"ekm_malformed_line"`
+		EKMMissingKey       string       `json:"ekm_missing_key"`
+		DefaultMaxMemUsage  string       `json:"default_max_mem_usage"`
+		CallTimeout         cos.Duration `json:"call_timeout"`
+		Compression         string       `json:"compression"` // enum { CompressAlways, ... }
+		DSorterMemThreshold string       `json:"dsorter_mem_threshold"`
 	}
 	DSortConfToUpdate struct {
-		DuplicatedRecords   *string `json:"duplicated_records,omitempty"`
-		MissingShards       *string `json:"missing_shards,omitempty"`
-		EKMMalformedLine    *string `json:"ekm_malformed_line,omitempty"`
-		EKMMissingKey       *string `json:"ekm_missing_key,omitempty"`
-		DefaultMaxMemUsage  *string `json:"default_max_mem_usage,omitempty"`
-		CallTimeoutStr      *string `json:"call_timeout,omitempty"`
-		Compression         *string `json:"compression,omitempty"`
-		DSorterMemThreshold *string `json:"dsorter_mem_threshold,omitempty"`
+		DuplicatedRecords   *string       `json:"duplicated_records,omitempty"`
+		MissingShards       *string       `json:"missing_shards,omitempty"`
+		EKMMalformedLine    *string       `json:"ekm_malformed_line,omitempty"`
+		EKMMissingKey       *string       `json:"ekm_missing_key,omitempty"`
+		DefaultMaxMemUsage  *string       `json:"default_max_mem_usage,omitempty"`
+		CallTimeout         *cos.Duration `json:"call_timeout,omitempty"`
+		Compression         *string       `json:"compression,omitempty"`
+		DSorterMemThreshold *string       `json:"dsorter_mem_threshold,omitempty"`
 	}
 
 	FSPathsConf struct {
@@ -942,13 +914,6 @@ func (c *DiskConf) Validate() (err error) {
 	if lwm <= 0 || hwm <= lwm || maxwm <= hwm || maxwm > 100 {
 		return fmt.Errorf("invalid (disk_util_lwm, disk_util_hwm, disk_util_maxwm) config %+v", c)
 	}
-
-	if c.IostatTimeLong, err = time.ParseDuration(c.IostatTimeLongStr); err != nil {
-		return fmt.Errorf("invalid disk.iostat_time_long format %s, err %v", c.IostatTimeLongStr, err)
-	}
-	if c.IostatTimeShort, err = time.ParseDuration(c.IostatTimeShortStr); err != nil {
-		return fmt.Errorf("invalid disk.iostat_time_short format %s, err %v", c.IostatTimeShortStr, err)
-	}
 	if c.IostatTimeLong <= 0 {
 		return fmt.Errorf("disk.iostat_time_long is zero")
 	}
@@ -965,15 +930,9 @@ func (c *DiskConf) Validate() (err error) {
 func (c *LRUConf) Validate() (err error) {
 	lwm, hwm, oos := c.LowWM, c.HighWM, c.OOS
 	if lwm <= 0 || hwm < lwm || oos < hwm || oos > 100 {
-		return fmt.Errorf("invalid lru (lwm, hwm, oos) configuration (%d, %d, %d)", lwm, hwm, oos)
+		err = fmt.Errorf("invalid lru (lwm, hwm, oos) configuration (%d, %d, %d)", lwm, hwm, oos)
 	}
-	if c.DontEvictTime, err = time.ParseDuration(c.DontEvictTimeStr); err != nil {
-		return fmt.Errorf("invalid lru.dont_evict_time format: %v", err)
-	}
-	if c.CapacityUpdTime, err = time.ParseDuration(c.CapacityUpdTimeStr); err != nil {
-		return fmt.Errorf("invalid lru.capacity_upd_time format: %v", err)
-	}
-	return nil
+	return
 }
 
 func (c *LRUConf) ValidateAsProps(_ *ValidationArgs) (err error) {
@@ -1072,69 +1031,14 @@ func (c *ECConf) ValidateAsProps(args *ValidationArgs) error {
 	return nil
 }
 
-func (c *TimeoutConf) Validate() (err error) {
-	if c.MaxKeepalive, err = time.ParseDuration(c.MaxKeepaliveStr); err != nil {
-		return fmt.Errorf("invalid timeout.max_keepalive format %s, err %v", c.MaxKeepaliveStr, err)
-	}
-	if c.CplaneOperation, err = time.ParseDuration(c.CplaneOperationStr); err != nil {
-		return fmt.Errorf("invalid timeout.vote_request format %s, err %v", c.CplaneOperationStr, err)
-	}
-	if c.SendFile, err = time.ParseDuration(c.SendFileStr); err != nil {
-		return fmt.Errorf("invalid timeout.send_file_time format %s, err %v", c.SendFileStr, err)
-	}
-	if c.Startup, err = time.ParseDuration(c.StartupStr); err != nil {
-		return fmt.Errorf("invalid timeout.startup_time format %s, err %v", c.StartupStr, err)
-	}
-	if c.MaxHostBusy, err = time.ParseDuration(c.MaxHostBusyStr); err != nil {
-		return fmt.Errorf("invalid timeout.max_host_busy format %s, err %v", c.MaxHostBusyStr, err)
-	}
-	return nil
-}
-
-func (c *ClientConf) Validate() (err error) {
-	if c.Timeout, err = time.ParseDuration(c.TimeoutStr); err != nil {
-		return fmt.Errorf("invalid client.default format %s, err %v", c.TimeoutStr, err)
-	}
-	if c.TimeoutLong, err = time.ParseDuration(c.TimeoutLongStr); err != nil {
-		return fmt.Errorf("invalid client.default_long format %s, err %v", c.TimeoutLongStr, err)
-	}
-	if c.ListObjects, err = time.ParseDuration(c.ListObjectsStr); err != nil {
-		return fmt.Errorf("invalid client.list_timeout format %s, err %v", c.ListObjectsStr, err)
-	}
-	return nil
-}
-
-func (c *RebalanceConf) Validate() (err error) {
-	if c.DestRetryTime, err = time.ParseDuration(c.DestRetryTimeStr); err != nil {
-		return fmt.Errorf("invalid rebalance.dest_retry_time format %s, err %v", c.DestRetryTimeStr, err)
-	}
-	if c.Quiesce, err = time.ParseDuration(c.QuiesceStr); err != nil {
-		return fmt.Errorf("invalid rebalance.quiesce format %s, err %v", c.QuiesceStr, err)
-	}
-	return nil
-}
-
-func (c *ResilverConf) Validate() (err error) {
-	return nil // no validation required
-}
-
-func (c *PeriodConf) Validate() (err error) {
-	if c.RetrySyncTime, err = time.ParseDuration(c.RetrySyncTimeStr); err != nil {
-		return fmt.Errorf("invalid periodic.retry_sync_time format %s, err %v", c.RetrySyncTimeStr, err)
-	}
-	if c.NotifTime, err = time.ParseDuration(c.NotifTimeStr); err != nil {
-		return fmt.Errorf("invalid periodic.notif_time format %s, err %v", c.NotifTimeStr, err)
-	}
-	return nil
-}
+func (c *TimeoutConf) Validate() (err error)    { return }
+func (c *ClientConf) Validate() (err error)     { return }
+func (c *RebalanceConf) Validate() (err error)  { return }
+func (c *ResilverConf) Validate() (err error)   { return }
+func (c *PeriodConf) Validate() (err error)     { return }
+func (c *DownloaderConf) Validate() (err error) { return }
 
 func (c *KeepaliveConf) Validate() (err error) {
-	if c.Proxy.Interval, err = time.ParseDuration(c.Proxy.IntervalStr); err != nil {
-		return fmt.Errorf("invalid keepalivetracker.proxy.interval %s", c.Proxy.IntervalStr)
-	}
-	if c.Target.Interval, err = time.ParseDuration(c.Target.IntervalStr); err != nil {
-		return fmt.Errorf("invalid keepalivetracker.target.interval %s", c.Target.IntervalStr)
-	}
 	if !validKeepaliveType(c.Proxy.Name) {
 		return fmt.Errorf("invalid keepalivetracker.proxy.name %s", c.Proxy.Name)
 	}
@@ -1207,13 +1111,6 @@ func (c *LocalNetConfig) Validate(contextConfig *Config) (err error) {
 	return
 }
 
-func (c *DownloaderConf) Validate() (err error) {
-	if c.Timeout, err = time.ParseDuration(c.TimeoutStr); err != nil {
-		return fmt.Errorf("invalid downloader.timeout %s", c.TimeoutStr)
-	}
-	return nil
-}
-
 func (c *DSortConf) Validate() (err error) {
 	return c.ValidateWithOpts(false)
 }
@@ -1243,9 +1140,6 @@ func (c *DSortConf) ValidateWithOpts(allowEmpty bool) (err error) {
 		if _, err := cos.ParseQuantity(c.DefaultMaxMemUsage); err != nil {
 			return fmt.Errorf("invalid distributed_sort.default_max_mem_usage: %s (err: %s)",
 				c.DefaultMaxMemUsage, err)
-		}
-		if c.CallTimeout, err = time.ParseDuration(c.CallTimeoutStr); err != nil {
-			return fmt.Errorf("invalid distributed_sort.call_timeout: %s", c.CallTimeoutStr)
 		}
 	}
 	if _, err := cos.S2B(c.DSorterMemThreshold); err != nil && (!allowEmpty || c.DSorterMemThreshold != "") {
@@ -1345,7 +1239,7 @@ func KeepaliveRetryDuration(cs ...*Config) time.Duration {
 	} else {
 		c = GCO.Get()
 	}
-	return c.Timeout.CplaneOperation * time.Duration(c.Keepalive.RetryFactor)
+	return c.Timeout.CplaneOperation.D() * time.Duration(c.Keepalive.RetryFactor)
 }
 
 ///////////////////

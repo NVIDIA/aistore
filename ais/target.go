@@ -126,7 +126,8 @@ func (gfn *globalGFN) Activate() bool {
 }
 
 func (gfn *globalGFN) activateTimed() {
-	timedInterval := cmn.GCO.Get().Timeout.Startup
+	config := cmn.GCO.Get()
+	timedInterval := config.Timeout.Startup.D()
 
 	gfn.mtx.Lock()
 	// If gfn is already activated we should not start timed.

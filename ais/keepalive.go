@@ -121,8 +121,8 @@ func newTargetKeepalive(t *targetrunner, statsT stats.Tracker, startedUp *atomic
 	tkr.kt = newKeepaliveTracker(&config.Keepalive.Target)
 	tkr.tt = &timeoutTracker{timeoutStats: make(map[string]*timeoutStats, 8)}
 	tkr.controlCh = make(chan controlSignal) // unbuffered on purpose
-	tkr.interval = config.Keepalive.Target.Interval
-	tkr.maxKeepalive = config.Timeout.MaxKeepalive.Nanoseconds()
+	tkr.interval = config.Keepalive.Target.Interval.D()
+	tkr.maxKeepalive = int64(config.Timeout.MaxKeepalive)
 	return tkr
 }
 
@@ -156,8 +156,8 @@ func newProxyKeepalive(p *proxyrunner, statsT stats.Tracker, startedUp *atomic.B
 	pkr.kt = newKeepaliveTracker(&config.Keepalive.Proxy)
 	pkr.tt = &timeoutTracker{timeoutStats: make(map[string]*timeoutStats, 8)}
 	pkr.controlCh = make(chan controlSignal) // unbuffered on purpose
-	pkr.interval = config.Keepalive.Proxy.Interval
-	pkr.maxKeepalive = config.Timeout.MaxKeepalive.Nanoseconds()
+	pkr.interval = config.Keepalive.Proxy.Interval.D()
+	pkr.maxKeepalive = int64(config.Timeout.MaxKeepalive)
 	return pkr
 }
 
@@ -419,7 +419,8 @@ func (k *keepalive) waitStatsRunner() (stopped bool) {
 				return false
 			}
 			i += waitStartupSleep
-			if i > cmn.GCO.Get().Timeout.Startup {
+			config := cmn.GCO.Get()
+			if i > config.Timeout.Startup.D() {
 				glog.Errorln("startup is taking unusually long time...")
 				i = 0
 			}
@@ -448,7 +449,7 @@ func (k *keepalive) Run() error {
 			lastCheck = mono.NanoTime()
 			k.k.doKeepalive()
 			config := cmn.GCO.Get()
-			k.configUpdate(config.Timeout.MaxKeepalive, k.k.cfg(config))
+			k.configUpdate(config.Timeout.MaxKeepalive.D(), k.k.cfg(config))
 		case sig := <-k.controlCh:
 			switch sig.msg {
 			case kaRegisterMsg:
@@ -474,11 +475,11 @@ func (k *keepalive) Run() error {
 }
 
 func (k *keepalive) configUpdate(maxKeepalive time.Duration, cfg *cmn.KeepaliveTrackerConf) {
-	k.maxKeepalive = maxKeepalive.Nanoseconds()
-	if !k.kt.changed(cfg.Factor, cfg.Interval) {
+	k.maxKeepalive = int64(maxKeepalive)
+	if !k.kt.changed(cfg.Factor, cfg.Interval.D()) {
 		return
 	}
-	k.interval = cfg.Interval
+	k.interval = cfg.Interval.D()
 	k.kt = newKeepaliveTracker(cfg)
 }
 
@@ -543,13 +544,13 @@ func (k *keepalive) register(sendKeepalive func(time.Duration) (int, error), pri
 // updateTimeoutForDaemon calculates the new timeout for the daemon with ID sid, updates it in
 // k.timeoutStatsForDaemon, and returns it. The algorithm is loosely based on TCP's RTO calculation,
 // as documented in RFC 6298.
-func (k *keepalive) updateTimeoutForDaemon(sid string, t time.Duration) time.Duration {
+func (k *keepalive) updateTimeoutForDaemon(sid string, d time.Duration) time.Duration {
 	const (
 		alpha = 125
 		beta  = 250
 		c     = 4
 	)
-	next := t.Nanoseconds()
+	next := int64(d)
 	ts := k.timeoutStatsForDaemon(sid)
 	ts.rttvar = (1000-beta)*ts.rttvar + beta*(cos.AbsI64(ts.srtt-next))
 	ts.rttvar = cos.DivRound(ts.rttvar, 1000)
@@ -621,7 +622,7 @@ var (
 func newKeepaliveTracker(c *cmn.KeepaliveTrackerConf) KeepaliveTracker {
 	switch c.Name {
 	case cmn.KeepaliveHeartbeatType:
-		return newHBTracker(c.Interval)
+		return newHBTracker(c.Interval.D())
 	case cmn.KeepaliveAverageType:
 		return newAvgTracker(c.Factor)
 	}

@@ -292,17 +292,17 @@ func (txns *transactions) housekeep() (d time.Duration) {
 		elapsed := now.Sub(txn.started(cmn.ActBegin))
 		if commitTimestamp := txn.started(cmn.ActCommit); !commitTimestamp.IsZero() {
 			elapsed = now.Sub(commitTimestamp)
-			if elapsed > gcTxnsTimeotMult*config.Timeout.MaxHostBusy {
+			if elapsed > gcTxnsTimeotMult*config.Timeout.MaxHostBusy.D() {
 				errs = append(errs, fmt.Sprintf("GC %s: [commit - done] timeout", txn))
 				orphans = append(orphans, txn)
-			} else if elapsed >= TxnTimeoutMult*config.Timeout.MaxHostBusy {
+			} else if elapsed >= TxnTimeoutMult*config.Timeout.MaxHostBusy.D() {
 				errs = append(errs, fmt.Sprintf("GC %s: commit is taking too long...", txn))
 			}
 		} else {
-			if elapsed > TxnTimeoutMult*config.Timeout.MaxHostBusy {
+			if elapsed > TxnTimeoutMult*config.Timeout.MaxHostBusy.D() {
 				errs = append(errs, fmt.Sprintf("GC %s: [begin - start-commit] timeout", txn))
 				orphans = append(orphans, txn)
-			} else if elapsed >= TxnTimeoutMult*config.Timeout.MaxKeepalive {
+			} else if elapsed >= TxnTimeoutMult*config.Timeout.MaxKeepalive.D() {
 				errs = append(errs, fmt.Sprintf("GC %s: commit message is taking too long...", txn))
 			}
 		}

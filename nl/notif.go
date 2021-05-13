@@ -34,7 +34,7 @@ func (notif *NotifBase) LastNotifTime() int64                     { return notif
 func (notif *NotifBase) SetLastNotified(now int64)                { notif.lastNotified.Store(now) }
 func (notif *NotifBase) NotifyInterval() time.Duration {
 	if notif.Interval == 0 {
-		return cmn.GCO.Get().Periodic.NotifTime
+		return cmn.GCO.Get().Periodic.NotifTime.D()
 	}
 	return notif.Interval
 }

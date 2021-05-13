@@ -516,7 +516,7 @@ func (r *statsRunner) runcommon(logger statsLogger) error {
 
 		// NOTE: the maximum time we agree to wait for r.daemon.ClusterStarted()
 		config   = cmn.GCO.Get()
-		deadline = startupDeadlineMultiplier * config.Timeout.Startup
+		deadline = startupDeadlineMultiplier * config.Timeout.Startup.D()
 	)
 waitStartup:
 	for {
@@ -536,7 +536,7 @@ waitStartup:
 				return cmn.ErrStartupTimeout
 			}
 			i += startupSleep
-			if i > config.Timeout.Startup {
+			if i > config.Timeout.Startup.D() {
 				glog.Errorln("startup is taking unusually long time...")
 				i = 0
 			}

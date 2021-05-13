@@ -580,7 +580,8 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 		err = errors.New("invalid number of slices")
 		return
 	}
-	if !nlp.TryLock(cmn.GCO.Get().Timeout.CplaneOperation / 2) {
+	config := cmn.GCO.Get()
+	if !nlp.TryLock(config.Timeout.CplaneOperation.D() / 2) {
 		err = cmn.NewErrorBucketIsBusy(bck.Bck)
 		return
 	}
@@ -669,15 +670,12 @@ func (p *proxyrunner) _updatePropsBMDPre(ctx *bmdModifier, clone *bucketMD) erro
 }
 
 // maintenance: { begin -- enable GFN -- commit -- start rebalance }
-func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
-	opts *cmn.ActValRmNode) (rebID xaction.RebID, err error) {
-	// 1. begin
+func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, opts *cmn.ActValRmNode) (rebID xaction.RebID, err error) {
 	var (
 		waitmsync  = false
 		c          = p.prepTxnClient(msg, nil, waitmsync)
 		rebEnabled = cmn.GCO.Get().Rebalance.Enabled
 	)
-
 	if si.IsTarget() && !opts.SkipRebalance && rebEnabled {
 		if err = p.canStartRebalance(); err != nil {
 			// special case: removing the very last target
@@ -686,7 +684,7 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 			}
 		}
 	}
-
+	// 1. begin
 	results := c.bcast(cmn.ActBegin, c.timeout.netw)
 	for _, res := range results {
 		if res.err == nil {
@@ -775,7 +773,7 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 	// NOTE: testing only: to avoid premature aborts when loopback devices get 100% utilized
 	//       (under heavy writing)
 	if config.TestingEnv() {
-		c.timeout.netw = config.Timeout.MaxHostBusy + config.Timeout.MaxHostBusy/2
+		c.timeout.netw = config.Timeout.MaxHostBusy.D() + config.Timeout.MaxHostBusy.D()/2
 		c.timeout.host = c.timeout.netw
 	}
 	results := c.bcast(cmn.ActBegin, c.timeout.netw)
@@ -897,11 +895,11 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck, waitms
 		query = cmn.AddBckToQuery(query, bck.Bck)
 	}
 	config := cmn.GCO.Get()
-	c.timeout.netw = config.Timeout.MaxKeepalive
+	c.timeout.netw = config.Timeout.MaxKeepalive.D()
 	if !waitmsync { // when commit does not block behind metasync
 		query.Set(cmn.URLParamNetwTimeout, cos.UnixNano2S(int64(c.timeout.netw)))
 	}
-	c.timeout.host = config.Timeout.MaxHostBusy
+	c.timeout.host = config.Timeout.MaxHostBusy.D()
 	query.Set(cmn.URLParamHostTimeout, cos.UnixNano2S(int64(c.timeout.host)))
 
 	c.req = cmn.ReqArgs{Method: http.MethodPost, Query: query, Body: body}
