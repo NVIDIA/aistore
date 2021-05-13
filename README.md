@@ -63,38 +63,35 @@ Further, there's the capability referred to as [global namespace](/providers.md#
 
 ## Observability
 
-There are multiple ways to monitor all aspects of AIS operation.
+AIStore tracks, logs, and reports a fairly large and growing number of counters, latencies and throughputs including (but not limited to) those stats that reflect cluster recovery and global rebalancing, all [extended long-running operations](/xaction/README.md), and, of course, the basic read, write, list transactions, and more.
 
-For starters, AIS collects, logs, and reports via [StatsD](https://github.com/etsy/statsd) a fairly large and growing number of counters, latencies and throughputs including (but not limited to) those stats that reflect cluster recovery and global rebalancing, all [extended long-running operations](/xaction/README.md), and, of course, the basic read, write, list transactions, and more.
+Overall, the options to *observe* what's going on include:
 
-> Logging interval is called `stats_time` (default `10s`) and is [configurable](/docs/configuration.md) on the level of both each specific node and the entire cluster.
+1. Logs
+2. [CLI](/cmd/cli/README.md)
+3. Any [StatsD](https://github.com/etsy/statsd) compliant backend (e.g., Graphite/Grafana)
+4. [Prometheus](https://prometheus.io/), via its own included [statsd_exporter](https://github.com/prometheus/statsd_exporter) extension that on-the-fly translates StatsD formatted metrics into Prometheus.
 
-In particular, all [eXtended actions](/xaction/README.md) support generic [API](/api/xaction.go) and [CLI](/cmd/cli/resources/job.md#show-job-statistics) to show both common counters (byte and object numbers) as well as operation-specific extended statistics.
+Quick links:
 
-> Batch operations that may take many seconds (minutes, sometimes hours) to execute are called *eXtended actions* or *xactions*. Examples include erasure coding or n-way mirroring a dataset, resharding and reshuffling a dataset, and many more.
+* For information on AIS metrics, see [Statistics, Collected Metrics, Visualization](/docs/metrics.md).
+* For monitoring AIS with Prometheus, see the [Prometheus](docs/prometheus.md) readme.
+  - This document also includes an illustrated  getting-started guide to deploy with Prometheus in no time.
+* [REST API](docs/http_api.md) that, in particular, can be used to retrieve current cluster stats or the statistics from any given selected node.
+* AIStore includes `aisloader` - a powerful tool to stress-test and benchmark storage performance. The tool generates its own statistics and is fully StatsD-enabled. For numerous command-line options and many examples, please see:
+  - [Load Generator](/bench/aisloader/README.md)
+  - [How To Benchmark AIStore](/docs/howto_benchmark.md)
 
-In addition, AIS subsystems integrate their own, subsystem-specific, stats - e.g.:
+And in addition:
+
+Batch operations that may take many seconds (minutes, sometimes hours) to execute are called *eXtended actions* or *xactions*. Examples include erasure coding or n-way mirroring a dataset, resharding and reshuffling a dataset, and many more. All [eXtended actions](/xaction/README.md) support generic [API](/api/xaction.go) and [CLI](/cmd/cli/resources/job.md#show-job-statistics) to show both common counters (byte and object numbers) as well as operation-specific extended statistics.
+
+Global rebalance that gets triggered by any membership changes (nodes joining, leaving, going down, etc.) can be further visualized via `ais show rebalance` CLI.
+
+AIS subsystems integrate subsystem-specific stats - e.g.:
 
 * [dSort](/dsort/README.md)
 * [Downloader](/downloader/README.md)
-
-Finally, global rebalance (that gets triggered by any membership changes - nodes joining, leaving, going down, etc.) can be further "visualized" via `ais show rebalance` CLI.
-
-As far as Graphite/Grafana and Prometheus, AIS integrates with these popular backends via [StatsD](https://github.com/etsy/statsd) - the *daemon for easy but powerful stats aggregation*.
-
-> Scripts for easy deployment of both Graphite and Grafana are included (see below). StatsD can be connected to Graphite, which then can be used as a data source for Grafana to get a visual overview of the statistics and metrics. The same is true for Prometheus that is available for easy integration via its [official exporter](https://github.com/prometheus/statsd_exporter).
-
-> For local non-containerized deployments, use `./deploy/dev/local/deploy_grafana.sh` to start Graphite and Grafana containers.
-> Local deployment scripts will automatically "notice" the presence of the containers and will send statistics to the Graphite.
-
-> For local docker-compose based deployments, make sure to use `-grafana` command-line option.
-> The `./deploy/dev/docker/deploy_docker.sh` script will then spin-up Graphite and Grafana containers.
-
-In both of these cases, Grafana will be accessible at [localhost:3000](http://localhost:3000).
-
-> For information on AIS statistics, please see [Statistics, Collected Metrics, Visualization](/docs/metrics.md)
-
-> AIStore includes `aisloader` - the tool to stress-test and benchmark storage performance. For background, command-line options, and usage, please see [Load Generator](/bench/aisloader/README.md) and [How To Benchmark AIStore](/docs/howto_benchmark.md).
 
 ## Debug-Mode Observability
 
