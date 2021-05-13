@@ -926,13 +926,13 @@ func nextRefresh(config *cmn.Config) time.Duration {
 		umin = cos.MaxI64(config.LRU.HighWM-10, config.LRU.LowWM)
 		umax = config.LRU.OOS
 		tmax = config.LRU.CapacityUpdTime
-		tmin = config.Periodic.StatsTime
+		tmin = time.Duration(config.Periodic.StatsTime)
 	)
 	if util <= umin {
 		return config.LRU.CapacityUpdTime
 	}
 	if util >= umax {
-		return config.Periodic.StatsTime
+		return tmin
 	}
 	debug.Assert(umin < umax)
 	debug.Assert(tmin < tmax)

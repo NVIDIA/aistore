@@ -549,7 +549,7 @@ waitStartup:
 	glog.Infof("Starting %s", r.Name())
 	hk.Reg(r.Name()+".gc.logs", r.recycleLogs, logsMaxSizeCheckTime)
 
-	statsTime := config.Periodic.StatsTime
+	statsTime := config.Periodic.StatsTime.D()
 	r.ticker = time.NewTicker(statsTime)
 	r.startedUp.Store(true)
 
@@ -566,8 +566,8 @@ waitStartup:
 			checkNumGorHigh = _whingeGoroutines(now, checkNumGorHigh, goMaxProcs)
 
 			config = cmn.GCO.Get()
-			if statsTime != config.Periodic.StatsTime {
-				statsTime = config.Periodic.StatsTime
+			if statsTime != config.Periodic.StatsTime.D() {
+				statsTime = config.Periodic.StatsTime.D()
 				r.ticker.Reset(statsTime)
 				logger.statsTime(statsTime)
 			}

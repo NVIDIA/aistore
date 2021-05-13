@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
@@ -33,12 +34,12 @@ func TestConfig(t *testing.T) {
 	nlruconfig := nconfig.LRU
 	nperiodic := nconfig.Periodic
 
-	if nperiodic.StatsTimeStr != configRegression["periodic.stats_time"] {
+	if v, _ := time.ParseDuration(configRegression["periodic.stats_time"]); nperiodic.StatsTime != cos.Duration(v) {
 		t.Errorf("StatsTime was not set properly: %v, should be: %v",
-			nperiodic.StatsTimeStr, configRegression["periodic.stats_time"])
+			nperiodic.StatsTime, configRegression["periodic.stats_time"])
 	} else {
-		o := operiodic.StatsTimeStr
-		tutils.SetClusterConfig(t, cos.SimpleKVs{"periodic.stats_time": o})
+		o := operiodic.StatsTime
+		tutils.SetClusterConfig(t, cos.SimpleKVs{"periodic.stats_time": fmt.Sprintf("%v", o)})
 	}
 	if nlruconfig.DontEvictTimeStr != configRegression["lru.dont_evict_time"] {
 		t.Errorf("DontEvictTime was not set properly: %v, should be: %v",
@@ -103,7 +104,8 @@ func TestConfigSetGlobal(t *testing.T) {
 	smap := tutils.GetClusterMap(t, tutils.GetPrimaryURL())
 	config := tutils.GetClusterConfig(t)
 	check := func(snode *cluster.Snode, c *cmn.Config) {
-		tassert.Errorf(t, c.EC.Enabled == ecCondition, "%s expected 'ec.enabled' to be %v, got %v", snode, ecCondition, c.EC.Enabled)
+		tassert.Errorf(t, c.EC.Enabled == ecCondition,
+			"%s expected 'ec.enabled' to be %v, got %v", snode, ecCondition, c.EC.Enabled)
 	}
 
 	ecCondition = !config.EC.Enabled
@@ -139,7 +141,8 @@ func TestConfigFailOverrideClusterOnly(t *testing.T) {
 	tassert.Fatalf(t, err != nil, "expected error to occur when trying to override cluster only config")
 
 	daemonConfig := tutils.GetDaemonConfig(t, proxy)
-	tassert.Errorf(t, daemonConfig.EC.Enabled == config.EC.Enabled, "expected 'ec.enabled' to be %v, got: %v", config.EC.Enabled, daemonConfig.EC.Enabled)
+	tassert.Errorf(t, daemonConfig.EC.Enabled == config.EC.Enabled,
+		"expected 'ec.enabled' to be %v, got: %v", config.EC.Enabled, daemonConfig.EC.Enabled)
 }
 
 func TestConfigOverrideAndRestart(t *testing.T) {
@@ -163,7 +166,8 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	daemonConfig := tutils.GetDaemonConfig(t, proxy)
-	tassert.Errorf(t, daemonConfig.Disk.DiskUtilLowWM == newLowWM, errWMConfigNotExpected, newLowWM, daemonConfig.Disk.DiskUtilLowWM)
+	tassert.Errorf(t, daemonConfig.Disk.DiskUtilLowWM == newLowWM,
+		errWMConfigNotExpected, newLowWM, daemonConfig.Disk.DiskUtilLowWM)
 
 	// Restart daemon and check if the config is persisted.
 	cmd, err := tutils.KillNode(proxy)
@@ -179,7 +183,8 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 	tassert.CheckError(t, err)
 
 	daemonConfig = tutils.GetDaemonConfig(t, proxy)
-	tassert.Fatalf(t, daemonConfig.Disk.DiskUtilLowWM == newLowWM, errWMConfigNotExpected, newLowWM, daemonConfig.Disk.DiskUtilLowWM)
+	tassert.Fatalf(t, daemonConfig.Disk.DiskUtilLowWM == newLowWM,
+		errWMConfigNotExpected, newLowWM, daemonConfig.Disk.DiskUtilLowWM)
 
 	// Reset node config.
 	err = api.SetDaemonConfig(baseParams, proxy.DaemonID, cos.SimpleKVs{
@@ -230,7 +235,8 @@ func TestConfigSyncToNewNode(t *testing.T) {
 
 	// 4. Ensure the proxy has lastest updated config
 	daemonConfig := tutils.GetDaemonConfig(t, proxy)
-	tassert.Fatalf(t, daemonConfig.EC.Enabled == newECEnabled, "expected 'ec.Enabled' to be %v, got: %v", newECEnabled, daemonConfig.EC.Enabled)
+	tassert.Fatalf(t, daemonConfig.EC.Enabled == newECEnabled,
+		"expected 'ec.Enabled' to be %v, got: %v", newECEnabled, daemonConfig.EC.Enabled)
 }
 
 func checkConfig(t *testing.T, smap *cluster.Smap, check func(*cluster.Snode, *cmn.Config)) {

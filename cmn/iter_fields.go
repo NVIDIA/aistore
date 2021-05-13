@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -234,7 +235,7 @@ func copyProps(src, dst interface{}, asType string) (err error) {
 		}
 
 		t, ok := dstVal.Type().FieldByName(fieldName)
-		cos.Assert(ok)
+		cos.AssertMsg(ok, fieldName)
 		// NOTE: the tag is used exclusively to enforce local vs global scope of the config var
 		allowed := t.Tag.Get("allow")
 		if allowed != "" && allowed != asType {
@@ -276,7 +277,8 @@ func mergeProps(src, dst interface{}) {
 			continue
 		}
 
-		if dstValField.IsNil() || (srcValField.Elem().Kind() != reflect.Struct && srcValField.Elem().Kind() != reflect.Invalid) {
+		if dstValField.IsNil() ||
+			(srcValField.Elem().Kind() != reflect.Struct && srcValField.Elem().Kind() != reflect.Invalid) {
 			dstValField.Set(srcValField)
 			continue
 		}
@@ -320,7 +322,18 @@ func (f *field) SetValue(src interface{}, force ...bool) error {
 				return err
 			}
 			dst.SetBool(n)
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		case reflect.Int64:
+			n, err := strconv.ParseInt(s, 10, 64)
+			if err != nil && dst.Type().Name() == "Duration" /*cos.Duration*/ {
+				var d time.Duration
+				d, err = time.ParseDuration(s)
+				n = int64(d)
+			}
+			if err != nil {
+				return err
+			}
+			dst.SetInt(n)
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
 			n, err := strconv.ParseInt(s, 10, 64)
 			if err != nil {
 				return err

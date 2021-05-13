@@ -101,7 +101,7 @@ func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
 	r.lines = make([]string, 0, 16)
 
 	config := cmn.GCO.Get()
-	r.Core.statsTime = config.Periodic.StatsTime
+	r.Core.statsTime = config.Periodic.StatsTime.D()
 
 	r.statsRunner.name = "targetstats"
 	r.statsRunner.daemon = t

@@ -170,7 +170,7 @@ func (r *XactGet) Run() {
 
 	var (
 		cfg    = cmn.GCO.Get()
-		ticker = time.NewTicker(cfg.Periodic.StatsTime)
+		ticker = time.NewTicker(cfg.Periodic.StatsTime.D())
 	)
 	defer ticker.Stop()
 

@@ -257,18 +257,17 @@ type (
 	}
 
 	PeriodConf struct {
-		StatsTimeStr     string `json:"stats_time"`
-		RetrySyncTimeStr string `json:"retry_sync_time"`
-		NotifTimeStr     string `json:"notif_time"`
+		StatsTime        cos.Duration `json:"stats_time"`
+		RetrySyncTimeStr string       `json:"retry_sync_time"`
+		NotifTimeStr     string       `json:"notif_time"`
 		// omit
-		StatsTime     time.Duration `json:"-"`
 		RetrySyncTime time.Duration `json:"-"`
 		NotifTime     time.Duration `json:"-"`
 	}
 	PeriodConfToUpdate struct {
-		StatsTimeStr     *string `json:"stats_time,omitempty"`
-		RetrySyncTimeStr *string `json:"retry_sync_time,omitempty"`
-		NotifTimeStr     *string `json:"notif_time,omitempty"`
+		StatsTime        *cos.Duration `json:"stats_time,omitempty"`
+		RetrySyncTimeStr *string       `json:"retry_sync_time,omitempty"`
+		NotifTimeStr     *string       `json:"notif_time,omitempty"`
 	}
 
 	// maximum intra-cluster latencies (in the increasing order)
@@ -1120,9 +1119,6 @@ func (c *ResilverConf) Validate() (err error) {
 }
 
 func (c *PeriodConf) Validate() (err error) {
-	if c.StatsTime, err = time.ParseDuration(c.StatsTimeStr); err != nil {
-		return fmt.Errorf("invalid periodic.stats_time format %s, err %v", c.StatsTimeStr, err)
-	}
 	if c.RetrySyncTime, err = time.ParseDuration(c.RetrySyncTimeStr); err != nil {
 		return fmt.Errorf("invalid periodic.retry_sync_time format %s, err %v", c.RetrySyncTimeStr, err)
 	}

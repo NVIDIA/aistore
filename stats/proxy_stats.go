@@ -44,7 +44,7 @@ func (r *Prunner) Get(name string) (val int64) { return r.Core.get(name) }
 func (r *Prunner) Init(p cluster.Node) *atomic.Bool {
 	r.Core = &CoreStats{}
 	r.Core.init(24)
-	r.Core.statsTime = cmn.GCO.Get().Periodic.StatsTime
+	r.Core.statsTime = cmn.GCO.Get().Periodic.StatsTime.D()
 	r.ctracker = make(copyTracker, 24)
 	r.Core.initStatsD(p.Snode())
 

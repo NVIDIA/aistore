@@ -155,7 +155,7 @@ func (r *XactPut) Run() {
 func (r *XactPut) mainLoop() {
 	var (
 		cfg    = cmn.GCO.Get()
-		ticker = time.NewTicker(cfg.Periodic.StatsTime)
+		ticker = time.NewTicker(cfg.Periodic.StatsTime.D())
 	)
 	defer ticker.Stop()
 
