@@ -230,14 +230,24 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 	return templates.DisplayOutput(bckSums, c.App.Writer, templates.BucketSummaryValidateTmpl)
 }
 
-func showObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
+func showObjectHealth(c *cli.Context) (err error) {
+	queryBcks, err := parseQueryBckURI(c, c.Args().First())
+	if err != nil {
+		return err
+	}
+
 	fValidate := func() error {
 		return checkObjectHealth(c, queryBcks)
 	}
 	return cmn.WaitForFunc(fValidate, longCommandTime)
 }
 
-func showBucketSizes(c *cli.Context, queryBcks cmn.QueryBcks) error {
+func showBucketSizes(c *cli.Context) error {
+	queryBcks, err := parseQueryBckURI(c, c.Args().First())
+	if err != nil {
+		return err
+	}
+
 	summaries, err := fetchSummaries(queryBcks, flagIsSet(c, fastFlag), flagIsSet(c, cachedFlag))
 	if err != nil {
 		return err
@@ -250,16 +260,11 @@ func showBucketSizes(c *cli.Context, queryBcks cmn.QueryBcks) error {
 }
 
 func summaryBucketHandler(c *cli.Context) (err error) {
-	queryBcks, err := parseQueryBckURI(c, c.Args().First())
-	if err != nil {
-		return err
-	}
-
 	if flagIsSet(c, validateFlag) {
-		return showObjectHealth(c, queryBcks)
+		return showObjectHealth(c)
 	}
 
-	return showBucketSizes(c, queryBcks)
+	return showBucketSizes(c)
 }
 
 func copyBucketHandler(c *cli.Context) (err error) {

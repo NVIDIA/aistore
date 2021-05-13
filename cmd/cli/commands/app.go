@@ -193,13 +193,13 @@ func (aisCLI *AISCLI) setupCommands() {
 		objectCmd,
 		clusterCmd,
 		configCmd,
-		mpathCmd,
 		etlCmd,
 		jobCmd,
 		authCmd,
 		showCmd,
 		helpCommand,
 		advancedCmd,
+		storageCmd,
 		aisCLI.getAliasCmd(),
 	}
 

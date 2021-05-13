@@ -1,9 +1,9 @@
-ais mountpath attach // FAIL
-ais mountpath detach // FAIL
-ais mountpath attach something // FAIL "invalid key-value pair "something""
-ais mountpath detach something // FAIL "invalid key-value pair "something""
-ais mountpath attach $RANDOM_TARGET=/nonexisting // FAIL "not found"
-ais mountpath detach $RANDOM_TARGET=/nonexisting // FAIL "tried to remove non-existing mountpath: /nonexisting"
+ais storage mountpath attach // FAIL
+ais storage mountpath detach // FAIL
+ais storage mountpath attach something // FAIL "invalid key-value pair "something""
+ais storage mountpath detach something // FAIL "invalid key-value pair "something""
+ais storage mountpath attach $RANDOM_TARGET=/nonexisting // FAIL "not found"
+ais storage mountpath detach $RANDOM_TARGET=/nonexisting // FAIL "tried to remove non-existing mountpath: /nonexisting"
 
-ais mountpath detach $RANDOM_TARGET=$RANDOM_MOUNTPATH
-ais mountpath attach $RANDOM_TARGET=$RANDOM_MOUNTPATH
+ais storage mountpath detach $RANDOM_TARGET=$RANDOM_MOUNTPATH
+ais storage mountpath attach $RANDOM_TARGET=$RANDOM_MOUNTPATH

@@ -49,6 +49,7 @@ const (
 	commandStop      = cmn.ActXactStop
 	commandWait      = "wait"
 	commandAlias     = "alias"
+	commandStorage   = "storage"
 
 	// Common Subcommands
 	// NOTE: second level subcommands are preferably verbs
@@ -154,6 +155,11 @@ const (
 	subcmdK8s        = "kubectl"
 	subcmdK8sSvc     = "svc"
 	subcmdK8sCluster = commandCluster
+
+	// Bucket subcommands
+	subcmdStgSummary   = subcmdSummary
+	subcmdStgValidate  = "validate"
+	subcmdStgMountpath = subcmdMountpath
 
 	// Default values for long running operations
 	refreshRateDefault = time.Second
