@@ -30,6 +30,7 @@ import (
 	"github.com/NVIDIA/aistore/stats/statsd"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -97,7 +98,8 @@ type (
 		AddMany(namedVal64 ...NamedVal64)
 		CoreStats() *CoreStats
 		GetWhatStats() interface{}
-		RegMetrics()
+		RegMetrics(node *cluster.Snode)
+		IsPrometheus() bool
 	}
 	NamedVal64 struct {
 		Name       string
@@ -106,6 +108,7 @@ type (
 	}
 	CoreStats struct {
 		Tracker   statsTracker
+		promDesc  promDesc
 		statsdC   *statsd.Client
 		statsTime time.Duration
 		sgl       *memsys.SGL
@@ -183,7 +186,8 @@ type (
 		sync.RWMutex
 		Value      int64 `json:"v,string"`
 		kind       string
-		nroot      string
+		nroot      string // StatsD name "root" (prefix . nroot . suffix)
+		plabel     string // Prometheus label
 		numSamples int64
 		cumulative int64
 		isCommon   bool // optional, common to the proxy and target
@@ -193,6 +197,7 @@ type (
 	}
 	statsTracker map[string]*statsValue
 	copyTracker  map[string]*copyValue
+	promDesc     map[string]*prometheus.Desc
 )
 
 ///////////////
@@ -207,6 +212,7 @@ var (
 
 func (s *CoreStats) init(size int) {
 	s.Tracker = make(statsTracker, size)
+	s.promDesc = make(promDesc, size)
 	// NOTE:
 	// accessible in debug mode via host:port/debug/vars
 	// * all counters including errors
@@ -221,7 +227,92 @@ func (s *CoreStats) init(size int) {
 	s.sgl = memsys.DefaultPageMM().NewSGL(memsys.PageSize)
 }
 
-func (s *CoreStats) UpdateUptime(d time.Duration) {
+// NOTE: nil StatsD client means that we provide metrics to Prometheus (see below)
+func (s *CoreStats) isPrometheus() bool { return s.statsdC == nil }
+
+// init MetricClient client: StatsD (default) or Prometheus
+func (s *CoreStats) initMetricClient(node *cluster.Snode, parent *statsRunner) {
+	// Either Prometheus
+	if prom := os.Getenv("AIS_PROMETHEUS"); prom != "" { // TODO -- FIXME: document
+		glog.Infoln("Using Prometheus")
+		prometheus.MustRegister(parent) // as prometheus.Collector
+		return
+	}
+
+	// or StatsD
+	var (
+		port  = 8125  // StatsD default port, see https://github.com/etsy/stats
+		probe = false // test-probe StatsD server at init time
+	)
+	if portStr := os.Getenv("AIS_STATSD_PORT"); portStr != "" {
+		if portNum, err := cmn.ParsePort(portStr); err != nil {
+			debug.AssertNoErr(err)
+			glog.Error(err)
+		} else {
+			port = portNum
+		}
+	}
+	if probeStr := os.Getenv("AIS_STATSD_PROBE"); probeStr != "" {
+		if probeBool, err := cos.ParseBool(probeStr); err != nil {
+			glog.Error(err)
+		} else {
+			probe = probeBool
+		}
+	}
+	id := strings.ReplaceAll(node.ID(), ":", "_") // ":" delineates name and value for StatsD
+	statsD, err := statsd.New("localhost", port, "ais"+node.Type()+"."+id, probe)
+	if err != nil {
+		glog.Errorf("Starting up without StatsD: %v", err)
+	} else {
+		glog.Infoln("Using StatsD")
+	}
+	s.statsdC = &statsD
+}
+
+// populate *prometheus.Desc(riptions) and statsValue.plabel
+// NOTE: the naming
+func (s *CoreStats) initProm(node *cluster.Snode) {
+	if !s.isPrometheus() {
+		return
+	}
+	id := strings.ReplaceAll(node.ID(), ".", "_")
+	for name, v := range s.Tracker {
+		label := strings.ReplaceAll(name, ".", "_")
+		v.plabel = strings.ReplaceAll(label, ":", "_")
+
+		help := v.kind
+		switch v.kind {
+		case KindCounter:
+			if strings.HasSuffix(v.plabel, "_n") {
+				help = "total number of operations"
+			} else if strings.HasSuffix(v.plabel, "_size") {
+				help = "total size (MB)"
+			}
+		case KindLatency:
+			if strings.HasSuffix(v.plabel, "_ns") {
+				v.plabel = strings.TrimSuffix(v.plabel, "_ns") + "_ms"
+			} else {
+				v.plabel = strings.ReplaceAll(v.plabel, "_ns_", "_ms_")
+			}
+			help = "latency (milliseconds)"
+		case KindThroughput:
+			if strings.HasSuffix(v.plabel, "_bps") {
+				v.plabel = strings.TrimSuffix(v.plabel, "_bps") + "_mbps"
+			}
+			help = "throughput (MB/s)"
+		case KindSpecial:
+			if name == Uptime {
+				v.plabel = strings.ReplaceAll(v.plabel, "_ns_", "")
+				help = "uptime (seconds)"
+			}
+		}
+
+		fullqn := prometheus.BuildFQName("ais", node.Type(), id+"_"+v.plabel)
+		s.promDesc[name] = prometheus.NewDesc(fullqn, help, nil /*variableLabels*/, nil /*constLabels*/)
+	}
+}
+
+func (s *CoreStats) updateUptime(d time.Duration) {
 	v := s.Tracker[Uptime]
 	v.Lock()
 	v.Value = d.Nanoseconds()
@@ -239,9 +330,7 @@ func (s *CoreStats) get(name string) (val int64) {
 	return
 }
 
-//
 // NOTE naming convention: ".n" for the count and ".ns" for duration (nanoseconds)
-//
 func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
 	v, ok := s.Tracker[name]
 	debug.Assertf(ok, "invalid stats name %q", name)
@@ -262,11 +351,11 @@ func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
 		v.Value += val
 		v.Unlock()
 		// NOTE:
-		// - currently only counters;
-		// - non-empty suffix forces an immediate Tx with no aggregation (see below);
-		// - suffix is an arbitrary string that can be defined at runtime;
-		// - e.g. usage: per-mountpath error counters.
-		if nameSuffix != "" {
+		//      - currently only counters;
+		//      - non-empty suffix forces an immediate Tx with no aggregation (see below);
+		//      - suffix is an arbitrary string that can be defined at runtime;
+		//      - e.g. usage: per-mountpath error counters.
+		if !s.isPrometheus() && nameSuffix != "" {
 			s.statsdC.Send(v.nroot+"."+nameSuffix,
 				1, metric{Type: statsd.Counter, Name: "count", Value: val})
 		}
@@ -295,16 +384,12 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 			v.Value = 0
 			v.numSamples = 0
 			v.Unlock()
-			// NOTE: ns to ms and don't report zeros
+			// NOTE: ns to ms and not reporting zeros
 			millis := cos.DivRound(lat, int64(time.Millisecond))
-			if millis > 0 && strings.HasSuffix(name, ".ns") {
+			if !s.isPrometheus() && millis > 0 && strings.HasSuffix(name, ".ns") {
 				s.statsdC.AppendMetric(
 					v.nroot,
-					metric{
-						Type:  statsd.Timer,
-						Name:  "latency",
-						Value: float64(millis),
-					},
+					metric{Type: statsd.Timer, Name: "latency", Value: float64(millis)},
 					s.sgl, newline)
 				newline = true
 			}
@@ -318,7 +403,7 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 				v.Value = 0
 			}
 			v.Unlock()
-			if throughput > 0 {
+			if !s.isPrometheus() && throughput > 0 {
 				s.statsdC.AppendMetric(
 					v.nroot,
 					metric{Type: statsd.Gauge, Name: "throughput", Value: throughput},
@@ -342,7 +427,7 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 				}
 			}
 			v.RUnlock()
-			if cnt > 0 {
+			if !s.isPrometheus() && cnt > 0 {
 				if strings.HasSuffix(name, ".size") {
 					// target only suffix
 					metricType := statsd.Counter
@@ -369,8 +454,9 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 			debug.SetExpvar(glog.SmoduleStats, name, v.Value)
 		}
 	}
-	s.statsdC.SendSGL(s.sgl)
-
+	if !s.isPrometheus() {
+		s.statsdC.SendSGL(s.sgl)
+	}
 	debug.SetExpvar(glog.SmoduleStats, "num-goroutines", int64(runtime.NumGoroutine()))
 	return
 }
@@ -393,37 +479,9 @@ func (s *CoreStats) copyCumulative(ctracker copyTracker) {
 	}
 }
 
-// init StatsD client
-func (s *CoreStats) initStatsD(node *cluster.Snode) {
-	var (
-		suffix = strings.ReplaceAll(node.ID(), ":", "_") // ":" delineates name and value for StatsD
-		port   = 8125                                    // StatsD default port, see https://github.com/etsy/stats
-		probe  = false                                   // test-probe StatsD server at init time
-	)
-	if portStr := os.Getenv("AIS_STATSD_PORT"); portStr != "" {
-		if portNum, err := cmn.ParsePort(portStr); err != nil {
-			glog.Error(err)
-		} else {
-			port = portNum
-		}
-	}
-	if probeStr := os.Getenv("AIS_STATSD_PROBE"); probeStr != "" {
-		if probeBool, err := cos.ParseBool(probeStr); err != nil {
-			glog.Error(err)
-		} else {
-			probe = probeBool
-		}
-	}
-	statsD, err := statsd.New("localhost", port, "ais"+node.Type()+"."+suffix, probe)
-	if err != nil {
-		glog.Errorf("Starting up without StatsD: %v", err)
-	}
-	s.statsdC = &statsD
-}
-
-//
-// statsValue
-//
+////////////////
+// statsValue //
+////////////////
 
 // interface guard
 var (
@@ -452,9 +510,9 @@ var (
 func (v *copyValue) MarshalJSON() (b []byte, err error) { return jsoniter.Marshal(v.Value) }
 func (v *copyValue) UnmarshalJSON(b []byte) error       { return jsoniter.Unmarshal(b, &v.Value) }
 
-//
-// statsTracker
-//
+//////////////////
+// statsTracker //
+//////////////////
 
 func (tracker statsTracker) register(name, kind string, isCommon ...bool) {
 	v := &statsValue{kind: kind}
@@ -507,9 +565,68 @@ func (tracker statsTracker) regCommonMetrics() {
 	tracker.register(Uptime, KindSpecial, true)
 }
 
-////////////////
-// statsunner //
-////////////////
+/////////////////
+// statsRunner //
+/////////////////
+
+// interface guard
+var (
+	_ prometheus.Collector = (*statsRunner)(nil)
+)
+
+func (r *statsRunner) IsPrometheus() bool { return r.Core.isPrometheus() }
+
+func (r *statsRunner) Describe(ch chan<- *prometheus.Desc) {
+	for _, desc := range r.Core.promDesc {
+		ch <- desc
+	}
+}
+
+// TODO -- FIXME: rlock r.ctracker
+func (r *statsRunner) Collect(ch chan<- prometheus.Metric) {
+	for name, v := range r.Core.Tracker {
+		var (
+			val int64
+			fv  float64
+		)
+		if copyV, ok := r.ctracker[name]; !ok {
+			continue
+		} else {
+			val = copyV.Value
+			fv = float64(val)
+		}
+		// 1. convert units
+		switch v.kind {
+		case KindCounter:
+			if strings.HasSuffix(name, ".size") {
+				mbs := val / 1000 / 1000 // MB not MiB
+				fv = float64(mbs)
+			}
+		case KindLatency:
+			millis := cos.DivRound(val, int64(time.Millisecond))
+			fv = float64(millis)
+		case KindThroughput:
+			mbs := val / 1000 / 1000 // ditto
+			fv = float64(mbs)
+		case KindSpecial:
+			if name == Uptime {
+				seconds := cos.DivRound(val, int64(time.Second))
+				fv = float64(seconds)
+			}
+		}
+		// 2. convert kind
+		promMetricType := prometheus.GaugeValue
+		if v.kind == KindCounter {
+			promMetricType = prometheus.CounterValue
+		}
+		// 3. publish
+		desc, ok := r.Core.promDesc[name]
+		debug.AssertMsg(ok, name)
+		m, err := prometheus.NewConstMetric(desc, promMetricType, fv)
+		debug.AssertNoErr(err)
+		ch <- m
+	}
+}
 
 func (r *statsRunner) Name() string { return r.name }
 
@@ -610,7 +727,9 @@ func (r *statsRunner) StartedUp() bool { return r.startedUp.Load() }
 func (r *statsRunner) Stop(err error) {
 	glog.Infof("Stopping %s, err: %v", r.Name(), err)
 	r.stopCh <- struct{}{}
-	r.Core.statsdC.Close()
+	if !r.IsPrometheus() {
+		r.Core.statsdC.Close()
+	}
 	close(r.stopCh)
 }
 

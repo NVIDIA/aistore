@@ -95,7 +95,6 @@ func (r *Trunner) Get(name string) (val int64) { return r.Core.get(name) }
 func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
 	r.Core = &CoreStats{}
 	r.Core.init(48) // register common (target's own stats are Register()-ed elsewhere)
-	r.Core.initStatsD(t.Snode())
 
 	r.ctracker = make(copyTracker, 48) // these two are allocated once and only used in serial context
 	r.lines = make([]string, 0, 16)
@@ -108,6 +107,8 @@ func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
 
 	r.statsRunner.stopCh = make(chan struct{}, 4)
 	r.statsRunner.workCh = make(chan NamedVal64, 256)
+
+	r.Core.initMetricClient(t.Snode(), &r.statsRunner)
 	return &r.statsRunner.startedUp
 }
 
@@ -126,7 +127,7 @@ func (r *Trunner) InitCapacity() error {
 
 // register target-specific metrics in addition to those that must be
 // already added via regCommon()
-func (r *Trunner) RegMetrics() {
+func (r *Trunner) RegMetrics(node *cluster.Snode) {
 	r.Register(PutLatency, KindLatency)
 	r.Register(AppendLatency, KindLatency)
 	r.Register(GetColdCount, KindCounter)
@@ -143,6 +144,7 @@ func (r *Trunner) RegMetrics() {
 	r.Register(ErrCksumCount, KindCounter)
 	r.Register(ErrCksumSize, KindCounter)
 	r.Register(ErrMetadataCount, KindCounter)
+
 	r.Register(ErrIOCount, KindCounter)
 
 	// rebalance
@@ -163,6 +165,8 @@ func (r *Trunner) RegMetrics() {
 	r.Register(DSortCreationReqLatency, KindLatency)
 	r.Register(DSortCreationRespCount, KindCounter)
 	r.Register(DSortCreationRespLatency, KindLatency)
+
+	r.Core.initProm(node)
 }
 
 func (r *Trunner) GetWhatStats() interface{} {
@@ -175,7 +179,7 @@ func (r *Trunner) log(uptime time.Duration) {
 	r.lines = r.lines[:0] // TODO: reuse lines as []byte buffers
 
 	// copy stats, reset latencies
-	r.Core.UpdateUptime(uptime)
+	r.Core.updateUptime(uptime)
 	if idle := r.Core.copyT(r.ctracker, []string{"kalive", Uptime}); !idle {
 		ln, err := cos.MarshalToString(r.ctracker)
 		debug.AssertNoErr(err)

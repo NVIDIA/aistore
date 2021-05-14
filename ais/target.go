@@ -341,7 +341,7 @@ func (t *targetrunner) Run() error {
 
 	cluster.Init(t)
 
-	t.statsT.RegMetrics()
+	t.statsT.RegMetrics(t.si)
 
 	t.checkRestarted()
 

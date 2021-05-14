@@ -37,6 +37,7 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/tinylib/msgp/msgp"
 )
 
@@ -595,9 +596,11 @@ func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
 		path   string
 		config = cmn.GCO.Get()
 	)
+	// common, debug
 	for r, nh := range debug.Handlers() {
 		h.registerPublicNetHandler(r, nh)
 	}
+	// node type specific
 	for _, nh := range networkHandlers {
 		var reg bool
 		if nh.r[0] == '/' { // absolute path
@@ -633,6 +636,12 @@ func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
 			// (not configured) control defaults to (configured) data
 			h.registerIntraDataNetHandler(path, nh.h)
 		}
+	}
+	// common Prometheus
+	if h.statsT.IsPrometheus() {
+		nh := networkHandler{r: "/" + cmn.Metrics, h: promhttp.Handler().ServeHTTP, net: accessNetPublicControl}
+		path := nh.r // absolute
+		h.registerPublicNetHandler(path, nh.h)
 	}
 }
 

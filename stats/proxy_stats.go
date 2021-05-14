@@ -40,7 +40,10 @@ func (r *Prunner) Run() error                  { return r.runcommon(r) }
 func (r *Prunner) CoreStats() *CoreStats       { return r.Core }
 func (r *Prunner) Get(name string) (val int64) { return r.Core.get(name) }
 
-func (*Prunner) RegMetrics() {} // have only common (regCommon())
+// NOTE: have only common metrics (see regCommon()) - init only the Prometheus part if used
+func (r *Prunner) RegMetrics(node *cluster.Snode) {
+	r.Core.initProm(node)
+}
 
 // All stats that proxy currently has are CoreStats which are registered at startup
 func (r *Prunner) Init(p cluster.Node) *atomic.Bool {
@@ -48,13 +51,15 @@ func (r *Prunner) Init(p cluster.Node) *atomic.Bool {
 	r.Core.init(24)
 	r.Core.statsTime = cmn.GCO.Get().Periodic.StatsTime.D()
 	r.ctracker = make(copyTracker, 24)
-	r.Core.initStatsD(p.Snode())
 
 	r.statsRunner.name = "proxystats"
 	r.statsRunner.daemon = p
 
 	r.statsRunner.stopCh = make(chan struct{}, 4)
 	r.statsRunner.workCh = make(chan NamedVal64, 256)
+
+	r.Core.initMetricClient(p.Snode(), &r.statsRunner)
+
 	return &r.statsRunner.startedUp
 }
 
@@ -67,7 +72,7 @@ func (r *Prunner) GetWhatStats() interface{} {
 
 // statsLogger interface impl
 func (r *Prunner) log(uptime time.Duration) {
-	r.Core.UpdateUptime(uptime)
+	r.Core.updateUptime(uptime)
 	if idle := r.Core.copyT(r.ctracker, []string{"kalive", Uptime}); !idle {
 		b := cos.MustMarshal(r.ctracker)
 		glog.Infoln(string(b))

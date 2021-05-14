@@ -158,6 +158,8 @@ func (p *proxyrunner) Run() error {
 
 	cluster.Init(nil /*cluster.Target*/)
 
+	p.statsT.RegMetrics(p.si) // reg target metrics to common; init Prometheus if used
+
 	// startup sequence - see earlystart.go for the steps and commentary
 	p.bootstrap()
 
@@ -202,7 +204,6 @@ func (p *proxyrunner) Run() error {
 
 		{r: "/", h: p.httpCloudHandler, net: accessNetPublic},
 	}
-
 	p.registerNetworkHandlers(networkHandlers)
 
 	glog.Infof("%s: [%s net] listening on: %s", p.si, cmn.NetworkPublic, p.si.PublicNet.DirectURL)

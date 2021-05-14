@@ -36,6 +36,7 @@ require (
 	github.com/onsi/gomega v1.11.0
 	github.com/pierrec/lz4/v3 v3.3.2
 	github.com/pkg/errors v0.9.1
+	github.com/prometheus/client_golang v1.10.0
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/seiflotfy/cuckoofilter v0.0.0-20201222105146-bc6005554a0c
 	github.com/teris-io/shortid v0.0.0-20201117134242-e59966efd125
