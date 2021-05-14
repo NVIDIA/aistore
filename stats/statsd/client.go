@@ -171,7 +171,6 @@ func (c Client) AppendMetric(bucket string, m Metric, sgl *memsys.SGL, newline b
 	if newline {
 		sgl.WriteByte('\n')
 	}
-	bucket = strings.ReplaceAll(bucket, ":", "_")
 	c.appendM(m, sgl, bucket, 1)
 }
 

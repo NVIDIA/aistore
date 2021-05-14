@@ -40,6 +40,8 @@ func (r *Prunner) Run() error                  { return r.runcommon(r) }
 func (r *Prunner) CoreStats() *CoreStats       { return r.Core }
 func (r *Prunner) Get(name string) (val int64) { return r.Core.get(name) }
 
+func (*Prunner) RegMetrics() {} // have only common (regCommon())
+
 // All stats that proxy currently has are CoreStats which are registered at startup
 func (r *Prunner) Init(p cluster.Node) *atomic.Bool {
 	r.Core = &CoreStats{}

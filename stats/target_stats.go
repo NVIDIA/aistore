@@ -124,7 +124,9 @@ func (r *Trunner) InitCapacity() error {
 	return nil
 }
 
-func (r *Trunner) RegisterAll() {
+// register target-specific metrics in addition to those that must be
+// already added via regCommon()
+func (r *Trunner) RegMetrics() {
 	r.Register(PutLatency, KindLatency)
 	r.Register(AppendLatency, KindLatency)
 	r.Register(GetColdCount, KindCounter)
