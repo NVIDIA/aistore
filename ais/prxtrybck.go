@@ -84,7 +84,7 @@ func (args *bckInitArgs) init(bucket string) (bck *cluster.Bck, errCode int, err
 	return
 }
 
-// TODO -- FIXME: A hack to check permissions specific to providers. Should automatically check based on providers.
+// FIXME: must be provider-specific.
 func (args *bckInitArgs) _checkRemoteBckPermissions() (err error) {
 	if !args.bck.IsRemote() {
 		return
@@ -105,7 +105,8 @@ func (args *bckInitArgs) _checkRemoteBckPermissions() (err error) {
 	}
 
 	// Destroy and Rename/Move are not permitted.
-	if args.bck.IsCloud() && args._requiresPermission(cmn.AccessDestroyBucket) && args.msg.Action == cmn.ActDestroyBck {
+	if args.bck.IsCloud() && args._requiresPermission(cmn.AccessDestroyBucket) &&
+		args.msg.Action == cmn.ActDestroyBck {
 		goto retErr
 	}
 

@@ -1773,7 +1773,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 	// Combine the results.
 	bckLists := make([]*cmn.BucketList, 0, len(results))
 	for _, res := range results {
-		if res.status == http.StatusNotFound { // TODO -- FIXME
+		if res.status == http.StatusNotFound {
 			continue
 		}
 		if res.err != nil {
@@ -1854,7 +1854,7 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 
 	// all targets
 	//
-	// TODO -- FIXME: 2phase begin to check space, validate params, and check vs running xactions
+	// TODO: 2phase begin to check space, validate params, and check vs running xactions
 	//
 	query := cmn.AddBckToQuery(nil, bck.Bck)
 	args := allocBcastArgs()

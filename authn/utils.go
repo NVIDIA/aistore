@@ -79,7 +79,7 @@ var (
 	_ jsp.Opts = (*Config)(nil)
 	_ jsp.Opts = (*TokenMsg)(nil)
 
-	authcfgJspOpts = jsp.Plain() // TODO -- FIXME: use CCSign(MetaverAuthNConfig)
+	authcfgJspOpts = jsp.Plain() // TODO: use CCSign(MetaverAuthNConfig)
 	authtokJspOpts = jsp.Plain() // ditto MetaverTokens
 )
 

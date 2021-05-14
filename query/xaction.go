@@ -42,7 +42,7 @@ type (
 )
 
 const (
-	xactionTTL = 10 * time.Minute // TODO -- FIXME: see "quiescence"
+	xactionTTL = 10 * time.Minute // TODO: see "quiescence"; see #1085
 )
 
 func NewObjectsListing(ctx context.Context, t cluster.Target, query *ObjectsQuery, msg *cmn.SelectMsg) *ObjectsListingXact {

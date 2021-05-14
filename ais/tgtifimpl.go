@@ -213,7 +213,7 @@ func (t *targetrunner) CopyObject(lom *cluster.LOM, params *cluster.CopyObjectPa
 	return
 }
 
-// FIXME: recomputes checksum if called with a bad one (optimize).
+// recomputes checksum if called with a bad one. TODO: optimize
 func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster.GetColdType) (errCode int, err error) {
 	switch ty {
 	case cluster.Prefetch:

@@ -204,7 +204,7 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 			if s.pdu.rlength() == 0 {
 				s.sendoff.off += int64(s.pdu.slength())
 				if s.pdu.last {
-					s.eoObj(nil) // TODO -- FIXME: readFrom err
+					s.eoObj(nil)
 				}
 				s.pdu.reset()
 			}

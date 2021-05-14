@@ -256,7 +256,7 @@ func (nlb *NotifListenerBase) SetHrwOwner(smap *cluster.Smap) {
 	psiOwner, err := cluster.HrwIC(smap, nlb.UUID())
 	if err != nil {
 		debug.AssertNoErr(err)
-		return // TODO -- FIXME: return err
+		return
 	}
 	nlb.SetOwner(psiOwner.ID())
 }
