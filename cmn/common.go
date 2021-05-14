@@ -83,7 +83,7 @@ loop:
 	for {
 		select {
 		case <-timer.C:
-			fmt.Println("Please wait, the operation may take some time")
+			fmt.Println("Please wait, the operation may take some time...")
 		case <-chDone:
 			timer.Stop()
 			break loop

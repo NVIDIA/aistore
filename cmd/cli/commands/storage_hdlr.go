@@ -34,7 +34,7 @@ var (
 			},
 			{
 				Name:         subcmdStgValidate,
-				Usage:        "check objects for errors: misplaced or incomplete objects",
+				Usage:        "check buckets for errors: detect misplaced or incomplete objects",
 				ArgsUsage:    optionalBucketArgument,
 				Flags:        storageCmdFlags[subcmdStgValidate],
 				Action:       showObjectHealth,

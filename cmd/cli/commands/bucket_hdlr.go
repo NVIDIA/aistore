@@ -177,7 +177,7 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 	}
 	bckSums := make([]*bucketHealth, 0)
 	msg := &cmn.SelectMsg{Flags: cmn.SelectMisplaced}
-	msg.AddProps(cmn.GetPropsCopies)
+	msg.AddProps(cmn.GetPropsCopies, cmn.GetPropsCached)
 	for _, bck := range bckList {
 		if queryBcks.Name != "" && !queryBcks.Equal(bck) {
 			continue
@@ -204,7 +204,7 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 			stats.ObjectCnt++
 			if !obj.IsStatusOK() {
 				stats.Misplaced++
-			} else if obj.Copies != copies {
+			} else if obj.CheckExists() && p.Mirror.Enabled && obj.Copies < copies {
 				stats.MissingCopies++
 			}
 		}
