@@ -68,7 +68,7 @@ func (r *Prunner) GetWhatStats() interface{} {
 // statsLogger interface impl
 func (r *Prunner) log(uptime time.Duration) {
 	r.Core.UpdateUptime(uptime)
-	if idle := r.Core.copyT(r.ctracker, []string{"kalive", PostCount, Uptime}); !idle {
+	if idle := r.Core.copyT(r.ctracker, []string{"kalive", Uptime}); !idle {
 		b := cos.MustMarshal(r.ctracker)
 		glog.Infoln(string(b))
 	}

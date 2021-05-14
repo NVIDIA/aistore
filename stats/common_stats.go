@@ -60,7 +60,6 @@ const (
 	GetCount         = "get.n"
 	PutCount         = "put.n"
 	AppendCount      = "append.n"
-	PostCount        = "pst.n"
 	DeleteCount      = "del.n"
 	RenameCount      = "ren.n"
 	ListCount        = "lst.n"
@@ -487,7 +486,6 @@ func (tracker statsTracker) regCommonMetrics() {
 	tracker.register(GetCount, KindCounter, true)
 	tracker.register(PutCount, KindCounter, true)
 	tracker.register(AppendCount, KindCounter, true)
-	tracker.register(PostCount, KindCounter, true)
 	tracker.register(DeleteCount, KindCounter, true)
 	tracker.register(RenameCount, KindCounter, true)
 	tracker.register(ListCount, KindCounter, true)

@@ -346,13 +346,10 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			glog.Errorf("%s: failed to parse %s for non-electability: %v", p.si, s, err)
 		}
 	}
-
 	if err := validateHostname(nsi.PublicNet.NodeHostname); err != nil {
 		p.writeErrf(w, r, "%s: failed to %s %s - (err: %v)", p.si, tag, nsi, err)
 		return
 	}
-
-	p.statsT.Add(stats.PostCount, 1)
 
 	smap := p.owner.smap.get()
 	if osi := smap.GetNode(nsi.ID()); osi != nil {
