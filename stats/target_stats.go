@@ -87,14 +87,14 @@ type (
 // interface guard
 var _ cos.Runner = (*Trunner)(nil)
 
-func (r *Trunner) Register(name, kind string)  { r.Core.Tracker.register(name, kind) }
+func (r *Trunner) Register(name, kind string)  { r.Core.Tracker.register(r.T.Snode(), name, kind) }
 func (r *Trunner) Run() error                  { return r.runcommon(r) }
 func (r *Trunner) CoreStats() *CoreStats       { return r.Core }
 func (r *Trunner) Get(name string) (val int64) { return r.Core.get(name) }
 
 func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
 	r.Core = &CoreStats{}
-	r.Core.init(48) // register common (target's own stats are Register()-ed elsewhere)
+	r.Core.init(t.Snode(), 48) // register common (target's own stats are Register()-ed elsewhere)
 
 	r.ctracker = make(copyTracker, 48) // these two are allocated once and only used in serial context
 	r.lines = make([]string, 0, 16)
@@ -126,7 +126,7 @@ func (r *Trunner) InitCapacity() error {
 }
 
 // register target-specific metrics in addition to those that must be
-// already added via regCommon()
+// already added via regCommonMetrics()
 func (r *Trunner) RegMetrics(node *cluster.Snode) {
 	r.Register(PutLatency, KindLatency)
 	r.Register(AppendLatency, KindLatency)

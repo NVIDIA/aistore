@@ -7,6 +7,7 @@ package stats
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -184,10 +185,13 @@ type (
 	// using the the kind field. Only latency stats have numSamples used to compute latency.
 	statsValue struct {
 		sync.RWMutex
-		Value      int64 `json:"v,string"`
-		kind       string
-		nroot      string // StatsD name "root" (prefix . nroot . suffix)
-		plabel     string // Prometheus label
+		Value int64 `json:"v,string"`
+		kind  string
+		label struct {
+			comm string // common part of the metric label (as in: <prefix> . comm . <suffix>)
+			stsd string // StatsD label
+			prom string // Prometheus label
+		}
 		numSamples int64
 		cumulative int64
 		isCommon   bool // optional, common to the proxy and target
@@ -200,6 +204,14 @@ type (
 	promDesc     map[string]*prometheus.Desc
 )
 
+// convert bytes to megabytes with a fixed rounding precision = 2 digits (NOTE: MB not MiB)
+func roundMBs(val int64) (mbs float64) {
+	mbs = float64(val) / 1000 / 10
+	num := int(mbs + 0.5)
+	mbs = float64(num) / 100
+	return
+}
+
 ///////////////
 // CoreStats //
 ///////////////
@@ -210,7 +222,7 @@ var (
 	_ json.Unmarshaler = (*CoreStats)(nil)
 )
 
-func (s *CoreStats) init(size int) {
+func (s *CoreStats) init(node *cluster.Snode, size int) {
 	s.Tracker = make(statsTracker, size)
 	s.promDesc = make(promDesc, size)
 	// NOTE:
@@ -221,7 +233,7 @@ func (s *CoreStats) init(size int) {
 	// * mountpath (disk) utilizations (see ios)
 	// * total number of goroutines
 	debug.NewExpvar(glog.SmoduleStats)
-	s.Tracker.regCommonMetrics()
+	s.Tracker.regCommonMetrics(node)
 
 	// reusable sgl => (udp) => StatsD
 	s.sgl = memsys.DefaultPageMM().NewSGL(memsys.PageSize)
@@ -269,8 +281,8 @@ func (s *CoreStats) initMetricClient(node *cluster.Snode, parent *statsRunner) {
 	s.statsdC = &statsD
 }
 
-// populate *prometheus.Desc(riptions) and statsValue.plabel
-// NOTE: the naming
+// populate *prometheus.Desc and statsValue.label.prom
+// NOTE: naming; compare with statsTracker.register()
 func (s *CoreStats) initProm(node *cluster.Snode) {
 	if !s.isPrometheus() {
 		return
@@ -278,36 +290,36 @@ func (s *CoreStats) initProm(node *cluster.Snode) {
 	id := strings.ReplaceAll(node.ID(), ".", "_")
 	for name, v := range s.Tracker {
 		label := strings.ReplaceAll(name, ".", "_")
-		v.plabel = strings.ReplaceAll(label, ":", "_")
+		v.label.prom = strings.ReplaceAll(label, ":", "_")
 
 		help := v.kind
 		switch v.kind {
 		case KindCounter:
-			if strings.HasSuffix(v.plabel, "_n") {
+			if strings.HasSuffix(v.label.prom, "_n") {
 				help = "total number of operations"
-			} else if strings.HasSuffix(v.plabel, "_size") {
+			} else if strings.HasSuffix(v.label.prom, "_size") {
 				help = "total size (MB)"
 			}
 		case KindLatency:
-			if strings.HasSuffix(v.plabel, "_ns") {
-				v.plabel = strings.TrimSuffix(v.plabel, "_ns") + "_ms"
+			if strings.HasSuffix(v.label.prom, "_ns") {
+				v.label.prom = strings.TrimSuffix(v.label.prom, "_ns") + "_ms"
 			} else {
-				v.plabel = strings.ReplaceAll(v.plabel, "_ns_", "_ms_")
+				v.label.prom = strings.ReplaceAll(v.label.prom, "_ns_", "_ms_")
 			}
 			help = "latency (milliseconds)"
 		case KindThroughput:
-			if strings.HasSuffix(v.plabel, "_bps") {
-				v.plabel = strings.TrimSuffix(v.plabel, "_bps") + "_mbps"
+			if strings.HasSuffix(v.label.prom, "_bps") {
+				v.label.prom = strings.TrimSuffix(v.label.prom, "_bps") + "_mbps"
 			}
 			help = "throughput (MB/s)"
 		case KindSpecial:
 			if name == Uptime {
-				v.plabel = strings.ReplaceAll(v.plabel, "_ns_", "")
+				v.label.prom = strings.ReplaceAll(v.label.prom, "_ns_", "")
 				help = "uptime (seconds)"
 			}
 		}
 
-		fullqn := prometheus.BuildFQName("ais", node.Type(), id+"_"+v.plabel)
+		fullqn := prometheus.BuildFQName("ais", node.Type(), id+"_"+v.label.prom)
 		s.promDesc[name] = prometheus.NewDesc(fullqn, help, nil /*variableLabels*/, nil /*constLabels*/)
 	}
 }
@@ -356,7 +368,7 @@ func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
 		//      - suffix is an arbitrary string that can be defined at runtime;
 		//      - e.g. usage: per-mountpath error counters.
 		if !s.isPrometheus() && nameSuffix != "" {
-			s.statsdC.Send(v.nroot+"."+nameSuffix,
+			s.statsdC.Send(v.label.comm+"."+nameSuffix,
 				1, metric{Type: statsd.Counter, Name: "count", Value: val})
 		}
 	default:
@@ -365,7 +377,6 @@ func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
 }
 
 func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) {
-	var newline bool
 	idle = true
 	s.sgl.Reset()
 	for name, v := range s.Tracker {
@@ -387,11 +398,7 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 			// NOTE: ns to ms and not reporting zeros
 			millis := cos.DivRound(lat, int64(time.Millisecond))
 			if !s.isPrometheus() && millis > 0 && strings.HasSuffix(name, ".ns") {
-				s.statsdC.AppendMetric(
-					v.nroot,
-					metric{Type: statsd.Timer, Name: "latency", Value: float64(millis)},
-					s.sgl, newline)
-				newline = true
+				s.statsdC.AppMetric(metric{Type: statsd.Timer, Name: v.label.stsd, Value: float64(millis)}, s.sgl)
 			}
 		case KindThroughput:
 			var throughput int64
@@ -404,12 +411,8 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 			}
 			v.Unlock()
 			if !s.isPrometheus() && throughput > 0 {
-				s.statsdC.AppendMetric(
-					v.nroot,
-					metric{Type: statsd.Gauge, Name: "throughput", Value: throughput},
-					s.sgl, newline,
-				)
-				newline = true
+				fv := roundMBs(throughput)
+				s.statsdC.AppMetric(metric{Type: statsd.Gauge, Name: v.label.stsd, Value: fv}, s.sgl)
 			}
 		case KindCounter:
 			var cnt int64
@@ -431,22 +434,13 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 				if strings.HasSuffix(name, ".size") {
 					// target only suffix
 					metricType := statsd.Counter
-					if v.nroot == "dl" {
+					if v.label.comm == "dl" {
 						metricType = statsd.PersistentCounter
 					}
-					s.statsdC.AppendMetric(
-						v.nroot,
-						metric{Type: metricType, Name: "bytes", Value: cnt},
-						s.sgl, newline,
-					)
-					newline = true
+					fv := roundMBs(cnt)
+					s.statsdC.AppMetric(metric{Type: metricType, Name: v.label.stsd, Value: fv}, s.sgl)
 				} else {
-					s.statsdC.AppendMetric(
-						v.nroot,
-						metric{Type: statsd.Counter, Name: "count", Value: cnt},
-						s.sgl, newline,
-					)
-					newline = true
+					s.statsdC.AppMetric(metric{Type: statsd.Counter, Name: v.label.stsd, Value: cnt}, s.sgl)
 				}
 			}
 		default:
@@ -514,55 +508,71 @@ func (v *copyValue) UnmarshalJSON(b []byte) error       { return jsoniter.Unmars
 // statsTracker //
 //////////////////
 
-func (tracker statsTracker) register(name, kind string, isCommon ...bool) {
+// NOTE: naming; compare with CoreStats.initProm()
+func (tracker statsTracker) register(node *cluster.Snode, name, kind string, isCommon ...bool) {
 	v := &statsValue{kind: kind}
 	if len(isCommon) > 0 {
 		v.isCommon = isCommon[0]
 	}
-
 	debug.Assertf(cos.StringInSlice(kind, kinds), "invalid metric kind %q", kind)
 	switch kind {
 	case KindCounter:
-		debug.AssertMsg(strings.HasSuffix(name, ".n") || strings.HasSuffix(name, ".size"), name)
-		v.nroot = strings.TrimSuffix(name, ".n")
-		v.nroot = strings.TrimSuffix(v.nroot, ".size")
+		if strings.HasSuffix(name, ".size") {
+			v.label.comm = strings.TrimSuffix(name, ".size")
+			v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_") // ":" delineates name and value for StatsD
+			v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "mbytes")
+		} else {
+			debug.AssertMsg(strings.HasSuffix(name, ".n"), name)
+			v.label.comm = strings.TrimSuffix(name, ".n")
+			v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_") // ":" delineates name and value for StatsD
+			v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "count")
+		}
 	case KindLatency:
 		debug.AssertMsg(strings.Contains(name, ".ns"), name)
-		v.nroot = strings.TrimSuffix(name, ".ns")
-		v.nroot = strings.ReplaceAll(v.nroot, ".ns.", ".")
+		v.label.comm = strings.TrimSuffix(name, ".ns")
+		v.label.comm = strings.ReplaceAll(v.label.comm, ".ns.", ".")
+		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_") // ":" delineates name and value for StatsD
+		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "ms")
 	case KindThroughput:
-		v.nroot = strings.TrimSuffix(name, ".bps")
+		debug.AssertMsg(strings.HasSuffix(name, ".bps"), name)
+		v.label.comm = strings.TrimSuffix(name, ".bps")
+		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_") // ":" delineates name and value for StatsD
+		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "mbps")
 	default:
-		v.nroot = name
+		v.label.comm = name
+		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_") // ":" delineates name and value for StatsD
+		if name == Uptime {
+			v.label.comm = strings.ReplaceAll(v.label.comm, ".ns.", ".")
+			v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "seconds")
+		}
 	}
-	v.nroot = strings.ReplaceAll(v.nroot, ":", "_") // ":" delineates name and value for StatsD
 	tracker[name] = v
 }
 
 // register common metrics; see RegMetrics() in target_stats.go
-func (tracker statsTracker) regCommonMetrics() {
-	tracker.register(GetCount, KindCounter, true)
-	tracker.register(PutCount, KindCounter, true)
-	tracker.register(AppendCount, KindCounter, true)
-	tracker.register(DeleteCount, KindCounter, true)
-	tracker.register(RenameCount, KindCounter, true)
-	tracker.register(ListCount, KindCounter, true)
-	tracker.register(GetLatency, KindLatency, true)
-	tracker.register(ListLatency, KindLatency, true)
-	tracker.register(KeepAliveMinLatency, KindLatency, true)
-	tracker.register(KeepAliveMaxLatency, KindLatency, true)
-	tracker.register(KeepAliveLatency, KindLatency, true)
-	tracker.register(ErrCount, KindCounter, true)
-	tracker.register(ErrGetCount, KindCounter, true)
-	tracker.register(ErrDeleteCount, KindCounter, true)
-	tracker.register(ErrPostCount, KindCounter, true)
-	tracker.register(ErrPutCount, KindCounter, true)
-	tracker.register(ErrHeadCount, KindCounter, true)
-	tracker.register(ErrListCount, KindCounter, true)
-	tracker.register(ErrRangeCount, KindCounter, true)
-	tracker.register(ErrDownloadCount, KindCounter, true)
+func (tracker statsTracker) regCommonMetrics(node *cluster.Snode) {
+	tracker.register(node, GetCount, KindCounter, true)
+	tracker.register(node, PutCount, KindCounter, true)
+	tracker.register(node, AppendCount, KindCounter, true)
+	tracker.register(node, DeleteCount, KindCounter, true)
+	tracker.register(node, RenameCount, KindCounter, true)
+	tracker.register(node, ListCount, KindCounter, true)
+	tracker.register(node, GetLatency, KindLatency, true)
+	tracker.register(node, ListLatency, KindLatency, true)
+	tracker.register(node, KeepAliveMinLatency, KindLatency, true)
+	tracker.register(node, KeepAliveMaxLatency, KindLatency, true)
+	tracker.register(node, KeepAliveLatency, KindLatency, true)
+	tracker.register(node, ErrCount, KindCounter, true)
+	tracker.register(node, ErrGetCount, KindCounter, true)
+	tracker.register(node, ErrDeleteCount, KindCounter, true)
+	tracker.register(node, ErrPostCount, KindCounter, true)
+	tracker.register(node, ErrPutCount, KindCounter, true)
+	tracker.register(node, ErrHeadCount, KindCounter, true)
+	tracker.register(node, ErrListCount, KindCounter, true)
+	tracker.register(node, ErrRangeCount, KindCounter, true)
+	tracker.register(node, ErrDownloadCount, KindCounter, true)
 
-	tracker.register(Uptime, KindSpecial, true)
+	tracker.register(node, Uptime, KindSpecial, true)
 }
 
 /////////////////
@@ -599,15 +609,13 @@ func (r *statsRunner) Collect(ch chan<- prometheus.Metric) {
 		switch v.kind {
 		case KindCounter:
 			if strings.HasSuffix(name, ".size") {
-				mbs := val / 1000 / 1000 // MB not MiB
-				fv = float64(mbs)
+				fv = roundMBs(val)
 			}
 		case KindLatency:
 			millis := cos.DivRound(val, int64(time.Millisecond))
 			fv = float64(millis)
 		case KindThroughput:
-			mbs := val / 1000 / 1000 // ditto
-			fv = float64(mbs)
+			fv = roundMBs(val)
 		case KindSpecial:
 			if name == Uptime {
 				seconds := cos.DivRound(val, int64(time.Second))

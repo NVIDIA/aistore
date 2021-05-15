@@ -48,7 +48,7 @@ func (r *Prunner) RegMetrics(node *cluster.Snode) {
 // All stats that proxy currently has are CoreStats which are registered at startup
 func (r *Prunner) Init(p cluster.Node) *atomic.Bool {
 	r.Core = &CoreStats{}
-	r.Core.init(24)
+	r.Core.init(p.Snode(), 24)
 	r.Core.statsTime = cmn.GCO.Get().Periodic.StatsTime.D()
 	r.ctracker = make(copyTracker, 24)
 

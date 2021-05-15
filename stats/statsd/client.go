@@ -164,14 +164,32 @@ func (c Client) write(bytes []byte, l int) {
 }
 
 // TODO: MTU size limitation
-func (c Client) AppendMetric(bucket string, m Metric, sgl *memsys.SGL, newline bool) {
+func (c Client) AppMetric(m Metric, sgl *memsys.SGL) {
+	var (
+		t, prefix string
+		err       error
+	)
 	if !c.opened {
 		return
 	}
-	if newline {
+	if sgl.Len() > 0 {
 		sgl.WriteByte('\n')
 	}
-	c.appendM(m, sgl, bucket, 1)
+	switch m.Type {
+	case Timer:
+		t = "ms"
+	case Counter:
+		t = "c"
+	case Gauge:
+		t = "g"
+	case PersistentCounter:
+		prefix = "+"
+		t = "g"
+	default:
+		debug.Assertf(false, "unknown type %+v", m.Type)
+	}
+	_, err = fmt.Fprintf(sgl, "%s:%s%v|%s", m.Name /*slabel*/, prefix, m.Value, t)
+	debug.AssertNoErr(err)
 }
 
 func (c Client) appendM(m Metric, sgl *memsys.SGL, bucket string, aggCnt int64) {
@@ -193,7 +211,7 @@ func (c Client) appendM(m Metric, sgl *memsys.SGL, bucket string, aggCnt int64) 
 		debug.Assertf(false, "unknown type %+v", m.Type)
 	}
 	if sgl.Len() > 0 {
-		sgl.Write([]byte{'\n'})
+		sgl.WriteByte('\n')
 	}
 	if aggCnt != 1 {
 		_, err = fmt.Fprintf(sgl, "%s.%s.%s:%s%v|%s|@%f",
