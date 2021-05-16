@@ -6,7 +6,9 @@
 package stats
 
 import (
+	"strconv"
 	"time"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -15,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/ios"
 )
 
 // Naming Convention:
@@ -73,6 +76,7 @@ type (
 		T     cluster.Target `json:"-"`
 		MPCap fs.MPCap       `json:"capacity"`
 		lines []string
+		disk  ios.AllDiskStats
 	}
 	copyRunner struct {
 		Tracker copyTracker `json:"core"`
@@ -98,6 +102,7 @@ func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
 
 	r.ctracker = make(copyTracker, 48) // these two are allocated once and only used in serial context
 	r.lines = make([]string, 0, 16)
+	r.disk = make(ios.AllDiskStats, 16)
 
 	config := cmn.GCO.Get()
 	r.Core.statsTime = config.Periodic.StatsTime.D()
@@ -166,6 +171,7 @@ func (r *Trunner) RegMetrics(node *cluster.Snode) {
 	r.Register(DSortCreationRespCount, KindCounter)
 	r.Register(DSortCreationRespLatency, KindLatency)
 
+	// Prometheus
 	r.Core.initProm(node)
 }
 
@@ -200,12 +206,34 @@ func (r *Trunner) log(uptime time.Duration) {
 		}
 	}
 
-	// 3. io stats
-	r.lines = fs.LogAppend(r.lines)
+	// 3. disk stats
+	fs.FillDiskStats(r.disk)
+	r.logDiskStats()
 
 	// 4. log
 	for _, ln := range r.lines {
 		glog.Infoln(ln)
+	}
+}
+
+func (r *Trunner) logDiskStats() {
+	for disk, stats := range r.disk {
+		if stats.Util == 0 {
+			continue
+		}
+		rbps := cos.B2S(stats.RBps, 0)
+		wbps := cos.B2S(stats.WBps, 0)
+		l := len(disk) + len(rbps) + len(wbps) + 32
+		buf := make([]byte, 0, l)
+		buf = append(buf, disk...)
+		buf = append(buf, ": "...)
+		buf = append(buf, rbps...)
+		buf = append(buf, "/s, "...)
+		buf = append(buf, wbps...)
+		buf = append(buf, "/s, "...)
+		buf = append(buf, strconv.FormatInt(stats.Util, 10)...)
+		buf = append(buf, "%"...)
+		r.lines = append(r.lines, *(*string)(unsafe.Pointer(&buf)))
 	}
 }
 

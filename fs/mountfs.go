@@ -537,10 +537,7 @@ func Decommission(mdOnly bool) {
 
 func GetAllMpathUtils() (utils *ios.MpathsUtils) { return mfs.ios.GetAllMpathUtils() }
 func GetMpathUtil(mpath string) int64            { return mfs.ios.GetMpathUtil(mpath) }
-func LogAppend(lines []string) []string          { return mfs.ios.LogAppend(lines) }
-func GetSelectedDiskStats() (m map[string]*ios.SelectedDiskStats) {
-	return mfs.ios.GetSelectedDiskStats()
-}
+func FillDiskStats(m ios.AllDiskStats)           { mfs.ios.FillDiskStats(m) }
 
 // DisableFsIDCheck disables fsid checking when adding new mountpath
 func DisableFsIDCheck() { mfs.checkFsID = false }

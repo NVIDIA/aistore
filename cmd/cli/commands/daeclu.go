@@ -30,7 +30,7 @@ import (
 type (
 	targetDiskStats struct {
 		targetID string
-		stats    map[string]*ios.SelectedDiskStats
+		stats    ios.AllDiskStats
 	}
 
 	targetRebStats struct {

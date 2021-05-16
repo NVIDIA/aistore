@@ -340,7 +340,7 @@ type (
 	DiskStatsTemplateHelper struct {
 		TargetID string
 		DiskName string
-		Stat     *ios.SelectedDiskStats
+		Stat     ios.DiskStats
 	}
 
 	ObjectStatTemplateHelper struct {

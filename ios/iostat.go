@@ -7,7 +7,6 @@ package ios
 
 import (
 	"fmt"
-	"strconv"
 	"sync"
 	"time"
 	"unsafe"
@@ -31,9 +30,9 @@ type (
 		cacheIdx    int
 		busy        atomic.Bool
 	}
-	SelectedDiskStats struct {
-		RBps, WBps, Util int64
-	}
+
+	DiskStats    struct{ RBps, WBps, Util int64 }
+	AllDiskStats map[string]DiskStats
 
 	MpathsUtils sync.Map
 
@@ -59,8 +58,7 @@ type (
 		GetMpathUtil(mpath string) int64
 		AddMpath(mpath string, fs string)
 		RemoveMpath(mpath string)
-		LogAppend(log []string) []string
-		GetSelectedDiskStats() (m map[string]*SelectedDiskStats)
+		FillDiskStats(m AllDiskStats)
 	}
 )
 
@@ -212,46 +210,21 @@ func (ctx *iostatContext) GetMpathUtil(mpath string) int64 {
 	return ctx.GetAllMpathUtils().Util(mpath)
 }
 
-func (ctx *iostatContext) GetSelectedDiskStats() (m map[string]*SelectedDiskStats) {
+func (ctx *iostatContext) FillDiskStats(m AllDiskStats) {
+	debug.Assert(m != nil)
 	cache := ctx.refreshIostatCache()
-	m = make(map[string]*SelectedDiskStats, len(cache.diskIOms))
 	for disk := range cache.diskIOms {
-		m[disk] = &SelectedDiskStats{
+		m[disk] = DiskStats{
 			RBps: cache.diskRBps[disk],
 			WBps: cache.diskWBps[disk],
 			Util: cache.diskUtil[disk],
 		}
 	}
-	return
-}
-
-func (ctx *iostatContext) LogAppend(lines []string) []string {
-	cache := ctx.refreshIostatCache()
-	ctx.RLock()
-	for disk := range ctx.disk2mpath {
+	for disk := range m {
 		if _, ok := cache.diskIOms[disk]; !ok {
-			continue
+			delete(m, disk)
 		}
-		util := int(cache.diskUtil[disk])
-		if util == 0 {
-			continue
-		}
-		rbps := cos.B2S(cache.diskRBps[disk], 0)
-		wbps := cos.B2S(cache.diskWBps[disk], 0)
-		l := len(disk) + len(rbps) + len(wbps) + 32
-		buf := make([]byte, 0, l)
-		buf = append(buf, disk...)
-		buf = append(buf, ": "...)
-		buf = append(buf, rbps...)
-		buf = append(buf, "/s, "...)
-		buf = append(buf, wbps...)
-		buf = append(buf, "/s, "...)
-		buf = append(buf, strconv.Itoa(util)...)
-		buf = append(buf, "%"...)
-		lines = append(lines, *(*string)(unsafe.Pointer(&buf)))
 	}
-	ctx.RUnlock()
-	return lines
 }
 
 // private methods ---

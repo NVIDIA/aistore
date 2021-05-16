@@ -200,7 +200,7 @@ type (
 		Value int64 `json:"v,string"`
 	}
 	statsTracker map[string]*statsValue
-	copyTracker  map[string]*copyValue
+	copyTracker  map[string]copyValue
 	promDesc     map[string]*prometheus.Desc
 )
 
@@ -386,7 +386,7 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 			v.Lock()
 			if v.numSamples > 0 {
 				lat = v.Value / v.numSamples
-				ctracker[name] = &copyValue{Value: lat}
+				ctracker[name] = copyValue{lat}
 				debug.SetExpvar(glog.SmoduleStats, name, lat)
 				if !match(name, idlePrefs) {
 					idle = false
@@ -405,7 +405,7 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 			v.Lock()
 			if v.Value > 0 {
 				throughput = v.Value / cos.MaxI64(int64(s.statsTime.Seconds()), 1)
-				ctracker[name] = &copyValue{Value: throughput}
+				ctracker[name] = copyValue{throughput}
 				idle = false
 				v.Value = 0
 			}
@@ -420,7 +420,7 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 			if v.Value > 0 {
 				cnt = v.Value
 				if prev, ok := ctracker[name]; !ok || prev.Value != cnt {
-					ctracker[name] = &copyValue{Value: cnt}
+					ctracker[name] = copyValue{cnt}
 					debug.SetExpvar(glog.SmoduleStats, name, cnt)
 					if !match(name, idlePrefs) {
 						idle = false
@@ -444,7 +444,7 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 				}
 			}
 		default:
-			ctracker[name] = &copyValue{Value: v.Value} // KindSpecial/KindDelta as is and wo/ lock
+			ctracker[name] = copyValue{v.Value} // KindSpecial/KindDelta as is and wo/ lock
 			debug.SetExpvar(glog.SmoduleStats, name, v.Value)
 		}
 	}
@@ -461,13 +461,13 @@ func (s *CoreStats) copyCumulative(ctracker copyTracker) {
 	for name, v := range s.Tracker {
 		v.RLock()
 		if v.kind == KindLatency || v.kind == KindThroughput {
-			ctracker[name] = &copyValue{Value: v.cumulative}
+			ctracker[name] = copyValue{v.cumulative}
 		} else if v.kind == KindCounter {
 			if v.Value != 0 {
-				ctracker[name] = &copyValue{Value: v.Value}
+				ctracker[name] = copyValue{v.Value}
 			}
 		} else {
-			ctracker[name] = &copyValue{Value: v.Value} // KindSpecial as is and wo/ lock
+			ctracker[name] = copyValue{v.Value} // KindSpecial as is and wo/ lock
 		}
 		v.RUnlock()
 	}
@@ -491,9 +491,9 @@ func (v *statsValue) MarshalJSON() (b []byte, err error) {
 }
 func (v *statsValue) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &v.Value) }
 
-//
-// copyValue
-//
+///////////////
+// copyValue //
+///////////////
 
 // interface guard
 var (
@@ -501,8 +501,8 @@ var (
 	_ json.Unmarshaler = (*copyValue)(nil)
 )
 
-func (v *copyValue) MarshalJSON() (b []byte, err error) { return jsoniter.Marshal(v.Value) }
-func (v *copyValue) UnmarshalJSON(b []byte) error       { return jsoniter.Unmarshal(b, &v.Value) }
+func (v copyValue) MarshalJSON() (b []byte, err error) { return jsoniter.Marshal(v.Value) }
+func (v *copyValue) UnmarshalJSON(b []byte) error      { return jsoniter.Unmarshal(b, &v.Value) }
 
 //////////////////
 // statsTracker //
