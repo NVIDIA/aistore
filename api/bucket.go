@@ -108,23 +108,21 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p *cmn
 	return p, err
 }
 
-// ListBuckets returns bucket names for the given provider. Provider takes one
-// of Backend Provider enum names (see cmn/bucket.go). If provider is empty,
-// return all names. Otherwise, return remote backend's or ais bucket names.
-func ListBuckets(baseParams BaseParams, queryBcks cmn.QueryBcks) (cmn.BucketNames, error) {
+// ListBuckets returns buckets for provided query.
+func ListBuckets(baseParams BaseParams, queryBcks cmn.QueryBcks) (cmn.Bcks, error) {
 	var (
-		bucketNames = cmn.BucketNames{}
-		path        = cmn.URLPathBuckets.S
-		body        = cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActList})
-		query       = cmn.AddBckToQuery(nil, cmn.Bck(queryBcks))
+		bcks  = cmn.Bcks{}
+		path  = cmn.URLPathBuckets.S
+		body  = cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActList})
+		query = cmn.AddBckToQuery(nil, cmn.Bck(queryBcks))
 	)
 
 	baseParams.Method = http.MethodGet
-	err := DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: path, Body: body, Query: query}, &bucketNames)
+	err := DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: path, Body: body, Query: query}, &bcks)
 	if err != nil {
 		return nil, err
 	}
-	return bucketNames, nil
+	return bcks, nil
 }
 
 // GetBucketsSummaries returns bucket summaries for the specified backend provider

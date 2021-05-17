@@ -227,7 +227,7 @@ func bckNameWithoutPrefix(bckName string) (res string) {
 func fetchBuckets(tag string) []string {
 	bcks, err := api.ListBuckets(soakcmn.BaseAPIParams(primaryURL), cmn.QueryBcks{Provider: cmn.ProviderAIS})
 	if err != nil {
-		cos.AssertNoErr(fmt.Errorf("error fetching bucketnames for %v: %v", tag, err.Error()))
+		cos.AssertNoErr(fmt.Errorf("error fetching buckets for %v: %v", tag, err.Error()))
 	}
 
 	var res []string

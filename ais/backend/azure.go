@@ -270,11 +270,10 @@ func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck,
 }
 
 //////////////////
-// BUCKET NAMES //
+// LIST BUCKETS //
 //////////////////
 
-func (ap *azureProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buckets cmn.BucketNames,
-	errCode int, err error) {
+func (ap *azureProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	var (
 		o          azblob.ListContainersSegmentOptions
 		marker     azblob.Marker
@@ -288,7 +287,7 @@ func (ap *azureProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buck
 		}
 
 		for idx := range containers.ContainerItems {
-			buckets = append(buckets, cmn.Bck{
+			bcks = append(bcks, cmn.Bck{
 				Name:     containers.ContainerItems[idx].Name,
 				Provider: cmn.ProviderAzure,
 			})

@@ -44,8 +44,8 @@ func (m *dummyBackendProvider) ListObjects(ctx context.Context, bck *cluster.Bck
 }
 
 // The function must not fail - it should return empty list.
-func (m *dummyBackendProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error) {
-	return cmn.BucketNames{}, 0, nil
+func (m *dummyBackendProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
+	return cmn.Bcks{}, 0, nil
 }
 
 func (m *dummyBackendProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cos.SimpleKVs, errCode int, err error) {

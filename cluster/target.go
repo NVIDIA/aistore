@@ -34,12 +34,12 @@ const (
 	ColdGet
 	Migrated
 
-	// Error if lock is not available to be acquired immediately.
+	// Prefetch errors if lock is not available to be acquired immediately.
 	// Otherwise acquire, create an object, release the lock.
 	Prefetch GetColdType = iota
-	// Wait until a lock is acquired, create an object, release the lock.
+	// PrefetchWait waits until a lock is acquired, create an object, release the lock.
 	PrefetchWait
-	// Wait until a lock is acquired, create an object, downgrade the lock.
+	// GetCold waits until a lock is acquired, create an object, downgrade the lock.
 	GetCold
 
 	GFNGlobal GFNType = iota
@@ -54,7 +54,7 @@ type BackendProvider interface {
 	HeadBucket(ctx context.Context, bck *Bck) (bckProps cos.SimpleKVs, errCode int, err error)
 	ListObjects(ctx context.Context, bck *Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error)
 
-	ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error)
+	ListBuckets(ctx context.Context, query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error)
 
 	HeadObj(ctx context.Context, lom *LOM) (objMeta cos.SimpleKVs, errCode int, err error)
 	// GetObj fetches and finalizes the object from the cloud.

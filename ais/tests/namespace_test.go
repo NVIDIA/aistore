@@ -13,7 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
 
-func listAllBuckets(t *testing.T, baseParams api.BaseParams, includeRemote bool) cmn.BucketNames {
+func listAllBuckets(t *testing.T, baseParams api.BaseParams, includeRemote bool) cmn.Bcks {
 	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: cmn.ProviderAIS})
 	tassert.CheckFatal(t, err)
 	if includeRemote {

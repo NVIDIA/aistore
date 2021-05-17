@@ -369,7 +369,7 @@ func (m *AISBackendProvider) ListObjects(_ context.Context, remoteBck *cluster.B
 	return bckList, 0, nil
 }
 
-func (m *AISBackendProvider) listBucketsCluster(uuid string, query cmn.QueryBcks) (buckets cmn.BucketNames, err error) {
+func (m *AISBackendProvider) listBucketsCluster(uuid string, query cmn.QueryBcks) (bcks cmn.Bcks, err error) {
 	var (
 		aisCluster  *remAISCluster
 		remoteQuery = cmn.QueryBcks{Provider: cmn.ProviderAIS, Ns: cmn.Ns{Name: query.Ns.Name}}
@@ -377,25 +377,25 @@ func (m *AISBackendProvider) listBucketsCluster(uuid string, query cmn.QueryBcks
 	if aisCluster, err = m.remoteCluster(uuid); err != nil {
 		return
 	}
-	buckets, err = api.ListBuckets(aisCluster.bp, remoteQuery)
+	bcks, err = api.ListBuckets(aisCluster.bp, remoteQuery)
 	if err != nil {
 		_, err = extractErrCode(err)
 		return nil, err
 	}
-	for i, bck := range buckets {
+	for i, bck := range bcks {
 		bck.Ns.UUID = uuid // if `uuid` is alias we need to preserve it
-		buckets[i] = bck
+		bcks[i] = bck
 	}
-	return buckets, nil
+	return bcks, nil
 }
 
-func (m *AISBackendProvider) ListBuckets(_ context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error) {
+func (m *AISBackendProvider) ListBuckets(_ context.Context, query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	if !query.Ns.IsAnyRemote() {
-		buckets, err = m.listBucketsCluster(query.Ns.UUID, query)
+		bcks, err = m.listBucketsCluster(query.Ns.UUID, query)
 	} else {
 		for uuid := range m.remote {
 			remoteBcks, tryErr := m.listBucketsCluster(uuid, query)
-			buckets = append(buckets, remoteBcks...)
+			bcks = append(bcks, remoteBcks...)
 			if tryErr != nil {
 				err = tryErr
 			}

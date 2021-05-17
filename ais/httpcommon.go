@@ -2213,9 +2213,9 @@ func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header) {
 	hdr.Set(cmn.HdrBucketProps, props)
 }
 
-func (h *httprunner) selectBMDBuckets(bmd *bucketMD, query cmn.QueryBcks) cmn.BucketNames {
+func (h *httprunner) selectBMDBuckets(bmd *bucketMD, query cmn.QueryBcks) cmn.Bcks {
 	var (
-		names = make(cmn.BucketNames, 0, 10)
+		names = make(cmn.Bcks, 0, 10)
 		cp    = &query.Provider
 	)
 	if query.Provider == "" {

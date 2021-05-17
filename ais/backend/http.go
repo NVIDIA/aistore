@@ -106,7 +106,7 @@ func (hp *httpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *
 	return
 }
 
-func (hp *httpProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error) {
+func (hp *httpProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	debug.Assert(false)
 	return
 }

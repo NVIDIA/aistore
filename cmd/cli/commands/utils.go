@@ -895,15 +895,15 @@ func parseBckPropsFromContext(c *cli.Context) (props *cmn.BucketPropsToUpdate, e
 }
 
 func bucketsFromArgsOrEnv(c *cli.Context) ([]cmn.Bck, error) {
-	bucketNames := c.Args()
-	bcks := make([]cmn.Bck, 0, len(bucketNames))
+	uris := c.Args()
+	bcks := make([]cmn.Bck, 0, len(uris))
 
-	for _, bucket := range bucketNames {
-		bck, err := parseBckURI(c, bucket)
+	for _, bckURI := range uris {
+		bck, err := parseBckURI(c, bckURI)
 		if err != nil {
 			return nil, err
 		}
-		if bucket != "" {
+		if bckURI != "" {
 			bcks = append(bcks, bck)
 		}
 	}
@@ -912,7 +912,7 @@ func bucketsFromArgsOrEnv(c *cli.Context) ([]cmn.Bck, error) {
 		return bcks, nil
 	}
 
-	return nil, missingArgumentsError(c, "bucket name")
+	return nil, missingArgumentsError(c, "bucket")
 }
 
 func cliAPIParams(proxyURL string) api.BaseParams {

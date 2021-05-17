@@ -1281,35 +1281,35 @@ func (t *targetrunner) CheckRemoteVersion(ctx context.Context, lom *cluster.LOM)
 
 func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query cmn.QueryBcks) {
 	var (
-		bucketNames cmn.BucketNames
-		code        int
-		err         error
-		config      = cmn.GCO.Get()
+		bcks   cmn.Bcks
+		code   int
+		err    error
+		config = cmn.GCO.Get()
 	)
 
 	if query.Provider != "" {
-		bucketNames, code, err = t._listBcks(query, config)
+		bcks, code, err = t._listBcks(query, config)
 		if err != nil {
 			t.writeErrStatusf(w, r, code, "failed to list buckets for %q, err: %v", query, err)
 			return
 		}
 	} else /* all providers */ {
 		for provider := range cmn.Providers {
-			var buckets cmn.BucketNames
+			var buckets cmn.Bcks
 			query.Provider = provider
 			buckets, code, err = t._listBcks(query, config)
 			if err != nil {
 				t.writeErrStatusf(w, r, code, "failed to list buckets for %q, err: %v", query, err)
 				return
 			}
-			bucketNames = append(bucketNames, buckets...)
+			bcks = append(bcks, buckets...)
 		}
 	}
-	sort.Sort(bucketNames)
-	t.writeJSON(w, r, bucketNames, listBuckets)
+	sort.Sort(bcks)
+	t.writeJSON(w, r, bcks, listBuckets)
 }
 
-func (t *targetrunner) _listBcks(query cmn.QueryBcks, cfg *cmn.Config) (names cmn.BucketNames, errCode int, err error) {
+func (t *targetrunner) _listBcks(query cmn.QueryBcks, cfg *cmn.Config) (names cmn.Bcks, errCode int, err error) {
 	_, ok := cfg.Backend.Providers[query.Provider]
 	// HDFS doesn't support listing remote buckets (there are no remote buckets).
 	if (!ok && !query.IsRemoteAIS()) || query.IsHDFS() {

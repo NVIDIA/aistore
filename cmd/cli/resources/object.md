@@ -504,11 +504,11 @@ Delete an object or list/range of objects from the bucket.
 | `--list` | `string` | Comma separated list of objects for list deletion | `""` |
 | `--template` | `string` | The object name template with optional range parts | `""` |
 
-- Options `--list`, `--template`, and argument(s) `OBJECT_NAME` are mutually exclusive
-- List and template deletions expect only a bucket name
-- If OBJECT_NAMEs are given, CLI sends a separate request for each object
+- Options `--list`, `--template`, and argument(s) `OBJECT_NAME` are mutually exclusive.
+- List and template deletions expect only a bucket.
+- If OBJECT_NAMEs are given, CLI sends a separate request for each object.
 
-See [List/Range Operations](/docs/batch.md#listrange-operation) for more details.
+See [List/Range Operations](/docs/batch.md#listrange-operations) for more details.
 
 ### Examples
 
@@ -563,9 +563,9 @@ removed files in the range 'test-{001..003}' from ais://mybucket bucket
 | `--template` | `string` | The object name template with optional range parts | `""` |
 | `--dry-run` | `bool` | Do not actually perform EVICT. Shows a few objects to be evicted |
 
-- Options `--list`, `--template`, and argument(s) `OBJECT_NAME` are mutually exclusive
-- List and template evictions expect only a bucket name
-- If OBJECT_NAMEs are given, CLI sends a separate request for each object
+- Options `--list`, `--template`, and argument(s) `OBJECT_NAME` are mutually exclusive.
+- List and template evictions expect only a bucket.
+- If OBJECT_NAMEs are given, CLI sends a separate request for each object.
 
 See [List/Range Operations](/docs/batch.md#listrange-operations) for more details.
 

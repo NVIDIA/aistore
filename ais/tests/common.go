@@ -955,7 +955,7 @@ func findObjOnDisk(bck cmn.Bck, objName string) (fqn string) {
 	return fqn
 }
 
-func detectNewBucket(oldList, newList cmn.BucketNames) (cmn.Bck, error) {
+func detectNewBucket(oldList, newList cmn.Bcks) (cmn.Bck, error) {
 	for _, nbck := range newList {
 		found := false
 		for _, obck := range oldList {

@@ -313,10 +313,10 @@ func (awsp *awsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 }
 
 //////////////////
-// BUCKET NAMES //
+// LIST BUCKETS //
 //////////////////
 
-func (awsp *awsProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error) {
+func (awsp *awsProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	svc, _, _ := awsp.newS3Client(sessConf{}, "")
 	result, err := svc.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {
@@ -324,12 +324,12 @@ func (awsp *awsProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (
 		return
 	}
 
-	buckets = make(cmn.BucketNames, len(result.Buckets))
+	bcks = make(cmn.Bcks, len(result.Buckets))
 	for idx, bck := range result.Buckets {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("[bucket_names] %s: created %v", aws.StringValue(bck.Name), *bck.CreationDate)
 		}
-		buckets[idx] = cmn.Bck{
+		bcks[idx] = cmn.Bck{
 			Name:     aws.StringValue(bck.Name),
 			Provider: cmn.ProviderAmazon,
 		}

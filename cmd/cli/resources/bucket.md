@@ -5,7 +5,7 @@ For types of supported buckets (AIS, Cloud, backend, etc.) and many more example
 ## Table of Contents
 - [Create bucket](#create-bucket)
 - [Delete bucket](#delete-bucket)
-- [List bucket names](#list-bucket-names)
+- [List buckets](#list-buckets)
 - [List object names](#list-object-names)
 - [Evict remote bucket](#evict-remote-bucket)
 - [Move or Rename a bucket](#move-or-rename-a-bucket)
@@ -144,27 +144,27 @@ $ ais bucket rm aws://bucket_name
 Operation "destroy_bck" is not supported by "aws://bucket_name"
 ```
 
-## List bucket names
+## List buckets
 
 `ais bucket ls`
 
-List all bucket names.
+List all buckets.
 
 `ais bucket ls --regex "ngn*"`
 
-List all bucket names matching the `ngn*` regex expression.
+List all buckets matching the `ngn*` regex expression.
 
 `ais bucket ls aws://` or `ais bucket ls ais://`
 
-List all bucket names for the specific provider.
+List all buckets for the specific provider.
 
 `ais bucket ls ais://#name`
 
-List all bucket names for the `ais` provider and `name` namespace.
+List all buckets for the `ais` provider and `name` namespace.
 
 `ais bucket ls ais://@uuid#namespace`
 
-List all bucket names for the `ais` provider and `uuid#namespace` namespace.
+List all buckets for the `ais` provider and `uuid#namespace` namespace.
 `uuid` should be equal to remote cluster UUID and `namespace` is optional name of the remote namespace (if `namespace` not provided the global namespace will be used).
 
 ### Options

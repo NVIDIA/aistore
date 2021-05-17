@@ -143,8 +143,7 @@ type (
 	bucketFilter func(cmn.Bck) bool
 )
 
-// List bucket names
-func listBucketNames(c *cli.Context, query cmn.QueryBcks) (err error) {
+func listBuckets(c *cli.Context, query cmn.QueryBcks) (err error) {
 	// TODO: Think if there is a need to make generic filter for buckets as well ?
 	var (
 		filter = func(_ cmn.Bck) bool { return true }
@@ -158,11 +157,11 @@ func listBucketNames(c *cli.Context, query cmn.QueryBcks) (err error) {
 		filter = func(bck cmn.Bck) bool { return regex.MatchString(bck.Name) }
 	}
 
-	bucketNames, err := api.ListBuckets(defaultAPIParams, query)
+	bcks, err := api.ListBuckets(defaultAPIParams, query)
 	if err != nil {
 		return
 	}
-	printBucketNames(c, bucketNames, !flagIsSet(c, noHeaderFlag), filter)
+	printBuckets(c, bcks, !flagIsSet(c, noHeaderFlag), filter)
 	return
 }
 
@@ -457,7 +456,7 @@ func parseBcks(c *cli.Context) (bckFrom, bckTo cmn.Bck, err error) {
 	return bcks[0], bcks[1], nil
 }
 
-func printBucketNames(c *cli.Context, bucketNames cmn.BucketNames, showHeaders bool, matches bucketFilter) {
+func printBuckets(c *cli.Context, bcks cmn.Bcks, showHeaders bool, matches bucketFilter) {
 	providerList := make([]string, 0, len(cmn.Providers))
 	for provider := range cmn.Providers {
 		providerList = append(providerList, provider)
@@ -465,7 +464,7 @@ func printBucketNames(c *cli.Context, bucketNames cmn.BucketNames, showHeaders b
 	sort.Strings(providerList)
 	for _, provider := range providerList {
 		query := cmn.QueryBcks{Provider: provider}
-		bcks := bucketNames.Select(query)
+		bcks := bcks.Select(query)
 		if len(bcks) == 0 {
 			continue
 		}

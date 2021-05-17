@@ -178,7 +178,7 @@ func mvObjectHandler(c *cli.Context) (err error) {
 
 func removeObjectHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		return incorrectUsageMsg(c, "missing bucket name")
+		return incorrectUsageMsg(c, "missing bucket")
 	}
 
 	if c.NArg() == 1 {

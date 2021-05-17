@@ -417,7 +417,7 @@ func defaultListHandler(c *cli.Context) (err error) {
 	}
 
 	if queryBcks.Name == "" {
-		return listBucketNames(c, queryBcks)
+		return listBuckets(c, queryBcks)
 	}
 	return listObjects(c, cmn.Bck(queryBcks))
 }

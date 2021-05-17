@@ -190,10 +190,10 @@ func skipDir(fi os.FileInfo) error {
 }
 
 //////////////////
-// BUCKET NAMES //
+// LIST BUCKETS //
 //////////////////
 
-func (hp *hdfsProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error) {
+func (hp *hdfsProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.Bcks, errCode int, err error) {
 	cos.Assert(false)
 	return
 }

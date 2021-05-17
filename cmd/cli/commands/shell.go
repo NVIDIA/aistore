@@ -211,8 +211,8 @@ type bckCompletionsOpts struct {
 }
 
 // The function lists buckets names if the first argument was not yet given, otherwise it lists flags and additional completions
-// Bucket names will also be listed after the first argument was given if true is passed to the 'multiple' param
-// Bucket names will contain a path separator '/' if true is passed to the 'separator' param
+// Buckets will also be listed after the first argument was given if true is passed to the 'multiple' param
+// Buckets will contain a path separator '/' if true is passed to the 'separator' param
 func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 	return func(c *cli.Context) {
 		var (

@@ -233,10 +233,10 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 }
 
 //////////////////
-// BUCKET NAMES //
+// LIST BUCKETS //
 //////////////////
 
-func (gcpp *gcpProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error) {
+func (gcpp *gcpProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	if gcpp.projectID == "" {
 		// NOTE: Passing empty `projectID` to `Buckets` method results in
 		//  enigmatic error: "googleapi: Error 400: Invalid argument".
@@ -246,7 +246,7 @@ func (gcpp *gcpProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (
 	if err != nil {
 		return
 	}
-	buckets = make(cmn.BucketNames, 0, 16)
+	bcks = make(cmn.Bcks, 0, 16)
 	it := gcpClient.Buckets(gctx, gcpp.projectID)
 	for {
 		var battrs *storage.BucketAttrs
@@ -260,7 +260,7 @@ func (gcpp *gcpProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (
 			errCode, err = gcpp.gcpErrorToAISError(err, &cmn.Bck{Provider: cmn.ProviderGoogle})
 			return
 		}
-		buckets = append(buckets, cmn.Bck{
+		bcks = append(bcks, cmn.Bck{
 			Name:     battrs.Name,
 			Provider: cmn.ProviderGoogle,
 		})

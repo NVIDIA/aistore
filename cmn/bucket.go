@@ -71,7 +71,7 @@ type (
 
 	QueryBcks Bck
 
-	BucketNames []Bck
+	Bcks []Bck
 
 	// implemented by cluster.Bck
 	NLP interface {
@@ -516,24 +516,24 @@ func DelBckFromQuery(query url.Values) url.Values {
 	return query
 }
 
-/////////////////
-// BucketNames //
-/////////////////
+//////////
+// Bcks //
+//////////
 
-func (names BucketNames) Len() int {
-	return len(names)
+func (bcks Bcks) Len() int {
+	return len(bcks)
 }
 
-func (names BucketNames) Less(i, j int) bool {
-	return names[i].Less(names[j])
+func (bcks Bcks) Less(i, j int) bool {
+	return bcks[i].Less(bcks[j])
 }
 
-func (names BucketNames) Swap(i, j int) {
-	names[i], names[j] = names[j], names[i]
+func (bcks Bcks) Swap(i, j int) {
+	bcks[i], bcks[j] = bcks[j], bcks[i]
 }
 
-func (names BucketNames) Select(query QueryBcks) (filtered BucketNames) {
-	for _, bck := range names {
+func (bcks Bcks) Select(query QueryBcks) (filtered Bcks) {
+	for _, bck := range bcks {
 		if query.Contains(bck) {
 			filtered = append(filtered, bck)
 		}
@@ -541,8 +541,8 @@ func (names BucketNames) Select(query QueryBcks) (filtered BucketNames) {
 	return filtered
 }
 
-func (names BucketNames) Contains(query QueryBcks) bool {
-	for _, bck := range names {
+func (bcks Bcks) Contains(query QueryBcks) bool {
+	for _, bck := range bcks {
 		if query.Equal(bck) || query.Contains(bck) {
 			return true
 		}
@@ -550,11 +550,11 @@ func (names BucketNames) Contains(query QueryBcks) bool {
 	return false
 }
 
-func (names BucketNames) Equal(other BucketNames) bool {
-	if len(names) != len(other) {
+func (bcks Bcks) Equal(other Bcks) bool {
+	if len(bcks) != len(other) {
 		return false
 	}
-	for _, b1 := range names {
+	for _, b1 := range bcks {
 		var found bool
 		for _, b2 := range other {
 			if b1.Equal(b2) {

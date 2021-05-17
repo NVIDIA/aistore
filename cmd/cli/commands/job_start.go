@@ -455,7 +455,7 @@ func startPrefetchHandler(c *cli.Context) (err error) {
 	printDryRunHeader(c)
 
 	if c.NArg() == 0 {
-		return incorrectUsageMsg(c, "missing bucket name")
+		return incorrectUsageMsg(c, "missing bucket")
 	}
 	if c.NArg() > 1 {
 		return incorrectUsageMsg(c, "too many arguments")

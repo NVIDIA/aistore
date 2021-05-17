@@ -58,7 +58,7 @@ func TestHTTPProviderBucket(t *testing.T) {
 	tassert.Fatalf(t, err != nil, "expected error")
 }
 
-func Test_BucketNames(t *testing.T) {
+func TestListBuckets(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     t.Name() + "Bucket",
@@ -69,17 +69,19 @@ func Test_BucketNames(t *testing.T) {
 	)
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
-	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{})
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{})
 	tassert.CheckFatal(t, err)
 
-	printBucketNames(buckets)
+	for _, bck := range bcks {
+		fmt.Fprintf(os.Stdout, "  provider: %s, name: %s, ns: %s\n", bck.Provider, bck.Name, bck.Ns)
+	}
 
 	for _, provider := range []string{cmn.ProviderAmazon, cmn.ProviderGoogle, cmn.ProviderAzure, cmn.ProviderHDFS} {
 		query := cmn.QueryBcks{Provider: provider}
 		remoteBuckets, err := api.ListBuckets(baseParams, query)
 		tassert.CheckError(t, err)
-		if len(remoteBuckets) != len(buckets.Select(query)) {
-			t.Fatalf("%s: remote buckets: %d != %d\n", provider, len(remoteBuckets), len(buckets.Select(query)))
+		if len(remoteBuckets) != len(bcks.Select(query)) {
+			t.Fatalf("%s: remote buckets: %d != %d\n", provider, len(remoteBuckets), len(bcks.Select(query)))
 		}
 	}
 
@@ -87,25 +89,19 @@ func Test_BucketNames(t *testing.T) {
 	query := cmn.QueryBcks{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 	aisBuckets, err := api.ListBuckets(baseParams, query)
 	tassert.CheckError(t, err)
-	if len(aisBuckets) != len(buckets.Select(query)) {
-		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets), len(buckets.Select(query)))
+	if len(aisBuckets) != len(bcks.Select(query)) {
+		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets), len(bcks.Select(query)))
 	}
 
 	// NsAnyRemote
 	query = cmn.QueryBcks{Ns: cmn.NsAnyRemote}
-	buckets, err = api.ListBuckets(baseParams, query)
+	bcks, err = api.ListBuckets(baseParams, query)
 	tassert.CheckError(t, err)
 	query = cmn.QueryBcks{Provider: cmn.ProviderAIS, Ns: cmn.NsAnyRemote}
 	aisBuckets, err = api.ListBuckets(baseParams, query)
 	tassert.CheckError(t, err)
-	if len(aisBuckets) != len(buckets.Select(query)) {
-		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets), len(buckets.Select(query)))
-	}
-}
-
-func printBucketNames(bcks cmn.BucketNames) {
-	for _, bck := range bcks {
-		fmt.Fprintf(os.Stdout, "  provider: %s, name: %s\n", bck.Provider, bck.Name)
+	if len(aisBuckets) != len(bcks.Select(query)) {
+		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets), len(bcks.Select(query)))
 	}
 }
 
