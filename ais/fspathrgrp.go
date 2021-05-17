@@ -32,81 +32,69 @@ func (g *fsprungroup) init(t *targetrunner) {
 
 // enableMountpath enables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
-func (g *fsprungroup) enableMountpath(mpath string) (enabled bool, err error) {
-	var (
-		gfnActive    = g.t.gfn.local.Activate()
-		enabledMpath *fs.MountpathInfo
-	)
-	enabledMpath, err = fs.Enable(mpath, g.redistributeMD)
-	if err != nil || enabledMpath == nil {
-		if !gfnActive {
-			g.t.gfn.local.Deactivate()
-		}
-		return false, err
-	}
-
-	g.addMpathEvent(enableMpathAct, enabledMpath)
-	return true, nil
-}
-
-// disableMountpath disables mountpath and notifies necessary runners about the
-// change if mountpath actually was disabled.
-func (g *fsprungroup) disableMountpath(mpath string) (disabled bool, err error) {
-	var (
-		gfnActive     = g.t.gfn.local.Activate()
-		disabledMpath *fs.MountpathInfo
-	)
-	disabledMpath, err = fs.Disable(mpath, g.redistributeMD)
-	if err != nil || disabledMpath == nil {
-		if !gfnActive {
-			g.t.gfn.local.Deactivate()
-		}
-		return false, err
-	}
-
-	g.delMpathEvent(disableMpathAct, disabledMpath)
-	return true, nil
-}
-
-// addMountpath adds mountpath and notifies necessary runners about the change
-// if the mountpath was actually added.
-func (g *fsprungroup) addMountpath(mpath string) (err error) {
-	var (
-		gfnActive  = g.t.gfn.local.Activate()
-		addedMpath *fs.MountpathInfo
-	)
-	addedMpath, err = fs.Add(mpath, g.t.si.ID(), g.redistributeMD)
-	if err != nil || addedMpath == nil {
+func (g *fsprungroup) enableMountpath(mpath string) (enabledMi *fs.MountpathInfo, err error) {
+	enabledMi, err = fs.Enable(mpath, g.redistributeMD)
+	if err != nil || enabledMi == nil {
+		gfnActive := g.t.gfn.local.Activate()
 		if !gfnActive {
 			g.t.gfn.local.Deactivate()
 		}
 		return
 	}
 
-	g.addMpathEvent(addMpathAct, addedMpath)
+	g._postaddmi(enableMpathAct, enabledMi)
+	return
+}
+
+// disableMountpath disables mountpath and notifies necessary runners about the
+// change if mountpath actually was disabled.
+func (g *fsprungroup) disableMountpath(mpath string) (disabledMi *fs.MountpathInfo, err error) {
+	disabledMi, err = fs.Disable(mpath, g.redistributeMD)
+	if err != nil || disabledMi == nil {
+		gfnActive := g.t.gfn.local.Activate()
+		if !gfnActive {
+			g.t.gfn.local.Deactivate()
+		}
+		return
+	}
+
+	g._postdelmi(disableMpathAct, disabledMi)
+	return
+}
+
+// addMountpath adds mountpath and notifies necessary runners about the change
+// if the mountpath was actually added.
+func (g *fsprungroup) addMountpath(mpath string) (addedMi *fs.MountpathInfo, err error) {
+	addedMi, err = fs.Add(mpath, g.t.si.ID(), g.redistributeMD)
+	if err != nil || addedMi == nil {
+		gfnActive := g.t.gfn.local.Activate()
+		if !gfnActive {
+			g.t.gfn.local.Deactivate()
+		}
+		return
+	}
+
+	g._postaddmi(addMpathAct, addedMi)
 	return
 }
 
 // removeMountpath removes mountpath and notifies necessary runners about the
 // change if the mountpath was actually removed.
-func (g *fsprungroup) removeMountpath(mpath string) (err error) {
-	var (
-		gfnActive    = g.t.gfn.local.Activate()
-		removedMpath *fs.MountpathInfo
-	)
-	removedMpath, err = fs.Remove(mpath, g.redistributeMD)
-	if err != nil || removedMpath == nil {
+func (g *fsprungroup) removeMountpath(mpath string) (removedMi *fs.MountpathInfo, err error) {
+	removedMi, err = fs.Remove(mpath, g.redistributeMD)
+	if err != nil || removedMi == nil {
+		gfnActive := g.t.gfn.local.Activate()
 		if !gfnActive {
 			g.t.gfn.local.Deactivate()
 		}
 		return
 	}
 
-	g.delMpathEvent(removeMpathAct, removedMpath)
+	g._postdelmi(removeMpathAct, removedMi)
 	return
 }
 
-func (g *fsprungroup) addMpathEvent(action string, mpath *fs.MountpathInfo) {
+func (g *fsprungroup) _postaddmi(action string, mpath *fs.MountpathInfo) {
 	xreg.AbortAllMountpathsXactions()
 	go func() {
 		if cmn.GCO.Get().Resilver.Enabled {
@@ -118,7 +106,7 @@ func (g *fsprungroup) addMpathEvent(action string, mpath *fs.MountpathInfo) {
 	g.checkEnable(action, mpath.Path)
 }
 
-func (g *fsprungroup) delMpathEvent(action string, mpath *fs.MountpathInfo) {
+func (g *fsprungroup) _postdelmi(action string, mpath *fs.MountpathInfo) {
 	xreg.AbortAllMountpathsXactions()
 
 	go mpath.EvictLomCache()
@@ -134,6 +122,7 @@ func (g *fsprungroup) delMpathEvent(action string, mpath *fs.MountpathInfo) {
 	}()
 }
 
+// NOTE: executes under mfs lock
 func (g *fsprungroup) redistributeMD() {
 	if !hasEnoughBMDCopies() {
 		bo := g.t.owner.bmd

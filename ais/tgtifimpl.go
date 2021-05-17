@@ -404,9 +404,11 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 // implements health.fspathDispatcher interface
 //
 
-func (t *targetrunner) DisableMountpath(mountpath, reason string) (disabled bool, err error) {
-	glog.Warningf("Disabling mountpath %s: %s", mountpath, reason)
-	return t.fsprg.disableMountpath(mountpath)
+func (t *targetrunner) DisableMountpath(mpath, reason string) (disabled bool, err error) {
+	var disabledMi *fs.MountpathInfo
+	glog.Warningf("Disabling mountpath %s: %s", mpath, reason)
+	disabledMi, err = t.fsprg.disableMountpath(mpath)
+	return disabledMi != nil, err
 }
 
 func (t *targetrunner) RebalanceNamespace(si *cluster.Snode) (b []byte, status int, err error) {

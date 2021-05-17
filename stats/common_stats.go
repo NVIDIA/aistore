@@ -204,14 +204,6 @@ type (
 	promDesc     map[string]*prometheus.Desc
 )
 
-// convert bytes to megabytes with a fixed rounding precision = 2 digits (NOTE: MB not MiB)
-func roundMBs(val int64) (mbs float64) {
-	mbs = float64(val) / 1000 / 10
-	num := int(mbs + 0.5)
-	mbs = float64(num) / 100
-	return
-}
-
 ///////////////
 // CoreStats //
 ///////////////
@@ -221,6 +213,24 @@ var (
 	_ json.Marshaler   = (*CoreStats)(nil)
 	_ json.Unmarshaler = (*CoreStats)(nil)
 )
+
+// helper: convert bytes to megabytes with a fixed rounding precision = 2 digits (NOTE: MB not MiB)
+func roundMBs(val int64) (mbs float64) {
+	mbs = float64(val) / 1000 / 10
+	num := int(mbs + 0.5)
+	mbs = float64(num) / 100
+	return
+}
+
+// helper not to log idle: when the only updated vars are those that match "idle" prefixes
+func match(s string, prefs []string) bool {
+	for _, p := range prefs {
+		if strings.HasPrefix(s, p) {
+			return true
+		}
+	}
+	return false
+}
 
 func (s *CoreStats) init(node *cluster.Snode, size int) {
 	s.Tracker = make(statsTracker, size)
@@ -515,32 +525,33 @@ func (tracker statsTracker) register(node *cluster.Snode, name, kind string, isC
 		v.isCommon = isCommon[0]
 	}
 	debug.Assertf(cos.StringInSlice(kind, kinds), "invalid metric kind %q", kind)
+	// in StatsD metrics ":" delineates the name and the value - replace with underscore
 	switch kind {
 	case KindCounter:
 		if strings.HasSuffix(name, ".size") {
 			v.label.comm = strings.TrimSuffix(name, ".size")
-			v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_") // ":" delineates name and value for StatsD
+			v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
 			v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "mbytes")
 		} else {
 			debug.AssertMsg(strings.HasSuffix(name, ".n"), name)
 			v.label.comm = strings.TrimSuffix(name, ".n")
-			v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_") // ":" delineates name and value for StatsD
+			v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
 			v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "count")
 		}
 	case KindLatency:
 		debug.AssertMsg(strings.Contains(name, ".ns"), name)
 		v.label.comm = strings.TrimSuffix(name, ".ns")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ".ns.", ".")
-		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_") // ":" delineates name and value for StatsD
+		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
 		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "ms")
 	case KindThroughput:
 		debug.AssertMsg(strings.HasSuffix(name, ".bps"), name)
 		v.label.comm = strings.TrimSuffix(name, ".bps")
-		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_") // ":" delineates name and value for StatsD
+		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
 		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "mbps")
 	default:
 		v.label.comm = name
-		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_") // ":" delineates name and value for StatsD
+		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
 		if name == Uptime {
 			v.label.comm = strings.ReplaceAll(v.label.comm, ".ns.", ".")
 			v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "seconds")
@@ -839,14 +850,4 @@ func (r *statsRunner) AddErrorHTTP(method string, val int64) {
 	default:
 		r.workCh <- NamedVal64{Name: ErrCount, Value: val}
 	}
-}
-
-// (don't log when the only updated vars are those that match "idle" prefixes)
-func match(s string, prefs []string) bool {
-	for _, p := range prefs {
-		if strings.HasPrefix(s, p) {
-			return true
-		}
-	}
-	return false
 }

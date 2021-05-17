@@ -56,7 +56,7 @@ type (
 	IOStater interface {
 		GetAllMpathUtils() *MpathsUtils
 		GetMpathUtil(mpath string) int64
-		AddMpath(mpath string, fs string)
+		AddMpath(mpath string, fs string) error
 		RemoveMpath(mpath string)
 		FillDiskStats(m AllDiskStats)
 	}
@@ -70,19 +70,40 @@ func init() {
 	debug.NewExpvar(glog.SmoduleIOS)
 }
 
+/////////////////
+// MpathsUtils //
+/////////////////
+
+func (x *MpathsUtils) Util(mpath string) int64 {
+	if v, ok := (*sync.Map)(x).Load(mpath); ok {
+		util := v.(int64)
+		debug.Assert(util >= 0 && util <= 100, util)
+		return util
+	}
+	return 100 // If hasn't been updated yet we assume the worst.
+}
+
+func (x *MpathsUtils) Store(mpath string, util int64) {
+	(*sync.Map)(x).Store(mpath, util)
+}
+
+///////////////////
+// iostatContext //
+///////////////////
+
 func NewIostatContext() IOStater {
-	ctx := &iostatContext{
+	ios := &iostatContext{
 		mpath2disks: make(map[string]fsDisks, 10),
 		disk2mpath:  make(cos.SimpleKVs, 10),
 		disk2sysfn:  make(cos.SimpleKVs, 10),
 	}
-	for i := 0; i < len(ctx.cacheHst); i++ {
-		ctx.cacheHst[i] = newIostatCache()
+	for i := 0; i < len(ios.cacheHst); i++ {
+		ios.cacheHst[i] = newIostatCache()
 	}
-	ctx.putStatsCache(ctx.cacheHst[0])
-	ctx.cacheIdx = 0
-	ctx.busy.Store(false)
-	return ctx
+	ios.putStatsCache(ios.cacheHst[0])
+	ios.cacheIdx = 0
+	ios.busy.Store(false)
+	return ios
 }
 
 func newIostatCache() *ioStatCache {
@@ -99,120 +120,116 @@ func newIostatCache() *ioStatCache {
 	}
 }
 
-func (x *MpathsUtils) Util(mpath string) int64 {
-	if v, ok := (*sync.Map)(x).Load(mpath); ok {
-		util := v.(int64)
-		debug.Assert(util >= 0 && util <= 100, util)
-		return util
-	}
-	return 100 // If hasn't been updated yet we assume the worst.
-}
-
-func (x *MpathsUtils) Store(mpath string, util int64) {
-	(*sync.Map)(x).Store(mpath, util)
-}
-
-func (ctx *iostatContext) AddMpath(mpath, fs string) {
-	ctx.Lock()
-	defer ctx.Unlock()
-
+func (ios *iostatContext) AddMpath(mpath, fs string) (err error) {
 	config := cmn.GCO.Get()
 	fsdisks := fs2disks(fs)
 	if len(fsdisks) == 0 {
-		glog.Errorf("no disks associated with (mountpath: %q, fs: %q)", mpath, fs)
-		return
-	}
-	if dd, ok := ctx.mpath2disks[mpath]; ok {
-		s := fmt.Sprintf("mountpath %s already added, disks %+v %+v", mpath, dd, fsdisks)
-		cos.AssertMsg(false, s)
-	}
-	ctx.mpath2disks[mpath] = fsdisks
-	for disk := range fsdisks {
-		if mp, ok := ctx.disk2mpath[disk]; ok && !config.TestingEnv() {
-			s := fmt.Sprintf("disk sharing is not permitted: mp %s, add fs %s mp %s, disk %s",
-				mp, fs, mpath, disk)
-			cos.AssertMsg(false, s)
+		err = fmt.Errorf("mountpath %s has no disks (fs %q)", mpath, fs)
+		if !config.TestingEnv() {
+			glog.Error(err)
 			return
 		}
-		ctx.disk2mpath[disk] = mpath
+		if fs != "overlay" {
+			glog.Error(err)
+		}
+		err = nil // proceed anyway
 	}
-	for disk := range ctx.disk2mpath {
-		if _, ok := ctx.disk2sysfn[disk]; !ok {
-			ctx.disk2sysfn[disk] = fmt.Sprintf("/sys/class/block/%v/stat", disk)
+
+	ios.Lock()
+	defer ios.Unlock()
+
+	if dd, ok := ios.mpath2disks[mpath]; ok {
+		err = fmt.Errorf("mountpath %s already exists, disks %v (%v)", mpath, dd, fsdisks)
+		glog.Error(err)
+		return
+	}
+	ios.mpath2disks[mpath] = fsdisks
+	for disk := range fsdisks {
+		if mp, ok := ios.disk2mpath[disk]; ok && !config.TestingEnv() {
+			err = fmt.Errorf("disk %s: disk sharing is not allowed: %s vs %s", disk, mpath, mp)
+			glog.Error(err)
+			return
+		}
+		ios.disk2mpath[disk] = mpath
+	}
+	for disk := range ios.disk2mpath {
+		if _, ok := ios.disk2sysfn[disk]; !ok {
+			ios.disk2sysfn[disk] = fmt.Sprintf("/sys/class/block/%v/stat", disk)
 		}
 	}
-	if len(ctx.disk2sysfn) != len(ctx.disk2mpath) {
-		for disk := range ctx.disk2sysfn {
-			if _, ok := ctx.disk2mpath[disk]; !ok {
-				delete(ctx.disk2sysfn, disk)
+	if len(ios.disk2sysfn) != len(ios.disk2mpath) {
+		for disk := range ios.disk2sysfn {
+			if _, ok := ios.disk2mpath[disk]; !ok {
+				delete(ios.disk2sysfn, disk)
 			}
 		}
 	}
+	return
 }
 
 // For TestingEnv to avoid a case when removing a mountpath also empties
 // `disk` list, so a target stops generating disk stats.
 // If another mountpath containing the same disk is found, the disk2mpath map
 // is updated. Otherwise, the function removes disk from the disk2map map.
-func (ctx *iostatContext) removeMpathDiskTesting(mpath, disk string) {
-	if _, ok := ctx.disk2mpath[disk]; !ok {
+func (ios *iostatContext) removeMpathDiskTesting(mpath, disk string) {
+	if _, ok := ios.disk2mpath[disk]; !ok {
 		return
 	}
-	for path, disks := range ctx.mpath2disks {
+	for path, disks := range ios.mpath2disks {
 		if path == mpath {
 			continue
 		}
 		for dsk := range disks {
 			if dsk == disk {
-				ctx.disk2mpath[disk] = path
+				ios.disk2mpath[disk] = path
 				return
 			}
 		}
 	}
-	delete(ctx.mpath2disks, disk)
+	delete(ios.mpath2disks, disk)
 }
 
-func (ctx *iostatContext) removeMpathDisk(mpath, disk string) {
-	mp, ok := ctx.disk2mpath[disk]
+func (ios *iostatContext) removeMpathDisk(mpath, disk string) {
+	mp, ok := ios.disk2mpath[disk]
 	if !ok {
 		return
 	}
 	debug.Assertf(mp == mpath, "(mpath %s => disk %s => mpath %s) violation", mp, disk, mpath)
-	delete(ctx.disk2mpath, disk)
+	delete(ios.disk2mpath, disk)
 }
 
-func (ctx *iostatContext) RemoveMpath(mpath string) {
-	ctx.Lock()
-	defer ctx.Unlock()
+func (ios *iostatContext) RemoveMpath(mpath string) {
+	ios.Lock()
+	defer ios.Unlock()
 
 	config := cmn.GCO.Get()
-	oldDisks, ok := ctx.mpath2disks[mpath]
+	oldDisks, ok := ios.mpath2disks[mpath]
 	if !ok {
 		glog.Warningf("mountpath %s already removed", mpath)
 		return
 	}
 	for disk := range oldDisks {
 		if config.TestingEnv() {
-			ctx.removeMpathDiskTesting(mpath, disk)
+			ios.removeMpathDiskTesting(mpath, disk)
 		} else {
-			ctx.removeMpathDisk(mpath, disk)
+			ios.removeMpathDisk(mpath, disk)
 		}
 	}
-	delete(ctx.mpath2disks, mpath)
+	delete(ios.mpath2disks, mpath)
 }
 
-func (ctx *iostatContext) GetAllMpathUtils() *MpathsUtils {
-	cache := ctx.refreshIostatCache()
+func (ios *iostatContext) GetAllMpathUtils() *MpathsUtils {
+	cache := ios.refreshIostatCache()
 	return &cache.mpathUtilRO
 }
 
-func (ctx *iostatContext) GetMpathUtil(mpath string) int64 {
-	return ctx.GetAllMpathUtils().Util(mpath)
+func (ios *iostatContext) GetMpathUtil(mpath string) int64 {
+	return ios.GetAllMpathUtils().Util(mpath)
 }
 
-func (ctx *iostatContext) FillDiskStats(m AllDiskStats) {
+func (ios *iostatContext) FillDiskStats(m AllDiskStats) {
 	debug.Assert(m != nil)
-	cache := ctx.refreshIostatCache()
+	cache := ios.refreshIostatCache()
 	for disk := range cache.diskIOms {
 		m[disk] = DiskStats{
 			RBps: cache.diskRBps[disk],
@@ -230,22 +247,22 @@ func (ctx *iostatContext) FillDiskStats(m AllDiskStats) {
 // private methods ---
 
 // update iostat cache
-func (ctx *iostatContext) refreshIostatCache() *ioStatCache {
+func (ios *iostatContext) refreshIostatCache() *ioStatCache {
 	var (
 		expireTime int64
 		nowTs      = mono.NanoTime()
-		statsCache = ctx.getStatsCache()
+		statsCache = ios.getStatsCache()
 	)
 	if statsCache.expireTime > nowTs {
 		return statsCache
 	}
-	if !ctx.busy.CAS(false, true) {
+	if !ios.busy.CAS(false, true) {
 		return statsCache // never want callers to wait
 	}
-	defer ctx.busy.Store(false)
+	defer ios.busy.Store(false)
 
 	// refresh under mpath lock
-	ncache, maxUtil, missingInfo := ctx._refresh()
+	ncache, maxUtil, missingInfo := ios._refresh()
 
 	config := cmn.GCO.Get()
 	if missingInfo {
@@ -261,21 +278,21 @@ func (ctx *iostatContext) refreshIostatCache() *ioStatCache {
 		expireTime = int64(config.Disk.IostatTimeShort) + delta*(100-utilRatio)/100
 	}
 	ncache.expireTime = nowTs + expireTime
-	ctx.putStatsCache(ncache)
+	ios.putStatsCache(ncache)
 
 	return ncache
 }
 
-func (ctx *iostatContext) _refresh() (ncache *ioStatCache, maxUtil int64, missingInfo bool) {
-	ctx.Lock()
-	defer ctx.Unlock()
+func (ios *iostatContext) _refresh() (ncache *ioStatCache, maxUtil int64, missingInfo bool) {
+	ios.Lock()
+	defer ios.Unlock()
 
-	ctx.cacheIdx++
-	ctx.cacheIdx %= len(ctx.cacheHst)
-	ncache = ctx.cacheHst[ctx.cacheIdx]
+	ios.cacheIdx++
+	ios.cacheIdx %= len(ios.cacheHst)
+	ncache = ios.cacheHst[ios.cacheIdx]
 
 	var (
-		statsCache     = ctx.getStatsCache()
+		statsCache     = ios.getStatsCache()
 		nowTs          = mono.NanoTime()
 		elapsed        = nowTs - statsCache.timestamp
 		elapsedSeconds = cos.DivRound(elapsed, int64(time.Second))
@@ -283,18 +300,18 @@ func (ctx *iostatContext) _refresh() (ncache *ioStatCache, maxUtil int64, missin
 	)
 
 	ncache.timestamp = nowTs
-	for mpath := range ctx.mpath2disks {
+	for mpath := range ios.mpath2disks {
 		ncache.mpathUtil[mpath] = 0
 	}
 	for disk := range ncache.diskIOms {
-		if _, ok := ctx.disk2mpath[disk]; !ok {
+		if _, ok := ios.disk2mpath[disk]; !ok {
 			ncache = newIostatCache()
-			ctx.cacheHst[ctx.cacheIdx] = ncache
+			ios.cacheHst[ios.cacheIdx] = ncache
 		}
 	}
 
-	disksStats := readDiskStats(ctx.disk2mpath, ctx.disk2sysfn)
-	for disk, mpath := range ctx.disk2mpath {
+	disksStats := readDiskStats(ios.disk2mpath, ios.disk2sysfn)
+	for disk, mpath := range ios.disk2mpath {
 		ncache.diskRBps[disk] = 0
 		ncache.diskWBps[disk] = 0
 		ncache.diskUtil[disk] = 0
@@ -338,8 +355,12 @@ func (ctx *iostatContext) _refresh() (ncache *ioStatCache, maxUtil int64, missin
 	}
 
 	// average and max
-	for mpath, disks := range ctx.mpath2disks {
+	for mpath, disks := range ios.mpath2disks {
 		numDisk := int64(len(disks))
+		if numDisk == 0 {
+			debug.Assert(ncache.mpathUtil[mpath] == 0)
+			continue
+		}
 		util := ncache.mpathUtil[mpath] / numDisk
 
 		ncache.mpathUtil[mpath] = util
@@ -350,11 +371,11 @@ func (ctx *iostatContext) _refresh() (ncache *ioStatCache, maxUtil int64, missin
 	return
 }
 
-func (ctx *iostatContext) getStatsCache() *ioStatCache {
-	cache := (*ioStatCache)(ctx.cache.Load())
+func (ios *iostatContext) getStatsCache() *ioStatCache {
+	cache := (*ioStatCache)(ios.cache.Load())
 	return cache
 }
 
-func (ctx *iostatContext) putStatsCache(cache *ioStatCache) {
-	ctx.cache.Store(unsafe.Pointer(cache))
+func (ios *iostatContext) putStatsCache(cache *ioStatCache) {
+	ios.cache.Store(unsafe.Pointer(cache))
 }

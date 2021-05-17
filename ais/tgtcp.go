@@ -466,8 +466,8 @@ func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request
 	}
 }
 
-func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
-	enabled, err := t.fsprg.enableMountpath(mountpath)
+func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.Request, mpath string) {
+	enabledMi, err := t.fsprg.enableMountpath(mpath)
 	if err != nil {
 		if _, ok := err.(*cmn.ErrNoMountpath); ok {
 			t.writeErr(w, r, err, http.StatusNotFound)
@@ -477,36 +477,27 @@ func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.R
 		}
 		return
 	}
-	if !enabled {
+	if enabledMi == nil {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	var (
-		cleanMpath, _     = cmn.ValidateMpath(mountpath)
-		availablePaths, _ = fs.Get()
-		mi                = availablePaths[cleanMpath]
-		bmd               = t.owner.bmd.get()
-	)
+
 	// create missing buckets dirs
+	bmd := t.owner.bmd.get()
 	bmd.Range(nil, nil, func(bck *cluster.Bck) bool {
-		err = mi.CreateMissingBckDirs(bck.Bck)
+		err = enabledMi.CreateMissingBckDirs(bck.Bck)
 		return err != nil // break on error
 	})
 	if err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
-
-	// TODO: Currently we must abort on enabling mountpath. In some places we open
-	// files directly and put them directly on mountpaths. This can lead to
-	// problems where we get from new mountpath without asking other (old)
-	// mountpaths if they have it (resilver has not yet finished).
-	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been enabled during %s job - aborting due to possible errors",
-		mountpath, cmn.DSortName))
+	// TODO: Currently, dSort doesn't handle adding/enabling mountpaths at runtime
+	dsort.Managers.AbortAll(fmt.Errorf("mountpath %s has been enabled", enabledMi))
 }
 
-func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
-	disabled, err := t.fsprg.disableMountpath(mountpath)
+func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.Request, mpath string) {
+	disabledMi, err := t.fsprg.disableMountpath(mpath)
 	if err != nil {
 		if _, ok := err.(*cmn.ErrNoMountpath); ok {
 			t.writeErr(w, r, err, http.StatusNotFound)
@@ -516,30 +507,26 @@ func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.
 		}
 		return
 	}
-
-	if !disabled {
+	if disabledMi == nil {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-
-	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been disabled", mountpath))
+	dsort.Managers.AbortAll(fmt.Errorf("mountpath %s has been disabled", disabledMi))
 }
 
-func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
-	err := t.fsprg.addMountpath(mountpath)
+func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Request, mpath string) {
+	addedMi, err := t.fsprg.addMountpath(mpath)
 	if err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
-	var (
-		cleanMpath, _     = cmn.ValidateMpath(mountpath)
-		availablePaths, _ = fs.Get()
-		mi                = availablePaths[cleanMpath]
-		bmd               = t.owner.bmd.get()
-	)
-	// create missing buckets dirs
+	if addedMi == nil {
+		return
+	}
+	// create missing buckets dirs, if any
+	bmd := t.owner.bmd.get()
 	bmd.Range(nil, nil, func(bck *cluster.Bck) bool {
-		err = mi.CreateMissingBckDirs(bck.Bck)
+		err = addedMi.CreateMissingBckDirs(bck.Bck)
 		return err != nil // break on error
 	})
 	if err != nil {
@@ -547,21 +534,20 @@ func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// TODO: Currently we must abort on adding mountpath. In some places we open
-	// files directly and put them directly on mountpaths. This can lead to
-	// problems where we get from new mountpath without asking other (old)
-	// mountpaths if they have it (resilver has not yet finished).
-	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been added during %s job - aborting due to possible errors",
-		mountpath, cmn.DSortName))
+	// TODO: Currently, dSort doesn't handle adding/enabling mountpaths at runtime
+	dsort.Managers.AbortAll(fmt.Errorf("mountpath %s has been added", addedMi))
 }
 
-func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
-	if err := t.fsprg.removeMountpath(mountpath); err != nil {
+func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.Request, mpath string) {
+	removedMi, err := t.fsprg.removeMountpath(mpath)
+	if err != nil {
 		t.writeErrf(w, r, err.Error())
 		return
 	}
-
-	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been removed", mountpath))
+	if removedMi == nil {
+		return
+	}
+	dsort.Managers.AbortAll(fmt.Errorf("mpath %q has been removed", removedMi))
 }
 
 func (t *targetrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag, caller string, silent bool) (err error) {
