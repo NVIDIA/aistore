@@ -124,15 +124,10 @@ func (ios *iostatContext) AddMpath(mpath, fs string) (err error) {
 	config := cmn.GCO.Get()
 	fsdisks := fs2disks(fs)
 	if len(fsdisks) == 0 {
-		err = fmt.Errorf("mountpath %s has no disks (fs %q)", mpath, fs)
 		if !config.TestingEnv() {
-			glog.Error(err)
-			return
+			glog.Errorf("mountpath %s has no disks (fs %q)", mpath, fs)
 		}
-		if fs != "overlay" {
-			glog.Error(err)
-		}
-		err = nil // proceed anyway
+		return
 	}
 
 	ios.Lock()
