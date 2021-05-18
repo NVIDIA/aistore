@@ -20,15 +20,12 @@ import (
 )
 
 type (
-	iostatContext struct {
-		sync.RWMutex
-		mpath2disks map[string]FsDisks
-		disk2mpath  cos.SimpleKVs
-		disk2sysfn  cos.SimpleKVs
-		cache       atomic.Pointer
-		cacheHst    [16]*ioStatCache
-		cacheIdx    int
-		busy        atomic.Bool
+	IOStater interface {
+		GetAllMpathUtils() *MpathsUtils
+		GetMpathUtil(mpath string) int64
+		AddMpath(mpath string, fs string) (FsDisks, error)
+		RemoveMpath(mpath string)
+		FillDiskStats(m AllDiskStats)
 	}
 
 	FsDisks      map[string]int64 // disk name => sector size
@@ -54,12 +51,15 @@ type (
 		mpathUtilRO MpathsUtils      // Read-only copy of `mpathUtil`.
 	}
 
-	IOStater interface {
-		GetAllMpathUtils() *MpathsUtils
-		GetMpathUtil(mpath string) int64
-		AddMpath(mpath string, fs string) (FsDisks, error)
-		RemoveMpath(mpath string)
-		FillDiskStats(m AllDiskStats)
+	iostatContext struct {
+		sync.RWMutex
+		mpath2disks map[string]FsDisks
+		disk2mpath  cos.SimpleKVs
+		disk2sysfn  cos.SimpleKVs
+		cache       atomic.Pointer
+		cacheHst    [16]*ioStatCache
+		cacheIdx    int
+		busy        atomic.Bool
 	}
 )
 
