@@ -18,9 +18,9 @@ func NewIOStaterMock() *IOStaterMock {
 	return &IOStaterMock{}
 }
 
-func (m *IOStaterMock) GetAllMpathUtils() *MpathsUtils  { return &m.Utils }
-func (m *IOStaterMock) GetMpathUtil(mpath string) int64 { return m.Utils.Util(mpath) }
-func (m *IOStaterMock) AddMpath(mpath, fs string) error { return nil }
-func (m *IOStaterMock) RemoveMpath(mpath string)        {}
-func (m *IOStaterMock) LogAppend(l []string) []string   { return l }
-func (m *IOStaterMock) FillDiskStats(AllDiskStats)      {}
+func (m *IOStaterMock) GetAllMpathUtils() *MpathsUtils             { return &m.Utils }
+func (m *IOStaterMock) GetMpathUtil(mpath string) int64            { return m.Utils.Util(mpath) }
+func (m *IOStaterMock) AddMpath(mpath, fs string) (FsDisks, error) { return nil, nil }
+func (m *IOStaterMock) RemoveMpath(mpath string)                   {}
+func (m *IOStaterMock) LogAppend(l []string) []string              { return l }
+func (m *IOStaterMock) FillDiskStats(AllDiskStats)                 {}

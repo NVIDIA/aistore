@@ -28,7 +28,7 @@ type BlockDevice struct {
 // fs2disks is used when a mountpath is added to
 // retrieve the disk(s) associated with a filesystem.
 // This returns multiple disks only if the filesystem is RAID.
-func fs2disks(fs string) (disks fsDisks) {
+func fs2disks(fs string) (disks FsDisks) {
 	getDiskCommand := exec.Command("lsblk", "-Jt")
 	outputBytes, err := getDiskCommand.Output()
 	if err != nil || len(outputBytes) == 0 {
@@ -39,7 +39,7 @@ func fs2disks(fs string) (disks fsDisks) {
 		lsBlkOutput LsBlk
 		device      = strings.TrimPrefix(fs, "/dev/")
 	)
-	disks = make(fsDisks)
+	disks = make(FsDisks, 4)
 	err = jsoniter.Unmarshal(outputBytes, &lsBlkOutput)
 	if err != nil {
 		glog.Errorf("Unable to unmarshal lsblk output [%s], err: %v", string(outputBytes), err)
@@ -68,7 +68,7 @@ func childMatches(devList []*BlockDevice, device string) bool {
 	return false
 }
 
-func findDevDisks(devList []*BlockDevice, device string, disks fsDisks) {
+func findDevDisks(devList []*BlockDevice, device string, disks FsDisks) {
 	addDisk := func(bd *BlockDevice) {
 		var err error
 		if disks[bd.Name], err = bd.PhySec.Int64(); err != nil {

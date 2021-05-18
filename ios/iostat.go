@@ -22,7 +22,7 @@ import (
 type (
 	iostatContext struct {
 		sync.RWMutex
-		mpath2disks map[string]fsDisks
+		mpath2disks map[string]FsDisks
 		disk2mpath  cos.SimpleKVs
 		disk2sysfn  cos.SimpleKVs
 		cache       atomic.Pointer
@@ -31,6 +31,7 @@ type (
 		busy        atomic.Bool
 	}
 
+	FsDisks      map[string]int64 // disk name => sector size
 	DiskStats    struct{ RBps, WBps, Util int64 }
 	AllDiskStats map[string]DiskStats
 
@@ -56,7 +57,7 @@ type (
 	IOStater interface {
 		GetAllMpathUtils() *MpathsUtils
 		GetMpathUtil(mpath string) int64
-		AddMpath(mpath string, fs string) error
+		AddMpath(mpath string, fs string) (FsDisks, error)
 		RemoveMpath(mpath string)
 		FillDiskStats(m AllDiskStats)
 	}
@@ -93,7 +94,7 @@ func (x *MpathsUtils) Store(mpath string, util int64) {
 
 func NewIostatContext() IOStater {
 	ios := &iostatContext{
-		mpath2disks: make(map[string]fsDisks, 10),
+		mpath2disks: make(map[string]FsDisks, 10),
 		disk2mpath:  make(cos.SimpleKVs, 10),
 		disk2sysfn:  make(cos.SimpleKVs, 10),
 	}
@@ -120,9 +121,9 @@ func newIostatCache() *ioStatCache {
 	}
 }
 
-func (ios *iostatContext) AddMpath(mpath, fs string) (err error) {
+func (ios *iostatContext) AddMpath(mpath, fs string) (fsdisks FsDisks, err error) {
 	config := cmn.GCO.Get()
-	fsdisks := fs2disks(fs)
+	fsdisks = fs2disks(fs)
 	if len(fsdisks) == 0 {
 		if !config.TestingEnv() {
 			glog.Errorf("mountpath %s has no disks (fs %q)", mpath, fs)

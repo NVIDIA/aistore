@@ -47,16 +47,13 @@ const (
 
 type (
 	MountpathInfo struct {
-		Path     string // Cleaned OrigPath
-		OrigPath string // As entered by the user, must be used for logging / returning errors
-
-		FilesystemInfo // Additional information about the filesystem for a given mountpath.
-
-		PathDigest uint64 // Calculated from `Path` and used for HRW.
+		Path           string   // cleaned up
+		FilesystemInfo          // name of the underlying filesystem, its ID and other info
+		PathDigest     uint64   // used for HRW
+		Disks          []string // owned disks (ios.FsDisks map => slice)
 
 		// LOM caches
 		lomCaches cos.MultiSyncMap
-
 		// bucket path cache
 		bpc struct {
 			sync.RWMutex
@@ -65,6 +62,8 @@ type (
 		// capacity
 		cmu      sync.RWMutex
 		capacity Capacity
+		// String
+		info string
 	}
 	MPI map[string]*MountpathInfo
 
@@ -120,26 +119,44 @@ var (
 // MountpathInfo //
 ///////////////////
 
-func newMountpath(cleanPath, origPath string) (*MountpathInfo, error) {
-	fsInfo, err := makeFsInfo(cleanPath)
-	if err != nil {
-		return nil, err
+func newMountpath(mpath string) (mi *MountpathInfo, err error) {
+	var (
+		cleanMpath string
+		fsInfo     FilesystemInfo
+	)
+	if cleanMpath, err = cmn.ValidateMpath(mpath); err != nil {
+		return
 	}
-
-	mi := &MountpathInfo{
-		Path:     cleanPath,
-		OrigPath: origPath,
-
+	if err = Access(cleanMpath); err != nil {
+		return nil, cmn.NewNotFoundError("mountpath %q", mpath)
+	}
+	if fsInfo, err = makeFsInfo(cleanMpath); err != nil {
+		return
+	}
+	mi = &MountpathInfo{
+		Path:           cleanMpath,
 		FilesystemInfo: fsInfo,
-
-		PathDigest: xxhash.ChecksumString64S(cleanPath, cos.MLCG32),
+		PathDigest:     xxhash.ChecksumString64S(cleanMpath, cos.MLCG32),
 	}
 	mi.bpc.m = make(map[uint64]string, 16)
-	return mi, nil
+	return
 }
 
-func (mi *MountpathInfo) String() string {
-	return fmt.Sprintf("mp[%s, fs=%s]", mi.Path, mi.Fs)
+func (mi *MountpathInfo) String() string { return mi._string() }
+
+func (mi *MountpathInfo) _string() string {
+	if mi.info != "" {
+		return mi.info
+	}
+	switch len(mi.Disks) {
+	case 0:
+		mi.info = fmt.Sprintf("mp[%s, fs=%s]", mi.Path, mi.Fs)
+	case 1:
+		mi.info = fmt.Sprintf("mp[%s, %s]", mi.Path, mi.Disks[0])
+	default:
+		mi.info = fmt.Sprintf("mp[%s, %v]", mi.Path, mi.Disks)
+	}
+	return mi.info
 }
 
 func (mi *MountpathInfo) LomCache(idx int) *sync.Map { return mi.lomCaches.Get(idx) }
@@ -404,6 +421,15 @@ func (mi *MountpathInfo) createBckDirs(bck cmn.Bck, nilbmd bool) (num int, err e
 	return num, nil
 }
 
+func (mi *MountpathInfo) _setDisks(fsdisks ios.FsDisks) {
+	mi.Disks = make([]string, len(fsdisks))
+	i := 0
+	for d := range fsdisks {
+		mi.Disks[i] = d
+		i++
+	}
+}
+
 // available/used capacity
 
 func (mi *MountpathInfo) getCapacity(config *cmn.Config, refresh bool) (c Capacity, err error) {
@@ -434,6 +460,22 @@ func (mi *MountpathInfo) getCapacity(config *cmn.Config, refresh bool) (c Capaci
 	return
 }
 
+func (mi *MountpathInfo) _addEnabled(tid string, availablePaths MPI) error {
+	disks, err := mfs.ios.AddMpath(mi.Path, mi.Fs)
+	if err != nil {
+		return err
+	}
+	if tid != "" && cmn.GCO.Get().MDWrite != cmn.WriteNever {
+		if err := mi.SetDaemonIDXattr(tid); err != nil {
+			return err
+		}
+	}
+	mi._setDisks(disks)
+	_ = mi._string()
+	availablePaths[mi.Path] = mi
+	return nil
+}
+
 ///////////////
 // MountedFS //
 ///////////////
@@ -453,7 +495,8 @@ func InitMpaths(tid string) (changed bool, err error) {
 	configPaths := cmn.GCO.Get().FSpaths.Paths
 	if len(configPaths) == 0 {
 		// (usability) not to clutter the log with backtraces when starting up and validating config
-		return false, fmt.Errorf("no fspaths - see README => Configuration and/or fspaths section in the config.sh")
+		return false,
+			fmt.Errorf("no fspaths - see README => Configuration and/or fspaths section in the config.sh")
 	}
 	vmd, err := initVMD(configPaths)
 	if err != nil {
@@ -461,7 +504,6 @@ func InitMpaths(tid string) (changed bool, err error) {
 	}
 	if vmd == nil {
 		glog.Infof("VMD not loaded, adding %d mountpaths from config", len(configPaths))
-
 		for path := range configPaths {
 			if _, err := Add(path, tid); err != nil {
 				return false, err
@@ -471,7 +513,8 @@ func InitMpaths(tid string) (changed bool, err error) {
 		return false, err
 	}
 
-	glog.Infof("VMD loaded (mountpaths: %d), validating it with config (mountpaths: %d)", len(vmd.Mountpaths), len(configPaths))
+	glog.Infof("VMD loaded (mountpaths: %d), validating it with config (mountpaths: %d)",
+		len(vmd.Mountpaths), len(configPaths))
 
 	if vmd.DaemonID != tid {
 		return false, newVMDIDMismatchErr(vmd, tid)
@@ -480,7 +523,10 @@ func InitMpaths(tid string) (changed bool, err error) {
 	// Validate VMD versus config
 	for path := range configPaths {
 		// Check if config path is present in VMD paths.
-		var enabled bool
+		var (
+			mi      *MountpathInfo
+			enabled bool
+		)
 		if mpath, exists := vmd.Mountpaths[path]; !exists {
 			enabled = true
 			changed = true
@@ -488,9 +534,14 @@ func InitMpaths(tid string) (changed bool, err error) {
 		} else {
 			enabled = mpath.Enabled
 		}
-
-		if _, err := add(path, tid, enabled); err != nil {
+		if mi, err = newMountpath(path); err == nil {
+			_, err = addEnabledDisabled(mi, tid, enabled)
+		}
+		if err != nil {
 			return changed, err
+		}
+		if mi.Path != path {
+			glog.Warningf("%s: cleanpath(%q) => %q", mi, path, mi.Path)
 		}
 	}
 
@@ -553,59 +604,8 @@ func updatePaths(available, disabled MPI) {
 	mfs.disabled.Store(unsafe.Pointer(&disabled))
 }
 
-// Add adds new mountpath to the target's mountpaths.
-func Add(mpath, tid string, cb ...func()) (*MountpathInfo, error) {
-	return add(mpath, tid, true, cb...)
-}
-
-// add enabled/disabled mountpath to mfs
-func add(mpath, tid string, enabled bool, cb ...func()) (*MountpathInfo, error) {
-	cleanMpath, err := cmn.ValidateMpath(mpath)
-	if err != nil {
-		return nil, err
-	}
-	if err := Access(cleanMpath); err != nil {
-		return nil, cmn.NewNotFoundError("mountpath %q", mpath)
-	}
-	mi, err := newMountpath(cleanMpath, mpath)
-	if err != nil {
-		return nil, err
-	}
-
-	mfs.mu.Lock()
-	defer mfs.mu.Unlock()
-	availablePaths, disabledPaths := mountpathsCopy()
-	if existingMi, exists := availablePaths[mi.Path]; exists {
-		return nil, fmt.Errorf("failed adding %s: %s already exists", mi, existingMi)
-	}
-	if existingPath, exists := mfs.fsIDs[mi.FsID]; exists && mfs.checkFsID {
-		return nil, fmt.Errorf("FSID %v: filesystem sharing is not allowed: %s vs %q", mi.FsID, mi, existingPath)
-	}
-
-	if enabled {
-		if err := mfs.ios.AddMpath(mi.Path, mi.Fs); err != nil {
-			return nil, err
-		}
-		if cmn.GCO.Get().MDWrite != cmn.WriteNever {
-			if err := mi.SetDaemonIDXattr(tid); err != nil {
-				return nil, err
-			}
-		}
-		availablePaths[mi.Path] = mi
-	} else {
-		disabledPaths[mi.Path] = mi
-	}
-
-	mfs.fsIDs[mi.FsID] = cleanMpath
-	updatePaths(availablePaths, disabledPaths)
-	if len(cb) > 0 {
-		cb[0]()
-	}
-	return mi, nil
-}
-
-// mountpathsCopy returns a shallow copy of current mountpaths
-func mountpathsCopy() (MPI, MPI) {
+// cloneMPI returns a shallow copy of the current (available, disabled) mountpaths
+func cloneMPI() (MPI, MPI) {
 	availablePaths, disabledPaths := Get()
 	availableCopy := make(MPI, len(availablePaths))
 	disabledCopy := make(MPI, len(availablePaths))
@@ -617,6 +617,119 @@ func mountpathsCopy() (MPI, MPI) {
 		disabledCopy[mpath] = mpathInfo
 	}
 	return availableCopy, disabledCopy
+}
+
+// (used only in tests - compare with AddMpath below)
+func Add(mpath, tid string) (mi *MountpathInfo, err error) {
+	mi, err = newMountpath(mpath)
+	if err != nil {
+		return
+	}
+	mfs.mu.Lock()
+	mi, err = addEnabledDisabled(mi, tid, true /*enabled*/)
+	mfs.mu.Unlock()
+	return
+}
+
+// Add adds new mountpath to the target's mountpaths.
+func AddMpath(mpath, tid string, cb func()) (mi *MountpathInfo, err error) {
+	debug.Assert(tid != "")
+	mi, err = newMountpath(mpath)
+	if err != nil {
+		return
+	}
+
+	mfs.mu.Lock()
+	mi, err = addEnabledDisabled(mi, tid, true /*enabled*/)
+	if err == nil && len(mi.Disks) == 0 {
+		if !cmn.GCO.Get().TestingEnv() {
+			err = fmt.Errorf("mountpath %s has no disks", mi)
+		}
+	}
+	if err == nil {
+		cb()
+	}
+	mfs.mu.Unlock()
+
+	if mi.Path != mpath {
+		glog.Warningf("%s: cleanpath(%q) => %q", mi, mpath, mi.Path)
+	}
+	return
+}
+
+// add enabled/disabled mountpath to mfs
+func addEnabledDisabled(mi *MountpathInfo, tid string, enabled bool) (*MountpathInfo, error) {
+	availablePaths, disabledPaths := cloneMPI()
+	if existingMi, exists := availablePaths[mi.Path]; exists {
+		return nil, fmt.Errorf("failed adding %s: %s already exists", mi, existingMi)
+	}
+	if existingPath, exists := mfs.fsIDs[mi.FsID]; exists && mfs.checkFsID {
+		return nil, fmt.Errorf("FSID %v: filesystem sharing is not allowed: %s vs %q", mi.FsID, mi, existingPath)
+	}
+	if enabled {
+		if err := mi._addEnabled(tid, availablePaths); err != nil {
+			return nil, err
+		}
+	} else {
+		disabledPaths[mi.Path] = mi
+	}
+	mfs.fsIDs[mi.FsID] = mi.Path
+	updatePaths(availablePaths, disabledPaths)
+	return mi, nil
+}
+
+// (used only in tests - compare with EnableMpath below)
+func Enable(mpath string) (enabledMpath *MountpathInfo, err error) {
+	var cleanMpath string
+	if cleanMpath, err = cmn.ValidateMpath(mpath); err != nil {
+		return
+	}
+	mfs.mu.Lock()
+	enabledMpath, err = enable(mpath, cleanMpath, "" /*tid*/)
+	mfs.mu.Unlock()
+	return
+}
+
+// Enable enables previously disabled mountpath. enabled is set to
+// true if mountpath has been moved from disabled to available and exists is
+// set to true if such mountpath even exists.
+func EnableMpath(mpath, tid string, cb func()) (enabledMpath *MountpathInfo, err error) {
+	var cleanMpath string
+	debug.Assert(tid != "")
+	if cleanMpath, err = cmn.ValidateMpath(mpath); err != nil {
+		return
+	}
+	mfs.mu.Lock()
+	enabledMpath, err = enable(mpath, cleanMpath, tid)
+	if err == nil {
+		cb()
+	}
+	mfs.mu.Unlock()
+	return
+}
+
+func enable(mpath, cleanMpath, tid string) (enabledMpath *MountpathInfo, err error) {
+	availablePaths, disabledPaths := cloneMPI()
+	if _, ok := availablePaths[cleanMpath]; ok {
+		_, ok = disabledPaths[cleanMpath]
+		debug.Assert(!ok)
+		return
+	}
+	mi, ok := disabledPaths[cleanMpath]
+	if !ok {
+		err = cmn.NewNoMountpathError(mpath)
+		return
+	}
+	debug.Assert(cleanMpath == mi.Path)
+	// TODO: check that on-disk tid is identical if exists
+	if err = mi._addEnabled(tid, availablePaths); err != nil {
+		return
+	}
+	enabledMpath = mi
+	delete(disabledPaths, cleanMpath)
+	mfs.fsIDs[mi.FsID] = mi.Path
+	updatePaths(availablePaths, disabledPaths)
+	return
 }
 
 // Remove removes mountpaths from the target's mountpaths. It searches
@@ -639,7 +752,7 @@ func Remove(mpath string, cb ...func()) (*MountpathInfo, error) {
 		exists    bool
 		mpathInfo *MountpathInfo
 
-		availablePaths, disabledPaths = mountpathsCopy()
+		availablePaths, disabledPaths = cloneMPI()
 	)
 	if mpathInfo, exists = availablePaths[cleanMpath]; !exists {
 		if mpathInfo, exists = disabledPaths[cleanMpath]; !exists {
@@ -672,56 +785,19 @@ func Remove(mpath string, cb ...func()) (*MountpathInfo, error) {
 	return mpathInfo, nil
 }
 
-// Enable enables previously disabled mountpath. enabled is set to
-// true if mountpath has been moved from disabled to available and exists is
-// set to true if such mountpath even exists.
-func Enable(mpath string, cb ...func()) (enabledMpath *MountpathInfo, err error) {
-	var cleanMpath string
-	if cleanMpath, err = cmn.ValidateMpath(mpath); err != nil {
-		return
-	}
-
-	mfs.mu.Lock()
-	defer mfs.mu.Unlock()
-	availablePaths, disabledPaths := mountpathsCopy()
-	if _, ok := availablePaths[cleanMpath]; ok {
-		_, ok = disabledPaths[cleanMpath]
-		debug.Assert(!ok)
-		return
-	}
-	mp, ok := disabledPaths[cleanMpath]
-	if !ok {
-		err = cmn.NewNoMountpathError(mpath)
-		return
-	}
-	if err = mfs.ios.AddMpath(cleanMpath, mp.Fs); err != nil {
-		return
-	}
-
-	// enable
-	availablePaths[cleanMpath] = mp
-	enabledMpath = mp
-	delete(disabledPaths, cleanMpath)
-	updatePaths(availablePaths, disabledPaths)
-	if len(cb) > 0 {
-		cb[0]()
-	}
-	return
-}
-
 // Disable disables an available mountpath.
 // It returns disabled mountpath if it was actually disabled - moved from enabled to disabled.
 // Otherwise it returns nil, even if the mountpath existed (but was already disabled).
 func Disable(mpath string, cb ...func()) (disabledMpath *MountpathInfo, err error) {
-	mfs.mu.Lock()
-	defer mfs.mu.Unlock()
-
 	cleanMpath, err := cmn.ValidateMpath(mpath)
 	if err != nil {
 		return nil, err
 	}
 
-	availablePaths, disabledPaths := mountpathsCopy()
+	mfs.mu.Lock()
+	defer mfs.mu.Unlock()
+
+	availablePaths, disabledPaths := cloneMPI()
 	if mpathInfo, ok := availablePaths[cleanMpath]; ok {
 		disabledPaths[cleanMpath] = mpathInfo
 		mfs.ios.RemoveMpath(cleanMpath)
