@@ -33,9 +33,9 @@ func (g *fsprungroup) init(t *targetrunner) {
 // enableMountpath enables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
 func (g *fsprungroup) enableMountpath(mpath string) (enabledMi *fs.MountpathInfo, err error) {
+	gfnActive := g.t.gfn.local.Activate()
 	enabledMi, err = fs.EnableMpath(mpath, g.t.si.ID(), g.redistributeMD)
 	if err != nil || enabledMi == nil {
-		gfnActive := g.t.gfn.local.Activate()
 		if !gfnActive {
 			g.t.gfn.local.Deactivate()
 		}
@@ -49,9 +49,9 @@ func (g *fsprungroup) enableMountpath(mpath string) (enabledMi *fs.MountpathInfo
 // disableMountpath disables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
 func (g *fsprungroup) disableMountpath(mpath string) (disabledMi *fs.MountpathInfo, err error) {
+	gfnActive := g.t.gfn.local.Activate()
 	disabledMi, err = fs.Disable(mpath, g.redistributeMD)
 	if err != nil || disabledMi == nil {
-		gfnActive := g.t.gfn.local.Activate()
 		if !gfnActive {
 			g.t.gfn.local.Deactivate()
 		}
@@ -65,9 +65,9 @@ func (g *fsprungroup) disableMountpath(mpath string) (disabledMi *fs.MountpathIn
 // addMountpath adds mountpath and notifies necessary runners about the change
 // if the mountpath was actually added.
 func (g *fsprungroup) addMountpath(mpath string) (addedMi *fs.MountpathInfo, err error) {
+	gfnActive := g.t.gfn.local.Activate()
 	addedMi, err = fs.AddMpath(mpath, g.t.si.ID(), g.redistributeMD)
 	if err != nil || addedMi == nil {
-		gfnActive := g.t.gfn.local.Activate()
 		if !gfnActive {
 			g.t.gfn.local.Deactivate()
 		}
@@ -81,9 +81,9 @@ func (g *fsprungroup) addMountpath(mpath string) (addedMi *fs.MountpathInfo, err
 // removeMountpath removes mountpath and notifies necessary runners about the
 // change if the mountpath was actually removed.
 func (g *fsprungroup) removeMountpath(mpath string) (removedMi *fs.MountpathInfo, err error) {
+	gfnActive := g.t.gfn.local.Activate()
 	removedMi, err = fs.Remove(mpath, g.redistributeMD)
 	if err != nil || removedMi == nil {
-		gfnActive := g.t.gfn.local.Activate()
 		if !gfnActive {
 			g.t.gfn.local.Deactivate()
 		}
