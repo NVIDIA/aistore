@@ -84,8 +84,8 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 	if length, err = parseByteFlagToInt(c, lengthFlag); err != nil {
 		return
 	}
-	hdr := cmn.RangeHdr(offset, length)
 
+	hdr := cmn.RangeHdr(offset, length)
 	if outFile == fileStdIO {
 		objArgs = api.GetObjectInput{Writer: os.Stdout, Header: hdr}
 		silent = true
@@ -94,7 +94,12 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		if file, err = os.Create(outFile); err != nil {
 			return
 		}
-		defer file.Close()
+		defer func() {
+			file.Close()
+			if err != nil {
+				os.Remove(outFile)
+			}
+		}()
 		objArgs = api.GetObjectInput{Writer: file, Header: hdr}
 	}
 
@@ -110,7 +115,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 	}
 	if err != nil {
 		if cmn.IsStatusNotFound(err) {
-			return fmt.Errorf("object \"%s/%s\" does not exist", bck, objName)
+			err = fmt.Errorf("object \"%s/%s\" does not exist", bck, objName)
 		}
 		return
 	}
