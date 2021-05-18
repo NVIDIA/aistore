@@ -24,16 +24,18 @@ type (
 		Fs      string      `json:"fs"`
 		FsType  string      `json:"fs_type"`
 		FsID    cos.FsID    `json:"fs_id"`
-		Ext     interface{} `json:"ext,omitempty"` // Reserved for future extension.
+		Ext     interface{} `json:"ext,omitempty"` // reserved for within-metaversion extensions
 		Enabled bool        `json:"enabled"`
 	}
 
 	// Short for VolumeMetaData.
 	VMD struct {
-		Version    uint64                `json:"version,string"` // Version which tracks any updates happened to Mountpaths.
-		Mountpaths map[string]*fsMpathMD `json:"mountpaths"`     // mountpath => metadata
-		DaemonID   string                `json:"daemon_id"`      // ID of the daemon to which the mountpaths belong(ed).
-		cksum      *cos.Cksum            // Checksum of loaded VMD.
+		Version    uint64                `json:"version,string"` // version inc-s upon mountpath add/remove, etc.
+		Mountpaths map[string]*fsMpathMD `json:"mountpaths"`     // mountpath => details
+		DaemonID   string                `json:"daemon_id"`      // this target node ID
+		// private
+		cksum *cos.Cksum // VMD checksum
+		info  string
 	}
 
 	// errors
@@ -87,6 +89,13 @@ func (vmd *VMD) equal(other *VMD) bool {
 }
 
 func (vmd *VMD) String() string {
+	if vmd.info != "" {
+		return vmd.info
+	}
+	return vmd._string()
+}
+
+func (vmd *VMD) _string() string {
 	mps := make([]string, len(vmd.Mountpaths))
 	i := 0
 	for mpath, md := range vmd.Mountpaths {
@@ -134,6 +143,7 @@ func CreateNewVMD(daemonID string) (vmd *VMD, err error) {
 	for _, mpath := range disabled {
 		addMountpath(mpath, false /*enabled*/)
 	}
+	_ = vmd._string()
 	err = vmd.persist()
 	return
 }
@@ -160,6 +170,9 @@ func LoadVMD(available MPI) (vmd *VMD, err error) {
 		if v != nil {
 			vmd = v
 		}
+	}
+	if vmd != nil {
+		_ = vmd._string()
 	}
 	return vmd, nil
 }
