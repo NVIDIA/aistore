@@ -36,8 +36,8 @@ func testVMDCreate(t *testing.T, mpaths fs.MPI, daemonID string) {
 	tassert.Errorf(t, len(vmd.Mountpaths) == mpathsCnt, "expected %d mpaths, got %d", mpathsCnt, len(vmd.Mountpaths))
 
 	for _, dev := range vmd.Mountpaths {
-		_, ok := mpaths[dev.Mountpath]
-		tassert.Errorf(t, ok, "vmd has unknown %q mountpath", dev.Mountpath)
+		_, ok := mpaths[dev.Path]
+		tassert.Errorf(t, ok, "vmd has unknown %q mountpath", dev.Path)
 	}
 	tassert.Errorf(t, len(mpaths) == len(vmd.Mountpaths),
 		"expected mpath set to have size %d, got %d", len(mpaths), len(vmd.Mountpaths))

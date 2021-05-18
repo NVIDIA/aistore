@@ -125,9 +125,6 @@ func (ios *iostatContext) AddMpath(mpath, fs string) (fsdisks FsDisks, err error
 	config := cmn.GCO.Get()
 	fsdisks = fs2disks(fs)
 	if len(fsdisks) == 0 {
-		if !config.TestingEnv() {
-			glog.Errorf("mountpath %s has no disks (fs %q)", mpath, fs)
-		}
 		return
 	}
 

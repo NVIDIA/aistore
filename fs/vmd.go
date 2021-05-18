@@ -20,14 +20,12 @@ const vmdCopies = 3
 
 type (
 	fsMpathMD struct {
-		Mountpath string `json:"mountpath"`
-		Enabled   bool   `json:"enabled"`
-
-		Fs     string   `json:"fs"`
-		FsType string   `json:"fs_type"`
-		FsID   cos.FsID `json:"fs_id"`
-
-		Ext interface{} `json:"ext,omitempty"` // Reserved for future extension.
+		Path    string      `json:"mountpath"`
+		Fs      string      `json:"fs"`
+		FsType  string      `json:"fs_type"`
+		FsID    cos.FsID    `json:"fs_id"`
+		Ext     interface{} `json:"ext,omitempty"` // Reserved for future extension.
+		Enabled bool        `json:"enabled"`
 	}
 
 	// Short for VolumeMetaData.
@@ -88,7 +86,18 @@ func (vmd *VMD) equal(other *VMD) bool {
 		vmd.cksum.Equal(other.cksum)
 }
 
-func (vmd *VMD) String() string { return string(cos.MustMarshal(vmd)) }
+func (vmd *VMD) String() string {
+	mps := make([]string, len(vmd.Mountpaths))
+	i := 0
+	for mpath, md := range vmd.Mountpaths {
+		mps[i] = mpath
+		if !md.Enabled {
+			mps[i] += "(-)"
+		}
+		i++
+	}
+	return fmt.Sprintf("VMD v%d(%s, %v)", vmd.Version, vmd.DaemonID, mps)
+}
 
 func CreateNewVMD(daemonID string) (vmd *VMD, err error) {
 	var (
@@ -111,12 +120,11 @@ func CreateNewVMD(daemonID string) (vmd *VMD, err error) {
 
 	addMountpath := func(mpath *MountpathInfo, enabled bool) {
 		vmd.Mountpaths[mpath.Path] = &fsMpathMD{
-			Mountpath: mpath.Path,
-			Enabled:   enabled,
-
-			Fs:     mpath.Fs,
-			FsType: mpath.FsType,
-			FsID:   mpath.FsID,
+			Path:    mpath.Path,
+			Enabled: enabled,
+			Fs:      mpath.Fs,
+			FsType:  mpath.FsType,
+			FsID:    mpath.FsID,
 		}
 	}
 
@@ -156,6 +164,7 @@ func LoadVMD(available MPI) (vmd *VMD, err error) {
 	return vmd, nil
 }
 
+// given mountpath return a greater-version VMD if available
 func _loadVMD(vmd *VMD, mpath string, l int) (*VMD, error) {
 	var (
 		v   = newVMD(l)
@@ -174,16 +183,35 @@ func _loadVMD(vmd *VMD, mpath string, l int) (*VMD, error) {
 	if v.DaemonID != vmd.DaemonID {
 		return nil, newMpathIDMismatchErr(v.DaemonID, vmd.DaemonID, mpath)
 	}
-	if v.Version > vmd.Version { // NOTE: take the newer
-		glog.Warningf("%s (on %q) version greater than %s", v, mpath, vmd)
+	if v.Version > vmd.Version {
+		if !_mpathGreaterEq(v, vmd, mpath) {
+			glog.Warningf("mpath %s: VMD version mismatch: %s vs %s", mpath, v, vmd)
+		}
 		return v, nil
 	}
-	if v.Version < vmd.Version { // NOTE: ignore the older
-		glog.Warningf("%s (on %q) version lesser than %s", v, mpath, vmd)
-	} else if !v.equal(vmd) { // NOTE: must be identical
+	if v.Version < vmd.Version {
+		if !_mpathGreaterEq(vmd, v, mpath) {
+			glog.Warningf("mpath %s: VMD version mismatch: %s vs %s", mpath, vmd, v)
+		}
+	} else if !v.equal(vmd) { // NOTE: same version must be identical
 		err = newVMDMismatchErr(vmd, v, mpath)
 	}
 	return nil, err
+}
+
+func _mpathGreaterEq(curr, prev *VMD, mpath string) bool {
+	currMd, currOk := curr.Mountpaths[mpath]
+	prevMd, prevOk := prev.Mountpaths[mpath]
+	if !currOk {
+		return false
+	} else if !prevOk {
+		return true
+	} else if currMd.Enabled {
+		return true
+	} else if currMd.Enabled == prevMd.Enabled {
+		return true
+	}
+	return false
 }
 
 // LoadDaemonID loads the daemon ID present as xattr on given mount paths.

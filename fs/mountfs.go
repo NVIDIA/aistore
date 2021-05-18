@@ -107,6 +107,9 @@ type (
 		Err        error
 		OOS        bool
 	}
+	ErrMpathNoDisks struct {
+		mi *MountpathInfo
+	}
 )
 
 var (
@@ -114,6 +117,8 @@ var (
 
 	ErrNoMountpaths = errors.New("no mountpaths")
 )
+
+func (e *ErrMpathNoDisks) Error() string { return fmt.Sprintf("%s has no disks", e.mi) }
 
 ///////////////////
 // MountpathInfo //
@@ -460,6 +465,19 @@ func (mi *MountpathInfo) getCapacity(config *cmn.Config, refresh bool) (c Capaci
 	return
 }
 
+//
+// mountpath add/enable helpers - always call under mfs lock
+//
+
+func (mi *MountpathInfo) _checkExists(availablePaths MPI) (err error) {
+	if existingMi, exists := availablePaths[mi.Path]; exists {
+		err = fmt.Errorf("failed adding %s: %s already exists", mi, existingMi)
+	} else if existingPath, exists := mfs.fsIDs[mi.FsID]; exists && mfs.checkFsID {
+		err = fmt.Errorf("FSID %v: filesystem sharing is not allowed: %s vs %q", mi.FsID, mi, existingPath)
+	}
+	return
+}
+
 func (mi *MountpathInfo) _addEnabled(tid string, availablePaths MPI) error {
 	disks, err := mfs.ios.AddMpath(mi.Path, mi.Fs)
 	if err != nil {
@@ -474,6 +492,24 @@ func (mi *MountpathInfo) _addEnabled(tid string, availablePaths MPI) error {
 	_ = mi._string()
 	availablePaths[mi.Path] = mi
 	return nil
+}
+
+// with cloning
+func (mi *MountpathInfo) addEnabledDisabled(tid string, enabled bool) (err error) {
+	availablePaths, disabledPaths := cloneMPI()
+	if enabled {
+		if err = mi._checkExists(availablePaths); err != nil {
+			return
+		}
+		if err = mi._addEnabled(tid, availablePaths); err != nil {
+			return
+		}
+	} else {
+		disabledPaths[mi.Path] = mi
+	}
+	mfs.fsIDs[mi.FsID] = mi.Path
+	updatePaths(availablePaths, disabledPaths)
+	return
 }
 
 ///////////////
@@ -492,37 +528,65 @@ func Init(iostater ...ios.IOStater) {
 
 // InitMpaths prepares, validates, and adds configured mountpaths.
 func InitMpaths(tid string) (changed bool, err error) {
-	configPaths := cmn.GCO.Get().FSpaths.Paths
+	var (
+		vmd         *VMD
+		configPaths = cmn.GCO.Get().FSpaths.Paths
+	)
 	if len(configPaths) == 0 {
-		// (usability) not to clutter the log with backtraces when starting up and validating config
-		return false,
-			fmt.Errorf("no fspaths - see README => Configuration and/or fspaths section in the config.sh")
+		err = fmt.Errorf("no fspaths - see README => Configuration and fspaths section in the config.sh")
+		return
 	}
-	vmd, err := initVMD(configPaths)
-	if err != nil {
-		return false, err
+	if vmd, err = initVMD(configPaths); err != nil {
+		return
 	}
+	//
+	// create mountpaths and load VMD
+	//
+	var (
+		availablePaths = make(MPI, len(configPaths))
+		disabledPaths  = make(MPI)
+		cfgpaths       = configPaths.ToSlice()
+		config         = cmn.GCO.Get()
+	)
 	if vmd == nil {
-		glog.Infof("VMD not loaded, adding %d mountpaths from config", len(configPaths))
+		glog.Warningf("no VMD: populating from the config %v", cfgpaths)
+	} else {
+		glog.Infof("loaded VMD %s: validating vs config %v", vmd, cfgpaths)
+	}
+
+	// populate under lock
+	mfs.mu.Lock()
+	defer mfs.mu.Unlock()
+
+	// no VMD
+	if vmd == nil {
 		for path := range configPaths {
-			if _, err := Add(path, tid); err != nil {
-				return false, err
+			var mi *MountpathInfo
+			if mi, err = newMountpath(path); err != nil {
+				return
+			}
+			if err = mi._checkExists(availablePaths); err != nil {
+				return
+			}
+			if err = mi._addEnabled(tid, availablePaths); err != nil {
+				return
+			}
+			if len(mi.Disks) == 0 && !config.TestingEnv() {
+				err = &ErrMpathNoDisks{mi}
+				return
 			}
 		}
+		updatePaths(availablePaths, disabledPaths)
 		_, err = CreateNewVMD(tid)
-		return false, err
+		return
 	}
 
-	glog.Infof("VMD loaded (mountpaths: %d), validating it with config (mountpaths: %d)",
-		len(vmd.Mountpaths), len(configPaths))
-
+	// existing VMD
 	if vmd.DaemonID != tid {
-		return false, newVMDIDMismatchErr(vmd, tid)
+		err = newVMDIDMismatchErr(vmd, tid)
+		return
 	}
-
-	// Validate VMD versus config
 	for path := range configPaths {
-		// Check if config path is present in VMD paths.
 		var (
 			mi      *MountpathInfo
 			enabled bool
@@ -535,15 +599,27 @@ func InitMpaths(tid string) (changed bool, err error) {
 			enabled = mpath.Enabled
 		}
 		if mi, err = newMountpath(path); err == nil {
-			_, err = addEnabledDisabled(mi, tid, enabled)
+			if enabled {
+				if err = mi._checkExists(availablePaths); err == nil {
+					if err = mi._addEnabled(tid, availablePaths); err == nil {
+						if len(mi.Disks) == 0 && !config.TestingEnv() {
+							err = &ErrMpathNoDisks{mi}
+						}
+					}
+				}
+			} else {
+				disabledPaths[mi.Path] = mi
+			}
+			mfs.fsIDs[mi.FsID] = mi.Path
 		}
 		if err != nil {
-			return changed, err
+			return
 		}
 		if mi.Path != path {
 			glog.Warningf("%s: cleanpath(%q) => %q", mi, path, mi.Path)
 		}
 	}
+	updatePaths(availablePaths, disabledPaths)
 
 	if len(vmd.Mountpaths) > len(configPaths) {
 		for mpath := range vmd.Mountpaths {
@@ -556,7 +632,7 @@ func InitMpaths(tid string) (changed bool, err error) {
 	if changed {
 		_, err = CreateNewVMD(tid)
 	}
-	return changed, err
+	return
 }
 
 func Decommission(mdOnly bool) {
@@ -626,7 +702,7 @@ func Add(mpath, tid string) (mi *MountpathInfo, err error) {
 		return
 	}
 	mfs.mu.Lock()
-	mi, err = addEnabledDisabled(mi, tid, true /*enabled*/)
+	err = mi.addEnabledDisabled(tid, true /*enabled*/)
 	mfs.mu.Unlock()
 	return
 }
@@ -640,10 +716,10 @@ func AddMpath(mpath, tid string, cb func()) (mi *MountpathInfo, err error) {
 	}
 
 	mfs.mu.Lock()
-	mi, err = addEnabledDisabled(mi, tid, true /*enabled*/)
+	err = mi.addEnabledDisabled(tid, true /*enabled*/)
 	if err == nil && len(mi.Disks) == 0 {
 		if !cmn.GCO.Get().TestingEnv() {
-			err = fmt.Errorf("mountpath %s has no disks", mi)
+			err = &ErrMpathNoDisks{mi}
 		}
 	}
 	if err == nil {
@@ -655,27 +731,6 @@ func AddMpath(mpath, tid string, cb func()) (mi *MountpathInfo, err error) {
 		glog.Warningf("%s: cleanpath(%q) => %q", mi, mpath, mi.Path)
 	}
 	return
-}
-
-// add enabled/disabled mountpath to mfs
-func addEnabledDisabled(mi *MountpathInfo, tid string, enabled bool) (*MountpathInfo, error) {
-	availablePaths, disabledPaths := cloneMPI()
-	if existingMi, exists := availablePaths[mi.Path]; exists {
-		return nil, fmt.Errorf("failed adding %s: %s already exists", mi, existingMi)
-	}
-	if existingPath, exists := mfs.fsIDs[mi.FsID]; exists && mfs.checkFsID {
-		return nil, fmt.Errorf("FSID %v: filesystem sharing is not allowed: %s vs %q", mi.FsID, mi, existingPath)
-	}
-	if enabled {
-		if err := mi._addEnabled(tid, availablePaths); err != nil {
-			return nil, err
-		}
-	} else {
-		disabledPaths[mi.Path] = mi
-	}
-	mfs.fsIDs[mi.FsID] = mi.Path
-	updatePaths(availablePaths, disabledPaths)
-	return mi, nil
 }
 
 // (used only in tests - compare with EnableMpath below)
@@ -710,7 +765,7 @@ func EnableMpath(mpath, tid string, cb func()) (enabledMpath *MountpathInfo, err
 
 func enable(mpath, cleanMpath, tid string) (enabledMpath *MountpathInfo, err error) {
 	availablePaths, disabledPaths := cloneMPI()
-	if _, ok := availablePaths[cleanMpath]; ok {
+	if _, ok := availablePaths[cleanMpath]; ok { // nothing to do
 		_, ok = disabledPaths[cleanMpath]
 		debug.Assert(!ok)
 		return
@@ -721,7 +776,12 @@ func enable(mpath, cleanMpath, tid string) (enabledMpath *MountpathInfo, err err
 		return
 	}
 	debug.Assert(cleanMpath == mi.Path)
-	// TODO: check that on-disk tid is identical if exists
+
+	// TODO: check tid == on-disk-tid if exists
+
+	if err = mi._checkExists(availablePaths); err != nil {
+		return
+	}
 	if err = mi._addEnabled(tid, availablePaths); err != nil {
 		return
 	}
