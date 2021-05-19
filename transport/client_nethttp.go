@@ -24,12 +24,22 @@ type Client interface {
 func whichClient() string { return "net/http" }
 
 // intra-cluster networking: net/http client
-func NewIntraDataClient() *http.Client {
+func NewIntraDataClient() (client *http.Client) {
 	config := cmn.GCO.Get()
+
+	// apply global defaults
+	wbuf, rbuf := config.Net.HTTP.WriteBufferSize, config.Net.HTTP.ReadBufferSize
+	if config.Net.HTTP.WriteBufferSize == 0 {
+		wbuf = cmn.DefaultWriteBufferSize
+	}
+	if rbuf == 0 {
+		rbuf = cmn.DefaultReadBufferSize
+	}
+
 	return cmn.NewClient(cmn.TransportArgs{
 		SndRcvBufSize:   config.Net.L4.SndRcvBufSize,
-		WriteBufferSize: config.Net.HTTP.WriteBufferSize,
-		ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
+		WriteBufferSize: wbuf,
+		ReadBufferSize:  rbuf,
 		UseHTTPS:        config.Net.HTTP.UseHTTPS,
 		SkipVerify:      config.Net.HTTP.SkipVerify,
 	})

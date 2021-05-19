@@ -64,9 +64,8 @@ var (
 	restoreNodes     map[string]RestoreCmd // initial proxy and target nodes => command to restore them
 
 	transportArgs = cmn.TransportArgs{
-		Timeout:          600 * time.Second,
-		IdleConnsPerHost: 100,
-		UseHTTPProxyEnv:  true,
+		Timeout:         600 * time.Second,
+		UseHTTPProxyEnv: true,
 	}
 	HTTPClient *http.Client
 

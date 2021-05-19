@@ -25,9 +25,8 @@ var (
 	// AIS cluster timeouts. And if HTTPS is used, certificate check is
 	// always disable in AisLoader client.
 	transportArgs = cmn.TransportArgs{
-		IdleConnsPerHost: 100,
-		UseHTTPProxyEnv:  true,
-		SkipVerify:       true,
+		UseHTTPProxyEnv: true,
+		SkipVerify:      true,
 	}
 	httpClient *http.Client
 )

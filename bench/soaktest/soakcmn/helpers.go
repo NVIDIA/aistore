@@ -21,9 +21,8 @@ var (
 	HTTPClient *http.Client
 
 	transportArgs = cmn.TransportArgs{
-		Timeout:          600 * time.Second,
-		IdleConnsPerHost: 100,
-		UseHTTPProxyEnv:  true,
+		Timeout:         600 * time.Second,
+		UseHTTPProxyEnv: true,
 	}
 
 	registerTimeout = time.Minute * 2

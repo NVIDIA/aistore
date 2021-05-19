@@ -39,9 +39,6 @@ func initClusterParams() {
 		Timeout:     cfg.Timeout.HTTPTimeout,
 		UseHTTPS:    cos.IsHTTPS(clusterURL),
 		SkipVerify:  cfg.Cluster.SkipVerifyCrt,
-
-		IdleConnsPerHost: 100,
-		MaxIdleConns:     100,
 	})
 
 	if authnURL := cliAuthnURL(cfg); authnURL != "" {

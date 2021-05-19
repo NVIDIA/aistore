@@ -115,9 +115,6 @@ func NewAISFileSystemServer(cfg *ServerConfig, errLog *log.Logger) (srv fuse.Ser
 		Timeout:     cfg.HTTPTimeout,
 		UseHTTPS:    cos.IsHTTPS(cfg.AISURL),
 		SkipVerify:  cfg.SkipVerifyCrt,
-
-		IdleConnsPerHost: 100,
-		MaxIdleConns:     100,
 	})
 
 	// Create an aisfs instance.

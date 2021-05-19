@@ -34,17 +34,27 @@ func dialTimeout(addr string) (net.Conn, error) {
 // intra-cluster networking: fasthttp client
 func NewIntraDataClient() Client {
 	config := cmn.GCO.Get()
+
+	// apply global defaults
+	wbuf, rbuf := config.Net.HTTP.WriteBufferSize, config.Net.HTTP.ReadBufferSize
+	if config.Net.HTTP.WriteBufferSize == 0 {
+		wbuf = cmn.DefaultWriteBufferSize // NOTE: fasthttp uses 4K
+	}
+	if rbuf == 0 {
+		rbuf = cmn.DefaultReadBufferSize // ditto
+	}
+
 	if !config.Net.HTTP.UseHTTPS {
 		return &fasthttp.Client{
 			Dial:            dialTimeout,
-			ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
-			WriteBufferSize: config.Net.HTTP.WriteBufferSize,
+			ReadBufferSize:  rbuf,
+			WriteBufferSize: wbuf,
 		}
 	}
 	return &fasthttp.Client{
 		Dial:            dialTimeout,
-		ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
-		WriteBufferSize: config.Net.HTTP.WriteBufferSize,
+		ReadBufferSize:  rbuf,
+		WriteBufferSize: wbuf,
 		TLSConfig:       &tls.Config{InsecureSkipVerify: config.Net.HTTP.SkipVerify},
 	}
 }
