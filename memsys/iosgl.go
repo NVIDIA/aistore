@@ -73,6 +73,7 @@ func _freeSGL(z *SGL) {
 func (z *SGL) Cap() int64  { return int64(len(z.sgl)) * z.slab.Size() }
 func (z *SGL) Size() int64 { return z.woff }
 func (z *SGL) Slab() *Slab { return z.slab }
+func (z *SGL) IsNil() bool { return z == nil || z.slab == nil }
 
 func (z *SGL) grow(toSize int64) {
 	z.slab.muget.Lock()

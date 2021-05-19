@@ -673,10 +673,14 @@ func (h *httprunner) registerIntraDataNetHandler(path string, handler func(http.
 }
 
 func (h *httprunner) init(config *cmn.Config) {
+	const (
+		defaultControlWriteBufferSize = 16 * cos.KiB // for more defaults see cmn/network.go
+		defaultControlReadBufferSize  = 16 * cos.KiB
+	)
 	h.client.control = cmn.NewClient(cmn.TransportArgs{
 		Timeout:         config.Client.Timeout.D(),
-		WriteBufferSize: 4 * cos.KiB,
-		ReadBufferSize:  4 * cos.KiB,
+		WriteBufferSize: defaultControlWriteBufferSize,
+		ReadBufferSize:  defaultControlReadBufferSize,
 		UseHTTPS:        config.Net.HTTP.UseHTTPS,
 		SkipVerify:      config.Net.HTTP.SkipVerify,
 	})

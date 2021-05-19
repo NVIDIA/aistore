@@ -308,7 +308,10 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 			glog.Infof("%s: sync %s v%d%s", y.p.si, tag, revs.version(), s)
 		}
 		y.lastSynced[tag] = revs
-		if sgl := revs.sgl(); sgl != nil {
+		// NOTE: in extremely rare cases the revs here may still be carrying sgl that has been freed
+		//       via becomeNonPrimary => y.free(); checking sgl.IsNil() looks like the most lightweight
+		//       vs ther possible (tracking) alternatives
+		if sgl := revs.sgl(); sgl != nil && !sgl.IsNil() {
 			// fast path
 			y.addnew(revs)
 			revsBody = sgl.Bytes()
@@ -513,7 +516,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 			payload[tag] = sgl.Bytes()
 		} else {
 			payload[tag] = revs.marshal()
-			if sgl := revs.sgl(); sgl != nil {
+			if sgl := revs.sgl(); sgl != nil && !sgl.IsNil() {
 				y.addnew(revs)
 			}
 		}
@@ -658,7 +661,9 @@ func (y *metasyncer) delold(revs revs) {
 	}
 	for v, sgl := range vgl {
 		if v < revs.version() {
-			sgl.Free()
+			if !sgl.IsNil() {
+				sgl.Free()
+			}
 			delete(vgl, v)
 		}
 	}
