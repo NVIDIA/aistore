@@ -120,7 +120,7 @@ To uninstall autocompletions, run `bash autocomplete/uninstall.sh`.
 | [`ais object`](/cmd/cli/resources/object.md) | PUT (write), GET (read), list, move (rename) and other operations on objects in a given bucket |
 | [`ais cluster`](/cmd/cli/resources/cluster.md) | Monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc. |
 | [`ais config`](/cmd/cli/resources/config.md) | Set local/global AIS cluster configurations |
-| [`ais mountpath`](/cmd/cli/resources/mpath.md) | Manage mountpaths (disks) in a given storage target |
+| [`ais storage`](/cmd/cli/resources/storage.md) | Show capacity usage on a per bucket basis, attach/detach mountpaths (disks), run certain bucket validation logic, and more |
 | [`ais etl`](/cmd/cli/resources/etl.md) | Execute custom transformations on objects |
 | [`ais job`](/cmd/cli/resources/job.md) | Query and manage jobs (aka extended actions or xactions) |
 | [`ais auth`](/cmd/cli/resources/auth.md) | Add/remove/show users, manage user roles, manage access to remote clusters |
@@ -172,5 +172,5 @@ Supported backend providers currently include:
 * `ht://` (\* see below) - HTTP(S) datasets
 
 > See also: [Backend Providers](/docs/providers.md)
-> 
+>
 > See also: [Buckets](/docs/bucket.md)

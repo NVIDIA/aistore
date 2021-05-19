@@ -22,20 +22,20 @@ var (
 
 	storageCmd = cli.Command{
 		Name:  commandStorage,
-		Usage: "monitor and manage AIS cluster storage: disk space usage, add/remove mountpath etc",
+		Usage: "monitor and manage AIS cluster storage: used and total capacity, add/remove mountpaths",
 		Subcommands: []cli.Command{
 			{
 				Name:         subcmdStgSummary,
-				Usage:        "fetch and display storage summary: bucket sizes, capacity percentage used by each bucket",
-				ArgsUsage:    optionalBucketArgument,
+				Usage:        "show bucket sizes and percentages of used capacity on a per-bucket basis",
+				ArgsUsage:    listCommandArgument,
 				Flags:        storageCmdFlags[subcmdStgSummary],
 				Action:       showBucketSizes,
 				BashComplete: bucketCompletions(),
 			},
 			{
 				Name:         subcmdStgValidate,
-				Usage:        "check buckets for errors: detect misplaced or incomplete objects",
-				ArgsUsage:    optionalBucketArgument,
+				Usage:        "check buckets for errors: detect misplaced objects and objects that have insufficient number of copies",
+				ArgsUsage:    listCommandArgument,
 				Flags:        storageCmdFlags[subcmdStgValidate],
 				Action:       showObjectHealth,
 				BashComplete: bucketCompletions(),

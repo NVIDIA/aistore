@@ -360,24 +360,28 @@ To check the status, run: ais show job xaction copybck aws://dst_bucket
 
 `ais bucket summary [BUCKET]`
 
-Show aggregated information about objects in the bucket `BUCKET`.
-If `BUCKET` is omitted, shows information about all buckets.
+Show summary information on a per bucket basis. If `BUCKET` is specified in the command line, the output gets narrowed down to this specific bucket.
 
-When `--validate` option is used, the command may take a lot of time.
-In this mode it reads the list of all objects in buckets to get detailed information.
-After validating a bucket, it displays the total number of objects(including misplaced ones),
-the number of misplaced, and the number of objects with insufficient number of copies.
-Note that for a remote bucket, insuffient number of copies also means that the object has never been read,
-so AIS does not have a copy on local drives yet. In other words, for remote buckets it may be OK to have non-zero
-number of objects with missing copies.
-Non-zero number of misplaced objects may mean the bucket needs rebalancing.
+Depending on the command line options (listed below), per-bucket information includes total number of objects, size of the bucket in bytes or megabytes, and percentage of the total capacity used by the bucket.
+
+A recently added `--validate` option is intended to analyze integrity of the stored distributed content. The questions that we ask at validation time "cover" location of stored objects and their replicas, the number of replicas (and whether this number agrees with the bucket configuration), etc.
+
+In particular, location of each objects stored in the cluster must at any point in time correspond to the current cluster map and, within each storage target, to the target's *mountpaths* (disks).  A failure to abide by location rules is called "misplacement"; misplaced objects - if any - must be migrated to their proper locations via automated processes called `global rebalance` and `resilver`:
+
+* [global rebalance and reslver](/docs/rebalance.md)
+* [resilvering selected targets: advanced usage](/cmd/cli/resources/advanced.md)
+
+As far as the option `--validate` a non-zero *misplaced* objects in its output would be a direct indication that the cluster requires rebalancing.
+
+Note that `--validate` may take considerable time to execute, depending, of course, on sizes of the datasets and capabilities of the underlying hardware.
 
 ### Options
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--fast` | `bool` | Enforce using faster methods to find out the buckets' details. The output may not be accurate. | `false`
-| `--validate` | `bool` | Check objects for errors: misplaced, insufficient number of copies etc | `false`
+| `--fast` | `bool` | The option is designed primarily for internal usage. The output may not accurately reflect user-accessible content. | `false` |
+| `--validate` | `bool` | Check objects for errors: misplacement, insufficient number of copies | `false` |
+| `--cached` | `bool` | For buckets that have remote [backends](/docs/providers.md), list only objects stored in the AIS cluster | `false` |
 
 ## Start N-way Mirroring
 

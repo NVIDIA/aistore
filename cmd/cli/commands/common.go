@@ -283,7 +283,7 @@ var (
 	maxPagesFlag = cli.IntFlag{Name: "max-pages", Usage: "display up to this number pages of bucket objects"}
 	fastFlag     = cli.BoolTFlag{
 		Name:  "fast",
-		Usage: "use fast algorithm to compute the result (warning: the result can be inaccurate)",
+		Usage: "use fast algorithm to compute the result (beware: advanced usage only)",
 	}
 	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "fetch and print the bucket list page by page, ignored in fast mode"}
 	showUnmatchedFlag = cli.BoolTFlag{Name: "show-unmatched", Usage: "list objects that were not matched by regex and template"}
