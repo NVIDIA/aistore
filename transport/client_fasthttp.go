@@ -37,7 +37,7 @@ func NewIntraDataClient() Client {
 
 	// apply global defaults
 	wbuf, rbuf := config.Net.HTTP.WriteBufferSize, config.Net.HTTP.ReadBufferSize
-	if config.Net.HTTP.WriteBufferSize == 0 {
+	if wbuf == 0 {
 		wbuf = cmn.DefaultWriteBufferSize // NOTE: fasthttp uses 4K
 	}
 	if rbuf == 0 {

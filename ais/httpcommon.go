@@ -674,9 +674,11 @@ func (h *httprunner) registerIntraDataNetHandler(path string, handler func(http.
 
 func (h *httprunner) init(config *cmn.Config) {
 	h.client.control = cmn.NewClient(cmn.TransportArgs{
-		Timeout:    config.Client.Timeout.D(),
-		UseHTTPS:   config.Net.HTTP.UseHTTPS,
-		SkipVerify: config.Net.HTTP.SkipVerify,
+		Timeout:         config.Client.Timeout.D(),
+		WriteBufferSize: 4 * cos.KiB,
+		ReadBufferSize:  4 * cos.KiB,
+		UseHTTPS:        config.Net.HTTP.UseHTTPS,
+		SkipVerify:      config.Net.HTTP.SkipVerify,
 	})
 	h.client.data = cmn.NewClient(cmn.TransportArgs{
 		Timeout:         config.Client.TimeoutLong.D(),
