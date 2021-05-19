@@ -293,24 +293,14 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 	payload := make(msPayload, 2*len(pairs))
 	for _, pair := range pairs {
 		var (
-			revs, msg, tag, s = pair.revs, pair.msg, pair.revs.tag(), ""
-			jitRevs           = revs.jit(y.p)
-			revsBody          []byte
+			revsBody []byte
+			msg, tag = pair.msg, pair.revs.tag()
+			revs     = y.useJIT(pair)
 		)
-		if msg.Action != "" {
-			s = ", action " + msg.Action
-		}
-		// just-in-time: making exception for BMD (and associated bucket-level transactions)
-		if jitRevs != nil && jitRevs.version() > revs.version() && tag != revsBMDTag {
-			glog.Infof("%s: sync newer %s v%d%s (skipping %s)", y.p.si, tag, jitRevs.version(), s, revs)
-			revs = jitRevs
-		} else {
-			glog.Infof("%s: sync %s v%d%s", y.p.si, tag, revs.version(), s)
-		}
 		y.lastSynced[tag] = revs
 		// NOTE: in extremely rare cases the revs here may still be carrying sgl that has been freed
 		//       via becomeNonPrimary => y.free(); checking sgl.IsNil() looks like the most lightweight
-		//       vs ther possible (tracking) alternatives
+		//       vs possible (tracking) alternatives
 		if sgl := revs.sgl(); sgl != nil && !sgl.IsNil() {
 			// fast path
 			y.addnew(revs)
@@ -401,6 +391,37 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 	}
 	failedCnt += len(refused)
 	return
+}
+
+func (y *metasyncer) useJIT(pair revsPair) revs {
+	var (
+		s              string
+		revs, msg, tag = pair.revs, pair.msg, pair.revs.tag()
+		jitRevs        = revs.jit(y.p)
+		skipping       bool
+	)
+	if msg.Action != "" {
+		s = ", action " + msg.Action
+	}
+	if jitRevs != nil && jitRevs.version() > revs.version() {
+		// making exception for BMD (and associated bucket-level transactions) unless:
+		if tag == revsBMDTag {
+			jsgl, sgl := jitRevs.sgl(), revs.sgl()
+			if jitRevs.version() > revs.version()+1 || (sgl.IsNil() && !jsgl.IsNil()) {
+				revs = jitRevs
+				skipping = true
+			}
+		} else {
+			revs = jitRevs
+			skipping = true
+		}
+	}
+	if skipping {
+		glog.Infof("%s: sync newer %s v%d%s (skipping %s)", y.p.si, tag, jitRevs.version(), s, revs)
+	} else {
+		glog.Infof("%s: sync %s v%d%s", y.p.si, tag, revs.version(), s)
+	}
+	return revs
 }
 
 // keeping track of per-daemon versioning - TODO: extend to take care of aisMsg where pairs may be empty
