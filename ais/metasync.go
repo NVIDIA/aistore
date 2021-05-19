@@ -533,7 +533,8 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 		msgBody = cos.MustMarshal(msg)
 	)
 	for tag, revs := range y.lastSynced {
-		if sgl := y.getver(revs); sgl != nil {
+		debug.Assert(tag == revs.tag())
+		if sgl := y.getver(revs); sgl != nil && !sgl.IsNil() {
 			payload[tag] = sgl.Bytes()
 		} else {
 			payload[tag] = revs.marshal()

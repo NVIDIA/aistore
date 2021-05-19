@@ -1837,7 +1837,7 @@ func (h *httprunner) extractBMD(payload msPayload, caller string) (newBMD *bucke
 	bmdValue := payload[revsBMDTag]
 	reader := bytes.NewBuffer(bmdValue)
 	if _, err1 := jsp.Decode(io.NopCloser(reader), newBMD, newBMD.JspOpts(), "extractBMD"); err1 != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new Smap", cmn.BytesHead(bmdValue), err1)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new BMD", cmn.BytesHead(bmdValue), err1)
 		return
 	}
 	if msgValue, ok := payload[revsBMDTag+revsActionTag]; ok {
