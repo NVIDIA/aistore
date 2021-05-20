@@ -42,10 +42,13 @@ const (
 )
 
 const (
-	KindCounter    = "counter"
-	KindLatency    = "latency"
-	KindThroughput = "throughput"
-	KindSpecial    = "special"
+	KindCounter = "counter"
+	KindGauge   = "gauge"
+	// + semantics
+	KindLatency            = "latency"
+	KindThroughput         = "bw"
+	KindComputedThroughput = "compbw"
+	KindSpecial            = "special"
 )
 
 // number-of-goroutines watermarks expressed as multipliers over the number of available logical CPUs (GOMAXPROCS)
@@ -54,7 +57,8 @@ const (
 	numGorExtreme = 1000
 )
 
-var kinds = []string{KindCounter, KindLatency, KindThroughput, KindSpecial} // NOTE: supported metric types
+// NOTE: all supported metrics
+var kinds = []string{KindCounter, KindGauge, KindLatency, KindThroughput, KindComputedThroughput, KindSpecial}
 
 // CoreStats stats
 const (
@@ -303,30 +307,24 @@ func (s *CoreStats) initProm(node *cluster.Snode) {
 		v.label.prom = strings.ReplaceAll(label, ":", "_")
 
 		help := v.kind
-		switch v.kind {
-		case KindCounter:
-			if strings.HasSuffix(v.label.prom, "_n") {
-				help = "total number of operations"
-			} else if strings.HasSuffix(v.label.prom, "_size") {
-				help = "total size (MB)"
-			}
-		case KindLatency:
-			if strings.HasSuffix(v.label.prom, "_ns") {
-				v.label.prom = strings.TrimSuffix(v.label.prom, "_ns") + "_ms"
-			} else {
-				v.label.prom = strings.ReplaceAll(v.label.prom, "_ns_", "_ms_")
-			}
+		if strings.HasSuffix(v.label.prom, "_n") {
+			help = "total number of operations"
+		} else if strings.HasSuffix(v.label.prom, "_size") {
+			help = "total size (MB)"
+		} else if strings.HasSuffix(v.label.prom, "_ns") {
+			v.label.prom = strings.TrimSuffix(v.label.prom, "_ns") + "_ms"
 			help = "latency (milliseconds)"
-		case KindThroughput:
-			if strings.HasSuffix(v.label.prom, "_bps") {
-				v.label.prom = strings.TrimSuffix(v.label.prom, "_bps") + "_mbps"
-			}
-			help = "throughput (MB/s)"
-		case KindSpecial:
+		} else if strings.Contains(v.label.prom, "_ns_") {
+			v.label.prom = strings.ReplaceAll(v.label.prom, "_ns_", "_ms_")
 			if name == Uptime {
 				v.label.prom = strings.ReplaceAll(v.label.prom, "_ns_", "")
 				help = "uptime (seconds)"
+			} else {
+				help = "latency (milliseconds)"
 			}
+		} else if strings.HasSuffix(v.label.prom, "_bps") {
+			v.label.prom = strings.TrimSuffix(v.label.prom, "_bps") + "_mbps"
+			help = "throughput (MB/s)"
 		}
 
 		fullqn := prometheus.BuildFQName("ais", node.Type(), id+"_"+v.label.prom)
@@ -410,11 +408,14 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 			if !s.isPrometheus() && millis > 0 && strings.HasSuffix(name, ".ns") {
 				s.statsdC.AppMetric(metric{Type: statsd.Timer, Name: v.label.stsd, Value: float64(millis)}, s.sgl)
 			}
-		case KindThroughput:
+		case KindThroughput, KindComputedThroughput:
 			var throughput int64
 			v.Lock()
 			if v.Value > 0 {
-				throughput = v.Value / cos.MaxI64(int64(s.statsTime.Seconds()), 1)
+				throughput = v.Value
+				if v.kind != KindComputedThroughput {
+					throughput /= cos.MaxI64(int64(s.statsTime.Seconds()), 1)
+				}
 				ctracker[name] = copyValue{throughput}
 				idle = false
 				v.Value = 0
@@ -453,6 +454,11 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 					s.statsdC.AppMetric(metric{Type: statsd.Counter, Name: v.label.stsd, Value: cnt}, s.sgl)
 				}
 			}
+		case KindGauge:
+			ctracker[name] = copyValue{v.Value}
+			if !s.isPrometheus() {
+				s.statsdC.AppMetric(metric{Type: statsd.Gauge, Name: v.label.stsd, Value: float64(v.Value)}, s.sgl)
+			}
 		default:
 			ctracker[name] = copyValue{v.Value} // KindSpecial/KindDelta as is and wo/ lock
 			debug.SetExpvar(glog.SmoduleStats, name, v.Value)
@@ -465,9 +471,8 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 	return
 }
 
+// serves to satisfy REST API what=stats query
 func (s *CoreStats) copyCumulative(ctracker copyTracker) {
-	// serves to satisfy REST API what=stats query
-
 	for name, v := range s.Tracker {
 		v.RLock()
 		if v.kind == KindLatency || v.kind == KindThroughput {
@@ -476,8 +481,8 @@ func (s *CoreStats) copyCumulative(ctracker copyTracker) {
 			if v.Value != 0 {
 				ctracker[name] = copyValue{v.Value}
 			}
-		} else {
-			ctracker[name] = copyValue{v.Value} // KindSpecial as is and wo/ lock
+		} else { // KindSpecial, KindComputedThroughput, KindGauge
+			ctracker[name] = copyValue{v.Value}
 		}
 		v.RUnlock()
 	}
@@ -544,7 +549,7 @@ func (tracker statsTracker) register(node *cluster.Snode, name, kind string, isC
 		v.label.comm = strings.ReplaceAll(v.label.comm, ".ns.", ".")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
 		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "ms")
-	case KindThroughput:
+	case KindThroughput, KindComputedThroughput:
 		debug.AssertMsg(strings.HasSuffix(name, ".bps"), name)
 		v.label.comm = strings.TrimSuffix(name, ".bps")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
@@ -555,6 +560,8 @@ func (tracker statsTracker) register(node *cluster.Snode, name, kind string, isC
 		if name == Uptime {
 			v.label.comm = strings.ReplaceAll(v.label.comm, ".ns.", ".")
 			v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "seconds")
+		} else {
+			v.label.stsd = fmt.Sprintf("%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm)
 		}
 	}
 	tracker[name] = v
@@ -627,7 +634,7 @@ func (r *statsRunner) Collect(ch chan<- prometheus.Metric) {
 			fv = float64(millis)
 		case KindThroughput:
 			fv = roundMBs(val)
-		case KindSpecial:
+		default:
 			if name == Uptime {
 				seconds := cos.DivRound(val, int64(time.Second))
 				fv = float64(seconds)
@@ -648,6 +655,9 @@ func (r *statsRunner) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (r *statsRunner) Name() string { return r.name }
+
+func (r *statsRunner) CoreStats() *CoreStats       { return r.Core }
+func (r *statsRunner) Get(name string) (val int64) { return r.Core.get(name) }
 
 func (r *statsRunner) runcommon(logger statsLogger) error {
 	var (
@@ -755,7 +765,6 @@ func (r *statsRunner) Stop(err error) {
 // common impl
 // NOTE: currently, proxy's stats == common and hardcoded
 func (r *statsRunner) Add(name string, val int64) { r.workCh <- NamedVal64{Name: name, Value: val} }
-func (r *statsRunner) Get(name string) int64      { cos.Assert(false); return 0 }
 
 func (r *statsRunner) AddMany(nvs ...NamedVal64) {
 	for _, nv := range nvs {

@@ -332,16 +332,29 @@ func (t *targetrunner) initFs() {
 	}
 }
 
+func regDiskMetrics(tstats *stats.Trunner, mpi fs.MPI) {
+	for _, mi := range mpi {
+		for _, disk := range mi.Disks {
+			tstats.RegDiskMetrics(disk)
+		}
+	}
+}
+
 func (t *targetrunner) Run() error {
-	config := cmn.GCO.Get()
 	if err := t.si.Validate(); err != nil {
 		cos.ExitLogf("%v", err)
 	}
+	config := cmn.GCO.Get()
 	t.httprunner.init(config)
 
 	cluster.Init(t)
 
-	t.statsT.RegMetrics(t.si)
+	// metrics, disks first
+	tstats := t.statsT.(*stats.Trunner)
+	availablePaths, disabledPaths := fs.Get()
+	regDiskMetrics(tstats, availablePaths)
+	regDiskMetrics(tstats, disabledPaths)
+	t.statsT.RegMetrics(t.si) // + Prometheus, if configured
 
 	t.checkRestarted()
 

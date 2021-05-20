@@ -91,14 +91,11 @@ type (
 // interface guard
 var _ cos.Runner = (*Trunner)(nil)
 
-func (r *Trunner) Register(name, kind string)  { r.Core.Tracker.register(r.T.Snode(), name, kind) }
-func (r *Trunner) Run() error                  { return r.runcommon(r) }
-func (r *Trunner) CoreStats() *CoreStats       { return r.Core }
-func (r *Trunner) Get(name string) (val int64) { return r.Core.get(name) }
+func (r *Trunner) Run() error { return r.runcommon(r) }
 
 func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
 	r.Core = &CoreStats{}
-	r.Core.init(t.Snode(), 48) // register common (target's own stats are Register()-ed elsewhere)
+	r.Core.init(t.Snode(), 48) // register common (target's own stats are reg()-ed elsewhere)
 
 	r.ctracker = make(copyTracker, 48) // these two are allocated once and only used in serial context
 	r.lines = make([]string, 0, 16)
@@ -132,44 +129,62 @@ func (r *Trunner) InitCapacity() error {
 
 // register target-specific metrics in addition to those that must be
 // already added via regCommonMetrics()
+func (r *Trunner) reg(name, kind string) { r.Core.Tracker.register(r.T.Snode(), name, kind) }
+
+func nameRbps(disk string) string { return "disk." + disk + ".read.bps" }
+func nameWbps(disk string) string { return "disk." + disk + ".read.bps" }
+func nameUtil(disk string) string { return "disk." + disk + ".util" }
+
+func (r *Trunner) RegDiskMetrics(disk string) {
+	s, n := r.Core.Tracker, nameRbps(disk)
+	if _, ok := s[n]; ok { // must be config.TestingEnv()
+		return
+	}
+	r.reg(n, KindComputedThroughput)
+	r.reg(nameWbps(disk), KindComputedThroughput)
+	r.reg(nameUtil(disk), KindGauge)
+}
+
 func (r *Trunner) RegMetrics(node *cluster.Snode) {
-	r.Register(PutLatency, KindLatency)
-	r.Register(AppendLatency, KindLatency)
-	r.Register(GetColdCount, KindCounter)
-	r.Register(GetColdSize, KindCounter)
-	r.Register(GetThroughput, KindThroughput)
-	r.Register(LruEvictSize, KindCounter)
-	r.Register(LruEvictCount, KindCounter)
-	r.Register(VerChangeCount, KindCounter)
-	r.Register(VerChangeSize, KindCounter)
-	r.Register(GetRedirLatency, KindLatency)
-	r.Register(PutRedirLatency, KindLatency)
+	debug.Assert(node == r.T.Snode())
+
+	r.reg(PutLatency, KindLatency)
+	r.reg(AppendLatency, KindLatency)
+	r.reg(GetColdCount, KindCounter)
+	r.reg(GetColdSize, KindCounter)
+	r.reg(GetThroughput, KindThroughput)
+	r.reg(LruEvictSize, KindCounter)
+	r.reg(LruEvictCount, KindCounter)
+	r.reg(VerChangeCount, KindCounter)
+	r.reg(VerChangeSize, KindCounter)
+	r.reg(GetRedirLatency, KindLatency)
+	r.reg(PutRedirLatency, KindLatency)
 
 	// errors
-	r.Register(ErrCksumCount, KindCounter)
-	r.Register(ErrCksumSize, KindCounter)
-	r.Register(ErrMetadataCount, KindCounter)
+	r.reg(ErrCksumCount, KindCounter)
+	r.reg(ErrCksumSize, KindCounter)
+	r.reg(ErrMetadataCount, KindCounter)
 
-	r.Register(ErrIOCount, KindCounter)
+	r.reg(ErrIOCount, KindCounter)
 
 	// rebalance
-	r.Register(RebTxCount, KindCounter)
-	r.Register(RebTxSize, KindCounter)
-	r.Register(RebRxCount, KindCounter)
-	r.Register(RebRxSize, KindCounter)
+	r.reg(RebTxCount, KindCounter)
+	r.reg(RebTxSize, KindCounter)
+	r.reg(RebRxCount, KindCounter)
+	r.reg(RebRxSize, KindCounter)
 
 	// special
-	r.Register(RestartCount, KindCounter)
+	r.reg(RestartCount, KindCounter)
 
 	// download
-	r.Register(DownloadSize, KindCounter)
-	r.Register(DownloadLatency, KindLatency)
+	r.reg(DownloadSize, KindCounter)
+	r.reg(DownloadLatency, KindLatency)
 
 	// dsort
-	r.Register(DSortCreationReqCount, KindCounter)
-	r.Register(DSortCreationReqLatency, KindLatency)
-	r.Register(DSortCreationRespCount, KindCounter)
-	r.Register(DSortCreationRespLatency, KindLatency)
+	r.reg(DSortCreationReqCount, KindCounter)
+	r.reg(DSortCreationReqLatency, KindLatency)
+	r.reg(DSortCreationRespCount, KindCounter)
+	r.reg(DSortCreationRespLatency, KindLatency)
 
 	// Prometheus
 	r.Core.initProm(node)
@@ -184,7 +199,19 @@ func (r *Trunner) GetWhatStats() interface{} {
 func (r *Trunner) log(uptime time.Duration) {
 	r.lines = r.lines[:0] // TODO: reuse lines as []byte buffers
 
-	// copy stats, reset latencies
+	// 1 collect disk stats and populate the tracker
+	fs.FillDiskStats(r.disk)
+	s := r.Core
+	for disk, stats := range r.disk {
+		v := s.Tracker[nameRbps(disk)]
+		v.Value = stats.RBps
+		v = s.Tracker[nameWbps(disk)]
+		v.Value = stats.WBps
+		v = s.Tracker[nameUtil(disk)]
+		v.Value = stats.Util
+	}
+
+	// 2 copy stats, reset latencies, send via StatsD if configured
 	r.Core.updateUptime(uptime)
 	if idle := r.Core.copyT(r.ctracker, []string{"kalive", Uptime}); !idle {
 		ln, err := cos.MarshalToString(r.ctracker)
@@ -192,7 +219,7 @@ func (r *Trunner) log(uptime time.Duration) {
 		r.lines = append(r.lines, ln)
 	}
 
-	// 2. capacity
+	// 3. capacity
 	cs, updated, _ := fs.CapPeriodic(r.MPCap)
 	if updated {
 		if cs.Err != nil {
@@ -206,11 +233,10 @@ func (r *Trunner) log(uptime time.Duration) {
 		}
 	}
 
-	// 3. disk stats
-	fs.FillDiskStats(r.disk)
+	// 4. append disk stats to log
 	r.logDiskStats()
 
-	// 4. log
+	// 5. log
 	for _, ln := range r.lines {
 		glog.Infoln(ln)
 	}

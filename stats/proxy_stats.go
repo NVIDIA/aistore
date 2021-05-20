@@ -36,9 +36,7 @@ type (
 // interface guard
 var _ cos.Runner = (*Prunner)(nil)
 
-func (r *Prunner) Run() error                  { return r.runcommon(r) }
-func (r *Prunner) CoreStats() *CoreStats       { return r.Core }
-func (r *Prunner) Get(name string) (val int64) { return r.Core.get(name) }
+func (r *Prunner) Run() error { return r.runcommon(r) }
 
 // NOTE: have only common metrics (see regCommon()) - init only the Prometheus part if used
 func (r *Prunner) RegMetrics(node *cluster.Snode) {

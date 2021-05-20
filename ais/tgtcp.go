@@ -277,10 +277,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		}
 		t.writeJSON(w, r, &mpList, httpdaeWhat)
 	case cmn.GetWhatDaemonStatus:
-		var (
-			rebStats *stats.RebalanceTargetStats
-			tstats   = t.statsT.(*stats.Trunner)
-		)
+		var rebStats *stats.RebalanceTargetStats
 		if entry := xreg.GetLatest(xreg.XactFilter{Kind: cmn.ActRebalance}); entry != nil {
 			var ok bool
 			if xact := entry.Get(); xact != nil {
@@ -292,13 +289,15 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			Snode:       t.httprunner.si,
 			SmapVersion: t.owner.smap.get().Version,
 			SysInfo:     sys.FetchSysInfo(),
-			Stats:       tstats.CoreStats(),
-			Capacity:    tstats.MPCap,
+			Stats:       t.statsT.CoreStats(),
 			TStatus:     &stats.TargetStatus{RebalanceStats: rebStats},
 			DeployedOn:  deploymentType(),
 			Version:     daemon.version,
 			BuildTime:   daemon.buildTime,
 		}
+		// capacity
+		tstats := t.statsT.(*stats.Trunner)
+		msg.Capacity = tstats.MPCap
 		t.writeJSON(w, r, msg, httpdaeWhat)
 	case cmn.GetWhatDiskStats:
 		diskStats := make(ios.AllDiskStats)
