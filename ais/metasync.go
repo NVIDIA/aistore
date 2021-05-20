@@ -186,9 +186,16 @@ func (y *metasyncer) Run() error {
 				}
 				revsReq.wg.Done()
 			}
-			if failedCnt > 0 && y.timerStopped {
-				y.retryTimer.Reset(config.Periodic.RetrySyncTime.D())
-				y.timerStopped = false
+			if y.timerStopped {
+				if failedCnt > 0 {
+					y.retryTimer.Reset(config.Periodic.RetrySyncTime.D())
+					y.timerStopped = false
+				} else {
+					// all in sync - full(er) cleanup
+					for _, revs := range y.lastSynced {
+						y.delold(revs, 0)
+					}
+				}
 			}
 		case <-y.retryTimer.C:
 			failedCnt := y.handlePending()
@@ -305,13 +312,13 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 			// fast path
 			y.addnew(revs)
 			revsBody = sgl.Bytes()
-			y.delold(revs)
+			y.delold(revs, 1)
 		} else {
 			// slow path
 			revsBody = revs.marshal()
 			if sgl := revs.sgl(); sgl != nil {
 				y.addnew(revs)
-				y.delold(revs)
+				y.delold(revs, 1)
 			}
 		}
 		debug.Func(func() { y.lastClone[tag] = revsBody })
@@ -534,11 +541,11 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 	)
 	for tag, revs := range y.lastSynced {
 		debug.Assert(tag == revs.tag())
-		if sgl := y.getver(revs); sgl != nil && !sgl.IsNil() {
+		if sgl := revs.sgl(); sgl != nil && !sgl.IsNil() {
 			payload[tag] = sgl.Bytes()
 		} else {
 			payload[tag] = revs.marshal()
-			if sgl := revs.sgl(); sgl != nil && !sgl.IsNil() {
+			if sgl := revs.sgl(); sgl != nil {
 				y.addnew(revs)
 			}
 		}
@@ -568,12 +575,14 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 		// failing to sync
 		if res.status == http.StatusConflict {
 			if e := err2MsyncErr(res.err); e != nil {
+				msg := fmt.Sprintf("%s [hp]: %s %s, err: %s [%v]", y.p.si, faisync, res.si, e.Message, e.Cii)
 				if !y.remainPrimary(e, res.si, smap) {
 					// return zero so that the caller stops retrying (y.retryTimer)
+					glog.Errorln(msg + " - aborting")
 					freeCallResults(results)
 					return 0
 				}
-				glog.Warningf("%s [hp]: %s %s, err: %s [%v]", y.p.si, faisync, res.si, e.Message, e.Cii)
+				glog.Warningln(msg)
 				continue
 			}
 		}
@@ -668,21 +677,13 @@ func (y *metasyncer) addnew(revs revs) {
 	vgl[revs.version()] = revs.sgl()
 }
 
-func (y *metasyncer) getver(revs revs) (sgl *memsys.SGL) {
-	vgl, ok := y.sgls[revs.tag()]
-	if !ok {
-		return
-	}
-	return vgl[revs.version()]
-}
-
-func (y *metasyncer) delold(revs revs) {
+func (y *metasyncer) delold(revs revs, except int64) {
 	vgl, ok := y.sgls[revs.tag()]
 	if !ok {
 		return
 	}
 	for v, sgl := range vgl {
-		if v < revs.version() {
+		if v < revs.version()-except {
 			if !sgl.IsNil() {
 				sgl.Free()
 			}
