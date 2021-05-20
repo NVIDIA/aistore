@@ -66,42 +66,39 @@ git status
 git log | head -5
 
 if [[ "${TEST_ETL,,}" == y* ]]; then
+  # Setting up minikube for the running kubernetes based tests.
+  pushd deploy/dev/k8s
+  echo "Deploying Minikube ========================================================"
+  { echo y; echo y; } | ./utils/deploy_minikube.sh
 
-# Setting up minikube for the running kubernetes based tests.
-pushd deploy/dev/k8s
-echo "Deploying Minikube ========================================================"
-{ echo y; echo y; } | ./utils/deploy_minikube.sh
+  # Login to Docker Hub to avoid pulls rate limiting in ETL tests.
+  docker_login
 
+  echo "Deploying AIS on Minikube"
+  target_cnt=5
+  proxy_cnt=1
+  # NOTE: (4 remote providers + aws cache directory + local registry + datascience stack)
+  { echo $target_cnt; echo $proxy_cnt; echo 1; echo 6; echo y; echo n; echo n; echo n; echo "$HOME/.aws"; echo y; echo n; } | MODE="debug" ./utils/deploy_ais.sh
+  echo "AIS on Minikube deployed"
+  popd
 
-# Login to Docker Hub to avoid pulls rate limiting in ETL tests.
-docker_login
+  kubectl logs -f --max-log-requests $(( target_cnt + proxy_cnt )) -l 'type in (aisproxy,aistarget)' & # Send to background, don't show ETL logs.
 
-echo "Deploying AIS on Minikube"
-# NOTE: 6 x n (4 remote providers + local registry + datascience stack)
-target_cnt=5
-proxy_cnt=1
-{ echo $target_cnt; echo $proxy_cnt; echo 1; echo 6; echo n; echo n; echo n; echo n; echo y; echo n; } | MODE="debug" ./utils/deploy_ais.sh
-echo "AIS on Minikube deployed"
-popd
+  # Running kubernetes based tests
+  echo "----- RUNNING K8S TESTS -----"
+  AIS_ENDPOINT="$(minikube ip):8080" BUCKET="aws://ais-jenkins" RE="TestETL|TestConfig|TestMountpath" make test-run
+  exit_code=$?
+  result=$((result + exit_code))
+  echo "----- K8S TESTS FINISHED WITH: ${exit_code} -----"
 
-kubectl logs -f --max-log-requests $(( target_cnt + proxy_cnt )) -l 'type in (aisproxy,aistarget)' & # Send to background, don't show ETL logs.
+  # Deleting minikube cluster
+  ./deploy/dev/k8s/stop.sh
 
-# Running kubernetes based tests
-echo "----- RUNNING K8S TESTS -----"
-AIS_ENDPOINT="$(minikube ip):8080" BUCKET="ais://test" RE="TestETL|TestConfig|TestMountpath" make test-run
-exit_code=$?
-result=$((result + exit_code))
-echo "----- K8S TESTS FINISHED WITH: ${exit_code} -----"
-
-# Deleting minikube cluster
-./deploy/dev/k8s/stop.sh
-
-# Clean docker images cache - it takes tens of GBs if not cleaned regularly.
-if docker -v ; then
-  docker image prune -a -f
+  # Clean docker images cache - it takes tens of GBs if not cleaned regularly.
+  if docker -v ; then
+    docker image prune -a -f
+  fi
 fi
-
-fi # TEST_ETL
 
 # Running long tests
 deploy ${TARGET_COUNT:-6} ${PROXY_COUNT:-6} ${MPATH_COUNT:-4} ${USE_AWS:-y} ${USE_GCP:-y} ${USE_AZURE:-n} ${USE_HDFS:-n} ${USE_LOOPBACK:-y}

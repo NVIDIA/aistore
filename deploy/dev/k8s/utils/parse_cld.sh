@@ -1,7 +1,7 @@
 
 export LOCAL_AWS="/tmp/credentials"
 touch $LOCAL_AWS
-export AIS_BACKEND_PROVIDERS="" # See deploy.sh for more informations about empty AIS_BACKEND_PROVIDERS
+export AIS_BACKEND_PROVIDERS="" # See deploy.sh for more information about empty AIS_BACKEND_PROVIDERS.
 source ../utils.sh
 parse_backend_providers
 
