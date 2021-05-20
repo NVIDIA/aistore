@@ -1126,8 +1126,8 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 }
 
 func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (size int64, err error) {
-	cos.Assert(coi.DryRun)
-	cos.Assert(coi.DP != nil)
+	debug.Assert(coi.DryRun)
+	debug.Assert(coi.DP != nil)
 
 	var reader io.ReadCloser
 	if reader, _, err = coi.DP.Reader(lom); err != nil {
@@ -1193,8 +1193,10 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 			cos.Close(params.Reader)
 			return
 		}
-		// NOTE: return the current size as resulting (transformed) size may not be known.
-		size = lom.Size()
+		if size = params.HdrMeta.Size(); size < 0 {
+			// NOTE: Return the current size as resulting (transformed) size isn't known.
+			size = lom.Size()
+		}
 	}
 	debug.Assert(params.HdrMeta != nil)
 	if params.NoVersion {

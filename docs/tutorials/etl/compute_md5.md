@@ -7,8 +7,8 @@ Get ready!
 ## Prerequisites
 
 * AIStore cluster deployed on Kubernetes. We recommend following guide below.
+  * [Deploy AIStore on local Kuberenetes cluster](https://github.com/NVIDIA/ais-k8s/blob/master/operator/README.md)
   * [Deploy AIStore on the cloud](https://github.com/NVIDIA/ais-k8s/blob/master/terraform/README.md)
-  * [Deploy AIStore on local Kuberenetes cluster](/docs/getting_started.md#on-premise-deployment)
 
 ## Prepare ETL
 
@@ -110,11 +110,11 @@ There are two ways of approaching this problem:
     ```
 
     Once we have the docker file, we must build it and publish it to some [Docker Registry](https://docs.docker.com/registry/) so that our Kubernetes cluster can pull this image later.
-    In this example, we will use [quay.io](https://quay.io/) Docker Registry.
+    In this example, we will use [docker.io](https://hub.docker.com/) Docker Registry.
 
     ```console
-    $ docker build -t quay.io/user/md5_server:v1 .
-    $ docker push quay.io/user/md5_server:v1
+    $ docker build -t docker.io/aistore/md5_server:v1 .
+    $ docker push docker.io/aistore/md5_server:v1
     ```
 
     The next step is to create spec of a Pod, that will be run on Kubernetes (`spec.yaml`):
@@ -130,7 +130,7 @@ There are two ways of approaching this problem:
     spec:
       containers:
         - name: server
-          image: quay.io/user/md5_server:v1
+          image: docker.io/aistore/md5_server:v1
           ports:
             - name: default
               containerPort: 80
@@ -138,7 +138,7 @@ There are two ways of approaching this problem:
     ```
 
     **Important**: the server listens on the same port as specified in `ports.containerPort`.
-    It is required, as a target needs to know the precise address of the ETL container.
+    It is required, as a target needs to know the precise socket address of the ETL container.
 
     Another note is that we pass additional parameters via the `annotations` field.
     We specified the communication type and wait time (for the Pod to start).
@@ -193,7 +193,7 @@ $ ais etl object JGHEoo89gg transform/shard.in -
 393c6706efb128fbc442d3f7d084a426
 ```
 
-Voila! The ETL container successfully computed the `md5` on the `transform/shard.in` object.
+Voilà! The ETL container successfully computed the `md5` on the `transform/shard.in` object.
 
 Alternatively, one can use the offline ETL feature to transform the whole bucket.
 

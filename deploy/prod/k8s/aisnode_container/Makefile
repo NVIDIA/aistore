@@ -2,7 +2,7 @@
 # Usage:
 #  $ env IMAGE_TAG=3.3 make -e all
 #  $ env IMAGE_TAG=3.3 make -e all_debug
-#  $ env IMAGE_REPO=quay.io/aistore/admin IMAGE_TAG=4.0 make -e all
+#  $ env IMAGE_REPO=docker.io/aistore/admin IMAGE_TAG=4.0 make -e all
 #
 
 IMAGE_TAG=.must_set_in_environment

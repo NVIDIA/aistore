@@ -467,7 +467,7 @@ func setTransformAntiAffinity(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) erro
 		return cmn.NewETLError(errCtx, "error in YAML spec, pod should not have any NodeAntiAffinities defined")
 	}
 
-	// Don't create antiaffinity limitation, to be able to run multiple ETL pods on a single machine.
+	// Don't create anti-affinity limitation, to be able to run multiple ETL pods on a single machine.
 	// NOTE: This change allows deploying multiple different ETLs at the same time.
 	if !k8s.AllowOneNodeManyETLs {
 		reqAntiAffinities = []corev1.PodAffinityTerm{{

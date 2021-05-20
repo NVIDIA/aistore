@@ -20,8 +20,8 @@ Here is a general overview of these steps:
 ## Prerequisites
 
 * AIStore cluster deployed on Kubernetes. We recommend following guide below.
+  * [Deploy AIStore on local Kuberenetes cluster](https://github.com/NVIDIA/ais-k8s/blob/master/operator/README.md)
   * [Deploy AIStore on the cloud](https://github.com/NVIDIA/ais-k8s/blob/master/terraform/README.md)
-  * [Deploy AIStore on local Kuberenetes cluster](/docs/getting_started.md#on-premise-deployment)
 
 ## Prepare dataset
 

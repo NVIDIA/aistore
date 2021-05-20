@@ -133,8 +133,8 @@ func (c baseComm) SvcName() string { return c.podName /*pod name is same as serv
 
 func (pc *pushComm) doRequest(bck *cluster.Bck, objName string, ts ...time.Duration) (r cos.ReadCloseSizer, err error) {
 	lom := cluster.AllocLOM(objName)
-
 	defer cluster.FreeLOM(lom)
+
 	if err := lom.Init(bck.Bck); err != nil {
 		return nil, err
 	}
@@ -177,6 +177,7 @@ func (pc *pushComm) tryDoRequest(lom *cluster.LOM, ts ...time.Duration) (cos.Rea
 		req, err = http.NewRequest(http.MethodPut, pc.transformerURL, fh)
 	}
 	if err != nil {
+		cos.Close(fh)
 		goto finish
 	}
 
