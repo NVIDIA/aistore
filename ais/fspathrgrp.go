@@ -10,6 +10,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
@@ -94,7 +95,7 @@ func (g *fsprungroup) removeMountpath(mpath string) (removedMi *fs.MountpathInfo
 	return
 }
 
-func (g *fsprungroup) _postaddmi(action string, mpath *fs.MountpathInfo) {
+func (g *fsprungroup) _postaddmi(action string, mi *fs.MountpathInfo) {
 	xreg.AbortAllMountpathsXactions()
 	go func() {
 		if cmn.GCO.Get().Resilver.Enabled {
@@ -103,13 +104,18 @@ func (g *fsprungroup) _postaddmi(action string, mpath *fs.MountpathInfo) {
 		xreg.RenewMakeNCopies(g.t, "add-mp")
 	}()
 
-	g.checkEnable(action, mpath.Path)
+	g.checkEnable(action, mi.Path)
+
+	tstats := g.t.statsT.(*stats.Trunner)
+	for _, disk := range mi.Disks {
+		tstats.RegDiskMetrics(disk)
+	}
 }
 
-func (g *fsprungroup) _postdelmi(action string, mpath *fs.MountpathInfo) {
+func (g *fsprungroup) _postdelmi(action string, mi *fs.MountpathInfo) {
 	xreg.AbortAllMountpathsXactions()
 
-	go mpath.EvictLomCache()
+	go mi.EvictLomCache()
 	if g.checkZeroMountpaths(action) {
 		return
 	}
