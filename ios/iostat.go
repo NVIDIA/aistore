@@ -363,13 +363,17 @@ func (ios *iostatContext) _refresh(config *cmn.Config) (ncache *ioStatCache, max
 		}
 		if reads > 0 {
 			ncache.ravg[disk] = cos.DivRound(readBytes, reads)
-		} else {
+		} else if elapsedSeconds == 0 {
 			ncache.ravg[disk] = statsCache.ravg[disk]
+		} else {
+			ncache.ravg[disk] = 0
 		}
 		if writes > 0 {
 			ncache.wavg[disk] = cos.DivRound(writeBytes, writes)
-		} else {
+		} else if elapsedSeconds == 0 {
 			ncache.wavg[disk] = statsCache.wavg[disk]
+		} else {
+			ncache.wavg[disk] = 0
 		}
 	}
 
