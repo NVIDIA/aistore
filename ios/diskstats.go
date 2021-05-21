@@ -7,7 +7,9 @@ package ios
 
 type (
 	diskBlockStat interface {
+		Reads() int64
 		ReadBytes() int64
+		Writes() int64
 		WriteBytes() int64
 
 		IOMs() int64

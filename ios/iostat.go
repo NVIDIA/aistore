@@ -29,7 +29,7 @@ type (
 	}
 
 	FsDisks      map[string]int64 // disk name => sector size
-	DiskStats    struct{ RBps, WBps, Util int64 }
+	DiskStats    struct{ RBps, Ravg, WBps, Wavg, Util int64 }
 	AllDiskStats map[string]DiskStats
 
 	MpathsUtils sync.Map
@@ -38,14 +38,18 @@ type (
 		expireTime int64
 		timestamp  int64
 
-		diskIOms   map[string]int64
-		diskUtil   map[string]int64
-		diskRms    map[string]int64
-		diskRBytes map[string]int64
-		diskRBps   map[string]int64
-		diskWms    map[string]int64
-		diskWBytes map[string]int64
-		diskWBps   map[string]int64
+		ioms   map[string]int64 // IO millis
+		util   map[string]int64 // utilization
+		rms    map[string]int64 // read millis
+		rbytes map[string]int64 // read bytes
+		reads  map[string]int64 // completed read requests
+		rbps   map[string]int64 // read B/s
+		ravg   map[string]int64 // average read size
+		wms    map[string]int64 // write millis
+		wbytes map[string]int64 // written bytes
+		writes map[string]int64 // completed write requests
+		wbps   map[string]int64 // write B/s
+		wavg   map[string]int64 // average write size
 
 		mpathUtil   map[string]int64 // Average utilization of the disks, range [0, 100].
 		mpathUtilRO MpathsUtils      // Read-only copy of `mpathUtil`.
@@ -104,15 +108,19 @@ func NewIostatContext() IOStater {
 
 func newIostatCache() *ioStatCache {
 	return &ioStatCache{
-		diskIOms:   make(map[string]int64, 4), // TODO: mfs.ios.num-mountpaths(...) to opt
-		diskUtil:   make(map[string]int64, 4),
-		diskRms:    make(map[string]int64, 4),
-		diskRBytes: make(map[string]int64, 4),
-		diskRBps:   make(map[string]int64, 4),
-		diskWms:    make(map[string]int64, 4),
-		diskWBytes: make(map[string]int64, 4),
-		diskWBps:   make(map[string]int64, 4),
-		mpathUtil:  make(map[string]int64, 4),
+		ioms:      make(map[string]int64, 4), // TODO: mfs.ios.num-mountpaths(...) to opt
+		util:      make(map[string]int64, 4),
+		rms:       make(map[string]int64, 4),
+		rbytes:    make(map[string]int64, 4),
+		reads:     make(map[string]int64, 4),
+		rbps:      make(map[string]int64, 4),
+		ravg:      make(map[string]int64, 4),
+		wms:       make(map[string]int64, 4),
+		wbytes:    make(map[string]int64, 4),
+		writes:    make(map[string]int64, 4),
+		wbps:      make(map[string]int64, 4),
+		wavg:      make(map[string]int64, 4),
+		mpathUtil: make(map[string]int64, 4),
 	}
 }
 
@@ -218,15 +226,17 @@ func (ios *iostatContext) GetMpathUtil(mpath string) int64 {
 func (ios *iostatContext) FillDiskStats(m AllDiskStats) {
 	debug.Assert(m != nil)
 	cache := ios.refreshIostatCache()
-	for disk := range cache.diskIOms {
+	for disk := range cache.ioms {
 		m[disk] = DiskStats{
-			RBps: cache.diskRBps[disk],
-			WBps: cache.diskWBps[disk],
-			Util: cache.diskUtil[disk],
+			RBps: cache.rbps[disk],
+			Ravg: cache.ravg[disk],
+			WBps: cache.wbps[disk],
+			Wavg: cache.wavg[disk],
+			Util: cache.util[disk],
 		}
 	}
 	for disk := range m {
-		if _, ok := cache.diskIOms[disk]; !ok {
+		if _, ok := cache.ioms[disk]; !ok {
 			delete(m, disk)
 		}
 	}
@@ -291,56 +301,75 @@ func (ios *iostatContext) _refresh(config *cmn.Config) (ncache *ioStatCache, max
 	for mpath := range ios.mpath2disks {
 		ncache.mpathUtil[mpath] = 0
 	}
-	for disk := range ncache.diskIOms {
+	for disk := range ncache.ioms {
 		if _, ok := ios.disk2mpath[disk]; !ok {
 			ncache = newIostatCache()
 			ios.cacheHst[ios.cacheIdx] = ncache
 		}
 	}
 
-	disksStats := readDiskStats(ios.disk2mpath, ios.disk2sysfn)
+	osDiskStats := readDiskStats(ios.disk2mpath, ios.disk2sysfn)
 	for disk, mpath := range ios.disk2mpath {
-		ncache.diskRBps[disk] = 0
-		ncache.diskWBps[disk] = 0
-		ncache.diskUtil[disk] = 0
-		stat, ok := disksStats[disk]
+		ncache.rbps[disk] = 0
+		ncache.wbps[disk] = 0
+		ncache.util[disk] = 0
+		ncache.ravg[disk] = 0
+		ncache.wavg[disk] = 0
+		osDisk, ok := osDiskStats[disk]
 		if !ok {
 			glog.Errorf("no block stats for disk %s", disk) // TODO: remove
 			continue
 		}
-		ncache.diskIOms[disk] = stat.IOMs()
-		ncache.diskRms[disk] = stat.ReadMs()
-		ncache.diskRBytes[disk] = stat.ReadBytes()
-		ncache.diskWms[disk] = stat.WriteMs()
-		ncache.diskWBytes[disk] = stat.WriteBytes()
+		ncache.ioms[disk] = osDisk.IOMs()
+		ncache.rms[disk] = osDisk.ReadMs()
+		ncache.rbytes[disk] = osDisk.ReadBytes()
+		ncache.reads[disk] = osDisk.Reads()
+		ncache.wms[disk] = osDisk.WriteMs()
+		ncache.wbytes[disk] = osDisk.WriteBytes()
+		ncache.writes[disk] = osDisk.Writes()
 
-		if _, ok := statsCache.diskIOms[disk]; !ok {
+		if _, ok := statsCache.ioms[disk]; !ok {
 			missingInfo = true
 			continue
 		}
 		// deltas
 		var (
-			ioMs       = stat.IOMs() - statsCache.diskIOms[disk]
-			readBytes  = stat.ReadBytes() - statsCache.diskRBytes[disk]
-			writeBytes = stat.WriteBytes() - statsCache.diskWBytes[disk]
+			ioMs       = ncache.ioms[disk] - statsCache.ioms[disk]
+			reads      = ncache.reads[disk] - statsCache.reads[disk]
+			writes     = ncache.writes[disk] - statsCache.writes[disk]
+			readBytes  = ncache.rbytes[disk] - statsCache.rbytes[disk]
+			writeBytes = ncache.wbytes[disk] - statsCache.wbytes[disk]
 		)
 		if elapsedMillis > 0 {
-			// NOTE: On macOS computation of `diskUtil` is not accurate and can
-			//  sometimes exceed 100% which may cause some further inaccuracies.
-			//  That is why we need to clamp the value.
-			ncache.diskUtil[disk] = cos.MinI64(100, cos.DivRound(ioMs*100, elapsedMillis))
+			// On macOS computation of `diskUtil` may sometimes exceed 100%
+			// which may cause some further inaccuracies.
+			if ioMs >= elapsedMillis {
+				ncache.util[disk] = 100
+			} else {
+				ncache.util[disk] = cos.DivRound(ioMs*100, elapsedMillis)
+			}
 		} else {
-			ncache.diskUtil[disk] = statsCache.diskUtil[disk]
+			ncache.util[disk] = statsCache.util[disk]
 		}
 		if !config.TestingEnv() {
-			ncache.mpathUtil[mpath] += ncache.diskUtil[disk]
+			ncache.mpathUtil[mpath] += ncache.util[disk]
 		}
 		if elapsedSeconds > 0 {
-			ncache.diskRBps[disk] = cos.DivRound(readBytes, elapsedSeconds)
-			ncache.diskWBps[disk] = cos.DivRound(writeBytes, elapsedSeconds)
+			ncache.rbps[disk] = cos.DivRound(readBytes, elapsedSeconds)
+			ncache.wbps[disk] = cos.DivRound(writeBytes, elapsedSeconds)
 		} else {
-			ncache.diskRBps[disk] = statsCache.diskRBps[disk]
-			ncache.diskWBps[disk] = statsCache.diskWBps[disk]
+			ncache.rbps[disk] = statsCache.rbps[disk]
+			ncache.wbps[disk] = statsCache.wbps[disk]
+		}
+		if reads > 0 {
+			ncache.ravg[disk] = cos.DivRound(readBytes, reads)
+		} else {
+			ncache.ravg[disk] = statsCache.ravg[disk]
+		}
+		if writes > 0 {
+			ncache.wavg[disk] = cos.DivRound(writeBytes, writes)
+		} else {
+			ncache.wavg[disk] = statsCache.wavg[disk]
 		}
 	}
 
@@ -350,7 +379,7 @@ func (ios *iostatContext) _refresh(config *cmn.Config) (ncache *ioStatCache, max
 			debug.Assert(len(disks) <= 1) // testing env: one (shared) disk per mpath
 			var u int64
 			for d := range disks {
-				u = ncache.diskUtil[d]
+				u = ncache.util[d]
 				ncache.mpathUtil[mpath] = u
 				break
 			}

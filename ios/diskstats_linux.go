@@ -36,12 +36,13 @@ type dblockStat struct {
 }
 
 // interface guard
-var _ diskBlockStat = dblockStat{}
+var (
+	_ diskBlockStat = (*dblockStat)(nil)
+)
 
-// Allocated here to reduce number of allocations in `readDiskStats`.
 var blockStats = make(diskBlockStats, 10)
 
-// readDiskStats returns disk stats FIXME: optimize
+// readDiskStats returns disk stats
 func readDiskStats(disks, sysfnames cos.SimpleKVs) diskBlockStats {
 	for d := range disks {
 		stat, ok := readSingleDiskStat(sysfnames[d])
@@ -95,7 +96,9 @@ func extractI64(field string) int64 {
 	return val
 }
 
+func (dbs dblockStat) Reads() int64      { return dbs.readComplete }
 func (dbs dblockStat) ReadBytes() int64  { return dbs.readSectors * sectorSize }
+func (dbs dblockStat) Writes() int64     { return dbs.writeComplete }
 func (dbs dblockStat) WriteBytes() int64 { return dbs.writeSectors * sectorSize }
 func (dbs dblockStat) IOMs() int64       { return dbs.ioMs }
 func (dbs dblockStat) WriteMs() int64    { return dbs.writeMs }

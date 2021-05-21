@@ -67,9 +67,6 @@ const (
 	GetThroughput = "get.bps" // bytes per second
 )
 
-//
-// public type
-//
 type (
 	Trunner struct {
 		statsRunner
@@ -82,6 +79,10 @@ type (
 		Tracker copyTracker `json:"core"`
 		MPCap   fs.MPCap    `json:"capacity"`
 	}
+)
+
+const (
+	minLogDiskUtil = 10 // skip logDiskStats if below
 )
 
 /////////////
@@ -132,7 +133,9 @@ func (r *Trunner) InitCapacity() error {
 func (r *Trunner) reg(name, kind string) { r.Core.Tracker.register(r.T.Snode(), name, kind) }
 
 func nameRbps(disk string) string { return "disk." + disk + ".read.bps" }
+func nameRavg(disk string) string { return "disk." + disk + ".avg.rsize" }
 func nameWbps(disk string) string { return "disk." + disk + ".read.bps" }
+func nameWavg(disk string) string { return "disk." + disk + ".avg.wsize" }
 func nameUtil(disk string) string { return "disk." + disk + ".util" }
 
 func (r *Trunner) RegDiskMetrics(disk string) {
@@ -141,7 +144,9 @@ func (r *Trunner) RegDiskMetrics(disk string) {
 		return
 	}
 	r.reg(n, KindComputedThroughput)
+	r.reg(nameRavg(disk), KindGauge)
 	r.reg(nameWbps(disk), KindComputedThroughput)
+	r.reg(nameWavg(disk), KindGauge)
 	r.reg(nameUtil(disk), KindGauge)
 }
 
@@ -196,8 +201,8 @@ func (r *Trunner) GetWhatStats() interface{} {
 	return &copyRunner{Tracker: ctracker, MPCap: r.MPCap}
 }
 
-func (r *Trunner) log(uptime time.Duration) {
-	r.lines = r.lines[:0] // TODO: reuse lines as []byte buffers
+func (r *Trunner) log(now int64, uptime time.Duration) {
+	r.lines = r.lines[:0]
 
 	// 1 collect disk stats and populate the tracker
 	fs.FillDiskStats(r.disk)
@@ -205,18 +210,24 @@ func (r *Trunner) log(uptime time.Duration) {
 	for disk, stats := range r.disk {
 		v := s.Tracker[nameRbps(disk)]
 		v.Value = stats.RBps
+		v = s.Tracker[nameRavg(disk)]
+		v.Value = stats.Ravg
 		v = s.Tracker[nameWbps(disk)]
 		v.Value = stats.WBps
+		v = s.Tracker[nameWavg(disk)]
+		v.Value = stats.Wavg
 		v = s.Tracker[nameUtil(disk)]
 		v.Value = stats.Util
 	}
 
 	// 2 copy stats, reset latencies, send via StatsD if configured
 	r.Core.updateUptime(uptime)
-	if idle := r.Core.copyT(r.ctracker, []string{"kalive", Uptime}); !idle {
+	idle := r.Core.copyT(r.ctracker, []string{"kalive", Uptime})
+	if now >= r.nextLogTime && !idle {
 		ln, err := cos.MarshalToString(r.ctracker)
 		debug.AssertNoErr(err)
 		r.lines = append(r.lines, ln)
+		r.nextLogTime = now + cos.MinI64(int64(r.Core.statsTime)*logIntervalMult, logIntervalMax)
 	}
 
 	// 3. capacity
@@ -242,21 +253,30 @@ func (r *Trunner) log(uptime time.Duration) {
 	}
 }
 
+// log formatted disk stats:
+//       [ disk: read throughput, average read size, write throughput, average write size, disk utilization ]
+// e.g.: [ sda: 94MiB/s, 68KiB, 25MiB/s, 21KiB, 82% ]
 func (r *Trunner) logDiskStats() {
 	for disk, stats := range r.disk {
-		if stats.Util == 0 {
+		if stats.Util < minLogDiskUtil {
 			continue
 		}
 		rbps := cos.B2S(stats.RBps, 0)
 		wbps := cos.B2S(stats.WBps, 0)
-		l := len(disk) + len(rbps) + len(wbps) + 32
+		ravg := cos.B2S(stats.Ravg, 0)
+		wavg := cos.B2S(stats.Wavg, 0)
+		l := len(disk) + len(rbps) + len(wbps) + len(ravg) + len(wavg) + 64
 		buf := make([]byte, 0, l)
 		buf = append(buf, disk...)
 		buf = append(buf, ": "...)
 		buf = append(buf, rbps...)
 		buf = append(buf, "/s, "...)
+		buf = append(buf, ravg...)
+		buf = append(buf, ", "...)
 		buf = append(buf, wbps...)
 		buf = append(buf, "/s, "...)
+		buf = append(buf, wavg...)
+		buf = append(buf, ", "...)
 		buf = append(buf, strconv.FormatInt(stats.Util, 10)...)
 		buf = append(buf, "%"...)
 		r.lines = append(r.lines, *(*string)(unsafe.Pointer(&buf)))

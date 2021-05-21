@@ -69,11 +69,13 @@ func (r *Prunner) GetWhatStats() interface{} {
 }
 
 // statsLogger interface impl
-func (r *Prunner) log(uptime time.Duration) {
+func (r *Prunner) log(now int64, uptime time.Duration) {
 	r.Core.updateUptime(uptime)
-	if idle := r.Core.copyT(r.ctracker, []string{"kalive", Uptime}); !idle {
+	idle := r.Core.copyT(r.ctracker, []string{"kalive", Uptime})
+	if now >= r.nextLogTime && !idle {
 		b := cos.MustMarshal(r.ctracker)
 		glog.Infoln(string(b))
+		r.nextLogTime = now + cos.MinI64(int64(r.Core.statsTime)*logIntervalMult, logIntervalMax)
 	}
 }
 

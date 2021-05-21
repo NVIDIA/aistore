@@ -57,6 +57,12 @@ const (
 	numGorExtreme = 1000
 )
 
+// logging frequency
+const (
+	logIntervalMult = 6                      // every (logIntervalMult * config.Periodic.StatsTime)
+	logIntervalMax  = int64(2 * time.Minute) // but not less frequently than logIntervalMax
+)
+
 // NOTE: all supported metrics
 var kinds = []string{KindCounter, KindGauge, KindLatency, KindThroughput, KindComputedThroughput, KindSpecial}
 
@@ -166,7 +172,7 @@ type (
 
 	// implemented by the stats runners
 	statsLogger interface {
-		log(uptime time.Duration)
+		log(now int64, uptime time.Duration)
 		doAdd(nv NamedVal64)
 		statsTime(newval time.Duration)
 	}
@@ -175,14 +181,15 @@ type (
 	}
 	// implements Tracker, inherited by Prunner and Trunner
 	statsRunner struct {
-		name      string
-		stopCh    chan struct{}
-		workCh    chan NamedVal64
-		ticker    *time.Ticker
-		Core      *CoreStats  `json:"core"`
-		ctracker  copyTracker // to avoid making it at runtime
-		daemon    runnerHost
-		startedUp atomic.Bool
+		name        string
+		stopCh      chan struct{}
+		workCh      chan NamedVal64
+		ticker      *time.Ticker
+		Core        *CoreStats  `json:"core"`
+		ctracker    copyTracker // to avoid making it at runtime
+		daemon      runnerHost
+		nextLogTime int64 // mono.NanoTime()
+		startedUp   atomic.Bool
 	}
 	// Stats are tracked via a map of stats names (key) to statsValue (values).
 	// There are two main types of stats: counter and latency declared
@@ -311,6 +318,10 @@ func (s *CoreStats) initProm(node *cluster.Snode) {
 			help = "total number of operations"
 		} else if strings.HasSuffix(v.label.prom, "_size") {
 			help = "total size (MB)"
+		} else if strings.HasSuffix(v.label.prom, "avg_rsize") {
+			help = "average read size (bytes)"
+		} else if strings.HasSuffix(v.label.prom, "avg_wsize") {
+			help = "average write size (bytes)"
 		} else if strings.HasSuffix(v.label.prom, "_ns") {
 			v.label.prom = strings.TrimSuffix(v.label.prom, "_ns") + "_ms"
 			help = "latency (milliseconds)"
@@ -709,7 +720,7 @@ waitStartup:
 			}
 		case <-r.ticker.C:
 			now := mono.NanoTime()
-			logger.log(time.Duration(now - startTime)) // uptime
+			logger.log(now, time.Duration(now-startTime)) // uptime
 			checkNumGorHigh = _whingeGoroutines(now, checkNumGorHigh, goMaxProcs)
 
 			config = cmn.GCO.Get()

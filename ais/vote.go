@@ -377,7 +377,9 @@ func (h *httprunner) onPrimaryFail() {
 		// use HRW ordering
 		nextPrimaryProxy, err := cluster.HrwProxy(&clone.Smap, clone.Primary.ID())
 		if err != nil {
-			glog.Errorf("%s: failed to execute HRW selection, err: %v", h.si, err)
+			if !daemon.stopping.Load() {
+				glog.Errorf("%s: failed to execute HRW selection, err: %v", h.si, err)
+			}
 			return
 		}
 		glog.Infof("%s: trying %s as the primary candidate", h.si, nextPrimaryProxy.ID())
