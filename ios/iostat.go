@@ -255,9 +255,9 @@ func (ios *iostatContext) refreshIostatCache() *ioStatCache {
 	defer ios.busy.Store(false)
 
 	// refresh under mpath lock
-	ncache, maxUtil, missingInfo := ios._refresh()
-
 	config := cmn.GCO.Get()
+	ncache, maxUtil, missingInfo := ios._refresh(config)
+
 	if missingInfo {
 		expireTime = int64(config.Disk.IostatTimeShort)
 	} else { // use the maximum utilization to determine expiration time
@@ -276,7 +276,7 @@ func (ios *iostatContext) refreshIostatCache() *ioStatCache {
 	return ncache
 }
 
-func (ios *iostatContext) _refresh() (ncache *ioStatCache, maxUtil int64, missingInfo bool) {
+func (ios *iostatContext) _refresh(config *cmn.Config) (ncache *ioStatCache, maxUtil int64, missingInfo bool) {
 	ios.Lock()
 	defer ios.Unlock()
 
@@ -337,7 +337,9 @@ func (ios *iostatContext) _refresh() (ncache *ioStatCache, maxUtil int64, missin
 		} else {
 			ncache.diskUtil[disk] = statsCache.diskUtil[disk]
 		}
-		ncache.mpathUtil[mpath] += ncache.diskUtil[disk]
+		if !config.TestingEnv() {
+			ncache.mpathUtil[mpath] += ncache.diskUtil[disk]
+		}
 		if elapsedSeconds > 0 {
 			ncache.diskRBps[disk] = cos.DivRound(readBytes, elapsedSeconds)
 			ncache.diskWBps[disk] = cos.DivRound(writeBytes, elapsedSeconds)
@@ -348,18 +350,32 @@ func (ios *iostatContext) _refresh() (ncache *ioStatCache, maxUtil int64, missin
 	}
 
 	// average and max
+	if config.TestingEnv() {
+		for mpath, disks := range ios.mpath2disks {
+			debug.Assert(len(disks) <= 1) // testing env: one (shared) disk per mpath
+			var u int64
+			for d := range disks {
+				u = ncache.diskUtil[d]
+				ncache.mpathUtil[mpath] = u
+				break
+			}
+			ncache.mpathUtilRO.Store(mpath, u)
+			maxUtil = cos.MaxI64(maxUtil, u)
+		}
+		return
+	}
+
 	for mpath, disks := range ios.mpath2disks {
 		numDisk := int64(len(disks))
 		if numDisk == 0 {
 			debug.Assert(ncache.mpathUtil[mpath] == 0)
 			continue
 		}
-		util := ncache.mpathUtil[mpath] / numDisk
-
-		ncache.mpathUtil[mpath] = util
-		debug.SetExpvar(glog.SmoduleIOS, mpath+":util%", util)
-		ncache.mpathUtilRO.Store(mpath, util)
-		maxUtil = cos.MaxI64(maxUtil, util)
+		u := ncache.mpathUtil[mpath] / numDisk
+		ncache.mpathUtil[mpath] = u
+		debug.SetExpvar(glog.SmoduleIOS, mpath+":util%", u)
+		ncache.mpathUtilRO.Store(mpath, u)
+		maxUtil = cos.MaxI64(maxUtil, u)
 	}
 	return
 }
