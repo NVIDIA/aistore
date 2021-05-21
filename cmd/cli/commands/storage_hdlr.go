@@ -11,18 +11,19 @@ import (
 
 var (
 	storageCmdFlags = map[string][]cli.Flag{
-		subcmdStgSummary: {
+		subcmdStgSummary: append(
+			longRunFlags,
 			cachedFlag,
 			fastFlag,
 			verboseFlag,
-		},
+		),
 		subcmdStgValidate:  {},
 		subcmdStgMountpath: {},
 	}
 
 	storageCmd = cli.Command{
 		Name:  commandStorage,
-		Usage: "monitor and manage AIS cluster storage: used and total capacity, add/remove mountpaths",
+		Usage: "monitor and manage AIS storage: used and total capacity, add/remove mountpaths",
 		Subcommands: []cli.Command{
 			{
 				Name:         subcmdStgSummary,
@@ -41,6 +42,7 @@ var (
 				BashComplete: bucketCompletions(),
 			},
 			mpathCmd,
+			showCmdDisk,
 		},
 	}
 )

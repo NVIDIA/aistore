@@ -285,10 +285,11 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	// cleanup
 	defer func() { // free & cleanup on err
 		slab.Free(buf)
-		cos.Close(reader)
 		if err == nil {
+			cos.Close(reader)
 			return
 		}
+		reader.Close()
 		if file != nil {
 			if nestedErr := file.Close(); nestedErr != nil {
 				glog.Errorf("Nested (%v): failed to close received object %s, err: %v",

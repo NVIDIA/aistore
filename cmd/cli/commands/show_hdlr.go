@@ -221,7 +221,7 @@ var (
 	}
 	showCmdMpath = cli.Command{
 		Name:         subcmdShowMpath,
-		Usage:        "show mountpath list for targets",
+		Usage:        "show target mountpaths",
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        showCmdsFlags[subcmdShowMpath],
 		Action:       showMpathHandler,
@@ -229,7 +229,7 @@ var (
 	}
 	showCmdJob = cli.Command{
 		Name:  subcmdShowJob,
-		Usage: "show information about various jobs",
+		Usage: "show running and completed jobs (xactions)",
 		Subcommands: []cli.Command{
 			showCmdDownload,
 			showCmdDsort,
@@ -238,7 +238,7 @@ var (
 	}
 	showCmdDownload = cli.Command{
 		Name:         subcmdShowDownload,
-		Usage:        "show information about download jobs",
+		Usage:        "show active downloads",
 		ArgsUsage:    optionalJobIDArgument,
 		Flags:        showCmdsFlags[subcmdShowDownload],
 		Action:       showDownloadsHandler,

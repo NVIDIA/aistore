@@ -250,8 +250,12 @@ var (
 		Usage: "properties to return with object names, comma separated",
 		Value: cmn.GetPropsName + "," + cmn.GetPropsSize,
 	}
-	prefixFlag      = cli.StringFlag{Name: "prefix", Usage: "list objects matching the given prefix"}
-	refreshFlag     = cli.DurationFlag{Name: "refresh", Usage: "refresh rate for monitoring", Value: refreshRateDefault}
+	prefixFlag  = cli.StringFlag{Name: "prefix", Usage: "list objects matching the given prefix"}
+	refreshFlag = cli.DurationFlag{
+		Name:  "refresh",
+		Usage: "refresh interval for continuous monitoring, valid time units: 'ns', 'us', 'ms', 's', 'm', and 'h'",
+		Value: refreshRateDefault,
+	}
 	regexFlag       = cli.StringFlag{Name: "regex", Usage: "regex pattern for matching"}
 	jsonFlag        = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}
 	noHeaderFlag    = cli.BoolFlag{Name: "no-headers,H", Usage: "display tables without headers"}

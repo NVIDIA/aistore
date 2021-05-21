@@ -248,6 +248,10 @@ func showBucketSizes(c *cli.Context) error {
 		return err
 	}
 
+	if err := updateLongRunParams(c); err != nil {
+		return err
+	}
+
 	summaries, err := fetchSummaries(queryBcks, flagIsSet(c, fastFlag), flagIsSet(c, cachedFlag))
 	if err != nil {
 		return err
