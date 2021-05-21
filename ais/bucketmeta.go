@@ -63,8 +63,7 @@ type (
 	}
 	bmdOwnerBase struct {
 		sync.Mutex
-		bmd     atomic.Pointer
-		immSize int64
+		bmd atomic.Pointer
 	}
 	bmdOwnerPrx struct {
 		bmdOwnerBase
@@ -99,6 +98,8 @@ var (
 	_ bmdOwner       = (*bmdOwnerPrx)(nil)
 	_ bmdOwner       = (*bmdOwnerTgt)(nil)
 )
+
+var bmdImmSize int64
 
 // c-tor
 func newBucketMD() *bucketMD {
@@ -213,15 +214,19 @@ func (m *bucketMD) version() int64          { return m.Version }
 func (m *bucketMD) jit(p *proxyrunner) revs { return p.owner.bmd.get() }
 func (m *bucketMD) sgl() *memsys.SGL        { return m._sgl }
 
+// TODO: optimize back
 func (m *bucketMD) marshal() []byte {
-	m._sgl = m._encode(0)
-	return m._sgl.Bytes()
+	sgl := m._encode()
+	b, _ := sgl.ReadAll()
+	sgl.Free()
+	return b
 }
 
-func (m *bucketMD) _encode(immSize int64) (sgl *memsys.SGL) {
-	sgl = memsys.DefaultPageMM().NewSGL(immSize)
+func (m *bucketMD) _encode() (sgl *memsys.SGL) {
+	sgl = memsys.DefaultPageMM().NewSGL(bmdImmSize)
 	err := jsp.Encode(sgl, m, m.JspOpts())
 	debug.AssertNoErr(err)
+	bmdImmSize = cos.MaxI64(bmdImmSize, sgl.Len())
 	return
 }
 
@@ -277,8 +282,8 @@ func (bo *bmdOwnerPrx) init() {
 
 func (bo *bmdOwnerPrx) putPersist(bmd *bucketMD, payload msPayload) (err error) {
 	if !bo.persistBytes(payload, bo.fpath) {
-		bmd._sgl = bmd._encode(bo.immSize)
-		bo.immSize = cos.MaxI64(bo.immSize, bmd._sgl.Len())
+		debug.Assert(bmd._sgl == nil)
+		bmd._sgl = bmd._encode()
 		err = jsp.SaveMeta(bo.fpath, bmd, bmd._sgl)
 		if err != nil {
 			bmd._sgl.Free()
@@ -306,6 +311,10 @@ func (bo *bmdOwnerPrx) _pre(ctx *bmdModifier) (clone *bucketMD, err error) {
 
 func (bo *bmdOwnerPrx) modify(ctx *bmdModifier) (clone *bucketMD, err error) {
 	if clone, err = bo._pre(ctx); err != nil || ctx.terminate {
+		if clone._sgl != nil {
+			clone._sgl.Free()
+			clone._sgl = nil
+		}
 		return
 	}
 	if ctx.final != nil {
@@ -366,8 +375,7 @@ func (bo *bmdOwnerTgt) persist(clone *bucketMD, payload msPayload) (err error) {
 		}
 	}
 	if b == nil {
-		sgl = clone._encode(bo.immSize)
-		bo.immSize = cos.MaxI64(bo.immSize, sgl.Len())
+		sgl = clone._encode()
 		defer sgl.Free()
 	}
 	cnt, availCnt := fs.PersistOnMpaths(cmn.BmdFname, cmn.BmdPreviousFname, clone, bmdCopies, b, sgl)

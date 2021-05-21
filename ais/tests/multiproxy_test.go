@@ -52,7 +52,7 @@ var (
 		{"ProxyStress", proxyStress},
 		{"NetworkFailure", networkFailure},
 		{"PrimaryAndNextCrash", primaryAndNextCrash},
-		{"DiscoveryAndOrignalPrimaryCrash", discoveryAndOrigPrimaryProxiesCrash},
+		{"DiscoveryAndOriginalPrimaryCrash", discoveryAndOrigPrimaryProxiesCrash},
 		{"AddNodeDuplicateIP", addNodeDuplicateIP},
 		{"AddNodeDuplicateDaemonID", addNodeDuplicateDaemonID},
 	}
@@ -898,7 +898,8 @@ func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
 			targetCnt++
 		}
 		tutils.RestoreNode(cmd, false, cmd.Node.Type())
-		_, err = tutils.WaitForClusterState(proxyURL, "to restore "+cmd.Node.ID(), smap.Version, proxyCnt, targetCnt)
+		_, err = tutils.WaitForClusterState(proxyURL, "to restore "+cmd.Node.ID(), smap.Version,
+			proxyCnt, targetCnt)
 		tassert.CheckError(t, err)
 	}
 

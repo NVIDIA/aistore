@@ -1216,7 +1216,7 @@ func (p *proxyrunner) _syncRMDFinal(ctx *rmdModifier, clone *rebMD) {
 	if ctx.rebCB != nil {
 		nl.F = ctx.rebCB
 	}
-	// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
+	// Rely on metasync to register rebalance/resilver `nl` on all IC members. See `p.receiveRMD`.
 	err := p.notifs.add(nl)
 	cos.AssertNoErr(err)
 	if ctx.wait {

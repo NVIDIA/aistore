@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -121,7 +120,6 @@ type (
 		nodesRevs    map[string]ndRevs // cluster-wide node ID => ndRevs sync-ed
 		sgls         map[string]tagl   // tag => (version => SGL)
 		lastSynced   map[string]revs   // tag => revs last/current sync-ed
-		lastClone    msPayload         // debug to enforce CoW
 		stopCh       chan struct{}     // stop channel
 		workCh       chan revsReq      // work channel
 		retryTimer   *time.Timer       // timer to sync pending
@@ -148,7 +146,6 @@ func newMetasyncer(p *proxyrunner) (y *metasyncer) {
 	y.nodesRevs = make(map[string]ndRevs, 8)
 	y.inigls()
 	y.lastSynced = make(map[string]revs, revsMaxTags)
-	y.lastClone = make(msPayload)
 
 	y.stopCh = make(chan struct{}, 1)
 	y.workCh = make(chan revsReq, 32)
@@ -174,7 +171,6 @@ func (y *metasyncer) Run() error {
 				y.nodesRevs = make(map[string]ndRevs)
 				y.free()
 				y.lastSynced = make(map[string]revs)
-				y.lastClone = make(msPayload)
 				y.retryTimer.Stop()
 				y.timerStopped = true
 				break
@@ -288,7 +284,6 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 	}
 
 	// step 1: validation & enforcement (CoW, non-decremental versioning, duplication)
-	debug.Func(func() { y.validateCoW() })
 	if revsReqType == revsReqNotify {
 		method = http.MethodPost
 	} else {
@@ -304,14 +299,13 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 			msg, tag = pair.msg, pair.revs.tag()
 			revs     = y.useJIT(pair)
 		)
-		y.lastSynced[tag] = revs
 		// NOTE: in extremely rare cases the revs here may still be carrying sgl that has been freed
 		//       via becomeNonPrimary => y.free(); checking sgl.IsNil() looks like the most lightweight
 		//       vs possible (tracking) alternatives
 		if sgl := revs.sgl(); sgl != nil && !sgl.IsNil() {
 			// fast path
-			y.addnew(revs)
 			revsBody = sgl.Bytes()
+			y.addnew(revs)
 			y.delold(revs, 1)
 		} else {
 			// slow path
@@ -321,16 +315,13 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 				y.delold(revs, 1)
 			}
 		}
-		debug.Func(func() { y.lastClone[tag] = revsBody })
-		msgJSON := cos.MustMarshal(msg)
-
+		y.lastSynced[tag] = revs
 		if tag == revsRMDTag {
 			md := revs.(*rebMD)
 			newTargetIDs = md.TargetIDs
 		}
-
-		payload[tag] = revsBody              // payload
-		payload[tag+revsActionTag] = msgJSON // action message always on the wire even when empty
+		payload[tag] = revsBody                           // payload
+		payload[tag+revsActionTag] = cos.MustMarshal(msg) // action message always on the wire even when empty
 	}
 
 	// step 3: b-cast
@@ -385,8 +376,9 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 			y.becomeNonPrimary()
 			return
 		}
-
-		y.handleRefused(method, urlPath, body, refused, pairs, smap, config)
+		if !y.handleRefused(method, urlPath, body, refused, pairs, smap, config) {
+			break
+		}
 	}
 	// step 6: housekeep and return new pending
 	smap = y.p.owner.smap.get()
@@ -452,7 +444,7 @@ func (y *metasyncer) syncDone(si *cluster.Snode, pairs []revsPair) {
 }
 
 func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refused cluster.NodeMap,
-	pairs []revsPair, smap *smapX, config *cmn.Config) {
+	pairs []revsPair, smap *smapX, config *cmn.Config) (ok bool) {
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{Method: method, Path: urlPath, BodyR: body}
 	args.network = cmn.NetworkIntraControl
@@ -470,17 +462,20 @@ func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refus
 		// failing to sync
 		if res.status == http.StatusConflict {
 			if e := err2MsyncErr(res.err); e != nil {
+				msg := fmt.Sprintf("%s [hr]: %s %s, err: %s [%v]", y.p.si, faisync, res.si, e.Message, e.Cii)
 				if !y.remainPrimary(e, res.si, smap) {
+					glog.Errorln(msg + " - aborting")
 					freeCallResults(results)
-					return
+					return false
 				}
-				glog.Warningf("%s [hr]: %s %s, err: %s [%v]", y.p.si, faisync, res.si, e.Message, e.Cii)
+				glog.Warningln(msg)
 				continue
 			}
 		}
 		glog.Warningf("%s [hr]: %s %s, err: %v(%d)", y.p.si, faisync, res.si, res.err, res.status)
 	}
 	freeCallResults(results)
+	return true
 }
 
 // pending (map), if requested, contains only those daemons that need
@@ -628,19 +623,6 @@ func (y *metasyncer) isPrimary() (err error) {
 	return
 }
 
-func (y *metasyncer) validateCoW() {
-	for tag, revs := range y.lastSynced {
-		if cowCopy, ok := y.lastClone[tag]; ok {
-			if bytes.Equal(cowCopy, revs.marshal()) {
-				continue
-			}
-			s := fmt.Sprintf("CoW violation: previously sync-ed %s v%d has been updated in-place",
-				tag, revs.version())
-			debug.AssertMsg(false, s)
-		}
-	}
-}
-
 ////////////
 // y.sgls //
 ////////////
@@ -668,11 +650,12 @@ func (y *metasyncer) addnew(revs revs) {
 		y.sgls[revs.tag()] = vgl
 	}
 	if sgl, ok := vgl[revs.version()]; ok {
-		// free duplicate (created previously via "slow path")
-		if sgl != revs.sgl() {
-			debug.Assert(sgl.Len() == revs.sgl().Len())
-			sgl.Free()
+		if sgl == revs.sgl() {
+			return
 		}
+		// free duplicate (created previously via "slow path")
+		debug.Assert(sgl.Len() == revs.sgl().Len())
+		sgl.Free()
 	}
 	vgl[revs.version()] = revs.sgl()
 }
