@@ -59,10 +59,10 @@ var (
 func (r *intraReq) PackedSize() int {
 	if r.meta == nil {
 		// int8(type)+sender(string)+int8+int8+ptr_marker
-		return cos.SizeofLen + len(r.sender) + 4 + cos.SizeofI64
+		return cos.PackedStrLen(r.sender) + 4 + cos.SizeofI64
 	}
 	// int8(type)+sender(string)+int8+int8+ptr_marker+sizeof(meta)
-	return cos.SizeofLen + len(r.sender) + r.meta.PackedSize() + 4 + cos.SizeofI64
+	return cos.PackedStrLen(r.sender) + r.meta.PackedSize() + 4 + cos.SizeofI64
 }
 
 func (r *intraReq) Pack(packer *cos.BytePack) {

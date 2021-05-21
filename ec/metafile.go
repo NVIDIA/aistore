@@ -15,15 +15,17 @@ import (
 
 // Metadata - EC information stored in metafiles for every encoded object
 type Metadata struct {
-	Size       int64  `json:"size"`                      // obj size (after EC'ing sum size of slices differs from the original)
-	ObjCksum   string `json:"obj_chk"`                   // checksum of the original object
-	ObjVersion string `json:"obj_version,omitempty"`     // object version
-	CksumType  string `json:"slice_ck_type,omitempty"`   // slice checksum type
-	CksumValue string `json:"slice_chk_value,omitempty"` // slice checksum of the slice if EC is used
-	Data       int    `json:"data"`                      // the number of data slices
-	Parity     int    `json:"parity"`                    // the number of parity slices
-	SliceID    int    `json:"sliceid,omitempty"`         // 0 for full replica, 1 to N for slices
-	IsCopy     bool   `json:"copy"`                      // object is replicated(true) or encoded(false)
+	Size       int64            `json:"size"`                      // obj size (after EC'ing sum size of slices differs from the original)
+	Version    uint64           `json:"version,omitempty"`         // Metadata version
+	ObjCksum   string           `json:"obj_chk"`                   // checksum of the original object
+	ObjVersion string           `json:"obj_version,omitempty"`     // object version
+	CksumType  string           `json:"slice_ck_type,omitempty"`   // slice checksum type
+	CksumValue string           `json:"slice_chk_value,omitempty"` // slice checksum of the slice if EC is used
+	Data       int              `json:"data"`                      // the number of data slices
+	Parity     int              `json:"parity"`                    // the number of parity slices
+	SliceID    int              `json:"sliceid,omitempty"`         // 0 for full replica, 1 to N for slices
+	Daemons    cos.MapStrUint16 `json:"daemons,omitempty"`         // Locations of all slices: DaemonID <-> SliceID
+	IsCopy     bool             `json:"copy"`                      // object is replicated(true) or encoded(false)
 }
 
 // interface guard
@@ -111,7 +113,13 @@ func (md *Metadata) Unpack(unpacker *cos.ByteUnpack) (err error) {
 	if md.CksumType, err = unpacker.ReadString(); err != nil {
 		return
 	}
-	md.CksumValue, err = unpacker.ReadString()
+	if md.CksumValue, err = unpacker.ReadString(); err != nil {
+		return
+	}
+	if md.Version, err = unpacker.ReadUint64(); err != nil {
+		return
+	}
+	md.Daemons, err = unpacker.ReadMapStrUint16()
 	return
 }
 
@@ -125,11 +133,17 @@ func (md *Metadata) Pack(packer *cos.BytePack) {
 	packer.WriteString(md.ObjVersion)
 	packer.WriteString(md.CksumType)
 	packer.WriteString(md.CksumValue)
+	packer.WriteUint64(md.Version)
+	packer.WriteMapStrUint16(md.Daemons)
 }
 
-// int16 is sufficient to keep Data,Parity, and SliceID, so:
-//    int64 + 3*int16 + bool + 4 strings
 func (md *Metadata) PackedSize() int {
-	return cos.SizeofI64 + cos.SizeofI16*3 + 1 + cos.SizeofLen*4 +
-		len(md.ObjCksum) + len(md.ObjVersion) + len(md.CksumType) + len(md.CksumValue)
+	daemonListSz := cos.SizeofLen
+	for k := range md.Daemons {
+		daemonListSz += cos.PackedStrLen(k) + cos.SizeofI16
+	}
+	return cos.SizeofI64 + cos.SizeofI16*3 + 1 +
+		cos.PackedStrLen(md.ObjCksum) + cos.PackedStrLen(md.ObjVersion) +
+		cos.PackedStrLen(md.CksumType) + cos.PackedStrLen(md.CksumValue) +
+		cos.SizeofI64 + daemonListSz
 }

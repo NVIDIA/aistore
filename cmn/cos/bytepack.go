@@ -72,6 +72,8 @@ type (
 		b   []byte
 	}
 
+	MapStrUint16 map[string]uint16
+
 	// Every object that is going to use binary representation instead of
 	// JSON must implement two following methods
 	Unpacker interface {
@@ -90,6 +92,11 @@ type (
 const SizeofLen = SizeofI32
 
 var ErrBufferUnderrun = errors.New("buffer underrun")
+
+// PackedStrLen returns the size occupied by a given string in the output
+func PackedStrLen(s string) int {
+	return SizeofLen + len(s)
+}
 
 func NewUnpacker(buf []byte) *ByteUnpack {
 	return &ByteUnpack{b: buf}
@@ -191,6 +198,26 @@ func (br *ByteUnpack) ReadAny(st Unpacker) error {
 	return st.Unpack(br)
 }
 
+func (br ByteUnpack) ReadMapStrUint16() (MapStrUint16, error) {
+	l, err := br.ReadInt32()
+	if err != nil {
+		return nil, err
+	}
+	mp := make(MapStrUint16, l)
+	for ; l > 0; l-- {
+		key, err := br.ReadString()
+		if err != nil {
+			return nil, err
+		}
+		val, err := br.ReadUint16()
+		if err != nil {
+			return nil, err
+		}
+		mp[key] = val
+	}
+	return mp, nil
+}
+
 //
 // Packer
 //
@@ -249,6 +276,18 @@ func (bw *BytePack) WriteString(s string) {
 	written := copy(bw.b[bw.off:], s)
 	Assert(written == l)
 	bw.off += l
+}
+
+func (bw *BytePack) WriteMapStrUint16(mp MapStrUint16) {
+	l := int32(len(mp))
+	bw.WriteInt32(l)
+	if l == 0 {
+		return
+	}
+	for k, v := range mp {
+		bw.WriteString(k)
+		bw.WriteUint16(v)
+	}
 }
 
 func (bw *BytePack) WriteAny(st Packer) {
