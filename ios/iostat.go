@@ -66,11 +66,6 @@ type (
 // interface guard
 var _ IOStater = (*iostatContext)(nil)
 
-func init() {
-	// NOTE: publish disk utilizations via host:port/debug/vars (debug mode)
-	debug.NewExpvar(glog.SmoduleIOS)
-}
-
 /////////////////
 // MpathsUtils //
 /////////////////
@@ -373,7 +368,6 @@ func (ios *iostatContext) _refresh(config *cmn.Config) (ncache *ioStatCache, max
 		}
 		u := ncache.mpathUtil[mpath] / numDisk
 		ncache.mpathUtil[mpath] = u
-		debug.SetExpvar(glog.SmoduleIOS, mpath+":util%", u)
 		ncache.mpathUtilRO.Store(mpath, u)
 		maxUtil = cos.MaxI64(maxUtil, u)
 	}

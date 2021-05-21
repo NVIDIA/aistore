@@ -395,7 +395,6 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 			if v.numSamples > 0 {
 				lat = v.Value / v.numSamples
 				ctracker[name] = copyValue{lat}
-				debug.SetExpvar(glog.SmoduleStats, name, lat)
 				if !match(name, idlePrefs) {
 					idle = false
 				}
@@ -432,7 +431,6 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 				cnt = v.Value
 				if prev, ok := ctracker[name]; !ok || prev.Value != cnt {
 					ctracker[name] = copyValue{cnt}
-					debug.SetExpvar(glog.SmoduleStats, name, cnt)
 					if !match(name, idlePrefs) {
 						idle = false
 					}
@@ -461,7 +459,6 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 			}
 		default:
 			ctracker[name] = copyValue{v.Value} // KindSpecial/KindDelta as is and wo/ lock
-			debug.SetExpvar(glog.SmoduleStats, name, v.Value)
 		}
 	}
 	if !s.isPrometheus() {
