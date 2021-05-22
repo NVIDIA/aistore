@@ -123,6 +123,7 @@ type (
 		statsdC   *statsd.Client
 		statsTime time.Duration
 		sgl       *memsys.SGL
+		cmu       sync.RWMutex // ctracker vs Prometheus Collect()
 	}
 
 	RebalanceTargetStats struct {
@@ -211,7 +212,7 @@ type (
 		Value int64 `json:"v,string"`
 	}
 	statsTracker map[string]*statsValue
-	copyTracker  map[string]copyValue
+	copyTracker  map[string]copyValue // values aggregated and computed every statsTime
 	promDesc     map[string]*prometheus.Desc
 )
 
@@ -262,6 +263,31 @@ func (s *CoreStats) init(node *cluster.Snode, size int) {
 
 // NOTE: nil StatsD client means that we provide metrics to Prometheus (see below)
 func (s *CoreStats) isPrometheus() bool { return s.statsdC == nil }
+
+// vs Collect()
+func (s *CoreStats) promRLock() {
+	if s.isPrometheus() {
+		s.cmu.RLock()
+	}
+}
+
+func (s *CoreStats) promRUnlock() {
+	if s.isPrometheus() {
+		s.cmu.RUnlock()
+	}
+}
+
+func (s *CoreStats) promLock() {
+	if s.isPrometheus() {
+		s.cmu.Lock()
+	}
+}
+
+func (s *CoreStats) promUnlock() {
+	if s.isPrometheus() {
+		s.cmu.Unlock()
+	}
+}
 
 // init MetricClient client: StatsD (default) or Prometheus
 func (s *CoreStats) initMetricClient(node *cluster.Snode, parent *statsRunner) {
@@ -618,8 +644,11 @@ func (r *statsRunner) Describe(ch chan<- *prometheus.Desc) {
 	}
 }
 
-// TODO -- FIXME: rlock r.ctracker
 func (r *statsRunner) Collect(ch chan<- prometheus.Metric) {
+	if !r.StartedUp() {
+		return
+	}
+	r.Core.promRLock()
 	for name, v := range r.Core.Tracker {
 		var (
 			val int64
@@ -660,6 +689,7 @@ func (r *statsRunner) Collect(ch chan<- prometheus.Metric) {
 		debug.AssertNoErr(err)
 		ch <- m
 	}
+	r.Core.promRUnlock()
 }
 
 func (r *statsRunner) Name() string { return r.name }

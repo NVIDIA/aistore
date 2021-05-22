@@ -222,7 +222,9 @@ func (r *Trunner) log(now int64, uptime time.Duration) {
 
 	// 2 copy stats, reset latencies, send via StatsD if configured
 	r.Core.updateUptime(uptime)
+	r.Core.promLock()
 	idle := r.Core.copyT(r.ctracker, []string{"kalive", Uptime})
+	r.Core.promUnlock()
 	if now >= r.nextLogTime && !idle {
 		ln, err := cos.MarshalToString(r.ctracker)
 		debug.AssertNoErr(err)

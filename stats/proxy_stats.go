@@ -71,7 +71,9 @@ func (r *Prunner) GetWhatStats() interface{} {
 // statsLogger interface impl
 func (r *Prunner) log(now int64, uptime time.Duration) {
 	r.Core.updateUptime(uptime)
+	r.Core.promLock()
 	idle := r.Core.copyT(r.ctracker, []string{"kalive", Uptime})
+	r.Core.promUnlock()
 	if now >= r.nextLogTime && !idle {
 		b := cos.MustMarshal(r.ctracker)
 		glog.Infoln(string(b))
