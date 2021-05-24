@@ -8,6 +8,7 @@ import (
 	"io"
 
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 // interface guard
@@ -22,7 +23,7 @@ func NopExtractCreator(internal ExtractCreator) ExtractCreator {
 }
 
 // ExtractShard reads the tarball f and extracts its metadata.
-func (t *nopExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (extractedSize int64, extractedCount int, err error) {
+func (t *nopExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (extractedSize int64, extractedCount int, err error) {
 	return t.internal.ExtractShard(lom, r, extractor, toDisk)
 }
 

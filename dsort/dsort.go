@@ -217,8 +217,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 
 		beforeExtraction := mono.NanoTime()
 
-		reader := io.NewSectionReader(f, 0, lom.Size())
-		extractedSize, extractedCount, err := m.extractCreator.ExtractShard(lom, reader, m.recManager, toDisk)
+		extractedSize, extractedCount, err := m.extractCreator.ExtractShard(lom, f, m.recManager, toDisk)
 		cos.Close(f)
 
 		dur := mono.Since(beforeExtraction)

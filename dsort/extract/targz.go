@@ -25,7 +25,7 @@ type targzExtractCreator struct {
 }
 
 // ExtractShard reads the tarball f and extracts its metadata.
-func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader, extractor RecordExtractor,
+func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor,
 	toDisk bool) (extractedSize int64, extractedCount int, err error) {
 	var (
 		size    int64
@@ -51,7 +51,7 @@ func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader
 		cos.Close(f)
 	}()
 
-	buf, slab := t.t.MMSA().Alloc(r.Size())
+	buf, slab := t.t.MMSA().Alloc(lom.Size())
 	defer slab.Free(buf)
 
 	offset := int64(0)

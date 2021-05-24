@@ -101,18 +101,18 @@ func (rd *zipRecordDataReader) Write(p []byte) (int, error) {
 }
 
 // ExtractShard reads the tarball f and extracts its metadata.
-func (z *zipExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader, extractor RecordExtractor,
+func (z *zipExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor,
 	toDisk bool) (extractedSize int64, extractedCount int, err error) {
 	var (
 		zr   *zip.Reader
 		size int64
 	)
 
-	if zr, err = zip.NewReader(r, r.Size()); err != nil {
+	if zr, err = zip.NewReader(r, lom.Size()); err != nil {
 		return extractedSize, extractedCount, err
 	}
 
-	buf, slab := z.t.MMSA().Alloc(r.Size())
+	buf, slab := z.t.MMSA().Alloc(lom.Size())
 	defer slab.Free(buf)
 
 	for _, f := range zr.File {

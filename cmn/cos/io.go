@@ -23,6 +23,10 @@ type (
 		size   int
 		offset int
 	}
+	ReadReaderAt interface {
+		io.Reader
+		io.ReaderAt
+	}
 	ReadOpenCloser interface {
 		io.ReadCloser
 		Open() (ReadOpenCloser, error)

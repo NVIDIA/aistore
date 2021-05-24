@@ -51,7 +51,7 @@ type (
 	// ExtractCreator is interface which describes set of functions which each
 	// shard creator should implement.
 	ExtractCreator interface {
-		ExtractShard(lom *cluster.LOM, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (int64, int, error)
+		ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error)
 		CreateShard(s *Shard, w io.Writer, loadContent LoadContentFunc) (int64, error)
 		UsingCompression() bool
 		SupportsOffset() bool
