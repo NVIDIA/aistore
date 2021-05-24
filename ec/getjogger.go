@@ -237,7 +237,7 @@ func (c *getJogger) restoreReplicatedFromMemory(ctx *restoreCtx) error {
 	ctx.lom.SetSize(writer.Size())
 	args := &WriteArgs{
 		Reader:     memsys.NewReader(writer),
-		MD:         cos.MustMarshal(ctx.meta),
+		MD:         ctx.meta.NewPack(),
 		CksumType:  ctx.meta.CksumType,
 		CksumValue: ctx.meta.CksumValue,
 	}
@@ -586,7 +586,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 	mainMeta.SliceID = 0
 	args := &WriteArgs{
 		Reader:    src,
-		MD:        mainMeta.Marshal(),
+		MD:        mainMeta.NewPack(),
 		CksumType: conf.Type,
 	}
 	err = WriteReplicaAndMeta(c.parent.t, ctx.lom, args)

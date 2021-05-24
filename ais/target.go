@@ -1227,7 +1227,7 @@ func (t *targetrunner) sendECMetafile(w http.ResponseWriter, r *http.Request, bc
 		}
 		return
 	}
-	w.Write(md.Marshal())
+	w.Write(md.NewPack())
 }
 
 func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) {

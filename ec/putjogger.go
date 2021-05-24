@@ -232,7 +232,7 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 
 	// Save metadata before encoding the object
 	ctMeta := cluster.NewCTFromLOM(lom, MetaType)
-	metaBuf := bytes.NewReader(meta.Marshal())
+	metaBuf := bytes.NewReader(meta.NewPack())
 	if err := ctMeta.Write(c.parent.t, metaBuf, -1); err != nil {
 		return err
 	}

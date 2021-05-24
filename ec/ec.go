@@ -26,7 +26,6 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction/xreg"
-	jsoniter "github.com/json-iterator/go"
 )
 
 // EC module provides data protection on a per bucket basis. By default, the
@@ -375,9 +374,7 @@ func requestECMeta(bck cmn.Bck, objName string, si *cluster.Snode, client *http.
 	} else if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to read %s GET request: %v", objName, err)
 	}
-	md = &Metadata{}
-	err = jsoniter.NewDecoder(resp.Body).Decode(md)
-	return md, err
+	return MetaFromReader(resp.Body)
 }
 
 // Saves the main replica to local drives

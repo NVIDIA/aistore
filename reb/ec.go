@@ -450,7 +450,7 @@ func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Obj
 		return nil
 	}
 
-	md := req.md.Marshal()
+	md := req.md.NewPack()
 	if req.md.SliceID != 0 {
 		args := &ec.WriteArgs{Reader: data, MD: md}
 		err = ec.WriteSliceAndMeta(reb.t, hdr, args)
@@ -1264,6 +1264,7 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 	var (
 		rq   *http.Request
 		resp *http.Response
+		md   *ec.Metadata
 	)
 	if rq, slice.err = http.NewRequest(http.MethodGet, urlPath, nil); slice.err != nil {
 		return
@@ -1279,9 +1280,8 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 		slice.err = fmt.Errorf("failed to read metadata, HTTP status: %d", resp.StatusCode)
 		return
 	}
-	metadata := ec.Metadata{}
-	slice.err = jsoniter.NewDecoder(resp.Body).Decode(&metadata)
-	defer cos.Close(resp.Body)
+	md, slice.err = ec.MetaFromReader(resp.Body)
+	cos.Close(resp.Body)
 	if slice.err != nil {
 		return
 	}
@@ -1311,7 +1311,7 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 	if _, slice.err = io.Copy(slice.sgl, resp.Body); slice.err != nil {
 		return
 	}
-	slice.meta = &metadata
+	slice.meta = md
 }
 
 // Fetches missing slices from targets that so far failed to send them.
@@ -1780,7 +1780,7 @@ func (reb *Manager) restoreObject(obj *rebObject, objMD *ec.Metadata, src io.Rea
 	lom.SetSize(obj.objSize)
 	args := &ec.WriteArgs{
 		Reader:    src,
-		MD:        cos.MustMarshal(objMD),
+		MD:        objMD.NewPack(),
 		CksumType: lom.Bprops().Cksum.Type,
 	}
 	return ec.WriteReplicaAndMeta(reb.t, lom, args)

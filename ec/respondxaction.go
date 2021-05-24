@@ -198,7 +198,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object i
 			glog.Infof("Got slice=%t from %s (#%d of %s/%s) v%s, chsum: %s",
 				iReq.isSlice, iReq.sender, iReq.meta.SliceID, hdr.Bck, hdr.ObjName, meta.ObjVersion, meta.CksumValue)
 		}
-		md := meta.Marshal()
+		md := meta.NewPack()
 		if iReq.isSlice {
 			args := &WriteArgs{Reader: object, MD: md, BID: iReq.bid}
 			err = WriteSliceAndMeta(r.t, hdr, args)
