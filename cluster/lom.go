@@ -1123,10 +1123,7 @@ func (lom *LOM) Unlock(exclusive bool) {
 	nlc.Unlock(lom.Uname(), exclusive)
 }
 
-//
-// create file
-//
-
+// compare with cos.CreateFile
 func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
 	fh, err = os.OpenFile(fqn, os.O_CREATE|os.O_WRONLY, cos.PermRWR)
 	if err == nil || !os.IsNotExist(err) {

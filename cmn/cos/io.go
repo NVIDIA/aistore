@@ -376,13 +376,14 @@ func CreateDir(dir string) error {
 	return os.MkdirAll(dir, configDirMode)
 }
 
-// CreateFile creates file and ensures that the directories for the file will be
-// created if they do not yet exist.
-func CreateFile(fname string) (*os.File, error) {
-	if err := CreateDir(filepath.Dir(fname)); err != nil {
+// CreateFile creates a new write-only (O_WRONLY) file with default cos.PermRWR permissions.
+// NOTE: if the file pathname doesn't exist it'll be created.
+// NOTE: if the file already exists it'll be also silently truncated.
+func CreateFile(fqn string) (*os.File, error) {
+	if err := CreateDir(filepath.Dir(fqn)); err != nil {
 		return nil, err
 	}
-	return os.Create(fname)
+	return os.OpenFile(fqn, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, PermRWR)
 }
 
 // Rename renames file ensuring that the parent's directory of dst exists. Creates
