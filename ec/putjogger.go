@@ -29,12 +29,13 @@ type (
 		lom          *cluster.LOM     // replica
 		meta         *Metadata        //
 		fh           *cos.FileHandle  // file handle for the replica
-		slices       []*slice         // all EC slices
 		sliceSize    int64            // calculated slice size
 		padSize      int64            // zero tail of the last object's data slice
 		dataSlices   int              // the number of data slices
 		paritySlices int              // the number of parity slices
 		cksums       []*cos.CksumHash // checksums of parity slices (filled by reed-solomon)
+		slices       []*slice         // all EC slices (in the order of slice IDs)
+		targets      []*cluster.Snode // target list (in the order of slice IDs: targets[i] receives slices[i])
 	}
 
 	// a mountpath putJogger: processes PUT/DEL requests to one mountpath
@@ -208,18 +209,6 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 	if lom.Cksum() != nil {
 		cksumType, cksumValue = lom.Cksum().Get()
 	}
-	meta := &Metadata{
-		Size:      lom.Size(),
-		Data:      ecConf.DataSlices,
-		Parity:    ecConf.ParitySlices,
-		IsCopy:    req.IsCopy,
-		ObjCksum:  cksumValue,
-		CksumType: cksumType,
-	}
-
-	// calculate the number of targets required to encode the object
-	// For replicated: ParitySlices + original object
-	// For encoded: ParitySlices + DataSlices + original object
 	reqTargets := ecConf.ParitySlices + 1
 	if !req.IsCopy {
 		reqTargets += ecConf.DataSlices
@@ -230,11 +219,14 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 			lom, reqTargets, targetCnt)
 	}
 
-	// Save metadata before encoding the object
-	ctMeta := cluster.NewCTFromLOM(lom, MetaType)
-	metaBuf := bytes.NewReader(meta.NewPack())
-	if err := ctMeta.Write(c.parent.t, metaBuf, -1); err != nil {
-		return err
+	meta := &Metadata{
+		Size:      lom.Size(),
+		Data:      ecConf.DataSlices,
+		Parity:    ecConf.ParitySlices,
+		IsCopy:    req.IsCopy,
+		ObjCksum:  cksumValue,
+		CksumType: cksumType,
+		Daemons:   make(cos.MapStrUint16, reqTargets),
 	}
 
 	c.parent.ObjectsInc()
@@ -246,12 +238,31 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 		return err
 	}
 
-	// if an object is small just make `parity` copies
-	if meta.IsCopy {
-		return c.replicate(ctx)
+	targets, err := cluster.HrwTargetList(ctx.lom.Uname(), c.parent.smap.Get(), reqTargets)
+	if err != nil {
+		return err
+	}
+	ctx.targets = targets[1:]
+	meta.Daemons[targets[0].ID()] = 0 // main or full replica always on the first target
+	for i, tgt := range ctx.targets {
+		sliceID := uint16(i + 1)
+		if meta.IsCopy {
+			sliceID = 0
+		}
+		meta.Daemons[tgt.ID()] = sliceID
 	}
 
-	return c.splitAndDistribute(ctx)
+	if meta.IsCopy {
+		err = c.replicate(ctx)
+	} else {
+		err = c.splitAndDistribute(ctx)
+	}
+	if err == nil {
+		ctMeta := cluster.NewCTFromLOM(lom, MetaType)
+		metaBuf := bytes.NewReader(meta.NewPack())
+		err = ctMeta.Write(c.parent.t, metaBuf, -1)
+	}
+	return err
 }
 
 func (c *putJogger) ctSendCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ interface{}, err error) {
@@ -284,14 +295,8 @@ func (c *putJogger) cleanup(lom *cluster.LOM) error {
 // uploads the main replica
 func (c *putJogger) createCopies(ctx *encodeCtx) error {
 	// generate a list of target to send the replica (all excluding this one)
-	targets, err := cluster.HrwTargetList(ctx.lom.Uname(), c.parent.smap.Get(), ctx.paritySlices+1)
-	if err != nil {
-		return err
-	}
-	targets = targets[1:]
-
-	nodes := make([]string, 0, len(targets))
-	for _, tgt := range targets {
+	nodes := make([]string, 0, len(ctx.targets))
+	for _, tgt := range ctx.targets {
 		nodes = append(nodes, tgt.ID())
 	}
 
@@ -468,14 +473,7 @@ func (c *putJogger) sendSlice(ctx *encodeCtx, data *slice, node *cluster.Snode, 
 }
 
 // Copies the constructed EC slices to remote targets.
-func (c *putJogger) sendSlices(ctx *encodeCtx) error {
-	totalCnt := ctx.paritySlices + ctx.dataSlices
-	// totalCnt+1 because the first node gets the replica
-	targets, err := cluster.HrwTargetList(ctx.lom.Uname(), c.parent.smap.Get(), totalCnt+1)
-	if err != nil {
-		return err
-	}
-
+func (c *putJogger) sendSlices(ctx *encodeCtx) (err error) {
 	// load the data slices from original object and construct parity ones
 	if c.toDisk {
 		err = generateSlicesToDisk(ctx)
@@ -488,12 +486,10 @@ func (c *putJogger) sendSlices(ctx *encodeCtx) error {
 	}
 
 	dataSlice := &slice{refCnt: *atomic.NewInt32(int32(ctx.dataSlices)), obj: ctx.fh}
-	toSend := cos.Min(totalCnt, len(targets)-1)
-
 	// If the slice is data one - no immediate cleanup is required because this
 	// slice is just a section reader of the entire file.
 	var copyErr error
-	for i := 0; i < toSend; i++ {
+	for i, tgt := range ctx.targets {
 		var sl *slice
 		// Each data slice is a section reader of the replica, so the memory is
 		// freed only after the last data slice is sent. Parity slices allocate memory,
@@ -503,7 +499,7 @@ func (c *putJogger) sendSlices(ctx *encodeCtx) error {
 		} else {
 			sl = &slice{refCnt: *atomic.NewInt32(1), obj: ctx.slices[i].obj, workFQN: ctx.slices[i].workFQN}
 		}
-		if err := c.sendSlice(ctx, sl, targets[i+1], i); err != nil {
+		if err := c.sendSlice(ctx, sl, tgt, i); err != nil {
 			copyErr = err
 		}
 	}
