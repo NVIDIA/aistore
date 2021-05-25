@@ -15,7 +15,7 @@ The ability to scale linearly with each added disk was, and remains, one of the 
 
 * scale-out with no downtime and no limitation;
 * comprehensive HTTP REST API to GET and PUT objects, create, destroy, list and configure buckets, and more;
-* [Amazon S3 API](docs/s3compat.md) to run unmodified S3 clients and apps;
+* [Amazon S3 API](/docs/s3compat.md) to run unmodified S3 clients and apps;
 * FUSE client (`aisfs`) to access AIS objects as files;
 * arbitrary number of extremely lightweight access points;
 * easy-to-use [CLI](https://www.youtube.com/watch?v=VPIhQm2sMD8&ab_channel=AIStore) based on [auto-completions](/cmd/cli/README.md);
@@ -63,26 +63,18 @@ Further, there's the capability referred to as [global namespace](/providers.md#
 
 ## Observability
 
-AIStore tracks, logs, and reports a fairly large and growing number of counters, latencies and throughputs including (but not limited to) those stats that reflect cluster recovery and global rebalancing, all [extended long-running operations](/xaction/README.md), and, of course, the basic read, write, list transactions, and more.
+AIStore tracks, logs, and reports a fairly large and growing number of counters, latencies and throughputs including (but not limited to) metrics that reflect cluster recovery and global rebalancing, all [extended long-running operations](/xaction/README.md), and, of course, the basic read, write, list transactions, and more. Viewership is equally supported via:
 
-Overall, the options to *observe* what's going on include:
-
-1. Logs
+1. System logs
 2. [CLI](/cmd/cli/README.md)
-3. Any [StatsD](https://github.com/etsy/statsd) compliant backend (e.g., Graphite/Grafana)
-4. [Prometheus](https://prometheus.io/), via its own included [statsd_exporter](https://github.com/prometheus/statsd_exporter) extension that on-the-fly translates StatsD formatted metrics into Prometheus.
+3. [Prometheus](/docs/prometheus.md)
+4. Any [StatsD](https://github.com/etsy/statsd) compliant [backend](https://github.com/statsd/statsd/blob/master/docs/backend.md#supported-backends) including Graphite/Grafana
 
-Quick links:
+> For general information on AIS metrics, see [Statistics, Collected Metrics, Visualization](/docs/metrics.md).
 
-* For information on AIS metrics, see [Statistics, Collected Metrics, Visualization](/docs/metrics.md).
-* For monitoring AIS with Prometheus, see the [Prometheus](docs/prometheus.md) readme.
-  - This document also includes an illustrated  getting-started guide to deploy with Prometheus in no time.
-* [REST API](docs/http_api.md) that, in particular, can be used to retrieve current cluster stats or the statistics from any given selected node.
-* AIStore includes `aisloader` - a powerful tool to stress-test and benchmark storage performance. The tool generates its own statistics and is fully StatsD-enabled. For numerous command-line options and many examples, please see:
-  - [Load Generator](/bench/aisloader/README.md)
-  - [How To Benchmark AIStore](/docs/howto_benchmark.md)
+> AIStore includes `aisloader` - a powerful tool that we use to simulate a variety of AI workloads. For numerous command-line options and usage examples, please see [Load Generator](/bench/aisloader/README.md) and [How To Benchmark AIStore](/docs/howto_benchmark.md). Or, just run the tool and see its online help. Note as well that `aisloader` is fully StatsD-enabled.
 
-And in addition:
+## Batch jobs
 
 Batch operations that may take many seconds (minutes, sometimes hours) to execute are called *eXtended actions* or *xactions*. Examples include erasure coding or n-way mirroring a dataset, resharding and reshuffling a dataset, and many more. All [eXtended actions](/xaction/README.md) support generic [API](/api/xaction.go) and [CLI](/cmd/cli/resources/job.md#show-job-statistics) to show both common counters (byte and object numbers) as well as operation-specific extended statistics.
 
