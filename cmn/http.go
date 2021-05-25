@@ -55,11 +55,6 @@ type (
 		Start, Length int64
 	}
 
-	RangesQuery struct {
-		Range string
-		Size  int64
-	}
-
 	// ReqArgs specifies HTTP request that we want to send.
 	ReqArgs struct {
 		Method string      // GET, POST, ...

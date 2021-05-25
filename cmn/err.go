@@ -125,7 +125,6 @@ type (
 var (
 	ErrSkip           = errors.New("skip")
 	ErrStartupTimeout = errors.New("startup timeout")
-	ErrForwarded      = errors.New("forwarded")
 
 	ErrETLMissingUUID = errors.New("ETL UUID can't be empty")
 	ErrETLOnlyOne     = errors.New(

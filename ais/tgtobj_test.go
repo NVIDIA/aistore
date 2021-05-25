@@ -254,7 +254,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				_, _, err := goi.getObject()
+				_, err := goi.getObject()
 				if err != nil {
 					b.Fatal(err)
 				}

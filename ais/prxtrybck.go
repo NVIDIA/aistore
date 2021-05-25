@@ -162,7 +162,7 @@ func (args *bckInitArgs) initAndTry(bucket string, origURLBck ...string) (bck *c
 
 func (args *bckInitArgs) try(origURLBck ...string) (bck *cluster.Bck, err error) {
 	bck, errCode, err := args._try(origURLBck...)
-	if err != nil && err != cmn.ErrForwarded {
+	if err != nil && err != errForwarded {
 		args.p.writeErr(args.w, args.r, err, errCode)
 	}
 	return bck, err
@@ -187,7 +187,7 @@ func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode i
 	}
 
 	if args.p.forwardCP(args.w, args.r, args.msg, "add-bucket", args.reqBody) {
-		err = cmn.ErrForwarded
+		err = errForwarded
 		return
 	}
 

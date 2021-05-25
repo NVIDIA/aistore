@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/s3compat"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -201,15 +200,10 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 		goi.lom = lom
 		goi.w = w
 		goi.ctx = context.Background()
-		goi.ranges = cmn.RangesQuery{Range: r.Header.Get(cmn.HdrRange), Size: objSize}
+		goi.ranges = rangesQuery{Range: r.Header.Get(cmn.HdrRange), Size: objSize}
 	}
-	if sent, errCode, err := goi.getObject(); err != nil {
-		if sent {
-			// Cannot send error message at this point so we just glog.
-			glog.Errorf("GET %s: %v", lom, err)
-		} else {
-			t.writeErr(w, r, err, errCode)
-		}
+	if errCode, err := goi.getObject(); err != nil && err != errSendingResp {
+		t.writeErr(w, r, err, errCode)
 	}
 	objSize = lom.Size()
 	s3compat.SetHeaderFromLOM(w.Header(), lom, objSize)

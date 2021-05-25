@@ -875,10 +875,9 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 // so it must be done by the caller (if necessary).
 func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query url.Values, bck *cluster.Bck, objName string) {
 	var (
-		ptime        = isRedirect(query)
-		config       = cmn.GCO.Get()
-		isGFNRequest = cos.IsParseBool(query.Get(cmn.URLParamIsGFNRequest))
-		started      = time.Now()
+		ptime   = isRedirect(query)
+		config  = cmn.GCO.Get()
+		started = time.Now()
 	)
 
 	if ptime != "" {
@@ -909,21 +908,17 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 		goi.lom = lom
 		goi.w = w
 		goi.ctx = context.Background()
-		goi.ranges = cmn.RangesQuery{Range: r.Header.Get(cmn.HdrRange), Size: 0}
-		goi.isGFN = isGFNRequest
+		goi.ranges = rangesQuery{Range: r.Header.Get(cmn.HdrRange), Size: 0}
+		goi.extract = extractQuery{relname: query.Get(cmn.URLParamExtract)}
+		goi.isGFN = cos.IsParseBool(query.Get(cmn.URLParamIsGFNRequest))
 		goi.chunked = config.Net.HTTP.Chunked
 	}
 	if bck.IsHTTP() {
 		originalURL := query.Get(cmn.URLParamOrigURL)
 		goi.ctx = context.WithValue(goi.ctx, cmn.CtxOriginalURL, originalURL)
 	}
-	if sent, errCode, err := goi.getObject(); err != nil {
-		if sent {
-			// Cannot send error message at this point so we just glog.
-			glog.Errorf("GET %s: %v", lom, err)
-		} else {
-			t.writeErr(w, r, err, errCode)
-		}
+	if errCode, err := goi.getObject(); err != nil && err != errSendingResp {
+		t.writeErr(w, r, err, errCode)
 	}
 	freeGetObjInfo(goi)
 }

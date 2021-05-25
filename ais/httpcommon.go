@@ -44,6 +44,15 @@ import (
 const unknownDaemonID = "unknown"
 
 type (
+	rangesQuery struct {
+		Range string // cmn.HdrRange, see https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35
+		Size  int64  // size, in bytes
+	}
+
+	extractQuery struct {
+		relname string
+	}
+
 	// callResult contains HTTP response.
 	callResult struct {
 		si      *cluster.Snode
@@ -236,7 +245,11 @@ var allHTTPverbs = []string{
 	http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace,
 }
 
-var errRebalanceDisabled = errors.New("rebalance is disabled")
+var (
+	errRebalanceDisabled = errors.New("rebalance is disabled")
+	errForwarded         = errors.New("forwarded")
+	errSendingResp       = errors.New("err-sending-resp")
+)
 
 // BMD uuid errs
 var errNoBMD = errors.New("no bucket metadata")

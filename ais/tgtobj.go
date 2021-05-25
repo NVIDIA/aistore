@@ -48,8 +48,7 @@ type (
 		cksumToUse *cos.Cksum
 		// object size aka Content-Length
 		size int64
-		// Context used when putting the object which should be contained in
-		// cloud bucket. It usually contains credentials to access the cloud.
+		// Context used when putting object to remote backend. It usually contains access credentials.
 		ctx context.Context
 		// FQN which is used only temporarily for receiving file. After
 		// successful receive is renamed to actual FQN.
@@ -66,11 +65,12 @@ type (
 		lom     *cluster.LOM
 		// Writer where the object will be written.
 		w io.Writer
-		// Context used when receiving the object which is contained in cloud
-		// bucket. It usually contains credentials to access the cloud.
+		// Context used when getting object from remote backend. It usually contains access credentials.
 		ctx context.Context
 		// Contains object range query
-		ranges cmn.RangesQuery
+		ranges rangesQuery
+		// Extract TODO -- FIXME
+		extract extractQuery
 		// Determines if it is GFN request
 		isGFN bool
 		// true: chunked transfer (en)coding as per https://tools.ietf.org/html/rfc7230#page-36
@@ -363,7 +363,7 @@ write:
 // GET OBJECT //
 ////////////////
 
-func (goi *getObjInfo) getObject() (sent bool, errCode int, err error) {
+func (goi *getObjInfo) getObject() (errCode int, err error) {
 	var (
 		cs                                            fs.CapStatus
 		doubleCheck, retry, retried, coldGet, capRead bool
@@ -380,14 +380,16 @@ do:
 		coldGet = cmn.IsObjNotExist(err)
 		if !coldGet {
 			goi.lom.Unlock(false)
-			return sent, http.StatusInternalServerError, err
+			errCode = http.StatusInternalServerError
+			return
 		}
 		capRead = true // set flag to avoid calling later
 		cs = fs.GetCapStatus()
 		if cs.OOS {
 			// Immediate return for no space left to restore object.
 			goi.lom.Unlock(false)
-			return sent, http.StatusInsufficientStorage, cs.Err
+			errCode, err = http.StatusInsufficientStorage, cs.Err
+			return
 		}
 	}
 
@@ -446,21 +448,23 @@ do:
 		if cs.OOS {
 			// No space left to prefetch object.
 			goi.lom.Unlock(false)
-			return sent, http.StatusInsufficientStorage, cs.Err
+			errCode, err = http.StatusInsufficientStorage, cs.Err
+			return
 		}
 		goi.lom.SetAtimeUnix(goi.started.UnixNano())
-		if errCode, err := goi.t.GetCold(goi.ctx, goi.lom, cluster.GetCold); err != nil {
-			return sent, errCode, err
+		if errCode, err = goi.t.GetCold(goi.ctx, goi.lom, cluster.GetCold); err != nil {
+			return
 		}
 		goi.t.putMirror(goi.lom)
 	}
 
 	// 4. get locally and stream back
 get:
-	retry, sent, errCode, err = goi.finalize(coldGet)
+	retry, errCode, err = goi.finalize(coldGet)
 	if retry && !retried {
+		debug.Assert(err != errSendingResp)
 		glog.Warningf("GET %s: uncaching and retrying...", goi.lom)
-		retried = true
+		retried = true // NOTE: retry only once
 		goi.lom.Uncache(true /*delDirty*/)
 		goto do
 	}
@@ -673,7 +677,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 	return
 }
 
-func (goi *getObjInfo) finalize(coldGet bool) (retry, sent bool, errCode int, err error) {
+func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err error) {
 	var (
 		file    *os.File
 		sgl     *memsys.SGL
@@ -711,10 +715,9 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry, sent bool, errCode int, er
 		return
 	}
 
-	if rw, ok := goi.w.(http.ResponseWriter); ok {
-		hdr = rw.Header()
+	if resp, ok := goi.w.(http.ResponseWriter); ok {
+		hdr = resp.Header()
 	}
-
 	fqn := goi.lom.FQN
 	if !coldGet && !goi.isGFN {
 		// best-effort GET load balancing (see also mirror.findLeastUtilized())
@@ -734,39 +737,42 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry, sent bool, errCode int, er
 	}
 
 	var (
-		r    *cmn.HTTPRange
-		size = goi.lom.Size()
+		rrange     *cmn.HTTPRange
+		size       = goi.lom.Size()
+		cksumConf  = goi.lom.CksumConf()
+		cksumRange bool
 	)
-	if goi.ranges.Size > 0 {
-		size = goi.ranges.Size
-	}
-
+	// set response header
 	if hdr != nil {
-		ranges, err := cmn.ParseMultiRange(goi.ranges.Range, size)
-		if err != nil {
-			if err == cmn.ErrNoOverlap {
-				hdr.Set(cmn.HdrContentRange, fmt.Sprintf("%s*/%d", cmn.HdrContentRangeValPrefix, size))
+		// parse and set read range
+		if goi.ranges.Range != "" {
+			if goi.ranges.Size > 0 {
+				size = goi.ranges.Size
 			}
-			return false, sent, http.StatusRequestedRangeNotSatisfiable, err
-		}
-
-		if len(ranges) > 0 {
-			if len(ranges) > 1 {
-				err = fmt.Errorf(cmn.FmtErrUnsupported, goi.t.Snode(), "multi-range")
+			var ranges []cmn.HTTPRange
+			ranges, err = cmn.ParseMultiRange(goi.ranges.Range, size)
+			if err != nil {
+				if err == cmn.ErrNoOverlap {
+					hdr.Set(cmn.HdrContentRange, fmt.Sprintf("%s*/%d", cmn.HdrContentRangeValPrefix, size))
+				}
 				errCode = http.StatusRequestedRangeNotSatisfiable
-				return false, sent, errCode, err
+				return
 			}
-			r = &ranges[0]
-
-			hdr.Set(cmn.HdrAcceptRanges, "bytes")
-			hdr.Set(cmn.HdrContentRange, r.ContentRange(size))
+			if len(ranges) > 0 {
+				// NOTE: multi-range not supported
+				if len(ranges) > 1 {
+					err = fmt.Errorf(cmn.FmtErrUnsupported, goi.t.Snode(), "multi-range")
+					errCode = http.StatusRequestedRangeNotSatisfiable
+					return
+				}
+				rrange = &ranges[0]
+				hdr.Set(cmn.HdrAcceptRanges, "bytes")
+				hdr.Set(cmn.HdrContentRange, rrange.ContentRange(size))
+			}
 		}
-	}
 
-	cksumConf := goi.lom.CksumConf()
-	cksumRange := cksumConf.Type != cos.ChecksumNone && r != nil && cksumConf.EnableReadRange
-
-	if hdr != nil {
+		// set checksum, version, time, length
+		cksumRange = cksumConf.Type != cos.ChecksumNone && rrange != nil && cksumConf.EnableReadRange
 		if !goi.lom.Cksum().IsEmpty() && !cksumRange {
 			cksumType, cksumValue := goi.lom.Cksum().Get()
 			hdr.Set(cmn.HdrObjCksumType, cksumType)
@@ -777,15 +783,16 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry, sent bool, errCode int, er
 		}
 		hdr.Set(cmn.HdrObjSize, strconv.FormatInt(goi.lom.Size(), 10))
 		hdr.Set(cmn.HdrObjAtime, cos.UnixNano2S(goi.lom.AtimeUnix()))
-		if r != nil {
-			hdr.Set(cmn.HdrContentLength, strconv.FormatInt(r.Length, 10))
+		if rrange != nil {
+			hdr.Set(cmn.HdrContentLength, strconv.FormatInt(rrange.Length, 10))
 		} else {
 			hdr.Set(cmn.HdrContentLength, strconv.FormatInt(size, 10))
 		}
 	}
 
+	// set reader
 	w := goi.w
-	if r == nil {
+	if rrange == nil {
 		reader = file
 		if goi.chunked {
 			// Explicitly hiding `ReadFrom` implemented for `http.ResponseWriter`
@@ -794,30 +801,32 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry, sent bool, errCode int, er
 			buf, slab = goi.t.gmm.Alloc(goi.lom.Size())
 		}
 	} else {
-		buf, slab = goi.t.gmm.Alloc(r.Length)
-		reader = io.NewSectionReader(file, r.Start, r.Length)
+		buf, slab = goi.t.gmm.Alloc(rrange.Length)
+		reader = io.NewSectionReader(file, rrange.Start, rrange.Length)
 		if cksumRange {
 			var cksum *cos.CksumHash
-			sgl = slab.MMSA().NewSGL(r.Length, slab.Size())
+			sgl = slab.MMSA().NewSGL(rrange.Length, slab.Size())
 			if _, cksum, err = cos.CopyAndChecksum(sgl, reader, buf, cksumConf.Type); err != nil {
 				return
 			}
 			hdr.Set(cmn.HdrObjCksumVal, cksum.Value())
 			hdr.Set(cmn.HdrObjCksumType, cksumConf.Type)
-			reader = io.NewSectionReader(file, r.Start, r.Length)
+			reader = io.NewSectionReader(file, rrange.Start, rrange.Length)
 		}
 	}
 
-	sent = true // At this point we mark the object as sent, regardless of the outcome.
+	// transmit
 	written, err = io.CopyBuffer(w, reader, buf)
 	if err != nil {
-		if cmn.IsErrConnectionReset(err) {
-			return
+		if !cmn.IsErrConnectionReset(err) {
+			goi.t.fsErr(err, fqn)
+			goi.t.statsT.Add(stats.ErrGetCount, 1)
 		}
-		goi.t.fsErr(err, fqn)
-		goi.t.statsT.Add(stats.ErrGetCount, 1)
-		err := fmt.Errorf(cmn.FmtErrFailed, goi.t.si, "GET", fqn, err)
-		return retry, sent, http.StatusInternalServerError, err
+		glog.Errorf(cmn.FmtErrFailed, goi.t.si, "GET", fqn, err)
+		// at this point, error is already written into the response
+		// return special to indicate just that
+		err = errSendingResp
+		return
 	}
 
 	// GFN: atime must be already set

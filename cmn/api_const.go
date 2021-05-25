@@ -193,6 +193,9 @@ const (
 
 	// Log severity
 	URLParamSev = "severity" // see { LogInfo, ...} enum
+
+	// Extract archived
+	URLParamExtract = "extract"
 )
 
 // Internal query params.
