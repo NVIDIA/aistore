@@ -15,7 +15,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/ec"
 )
 
 const (
@@ -104,16 +103,6 @@ func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists .
 	}
 
 	objProps := &cmn.ObjectProps{}
-	if ecStr := resp.Header.Get(cmn.HdrObjECMeta); ecStr != "" {
-		md, err := ec.StringToMeta(ecStr)
-		if err != nil {
-			return nil, err
-		}
-		objProps.DataSlices = md.Data
-		objProps.ParitySlices = md.Parity
-		objProps.IsECCopy = md.IsCopy
-	}
-
 	err = cmn.IterFields(objProps, func(tag string, field cmn.IterField) (error, bool) {
 		headerName := cmn.PropToHeader(tag)
 		return field.SetValue(resp.Header.Get(headerName), true /*force*/), false

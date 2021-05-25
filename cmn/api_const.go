@@ -117,7 +117,6 @@ const (
 	HdrObjCustomMD  = headerPrefix + "custom-md"      // Object custom metadata.
 	HdrObjSize      = headerPrefix + "size"           // Object size (bytes).
 	HdrObjVersion   = headerPrefix + "version"        // Object version/generation - ais or cloud.
-	HdrObjECMeta    = headerPrefix + "ec-meta"        // Info about EC object/slice/replica.
 
 	// Append object header.
 	HdrAppendHandle = headerPrefix + "append-handle"

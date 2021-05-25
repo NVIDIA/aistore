@@ -80,23 +80,6 @@ func (md *Metadata) Clone() *Metadata {
 	return clone
 }
 
-func MetaToString(md *Metadata) string {
-	if md == nil {
-		return ""
-	}
-	return string(md.NewPack())
-}
-
-func StringToMeta(s string) (*Metadata, error) {
-	md := &Metadata{}
-	unpacker := cos.NewUnpacker([]byte(s))
-	err := unpacker.ReadAny(md)
-	if err == nil {
-		return md, nil
-	}
-	return nil, err
-}
-
 // ObjectMetadata returns metadata for an object or its slice if any exists
 func ObjectMetadata(bck *cluster.Bck, objName string) (*Metadata, error) {
 	fqn, _, err := cluster.HrwFQN(bck, MetaType, objName)

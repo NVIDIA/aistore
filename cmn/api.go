@@ -219,9 +219,9 @@ type (
 		Atime        int64            `json:"atime"`
 		Checksum     ObjectCksumProps `json:"checksum"`
 		NumCopies    int              `json:"copies"`
-		DataSlices   int              `list:"omit"`
-		ParitySlices int              `list:"omit"`
-		IsECCopy     bool             `list:"omit"`
+		DataSlices   int              `json:"ec_data"`
+		ParitySlices int              `json:"ec_parity"`
+		IsECCopy     bool             `json:"ec_replicated"`
 		Present      bool             `json:"present"`
 	}
 

@@ -1167,7 +1167,9 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 		objProps.NumCopies = lom.NumCopies()
 		if lom.Bck().Props.EC.Enabled {
 			if md, err := ec.ObjectMetadata(lom.Bck(), objName); err == nil {
-				hdr.Set(cmn.HdrObjECMeta, ec.MetaToString(md))
+				objProps.DataSlices = md.Data
+				objProps.ParitySlices = md.Parity
+				objProps.IsECCopy = md.IsCopy
 			}
 		}
 	}
