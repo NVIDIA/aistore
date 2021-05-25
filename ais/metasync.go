@@ -182,16 +182,12 @@ func (y *metasyncer) Run() error {
 				}
 				revsReq.wg.Done()
 			}
-			if y.timerStopped {
-				if failedCnt > 0 {
-					y.retryTimer.Reset(config.Periodic.RetrySyncTime.D())
-					y.timerStopped = false
-				} else {
-					// all in sync - full(er) cleanup
-					for _, revs := range y.lastSynced {
-						y.delold(revs, 0)
-					}
-				}
+			if y.timerStopped && failedCnt > 0 {
+				y.retryTimer.Reset(config.Periodic.RetrySyncTime.D())
+				y.timerStopped = false
+			}
+			for _, revs := range y.lastSynced {
+				y.delold(revs, 1)
 			}
 		case <-y.retryTimer.C:
 			failedCnt := y.handlePending()
@@ -306,13 +302,11 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 			// fast path
 			revsBody = sgl.Bytes()
 			y.addnew(revs)
-			y.delold(revs, 1)
 		} else {
 			// slow path
 			revsBody = revs.marshal()
 			if sgl := revs.sgl(); sgl != nil {
 				y.addnew(revs)
-				y.delold(revs, 1)
 			}
 		}
 		y.lastSynced[tag] = revs

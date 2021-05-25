@@ -214,12 +214,9 @@ func (m *bucketMD) version() int64          { return m.Version }
 func (m *bucketMD) jit(p *proxyrunner) revs { return p.owner.bmd.get() }
 func (m *bucketMD) sgl() *memsys.SGL        { return m._sgl }
 
-// TODO: optimize back
 func (m *bucketMD) marshal() []byte {
-	sgl := m._encode()
-	b, _ := sgl.ReadAll()
-	sgl.Free()
-	return b
+	m._sgl = m._encode()
+	return m._sgl.Bytes()
 }
 
 func (m *bucketMD) _encode() (sgl *memsys.SGL) {
