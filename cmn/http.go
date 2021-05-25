@@ -273,14 +273,9 @@ func (r HTTPRange) ContentRange(size int64) string {
 // ParseMultiRange parses a Range header string as per RFC 7233.
 // ErrNoOverlap is returned if none of the ranges overlap.
 func ParseMultiRange(s string, size int64) (ranges []HTTPRange, err error) {
-	if s == "" {
-		return nil, nil // header not present
-	}
-
 	if !strings.HasPrefix(s, HdrRangeValPrefix) {
 		return nil, errors.New("invalid range")
 	}
-
 	noOverlap := false
 	for _, ra := range strings.Split(s[len(HdrRangeValPrefix):], ",") {
 		ra = strings.TrimSpace(ra)
