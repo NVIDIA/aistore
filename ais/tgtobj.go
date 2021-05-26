@@ -786,6 +786,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 				return
 			}
 			reader, size = lim, lim.N
+			// TODO: add support for checksumming extracted files (see cksumRange)
 		}
 		if goi.chunked {
 			// NOTE: hide `ReadFrom` of the `http.ResponseWriter` (in re: sendfile)
@@ -796,14 +797,18 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 		buf, slab = goi.t.gmm.Alloc(rrange.Length)
 		reader = io.NewSectionReader(file, rrange.Start, rrange.Length)
 		if cksumRange {
-			var cksum *cos.CksumHash
+			var (
+				cksum *cos.CksumHash
+				n     int64
+			)
 			sgl = slab.MMSA().NewSGL(rrange.Length, slab.Size())
-			if _, cksum, err = cos.CopyAndChecksum(sgl, reader, buf, cksumConf.Type); err != nil {
+			if n, cksum, err = cos.CopyAndChecksum(sgl, reader, buf, cksumConf.Type); err != nil {
 				return
 			}
+			debug.Assert(n <= rrange.Length)
 			hdr.Set(cmn.HdrObjCksumVal, cksum.Value())
 			hdr.Set(cmn.HdrObjCksumType, cksumConf.Type)
-			reader = io.NewSectionReader(file, rrange.Start, rrange.Length)
+			reader = sgl
 		}
 	}
 

@@ -22,6 +22,17 @@ import (
 	"github.com/NVIDIA/aistore/sys"
 )
 
+// ====================== How to run unit tests ===========================
+//
+// 1. Run all tests with default parameters
+// $ go test -v
+// 2. ... and debug enabled
+// $ go test -v -tags=debug
+// 3. ... and deadbeef (build tag) enabled, to "DEADBEEF" every freed buffer
+// $ go test -v -tags=debug,deadbeef
+// 4. Run a given named test with the specified build tags for 100s; redirect logs to STDERR
+// $ go test -v -tags=debug,deadbeef -logtostderr=true -run=Test_Sleep -duration=100s
+
 // ============== Memory Manager Slab Allocator (MMSA) ===========================
 //
 // MMSA is, simultaneously, a Slab and SGL allocator, and a memory manager
@@ -63,8 +74,6 @@ import (
 // includes Alloc() and Free() methods. In addition, each allocated SGL internally
 // utilizes one of the existing enumerated slabs to "grow" (that is, allocate more
 // buffers from the slab) on demand. For details, look for "grow" in the iosgl.go.
-//
-// ========================== end of TOO ========================================
 
 const readme = "https://github.com/NVIDIA/aistore/blob/master/memsys/README.md"
 
@@ -77,10 +86,6 @@ const (
 const (
 	gmmName = ".dflt.mm"
 	smmName = ".dflt.mm.small"
-)
-
-const (
-	deadBEEF = "DEADBEEF"
 )
 
 // page slabs: pagesize increments up to MaxPageSlabSize
@@ -551,20 +556,15 @@ func (s *Slab) Free(bufs ...[]byte) {
 		s.muput.Lock()
 		for _, buf := range bufs {
 			size := cap(buf)
-			b := buf[:size] // NOTE: always freeing the original (full) size
-			debug.Func(func() {
-				debug.Assert(int64(size) == s.Size())
-				for i := 0; i < len(b); i += len(deadBEEF) {
-					copy(b[i:], deadBEEF)
-				}
-			})
+			debug.Assert(int64(size) == s.Size())
+			b := buf[:size] // NOTE: always freeing the original (fixed buffer) size
+			deadbeef(b)
 			s.put = append(s.put, b)
 		}
 		s.muput.Unlock()
 	} else {
-		// When we just discard buffer, since the `s.put` cache is full, then
-		// we need to remember how much memory we discarded and take it into
-		// account when determining if we should return memory to the system.
+		// Since `s.put` is full need to remember how much memory we freed and
+		// take it into account when determining whether to return the memory to the system.
 		s.m.toGC.Add(s.Size() * int64(len(bufs)))
 	}
 }

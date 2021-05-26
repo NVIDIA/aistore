@@ -62,15 +62,17 @@ var (
 )
 
 func genShardsHandler(c *cli.Context) error {
+	const usage = "gen-shards \"ais://mybucket/trunk-{000..099}-abc.tar\""
 	var (
 		fileCnt   = parseIntFlag(c, fileCountFlag)
 		concLimit = parseIntFlag(c, concurrencyFlag)
 	)
 
 	if c.NArg() == 0 {
-		return incorrectUsageMsg(c, "missing bucket and template")
+		return incorrectUsageMsg(c, "missing bucket and template, e.g. usage: %s", usage)
 	} else if c.NArg() > 1 {
-		return incorrectUsageMsg(c, "too many arguments provided (make sure that provided argument is quoted to prevent bash brace expansion)")
+		return incorrectUsageMsg(c,
+			"too many arguments, make sure to use quotation marks to prevent BASH brace expansion, e.g.: %s", usage)
 	}
 
 	// Expecting: "ais://bucket/shard-{00..99}.tar"

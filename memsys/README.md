@@ -120,6 +120,12 @@ $ AIS_DEBUG=memsys=4 go test -v -logtostderr=true -duration 2m -tags=debug
 $ go test -v -logtostderr=true -run=Test_Sleep -duration=100s
 ```
 
+* **Same as above with debug and deadbeef (build tags) enabled**:
+
+```console
+$ go test -v -tags=debug,deadbeef -logtostderr=true -run=Test_Sleep -duration=100s
+```
+
 * **Run each test for 10 minutes with the permission to use up to 90% of total RAM (and glog => STDERR)**
 
 ```console

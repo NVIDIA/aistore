@@ -1069,6 +1069,7 @@ func executeTwoGETsForChecksumValidation(proxyURL string, bck cmn.Bck, objName s
 	}
 }
 
+// TODO: validate range checksums
 func TestRangeRead(t *testing.T) {
 	initMountpaths(t, tutils.RandomProxyURL(t))
 
@@ -1077,7 +1078,7 @@ func TestRangeRead(t *testing.T) {
 			m = ioContext{
 				t:         t,
 				bck:       bck.Bck,
-				num:       1,
+				num:       5,
 				fileSize:  5271,
 				fixedSize: true,
 			}
@@ -1101,8 +1102,8 @@ func TestRangeRead(t *testing.T) {
 			tassert.CheckError(t, err)
 		}()
 
-		tlog.Logln("Testing valid cases.")
-		// Validate entire object checksum is being returned
+		tlog.Logln("Valid range with object checksum...")
+		// Validate that entire object checksum is being returned
 		if cksumProps.EnableReadRange {
 			propsToUpdate := &cmn.BucketPropsToUpdate{
 				Cksum: &cmn.CksumConfToUpdate{
@@ -1114,7 +1115,8 @@ func TestRangeRead(t *testing.T) {
 		}
 		testValidCases(t, proxyURL, bck.Bck, cksumProps.Type, m.fileSize, objName, true)
 
-		// Validate only range checksum is being returned
+		// Validate only that range checksum is being returned
+		tlog.Logln("Valid range with range checksum...")
 		if !cksumProps.EnableReadRange {
 			propsToUpdate := &cmn.BucketPropsToUpdate{
 				Cksum: &cmn.CksumConfToUpdate{
@@ -1126,14 +1128,15 @@ func TestRangeRead(t *testing.T) {
 		}
 		testValidCases(t, proxyURL, bck.Bck, cksumProps.Type, m.fileSize, objName, false)
 
-		tlog.Logln("Testing valid cases (query).")
+		tlog.Logln("Valid range query...")
 		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=-1", 1)
 		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=0-", int64(m.fileSize))
 		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=10-", int64(m.fileSize-10))
 		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, fmt.Sprintf("bytes=-%d", m.fileSize), int64(m.fileSize))
 		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, fmt.Sprintf("bytes=-%d", m.fileSize+2), int64(m.fileSize))
 
-		tlog.Logln("Testing invalid cases (query).")
+		tlog.Logln("======================================================================")
+		tlog.Logln("Invalid range query:")
 		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "potatoes=0-1")
 		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes")
 		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, fmt.Sprintf("bytes=%d-", m.fileSize+1))
@@ -1148,11 +1151,10 @@ func TestRangeRead(t *testing.T) {
 	})
 }
 
+// TODO: validate range checksum if enabled
 func testValidCases(t *testing.T, proxyURL string, bck cmn.Bck, cksumType string, fileSize uint64, objName string,
 	checkEntireObjCksum bool) {
-	// Read the entire file range by range
-	// Read in ranges of 500 to test covered, partially covered and completely
-	// uncovered ranges
+	// Range-Read the entire file in 500 increments
 	byteRange := int64(500)
 	iterations := int64(fileSize) / byteRange
 	for i := int64(0); i < iterations; i += byteRange {

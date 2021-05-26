@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 type (
@@ -43,7 +44,7 @@ var _ cos.Runner = (*StreamCollector)(nil)
 // 3. deactivates idle streams
 
 func Init() *StreamCollector {
-	cos.Assert(gc == nil)
+	debug.Assert(gc == nil)
 
 	// real stream collector
 	gc = &collector{
@@ -84,7 +85,7 @@ func (gc *collector) run() (err error) {
 			s, add := ctrl.s, ctrl.add
 			_, ok = gc.streams[s.lid]
 			if add {
-				cos.AssertMsg(!ok, s.lid)
+				debug.AssertMsg(!ok, s.lid)
 				gc.streams[s.lid] = s
 				heap.Push(gc, s)
 			} else if ok {
@@ -134,7 +135,7 @@ func (gc *collector) Push(x interface{}) {
 
 func (gc *collector) update(s *streamBase, ticks int) {
 	s.time.ticks = ticks
-	cos.Assert(s.time.ticks >= 0)
+	debug.Assert(s.time.ticks >= 0)
 	heap.Fix(gc, s.time.index)
 }
 

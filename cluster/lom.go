@@ -60,6 +60,7 @@ type (
 		FQN         string            // fqn
 		ObjName     string            // object name in the bucket
 		HrwFQN      string            // => main replica (misplaced?)
+		info        string
 	}
 	// LOM In Flight (LIF)
 	LIF struct {
@@ -549,15 +550,20 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 // lom.String() and helpers
 //
 
-func (lom *LOM) String() string { return lom._string(lom.bck.Name) }
+func (lom *LOM) String() string {
+	if lom.info != "" {
+		return lom.info
+	}
+	return lom._string(lom.bck.Name)
+}
 
 func (lom *LOM) _string(b string) string {
 	var (
 		a string
-		s = fmt.Sprintf("o[%s/%s fs=%s", b, lom.ObjName, lom.mpathInfo.Fs)
+		s = "o[" + b + "/" + lom.ObjName
 	)
 	if glog.FastV(4, glog.SmoduleCluster) {
-		s += fmt.Sprintf("(%s)", lom.FQN)
+		s += fmt.Sprintf(" %s (%s)", lom.mpathInfo.Fs, lom.FQN)
 		if lom.md.size != 0 {
 			s += " size=" + cos.B2S(lom.md.size, 1)
 		}
@@ -583,7 +589,8 @@ func (lom *LOM) _string(b string) string {
 			a += "(not-hrw)"
 		}
 	}
-	return s + a + "]"
+	lom.info = s + a + "]"
+	return lom.info
 }
 
 // increment ais LOM's version
