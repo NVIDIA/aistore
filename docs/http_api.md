@@ -28,17 +28,21 @@ $ curl -X GET http://G-or-T/v1/daemon?what=config
 
 This command queries one of the AIS nodes (denoted as `G-or-T`) for its configuration. The query - as well as most of other control plane queries - results in a JSON-formatted output that can be viewed with any compatible JSON viewer.
 
-Notice the 4 (four) ubiquitous elements in the `curl` command line above:
+Notice the 5 (five) ubiquitous elements in the `curl` command line above:
 
-1. **HTTP verb** aka method, one of: `PUT`, `GET`, `HEAD`, `POST`, `DELETE`, or `PATCH`.
+1. **Option**
+
+In particular, note the '-X` (`--request`) and `-L` (`--location`) options. Run `curl --help` for help.
+
+2. **HTTP verb** aka method, one of: `PUT`, `GET`, `HEAD`, `POST`, `DELETE`, or `PATCH`.
 
 In the example, it's a GET but it can also be POST, PUT, and DELETE. For a brief summary of the standard HTTP verbs and their CRUD semantics, see, for instance, this [REST API tutorial](http://www.restapitutorial.com/lessons/httpmethods.html).
 
-2. **Hostname** (or IPv4 address) and TCP port of one of the AIStore daemons.
+3. **Hostname** (or IPv4 address) and TCP port of one of the AIStore daemons.
 
 Most RESTful operations performed on an AIStore proxy/gateway will likely have a *clustered* scope. Exceptions may include querying proxy's own configuration via `?what=config`, and more.
 
-3. **URL path**: version of the REST API, RESTful *resource* that is operated upon, and possibly more forward-slash delimited specifiers.
+4. **URL path**: version of the REST API, RESTful *resource* that is operated upon, and possibly more forward-slash delimited specifiers.
 
 For example: /v1/cluster where `v1` is the currently supported API version and `cluster` is the (RESTful) resource. Other *resources* include:
 
@@ -50,7 +54,9 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | `objects` | datapath request to GET, PUT and DELETE objects, read their properties |
 | `download` | download external resources (datasets, files) into cluster |
 
-4. **URL query**, e. g., `?what=config`. In particular, All API requests that operate on buckets carry the bucket(s) specification details in the query parameters of the corresponding URL. Those details may include [backend provider](providers.md) and [namespace](providers.md#unified-global-namespace) where an empty backend provider indicates an AIS bucket (with AIStore being, effectively, the default provider) while an empty namespace parameter translates as a global (default) namespace. For exact names of the bucket-specifying URL Query parameters, please refer to this [API source](/api/bucket.go).
+5. **URL query**, e. g., `?what=config`.
+
+In particular, all API requests that operate on a bucket carry the bucket's specification details in the URL's query. Those details may include [backend provider](providers.md) and [namespace](providers.md#unified-global-namespace) where an empty backend provider indicates an AIS bucket (with AIStore being, effectively, the default provider) while an empty namespace parameter translates as a global (default) namespace. For exact names of the bucket-specifying URL Query parameters, please refer to this [API source](/api/bucket.go).
 
 > Combined, all these elements tell the following story. They specify the most generic action (e.g., GET) and designate the target aka "resource" of this action: e. g., an entire cluster or a given AIS node. Further, they may also include context-specific and query string encoded control message to, for instance, distinguish between getting system statistics (`?what=stats`) versus system configuration (`?what=config`).
 

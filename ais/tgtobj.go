@@ -742,36 +742,19 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 		cksumConf  = goi.lom.CksumConf()
 		cksumRange bool
 	)
-	// set response header
+	// parse, validate, set response header
 	if hdr != nil {
-		// parse and set read range
+		// read range
 		if goi.ranges.Range != "" {
 			if goi.ranges.Size > 0 {
 				size = goi.ranges.Size
 			}
-			var ranges []cmn.HTTPRange
-			ranges, err = cmn.ParseMultiRange(goi.ranges.Range, size)
-			if err != nil {
-				if err == cmn.ErrNoOverlap {
-					hdr.Set(cmn.HdrContentRange, fmt.Sprintf("%s*/%d", cmn.HdrContentRangeValPrefix, size))
-				}
-				errCode = http.StatusRequestedRangeNotSatisfiable
+			if rrange, errCode, err = goi.parseRange(hdr, size); err != nil {
 				return
-			}
-			if len(ranges) > 0 {
-				// NOTE: multi-range not supported
-				if len(ranges) > 1 {
-					err = fmt.Errorf(cmn.FmtErrUnsupported, goi.t.Snode(), "multi-range")
-					errCode = http.StatusRequestedRangeNotSatisfiable
-					return
-				}
-				rrange = &ranges[0]
-				hdr.Set(cmn.HdrAcceptRanges, "bytes")
-				hdr.Set(cmn.HdrContentRange, rrange.ContentRange(size))
 			}
 		}
 
-		// set checksum, version, time, length
+		// checksum, version, time, length
 		cksumRange = cksumConf.Type != cos.ChecksumNone && rrange != nil && cksumConf.EnableReadRange
 		if !goi.lom.Cksum().IsEmpty() && !cksumRange {
 			cksumType, cksumValue := goi.lom.Cksum().Get()
@@ -794,11 +777,20 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 	w := goi.w
 	if rrange == nil {
 		reader = file
+		if goi.extract.relname != "" {
+			var lim *io.LimitedReader
+			lim, err = extractTar(reader, goi.extract.relname)
+			if err != nil {
+				err = fmt.Errorf(cmn.FmtErrFailed, goi.t.si, "extract "+goi.extract.relname+" from",
+					goi.lom, err)
+				return
+			}
+			reader, size = lim, lim.N
+		}
 		if goi.chunked {
-			// Explicitly hiding `ReadFrom` implemented for `http.ResponseWriter`
-			// so the `sendfile` syscall won't be used.
+			// NOTE: hide `ReadFrom` of the `http.ResponseWriter` (in re: sendfile)
 			w = cos.WriterOnly{Writer: goi.w}
-			buf, slab = goi.t.gmm.Alloc(goi.lom.Size())
+			buf, slab = goi.t.gmm.Alloc(size)
 		}
 	} else {
 		buf, slab = goi.t.gmm.Alloc(rrange.Length)
@@ -856,6 +848,37 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 		stats.NamedVal64{Name: stats.GetLatency, Value: int64(delta)},
 		stats.NamedVal64{Name: stats.GetCount, Value: 1},
 	)
+	return
+}
+
+// parse, validate, set response header
+func (goi *getObjInfo) parseRange(hdr http.Header, size int64) (rrange *cmn.HTTPRange, errCode int, err error) {
+	var ranges []cmn.HTTPRange
+
+	ranges, err = cmn.ParseMultiRange(goi.ranges.Range, size)
+	if err != nil {
+		if err == cmn.ErrNoOverlap {
+			hdr.Set(cmn.HdrContentRange, fmt.Sprintf("%s*/%d", cmn.HdrContentRangeValPrefix, size))
+		}
+		errCode = http.StatusRequestedRangeNotSatisfiable
+		return
+	}
+	if len(ranges) == 0 {
+		return
+	}
+	if len(ranges) > 1 {
+		err = fmt.Errorf(cmn.FmtErrUnsupported, goi.t.Snode(), "multi-range")
+		errCode = http.StatusRequestedRangeNotSatisfiable
+		return
+	}
+	if goi.extract.relname != "" {
+		err = fmt.Errorf(cmn.FmtErrUnsupported, goi.t.Snode(), "range-reading archived files")
+		errCode = http.StatusRequestedRangeNotSatisfiable
+		return
+	}
+	rrange = &ranges[0]
+	hdr.Set(cmn.HdrAcceptRanges, "bytes")
+	hdr.Set(cmn.HdrContentRange, rrange.ContentRange(size))
 	return
 }
 
