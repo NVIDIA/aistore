@@ -8,7 +8,6 @@ package cmn
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -87,6 +86,11 @@ type (
 		BackOff   bool // If requests should be retried less and less often.
 		IsClient  bool // true: client (e.g. tutils, etc.)
 	}
+
+	ErrRangeNoOverlap struct {
+		ranges []string // RFC 7233
+		size   int64    // [0, size)
+	}
 )
 
 const (
@@ -97,7 +101,13 @@ const (
 
 // ErrNoOverlap is returned by serveContent's parseRange if first-byte-pos of
 // all of the byte-range-spec values is greater than the content size.
-var ErrNoOverlap = errors.New("invalid range: failed to overlap")
+func (e *ErrRangeNoOverlap) Error() string {
+	msg := fmt.Sprintf("overlap with the content [0, %d)", e.size)
+	if len(e.ranges) == 1 {
+		return fmt.Sprintf("range %q does not %s", e.ranges[0], msg)
+	}
+	return fmt.Sprintf("none of the ranges %v %s", e.ranges, msg)
+}
 
 // PrependProtocol prepends protocol in URL in case it is missing.
 // By default it adds `http://` as prefix to the URL.
@@ -270,39 +280,38 @@ func (r HTTPRange) ContentRange(size int64) string {
 	return fmt.Sprintf("%s%d-%d/%d", HdrContentRangeValPrefix, r.Start, r.Start+r.Length-1, size)
 }
 
-// ParseMultiRange parses a Range header string as per RFC 7233.
-// ErrNoOverlap is returned if none of the ranges overlap.
+// ParseMultiRange parses a Range Header string as per RFC 7233.
+// ErrNoOverlap is returned if none of the ranges overlap with the [0, size) content.
 func ParseMultiRange(s string, size int64) (ranges []HTTPRange, err error) {
+	var noOverlap bool
 	if !strings.HasPrefix(s, HdrRangeValPrefix) {
-		return nil, errors.New("invalid range")
+		return nil, fmt.Errorf("read range %q is invalid (prefix)", s)
 	}
-	noOverlap := false
-	for _, ra := range strings.Split(s[len(HdrRangeValPrefix):], ",") {
+	allRanges := strings.Split(s[len(HdrRangeValPrefix):], ",")
+	for _, ra := range allRanges {
 		ra = strings.TrimSpace(ra)
 		if ra == "" {
 			continue
 		}
-
 		i := strings.Index(ra, "-")
 		if i < 0 {
-			return nil, errors.New("invalid range")
+			return nil, fmt.Errorf("read range %q is invalid (-)", s)
 		}
-
-		start, end := strings.TrimSpace(ra[:i]), strings.TrimSpace(ra[i+1:])
-
-		var r HTTPRange
+		var (
+			r          HTTPRange
+			start, end = strings.TrimSpace(ra[:i]), strings.TrimSpace(ra[i+1:])
+		)
 		if start == "" {
 			// If no start is specified, end specifies the range start relative
 			// to the end of the file, and we are dealing with <suffix-length>
 			// which has to be a non-negative integer as per RFC 7233 Section 2.1 "Byte-Ranges".
 			if end == "" || end[0] == '-' {
-				return nil, errors.New("invalid range")
+				return nil, fmt.Errorf("read range %q is invalid as per RFC 7233 Section 2.1", ra)
 			}
 			i, err := strconv.ParseInt(end, 10, 64)
 			if i < 0 || err != nil {
-				return nil, errors.New("invalid range")
+				return nil, fmt.Errorf("read range %q is invalid (see RFC 7233 Section 2.1)", ra)
 			}
-
 			if i > size {
 				i = size
 			}
@@ -311,24 +320,21 @@ func ParseMultiRange(s string, size int64) (ranges []HTTPRange, err error) {
 		} else {
 			i, err := strconv.ParseInt(start, 10, 64)
 			if err != nil || i < 0 {
-				return nil, errors.New("invalid range")
+				return nil, fmt.Errorf("read range %q is invalid (start)", ra)
 			}
-
 			if i >= size {
-				// If the range begins after the size of the content,
-				// then it does not overlap.
+				// If the range begins after the size of the content it does not overlap.
 				noOverlap = true
 				continue
 			}
-
 			r.Start = i
 			if end == "" {
-				// If no end is specified, range extends to end of the file.
+				// If no end is specified, range extends to the end of the file.
 				r.Length = size - r.Start
 			} else {
 				i, err := strconv.ParseInt(end, 10, 64)
 				if err != nil || r.Start > i {
-					return nil, errors.New("invalid range")
+					return nil, fmt.Errorf("read range %q is invalid (end)", ra)
 				}
 				if i >= size {
 					i = size - 1
@@ -340,8 +346,7 @@ func ParseMultiRange(s string, size int64) (ranges []HTTPRange, err error) {
 	}
 
 	if noOverlap && len(ranges) == 0 {
-		// The specified ranges did not overlap with the content.
-		return nil, ErrNoOverlap
+		return nil, &ErrRangeNoOverlap{allRanges, size}
 	}
 	return ranges, nil
 }

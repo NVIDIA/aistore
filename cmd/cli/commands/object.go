@@ -47,7 +47,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 	var (
 		objArgs                api.GetObjectInput
 		bck                    cmn.Bck
-		objName                string
+		objName, extract       string
 		objLen, offset, length int64
 	)
 
@@ -70,7 +70,8 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		outFile = filepath.Base(objName)
 	}
 
-	// just check if object is cached, don't get object
+	// just check if remote object is present (do not execute GET)
+	// TODO: archive
 	if flagIsSet(c, isCachedFlag) {
 		return objectCheckExists(c, bck, objName)
 	}
@@ -104,8 +105,15 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 	}
 
 	if bck.IsHTTP() {
-		objArgs.Query = make(url.Values, 1)
+		objArgs.Query = make(url.Values, 2)
 		objArgs.Query.Set(cmn.URLParamOrigURL, uri)
+	}
+	// TODO: validate
+	if extract = parseStrFlag(c, extractFlag); extract != "" {
+		if objArgs.Query == nil {
+			objArgs.Query = make(url.Values, 1)
+		}
+		objArgs.Query.Set(cmn.URLParamExtract, extract)
 	}
 
 	if flagIsSet(c, checksumFlag) {
@@ -114,17 +122,17 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		objLen, err = api.GetObject(defaultAPIParams, bck, objName, objArgs)
 	}
 	if err != nil {
-		if cmn.IsStatusNotFound(err) {
+		if cmn.IsStatusNotFound(err) && extract == "" {
 			err = fmt.Errorf("object \"%s/%s\" does not exist", bck, objName)
 		}
 		return
 	}
 
-	if flagIsSet(c, lengthFlag) {
-		fmt.Fprintf(c.App.ErrWriter, "Read %s (%d B)\n", cos.B2S(objLen, 2), objLen)
+	if flagIsSet(c, lengthFlag) && outFile != fileStdIO {
+		fmt.Fprintf(c.App.ErrWriter, "Read range len=%s(%dB) as %q\n", cos.B2S(objLen, 2), objLen, outFile)
 		return
 	}
-	if !silent {
+	if !silent && outFile != fileStdIO {
 		fmt.Fprintf(c.App.Writer, "GET %q from bucket %q as %q [%s]\n", objName, bck, outFile, cos.B2S(objLen, 2))
 	}
 	return

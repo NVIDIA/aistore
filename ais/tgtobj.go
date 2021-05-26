@@ -779,10 +779,14 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 		reader = file
 		if goi.extract.relname != "" {
 			var lim *io.LimitedReader
-			lim, err = extractTar(reader, goi.extract.relname)
+			lim, err = extractTar(reader, goi.extract.relname, goi.lom)
 			if err != nil {
-				err = fmt.Errorf(cmn.FmtErrFailed, goi.t.si, "extract "+goi.extract.relname+" from",
-					goi.lom, err)
+				if _, ok := err.(*cmn.ErrNotFound); ok {
+					errCode = http.StatusNotFound
+				} else {
+					err = fmt.Errorf(cmn.FmtErrFailed, goi.t.si,
+						"extract "+goi.extract.relname+" from", goi.lom, err)
+				}
 				return
 			}
 			reader, size = lim, lim.N
@@ -862,7 +866,8 @@ func (goi *getObjInfo) parseRange(hdr http.Header, size int64) (rrange *cmn.HTTP
 
 	ranges, err = cmn.ParseMultiRange(goi.ranges.Range, size)
 	if err != nil {
-		if err == cmn.ErrNoOverlap {
+		if _, ok := err.(*cmn.ErrRangeNoOverlap); ok {
+			// https://datatracker.ietf.org/doc/html/rfc7233#section-4.2
 			hdr.Set(cmn.HdrContentRange, fmt.Sprintf("%s*/%d", cmn.HdrContentRangeValPrefix, size))
 		}
 		errCode = http.StatusRequestedRangeNotSatisfiable

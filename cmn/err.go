@@ -417,7 +417,7 @@ func NewNotFoundError(format string, a ...interface{}) *ErrNotFound {
 	return &ErrNotFound{fmt.Sprintf(format, a...)}
 }
 
-func (e *ErrNotFound) Error() string { return e.what + " not found" }
+func (e *ErrNotFound) Error() string { return e.what + " does not exist" }
 
 func (e *ErrNotFound) Is(target error) bool {
 	_, ok := target.(*ErrNotFound)
@@ -599,7 +599,9 @@ func Err2HTTPErr(err error) (httpErr *ErrHTTP) {
 func (e *ErrHTTP) String() (s string) {
 	s = http.StatusText(e.Status) + ": " + e.Message
 	if e.Method != "" || e.URLPath != "" {
-		s += ":"
+		if !strings.HasSuffix(s, ".") {
+			s += ":"
+		}
 		if e.Method != "" {
 			s += " " + e.Method
 		}

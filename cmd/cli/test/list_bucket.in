@@ -19,11 +19,11 @@ ais ls gcp:// // IGNORE
 
 ais ls #ns // IGNORE
 ais ls @ // IGNORE
-ais ls @uuid // FAIL "remote cluster "uuid" not found"
+ais ls @uuid // FAIL "remote cluster "uuid" "
 ais ls ais://#ns // IGNORE
 ais ls ais://#ns/tmp // FAIL "bucket "ais://#ns/tmp" does not exist"
-ais ls ais://@uuid#ns // FAIL "remote cluster "uuid" not found"
-ais ls ais://@uuid#ns/tmp // FAIL "remote cluster "uuid" not found"
+ais ls ais://@uuid#ns // FAIL "remote cluster "uuid" "
+ais ls ais://@uuid#ns/tmp // FAIL "remote cluster "uuid" "
 
 ais ls cloud://$BUCKET_1/ // FAIL "invalid backend provider "cloud""
 ais ls aiss://$BUCKET_1 // FAIL "invalid backend provider "aiss""

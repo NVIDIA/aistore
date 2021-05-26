@@ -22,6 +22,7 @@ var (
 		commandGet: {
 			offsetFlag,
 			lengthFlag,
+			extractFlag,
 			checksumFlag,
 			isCachedFlag,
 			forceFlag,
@@ -52,6 +53,7 @@ var (
 		commandCat: {
 			offsetFlag,
 			lengthFlag,
+			extractFlag,
 			checksumFlag,
 			forceFlag,
 		},
@@ -60,7 +62,7 @@ var (
 	// define separately to allow for aliasing (see alias_hdlr.go)
 	objectCmdGet = cli.Command{
 		Name:         commandGet,
-		Usage:        "get the object from the specified bucket",
+		Usage:        "get object from the specified bucket",
 		ArgsUsage:    getObjectArgument,
 		Flags:        objectCmdsFlags[commandGet],
 		Action:       getHandler,
@@ -69,7 +71,7 @@ var (
 
 	objectCmdPut = cli.Command{
 		Name:         commandPut,
-		Usage:        "put the objects into the specified bucket",
+		Usage:        "put object(s) into the specified bucket",
 		ArgsUsage:    putPromoteObjectArgument,
 		Flags:        objectCmdsFlags[commandPut],
 		Action:       putHandler,

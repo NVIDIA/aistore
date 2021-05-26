@@ -166,6 +166,8 @@ const (
 	countDefault       = 1
 )
 
+const sizeUnits = "(all IEC and SI units are supported, e.g.: b, B, KB, KiB, k, MiB, mb, etc.)"
+
 // Argument placeholders in help messages
 // Name format: *Argument
 const (
@@ -189,7 +191,7 @@ const (
 	bucketAndPropsArgument = "BUCKET [PROP_PREFIX]"
 
 	// Objects
-	getObjectArgument        = "BUCKET/OBJECT_NAME [OUT_FILE]"
+	getObjectArgument        = "BUCKET/OBJECT_NAME [OUT_FILE|-]"
 	putPromoteObjectArgument = "FILE|DIRECTORY BUCKET/[OBJECT_NAME]"
 	concatObjectArgument     = "FILE|DIRECTORY [FILE|DIRECTORY...] BUCKET/OBJECT_NAME"
 	objectArgument           = "BUCKET/OBJECT_NAME"
@@ -295,7 +297,7 @@ var (
 	keepMDFlag        = cli.BoolFlag{Name: "keep-md", Usage: "keep bucket metadata"}
 	dataSlicesFlag    = cli.IntFlag{Name: "data-slices,data,d", Usage: "number of data slices", Required: true}
 	paritySlicesFlag  = cli.IntFlag{Name: "parity-slices,parity,p", Usage: "number of parity slices", Required: true}
-	listBucketsFlag   = cli.StringFlag{Name: "buckets", Usage: "comma-separated list of bucket names, eg. 'b1,b2,b3'"}
+	listBucketsFlag   = cli.StringFlag{Name: "buckets", Usage: "comma-separated list of bucket names, e.g.: 'b1,b2,b3'"}
 	validateFlag      = cli.BoolFlag{Name: "validate", Usage: "check objects health"}
 
 	// Config
@@ -312,7 +314,7 @@ var (
 		Name:  "description,desc",
 		Usage: "description of the job (useful when listing all downloads)",
 	}
-	timeoutFlag          = cli.StringFlag{Name: "timeout", Usage: "timeout for request to external resource, eg. '30m'"}
+	timeoutFlag          = cli.StringFlag{Name: "timeout", Usage: "timeout, e.g. '30m'"}
 	limitConnectionsFlag = cli.IntFlag{
 		Name:  "limit-connections,conns",
 		Usage: "number of connections each target can make concurrently (each target can handle at most #mountpaths connections)",
@@ -326,10 +328,13 @@ var (
 		Usage: "path to file containing JSON array of strings with object names to download",
 	}
 	syncFlag             = cli.BoolFlag{Name: "sync", Usage: "sync bucket with cloud"}
-	progressIntervalFlag = cli.StringFlag{Name: "progress-interval", Value: downloader.DownloadProgressInterval.String(), Usage: "interval(in secs) at which progress will be monitored, e.g. '10s'"}
-
+	progressIntervalFlag = cli.StringFlag{
+		Name:  "progress-interval",
+		Value: downloader.DownloadProgressInterval.String(),
+		Usage: "interval(in secs) at which progress will be monitored, e.g. '10s'",
+	}
 	// dSort
-	fileSizeFlag = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "single file size inside the shard"}
+	fileSizeFlag = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "size of file in a shard"}
 	logFlag      = cli.StringFlag{Name: "log", Usage: "path to file where the metrics will be saved"}
 	cleanupFlag  = cli.BoolFlag{
 		Name:  "cleanup",
@@ -343,11 +348,15 @@ var (
 	specFileFlag  = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to file with dSort specification"}
 
 	// Object
-	listFlag      = cli.StringFlag{Name: "list", Usage: "comma separated list of object names, eg. 'o1,o2,o3'"}
-	offsetFlag    = cli.StringFlag{Name: "offset", Usage: "object read offset, can contain prefix 'b', 'KiB', 'MB'"}
-	lengthFlag    = cli.StringFlag{Name: "length", Usage: "object read length, can contain prefix 'b', 'KiB', 'MB'"}
-	isCachedFlag  = cli.BoolFlag{Name: "is-cached", Usage: "check if an object is cached"}
-	cachedFlag    = cli.BoolFlag{Name: "cached", Usage: "list only cached objects"}
+	listFlag     = cli.StringFlag{Name: "list", Usage: "comma-separated list of object names, e.g.: 'o1,o2,o3'"}
+	offsetFlag   = cli.StringFlag{Name: "offset", Usage: "object read offset " + sizeUnits}
+	lengthFlag   = cli.StringFlag{Name: "length", Usage: "object read length " + sizeUnits}
+	extractFlag  = cli.StringFlag{Name: "extract", Usage: "extract named file from archive"}
+	isCachedFlag = cli.BoolFlag{Name: "is-cached", Usage: "check if object from a remote bucket is present (cached)"}
+	cachedFlag   = cli.BoolFlag{
+		Name:  "cached",
+		Usage: "list only those objects from a remote bucket that are present locally (ie., cached)",
+	}
 	checksumFlag  = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
 	recursiveFlag = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
 	overwriteFlag = cli.BoolTFlag{Name: "overwrite,o", Usage: "overwrite destination if exists"}
@@ -356,7 +365,7 @@ var (
 	yesFlag       = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' for all questions"}
 	chunkSizeFlag = cli.StringFlag{
 		Name:  "chunk-size",
-		Usage: "chunk size used for each request, can contain prefix 'b', 'KiB', 'MB'", Value: "10MB",
+		Usage: "chunk size used for each request " + sizeUnits, Value: "10MB",
 	}
 	computeCksumFlag = cli.BoolFlag{Name: "compute-cksum", Usage: "compute the checksum with the type configured for the bucket"}
 	checksumFlags    = getCksumFlags()
