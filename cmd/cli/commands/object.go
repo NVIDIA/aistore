@@ -47,7 +47,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 	var (
 		objArgs                api.GetObjectInput
 		bck                    cmn.Bck
-		objName, extract       string
+		objName, archpath      string
 		objLen, offset, length int64
 	)
 
@@ -109,11 +109,11 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		objArgs.Query.Set(cmn.URLParamOrigURL, uri)
 	}
 	// TODO: validate
-	if extract = parseStrFlag(c, extractFlag); extract != "" {
+	if archpath = parseStrFlag(c, archpathFlag); archpath != "" {
 		if objArgs.Query == nil {
 			objArgs.Query = make(url.Values, 1)
 		}
-		objArgs.Query.Set(cmn.URLParamExtract, extract)
+		objArgs.Query.Set(cmn.URLParamArchpath, archpath)
 	}
 
 	if flagIsSet(c, checksumFlag) {
@@ -122,7 +122,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		objLen, err = api.GetObject(defaultAPIParams, bck, objName, objArgs)
 	}
 	if err != nil {
-		if cmn.IsStatusNotFound(err) && extract == "" {
+		if cmn.IsStatusNotFound(err) && archpath == "" {
 			err = fmt.Errorf("object \"%s/%s\" does not exist", bck, objName)
 		}
 		return

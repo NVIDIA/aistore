@@ -42,8 +42,8 @@ var (
 	errInvalidAlgorithmExtension = errors.New("invalid extension provided, should be in format: .ext")
 )
 
-// supportedExtensions is a list of supported extensions by dSort
-var supportedExtensions = []string{cmn.ExtTar, cmn.ExtTgz, cmn.ExtTarTgz, cmn.ExtZip}
+// supportedExtensions is a list of extensions (archives) supported by dSort
+var supportedExtensions = cos.ArchExtensions
 
 // TODO: maybe this struct should be composed of `type` and `template` where
 // template is interface and each template has it's own struct. Then we could

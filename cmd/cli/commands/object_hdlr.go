@@ -22,7 +22,7 @@ var (
 		commandGet: {
 			offsetFlag,
 			lengthFlag,
-			extractFlag,
+			archpathFlag,
 			checksumFlag,
 			isCachedFlag,
 			forceFlag,
@@ -53,7 +53,7 @@ var (
 		commandCat: {
 			offsetFlag,
 			lengthFlag,
-			extractFlag,
+			archpathFlag,
 			checksumFlag,
 			forceFlag,
 		},

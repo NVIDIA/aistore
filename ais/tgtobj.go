@@ -70,7 +70,7 @@ type (
 		// Contains object range query
 		ranges rangesQuery
 		// Extract TODO -- FIXME
-		extract extractQuery
+		archive archiveQuery
 		// Determines if it is GFN request
 		isGFN bool
 		// true: chunked transfer (en)coding as per https://tools.ietf.org/html/rfc7230#page-36
@@ -746,16 +746,19 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 	if hdr != nil {
 		// read range
 		if goi.ranges.Range != "" {
+			rsize := size
 			if goi.ranges.Size > 0 {
-				size = goi.ranges.Size
+				rsize = goi.ranges.Size
 			}
-			if rrange, errCode, err = goi.parseRange(hdr, size); err != nil {
+			if rrange, errCode, err = goi.parseRange(hdr, rsize); err != nil {
 				return
 			}
+			if rrange != nil {
+				cksumRange = cksumConf.Type != cos.ChecksumNone && cksumConf.EnableReadRange
+				size = rrange.Length // Content-Length
+			}
 		}
-
-		// checksum, version, time, length
-		cksumRange = cksumConf.Type != cos.ChecksumNone && rrange != nil && cksumConf.EnableReadRange
+		// checksum, version, time => resp hdr
 		if !goi.lom.Cksum().IsEmpty() && !cksumRange {
 			cksumType, cksumValue := goi.lom.Cksum().Get()
 			hdr.Set(cmn.HdrObjCksumType, cksumType)
@@ -766,31 +769,26 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 		}
 		hdr.Set(cmn.HdrObjSize, strconv.FormatInt(goi.lom.Size(), 10))
 		hdr.Set(cmn.HdrObjAtime, cos.UnixNano2S(goi.lom.AtimeUnix()))
-		if rrange != nil {
-			hdr.Set(cmn.HdrContentLength, strconv.FormatInt(rrange.Length, 10))
-		} else {
-			hdr.Set(cmn.HdrContentLength, strconv.FormatInt(size, 10))
-		}
 	}
 
 	// set reader
 	w := goi.w
 	if rrange == nil {
 		reader = file
-		if goi.extract.relname != "" {
+		if goi.archive.filename != "" {
 			var lim *io.LimitedReader
-			lim, err = extractTar(reader, goi.extract.relname, goi.lom)
+			lim, err = extractTar(reader, goi.archive.filename, goi.lom)
 			if err != nil {
 				if _, ok := err.(*cmn.ErrNotFound); ok {
 					errCode = http.StatusNotFound
 				} else {
 					err = fmt.Errorf(cmn.FmtErrFailed, goi.t.si,
-						"extract "+goi.extract.relname+" from", goi.lom, err)
+						"extract "+goi.archive.filename+" from", goi.lom, err)
 				}
 				return
 			}
-			reader, size = lim, lim.N
-			// TODO: add support for checksumming extracted files (see cksumRange)
+			reader, size = lim, lim.N // Content-Length
+			// TODO: support checksumming extracted files
 		}
 		if goi.chunked {
 			// NOTE: hide `ReadFrom` of the `http.ResponseWriter` (in re: sendfile)
@@ -814,6 +812,10 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 			hdr.Set(cmn.HdrObjCksumType, cksumConf.Type)
 			reader = sgl
 		}
+	}
+	// set Content-Length
+	if hdr != nil {
+		hdr.Set(cmn.HdrContentLength, strconv.FormatInt(size, 10))
 	}
 
 	// transmit
@@ -845,13 +847,6 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 	}
 
 	delta := time.Since(goi.started)
-	if glog.FastV(4, glog.SmoduleAIS) {
-		s := fmt.Sprintf("GET: %s(%s), %s", goi.lom, cos.B2S(written, 1), delta)
-		if coldGet {
-			s += " (cold)"
-		}
-		glog.Infoln(s)
-	}
 	goi.t.statsT.AddMany(
 		stats.NamedVal64{Name: stats.GetThroughput, Value: written},
 		stats.NamedVal64{Name: stats.GetLatency, Value: int64(delta)},
@@ -881,7 +876,7 @@ func (goi *getObjInfo) parseRange(hdr http.Header, size int64) (rrange *cmn.HTTP
 		errCode = http.StatusRequestedRangeNotSatisfiable
 		return
 	}
-	if goi.extract.relname != "" {
+	if goi.archive.filename != "" {
 		err = fmt.Errorf(cmn.FmtErrUnsupported, goi.t.Snode(), "range-reading archived files")
 		errCode = http.StatusRequestedRangeNotSatisfiable
 		return

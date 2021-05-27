@@ -1071,7 +1071,7 @@ func executeTwoGETsForChecksumValidation(proxyURL string, bck cmn.Bck, objName s
 
 // TODO: validate range checksums
 func TestRangeRead(t *testing.T) {
-	initMountpaths(t, tutils.RandomProxyURL(t))
+	initMountpaths(t, tutils.RandomProxyURL(t)) // to run findObjOnDisk() and validate range
 
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (

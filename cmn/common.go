@@ -17,15 +17,6 @@ import (
 )
 
 const (
-	// ExtTar is tar files extension
-	ExtTar = ".tar"
-	// ExtTgz is short tar tgz files extension
-	ExtTgz = ".tgz"
-	// ExtTarTgz is tar tgz files extension
-	ExtTarTgz = ".tar.gz"
-	// ExtZip is zip files extension
-	ExtZip = ".zip"
-
 	configHomeEnvVar = "XDG_CONFIG_HOME" // https://wiki.archlinux.org/index.php/XDG_Base_Directory
 
 	// NOTE: Taken from cloud.google.com/go/storage/storage.go (userAgent).

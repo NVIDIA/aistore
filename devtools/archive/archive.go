@@ -1,4 +1,4 @@
-// Package archive provides common low-level utilities for archives tests
+// Package archive provides common low-level utilities for testing archives
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -71,15 +71,16 @@ func addFileToZip(tw *zip.Writer, path string, fileSize int) error {
 
 // CreateTarWithRandomFiles creates tar with specified number of files. Tar
 // is also gzipped if necessary.
-func CreateTarWithRandomFiles(tarName string, gzipped bool, fileCnt, fileSize int, duplication bool, recordExts []string) error {
+func CreateTarWithRandomFiles(tarName string, gzipped bool, fileCnt, fileSize int, duplication bool,
+	recordExts []string, randomNames []string) error {
 	var (
 		gzw *gzip.Writer
 		tw  *tar.Writer
 	)
 
-	extension := ".tar"
+	extension := cos.ExtTar
 	if gzipped {
-		extension += ".gz"
+		extension = cos.ExtTarTgz
 	}
 
 	// set up the output file
@@ -108,13 +109,20 @@ func CreateTarWithRandomFiles(tarName string, gzipped bool, fileCnt, fileSize in
 	}
 
 	for i := 0; i < fileCnt; i++ {
-		randomName := rand.Int()
+		var randomName int
+		if randomNames == nil {
+			randomName = rand.Int()
+		}
 		for _, ext := range recordExts {
-			fileName := fmt.Sprintf("%d%s", randomName, ext) // generate random names
-			if dupIndex == i && duplication {
-				fileName = prevFileName
+			var fileName string
+			if randomNames == nil {
+				fileName = fmt.Sprintf("%d%s", randomName, ext) // generate random names
+				if dupIndex == i && duplication {
+					fileName = prevFileName
+				}
+			} else {
+				fileName = randomNames[i]
 			}
-
 			if err := addFileToTar(tw, fileName, fileSize, nil); err != nil {
 				return err
 			}
@@ -161,7 +169,7 @@ func CreateTarWithCustomFilesToWriter(w io.Writer, fileCnt, fileSize int, custom
 
 func CreateTarWithCustomFiles(tarName string, fileCnt, fileSize int, customFileType, customFileExt string, missingKeys bool) error {
 	// set up the output file
-	extension := ".tar"
+	extension := cos.ExtTar
 	name := tarName + extension
 	tarball, err := cos.CreateFile(name)
 	if err != nil {
@@ -175,7 +183,7 @@ func CreateTarWithCustomFiles(tarName string, fileCnt, fileSize int, customFileT
 func CreateZipWithRandomFiles(zipName string, fileCnt, fileSize int) error {
 	var zw *zip.Writer
 
-	extension := ".zip"
+	extension := cos.ExtZip
 	name := zipName + extension
 	z, err := cos.CreateFile(name)
 	if err != nil {

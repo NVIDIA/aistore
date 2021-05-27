@@ -49,8 +49,8 @@ type (
 		Size  int64  // size, in bytes
 	}
 
-	extractQuery struct {
-		relname string
+	archiveQuery struct {
+		filename string // pathname in archive
 	}
 
 	// callResult contains HTTP response.

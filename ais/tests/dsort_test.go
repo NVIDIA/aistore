@@ -177,7 +177,7 @@ func (df *dsortFramework) init() {
 		df.outputTempl = "output-{00000..10000}"
 	}
 	if df.extension == "" {
-		df.extension = cmn.ExtTar
+		df.extension = cos.ExtTar
 	}
 
 	// Assumption is that all prefixes end with dash: "-"
@@ -265,11 +265,11 @@ func (df *dsortFramework) createInputShards() {
 
 			if df.algorithm.Kind == dsort.SortKindContent {
 				err = archive.CreateTarWithCustomFiles(path, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension, df.missingKeys)
-			} else if df.extension == cmn.ExtTar {
-				err = archive.CreateTarWithRandomFiles(path, false, df.fileInTarballCnt, df.fileInTarballSize, duplication, df.recordExts)
-			} else if df.extension == cmn.ExtTarTgz {
-				err = archive.CreateTarWithRandomFiles(path, true, df.fileInTarballCnt, df.fileInTarballSize, duplication, nil)
-			} else if df.extension == cmn.ExtZip {
+			} else if df.extension == cos.ExtTar {
+				err = archive.CreateTarWithRandomFiles(path, false, df.fileInTarballCnt, df.fileInTarballSize, duplication, df.recordExts, nil)
+			} else if df.extension == cos.ExtTarTgz {
+				err = archive.CreateTarWithRandomFiles(path, true, df.fileInTarballCnt, df.fileInTarballSize, duplication, nil, nil)
+			} else if df.extension == cos.ExtZip {
 				err = archive.CreateZipWithRandomFiles(path, df.fileInTarballCnt, df.fileInTarballSize)
 			} else {
 				df.m.t.Fail()
@@ -300,7 +300,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 	var lastValue interface{}
 
 	gzipped := false
-	if df.extension != cmn.ExtTar {
+	if df.extension != cos.ExtTar {
 		gzipped = true
 	}
 
@@ -375,9 +375,9 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 		} else {
 			var files []os.FileInfo
 
-			if df.extension == cmn.ExtTar || df.extension == cmn.ExtTarTgz {
+			if df.extension == cos.ExtTar || df.extension == cos.ExtTarTgz {
 				files, err = tutils.GetFileInfosFromTarBuffer(buffer, gzipped)
-			} else if df.extension == cmn.ExtZip {
+			} else if df.extension == cos.ExtZip {
 				files, err = tutils.GetFileInfosFromZipBuffer(buffer)
 			}
 
@@ -924,7 +924,7 @@ func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
 					dsorterType:      dsorterType,
 					tarballCnt:       200,
 					fileInTarballCnt: 50,
-					extension:        cmn.ExtTarTgz,
+					extension:        cos.ExtTarTgz,
 					maxMemUsage:      "1KB",
 				}
 			)
@@ -1021,7 +1021,7 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 			tarballCnt:        400,
 			fileInTarballSize: cos.MiB,
 			fileInTarballCnt:  5,
-			extension:         ".tar.gz",
+			extension:         cos.ExtTarTgz,
 		}
 	)
 
@@ -1125,7 +1125,7 @@ func TestDistributedSortWithCompression(t *testing.T) {
 					dsorterType:      dsorterType,
 					tarballCnt:       1000,
 					fileInTarballCnt: 50,
-					extension:        cmn.ExtTarTgz,
+					extension:        cos.ExtTarTgz,
 					maxMemUsage:      "99%",
 				}
 			)
@@ -1693,7 +1693,7 @@ func TestDistributedSortMissingShards(t *testing.T) {
 					tarballCnt:       1000,
 					tarballCntToSkip: 50,
 					fileInTarballCnt: 200,
-					extension:        ".tar",
+					extension:        cos.ExtTar,
 				}
 			)
 
@@ -1751,7 +1751,7 @@ func TestDistributedSortDuplications(t *testing.T) {
 					tarballCnt:            1000,
 					fileInTarballCnt:      200,
 					recordDuplicationsCnt: 50,
-					extension:             ".tar",
+					extension:             cos.ExtTar,
 				}
 			)
 

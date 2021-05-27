@@ -351,7 +351,7 @@ var (
 	listFlag     = cli.StringFlag{Name: "list", Usage: "comma-separated list of object names, e.g.: 'o1,o2,o3'"}
 	offsetFlag   = cli.StringFlag{Name: "offset", Usage: "object read offset " + sizeUnits}
 	lengthFlag   = cli.StringFlag{Name: "length", Usage: "object read length " + sizeUnits}
-	extractFlag  = cli.StringFlag{Name: "extract", Usage: "extract named file from archive"}
+	archpathFlag = cli.StringFlag{Name: "archpath", Usage: "filename in archive"}
 	isCachedFlag = cli.BoolFlag{Name: "is-cached", Usage: "check if object from a remote bucket is present (cached)"}
 	cachedFlag   = cli.BoolFlag{
 		Name:  "cached",

@@ -909,7 +909,7 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 		goi.w = w
 		goi.ctx = context.Background()
 		goi.ranges = rangesQuery{Range: r.Header.Get(cmn.HdrRange), Size: 0}
-		goi.extract = extractQuery{relname: query.Get(cmn.URLParamExtract)}
+		goi.archive = archiveQuery{filename: query.Get(cmn.URLParamArchpath)}
 		goi.isGFN = cos.IsParseBool(query.Get(cmn.URLParamIsGFNRequest))
 		goi.chunked = config.Net.HTTP.Chunked
 	}
