@@ -9,3 +9,4 @@ import (
 )
 
 func Since(started int64) time.Duration { return time.Duration(NanoTime() - started) }
+func SinceNano(started int64) int64     { return NanoTime() - started }

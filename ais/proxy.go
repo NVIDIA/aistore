@@ -1087,19 +1087,15 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 		return
 	}
 
-	delta := mono.Since(begin)
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("LIST: bck: %q, token: %q, %s", bck, bckList.ContinuationToken, delta)
-	}
-
 	// Free memory allocated for temporary slice immediately as it can take up to a few GB
 	bckList.Entries = bckList.Entries[:0]
 	bckList.Entries = nil
 	bckList = nil
 
+	delta := mono.SinceNano(begin)
 	p.statsT.AddMany(
 		stats.NamedVal64{Name: stats.ListCount, Value: 1},
-		stats.NamedVal64{Name: stats.ListLatency, Value: int64(delta)},
+		stats.NamedVal64{Name: stats.ListLatency, Value: delta},
 	)
 }
 

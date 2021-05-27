@@ -43,17 +43,16 @@ func (na netAccess) isSet(flag netAccess) bool {
 
 func isIntraPut(hdr http.Header) bool { return hdr != nil && hdr.Get(cmn.HdrPutterID) != "" }
 
-func isRedirect(q url.Values) (delta string) {
+func isRedirect(q url.Values) (ptime string) {
 	if len(q) == 0 || q.Get(cmn.URLParamProxyID) == "" {
 		return
 	}
 	return q.Get(cmn.URLParamUnixTime)
 }
 
-func requestLatency(started time.Time, ptime string) (delta int64) {
+func ptLatency(started time.Time, ptime string) (delta int64) {
 	pts, err := cos.S2UnixNano(ptime)
 	if err != nil {
-		glog.Errorf("unexpected: failed to convert %s to int, err: %v", ptime, err)
 		return
 	}
 	delta = started.UnixNano() - pts

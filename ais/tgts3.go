@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -163,7 +164,7 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 		t.writeErr(w, r, errS3Obj)
 		return
 	}
-	started := time.Now()
+	started, nanotim := time.Now(), mono.NanoTime()
 	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(t.owner.bmd); err != nil {
 		t.writeErr(w, r, err)
@@ -196,6 +197,7 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 	goi := allocGetObjInfo()
 	{
 		goi.started = started
+		goi.nanotim = nanotim
 		goi.t = t
 		goi.lom = lom
 		goi.w = w

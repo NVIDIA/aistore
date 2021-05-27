@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -60,21 +61,16 @@ type (
 	}
 
 	getObjInfo struct {
-		started time.Time // started time of receiving - used to calculate the recv duration
+		started time.Time
+		nanotim int64
 		t       *targetrunner
 		lom     *cluster.LOM
-		// Writer where the object will be written.
-		w io.Writer
-		// Context used when getting object from remote backend. It usually contains access credentials.
-		ctx context.Context
-		// Contains object range query
-		ranges rangesQuery
-		// Extract TODO -- FIXME
-		archive archiveQuery
-		// Determines if it is GFN request
-		isGFN bool
-		// true: chunked transfer (en)coding as per https://tools.ietf.org/html/rfc7230#page-36
-		chunked bool
+		w       io.Writer       // not necessarily http.ResponseWriter
+		ctx     context.Context // context used when getting object from remote backend (access creds)
+		ranges  rangesQuery     // range read query
+		archive archiveQuery    // archive extraction query
+		isGFN   bool            // is GFN request
+		chunked bool            // chunked transfer (en)coding: https://tools.ietf.org/html/rfc7230#page-36
 	}
 
 	// Contains information packed in append handle.
@@ -707,10 +703,10 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 			goi.t.statsT.Add(stats.ErrGetCount, 1)
 			return
 		}
-		delta := time.Since(goi.started)
+		delta := mono.SinceNano(goi.nanotim)
 		goi.t.statsT.AddMany(
 			stats.NamedVal64{Name: stats.GetCount, Value: 1},
-			stats.NamedVal64{Name: stats.GetLatency, Value: int64(delta)},
+			stats.NamedVal64{Name: stats.GetLatency, Value: delta},
 		)
 		return
 	}
@@ -846,10 +842,10 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 		goi.t.rebManager.FilterAdd([]byte(goi.lom.Uname()))
 	}
 
-	delta := time.Since(goi.started)
+	delta := mono.SinceNano(goi.nanotim)
 	goi.t.statsT.AddMany(
 		stats.NamedVal64{Name: stats.GetThroughput, Value: written},
-		stats.NamedVal64{Name: stats.GetLatency, Value: int64(delta)},
+		stats.NamedVal64{Name: stats.GetLatency, Value: delta},
 		stats.NamedVal64{Name: stats.GetCount, Value: 1},
 	)
 	return

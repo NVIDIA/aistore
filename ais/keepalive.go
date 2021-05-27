@@ -489,9 +489,9 @@ func (k *keepalive) register(sendKeepalive func(time.Duration) (int, error), pri
 		timeout     = time.Duration(k.timeoutStatsForDaemon(primaryID).timeout)
 		now         = mono.NanoTime()
 		status, err = sendKeepalive(timeout)
-		delta       = mono.Since(now)
+		delta       = mono.SinceNano(now)
 	)
-	k.statsT.Add(stats.KeepAliveLatency, int64(delta))
+	k.statsT.Add(stats.KeepAliveLatency, delta)
 	if err == nil {
 		return
 	}

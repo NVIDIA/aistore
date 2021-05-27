@@ -714,7 +714,7 @@ func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase
 	// latency = (network) +- (clock drift)
 	if phase == cmn.ActBegin || phase == cmn.ActCommit {
 		if ptime := query.Get(cmn.URLParamUnixTime); ptime != "" {
-			if delta := requestLatency(time.Now(), ptime); delta != 0 {
+			if delta := ptLatency(time.Now(), ptime); delta != 0 {
 				bound := cmn.GCO.Get().Timeout.CplaneOperation / 2
 				if delta > int64(bound) || delta < -int64(bound) {
 					glog.Errorf("%s: txn %s[%s] latency=%v(!), caller %s, phase=%s, bucket %q",

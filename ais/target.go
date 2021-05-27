@@ -606,14 +606,11 @@ func (t *targetrunner) handleList(w http.ResponseWriter, r *http.Request, queryB
 			return
 		}
 
-		delta := mono.Since(begin)
+		delta := mono.SinceNano(begin)
 		t.statsT.AddMany(
 			stats.NamedVal64{Name: stats.ListCount, Value: 1},
-			stats.NamedVal64{Name: stats.ListLatency, Value: int64(delta)},
+			stats.NamedVal64{Name: stats.ListLatency, Value: delta},
 		)
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("LIST: %s, %s", bck, delta)
-		}
 	}
 }
 
@@ -878,10 +875,10 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 		ptime   = isRedirect(query)
 		config  = cmn.GCO.Get()
 		started = time.Now()
+		nanotim = mono.NanoTime()
 	)
-
-	if ptime != "" {
-		if redelta := requestLatency(started, ptime); redelta != 0 {
+	if nanotim&0x5 == 5 {
+		if redelta := ptLatency(time.Now(), ptime); redelta != 0 {
 			t.statsT.Add(stats.GetRedirLatency, redelta)
 		}
 	}
@@ -904,6 +901,7 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 	goi := allocGetObjInfo()
 	{
 		goi.started = started
+		goi.nanotim = nanotim
 		goi.t = t
 		goi.lom = lom
 		goi.w = w
@@ -943,7 +941,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 
 	started := time.Now()
 	if ptime != "" {
-		if redelta := requestLatency(started, ptime); redelta != 0 {
+		if redelta := ptLatency(started, ptime); redelta != 0 {
 			t.statsT.Add(stats.PutRedirLatency, redelta)
 		}
 	}
