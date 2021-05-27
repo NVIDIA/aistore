@@ -69,23 +69,17 @@ func addFileToZip(tw *zip.Writer, path string, fileSize int) error {
 	return nil
 }
 
-// CreateTarWithRandomFiles creates tar with specified number of files. Tar
-// is also gzipped if necessary.
-func CreateTarWithRandomFiles(tarName string, gzipped bool, fileCnt, fileSize int, duplication bool,
+// CreateTarWithRandomFiles creates tar with specified number of files. Tar is also gzipped if necessary.
+func CreateTarWithRandomFiles(tarName string, fileCnt, fileSize int, duplication bool,
 	recordExts []string, randomNames []string) error {
 	var (
-		gzw *gzip.Writer
-		tw  *tar.Writer
+		gzw     *gzip.Writer
+		tw      *tar.Writer
+		gzipped = cos.IsGzipped(tarName)
 	)
 
-	extension := cos.ExtTar
-	if gzipped {
-		extension = cos.ExtTarTgz
-	}
-
 	// set up the output file
-	name := tarName + extension
-	tarball, err := cos.CreateFile(name)
+	tarball, err := cos.CreateFile(tarName)
 	if err != nil {
 		return err
 	}
@@ -169,9 +163,7 @@ func CreateTarWithCustomFilesToWriter(w io.Writer, fileCnt, fileSize int, custom
 
 func CreateTarWithCustomFiles(tarName string, fileCnt, fileSize int, customFileType, customFileExt string, missingKeys bool) error {
 	// set up the output file
-	extension := cos.ExtTar
-	name := tarName + extension
-	tarball, err := cos.CreateFile(name)
+	tarball, err := cos.CreateFile(tarName)
 	if err != nil {
 		return err
 	}
@@ -182,10 +174,7 @@ func CreateTarWithCustomFiles(tarName string, fileCnt, fileSize int, customFileT
 
 func CreateZipWithRandomFiles(zipName string, fileCnt, fileSize int) error {
 	var zw *zip.Writer
-
-	extension := cos.ExtZip
-	name := zipName + extension
-	z, err := cos.CreateFile(name)
+	z, err := cos.CreateFile(zipName)
 	if err != nil {
 		return err
 	}

@@ -32,7 +32,7 @@ func TestGetFromArchive(t *testing.T) {
 				bck: bck.Bck,
 			}
 			baseParams  = tutils.BaseAPIParams(m.proxyURL)
-			path        = fmt.Sprintf("%s/%s", tmpDir, bck.Name)
+			tarName     = fmt.Sprintf("%s/%s", tmpDir, bck.Name) + cos.ExtTar
 			errCh       = make(chan error, m.num)
 			numArchived = 5
 			randomNames = make([]string, numArchived)
@@ -41,8 +41,7 @@ func TestGetFromArchive(t *testing.T) {
 			randomNames[i] = fmt.Sprintf("%d.txt", rand.Int())
 		}
 		err := archive.CreateTarWithRandomFiles(
-			path,                 // tar name
-			false,                // gzip
+			tarName,              // tar name
 			numArchived,          // num archived files
 			rand.Intn(cos.KiB)+1, // archived file size
 			false,                // duplication
@@ -50,12 +49,11 @@ func TestGetFromArchive(t *testing.T) {
 			randomNames,          // caller-generated filenames
 		)
 		tassert.CheckFatal(t, err)
+		defer os.Remove(tarName)
 
-		fqn := path + cos.ExtTar
-		objname := filepath.Base(fqn)
-		defer os.Remove(fqn)
+		objname := filepath.Base(tarName)
 
-		reader, err := readers.NewFileReaderFromFile(fqn, cos.ChecksumNone)
+		reader, err := readers.NewFileReaderFromFile(tarName, cos.ChecksumNone)
 		tassert.CheckFatal(t, err)
 
 		tutils.Put(m.proxyURL, m.bck, objname, reader, errCh)

@@ -261,16 +261,21 @@ func (df *dsortFramework) createInputShards() {
 				err         error
 				duplication = i < df.recordDuplicationsCnt
 				path        = fmt.Sprintf("%s/%s/%s%d", tmpDir, df.m.bck.Name, df.inputPrefix, i)
+				tarName     string
 			)
-
 			if df.algorithm.Kind == dsort.SortKindContent {
-				err = archive.CreateTarWithCustomFiles(path, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension, df.missingKeys)
+				tarName = path + cos.ExtTar
+			} else {
+				tarName = path + df.extension
+			}
+			if df.algorithm.Kind == dsort.SortKindContent {
+				err = archive.CreateTarWithCustomFiles(tarName, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension, df.missingKeys)
 			} else if df.extension == cos.ExtTar {
-				err = archive.CreateTarWithRandomFiles(path, false, df.fileInTarballCnt, df.fileInTarballSize, duplication, df.recordExts, nil)
+				err = archive.CreateTarWithRandomFiles(tarName, df.fileInTarballCnt, df.fileInTarballSize, duplication, df.recordExts, nil)
 			} else if df.extension == cos.ExtTarTgz {
-				err = archive.CreateTarWithRandomFiles(path, true, df.fileInTarballCnt, df.fileInTarballSize, duplication, nil, nil)
+				err = archive.CreateTarWithRandomFiles(tarName, df.fileInTarballCnt, df.fileInTarballSize, duplication, nil, nil)
 			} else if df.extension == cos.ExtZip {
-				err = archive.CreateZipWithRandomFiles(path, df.fileInTarballCnt, df.fileInTarballSize)
+				err = archive.CreateZipWithRandomFiles(tarName, df.fileInTarballCnt, df.fileInTarballSize)
 			} else {
 				df.m.t.Fail()
 			}

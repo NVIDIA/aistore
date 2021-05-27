@@ -4,15 +4,17 @@
  */
 package cos
 
+import "strings"
+
 const (
-	// ExtTar is tar files extension
-	ExtTar = ".tar"
-	// ExtTgz is short tar tgz files extension
-	ExtTgz = ".tgz"
-	// ExtTarTgz is tar tgz files extension
+	ExtTar    = ".tar"
+	ExtTgz    = ".tgz"
 	ExtTarTgz = ".tar.gz"
-	// ExtZip is zip files extension
-	ExtZip = ".zip"
+	ExtZip    = ".zip"
 )
 
 var ArchExtensions = []string{ExtTar, ExtTgz, ExtTarTgz, ExtZip}
+
+func IsGzipped(filename string) bool {
+	return strings.HasSuffix(filename, ExtTgz) || strings.HasSuffix(filename, ExtTarTgz)
+}
