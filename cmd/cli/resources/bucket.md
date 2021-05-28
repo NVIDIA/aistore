@@ -268,22 +268,49 @@ Evict a [remote bucket](/docs/bucket.md#remote-bucket). It also resets the prope
 All data from the remote bucket stored in the cluster will be removed, and AIS will stop keeping track of the remote bucket.
 Read more about this feature [here](/docs/bucket.md#evict-remote-bucket).
 
-Various flags that can be used with this command are below.
 ```console
-$ ais bucket evict aws://abc/
+$ ais bucket evict aws://abc
 "aws://abc" bucket evicted
 
 # Dry run: the cluster will not be modified
-$ ais bucket evict --dry-run aws://abc/
+$ ais bucket evict --dry-run aws://abc
 [DRY RUN] No modifications on the cluster
 EVICT: "aws://abc"
 
 # Only evict the remote bucket's data (AIS will retain the bucket's metadata)
-$ ais bucket evict --keep-md aws://abc/
+$ ais bucket evict --keep-md aws://abc
 "aws://abc" bucket evicted
 ```
 
-Note: When an [HDFS bucket](/docs/providers.md#hdfs-provider) is evicted, AIS will only delete objects stored in the cluster.
+Here's a fuller example that lists remote bucket and then reads and evicts a selected object:
+
+```console
+$ ais ls gs://wrQkliptRt
+NAME             SIZE
+TDXBNBEZNl.tar   8.50KiB
+qFpwOOifUe.tar   8.50KiB
+thmdpZXetG.tar   8.50KiB
+
+$ ais object get gcp://wrQkliptRt/qFpwOOifUe.tar /tmp/qFpwOOifUe.tar
+GET "qFpwOOifUe.tar" from bucket "gcp://wrQkliptRt" as "/tmp/qFpwOOifUe.tar" [8.50KiB]
+
+$ ais ls gs://wrQkliptRt --props all
+NAME             SIZE            CHECKSUM                                ATIME                   VERSION                 CACHED  STATUS  COPIES
+TDXBNBEZNl.tar   8.50KiB         33345a69bade096a30abd42058da4537                                1622133976984266        no      ok      0
+qFpwOOifUe.tar   8.50KiB         47dd59e41f6b7723                        28 May 21 12:02 PDT     1622133846120151        yes     ok      1
+thmdpZXetG.tar   8.50KiB         cfe0c386e91daa1571d6a659f49b1408                                1622137609269706        no      ok      0
+
+$ ais bucket evict gcp://wrQkliptRt
+"gcp://wrQkliptRt" bucket evicted
+
+$ ais ls gs://wrQkliptRt --props all
+NAME             SIZE            CHECKSUM                                ATIME   VERSION                 CACHED  STATUS  COPIES
+TDXBNBEZNl.tar   8.50KiB         33345a69bade096a30abd42058da4537                1622133976984266        no      ok      0
+qFpwOOifUe.tar   8.50KiB         8b5919c0850a07d931c3c46ed9101eab                1622133846120151        no      ok      0
+thmdpZXetG.tar   8.50KiB         cfe0c386e91daa1571d6a659f49b1408                1622137609269706        no      ok      0
+```
+
+> Note: When an [HDFS bucket](/docs/providers.md#hdfs-provider) is evicted, AIS will only remove objects stored in the cluster.
 AIS will retain the bucket's metadata to allow the bucket to re-register later.
 
 ## Move or Rename a bucket

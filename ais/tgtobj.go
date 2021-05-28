@@ -123,14 +123,11 @@ func (poi *putObjInfo) putObject() (errCode int, err error) {
 			return 0, nil
 		}
 	}
-
-	if !daemon.dryRun.disk {
-		if err := poi.writeToFile(); err != nil {
-			return http.StatusInternalServerError, err
-		}
-		if errCode, err := poi.finalize(); err != nil {
-			return errCode, err
-		}
+	if err := poi.writeToFile(); err != nil {
+		return http.StatusInternalServerError, err
+	}
+	if errCode, err := poi.finalize(); err != nil {
+		return errCode, err
 	}
 	if poi.recvType == cluster.RegularPut {
 		delta := time.Since(poi.started)
@@ -266,9 +263,6 @@ func (poi *putObjInfo) writeToFile() (err error) {
 		}{}
 		conf = poi.lom.CksumConf()
 	)
-	if daemon.dryRun.disk {
-		return
-	}
 	if file, err = poi.lom.CreateFile(poi.workFQN); err != nil {
 		return
 	}
@@ -367,10 +361,6 @@ func (goi *getObjInfo) getObject() (errCode int, err error) {
 	// under lock: lom init, restore from cluster
 	goi.lom.Lock(false)
 do:
-	// all subsequent checks work with disks - skip all if dryRun.disk=true
-	if daemon.dryRun.disk {
-		goto get
-	}
 	err = goi.lom.Load(true /*cache it*/, true /*locked*/)
 	if err != nil {
 		coldGet = cmn.IsObjNotExist(err)
@@ -684,7 +674,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 		hdr     http.Header // if it is http request we will write also header
 		written int64
 	)
-	defer func() {
+	defer func() { // cleanup
 		if file != nil {
 			cos.Close(file)
 		}
@@ -698,23 +688,6 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 			csl.Close()
 		}
 	}()
-
-	// loopback if disk IO is disabled
-	if daemon.dryRun.disk {
-		if err = cos.FloodWriter(goi.w, daemon.dryRun.size); err != nil {
-			err = fmt.Errorf("dry-run: failed to send random response, err: %v", err)
-			errCode = http.StatusInternalServerError
-			goi.t.statsT.Add(stats.ErrGetCount, 1)
-			return
-		}
-		delta := mono.SinceNano(goi.nanotim)
-		goi.t.statsT.AddMany(
-			stats.NamedVal64{Name: stats.GetCount, Value: 1},
-			stats.NamedVal64{Name: stats.GetLatency, Value: delta},
-		)
-		return
-	}
-
 	if resp, ok := goi.w.(http.ResponseWriter); ok {
 		hdr = resp.Header()
 	}

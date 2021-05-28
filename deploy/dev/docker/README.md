@@ -95,9 +95,6 @@ To deploy a cluster in 'silent' mode use the following options (if any of them a
 * `-qs=AWS_DIR` or `--quickstart=AWS_DIR`   : deploys a quickstart version of AIS
 * `-nocloud`                                : to deploy AIS without any backend provider
 * `-grafana`                                : starts Graphite and Grafana (can be accessed at [localhost:3000](http://localhost:3000)) for displaying metrics
-* `-nodiskio=BOOL`                          : run Dry-Run mode with disk IO is disabled (default = false)
-* `-dryobjsize=SIZE`                        : size of an object when a source is a 'fake' one. 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. Default value is '8m'
-
 
 Note:
 * If the `-f` or `--filesystems` flag is used, the `-d` or `--directories` flag is disabled and vice-versa
@@ -202,10 +199,6 @@ $ BUCKET=vlocal go test -v ./tests -count 1 -p 1 -timeout 1h -url=http://172.51.
 ```
 
 **NOTE:** Some tests require a minimum number of targets or proxies. Also, due to Docker permissions, you might have to run tests with `sudo` too.
-
-## Running benchmark tests in the Docker environment
-
-AIStore Docker clusters can also be deployed in Dry-Run mode. These modes can be activated either through the interactive interface or by passing in `-nodiskio`. See more about benchmark tests, see [AIS Loader](/bench/aisloader/README.md)
 
 ## Utility Scripts
 

@@ -36,7 +36,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -bucket | `string` | Bucket name. Bucket will be created if doesn't exist. If empty, aisloader generates a new random bucket name | `""` |
 | -check-statsd | `bool` | true: prior to benchmark make sure that StatsD is reachable | `false` |
 | -cleanup | `bool` | true: remove bucket upon benchmark termination | `n/a` (required) |
-| -dry-run | `bool` | show the configuration and parameters that aisloader will use | `false` |
+| -dry-run | `bool` | show the entire set of parameters that aisloader will use when actually running | `false` |
 | -duration | `string`, `int` | Benchmark duration (0 - run forever or until Ctrl-C, default 1m). Note that if both duration and totalputsize are zeros, aisloader will have nothing to do | `1m` |
 | -getconfig | `bool` | true: generate control plane load by reading AIS proxy configuration (that is, instead of reading/writing data exercise control path) | `false` |
 | -getloaderid | `bool` | true: print stored/computed unique loaderID aka aisloader identifier and exit | `false` |

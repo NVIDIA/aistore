@@ -366,8 +366,6 @@ func (t *targetrunner) Run() error {
 		cos.ExitLogf("%v", err)
 	}
 
-	dryRunInit()
-
 	// Init meta-owners and load local instances
 	t.owner.bmd.init()
 

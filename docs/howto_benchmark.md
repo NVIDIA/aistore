@@ -56,21 +56,3 @@ $ aisloader -bucket=nvaws -duration=5m -numworkers=3 -pctput=30 -readertype=tar 
 ### AIS Loader full documentation
 
 Full aisloader documentation, including more examples and full options list, is available [here](/bench/aisloader/README.md).
-
-
-## Dry-Run Performance Tests
-
-AIStore supports a "dry" deployment: `AIS_NO_DISK_IO`.
-
-Example of deploying a cluster with disk IO disabled and object size 256KB:
-
-```console
-$ AIS_NO_DISK_IO=true AIS_DRY_OBJ_SIZE=256k make deploy
-```
-
-**Note:** These are passed in either as environment variables or command line arguments when deploying the AIStore clusters.
-
-| CLI Argument | Environment Variable | Default Value | Behavior |
-| ------------ | ------ | ------ | ------------- |
-| nodiskio | `AIS_NO_DISK_IO` | `false` | If `true` - disables disk IO. For GET requests, a storage target does not read anything from disks - no file stat, file open etc - and returns an in-memory object with predefined size (see `AIS_DRY_OBJ_SIZE` variable). For PUT requests, it reads the request's body to `/dev/null`. <br> Valid values are `true` or `1`, and `false` or `0`. |
-| dryobjsize | `AIS_DRY_OBJ_SIZE` | `8m` | A size of an object when a source is a 'fake' one: disk IO disabled for GET requests, and network IO disabled for PUT requests. The size is in bytes but suffixes can be used. The following suffixes are supported: 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. <br> Default value is '8m' - the size of an object is 8 megabytes |

@@ -28,7 +28,6 @@ const usecli = `
 type (
 	daemonCtx struct {
 		cli       cliFlags
-		dryRun    dryRunConfig
 		rg        *rungroup
 		version   string      // major.minor.build (see cmd/aisnode)
 		buildTime string      // YYYY-MM-DD HH:MM:SS-TZ
@@ -55,15 +54,6 @@ type (
 		rs    map[string]cos.Runner
 		errCh chan error
 	}
-	// - selective disabling of a disk and/or network IO.
-	// - dry-run is initialized at startup and cannot be changed.
-	// - the values can be set via clivars or environment (environment will override clivars).
-	// - for details see README, section "Performance testing"
-	dryRunConfig struct {
-		sizeStr string // random content size used when disk IO is disabled (-dryobjsize/AIS_DRY_OBJ_SIZE)
-		size    int64  // as above converted to bytes from a string like '8m'
-		disk    bool   // dry-run disk (-nodiskio/AIS_NO_DISK_IO)
-	}
 )
 
 var daemon = daemonCtx{}
@@ -89,29 +79,6 @@ func init() {
 		"determines if primary proxy should skip waiting for target registrations when starting up")
 	flag.BoolVar(&daemon.cli.usage, "h", false, "show usage and exit")
 	flag.BoolVar(&daemon.cli.overrideBackends, "override_backends", false, "set remote backends at deployment time")
-
-	// dry-run
-	flag.BoolVar(&daemon.dryRun.disk, "nodiskio", false, "dry-run: if true, no disk operations for GET and PUT")
-	flag.StringVar(&daemon.dryRun.sizeStr, "dryobjsize", "8m", "dry-run: in-memory random content")
-}
-
-// dry-run environment overrides dry-run clivars
-func dryRunInit() {
-	str := os.Getenv("AIS_NO_DISK_IO")
-	if b, err := cos.ParseBool(str); err == nil {
-		daemon.dryRun.disk = b
-	}
-	str = os.Getenv("AIS_DRY_OBJ_SIZE")
-	if str != "" {
-		if size, err := cos.S2B(str); size > 0 && err == nil {
-			daemon.dryRun.size = size
-		}
-	}
-	if daemon.dryRun.disk {
-		warning := "Dry-run: disk IO will be disabled"
-		fmt.Fprintf(os.Stderr, "%s\n", warning)
-		glog.Infof("%s - in memory file size: %d (%s) bytes", warning, daemon.dryRun.size, daemon.dryRun.sizeStr)
-	}
 }
 
 func initDaemon(version, buildTime string) cos.Runner {
@@ -127,12 +94,6 @@ func initDaemon(version, buildTime string) cos.Runner {
 	}
 	if daemon.cli.role != cmn.Proxy && daemon.cli.role != cmn.Target {
 		cos.ExitLogf("Invalid daemon's role %q, expecting %q or %q", daemon.cli.role, cmn.Proxy, cmn.Target)
-	}
-	if daemon.dryRun.disk {
-		daemon.dryRun.size, err = cos.S2B(daemon.dryRun.sizeStr)
-		if daemon.dryRun.size < 1 || err != nil {
-			cos.ExitLogf("Invalid dry-run size: %d [%s]\n", daemon.dryRun.size, daemon.dryRun.sizeStr)
-		}
 	}
 	if daemon.cli.globalConfigPath == "" {
 		cos.ExitLogf(erfm, "config")

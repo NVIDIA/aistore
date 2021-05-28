@@ -13,7 +13,7 @@ Below you will find some tips and tricks to ensure that AIStore does deliver.
       - [noatime](#noatime)
   - [Virtualization](#virtualization)
   - [Metadata write policy](#metadata-write-policy)
-- [Performance testing](#performance-testing)
+- [AIS Loader](#ais-loader)
 
 # Performance tuning
 
@@ -186,25 +186,8 @@ Metadata write policy - json tag `md_write` - was introduced specifically to sup
 
 > For the most recently updated enumeration, please see the [source](/cmn/api_const.go).
 
-# Performance testing
+# AIS Loader
 
-[AIStore load generator](howto_benchmark.md) is a built-in tool to test performance. One of the most common questions that arise when analyzing performance results is whether the bottleneck is imposed by the hardware - namely, HDDs.
+AIStore includes `aisloader` - a powerful tool that we use to simulate a variety of AI workloads. For numerous command-line options and usage examples, please see [Load Generator](/bench/aisloader/README.md) and [How To Benchmark AIStore](howto_benchmark.md). Or, just run the tool with empty command line and see its online help and examples.
 
-To that end, AIStore supports switching off disk IO to, effectively, perform dry-run type benchmarking. This can be done by passing command-line arguments or by setting environment variables (see below).
-
-> The environment variables have higher priority: if both environment and command-line are specified the former takes precedence.
-
-> Disabling disk IO must be done at startup; disabling/enabling disk IO at runtime is not supported.
-
-| CLI argument | Environment variable | Default value | Description |
-|---|---|---|---|
-| nodiskio | `AIS_NO_DISK_IO` | false | true - disables disk IO. For GET requests a storage target does not read anything from disks - no file stat, file open etc - and returns an in-memory object with predefined size (see `AIS_DRY_OBJ_SIZE` variable). For PUT requests it reads the request's body to /dev/null.<br>Valid values are true or 1, and false or 0 |
-| dryobjsize | `AIS_DRY_OBJ_SIZE` | 8m | A size of an object when a source is a 'fake' one: disk IO disabled for GET requests, and network IO disabled for PUT requests. The size is in bytes but suffixes can be used. The following suffixes are supported: 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. The default value is '8m' - the size of an object is 8 megabytes |
-
-Example of deploying a cluster with disk IO disabled and object size 256KB:
-
-```console
-$ AIS_NO_DISK_IO=true AIS_DRY_OBJ_SIZE=256k make deploy
-```
-
-> The command-line load generator shows 0 bytes throughput for GET operations when network IO is disabled because a caller opens a connection but a storage target does not write anything to it. In this case, the throughput can be calculated only indirectly by comparing total number of GETs or latency of the current test and those of the previous test that had network IO enabled.
+> Note as well that `aisloader` is fully StatsD-enabled - the metrics can be formwarded to any StatsD-compliant backend for visualization and further analysis.
