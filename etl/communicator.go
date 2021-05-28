@@ -256,16 +256,25 @@ func (pc *pushComm) Get(bck *cluster.Bck, objName string, timeout time.Duration)
 //////////////////
 
 func (rc *redirectComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
-	// TODO: Should we load object to update `rc.stats.inBytes`?
-	// TODO: Is there way to determine `rc.stats.outBytes`?
+	size, err := determineSize(bck, objName)
+	if err != nil {
+		return err
+	}
+	rc.stats.inBytes.Add(size)
 
+	// TODO: Is there way to determine `rc.stats.outBytes`?
 	redirectURL := cos.JoinPath(rc.transformerURL, transformerPath(bck, objName))
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 	return nil
 }
 
 func (rc *redirectComm) Get(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
-	// TODO: Should we load object to update `rc.stats.inBytes`?
+	size, err := determineSize(bck, objName)
+	if err != nil {
+		return nil, err
+	}
+	rc.stats.inBytes.Add(size)
+
 	etlURL := cos.JoinPath(rc.transformerURL, transformerPath(bck, objName))
 	return rc.getWithTimeout(etlURL, timeout)
 }
@@ -275,9 +284,13 @@ func (rc *redirectComm) Get(bck *cluster.Bck, objName string, timeout time.Durat
 //////////////////
 
 func (pc *revProxyComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
-	// TODO: Should we load object to update `rc.stats.inBytes`?
-	// TODO: Is there way to determine `rc.stats.outBytes`?
+	size, err := determineSize(bck, objName)
+	if err != nil {
+		return err
+	}
+	pc.stats.inBytes.Add(size)
 
+	// TODO: Is there way to determine `rc.stats.outBytes`?
 	path := transformerPath(bck, objName)
 	r.URL.Path, _ = url.PathUnescape(path) // `Path` must be unescaped otherwise it will be escaped again.
 	r.URL.RawPath = path                   // `RawPath` should be escaped version of `Path`.
@@ -286,7 +299,12 @@ func (pc *revProxyComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.
 }
 
 func (pc *revProxyComm) Get(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
-	// TODO: Should we load object to update `rc.stats.inBytes`?
+	size, err := determineSize(bck, objName)
+	if err != nil {
+		return nil, err
+	}
+	pc.stats.inBytes.Add(size)
+
 	etlURL := cos.JoinPath(pc.transformerURL, transformerPath(bck, objName))
 	return pc.getWithTimeout(etlURL, timeout)
 }
@@ -346,4 +364,19 @@ finish:
 			c.stats.objCount.Inc()
 		},
 	}), nil
+}
+
+func determineSize(bck *cluster.Bck, objName string) (int64, error) {
+	lom := cluster.AllocLOM(objName)
+	defer cluster.FreeLOM(lom)
+	if err := lom.Init(bck.Bck); err != nil {
+		return 0, err
+	}
+	if err := lom.Load(true /*cacheIt*/, false /*locked*/); err != nil {
+		if cmn.IsObjNotExist(err) && bck.IsRemote() {
+			return 0, nil
+		}
+		return 0, err
+	}
+	return lom.Size(), nil
 }

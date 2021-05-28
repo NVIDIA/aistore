@@ -24,8 +24,9 @@ func NewBaseBownerMock(bcks ...*Bck) *BownerMock {
 	providers[cmn.ProviderAIS] = namespaces
 	namespaces[cmn.NsGlobal.Uname()] = buckets
 
-	owner := &BownerMock{BMD: BMD{Providers: providers}}
+	owner := &BownerMock{BMD: BMD{Version: 1, Providers: providers}}
 	for _, bck := range bcks {
+		bck.Props.BID = bck.MaskBID(owner.BMD.Version)
 		owner.Add(bck)
 	}
 	return owner
