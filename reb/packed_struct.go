@@ -164,7 +164,7 @@ func (req *pushReq) Unpack(unpacker *cos.ByteUnpack) error {
 		req.md = nil
 		return nil
 	}
-	req.md = &ec.Metadata{}
+	req.md = ec.NewMetadata()
 	return unpacker.ReadAny(req.md)
 }
 

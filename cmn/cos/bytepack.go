@@ -113,6 +113,10 @@ func NewPacker(buf []byte, bufLen int) *BytePack {
 // Unpacker
 //
 
+func (br *ByteUnpack) Bytes() []byte {
+	return br.b
+}
+
 func (br *ByteUnpack) ReadByte() (byte, error) {
 	if br.off >= len(br.b) {
 		return 0, ErrBufferUnderrun
@@ -198,7 +202,7 @@ func (br *ByteUnpack) ReadAny(st Unpacker) error {
 	return st.Unpack(br)
 }
 
-func (br ByteUnpack) ReadMapStrUint16() (MapStrUint16, error) {
+func (br *ByteUnpack) ReadMapStrUint16() (MapStrUint16, error) {
 	l, err := br.ReadInt32()
 	if err != nil {
 		return nil, err

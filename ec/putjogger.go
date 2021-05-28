@@ -220,13 +220,15 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 	}
 
 	meta := &Metadata{
-		Size:      lom.Size(),
-		Data:      ecConf.DataSlices,
-		Parity:    ecConf.ParitySlices,
-		IsCopy:    req.IsCopy,
-		ObjCksum:  cksumValue,
-		CksumType: cksumType,
-		Daemons:   make(cos.MapStrUint16, reqTargets),
+		MDVersion:   MDVersionLast,
+		Size:        lom.Size(),
+		Data:        ecConf.DataSlices,
+		Parity:      ecConf.ParitySlices,
+		IsCopy:      req.IsCopy,
+		ObjCksum:    cksumValue,
+		CksumType:   cksumType,
+		FullReplica: c.parent.t.Snode().ID(),
+		Daemons:     make(cos.MapStrUint16, reqTargets),
 	}
 
 	c.parent.ObjectsInc()

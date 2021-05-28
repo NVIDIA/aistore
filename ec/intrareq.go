@@ -107,7 +107,7 @@ func (r *intraReq) Unpack(unpacker *cos.ByteUnpack) error {
 		r.meta = nil
 		return nil
 	}
-	r.meta = &Metadata{}
+	r.meta = NewMetadata()
 	return unpacker.ReadAny(r.meta)
 }
 

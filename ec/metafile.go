@@ -11,21 +11,26 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/OneOfOne/xxhash"
 )
+
+const MDVersionLast = 1 // current version of metadata
 
 // Metadata - EC information stored in metafiles for every encoded object
 type Metadata struct {
-	Size       int64            // obj size (after EC'ing sum size of slices differs from the original)
-	Version    uint64           // Metadata version
-	ObjCksum   string           // checksum of the original object
-	ObjVersion string           // object version
-	CksumType  string           // slice checksum type
-	CksumValue string           // slice checksum of the slice if EC is used
-	Data       int              // the number of data slices
-	Parity     int              // the number of parity slices
-	SliceID    int              // 0 for full replica, 1 to N for slices
-	Daemons    cos.MapStrUint16 // Locations of all slices: DaemonID <-> SliceID
-	IsCopy     bool             // object is replicated(true) or encoded(false)
+	Size        int64            // obj size (after EC'ing sum size of slices differs from the original)
+	ObjCksum    string           // checksum of the original object
+	ObjVersion  string           // object version
+	CksumType   string           // slice checksum type
+	CksumValue  string           // slice checksum of the slice if EC is used
+	FullReplica string           // daemon ID where full(main) replica is
+	Daemons     cos.MapStrUint16 // Locations of all slices: DaemonID <-> SliceID
+	Data        int              // the number of data slices
+	Parity      int              // the number of parity slices
+	SliceID     int              // 0 for full replica, 1 to N for slices
+	MDVersion   uint32           // Metadata format version
+	Generation  uint32           // Increases every object update
+	IsCopy      bool             // object is replicated(true) or encoded(false)
 }
 
 // interface guard
@@ -33,6 +38,10 @@ var (
 	_ cos.Unpacker = (*Metadata)(nil)
 	_ cos.Packer   = (*Metadata)(nil)
 )
+
+func NewMetadata() *Metadata {
+	return &Metadata{MDVersion: MDVersionLast}
+}
 
 // LoadMetadata loads and parses EC metadata from a file
 func LoadMetadata(fqn string) (*Metadata, error) {
@@ -90,23 +99,56 @@ func ObjectMetadata(bck *cluster.Bck, objName string) (*Metadata, error) {
 }
 
 func (md *Metadata) Unpack(unpacker *cos.ByteUnpack) (err error) {
-	var i uint16
+	var cksum uint64
+	if md.MDVersion, err = unpacker.ReadUint32(); err != nil {
+		return
+	}
+	switch md.MDVersion {
+	case MDVersionLast:
+		err = md.unpackLastVersion(unpacker)
+	default:
+		err = fmt.Errorf("unsupported metadata format version %d. Only %d supported",
+			md.MDVersion, MDVersionLast)
+	}
+	if err != nil {
+		return
+	}
+
+	if cksum, err = unpacker.ReadUint64(); err != nil {
+		return
+	}
+	b := unpacker.Bytes()
+	calcCksum := xxhash.Checksum64S(b[:len(b)-cos.SizeofI64], cos.MLCG32)
+	if cksum != calcCksum {
+		err = cos.NewBadMetaCksumError(cksum, calcCksum, "EC metadata")
+	}
+	return err
+}
+
+func (md *Metadata) unpackLastVersion(unpacker *cos.ByteUnpack) (err error) {
+	var i16 uint16
+	if md.Generation, err = unpacker.ReadUint32(); err != nil {
+		return
+	}
 	if md.Size, err = unpacker.ReadInt64(); err != nil {
 		return
 	}
-	if i, err = unpacker.ReadUint16(); err != nil {
+	if i16, err = unpacker.ReadUint16(); err != nil {
 		return
 	}
-	md.Data = int(i)
-	if i, err = unpacker.ReadUint16(); err != nil {
+	md.Data = int(i16)
+	if i16, err = unpacker.ReadUint16(); err != nil {
 		return
 	}
-	md.Parity = int(i)
-	if i, err = unpacker.ReadUint16(); err != nil {
+	md.Parity = int(i16)
+	if i16, err = unpacker.ReadUint16(); err != nil {
 		return
 	}
-	md.SliceID = int(i)
+	md.SliceID = int(i16)
 	if md.IsCopy, err = unpacker.ReadBool(); err != nil {
+		return
+	}
+	if md.FullReplica, err = unpacker.ReadString(); err != nil {
 		return
 	}
 	if md.ObjCksum, err = unpacker.ReadString(); err != nil {
@@ -121,25 +163,26 @@ func (md *Metadata) Unpack(unpacker *cos.ByteUnpack) (err error) {
 	if md.CksumValue, err = unpacker.ReadString(); err != nil {
 		return
 	}
-	if md.Version, err = unpacker.ReadUint64(); err != nil {
-		return
-	}
 	md.Daemons, err = unpacker.ReadMapStrUint16()
 	return
 }
 
 func (md *Metadata) Pack(packer *cos.BytePack) {
+	packer.WriteUint32(md.MDVersion)
+	packer.WriteUint32(md.Generation)
 	packer.WriteInt64(md.Size)
 	packer.WriteUint16(uint16(md.Data))
 	packer.WriteUint16(uint16(md.Parity))
 	packer.WriteUint16(uint16(md.SliceID))
 	packer.WriteBool(md.IsCopy)
+	packer.WriteString(md.FullReplica)
 	packer.WriteString(md.ObjCksum)
 	packer.WriteString(md.ObjVersion)
 	packer.WriteString(md.CksumType)
 	packer.WriteString(md.CksumValue)
-	packer.WriteUint64(md.Version)
 	packer.WriteMapStrUint16(md.Daemons)
+	h := xxhash.Checksum64S(packer.Bytes(), cos.MLCG32)
+	packer.WriteUint64(h)
 }
 
 func (md *Metadata) PackedSize() int {
@@ -147,8 +190,8 @@ func (md *Metadata) PackedSize() int {
 	for k := range md.Daemons {
 		daemonListSz += cos.PackedStrLen(k) + cos.SizeofI16
 	}
-	return cos.SizeofI64 + cos.SizeofI16*3 + 1 +
+	return cos.SizeofI64 + cos.SizeofI16*3 + 1 /*isCopy*/ + cos.SizeofI32*2 +
 		cos.PackedStrLen(md.ObjCksum) + cos.PackedStrLen(md.ObjVersion) +
 		cos.PackedStrLen(md.CksumType) + cos.PackedStrLen(md.CksumValue) +
-		cos.SizeofI64 + daemonListSz
+		cos.PackedStrLen(md.FullReplica) + daemonListSz + cos.SizeofI64 /*md cksum*/
 }
