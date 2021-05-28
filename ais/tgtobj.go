@@ -680,6 +680,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 		slab    *memsys.Slab
 		buf     []byte
 		reader  io.Reader
+		csl     cos.ReadCloseSizer
 		hdr     http.Header // if it is http request we will write also header
 		written int64
 	)
@@ -692,6 +693,9 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 		}
 		if sgl != nil {
 			sgl.Free()
+		}
+		if csl != nil {
+			csl.Close()
 		}
 	}()
 
@@ -772,7 +776,6 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 	if rrange == nil {
 		reader = file
 		if goi.archive.filename != "" {
-			var csl cos.ReadCloseSizer
 			csl, err = extractArch(file, goi.archive.filename, goi.lom)
 			if err != nil {
 				if _, ok := err.(*cmn.ErrNotFound); ok {
@@ -784,7 +787,6 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 				return
 			}
 			reader, size = csl, csl.Size() // Content-Length
-			defer csl.Close()
 			//
 			// TODO: support checksumming extracted files
 			//

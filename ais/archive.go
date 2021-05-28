@@ -75,16 +75,19 @@ func extractTar(reader io.Reader, filename string, lom *cluster.LOM) (*cslLimite
 	}
 }
 
-func extractTgz(reader io.Reader, filename string, lom *cluster.LOM) (*cslClose, error) {
-	gzr, err := gzip.NewReader(reader)
-	if err != nil {
-		return nil, err
+func extractTgz(reader io.Reader, filename string, lom *cluster.LOM) (csc *cslClose, err error) {
+	var (
+		gzr *gzip.Reader
+		csl *cslLimited
+	)
+	if gzr, err = gzip.NewReader(reader); err != nil {
+		return
 	}
-	csl, err := extractTar(gzr, filename, lom)
-	if err != nil {
-		return nil, err
+	if csl, err = extractTar(gzr, filename, lom); err != nil {
+		return
 	}
-	return &cslClose{gzr, csl.R, csl.N}, nil
+	csc = &cslClose{gzr: gzr /*to close*/, R: csl /*to read from*/, N: csl.N /*size*/}
+	return
 }
 
 func extractZip(readerAt cos.ReadReaderAt, filename string, lom *cluster.LOM) (csf *cslFile, err error) {

@@ -275,7 +275,7 @@ func (df *dsortFramework) createInputShards() {
 			} else if df.extension == cos.ExtTarTgz {
 				err = archive.CreateTarWithRandomFiles(tarName, df.fileInTarballCnt, df.fileInTarballSize, duplication, nil, nil)
 			} else if df.extension == cos.ExtZip {
-				err = archive.CreateZipWithRandomFiles(tarName, df.fileInTarballCnt, df.fileInTarballSize)
+				err = archive.CreateZipWithRandomFiles(tarName, df.fileInTarballCnt, df.fileInTarballSize, nil)
 			} else {
 				df.m.t.Fail()
 			}
@@ -340,7 +340,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 		tassert.CheckFatal(df.m.t, err)
 
 		if df.algorithm.Kind == dsort.SortKindContent {
-			files, err := tutils.GetFilesFromTarBuffer(buffer, df.algorithm.Extension)
+			files, err := archive.GetFilesFromTarBuffer(buffer, df.algorithm.Extension)
 			tassert.CheckFatal(df.m.t, err)
 			for _, file := range files {
 				if file.Ext == df.algorithm.Extension {
@@ -381,9 +381,9 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 			var files []os.FileInfo
 
 			if df.extension == cos.ExtTar || df.extension == cos.ExtTarTgz {
-				files, err = tutils.GetFileInfosFromTarBuffer(buffer, gzipped)
+				files, err = archive.GetFileInfosFromTarBuffer(buffer, gzipped)
 			} else if df.extension == cos.ExtZip {
-				files, err = tutils.GetFileInfosFromZipBuffer(buffer)
+				files, err = archive.GetFileInfosFromZipBuffer(buffer)
 			}
 
 			tassert.CheckFatal(df.m.t, err)
@@ -507,7 +507,7 @@ func (df *dsortFramework) getRecordNames(bck cmn.Bck) []shardRecords {
 		_, err := api.GetObject(df.baseParams, bck, obj.Name, getOptions)
 		tassert.CheckFatal(df.m.t, err)
 
-		files, err := tutils.GetFileInfosFromTarBuffer(buffer, false)
+		files, err := archive.GetFileInfosFromTarBuffer(buffer, false)
 		tassert.CheckFatal(df.m.t, err)
 
 		shard := shardRecords{

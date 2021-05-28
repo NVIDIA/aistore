@@ -32,39 +32,64 @@ func TestGetFromArchive(t *testing.T) {
 				bck: bck.Bck,
 			}
 			baseParams  = tutils.BaseAPIParams(m.proxyURL)
-			tarName     = fmt.Sprintf("%s/%s", tmpDir, bck.Name) + cos.ExtTar
 			errCh       = make(chan error, m.num)
 			numArchived = 10
 			randomNames = make([]string, numArchived)
-		)
-		for i := 0; i < numArchived; i++ {
-			randomNames[i] = fmt.Sprintf("%d.txt", rand.Int())
-		}
-		err := archive.CreateTarWithRandomFiles(
-			tarName,                 // full name of the tarball
-			numArchived,             // number of archived files
-			rand.Intn(10*cos.KiB)+1, // size of archived files
-			false,                   // duplication
-			nil,                     // record extensions
-			randomNames,             // pregenerated filenames
-		)
-		tassert.CheckFatal(t, err)
-		defer os.Remove(tarName)
-
-		objname := filepath.Base(tarName)
-
-		reader, err := readers.NewFileReaderFromFile(tarName, cos.ChecksumNone)
-		tassert.CheckFatal(t, err)
-
-		tutils.Put(m.proxyURL, m.bck, objname, reader, errCh)
-
-		for _, randomName := range randomNames {
-			getOptions := api.GetObjectInput{
-				Query: url.Values{cmn.URLParamArchpath: []string{randomName}},
+			subtests    = []struct {
+				ext string
+			}{
+				{
+					ext: cos.ExtTar,
+				},
+				{
+					ext: cos.ExtTarTgz,
+				},
+				{
+					ext: cos.ExtZip,
+				},
 			}
-			n, err := api.GetObject(baseParams, m.bck, objname, getOptions)
-			tlog.Logf("%s/%s?%s=%s(%dB)\n", m.bck.Name, objname, cmn.URLParamArchpath, randomName, n)
-			tassert.CheckFatal(t, err)
+		)
+		for _, test := range subtests {
+			t.Run(test.ext, func(t *testing.T) {
+				var (
+					err      error
+					fsize    = rand.Intn(10*cos.KiB) + 1
+					archName = fmt.Sprintf("%s/%s", tmpDir, bck.Name) + test.ext
+				)
+				for i := 0; i < numArchived; i++ {
+					randomNames[i] = fmt.Sprintf("%d.txt", rand.Int())
+				}
+				if test.ext == cos.ExtZip {
+					err = archive.CreateZipWithRandomFiles(archName, numArchived, fsize, randomNames)
+				} else {
+					err = archive.CreateTarWithRandomFiles(
+						archName,
+						numArchived,
+						fsize,
+						false,       // duplication
+						nil,         // record extensions
+						randomNames, // pregenerated filenames
+					)
+				}
+				tassert.CheckFatal(t, err)
+				defer os.Remove(archName)
+
+				objname := filepath.Base(archName)
+
+				reader, err := readers.NewFileReaderFromFile(archName, cos.ChecksumNone)
+				tassert.CheckFatal(t, err)
+
+				tutils.Put(m.proxyURL, m.bck, objname, reader, errCh)
+
+				for _, randomName := range randomNames {
+					getOptions := api.GetObjectInput{
+						Query: url.Values{cmn.URLParamArchpath: []string{randomName}},
+					}
+					n, err := api.GetObject(baseParams, m.bck, objname, getOptions)
+					tlog.Logf("%s/%s?%s=%s(%dB)\n", m.bck.Name, objname, cmn.URLParamArchpath, randomName, n)
+					tassert.CheckFatal(t, err)
+				}
+			})
 		}
 	})
 }

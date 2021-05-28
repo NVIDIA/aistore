@@ -5,35 +5,23 @@
 package tutils
 
 import (
-	"archive/tar"
-	"archive/zip"
 	"bytes"
-	"compress/gzip"
-	"io"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 )
 
 type (
-	FileContent struct {
-		Name    string
-		Ext     string
-		Content []byte
-	}
-
 	DirTreeDesc struct {
 		InitDir string // Directory where the tree is created (can be empty).
 		Dirs    int    // Number of (initially empty) directories at each depth (we recurse into single directory at each depth).
@@ -61,103 +49,6 @@ type (
 		MpathObjectsCnt map[string]int      // mpath -> # objects on the mpath
 	}
 )
-
-type dummyFile struct {
-	name string
-	size int64
-}
-
-func newDummyFile(name string, size int64) *dummyFile {
-	return &dummyFile{
-		name: name,
-		size: size,
-	}
-}
-
-func (f *dummyFile) Name() string       { return f.name }
-func (f *dummyFile) Size() int64        { return f.size }
-func (f *dummyFile) Mode() os.FileMode  { return 0 }
-func (f *dummyFile) ModTime() time.Time { return time.Now() }
-func (f *dummyFile) IsDir() bool        { return false }
-func (f *dummyFile) Sys() interface{}   { return nil }
-
-// GetFileInfosFromTarBuffer returns all file infos contained in buffer which
-// presumably is tar or gzipped tar.
-func GetFileInfosFromTarBuffer(buffer bytes.Buffer, gzipped bool) ([]os.FileInfo, error) {
-	var tr *tar.Reader
-	if gzipped {
-		gzr, err := gzip.NewReader(&buffer)
-		if err != nil {
-			return nil, err
-		}
-		tr = tar.NewReader(gzr)
-	} else {
-		tr = tar.NewReader(&buffer)
-	}
-
-	var files []os.FileInfo // nolint:prealloc // cannot determine the size
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break // End of archive
-		}
-
-		if err != nil {
-			return nil, err
-		}
-
-		files = append(files, newDummyFile(hdr.Name, hdr.Size))
-	}
-
-	return files, nil
-}
-
-// GetFilesFromTarBuffer returns all file infos contained in buffer which
-// presumably is tar or gzipped tar.
-func GetFilesFromTarBuffer(buffer bytes.Buffer, extension string) ([]FileContent, error) {
-	tr := tar.NewReader(&buffer)
-
-	var files []FileContent // nolint:prealloc // cannot determine the size
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break // End of archive
-		}
-
-		if err != nil {
-			return nil, err
-		}
-
-		var buf bytes.Buffer
-		fExt := extract.Ext(hdr.Name)
-		if extension == fExt {
-			if _, err := io.CopyN(&buf, tr, hdr.Size); err != nil {
-				return nil, err
-			}
-		}
-
-		files = append(files, FileContent{Name: hdr.Name, Ext: fExt, Content: buf.Bytes()})
-	}
-
-	return files, nil
-}
-
-// GetFileInfosFromZipBuffer returns all file infos contained in buffer which
-// presumably is zip.
-func GetFileInfosFromZipBuffer(buffer bytes.Buffer) ([]os.FileInfo, error) {
-	reader := bytes.NewReader(buffer.Bytes())
-	zr, err := zip.NewReader(reader, int64(buffer.Len()))
-	if err != nil {
-		return nil, err
-	}
-
-	files := make([]os.FileInfo, len(zr.File))
-	for idx, file := range zr.File {
-		files[idx] = file.FileInfo()
-	}
-
-	return files, nil
-}
 
 func RandomObjDir(dirLen, maxDepth int) (dir string) {
 	depth := rand.Intn(maxDepth)
