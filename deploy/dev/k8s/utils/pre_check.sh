@@ -5,12 +5,12 @@ os=$(uname -s | tr '[:upper:]' '[:lower:]')
 install_minikube='true'
 if command -v minikube &> /dev/null; then
   MINIKUBE_VER=$(minikube version --short 2>&1 | cut -d'v' -f3)
-  if ! [[ "$MINIKUBE_VER" < "1.11.0" ]] ; then
+  if ! [[ "$MINIKUBE_VER" < "1.20.0" ]] ; then
     install_minikube='false'
   fi
 fi
 if [[ "$install_minikube" == "true" ]]; then
-  echo "minikube >= v1.11.0 could not be found"
+  echo "minikube >= v1.20.0 could not be found"
   echo "Fetching and installing the latest minikube ..."
   curl -Lo /tmp/minikube https://storage.googleapis.com/minikube/releases/latest/minikube-${os}-amd64 \
   && chmod +x /tmp/minikube
