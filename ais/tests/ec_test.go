@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
@@ -179,7 +180,7 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 
 		if ct.ContentType() == ec.MetaType {
 			metaCnt++
-			tassert.Errorf(t, md.size <= 512, "Metafile %q size is too big: %d", k, md.size)
+			tassert.Errorf(t, md.size <= 4*cos.KiB, "Metafile %q size is too big: %d", k, md.size)
 		} else if ct.ContentType() == ec.SliceType {
 			tassert.Errorf(t, md.size == sliceSize, "Slice %q size mismatch: %d, expected %d", k, md.size, sliceSize)
 		} else {
@@ -739,7 +740,8 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 		for k := range partsAfterRemove {
 			tlog.Logf("     %s\n", k)
 		}
-		t.Error("Some slices were not deleted")
+		// Not an error as a directory can contain leftovers
+		tlog.Logln("Some slices were not deleted")
 		return
 	}
 
@@ -2661,5 +2663,70 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	for _, entry := range objList.Entries {
 		_, err := api.GetObject(baseParams, bck, entry.Name)
 		tassert.CheckError(t, err)
+	}
+}
+
+// Test EC metadata versioning.
+func TestECGenerations(t *testing.T) {
+	var (
+		bck = cmn.Bck{
+			Name:     testBucketName + "-obj-gens",
+			Provider: cmn.ProviderAIS,
+		}
+		proxyURL    = tutils.RandomProxyURL()
+		baseParams  = tutils.BaseAPIParams(proxyURL)
+		generations = 3
+	)
+
+	o := ecOptions{
+		minTargets:  4,
+		objCount:    10,
+		concurrency: 4,
+		pattern:     "obj-gen-%04d",
+		silent:      testing.Short(),
+	}.init(t, proxyURL)
+	initMountpaths(t, proxyURL)
+	lastWrite := make([]int64, o.objCount)
+
+	for _, test := range ecTests {
+		t.Run(test.name, func(t *testing.T) {
+			if o.smap.CountActiveTargets() <= test.parity+test.data {
+				t.Skip("insufficient number of targets")
+			}
+			o.parityCnt = test.parity
+			o.dataCnt = test.data
+			newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
+
+			wg := sync.WaitGroup{}
+			for gen := 0; gen < generations; gen++ {
+				wg.Add(o.objCount)
+				for i := 0; i < o.objCount; i++ {
+					o.sema.Acquire()
+					go func(i, gen int) {
+						defer func() {
+							o.sema.Release()
+							wg.Done()
+						}()
+						objName := fmt.Sprintf(o.pattern, i)
+						createDamageRestoreECFile(t, baseParams, bck, objName, i, o)
+						if gen == generations-2 {
+							lastWrite[i] = mono.NanoTime()
+						}
+					}(i, gen)
+				}
+				wg.Wait()
+			}
+
+			currentTime := mono.NanoTime()
+			for i := 0; i < o.objCount; i++ {
+				objName := ecTestDir + fmt.Sprintf(o.pattern, i)
+				props, err := api.HeadObject(baseParams, bck, objName)
+				tassert.CheckError(t, err)
+				if err == nil && props.Generation > lastWrite[i] && props.Generation < currentTime {
+					t.Errorf("Object %s, generation %d expected between %d and %d",
+						objName, props.Generation, lastWrite[i], currentTime)
+				}
+			}
+		})
 	}
 }

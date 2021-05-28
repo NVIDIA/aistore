@@ -240,6 +240,7 @@ func (c *getJogger) restoreReplicatedFromMemory(ctx *restoreCtx) error {
 		MD:         ctx.meta.NewPack(),
 		CksumType:  ctx.meta.CksumType,
 		CksumValue: ctx.meta.CksumValue,
+		Generation: ctx.meta.Generation,
 	}
 	if err := WriteReplicaAndMeta(c.parent.t, ctx.lom, args); err != nil {
 		writer.Free()
@@ -585,9 +586,10 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 	mainMeta := *ctx.meta
 	mainMeta.SliceID = 0
 	args := &WriteArgs{
-		Reader:    src,
-		MD:        mainMeta.NewPack(),
-		CksumType: conf.Type,
+		Reader:     src,
+		MD:         mainMeta.NewPack(),
+		CksumType:  conf.Type,
+		Generation: mainMeta.Generation,
 	}
 	err = WriteReplicaAndMeta(c.parent.t, ctx.lom, args)
 	return restored, err
@@ -804,12 +806,10 @@ func (c *getJogger) restore(ctx *restoreCtx) error {
 // nodes(with their EC metadata) that have the lastest object version
 func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 	var (
-		tmap   = c.parent.smap.Get().Tmap
-		wg     = cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), 8)
-		mtx    = &sync.Mutex{}
-		chk    = make(map[string]int, len(tmap))
-		chkVal string
-		chkMax int
+		tmap = c.parent.smap.Get().Tmap
+		wg   = cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), 8)
+		mtx  = &sync.Mutex{}
+		gen  int64
 	)
 	ctx.nodes = make(map[string]*Metadata, len(tmap))
 	for _, node := range tmap {
@@ -829,15 +829,9 @@ func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 
 			mtx.Lock()
 			ctx.nodes[si.ID()] = md
-			// detect the metadata with the latest version on the fly.
-			// At this moment it is the most frequent hash in the list.
-			// TODO: fix when an EC Metadata versioning is introduced
-			cnt := chk[md.ObjCksum]
-			cnt++
-			chk[md.ObjCksum] = cnt
-			if cnt > chkMax {
-				chkMax = cnt
-				chkVal = md.ObjCksum
+			// detect the metadata with the latest generation on the fly.
+			if md.Generation > gen {
+				gen = md.Generation
 				ctx.meta = md
 			}
 			mtx.Unlock()
@@ -852,9 +846,9 @@ func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 
 	// Cleanup: delete all metadatas with "obsolete" information
 	for k, v := range ctx.nodes {
-		if v.ObjCksum != chkVal {
-			glog.Warningf("Hashes of target %s[slice id %d] mismatch: %s == %s",
-				k, v.SliceID, chkVal, v.ObjCksum)
+		if v.Generation != gen {
+			glog.Warningf("Target %s[slice id %d] old generation: %v == %v",
+				k, v.SliceID, v.Generation, gen)
 			delete(ctx.nodes, k)
 		}
 	}

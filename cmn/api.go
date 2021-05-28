@@ -218,10 +218,11 @@ type (
 		Version      string           `json:"version"`
 		Atime        int64            `json:"atime"`
 		Checksum     ObjectCksumProps `json:"checksum"`
+		Generation   int64            `json:"ec-generation"`
 		NumCopies    int              `json:"copies"`
-		DataSlices   int              `json:"ec_data"`
-		ParitySlices int              `json:"ec_parity"`
-		IsECCopy     bool             `json:"ec_replicated"`
+		DataSlices   int              `json:"ec-data"`
+		ParitySlices int              `json:"ec-parity"`
+		IsECCopy     bool             `json:"ec-replicated"`
 		Present      bool             `json:"present"`
 	}
 

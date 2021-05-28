@@ -19,6 +19,7 @@ const MDVersionLast = 1 // current version of metadata
 // Metadata - EC information stored in metafiles for every encoded object
 type Metadata struct {
 	Size        int64            // obj size (after EC'ing sum size of slices differs from the original)
+	Generation  int64            // Timestamp when the object was EC'ed
 	ObjCksum    string           // checksum of the original object
 	ObjVersion  string           // object version
 	CksumType   string           // slice checksum type
@@ -29,7 +30,6 @@ type Metadata struct {
 	Parity      int              // the number of parity slices
 	SliceID     int              // 0 for full replica, 1 to N for slices
 	MDVersion   uint32           // Metadata format version
-	Generation  uint32           // Increases every object update
 	IsCopy      bool             // object is replicated(true) or encoded(false)
 }
 
@@ -127,7 +127,7 @@ func (md *Metadata) Unpack(unpacker *cos.ByteUnpack) (err error) {
 
 func (md *Metadata) unpackLastVersion(unpacker *cos.ByteUnpack) (err error) {
 	var i16 uint16
-	if md.Generation, err = unpacker.ReadUint32(); err != nil {
+	if md.Generation, err = unpacker.ReadInt64(); err != nil {
 		return
 	}
 	if md.Size, err = unpacker.ReadInt64(); err != nil {
@@ -169,7 +169,7 @@ func (md *Metadata) unpackLastVersion(unpacker *cos.ByteUnpack) (err error) {
 
 func (md *Metadata) Pack(packer *cos.BytePack) {
 	packer.WriteUint32(md.MDVersion)
-	packer.WriteUint32(md.Generation)
+	packer.WriteInt64(md.Generation)
 	packer.WriteInt64(md.Size)
 	packer.WriteUint16(uint16(md.Data))
 	packer.WriteUint16(uint16(md.Parity))
@@ -190,7 +190,7 @@ func (md *Metadata) PackedSize() int {
 	for k := range md.Daemons {
 		daemonListSz += cos.PackedStrLen(k) + cos.SizeofI16
 	}
-	return cos.SizeofI64 + cos.SizeofI16*3 + 1 /*isCopy*/ + cos.SizeofI32*2 +
+	return cos.SizeofI32 + cos.SizeofI64*2 + cos.SizeofI16*3 + 1 /*isCopy*/ +
 		cos.PackedStrLen(md.ObjCksum) + cos.PackedStrLen(md.ObjVersion) +
 		cos.PackedStrLen(md.CksumType) + cos.PackedStrLen(md.CksumValue) +
 		cos.PackedStrLen(md.FullReplica) + daemonListSz + cos.SizeofI64 /*md cksum*/

@@ -1183,6 +1183,7 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 				objProps.DataSlices = md.Data
 				objProps.ParitySlices = md.Parity
 				objProps.IsECCopy = md.IsCopy
+				objProps.Generation = md.Generation
 			}
 		}
 	}

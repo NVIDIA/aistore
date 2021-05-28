@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
@@ -219,8 +220,11 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 			lom, reqTargets, targetCnt)
 	}
 
+	ctMeta := cluster.NewCTFromLOM(lom, MetaType)
+	generation := mono.NanoTime()
 	meta := &Metadata{
 		MDVersion:   MDVersionLast,
+		Generation:  generation,
 		Size:        lom.Size(),
 		Data:        ecConf.DataSlices,
 		Parity:      ecConf.ParitySlices,
@@ -260,7 +264,6 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 		err = c.splitAndDistribute(ctx)
 	}
 	if err == nil {
-		ctMeta := cluster.NewCTFromLOM(lom, MetaType)
 		metaBuf := bytes.NewReader(meta.NewPack())
 		err = ctMeta.Write(c.parent.t, metaBuf, -1)
 	}

@@ -148,6 +148,7 @@ type (
 		BID        uint64    // bucket ID
 		CksumType  string    // object checksum type
 		CksumValue string    // object checksum value
+		Generation int64     // EC Generation
 	}
 
 	// keeps temporarily a slice of object data until it is sent to remote node
@@ -416,11 +417,17 @@ func WriteSliceAndMeta(t cluster.Target, hdr transport.ObjHdr, args *WriteArgs) 
 	}
 	ct.Lock(true)
 	defer ct.Unlock(true)
+	ctMeta := ct.Clone(MetaType)
+	if args.Generation != 0 {
+		if oldMeta, oldErr := LoadMetadata(ctMeta.FQN()); oldErr == nil && oldMeta.Generation > args.Generation {
+			cos.DrainReader(args.Reader)
+			return nil
+		}
+	}
 	tmpFQN := ct.Make(fs.WorkfileType)
 	if err := ct.Write(t, args.Reader, hdr.ObjAttrs.Size, tmpFQN); err != nil {
 		return err
 	}
-	ctMeta := ct.Clone(MetaType)
 	err = ctMeta.Write(t, bytes.NewReader(args.MD), -1)
 	if err == nil {
 		err = validateBckBID(t, hdr.Bck, args.BID)
@@ -458,6 +465,16 @@ func LomFromHeader(hdr transport.ObjHdr) (*cluster.LOM, error) {
 
 // Saves replica and its metafile
 func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) error {
+	lom.Lock(false)
+	if args.Generation != 0 {
+		ctMeta := cluster.NewCTFromLOM(lom, MetaType)
+		if oldMeta, oldErr := LoadMetadata(ctMeta.FQN()); oldErr == nil && oldMeta.Generation > args.Generation {
+			lom.Unlock(false)
+			cos.DrainReader(args.Reader)
+			return nil
+		}
+	}
+	lom.Unlock(false)
 	err := WriteObject(t, lom, args.Reader, lom.Size(true))
 	if err != nil {
 		return err
@@ -470,6 +487,8 @@ func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) er
 		}
 	}
 	ctMeta := cluster.NewCTFromLOM(lom, MetaType)
+	ctMeta.Lock(true)
+	defer ctMeta.Unlock(true)
 	err = ctMeta.Write(t, bytes.NewReader(args.MD), -1)
 	if err == nil {
 		err = validateBckBID(t, lom.Bucket(), args.BID)

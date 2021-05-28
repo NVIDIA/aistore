@@ -200,7 +200,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object i
 		}
 		md := meta.NewPack()
 		if iReq.isSlice {
-			args := &WriteArgs{Reader: object, MD: md, BID: iReq.bid}
+			args := &WriteArgs{Reader: object, MD: md, BID: iReq.bid, Generation: meta.Generation}
 			err = WriteSliceAndMeta(r.t, hdr, args)
 		} else {
 			var lom *cluster.LOM
@@ -212,6 +212,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object i
 					CksumType:  hdr.ObjAttrs.CksumType,
 					CksumValue: hdr.ObjAttrs.CksumValue,
 					BID:        iReq.bid,
+					Generation: meta.Generation,
 				}
 				err = WriteReplicaAndMeta(r.t, lom, args)
 			}
