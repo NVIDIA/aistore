@@ -129,33 +129,29 @@ func (z *zipExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, e
 			// when we create files. And since dirs can appear after all the files
 			// we must have this `MkdirAll` before files.
 			continue
-		} else {
-			file, err := f.Open()
-			if err != nil {
-				return extractedSize, extractedCount, err
-			}
-
-			extractMethod := ExtractToMem
-			if toDisk {
-				extractMethod = ExtractToDisk
-			}
-
-			args := extractRecordArgs{
-				shardName:     lom.ObjName,
-				fileType:      fs.ObjectType,
-				recordName:    header.Name,
-				r:             cos.NewSizedReader(file, int64(header.UncompressedSize64)),
-				metadata:      bmeta,
-				extractMethod: extractMethod,
-				buf:           buf,
-			}
-			if size, err = extractor.ExtractRecordWithBuffer(args); err != nil {
-				cos.Close(file)
-				return extractedSize, extractedCount, err
-			}
-			cos.Close(file)
 		}
-
+		file, err := f.Open()
+		if err != nil {
+			return extractedSize, extractedCount, err
+		}
+		extractMethod := ExtractToMem
+		if toDisk {
+			extractMethod = ExtractToDisk
+		}
+		args := extractRecordArgs{
+			shardName:     lom.ObjName,
+			fileType:      fs.ObjectType,
+			recordName:    header.Name,
+			r:             cos.NewSizedReader(file, int64(header.UncompressedSize64)),
+			metadata:      bmeta,
+			extractMethod: extractMethod,
+			buf:           buf,
+		}
+		if size, err = extractor.ExtractRecordWithBuffer(args); err != nil {
+			cos.Close(file)
+			return extractedSize, extractedCount, err
+		}
+		cos.Close(file)
 		extractedSize += size
 		extractedCount++
 	}

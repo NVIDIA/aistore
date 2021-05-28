@@ -34,19 +34,19 @@ func TestGetFromArchive(t *testing.T) {
 			baseParams  = tutils.BaseAPIParams(m.proxyURL)
 			tarName     = fmt.Sprintf("%s/%s", tmpDir, bck.Name) + cos.ExtTar
 			errCh       = make(chan error, m.num)
-			numArchived = 5
+			numArchived = 10
 			randomNames = make([]string, numArchived)
 		)
 		for i := 0; i < numArchived; i++ {
 			randomNames[i] = fmt.Sprintf("%d.txt", rand.Int())
 		}
 		err := archive.CreateTarWithRandomFiles(
-			tarName,              // tar name
-			numArchived,          // num archived files
-			rand.Intn(cos.KiB)+1, // archived file size
-			false,                // duplication
-			nil,                  // record exts
-			randomNames,          // caller-generated filenames
+			tarName,                 // full name of the tarball
+			numArchived,             // number of archived files
+			rand.Intn(10*cos.KiB)+1, // size of archived files
+			false,                   // duplication
+			nil,                     // record extensions
+			randomNames,             // pregenerated filenames
 		)
 		tassert.CheckFatal(t, err)
 		defer os.Remove(tarName)

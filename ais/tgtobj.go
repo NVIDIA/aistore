@@ -772,8 +772,8 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 	if rrange == nil {
 		reader = file
 		if goi.archive.filename != "" {
-			var lim *io.LimitedReader
-			lim, err = extractTar(reader, goi.archive.filename, goi.lom)
+			var csl cos.ReadCloseSizer
+			csl, err = extractArch(file, goi.archive.filename, goi.lom)
 			if err != nil {
 				if _, ok := err.(*cmn.ErrNotFound); ok {
 					errCode = http.StatusNotFound
@@ -783,8 +783,11 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 				}
 				return
 			}
-			reader, size = lim, lim.N // Content-Length
+			reader, size = csl, csl.Size() // Content-Length
+			defer csl.Close()
+			//
 			// TODO: support checksumming extracted files
+			//
 		}
 		if goi.chunked {
 			// NOTE: hide `ReadFrom` of the `http.ResponseWriter` (in re: sendfile)
