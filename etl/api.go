@@ -30,6 +30,10 @@ type (
 	InfoList []Info
 	Info     struct {
 		ID string `json:"id"`
+
+		ObjCount int64 `json:"obj_count"`
+		InBytes  int64 `json:"in_bytes"`
+		OutBytes int64 `json:"out_bytes"`
 	}
 
 	PodsLogsMsg []PodLogsMsg

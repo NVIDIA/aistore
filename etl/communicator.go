@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -21,6 +22,12 @@ import (
 )
 
 type (
+	CommStats interface {
+		ObjCount() int64
+		InBytes() int64
+		OutBytes() int64
+	}
+
 	// Communicator is responsible for managing communications with local ETL container.
 	// Do() gets executed as part of (each) GET bucket/object by the user.
 	// Communicator listens to cluster membership changes and terminates ETL container,
@@ -41,7 +48,9 @@ type (
 		// Get() is driven by `OfflineDataProvider` - not to confuse with
 		// GET requests from users (such as training models and apps)
 		// to perform on-the-fly transformation.
-		Get(bck *cluster.Bck, objName string, ts ...time.Duration) (cos.ReadCloseSizer, error)
+		Get(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error)
+
+		CommStats
 	}
 
 	commArgs struct {
@@ -53,6 +62,12 @@ type (
 		transformerURL string
 	}
 
+	commStats struct {
+		objCount atomic.Int64
+		inBytes  atomic.Int64
+		outBytes atomic.Int64
+	}
+
 	baseComm struct {
 		cluster.Slistener
 		t cluster.Target
@@ -61,6 +76,8 @@ type (
 		podName string
 
 		transformerURL string
+
+		stats *commStats
 	}
 
 	pushComm struct {
@@ -94,6 +111,8 @@ func makeCommunicator(args commArgs) Communicator {
 		name:           args.name,
 		podName:        args.pod.GetName(),
 		transformerURL: args.transformerURL,
+
+		stats: &commStats{},
 	}
 
 	switch args.commType {
@@ -127,11 +146,15 @@ func (c baseComm) Name() string    { return c.name }
 func (c baseComm) PodName() string { return c.podName }
 func (c baseComm) SvcName() string { return c.podName /*pod name is same as service name*/ }
 
+func (c baseComm) ObjCount() int64 { return c.stats.objCount.Load() }
+func (c baseComm) InBytes() int64  { return c.stats.inBytes.Load() }
+func (c baseComm) OutBytes() int64 { return c.stats.outBytes.Load() }
+
 //////////////
 // pushComm //
 //////////////
 
-func (pc *pushComm) doRequest(bck *cluster.Bck, objName string, ts ...time.Duration) (r cos.ReadCloseSizer, err error) {
+func (pc *pushComm) doRequest(bck *cluster.Bck, objName string, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
 
@@ -139,18 +162,18 @@ func (pc *pushComm) doRequest(bck *cluster.Bck, objName string, ts ...time.Durat
 		return nil, err
 	}
 
-	r, err = pc.tryDoRequest(lom, ts...)
+	r, err = pc.tryDoRequest(lom, timeout)
 	if err != nil && cmn.IsObjNotExist(err) && bck.IsRemote() {
 		_, err = pc.t.GetCold(context.Background(), lom, cluster.PrefetchWait)
 		if err != nil {
 			return nil, err
 		}
-		r, err = pc.tryDoRequest(lom, ts...)
+		r, err = pc.tryDoRequest(lom, timeout)
 	}
 	return
 }
 
-func (pc *pushComm) tryDoRequest(lom *cluster.LOM, ts ...time.Duration) (cos.ReadCloseSizer, error) {
+func (pc *pushComm) tryDoRequest(lom *cluster.LOM, timeout time.Duration) (cos.ReadCloseSizer, error) {
 	lom.Lock(false)
 	defer lom.Unlock(false)
 
@@ -165,13 +188,13 @@ func (pc *pushComm) tryDoRequest(lom *cluster.LOM, ts ...time.Duration) (cos.Rea
 	}
 
 	var (
-		req     *http.Request
-		resp    *http.Response
-		cleanup func()
+		req    *http.Request
+		resp   *http.Response
+		cancel func()
 	)
-	if len(ts) > 0 && ts[0] != 0 {
+	if timeout != 0 {
 		var ctx context.Context
-		ctx, cleanup = context.WithTimeout(context.Background(), ts[0])
+		ctx, cancel = context.WithTimeout(context.Background(), timeout)
 		req, err = http.NewRequestWithContext(ctx, http.MethodPut, pc.transformerURL, fh)
 	} else {
 		req, err = http.NewRequest(http.MethodPut, pc.transformerURL, fh)
@@ -186,18 +209,30 @@ func (pc *pushComm) tryDoRequest(lom *cluster.LOM, ts ...time.Duration) (cos.Rea
 	resp, err = pc.t.DataClient().Do(req) // nolint:bodyclose // Closed by the caller.
 finish:
 	if err != nil {
-		if cleanup != nil {
-			cleanup()
+		if cancel != nil {
+			cancel()
 		}
 		return nil, err
 	}
-	return cos.NewDeferRCS(cos.NewSizedRC(resp.Body, resp.ContentLength), cleanup), nil
+
+	pc.stats.inBytes.Add(lom.Size())
+	return cos.NewReaderWithArgs(cos.ReaderArgs{
+		R:      resp.Body,
+		Size:   resp.ContentLength,
+		ReadCb: func(i int, err error) { pc.stats.outBytes.Add(int64(i)) },
+		DeferCb: func() {
+			if cancel != nil {
+				cancel()
+			}
+			pc.stats.objCount.Inc()
+		},
+	}), nil
 }
 
 func (pc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck, objName string) error {
 	var (
 		size   int64
-		r, err = pc.doRequest(bck, objName)
+		r, err = pc.doRequest(bck, objName, 0 /*timeout*/)
 	)
 	if err != nil {
 		return err
@@ -212,8 +247,8 @@ func (pc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck,
 	return err
 }
 
-func (pc *pushComm) Get(bck *cluster.Bck, objName string, ts ...time.Duration) (cos.ReadCloseSizer, error) {
-	return pc.doRequest(bck, objName, ts...)
+func (pc *pushComm) Get(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
+	return pc.doRequest(bck, objName, timeout)
 }
 
 //////////////////
@@ -221,14 +256,18 @@ func (pc *pushComm) Get(bck *cluster.Bck, objName string, ts ...time.Duration) (
 //////////////////
 
 func (rc *redirectComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
+	// TODO: Should we load object to update `rc.stats.inBytes`?
+	// TODO: Is there way to determine `rc.stats.outBytes`?
+
 	redirectURL := cos.JoinPath(rc.transformerURL, transformerPath(bck, objName))
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 	return nil
 }
 
-func (rc *redirectComm) Get(bck *cluster.Bck, objName string, ts ...time.Duration) (cos.ReadCloseSizer, error) {
+func (rc *redirectComm) Get(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
+	// TODO: Should we load object to update `rc.stats.inBytes`?
 	etlURL := cos.JoinPath(rc.transformerURL, transformerPath(bck, objName))
-	return getWithTimeout(rc.t.DataClient(), etlURL, ts...)
+	return rc.getWithTimeout(etlURL, timeout)
 }
 
 //////////////////
@@ -236,6 +275,9 @@ func (rc *redirectComm) Get(bck *cluster.Bck, objName string, ts ...time.Duratio
 //////////////////
 
 func (pc *revProxyComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
+	// TODO: Should we load object to update `rc.stats.inBytes`?
+	// TODO: Is there way to determine `rc.stats.outBytes`?
+
 	path := transformerPath(bck, objName)
 	r.URL.Path, _ = url.PathUnescape(path) // `Path` must be unescaped otherwise it will be escaped again.
 	r.URL.RawPath = path                   // `RawPath` should be escaped version of `Path`.
@@ -243,9 +285,10 @@ func (pc *revProxyComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.
 	return nil
 }
 
-func (pc *revProxyComm) Get(bck *cluster.Bck, objName string, ts ...time.Duration) (cos.ReadCloseSizer, error) {
+func (pc *revProxyComm) Get(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
+	// TODO: Should we load object to update `rc.stats.inBytes`?
 	etlURL := cos.JoinPath(pc.transformerURL, transformerPath(bck, objName))
-	return getWithTimeout(pc.t.DataClient(), etlURL, ts...)
+	return pc.getWithTimeout(etlURL, timeout)
 }
 
 // prune query (received from AIS proxy) prior to reverse-proxying the request to/from container -
@@ -267,15 +310,15 @@ func transformerPath(bck *cluster.Bck, objName string) string {
 	return "/" + url.PathEscape(bck.MakeUname(objName))
 }
 
-func getWithTimeout(client *http.Client, url string, ts ...time.Duration) (r cos.ReadCloseSizer, err error) {
+func (c *baseComm) getWithTimeout(url string, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
 	var (
-		req     *http.Request
-		resp    *http.Response
-		cleanup func()
+		req    *http.Request
+		resp   *http.Response
+		cancel func()
 	)
-	if len(ts) > 0 && ts[0] != 0 {
+	if timeout != 0 {
 		var ctx context.Context
-		ctx, cleanup = context.WithTimeout(context.Background(), ts[0])
+		ctx, cancel = context.WithTimeout(context.Background(), timeout)
 		req, err = http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	} else {
 		req, err = http.NewRequest(http.MethodGet, url, nil)
@@ -283,14 +326,24 @@ func getWithTimeout(client *http.Client, url string, ts ...time.Duration) (r cos
 	if err != nil {
 		goto finish
 	}
-	resp, err = client.Do(req) // nolint:bodyclose // Closed by the caller.
+	resp, err = c.t.DataClient().Do(req) // nolint:bodyclose // Closed by the caller.
 finish:
 	if err != nil {
-		if cleanup != nil {
-			cleanup()
+		if cancel != nil {
+			cancel()
 		}
 		return nil, err
 	}
-	r = cos.NewDeferRCS(cos.NewSizedRC(resp.Body, resp.ContentLength), cleanup)
-	return r, nil
+
+	return cos.NewReaderWithArgs(cos.ReaderArgs{
+		R:      resp.Body,
+		Size:   resp.ContentLength,
+		ReadCb: func(i int, err error) { c.stats.outBytes.Add(int64(i)) },
+		DeferCb: func() {
+			if cancel != nil {
+				cancel()
+			}
+			c.stats.objCount.Inc()
+		},
+	}), nil
 }

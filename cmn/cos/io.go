@@ -76,6 +76,15 @@ type (
 		// This value is preserved across all the `Open`'s.
 		reportedBytes int
 	}
+	ReaderArgs struct {
+		R       io.Reader
+		Size    int64
+		ReadCb  func(int, error)
+		DeferCb func()
+	}
+	ReaderWithArgs struct {
+		args ReaderArgs
+	}
 	FileHandle struct {
 		*os.File
 		fqn string
@@ -273,6 +282,38 @@ func (r *CallbackROC) Open() (ReadOpenCloser, error) {
 }
 
 func (r *CallbackROC) Close() error { return r.roc.Close() }
+
+////////////////////
+// ReaderWithArgs //
+////////////////////
+
+func NewReaderWithArgs(args ReaderArgs) *ReaderWithArgs {
+	return &ReaderWithArgs{args: args}
+}
+
+func (r *ReaderWithArgs) Size() int64 { return r.args.Size }
+
+func (r *ReaderWithArgs) Read(p []byte) (n int, err error) {
+	n, err = r.args.R.Read(p)
+	if r.args.ReadCb != nil {
+		r.args.ReadCb(n, err)
+	}
+	return n, err
+}
+
+func (r *ReaderWithArgs) Open() (ReadOpenCloser, error) {
+	panic("not supported")
+}
+
+func (r *ReaderWithArgs) Close() (err error) {
+	if rc, ok := r.args.R.(io.ReadCloser); ok {
+		err = rc.Close()
+	}
+	if r.args.DeferCb != nil {
+		r.args.DeferCb()
+	}
+	return err
+}
 
 ///////////////////
 // SectionHandle //
