@@ -34,6 +34,9 @@ spec:
             fieldPath: spec.nodeName
       - name: AIS_NODE_ROLE
         value: "target"
+    envFrom:
+      - configMapRef:
+        name: aws-credentials
     volumeMounts:
      - name: aws-credentials
        mountPath: /root/.aws/

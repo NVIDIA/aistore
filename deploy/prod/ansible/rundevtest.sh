@@ -78,7 +78,7 @@ if [[ "${TEST_ETL,,}" == y* ]]; then
   target_cnt=5
   proxy_cnt=1
   # NOTE: (4 remote providers + aws cache directory + local registry + datascience stack)
-  { echo $target_cnt; echo $proxy_cnt; echo 1; echo 6; echo y; echo n; echo n; echo n; echo "$HOME/.aws"; echo y; echo n; } | MODE="debug" ./utils/deploy_ais.sh
+  { echo $target_cnt; echo $proxy_cnt; echo 1; echo 6; echo y; echo n; echo n; echo n; echo "$HOME/aws.env"; echo y; echo n; } | MODE="debug" ./utils/deploy_ais.sh
   echo "AIS on Minikube deployed"
   popd
 
