@@ -38,9 +38,4 @@ func calcPageSize(pageSize, maxPageSize uint) uint {
 }
 
 // nolint:deadcode,unused // It is used but in `*_mock.go` files.
-func newInitCloudErr(provider string) error {
-	return fmt.Errorf(
-		"tried to initialize %q cloud (specified in config) but the binary was not built with %q build tag",
-		provider, provider,
-	)
-}
+func newErrInitBackend(provider string) error { return &cmn.ErrInitBackend{Provider: provider} }

@@ -12,5 +12,5 @@ import (
 )
 
 func NewAzure(_ cluster.Target) (cluster.BackendProvider, error) {
-	return nil, newInitCloudErr(cmn.ProviderAzure)
+	return nil, newErrInitBackend(cmn.ProviderAzure)
 }

@@ -146,8 +146,8 @@ for (( c=START; c<=END; c++ )); do
   AIS_CONF_FILE="$AIS_CONF_DIR/ais.json"
   AIS_LOCAL_CONF_FILE="$AIS_CONF_DIR/ais_local.json"
 
-  PROXY_PARAM="${AIS_NODE_FLAGS} -config=${AIS_CONF_FILE} -local_config=${AIS_LOCAL_CONF_FILE} -role=proxy -ntargets=${TARGET_CNT} $1 $2"
-  TARGET_PARAM="${AIS_NODE_FLAGS} -config=${AIS_CONF_FILE} -local_config=${AIS_LOCAL_CONF_FILE} -role=target $1 $2"
+  PROXY_PARAM="${AIS_NODE_FLAGS} -config=${AIS_CONF_FILE} -local_config=${AIS_LOCAL_CONF_FILE} -role=proxy -ntargets=${TARGET_CNT} ${RUN_ARGS}"
+  TARGET_PARAM="${AIS_NODE_FLAGS} -config=${AIS_CONF_FILE} -local_config=${AIS_LOCAL_CONF_FILE} -role=target ${RUN_ARGS}"
 
   if [[ $c -eq 0 ]]; then
     export AIS_IS_PRIMARY="true"

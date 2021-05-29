@@ -12,5 +12,5 @@ import (
 )
 
 func NewGCP(_ cluster.Target) (cluster.BackendProvider, error) {
-	return nil, newInitCloudErr(cmn.ProviderGoogle)
+	return nil, newErrInitBackend(cmn.ProviderGoogle)
 }

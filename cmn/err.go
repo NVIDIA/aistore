@@ -96,6 +96,9 @@ type (
 	ErrNotFound struct {
 		what string
 	}
+	ErrInitBackend struct {
+		Provider string
+	}
 	ErrETL struct {
 		Reason string
 		ETLErrorContext
@@ -419,14 +422,16 @@ func NewNotFoundError(format string, a ...interface{}) *ErrNotFound {
 
 func (e *ErrNotFound) Error() string { return e.what + " does not exist" }
 
-func (e *ErrNotFound) Is(target error) bool {
+func (e *ErrNotFound) As(target error) bool {
 	_, ok := target.(*ErrNotFound)
 	return ok
 }
 
-func (e *ErrNotFound) As(target error) bool {
-	_, ok := target.(*ErrNotFound)
-	return ok
+func (e *ErrInitBackend) Error() string {
+	return fmt.Sprintf(
+		"cannot initialize %q backend (as per cluster config): missing %s-supporting libraries in the build",
+		e.Provider, e.Provider,
+	)
 }
 
 func NewETLError(ctx *ETLErrorContext, format string, a ...interface{}) *ErrETL {

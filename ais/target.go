@@ -247,6 +247,9 @@ func (b backends) initExt(t *targetrunner, starting bool) (err error) {
 			err = fmt.Errorf(cmn.FmtErrUnknown, t.si, "backend provider", provider)
 		}
 		if err != nil {
+			err = _overback(err)
+		}
+		if err != nil {
 			return
 		}
 		if add != "" && !starting {
@@ -254,6 +257,17 @@ func (b backends) initExt(t *targetrunner, starting bool) (err error) {
 		}
 	}
 	return
+}
+
+func _overback(err error) error {
+	if _, ok := err.(*cmn.ErrInitBackend); !ok {
+		return err
+	}
+	if !daemon.cli.overrideBackends {
+		return fmt.Errorf("%v - consider using '-override_backends' command-line", err)
+	}
+	glog.Warningf("%v - overriding, proceeding anyway", err)
+	return nil
 }
 
 ///////////////////

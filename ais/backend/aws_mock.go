@@ -12,5 +12,5 @@ import (
 )
 
 func NewAWS(_ cluster.Target) (cluster.BackendProvider, error) {
-	return nil, newInitCloudErr(cmn.ProviderAmazon)
+	return nil, newErrInitBackend(cmn.ProviderAmazon)
 }

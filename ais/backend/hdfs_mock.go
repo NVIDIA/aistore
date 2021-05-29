@@ -12,5 +12,5 @@ import (
 )
 
 func NewHDFS(_ cluster.Target) (cluster.BackendProvider, error) {
-	return nil, newInitCloudErr(cmn.ProviderHDFS)
+	return nil, newErrInitBackend(cmn.ProviderHDFS)
 }
