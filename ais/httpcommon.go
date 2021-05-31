@@ -1112,7 +1112,7 @@ func (h *httprunner) call(args callArgs) (res *callResult) {
 
 	if args.v != nil {
 		if v, ok := args.v.(msgp.Decodable); ok {
-			buf, slab := h.smm.Alloc(10 * cos.KiB)
+			buf, slab := h.gmm.Alloc(10 * cos.KiB)
 			res.err = v.DecodeMsg(msgp.NewReaderBuf(resp.Body, buf))
 			slab.Free(buf)
 		} else {
@@ -1355,7 +1355,7 @@ func (h *httprunner) checkRESTItems(w http.ResponseWriter, r *http.Request, item
 func (h *httprunner) writeMsgPack(w http.ResponseWriter, r *http.Request, v interface{}, tag string) (ok bool) {
 	var (
 		err       error
-		buf, slab = h.smm.Alloc(10 * cos.KiB)
+		buf, slab = h.gmm.Alloc(10 * cos.KiB)
 		mw        = msgp.NewWriterBuf(w, buf)
 	)
 	defer slab.Free(buf)

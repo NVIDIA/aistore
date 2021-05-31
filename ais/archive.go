@@ -7,18 +7,30 @@ package ais
 import (
 	"archive/tar"
 	"archive/zip"
+	"bytes"
 	"compress/gzip"
+	"errors"
+	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
+)
+
+// References:
+// * https://en.wikipedia.org/wiki/List_of_file_signatures
+// * https://www.iana.org/assignments/media-types/media-types.xhtml#application
+
+const (
+	sizeDetectMime = 512
 )
 
 const (
-	fmtErrNotFound = "file %q in archive \"%s/%s\""
+	unknownMime = "unknown mime type"
 )
 
 type (
@@ -34,6 +46,20 @@ type (
 		file io.ReadCloser
 		size int64
 	}
+
+	detect struct {
+		offset int
+		sig    []byte
+		mime   string // '.' + IANA mime
+	}
+)
+
+var (
+	magicTar  = detect{offset: 257, sig: []byte("ustar"), mime: cos.ExtTar}
+	magicGzip = detect{sig: []byte{0x1f, 0x8b}, mime: cos.ExtTarTgz}
+	magicZip  = detect{sig: []byte{0x50, 0x4b}, mime: cos.ExtZip}
+
+	allMagics = []detect{magicTar, magicGzip, magicZip} // NOTE: must contain all
 )
 
 func (csl *cslLimited) Size() int64  { return csl.N }
@@ -47,24 +73,84 @@ func (csf *cslFile) Read(b []byte) (int, error) { return csf.file.Read(b) }
 func (csf *cslFile) Size() int64                { return csf.size }
 func (csf *cslFile) Close() error               { return csf.file.Close() }
 
-func extractArch(file *os.File, filename string, lom *cluster.LOM) (cos.ReadCloseSizer, error) {
-	switch {
-	case strings.HasSuffix(lom.ObjName, cos.ExtTarTgz) || strings.HasSuffix(lom.ObjName, cos.ExtTgz):
-		return extractTgz(file, filename, lom)
-	case strings.HasSuffix(lom.ObjName, cos.ExtZip):
-		return extractZip(file, filename, lom)
+func notFoundInArch(filename, archname string) error {
+	return cmn.NewNotFoundError("file %q in archive %q", filename, archname)
+}
+
+/////////////////////////
+// GET OBJECT: archive //
+/////////////////////////
+
+func (goi *getObjInfo) freadArch(file *os.File) (cos.ReadCloseSizer, error) {
+	mime, err := goi.mime(file)
+	if err != nil {
+		return nil, err
+	}
+	// NOTE: not supporting `--absolute-names`
+	filename, archname := goi.archive.filename, filepath.Join(goi.lom.Bucket().Name, goi.lom.ObjName)
+	if goi.archive.filename[0] == filepath.Separator {
+		filename = goi.archive.filename[1:]
+	}
+	switch mime {
+	case cos.ExtTar:
+		return freadTar(file, filename, archname)
+	case cos.ExtTarTgz, cos.ExtTgz:
+		return freadTgz(file, filename, archname)
+	case cos.ExtZip:
+		return freadZip(file, filename, archname, goi.lom.Size())
 	default:
-		return extractTar(file, filename, lom)
+		debug.Assert(false)
+		return nil, errors.New(unknownMime)
 	}
 }
 
-func extractTar(reader io.Reader, filename string, lom *cluster.LOM) (*cslLimited, error) {
+func (goi *getObjInfo) mime(file *os.File) (m string, err error) {
+	objname := goi.lom.ObjName
+	switch {
+	case strings.HasSuffix(objname, cos.ExtTar):
+		return cos.ExtTar, nil
+	case strings.HasSuffix(objname, cos.ExtTarTgz):
+		return cos.ExtTarTgz, nil
+	case strings.HasSuffix(objname, cos.ExtTgz):
+		return cos.ExtTgz, nil
+	case strings.HasSuffix(objname, cos.ExtZip):
+		return cos.ExtZip, nil
+	}
+	// simplified auto-detection
+	var (
+		buf, slab = goi.t.smm.Alloc(sizeDetectMime)
+		n         int
+	)
+	n, err = file.Read(buf)
+	for _, magic := range allMagics {
+		if n > magic.offset && bytes.HasPrefix(buf[magic.offset:], magic.sig) {
+			m = magic.mime
+			break
+		}
+	}
+	if m == "" {
+		if err == nil {
+			err = errors.New(unknownMime)
+		} else {
+			err = fmt.Errorf("%s (%v)", unknownMime, err)
+		}
+	} else {
+		err = nil
+	}
+	if n > 0 {
+		file.Seek(0, io.SeekStart)
+	}
+	slab.Free(buf)
+	return
+}
+
+func freadTar(reader io.Reader, filename, archname string) (*cslLimited, error) {
 	tr := tar.NewReader(reader)
 	for {
 		hdr, err := tr.Next()
 		if err != nil {
 			if err == io.EOF {
-				err = cmn.NewNotFoundError(fmtErrNotFound, filename, lom.Bucket(), lom.ObjName)
+				err = notFoundInArch(filename, archname)
 			}
 			return nil, err
 		}
@@ -75,7 +161,7 @@ func extractTar(reader io.Reader, filename string, lom *cluster.LOM) (*cslLimite
 	}
 }
 
-func extractTgz(reader io.Reader, filename string, lom *cluster.LOM) (csc *cslClose, err error) {
+func freadTgz(reader io.Reader, filename, archname string) (csc *cslClose, err error) {
 	var (
 		gzr *gzip.Reader
 		csl *cslLimited
@@ -83,16 +169,16 @@ func extractTgz(reader io.Reader, filename string, lom *cluster.LOM) (csc *cslCl
 	if gzr, err = gzip.NewReader(reader); err != nil {
 		return
 	}
-	if csl, err = extractTar(gzr, filename, lom); err != nil {
+	if csl, err = freadTar(gzr, filename, archname); err != nil {
 		return
 	}
 	csc = &cslClose{gzr: gzr /*to close*/, R: csl /*to read from*/, N: csl.N /*size*/}
 	return
 }
 
-func extractZip(readerAt cos.ReadReaderAt, filename string, lom *cluster.LOM) (csf *cslFile, err error) {
+func freadZip(readerAt cos.ReadReaderAt, filename, archname string, size int64) (csf *cslFile, err error) {
 	var zr *zip.Reader
-	if zr, err = zip.NewReader(readerAt, lom.Size()); err != nil {
+	if zr, err = zip.NewReader(readerAt, size); err != nil {
 		return
 	}
 	for _, f := range zr.File {
@@ -108,6 +194,6 @@ func extractZip(readerAt cos.ReadReaderAt, filename string, lom *cluster.LOM) (c
 		csf.file, err = f.Open()
 		return
 	}
-	err = cmn.NewNotFoundError(fmtErrNotFound, filename, lom.Bucket(), lom.ObjName)
+	err = notFoundInArch(filename, archname)
 	return
 }

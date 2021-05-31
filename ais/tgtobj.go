@@ -749,7 +749,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 	if rrange == nil {
 		reader = file
 		if goi.archive.filename != "" {
-			csl, err = extractArch(file, goi.archive.filename, goi.lom)
+			csl, err = goi.freadArch(file)
 			if err != nil {
 				if _, ok := err.(*cmn.ErrNotFound); ok {
 					errCode = http.StatusNotFound
