@@ -2,6 +2,7 @@ linters:
   enable-all: false
   disable-all: true
   enable:
+    - revive
     - asciicheck
     - bodyclose
     - deadcode
@@ -14,7 +15,6 @@ linters:
     - gofumpt
     - goheader
     - goimports
-    - golint
     - gomoddirectives
     - goprintffuncname
     - gosimple
@@ -64,6 +64,46 @@ linters:
     # - wrapcheck
 
 linters-settings:
+  revive:
+    ignore-generated-header: true
+    severity: warning
+    rules:
+      # name: unhandled-error
+      # arguments : ["fmt.Printf", "fmt.Fprintf", "fmt.Fprintln"]
+      # name: line-length-limit
+      # severity: error
+      # arguments: [130]
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: early-return
+      - name: error-naming
+      - name: error-strings
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      - name: indent-error-flow
+      - name: imports-blacklist
+      - name: import-shadowing
+      - name: modifies-value-receiver
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: redefines-builtin-id
+      - name: string-of-int
+      - name: superfluous-else
+      - name: time-naming
+      - name: var-naming
+      - name: var-declaration
+      - name: unconditional-recursion
+      - name: unexported-naming
+      - name: unexported-return
+      - name: unnecessary-stmt
+      - name: unreachable-code
+      - name: unused-parameter
+      - name: unused-receiver
+      - name: waitgroup-by-value
   govet:
     enable-all: true
     disable:
