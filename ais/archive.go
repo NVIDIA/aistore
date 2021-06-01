@@ -86,11 +86,8 @@ func (goi *getObjInfo) freadArch(file *os.File) (cos.ReadCloseSizer, error) {
 	if err != nil {
 		return nil, err
 	}
-	// NOTE: not supporting `--absolute-names`
-	filename, archname := goi.archive.filename, filepath.Join(goi.lom.Bucket().Name, goi.lom.ObjName)
-	if goi.archive.filename[0] == filepath.Separator {
-		filename = goi.archive.filename[1:]
-	}
+	archname := filepath.Join(goi.lom.Bucket().Name, goi.lom.ObjName)
+	filename := goi.archive.filename
 	switch mime {
 	case cos.ExtTar:
 		return freadTar(file, filename, archname)
@@ -154,10 +151,9 @@ func freadTar(reader io.Reader, filename, archname string) (*cslLimited, error) 
 			}
 			return nil, err
 		}
-		if hdr.Name != filename {
-			continue
+		if hdr.Name == filename || archNamesEq(hdr.Name, filename) {
+			return &cslLimited{LimitedReader: io.LimitedReader{R: reader, N: hdr.Size}}, nil
 		}
-		return &cslLimited{LimitedReader: io.LimitedReader{R: reader, N: hdr.Size}}, nil
 	}
 }
 
@@ -182,18 +178,27 @@ func freadZip(readerAt cos.ReadReaderAt, filename, archname string, size int64) 
 		return
 	}
 	for _, f := range zr.File {
-		header := f.FileHeader
-		if header.Name != filename {
-			continue
-		}
 		finfo := f.FileInfo()
 		if finfo.IsDir() {
 			continue
 		}
-		csf = &cslFile{size: finfo.Size()}
-		csf.file, err = f.Open()
-		return
+		if f.FileHeader.Name == filename || archNamesEq(f.FileHeader.Name, filename) {
+			csf = &cslFile{size: finfo.Size()}
+			csf.file, err = f.Open()
+			return
+		}
 	}
 	err = notFoundInArch(filename, archname)
 	return
+}
+
+// NOTE: in re `--absolute-names` (simplified)
+func archNamesEq(n1, n2 string) bool {
+	if n1[0] == filepath.Separator {
+		n1 = n1[1:]
+	}
+	if n2[0] == filepath.Separator {
+		n2 = n2[1:]
+	}
+	return n1 == n2
 }

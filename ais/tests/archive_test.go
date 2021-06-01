@@ -36,28 +36,62 @@ func TestGetFromArchive(t *testing.T) {
 			numArchived = 10
 			randomNames = make([]string, numArchived)
 			subtests    = []struct {
-				ext string
+				ext        string
+				nested     bool
+				autodetect bool
 			}{
 				{
-					ext: cos.ExtTar,
+					ext:        cos.ExtTar,
+					nested:     false,
+					autodetect: false,
 				},
 				{
-					ext: cos.ExtTarTgz,
+					ext:        cos.ExtTarTgz,
+					nested:     false,
+					autodetect: false,
 				},
 				{
-					ext: cos.ExtZip,
+					ext:        cos.ExtZip,
+					nested:     false,
+					autodetect: false,
+				},
+				{
+					ext:        cos.ExtTar,
+					nested:     true,
+					autodetect: true,
+				},
+				{
+					ext:        cos.ExtTarTgz,
+					nested:     true,
+					autodetect: true,
+				},
+				{
+					ext:        cos.ExtZip,
+					nested:     true,
+					autodetect: true,
 				},
 			}
 		)
 		for _, test := range subtests {
-			t.Run(test.ext, func(t *testing.T) {
+			tname := fmt.Sprintf("%s/nested=%t/auto=%t", test.ext, test.nested, test.autodetect)
+			t.Run(tname, func(t *testing.T) {
 				var (
 					err      error
 					fsize    = rand.Intn(10*cos.KiB) + 1
-					archName = fmt.Sprintf("%s/%s", tmpDir, bck.Name) + test.ext
+					archName = tmpDir + "/" + cos.GenTie() + test.ext
+					dirs     = []string{"a", "b", "c", "a/b", "a/c", "b/c", "a/b/c", "a/c/b", "b/a/c"}
 				)
 				for i := 0; i < numArchived; i++ {
-					randomNames[i] = fmt.Sprintf("%d.txt", rand.Int())
+					j := rand.Int()
+					randomNames[i] = fmt.Sprintf("%d.txt", j)
+					if test.nested {
+						k := j % len(dirs)
+						dir := dirs[k]
+						randomNames[i] = dir + "/" + randomNames[i]
+					}
+					if j%3 == 0 {
+						randomNames[i] = "/" + randomNames[i]
+					}
 				}
 				if test.ext == cos.ExtZip {
 					err = archive.CreateZipWithRandomFiles(archName, numArchived, fsize, randomNames)
@@ -75,7 +109,9 @@ func TestGetFromArchive(t *testing.T) {
 				defer os.Remove(archName)
 
 				objname := filepath.Base(archName)
-
+				if test.autodetect {
+					objname = objname[0 : len(objname)-len(test.ext)]
+				}
 				reader, err := readers.NewFileReaderFromFile(archName, cos.ChecksumNone)
 				tassert.CheckFatal(t, err)
 
