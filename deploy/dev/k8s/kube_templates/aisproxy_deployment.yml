@@ -34,7 +34,7 @@ spec:
       - name: AIS_IS_PRIMARY
         value: "${AIS_IS_PRIMARY}"
     envFrom:
-      - configMapRef:
+    - configMapRef:
         name: aws-credentials
     volumeMounts:
      - name: aws-credentials

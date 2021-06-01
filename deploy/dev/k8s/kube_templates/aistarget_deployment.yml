@@ -35,7 +35,7 @@ spec:
       - name: AIS_NODE_ROLE
         value: "target"
     envFrom:
-      - configMapRef:
+    - configMapRef:
         name: aws-credentials
     volumeMounts:
      - name: aws-credentials
