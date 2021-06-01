@@ -23,7 +23,7 @@ import (
 
 // References:
 // * https://en.wikipedia.org/wiki/List_of_file_signatures
-// * https://www.iana.org/assignments/media-types/media-types.xhtml#application
+// * https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
 
 const (
 	sizeDetectMime = 512
@@ -103,17 +103,27 @@ func (goi *getObjInfo) freadArch(file *os.File) (cos.ReadCloseSizer, error) {
 
 func (goi *getObjInfo) mime(file *os.File) (m string, err error) {
 	objname := goi.lom.ObjName
-	switch {
-	case strings.HasSuffix(objname, cos.ExtTar):
-		return cos.ExtTar, nil
-	case strings.HasSuffix(objname, cos.ExtTarTgz):
-		return cos.ExtTarTgz, nil
-	case strings.HasSuffix(objname, cos.ExtTgz):
-		return cos.ExtTgz, nil
-	case strings.HasSuffix(objname, cos.ExtZip):
-		return cos.ExtZip, nil
+	// 1. user-specified (overrides everything else)
+	if goi.archive.mime != "" {
+		// NOTE exception: cos.ExtTarTgz contains cos.ExtTar
+		if strings.Contains(goi.archive.mime, cos.ExtTarTgz[1:]) {
+			return cos.ExtTarTgz, nil
+		}
+		for _, ext := range cos.ArchExtensions {
+			if strings.Contains(goi.archive.mime, ext[1:]) {
+				return ext, nil
+			}
+		}
+		err = fmt.Errorf("%s %q", unknownMime, goi.archive.mime)
+		return
 	}
-	// simplified auto-detection
+	// 2. by extension
+	for _, ext := range cos.ArchExtensions {
+		if strings.HasSuffix(objname, ext) {
+			return ext, nil
+		}
+	}
+	// 3. by magic
 	var (
 		buf, slab = goi.t.smm.Alloc(sizeDetectMime)
 		n         int

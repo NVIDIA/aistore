@@ -193,8 +193,9 @@ const (
 	// Log severity
 	URLParamSev = "severity" // see { LogInfo, ...} enum
 
-	// Filename in archive
+	// Archive filename and format (mime type)
 	URLParamArchpath = "archpath"
+	URLParamArchmime = "archmime"
 )
 
 // Internal query params.

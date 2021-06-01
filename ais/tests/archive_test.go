@@ -36,44 +36,42 @@ func TestGetFromArchive(t *testing.T) {
 			numArchived = 10
 			randomNames = make([]string, numArchived)
 			subtests    = []struct {
-				ext        string
-				nested     bool
-				autodetect bool
+				ext        string // one of cos.ArchExtensions
+				nested     bool   // subdirs
+				autodetect bool   // auto-detect by magic
+				mime       bool   // specify mime type
 			}{
 				{
-					ext:        cos.ExtTar,
-					nested:     false,
-					autodetect: false,
+					ext: cos.ExtTar, nested: false, autodetect: false, mime: false,
 				},
 				{
-					ext:        cos.ExtTarTgz,
-					nested:     false,
-					autodetect: false,
+					ext: cos.ExtTarTgz, nested: false, autodetect: false, mime: false,
 				},
 				{
-					ext:        cos.ExtZip,
-					nested:     false,
-					autodetect: false,
+					ext: cos.ExtZip, nested: false, autodetect: false, mime: false,
 				},
 				{
-					ext:        cos.ExtTar,
-					nested:     true,
-					autodetect: true,
+					ext: cos.ExtTar, nested: true, autodetect: true, mime: false,
 				},
 				{
-					ext:        cos.ExtTarTgz,
-					nested:     true,
-					autodetect: true,
+					ext: cos.ExtTarTgz, nested: true, autodetect: true, mime: false,
 				},
 				{
-					ext:        cos.ExtZip,
-					nested:     true,
-					autodetect: true,
+					ext: cos.ExtZip, nested: true, autodetect: true, mime: false,
+				},
+				{
+					ext: cos.ExtTar, nested: true, autodetect: true, mime: true,
+				},
+				{
+					ext: cos.ExtTarTgz, nested: true, autodetect: true, mime: true,
+				},
+				{
+					ext: cos.ExtZip, nested: true, autodetect: true, mime: true,
 				},
 			}
 		)
 		for _, test := range subtests {
-			tname := fmt.Sprintf("%s/nested=%t/auto=%t", test.ext, test.nested, test.autodetect)
+			tname := fmt.Sprintf("%s/nested=%t/auto=%t/mime=%t", test.ext, test.nested, test.autodetect, test.mime)
 			t.Run(tname, func(t *testing.T) {
 				var (
 					err      error
@@ -118,8 +116,15 @@ func TestGetFromArchive(t *testing.T) {
 				tutils.Put(m.proxyURL, m.bck, objname, reader, errCh)
 
 				for _, randomName := range randomNames {
+					var mime string
+					if test.mime {
+						mime = "application/x-" + test.ext[1:]
+					}
 					getOptions := api.GetObjectInput{
-						Query: url.Values{cmn.URLParamArchpath: []string{randomName}},
+						Query: url.Values{
+							cmn.URLParamArchpath: []string{randomName},
+							cmn.URLParamArchmime: []string{mime},
+						},
 					}
 					n, err := api.GetObject(baseParams, m.bck, objname, getOptions)
 					tlog.Logf("%s/%s?%s=%s(%dB)\n", m.bck.Name, objname, cmn.URLParamArchpath, randomName, n)

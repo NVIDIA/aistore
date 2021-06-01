@@ -66,15 +66,13 @@ func init() {
 	// config itself and its command line overrides
 	flag.StringVar(&daemon.cli.globalConfigPath, "config", "",
 		"config filename: local file that stores the global cluster configuration")
-	flag.StringVar(&daemon.cli.localConfigPath, "local_config", "", "config filename: local file that stores daemon's local configuration")
-
+	flag.StringVar(&daemon.cli.localConfigPath, "local_config", "",
+		"config filename: local file that stores daemon's local configuration")
 	flag.StringVar(&daemon.cli.confCustom, "config_custom", "",
 		"\"key1=value1,key2=value2\" formatted string to override selected entries in config")
-
 	flag.IntVar(&daemon.cli.ntargets, "ntargets", 0, "number of storage targets to expect at startup (hint, proxy-only)")
-
 	flag.BoolVar(&daemon.cli.transient, "transient", false,
-		"false: apply command-line args to the configuration and save the latter to disk\ntrue: keep it transient (for this run only)")
+		"false: store customized (via config_custom) configuration\ntrue: runtime only (non-persistent)")
 	flag.BoolVar(&daemon.cli.skipStartup, "skip_startup", false,
 		"determines if primary proxy should skip waiting for target registrations when starting up")
 	flag.BoolVar(&daemon.cli.usage, "h", false, "show usage and exit")

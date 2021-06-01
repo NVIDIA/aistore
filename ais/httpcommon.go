@@ -51,6 +51,7 @@ type (
 
 	archiveQuery struct {
 		filename string // pathname in archive
+		mime     string // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
 	}
 
 	// callResult contains HTTP response.
