@@ -770,10 +770,9 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		return
 	}
 	if bck.Bck.IsRemoteAIS() {
-		// forward to remote AIS as is, with a few distinct exceptions
+		// forward to remote AIS as is, with distinct exception
 		switch msg.Action {
 		case cmn.ActInvalListCache:
-			break
 		default:
 			p.reverseReqRemote(w, r, msg, bck.Bck)
 			return

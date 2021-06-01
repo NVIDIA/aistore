@@ -361,11 +361,9 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cos.SimpleKVs, err
 
 func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duration) error {
 	var (
-		latestAborted  bool = false
-		latestFinished bool = false
+		tw                            = &tabwriter.Writer{}
+		latestAborted, latestFinished bool
 	)
-
-	tw := &tabwriter.Writer{}
 	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
 
 	// run until rebalance is completed

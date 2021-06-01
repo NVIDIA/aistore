@@ -306,10 +306,7 @@ func (b *DlSingleBody) Validate() error {
 	if err := b.DlBase.Validate(); err != nil {
 		return err
 	}
-	if err := b.DlSingleObj.Validate(); err != nil {
-		return err
-	}
-	return nil
+	return b.DlSingleObj.Validate()
 }
 
 func (b *DlSingleBody) ExtractPayload() (cos.SimpleKVs, error) {
@@ -367,10 +364,7 @@ func (b *DlMultiBody) Validate() error {
 	if b.ObjectsPayload == nil {
 		return errors.New("body should not be empty")
 	}
-	if err := b.DlBase.Validate(); err != nil {
-		return err
-	}
-	return nil
+	return b.DlBase.Validate()
 }
 
 func (b *DlMultiBody) ExtractPayload() (cos.SimpleKVs, error) {
@@ -425,12 +419,7 @@ type DlBackendBody struct {
 	Suffix string `json:"suffix"`
 }
 
-func (b *DlBackendBody) Validate() error {
-	if err := b.DlBase.Validate(); err != nil {
-		return err
-	}
-	return nil
-}
+func (b *DlBackendBody) Validate() error { return b.DlBase.Validate() }
 
 func (b *DlBackendBody) Describe() string {
 	if b.Description != "" {

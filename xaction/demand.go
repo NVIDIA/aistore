@@ -163,11 +163,11 @@ func (r *XactDemandBase) Finish(err error) {
 
 func (r *XactDemandBase) quicb(elapsed time.Duration /*accum. wait time*/) cluster.QuiRes {
 	switch {
-	case elapsed >= r.idle.likely:
-		return cluster.QuiTimeout
 	case r.Pending() != 0:
 		debug.Assertf(r.Pending() > 0, "%s %d", r, r.Pending())
 		return cluster.QuiActive
+	case elapsed >= r.idle.likely:
+		return cluster.QuiTimeout
 	default:
 		return cluster.QuiInactive
 	}

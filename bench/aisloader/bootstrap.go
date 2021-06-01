@@ -182,7 +182,7 @@ var (
 	accumulatedStats sts
 	bucketObjsNames  namegetter.ObjectNameGetter
 	statsPrintHeader = "%-10s%-6s%-22s\t%-22s\t%-36s\t%-22s\t%-10s\n"
-	statsdC          statsd.Client
+	statsdC          *statsd.Client
 	getPending       int64
 	putPending       int64
 	traceHTTPSig     atomic.Bool
@@ -911,7 +911,7 @@ Done:
 }
 
 func sendStatsdStats(s *sts) {
-	s.statsd.SendAll(&statsdC)
+	s.statsd.SendAll(statsdC)
 }
 
 func newPutWorkOrder() (*workOrder, error) {

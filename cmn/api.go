@@ -529,11 +529,10 @@ func (bp *BucketProps) Validate(targetCnt int) error {
 	)
 	for _, validator := range validators {
 		if err := validator.ValidateAsProps(validationArgs); err != nil {
-			if IsErrSoft(err) {
-				softErr = err
-			} else {
+			if !IsErrSoft(err) {
 				return err
 			}
+			softErr = err
 		}
 	}
 

@@ -59,32 +59,32 @@ var (
 )
 
 // New returns a UDP client that we then use to send metrics to the specified IP:port
-func New(ip string, port int, prefix string, probe bool) (Client, error) {
+func New(ip string, port int, prefix string, probe bool) (*Client, error) {
 	c, err := net.ListenPacket("udp", ":0")
 	if err != nil {
-		return Client{}, err
+		return &Client{}, err
 	}
 	conn, ok := c.(*net.UDPConn)
 	debug.Assert(ok)
 	server, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", ip, port))
 	if err != nil {
 		conn.Close()
-		return Client{}, err
+		return &Client{}, err
 	}
 	smm = memsys.DefaultSmallMM()
-	client := Client{conn, server, prefix, true /*opened*/}
+	client := &Client{conn, server, prefix, true /*opened*/}
 	if !probe {
 		return client, nil
 	}
 	if err := client.probeUDP(); err != nil {
 		conn.Close()
-		return Client{}, err
+		return &Client{}, err
 	}
 	return client, nil
 }
 
 // NOTE: a single failed probe disables StatsD for the entire runtime
-func (c Client) probeUDP() (err error) {
+func (c *Client) probeUDP() (err error) {
 	var (
 		sgl = smm.NewSGL(0)
 		m   = Metric{Type: Counter, Name: "counter", Value: 1}
@@ -113,7 +113,7 @@ func (c Client) probeUDP() (err error) {
 }
 
 // Close closes the UDP connection
-func (c Client) Close() error {
+func (c *Client) Close() error {
 	if c.opened {
 		c.opened = false
 		return c.conn.Close()
@@ -126,7 +126,7 @@ func (c Client) Close() error {
 // aggCnt - if stats were aggregated - number of stats which were aggregated, 1 otherwise
 // 1/ratio - how many samples are aggregated into single metric
 // see: https://github.com/statsd/statsd/blob/master/docs/metric_types.md#sampling
-func (c Client) Send(bucket string, aggCnt int64, metrics ...Metric) {
+func (c *Client) Send(bucket string, aggCnt int64, metrics ...Metric) {
 	if !c.opened {
 		return
 	}
@@ -143,7 +143,7 @@ func (c Client) Send(bucket string, aggCnt int64, metrics ...Metric) {
 	c.write(bytes, int(l))
 }
 
-func (c Client) SendSGL(sgl *memsys.SGL) {
+func (c *Client) SendSGL(sgl *memsys.SGL) {
 	l := sgl.Len()
 	debug.Assert(l < sgl.Slab().Size())
 	if !c.opened || l == 0 {

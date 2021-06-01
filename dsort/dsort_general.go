@@ -264,7 +264,7 @@ CreateAllShards:
 	return group.Wait()
 }
 
-func (ds *dsorterGeneral) preShardCreation(shardName string, mpathInfo *fs.MountpathInfo) error {
+func (ds *dsorterGeneral) preShardCreation(_ string, mpathInfo *fs.MountpathInfo) error {
 	ds.creationPhase.adjuster.acquireSema(mpathInfo)
 	return nil
 }

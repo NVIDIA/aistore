@@ -229,13 +229,13 @@ func appMain(c *cli.Context) (err error) {
 	blocked := true
 	// In case of 1) signal() does nothing.
 	// In case of 2) signal() unblocks the calling process.
-	signal := func() {
+	sig := func() {
 		if blocked {
 			daemonize.SignalOutcome(err)
 			blocked = false
 		}
 	}
-	defer signal()
+	defer sig()
 
 	fsowner, err = initOwner(flags)
 	if err != nil {
@@ -302,7 +302,7 @@ func appMain(c *cli.Context) (err error) {
 	}
 
 	// Signal the calling process that mounting was successful.
-	signal()
+	sig()
 
 	// Start signal dispatcher which catches different signals and reacts upon
 	// receiving them.

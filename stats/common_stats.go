@@ -325,7 +325,7 @@ func (s *CoreStats) initMetricClient(node *cluster.Snode, parent *statsRunner) {
 	} else {
 		glog.Infoln("Using StatsD")
 	}
-	s.statsdC = &statsD
+	s.statsdC = statsD
 }
 
 // populate *prometheus.Desc and statsValue.label.prom
@@ -654,12 +654,12 @@ func (r *statsRunner) Collect(ch chan<- prometheus.Metric) {
 			val int64
 			fv  float64
 		)
-		if copyV, ok := r.ctracker[name]; !ok {
+		copyV, okc := r.ctracker[name]
+		if !okc {
 			continue
-		} else {
-			val = copyV.Value
-			fv = float64(val)
 		}
+		val = copyV.Value
+		fv = float64(val)
 		// 1. convert units
 		switch v.kind {
 		case KindCounter:

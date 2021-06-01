@@ -227,14 +227,13 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 			gomega.Expect(err).To(gomega.HaveOccurred(), "expected FAIL but command succeeded")
 			gomega.Expect(desc).To(gomega.ContainSubstring(expectFailMsg))
 			continue
-		} else {
-			var desc string
-			if ee, ok := err.(*exec.ExitError); ok {
-				desc = string(ee.Stderr)
-			}
-			desc = fmt.Sprintf("cmd: %q, err: %s", cmd.String(), desc)
-			gomega.Expect(err).NotTo(gomega.HaveOccurred(), desc)
 		}
+		var desc string
+		if ee, ok := err.(*exec.ExitError); ok {
+			desc = string(ee.Stderr)
+		}
+		desc = fmt.Sprintf("cmd: %q, err: %s", cmd.String(), desc)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred(), desc)
 
 		if saveResult {
 			lastResult = strings.TrimSpace(string(b))

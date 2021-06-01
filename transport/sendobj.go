@@ -185,12 +185,11 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 		if !obj.IsHeaderOnly() {
 			return s.sendData(b)
 		}
-		if !obj.IsLast() {
-			s.eoObj(nil)
-		} else {
+		if obj.IsLast() {
 			err = io.EOF
 			return
 		}
+		s.eoObj(nil)
 	case inPDU:
 		for !s.pdu.done {
 			err = s.pdu.readFrom(&s.sendoff)

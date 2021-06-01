@@ -477,7 +477,7 @@ func (query QueryBcks) Contains(other Bck) bool {
 		}
 		if query.Provider == "" {
 			// If query's provider not set, we should match the expected bucket
-			query.Provider = other.Provider
+			query.Provider = other.Provider // nolint:revive // temp change to compare
 		}
 		return query.Equal(other)
 	}

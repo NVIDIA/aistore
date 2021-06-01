@@ -68,14 +68,11 @@ func (id RebID) Compare(other string) int {
 		o   int64
 		err error
 	)
-	if o, err = strconv.ParseInt(other, 10, 64); err == nil {
-		goto compare
-	} else if o, err = strconv.ParseInt(other[1:], 10, 64); err == nil {
-		goto compare
-	} else {
-		return -1
+	if o, err = strconv.ParseInt(other, 10, 64); err != nil {
+		if o, err = strconv.ParseInt(other[1:], 10, 64); err != nil {
+			return -1
+		}
 	}
-compare:
 	if int64(id) < o {
 		return -1
 	}
@@ -130,6 +127,7 @@ func (xact *XactBase) Quiesce(d time.Duration, cb cluster.QuiCB) cluster.QuiRes 
 	if xact.Aborted() {
 		return cluster.QuiAborted
 	}
+wait:
 	for idle < dur {
 		time.Sleep(sleep)
 		if xact.Aborted() {
@@ -145,7 +143,7 @@ func (xact *XactBase) Quiesce(d time.Duration, cb cluster.QuiCB) cluster.QuiRes 
 		case cluster.QuiDone:
 			return cluster.QuiDone
 		case cluster.QuiTimeout:
-			break
+			break wait
 		}
 	}
 	return cluster.QuiTimeout

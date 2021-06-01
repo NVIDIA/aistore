@@ -667,21 +667,21 @@ func (e *ErrHTTP) populateStackTrace() {
 	buffer := bytes.NewBuffer(e.trace)
 	fmt.Fprint(buffer, stackTracePrefix)
 	for i := 1; i < 9; i++ {
-		if _, file, line, ok := runtime.Caller(i); !ok {
+		_, file, line, ok := runtime.Caller(i)
+		if !ok {
 			break
-		} else {
-			if !strings.Contains(file, "aistore") {
-				break
-			}
-			f := filepath.Base(file)
-			if f == "err.go" {
-				continue
-			}
-			if buffer.Len() > len(stackTracePrefix) {
-				buffer.WriteString(" <- ")
-			}
-			fmt.Fprintf(buffer, "%s:%d", f, line)
 		}
+		if !strings.Contains(file, "aistore") {
+			break
+		}
+		f := filepath.Base(file)
+		if f == "err.go" {
+			continue
+		}
+		if buffer.Len() > len(stackTracePrefix) {
+			buffer.WriteString(" <- ")
+		}
+		fmt.Fprintf(buffer, "%s:%d", f, line)
 	}
 	fmt.Fprint(buffer, "]")
 	e.trace = buffer.Bytes()

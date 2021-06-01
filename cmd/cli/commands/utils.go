@@ -393,7 +393,6 @@ func parseSource(rawURL string) (source dlSource, err error) {
 	case "":
 		scheme = cmn.DefaultScheme
 	case "https", "http":
-		break
 	default:
 		err = fmt.Errorf("invalid scheme: %s", scheme)
 		return

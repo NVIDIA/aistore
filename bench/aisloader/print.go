@@ -167,7 +167,7 @@ func finalizeStats(to io.Writer) {
 	postWriteStats(to, runParams.jsonFormat)
 
 	// reset gauges, otherwise they would stay at last send value
-	stats.ResetMetricsGauges(&statsdC)
+	stats.ResetMetricsGauges(statsdC)
 }
 
 func writeFinalStats(to io.Writer, jsonFormat bool, s sts) {

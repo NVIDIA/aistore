@@ -248,10 +248,9 @@ func nodeMaintenanceHandler(c *cli.Context) (err error) {
 
 	var (
 		xactID string
-		sid    string = c.Args().First()
-		action string = c.Command.Name
-
-		node *cluster.Snode = smap.GetNode(sid)
+		sid    = c.Args().First()
+		action = c.Command.Name
+		node   = smap.GetNode(sid)
 	)
 	if node == nil {
 		return fmt.Errorf("node %q does not exist", sid)
@@ -262,7 +261,8 @@ func nodeMaintenanceHandler(c *cli.Context) (err error) {
 
 	skipRebalance := flagIsSet(c, noRebalanceFlag) || node.IsProxy()
 	if skipRebalance && node.IsTarget() {
-		fmt.Fprintln(c.App.Writer, "Warning: Skipping Rebalance could lead to data loss! To rebalance the cluster manually at a later time, please run: `ais job start rebalance`")
+		fmt.Fprintln(c.App.Writer,
+			"Warning: Skipping Rebalance could lead to data loss! To rebalance the cluster manually at a later time, please run: `ais job start rebalance`")
 	}
 
 	actValue := &cmn.ActValRmNode{DaemonID: sid, SkipRebalance: skipRebalance}

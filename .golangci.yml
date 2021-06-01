@@ -68,6 +68,11 @@ linters-settings:
     ignore-generated-header: true
     severity: warning
     rules:
+      # name: if-return
+      # name: early-return
+      # name: unused-parameter
+      # name: import-shadowing
+      # name: unused-receiver
       # name: unhandled-error
       # arguments : ["fmt.Printf", "fmt.Fprintf", "fmt.Fprintln"]
       # name: line-length-limit
@@ -77,15 +82,12 @@ linters-settings:
       - name: context-as-argument
       - name: context-keys-type
       - name: dot-imports
-      - name: early-return
       - name: error-naming
       - name: error-strings
       - name: exported
-      - name: if-return
       - name: increment-decrement
       - name: indent-error-flow
       - name: imports-blacklist
-      - name: import-shadowing
       - name: modifies-value-receiver
       - name: package-comments
       - name: range
@@ -101,8 +103,6 @@ linters-settings:
       - name: unexported-return
       - name: unnecessary-stmt
       - name: unreachable-code
-      - name: unused-parameter
-      - name: unused-receiver
       - name: waitgroup-by-value
   govet:
     enable-all: true

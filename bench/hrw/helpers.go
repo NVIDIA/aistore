@@ -1,9 +1,9 @@
-// Package hrw_bench provides a way to benchmark different HRW variants.
+// Package hrw provides a way to benchmark different HRW variants.
 // See /bench/hrw/README.md for more info.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package hrw_bench
+package hrw
 
 import (
 	"fmt"

@@ -11,24 +11,24 @@ import (
 	"sync"
 )
 
-func NewExpvar(smodule uint8)                         {}
-func SetExpvar(smodule uint8, name string, val int64) {}
+func NewExpvar(_ uint8)                    {}
+func SetExpvar(_ uint8, _ string, _ int64) {}
 
-func Errorln(a ...interface{})          {}
-func Errorf(f string, a ...interface{}) {}
-func Infof(f string, a ...interface{})  {}
+func Errorln(_ ...interface{})          {}
+func Errorf(_ string, _ ...interface{}) {}
+func Infof(_ string, _ ...interface{})  {}
 
-func Func(f func()) {}
+func Func(_ func()) {}
 
-func Assert(cond bool, a ...interface{})            {}
-func AssertFunc(f func() bool, a ...interface{})    {}
-func AssertMsg(cond bool, msg string)               {}
-func AssertNoErr(err error)                         {}
-func Assertf(cond bool, f string, a ...interface{}) {}
+func Assert(_ bool, _ ...interface{})            {}
+func AssertFunc(_ func() bool, _ ...interface{}) {}
+func AssertMsg(_ bool, _ string)                 {}
+func AssertNoErr(_ error)                        {}
+func Assertf(_ bool, _ string, _ ...interface{}) {}
 
-func AssertMutexLocked(m *sync.Mutex)      {}
-func AssertRWMutexLocked(m *sync.RWMutex)  {}
-func AssertRWMutexRLocked(m *sync.RWMutex) {}
+func AssertMutexLocked(_ *sync.Mutex)      {}
+func AssertRWMutexLocked(_ *sync.RWMutex)  {}
+func AssertRWMutexRLocked(_ *sync.RWMutex) {}
 
 func Handlers() map[string]http.HandlerFunc {
 	return nil

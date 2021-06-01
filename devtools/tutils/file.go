@@ -196,7 +196,6 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 				err = lom.Persist()
 				tassert.CheckFatal(t, err)
 			case fs.WorkfileType, ec.SliceType, ec.MetaType:
-				break
 			default:
 				cos.AssertMsg(false, "non-implemented type")
 			}

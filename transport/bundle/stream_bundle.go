@@ -246,13 +246,13 @@ func (sb *Streams) sendOne(obj *transport.Obj, roc cos.ReadOpenCloser, robin *ro
 	*one = *obj
 	one.Reader = roc // reduce to io.ReadCloser
 	if reopen && roc != nil {
-		if reader, err := roc.Open(); err == nil { // reopen for every destination
-			one.Reader = reader
-		} else {
+		reader, err := roc.Open()
+		if err != nil { // reopen for every destination
 			err := fmt.Errorf("%s failed to reopen %q reader: %v", sb, obj, err)
 			debug.AssertNoErr(err) // must never happen
 			return err
 		}
+		one.Reader = reader
 	}
 	i := 0
 	if sb.multiplier > 1 {

@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package s3_integration
+package integration
 
 import (
 	"os"

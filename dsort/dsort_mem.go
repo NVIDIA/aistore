@@ -613,12 +613,6 @@ func (ds *dsorterMem) makeRecvResponseFunc() transport.ReceiveObj {
 	}
 }
 
-func (ds *dsorterMem) preShardExtraction(expectedUncompressedSize uint64) (toDisk bool) {
-	return true
-}
-
-func (ds *dsorterMem) postShardExtraction(expectedUncompressedSize uint64) {}
-
-func (ds *dsorterMem) onAbort() {
-	_ = ds.cleanupStreams()
-}
+func (ds *dsorterMem) preShardExtraction(uint64) bool { return true }
+func (ds *dsorterMem) postShardExtraction(uint64)     {}
+func (ds *dsorterMem) onAbort()                       { _ = ds.cleanupStreams() }
