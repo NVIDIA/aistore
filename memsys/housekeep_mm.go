@@ -94,21 +94,20 @@ func (r *MMSA) garbageCollect() time.Duration {
 	}
 
 	// 4. calibrate and do more aggressive freeing
-	if mem.ActualFree <= r.MinFree || swapping { // 2. mem too low indicates "high watermark"
-		depth = minDepth / 4
-		if mem.ActualFree < r.MinFree {
-			depth = minDepth / 8
-		}
-		if swapping {
-			depth = 1
-		}
-		r.minDepth.Store(int64(depth))
+	if swapping {
+		r.minDepth.Store(1)
+		depth = 2
+		limit = sizeToGC / 4
+	} else if mem.ActualFree <= r.MinFree {
+		tmp := cos.MaxI64(r.minDepth.Load()/2, 32)
+		r.minDepth.Store(tmp)
+		depth = int(tmp)
 		limit = sizeToGC / 2
 	} else { // in-between hysteresis
-		x := uint64(maxDepth-minDepth) * (mem.ActualFree - r.MinFree)
-		depth = minDepth + int(x/(r.lowWM-r.MinFree)) // Heu #2
+		tmp := uint64(maxDepth-minDepth) * (mem.ActualFree - r.MinFree)
+		depth = minDepth + int(tmp/(r.lowWM-r.MinFree)) // Heu #2
 		debug.Assert(depth >= minDepth && depth <= maxDepth)
-		r.minDepth.Store(minDepth / 4)
+		r.minDepth.Store(minDepth / 2)
 	}
 	for _, s := range r.sorted { // idle first
 		idle := r.statsSnapshot.Idle[s.ringIdx()]
@@ -119,7 +118,6 @@ func (r *MMSA) garbageCollect() time.Duration {
 			}
 		}
 	}
-
 	// 5. still not enough? do more
 	if mem.ActualFree <= r.MinFree || swapping {
 		r.doGC(mem.ActualFree, limit, true, swapping)

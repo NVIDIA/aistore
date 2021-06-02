@@ -121,7 +121,7 @@ const NumStats = NumPageSlabs // NOTE: must be greater or equal NumSmallSlabs, o
 // =================================== MMSA config defaults ==========================================
 const (
 	minDepth      = 128                   // ring cap min; default ring growth increment
-	maxDepth      = 1024 * 24             // ring cap max
+	maxDepth      = 1024 * 16             // ring cap max
 	loadAvg       = 10                    // "idle" load average to deallocate Slabs when below
 	sizeToGC      = cos.GiB * 2           // see heuristics ("Heu")
 	minMemFree    = cos.GiB + cos.MiB*256 // default minimum memory - see extended comment above
@@ -180,10 +180,10 @@ type (
 		swap          atomic.Uint64 // actual swap size
 		slabIncStep   int64
 		maxSlabSize   int64
+		defBufSize    int64
 		numSlabs      int
 		// public - aligned
 		Swapping atomic.Int32 // max = SwappingMax; halves every r.duration unless swapping
-		Small    bool         // defines the type of Slab rings (NumSmallSlabs x 128 | NumPageSlabs x 4K)
 	}
 	FreeSpec struct {
 		IdleDuration time.Duration // reduce only the slabs that are idling for at least as much time
@@ -220,8 +220,8 @@ var (
 )
 
 func init() {
-	gmm = &MMSA{Name: gmmName}
-	smm = &MMSA{Name: smmName, Small: true}
+	gmm = &MMSA{Name: gmmName, defBufSize: DefaultBufSize}
+	smm = &MMSA{Name: smmName, defBufSize: DefaultSmallBufSize}
 	verbose = bool(glog.FastV(4, glog.SmoduleMemsys))
 }
 
@@ -249,9 +249,12 @@ func DefaultSmallMM() *MMSA {
 	return smm
 }
 
-//////////////
-// MMSA API //
-//////////////
+//////////
+// MMSA //
+//////////
+
+// defines the type of Slab rings: NumSmallSlabs x 128 vs NumPageSlabs x 4K
+func (r *MMSA) isSmall() bool { return r.defBufSize == DefaultSmallBufSize }
 
 // initialize new MMSA instance
 func (r *MMSA) Init(panicOnErr bool) (err error) {
@@ -311,7 +314,7 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 
 	// init rings and slabs
 	r.slabIncStep, r.maxSlabSize, r.numSlabs = PageSlabIncStep, MaxPageSlabSize, NumPageSlabs
-	if r.Small {
+	if r.isSmall() {
 		r.slabIncStep, r.maxSlabSize, r.numSlabs = SmallSlabIncStep, MaxSmallSlabSize, NumSmallSlabs
 	}
 	r.slabStats = &slabStats{}
@@ -333,7 +336,7 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 	}
 
 	// 6. GC at init time but only non-small
-	if !r.Small {
+	if !r.isSmall() {
 		runtime.GC()
 	}
 	// 7. compute the first time for hk to call back
@@ -389,11 +392,7 @@ func (r *MMSA) NewSGL(immediateSize int64, sbufSize ...int64) *SGL {
 	} else if immediateSize <= r.maxSlabSize {
 		// NOTE allocate imm. size in one shot when below max
 		if immediateSize == 0 {
-			if !r.Small {
-				immediateSize = DefaultBufSize
-			} else {
-				immediateSize = DefaultSmallBufSize
-			}
+			immediateSize = r.defBufSize
 		}
 		i := cos.DivCeil(immediateSize, r.slabIncStep)
 		slab = r.rings[i-1]
@@ -460,16 +459,10 @@ func (r *MMSA) GetSlab(bufSize int64) (s *Slab, err error) {
 }
 
 // uses SelectMemAndSlab to select both MMSA (page or small) and its Slab
-func (r *MMSA) Alloc(sizes ...int64) (buf []byte, slab *Slab) {
-	var size int64
-	if len(sizes) == 0 {
-		if !r.Small {
-			size = DefaultBufSize
-		} else {
-			size = DefaultSmallBufSize
-		}
-	} else {
-		size = sizes[0]
+func (r *MMSA) Alloc(optSize ...int64) (buf []byte, slab *Slab) {
+	size := r.defBufSize
+	if len(optSize) > 0 {
+		size = optSize[0]
 	}
 	_, slab = r.SelectMemAndSlab(size)
 	buf = slab.Alloc()
@@ -478,9 +471,9 @@ func (r *MMSA) Alloc(sizes ...int64) (buf []byte, slab *Slab) {
 
 func (r *MMSA) Free(buf []byte) {
 	size := int64(cap(buf))
-	if size > r.maxSlabSize && r.Small && r.Sibling != nil {
+	if size > r.maxSlabSize && r.isSmall() {
 		r.Sibling.Free(buf)
-	} else if size < r.slabIncStep && !r.Small && r.Sibling != nil {
+	} else if size < r.slabIncStep && !r.isSmall() {
 		r.Sibling.Free(buf)
 	} else {
 		debug.Assert(size%r.slabIncStep == 0)
@@ -494,10 +487,10 @@ func (r *MMSA) Free(buf []byte) {
 // Given a known, expected or minimum size to allocate, selects MMSA (page or small, if initialized)
 // and its Slab
 func (r *MMSA) SelectMemAndSlab(size int64) (mmsa *MMSA, slab *Slab) {
-	if size > r.maxSlabSize && r.Small && r.Sibling != nil {
+	if size > r.maxSlabSize && r.isSmall() {
 		return r.Sibling, r.Sibling._selectSlab(size)
 	}
-	if size < r.slabIncStep && !r.Small && r.Sibling != nil {
+	if size < r.slabIncStep && !r.isSmall() {
 		return r.Sibling, r.Sibling._selectSlab(size)
 	}
 	mmsa, slab = r, r._selectSlab(size)
@@ -533,45 +526,7 @@ func (r *MMSA) Append(buf []byte, bytes string) (nbuf []byte) {
 	return
 }
 
-///////////////
-// Slab API //
-///////////////
-
-func (s *Slab) Size() int64 { return s.bufSize }
-func (s *Slab) Tag() string { return s.tag }
-func (s *Slab) MMSA() *MMSA { return s.m }
-
-func (s *Slab) Alloc() (buf []byte) {
-	s.muget.Lock()
-	buf = s._alloc()
-	s.muget.Unlock()
-	return
-}
-
-func (s *Slab) Free(bufs ...[]byte) {
-	// NOTE: races are expected between getting the length of the `s.put` slice
-	// and putting into it. Since `maxdepth` is not a hard limit, we are trading
-	// this check in favor for maybe bigger slices.
-	if len(s.put) < maxDepth {
-		s.muput.Lock()
-		for _, buf := range bufs {
-			size := cap(buf)
-			debug.Assert(int64(size) == s.Size())
-			b := buf[:size] // NOTE: always freeing the original (fixed buffer) size
-			deadbeef(b)
-			s.put = append(s.put, b)
-		}
-		s.muput.Unlock()
-	} else {
-		// Since `s.put` is full need to remember how much memory we freed and
-		// take it into account when determining whether to return the memory to the system.
-		s.m.toGC.Add(s.Size() * int64(len(bufs)))
-	}
-}
-
-/////////////////////
-// PRIVATE METHODS //
-/////////////////////
+// private
 
 // select slab for SGL given a large immediate size to allocate
 func (r *MMSA) _large2slab(immediateSize int64) *Slab {
@@ -611,6 +566,29 @@ func (r *MMSA) env() (err error) {
 	return
 }
 
+//////////
+// Slab //
+//////////
+
+func (s *Slab) Size() int64 { return s.bufSize }
+func (s *Slab) Tag() string { return s.tag }
+func (s *Slab) MMSA() *MMSA { return s.m }
+
+func (s *Slab) Alloc() (buf []byte) {
+	s.muget.Lock()
+	buf = s._alloc()
+	s.muget.Unlock()
+	return
+}
+
+func (s *Slab) Free(buf []byte) {
+	s.muput.Lock()
+	debug.Assert(int64(cap(buf)) == s.Size())
+	deadbeef(buf[:cap(buf)])
+	s.put = append(s.put, buf[:cap(buf)]) // always freeing the original size
+	s.muput.Unlock()
+}
+
 func (s *Slab) _alloc() (buf []byte) {
 	if len(s.get) > s.pos { // fast path
 		buf = s.get[s.pos]
@@ -622,22 +600,18 @@ func (s *Slab) _alloc() (buf []byte) {
 }
 
 func (s *Slab) _allocSlow() (buf []byte) {
-	curMinDepth := s.pMinDepth.Load()
-	if curMinDepth == 0 {
-		curMinDepth = 1
-	}
-
+	curMinDepth := int(s.pMinDepth.Load())
+	debug.Assert(curMinDepth > 0)
 	debug.Assert(len(s.get) == s.pos)
-
 	s.muput.Lock()
 	lput := len(s.put)
-	if cnt := int(curMinDepth) - lput; cnt > 0 {
+	if cnt := curMinDepth - lput; cnt > 0 {
 		s.grow(cnt)
 	}
 	s.get, s.put = s.put, s.get
 
 	debug.Assert(len(s.put) == s.pos)
-	debug.Assert(len(s.get) >= int(curMinDepth))
+	debug.Assert(len(s.get) >= curMinDepth)
 
 	s.put = s.put[:0]
 	s.muput.Unlock()
@@ -674,7 +648,6 @@ func (s *Slab) reduce(todepth int, isIdle, force bool) (freed int64) {
 		if verbose {
 			glog.Infof("%s(f=%t, i=%t): reduce lput %d => %d", s.tag, force, isIdle, lput, lput-cnt)
 		}
-
 		for ; cnt > 0; cnt-- {
 			lput--
 			s.put[lput] = nil

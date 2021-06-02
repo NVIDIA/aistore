@@ -222,7 +222,16 @@ func (z *SGL) Close() error { return nil }
 
 func (z *SGL) Free() {
 	debug.Assert(z.slab != nil)
-	z.slab.Free(z.sgl...)
+	s := z.slab
+	s.muput.Lock()
+	for _, buf := range z.sgl {
+		size := cap(buf)
+		debug.Assert(int64(size) == s.Size())
+		b := buf[:size] // always freeing original (fixed buffer) size
+		deadbeef(b)
+		s.put = append(s.put, b)
+	}
+	s.muput.Unlock()
 	_freeSGL(z)
 }
 
