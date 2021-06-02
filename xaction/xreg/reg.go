@@ -189,16 +189,7 @@ func (r *registry) abortAllMountpathsXactions() {
 
 func DoAbort(kind string, bck *cluster.Bck) (aborted bool) { return defaultReg.doAbort(kind, bck) }
 func (r *registry) doAbort(kind string, bck *cluster.Bck) (aborted bool) {
-	if kind == "" {
-		if bck == nil {
-			// No bucket and no kind - request for all available xactions.
-			r.abortAll()
-		} else {
-			// Bucket present and no kind - request for all available bucket's xactions.
-			r.abortAllBuckets(bck)
-		}
-		aborted = true
-	} else {
+	if kind != "" {
 		entry := r.getRunning(XactFilter{Kind: kind, Bck: bck})
 		if entry == nil {
 			return false
@@ -206,6 +197,14 @@ func (r *registry) doAbort(kind string, bck *cluster.Bck) (aborted bool) {
 		entry.Get().Abort()
 		return true
 	}
+	if bck == nil {
+		// No bucket and no kind - request for all available xactions.
+		r.abortAll()
+	} else {
+		// Bucket present and no kind - request for all available bucket's xactions.
+		r.abortAllBuckets(bck)
+	}
+	aborted = true
 	return
 }
 

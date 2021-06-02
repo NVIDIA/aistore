@@ -258,11 +258,11 @@ func (m *AISBackendProvider) add(newAis *remAISCluster, newAlias string) (err er
 	}
 	if uuid, ok := m.alias[newAlias]; ok {
 		remAis, ok := m.remote[uuid]
-		if !ok {
-			delete(m.alias, newAlias)
-		} else {
-			return fmt.Errorf("cannot attach %s: alias %q is already in use for %s", newAis, newAlias, remAis)
+		if ok {
+			return fmt.Errorf("cannot attach %s: alias %q is already in use for %s",
+				newAis, newAlias, remAis)
 		}
+		delete(m.alias, newAlias)
 	}
 	m.alias[newAlias] = newAis.smap.UUID
 ad:

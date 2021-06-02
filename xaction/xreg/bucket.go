@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/query"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
@@ -83,7 +84,7 @@ type (
 func RegisterBucketXact(entry BucketEntryProvider) { defaultReg.registerBucketXact(entry) }
 
 func (r *registry) registerBucketXact(entry BucketEntryProvider) {
-	cos.Assert(xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeBck)
+	debug.Assert(xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeBck)
 
 	// It is expected that registrations happen at the init time. Therefore, it
 	// is safe to assume that no `RenewXYZ` will happen before all xactions
@@ -343,15 +344,13 @@ func RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery,
 
 func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery,
 	msg *cmn.SelectMsg) (cluster.Xact, bool, error) {
-	cos.Assert(msg.UUID != "")
+	debug.Assert(msg.UUID != "")
 	if xact := query.Registry.Get(msg.UUID); xact != nil {
-		if xact.Aborted() {
-			query.Registry.Delete(msg.UUID)
-		} else {
+		if !xact.Aborted() {
 			return xact, false, nil
 		}
+		query.Registry.Delete(msg.UUID)
 	}
-
 	if err := r.removeFinishedByID(msg.UUID); err != nil {
 		return nil, false, err
 	}

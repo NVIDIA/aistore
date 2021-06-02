@@ -591,7 +591,7 @@ func suggestUpdatableAuthNConfig(c *cli.Context) {
 	}
 }
 
-func suggestRemote(c *cli.Context) {
+func suggestRemote(_ *cli.Context) {
 	aisCloudInfo, err := api.GetRemoteAIS(defaultAPIParams)
 	if err != nil {
 		return

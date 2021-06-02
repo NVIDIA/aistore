@@ -168,6 +168,6 @@ func (hk *housekeeper) updateTimer() {
 	hk.timer.Reset(time.Until(hk.actions.Peek().updateTime))
 }
 
-func (hk *housekeeper) Stop(err error) {
+func (hk *housekeeper) Stop(_ error) {
 	DefaultHK.stopCh.Close()
 }

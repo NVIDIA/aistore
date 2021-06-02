@@ -43,10 +43,10 @@ func (s *MsgStream) terminate() {
 	gc.remove(&s.streamBase)
 }
 
-func (s *MsgStream) abortPending(_ error, _ bool) {}
-func (s *MsgStream) errCmpl(err error)            {} // TODO
-func (s *MsgStream) compressed() bool             { return false }
-func (s *MsgStream) resetCompression()            { cos.Assert(false) }
+func (s *MsgStream) abortPending(error, bool) {}
+func (s *MsgStream) errCmpl(error)            {}
+func (s *MsgStream) compressed() bool         { return false }
+func (s *MsgStream) resetCompression()        { debug.Assert(false) }
 
 func (s *MsgStream) doRequest() error {
 	s.Numcur, s.Sizecur = 0, 0

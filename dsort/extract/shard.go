@@ -27,4 +27,4 @@ type (
 )
 
 func (s *Shard) MarshalJSON() ([]byte, error) { panic("should not be used") }
-func (s *Shard) UnmarshalJSON(b []byte) error { panic("should not be used") }
+func (s *Shard) UnmarshalJSON([]byte) error   { panic("should not be used") }

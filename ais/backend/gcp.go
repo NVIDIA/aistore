@@ -139,7 +139,7 @@ func (gcpp *gcpProvider) MaxPageSize() uint { return 1000 }
 // CREATE BUCKET //
 ///////////////////
 
-func (gcpp *gcpProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (errCode int, err error) {
+func (gcpp *gcpProvider) CreateBucket(_ context.Context, _ *cluster.Bck) (errCode int, err error) {
 	return creatingBucketNotSupportedErr(gcpp.Provider())
 }
 

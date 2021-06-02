@@ -74,7 +74,7 @@ func (hp *hdfsProvider) MaxPageSize() uint { return 10000 }
 // CREATE BUCKET //
 ///////////////////
 
-func (hp *hdfsProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (errCode int, err error) {
+func (hp *hdfsProvider) CreateBucket(_ context.Context, bck *cluster.Bck) (errCode int, err error) {
 	return hp.checkDirectoryExists(bck)
 }
 
@@ -97,7 +97,8 @@ func (hp *hdfsProvider) checkDirectoryExists(bck *cluster.Bck) (errCode int, err
 // HEAD BUCKET //
 /////////////////
 
-func (hp *hdfsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
+func (hp *hdfsProvider) HeadBucket(_ context.Context, bck *cluster.Bck) (bckProps cos.SimpleKVs,
+	errCode int, err error) {
 	if errCode, err = hp.checkDirectoryExists(bck); err != nil {
 		return
 	}
@@ -112,7 +113,8 @@ func (hp *hdfsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 // LIST OBJECTS //
 //////////////////
 
-func (hp *hdfsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
+func (hp *hdfsProvider) ListObjects(_ context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList,
+	errCode int, err error) {
 	msg.PageSize = calcPageSize(msg.PageSize, hp.MaxPageSize())
 
 	h := cmn.BackendHelpers.HDFS
@@ -248,7 +250,8 @@ func (hp *hdfsProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode i
 // GET OBJ READER //
 ////////////////////
 
-func (hp *hdfsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cos.Cksum, errCode int, err error) {
+func (hp *hdfsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser,
+	expectedCksm *cos.Cksum, errCode int, err error) {
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
 	fr, err := hp.c.Open(filePath)
 	if err != nil {
@@ -270,7 +273,8 @@ func (hp *hdfsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 // PUT OBJECT //
 ////////////////
 
-func (hp *hdfsProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
+func (hp *hdfsProvider) PutObj(_ context.Context, r io.ReadCloser, lom *cluster.LOM) (version string,
+	errCode int, err error) {
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
 	fw, err := hp.c.Create(filePath)
 	if err != nil {
@@ -317,7 +321,7 @@ finish:
 // DELETE OBJECT //
 ///////////////////
 
-func (hp *hdfsProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
+func (hp *hdfsProvider) DeleteObj(_ context.Context, lom *cluster.LOM) (errCode int, err error) {
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
 	if err := hp.c.Remove(filePath); err != nil {
 		errCode, err = hp.hdfsErrorToAISError(err)

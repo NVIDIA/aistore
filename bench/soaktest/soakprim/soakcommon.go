@@ -183,10 +183,7 @@ func (rctx *RecipeContext) PostRecipe() error {
 		rctx.FinishRegression()
 	}
 
-	if err := rctx.repCtx.EndRecipe(); err != nil {
-		return err
-	}
-	return nil
+	return rctx.repCtx.EndRecipe()
 }
 
 func cleanupRecipeBuckets() {

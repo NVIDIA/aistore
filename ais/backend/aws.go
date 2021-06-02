@@ -132,7 +132,7 @@ func (awsp *awsProvider) MaxPageSize() uint { return 1000 }
 // CREATE BUCKET //
 ///////////////////
 
-func (awsp *awsProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (errCode int, err error) {
+func (awsp *awsProvider) CreateBucket(_ context.Context, _ *cluster.Bck) (errCode int, err error) {
 	return creatingBucketNotSupportedErr(awsp.Provider())
 }
 
@@ -203,7 +203,8 @@ func (awsp *awsProvider) getBucketLocation(svc *s3.S3, bckName string) (region s
 // LIST OBJECTS //
 //////////////////
 
-func (awsp *awsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
+func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList,
+	errCode int, err error) {
 	msg.PageSize = calcPageSize(msg.PageSize, awsp.MaxPageSize())
 
 	var (
@@ -316,7 +317,7 @@ func (awsp *awsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 // LIST BUCKETS //
 //////////////////
 
-func (awsp *awsProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
+func (awsp *awsProvider) ListBuckets(_ context.Context, query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	svc, _, _ := awsp.newS3Client(sessConf{}, "")
 	result, err := svc.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {
@@ -341,7 +342,7 @@ func (awsp *awsProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (
 // HEAD OBJECT //
 /////////////////
 
-func (awsp *awsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cos.SimpleKVs, errCode int, err error) {
+func (awsp *awsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta cos.SimpleKVs, errCode int, err error) {
 	var (
 		svc      *s3.S3
 		h        = cmn.BackendHelpers.Amazon
@@ -500,7 +501,7 @@ func (awsp *awsProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *clust
 // DELETE OBJECT //
 ///////////////////
 
-func (awsp *awsProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
+func (awsp *awsProvider) DeleteObj(_ context.Context, lom *cluster.LOM) (errCode int, err error) {
 	var (
 		svc      *s3.S3
 		cloudBck = lom.Bck().RemoteBck()

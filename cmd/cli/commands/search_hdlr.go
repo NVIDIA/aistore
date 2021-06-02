@@ -118,7 +118,7 @@ func searchCmdHdlr(c *cli.Context) error {
 	return templates.DisplayOutput(commands, c.App.Writer, templates.SearchTmpl)
 }
 
-func searchBashCmplt(c *cli.Context) {
+func searchBashCmplt(_ *cli.Context) {
 	for key := range keywordMap {
 		fmt.Println(key)
 	}
