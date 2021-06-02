@@ -46,22 +46,20 @@ if [[ "${AIS_BACKEND_PROVIDERS}" == *aws* ]]; then
     elif [[ -f $aws_env ]]; then # File contains env variables.
         source ${aws_env}
         cat > ${LOCAL_AWS} <<- EOM
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: aws-credentials
-  namespace: default
-data:
-  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-  AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
+[default]
+aws_access_key_id = ${AWS_ACCESS_KEY_ID}
+aws_secret_access_key = ${AWS_SECRET_ACCESS_KEY}
+region = ${AWS_DEFAULT_REGION}
+output = json
 EOM
 
-        if kubectl get configmap | grep aws > /dev/null 2>&1; then
-            kubectl delete configmap aws-credentials
+        if kubectl get secret | grep aws > /dev/null 2>&1; then
+            kubectl delete secret aws-credentials
         fi
-        kubectl create -f ${LOCAL_AWS}
+        kubectl create secret generic aws-credentials --from-file=${LOCAL_AWS}
     else
       echo "File nor directory exists under: ${aws_env}"
     fi
 fi
+
+rm -rf ${LOCAL_AWS}
