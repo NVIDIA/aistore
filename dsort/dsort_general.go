@@ -9,7 +9,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"sync"
 
@@ -482,7 +481,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 		}
 	}
 
-	return func(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
+	return func(hdr transport.ObjHdr, object io.Reader, err error) {
 		transport.FreeRecv(object)
 		req := remoteRequest{}
 		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
@@ -586,7 +585,7 @@ func (ds *dsorterGeneral) postExtraction() {
 
 func (ds *dsorterGeneral) makeRecvResponseFunc() transport.ReceiveObj {
 	metrics := ds.m.Metrics.Creation
-	return func(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
+	return func(hdr transport.ObjHdr, object io.Reader, err error) {
 		defer transport.FreeRecv(object)
 		if err != nil {
 			ds.m.abort(err)

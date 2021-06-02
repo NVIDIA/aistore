@@ -321,7 +321,7 @@ func (reb *Manager) waitForSmap() (*cluster.Smap, error) {
 	return smap, nil
 }
 
-func (reb *Manager) recvObj(_ http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
+func (reb *Manager) recvObj(hdr transport.ObjHdr, objReader io.Reader, err error) {
 	defer transport.FreeRecv(objReader)
 	if err != nil {
 		glog.Error(err)
@@ -372,7 +372,7 @@ func (reb *Manager) changeStage(newStage uint32, batchID int64) {
 	}
 }
 
-func (reb *Manager) recvPush(_ http.ResponseWriter, hdr transport.ObjHdr, _ io.Reader, err error) {
+func (reb *Manager) recvPush(hdr transport.ObjHdr, _ io.Reader, err error) {
 	if err != nil {
 		glog.Errorf("Failed to get notification %s from %s: %v", hdr.ObjName, hdr.Bck, err)
 		return
@@ -450,7 +450,7 @@ func (reb *Manager) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpac
 	reb.delLomAck(lom)
 }
 
-func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.ObjHdr, _ io.Reader, err error) {
+func (reb *Manager) recvAck(hdr transport.ObjHdr, _ io.Reader, err error) {
 	if err != nil {
 		glog.Error(err)
 		return

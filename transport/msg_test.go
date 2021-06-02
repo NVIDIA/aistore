@@ -7,7 +7,6 @@ package transport_test
 
 import (
 	"fmt"
-	"net/http"
 	"net/http/httptest"
 	"os"
 	"strconv"
@@ -24,7 +23,7 @@ import (
 )
 
 func Example_msg() {
-	receive := func(w http.ResponseWriter, msg transport.Msg, err error) {
+	receive := func(msg transport.Msg, err error) {
 		fmt.Printf("%s...\n", string(msg.Body[:16]))
 	}
 

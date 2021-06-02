@@ -8,7 +8,6 @@ package transport_test
 import (
 	"fmt"
 	"io"
-	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"testing"
@@ -111,7 +110,7 @@ func testBundle(t *testing.T, nvs cos.SimpleKVs) {
 	}()
 	smap.Version = 1
 
-	receive := func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
+	receive := func(hdr transport.ObjHdr, objReader io.Reader, err error) {
 		if err != nil && !cos.IsEOF(err) {
 			tassert.CheckFatal(t, err)
 		}

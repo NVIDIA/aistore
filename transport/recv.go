@@ -142,7 +142,7 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 					obj.pdu.reset()
 				}
 				// err => err; EOF => (unsized => EOF, otherwise => nil)
-				h.rxObj(w, obj.hdr, obj, eofOK(err, unsized))
+				h.rxObj(obj.hdr, obj, eofOK(err, unsized))
 				stats.Num.Inc()
 				// NOTE: `GORACE` may erroneously trigger at this point vs. objReader.Read
 				// below incrementing the offset - disabling `recvPool` makes it go away
@@ -151,14 +151,14 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 			} else if err != nil && err != io.EOF {
-				h.rxObj(w, ObjHdr{}, nil, err)
+				h.rxObj(ObjHdr{}, nil, err)
 			}
 		} else {
 			msg, err = it.nextMsg(loghdr, hlen)
 			if err == nil {
-				h.rxMsg(w, msg, nil)
+				h.rxMsg(msg, nil)
 			} else if err != io.EOF {
-				h.rxMsg(w, Msg{}, err)
+				h.rxMsg(Msg{}, err)
 			}
 		}
 	rerr:

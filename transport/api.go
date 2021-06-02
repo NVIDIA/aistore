@@ -8,7 +8,6 @@ package transport
 import (
 	"fmt"
 	"io"
-	"net/http"
 	"reflect"
 	"time"
 	"unsafe"
@@ -92,8 +91,8 @@ type (
 	StreamCollector struct{}
 
 	// Rx callbacks
-	ReceiveObj func(w http.ResponseWriter, hdr ObjHdr, object io.Reader, err error)
-	ReceiveMsg func(w http.ResponseWriter, msg Msg, err error)
+	ReceiveObj func(hdr ObjHdr, object io.Reader, err error)
+	ReceiveMsg func(msg Msg, err error)
 )
 
 ///////////////////

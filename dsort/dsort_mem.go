@@ -9,7 +9,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/http"
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -549,7 +548,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 func (ds *dsorterMem) postExtraction() {}
 
 func (ds *dsorterMem) makeRecvRequestFunc() transport.ReceiveObj {
-	return func(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
+	return func(hdr transport.ObjHdr, object io.Reader, err error) {
 		defer transport.FreeRecv(object)
 		if err != nil {
 			ds.m.abort(err)
@@ -574,7 +573,7 @@ func (ds *dsorterMem) makeRecvRequestFunc() transport.ReceiveObj {
 
 func (ds *dsorterMem) makeRecvResponseFunc() transport.ReceiveObj {
 	metrics := ds.m.Metrics.Creation
-	return func(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
+	return func(hdr transport.ObjHdr, object io.Reader, err error) {
 		defer transport.FreeRecv(object)
 		if err != nil {
 			ds.m.abort(err)

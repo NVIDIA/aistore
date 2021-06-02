@@ -8,7 +8,6 @@ package bundle
 import (
 	"fmt"
 	"io"
-	"net/http"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -203,12 +202,12 @@ func (dm *DataMover) quicb(_ time.Duration /*accum. sleep time*/) cluster.QuiRes
 	return cluster.QuiInactive
 }
 
-func (dm *DataMover) wrapRecvData(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
+func (dm *DataMover) wrapRecvData(hdr transport.ObjHdr, object io.Reader, err error) {
 	dm.laterx.Store(true)
-	dm.data.recv(w, hdr, object, err)
+	dm.data.recv(hdr, object, err)
 }
 
-func (dm *DataMover) wrapRecvACK(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
+func (dm *DataMover) wrapRecvACK(hdr transport.ObjHdr, object io.Reader, err error) {
 	dm.laterx.Store(true)
-	dm.ack.recv(w, hdr, object, err)
+	dm.ack.recv(hdr, object, err)
 }

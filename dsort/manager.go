@@ -642,7 +642,7 @@ func (m *Manager) sentCallback(hdr transport.ObjHdr, rc io.ReadCloser, x interfa
 }
 
 func (m *Manager) makeRecvShardFunc() transport.ReceiveObj {
-	return func(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
+	return func(hdr transport.ObjHdr, object io.Reader, err error) {
 		defer transport.FreeRecv(object)
 		if err != nil {
 			m.abort(err)

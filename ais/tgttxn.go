@@ -776,7 +776,7 @@ func (c *txnServerCtx) addNotif(xact cluster.Xact) {
 	})
 }
 
-func (c *txnServerCtx) recvObjDM(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
+func (c *txnServerCtx) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, err error) {
 	defer transport.FreeRecv(objReader)
 	if err != nil && !cos.IsEOF(err) {
 		glog.Error(err)
