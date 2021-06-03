@@ -284,7 +284,6 @@ var (
 	}
 	objLimitFlag = cli.IntFlag{Name: "limit", Usage: "limit object count", Value: 0} // TODO: specify default as unlimited
 	pageSizeFlag = cli.IntFlag{Name: "page-size", Usage: "maximum number of entries by list objects call", Value: 1000}
-	templateFlag = cli.StringFlag{Name: "template", Usage: "template for matching object names"}
 	copiesFlag   = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1, Required: true}
 	maxPagesFlag = cli.IntFlag{Name: "max-pages", Usage: "display up to this number pages of bucket objects"}
 	fastFlag     = cli.BoolTFlag{
@@ -347,8 +346,11 @@ var (
 	fileCountFlag = cli.IntFlag{Name: "fcount", Value: 5, Usage: "number of files inside single shard"}
 	specFileFlag  = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to file with dSort specification"}
 
-	// Object
+	// multi-object
 	listFlag     = cli.StringFlag{Name: "list", Usage: "comma-separated list of object names, e.g.: 'o1,o2,o3'"}
+	templateFlag = cli.StringFlag{Name: "template", Usage: "template for matching object names, e.g.: 'shard-{900..999}.tar'"}
+
+	// Object
 	offsetFlag   = cli.StringFlag{Name: "offset", Usage: "object read offset " + sizeUnits}
 	lengthFlag   = cli.StringFlag{Name: "length", Usage: "object read length " + sizeUnits}
 	archpathFlag = cli.StringFlag{Name: "archpath", Usage: "filename in archive"}

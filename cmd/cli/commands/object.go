@@ -803,8 +803,7 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 		return
 	}
 
-	baseMsg := fmt.Sprintf("%s files in the range %q from %q bucket",
-		command, rangeStr, bck)
+	baseMsg := fmt.Sprintf("%s from %s objects in the range %q", command, bck, rangeStr)
 
 	if xactID != "" {
 		baseMsg += ", " + xactProgressMsg(xactID)

@@ -205,7 +205,7 @@ func removeObjectHandler(c *cli.Context) (err error) {
 
 	// List and range flags are invalid with object argument(s).
 	if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
-		return incorrectUsageMsg(c, "flags %q are cannot be used together with object name arguments",
+		return incorrectUsageMsg(c, "flags %q cannot be used together with object name arguments",
 			strings.Join([]string{listFlag.Name, templateFlag.Name}, ", "))
 	}
 

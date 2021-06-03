@@ -34,7 +34,6 @@ func parseTemplate(template string) (cos.ParsedTemplate, error) {
 	if template == "" {
 		return cos.ParsedTemplate{}, errors.New("empty range template")
 	}
-
 	if parsed, err := cos.ParseBashTemplate(template); err == nil {
 		return parsed, nil
 	}

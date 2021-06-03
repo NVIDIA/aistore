@@ -1,4 +1,4 @@
-// Package api provides RESTful API to AIS object storage
+// Package api provides AIStore API over HTTP(S)
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
