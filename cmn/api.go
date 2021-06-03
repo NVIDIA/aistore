@@ -508,17 +508,18 @@ func (bp *BucketProps) Equal(other *BucketProps) (eq bool) {
 func (bp *BucketProps) Validate(targetCnt int) error {
 	debug.Assert(IsNormalizedProvider(bp.Provider))
 	if !bp.BackendBck.IsEmpty() {
+		if bp.Provider != ProviderAIS {
+			return fmt.Errorf("wrong bucket provider %q: only AIS buckets can have remote backend (%q)",
+				bp.Provider, bp.BackendBck)
+		}
 		if bp.BackendBck.Provider == "" {
 			return fmt.Errorf("backend bucket %q: provider is empty", bp.BackendBck)
 		}
 		if bp.BackendBck.Name == "" {
 			return fmt.Errorf("backend bucket %q name is empty", bp.BackendBck)
 		}
-		if !bp.BackendBck.IsCloud() {
-			return fmt.Errorf("backend bucket %q must be a cloud bucket", bp.BackendBck)
-		}
-		if bp.Provider != ProviderAIS {
-			return fmt.Errorf("backend bucket %q can only be set for AIS buckets", bp.BackendBck)
+		if !bp.BackendBck.IsRemote() {
+			return fmt.Errorf("backend bucket %q must be remote", bp.BackendBck)
 		}
 	}
 
