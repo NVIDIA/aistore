@@ -345,7 +345,9 @@ func (m *ioContext) remotePrefetch(prefetchCnt int) {
 	wg.Wait()
 }
 
+// NOTE: is also called via deferred t.Cleanup => _cleanup() => del()
 func (m *ioContext) del(cnt ...int) {
+	const maxErrCount = 100
 	var (
 		baseParams = tutils.BaseAPIParams()
 		msg        = &cmn.SelectMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
@@ -370,13 +372,24 @@ func (m *ioContext) del(cnt ...int) {
 	}
 
 	tlog.Logf("deleting %d objects...\n", len(toRemove))
-
-	wg := cos.NewLimitedWaitGroup(40)
+	var (
+		errCnt atomic.Int64
+		wg     = cos.NewLimitedWaitGroup(16)
+	)
 	for _, obj := range toRemove {
+		if errCnt.Load() > maxErrCount {
+			tassert.CheckFatal(m.t, err)
+			break
+		}
 		wg.Add(1)
 		go func(obj *cmn.BucketEntry) {
 			defer wg.Done()
 			err := api.DeleteObject(baseParams, m.bck, obj.Name)
+			if cmn.IsErrConnectionNotAvail(err) {
+				errCnt.Add(maxErrCount / 10)
+			} else {
+				errCnt.Inc()
+			}
 			tassert.CheckError(m.t, err)
 		}(obj)
 	}

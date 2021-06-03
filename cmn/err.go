@@ -192,6 +192,11 @@ func IsStatusGone(err error) (yes bool) {
 // syscall-based helpers //
 ///////////////////////////
 
+// likely out of socket descriptors
+func IsErrConnectionNotAvail(err error) (yes bool) {
+	return errors.Is(err, syscall.EADDRNOTAVAIL)
+}
+
 func IsErrConnectionRefused(err error) (yes bool) {
 	return errors.Is(err, syscall.ECONNREFUSED)
 }
