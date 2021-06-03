@@ -170,7 +170,7 @@ type (
 	}
 
 	ExtraPropsAWS struct {
-		// Region where the cloud bucket is located.
+		// Region where AWS bucket is located.
 		CloudRegion string `json:"cloud_region,omitempty" list:"readonly"`
 	}
 
@@ -268,8 +268,8 @@ var GetPropsAll = append(GetPropsDefault,
 // SelectMsg //
 ///////////////
 
-// NeedLocalMD returns true if ListObjects for a cloud bucket needs
-// to return object properties that can be retrieved only from local caches
+// NeedLocalMD indicates that ListObjects for a remote bucket needs
+// to include AIS-maintained metadata: access time, etc.
 func (msg *SelectMsg) NeedLocalMD() bool {
 	return msg.WantProp(GetPropsAtime) ||
 		msg.WantProp(GetPropsStatus) ||

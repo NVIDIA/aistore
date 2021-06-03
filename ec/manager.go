@@ -223,7 +223,7 @@ func (mgr *Manager) recvRequest(hdr transport.ObjHdr, object io.Reader, err erro
 	}
 	bck := cluster.NewBckEmbed(hdr.Bck)
 	if err = bck.Init(mgr.t.Bowner()); err != nil {
-		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); !ok { // is ais
+		if _, ok := err.(*cmn.ErrRemoteBckNotFound); !ok { // is ais
 			glog.Errorf("failed to init bucket %s: %v", bck, err)
 			return
 		}
@@ -254,7 +254,7 @@ func (mgr *Manager) recvResponse(hdr transport.ObjHdr, object io.Reader, err err
 	}
 	bck := cluster.NewBckEmbed(hdr.Bck)
 	if err = bck.Init(mgr.t.Bowner()); err != nil {
-		if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); !ok { // is ais
+		if _, ok := err.(*cmn.ErrRemoteBckNotFound); !ok { // is ais
 			glog.Error(err)
 			cos.DrainReader(object)
 			return

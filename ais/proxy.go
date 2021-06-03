@@ -594,7 +594,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		}
 		if bck.IsRemoteAIS() {
 			if err := p.destroyBucket(&msg, bck); err != nil {
-				if _, ok := err.(*cmn.ErrBucketDoesNotExist); !ok {
+				if !cmn.IsErrBckNotFound(err) {
 					p.writeErr(w, r, err)
 					return
 				}
@@ -604,7 +604,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := p.destroyBucket(&msg, bck); err != nil {
-			if _, ok := err.(*cmn.ErrBucketDoesNotExist); ok { // race
+			if cmn.IsErrBckNotFound(err) {
 				glog.Infof("%s: %s already %q-ed, nothing to do", p.si, bck, msg.Action)
 			} else {
 				p.writeErr(w, r, err)
@@ -790,7 +790,8 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		}
 	}
 
-	// Initialize bucket, try creating if it's a cloud bucket.
+	// Initialize bucket; if doesn't exist try creating it (on the fly)
+	// but only if it's a remote bucket.
 	args := bckInitArgs{p: p, w: w, r: r, bck: bck, msg: msg, tryOnlyRem: true}
 	if bck, err = args.initAndTry(bck.Name); err != nil {
 		return
@@ -824,7 +825,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		bckTo.Provider = cmn.ProviderAIS
 
 		if _, present := p.owner.bmd.get().Get(bckTo); present {
-			err := cmn.NewErrorBucketAlreadyExists(bckTo.Bck)
+			err := cmn.NewErrBckAlreadyExists(bckTo.Bck)
 			p.writeErr(w, r, err)
 			return
 		}
@@ -877,7 +878,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			return
 		}
 		if errCode == http.StatusNotFound && userBckTo.IsCloud() {
-			// If userBckTo is a cloud bucket that doesn't exist (in the BMD) - try registering on the fly
+			// If userBckTo is a remote bucket that doesn't exist (in the BMD) - try registering on the fly
 			if bckTo, err = bckToArgs.try(); err != nil {
 				return
 			}
@@ -989,7 +990,7 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 			// Initialize backend bucket.
 			backend := cluster.BackendBck(bck)
 			if err = backend.InitNoBackend(p.owner.bmd); err != nil {
-				if _, ok := err.(*cmn.ErrRemoteBucketDoesNotExist); !ok {
+				if !cmn.IsErrRemoteBckNotFound(err) {
 					p.writeErrf(w, r,
 						"cannot create %s: failing to initialize backend %s, err: %v",
 						bck, backend, err)
@@ -1067,9 +1068,9 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 	} else {
 		bckList, err = p.listObjectsRemote(bck, smsg)
 		// TODO: `status == http.StatusGone` At this point we know that this
-		//  cloud bucket exists and is offline. We should somehow try to list
-		//  cached objects. This isn't easy as we basically need to start a new
-		//  xaction and return new `UUID`.
+		//       remote bucket exists and is offline. We should somehow try to list
+		//       cached objects. This isn't easy as we basically need to start a new
+		//       xaction and return new `UUID`.
 	}
 	if err != nil {
 		p.writeErr(w, r, err)
@@ -1209,7 +1210,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: revisit versus cloud bucket not being present, see p.tryBckInit
+	// TODO: revisit versus remote bucket not being present, see p.tryBckInit
 	bck := request.bck
 	if err := bck.Init(p.owner.bmd); err != nil {
 		p.writeErr(w, r, err)
@@ -1298,7 +1299,7 @@ func (p *proxyrunner) _bckHeadPre(ctx *bmdModifier, clone *bucketMD) error {
 		bprops, present = clone.Get(bck)
 	)
 	if !present {
-		return cmn.NewErrorBucketDoesNotExist(bck.Bck)
+		return cmn.NewErrBckNotFound(bck.Bck)
 	}
 	nprops := mergeRemoteBckProps(bprops, ctx.cloudProps)
 	if nprops.Equal(bprops) {
@@ -1734,7 +1735,7 @@ end:
 // is chosen to perform cloud listing.
 func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (allEntries *cmn.BucketList, err error) {
 	if smsg.StartAfter != "" {
-		return nil, fmt.Errorf("start after for cloud buckets is not yet supported")
+		return nil, fmt.Errorf("list-objects %q option for remote buckets is not yet supported", smsg.StartAfter)
 	}
 	var (
 		smap       = p.owner.smap.get()
@@ -2593,9 +2594,9 @@ func (p *proxyrunner) headRemoteBck(bck cmn.Bck, q url.Values) (header http.Head
 	res := p.call(callArgs{si: tsi, req: req, timeout: cmn.DefaultTimeout})
 	defer _freeCallRes(res)
 	if res.status == http.StatusNotFound {
-		err = cmn.NewErrorRemoteBucketDoesNotExist(bck)
+		err = cmn.NewErrRemoteBckNotFound(bck)
 	} else if res.status == http.StatusGone {
-		err = cmn.NewErrorRemoteBucketOffline(bck)
+		err = cmn.NewErrRemoteBckOffline(bck)
 	} else {
 		err = res.err
 		header = res.header

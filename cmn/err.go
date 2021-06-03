@@ -39,11 +39,11 @@ const (
 )
 
 type (
-	ErrBucketAlreadyExists      struct{ bck Bck }
-	ErrRemoteBucketDoesNotExist struct{ bck Bck }
-	ErrRemoteBucketOffline      struct{ bck Bck }
-	ErrBucketDoesNotExist       struct{ bck Bck }
-	ErrBucketIsBusy             struct{ bck Bck }
+	ErrBucketAlreadyExists struct{ bck Bck }
+	ErrRemoteBckNotFound   struct{ bck Bck }
+	ErrRemoteBucketOffline struct{ bck Bck }
+	ErrBckNotFound         struct{ bck Bck }
+	ErrBucketIsBusy        struct{ bck Bck }
 
 	ErrInvalidBucketProvider struct {
 		bck Bck
@@ -223,7 +223,7 @@ func IsUnreachable(err error, status int) bool {
 // structured error types //
 ////////////////////////////
 
-func NewErrorBucketAlreadyExists(bck Bck) *ErrBucketAlreadyExists {
+func NewErrBckAlreadyExists(bck Bck) *ErrBucketAlreadyExists {
 	return &ErrBucketAlreadyExists{bck: bck}
 }
 
@@ -231,31 +231,41 @@ func (e *ErrBucketAlreadyExists) Error() string {
 	return fmt.Sprintf("bucket %q already exists", e.bck)
 }
 
-func NewErrorRemoteBucketDoesNotExist(bck Bck) *ErrRemoteBucketDoesNotExist {
-	return &ErrRemoteBucketDoesNotExist{bck: bck}
+func NewErrRemoteBckNotFound(bck Bck) *ErrRemoteBckNotFound {
+	return &ErrRemoteBckNotFound{bck: bck}
 }
 
-func (e *ErrRemoteBucketDoesNotExist) Error() string {
+func (e *ErrRemoteBckNotFound) Error() string {
 	if e.bck.IsCloud() {
 		return fmt.Sprintf("cloud bucket %q does not exist", e.bck)
 	}
-	return fmt.Sprintf("remote ais bucket %q does not exist", e.bck)
+	return fmt.Sprintf("remote bucket %q does not exist", e.bck)
 }
 
-func NewErrorRemoteBucketOffline(bck Bck) *ErrRemoteBucketOffline {
+func IsErrRemoteBckNotFound(err error) bool {
+	_, ok := err.(*ErrRemoteBckNotFound)
+	return ok
+}
+
+func NewErrBckNotFound(bck Bck) *ErrBckNotFound {
+	return &ErrBckNotFound{bck: bck}
+}
+
+func (e *ErrBckNotFound) Error() string {
+	return fmt.Sprintf("bucket %q does not exist", e.bck)
+}
+
+func IsErrBckNotFound(err error) bool {
+	_, ok := err.(*ErrBckNotFound)
+	return ok
+}
+
+func NewErrRemoteBckOffline(bck Bck) *ErrRemoteBucketOffline {
 	return &ErrRemoteBucketOffline{bck: bck}
 }
 
 func (e *ErrRemoteBucketOffline) Error() string {
 	return fmt.Sprintf("bucket %q is currently unreachable", e.bck)
-}
-
-func NewErrorBucketDoesNotExist(bck Bck) *ErrBucketDoesNotExist {
-	return &ErrBucketDoesNotExist{bck: bck}
-}
-
-func (e *ErrBucketDoesNotExist) Error() string {
-	return fmt.Sprintf("bucket %q does not exist", e.bck)
 }
 
 func NewErrorInvalidBucketProvider(bck Bck) *ErrInvalidBucketProvider {
@@ -275,7 +285,7 @@ func (e *ErrInvalidBucketProvider) Is(target error) bool {
 	return ok
 }
 
-func NewErrorBucketIsBusy(bck Bck) *ErrBucketIsBusy {
+func NewErrBckIsBusy(bck Bck) *ErrBucketIsBusy {
 	return &ErrBucketIsBusy{bck: bck}
 }
 
@@ -522,10 +532,10 @@ func (e *ErrSoft) Error() string {
 
 // nought: not a thing
 func IsErrBucketNought(err error) bool {
-	if _, ok := err.(*ErrBucketDoesNotExist); ok {
+	if _, ok := err.(*ErrBckNotFound); ok {
 		return true
 	}
-	if _, ok := err.(*ErrRemoteBucketDoesNotExist); ok {
+	if _, ok := err.(*ErrRemoteBckNotFound); ok {
 		return true
 	}
 	_, ok := err.(*ErrRemoteBucketOffline)

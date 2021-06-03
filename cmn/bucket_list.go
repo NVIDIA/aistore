@@ -16,7 +16,7 @@ import "github.com/NVIDIA/aistore/cmn/cos"
 // Flags is a bit field:
 // 0-2: objects status, all statuses are mutually exclusive, so it can hold up
 //      to 8 different statuses. Now only OK=0, Moved=1, Deleted=2 are supported
-// 3:   CheckExists (for cloud bucket it shows if the object in local cache)
+// 3:   CheckExists (for remote bucket it shows if the object in present in AIS)
 type BucketEntry struct {
 	Name      string `json:"name" msg:"n"`                            // name of the object - NOTE: Does not include the bucket name.
 	Size      int64  `json:"size,string,omitempty" msg:"s,omitempty"` // size in bytes

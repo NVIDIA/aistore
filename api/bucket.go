@@ -147,7 +147,7 @@ func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks,
 	return summaries, nil
 }
 
-// CreateBucket sends a HTTP request to a proxy to create an AIS bucket with the given name.
+// CreateBucket sends HTTP request to a proxy to create an AIS bucket with the given name.
 func CreateBucket(baseParams BaseParams, bck cmn.Bck, props *cmn.BucketPropsToUpdate) error {
 	if err := bck.Validate(); err != nil {
 		return err
@@ -161,7 +161,7 @@ func CreateBucket(baseParams BaseParams, bck cmn.Bck, props *cmn.BucketPropsToUp
 	})
 }
 
-// DestroyBucket sends a HTTP request to a proxy to remove an AIS bucket with the given name.
+// DestroyBucket sends HTTP request to a proxy to remove an AIS bucket with the given name.
 func DestroyBucket(baseParams BaseParams, bck cmn.Bck) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
@@ -228,43 +228,43 @@ func RenameBucket(baseParams BaseParams, fromBck, toBck cmn.Bck) (xactID string,
 	return
 }
 
-// DeleteList sends a HTTP request to remove a list of objects from a bucket.
+// DeleteList sends HTTP request to remove a list of objects from a bucket.
 func DeleteList(baseParams BaseParams, bck cmn.Bck, filesList []string) (string, error) {
 	deleteMsg := cmn.ListMsg{ObjNames: filesList}
 	return doListRangeRequest(baseParams, bck, cmn.ActDelete, deleteMsg)
 }
 
-// DeleteRange sends a HTTP request to remove a range of objects from a bucket.
+// DeleteRange sends HTTP request to remove a range of objects from a bucket.
 func DeleteRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
 	deleteMsg := cmn.RangeMsg{Template: rng}
 	return doListRangeRequest(baseParams, bck, cmn.ActDelete, deleteMsg)
 }
 
-// PrefetchList sends a HTTP request to prefetch a list of objects from a cloud bucket.
+// PrefetchList sends HTTP request to prefetch a list of objects from a remote bucket.
 func PrefetchList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
 	prefetchMsg := cmn.ListMsg{ObjNames: fileslist}
 	return doListRangeRequest(baseParams, bck, cmn.ActPrefetch, prefetchMsg)
 }
 
-// PrefetchRange sends a HTTP request to prefetch a range of objects from a cloud bucket.
+// PrefetchRange sends HTTP request to prefetch a range of objects from a remote bucket.
 func PrefetchRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
 	prefetchMsg := cmn.RangeMsg{Template: rng}
 	return doListRangeRequest(baseParams, bck, cmn.ActPrefetch, prefetchMsg)
 }
 
-// EvictList sends a HTTP request to evict a list of objects from a cloud bucket.
+// EvictList sends HTTP request to evict a list of objects from a remote bucket.
 func EvictList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
 	evictMsg := cmn.ListMsg{ObjNames: fileslist}
 	return doListRangeRequest(baseParams, bck, cmn.ActEvictObjects, evictMsg)
 }
 
-// EvictRange sends a HTTP request to evict a range of objects from a cloud bucket.
+// EvictRange sends HTTP request to evict a range of objects from a remote bucket.
 func EvictRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
 	evictMsg := cmn.RangeMsg{Template: rng}
 	return doListRangeRequest(baseParams, bck, cmn.ActEvictObjects, evictMsg)
 }
 
-// EvictRemoteBucket sends a HTTP request to a proxy to evict an entire remote bucket from the AIStore
+// EvictRemoteBucket sends HTTP request to a proxy to evict an entire remote bucket from the AIStore
 // - the operation results in eliminating all traces of the specified remote bucket in the AIStore
 func EvictRemoteBucket(baseParams BaseParams, bck cmn.Bck, keepMD bool) error {
 	var q url.Values

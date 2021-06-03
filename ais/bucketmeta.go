@@ -441,41 +441,36 @@ type bckPropsArgs struct {
 
 func defaultBckProps(args bckPropsArgs) *cmn.BucketProps {
 	var (
-		skipValidate bool
-		c            = cmn.GCO.Get()
-		props        = cmn.DefaultBckProps(c)
+		config = cmn.GCO.Get()
+		props  = cmn.DefaultBckProps(config)
 	)
 	debug.Assert(args.bck != nil)
-	debug.AssertNoErr(cos.ValidateCksumType(c.Cksum.Type))
+	debug.AssertNoErr(cos.ValidateCksumType(config.Cksum.Type))
 	props.SetProvider(args.bck.Provider)
-
-	if args.bck.IsAIS() || args.bck.HasBackendBck() {
+	switch {
+	case args.bck.IsAIS() || args.bck.HasBackendBck():
 		debug.Assert(args.hdr == nil)
-	} else if args.bck.IsHDFS() {
+	case args.bck.IsHDFS():
 		props.Versioning.Enabled = false
 		if args.hdr != nil {
 			props = mergeRemoteBckProps(props, args.hdr)
 		}
 		// Preserve HDFS related information.
-		if args.bck.Props != nil {
-			props.Extra.HDFS = args.bck.Props.Extra.HDFS
-		} else {
+		if args.bck.Props == nil {
 			// Since the original bucket does not have the HDFS related info,
-			// the validate will fail so we must skip.
-			skipValidate = true
+			// validation will fail so we must skip.
+			return props
 		}
-	} else if args.bck.IsRemote() {
+		props.Extra.HDFS = args.bck.Props.Extra.HDFS
+	case args.bck.IsRemote():
 		debug.Assert(args.hdr != nil)
 		props.Versioning.Enabled = false
 		props = mergeRemoteBckProps(props, args.hdr)
-	} else {
-		cos.Assert(false)
+	default:
+		debug.Assert(false)
 	}
-
-	if !skipValidate {
-		// For debugging purposes we can set large value - we don't need to be precise here.
-		debug.AssertNoErr(props.Validate(1000 /*targetCnt*/))
-	}
+	// For debugging purposes we can set large value - we don't need to be precise here.
+	debug.AssertNoErr(props.Validate(1000 /*targetCnt*/))
 	return props
 }
 

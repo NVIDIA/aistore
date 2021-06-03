@@ -106,7 +106,7 @@ func (gcpp *gcpProvider) createClient(ctx context.Context) (*storage.Client, con
 
 func (gcpp *gcpProvider) gcpErrorToAISError(gcpError error, bck *cmn.Bck) (int, error) {
 	if gcpError == storage.ErrBucketNotExist {
-		return http.StatusNotFound, cmn.NewErrorRemoteBucketDoesNotExist(*bck)
+		return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(*bck)
 	}
 	status := http.StatusBadRequest
 	if apiErr, ok := gcpError.(*googleapi.Error); ok {

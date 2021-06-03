@@ -188,7 +188,7 @@ func (t *targetrunner) EvictObject(lom *cluster.LOM) (errCode int, err error) {
 // There are a few possible scenarios:
 // - if both src and dst LOMs are from local buckets the copying then takes place between AIS targets
 //   (of this same cluster);
-// - if the src is located in a cloud bucket, we always first make sure it is also present in
+// - if the src is located in a remote bucket, we always first make sure it is also present in
 //   the AIS cluster (by performing a cold GET if need be).
 // - if the dst is cloud, we perform a regular PUT logic thus also making sure that the new
 //   replica gets created in the cloud bucket of _this_ AIS cluster.

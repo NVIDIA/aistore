@@ -182,7 +182,7 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 		}
 		nlp := c.bck.GetNameLockPair()
 		if !nlp.TryLock(c.timeout.netw / 2) {
-			return cmn.NewErrorBucketIsBusy(c.bck.Bck)
+			return cmn.NewErrBckIsBusy(c.bck.Bck)
 		}
 		txn := newTxnMakeNCopies(c, curCopies, newCopies)
 		if err := t.transactions.begin(txn); err != nil {
@@ -262,7 +262,7 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 		}
 		nlp := c.bck.GetNameLockPair()
 		if !nlp.TryLock(c.timeout.netw / 2) {
-			return cmn.NewErrorBucketIsBusy(c.bck.Bck)
+			return cmn.NewErrBckIsBusy(c.bck.Bck)
 		}
 		txn := newTxnSetBucketProps(c, nprops)
 		if err := t.transactions.begin(txn); err != nil {
@@ -352,11 +352,11 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 		nlpFrom := bckFrom.GetNameLockPair()
 		nlpTo := bckTo.GetNameLockPair()
 		if !nlpFrom.TryLock(c.timeout.netw / 4) {
-			return cmn.NewErrorBucketIsBusy(bckFrom.Bck)
+			return cmn.NewErrBckIsBusy(bckFrom.Bck)
 		}
 		if !nlpTo.TryLock(c.timeout.netw / 4) {
 			nlpFrom.Unlock()
-			return cmn.NewErrorBucketIsBusy(bckTo.Bck)
+			return cmn.NewErrBckIsBusy(bckTo.Bck)
 		}
 		txn := newTxnRenameBucket(c, bckFrom, bckTo)
 		if err := t.transactions.begin(txn); err != nil {
@@ -409,10 +409,10 @@ func (t *targetrunner) validateBckRenTxn(bckFrom, bckTo *cluster.Bck, msg *aisMs
 	}
 	bmd := t.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
-		return cmn.NewErrorBucketDoesNotExist(bckFrom.Bck)
+		return cmn.NewErrBckNotFound(bckFrom.Bck)
 	}
 	if _, present := bmd.Get(bckTo); present {
-		return cmn.NewErrorBucketAlreadyExists(bckTo.Bck)
+		return cmn.NewErrBckAlreadyExists(bckTo.Bck)
 	}
 	for _, mpathInfo := range availablePaths {
 		path := mpathInfo.MakePathCT(bckTo.Bck, fs.ObjectType)
@@ -472,7 +472,7 @@ func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMs
 		nlpFrom = bckFrom.GetNameLockPair()
 		if !nlpFrom.TryRLock(c.timeout.netw / 4) {
 			dm.UnregRecv()
-			return cmn.NewErrorBucketIsBusy(bckFrom.Bck)
+			return cmn.NewErrBckIsBusy(bckFrom.Bck)
 		}
 
 		if !bck2BckMsg.DryRun {
@@ -480,7 +480,7 @@ func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMs
 			if !nlpTo.TryLock(c.timeout.netw / 4) {
 				dm.UnregRecv()
 				nlpFrom.Unlock()
-				return cmn.NewErrorBucketIsBusy(bckTo.Bck)
+				return cmn.NewErrBckIsBusy(bckTo.Bck)
 			}
 		}
 
@@ -535,7 +535,7 @@ func (t *targetrunner) validateTransferBckTxn(bckFrom *cluster.Bck, action strin
 	}
 	bmd := t.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
-		return cmn.NewErrorBucketDoesNotExist(bckFrom.Bck)
+		return cmn.NewErrBckNotFound(bckFrom.Bck)
 	}
 	return nil
 }
@@ -577,7 +577,7 @@ func (t *targetrunner) ecEncode(c *txnServerCtx) error {
 		}
 		nlp := c.bck.GetNameLockPair()
 		if !nlp.TryLock(c.timeout.netw / 4) {
-			return cmn.NewErrorBucketIsBusy(c.bck.Bck)
+			return cmn.NewErrBckIsBusy(c.bck.Bck)
 		}
 
 		txn := newTxnECEncode(c, c.bck)
@@ -667,7 +667,7 @@ func (t *targetrunner) destroyBucket(c *txnServerCtx) error {
 	case cmn.ActBegin:
 		nlp := c.bck.GetNameLockPair()
 		if !nlp.TryLock(c.timeout.netw / 2) {
-			return cmn.NewErrorBucketIsBusy(c.bck.Bck)
+			return cmn.NewErrBckIsBusy(c.bck.Bck)
 		}
 		txn := newTxnBckBase("dlb", *c.bck)
 		txn.fillFromCtx(c)

@@ -123,7 +123,7 @@ func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *cmn.CopyBckMsg) (er
 	return
 }
 
-// Evict a cloud bucket
+// Evict remote bucket
 func evictBucket(c *cli.Context, bck cmn.Bck) (err error) {
 	if flagIsSet(c, dryRunFlag) {
 		fmt.Fprintf(c.App.Writer, "EVICT: %q\n", bck)

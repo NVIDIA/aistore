@@ -154,8 +154,8 @@ func HrwIC(smap *Smap, uuid string) (pi *Snode, err error) {
 	return
 }
 
-// Returns target which should be responsible for a given task. E.g. usage
-// to list cloud bucket (we want only one target to do it).
+// Returns a target for a given task. E.g. usage: list objects in a cloud bucket
+// (we want only one target to do it).
 func HrwTargetTask(uuid string, smap *Smap) (si *Snode, err error) {
 	var (
 		max    uint64

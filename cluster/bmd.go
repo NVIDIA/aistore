@@ -96,9 +96,9 @@ func (m *BMD) Check(bck *Bck, bckID uint64) error {
 	bprops, present := m.Get(bck)
 	if !present {
 		if bck.IsRemote() {
-			return cmn.NewErrorRemoteBucketDoesNotExist(bck.Bucket())
+			return cmn.NewErrRemoteBckNotFound(bck.Bucket())
 		}
-		return cmn.NewErrorBucketDoesNotExist(bck.Bucket())
+		return cmn.NewErrBckNotFound(bck.Bucket())
 	}
 	if bckID == bprops.BID {
 		return nil // ok

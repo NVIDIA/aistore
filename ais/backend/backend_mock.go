@@ -36,11 +36,11 @@ func (m *dummyBackendProvider) CreateBucket(ctx context.Context, bck *cluster.Bc
 }
 
 func (m *dummyBackendProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
-	return cos.SimpleKVs{}, http.StatusNotFound, cmn.NewErrorRemoteBucketOffline(bck.Bck)
+	return cos.SimpleKVs{}, http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bck)
 }
 
 func (m *dummyBackendProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
-	return nil, http.StatusNotFound, cmn.NewErrorRemoteBucketOffline(bck.Bck)
+	return nil, http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bck)
 }
 
 // The function must not fail - it should return empty list.
@@ -49,11 +49,11 @@ func (m *dummyBackendProvider) ListBuckets(ctx context.Context, query cmn.QueryB
 }
 
 func (m *dummyBackendProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cos.SimpleKVs, errCode int, err error) {
-	return cos.SimpleKVs{}, http.StatusNotFound, cmn.NewErrorRemoteBucketDoesNotExist(lom.Bucket())
+	return cos.SimpleKVs{}, http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }
 
 func (m *dummyBackendProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
-	return http.StatusNotFound, cmn.NewErrorRemoteBucketDoesNotExist(lom.Bucket())
+	return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }
 
 func (m *dummyBackendProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cos.Cksum, errCode int, err error) {
@@ -61,9 +61,9 @@ func (m *dummyBackendProvider) GetObjReader(ctx context.Context, lom *cluster.LO
 }
 
 func (m *dummyBackendProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
-	return "", http.StatusNotFound, cmn.NewErrorRemoteBucketDoesNotExist(lom.Bucket())
+	return "", http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }
 
 func (m *dummyBackendProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
-	return http.StatusNotFound, cmn.NewErrorRemoteBucketDoesNotExist(lom.Bucket())
+	return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }

@@ -55,7 +55,7 @@ var (
 		Subcommands: []cli.Command{
 			{
 				Name:         commandPrefetch,
-				Usage:        "prefetch objects from cloud buckets",
+				Usage:        "prefetch objects from remote buckets",
 				ArgsUsage:    bucketArgument,
 				Flags:        startCmdsFlags[commandPrefetch],
 				Action:       startPrefetchHandler,
@@ -240,7 +240,7 @@ func startDownloadHandler(c *cli.Context) error {
 			}
 		} else if source.backend.prefix == "" {
 			return fmt.Errorf(
-				"cluster is not configured with %q provider: cannot download whole cloud bucket",
+				"cluster is not configured with %q provider: cannot download remote bucket",
 				source.backend.bck.Provider,
 			)
 		} else {
@@ -465,7 +465,7 @@ func startPrefetchHandler(c *cli.Context) (err error) {
 		return
 	}
 	if bck.IsAIS() {
-		return fmt.Errorf("cannot prefetch from ais buckets (the operation applies to cloud buckets only)")
+		return fmt.Errorf("cannot prefetch from ais buckets (the operation applies to remote buckets only)")
 	}
 	if _, err = headBucket(bck); err != nil {
 		return

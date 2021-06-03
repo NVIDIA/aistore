@@ -147,7 +147,7 @@ func (args *bckInitArgs) initAndTry(bucket string, origURLBck ...string) (bck *c
 	}
 
 	// Should create only for remote bucket when `tryOnlyRem` flag is set.
-	if _, ok := err.(*cmn.ErrBucketDoesNotExist); ok && args.tryOnlyRem {
+	if cmn.IsErrBckNotFound(err) && args.tryOnlyRem {
 		args.p.writeErr(args.w, args.r, err, errCode)
 		return
 	}
@@ -181,7 +181,7 @@ func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode i
 	// In case of HDFS if the bucket does not exist in BMD there is no point
 	// in checking if it exists remotely if we don't have `ref_directory`.
 	if args.bck.IsHDFS() {
-		err = cmn.NewErrorBucketDoesNotExist(args.bck.Bck)
+		err = cmn.NewErrBckNotFound(args.bck.Bck)
 		errCode = http.StatusNotFound
 		return
 	}

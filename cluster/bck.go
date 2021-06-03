@@ -124,7 +124,7 @@ func (b *Bck) Equal(other *Bck, sameID, sameBackend bool) bool {
 // - always returns the corresponding *DoesNotExist error
 // - Cloud bucket: fills in the props with defaults from config
 // - AIS bucket: sets the props to nil
-// - Remote (Cloud or Remote AIS) bucket: caller can type-cast err.(*cmn.ErrRemoteBucketDoesNotExist) and proceed
+// - Remote (Cloud or Remote AIS) bucket: caller can type-cast err.(*cmn.ErrRemoteBckNotFound) and proceed
 //
 // NOTE: most of the above applies to a backend bucket, if specified
 //
@@ -183,9 +183,9 @@ func (b *Bck) InitNoBackend(bowner Bowner) (err error) {
 		return
 	}
 	if b.Bck.IsAIS() {
-		return cmn.NewErrorBucketDoesNotExist(b.Bck)
+		return cmn.NewErrBckNotFound(b.Bck)
 	}
-	return cmn.NewErrorRemoteBucketDoesNotExist(b.Bck)
+	return cmn.NewErrRemoteBckNotFound(b.Bck)
 }
 
 func (b *Bck) CksumConf() (conf *cmn.CksumConf) { return &b.Props.Cksum }

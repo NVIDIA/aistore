@@ -115,7 +115,7 @@ func cleanError(awsError error) error {
 func (awsp *awsProvider) awsErrorToAISError(awsError error, bck *cmn.Bck) (int, error) {
 	if reqErr, ok := awsError.(awserr.RequestFailure); ok {
 		if reqErr.Code() == s3.ErrCodeNoSuchBucket {
-			return reqErr.StatusCode(), cmn.NewErrorRemoteBucketDoesNotExist(*bck)
+			return reqErr.StatusCode(), cmn.NewErrRemoteBckNotFound(*bck)
 		}
 		return reqErr.StatusCode(), cleanError(awsError)
 	}
@@ -151,7 +151,7 @@ func (awsp *awsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 		glog.Infof("[head_bucket] %s", cloudBck.Name)
 	}
 
-	// Since it's possible that the cloud bucket may not yet exist in the BMD,
+	// Since AWS bucket may not yet exist in the BMD,
 	// we must get the region manually and recreate S3 client.
 	svc, hasRegion, _ = awsp.newS3Client(sessConf{bck: cloudBck}, "")
 	if !hasRegion {

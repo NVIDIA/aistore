@@ -124,7 +124,7 @@ var (
 			},
 			{
 				Name:         commandEvict,
-				Usage:        "evict buckets or objects prefetched from cloud buckets",
+				Usage:        "evict buckets or objects prefetched from remote buckets",
 				ArgsUsage:    optionalObjectsArgument,
 				Flags:        bucketCmdsFlags[commandEvict],
 				Action:       evictHandler,
@@ -344,12 +344,13 @@ func evictHandler(c *cli.Context) (err error) {
 			return evictBucket(c, bck)
 		}
 
-		// Evict single object from cloud bucket - multiObjOp will handle.
+		// Evict a single object from remote bucket - multiObjOp will handle.
 	}
 
 	// List and range flags are invalid with object argument(s)
 	if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
-		return incorrectUsageMsg(c, "flags %q are invalid when object names provided", strings.Join([]string{listFlag.Name, templateFlag.Name}, ", "))
+		return incorrectUsageMsg(c, "flags %q are invalid when object names provided",
+			strings.Join([]string{listFlag.Name, templateFlag.Name}, ", "))
 	}
 
 	// Object argument(s) given by the user; operation on given object(s).
