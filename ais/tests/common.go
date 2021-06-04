@@ -385,10 +385,12 @@ func (m *ioContext) del(cnt ...int) {
 		go func(obj *cmn.BucketEntry) {
 			defer wg.Done()
 			err := api.DeleteObject(baseParams, m.bck, obj.Name)
-			if cmn.IsErrConnectionNotAvail(err) {
-				errCnt.Add(maxErrCount / 10)
-			} else {
-				errCnt.Inc()
+			if err != nil {
+				if cmn.IsErrConnectionNotAvail(err) {
+					errCnt.Add(maxErrCount / 10)
+				} else {
+					errCnt.Inc()
+				}
 			}
 			tassert.CheckError(m.t, err)
 		}(obj)
