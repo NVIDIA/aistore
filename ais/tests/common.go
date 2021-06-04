@@ -378,7 +378,7 @@ func (m *ioContext) del(cnt ...int) {
 	)
 	for _, obj := range toRemove {
 		if errCnt.Load() > maxErrCount {
-			tassert.CheckFatal(m.t, err)
+			tassert.CheckFatal(m.t, errors.New("too many errors"))
 			break
 		}
 		wg.Add(1)
