@@ -177,7 +177,7 @@ func (r *XactTransferBck) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 	}
 	size, err = r.Target().CopyObject(lom, params, false /*localOnly*/)
 	if err != nil {
-		if cmn.IsErrOOS(err) {
+		if cos.IsErrOOS(err) {
 			what := fmt.Sprintf("%s(%q)", r.Kind(), r.ID())
 			err = cmn.NewAbortedError(what, err.Error())
 		}

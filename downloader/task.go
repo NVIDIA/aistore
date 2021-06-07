@@ -177,7 +177,7 @@ func (t *singleObjectTask) downloadLocal(lom *cluster.LOM) (err error) {
 				return err
 			}
 			// Otherwise retry...
-		} else if cmn.IsErrConnectionReset(err) || cmn.IsErrConnectionRefused(err) {
+		} else if cos.IsErrConnectionReset(err) || cos.IsErrConnectionRefused(err) {
 			glog.Warningf("%s [retries: %d/%d]: connection failed with (%v), retrying...", t, i, retryCnt, err)
 		} else {
 			glog.Warningf("%s [retries: %d/%d]: unexpected error (%v), retrying...", t, i, retryCnt, err)

@@ -92,7 +92,7 @@ func (r *xactMNC) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 	if os.IsNotExist(err) {
 		return nil
 	}
-	if err != nil && cmn.IsErrOOS(err) {
+	if err != nil && cos.IsErrOOS(err) {
 		what := fmt.Sprintf("%s(%q)", r.Kind(), r.ID())
 		return cmn.NewAbortedError(what, err.Error())
 	}

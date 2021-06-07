@@ -210,7 +210,7 @@ func (f *FSHC) testMountpath(filePath, mountpath string,
 
 			if err := f.tryReadFile(filePath); err != nil {
 				glog.Errorf("[fshc] Failed to read file (fqn: %q, read_fails: %d, err: %v)", filePath, readFails, err)
-				if cmn.IsIOError(err) {
+				if cos.IsIOError(err) {
 					readFails++
 				}
 			}
@@ -229,7 +229,7 @@ func (f *FSHC) testMountpath(filePath, mountpath string,
 		}
 		totalReads++
 		if err != nil {
-			if cmn.IsIOError(err) {
+			if cos.IsIOError(err) {
 				readFails++
 			}
 			glog.Errorf(
@@ -243,7 +243,7 @@ func (f *FSHC) testMountpath(filePath, mountpath string,
 		}
 		if err = f.tryReadFile(fqn); err != nil {
 			glog.Errorf("[fshc] Failed to read random file (fqn: %q, err: %v)", fqn, err)
-			if cmn.IsIOError(err) {
+			if cos.IsIOError(err) {
 				readFails++
 			}
 		}
@@ -254,7 +254,7 @@ func (f *FSHC) testMountpath(filePath, mountpath string,
 		totalWrites++
 		if err := f.tryWriteFile(mountpath, int64(fileSize)); err != nil {
 			glog.Errorf("[fshc] Failed to write to a random file (mountpath: %q, err: %v)", mountpath, err)
-			if cmn.IsIOError(err) {
+			if cos.IsIOError(err) {
 				writeFails++
 			}
 		}

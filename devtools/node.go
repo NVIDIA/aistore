@@ -63,7 +63,10 @@ func WaitMapVersionSync(baseParams api.BaseParams, ctx *Ctx, timeout time.Time, 
 		}
 		daemonSmap, err := api.GetNodeClusterMap(baseParams, sid)
 		// NOTE: Retry if node returns `http.StatusServiceUnavailable` or `http.StatusBadGateway`
-		if err != nil && !cmn.IsErrConnectionRefused(err) && !cmn.IsStatusServiceUnavailable(err) && !cmn.IsStatusBadGateway(err) {
+		if err != nil &&
+			!cos.IsErrConnectionRefused(err) &&
+			!cmn.IsStatusServiceUnavailable(err) &&
+			!cmn.IsStatusBadGateway(err) {
 			return err
 		}
 

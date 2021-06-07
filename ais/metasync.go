@@ -349,7 +349,7 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 		// failing to sync
 		glog.Warningf("%s: %s %s, err: %v(%d)", y.p.si, faisync, res.si, res.err, res.status)
 		// in addition to "connection-refused" always retry newTargetID - the joining one
-		if cmn.IsErrConnectionRefused(res.err) || cos.StringInSlice(res.si.ID(), newTargetIDs) {
+		if cos.IsErrConnectionRefused(res.err) || cos.StringInSlice(res.si.ID(), newTargetIDs) {
 			if refused == nil {
 				refused = make(cluster.NodeMap, 2)
 			}

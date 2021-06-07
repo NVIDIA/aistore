@@ -437,11 +437,11 @@ func NetworkCallWithRetry(args *CallWithRetryArgs) (err error) {
 		if args.IsFatal != nil && args.IsFatal(err) {
 			return
 		}
-
 		if args.Verbosity < CallWithRetryLogQuiet {
-			glog.Errorf("%s Failed to %s, err: %v (iter: %d, status code: %d)", callerStr, args.Action, err, iter, status)
+			glog.Errorf("%s Failed to %s, err: %v (iter: %d, status code: %d)",
+				callerStr, args.Action, err, iter, status)
 		}
-		if IsErrConnectionRefused(err) || IsErrConnectionReset(err) {
+		if cos.IsErrConnectionRefused(err) || cos.IsErrConnectionReset(err) {
 			softErrCnt++
 		} else {
 			hardErrCnt++

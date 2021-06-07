@@ -386,7 +386,7 @@ func (m *ioContext) del(cnt ...int) {
 			defer wg.Done()
 			err := api.DeleteObject(baseParams, m.bck, obj.Name)
 			if err != nil {
-				if cmn.IsErrConnectionNotAvail(err) {
+				if cos.IsErrConnectionNotAvail(err) {
 					errCnt.Add(maxErrCount / 10)
 				} else {
 					errCnt.Inc()

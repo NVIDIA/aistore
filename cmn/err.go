@@ -7,7 +7,6 @@ package cmn
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -16,7 +15,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -188,42 +186,6 @@ func IsStatusGone(err error) (yes bool) {
 	return hErr.Status == http.StatusGone
 }
 
-///////////////////////////
-// syscall-based helpers //
-///////////////////////////
-
-// likely out of socket descriptors
-func IsErrConnectionNotAvail(err error) (yes bool) {
-	return errors.Is(err, syscall.EADDRNOTAVAIL)
-}
-
-func IsErrConnectionRefused(err error) (yes bool) {
-	return errors.Is(err, syscall.ECONNREFUSED)
-}
-
-// TCP RST
-func IsErrConnectionReset(err error) (yes bool) {
-	return errors.Is(err, syscall.ECONNRESET) || IsErrBrokenPipe(err)
-}
-
-// Check if a given error is a broken-pipe one.
-func IsErrBrokenPipe(err error) bool {
-	return errors.Is(err, syscall.EPIPE)
-}
-
-func IsErrOOS(err error) bool {
-	return errors.Is(err, syscall.ENOSPC)
-}
-
-func IsUnreachable(err error, status int) bool {
-	return IsErrConnectionRefused(err) ||
-		errors.Is(err, context.DeadlineExceeded) ||
-		status == http.StatusRequestTimeout ||
-		status == http.StatusServiceUnavailable ||
-		cos.IsEOF(err) ||
-		status == http.StatusBadGateway
-}
-
 ////////////////////////////
 // structured error types //
 ////////////////////////////
@@ -326,7 +288,8 @@ func NewErrorCapacityExceeded(highWM int64, usedPct int32, totalBytesUsed, total
 }
 
 func (e *ErrCapacityExceeded) Error() string {
-	suffix := fmt.Sprintf("total used %s out of %s", cos.B2S(int64(e.totalBytesUsed), 2), cos.B2S(int64(e.totalBytes), 2))
+	suffix := fmt.Sprintf("total used %s out of %s", cos.B2S(int64(e.totalBytesUsed), 2),
+		cos.B2S(int64(e.totalBytes), 2))
 	if e.oos {
 		return fmt.Sprintf("out of space: used %d%% of total capacity on at least one of the mountpaths (%s)",
 			e.usedPct, suffix)

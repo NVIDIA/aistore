@@ -189,7 +189,7 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 	for {
 		smap, err := api.GetClusterMap(baseParams)
 		if err != nil {
-			if !cmn.IsErrConnectionRefused(err) {
+			if !cos.IsErrConnectionRefused(err) {
 				return nil, err
 			}
 			tlog.Logf("%v\n", err)
@@ -662,7 +662,7 @@ while503:
 	if err == nil {
 		return nil
 	}
-	if !cmn.IsStatusServiceUnavailable(err) && !cmn.IsErrConnectionRefused(err) {
+	if !cmn.IsStatusServiceUnavailable(err) && !cos.IsErrConnectionRefused(err) {
 		return
 	}
 	time.Sleep(retryInterval)

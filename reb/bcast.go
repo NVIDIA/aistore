@@ -182,7 +182,7 @@ func (reb *Manager) pingTarget(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 			}
 			return true
 		}
-		if !cmn.IsUnreachable(err, code) {
+		if !cos.IsUnreachable(err, code) {
 			glog.Errorf("%s: health(%s) returned err %v(%d) - aborting", logHdr, tsi, err, code)
 			return
 		}

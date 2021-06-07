@@ -5,7 +5,10 @@
 package cos
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"syscall"
 
@@ -17,6 +20,42 @@ type (
 		signal syscall.Signal
 	}
 )
+
+///////////////////////////
+// syscall-based helpers //
+///////////////////////////
+
+// likely out of socket descriptors
+func IsErrConnectionNotAvail(err error) (yes bool) {
+	return errors.Is(err, syscall.EADDRNOTAVAIL)
+}
+
+func IsErrConnectionRefused(err error) (yes bool) {
+	return errors.Is(err, syscall.ECONNREFUSED)
+}
+
+// TCP RST
+func IsErrConnectionReset(err error) (yes bool) {
+	return errors.Is(err, syscall.ECONNRESET) || IsErrBrokenPipe(err)
+}
+
+// Check if a given error is a broken-pipe one.
+func IsErrBrokenPipe(err error) bool {
+	return errors.Is(err, syscall.EPIPE)
+}
+
+func IsErrOOS(err error) bool {
+	return errors.Is(err, syscall.ENOSPC)
+}
+
+func IsUnreachable(err error, status int) bool {
+	return IsErrConnectionRefused(err) ||
+		errors.Is(err, context.DeadlineExceeded) ||
+		status == http.StatusRequestTimeout ||
+		status == http.StatusServiceUnavailable ||
+		IsEOF(err) ||
+		status == http.StatusBadGateway
+}
 
 ///////////////
 // ErrSignal //

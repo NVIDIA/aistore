@@ -254,7 +254,7 @@ func loadDaemonIDXattr(mpath string) (daeID string, err error) {
 		daeID = string(b)
 		return
 	}
-	if cmn.IsErrXattrNotFound(err) {
+	if cos.IsErrXattrNotFound(err) {
 		err = nil
 	}
 	return

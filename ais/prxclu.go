@@ -439,7 +439,7 @@ func (p *proxyrunner) userRegisterNode(nsi *cluster.Snode, tag string) (errCode 
 	if res.err == nil {
 		return
 	}
-	if cmn.IsErrConnectionRefused(res.err) {
+	if cos.IsErrConnectionRefused(res.err) {
 		err = fmt.Errorf("failed to reach %s at %s:%s",
 			nsi, nsi.PublicNet.NodeHostname, nsi.PublicNet.DaemonPort)
 	} else {

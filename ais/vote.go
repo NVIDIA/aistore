@@ -242,7 +242,7 @@ func (p *proxyrunner) electAmongProxies(vr *VoteRecord) (winner bool, errors cos
 
 	for res := range resCh {
 		if res.err != nil {
-			if cmn.IsErrConnectionRefused(res.err) {
+			if cos.IsErrConnectionRefused(res.err) {
 				if res.daemonID == vr.Primary {
 					glog.Infof("Expected response from %s (failed primary): connection refused",
 						res.daemonID)
@@ -560,7 +560,7 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *c
 	}
 	config := cmn.GCO.Get()
 	sleepTime := config.Timeout.CplaneOperation.D()
-	if cmn.IsErrConnectionRefused(err) {
+	if cos.IsErrConnectionRefused(err) {
 		for i := 0; i < 2; i++ {
 			time.Sleep(sleepTime)
 			res = h.call(args)

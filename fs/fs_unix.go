@@ -8,7 +8,6 @@ import (
 	"syscall"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"golang.org/x/sys/unix"
 )
@@ -48,7 +47,7 @@ func SetXattr(fqn, attrName string, data []byte) (err error) {
 // removeXattr removes xattr
 func removeXattr(fqn, attrName string) error {
 	err := unix.Removexattr(fqn, attrName)
-	if err != nil && !cmn.IsErrXattrNotFound(err) {
+	if err != nil && !cos.IsErrXattrNotFound(err) {
 		glog.Errorf("failed to remove %q from %s: %v", attrName, fqn, err)
 		return err
 	}

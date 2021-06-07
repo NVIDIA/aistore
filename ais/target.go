@@ -1634,7 +1634,7 @@ func (t *targetrunner) fsErr(err error, filepath string) {
 	if !cmn.GCO.Get().FSHC.Enabled {
 		return
 	}
-	if !cmn.IsIOError(err) {
+	if !cos.IsIOError(err) {
 		return
 	}
 	glog.Errorf("FSHC: fqn %s, err %v", filepath, err)

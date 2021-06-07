@@ -99,7 +99,7 @@ func (m *UserManager) proxyRequest(method, proxyURL, path string, injson []byte)
 			return nil
 		}
 
-		if !cmn.IsErrConnectionRefused(err) {
+		if !cos.IsErrConnectionRefused(err) {
 			return err
 		}
 		if time.Since(startRequest) > proxyTimeout {

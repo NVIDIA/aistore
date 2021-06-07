@@ -385,7 +385,7 @@ func (pkr *proxyKeepalive) retry(si *cluster.Snode) (ok, stopped bool) {
 					pkr.p.si, i, si, smap)
 				return false, false
 			}
-			if cmn.IsUnreachable(err, status) {
+			if cos.IsUnreachable(err, status) {
 				continue
 			}
 			glog.Warningf("%s: keepalive: unexpected error %v(%d) from %s", pkr.p.si, err, status, si)
@@ -512,7 +512,7 @@ func (k *keepalive) register(sendKeepalive func(time.Duration) (int, error), pri
 			// could be much shorter than the specified `timeout`. In such case
 			// we want to report the worst-case scenario, otherwise we could possibly
 			// decrease next retransmission timeout (which doesn't make much sense).
-			if cmn.IsErrConnectionRefused(err) || cmn.IsErrConnectionReset(err) {
+			if cos.IsErrConnectionRefused(err) || cos.IsErrConnectionReset(err) {
 				delta = time.Duration(k.maxKeepalive)
 			}
 			timeout = k.updateTimeoutForDaemon(primaryID, delta)
@@ -524,7 +524,7 @@ func (k *keepalive) register(sendKeepalive func(time.Duration) (int, error), pri
 				glog.Warningf("%s: keepalive failed after %d attempts, removing from Smap", hname, i)
 				return true
 			}
-			if cmn.IsUnreachable(err, status) {
+			if cos.IsUnreachable(err, status) {
 				continue
 			}
 			if daemon.stopping.Load() {
@@ -577,7 +577,7 @@ func (k *keepalive) timeoutStatsForDaemon(sid string) *timeoutStats {
 }
 
 func (k *keepalive) onerr(err error, status int) {
-	if cmn.IsUnreachable(err, status) {
+	if cos.IsUnreachable(err, status) {
 		k.controlCh <- controlSignal{msg: kaErrorMsg, err: err}
 	}
 }

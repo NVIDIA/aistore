@@ -795,7 +795,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 	// transmit
 	written, err = io.CopyBuffer(w, reader, buf)
 	if err != nil {
-		if !cmn.IsErrConnectionReset(err) {
+		if !cos.IsErrConnectionReset(err) {
 			goi.t.fsErr(err, fqn)
 			goi.t.statsT.Add(stats.ErrGetCount, 1)
 		}
