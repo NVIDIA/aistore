@@ -17,7 +17,7 @@ import (
 )
 
 // interface guard
-var _ ExtractCreator = (*zipExtractCreator)(nil)
+var _ Creator = (*zipExtractCreator)(nil)
 
 type (
 	zipExtractCreator struct {
@@ -159,7 +159,7 @@ func (z *zipExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, e
 	return extractedSize, extractedCount, nil
 }
 
-func NewZipExtractCreator(t cluster.Target) ExtractCreator {
+func NewZipExtractCreator(t cluster.Target) Creator {
 	return &zipExtractCreator{t: t}
 }
 

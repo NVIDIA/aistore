@@ -44,7 +44,7 @@ type (
 		multiplier   int // optionally: multiple streams per destination (round-robin)
 		manualResync bool
 	}
-	BundleStats map[string]*transport.Stats // by DaemonID
+	Stats map[string]*transport.Stats // by DaemonID
 	//
 	// private types to support multiple streams to the same destination with round-robin selection
 	//
@@ -217,9 +217,9 @@ func (sb *Streams) ListenSmapChanged() {
 	sb.Resync()
 }
 
-func (sb *Streams) GetStats() BundleStats {
+func (sb *Streams) GetStats() Stats {
 	streams := sb.get()
-	stats := make(BundleStats, len(streams))
+	stats := make(Stats, len(streams))
 	for id, robin := range streams {
 		s := robin.stsdest[0]
 		tstat := s.GetStats()

@@ -17,7 +17,7 @@ import (
 // Uses the stats package to generate csv reports of the soaktest.
 // Maintains awareness of recipe, phase and primitive
 
-type ReportContext struct {
+type Context struct {
 	currentRecipe string
 	recipeNumber  map[string]int
 
@@ -32,21 +32,21 @@ type ReportContext struct {
 	recipeCfgStats stats.RecipeStats
 }
 
-func NewReportContext() *ReportContext {
-	return &ReportContext{
+func NewReportContext() *Context {
+	return &Context{
 		primitiveStatsPhaseQueue: make([]*stats.PrimitiveStat, 0),
 		recipeNumber:             make(map[string]int),
 	}
 }
 
-func (rctx *ReportContext) RecordRegression(stat *stats.PrimitiveStat) {
+func (rctx *Context) RecordRegression(stat *stats.PrimitiveStat) {
 	stat.RecipeName = rctx.currentRecipe
 	stat.RecipeNum = rctx.recipeNumber[stat.RecipeName]
 
 	regressionWriter.WriteStat(stat)
 }
 
-func (rctx *ReportContext) BeginRecipe(name string) {
+func (rctx *Context) BeginRecipe(name string) {
 	val, ok := rctx.recipeNumber[name]
 	if !ok {
 		val = 1
@@ -67,7 +67,7 @@ func (rctx *ReportContext) BeginRecipe(name string) {
 }
 
 // EndRecipe should be called after the recipe
-func (rctx *ReportContext) EndRecipe() error {
+func (rctx *Context) EndRecipe() error {
 	timestamp := time.Now()
 	rctx.recipeGetStats.EndTime = timestamp
 	rctx.recipePutStats.EndTime = timestamp
@@ -87,7 +87,7 @@ func (rctx *ReportContext) EndRecipe() error {
 }
 
 // FlushRecipePhase should be called after each phase
-func (rctx *ReportContext) FlushRecipePhase() {
+func (rctx *Context) FlushRecipePhase() {
 	rctx.phaseNumber++
 	Writef(ConsoleLevel, "[Phase %v]\n", rctx.phaseNumber)
 
@@ -121,7 +121,7 @@ func (rctx *ReportContext) FlushRecipePhase() {
 	rctx.primitiveStatsPhaseQueue = rctx.primitiveStatsPhaseQueue[:0]
 }
 
-func (rctx *ReportContext) PutPrimitiveStats(p *stats.PrimitiveStat) {
+func (rctx *Context) PutPrimitiveStats(p *stats.PrimitiveStat) {
 	rctx.primStatsMux.Lock()
 	rctx.primitiveStatsPhaseQueue = append(rctx.primitiveStatsPhaseQueue, p)
 	rctx.primStatsMux.Unlock()

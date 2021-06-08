@@ -6,6 +6,7 @@ package cos
 
 import "strings"
 
+// supported archive types (file extensions)
 const (
 	ExtTar    = ".tar"
 	ExtTgz    = ".tgz"

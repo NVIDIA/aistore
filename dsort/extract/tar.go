@@ -26,7 +26,7 @@ var (
 	padBuf [tarBlockSize]byte
 
 	// interface guard
-	_ ExtractCreator = (*tarExtractCreator)(nil)
+	_ Creator = (*tarExtractCreator)(nil)
 )
 
 type (
@@ -208,7 +208,7 @@ func (t *tarExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, e
 	}
 }
 
-func NewTarExtractCreator(t cluster.Target) ExtractCreator {
+func NewTarExtractCreator(t cluster.Target) Creator {
 	return &tarExtractCreator{t: t}
 }
 

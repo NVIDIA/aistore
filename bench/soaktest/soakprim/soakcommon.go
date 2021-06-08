@@ -50,7 +50,7 @@ type RecipeContext struct {
 	wg               *sync.WaitGroup
 
 	regCtx *regressionContext
-	repCtx *report.ReportContext
+	repCtx *report.Context
 }
 
 func init() {

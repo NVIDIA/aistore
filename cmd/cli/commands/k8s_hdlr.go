@@ -85,7 +85,9 @@ func k8sShowSingleDaemon(c *cli.Context) (err error) {
 	if node := smap.GetNode(daemonID); node == nil {
 		return fmt.Errorf("%s does not exist in the cluster (see 'ais show cluster')", daemonID)
 	}
-	cmdLine := append(cmdNodeInfo, "--selector=ais-daemon-id="+daemonID)
+	cmdLine := make([]string, 0, len(cmdNodeInfo)+1)
+	cmdLine = append(cmdLine, cmdNodeInfo...)
+	cmdLine = append(cmdLine, "--selector=ais-daemon-id="+daemonID)
 	output, err := exec.Command(subcmdK8s, cmdLine...).CombinedOutput()
 	if err != nil {
 		return err

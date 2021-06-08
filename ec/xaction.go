@@ -56,7 +56,17 @@ type (
 		mtx    sync.Mutex
 		slices map[string]*slice
 	}
+
+	BckXacts struct {
+		get atomic.Pointer // *XactGet
+		put atomic.Pointer // *XactPut
+		req atomic.Pointer // *XactRespond
+	}
 )
+
+/////////////////
+// xactReqBase //
+/////////////////
 
 func newXactReqECBase() xactReqBase {
 	return xactReqBase{
@@ -113,6 +123,10 @@ func (r *xactReqBase) setEcRequestsEnabled() {
 func (r *xactReqBase) ecRequestsEnabled() bool {
 	return !r.rejectReq.Load()
 }
+
+////////////////
+// xactECBase //
+////////////////
 
 // Create a request header: initializes the `Sender` field with local target's
 // daemon ID, and sets `Exists:true` that means "local object exists".
@@ -426,17 +440,11 @@ func (r *xactECBase) writerReceive(writer *slice, exists bool, objAttrs transpor
 	return err
 }
 
-func (r *xactECBase) ECStats() *ECStats {
-	return r.stats.stats()
-}
+func (r *xactECBase) ECStats() *Stats { return r.stats.stats() }
 
-type (
-	BckXacts struct {
-		get atomic.Pointer // *XactGet
-		put atomic.Pointer // *XactPut
-		req atomic.Pointer // *XactRespond
-	}
-)
+//////////////
+// BckXacts //
+//////////////
 
 func (xacts *BckXacts) Get() *XactGet {
 	return (*XactGet)(xacts.get.Load())

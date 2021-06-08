@@ -34,9 +34,9 @@ type stats struct {
 	objCnt     atomic.Int64
 }
 
-// ECStats are stats for clients-side apps - calculated from raw counters
+// Stats are EC-specific stats for clients-side apps - calculated from raw counters
 // All numbers except number of errors and requests are average ones
-type ECStats struct {
+type Stats struct {
 	// mpathrunner(not ecrunner) queue len
 	QueueLen float64
 	// time between ecrunner receives an object and mpathrunner starts processing it
@@ -119,8 +119,8 @@ func (s *stats) updateObjTime(d time.Duration) {
 	s.objCnt.Inc()
 }
 
-func (s *stats) stats() *ECStats {
-	st := &ECStats{Bck: s.bck}
+func (s *stats) stats() *Stats {
+	st := &Stats{Bck: s.bck}
 
 	val := s.queueLen.Load()
 	cnt := s.queueCnt.Load()
@@ -170,7 +170,7 @@ func (s *stats) stats() *ECStats {
 	return st
 }
 
-func (s *ECStats) String() string {
+func (s *Stats) String() string {
 	if s.ObjTime == 0 {
 		return ""
 	}

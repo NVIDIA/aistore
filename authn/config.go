@@ -29,9 +29,9 @@ type (
 		Level string `json:"level"`
 	}
 	NetConf struct {
-		HTTP AuthNHTTPConf `json:"http"`
+		HTTP HTTPConf `json:"http"`
 	}
-	AuthNHTTPConf struct {
+	HTTPConf struct {
 		Port        int    `json:"port"`
 		UseHTTPS    bool   `json:"use_https"`
 		Certificate string `json:"server_crt"`

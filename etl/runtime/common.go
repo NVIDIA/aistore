@@ -4,6 +4,7 @@
  */
 package runtime
 
+// supported runtimes
 const (
 	Python2 = "python2"
 	Python3 = "python3"

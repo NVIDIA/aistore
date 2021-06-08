@@ -20,8 +20,11 @@ const (
 	signature = "aistore" // file signature
 	//                              0 ---------------- 63  64 ------ 95 | 96 ------ 127
 	prefLen = 2 * cos.SizeofI64 // [ signature | jsp ver | meta version |   bit flags  ]
+)
 
-	Metaver = 3 // current JSP version
+// current JSP version
+const (
+	Metaver = 3
 )
 
 //////////////////

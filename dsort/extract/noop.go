@@ -12,13 +12,13 @@ import (
 )
 
 // interface guard
-var _ ExtractCreator = (*nopExtractCreator)(nil)
+var _ Creator = (*nopExtractCreator)(nil)
 
 type nopExtractCreator struct {
-	internal ExtractCreator
+	internal Creator
 }
 
-func NopExtractCreator(internal ExtractCreator) ExtractCreator {
+func NopExtractCreator(internal Creator) Creator {
 	return &nopExtractCreator{internal: internal}
 }
 

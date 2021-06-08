@@ -36,8 +36,8 @@ const (
 
 // interface guard
 var (
-	_ extract.ExtractCreator = (*extractCreatorMock)(nil)
-	_ cluster.SmapListeners  = (*testSmapListeners)(nil)
+	_ extract.Creator       = (*extractCreatorMock)(nil)
+	_ cluster.SmapListeners = (*testSmapListeners)(nil)
 )
 
 //

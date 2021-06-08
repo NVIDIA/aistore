@@ -102,7 +102,7 @@ type (
 		smap *cluster.Smap
 
 		recManager     *extract.RecordManager
-		extractCreator extract.ExtractCreator
+		extractCreator extract.Creator
 
 		startShardCreation chan struct{}
 		rs                 *ParsedRequestSpec
@@ -462,7 +462,7 @@ func (m *Manager) setExtractCreator() (err error) {
 		return m.react(m.rs.DuplicatedRecords, msg)
 	}
 
-	var extractCreator extract.ExtractCreator
+	var extractCreator extract.Creator
 	switch m.rs.Extension {
 	case cos.ExtTar:
 		extractCreator = extract.NewTarExtractCreator(m.ctx.t)

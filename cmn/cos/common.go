@@ -23,12 +23,16 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+// IEC (binary) units
 const (
 	KiB = 1024
 	MiB = 1024 * KiB
 	GiB = 1024 * MiB
 	TiB = 1024 * GiB
+)
 
+// misc common constants
+const (
 	SizeofI64 = int(unsafe.Sizeof(uint64(0)))
 	SizeofI32 = int(unsafe.Sizeof(uint32(0)))
 	SizeofI16 = int(unsafe.Sizeof(uint16(0)))

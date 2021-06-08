@@ -660,7 +660,7 @@ func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
 	}
 	// common Prometheus
 	if h.statsT.IsPrometheus() {
-		nh := networkHandler{r: "/" + cmn.Metrics, h: promhttp.Handler().ServeHTTP, net: accessNetPublicControl}
+		nh := networkHandler{r: "/" + cmn.Metrics, h: promhttp.Handler().ServeHTTP}
 		path := nh.r // absolute
 		h.registerPublicNetHandler(path, nh.h)
 	}

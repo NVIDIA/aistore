@@ -48,9 +48,9 @@ type (
 	// either remote or local target.
 	LoadContentFunc func(w io.Writer, rec *Record, obj *RecordObj) (int64, error)
 
-	// ExtractCreator is interface which describes set of functions which each
+	// Creator is interface which describes set of functions which each
 	// shard creator should implement.
-	ExtractCreator interface {
+	Creator interface {
 		ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error)
 		CreateShard(s *Shard, w io.Writer, loadContent LoadContentFunc) (int64, error)
 		UsingCompression() bool
@@ -70,7 +70,7 @@ type (
 		extension           string
 		onDuplicatedRecords func(string) error
 
-		extractCreator  ExtractCreator
+		extractCreator  Creator
 		keyExtractor    KeyExtractor
 		contents        *sync.Map
 		extractionPaths *sync.Map // Keys correspond to all paths to record contents on disk.
@@ -82,7 +82,7 @@ type (
 	}
 )
 
-func NewRecordManager(t cluster.Target, bck cmn.Bck, extension string, extractCreator ExtractCreator,
+func NewRecordManager(t cluster.Target, bck cmn.Bck, extension string, extractCreator Creator,
 	keyExtractor KeyExtractor, onDuplicatedRecords func(string) error) *RecordManager {
 	return &RecordManager{
 		Records: NewRecords(1000),

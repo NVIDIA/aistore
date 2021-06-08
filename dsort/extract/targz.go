@@ -18,7 +18,7 @@ import (
 )
 
 // interface guard
-var _ ExtractCreator = (*targzExtractCreator)(nil)
+var _ Creator = (*targzExtractCreator)(nil)
 
 type targzExtractCreator struct {
 	t cluster.Target
@@ -113,7 +113,7 @@ func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt,
 	}
 }
 
-func NewTargzExtractCreator(t cluster.Target) ExtractCreator {
+func NewTargzExtractCreator(t cluster.Target) Creator {
 	return &targzExtractCreator{t: t}
 }
 

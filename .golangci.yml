@@ -160,6 +160,9 @@ issues:
     - linters: golint
       text: "don't use an underscore in package name"
 
+    - linters: revive
+      text: "or a comment on this block"
+
     - linters: unused
       text: "`noCopy` is unused"
 

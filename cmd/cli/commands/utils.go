@@ -1037,21 +1037,26 @@ func simpleProgressBar(args ...progressBarArgs) (*mpb.Progress, []*mpb.Bar) {
 		var argDecorators []decor.Decorator
 		switch a.barType {
 		case unitsArg:
-			argDecorators = []decor.Decorator{decor.Name(a.barText, decor.WC{W: len(a.barText) + 1, C: decor.DidentRight}), decor.CountersNoUnit("%d/%d", decor.WCSyncWidth)}
+			argDecorators = []decor.Decorator{
+				decor.Name(a.barText, decor.WC{W: len(a.barText) + 1, C: decor.DidentRight}),
+				decor.CountersNoUnit("%d/%d", decor.WCSyncWidth),
+			}
 		case sizeArg:
-			argDecorators = []decor.Decorator{decor.Name(a.barText, decor.WC{W: len(a.barText) + 1, C: decor.DidentRight}), decor.CountersKibiByte("% .2f / % .2f", decor.WCSyncWidth)}
+			argDecorators = []decor.Decorator{
+				decor.Name(a.barText, decor.WC{W: len(a.barText) + 1, C: decor.DidentRight}),
+				decor.CountersKibiByte("% .2f / % .2f", decor.WCSyncWidth),
+			}
 		default:
 			cos.Assertf(false, "invalid argument: %s", a.barType)
 		}
-
-		options := append(
-			a.options,
+		options := make([]mpb.BarOption, 0, len(a.options)+2)
+		options = append(options, a.options...)
+		options = append(
+			options,
 			mpb.PrependDecorators(argDecorators...),
-			mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)))
-
-		bars = append(bars, progress.AddBar(
-			a.total,
-			options...))
+			mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)),
+		)
+		bars = append(bars, progress.AddBar(a.total, options...))
 	}
 
 	return progress, bars
