@@ -1422,29 +1422,25 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 }
 
 func (t *targetrunner) putMirror(lom *cluster.LOM) {
-	const retries = 2
-	if !lom.MirrorConf().Enabled {
+	mconfig := lom.MirrorConf()
+	if !mconfig.Enabled {
 		return
 	}
-	if mpathCnt := fs.NumAvail(); mpathCnt < 2 {
-		glog.Errorf("%s: insufficient mountpaths (%d)", lom, mpathCnt)
+	if mpathCnt := fs.NumAvail(); mpathCnt < int(mconfig.Copies) {
+		t.statsT.Add(stats.ErrPutCount, 1) // TODO: differentiate put err metrics
+		nanotim := mono.NanoTime()
+		if nanotim&0x7 == 7 {
+			if mpathCnt == 0 {
+				glog.Errorf("%s: %v", t.si, fs.ErrNoMountpaths)
+			} else {
+				glog.Errorf(fmtErrInsuffMpaths2, t.si, mpathCnt, lom, mconfig.Copies)
+			}
+		}
 		return
 	}
-	var err error
-	for i := 0; i < retries; i++ {
-		xputlrep := xreg.RenewPutMirror(t, lom)
-		if xputlrep == nil {
-			return
-		}
-		err = xputlrep.(*mirror.XactPut).Repl(lom)
-		if xaction.IsErrXactExpired(err) {
-			break
-		}
-		// retry upon race vs (just finished/timed_out)
-	}
-	if err != nil {
-		glog.Errorf("%s: unexpected failure to initiate local mirroring, err: %v", lom, err)
-	}
+	xact := xreg.RenewPutMirror(t, lom)
+	xputlrep := xact.(*mirror.XactPut)
+	xputlrep.Repl(lom)
 }
 
 func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict bool) (int, error) {

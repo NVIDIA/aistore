@@ -132,11 +132,8 @@ func (r *XactPut) Run() {
 }
 
 // main method: replicate onto a given (and different) mountpath
-func (r *XactPut) Repl(lom *cluster.LOM) (err error) {
-	if r.Finished() {
-		err = xaction.NewErrXactExpired("Cannot replicate: " + r.String())
-		return
-	}
+func (r *XactPut) Repl(lom *cluster.LOM) {
+	debug.AssertMsg(!r.Finished(), r.String())
 	r.total.Inc()
 
 	// [throttle]
@@ -155,7 +152,7 @@ func (r *XactPut) Repl(lom *cluster.LOM) (err error) {
 	r.IncPending() // ref-count via base to support on-demand action
 
 	if ok := r.workers.Do(lom); !ok {
-		err = fmt.Errorf("%s: failed to post %s work", r, lom)
+		err := fmt.Errorf("%s: failed to post %s work", r, lom)
 		debug.AssertNoErr(err)
 		return
 	}
@@ -169,7 +166,6 @@ func (r *XactPut) Repl(lom *cluster.LOM) (err error) {
 			time.Sleep(cmn.ThrottleAvg)
 		}
 	}
-	return
 }
 
 func (r *XactPut) stop() (err error) {

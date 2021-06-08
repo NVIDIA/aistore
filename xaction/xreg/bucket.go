@@ -108,7 +108,16 @@ func (r *registry) renewBucketXact(kind string, bck *cluster.Bck, args ...XactAr
 	if res.err != nil {
 		return nil, res.err
 	}
-	return res.entry.Get(), nil
+	xact := res.entry.Get()
+	if !res.isNew {
+		// NOTE: make sure existing on-demand is active to prevent it from (idle) expiration
+		//       (see demand.go hkcb())
+		if xactDemand, ok := xact.(xaction.XactDemand); ok {
+			xactDemand.IncPending()
+			xactDemand.DecPending()
+		}
+	}
+	return xact, nil
 }
 
 func RenewECEncode(t cluster.Target, bck *cluster.Bck, uuid, phase string) (cluster.Xact, error) {

@@ -90,6 +90,8 @@ func (r *XactDemandBase) InitIdle() {
 
 func (r *XactDemandBase) hkcb() time.Duration {
 	if r.active.Swap(0) == 0 {
+		// NOTE: closing IdleTimer() channel signals a parent on-demand xaction
+		//       to finish and exit
 		r.idle.ticks.Close()
 	}
 	return r.idle.totally

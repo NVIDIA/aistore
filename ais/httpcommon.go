@@ -45,6 +45,11 @@ const unknownDaemonID = "unknown"
 
 const msgpObjListBufSize = 32 * cos.KiB
 
+const (
+	fmtErrInsuffMpaths1 = "%s: not enough mountpaths (%d) to configure %s as %d-way mirror"
+	fmtErrInsuffMpaths2 = "%s: not enough mountpaths (%d) to replicate %s (configured) %d times"
+)
+
 type (
 	rangesQuery struct {
 		Range string // cmn.HdrRange, see https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35

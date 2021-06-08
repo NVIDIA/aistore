@@ -321,8 +321,7 @@ func (t *targetrunner) validateNprops(bck *cluster.Bck, msg *aisMsg) (nprops *cm
 	if nprops.Mirror.Enabled {
 		mpathCount := fs.NumAvail()
 		if int(nprops.Mirror.Copies) > mpathCount {
-			err = fmt.Errorf("%s: not enough mountpaths (%d) to configure %s as %d-way mirror",
-				t.si, mpathCount, bck, nprops.Mirror.Copies)
+			err = fmt.Errorf(fmtErrInsuffMpaths1, t.si, mpathCount, bck, nprops.Mirror.Copies)
 			return
 		}
 		if nprops.Mirror.Copies > bck.Props.Mirror.Copies && cs.Err != nil {
@@ -748,15 +747,15 @@ func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase
 
 // TODO: #791 "limited coexistence" - extend and unify
 func (t *targetrunner) coExists(bck *cluster.Bck, action string) (err error) {
-	const fmterr = "%s: [%s] is currently running, cannot run %q (bucket %s) concurrently"
+	const fmtErr = "%s: [%s] is currently running, cannot run %q (bucket %s) concurrently"
 	g, l := xreg.GetRebMarked(), xreg.GetResilverMarked()
 	if g.Xact != nil {
-		err = fmt.Errorf(fmterr, t.si, g.Xact, action, bck)
+		err = fmt.Errorf(fmtErr, t.si, g.Xact, action, bck)
 	} else if l.Xact != nil {
-		err = fmt.Errorf(fmterr, t.si, l.Xact, action, bck)
+		err = fmt.Errorf(fmtErr, t.si, l.Xact, action, bck)
 	}
 	if ren := xreg.GetXactRunning(cmn.ActMoveBck); ren != nil {
-		err = fmt.Errorf(fmterr, t.si, ren, action, bck)
+		err = fmt.Errorf(fmtErr, t.si, ren, action, bck)
 	}
 	return
 }
