@@ -282,9 +282,17 @@ func (c *putJogger) ctSendCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ inte
 // if exists and broadcast the request to other targets
 func (c *putJogger) cleanup(lom *cluster.LOM) error {
 	ctMeta := cluster.NewCTFromLOM(lom, MetaType)
+	md, err := LoadMetadata(ctMeta.FQN())
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Metafile does not exist = nothing to clean up
+			err = nil
+		}
+		return err
+	}
+	nodes := md.RemoteTargets(c.parent.t)
 	if err := cos.RemoveFile(ctMeta.FQN()); err != nil {
-		// logs the error but move on - notify all other target to do cleanup
-		glog.Errorf("Error removing metafile %q", ctMeta.FQN())
+		return err
 	}
 
 	mm := c.parent.t.SmallMMSA()
@@ -293,7 +301,7 @@ func (c *putJogger) cleanup(lom *cluster.LOM) error {
 	o.Hdr = transport.ObjHdr{Bck: lom.Bucket(), ObjName: lom.ObjName, Opaque: request}
 	o.Callback = c.ctSendCallback
 	c.parent.IncPending()
-	return c.parent.mgr.req().Send(o, nil)
+	return c.parent.mgr.req().Send(o, nil, nodes...)
 }
 
 // Sends object replicas to targets that must have replicas after the client

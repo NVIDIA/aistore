@@ -806,36 +806,55 @@ func (c *getJogger) restore(ctx *restoreCtx) error {
 // nodes(with their EC metadata) that have the lastest object version
 func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 	var (
-		tmap = c.parent.smap.Get().Tmap
-		wg   = cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), 8)
-		mtx  = &sync.Mutex{}
-		gen  int64
+		tmap     = c.parent.smap.Get().Tmap
+		wg       = cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), 8)
+		mtx      = &sync.Mutex{}
+		gen      int64
+		mdExists bool
 	)
-	ctx.nodes = make(map[string]*Metadata, len(tmap))
-	for _, node := range tmap {
-		if node.ID() == c.parent.si.ID() {
-			continue
+	requestMeta := func(si *cluster.Snode) {
+		defer wg.Done()
+		md, err := requestECMeta(ctx, si, c.client)
+		if err != nil {
+			if mdExists {
+				glog.Errorf("No EC meta %s from %s: %v", ctx.lom.ObjName, si, err)
+			} else if glog.FastV(4, glog.SmoduleEC) {
+				glog.Infof("No EC meta %s from %s: %v", ctx.lom.ObjName, si, err)
+			}
+			return
 		}
-		wg.Add(1)
-		go func(si *cluster.Snode) {
-			defer wg.Done()
-			md, err := requestECMeta(ctx.lom.Bucket(), ctx.lom.ObjName, si, c.client)
-			if err != nil {
-				if glog.FastV(4, glog.SmoduleEC) {
-					glog.Infof("No EC meta %s from %s: %v", ctx.lom.ObjName, si, err)
-				}
-				return
-			}
 
-			mtx.Lock()
-			ctx.nodes[si.ID()] = md
-			// detect the metadata with the latest generation on the fly.
-			if md.Generation > gen {
-				gen = md.Generation
-				ctx.meta = md
+		mtx.Lock()
+		ctx.nodes[si.ID()] = md
+		// Detect the metadata with the latest generation on the fly.
+		if md.Generation > gen {
+			gen = md.Generation
+			ctx.meta = md
+		}
+		mtx.Unlock()
+	}
+
+	ctMeta := cluster.NewCTFromLOM(ctx.lom, MetaType)
+	md, err := LoadMetadata(ctMeta.FQN())
+	mdExists = err == nil && len(md.Daemons) != 0
+	if mdExists {
+		// Metafile exists and contains a list of targets
+		nodes := md.RemoteTargets(c.parent.t)
+		ctx.nodes = make(map[string]*Metadata, len(nodes))
+		for _, node := range nodes {
+			wg.Add(1)
+			go requestMeta(node)
+		}
+	} else {
+		// Otherwise, send cluster-wide request
+		ctx.nodes = make(map[string]*Metadata, len(tmap))
+		for _, node := range tmap {
+			if node.ID() == c.parent.si.ID() {
+				continue
 			}
-			mtx.Unlock()
-		}(node)
+			wg.Add(1)
+			go requestMeta(node)
+		}
 	}
 	wg.Wait()
 

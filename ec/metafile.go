@@ -70,6 +70,26 @@ func MetaFromReader(reader io.Reader) (*Metadata, error) {
 	return md, err
 }
 
+// RemoteTargets returns list of Snodes that contain a slice or replica.
+// This target(`t`) is removed from the list.
+func (md *Metadata) RemoteTargets(t cluster.Target) []*cluster.Snode {
+	if len(md.Daemons) == 0 {
+		return nil
+	}
+	nodes := make([]*cluster.Snode, 0, len(md.Daemons))
+	smap := t.Sowner().Get()
+	for tid := range md.Daemons {
+		if tid == t.Snode().ID() {
+			continue
+		}
+		tsi := smap.GetTarget(tid)
+		if tsi != nil {
+			nodes = append(nodes, tsi)
+		}
+	}
+	return nodes
+}
+
 // Do not use MM.SGL for a byte buffer: as the buffer is sent via
 // HTTP, it can result in hard to debug errors when SGL is freed.
 // For details:  https://gitlab-master.nvidia.com/aistorage/aistore/issues/472#note_4212419
