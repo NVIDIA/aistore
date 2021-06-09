@@ -51,9 +51,17 @@ type (
 )
 
 // interface guard
-var _ xaction.XactDemand = (*XactPut)(nil)
+var (
+	_ xaction.XactDemand       = (*XactPut)(nil)
+	_ xreg.BucketEntryProvider = (*xactPutProvider)(nil)
+)
+
+/////////////////////
+// xactPutProvider //
+/////////////////////
 
 func (*xactPutProvider) New(_ xreg.XactArgs) xreg.BucketEntry { return &xactPutProvider{} }
+
 func (p *xactPutProvider) Start(bck cmn.Bck) error {
 	var (
 		xec         = ECM.NewPutXact(bck)
@@ -68,12 +76,13 @@ func (p *xactPutProvider) Start(bck cmn.Bck) error {
 	go xec.Run()
 	return nil
 }
+
 func (*xactPutProvider) Kind() string        { return cmn.ActECPut }
 func (p *xactPutProvider) Get() cluster.Xact { return p.xact }
 
-//
-// XactPut
-//
+/////////////
+// XactPut //
+/////////////
 
 func NewPutXact(t cluster.Target, bck cmn.Bck, mgr *Manager) *XactPut {
 	availablePaths, disabledPaths := fs.Get()

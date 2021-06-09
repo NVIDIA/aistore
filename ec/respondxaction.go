@@ -39,7 +39,14 @@ type (
 )
 
 // interface guard
-var _ xaction.XactDemand = (*XactRespond)(nil)
+var (
+	_ xaction.XactDemand       = (*XactRespond)(nil)
+	_ xreg.BucketEntryProvider = (*xactRespondProvider)(nil)
+)
+
+/////////////////////////
+// xactRespondProvider //
+/////////////////////////
 
 func (p *xactRespondProvider) New(_ xreg.XactArgs) xreg.BucketEntry {
 	return &xactRespondProvider{}
@@ -61,6 +68,10 @@ func (p *xactRespondProvider) Start(bck cmn.Bck) error {
 }
 func (*xactRespondProvider) Kind() string        { return cmn.ActECRespond }
 func (p *xactRespondProvider) Get() cluster.Xact { return p.xact }
+
+/////////////////
+// XactRespond //
+/////////////////
 
 func NewRespondXact(t cluster.Target, bck cmn.Bck, mgr *Manager) *XactRespond {
 	smap, si := t.Sowner(), t.Snode()

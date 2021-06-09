@@ -43,9 +43,9 @@ type (
 	}
 )
 
-func RegisterGlobalXact(entry GlobalEntryProvider) { defaultReg.registerGlobalXact(entry) }
+func RegGlobXact(entry GlobalEntryProvider) { defaultReg.regGlobXact(entry) }
 
-func (r *registry) registerGlobalXact(entry GlobalEntryProvider) {
+func (r *registry) regGlobXact(entry GlobalEntryProvider) {
 	cos.Assert(xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeGlobal)
 
 	// It is expected that registrations happen at the init time. Therefore, it

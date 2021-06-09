@@ -25,7 +25,14 @@ type (
 )
 
 // interface guard
-var _ cluster.Xact = (*xactLLC)(nil)
+var (
+	_ cluster.Xact             = (*xactLLC)(nil)
+	_ xreg.BucketEntryProvider = (*llcProvider)(nil)
+)
+
+/////////////////
+// llcProvider //
+/////////////////
 
 func (*llcProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &llcProvider{t: args.T, uuid: args.UUID}
@@ -37,12 +44,17 @@ func (p *llcProvider) Start(bck cmn.Bck) error {
 	go xact.Run()
 	return nil
 }
+
 func (*llcProvider) Kind() string        { return cmn.ActLoadLomCache }
 func (p *llcProvider) Get() cluster.Xact { return p.xact }
 
-// NOTE: Not using xreg.BaseBckEntry because it would return `false, nil`.
+// overriding xreg.BaseBckEntry because it would return `false, nil`.
 func (p *llcProvider) PreRenewHook(_ xreg.BucketEntry) (bool, error) { return true, nil }
 func (p *llcProvider) PostRenewHook(_ xreg.BucketEntry)              {}
+
+/////////////
+// xactLLC //
+/////////////
 
 func newXactLLC(t cluster.Target, uuid string, bck cmn.Bck) *xactLLC {
 	return &xactLLC{xactBckBase: *newXactBckBase(uuid, cmn.ActLoadLomCache, bck, &mpather.JoggerGroupOpts{

@@ -37,7 +37,7 @@ func TestXactionRenewLRU(t *testing.T) {
 	)
 	xreg.Reset()
 
-	xreg.RegisterGlobalXact(&lru.XactProvider{})
+	xreg.RegGlobXact(&lru.XactProvider{})
 	defer xreg.AbortAll()
 	cos.InitShortID(0)
 
@@ -75,7 +75,7 @@ func TestXactionRenewPrefetch(t *testing.T) {
 	xreg.Reset()
 	bmd.Add(bck)
 
-	xreg.RegisterBucketXact(&xrun.PrefetchProvider{})
+	xreg.RegBckXact(&xrun.PrefetchProvider{})
 	defer xreg.AbortAll()
 
 	ch := make(chan cluster.Xact, 10)
@@ -112,8 +112,8 @@ func TestXactionAbortAll(t *testing.T) {
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
 
-	xreg.RegisterGlobalXact(&lru.XactProvider{})
-	xreg.RegisterBucketXact(&xrun.BckRenameProvider{})
+	xreg.RegGlobXact(&lru.XactProvider{})
+	xreg.RegBckXact(&xrun.BckRenameProvider{})
 
 	xactGlob := xreg.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
@@ -142,8 +142,8 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
 
-	xreg.RegisterGlobalXact(&lru.XactProvider{})
-	xreg.RegisterBucketXact(&xrun.BckRenameProvider{})
+	xreg.RegGlobXact(&lru.XactProvider{})
+	xreg.RegBckXact(&xrun.BckRenameProvider{})
 
 	xactGlob := xreg.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
@@ -172,8 +172,8 @@ func TestXactionAbortBuckets(t *testing.T) {
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
 
-	xreg.RegisterGlobalXact(&lru.XactProvider{})
-	xreg.RegisterBucketXact(&xrun.BckRenameProvider{})
+	xreg.RegGlobXact(&lru.XactProvider{})
+	xreg.RegBckXact(&xrun.BckRenameProvider{})
 
 	xactGlob := xreg.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
@@ -209,8 +209,8 @@ func TestXactionQueryFinished(t *testing.T) {
 	bmd.Add(bck1)
 	bmd.Add(bck2)
 
-	xreg.RegisterBucketXact(&xrun.PrefetchProvider{})
-	xreg.RegisterBucketXact(&xrun.BckRenameProvider{})
+	xreg.RegBckXact(&xrun.PrefetchProvider{})
+	xreg.RegBckXact(&xrun.BckRenameProvider{})
 
 	xactBck1, err := xreg.RenewBckRename(tMock, bck1, bck1, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck1 != nil, "Xaction must be created")

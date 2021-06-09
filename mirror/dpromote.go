@@ -23,8 +23,7 @@ import (
 type (
 	dirPromoteProvider struct {
 		xreg.BaseBckEntry
-		xact *XactDirPromote
-
+		xact   *XactDirPromote
 		t      cluster.Target
 		dir    string
 		params *cmn.ActValPromote
@@ -37,7 +36,14 @@ type (
 )
 
 // interface guard
-var _ cluster.Xact = (*XactDirPromote)(nil)
+var (
+	_ cluster.Xact             = (*XactDirPromote)(nil)
+	_ xreg.BucketEntryProvider = (*dirPromoteProvider)(nil)
+)
+
+////////////////////////
+// dirPromoteProvider //
+////////////////////////
 
 func (*dirPromoteProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	c := args.Custom.(*xreg.DirPromoteArgs)
@@ -50,12 +56,13 @@ func (p *dirPromoteProvider) Start(bck cmn.Bck) error {
 	p.xact = xact
 	return nil
 }
+
 func (*dirPromoteProvider) Kind() string        { return cmn.ActPromote }
 func (p *dirPromoteProvider) Get() cluster.Xact { return p.xact }
 
-//
-// public methods
-//
+////////////////////
+// XactDirPromote //
+////////////////////
 
 func NewXactDirPromote(dir string, bck cmn.Bck, t cluster.Target, params *cmn.ActValPromote) *XactDirPromote {
 	args := xaction.Args{ID: xaction.BaseID(""), Kind: cmn.ActPromote, Bck: &bck}

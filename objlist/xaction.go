@@ -79,7 +79,7 @@ var (
 var _ cluster.Xact = (*Xact)(nil)
 
 func init() {
-	xreg.RegisterBucketXact(&xactProvider{})
+	xreg.RegBckXact(&xactProvider{})
 }
 
 func (*xactProvider) New(args xreg.XactArgs) xreg.BucketEntry {

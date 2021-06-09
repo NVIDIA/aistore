@@ -81,9 +81,9 @@ type (
 	}
 )
 
-func RegisterBucketXact(entry BucketEntryProvider) { defaultReg.registerBucketXact(entry) }
+func RegBckXact(entry BucketEntryProvider) { defaultReg.regBckXact(entry) }
 
-func (r *registry) registerBucketXact(entry BucketEntryProvider) {
+func (r *registry) regBckXact(entry BucketEntryProvider) {
 	debug.Assert(xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeBck)
 
 	// It is expected that registrations happen at the init time. Therefore, it
@@ -104,7 +104,7 @@ func (r *registry) renewBucketXact(kind string, bck *cluster.Bck, args ...XactAr
 		xactArgs = args[0]
 	}
 	e := r.bckXacts[kind].New(xactArgs)
-	res := r.renewBucketXaction(e, bck)
+	res := r.renewBckXact(e, bck)
 	if res.err != nil {
 		return nil, res.err
 	}
@@ -175,7 +175,7 @@ func (r *registry) renewBckMakeNCopies(t cluster.Target, bck *cluster.Bck, uuid 
 		UUID:   uuid,
 		Custom: copies,
 	})
-	res := r.renewBucketXaction(e, bck)
+	res := r.renewBckXact(e, bck)
 	if res.err != nil {
 		return nil, res.err
 	}
@@ -309,7 +309,7 @@ func (r *registry) renewObjList(t cluster.Target, bck *cluster.Bck, uuid string,
 			UUID:   uuid,
 			Custom: msg,
 		})
-		res := r.renewBucketXaction(e, bck, uuid)
+		res := r.renewBckXact(e, bck, uuid)
 		if res.err != nil {
 			return nil, res.isNew, res.err
 		}
@@ -369,7 +369,7 @@ func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.Ob
 		query: q,
 		msg:   msg,
 	}
-	res := r.renewBucketXaction(e, q.BckSource.Bck)
+	res := r.renewBckXact(e, q.BckSource.Bck)
 	if res.err != nil {
 		return nil, res.isNew, res.err
 	}

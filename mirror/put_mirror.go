@@ -30,7 +30,6 @@ type (
 	putMirrorProvider struct {
 		xreg.BaseBckEntry
 		xact *XactPut
-
 		t    cluster.Target
 		uuid string
 		lom  *cluster.LOM
@@ -49,7 +48,14 @@ type (
 )
 
 // interface guard
-var _ cluster.Xact = (*XactPut)(nil)
+var (
+	_ cluster.Xact             = (*XactPut)(nil)
+	_ xreg.BucketEntryProvider = (*putMirrorProvider)(nil)
+)
+
+///////////////////////
+// putMirrorProvider //
+///////////////////////
 
 func (*putMirrorProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &putMirrorProvider{t: args.T, uuid: args.UUID, lom: args.Custom.(*cluster.LOM)}
@@ -66,6 +72,7 @@ func (p *putMirrorProvider) Start(_ cmn.Bck) error {
 	p.xact = xact
 	return nil
 }
+
 func (*putMirrorProvider) Kind() string        { return cmn.ActPutCopies }
 func (p *putMirrorProvider) Get() cluster.Xact { return p.xact }
 
@@ -96,6 +103,10 @@ func runXactPut(lom *cluster.LOM, slab *memsys.Slab, t cluster.Target) (r *XactP
 	go r.Run()
 	return
 }
+
+/////////////
+// XactPut //
+/////////////
 
 // mpather/worker callback (one worker per mountpath)
 func (r *XactPut) workCb(lom *cluster.LOM, buf []byte) {

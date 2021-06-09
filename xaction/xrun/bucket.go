@@ -16,17 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
-func init() {
-	xreg.RegisterGlobalXact(&electionProvider{})
-	xreg.RegisterGlobalXact(&resilverProvider{})
-	xreg.RegisterGlobalXact(&rebalanceProvider{})
-
-	xreg.RegisterBucketXact(&BckRenameProvider{})
-	xreg.RegisterBucketXact(&evictDeleteProvider{kind: cmn.ActEvictObjects})
-	xreg.RegisterBucketXact(&evictDeleteProvider{kind: cmn.ActDelete})
-	xreg.RegisterBucketXact(&PrefetchProvider{})
-}
-
 type (
 	BckRenameProvider struct {
 		xact *bckRename
@@ -36,7 +25,6 @@ type (
 		phase string
 		args  *xreg.BckRenameArgs
 	}
-
 	bckRename struct {
 		xaction.XactBase
 		t       cluster.Target
@@ -47,7 +35,10 @@ type (
 )
 
 // interface guard
-var _ cluster.Xact = (*bckRename)(nil)
+var (
+	_ cluster.Xact             = (*bckRename)(nil)
+	_ xreg.BucketEntryProvider = (*BckRenameProvider)(nil)
+)
 
 func (*BckRenameProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &BckRenameProvider{
@@ -145,7 +136,10 @@ type (
 )
 
 // interface guard
-var _ cluster.Xact = (*evictDelete)(nil)
+var (
+	_ cluster.Xact             = (*evictDelete)(nil)
+	_ xreg.BucketEntryProvider = (*evictDeleteProvider)(nil)
+)
 
 func (p *evictDeleteProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &evictDeleteProvider{
@@ -191,7 +185,6 @@ type (
 	PrefetchProvider struct {
 		xreg.BaseBckEntry
 		xact *prefetch
-
 		t    cluster.Target
 		args *xreg.DeletePrefetchArgs
 	}
@@ -201,7 +194,10 @@ type (
 )
 
 // interface guard
-var _ cluster.Xact = (*prefetch)(nil)
+var (
+	_ cluster.Xact             = (*prefetch)(nil)
+	_ xreg.BucketEntryProvider = (*PrefetchProvider)(nil)
+)
 
 func (*PrefetchProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &PrefetchProvider{

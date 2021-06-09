@@ -39,7 +39,14 @@ type (
 )
 
 // interface guard
-var _ cluster.Xact = (*XactBckEncode)(nil)
+var (
+	_ cluster.Xact             = (*XactBckEncode)(nil)
+	_ xreg.BucketEntryProvider = (*xactBckEncodeProvider)(nil)
+)
+
+///////////////////////////
+// xactBckEncodeProvider //
+///////////////////////////
 
 func (*xactBckEncodeProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &xactBckEncodeProvider{
@@ -53,8 +60,10 @@ func (p *xactBckEncodeProvider) Start(bck cmn.Bck) error {
 	p.xact = NewXactBckEncode(bck, p.t, p.uuid)
 	return nil
 }
+
 func (*xactBckEncodeProvider) Kind() string        { return cmn.ActECEncode }
 func (p *xactBckEncodeProvider) Get() cluster.Xact { return p.xact }
+
 func (p *xactBckEncodeProvider) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, err error) {
 	// TODO: add more checks?
 	prev := previousEntry.(*xactBckEncodeProvider)
@@ -66,6 +75,10 @@ func (p *xactBckEncodeProvider) PreRenewHook(previousEntry xreg.BucketEntry) (ke
 	err = fmt.Errorf("%s(%s, phase %s): cannot %s", p.Kind(), prev.xact.Bck().Name, prev.phase, p.phase)
 	return
 }
+
+///////////////////
+// XactBckEncode //
+///////////////////
 
 func NewXactBckEncode(bck cmn.Bck, t cluster.Target, uuid string) *XactBckEncode {
 	args := xaction.Args{ID: xaction.BaseID(uuid), Kind: cmn.ActECEncode, Bck: &bck}
@@ -112,6 +125,7 @@ func (r *XactBckEncode) Run() {
 }
 
 func (r *XactBckEncode) beforeECObj() { r.wg.Add(1) }
+
 func (r *XactBckEncode) afterECObj(lom *cluster.LOM, err error) {
 	if err == nil {
 		r.ObjectsInc()

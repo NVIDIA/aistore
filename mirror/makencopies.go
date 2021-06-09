@@ -21,8 +21,7 @@ import (
 type (
 	mncProvider struct {
 		xreg.BaseBckEntry
-		xact *xactMNC
-
+		xact   *xactMNC
 		t      cluster.Target
 		uuid   string
 		copies int
@@ -37,7 +36,14 @@ type (
 )
 
 // interface guard
-var _ cluster.Xact = (*xactMNC)(nil)
+var (
+	_ cluster.Xact             = (*xactMNC)(nil)
+	_ xreg.BucketEntryProvider = (*mncProvider)(nil)
+)
+
+/////////////////
+// mncProvider //
+/////////////////
 
 func (*mncProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &mncProvider{t: args.T, uuid: args.UUID, copies: args.Custom.(int)}
@@ -49,8 +55,13 @@ func (p *mncProvider) Start(bck cmn.Bck) error {
 	p.xact = newXactMNC(bck, p.t, slab, p.uuid, p.copies)
 	return nil
 }
+
 func (*mncProvider) Kind() string        { return cmn.ActMakeNCopies }
 func (p *mncProvider) Get() cluster.Xact { return p.xact }
+
+/////////////
+// xactMNC //
+/////////////
 
 func newXactMNC(bck cmn.Bck, t cluster.Target, slab *memsys.Slab, id string, copies int) *xactMNC {
 	xact := &xactMNC{

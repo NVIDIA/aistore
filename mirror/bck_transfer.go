@@ -41,7 +41,10 @@ type (
 const etlBucketParallelCnt = 2
 
 // interface guard
-var _ cluster.Xact = (*XactTransferBck)(nil)
+var (
+	_ cluster.Xact             = (*XactTransferBck)(nil)
+	_ xreg.BucketEntryProvider = (*transferBckProvider)(nil)
+)
 
 ///////////////////////////////////
 // cluster.CopyObjectParams pool //

@@ -111,10 +111,13 @@ type (
 )
 
 // interface guard
-var _ xaction.XactDemand = (*Xaction)(nil)
+var (
+	_ xaction.XactDemand       = (*Xaction)(nil)
+	_ xreg.GlobalEntryProvider = (*XactProvider)(nil)
+)
 
 func init() {
-	xreg.RegisterGlobalXact(&XactProvider{})
+	xreg.RegGlobXact(&XactProvider{})
 }
 
 func (*XactProvider) New(args xreg.XactArgs) xreg.GlobalEntry {

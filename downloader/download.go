@@ -164,10 +164,25 @@ type (
 		r        io.Reader
 		reporter func(n int64)
 	}
+
+	downloaderProvider struct {
+		xreg.BaseGlobalEntry
+		xact   *Downloader
+		t      cluster.Target
+		statsT stats.Tracker
+	}
 )
 
 // interface guard
-var _ xaction.XactDemand = (*Downloader)(nil)
+var (
+	_ xaction.XactDemand       = (*Downloader)(nil)
+	_ xreg.GlobalEntryProvider = (*downloaderProvider)(nil)
+	_ io.ReadCloser            = (*progressReader)(nil)
+)
+
+func init() {
+	xreg.RegGlobXact(&downloaderProvider{})
+}
 
 func clientForURL(u string) *http.Client {
 	if cos.IsHTTPS(u) {
@@ -176,7 +191,9 @@ func clientForURL(u string) *http.Client {
 	return httpClient
 }
 
-// ============================ Requests =======================================
+/////////////
+// request //
+/////////////
 
 func (req *request) write(value interface{}, err error, statusCode int) {
 	req.response = &response{
@@ -194,10 +211,9 @@ func (req *request) writeResp(value interface{}) {
 	req.write(value, nil, http.StatusOK)
 }
 
-// ========================== progressReader ===================================
-
-// interface guard
-var _ io.ReadCloser = (*progressReader)(nil)
+////////////////////
+// progressReader //
+////////////////////
 
 func (pr *progressReader) Read(p []byte) (n int, err error) {
 	n, err = pr.r.Read(p)
@@ -211,19 +227,9 @@ func (pr *progressReader) Close() error {
 	return nil
 }
 
-// ============================= Downloader ====================================
-
-func init() {
-	xreg.RegisterGlobalXact(&downloaderProvider{})
-}
-
-type downloaderProvider struct {
-	xreg.BaseGlobalEntry
-	xact *Downloader
-
-	t      cluster.Target
-	statsT stats.Tracker
-}
+////////////////////////
+// downloaderProvider //
+////////////////////////
 
 func (*downloaderProvider) New(args xreg.XactArgs) xreg.GlobalEntry {
 	return &downloaderProvider{t: args.T, statsT: args.Custom.(stats.Tracker)}
@@ -237,6 +243,10 @@ func (p *downloaderProvider) Start(_ cmn.Bck) error {
 }
 func (*downloaderProvider) Kind() string        { return cmn.ActDownload }
 func (p *downloaderProvider) Get() cluster.Xact { return p.xact }
+
+////////////////
+// Downloader //
+////////////////
 
 func (d *Downloader) Name() string {
 	i := strconv.FormatInt(instance.Load(), 10)
@@ -269,9 +279,6 @@ func (d *Downloader) stop(err error) {
 	d.Finish(err)
 }
 
-/*
- * Downloader's exposed methods
- */
 func (d *Downloader) Download(dJob DlJob) (resp interface{}, statusCode int, err error) {
 	d.IncPending()
 	defer d.DecPending()

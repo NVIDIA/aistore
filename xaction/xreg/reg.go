@@ -513,7 +513,7 @@ func (r *registry) cleanUpFinished() time.Duration {
 
 // renew methods: bucket
 
-func (r *registry) renewBucketXaction(entry BucketEntry, bck *cluster.Bck, uuids ...string) (res renewRes) {
+func (r *registry) renewBckXact(entry BucketEntry, bck *cluster.Bck, uuids ...string) (res renewRes) {
 	var uuid string
 	if len(uuids) != 0 {
 		uuid = uuids[0]

@@ -47,9 +47,17 @@ type (
 )
 
 // interface guard
-var _ xaction.XactDemand = (*XactGet)(nil)
+var (
+	_ xaction.XactDemand       = (*XactGet)(nil)
+	_ xreg.BucketEntryProvider = (*xactGetProvider)(nil)
+)
+
+/////////////////////
+// xactGetProvider //
+/////////////////////
 
 func (*xactGetProvider) New(_ xreg.XactArgs) xreg.BucketEntry { return &xactGetProvider{} }
+
 func (p *xactGetProvider) Start(bck cmn.Bck) error {
 	var (
 		xec         = ECM.NewGetXact(bck)
@@ -67,9 +75,9 @@ func (p *xactGetProvider) Start(bck cmn.Bck) error {
 func (*xactGetProvider) Kind() string        { return cmn.ActECGet }
 func (p *xactGetProvider) Get() cluster.Xact { return p.xact }
 
-//
-// XactGet
-//
+/////////////
+// XactGet //
+/////////////
 
 func NewGetXact(t cluster.Target, bck cmn.Bck, mgr *Manager) *XactGet {
 	availablePaths, disabledPaths := fs.Get()
