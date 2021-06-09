@@ -40,7 +40,7 @@ var (
 	_ xreg.BucketEntryProvider = (*BckRenameProvider)(nil)
 )
 
-func (*BckRenameProvider) New(args xreg.XactArgs) xreg.BucketEntry {
+func (*BckRenameProvider) New(args *xreg.XactArgs) xreg.BucketEntry {
 	return &BckRenameProvider{
 		t:     args.T,
 		uuid:  args.UUID,
@@ -141,7 +141,7 @@ var (
 	_ xreg.BucketEntryProvider = (*evictDeleteProvider)(nil)
 )
 
-func (p *evictDeleteProvider) New(args xreg.XactArgs) xreg.BucketEntry {
+func (p *evictDeleteProvider) New(args *xreg.XactArgs) xreg.BucketEntry {
 	return &evictDeleteProvider{
 		t:    args.T,
 		kind: p.kind,
@@ -199,7 +199,7 @@ var (
 	_ xreg.BucketEntryProvider = (*PrefetchProvider)(nil)
 )
 
-func (*PrefetchProvider) New(args xreg.XactArgs) xreg.BucketEntry {
+func (*PrefetchProvider) New(args *xreg.XactArgs) xreg.BucketEntry {
 	return &PrefetchProvider{
 		t:    args.T,
 		args: args.Custom.(*xreg.DeletePrefetchArgs),

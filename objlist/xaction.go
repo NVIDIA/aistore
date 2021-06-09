@@ -32,7 +32,6 @@ type (
 	xactProvider struct {
 		xreg.BaseBckEntry
 		xact *Xact
-
 		ctx  context.Context
 		t    cluster.Target
 		uuid string
@@ -76,13 +75,16 @@ var (
 )
 
 // interface guard
-var _ cluster.Xact = (*Xact)(nil)
+var (
+	_ cluster.Xact             = (*Xact)(nil)
+	_ xreg.BucketEntryProvider = (*xactProvider)(nil)
+)
 
 func init() {
 	xreg.RegBckXact(&xactProvider{})
 }
 
-func (*xactProvider) New(args xreg.XactArgs) xreg.BucketEntry {
+func (*xactProvider) New(args *xreg.XactArgs) xreg.BucketEntry {
 	return &xactProvider{ctx: args.Ctx, t: args.T, uuid: args.UUID, msg: args.Custom.(*cmn.SelectMsg)}
 }
 

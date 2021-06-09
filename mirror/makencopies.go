@@ -45,7 +45,7 @@ var (
 // mncProvider //
 /////////////////
 
-func (*mncProvider) New(args xreg.XactArgs) xreg.BucketEntry {
+func (*mncProvider) New(args *xreg.XactArgs) xreg.BucketEntry {
 	return &mncProvider{t: args.T, uuid: args.UUID, copies: args.Custom.(int)}
 }
 

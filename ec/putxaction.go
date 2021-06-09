@@ -60,7 +60,7 @@ var (
 // xactPutProvider //
 /////////////////////
 
-func (*xactPutProvider) New(_ xreg.XactArgs) xreg.BucketEntry { return &xactPutProvider{} }
+func (*xactPutProvider) New(_ *xreg.XactArgs) xreg.BucketEntry { return &xactPutProvider{} }
 
 func (p *xactPutProvider) Start(bck cmn.Bck) error {
 	var (

@@ -45,7 +45,7 @@ var (
 // dirPromoteProvider //
 ////////////////////////
 
-func (*dirPromoteProvider) New(args xreg.XactArgs) xreg.BucketEntry {
+func (*dirPromoteProvider) New(args *xreg.XactArgs) xreg.BucketEntry {
 	c := args.Custom.(*xreg.DirPromoteArgs)
 	return &dirPromoteProvider{t: args.T, dir: c.Dir, params: c.Params}
 }

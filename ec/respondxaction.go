@@ -48,7 +48,7 @@ var (
 // xactRespondProvider //
 /////////////////////////
 
-func (p *xactRespondProvider) New(_ xreg.XactArgs) xreg.BucketEntry {
+func (p *xactRespondProvider) New(_ *xreg.XactArgs) xreg.BucketEntry {
 	return &xactRespondProvider{}
 }
 

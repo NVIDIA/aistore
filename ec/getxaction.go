@@ -56,7 +56,7 @@ var (
 // xactGetProvider //
 /////////////////////
 
-func (*xactGetProvider) New(_ xreg.XactArgs) xreg.BucketEntry { return &xactGetProvider{} }
+func (*xactGetProvider) New(_ *xreg.XactArgs) xreg.BucketEntry { return &xactGetProvider{} }
 
 func (p *xactGetProvider) Start(bck cmn.Bck) error {
 	var (

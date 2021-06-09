@@ -22,8 +22,7 @@ type (
 	// Implements `xreg.BucketEntryProvider` and `xreg.BucketEntry` interface.
 	xactBckEncodeProvider struct {
 		xreg.BaseBckEntry
-		xact *XactBckEncode
-
+		xact  *XactBckEncode
 		t     cluster.Target
 		uuid  string
 		phase string
@@ -48,7 +47,7 @@ var (
 // xactBckEncodeProvider //
 ///////////////////////////
 
-func (*xactBckEncodeProvider) New(args xreg.XactArgs) xreg.BucketEntry {
+func (*xactBckEncodeProvider) New(args *xreg.XactArgs) xreg.BucketEntry {
 	return &xactBckEncodeProvider{
 		t:     args.T,
 		uuid:  args.UUID,
