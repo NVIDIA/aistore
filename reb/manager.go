@@ -37,11 +37,6 @@ const (
 	rebStageInactive = iota
 	rebStageInit
 	rebStageTraverse
-	rebStageECNamespace // local CT list built
-	rebStageECDetect    // all lists are received, start detecting which objects to fix
-	rebStageECRepair    // all local CTs are fine, targets start rebalance
-	rebStageECBatch     // target sends message that the current batch is processed
-	rebStageECCleanup   // all is done, time to cleanup memory etc
 	rebStageWaitAck
 	rebStageFin
 	rebStageFinStreams
@@ -77,16 +72,11 @@ type (
 		beginStats atomic.Pointer // *stats.ExtRebalanceStats
 		xreb       atomic.Pointer // *xaction.Rebalance
 		stages     *nodeStages
-		ec         *ecData
 		ecClient   *http.Client
 		rebID      atomic.Int64
 		inQueue    atomic.Int64
+		onAir      atomic.Int64
 		laterx     atomic.Bool
-	}
-	// Stage status of a single target
-	stageStatus struct {
-		batchID int64  // current batch ID (0 for non-EC stages)
-		stage   uint32 // current stage
 	}
 	lomAcks struct {
 		mu *sync.Mutex
@@ -95,19 +85,14 @@ type (
 )
 
 var stages = map[uint32]string{
-	rebStageInactive:    "<inactive>",
-	rebStageInit:        "<init>",
-	rebStageTraverse:    "<traverse>",
-	rebStageWaitAck:     "<wack>",
-	rebStageFin:         "<fin>",
-	rebStageFinStreams:  "<fin-streams>",
-	rebStageDone:        "<done>",
-	rebStageECNamespace: "<namespace>",
-	rebStageECDetect:    "<build-fix-list>",
-	rebStageECRepair:    "<ec-transfer>",
-	rebStageECCleanup:   "<ec-fin>",
-	rebStageECBatch:     "<ec-batch>",
-	rebStageAbort:       "<abort>",
+	rebStageInactive:   "<inactive>",
+	rebStageInit:       "<init>",
+	rebStageTraverse:   "<traverse>",
+	rebStageWaitAck:    "<wack>",
+	rebStageFin:        "<fin>",
+	rebStageFinStreams: "<fin-streams>",
+	rebStageDone:       "<done>",
+	rebStageAbort:      "<abort>",
 }
 
 //////////////////////////////////////////////
@@ -138,7 +123,6 @@ func NewManager(t cluster.Target, config *cmn.Config, st stats.Tracker) *Manager
 		cos.ExitLogf("%v", err)
 	}
 	reb.dm = dm
-	reb.ec = newECData()
 	reb.registerRecv()
 	return reb
 }
@@ -355,13 +339,12 @@ func (reb *Manager) recvObj(hdr transport.ObjHdr, objReader io.Reader, err error
 // Rebalance moves to the next stage:
 // - update internal stage
 // - send notification to all other targets that this one is in a new stage
-func (reb *Manager) changeStage(newStage uint32, batchID int64) {
+func (reb *Manager) changeStage(newStage uint32) {
 	// first, set own stage
 	reb.stages.stage.Store(newStage)
 	var (
 		req = pushReq{
-			daemonID: reb.t.SID(), stage: newStage,
-			rebID: reb.rebID.Load(), batch: int(batchID),
+			daemonID: reb.t.SID(), stage: newStage, rebID: reb.rebID.Load(),
 		}
 		hdr = transport.ObjHdr{}
 	)
@@ -398,31 +381,15 @@ func (reb *Manager) recvPush(hdr transport.ObjHdr, _ io.Reader, err error) {
 		return
 	}
 
-	if req.stage == rebStageECBatch {
-		if glog.FastV(4, glog.SmoduleReb) {
-			glog.Infof("%s Target %s finished batch %d", reb.t.Snode(), req.daemonID, req.batch)
-		}
-	}
-
-	reb.stages.setStage(req.daemonID, req.stage, int64(req.batch))
+	reb.stages.setStage(req.daemonID, req.stage)
 }
 
-func (reb *Manager) recvECAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
+func (*Manager) recvECAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
 	ack := &ecAck{}
 	if err := unpacker.ReadAny(ack); err != nil {
 		glog.Errorf("Failed to unmarshal EC ACK for %s/%s: %v", hdr.Bck, hdr.ObjName, err)
 		return
 	}
-
-	rt := &retransmitCT{
-		header:  transport.ObjHdr{Bck: hdr.Bck, ObjName: hdr.ObjName},
-		sliceID: int16(ack.sliceID), daemonID: ack.daemonID,
-	}
-	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("%s: EC ack from %s on %s/%s [%d]",
-			reb.t.Snode(), ack.daemonID, hdr.Bck, hdr.ObjName, ack.sliceID)
-	}
-	reb.ec.ackCTs.remove(rt)
 }
 
 func (reb *Manager) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
@@ -533,13 +500,7 @@ func (reb *Manager) retransmit(md *rebArgs) (cnt int) {
 	return
 }
 
-// Aborts rebalance xaction and notifies all other targets
-// that they has to abort rebalance as well.
-// Useful for EC rebalance: after each batch EC rebalance waits in a loop
-// for all targets to finish their batches. No stream interactions in this loop,
-// except listening to push notifications. So, if any target stops its xaction
-// and closes all its streams, others wouldn't notice that. That is why the
-// target should send notification.
+// Aborts rebalance xaction and notifies all other targets.
 func (reb *Manager) abortRebalance() {
 	xreb := reb.xact()
 	if xreb == nil || xreb.Aborted() || xreb.Finished() {
@@ -570,10 +531,6 @@ func (reb *Manager) isQuiescent() bool {
 		return true
 	}
 
-	// Has not finished the stage that generates network traffic yet
-	if reb.stages.stage.Load() < rebStageECBatch {
-		return false
-	}
 	// Check for both regular and EC transport queues are empty
-	return reb.inQueue.Load() == 0 && reb.ec.onAir.Load() == 0
+	return reb.inQueue.Load() == 0 && reb.onAir.Load() == 0
 }

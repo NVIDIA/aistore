@@ -468,7 +468,6 @@ func (t *targetrunner) initRecvHandlers() {
 		{r: cmn.Metasync, h: t.metasyncHandler, net: accessNetIntraControl},
 		{r: cmn.Health, h: t.healthHandler, net: accessNetPublicControl},
 		{r: cmn.Xactions, h: t.xactHandler, net: accessNetIntraControl},
-		{r: cmn.Rebalance, h: t.rebManager.RespHandler, net: accessNetIntraData},
 		{r: cmn.EC, h: t.ecHandler, net: accessNetIntraData},
 		{r: cmn.Vote, h: t.voteHandler, net: accessNetIntraControl},
 		{r: cmn.Txn, h: t.txnHandler, net: accessNetIntraControl},

@@ -28,8 +28,6 @@ func (q *quiArgs) quicb(_ time.Duration /*accum. wait time*/) cluster.QuiRes {
 
 // Uses generic xaction.Quiesce to make sure that no objects are received
 // during a given `maxWait` interval of time.
-// Callback `cb` is used, e.g., to wait for EC batch to finish - no need
-// to wait if all targets have sent push notifications.
 func (reb *Manager) quiesce(md *rebArgs, maxWait time.Duration, cb func(md *rebArgs) bool) cluster.QuiRes {
 	q := &quiArgs{md, reb, cb}
 	return reb.xact().Quiesce(maxWait, q.quicb)
@@ -47,20 +45,5 @@ func (reb *Manager) nodesQuiescent(md *rebArgs) (quiescent bool) {
 			return
 		}
 	}
-	return true
-}
-
-// Ensures that no objects are stuck waiting for a slice from a remote
-// target. For each object marked waiting it re-requests the slices
-// from other targets, and uses those slices to rebuild the main replica.
-func (reb *Manager) allCTReceived(md *rebArgs) bool {
-	toWait, toRebuild := reb.toWait(md.config.EC.BatchSize)
-	if toWait == 0 && toRebuild == 0 {
-		return true
-	}
-	if toWait != 0 {
-		reb.reRequest(md)
-	}
-	reb.rebuildReceived(md)
 	return true
 }

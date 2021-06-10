@@ -20,45 +20,34 @@ type (
 		// Info about remote targets. It needs mutex for it can be
 		// updated from different goroutines
 		mtx     sync.Mutex
-		targets map[string]*stageStatus // daemonID <-> stageStatus
+		targets map[string]uint32 // daemonID <-> stage
 		// Info about this target rebalance status. This info is used oftener
 		// than remote target ones, and updated more frequently locally.
 		// That is why it uses atomics instead of global mutex
-		currBatch atomic.Int64  // EC rebalance: current batch ID
-		lastBatch atomic.Int64  // EC rebalance: ID of the last batch
-		stage     atomic.Uint32 // rebStage* enum: this target current stage
+		stage atomic.Uint32 // rebStage* enum: this target current stage
 	}
 )
 
 func newNodeStages() *nodeStages {
-	return &nodeStages{targets: make(map[string]*stageStatus)}
+	return &nodeStages{targets: make(map[string]uint32)}
 }
 
 // Returns true if the target is in `newStage` or in any next stage
-func (*nodeStages) stageReached(status *stageStatus, newStage uint32, newBatchID int64) bool {
-	// for simple stages: just check the stage
-	if newBatchID == 0 {
-		return status.stage >= newStage
-	}
-	// for cyclic stage (used in EC): check both batch ID and stage
-	return status.batchID > newBatchID ||
-		(status.batchID == newBatchID && status.stage >= newStage) ||
-		(status.stage >= rebStageECCleanup && status.stage > newStage)
+func (*nodeStages) stageReached(stage, newStage uint32) bool {
+	return stage > newStage
 }
 
 // Mark a 'node' that it has reached the 'stage'. Do nothing if the target
 // is already in this stage or has finished it already
-func (ns *nodeStages) setStage(daemonID string, stage uint32, batchID int64) {
+func (ns *nodeStages) setStage(daemonID string, stage uint32) {
 	ns.mtx.Lock()
 	status, ok := ns.targets[daemonID]
 	if !ok {
-		status = &stageStatus{}
 		ns.targets[daemonID] = status
 	}
 
-	if !ns.stageReached(status, stage, batchID) {
-		status.stage = stage
-		status.batchID = batchID
+	if !ns.stageReached(status, stage) {
+		ns.targets[daemonID] = stage
 	}
 	ns.mtx.Unlock()
 }
@@ -66,19 +55,18 @@ func (ns *nodeStages) setStage(daemonID string, stage uint32, batchID int64) {
 // Returns true if the target is in `newStage` or in any next stage.
 func (ns *nodeStages) isInStage(si *cluster.Snode, stage uint32) bool {
 	ns.mtx.Lock()
-	inStage := ns.isInStageBatchUnlocked(si, stage, 0)
+	inStage := ns.isInStageUnlocked(si, stage)
 	ns.mtx.Unlock()
 	return inStage
 }
 
-// Returns true if the target is in `newStage` and has reached the given
-// batch ID or it is in any next stage
-func (ns *nodeStages) isInStageBatchUnlocked(si *cluster.Snode, stage uint32, batchID int64) bool {
+// Returns true if the target is in `newStage` or in any next stage
+func (ns *nodeStages) isInStageUnlocked(si *cluster.Snode, stage uint32) bool {
 	status, ok := ns.targets[si.ID()]
 	if !ok {
 		return false
 	}
-	return ns.stageReached(status, stage, batchID)
+	return ns.stageReached(status, stage)
 }
 
 func (ns *nodeStages) cleanup() {

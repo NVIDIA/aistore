@@ -7,7 +7,6 @@ package reb
 import (
 	"fmt"
 	"io"
-	"net/http"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -82,7 +81,7 @@ func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64, notif *xaction.No
 	} else {
 		glog.Warning(err)
 	}
-	reb.changeStage(rebStageFin, 0)
+	reb.changeStage(rebStageFin)
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("global reb (v%d) in %s state", md.id, stages[rebStageFin])
 	}
@@ -216,11 +215,6 @@ func (reb *Manager) rebInit(md *rebArgs, notif *xaction.NotifXact) bool {
 	notif.Xact = xact
 	xact.AddNotif(notif)
 
-	// get EC rebalancer ready
-	if md.ecUsed {
-		reb.cleanupEC()
-	}
-
 	reb.Lock()
 	reb.setXact(xact.(*xrun.Rebalance))
 
@@ -256,27 +250,16 @@ func (reb *Manager) rebInit(md *rebArgs, notif *xaction.NotifXact) bool {
 
 // when at least one bucket has EC enabled
 func (reb *Manager) runEC(md *rebArgs) error {
-	// Collect all local slices
-	if cnt := reb.buildECNamespace(md); cnt != 0 {
-		return fmt.Errorf("%d targets failed to build namespace", cnt)
-	}
-	// Waiting for all targets to send their lists of slices to other nodes
-	if err := reb.distributeECNamespace(md); err != nil {
-		return err
-	}
-	// Detect objects with misplaced or missing parts
-	reb.generateECFixList(md)
-
-	// Fix objects that are on local target but they are misplaced
-	if err := reb.ecFixLocal(md); err != nil {
-		return err
+	_ = reb.bcast(md, reb.rxReady) // NOTE: ignore timeout
+	if reb.xact().Aborted() {
+		return cmn.NewAbortedError(fmt.Sprintf("%s: aborted", reb.logHdr(md)))
 	}
 
-	// Fix objects that needs network transfers and/or object rebuild
-	if err := reb.ecFixGlobal(md); err != nil {
-		return err
-	}
+	reb.runECjoggers()
 
+	if reb.xact().Aborted() {
+		return cmn.NewAbortedError(fmt.Sprintf("%s: aborted", reb.logHdr(md)))
+	}
 	glog.Infof("[%s] RebalanceEC done", reb.t.SID())
 	return nil
 }
@@ -317,7 +300,7 @@ func (reb *Manager) runNoEC(md *rebArgs) error {
 }
 
 func (reb *Manager) rebWaitAck(md *rebArgs) (errCnt int) {
-	reb.changeStage(rebStageWaitAck, 0)
+	reb.changeStage(rebStageWaitAck)
 	logHdr := reb.logHdr(md)
 	sleep := md.config.Timeout.CplaneOperation.D() // NOTE: TODO: used throughout; must be separately assigned and calibrated
 	maxwt := md.config.Rebalance.DestRetryTime.D()
@@ -395,31 +378,6 @@ func (reb *Manager) rebWaitAck(md *rebArgs) (errCnt int) {
 	return
 }
 
-// Wait until cb returns `true` or times out. Waits forever if `maxWait` is
-// omitted. The latter case is useful when it is unclear how much to wait.
-// Return true is xaction was aborted during wait loop.
-func (reb *Manager) waitEvent(md *rebArgs, cb func(md *rebArgs) bool, maxWait ...time.Duration) bool {
-	var (
-		waited, toWait time.Duration
-		sleep          = md.config.Timeout.CplaneOperation.D()
-		aborted        = reb.xact().Aborted()
-	)
-	if len(maxWait) != 0 {
-		toWait = maxWait[0]
-	}
-	for !aborted {
-		if cb(md) {
-			break
-		}
-		aborted = reb.xact().AbortedAfter(sleep)
-		waited += sleep
-		if toWait > 0 && waited > toWait {
-			break
-		}
-	}
-	return aborted
-}
-
 func (reb *Manager) rebFini(md *rebArgs, err error) {
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("finishing rebalance (reb_args: %s)", reb.logHdr(md))
@@ -441,12 +399,6 @@ func (reb *Manager) rebFini(md *rebArgs, err error) {
 		}
 	}
 	reb.stages.stage.Store(rebStageDone)
-
-	// clean up all collected data
-	if md.ecUsed {
-		reb.cleanupEC()
-	}
-
 	reb.stages.cleanup()
 
 	if glog.FastV(4, glog.SmoduleReb) {
@@ -459,40 +411,6 @@ func (reb *Manager) rebFini(md *rebArgs, err error) {
 	} else {
 		glog.Infoln(reb.xact().String())
 	}
-}
-
-func (reb *Manager) RespHandler(w http.ResponseWriter, r *http.Request) {
-	var (
-		caller = r.Header.Get(cmn.HdrCallerName)
-		query  = r.URL.Query()
-	)
-	if r.Method != http.MethodGet {
-		cmn.WriteErr405(w, r, http.MethodGet)
-		return
-	}
-	if !cos.IsParseBool(query.Get(cmn.URLParamRebData)) {
-		s := fmt.Sprintf("invalid request: %q", cmn.URLParamRebData)
-		cmn.WriteErrMsg(w, r, s)
-		return
-	}
-	rebStatus := &Status{}
-	reb.RebStatus(rebStatus)
-
-	// the target is still collecting the data, reply that the result is not ready
-	if rebStatus.Stage < rebStageECDetect {
-		w.WriteHeader(http.StatusAccepted)
-		return
-	}
-
-	// ask rebalance manager the list of all local slices
-	if slices, ok := reb.ec.nodeData(reb.t.SID()); ok {
-		if err := cmn.WriteJSON(w, slices); err != nil {
-			glog.Errorf("Failed to send data to %s", caller)
-		}
-		return
-	}
-	// no local slices found. It is possible if the number of object is small
-	w.WriteHeader(http.StatusNoContent)
 }
 
 ////////////////////////////////////

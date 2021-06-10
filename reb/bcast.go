@@ -5,7 +5,6 @@
 package reb
 
 import (
-	"net/http"
 	"net/url"
 	"time"
 
@@ -27,8 +26,6 @@ type (
 		RebVersion  int64                   `json:"reb_version,string"`  // Smap version of *this* rebalancing op
 		RebID       int64                   `json:"reb_id,string"`       // rebalance ID
 		StatsDelta  stats.ExtRebalanceStats `json:"stats_delta"`         // objects and sizes sent/recv-ed
-		BatchCurr   int                     `json:"batch_curr"`          // current EC batch ID
-		BatchLast   int                     `json:"batch_last"`          // final EC batch ID to be processed
 		Stage       uint32                  `json:"stage"`               // the current stage - see enum above
 		Aborted     bool                    `json:"aborted"`             // aborted?
 		Running     bool                    `json:"running"`             // running?
@@ -55,13 +52,6 @@ func (reb *Manager) RebStatus(status *Status) {
 	status.Stage = reb.stages.stage.Load()
 	status.RebID = reb.rebID.Load()
 	status.Quiescent = reb.isQuiescent()
-	if status.Stage > rebStageECRepair && status.Stage < rebStageECCleanup {
-		status.BatchCurr = int(reb.stages.currBatch.Load())
-		status.BatchLast = int(reb.stages.lastBatch.Load())
-	} else {
-		status.BatchCurr = 0
-		status.BatchLast = 0
-	}
 
 	status.SmapVersion = tsmap.Version
 	if rsmap != nil {
@@ -119,30 +109,6 @@ func (reb *Manager) RebStatus(status *Status) {
 	}
 ret:
 	reb.awaiting.mu.Unlock()
-}
-
-// returns the number of targets that have not reached `stage` yet. It is
-// assumed that this target checks other nodes only after it has reached
-// the `stage`, that is why it is skipped inside the loop
-func (reb *Manager) nodesNotInStage(md *rebArgs, stage uint32) int {
-	count := 0
-	reb.stages.mtx.Lock()
-	for _, si := range md.smap.Tmap {
-		if si.ID() == reb.t.SID() {
-			continue
-		}
-		if !reb.stages.isInStageBatchUnlocked(si, stage, 0) {
-			count++
-			continue
-		}
-		_, exists := reb.ec.nodeData(si.ID())
-		if stage == rebStageECDetect && !exists {
-			count++
-			continue
-		}
-	}
-	reb.stages.mtx.Unlock()
-	return count
 }
 
 // main method
@@ -252,15 +218,6 @@ func (reb *Manager) waitFinExtended(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 			glog.Infof("%s: abort wack", logHdr)
 			return
 		}
-		if status.Stage <= rebStageECNamespace {
-			glog.Infof("%s: keep waiting for %s[%s]", logHdr, tsi, stages[status.Stage])
-			time.Sleep(sleepRetry)
-			curwt += sleepRetry
-			if status.Stage != rebStageInactive {
-				curwt = 0 // keep waiting forever or until tsi finishes traversing&transmitting
-			}
-			continue
-		}
 		//
 		// tsi in rebStageWaitAck
 		//
@@ -338,122 +295,4 @@ func (reb *Manager) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md 
 	}
 	glog.Infof("%s: %s[%s] not yet at the right stage %s", logHdr, tsi, stages[status.Stage], stages[desiredStage])
 	return
-}
-
-// a generic wait loop for a stage when the target should just wait without extra actions
-func (reb *Manager) waitStage(si *cluster.Snode, md *rebArgs, stage uint32) bool {
-	sleep := md.config.Timeout.CplaneOperation.D() * 2
-	maxwt := md.config.Rebalance.DestRetryTime.D() + md.config.Rebalance.DestRetryTime.D()/2
-	curwt := time.Duration(0)
-	for curwt < maxwt {
-		if reb.stages.isInStage(si, stage) {
-			return true
-		}
-
-		status, ok := reb.checkGlobStatus(si, stage, md)
-		if ok && status.Stage >= stage {
-			return true
-		}
-
-		if reb.xact().Aborted() || reb.xact().AbortedAfter(sleep) {
-			glog.Infof("%s: abort %s", reb.logHdr(md), stages[stage])
-			return false
-		}
-
-		curwt += sleep
-	}
-	return false
-}
-
-// Wait until all nodes finishes namespace building (just wait)
-func (reb *Manager) waitNamespace(si *cluster.Snode, md *rebArgs) bool {
-	return reb.waitStage(si, md, rebStageECNamespace)
-}
-
-// Wait until all nodes finishes moving local slices/object to correct mpath
-func (reb *Manager) waitECResilver(si *cluster.Snode, md *rebArgs) bool {
-	return reb.waitStage(si, md, rebStageECRepair)
-}
-
-// Wait until all nodes clean up everything
-func (reb *Manager) waitECCleanup(si *cluster.Snode, md *rebArgs) bool {
-	return reb.waitStage(si, md, rebStageECCleanup)
-}
-
-// Wait until all nodes finishes exchanging slice lists (do pull request if
-// the remote target's data is still missing).
-// Returns `true` if a target has sent its namespace or the xaction
-// has been aborted (indicating no need for extra pull requests).
-func (reb *Manager) waitECData(si *cluster.Snode, md *rebArgs) bool {
-	sleep := md.config.Timeout.CplaneOperation.D() * 2
-	locStage := uint32(rebStageECDetect)
-	maxwt := md.config.Rebalance.DestRetryTime.D() + md.config.Rebalance.DestRetryTime.D()/2
-	curwt := time.Duration(0)
-
-	for curwt < maxwt {
-		if reb.xact().Aborted() {
-			return true
-		}
-		_, exists := reb.ec.nodeData(si.ID())
-		if reb.stages.isInStage(si, locStage) && exists {
-			return true
-		}
-
-		outjson, status, err := reb.t.RebalanceNamespace(si)
-		if err != nil {
-			// something bad happened, aborting
-			glog.Errorf("[g%d]: failed to call %s, err: %v", reb.rebID.Load(), si, err)
-			reb.abortRebalance()
-			return false
-		}
-		if status == http.StatusAccepted {
-			// the node is not ready, wait for more
-			curwt += sleep
-			time.Sleep(sleep)
-			continue
-		}
-		slices := make([]*rebCT, 0)
-		if status != http.StatusNoContent {
-			// TODO: send the number of items in push request and preallocate `slices`?
-			if err := jsoniter.Unmarshal(outjson, &slices); err != nil {
-				// not a severe error: next wait loop re-requests the data
-				glog.Warningf("Invalid JSON received from %s: %v", si, err)
-				curwt += sleep
-				time.Sleep(sleep)
-				continue
-			}
-		}
-		reb.ec.setNodeData(si.ID(), slices)
-		reb.stages.setStage(si.ID(), rebStageECDetect, 0)
-		return true
-	}
-	return false
-}
-
-// The loop waits until the minimal number of targets have sent push notifications.
-// First stages are very short and fast targets may send their notifications too
-// quickly. So, for the first notifications there is no wait loop - just a single check.
-// Returns `true` if all targets have sent push notifications or the xaction
-// has been aborted (indicating no need for additional pull requests).
-func (reb *Manager) waitForPushReqs(md *rebArgs, stage uint32, timeout ...time.Duration) bool {
-	const defaultWaitTime = time.Minute
-	maxMissing := len(md.smap.Tmap) / 2
-	curWait := time.Duration(0)
-	sleep := md.config.Timeout.CplaneOperation.D() * 2
-	maxWait := defaultWaitTime
-	if len(timeout) != 0 {
-		maxWait = timeout[0]
-	}
-	for curWait < maxWait {
-		if reb.xact().Aborted() {
-			return true
-		}
-		cnt := reb.nodesNotInStage(md, stage)
-		if cnt < maxMissing || stage <= rebStageECNamespace {
-			return cnt == 0
-		}
-		time.Sleep(sleep)
-		curWait += sleep
-	}
-	return false
 }

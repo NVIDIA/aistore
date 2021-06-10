@@ -18,6 +18,11 @@ const (
 	rebMsgPushStage        // push notification of target moved to the next stage
 )
 const rebMsgKindSize = 1
+const (
+	rebActRebCT    = iota // a CT moved to a correct target (regular rebalance)
+	rebActMoveCT          // a CT moved from a target after slice conflict (a target received a CT and it had another CT)
+	rebActUpdateMD        // a new MD to update existing local one
+)
 
 type (
 	regularAck struct {
@@ -32,11 +37,11 @@ type (
 
 	// push notification struct - a target sends it when it enters `stage`
 	pushReq struct {
+		md       *ec.Metadata
 		rebID    int64  // sender's rebalance ID
 		daemonID string // sender's ID
-		batch    int    // batch when restoring
 		stage    uint32 // stage the sender has just reached
-		md       *ec.Metadata
+		action   uint32 // see rebAct* constants
 	}
 )
 
@@ -101,15 +106,13 @@ func (eack *ecAck) NewPack() []byte {
 	return packer.Bytes()
 }
 
-// rebID + sliceID + length of DaemonID + Daemon
 func (eack *ecAck) PackedSize() int {
-	return cos.SizeofI64 + cos.SizeofI16 + cos.SizeofLen + len(eack.daemonID)
+	return cos.SizeofI64 + cos.SizeofI16 + cos.PackedStrLen(eack.daemonID)
 }
 
-// int64*2 + int32 + string + marker + sizeof(ec.MD)
 func (req *pushReq) PackedSize() int {
-	total := cos.SizeofLen + cos.SizeofI64*2 + cos.SizeofI32 +
-		len(req.daemonID) + 1
+	total := cos.SizeofI64 + cos.SizeofI32*2 +
+		cos.PackedStrLen(req.daemonID) + 1
 	if req.md != nil {
 		total += req.md.PackedSize()
 	}
@@ -118,7 +121,7 @@ func (req *pushReq) PackedSize() int {
 
 func (req *pushReq) Pack(packer *cos.BytePack) {
 	packer.WriteInt64(req.rebID)
-	packer.WriteUint64(uint64(req.batch))
+	packer.WriteUint32(req.action)
 	packer.WriteUint32(req.stage)
 	packer.WriteString(req.daemonID)
 	if req.md == nil {
@@ -141,15 +144,13 @@ func (req *pushReq) Unpack(unpacker *cos.ByteUnpack) error {
 	var (
 		marker byte
 		err    error
-		batch  uint64
 	)
 	if req.rebID, err = unpacker.ReadInt64(); err != nil {
 		return err
 	}
-	if batch, err = unpacker.ReadUint64(); err != nil {
+	if req.action, err = unpacker.ReadUint32(); err != nil {
 		return err
 	}
-	req.batch = int(batch)
 	if req.stage, err = unpacker.ReadUint32(); err != nil {
 		return err
 	}

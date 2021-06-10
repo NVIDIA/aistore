@@ -274,7 +274,7 @@ func (mgr *Manager) recvResponse(hdr transport.ObjHdr, object io.Reader, err err
 	}
 }
 
-// Encode the object:
+// EncodeObject generates slices using Reed-Solom algorithm:
 //   - lom - object to encode
 //   - intra - if true, it is internal request and has low priority
 //   - cb - optional callback that is called after the object is encoded

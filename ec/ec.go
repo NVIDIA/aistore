@@ -354,10 +354,9 @@ func freeSlices(slices []*slice) {
 	}
 }
 
-// requestECMeta returns an EC metadata found on a remote target.
-func requestECMeta(ctx *restoreCtx, si *cluster.Snode, client *http.Client) (md *Metadata, err error) {
-	bck := ctx.lom.Bucket()
-	path := cmn.URLPathEC.Join(URLMeta, bck.Name, ctx.lom.ObjName)
+// RequestECMeta returns an EC metadata found on a remote target.
+func RequestECMeta(bck cmn.Bck, objName string, si *cluster.Snode, client *http.Client) (md *Metadata, err error) {
+	path := cmn.URLPathEC.Join(URLMeta, bck.Name, objName)
 	query := url.Values{}
 	query = cmn.AddBckToQuery(query, bck)
 	url := si.URL(cmn.NetworkIntraData) + path
@@ -372,11 +371,16 @@ func requestECMeta(ctx *restoreCtx, si *cluster.Snode, client *http.Client) (md 
 	}
 	defer cos.Close(resp.Body)
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, cmn.NewNotFoundError("object %s/%s", bck, ctx.lom.ObjName)
+		return nil, cmn.NewNotFoundError("object %s/%s", bck, objName)
 	} else if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to read %s GET request: %v", ctx.lom.ObjName, err)
+		return nil, fmt.Errorf("failed to read %s GET request: %v", objName, err)
 	}
 	return MetaFromReader(resp.Body)
+}
+
+// requestECMeta returns an EC metadata found on a remote target.
+func requestECMeta(ctx *restoreCtx, si *cluster.Snode, client *http.Client) (md *Metadata, err error) {
+	return RequestECMeta(ctx.lom.Bucket(), ctx.lom.ObjName, si, client)
 }
 
 // Saves the main replica to local drives
@@ -410,7 +414,7 @@ func validateBckBID(t cluster.Target, bck cmn.Bck, bid uint64) error {
 	return err
 }
 
-// Saves slice and its metafile
+// WriteSliceAndMeta saves slice and its metafile
 func WriteSliceAndMeta(t cluster.Target, hdr transport.ObjHdr, args *WriteArgs) error {
 	ct, err := cluster.NewCTFromBO(hdr.Bck, hdr.ObjName, t.Bowner(), SliceType)
 	if err != nil {
@@ -464,7 +468,7 @@ func LomFromHeader(hdr transport.ObjHdr) (*cluster.LOM, error) {
 	return lom, nil
 }
 
-// Saves replica and its metafile
+// WriteReplicaAndMeta saves replica and its metafile
 func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) error {
 	lom.Lock(false)
 	if args.Generation != 0 {
