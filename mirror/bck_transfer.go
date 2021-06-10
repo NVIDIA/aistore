@@ -20,7 +20,7 @@ import (
 )
 
 type (
-	transferBckProvider struct {
+	cpyFactory struct {
 		xact  *XactTransferBck
 		t     cluster.Target
 		uuid  string
@@ -42,8 +42,8 @@ const etlBucketParallelCnt = 2
 
 // interface guard
 var (
-	_ cluster.Xact             = (*XactTransferBck)(nil)
-	_ xreg.BucketEntryProvider = (*transferBckProvider)(nil)
+	_ cluster.Xact    = (*XactTransferBck)(nil)
+	_ xreg.BckFactory = (*cpyFactory)(nil)
 )
 
 ///////////////////////////////////
@@ -69,11 +69,11 @@ func freeCpObjParams(a *cluster.CopyObjectParams) {
 }
 
 /////////////////////////
-// transferBckProvider //
+// cpyFactory //
 /////////////////////////
 
-func (e *transferBckProvider) New(args *xreg.XactArgs) xreg.BucketEntry {
-	return &transferBckProvider{
+func (e *cpyFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
+	return &cpyFactory{
 		t:     args.T,
 		uuid:  args.UUID,
 		kind:  e.kind,
@@ -82,17 +82,17 @@ func (e *transferBckProvider) New(args *xreg.XactArgs) xreg.BucketEntry {
 	}
 }
 
-func (e *transferBckProvider) Start(_ cmn.Bck) error {
+func (e *cpyFactory) Start(_ cmn.Bck) error {
 	slab, err := e.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
 	cos.AssertNoErr(err)
 	e.xact = NewXactTransferBck(e.uuid, e.kind, e.args.BckFrom, e.args.BckTo, e.t, slab,
 		e.args.DM, e.args.DP, e.args.Meta)
 	return nil
 }
-func (e *transferBckProvider) Kind() string      { return e.kind }
-func (e *transferBckProvider) Get() cluster.Xact { return e.xact }
-func (e *transferBckProvider) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, err error) {
-	prev := previousEntry.(*transferBckProvider)
+func (e *cpyFactory) Kind() string      { return e.kind }
+func (e *cpyFactory) Get() cluster.Xact { return e.xact }
+func (e *cpyFactory) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, err error) {
+	prev := previousEntry.(*cpyFactory)
 	bckEq := prev.args.BckFrom.Equal(e.args.BckFrom, true /*same BID*/, true /* same backend */)
 	if prev.phase == cmn.ActBegin && e.phase == cmn.ActCommit && bckEq {
 		prev.phase = cmn.ActCommit // transition
@@ -104,7 +104,7 @@ func (e *transferBckProvider) PreRenewHook(previousEntry xreg.BucketEntry) (keep
 	return
 }
 
-func (e *transferBckProvider) PostRenewHook(_ xreg.BucketEntry) {}
+func (e *cpyFactory) PostRenewHook(_ xreg.BucketEntry) {}
 
 /////////////////////
 // XactTransferBck //

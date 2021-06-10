@@ -20,6 +20,10 @@ import (
 	"github.com/NVIDIA/aistore/xaction"
 )
 
+const (
+	xactionTTL = 10 * time.Minute // TODO: see "quiescence"; see #1085
+)
+
 type (
 	ObjectsListingXact struct {
 		xaction.XactBase    // ID() serves as well as a query handle
@@ -39,10 +43,6 @@ type (
 		entry *cmn.BucketEntry
 		err   error
 	}
-)
-
-const (
-	xactionTTL = 10 * time.Minute // TODO: see "quiescence"; see #1085
 )
 
 func NewObjectsListing(ctx context.Context, t cluster.Target, query *ObjectsQuery, msg *cmn.SelectMsg) *ObjectsListingXact {
@@ -82,10 +82,7 @@ func (r *ObjectsListingXact) Run() {
 	r.startFromBck()
 }
 
-// TODO: make thread-safe
-func (r *ObjectsListingXact) LastDiscardedResult() string {
-	return r.lastDiscardedResult
-}
+func (r *ObjectsListingXact) LastDiscardedResult() string { return r.lastDiscardedResult }
 
 func (r *ObjectsListingXact) putResult(res *Result) (end bool) {
 	select {

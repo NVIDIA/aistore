@@ -27,7 +27,7 @@ const (
 )
 
 type (
-	putMirrorProvider struct {
+	putFactory struct {
 		xreg.BaseBckEntry
 		xact *XactPut
 		t    cluster.Target
@@ -49,19 +49,19 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact             = (*XactPut)(nil)
-	_ xreg.BucketEntryProvider = (*putMirrorProvider)(nil)
+	_ cluster.Xact    = (*XactPut)(nil)
+	_ xreg.BckFactory = (*putFactory)(nil)
 )
 
 ///////////////////////
-// putMirrorProvider //
+// putFactory //
 ///////////////////////
 
-func (*putMirrorProvider) New(args *xreg.XactArgs) xreg.BucketEntry {
-	return &putMirrorProvider{t: args.T, uuid: args.UUID, lom: args.Custom.(*cluster.LOM)}
+func (*putFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
+	return &putFactory{t: args.T, uuid: args.UUID, lom: args.Custom.(*cluster.LOM)}
 }
 
-func (p *putMirrorProvider) Start(_ cmn.Bck) error {
+func (p *putFactory) Start(_ cmn.Bck) error {
 	slab, err := p.t.MMSA().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	cos.AssertNoErr(err)
 	xact, err := runXactPut(p.lom, slab, p.t)
@@ -73,8 +73,8 @@ func (p *putMirrorProvider) Start(_ cmn.Bck) error {
 	return nil
 }
 
-func (*putMirrorProvider) Kind() string        { return cmn.ActPutCopies }
-func (p *putMirrorProvider) Get() cluster.Xact { return p.xact }
+func (*putFactory) Kind() string        { return cmn.ActPutCopies }
+func (p *putFactory) Get() cluster.Xact { return p.xact }
 
 // main
 func runXactPut(lom *cluster.LOM, slab *memsys.Slab, t cluster.Target) (r *XactPut, err error) {

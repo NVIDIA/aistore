@@ -96,7 +96,7 @@ type (
 		allowDelObj bool
 	}
 
-	XactProvider struct {
+	Factory struct {
 		xreg.BaseGlobalEntry
 		xact *Xaction
 
@@ -112,19 +112,19 @@ type (
 
 // interface guard
 var (
-	_ xaction.XactDemand       = (*Xaction)(nil)
-	_ xreg.GlobalEntryProvider = (*XactProvider)(nil)
+	_ xaction.XactDemand = (*Xaction)(nil)
+	_ xreg.GlobalFactory = (*Factory)(nil)
 )
 
 func init() {
-	xreg.RegGlobXact(&XactProvider{})
+	xreg.RegGlobXact(&Factory{})
 }
 
-func (*XactProvider) New(args xreg.XactArgs) xreg.GlobalEntry {
-	return &XactProvider{id: args.UUID}
+func (*Factory) New(args xreg.XactArgs) xreg.GlobalEntry {
+	return &Factory{id: args.UUID}
 }
 
-func (p *XactProvider) Start(_ cmn.Bck) error {
+func (p *Factory) Start(_ cmn.Bck) error {
 	var (
 		args        = xaction.Args{ID: xaction.BaseID(p.id), Kind: cmn.ActLRU}
 		config      = cmn.GCO.Get()
@@ -142,8 +142,8 @@ func (p *XactProvider) Start(_ cmn.Bck) error {
 	p.xact.InitIdle()
 	return nil
 }
-func (p *XactProvider) Kind() string      { return cmn.ActLRU }
-func (p *XactProvider) Get() cluster.Xact { return p.xact }
+func (p *Factory) Kind() string      { return cmn.ActLRU }
+func (p *Factory) Get() cluster.Xact { return p.xact }
 
 func Run(ini *InitLRU) {
 	var (

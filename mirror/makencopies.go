@@ -19,7 +19,7 @@ import (
 )
 
 type (
-	mncProvider struct {
+	mncFactory struct {
 		xreg.BaseBckEntry
 		xact   *xactMNC
 		t      cluster.Target
@@ -37,27 +37,27 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact             = (*xactMNC)(nil)
-	_ xreg.BucketEntryProvider = (*mncProvider)(nil)
+	_ cluster.Xact    = (*xactMNC)(nil)
+	_ xreg.BckFactory = (*mncFactory)(nil)
 )
 
 /////////////////
-// mncProvider //
+// mncFactory //
 /////////////////
 
-func (*mncProvider) New(args *xreg.XactArgs) xreg.BucketEntry {
-	return &mncProvider{t: args.T, uuid: args.UUID, copies: args.Custom.(int)}
+func (*mncFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
+	return &mncFactory{t: args.T, uuid: args.UUID, copies: args.Custom.(int)}
 }
 
-func (p *mncProvider) Start(bck cmn.Bck) error {
+func (p *mncFactory) Start(bck cmn.Bck) error {
 	slab, err := p.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
 	cos.AssertNoErr(err)
 	p.xact = newXactMNC(bck, p.t, slab, p.uuid, p.copies)
 	return nil
 }
 
-func (*mncProvider) Kind() string        { return cmn.ActMakeNCopies }
-func (p *mncProvider) Get() cluster.Xact { return p.xact }
+func (*mncFactory) Kind() string        { return cmn.ActMakeNCopies }
+func (p *mncFactory) Get() cluster.Xact { return p.xact }
 
 /////////////
 // xactMNC //

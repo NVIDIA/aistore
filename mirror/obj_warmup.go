@@ -14,7 +14,7 @@ import (
 )
 
 type (
-	llcProvider struct {
+	llcFactory struct {
 		t    cluster.Target
 		xact *xactLLC
 		uuid string
@@ -26,31 +26,31 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact             = (*xactLLC)(nil)
-	_ xreg.BucketEntryProvider = (*llcProvider)(nil)
+	_ cluster.Xact    = (*xactLLC)(nil)
+	_ xreg.BckFactory = (*llcFactory)(nil)
 )
 
 /////////////////
-// llcProvider //
+// llcFactory //
 /////////////////
 
-func (*llcProvider) New(args *xreg.XactArgs) xreg.BucketEntry {
-	return &llcProvider{t: args.T, uuid: args.UUID}
+func (*llcFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
+	return &llcFactory{t: args.T, uuid: args.UUID}
 }
 
-func (p *llcProvider) Start(bck cmn.Bck) error {
+func (p *llcFactory) Start(bck cmn.Bck) error {
 	xact := newXactLLC(p.t, p.uuid, bck)
 	p.xact = xact
 	go xact.Run()
 	return nil
 }
 
-func (*llcProvider) Kind() string        { return cmn.ActLoadLomCache }
-func (p *llcProvider) Get() cluster.Xact { return p.xact }
+func (*llcFactory) Kind() string        { return cmn.ActLoadLomCache }
+func (p *llcFactory) Get() cluster.Xact { return p.xact }
 
 // overriding xreg.BaseBckEntry because it would return `false, nil`.
-func (p *llcProvider) PreRenewHook(_ xreg.BucketEntry) (bool, error) { return true, nil }
-func (p *llcProvider) PostRenewHook(_ xreg.BucketEntry)              {}
+func (p *llcFactory) PreRenewHook(_ xreg.BucketEntry) (bool, error) { return true, nil }
+func (p *llcFactory) PostRenewHook(_ xreg.BucketEntry)              {}
 
 /////////////
 // xactLLC //

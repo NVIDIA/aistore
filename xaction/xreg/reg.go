@@ -81,8 +81,8 @@ type (
 		// to make sure that we don't keep old entries forever.
 		entries *registryEntries
 
-		bckXacts    map[string]BucketEntryProvider
-		globalXacts map[string]GlobalEntryProvider
+		bckXacts    map[string]BckFactory
+		globalXacts map[string]GlobalFactory
 	}
 )
 
@@ -97,8 +97,8 @@ func init() {
 func newRegistry() *registry {
 	xar := &registry{
 		entries:     newRegistryEntries(),
-		bckXacts:    make(map[string]BucketEntryProvider, 10),
-		globalXacts: make(map[string]GlobalEntryProvider, 10),
+		bckXacts:    make(map[string]BckFactory, 10),
+		globalXacts: make(map[string]GlobalFactory, 10),
 	}
 	hk.Reg("xactions", xar.cleanUpFinished)
 	return xar

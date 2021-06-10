@@ -29,7 +29,7 @@ import (
 // in passthrough mode. It just restarts `walk` if needed.
 // Xaction is created once per bucket list request (per UUID)
 type (
-	xactProvider struct {
+	factory struct {
 		xreg.BaseBckEntry
 		xact *Xact
 		ctx  context.Context
@@ -76,24 +76,24 @@ var (
 
 // interface guard
 var (
-	_ cluster.Xact             = (*Xact)(nil)
-	_ xreg.BucketEntryProvider = (*xactProvider)(nil)
+	_ cluster.Xact    = (*Xact)(nil)
+	_ xreg.BckFactory = (*factory)(nil)
 )
 
 func init() {
-	xreg.RegBckXact(&xactProvider{})
+	xreg.RegBckXact(&factory{})
 }
 
-func (*xactProvider) New(args *xreg.XactArgs) xreg.BucketEntry {
-	return &xactProvider{ctx: args.Ctx, t: args.T, uuid: args.UUID, msg: args.Custom.(*cmn.SelectMsg)}
+func (*factory) New(args *xreg.XactArgs) xreg.BucketEntry {
+	return &factory{ctx: args.Ctx, t: args.T, uuid: args.UUID, msg: args.Custom.(*cmn.SelectMsg)}
 }
 
-func (p *xactProvider) Start(bck cmn.Bck) error {
+func (p *factory) Start(bck cmn.Bck) error {
 	p.xact = newXact(p.ctx, p.t, bck, p.msg, p.uuid)
 	return nil
 }
-func (*xactProvider) Kind() string        { return cmn.ActList }
-func (p *xactProvider) Get() cluster.Xact { return p.xact }
+func (*factory) Kind() string        { return cmn.ActList }
+func (p *factory) Get() cluster.Xact { return p.xact }
 
 func newXact(ctx context.Context, t cluster.Target, bck cmn.Bck, smsg *cmn.SelectMsg, uuid string) *Xact {
 	config := cmn.GCO.Get()

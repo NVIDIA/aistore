@@ -23,14 +23,6 @@ import (
 )
 
 type (
-	bckSummaryTask struct {
-		xaction.XactBase
-		ctx context.Context
-		t   cluster.Target
-		msg *cmn.BucketSummaryMsg
-		res atomic.Pointer
-	}
-
 	bckSummaryTaskEntry struct {
 		xact *bckSummaryTask
 
@@ -39,23 +31,18 @@ type (
 		uuid string
 		msg  *cmn.BucketSummaryMsg
 	}
+	bckSummaryTask struct {
+		xaction.XactBase
+		ctx context.Context
+		t   cluster.Target
+		msg *cmn.BucketSummaryMsg
+		res atomic.Pointer
+	}
 )
 
-func RenewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.BucketSummaryMsg) error {
-	return defaultReg.renewBckSummary(ctx, t, bck, msg)
-}
-
-func (r *registry) renewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.BucketSummaryMsg) error {
-	if err := r.removeFinishedByID(msg.UUID); err != nil {
-		return err
-	}
-	e := &bckSummaryTaskEntry{ctx: ctx, t: t, uuid: msg.UUID, msg: msg}
-	if err := e.Start(bck.Bck); err != nil {
-		return err
-	}
-	r.storeEntry(e)
-	return nil
-}
+/////////////////////////
+// bckSummaryTaskEntry //
+/////////////////////////
 
 func (e *bckSummaryTaskEntry) Start(bck cmn.Bck) error {
 	args := xaction.Args{ID: xaction.BaseID(e.uuid), Kind: cmn.ActSummary, Bck: &bck}
@@ -69,12 +56,13 @@ func (e *bckSummaryTaskEntry) Start(bck cmn.Bck) error {
 	go xact.Run()
 	return nil
 }
+
 func (e *bckSummaryTaskEntry) Kind() string      { return cmn.ActSummary }
 func (e *bckSummaryTaskEntry) Get() cluster.Xact { return e.xact }
 
-//
-// bckSummaryTask
-//
+////////////////////
+// bckSummaryTask //
+////////////////////
 
 func (t *bckSummaryTask) Run() {
 	var (

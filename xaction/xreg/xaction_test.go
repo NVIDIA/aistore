@@ -37,7 +37,7 @@ func TestXactionRenewLRU(t *testing.T) {
 	)
 	xreg.Reset()
 
-	xreg.RegGlobXact(&lru.XactProvider{})
+	xreg.RegGlobXact(&lru.Factory{})
 	defer xreg.AbortAll()
 	cos.InitShortID(0)
 
@@ -75,7 +75,7 @@ func TestXactionRenewPrefetch(t *testing.T) {
 	xreg.Reset()
 	bmd.Add(bck)
 
-	xreg.RegBckXact(&xrun.PrefetchProvider{})
+	xreg.RegBckXact(&xrun.PrfchFactory{})
 	defer xreg.AbortAll()
 
 	ch := make(chan cluster.Xact, 10)
@@ -112,8 +112,8 @@ func TestXactionAbortAll(t *testing.T) {
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
 
-	xreg.RegGlobXact(&lru.XactProvider{})
-	xreg.RegBckXact(&xrun.BckRenameProvider{})
+	xreg.RegGlobXact(&lru.Factory{})
+	xreg.RegBckXact(&xrun.MovFactory{})
 
 	xactGlob := xreg.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
@@ -142,8 +142,8 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
 
-	xreg.RegGlobXact(&lru.XactProvider{})
-	xreg.RegBckXact(&xrun.BckRenameProvider{})
+	xreg.RegGlobXact(&lru.Factory{})
+	xreg.RegBckXact(&xrun.MovFactory{})
 
 	xactGlob := xreg.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
@@ -172,8 +172,8 @@ func TestXactionAbortBuckets(t *testing.T) {
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
 
-	xreg.RegGlobXact(&lru.XactProvider{})
-	xreg.RegBckXact(&xrun.BckRenameProvider{})
+	xreg.RegGlobXact(&lru.Factory{})
+	xreg.RegBckXact(&xrun.MovFactory{})
 
 	xactGlob := xreg.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
@@ -209,8 +209,8 @@ func TestXactionQueryFinished(t *testing.T) {
 	bmd.Add(bck1)
 	bmd.Add(bck2)
 
-	xreg.RegBckXact(&xrun.PrefetchProvider{})
-	xreg.RegBckXact(&xrun.BckRenameProvider{})
+	xreg.RegBckXact(&xrun.PrfchFactory{})
+	xreg.RegBckXact(&xrun.MovFactory{})
 
 	xactBck1, err := xreg.RenewBckRename(tMock, bck1, bck1, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck1 != nil, "Xaction must be created")

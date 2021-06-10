@@ -20,8 +20,8 @@ import (
 )
 
 type (
-	// Implements `xreg.BucketEntryProvider` and `xreg.BucketEntry` interface.
-	xactPutProvider struct {
+	// Implements `xreg.BckFactory` and `xreg.BucketEntry` interface.
+	putFactory struct {
 		xreg.BaseBckEntry
 		xact *XactPut
 	}
@@ -52,17 +52,17 @@ type (
 
 // interface guard
 var (
-	_ xaction.XactDemand       = (*XactPut)(nil)
-	_ xreg.BucketEntryProvider = (*xactPutProvider)(nil)
+	_ xaction.XactDemand = (*XactPut)(nil)
+	_ xreg.BckFactory    = (*putFactory)(nil)
 )
 
 /////////////////////
-// xactPutProvider //
+// putFactory //
 /////////////////////
 
-func (*xactPutProvider) New(_ *xreg.XactArgs) xreg.BucketEntry { return &xactPutProvider{} }
+func (*putFactory) New(_ *xreg.XactArgs) xreg.BucketEntry { return &putFactory{} }
 
-func (p *xactPutProvider) Start(bck cmn.Bck) error {
+func (p *putFactory) Start(bck cmn.Bck) error {
 	var (
 		xec         = ECM.NewPutXact(bck)
 		config      = cmn.GCO.Get()
@@ -77,8 +77,8 @@ func (p *xactPutProvider) Start(bck cmn.Bck) error {
 	return nil
 }
 
-func (*xactPutProvider) Kind() string        { return cmn.ActECPut }
-func (p *xactPutProvider) Get() cluster.Xact { return p.xact }
+func (*putFactory) Kind() string        { return cmn.ActECPut }
+func (p *putFactory) Get() cluster.Xact { return p.xact }
 
 /////////////
 // XactPut //

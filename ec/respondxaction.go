@@ -25,8 +25,8 @@ type (
 	// FIXME: Does `XactRespond` needs to be a `XactDemand`?
 	//  - it doesn't use `incPending()`
 
-	// Implements `xreg.BucketEntryProvider` and `xreg.BucketEntry` interface.
-	xactRespondProvider struct {
+	// Implements `xreg.BckFactory` and `xreg.BucketEntry` interface.
+	rspFactory struct {
 		xreg.BaseBckEntry
 		xact *XactRespond
 	}
@@ -40,19 +40,19 @@ type (
 
 // interface guard
 var (
-	_ xaction.XactDemand       = (*XactRespond)(nil)
-	_ xreg.BucketEntryProvider = (*xactRespondProvider)(nil)
+	_ xaction.XactDemand = (*XactRespond)(nil)
+	_ xreg.BckFactory    = (*rspFactory)(nil)
 )
 
 /////////////////////////
-// xactRespondProvider //
+// rspFactory //
 /////////////////////////
 
-func (p *xactRespondProvider) New(_ *xreg.XactArgs) xreg.BucketEntry {
-	return &xactRespondProvider{}
+func (p *rspFactory) New(_ *xreg.XactArgs) xreg.BucketEntry {
+	return &rspFactory{}
 }
 
-func (p *xactRespondProvider) Start(bck cmn.Bck) error {
+func (p *rspFactory) Start(bck cmn.Bck) error {
 	var (
 		xec         = ECM.NewRespondXact(bck)
 		config      = cmn.GCO.Get()
@@ -66,8 +66,8 @@ func (p *xactRespondProvider) Start(bck cmn.Bck) error {
 	go xec.Run()
 	return nil
 }
-func (*xactRespondProvider) Kind() string        { return cmn.ActECRespond }
-func (p *xactRespondProvider) Get() cluster.Xact { return p.xact }
+func (*rspFactory) Kind() string        { return cmn.ActECRespond }
+func (p *rspFactory) Get() cluster.Xact { return p.xact }
 
 /////////////////
 // XactRespond //

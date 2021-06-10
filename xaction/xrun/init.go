@@ -11,12 +11,12 @@ import (
 
 // for additional startup-time reg-s see lru, downloader, ec
 func init() {
-	xreg.RegGlobXact(&electionProvider{})
-	xreg.RegGlobXact(&resilverProvider{})
-	xreg.RegGlobXact(&rebalanceProvider{})
+	xreg.RegGlobXact(&eleFactory{})
+	xreg.RegGlobXact(&resilverFactory{})
+	xreg.RegGlobXact(&rebFactory{})
 
-	xreg.RegBckXact(&BckRenameProvider{})
-	xreg.RegBckXact(&evictDeleteProvider{kind: cmn.ActEvictObjects})
-	xreg.RegBckXact(&evictDeleteProvider{kind: cmn.ActDelete})
-	xreg.RegBckXact(&PrefetchProvider{})
+	xreg.RegBckXact(&MovFactory{})
+	xreg.RegBckXact(&evdFactory{kind: cmn.ActEvictObjects})
+	xreg.RegBckXact(&evdFactory{kind: cmn.ActDelete})
+	xreg.RegBckXact(&PrfchFactory{})
 }

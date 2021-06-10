@@ -165,7 +165,7 @@ type (
 		reporter func(n int64)
 	}
 
-	downloaderProvider struct {
+	dowFactory struct {
 		xreg.BaseGlobalEntry
 		xact   *Downloader
 		t      cluster.Target
@@ -175,13 +175,13 @@ type (
 
 // interface guard
 var (
-	_ xaction.XactDemand       = (*Downloader)(nil)
-	_ xreg.GlobalEntryProvider = (*downloaderProvider)(nil)
-	_ io.ReadCloser            = (*progressReader)(nil)
+	_ xaction.XactDemand = (*Downloader)(nil)
+	_ xreg.GlobalFactory = (*dowFactory)(nil)
+	_ io.ReadCloser      = (*progressReader)(nil)
 )
 
 func init() {
-	xreg.RegGlobXact(&downloaderProvider{})
+	xreg.RegGlobXact(&dowFactory{})
 }
 
 func clientForURL(u string) *http.Client {
@@ -228,21 +228,21 @@ func (pr *progressReader) Close() error {
 }
 
 ////////////////////////
-// downloaderProvider //
+// dowFactory //
 ////////////////////////
 
-func (*downloaderProvider) New(args xreg.XactArgs) xreg.GlobalEntry {
-	return &downloaderProvider{t: args.T, statsT: args.Custom.(stats.Tracker)}
+func (*dowFactory) New(args xreg.XactArgs) xreg.GlobalEntry {
+	return &dowFactory{t: args.T, statsT: args.Custom.(stats.Tracker)}
 }
 
-func (p *downloaderProvider) Start(_ cmn.Bck) error {
+func (p *dowFactory) Start(_ cmn.Bck) error {
 	xdl := newDownloader(p.t, p.statsT)
 	p.xact = xdl
 	go xdl.Run()
 	return nil
 }
-func (*downloaderProvider) Kind() string        { return cmn.ActDownload }
-func (p *downloaderProvider) Get() cluster.Xact { return p.xact }
+func (*dowFactory) Kind() string        { return cmn.ActDownload }
+func (p *dowFactory) Get() cluster.Xact { return p.xact }
 
 ////////////////
 // Downloader //

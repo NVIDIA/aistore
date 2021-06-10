@@ -19,8 +19,8 @@ import (
 )
 
 type (
-	// Implements `xreg.BucketEntryProvider` and `xreg.BucketEntry` interface.
-	xactBckEncodeProvider struct {
+	// Implements `xreg.BckFactory` and `xreg.BucketEntry` interface.
+	encFactory struct {
 		xreg.BaseBckEntry
 		xact  *XactBckEncode
 		t     cluster.Target
@@ -39,33 +39,33 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact             = (*XactBckEncode)(nil)
-	_ xreg.BucketEntryProvider = (*xactBckEncodeProvider)(nil)
+	_ cluster.Xact    = (*XactBckEncode)(nil)
+	_ xreg.BckFactory = (*encFactory)(nil)
 )
 
 ///////////////////////////
-// xactBckEncodeProvider //
+// encFactory //
 ///////////////////////////
 
-func (*xactBckEncodeProvider) New(args *xreg.XactArgs) xreg.BucketEntry {
-	return &xactBckEncodeProvider{
+func (*encFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
+	return &encFactory{
 		t:     args.T,
 		uuid:  args.UUID,
 		phase: args.Phase,
 	}
 }
 
-func (p *xactBckEncodeProvider) Start(bck cmn.Bck) error {
+func (p *encFactory) Start(bck cmn.Bck) error {
 	p.xact = NewXactBckEncode(bck, p.t, p.uuid)
 	return nil
 }
 
-func (*xactBckEncodeProvider) Kind() string        { return cmn.ActECEncode }
-func (p *xactBckEncodeProvider) Get() cluster.Xact { return p.xact }
+func (*encFactory) Kind() string        { return cmn.ActECEncode }
+func (p *encFactory) Get() cluster.Xact { return p.xact }
 
-func (p *xactBckEncodeProvider) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, err error) {
+func (p *encFactory) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, err error) {
 	// TODO: add more checks?
-	prev := previousEntry.(*xactBckEncodeProvider)
+	prev := previousEntry.(*encFactory)
 	if prev.phase == cmn.ActBegin && p.phase == cmn.ActCommit {
 		prev.phase = cmn.ActCommit // transition
 		keep = true

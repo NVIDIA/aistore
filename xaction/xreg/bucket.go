@@ -17,16 +17,9 @@ import (
 	"github.com/NVIDIA/aistore/xaction"
 )
 
-type BaseBckEntry struct{}
-
-func (b *BaseBckEntry) PreRenewHook(previousEntry BucketEntry) (keep bool, err error) {
-	e := previousEntry.Get()
-	_, keep = e.(xaction.XactDemand)
-	return
-}
-func (b *BaseBckEntry) PostRenewHook(_ BucketEntry) {}
-
 type (
+	BaseBckEntry struct{}
+
 	BucketEntry interface {
 		BaseEntry
 		// pre-renew: returns true iff the current active one exists and is either
@@ -37,8 +30,8 @@ type (
 		PostRenewHook(previousEntry BucketEntry)
 	}
 
-	// BucketEntryProvider is an interface to provider a new instance of BucketEntry interface.
-	BucketEntryProvider interface {
+	// BckFactory is an interface to provider a new instance of BucketEntry interface.
+	BckFactory interface {
 		// New should create empty stub for bucket xaction that could be started
 		// with `Start()` method.
 		New(args *XactArgs) BucketEntry
@@ -81,9 +74,24 @@ type (
 	}
 )
 
-func RegBckXact(entry BucketEntryProvider) { defaultReg.regBckXact(entry) }
+//////////////////
+// BaseBckEntry //
+//////////////////
 
-func (r *registry) regBckXact(entry BucketEntryProvider) {
+func (b *BaseBckEntry) PreRenewHook(previousEntry BucketEntry) (keep bool, err error) {
+	e := previousEntry.Get()
+	_, keep = e.(xaction.XactDemand)
+	return
+}
+func (b *BaseBckEntry) PostRenewHook(_ BucketEntry) {}
+
+//////////////
+// registry //
+//////////////
+
+func RegBckXact(entry BckFactory) { defaultReg.regBckXact(entry) }
+
+func (r *registry) regBckXact(entry BckFactory) {
 	debug.Assert(xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeBck)
 
 	// It is expected that registrations happen at the init time. Therefore, it
@@ -278,10 +286,6 @@ func (r *registry) renewBckRename(t cluster.Target, bckFrom, bckTo *cluster.Bck,
 	})
 }
 
-//
-// Objects list
-//
-
 func RenewObjList(t cluster.Target, bck *cluster.Bck, uuid string,
 	msg *cmn.SelectMsg) (xact cluster.Xact, isNew bool, err error) {
 	return defaultReg.renewObjList(t, bck, uuid, msg)
@@ -306,32 +310,20 @@ func (r *registry) renewObjList(t cluster.Target, bck *cluster.Bck, uuid string,
 	return xact, false, nil
 }
 
-//
-// Objects query
-//
-
-type queryEntry struct {
-	BaseBckEntry
-	xact *query.ObjectsListingXact
-
-	ctx   context.Context
-	t     cluster.Target
-	query *query.ObjectsQuery
-	msg   *cmn.SelectMsg
+func RenewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.BucketSummaryMsg) error {
+	return defaultReg.renewBckSummary(ctx, t, bck, msg)
 }
 
-func (e *queryEntry) Start(_ cmn.Bck) error {
-	xact := query.NewObjectsListing(e.ctx, e.t, e.query, e.msg)
-	e.xact = xact
-	if query.Registry.Get(e.msg.UUID) != nil {
-		return fmt.Errorf("result set with handle %s already exists", e.msg.UUID)
+func (r *registry) renewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.BucketSummaryMsg) error {
+	if err := r.removeFinishedByID(msg.UUID); err != nil {
+		return err
 	}
+	e := &bckSummaryTaskEntry{ctx: ctx, t: t, uuid: msg.UUID, msg: msg}
+	if err := e.Start(bck.Bck); err != nil {
+		return err
+	}
+	r.storeEntry(e)
 	return nil
-}
-func (*queryEntry) Kind() string        { return cmn.ActQueryObjects }
-func (e *queryEntry) Get() cluster.Xact { return e.xact }
-func (e *queryEntry) PreRenewHook(_ BucketEntry) (keep bool, err error) {
-	return query.Registry.Get(e.msg.UUID) != nil, nil
 }
 
 func RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery,
@@ -351,7 +343,7 @@ func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.Ob
 	if err := r.removeFinishedByID(msg.UUID); err != nil {
 		return nil, false, err
 	}
-	e := &queryEntry{
+	e := &queFactory{
 		ctx:   ctx,
 		t:     t,
 		query: q,

@@ -32,7 +32,7 @@ type (
 		PostRenewHook(previousEntry GlobalEntry)
 	}
 
-	GlobalEntryProvider interface {
+	GlobalFactory interface {
 		New(args XactArgs) GlobalEntry
 		Kind() string
 	}
@@ -43,9 +43,9 @@ type (
 	}
 )
 
-func RegGlobXact(entry GlobalEntryProvider) { defaultReg.regGlobXact(entry) }
+func RegGlobXact(entry GlobalFactory) { defaultReg.regGlobXact(entry) }
 
-func (r *registry) regGlobXact(entry GlobalEntryProvider) {
+func (r *registry) regGlobXact(entry GlobalFactory) {
 	cos.Assert(xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeGlobal)
 
 	// It is expected that registrations happen at the init time. Therefore, it

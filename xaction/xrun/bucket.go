@@ -17,7 +17,7 @@ import (
 )
 
 type (
-	BckRenameProvider struct {
+	MovFactory struct {
 		xact *bckRename
 
 		t     cluster.Target
@@ -36,12 +36,12 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact             = (*bckRename)(nil)
-	_ xreg.BucketEntryProvider = (*BckRenameProvider)(nil)
+	_ cluster.Xact    = (*bckRename)(nil)
+	_ xreg.BckFactory = (*MovFactory)(nil)
 )
 
-func (*BckRenameProvider) New(args *xreg.XactArgs) xreg.BucketEntry {
-	return &BckRenameProvider{
+func (*MovFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
+	return &MovFactory{
 		t:     args.T,
 		uuid:  args.UUID,
 		phase: args.Phase,
@@ -49,13 +49,13 @@ func (*BckRenameProvider) New(args *xreg.XactArgs) xreg.BucketEntry {
 	}
 }
 
-func (p *BckRenameProvider) Start(bck cmn.Bck) error {
+func (p *MovFactory) Start(bck cmn.Bck) error {
 	p.xact = newBckRename(p.uuid, p.Kind(), bck, p.t, p.args.BckFrom, p.args.BckTo, p.args.RebID)
 	return nil
 }
-func (*BckRenameProvider) Kind() string        { return cmn.ActMoveBck }
-func (p *BckRenameProvider) Get() cluster.Xact { return p.xact }
-func (p *BckRenameProvider) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, err error) {
+func (*MovFactory) Kind() string        { return cmn.ActMoveBck }
+func (p *MovFactory) Get() cluster.Xact { return p.xact }
+func (p *MovFactory) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, err error) {
 	if p.phase == cmn.ActBegin {
 		if !previousEntry.Get().Finished() {
 			err = fmt.Errorf("%s: cannot(%s=>%s) older rename still in progress", p.Kind(), p.args.BckFrom, p.args.BckTo)
@@ -63,7 +63,7 @@ func (p *BckRenameProvider) PreRenewHook(previousEntry xreg.BucketEntry) (keep b
 		}
 		// TODO: more checks
 	}
-	prev := previousEntry.(*BckRenameProvider)
+	prev := previousEntry.(*MovFactory)
 	bckEq := prev.args.BckTo.Equal(p.args.BckTo, false /*sameID*/, false /* same backend */)
 	if prev.phase == cmn.ActBegin && p.phase == cmn.ActCommit && bckEq {
 		prev.phase = cmn.ActCommit // transition
@@ -74,7 +74,7 @@ func (p *BckRenameProvider) PreRenewHook(previousEntry xreg.BucketEntry) (keep b
 		p.Kind(), prev.args.BckFrom, prev.args.BckTo, prev.phase, p.phase, p.args.BckFrom)
 	return
 }
-func (p *BckRenameProvider) PostRenewHook(_ xreg.BucketEntry) {}
+func (p *MovFactory) PostRenewHook(_ xreg.BucketEntry) {}
 
 func newBckRename(uuid, kind string, bck cmn.Bck, t cluster.Target,
 	bckFrom, bckTo *cluster.Bck, rebID xaction.RebID) *bckRename {
@@ -121,7 +121,7 @@ type (
 		t    cluster.Target
 		args *xreg.DeletePrefetchArgs
 	}
-	evictDeleteProvider struct {
+	evdFactory struct {
 		xreg.BaseBckEntry
 		xact *evictDelete
 
@@ -137,24 +137,24 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact             = (*evictDelete)(nil)
-	_ xreg.BucketEntryProvider = (*evictDeleteProvider)(nil)
+	_ cluster.Xact    = (*evictDelete)(nil)
+	_ xreg.BckFactory = (*evdFactory)(nil)
 )
 
-func (p *evictDeleteProvider) New(args *xreg.XactArgs) xreg.BucketEntry {
-	return &evictDeleteProvider{
+func (p *evdFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
+	return &evdFactory{
 		t:    args.T,
 		kind: p.kind,
 		args: args.Custom.(*xreg.DeletePrefetchArgs),
 	}
 }
 
-func (p *evictDeleteProvider) Start(bck cmn.Bck) error {
+func (p *evdFactory) Start(bck cmn.Bck) error {
 	p.xact = newEvictDelete(p.args.UUID, p.kind, bck, p.t, p.args)
 	return nil
 }
-func (p *evictDeleteProvider) Kind() string      { return p.kind }
-func (p *evictDeleteProvider) Get() cluster.Xact { return p.xact }
+func (p *evdFactory) Kind() string      { return p.kind }
+func (p *evdFactory) Get() cluster.Xact { return p.xact }
 
 func newEvictDelete(uuid, kind string, bck cmn.Bck, t cluster.Target, dpargs *xreg.DeletePrefetchArgs) *evictDelete {
 	xargs := xaction.Args{ID: xaction.BaseID(uuid), Kind: kind, Bck: &bck}
@@ -182,7 +182,7 @@ func (r *evictDelete) Run() {
 //
 
 type (
-	PrefetchProvider struct {
+	PrfchFactory struct {
 		xreg.BaseBckEntry
 		xact *prefetch
 		t    cluster.Target
@@ -195,23 +195,23 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact             = (*prefetch)(nil)
-	_ xreg.BucketEntryProvider = (*PrefetchProvider)(nil)
+	_ cluster.Xact    = (*prefetch)(nil)
+	_ xreg.BckFactory = (*PrfchFactory)(nil)
 )
 
-func (*PrefetchProvider) New(args *xreg.XactArgs) xreg.BucketEntry {
-	return &PrefetchProvider{
+func (*PrfchFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
+	return &PrfchFactory{
 		t:    args.T,
 		args: args.Custom.(*xreg.DeletePrefetchArgs),
 	}
 }
 
-func (p *PrefetchProvider) Start(bck cmn.Bck) error {
+func (p *PrfchFactory) Start(bck cmn.Bck) error {
 	p.xact = newPrefetch(p.args.UUID, p.Kind(), bck, p.t, p.args)
 	return nil
 }
-func (*PrefetchProvider) Kind() string        { return cmn.ActPrefetch }
-func (p *PrefetchProvider) Get() cluster.Xact { return p.xact }
+func (*PrfchFactory) Kind() string        { return cmn.ActPrefetch }
+func (p *PrfchFactory) Get() cluster.Xact { return p.xact }
 
 func newPrefetch(uuid, kind string, bck cmn.Bck, t cluster.Target, dpargs *xreg.DeletePrefetchArgs) *prefetch {
 	xargs := xaction.Args{ID: xaction.BaseID(uuid), Kind: kind, Bck: &bck}

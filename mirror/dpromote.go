@@ -21,7 +21,7 @@ import (
 // XactDirPromote copies a bucket locally within the same cluster
 
 type (
-	dirPromoteProvider struct {
+	proFactory struct {
 		xreg.BaseBckEntry
 		xact   *XactDirPromote
 		t      cluster.Target
@@ -37,28 +37,28 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact             = (*XactDirPromote)(nil)
-	_ xreg.BucketEntryProvider = (*dirPromoteProvider)(nil)
+	_ cluster.Xact    = (*XactDirPromote)(nil)
+	_ xreg.BckFactory = (*proFactory)(nil)
 )
 
 ////////////////////////
-// dirPromoteProvider //
+// proFactory //
 ////////////////////////
 
-func (*dirPromoteProvider) New(args *xreg.XactArgs) xreg.BucketEntry {
+func (*proFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
 	c := args.Custom.(*xreg.DirPromoteArgs)
-	return &dirPromoteProvider{t: args.T, dir: c.Dir, params: c.Params}
+	return &proFactory{t: args.T, dir: c.Dir, params: c.Params}
 }
 
-func (p *dirPromoteProvider) Start(bck cmn.Bck) error {
+func (p *proFactory) Start(bck cmn.Bck) error {
 	xact := NewXactDirPromote(p.dir, bck, p.t, p.params)
 	go xact.Run()
 	p.xact = xact
 	return nil
 }
 
-func (*dirPromoteProvider) Kind() string        { return cmn.ActPromote }
-func (p *dirPromoteProvider) Get() cluster.Xact { return p.xact }
+func (*proFactory) Kind() string        { return cmn.ActPromote }
+func (p *proFactory) Get() cluster.Xact { return p.xact }
 
 ////////////////////
 // XactDirPromote //
