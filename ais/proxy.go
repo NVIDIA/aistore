@@ -375,27 +375,25 @@ func (p *proxyrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/buckets[/bucket-name]
 func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
+	var (
+		msg       cmn.ActionMsg
+		bckName   string
+		queryBcks cmn.QueryBcks
+	)
 	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathBuckets.L)
 	if err != nil {
 		return
 	}
-
-	var msg cmn.ActionMsg
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
-
-	var bckName string
 	if len(apiItems) > 0 {
 		bckName = apiItems[0]
 	}
-
-	var queryBcks cmn.QueryBcks
 	if queryBcks, err = newQueryBcksFromQuery(bckName, r.URL.Query()); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
-
 	switch msg.Action {
 	case cmn.ActList:
 		p.handleList(w, r, queryBcks, &msg)
@@ -748,16 +746,14 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 // POST { action } /v1/buckets[/bucket-name]
 func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
+	var msg cmn.ActionMsg
 	apiItems, err := p.checkRESTItems(w, r, 1, true, cmn.URLPathBuckets.L)
 	if err != nil {
 		return
 	}
-
-	var msg cmn.ActionMsg
 	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
-
 	bucket := apiItems[0]
 	p.hpostBucket(w, r, &msg, bucket)
 }

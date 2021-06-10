@@ -326,32 +326,27 @@ func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 
 // POST /v1/etl/build
 func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
+	var msg etl.BuildMsg
 	_, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathETLBuild.L)
 	if err != nil {
 		return
 	}
-
-	var msg etl.BuildMsg
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
-
 	if msg.ID == "" {
 		msg.ID = cos.GenUUID()
 	} else if err = cos.ValidateID(msg.ID); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
-
 	if err := msg.Validate(); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
-
 	if p.forwardCP(w, r, nil, "buildETL") {
 		return
 	}
-
 	if err = p.startETL(w, r, cos.MustMarshal(msg), msg.ID); err != nil {
 		p.writeErr(w, r, err)
 	}

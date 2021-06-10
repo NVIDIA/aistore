@@ -41,7 +41,6 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	if _, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathQueryInit.L); err != nil {
 		return
 	}
-
 	// A target will return error if given handle already exists (though is very unlikely).
 	handle := cos.GenUUID()
 	header := http.Header{cmn.HdrHandle: []string{handle}}
@@ -49,7 +48,6 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		return
 	}
-
 	if _, err := query.NewQueryFromMsg(p, &msg.QueryMsg); err != nil {
 		p.writeErrMsg(w, r, "failed to parse query message: "+err.Error())
 		return
@@ -141,7 +139,6 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 	if _, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathQueryNext.L); err != nil {
 		return
 	}
-
 	msg := &query.NextMsg{}
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		return
@@ -150,15 +147,12 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, errQueryHandle)
 		return
 	}
-
 	if p.ic.reverseToOwner(w, r, msg.Handle, msg) {
 		return
 	}
-
 	if _, ok := p.ic.checkEntry(w, r, msg.Handle); !ok {
 		return
 	}
-
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{
 		Method: http.MethodGet,

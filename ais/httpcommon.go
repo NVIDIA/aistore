@@ -547,18 +547,19 @@ func (h *httprunner) parseAPIRequest(w http.ResponseWriter, r *http.Request, arg
 	debug.Assert(len(args.prefix) != 0)
 	args.items, err = h.checkRESTItems(w, r, args.after, false, args.prefix)
 	if err != nil {
-		return err
+		return
 	}
 	debug.Assert(len(args.items) > args.bckIdx)
 	bckName := args.items[args.bckIdx]
 	args.bck, err = newBckFromQuery(bckName, r.URL.Query())
-	if err == nil && args.msg != nil {
-		err = cmn.ReadJSON(w, r, args.msg)
-	}
 	if err != nil {
 		h.writeErr(w, r, err)
+		return
 	}
-	return err
+	if args.msg != nil {
+		err = cmn.ReadJSON(w, r, args.msg)
+	}
+	return
 }
 
 func (h *httprunner) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {

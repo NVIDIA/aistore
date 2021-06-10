@@ -183,21 +183,22 @@ func ReadBytes(r *http.Request) (b []byte, err error) {
 	return b, err
 }
 
-func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}, optional ...bool) error {
+// NOTE: calls httpErr.write
+func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}, optional ...bool) (err error) {
 	defer cos.Close(r.Body)
-	if err := jsoniter.NewDecoder(r.Body).Decode(out); err != nil {
-		if len(optional) > 0 && optional[0] && err == io.EOF {
-			return nil
-		}
-		s := fmt.Sprintf("failed to json-unmarshal %s request, err: %v [%T]", r.Method, err, out)
-		if _, file, line, ok := runtime.Caller(1); ok {
-			f := filepath.Base(file)
-			s += fmt.Sprintf("(%s, #%d)", f, line)
-		}
-		WriteErrMsg(w, r, s)
-		return err
+	if err = jsoniter.NewDecoder(r.Body).Decode(out); err == nil {
+		return
 	}
-	return nil
+	if len(optional) > 0 && optional[0] && err == io.EOF {
+		return nil
+	}
+	s := fmt.Sprintf("failed to json-unmarshal %s request, err: %v [%T]", r.Method, err, out)
+	if _, file, line, ok := runtime.Caller(1); ok {
+		f := filepath.Base(file)
+		s += fmt.Sprintf("(%s, #%d)", f, line)
+	}
+	WriteErrMsg(w, r, s)
+	return
 }
 
 // WriteJSON writes a struct or byte slice to an HTTP response.

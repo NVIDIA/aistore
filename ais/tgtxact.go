@@ -35,12 +35,10 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 			query = r.URL.Query()
 			what  = query.Get(cmn.URLParamWhat)
 		)
-
 		if uuid := query.Get(cmn.URLParamUUID); uuid != "" {
 			t.getXactByID(w, r, what, uuid)
 			return
 		}
-
 		if cmn.ReadJSON(w, r, &xactMsg) != nil {
 			return
 		}

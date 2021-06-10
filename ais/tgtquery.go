@@ -38,23 +38,21 @@ func (t *targetrunner) queryHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
-	if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathQueryInit.L); err != nil {
-		return
-	}
 	var (
 		handle = r.Header.Get(cmn.HdrHandle) // TODO: should it be from header or from body?
 		msg    = &query.InitMsg{}
 	)
+	if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathQueryInit.L); err != nil {
+		return
+	}
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		return
 	}
-
 	q, err := query.NewQueryFromMsg(t, &msg.QueryMsg)
 	if err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
-
 	var (
 		ctx = context.Background()
 		// TODO: we should use `q` directly instead of passing everything in
@@ -107,14 +105,14 @@ func (t *targetrunner) httpquerygetworkertarget(w http.ResponseWriter, _ *http.R
 }
 
 func (t *targetrunner) httpquerygetobjects(w http.ResponseWriter, r *http.Request) {
-	var entries []*cmn.BucketEntry
-
+	var (
+		entries []*cmn.BucketEntry
+		msg     = &query.NextMsg{}
+	)
 	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathQuery.L)
 	if err != nil {
 		return
 	}
-
-	msg := &query.NextMsg{}
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		return
 	}
@@ -127,7 +125,6 @@ func (t *targetrunner) httpquerygetobjects(w http.ResponseWriter, r *http.Reques
 		t.queryDoesntExist(w, r, msg.Handle)
 		return
 	}
-
 	switch apiItems[0] {
 	case cmn.Next:
 		entries, err = resultSet.NextN(msg.Size)
@@ -137,12 +134,10 @@ func (t *targetrunner) httpquerygetobjects(w http.ResponseWriter, r *http.Reques
 		t.writeErrf(w, r, "invalid %s/%s/%s", cmn.Version, cmn.Query, apiItems[0])
 		return
 	}
-
 	if err != nil && err != io.EOF {
 		t.writeErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
-
 	objList := &cmn.BucketList{Entries: entries}
 	if strings.Contains(r.Header.Get(cmn.HdrAccept), cmn.ContentMsgPack) {
 		t.writeMsgPack(w, r, objList, "query_objects")

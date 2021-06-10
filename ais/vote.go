@@ -92,7 +92,6 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 	if _, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathVoteInit.L); err != nil {
 		return
 	}
-
 	msg := VoteInitiationMessage{}
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
@@ -102,7 +101,6 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 		p.writeErrf(w, r, "%s: invalid %s in the Vote Request, err: %v", p.si, newSmap, err)
 		return
 	}
-
 	smap := p.owner.smap.get()
 	caller := r.Header.Get(cmn.HdrCallerName)
 	glog.Infof("[vote] receive %s from %q (local: %s)", newSmap.StringEx(), caller, smap.StringEx())
@@ -426,7 +424,6 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 	if _, err := h.checkRESTItems(w, r, 0, false, cmn.URLPathVoteProxy.L); err != nil {
 		return
 	}
-
 	msg := VoteMessage{}
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return

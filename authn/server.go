@@ -136,20 +136,20 @@ func (a *Server) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 	if _, err := checkRESTItems(w, r, 0, cmn.URLPathTokens.L); err != nil {
 		return
 	}
-
 	msg := &TokenMsg{}
-	if err := cmn.ReadJSON(w, r, msg); err != nil || msg.Token == "" {
-		glog.Errorf("Failed to read request: %v\n", err)
+	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		return
 	}
-
+	if msg.Token == "" {
+		cmn.WriteErrMsg(w, r, "empty token")
+		return
+	}
 	secret := Conf.Secret()
 	_, err := DecryptToken(msg.Token, secret)
 	if err != nil {
 		cmn.WriteErr(w, r, err)
 		return
 	}
-
 	a.users.revokeToken(msg.Token)
 }
 
@@ -210,13 +210,10 @@ func (a *Server) userAdd(w http.ResponseWriter, r *http.Request) {
 	if err := a.checkAuthorization(w, r); err != nil {
 		return
 	}
-
 	info := &User{}
 	if err := cmn.ReadJSON(w, r, info); err != nil {
-		glog.Errorf("Failed to read credentials: %v\n", err)
 		return
 	}
-
 	if err := a.users.addUser(info); err != nil {
 		cmn.WriteErrMsg(w, r, fmt.Sprintf("Failed to add user: %v", err), http.StatusInternalServerError)
 		return
@@ -299,23 +296,18 @@ func (a *Server) checkAuthorization(w http.ResponseWriter, r *http.Request) erro
 // token is returned
 func (a *Server) userLogin(w http.ResponseWriter, r *http.Request) {
 	var err error
-
 	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathUsers.L)
 	if err != nil {
 		return
 	}
-
 	msg := &LoginMsg{}
 	if err = cmn.ReadJSON(w, r, msg); err != nil {
-		glog.Errorf("Failed to read request body: %v\n", err)
 		return
 	}
-
 	if msg.Password == "" {
 		cmn.WriteErrMsg(w, r, "Not authorized", http.StatusUnauthorized)
 		return
 	}
-
 	userID := apiItems[0]
 	pass := msg.Password
 	if glog.V(4) {
@@ -360,10 +352,8 @@ func (a *Server) httpSrvPost(w http.ResponseWriter, r *http.Request) {
 	if err := a.checkAuthorization(w, r); err != nil {
 		return
 	}
-
 	cluConf := &Cluster{}
 	if err := cmn.ReadJSON(w, r, cluConf); err != nil {
-		glog.Errorf("Failed to read request body: %v\n", err)
 		return
 	}
 	if err := a.users.addCluster(cluConf); err != nil {
@@ -380,14 +370,11 @@ func (a *Server) httpSrvPut(w http.ResponseWriter, r *http.Request) {
 	if err := a.checkAuthorization(w, r); err != nil {
 		return
 	}
-
-	cluID := apiItems[0]
 	cluConf := &Cluster{}
 	if err := cmn.ReadJSON(w, r, cluConf); err != nil {
-		glog.Errorf("Failed to read request body: %v\n", err)
-		cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
+	cluID := apiItems[0]
 	if err := a.users.updateCluster(cluID, cluConf); err != nil {
 		cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 	}
@@ -522,13 +509,10 @@ func (a *Server) httpRolePost(w http.ResponseWriter, r *http.Request) {
 	if err = a.checkAuthorization(w, r); err != nil {
 		return
 	}
-
 	info := &Role{}
 	if err := cmn.ReadJSON(w, r, info); err != nil {
-		glog.Errorf("Failed to read role: %v", err)
 		return
 	}
-
 	if err := a.users.addRole(info); err != nil {
 		cmn.WriteErrMsg(w, r, fmt.Sprintf("Failed to add role: %v", err), http.StatusInternalServerError)
 	}

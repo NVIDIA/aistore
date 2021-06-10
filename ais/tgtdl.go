@@ -103,7 +103,6 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathDownload.L); err != nil {
 			return
 		}
-
 		payload := &downloader.DlAdminBody{}
 		if err := cmn.ReadJSON(w, r, payload); err != nil {
 			return
@@ -113,7 +112,6 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			t.writeErr(w, r, err)
 			return
 		}
-
 		if payload.ID != "" {
 			response, statusCode, respErr =
 				downloaderXact.JobStatus(payload.ID, payload.OnlyActiveTasks)
@@ -132,7 +130,6 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return
 		}
-
 		payload := &downloader.DlAdminBody{}
 		if err = cmn.ReadJSON(w, r, payload); err != nil {
 			return

@@ -565,29 +565,26 @@ func (t *targetrunner) ecHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/buckets[/bucket-name]
 func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
+	var (
+		bckName   string
+		queryBcks cmn.QueryBcks
+	)
 	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathBuckets.L)
 	if err != nil {
 		return
 	}
-
 	msg := &aisMsg{}
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
-
-	var bckName string
 	if len(apiItems) > 0 {
 		bckName = apiItems[0]
 	}
-
-	var queryBcks cmn.QueryBcks
 	if queryBcks, err = newQueryBcksFromQuery(bckName, r.URL.Query()); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
-
 	t.ensureLatestBMD(msg, r)
-
 	switch msg.Action {
 	case cmn.ActList:
 		t.handleList(w, r, queryBcks, msg)
@@ -650,7 +647,6 @@ func (t *targetrunner) handleSummary(w http.ResponseWriter, r *http.Request, que
 func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	msg := aisMsg{}
 	if err := cmn.ReadJSON(w, r, &msg, true); err != nil {
-		t.writeErr(w, r, err)
 		return
 	}
 	request := &apiRequest{after: 1, prefix: cmn.URLPathBuckets.L}
@@ -731,7 +727,6 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	msg := &aisMsg{}
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
-		t.writeErr(w, r, err)
 		return
 	}
 	request := &apiRequest{prefix: cmn.URLPathBuckets.L, after: 1}
@@ -1021,7 +1016,6 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		request = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
 	)
 	if err := cmn.ReadJSON(w, r, &msg, true); err != nil {
-		t.writeErr(w, r, err)
 		return
 	}
 	if isRedirect(query) == "" {
