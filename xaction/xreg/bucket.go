@@ -112,6 +112,9 @@ func RenewBucketXact(kind string, bck *cluster.Bck, args *XactArgs) (cluster.Xac
 }
 
 func (r *registry) renewBucketXact(kind string, bck *cluster.Bck, args *XactArgs) (cluster.Xact, error) {
+	if args == nil {
+		args = &XactArgs{}
+	}
 	e := r.bckXacts[kind].New(args)
 	res := r.renewBckXact(e, bck)
 	if res.err != nil {
