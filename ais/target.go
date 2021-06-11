@@ -705,12 +705,12 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			t.writeErrf(w, r, "invalid value provided to %q action", msg.Action)
 			return
 		}
-		xact, err := xreg.RenewEvictDelete(t, request.bck, args)
-		if err != nil {
-			t.writeErr(w, r, err)
+		rns := xreg.RenewEvictDelete(t, request.bck, args)
+		if rns.Err != nil {
+			t.writeErr(w, r, rns.Err)
 			return
 		}
-
+		xact := rns.Entry.Get()
 		xact.AddNotif(&xaction.NotifXact{
 			NotifBase: nl.NotifBase{
 				When: cluster.UponTerm,
@@ -748,7 +748,8 @@ func (t *targetrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		bckTo := cluster.NewBckEmbed(archiveMsg.ToBck)
-		xact := xreg.RenewPutArchive(msg.UUID, t, request.bck, bckTo)
+		rns := xreg.RenewPutArchive(msg.UUID, t, request.bck, bckTo)
+		xact := rns.Entry.Get()
 		xarch := xact.(*mirror.XactArchive)
 		xarch.Do(archiveMsg)
 	default:
@@ -802,7 +803,8 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		args.UUID = msg.UUID
-		xact := xreg.RenewPrefetch(t, request.bck, args)
+		rns := xreg.RenewPrefetch(t, request.bck, args)
+		xact := rns.Entry.Get()
 		go xact.Run()
 	default:
 		t.writeErrAct(w, r, msg.Action)
@@ -1466,7 +1468,8 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 		}
 		return
 	}
-	xact := xreg.RenewPutMirror(t, lom)
+	rns := xreg.RenewPutMirror(t, lom)
+	xact := rns.Entry.Get()
 	xputlrep := xact.(*mirror.XactPut)
 	xputlrep.Repl(lom)
 }
@@ -1627,11 +1630,12 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s: promote %+v", t.si, promoteArgs)
 		}
-		xact, err := xreg.RenewDirPromote(t, request.bck, srcFQN, &promoteArgs)
-		if err != nil {
-			t.writeErr(w, r, err)
+		rns := xreg.RenewDirPromote(t, request.bck, srcFQN, &promoteArgs)
+		if rns.Err != nil {
+			t.writeErr(w, r, rns.Err)
 			return
 		}
+		xact := rns.Entry.Get()
 		go xact.Run()
 		return
 	}

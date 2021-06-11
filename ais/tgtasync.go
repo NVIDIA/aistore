@@ -45,18 +45,19 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 	debug.Assert(msg.PageSize != 0)
 	debug.Assert(msg.UUID != "")
 
-	xact, isNew, err := xreg.RenewObjList(t, bck, msg.UUID, msg)
+	rns := xreg.RenewObjList(t, bck, msg.UUID, msg)
+	xact := rns.Entry.Get()
 	// Double check that xaction has not gone before starting page read.
 	// Restart xaction if needed.
-	if err == objlist.ErrGone {
-		xact, isNew, err = xreg.RenewObjList(t, bck, msg.UUID, msg)
+	if rns.Err == objlist.ErrGone {
+		rns = xreg.RenewObjList(t, bck, msg.UUID, msg)
+		xact = rns.Entry.Get()
 	}
-	if err != nil {
-		t.writeErr(w, r, err)
+	if rns.Err != nil {
+		t.writeErr(w, r, rns.Err)
 		return
 	}
-
-	if isNew {
+	if rns.IsNew {
 		go xact.Run()
 	}
 

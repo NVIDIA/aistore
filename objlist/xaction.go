@@ -81,7 +81,7 @@ var (
 )
 
 func init() {
-	xreg.RegBckXact(&factory{})
+	xreg.RegFactory(&factory{})
 }
 
 func (*factory) New(args *xreg.XactArgs) xreg.BucketEntry {

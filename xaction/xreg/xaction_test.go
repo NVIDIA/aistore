@@ -75,10 +75,10 @@ func TestXactionRenewPrefetch(t *testing.T) {
 	xreg.Reset()
 	bmd.Add(bck)
 
-	xreg.RegBckXact(&xrun.PrfchFactory{})
+	xreg.RegFactory(&xrun.PrfchFactory{})
 	defer xreg.AbortAll()
 
-	ch := make(chan cluster.Xact, 10)
+	ch := make(chan xreg.RenewRes, 10)
 	wg := &sync.WaitGroup{}
 	wg.Add(10)
 	for i := 0; i < 10; i++ {
@@ -92,8 +92,8 @@ func TestXactionRenewPrefetch(t *testing.T) {
 	close(ch)
 
 	res := make(map[cluster.Xact]struct{}, 10)
-	for xact := range ch {
-		if xact != nil {
+	for rns := range ch {
+		if xact := rns.Entry.Get(); xact != nil {
 			res[xact] = struct{}{}
 		}
 	}
@@ -113,12 +113,13 @@ func TestXactionAbortAll(t *testing.T) {
 	bmd.Add(bckTo)
 
 	xreg.RegGlobXact(&lru.Factory{})
-	xreg.RegBckXact(&xrun.MovFactory{})
+	xreg.RegFactory(&xrun.MovFactory{})
 
 	xactGlob := xreg.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	xactBck, err := xreg.RenewBckRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
-	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
+	rns := xreg.RenewBckRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
+	xactBck := rns.Entry.Get()
+	tassert.Errorf(t, rns.Err == nil && xactBck != nil, "Xaction must be created")
 
 	xreg.AbortAll()
 
@@ -143,12 +144,13 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 	bmd.Add(bckTo)
 
 	xreg.RegGlobXact(&lru.Factory{})
-	xreg.RegBckXact(&xrun.MovFactory{})
+	xreg.RegFactory(&xrun.MovFactory{})
 
 	xactGlob := xreg.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	xactBck, err := xreg.RenewBckRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
-	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
+	rns := xreg.RenewBckRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
+	xactBck := rns.Entry.Get()
+	tassert.Errorf(t, rns.Err == nil && xactBck != nil, "Xaction must be created")
 
 	xreg.AbortAll(xaction.XactTypeGlobal)
 
@@ -173,12 +175,13 @@ func TestXactionAbortBuckets(t *testing.T) {
 	bmd.Add(bckTo)
 
 	xreg.RegGlobXact(&lru.Factory{})
-	xreg.RegBckXact(&xrun.MovFactory{})
+	xreg.RegFactory(&xrun.MovFactory{})
 
 	xactGlob := xreg.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	xactBck, err := xreg.RenewBckRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
-	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
+	rns := xreg.RenewBckRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
+	xactBck := rns.Entry.Get()
+	tassert.Errorf(t, rns.Err == nil && xactBck != nil, "Xaction must be created")
 
 	xreg.AbortAllBuckets(bckFrom)
 
@@ -209,18 +212,21 @@ func TestXactionQueryFinished(t *testing.T) {
 	bmd.Add(bck1)
 	bmd.Add(bck2)
 
-	xreg.RegBckXact(&xrun.PrfchFactory{})
-	xreg.RegBckXact(&xrun.MovFactory{})
+	xreg.RegFactory(&xrun.PrfchFactory{})
+	xreg.RegFactory(&xrun.MovFactory{})
 
-	xactBck1, err := xreg.RenewBckRename(tMock, bck1, bck1, "uuid", 123, "phase")
-	tassert.Errorf(t, err == nil && xactBck1 != nil, "Xaction must be created")
-	xactBck2, err := xreg.RenewBckRename(tMock, bck2, bck2, "uuid", 123, "phase")
-	tassert.Errorf(t, err == nil && xactBck2 != nil, "Xaction must be created %v", err)
-	xactBck1.Finish(nil)
-	xactBck1, err = xreg.RenewBckRename(tMock, bck1, bck1, "uuid", 123, "phase")
-	tassert.Errorf(t, err == nil && xactBck1 != nil, "Xaction must be created")
-	xactBck3 := xreg.RenewPrefetch(tMock, bck1, &xreg.DeletePrefetchArgs{})
-	tassert.Errorf(t, xactBck3 != nil, "Xaction must be created %v", err)
+	rns1 := xreg.RenewBckRename(tMock, bck1, bck1, "uuid", 123, "phase")
+	tassert.Errorf(t, rns1.Err == nil && rns1.Entry.Get() != nil, "Xaction must be created")
+	rns2 := xreg.RenewBckRename(tMock, bck2, bck2, "uuid", 123, "phase")
+	tassert.Errorf(t, rns2.Err == nil && rns2.Entry.Get() != nil, "Xaction must be created %v", rns2.Err)
+	rns1.Entry.Get().Finish(nil)
+
+	rns1 = xreg.RenewBckRename(tMock, bck1, bck1, "uuid", 123, "phase")
+	tassert.Errorf(t, rns1.Err == nil && rns1.Entry.Get() != nil, "Xaction must be created")
+	rns3 := xreg.RenewPrefetch(tMock, bck1, &xreg.DeletePrefetchArgs{})
+	tassert.Errorf(t, rns3.Entry.Get() != nil, "Xaction must be created %v", rns3.Err)
+
+	xactBck1 := rns1.Entry.Get()
 
 	scenarioName := func(tc testConfig) string {
 		name := ""

@@ -160,7 +160,8 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bc
 			RangeMsg: &cmn.RangeMsg{},
 			UUID:     xactMsg.ID,
 		}
-		xact := xreg.RenewPrefetch(t, bck, args)
+		rns := xreg.RenewPrefetch(t, bck, args)
+		xact := rns.Entry.Get()
 		xact.AddNotif(&xaction.NotifXact{
 			NotifBase: nl.NotifBase{
 				When: cluster.UponTerm,

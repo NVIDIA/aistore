@@ -66,16 +66,15 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	if q.Cached {
 		smsg.Flags = cmn.SelectCached
 	}
-
-	xact, isNew, err := xreg.RenewQuery(ctx, t, q, smsg)
-	if err != nil {
-		t.writeErr(w, r, err)
+	rns := xreg.RenewQuery(ctx, t, q, smsg)
+	if rns.Err != nil {
+		t.writeErr(w, r, rns.Err)
 		return
 	}
-	if !isNew {
+	if !rns.IsNew {
 		return
 	}
-
+	xact := rns.Entry.Get()
 	xact.AddNotif(&xaction.NotifXact{
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 		Xact:      xact,

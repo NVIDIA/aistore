@@ -29,13 +29,13 @@ type (
 )
 
 func init() {
-	xreg.RegBckXact(&cpyFactory{kind: cmn.ActCopyBck})
-	xreg.RegBckXact(&cpyFactory{kind: cmn.ActETLBck})
-	xreg.RegBckXact(&proFactory{})
-	xreg.RegBckXact(&mncFactory{})
-	xreg.RegBckXact(&llcFactory{})
-	xreg.RegBckXact(&putFactory{})
-	xreg.RegBckXact(&archFactory{})
+	xreg.RegFactory(&cpyFactory{kind: cmn.ActCopyBck})
+	xreg.RegFactory(&cpyFactory{kind: cmn.ActETLBck})
+	xreg.RegFactory(&proFactory{})
+	xreg.RegFactory(&mncFactory{})
+	xreg.RegFactory(&llcFactory{})
+	xreg.RegFactory(&putFactory{})
+	xreg.RegFactory(&archFactory{})
 }
 
 func newXactBckBase(id, kind string, bck cmn.Bck, opts *mpather.JoggerGroupOpts) *xactBckBase {

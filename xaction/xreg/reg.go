@@ -43,6 +43,12 @@ type (
 		Bck         *cluster.Bck
 		OnlyRunning *bool
 	}
+	// Represents result of renewing given xaction.
+	RenewRes struct {
+		Entry BaseEntry // Depending on situation can be new or old entry.
+		Err   error     // Error that occurred during renewal.
+		IsNew bool      // true: a new entry has been created; false: old one returned
+	}
 	// Selects subset of xactions to abort.
 	abortArgs struct {
 		// run on `bcks` buckets
@@ -53,12 +59,6 @@ type (
 		mountpaths bool
 		// all or matching `ty` above, if defined
 		all bool
-	}
-	// Represents result of renewing given xaction.
-	renewRes struct {
-		entry BaseEntry // Depending on situation can be new or old entry.
-		err   error     // Error that occurred during renewal.
-		isNew bool      // true: a new entry has been created; false: old one returned
 	}
 	taskState struct {
 		Result interface{} `json:"res"`
@@ -513,7 +513,7 @@ func (r *registry) cleanUpFinished() time.Duration {
 
 // renew methods: bucket
 
-func (r *registry) renewBckXact(entry BucketEntry, bck *cluster.Bck, uuids ...string) (res renewRes) {
+func (r *registry) renewBckXact(entry BucketEntry, bck *cluster.Bck, uuids ...string) (res RenewRes) {
 	var uuid string
 	if len(uuids) != 0 {
 		uuid = uuids[0]
@@ -523,7 +523,7 @@ func (r *registry) renewBckXact(entry BucketEntry, bck *cluster.Bck, uuids ...st
 		prevEntry := e.(BucketEntry)
 		if keep, err := entry.PreRenewHook(prevEntry); keep || err != nil {
 			r.mtx.RUnlock()
-			return renewRes{entry: prevEntry, isNew: false, err: err}
+			return RenewRes{Entry: prevEntry, Err: err, IsNew: false}
 		}
 	}
 	r.mtx.RUnlock()
@@ -538,29 +538,29 @@ func (r *registry) renewBckXact(entry BucketEntry, bck *cluster.Bck, uuids ...st
 		prevEntry = e.(BucketEntry)
 		running = true
 		if keep, err := entry.PreRenewHook(prevEntry); keep || err != nil {
-			return renewRes{entry: prevEntry, isNew: false, err: err}
+			return RenewRes{Entry: prevEntry, Err: err, IsNew: false}
 		}
 	}
 
 	if err := entry.Start(bck.Bck); err != nil {
-		return renewRes{entry: nil, isNew: true, err: err}
+		return RenewRes{Entry: nil, Err: err, IsNew: true}
 	}
 	r.storeEntry(entry)
 	if running {
 		entry.PostRenewHook(prevEntry)
 	}
-	return renewRes{entry: entry, isNew: true, err: nil}
+	return RenewRes{Entry: entry, Err: nil, IsNew: true}
 }
 
 // renew methods: global
 
-func (r *registry) renewGlobalXaction(entry GlobalEntry) (res renewRes) {
+func (r *registry) renewGlobalXaction(entry GlobalEntry) RenewRes {
 	r.mtx.RLock()
 	if e := r.getRunning(XactFilter{Kind: entry.Kind()}); e != nil {
 		prevEntry := e.(GlobalEntry)
 		if entry.PreRenewHook(prevEntry) {
 			r.mtx.RUnlock()
-			return renewRes{entry: prevEntry, isNew: false, err: nil}
+			return RenewRes{Entry: prevEntry, Err: nil, IsNew: false}
 		}
 	}
 	r.mtx.RUnlock()
@@ -575,18 +575,18 @@ func (r *registry) renewGlobalXaction(entry GlobalEntry) (res renewRes) {
 		prevEntry = e.(GlobalEntry)
 		running = true
 		if entry.PreRenewHook(prevEntry) {
-			return renewRes{entry: prevEntry, isNew: false, err: nil}
+			return RenewRes{Entry: prevEntry, Err: nil, IsNew: false}
 		}
 	}
 
 	if err := entry.Start(cmn.Bck{}); err != nil {
-		return renewRes{entry: nil, isNew: true, err: err}
+		return RenewRes{Entry: nil, Err: err, IsNew: true}
 	}
 	r.storeEntry(entry)
 	if running {
 		entry.PostRenewHook(prevEntry)
 	}
-	return renewRes{entry: entry, isNew: true, err: nil}
+	return RenewRes{Entry: entry, Err: nil, IsNew: true}
 }
 
 ////////////////

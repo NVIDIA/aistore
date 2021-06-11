@@ -24,27 +24,26 @@ import (
 // NOTE: This request is internal so we can have asserts there.
 // [METHOD] /v1/download
 func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
-	if !t.ensureIntraControl(w, r, false /* from primary */) {
-		return
-	}
-
 	var (
 		response   interface{}
 		respErr    error
 		statusCode int
 	)
-	xact, err := xreg.RenewDownloader(t, t.statsT)
-	if err != nil {
-		t.writeErr(w, r, err, http.StatusInternalServerError)
+	if !t.ensureIntraControl(w, r, false /* from primary */) {
 		return
 	}
+	rns := xreg.RenewDownloader(t, t.statsT)
+	if rns.Err != nil {
+		t.writeErr(w, r, rns.Err, http.StatusInternalServerError)
+		return
+	}
+	xact := rns.Entry.Get()
 	downloaderXact := xact.(*downloader.Downloader)
 	switch r.Method {
 	case http.MethodPost:
 		if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathDownload.L); err != nil {
 			return
 		}
-
 		var (
 			ctx              = context.Background()
 			uuid             = r.URL.Query().Get(cmn.URLParamUUID)
@@ -116,7 +115,10 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			response, statusCode, respErr =
 				downloaderXact.JobStatus(payload.ID, payload.OnlyActiveTasks)
 		} else {
-			var regex *regexp.Regexp
+			var (
+				regex *regexp.Regexp
+				err   error
+			)
 			if payload.Regex != "" {
 				if regex, err = regexp.CompilePOSIX(payload.Regex); err != nil {
 					t.writeErr(w, r, err)

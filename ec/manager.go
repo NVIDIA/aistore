@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
@@ -145,9 +146,9 @@ func (mgr *Manager) NewRespondXact(bck cmn.Bck) *XactRespond {
 func (mgr *Manager) RestoreBckGetXact(bck *cluster.Bck) *XactGet {
 	xact := mgr.getBckXacts(bck.Name).Get()
 	if xact == nil || xact.Finished() {
-		x, err := xreg.RenewBucketXact(cmn.ActECGet, bck, nil)
-		cos.AssertNoErr(err)
-
+		rns := xreg.RenewBucketXact(cmn.ActECGet, bck, nil)
+		debug.AssertNoErr(rns.Err)
+		x := rns.Entry.Get()
 		xact = x.(*XactGet)
 		mgr.getBckXacts(bck.Name).SetGet(xact)
 	}
@@ -157,9 +158,9 @@ func (mgr *Manager) RestoreBckGetXact(bck *cluster.Bck) *XactGet {
 func (mgr *Manager) RestoreBckPutXact(bck *cluster.Bck) *XactPut {
 	xact := mgr.getBckXacts(bck.Name).Put()
 	if xact == nil || xact.Finished() {
-		x, err := xreg.RenewBucketXact(cmn.ActECPut, bck, nil)
-		cos.AssertNoErr(err)
-
+		rns := xreg.RenewBucketXact(cmn.ActECPut, bck, nil)
+		debug.AssertNoErr(rns.Err)
+		x := rns.Entry.Get()
 		xact = x.(*XactPut)
 		mgr.getBckXacts(bck.Name).SetPut(xact)
 	}
@@ -169,9 +170,9 @@ func (mgr *Manager) RestoreBckPutXact(bck *cluster.Bck) *XactPut {
 func (mgr *Manager) RestoreBckRespXact(bck *cluster.Bck) *XactRespond {
 	xact := mgr.getBckXacts(bck.Name).Req()
 	if xact == nil || xact.Finished() {
-		x, err := xreg.RenewBucketXact(cmn.ActECRespond, bck, nil)
-		cos.AssertNoErr(err)
-
+		rns := xreg.RenewBucketXact(cmn.ActECRespond, bck, nil)
+		debug.AssertNoErr(rns.Err)
+		x := rns.Entry.Get()
 		xact = x.(*XactRespond)
 		mgr.getBckXacts(bck.Name).SetReq(xact)
 	}
