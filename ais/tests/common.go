@@ -713,10 +713,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 				if !test.backendBck.IsEmpty() {
 					tutils.SetBackendBck(t, baseParams, test.bck, test.backendBck)
 				}
-
-				defer func() {
-					api.DestroyBucket(baseParams, test.bck)
-				}()
+				defer api.DestroyBucket(baseParams, test.bck)
 			}
 
 			p, err := api.HeadBucket(baseParams, test.bck)

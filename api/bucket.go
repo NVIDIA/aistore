@@ -191,13 +191,13 @@ func DoesBucketExist(baseParams BaseParams, query cmn.QueryBcks) (bool, error) {
 //   you can copy AIS bucket to (or from) AWS bucket, and the latter to Google or Azure
 //   bucket, etc.
 // * Copying multiple buckets to the same destination bucket is also permitted.
-func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, msgs ...*cmn.CopyBckMsg) (xactID string, err error) {
+func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, optionalMsg ...*cmn.CopyBckMsg) (xactID string, err error) {
 	if err = toBck.Validate(); err != nil {
 		return
 	}
 	var msg *cmn.CopyBckMsg
-	if len(msgs) > 0 && msgs[0] != nil {
-		msg = msgs[0]
+	if len(optionalMsg) > 0 && optionalMsg[0] != nil {
+		msg = optionalMsg[0]
 	}
 	q := cmn.AddBckToQuery(nil, fromBck)
 	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.URLParamBucketTo)
@@ -436,29 +436,6 @@ func ListObjectsInvalidateCache(params BaseParams, bck cmn.Bck) error {
 		Path:       path,
 		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActInvalListCache}),
 	})
-}
-
-// Handles the List/Range operations (delete, prefetch)
-func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action string, listRangeMsg interface{}) (xactID string, err error) {
-	switch action {
-	case cmn.ActDelete, cmn.ActEvictObjects:
-		baseParams.Method = http.MethodDelete
-	case cmn.ActPrefetch:
-		baseParams.Method = http.MethodPost
-	default:
-		err = fmt.Errorf("invalid action %q", action)
-		return
-	}
-	err = DoHTTPRequest(ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathBuckets.Join(bck.Name),
-		Body:       cos.MustMarshal(cmn.ActionMsg{Action: action, Value: listRangeMsg}),
-		Header: http.Header{
-			cmn.HdrContentType: []string{cmn.ContentJSON},
-		},
-		Query: cmn.AddBckToQuery(nil, bck),
-	}, &xactID)
-	return
 }
 
 func ECEncodeBucket(baseParams BaseParams, bck cmn.Bck, data, parity int) (xactID string, err error) {

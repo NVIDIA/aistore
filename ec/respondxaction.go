@@ -22,15 +22,10 @@ import (
 )
 
 type (
-	// FIXME: Does `XactRespond` needs to be a `XactDemand`?
-	//  - it doesn't use `incPending()`
-
-	// Implements `xreg.BckFactory` and `xreg.BucketEntry` interface.
 	rspFactory struct {
 		xreg.BaseBckEntry
 		xact *XactRespond
 	}
-
 	// Xaction responsible for responding to EC requests of other targets.
 	// Should not be stopped if number of known targets is small.
 	XactRespond struct {
@@ -44,13 +39,13 @@ var (
 	_ xreg.BckFactory    = (*rspFactory)(nil)
 )
 
-/////////////////////////
+////////////////
 // rspFactory //
-/////////////////////////
+////////////////
 
-func (p *rspFactory) New(_ *xreg.XactArgs) xreg.BucketEntry {
-	return &rspFactory{}
-}
+func (p *rspFactory) New(_ *xreg.XactArgs) xreg.BucketEntry { return &rspFactory{} }
+func (*rspFactory) Kind() string                            { return cmn.ActECRespond }
+func (p *rspFactory) Get() cluster.Xact                     { return p.xact }
 
 func (p *rspFactory) Start(bck cmn.Bck) error {
 	var (
@@ -66,8 +61,6 @@ func (p *rspFactory) Start(bck cmn.Bck) error {
 	go xec.Run()
 	return nil
 }
-func (*rspFactory) Kind() string        { return cmn.ActECRespond }
-func (p *rspFactory) Get() cluster.Xact { return p.xact }
 
 /////////////////
 // XactRespond //

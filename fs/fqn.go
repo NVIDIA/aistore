@@ -21,10 +21,11 @@ const (
 
 const (
 	// prefixes for workfiles created by various services
-	WorkfileRemote  = "remote" // getting object from neighbor target while rebalance is running
-	WorkfileColdget = "cold"   // object GET: coldget
-	WorkfilePut     = "put"    // object PUT
-	WorkfileAppend  = "append" // object APPEND
+	WorkfileRemote  = "remote"  // getting object from neighbor target when rebalancing
+	WorkfileColdget = "cold"    // object GET: coldget
+	WorkfilePut     = "put"     // object PUT
+	WorkfileAppend  = "append"  // object APPEND
+	WorkfileArchive = "archive" // Archive list/range
 )
 
 type ParsedFQN struct {

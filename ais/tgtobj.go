@@ -39,25 +39,16 @@ import (
 
 type (
 	putObjInfo struct {
-		started time.Time // started time of receiving - used to calculate the recv duration
-		t       *targetrunner
-		lom     *cluster.LOM
-		// Reader with the content of the object.
-		r io.ReadCloser
-		// If available (not `none`), can be validated and will be stored with the object
-		// see `writeToFile` method
-		cksumToUse *cos.Cksum
-		// object size aka Content-Length
-		size int64
-		// Context used when putting object to remote backend. It usually contains access credentials.
-		ctx context.Context
-		// FQN which is used only temporarily for receiving file. After
-		// successful receive is renamed to actual FQN.
-		workFQN string
-		// Determines the receive type of the request.
-		recvType cluster.RecvType
-		// if true, poi won't erasure-encode an object when finalizing
-		skipEC bool
+		started    time.Time
+		t          *targetrunner
+		lom        *cluster.LOM
+		r          io.ReadCloser    // reader that has the content
+		cksumToUse *cos.Cksum       // if available (not `none`), can be validated and will be stored
+		size       int64            // object size aka Content-Length
+		ctx        context.Context  // context for remote backend, usually access credentials
+		workFQN    string           // temp fqn to be renamed
+		recvType   cluster.RecvType // enum { RegularPut, Cold, Migrated, ... }
+		skipEC     bool             // true: do not erasure-encode when finalizing
 	}
 
 	getObjInfo struct {
@@ -68,7 +59,7 @@ type (
 		w       io.Writer       // not necessarily http.ResponseWriter
 		ctx     context.Context // context used when getting object from remote backend (access creds)
 		ranges  rangesQuery     // range read query
-		archive archiveQuery    // archive extraction query
+		archive archiveQuery    // archive query
 		isGFN   bool            // is GFN request
 		chunked bool            // chunked transfer (en)coding: https://tools.ietf.org/html/rfc7230#page-36
 	}

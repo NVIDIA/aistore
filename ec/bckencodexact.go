@@ -19,7 +19,6 @@ import (
 )
 
 type (
-	// Implements `xreg.BckFactory` and `xreg.BucketEntry` interface.
 	encFactory struct {
 		xreg.BaseBckEntry
 		xact  *XactBckEncode
@@ -27,7 +26,6 @@ type (
 		uuid  string
 		phase string
 	}
-
 	XactBckEncode struct {
 		xaction.XactBase
 		t    cluster.Target
@@ -43,9 +41,9 @@ var (
 	_ xreg.BckFactory = (*encFactory)(nil)
 )
 
-///////////////////////////
+////////////////
 // encFactory //
-///////////////////////////
+////////////////
 
 func (*encFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
 	return &encFactory{

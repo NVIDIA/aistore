@@ -78,14 +78,13 @@ type (
 	RangeMsg struct {
 		Template string `json:"template"`
 	}
-
-	// MountpathList contains two lists:
-	// * Available - list of local mountpaths available to the storage target
-	// * Disabled  - list of disabled mountpaths, the mountpaths that generated
-	//	         IO errors followed by (FSHC) health check, etc.
-	MountpathList struct {
-		Available []string `json:"available"`
-		Disabled  []string `json:"disabled"`
+	// ArchiveMsg contains parameters for archiving source objects as one of the supported
+	// archive cos.ArchExtensions types at the destination
+	ArchiveMsg struct {
+		ListMsg
+		RangeMsg
+		ToBck    Bck    `json:"tobck"`
+		ArchName string `json:"archname"` // must have one of the cos.ArchExtensions
 	}
 
 	CopyBckMsg struct {
@@ -104,6 +103,15 @@ type (
 		RequestTimeout cos.Duration `json:"request_timeout,omitempty"` // optional, ETL only
 
 		CopyBckMsg
+	}
+
+	// MountpathList contains two lists:
+	// * Available - list of local mountpaths available to the storage target
+	// * Disabled  - list of disabled mountpaths, the mountpaths that generated
+	//	         IO errors followed by (FSHC) health check, etc.
+	MountpathList struct {
+		Available []string `json:"available"`
+		Disabled  []string `json:"disabled"`
 	}
 )
 

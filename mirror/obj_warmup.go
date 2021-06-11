@@ -30,9 +30,9 @@ var (
 	_ xreg.BckFactory = (*llcFactory)(nil)
 )
 
-/////////////////
+////////////////
 // llcFactory //
-/////////////////
+////////////////
 
 func (*llcFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
 	return &llcFactory{t: args.T, uuid: args.UUID}

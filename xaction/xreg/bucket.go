@@ -10,7 +10,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/query"
 	"github.com/NVIDIA/aistore/transport/bundle"
@@ -59,6 +58,11 @@ type (
 		Meta    *cmn.Bck2BckMsg
 	}
 
+	PutArchiveArgs struct {
+		BckFrom *cluster.Bck
+		BckTo   *cluster.Bck
+	}
+
 	DeletePrefetchArgs struct {
 		Ctx      context.Context
 		UUID     string
@@ -83,6 +87,7 @@ func (b *BaseBckEntry) PreRenewHook(previousEntry BucketEntry) (keep bool, err e
 	_, keep = e.(xaction.XactDemand)
 	return
 }
+
 func (b *BaseBckEntry) PostRenewHook(_ BucketEntry) {}
 
 //////////////
@@ -136,7 +141,6 @@ func (r *registry) renewECEncode(t cluster.Target, bck *cluster.Bck, uuid, phase
 	})
 }
 
-// TODO: Restart the EC (#531) in case of mountpath event.
 func RenewMakeNCopies(t cluster.Target, tag string) { defaultReg.renewMakeNCopies(t, tag) }
 
 func (r *registry) renewMakeNCopies(t cluster.Target, tag string) {
@@ -216,8 +220,22 @@ func RenewPutMirror(t cluster.Target, lom *cluster.LOM) cluster.Xact {
 
 func (r *registry) renewPutMirror(t cluster.Target, lom *cluster.LOM) cluster.Xact {
 	xact, err := r.renewBucketXact(cmn.ActPutCopies, lom.Bck(), &XactArgs{T: t, Custom: lom})
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 	return xact
+}
+
+func RenewPutArchive(uuid string, t cluster.Target, bckFrom, bckTo *cluster.Bck) cluster.Xact {
+	xact, err := defaultReg.renewPutArchive(uuid, t, bckFrom, bckTo)
+	debug.AssertNoErr(err)
+	return xact
+}
+
+func (r *registry) renewPutArchive(uuid string, t cluster.Target, bckFrom, bckTo *cluster.Bck) (cluster.Xact, error) {
+	return r.renewBucketXact(cmn.ActArchive, bckFrom, &XactArgs{
+		T:      t,
+		UUID:   uuid,
+		Custom: &PutArchiveArgs{BckFrom: bckFrom, BckTo: bckTo},
+	})
 }
 
 func RenewTransferBck(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid, kind,

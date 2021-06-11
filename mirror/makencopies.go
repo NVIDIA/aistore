@@ -41,9 +41,9 @@ var (
 	_ xreg.BckFactory = (*mncFactory)(nil)
 )
 
-/////////////////
+////////////////
 // mncFactory //
-/////////////////
+////////////////
 
 func (*mncFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
 	return &mncFactory{t: args.T, uuid: args.UUID, copies: args.Custom.(int)}

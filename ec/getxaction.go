@@ -52,9 +52,9 @@ var (
 	_ xreg.BckFactory    = (*getFactory)(nil)
 )
 
-/////////////////////
+////////////////
 // getFactory //
-/////////////////////
+////////////////
 
 func (*getFactory) New(_ *xreg.XactArgs) xreg.BucketEntry { return &getFactory{} }
 

@@ -227,9 +227,9 @@ func (pr *progressReader) Close() error {
 	return nil
 }
 
-////////////////////////
+////////////////
 // dowFactory //
-////////////////////////
+////////////////
 
 func (*dowFactory) New(args xreg.XactArgs) xreg.GlobalEntry {
 	return &dowFactory{t: args.T, statsT: args.Custom.(stats.Tracker)}

@@ -46,55 +46,50 @@ func (f *dummyFile) ModTime() time.Time { return time.Now() }
 func (f *dummyFile) IsDir() bool        { return false }
 func (f *dummyFile) Sys() interface{}   { return nil }
 
-func addFileToTar(tw *tar.Writer, path string, fileSize int, buf []byte) error {
-	var file bytes.Buffer
+// adds a given buf to a tar or tar.gz or fills-out random fileSize bytes and adds anyway
+func addBufferToTar(tw *tar.Writer, path string, fileSize int, buf []byte) (err error) {
+	var b bytes.Buffer
 	if buf == nil {
 		buf = make([]byte, fileSize)
-		if _, err := rand.Read(buf); err != nil {
-			return err
+		if _, err = rand.Read(buf); err != nil {
+			return
 		}
 	}
-
-	if _, err := file.Write(buf); err != nil {
-		return err
+	if _, err = b.Write(buf); err != nil {
+		return
 	}
-
 	header := new(tar.Header)
 	header.Name = path
 	header.Size = int64(fileSize)
 	header.Typeflag = tar.TypeReg
 	// write the header to the tarball archive
-	if err := tw.WriteHeader(header); err != nil {
-		return err
+	if err = tw.WriteHeader(header); err != nil {
+		return
 	}
-	// copy the file data to the tarball
-	if _, err := io.CopyBuffer(tw, &file, buf); err != nil {
-		return err
-	}
-
-	return nil
+	// copy buffer to the tarball
+	_, err = io.CopyBuffer(tw, &b, buf)
+	return
 }
 
-func addFileToZip(tw *zip.Writer, path string, fileSize int) error {
-	b := make([]byte, fileSize)
-	if _, err := rand.Read(b); err != nil {
-		return err
+// adds random-filled fileSize to a zip
+func addRndToZip(tw *zip.Writer, path string, fileSize int) (err error) {
+	var (
+		w io.Writer
+		b = make([]byte, fileSize)
+	)
+	if _, err = rand.Read(b); err != nil {
+		return
 	}
-
 	header := new(zip.FileHeader)
 	header.Name = path
 	header.Comment = path
 	header.UncompressedSize64 = uint64(fileSize)
-	w, err := tw.CreateHeader(header)
+	w, err = tw.CreateHeader(header)
 	if err != nil {
-		return err
+		return
 	}
-
-	if _, err := w.Write(b); err != nil {
-		return err
-	}
-
-	return nil
+	_, err = w.Write(b)
+	return
 }
 
 // CreateTarWithRandomFiles creates tar with specified number of files. Tar is also gzipped if necessary.
@@ -145,7 +140,7 @@ func CreateTarWithRandomFiles(tarName string, fileCnt, fileSize int, duplication
 			} else {
 				fileName = randomNames[i]
 			}
-			if err := addFileToTar(tw, fileName, fileSize, nil); err != nil {
+			if err := addBufferToTar(tw, fileName, fileSize, nil); err != nil {
 				return err
 			}
 			prevFileName = fileName
@@ -161,10 +156,9 @@ func CreateTarWithCustomFilesToWriter(w io.Writer, fileCnt, fileSize int, custom
 
 	for i := 0; i < fileCnt; i++ {
 		fileName := fmt.Sprintf("%d", rand.Int()) // generate random names
-		if err := addFileToTar(tw, fileName+".txt", fileSize, nil); err != nil {
+		if err := addBufferToTar(tw, fileName+".txt", fileSize, nil); err != nil {
 			return err
 		}
-
 		// If missingKeys enabled we should only add keys randomly
 		if !missingKeys || (missingKeys && rand.Intn(2) == 0) {
 			var buf []byte
@@ -179,13 +173,11 @@ func CreateTarWithCustomFilesToWriter(w io.Writer, fileCnt, fileSize int, custom
 			default:
 				return fmt.Errorf("invalid custom file type: %q", customFileType)
 			}
-
-			if err := addFileToTar(tw, fileName+customFileExt, len(buf), buf); err != nil {
+			if err := addBufferToTar(tw, fileName+customFileExt, len(buf), buf); err != nil {
 				return err
 			}
 		}
 	}
-
 	return nil
 }
 
@@ -218,7 +210,7 @@ func CreateZipWithRandomFiles(zipName string, fileCnt, fileSize int, randomNames
 		} else {
 			fileName = randomNames[i]
 		}
-		if err := addFileToZip(zw, fileName, fileSize); err != nil {
+		if err := addRndToZip(zw, fileName, fileSize); err != nil {
 			return err
 		}
 	}

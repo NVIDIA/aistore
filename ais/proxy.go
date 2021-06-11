@@ -342,6 +342,8 @@ func (p *proxyrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
 		p.httpbckget(w, r)
 	case http.MethodDelete:
 		p.httpbckdelete(w, r)
+	case http.MethodPut:
+		p.httpbckput(w, r)
 	case http.MethodPost:
 		p.httpbckpost(w, r)
 	case http.MethodHead:
@@ -614,8 +616,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			p.writeErrf(w, r, fmtNotRemote, bck.Name)
 			return
 		}
-
-		if xactID, err = p.doListRange(http.MethodDelete, bck.Name, &msg, query); err != nil {
+		if xactID, err = p.doListRange(r.Method, bck.Name, &msg, query); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
@@ -742,6 +743,67 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.WriteHeader(http.StatusOK)
+}
+
+// PUT { action } /v1/buckets/bucket-name
+func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
+	var (
+		msg           cmn.ActionMsg
+		query         = r.URL.Query()
+		apiItems, err = p.checkRESTItems(w, r, 1, true, cmn.URLPathBuckets.L)
+	)
+	if err != nil {
+		return
+	}
+	bucket := apiItems[0]
+	bck, err := newBckFromQuery(bucket, query)
+	if err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	if cmn.ReadJSON(w, r, &msg) != nil {
+		return
+	}
+	args := bckInitArgs{p: p, w: w, r: r, bck: bck, msg: &msg, tryOnlyRem: true}
+	if bck, err = args.initAndTry(bck.Name); err != nil {
+		return
+	}
+	switch msg.Action {
+	case cmn.ActArchive: // TODO -- FIXME: initial
+		var (
+			xactID     string
+			bckTo      *cluster.Bck
+			archiveMsg = &cmn.ArchiveMsg{}
+			bckFrom    = bck
+		)
+		if err = cos.MorphMarshal(msg.Value, archiveMsg); err != nil {
+			return
+		}
+		bckTo = cluster.NewBckEmbed(archiveMsg.ToBck)
+		var (
+			bckToArgs = bckInitArgs{p: p, w: w, r: r, bck: bckTo, perms: cmn.AccessPUT}
+			errCode   int
+		)
+		if bckTo, errCode, err = bckToArgs.init(bckTo.Name); err != nil {
+			p.writeErr(w, r, err, errCode)
+			return
+		}
+		// TODO -- FIXME -- DEBUG
+		if len(archiveMsg.ObjNames) > 0 {
+			glog.Infof("%s %v from %s as %s/%s", msg.Action, archiveMsg.ObjNames, bckFrom.Bck, bckTo.Bck,
+				archiveMsg.ArchName)
+		} else {
+			glog.Infof("%s range %q from %s as %s/%s", msg.Action, archiveMsg.Template, bckFrom.Bck, bckTo.Bck,
+				archiveMsg.ArchName)
+		}
+		if xactID, err = p.doListRange(r.Method, bucket, &msg, query); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+		w.Write([]byte(xactID))
+	default:
+		p.writeErrAct(w, r, msg.Action)
+	}
 }
 
 // POST { action } /v1/buckets[/bucket-name]
@@ -880,7 +942,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			}
 		}
 		if bckTo == nil {
-			// It is a non existing ais bucket.
+			// It is a non-existing ais bucket.
 			bckTo = userBckTo
 		}
 		if bckTo.IsHTTP() {
@@ -919,7 +981,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			return
 		}
 		var xactID string
-		if xactID, err = p.doListRange(http.MethodPost, bucket, msg, query); err != nil {
+		if xactID, err = p.doListRange(r.Method, bucket, msg, query); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
@@ -1870,8 +1932,7 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 	freeCallResults(results)
 }
 
-func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg,
-	query url.Values) (xactID string, err error) {
+func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, query url.Values) (xactID string, err error) {
 	var (
 		smap   = p.owner.smap.get()
 		aisMsg = p.newAmsg(msg, nil, cos.GenUUID())

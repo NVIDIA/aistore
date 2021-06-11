@@ -80,6 +80,7 @@ var XactsDtor = map[string]XactDescriptor{
 	cmn.ActECRespond:      {Type: XactTypeBck, Startable: false},
 	cmn.ActMakeNCopies:    {Type: XactTypeBck, Access: cmn.AccessRW, Startable: true, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
 	cmn.ActPutCopies:      {Type: XactTypeBck, Startable: false},
+	cmn.ActArchive:        {Type: XactTypeBck, Startable: false},
 	cmn.ActMoveBck:        {Type: XactTypeBck, Access: cmn.AccessMoveBucket, Startable: false, Metasync: true, Owned: false, Mountpath: true},
 	cmn.ActCopyBck:        {Type: XactTypeBck, Access: cmn.AccessRW, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
 	cmn.ActETLBck:         {Type: XactTypeBck, Access: cmn.AccessRW, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},

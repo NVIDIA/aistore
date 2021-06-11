@@ -68,9 +68,9 @@ func freeCpObjParams(a *cluster.CopyObjectParams) {
 	cpObjPool.Put(a)
 }
 
-/////////////////////////
+////////////////
 // cpyFactory //
-/////////////////////////
+////////////////
 
 func (e *cpyFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
 	return &cpyFactory{
@@ -163,8 +163,6 @@ func (r *XactTransferBck) Run() {
 func (r *XactTransferBck) String() string {
 	return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.bckFrom)
 }
-
-// private
 
 func (r *XactTransferBck) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 	var size int64

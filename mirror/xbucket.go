@@ -35,6 +35,7 @@ func init() {
 	xreg.RegBckXact(&mncFactory{})
 	xreg.RegBckXact(&llcFactory{})
 	xreg.RegBckXact(&putFactory{})
+	xreg.RegBckXact(&archFactory{})
 }
 
 func newXactBckBase(id, kind string, bck cmn.Bck, opts *mpather.JoggerGroupOpts) *xactBckBase {

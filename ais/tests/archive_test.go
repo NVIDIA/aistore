@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
@@ -22,6 +23,10 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
+
+//
+// GET from
+//
 
 func TestGetFromArchive(t *testing.T) {
 	const tmpDir = "/tmp"
@@ -133,4 +138,42 @@ func TestGetFromArchive(t *testing.T) {
 			})
 		}
 	})
+}
+
+// PUT/create
+func TestArchiveListRange(t *testing.T) {
+	var (
+		bck = cmn.Bck{
+			Name:     cos.RandString(10),
+			Provider: cmn.ProviderAIS,
+		}
+		m          = ioContext{t: t, bck: bck}
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		numArchs   = 1 // TODO -- FIXME: make it 20 in parallel
+		numInArch  = 17
+		numPuts    = 100
+	)
+	m.init()
+	err := api.CreateBucket(baseParams, m.bck, nil)
+	tassert.CheckFatal(t, err)
+
+	pargs := tutils.PutObjectsArgs{ProxyURL: proxyURL, Bck: m.bck, ObjSize: cos.KiB, ObjCnt: numPuts}
+	objNames, _, err := tutils.PutRandObjs(pargs)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, len(objNames) == numPuts, "expected %d, have %d", numPuts, len(objNames))
+
+	for i := 0; i < numArchs; i++ {
+		tarName := fmt.Sprintf("test_%d.tar", i)
+		list := make([]string, 0, numInArch)
+		for j := 0; j < numInArch; j++ {
+			list = append(list, objNames[rand.Intn(numPuts)])
+		}
+		_, err = api.ArchiveList(baseParams, m.bck, m.bck, tarName, list)
+		tassert.CheckFatal(t, err)
+		time.Sleep(3 * time.Second) // TODO -- FIXME: remove when archive-msg scope, etc.
+	}
+
+	wargs := api.XactReqArgs{Kind: cmn.ActArchive, Bck: m.bck}
+	api.WaitForXactionIdle(baseParams, wargs)
 }

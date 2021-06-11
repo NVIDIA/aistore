@@ -230,7 +230,7 @@ func (p *proxyrunner) delMultipleObjs(w http.ResponseWriter, r *http.Request, bu
 	var msg2 cmn.ActionMsg
 	err := jsoniter.Unmarshal(bt, &msg2)
 	cos.AssertNoErr(err)
-	if _, err := p.doListRange(http.MethodDelete, bucket, &msg2, query); err != nil {
+	if _, err := p.doListRange(r.Method, bucket, &msg2, query); err != nil {
 		p.writeErr(w, r, err)
 	}
 }

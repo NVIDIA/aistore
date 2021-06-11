@@ -41,9 +41,9 @@ var (
 	_ xreg.BckFactory = (*proFactory)(nil)
 )
 
-////////////////////////
+////////////////
 // proFactory //
-////////////////////////
+////////////////
 
 func (*proFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
 	c := args.Custom.(*xreg.DirPromoteArgs)

@@ -20,12 +20,10 @@ import (
 )
 
 type (
-	// Implements `xreg.BckFactory` and `xreg.BucketEntry` interface.
 	putFactory struct {
 		xreg.BaseBckEntry
 		xact *XactPut
 	}
-
 	// Erasure coding runner: accepts requests and dispatches them to
 	// a correct mountpath runner. Runner uses dedicated to EC memory manager
 	// inherited by dependent mountpath runners
@@ -34,7 +32,6 @@ type (
 		xactReqBase
 		putJoggers map[string]*putJogger // mountpath joggers for PUT/DEL
 	}
-
 	// Runtime EC statistics for PUT xaction
 	ExtECPutStats struct {
 		AvgEncodeTime  cos.Duration `json:"ec.encode.time"`
@@ -56,9 +53,9 @@ var (
 	_ xreg.BckFactory    = (*putFactory)(nil)
 )
 
-/////////////////////
+////////////////
 // putFactory //
-/////////////////////
+////////////////
 
 func (*putFactory) New(_ *xreg.XactArgs) xreg.BucketEntry { return &putFactory{} }
 

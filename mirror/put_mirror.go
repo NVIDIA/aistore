@@ -53,9 +53,9 @@ var (
 	_ xreg.BckFactory = (*putFactory)(nil)
 )
 
-///////////////////////
+////////////////
 // putFactory //
-///////////////////////
+////////////////
 
 func (*putFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
 	return &putFactory{t: args.T, uuid: args.UUID, lom: args.Custom.(*cluster.LOM)}

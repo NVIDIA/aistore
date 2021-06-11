@@ -43,6 +43,7 @@ const (
 	ActPromote        = "promote"
 	ActEvictObjects   = "evictobj"
 	ActDelete         = "delete"
+	ActArchive        = "archive"
 	ActPrefetch       = "prefetch"
 	ActDownload       = "download"
 	ActRegTarget      = "regtarget"
