@@ -520,8 +520,6 @@ func (t *targetrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
 		t.httpbckget(w, r)
 	case http.MethodDelete:
 		t.httpbckdelete(w, r)
-	case http.MethodPut:
-		t.httpbckput(w, r)
 	case http.MethodPost:
 		t.httpbckpost(w, r)
 	case http.MethodHead:
@@ -720,38 +718,6 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			Xact: xact,
 		})
 		go xact.Run()
-	default:
-		t.writeErrAct(w, r, msg.Action)
-	}
-}
-
-// PUT /v1/buckets/bucket-name
-func (t *targetrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
-	msg := &aisMsg{}
-	err := cmn.ReadJSON(w, r, msg)
-	if err != nil {
-		return
-	}
-	request := &apiRequest{prefix: cmn.URLPathBuckets.L, after: 1}
-	if err = t.parseAPIRequest(w, r, request); err != nil {
-		return
-	}
-	if err = request.bck.Init(t.owner.bmd); err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
-	switch msg.Action {
-	case cmn.ActArchive:
-		archiveMsg := &cmn.ArchiveMsg{}
-		if err = cos.MorphMarshal(msg.Value, archiveMsg); err != nil {
-			t.writeErrf(w, r, "failed to unmarshal archive msg, %q action", msg.Action)
-			return
-		}
-		bckTo := cluster.NewBckEmbed(archiveMsg.ToBck)
-		rns := xreg.RenewPutArchive(msg.UUID, t, request.bck, bckTo)
-		xact := rns.Entry.Get()
-		xarch := xact.(*mirror.XactArchive)
-		xarch.Do(archiveMsg)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}

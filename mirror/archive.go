@@ -28,12 +28,12 @@ import (
 type (
 	archFactory struct {
 		xreg.BaseBckEntry
-		xact *XactArchive
+		xact *XactPutArchive
 		t    cluster.Target
 		uuid string
 		args *xreg.PutArchiveArgs
 	}
-	XactArchive struct {
+	XactPutArchive struct {
 		xaction.XactDemandBase
 		t       cluster.Target
 		bckFrom *cluster.Bck
@@ -51,7 +51,7 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact    = (*XactArchive)(nil)
+	_ cluster.Xact    = (*XactPutArchive)(nil)
 	_ xreg.BckFactory = (*archFactory)(nil)
 )
 
@@ -79,23 +79,26 @@ func (p *archFactory) Start(_ cmn.Bck) error {
 		totallyIdle = config.Timeout.SendFile.D()
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
 	)
-	r := &XactArchive{
-		t:              p.t,
+	r := &XactPutArchive{
 		XactDemandBase: *xaction.NewXDB(xargs, totallyIdle, likelyIdle),
+		t:              p.t,
 		bckFrom:        p.args.BckFrom,
 		bckTo:          p.args.BckTo,
 		workCh:         make(chan *cmn.ArchiveMsg, 16),
 	}
 	p.xact = r
 	r.InitIdle()
-	err := p.newDM(p.uuid, r)
-	debug.AssertNoErr(err)
+	if err := p.newDM(p.uuid, r); err != nil {
+		return err
+	}
+	r.dm.SetXact(r)
+	r.dm.Open()
+
 	go r.Run()
 	return nil
 }
 
-// TODO -- FIXME
-func (p *archFactory) newDM(uuid string, r *XactArchive) error {
+func (p *archFactory) newDM(uuid string, r *XactPutArchive) error {
 	dm, err := bundle.NewDataMover(p.t, "arch-"+uuid, r.recvObjDM, cluster.RegularPut, bundle.Extra{Multiplier: 1})
 	if err != nil {
 		return err
@@ -108,29 +111,25 @@ func (p *archFactory) newDM(uuid string, r *XactArchive) error {
 }
 
 /////////////////
-// XactArchive //
+// XactPutArchive //
 /////////////////
 
-func (r *XactArchive) Do(msg *cmn.ArchiveMsg) {
+func (r *XactPutArchive) Do(msg *cmn.ArchiveMsg) {
 	smap := r.t.Sowner().Get()
 	tsi, err := cluster.HrwTarget(r.bckTo.MakeUname(msg.ArchName), smap)
 	debug.AssertNoErr(err)
 	if r.t.Snode().ID() == tsi.ID() {
-		r.lom = cluster.AllocLOM(msg.ArchName) // TODO -- FIXME: must be per arch message; free
+		r.lom = cluster.AllocLOM(msg.ArchName) // TODO -- FIXME: via pending
 		err := r.lom.Init(r.bckTo.Bck)
 		debug.AssertNoErr(err)
-		r.workFQN = fs.CSM.GenContentFQN(r.lom, fs.WorkfileType, fs.WorkfileAppend) // TODO -- FIXME: ditto per msg
+		r.workFQN = fs.CSM.GenContentFQN(r.lom, fs.WorkfileType, fs.WorkfileAppend) // ditto
 		r.createArch(msg.ArchName, r.workFQN)
 	}
 	r.IncPending()
 	r.workCh <- msg
 }
 
-// TODO -- FIXME
-func (r *XactArchive) Run() {
-	r.dm.SetXact(r)
-	r.dm.Open()
-
+func (r *XactPutArchive) Run() {
 	glog.Infoln(r.String())
 	for {
 		select {
@@ -142,8 +141,8 @@ func (r *XactArchive) Run() {
 					cluster.FreeLOM(lom)
 				}
 			}
-			time.Sleep(3 * time.Second) // TODO -- FIXME: quiesce
-			r.finalize()
+			time.Sleep(3 * time.Second) // TODO -- FIXME: via [target => last] accounting
+			r.finalize()                // TODO -- FIXME: use poi
 			r.DecPending()
 		case <-r.IdleTimer():
 			r.XactDemandBase.Stop()
@@ -168,7 +167,7 @@ fin:
 	r.Finish(err)
 }
 
-func (r *XactArchive) doOne(lom *cluster.LOM, msg *cmn.ArchiveMsg, smap *cluster.Smap) (err error) {
+func (r *XactPutArchive) doOne(lom *cluster.LOM, msg *cmn.ArchiveMsg, smap *cluster.Smap) (err error) {
 	if err = lom.Init(r.bckFrom.Bck); err != nil {
 		return
 	}
@@ -195,7 +194,7 @@ func (r *XactArchive) doOne(lom *cluster.LOM, msg *cmn.ArchiveMsg, smap *cluster
 	return
 }
 
-func (r *XactArchive) doSend(lom *cluster.LOM, fh cos.ReadOpenCloser, tsi *cluster.Snode) {
+func (r *XactPutArchive) doSend(lom *cluster.LOM, fh cos.ReadOpenCloser, tsi *cluster.Snode) {
 	// TODO -- FIXME: copy/paste from ais _sendObjDM
 	o := transport.AllocSend()
 	hdr := &o.Hdr
@@ -216,7 +215,7 @@ func (r *XactArchive) doSend(lom *cluster.LOM, fh cos.ReadOpenCloser, tsi *clust
 }
 
 // TODO -- FIXME: err hdl
-func (r *XactArchive) addToArch(lom *cluster.LOM, hdr *transport.ObjHdr, reader io.Reader) {
+func (r *XactPutArchive) addToArch(lom *cluster.LOM, hdr *transport.ObjHdr, reader io.Reader) {
 	header := new(tar.Header) // TODO -- FIXME: support all 3
 	header.Typeflag = tar.TypeReg
 
@@ -240,14 +239,14 @@ func (r *XactArchive) addToArch(lom *cluster.LOM, hdr *transport.ObjHdr, reader 
 	r.mu.Unlock()
 }
 
-func (r *XactArchive) createArch(archName, workFQN string) {
+func (r *XactPutArchive) createArch(archName, workFQN string) {
 	debug.Assert(strings.HasSuffix(archName, cos.ExtTar)) // TODO -- FIXME: support all 3
 	r.archfh, _ = r.lom.CreateFile(workFQN)
 	r.tw = tar.NewWriter(r.archfh) // TODO -- FIXME: must be per message not xact
 }
 
 // TODO -- FIXME
-func (r *XactArchive) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, err error) {
+func (r *XactPutArchive) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, err error) {
 	defer transport.FreeRecv(objReader)
 	if err != nil && !cos.IsEOF(err) {
 		glog.Error(err)
@@ -258,7 +257,7 @@ func (r *XactArchive) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, err e
 }
 
 // TODO -- FIXME: use poi.finalize()
-func (r *XactArchive) finalize() {
+func (r *XactPutArchive) finalize() {
 	if r.tw == nil {
 		return // nothing to do
 	}
@@ -276,7 +275,7 @@ func (r *XactArchive) finalize() {
 	glog.Infof("%s: new archive %s (size %d)", r.t.Snode(), r.lom, r.lom.Size())
 }
 
-func (r *XactArchive) Stats() cluster.XactStats {
+func (r *XactPutArchive) Stats() cluster.XactStats {
 	baseStats := r.XactDemandBase.Stats().(*xaction.BaseXactStatsExt)
 	baseStats.Ext = &xaction.BaseXactDemandStatsExt{IsIdle: r.Pending() == 0}
 	return baseStats

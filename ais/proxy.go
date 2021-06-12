@@ -769,38 +769,33 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch msg.Action {
-	case cmn.ActArchive: // TODO -- FIXME: initial
+	case cmn.ActArchive:
 		var (
-			xactID     string
-			bckTo      *cluster.Bck
-			archiveMsg = &cmn.ArchiveMsg{}
 			bckFrom    = bck
+			archiveMsg = &cmn.ArchiveMsg{}
 		)
 		if err = cos.MorphMarshal(msg.Value, archiveMsg); err != nil {
 			return
 		}
-		bckTo = cluster.NewBckEmbed(archiveMsg.ToBck)
-		var (
-			bckToArgs = bckInitArgs{p: p, w: w, r: r, bck: bckTo, perms: cmn.AccessPUT}
-			errCode   int
-		)
-		if bckTo, errCode, err = bckToArgs.init(bckTo.Name); err != nil {
-			p.writeErr(w, r, err, errCode)
-			return
-		}
-		// TODO -- FIXME -- DEBUG
-		if len(archiveMsg.ObjNames) > 0 {
-			glog.Infof("%s %v from %s as %s/%s", msg.Action, archiveMsg.ObjNames, bckFrom.Bck, bckTo.Bck,
-				archiveMsg.ArchName)
+		bckTo := cluster.NewBckEmbed(archiveMsg.ToBck)
+		if bckTo.IsEmpty() {
+			bckTo = bckFrom
 		} else {
-			glog.Infof("%s range %q from %s as %s/%s", msg.Action, archiveMsg.Template, bckFrom.Bck, bckTo.Bck,
-				archiveMsg.ArchName)
+			var (
+				bckToArgs = bckInitArgs{p: p, w: w, r: r, bck: bckTo, perms: cmn.AccessPUT}
+				errCode   int
+			)
+			if bckTo, errCode, err = bckToArgs.init(bckTo.Name); err != nil {
+				p.writeErr(w, r, err, errCode)
+				return
+			}
 		}
-		if xactID, err = p.doListRange(r.Method, bucket, &msg, query); err != nil {
+		xactID, err := p.putArchive(bckFrom, bckTo, &msg)
+		if err == nil {
+			w.Write([]byte(xactID))
+		} else {
 			p.writeErr(w, r, err)
-			return
 		}
-		w.Write([]byte(xactID))
 	default:
 		p.writeErrAct(w, r, msg.Action)
 	}

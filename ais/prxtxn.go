@@ -669,6 +669,38 @@ func (p *proxyrunner) _updatePropsBMDPre(ctx *bmdModifier, clone *bucketMD) erro
 	return nil
 }
 
+func (p *proxyrunner) putArchive(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
+	// begin
+	c := p.prepTxnClient(msg, bckFrom, false /*waitmsync*/)
+	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.URLParamBucketTo)
+	results := c.bcast(cmn.ActBegin, c.timeout.netw)
+	for _, res := range results {
+		if res.err == nil {
+			continue
+		}
+		err = c.bcastAbort(bckFrom, res.error())
+		freeCallResults(results)
+		return
+	}
+	freeCallResults(results)
+
+	// commit
+	results = c.bcast(cmn.ActCommit, c.commitTimeout(false /*waitmsync*/))
+	for _, res := range results {
+		if res.err == nil {
+			continue
+		}
+		glog.Error(res.err)
+		err = res.error()
+		freeCallResults(results)
+		return
+	}
+	freeCallResults(results)
+
+	xactID = c.uuid
+	return
+}
+
 // maintenance: { begin -- enable GFN -- commit -- start rebalance }
 func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, opts *cmn.ActValRmNode) (rebID xaction.RebID, err error) {
 	var (

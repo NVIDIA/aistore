@@ -150,7 +150,7 @@ func TestArchiveListRange(t *testing.T) {
 		m          = ioContext{t: t, bck: bck}
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		numArchs   = 1 // TODO -- FIXME: make it 20 in parallel
+		numArchs   = 1 // TODO -- FIXME: add `pending` and make it 20
 		numInArch  = 17
 		numPuts    = 100
 	)

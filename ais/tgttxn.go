@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
@@ -57,22 +58,24 @@ type txnServerCtx struct {
 
 // verb /v1/txn
 func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
+	var (
+		bucket, phase string
+		msg           = &aisMsg{}
+	)
 	if r.Method != http.MethodPost {
 		cmn.WriteErr405(w, r, http.MethodPost)
 		return
 	}
-	if !t.ensureIntraControl(w, r, true /* from primary */) {
+	if cmn.ReadJSON(w, r, msg) != nil {
 		return
 	}
-	msg := &aisMsg{}
-	if cmn.ReadJSON(w, r, msg) != nil {
+	if !t.ensureIntraControl(w, r, msg.Action != cmn.ActArchive /* must be primary */) {
 		return
 	}
 	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathTxn.L)
 	if err != nil {
 		return
 	}
-	var bucket, phase string
 	switch len(apiItems) {
 	case 1: // Global transaction.
 		phase = apiItems[0]
@@ -109,6 +112,8 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	case cmn.ActECEncode:
 		err = t.ecEncode(c)
+	case cmn.ActArchive:
+		err = t.putArchive(c)
 	case cmn.ActStartMaintenance, cmn.ActDecommissionNode, cmn.ActShutdownNode:
 		err = t.startMaintenance(c)
 	case cmn.ActDestroyBck, cmn.ActEvictRemoteBck:
@@ -612,6 +617,59 @@ func (t *targetrunner) validateECEncode(bck *cluster.Bck, msg *aisMsg) (err erro
 	}
 	err = t.coExists(bck, msg.Action)
 	return
+}
+
+////////////////
+// putArchive //
+////////////////
+
+func (t *targetrunner) putArchive(c *txnServerCtx) error {
+	if err := c.bck.Init(t.owner.bmd); err != nil {
+		return err
+	}
+	switch c.phase {
+	case cmn.ActBegin:
+		var (
+			bckTo   = c.bckTo
+			bckFrom = c.bck
+		)
+		if err := bckTo.Validate(); err != nil {
+			return err
+		}
+		if !bckFrom.Equal(bckTo, false, false) {
+			if err := bckFrom.Validate(); err != nil {
+				return err
+			}
+		}
+		archiveMsg := &cmn.ArchiveMsg{}
+		if err := cos.MorphMarshal(c.msg.Value, archiveMsg); err != nil {
+			return err
+		}
+		rns := xreg.RenewPutArchive(c.msg.UUID, t, bckFrom, bckTo)
+		if rns.Err != nil {
+			return rns.Err
+		}
+		xact := rns.Entry.Get()
+		xarch := xact.(*mirror.XactPutArchive)
+		txn := newTxnPutArchive(c, bckFrom, bckTo, xarch, archiveMsg, rns.IsNew)
+		if err := t.transactions.begin(txn); err != nil {
+			return err
+		}
+	case cmn.ActAbort:
+		txn, _ := t.transactions.find(c.uuid, cmn.ActAbort)
+		txnArch := txn.(*txnPutArchive)
+		if txnArch != nil && txnArch.xarch != nil && txnArch.isNew {
+			txnArch.xarch.Abort()
+		}
+	case cmn.ActCommit:
+		txn, err := t.transactions.find(c.uuid, "")
+		if err != nil {
+			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+		}
+		txnArch := txn.(*txnPutArchive)
+		txnArch.xarch.Do(txnArch.msg)
+	}
+	return nil
 }
 
 //////////////////////
