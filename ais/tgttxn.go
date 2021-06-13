@@ -645,21 +645,26 @@ func (t *targetrunner) putArchive(c *txnServerCtx) error {
 		if err := cos.MorphMarshal(c.msg.Value, archiveMsg); err != nil {
 			return err
 		}
-		rns := xreg.RenewPutArchive(c.msg.UUID, t, bckFrom, bckTo)
+		rns := xreg.RenewPutArchive(c.msg.UUID, t, bckFrom)
 		if rns.Err != nil {
 			return rns.Err
 		}
 		xact := rns.Entry.Get()
 		xarch := xact.(*mirror.XactPutArchive)
+		if err := xarch.Begin(archiveMsg); err != nil {
+			return err
+		}
 		txn := newTxnPutArchive(c, bckFrom, bckTo, xarch, archiveMsg, rns.IsNew)
 		if err := t.transactions.begin(txn); err != nil {
 			return err
 		}
 	case cmn.ActAbort:
-		txn, _ := t.transactions.find(c.uuid, cmn.ActAbort)
-		txnArch := txn.(*txnPutArchive)
-		if txnArch != nil && txnArch.xarch != nil && txnArch.isNew {
-			txnArch.xarch.Abort()
+		txn, err := t.transactions.find(c.uuid, cmn.ActAbort)
+		if err == nil {
+			txnArch := txn.(*txnPutArchive)
+			if txnArch.xarch != nil && txnArch.isNew {
+				txnArch.xarch.Abort()
+			}
 		}
 	case cmn.ActCommit:
 		txn, err := t.transactions.find(c.uuid, "")

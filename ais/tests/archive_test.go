@@ -147,33 +147,45 @@ func TestArchiveListRange(t *testing.T) {
 			Name:     cos.RandString(10),
 			Provider: cmn.ProviderAIS,
 		}
-		m          = ioContext{t: t, bck: bck}
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		numArchs   = 1 // TODO -- FIXME: add `pending` and make it 20
-		numInArch  = 17
+		numArchs   = 20
+		numInArch  = 7
 		numPuts    = 100
 	)
-	m.init()
-	err := api.CreateBucket(baseParams, m.bck, nil)
-	tassert.CheckFatal(t, err)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	if testing.Short() {
+		numArchs = 2
+	}
 
-	pargs := tutils.PutObjectsArgs{ProxyURL: proxyURL, Bck: m.bck, ObjSize: cos.KiB, ObjCnt: numPuts}
+	pargs := tutils.PutObjectsArgs{ProxyURL: proxyURL, Bck: bck, ObjSize: cos.KiB, ObjCnt: numPuts}
 	objNames, _, err := tutils.PutRandObjs(pargs)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(objNames) == numPuts, "expected %d, have %d", numPuts, len(objNames))
 
+	// archive bucket => same bucket in parallel
 	for i := 0; i < numArchs; i++ {
-		tarName := fmt.Sprintf("test_%d.tar", i)
-		list := make([]string, 0, numInArch)
-		for j := 0; j < numInArch; j++ {
-			list = append(list, objNames[rand.Intn(numPuts)])
-		}
-		_, err = api.ArchiveList(baseParams, m.bck, m.bck, tarName, list)
-		tassert.CheckFatal(t, err)
-		time.Sleep(3 * time.Second) // TODO -- FIXME: remove when archive-msg scope, etc.
+		go func(i int) {
+			tarName := fmt.Sprintf("test_%02d.tar", i)
+			list := make([]string, 0, numInArch)
+			for j := 0; j < numInArch; j++ {
+				list = append(list, objNames[rand.Intn(numPuts)])
+			}
+			_, err = api.ArchiveList(baseParams, bck, bck, tarName, list)
+			tassert.CheckFatal(t, err)
+		}(i)
 	}
 
-	wargs := api.XactReqArgs{Kind: cmn.ActArchive, Bck: m.bck}
+	wargs := api.XactReqArgs{Kind: cmn.ActArchive, Bck: bck}
 	api.WaitForXactionIdle(baseParams, wargs)
+
+	time.Sleep(3 * time.Second) // TODO -- FIXME: remove
+	tlog.Logf("List %q\n", bck)
+	msg := &cmn.SelectMsg{Prefix: "test_"}
+	msg.AddProps(cmn.GetPropsName, cmn.GetPropsSize)
+	objList, err := api.ListObjects(baseParams, bck, msg, 0)
+	for _, entry := range objList.Entries {
+		tlog.Logf("%s: %dB\n", entry.Name, entry.Size)
+	}
+	tassert.Errorf(t, len(objList.Entries) == numArchs, "expected %d, have %d", numArchs, len(objList.Entries))
 }

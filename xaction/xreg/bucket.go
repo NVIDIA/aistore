@@ -64,11 +64,6 @@ type (
 		Meta    *cmn.Bck2BckMsg
 	}
 
-	PutArchiveArgs struct {
-		BckFrom *cluster.Bck
-		BckTo   *cluster.Bck
-	}
-
 	DeletePrefetchArgs struct {
 		Ctx      context.Context
 		UUID     string
@@ -234,15 +229,14 @@ func (r *registry) renewPutMirror(t cluster.Target, lom *cluster.LOM) RenewRes {
 	return r.renewBucketXact(cmn.ActPutCopies, lom.Bck(), &XactArgs{T: t, Custom: lom})
 }
 
-func RenewPutArchive(uuid string, t cluster.Target, bckFrom, bckTo *cluster.Bck) RenewRes {
-	return defaultReg.renewPutArchive(uuid, t, bckFrom, bckTo)
+func RenewPutArchive(uuid string, t cluster.Target, bckFrom *cluster.Bck) RenewRes {
+	return defaultReg.renewPutArchive(uuid, t, bckFrom)
 }
 
-func (r *registry) renewPutArchive(uuid string, t cluster.Target, bckFrom, bckTo *cluster.Bck) RenewRes {
+func (r *registry) renewPutArchive(uuid string, t cluster.Target, bckFrom *cluster.Bck) RenewRes {
 	return r.renewBucketXact(cmn.ActArchive, bckFrom, &XactArgs{
-		T:      t,
-		UUID:   uuid,
-		Custom: &PutArchiveArgs{BckFrom: bckFrom, BckTo: bckTo},
+		T:    t,
+		UUID: uuid,
 	})
 }
 

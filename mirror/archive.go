@@ -31,22 +31,31 @@ type (
 		xact *XactPutArchive
 		t    cluster.Target
 		uuid string
-		args *xreg.PutArchiveArgs
+	}
+	work struct {
+		msg *cmn.ArchiveMsg
+		lom *cluster.LOM // of the archive
+		fqn string       // workFQN --/--
+		fh  *os.File     // --/--
+		tw  *tar.Writer
+		mu  sync.Mutex
+		tsi *cluster.Snode
 	}
 	XactPutArchive struct {
 		xaction.XactDemandBase
 		t       cluster.Target
-		bckFrom *cluster.Bck
-		bckTo   *cluster.Bck
+		bckFrom cmn.Bck
 		dm      *bundle.DataMover
 		workCh  chan *cmn.ArchiveMsg
-		// TODO -- FIXME: per archive-msg context
-		lom     *cluster.LOM
-		workFQN string
-		archfh  *os.File
-		tw      *tar.Writer
-		mu      sync.Mutex
+		pending struct {
+			sync.RWMutex
+			m map[string]*work
+		}
 	}
+)
+
+const (
+	maxNumInParallel = 64
 )
 
 // interface guard
@@ -62,19 +71,15 @@ func _fullname(bucket, obj string) string { return filepath.Join(bucket, obj) }
 ////////////////
 
 func (*archFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
-	return &archFactory{
-		t:    args.T,
-		uuid: args.UUID,
-		args: args.Custom.(*xreg.PutArchiveArgs),
-	}
+	return &archFactory{t: args.T, uuid: args.UUID}
 }
 
 func (*archFactory) Kind() string        { return cmn.ActArchive }
 func (p *archFactory) Get() cluster.Xact { return p.xact }
 
-func (p *archFactory) Start(_ cmn.Bck) error {
+func (p *archFactory) Start(bckFrom cmn.Bck) error {
 	var (
-		xargs       = xaction.Args{ID: xaction.BaseID(p.uuid), Kind: cmn.ActArchive, Bck: &p.args.BckFrom.Bck}
+		xargs       = xaction.Args{ID: xaction.BaseID(p.uuid), Kind: cmn.ActArchive, Bck: &bckFrom}
 		config      = cmn.GCO.Get()
 		totallyIdle = config.Timeout.SendFile.D()
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
@@ -82,13 +87,13 @@ func (p *archFactory) Start(_ cmn.Bck) error {
 	r := &XactPutArchive{
 		XactDemandBase: *xaction.NewXDB(xargs, totallyIdle, likelyIdle),
 		t:              p.t,
-		bckFrom:        p.args.BckFrom,
-		bckTo:          p.args.BckTo,
-		workCh:         make(chan *cmn.ArchiveMsg, 16),
+		bckFrom:        bckFrom,
+		workCh:         make(chan *cmn.ArchiveMsg, maxNumInParallel),
 	}
+	r.pending.m = make(map[string]*work, maxNumInParallel)
 	p.xact = r
 	r.InitIdle()
-	if err := p.newDM(p.uuid, r); err != nil {
+	if err := p.newDM(bckFrom, r); err != nil {
 		return err
 	}
 	r.dm.SetXact(r)
@@ -98,8 +103,10 @@ func (p *archFactory) Start(_ cmn.Bck) error {
 	return nil
 }
 
-func (p *archFactory) newDM(uuid string, r *XactPutArchive) error {
-	dm, err := bundle.NewDataMover(p.t, "arch-"+uuid, r.recvObjDM, cluster.RegularPut, bundle.Extra{Multiplier: 1})
+func (p *archFactory) newDM(bckFrom cmn.Bck, r *XactPutArchive) error {
+	// NOTE: transport stream name
+	trname := "arch-" + bckFrom.Provider + "-" + bckFrom.Name
+	dm, err := bundle.NewDataMover(p.t, trname, r.recvObjDM, cluster.RegularPut, bundle.Extra{Multiplier: 1})
 	if err != nil {
 		return err
 	}
@@ -114,17 +121,36 @@ func (p *archFactory) newDM(uuid string, r *XactPutArchive) error {
 // XactPutArchive //
 /////////////////
 
-func (r *XactPutArchive) Do(msg *cmn.ArchiveMsg) {
-	smap := r.t.Sowner().Get()
-	tsi, err := cluster.HrwTarget(r.bckTo.MakeUname(msg.ArchName), smap)
-	debug.AssertNoErr(err)
-	if r.t.Snode().ID() == tsi.ID() {
-		r.lom = cluster.AllocLOM(msg.ArchName) // TODO -- FIXME: via pending
-		err := r.lom.Init(r.bckTo.Bck)
-		debug.AssertNoErr(err)
-		r.workFQN = fs.CSM.GenContentFQN(r.lom, fs.WorkfileType, fs.WorkfileAppend) // ditto
-		r.createArch(msg.ArchName, r.workFQN)
+func (r *XactPutArchive) Begin(msg *cmn.ArchiveMsg) (err error) {
+	debug.Assert(strings.HasSuffix(msg.ArchName, cos.ExtTar)) // TODO: NIY
+	lom := cluster.AllocLOM(msg.ArchName)
+	if err = lom.Init(msg.ToBck); err != nil {
+		return
 	}
+	work := &work{msg: msg, lom: lom}
+	work.fqn = fs.CSM.GenContentFQN(work.lom, fs.WorkfileType, fs.WorkfileAppend)
+
+	smap := r.t.Sowner().Get()
+	work.tsi, err = cluster.HrwTarget(msg.ToBck.MakeUname(msg.ArchName), smap)
+	if err != nil {
+		return
+	}
+
+	// NOTE: creating archive at BEGIN time; TODO: cleanup upon ABORT
+	if r.t.Snode().ID() == work.tsi.ID() {
+		work.fh, err = work.lom.CreateFile(work.fqn)
+		if err != nil {
+			return
+		}
+		work.tw = tar.NewWriter(work.fh)
+	}
+	r.pending.Lock()
+	r.pending.m[_fullname(msg.ToBck.Name, msg.ArchName)] = work
+	r.pending.Unlock()
+	return
+}
+
+func (r *XactPutArchive) Do(msg *cmn.ArchiveMsg) {
 	r.IncPending()
 	r.workCh <- msg
 }
@@ -134,15 +160,26 @@ func (r *XactPutArchive) Run() {
 	for {
 		select {
 		case msg := <-r.workCh:
-			smap := r.t.Sowner().Get()
+			fullname := _fullname(msg.ToBck.Name, msg.ArchName)
+			r.pending.RLock()
+			work := r.pending.m[fullname]
+			r.pending.RUnlock()
+			debug.Assert(work != nil)
 			for _, objName := range msg.ListMsg.ObjNames {
 				lom := cluster.AllocLOM(objName)
-				if err := r.doOne(lom, msg, smap); err != nil {
+				if err := r.work(lom, work); err != nil {
 					cluster.FreeLOM(lom)
 				}
 			}
-			time.Sleep(3 * time.Second) // TODO -- FIXME: via [target => last] accounting
-			r.finalize()                // TODO -- FIXME: use poi
+			if r.t.Snode().ID() == work.tsi.ID() {
+				go func() {
+					time.Sleep(3 * time.Second) // TODO -- FIXME: via [target => last] accounting
+					r.finalize(work)            // TODO -- FIXME: use poi
+					r.pending.Lock()
+					delete(r.pending.m, fullname)
+					r.pending.Unlock()
+				}()
+			}
 			r.DecPending()
 		case <-r.IdleTimer():
 			r.XactDemandBase.Stop()
@@ -167,8 +204,8 @@ fin:
 	r.Finish(err)
 }
 
-func (r *XactPutArchive) doOne(lom *cluster.LOM, msg *cmn.ArchiveMsg, smap *cluster.Smap) (err error) {
-	if err = lom.Init(r.bckFrom.Bck); err != nil {
+func (r *XactPutArchive) work(lom *cluster.LOM, work *work) (err error) {
+	if err = lom.Init(r.bckFrom); err != nil {
 		return
 	}
 	if err = lom.Load(false /*cache it*/, false /*locked*/); err != nil {
@@ -181,25 +218,23 @@ func (r *XactPutArchive) doOne(lom *cluster.LOM, msg *cmn.ArchiveMsg, smap *clus
 		return err
 	}
 
-	tsi, err := cluster.HrwTarget(r.bckTo.MakeUname(msg.ArchName), smap)
 	debug.AssertNoErr(err)
-	if r.t.Snode().ID() != tsi.ID() {
-		r.doSend(lom, fh, tsi)
+	if r.t.Snode().ID() != work.tsi.ID() {
+		r.doSend(lom, work, fh)
 		return
 	}
 
-	r.addToArch(lom, nil, fh)
+	r.addToArch(lom, nil, fh, work)
 	cluster.FreeLOM(lom)
 	cos.Close(fh)
 	return
 }
 
-func (r *XactPutArchive) doSend(lom *cluster.LOM, fh cos.ReadOpenCloser, tsi *cluster.Snode) {
-	// TODO -- FIXME: copy/paste from ais _sendObjDM
+func (r *XactPutArchive) doSend(lom *cluster.LOM, work *work, fh cos.ReadOpenCloser) {
 	o := transport.AllocSend()
 	hdr := &o.Hdr
 	{
-		hdr.Bck = r.bckTo.Bck
+		hdr.Bck = work.msg.ToBck
 		hdr.ObjName = lom.ObjName
 		hdr.ObjAttrs.Size = lom.Size()
 		hdr.ObjAttrs.Atime = lom.AtimeUnix()
@@ -207,16 +242,16 @@ func (r *XactPutArchive) doSend(lom *cluster.LOM, fh cos.ReadOpenCloser, tsi *cl
 			hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue = cksum.Get()
 		}
 		hdr.ObjAttrs.Version = lom.Version()
+		hdr.Opaque = []byte(_fullname(work.msg.ToBck.Name, work.msg.ArchName)) // NOTE
 	}
 	o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
 		cluster.FreeLOM(lom)
 	}
-	r.dm.Send(o, fh, tsi)
+	r.dm.Send(o, fh, work.tsi)
 }
 
-// TODO -- FIXME: err hdl
-func (r *XactPutArchive) addToArch(lom *cluster.LOM, hdr *transport.ObjHdr, reader io.Reader) {
-	header := new(tar.Header) // TODO -- FIXME: support all 3
+func (r *XactPutArchive) addToArch(lom *cluster.LOM, hdr *transport.ObjHdr, reader io.Reader, work *work) {
+	header := new(tar.Header)
 	header.Typeflag = tar.TypeReg
 
 	if lom != nil { // local
@@ -229,23 +264,16 @@ func (r *XactPutArchive) addToArch(lom *cluster.LOM, hdr *transport.ObjHdr, read
 		header.Name = _fullname(hdr.Bck.Name, hdr.ObjName)
 	}
 
-	// NOTE: one at a time
-	r.mu.Lock()
-	err := r.tw.WriteHeader(header)
+	// one at a time
+	work.mu.Lock()
+	err := work.tw.WriteHeader(header)
 	debug.AssertNoErr(err)
 
-	_, err = io.Copy(r.tw, reader) // TODO -- FIXME: use slab/buffer
+	_, err = io.Copy(work.tw, reader)
+	work.mu.Unlock()
 	debug.AssertNoErr(err)
-	r.mu.Unlock()
 }
 
-func (r *XactPutArchive) createArch(archName, workFQN string) {
-	debug.Assert(strings.HasSuffix(archName, cos.ExtTar)) // TODO -- FIXME: support all 3
-	r.archfh, _ = r.lom.CreateFile(workFQN)
-	r.tw = tar.NewWriter(r.archfh) // TODO -- FIXME: must be per message not xact
-}
-
-// TODO -- FIXME
 func (r *XactPutArchive) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, err error) {
 	defer transport.FreeRecv(objReader)
 	if err != nil && !cos.IsEOF(err) {
@@ -253,26 +281,34 @@ func (r *XactPutArchive) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, er
 		return
 	}
 	defer cos.DrainReader(objReader)
-	r.addToArch(nil, &hdr, objReader)
+
+	r.pending.RLock()
+	work, ok := r.pending.m[string(hdr.Opaque)] // NOTE: fullname
+	r.pending.RUnlock()
+	debug.Assert(ok)
+	debug.Assert(work.tsi.ID() == r.t.Snode().ID())
+
+	r.addToArch(nil, &hdr, objReader, work)
 }
 
-// TODO -- FIXME: use poi.finalize()
-func (r *XactPutArchive) finalize() {
-	if r.tw == nil {
+func (r *XactPutArchive) finalize(work *work) {
+	if work == nil || work.tw == nil {
 		return // nothing to do
 	}
-	r.tw.Close()
-	r.archfh.Close()
-	err := cos.Rename(r.workFQN, r.lom.FQN)
+	work.tw.Close()
+	work.fh.Close()
+	err := cos.Rename(work.fqn, work.lom.FQN)
 	debug.AssertNoErr(err)
 
-	finfo, err := os.Stat(r.lom.FQN)
+	finfo, err := os.Stat(work.lom.FQN)
 	debug.AssertNoErr(err)
-	r.lom.SetSize(finfo.Size())
+	work.lom.SetSize(finfo.Size())
 
-	err = r.lom.Persist(true)
+	err = work.lom.Persist(true)
 	debug.AssertNoErr(err)
-	glog.Infof("%s: new archive %s (size %d)", r.t.Snode(), r.lom, r.lom.Size())
+	glog.Infof("%s: new archive %s (size %d)", r.t.Snode(), work.lom, work.lom.Size())
+
+	cluster.FreeLOM(work.lom)
 }
 
 func (r *XactPutArchive) Stats() cluster.XactStats {

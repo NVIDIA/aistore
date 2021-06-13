@@ -685,7 +685,7 @@ func (p *proxyrunner) putArchive(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 	freeCallResults(results)
 
 	// commit
-	results = c.bcast(cmn.ActCommit, c.commitTimeout(false /*waitmsync*/))
+	results = c.bcast(cmn.ActCommit, 2*c.timeout.netw) // massive archiving vs workCh capacity
 	for _, res := range results {
 		if res.err == nil {
 			continue
