@@ -213,12 +213,10 @@ func (z *SGL) WriteAt(p []byte, off int64) (n int, err error) {
 }
 
 // reuse already allocated SGL
-func (z *SGL) Reset()     { z.woff, z.roff = 0, 0 }
-func (z *SGL) Len() int64 { return z.woff - z.roff }
-
+func (z *SGL) Reset()                            { z.woff, z.roff = 0, 0 }
+func (z *SGL) Len() int64                        { return z.woff - z.roff }
 func (z *SGL) Open() (cos.ReadOpenCloser, error) { return NewReader(z), nil }
-
-func (z *SGL) Close() error { return nil }
+func (*SGL) Close() error                        { return nil }
 
 func (z *SGL) Free() {
 	debug.Assert(z.slab != nil)
@@ -249,11 +247,9 @@ func (z *SGL) Bytes() (b []byte) {
 // A given SGL can be simultaneously utilized by multiple Readers
 //
 
-func NewReader(z *SGL) *Reader { return &Reader{z, 0} }
-
+func NewReader(z *SGL) *Reader                      { return &Reader{z, 0} }
 func (r *Reader) Open() (cos.ReadOpenCloser, error) { return NewReader(r.z), nil }
-
-func (r *Reader) Close() error { return nil }
+func (*Reader) Close() error                        { return nil }
 
 func (r *Reader) Read(b []byte) (n int, err error) {
 	n, r.roff, err = r.z.readAtOffset(b, r.roff)

@@ -154,7 +154,7 @@ func (c *defaultClient) CheckMetricsAvailability() error {
 	return err
 }
 
-func (c *defaultClient) Health(podName string) (cpuCores float64, freeMem int64, err error) {
+func (*defaultClient) Health(podName string) (cpuCores float64, freeMem int64, err error) {
 	var (
 		totalCPU, totalMem int64
 		fracCPU            float64

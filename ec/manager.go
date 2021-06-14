@@ -446,6 +446,4 @@ func (mgr *Manager) ListenSmapChanged() {
 }
 
 // implementing cluster.Slistener interface
-func (mgr *Manager) String() string {
-	return "ecmanager"
-}
+func (*Manager) String() string { return "ecmanager" }

@@ -580,6 +580,21 @@ func (*ConfigToUpdate) JspOpts() jsp.Options { return configJspOpts }
 // at startup and then can be accessed/updated by other services.
 var GCO *globalConfigOwner
 
+func SetConfigInMem(toUpdate *ConfigToUpdate, config *Config, asType string) (err error) {
+	if toUpdate.Vmodule != nil {
+		if err := SetGLogVModule(*toUpdate.Vmodule); err != nil {
+			return fmt.Errorf("failed to set vmodule = %s, err: %v", *toUpdate.Vmodule, err)
+		}
+	}
+	if toUpdate.LogLevel != nil {
+		if err := SetLogLevel(config, *toUpdate.LogLevel); err != nil {
+			return fmt.Errorf("failed to set log level = %s, err: %v", *toUpdate.LogLevel, err)
+		}
+	}
+	err = config.Apply(*toUpdate, asType)
+	return
+}
+
 var clientFeatureList = []struct {
 	name  string
 	value FeatureFlags
@@ -643,21 +658,6 @@ func (gco *globalConfigOwner) SetGlobalConfigPath(path string) {
 
 func (gco *globalConfigOwner) GetGlobalConfigPath() (s string) {
 	return *(*string)(gco.confPath.Load())
-}
-
-func (gco *globalConfigOwner) SetConfigInMem(toUpdate *ConfigToUpdate, config *Config, asType string) (err error) {
-	if toUpdate.Vmodule != nil {
-		if err := SetGLogVModule(*toUpdate.Vmodule); err != nil {
-			return fmt.Errorf("failed to set vmodule = %s, err: %v", *toUpdate.Vmodule, err)
-		}
-	}
-	if toUpdate.LogLevel != nil {
-		if err := SetLogLevel(config, *toUpdate.LogLevel); err != nil {
-			return fmt.Errorf("failed to set log level = %s, err: %v", *toUpdate.LogLevel, err)
-		}
-	}
-	err = config.Apply(*toUpdate, asType)
-	return
 }
 
 func (gco *globalConfigOwner) Update(cluConfig *ClusterConfig) (err error) {
@@ -1031,12 +1031,12 @@ func (c *ECConf) ValidateAsProps(args *ValidationArgs) error {
 	return nil
 }
 
-func (c *TimeoutConf) Validate() (err error)    { return }
-func (c *ClientConf) Validate() (err error)     { return }
-func (c *RebalanceConf) Validate() (err error)  { return }
-func (c *ResilverConf) Validate() (err error)   { return }
-func (c *PeriodConf) Validate() (err error)     { return }
-func (c *DownloaderConf) Validate() (err error) { return }
+func (*TimeoutConf) Validate() error    { return nil }
+func (*ClientConf) Validate() error     { return nil }
+func (*RebalanceConf) Validate() error  { return nil }
+func (*ResilverConf) Validate() error   { return nil }
+func (*PeriodConf) Validate() error     { return nil }
+func (*DownloaderConf) Validate() error { return nil }
 
 func (c *KeepaliveConf) Validate() (err error) {
 	if !validKeepaliveType(c.Proxy.Name) {

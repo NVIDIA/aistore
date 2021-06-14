@@ -743,7 +743,7 @@ func (p *proxyrunner) setClusterConfig(w http.ResponseWriter, r *http.Request, t
 		return
 	}
 	ctx := &configModifier{
-		pre:      p._setConfPre,
+		pre:      _setConfPre,
 		final:    p._syncConfFinal,
 		msg:      msg,
 		toUpdate: toUpdate,
@@ -778,7 +778,7 @@ func (p *proxyrunner) setTransientClusterConfig(w http.ResponseWriter, r *http.R
 	p.bcastReqGroup(w, r, req, cluster.AllNodes)
 }
 
-func (p *proxyrunner) _setConfPre(ctx *configModifier, clone *globalConfig) (updated bool, err error) {
+func _setConfPre(ctx *configModifier, clone *globalConfig) (updated bool, err error) {
 	if err = clone.Apply(*ctx.toUpdate, cmn.Cluster); err != nil {
 		return
 	}

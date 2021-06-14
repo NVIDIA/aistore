@@ -248,7 +248,7 @@ func (p *dowFactory) Get() cluster.Xact { return p.xact }
 // Downloader //
 ////////////////
 
-func (d *Downloader) Name() string {
+func (*Downloader) Name() string {
 	i := strconv.FormatInt(instance.Load(), 10)
 	return "downloader" + i
 }
@@ -338,7 +338,7 @@ func (d *Downloader) ListJobs(regex *regexp.Regexp) (resp interface{}, statusCod
 	return d.dispatcher.dispatchAdminReq(req)
 }
 
-func (d *Downloader) checkJob(req *request) (*downloadJobInfo, error) {
+func (*Downloader) checkJob(req *request) (*downloadJobInfo, error) {
 	jInfo, err := dlStore.getJob(req.id)
 	if err != nil {
 		cos.Assert(errors.Is(err, errJobNotFound))

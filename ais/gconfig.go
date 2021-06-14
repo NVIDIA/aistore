@@ -49,10 +49,10 @@ type (
 var _ revs = (*globalConfig)(nil)
 
 // as revs
-func (config *globalConfig) tag() string             { return revsConfTag }
-func (config *globalConfig) version() int64          { return config.Version }
-func (config *globalConfig) jit(p *proxyrunner) revs { g, _ := p.owner.config.get(); return g }
-func (config *globalConfig) sgl() *memsys.SGL        { return config._sgl }
+func (*globalConfig) tag() string             { return revsConfTag }
+func (config *globalConfig) version() int64   { return config.Version }
+func (*globalConfig) jit(p *proxyrunner) revs { g, _ := p.owner.config.get(); return g }
+func (config *globalConfig) sgl() *memsys.SGL { return config._sgl }
 
 func (config *globalConfig) marshal() []byte {
 	config._sgl = config._encode(0)
@@ -91,7 +91,7 @@ func (co *configOwner) get() (clone *globalConfig, err error) {
 	return
 }
 
-func (co *configOwner) version() int64 { return cmn.GCO.Get().Version }
+func (*configOwner) version() int64 { return cmn.GCO.Get().Version }
 
 func (co *configOwner) runPre(ctx *configModifier) (clone *globalConfig, err error) {
 	co.Lock()
@@ -115,7 +115,7 @@ func (co *configOwner) runPre(ctx *configModifier) (clone *globalConfig, err err
 	}
 
 	ctx.oldConfig = cmn.GCO.Get()
-	if err = co.updateGCO(clone); err != nil {
+	if err = cmn.GCO.Update(&clone.ClusterConfig); err != nil {
 		clone = nil
 		return
 	}
@@ -160,7 +160,7 @@ func (co *configOwner) persist(clone *globalConfig, payload msPayload) error {
 	return jsp.SaveMeta(co.globalFpath, clone, wto)
 }
 
-func (co *configOwner) persistBytes(payload msPayload, globalFpath string) (done bool) {
+func (*configOwner) persistBytes(payload msPayload, globalFpath string) (done bool) {
 	if payload == nil {
 		return
 	}
@@ -177,14 +177,10 @@ func (co *configOwner) persistBytes(payload msPayload, globalFpath string) (done
 	return
 }
 
-func (co *configOwner) updateGCO(newConfig *globalConfig) (err error) {
-	return cmn.GCO.Update(&newConfig.ClusterConfig)
-}
-
 func (co *configOwner) setDaemonConfig(toUpdate *cmn.ConfigToUpdate, transient bool) (err error) {
 	co.Lock()
 	clone := cmn.GCO.Clone()
-	err = cmn.GCO.SetConfigInMem(toUpdate, clone, cmn.Daemon)
+	err = cmn.SetConfigInMem(toUpdate, clone, cmn.Daemon)
 	if err != nil {
 		co.Unlock()
 		return
@@ -224,7 +220,7 @@ func (co *configOwner) resetDaemonConfig() (err error) {
 		co.Unlock()
 		return
 	}
-	co.updateGCO(config)
+	cmn.GCO.Update(&config.ClusterConfig)
 	co.Unlock()
 	return
 }

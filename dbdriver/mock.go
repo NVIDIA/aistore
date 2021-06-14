@@ -21,19 +21,9 @@ type DBMock struct {
 // interface guard
 var _ Driver = (*DBMock)(nil)
 
-func NewDBMock() Driver {
-	return &DBMock{
-		values: make(map[string]string),
-	}
-}
-
-func (bd *DBMock) makePath(collection, key string) string {
-	return collection + collectionSepa + key
-}
-
-func (bd *DBMock) Close() error {
-	return nil
-}
+func NewDBMock() Driver                                { return &DBMock{values: make(map[string]string)} }
+func (*DBMock) makePath(collection, key string) string { return collection + collectionSepa + key }
+func (*DBMock) Close() error                           { return nil }
 
 func (bd *DBMock) Set(collection, key string, object interface{}) error {
 	b := cos.MustMarshal(object)

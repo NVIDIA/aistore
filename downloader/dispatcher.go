@@ -424,7 +424,7 @@ func (d *dispatcher) dispatchAdminReq(req *request) (resp interface{}, statusCod
 	case actRemove:
 		d.handleRemove(req)
 	case actList:
-		d.handleList(req)
+		_handleList(req)
 	default:
 		cos.Assertf(false, "%v; %v", req, req.action)
 	}
@@ -500,7 +500,7 @@ func (d *dispatcher) handleStatus(req *request) {
 	})
 }
 
-func (d *dispatcher) handleList(req *request) {
+func _handleList(req *request) {
 	records := dlStore.getList(req.regex)
 	respMap := make(map[string]DlJobInfo)
 	for _, r := range records {

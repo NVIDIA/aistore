@@ -181,7 +181,7 @@ func newDSorterMem(m *Manager) *dsorterMem {
 	}
 }
 
-func (ds *dsorterMem) name() string { return DSorterMemType }
+func (*dsorterMem) name() string { return DSorterMemType }
 
 func (ds *dsorterMem) init() error {
 	ds.creationPhase.connector = newRWConnector(ds.m)
@@ -276,7 +276,7 @@ func (ds *dsorterMem) cleanupStreams() (err error) {
 	return err
 }
 
-func (ds *dsorterMem) cleanup() {}
+func (*dsorterMem) cleanup() {}
 
 func (ds *dsorterMem) finalCleanup() error {
 	err := ds.cleanupStreams()
@@ -286,7 +286,7 @@ func (ds *dsorterMem) finalCleanup() error {
 	return err
 }
 
-func (ds *dsorterMem) postRecordDistribution() {}
+func (*dsorterMem) postRecordDistribution() {}
 
 func (ds *dsorterMem) preShardCreation(shardName string, mpathInfo *fs.MountpathInfo) error {
 	bsi := &buildingShardInfo{
@@ -545,7 +545,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 	}
 }
 
-func (ds *dsorterMem) postExtraction() {}
+func (*dsorterMem) postExtraction() {}
 
 func (ds *dsorterMem) makeRecvRequestFunc() transport.ReceiveObj {
 	return func(hdr transport.ObjHdr, object io.Reader, err error) {
@@ -612,6 +612,6 @@ func (ds *dsorterMem) makeRecvResponseFunc() transport.ReceiveObj {
 	}
 }
 
-func (ds *dsorterMem) preShardExtraction(uint64) bool { return true }
-func (ds *dsorterMem) postShardExtraction(uint64)     {}
-func (ds *dsorterMem) onAbort()                       { _ = ds.cleanupStreams() }
+func (*dsorterMem) preShardExtraction(uint64) bool { return true }
+func (*dsorterMem) postShardExtraction(uint64)     {}
+func (ds *dsorterMem) onAbort()                    { _ = ds.cleanupStreams() }

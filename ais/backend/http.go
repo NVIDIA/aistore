@@ -57,8 +57,8 @@ func (hp *httpProvider) client(u string) *http.Client {
 	return hp.httpClient
 }
 
-func (hp *httpProvider) Provider() string  { return cmn.ProviderHTTP }
-func (hp *httpProvider) MaxPageSize() uint { return 10000 }
+func (*httpProvider) Provider() string  { return cmn.ProviderHTTP }
+func (*httpProvider) MaxPageSize() uint { return 10000 }
 
 func (hp *httpProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (errCode int, err error) {
 	// TODO: We could support it.
@@ -101,12 +101,12 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 	return
 }
 
-func (hp *httpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
+func (*httpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
 	debug.Assert(false)
 	return
 }
 
-func (hp *httpProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
+func (*httpProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	debug.Assert(false)
 	return
 }

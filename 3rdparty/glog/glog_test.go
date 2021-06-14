@@ -46,13 +46,9 @@ type flushBuffer struct {
 	bytes.Buffer
 }
 
-func (f *flushBuffer) Flush() error {
-	return nil
-}
+func (*flushBuffer) Flush() error { return nil }
 
-func (f *flushBuffer) Sync() error {
-	return nil
-}
+func (*flushBuffer) Sync() error { return nil }
 
 // swap sets the log writers and returns the old array.
 func (l *loggingT) swap(writers [numSeverity]flushSyncWriter) (old [numSeverity]flushSyncWriter) {

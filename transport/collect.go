@@ -59,7 +59,7 @@ func Init() *StreamCollector {
 	return sc
 }
 
-func (sc *StreamCollector) Name() string { return "stream_collector" }
+func (*StreamCollector) Name() string { return "stream_collector" }
 
 func (sc *StreamCollector) Run() (err error) {
 	cos.Printf("Intra-cluster networking: %s client", whichClient())

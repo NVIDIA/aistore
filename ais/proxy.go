@@ -99,7 +99,7 @@ func (p *proxyrunner) initClusterCIDR() {
 
 func (p *proxyrunner) init(config *cmn.Config) {
 	p.initNetworks()
-	p.si.Init(p.initID(config), cmn.Proxy)
+	p.si.Init(initPID(config), cmn.Proxy)
 
 	cos.InitShortID(p.si.Digest())
 	p.initClusterCIDR()
@@ -119,7 +119,7 @@ func (p *proxyrunner) init(config *cmn.Config) {
 	p.metasyncer = m
 }
 
-func (p *proxyrunner) initID(config *cmn.Config) (pid string) {
+func initPID(config *cmn.Config) (pid string) {
 	if pid = envDaemonID(cmn.Proxy); pid != "" {
 		return
 	}
@@ -1198,7 +1198,7 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, quer
 func (p *proxyrunner) gatherBucketSummary(bck cmn.QueryBcks, msg *cmn.BucketSummaryMsg) (
 	summaries cmn.BucketsSummaries, uuid string, err error) {
 	var (
-		isNew, q = p.initAsyncQuery(cmn.Bck(bck), msg, cos.GenUUID())
+		isNew, q = initAsyncQuery(cmn.Bck(bck), msg, cos.GenUUID())
 		config   = cmn.GCO.Get()
 		smap     = p.owner.smap.get()
 		aisMsg   = p.newAmsgActVal(cmn.ActSummary, msg)
@@ -1213,7 +1213,7 @@ func (p *proxyrunner) gatherBucketSummary(bck cmn.QueryBcks, msg *cmn.BucketSumm
 	args.smap = smap
 	args.timeout = config.Timeout.MaxHostBusy.D() + config.Timeout.MaxKeepalive.D()
 	results := p.bcastGroup(args)
-	allOK, _, err := p.checkBckTaskResp(msg.UUID, results)
+	allOK, _, err := checkBckTaskResp(msg.UUID, results)
 	if err != nil {
 		return nil, "", err
 	}
@@ -1315,7 +1315,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if bck.IsAIS() || !args.exists {
-		p.bucketPropsToHdr(bck, w.Header())
+		bpropsToHdr(bck, w.Header())
 		return
 	}
 
@@ -1343,7 +1343,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
-	p.bucketPropsToHdr(bck, w.Header())
+	bpropsToHdr(bck, w.Header())
 }
 
 func (p *proxyrunner) _bckHeadPre(ctx *bmdModifier, clone *bucketMD) error {
@@ -1389,7 +1389,7 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	if bck, err = args.initAndTry(bck.Name); err != nil {
 		return
 	}
-	if err = p.checkAction(msg, cmn.ActSetBprops, cmn.ActResetBprops); err != nil {
+	if err = _checkAction(msg, cmn.ActSetBprops, cmn.ActResetBprops); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
@@ -1586,7 +1586,7 @@ func (p *proxyrunner) listBuckets(w http.ResponseWriter, r *http.Request, query 
 	bmd := p.owner.bmd.get()
 	// HDFS doesn't support listing remote buckets (there are no remote buckets).
 	if query.IsAIS() || query.IsHDFS() {
-		bcks := p.selectBMDBuckets(bmd, query)
+		bcks := selectBMDBuckets(bmd, query)
 		p.writeJSON(w, r, bcks, listBuckets)
 		return
 	}
@@ -1632,7 +1632,7 @@ func (p *proxyrunner) redirectURL(r *http.Request, si *cluster.Snode, ts time.Ti
 	return
 }
 
-func (p *proxyrunner) initAsyncQuery(bck cmn.Bck, msg *cmn.BucketSummaryMsg, newTaskID string) (bool, url.Values) {
+func initAsyncQuery(bck cmn.Bck, msg *cmn.BucketSummaryMsg, newTaskID string) (bool, url.Values) {
 	isNew := msg.UUID == ""
 	q := url.Values{}
 	if isNew {
@@ -1654,7 +1654,7 @@ func (p *proxyrunner) initAsyncQuery(bck cmn.Bck, msg *cmn.BucketSummaryMsg, new
 	return isNew, q
 }
 
-func (p *proxyrunner) checkBckTaskResp(uuid string, results sliceResults) (allOK bool, status int, err error) {
+func checkBckTaskResp(uuid string, results sliceResults) (allOK bool, status int, err error) {
 	// check response codes of all targets
 	// Target that has completed its async task returns 200, and 202 otherwise
 	allOK = true

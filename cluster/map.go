@@ -520,7 +520,7 @@ func (m *Smap) ICCount() int {
 	return count
 }
 
-func (m *Smap) DefaultICSize() int { return icGroupSize }
+func (*Smap) DefaultICSize() int { return icGroupSize }
 
 /////////////
 // NodeMap //

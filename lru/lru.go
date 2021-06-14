@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
@@ -142,7 +143,8 @@ func (p *Factory) Start(_ cmn.Bck) error {
 	p.xact.InitIdle()
 	return nil
 }
-func (p *Factory) Kind() string      { return cmn.ActLRU }
+
+func (*Factory) Kind() string        { return cmn.ActLRU }
 func (p *Factory) Get() cluster.Xact { return p.xact }
 
 func Run(ini *InitLRU) {
@@ -241,8 +243,9 @@ repeat:
 // Xaction //
 /////////////
 
-func (r *Xaction) Run()   { cos.Assert(false) }
+func (*Xaction) Run()     { debug.Assert(false) }
 func (r *Xaction) Renew() { r.Renewed <- struct{}{} }
+
 func (r *Xaction) stop() {
 	r.XactDemandBase.Stop()
 	r.Finish(nil)
@@ -475,7 +478,7 @@ func (j *lruJ) evict() (size int64, err error) {
 	// 3.
 	for h.Len() > 0 && j.totalSize > 0 {
 		lom := heap.Pop(h).(*cluster.LOM)
-		if j.evictObj(lom) {
+		if evictObj(lom) {
 			bevicted += lom.Size(true /*not loaded*/)
 			size += lom.Size(true)
 			fevicted++
@@ -532,7 +535,7 @@ func (j *lruJ) _throttle(usedPct int64) (err error) {
 }
 
 // remove local copies that "belong" to different LRU joggers; hence, space accounting may be temporarily not precise
-func (j *lruJ) evictObj(lom *cluster.LOM) (ok bool) {
+func evictObj(lom *cluster.LOM) (ok bool) {
 	lom.Lock(true)
 	if err := lom.Remove(); err == nil {
 		ok = true

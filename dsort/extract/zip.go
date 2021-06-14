@@ -185,14 +185,6 @@ func (z *zipExtractCreator) CreateShard(s *Shard, w io.Writer, loadContent LoadC
 	return written, nil
 }
 
-func (z *zipExtractCreator) UsingCompression() bool {
-	return true
-}
-
-func (z *zipExtractCreator) SupportsOffset() bool {
-	return false
-}
-
-func (z *zipExtractCreator) MetadataSize() int64 {
-	return 0 // zip does not have header size
-}
+func (*zipExtractCreator) UsingCompression() bool { return true }
+func (*zipExtractCreator) SupportsOffset() bool   { return false }
+func (*zipExtractCreator) MetadataSize() int64    { return 0 } // zip does not have header size

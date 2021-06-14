@@ -39,7 +39,7 @@ func NewDownloadNL(uuid string, action string, smap *cluster.Smap,
 	}
 }
 
-func (nd *NotifDownloadListerner) UnmarshalStats(rawMsg []byte) (stats interface{}, finished, aborted bool, err error) {
+func (*NotifDownloadListerner) UnmarshalStats(rawMsg []byte) (stats interface{}, finished, aborted bool, err error) {
 	dlStatus := &DlStatusResp{}
 	if err = jsoniter.Unmarshal(rawMsg, dlStatus); err != nil {
 		return

@@ -49,7 +49,7 @@ func (rs *RecipeStats) HasData() bool {
 	return rs.requestCount > 0
 }
 
-func (rs RecipeStats) getHeadingsText() map[string]string {
+func (RecipeStats) getHeadingsText() map[string]string {
 	return map[string]string{
 		"beginTime": "Begin (excel timestamp)",
 		"endTime":   "End (excel timestamp)",
@@ -69,7 +69,7 @@ func (rs RecipeStats) getHeadingsText() map[string]string {
 	}
 }
 
-func (rs RecipeStats) getHeadingsOrder() []string {
+func (RecipeStats) getHeadingsOrder() []string {
 	return []string{
 		"beginTime", "endTime", "recName", "recNum", "opType",
 		"minLatency", "avgLatency", "maxLatency", "throughput",

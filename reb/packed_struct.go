@@ -168,11 +168,11 @@ func (req *pushReq) Unpack(unpacker *cos.ByteUnpack) error {
 	return unpacker.ReadAny(req.md)
 }
 
-func (reb *Manager) encodePushReq(req *pushReq) []byte {
+func (*Manager) encodePushReq(req *pushReq) []byte {
 	return req.NewPack(rebMsgPushStage)
 }
 
-func (reb *Manager) decodePushReq(buf []byte) (*pushReq, error) {
+func (*Manager) decodePushReq(buf []byte) (*pushReq, error) {
 	var (
 		req      = &pushReq{}
 		unpacker = cos.NewUnpacker(buf)

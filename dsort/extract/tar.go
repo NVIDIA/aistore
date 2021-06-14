@@ -272,17 +272,9 @@ func (t *tarExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadContent
 	return written, nil
 }
 
-func (t *tarExtractCreator) UsingCompression() bool {
-	return false
-}
-
-func (t *tarExtractCreator) SupportsOffset() bool {
-	return true
-}
-
-func (t *tarExtractCreator) MetadataSize() int64 {
-	return tarBlockSize // size of tar header with padding
-}
+func (*tarExtractCreator) UsingCompression() bool { return false }
+func (*tarExtractCreator) SupportsOffset() bool   { return true }
+func (*tarExtractCreator) MetadataSize() int64    { return tarBlockSize } // size of tar header with padding
 
 // Calculates padded value to 512 bytes
 func paddedSize(offset int64) int64 {

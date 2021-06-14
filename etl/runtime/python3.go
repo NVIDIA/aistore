@@ -14,7 +14,7 @@ type (
 //go:embed python3.yaml
 var py3PodSpec string
 
-func (r py3) Type() string        { return Python3 }
-func (r py3) CodeEnvName() string { return "AISTORE_CODE" }
-func (r py3) DepsEnvName() string { return "AISTORE_DEPS" }
-func (r py3) PodSpec() string     { return py3PodSpec }
+func (py3) Type() string        { return Python3 }
+func (py3) CodeEnvName() string { return "AISTORE_CODE" }
+func (py3) DepsEnvName() string { return "AISTORE_DEPS" }
+func (py3) PodSpec() string     { return py3PodSpec }

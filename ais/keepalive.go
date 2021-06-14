@@ -126,7 +126,7 @@ func newTargetKeepalive(t *targetrunner, statsT stats.Tracker, startedUp *atomic
 	return tkr
 }
 
-func (tkr *targetKeepalive) cfg(config *cmn.Config) *cmn.KeepaliveTrackerConf {
+func (*targetKeepalive) cfg(config *cmn.Config) *cmn.KeepaliveTrackerConf {
 	return &config.Keepalive.Target
 }
 
@@ -161,7 +161,7 @@ func newProxyKeepalive(p *proxyrunner, statsT stats.Tracker, startedUp *atomic.B
 	return pkr
 }
 
-func (pkr *proxyKeepalive) cfg(config *cmn.Config) *cmn.KeepaliveTrackerConf {
+func (*proxyKeepalive) cfg(config *cmn.Config) *cmn.KeepaliveTrackerConf {
 	return &config.Keepalive.Proxy
 }
 

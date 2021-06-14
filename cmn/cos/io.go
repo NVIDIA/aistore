@@ -164,29 +164,16 @@ func (r *nopReader) Read(b []byte) (int, error) {
 // ByteHandle //
 ////////////////
 
-func NewByteHandle(bt []byte) *ByteHandle {
-	return &ByteHandle{bt, bytes.NewReader(bt)}
-}
-
-func (b *ByteHandle) Close() error {
-	return nil
-}
-
-func (b *ByteHandle) Open() (ReadOpenCloser, error) {
-	return NewByteHandle(b.b), nil
-}
+func NewByteHandle(bt []byte) *ByteHandle           { return &ByteHandle{bt, bytes.NewReader(bt)} }
+func (*ByteHandle) Close() error                    { return nil }
+func (b *ByteHandle) Open() (ReadOpenCloser, error) { return NewByteHandle(b.b), nil }
 
 ///////////////
 // nopOpener //
 ///////////////
 
-func NopOpener(r io.ReadCloser) ReadOpenCloser {
-	return &nopOpener{r}
-}
-
-func (n *nopOpener) Open() (ReadOpenCloser, error) {
-	return n, nil
-}
+func NopOpener(r io.ReadCloser) ReadOpenCloser     { return &nopOpener{r} }
+func (n *nopOpener) Open() (ReadOpenCloser, error) { return n, nil }
 
 ////////////////
 // FileHandle //
@@ -301,9 +288,7 @@ func (r *ReaderWithArgs) Read(p []byte) (n int, err error) {
 	return n, err
 }
 
-func (r *ReaderWithArgs) Open() (ReadOpenCloser, error) {
-	panic("not supported")
-}
+func (*ReaderWithArgs) Open() (ReadOpenCloser, error) { panic("not supported") }
 
 func (r *ReaderWithArgs) Close() (err error) {
 	if rc, ok := r.args.R.(io.ReadCloser); ok {
@@ -365,7 +350,7 @@ func (f *SectionHandle) Read(buf []byte) (n int, err error) {
 	return n, io.EOF
 }
 
-func (f *SectionHandle) Close() error { return nil }
+func (*SectionHandle) Close() error { return nil }
 
 ///////////////////////
 // FileSectionHandle //

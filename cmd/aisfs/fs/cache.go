@@ -84,7 +84,7 @@ func (c *namespaceCache) newFileEntry(dta dtAttrs) nsEntry {
 	}
 }
 
-func (c *namespaceCache) newDirEntry(dta dtAttrs) *dirEntry {
+func (*namespaceCache) newDirEntry(dta dtAttrs) *dirEntry {
 	return &dirEntry{
 		id:   dta.id,
 		name: dta.path,

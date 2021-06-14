@@ -35,7 +35,7 @@ func newNodeStages() *nodeStages {
 }
 
 // Returns true if the target is in `newStage` or in any next stage
-func (ns *nodeStages) stageReached(status *stageStatus, newStage uint32, newBatchID int64) bool {
+func (*nodeStages) stageReached(status *stageStatus, newStage uint32, newBatchID int64) bool {
 	// for simple stages: just check the stage
 	if newBatchID == 0 {
 		return status.stage >= newStage

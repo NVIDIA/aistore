@@ -69,7 +69,15 @@ func allocCtx() (ctx *encodeCtx) {
 	return
 }
 
-func (c *putJogger) newCtx(lom *cluster.LOM, meta *Metadata) (ctx *encodeCtx, err error) {
+func (ctx *encodeCtx) freeReplica() {
+	freeObject(ctx.fh)
+}
+
+///////////////
+// putJogger //
+///////////////
+
+func (*putJogger) newCtx(lom *cluster.LOM, meta *Metadata) (ctx *encodeCtx, err error) {
 	ctx = allocCtx()
 	ctx.lom = lom
 	ctx.dataSlices = lom.Bprops().EC.DataSlices
@@ -85,13 +93,9 @@ func (c *putJogger) newCtx(lom *cluster.LOM, meta *Metadata) (ctx *encodeCtx, er
 	return ctx, err
 }
 
-func (c *putJogger) freeCtx(ctx *encodeCtx) {
+func (*putJogger) freeCtx(ctx *encodeCtx) {
 	*ctx = emptyCtx
 	encCtxPool.Put(ctx)
-}
-
-func (ctx *encodeCtx) freeReplica() {
-	freeObject(ctx.fh)
 }
 
 func (c *putJogger) freeResources() {

@@ -156,7 +156,7 @@ func newMetasyncer(p *proxyrunner) (y *metasyncer) {
 	return
 }
 
-func (y *metasyncer) Name() string { return "metasyncer" }
+func (*metasyncer) Name() string { return "metasyncer" }
 
 func (y *metasyncer) Run() error {
 	glog.Infof("Starting %s", y.Name())

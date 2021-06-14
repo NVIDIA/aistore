@@ -68,8 +68,8 @@ type testSmapListeners struct {
 	sync.RWMutex
 }
 
-func (a *testSmapListeners) Reg(sl cluster.Slistener)   {}
-func (a *testSmapListeners) Unreg(sl cluster.Slistener) {}
+func (*testSmapListeners) Reg(sl cluster.Slistener)   {}
+func (*testSmapListeners) Unreg(sl cluster.Slistener) {}
 
 type testSmap struct {
 	*cluster.Smap
@@ -108,7 +108,7 @@ type extractCreatorMock struct {
 	createShard    func(s *extract.Shard, w io.Writer, loadContent extract.LoadContentFunc) // func to hijack CreateShard function
 }
 
-func (ec *extractCreatorMock) ExtractShard(lom *cluster.LOM, f cos.ReadReaderAt, extractor extract.RecordExtractor, toDisk bool) (int64, int, error) {
+func (*extractCreatorMock) ExtractShard(lom *cluster.LOM, f cos.ReadReaderAt, extractor extract.RecordExtractor, toDisk bool) (int64, int, error) {
 	return 0, 0, nil
 }
 
@@ -116,9 +116,9 @@ func (ec *extractCreatorMock) CreateShard(s *extract.Shard, w io.Writer, loadCon
 	ec.createShard(s, w, loadContent)
 	return 0, nil
 }
-func (ec *extractCreatorMock) SupportsOffset() bool   { return true }
+func (*extractCreatorMock) SupportsOffset() bool      { return true }
 func (ec *extractCreatorMock) UsingCompression() bool { return ec.useCompression }
-func (ec *extractCreatorMock) MetadataSize() int64    { return 0 }
+func (*extractCreatorMock) MetadataSize() int64       { return 0 }
 
 type targetNodeMock struct {
 	daemonID  string

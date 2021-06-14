@@ -735,7 +735,7 @@ waitStartup:
 	config = cmn.GCO.Get()
 	goMaxProcs := runtime.GOMAXPROCS(0)
 	glog.Infof("Starting %s", r.Name())
-	hk.Reg(r.Name()+".gc.logs", r.recycleLogs, logsMaxSizeCheckTime)
+	hk.Reg(r.Name()+".gc.logs", recycleLogs, logsMaxSizeCheckTime)
 
 	statsTime := config.Periodic.StatsTime.D()
 	r.ticker = time.NewTicker(statsTime)
@@ -810,13 +810,13 @@ func (r *statsRunner) AddMany(nvs ...NamedVal64) {
 	}
 }
 
-func (r *statsRunner) recycleLogs() time.Duration {
+func recycleLogs() time.Duration {
 	// keep total log size below the configured max
-	go r.removeLogs(cmn.GCO.Get())
+	go removeLogs(cmn.GCO.Get())
 	return logsMaxSizeCheckTime
 }
 
-func (r *statsRunner) removeLogs(config *cmn.Config) {
+func removeLogs(config *cmn.Config) {
 	maxtotal := int64(config.Log.MaxTotal)
 	logfinfos, err := ioutil.ReadDir(config.LogDir)
 	if err != nil {
@@ -844,12 +844,12 @@ func (r *statsRunner) removeLogs(config *cmn.Config) {
 			}
 		}
 		if tot > maxtotal {
-			r.removeOlderLogs(tot, maxtotal, config.LogDir, logtype, infos)
+			removeOlderLogs(tot, maxtotal, config.LogDir, logtype, infos)
 		}
 	}
 }
 
-func (r *statsRunner) removeOlderLogs(tot, maxtotal int64, logdir, logtype string, filteredInfos []os.FileInfo) {
+func removeOlderLogs(tot, maxtotal int64, logdir, logtype string, filteredInfos []os.FileInfo) {
 	l := len(filteredInfos)
 	if l <= 1 {
 		glog.Warningf("GC logs: cannot cleanup %s, dir %s, tot %d, max %d", logtype, logdir, tot, maxtotal)

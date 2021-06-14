@@ -65,7 +65,7 @@ func freeRestoreCtx(ctx *restoreCtx) {
 	restoreCtxPool.Put(ctx)
 }
 
-func (c *getJogger) newCtx(req *request) (*restoreCtx, error) {
+func (*getJogger) newCtx(req *request) (*restoreCtx, error) {
 	lom, err := req.LIF.LOM()
 	ctx := allocRestoreCtx()
 	ctx.toDisk = useDisk(0 /*size of the original object is unknown*/)
@@ -79,7 +79,7 @@ func (c *getJogger) newCtx(req *request) (*restoreCtx, error) {
 	return ctx, err
 }
 
-func (c *getJogger) freeCtx(ctx *restoreCtx) {
+func (*getJogger) freeCtx(ctx *restoreCtx) {
 	cluster.FreeLOM(ctx.lom)
 	freeRestoreCtx(ctx)
 }
@@ -108,7 +108,7 @@ func (c *getJogger) stop() {
 }
 
 // Finalize the EC restore: report an error to a caller, do housekeeping.
-func (c *getJogger) finalizeReq(req *request, err error) {
+func (*getJogger) finalizeReq(req *request, err error) {
 	if err != nil {
 		glog.Errorf("Error restoring %s: %v", req.LIF.Uname, err)
 	}
@@ -637,7 +637,7 @@ func (c *getJogger) emptyTargets(ctx *restoreCtx) ([]string, error) {
 	return empty, nil
 }
 
-func (c *getJogger) freeSliceFrom(slices []*slice, start int) {
+func (*getJogger) freeSliceFrom(slices []*slice, start int) {
 	for sl, sliceID := getNextNonEmptySlice(slices, start); sl != nil; sl, sliceID = getNextNonEmptySlice(slices, sliceID) {
 		sl.free()
 	}

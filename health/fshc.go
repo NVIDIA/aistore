@@ -54,7 +54,8 @@ func NewFSHC(dispatcher fspathDispatcher) *FSHC {
 	}
 }
 
-func (f *FSHC) Name() string { return "fshc" }
+func (*FSHC) Name() string { return "fshc" }
+
 func (f *FSHC) Run() error {
 	glog.Infof("Starting %s", f.Name())
 
@@ -83,11 +84,10 @@ func (f *FSHC) OnErr(fqn string) {
 	if !cmn.GCO.Get().FSHC.Enabled {
 		return
 	}
-
 	f.fileListCh <- fqn
 }
 
-func (f *FSHC) isTestPassed(mpath string, readErrors, writeErrors int, available bool) (passed bool, err error) {
+func isTestPassed(mpath string, readErrors, writeErrors int, available bool) (passed bool, err error) {
 	config := &cmn.GCO.Get().FSHC
 	glog.Infof("Tested mountpath %s(%v), read: %d of %d, write(size=%d): %d of %d",
 		mpath, available,
@@ -107,17 +107,14 @@ func (f *FSHC) isTestPassed(mpath string, readErrors, writeErrors int, available
 
 func (f *FSHC) runMpathTest(mpath, filepath string) {
 	var (
-		passed    bool
+		config    = &cmn.GCO.Get().FSHC
 		whyFailed error
-
-		config = &cmn.GCO.Get().FSHC
+		passed    bool
 	)
-
-	readErrs, writeErrs, exists := f.testMountpath(filepath, mpath, config.TestFileCount, fshcFileSize)
-	if passed, whyFailed = f.isTestPassed(mpath, readErrs, writeErrs, exists); passed {
+	readErrs, writeErrs, exists := testMountpath(filepath, mpath, config.TestFileCount, fshcFileSize)
+	if passed, whyFailed = isTestPassed(mpath, readErrs, writeErrs, exists); passed {
 		return
 	}
-
 	glog.Errorf("Disabling mountpath %s...", mpath)
 	disabled, err := f.dispatcher.DisableMountpath(mpath, whyFailed.Error())
 	if err != nil {
@@ -128,7 +125,7 @@ func (f *FSHC) runMpathTest(mpath, filepath string) {
 }
 
 // reads the entire file content
-func (f *FSHC) tryReadFile(fqn string) error {
+func tryReadFile(fqn string) error {
 	file, err := fs.DirectOpen(fqn, os.O_RDONLY, 0)
 	if err != nil {
 		return err
@@ -141,7 +138,7 @@ func (f *FSHC) tryReadFile(fqn string) error {
 }
 
 // Creates a random file in a random directory inside a mountpath.
-func (f *FSHC) tryWriteFile(mountpath string, fileSize int64) error {
+func tryWriteFile(mountpath string, fileSize int64) error {
 	const ftag = "temp file"
 	// Do not test a mountpath if it is already disabled. To avoid a race
 	// when a lot of PUTs fail and each one calls FSHC, FSHC disables
@@ -191,7 +188,7 @@ func (f *FSHC) tryWriteFile(mountpath string, fileSize int64) error {
 // The function returns the number of read/write errors, and if the mountpath
 //   is accessible. When the specified local directory is inaccessible the
 //   function returns immediately without any read/write operations
-func (f *FSHC) testMountpath(filePath, mountpath string,
+func testMountpath(filePath, mountpath string,
 	maxTestFiles, fileSize int) (readFails, writeFails int, accessible bool) {
 	if glog.V(4) {
 		glog.Infof("[fshc] Testing mountpath %q", mountpath)
@@ -208,7 +205,7 @@ func (f *FSHC) testMountpath(filePath, mountpath string,
 		if stat, err := os.Stat(filePath); err == nil && !stat.IsDir() {
 			totalReads++
 
-			if err := f.tryReadFile(filePath); err != nil {
+			if err := tryReadFile(filePath); err != nil {
 				glog.Errorf("[fshc] Failed to read file (fqn: %q, read_fails: %d, err: %v)", filePath, readFails, err)
 				if cos.IsIOError(err) {
 					readFails++
@@ -241,7 +238,7 @@ func (f *FSHC) testMountpath(filePath, mountpath string,
 		if glog.V(4) {
 			glog.Infof("[fshc] Reading random file (fqn: %q)", fqn)
 		}
-		if err = f.tryReadFile(fqn); err != nil {
+		if err = tryReadFile(fqn); err != nil {
 			glog.Errorf("[fshc] Failed to read random file (fqn: %q, err: %v)", fqn, err)
 			if cos.IsIOError(err) {
 				readFails++
@@ -252,7 +249,7 @@ func (f *FSHC) testMountpath(filePath, mountpath string,
 	// 3. Try to create a few random files inside the mountpath.
 	for totalWrites < maxTestFiles {
 		totalWrites++
-		if err := f.tryWriteFile(mountpath, int64(fileSize)); err != nil {
+		if err := tryWriteFile(mountpath, int64(fileSize)); err != nil {
 			glog.Errorf("[fshc] Failed to write to a random file (mountpath: %q, err: %v)", mountpath, err)
 			if cos.IsIOError(err) {
 				writeFails++

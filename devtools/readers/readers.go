@@ -97,9 +97,7 @@ func (r *randReader) Open() (cos.ReadOpenCloser, error) {
 }
 
 // Close implements the Reader interface.
-func (r *randReader) Close() error {
-	return nil
-}
+func (*randReader) Close() error { return nil }
 
 // Seek implements the Reader interface.
 func (r *randReader) Seek(offset int64, whence int) (int64, error) {
@@ -301,15 +299,11 @@ func (r *bytesReader) Open() (cos.ReadOpenCloser, error) {
 }
 
 // Close implements the Reader interface.
-func (r *bytesReader) Close() error {
-	return nil
-}
+func (*bytesReader) Close() error { return nil }
 
-func (r *bytesReader) Cksum() *cos.Cksum {
-	return nil // niy
-}
+func (*bytesReader) Cksum() *cos.Cksum { return nil }
 
-func (r *bytesReader) Seek(offset int64, whence int) (int64, error) {
+func (*bytesReader) Seek(offset int64, whence int) (int64, error) {
 	return 0, nil
 }
 
@@ -380,9 +374,7 @@ func copyRandWithHash(w io.Writer, size int64, cksumType string, rnd *rand.Rand)
 }
 
 // To implement Reader
-func (r *tarReader) Close() error {
-	return nil
-}
+func (*tarReader) Close() error { return nil }
 
 // To implement Reader
 func (r *tarReader) Open() (cos.ReadOpenCloser, error) {

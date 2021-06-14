@@ -57,7 +57,7 @@ func (e *bckSummaryTaskEntry) Start(bck cmn.Bck) error {
 	return nil
 }
 
-func (e *bckSummaryTaskEntry) Kind() string      { return cmn.ActSummary }
+func (*bckSummaryTaskEntry) Kind() string        { return cmn.ActSummary }
 func (e *bckSummaryTaskEntry) Get() cluster.Xact { return e.xact }
 
 ////////////////////

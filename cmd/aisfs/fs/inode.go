@@ -107,6 +107,6 @@ func (in *baseInode) DecLookupCountN(n uint64) uint64 {
 }
 
 // Destroy releases all resources allocated by the inode.
-func (in *baseInode) Destroy() error {
+func (*baseInode) Destroy() error {
 	return nil
 }

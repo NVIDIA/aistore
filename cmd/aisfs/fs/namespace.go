@@ -66,15 +66,15 @@ type (
 	}
 )
 
-func (e *fileEntry) Ty() entryType       { return entryFileTy }
+func (*fileEntry) Ty() entryType         { return entryFileTy }
 func (e *fileEntry) ID() fuseops.InodeID { return e.id }
 func (e *fileEntry) Name() string        { return e.object.Name }
 func (e *fileEntry) Object() *ais.Object { return e.object }
 
-func (e *dirEntry) Ty() entryType       { return entryDirTy }
+func (*dirEntry) Ty() entryType         { return entryDirTy }
 func (e *dirEntry) ID() fuseops.InodeID { return e.id }
 func (e *dirEntry) Name() string        { return e.name }
-func (e *dirEntry) Object() *ais.Object { return nil }
+func (*dirEntry) Object() *ais.Object   { return nil }
 
 func newNamespace(bck ais.Bucket, logger *log.Logger, cfg *ServerConfig) (*namespace, error) {
 	nsCache := newNsCache(bck, cfg)

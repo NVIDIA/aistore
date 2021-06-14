@@ -98,7 +98,8 @@ func Unreg(name string) {
 	}
 }
 
-func (hk *housekeeper) Name() string { return "housekeeper" }
+func (*housekeeper) Name() string { return "housekeeper" }
+
 func (hk *housekeeper) Run() (err error) {
 	signal.Notify(hk.sigCh,
 		syscall.SIGHUP,  // kill -SIGHUP XXXX
@@ -168,6 +169,4 @@ func (hk *housekeeper) updateTimer() {
 	hk.timer.Reset(time.Until(hk.actions.Peek().updateTime))
 }
 
-func (hk *housekeeper) Stop(_ error) {
-	DefaultHK.stopCh.Close()
-}
+func (*housekeeper) Stop(_ error) { DefaultHK.stopCh.Close() }

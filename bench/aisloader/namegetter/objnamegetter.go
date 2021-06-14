@@ -11,18 +11,50 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-type ObjectNameGetter interface {
-	ObjName() string
-	AddObjName(objName string)
-	Init(names []string, rnd *rand.Rand)
-	Names() []string
-	Len() int
-}
+type (
+	ObjectNameGetter interface {
+		ObjName() string
+		AddObjName(objName string)
+		Init(names []string, rnd *rand.Rand)
+		Names() []string
+		Len() int
+	}
+	RandomNameGetter struct {
+		rnd *rand.Rand
+		BaseNameGetter
+	}
+	RandomUniqueNameGetter struct {
+		BaseNameGetter
+		rnd     *rand.Rand
+		bitmask []uint64
+		used    int
+	}
+	RandomUniqueIterNameGetter struct {
+		BaseNameGetter
+		rnd     *rand.Rand
+		bitmask []uint64
+		used    int
+	}
+	PermutationUniqueNameGetter struct {
+		BaseNameGetter
+		rnd     *rand.Rand
+		perm    []int
+		permidx int
+	}
+	PermutationUniqueImprovedNameGetter struct {
+		BaseNameGetter
+		rnd       *rand.Rand
+		perm      []int
+		permNext  []int
+		permidx   int
+		nextReady sync.WaitGroup
+	}
+	BaseNameGetter struct {
+		names []string
+	}
+)
 
-type RandomNameGetter struct {
-	rnd *rand.Rand
-	BaseNameGetter
-}
+// RandomNameGetter //
 
 func (rung *RandomNameGetter) Init(names []string, rnd *rand.Rand) {
 	rung.names = names
@@ -38,12 +70,7 @@ func (rung *RandomNameGetter) ObjName() string {
 	return rung.names[idx]
 }
 
-type RandomUniqueNameGetter struct {
-	BaseNameGetter
-	rnd     *rand.Rand
-	bitmask []uint64
-	used    int
-}
+// RandomUniqueNameGetter //
 
 func (rung *RandomUniqueNameGetter) Init(names []string, rnd *rand.Rand) {
 	rung.names = names
@@ -84,12 +111,7 @@ func (rung *RandomUniqueNameGetter) ObjName() string {
 	}
 }
 
-type RandomUniqueIterNameGetter struct {
-	BaseNameGetter
-	rnd     *rand.Rand
-	bitmask []uint64
-	used    int
-}
+// RandomUniqueIterNameGetter //
 
 func (ruing *RandomUniqueIterNameGetter) Init(names []string, rnd *rand.Rand) {
 	ruing.names = names
@@ -133,12 +155,7 @@ func (ruing *RandomUniqueIterNameGetter) ObjName() string {
 	}
 }
 
-type PermutationUniqueNameGetter struct {
-	BaseNameGetter
-	rnd     *rand.Rand
-	perm    []int
-	permidx int
-}
+// PermutationUniqueNameGetter //
 
 func (pung *PermutationUniqueNameGetter) Init(names []string, rnd *rand.Rand) {
 	pung.names = names
@@ -146,7 +163,7 @@ func (pung *PermutationUniqueNameGetter) Init(names []string, rnd *rand.Rand) {
 	pung.perm = pung.rnd.Perm(len(names))
 }
 
-func (pung *PermutationUniqueNameGetter) AddObjName(objName string) {
+func (*PermutationUniqueNameGetter) AddObjName(objName string) {
 	cos.AssertMsg(false, "can't add object once PermutationUniqueNameGetter is initialized")
 }
 
@@ -160,14 +177,7 @@ func (pung *PermutationUniqueNameGetter) ObjName() string {
 	return objName
 }
 
-type PermutationUniqueImprovedNameGetter struct {
-	BaseNameGetter
-	rnd       *rand.Rand
-	perm      []int
-	permNext  []int
-	permidx   int
-	nextReady sync.WaitGroup
-}
+// PermutationUniqueImprovedNameGetter //
 
 func (pung *PermutationUniqueImprovedNameGetter) Init(names []string, rnd *rand.Rand) {
 	pung.nextReady.Wait() // in case someone called Init twice, wait until initializing pung.permNext in ObjName() has finished
@@ -177,7 +187,7 @@ func (pung *PermutationUniqueImprovedNameGetter) Init(names []string, rnd *rand.
 	pung.permNext = pung.rnd.Perm(len(names))
 }
 
-func (pung *PermutationUniqueImprovedNameGetter) AddObjName(objName string) {
+func (*PermutationUniqueImprovedNameGetter) AddObjName(objName string) {
 	cos.AssertMsg(false, "can't add object once PermutationUniqueImprovedNameGetter is initialized")
 }
 
@@ -198,9 +208,7 @@ func (pung *PermutationUniqueImprovedNameGetter) ObjName() string {
 	return objName
 }
 
-type BaseNameGetter struct {
-	names []string
-}
+// BaseNameGetter //
 
 func (bng *BaseNameGetter) Names() []string {
 	return bng.names

@@ -143,6 +143,6 @@ func (bctx *benchContext) removeFiles() {
 	bctx.fileNames = bctx.fileNames[:0]
 }
 
-func (bctx *benchContext) randNestName() string {
+func (*benchContext) randNestName() string {
 	return cos.RandString(fileNameLen)
 }

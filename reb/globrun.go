@@ -596,7 +596,7 @@ func (rj *rebJogger) _lwalk(lom *cluster.LOM) (err error) {
 	}
 	// prepare to send
 	var roc cos.ReadOpenCloser
-	if roc, err = rj.prepSend(lom); err != nil {
+	if roc, err = _prepSend(lom); err != nil {
 		return
 	}
 	// transmit
@@ -613,7 +613,7 @@ func (rj *rebJogger) _lwalk(lom *cluster.LOM) (err error) {
 	return
 }
 
-func (rj *rebJogger) prepSend(lom *cluster.LOM) (roc cos.ReadOpenCloser, err error) {
+func _prepSend(lom *cluster.LOM) (roc cos.ReadOpenCloser, err error) {
 	clone := lom.Clone(lom.FQN)
 	lom.Lock(false)
 	if err = lom.Load(false /*cache it*/, true /*locked*/); err != nil {

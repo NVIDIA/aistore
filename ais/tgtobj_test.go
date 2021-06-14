@@ -46,8 +46,8 @@ func newDiscardRW() *discardRW {
 }
 
 func (drw *discardRW) Write(p []byte) (int, error) { return drw.w.Write(p) }
-func (drw *discardRW) Header() http.Header         { return make(http.Header) }
-func (drw *discardRW) WriteHeader(statusCode int)  {}
+func (*discardRW) Header() http.Header             { return make(http.Header) }
+func (*discardRW) WriteHeader(statusCode int)      {}
 
 func TestMain(m *testing.M) {
 	flag.Parse()
@@ -66,7 +66,7 @@ func TestMain(m *testing.M) {
 	t = newTarget(co)
 	t.name = cmn.Target
 	t.initNetworks()
-	t.si.Init(t.initID(config), cmn.Target)
+	t.si.Init(initTID(config), cmn.Target)
 
 	fs.Add(testMountpath, t.si.ID())
 

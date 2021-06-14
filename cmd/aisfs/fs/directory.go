@@ -12,7 +12,7 @@ import (
 	"github.com/jacobsa/fuse/fuseutil"
 )
 
-func (fs *aisfs) OpenDir(ctx context.Context, req *fuseops.OpenDirOp) (err error) {
+func (*aisfs) OpenDir(ctx context.Context, req *fuseops.OpenDirOp) (err error) {
 	return
 }
 
@@ -43,7 +43,7 @@ func (fs *aisfs) ReadDir(ctx context.Context, req *fuseops.ReadDirOp) (err error
 	return
 }
 
-func (fs *aisfs) ReleaseDirHandle(ctx context.Context, req *fuseops.ReleaseDirHandleOp) (err error) {
+func (*aisfs) ReleaseDirHandle(ctx context.Context, req *fuseops.ReleaseDirHandleOp) (err error) {
 	return
 }
 

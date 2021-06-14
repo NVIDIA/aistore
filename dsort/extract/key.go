@@ -62,7 +62,7 @@ func (ke *md5KeyExtractor) ExtractKey(ske *SingleKeyExtractor) (interface{}, err
 	return s, nil
 }
 
-func (ke *md5KeyExtractor) PrepareExtractor(name string, r cos.ReadSizer, ext string) (cos.ReadSizer, *SingleKeyExtractor, bool) {
+func (*md5KeyExtractor) PrepareExtractor(name string, r cos.ReadSizer, ext string) (cos.ReadSizer, *SingleKeyExtractor, bool) {
 	return r, &SingleKeyExtractor{name: name}, false
 }
 
@@ -70,11 +70,11 @@ func NewNameKeyExtractor() (KeyExtractor, error) {
 	return &nameKeyExtractor{}, nil
 }
 
-func (ke *nameKeyExtractor) PrepareExtractor(name string, r cos.ReadSizer, ext string) (cos.ReadSizer, *SingleKeyExtractor, bool) {
+func (*nameKeyExtractor) PrepareExtractor(name string, r cos.ReadSizer, ext string) (cos.ReadSizer, *SingleKeyExtractor, bool) {
 	return r, &SingleKeyExtractor{name: name}, false
 }
 
-func (ke *nameKeyExtractor) ExtractKey(ske *SingleKeyExtractor) (interface{}, error) {
+func (*nameKeyExtractor) ExtractKey(ske *SingleKeyExtractor) (interface{}, error) {
 	return ske.name, nil
 }
 

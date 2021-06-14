@@ -559,7 +559,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Read
 			return nil
 		}
 	} else {
-		reb.updateRebuildInfo(obj)
+		_updRebuildInfo(obj)
 	}
 	if glog.FastV(4, glog.SmoduleReb) {
 		waitSlice, waitRebuild := reb.toWait(batchSize)
@@ -1147,7 +1147,7 @@ func (reb *Manager) shouldSkipObj(obj *rebObject) bool {
 
 // Get the ordinal number of a target in HRW list of targets that have a slice.
 // Returns -1 if target is not found in the list.
-func (reb *Manager) targetIndex(daemonID string, obj *rebObject) int {
+func _targetIndex(daemonID string, obj *rebObject) int {
 	cnt := 0
 	// always skip the "default" target
 	for _, tgt := range obj.hrwTargets[1:] {
@@ -1173,7 +1173,7 @@ func (reb *Manager) shouldSendSlice(obj *rebObject) (hasSlice, shouldSend bool) 
 	}
 	// First check if this target in the first 'dataSliceCount' slices.
 	// Skip the first target in list for it is the main one.
-	tgtIndex := reb.targetIndex(reb.t.SID(), obj)
+	tgtIndex := _targetIndex(reb.t.SID(), obj)
 	shouldSend = tgtIndex >= 0 && tgtIndex < int(obj.dataSlices)
 	hasSlice = obj.hasCT && !obj.isMain && !obj.isECCopy && !obj.fullObjFound
 	if hasSlice && (bool(glog.FastV(4, glog.SmoduleReb))) {
@@ -1359,7 +1359,7 @@ func (reb *Manager) reRequestObj(md *rebArgs, obj *rebObject) error {
 	}
 	// update object status: e.g, mark an object ready to rebuild if it
 	// received enough slice to do it
-	reb.updateRebuildInfo(obj)
+	_updRebuildInfo(obj)
 	state := obj.ready.Load()
 	if state == objWaiting {
 		return fmt.Errorf("failed to restore %s/%s - insufficient number of slices", obj.bck, obj.objName)
@@ -1886,7 +1886,7 @@ func (reb *Manager) toWait(batchSize int) (wait, rebuild int) {
 }
 
 // Check if the target received enough slices to start rebuilding
-func (reb *Manager) updateRebuildInfo(obj *rebObject) {
+func _updRebuildInfo(obj *rebObject) {
 	if obj.ready.Load() != objWaiting {
 		return
 	}

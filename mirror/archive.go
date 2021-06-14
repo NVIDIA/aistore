@@ -224,7 +224,7 @@ func (r *XactPutArchive) work(lom *cluster.LOM, work *work) (err error) {
 		return
 	}
 
-	r.addToArch(lom, nil, fh, work)
+	_addToArch(lom, nil, fh, work)
 	cluster.FreeLOM(lom)
 	cos.Close(fh)
 	return
@@ -250,7 +250,7 @@ func (r *XactPutArchive) doSend(lom *cluster.LOM, work *work, fh cos.ReadOpenClo
 	r.dm.Send(o, fh, work.tsi)
 }
 
-func (r *XactPutArchive) addToArch(lom *cluster.LOM, hdr *transport.ObjHdr, reader io.Reader, work *work) {
+func _addToArch(lom *cluster.LOM, hdr *transport.ObjHdr, reader io.Reader, work *work) {
 	header := new(tar.Header)
 	header.Typeflag = tar.TypeReg
 
@@ -288,7 +288,7 @@ func (r *XactPutArchive) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, er
 	debug.Assert(ok)
 	debug.Assert(work.tsi.ID() == r.t.Snode().ID())
 
-	r.addToArch(nil, &hdr, objReader, work)
+	_addToArch(nil, &hdr, objReader, work)
 }
 
 func (r *XactPutArchive) finalize(work *work) {

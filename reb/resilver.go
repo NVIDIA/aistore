@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
@@ -29,7 +30,7 @@ type (
 )
 
 func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xaction.NotifXact) {
-	cos.Assert(id != "")
+	debug.Assert(id != "")
 
 	availablePaths, _ := fs.Get()
 	if len(availablePaths) < 2 {
@@ -52,7 +53,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xa
 	glog.Infoln(xact.String())
 
 	slab, err := reb.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 
 	jctx := &joggerCtx{xact: xact, t: reb.t}
 	jg := mpather.NewJoggerGroup(&mpather.JoggerGroupOpts{
@@ -84,7 +85,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xa
 // Copies a slice and its metafile (if exists) to the current mpath. At the
 // end does proper cleanup: removes ether source files(on success), or
 // destination files(on copy failure)
-func (rj *joggerCtx) moveSlice(ct *cluster.CT, buf []byte) {
+func _mvSlice(ct *cluster.CT, buf []byte) {
 	uname := ct.Bck().MakeUname(ct.ObjectName())
 	destMpath, _, err := cluster.HrwMpath(uname)
 	if err != nil {
@@ -96,7 +97,7 @@ func (rj *joggerCtx) moveSlice(ct *cluster.CT, buf []byte) {
 	}
 
 	destFQN := destMpath.MakePathFQN(ct.Bucket(), ec.SliceType, ct.ObjectName())
-	srcMetaFQN, destMetaFQN, err := rj.moveECMeta(ct, ct.MpathInfo(), destMpath, buf)
+	srcMetaFQN, destMetaFQN, err := _moveECMeta(ct, ct.MpathInfo(), destMpath, buf)
 	if err != nil {
 		return
 	}
@@ -123,7 +124,7 @@ func (rj *joggerCtx) moveSlice(ct *cluster.CT, buf []byte) {
 // Copies EC metafile to correct mpath. It returns FQNs of the source and
 // destination for a caller to do proper cleanup. Empty values means: either
 // the source FQN does not exist(err==nil), or copying failed
-func (rj *joggerCtx) moveECMeta(ct *cluster.CT, srcMpath, dstMpath *fs.MountpathInfo, buf []byte) (string, string, error) {
+func _moveECMeta(ct *cluster.CT, srcMpath, dstMpath *fs.MountpathInfo, buf []byte) (string, string, error) {
 	src := srcMpath.MakePathFQN(ct.Bucket(), ec.MetaType, ct.ObjectName())
 	// If metafile does not exist it may mean that EC has not processed the
 	// object yet (e.g, EC was enabled after the bucket was filled), or
@@ -165,7 +166,7 @@ func (rj *joggerCtx) moveObject(lom *cluster.LOM, buf []byte) {
 			return
 		}
 		ct := cluster.NewCTFromLOM(lom, fs.ObjectType)
-		metaOldPath, metaNewPath, err = rj.moveECMeta(ct, lom.MpathInfo(), newMpath.MpathInfo, buf)
+		metaOldPath, metaNewPath, err = _moveECMeta(ct, lom.MpathInfo(), newMpath.MpathInfo, buf)
 		if err != nil {
 			glog.Warningf("%s: failed to move metafile %q -> %q: %v",
 				lom, lom.MpathInfo().Path, newMpath.MpathInfo.Path, err)
@@ -200,13 +201,13 @@ func (rj *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 	return nil
 }
 
-func (rj *joggerCtx) visitCT(ct *cluster.CT, buf []byte) (err error) {
-	cos.Assert(ct.ContentType() == ec.SliceType)
+func (*joggerCtx) visitCT(ct *cluster.CT, buf []byte) (err error) {
+	debug.Assert(ct.ContentType() == ec.SliceType)
 	if !ct.Bck().Props.EC.Enabled {
 		// Since `%ec` directory is inside a bucket, it is safe to skip
 		// the entire `%ec` directory when EC is disabled for the bucket.
 		return filepath.SkipDir
 	}
-	rj.moveSlice(ct, buf)
+	_mvSlice(ct, buf)
 	return nil
 }

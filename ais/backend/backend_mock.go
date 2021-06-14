@@ -28,42 +28,42 @@ func NewDummyBackend(t cluster.Target) (cluster.BackendProvider, error) {
 	return &dummyBackendProvider{t: t}, nil
 }
 
-func (m *dummyBackendProvider) Provider() string  { return "dummy" }
-func (m *dummyBackendProvider) MaxPageSize() uint { return math.MaxUint32 }
+func (*dummyBackendProvider) Provider() string  { return "dummy" }
+func (*dummyBackendProvider) MaxPageSize() uint { return math.MaxUint32 }
 
-func (m *dummyBackendProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (errCode int, err error) {
+func (*dummyBackendProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (errCode int, err error) {
 	return creatingBucketNotSupportedErr("backend")
 }
 
-func (m *dummyBackendProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
+func (*dummyBackendProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
 	return cos.SimpleKVs{}, http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bck)
 }
 
-func (m *dummyBackendProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
+func (*dummyBackendProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
 	return nil, http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bck)
 }
 
 // The function must not fail - it should return empty list.
-func (m *dummyBackendProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
+func (*dummyBackendProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	return cmn.Bcks{}, 0, nil
 }
 
-func (m *dummyBackendProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cos.SimpleKVs, errCode int, err error) {
+func (*dummyBackendProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cos.SimpleKVs, errCode int, err error) {
 	return cos.SimpleKVs{}, http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }
 
-func (m *dummyBackendProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
+func (*dummyBackendProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
 	return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }
 
-func (m *dummyBackendProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cos.Cksum, errCode int, err error) {
+func (*dummyBackendProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cos.Cksum, errCode int, err error) {
 	return nil, nil, 0, nil
 }
 
-func (m *dummyBackendProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
+func (*dummyBackendProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
 	return "", http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }
 
-func (m *dummyBackendProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
+func (*dummyBackendProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
 	return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }

@@ -116,7 +116,7 @@ func (ds *dsorterGeneral) pullStreamWriter(objName string) *streamWriter {
 	return writer
 }
 
-func (ds *dsorterGeneral) name() string { return DSorterGeneralType }
+func (*dsorterGeneral) name() string { return DSorterGeneralType }
 
 func (ds *dsorterGeneral) init() error {
 	ds.creationPhase.adjuster = newConcAdjuster(

@@ -53,8 +53,10 @@ func (p *MovFactory) Start(bck cmn.Bck) error {
 	p.xact = newBckRename(p.uuid, p.Kind(), bck, p.t, p.args.BckFrom, p.args.BckTo, p.args.RebID)
 	return nil
 }
+
 func (*MovFactory) Kind() string        { return cmn.ActMoveBck }
 func (p *MovFactory) Get() cluster.Xact { return p.xact }
+
 func (p *MovFactory) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, err error) {
 	if p.phase == cmn.ActBegin {
 		if !previousEntry.Get().Finished() {
@@ -74,7 +76,8 @@ func (p *MovFactory) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, er
 		p.Kind(), prev.args.BckFrom, prev.args.BckTo, prev.phase, p.phase, p.args.BckFrom)
 	return
 }
-func (p *MovFactory) PostRenewHook(_ xreg.BucketEntry) {}
+
+func (*MovFactory) PostRenewHook(_ xreg.BucketEntry) {}
 
 func newBckRename(uuid, kind string, bck cmn.Bck, t cluster.Target,
 	bckFrom, bckTo *cluster.Bck, rebID xaction.RebID) *bckRename {
@@ -153,6 +156,7 @@ func (p *evdFactory) Start(bck cmn.Bck) error {
 	p.xact = newEvictDelete(p.args.UUID, p.kind, bck, p.t, p.args)
 	return nil
 }
+
 func (p *evdFactory) Kind() string      { return p.kind }
 func (p *evdFactory) Get() cluster.Xact { return p.xact }
 
@@ -210,6 +214,7 @@ func (p *PrfchFactory) Start(bck cmn.Bck) error {
 	p.xact = newPrefetch(p.args.UUID, p.Kind(), bck, p.t, p.args)
 	return nil
 }
+
 func (*PrfchFactory) Kind() string        { return cmn.ActPrefetch }
 func (p *PrfchFactory) Get() cluster.Xact { return p.xact }
 

@@ -126,7 +126,7 @@ func (p *voteRetryMockTarget) daemonhdlr(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (p *voteRetryMockTarget) votehdlr(w http.ResponseWriter, r *http.Request) {
+func (*voteRetryMockTarget) votehdlr(w http.ResponseWriter, r *http.Request) {
 	// Always vote yes.
 	w.Write([]byte(ais.VoteYes))
 }

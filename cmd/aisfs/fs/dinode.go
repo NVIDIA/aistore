@@ -41,7 +41,7 @@ func (dir *DirectoryInode) Parent() Inode {
 	return dir.parent
 }
 
-func (dir *DirectoryInode) IsDir() bool {
+func (*DirectoryInode) IsDir() bool {
 	return true
 }
 

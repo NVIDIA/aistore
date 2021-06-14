@@ -183,7 +183,7 @@ func (t *targetrunner) healthETL(w http.ResponseWriter, r *http.Request) {
 	t.writeJSON(w, r, healthMsg, "health-ETL")
 }
 
-func (t *targetrunner) etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (secret string, bck *cluster.Bck, objName string, err error) {
+func etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (secret string, bck *cluster.Bck, objName string, err error) {
 	items, err := cmn.MatchRESTItems(r.URL.EscapedPath(), 2, false, cmn.URLPathETLObject.L)
 	if err != nil {
 		return secret, bck, objName, err
@@ -210,7 +210,7 @@ func (t *targetrunner) etlParseObjectReq(_ http.ResponseWriter, r *http.Request)
 // getObjectETL handles GET requests from ETL containers (K8s Pods).
 // getObjectETL validates the secret that was injected into a Pod during its initialization.
 func (t *targetrunner) getObjectETL(w http.ResponseWriter, r *http.Request) {
-	secret, bck, objName, err := t.etlParseObjectReq(w, r)
+	secret, bck, objName, err := etlParseObjectReq(w, r)
 	if err != nil {
 		t.writeErr(w, r, err)
 		return
@@ -228,7 +228,7 @@ func (t *targetrunner) getObjectETL(w http.ResponseWriter, r *http.Request) {
 // headObjectETL handles HEAD requests from ETL containers (K8s Pods).
 // headObjectETL validates the secret that was injected into a Pod during its initialization.
 func (t *targetrunner) headObjectETL(w http.ResponseWriter, r *http.Request) {
-	secret, bck, objName, err := t.etlParseObjectReq(w, r)
+	secret, bck, objName, err := etlParseObjectReq(w, r)
 	if err != nil {
 		t.writeErr(w, r, err)
 		return

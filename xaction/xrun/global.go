@@ -11,7 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
@@ -62,7 +62,7 @@ var (
 
 func (xact *RebBase) MarkDone()      { xact.wg.Done() }
 func (xact *RebBase) WaitForFinish() { xact.wg.Wait() }
-func (xact *RebBase) Run()           { cos.Assert(false) }
+func (*RebBase) Run()                { debug.Assert(false) }
 
 func (xact *RebBase) String() string {
 	s := xact.XactBase.String()
@@ -86,7 +86,7 @@ func makeXactRebBase(id cluster.XactID, kind string) RebBase {
 // Rebalance //
 ///////////////
 
-func (p *rebFactory) New(args xreg.XactArgs) xreg.GlobalEntry {
+func (*rebFactory) New(args xreg.XactArgs) xreg.GlobalEntry {
 	return &rebFactory{args: args.Custom.(*xreg.RebalanceArgs)}
 }
 
@@ -94,8 +94,10 @@ func (p *rebFactory) Start(_ cmn.Bck) error {
 	p.xact = NewRebalance(p.args.ID, p.Kind(), p.args.StatTracker, xreg.GetRebMarked)
 	return nil
 }
+
 func (*rebFactory) Kind() string        { return cmn.ActRebalance }
 func (p *rebFactory) Get() cluster.Xact { return p.xact }
+
 func (p *rebFactory) PreRenewHook(previousEntry xreg.GlobalEntry) (keep bool) {
 	xreb := previousEntry.(*rebFactory)
 	if xreb.args.ID > p.args.ID {
@@ -110,7 +112,7 @@ func (p *rebFactory) PreRenewHook(previousEntry xreg.GlobalEntry) (keep bool) {
 	return
 }
 
-func (p *rebFactory) PostRenewHook(previousEntry xreg.GlobalEntry) {
+func (*rebFactory) PostRenewHook(previousEntry xreg.GlobalEntry) {
 	xreb := previousEntry.(*rebFactory).xact
 	xreb.Abort()
 	xreb.WaitForFinish()
@@ -161,10 +163,12 @@ func (p *resilverFactory) Start(_ cmn.Bck) error {
 	p.xact = NewResilver(p.id, p.Kind())
 	return nil
 }
-func (*resilverFactory) Kind() string                           { return cmn.ActResilver }
-func (p *resilverFactory) Get() cluster.Xact                    { return p.xact }
-func (p *resilverFactory) PreRenewHook(_ xreg.GlobalEntry) bool { return false }
-func (p *resilverFactory) PostRenewHook(previousEntry xreg.GlobalEntry) {
+
+func (*resilverFactory) Kind() string                         { return cmn.ActResilver }
+func (p *resilverFactory) Get() cluster.Xact                  { return p.xact }
+func (*resilverFactory) PreRenewHook(_ xreg.GlobalEntry) bool { return false }
+
+func (*resilverFactory) PostRenewHook(previousEntry xreg.GlobalEntry) {
 	xresilver := previousEntry.(*resilverFactory).xact
 	xresilver.Abort()
 	xresilver.WaitForFinish()
@@ -192,8 +196,9 @@ func (p *eleFactory) Start(_ cmn.Bck) error {
 	return nil
 }
 
-func (*eleFactory) Kind() string                           { return cmn.ActElection }
-func (p *eleFactory) Get() cluster.Xact                    { return p.xact }
-func (p *eleFactory) PreRenewHook(_ xreg.GlobalEntry) bool { return true }
-func (p *eleFactory) PostRenewHook(_ xreg.GlobalEntry)     {}
-func (e *Election) Run()                                   { cos.Assert(false) }
+func (*eleFactory) Kind() string                         { return cmn.ActElection }
+func (p *eleFactory) Get() cluster.Xact                  { return p.xact }
+func (*eleFactory) PreRenewHook(_ xreg.GlobalEntry) bool { return true }
+func (*eleFactory) PostRenewHook(_ xreg.GlobalEntry)     {}
+
+func (*Election) Run() { debug.Assert(false) }

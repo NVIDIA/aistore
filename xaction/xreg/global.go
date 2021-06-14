@@ -7,20 +7,10 @@ package xreg
 import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
 )
-
-type BaseGlobalEntry struct{}
-
-func (b *BaseGlobalEntry) PreRenewHook(previousEntry GlobalEntry) (keep bool) {
-	e := previousEntry.Get()
-	_, keep = e.(xaction.XactDemand)
-	return
-}
-func (b *BaseGlobalEntry) PostRenewHook(_ GlobalEntry) {}
 
 type (
 	GlobalEntry interface {
@@ -33,21 +23,38 @@ type (
 		PostRenewHook(previousEntry GlobalEntry)
 	}
 
+	BaseGlobalEntry struct{}
+
 	GlobalFactory interface {
 		New(args XactArgs) GlobalEntry
 		Kind() string
 	}
-
 	RebalanceArgs struct {
 		ID          xaction.RebID
 		StatTracker stats.Tracker
 	}
 )
 
-func RegGlobXact(entry GlobalFactory) { defaultReg.regGlobXact(entry) }
+/////////////////////
+// BaseGlobalEntry //
+/////////////////////
 
-func (r *registry) regGlobXact(entry GlobalFactory) {
-	cos.Assert(xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeGlobal)
+func (*BaseGlobalEntry) PreRenewHook(previousEntry GlobalEntry) (keep bool) {
+	e := previousEntry.Get()
+	_, keep = e.(xaction.XactDemand)
+	return
+}
+
+func (*BaseGlobalEntry) PostRenewHook(_ GlobalEntry) {}
+
+//////////////
+// registry //
+//////////////
+
+func RegGlobXact(entry GlobalFactory) { defaultReg.regGlobFactory(entry) }
+
+func (r *registry) regGlobFactory(entry GlobalFactory) {
+	debug.Assert(xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeGlobal)
 
 	// It is expected that registrations happen at the init time. Therefore, it
 	// is safe to assume that no `RenewXYZ` will happen before all xactions

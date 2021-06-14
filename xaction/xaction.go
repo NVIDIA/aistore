@@ -221,8 +221,7 @@ func (xact *XactBase) AddNotif(n cluster.Notif) {
 	debug.Assert(!n.Upon(cluster.UponProgress) || xact.notif.P != nil)
 }
 
-// TODO: Consider moving it to separate interface.
-func (xact *XactBase) Renew() {}
+func (*XactBase) Renew() {}
 
 func (xact *XactBase) Abort() {
 	if !xact.aborted.CAS(false, true) {
@@ -239,7 +238,7 @@ func (xact *XactBase) Finish(err error) {
 	}
 }
 
-func (xact *XactBase) Result() (interface{}, error) {
+func (*XactBase) Result() (interface{}, error) {
 	return nil, errors.New("getting result is not implemented")
 }
 
@@ -263,7 +262,7 @@ func (xact *XactBase) Stats() cluster.XactStats {
 }
 
 func (id BaseID) String() string           { return string(id) }
-func (id BaseID) Int() int64               { cos.Assert(false); return 0 }
+func (BaseID) Int() int64                  { cos.Assert(false); return 0 }
 func (id BaseID) Compare(other string) int { return strings.Compare(string(id), other) }
 
 // errors

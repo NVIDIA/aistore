@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/nl"
 )
 
@@ -137,7 +138,7 @@ func (j *baseDlJob) ID() string             { return j.id }
 func (j *baseDlJob) Bck() cmn.Bck           { return j.bck.Bck }
 func (j *baseDlJob) Timeout() time.Duration { return j.timeout }
 func (j *baseDlJob) Description() string    { return j.description }
-func (j *baseDlJob) Sync() bool             { return false }
+func (*baseDlJob) Sync() bool               { return false }
 
 // Notifications
 func (j *baseDlJob) Notif() cluster.Notif { return j.notif }
@@ -161,8 +162,10 @@ func (j *baseDlJob) ActiveStats() (*DlStatusResp, error) {
 	}
 	return resp.(*DlStatusResp), nil
 }
-func (j *baseDlJob) checkObj(string) bool  { cos.Assert(false); return false }
+
+func (*baseDlJob) checkObj(string) bool    { debug.Assert(false); return false }
 func (j *baseDlJob) throttler() *throttler { return j.t }
+
 func (j *baseDlJob) cleanup() {
 	j.throttler().stop()
 	dlStore.markFinished(j.ID())
@@ -248,8 +251,9 @@ func newSliceDlJob(t cluster.Target, bck *cluster.Bck, base *baseDlJob, objects 
 	}, nil
 }
 
-func (j *backendDlJob) Len() int   { return -1 }
+func (*backendDlJob) Len() int     { return -1 }
 func (j *backendDlJob) Sync() bool { return j.sync }
+
 func (j *backendDlJob) checkObj(objName string) bool {
 	return strings.HasPrefix(objName, j.prefix) && strings.HasSuffix(objName, j.suffix)
 }

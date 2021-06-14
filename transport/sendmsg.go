@@ -43,10 +43,10 @@ func (s *MsgStream) terminate() {
 	gc.remove(&s.streamBase)
 }
 
-func (s *MsgStream) abortPending(error, bool) {}
-func (s *MsgStream) errCmpl(error)            {}
-func (s *MsgStream) compressed() bool         { return false }
-func (s *MsgStream) resetCompression()        { debug.Assert(false) }
+func (*MsgStream) abortPending(error, bool) {}
+func (*MsgStream) errCmpl(error)            {}
+func (*MsgStream) compressed() bool         { return false }
+func (*MsgStream) resetCompression()        { debug.Assert(false) }
 
 func (s *MsgStream) doRequest() error {
 	s.Numcur, s.Sizecur = 0, 0
@@ -166,9 +166,9 @@ func (s *MsgStream) idleTick() {
 // Msg and MsgHdr //
 ////////////////////
 
-func (msg *Msg) IsLast() bool       { return msg.Flags == lastMarker }
-func (msg *Msg) IsIdleTick() bool   { return msg.Flags == tickMarker }
-func (msg *Msg) IsHeaderOnly() bool { return true }
+func (msg *Msg) IsLast() bool     { return msg.Flags == lastMarker }
+func (msg *Msg) IsIdleTick() bool { return msg.Flags == tickMarker }
+func (*Msg) IsHeaderOnly() bool   { return true }
 
 func (msg *Msg) String() string {
 	if msg.IsLast() {

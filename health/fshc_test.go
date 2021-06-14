@@ -83,12 +83,8 @@ func TestFSCheckerInaccessibleMountpath(t *testing.T) {
 	var (
 		failedMpath = fsCheckerTmpDir + "/3"
 		filePath    = failedMpath + "/testfile"
-
-		dispatcher = newMockFSDispatcher(failedMpath)
-		fshc       = NewFSHC(dispatcher)
 	)
-
-	_, _, exists := fshc.testMountpath(filePath, failedMpath, 4, cos.KiB)
+	_, _, exists := testMountpath(filePath, failedMpath, 4, cos.KiB)
 	tassert.Errorf(t, !exists, "testing non-existing mountpath must fail")
 }
 
@@ -101,7 +97,6 @@ func TestFSCheckerFailedMountpath(t *testing.T) {
 		dispatcher = newMockFSDispatcher(failedMpath)
 		fshc       = NewFSHC(dispatcher)
 	)
-
 	// Failed mountpath must be disabled.
 	fshc.runMpathTest(failedMpath, failedMpath+"/dir/testfile")
 	tassert.Errorf(t, dispatcher.faultDetected, "faulty mountpath %s was not detected", failedMpath)
@@ -109,8 +104,6 @@ func TestFSCheckerFailedMountpath(t *testing.T) {
 
 func TestFSCheckerDecisionFn(t *testing.T) {
 	updateTestConfig()
-
-	fshc := NewFSHC(nil)
 
 	// Decision making function.
 	type tstInfo struct {
@@ -129,9 +122,9 @@ func TestFSCheckerDecisionFn(t *testing.T) {
 
 	for _, tst := range testList {
 		t.Run(tst.title, func(t *testing.T) {
-			res, _ := fshc.isTestPassed("/tmp", tst.readErrs, tst.writeErrs, tst.avail)
+			res, err := isTestPassed("/tmp", tst.readErrs, tst.writeErrs, tst.avail)
 			if res != tst.result {
-				t.Errorf("%s failed. %v expected but %v got", tst.title, tst.result, res)
+				t.Errorf("%s failed: expected %v, got %v (%v)", tst.title, tst.result, res, err)
 			}
 		})
 	}
@@ -141,9 +134,6 @@ func TestFSCheckerTryReadFile(t *testing.T) {
 	setupTests(t)
 
 	var (
-		dispatcher = newMockFSDispatcher()
-		fshc       = NewFSHC(dispatcher)
-
 		mpath    = fsCheckerTmpDir + "/1"
 		filePath = mpath + "/smth.txt"
 	)
@@ -155,20 +145,13 @@ func TestFSCheckerTryReadFile(t *testing.T) {
 	file.Close()
 	tassert.CheckFatal(t, err)
 
-	err = fshc.tryReadFile(filePath)
+	err = tryReadFile(filePath)
 	tassert.CheckFatal(t, err)
 }
 
 func TestFSCheckerTryWriteFile(t *testing.T) {
 	setupTests(t)
-
-	var (
-		dispatcher = newMockFSDispatcher()
-		fshc       = NewFSHC(dispatcher)
-
-		mpath = fsCheckerTmpDir + "/1"
-	)
-
-	err := fshc.tryWriteFile(mpath, cos.KiB)
+	mpath := fsCheckerTmpDir + "/1"
+	err := tryWriteFile(mpath, cos.KiB)
 	tassert.CheckFatal(t, err)
 }

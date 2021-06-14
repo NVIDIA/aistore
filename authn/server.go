@@ -89,7 +89,7 @@ func (a *Server) registerPublicHandlers() {
 	a.registerHandler(cmn.URLPathTokens.S, a.tokenHandler)
 	a.registerHandler(cmn.URLPathClusters.S, a.clusterHandler)
 	a.registerHandler(cmn.URLPathRoles.S, a.roleHandler)
-	a.registerHandler(cmn.URLPathDaemon.S, a.configHandler)
+	a.registerHandler(cmn.URLPathDaemon.S, configHandler)
 }
 
 func (a *Server) userHandler(w http.ResponseWriter, r *http.Request) {
@@ -159,7 +159,7 @@ func (a *Server) httpUserDel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = a.checkAuthorization(w, r); err != nil {
+	if err = checkAuthorization(w, r); err != nil {
 		return
 	}
 	if err := a.users.delUser(apiItems[0]); err != nil {
@@ -184,7 +184,7 @@ func (a *Server) httpUserPut(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err = a.checkAuthorization(w, r); err != nil {
+	if err = checkAuthorization(w, r); err != nil {
 		return
 	}
 
@@ -207,7 +207,7 @@ func (a *Server) httpUserPut(w http.ResponseWriter, r *http.Request) {
 
 // Adds a new user to user list
 func (a *Server) userAdd(w http.ResponseWriter, r *http.Request) {
-	if err := a.checkAuthorization(w, r); err != nil {
+	if err := checkAuthorization(w, r); err != nil {
 		return
 	}
 	info := &User{}
@@ -244,7 +244,7 @@ func (a *Server) httpUserGet(w http.ResponseWriter, r *http.Request) {
 		for _, uInfo := range users {
 			uInfo.Password = ""
 		}
-		a.writeJSON(w, users, "list users")
+		writeJSON(w, users, "list users")
 		return
 	}
 
@@ -264,13 +264,13 @@ func (a *Server) httpUserGet(w http.ResponseWriter, r *http.Request) {
 			clu.Alias = cInfo.Alias
 		}
 	}
-	a.writeJSON(w, uInfo, "user info")
+	writeJSON(w, uInfo, "user info")
 }
 
 // Checks if the request header contains super-user credentials and they are
 // valid. Super-user is a user created at deployment time that cannot be
 // deleted/created via REST API
-func (a *Server) checkAuthorization(w http.ResponseWriter, r *http.Request) error {
+func checkAuthorization(w http.ResponseWriter, r *http.Request) error {
 	s := strings.SplitN(r.Header.Get(cmn.HdrAuthorization), " ", 2)
 	if len(s) != 2 {
 		cmn.WriteErrMsg(w, r, "Not authorized", http.StatusUnauthorized)
@@ -322,11 +322,11 @@ func (a *Server) userLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	repl := fmt.Sprintf(`{"token": "%s"}`, tokenString)
-	a.writeBytes(w, []byte(repl), "auth")
+	writeBytes(w, []byte(repl), "auth")
 }
 
 // Borrowed from ais (modified cmn.InvalidHandler calls)
-func (a *Server) writeJSON(w http.ResponseWriter, val interface{}, tag string) {
+func writeJSON(w http.ResponseWriter, val interface{}, tag string) {
 	w.Header().Set(cmn.HdrContentType, cmn.ContentJSON)
 	var err error
 	if err = jsoniter.NewEncoder(w).Encode(val); err == nil {
@@ -336,7 +336,7 @@ func (a *Server) writeJSON(w http.ResponseWriter, val interface{}, tag string) {
 }
 
 // Borrowed from ais (modified cmn.InvalidHandler calls)
-func (a *Server) writeBytes(w http.ResponseWriter, jsbytes []byte, tag string) {
+func writeBytes(w http.ResponseWriter, jsbytes []byte, tag string) {
 	w.Header().Set(cmn.HdrContentType, cmn.ContentJSON)
 	var err error
 	if _, err = w.Write(jsbytes); err == nil {
@@ -349,7 +349,7 @@ func (a *Server) httpSrvPost(w http.ResponseWriter, r *http.Request) {
 	if _, err := checkRESTItems(w, r, 0, cmn.URLPathClusters.L); err != nil {
 		return
 	}
-	if err := a.checkAuthorization(w, r); err != nil {
+	if err := checkAuthorization(w, r); err != nil {
 		return
 	}
 	cluConf := &Cluster{}
@@ -367,7 +367,7 @@ func (a *Server) httpSrvPut(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err := a.checkAuthorization(w, r); err != nil {
+	if err := checkAuthorization(w, r); err != nil {
 		return
 	}
 	cluConf := &Cluster{}
@@ -385,7 +385,7 @@ func (a *Server) httpSrvDelete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err = a.checkAuthorization(w, r); err != nil {
+	if err = checkAuthorization(w, r); err != nil {
 		return
 	}
 
@@ -430,7 +430,7 @@ func (a *Server) httpSrvGet(w http.ResponseWriter, r *http.Request) {
 		}
 		cluList = &ClusterList{Clusters: clusters}
 	}
-	a.writeJSON(w, cluList, "auth")
+	writeJSON(w, cluList, "auth")
 }
 
 func (a *Server) roleHandler(w http.ResponseWriter, r *http.Request) {
@@ -464,7 +464,7 @@ func (a *Server) httpRoleGet(w http.ResponseWriter, r *http.Request) {
 			cmn.WriteErr(w, r, err)
 			return
 		}
-		a.writeJSON(w, roles, "rolelist")
+		writeJSON(w, roles, "rolelist")
 		return
 	}
 
@@ -483,7 +483,7 @@ func (a *Server) httpRoleGet(w http.ResponseWriter, r *http.Request) {
 			clu.Alias = cInfo.Alias
 		}
 	}
-	a.writeJSON(w, role, "role")
+	writeJSON(w, role, "role")
 }
 
 func (a *Server) httpRoleDel(w http.ResponseWriter, r *http.Request) {
@@ -491,7 +491,7 @@ func (a *Server) httpRoleDel(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err = a.checkAuthorization(w, r); err != nil {
+	if err = checkAuthorization(w, r); err != nil {
 		return
 	}
 
@@ -506,7 +506,7 @@ func (a *Server) httpRolePost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err = a.checkAuthorization(w, r); err != nil {
+	if err = checkAuthorization(w, r); err != nil {
 		return
 	}
 	info := &Role{}
@@ -523,7 +523,7 @@ func (a *Server) httpRolePut(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err = a.checkAuthorization(w, r); err != nil {
+	if err = checkAuthorization(w, r); err != nil {
 		return
 	}
 
@@ -547,28 +547,28 @@ func (a *Server) httpRolePut(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *Server) configHandler(w http.ResponseWriter, r *http.Request) {
+func configHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		a.httpConfigGet(w, r)
+		httpConfigGet(w, r)
 	case http.MethodPut:
-		a.httpConfigPut(w, r)
+		httpConfigPut(w, r)
 	default:
 		cmn.WriteErr405(w, r, http.MethodPut, http.MethodGet)
 	}
 }
 
-func (a *Server) httpConfigGet(w http.ResponseWriter, r *http.Request) {
-	if err := a.checkAuthorization(w, r); err != nil {
+func httpConfigGet(w http.ResponseWriter, r *http.Request) {
+	if err := checkAuthorization(w, r); err != nil {
 		return
 	}
 	Conf.RLock()
 	defer Conf.RUnlock()
-	a.writeJSON(w, Conf, "config")
+	writeJSON(w, Conf, "config")
 }
 
-func (a *Server) httpConfigPut(w http.ResponseWriter, r *http.Request) {
-	if err := a.checkAuthorization(w, r); err != nil {
+func httpConfigPut(w http.ResponseWriter, r *http.Request) {
+	if err := checkAuthorization(w, r); err != nil {
 		return
 	}
 	updateCfg := &ConfigToUpdate{}

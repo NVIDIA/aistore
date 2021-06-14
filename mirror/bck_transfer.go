@@ -89,8 +89,10 @@ func (e *cpyFactory) Start(_ cmn.Bck) error {
 		e.args.DM, e.args.DP, e.args.Meta)
 	return nil
 }
+
 func (e *cpyFactory) Kind() string      { return e.kind }
 func (e *cpyFactory) Get() cluster.Xact { return e.xact }
+
 func (e *cpyFactory) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, err error) {
 	prev := previousEntry.(*cpyFactory)
 	bckEq := prev.args.BckFrom.Equal(e.args.BckFrom, true /*same BID*/, true /* same backend */)
@@ -104,7 +106,7 @@ func (e *cpyFactory) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, er
 	return
 }
 
-func (e *cpyFactory) PostRenewHook(_ xreg.BucketEntry) {}
+func (*cpyFactory) PostRenewHook(_ xreg.BucketEntry) {}
 
 /////////////////////
 // XactTransferBck //

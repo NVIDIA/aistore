@@ -38,7 +38,7 @@ func (file *FileInode) Parent() Inode {
 	return file.parent
 }
 
-func (file *FileInode) IsDir() bool {
+func (*FileInode) IsDir() bool {
 	return false
 }
 

@@ -120,7 +120,7 @@ func newClusterUUID() (uuid, created string) {
 //////////////
 
 func (m *bucketMD) add(bck *cluster.Bck, p *cmn.BucketProps) bool {
-	cos.Assert(cmn.IsNormalizedProvider(bck.Provider))
+	debug.Assert(cmn.IsNormalizedProvider(bck.Provider))
 	if _, present := m.Get(bck); present {
 		return false
 	}
@@ -145,12 +145,12 @@ func (m *bucketMD) del(bck *cluster.Bck) (deleted bool) {
 }
 
 func (m *bucketMD) set(bck *cluster.Bck, p *cmn.BucketProps) {
-	cos.Assert(cmn.IsNormalizedProvider(bck.Provider))
+	debug.Assert(cmn.IsNormalizedProvider(bck.Provider))
 	prevProps, present := m.Get(bck)
 	if !present {
-		cos.Assertf(false, "%s: not present", bck)
+		debug.Assertf(false, "%s: not present", bck)
 	}
-	cos.Assert(prevProps.BID != 0)
+	debug.Assert(prevProps.BID != 0)
 
 	p.SetProvider(bck.Provider)
 	p.BID = prevProps.BID
@@ -209,10 +209,10 @@ func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *cluster.Snode, caller s
 }
 
 // as revs
-func (m *bucketMD) tag() string             { return revsBMDTag }
-func (m *bucketMD) version() int64          { return m.Version }
-func (m *bucketMD) jit(p *proxyrunner) revs { return p.owner.bmd.get() }
-func (m *bucketMD) sgl() *memsys.SGL        { return m._sgl }
+func (*bucketMD) tag() string             { return revsBMDTag }
+func (m *bucketMD) version() int64        { return m.Version }
+func (*bucketMD) jit(p *proxyrunner) revs { return p.owner.bmd.get() }
+func (m *bucketMD) sgl() *memsys.SGL      { return m._sgl }
 
 func (m *bucketMD) marshal() []byte {
 	m._sgl = m._encode()
@@ -239,7 +239,7 @@ func (bo *bmdOwnerBase) put(bmd *bucketMD) {
 }
 
 // write metasync-sent bytes directly (no json)
-func (bo *bmdOwnerBase) persistBytes(payload msPayload, fpath string) (done bool) {
+func (*bmdOwnerBase) persistBytes(payload msPayload, fpath string) (done bool) {
 	if payload == nil {
 		return
 	}
@@ -293,7 +293,7 @@ func (bo *bmdOwnerPrx) putPersist(bmd *bucketMD, payload msPayload) (err error) 
 	return
 }
 
-func (bo *bmdOwnerPrx) persist(_ *bucketMD, _ msPayload) (err error) { debug.Assert(false); return }
+func (*bmdOwnerPrx) persist(_ *bucketMD, _ msPayload) (err error) { debug.Assert(false); return }
 
 func (bo *bmdOwnerPrx) _pre(ctx *bmdModifier) (clone *bucketMD, err error) {
 	bo.Lock()
@@ -361,7 +361,7 @@ func (bo *bmdOwnerTgt) putPersist(bmd *bucketMD, payload msPayload) (err error) 
 	return
 }
 
-func (bo *bmdOwnerTgt) persist(clone *bucketMD, payload msPayload) (err error) {
+func (*bmdOwnerTgt) persist(clone *bucketMD, payload msPayload) (err error) {
 	var (
 		b   []byte
 		sgl *memsys.SGL
@@ -388,9 +388,8 @@ func (bo *bmdOwnerTgt) persist(clone *bucketMD, payload msPayload) (err error) {
 	return
 }
 
-func (bo *bmdOwnerTgt) modify(_ *bmdModifier) (*bucketMD, error) {
-	// Method should not be used on targets.
-	cos.Assert(false)
+func (*bmdOwnerTgt) modify(_ *bmdModifier) (*bucketMD, error) {
+	debug.Assert(false)
 	return nil, nil
 }
 
@@ -475,7 +474,7 @@ func defaultBckProps(args bckPropsArgs) *cmn.BucketProps {
 }
 
 func mergeRemoteBckProps(props *cmn.BucketProps, header http.Header) *cmn.BucketProps {
-	cos.Assert(len(header) > 0)
+	debug.Assert(len(header) > 0)
 	switch props.Provider {
 	case cmn.ProviderAmazon:
 		props.Extra.AWS.CloudRegion = header.Get(cmn.HdrCloudRegion)
@@ -485,7 +484,7 @@ func mergeRemoteBckProps(props *cmn.BucketProps, header http.Header) *cmn.Bucket
 
 	if verStr := header.Get(cmn.HdrBucketVerEnabled); verStr != "" {
 		versioning, err := cos.ParseBool(verStr)
-		cos.AssertNoErr(err)
+		debug.AssertNoErr(err)
 		props.Versioning.Enabled = versioning
 	}
 	return props

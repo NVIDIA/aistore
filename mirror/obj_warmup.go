@@ -49,8 +49,8 @@ func (*llcFactory) Kind() string        { return cmn.ActLoadLomCache }
 func (p *llcFactory) Get() cluster.Xact { return p.xact }
 
 // overriding xreg.BaseBckEntry because it would return `false, nil`.
-func (p *llcFactory) PreRenewHook(_ xreg.BucketEntry) (bool, error) { return true, nil }
-func (p *llcFactory) PostRenewHook(_ xreg.BucketEntry)              {}
+func (*llcFactory) PreRenewHook(_ xreg.BucketEntry) (bool, error) { return true, nil }
+func (*llcFactory) PostRenewHook(_ xreg.BucketEntry)              {}
 
 /////////////
 // xactLLC //

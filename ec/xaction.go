@@ -148,7 +148,7 @@ func (r *xactECBase) newIntraReq(act intraReqType, meta *Metadata, bck *cluster.
 	return req
 }
 
-func (r *xactECBase) newSliceResponse(md *Metadata, attrs *transport.ObjectAttrs, fqn string) (reader cos.ReadOpenCloser, err error) {
+func newSliceResponse(md *Metadata, attrs *transport.ObjectAttrs, fqn string) (reader cos.ReadOpenCloser, err error) {
 	attrs.Version = md.ObjVersion
 	attrs.CksumType = md.CksumType
 	attrs.CksumValue = md.CksumValue
@@ -167,7 +167,7 @@ func (r *xactECBase) newSliceResponse(md *Metadata, attrs *transport.ObjectAttrs
 }
 
 // replica/full object request
-func (r *xactECBase) newReplicaResponse(attrs *transport.ObjectAttrs, bck *cluster.Bck,
+func newReplicaResponse(attrs *transport.ObjectAttrs, bck *cluster.Bck,
 	objName string) (reader cos.ReadOpenCloser, err error) {
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
@@ -209,11 +209,11 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 	ireq := r.newIntraReq(act, nil, bck)
 	if md != nil && md.SliceID != 0 {
 		// slice request
-		reader, err = r.newSliceResponse(md, &objAttrs, fqn)
+		reader, err = newSliceResponse(md, &objAttrs, fqn)
 		ireq.exists = err == nil
 	} else {
 		// replica/full object request
-		reader, err = r.newReplicaResponse(&objAttrs, bck, objName)
+		reader, err = newReplicaResponse(&objAttrs, bck, objName)
 		ireq.exists = err == nil
 	}
 	cos.Assert((objAttrs.Size == 0 && reader == nil) || (objAttrs.Size != 0 && reader != nil))
@@ -418,8 +418,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 // * writer - where to save the slice/meta/replica data
 // * exists - if the remote target had the requested object
 // * reader - response body
-func (r *xactECBase) writerReceive(writer *slice, exists bool, objAttrs transport.ObjectAttrs,
-	reader io.Reader) (err error) {
+func _writerReceive(writer *slice, exists bool, objAttrs transport.ObjectAttrs, reader io.Reader) (err error) {
 	if !exists {
 		writer.wg.Done()
 		// drain the body, to avoid panic:

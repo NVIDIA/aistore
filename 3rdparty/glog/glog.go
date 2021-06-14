@@ -151,7 +151,7 @@ func (s *severity) Get() interface{} {
 }
 
 // Set is part of the flag.Value interface.
-func (s *severity) Set(value string) error {
+func (*severity) Set(value string) error {
 	var threshold severity
 	// Is it a known name?
 	if v, ok := severityByName(value); ok {
@@ -240,7 +240,7 @@ func (l *Level) Get() interface{} {
 }
 
 // Set is part of the flag.Value interface.
-func (l *Level) Set(value string) error {
+func (*Level) Set(value string) error {
 	v, err := strconv.Atoi(value)
 	if err != nil {
 		return err
@@ -293,14 +293,12 @@ func (m *moduleSpec) String() string {
 
 // Get is part of the (Go 1.2)  flag.Getter interface. It always returns nil for this flag type since the
 // struct is not exported.
-func (m *moduleSpec) Get() interface{} {
-	return nil
-}
+func (*moduleSpec) Get() interface{} { return nil }
 
 var errVmoduleSyntax = errors.New("syntax error: expect comma-separated list of filename=N")
 
 // Syntax: -vmodule=recordio=2,file=1,gfs*=3
-func (m *moduleSpec) Set(value string) error {
+func (*moduleSpec) Set(value string) error {
 	filter := make([]modulePat, 0, 2)
 	for _, pat := range strings.Split(value, ",") {
 		if pat == "" {
@@ -371,9 +369,7 @@ func (t *traceLocation) String() string {
 
 // Get is part of the (Go 1.2) flag.Getter interface. It always returns nil for this flag type since the
 // struct is not exported
-func (t *traceLocation) Get() interface{} {
-	return nil
-}
+func (*traceLocation) Get() interface{} { return nil }
 
 var errTraceSyntax = errors.New("syntax error: expect file.go:234")
 
@@ -486,7 +482,7 @@ var logging loggingT
 
 // setVState sets a consistent state for V logging.
 // l.mu is held.
-func (l *loggingT) setVState(verbosity Level, filter []modulePat, setFilter bool) {
+func (*loggingT) setVState(verbosity Level, filter []modulePat, setFilter bool) {
 	// Turn verbosity off so V will not fire while we are in transition.
 	logging.verbosity.set(0)
 	// Ditto for filter length.
@@ -777,7 +773,7 @@ var logExitFunc func(error)
 
 // exit is called if there is trouble creating or writing log files.
 // l.mu is held.
-func (l *loggingT) exit(err error) {
+func (*loggingT) exit(err error) {
 	fmt.Fprintf(os.Stderr, "log: exiting because of error: %s\n", err)
 	if logExitFunc != nil {
 		logExitFunc(err)

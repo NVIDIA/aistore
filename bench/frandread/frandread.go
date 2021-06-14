@@ -301,5 +301,5 @@ func randString(n int) string {
 
 type nopReadCloser struct{}
 
-func (r *nopReadCloser) Read(p []byte) (n int, err error) { return len(p), nil }
-func (r *nopReadCloser) Close() error                     { return nil }
+func (*nopReadCloser) Read(p []byte) (n int, err error) { return len(p), nil }
+func (*nopReadCloser) Close() error                     { return nil }

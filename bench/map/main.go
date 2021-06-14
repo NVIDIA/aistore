@@ -101,7 +101,7 @@ func (m *syncMap) delete(key int) {
 	m.m.Delete(key)
 }
 
-func (m *syncMap) mapType() string {
+func (*syncMap) mapType() string {
 	return "Sync.Map"
 }
 
@@ -129,7 +129,7 @@ func (m *regMap) delete(key int) {
 	m.mu.Unlock()
 }
 
-func (m *regMap) mapType() string {
+func (*regMap) mapType() string {
 	return "Reg.Map"
 }
 

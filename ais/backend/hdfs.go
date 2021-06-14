@@ -37,7 +37,7 @@ var _ cluster.BackendProvider = (*hdfsProvider)(nil)
 
 func NewHDFS(t cluster.Target) (cluster.BackendProvider, error) {
 	providerConf, ok := cmn.GCO.Get().Backend.ProviderConf(cmn.ProviderHDFS)
-	cos.Assert(ok)
+	debug.Assert(ok)
 	hdfsConf := providerConf.(cmn.BackendConfHDFS)
 
 	client, err := hdfs.NewClient(hdfs.ClientOptions{
@@ -54,7 +54,7 @@ func NewHDFS(t cluster.Target) (cluster.BackendProvider, error) {
 	return &hdfsProvider{t: t, c: client}, nil
 }
 
-func (hp *hdfsProvider) hdfsErrorToAISError(err error) (int, error) {
+func hdfsErrorToAISError(err error) (int, error) {
 	if os.IsNotExist(err) {
 		return http.StatusNotFound, err
 	}
@@ -67,8 +67,8 @@ func (hp *hdfsProvider) hdfsErrorToAISError(err error) (int, error) {
 	return http.StatusBadRequest, err
 }
 
-func (hp *hdfsProvider) Provider() string  { return cmn.ProviderHDFS }
-func (hp *hdfsProvider) MaxPageSize() uint { return 10000 }
+func (*hdfsProvider) Provider() string  { return cmn.ProviderHDFS }
+func (*hdfsProvider) MaxPageSize() uint { return 10000 }
 
 ///////////////////
 // CREATE BUCKET //
@@ -173,7 +173,7 @@ func (hp *hdfsProvider) ListObjects(_ context.Context, bck *cluster.Bck, msg *cm
 		return nil
 	})
 	if err != nil {
-		errCode, err = hp.hdfsErrorToAISError(err)
+		errCode, err = hdfsErrorToAISError(err)
 		return nil, errCode, err
 	}
 	// Set continuation token only if we reached the page size.
@@ -195,8 +195,8 @@ func skipDir(fi os.FileInfo) error {
 // LIST BUCKETS //
 //////////////////
 
-func (hp *hdfsProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.Bcks, errCode int, err error) {
-	cos.Assert(false)
+func (*hdfsProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.Bcks, errCode int, err error) {
+	debug.Assert(false)
 	return
 }
 
@@ -208,7 +208,7 @@ func (hp *hdfsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta 
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
 	fr, err := hp.c.Open(filePath)
 	if err != nil {
-		errCode, err = hp.hdfsErrorToAISError(err)
+		errCode, err = hdfsErrorToAISError(err)
 		return nil, errCode, err
 	}
 
@@ -255,7 +255,7 @@ func (hp *hdfsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
 	fr, err := hp.c.Open(filePath)
 	if err != nil {
-		errCode, err = hp.hdfsErrorToAISError(err)
+		errCode, err = hdfsErrorToAISError(err)
 		return
 	}
 
@@ -307,7 +307,7 @@ finish:
 	// TODO: Cleanup if there was an error during `c.Create` or `io.Copy`. We need
 	//  to remove directories and file.
 	if err != nil {
-		errCode, err = hp.hdfsErrorToAISError(err)
+		errCode, err = hdfsErrorToAISError(err)
 		return "", errCode, err
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -324,7 +324,7 @@ finish:
 func (hp *hdfsProvider) DeleteObj(_ context.Context, lom *cluster.LOM) (errCode int, err error) {
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
 	if err := hp.c.Remove(filePath); err != nil {
-		errCode, err = hp.hdfsErrorToAISError(err)
+		errCode, err = hdfsErrorToAISError(err)
 		return errCode, err
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {

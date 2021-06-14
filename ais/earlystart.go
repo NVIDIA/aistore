@@ -566,7 +566,7 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 			} else {
 				glog.Infof("%s: override local %s with %s", p.si, config, svm.Config)
 			}
-			p.owner.config.updateGCO(svm.Config)
+			cmn.GCO.Update(&svm.Config.ClusterConfig)
 		}
 		p.owner.config.Unlock()
 	}

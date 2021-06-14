@@ -31,7 +31,7 @@ type AISLoaderStat struct {
 	Duration     time.Duration `json:"duration"`
 }
 
-func (ps PrimitiveStat) getHeadingsText() map[string]string {
+func (PrimitiveStat) getHeadingsText() map[string]string {
 	return map[string]string{
 		"startTime": "Start (excel timestamp)",
 		"endTime":   "End (excel timestamp)",
@@ -53,7 +53,7 @@ func (ps PrimitiveStat) getHeadingsText() map[string]string {
 	}
 }
 
-func (ps PrimitiveStat) getHeadingsOrder() []string {
+func (PrimitiveStat) getHeadingsOrder() []string {
 	return []string{
 		"startTime", "endTime", "recName", "recNum", "primID",
 		"opType",

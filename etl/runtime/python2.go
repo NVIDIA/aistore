@@ -14,7 +14,7 @@ type (
 //go:embed python2.yaml
 var py2PodSpec string
 
-func (r py2) Type() string        { return Python2 }
-func (r py2) CodeEnvName() string { return "AISTORE_CODE" }
-func (r py2) DepsEnvName() string { return "AISTORE_DEPS" }
-func (r py2) PodSpec() string     { return py2PodSpec }
+func (py2) Type() string        { return Python2 }
+func (py2) CodeEnvName() string { return "AISTORE_CODE" }
+func (py2) DepsEnvName() string { return "AISTORE_DEPS" }
+func (py2) PodSpec() string     { return py2PodSpec }

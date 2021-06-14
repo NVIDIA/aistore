@@ -240,7 +240,7 @@ func (b *downloaderPB) trackNewFile(state downloader.TaskDlInfo) {
 	}
 }
 
-func (b *downloaderPB) updateFileBar(newState downloader.TaskDlInfo, state *fileDownloadingState) {
+func (*downloaderPB) updateFileBar(newState downloader.TaskDlInfo, state *fileDownloadingState) {
 	if (state.total == 0 && newState.Total != 0) || (state.total != newState.Total) {
 		state.total = newState.Total
 		state.bar.SetTotal(newState.Total, false)

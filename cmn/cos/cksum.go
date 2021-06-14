@@ -175,14 +175,14 @@ func NewCRC32C() hash.Hash {
 	return crc32.New(crc32.MakeTable(crc32.Castagnoli))
 }
 
-func newNoopHash() hash.Hash                       { return &noopHash{} }
-func (h *noopHash) Write(b []byte) (int, error)    { return len(b), nil }
-func (h *noopHash) Sum([]byte) []byte              { return nil }
-func (h *noopHash) Reset()                         {}
-func (h *noopHash) Size() int                      { return 0 }
-func (h *noopHash) BlockSize() int                 { return KiB }
-func (h *noopHash) MarshalBinary() ([]byte, error) { return nil, nil }
-func (h *noopHash) UnmarshalBinary([]byte) error   { return nil }
+func newNoopHash() hash.Hash                     { return &noopHash{} }
+func (*noopHash) Write(b []byte) (int, error)    { return len(b), nil }
+func (*noopHash) Sum([]byte) []byte              { return nil }
+func (*noopHash) Reset()                         {}
+func (*noopHash) Size() int                      { return 0 }
+func (*noopHash) BlockSize() int                 { return KiB }
+func (*noopHash) MarshalBinary() ([]byte, error) { return nil, nil }
+func (*noopHash) UnmarshalBinary([]byte) error   { return nil }
 
 ////////////
 // errors //
@@ -228,7 +228,7 @@ func (e *ErrBadCksum) Error() string {
 	return fmt.Sprintf("%s (%v != %v)%s", e.prefix, e.a, e.b, context)
 }
 
-func (e *ErrBadCksum) Is(target error) bool {
+func (*ErrBadCksum) Is(target error) bool {
 	_, ok := target.(*ErrBadCksum)
 	return ok
 }

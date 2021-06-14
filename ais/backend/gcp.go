@@ -104,7 +104,7 @@ func (gcpp *gcpProvider) createClient(ctx context.Context) (*storage.Client, con
 	return client, ctx, nil
 }
 
-func (gcpp *gcpProvider) gcpErrorToAISError(gcpError error, bck *cmn.Bck) (int, error) {
+func gcpErrorToAISError(gcpError error, bck *cmn.Bck) (int, error) {
 	if gcpError == storage.ErrBucketNotExist {
 		return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(*bck)
 	}
@@ -117,7 +117,7 @@ func (gcpp *gcpProvider) gcpErrorToAISError(gcpError error, bck *cmn.Bck) (int, 
 	return status, gcpError
 }
 
-func (gcpp *gcpProvider) handleObjectError(ctx context.Context, gcpClient *storage.Client, objErr error, bck *cmn.Bck) (int, error) {
+func handleObjectError(ctx context.Context, gcpClient *storage.Client, objErr error, bck *cmn.Bck) (int, error) {
 	if objErr != storage.ErrObjectNotExist {
 		return http.StatusBadRequest, objErr
 	}
@@ -125,15 +125,15 @@ func (gcpp *gcpProvider) handleObjectError(ctx context.Context, gcpClient *stora
 	// Object does not exist, but in GCP it doesn't mean that the bucket existed.
 	// Check if the buckets exists.
 	if _, err := gcpClient.Bucket(bck.Name).Attrs(ctx); err != nil {
-		return gcpp.gcpErrorToAISError(err, bck)
+		return gcpErrorToAISError(err, bck)
 	}
 	return http.StatusNotFound, cmn.NewNotFoundError(objErr.Error())
 }
 
-func (gcpp *gcpProvider) Provider() string { return cmn.ProviderGoogle }
+func (*gcpProvider) Provider() string { return cmn.ProviderGoogle }
 
 // https://cloud.google.com/storage/docs/json_api/v1/objects/list#parameters
-func (gcpp *gcpProvider) MaxPageSize() uint { return 1000 }
+func (*gcpProvider) MaxPageSize() uint { return 1000 }
 
 ///////////////////
 // CREATE BUCKET //
@@ -159,7 +159,7 @@ func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 	cloudBck := bck.RemoteBck()
 	_, err = gcpClient.Bucket(cloudBck.Name).Attrs(gctx)
 	if err != nil {
-		errCode, err = gcpp.gcpErrorToAISError(err, cloudBck)
+		errCode, err = gcpErrorToAISError(err, cloudBck)
 		return
 	}
 	bckProps = make(cos.SimpleKVs)
@@ -200,7 +200,7 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 	)
 	nextPageToken, err := pager.NextPage(&objs)
 	if err != nil {
-		errCode, err = gcpp.gcpErrorToAISError(err, cloudBck)
+		errCode, err = gcpErrorToAISError(err, cloudBck)
 		return
 	}
 
@@ -257,7 +257,7 @@ func (gcpp *gcpProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (
 			break
 		}
 		if err != nil {
-			errCode, err = gcpp.gcpErrorToAISError(err, &cmn.Bck{Provider: cmn.ProviderGoogle})
+			errCode, err = gcpErrorToAISError(err, &cmn.Bck{Provider: cmn.ProviderGoogle})
 			return
 		}
 		bcks = append(bcks, cmn.Bck{
@@ -286,7 +286,7 @@ func (gcpp *gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 	)
 	attrs, err := gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName).Attrs(gctx)
 	if err != nil {
-		errCode, err = gcpp.handleObjectError(gctx, gcpClient, err, cloudBck)
+		errCode, err = handleObjectError(gctx, gcpClient, err, cloudBck)
 		return
 	}
 	objMeta = make(cos.SimpleKVs)
@@ -341,7 +341,7 @@ func (gcpp *gcpProvider) GetObjReader(ctx context.Context,
 	gcpClient, gctx, err := gcpp.createClient(ctx)
 	if err != nil {
 		bck := lom.Bucket()
-		errCode, err = gcpp.gcpErrorToAISError(err, &bck)
+		errCode, err = gcpErrorToAISError(err, &bck)
 		return nil, nil, errCode, err
 	}
 	var (
@@ -351,7 +351,7 @@ func (gcpp *gcpProvider) GetObjReader(ctx context.Context,
 	)
 	attrs, err := o.Attrs(gctx)
 	if err != nil {
-		errCode, err = gcpp.gcpErrorToAISError(err, cloudBck)
+		errCode, err = gcpErrorToAISError(err, cloudBck)
 		return nil, nil, errCode, err
 	}
 
@@ -414,12 +414,12 @@ func (gcpp *gcpProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *clust
 		return
 	}
 	if err = wc.Close(); err != nil {
-		errCode, err = gcpp.gcpErrorToAISError(err, cloudBck)
+		errCode, err = gcpErrorToAISError(err, cloudBck)
 		return
 	}
 	attr, err := gcpObj.Attrs(gctx)
 	if err != nil {
-		errCode, err = gcpp.handleObjectError(gctx, gcpClient, err, cloudBck)
+		errCode, err = handleObjectError(gctx, gcpClient, err, cloudBck)
 		return
 	}
 	if v, ok := h.EncodeVersion(attr.Generation); ok {
@@ -446,7 +446,7 @@ func (gcpp *gcpProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (errCo
 	)
 
 	if err = o.Delete(gctx); err != nil {
-		errCode, err = gcpp.handleObjectError(gctx, gcpClient, err, cloudBck)
+		errCode, err = handleObjectError(gctx, gcpClient, err, cloudBck)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {

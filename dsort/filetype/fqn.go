@@ -23,10 +23,11 @@ var _ fs.ContentResolver = (*DSortFile)(nil)
 
 type DSortFile struct{}
 
-func (df *DSortFile) PermToEvict() bool                  { return false }
-func (df *DSortFile) PermToMove() bool                   { return false }
-func (df *DSortFile) PermToProcess() bool                { return false }
-func (df *DSortFile) GenUniqueFQN(base, _ string) string { return base }
-func (df *DSortFile) ParseUniqueFQN(base string) (orig string, old, ok bool) {
+func (*DSortFile) PermToEvict() bool                  { return false }
+func (*DSortFile) PermToMove() bool                   { return false }
+func (*DSortFile) PermToProcess() bool                { return false }
+func (*DSortFile) GenUniqueFQN(base, _ string) string { return base }
+
+func (*DSortFile) ParseUniqueFQN(base string) (orig string, old, ok bool) {
 	return base, false, true
 }

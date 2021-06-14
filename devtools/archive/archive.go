@@ -39,12 +39,12 @@ func newDummyFile(name string, size int64) *dummyFile {
 	}
 }
 
-func (f *dummyFile) Name() string       { return f.name }
-func (f *dummyFile) Size() int64        { return f.size }
-func (f *dummyFile) Mode() os.FileMode  { return 0 }
-func (f *dummyFile) ModTime() time.Time { return time.Now() }
-func (f *dummyFile) IsDir() bool        { return false }
-func (f *dummyFile) Sys() interface{}   { return nil }
+func (f *dummyFile) Name() string     { return f.name }
+func (f *dummyFile) Size() int64      { return f.size }
+func (*dummyFile) Mode() os.FileMode  { return 0 }
+func (*dummyFile) ModTime() time.Time { return time.Now() }
+func (*dummyFile) IsDir() bool        { return false }
+func (*dummyFile) Sys() interface{}   { return nil }
 
 // adds a given buf to a tar or tar.gz or fills-out random fileSize bytes and adds anyway
 func addBufferToTar(tw *tar.Writer, path string, fileSize int, buf []byte) (err error) {

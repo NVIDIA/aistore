@@ -255,7 +255,7 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 	nl.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{nl: nl, smap: smap})
 
-	p.respondWithID(w, id)
+	_respWithID(w, id)
 }
 
 // Helper methods
@@ -281,7 +281,7 @@ func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *htt
 	return
 }
 
-func (p *proxyrunner) respondWithID(w http.ResponseWriter, id string) {
+func _respWithID(w http.ResponseWriter, id string) {
 	w.Header().Set(cmn.HdrContentType, cmn.ContentJSON)
 	b := cos.MustMarshal(downloader.DlPostResp{ID: id})
 	_, err := w.Write(b)

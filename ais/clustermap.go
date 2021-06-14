@@ -105,10 +105,10 @@ var (
 )
 
 // as revs
-func (m *smapX) tag() string             { return revsSmapTag }
-func (m *smapX) version() int64          { return m.Version }
-func (m *smapX) jit(p *proxyrunner) revs { return p.owner.smap.get() }
-func (m *smapX) sgl() *memsys.SGL        { return m._sgl }
+func (*smapX) tag() string             { return revsSmapTag }
+func (m *smapX) version() int64        { return m.Version }
+func (*smapX) jit(p *proxyrunner) revs { return p.owner.smap.get() }
+func (m *smapX) sgl() *memsys.SGL      { return m._sgl }
 
 func (m *smapX) marshal() []byte {
 	m._sgl = m._encode(0)

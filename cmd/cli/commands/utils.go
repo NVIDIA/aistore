@@ -1068,13 +1068,8 @@ type progIndicator struct {
 	sizeTransferred *atomic.Int64
 }
 
-func (pi *progIndicator) start() {
-	fmt.Print("\033[s")
-}
-
-func (pi *progIndicator) stop() {
-	fmt.Println("")
-}
+func (*progIndicator) start() { fmt.Print("\033[s") }
+func (*progIndicator) stop()  { fmt.Println("") }
 
 func (pi *progIndicator) printProgress(incr int64) {
 	fmt.Print("\033[u\033[K")

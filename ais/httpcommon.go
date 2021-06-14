@@ -408,7 +408,7 @@ func freeCallResults(results sliceResults) {
 
 const tlsHandshakeErrorPrefix = "http: TLS handshake error"
 
-func (r *glogWriter) Write(p []byte) (int, error) {
+func (*glogWriter) Write(p []byte) (int, error) {
 	s := string(p)
 	// Ignore TLS handshake errors (see: https://github.com/golang/go/issues/26918).
 	if strings.Contains(s, tlsHandshakeErrorPrefix) {
@@ -1402,7 +1402,7 @@ func (h *httprunner) handleWriteError(r *http.Request, tag string, err error) {
 	h.statsT.AddErrorHTTP(r.Method, 1)
 }
 
-func (h *httprunner) parseNCopies(value interface{}) (copies int64, err error) {
+func _parseNCopies(value interface{}) (copies int64, err error) {
 	switch v := value.(type) {
 	case string:
 		copies, err = strconv.ParseInt(v, 10, 64)
@@ -1414,7 +1414,7 @@ func (h *httprunner) parseNCopies(value interface{}) (copies int64, err error) {
 	return
 }
 
-func (h *httprunner) checkAction(msg *cmn.ActionMsg, expectedActions ...string) (err error) {
+func _checkAction(msg *cmn.ActionMsg, expectedActions ...string) (err error) {
 	found := false
 	for _, action := range expectedActions {
 		found = found || msg.Action == action
@@ -1923,7 +1923,7 @@ func (h *httprunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload
 	if err = h.owner.config.persist(newConfig, payload); err != nil {
 		return
 	}
-	err = h.owner.config.updateGCO(newConfig)
+	err = cmn.GCO.Update(&newConfig.ClusterConfig)
 	debug.AssertNoErr(err)
 	return
 }
@@ -2215,7 +2215,7 @@ func (h *httprunner) healthByExternalWD(w http.ResponseWriter, r *http.Request) 
 	return
 }
 
-func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header) {
+func bpropsToHdr(bck *cluster.Bck, hdr http.Header) {
 	if bck.Props == nil {
 		bck.Props = defaultBckProps(bckPropsArgs{bck: bck, hdr: hdr})
 	}
@@ -2241,7 +2241,7 @@ func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header) {
 	hdr.Set(cmn.HdrBucketProps, props)
 }
 
-func (h *httprunner) selectBMDBuckets(bmd *bucketMD, query cmn.QueryBcks) cmn.Bcks {
+func selectBMDBuckets(bmd *bucketMD, query cmn.QueryBcks) cmn.Bcks {
 	var (
 		names = make(cmn.Bcks, 0, 10)
 		cp    = &query.Provider

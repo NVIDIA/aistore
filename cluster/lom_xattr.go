@@ -122,7 +122,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	}
 	err = md.unmarshal(read)
 	if err == nil {
-		lom._recomputeMdSize(size, mdSize)
+		_recomputeMdSize(size, mdSize)
 	}
 	slab.Free(buf)
 	return
@@ -205,11 +205,11 @@ func (lom *LOM) marshal() (buf []byte, mm *memsys.MMSA) {
 	buf = lom.md.marshal(mm, lmsize)
 	size := int64(len(buf))
 	cos.Assert(size <= xattrMaxSize)
-	lom._recomputeMdSize(size, lmsize)
+	_recomputeMdSize(size, lmsize)
 	return
 }
 
-func (lom *LOM) _recomputeMdSize(size, mdSize int64) {
+func _recomputeMdSize(size, mdSize int64) {
 	const grow = memsys.SmallSlabIncStep
 	var nsize int64
 	if size > mdSize {

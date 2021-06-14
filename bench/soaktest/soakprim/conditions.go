@@ -25,7 +25,7 @@ type PostConds struct {
 }
 
 // Pre checks are run before a phase of a recipe, if not met, the recipe halts
-func (rctx *RecipeContext) Pre(conds *PreConds) {
+func (*RecipeContext) Pre(conds *PreConds) {
 	defer func() {
 		if Terminated {
 			report.Writef(report.SummaryLevel, "User terminated in pre ...")

@@ -513,7 +513,7 @@ func (reb *Manager) retransmit(md *rebArgs) (cnt int) {
 				continue
 			}
 			// retransmit
-			if roc, err := rj.prepSend(lom); err != nil {
+			if roc, err := _prepSend(lom); err != nil {
 				glog.Errorf("%s: failed to retransmit %s => %s: %v", loghdr, lom, tsi, err)
 			} else {
 				rj.doSend(lom, tsi, roc)

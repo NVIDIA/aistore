@@ -156,23 +156,20 @@ type (
 	WorkfileContentResolver struct{}
 )
 
-func (wf *ObjectContentResolver) PermToMove() bool    { return true }
-func (wf *ObjectContentResolver) PermToEvict() bool   { return true }
-func (wf *ObjectContentResolver) PermToProcess() bool { return true }
+func (*ObjectContentResolver) PermToMove() bool                   { return true }
+func (*ObjectContentResolver) PermToEvict() bool                  { return true }
+func (*ObjectContentResolver) PermToProcess() bool                { return true }
+func (*ObjectContentResolver) GenUniqueFQN(base, _ string) string { return base }
 
-func (wf *ObjectContentResolver) GenUniqueFQN(base, _ string) string {
-	return base
-}
-
-func (wf *ObjectContentResolver) ParseUniqueFQN(base string) (orig string, old, ok bool) {
+func (*ObjectContentResolver) ParseUniqueFQN(base string) (orig string, old, ok bool) {
 	return base, false, true
 }
 
-func (wf *WorkfileContentResolver) PermToMove() bool    { return false }
-func (wf *WorkfileContentResolver) PermToEvict() bool   { return true }
-func (wf *WorkfileContentResolver) PermToProcess() bool { return false }
+func (*WorkfileContentResolver) PermToMove() bool    { return false }
+func (*WorkfileContentResolver) PermToEvict() bool   { return true }
+func (*WorkfileContentResolver) PermToProcess() bool { return false }
 
-func (wf *WorkfileContentResolver) GenUniqueFQN(base, prefix string) string {
+func (*WorkfileContentResolver) GenUniqueFQN(base, prefix string) string {
 	var (
 		dir, fname = filepath.Split(base)
 		tieBreaker = cos.GenTie()
@@ -182,7 +179,7 @@ func (wf *WorkfileContentResolver) GenUniqueFQN(base, prefix string) string {
 	return base + "." + tieBreaker + "." + spid
 }
 
-func (wf *WorkfileContentResolver) ParseUniqueFQN(base string) (orig string, old, ok bool) {
+func (*WorkfileContentResolver) ParseUniqueFQN(base string) (orig string, old, ok bool) {
 	// remove original content type
 	cntIndex := strings.Index(base, ".")
 	if cntIndex < 0 {

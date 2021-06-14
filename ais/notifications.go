@@ -182,7 +182,7 @@ func (n *notifs) init(p *proxyrunner) {
 	n.p.Sowner().Listeners().Reg(n)
 }
 
-func (n *notifs) String() string { return notifsName }
+func (*notifs) String() string { return notifsName }
 
 // start listening
 func (n *notifs) add(nl nl.NotifListener) (err error) {
@@ -316,7 +316,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (n *notifs) handleProgress(nl nl.NotifListener, tsi *cluster.Snode, data []byte,
+func (*notifs) handleProgress(nl nl.NotifListener, tsi *cluster.Snode, data []byte,
 	srcErr error) (err error) {
 	nl.Lock()
 	defer nl.Unlock()
@@ -357,7 +357,7 @@ func (n *notifs) handleFinished(nl nl.NotifListener, tsi *cluster.Snode, data []
 }
 
 // PRECONDITION: `nl` should be under lock.
-func (n *notifs) markFinished(nl nl.NotifListener, tsi *cluster.Snode, srcErr error, aborted bool) (done bool) {
+func (*notifs) markFinished(nl nl.NotifListener, tsi *cluster.Snode, srcErr error, aborted bool) (done bool) {
 	nl.MarkFinished(tsi)
 	if aborted {
 		nl.SetAborted()
@@ -366,7 +366,6 @@ func (n *notifs) markFinished(nl nl.NotifListener, tsi *cluster.Snode, srcErr er
 			srcErr = cmn.NewAbortedError(nl.Kind(), detail)
 		}
 	}
-
 	if srcErr != nil {
 		nl.SetErr(srcErr)
 	}

@@ -83,21 +83,21 @@ type (
 // BaseBckEntry //
 //////////////////
 
-func (b *BaseBckEntry) PreRenewHook(previousEntry BucketEntry) (keep bool, err error) {
+func (*BaseBckEntry) PreRenewHook(previousEntry BucketEntry) (keep bool, err error) {
 	e := previousEntry.Get()
 	_, keep = e.(xaction.XactDemand)
 	return
 }
 
-func (b *BaseBckEntry) PostRenewHook(_ BucketEntry) {}
+func (*BaseBckEntry) PostRenewHook(_ BucketEntry) {}
 
 ////////////////
 // DummyEntry //
 ////////////////
 
-func (d *DummyEntry) Start(_ cmn.Bck) error { debug.Assert(false); return nil }
-func (d *DummyEntry) Kind() string          { debug.Assert(false); return "" }
-func (d *DummyEntry) Get() cluster.Xact     { return d.xact }
+func (*DummyEntry) Start(_ cmn.Bck) error { debug.Assert(false); return nil }
+func (*DummyEntry) Kind() string          { debug.Assert(false); return "" }
+func (d *DummyEntry) Get() cluster.Xact   { return d.xact }
 
 //////////////
 // registry //

@@ -28,7 +28,7 @@ func (t *nopExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, e
 }
 
 // CreateShard creates a new shard locally based on the Shard.
-func (t *nopExtractCreator) CreateShard(s *Shard, w io.Writer, loadContent LoadContentFunc) (written int64, err error) {
+func (*nopExtractCreator) CreateShard(s *Shard, w io.Writer, loadContent LoadContentFunc) (written int64, err error) {
 	var n int64
 
 	for _, rec := range s.Records.All() {
@@ -44,14 +44,6 @@ func (t *nopExtractCreator) CreateShard(s *Shard, w io.Writer, loadContent LoadC
 	return written, nil
 }
 
-func (t *nopExtractCreator) UsingCompression() bool {
-	return false
-}
-
-func (t *nopExtractCreator) SupportsOffset() bool {
-	return true
-}
-
-func (t *nopExtractCreator) MetadataSize() int64 {
-	return t.internal.MetadataSize()
-}
+func (*nopExtractCreator) UsingCompression() bool { return false }
+func (*nopExtractCreator) SupportsOffset() bool   { return true }
+func (t *nopExtractCreator) MetadataSize() int64  { return t.internal.MetadataSize() }

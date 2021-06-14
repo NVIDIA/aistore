@@ -247,7 +247,7 @@ func (e *ErrInvalidBucketProvider) Error() string {
 	return fmt.Sprintf("invalid backend provider %q: must be one of [%s]", e.bck.Provider, allProviders)
 }
 
-func (e *ErrInvalidBucketProvider) Is(target error) bool {
+func (*ErrInvalidBucketProvider) Is(target error) bool {
 	_, ok := target.(*ErrInvalidBucketProvider)
 	return ok
 }
@@ -399,11 +399,6 @@ func NewNotFoundError(format string, a ...interface{}) *ErrNotFound {
 }
 
 func (e *ErrNotFound) Error() string { return e.what + " does not exist" }
-
-func (e *ErrNotFound) As(target error) bool {
-	_, ok := target.(*ErrNotFound)
-	return ok
-}
 
 func (e *ErrInitBackend) Error() string {
 	return fmt.Sprintf(

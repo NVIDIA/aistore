@@ -179,14 +179,6 @@ func (t *targzExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadConte
 	return written, nil
 }
 
-func (t *targzExtractCreator) UsingCompression() bool {
-	return true
-}
-
-func (t *targzExtractCreator) SupportsOffset() bool {
-	return true
-}
-
-func (t *targzExtractCreator) MetadataSize() int64 {
-	return tarBlockSize // size of tar header with padding
-}
+func (*targzExtractCreator) UsingCompression() bool { return true }
+func (*targzExtractCreator) SupportsOffset() bool   { return true }
+func (*targzExtractCreator) MetadataSize() int64    { return tarBlockSize } // size of tar header with padding

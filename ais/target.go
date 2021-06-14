@@ -276,7 +276,7 @@ func _overback(err error) error {
 
 func (t *targetrunner) init(config *cmn.Config) {
 	t.initNetworks()
-	t.si.Init(t.initID(config), cmn.Target)
+	t.si.Init(initTID(config), cmn.Target)
 
 	cos.InitShortID(t.si.Digest())
 
@@ -309,7 +309,7 @@ func (t *targetrunner) init(config *cmn.Config) {
 	}
 }
 
-func (t *targetrunner) initID(config *cmn.Config) (tid string) {
+func initTID(config *cmn.Config) (tid string) {
 	var err error
 	if tid = envDaemonID(cmn.Target); tid != "" {
 		return
@@ -1332,7 +1332,7 @@ func (t *targetrunner) _listBcks(query cmn.QueryBcks, cfg *cmn.Config) (names cm
 	_, ok := cfg.Backend.Providers[query.Provider]
 	// HDFS doesn't support listing remote buckets (there are no remote buckets).
 	if (!ok && !query.IsRemoteAIS()) || query.IsHDFS() {
-		names = t.selectBMDBuckets(t.owner.bmd.get(), query)
+		names = selectBMDBuckets(t.owner.bmd.get(), query)
 	} else {
 		bck := cluster.NewBck("", query.Provider, query.Ns)
 		names, errCode, err = t.Backend(bck).ListBuckets(context.Background(), query)

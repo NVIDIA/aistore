@@ -62,8 +62,8 @@ var (
 	allMagics = []detect{magicTar, magicGzip, magicZip} // NOTE: must contain all
 )
 
-func (csl *cslLimited) Size() int64  { return csl.N }
-func (csl *cslLimited) Close() error { return nil }
+func (csl *cslLimited) Size() int64 { return csl.N }
+func (*cslLimited) Close() error    { return nil }
 
 func (csc *cslClose) Read(b []byte) (int, error) { return csc.R.Read(b) }
 func (csc *cslClose) Size() int64                { return csc.N }

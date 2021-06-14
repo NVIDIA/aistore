@@ -196,7 +196,8 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 	case cmn.ActAbort:
 		t.transactions.find(c.uuid, cmn.ActAbort)
 	case cmn.ActCommit:
-		copies, _ := t.parseNCopies(c.msg.Value)
+		copies, err := _parseNCopies(c.msg.Value)
+		debug.AssertNoErr(err)
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
@@ -226,7 +227,7 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 
 func (t *targetrunner) validateMakeNCopies(bck *cluster.Bck, msg *aisMsg) (curCopies, newCopies int64, err error) {
 	curCopies = bck.Props.Mirror.Copies
-	newCopies, err = t.parseNCopies(msg.Value)
+	newCopies, err = _parseNCopies(msg.Value)
 	if err == nil {
 		err = fs.ValidateNCopies(t.si.Name(), int(newCopies))
 	}

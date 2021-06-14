@@ -126,7 +126,7 @@ func (r *XactGet) DispatchResp(iReq intraReq, bck *cluster.Bck, objName string, 
 			return
 		}
 
-		if err := r.writerReceive(writer, iReq.exists, objAttrs, object); err != nil {
+		if err := _writerReceive(writer, iReq.exists, objAttrs, object); err != nil {
 			glog.Errorf("Failed to read replica: %v", err)
 		}
 	default:
