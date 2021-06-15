@@ -322,14 +322,14 @@ func RenewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck, ms
 }
 
 func (r *registry) renewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.BucketSummaryMsg) error {
-	if err := r.removeFinishedByID(msg.UUID); err != nil {
+	if err := r.delFinishedByID(msg.UUID); err != nil {
 		return err
 	}
 	e := &bckSummaryTaskEntry{ctx: ctx, t: t, uuid: msg.UUID, msg: msg}
 	if err := e.Start(bck.Bck); err != nil {
 		return err
 	}
-	r.storeEntry(e)
+	r.add(e)
 	return nil
 }
 
@@ -345,7 +345,7 @@ func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.Ob
 		}
 		query.Registry.Delete(msg.UUID)
 	}
-	if err := r.removeFinishedByID(msg.UUID); err != nil {
+	if err := r.delFinishedByID(msg.UUID); err != nil {
 		return RenewRes{&DummyEntry{nil}, err, false}
 	}
 	e := &queFactory{ctx: ctx, t: t, query: q, msg: msg}

@@ -56,13 +56,15 @@ var (
 	_ cluster.XactID = RebID(0)
 )
 
+var IncInactive func()
+
 ///////////
 // RebID //
 ///////////
 
 func (id RebID) String() string { return fmt.Sprintf("g%d", id) }
+func (id RebID) Int() int64     { return int64(id) }
 
-func (id RebID) Int() int64 { return int64(id) }
 func (id RebID) Compare(other string) int {
 	var (
 		o   int64
@@ -83,7 +85,7 @@ func (id RebID) Compare(other string) int {
 }
 
 //////////////
-// XactBase //
+// XactBase - partially implements Xact interface
 //////////////
 
 func NewXactBase(args Args) (xact *XactBase) {
@@ -95,10 +97,6 @@ func NewXactBase(args Args) (xact *XactBase) {
 	xact.setStartTime(time.Now())
 	return
 }
-
-//
-// XactBase - partially implements Xact interface
-//
 
 func (xact *XactBase) ID() cluster.XactID         { return xact.id }
 func (xact *XactBase) Kind() string               { return xact.kind }
@@ -175,9 +173,7 @@ func (xact *XactBase) StartTime() time.Time {
 	return time.Time{}
 }
 
-func (xact *XactBase) setStartTime(s time.Time) {
-	xact.sutime.Store(s.UnixNano())
-}
+func (xact *XactBase) setStartTime(s time.Time) { xact.sutime.Store(s.UnixNano()) }
 
 func (xact *XactBase) EndTime() time.Time {
 	u := xact.eutime.Load()
@@ -198,13 +194,14 @@ func (xact *XactBase) _setEndTime(err error) {
 	if n := xact.Notif(); n != nil {
 		nl.OnFinished(n, err)
 	}
-
 	xactDtor := XactsDtor[xact.kind]
 	if xactDtor.RefreshCap {
 		if cs, _ := fs.RefreshCapStatus(nil, nil); cs.Err != nil {
-			glog.Error(cs.Err)
+			glog.Error(cs.Err) // log warning
 		}
 	}
+
+	IncInactive()
 }
 
 func (xact *XactBase) Notif() (n cluster.Notif) {
