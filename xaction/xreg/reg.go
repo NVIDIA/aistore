@@ -330,12 +330,11 @@ func (r *registry) matchXactsStatsByID(xactID string) ([]cluster.XactStats, erro
 func (r *registry) incInactive() { r.inactive.Inc() }
 
 func (r *registry) hkDelInactive() time.Duration {
-	if r.inactive.Load() == 0 {
+	if r.inactive.Swap(0) == 0 {
 		return delInactiveInterval
 	}
 	r.entries.mtx.Lock()
 	r.entries.delInactive()
-	r.inactive.Store(0)
 	r.entries.mtx.Unlock()
 	return delInactiveInterval
 }
