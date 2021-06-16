@@ -119,6 +119,7 @@ func TestGetFromArchive(t *testing.T) {
 				tassert.CheckFatal(t, err)
 
 				tutils.Put(m.proxyURL, m.bck, objname, reader, errCh)
+				defer m.del()
 
 				for _, randomName := range randomNames {
 					var mime string

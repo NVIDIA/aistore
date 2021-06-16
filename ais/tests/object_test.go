@@ -1089,6 +1089,9 @@ func TestRangeRead(t *testing.T) {
 
 		m.init()
 		m.puts()
+		if m.bck.IsRemote() {
+			defer m.del()
+		}
 		objName := m.objNames[0]
 
 		defer func() {

@@ -251,6 +251,7 @@ func TestDownloadSingle(t *testing.T) {
 		}
 
 		m.init()
+		defer m.del()
 
 		clearDownloadList(t)
 
@@ -320,6 +321,7 @@ func TestDownloadRange(t *testing.T) {
 		}
 
 		m.init()
+		defer m.del()
 
 		clearDownloadList(t)
 
@@ -354,6 +356,7 @@ func TestDownloadMultiRange(t *testing.T) {
 		}
 
 		m.init()
+		defer m.del()
 		clearDownloadList(t)
 
 		id, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck.Bck, template)
@@ -382,6 +385,7 @@ func TestDownloadMultiMap(t *testing.T) {
 		}
 
 		m.init()
+		defer m.del()
 		clearDownloadList(t)
 
 		id, err := api.DownloadMulti(tutils.BaseAPIParams(), generateDownloadDesc(), bck.Bck, mapping)
@@ -412,6 +416,7 @@ func TestDownloadMultiList(t *testing.T) {
 		}
 
 		m.init()
+		defer m.del()
 		clearDownloadList(t)
 
 		id, err := api.DownloadMulti(baseParams, generateDownloadDesc(), bck.Bck, l)

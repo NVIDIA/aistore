@@ -213,7 +213,7 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 	tassert.CheckFatal(m.t, err)
 }
 
-// remotePuts by default cleanups the remote bucket and puts fresh `m.num` objects
+// remotePuts by default empties remote bucket and puts new `m.num` objects
 // into the bucket. If `override` parameter is set then the existing objects
 // are updated with new ones (new version and checksum).
 func (m *ioContext) remotePuts(evict bool, overrides ...bool) {

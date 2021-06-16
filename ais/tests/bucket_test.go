@@ -566,6 +566,9 @@ func TestListObjectsSmoke(t *testing.T) {
 
 		m.init()
 		m.puts()
+		if m.bck.IsRemote() {
+			defer m.del()
+		}
 
 		// Run couple iterations to see that we get deterministic results.
 		tlog.Logf("run %d list objects iterations\n", iters)
@@ -601,7 +604,9 @@ func TestListObjectsGoBack(t *testing.T) {
 
 		m.init()
 		m.puts()
-
+		if m.bck.IsRemote() {
+			defer m.del()
+		}
 		var (
 			tokens          []string
 			entries         []*cmn.BucketEntry
@@ -668,7 +673,9 @@ func TestListObjectsRerequestPage(t *testing.T) {
 
 		m.init()
 		m.puts()
-
+		if m.bck.IsRemote() {
+			defer m.del()
+		}
 		var (
 			err     error
 			objList *cmn.BucketList
@@ -714,7 +721,9 @@ func TestListObjectsStartAfter(t *testing.T) {
 
 		m.init()
 		m.puts()
-
+		if m.bck.IsRemote() {
+			defer m.del()
+		}
 		objList, err := api.ListObjects(baseParams, m.bck, nil, 0)
 		tassert.CheckFatal(t, err)
 
@@ -754,7 +763,9 @@ func TestListObjectsProps(t *testing.T) {
 
 		m.init()
 		m.puts()
-
+		if m.bck.IsRemote() {
+			defer m.del()
+		}
 		checkProps := func(useCache bool, props []string, f func(entry *cmn.BucketEntry)) {
 			msg := &cmn.SelectMsg{PageSize: 100, UseCache: useCache}
 			msg.AddProps(props...)
@@ -901,7 +912,9 @@ func TestListObjectsRandProxy(t *testing.T) {
 
 		m.init()
 		m.puts()
-
+		if m.bck.IsRemote() {
+			defer m.del()
+		}
 		for {
 			baseParams := tutils.BaseAPIParams()
 			objList, err := api.ListObjectsPage(baseParams, m.bck, msg)
@@ -940,7 +953,9 @@ func TestListObjectsRandPageSize(t *testing.T) {
 
 		m.init()
 		m.puts()
-
+		if m.bck.IsRemote() {
+			defer m.del()
+		}
 		for {
 			msg.PageSize = uint(rand.Intn(50) + 50)
 
@@ -2191,6 +2206,8 @@ func TestCopyBucket(t *testing.T) {
 				tassert.CheckFatal(t, err)
 			} else if bckTest.IsRemote() {
 				srcm.remotePuts(false /*evict*/)
+				defer srcm.del()
+
 				srcBckList, err = api.ListObjects(baseParams, srcm.bck, nil, 0)
 				tassert.CheckFatal(t, err)
 			} else {
