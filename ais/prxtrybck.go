@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -20,16 +21,38 @@ type bckInitArgs struct {
 	p       *proxyrunner
 	w       http.ResponseWriter
 	r       *http.Request
-	reqBody []byte // request body of original request
+	perms   cmn.AccessAttrs // cmn.AccessGET, cmn.AccessPATCH etc.
+	reqBody []byte          // request body of original request
 
-	bck *cluster.Bck
-	msg *cmn.ActionMsg
-
-	perms cmn.AccessAttrs // cmn.AccessGET, cmn.AccessPATCH etc.
+	origURLBck string
+	bck        *cluster.Bck
+	msg        *cmn.ActionMsg
 
 	skipBackend bool // initialize bucket `bck.InitNoBackend`
 	tryOnlyRem  bool // try only creating remote bucket
 	exists      bool // marks if bucket already exists
+}
+
+////////////////
+// ibargsPool //
+////////////////
+
+var (
+	ibargsPool sync.Pool
+	ib0        bckInitArgs
+)
+
+func allocInitBckArgs() (a *bckInitArgs) {
+	if v := ibargsPool.Get(); v != nil {
+		a = v.(*bckInitArgs)
+		return
+	}
+	return &bckInitArgs{}
+}
+
+func freeInitBckArgs(a *bckInitArgs) {
+	*a = ib0
+	ibargsPool.Put(a)
 }
 
 /////////////////////////////////////////////
@@ -135,7 +158,7 @@ func (args *bckInitArgs) _checkACL(bck *cluster.Bck) (errCode int, err error) {
 // initAndTry initializes bucket and tries to add it if doesn't exist.
 // The method sets and returns err if was not successful and any point (if err
 // is set then `p.writeErr` is called so caller doesn't need to).
-func (args *bckInitArgs) initAndTry(bucket string, origURLBck ...string) (bck *cluster.Bck, err error) {
+func (args *bckInitArgs) initAndTry(bucket string) (bck *cluster.Bck, err error) {
 	var errCode int
 	bck, errCode, err = args.init(bucket)
 	if err == nil {
@@ -156,12 +179,12 @@ func (args *bckInitArgs) initAndTry(bucket string, origURLBck ...string) (bck *c
 		args.p.writeErr(args.w, args.r, err, http.StatusBadRequest)
 		return
 	}
-	bck, err = args.try(origURLBck...)
+	bck, err = args.try()
 	return
 }
 
-func (args *bckInitArgs) try(origURLBck ...string) (bck *cluster.Bck, err error) {
-	bck, errCode, err := args._try(origURLBck...)
+func (args *bckInitArgs) try() (bck *cluster.Bck, err error) {
+	bck, errCode, err := args._try()
 	if err != nil && err != errForwarded {
 		args.p.writeErr(args.w, args.r, err, errCode)
 	}
@@ -172,7 +195,7 @@ func (args *bckInitArgs) try(origURLBck ...string) (bck *cluster.Bck, err error)
 // methods that are internal to this source
 //
 
-func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode int, err error) {
+func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 	if err = args.bck.Validate(); err != nil {
 		errCode = http.StatusBadRequest
 		return
@@ -213,8 +236,8 @@ func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode i
 	}
 
 	if bck.IsHTTP() {
-		if len(origURLBck) > 0 {
-			remoteProps.Set(cmn.HdrOrigURLBck, origURLBck[0])
+		if args.origURLBck != "" {
+			remoteProps.Set(cmn.HdrOrigURLBck, args.origURLBck)
 		} else if origURL := args.r.URL.Query().Get(cmn.URLParamOrigURL); origURL != "" {
 			hbo, err := cmn.NewHTTPObjPath(origURL)
 			if err != nil {

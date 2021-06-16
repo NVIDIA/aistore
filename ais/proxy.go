@@ -321,14 +321,17 @@ func (p *proxyrunner) Stop(err error) {
 // http /bucket and /objects handlers //
 ////////////////////////////////////////
 
-func (p *proxyrunner) parseAPIBckObj(w http.ResponseWriter, r *http.Request, bckArgs *bckInitArgs,
+func (p *proxyrunner) parseAPI(w http.ResponseWriter, r *http.Request, bckArgs *bckInitArgs,
 	origURLBck ...string) (bck *cluster.Bck, objName string, err error) {
 	request := apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
 	if err = p.parseAPIRequest(w, r, &request); err != nil {
 		return
 	}
 	bckArgs.bck = request.bck
-	bck, err = bckArgs.initAndTry(request.bck.Name, origURLBck...)
+	if len(origURLBck) > 0 {
+		bckArgs.origURLBck = origURLBck[0]
+	}
+	bck, err = bckArgs.initAndTry(request.bck.Name)
 	return bck, request.items[1], err
 }
 
@@ -432,12 +435,19 @@ func (p *proxyrunner) handleList(w http.ResponseWriter, r *http.Request, queryBc
 // GET /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ...string) {
 	started := time.Now()
-	bckArgs := bckInitArgs{p: p, w: w, r: r, perms: cmn.AccessGET, tryOnlyRem: true}
-	bck, objName, err := p.parseAPIBckObj(w, r, &bckArgs, origURLBck...)
+	bckArgs := allocInitBckArgs()
+	{
+		bckArgs.p = p
+		bckArgs.w = w
+		bckArgs.r = r
+		bckArgs.perms = cmn.AccessGET
+		bckArgs.tryOnlyRem = true
+	}
+	bck, objName, err := p.parseAPI(w, r, bckArgs, origURLBck...)
+	freeInitBckArgs(bckArgs)
 	if err != nil {
 		return
 	}
-
 	smap := p.owner.smap.get()
 	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
@@ -476,9 +486,17 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		}
 		nodeID = hi.nodeID
 	}
+	bckArgs := allocInitBckArgs()
+	{
+		bckArgs.p = p
+		bckArgs.w = w
+		bckArgs.r = r
+		bckArgs.perms = perms
+		bckArgs.tryOnlyRem = true
+	}
+	bck, objName, err := p.parseAPI(w, r, bckArgs)
+	freeInitBckArgs(bckArgs)
 
-	bckArgs := bckInitArgs{p: p, w: w, r: r, perms: perms, tryOnlyRem: true}
-	bck, objName, err := p.parseAPIBckObj(w, r, &bckArgs)
 	if err != nil {
 		return
 	}
@@ -514,8 +532,16 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 // DELETE /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	bckArgs := bckInitArgs{p: p, w: w, r: r, perms: cmn.AccessObjDELETE, tryOnlyRem: true}
-	bck, objName, err := p.parseAPIBckObj(w, r, &bckArgs)
+	bckArgs := allocInitBckArgs()
+	{
+		bckArgs.p = p
+		bckArgs.w = w
+		bckArgs.r = r
+		bckArgs.perms = cmn.AccessObjDELETE
+		bckArgs.tryOnlyRem = true
+	}
+	bck, objName, err := p.parseAPI(w, r, bckArgs)
+	freeInitBckArgs(bckArgs)
 	if err != nil {
 		return
 	}
@@ -1156,14 +1182,12 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, quer
 		err       error
 		uuid      string
 		summaries cmn.BucketsSummaries
-		smsg      = cmn.BucketSummaryMsg{}
+		smsg      cmn.BucketSummaryMsg
 	)
-
 	if err := cos.MorphMarshal(amsg.Value, &smsg); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
-
 	if queryBcks.Name != "" {
 		bck := cluster.NewBckEmbed(cmn.Bck(queryBcks))
 		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: amsg, perms: cmn.AccessBckHEAD, tryOnlyRem: true, bck: bck}
@@ -1171,12 +1195,10 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, quer
 			return
 		}
 	}
-
 	id := r.URL.Query().Get(cmn.URLParamUUID)
 	if id != "" {
 		smsg.UUID = id
 	}
-
 	if summaries, uuid, err = p.gatherBucketSummary(queryBcks, &smsg); err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -1418,11 +1440,17 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 
 // HEAD /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck ...string) {
-	var (
-		started = time.Now()
-		bckArgs = bckInitArgs{p: p, w: w, r: r, perms: cmn.AccessObjHEAD, tryOnlyRem: true}
-	)
-	bck, objName, err := p.parseAPIBckObj(w, r, &bckArgs, origURLBck...)
+	started := time.Now()
+	bckArgs := allocInitBckArgs()
+	{
+		bckArgs.p = p
+		bckArgs.w = w
+		bckArgs.r = r
+		bckArgs.perms = cmn.AccessObjHEAD
+		bckArgs.tryOnlyRem = true
+	}
+	bck, objName, err := p.parseAPI(w, r, bckArgs, origURLBck...)
+	freeInitBckArgs(bckArgs)
 	if err != nil {
 		return
 	}
