@@ -100,9 +100,8 @@ type (
 // PUT OBJECT //
 ////////////////
 
-func (poi *putObjInfo) putObject() (errCode int, err error) {
+func (poi *putObjInfo) putObject() (int, error) {
 	debug.Assert(cluster.RegularPut <= poi.recvType && poi.recvType <= cluster.Migrated)
-
 	lom := poi.lom
 	// optimize out if the checksums do match
 	if !poi.cksumToUse.IsEmpty() {
@@ -153,7 +152,6 @@ func (poi *putObjInfo) finalize() (errCode int, err error) {
 			return
 		}
 	}
-
 	poi.t.putMirror(poi.lom)
 	return
 }
@@ -161,13 +159,13 @@ func (poi *putObjInfo) finalize() (errCode int, err error) {
 // poi.workFQN => LOM
 func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 	var (
-		lom = poi.lom
-		bck = lom.Bck()
-		bmd = poi.t.owner.bmd.Get()
+		version string
+		lom     = poi.lom
+		bck     = lom.Bck()
+		bmd     = poi.t.owner.bmd.Get()
 	)
 	// remote versioning
 	if bck.IsRemote() && (poi.recvType == cluster.RegularPut || poi.recvType == cluster.Finalize) {
-		var version string
 		version, errCode, err = poi.putRemote()
 		if err != nil {
 			glog.Errorf("PUT %s: %v", lom, err)
@@ -219,13 +217,12 @@ func (poi *putObjInfo) putRemote() (version string, errCode int, err error) {
 		lom     = poi.lom
 		backend = poi.t.Backend(lom.Bck())
 	)
-	fh, err := cos.NewFileHandle(poi.workFQN)
+	lmfh, err := cos.NewFileHandle(poi.workFQN)
 	if err != nil {
 		err = fmt.Errorf(cmn.FmtErrFailed, poi.t.Snode(), "open", poi.workFQN, err)
 		return
 	}
-
-	version, errCode, err = backend.PutObj(poi.ctx, fh, lom)
+	version, errCode, err = backend.PutObj(poi.ctx, lmfh, lom)
 	if !lom.Bck().IsRemoteAIS() {
 		customMD := cos.SimpleKVs{cluster.SourceObjMD: backend.Provider()}
 		if version != "" {
@@ -236,15 +233,15 @@ func (poi *putObjInfo) putRemote() (version string, errCode int, err error) {
 	return
 }
 
-// NOTE: LOM is updated on the end of the call with proper size and checksum.
-// NOTE: `roi.r` is closed on the end of the call.
+// NOTE: LOM is updated at the end of this call with proper size and checksum.
+//       `poi.r` (reader) is closed upon exit.
 func (poi *putObjInfo) writeToFile() (err error) {
 	var (
 		written int64
-		file    *os.File
 		buf     []byte
 		slab    *memsys.Slab
 		reader  = poi.r
+		lmfh    *os.File
 		writer  io.Writer
 		writers = make([]io.Writer, 0, 4)
 		cksums  = struct {
@@ -254,25 +251,26 @@ func (poi *putObjInfo) writeToFile() (err error) {
 		}{}
 		conf = poi.lom.CksumConf()
 	)
-	if file, err = poi.lom.CreateFile(poi.workFQN); err != nil {
+	if lmfh, err = poi.lom.CreateFile(poi.workFQN); err != nil {
 		return
 	}
-	writer = cos.WriterOnly{Writer: file} // Hiding `ReadFrom` for `*os.File` introduced in Go1.15.
+	writer = cos.WriterOnly{Writer: lmfh} // Hiding `ReadFrom` for `*os.File` introduced in Go1.15.
 	if poi.size == 0 {
 		buf, slab = poi.t.gmm.Alloc()
 	} else {
 		buf, slab = poi.t.gmm.Alloc(poi.size)
 	}
 	// cleanup
-	defer func() { // free & cleanup on err
+	defer func() {
 		slab.Free(buf)
 		if err == nil {
 			cos.Close(reader)
-			return
+			return // ok
 		}
+		// not ok
 		reader.Close()
-		if file != nil {
-			if nestedErr := file.Close(); nestedErr != nil {
+		if lmfh != nil {
+			if nestedErr := lmfh.Close(); nestedErr != nil {
 				glog.Errorf("Nested (%v): failed to close received object %s, err: %v",
 					err, poi.workFQN, nestedErr)
 			}
@@ -303,7 +301,6 @@ func (poi *putObjInfo) writeToFile() (err error) {
 		cksums.given = cos.NewCksumHash(poi.cksumToUse.Type())
 		writers = append(writers, cksums.given.H)
 	}
-
 write:
 	if len(writers) == 0 {
 		written, err = io.CopyBuffer(writer, reader, buf)
@@ -326,11 +323,8 @@ write:
 			return
 		}
 	}
-	if err = cos.FlushClose(file); err != nil {
-		err = fmt.Errorf(cmn.FmtErrFailed, poi.t.si, "close poi temp", poi.workFQN, err)
-		file = nil // see defer
-		return
-	}
+	cos.Close(lmfh)
+	lmfh = nil
 	// ok
 	poi.lom.SetSize(written)
 	if cksums.store != nil {
@@ -656,7 +650,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 
 func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err error) {
 	var (
-		file    *os.File
+		lmfh    *os.File
 		sgl     *memsys.SGL
 		slab    *memsys.Slab
 		buf     []byte
@@ -666,8 +660,8 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 		written int64
 	)
 	defer func() { // cleanup
-		if file != nil {
-			cos.Close(file)
+		if lmfh != nil {
+			cos.Close(lmfh)
 		}
 		if buf != nil {
 			slab.Free(buf)
@@ -687,7 +681,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 		// best-effort GET load balancing (see also mirror.findLeastUtilized())
 		fqn = goi.lom.LBGet()
 	}
-	file, err = os.Open(fqn)
+	lmfh, err = os.Open(fqn)
 	if err != nil {
 		if os.IsNotExist(err) {
 			errCode = http.StatusNotFound
@@ -738,9 +732,9 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 	// set reader
 	w := goi.w
 	if rrange == nil {
-		reader = file
+		reader = lmfh
 		if goi.archive.filename != "" {
-			csl, err = goi.freadArch(file)
+			csl, err = goi.freadArch(lmfh)
 			if err != nil {
 				if _, ok := err.(*cmn.ErrNotFound); ok {
 					errCode = http.StatusNotFound
@@ -762,7 +756,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 		}
 	} else {
 		buf, slab = goi.t.gmm.Alloc(rrange.Length)
-		reader = io.NewSectionReader(file, rrange.Start, rrange.Length)
+		reader = io.NewSectionReader(lmfh, rrange.Start, rrange.Length)
 		if cksumRange {
 			var (
 				cksum *cos.CksumHash
@@ -1143,15 +1137,14 @@ func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (size int64, err erro
 // PUT object onto designated target
 func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams) (size int64, err error) {
 	if coi.DM != nil {
-		// We need to clone the `lom` as we will use in async operation.
-		// The `lom` is freed on callback in `_sendObjDM`.
+		// We need to clone the `lom` to use it in async operation.
+		// The `lom` is freed upon callback in `_sendObjDM`.
 		lom = lom.Clone(lom.FQN)
 	}
-
 	if coi.DP == nil {
-		// XXX: Kind of hacky way of determining if the `lom` is object or just
-		//  a regular file. Ideally, the parameter shouldn't be `lom` at all
-		//  but rather something more general like `cluster.CT`.
+		// NOTE: not the best way to determine whether `lom` is an object or just
+		// a regular file. Ideally, the parameter shouldn't be `lom` at all,
+		// rather something more general like `cluster.CT`.
 		var reader cos.ReadOpenCloser
 		if !coi.promoteFile {
 			lom.Lock(false)

@@ -6,7 +6,6 @@ package ais
 
 import (
 	"context"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -27,10 +26,6 @@ import (
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
-
-//
-// implements cluster.Target interfaces
-//
 
 // interface guard
 var _ cluster.Target = (*targetrunner)(nil)
@@ -129,13 +124,11 @@ func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParam
 	return err
 }
 
-func (t *targetrunner) FinalizeObj(lom *cluster.LOM, reader io.ReadCloser, workFQN string,
-	size int64) (errCode int, err error) {
+func (t *targetrunner) FinalizeObj(lom *cluster.LOM, workFQN string, size int64) (errCode int, err error) {
 	poi := allocPutObjInfo()
 	{
 		poi.t = t
 		poi.lom = lom
-		poi.r = reader
 		poi.ctx = context.Background()
 		poi.workFQN = workFQN
 		poi.recvType = cluster.Finalize
@@ -291,21 +284,12 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 		glog.Errorf("[promote] %s already exists", lom)
 		return
 	}
-	if glog.V(4) {
-		s := ""
-		if params.Overwrite {
-			s = " with overwrite"
-		}
-		glog.Infof("Attempt to promote%s %q => (lom: %q)", s, params.SrcFQN, lom)
-	}
-
 	var (
 		cksum    *cos.CksumHash
 		fileSize int64
 		workFQN  string
 		poi      = &putObjInfo{t: t, lom: lom}
 	)
-
 	copyFile := params.KeepOrig
 	if !params.KeepOrig {
 		// To use `params.SrcFQN` as `workFQN` we must be sure that they are on
@@ -355,7 +339,6 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 		}
 	}
 
-	cos.Assert(workFQN != "")
 	poi.workFQN = workFQN
 	lom.SetSize(fileSize)
 	if _, err = poi.finalize(); err == nil {

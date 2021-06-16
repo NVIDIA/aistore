@@ -242,9 +242,10 @@ func (r *XactPutArchive) finalize(work *zwork, fullname string) {
 		return // nothing to do
 	}
 	time.Sleep(3 * time.Second) // TODO -- FIXME: via [target => last] accounting
+
 	errCode, err := r._fini(work)
 	if err != nil {
-		glog.Errorf("%s: failed to archive %s: %v(%d)", r.t.Snode(), fullname, err, errCode)
+		glog.Errorf("%s: %v(%d)", r.t.Snode(), err, errCode) // TODO
 	}
 	r.pending.Lock()
 	delete(r.pending.m, fullname)
@@ -256,14 +257,15 @@ func (r *XactPutArchive) _fini(work *zwork) (errCode int, err error) {
 	work.tw.Close()
 
 	size, err := work.fh.Seek(0, io.SeekCurrent)
-	debug.AssertNoErr(err)
+	if err != nil {
+		debug.AssertNoErr(err)
+		return
+	}
 	work.lom.SetSize(size)
 	work.lom.SetCksum(cos.NewCksum(cos.ChecksumNone, ""))
-
-	work.fh.Seek(0, io.SeekStart)
-	errCode, err = r.t.FinalizeObj(work.lom, work.fh, work.fqn, size)
 	cos.Close(work.fh)
 
+	errCode, err = r.t.FinalizeObj(work.lom, work.fqn, size)
 	cluster.FreeLOM(work.lom)
 	return
 }

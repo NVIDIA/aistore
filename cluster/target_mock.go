@@ -6,7 +6,6 @@ package cluster
 
 import (
 	"context"
-	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -45,6 +44,7 @@ func (*TargetMock) FSHC(_ error, _ string)                                      
 func (*TargetMock) MMSA() *memsys.MMSA                                          { return memsys.DefaultPageMM() }
 func (*TargetMock) SmallMMSA() *memsys.MMSA                                     { return memsys.DefaultSmallMM() }
 func (*TargetMock) PutObject(_ *LOM, _ PutObjectParams) error                   { return nil }
+func (*TargetMock) FinalizeObj(_ *LOM, _ string, _ int64) (int, error)          { return 0, nil }
 func (*TargetMock) EvictObject(_ *LOM) (int, error)                             { return 0, nil }
 func (*TargetMock) DeleteObject(_ context.Context, _ *LOM, _ bool) (int, error) { return 0, nil }
 func (*TargetMock) PromoteFile(_ PromoteFileParams) (*LOM, error)               { return nil, nil }
@@ -56,10 +56,6 @@ func (*TargetMock) RebalanceNamespace(_ *Snode) ([]byte, int, error)            
 func (*TargetMock) BMDVersionFixup(r *http.Request, bck ...cmn.Bck)             {}
 
 func (*TargetMock) CopyObject(_ *LOM, _ *CopyObjectParams, _ bool) (int64, error) {
-	return 0, nil
-}
-
-func (*TargetMock) FinalizeObj(_ *LOM, _ io.ReadCloser, _ string, _ int64) (int, error) {
 	return 0, nil
 }
 
