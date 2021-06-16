@@ -2663,6 +2663,17 @@ func (p *proxyrunner) headRemoteBck(bck cmn.Bck, q url.Values) (header http.Head
 	if tsi, err = p.owner.smap.get().GetRandTarget(); err != nil {
 		return
 	}
+
+	if bck.IsCloud() {
+		config := cmn.GCO.Get()
+		if _, ok := config.Backend.Providers[bck.Provider]; !ok {
+			err = &cmn.ErrMissingBackend{Provider: bck.Provider}
+			err = fmt.Errorf("cannot lookup cloud bucket %q: %v", bck, err)
+			statusCode = http.StatusNotFound
+			return
+		}
+	}
+
 	q = cmn.AddBckToQuery(q, bck)
 
 	req := cmn.ReqArgs{Method: http.MethodHead, Base: tsi.URL(cmn.NetworkIntraData), Path: path, Query: q}

@@ -168,7 +168,9 @@ func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 		numArchs = 2
 	}
 	m.puts()
-	defer m.del()
+	if m.bck.IsRemote() {
+		defer m.del()
+	}
 	if !toBck.Equal(m.bck) && toBck.IsAIS() {
 		tutils.CreateFreshBucket(t, proxyURL, toBck, nil)
 	}

@@ -97,6 +97,9 @@ type (
 	ErrInitBackend struct {
 		Provider string
 	}
+	ErrMissingBackend struct {
+		Provider string
+	}
 	ErrETL struct {
 		Reason string
 		ETLErrorContext
@@ -403,6 +406,13 @@ func (e *ErrNotFound) Error() string { return e.what + " does not exist" }
 func (e *ErrInitBackend) Error() string {
 	return fmt.Sprintf(
 		"cannot initialize %q backend (as per cluster config): missing %s-supporting libraries in the build",
+		e.Provider, e.Provider,
+	)
+}
+
+func (e *ErrMissingBackend) Error() string {
+	return fmt.Sprintf(
+		"%q backend is missing in the cluster config (consider redeploying with -override_backends command-line and %s-supporting libraries)",
 		e.Provider, e.Provider,
 	)
 }
