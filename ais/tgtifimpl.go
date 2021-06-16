@@ -6,11 +6,10 @@ package ais
 
 import (
 	"context"
-	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/backend"
@@ -130,50 +129,20 @@ func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParam
 	return err
 }
 
-// PUT(lom) => destination-target
-// NOTE: always closes params.Reader (either explicitly or via Do())
-func (t *targetrunner) _sendPUT(lom *cluster.LOM, params *cluster.SendToParams) error {
-	var (
-		hdr   http.Header
-		query = cmn.AddBckToQuery(nil, params.BckTo.Bck)
-	)
-	debug.Assert(params.HdrMeta != nil)
-	if params.HdrMeta == lom {
-		hdr = make(http.Header, 4)
-		lom.ToHTTPHdr(hdr)
-	} else {
-		hdr = cmn.ToHTTPHdr(params.HdrMeta)
-		if size := params.HdrMeta.Size(); size > 0 {
-			hdr.Set(cmn.HdrContentLength, strconv.FormatInt(size, 10))
-		}
-		if version := params.HdrMeta.Version(); version != "" {
-			hdr.Set(cmn.HdrObjVersion, version)
-		}
+func (t *targetrunner) FinalizeObj(lom *cluster.LOM, reader io.ReadCloser, workFQN string,
+	size int64) (errCode int, err error) {
+	poi := allocPutObjInfo()
+	{
+		poi.t = t
+		poi.lom = lom
+		poi.r = reader
+		poi.ctx = context.Background()
+		poi.workFQN = workFQN
+		poi.recvType = cluster.Finalize
 	}
-	hdr.Set(cmn.HdrPutterID, t.si.ID())
-	query.Set(cmn.URLParamRecvType, strconv.Itoa(int(cluster.Migrated)))
-	reqArgs := cmn.ReqArgs{
-		Method: http.MethodPut,
-		Base:   params.Tsi.URL(cmn.NetworkIntraData),
-		Path:   cmn.URLPathObjects.Join(params.BckTo.Name, params.ObjNameTo),
-		Query:  query,
-		Header: hdr,
-		BodyR:  params.Reader,
-	}
-	config := cmn.GCO.Get()
-	req, _, cancel, err := reqArgs.ReqWithTimeout(config.Timeout.SendFile.D())
-	if err != nil {
-		cos.Close(params.Reader)
-		return fmt.Errorf("unexpected failure to create request, err: %w", err)
-	}
-	defer cancel()
-	resp, err := t.client.data.Do(req)
-	if err != nil {
-		return fmt.Errorf(cmn.FmtErrFailed, t.si, "PUT to", reqArgs.URL(), err)
-	}
-	cos.DrainReader(resp.Body)
-	resp.Body.Close()
-	return nil
+	errCode, err = poi.finalize()
+	freePutObjInfo(poi)
+	return
 }
 
 func (t *targetrunner) EvictObject(lom *cluster.LOM) (errCode int, err error) {

@@ -32,7 +32,7 @@ type (
 		t    cluster.Target
 		uuid string
 	}
-	work struct {
+	zwork struct {
 		msg *cmn.ArchiveMsg
 		lom *cluster.LOM // of the archive
 		fqn string       // workFQN --/--
@@ -49,7 +49,7 @@ type (
 		workCh  chan *cmn.ArchiveMsg
 		pending struct {
 			sync.RWMutex
-			m map[string]*work
+			m map[string]*zwork
 		}
 	}
 )
@@ -90,7 +90,7 @@ func (p *archFactory) Start(bckFrom cmn.Bck) error {
 		bckFrom:        bckFrom,
 		workCh:         make(chan *cmn.ArchiveMsg, maxNumInParallel),
 	}
-	r.pending.m = make(map[string]*work, maxNumInParallel)
+	r.pending.m = make(map[string]*zwork, maxNumInParallel)
 	p.xact = r
 	r.InitIdle()
 	if err := p.newDM(bckFrom, r); err != nil {
@@ -117,9 +117,9 @@ func (p *archFactory) newDM(bckFrom cmn.Bck, r *XactPutArchive) error {
 	return nil
 }
 
-/////////////////
+////////////////////
 // XactPutArchive //
-/////////////////
+////////////////////
 
 func (r *XactPutArchive) Begin(msg *cmn.ArchiveMsg) (err error) {
 	debug.Assert(strings.HasSuffix(msg.ArchName, cos.ExtTar)) // TODO: NIY
@@ -127,7 +127,7 @@ func (r *XactPutArchive) Begin(msg *cmn.ArchiveMsg) (err error) {
 	if err = lom.Init(msg.ToBck); err != nil {
 		return
 	}
-	work := &work{msg: msg, lom: lom}
+	work := &zwork{msg: msg, lom: lom}
 	work.fqn = fs.CSM.GenContentFQN(work.lom, fs.WorkfileType, fs.WorkfileAppend)
 
 	smap := r.t.Sowner().Get()
@@ -167,20 +167,15 @@ func (r *XactPutArchive) Run() {
 			debug.Assert(work != nil)
 			for _, objName := range msg.ListMsg.ObjNames {
 				lom := cluster.AllocLOM(objName)
-				if err := r.work(lom, work); err != nil {
+				if err := work.do(lom, r); err != nil {
 					cluster.FreeLOM(lom)
 				}
 			}
 			if r.t.Snode().ID() == work.tsi.ID() {
-				go func() {
-					time.Sleep(3 * time.Second) // TODO -- FIXME: via [target => last] accounting
-					r.finalize(work)            // TODO -- FIXME: use poi
-					r.pending.Lock()
-					delete(r.pending.m, fullname)
-					r.pending.Unlock()
-				}()
+				go r.finalize(work, fullname)
+			} else {
+				r.DecPending()
 			}
-			r.DecPending()
 		case <-r.IdleTimer():
 			r.XactDemandBase.Stop()
 			r.Finish(nil)
@@ -204,33 +199,7 @@ fin:
 	r.Finish(err)
 }
 
-func (r *XactPutArchive) work(lom *cluster.LOM, work *work) (err error) {
-	if err = lom.Init(r.bckFrom); err != nil {
-		return
-	}
-	if err = lom.Load(false /*cache it*/, false /*locked*/); err != nil {
-		return
-	}
-
-	fh, err := cos.NewFileHandle(lom.FQN)
-	debug.AssertNoErr(err)
-	if err != nil {
-		return err
-	}
-
-	debug.AssertNoErr(err)
-	if r.t.Snode().ID() != work.tsi.ID() {
-		r.doSend(lom, work, fh)
-		return
-	}
-
-	_addToArch(lom, nil, fh, work)
-	cluster.FreeLOM(lom)
-	cos.Close(fh)
-	return
-}
-
-func (r *XactPutArchive) doSend(lom *cluster.LOM, work *work, fh cos.ReadOpenCloser) {
+func (r *XactPutArchive) doSend(lom *cluster.LOM, work *zwork, fh cos.ReadOpenCloser) {
 	o := transport.AllocSend()
 	hdr := &o.Hdr
 	{
@@ -250,7 +219,91 @@ func (r *XactPutArchive) doSend(lom *cluster.LOM, work *work, fh cos.ReadOpenClo
 	r.dm.Send(o, fh, work.tsi)
 }
 
-func _addToArch(lom *cluster.LOM, hdr *transport.ObjHdr, reader io.Reader, work *work) {
+func (r *XactPutArchive) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, err error) {
+	defer transport.FreeRecv(objReader)
+	if err != nil && !cos.IsEOF(err) {
+		glog.Error(err)
+		return
+	}
+	defer cos.DrainReader(objReader)
+
+	r.pending.RLock()
+	work, ok := r.pending.m[string(hdr.Opaque)] // NOTE: fullname
+	r.pending.RUnlock()
+	debug.Assert(ok)
+	debug.Assert(work.tsi.ID() == r.t.Snode().ID())
+
+	work.addToArch(nil, &hdr, objReader)
+}
+
+func (r *XactPutArchive) finalize(work *zwork, fullname string) {
+	if work == nil || work.tw == nil {
+		r.DecPending()
+		return // nothing to do
+	}
+	time.Sleep(3 * time.Second) // TODO -- FIXME: via [target => last] accounting
+	errCode, err := r._fini(work)
+	if err != nil {
+		glog.Errorf("%s: failed to archive %s: %v(%d)", r.t.Snode(), fullname, err, errCode)
+	}
+	r.pending.Lock()
+	delete(r.pending.m, fullname)
+	r.pending.Unlock()
+	r.DecPending()
+}
+
+func (r *XactPutArchive) _fini(work *zwork) (errCode int, err error) {
+	work.tw.Close()
+
+	size, err := work.fh.Seek(0, io.SeekCurrent)
+	debug.AssertNoErr(err)
+	work.lom.SetSize(size)
+	work.lom.SetCksum(cos.NewCksum(cos.ChecksumNone, ""))
+
+	work.fh.Seek(0, io.SeekStart)
+	errCode, err = r.t.FinalizeObj(work.lom, work.fh, work.fqn, size)
+	cos.Close(work.fh)
+
+	cluster.FreeLOM(work.lom)
+	return
+}
+
+func (r *XactPutArchive) Stats() cluster.XactStats {
+	baseStats := r.XactDemandBase.Stats().(*xaction.BaseXactStatsExt)
+	baseStats.Ext = &xaction.BaseXactDemandStatsExt{IsIdle: r.Pending() == 0}
+	return baseStats
+}
+
+///////////
+// zwork //
+///////////
+func (work *zwork) do(lom *cluster.LOM, r *XactPutArchive) (err error) {
+	if err = lom.Init(r.bckFrom); err != nil {
+		return
+	}
+	if err = lom.Load(false /*cache it*/, false /*locked*/); err != nil {
+		return
+	}
+
+	fh, err := cos.NewFileHandle(lom.FQN)
+	debug.AssertNoErr(err)
+	if err != nil {
+		return err
+	}
+
+	debug.AssertNoErr(err)
+	if r.t.Snode().ID() != work.tsi.ID() {
+		r.doSend(lom, work, fh)
+		return
+	}
+	debug.Assert(work.fh != nil) // see Begin
+	work.addToArch(lom, nil, fh)
+	cluster.FreeLOM(lom)
+	cos.Close(fh)
+	return
+}
+
+func (work *zwork) addToArch(lom *cluster.LOM, hdr *transport.ObjHdr, reader io.Reader) {
 	header := new(tar.Header)
 	header.Typeflag = tar.TypeReg
 
@@ -272,47 +325,4 @@ func _addToArch(lom *cluster.LOM, hdr *transport.ObjHdr, reader io.Reader, work 
 	_, err = io.Copy(work.tw, reader)
 	work.mu.Unlock()
 	debug.AssertNoErr(err)
-}
-
-func (r *XactPutArchive) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, err error) {
-	defer transport.FreeRecv(objReader)
-	if err != nil && !cos.IsEOF(err) {
-		glog.Error(err)
-		return
-	}
-	defer cos.DrainReader(objReader)
-
-	r.pending.RLock()
-	work, ok := r.pending.m[string(hdr.Opaque)] // NOTE: fullname
-	r.pending.RUnlock()
-	debug.Assert(ok)
-	debug.Assert(work.tsi.ID() == r.t.Snode().ID())
-
-	_addToArch(nil, &hdr, objReader, work)
-}
-
-func (r *XactPutArchive) finalize(work *work) {
-	if work == nil || work.tw == nil {
-		return // nothing to do
-	}
-	work.tw.Close()
-	work.fh.Close()
-	err := cos.Rename(work.fqn, work.lom.FQN)
-	debug.AssertNoErr(err)
-
-	finfo, err := os.Stat(work.lom.FQN)
-	debug.AssertNoErr(err)
-	work.lom.SetSize(finfo.Size())
-
-	err = work.lom.Persist(true)
-	debug.AssertNoErr(err)
-	glog.Infof("%s: new archive %s (size %d)", r.t.Snode(), work.lom, work.lom.Size())
-
-	cluster.FreeLOM(work.lom)
-}
-
-func (r *XactPutArchive) Stats() cluster.XactStats {
-	baseStats := r.XactDemandBase.Stats().(*xaction.BaseXactStatsExt)
-	baseStats.Ext = &xaction.BaseXactDemandStatsExt{IsIdle: r.Pending() == 0}
-	return baseStats
 }

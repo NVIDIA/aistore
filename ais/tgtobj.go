@@ -166,7 +166,7 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 		bmd = poi.t.owner.bmd.Get()
 	)
 	// remote versioning
-	if bck.IsRemote() && poi.recvType == cluster.RegularPut {
+	if bck.IsRemote() && (poi.recvType == cluster.RegularPut || poi.recvType == cluster.Finalize) {
 		var version string
 		version, errCode, err = poi.putRemote()
 		if err != nil {
@@ -1232,6 +1232,52 @@ func _sendObjDM(lom *cluster.LOM, params *cluster.SendToParams) error {
 		cluster.FreeLOM(lom)
 	}
 	return params.DM.Send(o, params.Reader, params.Tsi)
+}
+
+// PUT(lom) => destination-target
+// NOTE: always closes params.Reader (either explicitly or via Do())
+func (t *targetrunner) _sendPUT(lom *cluster.LOM, params *cluster.SendToParams) error {
+	var (
+		hdr   http.Header
+		query = cmn.AddBckToQuery(nil, params.BckTo.Bck)
+	)
+	debug.Assert(params.HdrMeta != nil)
+	if params.HdrMeta == lom {
+		hdr = make(http.Header, 4)
+		lom.ToHTTPHdr(hdr)
+	} else {
+		hdr = cmn.ToHTTPHdr(params.HdrMeta)
+		if size := params.HdrMeta.Size(); size > 0 {
+			hdr.Set(cmn.HdrContentLength, strconv.FormatInt(size, 10))
+		}
+		if version := params.HdrMeta.Version(); version != "" {
+			hdr.Set(cmn.HdrObjVersion, version)
+		}
+	}
+	hdr.Set(cmn.HdrPutterID, t.si.ID())
+	query.Set(cmn.URLParamRecvType, strconv.Itoa(int(cluster.Migrated)))
+	reqArgs := cmn.ReqArgs{
+		Method: http.MethodPut,
+		Base:   params.Tsi.URL(cmn.NetworkIntraData),
+		Path:   cmn.URLPathObjects.Join(params.BckTo.Name, params.ObjNameTo),
+		Query:  query,
+		Header: hdr,
+		BodyR:  params.Reader,
+	}
+	config := cmn.GCO.Get()
+	req, _, cancel, err := reqArgs.ReqWithTimeout(config.Timeout.SendFile.D())
+	if err != nil {
+		cos.Close(params.Reader)
+		return fmt.Errorf("unexpected failure to create request, err: %w", err)
+	}
+	defer cancel()
+	resp, err := t.client.data.Do(req)
+	if err != nil {
+		return fmt.Errorf(cmn.FmtErrFailed, t.si, "PUT to", reqArgs.URL(), err)
+	}
+	cos.DrainReader(resp.Body)
+	resp.Body.Close()
+	return nil
 }
 
 ///////////////

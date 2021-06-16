@@ -6,6 +6,7 @@ package cluster
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -55,6 +56,10 @@ func (*TargetMock) RebalanceNamespace(_ *Snode) ([]byte, int, error)            
 func (*TargetMock) BMDVersionFixup(r *http.Request, bck ...cmn.Bck)             {}
 
 func (*TargetMock) CopyObject(_ *LOM, _ *CopyObjectParams, _ bool) (int64, error) {
+	return 0, nil
+}
+
+func (*TargetMock) FinalizeObj(_ *LOM, _ io.ReadCloser, _ string, _ int64) (int, error) {
 	return 0, nil
 }
 

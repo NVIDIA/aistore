@@ -19,21 +19,26 @@ import (
 )
 
 type (
-	RecvType    int
-	GetColdType uint8
-
-	GFNType int
-	GFN     interface {
+	GFN interface {
 		Activate() bool
 		Deactivate()
 	}
 )
 
+// poi RecvType and enum
+type RecvType int
+
 const (
 	RegularPut RecvType = iota
 	ColdGet
 	Migrated
+	Finalize
+)
 
+// GetColdType and enum
+type GetColdType uint8
+
+const (
 	// Prefetch errors if lock is not available to be acquired immediately.
 	// Otherwise acquire, create an object, release the lock.
 	Prefetch GetColdType = iota
@@ -41,36 +46,45 @@ const (
 	PrefetchWait
 	// GetCold waits until a lock is acquired, create an object, downgrade the lock.
 	GetCold
+)
 
+// GFNType and enum
+type GFNType int
+
+const (
 	GFNGlobal GFNType = iota
 	GFNLocal
 )
 
-type BackendProvider interface {
-	Provider() string
-	MaxPageSize() uint
-
-	CreateBucket(ctx context.Context, bck *Bck) (errCode int, err error)
-	HeadBucket(ctx context.Context, bck *Bck) (bckProps cos.SimpleKVs, errCode int, err error)
-	ListObjects(ctx context.Context, bck *Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error)
-
-	ListBuckets(ctx context.Context, query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error)
-
-	HeadObj(ctx context.Context, lom *LOM) (objMeta cos.SimpleKVs, errCode int, err error)
-	// GetObj fetches and finalizes the object from the cloud.
-	GetObj(ctx context.Context, lom *LOM) (errCode int, err error)
-	GetObjReader(ctx context.Context, lom *LOM) (r io.ReadCloser, expectedCksum *cos.Cksum, errCode int, err error)
-	// PutObj sends object to the backend.
-	// It takes over of `r` reader and closes it, even on error.
-	PutObj(ctx context.Context, r io.ReadCloser, lom *LOM) (version string, errCode int, err error)
-	DeleteObj(ctx context.Context, lom *LOM) (errCode int, err error)
-}
-
-// Callback called by EC PUT jogger after the object is processed and
-// all its slices/replicas are sent to other targets.
-type OnFinishObj = func(lom *LOM, err error)
+//
+// ais target's types and interfaces
+//
 
 type (
+	BackendProvider interface {
+		Provider() string
+		MaxPageSize() uint
+
+		CreateBucket(ctx context.Context, bck *Bck) (errCode int, err error)
+		HeadBucket(ctx context.Context, bck *Bck) (bckProps cos.SimpleKVs, errCode int, err error)
+		ListObjects(ctx context.Context, bck *Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error)
+
+		ListBuckets(ctx context.Context, query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error)
+
+		HeadObj(ctx context.Context, lom *LOM) (objMeta cos.SimpleKVs, errCode int, err error)
+		// GetObj fetches and finalizes the object from the cloud.
+		GetObj(ctx context.Context, lom *LOM) (errCode int, err error)
+		GetObjReader(ctx context.Context, lom *LOM) (r io.ReadCloser, expectedCksum *cos.Cksum, errCode int, err error)
+		// PutObj sends object to the backend.
+		// It takes over of `r` reader and closes it, even on error.
+		PutObj(ctx context.Context, r io.ReadCloser, lom *LOM) (version string, errCode int, err error)
+		DeleteObj(ctx context.Context, lom *LOM) (errCode int, err error)
+	}
+
+	// Callback called by EC PUT jogger after the object is processed and
+	// all its slices/replicas are sent to other targets.
+	OnFinishObj = func(lom *LOM, err error)
+
 	DataMover interface {
 		RegRecv() error
 		SetXact(xact Xact)
@@ -144,6 +158,7 @@ type Target interface {
 
 	// Object related functions.
 	PutObject(lom *LOM, params PutObjectParams) (err error)
+	FinalizeObj(lom *LOM, reader io.ReadCloser, workFQN string, size int64) (errCode int, err error)
 	EvictObject(lom *LOM) (errCode int, err error)
 	DeleteObject(ctx context.Context, lom *LOM, evict bool) (errCode int, err error)
 	CopyObject(lom *LOM, params *CopyObjectParams, localOnly bool) (int64, error)

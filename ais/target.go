@@ -1063,7 +1063,7 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 			t.writeErrf(w, r, "%s: %s-%s(obj) is expected to be redirected", t.si, r.Method, msg.Action)
 			return
 		}
-		t.renameObject(w, r, &msg)
+		t.objMv(w, r, &msg)
 	case cmn.ActPromote:
 		if isRedirect(query) == "" && !t.isIntraCall(r.Header) {
 			t.writeErrf(w, r, "%s: %s-%s(obj) is expected to be redirected or intra-called",
@@ -1495,7 +1495,7 @@ func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict
 ///////////////////
 
 // TODO: unify with PromoteFile (refactor)
-func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
+func (t *targetrunner) objMv(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	request := &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
 	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return

@@ -142,26 +142,35 @@ func TestGetFromArchive(t *testing.T) {
 
 // PUT/create
 func TestArchiveListRange(t *testing.T) {
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+		_testArchiveListRange(t, bck)
+	})
+}
+
+func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 	var (
-		bck = cmn.Bck{
-			Name:     cos.RandString(10),
-			Provider: cmn.ProviderAIS,
+		m = ioContext{
+			t:      t,
+			bck:    bck.Bck,
+			num:    100,
+			prefix: "archive",
 		}
+		toBck      = cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS}
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		numArchs   = 20
 		numInArch  = 7
 		numPuts    = 100
 	)
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	m.init()
 	if testing.Short() {
 		numArchs = 2
 	}
-
-	pargs := tutils.PutObjectsArgs{ProxyURL: proxyURL, Bck: bck, ObjSize: cos.KiB, ObjCnt: numPuts}
-	objNames, _, err := tutils.PutRandObjs(pargs)
-	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, len(objNames) == numPuts, "expected %d, have %d", numPuts, len(objNames))
+	m.puts()
+	defer m.del()
+	if !toBck.Equal(m.bck) && toBck.IsAIS() {
+		tutils.CreateFreshBucket(t, proxyURL, toBck, nil)
+	}
 
 	// archive bucket => same bucket in parallel
 	for i := 0; i < numArchs; i++ {
@@ -169,21 +178,22 @@ func TestArchiveListRange(t *testing.T) {
 			tarName := fmt.Sprintf("test_%02d.tar", i)
 			list := make([]string, 0, numInArch)
 			for j := 0; j < numInArch; j++ {
-				list = append(list, objNames[rand.Intn(numPuts)])
+				list = append(list, m.objNames[rand.Intn(numPuts)])
 			}
-			_, err = api.ArchiveList(baseParams, bck, bck, tarName, list)
+			_, err := api.ArchiveList(baseParams, m.bck, toBck, tarName, list)
 			tassert.CheckFatal(t, err)
 		}(i)
 	}
 
-	wargs := api.XactReqArgs{Kind: cmn.ActArchive, Bck: bck}
+	wargs := api.XactReqArgs{Kind: cmn.ActArchive, Bck: m.bck}
 	api.WaitForXactionIdle(baseParams, wargs)
 
 	time.Sleep(3 * time.Second) // TODO -- FIXME: remove
-	tlog.Logf("List %q\n", bck)
+	tlog.Logf("List %q\n", toBck)
 	msg := &cmn.SelectMsg{Prefix: "test_"}
 	msg.AddProps(cmn.GetPropsName, cmn.GetPropsSize)
-	objList, err := api.ListObjects(baseParams, bck, msg, 0)
+	objList, err := api.ListObjects(baseParams, toBck, msg, 0)
+	tassert.CheckFatal(t, err)
 	for _, entry := range objList.Entries {
 		tlog.Logf("%s: %dB\n", entry.Name, entry.Size)
 	}
