@@ -20,7 +20,7 @@ type (
 	// Providing default pre/post hooks
 	BaseBckEntry struct{}
 
-	// Means to return the result of renewing
+	// Serves to return the result of renewing
 	DummyEntry struct {
 		xact cluster.Xact
 	}
@@ -94,6 +94,11 @@ func (*BaseBckEntry) PostRenewHook(_ BucketEntry) {}
 ////////////////
 // DummyEntry //
 ////////////////
+
+// interface guard
+var (
+	_ BaseEntry = (*DummyEntry)(nil)
+)
 
 func (*DummyEntry) Start(_ cmn.Bck) error { debug.Assert(false); return nil }
 func (*DummyEntry) Kind() string          { debug.Assert(false); return "" }
@@ -348,6 +353,6 @@ func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.Ob
 	if err := r.delFinishedByID(msg.UUID); err != nil {
 		return RenewRes{&DummyEntry{nil}, err, false}
 	}
-	e := &queFactory{ctx: ctx, t: t, query: q, msg: msg}
+	e := &queEntry{ctx: ctx, t: t, query: q, msg: msg}
 	return r.renewBckXact(e, q.BckSource.Bck)
 }

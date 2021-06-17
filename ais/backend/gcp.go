@@ -79,7 +79,8 @@ func NewGCP(t cluster.Target) (cluster.BackendProvider, error) {
 		projectID = envProjectID
 		glog.Infof("[cloud_gcp] %s: %q (using %q env variable)", projectIDField, projectID, projectIDEnvVar)
 	} else {
-		glog.Warningf("[cloud_gcp] unable to determine %q (%q and %q env vars are empty) - using unauthenticated client", projectIDField, projectIDEnvVar, credPathEnvVar)
+		glog.Warningf("[cloud_gcp] unable to determine %q (%q and %q env vars are empty) - using unauthenticated client",
+			projectIDField, projectIDEnvVar, credPathEnvVar)
 	}
 	return &gcpProvider{t: t, projectID: projectID}, nil
 }
@@ -174,7 +175,8 @@ func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 // LIST OBJECTS //
 //////////////////
 
-func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
+func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList,
+	errCode int, err error) {
 	gcpClient, gctx, err := gcpp.createClient(ctx)
 	if err != nil {
 		return
@@ -265,7 +267,8 @@ func (gcpp *gcpProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (
 			Provider: cmn.ProviderGoogle,
 		})
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("[bucket_names] %s: created %v, versioning %t", battrs.Name, battrs.Created, battrs.VersioningEnabled)
+			glog.Infof("[bucket_names] %s: created %v, versioning %t",
+				battrs.Name, battrs.Created, battrs.VersioningEnabled)
 		}
 	}
 	return

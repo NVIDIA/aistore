@@ -40,6 +40,11 @@ type (
 	}
 )
 
+// interface guard
+var (
+	_ BaseEntry = (*bckSummaryTaskEntry)(nil)
+)
+
 /////////////////////////
 // bckSummaryTaskEntry //
 /////////////////////////

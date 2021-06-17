@@ -13,7 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/query"
 )
 
-type queFactory struct {
+type queEntry struct {
 	BaseBckEntry
 	xact  *query.ObjectsListingXact
 	ctx   context.Context
@@ -22,11 +22,16 @@ type queFactory struct {
 	msg   *cmn.SelectMsg
 }
 
-////////////////
-// queFactory //
-////////////////
+//////////////
+// queEntry //
+//////////////
 
-func (e *queFactory) Start(_ cmn.Bck) (err error) {
+// interface guard
+var (
+	_ BaseEntry = (*queEntry)(nil)
+)
+
+func (e *queEntry) Start(_ cmn.Bck) (err error) {
 	xact := query.NewObjectsListing(e.ctx, e.t, e.query, e.msg)
 	e.xact = xact
 	if query.Registry.Get(e.msg.UUID) != nil {
@@ -35,9 +40,9 @@ func (e *queFactory) Start(_ cmn.Bck) (err error) {
 	return
 }
 
-func (*queFactory) Kind() string        { return cmn.ActQueryObjects }
-func (e *queFactory) Get() cluster.Xact { return e.xact }
+func (*queEntry) Kind() string        { return cmn.ActQueryObjects }
+func (e *queEntry) Get() cluster.Xact { return e.xact }
 
-func (e *queFactory) PreRenewHook(_ BucketEntry) (keep bool, err error) {
+func (e *queEntry) PreRenewHook(_ BucketEntry) (keep bool, err error) {
 	return query.Registry.Get(e.msg.UUID) != nil, nil
 }

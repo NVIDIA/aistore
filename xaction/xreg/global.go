@@ -29,6 +29,7 @@ type (
 		New(args XactArgs) GlobalEntry
 		Kind() string
 	}
+
 	RebalanceArgs struct {
 		ID          xaction.RebID
 		StatTracker stats.Tracker
