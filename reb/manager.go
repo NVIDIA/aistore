@@ -213,7 +213,7 @@ func (reb *Manager) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unp
 	}
 
 	if ack.rebID != reb.RebID() {
-		glog.Warningf("received object %s/%s: %s", hdr.Bck, hdr.ObjName, reb.rebIDMismatchMsg(ack.rebID))
+		glog.Warningf("received %s: %s", hdr.FullName(), reb.rebIDMismatchMsg(ack.rebID))
 		return
 	}
 	tsid := ack.daemonID // the sender
@@ -313,7 +313,7 @@ func (reb *Manager) recvObj(hdr transport.ObjHdr, objReader io.Reader, err error
 	}
 	smap, err := reb.waitForSmap()
 	if err != nil {
-		glog.Errorf("%v: dropping %s/%s", err, hdr.Bck, hdr.ObjName)
+		glog.Errorf("%v: dropping %s", err, hdr.FullName())
 		return
 	}
 
@@ -387,7 +387,7 @@ func (reb *Manager) recvPush(hdr transport.ObjHdr, _ io.Reader, err error) {
 func (*Manager) recvECAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
 	ack := &ecAck{}
 	if err := unpacker.ReadAny(ack); err != nil {
-		glog.Errorf("Failed to unmarshal EC ACK for %s/%s: %v", hdr.Bck, hdr.ObjName, err)
+		glog.Errorf("Failed to unmarshal EC ACK for %s: %v", hdr.FullName(), err)
 		return
 	}
 }

@@ -7,6 +7,7 @@ package cmn
 
 import (
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"strings"
 
@@ -272,6 +273,11 @@ var GetPropsDefault = []string{
 var GetPropsAll = append(GetPropsDefault,
 	GetPropsVersion, GetPropsCached, GetTargetURL, GetPropsStatus, GetPropsCopies, GetPropsEC,
 )
+
+////////////////
+// ArchiveMsg //
+////////////////
+func (msg *ArchiveMsg) FullName() string { return filepath.Join(msg.ToBck.Name, msg.ArchName) }
 
 ///////////////
 // SelectMsg //

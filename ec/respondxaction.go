@@ -194,13 +194,13 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object i
 		)
 		if meta == nil {
 			cos.DrainReader(object)
-			glog.Errorf("%s no metadata in request for %s/%s", r.t.Snode(), hdr.Bck, hdr.ObjName)
+			glog.Errorf("%s: no metadata for %s", r.t.Snode(), hdr.FullName())
 			return
 		}
 
 		if glog.FastV(4, glog.SmoduleEC) {
-			glog.Infof("Got slice=%t from %s (#%d of %s/%s) v%s, chsum: %s",
-				iReq.isSlice, iReq.sender, iReq.meta.SliceID, hdr.Bck, hdr.ObjName, meta.ObjVersion, meta.CksumValue)
+			glog.Infof("Got slice=%t from %s (#%d of %s) v%s, cksum: %s",
+				iReq.isSlice, iReq.sender, iReq.meta.SliceID, hdr.FullName(), meta.ObjVersion, meta.CksumValue)
 		}
 		md := meta.NewPack()
 		if iReq.isSlice {

@@ -151,7 +151,7 @@ var _ = Describe("LOM", func() {
 				lom := &cluster.LOM{FQN: desiredLocalFQN}
 				err := lom.Init(cmn.Bck{})
 				Expect(err).NotTo(HaveOccurred())
-				Expect(lom.BckName()).To(BeEquivalentTo(bucketLocalA))
+				Expect(lom.Bck().Name).To(BeEquivalentTo(bucketLocalA))
 				Expect(lom.ObjName).To(BeEquivalentTo(testObject))
 
 				Expect(lom.Uname()).To(BeEquivalentTo(lom.Bck().MakeUname(testObject)))
@@ -205,7 +205,7 @@ var _ = Describe("LOM", func() {
 				lom := &cluster.LOM{FQN: desiredCloudFQN}
 				err := lom.Init(cmn.Bck{})
 				Expect(err).NotTo(HaveOccurred())
-				Expect(lom.BckName()).To(BeEquivalentTo(bucketCloudA))
+				Expect(lom.Bck().Name).To(BeEquivalentTo(bucketCloudA))
 				Expect(lom.ObjName).To(BeEquivalentTo(testObject))
 
 				Expect(lom.Uname()).To(BeEquivalentTo(lom.Bck().MakeUname(testObject)))

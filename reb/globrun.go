@@ -456,7 +456,7 @@ func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, arg 
 		rj.m.delLomAck(arg.(*cluster.LOM))
 		if bool(glog.FastV(4, glog.SmoduleReb)) || !cos.IsErrConnectionRefused(err) {
 			si := rj.m.t.Snode()
-			glog.Errorf("%s: failed to send o[%s/%s], err: %v", si, hdr.Bck, hdr.ObjName, err)
+			glog.Errorf("%s: failed to send o[%s]: %v", si, hdr.FullName(), err)
 		}
 		return
 	}

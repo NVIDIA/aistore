@@ -103,10 +103,8 @@ func NewGetXact(t cluster.Target, bck cmn.Bck, mgr *Manager) *XactGet {
 	return runner
 }
 
-func (r *XactGet) DispatchResp(iReq intraReq, bck *cluster.Bck, objName string, objAttrs transport.ObjectAttrs,
-	object io.Reader) {
+func (r *XactGet) DispatchResp(iReq intraReq, bck *cluster.Bck, objName string, objAttrs transport.ObjectAttrs, reader io.Reader) {
 	uname := unique(iReq.sender, bck, objName)
-
 	switch iReq.act {
 	// It is response to slice/replica request by an object
 	// restoration process. In this case there should exists
@@ -126,7 +124,7 @@ func (r *XactGet) DispatchResp(iReq intraReq, bck *cluster.Bck, objName string, 
 			return
 		}
 
-		if err := _writerReceive(writer, iReq.exists, objAttrs, object); err != nil {
+		if err := _writerReceive(writer, iReq.exists, objAttrs, reader); err != nil {
 			glog.Errorf("Failed to read replica: %v", err)
 		}
 	default:

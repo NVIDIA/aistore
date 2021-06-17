@@ -404,7 +404,7 @@ func (obj *Obj) IsUnsized() bool    { return obj.Hdr.IsUnsized() }
 func (obj *Obj) Size() int64 { return obj.Hdr.ObjSize() }
 
 func (obj *Obj) String() string {
-	s := fmt.Sprintf("sobj-%s/%s", obj.Hdr.Bck, obj.Hdr.ObjName)
+	s := fmt.Sprintf("sobj-%s", obj.Hdr.FullName())
 	if obj.IsHeaderOnly() {
 		return s
 	}

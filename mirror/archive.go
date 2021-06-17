@@ -8,7 +8,6 @@ import (
 	"archive/tar"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -63,8 +62,6 @@ var (
 	_ cluster.Xact    = (*XactPutArchive)(nil)
 	_ xreg.BckFactory = (*archFactory)(nil)
 )
-
-func _fullname(bucket, obj string) string { return filepath.Join(bucket, obj) }
 
 ////////////////
 // archFactory //
@@ -127,6 +124,8 @@ func (r *XactPutArchive) Begin(msg *cmn.ArchiveMsg) (err error) {
 	if err = lom.Init(msg.ToBck); err != nil {
 		return
 	}
+	debug.Assert(lom.FullName() == msg.FullName()) // relying on it
+
 	work := &zwork{msg: msg, lom: lom}
 	work.fqn = fs.CSM.GenContentFQN(work.lom, fs.WorkfileType, fs.WorkfileAppend)
 
@@ -145,7 +144,7 @@ func (r *XactPutArchive) Begin(msg *cmn.ArchiveMsg) (err error) {
 		work.tw = tar.NewWriter(work.fh)
 	}
 	r.pending.Lock()
-	r.pending.m[_fullname(msg.ToBck.Name, msg.ArchName)] = work
+	r.pending.m[msg.FullName()] = work
 	r.pending.Unlock()
 	return
 }
@@ -160,7 +159,7 @@ func (r *XactPutArchive) Run() {
 	for {
 		select {
 		case msg := <-r.workCh:
-			fullname := _fullname(msg.ToBck.Name, msg.ArchName)
+			fullname := msg.FullName()
 			r.pending.RLock()
 			work := r.pending.m[fullname]
 			r.pending.RUnlock()
@@ -211,7 +210,7 @@ func (r *XactPutArchive) doSend(lom *cluster.LOM, work *zwork, fh cos.ReadOpenCl
 			hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue = cksum.Get()
 		}
 		hdr.ObjAttrs.Version = lom.Version()
-		hdr.Opaque = []byte(_fullname(work.msg.ToBck.Name, work.msg.ArchName)) // NOTE
+		hdr.Opaque = []byte(work.msg.FullName()) // NOTE
 	}
 	o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
 		cluster.FreeLOM(lom)
@@ -306,22 +305,22 @@ func (work *zwork) do(lom *cluster.LOM, r *XactPutArchive) (err error) {
 }
 
 func (work *zwork) addToArch(lom *cluster.LOM, hdr *transport.ObjHdr, reader io.Reader) {
-	header := new(tar.Header)
-	header.Typeflag = tar.TypeReg
+	tarhdr := new(tar.Header)
+	tarhdr.Typeflag = tar.TypeReg
 
 	if lom != nil { // local
-		header.Size = lom.Size()
-		header.ModTime = lom.Atime()
-		header.Name = _fullname(lom.BckName(), lom.ObjName)
+		tarhdr.Size = lom.Size()
+		tarhdr.ModTime = lom.Atime()
+		tarhdr.Name = lom.FullName()
 	} else { // recv
-		header.Size = hdr.ObjAttrs.Size
-		header.ModTime = time.Unix(0, hdr.ObjAttrs.Atime)
-		header.Name = _fullname(hdr.Bck.Name, hdr.ObjName)
+		tarhdr.Size = hdr.ObjAttrs.Size
+		tarhdr.ModTime = time.Unix(0, hdr.ObjAttrs.Atime)
+		tarhdr.Name = hdr.FullName()
 	}
 
 	// one at a time
 	work.mu.Lock()
-	err := work.tw.WriteHeader(header)
+	err := work.tw.WriteHeader(tarhdr)
 	debug.AssertNoErr(err)
 
 	_, err = io.Copy(work.tw, reader)

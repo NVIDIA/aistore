@@ -596,9 +596,9 @@ gfn:
 	}
 
 	if err != nil {
-		err = fmt.Errorf("object %s/%s not found, err: %v", goi.lom.Bck(), goi.lom.ObjName, err)
+		err = fmt.Errorf("%s not found: %v", goi.lom.FullName(), err)
 	} else {
-		err = cmn.NewNotFoundError("object %s/%s", goi.lom.Bck(), goi.lom.ObjName)
+		err = cmn.NewNotFoundError(goi.lom.FullName())
 	}
 	errCode = http.StatusNotFound
 	return
@@ -615,7 +615,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 		Method: http.MethodGet,
 		Base:   tsi.URL(cmn.NetworkIntraData),
 		Header: header,
-		Path:   cmn.URLPathObjects.Join(lom.BckName(), lom.ObjName),
+		Path:   cmn.URLPathObjects.Join(lom.FullName()),
 		Query:  query,
 	}
 	config := cmn.GCO.Get()

@@ -128,7 +128,7 @@ func (r *XactBckEncode) afterECObj(lom *cluster.LOM, err error) {
 		r.ObjectsInc()
 		r.BytesAdd(lom.Size())
 	} else {
-		glog.Errorf("Failed to EC object %s/%s: %v", lom.BckName(), lom.ObjName, err)
+		glog.Errorf("Failed to erasure-code %s: %v", lom.FullName(), err)
 	}
 
 	r.wg.Done()

@@ -855,7 +855,7 @@ type randReaderCtx struct {
 
 func (rrc *randReaderCtx) sentCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ interface{}, err error) {
 	if err != nil {
-		rrc.t.Errorf("sent-callback %d(%s/%s) returned an error: %v", rrc.idx, hdr.Bck, hdr.ObjName, err)
+		rrc.t.Errorf("sent-callback %d(%s) returned an error: %v", rrc.idx, hdr.FullName(), err)
 	}
 	rr := rrc.rr
 	if rr != nil {
@@ -864,7 +864,7 @@ func (rrc *randReaderCtx) sentCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ 
 	rrc.mu.Lock()
 	rrc.posted[rrc.idx] = nil
 	if rrc.idx > 0 && rrc.posted[rrc.idx-1] != nil {
-		rrc.t.Errorf("sent-callback %d(%s/%s) fired out of order", rrc.idx, hdr.Bck, hdr.ObjName)
+		rrc.t.Errorf("sent-callback %d(%s) fired out of order", rrc.idx, hdr.FullName())
 	}
 	rrc.posted[rrc.idx] = nil
 	rrc.mu.Unlock()

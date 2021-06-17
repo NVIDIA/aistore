@@ -1017,7 +1017,7 @@ func (t *targetrunner) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) 
 			Method: http.MethodHead,
 			Header: header,
 			Base:   tsi.URL(cmn.NetworkIntraControl),
-			Path:   cmn.URLPathObjects.Join(lom.BckName(), lom.ObjName),
+			Path:   cmn.URLPathObjects.Join(lom.FullName()),
 			Query:  query,
 		},
 		timeout: config.Timeout.CplaneOperation.D(),

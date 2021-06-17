@@ -186,23 +186,29 @@ func (lom *LOM) AtimeUnix() int64             { return lom.md.atime }
 func (lom *LOM) SetAtimeUnix(tu int64)        { lom.md.atime = tu }
 func (lom *LOM) SetCustomMD(md cos.SimpleKVs) { lom.md.customMD = md }
 func (lom *LOM) CustomMD() cos.SimpleKVs      { return lom.md.customMD }
+
 func (lom *LOM) GetCustomMD(key string) (string, bool) {
 	value, exists := lom.md.customMD[key]
 	return value, exists
 }
+
 func (lom *LOM) ECEnabled() bool { return lom.Bprops().EC.Enabled }
 func (lom *LOM) IsHRW() bool     { return lom.HrwFQN == lom.FQN } // subj to resilvering
 
-func (lom *LOM) ObjectName() string           { return lom.ObjName }
-func (lom *LOM) Bck() *Bck                    { return lom.bck }
-func (lom *LOM) Bucket() cmn.Bck              { return lom.bck.Bucket() } // as fs.PartsFQN
-func (lom *LOM) BckName() string              { return lom.bck.Name }
-func (lom *LOM) Bprops() *cmn.BucketProps     { return lom.bck.Props }
-func (lom *LOM) MpathInfo() *fs.MountpathInfo { return lom.mpathInfo }
+func (lom *LOM) Bck() *Bck                { return lom.bck }
+func (lom *LOM) Bprops() *cmn.BucketProps { return lom.bck.Props }
 
 func (lom *LOM) MirrorConf() *cmn.MirrorConf  { return &lom.Bprops().Mirror }
 func (lom *LOM) CksumConf() *cmn.CksumConf    { return lom.bck.CksumConf() }
 func (lom *LOM) VersionConf() cmn.VersionConf { return lom.bck.VersionConf() }
+
+// as fs.PartsFQN
+func (lom *LOM) ObjectName() string           { return lom.ObjName }
+func (lom *LOM) Bucket() cmn.Bck              { return lom.bck.Bucket() } // as fs.PartsFQN
+func (lom *LOM) MpathInfo() *fs.MountpathInfo { return lom.mpathInfo }
+
+// see also: transport.ObjHdr.FullName()
+func (lom *LOM) FullName() string { return filepath.Join(lom.bck.Name, lom.ObjName) }
 
 func (lom *LOM) WritePolicy() (p cmn.MDWritePolicy) {
 	if bprops := lom.Bprops(); bprops == nil {
@@ -248,9 +254,9 @@ func (lom *LOM) FromHTTPHdr(hdr http.Header) {
 	}
 }
 
-///////////////////////////
-// local copy management //
-///////////////////////////
+/////////////////////
+// copy management //
+/////////////////////
 
 func (lom *LOM) _whingeCopy() (yes bool) {
 	if !lom.IsCopy() {
@@ -264,7 +270,7 @@ func (lom *LOM) _whingeCopy() (yes bool) {
 
 func (lom *LOM) HasCopies() bool { return lom.NumCopies() > 1 }
 
-// NumCopies returns number of copies: different mountpaths + itself.
+// NumCopies returns a total number of copies: other  mountpaths + self.
 func (lom *LOM) NumCopies() int {
 	if len(lom.md.copies) == 0 {
 		return 1
@@ -914,7 +920,7 @@ func (lom *LOM) Load(cacheit, locked bool) (err error) {
 		return
 	}
 	bid := lom.Bprops().BID
-	debug.AssertMsg(bid != 0, lom.BckName()+"/"+lom.ObjName)
+	debug.AssertMsg(bid != 0, lom.FullName())
 	if bid == 0 {
 		return
 	}

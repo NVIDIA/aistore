@@ -8,6 +8,7 @@ package transport
 import (
 	"fmt"
 	"io"
+	"path/filepath"
 	"reflect"
 	"time"
 	"unsafe"
@@ -94,6 +95,9 @@ type (
 	ReceiveObj func(hdr ObjHdr, object io.Reader, err error)
 	ReceiveMsg func(msg Msg, err error)
 )
+
+// see also: lom.FullName()
+func (hdr *ObjHdr) FullName() string { return filepath.Join(hdr.Bck.Name, hdr.ObjName) }
 
 ///////////////////
 // object stream //

@@ -309,7 +309,7 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 }
 
 func (obj *objReader) String() string {
-	return fmt.Sprintf("%s/%s(size=%d)", obj.hdr.Bck, obj.hdr.ObjName, obj.Size())
+	return fmt.Sprintf("%s(size=%d)", obj.hdr.FullName(), obj.Size())
 }
 
 func (obj *objReader) Size() int64     { return obj.hdr.ObjSize() }

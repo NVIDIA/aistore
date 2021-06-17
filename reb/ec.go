@@ -222,13 +222,13 @@ func (reb *Manager) recvECData(hdr transport.ObjHdr, unpacker *cos.ByteUnpack, r
 
 	if req.action == rebActUpdateMD {
 		if err := reb.receiveMD(req, hdr); err != nil {
-			glog.Errorf("failed to receive MD for %s/%s: %v", hdr.Bck, hdr.ObjName, err)
+			glog.Errorf("failed to receive MD for %s: %v", hdr.FullName(), err)
 		}
 		return
 	}
 
 	if err := reb.receiveCT(req, hdr, reader); err != nil {
-		glog.Errorf("failed to receive CT for %s/%s: %v", hdr.Bck, hdr.ObjName, err)
+		glog.Errorf("failed to receive CT for %s: %v", hdr.FullName(), err)
 	}
 }
 

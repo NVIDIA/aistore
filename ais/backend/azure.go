@@ -489,7 +489,7 @@ func (ap *azureProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *clust
 func (ap *azureProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (int, error) {
 	var (
 		cloudBck = lom.Bck().RemoteBck()
-		cntURL   = ap.s.NewContainerURL(lom.BckName())
+		cntURL   = ap.s.NewContainerURL(lom.Bck().Name)
 		blobURL  = cntURL.NewBlobURL(lom.ObjName)
 		cond     = azblob.ModifiedAccessConditions{}
 	)

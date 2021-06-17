@@ -85,7 +85,7 @@ func (mgr *Manager) initECBundles() error {
 
 	cbReq := func(hdr transport.ObjHdr, reader io.ReadCloser, _ interface{}, err error) {
 		if err != nil {
-			glog.Errorf("failed to request %s/%s: %v", hdr.Bck, hdr.ObjName, err)
+			glog.Errorf("failed to request %s: %v", hdr.FullName(), err)
 		}
 	}
 

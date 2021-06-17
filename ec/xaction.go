@@ -231,7 +231,7 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 	cb := func(hdr transport.ObjHdr, _ io.ReadCloser, _ interface{}, err error) {
 		r.t.SmallMMSA().Free(hdr.Opaque)
 		if err != nil {
-			glog.Errorf("Failed to send %s/%s: %v", hdr.Bck, hdr.ObjName, err)
+			glog.Errorf("Failed to send %s: %v", hdr.FullName(), err)
 		}
 		r.DecPending()
 	}
