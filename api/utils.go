@@ -97,6 +97,7 @@ func doHTTPRequestGetRespReader(reqParams ReqParams) (io.ReadCloser, error) {
 	}
 
 	if err := checkResp(reqParams, resp); err != nil {
+		resp.Body.Close()
 		return nil, err
 	}
 

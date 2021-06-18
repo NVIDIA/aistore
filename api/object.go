@@ -6,6 +6,7 @@ package api
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -416,19 +417,29 @@ func PromoteFileOrDir(args *PromoteArgs) error {
 // Should be used for PUT requests as it puts reader into a request.
 //
 // NOTE: always closes request body reader (reqArgs.BodyR) - explicitly or via Do()
+// TODO: this code must be totally revised
 func DoReqWithRetry(client *http.Client, newRequest func(_ cmn.ReqArgs) (*http.Request, error),
 	reqArgs cmn.ReqArgs) (resp *http.Response, err error) {
 	var (
-		r     io.ReadCloser
-		req   *http.Request
-		sleep = httpRetrySleep
+		r      io.ReadCloser
+		req    *http.Request
+		doErr  error
+		sleep  = httpRetrySleep
+		reader = reqArgs.BodyR.(cos.ReadOpenCloser)
 	)
-	reader := reqArgs.BodyR.(cos.ReadOpenCloser)
+	cleanup := func() {
+		if doErr == nil {
+			resp.Body.Close() // NOTE: not returning err close
+		}
+	}
 	if req, err = newRequest(reqArgs); err != nil {
 		cos.Close(reader)
 		return
 	}
-	if resp, err = client.Do(req); !shouldRetryHTTP(err, resp) {
+	resp, doErr = client.Do(req)
+	defer cleanup()
+	if !shouldRetryHTTP(doErr, resp) {
+		err = doErr
 		goto exit
 	}
 	if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
@@ -438,16 +449,20 @@ func DoReqWithRetry(client *http.Client, newRequest func(_ cmn.ReqArgs) (*http.R
 		time.Sleep(sleep)
 		sleep += sleep / 2
 
+		cos.Close(reader)
 		if r, err = reader.Open(); err != nil {
 			return
 		}
 		reqArgs.BodyR = r
 
 		if req, err = newRequest(reqArgs); err != nil {
-			cos.Close(reader)
+			cos.Close(r)
 			return
 		}
-		if resp, err = client.Do(req); !shouldRetryHTTP(err, resp) {
+		cleanup()
+		doErr = errors.New("dummy")
+		if resp, doErr = client.Do(req); !shouldRetryHTTP(doErr, resp) {
+			err = doErr
 			goto exit
 		}
 	}
@@ -456,9 +471,6 @@ exit:
 		return nil, fmt.Errorf("failed to %s, err: %v", reqArgs.Method, err)
 	}
 	_, err = readResp(ReqParams{}, resp, nil)
-	if errC := resp.Body.Close(); err == nil {
-		return resp, errC
-	}
 	return
 }
 

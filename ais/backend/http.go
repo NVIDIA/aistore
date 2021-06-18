@@ -82,6 +82,7 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 	if err != nil {
 		return nil, http.StatusBadRequest, err
 	}
+	resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		err = fmt.Errorf("HEAD(%s) failed, status %d", origURL, resp.StatusCode)
@@ -93,8 +94,6 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 		err = fmt.Errorf("invalid resource - missing header %s", cmn.HdrETag)
 		return nil, http.StatusBadRequest, err
 	}
-
-	resp.Body.Close()
 
 	bckProps = make(cos.SimpleKVs)
 	bckProps[cmn.HdrBackendProvider] = cmn.ProviderHTTP
@@ -182,7 +181,8 @@ func (hp *httpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode i
 	return
 }
 
-func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cos.Cksum, errCode int, err error) {
+func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cos.Cksum,
+	errCode int, err error) {
 	var (
 		h   = cmn.BackendHelpers.HTTP
 		bck = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().RemoteBck()`
