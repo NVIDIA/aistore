@@ -615,7 +615,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 		Method: http.MethodGet,
 		Base:   tsi.URL(cmn.NetworkIntraData),
 		Header: header,
-		Path:   cmn.URLPathObjects.Join(lom.FullName()),
+		Path:   cmn.URLPathObjects.Join(lom.Bck().Name, lom.ObjName),
 		Query:  query,
 	}
 	config := cmn.GCO.Get()

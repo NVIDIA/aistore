@@ -674,6 +674,7 @@ func (t *targetrunner) putArchive(c *txnServerCtx) error {
 		}
 		txnArch := txn.(*txnPutArchive)
 		txnArch.xarch.Do(txnArch.msg)
+		t.transactions.find(c.uuid, cmn.ActCommit)
 	}
 	return nil
 }
