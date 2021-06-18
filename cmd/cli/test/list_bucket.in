@@ -11,7 +11,7 @@ ais ls | grep "Buckets" | awk {'print tolower($1)'} | paste -sd "," - // Gathers
 
 ais ls s3:// // IGNORE
 ais ls aws:// // IGNORE
-ais ls aws://$BUCKET_1/ // FAIL "cannot lookup cloud bucket "aws://$BUCKET_1""
+ais ls aws://$BUCKET_1/ // FAIL "cloud bucket "aws://$BUCKET_1""
 ais ls az:// // IGNORE
 ais ls azure:// // IGNORE
 ais ls gs:// // IGNORE
