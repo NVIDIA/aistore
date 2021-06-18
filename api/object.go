@@ -6,7 +6,6 @@ package api
 
 import (
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -421,35 +420,35 @@ func PromoteFileOrDir(args *PromoteArgs) error {
 func DoReqWithRetry(client *http.Client, newRequest func(_ cmn.ReqArgs) (*http.Request, error),
 	reqArgs cmn.ReqArgs) (resp *http.Response, err error) {
 	var (
-		r      io.ReadCloser
 		req    *http.Request
 		doErr  error
 		sleep  = httpRetrySleep
 		reader = reqArgs.BodyR.(cos.ReadOpenCloser)
 	)
 	cleanup := func() {
-		if doErr == nil {
+		if resp != nil && doErr == nil {
 			resp.Body.Close() // NOTE: not returning err close
 		}
 	}
+	// first time
 	if req, err = newRequest(reqArgs); err != nil {
 		cos.Close(reader)
 		return
 	}
 	resp, doErr = client.Do(req)
+	err = doErr
 	defer cleanup()
 	if !shouldRetryHTTP(doErr, resp) {
-		err = doErr
 		goto exit
 	}
 	if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
 		sleep = httpRetryRateSleep
 	}
+	// retry
 	for i := 0; i < httpMaxRetries; i++ {
+		var r io.ReadCloser
 		time.Sleep(sleep)
 		sleep += sleep / 2
-
-		cos.Close(reader)
 		if r, err = reader.Open(); err != nil {
 			return
 		}
@@ -460,9 +459,9 @@ func DoReqWithRetry(client *http.Client, newRequest func(_ cmn.ReqArgs) (*http.R
 			return
 		}
 		cleanup()
-		doErr = errors.New("dummy")
-		if resp, doErr = client.Do(req); !shouldRetryHTTP(doErr, resp) {
-			err = doErr
+		resp, doErr = client.Do(req)
+		err = doErr
+		if !shouldRetryHTTP(doErr, resp) {
 			goto exit
 		}
 	}
