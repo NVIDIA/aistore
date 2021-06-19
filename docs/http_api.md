@@ -5,6 +5,7 @@
 - [Overview](#overview)
 - [API Reference](#api-reference)
 - [Backend Provider](#bucket-provider)
+- [Curl Examples](#curl-examples)
 - [Querying information](#querying-information)
 - [Example: querying runtime statistics](#example-querying-runtime-statistics)
 - [ETL](#etl)
@@ -147,13 +148,27 @@ Any storage bucket that AIS handles may originate in a 3rd party Cloud, or in an
 
 > Backend provider is realized as an optional parameter across all AIStore APIs that handle access to user data and bucket configuration. The list (of those APIs) includes GET, PUT, DELETE and [Range/List](batch.md) operations. For supported backend providers, please refer to [Providers](providers.md) and/or [Buckets: introduction and detailed overview](bucket.md) documents.
 
-Curl example: `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?provider=ais'`
-
 For even more information, CLI examples, and the most recent updates, please see:
 - [Backend Providers](providers.md)
 - [CLI: operations on buckets](/cmd/cli/resources/bucket.md)
 - [CLI: operations on objects](/cmd/cli/resources/object.md)
 - [On-Disk Layout](on-disk-layout.md)
+
+### Curl Examples
+
+```console
+# List a given AWS bucket
+$ curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?provider=aws'
+
+# Using locally deployed AIS, get archived file from a remote named tar:
+$ curl -L -X GET 'http://localhost:8080/v1/objects/myGCPbucket/train-1234.tar?provider=gcp&archpath=567.jpg' --output /tmp/567.jpg
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   201  100   201    0     0   196k      0 --:--:-- --:--:-- --:--:--  196k
+100 44327  100 44327    0     0  2404k      0 --:--:-- --:--:-- --:--:-- 2404k
+$ file /tmp/567.jpg
+/tmp/567.jpg: JPEG image data, JFIF standard 1.01, aspect ratio, density 1x1, segment length 16, baseline, precision 8, 294x312, frames 3
+```
 
 #### Supported APIs
 

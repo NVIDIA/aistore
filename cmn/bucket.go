@@ -396,6 +396,10 @@ func ParseUname(uname string) (b Bck, objName string) {
 // Is-Whats
 //
 
+func IsCloudProvider(p string) bool {
+	return p == ProviderAmazon || p == ProviderGoogle || p == ProviderAzure
+}
+
 func (n Ns) IsGlobal() bool    { return n == NsGlobal }
 func (n Ns) IsAnyRemote() bool { return n == NsAnyRemote }
 func (n Ns) IsRemote() bool    { return n.UUID != "" }
@@ -435,7 +439,7 @@ func (b Bck) IsCloud() bool {
 		debug.Assert(bck.IsCloud()) // Currently, backend bucket is always cloud.
 		return bck.IsCloud()
 	}
-	return b.Provider == ProviderAmazon || b.Provider == ProviderAzure || b.Provider == ProviderGoogle
+	return IsCloudProvider(b.Provider)
 }
 
 func (b Bck) HasProvider() bool {
@@ -451,6 +455,8 @@ func (query QueryBcks) String() string    { return Bck(query).String() }
 func (query QueryBcks) IsAIS() bool       { return Bck(query).IsAIS() }
 func (query QueryBcks) IsHDFS() bool      { return Bck(query).IsHDFS() }
 func (query QueryBcks) IsRemoteAIS() bool { return Bck(query).IsRemoteAIS() }
+func (query QueryBcks) IsCloud() bool     { return IsCloudProvider(query.Provider) }
+
 func (query *QueryBcks) Validate() (err error) {
 	if query.Name != "" {
 		bck := Bck(*query)

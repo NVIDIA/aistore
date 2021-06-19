@@ -9,13 +9,9 @@ ais ls ais://$BUCKET_1/
 
 ais ls | grep "Buckets" | awk {'print tolower($1)'} | paste -sd "," - // Gathers backend providers from headers.
 
-ais ls s3:// // IGNORE
-ais ls aws:// // IGNORE
 ais ls aws://$BUCKET_1/ // FAIL "cloud bucket "aws://$BUCKET_1""
-ais ls az:// // IGNORE
-ais ls azure:// // IGNORE
-ais ls gs:// // IGNORE
-ais ls gcp:// // IGNORE
+ais ls az:// // FAIL "backend"
+ais ls azure:// // FAIL "backend"
 
 ais ls #ns // IGNORE
 ais ls @ // IGNORE

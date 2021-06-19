@@ -75,11 +75,19 @@ func TestListBuckets(t *testing.T) {
 	for _, bck := range bcks {
 		fmt.Fprintf(os.Stdout, "  provider: %s, name: %s, ns: %s\n", bck.Provider, bck.Name, bck.Ns)
 	}
-
+	config := tutils.GetClusterConfig(t)
 	for _, provider := range []string{cmn.ProviderAmazon, cmn.ProviderGoogle, cmn.ProviderAzure, cmn.ProviderHDFS} {
+		_, configured := config.Backend.Providers[provider]
 		query := cmn.QueryBcks{Provider: provider}
 		remoteBuckets, err := api.ListBuckets(baseParams, query)
-		tassert.CheckError(t, err)
+		if err != nil {
+			if !configured {
+				continue
+			}
+			tassert.CheckError(t, err)
+		} else if cmn.IsCloudProvider(provider) && !configured {
+			t.Fatalf("%q is not configured: expecting list-buckets to fail, got %v\n", provider, remoteBuckets)
+		}
 		if len(remoteBuckets) != len(bcks.Select(query)) {
 			t.Fatalf("%s: remote buckets: %d != %d\n", provider, len(remoteBuckets), len(bcks.Select(query)))
 		}

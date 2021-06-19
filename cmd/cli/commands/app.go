@@ -119,7 +119,6 @@ func (aisCLI *AISCLI) handleCLIError(err error) error {
 	if err == nil {
 		return nil
 	}
-
 	var (
 		red          = color.New(color.FgRed).SprintFunc()
 		prepareError = func(msg string) error {
@@ -130,11 +129,10 @@ func (aisCLI *AISCLI) handleCLIError(err error) error {
 	)
 
 	if isUnreachableError(err) {
-		return fmt.Errorf(
-			red("AIStore proxy unreachable at %s. You may need to update environment variable AIS_ENDPOINT"),
-			clusterURL)
+		errmsg := red(fmt.Sprintf("AIStore cannot be reached at %s.", clusterURL))
+		return fmt.Errorf("%s Make sure to set environment variable %s=<gateway's hostname:port>",
+			errmsg, cmn.EnvVars.Endpoint)
 	}
-
 	switch err := err.(type) {
 	case *cmn.ErrHTTP:
 		return prepareError(err.Message)

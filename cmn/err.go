@@ -405,16 +405,14 @@ func (e *ErrNotFound) Error() string { return e.what + " does not exist" }
 
 func (e *ErrInitBackend) Error() string {
 	return fmt.Sprintf(
-		"cannot initialize %q backend (as per cluster config): missing %s-supporting libraries in the build",
+		"cannot initialize %q backend (present in the cluster configuration): missing %s-supporting libraries in the build",
 		e.Provider, e.Provider,
 	)
 }
 
 func (e *ErrMissingBackend) Error() string {
 	return fmt.Sprintf(
-		"%q backend is missing in the cluster config (consider redeploying with -override_backends command-line and %s-supporting libraries)",
-		e.Provider, e.Provider,
-	)
+		"%q backend is missing in the cluster configuration. Hint: consider redeploying with -override_backends command-line and the corresponding build tag.", e.Provider)
 }
 
 func NewETLError(ctx *ETLErrorContext, format string, a ...interface{}) *ErrETL {

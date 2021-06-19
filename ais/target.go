@@ -1298,17 +1298,17 @@ func (t *targetrunner) CheckRemoteVersion(ctx context.Context, lom *cluster.LOM)
 }
 
 func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query cmn.QueryBcks) {
+	const fmterr = "failed to list %q buckets: [%v]"
 	var (
 		bcks   cmn.Bcks
 		code   int
 		err    error
 		config = cmn.GCO.Get()
 	)
-
 	if query.Provider != "" {
 		bcks, code, err = t._listBcks(query, config)
 		if err != nil {
-			t.writeErrStatusf(w, r, code, "failed to list buckets for %q, err: %v", query, err)
+			t.writeErrStatusf(w, r, code, fmterr, query, err)
 			return
 		}
 	} else /* all providers */ {
@@ -1317,8 +1317,13 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query
 			query.Provider = provider
 			buckets, code, err = t._listBcks(query, config)
 			if err != nil {
-				t.writeErrStatusf(w, r, code, "failed to list buckets for %q, err: %v", query, err)
-				return
+				if provider == cmn.ProviderAIS {
+					t.writeErrStatusf(w, r, code, fmterr, query, err)
+					return
+				}
+				if glog.FastV(4, glog.SmoduleAIS) {
+					glog.Warningf(fmterr, query, err)
+				}
 			}
 			bcks = append(bcks, buckets...)
 		}

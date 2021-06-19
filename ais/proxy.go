@@ -416,7 +416,6 @@ func (p *proxyrunner) handleList(w http.ResponseWriter, r *http.Request, queryBc
 			p.writeErr(w, r, err, http.StatusUnauthorized)
 			return
 		}
-
 		p.listBuckets(w, r, queryBcks, msg)
 	} else {
 		var (
@@ -1608,11 +1607,19 @@ func (p *proxyrunner) reverseReqRemote(w http.ResponseWriter, r *http.Request, m
 
 func (p *proxyrunner) listBuckets(w http.ResponseWriter, r *http.Request, query cmn.QueryBcks, msg *cmn.ActionMsg) {
 	bmd := p.owner.bmd.get()
-	// HDFS doesn't support listing remote buckets (there are no remote buckets).
-	if query.IsAIS() || query.IsHDFS() {
-		bcks := selectBMDBuckets(bmd, query)
-		p.writeJSON(w, r, bcks, listBuckets)
-		return
+	if query.Provider != "" {
+		if query.IsAIS() || query.IsHDFS() {
+			bcks := selectBMDBuckets(bmd, query)
+			p.writeJSON(w, r, bcks, listBuckets)
+			return
+		} else if query.IsCloud() {
+			config := cmn.GCO.Get()
+			if _, ok := config.Backend.Providers[query.Provider]; !ok {
+				err := &cmn.ErrMissingBackend{Provider: query.Provider}
+				p.writeErrf(w, r, "cannot list %q bucket: %v", query, err)
+				return
+			}
+		}
 	}
 	si, err := p.owner.smap.get().GetRandTarget()
 	if err != nil {
@@ -2526,7 +2533,7 @@ func (p *proxyrunner) httpCloudHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Scheme == "" {
-		p.writeErrMsg(w, r, "invalid protocol scheme ''")
+		p.writeErrf(w, r, "invalid (empty) protocol scheme OR invalid URL path '%s'", r.URL.Path)
 		return
 	}
 	baseURL := r.URL.Scheme + "://" + r.URL.Host

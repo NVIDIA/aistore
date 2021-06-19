@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"cloud.google.com/go/storage"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -69,7 +70,7 @@ func NewGCP(t cluster.Target) (cluster.BackendProvider, error) {
 	)
 	if credProjectID != "" && envProjectID != "" && credProjectID != envProjectID {
 		return nil, fmt.Errorf(
-			"both %q and %q env vars are non-empty (and %s is not equal) cannot decide which to use",
+			"both %q and %q env vars are non-empty (and not equal %s) - cannot decide which to use",
 			projectIDEnvVar, credPathEnvVar, projectIDField,
 		)
 	} else if credProjectID != "" {
@@ -90,14 +91,18 @@ func (gcpp *gcpProvider) createClient(ctx context.Context) (*storage.Client, con
 	if gcpp.projectID == "" {
 		opts = append(opts, option.WithoutAuthentication())
 	}
-
-	// Create a custom HTTP client
+	// create HTTP transport
 	transport, err := htransport.NewTransport(ctx, cmn.NewTransport(cmn.TransportArgs{}), opts...)
 	if err != nil {
+		if strings.Contains(err.Error(), "credentials") {
+			details := fmt.Sprintf("%s Hint: check your %q and %q environment settings for project ID=%q.",
+				err, projectIDEnvVar, credPathEnvVar, gcpp.projectID)
+			return nil, nil, errors.New(details)
+		}
 		return nil, nil, fmt.Errorf(cmn.FmtErrFailed, cmn.ProviderGoogle, "create", "http transport", err)
 	}
 	opts = append(opts, option.WithHTTPClient(&http.Client{Transport: transport}))
-
+	// create HTTP client
 	client, err := storage.NewClient(ctx, opts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf(cmn.FmtErrFailed, cmn.ProviderGoogle, "create", "client", err)
@@ -240,9 +245,9 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 
 func (gcpp *gcpProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	if gcpp.projectID == "" {
-		// NOTE: Passing empty `projectID` to `Buckets` method results in
-		//  enigmatic error: "googleapi: Error 400: Invalid argument".
-		return nil, http.StatusBadRequest, errors.New("listing buckets with the unauthenticated client is not possible")
+		// NOTE: empty `projectID` results in obscure: "googleapi: Error 400: Invalid argument"
+		return nil, http.StatusBadRequest,
+			errors.New("empty project ID: cannot list GCP buckets with no authentication")
 	}
 	gcpClient, gctx, err := gcpp.createClient(ctx)
 	if err != nil {
