@@ -11,8 +11,14 @@ import (
 	"github.com/NVIDIA/aistore/bench/aisloader"
 )
 
+var (
+	version   = "1.2"
+	build     string
+	buildtime string
+)
+
 func main() {
-	if err := aisloader.Start(); err != nil {
+	if err := aisloader.Start(version, build, buildtime); err != nil {
 		fmt.Fprintf(os.Stderr, "aisloader exited with error: %v\n", err)
 		os.Exit(1)
 	}

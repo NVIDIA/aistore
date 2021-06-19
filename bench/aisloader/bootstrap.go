@@ -76,11 +76,6 @@ const (
 	randomObjNameLen = 32
 )
 
-var (
-	version = "1.0"
-	build   string
-)
-
 type (
 	workOrder struct {
 		op        int
@@ -207,6 +202,8 @@ var (
 	envEndpoint = os.Getenv(cmn.EnvVars.Endpoint)
 )
 
+var _version, _build, _buildtime string
+
 func (wo *workOrder) String() string {
 	var errstr, opName string
 	switch wo.op {
@@ -326,7 +323,7 @@ func parseCmdLine() (params, error) {
 		os.Exit(0)
 	}
 	if flagVersion || f.NArg() != 0 && f.Arg(0) == "version" {
-		fmt.Printf("version %s, build %s\n", version, build)
+		fmt.Printf("version %s, build %s (build-time: %s)\n", _version, _build, _buildtime)
 		os.Exit(0)
 	}
 	if !p.cleanUp.IsSet && p.bck.Name != "" {
@@ -677,12 +674,12 @@ func getIDFromString(val string, hashLen uint) uint64 {
 	return hash
 }
 
-func Start() error {
+func Start(version, build, buildtime string) error {
 	var (
 		wg  = &sync.WaitGroup{}
 		err error
 	)
-
+	_version, _build, _buildtime = version, build, buildtime
 	runParams, err = parseCmdLine()
 	if err != nil {
 		return err
