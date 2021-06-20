@@ -1565,7 +1565,7 @@ func icSinglePrimaryRevamp(t *testing.T) {
 		smap, err = tutils.WaitForClusterState(proxyURL,
 			"restore node "+cmd.Node.ID(), smap.Version,
 			smap.CountActiveProxies()+1, smap.CountTargets())
-		tassert.CheckError(t, err)
+		tassert.CheckFatal(t, err)
 
 		baseParams = tutils.BaseAPIParams(cmd.Node.URL(cmn.NetworkPublic))
 		_, err = api.GetXactionStatus(baseParams, xactArgs)
