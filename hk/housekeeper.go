@@ -15,10 +15,12 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 )
 
 const (
-	DayInterval = 24 * time.Hour
+	DayInterval   = 24 * time.Hour
+	UnregInterval = 365 * DayInterval
 )
 
 type (
@@ -35,7 +37,7 @@ type (
 	timedAction struct {
 		name       string
 		f          CleanupFunc
-		updateTime time.Time
+		updateTime int64
 	}
 	timedActions []timedAction
 
@@ -65,11 +67,16 @@ func init() {
 	heap.Init(DefaultHK.actions)
 }
 
+//////////////////
+// timedActions //
+//////////////////
+
 func (tc timedActions) Len() int            { return len(tc) }
-func (tc timedActions) Less(i, j int) bool  { return tc[i].updateTime.Before(tc[j].updateTime) }
+func (tc timedActions) Less(i, j int) bool  { return tc[i].updateTime < tc[j].updateTime }
 func (tc timedActions) Swap(i, j int)       { tc[i], tc[j] = tc[j], tc[i] }
 func (tc timedActions) Peek() *timedAction  { return &tc[0] }
 func (tc *timedActions) Push(x interface{}) { *tc = append(*tc, x.(timedAction)) }
+
 func (tc *timedActions) Pop() interface{} {
 	old := *tc
 	n := len(old)
@@ -77,6 +84,10 @@ func (tc *timedActions) Pop() interface{} {
 	*tc = old[0 : n-1]
 	return item
 }
+
+/////////////////
+// housekeeper //
+/////////////////
 
 func Reg(name string, f CleanupFunc, initialInterval ...time.Duration) {
 	var interval time.Duration
@@ -118,36 +129,32 @@ func (hk *housekeeper) Run() (err error) {
 			if hk.actions.Len() == 0 {
 				break
 			}
-
 			// Run callback and update the item in the heap.
 			item := hk.actions.Peek()
 			interval := item.f()
-			item.updateTime = time.Now().Add(interval)
-			heap.Fix(hk.actions, 0)
-
+			if interval == UnregInterval {
+				heap.Remove(hk.actions, 0)
+			} else {
+				item.updateTime = mono.NanoTime() + interval.Nanoseconds()
+				heap.Fix(hk.actions, 0)
+			}
 			hk.updateTimer()
 		case req := <-hk.workCh:
 			if req.registering {
-				cos.AssertMsg(req.f != nil, req.name)
+				debug.AssertMsg(req.f != nil, req.name)
+				debug.AssertMsg(req.initialInterval != UnregInterval, req.name) // cannot reg w/unreg
+				debug.AssertMsg(hk.byName(req.name) == -1, req.name)            // duplicate name
+
 				initialInterval := req.initialInterval
 				if req.initialInterval == 0 {
 					initialInterval = req.f()
 				}
-				heap.Push(hk.actions, timedAction{
-					name:       req.name,
-					f:          req.f,
-					updateTime: time.Now().Add(initialInterval),
-				})
+				nt := mono.NanoTime() + initialInterval.Nanoseconds() // next time
+				heap.Push(hk.actions, timedAction{name: req.name, f: req.f, updateTime: nt})
 			} else {
-				foundIdx := -1
-				for idx, tc := range *hk.actions {
-					if tc.name == req.name {
-						foundIdx = idx
-						break
-					}
-				}
-				debug.Assertf(foundIdx != -1, "cleanup func %q does not exist", req.name)
-				heap.Remove(hk.actions, foundIdx)
+				idx := hk.byName(req.name)
+				debug.AssertMsg(idx >= 0, req.name)
+				heap.Remove(hk.actions, idx)
 			}
 			hk.updateTimer()
 		case s, ok := <-hk.sigCh:
@@ -166,7 +173,17 @@ func (hk *housekeeper) updateTimer() {
 		hk.timer.Stop()
 		return
 	}
-	hk.timer.Reset(time.Until(hk.actions.Peek().updateTime))
+	d := hk.actions.Peek().updateTime - mono.NanoTime()
+	hk.timer.Reset(time.Duration(d))
+}
+
+func (hk *housekeeper) byName(name string) int {
+	for i, tc := range *hk.actions {
+		if tc.name == name {
+			return i
+		}
+	}
+	return -1
 }
 
 func (*housekeeper) Stop(_ error) { DefaultHK.stopCh.Close() }

@@ -520,7 +520,7 @@ func (e *entries) del(id string) error {
 	for idx, entry := range e.active {
 		xact := entry.Get()
 		if xact.ID().String() == id {
-			debug.Assert(xact.Finished())
+			debug.AssertMsg(xact.Finished(), xact.String())
 			nlen := len(e.active) - 1
 			e.active[idx] = e.active[nlen]
 			e.active = e.active[:nlen]

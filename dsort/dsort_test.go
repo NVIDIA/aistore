@@ -148,7 +148,7 @@ func newTargetMock(daemonID string, smap *testSmap) *targetNodeMock {
 	}
 
 	db := dbdriver.NewDBMock()
-	dsortManagers := NewManagerGroup(db)
+	dsortManagers := NewManagerGroup(db, true /*skip hk*/)
 	dsortManager, err := dsortManagers.Add(globalManagerUUID)
 	Expect(err).ShouldNot(HaveOccurred())
 	ctx.node = smap.Get().Tmap[daemonID]

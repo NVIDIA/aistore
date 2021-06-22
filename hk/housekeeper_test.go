@@ -19,11 +19,11 @@ import (
 var _ = Describe("Housekeeper", func() {
 	It("should register the callback and fire it", func() {
 		fired := false
-		hk.Reg("", func() time.Duration {
+		hk.Reg("foo", func() time.Duration {
 			fired = true
 			return time.Second
 		})
-
+		defer hk.Unreg("foo")
 		time.Sleep(20 * time.Millisecond)
 		Expect(fired).To(BeTrue()) // callback should be fired at the start
 		fired = false
@@ -37,10 +37,11 @@ var _ = Describe("Housekeeper", func() {
 
 	It("should register the callback and fire it after initial interval", func() {
 		fired := false
-		hk.Reg("", func() time.Duration {
+		hk.Reg("foo", func() time.Duration {
 			fired = true
 			return time.Second
 		}, time.Second)
+		defer hk.Unreg("foo")
 
 		time.Sleep(500 * time.Millisecond)
 		Expect(fired).To(BeFalse())
@@ -55,10 +56,12 @@ var _ = Describe("Housekeeper", func() {
 			fired[0] = true
 			return 2 * time.Second
 		})
+		defer hk.Unreg("foo")
 		hk.Reg("bar", func() time.Duration {
 			fired[1] = true
 			return time.Second + 500*time.Millisecond
 		})
+		defer hk.Unreg("bar")
 
 		time.Sleep(20 * time.Millisecond)
 		// "foo" and "bar" should fire at the start (no initial interval)
@@ -103,10 +106,9 @@ var _ = Describe("Housekeeper", func() {
 		}, 200*time.Millisecond)
 
 		time.Sleep(500 * time.Millisecond)
-		Expect(fired[0] && fired[1]).To(BeTrue()) // after ~2sec both callback should fire
+		Expect(fired[0] && fired[1]).To(BeTrue())
 
-		fired[0] = false
-		fired[1] = false
+		fired[0], fired[1] = false, false
 		hk.Unreg("foo")
 
 		time.Sleep(time.Second)
@@ -114,6 +116,31 @@ var _ = Describe("Housekeeper", func() {
 		Expect(fired[0]).To(BeTrue())
 
 		hk.Unreg("bar")
+	})
+
+	It("should unregister callback that returns UnregInterval", func() {
+		for i := 0; i < 3; i++ {
+			fired := make([]bool, 2)
+			hk.Reg("bar", func() time.Duration {
+				fired[0] = true
+				return 400 * time.Millisecond
+			}, 400*time.Millisecond)
+			hk.Reg("foo", func() time.Duration {
+				fired[1] = true
+				return hk.UnregInterval
+			}, 100*time.Millisecond)
+
+			time.Sleep(500 * time.Millisecond)
+			Expect(fired[0] && fired[1]).To(BeTrue())
+
+			fired[0], fired[1] = false, false
+
+			time.Sleep(500 * time.Millisecond)
+			Expect(fired[1]).To(BeFalse()) // foo
+			Expect(fired[0]).To(BeTrue())  // bar
+
+			hk.Unreg("bar")
+		}
 	})
 
 	It("should register and unregister multiple callbacks", func() {

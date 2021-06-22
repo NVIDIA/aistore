@@ -35,7 +35,7 @@ var _ = Describe("ManagerGroup", func() {
 		config.ConfigDir = testingConfigDir
 		cmn.GCO.CommitUpdate(config)
 		db := dbdriver.NewDBMock()
-		mgrp = NewManagerGroup(db)
+		mgrp = NewManagerGroup(db, false /* skip hk*/)
 
 		fs.Init()
 		fs.Add(testingConfigDir, "daeID")
@@ -44,6 +44,7 @@ var _ = Describe("ManagerGroup", func() {
 	AfterEach(func() {
 		err := os.RemoveAll(testingConfigDir)
 		Expect(err).ShouldNot(HaveOccurred())
+		hk.Unreg(cmn.DSortNameLowercase)
 	})
 
 	Context("add", func() {

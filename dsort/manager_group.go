@@ -35,16 +35,18 @@ type ManagerGroup struct {
 }
 
 func InitManagers(db dbdriver.Driver) {
-	Managers = NewManagerGroup(db)
+	Managers = NewManagerGroup(db, false)
 }
 
 // NewManagerGroup returns new, initialized manager group.
-func NewManagerGroup(db dbdriver.Driver) *ManagerGroup {
+func NewManagerGroup(db dbdriver.Driver, skipHk bool) *ManagerGroup {
 	mg := &ManagerGroup{
 		managers: make(map[string]*Manager, 1),
 		db:       db,
 	}
-	hk.Reg(cmn.DSortNameLowercase, mg.housekeep, hk.DayInterval)
+	if !skipHk {
+		hk.Reg(cmn.DSortNameLowercase, mg.housekeep, hk.DayInterval)
+	}
 	return mg
 }
 
