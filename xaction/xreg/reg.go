@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -338,24 +337,6 @@ func (r *registry) hkDelInactive() time.Duration {
 	return delInactiveInterval
 }
 
-func (r *registry) delFinishedByID(id string) error {
-	entry := r.entries.find(XactFilter{ID: id})
-	if entry == nil {
-		return nil
-	}
-	xact := entry
-	if !xact.Get().Finished() {
-		return fmt.Errorf("xaction %s(%s, %T) is running - duplicate ID?", xact.Kind(), id, xact.Get())
-	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("cleanup: removing xaction %s (ID %s)", xact.Get(), id)
-	}
-	r.entries.mtx.Lock()
-	r.entries.del(id)
-	r.entries.mtx.Unlock()
-	return nil
-}
-
 func (r *registry) add(entry BaseEntry) { r.entries.add(entry) }
 
 // FIXME: the logic here must be revisited and revised
@@ -392,7 +373,8 @@ func (r *registry) hkDelOld() time.Duration {
 	if len(toRemove) > 0 {
 		r.entries.mtx.Lock()
 		for _, id := range toRemove {
-			r.entries.del(id)
+			err := r.entries.del(id)
+			debug.AssertNoErr(err)
 		}
 		r.entries.mtx.Unlock()
 	}
@@ -522,22 +504,30 @@ func (e *entries) forEach(matcher func(entry BaseEntry) bool) {
 }
 
 // NOTE: is called under lock
-func (e *entries) del(id string) {
+func (e *entries) del(id string) error {
 	for idx, entry := range e.entries {
-		if entry.Get().ID().String() == id {
-			e.entries[idx] = e.entries[len(e.entries)-1]
-			e.entries = e.entries[:len(e.entries)-1]
+		xact := entry.Get()
+		if xact.ID().String() == id {
+			if !xact.Finished() {
+				return fmt.Errorf("cannot remove %s - is running", xact)
+			}
+			nlen := len(e.entries) - 1
+			e.entries[idx] = e.entries[nlen]
+			e.entries = e.entries[:nlen]
 			break
 		}
 	}
 	for idx, entry := range e.active {
-		if entry.Get().ID().String() == id {
+		xact := entry.Get()
+		if xact.ID().String() == id {
+			debug.Assert(xact.Finished())
 			nlen := len(e.active) - 1
 			e.active[idx] = e.active[nlen]
 			e.active = e.active[:nlen]
-			return
+			break
 		}
 	}
+	return nil
 }
 
 func (e *entries) delInactive() {
