@@ -66,6 +66,11 @@ var (
 	transportArgs = cmn.TransportArgs{
 		Timeout:         600 * time.Second,
 		UseHTTPProxyEnv: true,
+
+		// Allow a lot of idle connections so they can be reused when making huge
+		// number of requests (eg. in `TestETLBigBucket`).
+		MaxIdleConns:     2000,
+		IdleConnsPerHost: 200,
 	}
 	HTTPClient *http.Client
 
