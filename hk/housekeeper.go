@@ -1,7 +1,7 @@
 // Package hk provides mechanism for registering cleanup
 // functions which are invoked at specified intervals.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package hk
 
@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -153,8 +154,11 @@ func (hk *housekeeper) Run() (err error) {
 				heap.Push(hk.actions, timedAction{name: req.name, f: req.f, updateTime: nt})
 			} else {
 				idx := hk.byName(req.name)
-				debug.AssertMsg(idx >= 0, req.name)
-				heap.Remove(hk.actions, idx)
+				if idx >= 0 {
+					heap.Remove(hk.actions, idx)
+				} else {
+					glog.Warningln(req.name, "already removed")
+				}
 			}
 			hk.updateTimer()
 		case s, ok := <-hk.sigCh:

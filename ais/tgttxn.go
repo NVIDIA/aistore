@@ -152,7 +152,7 @@ func (t *targetrunner) createBucket(c *txnServerCtx) error {
 	case cmn.ActCommit:
 		t._commitCreateDestroy(c)
 	default:
-		cos.Assert(false)
+		debug.Assert(false)
 	}
 	return nil
 }
@@ -203,7 +203,7 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
 		txnMnc := txn.(*txnMakeNCopies)
-		cos.Assert(txnMnc.newCopies == copies)
+		debug.Assert(txnMnc.newCopies == copies)
 
 		// wait for newBMD w/timeout
 		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
@@ -220,7 +220,7 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 		c.addNotif(xact) // notify upon completion
 		go xact.Run()
 	default:
-		cos.Assert(false)
+		debug.Assert(false)
 	}
 	return nil
 }
@@ -307,7 +307,7 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 			go xact.Run()
 		}
 	default:
-		cos.Assert(false)
+		debug.Assert(false)
 	}
 	return nil
 }
@@ -394,7 +394,7 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 		t.gfn.global.activateTimed()
 		go xact.Run()
 	default:
-		cos.Assert(false)
+		debug.Assert(false)
 	}
 	return nil
 }
@@ -523,7 +523,7 @@ func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMs
 		c.addNotif(xact) // notify upon completion
 		go xact.Run()
 	default:
-		cos.Assert(false)
+		debug.Assert(false)
 	}
 	return nil
 }
@@ -607,7 +607,7 @@ func (t *targetrunner) ecEncode(c *txnServerCtx) error {
 		c.addNotif(xact) // notify upon completion
 		go xact.Run()
 	default:
-		cos.Assert(false)
+		debug.Assert(false)
 	}
 	return nil
 }
@@ -714,7 +714,7 @@ func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
 			}
 		}
 	default:
-		cos.Assert(false)
+		debug.Assert(false)
 	}
 	return nil
 }
@@ -742,7 +742,7 @@ func (t *targetrunner) destroyBucket(c *txnServerCtx) error {
 	case cmn.ActCommit:
 		t._commitCreateDestroy(c)
 	default:
-		cos.Assert(false)
+		debug.Assert(false)
 	}
 	return nil
 }

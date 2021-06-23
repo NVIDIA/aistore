@@ -17,7 +17,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/cluster"
@@ -56,22 +55,6 @@ type (
 		sync.Mutex
 		disabled bool // target was unregistered by internal event (e.g, all mountpaths are down)
 	}
-	baseGFN struct {
-		lookup atomic.Bool
-		tag    string
-	}
-	// The state that may influence GET logic when mountpath is added/enabled
-	localGFN struct {
-		baseGFN
-	}
-	// The state that may influence GET logic when new target joins cluster
-	globalGFN struct {
-		baseGFN
-
-		mtx         sync.Mutex
-		timedLookup atomic.Bool
-		refCount    uint32
-	}
 	backends map[string]cluster.BackendProvider
 	// main
 	targetrunner struct {
@@ -92,97 +75,6 @@ type (
 
 // interface guard
 var _ cos.Runner = (*targetrunner)(nil)
-
-//////////////
-// base gfn //
-//////////////
-
-func (gfn *baseGFN) active() bool { return gfn.lookup.Load() }
-
-func (gfn *baseGFN) Activate() bool {
-	previous := gfn.lookup.Swap(true)
-	glog.Infoln(gfn.tag, "activated")
-	return previous
-}
-func (gfn *baseGFN) Deactivate() { gfn.lookup.Store(false); glog.Infoln(gfn.tag, "deactivated") }
-
-////////////////
-// global gfn //
-////////////////
-
-func (gfn *globalGFN) active() bool {
-	return gfn.lookup.Load() || gfn.timedLookup.Load()
-}
-
-func (gfn *globalGFN) Activate() bool {
-	gfn.mtx.Lock()
-	previous := gfn.lookup.Swap(true)
-	gfn.timedLookup.Store(false)
-	gfn.refCount = 0
-	gfn.mtx.Unlock()
-
-	glog.Infoln(gfn.tag, "activated")
-	return previous
-}
-
-func (gfn *globalGFN) activateTimed() {
-	config := cmn.GCO.Get()
-	timedInterval := config.Timeout.Startup.D()
-
-	gfn.mtx.Lock()
-	// If gfn is already activated we should not start timed.
-	if gfn.lookup.Load() {
-		gfn.mtx.Unlock()
-		return
-	}
-
-	if active := gfn.timedLookup.Swap(true); active {
-		// There is no need to start goroutine since we know that one is already
-		// running at it should take care about deactivating.
-		gfn.refCount++
-		gfn.mtx.Unlock()
-		glog.Infoln(gfn.tag, "updated timed")
-		return
-	}
-	gfn.mtx.Unlock()
-	glog.Infoln(gfn.tag, "activated timed")
-
-	go func() {
-		const sleep = 5 * time.Second
-		for {
-			for tm := time.Duration(0); tm < timedInterval; tm += sleep {
-				time.Sleep(sleep)
-				if !gfn.timedLookup.Load() {
-					return
-				}
-			}
-
-			gfn.mtx.Lock()
-			// If we woke up after defined schedule we are safe to deactivate.
-			// Otherwise it means that someone updated the schedule and we need
-			// to sleep again.
-			if gfn.refCount == 0 {
-				gfn.timedLookup.Store(false)
-				gfn.mtx.Unlock()
-				glog.Infoln(gfn.tag, "deactivated timed")
-				return
-			}
-			gfn.refCount = 0
-			gfn.mtx.Unlock()
-		}
-	}()
-}
-
-// Deactivates timed GFN only if timed GFN has been activated only once before.
-func (gfn *globalGFN) abortTimed() {
-	gfn.mtx.Lock()
-	defer gfn.mtx.Unlock()
-	if gfn.refCount == 1 {
-		glog.Infoln(gfn.tag, "aborted timed")
-		gfn.timedLookup.Store(false)
-		gfn.refCount = 0
-	}
-}
 
 //////////////
 // backends //
