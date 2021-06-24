@@ -361,14 +361,14 @@ func RangeHdr(start, length int64) (hdr http.Header) {
 	return
 }
 
-func ToHTTPHdr(meta ObjHeaderMetaProvider, hdrs ...http.Header) (hdr http.Header) {
+func ToHTTPHdr(meta ObjAttrsHolder, hdrs ...http.Header) (hdr http.Header) {
 	if len(hdrs) == 0 || hdrs[0] == nil {
 		hdr = make(http.Header, 4)
 	} else {
 		hdr = hdrs[0]
 	}
-	if !meta.Cksum().IsEmpty() {
-		ty, val := meta.Cksum().Get()
+	if !meta.Checksum().IsEmpty() {
+		ty, val := meta.Checksum().Get()
 		hdr.Set(HdrObjCksumType, ty)
 		hdr.Set(HdrObjCksumVal, val)
 	}

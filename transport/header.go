@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xoshiro256"
@@ -99,12 +100,12 @@ func insUint64(off int, to []byte, i uint64) int {
 	return off + cos.SizeofI64
 }
 
-func insAttrs(off int, to []byte, attr ObjectAttrs) int {
+func insAttrs(off int, to []byte, attr cmn.ObjAttrs) int {
 	off = insInt64(off, to, attr.Size)
 	off = insInt64(off, to, attr.Atime)
-	off = insString(off, to, attr.CksumType)
-	off = insString(off, to, attr.CksumValue)
-	off = insString(off, to, attr.Version)
+	off = insString(off, to, attr.Cksum.Type())
+	off = insString(off, to, attr.Cksum.Value())
+	off = insString(off, to, attr.Ver)
 	return off
 }
 
@@ -168,11 +169,13 @@ func extUint64(off int, from []byte) (int, uint64) {
 	return off, size
 }
 
-func extAttrs(off int, from []byte) (n int, attr ObjectAttrs) {
+func extAttrs(off int, from []byte) (n int, attr cmn.ObjAttrs) {
+	var cksumTyp, cksumVal string
 	off, attr.Size = extInt64(off, from)
 	off, attr.Atime = extInt64(off, from)
-	off, attr.CksumType = extString(off, from)
-	off, attr.CksumValue = extString(off, from)
-	off, attr.Version = extString(off, from)
+	off, cksumTyp = extString(off, from)
+	off, cksumVal = extString(off, from)
+	attr.Cksum = cos.NewCksum(cksumTyp, cksumVal)
+	off, attr.Ver = extString(off, from)
 	return off, attr
 }

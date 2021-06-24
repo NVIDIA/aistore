@@ -475,9 +475,9 @@ func (m *AISBackendProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *c
 			BaseParams: aisCluster.bp,
 			Bck:        bck,
 			Object:     lom.ObjName,
-			Cksum:      lom.Cksum(),
+			Cksum:      lom.Checksum(),
 			Reader:     r.(cos.ReadOpenCloser),
-			Size:       uint64(lom.Size(true)), // It's special because it's still workfile.
+			Size:       uint64(lom.SizeBytes(true)), // It's special because it's still workfile.
 		}
 	)
 	if err = api.PutObject(args); err != nil {

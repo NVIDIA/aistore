@@ -16,7 +16,7 @@ type (
 	// Defines what to send to a target.
 	LomReaderProvider interface {
 		// Returned func() will be called after reading from reader is done.
-		Reader(lom *LOM) (reader cos.ReadOpenCloser, objMeta cmn.ObjHeaderMetaProvider, err error)
+		Reader(lom *LOM) (reader cos.ReadOpenCloser, objMeta cmn.ObjAttrsHolder, err error)
 	}
 	LomReader struct{}
 )
@@ -24,7 +24,7 @@ type (
 // interface guard
 var _ LomReaderProvider = (*LomReader)(nil)
 
-func (*LomReader) Reader(lom *LOM) (cos.ReadOpenCloser, cmn.ObjHeaderMetaProvider, error) {
+func (*LomReader) Reader(lom *LOM) (cos.ReadOpenCloser, cmn.ObjAttrsHolder, error) {
 	var lomLoadErr, err error
 
 	lom.Lock(false)

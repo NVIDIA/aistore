@@ -94,7 +94,7 @@ func (goi *getObjInfo) freadArch(file *os.File) (cos.ReadCloseSizer, error) {
 	case cos.ExtTarTgz, cos.ExtTgz:
 		return freadTgz(file, filename, archname)
 	case cos.ExtZip:
-		return freadZip(file, filename, archname, goi.lom.Size())
+		return freadZip(file, filename, archname, goi.lom.SizeBytes())
 	default:
 		debug.Assert(false)
 		return nil, errors.New(unknownMime)

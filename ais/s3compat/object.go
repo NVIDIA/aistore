@@ -119,7 +119,7 @@ func lomCksum(lom *cluster.LOM) string {
 			return v
 		}
 	}
-	if cksum := lom.Cksum(); cksum != nil && cksum.Type() == cos.ChecksumMD5 {
+	if cksum := lom.Checksum(); cksum.Type() == cos.ChecksumMD5 {
 		return cksum.Value()
 	}
 	return ""

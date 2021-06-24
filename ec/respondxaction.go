@@ -213,8 +213,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object i
 				args := &WriteArgs{
 					Reader:     object,
 					MD:         md,
-					CksumType:  hdr.ObjAttrs.CksumType,
-					CksumValue: hdr.ObjAttrs.CksumValue,
+					Cksum:      hdr.ObjAttrs.Cksum,
 					BID:        iReq.bid,
 					Generation: meta.Generation,
 				}

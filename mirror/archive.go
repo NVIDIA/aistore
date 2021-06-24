@@ -204,12 +204,10 @@ func (r *XactPutArchive) doSend(lom *cluster.LOM, work *zwork, fh cos.ReadOpenCl
 	{
 		hdr.Bck = work.msg.ToBck
 		hdr.ObjName = lom.ObjName
-		hdr.ObjAttrs.Size = lom.Size()
+		hdr.ObjAttrs.Size = lom.SizeBytes()
 		hdr.ObjAttrs.Atime = lom.AtimeUnix()
-		if cksum := lom.Cksum(); cksum != nil {
-			hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue = cksum.Get()
-		}
-		hdr.ObjAttrs.Version = lom.Version()
+		hdr.ObjAttrs.Cksum = lom.Checksum()
+		hdr.ObjAttrs.Ver = lom.Version()
 		hdr.Opaque = []byte(work.msg.FullName()) // NOTE
 	}
 	o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
@@ -261,7 +259,7 @@ func (r *XactPutArchive) _fini(work *zwork) (errCode int, err error) {
 		return
 	}
 	work.lom.SetSize(size)
-	work.lom.SetCksum(cos.NewCksum(cos.ChecksumNone, ""))
+	work.lom.SetCksum(cos.NoneCksum)
 	cos.Close(work.fh)
 
 	errCode, err = r.t.FinalizeObj(work.lom, work.fqn, size)
@@ -309,7 +307,7 @@ func (work *zwork) addToArch(lom *cluster.LOM, hdr *transport.ObjHdr, reader io.
 	tarhdr.Typeflag = tar.TypeReg
 
 	if lom != nil { // local
-		tarhdr.Size = lom.Size()
+		tarhdr.Size = lom.SizeBytes()
 		tarhdr.ModTime = lom.Atime()
 		tarhdr.Name = lom.FullName()
 	} else { // recv

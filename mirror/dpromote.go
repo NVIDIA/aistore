@@ -129,7 +129,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		}
 	} else if lom != nil { // nil when (placement = different target)
 		r.ObjectsInc()
-		r.BytesAdd(lom.Size())
+		r.BytesAdd(lom.SizeBytes())
 	}
 	return nil
 }

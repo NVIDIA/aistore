@@ -851,7 +851,7 @@ func (c *txnServerCtx) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, err 
 		return
 	}
 	lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
-	lom.SetVersion(hdr.ObjAttrs.Version)
+	lom.SetVersion(hdr.ObjAttrs.Ver)
 
 	params := cluster.PutObjectParams{
 		Tag:    fs.WorkfilePut,
@@ -861,7 +861,7 @@ func (c *txnServerCtx) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, err 
 		// that it must PUT the object to the Cloud as well after the local data are
 		// finalized in case of destination is Cloud.
 		RecvType: cluster.RegularPut,
-		Cksum:    cos.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
+		Cksum:    hdr.ObjAttrs.Cksum,
 		Started:  time.Now(),
 	}
 	if err := c.t.PutObject(lom, params); err != nil {

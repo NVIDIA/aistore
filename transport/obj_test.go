@@ -128,8 +128,8 @@ func Example_headers() {
 	stream.Fin()
 
 	// Output:
-	// {Bck:aws://@uuid#namespace/abc ObjName:X ObjAttrs:{Atime:663346294 Size:231 CksumType:xxhash CksumValue:hash Version:2} Opaque:[]} (119)
-	// {Bck:ais://abracadabra ObjName:p/q/s ObjAttrs:{Atime:663346294 Size:213 CksumType:xxhash CksumValue:hash Version:2} Opaque:[49 50 51]} (121)
+	// {Bck:aws://@uuid#namespace/abc ObjName:X ObjAttrs:{Atime:663346294 Size:231 Ver:2 Cksum:(xxhash,hash...) AddMD:map[]} Opaque:[]} (119)
+	// {Bck:ais://abracadabra ObjName:p/q/s ObjAttrs:{Atime:663346294 Size:213 Ver:2 Cksum:(xxhash,hash...) AddMD:map[]} Opaque:[49 50 51]} (121)
 }
 
 func sendText(stream *transport.Stream, txt1, txt2 string) {
@@ -146,12 +146,11 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 			Ns:       cmn.Ns{UUID: "uuid", Name: "namespace"},
 		},
 		ObjName: "X",
-		ObjAttrs: transport.ObjectAttrs{
-			Size:       sgl1.Size(),
-			Atime:      663346294,
-			CksumType:  cos.ChecksumXXHash,
-			CksumValue: "hash",
-			Version:    "2",
+		ObjAttrs: cmn.ObjAttrs{
+			Size:  sgl1.Size(),
+			Atime: 663346294,
+			Cksum: cos.NewCksum(cos.ChecksumXXHash, "hash"),
+			Ver:   "2",
 		},
 		Opaque: nil,
 	}
@@ -168,12 +167,11 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 			Ns:       cmn.NsGlobal,
 		},
 		ObjName: "p/q/s",
-		ObjAttrs: transport.ObjectAttrs{
-			Size:       sgl2.Size(),
-			Atime:      663346294,
-			CksumType:  cos.ChecksumXXHash,
-			CksumValue: "hash",
-			Version:    "2",
+		ObjAttrs: cmn.ObjAttrs{
+			Size:  sgl2.Size(),
+			Atime: 663346294,
+			Cksum: cos.NewCksum(cos.ChecksumXXHash, "hash"),
+			Ver:   "2",
 		},
 		Opaque: []byte{'1', '2', '3'},
 	}
@@ -359,27 +357,24 @@ func Test_OnSendCallback(t *testing.T) {
 }
 
 func Test_ObjAttrs(t *testing.T) {
-	testAttrs := []transport.ObjectAttrs{
+	testAttrs := []cmn.ObjAttrs{
 		{
-			Size:       1024,
-			Atime:      1024,
-			CksumType:  "",
-			CksumValue: "cheksum",
-			Version:    "102.44",
+			Size:  1024,
+			Atime: 1024,
+			Cksum: cos.NewCksum("", ""),
+			Ver:   "102.44",
 		},
 		{
-			Size:       1024,
-			Atime:      math.MaxInt64,
-			CksumType:  cos.ChecksumXXHash,
-			CksumValue: "120421",
-			Version:    "102.44",
+			Size:  1024,
+			Atime: math.MaxInt64,
+			Cksum: cos.NewCksum(cos.ChecksumXXHash, "120421"),
+			Ver:   "102.44",
 		},
 		{
-			Size:       0,
-			Atime:      0,
-			CksumType:  "",
-			CksumValue: "102412",
-			Version:    "",
+			Size:  0,
+			Atime: 0,
+			Cksum: cos.NewCksum(cos.ChecksumNone, "120421"),
+			Ver:   "",
 		},
 	}
 

@@ -152,7 +152,7 @@ func (t *tarExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, e
 		tr     = tar.NewReader(r)
 	)
 
-	buf, slab := t.t.MMSA().Alloc(lom.Size())
+	buf, slab := t.t.MMSA().Alloc(lom.SizeBytes())
 	defer slab.Free(buf)
 
 	offset := int64(0)

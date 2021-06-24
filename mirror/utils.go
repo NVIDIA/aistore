@@ -39,7 +39,7 @@ func delCopies(lom *cluster.LOM, copies int) (size int64, err error) {
 		}
 	}
 
-	size = int64(len(copiesFQN)) * lom.Size()
+	size = int64(len(copiesFQN)) * lom.SizeBytes()
 	if err = lom.DelCopies(copiesFQN...); err != nil {
 		return
 	}
@@ -80,7 +80,7 @@ func addCopies(lom *cluster.LOM, copies int, buf []byte) (size int64, err error)
 			cluster.FreeLOM(clone)
 			return
 		}
-		size += lom.Size()
+		size += lom.SizeBytes()
 		cluster.FreeLOM(clone)
 	}
 	return

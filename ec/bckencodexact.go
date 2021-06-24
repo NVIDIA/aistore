@@ -126,7 +126,7 @@ func (r *XactBckEncode) beforeECObj() { r.wg.Add(1) }
 func (r *XactBckEncode) afterECObj(lom *cluster.LOM, err error) {
 	if err == nil {
 		r.ObjectsInc()
-		r.BytesAdd(lom.Size())
+		r.BytesAdd(lom.SizeBytes())
 	} else {
 		glog.Errorf("Failed to erasure-code %s: %v", lom.FullName(), err)
 	}

@@ -13,13 +13,6 @@ import (
 )
 
 type (
-	objMeta struct {
-		size    int64
-		atime   int64
-		cksum   *cos.Cksum
-		version string
-	}
-
 	OfflineDataProvider struct {
 		bckMsg         *cmn.Bck2BckMsg
 		comm           Communicator
@@ -30,14 +23,7 @@ type (
 // interface guard
 var (
 	_ cluster.LomReaderProvider = (*OfflineDataProvider)(nil)
-	_ cmn.ObjHeaderMetaProvider = (*objMeta)(nil)
 )
-
-func (om *objMeta) Size(_ ...bool) int64     { return om.size }
-func (om *objMeta) Version(_ ...bool) string { return om.version }
-func (om *objMeta) Cksum() *cos.Cksum        { return om.cksum }
-func (om *objMeta) AtimeUnix() int64         { return om.atime }
-func (*objMeta) CustomMD() cos.SimpleKVs     { return nil }
 
 func NewOfflineDataProvider(msg *cmn.Bck2BckMsg) (*OfflineDataProvider, error) {
 	comm, err := GetCommunicator(msg.ID)
@@ -53,7 +39,7 @@ func NewOfflineDataProvider(msg *cmn.Bck2BckMsg) (*OfflineDataProvider, error) {
 }
 
 // Returns reader resulting from lom ETL transformation.
-func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cmn.ObjHeaderMetaProvider, error) {
+func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cmn.ObjAttrsHolder, error) {
 	var (
 		r   cos.ReadCloseSizer
 		err error
@@ -78,11 +64,11 @@ func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cmn
 		return nil, nil, err
 	}
 
-	om := &objMeta{
-		size:    r.Size(),
-		version: "",            // Object after ETL is a new object with a new version.
-		cksum:   cos.NoneCksum, // TODO: Revisit and check if possible to have a checksum.
-		atime:   lom.AtimeUnix(),
+	om := &cmn.ObjAttrs{
+		Size:  r.Size(),
+		Ver:   "",            // Object after ETL is a new object with a new version.
+		Cksum: cos.NoneCksum, // TODO: Revisit and check if possible to have a checksum.
+		Atime: lom.AtimeUnix(),
 	}
 	return cos.NopOpener(r), om, nil
 }

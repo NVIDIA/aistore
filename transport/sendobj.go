@@ -61,7 +61,7 @@ func (s *Stream) terminate() {
 
 	s.Stop()
 
-	obj := Obj{Hdr: ObjHdr{ObjAttrs: ObjectAttrs{Size: lastMarker}}}
+	obj := Obj{Hdr: ObjHdr{ObjAttrs: cmn.ObjAttrs{Size: lastMarker}}}
 	s.cmplCh <- cmpl{obj, s.term.err}
 	s.term.mu.Unlock()
 
@@ -385,7 +385,7 @@ func (s *Stream) closeAndFree() {
 // gc: post idle tick if idle
 func (s *Stream) idleTick() {
 	if len(s.workCh) == 0 && s.sessST.CAS(active, inactive) {
-		s.workCh <- &Obj{Hdr: ObjHdr{ObjAttrs: ObjectAttrs{Size: tickMarker}}}
+		s.workCh <- &Obj{Hdr: ObjHdr{ObjAttrs: cmn.ObjAttrs{Size: tickMarker}}}
 		if verbose {
 			glog.Infof("%s: active => inactive", s)
 		}

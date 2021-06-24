@@ -651,7 +651,6 @@ func (m *Manager) makeRecvShardFunc() transport.ReceiveObj {
 		if m.aborted() {
 			return
 		}
-		cksum := cos.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)
 		lom := cluster.AllocLOM(hdr.ObjName)
 		defer cluster.FreeLOM(lom)
 		if err = lom.Init(hdr.Bck); err == nil {
@@ -662,7 +661,7 @@ func (m *Manager) makeRecvShardFunc() transport.ReceiveObj {
 			return
 		}
 		if err == nil {
-			if lom.Cksum() != nil && lom.Cksum().Equal(cksum) {
+			if lom.Checksum().Equal(hdr.ObjAttrs.Cksum) {
 				glog.V(4).Infof("[dsort] %s shard (%s) already exists and checksums are equal, skipping", m.ManagerUUID, lom)
 				cos.DrainReader(object)
 				return

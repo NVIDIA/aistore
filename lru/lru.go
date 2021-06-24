@@ -422,7 +422,7 @@ func (j *lruJ) walk(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 	heap.Push(h, lom)
-	j.curSize += lom.Size()
+	j.curSize += lom.SizeBytes()
 	if lom.AtimeUnix() > j.newest {
 		j.newest = lom.AtimeUnix()
 	}
@@ -479,8 +479,8 @@ func (j *lruJ) evict() (size int64, err error) {
 	for h.Len() > 0 && j.totalSize > 0 {
 		lom := heap.Pop(h).(*cluster.LOM)
 		if evictObj(lom) {
-			bevicted += lom.Size(true /*not loaded*/)
-			size += lom.Size(true)
+			bevicted += lom.SizeBytes(true /*not loaded*/)
+			size += lom.SizeBytes(true)
 			fevicted++
 			if capCheck, err = j.postRemove(capCheck, lom); err != nil {
 				return
@@ -495,8 +495,8 @@ func (j *lruJ) evict() (size int64, err error) {
 }
 
 func (j *lruJ) postRemove(prev int64, lom *cluster.LOM) (capCheck int64, err error) {
-	j.totalSize -= lom.Size(true /*not loaded*/)
-	capCheck = prev + lom.Size(true)
+	j.totalSize -= lom.SizeBytes(true /*not loaded*/)
+	capCheck = prev + lom.SizeBytes(true)
 	if err = j.yieldTerm(); err != nil {
 		return
 	}

@@ -8,29 +8,27 @@ package cmn
 import "github.com/NVIDIA/aistore/cmn/cos"
 
 type (
-	ObjHeaderMetaProvider interface {
-		Size(special ...bool) int64
+	ObjAttrsHolder interface {
+		SizeBytes(special ...bool) int64
 		Version(special ...bool) string
-		Cksum() *cos.Cksum
+		Checksum() *cos.Cksum
 		AtimeUnix() int64
 		CustomMD() cos.SimpleKVs
 	}
-
-	HdrMetaCustomVersion struct {
-		provider ObjHeaderMetaProvider
-		version  string
+	ObjAttrs struct {
+		Atime int64         // access time (nanoseconds since UNIX epoch)
+		Size  int64         // object size (bytes)
+		Ver   string        // object version
+		Cksum *cos.Cksum    // object checksum
+		AddMD cos.SimpleKVs // custom md
 	}
 )
 
-func (m *HdrMetaCustomVersion) Size(_ ...bool) int64     { return m.provider.Size() }
-func (m *HdrMetaCustomVersion) Version(_ ...bool) string { return m.version }
-func (m *HdrMetaCustomVersion) Cksum() *cos.Cksum        { return m.provider.Cksum() }
-func (m *HdrMetaCustomVersion) AtimeUnix() int64         { return m.provider.AtimeUnix() }
-func (m *HdrMetaCustomVersion) CustomMD() cos.SimpleKVs  { return m.provider.CustomMD() }
+// interface guard
+var _ ObjAttrsHolder = (*ObjAttrs)(nil)
 
-func NewHdrMetaCustomVersion(provider ObjHeaderMetaProvider, version string) *HdrMetaCustomVersion {
-	return &HdrMetaCustomVersion{
-		provider: provider,
-		version:  version,
-	}
-}
+func (oa *ObjAttrs) SizeBytes(_ ...bool) int64 { return oa.Size }
+func (oa *ObjAttrs) Version(_ ...bool) string  { return oa.Ver }
+func (oa *ObjAttrs) Checksum() *cos.Cksum      { return oa.Cksum }
+func (oa *ObjAttrs) AtimeUnix() int64          { return oa.Atime }
+func (*ObjAttrs) CustomMD() cos.SimpleKVs      { return nil }

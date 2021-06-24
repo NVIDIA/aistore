@@ -204,7 +204,7 @@ func (pc *pushComm) tryDoRequest(lom *cluster.LOM, timeout time.Duration) (cos.R
 		goto finish
 	}
 
-	req.ContentLength = lom.Size()
+	req.ContentLength = lom.SizeBytes()
 	req.Header.Set(cmn.HdrContentType, cmn.ContentBinary)
 	resp, err = pc.t.DataClient().Do(req) // nolint:bodyclose // Closed by the caller.
 finish:
@@ -215,7 +215,7 @@ finish:
 		return nil, err
 	}
 
-	pc.stats.inBytes.Add(lom.Size())
+	pc.stats.inBytes.Add(lom.SizeBytes())
 	return cos.NewReaderWithArgs(cos.ReaderArgs{
 		R:      resp.Body,
 		Size:   resp.ContentLength,
@@ -378,5 +378,5 @@ func determineSize(bck *cluster.Bck, objName string) (int64, error) {
 		}
 		return 0, err
 	}
-	return lom.Size(), nil
+	return lom.SizeBytes(), nil
 }

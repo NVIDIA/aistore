@@ -148,10 +148,9 @@ func (r *xactECBase) newIntraReq(act intraReqType, meta *Metadata, bck *cluster.
 	return req
 }
 
-func newSliceResponse(md *Metadata, attrs *transport.ObjectAttrs, fqn string) (reader cos.ReadOpenCloser, err error) {
-	attrs.Version = md.ObjVersion
-	attrs.CksumType = md.CksumType
-	attrs.CksumValue = md.CksumValue
+func newSliceResponse(md *Metadata, attrs *cmn.ObjAttrs, fqn string) (reader cos.ReadOpenCloser, err error) {
+	attrs.Ver = md.ObjVersion
+	attrs.Cksum = cos.NewCksum(md.CksumType, md.CksumValue)
 
 	stat, err := os.Stat(fqn)
 	if err != nil {
@@ -167,7 +166,7 @@ func newSliceResponse(md *Metadata, attrs *transport.ObjectAttrs, fqn string) (r
 }
 
 // replica/full object request
-func newReplicaResponse(attrs *transport.ObjectAttrs, bck *cluster.Bck,
+func newReplicaResponse(attrs *cmn.ObjAttrs, bck *cluster.Bck,
 	objName string) (reader cos.ReadOpenCloser, err error) {
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
@@ -184,15 +183,13 @@ func newReplicaResponse(attrs *transport.ObjectAttrs, bck *cluster.Bck,
 	if err != nil {
 		return nil, err
 	}
-	if lom.Size() == 0 {
+	if lom.SizeBytes() == 0 {
 		return nil, nil
 	}
-	attrs.Size = lom.Size()
-	attrs.Version = lom.Version()
+	attrs.Size = lom.SizeBytes()
+	attrs.Ver = lom.Version()
 	attrs.Atime = lom.AtimeUnix()
-	if lom.Cksum() != nil {
-		attrs.CksumType, attrs.CksumValue = lom.Cksum().Get()
-	}
+	attrs.Cksum = lom.Checksum()
 	return reader, nil
 }
 
@@ -204,7 +201,7 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 	md *Metadata) (err error) {
 	var (
 		reader   cos.ReadOpenCloser
-		objAttrs transport.ObjectAttrs
+		objAttrs cmn.ObjAttrs
 	)
 	ireq := r.newIntraReq(act, nil, bck)
 	if md != nil && md.SliceID != 0 {
@@ -321,9 +318,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 	if sw.version != "" {
 		lom.SetVersion(sw.version)
 	}
-	if sw.cksum != nil && sw.cksum.Type() != cos.ChecksumNone {
-		lom.SetCksum(sw.cksum)
-	}
+	lom.SetCksum(sw.cksum)
 	lom.Uncache(true)
 	return sw.n, nil
 }
@@ -377,21 +372,19 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 
 	mm := r.t.SmallMMSA()
 	putData := req.NewPack(mm)
-	objAttrs := transport.ObjectAttrs{
-		Size:    src.size,
-		Version: lom.Version(),
-		Atime:   lom.AtimeUnix(),
+	objAttrs := cmn.ObjAttrs{
+		Size:  src.size,
+		Ver:   lom.Version(),
+		Atime: lom.AtimeUnix(),
 	}
 	if src.metadata != nil && src.metadata.SliceID != 0 {
 		// for a slice read everything from slice's metadata
 		if src.metadata.ObjVersion != "" {
-			objAttrs.Version = src.metadata.ObjVersion
+			objAttrs.Ver = src.metadata.ObjVersion
 		}
-		if src.metadata.CksumType != "" && src.metadata.CksumValue != "" {
-			objAttrs.CksumType, objAttrs.CksumValue = src.metadata.CksumType, src.metadata.CksumValue
-		}
-	} else if lom.Cksum() != nil {
-		objAttrs.CksumType, objAttrs.CksumValue = lom.Cksum().Get()
+		objAttrs.Cksum = cos.NewCksum(src.metadata.CksumType, src.metadata.CksumValue)
+	} else {
+		objAttrs.Cksum = lom.Checksum()
 	}
 	hdr := transport.ObjHdr{
 		Bck:      lom.Bucket(),
@@ -418,7 +411,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 // * writer - where to save the slice/meta/replica data
 // * exists - if the remote target had the requested object
 // * reader - response body
-func _writerReceive(writer *slice, exists bool, objAttrs transport.ObjectAttrs, reader io.Reader) (err error) {
+func _writerReceive(writer *slice, exists bool, objAttrs cmn.ObjAttrs, reader io.Reader) (err error) {
 	if !exists {
 		writer.wg.Done()
 		// drain the body, to avoid panic:
@@ -429,9 +422,9 @@ func _writerReceive(writer *slice, exists bool, objAttrs transport.ObjectAttrs, 
 
 	buf, slab := mm.Alloc()
 	writer.n, err = io.CopyBuffer(writer.writer, reader, buf)
-	writer.cksum = cos.NewCksum(objAttrs.CksumType, objAttrs.CksumValue)
-	if writer.version == "" && objAttrs.Version != "" {
-		writer.version = objAttrs.Version
+	writer.cksum = objAttrs.Cksum
+	if writer.version == "" && objAttrs.Ver != "" {
+		writer.version = objAttrs.Ver
 	}
 
 	writer.wg.Done()

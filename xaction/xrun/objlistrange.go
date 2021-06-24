@@ -64,7 +64,7 @@ func (r *evictDelete) doObjEvictDelete(args *xreg.DeletePrefetchArgs, objName st
 		return err
 	}
 	r.ObjectsInc()
-	r.BytesAdd(lom.Size(true)) // The `LOM` was loaded but was removed.
+	r.BytesAdd(lom.SizeBytes(true)) // was loaded and evicted
 	return nil
 }
 
@@ -118,7 +118,7 @@ func (r *prefetch) prefetchMissing(args *xreg.DeletePrefetchArgs, objName string
 		glog.Infof("prefetch: %s", lom)
 	}
 	r.ObjectsInc()
-	r.BytesAdd(lom.Size())
+	r.BytesAdd(lom.SizeBytes())
 	return nil
 }
 

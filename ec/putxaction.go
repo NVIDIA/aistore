@@ -122,7 +122,7 @@ func (r *XactPut) dispatchRequest(req *request, lom *cluster.LOM) error {
 	}
 	switch req.Action {
 	case ActSplit:
-		r.stats.updateEncode(lom.Size())
+		r.stats.updateEncode(lom.SizeBytes())
 	case ActDelete:
 		r.stats.updateDelete()
 	default:

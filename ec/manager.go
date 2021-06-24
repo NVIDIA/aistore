@@ -287,7 +287,7 @@ func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) er
 		return cs.Err
 	}
 
-	isECCopy := IsECCopy(lom.Size(), &lom.Bprops().EC)
+	isECCopy := IsECCopy(lom.SizeBytes(), &lom.Bprops().EC)
 	targetCnt := mgr.targetCnt.Load()
 
 	// tradeoff: encoding small object might require just 1 additional target available
@@ -305,7 +305,7 @@ func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) er
 	}
 
 	req := allocateReq(ActSplit, lom.LIF())
-	req.IsCopy = IsECCopy(lom.Size(), &lom.Bprops().EC)
+	req.IsCopy = IsECCopy(lom.SizeBytes(), &lom.Bprops().EC)
 	if len(cb) != 0 {
 		req.rebuild = true
 		req.Callback = cb[0]

@@ -91,7 +91,7 @@ func (t *targetrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items [
 	}
 
 	var cksumValue string
-	if cksum := lom.Cksum(); cksum != nil && cksum.Type() == cos.ChecksumMD5 {
+	if cksum := lom.Checksum(); cksum.Type() == cos.ChecksumMD5 {
 		cksumValue = cksum.Value()
 	}
 	result := s3compat.CopyObjectResult{
@@ -207,7 +207,7 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 	if errCode, err := goi.getObject(); err != nil && err != errSendingResp {
 		t.writeErr(w, r, err, errCode)
 	}
-	objSize = lom.Size()
+	objSize = lom.SizeBytes()
 	s3compat.SetHeaderFromLOM(w.Header(), lom, objSize)
 	freeGetObjInfo(goi)
 }
@@ -254,7 +254,7 @@ func (t *targetrunner) headObjS3(w http.ResponseWriter, r *http.Request, items [
 		s3compat.SetETLHeader(w.Header(), lom)
 		return
 	}
-	s3compat.SetHeaderFromLOM(w.Header(), lom, lom.Size())
+	s3compat.SetHeaderFromLOM(w.Header(), lom, lom.SizeBytes())
 }
 
 // DEL s3/bckName/objName

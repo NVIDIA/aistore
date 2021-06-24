@@ -2300,9 +2300,7 @@ func TestCopyBucket(t *testing.T) {
 						if a.Name == b.Name {
 							found = true
 
-							if dstm.bck.IsAIS() {
-								tassert.Fatalf(t, b.Version == "1", "Expected object %q to have initial version, got %q", b.Name, b.Version)
-							} else if dstmProps.Versioning.Enabled {
+							if dstm.bck.IsRemote() && dstmProps.Versioning.Enabled {
 								tassert.Fatalf(t, b.Version != "", "Expected non-empty object %q version", b.Name)
 							}
 

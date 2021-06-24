@@ -143,12 +143,11 @@ type (
 	}
 
 	WriteArgs struct {
-		MD         []byte    // CT's metafile content
-		Reader     io.Reader // CT content
-		BID        uint64    // bucket ID
-		CksumType  string    // object checksum type
-		CksumValue string    // object checksum value
-		Generation int64     // EC Generation
+		MD         []byte     // CT's metafile content
+		Reader     io.Reader  // CT content
+		BID        uint64     // bucket ID
+		Cksum      *cos.Cksum // object checksum
+		Generation int64      // EC Generation
 	}
 
 	// keeps temporarily a slice of object data until it is sent to remote node
@@ -456,15 +455,13 @@ func LomFromHeader(hdr transport.ObjHdr) (*cluster.LOM, error) {
 		return nil, err
 	}
 	lom.SetSize(hdr.ObjAttrs.Size)
-	if hdr.ObjAttrs.Version != "" {
-		lom.SetVersion(hdr.ObjAttrs.Version)
+	if hdr.ObjAttrs.Ver != "" {
+		lom.SetVersion(hdr.ObjAttrs.Ver)
 	}
 	if hdr.ObjAttrs.Atime != 0 {
 		lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
 	}
-	if hdr.ObjAttrs.CksumType != cos.ChecksumNone && hdr.ObjAttrs.CksumValue != "" {
-		lom.SetCksum(cos.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue))
-	}
+	lom.SetCksum(hdr.ObjAttrs.Cksum)
 	return lom, nil
 }
 
@@ -480,15 +477,15 @@ func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) er
 		}
 	}
 	lom.Unlock(false)
-	err := WriteObject(t, lom, args.Reader, lom.Size(true))
+	err := WriteObject(t, lom, args.Reader, lom.SizeBytes(true))
 	if err != nil {
 		return err
 	}
-	if args.CksumType != cos.ChecksumNone && args.CksumValue != "" {
-		cksumHdr := cos.NewCksum(args.CksumType, args.CksumValue)
-		if !lom.Cksum().Equal(cksumHdr) {
+	if !args.Cksum.IsEmpty() && args.Cksum.Value() != "" { // NOTE: empty value
+		cksumHdr := args.Cksum
+		if !lom.Checksum().Equal(cksumHdr) {
 			return fmt.Errorf("mismatched hash for %s/%s, version %s, hash calculated %s/md %s",
-				lom.Bucket(), lom.ObjName, lom.Version(), cksumHdr, lom.Cksum())
+				lom.Bucket(), lom.ObjName, lom.Version(), cksumHdr, lom.Checksum())
 		}
 	}
 	ctMeta := cluster.NewCTFromLOM(lom, MetaType)

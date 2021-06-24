@@ -216,7 +216,7 @@ func ATimeBeforeFilterMsg(before time.Time) *FilterMsg {
 
 func SizeFilter(min, max int64) cluster.ObjectFilter {
 	return func(lom *cluster.LOM) bool {
-		return lom.Size() >= min && lom.Size() <= max
+		return lom.SizeBytes() >= min && lom.SizeBytes() <= max
 	}
 }
 

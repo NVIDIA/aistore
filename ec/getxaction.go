@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
@@ -103,7 +102,7 @@ func NewGetXact(t cluster.Target, bck cmn.Bck, mgr *Manager) *XactGet {
 	return runner
 }
 
-func (r *XactGet) DispatchResp(iReq intraReq, bck *cluster.Bck, objName string, objAttrs transport.ObjectAttrs, reader io.Reader) {
+func (r *XactGet) DispatchResp(iReq intraReq, bck *cluster.Bck, objName string, objAttrs cmn.ObjAttrs, reader io.Reader) {
 	uname := unique(iReq.sender, bck, objName)
 	switch iReq.act {
 	// It is response to slice/replica request by an object

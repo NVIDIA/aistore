@@ -105,13 +105,14 @@ func ValidateCksumType(ty string, emptyOK ...bool) (err error) {
 // Cksum //
 ///////////
 
+func (ck *Cksum) IsEmpty() bool { return ck == nil || ck.ty == "" || ck.ty == ChecksumNone }
+
 func NewCksum(ty, value string) *Cksum {
 	if err := ValidateCksumType(ty, true /*empty OK*/); err != nil {
 		AssertMsg(false, err.Error())
 	}
 	if ty == "" {
-		AssertMsg(value == "", "type='' & value="+value)
-		ty = ChecksumNone
+		Assert(value == "")
 	}
 	return &Cksum{ty, value}
 }
@@ -137,22 +138,37 @@ func NewCksumHash(ty string) *CksumHash {
 }
 
 func (ck *Cksum) Equal(to *Cksum) bool {
-	if ck == nil || to == nil {
+	if ck.IsEmpty() || to.IsEmpty() {
 		return false
 	}
 	t1, v1 := ck.Get()
-	if t1 == ChecksumNone || t1 == "" || v1 == "" {
-		return false
-	}
 	t2, v2 := to.Get()
 	return t1 == t2 && v1 == v2
 }
 
-func (ck *Cksum) Get() (string, string) { return ck.ty, ck.value }
-func (ck *Cksum) Type() string          { return ck.ty }
-func (ck *Cksum) Value() string         { return ck.value }
-func (ck *Cksum) Clone() *Cksum         { return &Cksum{ty: ck.ty, value: ck.value} }
-func (ck *Cksum) IsEmpty() bool         { return ck == nil || ck.ty == ChecksumNone }
+func (ck *Cksum) Get() (string, string) {
+	if ck == nil {
+		return ChecksumNone, ""
+	}
+	return ck.ty, ck.value
+}
+
+func (ck *Cksum) Type() string {
+	if ck == nil {
+		return ChecksumNone
+	}
+	return ck.ty
+}
+
+func (ck *Cksum) Value() string {
+	if ck == nil {
+		return ""
+	}
+	return ck.value
+}
+
+func (ck *Cksum) Clone() *Cksum { return &Cksum{ty: ck.ty, value: ck.value} }
+
 func (ck *Cksum) String() string {
 	if ck == nil {
 		return "checksum <nil>"

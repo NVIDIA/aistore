@@ -121,8 +121,8 @@ func (w *Walk) RemoteObjPage() (*cmn.BucketList, error) {
 				e.Atime = cos.FormatUnixNano(lom.AtimeUnix(), w.msg.TimeFormat)
 			}
 		}
-		if needCksum && lom.Cksum() != nil {
-			_, storedCksum := lom.Cksum().Get()
+		if needCksum && lom.Checksum() != nil {
+			_, storedCksum := lom.Checksum().Get()
 			e.Checksum = storedCksum
 		}
 		if needVersion && lom.Version() != "" {

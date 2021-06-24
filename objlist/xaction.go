@@ -228,7 +228,7 @@ func (r *Xact) dispatchRequest() *Resp {
 
 func (r *Xact) walkCallback(lom *cluster.LOM) {
 	r.ObjectsInc()
-	r.BytesAdd(lom.Size())
+	r.BytesAdd(lom.SizeBytes())
 }
 
 func (r *Xact) walkCtx() context.Context {

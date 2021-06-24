@@ -209,10 +209,10 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 		}
 		var compressedSize int64
 		if m.extractCreator.UsingCompression() {
-			compressedSize = lom.Size()
+			compressedSize = lom.SizeBytes()
 		}
 
-		expectedUncompressedSize := uint64(float64(lom.Size()) / m.avgCompressionRatio())
+		expectedUncompressedSize := uint64(float64(lom.SizeBytes()) / m.avgCompressionRatio())
 		toDisk := m.dsorter.preShardExtraction(expectedUncompressedSize)
 
 		beforeExtraction := mono.NanoTime()
@@ -365,7 +365,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 				Started: beforeCreation,
 			}
 			if err = m.ctx.t.PutObject(lom, params); err == nil {
-				n = lom.Size()
+				n = lom.SizeBytes()
 			}
 		} else {
 			n, err = io.Copy(io.Discard, r)
@@ -418,7 +418,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 			return err
 		}
 
-		if lom.Size() <= 0 {
+		if lom.SizeBytes() <= 0 {
 			goto exit
 		}
 
@@ -427,16 +427,11 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 			return err
 		}
 
-		cksumType, cksumValue := lom.Cksum().Get()
 		o := transport.AllocSend()
 		o.Hdr = transport.ObjHdr{
-			Bck:     lom.Bucket(),
-			ObjName: shardName,
-			ObjAttrs: transport.ObjectAttrs{
-				Size:       lom.Size(),
-				CksumType:  cksumType,
-				CksumValue: cksumValue,
-			},
+			Bck:      lom.Bucket(),
+			ObjName:  shardName,
+			ObjAttrs: cmn.ObjAttrs{Size: lom.SizeBytes(), Cksum: lom.Checksum()},
 		}
 
 		// Make send synchronous.

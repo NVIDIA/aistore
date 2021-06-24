@@ -411,7 +411,7 @@ func (gcpp *gcpProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *clust
 		wc       = gcpObj.NewWriter(gctx)
 	)
 
-	md[gcpChecksumType], md[gcpChecksumVal] = lom.Cksum().Get()
+	md[gcpChecksumType], md[gcpChecksumVal] = lom.Checksum().Get()
 
 	wc.Metadata = md
 	buf, slab := gcpp.t.MMSA().Alloc()

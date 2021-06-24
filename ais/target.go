@@ -1062,7 +1062,7 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 		Present: exists,
 	}
 	if exists {
-		objProps.Size = lom.Size()
+		objProps.Size = lom.SizeBytes()
 		objProps.NumCopies = lom.NumCopies()
 		if lom.Bck().Props.EC.Enabled {
 			if md, err := ec.ObjectMetadata(lom.Bck(), objName); err == nil {
@@ -1364,7 +1364,7 @@ func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict
 		}
 	}
 	if delFromAIS {
-		size := lom.Size()
+		size := lom.SizeBytes()
 		aisErr = lom.Remove()
 		if aisErr != nil {
 			if !os.IsNotExist(aisErr) {

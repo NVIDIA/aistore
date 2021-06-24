@@ -193,7 +193,7 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 	}
 	src := &dataSource{
 		reader:   srcReader,
-		size:     ctx.lom.Size(),
+		size:     ctx.lom.SizeBytes(),
 		metadata: ctx.meta,
 		reqType:  reqPut,
 	}
@@ -238,8 +238,7 @@ func (c *getJogger) restoreReplicatedFromMemory(ctx *restoreCtx) error {
 	args := &WriteArgs{
 		Reader:     memsys.NewReader(writer),
 		MD:         ctx.meta.NewPack(),
-		CksumType:  ctx.meta.CksumType,
-		CksumValue: ctx.meta.CksumValue,
+		Cksum:      cos.NewCksum(ctx.meta.CksumType, ctx.meta.CksumValue),
 		Generation: ctx.meta.Generation,
 	}
 	if err := WriteReplicaAndMeta(c.parent.t, ctx.lom, args); err != nil {
@@ -588,7 +587,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 	args := &WriteArgs{
 		Reader:     src,
 		MD:         mainMeta.NewPack(),
-		CksumType:  conf.Type,
+		Cksum:      cos.NewCksum(conf.Type, ""),
 		Generation: mainMeta.Generation,
 	}
 	err = WriteReplicaAndMeta(c.parent.t, ctx.lom, args)

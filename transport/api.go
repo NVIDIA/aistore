@@ -51,20 +51,12 @@ type (
 	}
 	EndpointStats map[uint64]*Stats // all stats for a given (network, trname) endpoint indexed by session ID
 
-	// object attrs
-	ObjectAttrs struct {
-		Atime      int64  // access time - nanoseconds since UNIX epoch
-		Size       int64  // size of objects in bytes
-		CksumType  string // checksum type
-		CksumValue string // checksum of the object produced by given checksum type
-		Version    string // version of the object
-	}
 	// object header
 	ObjHdr struct {
 		Bck      cmn.Bck
 		ObjName  string
-		ObjAttrs ObjectAttrs // attributes/metadata of the sent object
-		Opaque   []byte      // custom control (optional)
+		ObjAttrs cmn.ObjAttrs // attributes/metadata of the sent object
+		Opaque   []byte       // custom control (optional)
 	}
 	// object to transmit
 	Obj struct {
@@ -169,7 +161,7 @@ func (s *Stream) Send(obj *Obj) (err error) {
 }
 
 func (s *Stream) Fin() {
-	_ = s.Send(&Obj{Hdr: ObjHdr{ObjAttrs: ObjectAttrs{Size: lastMarker}}})
+	_ = s.Send(&Obj{Hdr: ObjHdr{ObjAttrs: cmn.ObjAttrs{Size: lastMarker}}})
 	s.wg.Wait()
 }
 

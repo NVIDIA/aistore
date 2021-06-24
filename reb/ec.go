@@ -140,14 +140,12 @@ func (reb *Manager) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *clus
 	o.Hdr = transport.ObjHdr{
 		Bck:      ct.Bck().Bck,
 		ObjName:  ct.ObjectName(),
-		ObjAttrs: transport.ObjectAttrs{Size: meta.Size},
+		ObjAttrs: cmn.ObjAttrs{Size: meta.Size},
 	}
 	if lom != nil {
 		o.Hdr.ObjAttrs.Atime = lom.AtimeUnix()
-		o.Hdr.ObjAttrs.Version = lom.Version()
-		if cksum := lom.Cksum(); cksum != nil {
-			o.Hdr.ObjAttrs.CksumType, o.Hdr.ObjAttrs.CksumValue = cksum.Get()
-		}
+		o.Hdr.ObjAttrs.Ver = lom.Version()
+		o.Hdr.ObjAttrs.Cksum = lom.Checksum()
 	}
 	if meta.SliceID != 0 {
 		o.Hdr.ObjAttrs.Size = ec.SliceSize(meta.Size, meta.Data)
@@ -191,12 +189,7 @@ func (reb *Manager) saveCTToDisk(req *pushReq, hdr transport.ObjHdr, data io.Rea
 		var lom *cluster.LOM
 		lom, err = ec.LomFromHeader(hdr)
 		if err == nil {
-			args := &ec.WriteArgs{
-				Reader:     data,
-				MD:         md,
-				CksumType:  hdr.ObjAttrs.CksumType,
-				CksumValue: hdr.ObjAttrs.CksumValue,
-			}
+			args := &ec.WriteArgs{Reader: data, MD: md, Cksum: hdr.ObjAttrs.Cksum}
 			err = ec.WriteReplicaAndMeta(reb.t, lom, args)
 		}
 		cluster.FreeLOM(lom)
@@ -398,7 +391,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Read
 	o.Hdr = transport.ObjHdr{
 		Bck:      ct.Bck().Bck,
 		ObjName:  ct.ObjectName(),
-		ObjAttrs: transport.ObjectAttrs{Size: 0},
+		ObjAttrs: cmn.ObjAttrs{Size: 0},
 	}
 	o.Hdr.Opaque = reqMD.NewPack(rebMsgEC)
 	o.Callback = reb.transportECCB

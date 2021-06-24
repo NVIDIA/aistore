@@ -83,7 +83,7 @@ var _ = Describe("Mirror", func() {
 			clone, err := lom.CopyObject(copyFQN, nil)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(expectedCopyFQN).To(BeARegularFile())
-			Expect(clone.Size()).To(BeEquivalentTo(testObjectSize))
+			Expect(clone.SizeBytes()).To(BeEquivalentTo(testObjectSize))
 
 			// Check copy set
 			Expect(clone.IsCopy()).To(BeTrue())
@@ -107,7 +107,7 @@ var _ = Describe("Mirror", func() {
 			Expect(copyLOM.Load(false, false)).ShouldNot(HaveOccurred())
 			copyCksum, err := copyLOM.ComputeCksumIfMissing()
 			Expect(err).ShouldNot(HaveOccurred())
-			Expect(copyCksum.Value()).To(Equal(newLOM.Cksum().Value()))
+			Expect(copyCksum.Value()).To(Equal(newLOM.Checksum().Value()))
 			Expect(copyLOM.HrwFQN).To(BeEquivalentTo(lom.HrwFQN))
 			Expect(copyLOM.IsCopy()).To(BeTrue())
 			Expect(copyLOM.HasCopies()).To(BeTrue())

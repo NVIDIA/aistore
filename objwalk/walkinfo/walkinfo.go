@@ -143,8 +143,8 @@ func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntr
 	if wi.needAtime() {
 		fileInfo.Atime = cos.FormatUnixNano(lom.AtimeUnix(), wi.timeFormat)
 	}
-	if wi.needCksum() && lom.Cksum() != nil {
-		_, storedCksum := lom.Cksum().Get()
+	if wi.needCksum() && lom.Checksum() != nil {
+		_, storedCksum := lom.Checksum().Get()
 		fileInfo.Checksum = storedCksum
 	}
 	if wi.needVersion() {
@@ -157,7 +157,7 @@ func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntr
 		fileInfo.TargetURL = wi.t.Snode().URL(cmn.NetworkPublic)
 	}
 	if wi.needSize() {
-		fileInfo.Size = lom.Size()
+		fileInfo.Size = lom.SizeBytes()
 	}
 	if wi.postCallback != nil {
 		wi.postCallback(lom)

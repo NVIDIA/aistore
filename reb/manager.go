@@ -240,13 +240,13 @@ func (reb *Manager) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unp
 		glog.Errorf("%s: early receive from %s %s (stage %s)", reb.t.Snode(), tsid, lom, stages[stage])
 	}
 	lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
-	lom.SetVersion(hdr.ObjAttrs.Version)
+	lom.SetVersion(hdr.ObjAttrs.Ver)
 
 	params := cluster.PutObjectParams{
 		Tag:      fs.WorkfilePut,
 		Reader:   io.NopCloser(objReader),
 		RecvType: cluster.Migrated,
-		Cksum:    cos.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
+		Cksum:    hdr.ObjAttrs.Cksum,
 		Started:  time.Now(),
 	}
 	if err := reb.t.PutObject(lom, params); err != nil {

@@ -105,7 +105,7 @@ func (poi *putObjInfo) putObject() (int, error) {
 	lom := poi.lom
 	// optimize out if the checksums do match
 	if !poi.cksumToUse.IsEmpty() {
-		if lom.Cksum().Equal(poi.cksumToUse) {
+		if lom.Checksum().Equal(poi.cksumToUse) {
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("%s is valid %s: PUT is a no-op", lom, poi.cksumToUse)
 			}
@@ -696,7 +696,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 
 	var (
 		rrange     *cmn.HTTPRange
-		size       = goi.lom.Size()
+		size       = goi.lom.SizeBytes()
 		cksumConf  = goi.lom.CksumConf()
 		cksumRange bool
 	)
@@ -717,15 +717,15 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 			}
 		}
 		// checksum, version, time => resp hdr
-		if !goi.lom.Cksum().IsEmpty() && !cksumRange {
-			cksumType, cksumValue := goi.lom.Cksum().Get()
+		if !goi.lom.Checksum().IsEmpty() && !cksumRange {
+			cksumType, cksumValue := goi.lom.Checksum().Get()
 			hdr.Set(cmn.HdrObjCksumType, cksumType)
 			hdr.Set(cmn.HdrObjCksumVal, cksumValue)
 		}
 		if goi.lom.Version() != "" {
 			hdr.Set(cmn.HdrObjVersion, goi.lom.Version())
 		}
-		hdr.Set(cmn.HdrObjSize, strconv.FormatInt(goi.lom.Size(), 10))
+		hdr.Set(cmn.HdrObjSize, strconv.FormatInt(goi.lom.SizeBytes(), 10))
 		hdr.Set(cmn.HdrObjAtime, cos.UnixNano2S(goi.lom.AtimeUnix()))
 	}
 
@@ -902,7 +902,7 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 		cos.Assert(aoi.hi.partialCksum != nil)
 		aoi.hi.partialCksum.Finalize()
 		partialCksum := aoi.hi.partialCksum.Clone()
-		if aoi.cksum != nil && !partialCksum.Equal(aoi.cksum) {
+		if !aoi.cksum.IsEmpty() && !partialCksum.Equal(aoi.cksum) {
 			err = cos.NewBadDataCksumError(partialCksum, aoi.cksum)
 			errCode = http.StatusInternalServerError
 			return
@@ -988,7 +988,6 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 			params.ObjNameTo = objNameTo
 			params.Tsi = si
 			params.DM = coi.DM
-			params.NoVersion = !src.Bucket().Equal(coi.BckTo.Bck) // no versioning when buckets differ
 		}
 		size, err = coi.putRemote(src, params)
 		freeSendParams(params)
@@ -1000,7 +999,7 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 		if src.Bucket().Equal(coi.BckTo.Bck) && src.ObjName == objNameTo {
 			return 0, nil
 		}
-		return src.Size(), nil
+		return src.SizeBytes(), nil
 	}
 	// local copy
 	dst := cluster.AllocLOM(objNameTo)
@@ -1028,7 +1027,7 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 		dst.Lock(true)
 		defer dst.Unlock(true)
 		if err = dst.Load(false /*cache it*/, true /*locked*/); err == nil {
-			if src.Cksum().Equal(dst.Cksum()) {
+			if src.Checksum().Equal(dst.Checksum()) {
 				return
 			}
 		} else if cmn.IsErrBucketNought(err) {
@@ -1037,7 +1036,7 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 	}
 	dst2, err2 := src.CopyObject(dst.FQN, coi.Buf)
 	if err2 == nil {
-		size = src.Size()
+		size = src.SizeBytes()
 		if coi.finalize {
 			coi.t.putMirror(dst2)
 		}
@@ -1077,7 +1076,6 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 			params.ObjNameTo = objNameTo
 			params.Tsi = si
 			params.DM = coi.DM
-			params.NoVersion = !lom.Bucket().Equal(coi.BckTo.Bck) // no versioning when buckets differ
 		}
 		size, err = coi.putRemote(lom, params)
 		freeSendParams(params)
@@ -1119,7 +1117,7 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 		return 0, err
 	}
 
-	return lom.Size(), nil
+	return lom.SizeBytes(), nil
 }
 
 func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (size int64, err error) {
@@ -1154,14 +1152,14 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 			}
 			if coi.DryRun {
 				lom.Unlock(false)
-				return lom.Size(), nil
+				return lom.SizeBytes(), nil
 			}
 			fh, err := cos.NewFileHandle(lom.FQN)
 			if err != nil {
 				lom.Unlock(false)
 				return 0, fmt.Errorf(cmn.FmtErrFailed, coi.t.Snode(), "open", lom.FQN, err)
 			}
-			size = lom.Size()
+			size = lom.SizeBytes()
 			reader = cos.NewDeferROC(fh, func() { lom.Unlock(false) })
 		} else {
 			debug.Assert(!coi.DryRun)
@@ -1189,15 +1187,12 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 			cos.Close(params.Reader)
 			return
 		}
-		if size = params.HdrMeta.Size(); size < 0 {
+		if size = params.HdrMeta.SizeBytes(); size < 0 {
 			// NOTE: Return the current size as resulting (transformed) size isn't known.
-			size = lom.Size()
+			size = lom.SizeBytes()
 		}
 	}
 	debug.Assert(params.HdrMeta != nil)
-	if params.NoVersion {
-		params.HdrMeta = cmn.NewHdrMetaCustomVersion(params.HdrMeta, "")
-	}
 	params.BckTo = coi.BckTo
 	if params.DM != nil { // Either send via stream...
 		err = _sendObjDM(lom, params)
@@ -1214,12 +1209,10 @@ func _sendObjDM(lom *cluster.LOM, params *cluster.SendToParams) error {
 	{
 		hdr.Bck = params.BckTo.Bck
 		hdr.ObjName = params.ObjNameTo
-		hdr.ObjAttrs.Size = meta.Size()
+		hdr.ObjAttrs.Size = meta.SizeBytes()
 		hdr.ObjAttrs.Atime = meta.AtimeUnix()
-		if cksum := meta.Cksum(); cksum != nil {
-			hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue = cksum.Get()
-		}
-		hdr.ObjAttrs.Version = meta.Version()
+		hdr.ObjAttrs.Cksum = meta.Checksum()
+		hdr.ObjAttrs.Ver = meta.Version()
 	}
 	o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
 		cluster.FreeLOM(lom)
@@ -1240,7 +1233,7 @@ func (t *targetrunner) _sendPUT(lom *cluster.LOM, params *cluster.SendToParams) 
 		lom.ToHTTPHdr(hdr)
 	} else {
 		hdr = cmn.ToHTTPHdr(params.HdrMeta)
-		if size := params.HdrMeta.Size(); size > 0 {
+		if size := params.HdrMeta.SizeBytes(); size > 0 {
 			hdr.Set(cmn.HdrContentLength, strconv.FormatInt(size, 10))
 		}
 		if version := params.HdrMeta.Version(); version != "" {

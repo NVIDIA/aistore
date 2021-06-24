@@ -286,7 +286,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 				err = lom.Load(false, false)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(lom.Size()).To(BeEquivalentTo(testFileSize))
+				Expect(lom.SizeBytes()).To(BeEquivalentTo(testFileSize))
 			})
 		})
 
@@ -362,12 +362,12 @@ var _ = Describe("LOM", func() {
 					cksumType, cksumValue := cksum.Get()
 					Expect(cksumType).To(BeEquivalentTo(cos.ChecksumXXHash))
 					Expect(cksumValue).To(BeEquivalentTo(expectedChecksum))
-					Expect(lom.Cksum().Equal(cksum)).To(BeTrue())
+					Expect(lom.Checksum().Equal(cksum)).To(BeTrue())
 
 					newLom := NewBasicLom(lom.FQN)
 					err = newLom.Load(false, false)
 					Expect(err).NotTo(HaveOccurred())
-					cksumType, _ = newLom.Cksum().Get()
+					cksumType, _ = newLom.Checksum().Get()
 					Expect(cksumType).To(BeEquivalentTo(cos.ChecksumNone))
 				})
 			})
@@ -380,7 +380,7 @@ var _ = Describe("LOM", func() {
 					lom := NewBasicLom(noneFQN)
 					err := lom.ValidateMetaChecksum()
 					Expect(err).NotTo(HaveOccurred())
-					Expect(lom.Cksum()).To(BeNil())
+					Expect(lom.Checksum()).To(BeNil())
 				})
 
 				It("should fill object with checksum if was not present", func() {
@@ -391,18 +391,18 @@ var _ = Describe("LOM", func() {
 					err := fsLOM.Load(false, false)
 					Expect(err).NotTo(HaveOccurred())
 
-					cksumType, _ := fsLOM.Cksum().Get()
+					cksumType, _ := fsLOM.Checksum().Get()
 					Expect(cksumType).To(BeEquivalentTo(cos.ChecksumNone))
 
 					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 					lom.Uncache(false)
 
-					Expect(lom.Cksum()).ToNot(BeNil())
-					_, val := lom.Cksum().Get()
+					Expect(lom.Checksum()).ToNot(BeNil())
+					_, val := lom.Checksum().Get()
 					fsLOM = NewBasicLom(localFQN)
 					err = fsLOM.Load(false, false)
 					Expect(err).ShouldNot(HaveOccurred())
-					_, fsVal := fsLOM.Cksum().Get()
+					_, fsVal := fsLOM.Checksum().Get()
 					Expect(fsVal).To(BeEquivalentTo(expectedChecksum))
 					Expect(val).To(BeEquivalentTo(expectedChecksum))
 				})
@@ -462,7 +462,7 @@ var _ = Describe("LOM", func() {
 					lom := NewBasicLom(noneFQN)
 					err := lom.ValidateContentChecksum()
 					Expect(err).NotTo(HaveOccurred())
-					Expect(lom.Cksum()).To(BeNil())
+					Expect(lom.Checksum()).To(BeNil())
 				})
 
 				It("should fill object with checksum if was not present", func() {
@@ -473,20 +473,20 @@ var _ = Describe("LOM", func() {
 					err := fsLOM.Load(false, false)
 					Expect(err).ShouldNot(HaveOccurred())
 
-					cksumType, _ := fsLOM.Cksum().Get()
+					cksumType, _ := fsLOM.Checksum().Get()
 					Expect(cksumType).To(BeEquivalentTo(cos.ChecksumNone))
 
 					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 					lom.Uncache(false)
 
-					Expect(lom.Cksum()).ToNot(BeNil())
-					_, cksumValue := lom.Cksum().Get()
+					Expect(lom.Checksum()).ToNot(BeNil())
+					_, cksumValue := lom.Checksum().Get()
 
 					fsLOM = NewBasicLom(localFQN)
 					err = fsLOM.Load(false, false)
 					Expect(err).ShouldNot(HaveOccurred())
 
-					_, fsCksmVal := fsLOM.Cksum().Get()
+					_, fsCksmVal := fsLOM.Checksum().Get()
 					Expect(fsCksmVal).To(BeEquivalentTo(expectedChecksum))
 					Expect(cksumValue).To(BeEquivalentTo(expectedChecksum))
 				})
@@ -536,9 +536,9 @@ var _ = Describe("LOM", func() {
 					Expect(lom1.Persist()).ToNot(HaveOccurred())
 
 					Expect(lom2.Load(false, false)).ToNot(HaveOccurred()) // Calls `FromFS`.
-					Expect(lom2.Cksum()).To(BeEquivalentTo(lom1.Cksum()))
+					Expect(lom2.Checksum()).To(BeEquivalentTo(lom1.Checksum()))
 					Expect(lom2.Version()).To(BeEquivalentTo(lom1.Version()))
-					Expect(lom2.Size()).To(BeEquivalentTo(testFileSize))
+					Expect(lom2.SizeBytes()).To(BeEquivalentTo(testFileSize))
 					Expect(time.Unix(0, lom2.AtimeUnix()).After(startTime)).To(BeTrue())
 				})
 			})
@@ -658,7 +658,7 @@ var _ = Describe("LOM", func() {
 			dst, err = lom.CopyObject(fqn, make([]byte, testFileSize))
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(dst.FQN).To(BeARegularFile())
-			Expect(dst.Size()).To(BeEquivalentTo(testFileSize))
+			Expect(dst.SizeBytes()).To(BeEquivalentTo(testFileSize))
 
 			hrwLom := &cluster.LOM{ObjName: lom.ObjName}
 			Expect(hrwLom.Init(bck.Bucket())).NotTo(HaveOccurred())
@@ -679,10 +679,10 @@ var _ = Describe("LOM", func() {
 				copyLOM := NewBasicLom(copyFQN)
 				Expect(copyLOM.Load(false, true)).NotTo(HaveOccurred())
 
-				_, cksumValue := copyLOM.Cksum().Get()
+				_, cksumValue := copyLOM.Checksum().Get()
 				Expect(cksumValue).To(Equal(expectedHash))
 				Expect(copyLOM.Version()).To(Equal(desiredVersion))
-				Expect(copyLOM.Size()).To(BeEquivalentTo(testFileSize))
+				Expect(copyLOM.SizeBytes()).To(BeEquivalentTo(testFileSize))
 
 				Expect(copyLOM.IsCopy()).To(Equal(copyFQN != defaultLOM.FQN))
 				Expect(copyLOM.HasCopies()).To(BeTrue())
@@ -713,10 +713,10 @@ var _ = Describe("LOM", func() {
 
 				// Check copy created
 				Expect(copyLOM.FQN).NotTo(Equal(lom.FQN))
-				_, cksumValue := copyLOM.Cksum().Get()
+				_, cksumValue := copyLOM.Checksum().Get()
 				Expect(cksumValue).To(Equal(expectedHash))
 				Expect(copyLOM.Version()).To(Equal(desiredVersion))
-				Expect(copyLOM.Size()).To(BeEquivalentTo(testFileSize))
+				Expect(copyLOM.SizeBytes()).To(BeEquivalentTo(testFileSize))
 				Expect(copyLOM.IsCopy()).To(BeFalse())
 				Expect(copyLOM.HasCopies()).To(BeFalse())
 				Expect(copyLOM.NumCopies()).To(Equal(1))
@@ -742,10 +742,10 @@ var _ = Describe("LOM", func() {
 
 				// Check copy created
 				Expect(copyLOM.FQN).NotTo(Equal(lom.FQN))
-				_, cksumValue := copyLOM.Cksum().Get()
+				_, cksumValue := copyLOM.Checksum().Get()
 				Expect(cksumValue).To(Equal(expectedHash))
 				Expect(copyLOM.Version()).To(Equal(desiredVersion))
-				Expect(copyLOM.Size()).To(BeEquivalentTo(testFileSize))
+				Expect(copyLOM.SizeBytes()).To(BeEquivalentTo(testFileSize))
 
 				Expect(copyLOM.IsCopy()).To(BeTrue())
 				Expect(copyLOM.HasCopies()).To(BeTrue())
@@ -820,10 +820,10 @@ var _ = Describe("LOM", func() {
 				nonMirroredLOM.Lock(false)
 				defer nonMirroredLOM.Unlock(false)
 				Expect(nonMirroredLOM.FQN).NotTo(Equal(lom.FQN))
-				_, cksumValue := nonMirroredLOM.Cksum().Get()
+				_, cksumValue := nonMirroredLOM.Checksum().Get()
 				Expect(cksumValue).To(Equal(expectedHash))
 				Expect(nonMirroredLOM.Version()).To(Equal("1"))
-				Expect(nonMirroredLOM.Size()).To(BeEquivalentTo(testFileSize))
+				Expect(nonMirroredLOM.SizeBytes()).To(BeEquivalentTo(testFileSize))
 
 				Expect(nonMirroredLOM.IsCopy()).To(BeFalse())
 				Expect(nonMirroredLOM.HasCopies()).To(BeFalse())
@@ -854,10 +854,10 @@ var _ = Describe("LOM", func() {
 				copyLOM.Lock(false)
 				defer copyLOM.Unlock(false)
 				Expect(copyLOM.FQN).NotTo(Equal(lom.FQN))
-				_, cksumValue := copyLOM.Cksum().Get()
+				_, cksumValue := copyLOM.Checksum().Get()
 				Expect(cksumValue).To(Equal(expectedHash))
 				Expect(copyLOM.Version()).To(Equal(desiredVersion)) // TODO: ???
-				Expect(copyLOM.Size()).To(BeEquivalentTo(testFileSize))
+				Expect(copyLOM.SizeBytes()).To(BeEquivalentTo(testFileSize))
 				Expect(copyLOM.IsHRW()).To(BeTrue())
 				Expect(copyLOM.IsCopy()).To(BeFalse())
 				Expect(copyLOM.HasCopies()).To(BeFalse())
@@ -880,12 +880,12 @@ var _ = Describe("LOM", func() {
 				Expect(lom.NumCopies()).To(Equal(2))
 				Expect(lom.GetCopies()).To(And(HaveKey(mirrorFQNs[0]), HaveKey(mirrorFQNs[1])))
 				Expect(lom.Version()).To(Equal(desiredVersion))
-				Expect(lom.Size()).To(BeEquivalentTo(testFileSize))
+				Expect(lom.SizeBytes()).To(BeEquivalentTo(testFileSize))
 
 				// Check that copy from which HRW object was created is also updated.
 				Expect(copyLOM.FQN).NotTo(Equal(lom.FQN))
 				Expect(copyLOM.Version()).To(Equal(desiredVersion))
-				Expect(copyLOM.Size()).To(BeEquivalentTo(testFileSize))
+				Expect(copyLOM.SizeBytes()).To(BeEquivalentTo(testFileSize))
 				Expect(copyLOM.IsCopy()).To(BeTrue())
 				Expect(copyLOM.HasCopies()).To(BeTrue())
 				Expect(copyLOM.NumCopies()).To(Equal(lom.NumCopies()))
@@ -950,10 +950,10 @@ var _ = Describe("LOM", func() {
 				// Check that left copy was correctly updated.
 				copyLOM := NewBasicLom(mirrorFQNs[2])
 				Expect(copyLOM.Load(false, true)).NotTo(HaveOccurred())
-				_, cksumValue := copyLOM.Cksum().Get()
+				_, cksumValue := copyLOM.Checksum().Get()
 				Expect(cksumValue).To(Equal(expectedHash))
 				Expect(copyLOM.Version()).To(Equal(desiredVersion))
-				Expect(copyLOM.Size()).To(BeEquivalentTo(testFileSize))
+				Expect(copyLOM.SizeBytes()).To(BeEquivalentTo(testFileSize))
 
 				Expect(copyLOM.IsCopy()).To(BeTrue())
 				Expect(copyLOM.HasCopies()).To(BeTrue())

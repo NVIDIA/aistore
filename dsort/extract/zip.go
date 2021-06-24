@@ -108,11 +108,11 @@ func (z *zipExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, e
 		size int64
 	)
 
-	if zr, err = zip.NewReader(r, lom.Size()); err != nil {
+	if zr, err = zip.NewReader(r, lom.SizeBytes()); err != nil {
 		return extractedSize, extractedCount, err
 	}
 
-	buf, slab := z.t.MMSA().Alloc(lom.Size())
+	buf, slab := z.t.MMSA().Alloc(lom.SizeBytes())
 	defer slab.Free(buf)
 
 	for _, f := range zr.File {

@@ -117,8 +117,7 @@ type (
 		ObjNameTo string
 		Tsi       *Snode
 		DM        DataMover
-		HdrMeta   cmn.ObjHeaderMetaProvider
-		NoVersion bool // whether to reset object's version at the destination
+		HdrMeta   cmn.ObjAttrsHolder
 	}
 	PromoteFileParams struct {
 		SrcFQN    string

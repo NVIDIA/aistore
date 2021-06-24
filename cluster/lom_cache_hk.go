@@ -77,7 +77,7 @@ func (lchk *lcHK) evictAll(d time.Duration) {
 	for _, cache := range caches {
 		f := func(hkey, value interface{}) bool {
 			md := value.(*lmeta)
-			mdTime := md.atime
+			mdTime := md.Atime
 			if mdTime < 0 {
 				mdTime = -mdTime // special case: prefetched but not yet accessed
 			}
@@ -87,7 +87,7 @@ func (lchk *lcHK) evictAll(d time.Duration) {
 				return true
 			}
 			atimefs := md.atimefs & ^lomDirtyMask
-			if md.atime > 0 && atimefs != uint64(md.atime) {
+			if md.Atime > 0 && atimefs != uint64(md.Atime) {
 				lif := LIF{md.uname, md.bckID}
 				lom, err := lif.LOM()
 				if err == nil {

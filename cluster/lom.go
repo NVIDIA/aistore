@@ -42,15 +42,11 @@ const (
 
 type (
 	lmeta struct {
-		uname    string
-		version  string
-		size     int64
-		atime    int64
-		atimefs  uint64     // high bit is reserved for `dirty`
-		bckID    uint64     // see ais/bucketmeta
-		cksum    *cos.Cksum // ReCache(ref)
-		copies   fs.MPI     // ditto
-		customMD cos.SimpleKVs
+		cmn.ObjAttrs
+		uname   string
+		atimefs uint64 // high bit is reserved for `dirty`
+		bckID   uint64 // see ais/bucketmeta
+		copies  fs.MPI // ditto
 	}
 	LOM struct {
 		md          lmeta             // local persistent metadata
@@ -79,8 +75,8 @@ var (
 
 // interface guard
 var (
-	_ cmn.ObjHeaderMetaProvider = (*LOM)(nil)
-	_ fs.PartsFQN               = (*LOM)(nil)
+	_ cmn.ObjAttrsHolder = (*LOM)(nil)
+	_ fs.PartsFQN        = (*LOM)(nil)
 )
 
 func Init(t Target) {
@@ -166,29 +162,29 @@ func (lom *LOM) LIF() (lif LIF) {
 /////////
 
 // special a) when a new version is being created b) for usage in unit tests
-func (lom *LOM) Size(special ...bool) int64 {
+func (lom *LOM) SizeBytes(special ...bool) int64 {
 	debug.Assert(len(special) > 0 || lom.loaded())
-	return lom.md.size
+	return lom.md.Size
 }
 
 func (lom *LOM) Version(special ...bool) string {
 	debug.Assert(len(special) > 0 || lom.loaded())
-	return lom.md.version
+	return lom.md.Ver
 }
 
 func (lom *LOM) Uname() string                { return lom.md.uname }
-func (lom *LOM) SetSize(size int64)           { lom.md.size = size }
-func (lom *LOM) SetVersion(ver string)        { lom.md.version = ver }
-func (lom *LOM) Cksum() *cos.Cksum            { return lom.md.cksum }
-func (lom *LOM) SetCksum(cksum *cos.Cksum)    { lom.md.cksum = cksum }
-func (lom *LOM) Atime() time.Time             { return time.Unix(0, lom.md.atime) }
-func (lom *LOM) AtimeUnix() int64             { return lom.md.atime }
-func (lom *LOM) SetAtimeUnix(tu int64)        { lom.md.atime = tu }
-func (lom *LOM) SetCustomMD(md cos.SimpleKVs) { lom.md.customMD = md }
-func (lom *LOM) CustomMD() cos.SimpleKVs      { return lom.md.customMD }
+func (lom *LOM) SetSize(size int64)           { lom.md.Size = size }
+func (lom *LOM) SetVersion(ver string)        { lom.md.Ver = ver }
+func (lom *LOM) Checksum() *cos.Cksum         { return lom.md.Cksum }
+func (lom *LOM) SetCksum(cksum *cos.Cksum)    { lom.md.Cksum = cksum }
+func (lom *LOM) Atime() time.Time             { return time.Unix(0, lom.md.Atime) }
+func (lom *LOM) AtimeUnix() int64             { return lom.md.Atime }
+func (lom *LOM) SetAtimeUnix(tu int64)        { lom.md.Atime = tu }
+func (lom *LOM) SetCustomMD(md cos.SimpleKVs) { lom.md.AddMD = md }
+func (lom *LOM) CustomMD() cos.SimpleKVs      { return lom.md.AddMD }
 
 func (lom *LOM) GetCustomMD(key string) (string, bool) {
-	value, exists := lom.md.customMD[key]
+	value, exists := lom.md.AddMD[key]
 	return value, exists
 }
 
@@ -223,10 +219,10 @@ func (lom *LOM) loaded() bool { return lom.md.bckID != 0 }
 
 func (lom *LOM) ToHTTPHdr(hdr http.Header) http.Header {
 	cmn.ToHTTPHdr(lom, hdr)
-	if n := lom.md.size; n > 0 {
+	if n := lom.md.Size; n > 0 {
 		hdr.Set(cmn.HdrContentLength, strconv.FormatInt(n, 10))
 	}
-	if v := lom.md.version; v != "" {
+	if v := lom.md.Ver; v != "" {
 		hdr.Set(cmn.HdrObjVersion, v)
 	}
 	return hdr
@@ -472,7 +468,7 @@ func (lom *LOM) _restore(fqn string, buf []byte) (dst *LOM, err error) {
 func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	var (
 		dstCksum  *cos.CksumHash
-		srcCksum  = lom.Cksum()
+		srcCksum  = lom.Checksum()
 		cksumType = cos.ChecksumNone
 	)
 	if srcCksum != nil {
@@ -517,8 +513,8 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	}
 
 	if cksumType != cos.ChecksumNone {
-		if !dstCksum.Equal(lom.Cksum()) {
-			return nil, cos.NewBadDataCksumError(&dstCksum.Cksum, lom.Cksum())
+		if !dstCksum.Equal(lom.Checksum()) {
+			return nil, cos.NewBadDataCksumError(&dstCksum.Cksum, lom.Checksum())
 		}
 		dst.SetCksum(dstCksum.Clone())
 	}
@@ -570,14 +566,14 @@ func (lom *LOM) _string(b string) string {
 	)
 	if glog.FastV(4, glog.SmoduleCluster) {
 		s += fmt.Sprintf(" %s (%s)", lom.mpathInfo.Fs, lom.FQN)
-		if lom.md.size != 0 {
-			s += " size=" + cos.B2S(lom.md.size, 1)
+		if lom.md.Size != 0 {
+			s += " size=" + cos.B2S(lom.md.Size, 1)
 		}
-		if lom.md.version != "" {
-			s += " ver=" + lom.md.version
+		if lom.md.Ver != "" {
+			s += " ver=" + lom.md.Ver
 		}
-		if lom.md.cksum != nil {
-			s += " " + lom.md.cksum.String()
+		if lom.md.Cksum != nil {
+			s += " " + lom.md.Cksum.String()
 		}
 	}
 	if lom.loaded() {
@@ -602,11 +598,11 @@ func (lom *LOM) _string(b string) string {
 // increment ais LOM's version
 func (lom *LOM) IncVersion() error {
 	debug.Assert(lom.Bck().IsAIS())
-	if lom.md.version == "" {
+	if lom.md.Ver == "" {
 		lom.SetVersion(lomInitialVersion)
 		return nil
 	}
-	ver, err := strconv.Atoi(lom.md.version)
+	ver, err := strconv.Atoi(lom.md.Ver)
 	if err != nil {
 		return fmt.Errorf("%s: failed to inc version, err: %v", lom, err)
 	}
@@ -708,13 +704,13 @@ func (lom *LOM) ValidateMetaChecksum() error {
 	if md == nil {
 		return fmt.Errorf("%s: no meta", lom)
 	}
-	if lom.md.cksum == nil {
-		lom.SetCksum(md.cksum)
+	if lom.md.Cksum == nil {
+		lom.SetCksum(md.Cksum)
 		return nil
 	}
 	// different versions may have different checksums
-	if md.version == lom.md.version && !lom.md.cksum.Equal(md.cksum) {
-		err = cos.NewBadDataCksumError(lom.md.cksum, md.cksum, lom.String())
+	if md.Ver == lom.md.Ver && !lom.md.Cksum.Equal(md.Cksum) {
+		err = cos.NewBadDataCksumError(lom.md.Cksum, md.Cksum, lom.String())
 		lom.Uncache(true /*delDirty*/)
 	}
 	return err
@@ -730,7 +726,7 @@ func (lom *LOM) ValidateContentChecksum() (err error) {
 		cksums = struct {
 			stor *cos.Cksum     // stored with LOM
 			comp *cos.CksumHash // computed
-		}{stor: lom.md.cksum}
+		}{stor: lom.md.Cksum}
 
 		reloaded bool
 	)
@@ -738,20 +734,20 @@ recomp:
 	if cksumType == cos.ChecksumNone { // as far as do-no-checksum-checking bucket rules
 		return
 	}
-	if !lom.md.cksum.IsEmpty() {
-		cksumType = lom.md.cksum.Type() // takes precedence on the other hand
+	if !lom.md.Cksum.IsEmpty() {
+		cksumType = lom.md.Cksum.Type() // takes precedence on the other hand
 	}
 	if cksums.comp, err = lom.ComputeCksum(cksumType); err != nil {
 		return
 	}
-	if lom.md.cksum.IsEmpty() { // store computed
-		lom.md.cksum = cksums.comp.Clone()
+	if lom.md.Cksum.IsEmpty() { // store computed
+		lom.md.Cksum = cksums.comp.Clone()
 		if err = lom.Persist(); err != nil {
-			lom.md.cksum = cksums.stor
+			lom.md.Cksum = cksums.stor
 		}
 		return
 	}
-	if cksums.comp.Equal(lom.md.cksum) {
+	if cksums.comp.Equal(lom.md.Cksum) {
 		return
 	}
 	if reloaded {
@@ -759,13 +755,13 @@ recomp:
 	}
 	// retry: load from disk and check again
 	reloaded = true
-	if _, err = lom.lmfs(true); err == nil && lom.md.cksum != nil {
-		if cksumType == lom.md.cksum.Type() {
-			if cksums.comp.Equal(lom.md.cksum) {
+	if _, err = lom.lmfs(true); err == nil && lom.md.Cksum != nil {
+		if cksumType == lom.md.Cksum.Type() {
+			if cksums.comp.Equal(lom.md.Cksum) {
 				return
 			}
 		} else { // type changed
-			cksums.stor = lom.md.cksum
+			cksums.stor = lom.md.Cksum
 			cksumType = lom.CksumConf().Type
 			goto recomp
 		}
@@ -778,8 +774,8 @@ ex:
 
 func (lom *LOM) ComputeCksumIfMissing() (cksum *cos.Cksum, err error) {
 	var cksumHash *cos.CksumHash
-	if lom.md.cksum != nil {
-		cksum = lom.md.cksum
+	if lom.md.Cksum != nil {
+		cksum = lom.md.Cksum
 		return
 	}
 	cksumHash, err = lom.ComputeCksum()
@@ -1010,13 +1006,13 @@ beg:
 		return
 	}
 	// fstat & atime
-	if lom.md.size != finfo.Size() { // corruption or tampering
-		return fmt.Errorf("%s: errsize (%d != %d)", lom, lom.md.size, finfo.Size())
+	if lom.md.Size != finfo.Size() { // corruption or tampering
+		return fmt.Errorf("%s: errsize (%d != %d)", lom, lom.md.Size, finfo.Size())
 	}
 	atime := ios.GetATime(finfo)
-	lom.md.atime = atime.UnixNano()
-	debug.Assert(lom.md.atime > 0)
-	lom.md.atimefs = uint64(lom.md.atime)
+	lom.md.Atime = atime.UnixNano()
+	debug.Assert(lom.md.Atime > 0)
+	lom.md.atimefs = uint64(lom.md.Atime)
 	return
 }
 

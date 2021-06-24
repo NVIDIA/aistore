@@ -287,13 +287,13 @@ func (md *lmeta) unmarshal(buf []byte) (err error) {
 			if haveVersion {
 				return errors.New(invalid + " #3")
 			}
-			md.version = val
+			md.Ver = val
 			haveVersion = true
 		case lomObjSize:
 			if haveSize {
 				return errors.New(invalid + " #4")
 			}
-			md.size = int64(binary.BigEndian.Uint64([]byte(val)))
+			md.Size = int64(binary.BigEndian.Uint64([]byte(val)))
 			haveSize = true
 		case lomObjCopies:
 			if haveCopies {
@@ -319,9 +319,9 @@ func (md *lmeta) unmarshal(buf []byte) (err error) {
 			}
 		case lomCustomMD:
 			entries := strings.Split(val, customMDSepa)
-			md.customMD = make(cos.SimpleKVs, len(entries)/2)
+			md.AddMD = make(cos.SimpleKVs, len(entries)/2)
 			for i := 0; i < len(entries); i += 2 {
-				md.customMD[entries[i]] = entries[i+1]
+				md.AddMD[entries[i]] = entries[i+1]
 			}
 		default:
 			return errors.New(invalid + " #6")
@@ -330,7 +330,7 @@ func (md *lmeta) unmarshal(buf []byte) (err error) {
 	if haveCksumType != haveCksumValue {
 		return errors.New(invalid + " #7")
 	}
-	md.cksum = cos.NewCksum(cksumType, cksumValue)
+	md.Cksum = cos.NewCksum(cksumType, cksumValue)
 	if !haveSize {
 		return errors.New(invalid + " #8")
 	}
@@ -339,33 +339,29 @@ func (md *lmeta) unmarshal(buf []byte) (err error) {
 
 func (md *lmeta) marshal(mm *memsys.MMSA, mdSize int64) (buf []byte) {
 	var (
-		cksumType  = cos.ChecksumNone
-		cksumValue string
-		b8         [cos.SizeofI64]byte
+		b8                    [cos.SizeofI64]byte
+		cksumType, cksumValue = md.Cksum.Get()
 	)
 	buf, _ = mm.Alloc(mdSize)
 	buf = buf[:prefLen] // hold it for md-xattr checksum (below)
 
 	// serialize
-	if md.cksum != nil {
-		cksumType, cksumValue = md.cksum.Get()
-	}
 	buf = _marshRecord(mm, buf, lomCksumType, cksumType, true)
 	buf = _marshRecord(mm, buf, lomCksumValue, cksumValue, true)
-	if md.version != "" {
-		buf = _marshRecord(mm, buf, lomObjVersion, md.version, true)
+	if md.Ver != "" {
+		buf = _marshRecord(mm, buf, lomObjVersion, md.Ver, true)
 	}
-	binary.BigEndian.PutUint64(b8[:], uint64(md.size))
+	binary.BigEndian.PutUint64(b8[:], uint64(md.Size))
 	buf = _marshRecord(mm, buf, lomObjSize, string(b8[:]), false)
 	if len(md.copies) > 0 {
 		buf = mm.Append(buf, recordSepa)
 		buf = _marshRecord(mm, buf, lomObjCopies, "", false)
 		buf = _marshCopies(mm, buf, md.copies)
 	}
-	if len(md.customMD) > 0 {
+	if len(md.AddMD) > 0 {
 		buf = mm.Append(buf, recordSepa)
 		buf = _marshRecord(mm, buf, lomCustomMD, "", false)
-		buf = _marshCustomMD(mm, buf, md.customMD)
+		buf = _marshCustomMD(mm, buf, md.AddMD)
 	}
 
 	// checksum, prepend, and return

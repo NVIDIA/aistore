@@ -85,9 +85,9 @@ func (*putJogger) newCtx(lom *cluster.LOM, meta *Metadata) (ctx *encodeCtx, err 
 	ctx.meta = meta
 
 	totalCnt := ctx.paritySlices + ctx.dataSlices
-	ctx.sliceSize = SliceSize(ctx.lom.Size(), ctx.dataSlices)
+	ctx.sliceSize = SliceSize(ctx.lom.SizeBytes(), ctx.dataSlices)
 	ctx.slices = make([]*slice, totalCnt)
-	ctx.padSize = ctx.sliceSize*int64(ctx.dataSlices) - ctx.lom.Size()
+	ctx.padSize = ctx.sliceSize*int64(ctx.dataSlices) - ctx.lom.SizeBytes()
 
 	ctx.fh, err = cos.NewFileHandle(lom.FQN)
 	return ctx, err
@@ -118,7 +118,7 @@ func (c *putJogger) processRequest(req *request) {
 			return
 		}
 		ecConf := lom.Bprops().EC
-		memRequired = lom.Size() * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
+		memRequired = lom.SizeBytes() * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
 		c.toDisk = useDisk(memRequired)
 	}
 
@@ -211,8 +211,8 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Encoding %q...", lom.FQN)
 	}
-	if lom.Cksum() != nil {
-		cksumType, cksumValue = lom.Cksum().Get()
+	if lom.Checksum() != nil {
+		cksumType, cksumValue = lom.Checksum().Get()
 	}
 	reqTargets := ecConf.ParitySlices + 1
 	if !req.IsCopy {
@@ -229,7 +229,7 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 	meta := &Metadata{
 		MDVersion:   MDVersionLast,
 		Generation:  generation,
-		Size:        lom.Size(),
+		Size:        lom.SizeBytes(),
 		Data:        ecConf.DataSlices,
 		Parity:      ecConf.ParitySlices,
 		IsCopy:      req.IsCopy,
@@ -240,7 +240,7 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 	}
 
 	c.parent.ObjectsInc()
-	c.parent.BytesAdd(lom.Size())
+	c.parent.BytesAdd(lom.SizeBytes())
 
 	ctx, err := c.newCtx(lom, meta)
 	defer c.freeCtx(ctx)
@@ -320,7 +320,7 @@ func (c *putJogger) createCopies(ctx *encodeCtx) error {
 	// broadcast the replica to the targets
 	src := &dataSource{
 		reader:   ctx.fh,
-		size:     ctx.lom.Size(),
+		size:     ctx.lom.SizeBytes(),
 		metadata: ctx.meta,
 		reqType:  reqPut,
 	}
@@ -364,7 +364,7 @@ func generateSlicesToMemory(ctx *encodeCtx) error {
 func initializeSlices(ctx *encodeCtx) (err error) {
 	// readers are slices of original object(no memory allocated)
 	cksmReaders := make([]io.Reader, ctx.dataSlices)
-	sizeLeft := ctx.lom.Size()
+	sizeLeft := ctx.lom.SizeBytes()
 	for i := 0; i < ctx.dataSlices; i++ {
 		var (
 			reader     cos.ReadOpenCloser
