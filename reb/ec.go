@@ -207,7 +207,8 @@ func (reb *Manager) recvECData(hdr transport.ObjHdr, unpacker *cos.ByteUnpack, r
 	}
 
 	if req.rebID != reb.rebID.Load() {
-		glog.Warningf("local node has not started or already has finished rebalancing")
+		glog.Warningf("%s: not yet started or already finished rebalancing (%d, %d)",
+			reb.t.Snode(), req.rebID, reb.rebID.Load())
 		return
 	}
 
@@ -218,6 +219,7 @@ func (reb *Manager) recvECData(hdr transport.ObjHdr, unpacker *cos.ByteUnpack, r
 		return
 	}
 
+	debug.Assert(reb.dm.IsOpen())
 	if err := reb.receiveCT(req, hdr, reader); err != nil {
 		glog.Errorf("failed to receive CT for %s: %v", hdr.FullName(), err)
 	}
@@ -399,6 +401,11 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Read
 			continue
 		}
 		reb.onAir.Inc()
+		xreb := reb.xact()
+		if xreb.Aborted() {
+			err = fmt.Errorf("failed to send updated metafile: %s", xreb)
+			break
+		}
 		if errSend := reb.dm.Send(o, nil, tsi); errSend != nil && err == nil {
 			err = fmt.Errorf("failed to send updated metafile: %v", err)
 		}

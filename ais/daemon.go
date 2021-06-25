@@ -271,11 +271,11 @@ const (
 
 func envDaemonID(daemonType string) (daemonID string) {
 	if daemon.cli.daemonID != "" {
-		glog.Warningf("%s[%s] ID from command-line", daemonType, daemonID)
+		glog.Warningf("%s[%q] ID from command-line", daemonType, daemon.cli.daemonID)
 		return daemon.cli.daemonID
 	}
 	if daemonID = os.Getenv(daemonIDEnv); daemonID != "" {
-		glog.Warningf("%s[%s] ID from env", daemonType, daemonID)
+		glog.Warningf("%s[%q] ID from env", daemonType, daemonID)
 	}
 	return
 }

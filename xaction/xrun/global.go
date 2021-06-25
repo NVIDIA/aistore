@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
@@ -191,7 +192,7 @@ func (xact *Resilver) String() string {
 func (*eleFactory) New(_ xreg.XactArgs) xreg.GlobalEntry { return &eleFactory{} }
 
 func (p *eleFactory) Start(_ cmn.Bck) error {
-	args := xaction.Args{ID: xaction.BaseID(""), Kind: cmn.ActElection}
+	args := xaction.Args{ID: xaction.BaseID(cos.GenUUID()), Kind: cmn.ActElection}
 	p.xact = &Election{XactBase: *xaction.NewXactBase(args)}
 	return nil
 }

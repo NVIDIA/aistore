@@ -44,7 +44,7 @@ func TestXactionRenewLRU(t *testing.T) {
 	wg.Add(num)
 	for i := 0; i < num; i++ {
 		go func() {
-			xactCh <- xreg.RenewLRU("")
+			xactCh <- xreg.RenewLRU(cos.GenUUID())
 			wg.Done()
 		}()
 	}
@@ -63,7 +63,7 @@ func TestXactionRenewLRU(t *testing.T) {
 
 func TestXactionRenewPrefetch(t *testing.T) {
 	var (
-		evArgs = &xreg.DeletePrefetchArgs{}
+		evArgs = &xreg.DeletePrefetchArgs{UUID: cos.GenUUID()}
 
 		bmd = cluster.NewBaseBownerMock()
 		bck = cluster.NewBck(
@@ -115,7 +115,7 @@ func TestXactionAbortAll(t *testing.T) {
 	xreg.RegGlobXact(&lru.Factory{})
 	xreg.RegFactory(&xrun.MovFactory{})
 
-	xactGlob := xreg.RenewLRU("")
+	xactGlob := xreg.RenewLRU(cos.GenUUID())
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
 	rns := xreg.RenewBckRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
 	xactBck := rns.Entry.Get()
@@ -146,7 +146,7 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 	xreg.RegGlobXact(&lru.Factory{})
 	xreg.RegFactory(&xrun.MovFactory{})
 
-	xactGlob := xreg.RenewLRU("")
+	xactGlob := xreg.RenewLRU(cos.GenUUID())
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
 	rns := xreg.RenewBckRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
 	xactBck := rns.Entry.Get()
@@ -177,7 +177,7 @@ func TestXactionAbortBuckets(t *testing.T) {
 	xreg.RegGlobXact(&lru.Factory{})
 	xreg.RegFactory(&xrun.MovFactory{})
 
-	xactGlob := xreg.RenewLRU("")
+	xactGlob := xreg.RenewLRU(cos.GenUUID())
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
 	rns := xreg.RenewBckRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
 	xactBck := rns.Entry.Get()
@@ -223,7 +223,7 @@ func TestXactionQueryFinished(t *testing.T) {
 
 	rns1 = xreg.RenewBckRename(tMock, bck1, bck1, "uuid", 123, "phase")
 	tassert.Errorf(t, rns1.Err == nil && rns1.Entry.Get() != nil, "Xaction must be created")
-	rns3 := xreg.RenewPrefetch(tMock, bck1, &xreg.DeletePrefetchArgs{})
+	rns3 := xreg.RenewPrefetch(tMock, bck1, &xreg.DeletePrefetchArgs{UUID: cos.GenUUID()})
 	tassert.Errorf(t, rns3.Entry.Get() != nil, "Xaction must be created %v", rns3.Err)
 
 	xactBck1 := rns1.Entry.Get()

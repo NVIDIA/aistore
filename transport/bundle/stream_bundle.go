@@ -292,7 +292,11 @@ func (sb *Streams) Resync() {
 	defer sb.smaplock.Unlock()
 	smap := sb.sowner.Get()
 	if smap.Version <= sb.smap.Version {
-		return
+		var u unsafe.Pointer
+		if sb.streams.Load() != u {
+			return
+		}
+		glog.Errorf("%s[%s]: %s vs %s, unsafe=%v", sb.trname, sb.lid, smap, sb.smap, sb.streams.Load())
 	}
 
 	var oldNodeMap, newNodeMap []cluster.NodeMap

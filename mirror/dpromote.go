@@ -65,7 +65,7 @@ func (p *proFactory) Get() cluster.Xact { return p.xact }
 ////////////////////
 
 func NewXactDirPromote(dir string, bck cmn.Bck, t cluster.Target, params *cmn.ActValPromote) *XactDirPromote {
-	args := xaction.Args{ID: xaction.BaseID(""), Kind: cmn.ActPromote, Bck: &bck}
+	args := xaction.Args{ID: xaction.BaseID(cos.GenUUID()), Kind: cmn.ActPromote, Bck: &bck}
 	return &XactDirPromote{
 		xactBckBase: xactBckBase{XactBase: *xaction.NewXactBase(args), t: t},
 		dir:         dir,

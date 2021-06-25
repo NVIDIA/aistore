@@ -152,6 +152,8 @@ func (dm *DataMover) Open() {
 	dm.opened.Store(true)
 }
 
+func (dm *DataMover) IsOpen() bool { return dm.opened.Load() }
+
 // quiesce *local* Rx
 func (dm *DataMover) Quiesce(d time.Duration) cluster.QuiRes {
 	return dm.xact.Quiesce(d, dm.quicb)

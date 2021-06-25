@@ -90,6 +90,7 @@ func (id RebID) Compare(other string) int {
 
 func NewXactBase(args Args) (xact *XactBase) {
 	debug.Assert(args.Kind != "")
+	debug.Assertf(args.ID != BaseID(""), "%v", args)
 	xact = &XactBase{id: args.ID, kind: args.Kind, abrt: make(chan struct{})}
 	if args.Bck != nil {
 		xact.bck = *args.Bck

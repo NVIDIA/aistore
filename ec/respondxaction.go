@@ -53,7 +53,7 @@ func (p *rspFactory) Start(bck cmn.Bck) error {
 		config      = cmn.GCO.Get()
 		totallyIdle = config.Timeout.SendFile.D()
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
-		args        = xaction.Args{ID: xaction.BaseID(""), Kind: p.Kind(), Bck: &bck}
+		args        = xaction.Args{ID: xaction.BaseID(cos.GenUUID()), Kind: p.Kind(), Bck: &bck}
 	)
 	xec.XactDemandBase = *xaction.NewXDB(args, totallyIdle, likelyIdle)
 	xec.InitIdle()
