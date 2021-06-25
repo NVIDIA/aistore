@@ -170,7 +170,7 @@ func (reb *Manager) transportECCB(_ transport.ObjHdr, _ io.ReadCloser, _ interfa
 //   1. Full object/replica is received
 //   2. A CT is received and this target is not the default target (it
 //      means that the CTs came from default target after EC had been rebuilt)
-func (reb *Manager) saveCTToDisk(req *pushReq, hdr transport.ObjHdr, data io.Reader) error {
+func (reb *Manager) saveCTToDisk(req *pushReq, hdr *transport.ObjHdr, data io.Reader) error {
 	cos.Assert(req.md != nil)
 	var (
 		err error
@@ -219,7 +219,6 @@ func (reb *Manager) recvECData(hdr transport.ObjHdr, unpacker *cos.ByteUnpack, r
 		return
 	}
 
-	debug.Assert(reb.dm.IsOpen())
 	if err := reb.receiveCT(req, hdr, reader); err != nil {
 		glog.Errorf("failed to receive CT for %s: %v", hdr.FullName(), err)
 	}
@@ -366,7 +365,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Read
 		req.md.Daemons[moveTo.ID()] = uint16(md.SliceID)
 	}
 	// Save received CT to local drives
-	err = reb.saveCTToDisk(req, hdr, reader)
+	err = reb.saveCTToDisk(req, &hdr, reader)
 	if err != nil {
 		if errRm := os.Remove(ct.FQN()); errRm != nil {
 			glog.Errorf("Failed to remove %s: %v", ct.FQN(), errRm)

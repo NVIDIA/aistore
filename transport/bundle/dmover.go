@@ -162,9 +162,6 @@ func (dm *DataMover) Quiesce(d time.Duration) cluster.QuiRes {
 func (dm *DataMover) Close(err error) {
 	debug.Assert(dm.opened.Load())    // Open() must've been called
 	dm.data.streams.Close(err == nil) // err == nil: close gracefully via `fin`, otherwise abort
-	if err == nil {
-		dm.data.streams = nil // safe when closed gracefully
-	}
 	if dm.useACKs() {
 		dm.ack.streams.Close(true)
 	}

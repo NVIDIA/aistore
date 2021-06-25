@@ -199,16 +199,16 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object i
 		}
 
 		if glog.FastV(4, glog.SmoduleEC) {
-			glog.Infof("Got slice=%t from %s (#%d of %s) v%s, cksum: %s",
-				iReq.isSlice, iReq.sender, iReq.meta.SliceID, hdr.FullName(), meta.ObjVersion, meta.CksumValue)
+			glog.Infof("Got slice=%t from %s (#%d of %s) v%s, cksum: %s", iReq.isSlice, iReq.sender,
+				iReq.meta.SliceID, hdr.FullName(), meta.ObjVersion, meta.CksumValue)
 		}
 		md := meta.NewPack()
 		if iReq.isSlice {
 			args := &WriteArgs{Reader: object, MD: md, BID: iReq.bid, Generation: meta.Generation}
-			err = WriteSliceAndMeta(r.t, hdr, args)
+			err = WriteSliceAndMeta(r.t, &hdr, args)
 		} else {
 			var lom *cluster.LOM
-			lom, err = cluster.AllocLomFromHdr(hdr)
+			lom, err = cluster.AllocLomFromHdr(&hdr)
 			if err == nil {
 				args := &WriteArgs{
 					Reader:     object,

@@ -192,7 +192,7 @@ func (lom *LOM) GetCustomMD(key string) (string, bool) {
 }
 
 // lom <= transport.ObjHdr (NOTE: caller must call freeLOM)
-func AllocLomFromHdr(hdr transport.ObjHdr) (lom *LOM, err error) {
+func AllocLomFromHdr(hdr *transport.ObjHdr) (lom *LOM, err error) {
 	lom = AllocLOM(hdr.ObjName)
 	if err = lom.Init(hdr.Bck); err != nil {
 		return
