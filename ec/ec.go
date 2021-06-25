@@ -436,7 +436,6 @@ func WriteSliceAndMeta(t cluster.Target, hdr transport.ObjHdr, args *WriteArgs) 
 	if err == nil {
 		err = validateBckBID(t, hdr.Bck, args.BID)
 	}
-
 	if err != nil {
 		if rmErr := cos.RemoveFile(ct.FQN()); rmErr != nil {
 			glog.Errorf("nested error: save replica -> remove replica: %v", rmErr)
@@ -445,24 +444,7 @@ func WriteSliceAndMeta(t cluster.Target, hdr transport.ObjHdr, args *WriteArgs) 
 			glog.Errorf("nested error: save replica -> remove metafile: %v", rmErr)
 		}
 	}
-
 	return err
-}
-
-func LomFromHeader(hdr transport.ObjHdr) (*cluster.LOM, error) {
-	lom := cluster.AllocLOM(hdr.ObjName) // NOTE: caller must call freeLOM
-	if err := lom.Init(hdr.Bck); err != nil {
-		return nil, err
-	}
-	lom.SetSize(hdr.ObjAttrs.Size)
-	if hdr.ObjAttrs.Ver != "" {
-		lom.SetVersion(hdr.ObjAttrs.Ver)
-	}
-	if hdr.ObjAttrs.Atime != 0 {
-		lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
-	}
-	lom.SetCksum(hdr.ObjAttrs.Cksum)
-	return lom, nil
 }
 
 // WriteReplicaAndMeta saves replica and its metafile

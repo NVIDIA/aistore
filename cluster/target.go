@@ -117,7 +117,7 @@ type (
 		ObjNameTo string
 		Tsi       *Snode
 		DM        DataMover
-		HdrMeta   cmn.ObjAttrsHolder
+		ObjAttrs  cmn.ObjAttrsHolder
 	}
 	PromoteFileParams struct {
 		SrcFQN    string

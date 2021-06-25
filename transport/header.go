@@ -47,7 +47,7 @@ func insObjHeader(hbuf []byte, hdr *ObjHdr, usePDU bool) (off int) {
 	off = insString(off, hbuf, hdr.Bck.Ns.Name)
 	off = insString(off, hbuf, hdr.Bck.Ns.UUID)
 	off = insByte(off, hbuf, hdr.Opaque)
-	off = insAttrs(off, hbuf, hdr.ObjAttrs)
+	off = insAttrs(off, hbuf, &hdr.ObjAttrs)
 	word1 := uint64(off-sizeProtoHdr) | flags
 	insUint64(0, hbuf, word1)
 	checksum := xoshiro256.Hash(word1)
@@ -100,11 +100,11 @@ func insUint64(off int, to []byte, i uint64) int {
 	return off + cos.SizeofI64
 }
 
-func insAttrs(off int, to []byte, attr cmn.ObjAttrs) int {
+func insAttrs(off int, to []byte, attr *cmn.ObjAttrs) int {
 	off = insInt64(off, to, attr.Size)
 	off = insInt64(off, to, attr.Atime)
-	off = insString(off, to, attr.Cksum.Type())
-	off = insString(off, to, attr.Cksum.Value())
+	off = insString(off, to, attr.Checksum().Type())
+	off = insString(off, to, attr.Checksum().Value())
 	off = insString(off, to, attr.Ver)
 	return off
 }
@@ -175,7 +175,7 @@ func extAttrs(off int, from []byte) (n int, attr cmn.ObjAttrs) {
 	off, attr.Atime = extInt64(off, from)
 	off, cksumTyp = extString(off, from)
 	off, cksumVal = extString(off, from)
-	attr.Cksum = cos.NewCksum(cksumTyp, cksumVal)
+	attr.SetCksum(cos.NewCksum(cksumTyp, cksumVal), true /*cloned*/)
 	off, attr.Ver = extString(off, from)
 	return off, attr
 }

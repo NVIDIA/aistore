@@ -1175,11 +1175,10 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 			size = fi.Size()
 			reader = fh
 		}
-
 		params.Reader = reader
-		params.HdrMeta = lom
+		params.ObjAttrs = lom
 	} else {
-		if params.Reader, params.HdrMeta, err = coi.DP.Reader(lom); err != nil {
+		if params.Reader, params.ObjAttrs, err = coi.DP.Reader(lom); err != nil {
 			return
 		}
 		if coi.DryRun {
@@ -1187,12 +1186,12 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 			cos.Close(params.Reader)
 			return
 		}
-		if size = params.HdrMeta.SizeBytes(); size < 0 {
+		if size = params.ObjAttrs.SizeBytes(); size < 0 {
 			// NOTE: Return the current size as resulting (transformed) size isn't known.
 			size = lom.SizeBytes()
 		}
 	}
-	debug.Assert(params.HdrMeta != nil)
+	debug.Assert(params.ObjAttrs != nil)
 	params.BckTo = coi.BckTo
 	if params.DM != nil { // Either send via stream...
 		err = _sendObjDM(lom, params)
@@ -1205,7 +1204,7 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 // streaming send via bundle.DataMover
 func _sendObjDM(lom *cluster.LOM, params *cluster.SendToParams) error {
 	o := transport.AllocSend()
-	hdr, meta := &o.Hdr, params.HdrMeta
+	hdr, meta := &o.Hdr, params.ObjAttrs
 	{
 		hdr.Bck = params.BckTo.Bck
 		hdr.ObjName = params.ObjNameTo
@@ -1227,16 +1226,16 @@ func (t *targetrunner) _sendPUT(lom *cluster.LOM, params *cluster.SendToParams) 
 		hdr   http.Header
 		query = cmn.AddBckToQuery(nil, params.BckTo.Bck)
 	)
-	debug.Assert(params.HdrMeta != nil)
-	if params.HdrMeta == lom {
+	debug.Assert(params.ObjAttrs != nil)
+	if params.ObjAttrs == lom {
 		hdr = make(http.Header, 4)
 		lom.ToHTTPHdr(hdr)
 	} else {
-		hdr = cmn.ToHTTPHdr(params.HdrMeta)
-		if size := params.HdrMeta.SizeBytes(); size > 0 {
+		hdr = cmn.ToHTTPHdr(params.ObjAttrs)
+		if size := params.ObjAttrs.SizeBytes(); size > 0 {
 			hdr.Set(cmn.HdrContentLength, strconv.FormatInt(size, 10))
 		}
-		if version := params.HdrMeta.Version(); version != "" {
+		if version := params.ObjAttrs.Version(); version != "" {
 			hdr.Set(cmn.HdrObjVersion, version)
 		}
 	}

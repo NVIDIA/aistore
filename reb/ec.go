@@ -143,9 +143,7 @@ func (reb *Manager) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *clus
 		ObjAttrs: cmn.ObjAttrs{Size: meta.Size},
 	}
 	if lom != nil {
-		o.Hdr.ObjAttrs.Atime = lom.AtimeUnix()
-		o.Hdr.ObjAttrs.Ver = lom.Version()
-		o.Hdr.ObjAttrs.Cksum = lom.Checksum()
+		o.Hdr.ObjAttrs.Clone(lom.ObjAttrs())
 	}
 	if meta.SliceID != 0 {
 		o.Hdr.ObjAttrs.Size = ec.SliceSize(meta.Size, meta.Data)
@@ -187,7 +185,7 @@ func (reb *Manager) saveCTToDisk(req *pushReq, hdr transport.ObjHdr, data io.Rea
 		err = ec.WriteSliceAndMeta(reb.t, hdr, args)
 	} else {
 		var lom *cluster.LOM
-		lom, err = ec.LomFromHeader(hdr)
+		lom, err = cluster.AllocLomFromHdr(hdr)
 		if err == nil {
 			args := &ec.WriteArgs{Reader: data, MD: md, Cksum: hdr.ObjAttrs.Cksum}
 			err = ec.WriteReplicaAndMeta(reb.t, lom, args)

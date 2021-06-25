@@ -44,12 +44,10 @@ func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cmn
 		r   cos.ReadCloseSizer
 		err error
 	)
-
 	call := func() (int, error) {
 		r, err = dp.comm.Get(lom.Bck(), lom.ObjName, dp.requestTimeout)
 		return 0, err
 	}
-
 	// TODO: Check if ETL pod is healthy and wait some more if not (yet).
 	err = cmn.NetworkCallWithRetry(&cmn.CallWithRetryArgs{
 		Call:      call,
@@ -63,11 +61,10 @@ func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cmn
 	if err != nil {
 		return nil, nil, err
 	}
-
 	om := &cmn.ObjAttrs{
 		Size:  r.Size(),
-		Ver:   "",            // Object after ETL is a new object with a new version.
-		Cksum: cos.NoneCksum, // TODO: Revisit and check if possible to have a checksum.
+		Ver:   "",            // after ETL a new object
+		Cksum: cos.NoneCksum, // TODO: checksum
 		Atime: lom.AtimeUnix(),
 	}
 	return cos.NopOpener(r), om, nil

@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
+	"github.com/NVIDIA/aistore/transport"
 )
 
 //
@@ -161,6 +162,8 @@ func (lom *LOM) LIF() (lif LIF) {
 // LOM //
 /////////
 
+func (lom *LOM) ObjAttrs() cmn.ObjAttrsHolder { return &lom.md.ObjAttrs }
+
 // special a) when a new version is being created b) for usage in unit tests
 func (lom *LOM) SizeBytes(special ...bool) int64 {
 	debug.Assert(len(special) > 0 || lom.loaded())
@@ -186,6 +189,19 @@ func (lom *LOM) CustomMD() cos.SimpleKVs      { return lom.md.AddMD }
 func (lom *LOM) GetCustomMD(key string) (string, bool) {
 	value, exists := lom.md.AddMD[key]
 	return value, exists
+}
+
+// lom <= transport.ObjHdr (NOTE: caller must call freeLOM)
+func AllocLomFromHdr(hdr transport.ObjHdr) (lom *LOM, err error) {
+	lom = AllocLOM(hdr.ObjName)
+	if err = lom.Init(hdr.Bck); err != nil {
+		return
+	}
+	lom.SetSize(hdr.ObjAttrs.Size)
+	lom.SetVersion(hdr.ObjAttrs.Ver)
+	lom.SetCksum(hdr.ObjAttrs.Cksum)
+	lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
+	return
 }
 
 func (lom *LOM) ECEnabled() bool { return lom.Bprops().EC.Enabled }

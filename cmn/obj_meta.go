@@ -19,7 +19,7 @@ type (
 		Atime int64         // access time (nanoseconds since UNIX epoch)
 		Size  int64         // object size (bytes)
 		Ver   string        // object version
-		Cksum *cos.Cksum    // object checksum
+		Cksum *cos.Cksum    // object checksum (NOTE: m.b. cloned)
 		AddMD cos.SimpleKVs // custom md
 	}
 )
@@ -32,3 +32,19 @@ func (oa *ObjAttrs) Version(_ ...bool) string  { return oa.Ver }
 func (oa *ObjAttrs) Checksum() *cos.Cksum      { return oa.Cksum }
 func (oa *ObjAttrs) AtimeUnix() int64          { return oa.Atime }
 func (*ObjAttrs) CustomMD() cos.SimpleKVs      { return nil }
+
+func (oa *ObjAttrs) SetCksum(cksum *cos.Cksum, cloned bool) {
+	if cloned {
+		oa.Cksum = cksum
+	} else {
+		oa.Cksum = cksum.Clone()
+	}
+}
+
+func (oa *ObjAttrs) Clone(oah ObjAttrsHolder) {
+	oa.Atime = oah.AtimeUnix()
+	oa.Size = oah.SizeBytes()
+	oa.Ver = oah.Version()
+	oa.Cksum = oah.Checksum().Clone()
+	oa.AddMD = oah.CustomMD() // TODO -- FIXME: clone and support
+}
