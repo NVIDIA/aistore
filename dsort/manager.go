@@ -661,7 +661,7 @@ func (m *Manager) makeRecvShardFunc() transport.ReceiveObj {
 			return
 		}
 		if err == nil {
-			if lom.Checksum().Equal(hdr.ObjAttrs.Cksum) {
+			if lom.EqCksum(hdr.ObjAttrs.Cksum) {
 				glog.V(4).Infof("[dsort] %s shard (%s) already exists and checksums are equal, skipping", m.ManagerUUID, lom)
 				cos.DrainReader(object)
 				return

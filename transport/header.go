@@ -175,7 +175,7 @@ func extAttrs(off int, from []byte) (n int, attr cmn.ObjAttrs) {
 	off, attr.Atime = extInt64(off, from)
 	off, cksumTyp = extString(off, from)
 	off, cksumVal = extString(off, from)
-	attr.SetCksum(cos.NewCksum(cksumTyp, cksumVal), true /*cloned*/)
+	attr.SetCksum(cksumTyp, cksumVal)
 	off, attr.Ver = extString(off, from)
 	return off, attr
 }

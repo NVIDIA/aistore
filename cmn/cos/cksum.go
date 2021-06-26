@@ -141,9 +141,7 @@ func (ck *Cksum) Equal(to *Cksum) bool {
 	if ck.IsEmpty() || to.IsEmpty() {
 		return false
 	}
-	t1, v1 := ck.Get()
-	t2, v2 := to.Get()
-	return t1 == t2 && v1 == v2
+	return ck.ty == to.ty && ck.value == to.value
 }
 
 func (ck *Cksum) Get() (string, string) {
@@ -176,8 +174,13 @@ func (ck *Cksum) String() string {
 	return fmt.Sprintf("(%s,%s...)", ck.ty, ck.value[:Min(10, len(ck.value))])
 }
 
+///////////////
+// CksumHash //
+///////////////
+
 func (ck *CksumHash) Equal(to *Cksum) bool { return ck.Cksum.Equal(to) }
 func (ck *CksumHash) Sum() []byte          { return ck.sum }
+
 func (ck *CksumHash) Finalize() {
 	ck.sum = ck.H.Sum(nil)
 	ck.value = hex.EncodeToString(ck.sum)

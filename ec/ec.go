@@ -464,10 +464,9 @@ func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) er
 		return err
 	}
 	if !args.Cksum.IsEmpty() && args.Cksum.Value() != "" { // NOTE: empty value
-		cksumHdr := args.Cksum
-		if !lom.Checksum().Equal(cksumHdr) {
+		if !lom.EqCksum(args.Cksum) {
 			return fmt.Errorf("mismatched hash for %s/%s, version %s, hash calculated %s/md %s",
-				lom.Bucket(), lom.ObjName, lom.Version(), cksumHdr, lom.Checksum())
+				lom.Bucket(), lom.ObjName, lom.Version(), args.Cksum, lom.Checksum())
 		}
 	}
 	ctMeta := cluster.NewCTFromLOM(lom, MetaType)

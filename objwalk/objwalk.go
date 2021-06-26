@@ -122,8 +122,7 @@ func (w *Walk) RemoteObjPage() (*cmn.BucketList, error) {
 			}
 		}
 		if needCksum && lom.Checksum() != nil {
-			_, storedCksum := lom.Checksum().Get()
-			e.Checksum = storedCksum
+			e.Checksum = lom.Checksum().Value()
 		}
 		if needVersion && lom.Version() != "" {
 			e.Version = lom.Version()

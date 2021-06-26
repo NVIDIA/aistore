@@ -105,7 +105,7 @@ func (poi *putObjInfo) putObject() (int, error) {
 	lom := poi.lom
 	// optimize out if the checksums do match
 	if !poi.cksumToUse.IsEmpty() {
-		if lom.Checksum().Equal(poi.cksumToUse) {
+		if lom.EqCksum(poi.cksumToUse) {
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("%s is valid %s: PUT is a no-op", lom, poi.cksumToUse)
 			}
@@ -717,8 +717,9 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 			}
 		}
 		// checksum, version, time => resp hdr
-		if !goi.lom.Checksum().IsEmpty() && !cksumRange {
-			cksumType, cksumValue := goi.lom.Checksum().Get()
+		cksum := goi.lom.Checksum()
+		if !cksum.IsEmpty() && !cksumRange {
+			cksumType, cksumValue := cksum.Get()
 			hdr.Set(cmn.HdrObjCksumType, cksumType)
 			hdr.Set(cmn.HdrObjCksumVal, cksumValue)
 		}
@@ -1027,7 +1028,7 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 		dst.Lock(true)
 		defer dst.Unlock(true)
 		if err = dst.Load(false /*cache it*/, true /*locked*/); err == nil {
-			if src.Checksum().Equal(dst.Checksum()) {
+			if src.EqCksum(dst.Checksum()) {
 				return
 			}
 		} else if cmn.IsErrBucketNought(err) {

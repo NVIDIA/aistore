@@ -144,8 +144,7 @@ func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntr
 		fileInfo.Atime = cos.FormatUnixNano(lom.AtimeUnix(), wi.timeFormat)
 	}
 	if wi.needCksum() && lom.Checksum() != nil {
-		_, storedCksum := lom.Checksum().Get()
-		fileInfo.Checksum = storedCksum
+		fileInfo.Checksum = lom.Checksum().Value()
 	}
 	if wi.needVersion() {
 		fileInfo.Version = lom.Version()

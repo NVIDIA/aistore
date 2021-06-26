@@ -186,6 +186,8 @@ func (lom *LOM) SetAtimeUnix(tu int64)        { lom.md.Atime = tu }
 func (lom *LOM) SetCustomMD(md cos.SimpleKVs) { lom.md.AddMD = md }
 func (lom *LOM) CustomMD() cos.SimpleKVs      { return lom.md.AddMD }
 
+func (lom *LOM) EqCksum(cksum *cos.Cksum) bool { return lom.md.Cksum.Equal(cksum) }
+
 func (lom *LOM) GetCustomMD(key string) (string, bool) {
 	value, exists := lom.md.AddMD[key]
 	return value, exists
@@ -725,7 +727,7 @@ func (lom *LOM) ValidateMetaChecksum() error {
 		return nil
 	}
 	// different versions may have different checksums
-	if md.Ver == lom.md.Ver && !lom.md.Cksum.Equal(md.Cksum) {
+	if md.Ver == lom.md.Ver && !lom.EqCksum(md.Cksum) {
 		err = cos.NewBadDataCksumError(lom.md.Cksum, md.Cksum, lom.String())
 		lom.Uncache(true /*delDirty*/)
 	}

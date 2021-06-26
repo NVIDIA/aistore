@@ -29,17 +29,11 @@ var _ ObjAttrsHolder = (*ObjAttrs)(nil)
 
 func (oa *ObjAttrs) SizeBytes(_ ...bool) int64 { return oa.Size }
 func (oa *ObjAttrs) Version(_ ...bool) string  { return oa.Ver }
-func (oa *ObjAttrs) Checksum() *cos.Cksum      { return oa.Cksum }
 func (oa *ObjAttrs) AtimeUnix() int64          { return oa.Atime }
-func (*ObjAttrs) CustomMD() cos.SimpleKVs      { return nil }
+func (oa *ObjAttrs) Checksum() *cos.Cksum      { return oa.Cksum }
+func (oa *ObjAttrs) SetCksum(ty, val string)   { oa.Cksum = cos.NewCksum(ty, val) }
 
-func (oa *ObjAttrs) SetCksum(cksum *cos.Cksum, cloned bool) {
-	if cloned {
-		oa.Cksum = cksum
-	} else {
-		oa.Cksum = cksum.Clone()
-	}
-}
+func (*ObjAttrs) CustomMD() cos.SimpleKVs { return nil }
 
 func (oa *ObjAttrs) Clone(oah ObjAttrsHolder) {
 	oa.Atime = oah.AtimeUnix()
