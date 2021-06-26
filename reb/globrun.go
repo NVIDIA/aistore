@@ -568,7 +568,7 @@ func (rj *rebJogger) doSend(lom *cluster.LOM, tsi *cluster.Snode, roc cos.ReadOp
 	o.Hdr.Bck = lom.Bucket()
 	o.Hdr.ObjName = lom.ObjName
 	o.Hdr.Opaque = opaque
-	o.Hdr.ObjAttrs.Clone(lom.ObjAttrs())
+	o.Hdr.ObjAttrs.CopyFrom(lom.ObjAttrs())
 	o.Callback, o.CmplArg = rj.objSentCallback, lom
 	rj.m.inQueue.Inc()
 	rj.m.dm.Send(o, roc, tsi)

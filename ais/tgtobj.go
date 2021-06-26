@@ -716,18 +716,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 				size = rrange.Length // Content-Length
 			}
 		}
-		// checksum, version, time => resp hdr
-		cksum := goi.lom.Checksum()
-		if !cksum.IsEmpty() && !cksumRange {
-			cksumType, cksumValue := cksum.Get()
-			hdr.Set(cmn.HdrObjCksumType, cksumType)
-			hdr.Set(cmn.HdrObjCksumVal, cksumValue)
-		}
-		if goi.lom.Version() != "" {
-			hdr.Set(cmn.HdrObjVersion, goi.lom.Version())
-		}
-		hdr.Set(cmn.HdrObjSize, strconv.FormatInt(goi.lom.SizeBytes(), 10))
-		hdr.Set(cmn.HdrObjAtime, cos.UnixNano2S(goi.lom.AtimeUnix()))
+		cmn.ToHTTPHdr(goi.lom, hdr)
 	}
 
 	// set reader
@@ -958,7 +947,7 @@ func parseAppendHandle(handle string) (hi handleInfo, err error) {
 
 func combineAppendHandle(nodeID, filePath string, partialCksum *cos.CksumHash) string {
 	buf, err := partialCksum.H.(encoding.BinaryMarshaler).MarshalBinary()
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 	cksumTy := partialCksum.Type()
 	cksumBinary := base64.StdEncoding.EncodeToString(buf)
 	return nodeID + "|" + filePath + "|" + cksumTy + "|" + cksumBinary
@@ -1188,16 +1177,17 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 			return
 		}
 		if size = params.ObjAttrs.SizeBytes(); size < 0 {
-			// NOTE: Return the current size as resulting (transformed) size isn't known.
+			// NOTE?: returning the current size since post-transform size cannot be known
 			size = lom.SizeBytes()
 		}
 	}
 	debug.Assert(params.ObjAttrs != nil)
 	params.BckTo = coi.BckTo
-	if params.DM != nil { // Either send via stream...
+	// either stream or PUT
+	if params.DM != nil {
 		err = _sendObjDM(lom, params)
-	} else { // ... or via remote PUT call.
-		err = coi.t._sendPUT(lom, params)
+	} else {
+		err = coi.t._sendPUT(params)
 	}
 	return
 }
@@ -1205,14 +1195,11 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 // streaming send via bundle.DataMover
 func _sendObjDM(lom *cluster.LOM, params *cluster.SendToParams) error {
 	o := transport.AllocSend()
-	hdr, meta := &o.Hdr, params.ObjAttrs
+	hdr, oa := &o.Hdr, params.ObjAttrs
 	{
 		hdr.Bck = params.BckTo.Bck
 		hdr.ObjName = params.ObjNameTo
-		hdr.ObjAttrs.Size = meta.SizeBytes()
-		hdr.ObjAttrs.Atime = meta.AtimeUnix()
-		hdr.ObjAttrs.Cksum = meta.Checksum()
-		hdr.ObjAttrs.Ver = meta.Version()
+		hdr.ObjAttrs.CopyFrom(oa)
 	}
 	o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
 		cluster.FreeLOM(lom)
@@ -1220,26 +1207,13 @@ func _sendObjDM(lom *cluster.LOM, params *cluster.SendToParams) error {
 	return params.DM.Send(o, params.Reader, params.Tsi)
 }
 
-// PUT(lom) => destination-target
-// NOTE: always closes params.Reader (either explicitly or via Do())
-func (t *targetrunner) _sendPUT(lom *cluster.LOM, params *cluster.SendToParams) error {
+// PUT(lom) => destination target
+// NOTE: always closes params.Reader, either explicitly or via Do()
+func (t *targetrunner) _sendPUT(params *cluster.SendToParams) error {
 	var (
-		hdr   http.Header
+		hdr   = cmn.ToHTTPHdr(params.ObjAttrs)
 		query = cmn.AddBckToQuery(nil, params.BckTo.Bck)
 	)
-	debug.Assert(params.ObjAttrs != nil)
-	if params.ObjAttrs == lom {
-		hdr = make(http.Header, 4)
-		lom.ToHTTPHdr(hdr)
-	} else {
-		hdr = cmn.ToHTTPHdr(params.ObjAttrs)
-		if size := params.ObjAttrs.SizeBytes(); size > 0 {
-			hdr.Set(cmn.HdrContentLength, strconv.FormatInt(size, 10))
-		}
-		if version := params.ObjAttrs.Version(); version != "" {
-			hdr.Set(cmn.HdrObjVersion, version)
-		}
-	}
 	hdr.Set(cmn.HdrPutterID, t.si.ID())
 	query.Set(cmn.URLParamRecvType, strconv.Itoa(int(cluster.Migrated)))
 	reqArgs := cmn.ReqArgs{

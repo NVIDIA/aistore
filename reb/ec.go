@@ -143,7 +143,7 @@ func (reb *Manager) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *clus
 		ObjAttrs: cmn.ObjAttrs{Size: meta.Size},
 	}
 	if lom != nil {
-		o.Hdr.ObjAttrs.Clone(lom.ObjAttrs())
+		o.Hdr.ObjAttrs.CopyFrom(lom.ObjAttrs())
 	}
 	if meta.SliceID != 0 {
 		o.Hdr.ObjAttrs.Size = ec.SliceSize(meta.Size, meta.Data)

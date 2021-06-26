@@ -151,12 +151,16 @@ func (ck *Cksum) Get() (string, string) {
 	return ck.ty, ck.value
 }
 
+func (ck *Cksum) Ty() string { return ck.ty }
+
 func (ck *Cksum) Type() string {
 	if ck == nil {
 		return ChecksumNone
 	}
 	return ck.ty
 }
+
+func (ck *Cksum) Val() string { return ck.value }
 
 func (ck *Cksum) Value() string {
 	if ck == nil {

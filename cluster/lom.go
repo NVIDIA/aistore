@@ -235,17 +235,6 @@ func (lom *LOM) WritePolicy() (p cmn.MDWritePolicy) {
 
 func (lom *LOM) loaded() bool { return lom.md.bckID != 0 }
 
-func (lom *LOM) ToHTTPHdr(hdr http.Header) http.Header {
-	cmn.ToHTTPHdr(lom, hdr)
-	if n := lom.md.Size; n > 0 {
-		hdr.Set(cmn.HdrContentLength, strconv.FormatInt(n, 10))
-	}
-	if v := lom.md.Ver; v != "" {
-		hdr.Set(cmn.HdrObjVersion, v)
-	}
-	return hdr
-}
-
 func (lom *LOM) FromHTTPHdr(hdr http.Header) {
 	// NOTE: not setting received checksum into the LOM
 	// to preserve its own local checksum
@@ -489,10 +478,9 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		srcCksum  = lom.Checksum()
 		cksumType = cos.ChecksumNone
 	)
-	if srcCksum != nil {
-		cksumType = srcCksum.Type()
+	if !srcCksum.IsEmpty() {
+		cksumType = srcCksum.Ty()
 	}
-
 	dst = lom.Clone(dstFQN)
 	if err = dst.Init(cmn.Bck{}); err != nil {
 		return
@@ -753,7 +741,7 @@ recomp:
 		return
 	}
 	if !lom.md.Cksum.IsEmpty() {
-		cksumType = lom.md.Cksum.Type() // takes precedence on the other hand
+		cksumType = lom.md.Cksum.Ty() // takes precedence on the other hand
 	}
 	if cksums.comp, err = lom.ComputeCksum(cksumType); err != nil {
 		return
@@ -774,7 +762,7 @@ recomp:
 	// retry: load from disk and check again
 	reloaded = true
 	if _, err = lom.lmfs(true); err == nil && lom.md.Cksum != nil {
-		if cksumType == lom.md.Cksum.Type() {
+		if cksumType == lom.md.Cksum.Ty() {
 			if cksums.comp.Equal(lom.md.Cksum) {
 				return
 			}

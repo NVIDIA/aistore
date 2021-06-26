@@ -281,11 +281,11 @@ func PutObject(args PutObjectArgs) (err error) {
 		req.GetBody = func() (io.ReadCloser, error) {
 			return args.Reader.Open()
 		}
-		if args.Cksum != nil && args.Cksum.Type() != cos.ChecksumNone {
-			req.Header.Set(cmn.HdrObjCksumType, args.Cksum.Type())
+		if args.Cksum != nil && args.Cksum.Ty() != cos.ChecksumNone {
+			req.Header.Set(cmn.HdrObjCksumType, args.Cksum.Ty())
 			ckVal := args.Cksum.Value()
 			if ckVal == "" {
-				_, ckhash, err := cos.CopyAndChecksum(io.Discard, args.Reader, nil, args.Cksum.Type())
+				_, ckhash, err := cos.CopyAndChecksum(io.Discard, args.Reader, nil, args.Cksum.Ty())
 				if err != nil {
 					return nil, cmn.NewFailedToCreateHTTPRequest(err)
 				}
@@ -359,10 +359,10 @@ func FlushObject(args FlushArgs) (err error) {
 	query = cmn.AddBckToQuery(query, args.Bck)
 
 	var header http.Header
-	if args.Cksum != nil && args.Cksum.Type() != cos.ChecksumNone {
+	if args.Cksum != nil && args.Cksum.Ty() != cos.ChecksumNone {
 		header = make(http.Header)
-		header.Set(cmn.HdrObjCksumType, args.Cksum.Type())
-		header.Set(cmn.HdrObjCksumVal, args.Cksum.Value())
+		header.Set(cmn.HdrObjCksumType, args.Cksum.Ty())
+		header.Set(cmn.HdrObjCksumVal, args.Cksum.Val())
 	}
 
 	args.BaseParams.Method = http.MethodPut

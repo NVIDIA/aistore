@@ -204,7 +204,7 @@ func (r *XactPutArchive) doSend(lom *cluster.LOM, work *zwork, fh cos.ReadOpenCl
 	{
 		hdr.Bck = work.msg.ToBck
 		hdr.ObjName = lom.ObjName
-		hdr.ObjAttrs.Clone(lom.ObjAttrs())
+		hdr.ObjAttrs.CopyFrom(lom.ObjAttrs())
 		hdr.Opaque = []byte(work.msg.FullName()) // NOTE
 	}
 	o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {

@@ -1044,7 +1044,7 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 			invalidHandler(w, r, err, http.StatusNotFound)
 			return
 		}
-		lom.ToHTTPHdr(hdr)
+		cmn.ToHTTPHdr(lom, hdr)
 	} else {
 		objMeta, errCode, err := t.Backend(lom.Bck()).HeadObj(context.Background(), lom)
 		if err != nil {

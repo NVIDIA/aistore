@@ -178,10 +178,9 @@ func putWithTrace(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum,
 			return reader.Open()
 		}
 		if cksum != nil {
-			req.Header.Set(cmn.HdrObjCksumType, cksum.Type())
-			req.Header.Set(cmn.HdrObjCksumVal, cksum.Value())
+			req.Header.Set(cmn.HdrObjCksumType, cksum.Ty())
+			req.Header.Set(cmn.HdrObjCksumVal, cksum.Val())
 		}
-
 		request = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))
 		return
 	}

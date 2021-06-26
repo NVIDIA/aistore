@@ -103,8 +103,13 @@ func insUint64(off int, to []byte, i uint64) int {
 func insAttrs(off int, to []byte, attr *cmn.ObjAttrs) int {
 	off = insInt64(off, to, attr.Size)
 	off = insInt64(off, to, attr.Atime)
-	off = insString(off, to, attr.Checksum().Type())
-	off = insString(off, to, attr.Checksum().Value())
+	if cksum := attr.Checksum(); cksum == nil {
+		off = insString(off, to, "")
+		off = insString(off, to, "")
+	} else {
+		off = insString(off, to, cksum.Ty())
+		off = insString(off, to, cksum.Val())
+	}
 	off = insString(off, to, attr.Ver)
 	return off
 }
