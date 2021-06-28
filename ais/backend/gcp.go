@@ -386,7 +386,7 @@ func (gcpp *gcpProvider) GetObjReader(ctx context.Context,
 	}
 
 	lom.SetCksum(cksum)
-	lom.SetCustomMD(customMD)
+	lom.SetCustom(customMD)
 	setSize(ctx, rc.Attrs.Size)
 	r = wrapReader(ctx, rc)
 	return

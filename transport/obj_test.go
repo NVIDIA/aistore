@@ -128,8 +128,8 @@ func Example_headers() {
 	stream.Fin()
 
 	// Output:
-	// {Bck:aws://@uuid#namespace/abc ObjName:X ObjAttrs:{Atime:663346294 Size:231 Ver:2 Cksum:(xxhash,hash...) AddMD:map[]} Opaque:[]} (119)
-	// {Bck:ais://abracadabra ObjName:p/q/s ObjAttrs:{Atime:663346294 Size:213 Ver:2 Cksum:(xxhash,hash...) AddMD:map[]} Opaque:[49 50 51]} (121)
+	// {Bck:aws://@uuid#namespace/abc ObjName:X ObjAttrs:{Atime:663346294 Size:231 Ver:1 Cksum:(xxhash,h1...) AddMD:map[]} Opaque:[]} (125)
+	// {Bck:ais://abracadabra ObjName:p/q/s ObjAttrs:{Atime:663346294 Size:213 Ver:222222222222222222222222 Cksum:(xxhash,h2...) AddMD:map[xx:11 yy:22]} Opaque:[49 50 51]} (190)
 }
 
 func sendText(stream *transport.Stream, txt1, txt2 string) {
@@ -149,8 +149,9 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 		ObjAttrs: cmn.ObjAttrs{
 			Size:  sgl1.Size(),
 			Atime: 663346294,
-			Cksum: cos.NewCksum(cos.ChecksumXXHash, "hash"),
-			Ver:   "2",
+			Cksum: cos.NewCksum(cos.ChecksumXXHash, "h1"),
+			Ver:   "1",
+			AddMD: cos.SimpleKVs{},
 		},
 		Opaque: nil,
 	}
@@ -170,8 +171,9 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 		ObjAttrs: cmn.ObjAttrs{
 			Size:  sgl2.Size(),
 			Atime: 663346294,
-			Cksum: cos.NewCksum(cos.ChecksumXXHash, "hash"),
-			Ver:   "2",
+			Cksum: cos.NewCksum(cos.ChecksumXXHash, "h2"),
+			Ver:   "222222222222222222222222",
+			AddMD: cos.SimpleKVs{"xx": "11", "yy": "22"},
 		},
 		Opaque: []byte{'1', '2', '3'},
 	}
@@ -466,7 +468,7 @@ func Test_CompressedOne(t *testing.T) {
 	random := newRand(mono.NanoTime())
 	buf := slab.Alloc()
 	_, _ = random.Read(buf)
-	hdr := genStaticHeader()
+	hdr := genStaticHeader(random)
 	size, prevsize, num, numhdr, numGs := int64(0), int64(0), 0, 0, int64(16)
 	if testing.Short() {
 		numGs = 2
@@ -526,7 +528,7 @@ func Test_DryRun(t *testing.T) {
 	}
 
 	size, num, prevsize := int64(0), 0, int64(0)
-	hdr := genStaticHeader()
+	hdr := genStaticHeader(random)
 	total := int64(cos.TiB)
 	if testing.Short() {
 		total = cos.TiB / 4
@@ -586,7 +588,7 @@ func Test_CompletionCount(t *testing.T) {
 	rem := int64(0)
 	for idx := 0; idx < 10000; idx++ {
 		if idx%7 == 0 {
-			hdr := genStaticHeader()
+			hdr := genStaticHeader(random)
 			hdr.ObjAttrs.Size = 0
 			hdr.Opaque = []byte(strconv.FormatInt(104729*int64(idx), 10))
 			stream.Send(&transport.Obj{Hdr: hdr, Callback: callback})
@@ -723,14 +725,17 @@ func newRand(seed int64) *rand.Rand {
 	return random
 }
 
-func genStaticHeader() (hdr transport.ObjHdr) {
+func genStaticHeader(random *rand.Rand) (hdr transport.ObjHdr) {
 	hdr.Bck = cmn.Bck{
 		Name:     "a",
 		Provider: cmn.ProviderAIS,
 	}
-	hdr.ObjName = "b"
-	hdr.Opaque = []byte("c")
+	hdr.ObjName = strconv.FormatInt(random.Int63(), 10)
+	hdr.Opaque = []byte("123456789abcdef")
 	hdr.ObjAttrs.Size = cos.GiB
+	hdr.ObjAttrs.SetCustom(strconv.FormatInt(random.Int63(), 10), "d")
+	hdr.ObjAttrs.SetCustom("e", "")
+	hdr.ObjAttrs.SetCksum(cos.ChecksumXXHash, "xxhash")
 	return
 }
 
@@ -744,19 +749,32 @@ func genRandomHeader(random *rand.Rand, usePDU bool) (hdr transport.ObjHdr) {
 
 	// test a variety of payload sizes
 	y := x & 3
+	s := strconv.FormatInt(x, 10)
 	switch y {
 	case 0:
 		hdr.ObjAttrs.Size = (x & 0xffffff) + 1
+		hdr.ObjAttrs.Ver = s
+		hdr.ObjAttrs.SetCksum(cos.ChecksumNone, "")
 	case 1:
 		if usePDU {
 			hdr.ObjAttrs.Size = transport.SizeUnknown
 		} else {
 			hdr.ObjAttrs.Size = (x & 0xfffff) + 1
 		}
+		hdr.ObjAttrs.SetCustom(strconv.FormatInt(random.Int63(), 10), s)
+		hdr.ObjAttrs.SetCksum(cos.ChecksumMD5, "md5")
+		hdr.ObjAttrs.SetCustom(s, "")
 	case 2:
 		hdr.ObjAttrs.Size = (x & 0xffff) + 1
+		hdr.ObjAttrs.SetCksum(cos.ChecksumXXHash, "xxhash")
+		for i := 0; i < int(x&0x1f); i++ {
+			hdr.ObjAttrs.SetCustom(strconv.FormatInt(random.Int63(), 10), s)
+		}
 	default:
 		hdr.ObjAttrs.Size = 0
+		hdr.ObjAttrs.Ver = s
+		hdr.ObjAttrs.SetCustom(s, "")
+		hdr.ObjAttrs.SetCksum(cos.ChecksumNone, "")
 	}
 	return
 }

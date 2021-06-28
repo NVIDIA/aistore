@@ -20,7 +20,7 @@ type (
 		Version(special ...bool) string
 		Checksum() *cos.Cksum
 		AtimeUnix() int64
-		CustomMD() cos.SimpleKVs
+		Custom() cos.SimpleKVs
 	}
 	ObjAttrs struct {
 		Atime int64         // access time (nanoseconds since UNIX epoch)
@@ -39,18 +39,27 @@ func (oa *ObjAttrs) Version(_ ...bool) string  { return oa.Ver }
 func (oa *ObjAttrs) AtimeUnix() int64          { return oa.Atime }
 func (oa *ObjAttrs) Checksum() *cos.Cksum      { return oa.Cksum }
 func (oa *ObjAttrs) SetCksum(ty, val string)   { oa.Cksum = cos.NewCksum(ty, val) }
+func (oa *ObjAttrs) Custom() cos.SimpleKVs     { return oa.AddMD }
 
-// ObjAttrsHolder => (transport obj header).ObjAttrs
-func (oa *ObjAttrs) CopyFrom(oah ObjAttrsHolder) {
+func (oa *ObjAttrs) SetCustom(k, v string) {
+	debug.Assert(k != "")
+	if oa.AddMD == nil {
+		oa.AddMD = make(cos.SimpleKVs, 4)
+	}
+	oa.AddMD[k] = v
+}
+
+// ObjAttrsHolder => ObjAttrs; see also: lom.CopyAttrs
+func (oa *ObjAttrs) CopyFrom(oah ObjAttrsHolder, skipCksum ...bool) {
 	oa.Atime = oah.AtimeUnix()
 	oa.Size = oah.SizeBytes()
 	oa.Ver = oah.Version()
-	debug.Assert(oah.Checksum() != nil)
-	oa.Cksum = oah.Checksum().Clone() // TODO: checksum by value
-	oa.AddMD = oah.CustomMD()         // TODO -- FIXME: clone and support
+	if len(skipCksum) == 0 || !skipCksum[0] {
+		debug.Assert(oah.Checksum() != nil)
+		oa.Cksum = oah.Checksum().Clone() // TODO: checksum by value
+	}
+	oa.AddMD = oah.Custom()
 }
-
-func (*ObjAttrs) CustomMD() cos.SimpleKVs { return nil } // ditto
 
 // ObjAttrsHolder => http header
 func ToHTTPHdr(oah ObjAttrsHolder, hdrs ...http.Header) (hdr http.Header) {
@@ -72,7 +81,7 @@ func ToHTTPHdr(oah ObjAttrsHolder, hdrs ...http.Header) (hdr http.Header) {
 	if v := oah.Version(true); v != "" {
 		hdr.Set(HdrObjVersion, v)
 	}
-	for k, v := range oah.CustomMD() {
+	for k, v := range oah.Custom() {
 		debug.Assert(k != "")
 		hdr.Add(HdrObjCustomMD, strings.Join([]string{k, v}, "="))
 	}

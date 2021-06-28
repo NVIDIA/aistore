@@ -566,7 +566,7 @@ var _ = Describe("LOM", func() {
 
 			It("should correctly set and get custom metadata", func() {
 				lom := filePut(localFQN, 0)
-				lom.SetCustomMD(cos.SimpleKVs{
+				lom.SetCustom(cos.SimpleKVs{
 					cluster.SourceObjMD:  cluster.SourceGoogleObjMD,
 					cluster.VersionObjMD: "version",
 					cluster.CRC32CObjMD:  "crc32",

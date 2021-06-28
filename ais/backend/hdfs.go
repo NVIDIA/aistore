@@ -264,7 +264,7 @@ func (hp *hdfsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 		cluster.VersionObjMD: "",
 	}
 
-	lom.SetCustomMD(customMD)
+	lom.SetCustom(customMD)
 	setSize(ctx, fr.Stat().Size())
 	return wrapReader(ctx, fr), nil, 0, nil
 }

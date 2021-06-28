@@ -111,6 +111,12 @@ func insAttrs(off int, to []byte, attr *cmn.ObjAttrs) int {
 		off = insString(off, to, cksum.Val())
 	}
 	off = insString(off, to, attr.Ver)
+	for k, v := range attr.Custom() {
+		debug.Assert(k != "")
+		off = insString(off, to, k)
+		off = insString(off, to, v)
+	}
+	off = insString(off, to, "") // term
 	return off
 }
 
@@ -175,12 +181,20 @@ func extUint64(off int, from []byte) (int, uint64) {
 }
 
 func extAttrs(off int, from []byte) (n int, attr cmn.ObjAttrs) {
-	var cksumTyp, cksumVal string
+	var cksumTyp, cksumVal, k, v string
 	off, attr.Size = extInt64(off, from)
 	off, attr.Atime = extInt64(off, from)
 	off, cksumTyp = extString(off, from)
 	off, cksumVal = extString(off, from)
 	attr.SetCksum(cksumTyp, cksumVal)
 	off, attr.Ver = extString(off, from)
+	for {
+		off, k = extString(off, from)
+		if k == "" {
+			break
+		}
+		off, v = extString(off, from)
+		attr.SetCustom(k, v)
+	}
 	return off, attr
 }

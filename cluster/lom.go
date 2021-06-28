@@ -164,6 +164,10 @@ func (lom *LOM) LIF() (lif LIF) {
 
 func (lom *LOM) ObjAttrs() cmn.ObjAttrsHolder { return &lom.md.ObjAttrs }
 
+func (lom *LOM) CopyAttrs(oah cmn.ObjAttrsHolder, skipCksum bool) {
+	lom.md.ObjAttrs.CopyFrom(oah, skipCksum)
+}
+
 // special a) when a new version is being created b) for usage in unit tests
 func (lom *LOM) SizeBytes(special ...bool) int64 {
 	debug.Assert(len(special) > 0 || lom.loaded())
@@ -175,16 +179,16 @@ func (lom *LOM) Version(special ...bool) string {
 	return lom.md.Ver
 }
 
-func (lom *LOM) Uname() string                { return lom.md.uname }
-func (lom *LOM) SetSize(size int64)           { lom.md.Size = size }
-func (lom *LOM) SetVersion(ver string)        { lom.md.Ver = ver }
-func (lom *LOM) Checksum() *cos.Cksum         { return lom.md.Cksum }
-func (lom *LOM) SetCksum(cksum *cos.Cksum)    { lom.md.Cksum = cksum }
-func (lom *LOM) Atime() time.Time             { return time.Unix(0, lom.md.Atime) }
-func (lom *LOM) AtimeUnix() int64             { return lom.md.Atime }
-func (lom *LOM) SetAtimeUnix(tu int64)        { lom.md.Atime = tu }
-func (lom *LOM) SetCustomMD(md cos.SimpleKVs) { lom.md.AddMD = md }
-func (lom *LOM) CustomMD() cos.SimpleKVs      { return lom.md.AddMD }
+func (lom *LOM) Uname() string              { return lom.md.uname }
+func (lom *LOM) SetSize(size int64)         { lom.md.Size = size }
+func (lom *LOM) SetVersion(ver string)      { lom.md.Ver = ver }
+func (lom *LOM) Checksum() *cos.Cksum       { return lom.md.Cksum }
+func (lom *LOM) SetCksum(cksum *cos.Cksum)  { lom.md.Cksum = cksum }
+func (lom *LOM) Atime() time.Time           { return time.Unix(0, lom.md.Atime) }
+func (lom *LOM) AtimeUnix() int64           { return lom.md.Atime }
+func (lom *LOM) SetAtimeUnix(tu int64)      { lom.md.Atime = tu }
+func (lom *LOM) SetCustom(md cos.SimpleKVs) { lom.md.AddMD = md }
+func (lom *LOM) Custom() cos.SimpleKVs      { return lom.md.AddMD }
 
 func (lom *LOM) EqCksum(cksum *cos.Cksum) bool { return lom.md.Cksum.Equal(cksum) }
 
@@ -199,10 +203,7 @@ func AllocLomFromHdr(hdr *transport.ObjHdr) (lom *LOM, err error) {
 	if err = lom.Init(hdr.Bck); err != nil {
 		return
 	}
-	lom.SetSize(hdr.ObjAttrs.Size)
-	lom.SetVersion(hdr.ObjAttrs.Ver)
-	lom.SetCksum(hdr.ObjAttrs.Cksum)
-	lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
+	lom.CopyAttrs(&hdr.ObjAttrs, false /*skip checksum*/)
 	return
 }
 
@@ -253,7 +254,7 @@ func (lom *LOM) FromHTTPHdr(hdr http.Header) {
 			cos.Assert(len(entry) == 2)
 			md[entry[0]] = entry[1]
 		}
-		lom.SetCustomMD(md)
+		lom.SetCustom(md)
 	}
 }
 

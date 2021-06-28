@@ -453,7 +453,7 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.Re
 		customMD[cluster.MD5ObjMD] = v
 	}
 	lom.SetCksum(cksum)
-	lom.SetCustomMD(customMD)
+	lom.SetCustom(customMD)
 	setSize(ctx, *obj.ContentLength)
 	return wrapReader(ctx, obj.Body), expectedCksm, 0, nil
 }

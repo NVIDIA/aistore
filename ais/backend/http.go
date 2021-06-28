@@ -215,7 +215,7 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 		customMD[cluster.VersionObjMD] = v
 	}
 
-	lom.SetCustomMD(customMD)
+	lom.SetCustom(customMD)
 	setSize(ctx, resp.ContentLength)
 	return wrapReader(ctx, resp.Body), nil, 0, nil
 }

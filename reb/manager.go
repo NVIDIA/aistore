@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/filter"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
@@ -186,7 +187,7 @@ func (reb *Manager) getStats() (s *stats.ExtRebalanceStats) {
 }
 
 func (reb *Manager) beginStreams() {
-	cos.Assert(reb.stages.stage.Load() == rebStageInit)
+	debug.Assert(reb.stages.stage.Load() == rebStageInit)
 
 	reb.dm.Open()
 	pushArgs := bundle.Args{Net: reb.dm.NetC(), Trname: rebPushTrname}
@@ -239,9 +240,8 @@ func (reb *Manager) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unp
 	} else if stage < rebStageTraverse {
 		glog.Errorf("%s: early receive from %s %s (stage %s)", reb.t.Snode(), tsid, lom, stages[stage])
 	}
-	lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
-	lom.SetVersion(hdr.ObjAttrs.Ver)
 
+	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip-checksum*/) // see "PUT is a no-op"
 	params := cluster.PutObjectParams{
 		Tag:      fs.WorkfilePut,
 		Reader:   io.NopCloser(objReader),

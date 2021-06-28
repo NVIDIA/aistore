@@ -848,8 +848,11 @@ func (c *txnServerCtx) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, err 
 		glog.Error(err)
 		return
 	}
+
+	// lom.ObjAttrs().CopyFrom(&hdr.ObjAttrs) TODO -- FIXME
 	lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
 	lom.SetVersion(hdr.ObjAttrs.Ver)
+	lom.SetCustom(hdr.ObjAttrs.AddMD)
 
 	params := cluster.PutObjectParams{
 		Tag:    fs.WorkfilePut,

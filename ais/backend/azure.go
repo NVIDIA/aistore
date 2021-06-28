@@ -413,7 +413,7 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 		cksumToUse = cos.NewCksum(cos.ChecksumMD5, v)
 	}
 
-	lom.SetCustomMD(customMD)
+	lom.SetCustom(customMD)
 	setSize(ctx, resp.ContentLength())
 
 	return wrapReader(ctx, resp.Body(retryOpts)), cksumToUse, 0, nil

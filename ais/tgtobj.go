@@ -228,7 +228,7 @@ func (poi *putObjInfo) putRemote() (version string, errCode int, err error) {
 		if version != "" {
 			customMD[cluster.VersionObjMD] = version
 		}
-		lom.SetCustomMD(customMD)
+		lom.SetCustom(customMD)
 	}
 	return
 }
