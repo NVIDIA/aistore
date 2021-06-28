@@ -124,7 +124,7 @@ func (e *ErrMpathNoDisks) Error() string { return fmt.Sprintf("%s has no disks",
 // MountpathInfo //
 ///////////////////
 
-func newMountpath(mpath string) (mi *MountpathInfo, err error) {
+func newMountpath(mpath, tid string) (mi *MountpathInfo, err error) {
 	var (
 		cleanMpath string
 		fsInfo     FilesystemInfo
@@ -133,7 +133,7 @@ func newMountpath(mpath string) (mi *MountpathInfo, err error) {
 		return
 	}
 	if err = Access(cleanMpath); err != nil {
-		return nil, cmn.NewNotFoundError("mountpath %q", mpath)
+		return nil, cmn.NewNotFoundError("t[%s]: mountpath %q", tid, mpath)
 	}
 	if fsInfo, err = makeFsInfo(cleanMpath); err != nil {
 		return
@@ -562,7 +562,7 @@ func InitMpaths(tid string) (changed bool, err error) {
 	if vmd == nil {
 		for path := range configPaths {
 			var mi *MountpathInfo
-			if mi, err = newMountpath(path); err != nil {
+			if mi, err = newMountpath(path, tid); err != nil {
 				return
 			}
 			if err = mi._checkExists(availablePaths); err != nil {
@@ -598,7 +598,7 @@ func InitMpaths(tid string) (changed bool, err error) {
 		} else {
 			enabled = mpath.Enabled
 		}
-		if mi, err = newMountpath(path); err == nil {
+		if mi, err = newMountpath(path, tid); err == nil {
 			if enabled {
 				if err = mi._checkExists(availablePaths); err == nil {
 					if err = mi._addEnabled(tid, availablePaths); err == nil {
@@ -697,7 +697,7 @@ func cloneMPI() (MPI, MPI) {
 
 // (used only in tests - compare with AddMpath below)
 func Add(mpath, tid string) (mi *MountpathInfo, err error) {
-	mi, err = newMountpath(mpath)
+	mi, err = newMountpath(mpath, tid)
 	if err != nil {
 		return
 	}
@@ -710,7 +710,7 @@ func Add(mpath, tid string) (mi *MountpathInfo, err error) {
 // Add adds new mountpath to the target's mountpaths.
 func AddMpath(mpath, tid string, cb func()) (mi *MountpathInfo, err error) {
 	debug.Assert(tid != "")
-	mi, err = newMountpath(mpath)
+	mi, err = newMountpath(mpath, tid)
 	if err != nil {
 		return
 	}

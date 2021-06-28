@@ -128,7 +128,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 	xact := xreg.GetXact(msg.UUID)
 	// task never started
 	if xact == nil {
-		err := cmn.NewNotFoundError("task %q", msg.UUID)
+		err := cmn.NewNotFoundError("%s: task %q", t.si, msg.UUID)
 		if silent {
 			t.writeErrSilent(w, r, err, http.StatusNotFound)
 		} else {

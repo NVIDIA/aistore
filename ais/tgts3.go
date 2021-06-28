@@ -245,7 +245,7 @@ func (t *targetrunner) headObjS3(w http.ResponseWriter, r *http.Request, items [
 
 	exists := err == nil
 	if !exists {
-		err := cmn.NewNotFoundError("object %s/%s", bucket, objName)
+		err := cmn.NewNotFoundError("%s: object %s/%s", t.si, bucket, objName)
 		t.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
@@ -278,7 +278,7 @@ func (t *targetrunner) delObjS3(w http.ResponseWriter, r *http.Request, items []
 	errCode, err := t.DeleteObject(context.Background(), lom, false)
 	if err != nil {
 		if errCode == http.StatusNotFound {
-			err := cmn.NewNotFoundError(lom.FullName())
+			err := cmn.NewNotFoundError("%s: %s", t.si, lom.FullName())
 			t.writeErrSilent(w, r, err, http.StatusNotFound)
 		} else {
 			t.writeErrStatusf(w, r, errCode, "error deleting %s: %v", lom, err)

@@ -377,11 +377,6 @@ func RequestECMeta(bck cmn.Bck, objName string, si *cluster.Snode, client *http.
 	return MetaFromReader(resp.Body)
 }
 
-// requestECMeta returns an EC metadata found on a remote target.
-func requestECMeta(ctx *restoreCtx, si *cluster.Snode, client *http.Client) (md *Metadata, err error) {
-	return RequestECMeta(ctx.lom.Bucket(), ctx.lom.ObjName, si, client)
-}
-
 // Saves the main replica to local drives
 func WriteObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int64) error {
 	if size > 0 {

@@ -21,19 +21,14 @@ type (
 )
 
 // interface guard
-var (
-	_ cluster.LomReaderProvider = (*OfflineDataProvider)(nil)
-)
+var _ cluster.LomReaderProvider = (*OfflineDataProvider)(nil)
 
-func NewOfflineDataProvider(msg *cmn.Bck2BckMsg) (*OfflineDataProvider, error) {
-	comm, err := GetCommunicator(msg.ID)
+func NewOfflineDataProvider(msg *cmn.Bck2BckMsg, lsnode *cluster.Snode) (*OfflineDataProvider, error) {
+	comm, err := GetCommunicator(msg.ID, lsnode)
 	if err != nil {
 		return nil, err
 	}
-	pr := &OfflineDataProvider{
-		bckMsg: msg,
-		comm:   comm,
-	}
+	pr := &OfflineDataProvider{bckMsg: msg, comm: comm}
 	pr.requestTimeout = time.Duration(msg.RequestTimeout)
 	return pr, nil
 }

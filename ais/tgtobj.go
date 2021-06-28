@@ -598,7 +598,7 @@ gfn:
 	if err != nil {
 		err = fmt.Errorf("%s not found: %v", goi.lom.FullName(), err)
 	} else {
-		err = cmn.NewNotFoundError(goi.lom.FullName())
+		err = cmn.NewNotFoundError("%s: %s", goi.t.si, goi.lom.FullName())
 	}
 	errCode = http.StatusNotFound
 	return

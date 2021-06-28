@@ -1232,7 +1232,7 @@ func (p *proxyrunner) gatherBucketSummary(bck cmn.QueryBcks, msg *cmn.BucketSumm
 	args.smap = smap
 	args.timeout = config.Timeout.MaxHostBusy.D() + config.Timeout.MaxKeepalive.D()
 	results := p.bcastGroup(args)
-	allOK, _, err := checkBckTaskResp(msg.UUID, results)
+	allOK, _, err := p.checkBckTaskResp(msg.UUID, results)
 	if err != nil {
 		return nil, "", err
 	}
@@ -1581,7 +1581,7 @@ func (p *proxyrunner) reverseReqRemote(w http.ResponseWriter, r *http.Request, m
 		}
 	}
 	if !exists {
-		err = cmn.NewNotFoundError("remote UUID/alias %q", remoteUUID)
+		err = cmn.NewNotFoundError("%s: remote UUID/alias %q", p.si, remoteUUID)
 		p.writeErr(w, r, err)
 		return err
 	}
@@ -1685,7 +1685,7 @@ func initAsyncQuery(bck cmn.Bck, msg *cmn.BucketSummaryMsg, newTaskID string) (b
 	return isNew, q
 }
 
-func checkBckTaskResp(uuid string, results sliceResults) (allOK bool, status int, err error) {
+func (p *proxyrunner) checkBckTaskResp(uuid string, results sliceResults) (allOK bool, status int, err error) {
 	// check response codes of all targets
 	// Target that has completed its async task returns 200, and 202 otherwise
 	allOK = true
@@ -1708,7 +1708,7 @@ func checkBckTaskResp(uuid string, results sliceResults) (allOK bool, status int
 	}
 	freeCallResults(results)
 	if allNotFound {
-		err = cmn.NewNotFoundError("task %q", uuid)
+		err = cmn.NewNotFoundError("%s: task %q", p.si, uuid)
 	}
 	return
 }

@@ -173,7 +173,7 @@ func (txns *transactions) find(uuid, act string) (txn txn, err error) {
 	return
 rerr:
 	txns.Unlock()
-	err = cmn.NewNotFoundError("txn %q", uuid)
+	err = cmn.NewNotFoundError("%s: txn %q", txns.t.si, uuid)
 	return
 }
 
@@ -221,7 +221,7 @@ func (txns *transactions) commitAfter(caller string, msg *aisMsg, err error, arg
 	return
 rerr:
 	txns.Unlock()
-	errDone = cmn.NewNotFoundError("rendezvous record %q", msg.UUID) // can't happen
+	errDone = cmn.NewNotFoundError("%s: rendezvous record %q", txns.t.si, msg.UUID) // can't happen
 	return
 }
 

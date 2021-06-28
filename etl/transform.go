@@ -327,7 +327,7 @@ func Stop(t cluster.Target, id string) error {
 	// Abort any running offline ETLs.
 	xreg.AbortAll(cmn.ActETLBck)
 
-	c, err := GetCommunicator(id)
+	c, err := GetCommunicator(id, t.Snode())
 	if err != nil {
 		return cmn.NewETLError(errCtx, err.Error())
 	}
@@ -359,10 +359,10 @@ func StopAll(t cluster.Target) {
 	}
 }
 
-func GetCommunicator(transformID string) (Communicator, error) {
+func GetCommunicator(transformID string, lsnode *cluster.Snode) (Communicator, error) {
 	c, exists := reg.getByUUID(transformID)
 	if !exists {
-		return nil, cmn.NewNotFoundError("ETL %q", transformID)
+		return nil, cmn.NewNotFoundError("%s: ETL %q", lsnode, transformID)
 	}
 	return c, nil
 }
@@ -370,7 +370,7 @@ func GetCommunicator(transformID string) (Communicator, error) {
 func List() []Info { return reg.list() }
 
 func PodLogs(t cluster.Target, transformID string) (logs PodLogsMsg, err error) {
-	c, err := GetCommunicator(transformID)
+	c, err := GetCommunicator(transformID, t.Snode())
 	if err != nil {
 		return logs, err
 	}
@@ -393,7 +393,7 @@ func PodHealth(t cluster.Target, etlID string) (stats *PodHealthMsg, err error) 
 		c      Communicator
 		client k8s.Client
 	)
-	if c, err = GetCommunicator(etlID); err != nil {
+	if c, err = GetCommunicator(etlID, t.Snode()); err != nil {
 		return
 	}
 	if client, err = k8s.GetClient(); err != nil {

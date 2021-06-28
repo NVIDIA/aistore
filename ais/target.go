@@ -1033,14 +1033,14 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 
 	if checkExists || checkExistsAny {
 		if !exists {
-			err = cmn.NewNotFoundError("object %s/%s", bck, objName)
+			err = cmn.NewNotFoundError("%s: object %s/%s", t.si, bck, objName)
 			invalidHandler(w, r, err, http.StatusNotFound)
 		}
 		return
 	}
 	if lom.Bck().IsAIS() || exists { // && !lom.VerConf().Enabled) {
 		if !exists {
-			err = cmn.NewNotFoundError("object %s/%s", bck, objName)
+			err = cmn.NewNotFoundError("%s: object %s/%s", t.si, bck, objName)
 			invalidHandler(w, r, err, http.StatusNotFound)
 			return
 		}
@@ -1469,7 +1469,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	finfo, err := os.Stat(srcFQN)
 	if err != nil {
 		if os.IsNotExist(err) {
-			err := cmn.NewNotFoundError("file %q", srcFQN)
+			err := cmn.NewNotFoundError("%s: file %q", t.si, srcFQN)
 			t.writeErr(w, r, err, http.StatusNotFound)
 			return
 		}

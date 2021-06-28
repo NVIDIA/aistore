@@ -549,18 +549,16 @@ func (t *targetrunner) validateTransferBckTxn(bckFrom *cluster.Bck, action strin
 // etlBucket uses transferBucket xaction to transform the whole bucket. The only difference is that instead of copying the
 // same bytes, it creates a reader based on given ETL transformation.
 func (t *targetrunner) etlBucket(c *txnServerCtx, msg *cmn.Bck2BckMsg) (err error) {
+	var dp cluster.LomReaderProvider
 	if err := k8s.Detect(); err != nil {
 		return err
 	}
 	if msg.ID == "" {
 		return cmn.ErrETLMissingUUID
 	}
-	var dp cluster.LomReaderProvider
-
-	if dp, err = etl.NewOfflineDataProvider(msg); err != nil {
+	if dp, err = etl.NewOfflineDataProvider(msg, t.si); err != nil {
 		return nil
 	}
-
 	return t.transferBucket(c, msg, dp)
 }
 

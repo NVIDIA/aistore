@@ -813,7 +813,7 @@ func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 	)
 	requestMeta := func(si *cluster.Snode) {
 		defer wg.Done()
-		md, err := requestECMeta(ctx, si, c.client)
+		md, err := RequestECMeta(ctx.lom.Bucket(), ctx.lom.ObjName, si, c.client)
 		if err != nil {
 			if mdExists {
 				glog.Errorf("No EC meta %s from %s: %v", ctx.lom.FullName(), si, err)

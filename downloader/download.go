@@ -338,11 +338,11 @@ func (d *Downloader) ListJobs(regex *regexp.Regexp) (resp interface{}, statusCod
 	return d.dispatcher.dispatchAdminReq(req)
 }
 
-func (*Downloader) checkJob(req *request) (*downloadJobInfo, error) {
+func (d *Downloader) checkJob(req *request) (*downloadJobInfo, error) {
 	jInfo, err := dlStore.getJob(req.id)
 	if err != nil {
 		cos.Assert(errors.Is(err, errJobNotFound))
-		err := cmn.NewNotFoundError("job %q", req.id)
+		err := cmn.NewNotFoundError("%s: download job %q", d.t.Snode(), req.id)
 		req.writeErrResp(err, http.StatusNotFound)
 		return nil, err
 	}

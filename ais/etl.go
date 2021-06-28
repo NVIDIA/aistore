@@ -121,7 +121,7 @@ func (t *targetrunner) doETL(w http.ResponseWriter, r *http.Request, uuid string
 		comm etl.Communicator
 		err  error
 	)
-	comm, err = etl.GetCommunicator(uuid)
+	comm, err = etl.GetCommunicator(uuid, t.si)
 	if err != nil {
 		if _, ok := err.(*cmn.ErrNotFound); ok {
 			smap := t.owner.smap.Get()
