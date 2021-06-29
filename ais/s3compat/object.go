@@ -113,7 +113,7 @@ func FormatTime(t time.Time) string {
 	return strings.Replace(s, "UTC", "GMT", 1) // expects: "%a, %d %b %Y %H:%M:%S GMT"
 }
 
-func lomCksum(lom *cluster.LOM) string {
+func lomMD5(lom *cluster.LOM) string {
 	if v, exists := lom.GetCustomMD(cluster.SourceObjMD); exists && v == cluster.SourceAmazonObjMD {
 		if v, exists := lom.GetCustomMD(cluster.MD5ObjMD); exists {
 			return v
@@ -125,20 +125,10 @@ func lomCksum(lom *cluster.LOM) string {
 	return ""
 }
 
-func SetHeaderFromLOM(header http.Header, lom *cluster.LOM, size int64) {
-	if cksumValue := lomCksum(lom); cksumValue != "" {
-		header.Set(headerETag, cksumValue)
+func SetETag(header http.Header, lom *cluster.LOM) {
+	if md5val := lomMD5(lom); md5val != "" {
+		header.Set(headerETag, md5val)
 	}
-	header.Set(headerAtime, FormatTime(lom.Atime()))
-	header.Set(cmn.HdrContentLength, strconv.FormatInt(size, 10))
-	header.Set(cmn.HdrContentType, cmn.ContentBinary)
-	header.Set(headerVersion, lom.Version())
-}
-
-func SetETLHeader(header http.Header, lom *cluster.LOM) {
-	header.Set(headerAtime, FormatTime(lom.Atime()))
-	header.Set(cmn.HdrContentType, cmn.ContentBinary)
-	header.Set(headerVersion, lom.Version())
 }
 
 func (r *CopyObjectResult) MustMarshal(sgl *memsys.SGL) {

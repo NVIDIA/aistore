@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"strconv"
 	"time"
@@ -105,6 +106,15 @@ func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists .
 	objProps := &cmn.ObjectProps{}
 	err = cmn.IterFields(objProps, func(tag string, field cmn.IterField) (error, bool) {
 		headerName := cmn.PropToHeader(tag)
+		// skip the missing ones
+		if _, ok := resp.Header[textproto.CanonicalMIMEHeaderKey(headerName)]; !ok {
+			return nil, false
+		}
+		// multi-value
+		if headerName == cmn.HdrObjCustomMD {
+			return field.SetValue(resp.Header.Values(headerName), true /*force*/), false
+		}
+		// single-value
 		return field.SetValue(resp.Header.Get(headerName), true /*force*/), false
 	}, cmn.IterOpts{OnlyRead: false})
 	if err != nil {

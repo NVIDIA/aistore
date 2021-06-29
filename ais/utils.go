@@ -272,6 +272,7 @@ func withRetry(cond func() bool) (ok bool) {
 	return
 }
 
+// TODO: !4455 comment
 func isETLRequest(query url.Values) bool {
 	return query.Get(cmn.URLParamUUID) != ""
 }

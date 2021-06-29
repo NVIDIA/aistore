@@ -66,7 +66,7 @@ func ToHTTPHdr(oah ObjAttrsHolder, hdrs ...http.Header) (hdr http.Header) {
 	if len(hdrs) > 0 && hdrs[0] != nil {
 		hdr = hdrs[0]
 	} else {
-		hdr = make(http.Header, 6)
+		hdr = make(http.Header, 8)
 	}
 	if cksum := oah.Checksum(); !cksum.IsEmpty() {
 		hdr.Set(HdrObjCksumType, cksum.Ty())

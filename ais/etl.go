@@ -238,7 +238,9 @@ func (t *targetrunner) headObjectETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t.headObject(w, r, r.URL.Query(), bck, objName)
+	lom := cluster.AllocLOM(objName)
+	t.headObject(w, r, r.URL.Query(), bck, lom)
+	cluster.FreeLOM(lom)
 }
 
 ////////////////

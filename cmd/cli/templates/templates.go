@@ -292,10 +292,11 @@ var (
 		"cached":   "{{FormatBool .Present}}",
 		"size":     "{{FormatBytesSigned .Size 2}}",
 		"version":  "{{.Version}}",
+		"custom":   "{{.Custom}}",
 		"atime":    "{{if (eq .Atime 0)}}-{{else}}{{FormatUnixNano .Atime}}{{end}}",
 		"copies":   "{{if .NumCopies}}{{.NumCopies}}{{else}}-{{end}}",
 		"checksum": "{{if .Checksum.Value}}{{.Checksum.Value}}{{else}}-{{end}}",
-		"ec":       "{{if (eq .DataSlices 0)}}-{{else}}{{FormatEC .DataSlices .ParitySlices .IsECCopy}}{{end}}",
+		"ec":       "{{if (eq .DataSlices 0)}}-{{else}}{{FormatEC .Generation .DataSlices .ParitySlices .IsECCopy}}{{end}}",
 	}
 
 	funcMap = template.FuncMap{
@@ -473,11 +474,11 @@ func FmtCopies(copies int) string {
 
 // FmtEC formats EC data (DataSlices, ParitySlices, IsECCopy) into a
 // readable string for CLI, e.g. "1:2[encoded]"
-func FmtEC(data, parity int, isCopy bool) string {
+func FmtEC(gen int64, data, parity int, isCopy bool) string {
 	if data == 0 {
 		return "-"
 	}
-	info := fmt.Sprintf("%d:%d", data, parity)
+	info := fmt.Sprintf("%d:%d (gen %d)", data, parity, gen)
 	if isCopy {
 		info += "[replicated]"
 	} else {

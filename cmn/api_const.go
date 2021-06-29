@@ -173,7 +173,7 @@ const (
 const (
 	URLParamWhat            = "what"         // "smap" | "bmd" | "config" | "stats" | "xaction" ...
 	URLParamProps           = "props"        // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
-	URLParamCheckExists     = "check_cached" // true: check if object exists
+	URLParamCheckExists     = "check_cached" // true: check if object exists (aka "cached", "present")
 	URLParamHealthReadiness = "readiness"    // true: check if node can accept HTTP(S) requests
 	URLParamUUID            = "uuid"
 	URLParamRegex           = "regex" // dsort/downloader regex
@@ -292,6 +292,7 @@ const (
 	GetPropsStatus   = "status"
 	GetPropsCopies   = "copies"
 	GetPropsEC       = "ec"
+	GetPropsCustom   = "custom"
 )
 
 // BucketEntry.Flags field

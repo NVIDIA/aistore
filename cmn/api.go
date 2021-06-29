@@ -225,8 +225,9 @@ type (
 		Bck          Bck              `json:"bucket"`
 		Size         int64            `json:"size"`
 		Version      string           `json:"version"`
-		Atime        int64            `json:"atime"`
+		Atime        int64            `json:"atime"` // nanoseconds since Unix Epoch
 		Checksum     ObjectCksumProps `json:"checksum"`
+		Custom       []string         `json:"custom-md"`
 		Generation   int64            `json:"ec-generation"`
 		NumCopies    int              `json:"copies"`
 		DataSlices   int              `json:"ec-data"`
@@ -271,7 +272,7 @@ var GetPropsDefault = []string{
 // GetPropsAll is a list of all `GetProps*` options.
 // NOTE: do **NOT** forget to update this array when a prop is added/removed.
 var GetPropsAll = append(GetPropsDefault,
-	GetPropsVersion, GetPropsCached, GetTargetURL, GetPropsStatus, GetPropsCopies, GetPropsEC,
+	GetPropsVersion, GetPropsCached, GetTargetURL, GetPropsStatus, GetPropsCopies, GetPropsEC, GetPropsCustom,
 )
 
 ////////////////

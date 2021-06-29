@@ -23,9 +23,6 @@ const (
 	// TODO: can it be omitted? // storageClass = "STANDARD"
 
 	// Headers
-	headerETag    = "ETag"
-	headerVersion = "x-amz-version-id"
-	HeaderObjSrc  = "x-amz-copy-source"
-
-	headerAtime = "Last-Modified"
+	headerETag   = "ETag"
+	HeaderObjSrc = "x-amz-copy-source"
 )

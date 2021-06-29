@@ -152,7 +152,6 @@ func objectNameArgumentNotSupported(c *cli.Context, objectName string) error {
 
 func objectPropList(props *cmn.ObjectProps, selection []string) (propList []prop) {
 	var propValue string
-
 	for _, currProp := range selection {
 		switch currProp {
 		case cmn.GetPropsName:
@@ -170,11 +169,15 @@ func objectPropList(props *cmn.ObjectProps, selection []string) (propList []prop
 		case cmn.GetPropsCopies:
 			propValue = templates.FmtCopies(props.NumCopies)
 		case cmn.GetPropsEC:
-			propValue = templates.FmtEC(props.DataSlices, props.ParitySlices, props.IsECCopy)
+			propValue = templates.FmtEC(props.Generation, props.DataSlices, props.ParitySlices, props.IsECCopy)
+		case cmn.GetPropsCustom:
+			if len(props.Custom) == 0 {
+				continue
+			}
+			propValue = strings.Join(props.Custom, ", ")
 		default:
 			continue
 		}
-
 		propList = append(propList, prop{currProp, propValue})
 	}
 

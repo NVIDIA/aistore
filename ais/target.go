@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -986,13 +987,14 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
-	t.headObject(w, r, query, request.bck, request.items[1])
+	lom := cluster.AllocLOM(request.items[1] /*objName*/)
+	t.headObject(w, r, query, request.bck, lom)
+	cluster.FreeLOM(lom)
 }
 
 // headObject is main function to head the object. It doesn't check request origin,
 // so it must be done by the caller (if necessary).
-func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query url.Values, bck *cluster.Bck,
-	objName string) {
+func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query url.Values, bck *cluster.Bck, lom *cluster.LOM) {
 	var (
 		err            error
 		invalidHandler = t.writeErr
@@ -1000,13 +1002,11 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 		checkExists    = cos.IsParseBool(query.Get(cmn.URLParamCheckExists))
 		checkExistsAny = cos.IsParseBool(query.Get(cmn.URLParamCheckExistsAny))
 		silent         = cos.IsParseBool(query.Get(cmn.URLParamSilent))
+		addedEC        bool
 	)
 	if silent {
 		invalidHandler = t.writeErrSilent
 	}
-
-	lom := cluster.AllocLOM(objName)
-	defer cluster.FreeLOM(lom)
 	if err = lom.Init(bck.Bck); err != nil {
 		invalidHandler(w, r, err)
 		return
@@ -1021,6 +1021,7 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 	}
 
 	exists := err == nil
+
 	// * checkExists and checkExistsAny establish local presence of the object by looking up all mountpaths
 	// * checkExistsAny does it *even* if the object *may* not have local copies
 	// * see also: GFN
@@ -1030,20 +1031,23 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 			exists = lom.RestoreObjectFromAny()
 		}
 	}
-
 	if checkExists || checkExistsAny {
 		if !exists {
-			err = cmn.NewNotFoundError("%s: object %s/%s", t.si, bck, objName)
+			err = cmn.NewNotFoundError("%s: object %s", t.si, lom.FullName())
 			invalidHandler(w, r, err, http.StatusNotFound)
 		}
 		return
 	}
-	if lom.Bck().IsAIS() || exists { // && !lom.VerConf().Enabled) {
+
+	// 1. add cmn.HdrObj* props
+	if lom.Bck().IsAIS() {
 		if !exists {
-			err = cmn.NewNotFoundError("%s: object %s/%s", t.si, bck, objName)
+			err = cmn.NewNotFoundError("%s: object %s", t.si, lom.FullName())
 			invalidHandler(w, r, err, http.StatusNotFound)
 			return
 		}
+		cmn.ToHTTPHdr(lom, hdr)
+	} else if exists {
 		cmn.ToHTTPHdr(lom, hdr)
 	} else {
 		objMeta, errCode, err := t.Backend(lom.Bck()).HeadObj(context.Background(), lom)
@@ -1052,20 +1056,24 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 			invalidHandler(w, r, err, errCode)
 			return
 		}
+		// 2. add Cloud props as is
 		for k, v := range objMeta {
 			hdr.Set(k, v)
 		}
 	}
+
+	// 3. add cmn.ObjectProps via json-tag => headerName (dynamic)
 	objProps := cmn.ObjectProps{
-		Name:    objName,
+		Name:    lom.ObjName,
 		Bck:     lom.Bucket(),
+		Size:    lom.SizeBytes(),
 		Present: exists,
 	}
 	if exists {
-		objProps.Size = lom.SizeBytes()
 		objProps.NumCopies = lom.NumCopies()
 		if lom.Bck().Props.EC.Enabled {
-			if md, err := ec.ObjectMetadata(lom.Bck(), objName); err == nil {
+			if md, err := ec.ObjectMetadata(lom.Bck(), lom.ObjName); err == nil {
+				addedEC = true
 				objProps.DataSlices = md.Data
 				objProps.ParitySlices = md.Parity
 				objProps.IsECCopy = md.IsCopy
@@ -1074,18 +1082,23 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 		}
 	}
 	err = cmn.IterFields(objProps, func(tag string, field cmn.IterField) (err error, b bool) {
+		v := fmt.Sprintf("%v", field.Value())
+		if !addedEC && strings.HasPrefix(tag, "ec-") {
+			return nil, false
+		}
+		if v == "" {
+			return nil, false
+		}
 		headerName := cmn.PropToHeader(tag)
 		if hdr.Get(headerName) == "" {
-			hdr.Set(headerName, fmt.Sprintf("%v", field.Value()))
+			hdr.Set(headerName, v)
 		}
 		return nil, false
 	})
-	cos.AssertNoErr(err)
-
+	debug.AssertNoErr(err)
+	// hide from ETL user (reason: will change)
 	if isETLRequest(query) {
-		// We don't know neither length of on-the-fly transformed object, nor checksum.
 		hdr.Del(cmn.HdrContentLength)
-		hdr.Del(cmn.GetPropsChecksum)
 		hdr.Del(cmn.HdrObjCksumVal)
 		hdr.Del(cmn.HdrObjCksumType)
 	}

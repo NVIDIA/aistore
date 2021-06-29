@@ -139,14 +139,14 @@ func (t *targetrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, it
 	}
 	lom.SetAtimeUnix(started.UnixNano())
 
-	// TODO: lom.SetCustom(cluster.AmazonMD5ObjMD, checksum)
+	// TODO: dual checksumming, e.g. lom.SetCustom(cluster.SourceAmazonObjMD, ...)
 
 	if errCode, err := t.doPut(r, lom, started); err != nil {
 		t.fsErr(err, lom.FQN)
 		t.writeErr(w, r, err, errCode)
 		return
 	}
-	s3compat.SetHeaderFromLOM(w.Header(), lom, 0)
+	s3compat.SetETag(w.Header(), lom)
 }
 
 // PUT s3/bckName/objName
@@ -194,6 +194,13 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 		}
 		return
 	}
+	// TODO -- FIXME: see target.go
+	//
+	// if isETLRequest(query) {
+	// 	t.doETL(w, r, query.Get(cmn.URLParamUUID), bck, objName)
+	// 	return
+	// }
+	//
 	goi := allocGetObjInfo()
 	{
 		goi.started = started
@@ -207,14 +214,14 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 	if errCode, err := goi.getObject(); err != nil && err != errSendingResp {
 		t.writeErr(w, r, err, errCode)
 	}
-	objSize = lom.SizeBytes()
-	s3compat.SetHeaderFromLOM(w.Header(), lom, objSize)
+	hdr := w.Header()
+	cmn.ToHTTPHdr(lom, hdr)
+	s3compat.SetETag(hdr, lom) // and etag
 	freeGetObjInfo(goi)
 }
 
 // HEAD s3/bckName/objName
 func (t *targetrunner) headObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	var err error
 	if len(items) < 2 {
 		t.writeErr(w, r, errS3Obj)
 		return
@@ -225,36 +232,11 @@ func (t *targetrunner) headObjS3(w http.ResponseWriter, r *http.Request, items [
 		t.writeErr(w, r, err)
 		return
 	}
+
 	lom := cluster.AllocLOM(objName)
-	defer cluster.FreeLOM(lom)
-	if err = lom.Init(bck.Bck); err != nil {
-		if cmn.IsErrRemoteBckNotFound(err) {
-			t.BMDVersionFixup(r)
-			err = lom.Init(bck.Bck)
-		}
-		if err != nil {
-			t.writeErr(w, r, err)
-		}
-		return
-	}
-
-	if err = lom.Load(true /*cache it*/, false /*locked*/); err != nil && !cmn.IsObjNotExist(err) {
-		t.writeErr(w, r, err)
-		return
-	}
-
-	exists := err == nil
-	if !exists {
-		err := cmn.NewNotFoundError("%s: object %s/%s", t.si, bucket, objName)
-		t.writeErr(w, r, err, http.StatusNotFound)
-		return
-	}
-
-	if isETLRequest(r.URL.Query()) {
-		s3compat.SetETLHeader(w.Header(), lom)
-		return
-	}
-	s3compat.SetHeaderFromLOM(w.Header(), lom, lom.SizeBytes())
+	t.headObject(w, r, r.URL.Query(), bck, lom)
+	s3compat.SetETag(w.Header(), lom) // add etag/md5
+	cluster.FreeLOM(lom)
 }
 
 // DEL s3/bckName/objName
