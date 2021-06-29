@@ -311,6 +311,12 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 	if err := ctMeta.Write(c.parent.t, bytes.NewReader(b), -1); err != nil {
 		return err
 	}
+	if _, exists := c.parent.t.Bowner().Get().Get(ctMeta.Bck()); !exists {
+		if errRm := cos.RemoveFile(ctMeta.FQN()); errRm != nil {
+			glog.Errorf("nested error: save restored replica -> remove metafile: %v", errRm)
+		}
+		return fmt.Errorf("%s metafile saved while bucket %s was being destroyed", ctMeta.ObjectName(), ctMeta.Bucket())
+	}
 
 	reader, err := cos.NewFileHandle(objFQN)
 	if err != nil {

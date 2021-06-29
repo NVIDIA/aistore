@@ -415,8 +415,19 @@ func WriteSliceAndMeta(t cluster.Target, hdr *transport.ObjHdr, args *WriteArgs)
 		return err
 	}
 	ct.Lock(true)
-	defer ct.Unlock(true)
 	ctMeta := ct.Clone(MetaType)
+	defer func() {
+		ct.Unlock(true)
+		if err == nil {
+			return
+		}
+		if rmErr := cos.RemoveFile(ct.FQN()); rmErr != nil {
+			glog.Errorf("nested error: save replica -> remove replica: %v", rmErr)
+		}
+		if rmErr := cos.RemoveFile(ctMeta.FQN()); rmErr != nil {
+			glog.Errorf("nested error: save replica -> remove metafile: %v", rmErr)
+		}
+	}()
 	if args.Generation != 0 {
 		if oldMeta, oldErr := LoadMetadata(ctMeta.FQN()); oldErr == nil && oldMeta.Generation > args.Generation {
 			cos.DrainReader(args.Reader)
@@ -427,23 +438,19 @@ func WriteSliceAndMeta(t cluster.Target, hdr *transport.ObjHdr, args *WriteArgs)
 	if err := ct.Write(t, args.Reader, hdr.ObjAttrs.Size, tmpFQN); err != nil {
 		return err
 	}
-	err = ctMeta.Write(t, bytes.NewReader(args.MD), -1)
-	if err == nil {
-		err = validateBckBID(t, hdr.Bck, args.BID)
+	if err := ctMeta.Write(t, bytes.NewReader(args.MD), -1); err != nil {
+		return err
 	}
-	if err != nil {
-		if rmErr := cos.RemoveFile(ct.FQN()); rmErr != nil {
-			glog.Errorf("nested error: save replica -> remove replica: %v", rmErr)
-		}
-		if rmErr := cos.RemoveFile(ctMeta.FQN()); rmErr != nil {
-			glog.Errorf("nested error: save replica -> remove metafile: %v", rmErr)
-		}
+	if _, exists := t.Bowner().Get().Get(ctMeta.Bck()); !exists {
+		err = fmt.Errorf("%s metafile saved while bucket %s was being destroyed", ctMeta.ObjectName(), ctMeta.Bucket())
+		return err
 	}
+	err = validateBckBID(t, hdr.Bck, args.BID)
 	return err
 }
 
 // WriteReplicaAndMeta saves replica and its metafile
-func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) error {
+func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) (err error) {
 	lom.Lock(false)
 	if args.Generation != 0 {
 		ctMeta := cluster.NewCTFromLOM(lom, MetaType)
@@ -454,9 +461,8 @@ func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) er
 		}
 	}
 	lom.Unlock(false)
-	err := WriteObject(t, lom, args.Reader, lom.SizeBytes(true))
-	if err != nil {
-		return err
+	if err = WriteObject(t, lom, args.Reader, lom.SizeBytes(true)); err != nil {
+		return
 	}
 	if !args.Cksum.IsEmpty() && args.Cksum.Value() != "" { // NOTE: empty value
 		if !lom.EqCksum(args.Cksum) {
@@ -466,20 +472,25 @@ func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) er
 	}
 	ctMeta := cluster.NewCTFromLOM(lom, MetaType)
 	ctMeta.Lock(true)
-	defer ctMeta.Unlock(true)
-	err = ctMeta.Write(t, bytes.NewReader(args.MD), -1)
-	if err == nil {
-		err = validateBckBID(t, lom.Bucket(), args.BID)
-	}
-
-	if err != nil {
+	defer func() {
+		ctMeta.Unlock(true)
+		if err == nil {
+			return
+		}
 		if rmErr := cos.RemoveFile(lom.FQN); rmErr != nil {
 			glog.Errorf("nested error: save replica -> remove replica: %v", rmErr)
 		}
 		if rmErr := cos.RemoveFile(ctMeta.FQN()); rmErr != nil {
 			glog.Errorf("nested error: save replica -> remove metafile: %v", rmErr)
 		}
+	}()
+	if err = ctMeta.Write(t, bytes.NewReader(args.MD), -1); err != nil {
+		return
 	}
-
-	return err
+	if _, exists := t.Bowner().Get().Get(ctMeta.Bck()); !exists {
+		err = fmt.Errorf("%s metafile saved while bucket %s was being destroyed", ctMeta.ObjectName(), ctMeta.Bucket())
+		return
+	}
+	err = validateBckBID(t, lom.Bucket(), args.BID)
+	return
 }

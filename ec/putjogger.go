@@ -267,11 +267,20 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 	} else {
 		err = c.splitAndDistribute(ctx)
 	}
-	if err == nil {
-		metaBuf := bytes.NewReader(meta.NewPack())
-		err = ctMeta.Write(c.parent.t, metaBuf, -1)
+	if err != nil {
+		return err
 	}
-	return err
+	metaBuf := bytes.NewReader(meta.NewPack())
+	if err := ctMeta.Write(c.parent.t, metaBuf, -1); err != nil {
+		return err
+	}
+	if _, exists := c.parent.t.Bowner().Get().Get(ctMeta.Bck()); !exists {
+		if errRm := cos.RemoveFile(ctMeta.FQN()); errRm != nil {
+			glog.Errorf("nested error: encode -> remove metafile: %v", errRm)
+		}
+		return fmt.Errorf("%s metafile saved while bucket %s was being destroyed", ctMeta.ObjectName(), ctMeta.Bucket())
+	}
+	return nil
 }
 
 func (c *putJogger) ctSendCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ interface{}, err error) {
