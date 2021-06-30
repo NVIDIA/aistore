@@ -18,6 +18,8 @@ import (
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
+// assorted non-bucket (global) xactions: rebalance, resilver, election
+
 type (
 	getMarked = func() xaction.XactMarked
 	RebBase   struct {
@@ -57,6 +59,7 @@ var (
 	_ xreg.GlobalFactory = (*rebFactory)(nil)
 	_ cluster.Xact       = (*Resilver)(nil)
 	_ xreg.GlobalFactory = (*resilverFactory)(nil)
+
 	_ cluster.Xact       = (*Election)(nil)
 	_ xreg.GlobalFactory = (*eleFactory)(nil)
 )
