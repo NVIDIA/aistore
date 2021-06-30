@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
 	"github.com/vbauerster/mpb/v4/decor"
@@ -158,6 +159,38 @@ func promoteFileOrDir(c *cli.Context, bck cmn.Bck, objName, fqn string) (err err
 	}
 	fmt.Fprintf(c.App.Writer, "promoted %q => bucket %q\n", fqn, bck)
 	return
+}
+
+func setCustomProps(c *cli.Context, bck cmn.Bck, objName string) (err error) {
+	props := make(cos.SimpleKVs)
+	propArgs := c.Args().Tail()
+
+	if len(propArgs) == 1 && isJSON(propArgs[0]) {
+		if err = jsoniter.Unmarshal([]byte(propArgs[0]), &props); err != nil {
+			return
+		}
+	} else {
+		if len(propArgs) == 0 {
+			err = missingArgumentsError(c, "property key-value pairs")
+			return
+		}
+		for _, pair := range propArgs {
+			nv := strings.Split(pair, "=")
+			if len(nv) != 2 {
+				return fmt.Errorf("invalid custom property %q (Hint: use syntax key1=value1 key2=value2 ...)", nv)
+			}
+			nv[0] = strings.TrimSpace(nv[0])
+			nv[1] = strings.TrimSpace(nv[1])
+			props[nv[0]] = nv[1]
+		}
+	}
+	if err = api.SetObjectCustomProps(defaultAPIParams, bck, objName, props); err != nil {
+		return
+	}
+	fmt.Fprintf(c.App.Writer,
+		"Custom props successfully updated (use `ais show object %s/%s --props=all` to show the updates).\n",
+		bck, objName)
+	return nil
 }
 
 // PUT methods.

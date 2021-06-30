@@ -123,6 +123,19 @@ func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists .
 	return objProps, nil
 }
 
+// Given cos.SimpleKVs (map[string]string) sets (as in: overwrites) object's custom properties
+// See also: HeadObject() and cmn.HdrObjCustomMD
+func SetObjectCustomProps(baseParams BaseParams, bck cmn.Bck, object string, custom cos.SimpleKVs) error {
+	actMsg := cmn.ActionMsg{Value: custom}
+	baseParams.Method = http.MethodPatch
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPathObjects.Join(bck.Name, object),
+		Body:       cos.MustMarshal(actMsg),
+		Query:      cmn.AddBckToQuery(nil, bck),
+	})
+}
+
 // DeleteObject deletes an object specified by bucket/object.
 func DeleteObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 	baseParams.Method = http.MethodDelete

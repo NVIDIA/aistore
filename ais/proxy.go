@@ -373,6 +373,8 @@ func (p *proxyrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 		p.httpobjpost(w, r)
 	case http.MethodHead:
 		p.httpobjhead(w, r)
+	case http.MethodPatch:
+		p.httpobjpatch(w, r)
 	default:
 		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodHead,
 			http.MethodPost, http.MethodPut)
@@ -1449,6 +1451,35 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request, origUR
 		bckArgs.tryOnlyRem = true
 	}
 	bck, objName, err := p.parseAPI(w, r, bckArgs, origURLBck...)
+	freeInitBckArgs(bckArgs)
+	if err != nil {
+		return
+	}
+	smap := p.owner.smap.get()
+	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
+	if err != nil {
+		p.writeErr(w, r, err, http.StatusInternalServerError)
+		return
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s %s/%s => %s", r.Method, bck.Name, objName, si)
+	}
+	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+}
+
+// PATCH /v1/objects/bucket-name/object-name
+func (p *proxyrunner) httpobjpatch(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
+	bckArgs := allocInitBckArgs()
+	{
+		bckArgs.p = p
+		bckArgs.w = w
+		bckArgs.r = r
+		bckArgs.perms = cmn.AccessObjHEAD
+		bckArgs.tryOnlyRem = true
+	}
+	bck, objName, err := p.parseAPI(w, r, bckArgs)
 	freeInitBckArgs(bckArgs)
 	if err != nil {
 		return

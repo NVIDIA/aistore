@@ -470,7 +470,7 @@ $ ais show bucket ais://bucket_name
 PROPERTY	 VALUE
 access		 GET,PUT,DELETE,HEAD,ColdGET
 checksum	 Type: xxhash | Validate: ColdGET
-created		2020-04-08T16:20:12-08:00
+created		 2020-04-08T16:20:12-08:00
 ec		 Disabled
 lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
 mirror		 Disabled

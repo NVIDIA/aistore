@@ -434,6 +434,8 @@ func (t *targetrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 		t.httpobjdelete(w, r)
 	case http.MethodPost:
 		t.httpobjpost(w, r)
+	case http.MethodPatch:
+		t.httpobjpatch(w, r)
 	default:
 		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodHead,
 			http.MethodPost, http.MethodPut)
@@ -1102,6 +1104,51 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 		hdr.Del(cmn.HdrObjCksumVal)
 		hdr.Del(cmn.HdrObjCksumType)
 	}
+}
+
+// PATCH /v1/objects/<bucket-name>/<object-name>
+func (t *targetrunner) httpobjpatch(w http.ResponseWriter, r *http.Request) {
+	var (
+		msg      cmn.ActionMsg
+		features = cmn.GCO.Get().Client.Features
+		query    = r.URL.Query()
+		request  = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
+	)
+	if isRedirect(query) == "" && !t.isIntraCall(r.Header) && !features.IsSet(cmn.FeatureDirectAccess) {
+		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
+			t.si, r.Method, r.RemoteAddr)
+		return
+	}
+	if err := t.parseAPIRequest(w, r, request); err != nil {
+		return
+	}
+	if cmn.ReadJSON(w, r, &msg) != nil {
+		return
+	}
+	custom := cos.SimpleKVs{}
+	if err := cos.MorphMarshal(msg.Value, &custom); err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+	lom := cluster.AllocLOM(request.items[1] /*objName*/)
+	defer cluster.FreeLOM(lom)
+	if err := lom.Init(request.bck.Bck); err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
+		if cmn.IsObjNotExist(err) {
+			t.writeErr(w, r, err, http.StatusNotFound)
+		} else {
+			t.writeErr(w, r, err)
+		}
+		return
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s: %s, custom=%+v", t.si, lom, msg.Value)
+	}
+	lom.SetCustom(custom)
+	lom.Persist()
 }
 
 //////////////////////

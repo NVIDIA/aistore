@@ -12,6 +12,7 @@ This section lists operations (such as GET, PUT, APPEND, PROMOTE) on *objects* u
 - [Prefetch objects](#prefetch-objects)
 - [Move object](#move-object)
 - [Concat objects](#concat-objects)
+- [Set custom properties](#set-custom-properties)
 
 ## GET object
 
@@ -242,7 +243,7 @@ The current user HOME directory is `/home/user`.
 
 Put a single file `img1.tar` into local bucket `mybucket`, name it `img-set-1.tar`.
 
-```bash
+```console
 $ ais object put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
 ```
@@ -253,7 +254,7 @@ Put a single file `img1.tar` into local bucket `mybucket`, with a content checks
 to override the default bucket checksum performed at the server side.
 
 
-```bash
+```console
 $ ais object put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --crc32c 0767345f
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
 
@@ -273,7 +274,7 @@ $ ais object put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --xxhash
 Optionally, the user can choose to provide a `--compute-cksum` flag for the checksum flag and
 let the api take care of the computation.
 
-```bash
+```console
 $ ais object put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --compute-cksum
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
 ```
@@ -282,7 +283,7 @@ $ ais object put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --comput
 
 Put a single file `~/bck/img1.tar` into bucket `mybucket`, without explicit name.
 
-```bash
+```console
 $ ais object put "~/bck/img1.tar" ais://mybucket/
 # PUT /home/user/bck/img1.tar => mybucket/img-set-1.tar
 ```
@@ -304,7 +305,7 @@ $ tar -xOzf ~/bck/img1.tar | ais object put - ais://mybucket/img1-unpacked
 Put two objects, `/home/user/bck/img1.tar` and `/home/user/bck/img2.zip`, into the root of bucket `mybucket`.
 Note that the path `/home/user/bck` is a shortcut for `/home/user/bck/*` and that recursion is disabled by default.
 
-```bash
+```console
 $ ais object put "/home/user/bck" ais://mybucket
 # PUT /home/user/bck/img1.tar => img1.tar
 # PUT /home/user/bck/img2.tar => img2.zip
@@ -314,7 +315,7 @@ $ ais object put "/home/user/bck" ais://mybucket
 
 The same as above, but add `OBJECT_NAME` (`../subdir/`) prefix to objects names.
 
-```bash
+```console
 $ ais object put "/home/user/bck" ais://mybucket/subdir/
 # PUT /home/user/bck/img1.tar => ais://mybucket/subdir/img1.tar
 # PUT /home/user/bck/img2.tar => ais://mybucket/subdir/img2.zip
@@ -326,7 +327,7 @@ $ ais object put "/home/user/bck" ais://mybucket/subdir/
 
 The same as above, but without trailing `/`.
 
-```bash
+```console
 $ ais object put "/home/user/bck" ais://mybucket/subdir
 # PUT /home/user/bck/img1.tar => ais://mybucket/subdirimg1.tar
 # PUT /home/user/bck/img2.tar => ais://mybucket/subdirimg2.zip
@@ -338,7 +339,7 @@ $ ais object put "/home/user/bck" ais://mybucket/subdir
 
 Same as above, except that only files matching pattern `*.tar` are PUT, so the final bucket content is `tars/img1.tar` and `tars/extra/img1.tar`.
 
-```bash
+```console
 $ ais object put "~/bck/*.tar" ais://mybucket/tars/
 # PUT /home/user/bck/img1.tar => ais://mybucket/tars/img1.tar
 # PUT /home/user/bck/extra/img1.tar => ais://mybucket/tars/extra/img1.tar
@@ -373,7 +374,7 @@ $ ais object put "~/dir/test{0..2}{0..2}.txt" ais://mybucket/dir/ -y
 
 Preview the files that would be sent to the cluster, without really putting them.
 
-```console
+```bash
 $ for d1 in {0..2}; do for d2 in {0..2}; mkdir -p ~/dir/test${d1}/dir && do echo "0" > ~/dir/test${d1}/dir/test${d2}.txt; done; done
 $ ais object put "~/dir/test{0..2}/dir/test{0..2}.txt" ais://mybucket --dry-run
 [DRY RUN] No modifications on the cluster
@@ -432,7 +433,7 @@ Notice that `keep` option is required - it cannot be omitted.
 
 Promote `/tmp/examples/example1.txt` without specified object name.
 
-```bash
+```console
 $ ais object promote /tmp/examples/example1.txt ais://mybucket --keep=true
 # PROMOTE /tmp/examples/example1.txt => ais://mybucket/example1.txt
 ```
@@ -441,7 +442,7 @@ $ ais object promote /tmp/examples/example1.txt ais://mybucket --keep=true
 
 Promote /tmp/examples/example1.txt as object with name `example1.txt`.
 
-```bash
+```console
 $ ais object promote /tmp/examples/example1.txt ais://mybucket/example1.txt --keep=true
 # PROMOTE /tmp/examples/example1.txt => ais://mybucket/example1.txt
 ```
@@ -676,3 +677,41 @@ Creates `obj` in bucket `mybucket` which is concatenation of sorted files from `
 ```console
 $ ais object concat dirB dirA ais://mybucket/obj
 ```
+
+## Set custom properties
+
+Generally, AIS objects have two kinds of properties: system and, optionally, custom (user-defined). Unlike the system-maintained properties, such as checksum and the number of copies (or EC parity slices, etc.) custom properties may have arbitrary user-defined names and values.
+
+Custom properties are not impacted by object updates (PUTs) - a new version of an object simply inherits custom properties of the previous version, as is with no changes.
+
+The command's syntax is similar to the one used to assign [bucket properties](bucket.md#set-bucket-properties):
+
+`ais object set-custom [command options] BUCKET/OBJECT_NAME JSON_SPECIFICATION|KEY=VALUE [KEY=VALUE...]`,
+
+for example:
+
+```console
+$ ais object put README.md ais://abc
+$ ais object set-custom ais://abc/README.md mykey1=value1 mykey2=value2
+
+# or, the same using JSON formatting:
+$ ais object set-custom ais://abc/README.md '{"mykey1":"value1", "mykey2":"value2"}'
+```
+
+To show the results:
+
+```console
+$ ais show object ais://abc/README.md --props=all
+PROPERTY         VALUE
+atime            30 Jun 21 09:43 PDT
+cached           yes
+checksum         47904b6991a92ca9
+copies           1
+custom           mykey1=value1, mykey2=value2
+ec               -
+name             ais://abc/README.md
+size             13.13KiB
+version          1
+```
+
+Note the flag `--props=all` used to show _all_ object's properties including the custom ones, if available.

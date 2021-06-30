@@ -41,6 +41,7 @@ const (
 	commandPrefetch  = cmn.ActPrefetch
 	commandPromote   = "promote"
 	commandPut       = "put"
+	commandSetCustom = "set-custom"
 	commandRemove    = "rm"
 	commandMv        = "mv"
 	commandSet       = "set"
@@ -269,7 +270,7 @@ var (
 		Name:  "ignore-error",
 		Usage: "ignore error on soft failures like bucket already exists, bucket does not exist etc.",
 	}
-	bucketPropsFlag = cli.StringFlag{Name: "bucket-props", Usage: "value represents custom properties of a bucket"}
+	bucketPropsFlag = cli.StringFlag{Name: "bucket-props", Usage: "bucket properties"}
 	forceFlag       = cli.BoolFlag{Name: "force,f", Usage: "force an action"}
 
 	allXactionsFlag = cli.BoolTFlag{Name: "all", Usage: "show all xactions, including finished"}
@@ -434,7 +435,7 @@ var (
 	// Alias
 	resetAliasFlag = cli.BoolFlag{
 		Name:  "reset",
-		Usage: "remove all custom aliases and reset to default",
+		Usage: "remove all custom aliases and reset to system default",
 	}
 )
 

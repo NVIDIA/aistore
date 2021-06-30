@@ -39,6 +39,7 @@ var (
 			yesFlag,
 			computeCksumFlag,
 		),
+		commandSetCustom: {},
 		commandPromote: {
 			recursiveFlag,
 			overwriteFlag,
@@ -78,12 +79,21 @@ var (
 		BashComplete: putPromoteObjectCompletions,
 	}
 
+	objectCmdSetCustom = cli.Command{
+		Name:      commandSetCustom,
+		Usage:     "set object custom properties",
+		ArgsUsage: objectArgument + " " + jsonSpecArgument + "|" + keyValuePairsArgument,
+		Flags:     objectCmdsFlags[commandSetCustom],
+		Action:    setCustomPropsHandler,
+	}
+
 	objectCmd = cli.Command{
 		Name:  commandObject,
 		Usage: "PUT (write), GET (read), list, move (rename) and other operations on objects in a given bucket",
 		Subcommands: []cli.Command{
 			objectCmdGet,
 			objectCmdPut,
+			objectCmdSetCustom,
 			makeAlias(showCmdObject, "", true, commandShow), // alias for `ais show`
 			{
 				Name:      commandMv,
@@ -292,6 +302,18 @@ func promoteHandler(c *cli.Context) (err error) {
 		return
 	}
 	return promoteFileOrDir(c, bck, objName, fqn)
+}
+
+func setCustomPropsHandler(c *cli.Context) (err error) {
+	if c.NArg() == 0 {
+		return incorrectUsageMsg(c, "missing bucket")
+	}
+	uri := c.Args().First()
+	bck, objName, err := parseBckObjectURI(c, uri, true /* optional objName */)
+	if err != nil {
+		return err
+	}
+	return setCustomProps(c, bck, objName)
 }
 
 func catHandler(c *cli.Context) (err error) {
