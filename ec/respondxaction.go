@@ -108,7 +108,7 @@ func (r *XactRespond) removeObjAndMeta(bck *cluster.Bck, objName string) error {
 		glog.Infof("Delete request for %s/%s", bck.Name, objName)
 	}
 
-	ct, err := cluster.NewCTFromBO(bck.Bck, objName, r.t.Bowner(), SliceType)
+	ct, err := cluster.NewCTFromBO(bck.Bck, objName, r.t.Bowner(), fs.ECSliceType)
 	if err != nil {
 		return err
 	}
@@ -121,7 +121,7 @@ func (r *XactRespond) removeObjAndMeta(bck *cluster.Bck, objName string) error {
 	// responds that it has the object because it has metafile. We delete
 	// metafile that makes remained slices/replicas outdated and can be cleaned
 	// up later by LRU or other runner
-	for _, tp := range []string{MetaType, fs.ObjectType, SliceType} {
+	for _, tp := range []string{fs.ECMetaType, fs.ObjectType, fs.ECSliceType} {
 		fqnMeta, _, err := cluster.HrwFQN(bck, tp, objName)
 		if err != nil {
 			return err
@@ -143,14 +143,14 @@ func (r *XactRespond) trySendCT(iReq intraReq, bck *cluster.Bck, objName string)
 		glog.Infof("Received request for slice %d of %s", iReq.meta.SliceID, objName)
 	}
 	if iReq.isSlice {
-		ct, err := cluster.NewCTFromBO(bck.Bck, objName, r.t.Bowner(), SliceType)
+		ct, err := cluster.NewCTFromBO(bck.Bck, objName, r.t.Bowner(), fs.ECSliceType)
 		if err != nil {
 			return err
 		}
 		ct.Lock(false)
 		defer ct.Unlock(false)
 		fqn = ct.FQN()
-		metaFQN = ct.Make(MetaType)
+		metaFQN = ct.Make(fs.ECMetaType)
 		if md, err = LoadMetadata(metaFQN); err != nil {
 			return err
 		}

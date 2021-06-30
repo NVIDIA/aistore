@@ -63,7 +63,7 @@ func (ct *CT) Unlock(exclusive bool) {
 // e.g.: generate EC metafile FQN from bucket name, backend provider and object name:
 //  ct, err := NewCTFromBO(bckName, bckProvider, objName, nil)
 //  if err != nil { ... }
-//  fqn := ct.Make(MetaType)
+//  fqn := ct.Make(fs.ECMetaType)
 
 func NewCTFromFQN(fqn string, b Bowner) (ct *CT, err error) {
 	parsedFQN, _, err := ResolveFQN(fqn)

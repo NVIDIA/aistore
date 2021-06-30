@@ -915,8 +915,8 @@ func initFS() {
 
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
-	_ = fs.CSM.RegisterContentType(ec.SliceType, &ec.SliceSpec{})
-	_ = fs.CSM.RegisterContentType(ec.MetaType, &ec.MetaSpec{})
+	_ = fs.CSM.RegisterContentType(fs.ECSliceType, &ec.SliceSpec{})
+	_ = fs.CSM.RegisterContentType(fs.ECMetaType, &ec.MetaSpec{})
 }
 
 func initMountpaths(t *testing.T, proxyURL string) {

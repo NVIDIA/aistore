@@ -160,7 +160,7 @@ func (c *putJogger) ec(req *request, lom *cluster.LOM) (err error) {
 	switch req.Action {
 	case ActSplit:
 		if err = c.encode(req, lom); err != nil {
-			ctMeta := cluster.NewCTFromLOM(lom, MetaType)
+			ctMeta := cluster.NewCTFromLOM(lom, fs.ECMetaType)
 			errRm := cos.RemoveFile(ctMeta.FQN())
 			debug.AssertNoErr(errRm)
 		}
@@ -224,7 +224,7 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 			lom, reqTargets, targetCnt)
 	}
 
-	ctMeta := cluster.NewCTFromLOM(lom, MetaType)
+	ctMeta := cluster.NewCTFromLOM(lom, fs.ECMetaType)
 	generation := mono.NanoTime()
 	meta := &Metadata{
 		MDVersion:   MDVersionLast,
@@ -294,7 +294,7 @@ func (c *putJogger) ctSendCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ inte
 // Remove slices and replicas across the cluster: remove local metafile
 // if exists and broadcast the request to other targets
 func (c *putJogger) cleanup(lom *cluster.LOM) error {
-	ctMeta := cluster.NewCTFromLOM(lom, MetaType)
+	ctMeta := cluster.NewCTFromLOM(lom, fs.ECMetaType)
 	md, err := LoadMetadata(ctMeta.FQN())
 	if err != nil {
 		if os.IsNotExist(err) {

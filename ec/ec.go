@@ -103,9 +103,6 @@ import (
 //		 algorithm returns.
 
 const (
-	SliceType = "ec" // object slice prefix
-	MetaType  = "mt" // metafile prefix
-
 	ActSplit   = "split"
 	ActRestore = "restore"
 	ActDelete  = "delete"
@@ -274,8 +271,8 @@ func (s *slice) reopenReader() (reader cos.ReadOpenCloser, err error) {
 func Init(t cluster.Target) {
 	mm = t.MMSA()
 
-	fs.CSM.RegisterContentType(SliceType, &SliceSpec{})
-	fs.CSM.RegisterContentType(MetaType, &MetaSpec{})
+	fs.CSM.RegisterContentType(fs.ECSliceType, &SliceSpec{})
+	fs.CSM.RegisterContentType(fs.ECMetaType, &MetaSpec{})
 
 	xreg.RegFactory(&getFactory{})
 	xreg.RegFactory(&putFactory{})
@@ -410,12 +407,12 @@ func validateBckBID(t cluster.Target, bck cmn.Bck, bid uint64) error {
 
 // WriteSliceAndMeta saves slice and its metafile
 func WriteSliceAndMeta(t cluster.Target, hdr *transport.ObjHdr, args *WriteArgs) error {
-	ct, err := cluster.NewCTFromBO(hdr.Bck, hdr.ObjName, t.Bowner(), SliceType)
+	ct, err := cluster.NewCTFromBO(hdr.Bck, hdr.ObjName, t.Bowner(), fs.ECSliceType)
 	if err != nil {
 		return err
 	}
 	ct.Lock(true)
-	ctMeta := ct.Clone(MetaType)
+	ctMeta := ct.Clone(fs.ECMetaType)
 	defer func() {
 		ct.Unlock(true)
 		if err == nil {
@@ -453,7 +450,7 @@ func WriteSliceAndMeta(t cluster.Target, hdr *transport.ObjHdr, args *WriteArgs)
 func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) (err error) {
 	lom.Lock(false)
 	if args.Generation != 0 {
-		ctMeta := cluster.NewCTFromLOM(lom, MetaType)
+		ctMeta := cluster.NewCTFromLOM(lom, fs.ECMetaType)
 		if oldMeta, oldErr := LoadMetadata(ctMeta.FQN()); oldErr == nil && oldMeta.Generation > args.Generation {
 			lom.Unlock(false)
 			cos.DrainReader(args.Reader)
@@ -470,7 +467,7 @@ func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) (e
 				lom.Bucket(), lom.ObjName, lom.Version(), args.Cksum, lom.Checksum())
 		}
 	}
-	ctMeta := cluster.NewCTFromLOM(lom, MetaType)
+	ctMeta := cluster.NewCTFromLOM(lom, fs.ECMetaType)
 	ctMeta.Lock(true)
 	defer func() {
 		ctMeta.Unlock(true)

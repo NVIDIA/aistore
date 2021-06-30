@@ -149,7 +149,7 @@ func (r *XactBckEncode) bckEncode(lom *cluster.LOM, _ []byte) error {
 		return nil
 	}
 
-	mdFQN, _, err := cluster.HrwFQN(lom.Bck(), MetaType, lom.ObjName)
+	mdFQN, _, err := cluster.HrwFQN(lom.Bck(), fs.ECMetaType, lom.ObjName)
 	if err != nil {
 		glog.Warningf("metadata FQN generation failed %q: %v", lom.FQN, err)
 		return nil

@@ -34,6 +34,8 @@ const (
 	contentTypeLen = 2
 	ObjectType     = "ob"
 	WorkfileType   = "wk"
+	ECSliceType    = "ec"
+	ECMetaType     = "mt"
 )
 
 type (

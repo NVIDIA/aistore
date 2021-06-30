@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
-	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
@@ -260,13 +259,13 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 
 func TestJoggerGroupMultiContentTypes(t *testing.T) {
 	var (
-		cts  = []string{fs.ObjectType, ec.SliceType, ec.MetaType}
+		cts  = []string{fs.ObjectType, fs.ECSliceType, fs.ECMetaType}
 		desc = tutils.ObjectsDesc{
 			CTs: []tutils.ContentTypeDesc{
 				{Type: fs.WorkfileType, ContentCnt: 10},
 				{Type: fs.ObjectType, ContentCnt: 541},
-				{Type: ec.SliceType, ContentCnt: 244},
-				{Type: ec.MetaType, ContentCnt: 405},
+				{Type: fs.ECSliceType, ContentCnt: 244},
+				{Type: fs.ECMetaType, ContentCnt: 405},
 			},
 			MountpathsCnt: 10,
 			ObjectSize:    cos.KiB,

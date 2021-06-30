@@ -144,8 +144,8 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
-	_ = fs.CSM.RegisterContentType(ec.SliceType, &ec.SliceSpec{})
-	_ = fs.CSM.RegisterContentType(ec.MetaType, &ec.MetaSpec{})
+	_ = fs.CSM.RegisterContentType(fs.ECSliceType, &ec.SliceSpec{})
+	_ = fs.CSM.RegisterContentType(fs.ECMetaType, &ec.MetaSpec{})
 
 	dir := t.TempDir()
 
@@ -195,7 +195,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 				lom.SetSize(desc.ObjectSize)
 				err = lom.Persist()
 				tassert.CheckFatal(t, err)
-			case fs.WorkfileType, ec.SliceType, ec.MetaType:
+			case fs.WorkfileType, fs.ECSliceType, fs.ECMetaType:
 			default:
 				cos.AssertMsg(false, "non-implemented type")
 			}

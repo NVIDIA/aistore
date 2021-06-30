@@ -1205,7 +1205,7 @@ func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, bck *clu
 			return
 		}
 	}
-	sliceFQN := lom.MpathInfo().MakePathFQN(bck.Bck, ec.SliceType, objName)
+	sliceFQN := lom.MpathInfo().MakePathFQN(bck.Bck, fs.ECSliceType, objName)
 	finfo, err := os.Stat(sliceFQN)
 	if err != nil {
 		t.writeErrSilent(w, r, err, http.StatusNotFound)

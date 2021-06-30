@@ -307,7 +307,7 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 	}
 
 	b := cos.MustMarshal(ctx.meta)
-	ctMeta := cluster.NewCTFromLOM(ctx.lom, MetaType)
+	ctMeta := cluster.NewCTFromLOM(ctx.lom, fs.ECMetaType)
 	if err := ctMeta.Write(c.parent.t, bytes.NewReader(b), -1); err != nil {
 		return err
 	}
@@ -801,7 +801,7 @@ func (c *getJogger) restore(ctx *restoreCtx) error {
 
 	if len(ctx.nodes) < ctx.meta.Data {
 		return fmt.Errorf("cannot restore: too many slices missing (found %d slices, need %d or more)",
-			ctx.meta.Data, len(ctx.nodes))
+			len(ctx.nodes), ctx.meta.Data)
 	}
 
 	return c.restoreEncoded(ctx)
@@ -839,7 +839,7 @@ func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 		mtx.Unlock()
 	}
 
-	ctMeta := cluster.NewCTFromLOM(ctx.lom, MetaType)
+	ctMeta := cluster.NewCTFromLOM(ctx.lom, fs.ECMetaType)
 	md, err := LoadMetadata(ctMeta.FQN())
 	mdExists = err == nil && len(md.Daemons) != 0
 	if mdExists {

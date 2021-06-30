@@ -13,7 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
@@ -58,7 +57,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xa
 	jctx := &joggerCtx{xact: xact, t: reb.t}
 	jg := mpather.NewJoggerGroup(&mpather.JoggerGroupOpts{
 		T:                     reb.t,
-		CTs:                   []string{fs.ObjectType, ec.SliceType},
+		CTs:                   []string{fs.ObjectType, fs.ECSliceType},
 		VisitObj:              jctx.visitObj,
 		VisitCT:               jctx.visitCT,
 		Slab:                  slab,
@@ -96,7 +95,7 @@ func _mvSlice(ct *cluster.CT, buf []byte) {
 		return
 	}
 
-	destFQN := destMpath.MakePathFQN(ct.Bucket(), ec.SliceType, ct.ObjectName())
+	destFQN := destMpath.MakePathFQN(ct.Bucket(), fs.ECSliceType, ct.ObjectName())
 	srcMetaFQN, destMetaFQN, err := _moveECMeta(ct, ct.MpathInfo(), destMpath, buf)
 	if err != nil {
 		return
@@ -125,14 +124,14 @@ func _mvSlice(ct *cluster.CT, buf []byte) {
 // destination for a caller to do proper cleanup. Empty values means: either
 // the source FQN does not exist(err==nil), or copying failed
 func _moveECMeta(ct *cluster.CT, srcMpath, dstMpath *fs.MountpathInfo, buf []byte) (string, string, error) {
-	src := srcMpath.MakePathFQN(ct.Bucket(), ec.MetaType, ct.ObjectName())
+	src := srcMpath.MakePathFQN(ct.Bucket(), fs.ECMetaType, ct.ObjectName())
 	// If metafile does not exist it may mean that EC has not processed the
 	// object yet (e.g, EC was enabled after the bucket was filled), or
 	// the metafile has gone
 	if err := fs.Access(src); os.IsNotExist(err) {
 		return "", "", nil
 	}
-	dst := dstMpath.MakePathFQN(ct.Bucket(), ec.MetaType, ct.ObjectName())
+	dst := dstMpath.MakePathFQN(ct.Bucket(), fs.ECMetaType, ct.ObjectName())
 	_, _, err := cos.CopyFile(src, dst, buf, cos.ChecksumNone)
 	if err == nil {
 		return src, dst, nil
@@ -202,7 +201,7 @@ func (rj *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 }
 
 func (*joggerCtx) visitCT(ct *cluster.CT, buf []byte) (err error) {
-	debug.Assert(ct.ContentType() == ec.SliceType)
+	debug.Assert(ct.ContentType() == fs.ECSliceType)
 	if !ct.Bck().Props.EC.Enabled {
 		// Since `%ec` directory is inside a bucket, it is safe to skip
 		// the entire `%ec` directory when EC is disabled for the bucket.

@@ -75,7 +75,7 @@ func (reb *Manager) jogEC(mpathInfo *fs.MountpathInfo, bck cmn.Bck, wg *sync.Wai
 	opts := &fs.Options{
 		Mpath: mpathInfo,
 		Bck:   bck,
-		CTs:   []string{ec.MetaType},
+		CTs:   []string{fs.ECMetaType},
 
 		Callback: reb.walkEC,
 		Sorted:   false,
@@ -276,7 +276,7 @@ func (reb *Manager) findEmptyTarget(md *ec.Metadata, ct *cluster.CT, sender stri
 // A sender sent an MD update. This target must update local information partially:
 // only list of daemons and the "main" target.
 func (reb *Manager) receiveMD(req *pushReq, hdr transport.ObjHdr) error {
-	ctMeta, err := cluster.NewCTFromBO(hdr.Bck, hdr.ObjName, reb.t.Bowner(), ec.MetaType)
+	ctMeta, err := cluster.NewCTFromBO(hdr.Bck, hdr.ObjName, reb.t.Bowner(), fs.ECMetaType)
 	if err != nil {
 		return err
 	}
@@ -303,7 +303,7 @@ func (reb *Manager) detectLocalCT(req *pushReq, ct *cluster.CT) (*ec.Metadata, e
 	if _, ok := req.md.Daemons[reb.t.Snode().ID()]; !ok {
 		return nil, nil
 	}
-	mdCT, err := cluster.NewCTFromBO(ct.Bck().Bck, ct.ObjectName(), reb.t.Bowner(), ec.MetaType)
+	mdCT, err := cluster.NewCTFromBO(ct.Bck().Bck, ct.ObjectName(), reb.t.Bowner(), fs.ECMetaType)
 	if err != nil {
 		return nil, err
 	}
@@ -339,7 +339,7 @@ func (reb *Manager) renameLocalCT(req *pushReq, ct *cluster.CT, md *ec.Metadata)
 
 func (reb *Manager) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Reader) error {
 	defer cos.DrainReader(reader)
-	ct, err := cluster.NewCTFromBO(hdr.Bck, hdr.ObjName, reb.t.Bowner(), ec.SliceType)
+	ct, err := cluster.NewCTFromBO(hdr.Bck, hdr.ObjName, reb.t.Bowner(), fs.ECSliceType)
 	if err != nil {
 		return err
 	}
@@ -454,7 +454,7 @@ func (reb *Manager) walkEC(fqn string, de fs.DirEntry) (err error) {
 	if isReplica {
 		fileFQN = ct.Make(fs.ObjectType)
 	} else {
-		fileFQN = ct.Make(ec.SliceType)
+		fileFQN = ct.Make(fs.ECSliceType)
 	}
 	if err := fs.Access(fileFQN); err != nil {
 		glog.Warningf("%s no CT for metadata[%d]: %s", reb.t.Snode(), md.SliceID, fileFQN)

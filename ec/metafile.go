@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -111,7 +112,7 @@ func (md *Metadata) Clone() *Metadata {
 
 // ObjectMetadata returns metadata for an object or its slice if any exists
 func ObjectMetadata(bck *cluster.Bck, objName string) (*Metadata, error) {
-	fqn, _, err := cluster.HrwFQN(bck, MetaType, objName)
+	fqn, _, err := cluster.HrwFQN(bck, fs.ECMetaType, objName)
 	if err != nil {
 		return nil, err
 	}
