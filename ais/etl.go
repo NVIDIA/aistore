@@ -220,7 +220,9 @@ func (t *targetrunner) getObjectETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t.getObject(w, r, r.URL.Query(), bck, objName)
+	lom := cluster.AllocLOM(objName)
+	t.getObject(w, r, r.URL.Query(), bck, lom)
+	cluster.FreeLOM(lom)
 }
 
 // HEAD /v1/etl/objects/<secret>/<uname>

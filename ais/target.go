@@ -765,12 +765,14 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t.getObject(w, r, query, request.bck, request.items[1])
+	lom := cluster.AllocLOM(request.items[1])
+	t.getObject(w, r, query, request.bck, lom)
+	cluster.FreeLOM(lom)
 }
 
 // getObject is main function to get the object. It doesn't check request origin,
 // so it must be done by the caller (if necessary).
-func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query url.Values, bck *cluster.Bck, objName string) {
+func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query url.Values, bck *cluster.Bck, lom *cluster.LOM) {
 	var (
 		ptime   = isRedirect(query)
 		config  = cmn.GCO.Get()
@@ -782,8 +784,6 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 			t.statsT.Add(stats.GetRedirLatency, redelta)
 		}
 	}
-	lom := cluster.AllocLOM(objName)
-	defer cluster.FreeLOM(lom)
 	if err := lom.Init(bck.Bck); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
@@ -795,7 +795,7 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 		}
 	}
 	if isETLRequest(query) {
-		t.doETL(w, r, query.Get(cmn.URLParamUUID), bck, objName)
+		t.doETL(w, r, query.Get(cmn.URLParamUUID), bck, lom.ObjName)
 		return
 	}
 	goi := allocGetObjInfo()

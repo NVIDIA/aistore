@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -164,60 +163,15 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 		t.writeErr(w, r, errS3Obj)
 		return
 	}
-	started, nanotim := time.Now(), mono.NanoTime()
 	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(t.owner.bmd); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
-	var (
-		err     error
-		objSize int64
-
-		objName = path.Join(items[1:]...)
-	)
-	uuid := r.URL.Query().Get(cmn.URLParamUUID)
-	if uuid != "" {
-		t.doETL(w, r, uuid, bck, objName)
-		return
-	}
-
-	lom := cluster.AllocLOM(objName)
-	defer cluster.FreeLOM(lom)
-	if err = lom.Init(bck.Bck); err != nil {
-		if cmn.IsErrRemoteBckNotFound(err) {
-			t.BMDVersionFixup(r)
-			err = lom.Init(bck.Bck)
-		}
-		if err != nil {
-			t.writeErr(w, r, err)
-		}
-		return
-	}
-	// TODO -- FIXME: see target.go
-	//
-	// if isETLRequest(query) {
-	// 	t.doETL(w, r, query.Get(cmn.URLParamUUID), bck, objName)
-	// 	return
-	// }
-	//
-	goi := allocGetObjInfo()
-	{
-		goi.started = started
-		goi.nanotim = nanotim
-		goi.t = t
-		goi.lom = lom
-		goi.w = w
-		goi.ctx = context.Background()
-		goi.ranges = rangesQuery{Range: r.Header.Get(cmn.HdrRange), Size: objSize}
-	}
-	if errCode, err := goi.getObject(); err != nil && err != errSendingResp {
-		t.writeErr(w, r, err, errCode)
-	}
-	hdr := w.Header()
-	cmn.ToHTTPHdr(lom, hdr)
-	s3compat.SetETag(hdr, lom) // and etag
-	freeGetObjInfo(goi)
+	lom := cluster.AllocLOM(path.Join(items[1:]...))
+	t.getObject(w, r, r.URL.Query(), bck, lom)
+	s3compat.SetETag(w.Header(), lom) // add etag/md5
+	cluster.FreeLOM(lom)
 }
 
 // HEAD s3/bckName/objName
