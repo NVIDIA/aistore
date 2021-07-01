@@ -16,8 +16,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/hk"
-	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/transport/bundle"
+	"github.com/NVIDIA/aistore/xs"
 )
 
 // GC
@@ -114,7 +114,7 @@ type (
 		txnBckBase
 		bckFrom *cluster.Bck
 		bckTo   *cluster.Bck
-		xarch   *mirror.XactPutArchive
+		xarch   *xs.XactPutArchive
 		msg     *cmn.ArchiveMsg
 		isNew   bool
 	}
@@ -543,7 +543,7 @@ func newTxnECEncode(c *txnServerCtx, bck *cluster.Bck) (txn *txnECEncode) {
 // txnPutArchive //
 ///////////////////
 
-func newTxnPutArchive(c *txnServerCtx, bckFrom, bckTo *cluster.Bck, xarch *mirror.XactPutArchive,
+func newTxnPutArchive(c *txnServerCtx, bckFrom, bckTo *cluster.Bck, xarch *xs.XactPutArchive,
 	msg *cmn.ArchiveMsg, isNew bool) (txn *txnPutArchive) {
 	txn = &txnPutArchive{
 		*newTxnBckBase("arc", *bckFrom),

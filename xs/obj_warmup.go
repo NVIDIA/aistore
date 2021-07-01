@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package mirror
+package xs
 
 import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -10,6 +10,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
+	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
@@ -20,7 +21,7 @@ type (
 		uuid string
 	}
 	xactLLC struct {
-		xactBckBase
+		xaction.XactBckJog
 	}
 )
 
@@ -57,18 +58,20 @@ func (*llcFactory) PostRenewHook(_ xreg.BucketEntry)              {}
 /////////////
 
 func newXactLLC(t cluster.Target, uuid string, bck cmn.Bck) *xactLLC {
-	return &xactLLC{xactBckBase: *newXactBckBase(uuid, cmn.ActLoadLomCache, bck, &mpather.JoggerGroupOpts{
-		T:        t,
-		Bck:      bck,
-		CTs:      []string{fs.ObjectType},
-		VisitObj: func(_ *cluster.LOM, _ []byte) error { return nil },
-		DoLoad:   mpather.Load,
-	})}
+	return &xactLLC{
+		XactBckJog: *xaction.NewXactBckJog(uuid, cmn.ActLoadLomCache, bck, &mpather.JoggerGroupOpts{
+			T:        t,
+			Bck:      bck,
+			CTs:      []string{fs.ObjectType},
+			VisitObj: func(_ *cluster.LOM, _ []byte) error { return nil },
+			DoLoad:   mpather.Load,
+		}),
+	}
 }
 
 func (r *xactLLC) Run() {
-	r.xactBckBase.runJoggers()
+	r.XactBckJog.Run()
 	glog.Infoln(r.String())
-	err := r.xactBckBase.waitDone()
+	err := r.XactBckJog.Wait()
 	r.Finish(err)
 }

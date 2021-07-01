@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
@@ -30,7 +31,7 @@ type (
 	// xactMNC runs in a background, traverses all local mountpaths, and makes sure
 	// the bucket is N-way replicated (where N >= 1).
 	xactMNC struct {
-		xactBckBase
+		xaction.XactBckJog
 		copies int
 	}
 )
@@ -67,7 +68,7 @@ func newXactMNC(bck cmn.Bck, t cluster.Target, slab *memsys.Slab, id string, cop
 	xact := &xactMNC{
 		copies: copies,
 	}
-	xact.xactBckBase = *newXactBckBase(id, cmn.ActMakeNCopies, bck, &mpather.JoggerGroupOpts{
+	xact.XactBckJog = *xaction.NewXactBckJog(id, cmn.ActMakeNCopies, bck, &mpather.JoggerGroupOpts{
 		Bck:      bck,
 		T:        t,
 		CTs:      []string{fs.ObjectType},
@@ -84,9 +85,9 @@ func (r *xactMNC) Run() {
 		r.Finish(err)
 		return
 	}
-	r.xactBckBase.runJoggers()
+	r.XactBckJog.Run()
 	glog.Infoln(r.String(), "copies=", r.copies)
-	err := r.xactBckBase.waitDone()
+	err := r.XactBckJog.Wait()
 	r.Finish(err)
 }
 

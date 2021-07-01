@@ -21,4 +21,8 @@ func init() {
 	xreg.RegFactory(&PrfchFactory{})
 
 	xreg.RegFactory(&olFactory{})
+
+	xreg.RegFactory(&proFactory{})
+	xreg.RegFactory(&llcFactory{})
+	xreg.RegFactory(&archFactory{})
 }

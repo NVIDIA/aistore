@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport/bundle"
+	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
@@ -29,7 +30,7 @@ type (
 		args  *xreg.TransferBckArgs
 	}
 	XactTransferBck struct {
-		xactBckBase
+		xaction.XactBckJog
 		bckFrom *cluster.Bck
 		bckTo   *cluster.Bck
 		dm      *bundle.DataMover
@@ -129,7 +130,7 @@ func NewXactTransferBck(id, kind string, bckFrom, bckTo *cluster.Bck, t cluster.
 		parallel = etlBucketParallelCnt
 	}
 
-	xact.xactBckBase = *newXactBckBase(id, kind, bckTo.Bck, &mpather.JoggerGroupOpts{
+	xact.XactBckJog = *xaction.NewXactBckJog(id, kind, bckTo.Bck, &mpather.JoggerGroupOpts{
 		Bck:      bckFrom.Bck,
 		T:        t,
 		CTs:      []string{fs.ObjectType},
@@ -147,9 +148,9 @@ func (r *XactTransferBck) Run() {
 	r.dm.SetXact(r)
 	r.dm.Open()
 
-	r.xactBckBase.runJoggers()
+	r.XactBckJog.Run()
 	glog.Infoln(r.String(), r.bckFrom.Bck, "=>", r.bckTo.Bck)
-	err := r.xactBckBase.waitDone()
+	err := r.XactBckJog.Wait()
 	config := cmn.GCO.Get()
 	if q := r.dm.Quiesce(config.Timeout.CplaneOperation.D()); q == cluster.QuiAborted {
 		if err == nil {

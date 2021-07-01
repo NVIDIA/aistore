@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package mirror
+package xs
 
 import (
 	"os"
@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
@@ -29,7 +30,7 @@ type (
 		params *cmn.ActValPromote
 	}
 	XactDirPromote struct {
-		xactBckBase
+		xaction.XactBckJog
 		dir    string
 		params *cmn.ActValPromote
 	}
@@ -65,11 +66,15 @@ func (p *proFactory) Get() cluster.Xact { return p.xact }
 ////////////////////
 
 func NewXactDirPromote(dir string, bck cmn.Bck, t cluster.Target, params *cmn.ActValPromote) *XactDirPromote {
-	args := xaction.Args{ID: xaction.BaseID(cos.GenUUID()), Kind: cmn.ActPromote, Bck: &bck}
 	return &XactDirPromote{
-		xactBckBase: xactBckBase{XactBase: *xaction.NewXactBase(args), t: t},
-		dir:         dir,
-		params:      params,
+		XactBckJog: *xaction.NewXactBckJog(
+			cos.GenUUID(),
+			cmn.ActPromote,
+			bck,
+			&mpather.JoggerGroupOpts{T: t},
+		),
+		dir:    dir,
+		params: params,
 	}
 }
 
@@ -101,7 +106,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	cos.Assert(filepath.IsAbs(fqn))
 
 	bck := cluster.NewBckEmbed(r.Bck())
-	if err := bck.Init(r.t.Bowner()); err != nil {
+	if err := bck.Init(r.Target().Bowner()); err != nil {
 		return err
 	}
 	objName := r.params.ObjName

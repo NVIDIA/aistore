@@ -11,14 +11,13 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
-// assorted non-bucket (global) xactions: rebalance, resilver, election
+// rebalance & resilver xactions
 
 type (
 	getMarked = func() xaction.XactMarked
@@ -26,7 +25,6 @@ type (
 		xaction.XactBase
 		wg *sync.WaitGroup
 	}
-
 	rebFactory struct {
 		xact *Rebalance
 		args *xreg.RebalanceArgs
@@ -36,20 +34,12 @@ type (
 		statTracker  stats.Tracker // extended stats
 		getRebMarked getMarked
 	}
-
 	resilverFactory struct {
 		xact *Resilver
 		id   string
 	}
 	Resilver struct {
 		RebBase
-	}
-
-	eleFactory struct {
-		xact *Election
-	}
-	Election struct {
-		xaction.XactBase
 	}
 )
 
@@ -59,9 +49,6 @@ var (
 	_ xreg.GlobalFactory = (*rebFactory)(nil)
 	_ cluster.Xact       = (*Resilver)(nil)
 	_ xreg.GlobalFactory = (*resilverFactory)(nil)
-
-	_ cluster.Xact       = (*Election)(nil)
-	_ xreg.GlobalFactory = (*eleFactory)(nil)
 )
 
 func (xact *RebBase) MarkDone()      { xact.wg.Done() }
@@ -187,22 +174,3 @@ func NewResilver(uuid, kind string) *Resilver {
 func (xact *Resilver) String() string {
 	return xact.RebBase.String()
 }
-
-//////////////
-// Election //
-//////////////
-
-func (*eleFactory) New(_ xreg.XactArgs) xreg.GlobalEntry { return &eleFactory{} }
-
-func (p *eleFactory) Start(_ cmn.Bck) error {
-	args := xaction.Args{ID: xaction.BaseID(cos.GenUUID()), Kind: cmn.ActElection}
-	p.xact = &Election{XactBase: *xaction.NewXactBase(args)}
-	return nil
-}
-
-func (*eleFactory) Kind() string                         { return cmn.ActElection }
-func (p *eleFactory) Get() cluster.Xact                  { return p.xact }
-func (*eleFactory) PreRenewHook(_ xreg.GlobalEntry) bool { return true }
-func (*eleFactory) PostRenewHook(_ xreg.GlobalEntry)     {}
-
-func (*Election) Run() { debug.Assert(false) }

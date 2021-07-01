@@ -23,12 +23,12 @@ import (
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
+	"github.com/NVIDIA/aistore/xs"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -649,7 +649,7 @@ func (t *targetrunner) putArchive(c *txnServerCtx) error {
 			return rns.Err
 		}
 		xact := rns.Entry.Get()
-		xarch := xact.(*mirror.XactPutArchive)
+		xarch := xact.(*xs.XactPutArchive)
 		if err := xarch.Begin(archiveMsg); err != nil {
 			return err
 		}
