@@ -63,7 +63,7 @@ func TestXactionRenewLRU(t *testing.T) {
 
 func TestXactionRenewPrefetch(t *testing.T) {
 	var (
-		evArgs = &xreg.DeletePrefetchArgs{UUID: cos.GenUUID()}
+		evArgs = &xreg.ListRangeArgs{UUID: cos.GenUUID()}
 
 		bmd = cluster.NewBaseBownerMock()
 		bck = cluster.NewBck(
@@ -223,7 +223,7 @@ func TestXactionQueryFinished(t *testing.T) {
 
 	rns1 = xreg.RenewBckRename(tMock, bck1, bck1, "uuid", 123, "phase")
 	tassert.Errorf(t, rns1.Err == nil && rns1.Entry.Get() != nil, "Xaction must be created")
-	rns3 := xreg.RenewPrefetch(tMock, bck1, &xreg.DeletePrefetchArgs{UUID: cos.GenUUID()})
+	rns3 := xreg.RenewPrefetch(tMock, bck1, &xreg.ListRangeArgs{UUID: cos.GenUUID()})
 	tassert.Errorf(t, rns3.Entry.Get() != nil, "Xaction must be created %v", rns3.Err)
 
 	xactBck1 := rns1.Entry.Get()

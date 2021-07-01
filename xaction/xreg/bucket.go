@@ -64,12 +64,11 @@ type (
 		Meta    *cmn.Bck2BckMsg
 	}
 
-	DeletePrefetchArgs struct {
+	ListRangeArgs struct {
 		Ctx      context.Context
 		UUID     string
 		RangeMsg *cmn.RangeMsg
 		ListMsg  *cmn.ListMsg
-		Evict    bool
 	}
 
 	BckRenameArgs struct {
@@ -266,23 +265,19 @@ func (r *registry) renewTransferBck(t cluster.Target, bckFrom, bckTo *cluster.Bc
 	})
 }
 
-func RenewEvictDelete(t cluster.Target, bck *cluster.Bck, args *DeletePrefetchArgs) RenewRes {
-	return defaultReg.renewEvictDelete(t, bck, args)
+func RenewEvictDelete(t cluster.Target, kind string, bck *cluster.Bck, args *ListRangeArgs) RenewRes {
+	return defaultReg.renewEvictDelete(t, kind, bck, args)
 }
 
-func (r *registry) renewEvictDelete(t cluster.Target, bck *cluster.Bck, args *DeletePrefetchArgs) RenewRes {
-	kind := cmn.ActDelete
-	if args.Evict {
-		kind = cmn.ActEvictObjects
-	}
+func (r *registry) renewEvictDelete(t cluster.Target, kind string, bck *cluster.Bck, args *ListRangeArgs) RenewRes {
 	return r.renewBucketXact(kind, bck, &XactArgs{T: t, UUID: args.UUID, Custom: args})
 }
 
-func RenewPrefetch(t cluster.Target, bck *cluster.Bck, args *DeletePrefetchArgs) RenewRes {
+func RenewPrefetch(t cluster.Target, bck *cluster.Bck, args *ListRangeArgs) RenewRes {
 	return defaultReg.renewPrefetch(t, bck, args)
 }
 
-func (r *registry) renewPrefetch(t cluster.Target, bck *cluster.Bck, args *DeletePrefetchArgs) RenewRes {
+func (r *registry) renewPrefetch(t cluster.Target, bck *cluster.Bck, args *ListRangeArgs) RenewRes {
 	return r.renewBucketXact(cmn.ActPrefetch, bck, &XactArgs{T: t, UUID: args.UUID, Custom: args})
 }
 

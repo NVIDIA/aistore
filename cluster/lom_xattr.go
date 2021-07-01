@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/OneOfOne/xxhash"
@@ -100,7 +101,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 		if err != syscall.ERANGE {
 			return
 		}
-		cos.Assert(mdSize < xattrMaxSize)
+		debug.Assert(mdSize < xattrMaxSize)
 		// 2nd attempt: max-size
 		buf, slab = mm.Alloc(xattrMaxSize)
 		read, err = fs.GetXattrBuf(lom.FQN, XattrLOM, buf)
@@ -128,6 +129,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	return
 }
 
+// NOTE (beware): not checking lom.loaded()
 func (lom *LOM) Persist(stores ...bool) (err error) {
 	if !lom.WritePolicy().IsImmediate() {
 		lom.md.makeDirty()
@@ -204,7 +206,7 @@ func (lom *LOM) marshal() (buf []byte, mm *memsys.MMSA) {
 	mm = T.SmallMMSA()
 	buf = lom.md.marshal(mm, lmsize)
 	size := int64(len(buf))
-	cos.Assert(size <= xattrMaxSize)
+	debug.Assert(size <= xattrMaxSize)
 	_recomputeMdSize(size, lmsize)
 	return
 }
@@ -389,7 +391,7 @@ func _marshCopies(mm *memsys.MMSA, buf []byte, copies fs.MPI) []byte {
 		num = len(copies)
 	)
 	for copyFQN := range copies {
-		cos.Assert(copyFQN != "")
+		debug.Assert(copyFQN != "")
 		i++
 		buf = mm.Append(buf, copyFQN)
 		if i < num {
@@ -405,7 +407,7 @@ func _marshCustomMD(mm *memsys.MMSA, buf []byte, md cos.SimpleKVs) []byte {
 		num = len(md)
 	)
 	for k, v := range md {
-		cos.Assert(k != "")
+		debug.Assert(k != "")
 		i++
 		buf = mm.Append(buf, k)
 		buf = mm.Append(buf, customMDSepa)
