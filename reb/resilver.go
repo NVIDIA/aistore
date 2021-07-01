@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
-	"github.com/NVIDIA/aistore/xaction/xrun"
+	"github.com/NVIDIA/aistore/xs"
 )
 
 type (
@@ -41,7 +41,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xa
 		glog.Errorf("Failed to create resilver marker, err: %v", err)
 	}
 
-	xact := xreg.RenewResilver(id).(*xrun.Resilver)
+	xact := xreg.RenewResilver(id).(*xs.Resilver)
 	defer xact.MarkDone()
 
 	if len(notifs) != 0 {

@@ -22,7 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
-	"github.com/NVIDIA/aistore/xaction/xrun"
+	"github.com/NVIDIA/aistore/xs"
 	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/sync/errgroup"
 )
@@ -188,7 +188,7 @@ func (reb *Manager) serialize(md *rebArgs) (newerRMD, alreadyRunning bool) {
 			}
 			glog.Warningf("%s: waiting for ???...", logHdr)
 		} else {
-			otherXreb := entry.Get().(*xrun.Rebalance) // running or previous
+			otherXreb := entry.Get().(*xs.Rebalance) // running or previous
 			if canRun {
 				return
 			}
@@ -216,7 +216,7 @@ func (reb *Manager) rebInit(md *rebArgs, notif *xaction.NotifXact) bool {
 	xact.AddNotif(notif)
 
 	reb.Lock()
-	reb.setXact(xact.(*xrun.Rebalance))
+	reb.setXact(xact.(*xs.Rebalance))
 
 	// 3. init streams and data structures
 	reb.beginStats.Store(unsafe.Pointer(reb.getStats()))

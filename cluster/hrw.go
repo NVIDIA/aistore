@@ -9,8 +9,8 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/xoshiro256"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/xoshiro256"
 	"github.com/OneOfOne/xxhash"
 )
 

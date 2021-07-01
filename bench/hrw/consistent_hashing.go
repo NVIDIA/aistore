@@ -6,7 +6,7 @@
 package hrw
 
 import (
-	"github.com/NVIDIA/aistore/xoshiro256"
+	"github.com/NVIDIA/aistore/cmn/xoshiro256"
 	"github.com/OneOfOne/xxhash"
 )
 

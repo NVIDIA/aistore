@@ -25,7 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction/xreg"
-	"github.com/NVIDIA/aistore/xaction/xrun"
+	"github.com/NVIDIA/aistore/xs"
 )
 
 const (
@@ -51,7 +51,7 @@ type (
 	syncCallback func(tsi *cluster.Snode, md *rebArgs) (ok bool)
 	joggerBase   struct {
 		m    *Manager
-		xreb *xrun.RebBase
+		xreb *xs.RebBase
 		wg   *sync.WaitGroup
 	}
 
@@ -142,8 +142,8 @@ func (reb *Manager) registerRecv() {
 
 func (reb *Manager) RebID() int64                              { return reb.rebID.Load() }
 func (reb *Manager) FilterAdd(uname []byte)                    { reb.filterGFN.Insert(uname) }
-func (reb *Manager) xact() *xrun.Rebalance                     { return (*xrun.Rebalance)(reb.xreb.Load()) }
-func (reb *Manager) setXact(xact *xrun.Rebalance)              { reb.xreb.Store(unsafe.Pointer(xact)) }
+func (reb *Manager) xact() *xs.Rebalance                       { return (*xs.Rebalance)(reb.xreb.Load()) }
+func (reb *Manager) setXact(xact *xs.Rebalance)                { reb.xreb.Store(unsafe.Pointer(xact)) }
 func (reb *Manager) lomAcks() *[cos.MultiSyncMapCount]*lomAcks { return &reb.lomacks }
 
 // TODO: lomAck.q[lom.Uname()] = lom.Bprops().BID and, subsequently, LIF => LOM reinit

@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package xreg_test
+package xs_test
 
 import (
 	"sync"
@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
-	"github.com/NVIDIA/aistore/xaction/xrun"
+	"github.com/NVIDIA/aistore/xs"
 )
 
 func init() {
@@ -75,7 +75,7 @@ func TestXactionRenewPrefetch(t *testing.T) {
 	xreg.Reset()
 	bmd.Add(bck)
 
-	xreg.RegFactory(&xrun.PrfchFactory{})
+	xreg.RegFactory(&xs.PrfchFactory{})
 	defer xreg.AbortAll()
 
 	ch := make(chan xreg.RenewRes, 10)
@@ -113,7 +113,7 @@ func TestXactionAbortAll(t *testing.T) {
 	bmd.Add(bckTo)
 
 	xreg.RegGlobXact(&lru.Factory{})
-	xreg.RegFactory(&xrun.MovFactory{})
+	xreg.RegFactory(&xs.MovFactory{})
 
 	xactGlob := xreg.RenewLRU(cos.GenUUID())
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
@@ -144,7 +144,7 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 	bmd.Add(bckTo)
 
 	xreg.RegGlobXact(&lru.Factory{})
-	xreg.RegFactory(&xrun.MovFactory{})
+	xreg.RegFactory(&xs.MovFactory{})
 
 	xactGlob := xreg.RenewLRU(cos.GenUUID())
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
@@ -175,7 +175,7 @@ func TestXactionAbortBuckets(t *testing.T) {
 	bmd.Add(bckTo)
 
 	xreg.RegGlobXact(&lru.Factory{})
-	xreg.RegFactory(&xrun.MovFactory{})
+	xreg.RegFactory(&xs.MovFactory{})
 
 	xactGlob := xreg.RenewLRU(cos.GenUUID())
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
@@ -212,8 +212,8 @@ func TestXactionQueryFinished(t *testing.T) {
 	bmd.Add(bck1)
 	bmd.Add(bck2)
 
-	xreg.RegFactory(&xrun.PrfchFactory{})
-	xreg.RegFactory(&xrun.MovFactory{})
+	xreg.RegFactory(&xs.PrfchFactory{})
+	xreg.RegFactory(&xs.MovFactory{})
 
 	rns1 := xreg.RenewBckRename(tMock, bck1, bck1, "uuid", 123, "phase")
 	tassert.Errorf(t, rns1.Err == nil && rns1.Entry.Get() != nil, "Xaction must be created")

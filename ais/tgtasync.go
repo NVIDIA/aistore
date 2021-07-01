@@ -15,8 +15,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/objlist"
 	"github.com/NVIDIA/aistore/xaction/xreg"
+	"github.com/NVIDIA/aistore/xs"
 )
 
 // listObjects returns a list of objects in a bucket (with optional prefix).
@@ -49,7 +49,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 	xact := rns.Entry.Get()
 	// Double check that xaction has not gone before starting page read.
 	// Restart xaction if needed.
-	if rns.Err == objlist.ErrGone {
+	if rns.Err == xs.ErrGone {
 		rns = xreg.RenewObjList(t, bck, msg.UUID, msg)
 		xact = rns.Entry.Get()
 	}
@@ -61,7 +61,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 		go xact.Run()
 	}
 
-	resp := xact.(*objlist.Xact).Do(msg)
+	resp := xact.(*xs.ObjListXact).Do(msg)
 	if resp.Err != nil {
 		t.writeErr(w, r, resp.Err, resp.Status)
 		return false

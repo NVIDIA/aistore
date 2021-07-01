@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package objlist
+package xs
 
 import (
 	"context"
@@ -29,15 +29,15 @@ import (
 // in passthrough mode. It just restarts `walk` if needed.
 // Xaction is created once per bucket list request (per UUID)
 type (
-	factory struct {
+	olFactory struct {
 		xreg.BaseBckEntry
-		xact *Xact
+		xact *ObjListXact
 		ctx  context.Context
 		t    cluster.Target
 		uuid string
 		msg  *cmn.SelectMsg
 	}
-	Xact struct {
+	ObjListXact struct {
 		xaction.XactDemandBase
 		ctx context.Context
 		t   cluster.Target
@@ -76,30 +76,26 @@ var (
 
 // interface guard
 var (
-	_ cluster.Xact    = (*Xact)(nil)
-	_ xreg.BckFactory = (*factory)(nil)
+	_ cluster.Xact    = (*ObjListXact)(nil)
+	_ xreg.BckFactory = (*olFactory)(nil)
 )
 
-func init() {
-	xreg.RegFactory(&factory{})
+func (*olFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
+	return &olFactory{ctx: args.Ctx, t: args.T, uuid: args.UUID, msg: args.Custom.(*cmn.SelectMsg)}
 }
 
-func (*factory) New(args *xreg.XactArgs) xreg.BucketEntry {
-	return &factory{ctx: args.Ctx, t: args.T, uuid: args.UUID, msg: args.Custom.(*cmn.SelectMsg)}
-}
-
-func (p *factory) Start(bck cmn.Bck) error {
+func (p *olFactory) Start(bck cmn.Bck) error {
 	p.xact = newXact(p.ctx, p.t, bck, p.msg, p.uuid)
 	return nil
 }
-func (*factory) Kind() string        { return cmn.ActList }
-func (p *factory) Get() cluster.Xact { return p.xact }
+func (*olFactory) Kind() string        { return cmn.ActList }
+func (p *olFactory) Get() cluster.Xact { return p.xact }
 
-func newXact(ctx context.Context, t cluster.Target, bck cmn.Bck, smsg *cmn.SelectMsg, uuid string) *Xact {
+func newXact(ctx context.Context, t cluster.Target, bck cmn.Bck, smsg *cmn.SelectMsg, uuid string) *ObjListXact {
 	config := cmn.GCO.Get()
 	totallyIdle := config.Timeout.MaxHostBusy.D()
 	likelyIdle := config.Timeout.MaxKeepalive.D()
-	xact := &Xact{
+	xact := &ObjListXact{
 		ctx:      ctx,
 		t:        t,
 		bck:      cluster.NewBckEmbed(bck),
@@ -116,11 +112,11 @@ func newXact(ctx context.Context, t cluster.Target, bck cmn.Bck, smsg *cmn.Selec
 	return xact
 }
 
-func (r *Xact) String() string {
+func (r *ObjListXact) String() string {
 	return fmt.Sprintf("%s: %s", r.t.Snode(), &r.XactDemandBase)
 }
 
-func (r *Xact) Do(msg *cmn.SelectMsg) *Resp {
+func (r *ObjListXact) Do(msg *cmn.SelectMsg) *Resp {
 	// The guarantee here is that we either put something on the channel and our
 	// request will be processed (since the `workCh` is unbuffered) or we receive
 	// message that the xaction has been stopped.
@@ -132,7 +128,7 @@ func (r *Xact) Do(msg *cmn.SelectMsg) *Resp {
 	}
 }
 
-func (r *Xact) init() {
+func (r *ObjListXact) init() {
 	r.fromRemote = !r.bck.IsAIS() && !r.msg.IsFlagSet(cmn.SelectCached)
 	if r.fromRemote {
 		return
@@ -140,10 +136,10 @@ func (r *Xact) init() {
 
 	// Start fs.Walk beforehand if needed so that by the time we read
 	// the next page local cache is populated.
-	r.initTraverse()
+	r._initTraverse()
 }
 
-func (r *Xact) initTraverse() {
+func (r *ObjListXact) _initTraverse() {
 	if r.walkStopCh != nil {
 		r.walkStopCh.Close()
 		r.walkWg.Wait()
@@ -157,7 +153,7 @@ func (r *Xact) initTraverse() {
 	go r.traverseBucket(r.msg.Clone())
 }
 
-func (r *Xact) Run() {
+func (r *ObjListXact) Run() {
 	glog.Infoln(r.String())
 
 	r.init()
@@ -182,14 +178,14 @@ func (r *Xact) Run() {
 	}
 }
 
-func (r *Xact) stopWalk() {
+func (r *ObjListXact) stopWalk() {
 	if r.walkStopCh != nil {
 		r.walkStopCh.Close()
 		r.walkWg.Wait()
 	}
 }
 
-func (r *Xact) stop() {
+func (r *ObjListXact) stop() {
 	r.XactDemandBase.Stop()
 	r.stopCh.Close()
 	// NOTE: Not closing `r.workCh` as it potentially could result in "sending on closed channel" panic.
@@ -198,7 +194,7 @@ func (r *Xact) stop() {
 	r.Finish(nil)
 }
 
-func (r *Xact) dispatchRequest() *Resp {
+func (r *ObjListXact) dispatchRequest() *Resp {
 	var (
 		cnt   = r.msg.PageSize
 		token = r.msg.ContinuationToken
@@ -226,12 +222,12 @@ func (r *Xact) dispatchRequest() *Resp {
 	}
 }
 
-func (r *Xact) walkCallback(lom *cluster.LOM) {
+func (r *ObjListXact) walkCallback(lom *cluster.LOM) {
 	r.ObjectsInc()
 	r.BytesAdd(lom.SizeBytes())
 }
 
-func (r *Xact) walkCtx() context.Context {
+func (r *ObjListXact) walkCtx() context.Context {
 	return context.WithValue(
 		context.Background(),
 		walkinfo.CtxPostCallbackKey,
@@ -239,7 +235,7 @@ func (r *Xact) walkCtx() context.Context {
 	)
 }
 
-func (r *Xact) nextPageAIS(cnt uint) error {
+func (r *ObjListXact) nextPageAIS(cnt uint) error {
 	if r.isPageCached(r.token, cnt) {
 		return nil
 	}
@@ -260,7 +256,7 @@ func (r *Xact) nextPageAIS(cnt uint) error {
 }
 
 // Returns an index of the first objects in the cache that follows marker
-func (r *Xact) findMarker(marker string) uint {
+func (r *ObjListXact) findMarker(marker string) uint {
 	if r.fromRemote && r.token == marker {
 		return 0
 	}
@@ -269,7 +265,7 @@ func (r *Xact) findMarker(marker string) uint {
 	}))
 }
 
-func (r *Xact) isPageCached(marker string, cnt uint) bool {
+func (r *ObjListXact) isPageCached(marker string, cnt uint) bool {
 	if r.walkDone {
 		return true
 	}
@@ -277,7 +273,7 @@ func (r *Xact) isPageCached(marker string, cnt uint) bool {
 	return idx+cnt < uint(len(r.lastPage))
 }
 
-func (r *Xact) nextPageRemote() error {
+func (r *ObjListXact) nextPageRemote() error {
 	walk := objwalk.NewWalk(r.walkCtx(), r.t, r.bck, r.msg)
 	bckList, err := walk.RemoteObjPage()
 	if err != nil {
@@ -296,7 +292,7 @@ func (r *Xact) nextPageRemote() error {
 // Called before generating a page for a proxy. It is OK if the page is
 // still in progress. If the page is done, the function ensures that the
 // local cache contains the requested data.
-func (r *Xact) pageIsValid(marker string, cnt uint) bool {
+func (r *ObjListXact) pageIsValid(marker string, cnt uint) bool {
 	// The same page is re-requested
 	if r.token == marker {
 		return true
@@ -313,7 +309,7 @@ func (r *Xact) pageIsValid(marker string, cnt uint) bool {
 	return inCache || r.walkDone
 }
 
-func (r *Xact) getPage(marker string, cnt uint) *cmn.BucketList {
+func (r *ObjListXact) getPage(marker string, cnt uint) *cmn.BucketList {
 	debug.Assert(r.msg.UUID != "")
 	if r.fromRemote {
 		return &cmn.BucketList{
@@ -343,7 +339,7 @@ func (r *Xact) getPage(marker string, cnt uint) *cmn.BucketList {
 
 // genNextPage calls DecPending either immediately on error or inside
 // a goroutine if some work must be done.
-func (r *Xact) genNextPage(token string, cnt uint) error {
+func (r *ObjListXact) genNextPage(token string, cnt uint) error {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("[%s] token: %q", r, r.msg.ContinuationToken)
 	}
@@ -360,7 +356,7 @@ func (r *Xact) genNextPage(token string, cnt uint) error {
 	}
 
 	if r.token > token {
-		r.initTraverse() // Restart traversing as we cannot go back in time :(.
+		r._initTraverse() // Restart traversing as we cannot go back in time :(.
 		r.lastPage = r.lastPage[:0]
 	} else {
 		if r.walkDone {
@@ -375,7 +371,7 @@ func (r *Xact) genNextPage(token string, cnt uint) error {
 // Removes from local cache, the objects that have been already sent.
 // Use only for AIS buckets(or Cached:true requests) - in other cases
 // the marker, in general, is not an object name
-func (r *Xact) discardObsolete(token string) {
+func (r *ObjListXact) discardObsolete(token string) {
 	if token == "" || len(r.lastPage) == 0 {
 		return
 	}
@@ -395,7 +391,7 @@ func (r *Xact) discardObsolete(token string) {
 	r.lastPage = r.lastPage[:l-j]
 }
 
-func (r *Xact) traverseBucket(msg *cmn.SelectMsg) {
+func (r *ObjListXact) traverseBucket(msg *cmn.SelectMsg) {
 	wi := walkinfo.NewWalkInfo(r.walkCtx(), r.t, msg)
 	defer r.walkWg.Done()
 	cb := func(fqn string, de fs.DirEntry) error {

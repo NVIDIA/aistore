@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package xrun
+package xs
 
 import (
 	"github.com/NVIDIA/aistore/cmn"
@@ -19,4 +19,6 @@ func init() {
 	xreg.RegFactory(&evdFactory{kind: cmn.ActEvictObjects})
 	xreg.RegFactory(&evdFactory{kind: cmn.ActDelete})
 	xreg.RegFactory(&PrfchFactory{})
+
+	xreg.RegFactory(&olFactory{})
 }
