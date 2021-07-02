@@ -321,7 +321,7 @@ func (r *_lrBase) iterate(lom *cluster.LOM, args *xreg.ListRangeArgs, cb lrCallb
 		// NOTE: checking locality here to speed up iterating, trading off
 		//       rebalancing use case for performance - TODO: add
 		//       configurable option to lom.Load() instead.
-		local, err := r.isLocLOM(lom, smap)
+		_, local, err := lom.HrwTarget(smap)
 		if err != nil {
 			return err
 		}
@@ -349,13 +349,4 @@ func parseTemplate(template string) (cos.ParsedTemplate, error) {
 		return parsed, nil
 	}
 	return cos.ParsedTemplate{Prefix: template}, nil
-}
-
-// TODO -- FIXME: doesn't belong here - move it
-func (r *_lrBase) isLocLOM(lom *cluster.LOM, smap *cluster.Smap) (bool, error) {
-	tsi, err := cluster.HrwTarget(lom.Uname(), smap)
-	if err != nil {
-		return false, err
-	}
-	return tsi.ID() == r.t.Snode().ID(), nil
 }

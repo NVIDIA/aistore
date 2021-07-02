@@ -258,6 +258,15 @@ func (lom *LOM) FromHTTPHdr(hdr http.Header) {
 	}
 }
 
+func (lom *LOM) HrwTarget(smap *Smap) (tsi *Snode, local bool, err error) {
+	tsi, err = HrwTarget(lom.Uname(), smap)
+	if err != nil {
+		return
+	}
+	local = tsi.ID() == T.Snode().ID()
+	return
+}
+
 /////////////////////
 // copy management //
 /////////////////////

@@ -138,17 +138,15 @@ func (r *XactBckEncode) afterECObj(lom *cluster.LOM, err error) {
 // file whose HRW points to this file and the file does not have corresponding
 // metadata file in 'meta' directory
 func (r *XactBckEncode) bckEncode(lom *cluster.LOM, _ []byte) error {
-	si, err := cluster.HrwTarget(lom.Uname(), r.smap)
+	_, local, err := lom.HrwTarget(r.smap)
 	if err != nil {
 		glog.Errorf("%s: %s", lom, err)
 		return nil
 	}
-
 	// An object replica - skip EC.
-	if r.t.SID() != si.ID() {
+	if !local {
 		return nil
 	}
-
 	mdFQN, _, err := cluster.HrwFQN(lom.Bck(), fs.ECMetaType, lom.ObjName)
 	if err != nil {
 		glog.Warningf("metadata FQN generation failed %q: %v", lom.FQN, err)

@@ -172,11 +172,11 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 		if err := lom.Init(m.rs.Bck); err != nil {
 			return err
 		}
-		si, err := cluster.HrwTarget(lom.Uname(), m.smap)
+		_, local, err := lom.HrwTarget(m.smap)
 		if err != nil {
 			return err
 		}
-		if si.DaemonID != m.ctx.node.DaemonID {
+		if !local {
 			return nil
 		}
 		if err = lom.Load(false /*cache it*/, false /*locked*/); err != nil {

@@ -193,11 +193,11 @@ func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (*cmn.BucketEntry, erro
 	if !lom.IsHRW() {
 		objStatus = cmn.ObjStatusMoved
 	} else {
-		si, err := cluster.HrwTarget(lom.Uname(), wi.smap)
+		_, local, err := lom.HrwTarget(wi.smap)
 		if err != nil {
 			return nil, err
 		}
-		if wi.t.SID() != si.ID() {
+		if !local {
 			objStatus = cmn.ObjStatusMoved
 		}
 	}

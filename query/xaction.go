@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/objwalk/walkinfo"
 	"github.com/NVIDIA/aistore/xaction"
@@ -64,13 +65,10 @@ func (r *ObjectsListingXact) stop() {
 }
 
 func (r *ObjectsListingXact) Run() {
-	defer func() {
-		r.fetchingDone.Store(true)
-	}()
-
-	cos.Assert(r.query.ObjectsSource != nil)
-	cos.Assert(r.query.BckSource != nil)
-	cos.Assert(r.query.BckSource.Bck != nil)
+	defer r.fetchingDone.Store(true)
+	debug.Assert(r.query.ObjectsSource != nil)
+	debug.Assert(r.query.BckSource != nil)
+	debug.Assert(r.query.BckSource.Bck != nil)
 
 	Registry.Put(r.ID().String(), r)
 
@@ -97,17 +95,13 @@ func (r *ObjectsListingXact) putResult(res *Result) (end bool) {
 }
 
 func (r *ObjectsListingXact) startFromTemplate() {
-	defer func() {
-		r.stop()
-	}()
-
 	var (
 		iter = r.query.ObjectsSource.Pt.Iter()
 		bck  = r.query.BckSource.Bck
 		smap = r.t.Sowner().Get()
 	)
-
-	cos.Assert(bck.IsAIS())
+	defer r.stop()
+	debug.Assert(bck.IsAIS())
 
 	for objName, hasNext := iter(); hasNext; objName, hasNext = iter() {
 		lom := &cluster.LOM{ObjName: objName}
@@ -115,12 +109,12 @@ func (r *ObjectsListingXact) startFromTemplate() {
 			r.putResult(&Result{err: err})
 			return
 		}
-		si, err := cluster.HrwTarget(lom.Uname(), smap)
+		_, local, err := lom.HrwTarget(smap)
 		if err != nil {
 			r.putResult(&Result{err: err})
 			return
 		}
-		if si.ID() != r.t.SID() {
+		if !local {
 			continue
 		}
 		if err = lom.Load(true /*cache it*/, false /*locked*/); err != nil {
@@ -130,15 +124,12 @@ func (r *ObjectsListingXact) startFromTemplate() {
 			}
 			continue
 		}
-
 		if lom.IsCopy() {
 			continue
 		}
-
 		if !r.query.Filter()(lom) {
 			continue
 		}
-
 		if r.putResult(&Result{entry: &cmn.BucketEntry{Name: lom.ObjName}, err: err}) {
 			return
 		}
@@ -146,12 +137,9 @@ func (r *ObjectsListingXact) startFromTemplate() {
 }
 
 func (r *ObjectsListingXact) startFromBck() {
-	defer func() {
-		r.stop()
-	}()
-
-	cos.Assert(r.msg != nil)
-	cos.Assert(r.ctx != nil)
+	defer r.stop()
+	debug.Assert(r.msg != nil)
+	debug.Assert(r.ctx != nil)
 
 	bck := r.query.BckSource.Bck
 
@@ -312,7 +300,7 @@ func (r *ObjectsListingXact) Next() (entry *cmn.BucketEntry, err error) {
 	if len(res) == 0 {
 		return nil, err
 	}
-	cos.Assert(len(res) == 1)
+	debug.Assert(len(res) == 1)
 	return res[0], err
 }
 

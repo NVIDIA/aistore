@@ -233,24 +233,26 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 	return
 }
 
-// TODO: unify with ActRenameObject (refactor)
 func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *cluster.LOM, err error) {
-	lom := cluster.AllocLOM(params.ObjName)
-	if err = lom.Init(params.Bck.Bck); err != nil {
-		return
-	}
-	// local or remote?
 	var (
-		si   *cluster.Snode
-		smap = t.owner.smap.get()
+		tsi   *cluster.Snode
+		smap  = t.owner.smap.get()
+		lom   = cluster.AllocLOM(params.ObjName)
+		local bool
 	)
-	if si, err = cluster.HrwTarget(lom.Uname(), &smap.Smap); err != nil {
+	if err = lom.Init(params.Bck.Bck); err != nil {
+		cluster.FreeLOM(lom)
 		return
 	}
-	// remote; TODO: handle overwrite (lookup first)
-	if si.ID() != t.si.ID() {
+	if tsi, local, err = lom.HrwTarget(&smap.Smap); err != nil {
+		cluster.FreeLOM(lom)
+		return
+	}
+	// TODO: handle overwrite (lookup first)
+	// TODO: FreeLOM
+	if !local {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("Attempt to promote %q => (lom: %q, target_id: %s)", params.SrcFQN, lom, si.ID())
+			glog.Infof("Attempt to promote %q => (lom: %q, target_id: %s)", params.SrcFQN, lom, tsi.ID())
 		}
 		lom.FQN = params.SrcFQN
 		coi := allocCopyObjInfo()
@@ -262,7 +264,7 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 		sendParams := allocSendParams()
 		{
 			sendParams.ObjNameTo = lom.ObjName
-			sendParams.Tsi = si
+			sendParams.Tsi = tsi
 		}
 		_, err = coi.putRemote(lom, sendParams)
 		freeSendParams(sendParams)
@@ -276,10 +278,9 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 	}
 
 	// local
+	defer cluster.FreeLOM(lom)
 	err = lom.Load(false /*cache it*/, false /*locked*/)
 	if err == nil && !params.Overwrite {
-		// TODO: Handle the case where the object does not exist but there are two
-		//  or more targets racing to override the same object with their local promotions.
 		glog.Errorf("[promote] %s already exists", lom)
 		return
 	}
