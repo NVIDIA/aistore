@@ -11,7 +11,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -663,30 +662,17 @@ func TestPrefetchList(t *testing.T) {
 		bck        = cliBck
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		objNamesCh = make(chan string, m.num)
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
 
 	m.saveClusterState()
 	m.expectTargets(2)
-
 	m.puts()
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
-
-	// 1. Get keys to prefetch
-	n := getMatchingKeys(t, proxyURL, bck, ".*", m.num, objNamesCh)
-	close(objNamesCh) // to exit for-range
-	files := make([]string, 0)
-	for i := range objNamesCh {
-		files = append(files, i)
-	}
-	tlog.Logf("Matching count: %d\n", len(files))
-
 	// 2. Evict those objects from the cache and prefetch them
-	tlog.Logf("Evicting and Prefetching %d objects\n", len(files))
-	xactID, err := api.EvictList(baseParams, bck, files)
+	tlog.Logf("Evicting and Prefetching %d objects\n", len(m.objNames))
+	xactID, err := api.EvictList(baseParams, bck, m.objNames)
 	if err != nil {
 		t.Error(err)
 	}
@@ -696,7 +682,7 @@ func TestPrefetchList(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// 3. Prefetch evicted objects
-	xactID, err = api.PrefetchList(baseParams, bck, files)
+	xactID, err = api.PrefetchList(baseParams, bck, m.objNames)
 	if err != nil {
 		t.Error(err)
 	}
@@ -709,33 +695,12 @@ func TestPrefetchList(t *testing.T) {
 	xactArgs := api.XactReqArgs{ID: xactID, Timeout: rebalanceTimeout}
 	xactStats, err := api.QueryXactionStats(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
-	if xactStats.ObjCount() != n {
+	if xactStats.ObjCount() != int64(m.num) {
 		t.Errorf(
-			"did not prefetch all files: missing %d of %d (%v)",
-			n-xactStats.ObjCount(), n, xactStats,
+			"did not prefetch all files: missing %d of %d",
+			int64(m.num)-xactStats.ObjCount(), m.num,
 		)
 	}
-}
-
-func getMatchingKeys(t *testing.T, proxyURL string, bck cmn.Bck, regexMatch string, objCnt int,
-	keynameCh chan string) (num int64) {
-	reslist := testListObjects(t, proxyURL, bck, nil)
-	if reslist == nil {
-		return
-	}
-	re := regexp.MustCompile(regexMatch)
-	for _, entry := range reslist.Entries {
-		name := entry.Name
-		if !re.MatchString(name) {
-			continue
-		}
-		keynameCh <- name
-		num++
-		if num >= int64(objCnt) {
-			break
-		}
-	}
-	return
 }
 
 func TestDeleteList(t *testing.T) {
@@ -788,44 +753,45 @@ func TestDeleteList(t *testing.T) {
 }
 
 func TestPrefetchRange(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
-		rangeMin, rangeMax int64
-		proxyURL           = tutils.RandomProxyURL(t)
-		baseParams         = tutils.BaseAPIParams(proxyURL)
-		prefetchPrefix     = "regressionList/obj"
-		prefetchRange      = "{0..200}"
-		bck                = cliBck
+		m = ioContext{
+			t:        t,
+			bck:      cliBck,
+			num:      200,
+			fileSize: cos.KiB,
+			prefix:   "regressionList/obj-",
+			ordered:  true,
+		}
+		proxyURL      = tutils.RandomProxyURL(t)
+		baseParams    = tutils.BaseAPIParams(proxyURL)
+		prefetchRange = "{1..150}"
+		bck           = cliBck
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
 
+	m.saveClusterState()
+	m.expectTargets(2)
+	m.puts()
 	// 1. Parse arguments
 	pt, err := cos.ParseBashTemplate(prefetchRange)
 	tassert.CheckFatal(t, err)
-	rangeMin, rangeMax = pt.Ranges[0].Start, pt.Ranges[0].End
+	rangeMin, rangeMax := pt.Ranges[0].Start, pt.Ranges[0].End
 
 	// 2. Discover the number of items we expect to be prefetched
-	msg := &cmn.SelectMsg{Prefix: prefetchPrefix}
-	objsToFilter := testListObjects(t, proxyURL, bck, msg)
 	files := make([]string, 0)
-	if objsToFilter != nil {
-		for _, be := range objsToFilter.Entries {
-			oname := strings.TrimPrefix(be.Name, prefetchPrefix)
-			if oname == "" {
-				continue
-			}
-			if i, err := strconv.ParseInt(oname, 10, 64); err != nil {
-				continue
-			} else if (rangeMin == 0 && rangeMax == 0) || (i >= rangeMin && i <= rangeMax) {
-				files = append(files, be.Name)
-			}
+	for _, objName := range m.objNames {
+		oName := strings.TrimPrefix(objName, m.prefix)
+		if i, err := strconv.ParseInt(oName, 10, 64); err != nil {
+			continue
+		} else if (rangeMin == 0 && rangeMax == 0) || (i >= rangeMin && i <= rangeMax) {
+			files = append(files, objName)
 		}
 	}
 
 	// 3. Evict those objects from the cache, and then prefetch them
 	tlog.Logf("Evicting and Prefetching %d objects\n", len(files))
-	rng := fmt.Sprintf("%s%s", prefetchPrefix, prefetchRange)
+	rng := fmt.Sprintf("%s%s", m.prefix, prefetchRange)
 	xactID, err := api.EvictRange(baseParams, bck, rng)
 	tassert.CheckError(t, err)
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
@@ -844,8 +810,8 @@ func TestPrefetchRange(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	if xactStats.ObjCount() != int64(len(files)) {
 		t.Errorf(
-			"did not prefetch all files: missing %d of %d (%v)",
-			int64(len(files))-xactStats.ObjCount(), len(files), xactStats,
+			"did not prefetch all files: missing %d of %d",
+			int64(len(files))-xactStats.ObjCount(), len(files),
 		)
 	}
 }

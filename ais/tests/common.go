@@ -56,7 +56,7 @@ type ioContext struct {
 	bck                 cmn.Bck
 	fileSize            uint64
 	proxyURL            string
-	prefix              string
+	prefix              string // default value is "copy/remote-"
 	otherTasksToTrigger int
 	originalTargetCount int
 	originalProxyCount  int
@@ -65,6 +65,7 @@ type ioContext struct {
 	getErrIsFatal       bool
 	silent              bool
 	fixedSize           bool
+	ordered             bool // true - object names make sequence, false - names are random
 
 	numGetErrs atomic.Uint64
 	numPutErrs int
@@ -209,6 +210,7 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 		CksumType: p.Cksum.Type,
 		WorkerCnt: 0, // TODO: Should we set something custom?
 		IgnoreErr: ignoreErr,
+		Ordered:   m.ordered,
 	})
 	tassert.CheckFatal(m.t, err)
 }
@@ -272,7 +274,9 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 	if objPrefix == "" {
 		objPrefix = "copy"
 	}
-	objPrefix += "/remote_"
+	if !strings.Contains(objPrefix, "/") {
+		objPrefix += "/remote_"
+	}
 	for i := 0; i < objCnt; i++ {
 		r, err := readers.NewRandReader(int64(m.fileSize), p.Cksum.Type)
 		tassert.CheckFatal(m.t, err)
@@ -280,8 +284,10 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 		var objName string
 		if override {
 			objName = m.objNames[i]
+		} else if m.ordered {
+			objName = fmt.Sprintf("%s%d", objPrefix, i)
 		} else {
-			objName = fmt.Sprintf("%s%s%d", objPrefix, cos.RandString(8), i)
+			objName = fmt.Sprintf("%s%s-%d", objPrefix, cos.RandString(8), i)
 		}
 		wg.Add(1)
 		go func() {

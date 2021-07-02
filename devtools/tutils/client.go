@@ -273,6 +273,7 @@ type PutObjectsArgs struct {
 	ObjSize   uint64
 	FixedSize bool
 	CksumType string
+	Ordered   bool // true - object names make sequence, false - names are random
 
 	WorkerCnt int
 	IgnoreErr bool
@@ -295,7 +296,11 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 	workerCnt = cos.Min(workerCnt, args.ObjCnt)
 
 	for i := 0; i < args.ObjCnt; i++ {
-		objNames = append(objNames, path.Join(args.ObjPath, cos.RandString(16)))
+		if args.Ordered {
+			objNames = append(objNames, path.Join(args.ObjPath, fmt.Sprintf("%08d", i)))
+		} else {
+			objNames = append(objNames, path.Join(args.ObjPath, cos.RandString(16)))
+		}
 	}
 	chunkSize := (len(objNames) + workerCnt - 1) / workerCnt
 	for i := 0; i < len(objNames); i += chunkSize {
