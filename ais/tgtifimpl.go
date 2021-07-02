@@ -180,7 +180,7 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 	switch ty {
 	case cluster.Prefetch:
 		if !lom.TryLock(true) {
-			glog.Warningf("[prefetch] cold GET race, skipping (lom: %s)", lom)
+			glog.Warningf("%s: skipping prefetch: %s is busy", t.si, lom)
 			return 0, cmn.ErrSkip
 		}
 	case cluster.PrefetchWait:
@@ -192,8 +192,7 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 			if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 				if cmn.IsErrObjNought(err) {
 					// Try to get `UpgradeLock` again and retry getting object.
-					glog.Errorf("[get_cold] %s(%q) doesn't exist, err: %v - retrying...",
-						lom, lom.FQN, err)
+					glog.Errorf("%s: %s doesn't exist, err: %v - retrying...", t.si, lom, err)
 					continue
 				}
 				return http.StatusBadRequest, err
@@ -202,20 +201,20 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 				return errCode, err
 			} else if vchanged {
 				// Need to re-download the object as the version has changed.
-				glog.Errorf("[get_cold] Backend provider has newer version of the object (fqn: %q)",
-					lom.FQN)
+				glog.Errorf("%s: backend provider has a newer version of %s - retrying...", t.si, lom)
 				continue
 			}
 			// Object exists and version is up-to-date.
 			return 0, nil
 		}
 	default:
-		cos.Assertf(false, "%v", ty)
+		debug.Assertf(false, "%v", ty)
+		return
 	}
 
 	if errCode, err = t.Backend(lom.Bck()).GetObj(ctx, lom); err != nil {
 		lom.Unlock(true)
-		glog.Errorf("[get_cold] Remote object get failed (lom: %s, err_code: %d, err: %v)", lom, errCode, err)
+		glog.Errorf("%s: failed to GET remote %s: %v(%d)", t.si, lom.FullName(), err, errCode)
 		return
 	}
 
@@ -229,7 +228,7 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 		)
 		lom.DowngradeLock()
 	default:
-		cos.Assertf(false, "%v", ty)
+		debug.Assertf(false, "get-cold-type=%d", ty)
 	}
 	return
 }

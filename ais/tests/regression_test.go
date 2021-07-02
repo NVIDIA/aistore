@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -652,24 +653,36 @@ func TestLRU(t *testing.T) {
 }
 
 func TestPrefetchList(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
-		objCnt     = 100
-		objNamesCh = make(chan string, objCnt)
+		m = ioContext{
+			t:        t,
+			bck:      cliBck,
+			num:      100,
+			fileSize: cos.KiB,
+		}
+		bck        = cliBck
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		bck        = cliBck
+		objNamesCh = make(chan string, m.num)
 	)
+
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
+
+	m.saveClusterState()
+	m.expectTargets(2)
+
+	m.puts()
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
 
 	// 1. Get keys to prefetch
-	n := int64(getMatchingKeys(t, proxyURL, bck, ".*", objCnt, objNamesCh))
+	n := getMatchingKeys(t, proxyURL, bck, ".*", m.num, objNamesCh)
 	close(objNamesCh) // to exit for-range
 	files := make([]string, 0)
 	for i := range objNamesCh {
 		files = append(files, i)
 	}
+	tlog.Logf("Matching count: %d\n", len(files))
 
 	// 2. Evict those objects from the cache and prefetch them
 	tlog.Logf("Evicting and Prefetching %d objects\n", len(files))
@@ -702,6 +715,27 @@ func TestPrefetchList(t *testing.T) {
 			n-xactStats.ObjCount(), n, xactStats,
 		)
 	}
+}
+
+func getMatchingKeys(t *testing.T, proxyURL string, bck cmn.Bck, regexMatch string, objCnt int,
+	keynameCh chan string) (num int64) {
+	reslist := testListObjects(t, proxyURL, bck, nil)
+	if reslist == nil {
+		return
+	}
+	re := regexp.MustCompile(regexMatch)
+	for _, entry := range reslist.Entries {
+		name := entry.Name
+		if !re.MatchString(name) {
+			continue
+		}
+		keynameCh <- name
+		num++
+		if num >= int64(objCnt) {
+			break
+		}
+	}
+	return
 }
 
 func TestDeleteList(t *testing.T) {

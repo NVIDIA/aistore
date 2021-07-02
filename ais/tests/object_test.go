@@ -14,7 +14,6 @@ import (
 	"net/url"
 	"os"
 	"reflect"
-	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -723,31 +722,6 @@ func TestHeadNonexistentBucket(t *testing.T) {
 	}
 }
 
-func getMatchingKeys(t *testing.T, proxyURL string, bck cmn.Bck, regexMatch string,
-	objCnt int, keynameCh chan string) int {
-	reslist := testListObjects(t, proxyURL, bck, nil)
-	if reslist == nil {
-		return 0
-	}
-
-	re := regexp.MustCompile(regexMatch)
-
-	num := 0
-	for _, entry := range reslist.Entries {
-		name := entry.Name
-		if !re.MatchString(name) {
-			continue
-		}
-		keynameCh <- name
-		num++
-		if num >= objCnt {
-			break
-		}
-	}
-
-	return num
-}
-
 func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg) *cmn.BucketList {
 	if msg == nil {
 		tlog.Logf("LIST objects %s []\n", bck)
@@ -761,7 +735,6 @@ func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.Select
 		t.Errorf("List objects %s failed, err = %v", bck, err)
 		return nil
 	}
-
 	return resList
 }
 

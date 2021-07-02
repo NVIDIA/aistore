@@ -517,6 +517,9 @@ func IsErrObjNought(err error) bool {
 	if IsObjNotExist(err) {
 		return true
 	}
+	if IsStatusNotFound(err) {
+		return true
+	}
 	if _, ok := err.(*ObjMetaErr); ok {
 		return true
 	}
