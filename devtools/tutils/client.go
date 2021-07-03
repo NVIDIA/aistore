@@ -297,7 +297,7 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 
 	for i := 0; i < args.ObjCnt; i++ {
 		if args.Ordered {
-			objNames = append(objNames, path.Join(args.ObjPath, fmt.Sprintf("%08d", i)))
+			objNames = append(objNames, path.Join(args.ObjPath, fmt.Sprintf("%d", i)))
 		} else {
 			objNames = append(objNames, path.Join(args.ObjPath, cos.RandString(16)))
 		}

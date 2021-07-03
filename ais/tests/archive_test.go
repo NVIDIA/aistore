@@ -151,10 +151,11 @@ func TestArchiveListRange(t *testing.T) {
 func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 	var (
 		m = ioContext{
-			t:      t,
-			bck:    bck.Bck,
-			num:    100,
-			prefix: "archive",
+			t:       t,
+			bck:     bck.Bck,
+			num:     100,
+			prefix:  "archive",
+			ordered: true,
 		}
 		toBck      = cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS}
 		proxyURL   = tutils.RandomProxyURL(t)
@@ -162,6 +163,7 @@ func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 		numArchs   = 20
 		numInArch  = 7
 		numPuts    = 100
+		fmtRange   = "%s{%d..%d}"
 	)
 	m.init()
 	if testing.Short() {
@@ -187,6 +189,15 @@ func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 			tassert.CheckFatal(t, err)
 		}(i)
 	}
+	for i := 0; i < numArchs; i++ {
+		go func(i int) {
+			tarName := fmt.Sprintf("test_rng_%02d.tar", i)
+			start := rand.Intn(numPuts - numInArch)
+			rng := fmt.Sprintf(fmtRange, m.prefix+"/", start, start+numInArch-1)
+			_, err := api.ArchiveRange(baseParams, m.bck, toBck, tarName, rng)
+			tassert.CheckFatal(t, err)
+		}(i)
+	}
 
 	wargs := api.XactReqArgs{Kind: cmn.ActArchive, Bck: m.bck}
 	api.WaitForXactionIdle(baseParams, wargs)
@@ -200,5 +211,5 @@ func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 	for _, entry := range objList.Entries {
 		tlog.Logf("%s: %dB\n", entry.Name, entry.Size)
 	}
-	tassert.Errorf(t, len(objList.Entries) == numArchs, "expected %d, have %d", numArchs, len(objList.Entries))
+	tassert.Errorf(t, len(objList.Entries) == numArchs*2, "expected %d, have %d", numArchs, len(objList.Entries))
 }

@@ -194,6 +194,9 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 	if !m.silent {
 		tlog.Logf("PUT %d objects into bucket %s...\n", m.num, m.bck)
 	}
+	if m.prefix != "" {
+		objPrefix = m.prefix
+	}
 
 	var ignoreErr bool
 	if len(ignoreErrs) > 0 {
