@@ -201,6 +201,11 @@ func (e *ErrBucketAlreadyExists) Error() string {
 	return fmt.Sprintf("bucket %q already exists", e.bck)
 }
 
+func IsErrBucketAlreadyExists(err error) bool {
+	_, ok := err.(*ErrBucketAlreadyExists)
+	return ok
+}
+
 func NewErrRemoteBckNotFound(bck Bck) *ErrRemoteBckNotFound {
 	return &ErrRemoteBckNotFound{bck: bck}
 }

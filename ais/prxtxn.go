@@ -114,7 +114,6 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, remoteH
 		setProps: bucketProps,
 	}
 	if _, err := p.owner.bmd.modify(ctx); err != nil {
-		debug.AssertNoErr(err)
 		return c.bcastAbort(bck, err)
 	}
 
@@ -134,10 +133,13 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, remoteH
 	return nil
 }
 
-func _createBMDPre(ctx *bmdModifier, clone *bucketMD) error {
-	added := clone.add(ctx.bcks[0], ctx.setProps) // TODO: Bucket could be added during begin.
-	debug.Assert(added)
-	return nil
+func _createBMDPre(ctx *bmdModifier, clone *bucketMD) (err error) {
+	bck := ctx.bcks[0]
+	added := clone.add(bck, ctx.setProps)
+	if !added {
+		err = cmn.NewErrBckAlreadyExists(bck.Bck)
+	}
+	return
 }
 
 func _destroyBMDPre(ctx *bmdModifier, clone *bucketMD) error {

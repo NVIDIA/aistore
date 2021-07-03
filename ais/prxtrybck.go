@@ -186,7 +186,12 @@ func (args *bckInitArgs) initAndTry(bucket string) (bck *cluster.Bck, err error)
 func (args *bckInitArgs) try() (bck *cluster.Bck, err error) {
 	bck, errCode, err := args._try()
 	if err != nil && err != errForwarded {
-		args.p.writeErr(args.w, args.r, err, errCode)
+		if cmn.IsErrBucketAlreadyExists(err) {
+			glog.Errorf("%s: %v - race, proceeding anyway...", args.p.si, err)
+			err = nil
+		} else {
+			args.p.writeErr(args.w, args.r, err, errCode)
+		}
 	}
 	return bck, err
 }
