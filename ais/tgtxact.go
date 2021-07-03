@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 
@@ -155,12 +154,8 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bc
 		go t.runResilver(xactMsg.ID, false /*skipGlobMisplaced*/, notif)
 	// 2. with bucket
 	case cmn.ActPrefetch:
-		args := &xreg.ListRangeArgs{
-			Ctx:      context.Background(),
-			RangeMsg: &cmn.RangeMsg{},
-			UUID:     xactMsg.ID,
-		}
-		rns := xreg.RenewPrefetch(t, bck, args)
+		args := &xreg.ListRangeMsg{RangeMsg: &cmn.RangeMsg{}}
+		rns := xreg.RenewPrefetch(xactMsg.ID, t, bck, args)
 		xact := rns.Entry.Get()
 		xact.AddNotif(&xaction.NotifXact{
 			NotifBase: nl.NotifBase{

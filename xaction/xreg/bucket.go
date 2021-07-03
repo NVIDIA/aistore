@@ -64,13 +64,6 @@ type (
 		Meta    *cmn.Bck2BckMsg
 	}
 
-	ListRangeArgs struct {
-		Ctx      context.Context
-		UUID     string
-		RangeMsg *cmn.RangeMsg
-		ListMsg  *cmn.ListMsg
-	}
-
 	BckRenameArgs struct {
 		RebID   xaction.RebID
 		BckFrom *cluster.Bck
@@ -233,17 +226,6 @@ func (r *registry) renewPutMirror(t cluster.Target, lom *cluster.LOM) RenewRes {
 	return r.renewBucketXact(cmn.ActPutCopies, lom.Bck(), &XactArgs{T: t, Custom: lom})
 }
 
-func RenewPutArchive(uuid string, t cluster.Target, bckFrom *cluster.Bck) RenewRes {
-	return defaultReg.renewPutArchive(uuid, t, bckFrom)
-}
-
-func (r *registry) renewPutArchive(uuid string, t cluster.Target, bckFrom *cluster.Bck) RenewRes {
-	return r.renewBucketXact(cmn.ActArchive, bckFrom, &XactArgs{
-		T:    t,
-		UUID: uuid,
-	})
-}
-
 func RenewTransferBck(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid, kind,
 	phase string, dm *bundle.DataMover, dp cluster.LomReaderProvider, meta *cmn.Bck2BckMsg) RenewRes {
 	return defaultReg.renewTransferBck(t, bckFrom, bckTo, uuid, kind, phase, dm, dp, meta)
@@ -263,22 +245,6 @@ func (r *registry) renewTransferBck(t cluster.Target, bckFrom, bckTo *cluster.Bc
 			Meta:    meta,
 		},
 	})
-}
-
-func RenewEvictDelete(t cluster.Target, kind string, bck *cluster.Bck, args *ListRangeArgs) RenewRes {
-	return defaultReg.renewEvictDelete(t, kind, bck, args)
-}
-
-func (r *registry) renewEvictDelete(t cluster.Target, kind string, bck *cluster.Bck, args *ListRangeArgs) RenewRes {
-	return r.renewBucketXact(kind, bck, &XactArgs{T: t, UUID: args.UUID, Custom: args})
-}
-
-func RenewPrefetch(t cluster.Target, bck *cluster.Bck, args *ListRangeArgs) RenewRes {
-	return defaultReg.renewPrefetch(t, bck, args)
-}
-
-func (r *registry) renewPrefetch(t cluster.Target, bck *cluster.Bck, args *ListRangeArgs) RenewRes {
-	return r.renewBucketXact(cmn.ActPrefetch, bck, &XactArgs{T: t, UUID: args.UUID, Custom: args})
 }
 
 func RenewBckRename(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid string, rmdVersion int64, phase string) RenewRes {

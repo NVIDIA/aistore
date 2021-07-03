@@ -5,6 +5,7 @@
 package xs
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -37,33 +38,35 @@ type (
 	_lrBase struct {
 		xact bckAbortable
 		t    cluster.Target
-		args *xreg.ListRangeArgs
+		ctx  context.Context
+		msg  *xreg.ListRangeMsg
 	}
 	evdFactory struct {
 		xreg.BaseBckEntry
-		xact *evictDelete
-
-		t    cluster.Target
-		kind string
-		args *xreg.ListRangeArgs
+		xargs xreg.XactArgs
+		xact  *evictDelete
+		kind  string
+		msg   *xreg.ListRangeMsg
 	}
 	evictDelete struct {
 		xaction.XactBase
 		_lrBase
 	}
 
-	lrCallback func(args *xreg.ListRangeArgs, lom *cluster.LOM) error
+	lrCallback func(args *xreg.ListRangeMsg, lom *cluster.LOM) error
 
-	PrfchFactory struct {
+	prfFactory struct {
 		xreg.BaseBckEntry
-		xact *prefetch
-		t    cluster.Target
-		args *xreg.ListRangeArgs
+		xargs xreg.XactArgs
+		xact  *prefetch
+		msg   *xreg.ListRangeMsg
 	}
 	prefetch struct {
 		xaction.XactBase
 		_lrBase
 	}
+
+	TestXFactory struct{ prfFactory } // tests only
 )
 
 // interface guard
@@ -72,7 +75,7 @@ var (
 	_ cluster.Xact = (*prefetch)(nil)
 
 	_ xreg.BckFactory = (*evdFactory)(nil)
-	_ xreg.BckFactory = (*PrfchFactory)(nil)
+	_ xreg.BckFactory = (*prfFactory)(nil)
 )
 
 //////////////////
@@ -80,25 +83,24 @@ var (
 //////////////////
 
 func (p *evdFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
-	a := args.Custom.(*xreg.ListRangeArgs)
-	debug.Assert(a.RangeMsg != nil || a.ListMsg != nil)
-	debug.Assert(a.RangeMsg == nil || a.ListMsg == nil)
-	return &evdFactory{t: args.T, kind: p.kind, args: a}
+	msg := args.Custom.(*xreg.ListRangeMsg)
+	debug.Assert(msg.RangeMsg != nil || msg.ListMsg != nil)
+	debug.Assert(msg.RangeMsg == nil || msg.ListMsg == nil)
+	return &evdFactory{xargs: *args, kind: p.kind, msg: msg}
 }
 
 func (p *evdFactory) Start(bck cmn.Bck) error {
-	p.xact = newEvictDelete(p.args.UUID, p.kind, bck, p.t, p.args)
+	p.xact = newEvictDelete(&p.xargs, p.kind, bck, p.msg)
 	return nil
 }
 
 func (p *evdFactory) Kind() string      { return p.kind }
 func (p *evdFactory) Get() cluster.Xact { return p.xact }
 
-func newEvictDelete(uuid, kind string, bck cmn.Bck, t cluster.Target, a *xreg.ListRangeArgs) (ed *evictDelete) {
-	xargs := xaction.Args{ID: xaction.BaseID(uuid), Kind: kind, Bck: &bck}
+func newEvictDelete(xargs *xreg.XactArgs, kind string, bck cmn.Bck, msg *xreg.ListRangeMsg) (ed *evictDelete) {
 	ed = &evictDelete{
-		XactBase: *xaction.NewXactBase(xargs),
-		_lrBase:  _lrBase{t: t, args: a},
+		XactBase: *xaction.NewXactBase(xaction.Args{ID: xaction.BaseID(xargs.UUID), Kind: kind, Bck: &bck}),
+		_lrBase:  _lrBase{t: xargs.T, ctx: xargs.Ctx, msg: msg},
 	}
 	ed._lrBase.xact = ed
 	return
@@ -106,16 +108,16 @@ func newEvictDelete(uuid, kind string, bck cmn.Bck, t cluster.Target, a *xreg.Li
 
 func (r *evictDelete) Run() {
 	var err error
-	if r.args.RangeMsg != nil {
-		err = r.iterateRange(r.args, r.do)
+	if r.msg.RangeMsg != nil {
+		err = r.iterateRange(r.msg, r.do)
 	} else {
-		err = r.iterateList(r.args, r.args.ListMsg, r.do)
+		err = r.iterateList(r.msg, r.do)
 	}
 	r.Finish(err)
 }
 
-func (r *evictDelete) do(args *xreg.ListRangeArgs, lom *cluster.LOM) error {
-	errCode, err := r.t.DeleteObject(args.Ctx, lom, r.Kind() == cmn.ActEvictObjects)
+func (r *evictDelete) do(args *xreg.ListRangeMsg, lom *cluster.LOM) error {
+	errCode, err := r.t.DeleteObject(r.ctx, lom, r.Kind() == cmn.ActEvictObjects)
 	if errCode == http.StatusNotFound {
 		return nil
 	}
@@ -134,16 +136,16 @@ func (r *evictDelete) do(args *xreg.ListRangeArgs, lom *cluster.LOM) error {
 // prefetch //
 //////////////
 
-func (*PrfchFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
-	a := args.Custom.(*xreg.ListRangeArgs)
-	debug.Assert(a.RangeMsg != nil || a.ListMsg != nil)
-	debug.Assert(a.RangeMsg == nil || a.ListMsg == nil)
-	return &PrfchFactory{t: args.T, args: a}
+func (*prfFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
+	msg := args.Custom.(*xreg.ListRangeMsg)
+	debug.Assert(msg.RangeMsg != nil || msg.ListMsg != nil)
+	debug.Assert(msg.RangeMsg == nil || msg.ListMsg == nil)
+	return &prfFactory{xargs: *args, msg: msg}
 }
 
-func (p *PrfchFactory) Start(bck cmn.Bck) error {
+func (p *prfFactory) Start(bck cmn.Bck) error {
 	b := cluster.NewBckEmbed(bck)
-	if err := b.Init(p.t.Bowner()); err != nil {
+	if err := b.Init(p.xargs.T.Bowner()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			glog.Warning(err) // may show up later via ais/prxtrybck.go logic
 		} else {
@@ -153,18 +155,17 @@ func (p *PrfchFactory) Start(bck cmn.Bck) error {
 		glog.Errorf("bucket %q: can only prefetch remote buckets", b)
 		return fmt.Errorf("bucket %q: can only prefetch remote buckets", b)
 	}
-	p.xact = newPrefetch(p.args.UUID, p.Kind(), bck, p.t, p.args)
+	p.xact = newPrefetch(&p.xargs, p.Kind(), bck, p.msg)
 	return nil
 }
 
-func (*PrfchFactory) Kind() string        { return cmn.ActPrefetch }
-func (p *PrfchFactory) Get() cluster.Xact { return p.xact }
+func (*prfFactory) Kind() string        { return cmn.ActPrefetch }
+func (p *prfFactory) Get() cluster.Xact { return p.xact }
 
-func newPrefetch(uuid, kind string, bck cmn.Bck, t cluster.Target, a *xreg.ListRangeArgs) (prf *prefetch) {
-	xargs := xaction.Args{ID: xaction.BaseID(uuid), Kind: kind, Bck: &bck}
+func newPrefetch(xargs *xreg.XactArgs, kind string, bck cmn.Bck, msg *xreg.ListRangeMsg) (prf *prefetch) {
 	prf = &prefetch{
-		XactBase: *xaction.NewXactBase(xargs),
-		_lrBase:  _lrBase{t: t, args: a},
+		XactBase: *xaction.NewXactBase(xaction.Args{ID: xaction.BaseID(xargs.UUID), Kind: kind, Bck: &bck}),
+		_lrBase:  _lrBase{t: xargs.T, ctx: xargs.Ctx, msg: msg},
 	}
 	prf._lrBase.xact = prf
 	return
@@ -172,15 +173,15 @@ func newPrefetch(uuid, kind string, bck cmn.Bck, t cluster.Target, a *xreg.ListR
 
 func (r *prefetch) Run() {
 	var err error
-	if r.args.RangeMsg != nil {
-		err = r.iterateRange(r.args, r.do)
+	if r.msg.RangeMsg != nil {
+		err = r.iterateRange(r.msg, r.do)
 	} else {
-		err = r.iterateList(r.args, r.args.ListMsg, r.do)
+		err = r.iterateList(r.msg, r.do)
 	}
 	r.Finish(err)
 }
 
-func (r *prefetch) do(args *xreg.ListRangeArgs, lom *cluster.LOM) error {
+func (r *prefetch) do(args *xreg.ListRangeMsg, lom *cluster.LOM) error {
 	var coldGet bool
 	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
 		coldGet = cmn.IsObjNotExist(err)
@@ -190,7 +191,7 @@ func (r *prefetch) do(args *xreg.ListRangeArgs, lom *cluster.LOM) error {
 	}
 	if !coldGet && lom.Version() != "" && lom.VersionConf().ValidateWarmGet {
 		var err error
-		if coldGet, _, err = r.t.CheckRemoteVersion(args.Ctx, lom); err != nil {
+		if coldGet, _, err = r.t.CheckRemoteVersion(r.ctx, lom); err != nil {
 			return err
 		}
 	}
@@ -202,7 +203,7 @@ func (r *prefetch) do(args *xreg.ListRangeArgs, lom *cluster.LOM) error {
 	// too short - the first housekeeping removes it. Set the special value:
 	// negatve Now() for correct processing the LOM while housekeeping
 	lom.SetAtimeUnix(-time.Now().UnixNano())
-	if _, err := r.t.GetCold(args.Ctx, lom, cluster.Prefetch); err != nil {
+	if _, err := r.t.GetCold(r.ctx, lom, cluster.Prefetch); err != nil {
 		if err != cmn.ErrSkip {
 			return err
 		}
@@ -220,19 +221,19 @@ func (r *prefetch) do(args *xreg.ListRangeArgs, lom *cluster.LOM) error {
 // _lrbase //
 /////////////
 
-func (r *_lrBase) iterateRange(args *xreg.ListRangeArgs, cb lrCallback) error {
-	pt, err := parseTemplate(args.RangeMsg.Template)
+func (r *_lrBase) iterateRange(msg *xreg.ListRangeMsg, cb lrCallback) error {
+	pt, err := parseTemplate(msg.RangeMsg.Template)
 	if err != nil {
 		return err
 	}
 	smap := r.t.Sowner().Get()
 	if len(pt.Ranges) != 0 {
-		return r.iterateTemplate(args, smap, &pt, cb)
+		return r.iterateTemplate(msg, smap, &pt, cb)
 	}
-	return r.iteratePrefix(args, smap, pt.Prefix, cb)
+	return r.iteratePrefix(msg, smap, pt.Prefix, cb)
 }
 
-func (r *_lrBase) iterateTemplate(args *xreg.ListRangeArgs, smap *cluster.Smap, pt *cos.ParsedTemplate, cb lrCallback) error {
+func (r *_lrBase) iterateTemplate(args *xreg.ListRangeMsg, smap *cluster.Smap, pt *cos.ParsedTemplate, cb lrCallback) error {
 	getNext := pt.Iter()
 	for objName, hasNext := getNext(); hasNext; objName, hasNext = getNext() {
 		if r.xact.Aborted() {
@@ -248,7 +249,7 @@ func (r *_lrBase) iterateTemplate(args *xreg.ListRangeArgs, smap *cluster.Smap, 
 	return nil
 }
 
-func (r *_lrBase) iteratePrefix(args *xreg.ListRangeArgs, smap *cluster.Smap, prefix string, cb lrCallback) error {
+func (r *_lrBase) iteratePrefix(args *xreg.ListRangeMsg, smap *cluster.Smap, prefix string, cb lrCallback) error {
 	var (
 		objList *cmn.BucketList
 		err     error
@@ -264,9 +265,9 @@ func (r *_lrBase) iteratePrefix(args *xreg.ListRangeArgs, smap *cluster.Smap, pr
 	msg := &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
 	for !r.xact.Aborted() {
 		if bremote {
-			objList, _, err = r.t.Backend(bck).ListObjects(args.Ctx, bck, msg)
+			objList, _, err = r.t.Backend(bck).ListObjects(r.ctx, bck, msg)
 		} else {
-			walk := objwalk.NewWalk(args.Ctx, r.t, bck, msg)
+			walk := objwalk.NewWalk(r.ctx, r.t, bck, msg)
 			objList, err = walk.DefaultLocalObjPage(msg)
 		}
 		if err != nil {
@@ -297,14 +298,14 @@ func (r *_lrBase) iteratePrefix(args *xreg.ListRangeArgs, smap *cluster.Smap, pr
 	return nil
 }
 
-func (r *_lrBase) iterateList(args *xreg.ListRangeArgs, listMsg *cmn.ListMsg, cb lrCallback) error {
+func (r *_lrBase) iterateList(msg *xreg.ListRangeMsg, cb lrCallback) error {
 	smap := r.t.Sowner().Get()
-	for _, objName := range listMsg.ObjNames {
+	for _, objName := range msg.ListMsg.ObjNames {
 		if r.xact.Aborted() {
 			break
 		}
 		lom := cluster.AllocLOM(objName)
-		err := r.iterate(lom, args, cb, smap)
+		err := r.iterate(lom, msg, cb, smap)
 		cluster.FreeLOM(lom)
 		if err != nil {
 			return err
@@ -313,7 +314,7 @@ func (r *_lrBase) iterateList(args *xreg.ListRangeArgs, listMsg *cmn.ListMsg, cb
 	return nil
 }
 
-func (r *_lrBase) iterate(lom *cluster.LOM, args *xreg.ListRangeArgs, cb lrCallback, smap *cluster.Smap) error {
+func (r *_lrBase) iterate(lom *cluster.LOM, args *xreg.ListRangeMsg, cb lrCallback, smap *cluster.Smap) error {
 	if err := lom.Init(r.xact.Bck()); err != nil {
 		return err
 	}

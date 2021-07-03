@@ -18,7 +18,7 @@ func init() {
 	xreg.RegFactory(&MovFactory{})
 	xreg.RegFactory(&evdFactory{kind: cmn.ActEvictObjects})
 	xreg.RegFactory(&evdFactory{kind: cmn.ActDelete})
-	xreg.RegFactory(&PrfchFactory{})
+	xreg.RegFactory(&prfFactory{})
 
 	xreg.RegFactory(&olFactory{})
 

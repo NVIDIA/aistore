@@ -191,7 +191,7 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 		// NOTE: the caller is expected to load it and get the current version, if exists
 		if poi.recvType == cluster.RegularPut || lom.Version(true) == "" {
 			if err = lom.IncVersion(); err != nil {
-				return
+				glog.Error(err) // TODO -- FIXME: "RegularPut" vs Cloud version
 			}
 		}
 	}
@@ -905,11 +905,15 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 			Overwrite: true,
 			KeepOrig:  false,
 		}
-		if _, err := aoi.t.PromoteFile(params); err != nil {
-			return "", 0, err
+		var lom *cluster.LOM
+		if lom, err = aoi.t.PromoteFile(params); err != nil {
+			return
+		}
+		if lom != nil {
+			cluster.FreeLOM(lom)
 		}
 	default:
-		cos.AssertMsg(false, aoi.op)
+		debug.AssertMsg(false, aoi.op)
 	}
 
 	delta := time.Since(aoi.started)

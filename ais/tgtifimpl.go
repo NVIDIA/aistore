@@ -277,8 +277,7 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 		return
 	}
 
-	// local
-	defer cluster.FreeLOM(lom)
+	// local; NOTE: cluster.FreeLOM(lom) by the caller
 	err = lom.Load(false /*cache it*/, false /*locked*/)
 	if err == nil && !params.Overwrite {
 		glog.Errorf("[promote] %s already exists", lom)

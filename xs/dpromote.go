@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/xaction"
@@ -103,7 +104,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	// NOTE: destination objName is:
 	// r.params.ObjName + filepath.Base(fqn) if promoting single file
 	// r.params.ObjName + strings.TrimPrefix(fileFqn, dirFqn) if promoting the whole directory
-	cos.Assert(filepath.IsAbs(fqn))
+	debug.Assert(filepath.IsAbs(fqn))
 
 	bck := cluster.NewBckEmbed(r.Bck())
 	if err := bck.Init(r.Target().Bowner()); err != nil {
@@ -135,6 +136,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	} else if lom != nil { // nil when (placement = different target)
 		r.ObjectsInc()
 		r.BytesAdd(lom.SizeBytes())
+		cluster.FreeLOM(lom)
 	}
 	return nil
 }

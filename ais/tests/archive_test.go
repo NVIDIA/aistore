@@ -180,7 +180,7 @@ func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 	// archive bucket => same bucket in parallel
 	for i := 0; i < numArchs; i++ {
 		go func(i int) {
-			tarName := fmt.Sprintf("test_%02d.tar", i)
+			tarName := fmt.Sprintf("test_lst_%02d.tar", i)
 			list := make([]string, 0, numInArch)
 			for j := 0; j < numInArch; j++ {
 				list = append(list, m.objNames[rand.Intn(numPuts)])

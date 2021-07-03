@@ -620,7 +620,7 @@ func (lom *LOM) IncVersion() error {
 	}
 	ver, err := strconv.Atoi(lom.md.Ver)
 	if err != nil {
-		return fmt.Errorf("%s: failed to inc version, err: %v", lom, err)
+		return fmt.Errorf("%s: %v", lom, err)
 	}
 	lom.SetVersion(strconv.Itoa(ver + 1))
 	return nil

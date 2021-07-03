@@ -584,10 +584,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			rangeMsg = &cmn.RangeMsg{}
 			listMsg  = &cmn.ListMsg{}
 		)
-		args := &xreg.ListRangeArgs{
-			Ctx:  context.Background(),
-			UUID: msg.UUID,
-		}
+		args := &xreg.ListRangeMsg{}
 		if err := cos.MorphMarshal(msg.Value, &rangeMsg); err == nil {
 			args.RangeMsg = rangeMsg
 		} else if err := cos.MorphMarshal(msg.Value, &listMsg); err == nil {
@@ -596,7 +593,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			t.writeErrf(w, r, "invalid value provided to %q action", msg.Action)
 			return
 		}
-		rns := xreg.RenewEvictDelete(t, msg.Action /*xaction kind*/, request.bck, args)
+		rns := xreg.RenewEvictDelete(msg.UUID, t, msg.Action /*xaction kind*/, request.bck, args)
 		if rns.Err != nil {
 			t.writeErr(w, r, rns.Err)
 			return
@@ -651,7 +648,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			err      error
 			rangeMsg = &cmn.RangeMsg{}
 			listMsg  = &cmn.ListMsg{}
-			args     = &xreg.ListRangeArgs{Ctx: context.Background()}
+			args     = &xreg.ListRangeMsg{}
 		)
 		if err = cos.MorphMarshal(msg.Value, rangeMsg); err == nil {
 			args.RangeMsg = rangeMsg
@@ -661,8 +658,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			t.writeErrf(w, r, "invalid value provided to %q action", msg.Action)
 			return
 		}
-		args.UUID = msg.UUID
-		rns := xreg.RenewPrefetch(t, request.bck, args)
+		rns := xreg.RenewPrefetch(msg.UUID, t, request.bck, args)
 		xact := rns.Entry.Get()
 		go xact.Run()
 	default:
