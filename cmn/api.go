@@ -71,23 +71,6 @@ type (
 	}
 	BucketsSummaries []BucketSummary
 
-	// ListMsg contains a list of files and a duration within which to get them
-	ListMsg struct {
-		ObjNames []string `json:"objnames"`
-	}
-	// RangeMsg contains a Prefix, Regex, and Range for a Range Operation
-	RangeMsg struct {
-		Template string `json:"template"`
-	}
-	// ArchiveMsg contains parameters for archiving source objects as one of the supported
-	// archive cos.ArchExtensions types at the destination
-	ArchiveMsg struct {
-		ListMsg
-		RangeMsg
-		ToBck    Bck    `json:"tobck"`
-		ArchName string `json:"archname"` // must have one of the cos.ArchExtensions
-	}
-
 	CopyBckMsg struct {
 		Prefix string `json:"prefix"`  // Prefix added to each resulting object.
 		DryRun bool   `json:"dry_run"` // Don't perform any PUT

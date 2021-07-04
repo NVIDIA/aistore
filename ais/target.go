@@ -580,20 +580,12 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	case cmn.ActDelete, cmn.ActEvictObjects:
-		var (
-			rangeMsg = &cmn.RangeMsg{}
-			listMsg  = &cmn.ListMsg{}
-		)
-		args := &xreg.ListRangeMsg{}
-		if err := cos.MorphMarshal(msg.Value, &rangeMsg); err == nil {
-			args.RangeMsg = rangeMsg
-		} else if err := cos.MorphMarshal(msg.Value, &listMsg); err == nil {
-			args.ListMsg = listMsg
-		} else {
-			t.writeErrf(w, r, "invalid value provided to %q action", msg.Action)
+		lrMsg := &cmn.ListRangeMsg{}
+		if err := cos.MorphMarshal(msg.Value, lrMsg); err != nil {
+			t.writeErrf(w, r, "%s failure to unmarshal for action %s: %v", t.si, msg.Action, err)
 			return
 		}
-		rns := xreg.RenewEvictDelete(msg.UUID, t, msg.Action /*xaction kind*/, request.bck, args)
+		rns := xreg.RenewEvictDelete(msg.UUID, t, msg.Action /*xaction kind*/, request.bck, lrMsg)
 		if rns.Err != nil {
 			t.writeErr(w, r, rns.Err)
 			return
@@ -639,26 +631,20 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 
 	switch msg.Action {
 	case cmn.ActPrefetch:
+		var (
+			err   error
+			lrMsg = &cmn.ListRangeMsg{}
+		)
 		if !request.bck.IsRemote() {
 			t.writeErrf(w, r, "%s: expecting remote bucket, got %s, action=%s",
 				t.si, request.bck, msg.Action)
 			return
 		}
-		var (
-			err      error
-			rangeMsg = &cmn.RangeMsg{}
-			listMsg  = &cmn.ListMsg{}
-			args     = &xreg.ListRangeMsg{}
-		)
-		if err = cos.MorphMarshal(msg.Value, rangeMsg); err == nil {
-			args.RangeMsg = rangeMsg
-		} else if err = cos.MorphMarshal(msg.Value, listMsg); err == nil {
-			args.ListMsg = listMsg
-		} else {
-			t.writeErrf(w, r, "invalid value provided to %q action", msg.Action)
+		if err = cos.MorphMarshal(msg.Value, lrMsg); err != nil {
+			t.writeErrf(w, r, "%s failure to unmarshal for action %s: %v", t.si, msg.Action, err)
 			return
 		}
-		rns := xreg.RenewPrefetch(msg.UUID, t, request.bck, args)
+		rns := xreg.RenewPrefetch(msg.UUID, t, request.bck, lrMsg)
 		xact := rns.Entry.Get()
 		go xact.Run()
 	default:

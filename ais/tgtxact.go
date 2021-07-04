@@ -154,7 +154,7 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bc
 		go t.runResilver(xactMsg.ID, false /*skipGlobMisplaced*/, notif)
 	// 2. with bucket
 	case cmn.ActPrefetch:
-		args := &xreg.ListRangeMsg{RangeMsg: &cmn.RangeMsg{}}
+		args := &cmn.ListRangeMsg{}
 		rns := xreg.RenewPrefetch(xactMsg.ID, t, bck, args)
 		xact := rns.Entry.Get()
 		xact.AddNotif(&xaction.NotifXact{

@@ -219,11 +219,11 @@ func (p *proxyrunner) delMultipleObjs(w http.ResponseWriter, r *http.Request, bu
 	msg := cmn.ActionMsg{Action: cmn.ActDelete}
 	query := make(url.Values)
 	query.Set(cmn.URLParamProvider, cmn.ProviderAIS)
-	listMsg := &cmn.ListMsg{ObjNames: make([]string, 0, len(objList.Object))}
+	lrMsg := &cmn.ListRangeMsg{ObjNames: make([]string, 0, len(objList.Object))}
 	for _, obj := range objList.Object {
-		listMsg.ObjNames = append(listMsg.ObjNames, obj.Key)
+		lrMsg.ObjNames = append(lrMsg.ObjNames, obj.Key)
 	}
-	msg.Value = listMsg
+	msg.Value = lrMsg
 	bt := cos.MustMarshal(&msg)
 	// Marshal+Unmashal to new struct:
 	// hack to make `doListRange` treat `listMsg` as `map[string]interface`

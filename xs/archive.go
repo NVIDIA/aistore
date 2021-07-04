@@ -164,7 +164,7 @@ func (r *XactPutArchive) Run() {
 			work := r.pending.m[fullname]
 			r.pending.RUnlock()
 			debug.Assert(work != nil)
-			for _, objName := range msg.ListMsg.ObjNames {
+			for _, objName := range msg.ObjNames {
 				lom := cluster.AllocLOM(objName)
 				if err := work.do(lom, r); err != nil {
 					cluster.FreeLOM(lom)

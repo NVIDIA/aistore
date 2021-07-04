@@ -39,27 +39,27 @@ type (
 		xact bckAbortable
 		t    cluster.Target
 		ctx  context.Context
-		msg  *xreg.ListRangeMsg
+		msg  *cmn.ListRangeMsg
 	}
 	evdFactory struct {
 		xreg.BaseBckEntry
 		xargs xreg.XactArgs
 		xact  *evictDelete
 		kind  string
-		msg   *xreg.ListRangeMsg
+		msg   *cmn.ListRangeMsg
 	}
 	evictDelete struct {
 		xaction.XactBase
 		_lrBase
 	}
 
-	lrCallback func(args *xreg.ListRangeMsg, lom *cluster.LOM) error
+	lrCallback func(args *cmn.ListRangeMsg, lom *cluster.LOM) error
 
 	prfFactory struct {
 		xreg.BaseBckEntry
 		xargs xreg.XactArgs
 		xact  *prefetch
-		msg   *xreg.ListRangeMsg
+		msg   *cmn.ListRangeMsg
 	}
 	prefetch struct {
 		xaction.XactBase
@@ -83,9 +83,8 @@ var (
 //////////////////
 
 func (p *evdFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
-	msg := args.Custom.(*xreg.ListRangeMsg)
-	debug.Assert(msg.RangeMsg != nil || msg.ListMsg != nil)
-	debug.Assert(msg.RangeMsg == nil || msg.ListMsg == nil)
+	msg := args.Custom.(*cmn.ListRangeMsg)
+	debug.Assert(!msg.IsList() || !msg.HasTemplate())
 	return &evdFactory{xargs: *args, kind: p.kind, msg: msg}
 }
 
@@ -97,7 +96,7 @@ func (p *evdFactory) Start(bck cmn.Bck) error {
 func (p *evdFactory) Kind() string      { return p.kind }
 func (p *evdFactory) Get() cluster.Xact { return p.xact }
 
-func newEvictDelete(xargs *xreg.XactArgs, kind string, bck cmn.Bck, msg *xreg.ListRangeMsg) (ed *evictDelete) {
+func newEvictDelete(xargs *xreg.XactArgs, kind string, bck cmn.Bck, msg *cmn.ListRangeMsg) (ed *evictDelete) {
 	ed = &evictDelete{
 		XactBase: *xaction.NewXactBase(xaction.Args{ID: xaction.BaseID(xargs.UUID), Kind: kind, Bck: &bck}),
 		_lrBase:  _lrBase{t: xargs.T, ctx: xargs.Ctx, msg: msg},
@@ -108,15 +107,15 @@ func newEvictDelete(xargs *xreg.XactArgs, kind string, bck cmn.Bck, msg *xreg.Li
 
 func (r *evictDelete) Run() {
 	var err error
-	if r.msg.RangeMsg != nil {
-		err = r.iterateRange(r.msg, r.do)
-	} else {
+	if r.msg.IsList() {
 		err = r.iterateList(r.msg, r.do)
+	} else {
+		err = r.iterateRange(r.msg, r.do)
 	}
 	r.Finish(err)
 }
 
-func (r *evictDelete) do(args *xreg.ListRangeMsg, lom *cluster.LOM) error {
+func (r *evictDelete) do(args *cmn.ListRangeMsg, lom *cluster.LOM) error {
 	errCode, err := r.t.DeleteObject(r.ctx, lom, r.Kind() == cmn.ActEvictObjects)
 	if errCode == http.StatusNotFound {
 		return nil
@@ -137,9 +136,8 @@ func (r *evictDelete) do(args *xreg.ListRangeMsg, lom *cluster.LOM) error {
 //////////////
 
 func (*prfFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
-	msg := args.Custom.(*xreg.ListRangeMsg)
-	debug.Assert(msg.RangeMsg != nil || msg.ListMsg != nil)
-	debug.Assert(msg.RangeMsg == nil || msg.ListMsg == nil)
+	msg := args.Custom.(*cmn.ListRangeMsg)
+	debug.Assert(!msg.IsList() || !msg.HasTemplate())
 	return &prfFactory{xargs: *args, msg: msg}
 }
 
@@ -162,7 +160,7 @@ func (p *prfFactory) Start(bck cmn.Bck) error {
 func (*prfFactory) Kind() string        { return cmn.ActPrefetch }
 func (p *prfFactory) Get() cluster.Xact { return p.xact }
 
-func newPrefetch(xargs *xreg.XactArgs, kind string, bck cmn.Bck, msg *xreg.ListRangeMsg) (prf *prefetch) {
+func newPrefetch(xargs *xreg.XactArgs, kind string, bck cmn.Bck, msg *cmn.ListRangeMsg) (prf *prefetch) {
 	prf = &prefetch{
 		XactBase: *xaction.NewXactBase(xaction.Args{ID: xaction.BaseID(xargs.UUID), Kind: kind, Bck: &bck}),
 		_lrBase:  _lrBase{t: xargs.T, ctx: xargs.Ctx, msg: msg},
@@ -173,15 +171,15 @@ func newPrefetch(xargs *xreg.XactArgs, kind string, bck cmn.Bck, msg *xreg.ListR
 
 func (r *prefetch) Run() {
 	var err error
-	if r.msg.RangeMsg != nil {
-		err = r.iterateRange(r.msg, r.do)
-	} else {
+	if r.msg.IsList() {
 		err = r.iterateList(r.msg, r.do)
+	} else {
+		err = r.iterateRange(r.msg, r.do)
 	}
 	r.Finish(err)
 }
 
-func (r *prefetch) do(args *xreg.ListRangeMsg, lom *cluster.LOM) error {
+func (r *prefetch) do(args *cmn.ListRangeMsg, lom *cluster.LOM) error {
 	var coldGet bool
 	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
 		coldGet = cmn.IsObjNotExist(err)
@@ -221,8 +219,8 @@ func (r *prefetch) do(args *xreg.ListRangeMsg, lom *cluster.LOM) error {
 // _lrbase //
 /////////////
 
-func (r *_lrBase) iterateRange(msg *xreg.ListRangeMsg, cb lrCallback) error {
-	pt, err := parseTemplate(msg.RangeMsg.Template)
+func (r *_lrBase) iterateRange(msg *cmn.ListRangeMsg, cb lrCallback) error {
+	pt, err := parseTemplate(msg.Template)
 	if err != nil {
 		return err
 	}
@@ -233,7 +231,7 @@ func (r *_lrBase) iterateRange(msg *xreg.ListRangeMsg, cb lrCallback) error {
 	return r.iteratePrefix(msg, smap, pt.Prefix, cb)
 }
 
-func (r *_lrBase) iterateTemplate(args *xreg.ListRangeMsg, smap *cluster.Smap, pt *cos.ParsedTemplate, cb lrCallback) error {
+func (r *_lrBase) iterateTemplate(args *cmn.ListRangeMsg, smap *cluster.Smap, pt *cos.ParsedTemplate, cb lrCallback) error {
 	getNext := pt.Iter()
 	for objName, hasNext := getNext(); hasNext; objName, hasNext = getNext() {
 		if r.xact.Aborted() {
@@ -249,7 +247,7 @@ func (r *_lrBase) iterateTemplate(args *xreg.ListRangeMsg, smap *cluster.Smap, p
 	return nil
 }
 
-func (r *_lrBase) iteratePrefix(args *xreg.ListRangeMsg, smap *cluster.Smap, prefix string, cb lrCallback) error {
+func (r *_lrBase) iteratePrefix(args *cmn.ListRangeMsg, smap *cluster.Smap, prefix string, cb lrCallback) error {
 	var (
 		objList *cmn.BucketList
 		err     error
@@ -298,9 +296,9 @@ func (r *_lrBase) iteratePrefix(args *xreg.ListRangeMsg, smap *cluster.Smap, pre
 	return nil
 }
 
-func (r *_lrBase) iterateList(msg *xreg.ListRangeMsg, cb lrCallback) error {
+func (r *_lrBase) iterateList(msg *cmn.ListRangeMsg, cb lrCallback) error {
 	smap := r.t.Sowner().Get()
-	for _, objName := range msg.ListMsg.ObjNames {
+	for _, objName := range msg.ObjNames {
 		if r.xact.Aborted() {
 			break
 		}
@@ -314,7 +312,7 @@ func (r *_lrBase) iterateList(msg *xreg.ListRangeMsg, cb lrCallback) error {
 	return nil
 }
 
-func (r *_lrBase) iterate(lom *cluster.LOM, args *xreg.ListRangeMsg, cb lrCallback, smap *cluster.Smap) error {
+func (r *_lrBase) iterate(lom *cluster.LOM, args *cmn.ListRangeMsg, cb lrCallback, smap *cluster.Smap) error {
 	if err := lom.Init(r.xact.Bck()); err != nil {
 		return err
 	}
