@@ -29,11 +29,11 @@ func (tc testConfig) name() string {
 	)
 }
 
-func createAndFillBucket(b *testing.B, objCnt uint) cmn.Bck {
+func createAndFillBucket(b *testing.B, objCnt uint, u string) cmn.Bck {
 	const workerCount = 10
 	var (
 		bck        = cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS}
-		baseParams = tutils.BaseAPIParams()
+		baseParams = tutils.BaseAPIParams(u)
 
 		wg              = &sync.WaitGroup{}
 		objCntPerWorker = int(objCnt) / workerCount
@@ -56,7 +56,7 @@ func createAndFillBucket(b *testing.B, objCnt uint) cmn.Bck {
 
 func BenchmarkListObject(b *testing.B) {
 	tutils.CheckSkip(b, tutils.SkipTestArgs{Long: true})
-
+	u := "http://127.0.0.1:8080"
 	tests := []testConfig{
 		{objectCnt: 1_000, pageSize: 10, useCache: false},
 		{objectCnt: 1_000, pageSize: 10, useCache: true},
@@ -74,10 +74,9 @@ func BenchmarkListObject(b *testing.B) {
 	for _, test := range tests {
 		b.Run(test.name(), func(b *testing.B) {
 			var (
-				bck        = createAndFillBucket(b, test.objectCnt)
-				baseParams = tutils.BaseAPIParams()
+				bck        = createAndFillBucket(b, test.objectCnt, u)
+				baseParams = tutils.BaseAPIParams(u)
 			)
-
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {

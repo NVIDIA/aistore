@@ -30,7 +30,7 @@ const (
 	stackTracePrefix = "stack: ["
 
 	FmtErrUnmarshal      = "%s: failed to unmarshal %s (%s), err: %w"
-	FmtErrMorphUnmarshal = "%s: failed to unmarshal %s (%T), err: %w"
+	FmtErrMorphUnmarshal = "%s: failed to unmarshal %s (%T), err: %v"
 	FmtErrUnsupported    = "%s: %s is not supported"
 	FmtErrUnknown        = "%s: unknown %s %q"
 	FmtErrFailed         = "%s: failed to %s %s, err: %v" // node: action object, error

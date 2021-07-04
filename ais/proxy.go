@@ -803,6 +803,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 			archiveMsg = &cmn.ArchiveMsg{}
 		)
 		if err = cos.MorphMarshal(msg.Value, archiveMsg); err != nil {
+			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
 		}
 		bckTo := cluster.NewBckEmbed(archiveMsg.ToBck)
@@ -922,7 +923,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		switch msg.Action {
 		case cmn.ActETLBck:
 			if err := cos.MorphMarshal(msg.Value, internalMsg); err != nil {
-				p.writeErrMsg(w, r, "request body can't be empty")
+				p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 				return
 			}
 			if err := internalMsg.Validate(); err != nil {
@@ -932,12 +933,12 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		case cmn.ActCopyBck:
 			cpyBckMsg := &cmn.CopyBckMsg{}
 			if err = cos.MorphMarshal(msg.Value, cpyBckMsg); err != nil {
+				p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 				return
 			}
 			internalMsg.DryRun = cpyBckMsg.DryRun
 			internalMsg.Prefix = cpyBckMsg.Prefix
 		}
-
 		userBckTo, err := newBckFromQueryUname(query, cmn.URLParamBucketTo, true /*required*/)
 		if err != nil {
 			p.writeErr(w, r, err)
@@ -1052,10 +1053,9 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 	if msg.Value != nil {
 		propsToUpdate := cmn.BucketPropsToUpdate{}
 		if err := cos.MorphMarshal(msg.Value, &propsToUpdate); err != nil {
-			p.writeErr(w, r, err)
+			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
 		}
-
 		// Make and validate new bucket props.
 		bck.Props = defaultBckProps(bckPropsArgs{bck: bck})
 		bck.Props, err = p.makeNewBckProps(bck, &propsToUpdate, true /*creating*/)
@@ -1102,7 +1102,7 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 		smap    = p.owner.smap.get()
 	)
 	if err := cos.MorphMarshal(amsg.Value, &smsg); err != nil {
-		p.writeErr(w, r, err)
+		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, amsg.Action, amsg.Value, err)
 		return
 	}
 	if smap.CountActiveTargets() < 1 {
@@ -1186,7 +1186,7 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, quer
 		smsg      cmn.BucketSummaryMsg
 	)
 	if err := cos.MorphMarshal(amsg.Value, &smsg); err != nil {
-		p.writeErr(w, r, err)
+		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, amsg.Action, amsg.Value, err)
 		return
 	}
 	if queryBcks.Name != "" {
@@ -1942,7 +1942,7 @@ func (p *proxyrunner) objMv(w http.ResponseWriter, r *http.Request, bck *cluster
 func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, msg *cmn.ActionMsg) {
 	promoteArgs := cmn.ActValPromote{}
 	if err := cos.MorphMarshal(msg.Value, &promoteArgs); err != nil {
-		p.writeErr(w, r, err)
+		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
 	var (

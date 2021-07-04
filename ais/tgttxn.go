@@ -102,7 +102,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActCopyBck, cmn.ActETLBck:
 		bck2BckMsg := &cmn.Bck2BckMsg{}
 		if err := cos.MorphMarshal(c.msg.Value, bck2BckMsg); err != nil {
-			t.writeErr(w, r, err)
+			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, c.msg.Value, err)
 			return
 		}
 		if msg.Action == cmn.ActCopyBck {
@@ -140,7 +140,7 @@ func (t *targetrunner) createBucket(c *txnServerCtx) error {
 		if c.msg.Action == cmn.ActCreateBck && c.bck.IsRemote() {
 			if c.msg.Value != nil {
 				if err := cos.MorphMarshal(c.msg.Value, &c.bck.Props); err != nil {
-					return err
+					return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, c.msg.Action, c.msg.Value, err)
 				}
 			}
 			if _, err := t.Backend(c.bck).CreateBucket(context.Background(), c.bck); err != nil {
@@ -319,6 +319,7 @@ func (t *targetrunner) validateNprops(bck *cluster.Bck, msg *aisMsg) (nprops *cm
 	)
 	nprops = &cmn.BucketProps{}
 	if err = jsoniter.Unmarshal(body, nprops); err != nil {
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, t.si, "new bucket props", cmn.BytesHead(body), err)
 		return
 	}
 	if nprops.Mirror.Enabled {
@@ -642,7 +643,7 @@ func (t *targetrunner) putArchive(c *txnServerCtx) error {
 		}
 		archiveMsg := &cmn.ArchiveMsg{}
 		if err := cos.MorphMarshal(c.msg.Value, archiveMsg); err != nil {
-			return err
+			return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, c.msg.Action, c.msg.Value, err)
 		}
 		rns := xreg.RenewPutArchive(c.msg.UUID, t, bckFrom)
 		if rns.Err != nil {
@@ -686,7 +687,7 @@ func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
 	case cmn.ActBegin:
 		var opts cmn.ActValRmNode
 		if err := cos.MorphMarshal(c.msg.Value, &opts); err != nil {
-			return err
+			return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, c.msg.Action, c.msg.Value, err)
 		}
 		g := xreg.GetRebMarked()
 		if g.Xact != nil && !g.Xact.Finished() && !g.Xact.Aborted() {
@@ -702,7 +703,7 @@ func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
 	case cmn.ActCommit:
 		var opts cmn.ActValRmNode
 		if err := cos.MorphMarshal(c.msg.Value, &opts); err != nil {
-			return err
+			return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, c.msg.Action, c.msg.Value, err)
 		}
 		if c.msg.Action == cmn.ActDecommissionNode {
 			if opts.DaemonID != t.si.ID() {

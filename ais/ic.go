@@ -6,6 +6,7 @@ package ais
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -287,13 +288,13 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 	switch msg.Action {
 	case cmn.ActMergeOwnershipTbl:
 		if err := cos.MorphMarshal(msg.Value, &ic.p.notifs); err != nil {
-			ic.p.writeErr(w, r, err)
+			ic.p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, ic.p.si, msg.Action, msg.Value, err)
 			return
 		}
 	case cmn.ActListenToNotif:
 		nlMsg := &notifListenMsg{}
 		if err := cos.MorphMarshal(msg.Value, nlMsg); err != nil {
-			ic.p.writeErr(w, r, err)
+			ic.p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, ic.p.si, msg.Action, msg.Value, err)
 			return
 		}
 		if err := ic.p.notifs.add(nlMsg.nl); err != nil {
@@ -308,7 +309,7 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 			err        error
 		)
 		if err = cos.MorphMarshal(msg.Value, regMsg); err != nil {
-			ic.p.writeErr(w, r, err)
+			ic.p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, ic.p.si, msg.Action, msg.Value, err)
 			return
 		}
 		debug.Assert(len(regMsg.Srcs) != 0)
@@ -406,8 +407,7 @@ func (ic *ic) syncICBundle() error {
 
 	bundle := &icBundle{}
 	if err := jsoniter.Unmarshal(result.bytes, bundle); err != nil {
-		glog.Errorf("%s: failed to unmarshal ic bundle", ic.p.si)
-		return err
+		return fmt.Errorf(cmn.FmtErrUnmarshal, ic.p.si, "IC bundle", cmn.BytesHead(result.bytes), err)
 	}
 
 	cos.Assertf(smap.UUID == bundle.Smap.UUID, "%s vs %s", smap.StringEx(), bundle.Smap.StringEx())
@@ -424,5 +424,8 @@ func (ic *ic) syncICBundle() error {
 	if !smap.IsIC(ic.p.si) {
 		return nil
 	}
-	return jsoniter.Unmarshal(bundle.OwnershipTbl, &ic.p.notifs)
+	if err := jsoniter.Unmarshal(bundle.OwnershipTbl, &ic.p.notifs); err != nil {
+		return fmt.Errorf(cmn.FmtErrUnmarshal, ic.p.si, "ownership table", cmn.BytesHead(bundle.OwnershipTbl), err)
+	}
+	return nil
 }

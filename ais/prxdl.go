@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -19,8 +20,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string,
-	msg *downloader.DlAdminBody) ([]byte, int, error) {
+func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *downloader.DlAdminBody) ([]byte, int, error) {
 	var (
 		notFoundCnt int
 		err         error
@@ -35,10 +35,11 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string,
 				)
 				if dlStatus, ok = status.(*downloader.DlStatusResp); !ok {
 					dlStatus = &downloader.DlStatusResp{}
-					err := cos.MorphMarshal(status, dlStatus)
-					cos.AssertNoErr(err)
+					if err := cos.MorphMarshal(status, dlStatus); err != nil {
+						debug.AssertNoErr(err)
+						return false
+					}
 				}
-
 				resp = resp.Aggregate(*dlStatus)
 				return true
 			})
@@ -263,12 +264,14 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *http.Request,
 	body []byte) (dlb downloader.DlBody, dlBase downloader.DlBase, ok bool) {
 	if err := jsoniter.Unmarshal(body, &dlb); err != nil {
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, p.si, "download request", cmn.BytesHead(body), err)
 		p.writeErr(w, r, err)
 		return
 	}
 
 	err := jsoniter.Unmarshal(dlb.RawMessage, &dlBase)
 	if err != nil {
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, p.si, "download message", cmn.BytesHead(dlb.RawMessage), err)
 		p.writeErr(w, r, err)
 		return
 	}

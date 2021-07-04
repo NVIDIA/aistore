@@ -6,7 +6,6 @@ package ais
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -20,26 +19,27 @@ import (
 )
 
 // listObjects returns a list of objects in a bucket (with optional prefix).
-func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actionMsg *aisMsg) (ok bool) {
-	query := r.URL.Query()
+func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actMsg *aisMsg) (ok bool) {
+	var (
+		msg   *cmn.SelectMsg
+		query = r.URL.Query()
+	)
 	if glog.FastV(4, glog.SmoduleAIS) {
 		pid := query.Get(cmn.HdrCallerID)
 		glog.Infof("%s %s <= (%s)", r.Method, bck, pid)
 	}
-
-	var msg *cmn.SelectMsg
-	if err := cos.MorphMarshal(actionMsg.Value, &msg); err != nil {
-		t.writeErrf(w, r, "unable to unmarshal 'value' in request to a cmn.SelectMsg: %v", actionMsg.Value)
+	if err := cos.MorphMarshal(actMsg.Value, &msg); err != nil {
+		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, actMsg.Action, actMsg.Value, err)
 		return
 	}
-
 	if !bck.IsAIS() && !msg.IsFlagSet(cmn.SelectCached) {
 		maxCloudPageSize := t.Backend(bck).MaxPageSize()
+		if msg.PageSize > maxCloudPageSize {
+			t.writeErrf(w, r, "page size %d exceeds the supported maximum (%d)", msg.PageSize, maxCloudPageSize)
+			return false
+		}
 		if msg.PageSize == 0 {
 			msg.PageSize = maxCloudPageSize
-		} else if msg.PageSize > maxCloudPageSize {
-			t.writeErrf(w, r, "page size exceeds the maximum value (got: %d, max expected: %d)", msg.PageSize, maxCloudPageSize)
-			return false
 		}
 	}
 	debug.Assert(msg.PageSize != 0)
@@ -77,7 +77,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 	return t.writeMsgPack(w, r, resp.BckList, "list_objects")
 }
 
-func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actionMsg *aisMsg) {
+func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actMsg *aisMsg) {
 	query := r.URL.Query()
 	if glog.FastV(4, glog.SmoduleAIS) {
 		pid := query.Get(cmn.HdrCallerID)
@@ -85,12 +85,11 @@ func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck
 	}
 
 	var msg cmn.BucketSummaryMsg
-	if err := cos.MorphMarshal(actionMsg.Value, &msg); err != nil {
-		err := fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, "BucketSummaryMsg", actionMsg.Value, err)
-		t.writeErr(w, r, err)
+	if err := cos.MorphMarshal(actMsg.Value, &msg); err != nil {
+		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, actMsg.Action, actMsg.Value, err)
 		return
 	}
-	t.doAsync(w, r, actionMsg.Action, bck, &msg)
+	t.doAsync(w, r, actMsg.Action, bck, &msg)
 }
 
 // asynchronous bucket request

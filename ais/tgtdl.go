@@ -6,6 +6,7 @@ package ais
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"regexp"
 	"time"
@@ -61,6 +62,8 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 
 		dlBodyBase := downloader.DlBase{}
 		if err := jsoniter.Unmarshal(dlb.RawMessage, &dlBodyBase); err != nil {
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, t.si, "download message", cmn.BytesHead(dlb.RawMessage), err)
+			t.writeErr(w, r, err)
 			return
 		}
 

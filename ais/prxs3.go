@@ -7,6 +7,7 @@ package ais
 import (
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"path"
@@ -224,12 +225,17 @@ func (p *proxyrunner) delMultipleObjs(w http.ResponseWriter, r *http.Request, bu
 		lrMsg.ObjNames = append(lrMsg.ObjNames, obj.Key)
 	}
 	msg.Value = lrMsg
-	bt := cos.MustMarshal(&msg)
 	// Marshal+Unmashal to new struct:
 	// hack to make `doListRange` treat `listMsg` as `map[string]interface`
-	var msg2 cmn.ActionMsg
-	err := jsoniter.Unmarshal(bt, &msg2)
-	cos.AssertNoErr(err)
+	var (
+		msg2 cmn.ActionMsg
+		bt   = cos.MustMarshal(&msg)
+	)
+	if err := jsoniter.Unmarshal(bt, &msg2); err != nil {
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, p.si, "list-range action message", cmn.BytesHead(bt), err)
+		p.writeErr(w, r, err)
+		return
+	}
 	if _, err := p.doListRange(r.Method, bucket, &msg2, query); err != nil {
 		p.writeErr(w, r, err)
 	}

@@ -879,7 +879,7 @@ func (h *httprunner) setDaemonConfigMsg(w http.ResponseWriter, r *http.Request, 
 	transient := cos.IsParseBool(r.URL.Query().Get(cmn.ActTransient))
 	toUpdate := &cmn.ConfigToUpdate{}
 	if err := cos.MorphMarshal(msg.Value, toUpdate); err != nil {
-		h.writeErrf(w, r, "failed to parse configuration to update, err: %v", err)
+		h.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, h.si, msg.Action, msg.Value, err)
 		return
 	}
 

@@ -58,7 +58,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := cos.MorphMarshal(msg.Value, &xactMsg); err != nil {
-			t.writeErr(w, r, err)
+			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
 			return
 		}
 		if !xactMsg.Bck.IsEmpty() {

@@ -582,7 +582,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActDelete, cmn.ActEvictObjects:
 		lrMsg := &cmn.ListRangeMsg{}
 		if err := cos.MorphMarshal(msg.Value, lrMsg); err != nil {
-			t.writeErrf(w, r, "%s failure to unmarshal for action %s: %v", t.si, msg.Action, err)
+			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
 			return
 		}
 		rns := xreg.RenewEvictDelete(msg.UUID, t, msg.Action /*xaction kind*/, request.bck, lrMsg)
@@ -641,7 +641,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err = cos.MorphMarshal(msg.Value, lrMsg); err != nil {
-			t.writeErrf(w, r, "%s failure to unmarshal for action %s: %v", t.si, msg.Action, err)
+			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
 			return
 		}
 		rns := xreg.RenewPrefetch(msg.UUID, t, request.bck, lrMsg)
@@ -1108,7 +1108,7 @@ func (t *targetrunner) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 	}
 	custom := cos.SimpleKVs{}
 	if err := cos.MorphMarshal(msg.Value, &custom); err != nil {
-		t.writeErr(w, r, err)
+		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, "set-custom", msg.Value, err)
 		return
 	}
 	lom := cluster.AllocLOM(request.items[1] /*objName*/)
@@ -1490,12 +1490,11 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
-
 	promoteArgs := cmn.ActValPromote{}
 	if err := cos.MorphMarshal(msg.Value, &promoteArgs); err != nil {
+		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
 		return
 	}
-
 	if promoteArgs.Target != "" && promoteArgs.Target != t.si.ID() {
 		glog.Errorf("%s: unexpected target ID %s mismatch", t.si, promoteArgs.Target)
 	}

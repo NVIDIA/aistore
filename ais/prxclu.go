@@ -709,7 +709,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActSetConfig:
 		toUpdate := &cmn.ConfigToUpdate{}
 		if err := cos.MorphMarshal(msg.Value, toUpdate); err != nil {
-			p.writeErrf(w, r, "%s: failed to parse value, err: %v", cmn.ActSetConfig, err)
+			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
 		}
 		p.setClusterConfig(w, r, toUpdate, msg)
@@ -796,7 +796,7 @@ func (p *proxyrunner) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
 func (p *proxyrunner) xactStarStop(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	xactMsg := xaction.XactReqMsg{}
 	if err := cos.MorphMarshal(msg.Value, &xactMsg); err != nil {
-		p.writeErr(w, r, err)
+		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
 	if msg.Action == cmn.ActXactStart {
@@ -890,7 +890,7 @@ func (p *proxyrunner) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *cm
 		dstID string
 	)
 	if err := cos.MorphMarshal(msg.Value, &dstID); err != nil {
-		p.writeErr(w, r, err)
+		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
 	dst := smap.GetProxy(dstID)
@@ -940,7 +940,7 @@ func (p *proxyrunner) rmNode(w http.ResponseWriter, r *http.Request, msg *cmn.Ac
 		return
 	}
 	if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
-		p.writeErr(w, r, err)
+		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
 	si := smap.GetNode(opts.DaemonID)
@@ -988,7 +988,7 @@ func (p *proxyrunner) stopMaintenance(w http.ResponseWriter, r *http.Request, ms
 		smap = p.owner.smap.get()
 	)
 	if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
-		p.writeErr(w, r, err)
+		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
 	si := smap.GetNode(opts.DaemonID)

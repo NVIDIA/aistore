@@ -17,9 +17,7 @@ func BenchmarkActionMsgMarshal(b *testing.B) {
 		msg := cmn.ActionMsg{
 			Name:   "test-name",
 			Action: cmn.ActDelete,
-			Value: &cmn.RangeMsg{
-				Template: "thisisatemplate",
-			},
+			Value:  &cmn.ListRangeMsg{Template: "thisisatemplate"},
 		}
 		data, err := jsoniter.Marshal(&msg)
 		if err != nil {
@@ -30,7 +28,7 @@ func BenchmarkActionMsgMarshal(b *testing.B) {
 		if err != nil {
 			b.Errorf("unmarshaling errored: %v", err)
 		}
-		err = cos.MorphMarshal(msg2.Value, &cmn.RangeMsg{})
+		err = cos.MorphMarshal(msg2.Value, &cmn.ListRangeMsg{})
 		if err != nil {
 			b.Errorf("morph unmarshal errored: %v", err)
 		}
