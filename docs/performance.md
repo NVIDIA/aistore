@@ -109,6 +109,17 @@ Storage-wise, each local `ais_local.json` config must be looking as follows:
 * Each local filesystem (above) must utilize one or more data drives, whereby none of the data drives is shared between two or more local filesystems.
 * Each filesystem must be fine-tuned for reading large files/blocks/xfersizes.
 
+### Disk priority
+
+AIStore can be sensitive to spikes in I/O latencies, especially when running bursty traffic that carries large numbers of small-size I/O requests (resulting from writing and/or reading small-size objects).
+To ensure that latencies do not spike because of some other processes running on the system it is recommended to give `aisnode` process the highest disk priority.
+This can be done using [`ionice` tool](https://linux.die.net/man/1/ionice).
+
+```console
+$ # Best effort, highest priority
+$ sudo ionice -c2 -n0 -p $(pgrep aisnode)
+```
+
 ### Block settings
 
 When initializing the disk it is necessary to set proper block size: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/disk-performance.html
