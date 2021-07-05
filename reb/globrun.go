@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
@@ -192,7 +193,9 @@ func (reb *Manager) serialize(md *rebArgs) (newerRMD, alreadyRunning bool) {
 			if canRun {
 				return
 			}
-			if otherXreb.ID().Int() < md.id {
+			otherRebID, err := xaction.S2RebID(otherXreb.ID())
+			debug.AssertNoErr(err)
+			if otherRebID < md.id {
 				otherXreb.Abort()
 				glog.Warningf("%s: aborting older [%s]", logHdr, otherXreb)
 			}

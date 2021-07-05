@@ -1,4 +1,5 @@
-// Package mirror provides local mirroring and replica management
+// Package xs contains eXtended actions (xactions) except storage services
+// (mirror, ec) and extensions (downloader, lru).
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */

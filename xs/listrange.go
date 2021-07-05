@@ -1,4 +1,5 @@
-// Package runners provides implementation for the AIStore extended actions.
+// Package xs contains eXtended actions (xactions) except storage services
+// (mirror, ec) and extensions (downloader, lru).
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
@@ -98,7 +99,7 @@ func (p *evdFactory) Get() cluster.Xact { return p.xact }
 
 func newEvictDelete(xargs *xreg.XactArgs, kind string, bck cmn.Bck, msg *cmn.ListRangeMsg) (ed *evictDelete) {
 	ed = &evictDelete{
-		XactBase: *xaction.NewXactBase(xaction.Args{ID: xaction.BaseID(xargs.UUID), Kind: kind, Bck: &bck}),
+		XactBase: *xaction.NewXactBase(xaction.Args{ID: xargs.UUID, Kind: kind, Bck: &bck}),
 		_lrBase:  _lrBase{t: xargs.T, ctx: xargs.Ctx, msg: msg},
 	}
 	ed._lrBase.xact = ed
@@ -162,7 +163,7 @@ func (p *prfFactory) Get() cluster.Xact { return p.xact }
 
 func newPrefetch(xargs *xreg.XactArgs, kind string, bck cmn.Bck, msg *cmn.ListRangeMsg) (prf *prefetch) {
 	prf = &prefetch{
-		XactBase: *xaction.NewXactBase(xaction.Args{ID: xaction.BaseID(xargs.UUID), Kind: kind, Bck: &bck}),
+		XactBase: *xaction.NewXactBase(xaction.Args{ID: xargs.UUID, Kind: kind, Bck: &bck}),
 		_lrBase:  _lrBase{t: xargs.T, ctx: xargs.Ctx, msg: msg},
 	}
 	prf._lrBase.xact = prf

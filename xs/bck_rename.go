@@ -1,4 +1,5 @@
-// Package runners provides implementation for the AIStore extended actions.
+// Package xs contains eXtended actions (xactions) except storage services
+// (mirror, ec) and extensions (downloader, lru).
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -30,7 +31,7 @@ type (
 		t       cluster.Target
 		bckFrom *cluster.Bck
 		bckTo   *cluster.Bck
-		rebID   xaction.RebID
+		rebID   string
 	}
 )
 
@@ -79,9 +80,8 @@ func (p *MovFactory) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, er
 
 func (*MovFactory) PostRenewHook(_ xreg.BucketEntry) {}
 
-func newBckRename(uuid, kind string, bck cmn.Bck, t cluster.Target,
-	bckFrom, bckTo *cluster.Bck, rebID xaction.RebID) *bckRename {
-	args := xaction.Args{ID: xaction.BaseID(uuid), Kind: kind, Bck: &bck}
+func newBckRename(uuid, kind string, bck cmn.Bck, t cluster.Target, bckFrom, bckTo *cluster.Bck, rebID string) *bckRename {
+	args := xaction.Args{ID: uuid, Kind: kind, Bck: &bck}
 	return &bckRename{
 		XactBase: *xaction.NewXactBase(args),
 		t:        t,
@@ -93,14 +93,14 @@ func newBckRename(uuid, kind string, bck cmn.Bck, t cluster.Target,
 
 func (r *bckRename) String() string { return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.bckFrom) }
 
+// NOTE: assuming that rebalance takes longer than resilvering
 func (r *bckRename) Run() {
-	glog.Infoln(r.String())
-	// FIXME: smart wait for resilver. For now assuming that rebalance takes longer than resilver.
 	var (
-		onlyRunning, finished bool
-
-		flt = xreg.XactFilter{ID: r.rebID.String(), Kind: cmn.ActRebalance, OnlyRunning: &onlyRunning}
+		onlyRunning bool
+		finished    bool
+		flt         = xreg.XactFilter{ID: r.rebID, Kind: cmn.ActRebalance, OnlyRunning: &onlyRunning}
 	)
+	glog.Infoln(r.String())
 	for !finished {
 		time.Sleep(10 * time.Second)
 		rebStats, err := xreg.GetStats(flt)

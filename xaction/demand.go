@@ -62,7 +62,7 @@ func NewXDB(args Args, idleTimes ...time.Duration) *XactDemandBase {
 	var (
 		hkName          string
 		totally, likely = totallyIdle, likelyIdle
-		uuid            = args.ID.String()
+		uuid            = args.ID
 	)
 	if len(idleTimes) != 0 {
 		debug.Assert(len(idleTimes) == 2)
@@ -121,7 +121,7 @@ func (r *XactDemandBase) Stop() {
 func (r *XactDemandBase) Stats() cluster.XactStats {
 	return &BaseXactStatsExt{
 		BaseXactStats: BaseXactStats{
-			IDX:         r.ID().String(),
+			IDX:         r.ID(),
 			KindX:       r.Kind(),
 			StartTimeX:  r.StartTime(),
 			EndTimeX:    r.EndTime(),

@@ -1,4 +1,5 @@
-// Package runners provides implementation for the AIStore extended actions.
+// Package xs contains eXtended actions (xactions) except storage services
+// (mirror, ec) and extensions (downloader, lru).
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -66,7 +67,7 @@ func (xact *RebBase) String() string {
 //
 // resilver|rebalance helper
 //
-func makeXactRebBase(id cluster.XactID, kind string) RebBase {
+func makeXactRebBase(id, kind string) RebBase {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	args := xaction.Args{ID: id, Kind: kind}
@@ -92,7 +93,7 @@ func (p *rebFactory) Get() cluster.Xact { return p.xact }
 func (p *rebFactory) PreRenewHook(previousEntry xreg.GlobalEntry) (keep bool) {
 	xreb := previousEntry.(*rebFactory)
 	if xreb.args.ID > p.args.ID {
-		glog.Errorf("(reb: %s) g%d is greater than g%d", xreb.xact, xreb.args.ID, p.args.ID)
+		glog.Errorf("(reb: %s) %s is greater than %s", xreb.xact, xreb.args.ID, p.args.ID)
 		keep = true
 	} else if xreb.args.ID == p.args.ID {
 		if glog.FastV(4, glog.SmoduleAIS) {
@@ -109,7 +110,7 @@ func (*rebFactory) PostRenewHook(previousEntry xreg.GlobalEntry) {
 	xreb.WaitForFinish()
 }
 
-func NewRebalance(id cluster.XactID, kind string, statTracker stats.Tracker, getMarked getMarked) *Rebalance {
+func NewRebalance(id, kind string, statTracker stats.Tracker, getMarked getMarked) *Rebalance {
 	return &Rebalance{
 		RebBase:      makeXactRebBase(id, kind),
 		statTracker:  statTracker,
@@ -133,7 +134,9 @@ func (xact *Rebalance) Stats() cluster.XactStats {
 	rebStats.Ext.RebRxCount = statsRunner.Get(stats.RebRxCount)
 	rebStats.Ext.RebRxSize = statsRunner.Get(stats.RebRxSize)
 	if marked := xact.getRebMarked(); marked.Xact != nil {
-		rebStats.Ext.RebID = marked.Xact.ID().Int()
+		var err error
+		rebStats.Ext.RebID, err = xaction.S2RebID(marked.Xact.ID())
+		debug.AssertNoErr(err)
 	} else {
 		rebStats.Ext.RebID = 0
 	}
@@ -166,9 +169,7 @@ func (*resilverFactory) PostRenewHook(previousEntry xreg.GlobalEntry) {
 }
 
 func NewResilver(uuid, kind string) *Resilver {
-	return &Resilver{
-		RebBase: makeXactRebBase(xaction.BaseID(uuid), kind),
-	}
+	return &Resilver{RebBase: makeXactRebBase(uuid, kind)}
 }
 
 func (xact *Resilver) String() string {

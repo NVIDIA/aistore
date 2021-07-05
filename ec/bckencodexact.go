@@ -78,7 +78,7 @@ func (p *encFactory) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, er
 ///////////////////
 
 func NewXactBckEncode(bck cmn.Bck, t cluster.Target, uuid string) *XactBckEncode {
-	args := xaction.Args{ID: xaction.BaseID(uuid), Kind: cmn.ActECEncode, Bck: &bck}
+	args := xaction.Args{ID: uuid, Kind: cmn.ActECEncode, Bck: &bck}
 	return &XactBckEncode{
 		XactBase: *xaction.NewXactBase(args),
 		t:        t,

@@ -1,4 +1,4 @@
-// Package registry provides core functionality for the AIStore extended actions xreg.
+// Package xs_test contains xs unit test.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */

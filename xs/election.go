@@ -1,4 +1,5 @@
-// Package runners provides implementation for the AIStore extended actions.
+// Package xs contains eXtended actions (xactions) except storage services
+// (mirror, ec) and extensions (downloader, lru).
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -31,7 +32,7 @@ var (
 func (*eleFactory) New(_ xreg.XactArgs) xreg.GlobalEntry { return &eleFactory{} }
 
 func (p *eleFactory) Start(_ cmn.Bck) error {
-	args := xaction.Args{ID: xaction.BaseID(cos.GenUUID()), Kind: cmn.ActElection}
+	args := xaction.Args{ID: cos.GenUUID(), Kind: cmn.ActElection}
 	p.xact = &Election{XactBase: *xaction.NewXactBase(args)}
 	return nil
 }

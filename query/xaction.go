@@ -47,7 +47,7 @@ type (
 )
 
 func NewObjectsListing(ctx context.Context, t cluster.Target, query *ObjectsQuery, msg *cmn.SelectMsg) *ObjectsListingXact {
-	args := xaction.Args{ID: xaction.BaseID(msg.UUID), Kind: cmn.ActQueryObjects, Bck: &query.BckSource.Bck.Bck}
+	args := xaction.Args{ID: msg.UUID, Kind: cmn.ActQueryObjects, Bck: &query.BckSource.Bck.Bck}
 	return &ObjectsListingXact{
 		XactBase: *xaction.NewXactBase(args),
 		t:        t,
@@ -70,7 +70,7 @@ func (r *ObjectsListingXact) Run() {
 	debug.Assert(r.query.BckSource != nil)
 	debug.Assert(r.query.BckSource.Bck != nil)
 
-	Registry.Put(r.ID().String(), r)
+	Registry.Put(r.ID(), r)
 
 	if r.query.ObjectsSource.Pt != nil {
 		r.startFromTemplate()
@@ -145,7 +145,7 @@ func (r *ObjectsListingXact) startFromBck() {
 
 	// TODO: filtering for cloud buckets is not yet supported.
 	if bck.IsCloud() && !r.msg.IsFlagSet(cmn.SelectCached) {
-		si, err := cluster.HrwTargetTask(r.ID().String(), r.t.Sowner().Get())
+		si, err := cluster.HrwTargetTask(r.ID(), r.t.Sowner().Get())
 		if err != nil {
 			// TODO: should we handle it somehow?
 			return
@@ -247,7 +247,7 @@ func (r *ObjectsListingXact) discardN(n uint) {
 	}
 
 	if r.fetchingDone.Load() && len(r.buff) == 0 {
-		Registry.Delete(r.ID().String())
+		Registry.Delete(r.ID())
 		r.Finish(nil)
 	}
 }

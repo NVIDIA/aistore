@@ -2611,8 +2611,7 @@ func (p *proxyrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err
 	// Register `nl` for rebalance/resilver
 	smap := p.owner.smap.get()
 	if smap.IsIC(p.si) && smap.CountActiveTargets() > 0 {
-		nl := xaction.NewXactNL(xaction.RebID(newRMD.Version).String(),
-			cmn.ActRebalance, &smap.Smap, nil)
+		nl := xaction.NewXactNL(xaction.RebID2S(newRMD.Version), cmn.ActRebalance, &smap.Smap, nil)
 		nl.SetOwner(equalIC)
 		err := p.notifs.add(nl)
 		cos.AssertNoErr(err)

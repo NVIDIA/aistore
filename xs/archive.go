@@ -1,4 +1,5 @@
-// Package mirror provides local mirroring and replica management
+// Package xs contains eXtended actions (xactions) except storage services
+// (mirror, ec) and extensions (downloader, lru).
 /*
  * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  */
@@ -76,7 +77,7 @@ func (p *archFactory) Get() cluster.Xact { return p.xact }
 
 func (p *archFactory) Start(bckFrom cmn.Bck) error {
 	var (
-		xargs       = xaction.Args{ID: xaction.BaseID(p.uuid), Kind: cmn.ActArchive, Bck: &bckFrom}
+		xargs       = xaction.Args{ID: p.uuid, Kind: cmn.ActArchive, Bck: &bckFrom}
 		config      = cmn.GCO.Get()
 		totallyIdle = config.Timeout.SendFile.D()
 		likelyIdle  = config.Timeout.MaxKeepalive.D()

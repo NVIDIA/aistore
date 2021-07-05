@@ -31,7 +31,7 @@ type (
 	}
 
 	RebalanceArgs struct {
-		ID          xaction.RebID
+		ID          string
 		StatTracker stats.Tracker
 	}
 )
@@ -69,7 +69,7 @@ func RenewRebalance(id int64, statTracker stats.Tracker) cluster.Xact {
 
 func (r *registry) renewRebalance(id int64, statTracker stats.Tracker) cluster.Xact {
 	e := r.globalXacts[cmn.ActRebalance].New(XactArgs{Custom: &RebalanceArgs{
-		ID:          xaction.RebID(id),
+		ID:          xaction.RebID2S(id),
 		StatTracker: statTracker,
 	}})
 	res := r.renewGlobalXaction(e)

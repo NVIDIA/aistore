@@ -1,4 +1,5 @@
-// Package objlist provides xaction and utilities for listing bucket objects.
+// Package xs contains eXtended actions (xactions) except storage services
+// (mirror, ec) and extensions (downloader, lru).
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -106,7 +107,7 @@ func newXact(ctx context.Context, t cluster.Target, bck cmn.Bck, smsg *cmn.Selec
 		lastPage: make([]*cmn.BucketEntry, 0, cacheSize),
 	}
 	cos.Assert(xact.bck.Props != nil)
-	args := xaction.Args{ID: xaction.BaseID(uuid), Kind: cmn.ActList, Bck: &bck}
+	args := xaction.Args{ID: uuid, Kind: cmn.ActList, Bck: &bck}
 	xact.XactDemandBase = *xaction.NewXDB(args, totallyIdle, likelyIdle)
 	xact.InitIdle()
 	return xact

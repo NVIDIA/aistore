@@ -502,7 +502,7 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 		return
 	}
 	if ctx.rmd != nil {
-		xactID = xaction.RebID(ctx.rmd.Version).String()
+		xactID = xaction.RebID2S(ctx.rmd.Version)
 	}
 	return
 }
@@ -567,8 +567,7 @@ func (p *proxyrunner) _updFinal(ctx *smapModifier, clone *smapX) {
 	pairs = append(pairs, revsPair{clone, aisMsg}, revsPair{bmd, aisMsg})
 	if ctx.rmd != nil && ctx.nsi.IsTarget() {
 		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
-		nl := xaction.NewXactNL(xaction.RebID(ctx.rmd.version()).String(),
-			cmn.ActRebalance, &clone.Smap, nil)
+		nl := xaction.NewXactNL(xaction.RebID2S(ctx.rmd.version()), cmn.ActRebalance, &clone.Smap, nil)
 		nl.SetOwner(equalIC)
 		// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
 		err := p.notifs.add(nl)
@@ -654,8 +653,7 @@ func (p *proxyrunner) _syncFinal(ctx *smapModifier, clone *smapX) {
 	)
 	pairs = append(pairs, revsPair{clone, aisMsg})
 	if ctx.rmd != nil {
-		nl := xaction.NewXactNL(xaction.RebID(ctx.rmd.version()).String(),
-			cmn.ActRebalance, &clone.Smap, nil)
+		nl := xaction.NewXactNL(xaction.RebID2S(ctx.rmd.version()), cmn.ActRebalance, &clone.Smap, nil)
 		nl.SetOwner(equalIC)
 		// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
 		err := p.notifs.add(nl)
@@ -851,7 +849,7 @@ func (p *proxyrunner) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err)
 		return
 	}
-	w.Write([]byte(xaction.RebID(rmdClone.version()).String()))
+	w.Write([]byte(xaction.RebID2S(rmdClone.version())))
 }
 
 func (p *proxyrunner) resilverOne(w http.ResponseWriter, r *http.Request,
@@ -977,8 +975,8 @@ func (p *proxyrunner) rmNode(w http.ResponseWriter, r *http.Request, msg *cmn.Ac
 		p.writeErrf(w, r, cmn.FmtErrFailed, p.si, msg.Action, si, err)
 		return
 	}
-	if rebID != 0 {
-		w.Write([]byte(rebID.String()))
+	if rebID != "" {
+		w.Write([]byte(rebID))
 	}
 }
 
@@ -1006,8 +1004,8 @@ func (p *proxyrunner) stopMaintenance(w http.ResponseWriter, r *http.Request, ms
 		p.writeErr(w, r, err)
 		return
 	}
-	if rebID != 0 {
-		w.Write([]byte(rebID.String()))
+	if rebID != "" {
+		w.Write([]byte(rebID))
 	}
 }
 
@@ -1142,7 +1140,7 @@ func (p *proxyrunner) removeAfterRebalance(nl nl.NotifListener, msg *cmn.ActionM
 
 // Run rebalance if needed; remove self from the cluster when rebalance finishes
 // the method handles msg.Action == cmn.ActStartMaintenance | cmn.ActDecommission | cmn.ActShutdownNode
-func (p *proxyrunner) rebalanceAndRmSelf(msg *cmn.ActionMsg, si *cluster.Snode) (rebID xaction.RebID, err error) {
+func (p *proxyrunner) rebalanceAndRmSelf(msg *cmn.ActionMsg, si *cluster.Snode) (rebID string, err error) {
 	smap := p.owner.smap.get()
 	if smap.CountActiveTargets() < 2 {
 		if glog.FastV(4, glog.SmoduleAIS) {
@@ -1173,14 +1171,13 @@ func (p *proxyrunner) rebalanceAndRmSelf(msg *cmn.ActionMsg, si *cluster.Snode) 
 		glog.Error(err)
 		debug.AssertNoErr(err)
 	} else {
-		rebID = xaction.RebID(rmdClone.version())
+		rebID = xaction.RebID2S(rmdClone.version())
 	}
 	return
 }
 
 // Stops rebalance if needed, do cleanup, and get the node back to the cluster.
-func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, si *cluster.Snode, opts *cmn.ActValRmNode) (rebID xaction.RebID,
-	err error) {
+func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, si *cluster.Snode, opts *cmn.ActValRmNode) (rebID string, err error) {
 	ctx := &smapModifier{
 		pre:      p._cancelMaintPre,
 		post:     p._perfRebPost,
@@ -1193,7 +1190,7 @@ func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, si *cluster.Snode, o
 	}
 	err = p.owner.smap.modify(ctx)
 	if ctx.rmd != nil {
-		rebID = xaction.RebID(ctx.rmd.Version)
+		rebID = xaction.RebID2S(ctx.rmd.Version)
 	}
 	return
 }
@@ -1210,8 +1207,7 @@ func (p *proxyrunner) _cancelMaintPre(ctx *smapModifier, clone *smapX) error {
 
 func (p *proxyrunner) _syncRMDFinal(ctx *rmdModifier, clone *rebMD) {
 	wg := p.metasyncer.sync(revsPair{clone, p.newAmsg(ctx.msg, nil)})
-	nl := xaction.NewXactNL(xaction.RebID(clone.Version).String(),
-		cmn.ActRebalance, &ctx.smap.Smap, nil)
+	nl := xaction.NewXactNL(xaction.RebID2S(clone.Version), cmn.ActRebalance, &ctx.smap.Smap, nil)
 	nl.SetOwner(equalIC)
 	if ctx.rebCB != nil {
 		nl.F = ctx.rebCB

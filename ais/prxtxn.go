@@ -430,8 +430,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	wg := p.metasyncer.sync(revsPair{rmd, c.msg})
 
 	// Register rebalance `nl`
-	nl = xaction.NewXactNL(xaction.RebID(rmd.Version).String(),
-		cmn.ActRebalance, &c.smap.Smap, nil)
+	nl = xaction.NewXactNL(xaction.RebID2S(rmd.Version), cmn.ActRebalance, &c.smap.Smap, nil)
 	nl.SetOwner(equalIC)
 
 	// Rely on metasync to register rebalance/resilver `nl` on all IC members.  See `p.receiveRMD`.
@@ -704,7 +703,7 @@ func (p *proxyrunner) putArchive(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 }
 
 // maintenance: { begin -- enable GFN -- commit -- start rebalance }
-func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, opts *cmn.ActValRmNode) (rebID xaction.RebID, err error) {
+func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, opts *cmn.ActValRmNode) (rebID string, err error) {
 	var (
 		waitmsync  = false
 		c          = p.prepTxnClient(msg, nil, waitmsync)

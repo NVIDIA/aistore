@@ -65,7 +65,7 @@ type (
 	}
 
 	BckRenameArgs struct {
-		RebID   xaction.RebID
+		RebID   string
 		BckFrom *cluster.Bck
 		BckTo   *cluster.Bck
 	}
@@ -258,7 +258,7 @@ func (r *registry) renewBckRename(t cluster.Target, bckFrom, bckTo *cluster.Bck,
 		UUID:  uuid,
 		Phase: phase,
 		Custom: &BckRenameArgs{
-			RebID:   xaction.RebID(rmdVersion),
+			RebID:   xaction.RebID2S(rmdVersion),
 			BckFrom: bckFrom,
 			BckTo:   bckTo,
 		},

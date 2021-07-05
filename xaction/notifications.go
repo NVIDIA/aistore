@@ -78,7 +78,7 @@ func (nxb *NotifXactListener) AbortArgs() cmn.ReqArgs {
 //
 func (nx *NotifXact) ToNotifMsg() cluster.NotifMsg {
 	return cluster.NotifMsg{
-		UUID: nx.Xact.ID().String(),
+		UUID: nx.Xact.ID(),
 		Kind: nx.Xact.Kind(),
 		Data: cos.MustMarshal(nx.Xact.Stats()),
 	}

@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -23,12 +22,12 @@ import (
 
 type (
 	Args struct {
-		ID   cluster.XactID
+		ID   string
 		Kind string
 		Bck  *cmn.Bck
 	}
 	XactBase struct {
-		id      cluster.XactID
+		id      string
 		sutime  atomic.Int64
 		eutime  atomic.Int64
 		objects atomic.Int64
@@ -46,43 +45,9 @@ type (
 	ErrXactExpired struct { // return it if called (right) after self-termination
 		msg string
 	}
-
-	BaseID string
-	RebID  int64
-)
-
-var (
-	_ cluster.XactID = BaseID("")
-	_ cluster.XactID = RebID(0)
 )
 
 var IncInactive func()
-
-///////////
-// RebID //
-///////////
-
-func (id RebID) String() string { return fmt.Sprintf("g%d", id) }
-func (id RebID) Int() int64     { return int64(id) }
-
-func (id RebID) Compare(other string) int {
-	var (
-		o   int64
-		err error
-	)
-	if o, err = strconv.ParseInt(other, 10, 64); err != nil {
-		if o, err = strconv.ParseInt(other[1:], 10, 64); err != nil {
-			return -1
-		}
-	}
-	if int64(id) < o {
-		return -1
-	}
-	if int64(id) > o {
-		return 1
-	}
-	return 0
-}
 
 //////////////
 // XactBase - partially implements Xact interface
@@ -90,7 +55,7 @@ func (id RebID) Compare(other string) int {
 
 func NewXactBase(args Args) (xact *XactBase) {
 	debug.Assert(args.Kind != "")
-	debug.Assertf(args.ID != BaseID(""), "%v", args)
+	debug.Assertf(args.ID != "", "%v", args)
 	xact = &XactBase{id: args.ID, kind: args.Kind, abrt: make(chan struct{})}
 	if args.Bck != nil {
 		xact.bck = *args.Bck
@@ -99,7 +64,7 @@ func NewXactBase(args Args) (xact *XactBase) {
 	return
 }
 
-func (xact *XactBase) ID() cluster.XactID         { return xact.id }
+func (xact *XactBase) ID() string                 { return xact.id }
 func (xact *XactBase) Kind() string               { return xact.kind }
 func (xact *XactBase) Bck() cmn.Bck               { return xact.bck }
 func (xact *XactBase) Finished() bool             { return xact.eutime.Load() != 0 }
@@ -248,7 +213,7 @@ func (xact *XactBase) BytesAdd(size int64) int64  { return xact.bytes.Add(size) 
 
 func (xact *XactBase) Stats() cluster.XactStats {
 	return &BaseXactStats{
-		IDX:         xact.ID().String(),
+		IDX:         xact.ID(),
 		KindX:       xact.Kind(),
 		StartTimeX:  xact.StartTime(),
 		EndTimeX:    xact.EndTime(),
@@ -259,12 +224,29 @@ func (xact *XactBase) Stats() cluster.XactStats {
 	}
 }
 
-func (id BaseID) String() string           { return string(id) }
-func (BaseID) Int() int64                  { cos.Assert(false); return 0 }
-func (id BaseID) Compare(other string) int { return strings.Compare(string(id), other) }
-
 // errors
 
 func NewErrXactExpired(msg string) *ErrXactExpired { return &ErrXactExpired{msg: msg} }
 func (e *ErrXactExpired) Error() string            { return e.msg }
 func IsErrXactExpired(err error) bool              { _, ok := err.(*ErrXactExpired); return ok }
+
+// RebID helpers
+
+func RebID2S(id int64) string          { return fmt.Sprintf("g%d", id) }
+func S2RebID(id string) (int64, error) { return strconv.ParseInt(id[1:], 10, 64) }
+
+func CompareRebIDs(a, b string) int {
+	if ai, err := S2RebID(a); err != nil {
+		debug.AssertMsg(false, a)
+	} else if bi, err := S2RebID(b); err != nil {
+		debug.AssertMsg(false, b)
+	} else {
+		if ai < bi {
+			return -1
+		}
+		if ai > bi {
+			return 1
+		}
+	}
+	return 0
+}

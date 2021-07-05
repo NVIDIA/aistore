@@ -114,7 +114,7 @@ func GetXact(uuid string) (xact cluster.Xact) { return defaultReg.getXact(uuid) 
 func (r *registry) getXact(uuid string) (xact cluster.Xact) {
 	r.entries.forEach(func(entry BaseEntry) bool {
 		x := entry.Get()
-		if x != nil && x.ID().Compare(uuid) == 0 {
+		if x != nil && x.ID() == uuid {
 			xact = x
 			return false
 		}
@@ -230,10 +230,11 @@ func (r *registry) getStats(flt XactFilter) ([]cluster.XactStats, error) {
 		}
 		return r.matchingXactsStats(func(xact cluster.Xact) bool {
 			if xact.Kind() == cmn.ActRebalance {
-				// Any rebalance after a given ID that finished and was not aborted
-				return xact.ID().Compare(flt.ID) >= 0 && xact.Finished() && !xact.Aborted()
+				// Any rebalance at or after a given ID that finished and was not aborted
+				cmp := xaction.CompareRebIDs(xact.ID(), flt.ID)
+				return cmp >= 0 && xact.Finished() && !xact.Aborted()
 			}
-			return xact.ID().Compare(flt.ID) == 0 && xact.Finished() && !xact.Aborted()
+			return xact.ID() == flt.ID && xact.Finished() && !xact.Aborted()
 		}), nil
 	}
 	if flt.Bck != nil || flt.Kind != "" {
@@ -317,7 +318,7 @@ func (r *registry) matchingXactsStats(match func(xact cluster.Xact) bool) []clus
 
 func (r *registry) matchXactsStatsByID(xactID string) ([]cluster.XactStats, error) {
 	matchedStat := r.matchingXactsStats(func(xact cluster.Xact) bool {
-		return xact.ID().Compare(xactID) == 0
+		return xact.ID() == xactID
 	})
 	if len(matchedStat) == 0 {
 		return nil, cmn.NewXactionNotFoundError("ID=" + xactID)
@@ -366,7 +367,7 @@ func (r *registry) hkDelOld() time.Duration {
 			return
 		}
 		if xact.EndTime().Add(entryOldAge).Before(now) {
-			toRemove = append(toRemove, eID.String())
+			toRemove = append(toRemove, eID)
 		}
 		return
 	})
@@ -507,7 +508,7 @@ func (e *entries) forEach(matcher func(entry BaseEntry) bool) {
 func (e *entries) del(id string) error {
 	for idx, entry := range e.entries {
 		xact := entry.Get()
-		if xact.ID().String() == id {
+		if xact.ID() == id {
 			if !xact.Finished() {
 				return fmt.Errorf("cannot remove %s - is running", xact)
 			}
@@ -519,7 +520,7 @@ func (e *entries) del(id string) error {
 	}
 	for idx, entry := range e.active {
 		xact := entry.Get()
-		if xact.ID().String() == id {
+		if xact.ID() == id {
 			debug.AssertMsg(xact.Finished(), xact.String())
 			nlen := len(e.active) - 1
 			e.active[idx] = e.active[nlen]
@@ -578,7 +579,7 @@ func (rxf XactFilter) genericMatcher(xact cluster.Xact) bool {
 
 func matchEntry(entry BaseEntry, flt XactFilter) (matches bool) {
 	if flt.ID != "" {
-		return entry.Get().ID().Compare(flt.ID) == 0
+		return entry.Get().ID() == flt.ID
 	}
 	if entry.Kind() == flt.Kind {
 		if flt.Bck == nil || flt.Bck.IsEmpty() {

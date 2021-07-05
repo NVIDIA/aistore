@@ -50,7 +50,7 @@ var (
 /////////////////////////
 
 func (e *bckSummaryTaskEntry) Start(bck cmn.Bck) error {
-	args := xaction.Args{ID: xaction.BaseID(e.uuid), Kind: cmn.ActSummary, Bck: &bck}
+	args := xaction.Args{ID: e.uuid, Kind: cmn.ActSummary, Bck: &bck}
 	xact := &bckSummaryTask{
 		XactBase: *xaction.NewXactBase(args),
 		t:        e.t,

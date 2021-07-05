@@ -18,7 +18,7 @@ type XactBckJog struct {
 }
 
 func NewXactBckJog(id, kind string, bck cmn.Bck, opts *mpather.JoggerGroupOpts) *XactBckJog {
-	args := Args{ID: BaseID(id), Kind: kind, Bck: &bck}
+	args := Args{ID: id, Kind: kind, Bck: &bck}
 	base := &XactBckJog{XactBase: *NewXactBase(args), t: opts.T}
 	base.joggers = mpather.NewJoggerGroup(opts)
 	return base

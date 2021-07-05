@@ -11,18 +11,12 @@ import (
 )
 
 type (
-	XactID interface {
-		String() string
-		Int() int64
-		Compare(string) int // -1 = less, 0 = equal, +1 = greater
-	}
-
 	QuiRes int
 	QuiCB  func(elapsed time.Duration) QuiRes // see enum below
 
 	Xact interface {
 		Run()
-		ID() XactID
+		ID() string
 		Kind() string
 		Bck() cmn.Bck
 		StartTime() time.Time
