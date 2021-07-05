@@ -27,7 +27,13 @@ Setting CPU governor (P-States) to `performance` may make a big difference and, 
 
 * [Recent Linux TCP Updates, and how to tune your 100G host](https://fasterdata.es.net/assets/Papers-and-Publications/100G-Tuning-TechEx2016.tierney.pdf) (slide 13)
 
-On `Debian` and `Ubuntu`:
+On `Linux`:
+
+```console
+$ echo performance | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
+```
+
+or using `cpupower` package (on `Debian` and `Ubuntu`):
 
 ```console
 $ apt-get install -y linux-tools-$(uname -r) # install `cpupower`
