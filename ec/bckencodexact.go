@@ -46,10 +46,11 @@ var (
 ////////////////
 
 func (*encFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
+	custom := args.Custom.(*xreg.ECEncodeArgs)
 	return &encFactory{
 		t:     args.T,
 		uuid:  args.UUID,
-		phase: args.Phase,
+		phase: custom.Phase,
 	}
 }
 
@@ -77,15 +78,10 @@ func (p *encFactory) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, er
 // XactBckEncode //
 ///////////////////
 
-func NewXactBckEncode(bck cmn.Bck, t cluster.Target, uuid string) *XactBckEncode {
-	args := xaction.Args{ID: uuid, Kind: cmn.ActECEncode, Bck: &bck}
-	return &XactBckEncode{
-		XactBase: *xaction.NewXactBase(args),
-		t:        t,
-		bck:      bck,
-		wg:       &sync.WaitGroup{},
-		smap:     t.Sowner().Get(),
-	}
+func NewXactBckEncode(bck cmn.Bck, t cluster.Target, uuid string) (r *XactBckEncode) {
+	r = &XactBckEncode{t: t, bck: bck, wg: &sync.WaitGroup{}, smap: t.Sowner().Get()}
+	r.InitBase(uuid, cmn.ActECEncode, &bck)
+	return
 }
 
 func (r *XactBckEncode) Run() {

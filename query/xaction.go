@@ -46,10 +46,8 @@ type (
 	}
 )
 
-func NewObjectsListing(ctx context.Context, t cluster.Target, query *ObjectsQuery, msg *cmn.SelectMsg) *ObjectsListingXact {
-	args := xaction.Args{ID: msg.UUID, Kind: cmn.ActQueryObjects, Bck: &query.BckSource.Bck.Bck}
-	return &ObjectsListingXact{
-		XactBase: *xaction.NewXactBase(args),
+func NewObjectsListing(ctx context.Context, t cluster.Target, query *ObjectsQuery, msg *cmn.SelectMsg) (x *ObjectsListingXact) {
+	x = &ObjectsListingXact{
 		t:        t,
 		ctx:      ctx,
 		msg:      msg,
@@ -57,6 +55,8 @@ func NewObjectsListing(ctx context.Context, t cluster.Target, query *ObjectsQuer
 		query:    query,
 		timer:    time.NewTimer(xactionTTL),
 	}
+	x.InitBase(msg.UUID, cmn.ActQueryObjects, &query.BckSource.Bck.Bck)
+	return
 }
 
 func (r *ObjectsListingXact) stop() {

@@ -65,9 +65,8 @@ func (p *putFactory) Start(bck cmn.Bck) error {
 		config      = cmn.GCO.Get()
 		totallyIdle = config.Timeout.SendFile.D()
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
-		args        = xaction.Args{ID: cos.GenUUID(), Kind: p.Kind(), Bck: &bck}
 	)
-	xec.XactDemandBase = *xaction.NewXDB(args, totallyIdle, likelyIdle)
+	xec.XactDemandBase = *xaction.NewXDB(cos.GenUUID(), p.Kind(), &bck, totallyIdle, likelyIdle)
 	xec.InitIdle()
 	p.xact = xec
 	go xec.Run()

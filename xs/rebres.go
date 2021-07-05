@@ -64,14 +64,10 @@ func (xact *RebBase) String() string {
 	return s
 }
 
-//
-// resilver|rebalance helper
-//
-func makeXactRebBase(id, kind string) RebBase {
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	args := xaction.Args{ID: id, Kind: kind}
-	return RebBase{XactBase: *xaction.NewXactBase(args), wg: wg}
+func (xact *RebBase) initRebBase(id, kind string) {
+	xact.wg = &sync.WaitGroup{}
+	xact.wg.Add(1)
+	xact.InitBase(id, kind, nil)
 }
 
 ///////////////
@@ -110,12 +106,10 @@ func (*rebFactory) PostRenewHook(previousEntry xreg.GlobalEntry) {
 	xreb.WaitForFinish()
 }
 
-func NewRebalance(id, kind string, statTracker stats.Tracker, getMarked getMarked) *Rebalance {
-	return &Rebalance{
-		RebBase:      makeXactRebBase(id, kind),
-		statTracker:  statTracker,
-		getRebMarked: getMarked,
-	}
+func NewRebalance(id, kind string, statTracker stats.Tracker, getMarked getMarked) (xact *Rebalance) {
+	xact = &Rebalance{statTracker: statTracker, getRebMarked: getMarked}
+	xact.initRebBase(id, kind)
+	return
 }
 
 func (xact *Rebalance) String() string {
@@ -168,8 +162,10 @@ func (*resilverFactory) PostRenewHook(previousEntry xreg.GlobalEntry) {
 	xresilver.WaitForFinish()
 }
 
-func NewResilver(uuid, kind string) *Resilver {
-	return &Resilver{RebBase: makeXactRebBase(uuid, kind)}
+func NewResilver(uuid, kind string) (xact *Resilver) {
+	xact = &Resilver{}
+	xact.initRebBase(uuid, kind)
+	return
 }
 
 func (xact *Resilver) String() string {

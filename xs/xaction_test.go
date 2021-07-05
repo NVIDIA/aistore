@@ -153,10 +153,8 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 
 	xreg.AbortAll(xaction.XactTypeGlobal)
 
-	tassert.Errorf(t, xactGlob != nil && xactGlob.Aborted(),
-		"AbortAllGlobal: expected global xaction to be aborted")
-	tassert.Errorf(t, xactBck != nil && !xactBck.Aborted(),
-		"AbortAllGlobal: expected bucket xaction to be running")
+	tassert.Errorf(t, xactGlob.Aborted(), "AbortAllGlobal: expected global xaction to be aborted: %s", xactGlob)
+	tassert.Errorf(t, !xactBck.Aborted(), "AbortAllGlobal: expected bucket xaction to be running: %s", xactBck)
 }
 
 func TestXactionAbortBuckets(t *testing.T) {

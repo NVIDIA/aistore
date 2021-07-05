@@ -32,8 +32,8 @@ var (
 func (*eleFactory) New(_ xreg.XactArgs) xreg.GlobalEntry { return &eleFactory{} }
 
 func (p *eleFactory) Start(_ cmn.Bck) error {
-	args := xaction.Args{ID: cos.GenUUID(), Kind: cmn.ActElection}
-	p.xact = &Election{XactBase: *xaction.NewXactBase(args)}
+	p.xact = &Election{}
+	p.xact.InitBase(cos.GenUUID(), cmn.ActElection, nil)
 	return nil
 }
 

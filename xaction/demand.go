@@ -58,28 +58,24 @@ type (
 ////////////////////
 
 // NOTE: to fully initialize it, must call xact.InitIdle() upon return
-func NewXDB(args Args, idleTimes ...time.Duration) *XactDemandBase {
+func NewXDB(uuid, kind string, bck *cmn.Bck, idleTimes ...time.Duration) (xdb *XactDemandBase) {
 	var (
-		hkName          string
+		hkName          = kind + "/" + uuid
 		totally, likely = totallyIdle, likelyIdle
-		uuid            = args.ID
 	)
+	debug.Assert(uuid != "" && kind != "")
 	if len(idleTimes) != 0 {
 		debug.Assert(len(idleTimes) == 2)
 		totally, likely = idleTimes[0], idleTimes[1]
 		debug.Assert(totally > likely)
 		debug.Assert(likely > time.Second/10)
 	}
-	if uuid == "" {
-		hkName = args.Kind + cos.GenUUID()
-	} else {
-		hkName = args.Kind + "/" + uuid
+	xdb = &XactDemandBase{
+		hkName: hkName,
+		idle:   idle{totally: totally, likely: likely, ticks: cos.NewStopCh()},
 	}
-	return &XactDemandBase{
-		XactBase: *NewXactBase(args),
-		hkName:   hkName,
-		idle:     idle{totally: totally, likely: likely, ticks: cos.NewStopCh()},
-	}
+	xdb.InitBase(uuid, kind, bck)
+	return
 }
 
 func (r *XactDemandBase) InitIdle() {

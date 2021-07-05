@@ -99,9 +99,9 @@ func (p *evdFactory) Get() cluster.Xact { return p.xact }
 
 func newEvictDelete(xargs *xreg.XactArgs, kind string, bck cmn.Bck, msg *cmn.ListRangeMsg) (ed *evictDelete) {
 	ed = &evictDelete{
-		XactBase: *xaction.NewXactBase(xaction.Args{ID: xargs.UUID, Kind: kind, Bck: &bck}),
-		_lrBase:  _lrBase{t: xargs.T, ctx: xargs.Ctx, msg: msg},
+		_lrBase: _lrBase{t: xargs.T, ctx: xargs.Ctx, msg: msg},
 	}
+	ed.InitBase(xargs.UUID, kind, &bck)
 	ed._lrBase.xact = ed
 	return
 }
@@ -163,9 +163,9 @@ func (p *prfFactory) Get() cluster.Xact { return p.xact }
 
 func newPrefetch(xargs *xreg.XactArgs, kind string, bck cmn.Bck, msg *cmn.ListRangeMsg) (prf *prefetch) {
 	prf = &prefetch{
-		XactBase: *xaction.NewXactBase(xaction.Args{ID: xargs.UUID, Kind: kind, Bck: &bck}),
-		_lrBase:  _lrBase{t: xargs.T, ctx: xargs.Ctx, msg: msg},
+		_lrBase: _lrBase{t: xargs.T, ctx: xargs.Ctx, msg: msg},
 	}
+	prf.InitBase(xargs.UUID, kind, &bck)
 	prf._lrBase.xact = prf
 	return
 }

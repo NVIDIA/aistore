@@ -77,13 +77,12 @@ func (p *archFactory) Get() cluster.Xact { return p.xact }
 
 func (p *archFactory) Start(bckFrom cmn.Bck) error {
 	var (
-		xargs       = xaction.Args{ID: p.uuid, Kind: cmn.ActArchive, Bck: &bckFrom}
 		config      = cmn.GCO.Get()
 		totallyIdle = config.Timeout.SendFile.D()
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
 	)
 	r := &XactPutArchive{
-		XactDemandBase: *xaction.NewXDB(xargs, totallyIdle, likelyIdle),
+		XactDemandBase: *xaction.NewXDB(p.uuid, cmn.ActArchive, &bckFrom, totallyIdle, likelyIdle),
 		t:              p.t,
 		bckFrom:        bckFrom,
 		workCh:         make(chan *cmn.ArchiveMsg, maxNumInParallel),

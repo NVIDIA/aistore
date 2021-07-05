@@ -47,7 +47,6 @@ type (
 		Ctx    context.Context
 		T      cluster.Target
 		UUID   string
-		Phase  string
 		Custom interface{} // Additional arguments that are specific for a given xaction.
 	}
 
@@ -57,6 +56,7 @@ type (
 	}
 
 	TransferBckArgs struct {
+		Phase   string
 		BckFrom *cluster.Bck
 		BckTo   *cluster.Bck
 		DM      *bundle.DataMover
@@ -64,8 +64,13 @@ type (
 		Meta    *cmn.Bck2BckMsg
 	}
 
+	ECEncodeArgs struct {
+		Phase string
+	}
+
 	BckRenameArgs struct {
 		RebID   string
+		Phase   string
 		BckFrom *cluster.Bck
 		BckTo   *cluster.Bck
 	}
@@ -143,7 +148,7 @@ func RenewECEncode(t cluster.Target, bck *cluster.Bck, uuid, phase string) Renew
 }
 
 func (r *registry) renewECEncode(t cluster.Target, bck *cluster.Bck, uuid, phase string) RenewRes {
-	return r.renewBucketXact(cmn.ActECEncode, bck, &XactArgs{T: t, UUID: uuid, Phase: phase})
+	return r.renewBucketXact(cmn.ActECEncode, bck, &XactArgs{T: t, UUID: uuid, Custom: &ECEncodeArgs{Phase: phase}})
 }
 
 func RenewMakeNCopies(t cluster.Target, tag string) { defaultReg.renewMakeNCopies(t, tag) }
@@ -234,10 +239,10 @@ func RenewTransferBck(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid, kind,
 func (r *registry) renewTransferBck(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid, kind,
 	phase string, dm *bundle.DataMover, dp cluster.LomReaderProvider, meta *cmn.Bck2BckMsg) RenewRes {
 	return r.renewBucketXact(kind, bckTo, &XactArgs{
-		T:     t,
-		UUID:  uuid,
-		Phase: phase,
+		T:    t,
+		UUID: uuid,
 		Custom: &TransferBckArgs{
+			Phase:   phase,
 			BckFrom: bckFrom,
 			BckTo:   bckTo,
 			DM:      dm,
@@ -254,10 +259,10 @@ func RenewBckRename(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid string, 
 func (r *registry) renewBckRename(t cluster.Target, bckFrom, bckTo *cluster.Bck,
 	uuid string, rmdVersion int64, phase string) RenewRes {
 	return r.renewBucketXact(cmn.ActMoveBck, bckTo, &XactArgs{
-		T:     t,
-		UUID:  uuid,
-		Phase: phase,
+		T:    t,
+		UUID: uuid,
 		Custom: &BckRenameArgs{
+			Phase:   phase,
 			RebID:   xaction.RebID2S(rmdVersion),
 			BckFrom: bckFrom,
 			BckTo:   bckTo,

@@ -254,13 +254,11 @@ func (*Downloader) Name() string {
 }
 
 func newDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
-	args := xaction.Args{ID: cos.GenUUID(), Kind: cmn.Download, Bck: &cmn.Bck{Provider: cmn.ProviderAIS}}
 	downloader := &Downloader{
-		XactDemandBase: *xaction.NewXDB(args),
+		XactDemandBase: *xaction.NewXDB(cos.GenUUID(), cmn.Download, &cmn.Bck{Provider: cmn.ProviderAIS}),
 		t:              t,
 		statsT:         statsT,
 	}
-
 	downloader.dispatcher = newDispatcher(downloader)
 	downloader.InitIdle()
 	instance.Inc()

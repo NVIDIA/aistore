@@ -21,19 +21,14 @@ import (
 )
 
 type (
-	Args struct {
-		ID   string
-		Kind string
-		Bck  *cmn.Bck
-	}
 	XactBase struct {
 		id      string
+		kind    string
+		bck     cmn.Bck
 		sutime  atomic.Int64
 		eutime  atomic.Int64
 		objects atomic.Int64
 		bytes   atomic.Int64
-		kind    string
-		bck     cmn.Bck
 		abrt    chan struct{}
 		aborted atomic.Bool
 		notif   *NotifXact
@@ -53,15 +48,14 @@ var IncInactive func()
 // XactBase - partially implements Xact interface
 //////////////
 
-func NewXactBase(args Args) (xact *XactBase) {
-	debug.Assert(args.Kind != "")
-	debug.Assertf(args.ID != "", "%v", args)
-	xact = &XactBase{id: args.ID, kind: args.Kind, abrt: make(chan struct{})}
-	if args.Bck != nil {
-		xact.bck = *args.Bck
+func (xact *XactBase) InitBase(id, kind string, bck *cmn.Bck) {
+	debug.Assert(id != "" && kind != "")
+	xact.id, xact.kind = id, kind
+	xact.abrt = make(chan struct{})
+	if bck != nil {
+		xact.bck = *bck
 	}
 	xact.setStartTime(time.Now())
-	return
 }
 
 func (xact *XactBase) ID() string                 { return xact.id }

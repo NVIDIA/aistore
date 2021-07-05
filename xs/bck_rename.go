@@ -43,10 +43,9 @@ var (
 
 func (*MovFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
 	return &MovFactory{
-		t:     args.T,
-		uuid:  args.UUID,
-		phase: args.Phase,
-		args:  args.Custom.(*xreg.BckRenameArgs),
+		t:    args.T,
+		uuid: args.UUID,
+		args: args.Custom.(*xreg.BckRenameArgs),
 	}
 }
 
@@ -80,15 +79,10 @@ func (p *MovFactory) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, er
 
 func (*MovFactory) PostRenewHook(_ xreg.BucketEntry) {}
 
-func newBckRename(uuid, kind string, bck cmn.Bck, t cluster.Target, bckFrom, bckTo *cluster.Bck, rebID string) *bckRename {
-	args := xaction.Args{ID: uuid, Kind: kind, Bck: &bck}
-	return &bckRename{
-		XactBase: *xaction.NewXactBase(args),
-		t:        t,
-		bckFrom:  bckFrom,
-		bckTo:    bckTo,
-		rebID:    rebID,
-	}
+func newBckRename(uuid, kind string, bck cmn.Bck, t cluster.Target, bckFrom, bckTo *cluster.Bck, rebID string) (x *bckRename) {
+	x = &bckRename{t: t, bckFrom: bckFrom, bckTo: bckTo, rebID: rebID}
+	x.InitBase(uuid, kind, &bck)
+	return
 }
 
 func (r *bckRename) String() string { return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.bckFrom) }

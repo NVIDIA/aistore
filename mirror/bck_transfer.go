@@ -75,11 +75,10 @@ func freeCpObjParams(a *cluster.CopyObjectParams) {
 
 func (e *cpyFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
 	return &cpyFactory{
-		t:     args.T,
-		uuid:  args.UUID,
-		kind:  e.kind,
-		phase: args.Phase,
-		args:  args.Custom.(*xreg.TransferBckArgs),
+		t:    args.T,
+		uuid: args.UUID,
+		kind: e.kind,
+		args: args.Custom.(*xreg.TransferBckArgs),
 	}
 }
 

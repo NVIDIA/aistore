@@ -127,13 +127,12 @@ func (*Factory) New(args xreg.XactArgs) xreg.GlobalEntry {
 
 func (p *Factory) Start(_ cmn.Bck) error {
 	var (
-		args        = xaction.Args{ID: p.id, Kind: cmn.ActLRU}
 		config      = cmn.GCO.Get()
 		totallyIdle = config.Timeout.MaxHostBusy.D()
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
 	)
 	p.xact = &Xaction{
-		XactDemandBase: *xaction.NewXDB(args, totallyIdle, likelyIdle),
+		XactDemandBase: *xaction.NewXDB(p.id, cmn.ActLRU, nil, totallyIdle, likelyIdle),
 		Renewed:        make(chan struct{}, 10),
 		OkRemoveMisplaced: func() bool {
 			g, l := xreg.GetRebMarked(), xreg.GetResilverMarked()

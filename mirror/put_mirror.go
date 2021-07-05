@@ -86,9 +86,8 @@ func runXactPut(lom *cluster.LOM, slab *memsys.Slab, t cluster.Target) (r *XactP
 		return
 	}
 	bck := lom.Bucket()
-	args := xaction.Args{ID: cos.GenUUID(), Kind: cmn.ActPutCopies, Bck: &bck}
 	r = &XactPut{
-		XactDemandBase: *xaction.NewXDB(args),
+		XactDemandBase: *xaction.NewXDB(cos.GenUUID(), cmn.ActPutCopies, &bck),
 		mirror:         mirror,
 		workCh:         make(chan cluster.LIF, mirror.Burst),
 	}
