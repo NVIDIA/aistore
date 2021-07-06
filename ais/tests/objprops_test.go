@@ -367,6 +367,7 @@ func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType str
 			t.Errorf("Object %s/%s access time is empty", bck, m.Name)
 		}
 
+		filesList[m.Name] = m.Version
 		if !versionEnabled {
 			continue
 		}
@@ -374,8 +375,6 @@ func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType str
 		if m.Version == "" {
 			t.Errorf("Failed to read object %q version", m.Name)
 			t.Fail()
-		} else {
-			filesList[m.Name] = m.Version
 		}
 	}
 
