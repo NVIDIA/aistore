@@ -45,6 +45,25 @@ var (
 	_ BaseEntry = (*bckSummaryTaskEntry)(nil)
 )
 
+func RenewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.BucketSummaryMsg) error {
+	return defaultReg.renewBckSummary(ctx, t, bck, msg)
+}
+
+func (r *registry) renewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.BucketSummaryMsg) error {
+	r.entries.mtx.Lock()
+	err := r.entries.del(msg.UUID)
+	r.entries.mtx.Unlock()
+	if err != nil {
+		return err
+	}
+	e := &bckSummaryTaskEntry{ctx: ctx, t: t, uuid: msg.UUID, msg: msg}
+	if err := e.Start(bck.Bck); err != nil {
+		return err
+	}
+	r.add(e)
+	return nil
+}
+
 /////////////////////////
 // bckSummaryTaskEntry //
 /////////////////////////

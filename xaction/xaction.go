@@ -49,7 +49,8 @@ var IncInactive func()
 //////////////
 
 func (xact *XactBase) InitBase(id, kind string, bck *cmn.Bck) {
-	debug.Assert(id != "" && kind != "")
+	debug.AssertMsg(cos.IsValidUUID(id) || isValidRebID(id), id)
+	debug.AssertMsg(IsValidKind(kind), kind)
 	xact.id, xact.kind = id, kind
 	xact.abrt = make(chan struct{})
 	if bck != nil {
@@ -228,6 +229,7 @@ func IsErrXactExpired(err error) bool              { _, ok := err.(*ErrXactExpir
 
 func RebID2S(id int64) string          { return fmt.Sprintf("g%d", id) }
 func S2RebID(id string) (int64, error) { return strconv.ParseInt(id[1:], 10, 64) }
+func isValidRebID(id string) bool      { _, err := S2RebID(id); return err == nil }
 
 func CompareRebIDs(a, b string) int {
 	if ai, err := S2RebID(a); err != nil {

@@ -116,7 +116,7 @@ func TestXactionAbortAll(t *testing.T) {
 
 	xactGlob := xreg.RenewLRU(cos.GenUUID())
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	rns := xreg.RenewBckRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
+	rns := xreg.RenewBckRename(tMock, bckFrom, bckTo, cos.GenUUID(), 123, "phase")
 	xactBck := rns.Entry.Get()
 	tassert.Errorf(t, rns.Err == nil && xactBck != nil, "Xaction must be created")
 
@@ -147,7 +147,7 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 
 	xactGlob := xreg.RenewLRU(cos.GenUUID())
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	rns := xreg.RenewBckRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
+	rns := xreg.RenewBckRename(tMock, bckFrom, bckTo, cos.GenUUID(), 123, "phase")
 	xactBck := rns.Entry.Get()
 	tassert.Errorf(t, rns.Err == nil && xactBck != nil, "Xaction must be created")
 
@@ -176,7 +176,7 @@ func TestXactionAbortBuckets(t *testing.T) {
 
 	xactGlob := xreg.RenewLRU(cos.GenUUID())
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	rns := xreg.RenewBckRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
+	rns := xreg.RenewBckRename(tMock, bckFrom, bckTo, cos.GenUUID(), 123, "phase")
 	xactBck := rns.Entry.Get()
 	tassert.Errorf(t, rns.Err == nil && xactBck != nil, "Xaction must be created")
 
@@ -214,13 +214,13 @@ func TestXactionQueryFinished(t *testing.T) {
 	xreg.RegFactory(&xs.TestXFactory{})
 	xreg.RegFactory(&xs.MovFactory{})
 
-	rns1 := xreg.RenewBckRename(tMock, bck1, bck1, "uuid", 123, "phase")
+	rns1 := xreg.RenewBckRename(tMock, bck1, bck1, cos.GenUUID(), 123, "phase")
 	tassert.Errorf(t, rns1.Err == nil && rns1.Entry.Get() != nil, "Xaction must be created")
-	rns2 := xreg.RenewBckRename(tMock, bck2, bck2, "uuid", 123, "phase")
+	rns2 := xreg.RenewBckRename(tMock, bck2, bck2, cos.GenUUID(), 123, "phase")
 	tassert.Errorf(t, rns2.Err == nil && rns2.Entry.Get() != nil, "Xaction must be created %v", rns2.Err)
 	rns1.Entry.Get().Finish(nil)
 
-	rns1 = xreg.RenewBckRename(tMock, bck1, bck1, "uuid", 123, "phase")
+	rns1 = xreg.RenewBckRename(tMock, bck1, bck1, cos.GenUUID(), 123, "phase")
 	tassert.Errorf(t, rns1.Err == nil && rns1.Entry.Get() != nil, "Xaction must be created")
 	rns3 := xreg.RenewPrefetch(cos.GenUUID(), tMock, bck3, &cmn.ListRangeMsg{})
 	tassert.Errorf(t, rns3.Entry.Get() != nil, "Xaction must be created %v", rns3.Err)

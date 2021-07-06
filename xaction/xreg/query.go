@@ -22,14 +22,35 @@ type queEntry struct {
 	msg   *cmn.SelectMsg
 }
 
-//////////////
-// queEntry //
-//////////////
-
 // interface guard
 var (
 	_ BaseEntry = (*queEntry)(nil)
 )
+
+func RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, msg *cmn.SelectMsg) RenewRes {
+	return defaultReg.RenewQuery(ctx, t, q, msg)
+}
+
+func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, msg *cmn.SelectMsg) RenewRes {
+	if xact := query.Registry.Get(msg.UUID); xact != nil {
+		if !xact.Aborted() {
+			return RenewRes{&DummyEntry{xact}, nil, false}
+		}
+		query.Registry.Delete(msg.UUID)
+	}
+	r.entries.mtx.Lock()
+	err := r.entries.del(msg.UUID)
+	r.entries.mtx.Unlock()
+	if err != nil {
+		return RenewRes{&DummyEntry{nil}, err, false}
+	}
+	e := &queEntry{ctx: ctx, t: t, query: q, msg: msg}
+	return r.renewBckXact(e, q.BckSource.Bck)
+}
+
+//////////////
+// queEntry //
+//////////////
 
 func (e *queEntry) Start(_ cmn.Bck) (err error) {
 	xact := query.NewObjectsListing(e.ctx, e.t, e.query, e.msg)

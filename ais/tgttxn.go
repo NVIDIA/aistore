@@ -211,7 +211,7 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 		}
 
 		// do the work in xaction
-		rns := xreg.RenewBckMakeNCopies(t, c.bck, c.uuid, int(copies))
+		rns := xreg.RenewBckMakeNCopies(t, c.bck, c.uuid, "mnc-actmnc", int(copies))
 		if rns.Err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, rns.Err)
 		}
@@ -287,7 +287,7 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 		}
 		if reMirror(txnSetBprops.bprops, txnSetBprops.nprops) {
 			n := int(txnSetBprops.nprops.Mirror.Copies)
-			rns := xreg.RenewBckMakeNCopies(t, c.bck, c.uuid, n)
+			rns := xreg.RenewBckMakeNCopies(t, c.bck, c.uuid, "mnc-setprops", n)
 			if rns.Err != nil {
 				return fmt.Errorf("%s %s: %v", t.si, txn, rns.Err)
 			}

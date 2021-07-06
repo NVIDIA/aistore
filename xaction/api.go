@@ -96,7 +96,7 @@ var XactsDtor = map[string]XactDescriptor{
 	cmn.ActInvalListCache: {Type: XactTypeBck, Access: cmn.AccessObjLIST, Startable: false},
 }
 
-func IsValid(kind string) bool     { _, ok := XactsDtor[kind]; return ok }
+func IsValidKind(kind string) bool { _, ok := XactsDtor[kind]; return ok }
 func IsTypeBck(kind string) bool   { return XactsDtor[kind].Type == XactTypeBck }
 func IsMountpath(kind string) bool { return XactsDtor[kind].Mountpath }
 

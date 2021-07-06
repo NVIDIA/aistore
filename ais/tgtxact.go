@@ -125,7 +125,7 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bc
 	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
 	const erfmn = "xaction %q requires a bucket to start"
 
-	if !xaction.IsValid(xactMsg.Kind) {
+	if !xaction.IsValidKind(xactMsg.Kind) {
 		return fmt.Errorf(cmn.FmtErrUnknown, t.si, "xaction kind", xactMsg.Kind)
 	}
 

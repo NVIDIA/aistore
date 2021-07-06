@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
@@ -22,16 +23,17 @@ import (
 type (
 	mncFactory struct {
 		xreg.BaseBckEntry
-		xact   *xactMNC
-		t      cluster.Target
-		uuid   string
-		copies int
+		xact *xactMNC
+		t    cluster.Target
+		uuid string
+		args xreg.MNCArgs
 	}
 
 	// xactMNC runs in a background, traverses all local mountpaths, and makes sure
 	// the bucket is N-way replicated (where N >= 1).
 	xactMNC struct {
 		xaction.XactBckJog
+		tag    string
 		copies int
 	}
 )
@@ -47,13 +49,13 @@ var (
 ////////////////
 
 func (*mncFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
-	return &mncFactory{t: args.T, uuid: args.UUID, copies: args.Custom.(int)}
+	return &mncFactory{t: args.T, uuid: args.UUID, args: *args.Custom.(*xreg.MNCArgs)}
 }
 
 func (p *mncFactory) Start(bck cmn.Bck) error {
 	slab, err := p.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
 	cos.AssertNoErr(err)
-	p.xact = newXactMNC(bck, p.t, slab, p.uuid, p.copies)
+	p.xact = newXactMNC(bck, p, slab)
 	return nil
 }
 
@@ -64,13 +66,19 @@ func (p *mncFactory) Get() cluster.Xact { return p.xact }
 // xactMNC //
 /////////////
 
-func newXactMNC(bck cmn.Bck, t cluster.Target, slab *memsys.Slab, id string, copies int) *xactMNC {
+func (r *xactMNC) String() string {
+	return fmt.Sprintf("%s tag=%s, copies=%d", r.XactBase.String(), r.tag, r.copies)
+}
+
+func newXactMNC(bck cmn.Bck, p *mncFactory, slab *memsys.Slab) *xactMNC {
 	xact := &xactMNC{
-		copies: copies,
+		tag:    p.args.Tag,
+		copies: p.args.Copies,
 	}
-	xact.XactBckJog = *xaction.NewXactBckJog(id, cmn.ActMakeNCopies, bck, &mpather.JoggerGroupOpts{
+	debug.Assert(xact.tag != "" && xact.copies > 0)
+	xact.XactBckJog = *xaction.NewXactBckJog(p.uuid, cmn.ActMakeNCopies, bck, &mpather.JoggerGroupOpts{
 		Bck:      bck,
-		T:        t,
+		T:        p.t,
 		CTs:      []string{fs.ObjectType},
 		VisitObj: xact.visitObj,
 		Slab:     slab,
@@ -86,7 +94,7 @@ func (r *xactMNC) Run() {
 		return
 	}
 	r.XactBckJog.Run()
-	glog.Infoln(r.String(), "copies=", r.copies)
+	glog.Infoln(r.String())
 	err := r.XactBckJog.Wait()
 	r.Finish(err)
 }

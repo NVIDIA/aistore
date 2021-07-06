@@ -63,7 +63,6 @@ func NewXDB(uuid, kind string, bck *cmn.Bck, idleTimes ...time.Duration) (xdb *X
 		hkName          = kind + "/" + uuid
 		totally, likely = totallyIdle, likelyIdle
 	)
-	debug.Assert(uuid != "" && kind != "")
 	if len(idleTimes) != 0 {
 		debug.Assert(len(idleTimes) == 2)
 		totally, likely = idleTimes[0], idleTimes[1]

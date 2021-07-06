@@ -5,6 +5,7 @@
 package xreg
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -40,6 +41,15 @@ type (
 		Kind() string
 		Get() cluster.Xact
 	}
+
+	// used in constructions
+	XactArgs struct {
+		Ctx    context.Context
+		T      cluster.Target
+		UUID   string
+		Custom interface{} // Additional arguments that are specific for a given xaction.
+	}
+
 	XactFilter struct {
 		ID          string
 		Kind        string
@@ -239,7 +249,7 @@ func (r *registry) getStats(flt XactFilter) ([]cluster.XactStats, error) {
 	}
 	if flt.Bck != nil || flt.Kind != "" {
 		// Error checks
-		if flt.Kind != "" && !xaction.IsValid(flt.Kind) {
+		if flt.Kind != "" && !xaction.IsValidKind(flt.Kind) {
 			return nil, cmn.NewXactionNotFoundError(flt.Kind)
 		}
 		if flt.Bck != nil && !flt.Bck.HasProvider() {
@@ -478,7 +488,7 @@ func (e *entries) findUnlocked(flt XactFilter) BaseEntry {
 		}
 		return nil
 	}
-	debug.AssertMsg(flt.Kind == "" || xaction.IsValid(flt.Kind), flt.Kind)
+	debug.AssertMsg(flt.Kind == "" || xaction.IsValidKind(flt.Kind), flt.Kind)
 	for _, entry := range e.active {
 		if !entry.Get().Finished() && matchEntry(entry, flt) {
 			return entry

@@ -11,7 +11,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/query"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
 )
@@ -43,13 +42,6 @@ type (
 		Kind() string
 	}
 
-	XactArgs struct {
-		Ctx    context.Context
-		T      cluster.Target
-		UUID   string
-		Custom interface{} // Additional arguments that are specific for a given xaction.
-	}
-
 	DirPromoteArgs struct {
 		Dir    string
 		Params *cmn.ActValPromote
@@ -73,6 +65,11 @@ type (
 		Phase   string
 		BckFrom *cluster.Bck
 		BckTo   *cluster.Bck
+	}
+
+	MNCArgs struct {
+		Tag    string
+		Copies int
 	}
 )
 
@@ -151,9 +148,9 @@ func (r *registry) renewECEncode(t cluster.Target, bck *cluster.Bck, uuid, phase
 	return r.renewBucketXact(cmn.ActECEncode, bck, &XactArgs{T: t, UUID: uuid, Custom: &ECEncodeArgs{Phase: phase}})
 }
 
-func RenewMakeNCopies(t cluster.Target, tag string) { defaultReg.renewMakeNCopies(t, tag) }
+func RenewMakeNCopies(t cluster.Target, uuid, tag string) { defaultReg.renewMakeNCopies(t, uuid, tag) }
 
-func (r *registry) renewMakeNCopies(t cluster.Target, tag string) {
+func (r *registry) renewMakeNCopies(t cluster.Target, uuid, tag string) {
 	var (
 		cfg      = cmn.GCO.Get()
 		bmd      = t.Bowner().Get()
@@ -161,7 +158,7 @@ func (r *registry) renewMakeNCopies(t cluster.Target, tag string) {
 	)
 	bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
 		if bck.Props.Mirror.Enabled {
-			res := r.renewBckMakeNCopies(t, bck, tag, int(bck.Props.Mirror.Copies))
+			res := r.renewBckMakeNCopies(t, bck, uuid, tag, int(bck.Props.Mirror.Copies))
 			if res.Err == nil {
 				xact := res.Entry.Get()
 				go xact.Run()
@@ -173,7 +170,7 @@ func (r *registry) renewMakeNCopies(t cluster.Target, tag string) {
 	for name, ns := range cfg.Backend.Providers {
 		bmd.Range(&name, &ns, func(bck *cluster.Bck) bool {
 			if bck.Props.Mirror.Enabled {
-				res := r.renewBckMakeNCopies(t, bck, tag, int(bck.Props.Mirror.Copies))
+				res := r.renewBckMakeNCopies(t, bck, uuid, tag, int(bck.Props.Mirror.Copies))
 				if res.Err == nil {
 					xact := res.Entry.Get()
 					go xact.Run()
@@ -184,12 +181,12 @@ func (r *registry) renewMakeNCopies(t cluster.Target, tag string) {
 	}
 }
 
-func RenewBckMakeNCopies(t cluster.Target, bck *cluster.Bck, uuid string, copies int) (res RenewRes) {
-	return defaultReg.renewBckMakeNCopies(t, bck, uuid, copies)
+func RenewBckMakeNCopies(t cluster.Target, bck *cluster.Bck, uuid, tag string, copies int) (res RenewRes) {
+	return defaultReg.renewBckMakeNCopies(t, bck, uuid, tag, copies)
 }
 
-func (r *registry) renewBckMakeNCopies(t cluster.Target, bck *cluster.Bck, uuid string, copies int) (res RenewRes) {
-	e := r.bckXacts[cmn.ActMakeNCopies].New(&XactArgs{T: t, UUID: uuid, Custom: copies})
+func (r *registry) renewBckMakeNCopies(t cluster.Target, bck *cluster.Bck, uuid, tag string, copies int) (res RenewRes) {
+	e := r.bckXacts[cmn.ActMakeNCopies].New(&XactArgs{T: t, UUID: uuid, Custom: &MNCArgs{tag, copies}})
 	res = r.renewBckXact(e, bck)
 	if res.Err != nil {
 		return
@@ -286,45 +283,4 @@ func (r *registry) renewObjList(t cluster.Target, bck *cluster.Bck, uuid string,
 		return r.renewBckXact(e, bck, uuid)
 	}
 	return RenewRes{&DummyEntry{xact}, nil, false}
-}
-
-func RenewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.BucketSummaryMsg) error {
-	return defaultReg.renewBckSummary(ctx, t, bck, msg)
-}
-
-func (r *registry) renewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.BucketSummaryMsg) error {
-	r.entries.mtx.Lock()
-	err := r.entries.del(msg.UUID)
-	r.entries.mtx.Unlock()
-	if err != nil {
-		return err
-	}
-	e := &bckSummaryTaskEntry{ctx: ctx, t: t, uuid: msg.UUID, msg: msg}
-	if err := e.Start(bck.Bck); err != nil {
-		return err
-	}
-	r.add(e)
-	return nil
-}
-
-func RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, msg *cmn.SelectMsg) RenewRes {
-	return defaultReg.RenewQuery(ctx, t, q, msg)
-}
-
-func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, msg *cmn.SelectMsg) RenewRes {
-	debug.Assert(msg.UUID != "")
-	if xact := query.Registry.Get(msg.UUID); xact != nil {
-		if !xact.Aborted() {
-			return RenewRes{&DummyEntry{xact}, nil, false}
-		}
-		query.Registry.Delete(msg.UUID)
-	}
-	r.entries.mtx.Lock()
-	err := r.entries.del(msg.UUID)
-	r.entries.mtx.Unlock()
-	if err != nil {
-		return RenewRes{&DummyEntry{nil}, err, false}
-	}
-	e := &queEntry{ctx: ctx, t: t, query: q, msg: msg}
-	return r.renewBckXact(e, q.BckSource.Bck)
 }
