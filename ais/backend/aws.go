@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -38,89 +39,24 @@ type (
 	awsProvider struct {
 		t cluster.Target
 	}
-
 	sessConf struct {
 		bck    *cmn.Bck
 		region string
 	}
 )
 
-// interface guard
-var _ cluster.BackendProvider = (*awsProvider)(nil)
+var (
+	// one client per AWS region
+	clients map[string]*s3.S3
+	cmu     sync.RWMutex
 
-func NewAWS(t cluster.Target) (cluster.BackendProvider, error) { return &awsProvider{t: t}, nil }
+	// interface guard
+	_ cluster.BackendProvider = (*awsProvider)(nil)
+)
 
-// A session is created using default credentials from
-// configuration file in ~/.aws/credentials and environment variables
-func createSession() *session.Session {
-	// TODO: avoid creating sessions for each request
-	return session.Must(session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-		Config:            aws.Config{HTTPClient: cmn.NewClient(cmn.TransportArgs{})},
-	}))
-}
-
-// newS3Client creates new S3 client that can be used to make requests. It is
-// guaranteed that the client is initialized even in case of errors.
-func newS3Client(conf sessConf, tag string) (svc *s3.S3, regIsSet bool, err error) {
-	var (
-		sess    = createSession()
-		awsConf = &aws.Config{}
-	)
-
-	if conf.region != "" {
-		regIsSet = true
-		awsConf.Region = aws.String(conf.region)
-	} else if conf.bck != nil {
-		region := ""
-		if conf.bck.Props != nil {
-			region = conf.bck.Props.Extra.AWS.CloudRegion
-		}
-		if region == "" {
-			if tag != "" {
-				err = fmt.Errorf("%s: unknown region for bucket %s -- proceeding with default", tag, conf.bck)
-			}
-			svc = s3.New(sess)
-			return
-		}
-		regIsSet = true
-		awsConf.Region = aws.String(region)
-	}
-	svc = s3.New(sess, awsConf)
-	return
-}
-
-// Original AWS error contains extra information that a caller does not need:
-//     status code: 400, request id: D918CB, host id: RJtDP0q8
-// The extra information starts from the new line (`\n`) and tab (`\t`) of the message.
-// At the same time we want to preserve original error which starts with `\ncaused by:`.
-// See more `aws-sdk-go/aws/awserr/types.go:12` (`SprintError`).
-func cleanError(awsError error) error {
-	var (
-		msg    string
-		errMsg = awsError.Error()
-	)
-	// Strip extra information...
-	if idx := strings.Index(errMsg, "\n\t"); idx > 0 {
-		msg = errMsg[:idx]
-	}
-	// ...but preserve original error information.
-	if idx := strings.Index(errMsg, "\ncaused"); idx > 0 {
-		// `idx+1` because we want to remove `\n`.
-		msg += " (" + errMsg[idx+1:] + ")"
-	}
-	return errors.New(msg)
-}
-
-func awsErrorToAISError(awsError error, bck *cmn.Bck) (int, error) {
-	if reqErr, ok := awsError.(awserr.RequestFailure); ok {
-		if reqErr.Code() == s3.ErrCodeNoSuchBucket {
-			return reqErr.StatusCode(), cmn.NewErrRemoteBckNotFound(*bck)
-		}
-		return reqErr.StatusCode(), cleanError(awsError)
-	}
-
-	return http.StatusInternalServerError, cleanError(awsError)
+func NewAWS(t cluster.Target) (cluster.BackendProvider, error) {
+	clients = make(map[string]*s3.S3, 2)
+	return &awsProvider{t: t}, nil
 }
 
 func (*awsProvider) Provider() string { return cmn.ProviderAmazon }
@@ -142,31 +78,27 @@ func (awsp *awsProvider) CreateBucket(_ context.Context, _ *cluster.Bck) (errCod
 
 func (*awsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
 	var (
-		svc       *s3.S3
-		region    string
-		cloudBck  = bck.RemoteBck()
-		hasRegion bool
+		svc      *s3.S3
+		region   string
+		cloudBck = bck.RemoteBck()
 	)
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("[head_bucket] %s", cloudBck.Name)
 	}
-
-	// Since AWS bucket may not yet exist in the BMD,
-	// we must get the region manually and recreate S3 client.
-	svc, hasRegion, _ = newS3Client(sessConf{bck: cloudBck}, "") // nolint:errcheck // on purpose
-	if !hasRegion {
+	svc, region, _ = newClient(sessConf{bck: cloudBck}, "") // nolint:errcheck // on purpose
+	if region == "" {
+		// AWS bucket may not yet exist in the BMD -
+		// get the region manually and recreate S3 client.
 		if region, err = getBucketLocation(svc, cloudBck.Name); err != nil {
 			errCode, err = awsErrorToAISError(err, cloudBck)
 			return
 		}
-
 		// Create new svc with the region details.
-		if svc, _, err = newS3Client(sessConf{region: region}, ""); err != nil {
+		if svc, _, err = newClient(sessConf{region: region}, ""); err != nil {
 			errCode, err = awsErrorToAISError(err, cloudBck)
 			return
 		}
 	}
-
 	region = *svc.Config.Region
 	debug.Assert(region != "")
 
@@ -176,7 +108,6 @@ func (*awsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps 
 		errCode, err = awsErrorToAISError(err, cloudBck)
 		return
 	}
-
 	bckProps = make(cos.SimpleKVs, 3)
 	bckProps[cmn.HdrBackendProvider] = cmn.ProviderAmazon
 	bckProps[cmn.HdrCloudRegion] = region
@@ -219,7 +150,7 @@ func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck, msg *c
 		glog.Infof("list_objects %s", cloudBck.Name)
 	}
 
-	svc, _, err = newS3Client(sessConf{bck: cloudBck}, "[list_objects]")
+	svc, _, err = newClient(sessConf{bck: cloudBck}, "[list_objects]")
 	if err != nil {
 		glog.Warning(err)
 	}
@@ -321,7 +252,7 @@ func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck, msg *c
 //////////////////
 
 func (*awsProvider) ListBuckets(_ context.Context, query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
-	svc, _, err := newS3Client(sessConf{}, "")
+	svc, _, err := newClient(sessConf{}, "")
 	if err != nil {
 		errCode, err = awsErrorToAISError(err, &cmn.Bck{Provider: cmn.ProviderAmazon})
 		return
@@ -355,7 +286,7 @@ func (*awsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta cos.Si
 		h        = cmn.BackendHelpers.Amazon
 		cloudBck = lom.Bck().RemoteBck()
 	)
-	svc, _, err = newS3Client(sessConf{bck: cloudBck}, "[head_object]")
+	svc, _, err = newClient(sessConf{bck: cloudBck}, "[head_object]")
 	if err != nil {
 		glog.Warning(err)
 	}
@@ -421,7 +352,7 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.Re
 		h        = cmn.BackendHelpers.Amazon
 		cloudBck = lom.Bck().RemoteBck()
 	)
-	svc, _, err = newS3Client(sessConf{bck: cloudBck}, "[get_object]")
+	svc, _, err = newClient(sessConf{bck: cloudBck}, "[get_object]")
 	if err != nil {
 		glog.Warning(err)
 	}
@@ -440,7 +371,6 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.Re
 			cksum = cos.NewCksum(*cksumType, *cksumValue)
 		}
 	}
-
 	customMD := cos.SimpleKVs{
 		cluster.SourceObjMD: cluster.SourceAmazonObjMD,
 	}
@@ -473,7 +403,7 @@ func (*awsProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluster.LO
 	)
 	defer cos.Close(r)
 
-	svc, _, err = newS3Client(sessConf{bck: cloudBck}, "[put_object]")
+	svc, _, err = newClient(sessConf{bck: cloudBck}, "[put_object]")
 	if err != nil {
 		glog.Warning(err)
 	}
@@ -510,11 +440,10 @@ func (*awsProvider) DeleteObj(_ context.Context, lom *cluster.LOM) (errCode int,
 		svc      *s3.S3
 		cloudBck = lom.Bck().RemoteBck()
 	)
-	svc, _, err = newS3Client(sessConf{bck: cloudBck}, "[delete_object]")
+	svc, _, err = newClient(sessConf{bck: cloudBck}, "[delete_object]")
 	if err != nil {
 		glog.Warning(err)
 	}
-
 	_, err = svc.DeleteObject(&s3.DeleteObjectInput{
 		Bucket: aws.String(cloudBck.Name),
 		Key:    aws.String(lom.ObjName),
@@ -527,4 +456,93 @@ func (*awsProvider) DeleteObj(_ context.Context, lom *cluster.LOM) (errCode int,
 		glog.Infof("[delete_object] %s", lom)
 	}
 	return
+}
+
+//
+// static helpers
+//
+
+// newClient creates new S3 client that can be used to make requests. It is
+// guaranteed that the client is initialized even in case of errors.
+//
+// Quoting S3 SDK:
+//     "S3 methods are safe to use concurrently. It is not safe to
+//      modify mutate any of the struct's properties though."
+func newClient(conf sessConf, tag string) (svc *s3.S3, region string, err error) {
+	region = conf.region
+	if region == "" && conf.bck != nil && conf.bck.Props != nil {
+		region = conf.bck.Props.Extra.AWS.CloudRegion
+	}
+	// reuse
+	if region != "" {
+		cmu.RLock()
+		svc = clients[region]
+		cmu.RUnlock()
+		if svc != nil {
+			return
+		}
+	}
+	// create
+	var (
+		sess    = _session()
+		awsConf = &aws.Config{}
+	)
+	if region == "" {
+		if tag != "" {
+			err = fmt.Errorf("%s: unknown region for bucket %s -- proceeding with default", tag, conf.bck)
+		}
+		svc = s3.New(sess)
+		return
+	}
+	// ok
+	awsConf.Region = aws.String(region)
+	svc = s3.New(sess, awsConf)
+	debug.Assertf(region == *svc.Config.Region, "%s != %s", region, *svc.Config.Region)
+
+	cmu.Lock()
+	clients[region] = svc
+	cmu.Unlock()
+	return
+}
+
+// Create session using default creds from ~/.aws/credentials and environment variables.
+func _session() *session.Session {
+	// TODO: avoid creating sessions for each request
+	return session.Must(session.NewSessionWithOptions(session.Options{
+		SharedConfigState: session.SharedConfigEnable,
+		Config:            aws.Config{HTTPClient: cmn.NewClient(cmn.TransportArgs{})},
+	}))
+}
+
+func awsErrorToAISError(awsError error, bck *cmn.Bck) (int, error) {
+	if reqErr, ok := awsError.(awserr.RequestFailure); ok {
+		if reqErr.Code() == s3.ErrCodeNoSuchBucket {
+			return reqErr.StatusCode(), cmn.NewErrRemoteBckNotFound(*bck)
+		}
+		return reqErr.StatusCode(), _clearErr(awsError)
+	}
+
+	return http.StatusInternalServerError, _clearErr(awsError)
+}
+
+// Original AWS error contains extra information that a caller does not need:
+//     status code: 400, request id: D918CB, host id: RJtDP0q8
+// The extra information starts from the new line (`\n`) and tab (`\t`) of the message.
+// At the same time we want to preserve original error which starts with `\ncaused by:`.
+// See more `aws-sdk-go/aws/awserr/types.go:12` (`SprintError`).
+func _clearErr(awsError error) error {
+	var (
+		msg    string
+		errMsg = awsError.Error()
+	)
+	// Strip extra information...
+	if idx := strings.Index(errMsg, "\n\t"); idx > 0 {
+		msg = errMsg[:idx]
+	}
+	// ...but preserve original error information.
+	if idx := strings.Index(errMsg, "\ncaused"); idx > 0 {
+		// `idx+1` because we want to remove `\n`.
+		msg += " (" + errMsg[idx+1:] + ")"
+	}
+	return errors.New(msg)
 }
