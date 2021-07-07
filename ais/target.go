@@ -910,7 +910,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	errCode, err := t.DeleteObject(context.Background(), lom, evict)
+	errCode, err := t.DeleteObject(lom, evict)
 	if err != nil {
 		if errCode == http.StatusNotFound {
 			t.writeErrSilentf(w, r, http.StatusNotFound, "object %s/%s doesn't exist",
@@ -1333,7 +1333,6 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 		poi.lom = lom
 		poi.r = r.Body
 		poi.cksumToUse = cos.NewCksum(cksumType, cksumValue)
-		poi.ctx = context.Background()
 		poi.workFQN = fs.CSM.GenContentFQN(lom, fs.WorkfileType, fs.WorkfilePut)
 	}
 	if recvType != "" {
@@ -1377,7 +1376,7 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 	xputlrep.Repl(lom)
 }
 
-func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict bool) (int, error) {
+func (t *targetrunner) DeleteObject(lom *cluster.LOM, evict bool) (int, error) {
 	var (
 		aisErr, backendErr         error
 		aisErrCode, backendErrCode int

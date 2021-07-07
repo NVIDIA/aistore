@@ -79,8 +79,7 @@ func NormalizeObjName(objName string) (string, error) {
 	return url.PathUnescape(u.Path)
 }
 
-func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *cluster.Bck, id string, dlb DlBody,
-	dlXact *Downloader) (DlJob, error) {
+func ParseStartDownloadRequest(t cluster.Target, bck *cluster.Bck, id string, dlb DlBody, dlXact *Downloader) (DlJob, error) {
 	switch dlb.Type {
 	case DlTypeBackend:
 		dp := &DlBackendBody{}
@@ -91,7 +90,7 @@ func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *clust
 		if err := dp.Validate(); err != nil {
 			return nil, err
 		}
-		return newBackendDlJob(ctx, t, id, bck, dp, dlXact)
+		return newBackendDlJob(t, id, bck, dp, dlXact)
 	case DlTypeMulti:
 		dp := &DlMultiBody{}
 		err := jsoniter.Unmarshal(dlb.RawMessage, dp)

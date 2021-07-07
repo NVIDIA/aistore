@@ -111,7 +111,6 @@ func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParam
 		poi.lom = lom
 		poi.r = params.Reader
 		poi.workFQN = workFQN
-		poi.ctx = context.Background()
 		poi.started = params.Started
 		poi.recvType = params.RecvType
 		poi.skipEC = params.SkipEncode
@@ -129,7 +128,6 @@ func (t *targetrunner) FinalizeObj(lom *cluster.LOM, workFQN string, size int64)
 	{
 		poi.t = t
 		poi.lom = lom
-		poi.ctx = context.Background()
 		poi.workFQN = workFQN
 		poi.recvType = cluster.Finalize
 	}
@@ -139,8 +137,7 @@ func (t *targetrunner) FinalizeObj(lom *cluster.LOM, workFQN string, size int64)
 }
 
 func (t *targetrunner) EvictObject(lom *cluster.LOM) (errCode int, err error) {
-	ctx := context.Background()
-	errCode, err = t.DeleteObject(ctx, lom, true /*evict*/)
+	errCode, err = t.DeleteObject(lom, true /*evict*/)
 	return
 }
 

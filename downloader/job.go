@@ -5,7 +5,6 @@
 package downloader
 
 import (
-	"context"
 	"errors"
 	"path"
 	"strings"
@@ -97,23 +96,20 @@ type (
 		t     cluster.Target
 		objs  []dlObj               // objects' metas which are ready to be downloaded
 		iter  func() (string, bool) // links iterator
-		count int                   // total number object to download by a target
 		dir   string                // objects directory(prefix) from request
-		done  bool                  // true = the iterator is exhausted, nothing left to read
+		count int                   // total number object to download by a target
+		done  bool                  // true when iterator is finished, nothing left to read
 	}
 
 	backendDlJob struct {
 		baseDlJob
-		t   cluster.Target
-		ctx context.Context // context for the request, user etc...
-
-		prefix string
-		suffix string
-		sync   bool
-
-		done              bool
+		t                 cluster.Target
+		prefix            string
+		suffix            string
 		objs              []dlObj // objects' metas which are ready to be downloaded
 		continuationToken string
+		sync              bool
+		done              bool
 	}
 
 	downloadJobInfo struct {
@@ -347,7 +343,7 @@ func (j *rangeDlJob) getNextObjs() error {
 	return nil
 }
 
-func newBackendDlJob(ctx context.Context, t cluster.Target, id string, bck *cluster.Bck, payload *DlBackendBody, dlXact *Downloader) (*backendDlJob, error) {
+func newBackendDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlBackendBody, dlXact *Downloader) (*backendDlJob, error) {
 	if !bck.IsRemote() {
 		return nil, errors.New("bucket download requires a remote bucket")
 	} else if bck.IsHTTP() {
@@ -357,7 +353,6 @@ func newBackendDlJob(ctx context.Context, t cluster.Target, id string, bck *clus
 	job := &backendDlJob{
 		baseDlJob: *base,
 		t:         t,
-		ctx:       ctx,
 		sync:      payload.Sync,
 		prefix:    payload.Prefix,
 		suffix:    payload.Suffix,

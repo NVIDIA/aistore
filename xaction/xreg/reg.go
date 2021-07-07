@@ -5,7 +5,6 @@
 package xreg
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -44,7 +43,6 @@ type (
 
 	// used in constructions
 	XactArgs struct {
-		Ctx    context.Context
 		T      cluster.Target
 		UUID   string
 		Custom interface{} // Additional arguments that are specific for a given xaction.

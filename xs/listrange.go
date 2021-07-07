@@ -99,7 +99,7 @@ func (p *evdFactory) Get() cluster.Xact { return p.xact }
 
 func newEvictDelete(xargs *xreg.XactArgs, kind string, bck cmn.Bck, msg *cmn.ListRangeMsg) (ed *evictDelete) {
 	ed = &evictDelete{
-		_lrBase: _lrBase{t: xargs.T, ctx: xargs.Ctx, msg: msg},
+		_lrBase: _lrBase{t: xargs.T, ctx: context.Background(), msg: msg},
 	}
 	ed.InitBase(xargs.UUID, kind, &bck)
 	ed._lrBase.xact = ed
@@ -117,7 +117,7 @@ func (r *evictDelete) Run() {
 }
 
 func (r *evictDelete) do(args *cmn.ListRangeMsg, lom *cluster.LOM) error {
-	errCode, err := r.t.DeleteObject(r.ctx, lom, r.Kind() == cmn.ActEvictObjects)
+	errCode, err := r.t.DeleteObject(lom, r.Kind() == cmn.ActEvictObjects)
 	if errCode == http.StatusNotFound {
 		return nil
 	}
@@ -163,7 +163,7 @@ func (p *prfFactory) Get() cluster.Xact { return p.xact }
 
 func newPrefetch(xargs *xreg.XactArgs, kind string, bck cmn.Bck, msg *cmn.ListRangeMsg) (prf *prefetch) {
 	prf = &prefetch{
-		_lrBase: _lrBase{t: xargs.T, ctx: xargs.Ctx, msg: msg},
+		_lrBase: _lrBase{t: xargs.T, ctx: context.Background(), msg: msg},
 	}
 	prf.InitBase(xargs.UUID, kind, &bck)
 	prf._lrBase.xact = prf

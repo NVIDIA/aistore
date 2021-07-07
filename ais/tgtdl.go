@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -46,7 +45,6 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var (
-			ctx              = context.Background()
 			uuid             = r.URL.Query().Get(cmn.URLParamUUID)
 			dlb              = downloader.DlBody{}
 			progressInterval = downloader.DownloadProgressInterval
@@ -82,7 +80,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			t.writeErr(w, r, err)
 			return
 		}
-		dlJob, err := downloader.ParseStartDownloadRequest(ctx, t, bck, uuid, dlb, downloaderXact)
+		dlJob, err := downloader.ParseStartDownloadRequest(t, bck, uuid, dlb, downloaderXact)
 		if err != nil {
 			t.writeErr(w, r, err)
 			return

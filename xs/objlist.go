@@ -33,14 +33,12 @@ type (
 	olFactory struct {
 		xreg.BaseBckEntry
 		xact *ObjListXact
-		ctx  context.Context
 		t    cluster.Target
 		uuid string
 		msg  *cmn.SelectMsg
 	}
 	ObjListXact struct {
 		xaction.XactDemandBase
-		ctx context.Context
 		t   cluster.Target
 		bck *cluster.Bck
 		msg *cmn.SelectMsg
@@ -58,7 +56,6 @@ type (
 		walkDone   bool                  // true: done walking or Cloud returned all objects
 		fromRemote bool                  // whether to request remote data
 	}
-
 	Resp struct {
 		BckList *cmn.BucketList
 		Status  int
@@ -82,22 +79,22 @@ var (
 )
 
 func (*olFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
-	return &olFactory{ctx: args.Ctx, t: args.T, uuid: args.UUID, msg: args.Custom.(*cmn.SelectMsg)}
+	return &olFactory{t: args.T, uuid: args.UUID, msg: args.Custom.(*cmn.SelectMsg)}
 }
 
 func (p *olFactory) Start(bck cmn.Bck) error {
-	p.xact = newXact(p.ctx, p.t, bck, p.msg, p.uuid)
+	p.xact = newXact(p.t, bck, p.msg, p.uuid)
 	return nil
 }
+
 func (*olFactory) Kind() string        { return cmn.ActList }
 func (p *olFactory) Get() cluster.Xact { return p.xact }
 
-func newXact(ctx context.Context, t cluster.Target, bck cmn.Bck, smsg *cmn.SelectMsg, uuid string) *ObjListXact {
+func newXact(t cluster.Target, bck cmn.Bck, smsg *cmn.SelectMsg, uuid string) *ObjListXact {
 	config := cmn.GCO.Get()
 	totallyIdle := config.Timeout.MaxHostBusy.D()
 	likelyIdle := config.Timeout.MaxKeepalive.D()
 	xact := &ObjListXact{
-		ctx:      ctx,
 		t:        t,
 		bck:      cluster.NewBckEmbed(bck),
 		msg:      smsg,

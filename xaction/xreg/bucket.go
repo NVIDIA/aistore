@@ -5,7 +5,6 @@
 package xreg
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/NVIDIA/aistore/cluster"
@@ -274,12 +273,7 @@ func RenewObjList(t cluster.Target, bck *cluster.Bck, uuid string, msg *cmn.Sele
 func (r *registry) renewObjList(t cluster.Target, bck *cluster.Bck, uuid string, msg *cmn.SelectMsg) RenewRes {
 	xact := r.getXact(uuid)
 	if xact == nil || xact.Finished() {
-		e := r.bckXacts[cmn.ActList].New(&XactArgs{
-			Ctx:    context.Background(),
-			T:      t,
-			UUID:   uuid,
-			Custom: msg,
-		})
+		e := r.bckXacts[cmn.ActList].New(&XactArgs{T: t, UUID: uuid, Custom: msg})
 		return r.renewBckXact(e, bck, uuid)
 	}
 	return RenewRes{&DummyEntry{xact}, nil, false}

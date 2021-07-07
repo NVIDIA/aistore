@@ -45,7 +45,6 @@ type (
 		r          io.ReadCloser    // reader that has the content
 		cksumToUse *cos.Cksum       // if available (not `none`), can be validated and will be stored
 		size       int64            // object size aka Content-Length
-		ctx        context.Context  // context for remote backend, usually access credentials
 		workFQN    string           // temp fqn to be renamed
 		recvType   cluster.RecvType // enum { RegularPut, Cold, Migrated, ... }
 		skipEC     bool             // true: do not erasure-encode when finalizing

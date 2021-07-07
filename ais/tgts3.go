@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"context"
 	"net/http"
 	"path"
 	"strings"
@@ -211,7 +210,7 @@ func (t *targetrunner) delObjS3(w http.ResponseWriter, r *http.Request, items []
 		t.writeErr(w, r, err)
 		return
 	}
-	errCode, err := t.DeleteObject(context.Background(), lom, false)
+	errCode, err := t.DeleteObject(lom, false)
 	if err != nil {
 		if errCode == http.StatusNotFound {
 			err := cmn.NewNotFoundError("%s: %s", t.si, lom.FullName())

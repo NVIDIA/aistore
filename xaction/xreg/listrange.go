@@ -5,8 +5,6 @@
 package xreg
 
 import (
-	"context"
-
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -24,8 +22,7 @@ func RenewEvictDelete(uuid string, t cluster.Target, kind string, bck *cluster.B
 }
 
 func (r *registry) renewEvictDelete(uuid string, t cluster.Target, kind string, bck *cluster.Bck, msg *cmn.ListRangeMsg) RenewRes {
-	ctx := context.Background()
-	return r.renewBucketXact(kind, bck, &XactArgs{Ctx: ctx, T: t, UUID: uuid, Custom: msg})
+	return r.renewBucketXact(kind, bck, &XactArgs{T: t, UUID: uuid, Custom: msg})
 }
 
 func RenewPrefetch(uuid string, t cluster.Target, bck *cluster.Bck, msg *cmn.ListRangeMsg) RenewRes {
@@ -33,6 +30,5 @@ func RenewPrefetch(uuid string, t cluster.Target, bck *cluster.Bck, msg *cmn.Lis
 }
 
 func (r *registry) renewPrefetch(uuid string, t cluster.Target, bck *cluster.Bck, msg *cmn.ListRangeMsg) RenewRes {
-	ctx := context.Background()
-	return r.renewBucketXact(cmn.ActPrefetch, bck, &XactArgs{Ctx: ctx, T: t, UUID: uuid, Custom: msg})
+	return r.renewBucketXact(cmn.ActPrefetch, bck, &XactArgs{T: t, UUID: uuid, Custom: msg})
 }
