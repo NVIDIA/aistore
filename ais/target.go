@@ -1272,7 +1272,7 @@ func (t *targetrunner) _listBcks(query cmn.QueryBcks, cfg *cmn.Config) (names cm
 		names = selectBMDBuckets(t.owner.bmd.get(), query)
 	} else {
 		bck := cluster.NewBck("", query.Provider, query.Ns)
-		names, errCode, err = t.Backend(bck).ListBuckets(context.Background(), query)
+		names, errCode, err = t.Backend(bck).ListBuckets(query)
 		sort.Sort(names)
 	}
 	return
@@ -1399,7 +1399,7 @@ func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict
 	}
 
 	if delFromBackend {
-		backendErrCode, backendErr = t.Backend(lom.Bck()).DeleteObj(ctx, lom)
+		backendErrCode, backendErr = t.Backend(lom.Bck()).DeleteObj(lom)
 		if backendErr == nil {
 			t.statsT.Add(stats.DeleteCount, 1)
 		}

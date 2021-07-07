@@ -68,7 +68,7 @@ func (*awsProvider) MaxPageSize() uint { return 1000 }
 // CREATE BUCKET //
 ///////////////////
 
-func (awsp *awsProvider) CreateBucket(_ context.Context, _ *cluster.Bck) (errCode int, err error) {
+func (awsp *awsProvider) CreateBucket(_ *cluster.Bck) (errCode int, err error) {
 	return creatingBucketNotSupportedErr(awsp.Provider())
 }
 
@@ -76,7 +76,7 @@ func (awsp *awsProvider) CreateBucket(_ context.Context, _ *cluster.Bck) (errCod
 // HEAD BUCKET //
 /////////////////
 
-func (*awsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
+func (*awsProvider) HeadBucket(_ context.Context, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
 	var (
 		svc      *s3.S3
 		region   string
@@ -117,27 +117,11 @@ func (*awsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps 
 	return
 }
 
-func getBucketLocation(svc *s3.S3, bckName string) (region string, err error) {
-	resp, err := svc.GetBucketLocation(&s3.GetBucketLocationInput{
-		Bucket: aws.String(bckName),
-	})
-	if err != nil {
-		return
-	}
-	region = aws.StringValue(resp.LocationConstraint)
-
-	// NOTE: AWS API returns empty region "only" for 'us-east-1`
-	if region == "" {
-		region = endpoints.UsEast1RegionID
-	}
-	return
-}
-
 //////////////////
 // LIST OBJECTS //
 //////////////////
 
-func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList,
+func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList,
 	errCode int, err error) {
 	msg.PageSize = calcPageSize(msg.PageSize, awsp.MaxPageSize())
 
@@ -251,7 +235,7 @@ func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck, msg *c
 // LIST BUCKETS //
 //////////////////
 
-func (*awsProvider) ListBuckets(_ context.Context, query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
+func (*awsProvider) ListBuckets(query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	svc, _, err := newClient(sessConf{}, "")
 	if err != nil {
 		errCode, err = awsErrorToAISError(err, &cmn.Bck{Provider: cmn.ProviderAmazon})
@@ -392,7 +376,7 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.Re
 // PUT OBJECT //
 ////////////////
 
-func (*awsProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
+func (*awsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
 	var (
 		svc                   *s3.S3
 		uploadOutput          *s3manager.UploadOutput
@@ -435,7 +419,7 @@ func (*awsProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluster.LO
 // DELETE OBJECT //
 ///////////////////
 
-func (*awsProvider) DeleteObj(_ context.Context, lom *cluster.LOM) (errCode int, err error) {
+func (*awsProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 	var (
 		svc      *s3.S3
 		cloudBck = lom.Bck().RemoteBck()
@@ -512,6 +496,22 @@ func _session() *session.Session {
 		SharedConfigState: session.SharedConfigEnable,
 		Config:            aws.Config{HTTPClient: cmn.NewClient(cmn.TransportArgs{})},
 	}))
+}
+
+func getBucketLocation(svc *s3.S3, bckName string) (region string, err error) {
+	resp, err := svc.GetBucketLocation(&s3.GetBucketLocationInput{
+		Bucket: aws.String(bckName),
+	})
+	if err != nil {
+		return
+	}
+	region = aws.StringValue(resp.LocationConstraint)
+
+	// NOTE: AWS API returns empty region "only" for 'us-east-1`
+	if region == "" {
+		region = endpoints.UsEast1RegionID
+	}
+	return
 }
 
 func awsErrorToAISError(awsError error, bck *cmn.Bck) (int, error) {

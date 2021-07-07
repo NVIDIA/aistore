@@ -310,7 +310,7 @@ func extractErrCode(e error) (int, error) {
 func (*AISBackendProvider) Provider() string  { return cmn.ProviderAIS }
 func (*AISBackendProvider) MaxPageSize() uint { return cmn.DefaultListPageSizeAIS }
 
-func (*AISBackendProvider) CreateBucket(_ context.Context, _ *cluster.Bck) (errCode int, err error) {
+func (*AISBackendProvider) CreateBucket(_ *cluster.Bck) (errCode int, err error) {
 	debug.Assert(false) // Bucket creation happens only with reverse proxy to AIS cluster.
 	return 0, nil
 }
@@ -337,7 +337,7 @@ func (m *AISBackendProvider) HeadBucket(_ context.Context, remoteBck *cluster.Bc
 	return bckProps, 0, nil
 }
 
-func (m *AISBackendProvider) ListObjects(_ context.Context, remoteBck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
+func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
 	debug.Assert(remoteBck.Provider == cmn.ProviderAIS)
 
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
@@ -389,7 +389,7 @@ func (m *AISBackendProvider) listBucketsCluster(uuid string, query cmn.QueryBcks
 	return bcks, nil
 }
 
-func (m *AISBackendProvider) ListBuckets(_ context.Context, query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
+func (m *AISBackendProvider) ListBuckets(query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	if !query.Ns.IsAnyRemote() {
 		bcks, err = m.listBucketsCluster(query.Ns.UUID, query)
 	} else {
@@ -462,7 +462,7 @@ func (m *AISBackendProvider) GetObjReader(_ context.Context, lom *cluster.LOM) (
 	return r, nil, errCode, err
 }
 
-func (m *AISBackendProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
+func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
 	remoteBck := lom.Bucket()
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
@@ -488,7 +488,7 @@ func (m *AISBackendProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *c
 	return lom.Version(true), 0, nil
 }
 
-func (m *AISBackendProvider) DeleteObj(_ context.Context, lom *cluster.LOM) (errCode int, err error) {
+func (m *AISBackendProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 	remoteBck := lom.Bucket()
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {

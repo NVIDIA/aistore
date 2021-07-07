@@ -60,7 +60,7 @@ func (hp *httpProvider) client(u string) *http.Client {
 func (*httpProvider) Provider() string  { return cmn.ProviderHTTP }
 func (*httpProvider) MaxPageSize() uint { return 10000 }
 
-func (hp *httpProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (errCode int, err error) {
+func (hp *httpProvider) CreateBucket(bck *cluster.Bck) (errCode int, err error) {
 	// TODO: We could support it.
 	return creatingBucketNotSupportedErr(hp.Provider())
 }
@@ -100,12 +100,12 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 	return
 }
 
-func (*httpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
+func (*httpProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
 	debug.Assert(false)
 	return
 }
 
-func (*httpProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
+func (*httpProvider) ListBuckets(query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	debug.Assert(false)
 	return
 }
@@ -220,10 +220,10 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 	return wrapReader(ctx, resp.Body), nil, 0, nil
 }
 
-func (hp *httpProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluster.LOM) (string, int, error) {
+func (hp *httpProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (string, int, error) {
 	return "", http.StatusBadRequest, fmt.Errorf(cmn.FmtErrUnsupported, hp.Provider(), "creating new objects")
 }
 
-func (hp *httpProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (int, error) {
+func (hp *httpProvider) DeleteObj(lom *cluster.LOM) (int, error) {
 	return http.StatusBadRequest, fmt.Errorf(cmn.FmtErrUnsupported, hp.Provider(), "deleting object")
 }

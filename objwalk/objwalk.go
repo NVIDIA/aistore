@@ -76,7 +76,7 @@ func (w *Walk) RemoteObjPage() (*cmn.BucketList, error) {
 	}
 	msg := &cmn.SelectMsg{}
 	*msg = *w.msg
-	objList, _, err := w.t.Backend(w.bck).ListObjects(w.ctx, w.bck, msg)
+	objList, _, err := w.t.Backend(w.bck).ListObjects(w.bck, msg)
 	if err != nil {
 		return nil, err
 	}

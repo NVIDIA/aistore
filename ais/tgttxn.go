@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -143,7 +142,7 @@ func (t *targetrunner) createBucket(c *txnServerCtx) error {
 					return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, c.msg.Action, c.msg.Value, err)
 				}
 			}
-			if _, err := t.Backend(c.bck).CreateBucket(context.Background(), c.bck); err != nil {
+			if _, err := t.Backend(c.bck).CreateBucket(c.bck); err != nil {
 				return err
 			}
 		}

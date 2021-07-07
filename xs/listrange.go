@@ -264,7 +264,7 @@ func (r *_lrBase) iteratePrefix(args *cmn.ListRangeMsg, smap *cluster.Smap, pref
 	msg := &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
 	for !r.xact.Aborted() {
 		if bremote {
-			objList, _, err = r.t.Backend(bck).ListObjects(r.ctx, bck, msg)
+			objList, _, err = r.t.Backend(bck).ListObjects(bck, msg)
 		} else {
 			walk := objwalk.NewWalk(r.ctx, r.t, bck, msg)
 			objList, err = walk.DefaultLocalObjPage(msg)

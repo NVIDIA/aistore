@@ -52,7 +52,7 @@ var (
 	//     The default scope is ScopeFullControl."
 	gcpClient *storage.Client
 
-	// dummy context
+	// context placeholder
 	gctx context.Context
 
 	// interface guard
@@ -82,10 +82,8 @@ func NewGCP(t cluster.Target) (bp cluster.BackendProvider, err error) {
 	gcpp := &gcpProvider{t: t, projectID: projectID}
 	bp = gcpp
 
-	// create and reuse it henceforth
 	gctx = context.Background()
 	gcpClient, err = gcpp.createClient(gctx)
-
 	return
 }
 
@@ -122,7 +120,7 @@ func (*gcpProvider) MaxPageSize() uint { return 1000 }
 // CREATE BUCKET //
 ///////////////////
 
-func (gcpp *gcpProvider) CreateBucket(_ context.Context, _ *cluster.Bck) (errCode int, err error) {
+func (gcpp *gcpProvider) CreateBucket(_ *cluster.Bck) (errCode int, err error) {
 	return creatingBucketNotSupportedErr(gcpp.Provider())
 }
 
@@ -152,7 +150,7 @@ func (*gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps 
 // LIST OBJECTS //
 //////////////////
 
-func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList,
+func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList,
 	errCode int, err error) {
 	msg.PageSize = calcPageSize(msg.PageSize, gcpp.MaxPageSize())
 	var (
@@ -169,7 +167,7 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 	}
 
 	var (
-		it    = gcpClient.Bucket(cloudBck.Name).Objects(ctx, query)
+		it    = gcpClient.Bucket(cloudBck.Name).Objects(gctx, query)
 		pager = iterator.NewPager(it, int(msg.PageSize), msg.ContinuationToken)
 		objs  = make([]*storage.ObjectAttrs, 0, msg.PageSize)
 	)
@@ -211,14 +209,14 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 // LIST BUCKETS //
 //////////////////
 
-func (gcpp *gcpProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
+func (gcpp *gcpProvider) ListBuckets(query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	if gcpp.projectID == "" {
 		// NOTE: empty `projectID` results in obscure: "googleapi: Error 400: Invalid argument"
 		return nil, http.StatusBadRequest,
 			errors.New("empty project ID: cannot list GCP buckets with no authentication")
 	}
 	bcks = make(cmn.Bcks, 0, 16)
-	it := gcpClient.Buckets(ctx, gcpp.projectID)
+	it := gcpClient.Buckets(gctx, gcpp.projectID)
 	for {
 		var battrs *storage.BucketAttrs
 
@@ -350,13 +348,13 @@ func (*gcpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.Re
 // PUT OBJECT //
 ////////////////
 
-func (gcpp *gcpProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
+func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
 	var (
 		h        = cmn.BackendHelpers.Google
 		cloudBck = lom.Bck().RemoteBck()
 		md       = make(cos.SimpleKVs, 2)
 		gcpObj   = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
-		wc       = gcpObj.NewWriter(ctx)
+		wc       = gcpObj.NewWriter(gctx)
 	)
 	md[gcpChecksumType], md[gcpChecksumVal] = lom.Checksum().Get()
 
@@ -372,9 +370,9 @@ func (gcpp *gcpProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *clust
 		errCode, err = gcpErrorToAISError(err, cloudBck)
 		return
 	}
-	attr, err := gcpObj.Attrs(ctx)
+	attr, err := gcpObj.Attrs(gctx)
 	if err != nil {
-		errCode, err = handleObjectError(ctx, gcpClient, err, cloudBck)
+		errCode, err = handleObjectError(gctx, gcpClient, err, cloudBck)
 		return
 	}
 	if v, ok := h.EncodeVersion(attr.Generation); ok {
@@ -390,13 +388,13 @@ func (gcpp *gcpProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *clust
 // DELETE OBJECT //
 ///////////////////
 
-func (*gcpProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
+func (*gcpProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 	var (
 		cloudBck = lom.Bck().RemoteBck()
 		o        = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
 	)
-	if err = o.Delete(ctx); err != nil {
-		errCode, err = handleObjectError(ctx, gcpClient, err, cloudBck)
+	if err = o.Delete(gctx); err != nil {
+		errCode, err = handleObjectError(gctx, gcpClient, err, cloudBck)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {

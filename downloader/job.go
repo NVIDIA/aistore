@@ -283,7 +283,7 @@ func (j *backendDlJob) getNextObjs() error {
 			ContinuationToken: j.continuationToken,
 			PageSize:          backend.MaxPageSize(),
 		}
-		bckList, _, err := backend.ListObjects(j.ctx, j.bck, msg)
+		bckList, _, err := backend.ListObjects(j.bck, msg)
 		if err != nil {
 			return err
 		}

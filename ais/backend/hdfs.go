@@ -74,7 +74,7 @@ func (*hdfsProvider) MaxPageSize() uint { return 10000 }
 // CREATE BUCKET //
 ///////////////////
 
-func (hp *hdfsProvider) CreateBucket(_ context.Context, bck *cluster.Bck) (errCode int, err error) {
+func (hp *hdfsProvider) CreateBucket(bck *cluster.Bck) (errCode int, err error) {
 	return hp.checkDirectoryExists(bck)
 }
 
@@ -113,7 +113,7 @@ func (hp *hdfsProvider) HeadBucket(_ context.Context, bck *cluster.Bck) (bckProp
 // LIST OBJECTS //
 //////////////////
 
-func (hp *hdfsProvider) ListObjects(_ context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList,
+func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList,
 	errCode int, err error) {
 	msg.PageSize = calcPageSize(msg.PageSize, hp.MaxPageSize())
 
@@ -195,7 +195,7 @@ func skipDir(fi os.FileInfo) error {
 // LIST BUCKETS //
 //////////////////
 
-func (*hdfsProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.Bcks, errCode int, err error) {
+func (*hdfsProvider) ListBuckets(query cmn.QueryBcks) (buckets cmn.Bcks, errCode int, err error) {
 	debug.Assert(false)
 	return
 }
@@ -273,7 +273,7 @@ func (hp *hdfsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 // PUT OBJECT //
 ////////////////
 
-func (hp *hdfsProvider) PutObj(_ context.Context, r io.ReadCloser, lom *cluster.LOM) (version string,
+func (hp *hdfsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (version string,
 	errCode int, err error) {
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
 	fw, err := hp.c.Create(filePath)
@@ -321,7 +321,7 @@ finish:
 // DELETE OBJECT //
 ///////////////////
 
-func (hp *hdfsProvider) DeleteObj(_ context.Context, lom *cluster.LOM) (errCode int, err error) {
+func (hp *hdfsProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
 	if err := hp.c.Remove(filePath); err != nil {
 		errCode, err = hdfsErrorToAISError(err)

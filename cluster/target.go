@@ -65,20 +65,17 @@ type (
 		Provider() string
 		MaxPageSize() uint
 
-		CreateBucket(ctx context.Context, bck *Bck) (errCode int, err error)
+		CreateBucket(bck *Bck) (errCode int, err error)
+		ListObjects(bck *Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error)
+		ListBuckets(query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error)
+		PutObj(r io.ReadCloser, lom *LOM) (version string, errCode int, err error)
+		DeleteObj(lom *LOM) (errCode int, err error)
+
+		// with context
 		HeadBucket(ctx context.Context, bck *Bck) (bckProps cos.SimpleKVs, errCode int, err error)
-		ListObjects(ctx context.Context, bck *Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error)
-
-		ListBuckets(ctx context.Context, query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error)
-
 		HeadObj(ctx context.Context, lom *LOM) (objMeta cos.SimpleKVs, errCode int, err error)
-		// GetObj fetches and finalizes the object from the cloud.
 		GetObj(ctx context.Context, lom *LOM) (errCode int, err error)
 		GetObjReader(ctx context.Context, lom *LOM) (r io.ReadCloser, expectedCksum *cos.Cksum, errCode int, err error)
-		// PutObj sends object to the backend.
-		// It takes over of `r` reader and closes it, even on error.
-		PutObj(ctx context.Context, r io.ReadCloser, lom *LOM) (version string, errCode int, err error)
-		DeleteObj(ctx context.Context, lom *LOM) (errCode int, err error)
 	}
 
 	// Callback called by EC PUT jogger after the object is processed and

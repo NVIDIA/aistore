@@ -222,7 +222,7 @@ func (poi *putObjInfo) putRemote() (version string, errCode int, err error) {
 		err = fmt.Errorf(cmn.FmtErrFailed, poi.t.Snode(), "open", poi.workFQN, err)
 		return
 	}
-	version, errCode, err = backend.PutObj(poi.ctx, lmfh, lom)
+	version, errCode, err = backend.PutObj(lmfh, lom)
 	if !lom.Bck().IsRemoteAIS() {
 		customMD := cos.SimpleKVs{cluster.SourceObjMD: backend.Provider()}
 		if version != "" {

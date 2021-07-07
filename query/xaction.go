@@ -156,7 +156,7 @@ func (r *ObjectsListingXact) startFromBck() {
 		}
 
 		for {
-			bckList, _, err := r.t.Backend(bck).ListObjects(r.ctx, bck, r.msg)
+			bckList, _, err := r.t.Backend(bck).ListObjects(bck, r.msg)
 			if err != nil {
 				// TODO: should we do `r.putResult(&Result{err: err})`?
 				return

@@ -55,11 +55,16 @@ const (
 	leaseTime = 60
 )
 
-// interface guard
-var _ cluster.BackendProvider = (*azureProvider)(nil)
+var (
+	// context placeholder
+	azctx context.Context
 
-// TODO: client provided key by name and/or by value to encrypt/decrypt data.
-var defaultKeyOptions azblob.ClientProvidedKeyOptions
+	// TODO: client provided key by name and/or by value to encrypt/decrypt data.
+	defaultKeyOptions azblob.ClientProvidedKeyOptions
+
+	// interface guard
+	_ cluster.BackendProvider = (*azureProvider)(nil)
+)
 
 func azureProto() string {
 	proto := os.Getenv(azureProtoEnvVar)
@@ -131,6 +136,8 @@ func NewAzure(t cluster.Target) (cluster.BackendProvider, error) {
 	if err != nil {
 		return nil, fmt.Errorf(cmn.FmtErrFailed, cmn.ProviderAzure, "init", "credentials", err)
 	}
+
+	azctx = context.Background()
 	p := azblob.NewPipeline(creds, azblob.PipelineOptions{})
 	return &azureProvider{
 		t: t,
@@ -173,7 +180,7 @@ func (*azureProvider) MaxPageSize() uint { return 5000 }
 // CREATE BUCKET //
 ///////////////////
 
-func (ap *azureProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (errCode int, err error) {
+func (ap *azureProvider) CreateBucket(_ *cluster.Bck) (errCode int, err error) {
 	return creatingBucketNotSupportedErr(ap.Provider())
 }
 
@@ -207,8 +214,7 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 // LIST OBJECTS //
 //////////////////
 
-func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck,
-	msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
+func (ap *azureProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
 	msg.PageSize = calcPageSize(msg.PageSize, ap.MaxPageSize())
 
 	var (
@@ -228,7 +234,7 @@ func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck,
 		marker.Val = api.String(msg.ContinuationToken)
 	}
 
-	resp, err := cntURL.ListBlobsFlatSegment(ctx, marker, opts)
+	resp, err := cntURL.ListBlobsFlatSegment(azctx, marker, opts)
 	if err != nil {
 		status, err := azureErrorToAISError(err, cloudBck, "")
 		return nil, status, err
@@ -273,14 +279,14 @@ func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck,
 // LIST BUCKETS //
 //////////////////
 
-func (ap *azureProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
+func (ap *azureProvider) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	var (
 		o          azblob.ListContainersSegmentOptions
 		marker     azblob.Marker
 		containers *azblob.ListContainersSegmentResponse
 	)
 	for marker.NotDone() {
-		containers, err = ap.s.ListContainersSegment(ctx, marker, o)
+		containers, err = ap.s.ListContainersSegment(azctx, marker, o)
 		if err != nil {
 			errCode, err = azureErrorToAISError(err, &cmn.Bck{Provider: cmn.ProviderAzure}, "")
 			return
@@ -423,8 +429,7 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 // PUT OBJECT //
 ////////////////
 
-func (ap *azureProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluster.LOM) (version string,
-	errCode int, err error) {
+func (ap *azureProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
 	defer cos.Close(r)
 
 	var (
@@ -436,10 +441,10 @@ func (ap *azureProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *clust
 		cond     = azblob.ModifiedAccessConditions{}
 	)
 	// Try to lease: if object does not exist, leasing fails with NotFound
-	acqResp, err := blobURL.AcquireLease(ctx, "", leaseTime, cond)
+	acqResp, err := blobURL.AcquireLease(azctx, "", leaseTime, cond)
 	if err == nil {
 		leaseID = acqResp.LeaseID()
-		defer blobURL.ReleaseLease(ctx, acqResp.LeaseID(), cond)
+		defer blobURL.ReleaseLease(azctx, acqResp.LeaseID(), cond)
 	}
 	if err != nil {
 		code, errLease := azureErrorToAISError(err, cloudBck, lom.ObjName)
@@ -459,7 +464,7 @@ func (ap *azureProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *clust
 			LeaseAccessConditions: azblob.LeaseAccessConditions{LeaseID: leaseID},
 		}
 	}
-	putResp, err := azblob.UploadStreamToBlockBlob(ctx, r, blobURL, opts)
+	putResp, err := azblob.UploadStreamToBlockBlob(azctx, r, blobURL, opts)
 	if err != nil {
 		status, err := azureErrorToAISError(err, cloudBck, lom.ObjName)
 		return "", status, err
@@ -486,7 +491,7 @@ func (ap *azureProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *clust
 
 // Delete looks complex because according to docs, it needs acquiring
 // an object beforehand and releasing the lease after
-func (ap *azureProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (int, error) {
+func (ap *azureProvider) DeleteObj(lom *cluster.LOM) (int, error) {
 	var (
 		cloudBck = lom.Bck().RemoteBck()
 		cntURL   = ap.s.NewContainerURL(lom.Bck().Name)
@@ -494,7 +499,7 @@ func (ap *azureProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (int, 
 		cond     = azblob.ModifiedAccessConditions{}
 	)
 
-	acqResp, err := blobURL.AcquireLease(ctx, "", leaseTime, cond)
+	acqResp, err := blobURL.AcquireLease(azctx, "", leaseTime, cond)
 	if err != nil {
 		return azureErrorToAISError(err, cloudBck, lom.ObjName)
 	}
@@ -507,8 +512,8 @@ func (ap *azureProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (int, 
 	delCond := azblob.BlobAccessConditions{
 		LeaseAccessConditions: azblob.LeaseAccessConditions{LeaseID: acqResp.LeaseID()},
 	}
-	defer blobURL.ReleaseLease(ctx, acqResp.LeaseID(), cond)
-	delResp, err := blobURL.Delete(ctx, azblob.DeleteSnapshotsOptionInclude, delCond)
+	defer blobURL.ReleaseLease(azctx, acqResp.LeaseID(), cond)
+	delResp, err := blobURL.Delete(azctx, azblob.DeleteSnapshotsOptionInclude, delCond)
 	if err != nil {
 		return azureErrorToAISError(err, cloudBck, lom.ObjName)
 	}
