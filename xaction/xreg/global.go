@@ -26,7 +26,7 @@ type (
 	BaseGlobalEntry struct{}
 
 	GlobalFactory interface {
-		New(args XactArgs) GlobalEntry
+		New(args Args) GlobalEntry
 		Kind() string
 	}
 
@@ -68,7 +68,7 @@ func RenewRebalance(id int64, statTracker stats.Tracker) cluster.Xact {
 }
 
 func (r *registry) renewRebalance(id int64, statTracker stats.Tracker) cluster.Xact {
-	e := r.globalXacts[cmn.ActRebalance].New(XactArgs{Custom: &RebalanceArgs{
+	e := r.globalXacts[cmn.ActRebalance].New(Args{Custom: &RebalanceArgs{
 		ID:          xaction.RebID2S(id),
 		StatTracker: statTracker,
 	}})
@@ -82,7 +82,7 @@ func (r *registry) renewRebalance(id int64, statTracker stats.Tracker) cluster.X
 func RenewResilver(id string) cluster.Xact { return defaultReg.renewResilver(id) }
 
 func (r *registry) renewResilver(id string) cluster.Xact {
-	e := r.globalXacts[cmn.ActResilver].New(XactArgs{UUID: id})
+	e := r.globalXacts[cmn.ActResilver].New(Args{UUID: id})
 	res := r.renewGlobalXaction(e)
 	debug.Assert(res.IsNew) // resilver must be always preempted
 	return res.Entry.Get()
@@ -91,7 +91,7 @@ func (r *registry) renewResilver(id string) cluster.Xact {
 func RenewElection() cluster.Xact { return defaultReg.renewElection() }
 
 func (r *registry) renewElection() cluster.Xact {
-	e := r.globalXacts[cmn.ActElection].New(XactArgs{})
+	e := r.globalXacts[cmn.ActElection].New(Args{})
 	res := r.renewGlobalXaction(e)
 	if !res.IsNew { // previous election is still running
 		return nil
@@ -102,7 +102,7 @@ func (r *registry) renewElection() cluster.Xact {
 func RenewLRU(id string) cluster.Xact { return defaultReg.renewLRU(id) }
 
 func (r *registry) renewLRU(id string) cluster.Xact {
-	e := r.globalXacts[cmn.ActLRU].New(XactArgs{UUID: id})
+	e := r.globalXacts[cmn.ActLRU].New(Args{UUID: id})
 	res := r.renewGlobalXaction(e)
 	if !res.IsNew { // Previous LRU is still running.
 		res.Entry.Get().Renew()
@@ -116,7 +116,7 @@ func RenewDownloader(t cluster.Target, statsT stats.Tracker) RenewRes {
 }
 
 func (r *registry) renewDownloader(t cluster.Target, statsT stats.Tracker) RenewRes {
-	e := r.globalXacts[cmn.ActDownload].New(XactArgs{
+	e := r.globalXacts[cmn.ActDownload].New(Args{
 		T:      t,
 		Custom: statsT,
 	})

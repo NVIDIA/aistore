@@ -31,42 +31,46 @@ import (
 //
 // NOTE: rebalancing vs performance comment below.
 
+// common for all list-range
 type (
-	bckAbortable interface { // two selected methods that _lrBase needs for itself
+	lrwi interface { // list-range work item
+		do(*cluster.LOM) error
+	}
+	lrxact interface { // two selected methods that lrbase needs for itself
 		Bck() cmn.Bck
 		Aborted() bool
 	}
-	_lrBase struct {
-		xact bckAbortable
+	lrbase struct {
+		xact lrxact
 		t    cluster.Target
 		ctx  context.Context
 		msg  *cmn.ListRangeMsg
 	}
+)
+
+// concrete list-range type xactions (see also: archive.go)
+type (
 	evdFactory struct {
 		xreg.BaseBckEntry
-		xargs xreg.XactArgs
+		xargs xreg.Args
 		xact  *evictDelete
 		kind  string
 		msg   *cmn.ListRangeMsg
 	}
 	evictDelete struct {
 		xaction.XactBase
-		_lrBase
+		lrbase
 	}
-
-	lrCallback func(args *cmn.ListRangeMsg, lom *cluster.LOM) error
-
 	prfFactory struct {
 		xreg.BaseBckEntry
-		xargs xreg.XactArgs
+		xargs xreg.Args
 		xact  *prefetch
 		msg   *cmn.ListRangeMsg
 	}
 	prefetch struct {
 		xaction.XactBase
-		_lrBase
+		lrbase
 	}
-
 	TestXFactory struct{ prfFactory } // tests only
 )
 
@@ -77,13 +81,16 @@ var (
 
 	_ xreg.BckFactory = (*evdFactory)(nil)
 	_ xreg.BckFactory = (*prfFactory)(nil)
+
+	_ lrwi = (*evictDelete)(nil)
+	_ lrwi = (*prefetch)(nil)
 )
 
 //////////////////
 // evict/delete //
 //////////////////
 
-func (p *evdFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
+func (p *evdFactory) New(args *xreg.Args) xreg.BucketEntry {
 	msg := args.Custom.(*cmn.ListRangeMsg)
 	debug.Assert(!msg.IsList() || !msg.HasTemplate())
 	return &evdFactory{xargs: *args, kind: p.kind, msg: msg}
@@ -97,26 +104,26 @@ func (p *evdFactory) Start(bck cmn.Bck) error {
 func (p *evdFactory) Kind() string      { return p.kind }
 func (p *evdFactory) Get() cluster.Xact { return p.xact }
 
-func newEvictDelete(xargs *xreg.XactArgs, kind string, bck cmn.Bck, msg *cmn.ListRangeMsg) (ed *evictDelete) {
+func newEvictDelete(xargs *xreg.Args, kind string, bck cmn.Bck, msg *cmn.ListRangeMsg) (ed *evictDelete) {
 	ed = &evictDelete{
-		_lrBase: _lrBase{t: xargs.T, ctx: context.Background(), msg: msg},
+		lrbase: lrbase{t: xargs.T, ctx: context.Background(), msg: msg},
 	}
 	ed.InitBase(xargs.UUID, kind, &bck)
-	ed._lrBase.xact = ed
+	ed.lrbase.xact = ed
 	return
 }
 
 func (r *evictDelete) Run() {
 	var err error
 	if r.msg.IsList() {
-		err = r.iterateList(r.msg, r.do)
+		err = r.iterateList(r)
 	} else {
-		err = r.iterateRange(r.msg, r.do)
+		err = r.iterateRange(r)
 	}
 	r.Finish(err)
 }
 
-func (r *evictDelete) do(args *cmn.ListRangeMsg, lom *cluster.LOM) error {
+func (r *evictDelete) do(lom *cluster.LOM) error {
 	errCode, err := r.t.DeleteObject(lom, r.Kind() == cmn.ActEvictObjects)
 	if errCode == http.StatusNotFound {
 		return nil
@@ -136,7 +143,7 @@ func (r *evictDelete) do(args *cmn.ListRangeMsg, lom *cluster.LOM) error {
 // prefetch //
 //////////////
 
-func (*prfFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
+func (*prfFactory) New(args *xreg.Args) xreg.BucketEntry {
 	msg := args.Custom.(*cmn.ListRangeMsg)
 	debug.Assert(!msg.IsList() || !msg.HasTemplate())
 	return &prfFactory{xargs: *args, msg: msg}
@@ -161,26 +168,26 @@ func (p *prfFactory) Start(bck cmn.Bck) error {
 func (*prfFactory) Kind() string        { return cmn.ActPrefetch }
 func (p *prfFactory) Get() cluster.Xact { return p.xact }
 
-func newPrefetch(xargs *xreg.XactArgs, kind string, bck cmn.Bck, msg *cmn.ListRangeMsg) (prf *prefetch) {
+func newPrefetch(xargs *xreg.Args, kind string, bck cmn.Bck, msg *cmn.ListRangeMsg) (prf *prefetch) {
 	prf = &prefetch{
-		_lrBase: _lrBase{t: xargs.T, ctx: context.Background(), msg: msg},
+		lrbase: lrbase{t: xargs.T, ctx: context.Background(), msg: msg},
 	}
 	prf.InitBase(xargs.UUID, kind, &bck)
-	prf._lrBase.xact = prf
+	prf.lrbase.xact = prf
 	return
 }
 
 func (r *prefetch) Run() {
 	var err error
 	if r.msg.IsList() {
-		err = r.iterateList(r.msg, r.do)
+		err = r.iterateList(r)
 	} else {
-		err = r.iterateRange(r.msg, r.do)
+		err = r.iterateRange(r)
 	}
 	r.Finish(err)
 }
 
-func (r *prefetch) do(args *cmn.ListRangeMsg, lom *cluster.LOM) error {
+func (r *prefetch) do(lom *cluster.LOM) error {
 	var coldGet bool
 	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
 		coldGet = cmn.IsObjNotExist(err)
@@ -220,26 +227,26 @@ func (r *prefetch) do(args *cmn.ListRangeMsg, lom *cluster.LOM) error {
 // _lrbase //
 /////////////
 
-func (r *_lrBase) iterateRange(msg *cmn.ListRangeMsg, cb lrCallback) error {
-	pt, err := parseTemplate(msg.Template)
+func (r *lrbase) iterateRange(wi lrwi) error {
+	pt, err := parseTemplate(r.msg.Template)
 	if err != nil {
 		return err
 	}
 	smap := r.t.Sowner().Get()
 	if len(pt.Ranges) != 0 {
-		return r.iterateTemplate(msg, smap, &pt, cb)
+		return r.iterateTemplate(smap, &pt, wi)
 	}
-	return r.iteratePrefix(msg, smap, pt.Prefix, cb)
+	return r.iteratePrefix(smap, pt.Prefix, wi)
 }
 
-func (r *_lrBase) iterateTemplate(args *cmn.ListRangeMsg, smap *cluster.Smap, pt *cos.ParsedTemplate, cb lrCallback) error {
+func (r *lrbase) iterateTemplate(smap *cluster.Smap, pt *cos.ParsedTemplate, wi lrwi) error {
 	getNext := pt.Iter()
 	for objName, hasNext := getNext(); hasNext; objName, hasNext = getNext() {
 		if r.xact.Aborted() {
 			return nil
 		}
 		lom := cluster.AllocLOM(objName)
-		err := r.iterate(lom, args, cb, smap)
+		err := r.iterate(lom, wi, smap)
 		cluster.FreeLOM(lom)
 		if err != nil {
 			return err
@@ -248,7 +255,7 @@ func (r *_lrBase) iterateTemplate(args *cmn.ListRangeMsg, smap *cluster.Smap, pt
 	return nil
 }
 
-func (r *_lrBase) iteratePrefix(args *cmn.ListRangeMsg, smap *cluster.Smap, prefix string, cb lrCallback) error {
+func (r *lrbase) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) error {
 	var (
 		objList *cmn.BucketList
 		err     error
@@ -280,7 +287,7 @@ func (r *_lrBase) iteratePrefix(args *cmn.ListRangeMsg, smap *cluster.Smap, pref
 				return nil
 			}
 			lom := cluster.AllocLOM(be.Name)
-			err := r.iterate(lom, args, cb, smap)
+			err := r.iterate(lom, wi, smap)
 			cluster.FreeLOM(lom)
 			if err != nil {
 				return err
@@ -297,14 +304,14 @@ func (r *_lrBase) iteratePrefix(args *cmn.ListRangeMsg, smap *cluster.Smap, pref
 	return nil
 }
 
-func (r *_lrBase) iterateList(msg *cmn.ListRangeMsg, cb lrCallback) error {
+func (r *lrbase) iterateList(wi lrwi) error {
 	smap := r.t.Sowner().Get()
-	for _, objName := range msg.ObjNames {
+	for _, objName := range r.msg.ObjNames {
 		if r.xact.Aborted() {
 			break
 		}
 		lom := cluster.AllocLOM(objName)
-		err := r.iterate(lom, msg, cb, smap)
+		err := r.iterate(lom, wi, smap)
 		cluster.FreeLOM(lom)
 		if err != nil {
 			return err
@@ -313,7 +320,7 @@ func (r *_lrBase) iterateList(msg *cmn.ListRangeMsg, cb lrCallback) error {
 	return nil
 }
 
-func (r *_lrBase) iterate(lom *cluster.LOM, args *cmn.ListRangeMsg, cb lrCallback, smap *cluster.Smap) error {
+func (r *lrbase) iterate(lom *cluster.LOM, wi lrwi, smap *cluster.Smap) error {
 	if err := lom.Init(r.xact.Bck()); err != nil {
 		return err
 	}
@@ -329,7 +336,7 @@ func (r *_lrBase) iterate(lom *cluster.LOM, args *cmn.ListRangeMsg, cb lrCallbac
 			return nil
 		}
 	}
-	return cb(args, lom)
+	return wi.do(lom)
 }
 
 // helpers ---------------

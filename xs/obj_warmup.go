@@ -36,7 +36,7 @@ var (
 // llcFactory //
 ////////////////
 
-func (*llcFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
+func (*llcFactory) New(args *xreg.Args) xreg.BucketEntry {
 	return &llcFactory{t: args.T, uuid: args.UUID}
 }
 

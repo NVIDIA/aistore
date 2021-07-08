@@ -29,7 +29,7 @@ var (
 	_ xreg.GlobalFactory = (*eleFactory)(nil)
 )
 
-func (*eleFactory) New(_ xreg.XactArgs) xreg.GlobalEntry { return &eleFactory{} }
+func (*eleFactory) New(_ xreg.Args) xreg.GlobalEntry { return &eleFactory{} }
 
 func (p *eleFactory) Start(_ cmn.Bck) error {
 	p.xact = &Election{}

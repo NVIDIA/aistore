@@ -33,6 +33,7 @@ type (
 		uuid string
 	}
 	zwork struct {
+		r   *XactPutArchive
 		msg *cmn.ArchiveMsg
 		lom *cluster.LOM // of the archive
 		fqn string       // workFQN --/--
@@ -62,13 +63,14 @@ const (
 var (
 	_ cluster.Xact    = (*XactPutArchive)(nil)
 	_ xreg.BckFactory = (*archFactory)(nil)
+	_ lrwi            = (*zwork)(nil)
 )
 
 ////////////////
 // archFactory //
 ////////////////
 
-func (*archFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
+func (*archFactory) New(args *xreg.Args) xreg.BucketEntry {
 	return &archFactory{t: args.T, uuid: args.UUID}
 }
 
@@ -126,7 +128,7 @@ func (r *XactPutArchive) Begin(msg *cmn.ArchiveMsg) (err error) {
 	}
 	debug.Assert(lom.FullName() == msg.FullName()) // relying on it
 
-	work := &zwork{msg: msg, lom: lom}
+	work := &zwork{r: r, msg: msg, lom: lom}
 	work.fqn = fs.CSM.GenContentFQN(work.lom, fs.WorkfileType, fs.WorkfileAppend)
 
 	smap := r.t.Sowner().Get()
@@ -163,10 +165,12 @@ func (r *XactPutArchive) Run() {
 			r.pending.RLock()
 			work := r.pending.m[fullname]
 			r.pending.RUnlock()
-			debug.Assert(work != nil)
+			debug.Assert(work.r == r)
+
+			// TODO: reuse xs/listrange.go iterateList() and friends
 			for _, objName := range msg.ObjNames {
 				lom := cluster.AllocLOM(objName)
-				if err := work.do(lom, r); err != nil {
+				if err := work.do(lom); err != nil {
 					cluster.FreeLOM(lom)
 				}
 			}
@@ -273,8 +277,8 @@ func (r *XactPutArchive) Stats() cluster.XactStats {
 ///////////
 // zwork //
 ///////////
-func (work *zwork) do(lom *cluster.LOM, r *XactPutArchive) (err error) {
-	if err = lom.Init(r.bckFrom); err != nil {
+func (work *zwork) do(lom *cluster.LOM) (err error) {
+	if err = lom.Init(work.r.bckFrom); err != nil {
 		return
 	}
 	if err = lom.Load(false /*cache it*/, false /*locked*/); err != nil {
@@ -288,8 +292,8 @@ func (work *zwork) do(lom *cluster.LOM, r *XactPutArchive) (err error) {
 	}
 
 	debug.AssertNoErr(err)
-	if r.t.Snode().ID() != work.tsi.ID() {
-		r.doSend(lom, work, fh)
+	if work.r.t.Snode().ID() != work.tsi.ID() {
+		work.r.doSend(lom, work, fh)
 		return
 	}
 	debug.Assert(work.fh != nil) // see Begin

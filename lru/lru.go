@@ -121,7 +121,7 @@ func init() {
 	xreg.RegGlobXact(&Factory{})
 }
 
-func (*Factory) New(args xreg.XactArgs) xreg.GlobalEntry {
+func (*Factory) New(args xreg.Args) xreg.GlobalEntry {
 	return &Factory{id: args.UUID}
 }
 

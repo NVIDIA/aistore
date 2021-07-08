@@ -231,7 +231,7 @@ func (pr *progressReader) Close() error {
 // dowFactory //
 ////////////////
 
-func (*dowFactory) New(args xreg.XactArgs) xreg.GlobalEntry {
+func (*dowFactory) New(args xreg.Args) xreg.GlobalEntry {
 	return &dowFactory{t: args.T, statsT: args.Custom.(stats.Tracker)}
 }
 

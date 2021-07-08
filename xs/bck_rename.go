@@ -41,7 +41,7 @@ var (
 	_ xreg.BckFactory = (*MovFactory)(nil)
 )
 
-func (*MovFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
+func (*MovFactory) New(args *xreg.Args) xreg.BucketEntry {
 	return &MovFactory{
 		t:    args.T,
 		uuid: args.UUID,

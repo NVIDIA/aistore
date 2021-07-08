@@ -73,7 +73,7 @@ func freeCpObjParams(a *cluster.CopyObjectParams) {
 // cpyFactory //
 ////////////////
 
-func (e *cpyFactory) New(args *xreg.XactArgs) xreg.BucketEntry {
+func (e *cpyFactory) New(args *xreg.Args) xreg.BucketEntry {
 	return &cpyFactory{
 		t:    args.T,
 		uuid: args.UUID,

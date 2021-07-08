@@ -42,7 +42,7 @@ type (
 	}
 
 	// used in constructions
-	XactArgs struct {
+	Args struct {
 		T      cluster.Target
 		UUID   string
 		Custom interface{} // Additional arguments that are specific for a given xaction.

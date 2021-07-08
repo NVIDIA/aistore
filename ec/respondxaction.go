@@ -43,9 +43,9 @@ var (
 // rspFactory //
 ////////////////
 
-func (*rspFactory) New(_ *xreg.XactArgs) xreg.BucketEntry { return &rspFactory{} }
-func (*rspFactory) Kind() string                          { return cmn.ActECRespond }
-func (p *rspFactory) Get() cluster.Xact                   { return p.xact }
+func (*rspFactory) New(_ *xreg.Args) xreg.BucketEntry { return &rspFactory{} }
+func (*rspFactory) Kind() string                      { return cmn.ActECRespond }
+func (p *rspFactory) Get() cluster.Xact               { return p.xact }
 
 func (p *rspFactory) Start(bck cmn.Bck) error {
 	var (

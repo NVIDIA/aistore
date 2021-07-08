@@ -74,7 +74,7 @@ func (xact *RebBase) initRebBase(id, kind string) {
 // Rebalance //
 ///////////////
 
-func (*rebFactory) New(args xreg.XactArgs) xreg.GlobalEntry {
+func (*rebFactory) New(args xreg.Args) xreg.GlobalEntry {
 	return &rebFactory{args: args.Custom.(*xreg.RebalanceArgs)}
 }
 
@@ -143,7 +143,7 @@ func (xact *Rebalance) Stats() cluster.XactStats {
 // Resilver //
 //////////////
 
-func (*resilverFactory) New(args xreg.XactArgs) xreg.GlobalEntry {
+func (*resilverFactory) New(args xreg.Args) xreg.GlobalEntry {
 	return &resilverFactory{id: args.UUID}
 }
 

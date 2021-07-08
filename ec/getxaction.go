@@ -55,7 +55,7 @@ var (
 // getFactory //
 ////////////////
 
-func (*getFactory) New(_ *xreg.XactArgs) xreg.BucketEntry { return &getFactory{} }
+func (*getFactory) New(_ *xreg.Args) xreg.BucketEntry { return &getFactory{} }
 
 func (p *getFactory) Start(bck cmn.Bck) error {
 	var (
