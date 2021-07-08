@@ -372,6 +372,8 @@ var (
 	}
 	computeCksumFlag = cli.BoolFlag{Name: "compute-cksum", Usage: "compute the checksum with the type configured for the bucket"}
 	checksumFlags    = getCksumFlags()
+	archiveFlag      = cli.BoolFlag{Name: "archive", Usage: "create an archive from existing objects"}
+	sourceBckFlag    = cli.StringFlag{Name: "source-bck", Usage: "source bucket"}
 
 	// AuthN
 	tokenFileFlag = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to file"}

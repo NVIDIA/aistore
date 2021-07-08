@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
@@ -38,6 +39,10 @@ var (
 			verboseFlag,
 			yesFlag,
 			computeCksumFlag,
+			archiveFlag,
+			sourceBckFlag,
+			templateFlag,
+			listFlag,
 		),
 		commandSetCustom: {},
 		commandPromote: {
@@ -228,7 +233,57 @@ func getHandler(c *cli.Context) (err error) {
 	return getObject(c, outFile, false /*silent*/)
 }
 
-func putHandler(c *cli.Context) (err error) {
+func putArchiveHandler(c *cli.Context) (err error) {
+	var (
+		bckTo, bckFrom cmn.Bck
+		objName        string
+		template       = parseStrFlag(c, templateFlag)
+		list           = parseStrFlag(c, listFlag)
+	)
+	if c.NArg() < 1 {
+		return missingArgumentsError(c, "object name in the form bucket/[object]")
+	}
+	if c.NArg() > 1 {
+		return incorrectUsageMsg(c, "only single object is supported")
+	}
+	if template == "" && list == "" {
+		return missingArgumentsError(c, "either object list or template flag")
+	}
+	if template != "" && list != "" {
+		return incorrectUsageMsg(c, "list and template options are mutually exclusive")
+	}
+	if bckTo, objName, err = parseBckObjectURI(c, c.Args().Get(0), true /*optional objName*/); err != nil {
+		return
+	}
+	if srcURI := parseStrFlag(c, sourceBckFlag); srcURI != "" {
+		if bckFrom, _, err = parseBckObjectURI(c, srcURI, true /*optional objName*/); err != nil {
+			return
+		}
+	} else {
+		bckFrom = bckTo
+	}
+	if list != "" {
+		objList := strings.Split(list, ",")
+		_, err = api.ArchiveList(defaultAPIParams, bckFrom, bckTo, objName, objList)
+	} else {
+		_, err = api.ArchiveRange(defaultAPIParams, bckFrom, bckTo, objName, template)
+	}
+	if err != nil {
+		return err
+	}
+	for i := 0; ; i++ {
+		time.Sleep(time.Second)
+		_, err = api.HeadObject(defaultAPIParams, bckTo, objName, true /*checkExists*/)
+		if err == nil {
+			return nil
+		}
+		if i == 3 {
+			fmt.Fprintf(c.App.Writer, "Creating archive %q is in progress. Please wait...\n", objName)
+		}
+	}
+}
+
+func putRegularObjHandler(c *cli.Context) (err error) {
 	var (
 		bck      cmn.Bck
 		p        *cmn.BucketProps
@@ -236,6 +291,7 @@ func putHandler(c *cli.Context) (err error) {
 		fileName = c.Args().Get(0)
 		uri      = c.Args().Get(1)
 	)
+
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "file to upload", "object name in the form bucket/[object]")
 	}
@@ -249,6 +305,14 @@ func putHandler(c *cli.Context) (err error) {
 		return err
 	}
 	return putObject(c, bck, objName, fileName, p.Cksum.Type)
+}
+
+func putHandler(c *cli.Context) (err error) {
+	if flagIsSet(c, archiveFlag) {
+		return putArchiveHandler(c)
+	}
+
+	return putRegularObjHandler(c)
 }
 
 func concatHandler(c *cli.Context) (err error) {

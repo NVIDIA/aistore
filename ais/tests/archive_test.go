@@ -155,7 +155,7 @@ func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 			t:       t,
 			bck:     bck.Bck,
 			num:     100,
-			prefix:  "archive/qq",
+			prefix:  "archive/",
 			ordered: true,
 		}
 		toBck      = cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS}
@@ -194,7 +194,7 @@ func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 		go func(i int) {
 			tarName := fmt.Sprintf("test_rng_%02d.tar", i)
 			start := rand.Intn(numPuts - numInArch)
-			rng := fmt.Sprintf(fmtRange, m.prefix+"/", start, start+numInArch-1)
+			rng := fmt.Sprintf(fmtRange, m.prefix, start, start+numInArch-1)
 			_, err := api.ArchiveRange(baseParams, m.bck, toBck, tarName, rng)
 			tassert.CheckFatal(t, err)
 		}(i)
