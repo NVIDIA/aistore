@@ -28,6 +28,7 @@ func TestSmoke(t *testing.T) {
 					bck:      bck.Bck,
 					num:      100,
 					fileSize: objSize,
+					prefix:   "smoke/obj-",
 				}
 
 				if !testing.Short() {

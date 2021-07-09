@@ -119,7 +119,8 @@ func TestGetFromArchive(t *testing.T) {
 				tassert.CheckFatal(t, err)
 
 				tutils.Put(m.proxyURL, m.bck, objname, reader, errCh)
-				defer m.del()
+				tassert.SelectErr(t, errCh, "put", true)
+				defer tutils.Del(m.proxyURL, m.bck, objname, nil, nil, true)
 
 				for _, randomName := range randomNames {
 					var mime string
@@ -154,7 +155,7 @@ func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 			t:       t,
 			bck:     bck.Bck,
 			num:     100,
-			prefix:  "archive",
+			prefix:  "archive/",
 			ordered: true,
 		}
 		toBck      = cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS}
@@ -211,5 +212,5 @@ func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 	for _, entry := range objList.Entries {
 		tlog.Logf("%s: %dB\n", entry.Name, entry.Size)
 	}
-	tassert.Errorf(t, len(objList.Entries) == numArchs*2, "expected %d, have %d", numArchs, len(objList.Entries))
+	tassert.Errorf(t, len(objList.Entries) == numArchs*2, "expected %d, have %d", numArchs*2, len(objList.Entries))
 }

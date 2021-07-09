@@ -56,7 +56,7 @@ type ioContext struct {
 	bck                 cmn.Bck
 	fileSize            uint64
 	proxyURL            string
-	prefix              string // default value is "copy/remote-"
+	prefix              string
 	otherTasksToTrigger int
 	originalTargetCount int
 	originalProxyCount  int
@@ -183,19 +183,12 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 		return
 	}
 
-	var (
-		objPrefix  = "some_prefix"
-		baseParams = tutils.BaseAPIParams(m.proxyURL)
-	)
-
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	p, err := api.HeadBucket(baseParams, m.bck)
 	tassert.CheckFatal(m.t, err)
 
 	if !m.silent {
 		tlog.Logf("PUT %d objects into bucket %s...\n", m.num, m.bck)
-	}
-	if m.prefix != "" {
-		objPrefix = m.prefix
 	}
 
 	var ignoreErr bool
@@ -206,7 +199,7 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 	m.objNames, m.numPutErrs, err = tutils.PutRandObjs(tutils.PutObjectsArgs{
 		ProxyURL:  m.proxyURL,
 		Bck:       m.bck,
-		ObjPath:   objPrefix,
+		ObjPath:   m.prefix,
 		ObjCnt:    m.num,
 		ObjSize:   m.fileSize,
 		FixedSize: m.fixedSize,
@@ -273,13 +266,6 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 	p, err := api.HeadBucket(baseParams, m.bck)
 	tassert.CheckFatal(m.t, err)
 
-	objPrefix := m.prefix
-	if objPrefix == "" {
-		objPrefix = "copy"
-	}
-	if !strings.Contains(objPrefix, "/") {
-		objPrefix += "/remote_"
-	}
 	for i := 0; i < objCnt; i++ {
 		r, err := readers.NewRandReader(int64(m.fileSize), p.Cksum.Type)
 		tassert.CheckFatal(m.t, err)
@@ -288,9 +274,9 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 		if override {
 			objName = m.objNames[i]
 		} else if m.ordered {
-			objName = fmt.Sprintf("%s%d", objPrefix, i)
+			objName = fmt.Sprintf("%s%d", m.prefix, i)
 		} else {
-			objName = fmt.Sprintf("%s%s-%d", objPrefix, cos.RandString(8), i)
+			objName = fmt.Sprintf("%s%s-%d", m.prefix, cos.RandString(8), i)
 		}
 		wg.Add(1)
 		go func() {

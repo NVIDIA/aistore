@@ -334,6 +334,7 @@ func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType str
 			bck:      bck,
 			num:      15,
 			fileSize: cos.KiB,
+			prefix:   "props/obj-",
 		}
 		proxyURL = tutils.RandomProxyURL()
 	)
@@ -499,6 +500,7 @@ func TestObjProps(t *testing.T) {
 				num:       10,
 				fileSize:  512,
 				fixedSize: true,
+				prefix:    "props/obj-",
 			}
 
 			m.init()

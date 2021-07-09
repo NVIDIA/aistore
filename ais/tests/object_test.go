@@ -583,6 +583,7 @@ func Test_coldgetmd5(t *testing.T) {
 			bck:      cliBck,
 			num:      5,
 			fileSize: largeFileSize,
+			prefix:   "md5/obj-",
 		}
 		totalSize     = int64(uint64(m.num) * m.fileSize)
 		proxyURL      = tutils.RandomProxyURL(t)
@@ -751,6 +752,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 			bck:      cliBck,
 			num:      3,
 			fileSize: cos.KiB,
+			prefix:   "cksum/obj-",
 		}
 
 		proxyURL   = tutils.RandomProxyURL(t)
@@ -874,6 +876,7 @@ func testEvictRemoteBucket(t *testing.T, bck cmn.Bck, keepMD bool) {
 			bck:      bck,
 			num:      5,
 			fileSize: largeFileSize,
+			prefix:   "evict/obj-",
 		}
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
