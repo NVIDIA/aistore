@@ -33,18 +33,24 @@ import (
 
 // common for all list-range
 type (
-	lrwi interface { // list-range work item
-		do(*cluster.LOM) error
+	// one multi-object operation work item
+	lrwi interface {
+		do(*cluster.LOM, *lriterator) error
 	}
-	lrxact interface { // two selected methods that lrbase needs for itself
+	// two selected methods that lriterator needs for itself (a strict subset of cluster.Xact)
+	lrxact interface {
 		Bck() cmn.Bck
 		Aborted() bool
 	}
-	lrbase struct {
-		xact lrxact
-		t    cluster.Target
-		ctx  context.Context
-		msg  *cmn.ListRangeMsg
+	// common mult-obj operation context
+	// common iterateList()/iterateRange() logic
+	lriterator struct {
+		xact             lrxact
+		t                cluster.Target
+		ctx              context.Context
+		msg              *cmn.ListRangeMsg
+		ignoreBackendErr bool // ignore backend API errors
+		freeLOM          bool // free LOM upon return from lriterator.do()
 	}
 )
 
@@ -59,7 +65,7 @@ type (
 	}
 	evictDelete struct {
 		xaction.XactBase
-		lrbase
+		lriterator
 	}
 	prfFactory struct {
 		xreg.BaseBckEntry
@@ -69,7 +75,7 @@ type (
 	}
 	prefetch struct {
 		xaction.XactBase
-		lrbase
+		lriterator
 	}
 	TestXFactory struct{ prfFactory } // tests only
 )
@@ -85,6 +91,153 @@ var (
 	_ lrwi = (*evictDelete)(nil)
 	_ lrwi = (*prefetch)(nil)
 )
+
+////////////////
+// lriterator //
+////////////////
+
+func (r *lriterator) init(xact lrxact, t cluster.Target, msg *cmn.ListRangeMsg, ignoreBackendErr, freeLOM bool) {
+	r.xact = xact
+	r.t = t
+	r.ctx = context.Background()
+	r.msg = msg
+	r.ignoreBackendErr = ignoreBackendErr
+	r.freeLOM = freeLOM
+}
+
+func (r *lriterator) iterateRange(wi lrwi, smap *cluster.Smap) error {
+	pt, err := parseTemplate(r.msg.Template)
+	if err != nil {
+		return err
+	}
+	if len(pt.Ranges) != 0 {
+		return r.iterateTemplate(smap, &pt, wi)
+	}
+	return r.iteratePrefix(smap, pt.Prefix, wi)
+}
+
+func (r *lriterator) iterateTemplate(smap *cluster.Smap, pt *cos.ParsedTemplate, wi lrwi) error {
+	getNext := pt.Iter()
+	for objName, hasNext := getNext(); hasNext; objName, hasNext = getNext() {
+		if r.xact.Aborted() {
+			return nil
+		}
+		lom := cluster.AllocLOM(objName)
+		err := r.do(lom, wi, smap)
+		if err != nil || r.freeLOM {
+			cluster.FreeLOM(lom)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) error {
+	var (
+		objList *cmn.BucketList
+		err     error
+	)
+	bck := cluster.NewBckEmbed(r.xact.Bck())
+	if err := bck.Init(r.t.Bowner()); err != nil {
+		return err
+	}
+	bremote := bck.IsRemote()
+	if !bremote {
+		smap = nil // not needed
+	}
+	msg := &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
+	for !r.xact.Aborted() {
+		if bremote {
+			objList, _, err = r.t.Backend(bck).ListObjects(bck, msg)
+		} else {
+			walk := objwalk.NewWalk(r.ctx, r.t, bck, msg)
+			objList, err = walk.DefaultLocalObjPage(msg)
+		}
+		if err != nil {
+			return err
+		}
+		for _, be := range objList.Entries {
+			if !be.IsStatusOK() {
+				continue
+			}
+			if r.xact.Aborted() {
+				return nil
+			}
+			lom := cluster.AllocLOM(be.Name)
+			err := r.do(lom, wi, smap)
+			if err != nil || r.freeLOM {
+				cluster.FreeLOM(lom)
+			}
+			if err != nil {
+				return err
+			}
+		}
+
+		// Stop when the last page is reached.
+		if objList.ContinuationToken == "" {
+			break
+		}
+		// Update `ContinuationToken` for the next request.
+		msg.ContinuationToken = objList.ContinuationToken
+	}
+	return nil
+}
+
+func (r *lriterator) iterateList(wi lrwi, smap *cluster.Smap) error {
+	for _, objName := range r.msg.ObjNames {
+		if r.xact.Aborted() {
+			break
+		}
+		lom := cluster.AllocLOM(objName)
+		err := r.do(lom, wi, smap)
+		if err != nil || r.freeLOM {
+			cluster.FreeLOM(lom)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *lriterator) do(lom *cluster.LOM, wi lrwi, smap *cluster.Smap) error {
+	if err := lom.Init(r.xact.Bck()); err != nil {
+		return err
+	}
+	if smap != nil {
+		// NOTE: checking cluster locality to speed up iterating - trading off
+		// rebalancing for performance (can be configurable).
+		_, local, err := lom.HrwTarget(smap)
+		if err != nil {
+			return err
+		}
+		if !local {
+			return nil
+		}
+	}
+	return wi.do(lom, r)
+}
+
+// helpers ---------------
+
+// Parsing:
+// 1. bash-extension style: `file-{0..100}`
+// 2. at-style: `file-@100`
+// 3. if none of the above, fall back to just prefix matching
+func parseTemplate(template string) (cos.ParsedTemplate, error) {
+	if template == "" {
+		return cos.ParsedTemplate{}, errors.New("empty range template")
+	}
+	if parsed, err := cos.ParseBashTemplate(template); err == nil {
+		return parsed, nil
+	}
+	if parsed, err := cos.ParseAtTemplate(template); err == nil {
+		return parsed, nil
+	}
+	return cos.ParsedTemplate{Prefix: template}, nil
+}
 
 //////////////////
 // evict/delete //
@@ -105,32 +258,37 @@ func (p *evdFactory) Kind() string      { return p.kind }
 func (p *evdFactory) Get() cluster.Xact { return p.xact }
 
 func newEvictDelete(xargs *xreg.Args, kind string, bck cmn.Bck, msg *cmn.ListRangeMsg) (ed *evictDelete) {
-	ed = &evictDelete{
-		lrbase: lrbase{t: xargs.T, ctx: context.Background(), msg: msg},
-	}
+	ed = &evictDelete{}
+	// NOTE: list defaults to aborting on errors other than non-existence
+	ed.lriterator.init(ed, xargs.T, msg, !msg.IsList() /*ignoreBackendErr*/, true /*freeLOM*/)
 	ed.InitBase(xargs.UUID, kind, &bck)
-	ed.lrbase.xact = ed
 	return
 }
 
 func (r *evictDelete) Run() {
-	var err error
+	var (
+		err  error
+		smap = r.t.Sowner().Get()
+	)
 	if r.msg.IsList() {
-		err = r.iterateList(r)
+		err = r.iterateList(r, smap)
 	} else {
-		err = r.iterateRange(r)
+		err = r.iterateRange(r, smap)
 	}
 	r.Finish(err)
 }
 
-func (r *evictDelete) do(lom *cluster.LOM) error {
+func (r *evictDelete) do(lom *cluster.LOM, _ *lriterator) error {
 	errCode, err := r.t.DeleteObject(lom, r.Kind() == cmn.ActEvictObjects)
 	if errCode == http.StatusNotFound {
 		return nil
 	}
 	if err != nil {
 		if cmn.IsErrObjNought(err) {
-			return nil
+			err = nil
+		} else if r.ignoreBackendErr {
+			glog.Warning(err)
+			err = nil
 		}
 		return err
 	}
@@ -169,25 +327,28 @@ func (*prfFactory) Kind() string        { return cmn.ActPrefetch }
 func (p *prfFactory) Get() cluster.Xact { return p.xact }
 
 func newPrefetch(xargs *xreg.Args, kind string, bck cmn.Bck, msg *cmn.ListRangeMsg) (prf *prefetch) {
-	prf = &prefetch{
-		lrbase: lrbase{t: xargs.T, ctx: context.Background(), msg: msg},
-	}
+	prf = &prefetch{}
+	// NOTE: list defaults to aborting on errors other than non-existence
+	prf.lriterator.init(prf, xargs.T, msg, !msg.IsList() /*ignoreBackendErr*/, true /*freeLOM*/)
 	prf.InitBase(xargs.UUID, kind, &bck)
-	prf.lrbase.xact = prf
+	prf.lriterator.xact = prf
 	return
 }
 
 func (r *prefetch) Run() {
-	var err error
+	var (
+		err  error
+		smap = r.t.Sowner().Get()
+	)
 	if r.msg.IsList() {
-		err = r.iterateList(r)
+		err = r.iterateList(r, smap)
 	} else {
-		err = r.iterateRange(r)
+		err = r.iterateRange(r, smap)
 	}
 	r.Finish(err)
 }
 
-func (r *prefetch) do(lom *cluster.LOM) error {
+func (r *prefetch) do(lom *cluster.LOM, _ *lriterator) error {
 	var coldGet bool
 	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
 		coldGet = cmn.IsObjNotExist(err)
@@ -198,6 +359,10 @@ func (r *prefetch) do(lom *cluster.LOM) error {
 	if !coldGet && lom.Version() != "" && lom.VersionConf().ValidateWarmGet {
 		var err error
 		if coldGet, _, err = r.t.CheckRemoteVersion(r.ctx, lom); err != nil {
+			if r.ignoreBackendErr {
+				glog.Warning(err)
+				err = nil
+			}
 			return err
 		}
 	}
@@ -210,10 +375,13 @@ func (r *prefetch) do(lom *cluster.LOM) error {
 	// negatve Now() for correct processing the LOM while housekeeping
 	lom.SetAtimeUnix(-time.Now().UnixNano())
 	if _, err := r.t.GetCold(r.ctx, lom, cluster.Prefetch); err != nil {
-		if err != cmn.ErrSkip {
-			return err
+		if err == cmn.ErrSkip {
+			err = nil
+		} else if r.ignoreBackendErr {
+			glog.Warning(err)
+			err = nil
 		}
-		return nil
+		return err
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("prefetch: %s", lom)
@@ -221,139 +389,4 @@ func (r *prefetch) do(lom *cluster.LOM) error {
 	r.ObjectsInc()
 	r.BytesAdd(lom.SizeBytes())
 	return nil
-}
-
-/////////////
-// _lrbase //
-/////////////
-
-func (r *lrbase) iterateRange(wi lrwi) error {
-	pt, err := parseTemplate(r.msg.Template)
-	if err != nil {
-		return err
-	}
-	smap := r.t.Sowner().Get()
-	if len(pt.Ranges) != 0 {
-		return r.iterateTemplate(smap, &pt, wi)
-	}
-	return r.iteratePrefix(smap, pt.Prefix, wi)
-}
-
-func (r *lrbase) iterateTemplate(smap *cluster.Smap, pt *cos.ParsedTemplate, wi lrwi) error {
-	getNext := pt.Iter()
-	for objName, hasNext := getNext(); hasNext; objName, hasNext = getNext() {
-		if r.xact.Aborted() {
-			return nil
-		}
-		lom := cluster.AllocLOM(objName)
-		err := r.iterate(lom, wi, smap)
-		cluster.FreeLOM(lom)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (r *lrbase) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) error {
-	var (
-		objList *cmn.BucketList
-		err     error
-	)
-	bck := cluster.NewBckEmbed(r.xact.Bck())
-	if err := bck.Init(r.t.Bowner()); err != nil {
-		return err
-	}
-	bremote := bck.IsRemote()
-	if !bremote {
-		smap = nil // not needed
-	}
-	msg := &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
-	for !r.xact.Aborted() {
-		if bremote {
-			objList, _, err = r.t.Backend(bck).ListObjects(bck, msg)
-		} else {
-			walk := objwalk.NewWalk(r.ctx, r.t, bck, msg)
-			objList, err = walk.DefaultLocalObjPage(msg)
-		}
-		if err != nil {
-			return err
-		}
-		for _, be := range objList.Entries {
-			if !be.IsStatusOK() {
-				continue
-			}
-			if r.xact.Aborted() {
-				return nil
-			}
-			lom := cluster.AllocLOM(be.Name)
-			err := r.iterate(lom, wi, smap)
-			cluster.FreeLOM(lom)
-			if err != nil {
-				return err
-			}
-		}
-
-		// Stop when the last page is reached.
-		if objList.ContinuationToken == "" {
-			break
-		}
-		// Update `ContinuationToken` for the next request.
-		msg.ContinuationToken = objList.ContinuationToken
-	}
-	return nil
-}
-
-func (r *lrbase) iterateList(wi lrwi) error {
-	smap := r.t.Sowner().Get()
-	for _, objName := range r.msg.ObjNames {
-		if r.xact.Aborted() {
-			break
-		}
-		lom := cluster.AllocLOM(objName)
-		err := r.iterate(lom, wi, smap)
-		cluster.FreeLOM(lom)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (r *lrbase) iterate(lom *cluster.LOM, wi lrwi, smap *cluster.Smap) error {
-	if err := lom.Init(r.xact.Bck()); err != nil {
-		return err
-	}
-	if smap != nil {
-		// NOTE: checking locality here to speed up iterating, trading off
-		//       rebalancing use case for performance - TODO: add
-		//       configurable option to lom.Load() instead.
-		_, local, err := lom.HrwTarget(smap)
-		if err != nil {
-			return err
-		}
-		if !local {
-			return nil
-		}
-	}
-	return wi.do(lom)
-}
-
-// helpers ---------------
-
-// Parsing:
-// 1. bash-extension style: `file-{0..100}`
-// 2. at-style: `file-@100`
-// 3. if none of the above, fall back to just prefix matching
-func parseTemplate(template string) (cos.ParsedTemplate, error) {
-	if template == "" {
-		return cos.ParsedTemplate{}, errors.New("empty range template")
-	}
-	if parsed, err := cos.ParseBashTemplate(template); err == nil {
-		return parsed, nil
-	}
-	if parsed, err := cos.ParseAtTemplate(template); err == nil {
-		return parsed, nil
-	}
-	return cos.ParsedTemplate{Prefix: template}, nil
 }

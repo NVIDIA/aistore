@@ -644,6 +644,8 @@ func (t *targetrunner) putArchive(c *txnServerCtx) error {
 		if err := cos.MorphMarshal(c.msg.Value, archiveMsg); err != nil {
 			return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, c.msg.Action, c.msg.Value, err)
 		}
+
+		// TODO -- FIXME: existing one must return its own UUID
 		rns := xreg.RenewPutArchive(c.msg.UUID, t, bckFrom)
 		if rns.Err != nil {
 			return rns.Err

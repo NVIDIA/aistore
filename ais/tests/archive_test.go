@@ -155,7 +155,7 @@ func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 			t:       t,
 			bck:     bck.Bck,
 			num:     100,
-			prefix:  "archive/",
+			prefix:  "archive/qq",
 			ordered: true,
 		}
 		toBck      = cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS}
