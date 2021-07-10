@@ -127,7 +127,7 @@ func (r *registry) renewBucketXact(kind string, bck *cluster.Bck, args *Args) (r
 	if res.Err != nil {
 		return
 	}
-	if !res.IsNew {
+	if res.UUID != "" {
 		xact := res.Entry.Get()
 		// NOTE: make sure existing on-demand is active to prevent it from (idle) expiration
 		//       (see demand.go hkcb())
@@ -190,7 +190,7 @@ func (r *registry) renewBckMakeNCopies(t cluster.Target, bck *cluster.Bck, uuid,
 	if res.Err != nil {
 		return
 	}
-	if !res.IsNew {
+	if res.UUID != "" {
 		res.Err = fmt.Errorf("%s xaction already running", e.Kind())
 	}
 	return
@@ -276,5 +276,5 @@ func (r *registry) renewObjList(t cluster.Target, bck *cluster.Bck, uuid string,
 		e := r.bckXacts[cmn.ActList].New(&Args{T: t, UUID: uuid, Custom: msg})
 		return r.renewBckXact(e, bck, uuid)
 	}
-	return RenewRes{&DummyEntry{xact}, nil, false}
+	return RenewRes{&DummyEntry{xact}, nil, uuid}
 }

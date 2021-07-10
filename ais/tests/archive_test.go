@@ -162,8 +162,8 @@ func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		numArchs   = 20
-		numInArch  = 7
-		numPuts    = 100
+		numInArch  = cos.Min(m.num/2, 7)
+		numPuts    = m.num
 		fmtRange   = "%s{%d..%d}"
 	)
 	m.init()

@@ -58,7 +58,7 @@ type (
 	RenewRes struct {
 		Entry BaseEntry // Depending on situation can be new or old entry.
 		Err   error     // Error that occurred during renewal.
-		IsNew bool      // true: a new entry has been created; false: old one returned
+		UUID  string    // "" if a new entry has been created, ID of the existing xaction otherwise
 	}
 	// Selects subset of xactions to abort.
 	abortArgs struct {
@@ -400,7 +400,8 @@ func (r *registry) renewBckXact(entry BucketEntry, bck *cluster.Bck, uuids ...st
 		prevEntry := e.(BucketEntry)
 		if keep, err := entry.PreRenewHook(prevEntry); keep || err != nil {
 			r.mtx.RUnlock()
-			return RenewRes{Entry: prevEntry, Err: err, IsNew: false}
+			xact := prevEntry.Get()
+			return RenewRes{Entry: prevEntry, Err: err, UUID: xact.ID()}
 		}
 	}
 	r.mtx.RUnlock()
@@ -415,18 +416,19 @@ func (r *registry) renewBckXact(entry BucketEntry, bck *cluster.Bck, uuids ...st
 		prevEntry = e.(BucketEntry)
 		running = true
 		if keep, err := entry.PreRenewHook(prevEntry); keep || err != nil {
-			return RenewRes{Entry: prevEntry, Err: err, IsNew: false}
+			xact := prevEntry.Get()
+			return RenewRes{Entry: prevEntry, Err: err, UUID: xact.ID()}
 		}
 	}
 
 	if err := entry.Start(bck.Bck); err != nil {
-		return RenewRes{Entry: nil, Err: err, IsNew: true}
+		return RenewRes{Entry: nil, Err: err, UUID: ""}
 	}
 	r.add(entry)
 	if running {
 		entry.PostRenewHook(prevEntry)
 	}
-	return RenewRes{Entry: entry, Err: nil, IsNew: true}
+	return RenewRes{Entry: entry, Err: nil, UUID: ""}
 }
 
 func (r *registry) renewGlobalXaction(entry GlobalEntry) RenewRes {
@@ -435,7 +437,8 @@ func (r *registry) renewGlobalXaction(entry GlobalEntry) RenewRes {
 		prevEntry := e.(GlobalEntry)
 		if entry.PreRenewHook(prevEntry) {
 			r.mtx.RUnlock()
-			return RenewRes{Entry: prevEntry, Err: nil, IsNew: false}
+			xact := prevEntry.Get()
+			return RenewRes{Entry: prevEntry, Err: nil, UUID: xact.ID()}
 		}
 	}
 	r.mtx.RUnlock()
@@ -450,18 +453,19 @@ func (r *registry) renewGlobalXaction(entry GlobalEntry) RenewRes {
 		prevEntry = e.(GlobalEntry)
 		running = true
 		if entry.PreRenewHook(prevEntry) {
-			return RenewRes{Entry: prevEntry, Err: nil, IsNew: false}
+			xact := prevEntry.Get()
+			return RenewRes{Entry: prevEntry, Err: nil, UUID: xact.ID()}
 		}
 	}
 
 	if err := entry.Start(cmn.Bck{}); err != nil {
-		return RenewRes{Entry: nil, Err: err, IsNew: true}
+		return RenewRes{Entry: nil, Err: err, UUID: ""}
 	}
 	r.add(entry)
 	if running {
 		entry.PostRenewHook(prevEntry)
 	}
-	return RenewRes{Entry: entry, Err: nil, IsNew: true}
+	return RenewRes{Entry: entry, Err: nil, UUID: ""}
 }
 
 //////////////////////

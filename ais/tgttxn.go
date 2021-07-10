@@ -112,7 +112,11 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActECEncode:
 		err = t.ecEncode(c)
 	case cmn.ActArchive:
-		err = t.putArchive(c)
+		var xactID string
+		xactID, err = t.putArchive(c)
+		if xactID != "" {
+			w.Header().Set(cmn.HdrXactionID, xactID)
+		}
 	case cmn.ActStartMaintenance, cmn.ActDecommissionNode, cmn.ActShutdownNode:
 		err = t.startMaintenance(c)
 	case cmn.ActDestroyBck, cmn.ActEvictRemoteBck:
@@ -622,9 +626,10 @@ func (t *targetrunner) validateECEncode(bck *cluster.Bck, msg *aisMsg) (err erro
 // putArchive //
 ////////////////
 
-func (t *targetrunner) putArchive(c *txnServerCtx) error {
+func (t *targetrunner) putArchive(c *txnServerCtx) (string /*xaction uuid*/, error) {
+	var xactID string
 	if err := c.bck.Init(t.owner.bmd); err != nil {
-		return err
+		return xactID, err
 	}
 	switch c.phase {
 	case cmn.ActBegin:
@@ -633,50 +638,54 @@ func (t *targetrunner) putArchive(c *txnServerCtx) error {
 			bckFrom = c.bck
 		)
 		if err := bckTo.Validate(); err != nil {
-			return err
+			return xactID, err
 		}
 		if !bckFrom.Equal(bckTo, false, false) {
 			if err := bckFrom.Validate(); err != nil {
-				return err
+				return xactID, err
 			}
 		}
 		archiveMsg := &cmn.ArchiveMsg{}
 		if err := cos.MorphMarshal(c.msg.Value, archiveMsg); err != nil {
-			return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, c.msg.Action, c.msg.Value, err)
+			return xactID, fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, c.msg.Action, c.msg.Value, err)
 		}
 
-		// TODO -- FIXME: existing one must return its own UUID
 		rns := xreg.RenewPutArchive(c.msg.UUID, t, bckFrom)
 		if rns.Err != nil {
-			return rns.Err
+			return xactID, rns.Err
 		}
 		xact := rns.Entry.Get()
+		xactID = xact.ID()
+		debug.Assert((rns.UUID == "" && xactID == c.msg.UUID) || (rns.UUID != "" && xactID == rns.UUID))
+
 		xarch := xact.(*xs.XactPutArchive)
 		if err := xarch.Begin(archiveMsg); err != nil {
-			return err
+			return xactID, err
 		}
-		txn := newTxnPutArchive(c, bckFrom, bckTo, xarch, archiveMsg, rns.IsNew)
+		txn := newTxnPutArchive(c, bckFrom, bckTo, xarch, archiveMsg, rns.UUID)
 		if err := t.transactions.begin(txn); err != nil {
-			return err
+			return xactID, err
 		}
 	case cmn.ActAbort:
 		txn, err := t.transactions.find(c.uuid, cmn.ActAbort)
 		if err == nil {
 			txnArch := txn.(*txnPutArchive)
-			if txnArch.xarch != nil && txnArch.isNew {
+			if txnArch.xarch != nil && txnArch.oldid == "" {
+				xactID = txnArch.xarch.ID()
 				txnArch.xarch.Abort()
 			}
 		}
 	case cmn.ActCommit:
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
-			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+			return xactID, fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
 		txnArch := txn.(*txnPutArchive)
 		txnArch.xarch.Do(txnArch.msg)
+		xactID = txnArch.xarch.ID()
 		t.transactions.find(c.uuid, cmn.ActCommit)
 	}
-	return nil
+	return xactID, nil
 }
 
 //////////////////////

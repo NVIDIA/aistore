@@ -73,7 +73,7 @@ func (r *registry) renewRebalance(id int64, statTracker stats.Tracker) cluster.X
 		StatTracker: statTracker,
 	}})
 	res := r.renewGlobalXaction(e)
-	if !res.IsNew { // previous global rebalance is still running
+	if res.UUID != "" { // previous global rebalance is still running
 		return nil
 	}
 	return res.Entry.Get()
@@ -84,7 +84,7 @@ func RenewResilver(id string) cluster.Xact { return defaultReg.renewResilver(id)
 func (r *registry) renewResilver(id string) cluster.Xact {
 	e := r.globalXacts[cmn.ActResilver].New(Args{UUID: id})
 	res := r.renewGlobalXaction(e)
-	debug.Assert(res.IsNew) // resilver must be always preempted
+	debug.Assert(res.UUID == "") // resilver must be always preempted
 	return res.Entry.Get()
 }
 
@@ -93,7 +93,7 @@ func RenewElection() cluster.Xact { return defaultReg.renewElection() }
 func (r *registry) renewElection() cluster.Xact {
 	e := r.globalXacts[cmn.ActElection].New(Args{})
 	res := r.renewGlobalXaction(e)
-	if !res.IsNew { // previous election is still running
+	if res.UUID != "" { // previous election is still running
 		return nil
 	}
 	return res.Entry.Get()
@@ -104,7 +104,7 @@ func RenewLRU(id string) cluster.Xact { return defaultReg.renewLRU(id) }
 func (r *registry) renewLRU(id string) cluster.Xact {
 	e := r.globalXacts[cmn.ActLRU].New(Args{UUID: id})
 	res := r.renewGlobalXaction(e)
-	if !res.IsNew { // Previous LRU is still running.
+	if res.UUID != "" { // Previous LRU is still running.
 		res.Entry.Get().Renew()
 		return nil
 	}

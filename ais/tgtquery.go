@@ -71,7 +71,7 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		t.writeErr(w, r, rns.Err)
 		return
 	}
-	if !rns.IsNew {
+	if rns.UUID != "" {
 		return
 	}
 	xact := rns.Entry.Get()

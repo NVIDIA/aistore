@@ -57,7 +57,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 		t.writeErr(w, r, rns.Err)
 		return
 	}
-	if rns.IsNew {
+	if rns.UUID == "" {
 		go xact.Run()
 	}
 

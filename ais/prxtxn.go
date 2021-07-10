@@ -677,6 +677,9 @@ func (p *proxyrunner) putArchive(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 	results := c.bcast(cmn.ActBegin, c.timeout.netw)
 	for _, res := range results {
 		if res.err == nil {
+			if xactID == "" {
+				xactID = res.header.Get(cmn.HdrXactionID)
+			}
 			continue
 		}
 		err = c.bcastAbort(bckFrom, res.error())
@@ -697,8 +700,6 @@ func (p *proxyrunner) putArchive(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 		return
 	}
 	freeCallResults(results)
-
-	xactID = c.uuid
 	return
 }
 
@@ -912,11 +913,7 @@ func (c *txnClientCtx) bcastAbort(val fmt.Stringer, err error, key ...string) er
 
 // txn client context
 func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck, waitmsync bool) *txnClientCtx {
-	c := &txnClientCtx{
-		p:    p,
-		uuid: cos.GenUUID(),
-		smap: p.owner.smap.get(),
-	}
+	c := &txnClientCtx{p: p, uuid: cos.GenUUID(), smap: p.owner.smap.get()}
 	c.msg = p.newAmsg(msg, nil, c.uuid)
 	body := cos.MustMarshal(c.msg)
 

@@ -116,7 +116,7 @@ type (
 		bckTo   *cluster.Bck
 		xarch   *xs.XactPutArchive
 		msg     *cmn.ArchiveMsg
-		isNew   bool
+		oldid   string
 	}
 )
 
@@ -544,14 +544,14 @@ func newTxnECEncode(c *txnServerCtx, bck *cluster.Bck) (txn *txnECEncode) {
 ///////////////////
 
 func newTxnPutArchive(c *txnServerCtx, bckFrom, bckTo *cluster.Bck, xarch *xs.XactPutArchive,
-	msg *cmn.ArchiveMsg, isNew bool) (txn *txnPutArchive) {
+	msg *cmn.ArchiveMsg, oldid string) (txn *txnPutArchive) {
 	txn = &txnPutArchive{
 		*newTxnBckBase("arc", *bckFrom),
 		bckFrom,
 		bckTo,
 		xarch,
 		msg,
-		isNew,
+		oldid,
 	}
 	txn.fillFromCtx(c)
 	return

@@ -34,7 +34,7 @@ func RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, ms
 func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, msg *cmn.SelectMsg) RenewRes {
 	if xact := query.Registry.Get(msg.UUID); xact != nil {
 		if !xact.Aborted() {
-			return RenewRes{&DummyEntry{xact}, nil, false}
+			return RenewRes{&DummyEntry{xact}, nil, msg.UUID}
 		}
 		query.Registry.Delete(msg.UUID)
 	}
@@ -42,7 +42,7 @@ func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.Ob
 	err := r.entries.del(msg.UUID)
 	r.entries.mtx.Unlock()
 	if err != nil {
-		return RenewRes{&DummyEntry{nil}, err, false}
+		return RenewRes{&DummyEntry{nil}, err, msg.UUID}
 	}
 	e := &queEntry{ctx: ctx, t: t, query: q, msg: msg}
 	return r.renewBckXact(e, q.BckSource.Bck)

@@ -144,6 +144,8 @@ const (
 	HdrCallerName        = headerPrefix + "caller-name"
 	HdrCallerSmapVersion = headerPrefix + "caller-smap-ver"
 
+	HdrXactionID = headerPrefix + "xaction-id"
+
 	// Stream related headers.
 	HdrSessID   = headerPrefix + "session-id"
 	HdrCompress = headerPrefix + "compress" // LZ4Compression, etc.
