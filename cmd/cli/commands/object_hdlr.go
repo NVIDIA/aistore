@@ -9,10 +9,12 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/fatih/color"
 	"github.com/urfave/cli"
 )
 
@@ -43,6 +45,10 @@ var (
 			sourceBckFlag,
 			templateFlag,
 			listFlag,
+			cleanupSrcFlag,
+			skipMisplacedFlag,
+			includeBckNameFlag,
+			ignoreErrorFlag,
 		),
 		commandSetCustom: {},
 		commandPromote: {
@@ -239,6 +245,11 @@ func putArchiveHandler(c *cli.Context) (err error) {
 		objName        string
 		template       = parseStrFlag(c, templateFlag)
 		list           = parseStrFlag(c, listFlag)
+		dryRun         = flagIsSet(c, dryRunFlag)
+		cleanupSrc     = flagIsSet(c, cleanupSrcFlag)
+		skipMisplaced  = flagIsSet(c, skipMisplacedFlag)
+		includeBckName = flagIsSet(c, includeBckNameFlag)
+		ignoreError    = flagIsSet(c, ignoreErrorFlag)
 	)
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "object name in the form bucket/[object]")
@@ -262,6 +273,32 @@ func putArchiveHandler(c *cli.Context) (err error) {
 	} else {
 		bckFrom = bckTo
 	}
+
+	if dryRun {
+		fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
+		var srcDesc string
+		if list != "" {
+			srcDesc = fmt.Sprintf("list of objects %q", list)
+		} else {
+			srcDesc = fmt.Sprintf("objects matching pattern %q", template)
+		}
+		srcAction := "keep"
+		if cleanupSrc {
+			if bckFrom.IsRemote() {
+				srcAction = "evict"
+			} else {
+				red := color.New(color.FgRed).SprintFunc()
+				srcAction = red("delete")
+			}
+		}
+		w := tabwriter.NewWriter(c.App.Writer, 0, 8, 1, '\t', 0)
+		fmt.Fprintf(w, "Source\t%s of bucket %q\nDestination\t%s/%s\n", srcDesc, bckFrom, bckTo, objName)
+		fmt.Fprintf(w, "Source objects action:\t%s\nSkip misplaced objects:\t%t\n", srcAction, skipMisplaced)
+		fmt.Fprintf(w, "Ignore errors:\t%t\nDirectory structure starts with bucket name:\t%t\n", ignoreError, includeBckName)
+		w.Flush()
+		return nil
+	}
+
 	if list != "" {
 		objList := strings.Split(list, ",")
 		_, err = api.ArchiveList(defaultAPIParams, bckFrom, bckTo, objName, objList)
@@ -290,6 +327,7 @@ func putRegularObjHandler(c *cli.Context) (err error) {
 		objName  string
 		fileName = c.Args().Get(0)
 		uri      = c.Args().Get(1)
+		dryRun   = flagIsSet(c, dryRunFlag)
 	)
 
 	if c.NArg() < 1 {
@@ -303,6 +341,18 @@ func putRegularObjHandler(c *cli.Context) (err error) {
 	}
 	if p, err = headBucket(bck); err != nil {
 		return err
+	}
+	if dryRun {
+		fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
+		path, err := getPathFromFileName(fileName)
+		if err != nil {
+			return err
+		}
+		if objName == "" {
+			objName = filepath.Base(path)
+		}
+		fmt.Fprintf(c.App.Writer, "Put file %q to %s/%s\n", path, bck, objName)
+		return nil
 	}
 	return putObject(c, bck, objName, fileName, p.Cksum.Type)
 }

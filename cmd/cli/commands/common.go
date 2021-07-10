@@ -370,10 +370,13 @@ var (
 		Name:  "chunk-size",
 		Usage: "chunk size used for each request " + sizeUnits, Value: "10MB",
 	}
-	computeCksumFlag = cli.BoolFlag{Name: "compute-cksum", Usage: "compute the checksum with the type configured for the bucket"}
-	checksumFlags    = getCksumFlags()
-	archiveFlag      = cli.BoolFlag{Name: "archive", Usage: "create an archive from existing objects"}
-	sourceBckFlag    = cli.StringFlag{Name: "source-bck", Usage: "source bucket"}
+	computeCksumFlag   = cli.BoolFlag{Name: "compute-cksum", Usage: "compute the checksum with the type configured for the bucket"}
+	checksumFlags      = getCksumFlags()
+	archiveFlag        = cli.BoolFlag{Name: "archive", Usage: "create an archive from existing objects"}
+	sourceBckFlag      = cli.StringFlag{Name: "source-bck", Usage: "source bucket"}
+	cleanupSrcFlag     = cli.BoolFlag{Name: "cleanup", Usage: "delete or evict the source objects upon successful archiving"}
+	skipMisplacedFlag  = cli.BoolFlag{Name: "skip-misplaced", Usage: "skip misplaced objects"}
+	includeBckNameFlag = cli.BoolFlag{Name: "include-bck", Usage: "true - archive directory structure starts with bucket name, false - objects are put to the archive root"}
 
 	// AuthN
 	tokenFileFlag = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to file"}
