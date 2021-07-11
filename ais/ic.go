@@ -87,7 +87,7 @@ begin:
 			})
 			if !exists {
 				retry = false
-				_ = ic.syncICBundle() // TODO -- handle error
+				_ = ic.syncICBundle() // TODO handle error
 				goto begin
 			}
 		}

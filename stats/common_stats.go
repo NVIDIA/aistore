@@ -292,7 +292,7 @@ func (s *CoreStats) promUnlock() {
 // init MetricClient client: StatsD (default) or Prometheus
 func (s *CoreStats) initMetricClient(node *cluster.Snode, parent *statsRunner) {
 	// Either Prometheus
-	if prom := os.Getenv("AIS_PROMETHEUS"); prom != "" { // TODO -- FIXME: document
+	if prom := os.Getenv("AIS_PROMETHEUS"); prom != "" {
 		glog.Infoln("Using Prometheus")
 		prometheus.MustRegister(parent) // as prometheus.Collector
 		return

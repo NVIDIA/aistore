@@ -56,7 +56,7 @@ func (oa *ObjAttrs) CopyFrom(oah ObjAttrsHolder, skipCksum ...bool) {
 	oa.Ver = oah.Version()
 	if len(skipCksum) == 0 || !skipCksum[0] {
 		debug.Assert(oah.Checksum() != nil)
-		oa.Cksum = oah.Checksum().Clone() // TODO: checksum by value
+		oa.Cksum = oah.Checksum().Clone() // TODO: checksum by value (***)
 	}
 	oa.AddMD = oah.Custom()
 }

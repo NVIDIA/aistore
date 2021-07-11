@@ -187,10 +187,11 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 	}
 	// ais versioning
 	if bck.IsAIS() && lom.VersionConf().Enabled {
-		// NOTE: the caller is expected to load it and get the current version, if exists
+		// TODO: copy cloud-bucket => ais-bucket and similar scenarios where IncVersion()
+		//       won't work (disambiguate - store cloud version separately in custom-md)
 		if poi.recvType == cluster.RegularPut || lom.Version(true) == "" {
 			if err = lom.IncVersion(); err != nil {
-				glog.Error(err) // TODO -- FIXME: "RegularPut" vs Cloud version
+				glog.Error(err)
 			}
 		}
 	}

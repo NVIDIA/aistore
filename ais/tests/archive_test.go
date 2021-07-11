@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
@@ -154,63 +153,84 @@ func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 		m = ioContext{
 			t:       t,
 			bck:     bck.Bck,
-			num:     100,
+			num:     80,
 			prefix:  "archive/",
 			ordered: true,
 		}
 		toBck      = cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS}
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		numArchs   = 20
+		numArchs   = 15
 		numInArch  = cos.Min(m.num/2, 7)
 		numPuts    = m.num
 		fmtRange   = "%s{%d..%d}"
+		subtests   = []struct {
+			ext  string // one of cos.ArchExtensions (same as: supported arch formats)
+			list bool
+		}{
+			{
+				ext: cos.ExtTar, list: true,
+			},
+			{
+				ext: cos.ExtTar, list: false,
+			},
+		}
 	)
-	m.init()
 	if testing.Short() {
 		numArchs = 2
 	}
-	m.puts()
-	if m.bck.IsRemote() {
-		defer m.del()
-	}
-	if !toBck.Equal(m.bck) && toBck.IsAIS() {
-		tutils.CreateFreshBucket(t, proxyURL, toBck, nil)
-	}
-
-	// archive bucket => same bucket in parallel
-	for i := 0; i < numArchs; i++ {
-		go func(i int) {
-			tarName := fmt.Sprintf("test_lst_%02d.tar", i)
-			list := make([]string, 0, numInArch)
-			for j := 0; j < numInArch; j++ {
-				list = append(list, m.objNames[rand.Intn(numPuts)])
+	for _, test := range subtests {
+		listOrRange := "list"
+		if !test.list {
+			listOrRange = "range"
+		}
+		tname := fmt.Sprintf("%s/%s", test.ext, listOrRange)
+		t.Run(tname, func(t *testing.T) {
+			m.init()
+			m.puts()
+			if m.bck.IsRemote() {
+				defer m.del()
 			}
-			_, err := api.ArchiveList(baseParams, m.bck, toBck, tarName, list)
-			tassert.CheckFatal(t, err)
-		}(i)
-	}
-	for i := 0; i < numArchs; i++ {
-		go func(i int) {
-			tarName := fmt.Sprintf("test_rng_%02d.tar", i)
-			start := rand.Intn(numPuts - numInArch)
-			rng := fmt.Sprintf(fmtRange, m.prefix, start, start+numInArch-1)
-			_, err := api.ArchiveRange(baseParams, m.bck, toBck, tarName, rng)
-			tassert.CheckFatal(t, err)
-		}(i)
-	}
+			if !toBck.Equal(m.bck) && toBck.IsAIS() {
+				tutils.CreateFreshBucket(t, proxyURL, toBck, nil)
+			}
+			if test.list {
+				for i := 0; i < numArchs; i++ {
+					go func(i int) {
+						tarName := fmt.Sprintf("test_lst_%02d.tar", i)
+						list := make([]string, 0, numInArch)
+						for j := 0; j < numInArch; j++ {
+							list = append(list, m.objNames[rand.Intn(numPuts)])
+						}
+						_, err := api.ArchiveList(baseParams, m.bck, toBck, tarName, list)
+						tassert.CheckFatal(t, err)
+					}(i)
+				}
+			} else {
+				for i := 0; i < numArchs; i++ {
+					go func(i int) {
+						tarName := fmt.Sprintf("test_rng_%02d.tar", i)
+						start := rand.Intn(numPuts - numInArch)
+						rng := fmt.Sprintf(fmtRange, m.prefix, start, start+numInArch-1)
+						_, err := api.ArchiveRange(baseParams, m.bck, toBck, tarName, rng)
+						tassert.CheckFatal(t, err)
+					}(i)
+				}
+			}
 
-	wargs := api.XactReqArgs{Kind: cmn.ActArchive, Bck: m.bck}
-	api.WaitForXactionIdle(baseParams, wargs)
+			wargs := api.XactReqArgs{Kind: cmn.ActArchive, Bck: m.bck}
+			api.WaitForXactionIdle(baseParams, wargs)
 
-	time.Sleep(3 * time.Second) // TODO -- FIXME: remove
-	tlog.Logf("List %q\n", toBck)
-	msg := &cmn.SelectMsg{Prefix: "test_"}
-	msg.AddProps(cmn.GetPropsName, cmn.GetPropsSize)
-	objList, err := api.ListObjects(baseParams, toBck, msg, 0)
-	tassert.CheckFatal(t, err)
-	for _, entry := range objList.Entries {
-		tlog.Logf("%s: %dB\n", entry.Name, entry.Size)
+			tlog.Logf("List %q\n", toBck)
+			msg := &cmn.SelectMsg{Prefix: "test_"}
+			msg.AddProps(cmn.GetPropsName, cmn.GetPropsSize)
+			objList, err := api.ListObjects(baseParams, toBck, msg, 0)
+			tassert.CheckFatal(t, err)
+			for _, entry := range objList.Entries {
+				tlog.Logf("%s: %dB\n", entry.Name, entry.Size)
+			}
+			num := len(objList.Entries)
+			tassert.Errorf(t, num == numArchs, "expected %d, have %d", numArchs, num)
+		})
 	}
-	tassert.Errorf(t, len(objList.Entries) == numArchs*2, "expected %d, have %d", numArchs*2, len(objList.Entries))
 }
