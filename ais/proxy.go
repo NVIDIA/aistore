@@ -14,6 +14,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -200,9 +201,15 @@ func (p *proxyrunner) Run() error {
 
 		{r: cmn.Notifs, h: p.notifs.handler, net: accessNetIntraControl},
 
+		{r: "/", h: p.httpCloudHandler, net: accessNetPublic},
+
+		// S3 compatibility
 		{r: "/" + cmn.S3, h: p.s3Handler, net: accessNetPublic},
 
-		{r: "/", h: p.httpCloudHandler, net: accessNetPublic},
+		// "easy URL"
+		{r: "/" + cmn.GSScheme, h: p.easyURLHandler, net: accessNetPublic},
+		{r: "/" + cmn.AZScheme, h: p.easyURLHandler, net: accessNetPublic},
+		{r: "/" + cmn.AISScheme, h: p.easyURLHandler, net: accessNetPublic},
 	}
 	p.registerNetworkHandlers(networkHandlers)
 
@@ -378,6 +385,69 @@ func (p *proxyrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 	default:
 		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodHead,
 			http.MethodPost, http.MethodPut)
+	}
+}
+
+// "Easy URL" (feature) is a simple alternative mapping of the AIS API to handle
+// URLs paths that look as follows:
+//
+// 	/gs/mybucket/myobject   - to access Google Cloud buckets
+// 	/az/mybucket/myobject   - Azure Blob Storage
+// 	/ais/mybucket/myobject  - AIS
+//
+// In other words, easy URL is a convenience feature that allows reading, writing,
+// deleting, and listing objects as follows:
+//
+// # Example: GET
+// $ curl -L -X GET 'http://aistore/gs/my-google-bucket/abc-train-0001.tar'
+// # Example: PUT
+// $ curl -L -X PUT 'http://aistore/gs/my-google-bucket/abc-train-9999.tar -T /tmp/9999.tar'
+// # Example: LIST
+// $ curl -L -X GET 'http://aistore/gs/my-google-bucket'
+//
+// NOTE:
+//      Amazon S3 is missing in the list that includes GCP and Azure. The reason
+//      for this is that AIS provides S3 compatibility layer via its "/s3" endpoint.
+//      S3 compatibility (see https://github.com/NVIDIA/aistore/blob/master/docs/s3compat.md)
+//      shall not be confused with a simple alternative URL Path mapping via easyURLHandler,
+//      whereby a path (e.g.) "gs/mybucket/myobject" gets replaced with
+//      "v1/objects/mybucket/myobject?provider=gcp" with _no_ other changes to the request
+//      and response parameters and components.
+//
+func (p *proxyrunner) easyURLHandler(w http.ResponseWriter, r *http.Request) {
+	var provider, bucket, objName string
+	apiItems, err := p.checkRESTItems(w, r, 2, true, nil)
+	if err != nil {
+		return
+	}
+	provider, bucket = apiItems[0], apiItems[1]
+	if provider, err = cmn.NormalizeProvider(provider); err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	bck := cmn.Bck{Name: bucket, Provider: provider}
+	if err := bck.ValidateName(); err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	if len(apiItems) > 2 {
+		objName = apiItems[2]
+		r.URL.Path = "/" + path.Join(cmn.Version, cmn.Objects, bucket, objName)
+		r.URL.Path += path.Join(apiItems[3:]...)
+	} else {
+		r.URL.Path = "/" + path.Join(cmn.Version, cmn.Buckets, bucket)
+	}
+	if r.URL.RawQuery == "" {
+		query := cmn.AddBckToQuery(nil, bck)
+		r.URL.RawQuery = query.Encode()
+	} else if !strings.Contains(r.URL.RawQuery, cmn.URLParamProvider) {
+		r.URL.RawQuery += "&" + cmn.URLParamProvider + "=" + bck.Provider
+	}
+	// and finally
+	if objName != "" {
+		p.objectHandler(w, r)
+	} else {
+		p.bucketHandler(w, r)
 	}
 }
 
