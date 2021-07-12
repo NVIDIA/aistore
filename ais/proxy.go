@@ -802,7 +802,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 			bckFrom    = bck
 			archiveMsg = &cmn.ArchiveMsg{}
 		)
-		if err = cos.MorphMarshal(msg.Value, archiveMsg); err != nil {
+		if err := cos.MorphMarshal(msg.Value, archiveMsg); err != nil {
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
 		}
@@ -815,6 +815,10 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 				p.writeErr(w, r, err)
 				return
 			}
+		}
+		if _, err := cos.Mime(archiveMsg.Mime, archiveMsg.ArchName); err != nil {
+			p.writeErr(w, r, err)
+			return
 		}
 		xactID, err := p.putArchive(bckFrom, bckTo, msg)
 		if err == nil {

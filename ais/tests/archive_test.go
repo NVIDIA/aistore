@@ -174,6 +174,12 @@ func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 			{
 				ext: cos.ExtTar, list: false,
 			},
+			{
+				ext: cos.ExtZip, list: true,
+			},
+			{
+				ext: cos.ExtZip, list: false,
+			},
 		}
 	)
 	if testing.Short() {
@@ -197,22 +203,22 @@ func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 			if test.list {
 				for i := 0; i < numArchs; i++ {
 					go func(i int) {
-						tarName := fmt.Sprintf("test_lst_%02d.tar", i)
+						archName := fmt.Sprintf("test_lst_%02d%s", i, test.ext)
 						list := make([]string, 0, numInArch)
 						for j := 0; j < numInArch; j++ {
 							list = append(list, m.objNames[rand.Intn(numPuts)])
 						}
-						_, err := api.ArchiveList(baseParams, m.bck, toBck, tarName, list)
+						_, err := api.ArchiveList(baseParams, m.bck, toBck, archName, list)
 						tassert.CheckFatal(t, err)
 					}(i)
 				}
 			} else {
 				for i := 0; i < numArchs; i++ {
 					go func(i int) {
-						tarName := fmt.Sprintf("test_rng_%02d.tar", i)
+						archName := fmt.Sprintf("test_rng_%02d%s", i, test.ext)
 						start := rand.Intn(numPuts - numInArch)
 						rng := fmt.Sprintf(fmtRange, m.prefix, start, start+numInArch-1)
-						_, err := api.ArchiveRange(baseParams, m.bck, toBck, tarName, rng)
+						_, err := api.ArchiveRange(baseParams, m.bck, toBck, archName, rng)
 						tassert.CheckFatal(t, err)
 					}(i)
 				}

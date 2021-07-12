@@ -19,6 +19,7 @@ type (
 		ListRangeMsg
 		ToBck    Bck    `json:"tobck"`
 		ArchName string `json:"archname"` // must have one of the cos.ArchExtensions
+		Mime     string `json:"mime"`     // user-specified mime type takes precedence if defined
 	}
 )
 

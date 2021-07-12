@@ -649,7 +649,11 @@ func (t *targetrunner) putArchive(c *txnServerCtx) (string /*xaction uuid*/, err
 		if err := cos.MorphMarshal(c.msg.Value, archiveMsg); err != nil {
 			return xactID, fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, c.msg.Action, c.msg.Value, err)
 		}
-
+		mime, err := cos.Mime(archiveMsg.Mime, archiveMsg.ArchName)
+		if err != nil {
+			return xactID, err
+		}
+		archiveMsg.Mime = mime // set it for xarch
 		rns := xreg.RenewPutArchive(c.msg.UUID, t, bckFrom)
 		if rns.Err != nil {
 			return xactID, rns.Err

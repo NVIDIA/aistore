@@ -7,10 +7,10 @@ package xs
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"io"
 	"net/http"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -33,15 +33,29 @@ type (
 		t    cluster.Target
 		uuid string
 	}
+	archWriter interface {
+		write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader)
+		fini()
+	}
+	tarWriter struct {
+		archwi *archwi
+		w      *tar.Writer
+	}
+	zipWriter struct {
+		archwi *archwi
+		w      *zip.Writer
+	}
 	archwi struct { // archival work item; implements lrwi
 		r   *XactPutArchive
 		msg *cmn.ArchiveMsg
 		lom *cluster.LOM // of the archive
 		fqn string       // workFQN --/--
 		fh  *os.File     // --/--
-		tw  *tar.Writer
-		mu  sync.Mutex
 		tsi *cluster.Snode
+		// writing
+		wmu    sync.Mutex
+		buf    []byte
+		writer archWriter
 	}
 	XactPutArchive struct {
 		xaction.XactDemandBase
@@ -65,6 +79,9 @@ var (
 	_ cluster.Xact    = (*XactPutArchive)(nil)
 	_ xreg.BckFactory = (*archFactory)(nil)
 	_ lrwi            = (*archwi)(nil)
+
+	_ archWriter = (*tarWriter)(nil)
+	_ archWriter = (*zipWriter)(nil)
 )
 
 ////////////////
@@ -122,7 +139,6 @@ func (p *archFactory) newDM(bckFrom cmn.Bck, r *XactPutArchive) error {
 ////////////////////
 
 func (r *XactPutArchive) Begin(msg *cmn.ArchiveMsg) (err error) {
-	debug.Assert(strings.HasSuffix(msg.ArchName, cos.ExtTar)) // TODO: NIY
 	lom := cluster.AllocLOM(msg.ArchName)
 	if err = lom.Init(msg.ToBck); err != nil {
 		return
@@ -144,7 +160,16 @@ func (r *XactPutArchive) Begin(msg *cmn.ArchiveMsg) (err error) {
 		if err != nil {
 			return
 		}
-		wi.tw = tar.NewWriter(wi.fh)
+		wi.buf, _ = r.t.MMSA().Alloc()
+		switch msg.Mime {
+		case cos.ExtTar:
+			wi.writer = &tarWriter{archwi: wi, w: tar.NewWriter(wi.fh)}
+		case cos.ExtZip:
+			wi.writer = &zipWriter{archwi: wi, w: zip.NewWriter(wi.fh)}
+		default:
+			debug.AssertMsg(false, msg.Mime)
+			return
+		}
 	}
 	r.pending.Lock()
 	r.pending.m[msg.FullName()] = wi
@@ -233,17 +258,17 @@ func (r *XactPutArchive) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, er
 	debug.Assert(ok)
 	debug.Assert(wi.tsi.ID() == r.t.Snode().ID())
 
-	wi.addToArch(nil, &hdr, objReader)
+	wi.writer.write(hdr.FullName(), &hdr.ObjAttrs, objReader)
 }
 
 func (r *XactPutArchive) finalize(wi *archwi, fullname string) {
-	if wi == nil || wi.tw == nil {
+	if wi == nil || wi.writer == nil {
 		r.DecPending()
 		return // nothing to do
 	}
 	time.Sleep(3 * time.Second) // TODO -- FIXME: via [target => last] accounting
 
-	errCode, err := r._fini(wi)
+	errCode, err := r.fini(wi)
 	if err != nil {
 		glog.Errorf("%s: %v(%d)", r.t.Snode(), err, errCode) // TODO
 	}
@@ -253,9 +278,9 @@ func (r *XactPutArchive) finalize(wi *archwi, fullname string) {
 	r.DecPending()
 }
 
-func (r *XactPutArchive) _fini(wi *archwi) (errCode int, err error) {
-	wi.tw.Close()
-
+func (r *XactPutArchive) fini(wi *archwi) (errCode int, err error) {
+	wi.writer.fini()
+	r.t.MMSA().Free(wi.buf)
 	size, err := wi.fh.Seek(0, io.SeekCurrent)
 	if err != nil {
 		debug.AssertNoErr(err)
@@ -320,32 +345,53 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) (err error) {
 		return
 	}
 	debug.Assert(wi.fh != nil) // see Begin
-	wi.addToArch(lom, nil, fh)
+	wi.writer.write(lom.FullName(), lom, fh)
 	cluster.FreeLOM(lom)
 	cos.Close(fh)
 	return
 }
 
-func (wi *archwi) addToArch(lom *cluster.LOM, hdr *transport.ObjHdr, reader io.Reader) {
+///////////////
+// tarWriter //
+///////////////
+func (tw *tarWriter) fini() { tw.w.Close() }
+
+func (tw *tarWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader) {
 	tarhdr := new(tar.Header)
 	tarhdr.Typeflag = tar.TypeReg
 
-	if lom != nil { // local
-		tarhdr.Size = lom.SizeBytes()
-		tarhdr.ModTime = lom.Atime()
-		tarhdr.Name = lom.FullName()
-	} else { // recv
-		tarhdr.Size = hdr.ObjAttrs.Size
-		tarhdr.ModTime = time.Unix(0, hdr.ObjAttrs.Atime)
-		tarhdr.Name = hdr.FullName()
-	}
+	tarhdr.Size = oah.SizeBytes()
+	tarhdr.ModTime = time.Unix(0, oah.AtimeUnix())
+	tarhdr.Name = fullname
 
 	// one at a time
-	wi.mu.Lock()
-	err := wi.tw.WriteHeader(tarhdr)
+	tw.archwi.wmu.Lock()
+	err := tw.w.WriteHeader(tarhdr)
 	debug.AssertNoErr(err)
 
-	_, err = io.Copy(wi.tw, reader)
-	wi.mu.Unlock()
+	_, err = io.CopyBuffer(tw.w, reader, tw.archwi.buf)
+	tw.archwi.wmu.Unlock()
+	debug.AssertNoErr(err)
+}
+
+///////////////
+// zipWriter //
+///////////////
+func (zw *zipWriter) fini() { zw.w.Close() }
+
+func (zw *zipWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader) {
+	ziphdr := new(zip.FileHeader)
+
+	ziphdr.Name = fullname
+	ziphdr.Comment = fullname
+	ziphdr.UncompressedSize64 = uint64(oah.SizeBytes())
+	ziphdr.Modified = time.Unix(0, oah.AtimeUnix())
+
+	zw.archwi.wmu.Lock()
+	zipw, err := zw.w.CreateHeader(ziphdr)
+	debug.AssertNoErr(err)
+
+	_, err = io.CopyBuffer(zipw, reader, zw.archwi.buf)
+	zw.archwi.wmu.Unlock()
 	debug.AssertNoErr(err)
 }

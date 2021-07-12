@@ -9,12 +9,9 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
-	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -27,10 +24,6 @@ import (
 
 const (
 	sizeDetectMime = 512
-)
-
-const (
-	unknownMime = "unknown mime type"
 )
 
 type (
@@ -97,33 +90,16 @@ func (goi *getObjInfo) freadArch(file *os.File) (cos.ReadCloseSizer, error) {
 		return freadZip(file, filename, archname, goi.lom.SizeBytes())
 	default:
 		debug.Assert(false)
-		return nil, errors.New(unknownMime)
+		return nil, cos.NewUnknownMimeError(mime)
 	}
 }
 
 func (goi *getObjInfo) mime(file *os.File) (m string, err error) {
-	objname := goi.lom.ObjName
-	// 1. user-specified (overrides everything else)
-	if goi.archive.mime != "" {
-		// NOTE exception: cos.ExtTarTgz contains cos.ExtTar
-		if strings.Contains(goi.archive.mime, cos.ExtTarTgz[1:]) {
-			return cos.ExtTarTgz, nil
-		}
-		for _, ext := range cos.ArchExtensions {
-			if strings.Contains(goi.archive.mime, ext[1:]) {
-				return ext, nil
-			}
-		}
-		err = fmt.Errorf("%s %q", unknownMime, goi.archive.mime)
+	// either ok or non-empty user-defined mime type (that must work)
+	if m, err = cos.Mime(goi.archive.mime, goi.lom.ObjName); err == nil || goi.archive.mime != "" {
 		return
 	}
-	// 2. by extension
-	for _, ext := range cos.ArchExtensions {
-		if strings.HasSuffix(objname, ext) {
-			return ext, nil
-		}
-	}
-	// 3. by magic
+	// otherwise, by magic
 	var (
 		buf, slab = goi.t.smm.Alloc(sizeDetectMime)
 		n         int
@@ -137,9 +113,9 @@ func (goi *getObjInfo) mime(file *os.File) (m string, err error) {
 	}
 	if m == "" {
 		if err == nil {
-			err = errors.New(unknownMime)
+			err = cos.NewUnknownMimeError(goi.lom.ObjName)
 		} else {
-			err = fmt.Errorf("%s (%v)", unknownMime, err)
+			err = cos.NewUnknownMimeError(err.Error())
 		}
 	} else {
 		err = nil
@@ -212,7 +188,3 @@ func archNamesEq(n1, n2 string) bool {
 	}
 	return n1 == n2
 }
-
-/////////////////
-// new archive //
-/////////////////
