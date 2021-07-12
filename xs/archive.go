@@ -290,7 +290,7 @@ func (r *XactPutArchive) fini(wi *archwi) (errCode int, err error) {
 	wi.lom.SetCksum(cos.NoneCksum)
 	cos.Close(wi.fh)
 
-	errCode, err = r.t.FinalizeObj(wi.lom, wi.fqn, size)
+	errCode, err = r.t.FinalizeObj(wi.lom, wi.fqn)
 	cluster.FreeLOM(wi.lom)
 	return
 }

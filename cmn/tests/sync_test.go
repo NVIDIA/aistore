@@ -22,7 +22,7 @@ func TestTimeoutGroupSmoke(t *testing.T) {
 	}
 }
 
-func TestTimeoutGroupWait(t *testing.T) {
+func TestTimeoutGroupWait(*testing.T) {
 	wg := cos.NewTimeoutGroup()
 	wg.Add(2)
 	wg.Done()

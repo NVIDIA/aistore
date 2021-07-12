@@ -247,18 +247,16 @@ func collectResult(n int, ch <-chan transportData) []transportData {
 }
 
 // alwaysOk accepts the sync call
-func alwaysOk(w http.ResponseWriter, r *http.Request, cnt int) (int, error) {
-	return 0, nil
-}
+func alwaysOk(http.ResponseWriter, *http.Request, int) (int, error) { return 0, nil }
 
 // deletedOk accepts the sync call after a short wait
-func delayedOk(w http.ResponseWriter, r *http.Request, cnt int) (int, error) {
+func delayedOk(http.ResponseWriter, *http.Request, int) (int, error) {
 	time.Sleep(time.Second)
 	return 0, nil
 }
 
 // failFirst rejects the first sync call, accept all other calls
-func failFirst(w http.ResponseWriter, r *http.Request, cnt int) (int, error) {
+func failFirst(_ http.ResponseWriter, _ *http.Request, cnt int) (int, error) {
 	if cnt == 1 {
 		return http.StatusForbidden, fmt.Errorf("fail first call")
 	}
@@ -266,7 +264,7 @@ func failFirst(w http.ResponseWriter, r *http.Request, cnt int) (int, error) {
 }
 
 // syncOnce checks a mixed number of proxy and targets accept one sync call
-func syncOnce(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportData, []transportData) {
+func syncOnce(_ *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportData, []transportData) {
 	var (
 		servers = []metaSyncServer{
 			{"p1", true, alwaysOk, nil},
@@ -352,7 +350,7 @@ func syncOnceNoWait(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]t
 }
 
 // retry checks a failed sync call is retried
-func retry(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportData, []transportData) {
+func retry(_ *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportData, []transportData) {
 	var (
 		servers = []metaSyncServer{
 			{"p1", true, failFirst, nil},
@@ -381,7 +379,7 @@ func retry(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportD
 }
 
 // multipleSync checks a mixed number of proxy and targets accept multiple sync calls
-func multipleSync(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportData, []transportData) {
+func multipleSync(_ *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportData, []transportData) {
 	var (
 		servers = []metaSyncServer{
 			{"p1", true, alwaysOk, nil},

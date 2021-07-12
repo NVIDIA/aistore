@@ -163,7 +163,7 @@ func (pung *PermutationUniqueNameGetter) Init(names []string, rnd *rand.Rand) {
 	pung.perm = pung.rnd.Perm(len(names))
 }
 
-func (*PermutationUniqueNameGetter) AddObjName(objName string) {
+func (*PermutationUniqueNameGetter) AddObjName(string) {
 	cos.AssertMsg(false, "can't add object once PermutationUniqueNameGetter is initialized")
 }
 
@@ -187,7 +187,7 @@ func (pung *PermutationUniqueImprovedNameGetter) Init(names []string, rnd *rand.
 	pung.permNext = pung.rnd.Perm(len(names))
 }
 
-func (*PermutationUniqueImprovedNameGetter) AddObjName(objName string) {
+func (*PermutationUniqueImprovedNameGetter) AddObjName(string) {
 	cos.AssertMsg(false, "can't add object once PermutationUniqueImprovedNameGetter is initialized")
 }
 

@@ -154,7 +154,7 @@ type Target interface {
 
 	// Object related functions.
 	PutObject(lom *LOM, params PutObjectParams) (err error)
-	FinalizeObj(lom *LOM, workFQN string, size int64) (errCode int, err error)
+	FinalizeObj(lom *LOM, workFQN string) (errCode int, err error)
 	EvictObject(lom *LOM) (errCode int, err error)
 	DeleteObject(lom *LOM, evict bool) (errCode int, err error)
 	CopyObject(lom *LOM, params *CopyObjectParams, localOnly bool) (int64, error)

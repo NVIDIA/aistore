@@ -14,10 +14,10 @@ type (
 	}
 )
 
-func NewIOStaterMock() *IOStaterMock                             { return &IOStaterMock{} }
-func (m *IOStaterMock) GetAllMpathUtils() *MpathsUtils           { return &m.Utils }
-func (m *IOStaterMock) GetMpathUtil(mpath string) int64          { return m.Utils.Util(mpath) }
-func (*IOStaterMock) AddMpath(mpath, fs string) (FsDisks, error) { return nil, nil }
-func (*IOStaterMock) RemoveMpath(mpath string)                   {}
-func (*IOStaterMock) LogAppend(l []string) []string              { return l }
-func (*IOStaterMock) FillDiskStats(AllDiskStats)                 {}
+func NewIOStaterMock() *IOStaterMock                           { return &IOStaterMock{} }
+func (m *IOStaterMock) GetAllMpathUtils() *MpathsUtils         { return &m.Utils }
+func (m *IOStaterMock) GetMpathUtil(mpath string) int64        { return m.Utils.Util(mpath) }
+func (*IOStaterMock) AddMpath(string, string) (FsDisks, error) { return nil, nil }
+func (*IOStaterMock) RemoveMpath(string)                       {}
+func (*IOStaterMock) LogAppend(l []string) []string            { return l }
+func (*IOStaterMock) FillDiskStats(AllDiskStats)               {}

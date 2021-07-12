@@ -303,7 +303,7 @@ func (*bytesReader) Close() error { return nil }
 
 func (*bytesReader) Cksum() *cos.Cksum { return nil }
 
-func (*bytesReader) Seek(offset int64, whence int) (int64, error) {
+func (*bytesReader) Seek(int64, int) (int64, error) {
 	return 0, nil
 }
 

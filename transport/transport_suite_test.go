@@ -11,6 +11,6 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 )
 
-func TestTransport(t *testing.T) {
+func TestTransport(*testing.T) {
 	go hk.DefaultHK.Run()
 }

@@ -123,7 +123,7 @@ func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParam
 	return err
 }
 
-func (t *targetrunner) FinalizeObj(lom *cluster.LOM, workFQN string, size int64) (errCode int, err error) {
+func (t *targetrunner) FinalizeObj(lom *cluster.LOM, workFQN string) (errCode int, err error) {
 	poi := allocPutObjInfo()
 	{
 		poi.t = t

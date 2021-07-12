@@ -107,7 +107,7 @@ func newVoteMsg(inp bool) cluMetaRedux {
 	return cluMetaRedux{VoteInProgress: inp, Smap: &cluster.Smap{Version: 1}}
 }
 
-func (*voteRetryMockTarget) filehdlr(w http.ResponseWriter, r *http.Request) {
+func (*voteRetryMockTarget) filehdlr(http.ResponseWriter, *http.Request) {
 	// Ignore all file requests
 }
 
@@ -126,7 +126,7 @@ func (p *voteRetryMockTarget) daemonhdlr(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (*voteRetryMockTarget) votehdlr(w http.ResponseWriter, r *http.Request) {
+func (*voteRetryMockTarget) votehdlr(w http.ResponseWriter, _ *http.Request) {
 	// Always vote yes.
 	w.Write([]byte(ais.VoteYes))
 }

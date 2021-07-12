@@ -12,11 +12,11 @@ import (
 	"github.com/jacobsa/fuse/fuseutil"
 )
 
-func (*aisfs) OpenDir(ctx context.Context, req *fuseops.OpenDirOp) (err error) {
+func (*aisfs) OpenDir(context.Context, *fuseops.OpenDirOp) (err error) {
 	return
 }
 
-func (fs *aisfs) ReadDir(ctx context.Context, req *fuseops.ReadDirOp) (err error) {
+func (fs *aisfs) ReadDir(_ context.Context, req *fuseops.ReadDirOp) (err error) {
 	fs.mu.RLock()
 	dir := fs.lookupDirMustExist(req.Inode)
 	fs.mu.RUnlock()
@@ -43,11 +43,11 @@ func (fs *aisfs) ReadDir(ctx context.Context, req *fuseops.ReadDirOp) (err error
 	return
 }
 
-func (*aisfs) ReleaseDirHandle(ctx context.Context, req *fuseops.ReleaseDirHandleOp) (err error) {
+func (*aisfs) ReleaseDirHandle(context.Context, *fuseops.ReleaseDirHandleOp) (err error) {
 	return
 }
 
-func (fs *aisfs) MkDir(ctx context.Context, req *fuseops.MkDirOp) (err error) {
+func (fs *aisfs) MkDir(_ context.Context, req *fuseops.MkDirOp) (err error) {
 	var newDir Inode
 
 	fs.mu.RLock()
@@ -80,7 +80,7 @@ func (fs *aisfs) MkDir(ctx context.Context, req *fuseops.MkDirOp) (err error) {
 	return
 }
 
-func (fs *aisfs) RmDir(ctx context.Context, req *fuseops.RmDirOp) (err error) {
+func (fs *aisfs) RmDir(_ context.Context, req *fuseops.RmDirOp) (err error) {
 	fs.mu.RLock()
 	parent := fs.lookupDirMustExist(req.Parent)
 	fs.mu.RUnlock()

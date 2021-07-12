@@ -7,4 +7,4 @@
  */
 package memsys
 
-func deadbeef(b []byte) {}
+func deadbeef([]byte) {}

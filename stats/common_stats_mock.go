@@ -18,12 +18,12 @@ func NewTrackerMock() Tracker {
 	return &TrackerMock{}
 }
 
-func (*TrackerMock) StartedUp() bool                       { return true }
-func (*TrackerMock) Add(name string, val int64)            {}
-func (*TrackerMock) Get(name string) int64                 { return 0 }
-func (*TrackerMock) AddErrorHTTP(method string, val int64) {}
-func (*TrackerMock) AddMany(namedVal64 ...NamedVal64)      {}
-func (*TrackerMock) RegMetrics(*cluster.Snode)             {}
-func (*TrackerMock) CoreStats() *CoreStats                 { return nil }
-func (*TrackerMock) GetWhatStats() interface{}             { return nil }
-func (*TrackerMock) IsPrometheus() bool                    { return false }
+func (*TrackerMock) StartedUp() bool            { return true }
+func (*TrackerMock) Add(string, int64)          {}
+func (*TrackerMock) Get(string) int64           { return 0 }
+func (*TrackerMock) AddErrorHTTP(string, int64) {}
+func (*TrackerMock) AddMany(...NamedVal64)      {}
+func (*TrackerMock) RegMetrics(*cluster.Snode)  {}
+func (*TrackerMock) CoreStats() *CoreStats      { return nil }
+func (*TrackerMock) GetWhatStats() interface{}  { return nil }
+func (*TrackerMock) IsPrometheus() bool         { return false }

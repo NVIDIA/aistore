@@ -47,7 +47,7 @@ func newDiscardRW() *discardRW {
 
 func (drw *discardRW) Write(p []byte) (int, error) { return drw.w.Write(p) }
 func (*discardRW) Header() http.Header             { return make(http.Header) }
-func (*discardRW) WriteHeader(statusCode int)      {}
+func (*discardRW) WriteHeader(int)                 {}
 
 func TestMain(m *testing.M) {
 	flag.Parse()

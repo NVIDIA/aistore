@@ -124,7 +124,7 @@ func discoverServerFailTwiceHandler(sv, lv int64) *httptest.Server {
 }
 
 // discoverServerAlwaysFailHandler always responds with error
-func discoverServerAlwaysFailHandler(sv, lv int64) *httptest.Server {
+func discoverServerAlwaysFailHandler(_, _ int64) *httptest.Server {
 	f := func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "retry", http.StatusUnavailableForLegalReasons)
 	}
@@ -133,7 +133,7 @@ func discoverServerAlwaysFailHandler(sv, lv int64) *httptest.Server {
 }
 
 // discoverServerVoteInProgressHandler always responds with vote in progress
-func discoverServerVoteInProgressHandler(sv, lv int64) *httptest.Server {
+func discoverServerVoteInProgressHandler(_, _ int64) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			msg := cluMeta{

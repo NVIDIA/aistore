@@ -136,7 +136,7 @@ func (mgs *MetricLatsAgg) Add(name string, lat time.Duration) {
 	}
 }
 
-func (mcg *MetricConfigAgg) Add(lat, latProxy, latProxyConn time.Duration) {
+func (mcg *MetricConfigAgg) Add(lat, _, _ time.Duration) {
 	mcg.cnt++
 
 	mcg.latency += lat

@@ -280,7 +280,7 @@ func (r *Records) RecordMemorySize() (size uint64) {
 }
 
 func (*Records) MarshalJSON() ([]byte, error) { panic("should not be used") }
-func (*Records) UnmarshalJSON(b []byte) error { panic("should not be used") }
+func (*Records) UnmarshalJSON([]byte) error   { panic("should not be used") }
 
 // Ext returns the file name extension used by path.
 // The extension is the suffix beginning at the FIRST (not final) dot

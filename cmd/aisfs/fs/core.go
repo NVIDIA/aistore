@@ -285,7 +285,7 @@ func (fs *aisfs) createDirectoryInode(inodeID fuseops.InodeID, parent *Directory
 // FileSystem interface methods
 ////////////////////////////////
 
-func (fs *aisfs) GetInodeAttributes(ctx context.Context, req *fuseops.GetInodeAttributesOp) (err error) {
+func (fs *aisfs) GetInodeAttributes(_ context.Context, req *fuseops.GetInodeAttributesOp) (err error) {
 	fs.mu.RLock()
 	inode := fs.lookupMustExist(req.Inode)
 	fs.mu.RUnlock()
@@ -296,7 +296,7 @@ func (fs *aisfs) GetInodeAttributes(ctx context.Context, req *fuseops.GetInodeAt
 	return
 }
 
-func (fs *aisfs) SetInodeAttributes(ctx context.Context, req *fuseops.SetInodeAttributesOp) (err error) {
+func (fs *aisfs) SetInodeAttributes(_ context.Context, req *fuseops.SetInodeAttributesOp) (err error) {
 	fs.mu.RLock()
 	inode := fs.lookupMustExist(req.Inode)
 	fs.mu.RUnlock()
@@ -313,7 +313,7 @@ func (fs *aisfs) SetInodeAttributes(ctx context.Context, req *fuseops.SetInodeAt
 	return
 }
 
-func (fs *aisfs) LookUpInode(ctx context.Context, req *fuseops.LookUpInodeOp) (err error) {
+func (fs *aisfs) LookUpInode(_ context.Context, req *fuseops.LookUpInodeOp) (err error) {
 	var inode Inode
 
 	fs.mu.RLock()
@@ -363,7 +363,7 @@ func (fs *aisfs) LookUpInode(ctx context.Context, req *fuseops.LookUpInodeOp) (e
 	return
 }
 
-func (fs *aisfs) ForgetInode(ctx context.Context, req *fuseops.ForgetInodeOp) (err error) {
+func (fs *aisfs) ForgetInode(_ context.Context, req *fuseops.ForgetInodeOp) (err error) {
 	fs.mu.RLock()
 	inode := fs.lookupMustExist(req.Inode)
 	fs.mu.RUnlock()

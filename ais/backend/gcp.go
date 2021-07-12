@@ -209,7 +209,7 @@ func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckL
 // LIST BUCKETS //
 //////////////////
 
-func (gcpp *gcpProvider) ListBuckets(query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
+func (gcpp *gcpProvider) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	if gcpp.projectID == "" {
 		// NOTE: empty `projectID` results in obscure: "googleapi: Error 400: Invalid argument"
 		return nil, http.StatusBadRequest,

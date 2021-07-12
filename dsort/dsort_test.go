@@ -68,8 +68,8 @@ type testSmapListeners struct {
 	sync.RWMutex
 }
 
-func (*testSmapListeners) Reg(sl cluster.Slistener)   {}
-func (*testSmapListeners) Unreg(sl cluster.Slistener) {}
+func (*testSmapListeners) Reg(cluster.Slistener)   {}
+func (*testSmapListeners) Unreg(cluster.Slistener) {}
 
 type testSmap struct {
 	*cluster.Smap
@@ -108,7 +108,7 @@ type extractCreatorMock struct {
 	createShard    func(s *extract.Shard, w io.Writer, loadContent extract.LoadContentFunc) // func to hijack CreateShard function
 }
 
-func (*extractCreatorMock) ExtractShard(lom *cluster.LOM, f cos.ReadReaderAt, extractor extract.RecordExtractor, toDisk bool) (int64, int, error) {
+func (*extractCreatorMock) ExtractShard(*cluster.LOM, cos.ReadReaderAt, extract.RecordExtractor, bool) (int64, int, error) {
 	return 0, 0, nil
 }
 

@@ -637,7 +637,7 @@ func newHBTracker(interval time.Duration) *HBTracker {
 	}
 }
 
-func (hb *HBTracker) HeardFrom(id string, reset bool) {
+func (hb *HBTracker) HeardFrom(id string, _ bool) {
 	hb.mtx.Lock()
 	hb.last[id] = mono.NanoTime()
 	hb.mtx.Unlock()

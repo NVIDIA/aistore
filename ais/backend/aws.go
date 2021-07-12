@@ -235,7 +235,7 @@ func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckL
 // LIST BUCKETS //
 //////////////////
 
-func (*awsProvider) ListBuckets(query cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
+func (*awsProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	svc, _, err := newClient(sessConf{}, "")
 	if err != nil {
 		errCode, err = awsErrorToAISError(err, &cmn.Bck{Provider: cmn.ProviderAmazon})

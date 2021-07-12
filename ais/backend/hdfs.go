@@ -195,7 +195,7 @@ func skipDir(fi os.FileInfo) error {
 // LIST BUCKETS //
 //////////////////
 
-func (*hdfsProvider) ListBuckets(query cmn.QueryBcks) (buckets cmn.Bcks, errCode int, err error) {
+func (*hdfsProvider) ListBuckets(cmn.QueryBcks) (buckets cmn.Bcks, errCode int, err error) {
 	debug.Assert(false)
 	return
 }
@@ -204,7 +204,7 @@ func (*hdfsProvider) ListBuckets(query cmn.QueryBcks) (buckets cmn.Bcks, errCode
 // HEAD OBJECT //
 /////////////////
 
-func (hp *hdfsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cos.SimpleKVs, errCode int, err error) {
+func (hp *hdfsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta cos.SimpleKVs, errCode int, err error) {
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
 	fr, err := hp.c.Open(filePath)
 	if err != nil {

@@ -71,11 +71,7 @@ linters-settings:
       # name: early-return
       # name: import-shadowing
       # name: unhandled-error
-      # name: unused-parameter
-      # arguments : ["fmt.Printf", "fmt.Fprintf", "fmt.Fprintln"]
       # name: line-length-limit
-      # severity: error
-      # arguments: [130]
       - name: if-return
       - name: blank-imports
       - name: context-as-argument
@@ -102,6 +98,7 @@ linters-settings:
       - name: unexported-return
       - name: unnecessary-stmt
       - name: unreachable-code
+      - name: unused-parameter
       - name: unused-receiver
       - name: waitgroup-by-value
   govet:

@@ -56,7 +56,7 @@ func namesFromFilesMetadatas(fileMetadata []fileMetadata) []string {
 	return result
 }
 
-func mockGetFSUsedPercentage(path string) (usedPrecentage int64, ok bool) {
+func mockGetFSUsedPercentage(string) (usedPrecentage int64, _ bool) {
 	return int64(initialDiskUsagePct * 100), true
 }
 

@@ -2505,7 +2505,7 @@ func (p *proxyrunner) ensureConfigPrimaryURL() (config *globalConfig, err error)
 	return
 }
 
-func (p *proxyrunner) _primaryURLPre(ctx *configModifier, clone *globalConfig) (updated bool, err error) {
+func (p *proxyrunner) _primaryURLPre(_ *configModifier, clone *globalConfig) (updated bool, err error) {
 	smap := p.owner.smap.get()
 	debug.Assert(smap.isPrimary(p.si))
 	if newURL := smap.Primary.URL(cmn.NetworkPublic); clone.Proxy.PrimaryURL != newURL {

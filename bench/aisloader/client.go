@@ -84,7 +84,7 @@ func (t *traceableTransport) RoundTrip(req *http.Request) (*http.Response, error
 }
 
 // GotConn records when the connection to proxy/target is made.
-func (t *traceableTransport) GotConn(info httptrace.GotConnInfo) {
+func (t *traceableTransport) GotConn(httptrace.GotConnInfo) {
 	switch t.connCnt {
 	case 0:
 		t.tsProxyConn = time.Now()
@@ -110,7 +110,7 @@ func (t *traceableTransport) WroteHeaders() {
 }
 
 // WroteRequest records when the request is completely written
-func (t *traceableTransport) WroteRequest(wr httptrace.WroteRequestInfo) {
+func (t *traceableTransport) WroteRequest(httptrace.WroteRequestInfo) {
 	switch t.connCnt {
 	case 1:
 		t.tsProxyWroteRequest = time.Now()

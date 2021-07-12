@@ -21,7 +21,7 @@ import (
 
 // OpenFile creates a file handle to be used in subsequent file operations
 // that provide a valid handle ID (also generated here).
-func (fs *aisfs) OpenFile(ctx context.Context, req *fuseops.OpenFileOp) (err error) {
+func (fs *aisfs) OpenFile(_ context.Context, req *fuseops.OpenFileOp) (err error) {
 	fs.mu.Lock()
 	file := fs.lookupFileMustExist(req.Inode)
 	req.Handle = fs.allocateFileHandle(file)
@@ -29,7 +29,7 @@ func (fs *aisfs) OpenFile(ctx context.Context, req *fuseops.OpenFileOp) (err err
 	return
 }
 
-func (fs *aisfs) CreateFile(ctx context.Context, req *fuseops.CreateFileOp) (err error) {
+func (fs *aisfs) CreateFile(_ context.Context, req *fuseops.CreateFileOp) (err error) {
 	var newFile Inode
 
 	fs.mu.RLock()
@@ -64,7 +64,7 @@ func (fs *aisfs) CreateFile(ctx context.Context, req *fuseops.CreateFileOp) (err
 	return
 }
 
-func (fs *aisfs) ReadFile(ctx context.Context, req *fuseops.ReadFileOp) (err error) {
+func (fs *aisfs) ReadFile(_ context.Context, req *fuseops.ReadFileOp) (err error) {
 	fs.mu.RLock()
 	fhandle := fs.lookupFhandleMustExist(req.Handle)
 	fs.mu.RUnlock()
@@ -94,7 +94,7 @@ func (fs *aisfs) ReadFile(ctx context.Context, req *fuseops.ReadFileOp) (err err
 	return
 }
 
-func (fs *aisfs) WriteFile(ctx context.Context, req *fuseops.WriteFileOp) (err error) {
+func (fs *aisfs) WriteFile(_ context.Context, req *fuseops.WriteFileOp) (err error) {
 	fs.mu.RLock()
 	handle := fs.lookupFhandleMustExist(req.Handle)
 	fs.mu.RUnlock()
@@ -106,7 +106,7 @@ func (fs *aisfs) WriteFile(ctx context.Context, req *fuseops.WriteFileOp) (err e
 	return
 }
 
-func (fs *aisfs) FlushFile(ctx context.Context, req *fuseops.FlushFileOp) (err error) {
+func (fs *aisfs) FlushFile(_ context.Context, req *fuseops.FlushFileOp) (err error) {
 	fs.mu.RLock()
 	handle := fs.lookupFhandleMustExist(req.Handle)
 	fs.mu.RUnlock()
@@ -117,7 +117,7 @@ func (fs *aisfs) FlushFile(ctx context.Context, req *fuseops.FlushFileOp) (err e
 	return
 }
 
-func (fs *aisfs) ReleaseFileHandle(ctx context.Context, req *fuseops.ReleaseFileHandleOp) (err error) {
+func (fs *aisfs) ReleaseFileHandle(_ context.Context, req *fuseops.ReleaseFileHandleOp) (err error) {
 	fs.mu.Lock()
 
 	// Lookup and release the handle's resources.
@@ -131,7 +131,7 @@ func (fs *aisfs) ReleaseFileHandle(ctx context.Context, req *fuseops.ReleaseFile
 	return
 }
 
-func (fs *aisfs) Unlink(ctx context.Context, req *fuseops.UnlinkOp) (err error) {
+func (fs *aisfs) Unlink(_ context.Context, req *fuseops.UnlinkOp) (err error) {
 	fs.mu.RLock()
 	parent := fs.lookupDirMustExist(req.Parent)
 	fs.mu.RUnlock()
