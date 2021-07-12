@@ -243,10 +243,10 @@ func parseTemplate(template string) (cos.ParsedTemplate, error) {
 // evict/delete //
 //////////////////
 
-func (p *evdFactory) New(args *xreg.Args) xreg.BucketEntry {
+func (p *evdFactory) New(args xreg.Args) xreg.BucketEntry {
 	msg := args.Custom.(*cmn.ListRangeMsg)
 	debug.Assert(!msg.IsList() || !msg.HasTemplate())
-	return &evdFactory{xargs: *args, kind: p.kind, msg: msg}
+	return &evdFactory{xargs: args, kind: p.kind, msg: msg}
 }
 
 func (p *evdFactory) Start(bck cmn.Bck) error {
@@ -301,10 +301,10 @@ func (r *evictDelete) do(lom *cluster.LOM, _ *lriterator) error {
 // prefetch //
 //////////////
 
-func (*prfFactory) New(args *xreg.Args) xreg.BucketEntry {
+func (*prfFactory) New(args xreg.Args) xreg.BucketEntry {
 	msg := args.Custom.(*cmn.ListRangeMsg)
 	debug.Assert(!msg.IsList() || !msg.HasTemplate())
-	return &prfFactory{xargs: *args, msg: msg}
+	return &prfFactory{xargs: args, msg: msg}
 }
 
 func (p *prfFactory) Start(bck cmn.Bck) error {

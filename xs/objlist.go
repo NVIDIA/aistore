@@ -78,7 +78,7 @@ var (
 	_ xreg.BckFactory = (*olFactory)(nil)
 )
 
-func (*olFactory) New(args *xreg.Args) xreg.BucketEntry {
+func (*olFactory) New(args xreg.Args) xreg.BucketEntry {
 	return &olFactory{t: args.T, uuid: args.UUID, msg: args.Custom.(*cmn.SelectMsg)}
 }
 

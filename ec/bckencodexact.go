@@ -45,7 +45,7 @@ var (
 // encFactory //
 ////////////////
 
-func (*encFactory) New(args *xreg.Args) xreg.BucketEntry {
+func (*encFactory) New(args xreg.Args) xreg.BucketEntry {
 	custom := args.Custom.(*xreg.ECEncodeArgs)
 	return &encFactory{
 		t:     args.T,
