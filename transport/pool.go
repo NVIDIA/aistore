@@ -30,7 +30,7 @@ func AllocSend() (obj *Obj) {
 	return
 }
 
-func FreeSend(obj *Obj) { // <== sendobj & stream_bundle
+func freeSend(obj *Obj) { // <== sendobj & stream_bundle
 	*obj = sobj0
 	sendPool.Put(obj)
 }

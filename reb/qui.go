@@ -20,10 +20,10 @@ func (q *quiArgs) quicb(_ time.Duration /*accum. wait time*/) cluster.QuiRes {
 	if q.done(q.md) {
 		return cluster.QuiDone
 	}
-	if !q.reb.laterx.CAS(true, false) {
-		return cluster.QuiInactive
+	if q.reb.laterx.CAS(true, false) {
+		return cluster.QuiActive
 	}
-	return cluster.QuiActive
+	return cluster.QuiInactive
 }
 
 // Uses generic xaction.Quiesce to make sure that no objects are received

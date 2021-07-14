@@ -10,9 +10,18 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
+type QuiRes int
+
+const (
+	QuiInactive = QuiRes(iota) // e.g., no pending requests, no messages received, etc.
+	QuiActive                  // active (e.g., receiving data)
+	QuiDone                    // all done
+	QuiAborted                 // aborted
+	QuiTimeout                 // timeout
+)
+
 type (
-	QuiRes int
-	QuiCB  func(elapsed time.Duration) QuiRes // see enum below
+	QuiCB func(elapsed time.Duration) QuiRes // see enum below
 
 	Xact interface {
 		Run()
@@ -55,12 +64,4 @@ type (
 		Running() bool
 		Finished() bool
 	}
-)
-
-const (
-	QuiInactive = QuiRes(iota) // e.g., no pending requests, no messages received, etc.
-	QuiActive                  // active (e.g., receiving data)
-	QuiDone                    // all done
-	QuiAborted                 // aborted
-	QuiTimeout                 // timeout
 )

@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -56,6 +57,8 @@ type (
 		wmu    sync.Mutex
 		buf    []byte
 		writer archWriter
+		// finishing
+		rc atomic.Int32
 	}
 	XactPutArchive struct {
 		xaction.XactDemandBase
@@ -67,6 +70,7 @@ type (
 			sync.RWMutex
 			m map[string]*archwi
 		}
+		config *cmn.Config
 	}
 )
 
@@ -106,6 +110,7 @@ func (p *archFactory) Start(bckFrom cmn.Bck) error {
 		t:              p.t,
 		bckFrom:        bckFrom,
 		workCh:         make(chan *cmn.ArchiveMsg, maxNumInParallel),
+		config:         config,
 	}
 	r.pending.m = make(map[string]*archwi, maxNumInParallel)
 	p.xact = r
@@ -149,6 +154,7 @@ func (r *XactPutArchive) Begin(msg *cmn.ArchiveMsg) (err error) {
 	wi.fqn = fs.CSM.GenContentFQN(wi.lom, fs.WorkfileType, fs.WorkfileAppend)
 
 	smap := r.t.Sowner().Get()
+	wi.rc.Store(int32(smap.CountTargets() - 1))
 	wi.tsi, err = cluster.HrwTarget(msg.ToBck.MakeUname(msg.ArchName), smap)
 	if err != nil {
 		return
@@ -207,6 +213,7 @@ func (r *XactPutArchive) Run() {
 			if r.Aborted() || err != nil {
 				goto fin
 			}
+			r.bcastDone(wi)
 			if r.t.Snode().ID() == wi.tsi.ID() {
 				go r.finalize(wi, fullname)
 			} else {
@@ -220,13 +227,23 @@ func (r *XactPutArchive) Run() {
 	}
 fin:
 	r.XactDemandBase.Stop()
-	config := cmn.GCO.Get()
-	if q := r.dm.Quiesce(config.Rebalance.Quiesce.D()); q == cluster.QuiAborted && err == nil {
+	if q := r.dm.Quiesce(r.config.Rebalance.Quiesce.D()); q == cluster.QuiAborted && err == nil {
 		err = cmn.NewAbortedError(r.String())
 	}
 	r.dm.Close(err)
 	r.dm.UnregRecv()
 	r.Finish(err)
+}
+
+func (r *XactPutArchive) bcastDone(wi *archwi) {
+	o := transport.AllocSend()
+	hdr := &o.Hdr
+	{
+		hdr.Bck = wi.msg.ToBck
+		hdr.ObjName = ""                       // NOTE
+		hdr.Opaque = []byte(wi.msg.FullName()) // NOTE
+	}
+	r.dm.Send(o, nil, wi.tsi)
 }
 
 func (r *XactPutArchive) doSend(lom *cluster.LOM, wi *archwi, fh cos.ReadOpenCloser) {
@@ -258,7 +275,12 @@ func (r *XactPutArchive) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, er
 	debug.Assert(ok)
 	debug.Assert(wi.tsi.ID() == r.t.Snode().ID())
 
-	wi.writer.write(hdr.FullName(), &hdr.ObjAttrs, objReader)
+	if hdr.ObjName == "" {
+		rc := wi.rc.Dec()
+		debug.Assert(rc >= 0)
+	} else {
+		wi.writer.write(hdr.FullName(), &hdr.ObjAttrs, objReader)
+	}
 }
 
 func (r *XactPutArchive) finalize(wi *archwi, fullname string) {
@@ -266,7 +288,7 @@ func (r *XactPutArchive) finalize(wi *archwi, fullname string) {
 		r.DecPending()
 		return // nothing to do
 	}
-	time.Sleep(3 * time.Second) // TODO -- FIXME: via [target => last] accounting
+	_ = wi.quiesce()
 
 	errCode, err := r.fini(wi)
 	if err != nil {
@@ -349,6 +371,20 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) (err error) {
 	cluster.FreeLOM(lom)
 	cos.Close(fh)
 	return
+}
+
+func (wi *archwi) quiesce() cluster.QuiRes {
+	return wi.r.Quiesce(wi.r.config.Timeout.MaxKeepalive.D(), wi.quicb)
+}
+
+func (wi *archwi) quicb(total time.Duration) cluster.QuiRes {
+	if wi.rc.Load() > 0 {
+		return cluster.QuiActive
+	}
+	if total > wi.r.config.Timeout.SendFile.D()/2 {
+		return cluster.QuiTimeout
+	}
+	return cluster.QuiInactive
 }
 
 ///////////////

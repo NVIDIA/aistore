@@ -152,7 +152,7 @@ func (s *Stream) doCmpl(obj *Obj, err error) {
 			s.callback(obj.Hdr, obj.Reader, obj.CmplArg, err)
 		}
 	}
-	FreeSend(obj)
+	freeSend(obj)
 }
 
 func (s *Stream) doRequest() error {

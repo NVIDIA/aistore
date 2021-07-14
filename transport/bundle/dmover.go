@@ -190,6 +190,10 @@ func (dm *DataMover) ACK(hdr transport.ObjHdr, cb transport.ObjSentCB, tsi *clus
 	return dm.ack.streams.Send(&transport.Obj{Hdr: hdr, Callback: cb}, nil, tsi)
 }
 
+func (dm *DataMover) Bcast(obj *transport.Obj) error {
+	return dm.data.streams.Send(obj, nil)
+}
+
 //
 // private
 //

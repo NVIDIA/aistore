@@ -73,7 +73,7 @@ cat > $AIS_CONF_FILE <<EOL
 	"rebalance": {
 		"enabled":         true,
 		"dest_retry_time": "2m",
-		"quiescent":       "10s",
+		"quiescent":       "15s",
 		"compression":     "${COMPRESSION:-never}",
 		"multiplier":      ${REBALANCE_MULTIPLIER:-2}
 	},
