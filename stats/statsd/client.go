@@ -143,6 +143,7 @@ func (c *Client) Send(bucket string, aggCnt int64, metrics ...Metric) {
 	c.write(bytes, int(l))
 }
 
+// NOTE: ignoring potential race vs client.Close() - disregarding write errors, if any
 func (c *Client) SendSGL(sgl *memsys.SGL) {
 	l := sgl.Len()
 	debug.Assert(l < sgl.Slab().Size())

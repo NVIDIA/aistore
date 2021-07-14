@@ -404,7 +404,6 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 }
 
 func (t *targetrunner) validateBckRenTxn(bckFrom, bckTo *cluster.Bck, msg *aisMsg) error {
-	availablePaths, _ := fs.Get()
 	if cs := fs.GetCapStatus(); cs.Err != nil {
 		return cs.Err
 	}
@@ -418,6 +417,7 @@ func (t *targetrunner) validateBckRenTxn(bckFrom, bckTo *cluster.Bck, msg *aisMs
 	if _, present := bmd.Get(bckTo); present {
 		return cmn.NewErrBckAlreadyExists(bckTo.Bck)
 	}
+	availablePaths, _ := fs.Get()
 	for _, mpathInfo := range availablePaths {
 		path := mpathInfo.MakePathCT(bckTo.Bck, fs.ObjectType)
 		if err := fs.Access(path); err != nil {
@@ -654,6 +654,11 @@ func (t *targetrunner) putArchive(c *txnServerCtx) (string /*xaction uuid*/, err
 			return xactID, err
 		}
 		archiveMsg.Mime = mime // set it for xarch
+
+		if cs := fs.GetCapStatus(); cs.Err != nil {
+			return xactID, cs.Err
+		}
+
 		rns := xreg.RenewPutArchive(c.msg.UUID, t, bckFrom)
 		if rns.Err != nil {
 			return xactID, rns.Err

@@ -35,7 +35,7 @@ type (
 		uuid string
 	}
 	archWriter interface {
-		write(nameInArch string, oah cmn.ObjAttrsHolder, reader io.Reader)
+		write(nameInArch string, oah cmn.ObjAttrsHolder, reader io.Reader) error
 		fini()
 	}
 	tarWriter struct {
@@ -57,6 +57,8 @@ type (
 		wmu    sync.Mutex
 		buf    []byte
 		writer archWriter
+		err    error
+		errCnt atomic.Int32
 		// finishing
 		rc atomic.Int32
 	}
@@ -210,13 +212,18 @@ func (r *XactPutArchive) Run() {
 			} else {
 				err = lrit.iterateRange(wi, smap)
 			}
+			if wi.errCnt.Load() > 0 {
+				wi.wmu.Lock()
+				err = wi.err
+				wi.wmu.Unlock()
+			}
 			if r.Aborted() || err != nil {
 				goto fin
 			}
-			r.bcastDone(wi)
 			if r.t.Snode().ID() == wi.tsi.ID() {
 				go r.finalize(wi, fullname)
 			} else {
+				r.eoi(wi)
 				r.DecPending()
 			}
 		case <-r.IdleTimer():
@@ -235,7 +242,8 @@ fin:
 	r.Finish(err)
 }
 
-func (r *XactPutArchive) bcastDone(wi *archwi) {
+// send EOI (end of iteration) to the responsible target
+func (r *XactPutArchive) eoi(wi *archwi) {
 	o := transport.AllocSend()
 	hdr := &o.Hdr
 	{
@@ -326,7 +334,7 @@ func (r *XactPutArchive) Stats() cluster.XactStats {
 ////////////
 // archwi //
 ////////////
-func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) (err error) {
+func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) error {
 	var (
 		t       = lrit.t
 		coldGet bool
@@ -334,7 +342,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) (err error) {
 	debug.Assert(t == wi.r.t)
 	debug.Assert(wi.r.bckFrom.Equal(lom.Bucket()))
 	debug.Assert(lom.Bprops() != nil) // must be init-ed
-	if err = lom.Load(false /*cache it*/, false /*locked*/); err != nil {
+	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		if !cmn.IsObjNotExist(err) {
 			return err
 		}
@@ -343,7 +351,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) (err error) {
 			return err
 		}
 	}
-
+	// cold
 	if coldGet {
 		if errCode, err := t.Backend(lom.Bck()).GetObj(lrit.ctx, lom); err != nil {
 			if errCode == http.StatusNotFound || cmn.IsObjNotExist(err) {
@@ -356,7 +364,6 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) (err error) {
 			return err
 		}
 	}
-
 	fh, err := cos.NewFileHandle(lom.FQN)
 	debug.AssertNoErr(err)
 	if err != nil {
@@ -364,13 +371,13 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) (err error) {
 	}
 	if t.Snode().ID() != wi.tsi.ID() {
 		wi.r.doSend(lom, wi, fh)
-		return
+		return nil
 	}
 	debug.Assert(wi.fh != nil) // see Begin
-	wi.writer.write(lom.ObjName, lom, fh)
+	err = wi.writer.write(lom.ObjName, lom, fh)
 	cluster.FreeLOM(lom)
 	cos.Close(fh)
-	return
+	return err
 }
 
 func (wi *archwi) quiesce() cluster.QuiRes {
@@ -392,7 +399,7 @@ func (wi *archwi) quicb(total time.Duration) cluster.QuiRes {
 ///////////////
 func (tw *tarWriter) fini() { tw.w.Close() }
 
-func (tw *tarWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader) {
+func (tw *tarWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader) (err error) {
 	tarhdr := new(tar.Header)
 	tarhdr.Typeflag = tar.TypeReg
 
@@ -402,12 +409,15 @@ func (tw *tarWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Re
 
 	// one at a time
 	tw.archwi.wmu.Lock()
-	err := tw.w.WriteHeader(tarhdr)
-	debug.AssertNoErr(err)
-
-	_, err = io.CopyBuffer(tw.w, reader, tw.archwi.buf)
+	if err = tw.w.WriteHeader(tarhdr); err == nil {
+		_, err = io.CopyBuffer(tw.w, reader, tw.archwi.buf)
+	}
+	if err != nil {
+		tw.archwi.err = err
+		tw.archwi.errCnt.Inc()
+	}
 	tw.archwi.wmu.Unlock()
-	debug.AssertNoErr(err)
+	return
 }
 
 ///////////////
@@ -415,7 +425,7 @@ func (tw *tarWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Re
 ///////////////
 func (zw *zipWriter) fini() { zw.w.Close() }
 
-func (zw *zipWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader) {
+func (zw *zipWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader) error {
 	ziphdr := new(zip.FileHeader)
 
 	ziphdr.Name = fullname
@@ -425,9 +435,13 @@ func (zw *zipWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Re
 
 	zw.archwi.wmu.Lock()
 	zipw, err := zw.w.CreateHeader(ziphdr)
-	debug.AssertNoErr(err)
-
-	_, err = io.CopyBuffer(zipw, reader, zw.archwi.buf)
+	if err == nil {
+		_, err = io.CopyBuffer(zipw, reader, zw.archwi.buf)
+	}
+	if err != nil {
+		zw.archwi.err = err
+		zw.archwi.errCnt.Inc()
+	}
 	zw.archwi.wmu.Unlock()
-	debug.AssertNoErr(err)
+	return err
 }

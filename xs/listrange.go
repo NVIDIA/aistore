@@ -124,11 +124,12 @@ func (r *lriterator) iterateTemplate(smap *cluster.Smap, pt *cos.ParsedTemplate,
 		}
 		lom := cluster.AllocLOM(objName)
 		err := r.do(lom, wi, smap)
-		if err != nil || r.freeLOM {
-			cluster.FreeLOM(lom)
-		}
 		if err != nil {
+			cluster.FreeLOM(lom)
 			return err
+		}
+		if r.freeLOM {
+			cluster.FreeLOM(lom)
 		}
 	}
 	return nil
@@ -167,11 +168,12 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 			}
 			lom := cluster.AllocLOM(be.Name)
 			err := r.do(lom, wi, smap)
-			if err != nil || r.freeLOM {
-				cluster.FreeLOM(lom)
-			}
 			if err != nil {
+				cluster.FreeLOM(lom)
 				return err
+			}
+			if r.freeLOM {
+				cluster.FreeLOM(lom)
 			}
 		}
 
@@ -192,11 +194,12 @@ func (r *lriterator) iterateList(wi lrwi, smap *cluster.Smap) error {
 		}
 		lom := cluster.AllocLOM(objName)
 		err := r.do(lom, wi, smap)
-		if err != nil || r.freeLOM {
-			cluster.FreeLOM(lom)
-		}
 		if err != nil {
+			cluster.FreeLOM(lom)
 			return err
+		}
+		if r.freeLOM {
+			cluster.FreeLOM(lom)
 		}
 	}
 	return nil
