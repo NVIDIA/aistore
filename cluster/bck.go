@@ -50,7 +50,7 @@ func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.BucketProps) *Bck
 	)
 
 	provider, err = cmn.NormalizeProvider(provider)
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 
 	bck := cmn.Bck{Name: name, Provider: provider, Ns: ns}
 	if len(optProps) > 0 {
@@ -136,16 +136,16 @@ func (b *Bck) Init(bowner Bowner) (err error) {
 		return
 	}
 	backend := NewBckEmbed(b.Props.BackendBck)
-	// Ensure no cached props
-	backend.Props = nil
-
-	if !backend.IsCloud() {
-		return fmt.Errorf("bucket %s: invalid backend %s (not a Cloud bucket)", b, backend)
+	if backend.Provider == "" || backend.IsAIS() {
+		return fmt.Errorf("bucket %s: invalid backend %s (must be remote)", b, backend)
 	}
-	if err = backend.Init(bowner); err == nil {
-		cos.Assert(!backend.HasBackendBck())
+	backend.Props = nil // always re-init
+	if err = backend.InitNoBackend(bowner); err != nil {
+		return
 	}
-	b.Props.BackendBck = backend.Bck
+	if backend.HasBackendBck() {
+		err = fmt.Errorf("bucket %s: invalid backend %s (recursion is not permitted)", b, backend)
+	}
 	return
 }
 
@@ -153,7 +153,6 @@ func (b *Bck) InitNoBackend(bowner Bowner) (err error) {
 	if err := b.Validate(); err != nil {
 		return err
 	}
-
 	bmd := bowner.Get()
 	if b.Provider == "" {
 		bmd.initBckAnyProvider(b)
@@ -245,7 +244,7 @@ func (nlp *NameLockPair) TryRLock(timeout time.Duration) (ok bool) {
 		timeout = nlpTryDefault
 	}
 	ok = nlp.withRetry(timeout, false)
-	cos.Assert(!nlp.exclusive)
+	debug.Assert(!nlp.exclusive)
 	return
 }
 

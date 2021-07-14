@@ -550,7 +550,8 @@ func TestGetClusterStats(t *testing.T) {
 					fstats.Avail, tfstats["pct_used"], fstats.PctUsed)
 			}
 			if fstats.PctUsed > HighWaterMark {
-				t.Error("Used Percentage above High Watermark")
+				t.Errorf("Used Percentage (%d%%) is above High Watermark (%d%%)",
+					fstats.PctUsed, HighWaterMark)
 			}
 		}
 	}
