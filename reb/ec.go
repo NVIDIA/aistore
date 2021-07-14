@@ -386,14 +386,6 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Read
 	}
 	// Broadcast updated MD
 	reqMD := pushReq{daemonID: reb.t.SID(), stage: rebStageTraverse, rebID: reb.rebID.Load(), md: req.md, action: rebActUpdateMD}
-	o := transport.AllocSend()
-	o.Hdr = transport.ObjHdr{
-		Bck:      ct.Bck().Bck,
-		ObjName:  ct.ObjectName(),
-		ObjAttrs: cmn.ObjAttrs{Size: 0},
-	}
-	o.Hdr.Opaque = reqMD.NewPack(rebMsgEC)
-	o.Callback = reb.transportECCB
 	nodes := req.md.RemoteTargets(reb.t)
 	for _, tsi := range nodes {
 		if moveTo != nil && moveTo.ID() == tsi.ID() {
@@ -405,11 +397,18 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Read
 			err = fmt.Errorf("failed to send updated metafile: %s", xreb)
 			break
 		}
+		o := transport.AllocSend()
+		o.Hdr = transport.ObjHdr{
+			Bck:      ct.Bck().Bck,
+			ObjName:  ct.ObjectName(),
+			ObjAttrs: cmn.ObjAttrs{Size: 0},
+		}
+		o.Hdr.Opaque = reqMD.NewPack(rebMsgEC)
+		o.Callback = reb.transportECCB
 		if errSend := reb.dm.Send(o, nil, tsi); errSend != nil && err == nil {
 			err = fmt.Errorf("failed to send updated metafile: %v", err)
 		}
 	}
-	transport.FreeSend(o)
 	return err
 }
 

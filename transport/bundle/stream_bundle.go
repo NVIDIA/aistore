@@ -159,18 +159,18 @@ func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*cl
 	}
 
 	if nodes == nil {
-		var reopen bool
-		obj.SetPrc(len(streams))
+		idx, cnt := 0, len(streams)
+		obj.SetPrc(cnt)
 		// Reader-reopening logic: since the streams in a bundle are mutually independent
 		// and asynchronous, reader.Open() (aka reopen) is skipped for the 1st replica
 		// that we put on the wire and is done for the 2nd, 3rd, etc. replicas.
 		// In other words, for the N object replicas over the N bundled streams, the
 		// original reader will get reopened (N-1) times.
 		for _, robin := range streams {
-			if err = sb.sendOne(obj, roc, robin, reopen); err != nil {
+			if err = sb.sendOne(obj, roc, robin, idx, cnt); err != nil {
 				return
 			}
-			reopen = true
+			idx++
 		}
 	} else {
 		// first, check streams vs destinations
@@ -182,16 +182,14 @@ func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*cl
 			_doCmpl(obj, roc, err) // ditto
 			return
 		}
-		obj.SetPrc(len(nodes))
-
 		// second, do send. Same comment wrt reopening.
-		var reopen bool
-		for _, di := range nodes {
+		cnt := len(nodes)
+		obj.SetPrc(cnt)
+		for idx, di := range nodes {
 			robin := streams[di.ID()]
-			if err = sb.sendOne(obj, roc, robin, reopen); err != nil {
+			if err = sb.sendOne(obj, roc, robin, idx, cnt); err != nil {
 				return
 			}
-			reopen = true
 		}
 	}
 	return
@@ -241,11 +239,15 @@ func (sb *Streams) get() (bun bundle) {
 }
 
 // one obj, one stream
-func (sb *Streams) sendOne(obj *transport.Obj, roc cos.ReadOpenCloser, robin *robin, reopen bool) error {
-	one := transport.AllocSend()
+func (sb *Streams) sendOne(obj *transport.Obj, roc cos.ReadOpenCloser, robin *robin, idx, cnt int) error {
+	one := obj
+	one.Reader = roc
+	if cnt == 1 {
+		goto snd
+	}
+	one = transport.AllocSend()
 	*one = *obj
-	one.Reader = roc // reduce to io.ReadCloser
-	if reopen && roc != nil {
+	if idx > 0 && roc != nil {
 		reader, err := roc.Open()
 		if err != nil { // reopen for every destination
 			err := fmt.Errorf("%s failed to reopen %q reader: %v", sb, obj, err)
@@ -254,6 +256,7 @@ func (sb *Streams) sendOne(obj *transport.Obj, roc cos.ReadOpenCloser, robin *ro
 		}
 		one.Reader = reader
 	}
+snd:
 	i := 0
 	if sb.multiplier > 1 {
 		i = int(robin.i.Inc()) % len(robin.stsdest)

@@ -269,7 +269,6 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr, re
 		err = r.mgr.resp().Send(o, reader, nodes...)
 	}
 	cluster.FreeNodes(nodes)
-	transport.FreeSend(o)
 	return err
 }
 
