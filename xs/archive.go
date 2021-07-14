@@ -34,7 +34,7 @@ type (
 		uuid string
 	}
 	archWriter interface {
-		write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader)
+		write(nameInArch string, oah cmn.ObjAttrsHolder, reader io.Reader)
 		fini()
 	}
 	tarWriter struct {
@@ -345,7 +345,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) (err error) {
 		return
 	}
 	debug.Assert(wi.fh != nil) // see Begin
-	wi.writer.write(lom.FullName(), lom, fh)
+	wi.writer.write(lom.ObjName, lom, fh)
 	cluster.FreeLOM(lom)
 	cos.Close(fh)
 	return
