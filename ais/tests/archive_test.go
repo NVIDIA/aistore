@@ -200,27 +200,34 @@ func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 			if !toBck.Equal(m.bck) && toBck.IsAIS() {
 				tutils.CreateFreshBucket(t, proxyURL, toBck, nil)
 			}
+
+			extractFiles := make(map[string][]string, numArchs)
 			if test.list {
 				for i := 0; i < numArchs; i++ {
-					go func(i int) {
-						archName := fmt.Sprintf("test_lst_%02d%s", i, test.ext)
-						list := make([]string, 0, numInArch)
-						for j := 0; j < numInArch; j++ {
-							list = append(list, m.objNames[rand.Intn(numPuts)])
-						}
+					archName := fmt.Sprintf("test_lst_%02d%s", i, test.ext)
+					list := make([]string, 0, numInArch)
+					for j := 0; j < numInArch; j++ {
+						list = append(list, m.objNames[rand.Intn(numPuts)])
+					}
+					extractFiles[archName] = []string{list[0], list[numInArch-1]}
+					go func(archName string, list []string) {
 						_, err := api.ArchiveList(baseParams, m.bck, toBck, archName, list)
 						tassert.CheckFatal(t, err)
-					}(i)
+					}(archName, list)
 				}
 			} else {
 				for i := 0; i < numArchs; i++ {
-					go func(i int) {
-						archName := fmt.Sprintf("test_rng_%02d%s", i, test.ext)
-						start := rand.Intn(numPuts - numInArch)
+					archName := fmt.Sprintf("test_rng_%02d%s", i, test.ext)
+					start := rand.Intn(numPuts - numInArch)
+					extractFiles[archName] = []string{
+						fmt.Sprintf("%s%d", m.prefix, start),
+						fmt.Sprintf("%s%d", m.prefix, start+numInArch-1),
+					}
+					go func(archName string, start int) {
 						rng := fmt.Sprintf(fmtRange, m.prefix, start, start+numInArch-1)
 						_, err := api.ArchiveRange(baseParams, m.bck, toBck, archName, rng)
 						tassert.CheckFatal(t, err)
-					}(i)
+					}(archName, start)
 				}
 			}
 
@@ -237,6 +244,22 @@ func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 			}
 			num := len(objList.Entries)
 			tassert.Errorf(t, num == numArchs, "expected %d, have %d", numArchs, num)
+
+			for objName, fileList := range extractFiles {
+				mime := "application/x-" + test.ext[1:]
+				for _, fileName := range fileList {
+					getOptions := api.GetObjectInput{
+						Query: url.Values{
+							cmn.URLParamArchpath: []string{fileName},
+							cmn.URLParamArchmime: []string{mime},
+						},
+					}
+					n, err := api.GetObject(baseParams, toBck, objName, getOptions)
+					if err != nil {
+						t.Errorf("%s/%s?%s=%s(%dB): %v", toBck.Name, objName, cmn.URLParamArchpath, fileName, n, err)
+					}
+				}
+			}
 		})
 	}
 }

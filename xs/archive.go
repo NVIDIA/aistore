@@ -279,7 +279,7 @@ func (r *XactPutArchive) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, er
 		rc := wi.rc.Dec()
 		debug.Assert(rc >= 0)
 	} else {
-		wi.writer.write(hdr.FullName(), &hdr.ObjAttrs, objReader)
+		wi.writer.write(hdr.ObjName, &hdr.ObjAttrs, objReader)
 	}
 }
 
