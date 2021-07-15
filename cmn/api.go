@@ -76,7 +76,7 @@ type (
 		DryRun bool   `json:"dry_run"` // Don't perform any PUT
 	}
 
-	Bck2BckMsg struct {
+	TransCpyBckMsg struct {
 		// Resulting objects names will have this extension. Warning: if in a source bucket exist two objects with the
 		// same base name, but different extension, specifying this field might cause object overriding. This is because
 		// of resulting name conflict.
@@ -566,7 +566,7 @@ func NewBucketPropsToUpdate(nvs cos.SimpleKVs) (props *BucketPropsToUpdate, err 
 	return
 }
 
-func (msg *Bck2BckMsg) Validate() error {
+func (msg *TransCpyBckMsg) Validate() error {
 	if msg.ID == "" {
 		return ErrETLMissingUUID
 	}
@@ -574,7 +574,7 @@ func (msg *Bck2BckMsg) Validate() error {
 }
 
 // Replace extension and add suffix if provided.
-func ObjNameFromBck2BckMsg(name string, msg *Bck2BckMsg) string {
+func ObjNameFromBck2BckMsg(name string, msg *TransCpyBckMsg) string {
 	if msg == nil {
 		return name
 	}

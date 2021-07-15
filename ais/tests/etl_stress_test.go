@@ -208,7 +208,7 @@ def transform(input_bytes):
 			})
 
 			tlog.Logf("Start offline ETL %q\n", uuid)
-			xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{
+			xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &cmn.TransCpyBckMsg{
 				ID:             uuid,
 				RequestTimeout: cos.Duration(requestTimeout),
 			})
@@ -256,5 +256,5 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, name, comm string) (xactID s
 	})
 
 	tlog.Logf("Start offline ETL %q => %q\n", etlID, bckTo.String())
-	return tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: etlID})
+	return tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &cmn.TransCpyBckMsg{ID: etlID})
 }

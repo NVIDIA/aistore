@@ -145,6 +145,11 @@ func (p *archFactory) newDM(bckFrom cmn.Bck, r *XactPutArchive) error {
 // XactPutArchive //
 ////////////////////
 
+func (r *XactPutArchive) TxnAbort() {
+	debug.Assert(r.dm.IsOpen())
+	r.dm.UnregRecv()
+}
+
 func (r *XactPutArchive) Begin(msg *cmn.ArchiveMsg) (err error) {
 	lom := cluster.AllocLOM(msg.ArchName)
 	if err = lom.Init(msg.ToBck); err != nil {

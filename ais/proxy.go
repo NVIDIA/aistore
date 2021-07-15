@@ -991,7 +991,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		w.Write([]byte(xactID))
 	case cmn.ActCopyBck, cmn.ActETLBck:
 		var (
-			internalMsg = &cmn.Bck2BckMsg{}
+			internalMsg = &cmn.TransCpyBckMsg{}
 			bckTo       *cluster.Bck
 		)
 		switch msg.Action {

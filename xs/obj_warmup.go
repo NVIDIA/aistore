@@ -58,16 +58,17 @@ func (*llcFactory) PostRenewHook(_ xreg.BucketEntry)              {}
 // xactLLC //
 /////////////
 
-func newXactLLC(t cluster.Target, uuid string, bck cmn.Bck) *xactLLC {
-	return &xactLLC{
-		XactBckJog: *xaction.NewXactBckJog(uuid, cmn.ActLoadLomCache, bck, &mpather.JoggerGroupOpts{
-			T:        t,
-			Bck:      bck,
-			CTs:      []string{fs.ObjectType},
-			VisitObj: func(_ *cluster.LOM, _ []byte) error { return nil },
-			DoLoad:   mpather.Load,
-		}),
+func newXactLLC(t cluster.Target, uuid string, bck cmn.Bck) (r *xactLLC) {
+	r = &xactLLC{}
+	mpopts := &mpather.JoggerGroupOpts{
+		T:        t,
+		Bck:      bck,
+		CTs:      []string{fs.ObjectType},
+		VisitObj: func(*cluster.LOM, []byte) error { return nil },
+		DoLoad:   mpather.Load,
 	}
+	r.XactBckJog.Init(uuid, cmn.ActLoadLomCache, bck, mpopts)
+	return
 }
 
 func (r *xactLLC) Run() {

@@ -17,11 +17,10 @@ type XactBckJog struct {
 	doneCh  chan struct{}
 }
 
-func NewXactBckJog(id, kind string, bck cmn.Bck, opts *mpather.JoggerGroupOpts) *XactBckJog {
-	base := &XactBckJog{t: opts.T}
-	base.InitBase(id, kind, &bck)
-	base.joggers = mpather.NewJoggerGroup(opts)
-	return base
+func (r *XactBckJog) Init(id, kind string, bck cmn.Bck, opts *mpather.JoggerGroupOpts) {
+	r.t = opts.T
+	r.InitBase(id, kind, &bck)
+	r.joggers = mpather.NewJoggerGroup(opts)
 }
 
 func (r *XactBckJog) Run()                   { r.joggers.Run() }

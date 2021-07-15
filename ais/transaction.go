@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/hk"
-	"github.com/NVIDIA/aistore/transport/bundle"
+	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/xs"
 )
 
@@ -99,13 +99,9 @@ type (
 		bckFrom *cluster.Bck
 		bckTo   *cluster.Bck
 	}
-	txnTransferBucket struct {
+	txnTransCpyBucket struct {
 		txnBckBase
-		bckFrom *cluster.Bck
-		bckTo   *cluster.Bck
-		dm      *bundle.DataMover
-		dp      cluster.LomReaderProvider // optional
-		metaMsg *cmn.Bck2BckMsg           // optional, for object name translation.
+		xtcp *mirror.XactTransCpyBck
 	}
 	txnECEncode struct {
 		txnBckBase
@@ -127,7 +123,7 @@ var (
 	_ txn = (*txnMakeNCopies)(nil)
 	_ txn = (*txnSetBucketProps)(nil)
 	_ txn = (*txnRenameBucket)(nil)
-	_ txn = (*txnTransferBucket)(nil)
+	_ txn = (*txnTransCpyBucket)(nil)
 	_ txn = (*txnECEncode)(nil)
 )
 
@@ -404,7 +400,7 @@ func (txn *txnBckBase) abort() {
 	glog.Infof("aborted: %s", txn)
 }
 
-// NOTE: not keeping locks for the duration; see also: txnTransferBucket
+// NOTE: not keeping locks for the duration; see also: txnTransCpyBucket
 func (txn *txnBckBase) commit() { txn.cleanup() }
 
 func (txn *txnBckBase) String() string {
@@ -505,26 +501,18 @@ func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnR
 }
 
 ///////////////////////
-// txnTransferBucket //
+// txnTransCpyBucket //
 ///////////////////////
 
-func newTxnTransferBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck, dm *bundle.DataMover,
-	dp cluster.LomReaderProvider, metaMsg *cmn.Bck2BckMsg) (txn *txnTransferBucket) {
-	txn = &txnTransferBucket{
-		*newTxnBckBase("bcp", *bckFrom),
-		bckFrom,
-		bckTo,
-		dm,
-		dp,
-		metaMsg,
-	}
+func newTxnTransCpyBucket(c *txnServerCtx, xtcp *mirror.XactTransCpyBck) (txn *txnTransCpyBucket) {
+	txn = &txnTransCpyBucket{*newTxnBckBase("tcb", *xtcp.Args().BckFrom), xtcp}
 	txn.fillFromCtx(c)
 	return
 }
 
-func (txn *txnTransferBucket) abort() {
+func (txn *txnTransCpyBucket) abort() {
 	txn.txnBckBase.abort()
-	txn.dm.UnregRecv()
+	txn.xtcp.TxnAbort()
 }
 
 /////////////////////
@@ -559,4 +547,5 @@ func newTxnPutArchive(c *txnServerCtx, bckFrom, bckTo *cluster.Bck, xarch *xs.Xa
 
 func (txn *txnPutArchive) abort() {
 	txn.txnBckBase.abort()
+	txn.xarch.TxnAbort()
 }

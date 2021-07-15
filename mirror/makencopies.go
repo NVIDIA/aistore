@@ -70,22 +70,20 @@ func (r *xactMNC) String() string {
 	return fmt.Sprintf("%s tag=%s, copies=%d", r.XactBase.String(), r.tag, r.copies)
 }
 
-func newXactMNC(bck cmn.Bck, p *mncFactory, slab *memsys.Slab) *xactMNC {
-	xact := &xactMNC{
-		tag:    p.args.Tag,
-		copies: p.args.Copies,
-	}
-	debug.Assert(xact.tag != "" && xact.copies > 0)
-	xact.XactBckJog = *xaction.NewXactBckJog(p.uuid, cmn.ActMakeNCopies, bck, &mpather.JoggerGroupOpts{
+func newXactMNC(bck cmn.Bck, p *mncFactory, slab *memsys.Slab) (r *xactMNC) {
+	r = &xactMNC{tag: p.args.Tag, copies: p.args.Copies}
+	debug.Assert(r.tag != "" && r.copies > 0)
+	mpopts := &mpather.JoggerGroupOpts{
 		Bck:      bck,
 		T:        p.t,
 		CTs:      []string{fs.ObjectType},
-		VisitObj: xact.visitObj,
+		VisitObj: r.visitObj,
 		Slab:     slab,
 		DoLoad:   mpather.Load, // Required to fetch `NumCopies()` and skip copies.
 		Throttle: true,
-	})
-	return xact
+	}
+	r.XactBckJog.Init(p.uuid, cmn.ActMakeNCopies, bck, mpopts)
+	return
 }
 
 func (r *xactMNC) Run() {

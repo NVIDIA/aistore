@@ -67,17 +67,10 @@ func (p *proFactory) Get() cluster.Xact { return p.xact }
 // XactDirPromote //
 ////////////////////
 
-func NewXactDirPromote(dir string, bck cmn.Bck, t cluster.Target, params *cmn.ActValPromote) *XactDirPromote {
-	return &XactDirPromote{
-		XactBckJog: *xaction.NewXactBckJog(
-			cos.GenUUID(),
-			cmn.ActPromote,
-			bck,
-			&mpather.JoggerGroupOpts{T: t},
-		),
-		dir:    dir,
-		params: params,
-	}
+func NewXactDirPromote(dir string, bck cmn.Bck, t cluster.Target, params *cmn.ActValPromote) (r *XactDirPromote) {
+	r = &XactDirPromote{dir: dir, params: params}
+	r.XactBckJog.Init(cos.GenUUID(), cmn.ActPromote, bck, &mpather.JoggerGroupOpts{T: t})
+	return
 }
 
 func (r *XactDirPromote) Run() {

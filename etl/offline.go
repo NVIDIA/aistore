@@ -14,7 +14,7 @@ import (
 
 type (
 	OfflineDataProvider struct {
-		bckMsg         *cmn.Bck2BckMsg
+		bckMsg         *cmn.TransCpyBckMsg
 		comm           Communicator
 		requestTimeout time.Duration
 	}
@@ -23,7 +23,7 @@ type (
 // interface guard
 var _ cluster.LomReaderProvider = (*OfflineDataProvider)(nil)
 
-func NewOfflineDataProvider(msg *cmn.Bck2BckMsg, lsnode *cluster.Snode) (*OfflineDataProvider, error) {
+func NewOfflineDataProvider(msg *cmn.TransCpyBckMsg, lsnode *cluster.Snode) (*OfflineDataProvider, error) {
 	comm, err := GetCommunicator(msg.ID, lsnode)
 	if err != nil {
 		return nil, err

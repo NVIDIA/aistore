@@ -10,7 +10,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
 )
 
@@ -46,13 +45,12 @@ type (
 		Params *cmn.ActValPromote
 	}
 
-	TransferBckArgs struct {
+	TransCpyBckArgs struct {
 		Phase   string
 		BckFrom *cluster.Bck
 		BckTo   *cluster.Bck
-		DM      *bundle.DataMover
 		DP      cluster.LomReaderProvider
-		Meta    *cmn.Bck2BckMsg
+		Msg     *cmn.TransCpyBckMsg
 	}
 
 	ECEncodeArgs struct {
@@ -218,22 +216,12 @@ func (r *registry) renewPutMirror(t cluster.Target, lom *cluster.LOM) RenewRes {
 	return r.renewBucketXact(cmn.ActPutCopies, lom.Bck(), Args{T: t, Custom: lom})
 }
 
-func RenewTransferBck(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid, kind,
-	phase string, dm *bundle.DataMover, dp cluster.LomReaderProvider, meta *cmn.Bck2BckMsg) RenewRes {
-	return defaultReg.renewTransferBck(t, bckFrom, bckTo, uuid, kind, phase, dm, dp, meta)
+func RenewTransCpyBck(t cluster.Target, uuid, kind string, custom *TransCpyBckArgs) RenewRes {
+	return defaultReg.renewTransCpyBck(t, uuid, kind, custom)
 }
 
-func (r *registry) renewTransferBck(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid, kind,
-	phase string, dm *bundle.DataMover, dp cluster.LomReaderProvider, meta *cmn.Bck2BckMsg) RenewRes {
-	custom := &TransferBckArgs{
-		Phase:   phase,
-		BckFrom: bckFrom,
-		BckTo:   bckTo,
-		DM:      dm,
-		DP:      dp,
-		Meta:    meta,
-	}
-	return r.renewBucketXact(kind, bckTo, Args{t, uuid, custom})
+func (r *registry) renewTransCpyBck(t cluster.Target, uuid, kind string, custom *TransCpyBckArgs) RenewRes {
+	return r.renewBucketXact(kind, custom.BckTo /*NOTE: to not from*/, Args{t, uuid, custom})
 }
 
 func RenewBckRename(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid string, rmdVersion int64, phase string) RenewRes {

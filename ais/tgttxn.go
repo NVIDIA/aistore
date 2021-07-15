@@ -7,7 +7,6 @@ package ais
 import (
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -21,18 +20,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/nl"
-	"github.com/NVIDIA/aistore/transport"
-	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 	"github.com/NVIDIA/aistore/xs"
 	jsoniter "github.com/json-iterator/go"
-)
-
-const (
-	recvObjTrname = "recvobjs" // copy&transform transport endpoint prefix
 )
 
 // convenience structure to gather all (or most) of the relevant context in one place
@@ -99,15 +92,15 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActMoveBck:
 		err = t.renameBucket(c)
 	case cmn.ActCopyBck, cmn.ActETLBck:
-		bck2BckMsg := &cmn.Bck2BckMsg{}
-		if err := cos.MorphMarshal(c.msg.Value, bck2BckMsg); err != nil {
+		tcmsg := &cmn.TransCpyBckMsg{}
+		if err := cos.MorphMarshal(c.msg.Value, tcmsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, c.msg.Value, err)
 			return
 		}
 		if msg.Action == cmn.ActCopyBck {
-			err = t.transferBucket(c, bck2BckMsg, nil)
+			err = t.transCpyBck(c, tcmsg, nil)
 		} else {
-			err = t.etlBucket(c, bck2BckMsg) // Calls `t.transferBucket` internally.
+			err = t.etlBucket(c, tcmsg) // Calls the common `t.transCpyBck` internally.
 		}
 	case cmn.ActECEncode:
 		err = t.ecEncode(c)
@@ -435,62 +428,77 @@ func (t *targetrunner) validateBckRenTxn(bckFrom, bckTo *cluster.Bck, msg *aisMs
 	return nil
 }
 
-////////////////////
-// transferBucket //
-////////////////////
+///////////////
+// etlBucket //
+///////////////
 
-func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMsg, dp cluster.LomReaderProvider) error {
+// etlBucket uses transCpyBck xaction to transform an entire bucket. It creates
+// a reader based on a given ETL transformation.
+func (t *targetrunner) etlBucket(c *txnServerCtx, msg *cmn.TransCpyBckMsg) (err error) {
+	var dp cluster.LomReaderProvider
+	if err := k8s.Detect(); err != nil {
+		return err
+	}
+	if msg.ID == "" {
+		return cmn.ErrETLMissingUUID
+	}
+	if dp, err = etl.NewOfflineDataProvider(msg, t.si); err != nil {
+		return nil
+	}
+	return t.transCpyBck(c, msg, dp)
+}
+
+// common for both bucket copy and bucket transform - does the heavy lifting
+func (t *targetrunner) transCpyBck(c *txnServerCtx, msg *cmn.TransCpyBckMsg, dp cluster.LomReaderProvider) error {
 	if err := c.bck.Init(t.owner.bmd); err != nil {
 		return err
 	}
 	switch c.phase {
 	case cmn.ActBegin:
 		var (
-			bckTo   = c.bckTo
-			bckFrom = c.bck
-			dm      *bundle.DataMover
-			config  = cmn.GCO.Get()
-			err     error
-			sizePDU int32
-
+			bckTo          = c.bckTo
+			bckFrom        = c.bck // from
 			nlpTo, nlpFrom *cluster.NameLockPair
 		)
+		// validate
 		if err := bckTo.Validate(); err != nil {
 			return err
 		}
 		if err := bckFrom.Validate(); err != nil {
 			return err
 		}
-		if err := t.validateTransferBckTxn(bckFrom, c.msg.Action); err != nil {
+		if cs := fs.GetCapStatus(); cs.Err != nil {
+			return cs.Err
+		}
+		if err := t.coExists(bckFrom, c.msg.Action); err != nil {
 			return err
 		}
-		if c.msg.Action == cmn.ActETLBck {
-			sizePDU = memsys.DefaultBufSize
+		bmd := t.owner.bmd.get()
+		if _, present := bmd.Get(bckFrom); !present {
+			return cmn.NewErrBckNotFound(bckFrom.Bck)
 		}
-		// Reuse rebalance configuration to create a DM for copying objects.
-		// TODO: implement separate configuration for Copy/ETL MD.
-		if dm, err = c.newDM(&config.Rebalance, c.uuid, sizePDU); err != nil {
-			return err
-		}
-
+		// lock
 		nlpFrom = bckFrom.GetNameLockPair()
 		if !nlpFrom.TryRLock(c.timeout.netw / 4) {
-			dm.UnregRecv()
 			return cmn.NewErrBckIsBusy(bckFrom.Bck)
 		}
-
-		if !bck2BckMsg.DryRun {
+		if !msg.DryRun {
 			nlpTo = bckTo.GetNameLockPair()
 			if !nlpTo.TryLock(c.timeout.netw / 4) {
-				dm.UnregRecv()
 				nlpFrom.Unlock()
 				return cmn.NewErrBckIsBusy(bckTo.Bck)
 			}
 		}
-
-		txn := newTxnTransferBucket(c, bckFrom, bckTo, dm, dp, bck2BckMsg)
+		// begin
+		custom := &xreg.TransCpyBckArgs{Phase: cmn.ActBegin, BckFrom: bckFrom, BckTo: bckTo, DP: dp, Msg: msg}
+		rns := xreg.RenewTransCpyBck(t, c.uuid, c.msg.Action /*kind*/, custom)
+		if rns.Err != nil {
+			return rns.Err
+		}
+		xact := rns.Entry.Get()
+		xtcp := xact.(*mirror.XactTransCpyBck)
+		txn := newTxnTransCpyBucket(c, xtcp)
 		if err := t.transactions.begin(txn); err != nil {
-			dm.UnregRecv()
 			if nlpTo != nil {
 				nlpTo.Unlock()
 			}
@@ -508,7 +516,7 @@ func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMs
 		if err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
-		txnCp := txn.(*txnTransferBucket)
+		tcp := txn.(*txnTransCpyBucket)
 		if c.query.Get(cmn.URLParamWaitMetasync) != "" {
 			if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 				return fmt.Errorf("%s %s: %v", t.si, txn, err)
@@ -516,10 +524,10 @@ func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMs
 		} else {
 			t.transactions.find(c.uuid, cmn.ActCommit)
 		}
-		rns := xreg.RenewTransferBck(
-			t, txnCp.bckFrom, txnCp.bckTo, c.uuid, c.msg.Action, cmn.ActCommit,
-			txnCp.dm, txnCp.dp, txnCp.metaMsg,
-		)
+		custom := tcp.xtcp.Args()
+		debug.Assert(custom.Phase == cmn.ActBegin)
+		custom.Phase = cmn.ActCommit
+		rns := xreg.RenewTransCpyBck(t, c.uuid, c.msg.Action /*kind*/, tcp.xtcp.Args())
 		if rns.Err != nil {
 			return rns.Err
 		}
@@ -530,40 +538,6 @@ func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMs
 		debug.Assert(false)
 	}
 	return nil
-}
-
-func (t *targetrunner) validateTransferBckTxn(bckFrom *cluster.Bck, action string) (err error) {
-	if cs := fs.GetCapStatus(); cs.Err != nil {
-		return cs.Err
-	}
-	if err = t.coExists(bckFrom, action); err != nil {
-		return
-	}
-	bmd := t.owner.bmd.get()
-	if _, present := bmd.Get(bckFrom); !present {
-		return cmn.NewErrBckNotFound(bckFrom.Bck)
-	}
-	return nil
-}
-
-///////////////
-// etlBucket //
-///////////////
-
-// etlBucket uses transferBucket xaction to transform the whole bucket. The only difference is that instead of copying the
-// same bytes, it creates a reader based on given ETL transformation.
-func (t *targetrunner) etlBucket(c *txnServerCtx, msg *cmn.Bck2BckMsg) (err error) {
-	var dp cluster.LomReaderProvider
-	if err := k8s.Detect(); err != nil {
-		return err
-	}
-	if msg.ID == "" {
-		return cmn.ErrETLMissingUUID
-	}
-	if dp, err = etl.NewOfflineDataProvider(msg, t.si); err != nil {
-		return nil
-	}
-	return t.transferBucket(c, msg, dp)
 }
 
 //////////////
@@ -853,54 +827,4 @@ func (c *txnServerCtx) addNotif(xact cluster.Xact) {
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: dsts, F: c.t.callerNotifyFin},
 		Xact:      xact,
 	})
-}
-
-func (c *txnServerCtx) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, err error) {
-	defer transport.FreeRecv(objReader)
-	if err != nil && !cos.IsEOF(err) {
-		glog.Error(err)
-		return
-	}
-	defer cos.DrainReader(objReader)
-	lom := cluster.AllocLOM(hdr.ObjName)
-	defer cluster.FreeLOM(lom)
-	if err := lom.Init(hdr.Bck); err != nil {
-		glog.Error(err)
-		return
-	}
-
-	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip cksum*/)
-	params := cluster.PutObjectParams{
-		Tag:    fs.WorkfilePut,
-		Reader: io.NopCloser(objReader),
-		// Transaction is used only by CopyBucket and ETL. In both cases new objects
-		// are created at the destination. Setting `RegularPut` type informs `c.t.PutObject`
-		// that it must PUT the object to the Cloud as well after the local data are
-		// finalized in case of destination is Cloud.
-		RecvType: cluster.RegularPut,
-		Cksum:    hdr.ObjAttrs.Cksum,
-		Started:  time.Now(),
-	}
-	if err := c.t.PutObject(lom, params); err != nil {
-		glog.Error(err)
-	}
-}
-
-func (c *txnServerCtx) newDM(rebcfg *cmn.RebalanceConf, uuid string, sizePDU ...int32) (*bundle.DataMover, error) {
-	dmExtra := bundle.Extra{
-		RecvAck:     nil,                    // NOTE: no ACKs
-		Compression: rebcfg.Compression,     // TODO: define separately
-		Multiplier:  int(rebcfg.Multiplier), // ditto
-	}
-	if len(sizePDU) > 0 {
-		dmExtra.SizePDU = sizePDU[0]
-	}
-	dm, err := bundle.NewDataMover(c.t, recvObjTrname+"_"+uuid, c.recvObjDM, cluster.RegularPut, dmExtra)
-	if err != nil {
-		return nil, err
-	}
-	if err := dm.RegRecv(); err != nil {
-		return nil, err
-	}
-	return dm, nil
 }

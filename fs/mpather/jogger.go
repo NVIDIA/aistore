@@ -24,6 +24,8 @@ const (
 	throttleNumObjects = 16 // unit of self-throttling
 )
 
+type LoadType int
+
 const (
 	noLoad LoadType = iota
 	Load
@@ -32,8 +34,6 @@ const (
 )
 
 type (
-	LoadType int
-
 	JoggerGroupOpts struct {
 		T        cluster.Target
 		Bck      cmn.Bck
@@ -42,15 +42,16 @@ type (
 		VisitCT  func(ct *cluster.CT, buf []byte) error
 		Slab     *memsys.Slab
 
-		DoLoad                LoadType // Loads the LOM and if specified takes requested lock.
-		IncludeCopy           bool     // Traverses LOMs that are copies.
-		SkipGloballyMisplaced bool     // Skips content types that are globally misplaced.
-		Throttle              bool     // Determines if the jogger should throttle itself.
-		Parallel              int      // How many parallel calls each jogger should execute.
+		DoLoad   LoadType // Loads the LOM and if specified takes requested lock.
+		Parallel int      // How many parallel calls each jogger should execute.
 
 		// Additional function which should be set by JoggerGroup and called
 		// by each of the jogger if they finish.
 		onFinish func()
+
+		IncludeCopy           bool // Traverses LOMs that are copies.
+		SkipGloballyMisplaced bool // Skips content types that are globally misplaced.
+		Throttle              bool // Determines if the jogger should throttle itself.
 	}
 
 	// JoggerGroup runs jogger per mountpath which walk the entire bucket and
