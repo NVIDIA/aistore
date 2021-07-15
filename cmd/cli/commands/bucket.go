@@ -374,10 +374,11 @@ func printBckHeadTable(c *cli.Context, props, defProps *cmn.BucketProps, section
 	var (
 		defList []prop
 		colored = !flagIsSet(c, noColorFlag)
+		compact = flagIsSet(c, compactPropFlag)
 	)
 	// List instead of map to keep properties in the same order always.
 	// All names are one word ones - for easier parsing.
-	propList := bckPropList(props, flagIsSet(c, verboseFlag))
+	propList := bckPropList(props, !compact)
 	if section != "" {
 		tmpPropList := propList[:0]
 		for _, v := range propList {
@@ -389,7 +390,7 @@ func printBckHeadTable(c *cli.Context, props, defProps *cmn.BucketProps, section
 	}
 
 	if colored {
-		defList = bckPropList(defProps, flagIsSet(c, verboseFlag))
+		defList = bckPropList(defProps, !compact)
 		highlight := color.New(color.FgCyan).SprintfFunc()
 		for idx, p := range propList {
 			for _, def := range defList {

@@ -37,9 +37,9 @@ var (
 			keepMDFlag,
 		),
 		subcmdSetProps: {
-			resetFlag,
 			forceFlag,
 		},
+		subcmdResetProps: {},
 		commandList: {
 			regexFlag,
 			templateFlag,
@@ -131,12 +131,27 @@ var (
 				BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true}),
 			},
 			{
-				Name:         subcmdSetProps,
-				Usage:        "update or reset bucket properties",
-				ArgsUsage:    bucketPropsArgument,
-				Flags:        bucketCmdsFlags[subcmdSetProps],
-				Action:       setPropsHandler,
-				BashComplete: bucketCompletions(bckCompletionsOpts{additionalCompletions: []cli.BashCompleteFunc{propCompletions}}),
+				Name:  subcmdProps,
+				Usage: "show, update or reset bucket properties",
+				Subcommands: []cli.Command{
+					{
+						Name:         subcmdSetProps,
+						Usage:        "update bucket properties",
+						ArgsUsage:    bucketPropsArgument,
+						Flags:        bucketCmdsFlags[subcmdSetProps],
+						Action:       setPropsHandler,
+						BashComplete: bucketCompletions(bckCompletionsOpts{additionalCompletions: []cli.BashCompleteFunc{propCompletions}}),
+					},
+					{
+						Name:         subcmdResetProps,
+						Usage:        "reset bucket properties",
+						ArgsUsage:    bucketPropsArgument,
+						Flags:        bucketCmdsFlags[subcmdResetProps],
+						Action:       resetPropsHandler,
+						BashComplete: bucketCompletions(bckCompletionsOpts{additionalCompletions: []cli.BashCompleteFunc{propCompletions}}),
+					},
+					makeAlias(showCmdBucket, "", true, commandShow),
+				},
 			},
 		},
 	}
@@ -357,6 +372,14 @@ func evictHandler(c *cli.Context) (err error) {
 	return multiObjOp(c, commandEvict)
 }
 
+func resetPropsHandler(c *cli.Context) (err error) {
+	bck, err := parseBckURI(c, c.Args().First())
+	if err != nil {
+		return err
+	}
+	return resetBucketProps(c, bck)
+}
+
 func setPropsHandler(c *cli.Context) (err error) {
 	var origProps *cmn.BucketProps
 	bck, err := parseBckURI(c, c.Args().First())
@@ -365,10 +388,6 @@ func setPropsHandler(c *cli.Context) (err error) {
 	}
 	if origProps, err = headBucket(bck); err != nil {
 		return err
-	}
-
-	if flagIsSet(c, resetFlag) { // ignores all arguments, just resets bucket origProps
-		return resetBucketProps(c, bck)
 	}
 
 	updateProps, err := parseBckPropsFromContext(c)

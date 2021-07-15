@@ -1,6 +1,6 @@
 echo "0123456789" > $OBJECT.txt
 s3cmd --host=$HOST mb s3://$BUCKET $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)"
-ais bucket props ais://$BUCKET checksum.type=md5
+ais bucket props set ais://$BUCKET checksum.type=md5
 s3cmd --host=$HOST put $OBJECT.txt s3://$BUCKET/$OBJECT $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)" // IGNORE
 s3cmd --host=$HOST ls s3://$BUCKET $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)" | wc -l
 s3cmd --host=$HOST get s3://$BUCKET$OBJECT $OBJECT_copy.txt $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)" // IGNORE

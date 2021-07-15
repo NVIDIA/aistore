@@ -89,7 +89,7 @@ var (
 		},
 		subcmdShowBucket: {
 			jsonFlag,
-			verboseFlag,
+			compactPropFlag,
 		},
 		subcmdShowConfig: {
 			configTypeFlag,

@@ -127,8 +127,11 @@ const (
 	subcmdStopDownload = subcmdDownload
 
 	// Bucket subcommands
-	subcmdSummary  = "summary"
-	subcmdSetProps = subcmdProps
+	subcmdSummary = "summary"
+
+	// Bucket properties subcommands
+	subcmdSetProps   = "set"
+	subcmdResetProps = "reset"
 
 	// Wait subcommands
 	subcmdWaitXaction  = subcmdXaction
@@ -263,7 +266,6 @@ var (
 	jsonFlag        = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}
 	noHeaderFlag    = cli.BoolFlag{Name: "no-headers,H", Usage: "display tables without headers"}
 	progressBarFlag = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
-	resetFlag       = cli.BoolFlag{Name: "reset", Usage: "reset to original state"}
 	dryRunFlag      = cli.BoolFlag{Name: "dry-run", Usage: "preview the action without really doing it"}
 	verboseFlag     = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}
 	ignoreErrorFlag = cli.BoolFlag{
@@ -299,6 +301,7 @@ var (
 	paritySlicesFlag  = cli.IntFlag{Name: "parity-slices,parity,p", Usage: "number of parity slices", Required: true}
 	listBucketsFlag   = cli.StringFlag{Name: "buckets", Usage: "comma-separated list of bucket names, e.g.: 'b1,b2,b3'"}
 	validateFlag      = cli.BoolFlag{Name: "validate", Usage: "check objects health"}
+	compactPropFlag   = cli.BoolFlag{Name: "compact,c", Usage: "display properties grouped in human-readable mode"}
 
 	// Config
 	configTypeFlag = cli.StringFlag{Name: "type", Usage: "show the specified configuration, one of: 'all','cluster','local'"}
