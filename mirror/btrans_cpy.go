@@ -144,9 +144,11 @@ func (r *XactTransCpyBck) String() string {
 	return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.args.BckFrom)
 }
 
+// limited pre-run abort
 func (r *XactTransCpyBck) TxnAbort() {
 	debug.Assert(!r.dm.IsOpen())
 	r.dm.UnregRecv()
+	r.XactBase.Finish(cmn.NewAbortedError(r.String()))
 }
 
 //

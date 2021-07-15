@@ -519,6 +519,7 @@ func (t *targetrunner) transCpyBck(c *txnServerCtx, msg *cmn.TransCpyBckMsg, dp 
 		tcp := txn.(*txnTransCpyBucket)
 		if c.query.Get(cmn.URLParamWaitMetasync) != "" {
 			if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
+				tcp.xtcp.TxnAbort()
 				return fmt.Errorf("%s %s: %v", t.si, txn, err)
 			}
 		} else {
@@ -529,6 +530,7 @@ func (t *targetrunner) transCpyBck(c *txnServerCtx, msg *cmn.TransCpyBckMsg, dp 
 		custom.Phase = cmn.ActCommit
 		rns := xreg.RenewTransCpyBck(t, c.uuid, c.msg.Action /*kind*/, tcp.xtcp.Args())
 		if rns.Err != nil {
+			tcp.xtcp.TxnAbort()
 			return rns.Err
 		}
 		xact := rns.Entry.Get()
