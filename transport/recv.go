@@ -125,19 +125,6 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func eofOK(err error, unsized ...bool) error {
-	if len(unsized) > 0 && unsized[0] {
-		if err == nil {
-			return io.EOF
-		}
-		return err
-	}
-	if err == io.EOF {
-		return nil
-	}
-	return err
-}
-
 /////////////
 // handler //
 /////////////
@@ -196,7 +183,6 @@ func (it *iterator) rxloop(uid uint64, loghdr string) (err error) {
 		if flags&msgFlag == 0 {
 			obj, err = it.nextObj(loghdr, hlen)
 			if obj != nil {
-				unsized := obj.IsUnsized()
 				if flags&firstPDU != 0 && !obj.hdr.IsHeaderOnly() {
 					if it.pdu == nil {
 						buf, _ := h.mm.AllocSize(MaxSizePDU)
@@ -206,16 +192,12 @@ func (it *iterator) rxloop(uid uint64, loghdr string) (err error) {
 					obj.pdu.reset()
 				}
 				// err => err; EOF => (unsized => EOF, otherwise => nil)
-				h.rxObj(obj.hdr, obj, eofOK(err, unsized))
+				err = eofOK(err)
+				h.rxObj(obj.hdr, obj, err)
 				it.stats.Num.Inc()
-
 				// NOTE: `GORACE` may erroneously trigger at this point vs. objReader.Read
 				//       - disabling `recvPool` (pool.go) makes it go away
 				it.stats.Size.Add(obj.off)
-
-				if err = eofOK(err); err == nil {
-					continue
-				}
 			} else if err != nil && err != io.EOF {
 				h.rxObj(ObjHdr{}, nil, err)
 			}
@@ -230,6 +212,13 @@ func (it *iterator) rxloop(uid uint64, loghdr string) (err error) {
 	}
 	h.oldSessions.Store(uid, mono.NanoTime())
 	return
+}
+
+func eofOK(err error) error {
+	if err == io.EOF {
+		err = nil
+	}
+	return err
 }
 
 // nextProtoHdr receives and handles 16 bytes of the protocol header (not to confuse with transport.Obj.Hdr)
