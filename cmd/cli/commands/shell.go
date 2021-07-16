@@ -247,7 +247,14 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 		}
 
 		if query.Provider == "" {
-			providers = cmn.Providers.ToSlice()
+			config, err := api.GetClusterConfig(defaultAPIParams)
+			if err != nil {
+				return
+			}
+			providers = []string{cmn.ProviderAIS, cmn.ProviderHTTP}
+			for provider := range config.Backend.Conf {
+				providers = append(providers, provider)
+			}
 		} else {
 			providers = []string{query.Provider}
 		}
