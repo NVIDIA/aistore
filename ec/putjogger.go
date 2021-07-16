@@ -338,7 +338,7 @@ func (c *putJogger) createCopies(ctx *encodeCtx) error {
 
 // Fills slices with calculated checksums, reports errors to error channel
 func checksumDataSlices(ctx *encodeCtx, cksmReaders []io.Reader, cksumType string) error {
-	buf, slab := mm.Alloc(ctx.sliceSize)
+	buf, slab := mm.AllocSize(ctx.sliceSize)
 	defer slab.Free(buf)
 	for i, reader := range cksmReaders {
 		_, cksum, err := cos.CopyAndChecksum(io.Discard, reader, buf, cksumType)

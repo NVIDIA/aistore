@@ -482,7 +482,7 @@ func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
 		}
 
 		var (
-			buf, slab   = mm.Alloc(serializationBufSize)
+			buf, slab   = mm.AllocSize(serializationBufSize)
 			tmpMetadata = &CreationPhaseMetadata{}
 		)
 		defer slab.Free(buf)
@@ -560,7 +560,7 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 		}
 
 		var (
-			buf, slab = mm.Alloc(serializationBufSize)
+			buf, slab = mm.AllocSize(serializationBufSize)
 			records   = extract.NewRecords(int(d))
 		)
 		defer slab.Free(buf)

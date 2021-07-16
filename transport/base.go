@@ -139,13 +139,13 @@ func newStreamBase(client Client, toURL string, extra *Extra) (s *streamBase) {
 	if extra != nil && extra.MMSA != nil {
 		s.mm = extra.MMSA
 	}
-	s.maxheader, _ = s.mm.Alloc(maxHeaderSize) // NOTE: must be large enough to accommodate max-size
+	s.maxheader, _ = s.mm.AllocSize(maxHeaderSize) // NOTE: must be large enough to accommodate max-size
 	if extra != nil && extra.SizePDU > 0 {
 		if extra.SizePDU > MaxSizePDU {
 			debug.Assert(false)
 			extra.SizePDU = MaxSizePDU
 		}
-		buf, _ := s.mm.Alloc(int64(extra.SizePDU))
+		buf, _ := s.mm.AllocSize(int64(extra.SizePDU))
 		s.pdu = newSendPDU(buf)
 	}
 

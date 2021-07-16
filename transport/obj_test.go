@@ -520,7 +520,7 @@ func Test_DryRun(t *testing.T) {
 	random := newRand(mono.NanoTime())
 	sgl := MMSA.NewSGL(cos.MiB)
 	defer sgl.Free()
-	buf, slab := MMSA.Alloc(cos.KiB * 128)
+	buf, slab := MMSA.AllocSize(cos.KiB * 128)
 	defer slab.Free(buf)
 	for sgl.Len() < cos.MiB {
 		random.Read(buf)

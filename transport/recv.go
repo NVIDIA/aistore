@@ -107,7 +107,7 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	stats := statsif.(*Stats)
 
 	// receive loop
-	hbuf, _ := h.mm.Alloc(maxHeaderSize)
+	hbuf, _ := h.mm.AllocSize(maxHeaderSize)
 	it := &iterator{handler: h, body: reader, hbuf: hbuf, stats: stats}
 	err = it.rxloop(uid, loghdr)
 
@@ -199,7 +199,7 @@ func (it *iterator) rxloop(uid uint64, loghdr string) (err error) {
 				unsized := obj.IsUnsized()
 				if flags&firstPDU != 0 && !obj.hdr.IsHeaderOnly() {
 					if it.pdu == nil {
-						buf, _ := h.mm.Alloc(MaxSizePDU)
+						buf, _ := h.mm.AllocSize(MaxSizePDU)
 						it.pdu = newRecvPDU(it.body, buf)
 					}
 					obj.pdu = it.pdu

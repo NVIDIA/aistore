@@ -791,7 +791,7 @@ func (bsi *buildingShardInfo) PackedSize() int           { return cos.SizeofLen 
 func (bsi *buildingShardInfo) NewPack(mm *memsys.MMSA) []byte {
 	var (
 		size   = bsi.PackedSize()
-		buf, _ = mm.Alloc(int64(size))
+		buf, _ = mm.AllocSize(int64(size))
 		packer = cos.NewPacker(buf, size)
 	)
 	packer.WriteAny(bsi)

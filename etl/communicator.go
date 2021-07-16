@@ -241,7 +241,7 @@ func (pc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck,
 	if size = r.Size(); size < 0 {
 		size = memsys.DefaultBufSize // TODO: track the average
 	}
-	buf, slab := pc.mem.Alloc(size)
+	buf, slab := pc.mem.AllocSize(size)
 	_, err = io.CopyBuffer(w, r, buf)
 	slab.Free(buf)
 	return err

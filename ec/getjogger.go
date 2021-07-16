@@ -443,7 +443,7 @@ func checkSliceChecksum(reader io.Reader, recvCksm *cos.Cksum, sliceSize int64, 
 		return nil
 	}
 
-	buf, slab := mm.Alloc(sliceSize)
+	buf, slab := mm.AllocSize(sliceSize)
 	_, actualCksm, err := cos.CopyAndChecksum(io.Discard, reader, buf, cksumType)
 	slab.Free(buf)
 

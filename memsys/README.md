@@ -81,12 +81,13 @@ mm.Terminate()
 
 ## Operation
 
-Once constructed and initialized, memory-manager-and-slab-allocator (MMSA) can be exercised via its public API that includes
-`GetSlab` and `Alloc`. Notice the difference between the two:
-* `GetSlab(128KB)` returns Slab that contains 128KB reusable buffers
-* `Alloc()` returns both a Slab and (an already allocated buffer) from this Slab.
+Once constructed and initialized, memory-manager-and-slab-allocator (MMSA) can be exercised via its public API that includes `GetSlab`, on the one hand and `Alloc`/`AllocSize` on the other.
 
-Note as well that `Alloc()` accepts an optional buffer-size parameter.
+Notice the difference:
+* `GetSlab(fixed-bufsize)` returns Slab that contains presizely fixed-bufsize sized reusable buffers
+* `Alloc()` and `AllocSize()` return both a Slab and an already allocated buffer from this Slab.
+
+Note as well that `Alloc()` uses default buffer size for a given MMSA, while `AllocSize()` accepts the specified size (as the name implies).
 
 Once selected, each Slab can be used via its own public API that
 includes `Alloc` and `Free` methods. In addition, each allocated SGL internally

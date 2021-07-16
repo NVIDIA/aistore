@@ -93,7 +93,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 		read      []byte
 		mdSize    = maxLmeta.Load()
 		mm        = T.SmallMMSA()
-		buf, slab = mm.Alloc(mdSize)
+		buf, slab = mm.AllocSize(mdSize)
 	)
 	read, err = fs.GetXattrBuf(lom.FQN, XattrLOM, buf)
 	if err != nil {
@@ -103,7 +103,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 		}
 		debug.Assert(mdSize < xattrMaxSize)
 		// 2nd attempt: max-size
-		buf, slab = mm.Alloc(xattrMaxSize)
+		buf, slab = mm.AllocSize(xattrMaxSize)
 		read, err = fs.GetXattrBuf(lom.FQN, XattrLOM, buf)
 		if err != nil {
 			slab.Free(buf)
@@ -344,7 +344,7 @@ func (md *lmeta) marshal(mm *memsys.MMSA, mdSize int64) (buf []byte) {
 		b8                    [cos.SizeofI64]byte
 		cksumType, cksumValue = md.Cksum.Get()
 	)
-	buf, _ = mm.Alloc(mdSize)
+	buf, _ = mm.AllocSize(mdSize)
 	buf = buf[:prefLen] // hold it for md-xattr checksum (below)
 
 	// serialize

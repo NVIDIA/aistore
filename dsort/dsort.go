@@ -524,7 +524,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder cluster.Nodes) (cu
 			)
 			group.Go(func() error {
 				var (
-					buf, slab = mm.Alloc(serializationBufSize)
+					buf, slab = mm.AllocSize(serializationBufSize)
 					msgpw     = msgp.NewWriterBuf(w, buf)
 				)
 				defer slab.Free(buf)
@@ -861,7 +861,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 			)
 			group.Go(func() error {
 				var (
-					buf, slab = mm.Alloc(serializationBufSize)
+					buf, slab = mm.AllocSize(serializationBufSize)
 					msgpw     = msgp.NewWriterBuf(w, buf)
 					md        = &CreationPhaseMetadata{
 						Shards:    s,

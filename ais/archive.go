@@ -101,7 +101,7 @@ func (goi *getObjInfo) mime(file *os.File) (m string, err error) {
 	}
 	// otherwise, by magic
 	var (
-		buf, slab = goi.t.smm.Alloc(sizeDetectMime)
+		buf, slab = goi.t.smm.AllocSize(sizeDetectMime)
 		n         int
 	)
 	n, err = file.Read(buf)

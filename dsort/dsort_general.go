@@ -283,7 +283,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 			)
 
 			if storeType != extract.SGLStoreType { // SGL does not need buffer as it is buffer itself
-				buf, slab = mm.Alloc(obj.Size)
+				buf, slab = mm.AllocSize(obj.Size)
 			}
 
 			defer func() {
@@ -609,7 +609,7 @@ func (ds *dsorterGeneral) makeRecvResponseFunc() transport.ReceiveObj {
 			beforeSend = mono.NanoTime()
 		}
 
-		buf, slab := mm.Alloc(hdr.ObjAttrs.Size)
+		buf, slab := mm.AllocSize(hdr.ObjAttrs.Size)
 		writer.n, writer.err = io.CopyBuffer(writer.w, object, buf)
 		writer.wg.Done()
 		slab.Free(buf)

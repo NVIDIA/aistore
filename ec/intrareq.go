@@ -117,7 +117,7 @@ func (r *intraReq) NewPack(mm *memsys.MMSA) []byte {
 		l   = r.PackedSize()
 	)
 	if mm != nil {
-		buf, _ = mm.Alloc(int64(l))
+		buf, _ = mm.AllocSize(int64(l))
 	}
 	packer := cos.NewPacker(buf, l)
 	packer.WriteAny(r)

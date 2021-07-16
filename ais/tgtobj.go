@@ -258,7 +258,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	if poi.size == 0 {
 		buf, slab = poi.t.gmm.Alloc()
 	} else {
-		buf, slab = poi.t.gmm.Alloc(poi.size)
+		buf, slab = poi.t.gmm.AllocSize(poi.size)
 	}
 	// cleanup
 	defer func() {
@@ -742,10 +742,10 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 		if goi.chunked {
 			// NOTE: hide `ReadFrom` of the `http.ResponseWriter` (in re: sendfile)
 			w = cos.WriterOnly{Writer: goi.w}
-			buf, slab = goi.t.gmm.Alloc(size)
+			buf, slab = goi.t.gmm.AllocSize(size)
 		}
 	} else {
-		buf, slab = goi.t.gmm.Alloc(rrange.Length)
+		buf, slab = goi.t.gmm.AllocSize(rrange.Length)
 		reader = io.NewSectionReader(lmfh, rrange.Start, rrange.Length)
 		if cksumRange {
 			var (
@@ -869,7 +869,7 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 		if aoi.size == 0 {
 			buf, slab = aoi.t.gmm.Alloc()
 		} else {
-			buf, slab = aoi.t.gmm.Alloc(aoi.size)
+			buf, slab = aoi.t.gmm.AllocSize(aoi.size)
 		}
 
 		w := cos.NewWriterMulti(f, aoi.hi.partialCksum.H)

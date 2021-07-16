@@ -459,11 +459,14 @@ func (r *MMSA) GetSlab(bufSize int64) (s *Slab, err error) {
 }
 
 // uses SelectMemAndSlab to select both MMSA (page or small) and its Slab
-func (r *MMSA) Alloc(optSize ...int64) (buf []byte, slab *Slab) {
+func (r *MMSA) AllocSize(size int64) (buf []byte, slab *Slab) {
+	_, slab = r.SelectMemAndSlab(size)
+	buf = slab.Alloc()
+	return
+}
+
+func (r *MMSA) Alloc() (buf []byte, slab *Slab) {
 	size := r.defBufSize
-	if len(optSize) > 0 {
-		size = optSize[0]
-	}
 	_, slab = r.SelectMemAndSlab(size)
 	buf = slab.Alloc()
 	return
@@ -515,7 +518,7 @@ func (r *MMSA) Append(buf []byte, bytes string) (nbuf []byte) {
 		a        = ll + l - c
 	)
 	if a > 0 {
-		nbuf, _ = r.Alloc(int64(c + a))
+		nbuf, _ = r.AllocSize(int64(c + a))
 		copy(nbuf, buf)
 		r.Free(buf)
 		nbuf = nbuf[:ll+l]
