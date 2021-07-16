@@ -56,7 +56,7 @@ var _ streamer = (*Stream)(nil)
 
 func (s *Stream) terminate() {
 	s.term.mu.Lock()
-	cos.Assert(!s.term.terminated)
+	debug.Assert(!s.term.terminated)
 	s.term.terminated = true
 
 	s.Stop()
@@ -333,7 +333,7 @@ func (s *Stream) inSend() bool { return s.sendoff.ins >= inHdr || s.sendoff.ins 
 func (s *Stream) dryrun() {
 	var (
 		body = io.NopCloser(s)
-		h    = &handler{trname: s.trname}
+		h    = &handler{trname: s.trname, mm: memsys.DefaultPageMM()}
 		it   = iterator{handler: h, body: body, hbuf: make([]byte, maxHeaderSize)}
 	)
 	for {
@@ -341,8 +341,8 @@ func (s *Stream) dryrun() {
 		if err == io.EOF {
 			break
 		}
-		cos.AssertNoErr(err)
-		cos.Assert(flags&msgFlag == 0)
+		debug.AssertNoErr(err)
+		debug.Assert(flags&msgFlag == 0)
 		obj, err := it.nextObj(s.String(), hlen)
 		if obj != nil {
 			cos.DrainReader(obj) // TODO: recycle `objReader` here

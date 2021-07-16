@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 // message stream & private types
@@ -33,7 +34,7 @@ var _ streamer = (*MsgStream)(nil)
 
 func (s *MsgStream) terminate() {
 	s.term.mu.Lock()
-	cos.Assert(!s.term.terminated)
+	debug.Assert(!s.term.terminated)
 	s.term.terminated = true
 
 	s.Stop()
@@ -94,7 +95,7 @@ func (s *MsgStream) send(b []byte) (n int, err error) {
 	n = copy(b, s.header[s.msgoff.off:])
 	s.msgoff.off += n
 	if s.msgoff.off >= len(s.header) {
-		cos.Assert(s.msgoff.off == len(s.header))
+		debug.Assert(s.msgoff.off == len(s.header))
 		s.stats.Offset.Add(int64(s.msgoff.off))
 		if verbose {
 			num := s.stats.Num.Load()
@@ -118,7 +119,7 @@ func (s *MsgStream) inSend() bool { return s.msgoff.ins == inHdr }
 func (s *MsgStream) dryrun() {
 	var (
 		body = io.NopCloser(s)
-		h    = &handler{trname: s.trname}
+		h    = &handler{trname: s.trname, mm: memsys.DefaultSmallMM()}
 		it   = iterator{handler: h, body: body, hbuf: make([]byte, maxHeaderSize)}
 	)
 	for {
@@ -126,8 +127,8 @@ func (s *MsgStream) dryrun() {
 		if err == io.EOF {
 			break
 		}
-		cos.AssertNoErr(err)
-		cos.Assert(flags&msgFlag != 0)
+		debug.AssertNoErr(err)
+		debug.Assert(flags&msgFlag != 0)
 		_, _ = it.nextMsg(s.String(), hlen)
 		if err != nil {
 			break
