@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
@@ -101,8 +102,8 @@ func NewGetXact(t cluster.Target, bck cmn.Bck, mgr *Manager) *XactGet {
 	return runner
 }
 
-func (r *XactGet) DispatchResp(iReq intraReq, bck *cluster.Bck, objName string, objAttrs cmn.ObjAttrs, reader io.Reader) {
-	uname := unique(iReq.sender, bck, objName)
+func (r *XactGet) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *cluster.Bck, objName string, objAttrs cmn.ObjAttrs, reader io.Reader) {
+	uname := unique(hdr.SID, bck, objName)
 	switch iReq.act {
 	// It is response to slice/replica request by an object
 	// restoration process. In this case there should exists
@@ -111,7 +112,7 @@ func (r *XactGet) DispatchResp(iReq intraReq, bck *cluster.Bck, objName string, 
 	// the transfer is completed
 	case respPut:
 		if glog.V(4) {
-			glog.Infof("Response from %s, %s", iReq.sender, uname)
+			glog.Infof("Response from %s, %s", hdr.SID, uname)
 		}
 		r.dOwner.mtx.Lock()
 		writer, ok := r.dOwner.slices[uname]

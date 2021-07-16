@@ -128,26 +128,6 @@ func (r *xactReqBase) ecRequestsEnabled() bool {
 // xactECBase //
 ////////////////
 
-// Create a request header: initializes the `Sender` field with local target's
-// daemon ID, and sets `Exists:true` that means "local object exists".
-// Later `Exists` can be changed to `false` if local file is unreadable or does
-// not exist
-func (r *xactECBase) newIntraReq(act intraReqType, meta *Metadata, bck *cluster.Bck) *intraReq {
-	req := &intraReq{
-		act:    act,
-		sender: r.si.ID(),
-		meta:   meta,
-		exists: true,
-	}
-	if bck != nil && bck.Props != nil {
-		req.bid = bck.Props.BID
-	}
-	if act == reqGet && meta != nil {
-		req.isSlice = !meta.IsCopy
-	}
-	return req
-}
-
 func newSliceResponse(md *Metadata, attrs *cmn.ObjAttrs, fqn string) (reader cos.ReadOpenCloser, err error) {
 	attrs.Ver = md.ObjVersion
 	attrs.Cksum = cos.NewCksum(md.CksumType, md.CksumValue)
@@ -197,13 +177,12 @@ func newReplicaResponse(attrs *cmn.ObjAttrs, bck *cluster.Bck,
 // encoding or to send requested "object" to a client. In the latter case
 // if the local object does not exist, it sends an empty body and sets
 // exists=false in response header
-func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck, objName, id string,
-	md *Metadata) (err error) {
+func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn string, bck *cluster.Bck, objName string, md *Metadata) (err error) {
 	var (
 		reader   cos.ReadOpenCloser
 		objAttrs cmn.ObjAttrs
 	)
-	ireq := r.newIntraReq(act, nil, bck)
+	ireq := newIntraReq(act, nil, bck)
 	if md != nil && md.SliceID != 0 {
 		// slice request
 		reader, err = newSliceResponse(md, &objAttrs, fqn)
@@ -232,7 +211,7 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 		}
 		r.DecPending()
 	}
-	return r.sendByDaemonID([]string{id}, rHdr, reader, cb, false)
+	return r.sendByDaemonID([]string{hdr.SID}, rHdr, reader, cb, false)
 }
 
 // Send a data or request to one or few targets by their DaemonIDs. Most of the time
@@ -366,7 +345,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 	if src.metadata != nil && src.metadata.ObjVersion == "" {
 		src.metadata.ObjVersion = lom.Version()
 	}
-	req := r.newIntraReq(src.reqType, src.metadata, lom.Bck())
+	req := newIntraReq(src.reqType, src.metadata, lom.Bck())
 	req.isSlice = src.isSlice
 
 	mm := r.t.SmallMMSA()

@@ -208,7 +208,7 @@ func (c *getJogger) restoreReplicatedFromMemory(ctx *restoreCtx) error {
 	// Try to read replica from targets one by one until the replica is downloaded
 	for node := range ctx.nodes {
 		uname := unique(node, ctx.lom.Bck(), ctx.lom.ObjName)
-		iReqBuf := c.parent.newIntraReq(reqGet, ctx.meta, ctx.lom.Bck()).NewPack(mm)
+		iReqBuf := newIntraReq(reqGet, ctx.meta, ctx.lom.Bck()).NewPack(mm)
 
 		w := mm.NewSGL(cos.KiB)
 		if _, err := c.parent.readRemote(ctx.lom, node, uname, iReqBuf, w); err != nil {
@@ -271,7 +271,7 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 			glog.Errorf("Failed to create file: %v", err)
 			break
 		}
-		iReqBuf := c.parent.newIntraReq(reqGet, ctx.meta, ctx.lom.Bck()).NewPack(mm)
+		iReqBuf := newIntraReq(reqGet, ctx.meta, ctx.lom.Bck()).NewPack(mm)
 		n, err = c.parent.readRemote(ctx.lom, node, uname, iReqBuf, w)
 		mm.Free(iReqBuf)
 
@@ -377,7 +377,7 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 		}
 	}
 
-	iReq := c.parent.newIntraReq(reqGet, ctx.meta, ctx.lom.Bck())
+	iReq := newIntraReq(reqGet, ctx.meta, ctx.lom.Bck())
 	iReq.isSlice = true
 	mm := c.parent.t.SmallMMSA()
 	request := iReq.NewPack(mm)

@@ -133,7 +133,7 @@ func (r *XactRespond) removeObjAndMeta(bck *cluster.Bck, objName string) error {
 	return nil
 }
 
-func (r *XactRespond) trySendCT(iReq intraReq, bck *cluster.Bck, objName string) error {
+func (r *XactRespond) trySendCT(iReq intraReq, hdr *transport.ObjHdr, bck *cluster.Bck, objName string) error {
 	var (
 		fqn, metaFQN string
 		md           *Metadata
@@ -155,11 +155,11 @@ func (r *XactRespond) trySendCT(iReq intraReq, bck *cluster.Bck, objName string)
 		}
 	}
 
-	return r.dataResponse(respPut, fqn, bck, objName, iReq.sender, md)
+	return r.dataResponse(respPut, hdr, fqn, bck, objName, md)
 }
 
 // DispatchReq is responsible for handling request from other targets
-func (r *XactRespond) DispatchReq(iReq intraReq, bck *cluster.Bck, objName string) {
+func (r *XactRespond) DispatchReq(iReq intraReq, hdr *transport.ObjHdr, bck *cluster.Bck, objName string) {
 	switch iReq.act {
 	case reqDel:
 		// object cleanup request: delete replicas, slices and metafiles
@@ -167,7 +167,7 @@ func (r *XactRespond) DispatchReq(iReq intraReq, bck *cluster.Bck, objName strin
 			glog.Errorf("%s failed to delete %s/%s: %v", r.t.Snode(), bck.Name, objName, err)
 		}
 	case reqGet:
-		err := r.trySendCT(iReq, bck, objName)
+		err := r.trySendCT(iReq, hdr, bck, objName)
 		if err != nil {
 			glog.Error(err)
 		}
@@ -177,7 +177,7 @@ func (r *XactRespond) DispatchReq(iReq intraReq, bck *cluster.Bck, objName strin
 	}
 }
 
-func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object io.Reader) {
+func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object io.Reader) {
 	r.IncPending()
 	defer r.DecPending() // no async operation, so DecPending is deferred
 	switch iReq.act {
@@ -198,16 +198,16 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object i
 		}
 
 		if glog.FastV(4, glog.SmoduleEC) {
-			glog.Infof("Got slice=%t from %s (#%d of %s) v%s, cksum: %s", iReq.isSlice, iReq.sender,
+			glog.Infof("Got slice=%t from %s (#%d of %s) v%s, cksum: %s", iReq.isSlice, hdr.SID,
 				iReq.meta.SliceID, hdr.FullName(), meta.ObjVersion, meta.CksumValue)
 		}
 		md := meta.NewPack()
 		if iReq.isSlice {
 			args := &WriteArgs{Reader: object, MD: md, BID: iReq.bid, Generation: meta.Generation}
-			err = WriteSliceAndMeta(r.t, &hdr, args)
+			err = WriteSliceAndMeta(r.t, hdr, args)
 		} else {
 			var lom *cluster.LOM
-			lom, err = cluster.AllocLomFromHdr(&hdr)
+			lom, err = cluster.AllocLomFromHdr(hdr)
 			if err == nil {
 				args := &WriteArgs{
 					Reader:     object,

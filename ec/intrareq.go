@@ -5,6 +5,7 @@
 package ec
 
 import (
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -34,9 +35,6 @@ type (
 	intraReq struct {
 		// Request type
 		act intraReqType
-		// Sender's daemonID, used by the destination to send the response
-		// to the correct target
-		sender string
 		// Object metadata, used when a target copies replicas/slices after
 		// encoding or restoring the object data
 		meta *Metadata
@@ -56,18 +54,36 @@ var (
 	_ cos.Packer   = (*intraReq)(nil)
 )
 
+// Create a request header: initializes the `Sender` field with local target's
+// daemon ID, and sets `Exists:true` that means "local object exists".
+// Later `Exists` can be changed to `false` if local file is unreadable or does
+// not exist
+func newIntraReq(act intraReqType, meta *Metadata, bck *cluster.Bck) *intraReq {
+	req := &intraReq{
+		act:    act,
+		meta:   meta,
+		exists: true,
+	}
+	if bck != nil && bck.Props != nil {
+		req.bid = bck.Props.BID
+	}
+	if act == reqGet && meta != nil {
+		req.isSlice = !meta.IsCopy
+	}
+	return req
+}
+
 func (r *intraReq) PackedSize() int {
 	if r.meta == nil {
-		// int8(type)+sender(string)+int8+int8+ptr_marker
-		return cos.PackedStrLen(r.sender) + 4 + cos.SizeofI64
+		// int8(type)+int8+int8+ptr_marker
+		return 4 + cos.SizeofI64
 	}
-	// int8(type)+sender(string)+int8+int8+ptr_marker+sizeof(meta)
-	return cos.PackedStrLen(r.sender) + r.meta.PackedSize() + 4 + cos.SizeofI64
+	// int8(type)+int8+int8+ptr_marker+sizeof(meta)
+	return r.meta.PackedSize() + 4 + cos.SizeofI64
 }
 
 func (r *intraReq) Pack(packer *cos.BytePack) {
 	packer.WriteByte(uint8(r.act))
-	packer.WriteString(r.sender)
 	packer.WriteBool(r.exists)
 	packer.WriteBool(r.isSlice)
 	packer.WriteUint64(r.bid)
@@ -88,9 +104,6 @@ func (r *intraReq) Unpack(unpacker *cos.ByteUnpack) error {
 		return err
 	}
 	r.act = intraReqType(i)
-	if r.sender, err = unpacker.ReadString(); err != nil {
-		return err
-	}
 	if r.exists, err = unpacker.ReadBool(); err != nil {
 		return err
 	}

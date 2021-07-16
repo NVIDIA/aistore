@@ -309,7 +309,7 @@ func (c *putJogger) cleanup(lom *cluster.LOM) error {
 	}
 
 	mm := c.parent.t.SmallMMSA()
-	request := c.parent.newIntraReq(reqDel, nil, lom.Bck()).NewPack(mm)
+	request := newIntraReq(reqDel, nil, lom.Bck()).NewPack(mm)
 	o := transport.AllocSend()
 	o.Hdr = transport.ObjHdr{Bck: lom.Bucket(), ObjName: lom.ObjName, Opaque: request}
 	o.Callback = c.ctSendCallback
