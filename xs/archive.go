@@ -27,6 +27,10 @@ import (
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
+const (
+	doneSendingOpcode = 31415
+)
+
 type (
 	archFactory struct {
 		xreg.BaseBckEntry
@@ -252,12 +256,8 @@ fin:
 // send EOI (end of iteration) to the responsible target
 func (r *XactPutArchive) eoi(wi *archwi) {
 	o := transport.AllocSend()
-	hdr := &o.Hdr
-	{
-		hdr.Bck = wi.msg.ToBck
-		hdr.ObjName = ""                       // NOTE
-		hdr.Opaque = []byte(wi.msg.FullName()) // NOTE
-	}
+	o.Hdr.Opcode = doneSendingOpcode
+	o.Hdr.Opaque = []byte(wi.msg.FullName())
 	r.dm.Send(o, nil, wi.tsi)
 }
 
@@ -290,10 +290,11 @@ func (r *XactPutArchive) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, er
 	debug.Assert(ok)
 	debug.Assert(wi.tsi.ID() == r.t.Snode().ID())
 
-	if hdr.ObjName == "" {
+	if hdr.Opcode == doneSendingOpcode {
 		rc := wi.rc.Dec()
 		debug.Assert(rc >= 0)
 	} else {
+		debug.Assert(hdr.Opcode == 0)
 		wi.writer.write(hdr.ObjName, &hdr.ObjAttrs, objReader)
 	}
 }

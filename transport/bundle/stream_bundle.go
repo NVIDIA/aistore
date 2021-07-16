@@ -240,6 +240,7 @@ func (sb *Streams) get() (bun bundle) {
 
 // one obj, one stream
 func (sb *Streams) sendOne(obj *transport.Obj, roc cos.ReadOpenCloser, robin *robin, idx, cnt int) error {
+	obj.Hdr.SID = sb.lsnode.ID()
 	one := obj
 	one.Reader = roc
 	if cnt == 1 {

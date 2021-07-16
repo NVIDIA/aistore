@@ -57,6 +57,8 @@ type (
 		ObjName  string
 		ObjAttrs cmn.ObjAttrs // attributes/metadata of the sent object
 		Opaque   []byte       // custom control (optional)
+		SID      string       // sender node ID
+		Opcode   int          // custom opcode (optional)
 	}
 	// object to transmit
 	Obj struct {
