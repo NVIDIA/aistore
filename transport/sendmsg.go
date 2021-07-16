@@ -118,7 +118,8 @@ func (s *MsgStream) inSend() bool { return s.msgoff.ins == inHdr }
 func (s *MsgStream) dryrun() {
 	var (
 		body = io.NopCloser(s)
-		it   = iterator{trname: s.trname, body: body, headerBuf: make([]byte, maxHeaderSize)}
+		h    = &handler{trname: s.trname}
+		it   = iterator{handler: h, body: body, hbuf: make([]byte, maxHeaderSize)}
 	)
 	for {
 		hlen, flags, err := it.nextProtoHdr(s.String())

@@ -218,7 +218,8 @@ func HandleObjStream(trname string, rxObj ReceiveObj, mems ...*memsys.MMSA) erro
 }
 
 func HandleMsgStream(trname string, rxMsg ReceiveMsg) error {
-	h := &handler{trname: trname, rxMsg: rxMsg, hkName: MsgURLPath(trname)}
+	mm := memsys.DefaultSmallMM()
+	h := &handler{trname: trname, rxMsg: rxMsg, hkName: MsgURLPath(trname), mm: mm}
 	return h.handle()
 }
 

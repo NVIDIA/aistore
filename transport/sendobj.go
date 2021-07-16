@@ -333,7 +333,8 @@ func (s *Stream) inSend() bool { return s.sendoff.ins >= inHdr || s.sendoff.ins 
 func (s *Stream) dryrun() {
 	var (
 		body = io.NopCloser(s)
-		it   = iterator{trname: s.trname, body: body, headerBuf: make([]byte, maxHeaderSize)}
+		h    = &handler{trname: s.trname}
+		it   = iterator{handler: h, body: body, hbuf: make([]byte, maxHeaderSize)}
 	)
 	for {
 		hlen, flags, err := it.nextProtoHdr(s.String())
