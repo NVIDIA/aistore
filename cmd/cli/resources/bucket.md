@@ -15,6 +15,7 @@ For types of supported buckets (AIS, Cloud, backend, etc.) and many more example
 - [Start Erasure Coding](#start-erasure-coding)
 - [Show bucket properties](#show-bucket-properties)
 - [Set bucket properties](#set-bucket-properties)
+- [Reset bucket properties to cluster defaults](#reset-bucket-properties-to-cluster-defaults)
 - [Show bucket metadata](#show-bucket-metadata)
 
 ## Create bucket
@@ -441,7 +442,7 @@ All options are required and must be greater than `0`.
 
 ## Show bucket properties
 
-`ais bucket show BUCKET [PROP_PREFIX]`
+`ais bucket props show BUCKET [PROP_PREFIX]`
 
 List [properties](/docs/bucket.md#properties-and-options) of the bucket.
 By default, condensed form of bucket props sections is presented.
@@ -457,7 +458,7 @@ Useful `PROP_PREFIX` are: `access, checksum, ec, lru, mirror, provider, versioni
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--json` | `bool` | Output in JSON format | `false` |
-| `-v` | `bool` | Show list of properties with full names | `false` |
+| `--compact`, `-c` | `bool` | Show list of properties in compact human-readable mode | `false` |
 
 ### Examples
 
@@ -466,7 +467,7 @@ Useful `PROP_PREFIX` are: `access, checksum, ec, lru, mirror, provider, versioni
 Show only `lru` section of bucket props for `bucket_name` bucket.
 
 ```console
-$ ais show bucket ais://bucket_name
+$ ais bucket props show ais://bucket_name --compact
 PROPERTY	 VALUE
 access		 GET,PUT,DELETE,HEAD,ColdGET
 checksum	 Type: xxhash | Validate: ColdGET
@@ -476,10 +477,10 @@ lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
 mirror		 Disabled
 provider	 ais
 versioning	 Enabled | Validate on WarmGET: no
-$ ais show bucket ais://bucket_name lru
+$ ais bucket props show ais://bucket_name lru --compact
 PROPERTY	 VALUE
 lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
-$ ais show bucket bucket_name lru -v
+$ ais bucket props show bucket_name lru
 PROPERTY		 VALUE
 lru.capacity_upd_time	 10m
 lru.dont_evict_time	 120m
@@ -491,7 +492,7 @@ lru.out_of_space	 95
 
 ## Set bucket properties
 
-`ais bucket props [OPTIONS] BUCKET JSON_SPECIFICATION|KEY=VALUE [KEY=VALUE...]`
+`ais bucket props set [OPTIONS] BUCKET JSON_SPECIFICATION|KEY=VALUE [KEY=VALUE...]`
 
 Set bucket properties.
 For the available options, see [bucket-properties](/docs/bucket.md#bucket-properties).
@@ -500,11 +501,8 @@ If JSON_SPECIFICATION is used, **all** properties of the bucket are set based on
 
 ### Options
 
-If `--reset` flag is set, arguments are ignored and bucket properties are reset to original state.
-
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--reset` | `bool` | Reset bucket properties to original state | `false` |
 | `--force` | `bool` | Ignore non-critical errors | `false` |
 
 When JSON specification is not used, some properties support user-friendly aliases:
@@ -522,7 +520,7 @@ When JSON specification is not used, some properties support user-friendly alias
 Set the `mirror.enabled` and `mirror.copies` properties to `true` and `2` respectively, for the bucket `bucket_name`
 
 ```console
-$ ais bucket props ais://bucket_name 'mirror.enabled=true' 'mirror.copies=2'
+$ ais bucket props set ais://bucket_name 'mirror.enabled=true' 'mirror.copies=2'
 Bucket props successfully updated
 "mirror.enabled" set to:"true" (was:"false")
 ```
@@ -533,18 +531,9 @@ Set read-only access to the bucket `bucket_name`.
 All PUT and DELETE requests will fail.
 
 ```console
-$ ais bucket props ais://bucket_name 'access=ro'
+$ ais bucket props set ais://bucket_name 'access=ro'
 Bucket props successfully updated
 "access" set to:"GET,HEAD-OBJECT,HEAD-BUCKET,LIST-OBJECTS" (was:"<PREV_ACCESS_LIST>")
-```
-
-#### Reset properties for the bucket
-
-Reset properties for the bucket `bucket_name`.
-
-```console
-$ ais bucket props --reset bucket_name
-Bucket props successfully reset
 ```
 
 #### Connect/Disconnect AIS bucket to/from cloud bucket
@@ -555,7 +544,7 @@ It's like a symlink to a cloud bucket.
 The only difference is that all objects will be cached into `ais://bucket_name` (and reflected in the cloud as well) instead of `gcp://cloud_bucket`.
 
 ```console
-$ ais bucket props ais://bucket_name backend_bck=gcp://cloud_bucket
+$ ais bucket props set ais://bucket_name backend_bck=gcp://cloud_bucket
 Bucket props successfully updated
 "backend_bck.name" set to: "cloud_bucket" (was: "")
 "backend_bck.provider" set to: "gcp" (was: "")
@@ -564,7 +553,7 @@ Bucket props successfully updated
 To disconnect cloud bucket do:
 
 ```console
-$ ais bucket props ais://bucket_name backend_bck=none
+$ ais bucket props set ais://bucket_name backend_bck=none
 Bucket props successfully updated
 "backend_bck.name" set to: "" (was: "cloud_bucket")
 "backend_bck.provider" set to: "" (was: "gcp")
@@ -591,18 +580,18 @@ $ ais bucket create ais://bck --bucket-props "ec.enabled=true ec.data_slices=6 e
 $
 $ # If the number of targets is less than or equal to ec.parity_slices even `--force` does not help
 $
-$ ais bucket props ais://bck ec.enabled true ec.data_slices 6 ec.parity_slices 8
+$ ais bucket props set ais://bck ec.enabled true ec.data_slices 6 ec.parity_slices 8
 EC config (6 data, 8 parity)slices requires at least 15 targets (have 6). To show bucket properties, run "ais show bucket BUCKET -v".
 $
-$ ais bucket props ais://bck ec.enabled true ec.data_slices 6 ec.parity_slices 8 --force
+$ ais bucket props set ais://bck ec.enabled true ec.data_slices 6 ec.parity_slices 8 --force
 EC config (6 data, 8 parity)slices requires at least 15 targets (have 6). To show bucket properties, run "ais show bucket BUCKET -v".
 $
 $ # Use force to enable EC if the number of target is sufficient to keep `ec.parity_slices+1` replicas
 $
-$ ais bucket props ais://bck ec.enabled true ec.data_slices 6 ec.parity_slices 4
+$ ais bucket props set ais://bck ec.enabled true ec.data_slices 6 ec.parity_slices 4
 EC config (6 data, 8 parity)slices requires at least 11 targets (have 6). To show bucket properties, run "ais show bucket BUCKET -v".
 $
-$ ais bucket props ais://bck ec.enabled true ec.data_slices 6 ec.parity_slices 4 --force
+$ ais bucket props set ais://bck ec.enabled true ec.data_slices 6 ec.parity_slices 4 --force
 Bucket props successfully updated
 "ec.enabled" set to: "true" (was: "false")
 "ec.parity_slices" set to: "4" (was: "2")
@@ -613,14 +602,14 @@ The minimum object size `ec.objsize_limit` can be changed on the fly.
 To avoid accidental modification when EC for a bucket is enabled, the option `--force` must be used.
 
 ```console
-$ ais bucket props ais://bck ec.enabled
+$ ais bucket props set ais://bck ec.enabled true
 Bucket props successfully updated
 "ec.enabled" set to: "true" (was: "false")
 $
-$ ais bucket props ais://bck ec.objsize_limit 320000
+$ ais bucket props set ais://bck ec.objsize_limit 320000
 P[dBbfp8080]: once enabled, EC configuration can be only disabled but cannot change. To show bucket properties, run "ais show bucket BUCKET -v".
 $
-$ ais bucket props ais://bck ec.objsize_limit 320000 --force
+$ ais bucket props set ais://bck ec.objsize_limit 320000 --force
 Bucket props successfully updated
 "ec.objsize_limit" set to:"320000" (was:"262144")
 ```
@@ -630,7 +619,7 @@ Bucket props successfully updated
 Set **all** bucket properties for `bucket_name` bucket based on the provided JSON specification.
 
 ```bash
-$ ais bucket props ais://bucket_name '{
+$ ais bucket props set ais://bucket_name '{
     "provider": "ais",
     "versioning": {
       "enabled": true,
@@ -670,7 +659,7 @@ Bucket props successfully updated
 ```
 
 ```console
-$ ais show bucket ais://bucket_name
+$ ais show bucket ais://bucket_name --compact
 PROPERTY	 VALUE
 access		 GET,PUT,DELETE,HEAD,ColdGET
 checksum	 Type: xxhash | Validate: ColdGET
@@ -685,9 +674,9 @@ versioning	 Enabled | Validate on WarmGET: no
 If not all properties are mentioned in the JSON, the missing ones are set to zero values (empty / `false` / `nil`):
 
 ```bash
-$ ais bucket props --reset ais://bucket_name
+$ ais bucket props reset ais://bucket_name
 Bucket props successfully reset
-$ ais bucket props ais://bucket_name '{
+$ ais bucket props set ais://bucket_name '{
   "mirror": {
     "enabled": true,
     "copies": 2
@@ -700,7 +689,7 @@ $ ais bucket props ais://bucket_name '{
 Bucket props successfully updated
 "versioning.validate_warm_get" set to: "true" (was: "false")
 "mirror.enabled" set to: "true" (was: "false")
-$ ais show bucket bucket_name
+$ ais show bucket bucket_name --compact
 PROPERTY	 VALUE
 access		 GET,PUT,DELETE,HEAD,ColdGET
 checksum	 Type: xxhash | Validate: ColdGET
@@ -710,6 +699,19 @@ lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
 mirror		 2 copies
 provider	 ais
 versioning	 Enabled | Validate on WarmGET: yes
+```
+
+## Reset bucket properties to cluster defaults
+
+`ais bucket props reset BUCKET`
+
+Reset bucket properties to [cluster defaults](/cmd/cli/resources/config.md).
+
+### Examples
+
+```console
+$ ais bucket props reset bucket_name
+Bucket props successfully reset
 ```
 
 ## Show bucket metadata
