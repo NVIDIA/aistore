@@ -1,6 +1,6 @@
 # Start, Stop, and monitor downloads
 
-AIS Downloader is intended for downloading massive numbers of files (objects) and datasets from both Cloud Storage (buckets) and Internet. For details and background, please see the [downloader's own readme](/downloader/README.md).
+AIS Downloader is intended for downloading massive numbers of files (objects) and datasets from both Cloud Storage (buckets) and Internet. For details and background, please see the [downloader's own readme](/docs/downloader.md).
 
 ## Table of Contents
 - [Start download job](#start-download-job)

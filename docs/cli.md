@@ -116,22 +116,22 @@ To uninstall autocompletions, run `bash autocomplete/uninstall.sh`.
 
 | Command | Use Case |
 |---------|----------|
-| [`ais bucket`](/cmd/cli/resources/bucket.md) | Create/destroy buckets, list bucket's content, show existing buckets and their properties |
-| [`ais object`](/cmd/cli/resources/object.md) | PUT (write), GET (read), list, move (rename) and other operations on objects in a given bucket |
-| [`ais cluster`](/cmd/cli/resources/cluster.md) | Monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc. |
-| [`ais config`](/cmd/cli/resources/config.md) | Set local/global AIS cluster configurations |
-| [`ais storage`](/cmd/cli/resources/storage.md) | Show capacity usage on a per bucket basis, attach/detach mountpaths (disks), run certain bucket validation logic, and more |
-| [`ais etl`](/cmd/cli/resources/etl.md) | Execute custom transformations on objects |
-| [`ais job`](/cmd/cli/resources/job.md) | Query and manage jobs (aka extended actions or xactions) |
-| [`ais auth`](/cmd/cli/resources/auth.md) | Add/remove/show users, manage user roles, manage access to remote clusters |
-| [`ais show`](/cmd/cli/resources/show.md) | Show information about buckets, jobs, all other managed entities in the cluster and the cluster itself |
-| [`ais advanced`](/cmd/cli/resources/advanced.md) | Special commands intended for development and advanced usage |
-| [`ais search`](/cmd/cli/resources/search.md) | Search ais commands |
+| [`ais bucket`](/docs/cli/bucket.md) | Create/destroy buckets, list bucket's content, show existing buckets and their properties |
+| [`ais object`](/docs/cli/object.md) | PUT (write), GET (read), list, move (rename) and other operations on objects in a given bucket |
+| [`ais cluster`](/docs/cli/cluster.md) | Monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc. |
+| [`ais config`](/docs/cli/config.md) | Set local/global AIS cluster configurations |
+| [`ais storage`](/docs/cli/storage.md) | Show capacity usage on a per bucket basis, attach/detach mountpaths (disks), run certain bucket validation logic, and more |
+| [`ais etl`](/docs/cli/etl.md) | Execute custom transformations on objects |
+| [`ais job`](/docs/cli/job.md) | Query and manage jobs (aka extended actions or xactions) |
+| [`ais auth`](/docs/cli/auth.md) | Add/remove/show users, manage user roles, manage access to remote clusters |
+| [`ais show`](/docs/cli/show.md) | Show information about buckets, jobs, all other managed entities in the cluster and the cluster itself |
+| [`ais advanced`](/docs/cli/advanced.md) | Special commands intended for development and advanced usage |
+| [`ais search`](/docs/cli/search.md) | Search ais commands |
 
 Other CLI documentation:
-- [Attach, Detach, and monitor remote clusters](/cmd/cli/resources/remote.md)
-- [Start, Stop, and monitor downloads](/cmd/cli/resources/download.md)
-- [Distributed Sort](/cmd/cli/resources/dsort.md)
+- [Attach, Detach, and monitor remote clusters](/docs/cli/remote.md)
+- [Start, Stop, and monitor downloads](/docs/cli/download.md)
+- [Distributed Sort](/docs/cli/dsort.md)
 
 > Note: In CLI docs, the terms "xaction" and "job" are used interchangeably.
 

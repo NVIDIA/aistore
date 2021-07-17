@@ -114,7 +114,7 @@ $ cd $GOPATH/src/github.com/NVIDIA/aistore
 $ make deploy
 ```
 
-Using [AIS CLI](/cmd/cli/README.md) create an ais bucket, download several objects
+Using [AIS CLI](/docs/cli.md) create an ais bucket, download several objects
 and place them into the bucket:
 
 ```console

@@ -31,7 +31,7 @@ Implementation-wise, there are many similarities between *inline* and *offline* 
 
 Most notably, AIS always runs transformations locally - *close to data*. Running *close to data* has always been one of the cornerstone design principles whereby in a deployed cluster each AIStore target proportionally contributes to the resulting cumulative bandwidth - the bandwidth that, in turn, will scale linearly with each added target.
 
-This was the principle behind *distributed shuffle* (code-named [dSort](/dsort/README.md)). And this is exactly how we have more recently implemented **AIS-ETL** - the ETL service provided by AIStore.
+This was the principle behind *distributed shuffle* (code-named [dSort](/docs/dsort.md)). And this is exactly how we have more recently implemented **AIS-ETL** - the ETL service provided by AIStore.
 
 Technically, the service supports running user-provided ETL containers **and** custom Python scripts *in the* (and *by the*) storage cluster.
 
@@ -49,7 +49,7 @@ The following [video](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL G
 
 <img src="/docs/images/etl-md5.gif" alt="ETL-MD5" width="80%">
 
-The example above uses [AIS CLI](/cmd/cli/README.md) to:
+The example above uses [AIS CLI](/docs/cli.md) to:
 1. **Create** a new bucket;
 2. **PUT** an object into this bucket;
 3. **Init** ETL container that performs MD5 computation.
@@ -64,7 +64,7 @@ Note that both the container itself and its [YAML specification](https://raw.git
 
 <img src="/docs/images/etl-imagenet.gif" alt="ETL-ImageNet" width="80%">
 
-The example above uses [AIS CLI](/cmd/cli/README.md) to:
+The example above uses [AIS CLI](/docs/cli.md) to:
 1. **Create** a new AIS bucket;
 2. **PUT** multiple TAR files containing ImageNet images into the created bucket;
 3. **Init** ETL container based only on a simple python function;
@@ -89,7 +89,7 @@ To deploy ETL-ready AIStore cluster, please refer to [Getting Started](getting_s
 >         fieldPath: spec.nodeName
 > ```
 
-To verify that your deployment is set up correctly, run the following [CLI](/cmd/cli/README.md) command:
+To verify that your deployment is set up correctly, run the following [CLI](/docs/cli.md) command:
 ```console
 $ ais etl ls
 ```
@@ -238,8 +238,8 @@ AIStore supports both *inline* transformation of selected objects and *offline* 
 
 There are two ways to run ETL transformations:
 - HTTP RESTful API described in [API Reference section](#api-reference) of this document,
-- [ETL CLI](/cmd/cli/resources/etl.md),
-- [AIS Loader](/bench/aisloader/README.md).
+- [ETL CLI](/docs/cli/etl.md),
+- [AIS Loader](/docs/aisloader.md).
 
 ## API Reference
 

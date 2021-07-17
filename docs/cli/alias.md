@@ -145,7 +145,7 @@ put     object put
 
 ## Alias Configuration File
 
-As with other CLI configurations, aliases are stored in the [CLI config file](/cmd/cli/README.md#config).
+As with other CLI configurations, aliases are stored in the [CLI config file](/docs/cli.md#config).
 
 All aliases are stored under `"aliases"` as a map of strings (`ALIAS` to `AIS_COMMAND`).
 If an incorrect alias is manually added to the config file, it will be silently ignored.

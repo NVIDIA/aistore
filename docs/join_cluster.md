@@ -1,4 +1,5 @@
 ## Table of Contents
+
 - [Joining a Cluster](#joining-a-cluster)
 
 ## Joining a Cluster

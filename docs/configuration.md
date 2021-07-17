@@ -340,7 +340,7 @@ $ curl -i -X PUT 'http://T/v1/daemon/setconfig?vmodule=ais/targ*=1'
 
 ## CLI examples
 
-[AIS CLI](/cmd/cli/README.md) is an integrated management-and-monitoring command line tool. The following CLI command sequence, first - finds out all AIS knobs that contain substring "time" in their names, second - modifies `list_timeout` from 2 minutes to 5 minutes, and finally, displays the modified value:
+[AIS CLI](/docs/cli.md) is an integrated management-and-monitoring command line tool. The following CLI command sequence, first - finds out all AIS knobs that contain substring "time" in their names, second - modifies `list_timeout` from 2 minutes to 5 minutes, and finally, displays the modified value:
 
 ```console
 $ ais show config --type all 844974_8080 --json | jq '.timeout.list_timeout'

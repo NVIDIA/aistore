@@ -397,7 +397,7 @@ A recently added `--validate` option is intended to analyze integrity of the sto
 In particular, location of each objects stored in the cluster must at any point in time correspond to the current cluster map and, within each storage target, to the target's *mountpaths* (disks).  A failure to abide by location rules is called "misplacement"; misplaced objects - if any - must be migrated to their proper locations via automated processes called `global rebalance` and `resilver`:
 
 * [global rebalance and reslver](/docs/rebalance.md)
-* [resilvering selected targets: advanced usage](/cmd/cli/resources/advanced.md)
+* [resilvering selected targets: advanced usage](/docs/resourcesvanced.md)
 
 As far as the option `--validate` a non-zero *misplaced* objects in its output would be a direct indication that the cluster requires rebalancing.
 
@@ -705,7 +705,7 @@ versioning	 Enabled | Validate on WarmGET: yes
 
 `ais bucket props reset BUCKET`
 
-Reset bucket properties to [cluster defaults](/cmd/cli/resources/config.md).
+Reset bucket properties to [cluster defaults](/docs/resourcesnfig.md).
 
 ### Examples
 

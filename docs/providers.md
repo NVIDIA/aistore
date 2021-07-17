@@ -19,7 +19,7 @@ Further:
 
 * For additional information on working with buckets, please refer to [bucket readme](bucket.md).
 * For API reference, see [the RESTful API reference and examples](http_api.md).
-* For AIS command-line management, see [CLI](/cmd/cli/README.md).
+* For AIS command-line management, see [CLI](/docs/cli.md).
 
 ## Remote AIS cluster
 

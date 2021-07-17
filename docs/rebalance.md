@@ -23,7 +23,7 @@ Incoming GET requests for the objects that haven't yet migrated (or are being mo
 The (rebalancing) target that must (according to the new cluster map) have the object but doesn't, will locate its "neighbor", get the object, and satisfy the original GET request transparently from the user.
 
 Similar to all other AIS modules and sub-systems, global rebalance is controlled and monitored via the documented [RESTful API](http_api.md).
-It might be easier and faster, though, to use [AIS CLI](/cmd/cli/README.md) - see next section.
+It might be easier and faster, though, to use [AIS CLI](/docs/cli.md) - see next section.
 
 ## CLI: usage examples
 

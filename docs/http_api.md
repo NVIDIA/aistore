@@ -63,7 +63,7 @@ In particular, all API requests that operate on a bucket carry the bucket's spec
 
 > For developers and first-time users: if you deployed AIS locally having followed [these instructions](/README.md#local-non-containerized) then most likely you will have `http://localhost:8080` as the primary proxy, and generally, `http://localhost:808x` for all locally-deployed AIS daemons.
 
-> The reference below is "formulated" in `curl` - i.e., using `curl` command lines. It is possible, however, and often much easier (and, therefore, **preferable**), to execute the same operations using [AIS CLI](/cmd/cli/README.md).
+> The reference below is "formulated" in `curl` - i.e., using `curl` command lines. It is possible, however, and often much easier (and, therefore, **preferable**), to execute the same operations using [AIS CLI](/docs/cli.md).
 
 ### API Reference
 
@@ -150,8 +150,8 @@ Any storage bucket that AIS handles may originate in a 3rd party Cloud, or in an
 
 For even more information, CLI examples, and the most recent updates, please see:
 - [Backend Providers](providers.md)
-- [CLI: operations on buckets](/cmd/cli/resources/bucket.md)
-- [CLI: operations on objects](/cmd/cli/resources/object.md)
+- [CLI: operations on buckets](/docs/cli/bucket.md)
+- [CLI: operations on objects](/docs/cli/object.md)
 - [On-Disk Layout](on-disk-layout.md)
 
 ### Curl Examples

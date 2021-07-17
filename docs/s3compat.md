@@ -1,4 +1,5 @@
 ## Table of Contents
+
 - [S3 Compatibility](#s3-compatibility)
 - [Client Configuration](#client-configuration)
 - [Object Checksum](#object-checksum)
@@ -17,7 +18,7 @@ AIStore fully supports [Amazon S3 API](https://docs.aws.amazon.com/s3/index.html
 * [s3cmd](https://github.com/s3tools/s3cmd)
 * [aws CLI](https://aws.amazon.com/cli)
 
-Speaking of command-line tools, in addition to its own native [CLI](/cmd/cli/README.md) AIStore also supports Amazon's `s3cmd` and `aws` CLIs. Python-based Amazon S3 clients that will often use Amazon Web Services (AWS) Software Development Kit for Python called [Boto3](https://github.com/boto/boto3) are also supported - see a note below on [AIS <=> Boto3 compatibility](#boto3-compatibility).
+Speaking of command-line tools, in addition to its own native [CLI](/docs/cli.md) AIStore also supports Amazon's `s3cmd` and `aws` CLIs. Python-based Amazon S3 clients that will often use Amazon Web Services (AWS) Software Development Kit for Python called [Boto3](https://github.com/boto/boto3) are also supported - see a note below on [AIS <=> Boto3 compatibility](#boto3-compatibility).
 
 By way of quick summary, Amazon S3 supports the following API categories:
 

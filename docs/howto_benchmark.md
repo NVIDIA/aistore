@@ -11,7 +11,7 @@ $ make aisloader
 $ $GOPATH/bin/aisloader
 ```
 
-Following in this document are a few *easy* usage examples and dry-run instructions. For detailed description and more examples, please see [aisloader readme](/bench/aisloader/README.md).
+Following in this document are a few *easy* usage examples and dry-run instructions. For detailed description and more examples, please see [aisloader readme](/docs/aisloader.md).
 
 ### Basic Examples
 
@@ -55,4 +55,4 @@ $ aisloader -bucket=nvaws -duration=5m -numworkers=3 -pctput=30 -readertype=tar 
 
 ### AIS Loader full documentation
 
-Full aisloader documentation, including more examples and full options list, is available [here](/bench/aisloader/README.md).
+Full aisloader documentation, including more examples and full options list, is available [here](/docs/aisloader.md).

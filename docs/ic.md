@@ -15,10 +15,10 @@ IC is a group of up to 3 (or configured) AIStore gateways aka AIS proxies (hence
 
 IC members maintain an in-memory table to store the information about all the asynchronous batch operations being monitored. This table is reliably replicated on each of the following events:
 
-*   Proxy joins IC
-*   xaction started
-*   xaction finished
-*   IC member crashes or gets administratively removed
+* Proxy joins IC
+* xaction started
+* xaction finished
+* IC member crashes or gets administratively removed
 
 The diagram below shows a high-level flow of asynchronous operations in the presence of IC, and the different steps involved.
 

@@ -163,7 +163,7 @@ $ AIS_ENDPOINT=https://localhost:8080 AIS_SKIP_VERIFY_CRT=true BUCKET=tmp go tes
 As noted, the project utilizes GNU `make` to build and run things both locally and remotely (e.g., when deploying AIStore via [Kubernetes](/deploy/dev/k8s/Dockerfile). As the very first step, run `make help` for help on:
 
 * **building** AIS binary (called `aisnode`) deployable as both a storage target **or** a proxy/gateway;
-* **building** [CLI](/cmd/cli/README.md), [aisfs](/cmd/aisfs/README.md), and benchmark binaries;
+* **building** [CLI](/docs/cli.md), [aisfs](/docs/aisfs.md), and benchmark binaries;
 
 In particular, the `make` provides a growing number of developer-friendly commands to:
 
@@ -185,7 +185,7 @@ To that end, each AIS node at startup loads and parses [cgroup](https://www.kern
 
 Further, given the container's cgroup/memory limitation, each AIS node adjusts the amount of memory available for itself.
 
-> Limits on memory may affect [dSort](/dsort/README.md) performance forcing it to "spill" the content associated with in-progress resharding into local drives. The same is true for erasure-coding that also requires memory to rebuild objects from slices, etc.
+> Limits on memory may affect [dSort](/docs/dsort.md) performance forcing it to "spill" the content associated with in-progress resharding into local drives. The same is true for erasure-coding that also requires memory to rebuild objects from slices, etc.
 
 > For technical details on AIS memory management, please see [this readme](/memsys/README.md).
 

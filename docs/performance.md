@@ -205,6 +205,6 @@ Metadata write policy - json tag `md_write` - was introduced specifically to sup
 
 # AIS Loader
 
-AIStore includes `aisloader` - a powerful tool that we use to simulate a variety of AI workloads. For numerous command-line options and usage examples, please see [Load Generator](/bench/aisloader/README.md) and [How To Benchmark AIStore](howto_benchmark.md). Or, just run the tool with empty command line and see its online help and examples.
+AIStore includes `aisloader` - a powerful tool that we use to simulate a variety of AI workloads. For numerous command-line options and usage examples, please see [Load Generator](/docs/aisloader.md) and [How To Benchmark AIStore](howto_benchmark.md). Or, just run the tool with empty command line and see its online help and examples.
 
 > Note as well that `aisloader` is fully StatsD-enabled - the metrics can be formwarded to any StatsD-compliant backend for visualization and further analysis.

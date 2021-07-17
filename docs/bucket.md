@@ -190,7 +190,7 @@ images-train-000001.tar      964.74MiB
 ### Public HTTP(S) Dataset
 
 It is standard in machine learning community to publish datasets in public domains, so they can be accessed by everyone.
-AIStore has integrated tools like [downloader](/downloader/README.md) which can help in downloading those large datasets straight into provided AIS bucket.
+AIStore has integrated tools like [downloader](/docs/downloader.md) which can help in downloading those large datasets straight into provided AIS bucket.
 However, sometimes using such tools is not a feasible solution.
 
 For other cases AIStore has ability to act as a reverese-proxy when accessing **any** URL.
@@ -294,7 +294,7 @@ So far, we have covered AIS and remote buckets. These abstractions are sufficien
 One way of accomplishing that could be:
 1. Prefetch cloud objects.
 2. Create AIS bucket.
-3. Use the bucket-copying [API](http_api.md) or [CLI](/cmd/cli/resources/bucket.md) to copy over the objects from the remote bucket to the newly created AIS bucket.
+3. Use the bucket-copying [API](http_api.md) or [CLI](/docs/cli/bucket.md) to copy over the objects from the remote bucket to the newly created AIS bucket.
 
 However, the extra-copying involved may prove to be time and/or space consuming. Hence, AIS-supported capability to establish an **ad-hoc** 1-to-1 relationship between a given AIS bucket and an existing cloud (*backend*).
 
@@ -334,7 +334,7 @@ NAME		 SIZE		 VERSION
 shard-0.tar	 2.50KiB	 1
 ```
 
-For more examples please refer to [CLI docs](/cmd/cli/resources/bucket.md#connectdisconnect-ais-bucket-tofrom-cloud-bucket).
+For more examples please refer to [CLI docs](/docs/cli/bucket.md#connectdisconnect-ais-bucket-tofrom-cloud-bucket).
 
 ## Bucket Properties
 
@@ -391,7 +391,7 @@ Bucket access is controlled by a single 64-bit `access` value in the [Bucket Pro
 | Cold GET | 0x8 |
 | DELETE | 0x16 |
 
-For instance, to make bucket `abc` read-only, execute the following [AIS CLI](/cmd/cli/README.md) command:
+For instance, to make bucket `abc` read-only, execute the following [AIS CLI](/docs/cli.md) command:
 
 ```console
 $ ais bucket props abc 'access=ro'

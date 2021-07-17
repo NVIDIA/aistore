@@ -31,7 +31,7 @@ Downloader will then detect the SDK "presence" at runtime and use a wider range 
 Other supported features include:
 
 * Can download a single file (object), a range, an entire bucket, **and** a virtual directory in a given remote bucket.
-* Easy to use with [command line interface](/cmd/cli/resources/download.md).
+* Easy to use with [command line interface](/docs/cli/download.md).
 * Versioning and checksum support allows for an optimal download of the same source location multiple times to *incrementally* update AIS destination with source changes (if any).
 
 The rest of this document describes these and other capabilities in greater detail and illustrates them with examples.
@@ -54,7 +54,7 @@ JOB ID           STATUS          ERRORS  DESCRIPTION
 H9OjbW5FH        Finished        0       https://storage.googleapis.com/lpr-imagenet/imagenet_train-{0011..0020}.tgz -> ais://imagenet
 ```
 
-For more examples see: [Downloader CLI](/cmd/cli/resources/download.md)
+For more examples see: [Downloader CLI](/docs/cli/download.md)
 
 ## Request to download
 

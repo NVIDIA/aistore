@@ -21,7 +21,8 @@ The following figure illustrates a cluster of 3 AIS proxies (gateways) and 4 sto
 <img src="/docs/images/etl-arch.png" alt="ETL architecture" width="80%">
 
 ## Management and Benchmarking
-- [AIS CLI](/cmd/cli/resources/etl.md) includes commands to start, stop, and monitor ETL at runtime.
-- [AIS Loader](/bench/aisloader/README.md) has been extended to benchmark and stress test AIS clusters by running a number of pre-defined transformations that we include with the source code.
+
+- [AIS CLI](/docs/cli/etl.md) includes commands to start, stop, and monitor ETL at runtime.
+- [AIS Loader](/docs/aisloader.md) has been extended to benchmark and stress test AIS clusters by running a number of pre-defined transformations that we include with the source code.
 
 For more information and details, please refer to [ETL readme](/docs/etl.md).

@@ -1,4 +1,5 @@
 ## Table of Contents
+
 - [Deep Learning](#deep-learning)
 - [Helpful Links: Go](#helpful-links-go)
 - [Helpful Links: AWS](#helpful-links-aws)

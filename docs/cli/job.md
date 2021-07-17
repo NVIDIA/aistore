@@ -149,12 +149,12 @@ Note: `job wait download|dsort` have slightly different options. Please see thei
 
 `ais job start dsort`
 
-Run [dSort](/dsort/README.md).
+Run [dSort](/docs/dsort.md).
 [Further reference for this command can be found here.](dsort.md)
 
 ## Downloader
 
 `ais job start download`
 
-Run the AIS [Downloader](/dsort/README.md).
+Run the AIS [Downloader](/docs/README.md).
 [Further reference for this command can be found here.](downloader.md)

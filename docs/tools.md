@@ -1,13 +1,13 @@
 ## ais
 
 This is a CLI utility used to perform operations like `create bucket`, `list objects`, `put object` etc.on the `ais` cluster.
-For information on usage read [this](/cmd/cli/README.md).
+For information on usage read [this](/docs/cli.md).
 For downloading and installing the latest binary release run [this](/cmd/cli/install_bin.sh).
 
 ## aisfs
 
 This is a CLI utility which enables to use the local filesystem to be used as a store for AIStore.
-For information on usage read [this](/cmd/aisfs/README.md).
+For information on usage read [this](/docs/aisfs.md).
 For downloading and installing the latest binary release run [this](/cmd/aisfs/install_bin.sh).
 
 ## aisloader

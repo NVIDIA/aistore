@@ -175,7 +175,7 @@ Any of the supported options can be utilized at any time (and without downtime) 
 
 1. **cloud backend**  - [Backend Bucket](bucket.md#backend-bucket)
 2. **mirroring** - [N-way mirror](#n-way-mirror)
-3. **copying buckets**  - [Copy Bucket](/cmd/cli/resources/bucket.md#copy-bucket)
+3. **copying buckets**  - [Copy Bucket](/docs/cli/bucket.md#copy-bucket)
 4. **erasure coding** - [Erasure coding](#erasure-coding)
 
 For instance, you first could start with plain mirroring via `ais job start mirror BUCKET --copies N`, where N would be less or equal the number of target mountpaths (disks).
