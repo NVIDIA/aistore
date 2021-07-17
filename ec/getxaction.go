@@ -102,7 +102,8 @@ func NewGetXact(t cluster.Target, bck cmn.Bck, mgr *Manager) *XactGet {
 	return runner
 }
 
-func (r *XactGet) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *cluster.Bck, objName string, objAttrs cmn.ObjAttrs, reader io.Reader) {
+func (r *XactGet) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *cluster.Bck, reader io.Reader) {
+	objName, objAttrs := hdr.ObjName, hdr.ObjAttrs
 	uname := unique(hdr.SID, bck, objName)
 	switch iReq.act {
 	// It is response to slice/replica request by an object

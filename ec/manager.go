@@ -229,7 +229,7 @@ func (mgr *Manager) recvRequest(hdr transport.ObjHdr, object io.Reader, err erro
 			return
 		}
 	}
-	mgr.RestoreBckRespXact(bck).DispatchReq(iReq, &hdr, bck, hdr.ObjName)
+	mgr.RestoreBckRespXact(bck).DispatchReq(iReq, &hdr, bck)
 }
 
 // A function to process big chunks of data (replica/slice/meta) sent from other targets
@@ -267,7 +267,7 @@ func (mgr *Manager) recvResponse(hdr transport.ObjHdr, object io.Reader, err err
 	case respPut:
 		// Process the request even if the number of targets is insufficient
 		// (might've started when we had enough)
-		mgr.RestoreBckGetXact(bck).DispatchResp(iReq, &hdr, bck, hdr.ObjName, hdr.ObjAttrs, object)
+		mgr.RestoreBckGetXact(bck).DispatchResp(iReq, &hdr, bck, object)
 	default:
 		glog.Errorf("unknown EC response action %d", iReq.act)
 		cos.DrainReader(object)

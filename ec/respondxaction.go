@@ -133,10 +133,11 @@ func (r *XactRespond) removeObjAndMeta(bck *cluster.Bck, objName string) error {
 	return nil
 }
 
-func (r *XactRespond) trySendCT(iReq intraReq, hdr *transport.ObjHdr, bck *cluster.Bck, objName string) error {
+func (r *XactRespond) trySendCT(iReq intraReq, hdr *transport.ObjHdr, bck *cluster.Bck) error {
 	var (
 		fqn, metaFQN string
 		md           *Metadata
+		objName      = hdr.ObjName
 	)
 	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Received request for slice %d of %s", iReq.meta.SliceID, objName)
@@ -159,7 +160,8 @@ func (r *XactRespond) trySendCT(iReq intraReq, hdr *transport.ObjHdr, bck *clust
 }
 
 // DispatchReq is responsible for handling request from other targets
-func (r *XactRespond) DispatchReq(iReq intraReq, hdr *transport.ObjHdr, bck *cluster.Bck, objName string) {
+func (r *XactRespond) DispatchReq(iReq intraReq, hdr *transport.ObjHdr, bck *cluster.Bck) {
+	objName := hdr.ObjName
 	switch iReq.act {
 	case reqDel:
 		// object cleanup request: delete replicas, slices and metafiles
@@ -167,7 +169,7 @@ func (r *XactRespond) DispatchReq(iReq intraReq, hdr *transport.ObjHdr, bck *clu
 			glog.Errorf("%s failed to delete %s/%s: %v", r.t.Snode(), bck.Name, objName, err)
 		}
 	case reqGet:
-		err := r.trySendCT(iReq, hdr, bck, objName)
+		err := r.trySendCT(iReq, hdr, bck)
 		if err != nil {
 			glog.Error(err)
 		}
