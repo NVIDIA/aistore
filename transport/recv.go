@@ -191,13 +191,9 @@ func (it *iterator) rxloop(uid uint64, loghdr string) (err error) {
 					obj.pdu = it.pdu
 					obj.pdu.reset()
 				}
-				// err => err; EOF => (unsized => EOF, otherwise => nil)
 				err = eofOK(err)
 				h.rxObj(obj.hdr, obj, err)
 				it.stats.Num.Inc()
-				// NOTE: `GORACE` may erroneously trigger at this point vs. objReader.Read
-				//       - disabling `recvPool` (pool.go) makes it go away
-				it.stats.Size.Add(obj.off)
 			} else if err != nil && err != io.EOF {
 				h.rxObj(ObjHdr{}, nil, err)
 			}

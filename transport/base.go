@@ -119,14 +119,6 @@ func newStreamBase(client Client, toURL string, extra *Extra) (s *streamBase) {
 
 	s = &streamBase{client: client, toURL: toURL}
 
-	s.time.idleOut = defaultIdleOut
-	if extra != nil && extra.IdleTimeout > 0 {
-		s.time.idleOut = extra.IdleTimeout
-	}
-	if s.time.idleOut < tickUnit {
-		s.time.idleOut = tickUnit
-	}
-	s.time.ticks = int(s.time.idleOut / tickUnit)
 	s.sessID = nextSID.Inc()
 	s.trname = path.Base(u.Path)
 	s.lid = fmt.Sprintf("%s[%d]", s.trname, s.sessID)
@@ -136,20 +128,33 @@ func newStreamBase(client Client, toURL string, extra *Extra) (s *streamBase) {
 	s.postCh = make(chan struct{}, 1)
 
 	s.mm = memsys.DefaultPageMM()
-	if extra != nil && extra.MMSA != nil {
-		s.mm = extra.MMSA
-	}
-	s.maxheader, _ = s.mm.AllocSize(maxHeaderSize) // NOTE: must be large enough to accommodate max-size
-	if extra != nil && extra.SizePDU > 0 {
-		if extra.SizePDU > MaxSizePDU {
-			debug.Assert(false)
-			extra.SizePDU = MaxSizePDU
+	s.time.idleOut = defaultIdleOut
+
+	// NOTE: default overrides
+	if extra != nil {
+		if extra.IdleTimeout > 0 {
+			s.time.idleOut = extra.IdleTimeout
 		}
-		buf, _ := s.mm.AllocSize(int64(extra.SizePDU))
-		s.pdu = newSendPDU(buf)
+		if extra.MMSA != nil {
+			s.mm = extra.MMSA
+		}
+		// NOTE: PDU-based traffic (must-have for unsized)
+		if extra.SizePDU > 0 {
+			if extra.SizePDU > MaxSizePDU {
+				debug.Assert(false)
+				extra.SizePDU = MaxSizePDU
+			}
+			buf, _ := s.mm.AllocSize(int64(extra.SizePDU))
+			s.pdu = newSendPDU(buf)
+		}
 	}
 
-	s.sessST.Store(inactive) // NOTE: initiate HTTP session upon the first arrival
+	if s.time.idleOut < tickUnit {
+		s.time.idleOut = tickUnit
+	}
+	s.time.ticks = int(s.time.idleOut / tickUnit)
+	s.maxheader, _ = s.mm.AllocSize(maxHeaderSize) // NOTE: must be large enough to accommodate max-size
+	s.sessST.Store(inactive)                       // NOTE: initiate HTTP session upon the first arrival
 
 	s.term.reason = new(string)
 	return

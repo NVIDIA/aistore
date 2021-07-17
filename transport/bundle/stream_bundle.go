@@ -166,7 +166,10 @@ func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*cl
 		// that we put on the wire and is done for the 2nd, 3rd, etc. replicas.
 		// In other words, for the N object replicas over the N bundled streams, the
 		// original reader will get reopened (N-1) times.
-		for _, robin := range streams {
+		for sid, robin := range streams {
+			if sb.lsnode.ID() == sid {
+				continue
+			}
 			if err = sb.sendOne(obj, roc, robin, idx, cnt); err != nil {
 				return
 			}

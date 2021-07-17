@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -22,6 +23,10 @@ import (
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
+)
+
+const (
+	doneSendingOpcode = 27182
 )
 
 type (
@@ -38,6 +43,10 @@ type (
 		t    cluster.Target
 		dm   *bundle.DataMover
 		args xreg.TransCpyBckArgs
+		// starting up
+		wg sync.WaitGroup
+		// finishing
+		refc atomic.Int32
 	}
 )
 
@@ -91,6 +100,11 @@ func (e *cpyFactory) Start(cmn.Bck) error {
 	if e.kind == cmn.ActETLBck {
 		sizePDU = memsys.DefaultBufSize
 	}
+
+	// TODO -- FIXME: revisit
+	smap := e.t.Sowner().Get()
+	e.xact.refc.Store(int32(smap.CountTargets() - 1))
+	e.xact.wg.Add(1)
 
 	// TODO: using rebalance config for a DM that copies objects.
 	return e.newDM(&config.Rebalance, e.uuid, sizePDU)
@@ -175,19 +189,36 @@ func newXactTransCpyBck(e *cpyFactory, slab *memsys.Slab) (r *XactTransCpyBck) {
 	return
 }
 
+func (r *XactTransCpyBck) WaitRunning() { r.wg.Wait() }
+
 func (r *XactTransCpyBck) Run() {
 	r.dm.SetXact(r)
 	r.dm.Open()
 
+	r.wg.Done()
+
 	r.XactBckJog.Run()
 	glog.Infoln(r.String(), r.args.BckFrom.Bck, "=>", r.args.BckTo.Bck)
+
 	err := r.XactBckJog.Wait()
+
+	o := transport.AllocSend()
+	o.Hdr.Opcode = doneSendingOpcode
+	r.dm.Bcast(o)
+
+	// NOTE: ref-counted quiescence, fairly short (optimal) waiting
 	config := cmn.GCO.Get()
-	if q := r.dm.Quiesce(config.Timeout.CplaneOperation.D()); q == cluster.QuiAborted {
-		if err == nil {
+	optTime, maxTime := config.Timeout.MaxKeepalive.D(), config.Timeout.SendFile.D()/2
+	q := r.Quiesce(optTime, func(tot time.Duration) cluster.QuiRes { return xaction.RefcntQuiCB(&r.refc, maxTime, tot) })
+	if err == nil {
+		if q == cluster.QuiAborted {
 			err = cmn.NewAbortedError(r.String())
+		} else if q == cluster.QuiTimeout {
+			err = fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout)
 		}
 	}
+
+	// close
 	r.dm.Close(err)
 	r.dm.UnregRecv()
 
@@ -232,6 +263,14 @@ func (r *XactTransCpyBck) recv(hdr transport.ObjHdr, objReader io.Reader, err er
 		glog.Error(err)
 		return
 	}
+	// NOTE: best-effort via ref-counting
+	if hdr.Opcode == doneSendingOpcode {
+		refc := r.refc.Dec()
+		debug.Assert(refc >= 0)
+		return
+	}
+	debug.Assert(hdr.Opcode == 0)
+
 	defer cos.DrainReader(objReader)
 	lom := cluster.AllocLOM(hdr.ObjName)
 	defer cluster.FreeLOM(lom)

@@ -8,6 +8,7 @@ package xs
 import (
 	"archive/tar"
 	"archive/zip"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -64,7 +65,7 @@ type (
 		err    error
 		errCnt atomic.Int32
 		// finishing
-		rc atomic.Int32
+		refc atomic.Int32
 	}
 	XactPutArchive struct {
 		xaction.XactDemandBase
@@ -167,7 +168,7 @@ func (r *XactPutArchive) Begin(msg *cmn.ArchiveMsg) (err error) {
 	wi.fqn = fs.CSM.GenContentFQN(wi.lom, fs.WorkfileType, fs.WorkfileAppend)
 
 	smap := r.t.Sowner().Get()
-	wi.rc.Store(int32(smap.CountTargets() - 1))
+	wi.refc.Store(int32(smap.CountTargets() - 1))
 	wi.tsi, err = cluster.HrwTarget(msg.ToBck.MakeUname(msg.ArchName), smap)
 	if err != nil {
 		return
@@ -245,8 +246,14 @@ func (r *XactPutArchive) Run() {
 	}
 fin:
 	r.XactDemandBase.Stop()
-	if q := r.dm.Quiesce(r.config.Rebalance.Quiesce.D()); q == cluster.QuiAborted && err == nil {
-		err = cmn.NewAbortedError(r.String())
+
+	q := r.dm.Quiesce(r.config.Timeout.MaxKeepalive.D())
+	if err == nil {
+		if q == cluster.QuiAborted {
+			err = cmn.NewAbortedError(r.String())
+		} else if q == cluster.QuiTimeout {
+			err = fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout)
+		}
 	}
 	r.dm.Close(err)
 	r.dm.UnregRecv()
@@ -290,9 +297,10 @@ func (r *XactPutArchive) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, er
 	debug.Assert(ok)
 	debug.Assert(wi.tsi.ID() == r.t.Snode().ID())
 
+	// NOTE: best-effort via ref-counting
 	if hdr.Opcode == doneSendingOpcode {
-		rc := wi.rc.Dec()
-		debug.Assert(rc >= 0)
+		refc := wi.refc.Dec()
+		debug.Assert(refc >= 0)
 	} else {
 		debug.Assert(hdr.Opcode == 0)
 		wi.writer.write(hdr.ObjName, &hdr.ObjAttrs, objReader)
@@ -304,16 +312,26 @@ func (r *XactPutArchive) finalize(wi *archwi, fullname string) {
 		r.DecPending()
 		return // nothing to do
 	}
-	_ = wi.quiesce()
+	if q := wi.quiesce(); q == cluster.QuiAborted {
+		r.raiseErr(cmn.NewAbortedError(r.String()), 0)
+	} else if q == cluster.QuiTimeout {
+		r.raiseErr(fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout), 0)
+	}
 
 	errCode, err := r.fini(wi)
-	if err != nil {
-		glog.Errorf("%s: %v(%d)", r.t.Snode(), err, errCode) // TODO
-	}
 	r.pending.Lock()
 	delete(r.pending.m, fullname)
 	r.pending.Unlock()
 	r.DecPending()
+
+	if err != nil {
+		r.raiseErr(err, errCode)
+	}
+}
+
+// TODO -- FIXME: stateful
+func (r *XactPutArchive) raiseErr(err error, errCode int) {
+	glog.Errorf("%s: %v(%d)", r.t.Snode(), err, errCode)
 }
 
 func (r *XactPutArchive) fini(wi *archwi) (errCode int, err error) {
@@ -389,17 +407,9 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) error {
 }
 
 func (wi *archwi) quiesce() cluster.QuiRes {
-	return wi.r.Quiesce(wi.r.config.Timeout.MaxKeepalive.D(), wi.quicb)
-}
-
-func (wi *archwi) quicb(total time.Duration) cluster.QuiRes {
-	if wi.rc.Load() > 0 {
-		return cluster.QuiActive
-	}
-	if total > wi.r.config.Timeout.SendFile.D()/2 {
-		return cluster.QuiTimeout
-	}
-	return cluster.QuiInactive
+	return wi.r.Quiesce(wi.r.config.Timeout.MaxKeepalive.D(), func(total time.Duration) cluster.QuiRes {
+		return xaction.RefcntQuiCB(&wi.refc, wi.r.config.Timeout.SendFile.D()/2, total)
+	})
 }
 
 ///////////////

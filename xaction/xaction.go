@@ -86,7 +86,6 @@ func (xact *XactBase) Quiesce(d time.Duration, cb cluster.QuiCB) cluster.QuiRes 
 	if xact.Aborted() {
 		return cluster.QuiAborted
 	}
-wait:
 	for idle < dur {
 		time.Sleep(sleep)
 		if xact.Aborted() {
@@ -102,10 +101,10 @@ wait:
 		case cluster.QuiDone:
 			return cluster.QuiDone
 		case cluster.QuiTimeout:
-			break wait
+			return cluster.QuiTimeout
 		}
 	}
-	return cluster.QuiTimeout
+	return cluster.Quiescent
 }
 
 func (xact *XactBase) String() string {

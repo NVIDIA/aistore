@@ -18,6 +18,7 @@ const (
 	QuiDone                    // all done
 	QuiAborted                 // aborted
 	QuiTimeout                 // timeout
+	Quiescent                  // idle => quiescent
 )
 
 type (
