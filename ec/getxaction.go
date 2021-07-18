@@ -21,9 +21,9 @@ import (
 )
 
 type (
-	// Implements `xreg.Renewable` and `xreg.BckFactory` interface.
+	// Implements `xreg.Renewable` and `xreg.Factory` interface.
 	getFactory struct {
-		xreg.BaseBckEntry
+		xreg.BaseEntry
 		xact *XactGet
 	}
 
@@ -49,7 +49,7 @@ type (
 // interface guard
 var (
 	_ xaction.XactDemand = (*XactGet)(nil)
-	_ xreg.BckFactory    = (*getFactory)(nil)
+	_ xreg.Factory       = (*getFactory)(nil)
 )
 
 ////////////////

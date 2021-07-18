@@ -245,7 +245,7 @@ func (reb *Manager) rebInit(md *rebArgs, notif *xaction.NotifXact) bool {
 	reb.rebID.Store(md.id)
 	reb.stages.cleanup()
 
-	reb.xact().MarkDone()
+	reb.xact().MarkFinished()
 	reb.Unlock()
 	glog.Infof("%s: %s", reb.logHdr(md), reb.xact().String())
 	return true

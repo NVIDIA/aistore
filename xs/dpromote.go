@@ -25,7 +25,7 @@ import (
 
 type (
 	proFactory struct {
-		xreg.BaseBckEntry
+		xreg.BaseEntry
 		xact   *XactDirPromote
 		t      cluster.Target
 		dir    string
@@ -40,8 +40,8 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact    = (*XactDirPromote)(nil)
-	_ xreg.BckFactory = (*proFactory)(nil)
+	_ cluster.Xact = (*XactDirPromote)(nil)
+	_ xreg.Factory = (*proFactory)(nil)
 )
 
 ////////////////

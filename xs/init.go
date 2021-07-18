@@ -13,7 +13,7 @@ import (
 // for additional startup-time reg-s see lru, downloader, ec
 func init() {
 	xreg.RegGlobXact(&eleFactory{})
-	xreg.RegGlobXact(&resilverFactory{})
+	xreg.RegGlobXact(&rslvrFactory{})
 	xreg.RegGlobXact(&rebFactory{})
 
 	xreg.RegFactory(&MovFactory{})

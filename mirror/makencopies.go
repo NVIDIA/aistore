@@ -22,7 +22,7 @@ import (
 
 type (
 	mncFactory struct {
-		xreg.BaseBckEntry
+		xreg.BaseEntry
 		xact *xactMNC
 		t    cluster.Target
 		uuid string
@@ -40,8 +40,8 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact    = (*xactMNC)(nil)
-	_ xreg.BckFactory = (*mncFactory)(nil)
+	_ cluster.Xact = (*xactMNC)(nil)
+	_ xreg.Factory = (*mncFactory)(nil)
 )
 
 ////////////////

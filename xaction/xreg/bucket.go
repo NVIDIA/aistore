@@ -14,20 +14,9 @@ import (
 )
 
 type (
-	// Providing default pre/post hooks
-	BaseBckEntry struct{}
-
 	// Serves to return the result of renewing
 	DummyEntry struct {
 		xact cluster.Xact
-	}
-
-	// BckFactory is an interface to provider a new instance of Renewable interface.
-	BckFactory interface {
-		// New should create empty stub for bucket xaction that could be started
-		// with `Start()` method.
-		New(args Args) Renewable
-		Kind() string
 	}
 
 	DirPromoteArgs struct {
@@ -60,38 +49,26 @@ type (
 	}
 )
 
-//////////////////
-// BaseBckEntry //
-//////////////////
-
-func (*BaseBckEntry) PreRenewHook(previousEntry Renewable) (keep bool, err error) {
-	e := previousEntry.Get()
-	_, keep = e.(xaction.XactDemand)
-	return
-}
-
-func (*BaseBckEntry) PostRenewHook(Renewable) {}
-
 ////////////////
 // DummyEntry //
 ////////////////
 
 // interface guard
 var (
-	_ BaseEntry = (*DummyEntry)(nil)
+	_ xrunner = (*DummyEntry)(nil)
 )
 
-func (*DummyEntry) Start(_ cmn.Bck) error { debug.Assert(false); return nil }
-func (*DummyEntry) Kind() string          { debug.Assert(false); return "" }
-func (d *DummyEntry) Get() cluster.Xact   { return d.xact }
+func (*DummyEntry) Start(cmn.Bck) error { debug.Assert(false); return nil }
+func (*DummyEntry) Kind() string        { debug.Assert(false); return "" }
+func (d *DummyEntry) Get() cluster.Xact { return d.xact }
 
 //////////////
 // registry //
 //////////////
 
-func RegFactory(entry BckFactory) { defaultReg.regFactory(entry) }
+func RegFactory(entry Factory) { defaultReg.regFactory(entry) }
 
-func (r *registry) regFactory(entry BckFactory) {
+func (r *registry) regFactory(entry Factory) {
 	debug.Assert(xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeBck)
 
 	// It is expected that registrations happen at the init time. Therefore, it

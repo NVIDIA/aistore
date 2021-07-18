@@ -31,7 +31,7 @@ const (
 
 type (
 	cpyFactory struct {
-		xreg.BaseBckEntry
+		xreg.BaseEntry
 		xact  *XactTransCpyBck
 		t     cluster.Target
 		uuid  string
@@ -55,8 +55,8 @@ const etlBucketParallelCnt = 2
 
 // interface guard
 var (
-	_ cluster.Xact    = (*XactTransCpyBck)(nil)
-	_ xreg.BckFactory = (*cpyFactory)(nil)
+	_ cluster.Xact = (*XactTransCpyBck)(nil)
+	_ xreg.Factory = (*cpyFactory)(nil)
 )
 
 ///////////////////////////////////

@@ -23,6 +23,10 @@ import (
 )
 
 type (
+	taskState struct {
+		Result interface{} `json:"res"`
+		Err    error       `json:"error"`
+	}
 	bckSummaryTaskEntry struct {
 		xact *bckSummaryTask
 
@@ -42,7 +46,7 @@ type (
 
 // interface guard
 var (
-	_ BaseEntry = (*bckSummaryTaskEntry)(nil)
+	_ xrunner = (*bckSummaryTaskEntry)(nil)
 )
 
 func RenewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.BucketSummaryMsg) error {

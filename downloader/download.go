@@ -166,7 +166,7 @@ type (
 	}
 
 	dowFactory struct {
-		xreg.BaseGlobalEntry
+		xreg.BaseEntry
 		xact   *Downloader
 		t      cluster.Target
 		statsT stats.Tracker
@@ -176,7 +176,7 @@ type (
 // interface guard
 var (
 	_ xaction.XactDemand = (*Downloader)(nil)
-	_ xreg.GlobalFactory = (*dowFactory)(nil)
+	_ xreg.Factory       = (*dowFactory)(nil)
 	_ io.ReadCloser      = (*progressReader)(nil)
 )
 

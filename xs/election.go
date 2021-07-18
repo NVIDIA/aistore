@@ -16,7 +16,7 @@ import (
 
 type (
 	eleFactory struct {
-		xreg.BaseGlobalEntry
+		xreg.BaseEntry
 		xact *Election
 	}
 	Election struct {
@@ -26,8 +26,8 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact       = (*Election)(nil)
-	_ xreg.GlobalFactory = (*eleFactory)(nil)
+	_ cluster.Xact = (*Election)(nil)
+	_ xreg.Factory = (*eleFactory)(nil)
 )
 
 func (*eleFactory) New(_ xreg.Args) xreg.Renewable { return &eleFactory{} }

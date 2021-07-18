@@ -19,7 +19,7 @@ import (
 
 type (
 	MovFactory struct {
-		xreg.BaseBckEntry
+		xreg.BaseEntry
 		xact  *bckRename
 		t     cluster.Target
 		uuid  string
@@ -37,8 +37,8 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact    = (*bckRename)(nil)
-	_ xreg.BckFactory = (*MovFactory)(nil)
+	_ cluster.Xact = (*bckRename)(nil)
+	_ xreg.Factory = (*MovFactory)(nil)
 )
 
 func (*MovFactory) New(args xreg.Args) xreg.Renewable {
@@ -57,15 +57,15 @@ func (p *MovFactory) Start(bck cmn.Bck) error {
 func (*MovFactory) Kind() string        { return cmn.ActMoveBck }
 func (p *MovFactory) Get() cluster.Xact { return p.xact }
 
-func (p *MovFactory) PreRenewHook(previousEntry xreg.Renewable) (keep bool, err error) {
+func (p *MovFactory) PreRenewHook(prevEntry xreg.Renewable) (keep bool, err error) {
 	if p.phase == cmn.ActBegin {
-		if !previousEntry.Get().Finished() {
+		if !prevEntry.Get().Finished() {
 			err = fmt.Errorf("%s: cannot(%s=>%s) older rename still in progress", p.Kind(), p.args.BckFrom, p.args.BckTo)
 			return
 		}
 		// TODO: more checks
 	}
-	prev := previousEntry.(*MovFactory)
+	prev := prevEntry.(*MovFactory)
 	bckEq := prev.args.BckTo.Equal(p.args.BckTo, false /*sameID*/, false /* same backend */)
 	if prev.phase == cmn.ActBegin && p.phase == cmn.ActCommit && bckEq {
 		prev.phase = cmn.ActCommit // transition

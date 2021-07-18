@@ -17,7 +17,7 @@ import (
 
 type (
 	llcFactory struct {
-		xreg.BaseBckEntry
+		xreg.BaseEntry
 		t    cluster.Target
 		xact *xactLLC
 		uuid string
@@ -29,8 +29,8 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact    = (*xactLLC)(nil)
-	_ xreg.BckFactory = (*llcFactory)(nil)
+	_ cluster.Xact = (*xactLLC)(nil)
+	_ xreg.Factory = (*llcFactory)(nil)
 )
 
 ////////////////
@@ -51,8 +51,8 @@ func (p *llcFactory) Start(bck cmn.Bck) error {
 func (*llcFactory) Kind() string        { return cmn.ActLoadLomCache }
 func (p *llcFactory) Get() cluster.Xact { return p.xact }
 
-// overriding xreg.BaseBckEntry because it would return `false, nil`.
-func (*llcFactory) PreRenewHook(_ xreg.Renewable) (bool, error) { return true, nil }
+// overriding default to keep the previous/current
+func (*llcFactory) PreRenewHook(xreg.Renewable) (bool, error) { return true, nil }
 
 /////////////
 // xactLLC //

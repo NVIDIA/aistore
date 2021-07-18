@@ -35,7 +35,8 @@ type (
 		statTracker  stats.Tracker // extended stats
 		getRebMarked getMarked
 	}
-	resilverFactory struct {
+	rslvrFactory struct {
+		xreg.BaseEntry
 		xact *Resilver
 		id   string
 	}
@@ -46,15 +47,15 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact       = (*Rebalance)(nil)
-	_ xreg.GlobalFactory = (*rebFactory)(nil)
-	_ cluster.Xact       = (*Resilver)(nil)
-	_ xreg.GlobalFactory = (*resilverFactory)(nil)
+	_ cluster.Xact = (*Rebalance)(nil)
+	_ xreg.Factory = (*rebFactory)(nil)
+	_ cluster.Xact = (*Resilver)(nil)
+	_ xreg.Factory = (*rslvrFactory)(nil)
 )
 
-func (xact *RebBase) MarkDone()      { xact.wg.Done() }
-func (xact *RebBase) WaitForFinish() { xact.wg.Wait() }
-func (*RebBase) Run()                { debug.Assert(false) }
+func (xact *RebBase) MarkFinished() { xact.wg.Done() }
+func (xact *RebBase) WaitFinished() { xact.wg.Wait() }
+func (*RebBase) Run()               { debug.Assert(false) }
 
 func (xact *RebBase) String() string {
 	s := xact.XactBase.String()
@@ -86,8 +87,8 @@ func (p *rebFactory) Start(_ cmn.Bck) error {
 func (*rebFactory) Kind() string        { return cmn.ActRebalance }
 func (p *rebFactory) Get() cluster.Xact { return p.xact }
 
-func (p *rebFactory) PreRenewHook(previousEntry xreg.Renewable) (keep bool, err error) {
-	xreb := previousEntry.(*rebFactory)
+func (p *rebFactory) PreRenewHook(prevEntry xreg.Renewable) (keep bool, err error) {
+	xreb := prevEntry.(*rebFactory)
 	if xreb.args.ID > p.args.ID {
 		glog.Errorf("(reb: %s) %s is greater than %s", xreb.xact, xreb.args.ID, p.args.ID)
 		keep = true
@@ -100,10 +101,10 @@ func (p *rebFactory) PreRenewHook(previousEntry xreg.Renewable) (keep bool, err 
 	return
 }
 
-func (*rebFactory) PostRenewHook(previousEntry xreg.Renewable) {
-	xreb := previousEntry.(*rebFactory).xact
+func (*rebFactory) PostRenewHook(prevEntry xreg.Renewable) {
+	xreb := prevEntry.(*rebFactory).xact
 	xreb.Abort()
-	xreb.WaitForFinish()
+	xreb.WaitFinished()
 }
 
 func NewRebalance(id, kind string, statTracker stats.Tracker, getMarked getMarked) (xact *Rebalance) {
@@ -143,24 +144,22 @@ func (xact *Rebalance) Stats() cluster.XactStats {
 // Resilver //
 //////////////
 
-func (*resilverFactory) New(args xreg.Args) xreg.Renewable {
-	return &resilverFactory{id: args.UUID}
+func (*rslvrFactory) New(args xreg.Args) xreg.Renewable {
+	return &rslvrFactory{id: args.UUID}
 }
 
-func (p *resilverFactory) Start(_ cmn.Bck) error {
+func (p *rslvrFactory) Start(_ cmn.Bck) error {
 	p.xact = NewResilver(p.id, p.Kind())
 	return nil
 }
 
-func (*resilverFactory) Kind() string        { return cmn.ActResilver }
-func (p *resilverFactory) Get() cluster.Xact { return p.xact }
+func (*rslvrFactory) Kind() string        { return cmn.ActResilver }
+func (p *rslvrFactory) Get() cluster.Xact { return p.xact }
 
-func (*resilverFactory) PreRenewHook(xreg.Renewable) (bool, error) { return false, nil }
-
-func (*resilverFactory) PostRenewHook(previousEntry xreg.Renewable) {
-	xresilver := previousEntry.(*resilverFactory).xact
-	xresilver.Abort()
-	xresilver.WaitForFinish()
+func (*rslvrFactory) PostRenewHook(prevEntry xreg.Renewable) {
+	xres := prevEntry.(*rslvrFactory).xact
+	xres.Abort()
+	xres.WaitFinished()
 }
 
 func NewResilver(uuid, kind string) (xact *Resilver) {

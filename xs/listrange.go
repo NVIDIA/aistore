@@ -57,7 +57,7 @@ type (
 // concrete list-range type xactions (see also: archive.go)
 type (
 	evdFactory struct {
-		xreg.BaseBckEntry
+		xreg.BaseEntry
 		xargs xreg.Args
 		xact  *evictDelete
 		kind  string
@@ -68,7 +68,7 @@ type (
 		lriterator
 	}
 	prfFactory struct {
-		xreg.BaseBckEntry
+		xreg.BaseEntry
 		xargs xreg.Args
 		xact  *prefetch
 		msg   *cmn.ListRangeMsg
@@ -85,8 +85,8 @@ var (
 	_ cluster.Xact = (*evictDelete)(nil)
 	_ cluster.Xact = (*prefetch)(nil)
 
-	_ xreg.BckFactory = (*evdFactory)(nil)
-	_ xreg.BckFactory = (*prfFactory)(nil)
+	_ xreg.Factory = (*evdFactory)(nil)
+	_ xreg.Factory = (*prfFactory)(nil)
 
 	_ lrwi = (*evictDelete)(nil)
 	_ lrwi = (*prefetch)(nil)

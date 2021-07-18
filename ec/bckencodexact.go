@@ -20,7 +20,7 @@ import (
 
 type (
 	encFactory struct {
-		xreg.BaseBckEntry
+		xreg.BaseEntry
 		xact  *XactBckEncode
 		t     cluster.Target
 		uuid  string
@@ -37,8 +37,8 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact    = (*XactBckEncode)(nil)
-	_ xreg.BckFactory = (*encFactory)(nil)
+	_ cluster.Xact = (*XactBckEncode)(nil)
+	_ xreg.Factory = (*encFactory)(nil)
 )
 
 ////////////////

@@ -12,39 +12,18 @@ import (
 	"github.com/NVIDIA/aistore/xaction"
 )
 
-type (
-	BaseGlobalEntry struct{}
-
-	GlobalFactory interface {
-		New(args Args) Renewable
-		Kind() string
-	}
-
-	RebalanceArgs struct {
-		ID          string
-		StatTracker stats.Tracker
-	}
-)
-
-/////////////////////
-// BaseGlobalEntry //
-/////////////////////
-
-func (*BaseGlobalEntry) PreRenewHook(previousEntry Renewable) (keep bool, err error) {
-	e := previousEntry.Get()
-	_, keep = e.(xaction.XactDemand)
-	return
+type RebalanceArgs struct {
+	ID          string
+	StatTracker stats.Tracker
 }
-
-func (*BaseGlobalEntry) PostRenewHook(Renewable) {}
 
 //////////////
 // registry //
 //////////////
 
-func RegGlobXact(entry GlobalFactory) { defaultReg.regGlobFactory(entry) }
+func RegGlobXact(entry Factory) { defaultReg.regGlobFactory(entry) }
 
-func (r *registry) regGlobFactory(entry GlobalFactory) {
+func (r *registry) regGlobFactory(entry Factory) {
 	debug.Assert(xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeGlobal)
 
 	// It is expected that registrations happen at the init time. Therefore, it

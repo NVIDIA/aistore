@@ -18,36 +18,35 @@ import (
 )
 
 const (
-	// cleanup old (entries.entries)
-	delOldInterval = 10 * time.Minute
-
-	// separately, cleanup inactive (entries.active)
-	delInactiveInterval = time.Minute
-
-	// the interval to keep for history
-	entryOldAge = 1 * time.Hour
-
-	// initial capacity of registry entries
-	entriesCap = 256
-
-	// the number of entries to trigger (housekeeping) cleanup
-	delOldThreshold = 300
+	delOldInterval      = 10 * time.Minute // cleanup old (entries.entries)
+	delInactiveInterval = time.Minute      // separately, cleanup inactive (entries.active)
+	entryOldAge         = 1 * time.Hour    // the interval to keep for history
+	entriesCap          = 256              // initial capacity of registry entries
+	delOldThreshold     = 300              // the number of entries to trigger (housekeeping) cleanup
 )
 
 type (
-	BaseEntry interface {
+	xrunner interface {
 		Start(bck cmn.Bck) error // starts an xaction, will be called when entry is stored into registry
 		Kind() string
 		Get() cluster.Xact
 	}
 	Renewable interface {
-		BaseEntry
+		xrunner
 		// pre-renew: returns true iff the current active one exists and is either
 		// - ok to keep running as is, or
 		// - has been renew(ed) and is still ok
 		PreRenewHook(previousEntry Renewable) (keep bool, err error)
 		// post-renew hook
 		PostRenewHook(previousEntry Renewable)
+	}
+	BaseEntry struct{}
+
+	// Factory is an interface to create Renewable instances
+	Factory interface {
+		// New creates xaction stub that can be `Start`-ed.
+		New(args Args) Renewable
+		Kind() string
 	}
 
 	// used in constructions
@@ -63,11 +62,12 @@ type (
 		Bck         *cluster.Bck
 		OnlyRunning *bool
 	}
+
 	// Represents result of renewing given xaction.
 	RenewRes struct {
-		Entry BaseEntry // Depending on situation can be new or old entry.
-		Err   error     // Error that occurred during renewal.
-		UUID  string    // "" if a new entry has been created, ID of the existing xaction otherwise
+		Entry xrunner // Depending on situation can be new or old entry.
+		Err   error   // Error that occurred during renewal.
+		UUID  string  // "" if a new entry has been created, ID of the existing xaction otherwise
 	}
 	// Selects subset of xactions to abort.
 	abortArgs struct {
@@ -80,14 +80,11 @@ type (
 		// all or matching `ty` above, if defined
 		all bool
 	}
-	taskState struct {
-		Result interface{} `json:"res"`
-		Err    error       `json:"error"`
-	}
+
 	entries struct {
 		mtx     sync.RWMutex
-		active  []BaseEntry // running entries - finished entries are gradually removed
-		entries []BaseEntry
+		active  []xrunner // running entries - finished entries are gradually removed
+		entries []xrunner
 	}
 	registry struct {
 		mtx sync.RWMutex // lock for transactions
@@ -95,10 +92,26 @@ type (
 		// to make sure that we don't keep old entries forever.
 		inactive    atomic.Int64
 		entries     *entries
-		bckXacts    map[string]BckFactory
-		globalXacts map[string]GlobalFactory
+		bckXacts    map[string]Factory
+		globalXacts map[string]Factory
 	}
 )
+
+///////////////
+// BaseEntry //
+///////////////
+
+func (*BaseEntry) PreRenewHook(prevEntry Renewable) (keep bool, err error) {
+	e := prevEntry.Get()
+	_, keep = e.(xaction.XactDemand)
+	return
+}
+
+func (*BaseEntry) PostRenewHook(Renewable) {}
+
+//////////////////////
+// xaction registry //
+//////////////////////
 
 // default global registry that keeps track of all running xactions
 // In addition, the registry retains already finished xactions subject to lazy cleanup via `hk`.
@@ -112,8 +125,8 @@ func init() {
 func newRegistry() *registry {
 	xar := &registry{
 		entries:     newRegistryEntries(),
-		bckXacts:    make(map[string]BckFactory, 10),
-		globalXacts: make(map[string]GlobalFactory, 10),
+		bckXacts:    make(map[string]Factory, 10),
+		globalXacts: make(map[string]Factory, 10),
 	}
 	hk.Reg("xactions-old", xar.hkDelOld)
 	hk.Reg("xactions-inactive", xar.hkDelInactive)
@@ -122,14 +135,10 @@ func newRegistry() *registry {
 
 func Reset() { defaultReg = newRegistry() } // tests only
 
-//////////////////////
-// xaction registry //
-//////////////////////
-
 func GetXact(uuid string) (xact cluster.Xact) { return defaultReg.getXact(uuid) }
 
 func (r *registry) getXact(uuid string) (xact cluster.Xact) {
-	r.entries.forEach(func(entry BaseEntry) bool {
+	r.entries.forEach(func(entry xrunner) bool {
 		x := entry.Get()
 		if x != nil && x.ID() == uuid {
 			xact = x
@@ -151,23 +160,23 @@ func (r *registry) GetXactRunning(kind string) (xact cluster.Xact) {
 	return
 }
 
-func GetRunning(flt XactFilter) BaseEntry { return defaultReg.getRunning(flt) }
+func GetRunning(flt XactFilter) xrunner { return defaultReg.getRunning(flt) }
 
-func (r *registry) getRunning(flt XactFilter) BaseEntry {
+func (r *registry) getRunning(flt XactFilter) xrunner {
 	onl := true
 	flt.OnlyRunning = &onl
 	entry := r.entries.find(flt)
 	return entry
 }
 
-func GetLatest(flt XactFilter) BaseEntry { return defaultReg.getLatest(flt) }
+func GetLatest(flt XactFilter) xrunner { return defaultReg.getLatest(flt) }
 
-func (r *registry) getLatest(flt XactFilter) BaseEntry {
+func (r *registry) getLatest(flt XactFilter) xrunner {
 	entry := r.entries.find(flt)
 	return entry
 }
 
-func CheckBucketsBusy() (cause BaseEntry) {
+func CheckBucketsBusy() (cause xrunner) {
 	// These xactions have cluster-wide consequences: in general moving objects between targets.
 	busyXacts := []string{cmn.ActMoveBck, cmn.ActCopyBck, cmn.ActETLBck, cmn.ActECEncode}
 	for _, kind := range busyXacts {
@@ -287,7 +296,7 @@ func (r *registry) getStats(flt XactFilter) ([]cluster.XactStats, error) {
 }
 
 func (r *registry) abort(args abortArgs) {
-	r.entries.forEach(func(entry BaseEntry) bool {
+	r.entries.forEach(func(entry xrunner) bool {
 		xact := entry.Get()
 		if xact.Finished() {
 			return true
@@ -317,8 +326,8 @@ func (r *registry) abort(args abortArgs) {
 }
 
 func (r *registry) matchingXactsStats(match func(xact cluster.Xact) bool) []cluster.XactStats {
-	matchingEntries := make([]BaseEntry, 0, 20)
-	r.entries.forEach(func(entry BaseEntry) bool {
+	matchingEntries := make([]xrunner, 0, 20)
+	r.entries.forEach(func(entry xrunner) bool {
 		if !match(entry.Get()) {
 			return true
 		}
@@ -355,7 +364,7 @@ func (r *registry) hkDelInactive() time.Duration {
 	return delInactiveInterval
 }
 
-func (r *registry) add(entry BaseEntry) { r.entries.add(entry) }
+func (r *registry) add(entry xrunner) { r.entries.add(entry) }
 
 // FIXME: the logic here must be revisited and revised
 func (r *registry) hkDelOld() time.Duration {
@@ -364,7 +373,7 @@ func (r *registry) hkDelOld() time.Duration {
 		return delOldInterval
 	}
 	now := time.Now()
-	r.entries.forEach(func(entry BaseEntry) (ret bool) {
+	r.entries.forEach(func(entry xrunner) (ret bool) {
 		var (
 			xact = entry.Get()
 			eID  = xact.ID()
@@ -447,11 +456,11 @@ func (r *registry) renew(entry Renewable, bck *cluster.Bck, uuids ...string) (re
 
 func newRegistryEntries() *entries {
 	return &entries{
-		entries: make([]BaseEntry, 0, entriesCap),
+		entries: make([]xrunner, 0, entriesCap),
 	}
 }
 
-func (e *entries) findUnlocked(flt XactFilter) BaseEntry {
+func (e *entries) findUnlocked(flt XactFilter) xrunner {
 	if flt.OnlyRunning == nil {
 		// walk in reverse as there is a greater chance
 		// the one we are looking for is at the end
@@ -472,14 +481,14 @@ func (e *entries) findUnlocked(flt XactFilter) BaseEntry {
 	return nil
 }
 
-func (e *entries) find(flt XactFilter) (entry BaseEntry) {
+func (e *entries) find(flt XactFilter) (entry xrunner) {
 	e.mtx.RLock()
 	entry = e.findUnlocked(flt)
 	e.mtx.RUnlock()
 	return
 }
 
-func (e *entries) forEach(matcher func(entry BaseEntry) bool) {
+func (e *entries) forEach(matcher func(entry xrunner) bool) {
 	e.mtx.RLock()
 	defer e.mtx.RUnlock()
 	for _, entry := range e.entries {
@@ -530,7 +539,7 @@ func (e *entries) delInactive() {
 	}
 }
 
-func (e *entries) add(entry BaseEntry) {
+func (e *entries) add(entry xrunner) {
 	e.mtx.Lock()
 	e.active = append(e.active, entry)
 	e.entries = append(e.entries, entry)
@@ -562,7 +571,7 @@ func (rxf XactFilter) genericMatcher(xact cluster.Xact) bool {
 	return condition
 }
 
-func matchEntry(entry BaseEntry, flt XactFilter) (matches bool) {
+func matchEntry(entry xrunner, flt XactFilter) (matches bool) {
 	if flt.ID != "" {
 		return entry.Get().ID() == flt.ID
 	}

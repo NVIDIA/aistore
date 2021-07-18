@@ -21,7 +21,7 @@ import (
 
 type (
 	putFactory struct {
-		xreg.BaseBckEntry
+		xreg.BaseEntry
 		xact *XactPut
 	}
 	// Erasure coding runner: accepts requests and dispatches them to
@@ -50,7 +50,7 @@ type (
 // interface guard
 var (
 	_ xaction.XactDemand = (*XactPut)(nil)
-	_ xreg.BckFactory    = (*putFactory)(nil)
+	_ xreg.Factory       = (*putFactory)(nil)
 )
 
 ////////////////

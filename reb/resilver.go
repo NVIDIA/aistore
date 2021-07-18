@@ -42,7 +42,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xa
 	}
 
 	xact := xreg.RenewResilver(id).(*xs.Resilver)
-	defer xact.MarkDone()
+	defer xact.MarkFinished()
 
 	if len(notifs) != 0 {
 		notifs[0].Xact = xact

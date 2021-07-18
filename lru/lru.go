@@ -98,7 +98,7 @@ type (
 	}
 
 	Factory struct {
-		xreg.BaseGlobalEntry
+		xreg.BaseEntry
 		xact *Xaction
 
 		id string
@@ -114,7 +114,7 @@ type (
 // interface guard
 var (
 	_ xaction.XactDemand = (*Xaction)(nil)
-	_ xreg.GlobalFactory = (*Factory)(nil)
+	_ xreg.Factory       = (*Factory)(nil)
 )
 
 func init() { xreg.RegGlobXact(&Factory{}) }

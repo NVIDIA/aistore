@@ -28,7 +28,7 @@ const (
 
 type (
 	putFactory struct {
-		xreg.BaseBckEntry
+		xreg.BaseEntry
 		xact *XactPut
 		t    cluster.Target
 		uuid string
@@ -49,8 +49,8 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact    = (*XactPut)(nil)
-	_ xreg.BckFactory = (*putFactory)(nil)
+	_ cluster.Xact = (*XactPut)(nil)
+	_ xreg.Factory = (*putFactory)(nil)
 )
 
 ////////////////

@@ -14,7 +14,7 @@ import (
 )
 
 type queEntry struct {
-	BaseBckEntry
+	BaseEntry
 	xact  *query.ObjectsListingXact
 	ctx   context.Context
 	t     cluster.Target
@@ -24,7 +24,7 @@ type queEntry struct {
 
 // interface guard
 var (
-	_ BaseEntry = (*queEntry)(nil)
+	_ xrunner = (*queEntry)(nil)
 )
 
 func RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, msg *cmn.SelectMsg) RenewRes {
@@ -52,7 +52,7 @@ func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.Ob
 // queEntry //
 //////////////
 
-func (e *queEntry) Start(_ cmn.Bck) (err error) {
+func (e *queEntry) Start(cmn.Bck) (err error) {
 	xact := query.NewObjectsListing(e.ctx, e.t, e.query, e.msg)
 	e.xact = xact
 	if query.Registry.Get(e.msg.UUID) != nil {

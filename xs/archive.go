@@ -34,7 +34,7 @@ const (
 
 type (
 	archFactory struct {
-		xreg.BaseBckEntry
+		xreg.BaseEntry
 		xact *XactPutArchive
 		t    cluster.Target
 		uuid string
@@ -87,9 +87,9 @@ const (
 
 // interface guard
 var (
-	_ cluster.Xact    = (*XactPutArchive)(nil)
-	_ xreg.BckFactory = (*archFactory)(nil)
-	_ lrwi            = (*archwi)(nil)
+	_ cluster.Xact = (*XactPutArchive)(nil)
+	_ xreg.Factory = (*archFactory)(nil)
+	_ lrwi         = (*archwi)(nil)
 
 	_ archWriter = (*tarWriter)(nil)
 	_ archWriter = (*zipWriter)(nil)

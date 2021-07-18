@@ -31,7 +31,7 @@ import (
 // Xaction is created once per bucket list request (per UUID)
 type (
 	olFactory struct {
-		xreg.BaseBckEntry
+		xreg.BaseEntry
 		xact *ObjListXact
 		t    cluster.Target
 		uuid string
@@ -74,8 +74,8 @@ var (
 
 // interface guard
 var (
-	_ cluster.Xact    = (*ObjListXact)(nil)
-	_ xreg.BckFactory = (*olFactory)(nil)
+	_ cluster.Xact = (*ObjListXact)(nil)
+	_ xreg.Factory = (*olFactory)(nil)
 )
 
 func (*olFactory) New(args xreg.Args) xreg.Renewable {

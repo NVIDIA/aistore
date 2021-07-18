@@ -23,7 +23,7 @@ import (
 
 type (
 	rspFactory struct {
-		xreg.BaseBckEntry
+		xreg.BaseEntry
 		xact *XactRespond
 	}
 	// Xaction responsible for responding to EC requests of other targets.
@@ -36,7 +36,7 @@ type (
 // interface guard
 var (
 	_ xaction.XactDemand = (*XactRespond)(nil)
-	_ xreg.BckFactory    = (*rspFactory)(nil)
+	_ xreg.Factory       = (*rspFactory)(nil)
 )
 
 ////////////////
