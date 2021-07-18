@@ -17,6 +17,7 @@ import (
 
 type (
 	llcFactory struct {
+		xreg.BaseBckEntry
 		t    cluster.Target
 		xact *xactLLC
 		uuid string
@@ -36,7 +37,7 @@ var (
 // llcFactory //
 ////////////////
 
-func (*llcFactory) New(args xreg.Args) xreg.BucketEntry {
+func (*llcFactory) New(args xreg.Args) xreg.Renewable {
 	return &llcFactory{t: args.T, uuid: args.UUID}
 }
 
@@ -51,8 +52,7 @@ func (*llcFactory) Kind() string        { return cmn.ActLoadLomCache }
 func (p *llcFactory) Get() cluster.Xact { return p.xact }
 
 // overriding xreg.BaseBckEntry because it would return `false, nil`.
-func (*llcFactory) PreRenewHook(_ xreg.BucketEntry) (bool, error) { return true, nil }
-func (*llcFactory) PostRenewHook(_ xreg.BucketEntry)              {}
+func (*llcFactory) PreRenewHook(_ xreg.Renewable) (bool, error) { return true, nil }
 
 /////////////
 // xactLLC //

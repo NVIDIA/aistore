@@ -13,20 +13,10 @@ import (
 )
 
 type (
-	GlobalEntry interface {
-		BaseEntry
-		// pre-renew: returns true iff the current active one exists and is either
-		// - ok to keep running as is, or
-		// - has been renew(ed) and is still ok
-		PreRenewHook(previousEntry GlobalEntry) (keep bool)
-		// post-renew hook
-		PostRenewHook(previousEntry GlobalEntry)
-	}
-
 	BaseGlobalEntry struct{}
 
 	GlobalFactory interface {
-		New(args Args) GlobalEntry
+		New(args Args) Renewable
 		Kind() string
 	}
 
@@ -40,13 +30,13 @@ type (
 // BaseGlobalEntry //
 /////////////////////
 
-func (*BaseGlobalEntry) PreRenewHook(previousEntry GlobalEntry) (keep bool) {
+func (*BaseGlobalEntry) PreRenewHook(previousEntry Renewable) (keep bool, err error) {
 	e := previousEntry.Get()
 	_, keep = e.(xaction.XactDemand)
 	return
 }
 
-func (*BaseGlobalEntry) PostRenewHook(_ GlobalEntry) {}
+func (*BaseGlobalEntry) PostRenewHook(Renewable) {}
 
 //////////////
 // registry //
@@ -72,7 +62,7 @@ func (r *registry) renewRebalance(id int64, statTracker stats.Tracker) cluster.X
 		ID:          xaction.RebID2S(id),
 		StatTracker: statTracker,
 	}})
-	res := r.renewGlobalXaction(e)
+	res := r.renew(e, nil)
 	if res.UUID != "" { // previous global rebalance is still running
 		return nil
 	}
@@ -83,27 +73,27 @@ func RenewResilver(id string) cluster.Xact { return defaultReg.renewResilver(id)
 
 func (r *registry) renewResilver(id string) cluster.Xact {
 	e := r.globalXacts[cmn.ActResilver].New(Args{UUID: id})
-	res := r.renewGlobalXaction(e)
-	debug.Assert(res.UUID == "") // resilver must be always preempted
-	return res.Entry.Get()
+	rns := r.renew(e, nil)
+	debug.Assert(rns.UUID == "") // resilver must be always preempted
+	return rns.Entry.Get()
 }
 
 func RenewElection() cluster.Xact { return defaultReg.renewElection() }
 
 func (r *registry) renewElection() cluster.Xact {
 	e := r.globalXacts[cmn.ActElection].New(Args{})
-	res := r.renewGlobalXaction(e)
-	if res.UUID != "" { // previous election is still running
+	rns := r.renew(e, nil)
+	if rns.UUID != "" { // previous election is still running
 		return nil
 	}
-	return res.Entry.Get()
+	return rns.Entry.Get()
 }
 
 func RenewLRU(id string) cluster.Xact { return defaultReg.renewLRU(id) }
 
 func (r *registry) renewLRU(id string) cluster.Xact {
 	e := r.globalXacts[cmn.ActLRU].New(Args{UUID: id})
-	res := r.renewGlobalXaction(e)
+	res := r.renew(e, nil)
 	if res.UUID != "" { // Previous LRU is still running.
 		res.Entry.Get().Renew()
 		return nil
@@ -120,5 +110,5 @@ func (r *registry) renewDownloader(t cluster.Target, statsT stats.Tracker) Renew
 		T:      t,
 		Custom: statsT,
 	})
-	return r.renewGlobalXaction(e)
+	return r.renew(e, nil)
 }

@@ -119,7 +119,7 @@ var (
 
 func init() { xreg.RegGlobXact(&Factory{}) }
 
-func (*Factory) New(args xreg.Args) xreg.GlobalEntry { return &Factory{id: args.UUID} }
+func (*Factory) New(args xreg.Args) xreg.Renewable { return &Factory{id: args.UUID} }
 
 func (p *Factory) Start(_ cmn.Bck) error {
 	var (

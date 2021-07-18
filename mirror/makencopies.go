@@ -48,7 +48,7 @@ var (
 // mncFactory //
 ////////////////
 
-func (*mncFactory) New(args xreg.Args) xreg.BucketEntry {
+func (*mncFactory) New(args xreg.Args) xreg.Renewable {
 	return &mncFactory{t: args.T, uuid: args.UUID, args: *args.Custom.(*xreg.MNCArgs)}
 }
 

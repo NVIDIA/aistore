@@ -57,7 +57,7 @@ var (
 // putFactory //
 ////////////////
 
-func (*putFactory) New(args xreg.Args) xreg.BucketEntry {
+func (*putFactory) New(args xreg.Args) xreg.Renewable {
 	return &putFactory{t: args.T, uuid: args.UUID, lom: args.Custom.(*cluster.LOM)}
 }
 

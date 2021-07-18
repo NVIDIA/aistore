@@ -16,6 +16,7 @@ import (
 
 type (
 	eleFactory struct {
+		xreg.BaseGlobalEntry
 		xact *Election
 	}
 	Election struct {
@@ -29,7 +30,7 @@ var (
 	_ xreg.GlobalFactory = (*eleFactory)(nil)
 )
 
-func (*eleFactory) New(_ xreg.Args) xreg.GlobalEntry { return &eleFactory{} }
+func (*eleFactory) New(_ xreg.Args) xreg.Renewable { return &eleFactory{} }
 
 func (p *eleFactory) Start(_ cmn.Bck) error {
 	p.xact = &Election{}
@@ -37,9 +38,7 @@ func (p *eleFactory) Start(_ cmn.Bck) error {
 	return nil
 }
 
-func (*eleFactory) Kind() string                         { return cmn.ActElection }
-func (p *eleFactory) Get() cluster.Xact                  { return p.xact }
-func (*eleFactory) PreRenewHook(_ xreg.GlobalEntry) bool { return true }
-func (*eleFactory) PostRenewHook(_ xreg.GlobalEntry)     {}
+func (*eleFactory) Kind() string        { return cmn.ActElection }
+func (p *eleFactory) Get() cluster.Xact { return p.xact }
 
 func (*Election) Run() { debug.Assert(false) }

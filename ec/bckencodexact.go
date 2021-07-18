@@ -45,7 +45,7 @@ var (
 // encFactory //
 ////////////////
 
-func (*encFactory) New(args xreg.Args) xreg.BucketEntry {
+func (*encFactory) New(args xreg.Args) xreg.Renewable {
 	custom := args.Custom.(*xreg.ECEncodeArgs)
 	return &encFactory{
 		t:     args.T,
@@ -62,7 +62,7 @@ func (p *encFactory) Start(bck cmn.Bck) error {
 func (*encFactory) Kind() string        { return cmn.ActECEncode }
 func (p *encFactory) Get() cluster.Xact { return p.xact }
 
-func (p *encFactory) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, err error) {
+func (p *encFactory) PreRenewHook(previousEntry xreg.Renewable) (keep bool, err error) {
 	// TODO: add more checks?
 	prev := previousEntry.(*encFactory)
 	if prev.phase == cmn.ActBegin && p.phase == cmn.ActCommit {

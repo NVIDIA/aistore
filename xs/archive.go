@@ -99,7 +99,7 @@ var (
 // archFactory //
 ////////////////
 
-func (*archFactory) New(args xreg.Args) xreg.BucketEntry {
+func (*archFactory) New(args xreg.Args) xreg.Renewable {
 	return &archFactory{t: args.T, uuid: args.UUID}
 }
 

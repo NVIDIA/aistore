@@ -19,8 +19,8 @@ import (
 
 type (
 	MovFactory struct {
-		xact *bckRename
-
+		xreg.BaseBckEntry
+		xact  *bckRename
 		t     cluster.Target
 		uuid  string
 		phase string
@@ -41,7 +41,7 @@ var (
 	_ xreg.BckFactory = (*MovFactory)(nil)
 )
 
-func (*MovFactory) New(args xreg.Args) xreg.BucketEntry {
+func (*MovFactory) New(args xreg.Args) xreg.Renewable {
 	return &MovFactory{
 		t:    args.T,
 		uuid: args.UUID,
@@ -57,7 +57,7 @@ func (p *MovFactory) Start(bck cmn.Bck) error {
 func (*MovFactory) Kind() string        { return cmn.ActMoveBck }
 func (p *MovFactory) Get() cluster.Xact { return p.xact }
 
-func (p *MovFactory) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, err error) {
+func (p *MovFactory) PreRenewHook(previousEntry xreg.Renewable) (keep bool, err error) {
 	if p.phase == cmn.ActBegin {
 		if !previousEntry.Get().Finished() {
 			err = fmt.Errorf("%s: cannot(%s=>%s) older rename still in progress", p.Kind(), p.args.BckFrom, p.args.BckTo)
@@ -76,8 +76,6 @@ func (p *MovFactory) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, er
 		p.Kind(), prev.args.BckFrom, prev.args.BckTo, prev.phase, p.phase, p.args.BckFrom)
 	return
 }
-
-func (*MovFactory) PostRenewHook(_ xreg.BucketEntry) {}
 
 func newBckRename(uuid, kind string, bck cmn.Bck, t cluster.Target, bckFrom, bckTo *cluster.Bck, rebID string) (x *bckRename) {
 	x = &bckRename{t: t, bckFrom: bckFrom, bckTo: bckTo, rebID: rebID}

@@ -74,7 +74,7 @@ func (xact *RebBase) initRebBase(id, kind string) {
 // Rebalance //
 ///////////////
 
-func (*rebFactory) New(args xreg.Args) xreg.GlobalEntry {
+func (*rebFactory) New(args xreg.Args) xreg.Renewable {
 	return &rebFactory{args: args.Custom.(*xreg.RebalanceArgs)}
 }
 
@@ -86,7 +86,7 @@ func (p *rebFactory) Start(_ cmn.Bck) error {
 func (*rebFactory) Kind() string        { return cmn.ActRebalance }
 func (p *rebFactory) Get() cluster.Xact { return p.xact }
 
-func (p *rebFactory) PreRenewHook(previousEntry xreg.GlobalEntry) (keep bool) {
+func (p *rebFactory) PreRenewHook(previousEntry xreg.Renewable) (keep bool, err error) {
 	xreb := previousEntry.(*rebFactory)
 	if xreb.args.ID > p.args.ID {
 		glog.Errorf("(reb: %s) %s is greater than %s", xreb.xact, xreb.args.ID, p.args.ID)
@@ -100,7 +100,7 @@ func (p *rebFactory) PreRenewHook(previousEntry xreg.GlobalEntry) (keep bool) {
 	return
 }
 
-func (*rebFactory) PostRenewHook(previousEntry xreg.GlobalEntry) {
+func (*rebFactory) PostRenewHook(previousEntry xreg.Renewable) {
 	xreb := previousEntry.(*rebFactory).xact
 	xreb.Abort()
 	xreb.WaitForFinish()
@@ -143,7 +143,7 @@ func (xact *Rebalance) Stats() cluster.XactStats {
 // Resilver //
 //////////////
 
-func (*resilverFactory) New(args xreg.Args) xreg.GlobalEntry {
+func (*resilverFactory) New(args xreg.Args) xreg.Renewable {
 	return &resilverFactory{id: args.UUID}
 }
 
@@ -152,11 +152,12 @@ func (p *resilverFactory) Start(_ cmn.Bck) error {
 	return nil
 }
 
-func (*resilverFactory) Kind() string                         { return cmn.ActResilver }
-func (p *resilverFactory) Get() cluster.Xact                  { return p.xact }
-func (*resilverFactory) PreRenewHook(_ xreg.GlobalEntry) bool { return false }
+func (*resilverFactory) Kind() string        { return cmn.ActResilver }
+func (p *resilverFactory) Get() cluster.Xact { return p.xact }
 
-func (*resilverFactory) PostRenewHook(previousEntry xreg.GlobalEntry) {
+func (*resilverFactory) PreRenewHook(xreg.Renewable) (bool, error) { return false, nil }
+
+func (*resilverFactory) PostRenewHook(previousEntry xreg.Renewable) {
 	xresilver := previousEntry.(*resilverFactory).xact
 	xresilver.Abort()
 	xresilver.WaitForFinish()

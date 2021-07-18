@@ -31,6 +31,7 @@ const (
 
 type (
 	cpyFactory struct {
+		xreg.BaseBckEntry
 		xact  *XactTransCpyBck
 		t     cluster.Target
 		uuid  string
@@ -84,7 +85,7 @@ func freeCpObjParams(a *cluster.CopyObjectParams) {
 // cpyFactory //
 ////////////////
 
-func (e *cpyFactory) New(args xreg.Args) xreg.BucketEntry {
+func (e *cpyFactory) New(args xreg.Args) xreg.Renewable {
 	custom := args.Custom.(*xreg.TransCpyBckArgs)
 	return &cpyFactory{t: args.T, uuid: args.UUID, kind: e.kind, phase: custom.Phase, args: custom}
 }
@@ -132,7 +133,7 @@ func (e *cpyFactory) newDM(rebcfg *cmn.RebalanceConf, uuid string, sizePDU int32
 func (e *cpyFactory) Kind() string      { return e.kind }
 func (e *cpyFactory) Get() cluster.Xact { return e.xact }
 
-func (e *cpyFactory) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, err error) {
+func (e *cpyFactory) PreRenewHook(previousEntry xreg.Renewable) (keep bool, err error) {
 	prev := previousEntry.(*cpyFactory)
 	if e.uuid != prev.uuid {
 		err = fmt.Errorf("%s(%+v) != %s(%+v)", e.uuid, e.args, prev.uuid, prev.args)
@@ -145,8 +146,6 @@ func (e *cpyFactory) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, er
 	keep = true
 	return
 }
-
-func (*cpyFactory) PostRenewHook(_ xreg.BucketEntry) {}
 
 /////////////////////
 // XactTransCpyBck //

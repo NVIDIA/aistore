@@ -40,6 +40,15 @@ type (
 		Kind() string
 		Get() cluster.Xact
 	}
+	Renewable interface {
+		BaseEntry
+		// pre-renew: returns true iff the current active one exists and is either
+		// - ok to keep running as is, or
+		// - has been renew(ed) and is still ok
+		PreRenewHook(previousEntry Renewable) (keep bool, err error)
+		// post-renew hook
+		PostRenewHook(previousEntry Renewable)
+	}
 
 	// used in constructions
 	Args struct {
@@ -390,14 +399,14 @@ func (r *registry) hkDelOld() time.Duration {
 	return delOldInterval
 }
 
-func (r *registry) renewBckXact(entry BucketEntry, bck *cluster.Bck, uuids ...string) (res RenewRes) {
-	var uuid string
+func (r *registry) renew(entry Renewable, bck *cluster.Bck, uuids ...string) (res RenewRes) {
+	flt := XactFilter{Kind: entry.Kind(), Bck: bck}
 	if len(uuids) != 0 {
-		uuid = uuids[0]
+		flt.ID = uuids[0]
 	}
 	r.mtx.RLock()
-	if e := r.getRunning(XactFilter{ID: uuid, Kind: entry.Kind(), Bck: bck}); e != nil {
-		prevEntry := e.(BucketEntry)
+	if e := r.getRunning(flt); e != nil {
+		prevEntry := e.(Renewable)
 		if keep, err := entry.PreRenewHook(prevEntry); keep || err != nil {
 			r.mtx.RUnlock()
 			xact := prevEntry.Get()
@@ -408,61 +417,25 @@ func (r *registry) renewBckXact(entry BucketEntry, bck *cluster.Bck, uuids ...st
 
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
-	var (
-		running   = false
-		prevEntry BucketEntry
-	)
-	if e := r.getRunning(XactFilter{ID: uuid, Kind: entry.Kind(), Bck: bck}); e != nil {
-		prevEntry = e.(BucketEntry)
-		running = true
+	var prevEntry Renewable
+	if e := r.getRunning(flt); e != nil {
+		prevEntry = e.(Renewable)
 		if keep, err := entry.PreRenewHook(prevEntry); keep || err != nil {
 			xact := prevEntry.Get()
 			return RenewRes{Entry: prevEntry, Err: err, UUID: xact.ID()}
 		}
 	}
-
-	if err := entry.Start(bck.Bck); err != nil {
+	var err error
+	if bck == nil {
+		err = entry.Start(cmn.Bck{}) // global xaction
+	} else {
+		entry.Start(bck.Bck) // bucket xaction
+	}
+	if err != nil {
 		return RenewRes{Entry: nil, Err: err, UUID: ""}
 	}
 	r.add(entry)
-	if running {
-		entry.PostRenewHook(prevEntry)
-	}
-	return RenewRes{Entry: entry, Err: nil, UUID: ""}
-}
-
-func (r *registry) renewGlobalXaction(entry GlobalEntry) RenewRes {
-	r.mtx.RLock()
-	if e := r.getRunning(XactFilter{Kind: entry.Kind()}); e != nil {
-		prevEntry := e.(GlobalEntry)
-		if entry.PreRenewHook(prevEntry) {
-			r.mtx.RUnlock()
-			xact := prevEntry.Get()
-			return RenewRes{Entry: prevEntry, Err: nil, UUID: xact.ID()}
-		}
-	}
-	r.mtx.RUnlock()
-
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
-	var (
-		running   = false
-		prevEntry GlobalEntry
-	)
-	if e := r.getRunning(XactFilter{Kind: entry.Kind()}); e != nil {
-		prevEntry = e.(GlobalEntry)
-		running = true
-		if entry.PreRenewHook(prevEntry) {
-			xact := prevEntry.Get()
-			return RenewRes{Entry: prevEntry, Err: nil, UUID: xact.ID()}
-		}
-	}
-
-	if err := entry.Start(cmn.Bck{}); err != nil {
-		return RenewRes{Entry: nil, Err: err, UUID: ""}
-	}
-	r.add(entry)
-	if running {
+	if prevEntry != nil {
 		entry.PostRenewHook(prevEntry)
 	}
 	return RenewRes{Entry: entry, Err: nil, UUID: ""}

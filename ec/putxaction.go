@@ -57,7 +57,7 @@ var (
 // putFactory //
 ////////////////
 
-func (*putFactory) New(xreg.Args) xreg.BucketEntry { return &putFactory{} }
+func (*putFactory) New(xreg.Args) xreg.Renewable { return &putFactory{} }
 
 func (p *putFactory) Start(bck cmn.Bck) error {
 	var (

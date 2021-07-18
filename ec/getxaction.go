@@ -21,7 +21,7 @@ import (
 )
 
 type (
-	// Implements `xreg.BucketEntry` and `xreg.BckFactory` interface.
+	// Implements `xreg.Renewable` and `xreg.BckFactory` interface.
 	getFactory struct {
 		xreg.BaseBckEntry
 		xact *XactGet
@@ -56,7 +56,7 @@ var (
 // getFactory //
 ////////////////
 
-func (*getFactory) New(xreg.Args) xreg.BucketEntry { return &getFactory{} }
+func (*getFactory) New(xreg.Args) xreg.Renewable { return &getFactory{} }
 
 func (p *getFactory) Start(bck cmn.Bck) error {
 	var (

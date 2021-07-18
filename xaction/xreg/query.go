@@ -45,7 +45,7 @@ func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.Ob
 		return RenewRes{&DummyEntry{nil}, err, msg.UUID}
 	}
 	e := &queEntry{ctx: ctx, t: t, query: q, msg: msg}
-	return r.renewBckXact(e, q.BckSource.Bck)
+	return r.renew(e, q.BckSource.Bck)
 }
 
 //////////////
@@ -64,6 +64,6 @@ func (e *queEntry) Start(_ cmn.Bck) (err error) {
 func (*queEntry) Kind() string        { return cmn.ActQueryObjects }
 func (e *queEntry) Get() cluster.Xact { return e.xact }
 
-func (e *queEntry) PreRenewHook(_ BucketEntry) (keep bool, err error) {
+func (e *queEntry) PreRenewHook(Renewable) (keep bool, err error) {
 	return query.Registry.Get(e.msg.UUID) != nil, nil
 }

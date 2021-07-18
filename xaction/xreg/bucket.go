@@ -22,21 +22,11 @@ type (
 		xact cluster.Xact
 	}
 
-	BucketEntry interface {
-		BaseEntry
-		// pre-renew: returns true iff the current active one exists and is either
-		// - ok to keep running as is, or
-		// - has been renew(ed) and is still ok
-		PreRenewHook(previousEntry BucketEntry) (keep bool, err error)
-		// post-renew hook
-		PostRenewHook(previousEntry BucketEntry)
-	}
-
-	// BckFactory is an interface to provider a new instance of BucketEntry interface.
+	// BckFactory is an interface to provider a new instance of Renewable interface.
 	BckFactory interface {
 		// New should create empty stub for bucket xaction that could be started
 		// with `Start()` method.
-		New(args Args) BucketEntry
+		New(args Args) Renewable
 		Kind() string
 	}
 
@@ -74,13 +64,13 @@ type (
 // BaseBckEntry //
 //////////////////
 
-func (*BaseBckEntry) PreRenewHook(previousEntry BucketEntry) (keep bool, err error) {
+func (*BaseBckEntry) PreRenewHook(previousEntry Renewable) (keep bool, err error) {
 	e := previousEntry.Get()
 	_, keep = e.(xaction.XactDemand)
 	return
 }
 
-func (*BaseBckEntry) PostRenewHook(_ BucketEntry) {}
+func (*BaseBckEntry) PostRenewHook(Renewable) {}
 
 ////////////////
 // DummyEntry //
@@ -118,7 +108,7 @@ func RenewBucketXact(kind string, bck *cluster.Bck, args Args) (res RenewRes) {
 
 func (r *registry) renewBucketXact(kind string, bck *cluster.Bck, args Args) (res RenewRes) {
 	e := r.bckXacts[kind].New(args)
-	res = r.renewBckXact(e, bck)
+	res = r.renew(e, bck)
 	if res.Err != nil {
 		return
 	}
@@ -181,7 +171,7 @@ func RenewBckMakeNCopies(t cluster.Target, bck *cluster.Bck, uuid, tag string, c
 
 func (r *registry) renewBckMakeNCopies(t cluster.Target, bck *cluster.Bck, uuid, tag string, copies int) (res RenewRes) {
 	e := r.bckXacts[cmn.ActMakeNCopies].New(Args{t, uuid, &MNCArgs{tag, copies}})
-	res = r.renewBckXact(e, bck)
+	res = r.renew(e, bck)
 	if res.Err != nil {
 		return
 	}
@@ -247,7 +237,7 @@ func (r *registry) renewObjList(t cluster.Target, bck *cluster.Bck, uuid string,
 	xact := r.getXact(uuid)
 	if xact == nil || xact.Finished() {
 		e := r.bckXacts[cmn.ActList].New(Args{T: t, UUID: uuid, Custom: msg})
-		return r.renewBckXact(e, bck, uuid)
+		return r.renew(e, bck, uuid)
 	}
 	return RenewRes{&DummyEntry{xact}, nil, uuid}
 }

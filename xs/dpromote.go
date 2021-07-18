@@ -48,7 +48,7 @@ var (
 // proFactory //
 ////////////////
 
-func (*proFactory) New(args xreg.Args) xreg.BucketEntry {
+func (*proFactory) New(args xreg.Args) xreg.Renewable {
 	c := args.Custom.(*xreg.DirPromoteArgs)
 	return &proFactory{t: args.T, dir: c.Dir, params: c.Params}
 }
