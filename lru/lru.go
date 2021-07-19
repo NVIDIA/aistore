@@ -105,7 +105,7 @@ type (
 	}
 
 	Xaction struct {
-		xaction.XactDemandBase
+		xaction.DemandBase
 		Renewed           chan struct{}
 		OkRemoveMisplaced func() bool
 	}
@@ -113,8 +113,8 @@ type (
 
 // interface guard
 var (
-	_ xaction.XactDemand = (*Xaction)(nil)
-	_ xreg.Factory       = (*Factory)(nil)
+	_ xaction.Demand = (*Xaction)(nil)
+	_ xreg.Factory   = (*Factory)(nil)
 )
 
 func init() { xreg.RegGlobXact(&Factory{}) }
@@ -128,8 +128,8 @@ func (p *Factory) Start(_ cmn.Bck) error {
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
 	)
 	p.xact = &Xaction{
-		XactDemandBase: *xaction.NewXDB(p.id, cmn.ActLRU, nil, totallyIdle, likelyIdle),
-		Renewed:        make(chan struct{}, 10),
+		DemandBase: *xaction.NewXDB(p.id, cmn.ActLRU, nil, totallyIdle, likelyIdle),
+		Renewed:    make(chan struct{}, 10),
 		OkRemoveMisplaced: func() bool {
 			g, l := xreg.GetRebMarked(), xreg.GetResilverMarked()
 			return !g.Interrupted && !l.Interrupted && g.Xact == nil && l.Xact == nil
@@ -175,7 +175,7 @@ func Run(ini *InitLRU) {
 	providers = cmn.Providers.ToSlice()
 
 repeat:
-	xlru.XactDemandBase.IncPending()
+	xlru.DemandBase.IncPending()
 	fail := atomic.Bool{}
 	for _, j := range joggers {
 		parent.wg.Add(1)
@@ -218,7 +218,7 @@ repeat:
 		return
 	}
 	// linger for a while and circle back if renewed
-	xlru.XactDemandBase.DecPending()
+	xlru.DemandBase.DecPending()
 	select {
 	case <-xlru.IdleTimer():
 		xlru.stop()
@@ -242,12 +242,12 @@ func (*Xaction) Run()     { debug.Assert(false) }
 func (r *Xaction) Renew() { r.Renewed <- struct{}{} }
 
 func (r *Xaction) stop() {
-	r.XactDemandBase.Stop()
+	r.DemandBase.Stop()
 	r.Finish(nil)
 }
 
 func (r *Xaction) Stats() cluster.XactStats {
-	baseStats := r.XactDemandBase.Stats().(*xaction.BaseXactStatsExt)
+	baseStats := r.DemandBase.Stats().(*xaction.BaseXactStatsExt)
 	baseStats.Ext = &xaction.BaseXactDemandStatsExt{IsIdle: r.Pending() == 0}
 	return baseStats
 }

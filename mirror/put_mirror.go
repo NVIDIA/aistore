@@ -36,7 +36,7 @@ type (
 	}
 	XactPut struct {
 		// implements cluster.Xact interface
-		xaction.XactDemandBase
+		xaction.DemandBase
 		// runtime
 		workers *mpather.WorkerGroup
 		workCh  chan cluster.LIF
@@ -87,9 +87,9 @@ func runXactPut(lom *cluster.LOM, slab *memsys.Slab, t cluster.Target) (r *XactP
 	}
 	bck := lom.Bucket()
 	r = &XactPut{
-		XactDemandBase: *xaction.NewXDB(cos.GenUUID(), cmn.ActPutCopies, &bck),
-		mirror:         mirror,
-		workCh:         make(chan cluster.LIF, mirror.Burst),
+		DemandBase: *xaction.NewXDB(cos.GenUUID(), cmn.ActPutCopies, &bck),
+		mirror:     mirror,
+		workCh:     make(chan cluster.LIF, mirror.Burst),
 	}
 	r.InitIdle()
 
@@ -179,7 +179,7 @@ func (r *XactPut) Repl(lom *cluster.LOM) {
 }
 
 func (r *XactPut) stop() (err error) {
-	r.XactDemandBase.Stop()
+	r.DemandBase.Stop()
 	n := r.workers.Stop()
 	if nn := drainWorkCh(r.workCh); nn > 0 {
 		n += nn
@@ -192,7 +192,7 @@ func (r *XactPut) stop() (err error) {
 }
 
 func (r *XactPut) Stats() cluster.XactStats {
-	baseStats := r.XactDemandBase.Stats().(*xaction.BaseXactStatsExt)
+	baseStats := r.DemandBase.Stats().(*xaction.BaseXactStatsExt)
 	baseStats.Ext = &xaction.BaseXactDemandStatsExt{IsIdle: r.Pending() == 0}
 	return baseStats
 }

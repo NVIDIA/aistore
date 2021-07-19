@@ -35,8 +35,8 @@ type (
 
 // interface guard
 var (
-	_ xaction.XactDemand = (*XactRespond)(nil)
-	_ xreg.Factory       = (*rspFactory)(nil)
+	_ xaction.Demand = (*XactRespond)(nil)
+	_ xreg.Factory   = (*rspFactory)(nil)
 )
 
 ////////////////
@@ -54,7 +54,7 @@ func (p *rspFactory) Start(bck cmn.Bck) error {
 		totallyIdle = config.Timeout.SendFile.D()
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
 	)
-	xec.XactDemandBase = *xaction.NewXDB(cos.GenUUID(), p.Kind(), &bck, totallyIdle, likelyIdle)
+	xec.DemandBase = *xaction.NewXDB(cos.GenUUID(), p.Kind(), &bck, totallyIdle, likelyIdle)
 	xec.InitIdle()
 	p.xact = xec
 	go xec.Run()
@@ -240,12 +240,12 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 func (r *XactRespond) Stop(error) { r.Abort() }
 
 func (r *XactRespond) stop() {
-	r.XactDemandBase.Stop()
+	r.DemandBase.Stop()
 	r.Finish(nil)
 }
 
 func (r *XactRespond) Stats() cluster.XactStats {
-	baseStats := r.XactDemandBase.Stats().(*xaction.BaseXactStatsExt)
+	baseStats := r.DemandBase.Stats().(*xaction.BaseXactStatsExt)
 	baseStats.Ext = &xaction.BaseXactDemandStatsExt{IsIdle: r.Pending() == 0}
 	return baseStats
 }

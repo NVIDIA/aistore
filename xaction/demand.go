@@ -32,7 +32,7 @@ const (
 type (
 	// xaction that self-terminates after staying idle for a while
 	// with an added capability to renew itself and ref-count its pending work
-	XactDemand interface {
+	Demand interface {
 		cluster.Xact
 		IdleTimer() <-chan struct{}
 		IncPending()
@@ -43,7 +43,7 @@ type (
 		totally, likely time.Duration
 		ticks           *cos.StopCh
 	}
-	XactDemandBase struct {
+	DemandBase struct {
 		XactBase
 		pending atomic.Int64
 		active  atomic.Int64
@@ -53,12 +53,12 @@ type (
 	}
 )
 
-////////////////////
-// XactDemandBase //
-////////////////////
+////////////////
+// DemandBase //
+////////////////
 
 // NOTE: to fully initialize it, must call xact.InitIdle() upon return
-func NewXDB(uuid, kind string, bck *cmn.Bck, idleTimes ...time.Duration) (xdb *XactDemandBase) {
+func NewXDB(uuid, kind string, bck *cmn.Bck, idleTimes ...time.Duration) (xdb *DemandBase) {
 	var (
 		hkName          = kind + "/" + uuid
 		totally, likely = totallyIdle, likelyIdle
@@ -69,7 +69,7 @@ func NewXDB(uuid, kind string, bck *cmn.Bck, idleTimes ...time.Duration) (xdb *X
 		debug.Assert(totally > likely)
 		debug.Assert(likely > time.Second/10)
 	}
-	xdb = &XactDemandBase{
+	xdb = &DemandBase{
 		hkName: hkName,
 		idle:   idle{totally: totally, likely: likely, ticks: cos.NewStopCh()},
 	}
@@ -77,13 +77,13 @@ func NewXDB(uuid, kind string, bck *cmn.Bck, idleTimes ...time.Duration) (xdb *X
 	return
 }
 
-func (r *XactDemandBase) InitIdle() {
+func (r *DemandBase) InitIdle() {
 	r.active.Inc()
 	r.hkReg.Store(true)
 	hk.Reg(r.hkName, r.hkcb)
 }
 
-func (r *XactDemandBase) hkcb() time.Duration {
+func (r *DemandBase) hkcb() time.Duration {
 	if r.active.Swap(0) == 0 {
 		// NOTE: closing IdleTimer() channel signals a parent on-demand xaction
 		//       to finish and exit
@@ -92,28 +92,28 @@ func (r *XactDemandBase) hkcb() time.Duration {
 	return r.idle.totally
 }
 
-func (r *XactDemandBase) IdleTimer() <-chan struct{} { return r.idle.ticks.Listen() }
+func (r *DemandBase) IdleTimer() <-chan struct{} { return r.idle.ticks.Listen() }
 
-func (r *XactDemandBase) Pending() int64 { return r.pending.Load() }
-func (r *XactDemandBase) DecPending()    { r.SubPending(1) }
+func (r *DemandBase) Pending() int64 { return r.pending.Load() }
+func (r *DemandBase) DecPending()    { r.SubPending(1) }
 
-func (r *XactDemandBase) IncPending() {
+func (r *DemandBase) IncPending() {
 	debug.AssertMsg(r.hkReg.Load(), "unregistered at hk, forgot InitIdle?")
 	r.pending.Inc()
 	r.active.Inc()
 }
 
-func (r *XactDemandBase) SubPending(n int) {
+func (r *DemandBase) SubPending(n int) {
 	r.pending.Sub(int64(n))
 	debug.Assert(r.Pending() >= 0)
 }
 
-func (r *XactDemandBase) Stop() {
+func (r *DemandBase) Stop() {
 	hk.Unreg(r.hkName)
 	r.idle.ticks.Close()
 }
 
-func (r *XactDemandBase) Stats() cluster.XactStats {
+func (r *DemandBase) Stats() cluster.XactStats {
 	return &BaseXactStatsExt{
 		BaseXactStats: BaseXactStats{
 			IDX:         r.ID(),
@@ -128,7 +128,7 @@ func (r *XactDemandBase) Stats() cluster.XactStats {
 	}
 }
 
-func (r *XactDemandBase) Abort() {
+func (r *DemandBase) Abort() {
 	var err error
 	if !r.aborted.CAS(false, true) {
 		glog.Infof("already aborted: " + r.String())
@@ -144,7 +144,7 @@ func (r *XactDemandBase) Abort() {
 	glog.Infof("ABORT: " + r.String())
 }
 
-func (r *XactDemandBase) Finish(err error) {
+func (r *DemandBase) Finish(err error) {
 	if r.Aborted() {
 		return
 	}
@@ -158,7 +158,7 @@ func (r *XactDemandBase) Finish(err error) {
 
 // private: on-demand quiescence
 
-func (r *XactDemandBase) quicb(elapsed time.Duration /*accum. wait time*/) cluster.QuiRes {
+func (r *DemandBase) quicb(elapsed time.Duration /*accum. wait time*/) cluster.QuiRes {
 	switch {
 	case r.Pending() != 0:
 		debug.Assertf(r.Pending() > 0, "%s %d", r, r.Pending())
@@ -170,6 +170,6 @@ func (r *XactDemandBase) quicb(elapsed time.Duration /*accum. wait time*/) clust
 	}
 }
 
-func (r *XactDemandBase) likelyIdle() bool {
+func (r *DemandBase) likelyIdle() bool {
 	return r.Quiesce(likelyIdle, r.quicb) == cluster.QuiInactive
 }

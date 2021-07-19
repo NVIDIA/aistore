@@ -128,11 +128,11 @@ var (
 )
 
 type (
-	// Downloader implements the fs.PathRunner and demand.XactDemand interface.
+	// Downloader implements the fs.PathRunner and demand.Demand interface.
 	// When download related requests are made to AIS using the download endpoint,
 	// Downloader dispatches these requests to the corresponding jogger.
 	Downloader struct {
-		xaction.XactDemandBase
+		xaction.DemandBase
 
 		t          cluster.Target
 		statsT     stats.Tracker
@@ -175,9 +175,9 @@ type (
 
 // interface guard
 var (
-	_ xaction.XactDemand = (*Downloader)(nil)
-	_ xreg.Factory       = (*dowFactory)(nil)
-	_ io.ReadCloser      = (*progressReader)(nil)
+	_ xaction.Demand = (*Downloader)(nil)
+	_ xreg.Factory   = (*dowFactory)(nil)
+	_ io.ReadCloser  = (*progressReader)(nil)
 )
 
 func init() {
@@ -255,9 +255,9 @@ func (*Downloader) Name() string {
 
 func newDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
 	downloader := &Downloader{
-		XactDemandBase: *xaction.NewXDB(cos.GenUUID(), cmn.Download, &cmn.Bck{Provider: cmn.ProviderAIS}),
-		t:              t,
-		statsT:         statsT,
+		DemandBase: *xaction.NewXDB(cos.GenUUID(), cmn.Download, &cmn.Bck{Provider: cmn.ProviderAIS}),
+		t:          t,
+		statsT:     statsT,
 	}
 	downloader.dispatcher = newDispatcher(downloader)
 	downloader.InitIdle()
@@ -273,7 +273,7 @@ func (d *Downloader) Run() {
 
 // stop terminates the downloader and all dependent entities.
 func (d *Downloader) stop(err error) {
-	d.XactDemandBase.Stop()
+	d.DemandBase.Stop()
 	d.Finish(err)
 }
 
@@ -348,7 +348,7 @@ func (d *Downloader) checkJob(req *request) (*downloadJobInfo, error) {
 }
 
 func (d *Downloader) Stats() cluster.XactStats {
-	baseStats := d.XactDemandBase.Stats().(*xaction.BaseXactStatsExt)
+	baseStats := d.DemandBase.Stats().(*xaction.BaseXactStatsExt)
 	baseStats.Ext = &xaction.BaseXactDemandStatsExt{IsIdle: d.Pending() == 0}
 	return baseStats
 }

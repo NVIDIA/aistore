@@ -68,7 +68,7 @@ type (
 		refc atomic.Int32
 	}
 	XactPutArchive struct {
-		xaction.XactDemandBase
+		xaction.DemandBase
 		t       cluster.Target
 		bckFrom cmn.Bck
 		dm      *bundle.DataMover
@@ -113,11 +113,11 @@ func (p *archFactory) Start(bckFrom cmn.Bck) error {
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
 	)
 	r := &XactPutArchive{
-		XactDemandBase: *xaction.NewXDB(p.uuid, cmn.ActArchive, &bckFrom, totallyIdle, likelyIdle),
-		t:              p.t,
-		bckFrom:        bckFrom,
-		workCh:         make(chan *cmn.ArchiveMsg, maxNumInParallel),
-		config:         config,
+		DemandBase: *xaction.NewXDB(p.uuid, cmn.ActArchive, &bckFrom, totallyIdle, likelyIdle),
+		t:          p.t,
+		bckFrom:    bckFrom,
+		workCh:     make(chan *cmn.ArchiveMsg, maxNumInParallel),
+		config:     config,
 	}
 	r.pending.m = make(map[string]*archwi, maxNumInParallel)
 	p.xact = r
@@ -245,7 +245,7 @@ func (r *XactPutArchive) Run() {
 		}
 	}
 fin:
-	r.XactDemandBase.Stop()
+	r.DemandBase.Stop()
 
 	q := r.dm.Quiesce(r.config.Timeout.MaxKeepalive.D())
 	if err == nil {
@@ -352,7 +352,7 @@ func (r *XactPutArchive) fini(wi *archwi) (errCode int, err error) {
 }
 
 func (r *XactPutArchive) Stats() cluster.XactStats {
-	baseStats := r.XactDemandBase.Stats().(*xaction.BaseXactStatsExt)
+	baseStats := r.DemandBase.Stats().(*xaction.BaseXactStatsExt)
 	baseStats.Ext = &xaction.BaseXactDemandStatsExt{IsIdle: r.Pending() == 0}
 	return baseStats
 }

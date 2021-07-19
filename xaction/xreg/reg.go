@@ -110,7 +110,7 @@ type (
 func (*BaseEntry) WhenPrevIsRunning(prevEntry Renewable) (action WPR, err error) {
 	action = WprAbort
 	e := prevEntry.Get()
-	if _, ok := e.(xaction.XactDemand); ok {
+	if _, ok := e.(xaction.Demand); ok {
 		action = WprUse
 	}
 	return

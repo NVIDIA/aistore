@@ -93,7 +93,7 @@ func (r *registry) renewBucketXact(kind string, bck *cluster.Bck, args Args) (re
 		xact := res.Entry.Get()
 		// NOTE: make sure existing on-demand is active to prevent it from (idle) expiration
 		//       (see demand.go hkcb())
-		if xactDemand, ok := xact.(xaction.XactDemand); ok {
+		if xactDemand, ok := xact.(xaction.Demand); ok {
 			xactDemand.IncPending()
 			xactDemand.DecPending()
 		}

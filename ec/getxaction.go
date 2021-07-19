@@ -48,8 +48,8 @@ type (
 
 // interface guard
 var (
-	_ xaction.XactDemand = (*XactGet)(nil)
-	_ xreg.Factory       = (*getFactory)(nil)
+	_ xaction.Demand = (*XactGet)(nil)
+	_ xreg.Factory   = (*getFactory)(nil)
 )
 
 ////////////////
@@ -65,7 +65,7 @@ func (p *getFactory) Start(bck cmn.Bck) error {
 		totallyIdle = config.Timeout.SendFile.D()
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
 	)
-	xec.XactDemandBase = *xaction.NewXDB(cos.GenUUID(), p.Kind(), &bck, totallyIdle, likelyIdle)
+	xec.DemandBase = *xaction.NewXDB(cos.GenUUID(), p.Kind(), &bck, totallyIdle, likelyIdle)
 	xec.InitIdle()
 	p.xact = xec
 	go xec.Run()
@@ -220,7 +220,7 @@ func (r *XactGet) Run() {
 func (r *XactGet) Stop(error) { r.Abort() }
 
 func (r *XactGet) stop() {
-	r.XactDemandBase.Stop()
+	r.DemandBase.Stop()
 	for _, jog := range r.getJoggers {
 		jog.stop()
 	}
@@ -288,7 +288,7 @@ func (r *XactGet) removeMpath(mpath string) {
 }
 
 func (r *XactGet) Stats() cluster.XactStats {
-	baseStats := r.XactDemandBase.Stats().(*xaction.BaseXactStatsExt)
+	baseStats := r.DemandBase.Stats().(*xaction.BaseXactStatsExt)
 	st := r.stats.stats()
 	baseStats.Ext = &ExtECGetStats{
 		AvgTime:     cos.Duration(st.DecodeTime),

@@ -101,8 +101,8 @@ func newTargetLRUMock() *cluster.TargetMock {
 
 func newInitLRU(t cluster.Target) *lru.InitLRU {
 	xlru := &lru.Xaction{
-		XactDemandBase: *xaction.NewXDB(cos.GenUUID(), cmn.ActLRU, nil, 2*time.Second, time.Second),
-		Renewed:        make(chan struct{}, 8),
+		DemandBase: *xaction.NewXDB(cos.GenUUID(), cmn.ActLRU, nil, 2*time.Second, time.Second),
+		Renewed:    make(chan struct{}, 8),
 	}
 	xlru.InitIdle()
 	return &lru.InitLRU{

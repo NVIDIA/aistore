@@ -38,7 +38,7 @@ type (
 		msg  *cmn.SelectMsg
 	}
 	ObjListXact struct {
-		xaction.XactDemandBase
+		xaction.DemandBase
 		t   cluster.Target
 		bck *cluster.Bck
 		msg *cmn.SelectMsg
@@ -104,13 +104,13 @@ func newXact(t cluster.Target, bck cmn.Bck, smsg *cmn.SelectMsg, uuid string) *O
 		lastPage: make([]*cmn.BucketEntry, 0, cacheSize),
 	}
 	debug.Assert(xact.bck.Props != nil)
-	xact.XactDemandBase = *xaction.NewXDB(uuid, cmn.ActList, &bck, totallyIdle, likelyIdle)
+	xact.DemandBase = *xaction.NewXDB(uuid, cmn.ActList, &bck, totallyIdle, likelyIdle)
 	xact.InitIdle()
 	return xact
 }
 
 func (r *ObjListXact) String() string {
-	return fmt.Sprintf("%s: %s", r.t.Snode(), &r.XactDemandBase)
+	return fmt.Sprintf("%s: %s", r.t.Snode(), &r.DemandBase)
 }
 
 func (r *ObjListXact) Do(msg *cmn.SelectMsg) *Resp {
@@ -183,7 +183,7 @@ func (r *ObjListXact) stopWalk() {
 }
 
 func (r *ObjListXact) stop() {
-	r.XactDemandBase.Stop()
+	r.DemandBase.Stop()
 	r.stopCh.Close()
 	// NOTE: Not closing `r.workCh` as it potentially could result in "sending on closed channel" panic.
 	close(r.respCh)

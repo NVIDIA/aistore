@@ -49,8 +49,8 @@ type (
 
 // interface guard
 var (
-	_ xaction.XactDemand = (*XactPut)(nil)
-	_ xreg.Factory       = (*putFactory)(nil)
+	_ xaction.Demand = (*XactPut)(nil)
+	_ xreg.Factory   = (*putFactory)(nil)
 )
 
 ////////////////
@@ -66,7 +66,7 @@ func (p *putFactory) Start(bck cmn.Bck) error {
 		totallyIdle = config.Timeout.SendFile.D()
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
 	)
-	xec.XactDemandBase = *xaction.NewXDB(cos.GenUUID(), p.Kind(), &bck, totallyIdle, likelyIdle)
+	xec.DemandBase = *xaction.NewXDB(cos.GenUUID(), p.Kind(), &bck, totallyIdle, likelyIdle)
 	xec.InitIdle()
 	p.xact = xec
 	go xec.Run()
@@ -197,7 +197,7 @@ func (r *XactPut) mainLoop() {
 func (r *XactPut) Stop(error) { r.Abort() }
 
 func (r *XactPut) stop() {
-	r.XactDemandBase.Stop()
+	r.DemandBase.Stop()
 	for _, jog := range r.putJoggers {
 		jog.stop()
 	}
@@ -225,7 +225,7 @@ func (r *XactPut) cleanup(req *request, lom *cluster.LOM) {
 }
 
 func (r *XactPut) Stats() cluster.XactStats {
-	baseStats := r.XactDemandBase.Stats().(*xaction.BaseXactStatsExt)
+	baseStats := r.DemandBase.Stats().(*xaction.BaseXactStatsExt)
 	st := r.stats.stats()
 	baseStats.Ext = &ExtECPutStats{
 		AvgEncodeTime:  cos.Duration(st.EncodeTime),

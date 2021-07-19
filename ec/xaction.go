@@ -27,7 +27,7 @@ const (
 
 type (
 	xactECBase struct {
-		xaction.XactDemandBase
+		xaction.DemandBase
 		t cluster.Target
 
 		smap  cluster.Sowner // cluster map
