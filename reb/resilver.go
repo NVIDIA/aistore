@@ -36,14 +36,11 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xa
 		glog.Errorf("Cannot run resilver with less than 2 mountpaths (%d)", len(availablePaths))
 		return
 	}
-
 	if err := fs.PersistMarker(cmn.ResilverMarker); err != nil {
 		glog.Errorf("Failed to create resilver marker, err: %v", err)
 	}
 
 	xact := xreg.RenewResilver(id).(*xs.Resilver)
-	defer xact.MarkFinished()
-
 	if len(notifs) != 0 {
 		notifs[0].Xact = xact
 		xact.AddNotif(notifs[0])

@@ -28,8 +28,8 @@ type (
 		Err    error       `json:"error"`
 	}
 	bckSummaryTaskEntry struct {
+		BaseEntry
 		xact *bckSummaryTask
-
 		ctx  context.Context
 		t    cluster.Target
 		uuid string

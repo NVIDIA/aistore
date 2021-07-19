@@ -57,7 +57,7 @@ func (p *MovFactory) Start(bck cmn.Bck) error {
 func (*MovFactory) Kind() string        { return cmn.ActMoveBck }
 func (p *MovFactory) Get() cluster.Xact { return p.xact }
 
-func (p *MovFactory) PreRenewHook(prevEntry xreg.Renewable) (keep bool, err error) {
+func (p *MovFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	if p.phase == cmn.ActBegin {
 		if !prevEntry.Get().Finished() {
 			err = fmt.Errorf("%s: cannot(%s=>%s) older rename still in progress", p.Kind(), p.args.BckFrom, p.args.BckTo)
@@ -69,7 +69,7 @@ func (p *MovFactory) PreRenewHook(prevEntry xreg.Renewable) (keep bool, err erro
 	bckEq := prev.args.BckTo.Equal(p.args.BckTo, false /*sameID*/, false /* same backend */)
 	if prev.phase == cmn.ActBegin && p.phase == cmn.ActCommit && bckEq {
 		prev.phase = cmn.ActCommit // transition
-		keep = true
+		wpr = xreg.WprUse
 		return
 	}
 	err = fmt.Errorf("%s(%s=>%s, phase %s): cannot %s(=>%s)",

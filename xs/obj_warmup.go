@@ -52,7 +52,7 @@ func (*llcFactory) Kind() string        { return cmn.ActLoadLomCache }
 func (p *llcFactory) Get() cluster.Xact { return p.xact }
 
 // overriding default to keep the previous/current
-func (*llcFactory) PreRenewHook(xreg.Renewable) (bool, error) { return true, nil }
+func (*llcFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) { return xreg.WprUse, nil }
 
 /////////////
 // xactLLC //

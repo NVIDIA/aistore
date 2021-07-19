@@ -133,8 +133,8 @@ func (e *cpyFactory) newDM(rebcfg *cmn.RebalanceConf, uuid string, sizePDU int32
 func (e *cpyFactory) Kind() string      { return e.kind }
 func (e *cpyFactory) Get() cluster.Xact { return e.xact }
 
-func (e *cpyFactory) PreRenewHook(previousEntry xreg.Renewable) (keep bool, err error) {
-	prev := previousEntry.(*cpyFactory)
+func (e *cpyFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
+	prev := prevEntry.(*cpyFactory)
 	if e.uuid != prev.uuid {
 		err = fmt.Errorf("%s(%+v) != %s(%+v)", e.uuid, e.args, prev.uuid, prev.args)
 		return
@@ -143,7 +143,7 @@ func (e *cpyFactory) PreRenewHook(previousEntry xreg.Renewable) (keep bool, err 
 	debug.Assert(bckEq)
 	debug.Assert(prev.phase == cmn.ActBegin && e.phase == cmn.ActCommit)
 	prev.args.Phase = cmn.ActCommit // transition
-	keep = true
+	wpr = xreg.WprUse
 	return
 }
 

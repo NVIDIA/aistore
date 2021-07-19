@@ -62,12 +62,11 @@ func (p *encFactory) Start(bck cmn.Bck) error {
 func (*encFactory) Kind() string        { return cmn.ActECEncode }
 func (p *encFactory) Get() cluster.Xact { return p.xact }
 
-func (p *encFactory) PreRenewHook(previousEntry xreg.Renewable) (keep bool, err error) {
-	// TODO: add more checks?
-	prev := previousEntry.(*encFactory)
+func (p *encFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
+	prev := prevEntry.(*encFactory)
 	if prev.phase == cmn.ActBegin && p.phase == cmn.ActCommit {
 		prev.phase = cmn.ActCommit // transition
-		keep = true
+		wpr = xreg.WprUse
 		return
 	}
 	err = fmt.Errorf("%s(%s, phase %s): cannot %s", p.Kind(), prev.xact.Bck().Name, prev.phase, p.phase)

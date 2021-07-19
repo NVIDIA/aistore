@@ -23,6 +23,16 @@ const (
 	entryOldAge         = 1 * time.Hour    // the interval to keep for history
 	entriesCap          = 256              // initial capacity of registry entries
 	delOldThreshold     = 300              // the number of entries to trigger (housekeeping) cleanup
+	waitAbortDone       = 2 * time.Second
+)
+
+type WPR int
+
+const (
+	WprNone = WPR(iota)
+	WprAbort
+	WprUse
+	WprKeepAndStartNew
 )
 
 type (
@@ -33,12 +43,8 @@ type (
 	}
 	Renewable interface {
 		xrunner
-		// pre-renew: returns true iff the current active one exists and is either
-		// - ok to keep running as is, or
-		// - has been renew(ed) and is still ok
-		PreRenewHook(previousEntry Renewable) (keep bool, err error)
-		// post-renew hook
-		PostRenewHook(previousEntry Renewable)
+		// TODO -- FIXME: document
+		WhenPrevIsRunning(prevEntry Renewable) (action WPR, err error)
 	}
 	BaseEntry struct{}
 
@@ -101,13 +107,14 @@ type (
 // BaseEntry //
 ///////////////
 
-func (*BaseEntry) PreRenewHook(prevEntry Renewable) (keep bool, err error) {
+func (*BaseEntry) WhenPrevIsRunning(prevEntry Renewable) (action WPR, err error) {
+	action = WprAbort
 	e := prevEntry.Get()
-	_, keep = e.(xaction.XactDemand)
+	if _, ok := e.(xaction.XactDemand); ok {
+		action = WprUse
+	}
 	return
 }
-
-func (*BaseEntry) PostRenewHook(Renewable) {}
 
 //////////////////////
 // xaction registry //
@@ -408,15 +415,16 @@ func (r *registry) hkDelOld() time.Duration {
 	return delOldInterval
 }
 
-func (r *registry) renew(entry Renewable, bck *cluster.Bck, uuids ...string) (res RenewRes) {
+func (r *registry) renew(entry Renewable, bck *cluster.Bck, uuids ...string) (rns RenewRes) {
 	flt := XactFilter{Kind: entry.Kind(), Bck: bck}
 	if len(uuids) != 0 {
 		flt.ID = uuids[0]
 	}
+	// first, try to reuse under rlock
 	r.mtx.RLock()
 	if e := r.getRunning(flt); e != nil {
 		prevEntry := e.(Renewable)
-		if keep, err := entry.PreRenewHook(prevEntry); keep || err != nil {
+		if wpr, err := entry.WhenPrevIsRunning(prevEntry); wpr == WprUse || err != nil {
 			r.mtx.RUnlock()
 			xact := prevEntry.Get()
 			return RenewRes{Entry: prevEntry, Err: err, UUID: xact.ID()}
@@ -424,17 +432,33 @@ func (r *registry) renew(entry Renewable, bck *cluster.Bck, uuids ...string) (re
 	}
 	r.mtx.RUnlock()
 
+	// second
 	r.mtx.Lock()
-	defer r.mtx.Unlock()
-	var prevEntry Renewable
+	rns = r.renewLocked(entry, bck, flt)
+	r.mtx.Unlock()
+	return
+}
+
+func (r *registry) renewLocked(entry Renewable, bck *cluster.Bck, flt XactFilter) (rns RenewRes) {
+	var (
+		prevEntry Renewable
+		prevXact  cluster.Xact
+		wpr       WPR
+		err       error
+	)
 	if e := r.getRunning(flt); e != nil {
 		prevEntry = e.(Renewable)
-		if keep, err := entry.PreRenewHook(prevEntry); keep || err != nil {
-			xact := prevEntry.Get()
-			return RenewRes{Entry: prevEntry, Err: err, UUID: xact.ID()}
+		prevXact = prevEntry.Get()
+		wpr, err = entry.WhenPrevIsRunning(prevEntry)
+		if wpr == WprUse || err != nil {
+			return RenewRes{Entry: prevEntry, Err: err, UUID: prevXact.ID()}
 		}
+		debug.Assert(wpr == WprAbort || wpr == WprKeepAndStartNew)
 	}
-	var err error
+	if wpr == WprAbort {
+		prevXact.Abort()
+		time.Sleep(waitAbortDone) // TODO: better
+	}
 	if bck == nil {
 		err = entry.Start(cmn.Bck{}) // global xaction
 	} else {
@@ -444,9 +468,6 @@ func (r *registry) renew(entry Renewable, bck *cluster.Bck, uuids ...string) (re
 		return RenewRes{Entry: nil, Err: err, UUID: ""}
 	}
 	r.add(entry)
-	if prevEntry != nil {
-		entry.PostRenewHook(prevEntry)
-	}
 	return RenewRes{Entry: entry, Err: nil, UUID: ""}
 }
 

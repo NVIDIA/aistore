@@ -64,6 +64,10 @@ func (e *queEntry) Start(cmn.Bck) (err error) {
 func (*queEntry) Kind() string        { return cmn.ActQueryObjects }
 func (e *queEntry) Get() cluster.Xact { return e.xact }
 
-func (e *queEntry) PreRenewHook(Renewable) (keep bool, err error) {
-	return query.Registry.Get(e.msg.UUID) != nil, nil
+func (e *queEntry) WhenPrevIsRunning(Renewable) (wpr WPR, err error) {
+	wpr = WprKeepAndStartNew
+	if query.Registry.Get(e.msg.UUID) != nil {
+		wpr = WprUse
+	}
+	return
 }

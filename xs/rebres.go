@@ -7,7 +7,6 @@ package xs
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -24,7 +23,6 @@ type (
 	getMarked = func() xaction.XactMarked
 	RebBase   struct {
 		xaction.XactBase
-		wg *sync.WaitGroup
 	}
 	rebFactory struct {
 		xact *Rebalance
@@ -53,9 +51,7 @@ var (
 	_ xreg.Factory = (*rslvrFactory)(nil)
 )
 
-func (xact *RebBase) MarkFinished() { xact.wg.Done() }
-func (xact *RebBase) WaitFinished() { xact.wg.Wait() }
-func (*RebBase) Run()               { debug.Assert(false) }
+func (*RebBase) Run() { debug.Assert(false) }
 
 func (xact *RebBase) String() string {
 	s := xact.XactBase.String()
@@ -66,8 +62,6 @@ func (xact *RebBase) String() string {
 }
 
 func (xact *RebBase) initRebBase(id, kind string) {
-	xact.wg = &sync.WaitGroup{}
-	xact.wg.Add(1)
 	xact.InitBase(id, kind, nil)
 }
 
@@ -79,7 +73,7 @@ func (*rebFactory) New(args xreg.Args) xreg.Renewable {
 	return &rebFactory{args: args.Custom.(*xreg.RebalanceArgs)}
 }
 
-func (p *rebFactory) Start(_ cmn.Bck) error {
+func (p *rebFactory) Start(cmn.Bck) error {
 	p.xact = NewRebalance(p.args.ID, p.Kind(), p.args.StatTracker, xreg.GetRebMarked)
 	return nil
 }
@@ -87,24 +81,19 @@ func (p *rebFactory) Start(_ cmn.Bck) error {
 func (*rebFactory) Kind() string        { return cmn.ActRebalance }
 func (p *rebFactory) Get() cluster.Xact { return p.xact }
 
-func (p *rebFactory) PreRenewHook(prevEntry xreg.Renewable) (keep bool, err error) {
+func (p *rebFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	xreb := prevEntry.(*rebFactory)
+	wpr = xreg.WprAbort
 	if xreb.args.ID > p.args.ID {
 		glog.Errorf("(reb: %s) %s is greater than %s", xreb.xact, xreb.args.ID, p.args.ID)
-		keep = true
+		wpr = xreg.WprUse
 	} else if xreb.args.ID == p.args.ID {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s already running, nothing to do", xreb.xact)
 		}
-		keep = true
+		wpr = xreg.WprUse
 	}
 	return
-}
-
-func (*rebFactory) PostRenewHook(prevEntry xreg.Renewable) {
-	xreb := prevEntry.(*rebFactory).xact
-	xreb.Abort()
-	xreb.WaitFinished()
 }
 
 func NewRebalance(id, kind string, statTracker stats.Tracker, getMarked getMarked) (xact *Rebalance) {
@@ -153,14 +142,9 @@ func (p *rslvrFactory) Start(_ cmn.Bck) error {
 	return nil
 }
 
-func (*rslvrFactory) Kind() string        { return cmn.ActResilver }
-func (p *rslvrFactory) Get() cluster.Xact { return p.xact }
-
-func (*rslvrFactory) PostRenewHook(prevEntry xreg.Renewable) {
-	xres := prevEntry.(*rslvrFactory).xact
-	xres.Abort()
-	xres.WaitFinished()
-}
+func (*rslvrFactory) Kind() string                                       { return cmn.ActResilver }
+func (p *rslvrFactory) Get() cluster.Xact                                { return p.xact }
+func (*rslvrFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) { return xreg.WprAbort, nil }
 
 func NewResilver(uuid, kind string) (xact *Resilver) {
 	xact = &Resilver{}
