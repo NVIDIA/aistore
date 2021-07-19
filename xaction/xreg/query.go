@@ -24,7 +24,7 @@ type queEntry struct {
 
 // interface guard
 var (
-	_ xrunner = (*queEntry)(nil)
+	_ Renewable = (*queEntry)(nil)
 )
 
 func RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, msg *cmn.SelectMsg) RenewRes {
@@ -45,6 +45,8 @@ func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.Ob
 		return RenewRes{&DummyEntry{nil}, err, msg.UUID}
 	}
 	e := &queEntry{ctx: ctx, t: t, query: q, msg: msg}
+	xact := query.NewObjectsListing(e.ctx, e.t, e.query, e.msg)
+	e.xact = xact
 	return r.renew(e, q.BckSource.Bck)
 }
 
@@ -52,9 +54,7 @@ func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.Ob
 // queEntry //
 //////////////
 
-func (e *queEntry) Start(cmn.Bck) (err error) {
-	xact := query.NewObjectsListing(e.ctx, e.t, e.query, e.msg)
-	e.xact = xact
+func (e *queEntry) Start() (err error) {
 	if query.Registry.Get(e.msg.UUID) != nil {
 		err = fmt.Errorf("result set with handle %s already exists", e.msg.UUID)
 	}

@@ -48,13 +48,15 @@ var (
 // proFactory //
 ////////////////
 
-func (*proFactory) New(args xreg.Args) xreg.Renewable {
+func (*proFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 	c := args.Custom.(*xreg.DirPromoteArgs)
-	return &proFactory{t: args.T, dir: c.Dir, params: c.Params}
+	p := &proFactory{t: args.T, dir: c.Dir, params: c.Params}
+	p.Bck = bck
+	return p
 }
 
-func (p *proFactory) Start(bck cmn.Bck) error {
-	xact := NewXactDirPromote(p.dir, bck, p.t, p.params)
+func (p *proFactory) Start() error {
+	xact := NewXactDirPromote(p.dir, p.Bck.Bck, p.t, p.params)
 	go xact.Run()
 	p.xact = xact
 	return nil

@@ -45,17 +45,15 @@ var (
 // encFactory //
 ////////////////
 
-func (*encFactory) New(args xreg.Args) xreg.Renewable {
+func (*encFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 	custom := args.Custom.(*xreg.ECEncodeArgs)
-	return &encFactory{
-		t:     args.T,
-		uuid:  args.UUID,
-		phase: custom.Phase,
-	}
+	p := &encFactory{t: args.T, uuid: args.UUID, phase: custom.Phase}
+	p.Bck = bck
+	return p
 }
 
-func (p *encFactory) Start(bck cmn.Bck) error {
-	p.xact = NewXactBckEncode(bck, p.t, p.uuid)
+func (p *encFactory) Start() error {
+	p.xact = NewXactBckEncode(p.Bck.Bck, p.t, p.uuid)
 	return nil
 }
 

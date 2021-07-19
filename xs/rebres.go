@@ -69,11 +69,11 @@ func (xact *RebBase) initRebBase(id, kind string) {
 // Rebalance //
 ///////////////
 
-func (*rebFactory) New(args xreg.Args) xreg.Renewable {
+func (*rebFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
 	return &rebFactory{args: args.Custom.(*xreg.RebalanceArgs)}
 }
 
-func (p *rebFactory) Start(cmn.Bck) error {
+func (p *rebFactory) Start() error {
 	p.xact = NewRebalance(p.args.ID, p.Kind(), p.args.StatTracker, xreg.GetRebMarked)
 	return nil
 }
@@ -133,11 +133,11 @@ func (xact *Rebalance) Stats() cluster.XactStats {
 // Resilver //
 //////////////
 
-func (*rslvrFactory) New(args xreg.Args) xreg.Renewable {
+func (*rslvrFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
 	return &rslvrFactory{id: args.UUID}
 }
 
-func (p *rslvrFactory) Start(_ cmn.Bck) error {
+func (p *rslvrFactory) Start() error {
 	p.xact = NewResilver(p.id, p.Kind())
 	return nil
 }

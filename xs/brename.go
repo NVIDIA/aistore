@@ -41,16 +41,14 @@ var (
 	_ xreg.Factory = (*MovFactory)(nil)
 )
 
-func (*MovFactory) New(args xreg.Args) xreg.Renewable {
-	return &MovFactory{
-		t:    args.T,
-		uuid: args.UUID,
-		args: args.Custom.(*xreg.BckRenameArgs),
-	}
+func (*MovFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
+	p := &MovFactory{t: args.T, uuid: args.UUID, args: args.Custom.(*xreg.BckRenameArgs)}
+	p.Bck = bck
+	return p
 }
 
-func (p *MovFactory) Start(bck cmn.Bck) error {
-	p.xact = newBckRename(p.uuid, p.Kind(), bck, p.t, p.args.BckFrom, p.args.BckTo, p.args.RebID)
+func (p *MovFactory) Start() error {
+	p.xact = newBckRename(p.uuid, p.Kind(), p.Bck.Bck, p.t, p.args.BckFrom, p.args.BckTo, p.args.RebID)
 	return nil
 }
 

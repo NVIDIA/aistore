@@ -99,30 +99,32 @@ var (
 // archFactory //
 ////////////////
 
-func (*archFactory) New(args xreg.Args) xreg.Renewable {
-	return &archFactory{t: args.T, uuid: args.UUID}
+func (*archFactory) New(args xreg.Args, bckFrom *cluster.Bck) xreg.Renewable {
+	p := &archFactory{t: args.T, uuid: args.UUID}
+	p.Bck = bckFrom
+	return p
 }
 
 func (*archFactory) Kind() string        { return cmn.ActArchive }
 func (p *archFactory) Get() cluster.Xact { return p.xact }
 
-func (p *archFactory) Start(bckFrom cmn.Bck) error {
+func (p *archFactory) Start() error {
 	var (
 		config      = cmn.GCO.Get()
 		totallyIdle = config.Timeout.SendFile.D()
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
 	)
 	r := &XactPutArchive{
-		DemandBase: *xaction.NewXDB(p.uuid, cmn.ActArchive, &bckFrom, totallyIdle, likelyIdle),
+		DemandBase: *xaction.NewXDB(p.uuid, cmn.ActArchive, &p.Bck.Bck, totallyIdle, likelyIdle),
 		t:          p.t,
-		bckFrom:    bckFrom,
+		bckFrom:    p.Bck.Bck,
 		workCh:     make(chan *cmn.ArchiveMsg, maxNumInParallel),
 		config:     config,
 	}
 	r.pending.m = make(map[string]*archwi, maxNumInParallel)
 	p.xact = r
 	r.InitIdle()
-	if err := p.newDM(bckFrom, r); err != nil {
+	if err := p.newDM(p.Bck.Bck, r); err != nil {
 		return err
 	}
 	r.dm.SetXact(r)

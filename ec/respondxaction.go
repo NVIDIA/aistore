@@ -43,18 +43,23 @@ var (
 // rspFactory //
 ////////////////
 
-func (*rspFactory) New(xreg.Args) xreg.Renewable { return &rspFactory{} }
-func (*rspFactory) Kind() string                 { return cmn.ActECRespond }
-func (p *rspFactory) Get() cluster.Xact          { return p.xact }
+func (*rspFactory) New(_ xreg.Args, bck *cluster.Bck) xreg.Renewable {
+	p := &rspFactory{}
+	p.Bck = bck
+	return p
+}
 
-func (p *rspFactory) Start(bck cmn.Bck) error {
+func (*rspFactory) Kind() string        { return cmn.ActECRespond }
+func (p *rspFactory) Get() cluster.Xact { return p.xact }
+
+func (p *rspFactory) Start() error {
 	var (
-		xec         = ECM.NewRespondXact(bck)
+		xec         = ECM.NewRespondXact(p.Bck.Bck)
 		config      = cmn.GCO.Get()
 		totallyIdle = config.Timeout.SendFile.D()
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
 	)
-	xec.DemandBase = *xaction.NewXDB(cos.GenUUID(), p.Kind(), &bck, totallyIdle, likelyIdle)
+	xec.DemandBase = *xaction.NewXDB(cos.GenUUID(), p.Kind(), &p.Bck.Bck, totallyIdle, likelyIdle)
 	xec.InitIdle()
 	p.xact = xec
 	go xec.Run()

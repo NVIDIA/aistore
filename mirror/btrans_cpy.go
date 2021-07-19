@@ -85,12 +85,14 @@ func freeCpObjParams(a *cluster.CopyObjectParams) {
 // cpyFactory //
 ////////////////
 
-func (e *cpyFactory) New(args xreg.Args) xreg.Renewable {
+func (e *cpyFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 	custom := args.Custom.(*xreg.TransCpyBckArgs)
-	return &cpyFactory{t: args.T, uuid: args.UUID, kind: e.kind, phase: custom.Phase, args: custom}
+	p := &cpyFactory{t: args.T, uuid: args.UUID, kind: e.kind, phase: custom.Phase, args: custom}
+	p.Bck = bck
+	return p
 }
 
-func (e *cpyFactory) Start(cmn.Bck) error {
+func (e *cpyFactory) Start() error {
 	var (
 		config    = cmn.GCO.Get()
 		sizePDU   int32

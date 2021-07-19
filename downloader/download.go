@@ -128,12 +128,11 @@ var (
 )
 
 type (
-	// Downloader implements the fs.PathRunner and demand.Demand interface.
-	// When download related requests are made to AIS using the download endpoint,
+	// Downloader implements xaction.Demand interface.
+	// Upon getting requests via AIS download endpoint,
 	// Downloader dispatches these requests to the corresponding jogger.
 	Downloader struct {
 		xaction.DemandBase
-
 		t          cluster.Target
 		statsT     stats.Tracker
 		dispatcher *dispatcher
@@ -231,11 +230,11 @@ func (pr *progressReader) Close() error {
 // dowFactory //
 ////////////////
 
-func (*dowFactory) New(args xreg.Args) xreg.Renewable {
+func (*dowFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
 	return &dowFactory{t: args.T, statsT: args.Custom.(stats.Tracker)}
 }
 
-func (p *dowFactory) Start(_ cmn.Bck) error {
+func (p *dowFactory) Start() error {
 	xdl := newDownloader(p.t, p.statsT)
 	p.xact = xdl
 	go xdl.Run()

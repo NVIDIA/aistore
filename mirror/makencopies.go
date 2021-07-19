@@ -48,14 +48,16 @@ var (
 // mncFactory //
 ////////////////
 
-func (*mncFactory) New(args xreg.Args) xreg.Renewable {
-	return &mncFactory{t: args.T, uuid: args.UUID, args: *args.Custom.(*xreg.MNCArgs)}
+func (*mncFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
+	p := &mncFactory{t: args.T, uuid: args.UUID, args: *args.Custom.(*xreg.MNCArgs)}
+	p.Bck = bck
+	return p
 }
 
-func (p *mncFactory) Start(bck cmn.Bck) error {
+func (p *mncFactory) Start() error {
 	slab, err := p.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
 	cos.AssertNoErr(err)
-	p.xact = newXactMNC(bck, p, slab)
+	p.xact = newXactMNC(p.Bck.Bck, p, slab)
 	return nil
 }
 

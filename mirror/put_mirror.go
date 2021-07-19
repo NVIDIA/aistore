@@ -57,11 +57,13 @@ var (
 // putFactory //
 ////////////////
 
-func (*putFactory) New(args xreg.Args) xreg.Renewable {
-	return &putFactory{t: args.T, uuid: args.UUID, lom: args.Custom.(*cluster.LOM)}
+func (*putFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
+	p := &putFactory{t: args.T, uuid: args.UUID, lom: args.Custom.(*cluster.LOM)}
+	p.Bck = bck
+	return p
 }
 
-func (p *putFactory) Start(_ cmn.Bck) error {
+func (p *putFactory) Start() error {
 	slab, err := p.t.MMSA().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	cos.AssertNoErr(err)
 	xact, err := runXactPut(p.lom, slab, p.t)

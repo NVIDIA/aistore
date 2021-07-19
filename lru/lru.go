@@ -119,9 +119,9 @@ var (
 
 func init() { xreg.RegGlobXact(&Factory{}) }
 
-func (*Factory) New(args xreg.Args) xreg.Renewable { return &Factory{id: args.UUID} }
+func (*Factory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable { return &Factory{id: args.UUID} }
 
-func (p *Factory) Start(_ cmn.Bck) error {
+func (p *Factory) Start() error {
 	var (
 		config      = cmn.GCO.Get()
 		totallyIdle = config.Timeout.MaxHostBusy.D()

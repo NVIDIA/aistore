@@ -246,14 +246,16 @@ func parseTemplate(template string) (cos.ParsedTemplate, error) {
 // evict/delete //
 //////////////////
 
-func (p *evdFactory) New(args xreg.Args) xreg.Renewable {
+func (p *evdFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 	msg := args.Custom.(*cmn.ListRangeMsg)
 	debug.Assert(!msg.IsList() || !msg.HasTemplate())
-	return &evdFactory{xargs: args, kind: p.kind, msg: msg}
+	np := &evdFactory{xargs: args, kind: p.kind, msg: msg}
+	np.Bck = bck
+	return np
 }
 
-func (p *evdFactory) Start(bck cmn.Bck) error {
-	p.xact = newEvictDelete(&p.xargs, p.kind, bck, p.msg)
+func (p *evdFactory) Start() error {
+	p.xact = newEvictDelete(&p.xargs, p.kind, p.Bck.Bck, p.msg)
 	return nil
 }
 
@@ -304,14 +306,16 @@ func (r *evictDelete) do(lom *cluster.LOM, _ *lriterator) error {
 // prefetch //
 //////////////
 
-func (*prfFactory) New(args xreg.Args) xreg.Renewable {
+func (*prfFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 	msg := args.Custom.(*cmn.ListRangeMsg)
 	debug.Assert(!msg.IsList() || !msg.HasTemplate())
-	return &prfFactory{xargs: args, msg: msg}
+	np := &prfFactory{xargs: args, msg: msg}
+	np.Bck = bck
+	return np
 }
 
-func (p *prfFactory) Start(bck cmn.Bck) error {
-	b := cluster.NewBckEmbed(bck)
+func (p *prfFactory) Start() error {
+	b := cluster.NewBckEmbed(p.Bck.Bck)
 	if err := b.Init(p.xargs.T.Bowner()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			glog.Warning(err) // may show up later via ais/prxtrybck.go logic
@@ -322,7 +326,7 @@ func (p *prfFactory) Start(bck cmn.Bck) error {
 		glog.Errorf("bucket %q: can only prefetch remote buckets", b)
 		return fmt.Errorf("bucket %q: can only prefetch remote buckets", b)
 	}
-	p.xact = newPrefetch(&p.xargs, p.Kind(), bck, p.msg)
+	p.xact = newPrefetch(&p.xargs, p.Kind(), p.Bck.Bck, p.msg)
 	return nil
 }
 

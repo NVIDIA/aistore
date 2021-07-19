@@ -37,12 +37,14 @@ var (
 // llcFactory //
 ////////////////
 
-func (*llcFactory) New(args xreg.Args) xreg.Renewable {
-	return &llcFactory{t: args.T, uuid: args.UUID}
+func (*llcFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
+	p := &llcFactory{t: args.T, uuid: args.UUID}
+	p.Bck = bck
+	return p
 }
 
-func (p *llcFactory) Start(bck cmn.Bck) error {
-	xact := newXactLLC(p.t, p.uuid, bck)
+func (p *llcFactory) Start() error {
+	xact := newXactLLC(p.t, p.uuid, p.Bck.Bck)
 	p.xact = xact
 	go xact.Run()
 	return nil

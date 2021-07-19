@@ -55,12 +55,13 @@ type (
 
 // interface guard
 var (
-	_ xrunner = (*DummyEntry)(nil)
+	_ Renewable = (*DummyEntry)(nil)
 )
 
-func (*DummyEntry) Start(cmn.Bck) error { debug.Assert(false); return nil }
-func (*DummyEntry) Kind() string        { debug.Assert(false); return "" }
-func (d *DummyEntry) Get() cluster.Xact { return d.xact }
+func (*DummyEntry) Start() error                             { debug.Assert(false); return nil }
+func (*DummyEntry) Kind() string                             { debug.Assert(false); return "" }
+func (d *DummyEntry) Get() cluster.Xact                      { return d.xact }
+func (*DummyEntry) WhenPrevIsRunning(Renewable) (WPR, error) { return WprUse, nil }
 
 //////////////
 // registry //
@@ -84,7 +85,7 @@ func RenewBucketXact(kind string, bck *cluster.Bck, args Args) (res RenewRes) {
 }
 
 func (r *registry) renewBucketXact(kind string, bck *cluster.Bck, args Args) (res RenewRes) {
-	e := r.bckXacts[kind].New(args)
+	e := r.bckXacts[kind].New(args, bck)
 	res = r.renew(e, bck)
 	if res.Err != nil {
 		return
@@ -147,7 +148,7 @@ func RenewBckMakeNCopies(t cluster.Target, bck *cluster.Bck, uuid, tag string, c
 }
 
 func (r *registry) renewBckMakeNCopies(t cluster.Target, bck *cluster.Bck, uuid, tag string, copies int) (res RenewRes) {
-	e := r.bckXacts[cmn.ActMakeNCopies].New(Args{t, uuid, &MNCArgs{tag, copies}})
+	e := r.bckXacts[cmn.ActMakeNCopies].New(Args{t, uuid, &MNCArgs{tag, copies}}, bck)
 	res = r.renew(e, bck)
 	if res.Err != nil {
 		return
@@ -213,7 +214,7 @@ func RenewObjList(t cluster.Target, bck *cluster.Bck, uuid string, msg *cmn.Sele
 func (r *registry) renewObjList(t cluster.Target, bck *cluster.Bck, uuid string, msg *cmn.SelectMsg) RenewRes {
 	xact := r.getXact(uuid)
 	if xact == nil || xact.Finished() {
-		e := r.bckXacts[cmn.ActList].New(Args{T: t, UUID: uuid, Custom: msg})
+		e := r.bckXacts[cmn.ActList].New(Args{T: t, UUID: uuid, Custom: msg}, bck)
 		return r.renew(e, bck, uuid)
 	}
 	return RenewRes{&DummyEntry{xact}, nil, uuid}

@@ -46,7 +46,7 @@ type (
 
 // interface guard
 var (
-	_ xrunner = (*bckSummaryTaskEntry)(nil)
+	_ Renewable = (*bckSummaryTaskEntry)(nil)
 )
 
 func RenewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.BucketSummaryMsg) error {
@@ -61,9 +61,10 @@ func (r *registry) renewBckSummary(ctx context.Context, t cluster.Target, bck *c
 		return err
 	}
 	e := &bckSummaryTaskEntry{ctx: ctx, t: t, uuid: msg.UUID, msg: msg}
-	if err := e.Start(bck.Bck); err != nil {
-		return err
-	}
+	xact := &bckSummaryTask{t: e.t, msg: e.msg, ctx: e.ctx}
+	xact.InitBase(e.uuid, cmn.ActSummary, &bck.Bck)
+	e.xact = xact
+	e.Start()
 	r.add(e)
 	return nil
 }
@@ -72,11 +73,8 @@ func (r *registry) renewBckSummary(ctx context.Context, t cluster.Target, bck *c
 // bckSummaryTaskEntry //
 /////////////////////////
 
-func (e *bckSummaryTaskEntry) Start(bck cmn.Bck) error {
-	xact := &bckSummaryTask{t: e.t, msg: e.msg, ctx: e.ctx}
-	xact.InitBase(e.uuid, cmn.ActSummary, &bck)
-	e.xact = xact
-	go xact.Run()
+func (e *bckSummaryTaskEntry) Start() error {
+	go e.xact.Run()
 	return nil
 }
 

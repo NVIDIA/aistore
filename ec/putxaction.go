@@ -57,16 +57,20 @@ var (
 // putFactory //
 ////////////////
 
-func (*putFactory) New(xreg.Args) xreg.Renewable { return &putFactory{} }
+func (*putFactory) New(_ xreg.Args, bck *cluster.Bck) xreg.Renewable {
+	p := &putFactory{}
+	p.Bck = bck
+	return p
+}
 
-func (p *putFactory) Start(bck cmn.Bck) error {
+func (p *putFactory) Start() error {
 	var (
-		xec         = ECM.NewPutXact(bck)
+		xec         = ECM.NewPutXact(p.Bck.Bck)
 		config      = cmn.GCO.Get()
 		totallyIdle = config.Timeout.SendFile.D()
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
 	)
-	xec.DemandBase = *xaction.NewXDB(cos.GenUUID(), p.Kind(), &bck, totallyIdle, likelyIdle)
+	xec.DemandBase = *xaction.NewXDB(cos.GenUUID(), p.Kind(), &p.Bck.Bck, totallyIdle, likelyIdle)
 	xec.InitIdle()
 	p.xact = xec
 	go xec.Run()

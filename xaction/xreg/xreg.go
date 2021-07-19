@@ -36,22 +36,20 @@ const (
 )
 
 type (
-	xrunner interface {
-		Start(bck cmn.Bck) error // starts an xaction, will be called when entry is stored into registry
+	Renewable interface {
+		Start() error // starts an xaction, will be called when entry is stored into registry
 		Kind() string
 		Get() cluster.Xact
-	}
-	Renewable interface {
-		xrunner
-		// TODO -- FIXME: document
 		WhenPrevIsRunning(prevEntry Renewable) (action WPR, err error)
 	}
-	BaseEntry struct{}
+	BaseEntry struct {
+		Bck *cluster.Bck
+	}
 
 	// Factory is an interface to create Renewable instances
 	Factory interface {
 		// New creates xaction stub that can be `Start`-ed.
-		New(args Args) Renewable
+		New(args Args, bck *cluster.Bck) Renewable
 		Kind() string
 	}
 
@@ -71,9 +69,9 @@ type (
 
 	// Represents result of renewing given xaction.
 	RenewRes struct {
-		Entry xrunner // Depending on situation can be new or old entry.
-		Err   error   // Error that occurred during renewal.
-		UUID  string  // "" if a new entry has been created, ID of the existing xaction otherwise
+		Entry Renewable // Depending on situation can be new or old entry.
+		Err   error     // Error that occurred during renewal.
+		UUID  string    // "" if a new entry has been created, ID of the existing xaction otherwise
 	}
 	// Selects subset of xactions to abort.
 	abortArgs struct {
@@ -89,8 +87,8 @@ type (
 
 	entries struct {
 		mtx     sync.RWMutex
-		active  []xrunner // running entries - finished entries are gradually removed
-		entries []xrunner
+		active  []Renewable // running entries - finished entries are gradually removed
+		entries []Renewable
 	}
 	registry struct {
 		mtx sync.RWMutex // lock for transactions
@@ -145,7 +143,7 @@ func Reset() { defaultReg = newRegistry() } // tests only
 func GetXact(uuid string) (xact cluster.Xact) { return defaultReg.getXact(uuid) }
 
 func (r *registry) getXact(uuid string) (xact cluster.Xact) {
-	r.entries.forEach(func(entry xrunner) bool {
+	r.entries.forEach(func(entry Renewable) bool {
 		x := entry.Get()
 		if x != nil && x.ID() == uuid {
 			xact = x
@@ -167,23 +165,23 @@ func (r *registry) GetXactRunning(kind string) (xact cluster.Xact) {
 	return
 }
 
-func GetRunning(flt XactFilter) xrunner { return defaultReg.getRunning(flt) }
+func GetRunning(flt XactFilter) Renewable { return defaultReg.getRunning(flt) }
 
-func (r *registry) getRunning(flt XactFilter) xrunner {
+func (r *registry) getRunning(flt XactFilter) Renewable {
 	onl := true
 	flt.OnlyRunning = &onl
 	entry := r.entries.find(flt)
 	return entry
 }
 
-func GetLatest(flt XactFilter) xrunner { return defaultReg.getLatest(flt) }
+func GetLatest(flt XactFilter) Renewable { return defaultReg.getLatest(flt) }
 
-func (r *registry) getLatest(flt XactFilter) xrunner {
+func (r *registry) getLatest(flt XactFilter) Renewable {
 	entry := r.entries.find(flt)
 	return entry
 }
 
-func CheckBucketsBusy() (cause xrunner) {
+func CheckBucketsBusy() (cause Renewable) {
 	// These xactions have cluster-wide consequences: in general moving objects between targets.
 	busyXacts := []string{cmn.ActMoveBck, cmn.ActCopyBck, cmn.ActETLBck, cmn.ActECEncode}
 	for _, kind := range busyXacts {
@@ -303,7 +301,7 @@ func (r *registry) getStats(flt XactFilter) ([]cluster.XactStats, error) {
 }
 
 func (r *registry) abort(args abortArgs) {
-	r.entries.forEach(func(entry xrunner) bool {
+	r.entries.forEach(func(entry Renewable) bool {
 		xact := entry.Get()
 		if xact.Finished() {
 			return true
@@ -333,8 +331,8 @@ func (r *registry) abort(args abortArgs) {
 }
 
 func (r *registry) matchingXactsStats(match func(xact cluster.Xact) bool) []cluster.XactStats {
-	matchingEntries := make([]xrunner, 0, 20)
-	r.entries.forEach(func(entry xrunner) bool {
+	matchingEntries := make([]Renewable, 0, 20)
+	r.entries.forEach(func(entry Renewable) bool {
 		if !match(entry.Get()) {
 			return true
 		}
@@ -371,7 +369,7 @@ func (r *registry) hkDelInactive() time.Duration {
 	return delInactiveInterval
 }
 
-func (r *registry) add(entry xrunner) { r.entries.add(entry) }
+func (r *registry) add(entry Renewable) { r.entries.add(entry) }
 
 // FIXME: the logic here must be revisited and revised
 func (r *registry) hkDelOld() time.Duration {
@@ -380,7 +378,7 @@ func (r *registry) hkDelOld() time.Duration {
 		return delOldInterval
 	}
 	now := time.Now()
-	r.entries.forEach(func(entry xrunner) (ret bool) {
+	r.entries.forEach(func(entry Renewable) (ret bool) {
 		var (
 			xact = entry.Get()
 			eID  = xact.ID()
@@ -422,8 +420,7 @@ func (r *registry) renew(entry Renewable, bck *cluster.Bck, uuids ...string) (rn
 	}
 	// first, try to reuse under rlock
 	r.mtx.RLock()
-	if e := r.getRunning(flt); e != nil {
-		prevEntry := e.(Renewable)
+	if prevEntry := r.getRunning(flt); prevEntry != nil {
 		if wpr, err := entry.WhenPrevIsRunning(prevEntry); wpr == WprUse || err != nil {
 			r.mtx.RUnlock()
 			xact := prevEntry.Get()
@@ -434,20 +431,18 @@ func (r *registry) renew(entry Renewable, bck *cluster.Bck, uuids ...string) (rn
 
 	// second
 	r.mtx.Lock()
-	rns = r.renewLocked(entry, bck, flt)
+	rns = r.renewLocked(entry, flt)
 	r.mtx.Unlock()
 	return
 }
 
-func (r *registry) renewLocked(entry Renewable, bck *cluster.Bck, flt XactFilter) (rns RenewRes) {
+func (r *registry) renewLocked(entry Renewable, flt XactFilter) (rns RenewRes) {
 	var (
-		prevEntry Renewable
-		prevXact  cluster.Xact
-		wpr       WPR
-		err       error
+		prevXact cluster.Xact
+		wpr      WPR
+		err      error
 	)
-	if e := r.getRunning(flt); e != nil {
-		prevEntry = e.(Renewable)
+	if prevEntry := r.getRunning(flt); prevEntry != nil {
 		prevXact = prevEntry.Get()
 		wpr, err = entry.WhenPrevIsRunning(prevEntry)
 		if wpr == WprUse || err != nil {
@@ -459,12 +454,7 @@ func (r *registry) renewLocked(entry Renewable, bck *cluster.Bck, flt XactFilter
 		prevXact.Abort()
 		time.Sleep(waitAbortDone) // TODO: better
 	}
-	if bck == nil {
-		err = entry.Start(cmn.Bck{}) // global xaction
-	} else {
-		entry.Start(bck.Bck) // bucket xaction
-	}
-	if err != nil {
+	if err = entry.Start(); err != nil {
 		return RenewRes{Entry: nil, Err: err, UUID: ""}
 	}
 	r.add(entry)
@@ -477,11 +467,11 @@ func (r *registry) renewLocked(entry Renewable, bck *cluster.Bck, flt XactFilter
 
 func newRegistryEntries() *entries {
 	return &entries{
-		entries: make([]xrunner, 0, entriesCap),
+		entries: make([]Renewable, 0, entriesCap),
 	}
 }
 
-func (e *entries) findUnlocked(flt XactFilter) xrunner {
+func (e *entries) findUnlocked(flt XactFilter) Renewable {
 	if flt.OnlyRunning == nil {
 		// walk in reverse as there is a greater chance
 		// the one we are looking for is at the end
@@ -502,14 +492,14 @@ func (e *entries) findUnlocked(flt XactFilter) xrunner {
 	return nil
 }
 
-func (e *entries) find(flt XactFilter) (entry xrunner) {
+func (e *entries) find(flt XactFilter) (entry Renewable) {
 	e.mtx.RLock()
 	entry = e.findUnlocked(flt)
 	e.mtx.RUnlock()
 	return
 }
 
-func (e *entries) forEach(matcher func(entry xrunner) bool) {
+func (e *entries) forEach(matcher func(entry Renewable) bool) {
 	e.mtx.RLock()
 	defer e.mtx.RUnlock()
 	for _, entry := range e.entries {
@@ -560,7 +550,7 @@ func (e *entries) delInactive() {
 	}
 }
 
-func (e *entries) add(entry xrunner) {
+func (e *entries) add(entry Renewable) {
 	e.mtx.Lock()
 	e.active = append(e.active, entry)
 	e.entries = append(e.entries, entry)
@@ -592,7 +582,7 @@ func (rxf XactFilter) genericMatcher(xact cluster.Xact) bool {
 	return condition
 }
 
-func matchEntry(entry xrunner, flt XactFilter) (matches bool) {
+func matchEntry(entry Renewable, flt XactFilter) (matches bool) {
 	if flt.ID != "" {
 		return entry.Get().ID() == flt.ID
 	}

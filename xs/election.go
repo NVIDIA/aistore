@@ -30,9 +30,9 @@ var (
 	_ xreg.Factory = (*eleFactory)(nil)
 )
 
-func (*eleFactory) New(_ xreg.Args) xreg.Renewable { return &eleFactory{} }
+func (*eleFactory) New(xreg.Args, *cluster.Bck) xreg.Renewable { return &eleFactory{} }
 
-func (p *eleFactory) Start(_ cmn.Bck) error {
+func (p *eleFactory) Start() error {
 	p.xact = &Election{}
 	p.xact.InitBase(cos.GenUUID(), cmn.ActElection, nil)
 	return nil

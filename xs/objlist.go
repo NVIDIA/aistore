@@ -78,12 +78,14 @@ var (
 	_ xreg.Factory = (*olFactory)(nil)
 )
 
-func (*olFactory) New(args xreg.Args) xreg.Renewable {
-	return &olFactory{t: args.T, uuid: args.UUID, msg: args.Custom.(*cmn.SelectMsg)}
+func (*olFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
+	p := &olFactory{t: args.T, uuid: args.UUID, msg: args.Custom.(*cmn.SelectMsg)}
+	p.Bck = bck
+	return p
 }
 
-func (p *olFactory) Start(bck cmn.Bck) error {
-	p.xact = newXact(p.t, bck, p.msg, p.uuid)
+func (p *olFactory) Start() error {
+	p.xact = newXact(p.t, p.Bck.Bck, p.msg, p.uuid)
 	return nil
 }
 
