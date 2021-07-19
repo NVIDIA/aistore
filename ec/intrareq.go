@@ -33,8 +33,6 @@ type (
 	// An EC request sent via transport using Opaque field of transport.ObjHdr
 	// between targets inside a cluster
 	intraReq struct {
-		// Request type
-		act intraReqType
 		// Object metadata, used when a target copies replicas/slices after
 		// encoding or restoring the object data
 		meta *Metadata
@@ -60,7 +58,6 @@ var (
 // not exist
 func newIntraReq(act intraReqType, meta *Metadata, bck *cluster.Bck) *intraReq {
 	req := &intraReq{
-		act:    act,
 		meta:   meta,
 		exists: true,
 	}
@@ -75,15 +72,14 @@ func newIntraReq(act intraReqType, meta *Metadata, bck *cluster.Bck) *intraReq {
 
 func (r *intraReq) PackedSize() int {
 	if r.meta == nil {
-		// int8(type)+int8+int8+ptr_marker
-		return 4 + cos.SizeofI64
+		// int8+int8+ptr_marker
+		return 3 + cos.SizeofI64
 	}
-	// int8(type)+int8+int8+ptr_marker+sizeof(meta)
-	return r.meta.PackedSize() + 4 + cos.SizeofI64
+	// int8+int8+ptr_marker+sizeof(meta)
+	return r.meta.PackedSize() + 3 + cos.SizeofI64
 }
 
 func (r *intraReq) Pack(packer *cos.BytePack) {
-	packer.WriteByte(uint8(r.act))
 	packer.WriteBool(r.exists)
 	packer.WriteBool(r.isSlice)
 	packer.WriteUint64(r.bid)
@@ -100,10 +96,6 @@ func (r *intraReq) Unpack(unpacker *cos.ByteUnpack) error {
 		i   byte
 		err error
 	)
-	if i, err = unpacker.ReadByte(); err != nil {
-		return err
-	}
-	r.act = intraReqType(i)
 	if r.exists, err = unpacker.ReadBool(); err != nil {
 		return err
 	}

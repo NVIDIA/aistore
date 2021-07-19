@@ -109,7 +109,7 @@ func NewGetXact(t cluster.Target, bck cmn.Bck, mgr *Manager) *XactGet {
 func (r *XactGet) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *cluster.Bck, reader io.Reader) {
 	objName, objAttrs := hdr.ObjName, hdr.ObjAttrs
 	uname := unique(hdr.SID, bck, objName)
-	switch iReq.act {
+	switch hdr.Opcode {
 	// It is response to slice/replica request by an object
 	// restoration process. In this case there should exists
 	// a slice waiting for the data to come(registered with `regWriter`.
@@ -133,7 +133,7 @@ func (r *XactGet) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *cluste
 		}
 	default:
 		// should be unreachable
-		glog.Errorf("Invalid request: %d", iReq.act)
+		glog.Errorf("Invalid request: %d", hdr.Opcode)
 	}
 }
 

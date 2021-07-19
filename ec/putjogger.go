@@ -311,7 +311,7 @@ func (c *putJogger) cleanup(lom *cluster.LOM) error {
 	mm := c.parent.t.SmallMMSA()
 	request := newIntraReq(reqDel, nil, lom.Bck()).NewPack(mm)
 	o := transport.AllocSend()
-	o.Hdr = transport.ObjHdr{Bck: lom.Bucket(), ObjName: lom.ObjName, Opaque: request}
+	o.Hdr = transport.ObjHdr{Bck: lom.Bucket(), ObjName: lom.ObjName, Opaque: request, Opcode: reqDel}
 	o.Callback = c.ctSendCallback
 	c.parent.IncPending()
 	return c.parent.mgr.req().Send(o, nil, nodes...)

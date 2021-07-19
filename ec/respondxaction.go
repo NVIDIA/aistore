@@ -166,12 +166,11 @@ func (r *XactRespond) trySendCT(iReq intraReq, hdr *transport.ObjHdr, bck *clust
 
 // DispatchReq is responsible for handling request from other targets
 func (r *XactRespond) DispatchReq(iReq intraReq, hdr *transport.ObjHdr, bck *cluster.Bck) {
-	objName := hdr.ObjName
-	switch iReq.act {
+	switch hdr.Opcode {
 	case reqDel:
 		// object cleanup request: delete replicas, slices and metafiles
-		if err := r.removeObjAndMeta(bck, objName); err != nil {
-			glog.Errorf("%s failed to delete %s/%s: %v", r.t.Snode(), bck.Name, objName, err)
+		if err := r.removeObjAndMeta(bck, hdr.ObjName); err != nil {
+			glog.Errorf("%s failed to delete %s/%s: %v", r.t.Snode(), bck.Name, hdr.ObjName, err)
 		}
 	case reqGet:
 		err := r.trySendCT(iReq, hdr, bck)
@@ -180,14 +179,14 @@ func (r *XactRespond) DispatchReq(iReq intraReq, hdr *transport.ObjHdr, bck *clu
 		}
 	default:
 		// invalid request detected
-		glog.Errorf("Invalid request type %d", iReq.act)
+		glog.Errorf("Invalid request type %d", hdr.Opcode)
 	}
 }
 
 func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object io.Reader) {
 	r.IncPending()
 	defer r.DecPending() // no async operation, so DecPending is deferred
-	switch iReq.act {
+	switch hdr.Opcode {
 	case reqPut:
 		// a remote target sent a replica/slice while it was
 		// encoding or restoring an object. In this case it just saves
@@ -238,7 +237,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 		r.BytesAdd(hdr.ObjAttrs.Size)
 	default:
 		// should be unreachable
-		glog.Errorf("Invalid request type: %d", iReq.act)
+		glog.Errorf("Invalid request type: %d", hdr.Opcode)
 	}
 }
 

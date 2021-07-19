@@ -385,6 +385,7 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 		Bck:     ctx.lom.Bck().Bck,
 		ObjName: ctx.lom.ObjName,
 		Opaque:  request,
+		Opcode:  reqGet,
 	}
 
 	// Broadcast slice request and wait for targets to respond

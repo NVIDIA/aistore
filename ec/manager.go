@@ -261,7 +261,7 @@ func (mgr *Manager) recvResponse(hdr transport.ObjHdr, object io.Reader, err err
 			return
 		}
 	}
-	switch iReq.act {
+	switch hdr.Opcode {
 	case reqPut:
 		mgr.RestoreBckRespXact(bck).DispatchResp(iReq, &hdr, object)
 	case respPut:
@@ -269,7 +269,7 @@ func (mgr *Manager) recvResponse(hdr transport.ObjHdr, object io.Reader, err err
 		// (might've started when we had enough)
 		mgr.RestoreBckGetXact(bck).DispatchResp(iReq, &hdr, bck, object)
 	default:
-		glog.Errorf("unknown EC response action %d", iReq.act)
+		glog.Errorf("unknown EC response action %d", hdr.Opcode)
 		cos.DrainReader(object)
 	}
 }

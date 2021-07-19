@@ -198,6 +198,7 @@ func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn s
 		Bck:      bck.Bck,
 		ObjName:  objName,
 		ObjAttrs: objAttrs,
+		Opcode:   act,
 	}
 	rHdr.Opaque = ireq.NewPack(r.t.SmallMMSA())
 
@@ -266,6 +267,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 		Bck:     lom.Bucket(),
 		ObjName: lom.ObjName,
 		Opaque:  request,
+		Opcode:  reqGet,
 	}
 	sw := &slice{
 		writer: writer,
@@ -369,6 +371,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 		ObjName:  lom.ObjName,
 		ObjAttrs: objAttrs,
 		Opaque:   putData,
+		Opcode:   src.reqType,
 	}
 	oldCallback := cb
 	cb = func(hdr transport.ObjHdr, reader io.ReadCloser, arg interface{}, err error) {
