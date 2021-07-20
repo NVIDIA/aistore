@@ -22,7 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/xreg"
+	"github.com/NVIDIA/aistore/xreg"
 	"github.com/NVIDIA/aistore/xs"
 	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/sync/errgroup"

@@ -7,7 +7,7 @@ package xs
 
 import (
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/xaction/xreg"
+	"github.com/NVIDIA/aistore/xreg"
 )
 
 // for additional startup-time reg-s see lru, downloader, ec

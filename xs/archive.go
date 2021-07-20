@@ -25,7 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/xreg"
+	"github.com/NVIDIA/aistore/xreg"
 )
 
 const (
@@ -70,7 +70,7 @@ type (
 	XactPutArchive struct {
 		xaction.DemandBase
 		t       cluster.Target
-		bckFrom cmn.Bck
+		bckFrom *cluster.Bck
 		dm      *bundle.DataMover
 		workCh  chan *cmn.ArchiveMsg
 		pending struct {
@@ -117,14 +117,14 @@ func (p *archFactory) Start() error {
 	r := &XactPutArchive{
 		DemandBase: *xaction.NewXDB(p.uuid, cmn.ActArchive, p.Bck, totallyIdle, likelyIdle),
 		t:          p.t,
-		bckFrom:    p.Bck.Bck,
+		bckFrom:    p.Bck,
 		workCh:     make(chan *cmn.ArchiveMsg, maxNumInParallel),
 		config:     config,
 	}
 	r.pending.m = make(map[string]*archwi, maxNumInParallel)
 	p.xact = r
 	r.InitIdle()
-	if err := p.newDM(p.Bck.Bck, r); err != nil {
+	if err := p.newDM(p.Bck, r); err != nil {
 		return err
 	}
 	r.dm.SetXact(r)
@@ -134,7 +134,7 @@ func (p *archFactory) Start() error {
 	return nil
 }
 
-func (p *archFactory) newDM(bckFrom cmn.Bck, r *XactPutArchive) error {
+func (p *archFactory) newDM(bckFrom *cluster.Bck, r *XactPutArchive) error {
 	// NOTE: transport stream name
 	trname := "arch-" + bckFrom.Provider + "-" + bckFrom.Name
 	dm, err := bundle.NewDataMover(p.t, trname, r.recvObjDM, cluster.RegularPut, bundle.Extra{Multiplier: 1})
@@ -368,7 +368,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) error {
 		coldGet bool
 	)
 	debug.Assert(t == wi.r.t)
-	debug.Assert(wi.r.bckFrom.Equal(lom.Bucket()))
+	debug.Assert(wi.r.bckFrom.Bck.Equal(lom.Bucket()))
 	debug.Assert(lom.Bprops() != nil) // must be init-ed
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		if !cmn.IsObjNotExist(err) {
