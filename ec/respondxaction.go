@@ -23,7 +23,7 @@ import (
 
 type (
 	rspFactory struct {
-		xreg.BaseEntry
+		xreg.RenewBase
 		xact *XactRespond
 	}
 	// Xaction responsible for responding to EC requests of other targets.
@@ -44,8 +44,7 @@ var (
 ////////////////
 
 func (*rspFactory) New(_ xreg.Args, bck *cluster.Bck) xreg.Renewable {
-	p := &rspFactory{}
-	p.Bck = bck
+	p := &rspFactory{RenewBase: xreg.RenewBase{Bck: bck}}
 	return p
 }
 

@@ -22,10 +22,8 @@ import (
 
 type (
 	mncFactory struct {
-		xreg.BaseEntry
+		xreg.RenewBase
 		xact *xactMNC
-		t    cluster.Target
-		uuid string
 		args xreg.MNCArgs
 	}
 
@@ -49,13 +47,12 @@ var (
 ////////////////
 
 func (*mncFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
-	p := &mncFactory{t: args.T, uuid: args.UUID, args: *args.Custom.(*xreg.MNCArgs)}
-	p.Bck = bck
+	p := &mncFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, args: *args.Custom.(*xreg.MNCArgs)}
 	return p
 }
 
 func (p *mncFactory) Start() error {
-	slab, err := p.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
+	slab, err := p.T.MMSA().GetSlab(memsys.MaxPageSlabSize)
 	cos.AssertNoErr(err)
 	p.xact = newXactMNC(p.Bck, p, slab)
 	return nil
@@ -77,14 +74,14 @@ func newXactMNC(bck *cluster.Bck, p *mncFactory, slab *memsys.Slab) (r *xactMNC)
 	debug.Assert(r.tag != "" && r.copies > 0)
 	mpopts := &mpather.JoggerGroupOpts{
 		Bck:      bck.Bck,
-		T:        p.t,
+		T:        p.T,
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.visitObj,
 		Slab:     slab,
 		DoLoad:   mpather.Load, // Required to fetch `NumCopies()` and skip copies.
 		Throttle: true,
 	}
-	r.XactBckJog.Init(p.uuid, cmn.ActMakeNCopies, bck, mpopts)
+	r.XactBckJog.Init(p.UUID, cmn.ActMakeNCopies, bck, mpopts)
 	return
 }
 

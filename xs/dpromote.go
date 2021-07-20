@@ -25,9 +25,8 @@ import (
 
 type (
 	proFactory struct {
-		xreg.BaseEntry
+		xreg.RenewBase
 		xact   *XactDirPromote
-		t      cluster.Target
 		dir    string
 		params *cmn.ActValPromote
 	}
@@ -50,13 +49,12 @@ var (
 
 func (*proFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 	c := args.Custom.(*xreg.DirPromoteArgs)
-	p := &proFactory{t: args.T, dir: c.Dir, params: c.Params}
-	p.Bck = bck
+	p := &proFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, dir: c.Dir, params: c.Params}
 	return p
 }
 
 func (p *proFactory) Start() error {
-	xact := NewXactDirPromote(p.dir, p.Bck, p.t, p.params)
+	xact := NewXactDirPromote(p.dir, p.Bck, p.T, p.params)
 	go xact.Run()
 	p.xact = xact
 	return nil

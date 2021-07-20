@@ -43,15 +43,15 @@ type (
 		Get() cluster.Xact
 		WhenPrevIsRunning(prevEntry Renewable) (action WPR, err error)
 	}
-	BaseEntry struct {
-		Bck *cluster.Bck
-	}
-
 	// used in constructions
 	Args struct {
 		T      cluster.Target
 		UUID   string
 		Custom interface{} // Additional arguments that are specific for a given xaction.
+	}
+	RenewBase struct {
+		Args
+		Bck *cluster.Bck
 	}
 
 	XactFilter struct {
@@ -96,10 +96,10 @@ type (
 )
 
 ///////////////
-// BaseEntry //
+// RenewBase //
 ///////////////
 
-func (*BaseEntry) WhenPrevIsRunning(prevEntry Renewable) (action WPR, err error) {
+func (*RenewBase) WhenPrevIsRunning(prevEntry Renewable) (action WPR, err error) {
 	action = WprAbort
 	e := prevEntry.Get()
 	if _, ok := e.(xaction.Demand); ok {

@@ -51,7 +51,7 @@ type (
 	syncCallback func(tsi *cluster.Snode, md *rebArgs) (ok bool)
 	joggerBase   struct {
 		m    *Manager
-		xreb *xs.RebBase
+		xreb cluster.Xact
 		wg   *sync.WaitGroup
 	}
 
@@ -452,7 +452,7 @@ func (reb *Manager) retransmit(md *rebArgs) (cnt int) {
 	}
 	var (
 		rj = &rebJogger{joggerBase: joggerBase{
-			m: reb, xreb: &reb.xact().RebBase,
+			m: reb, xreb: reb.xact(),
 			wg: &sync.WaitGroup{},
 		}, smap: md.smap}
 		query  = url.Values{}

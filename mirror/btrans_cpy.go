@@ -31,10 +31,8 @@ const (
 
 type (
 	cpyFactory struct {
-		xreg.BaseEntry
+		xreg.RenewBase
 		xact  *XactTransCpyBck
-		t     cluster.Target
-		uuid  string
 		kind  string
 		phase string // (see "transition")
 		args  *xreg.TransCpyBckArgs
@@ -87,8 +85,7 @@ func freeCpObjParams(a *cluster.CopyObjectParams) {
 
 func (e *cpyFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 	custom := args.Custom.(*xreg.TransCpyBckArgs)
-	p := &cpyFactory{t: args.T, uuid: args.UUID, kind: e.kind, phase: custom.Phase, args: custom}
-	p.Bck = bck
+	p := &cpyFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: e.kind, phase: custom.Phase, args: custom}
 	return p
 }
 
@@ -96,7 +93,7 @@ func (e *cpyFactory) Start() error {
 	var (
 		config    = cmn.GCO.Get()
 		sizePDU   int32
-		slab, err = e.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
+		slab, err = e.T.MMSA().GetSlab(memsys.MaxPageSlabSize)
 	)
 	cos.AssertNoErr(err)
 	e.xact = newXactTransCpyBck(e, slab)
@@ -105,12 +102,12 @@ func (e *cpyFactory) Start() error {
 	}
 
 	// TODO -- FIXME: revisit
-	smap := e.t.Sowner().Get()
+	smap := e.T.Sowner().Get()
 	e.xact.refc.Store(int32(smap.CountTargets() - 1))
 	e.xact.wg.Add(1)
 
 	// TODO: using rebalance config for a DM that copies objects.
-	return e.newDM(&config.Rebalance, e.uuid, sizePDU)
+	return e.newDM(&config.Rebalance, e.UUID, sizePDU)
 }
 
 func (e *cpyFactory) newDM(rebcfg *cmn.RebalanceConf, uuid string, sizePDU int32) error {
@@ -121,7 +118,7 @@ func (e *cpyFactory) newDM(rebcfg *cmn.RebalanceConf, uuid string, sizePDU int32
 		Multiplier:  int(rebcfg.Multiplier), // ditto
 	}
 	dmExtra.SizePDU = sizePDU
-	dm, err := bundle.NewDataMover(e.t, trname+"_"+uuid, e.xact.recv, cluster.RegularPut, dmExtra)
+	dm, err := bundle.NewDataMover(e.T, trname+"_"+uuid, e.xact.recv, cluster.RegularPut, dmExtra)
 	if err != nil {
 		return err
 	}
@@ -137,8 +134,8 @@ func (e *cpyFactory) Get() cluster.Xact { return e.xact }
 
 func (e *cpyFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	prev := prevEntry.(*cpyFactory)
-	if e.uuid != prev.uuid {
-		err = fmt.Errorf("%s(%+v) != %s(%+v)", e.uuid, e.args, prev.uuid, prev.args)
+	if e.UUID != prev.UUID {
+		err = fmt.Errorf("%s(%+v) != %s(%+v)", e.UUID, e.args, prev.UUID, prev.args)
 		return
 	}
 	bckEq := prev.args.BckFrom.Equal(e.args.BckFrom, true /*same BID*/, true /* same backend */)
@@ -172,13 +169,13 @@ func (r *XactTransCpyBck) TxnAbort() {
 //
 func newXactTransCpyBck(e *cpyFactory, slab *memsys.Slab) (r *XactTransCpyBck) {
 	var parallel int
-	r = &XactTransCpyBck{t: e.t, args: *e.args}
+	r = &XactTransCpyBck{t: e.T, args: *e.args}
 	if e.kind == cmn.ActETLBck {
 		parallel = etlBucketParallelCnt // TODO: optimize with respect to disk bw and transforming computation
 	}
 	mpopts := &mpather.JoggerGroupOpts{
 		Bck:      e.args.BckFrom.Bck,
-		T:        e.t,
+		T:        e.T,
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.copyObject,
 		Slab:     slab,
@@ -186,7 +183,7 @@ func newXactTransCpyBck(e *cpyFactory, slab *memsys.Slab) (r *XactTransCpyBck) {
 		DoLoad:   mpather.Load,
 		Throttle: true,
 	}
-	r.XactBckJog.Init(e.uuid, e.kind, e.args.BckTo, mpopts)
+	r.XactBckJog.Init(e.UUID, e.kind, e.args.BckTo, mpopts)
 	return
 }
 

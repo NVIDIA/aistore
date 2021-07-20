@@ -34,10 +34,8 @@ const (
 
 type (
 	archFactory struct {
-		xreg.BaseEntry
+		xreg.RenewBase
 		xact *XactPutArchive
-		t    cluster.Target
-		uuid string
 	}
 	archWriter interface {
 		write(nameInArch string, oah cmn.ObjAttrsHolder, reader io.Reader) error
@@ -99,9 +97,8 @@ var (
 // archFactory //
 ////////////////
 
-func (*archFactory) New(args xreg.Args, bckFrom *cluster.Bck) xreg.Renewable {
-	p := &archFactory{t: args.T, uuid: args.UUID}
-	p.Bck = bckFrom
+func (*archFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
+	p := &archFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}}
 	return p
 }
 
@@ -115,8 +112,8 @@ func (p *archFactory) Start() error {
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
 	)
 	r := &XactPutArchive{
-		DemandBase: *xaction.NewXDB(p.uuid, cmn.ActArchive, p.Bck, totallyIdle, likelyIdle),
-		t:          p.t,
+		DemandBase: *xaction.NewXDB(p.UUID, cmn.ActArchive, p.Bck, totallyIdle, likelyIdle),
+		t:          p.T,
 		bckFrom:    p.Bck,
 		workCh:     make(chan *cmn.ArchiveMsg, maxNumInParallel),
 		config:     config,
@@ -137,7 +134,7 @@ func (p *archFactory) Start() error {
 func (p *archFactory) newDM(bckFrom *cluster.Bck, r *XactPutArchive) error {
 	// NOTE: transport stream name
 	trname := "arch-" + bckFrom.Provider + "-" + bckFrom.Name
-	dm, err := bundle.NewDataMover(p.t, trname, r.recvObjDM, cluster.RegularPut, bundle.Extra{Multiplier: 1})
+	dm, err := bundle.NewDataMover(p.T, trname, r.recvObjDM, cluster.RegularPut, bundle.Extra{Multiplier: 1})
 	if err != nil {
 		return err
 	}

@@ -28,10 +28,8 @@ const (
 
 type (
 	putFactory struct {
-		xreg.BaseEntry
+		xreg.RenewBase
 		xact *XactPut
-		t    cluster.Target
-		uuid string
 		lom  *cluster.LOM
 	}
 	XactPut struct {
@@ -58,15 +56,14 @@ var (
 ////////////////
 
 func (*putFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
-	p := &putFactory{t: args.T, uuid: args.UUID, lom: args.Custom.(*cluster.LOM)}
-	p.Bck = bck
+	p := &putFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, lom: args.Custom.(*cluster.LOM)}
 	return p
 }
 
 func (p *putFactory) Start() error {
-	slab, err := p.t.MMSA().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
+	slab, err := p.T.MMSA().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	cos.AssertNoErr(err)
-	xact, err := runXactPut(p.lom, slab, p.t)
+	xact, err := runXactPut(p.lom, slab, p.T)
 	if err != nil {
 		glog.Error(err)
 		return err

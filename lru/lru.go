@@ -98,10 +98,8 @@ type (
 	}
 
 	Factory struct {
-		xreg.BaseEntry
+		xreg.RenewBase
 		xact *Xaction
-
-		id string
 	}
 
 	Xaction struct {
@@ -119,7 +117,9 @@ var (
 
 func init() { xreg.RegGlobXact(&Factory{}) }
 
-func (*Factory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable { return &Factory{id: args.UUID} }
+func (*Factory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
+	return &Factory{RenewBase: xreg.RenewBase{Args: args}}
+}
 
 func (p *Factory) Start() error {
 	var (
@@ -128,7 +128,7 @@ func (p *Factory) Start() error {
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
 	)
 	p.xact = &Xaction{
-		DemandBase: *xaction.NewXDB(p.id, cmn.ActLRU, nil, totallyIdle, likelyIdle),
+		DemandBase: *xaction.NewXDB(p.UUID, cmn.ActLRU, nil, totallyIdle, likelyIdle),
 		Renewed:    make(chan struct{}, 10),
 		OkRemoveMisplaced: func() bool {
 			g, l := xreg.GetRebMarked(), xreg.GetResilverMarked()

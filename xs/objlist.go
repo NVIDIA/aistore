@@ -31,10 +31,8 @@ import (
 // Xaction is created once per bucket list request (per UUID)
 type (
 	olFactory struct {
-		xreg.BaseEntry
+		xreg.RenewBase
 		xact *ObjListXact
-		t    cluster.Target
-		uuid string
 		msg  *cmn.SelectMsg
 	}
 	ObjListXact struct {
@@ -79,13 +77,12 @@ var (
 )
 
 func (*olFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
-	p := &olFactory{t: args.T, uuid: args.UUID, msg: args.Custom.(*cmn.SelectMsg)}
-	p.Bck = bck
+	p := &olFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, msg: args.Custom.(*cmn.SelectMsg)}
 	return p
 }
 
 func (p *olFactory) Start() error {
-	p.xact = newXact(p.t, p.Bck, p.msg, p.uuid)
+	p.xact = newXact(p.T, p.Bck, p.msg, p.UUID)
 	return nil
 }
 

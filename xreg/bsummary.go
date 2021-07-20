@@ -28,15 +28,14 @@ type (
 		Result interface{} `json:"res"`
 		Err    error       `json:"error"`
 	}
-	bckSummaryTaskEntry struct {
-		BaseEntry
-		xact *bckSummaryTask
+	bsummFactory struct {
+		xact *bsummXact
 		ctx  context.Context
 		t    cluster.Target
 		uuid string
 		msg  *cmn.BucketSummaryMsg
 	}
-	bckSummaryTask struct {
+	bsummXact struct {
 		xaction.XactBase
 		ctx context.Context
 		t   cluster.Target
@@ -47,7 +46,7 @@ type (
 
 // interface guard
 var (
-	_ Renewable = (*bckSummaryTaskEntry)(nil)
+	_ Renewable = (*bsummFactory)(nil)
 )
 
 func RenewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.BucketSummaryMsg) error {
@@ -61,8 +60,8 @@ func (r *registry) renewBckSummary(ctx context.Context, t cluster.Target, bck *c
 	if err != nil {
 		return err
 	}
-	e := &bckSummaryTaskEntry{ctx: ctx, t: t, uuid: msg.UUID, msg: msg}
-	xact := &bckSummaryTask{t: e.t, msg: e.msg, ctx: e.ctx}
+	e := &bsummFactory{ctx: ctx, t: t, uuid: msg.UUID, msg: msg}
+	xact := &bsummXact{t: e.t, msg: e.msg, ctx: e.ctx}
 	xact.InitBase(e.uuid, cmn.ActSummary, bck)
 	e.xact = xact
 	e.Start()
@@ -71,24 +70,29 @@ func (r *registry) renewBckSummary(ctx context.Context, t cluster.Target, bck *c
 }
 
 /////////////////////////
-// bckSummaryTaskEntry //
+// bsummFactory //
 /////////////////////////
 
-func (*bckSummaryTaskEntry) New(Args, *cluster.Bck) Renewable { debug.Assert(false); return nil }
+func (*bsummFactory) New(Args, *cluster.Bck) Renewable { debug.Assert(false); return nil }
 
-func (e *bckSummaryTaskEntry) Start() error {
+func (*bsummFactory) WhenPrevIsRunning(Renewable) (action WPR, err error) {
+	debug.Assert(false)
+	return
+}
+
+func (e *bsummFactory) Start() error {
 	go e.xact.Run()
 	return nil
 }
 
-func (*bckSummaryTaskEntry) Kind() string        { return cmn.ActSummary }
-func (e *bckSummaryTaskEntry) Get() cluster.Xact { return e.xact }
+func (*bsummFactory) Kind() string        { return cmn.ActSummary }
+func (e *bsummFactory) Get() cluster.Xact { return e.xact }
 
-////////////////////
-// bckSummaryTask //
-////////////////////
+///////////////
+// bsummXact //
+///////////////
 
-func (t *bckSummaryTask) Run() {
+func (t *bsummXact) Run() {
 	var (
 		buckets []*cluster.Bck
 		bmd     = t.t.Bowner().Get()
@@ -237,7 +241,7 @@ func (t *bckSummaryTask) Run() {
 	t.UpdateResult(summaries, nil)
 }
 
-func (t *bckSummaryTask) doBckSummaryFast(bck *cluster.Bck) (objCount, size uint64, err error) {
+func (t *bsummXact) doBckSummaryFast(bck *cluster.Bck) (objCount, size uint64, err error) {
 	var (
 		availablePaths, _ = fs.Get()
 		group, _          = errgroup.WithContext(context.Background())
@@ -274,7 +278,7 @@ func (t *bckSummaryTask) doBckSummaryFast(bck *cluster.Bck) (objCount, size uint
 	return objCount, size, group.Wait()
 }
 
-func (t *bckSummaryTask) UpdateResult(result interface{}, err error) {
+func (t *bsummXact) UpdateResult(result interface{}, err error) {
 	res := &taskState{Err: err}
 	if err == nil {
 		res.Result = result
@@ -283,7 +287,7 @@ func (t *bckSummaryTask) UpdateResult(result interface{}, err error) {
 	t.Finish(err)
 }
 
-func (t *bckSummaryTask) Result() (interface{}, error) {
+func (t *bsummXact) Result() (interface{}, error) {
 	ts := (*taskState)(t.res.Load())
 	if ts == nil {
 		return nil, errors.New("no result to load")

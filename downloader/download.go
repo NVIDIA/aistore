@@ -165,9 +165,8 @@ type (
 	}
 
 	dowFactory struct {
-		xreg.BaseEntry
+		xreg.RenewBase
 		xact   *Downloader
-		t      cluster.Target
 		statsT stats.Tracker
 	}
 )
@@ -231,11 +230,11 @@ func (pr *progressReader) Close() error {
 ////////////////
 
 func (*dowFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
-	return &dowFactory{t: args.T, statsT: args.Custom.(stats.Tracker)}
+	return &dowFactory{RenewBase: xreg.RenewBase{Args: args}, statsT: args.Custom.(stats.Tracker)}
 }
 
 func (p *dowFactory) Start() error {
-	xdl := newDownloader(p.t, p.statsT)
+	xdl := newDownloader(p.T, p.statsT)
 	p.xact = xdl
 	go xdl.Run()
 	return nil

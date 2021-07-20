@@ -21,7 +21,7 @@ import (
 
 type (
 	putFactory struct {
-		xreg.BaseEntry
+		xreg.RenewBase
 		xact *XactPut
 	}
 	// Erasure coding runner: accepts requests and dispatches them to
@@ -58,8 +58,7 @@ var (
 ////////////////
 
 func (*putFactory) New(_ xreg.Args, bck *cluster.Bck) xreg.Renewable {
-	p := &putFactory{}
-	p.Bck = bck
+	p := &putFactory{RenewBase: xreg.RenewBase{Bck: bck}}
 	return p
 }
 

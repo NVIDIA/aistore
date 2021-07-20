@@ -20,10 +20,8 @@ import (
 
 type (
 	encFactory struct {
-		xreg.BaseEntry
+		xreg.RenewBase
 		xact  *XactBckEncode
-		t     cluster.Target
-		uuid  string
 		phase string
 	}
 	XactBckEncode struct {
@@ -47,13 +45,12 @@ var (
 
 func (*encFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 	custom := args.Custom.(*xreg.ECEncodeArgs)
-	p := &encFactory{t: args.T, uuid: args.UUID, phase: custom.Phase}
-	p.Bck = bck
+	p := &encFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, phase: custom.Phase}
 	return p
 }
 
 func (p *encFactory) Start() error {
-	p.xact = NewXactBckEncode(p.Bck, p.t, p.uuid)
+	p.xact = NewXactBckEncode(p.Bck, p.T, p.UUID)
 	return nil
 }
 

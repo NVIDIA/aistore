@@ -57,21 +57,19 @@ type (
 // concrete list-range type xactions (see also: archive.go)
 type (
 	evdFactory struct {
-		xreg.BaseEntry
-		xargs xreg.Args
-		xact  *evictDelete
-		kind  string
-		msg   *cmn.ListRangeMsg
+		xreg.RenewBase
+		xact *evictDelete
+		kind string
+		msg  *cmn.ListRangeMsg
 	}
 	evictDelete struct {
 		xaction.XactBase
 		lriterator
 	}
 	prfFactory struct {
-		xreg.BaseEntry
-		xargs xreg.Args
-		xact  *prefetch
-		msg   *cmn.ListRangeMsg
+		xreg.RenewBase
+		xact *prefetch
+		msg  *cmn.ListRangeMsg
 	}
 	prefetch struct {
 		xaction.XactBase
@@ -249,13 +247,12 @@ func parseTemplate(template string) (cos.ParsedTemplate, error) {
 func (p *evdFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 	msg := args.Custom.(*cmn.ListRangeMsg)
 	debug.Assert(!msg.IsList() || !msg.HasTemplate())
-	np := &evdFactory{xargs: args, kind: p.kind, msg: msg}
-	np.Bck = bck
+	np := &evdFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: p.kind, msg: msg}
 	return np
 }
 
 func (p *evdFactory) Start() error {
-	p.xact = newEvictDelete(&p.xargs, p.kind, p.Bck, p.msg)
+	p.xact = newEvictDelete(&p.Args, p.kind, p.Bck, p.msg)
 	return nil
 }
 
@@ -309,14 +306,13 @@ func (r *evictDelete) do(lom *cluster.LOM, _ *lriterator) error {
 func (*prfFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 	msg := args.Custom.(*cmn.ListRangeMsg)
 	debug.Assert(!msg.IsList() || !msg.HasTemplate())
-	np := &prfFactory{xargs: args, msg: msg}
-	np.Bck = bck
+	np := &prfFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, msg: msg}
 	return np
 }
 
 func (p *prfFactory) Start() error {
 	b := cluster.NewBckEmbed(p.Bck.Bck)
-	if err := b.Init(p.xargs.T.Bowner()); err != nil {
+	if err := b.Init(p.Args.T.Bowner()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			glog.Warning(err) // may show up later via ais/prxtrybck.go logic
 		} else {
@@ -326,7 +322,7 @@ func (p *prfFactory) Start() error {
 		glog.Errorf("bucket %q: can only prefetch remote buckets", b)
 		return fmt.Errorf("bucket %q: can only prefetch remote buckets", b)
 	}
-	p.xact = newPrefetch(&p.xargs, p.Kind(), p.Bck, p.msg)
+	p.xact = newPrefetch(&p.Args, p.Kind(), p.Bck, p.msg)
 	return nil
 }
 

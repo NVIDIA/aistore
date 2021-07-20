@@ -17,10 +17,8 @@ import (
 
 type (
 	llcFactory struct {
-		xreg.BaseEntry
-		t    cluster.Target
+		xreg.RenewBase
 		xact *xactLLC
-		uuid string
 	}
 	xactLLC struct {
 		xaction.XactBckJog
@@ -38,13 +36,13 @@ var (
 ////////////////
 
 func (*llcFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
-	p := &llcFactory{t: args.T, uuid: args.UUID}
+	p := &llcFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}}
 	p.Bck = bck
 	return p
 }
 
 func (p *llcFactory) Start() error {
-	xact := newXactLLC(p.t, p.uuid, p.Bck)
+	xact := newXactLLC(p.T, p.UUID, p.Bck)
 	p.xact = xact
 	go xact.Run()
 	return nil

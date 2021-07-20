@@ -6,8 +6,6 @@
 package xs
 
 import (
-	"fmt"
-
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -20,26 +18,23 @@ import (
 // rebalance & resilver xactions
 
 type (
-	getMarked = func() xaction.XactMarked
-	RebBase   struct {
-		xaction.XactBase
-	}
+	getMarked  = func() xaction.XactMarked
 	rebFactory struct {
+		xreg.RenewBase
 		xact *Rebalance
 		args *xreg.RebalanceArgs
 	}
 	Rebalance struct {
-		RebBase
+		xaction.XactBase
 		statTracker  stats.Tracker // extended stats
 		getRebMarked getMarked
 	}
 	rslvrFactory struct {
-		xreg.BaseEntry
+		xreg.RenewBase
 		xact *Resilver
-		id   string
 	}
 	Resilver struct {
-		RebBase
+		xaction.XactBase
 	}
 )
 
@@ -51,18 +46,12 @@ var (
 	_ xreg.Renewable = (*rslvrFactory)(nil)
 )
 
-func (*RebBase) Run() { debug.Assert(false) }
-
-func (xact *RebBase) initRebBase(id, kind string) {
-	xact.InitBase(id, kind, nil)
-}
-
 ///////////////
 // Rebalance //
 ///////////////
 
 func (*rebFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
-	return &rebFactory{args: args.Custom.(*xreg.RebalanceArgs)}
+	return &rebFactory{RenewBase: xreg.RenewBase{Args: args}, args: args.Custom.(*xreg.RebalanceArgs)}
 }
 
 func (p *rebFactory) Start() error {
@@ -90,13 +79,11 @@ func (p *rebFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 
 func NewRebalance(id, kind string, statTracker stats.Tracker, getMarked getMarked) (xact *Rebalance) {
 	xact = &Rebalance{statTracker: statTracker, getRebMarked: getMarked}
-	xact.initRebBase(id, kind)
+	xact.InitBase(id, kind, nil)
 	return
 }
 
-func (xact *Rebalance) String() string {
-	return fmt.Sprintf("%s, %s", xact.RebBase.String(), xact.ID())
-}
+func (*Rebalance) Run() { debug.Assert(false) }
 
 // override/extend cmn.XactBase.Stats()
 func (xact *Rebalance) Stats() cluster.XactStats {
@@ -126,11 +113,11 @@ func (xact *Rebalance) Stats() cluster.XactStats {
 //////////////
 
 func (*rslvrFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
-	return &rslvrFactory{id: args.UUID}
+	return &rslvrFactory{RenewBase: xreg.RenewBase{Args: args}}
 }
 
 func (p *rslvrFactory) Start() error {
-	p.xact = NewResilver(p.id, p.Kind())
+	p.xact = NewResilver(p.UUID, p.Kind())
 	return nil
 }
 
@@ -138,12 +125,10 @@ func (*rslvrFactory) Kind() string                                       { retur
 func (p *rslvrFactory) Get() cluster.Xact                                { return p.xact }
 func (*rslvrFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) { return xreg.WprAbort, nil }
 
-func NewResilver(uuid, kind string) (xact *Resilver) {
+func NewResilver(id, kind string) (xact *Resilver) {
 	xact = &Resilver{}
-	xact.initRebBase(uuid, kind)
+	xact.InitBase(id, kind, nil)
 	return
 }
 
-func (xact *Resilver) String() string {
-	return xact.RebBase.String()
-}
+func (*Resilver) Run() { debug.Assert(false) }

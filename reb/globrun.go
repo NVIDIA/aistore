@@ -284,7 +284,7 @@ func (reb *Manager) runNoEC(md *rebArgs) error {
 			sema = cos.NewDynSemaphore(int(multiplier))
 		}
 		rl := &rebJogger{
-			joggerBase: joggerBase{m: reb, xreb: &reb.xact().RebBase, wg: wg},
+			joggerBase: joggerBase{m: reb, xreb: reb.xact(), wg: wg},
 			smap:       md.smap, sema: sema, ver: ver,
 		}
 		wg.Add(1)

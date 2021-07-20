@@ -22,7 +22,7 @@ import (
 
 type (
 	getFactory struct {
-		xreg.BaseEntry
+		xreg.RenewBase
 		xact *XactGet
 	}
 
@@ -56,8 +56,7 @@ var (
 ////////////////
 
 func (*getFactory) New(_ xreg.Args, bck *cluster.Bck) xreg.Renewable {
-	p := &getFactory{}
-	p.Bck = bck
+	p := &getFactory{RenewBase: xreg.RenewBase{Bck: bck}}
 	return p
 }
 

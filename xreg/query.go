@@ -14,8 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/query"
 )
 
-type queEntry struct {
-	BaseEntry
+type queFactory struct {
 	xact  *query.ObjectsListingXact
 	ctx   context.Context
 	t     cluster.Target
@@ -25,7 +24,7 @@ type queEntry struct {
 
 // interface guard
 var (
-	_ Renewable = (*queEntry)(nil)
+	_ Renewable = (*queFactory)(nil)
 )
 
 func RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, msg *cmn.SelectMsg) RenewRes {
@@ -45,29 +44,29 @@ func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.Ob
 	if err != nil {
 		return RenewRes{&DummyEntry{nil}, err, msg.UUID}
 	}
-	e := &queEntry{ctx: ctx, t: t, query: q, msg: msg}
+	e := &queFactory{ctx: ctx, t: t, query: q, msg: msg}
 	xact := query.NewObjectsListing(e.ctx, e.t, e.query, e.msg)
 	e.xact = xact
 	return r.renew(e, q.BckSource.Bck)
 }
 
 //////////////
-// queEntry //
+// queFactory //
 //////////////
 
-func (*queEntry) New(Args, *cluster.Bck) Renewable { debug.Assert(false); return nil }
+func (*queFactory) New(Args, *cluster.Bck) Renewable { debug.Assert(false); return nil }
 
-func (e *queEntry) Start() (err error) {
+func (e *queFactory) Start() (err error) {
 	if query.Registry.Get(e.msg.UUID) != nil {
 		err = fmt.Errorf("result set with handle %s already exists", e.msg.UUID)
 	}
 	return
 }
 
-func (*queEntry) Kind() string        { return cmn.ActQueryObjects }
-func (e *queEntry) Get() cluster.Xact { return e.xact }
+func (*queFactory) Kind() string        { return cmn.ActQueryObjects }
+func (e *queFactory) Get() cluster.Xact { return e.xact }
 
-func (e *queEntry) WhenPrevIsRunning(Renewable) (wpr WPR, err error) {
+func (e *queFactory) WhenPrevIsRunning(Renewable) (wpr WPR, err error) {
 	wpr = WprKeepAndStartNew
 	if query.Registry.Get(e.msg.UUID) != nil {
 		wpr = WprUse

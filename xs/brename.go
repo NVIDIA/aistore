@@ -19,10 +19,8 @@ import (
 
 type (
 	MovFactory struct {
-		xreg.BaseEntry
+		xreg.RenewBase
 		xact  *bckRename
-		t     cluster.Target
-		uuid  string
 		phase string
 		args  *xreg.BckRenameArgs
 	}
@@ -42,8 +40,7 @@ var (
 )
 
 func (*MovFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
-	p := &MovFactory{t: args.T, uuid: args.UUID, args: args.Custom.(*xreg.BckRenameArgs)}
-	p.Bck = bck
+	p := &MovFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, args: args.Custom.(*xreg.BckRenameArgs)}
 	return p
 }
 
@@ -51,7 +48,7 @@ func (*MovFactory) Kind() string        { return cmn.ActMoveBck }
 func (p *MovFactory) Get() cluster.Xact { return p.xact }
 
 func (p *MovFactory) Start() error {
-	p.xact = newBckRename(p.uuid, p.Kind(), p.Bck, p.t, p.args.BckFrom, p.args.BckTo, p.args.RebID)
+	p.xact = newBckRename(p.UUID, p.Kind(), p.Bck, p.T, p.args.BckFrom, p.args.BckTo, p.args.RebID)
 	return nil
 }
 

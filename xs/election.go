@@ -16,7 +16,7 @@ import (
 
 type (
 	eleFactory struct {
-		xreg.BaseEntry
+		xreg.RenewBase
 		xact *Election
 	}
 	Election struct {
