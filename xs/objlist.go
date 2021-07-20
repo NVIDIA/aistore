@@ -74,8 +74,8 @@ var (
 
 // interface guard
 var (
-	_ cluster.Xact = (*ObjListXact)(nil)
-	_ xreg.Factory = (*olFactory)(nil)
+	_ cluster.Xact   = (*ObjListXact)(nil)
+	_ xreg.Renewable = (*olFactory)(nil)
 )
 
 func (*olFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {

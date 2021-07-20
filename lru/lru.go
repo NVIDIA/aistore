@@ -114,7 +114,7 @@ type (
 // interface guard
 var (
 	_ xaction.Demand = (*Xaction)(nil)
-	_ xreg.Factory   = (*Factory)(nil)
+	_ xreg.Renewable = (*Factory)(nil)
 )
 
 func init() { xreg.RegGlobXact(&Factory{}) }

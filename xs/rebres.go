@@ -45,10 +45,10 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact = (*Rebalance)(nil)
-	_ xreg.Factory = (*rebFactory)(nil)
-	_ cluster.Xact = (*Resilver)(nil)
-	_ xreg.Factory = (*rslvrFactory)(nil)
+	_ cluster.Xact   = (*Rebalance)(nil)
+	_ xreg.Renewable = (*rebFactory)(nil)
+	_ cluster.Xact   = (*Resilver)(nil)
+	_ xreg.Renewable = (*rslvrFactory)(nil)
 )
 
 func (*RebBase) Run() { debug.Assert(false) }

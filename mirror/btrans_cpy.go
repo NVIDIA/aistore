@@ -55,8 +55,8 @@ const etlBucketParallelCnt = 2
 
 // interface guard
 var (
-	_ cluster.Xact = (*XactTransCpyBck)(nil)
-	_ xreg.Factory = (*cpyFactory)(nil)
+	_ cluster.Xact   = (*XactTransCpyBck)(nil)
+	_ xreg.Renewable = (*cpyFactory)(nil)
 )
 
 ///////////////////////////////////

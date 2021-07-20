@@ -50,7 +50,7 @@ type (
 // interface guard
 var (
 	_ xaction.Demand = (*XactPut)(nil)
-	_ xreg.Factory   = (*putFactory)(nil)
+	_ xreg.Renewable = (*putFactory)(nil)
 )
 
 ////////////////

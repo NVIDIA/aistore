@@ -26,8 +26,8 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact = (*Election)(nil)
-	_ xreg.Factory = (*eleFactory)(nil)
+	_ cluster.Xact   = (*Election)(nil)
+	_ xreg.Renewable = (*eleFactory)(nil)
 )
 
 func (*eleFactory) New(xreg.Args, *cluster.Bck) xreg.Renewable { return &eleFactory{} }

@@ -37,20 +37,14 @@ const (
 
 type (
 	Renewable interface {
-		Start() error // starts an xaction, will be called when entry is stored into registry
+		New(args Args, bck *cluster.Bck) Renewable // new xaction stub that can be `Start`-ed.
+		Start() error                              // starts an xaction, will be called when entry is stored into registry
 		Kind() string
 		Get() cluster.Xact
 		WhenPrevIsRunning(prevEntry Renewable) (action WPR, err error)
 	}
 	BaseEntry struct {
 		Bck *cluster.Bck
-	}
-
-	// Factory is an interface to create Renewable instances
-	Factory interface {
-		// New creates xaction stub that can be `Start`-ed.
-		New(args Args, bck *cluster.Bck) Renewable
-		Kind() string
 	}
 
 	// used in constructions
@@ -96,8 +90,8 @@ type (
 		// to make sure that we don't keep old entries forever.
 		inactive    atomic.Int64
 		entries     *entries
-		bckXacts    map[string]Factory
-		globalXacts map[string]Factory
+		bckXacts    map[string]Renewable
+		globalXacts map[string]Renewable
 	}
 )
 
@@ -130,8 +124,8 @@ func init() {
 func newRegistry() *registry {
 	xar := &registry{
 		entries:     newRegistryEntries(),
-		bckXacts:    make(map[string]Factory, 10),
-		globalXacts: make(map[string]Factory, 10),
+		bckXacts:    make(map[string]Renewable, 10),
+		globalXacts: make(map[string]Renewable, 10),
 	}
 	hk.Reg("xactions-old", xar.hkDelOld)
 	hk.Reg("xactions-inactive", xar.hkDelInactive)

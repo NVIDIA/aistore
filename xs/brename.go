@@ -37,8 +37,8 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact = (*bckRename)(nil)
-	_ xreg.Factory = (*MovFactory)(nil)
+	_ cluster.Xact   = (*bckRename)(nil)
+	_ xreg.Renewable = (*MovFactory)(nil)
 )
 
 func (*MovFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {

@@ -21,9 +21,9 @@ type RebalanceArgs struct {
 // registry //
 //////////////
 
-func RegGlobXact(entry Factory) { defaultReg.regGlobFactory(entry) }
+func RegGlobXact(entry Renewable) { defaultReg.regGlobXact(entry) }
 
-func (r *registry) regGlobFactory(entry Factory) {
+func (r *registry) regGlobXact(entry Renewable) {
 	debug.Assert(xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeGlobal)
 
 	// It is expected that registrations happen at the init time. Therefore, it

@@ -36,7 +36,7 @@ type (
 // interface guard
 var (
 	_ xaction.Demand = (*XactRespond)(nil)
-	_ xreg.Factory   = (*rspFactory)(nil)
+	_ xreg.Renewable = (*rspFactory)(nil)
 )
 
 ////////////////

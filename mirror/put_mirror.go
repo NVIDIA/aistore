@@ -49,8 +49,8 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact = (*XactPut)(nil)
-	_ xreg.Factory = (*putFactory)(nil)
+	_ cluster.Xact   = (*XactPut)(nil)
+	_ xreg.Renewable = (*putFactory)(nil)
 )
 
 ////////////////

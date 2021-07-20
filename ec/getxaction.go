@@ -21,7 +21,6 @@ import (
 )
 
 type (
-	// Implements `xreg.Renewable` and `xreg.Factory` interface.
 	getFactory struct {
 		xreg.BaseEntry
 		xact *XactGet
@@ -49,7 +48,7 @@ type (
 // interface guard
 var (
 	_ xaction.Demand = (*XactGet)(nil)
-	_ xreg.Factory   = (*getFactory)(nil)
+	_ xreg.Renewable = (*getFactory)(nil)
 )
 
 ////////////////

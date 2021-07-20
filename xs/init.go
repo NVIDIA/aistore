@@ -16,14 +16,14 @@ func init() {
 	xreg.RegGlobXact(&rslvrFactory{})
 	xreg.RegGlobXact(&rebFactory{})
 
-	xreg.RegFactory(&MovFactory{})
-	xreg.RegFactory(&evdFactory{kind: cmn.ActEvictObjects})
-	xreg.RegFactory(&evdFactory{kind: cmn.ActDelete})
-	xreg.RegFactory(&prfFactory{})
+	xreg.RegBckXact(&MovFactory{})
+	xreg.RegBckXact(&evdFactory{kind: cmn.ActEvictObjects})
+	xreg.RegBckXact(&evdFactory{kind: cmn.ActDelete})
+	xreg.RegBckXact(&prfFactory{})
 
-	xreg.RegFactory(&olFactory{})
+	xreg.RegBckXact(&olFactory{})
 
-	xreg.RegFactory(&proFactory{})
-	xreg.RegFactory(&llcFactory{})
-	xreg.RegFactory(&archFactory{})
+	xreg.RegBckXact(&proFactory{})
+	xreg.RegBckXact(&llcFactory{})
+	xreg.RegBckXact(&archFactory{})
 }

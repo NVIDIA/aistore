@@ -85,8 +85,8 @@ var (
 	_ cluster.Xact = (*evictDelete)(nil)
 	_ cluster.Xact = (*prefetch)(nil)
 
-	_ xreg.Factory = (*evdFactory)(nil)
-	_ xreg.Factory = (*prfFactory)(nil)
+	_ xreg.Renewable = (*evdFactory)(nil)
+	_ xreg.Renewable = (*prfFactory)(nil)
 
 	_ lrwi = (*evictDelete)(nil)
 	_ lrwi = (*prefetch)(nil)

@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/objwalk"
@@ -72,6 +73,8 @@ func (r *registry) renewBckSummary(ctx context.Context, t cluster.Target, bck *c
 /////////////////////////
 // bckSummaryTaskEntry //
 /////////////////////////
+
+func (*bckSummaryTaskEntry) New(Args, *cluster.Bck) Renewable { debug.Assert(false); return nil }
 
 func (e *bckSummaryTaskEntry) Start() error {
 	go e.xact.Run()

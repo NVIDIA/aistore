@@ -58,6 +58,7 @@ var (
 	_ Renewable = (*DummyEntry)(nil)
 )
 
+func (*DummyEntry) New(Args, *cluster.Bck) Renewable         { debug.Assert(false); return nil }
 func (*DummyEntry) Start() error                             { debug.Assert(false); return nil }
 func (*DummyEntry) Kind() string                             { debug.Assert(false); return "" }
 func (d *DummyEntry) Get() cluster.Xact                      { return d.xact }
@@ -67,9 +68,9 @@ func (*DummyEntry) WhenPrevIsRunning(Renewable) (WPR, error) { return WprUse, ni
 // registry //
 //////////////
 
-func RegFactory(entry Factory) { defaultReg.regFactory(entry) }
+func RegBckXact(entry Renewable) { defaultReg.regBckXact(entry) }
 
-func (r *registry) regFactory(entry Factory) {
+func (r *registry) regBckXact(entry Renewable) {
 	debug.Assert(xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeBck)
 
 	// It is expected that registrations happen at the init time. Therefore, it

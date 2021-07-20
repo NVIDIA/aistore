@@ -37,8 +37,8 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact = (*XactBckEncode)(nil)
-	_ xreg.Factory = (*encFactory)(nil)
+	_ cluster.Xact   = (*XactBckEncode)(nil)
+	_ xreg.Renewable = (*encFactory)(nil)
 )
 
 ////////////////

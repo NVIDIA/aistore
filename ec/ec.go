@@ -274,10 +274,10 @@ func Init(t cluster.Target) {
 	fs.CSM.RegisterContentType(fs.ECSliceType, &SliceSpec{})
 	fs.CSM.RegisterContentType(fs.ECMetaType, &MetaSpec{})
 
-	xreg.RegFactory(&getFactory{})
-	xreg.RegFactory(&putFactory{})
-	xreg.RegFactory(&rspFactory{})
-	xreg.RegFactory(&encFactory{})
+	xreg.RegBckXact(&getFactory{})
+	xreg.RegBckXact(&putFactory{})
+	xreg.RegBckXact(&rspFactory{})
+	xreg.RegBckXact(&encFactory{})
 
 	if err := initManager(t); err != nil {
 		cos.ExitLogf("Failed to init manager: %v", err)

@@ -87,9 +87,9 @@ const (
 
 // interface guard
 var (
-	_ cluster.Xact = (*XactPutArchive)(nil)
-	_ xreg.Factory = (*archFactory)(nil)
-	_ lrwi         = (*archwi)(nil)
+	_ cluster.Xact   = (*XactPutArchive)(nil)
+	_ xreg.Renewable = (*archFactory)(nil)
+	_ lrwi           = (*archwi)(nil)
 
 	_ archWriter = (*tarWriter)(nil)
 	_ archWriter = (*zipWriter)(nil)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/query"
 )
 
@@ -53,6 +54,8 @@ func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.Ob
 //////////////
 // queEntry //
 //////////////
+
+func (*queEntry) New(Args, *cluster.Bck) Renewable { debug.Assert(false); return nil }
 
 func (e *queEntry) Start() (err error) {
 	if query.Registry.Get(e.msg.UUID) != nil {

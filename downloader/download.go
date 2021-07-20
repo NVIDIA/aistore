@@ -175,7 +175,7 @@ type (
 // interface guard
 var (
 	_ xaction.Demand = (*Downloader)(nil)
-	_ xreg.Factory   = (*dowFactory)(nil)
+	_ xreg.Renewable = (*dowFactory)(nil)
 	_ io.ReadCloser  = (*progressReader)(nil)
 )
 
