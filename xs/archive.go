@@ -115,7 +115,7 @@ func (p *archFactory) Start() error {
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
 	)
 	r := &XactPutArchive{
-		DemandBase: *xaction.NewXDB(p.uuid, cmn.ActArchive, &p.Bck.Bck, totallyIdle, likelyIdle),
+		DemandBase: *xaction.NewXDB(p.uuid, cmn.ActArchive, p.Bck, totallyIdle, likelyIdle),
 		t:          p.t,
 		bckFrom:    p.Bck.Bck,
 		workCh:     make(chan *cmn.ArchiveMsg, maxNumInParallel),

@@ -17,9 +17,9 @@ type XactBckJog struct {
 	doneCh  chan struct{}
 }
 
-func (r *XactBckJog) Init(id, kind string, bck cmn.Bck, opts *mpather.JoggerGroupOpts) {
+func (r *XactBckJog) Init(id, kind string, bck *cluster.Bck, opts *mpather.JoggerGroupOpts) {
 	r.t = opts.T
-	r.InitBase(id, kind, &bck)
+	r.InitBase(id, kind, bck)
 	r.joggers = mpather.NewJoggerGroup(opts)
 }
 

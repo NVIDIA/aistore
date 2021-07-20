@@ -58,7 +58,7 @@ type (
 ////////////////
 
 // NOTE: to fully initialize it, must call xact.InitIdle() upon return
-func NewXDB(uuid, kind string, bck *cmn.Bck, idleTimes ...time.Duration) (xdb *DemandBase) {
+func NewXDB(uuid, kind string, bck *cluster.Bck, idleTimes ...time.Duration) (xdb *DemandBase) {
 	var (
 		hkName          = kind + "/" + uuid
 		totally, likely = totallyIdle, likelyIdle
@@ -114,18 +114,21 @@ func (r *DemandBase) Stop() {
 }
 
 func (r *DemandBase) Stats() cluster.XactStats {
-	return &BaseXactStatsExt{
+	stats := &BaseXactStatsExt{
 		BaseXactStats: BaseXactStats{
 			IDX:         r.ID(),
 			KindX:       r.Kind(),
 			StartTimeX:  r.StartTime(),
 			EndTimeX:    r.EndTime(),
-			BckX:        r.Bck(),
 			ObjCountX:   r.ObjCount(),
 			BytesCountX: r.BytesCount(),
 			AbortedX:    r.Aborted(),
 		},
 	}
+	if r.Bck() != nil {
+		stats.BckX = r.Bck().Bck
+	}
+	return stats
 }
 
 func (r *DemandBase) Abort() {

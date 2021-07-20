@@ -39,7 +39,7 @@ type (
 	}
 	// two selected methods that lriterator needs for itself (a strict subset of cluster.Xact)
 	lrxact interface {
-		Bck() cmn.Bck
+		Bck() *cluster.Bck
 		Aborted() bool
 	}
 	// common mult-obj operation context
@@ -139,8 +139,8 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 	var (
 		objList *cmn.BucketList
 		err     error
+		bck     = r.xact.Bck()
 	)
-	bck := cluster.NewBckEmbed(r.xact.Bck())
 	if err := bck.Init(r.t.Bowner()); err != nil {
 		return err
 	}
@@ -206,7 +206,7 @@ func (r *lriterator) iterateList(wi lrwi, smap *cluster.Smap) error {
 }
 
 func (r *lriterator) do(lom *cluster.LOM, wi lrwi, smap *cluster.Smap) error {
-	if err := lom.Init(r.xact.Bck()); err != nil {
+	if err := lom.Init(r.xact.Bck().Bck); err != nil {
 		return err
 	}
 	if smap != nil {
@@ -255,18 +255,18 @@ func (p *evdFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (p *evdFactory) Start() error {
-	p.xact = newEvictDelete(&p.xargs, p.kind, p.Bck.Bck, p.msg)
+	p.xact = newEvictDelete(&p.xargs, p.kind, p.Bck, p.msg)
 	return nil
 }
 
 func (p *evdFactory) Kind() string      { return p.kind }
 func (p *evdFactory) Get() cluster.Xact { return p.xact }
 
-func newEvictDelete(xargs *xreg.Args, kind string, bck cmn.Bck, msg *cmn.ListRangeMsg) (ed *evictDelete) {
+func newEvictDelete(xargs *xreg.Args, kind string, bck *cluster.Bck, msg *cmn.ListRangeMsg) (ed *evictDelete) {
 	ed = &evictDelete{}
 	// NOTE: list defaults to aborting on errors other than non-existence
 	ed.lriterator.init(ed, xargs.T, msg, !msg.IsList() /*ignoreBackendErr*/, true /*freeLOM*/)
-	ed.InitBase(xargs.UUID, kind, &bck)
+	ed.InitBase(xargs.UUID, kind, bck)
 	return
 }
 
@@ -326,18 +326,18 @@ func (p *prfFactory) Start() error {
 		glog.Errorf("bucket %q: can only prefetch remote buckets", b)
 		return fmt.Errorf("bucket %q: can only prefetch remote buckets", b)
 	}
-	p.xact = newPrefetch(&p.xargs, p.Kind(), p.Bck.Bck, p.msg)
+	p.xact = newPrefetch(&p.xargs, p.Kind(), p.Bck, p.msg)
 	return nil
 }
 
 func (*prfFactory) Kind() string        { return cmn.ActPrefetch }
 func (p *prfFactory) Get() cluster.Xact { return p.xact }
 
-func newPrefetch(xargs *xreg.Args, kind string, bck cmn.Bck, msg *cmn.ListRangeMsg) (prf *prefetch) {
+func newPrefetch(xargs *xreg.Args, kind string, bck *cluster.Bck, msg *cmn.ListRangeMsg) (prf *prefetch) {
 	prf = &prefetch{}
 	// NOTE: list defaults to aborting on errors other than non-existence
 	prf.lriterator.init(prf, xargs.T, msg, !msg.IsList() /*ignoreBackendErr*/, true /*freeLOM*/)
-	prf.InitBase(xargs.UUID, kind, &bck)
+	prf.InitBase(xargs.UUID, kind, bck)
 	prf.lriterator.xact = prf
 	return
 }

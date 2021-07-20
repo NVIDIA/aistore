@@ -254,7 +254,7 @@ func (*Downloader) Name() string {
 
 func newDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
 	downloader := &Downloader{
-		DemandBase: *xaction.NewXDB(cos.GenUUID(), cmn.Download, &cmn.Bck{Provider: cmn.ProviderAIS}),
+		DemandBase: *xaction.NewXDB(cos.GenUUID(), cmn.Download, nil),
 		t:          t,
 		statsT:     statsT,
 	}

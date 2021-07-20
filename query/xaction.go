@@ -55,7 +55,7 @@ func NewObjectsListing(ctx context.Context, t cluster.Target, query *ObjectsQuer
 		query:    query,
 		timer:    time.NewTimer(xactionTTL),
 	}
-	x.InitBase(msg.UUID, cmn.ActQueryObjects, &query.BckSource.Bck.Bck)
+	x.InitBase(msg.UUID, cmn.ActQueryObjects, query.BckSource.Bck)
 	return
 }
 

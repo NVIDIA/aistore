@@ -44,7 +44,7 @@ func (*llcFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (p *llcFactory) Start() error {
-	xact := newXactLLC(p.t, p.uuid, p.Bck.Bck)
+	xact := newXactLLC(p.t, p.uuid, p.Bck)
 	p.xact = xact
 	go xact.Run()
 	return nil
@@ -60,11 +60,11 @@ func (*llcFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) { return 
 // xactLLC //
 /////////////
 
-func newXactLLC(t cluster.Target, uuid string, bck cmn.Bck) (r *xactLLC) {
+func newXactLLC(t cluster.Target, uuid string, bck *cluster.Bck) (r *xactLLC) {
 	r = &xactLLC{}
 	mpopts := &mpather.JoggerGroupOpts{
 		T:        t,
-		Bck:      bck,
+		Bck:      bck.Bck,
 		CTs:      []string{fs.ObjectType},
 		VisitObj: func(*cluster.LOM, []byte) error { return nil },
 		DoLoad:   mpather.Load,

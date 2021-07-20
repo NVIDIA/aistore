@@ -62,7 +62,7 @@ func (r *registry) renewBckSummary(ctx context.Context, t cluster.Target, bck *c
 	}
 	e := &bckSummaryTaskEntry{ctx: ctx, t: t, uuid: msg.UUID, msg: msg}
 	xact := &bckSummaryTask{t: e.t, msg: e.msg, ctx: e.ctx}
-	xact.InitBase(e.uuid, cmn.ActSummary, &bck.Bck)
+	xact.InitBase(e.uuid, cmn.ActSummary, bck)
 	e.xact = xact
 	e.Start()
 	r.add(e)
@@ -91,7 +91,7 @@ func (t *bckSummaryTask) Run() {
 		bmd     = t.t.Bowner().Get()
 	)
 	if t.Bck().Name != "" {
-		buckets = append(buckets, cluster.NewBckEmbed(t.Bck()))
+		buckets = append(buckets, t.Bck())
 	} else {
 		if !t.Bck().HasProvider() || t.Bck().IsAIS() {
 			provider := cmn.ProviderAIS

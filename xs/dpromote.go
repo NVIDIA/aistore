@@ -56,7 +56,7 @@ func (*proFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (p *proFactory) Start() error {
-	xact := NewXactDirPromote(p.dir, p.Bck.Bck, p.t, p.params)
+	xact := NewXactDirPromote(p.dir, p.Bck, p.t, p.params)
 	go xact.Run()
 	p.xact = xact
 	return nil
@@ -69,7 +69,7 @@ func (p *proFactory) Get() cluster.Xact { return p.xact }
 // XactDirPromote //
 ////////////////////
 
-func NewXactDirPromote(dir string, bck cmn.Bck, t cluster.Target, params *cmn.ActValPromote) (r *XactDirPromote) {
+func NewXactDirPromote(dir string, bck *cluster.Bck, t cluster.Target, params *cmn.ActValPromote) (r *XactDirPromote) {
 	r = &XactDirPromote{dir: dir, params: params}
 	r.XactBckJog.Init(cos.GenUUID(), cmn.ActPromote, bck, &mpather.JoggerGroupOpts{T: t})
 	return
@@ -102,7 +102,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	// r.params.ObjName + strings.TrimPrefix(fileFqn, dirFqn) if promoting the whole directory
 	debug.Assert(filepath.IsAbs(fqn))
 
-	bck := cluster.NewBckEmbed(r.Bck())
+	bck := r.Bck()
 	if err := bck.Init(r.Target().Bowner()); err != nil {
 		return err
 	}

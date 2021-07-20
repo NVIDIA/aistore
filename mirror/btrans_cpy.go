@@ -186,7 +186,7 @@ func newXactTransCpyBck(e *cpyFactory, slab *memsys.Slab) (r *XactTransCpyBck) {
 		DoLoad:   mpather.Load,
 		Throttle: true,
 	}
-	r.XactBckJog.Init(e.uuid, e.kind, e.args.BckTo.Bck, mpopts)
+	r.XactBckJog.Init(e.uuid, e.kind, e.args.BckTo, mpopts)
 	return
 }
 

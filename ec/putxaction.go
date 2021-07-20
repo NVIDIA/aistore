@@ -70,7 +70,7 @@ func (p *putFactory) Start() error {
 		totallyIdle = config.Timeout.SendFile.D()
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
 	)
-	xec.DemandBase = *xaction.NewXDB(cos.GenUUID(), p.Kind(), &p.Bck.Bck, totallyIdle, likelyIdle)
+	xec.DemandBase = *xaction.NewXDB(cos.GenUUID(), p.Kind(), p.Bck, totallyIdle, likelyIdle)
 	xec.InitIdle()
 	p.xact = xec
 	go xec.Run()

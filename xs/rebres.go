@@ -53,14 +53,6 @@ var (
 
 func (*RebBase) Run() { debug.Assert(false) }
 
-func (xact *RebBase) String() string {
-	s := xact.XactBase.String()
-	if xact.Bck().Name != "" {
-		s += ", bucket " + xact.Bck().String()
-	}
-	return s
-}
-
 func (xact *RebBase) initRebBase(id, kind string) {
 	xact.InitBase(id, kind, nil)
 }

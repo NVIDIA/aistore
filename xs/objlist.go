@@ -85,20 +85,20 @@ func (*olFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (p *olFactory) Start() error {
-	p.xact = newXact(p.t, p.Bck.Bck, p.msg, p.uuid)
+	p.xact = newXact(p.t, p.Bck, p.msg, p.uuid)
 	return nil
 }
 
 func (*olFactory) Kind() string        { return cmn.ActList }
 func (p *olFactory) Get() cluster.Xact { return p.xact }
 
-func newXact(t cluster.Target, bck cmn.Bck, smsg *cmn.SelectMsg, uuid string) *ObjListXact {
+func newXact(t cluster.Target, bck *cluster.Bck, smsg *cmn.SelectMsg, uuid string) *ObjListXact {
 	config := cmn.GCO.Get()
 	totallyIdle := config.Timeout.MaxHostBusy.D()
 	likelyIdle := config.Timeout.MaxKeepalive.D()
 	xact := &ObjListXact{
 		t:        t,
-		bck:      cluster.NewBckEmbed(bck),
+		bck:      bck,
 		msg:      smsg,
 		workCh:   make(chan *cmn.SelectMsg),
 		respCh:   make(chan *Resp),
@@ -106,7 +106,7 @@ func newXact(t cluster.Target, bck cmn.Bck, smsg *cmn.SelectMsg, uuid string) *O
 		lastPage: make([]*cmn.BucketEntry, 0, cacheSize),
 	}
 	debug.Assert(xact.bck.Props != nil)
-	xact.DemandBase = *xaction.NewXDB(uuid, cmn.ActList, &bck, totallyIdle, likelyIdle)
+	xact.DemandBase = *xaction.NewXDB(uuid, cmn.ActList, bck, totallyIdle, likelyIdle)
 	xact.InitIdle()
 	return xact
 }
@@ -411,7 +411,7 @@ func (r *ObjListXact) traverseBucket(msg *cmn.SelectMsg) {
 	}
 	opts := &fs.WalkBckOptions{
 		Options: fs.Options{
-			Bck:      r.Bck(),
+			Bck:      r.Bck().Bck,
 			CTs:      []string{fs.ObjectType},
 			Callback: cb,
 			Sorted:   true,

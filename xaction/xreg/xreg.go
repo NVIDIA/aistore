@@ -315,7 +315,7 @@ func (r *registry) abort(args abortArgs) {
 		} else if len(args.bcks) > 0 {
 			debug.AssertMsg(args.ty == "", args.ty)
 			for _, bck := range args.bcks {
-				if bck.Bck.Equal(xact.Bck()) {
+				if xact.Bck() != nil && bck.Bck.Equal(xact.Bck().Bck) {
 					abort = true
 					break
 				}
@@ -392,7 +392,7 @@ func (r *registry) hkDelOld() time.Duration {
 		// a given kind (if it is keep it anyway)
 		flt := XactFilter{Kind: entry.Kind(), OnlyRunning: &onl}
 		if xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeBck {
-			flt.Bck = cluster.NewBckEmbed(xact.Bck())
+			flt.Bck = xact.Bck()
 		}
 		if r.entries.findUnlocked(flt) == nil {
 			return
@@ -577,22 +577,28 @@ func (rxf XactFilter) genericMatcher(xact cluster.Xact) bool {
 		condition = condition && xact.Kind() == rxf.Kind
 	}
 	if rxf.Bck != nil {
-		condition = condition && xact.Bck().Equal(rxf.Bck.Bck)
+		if xact.Bck() == nil {
+			return false
+		}
+		condition = condition && xact.Bck().Bck.Equal(rxf.Bck.Bck)
 	}
 	return condition
 }
 
 func matchEntry(entry Renewable, flt XactFilter) (matches bool) {
+	xact := entry.Get()
 	if flt.ID != "" {
-		return entry.Get().ID() == flt.ID
+		return xact.ID() == flt.ID
 	}
-	if entry.Kind() == flt.Kind {
-		if flt.Bck == nil || flt.Bck.IsEmpty() {
-			return true
-		}
-		if !flt.Bck.IsEmpty() && entry.Get().Bck().Equal(flt.Bck.Bck) {
-			return true
-		}
+	if entry.Kind() != flt.Kind {
+		return false
 	}
-	return false
+	if flt.Bck == nil || flt.Bck.IsEmpty() {
+		return true
+	}
+	if xact.Bck() == nil {
+		return false
+	}
+	matches = xact.Bck().Bck.Equal(flt.Bck.Bck)
+	return
 }

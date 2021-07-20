@@ -13,7 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
@@ -24,7 +23,7 @@ type (
 	XactBase struct {
 		id      string
 		kind    string
-		bck     cmn.Bck
+		bck     *cluster.Bck
 		sutime  atomic.Int64
 		eutime  atomic.Int64
 		objects atomic.Int64
@@ -48,20 +47,18 @@ var IncInactive func()
 // XactBase - partially implements Xact interface
 //////////////
 
-func (xact *XactBase) InitBase(id, kind string, bck *cmn.Bck) {
+func (xact *XactBase) InitBase(id, kind string, bck *cluster.Bck) {
 	debug.AssertMsg(cos.IsValidUUID(id) || isValidRebID(id), id)
 	debug.AssertMsg(IsValidKind(kind), kind)
 	xact.id, xact.kind = id, kind
 	xact.abrt = make(chan struct{})
-	if bck != nil {
-		xact.bck = *bck
-	}
+	xact.bck = bck
 	xact.setStartTime(time.Now())
 }
 
 func (xact *XactBase) ID() string                 { return xact.id }
 func (xact *XactBase) Kind() string               { return xact.kind }
-func (xact *XactBase) Bck() cmn.Bck               { return xact.bck }
+func (xact *XactBase) Bck() *cluster.Bck          { return xact.bck }
 func (xact *XactBase) Finished() bool             { return xact.eutime.Load() != 0 }
 func (xact *XactBase) ChanAbort() <-chan struct{} { return xact.abrt }
 func (xact *XactBase) Aborted() bool              { return xact.aborted.Load() }
@@ -109,7 +106,7 @@ func (xact *XactBase) Quiesce(d time.Duration, cb cluster.QuiCB) cluster.QuiRes 
 
 func (xact *XactBase) String() string {
 	prefix := xact.Kind()
-	if xact.bck.Name != "" {
+	if xact.bck != nil {
 		prefix += "@" + xact.bck.Name
 	}
 	if !xact.Finished() {
@@ -206,16 +203,19 @@ func (xact *XactBase) BytesCount() int64          { return xact.bytes.Load() }
 func (xact *XactBase) BytesAdd(size int64) int64  { return xact.bytes.Add(size) }
 
 func (xact *XactBase) Stats() cluster.XactStats {
-	return &BaseXactStats{
+	stats := &BaseXactStats{
 		IDX:         xact.ID(),
 		KindX:       xact.Kind(),
 		StartTimeX:  xact.StartTime(),
 		EndTimeX:    xact.EndTime(),
-		BckX:        xact.Bck(),
 		ObjCountX:   xact.ObjCount(),
 		BytesCountX: xact.BytesCount(),
 		AbortedX:    xact.Aborted(),
 	}
+	if xact.Bck() != nil {
+		stats.BckX = xact.Bck().Bck
+	}
+	return stats
 }
 
 // errors

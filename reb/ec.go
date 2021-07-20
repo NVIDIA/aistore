@@ -50,18 +50,22 @@ func (reb *Manager) runECjoggers() {
 		wg                = &sync.WaitGroup{}
 		availablePaths, _ = fs.Get()
 		cfg               = cmn.GCO.Get()
-		bck               = reb.xact().Bck()
+		b                 = reb.xact().Bck()
 	)
-
 	for _, mpathInfo := range availablePaths {
-		bck := cmn.Bck{Name: bck.Name, Provider: cmn.ProviderAIS, Ns: bck.Ns}
+		bck := cmn.Bck{Provider: cmn.ProviderAIS}
+		if b != nil {
+			bck = cmn.Bck{Name: b.Name, Provider: cmn.ProviderAIS, Ns: b.Ns}
+		}
 		wg.Add(1)
 		go reb.jogEC(mpathInfo, bck, wg)
 	}
-
 	for _, provider := range cfg.Backend.Providers {
 		for _, mpathInfo := range availablePaths {
-			bck := cmn.Bck{Name: bck.Name, Provider: provider.Name, Ns: bck.Ns}
+			bck := cmn.Bck{Provider: provider.Name}
+			if b != nil {
+				bck = cmn.Bck{Name: bck.Name, Provider: provider.Name, Ns: bck.Ns}
+			}
 			wg.Add(1)
 			go reb.jogEC(mpathInfo, bck, wg)
 		}

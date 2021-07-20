@@ -47,13 +47,13 @@ func (*MovFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 	return p
 }
 
-func (p *MovFactory) Start() error {
-	p.xact = newBckRename(p.uuid, p.Kind(), p.Bck.Bck, p.t, p.args.BckFrom, p.args.BckTo, p.args.RebID)
-	return nil
-}
-
 func (*MovFactory) Kind() string        { return cmn.ActMoveBck }
 func (p *MovFactory) Get() cluster.Xact { return p.xact }
+
+func (p *MovFactory) Start() error {
+	p.xact = newBckRename(p.uuid, p.Kind(), p.Bck, p.t, p.args.BckFrom, p.args.BckTo, p.args.RebID)
+	return nil
+}
 
 func (p *MovFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	if p.phase == cmn.ActBegin {
@@ -75,9 +75,9 @@ func (p *MovFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 	return
 }
 
-func newBckRename(uuid, kind string, bck cmn.Bck, t cluster.Target, bckFrom, bckTo *cluster.Bck, rebID string) (x *bckRename) {
+func newBckRename(uuid, kind string, bck *cluster.Bck, t cluster.Target, bckFrom, bckTo *cluster.Bck, rebID string) (x *bckRename) {
 	x = &bckRename{t: t, bckFrom: bckFrom, bckTo: bckTo, rebID: rebID}
-	x.InitBase(uuid, kind, &bck)
+	x.InitBase(uuid, kind, bck)
 	return
 }
 

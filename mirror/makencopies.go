@@ -57,7 +57,7 @@ func (*mncFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 func (p *mncFactory) Start() error {
 	slab, err := p.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
 	cos.AssertNoErr(err)
-	p.xact = newXactMNC(p.Bck.Bck, p, slab)
+	p.xact = newXactMNC(p.Bck, p, slab)
 	return nil
 }
 
@@ -72,11 +72,11 @@ func (r *xactMNC) String() string {
 	return fmt.Sprintf("%s tag=%s, copies=%d", r.XactBase.String(), r.tag, r.copies)
 }
 
-func newXactMNC(bck cmn.Bck, p *mncFactory, slab *memsys.Slab) (r *xactMNC) {
+func newXactMNC(bck *cluster.Bck, p *mncFactory, slab *memsys.Slab) (r *xactMNC) {
 	r = &xactMNC{tag: p.args.Tag, copies: p.args.Copies}
 	debug.Assert(r.tag != "" && r.copies > 0)
 	mpopts := &mpather.JoggerGroupOpts{
-		Bck:      bck,
+		Bck:      bck.Bck,
 		T:        p.t,
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.visitObj,

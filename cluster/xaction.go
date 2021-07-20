@@ -28,7 +28,7 @@ type (
 		Run()
 		ID() string
 		Kind() string
-		Bck() cmn.Bck
+		Bck() *Bck
 		StartTime() time.Time
 		EndTime() time.Time
 		ObjCount() int64
