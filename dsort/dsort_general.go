@@ -72,7 +72,6 @@ type (
 	}
 
 	remoteRequest struct {
-		DaemonID  string             `json:"d"`
 		Record    *extract.Record    `json:"r"`
 		RecordObj *extract.RecordObj `json:"o"`
 	}
@@ -365,7 +364,6 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 			}
 
 			req := remoteRequest{
-				DaemonID:  ds.m.ctx.node.DaemonID,
 				Record:    rec,
 				RecordObj: obj,
 			}
@@ -489,9 +487,9 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 			return
 		}
 
-		fromNode := ds.m.smap.GetTarget(req.DaemonID)
+		fromNode := ds.m.smap.GetTarget(hdr.SID)
 		if fromNode == nil {
-			glog.Errorf("received request from node %q which is not present in the smap", req.DaemonID)
+			glog.Errorf("received request from node %q which is not present in the smap", hdr.SID)
 			return
 		}
 
