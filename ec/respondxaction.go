@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
@@ -50,6 +51,11 @@ func (*rspFactory) New(_ xreg.Args, bck *cluster.Bck) xreg.Renewable {
 
 func (*rspFactory) Kind() string        { return cmn.ActECRespond }
 func (p *rspFactory) Get() cluster.Xact { return p.xact }
+
+func (p *rspFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
+	debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) // xreg.usePrev() must've returned true
+	return xreg.WprUse, nil
+}
 
 func (p *rspFactory) Start() error {
 	var (

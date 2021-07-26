@@ -48,7 +48,7 @@ func (*MovFactory) Kind() string        { return cmn.ActMoveBck }
 func (p *MovFactory) Get() cluster.Xact { return p.xact }
 
 func (p *MovFactory) Start() error {
-	p.xact = newBckRename(p.UUID, p.Kind(), p.Bck, p.T, p.args.BckFrom, p.args.BckTo, p.args.RebID)
+	p.xact = newBckRename(p.UUID(), p.Kind(), p.Bck, p.T, p.args.BckFrom, p.args.BckTo, p.args.RebID)
 	return nil
 }
 

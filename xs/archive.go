@@ -105,6 +105,11 @@ func (*archFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 func (*archFactory) Kind() string        { return cmn.ActArchive }
 func (p *archFactory) Get() cluster.Xact { return p.xact }
 
+func (p *archFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
+	debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) // xreg.usePrev() must've returned true
+	return xreg.WprUse, nil
+}
+
 func (p *archFactory) Start() error {
 	var (
 		config      = cmn.GCO.Get()
@@ -112,7 +117,7 @@ func (p *archFactory) Start() error {
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
 	)
 	r := &XactPutArchive{
-		DemandBase: *xaction.NewXDB(p.UUID, cmn.ActArchive, p.Bck, totallyIdle, likelyIdle),
+		DemandBase: *xaction.NewXDB(p.UUID(), cmn.ActArchive, p.Bck, totallyIdle, likelyIdle),
 		t:          p.T,
 		bckFrom:    p.Bck,
 		workCh:     make(chan *cmn.ArchiveMsg, maxNumInParallel),

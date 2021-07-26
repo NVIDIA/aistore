@@ -76,6 +76,11 @@ func (p *getFactory) Start() error {
 func (*getFactory) Kind() string        { return cmn.ActECGet }
 func (p *getFactory) Get() cluster.Xact { return p.xact }
 
+func (p *getFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
+	debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) // xreg.usePrev() must've returned true
+	return xreg.WprUse, nil
+}
+
 /////////////
 // XactGet //
 /////////////

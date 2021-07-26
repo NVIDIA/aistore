@@ -14,11 +14,6 @@ import (
 )
 
 type (
-	// Serves to return the result of renewing
-	DummyEntry struct {
-		xact cluster.Xact
-	}
-
 	DirPromoteArgs struct {
 		Dir    string
 		Params *cmn.ActValPromote
@@ -48,21 +43,6 @@ type (
 		Copies int
 	}
 )
-
-////////////////
-// DummyEntry //
-////////////////
-
-// interface guard
-var (
-	_ Renewable = (*DummyEntry)(nil)
-)
-
-func (*DummyEntry) New(Args, *cluster.Bck) Renewable         { debug.Assert(false); return nil }
-func (*DummyEntry) Start() error                             { debug.Assert(false); return nil }
-func (*DummyEntry) Kind() string                             { debug.Assert(false); return "" }
-func (d *DummyEntry) Get() cluster.Xact                      { return d.xact }
-func (*DummyEntry) WhenPrevIsRunning(Renewable) (WPR, error) { return WprUse, nil }
 
 //////////////
 // registry //

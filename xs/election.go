@@ -41,4 +41,8 @@ func (p *eleFactory) Start() error {
 func (*eleFactory) Kind() string        { return cmn.ActElection }
 func (p *eleFactory) Get() cluster.Xact { return p.xact }
 
+func (*eleFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
+	return xreg.WprUse, nil
+}
+
 func (*Election) Run() { debug.Assert(false) }

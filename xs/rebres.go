@@ -117,7 +117,7 @@ func (*rslvrFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
 }
 
 func (p *rslvrFactory) Start() error {
-	p.xact = NewResilver(p.UUID, p.Kind())
+	p.xact = NewResilver(p.UUID(), p.Kind())
 	return nil
 }
 

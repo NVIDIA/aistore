@@ -242,6 +242,10 @@ func (p *dowFactory) Start() error {
 func (*dowFactory) Kind() string        { return cmn.ActDownload }
 func (p *dowFactory) Get() cluster.Xact { return p.xact }
 
+func (*dowFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
+	return xreg.WprKeepAndStartNew, nil
+}
+
 ////////////////
 // Downloader //
 ////////////////

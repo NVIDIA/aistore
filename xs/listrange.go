@@ -259,6 +259,10 @@ func (p *evdFactory) Start() error {
 func (p *evdFactory) Kind() string      { return p.kind }
 func (p *evdFactory) Get() cluster.Xact { return p.xact }
 
+func (*evdFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
+	return xreg.WprKeepAndStartNew, nil
+}
+
 func newEvictDelete(xargs *xreg.Args, kind string, bck *cluster.Bck, msg *cmn.ListRangeMsg) (ed *evictDelete) {
 	ed = &evictDelete{}
 	// NOTE: list defaults to aborting on errors other than non-existence
@@ -328,6 +332,10 @@ func (p *prfFactory) Start() error {
 
 func (*prfFactory) Kind() string        { return cmn.ActPrefetch }
 func (p *prfFactory) Get() cluster.Xact { return p.xact }
+
+func (*prfFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
+	return xreg.WprKeepAndStartNew, nil
+}
 
 func newPrefetch(xargs *xreg.Args, kind string, bck *cluster.Bck, msg *cmn.ListRangeMsg) (prf *prefetch) {
 	prf = &prefetch{}

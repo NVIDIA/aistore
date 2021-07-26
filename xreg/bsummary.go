@@ -69,16 +69,11 @@ func (r *registry) renewBckSummary(ctx context.Context, t cluster.Target, bck *c
 	return nil
 }
 
-/////////////////////////
+//////////////////
 // bsummFactory //
-/////////////////////////
+//////////////////
 
 func (*bsummFactory) New(Args, *cluster.Bck) Renewable { debug.Assert(false); return nil }
-
-func (*bsummFactory) WhenPrevIsRunning(Renewable) (action WPR, err error) {
-	debug.Assert(false)
-	return
-}
 
 func (e *bsummFactory) Start() error {
 	go e.xact.Run()
@@ -87,6 +82,11 @@ func (e *bsummFactory) Start() error {
 
 func (*bsummFactory) Kind() string        { return cmn.ActSummary }
 func (e *bsummFactory) Get() cluster.Xact { return e.xact }
+
+// never called
+func (*bsummFactory) Bucket() *cluster.Bck                         { debug.Assert(false); return nil }
+func (*bsummFactory) UUID() string                                 { debug.Assert(false); return "" }
+func (*bsummFactory) WhenPrevIsRunning(Renewable) (w WPR, e error) { debug.Assert(false); return }
 
 ///////////////
 // bsummXact //

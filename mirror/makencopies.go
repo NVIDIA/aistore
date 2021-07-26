@@ -61,6 +61,12 @@ func (p *mncFactory) Start() error {
 func (*mncFactory) Kind() string        { return cmn.ActMakeNCopies }
 func (p *mncFactory) Get() cluster.Xact { return p.xact }
 
+func (p *mncFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
+	err = fmt.Errorf("%s is currently running, cannot start a new %q",
+		prevEntry.Get(), p.Str(p.Kind()))
+	return
+}
+
 /////////////
 // xactMNC //
 /////////////
@@ -81,7 +87,7 @@ func newXactMNC(bck *cluster.Bck, p *mncFactory, slab *memsys.Slab) (r *xactMNC)
 		DoLoad:   mpather.Load, // Required to fetch `NumCopies()` and skip copies.
 		Throttle: true,
 	}
-	r.XactBckJog.Init(p.UUID, cmn.ActMakeNCopies, bck, mpopts)
+	r.XactBckJog.Init(p.UUID(), cmn.ActMakeNCopies, bck, mpopts)
 	return
 }
 

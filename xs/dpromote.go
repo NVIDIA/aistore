@@ -63,6 +63,10 @@ func (p *proFactory) Start() error {
 func (*proFactory) Kind() string        { return cmn.ActPromote }
 func (p *proFactory) Get() cluster.Xact { return p.xact }
 
+func (*proFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
+	return xreg.WprKeepAndStartNew, nil
+}
+
 ////////////////////
 // XactDirPromote //
 ////////////////////

@@ -75,6 +75,11 @@ func (p *putFactory) Start() error {
 func (*putFactory) Kind() string        { return cmn.ActPutCopies }
 func (p *putFactory) Get() cluster.Xact { return p.xact }
 
+func (p *putFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
+	debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) // xreg.usePrev() must've returned true
+	return xreg.WprUse, nil
+}
+
 // main
 func runXactPut(lom *cluster.LOM, slab *memsys.Slab, t cluster.Target) (r *XactPut, err error) {
 	mirror := *lom.MirrorConf()

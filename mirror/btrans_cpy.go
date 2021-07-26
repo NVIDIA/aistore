@@ -107,7 +107,7 @@ func (e *cpyFactory) Start() error {
 	e.xact.wg.Add(1)
 
 	// TODO: using rebalance config for a DM that copies objects.
-	return e.newDM(&config.Rebalance, e.UUID, sizePDU)
+	return e.newDM(&config.Rebalance, e.UUID(), sizePDU)
 }
 
 func (e *cpyFactory) newDM(rebcfg *cmn.RebalanceConf, uuid string, sizePDU int32) error {
@@ -134,8 +134,8 @@ func (e *cpyFactory) Get() cluster.Xact { return e.xact }
 
 func (e *cpyFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	prev := prevEntry.(*cpyFactory)
-	if e.UUID != prev.UUID {
-		err = fmt.Errorf("%s(%+v) != %s(%+v)", e.UUID, e.args, prev.UUID, prev.args)
+	if e.UUID() != prev.UUID() {
+		err = fmt.Errorf("%s is currently running - not starting new %q", prevEntry.Get(), e.Str(e.Kind()))
 		return
 	}
 	bckEq := prev.args.BckFrom.Equal(e.args.BckFrom, true /*same BID*/, true /* same backend */)
@@ -183,7 +183,7 @@ func newXactTransCpyBck(e *cpyFactory, slab *memsys.Slab) (r *XactTransCpyBck) {
 		DoLoad:   mpather.Load,
 		Throttle: true,
 	}
-	r.XactBckJog.Init(e.UUID, e.kind, e.args.BckTo, mpopts)
+	r.XactBckJog.Init(e.UUID(), e.kind, e.args.BckTo, mpopts)
 	return
 }
 

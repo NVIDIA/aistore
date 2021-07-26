@@ -50,7 +50,7 @@ func (*encFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (p *encFactory) Start() error {
-	p.xact = NewXactBckEncode(p.Bck, p.T, p.UUID)
+	p.xact = NewXactBckEncode(p.Bck, p.T, p.UUID())
 	return nil
 }
 

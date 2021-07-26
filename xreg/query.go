@@ -14,13 +14,19 @@ import (
 	"github.com/NVIDIA/aistore/query"
 )
 
-type queFactory struct {
-	xact  *query.ObjectsListingXact
-	ctx   context.Context
-	t     cluster.Target
-	query *query.ObjectsQuery
-	msg   *cmn.SelectMsg
-}
+type (
+	queFactory struct {
+		xact  *query.ObjectsListingXact
+		ctx   context.Context
+		t     cluster.Target
+		query *query.ObjectsQuery
+		msg   *cmn.SelectMsg
+	}
+	// Serves to return the result of renewing
+	DummyEntry struct {
+		xact cluster.Xact
+	}
+)
 
 // interface guard
 var (
@@ -45,9 +51,11 @@ func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.Ob
 		return RenewRes{&DummyEntry{nil}, err, msg.UUID}
 	}
 	e := &queFactory{ctx: ctx, t: t, query: q, msg: msg}
-	xact := query.NewObjectsListing(e.ctx, e.t, e.query, e.msg)
-	e.xact = xact
-	return r.renew(e, q.BckSource.Bck)
+	if err = e.Start(); err != nil {
+		return RenewRes{&DummyEntry{nil}, err, msg.UUID}
+	}
+	r.add(e)
+	return RenewRes{e, err, ""}
 }
 
 //////////////
@@ -60,16 +68,32 @@ func (e *queFactory) Start() (err error) {
 	if query.Registry.Get(e.msg.UUID) != nil {
 		err = fmt.Errorf("result set with handle %s already exists", e.msg.UUID)
 	}
+	xact := query.NewObjectsListing(e.ctx, e.t, e.query, e.msg)
+	e.xact = xact
 	return
 }
 
 func (*queFactory) Kind() string        { return cmn.ActQueryObjects }
 func (e *queFactory) Get() cluster.Xact { return e.xact }
 
-func (e *queFactory) WhenPrevIsRunning(Renewable) (wpr WPR, err error) {
-	wpr = WprKeepAndStartNew
-	if query.Registry.Get(e.msg.UUID) != nil {
-		wpr = WprUse
-	}
-	return
-}
+// never called
+func (*queFactory) Bucket() *cluster.Bck                         { debug.Assert(false); return nil }
+func (*queFactory) UUID() string                                 { debug.Assert(false); return "" }
+func (*queFactory) WhenPrevIsRunning(Renewable) (w WPR, e error) { debug.Assert(false); return }
+
+////////////////
+// DummyEntry //
+////////////////
+
+// interface guard
+var (
+	_ Renewable = (*DummyEntry)(nil)
+)
+
+func (*DummyEntry) New(Args, *cluster.Bck) Renewable         { return nil }
+func (*DummyEntry) Start() error                             { return nil }
+func (*DummyEntry) Kind() string                             { return "" }
+func (*DummyEntry) UUID() string                             { return "" }
+func (*DummyEntry) Bucket() *cluster.Bck                     { return nil }
+func (d *DummyEntry) Get() cluster.Xact                      { return d.xact }
+func (*DummyEntry) WhenPrevIsRunning(Renewable) (WPR, error) { return WprUse, nil }

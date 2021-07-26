@@ -42,7 +42,7 @@ func (*llcFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (p *llcFactory) Start() error {
-	xact := newXactLLC(p.T, p.UUID, p.Bck)
+	xact := newXactLLC(p.T, p.UUID(), p.Bck)
 	p.xact = xact
 	go xact.Run()
 	return nil
@@ -51,7 +51,6 @@ func (p *llcFactory) Start() error {
 func (*llcFactory) Kind() string        { return cmn.ActLoadLomCache }
 func (p *llcFactory) Get() cluster.Xact { return p.xact }
 
-// overriding default to keep the previous/current
 func (*llcFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) { return xreg.WprUse, nil }
 
 /////////////

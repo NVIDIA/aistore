@@ -42,6 +42,8 @@ type (
 		Kind() string
 		Get() cluster.Xact
 		WhenPrevIsRunning(prevEntry Renewable) (action WPR, err error)
+		Bucket() *cluster.Bck
+		UUID() string
 	}
 	// used in constructions
 	Args struct {
@@ -99,13 +101,15 @@ type (
 // RenewBase //
 ///////////////
 
-func (*RenewBase) WhenPrevIsRunning(prevEntry Renewable) (action WPR, err error) {
-	action = WprAbort
-	e := prevEntry.Get()
-	if _, ok := e.(xaction.Demand); ok {
-		action = WprUse
+func (r *RenewBase) Bucket() *cluster.Bck { return r.Bck }
+func (r *RenewBase) UUID() string         { return r.Args.UUID }
+
+func (r *RenewBase) Str(kind string) string {
+	prefix := kind
+	if r.Bck != nil {
+		prefix += "@" + r.Bck.String()
 	}
-	return
+	return fmt.Sprintf("%s, ID=%q", prefix, r.UUID())
 }
 
 //////////////////////
@@ -415,6 +419,11 @@ func (r *registry) renew(entry Renewable, bck *cluster.Bck, uuids ...string) (rn
 	// first, try to reuse under rlock
 	r.mtx.RLock()
 	if prevEntry := r.getRunning(flt); prevEntry != nil {
+		xprev := prevEntry.Get()
+		if usePrev(xprev, entry, bck) {
+			r.mtx.RUnlock()
+			return RenewRes{Entry: prevEntry, UUID: xprev.ID()}
+		}
 		if wpr, err := entry.WhenPrevIsRunning(prevEntry); wpr == WprUse || err != nil {
 			r.mtx.RUnlock()
 			xact := prevEntry.Get()
@@ -425,27 +434,55 @@ func (r *registry) renew(entry Renewable, bck *cluster.Bck, uuids ...string) (rn
 
 	// second
 	r.mtx.Lock()
-	rns = r.renewLocked(entry, flt)
+	rns = r.renewLocked(entry, flt, bck)
 	r.mtx.Unlock()
 	return
 }
 
-func (r *registry) renewLocked(entry Renewable, flt XactFilter) (rns RenewRes) {
+// reusing current (aka "previous") xaction: default policies
+func usePrev(xprev cluster.Xact, nentry Renewable, bck *cluster.Bck) (use bool) {
+	pkind, nkind := xprev.Kind(), nentry.Kind()
+	debug.Assertf(pkind == nkind && pkind != "", "%s != %s", pkind, nkind)
+	pdtor, ndtor := xaction.XactsDtor[pkind], xaction.XactsDtor[nkind]
+	debug.Assert(pdtor.Type == ndtor.Type)
+	// same ID
+	if xprev.ID() != "" && xprev.ID() == nentry.UUID() {
+		use = true
+		return
+	}
+	// on-demand
+	if _, ok := xprev.(xaction.Demand); ok {
+		if pdtor.Type == xaction.XactTypeGlobal {
+			use = true
+			return
+		}
+		debug.Assert(!bck.IsEmpty())
+		use = bck.Equal(xprev.Bck(), true, true)
+		return
+	}
+	// otherwise, consult with the impl via WhenPrevIsRunning()
+	return
+}
+
+func (r *registry) renewLocked(entry Renewable, flt XactFilter, bck *cluster.Bck) (rns RenewRes) {
 	var (
-		prevXact cluster.Xact
-		wpr      WPR
-		err      error
+		xprev cluster.Xact
+		wpr   WPR
+		err   error
 	)
 	if prevEntry := r.getRunning(flt); prevEntry != nil {
-		prevXact = prevEntry.Get()
+		xprev = prevEntry.Get()
+		if usePrev(xprev, entry, bck) {
+			return RenewRes{Entry: prevEntry, UUID: xprev.ID()}
+		}
 		wpr, err = entry.WhenPrevIsRunning(prevEntry)
 		if wpr == WprUse || err != nil {
-			return RenewRes{Entry: prevEntry, Err: err, UUID: prevXact.ID()}
+			return RenewRes{Entry: prevEntry, Err: err, UUID: xprev.ID()}
 		}
 		debug.Assert(wpr == WprAbort || wpr == WprKeepAndStartNew)
 	}
 	if wpr == WprAbort {
-		prevXact.Abort()
+		xprev.Abort()
 		time.Sleep(waitAbortDone) // TODO: better
 	}
 	if err = entry.Start(); err != nil {

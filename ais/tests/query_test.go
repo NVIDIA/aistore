@@ -230,8 +230,7 @@ func TestQueryWorkersTargetDown(t *testing.T) {
 		rebID, err := api.StopMaintenance(baseParams, argsMnt)
 		tassert.CheckFatal(t, err)
 		args := api.XactReqArgs{ID: rebID, Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
-		_, err = api.WaitForXaction(baseParams, args)
-		tassert.CheckError(t, err)
+		api.WaitForXaction(baseParams, args)
 	}()
 
 	_, err = tutils.WaitForClusterState(

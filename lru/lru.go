@@ -128,7 +128,7 @@ func (p *Factory) Start() error {
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
 	)
 	p.xact = &Xaction{
-		DemandBase: *xaction.NewXDB(p.UUID, cmn.ActLRU, nil, totallyIdle, likelyIdle),
+		DemandBase: *xaction.NewXDB(p.UUID(), cmn.ActLRU, nil, totallyIdle, likelyIdle),
 		Renewed:    make(chan struct{}, 10),
 		OkRemoveMisplaced: func() bool {
 			g, l := xreg.GetRebMarked(), xreg.GetResilverMarked()
@@ -141,6 +141,11 @@ func (p *Factory) Start() error {
 
 func (*Factory) Kind() string        { return cmn.ActLRU }
 func (p *Factory) Get() cluster.Xact { return p.xact }
+
+func (p *Factory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
+	err = fmt.Errorf("%s is already running - not starting %q", prevEntry.Get(), p.Str(p.Kind()))
+	return
+}
 
 func Run(ini *InitLRU) {
 	var (
