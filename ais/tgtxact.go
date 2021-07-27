@@ -129,7 +129,7 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bc
 		return fmt.Errorf(cmn.FmtErrUnknown, t.si, "xaction kind", xactMsg.Kind)
 	}
 
-	if dtor := xaction.XactsDtor[xactMsg.Kind]; dtor.Type == xaction.XactTypeBck && bck == nil {
+	if dtor := xaction.XactsDtor[xactMsg.Kind]; dtor.Scope == xaction.ScopeBck && bck == nil {
 		return fmt.Errorf(erfmn, xactMsg.Kind)
 	}
 

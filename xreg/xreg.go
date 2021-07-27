@@ -71,14 +71,10 @@ type (
 	}
 	// Selects subset of xactions to abort.
 	abortArgs struct {
-		// run on `bcks` buckets
-		bcks []*cluster.Bck
-		// one of { XactTypeGlobal, XactTypeBck, XactTypeTask } enum
-		ty string
-		// mountpath xactions - see xaction.XactsDtor
-		mountpaths bool
-		// all or matching `ty` above, if defined
-		all bool
+		bcks       []*cluster.Bck // run on a slice of buckets
+		ty         string         // one of { ScopeG, ScopeBck, ... } enum
+		mountpaths bool           // mountpath xactions - see xaction.XactsDtor
+		all        bool           // all or matching `ty` above, if defined
 	}
 
 	entries struct {
@@ -319,7 +315,7 @@ func (r *registry) abort(args abortArgs) {
 				}
 			}
 		} else if args.all {
-			abort = args.ty == "" || args.ty == xaction.XactsDtor[xact.Kind()].Type
+			abort = args.ty == "" || args.ty == xaction.XactsDtor[xact.Kind()].Scope
 		}
 		if abort {
 			xact.Abort()
@@ -389,7 +385,7 @@ func (r *registry) hkDelOld() time.Duration {
 		// extra check if the entry is not the most recent one for
 		// a given kind (if it is keep it anyway)
 		flt := XactFilter{Kind: entry.Kind(), OnlyRunning: &onl}
-		if xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeBck {
+		if xaction.XactsDtor[entry.Kind()].Scope == xaction.ScopeBck {
 			flt.Bck = xact.Bck()
 		}
 		if r.entries.findUnlocked(flt) == nil {
@@ -444,7 +440,7 @@ func usePrev(xprev cluster.Xact, nentry Renewable, bck *cluster.Bck) (use bool) 
 	pkind, nkind := xprev.Kind(), nentry.Kind()
 	debug.Assertf(pkind == nkind && pkind != "", "%s != %s", pkind, nkind)
 	pdtor, ndtor := xaction.XactsDtor[pkind], xaction.XactsDtor[nkind]
-	debug.Assert(pdtor.Type == ndtor.Type)
+	debug.Assert(pdtor.Scope == ndtor.Scope)
 	// same ID
 	if xprev.ID() != "" && xprev.ID() == nentry.UUID() {
 		use = true
@@ -452,7 +448,7 @@ func usePrev(xprev cluster.Xact, nentry Renewable, bck *cluster.Bck) (use bool) 
 	}
 	// on-demand
 	if _, ok := xprev.(xaction.Demand); ok {
-		if pdtor.Type == xaction.XactTypeGlobal {
+		if pdtor.Scope != xaction.ScopeBck {
 			use = true
 			return
 		}

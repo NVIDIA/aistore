@@ -13,14 +13,15 @@ import (
 )
 
 const (
-	XactTypeGlobal = "global"
-	XactTypeBck    = "bucket"
-	XactTypeTask   = "task"
+	ScopeG   = "global"
+	ScopeT   = "target"
+	ScopeBck = "bucket"
+	ScopeO   = "other"
 )
 
 type (
 	XactDescriptor struct {
-		Type       string          // XactTypeGlobal, etc. - enum above
+		Scope      string          // ScopeG (global), etc. - the enum above
 		Access     cmn.AccessAttrs // Access required by xact (see: cmn.Access*)
 		Startable  bool            // determines if this xaction can be started via API
 		Metasync   bool            // true: changes and metasyncs cluster-wide meta
@@ -68,36 +69,36 @@ var _ cluster.XactStats = (*BaseXactStats)(nil)
 // `Startable`, `Owned`, etc.
 var XactsDtor = map[string]XactDescriptor{
 	// bucket-less (aka "global") xactions with scope = (target | cluster)
-	cmn.ActLRU:       {Type: XactTypeGlobal, Startable: true, Mountpath: true},
-	cmn.ActElection:  {Type: XactTypeGlobal, Startable: false},
-	cmn.ActResilver:  {Type: XactTypeGlobal, Startable: true, Mountpath: true},
-	cmn.ActRebalance: {Type: XactTypeGlobal, Startable: true, Metasync: true, Owned: false, Mountpath: true},
-	cmn.ActDownload:  {Type: XactTypeGlobal, Startable: false, Mountpath: true},
+	cmn.ActLRU:       {Scope: ScopeG, Startable: true, Mountpath: true},
+	cmn.ActElection:  {Scope: ScopeG, Startable: false},
+	cmn.ActResilver:  {Scope: ScopeT, Startable: true, Mountpath: true},
+	cmn.ActRebalance: {Scope: ScopeG, Startable: true, Metasync: true, Owned: false, Mountpath: true},
+	cmn.ActDownload:  {Scope: ScopeG, Startable: false, Mountpath: true},
 
 	// xactions that run on a given bucket or buckets
-	cmn.ActECGet:          {Type: XactTypeBck, Startable: false},
-	cmn.ActECPut:          {Type: XactTypeBck, Startable: false},
-	cmn.ActECRespond:      {Type: XactTypeBck, Startable: false},
-	cmn.ActMakeNCopies:    {Type: XactTypeBck, Access: cmn.AccessRW, Startable: true, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
-	cmn.ActPutCopies:      {Type: XactTypeBck, Startable: false},
-	cmn.ActArchive:        {Type: XactTypeBck, Startable: false},
-	cmn.ActMoveBck:        {Type: XactTypeBck, Access: cmn.AccessMoveBucket, Startable: false, Metasync: true, Owned: false, Mountpath: true},
-	cmn.ActCopyBck:        {Type: XactTypeBck, Access: cmn.AccessRW, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
-	cmn.ActETLBck:         {Type: XactTypeBck, Access: cmn.AccessRW, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
-	cmn.ActECEncode:       {Type: XactTypeBck, Access: cmn.AccessRW, Startable: true, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
-	cmn.ActEvictObjects:   {Type: XactTypeBck, Access: cmn.AccessObjDELETE, Startable: false, Mountpath: true},
-	cmn.ActDelete:         {Type: XactTypeBck, Access: cmn.AccessObjDELETE, Startable: false, Mountpath: true},
-	cmn.ActLoadLomCache:   {Type: XactTypeBck, Startable: true, Mountpath: true},
-	cmn.ActPrefetch:       {Type: XactTypeBck, Access: cmn.AccessRW, Startable: true},
-	cmn.ActPromote:        {Type: XactTypeBck, Access: cmn.AccessPROMOTE, Startable: false, RefreshCap: true},
-	cmn.ActQueryObjects:   {Type: XactTypeBck, Access: cmn.AccessObjLIST, Startable: false, Metasync: false, Owned: true},
-	cmn.ActList:           {Type: XactTypeBck, Access: cmn.AccessObjLIST, Startable: false, Metasync: false, Owned: true},
-	cmn.ActSummary:        {Type: XactTypeTask, Access: cmn.AccessObjLIST | cmn.AccessBckHEAD, Startable: false, Metasync: false, Owned: true, Mountpath: true},
-	cmn.ActInvalListCache: {Type: XactTypeBck, Access: cmn.AccessObjLIST, Startable: false},
+	cmn.ActECGet:          {Scope: ScopeBck, Startable: false},
+	cmn.ActECPut:          {Scope: ScopeBck, Startable: false},
+	cmn.ActECRespond:      {Scope: ScopeBck, Startable: false},
+	cmn.ActMakeNCopies:    {Scope: ScopeBck, Access: cmn.AccessRW, Startable: true, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
+	cmn.ActPutCopies:      {Scope: ScopeBck, Startable: false},
+	cmn.ActArchive:        {Scope: ScopeBck, Startable: false},
+	cmn.ActMoveBck:        {Scope: ScopeBck, Access: cmn.AccessMoveBucket, Startable: false, Metasync: true, Owned: false, Mountpath: true},
+	cmn.ActCopyBck:        {Scope: ScopeBck, Access: cmn.AccessRW, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
+	cmn.ActETLBck:         {Scope: ScopeBck, Access: cmn.AccessRW, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
+	cmn.ActECEncode:       {Scope: ScopeBck, Access: cmn.AccessRW, Startable: true, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
+	cmn.ActEvictObjects:   {Scope: ScopeBck, Access: cmn.AccessObjDELETE, Startable: false, Mountpath: true},
+	cmn.ActDelete:         {Scope: ScopeBck, Access: cmn.AccessObjDELETE, Startable: false, Mountpath: true},
+	cmn.ActLoadLomCache:   {Scope: ScopeBck, Startable: true, Mountpath: true},
+	cmn.ActPrefetch:       {Scope: ScopeBck, Access: cmn.AccessRW, Startable: true},
+	cmn.ActPromote:        {Scope: ScopeBck, Access: cmn.AccessPROMOTE, Startable: false, RefreshCap: true},
+	cmn.ActQueryObjects:   {Scope: ScopeBck, Access: cmn.AccessObjLIST, Startable: false, Metasync: false, Owned: true},
+	cmn.ActList:           {Scope: ScopeBck, Access: cmn.AccessObjLIST, Startable: false, Metasync: false, Owned: true},
+	cmn.ActSummary:        {Scope: ScopeO, Access: cmn.AccessObjLIST | cmn.AccessBckHEAD, Startable: false, Metasync: false, Owned: true, Mountpath: true},
+	cmn.ActInvalListCache: {Scope: ScopeBck, Access: cmn.AccessObjLIST, Startable: false},
 }
 
 func IsValidKind(kind string) bool { _, ok := XactsDtor[kind]; return ok }
-func IsTypeBck(kind string) bool   { return XactsDtor[kind].Type == XactTypeBck }
+func IsTypeBck(kind string) bool   { return XactsDtor[kind].Scope == ScopeBck }
 func IsMountpath(kind string) bool { return XactsDtor[kind].Mountpath }
 
 ///////////////////

@@ -51,7 +51,7 @@ type (
 func RegBckXact(entry Renewable) { defaultReg.regBckXact(entry) }
 
 func (r *registry) regBckXact(entry Renewable) {
-	debug.Assert(xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeBck)
+	debug.Assert(xaction.XactsDtor[entry.Kind()].Scope == xaction.ScopeBck)
 
 	// It is expected that registrations happen at the init time. Therefore, it
 	// is safe to assume that no `RenewXYZ` will happen before all xactions

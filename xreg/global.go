@@ -24,7 +24,7 @@ type RebalanceArgs struct {
 func RegGlobXact(entry Renewable) { defaultReg.regGlobXact(entry) }
 
 func (r *registry) regGlobXact(entry Renewable) {
-	debug.Assert(xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeGlobal)
+	debug.Assert(xaction.XactsDtor[entry.Kind()].Scope != xaction.ScopeBck)
 
 	// It is expected that registrations happen at the init time. Therefore, it
 	// is safe to assume that no `RenewXYZ` will happen before all xactions

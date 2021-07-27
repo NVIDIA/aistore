@@ -702,12 +702,8 @@ func parseXactionFromArgs(c *cli.Context) (xactID, xactKind string, bck cmn.Bck,
 		xactID = xactKind
 		xactKind = ""
 	} else {
-		switch xaction.XactsDtor[xactKind].Type {
-		case xaction.XactTypeGlobal:
-			if c.NArg() > 1 {
-				fmt.Fprintf(c.App.ErrWriter, "Warning: %q is a global xaction, ignoring bucket name\n", xactKind)
-			}
-		case xaction.XactTypeBck:
+		switch xaction.XactsDtor[xactKind].Scope {
+		case xaction.ScopeBck:
 			// Bucket is optional.
 			if uri := c.Args().Get(1); uri != "" {
 				if bck, err = parseBckURI(c, uri); err != nil {
@@ -717,10 +713,10 @@ func parseXactionFromArgs(c *cli.Context) (xactID, xactKind string, bck cmn.Bck,
 					return "", "", bck, err
 				}
 			}
-		case xaction.XactTypeTask:
-			// TODO: we probably should not ignore bucket...
+		default:
 			if c.NArg() > 1 {
-				fmt.Fprintf(c.App.ErrWriter, "Warning: %q is a task xaction, ignoring bucket name\n", xactKind)
+				fmt.Fprintf(c.App.ErrWriter,
+					"Warning: %q is a non bucket-scope xaction, ignoring bucket name\n", xactKind)
 			}
 		}
 	}
