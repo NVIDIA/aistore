@@ -67,8 +67,7 @@ func (p *getFactory) Start() error {
 		totallyIdle = config.Timeout.SendFile.D()
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
 	)
-	xec.DemandBase = *xaction.NewXDB(cos.GenUUID(), p.Kind(), p.Bck, totallyIdle, likelyIdle)
-	xec.InitIdle()
+	xec.DemandBase.Init(cos.GenUUID(), p.Kind(), p.Bck, totallyIdle, likelyIdle)
 	p.xact = xec
 	go xec.Run()
 	return nil

@@ -115,17 +115,12 @@ func (p *archFactory) Start() error {
 		config      = cmn.GCO.Get()
 		totallyIdle = config.Timeout.SendFile.D()
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
+		workCh      = make(chan *cmn.ArchiveMsg, maxNumInParallel)
 	)
-	r := &XactPutArchive{
-		DemandBase: *xaction.NewXDB(p.UUID(), cmn.ActArchive, p.Bck, totallyIdle, likelyIdle),
-		t:          p.T,
-		bckFrom:    p.Bck,
-		workCh:     make(chan *cmn.ArchiveMsg, maxNumInParallel),
-		config:     config,
-	}
+	r := &XactPutArchive{t: p.T, bckFrom: p.Bck, workCh: workCh, config: config}
 	r.pending.m = make(map[string]*archwi, maxNumInParallel)
 	p.xact = r
-	r.InitIdle()
+	r.DemandBase.Init(p.UUID(), cmn.ActArchive, p.Bck, totallyIdle, likelyIdle)
 	if err := p.newDM(p.Bck, r); err != nil {
 		return err
 	}

@@ -128,14 +128,13 @@ func (p *Factory) Start() error {
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
 	)
 	p.xact = &Xaction{
-		DemandBase: *xaction.NewXDB(p.UUID(), cmn.ActLRU, nil, totallyIdle, likelyIdle),
-		Renewed:    make(chan struct{}, 10),
+		Renewed: make(chan struct{}, 10),
 		OkRemoveMisplaced: func() bool {
 			g, l := xreg.GetRebMarked(), xreg.GetResilverMarked()
 			return !g.Interrupted && !l.Interrupted && g.Xact == nil && l.Xact == nil
 		},
 	}
-	p.xact.InitIdle()
+	p.xact.DemandBase.Init(p.UUID(), cmn.ActLRU, nil, totallyIdle, likelyIdle)
 	return nil
 }
 

@@ -90,13 +90,8 @@ func runXactPut(lom *cluster.LOM, slab *memsys.Slab, t cluster.Target) (r *XactP
 		return
 	}
 	bck := lom.Bck()
-	r = &XactPut{
-		DemandBase: *xaction.NewXDB(cos.GenUUID(), cmn.ActPutCopies, bck),
-		mirror:     mirror,
-		workCh:     make(chan cluster.LIF, mirror.Burst),
-	}
-	r.InitIdle()
-
+	r = &XactPut{mirror: mirror, workCh: make(chan cluster.LIF, mirror.Burst)}
+	r.DemandBase.Init(cos.GenUUID(), cmn.ActPutCopies, bck)
 	r.workers = mpather.NewWorkerGroup(&mpather.WorkerGroupOpts{
 		Callback:  r.workCb,
 		Slab:      slab,

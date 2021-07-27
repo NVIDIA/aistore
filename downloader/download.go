@@ -256,15 +256,11 @@ func (*Downloader) Name() string {
 }
 
 func newDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
-	downloader := &Downloader{
-		DemandBase: *xaction.NewXDB(cos.GenUUID(), cmn.Download, nil),
-		t:          t,
-		statsT:     statsT,
-	}
-	downloader.dispatcher = newDispatcher(downloader)
-	downloader.InitIdle()
+	d = &Downloader{t: t, statsT: statsT}
+	d.dispatcher = newDispatcher(d)
+	d.DemandBase.Init(cos.GenUUID(), cmn.Download, nil)
 	instance.Inc()
-	return downloader
+	return
 }
 
 func (d *Downloader) Run() {

@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xaction"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -100,11 +99,8 @@ func newTargetLRUMock() *cluster.TargetMock {
 }
 
 func newInitLRU(t cluster.Target) *lru.InitLRU {
-	xlru := &lru.Xaction{
-		DemandBase: *xaction.NewXDB(cos.GenUUID(), cmn.ActLRU, nil, 2*time.Second, time.Second),
-		Renewed:    make(chan struct{}, 8),
-	}
-	xlru.InitIdle()
+	xlru := &lru.Xaction{Renewed: make(chan struct{}, 8)}
+	xlru.DemandBase.Init(cos.GenUUID(), cmn.ActLRU, nil, 2*time.Second, time.Second)
 	return &lru.InitLRU{
 		Xaction:             xlru,
 		StatsT:              stats.NewTrackerMock(),

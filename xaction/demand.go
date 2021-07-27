@@ -57,8 +57,7 @@ type (
 // DemandBase //
 ////////////////
 
-// NOTE: to fully initialize it, must call xact.InitIdle() upon return
-func NewXDB(uuid, kind string, bck *cluster.Bck, idleTimes ...time.Duration) (xdb *DemandBase) {
+func (r *DemandBase) Init(uuid, kind string, bck *cluster.Bck, idleTimes ...time.Duration) (xdb *DemandBase) {
 	var (
 		hkName          = kind + "/" + uuid
 		totally, likely = totallyIdle, likelyIdle
@@ -69,15 +68,18 @@ func NewXDB(uuid, kind string, bck *cluster.Bck, idleTimes ...time.Duration) (xd
 		debug.Assert(totally > likely)
 		debug.Assert(likely > time.Second/10)
 	}
-	xdb = &DemandBase{
-		hkName: hkName,
-		idle:   idle{totally: totally, likely: likely, ticks: cos.NewStopCh()},
+	{
+		r.hkName = hkName
+		r.idle.totally = totally
+		r.idle.likely = likely
+		r.idle.ticks = cos.NewStopCh()
 	}
-	xdb.InitBase(uuid, kind, bck)
+	r.InitBase(uuid, kind, bck)
+	r._initIdle()
 	return
 }
 
-func (r *DemandBase) InitIdle() {
+func (r *DemandBase) _initIdle() {
 	r.active.Inc()
 	r.hkReg.Store(true)
 	hk.Reg(r.hkName, r.hkcb)
