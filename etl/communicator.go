@@ -17,8 +17,8 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/memsys"
-	corev1 "k8s.io/api/core/v1"
 )
 
 type (
@@ -29,9 +29,7 @@ type (
 	}
 
 	// Communicator is responsible for managing communications with local ETL container.
-	// Do() gets executed as part of (each) GET bucket/object by the user.
-	// Communicator listens to cluster membership changes and terminates ETL container,
-	// if need be.
+	// It listens to cluster membership changes and terminates ETL container, if need be.
 	Communicator interface {
 		cluster.Slistener
 
@@ -39,27 +37,23 @@ type (
 		PodName() string
 		SvcName() string
 
-		// Do() uses one of the two ETL container endpoints:
-		// - Method "PUT", Path "/"
-		// - Method "GET", Path "/bucket/object"
-		Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error
+		// OnlineTransform uses one of the two ETL container endpoints:
+		//  - Method "PUT", Path "/"
+		//  - Method "GET", Path "/bucket/object"
+		OnlineTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error
 
-		// Get() interface implementations realize offline ETL.
-		// Get() is driven by `OfflineDataProvider` - not to confuse with
-		// GET requests from users (such as training models and apps)
+		// OfflineTransform interface implementations realize offline ETL.
+		// OfflineTransform is driven by `OfflineDataProvider` - not to confuse
+		// with GET requests from users (such as training models and apps)
 		// to perform on-the-fly transformation.
-		Get(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error)
+		OfflineTransform(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error)
 
 		CommStats
 	}
 
 	commArgs struct {
-		listener       cluster.Slistener
-		t              cluster.Target
-		pod            *corev1.Pod
-		name           string
-		commType       string
-		transformerURL string
+		listener    cluster.Slistener
+		bootstraper *etlBootstraper
 	}
 
 	commStats struct {
@@ -75,21 +69,33 @@ type (
 		name    string
 		podName string
 
-		transformerURL string
-
 		stats *commStats
 	}
 
 	pushComm struct {
 		baseComm
 		mem *memsys.MMSA
+		uri string
 	}
 	redirectComm struct {
 		baseComm
+		uri string
 	}
 	revProxyComm struct {
 		baseComm
-		rp *httputil.ReverseProxy
+		rp  *httputil.ReverseProxy
+		uri string
+	}
+	ioComm struct {
+		baseComm
+		client  k8s.Client
+		command []string
+	}
+
+	// TODO: Generalize and move to `cos` package
+	cbWriter struct {
+		w       io.Writer
+		writeCb func(int)
 	}
 )
 
@@ -98,6 +104,8 @@ var (
 	_ Communicator = (*pushComm)(nil)
 	_ Communicator = (*redirectComm)(nil)
 	_ Communicator = (*revProxyComm)(nil)
+
+	_ io.Writer = (*cbWriter)(nil)
 )
 
 //////////////
@@ -106,28 +114,31 @@ var (
 
 func makeCommunicator(args commArgs) Communicator {
 	baseComm := baseComm{
-		Slistener:      args.listener,
-		t:              args.t,
-		name:           args.name,
-		podName:        args.pod.GetName(),
-		transformerURL: args.transformerURL,
+		Slistener: args.listener,
+		t:         args.bootstraper.t,
+		name:      args.bootstraper.originalPodName,
+		podName:   args.bootstraper.pod.Name,
 
 		stats: &commStats{},
 	}
 
-	switch args.commType {
+	switch args.bootstraper.msg.CommType {
 	case PushCommType:
-		return &pushComm{baseComm: baseComm, mem: args.t.MMSA()}
+		return &pushComm{
+			baseComm: baseComm,
+			mem:      args.bootstraper.t.MMSA(),
+			uri:      args.bootstraper.uri,
+		}
 	case RedirectCommType:
-		return &redirectComm{baseComm: baseComm}
+		return &redirectComm{baseComm: baseComm, uri: args.bootstraper.uri}
 	case RevProxyCommType:
-		transURL, err := url.Parse(baseComm.transformerURL)
+		transformerURL, err := url.Parse(args.bootstraper.uri)
 		cos.AssertNoErr(err)
 		rp := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
 				// Replacing the `req.URL` host with ETL container host
-				req.URL.Scheme = transURL.Scheme
-				req.URL.Host = transURL.Host
+				req.URL.Scheme = transformerURL.Scheme
+				req.URL.Host = transformerURL.Host
 				req.URL.RawQuery = pruneQuery(req.URL.RawQuery)
 				if _, ok := req.Header["User-Agent"]; !ok {
 					// Explicitly disable `User-Agent` so it's not set to default value.
@@ -135,9 +146,17 @@ func makeCommunicator(args commArgs) Communicator {
 				}
 			},
 		}
-		return &revProxyComm{baseComm: baseComm, rp: rp}
+		return &revProxyComm{baseComm: baseComm, rp: rp, uri: args.bootstraper.uri}
+	case IOCommType:
+		client, err := k8s.GetClient()
+		cos.AssertNoErr(err) // TODO: Propagate the error.
+		return &ioComm{
+			baseComm: baseComm,
+			client:   client,
+			command:  args.bootstraper.originalCommand,
+		}
 	default:
-		cos.AssertMsg(false, args.commType)
+		cos.AssertMsg(false, args.bootstraper.msg.CommType)
 	}
 	return nil
 }
@@ -195,9 +214,9 @@ func (pc *pushComm) tryDoRequest(lom *cluster.LOM, timeout time.Duration) (cos.R
 	if timeout != 0 {
 		var ctx context.Context
 		ctx, cancel = context.WithTimeout(context.Background(), timeout)
-		req, err = http.NewRequestWithContext(ctx, http.MethodPut, pc.transformerURL, fh)
+		req, err = http.NewRequestWithContext(ctx, http.MethodPut, pc.uri, fh)
 	} else {
-		req, err = http.NewRequest(http.MethodPut, pc.transformerURL, fh)
+		req, err = http.NewRequest(http.MethodPut, pc.uri, fh)
 	}
 	if err != nil {
 		cos.Close(fh)
@@ -229,7 +248,7 @@ finish:
 	}), nil
 }
 
-func (pc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck, objName string) error {
+func (pc *pushComm) OnlineTransform(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck, objName string) error {
 	var (
 		size   int64
 		r, err = pc.doRequest(bck, objName, 0 /*timeout*/)
@@ -247,7 +266,7 @@ func (pc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck,
 	return err
 }
 
-func (pc *pushComm) Get(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
+func (pc *pushComm) OfflineTransform(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
 	return pc.doRequest(bck, objName, timeout)
 }
 
@@ -255,7 +274,7 @@ func (pc *pushComm) Get(bck *cluster.Bck, objName string, timeout time.Duration)
 // redirectComm //
 //////////////////
 
-func (rc *redirectComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
+func (rc *redirectComm) OnlineTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
 	size, err := determineSize(bck, objName)
 	if err != nil {
 		return err
@@ -263,19 +282,19 @@ func (rc *redirectComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.
 	rc.stats.inBytes.Add(size)
 
 	// TODO: Is there way to determine `rc.stats.outBytes`?
-	redirectURL := cos.JoinPath(rc.transformerURL, transformerPath(bck, objName))
+	redirectURL := cos.JoinPath(rc.uri, transformerPath(bck, objName))
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 	return nil
 }
 
-func (rc *redirectComm) Get(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
+func (rc *redirectComm) OfflineTransform(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
 	size, err := determineSize(bck, objName)
 	if err != nil {
 		return nil, err
 	}
 	rc.stats.inBytes.Add(size)
 
-	etlURL := cos.JoinPath(rc.transformerURL, transformerPath(bck, objName))
+	etlURL := cos.JoinPath(rc.uri, transformerPath(bck, objName))
 	return rc.getWithTimeout(etlURL, timeout)
 }
 
@@ -283,7 +302,7 @@ func (rc *redirectComm) Get(bck *cluster.Bck, objName string, timeout time.Durat
 // revProxyComm //
 //////////////////
 
-func (pc *revProxyComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
+func (pc *revProxyComm) OnlineTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
 	size, err := determineSize(bck, objName)
 	if err != nil {
 		return err
@@ -298,16 +317,103 @@ func (pc *revProxyComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.
 	return nil
 }
 
-func (pc *revProxyComm) Get(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
+func (pc *revProxyComm) OfflineTransform(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
 	size, err := determineSize(bck, objName)
 	if err != nil {
 		return nil, err
 	}
 	pc.stats.inBytes.Add(size)
 
-	etlURL := cos.JoinPath(pc.transformerURL, transformerPath(bck, objName))
+	etlURL := cos.JoinPath(pc.uri, transformerPath(bck, objName))
 	return pc.getWithTimeout(etlURL, timeout)
 }
+
+//////////////
+// cbWriter //
+//////////////
+
+func (cw *cbWriter) Write(b []byte) (n int, err error) {
+	n, err = cw.w.Write(b)
+	cw.writeCb(n)
+	return
+}
+
+////////////
+// ioComm //
+////////////
+
+func (ic *ioComm) tryExecReq(lom *cluster.LOM, w io.Writer) error {
+	lom.Lock(false)
+	defer lom.Unlock(false)
+
+	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+		return err
+	}
+
+	// `fh` is closed by Do(req).
+	fh, err := cos.NewFileHandle(lom.FQN)
+	if err != nil {
+		return err
+	}
+	defer cos.Close(fh)
+
+	ic.stats.inBytes.Add(lom.SizeBytes())
+	cw := &cbWriter{
+		w: w,
+		writeCb: func(n int) {
+			ic.stats.outBytes.Add(int64(n))
+		},
+	}
+
+	return ic.client.ExecCmd(ic.PodName(), ic.command, fh, cw, nil)
+}
+
+func (ic *ioComm) doExecReq(bck *cluster.Bck, objName string, w io.Writer) (err error) {
+	lom := cluster.AllocLOM(objName)
+	defer cluster.FreeLOM(lom)
+
+	if err = lom.Init(bck.Bck); err != nil {
+		return
+	}
+
+	err = ic.tryExecReq(lom, w)
+	if err != nil && cmn.IsObjNotExist(err) && lom.Bck().IsRemote() {
+		_, err = ic.t.GetCold(context.Background(), lom, cluster.PrefetchWait)
+		if err != nil {
+			return
+		}
+		err = ic.tryExecReq(lom, w)
+	}
+	return err
+}
+
+func (ic *ioComm) OnlineTransform(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck, objName string) (err error) {
+	defer ic.stats.objCount.Inc()
+	return ic.doExecReq(bck, objName, w)
+}
+
+func (ic *ioComm) OfflineTransform(bck *cluster.Bck, objName string, _ time.Duration) (cos.ReadCloseSizer, error) {
+	r, w := io.Pipe()
+	go func() {
+		if err := ic.doExecReq(bck, objName, w); err != nil {
+			w.CloseWithError(err)
+			return
+		}
+		w.Close()
+	}()
+
+	return cos.NewReaderWithArgs(cos.ReaderArgs{
+		R:    r,
+		Size: -1,
+		DeferCb: func() {
+			ic.stats.objCount.Inc()
+		},
+	}), nil
+}
+
+///////////
+// utils //
+///////////
 
 // prune query (received from AIS proxy) prior to reverse-proxying the request to/from container -
 // not removing cmn.URLParamUUID, for instance, would cause infinite loop.

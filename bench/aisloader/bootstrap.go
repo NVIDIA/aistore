@@ -754,7 +754,7 @@ func Start(version, build, buildtime string) error {
 
 	if etlSpec != nil {
 		fmt.Println(prettyTimestamp() + " Waiting for an ETL to start...")
-		etlID, err = api.ETLInit(runParams.bp, etlSpec)
+		etlID, err = api.ETLInitSpec(runParams.bp, etlSpec)
 		if err != nil {
 			return fmt.Errorf("failed to initialize ETL: %v", err)
 		}

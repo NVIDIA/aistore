@@ -79,7 +79,7 @@ var _ = Describe("CommunicatorTest", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}))
 		targetServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			err := comm.Do(w, r, clusterBck, objName)
+			err := comm.OnlineTransform(w, r, clusterBck, objName)
 			Expect(err).NotTo(HaveOccurred())
 		}))
 		proxyServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -106,10 +106,15 @@ var _ = Describe("CommunicatorTest", func() {
 			pod.SetName("somename")
 
 			comm = makeCommunicator(commArgs{
-				t:              tMock,
-				pod:            pod,
-				commType:       commType,
-				transformerURL: transformerServer.URL,
+				bootstraper: &etlBootstraper{
+					t: tMock,
+					msg: InitSpecMsg{
+						CommType: commType,
+					},
+
+					pod: pod,
+					uri: transformerServer.URL,
+				},
 			})
 			resp, err := http.Get(proxyServer.URL)
 			Expect(err).NotTo(HaveOccurred())

@@ -54,7 +54,7 @@ def transform(input_bytes):
 	tlog.Logln("Putting objects to source bucket")
 	m.puts()
 
-	uuid, err := api.ETLBuild(baseParams, etl.BuildMsg{
+	uuid, err := api.ETLInitCode(baseParams, etl.InitCodeMsg{
 		Code:        []byte(timeoutFunc),
 		Runtime:     runtime.Python3,
 		WaitTimeout: cos.Duration(5 * time.Minute),
@@ -150,15 +150,15 @@ def transform(input_bytes):
 			name      string
 			ty        string
 			initDesc  string
-			buildDesc etl.BuildMsg
+			buildDesc etl.InitCodeMsg
 		}{
-			{name: "init-echo-python", ty: cmn.ETLInit, initDesc: tetl.Echo},
-			{name: "init-echo-golang", ty: cmn.ETLInit, initDesc: tetl.EchoGolang},
+			{name: "init-echo-python", ty: cmn.ETLInitSpec, initDesc: tetl.Echo},
+			{name: "init-echo-golang", ty: cmn.ETLInitSpec, initDesc: tetl.EchoGolang},
 
 			{
 				name: "build-echo-python2",
-				ty:   cmn.ETLBuild,
-				buildDesc: etl.BuildMsg{
+				ty:   cmn.ETLInitCode,
+				buildDesc: etl.InitCodeMsg{
 					Code:        []byte(echoPythonTransform),
 					Runtime:     runtime.Python2,
 					WaitTimeout: cos.Duration(10 * time.Minute),
@@ -166,8 +166,8 @@ def transform(input_bytes):
 			},
 			{
 				name: "build-echo-python3",
-				ty:   cmn.ETLBuild,
-				buildDesc: etl.BuildMsg{
+				ty:   cmn.ETLInitCode,
+				buildDesc: etl.InitCodeMsg{
 					Code:        []byte(echoPythonTransform),
 					Runtime:     runtime.Python3,
 					WaitTimeout: cos.Duration(10 * time.Minute),
@@ -194,10 +194,10 @@ def transform(input_bytes):
 				requestTimeout = 30 * time.Second
 			)
 			switch test.ty {
-			case cmn.ETLInit:
+			case cmn.ETLInitSpec:
 				uuid, err = tetl.Init(baseParams, test.initDesc, etl.RedirectCommType)
-			case cmn.ETLBuild:
-				uuid, err = api.ETLBuild(baseParams, test.buildDesc)
+			case cmn.ETLInitCode:
+				uuid, err = api.ETLInitCode(baseParams, test.buildDesc)
 			default:
 				panic(test.ty)
 			}

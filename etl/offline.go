@@ -40,7 +40,7 @@ func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cmn
 		err error
 	)
 	call := func() (int, error) {
-		r, err = dp.comm.Get(lom.Bck(), lom.ObjName, dp.requestTimeout)
+		r, err = dp.comm.OfflineTransform(lom.Bck(), lom.ObjName, dp.requestTimeout)
 		return 0, err
 	}
 	// TODO: Check if ETL pod is healthy and wait some more if not (yet).

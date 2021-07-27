@@ -14,17 +14,17 @@ import (
 	"github.com/NVIDIA/aistore/etl"
 )
 
-func ETLInit(baseParams BaseParams, spec []byte) (id string, err error) {
+func ETLInitSpec(baseParams BaseParams, spec []byte) (id string, err error) {
 	baseParams.Method = http.MethodPost
-	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathETLInit.S, Body: spec}, &id)
+	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathETLInitSpec.S, Body: spec}, &id)
 	return id, err
 }
 
-func ETLBuild(baseParams BaseParams, msg etl.BuildMsg) (id string, err error) {
+func ETLInitCode(baseParams BaseParams, msg etl.InitCodeMsg) (id string, err error) {
 	baseParams.Method = http.MethodPost
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPathETLBuild.S,
+		Path:       cmn.URLPathETLInitCode.S,
 		Body:       cos.MustMarshal(msg),
 	}, &id)
 	return id, err

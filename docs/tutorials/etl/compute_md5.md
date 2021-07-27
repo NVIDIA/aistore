@@ -13,7 +13,7 @@ Get ready!
 ## Prepare ETL
 
 To showcase ETL's capabilities, we will go over a simple ETL container that computes the MD5 checksum of the object.
-There are two ways of approaching this problem:
+There are three ways of approaching this problem:
 
 1. **Simplified flow**
 
@@ -33,11 +33,31 @@ There are two ways of approaching this problem:
 
     Once we have the `transform` function defined, we can use CLI to build and initialize ETL:
     ```console
-    $ ais etl build --from-file=code.py --runtime=python3
+    $ ais etl init code --from-file=code.py --runtime=python3
     JGHEoo89gg
     ```
 
-2. **Regular flow**
+2. **Simplified flow with input/output**
+   Similar to the above example, we will be using the `python3` runtime.
+   However, the python code in this case expects data as standard input and writes the output bytes to standard output, as shown in the following `code.py`:
+
+   ```python
+    import hashlib
+    import sys
+
+    md5 = hashlib.md5()
+    for chunk in sys.stdin.buffer.read():
+        md5.update(chunk)
+    sys.stdout.buffer.write(md5.hexdigest().encode())
+   ```
+
+   We can now use the CLI to build and initialize ETL with `io://` communicator type:
+   ```console
+   $ ais etl init code --from-file=code.py --runtime=python3 --comm-type="io://"
+   QWHFsp92yp
+   ```
+
+3. **Regular flow**
 
     First, we need to write a server.
     In this case, we will write a Python 3 HTTP server.
@@ -145,7 +165,7 @@ There are two ways of approaching this problem:
 
     Once we have our `spec.yaml`, we can initialize ETL with CLI:
     ```console
-    $ ais etl init spec.yaml
+    $ ais etl init spec spec.yaml
     JGHEoo89gg
     ```
 
@@ -179,10 +199,8 @@ transformer-md5-vspra     1/1     Running   0          1m
 As expected, two more Pods are up and running - one for each target.
 
 > ETL containers will be run on the same node as the targets that started them.
-> In other words, each ETL container runs close to data and does not generate any extract-transform-load
-> related network traffic. Given that there are as many ETL containers as storage nodes
-> (one container per target) and that all ETL containers run in parallel, the cumulative "transformation"
-> bandwidth scales proportionally to the number of storage nodes and disks.
+> In other words, each ETL container runs close to data and does not generate any extract-transform-load related network traffic.
+> Given that there are as many ETL containers as storage nodes (one container per target) and that all ETL containers run in parallel, the cumulative "transformation" bandwidth scales proportionally to the number of storage nodes and disks.
 
 Finally, we can use newly created Pods to transform the objects on the fly for us:
 

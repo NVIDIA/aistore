@@ -6,6 +6,7 @@ package tutils
 
 import (
 	"bytes"
+	"io"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -250,6 +251,20 @@ func AssertMountpathCount(t *testing.T, availableCount, disabledCount int) {
 			len(disabledMountpaths), disabledCount,
 		)
 	}
+}
+
+func CreateFileFromReader(t *testing.T, fileName string, r io.Reader) string {
+	filePath := filepath.Join(t.TempDir(), fileName)
+	f, err := os.Create(filePath)
+	tassert.CheckFatal(t, err)
+
+	_, err = io.Copy(f, r)
+	tassert.CheckFatal(t, err)
+
+	err = f.Close()
+	tassert.CheckFatal(t, err)
+
+	return filePath
 }
 
 func FilesEqual(file1, file2 string) (bool, error) {

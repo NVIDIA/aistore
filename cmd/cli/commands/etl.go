@@ -27,23 +27,30 @@ var etlCmd = cli.Command{
 	Usage: "execute custom transformations on objects",
 	Subcommands: []cli.Command{
 		{
-			Name:      subcmdInit,
-			Usage:     "start an ETL with YAML Pod specification",
-			ArgsUsage: "SPEC_FILE",
-			Action:    etlInitHandler,
-		},
-		{
-			Name:  subcmdBuild,
-			Usage: "start an ETL with transformation source code",
-			Flags: []cli.Flag{
-				fromFileFlag,
-				depsFileFlag,
-				runtimeFlag,
-				waitTimeoutFlag,
-				etlUUID,
+			Name: subcmdInit,
+			Subcommands: []cli.Command{
+				{
+					Name:      subcmdSpec,
+					Usage:     "start an ETL with YAML Pod specification",
+					ArgsUsage: "SPEC_FILE",
+					Action:    etlInitSpecHandler,
+				},
+				{
+					Name:  subcmdCode,
+					Usage: "start an ETL with transformation source code",
+					Flags: []cli.Flag{
+						fromFileFlag,
+						depsFileFlag,
+						runtimeFlag,
+						commTypeFlag,
+						waitTimeoutFlag,
+						etlUUID,
+					},
+					Action: etlInitCodeHandler,
+				},
 			},
-			Action: etlBuildHandler,
 		},
+
 		{
 			Name:   subcmdList,
 			Usage:  "list all running ETLs",
@@ -117,7 +124,7 @@ func etlExists(uuid string) (err error) {
 	return
 }
 
-func etlInitHandler(c *cli.Context) (err error) {
+func etlInitSpecHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, "SPEC_FILE")
 	}
@@ -126,7 +133,7 @@ func etlInitHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	var msg etl.InitMsg
+	var msg etl.InitSpecMsg
 	if msg, err = etl.ValidateSpec(spec); err != nil {
 		return err
 	}
@@ -136,7 +143,7 @@ func etlInitHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	id, err := api.ETLInit(defaultAPIParams, spec)
+	id, err := api.ETLInitSpec(defaultAPIParams, spec)
 	if err != nil {
 		return err
 	}
@@ -144,8 +151,8 @@ func etlInitHandler(c *cli.Context) (err error) {
 	return nil
 }
 
-func etlBuildHandler(c *cli.Context) (err error) {
-	var msg etl.BuildMsg
+func etlInitCodeHandler(c *cli.Context) (err error) {
+	var msg etl.InitCodeMsg
 
 	fromFile := parseStrFlag(c, fromFileFlag)
 	if fromFile == "" {
@@ -174,13 +181,24 @@ func etlBuildHandler(c *cli.Context) (err error) {
 	}
 
 	msg.Runtime = parseStrFlag(c, runtimeFlag)
+	msg.CommType = parseStrFlag(c, commTypeFlag)
+	if msg.CommType != "" {
+		// Missing `/` at the end, eg. `hpush:/` (should be `hpush://`)
+		if strings.HasSuffix(msg.CommType, ":/") {
+			msg.CommType += "/"
+		}
+		// Missing `://` at the end, eg. `hpush` (should be `hpush://`)
+		if !strings.HasSuffix(msg.CommType, "://") {
+			msg.CommType += "://"
+		}
+	}
 	msg.WaitTimeout = cos.Duration(parseDurationFlag(c, waitTimeoutFlag))
 
 	if err := msg.Validate(); err != nil {
 		return err
 	}
 
-	id, err := api.ETLBuild(defaultAPIParams, msg)
+	id, err := api.ETLInitCode(defaultAPIParams, msg)
 	if err != nil {
 		return err
 	}

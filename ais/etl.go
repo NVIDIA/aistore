@@ -41,10 +41,10 @@ func (t *targetrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		switch apiItems[0] {
-		case cmn.ETLInit:
-			t.initETL(w, r)
-		case cmn.ETLBuild:
-			t.buildETL(w, r)
+		case cmn.ETLInitSpec:
+			t.initSpecETL(w, r)
+		case cmn.ETLInitCode:
+			t.initCodeETL(w, r)
 		default:
 			t.writeErrURL(w, r)
 		}
@@ -75,9 +75,9 @@ func (t *targetrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) initETL(w http.ResponseWriter, r *http.Request) {
-	var msg etl.InitMsg
-	if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathETLInit.L); err != nil {
+func (t *targetrunner) initSpecETL(w http.ResponseWriter, r *http.Request) {
+	var msg etl.InitSpecMsg
+	if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathETLInitSpec.L); err != nil {
 		return
 	}
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
@@ -88,15 +88,15 @@ func (t *targetrunner) initETL(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) buildETL(w http.ResponseWriter, r *http.Request) {
-	var msg etl.BuildMsg
-	if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathETLBuild.L); err != nil {
+func (t *targetrunner) initCodeETL(w http.ResponseWriter, r *http.Request) {
+	var msg etl.InitCodeMsg
+	if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathETLInitCode.L); err != nil {
 		return
 	}
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
-	if err := etl.Build(t, msg); err != nil {
+	if err := etl.InitCode(t, msg); err != nil {
 		t.writeErr(w, r, err)
 	}
 }
@@ -134,7 +134,7 @@ func (t *targetrunner) doETL(w http.ResponseWriter, r *http.Request, uuid string
 		t.writeErr(w, r, err)
 		return
 	}
-	if err := comm.Do(w, r, bck, objName); err != nil {
+	if err := comm.OnlineTransform(w, r, bck, objName); err != nil {
 		t.writeErr(w, r, cmn.NewETLError(&cmn.ETLErrorContext{
 			UUID:    uuid,
 			PodName: comm.PodName(),
@@ -262,10 +262,10 @@ func (p *proxyrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		switch apiItems[0] {
-		case cmn.ETLInit:
-			p.initETL(w, r)
-		case cmn.ETLBuild:
-			p.buildETL(w, r)
+		case cmn.ETLInitSpec:
+			p.initSpecETL(w, r)
+		case cmn.ETLInitCode:
+			p.initCodeETL(w, r)
 		default:
 			p.writeErrURL(w, r)
 		}
@@ -292,16 +292,16 @@ func (p *proxyrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// POST /v1/etl/init
+// POST /v1/etl/init_spec
 //
-// initETL creates a new ETL (instance) as follows:
+// initSpecETL creates a new ETL (instance) as follows:
 //  1. Validate user-provided pod specification.
 //  2. Generate UUID.
-//  3. Broadcast initETL message to all targets.
+//  3. Broadcast initSpecETL message to all targets.
 //  4. If any target fails to start ETL stop it on all (targets).
 //  5. In the event of success return ETL's UUID to the user.
-func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
-	_, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathETLInit.L)
+func (p *proxyrunner) initSpecETL(w http.ResponseWriter, r *http.Request) {
+	_, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathETLInitSpec.L)
 	if err != nil {
 		return
 	}
@@ -319,7 +319,7 @@ func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if p.forwardCP(w, r, nil, "initETL") {
+	if p.forwardCP(w, r, nil, "initSpecETL") {
 		return
 	}
 
@@ -328,13 +328,14 @@ func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// POST /v1/etl/build
-func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
-	var msg etl.BuildMsg
-	_, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathETLBuild.L)
+// POST /v1/etl/init_code
+func (p *proxyrunner) initCodeETL(w http.ResponseWriter, r *http.Request) {
+	_, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathETLInitCode.L)
 	if err != nil {
 		return
 	}
+
+	var msg etl.InitCodeMsg
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
@@ -348,7 +349,7 @@ func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err)
 		return
 	}
-	if p.forwardCP(w, r, nil, "buildETL") {
+	if p.forwardCP(w, r, nil, "initCodeETL") {
 		return
 	}
 	if err = p.startETL(w, r, cos.MustMarshal(msg), msg.ID); err != nil {

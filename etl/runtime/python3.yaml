@@ -10,7 +10,7 @@ spec:
       ports:
         - name: default
           containerPort: 80
-      command: ['sh', '-c', 'python /server.py']
+      command: <COMMAND>
       env:
         - name: MOD_NAME
           value: code
@@ -18,10 +18,7 @@ spec:
           value: transform
         - name: PYTHONPATH
           value: /runtime
-      readinessProbe:
-        httpGet:
-          path: /health
-          port: default
+      <PROBES>
       volumeMounts:
         - name: code
           mountPath: "/code"

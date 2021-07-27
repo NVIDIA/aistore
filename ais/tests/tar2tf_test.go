@@ -33,7 +33,7 @@ func startTar2TfTransformer(t *testing.T) (uuid string) {
 	spec, _ = jsoniter.Marshal(pod)
 
 	// Starting transformer
-	uuid, err = api.ETLInit(baseParams, spec)
+	uuid, err = api.ETLInitSpec(baseParams, spec)
 	tassert.CheckFatal(t, err)
 	return uuid
 }

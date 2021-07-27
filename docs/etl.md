@@ -6,7 +6,7 @@
 
 - [Introduction](#introduction)
 - [Getting Started](#getting-started)
-- [Inline ETL example](#inline-etl-example)
+- [Online ETL example](#online-etl-example)
 - [Offline ETL example](#offline-etl-example)
 - [Kubernetes Deployment](#kubernetes-deployment)
 - [Defining and initializing ETL](#defining-and-initializing-etl)
@@ -19,19 +19,22 @@
 **ETL** stands for **E**xtract, **T**ransform, **L**oad. More specifically:
 
 * **E**xtract - data from different original formats and/or multiple sources;
-* **T**ransform - to the unified common format optimized for subsequent computation (e. g., training deep learning model);
-* **L**oad - transformed data into a new destination - e. g., a storage system that supports high-performance computing over large scale datasets.
+* **T**ransform - to the unified common format optimized for subsequent computation (e.g., training deep learning model);
+* **L**oad - transformed data into a new destination - e.g., a storage system that supports high-performance computing over large scale datasets.
 
 The latter can be AIStore. In fact, AIS is designed from the ground up to support all 3 stages of the ETL pre (or post) processing. You can easily task AIS cluster with running custom transformations:
 
-* *inline* - that is, transforming datasets on the fly by virtue of (randomly) reading them and streaming a resulting transformed output directly to (computing) clients that perform those reads;
+* *online* - that is, transforming datasets on the fly by virtue of (randomly) reading them and streaming a resulting transformed output directly to (computing) clients that perform those reads;
 * *offline* - storing transformed output as a new dataset that AIStore will make available for any number of future computations.
 
-Implementation-wise, there are many similarities between *inline* and *offline* transformations on the one hand, and between *offline* transformation and copying datasets, on the other. The latter has been one of the supported AIStore storage services for quite a while; in the v3.3 we have amended it to become, effectively, a *no-op* transformation.
+Implementation-wise, there are many similarities between *online* and *offline* transformations on the one hand, and between *offline* transformation and copying datasets, on the other.
+The latter has been one of the supported AIStore storage services for quite a while; in the v3.3 we have amended it to become, effectively, a *no-op* transformation.
 
-Most notably, AIS always runs transformations locally - *close to data*. Running *close to data* has always been one of the cornerstone design principles whereby in a deployed cluster each AIStore target proportionally contributes to the resulting cumulative bandwidth - the bandwidth that, in turn, will scale linearly with each added target.
+Most notably, AIS always runs transformations locally - *close to data*.
+Running *close to data* has always been one of the cornerstone design principles whereby in a deployed cluster each AIStore target proportionally contributes to the resulting cumulative bandwidth - the bandwidth that, in turn, will scale linearly with each added target.
 
-This was the principle behind *distributed shuffle* (code-named [dSort](/docs/dsort.md)). And this is exactly how we have more recently implemented **AIS-ETL** - the ETL service provided by AIStore.
+This was the principle behind *distributed shuffle* (code-named [dSort](/docs/dsort.md)).
+And this is exactly how we have more recently implemented **AIS-ETL** - the ETL service provided by AIStore.
 
 Technically, the service supports running user-provided ETL containers **and** custom Python scripts *in the* (and *by the*) storage cluster.
 
@@ -45,7 +48,7 @@ The following [video](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL G
 
 [![AIStore ETL Getting Started](/docs/images/etl-getting-started-400.png)](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL Getting Started (Youtube video)")
 
-## Inline ETL example
+## Online ETL example
 
 <img src="/docs/images/etl-md5.gif" alt="ETL-MD5" width="80%">
 
@@ -102,27 +105,27 @@ This section is going to describe how to define and initialize custom ETL transf
 
 Deploying ETL consists of the following steps:
 1. To start distributed ETL processing, a user either:
-   * needs to send transform function in [**build** request](#build-request) to the AIStore endpoint, or
-   * needs to send documented [**init** request](#init-request) to the AIStore endpoint.
+   * needs to send transform function in [**init code** request](#init-code-request) to the AIStore endpoint, or
+   * needs to send documented [**init spec** request](#init-spec-request) to the AIStore endpoint.
 
      >  The request carries YAML spec and ultimately triggers creating [Kubernetes Pods](https://kubernetes.io/docs/concepts/workloads/pods/pod/) that run the user's ETL logic inside.
-2. Upon receiving **build**/**init** request, AIS proxy broadcasts the request to all AIS targets in the cluster.
-3. When a target receives **build**/**init**, it starts the container **locally** on the target's machine (aka [Kubernetes Node](https://kubernetes.io/docs/concepts/architecture/nodes/)).
+2. Upon receiving **init spec/code** request, AIS proxy broadcasts the request to all AIS targets in the cluster.
+3. When a target receives **init spec/code**, it starts the container **locally** on the target's machine (aka [Kubernetes Node](https://kubernetes.io/docs/concepts/architecture/nodes/)).
 
-### `build` request
+### *init code* request
 
 You can write your own custom `transform` function that takes input object bytes as a parameter and returns output bytes (the transformed object's content).
-You can then use the `build` request to execute this `transform` on the entire distributed dataset.
+You can then use the *init code* request to execute this `transform` on the entire distributed dataset.
 
-In effect, a user can skip the entire step of writing own Dockerfile and building a custom ETL container - the `build` capability allows the user to skip this step entirely.
+In effect, a user can skip the entire step of writing own Dockerfile and building a custom ETL container - the *init code* capability allows the user to skip this step entirely.
 
 > If you are familiar with [FasS](https://en.wikipedia.org/wiki/Function_as_a_service), then you probably will find this type of ETL initialization the most intuitive.
 
-For detailed step-by-step tutorial on `build` request, please see [ImageNet ETL playbook](/docs/tutorials/etl/etl_imagenet_pytorch.md).
+For detailed step-by-step tutorial on *init code* request, please see [ImageNet ETL playbook](/docs/tutorials/etl/etl_imagenet_pytorch.md).
 
 #### `transform` function
 
-To use `build` request a user has to provide a Python script with defined `transform` function which has the following signature:
+To use *init code* request a user has to provide a Python script with defined `transform` function which has the following signature:
 ```python
 def transform(input_bytes: bytes) -> bytes
 ```
@@ -143,15 +146,15 @@ Currently, the following runtimes are supported:
 | `python3` | `python:3.8.5` is used to run the code. |
 
 More *runtimes* will be added in the future, with the plans to support the most popular ETL toolchains.
-Still, since the number of supported  *runtimes* will always remain somewhat limited, there's always the second way: build your own ETL container and deploy it via [`init` request](#init-request).
+Still, since the number of supported  *runtimes* will always remain somewhat limited, there's always the second way: build your own ETL container and deploy it via [*init spec* request](#init-spec-request).
 
-### `init` request
+### *init spec* request
 
-`Init` request covers all, even the most sophisticated, cases of ETL initialization.
+*Init spec* request covers all, even the most sophisticated, cases of ETL initialization.
 It allows running any Docker image that implements certain requirements on communication with the cluster. 
-The 'init' request requires writing a Pod specification following specification requirements.
+The *init spec* request requires writing a Pod specification following specification requirements.
 
-For detailed step-by-step tutorial on `init` request, please see [MD5 ETL playbook](/docs/tutorials/etl/compute_md5.md).
+For detailed step-by-step tutorial on *init spec* request, please see [MD5 ETL playbook](/docs/tutorials/etl/compute_md5.md).
 
 #### Requirements
 
@@ -176,10 +179,10 @@ and contain all necessary fields to start the Pod.
 | `metadata.annotations.wait_timeout` | `false` | Timeout on ETL Pods starting on target machines. See [annotations](#annotations) | infinity |
 | `spec.containers` | `true` | Containers running inside a Pod, exactly one required. | - |
 | `spec.containers[0].image` | `true` | Docker image of ETL container. | - |
-| `spec.containers[0].ports` | `true` | Ports exposed by a container, at least one expected. | - |
+| `spec.containers[0].ports` | `true` (except `io://` communication type) | Ports exposed by a container, at least one expected. | - |
 | `spec.containers[0].ports[0].Name` | `true` | Name of the first Pod should be `default`. | - |
 | `spec.containers[0].ports[0].containerPort` | `true` | Port which a cluster will contact containers on. | - |
-| `spec.containers[0].readinessProbe` | `true` | ReadinessProbe of a container. | - |
+| `spec.containers[0].readinessProbe` | `true` (except `io://` communication type) | ReadinessProbe of a container. | - |
 | `spec.containers[0].readinessProbe.timeoutSeconds` | `false` | Timeout for a readiness probe in seconds. | `5` |
 | `spec.containers[0].readinessProbe.periodSeconds` | `false` | Period between readiness probe requests in seconds. | `10` |
 | `spec.containers[0].readinessProbe.httpGet.Path` | `true` | Path for HTTP readiness probes. | - |
@@ -202,6 +205,7 @@ User can choose and specify (via YAML spec) any of the following:
 | **post** | `hpush://` | A target issues a POST request to its ETL container with the body containing the requested object. After finishing the request, the target forwards the response from the ETL container to the user. |
 | **reverse proxy** | `hrev://` | A target uses a [reverse proxy](https://en.wikipedia.org/wiki/Reverse_proxy) to send (GET) request to cluster using ETL container. ETL container should make GET request to a target, transform bytes, and return the result to the target. |
 | **redirect** | `hpull://` | A target uses [HTTP redirect](https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections) to send (GET) request to cluster using ETL container. ETL container should make a GET request to the target, transform bytes, and return it to a user. |
+| **input/output** | `io://` | A target remotely runs the binary or the code and sends the data to standard input and excepts the transformed bytes to be sent on standard output. |
 
 #### Annotations
 
@@ -234,7 +238,7 @@ metadata:
 
 ## Transforming objects
 
-AIStore supports both *inline* transformation of selected objects and *offline* transformation of an entire bucket.
+AIStore supports both *online* transformation of selected objects and *offline* transformation of an entire bucket.
 
 There are two ways to run ETL transformations:
 - HTTP RESTful API described in [API Reference section](#api-reference) of this document,
@@ -249,8 +253,8 @@ This section describes how to interact with ETLs via RESTful API.
 
 | Operation | Description | HTTP action | Example |
 | --- | --- | --- | --- |
-| Init ETL | Inits ETL based on `spec.yaml`. Returns `ETL_ID`. | POST /v1/etl/init | `curl -X POST 'http://G/v1/etl/init' -T spec.yaml` |
-| Build ETL | Builds and initializes ETL based on the provided source code. Returns `ETL_ID`. | POST /v1/etl/build | `curl -X POST 'http://G/v1/etl/build' '{"code": "...", "dependencies": "...", "runtime": "python3"}'` |
+| Init spec ETL | Initializes ETL based on `spec.yaml`. Returns `ETL_ID`. | POST /v1/etl/init_spec | `curl -X POST 'http://G/v1/etl/init_spec' -T spec.yaml` |
+| Init code ETL | Initializes ETL based on the provided source code. Returns `ETL_ID`. | POST /v1/etl/init_code | `curl -X POST 'http://G/v1/etl/init_code' '{"code": "...", "dependencies": "...", "runtime": "python3"}'` |
 | List ETLs | Lists all running ETLs. | GET /v1/etl/list | `curl -L -X GET 'http://G/v1/etl/list'` |
 | Transform object | Transforms an object based on ETL with `ETL_ID`. | GET /v1/objects/<bucket>/<objname>?uuid=ETL_ID | `curl -L -X GET 'http://G/v1/objects/shards/shard01.tar?uuid=ETL_ID' -o transformed_shard01.tar` |
 | Transform bucket | Transforms all objects in a bucket and puts them to destination bucket. | POST {"action": "etlbck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "etlbck", "name": "to-name", "value":{"ext":"destext", "prefix":"prefix", "suffix": "suffix"}}' 'http://G/v1/buckets/from-name'` |
@@ -272,14 +276,14 @@ metadata:
 (...)
 ```
 
-When building ETL from code, a valid user-defined `ETL_ID` can be assigned using the `--name` CLI parameter as shown below. If the parameter is left empty, an auto-generated ID is assigned.
+When initializing ETL from code, a valid user-defined `ETL_ID` can be assigned using the `--name` CLI parameter as shown below. If the parameter is left empty, an auto-generated ID is assigned.
 
 ```console
-$ ais etl build --name=etl-md5 --from-file=code.py --runtime=python3 --deps-file=deps.txt
+$ ais etl init code --name=etl-md5 --from-file=code.py --runtime=python3 --deps-file=deps.txt
 ```
 
 Below are specifications for a valid `ETL_ID`:
-1. Starts with an alphabet 'A' to 'Z' or 'a' to 'z'
-2. Can contain alphabets, numbers, underscore ('_'), or hyphen ('-')
-3. Should have a length greater that 5 and less than 21
-4. Shouldn't contain special characters, except for underscore and hyphen
+1. Starts with an alphabet 'A' to 'Z' or 'a' to 'z'.
+2. Can contain alphabets, numbers, underscore ('_'), or hyphen ('-').
+3. Should have a length greater that 5 and less than 21.
+4. Shouldn't contain special characters, except for underscore and hyphen.

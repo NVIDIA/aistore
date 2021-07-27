@@ -218,7 +218,7 @@ spec:
 6. Initiating ETL
 
 ```console
-$ ais etl init spec.yaml
+$ ais etl init spec spec.yaml
 veSC9rvQQ
 ```
 

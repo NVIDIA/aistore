@@ -234,7 +234,7 @@ func Init(baseParams api.BaseParams, name, comm string) (string, error) {
 
 	spec, _ = jsoniter.Marshal(pod)
 	tlog.Logln("Init ETL")
-	return api.ETLInit(baseParams, spec)
+	return api.ETLInitSpec(baseParams, spec)
 }
 
 func ETLBucket(t *testing.T, baseParams api.BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.TransCpyBckMsg) string {

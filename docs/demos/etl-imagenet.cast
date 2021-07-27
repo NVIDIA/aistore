@@ -66,7 +66,7 @@
 [72.583,"o","torch==1.6.0\r\ntorchvision==0.7.0\r\n\u001b]0;root@demo-ais-admin-98bh5: /\u0007root@demo-ais-admin-98bh5:/# "]
 [78.207,"o","# Start ETL"]
 [78.859,"o","\r\n\u001b]0;root@demo-ais-admin-98bh5: /\u0007root@demo-ais-admin-98bh5:/# "]
-[80.183,"o","ais etl build --from-file=code.py --deps-file=deps.txt --runtime=python3"]
+[80.183,"o","ais etl init code --from-file=code.py --deps-file=deps.txt --runtime=python3"]
 [82.062,"o","\r\n"]
 [83.557,"o","P7G4uj65at\r\n"]
 [83.582,"o","\u001b]0;root@demo-ais-admin-98bh5: /\u0007root@demo-ais-admin-98bh5:/# \u001b[K"]

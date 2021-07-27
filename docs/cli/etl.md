@@ -1,18 +1,21 @@
 # CLI Reference for ETLs
+
 This section lists ETL management operations the AIS CLI, with `ais etl`.
 For more information and examples, please refer to [the ETL documentation](/docs/etl.md).
 
 ## Table of Contents
-- [Initialize ETL](#initialize-etl)
-- [Build ETL](#build-etl)
+
+- [Init ETL with spec](#init-etl-with-spec)
+- [Init ELT with code](#init-etl-with-code)
 - [List ETLs](#list-etls)
 - [View ETL Logs](#view-etl-logs)
-- [Stop an ETL](#stop-an-etl)
+- [Stop ETL](#stop-etl)
 - [Transform object on-the-fly with given ETL](#transform-object-on-the-fly-with-given-etl)
 - [Transform the whole bucket offline with the given ETL](#transform-the-whole-bucket-offline-with-the-given-etl)
-## Initialize ETL
 
-`ais etl init SPEC_FILE`
+## Init ETL with spec
+
+`ais etl init spec SPEC_FILE`
 
 Init ETL with Pod YAML specification file. The `metadata.name` attribute in the specification is used as unique ID for ETL (ref: [here](/docs/etl.md#etl-name-specifications) for information on valid ETL name).
 
@@ -39,15 +42,16 @@ spec:
         - name: default
           containerPort: 80
       command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
-$ ais etl init spec.yaml
+$ ais etl init spec spec.yaml
 JGHEoo89gg
 ```
 
-## Build ETL
+## Init ETL with code
 
-`ais etl build --from-file=CODE_FILE --runtime=RUNTIME [--deps-file=DEPS_FILE] [--name=UNIQUE_ID]`
+`ais etl init code --from-file=CODE_FILE --runtime=RUNTIME [--deps-file=DEPS_FILE] [--name=UNIQUE_ID] [--comm-type=COMMUNICATION_TYPE]`
 
-Builds and initializes ETL from provided `CODE_FILE` that contains a transformation function named `transform`. The `--name` parameter is used to assign a user defined unique ID (ref: [here](/docs/etl.md#etl-name-specifications) for information on valid ETL name).
+Initializes ETL from provided `CODE_FILE` that contains a transformation function named `transform`.
+The `--name` parameter is used to assign a user defined unique ID (ref: [here](/docs/etl.md#etl-name-specifications) for information on valid ETL name).
 The `transform` function must take `input_bytes` (raw bytes of the objects) as parameters and return the transformed object (also raw bytes that will be saved into a new object).
 
 Note: Currently, only one ETL can be run at a time. To run new ETLs, [stop any existing ETL](#stop-etl).
@@ -59,7 +63,7 @@ Note: currently only `python3` and `python2` runtimes are supported.
 
 ### Example
 
-Build ETL that computes MD5 of the object.
+Initialize ETL with code that computes MD5 of the object.
 
 ```console
 $ cat code.py
@@ -69,7 +73,7 @@ def transform(input_bytes):
     md5 = hashlib.md5()
     md5.update(input_bytes)
     return md5.hexdigest().encode()
-$ ais etl build --from-file=code.py --runtime=python3
+$ ais etl init code --from-file=code.py --runtime=python3
 JGHEoo89gg
 ```
 
@@ -86,7 +90,7 @@ Lists all available ETLs.
 Output logs produced by given ETL.
 It is possible to pass an additional parameter to specify a particular `TARGET_ID` from which the logs must be retrieved.
 
-## Stop an ETL
+## Stop ETL
 
 `ais etl stop ETL_ID`
 

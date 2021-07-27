@@ -7,6 +7,7 @@ package etl
 import (
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
+	"github.com/NVIDIA/aistore/etl/runtime"
 	"github.com/NVIDIA/aistore/xreg"
 	corev1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -144,7 +146,7 @@ func (e *Aborter) ListenSmapChanged() {
 	}()
 }
 
-func Start(t cluster.Target, msg InitMsg, opts ...StartOpts) (err error) {
+func Start(t cluster.Target, msg InitSpecMsg, opts ...StartOpts) (err error) {
 	errCtx, podName, svcName, err := tryStart(t, msg, opts...)
 	if err != nil {
 		glog.Warning(cmn.NewETLError(errCtx, "Performing cleanup after unsuccessful Start"))
@@ -154,6 +156,47 @@ func Start(t cluster.Target, msg InitMsg, opts ...StartOpts) (err error) {
 	}
 
 	return err
+}
+
+func InitCode(t cluster.Target, msg InitCodeMsg) error {
+	// Initialize runtime.
+	r, exists := runtime.Runtimes[msg.Runtime]
+	cos.Assert(exists) // Runtime should be checked in proxy during validation.
+
+	var (
+		// We clean up the `msg.ID` as K8s doesn't allow `_` and uppercase
+		// letters in the names.
+		name    = k8s.CleanName(msg.ID)
+		podSpec = r.PodSpec()
+	)
+
+	podSpec = strings.ReplaceAll(podSpec, "<NAME>", name)
+	switch msg.CommType {
+	case PushCommType, RedirectCommType, RevProxyCommType:
+		podSpec = strings.ReplaceAll(podSpec, "<COMMAND>", "['sh', '-c', 'python /server.py']")
+		podSpec = strings.ReplaceAll(podSpec, "<PROBES>", `
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: default
+`)
+	case IOCommType:
+		podSpec = strings.ReplaceAll(podSpec, "<COMMAND>", "['python /code/code.py']")
+		podSpec = strings.ReplaceAll(podSpec, "<PROBES>", "")
+	default:
+		cos.AssertMsg(false, msg.CommType)
+	}
+
+	// Finally, start the ETL with declared Pod specification.
+	return Start(t, InitSpecMsg{
+		ID:          msg.ID,
+		Spec:        []byte(podSpec),
+		CommType:    msg.CommType,
+		WaitTimeout: msg.WaitTimeout,
+	}, StartOpts{Env: map[string]string{
+		r.CodeEnvName(): string(msg.Code),
+		r.DepsEnvName(): string(msg.Deps),
+	}})
 }
 
 // cleanupEntities removes provided entities. It tries its best to remove all
@@ -179,19 +222,11 @@ func cleanupEntities(errCtx *cmn.ETLErrorContext, podName, svcName string) (err 
 // * podName - non-empty if at least one attempt of creating pod was executed
 // * svcName - non-empty if at least one attempt of creating service was executed
 // * err - any error occurred which should be passed further.
-func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETLErrorContext,
+func tryStart(t cluster.Target, msg InitSpecMsg, opts ...StartOpts) (errCtx *cmn.ETLErrorContext,
 	podName, svcName string, err error) {
 	cos.Assert(k8s.NodeName != "") // Corresponding 'if' done at the beginning of the request.
-	var (
-		pod             *corev1.Pod
-		svc             *corev1.Service
-		hostIP          string
-		originalPodName string
-		nodePort        uint
 
-		customEnv map[string]string
-	)
-
+	var customEnv map[string]string
 	if len(opts) > 0 {
 		customEnv = opts[0].Env
 	}
@@ -207,59 +242,49 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 		UUID: msg.ID,
 	}
 
+	b := &etlBootstraper{
+		errCtx: errCtx,
+		t:      t,
+		msg:    msg,
+		env:    customEnv,
+	}
+
 	// Parse spec template and fill Pod object with necessary fields.
-	if pod, originalPodName, err = createPodSpec(errCtx, t, msg.Spec, customEnv); err != nil {
+	if err = b.createPodSpec(); err != nil {
 		return
 	}
 
-	svc = createServiceSpec(pod)
-	errCtx.SvcName = svc.Name
+	b.createServiceSpec()
 
 	// 1. Cleanup previously started entities (if any).
-	errCleanup := cleanupEntities(errCtx, pod.Name, svc.Name)
+	errCleanup := cleanupEntities(errCtx, b.pod.Name, b.svc.Name)
 	debug.AssertNoErr(errCleanup)
 
-	// 2. Creating service.
-	svcName = svc.GetName()
-	if err = createEntity(errCtx, k8s.Svc, svc); err != nil {
-		return
+	if msg.CommType != IOCommType {
+		// 2. Creating service.
+		svcName = b.svc.GetName()
+		if err = b.createEntity(k8s.Svc); err != nil {
+			return
+		}
 	}
 
 	// 3. Creating pod.
-	podName = pod.GetName()
-	if err = createEntity(errCtx, k8s.Pod, pod); err != nil {
+	podName = b.pod.GetName()
+	if err = b.createEntity(k8s.Pod); err != nil {
 		return
 	}
 
-	if err = waitPodReady(errCtx, pod, msg.WaitTimeout); err != nil {
+	if err = b.waitPodReady(); err != nil {
 		return
 	}
 
-	// Retrieve host IP of the pod.
-	if hostIP, err = getPodHostIP(errCtx, pod); err != nil {
-		return
-	}
-
-	// Retrieve assigned port by the service.
-	if nodePort, err = getServiceNodePort(errCtx, svc); err != nil {
-		return
-	}
-
-	// Make sure we can access the pod via TCP socket address to ensure that
-	// it is accessible from target.
-	etlSocketAddr := fmt.Sprintf("%s:%d", hostIP, nodePort)
-	if err = checkETLConnection(etlSocketAddr, pod.GetName()); err != nil {
-		err = cmn.NewETLError(errCtx, err.Error())
+	if err = b.setupConnection(); err != nil {
 		return
 	}
 
 	c := makeCommunicator(commArgs{
-		listener:       newAborter(t, msg.ID),
-		t:              t,
-		pod:            pod,
-		name:           originalPodName,
-		commType:       msg.CommType,
-		transformerURL: "http://" + etlSocketAddr,
+		listener:    newAborter(t, msg.ID),
+		bootstraper: b,
 	})
 	// NOTE: Communicator is put to registry only if the whole tryStart was successful.
 	if err = reg.put(msg.ID, c); err != nil {
@@ -269,7 +294,7 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 	return
 }
 
-func checkETLConnection(socketAddr, podName string) error {
+func (b *etlBootstraper) checkETLConnection(socketAddr string) error {
 	config := cmn.GCO.Get()
 	probeInterval := config.Timeout.MaxKeepalive.D()
 	err := cmn.NetworkCallWithRetry(&cmn.CallWithRetryArgs{
@@ -284,36 +309,66 @@ func checkETLConnection(socketAddr, podName string) error {
 		SoftErr: 10,
 		HardErr: 2,
 		Sleep:   3 * time.Second,
-		Action:  fmt.Sprintf("dial POD %q at %s", podName, socketAddr),
+		Action:  fmt.Sprintf("dial POD %q at %s", b.pod.Name, socketAddr),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to wait for ETL Service/Pod %q to respond, err: %v", podName, err)
+		return fmt.Errorf("failed to wait for ETL Service/Pod %q to respond, err: %v", b.pod.Name, err)
 	}
 	return nil
 }
 
-func createServiceSpec(pod *corev1.Pod) *corev1.Service {
-	svc := &corev1.Service{
+func (b *etlBootstraper) setupConnection() (err error) {
+	// Retrieve host IP of the pod.
+	var hostIP string
+	if hostIP, err = b.getPodHostIP(); err != nil {
+		return
+	}
+
+	if b.msg.CommType != IOCommType {
+		// Retrieve assigned port by the service.
+		var nodePort uint
+		if nodePort, err = b.getServiceNodePort(); err != nil {
+			return
+		}
+
+		// Make sure we can access the pod via TCP socket address to ensure that
+		// it is accessible from target.
+		etlSocketAddr := fmt.Sprintf("%s:%d", hostIP, nodePort)
+		if err = b.checkETLConnection(etlSocketAddr); err != nil {
+			err = cmn.NewETLError(b.errCtx, err.Error())
+			return
+		}
+
+		b.uri = "http://" + etlSocketAddr
+	}
+
+	return nil
+}
+
+func (b *etlBootstraper) createServiceSpec() {
+	b.svc = &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Service",
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: pod.GetName(),
+			Name: b.pod.GetName(),
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				{Port: pod.Spec.Containers[0].Ports[0].ContainerPort},
+				{Port: b.pod.Spec.Containers[0].Ports[0].ContainerPort},
 			},
 			Selector: map[string]string{
-				podNameLabel: pod.Labels[podNameLabel],
-				appLabel:     pod.Labels[appLabel],
+				podNameLabel: b.pod.Labels[podNameLabel],
+				appLabel:     b.pod.Labels[appLabel],
 			},
 			Type: corev1.ServiceTypeNodePort,
 		},
 	}
-	updateServiceLabels(svc)
-	return svc
+
+	b.updateServiceLabels()
+
+	b.errCtx.SvcName = b.svc.Name
 }
 
 // Stop deletes all occupied by the ETL resources, including Pods and Services.
@@ -407,7 +462,6 @@ func PodHealth(t cluster.Target, etlID string) (stats *PodHealthMsg, err error) 
 		}
 		return nil, err
 	}
-
 	return &PodHealthMsg{
 		TargetID: t.SID(),
 		CPU:      cpuUsed,
@@ -416,19 +470,19 @@ func PodHealth(t cluster.Target, etlID string) (stats *PodHealthMsg, err error) 
 }
 
 // Sets pods node affinity, so pod will be scheduled on the same node as a target creating it.
-func setTransformAffinity(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) error {
-	if pod.Spec.Affinity == nil {
-		pod.Spec.Affinity = &corev1.Affinity{}
+func (b *etlBootstraper) setTransformAffinity() error {
+	if b.pod.Spec.Affinity == nil {
+		b.pod.Spec.Affinity = &corev1.Affinity{}
 	}
-	if pod.Spec.Affinity.NodeAffinity == nil {
-		pod.Spec.Affinity.NodeAffinity = &corev1.NodeAffinity{}
+	if b.pod.Spec.Affinity.NodeAffinity == nil {
+		b.pod.Spec.Affinity.NodeAffinity = &corev1.NodeAffinity{}
 	}
 
-	reqAffinity := pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution
-	prefAffinity := pod.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution
+	reqAffinity := b.pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution
+	prefAffinity := b.pod.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution
 
 	if reqAffinity != nil && len(reqAffinity.NodeSelectorTerms) > 0 || len(prefAffinity) > 0 {
-		return cmn.NewETLError(errCtx, "error in YAML spec, pod should not have any NodeAffinities defined")
+		return cmn.NewETLError(b.errCtx, "error in YAML spec, pod should not have any NodeAffinities defined")
 	}
 
 	nodeSelector := &corev1.NodeSelector{
@@ -446,25 +500,25 @@ func setTransformAffinity(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) error {
 	// target which creates it. This guarantee holds only during scheduling - initial pod start-up sequence.
 	// However, a target removes its ETL pod when it goes down, so this guarantee is sufficient.
 	// Additionally, if other targets notice that another target went down, they all stop all running ETL pods.
-	pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = nodeSelector
+	b.pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = nodeSelector
 	return nil
 }
 
 // Sets pods node anti-affinity, so no two pods with the matching criteria is scheduled on the same node
 // at the same time.
-func setTransformAntiAffinity(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) error {
-	if pod.Spec.Affinity == nil {
-		pod.Spec.Affinity = &corev1.Affinity{}
+func (b *etlBootstraper) setTransformAntiAffinity() error {
+	if b.pod.Spec.Affinity == nil {
+		b.pod.Spec.Affinity = &corev1.Affinity{}
 	}
-	if pod.Spec.Affinity.PodAntiAffinity == nil {
-		pod.Spec.Affinity.PodAntiAffinity = &corev1.PodAntiAffinity{}
+	if b.pod.Spec.Affinity.PodAntiAffinity == nil {
+		b.pod.Spec.Affinity.PodAntiAffinity = &corev1.PodAntiAffinity{}
 	}
 
-	reqAntiAffinities := pod.Spec.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution
-	prefAntiAffinity := pod.Spec.Affinity.PodAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution
+	reqAntiAffinities := b.pod.Spec.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution
+	prefAntiAffinity := b.pod.Spec.Affinity.PodAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution
 
 	if len(reqAntiAffinities) > 0 || len(prefAntiAffinity) > 0 {
-		return cmn.NewETLError(errCtx, "error in YAML spec, pod should not have any NodeAntiAffinities defined")
+		return cmn.NewETLError(b.errCtx, "error in YAML spec, pod should not have any NodeAntiAffinities defined")
 	}
 
 	// Don't create anti-affinity limitation, to be able to run multiple ETL pods on a single machine.
@@ -478,38 +532,41 @@ func setTransformAntiAffinity(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) erro
 			},
 			TopologyKey: nodeNameLabel,
 		}}
-		pod.Spec.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution = reqAntiAffinities
+		b.pod.Spec.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution = reqAntiAffinities
 	}
 
 	return nil
 }
 
-func updatePodLabels(t cluster.Target, pod *corev1.Pod) {
-	if pod.Labels == nil {
-		pod.Labels = make(map[string]string, 6)
+func (b *etlBootstraper) updatePodLabels() {
+	if b.pod.Labels == nil {
+		b.pod.Labels = make(map[string]string, 6)
 	}
 
-	pod.Labels[appLabel] = "ais"
-	pod.Labels[podNameLabel] = pod.GetName()
-	pod.Labels[podNodeLabel] = k8s.NodeName
-	pod.Labels[podTargetLabel] = t.SID()
-	pod.Labels[appK8sNameLabel] = "etl"
-	pod.Labels[appK8sComponentLabel] = "server"
+	b.pod.Labels[appLabel] = "ais"
+	b.pod.Labels[podNameLabel] = b.pod.GetName()
+	b.pod.Labels[podNodeLabel] = k8s.NodeName
+	b.pod.Labels[podTargetLabel] = b.t.SID()
+	b.pod.Labels[appK8sNameLabel] = "etl"
+	b.pod.Labels[appK8sComponentLabel] = "server"
 }
 
-func updateServiceLabels(svc *corev1.Service) {
-	if svc.Labels == nil {
-		svc.Labels = make(map[string]string, 4)
+func (b *etlBootstraper) updateServiceLabels() {
+	if b.svc.Labels == nil {
+		b.svc.Labels = make(map[string]string, 4)
 	}
 
-	svc.Labels[appLabel] = "ais"
-	svc.Labels[svcNameLabel] = svc.GetName()
-	svc.Labels[appK8sNameLabel] = "etl"
-	svc.Labels[appK8sComponentLabel] = "server"
+	b.svc.Labels[appLabel] = "ais"
+	b.svc.Labels[svcNameLabel] = b.svc.GetName()
+	b.svc.Labels[appK8sNameLabel] = "etl"
+	b.svc.Labels[appK8sComponentLabel] = "server"
 }
 
-func updateReadinessProbe(pod *corev1.Pod) {
-	probe := pod.Spec.Containers[0].ReadinessProbe
+func (b *etlBootstraper) updateReadinessProbe() {
+	probe := b.pod.Spec.Containers[0].ReadinessProbe
+	if b.msg.CommType == IOCommType {
+		return
+	}
 
 	// If someone already set these values, we don't to touch them.
 	if probe.TimeoutSeconds != 0 || probe.PeriodSeconds != 0 {
@@ -522,15 +579,15 @@ func updateReadinessProbe(pod *corev1.Pod) {
 }
 
 // Sets environment variables that can be accessed inside the container.
-func setPodEnvVariables(t cluster.Target, pod *corev1.Pod, customEnv map[string]string) {
-	containers := pod.Spec.Containers
+func (b *etlBootstraper) setPodEnvVariables() {
+	containers := b.pod.Spec.Containers
 	debug.Assert(len(containers) > 0)
 	for idx := range containers {
 		containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
 			Name:  "AIS_TARGET_URL",
-			Value: t.Snode().URL(cmn.NetworkPublic) + cmn.URLPathETLObject.Join(reqSecret),
+			Value: b.t.Snode().URL(cmn.NetworkPublic) + cmn.URLPathETLObject.Join(reqSecret),
 		})
-		for k, v := range customEnv {
+		for k, v := range b.env {
 			containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
 				Name:  k,
 				Value: v,
@@ -538,9 +595,9 @@ func setPodEnvVariables(t cluster.Target, pod *corev1.Pod, customEnv map[string]
 		}
 	}
 
-	for idx := range pod.Spec.InitContainers {
-		for k, v := range customEnv {
-			pod.Spec.InitContainers[idx].Env = append(pod.Spec.InitContainers[idx].Env, corev1.EnvVar{
+	for idx := range b.pod.Spec.InitContainers {
+		for k, v := range b.env {
+			b.pod.Spec.InitContainers[idx].Env = append(b.pod.Spec.InitContainers[idx].Env, corev1.EnvVar{
 				Name:  k,
 				Value: v,
 			})
@@ -553,25 +610,25 @@ func setPodEnvVariables(t cluster.Target, pod *corev1.Pod, customEnv map[string]
 // request (made by the Kubernetes itself) returns OK. If the Pod doesn't have
 // `readinessProbe` config specified the last step gets skipped.
 // NOTE: However, currently, we do require readinessProbe config in the ETL spec.
-func waitPodReady(errCtx *cmn.ETLErrorContext, pod *corev1.Pod, waitTimeout cos.Duration) error {
+func (b *etlBootstraper) waitPodReady() error {
 	var (
 		condition   *corev1.PodCondition
 		client, err = k8s.GetClient()
 	)
 	if err != nil {
-		return cmn.NewETLError(errCtx, "%v", err)
+		return cmn.NewETLError(b.errCtx, "%v", err)
 	}
 
-	err = wait.PollImmediate(time.Second, time.Duration(waitTimeout), func() (ready bool, err error) {
-		ready, condition, err = checkPodReady(client, pod.Name)
+	err = wait.PollImmediate(time.Second, time.Duration(b.msg.WaitTimeout), func() (ready bool, err error) {
+		ready, condition, err = checkPodReady(client, b.pod.Name)
 		return ready, err
 	})
 	if err != nil {
 		if condition == nil {
-			return cmn.NewETLError(errCtx, "%v", err)
+			return cmn.NewETLError(b.errCtx, "%v", err)
 		}
 		conditionStr := fmt.Sprintf("%s, reason: %s, msg: %s", condition.Type, condition.Reason, condition.Message)
-		return cmn.NewETLError(errCtx, "%v (pod condition: %s; expected status Ready)",
+		return cmn.NewETLError(b.errCtx, "%v (pod condition: %s; expected status Ready)",
 			err, conditionStr)
 	}
 	return nil
@@ -607,12 +664,12 @@ func checkPodReady(client k8s.Client, podName string) (ready bool, latestCond *c
 	return false, nil, nil
 }
 
-func getPodHostIP(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (string, error) {
+func (b *etlBootstraper) getPodHostIP() (string, error) {
 	client, err := k8s.GetClient()
 	if err != nil {
-		return "", cmn.NewETLError(errCtx, err.Error())
+		return "", cmn.NewETLError(b.errCtx, err.Error())
 	}
-	p, err := client.Pod(pod.GetName())
+	p, err := client.Pod(b.pod.Name)
 	if err != nil {
 		return "", err
 	}
@@ -646,32 +703,41 @@ func deleteEntity(errCtx *cmn.ETLErrorContext, entityType, entityName string) er
 	return nil
 }
 
-func createEntity(errCtx *cmn.ETLErrorContext, entity string, spec interface{}) error {
+func (b *etlBootstraper) createEntity(entity string) error {
 	client, err := k8s.GetClient()
 	if err != nil {
 		return err
 	}
-	if err = client.Create(spec); err != nil {
-		return cmn.NewETLError(errCtx, "failed to create %s (err: %v)", entity, err)
+	switch entity {
+	case k8s.Pod:
+		err = client.Create(b.pod)
+	case k8s.Svc:
+		err = client.Create(b.svc)
+	default:
+		panic(entity)
+	}
+
+	if err != nil {
+		return cmn.NewETLError(b.errCtx, "failed to create %s (err: %v)", entity, err)
 	}
 	return nil
 }
 
-func getServiceNodePort(errCtx *cmn.ETLErrorContext, svc *corev1.Service) (uint, error) {
+func (b *etlBootstraper) getServiceNodePort() (uint, error) {
 	client, err := k8s.GetClient()
 	if err != nil {
-		return 0, cmn.NewETLError(errCtx, err.Error())
+		return 0, cmn.NewETLError(b.errCtx, err.Error())
 	}
 
-	s, err := client.Service(svc.GetName())
+	s, err := client.Service(b.svc.Name)
 	if err != nil {
-		return 0, cmn.NewETLError(errCtx, err.Error())
+		return 0, cmn.NewETLError(b.errCtx, err.Error())
 	}
 
 	nodePort := int(s.Spec.Ports[0].NodePort)
 	port, err := cmn.ValidatePort(nodePort)
 	if err != nil {
-		return 0, cmn.NewETLError(errCtx, err.Error())
+		return 0, cmn.NewETLError(b.errCtx, err.Error())
 	}
 	return uint(port), nil
 }

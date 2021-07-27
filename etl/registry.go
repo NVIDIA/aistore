@@ -22,7 +22,11 @@ const (
 	RedirectCommType = "hpull://"
 	// Similar to redirection strategy but with usage of reverse proxy.
 	RevProxyCommType = "hrev://"
+	// Stdin/stdout communication.
+	IOCommType = "io://"
 )
+
+var commTypes = []string{PushCommType, RedirectCommType, RevProxyCommType, IOCommType}
 
 type (
 	registry struct {

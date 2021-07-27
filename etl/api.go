@@ -12,18 +12,19 @@ import (
 )
 
 type (
-	InitMsg struct {
+	InitSpecMsg struct {
 		ID          string       `json:"id"`
 		Spec        []byte       `json:"spec"`
 		CommType    string       `json:"communication_type"`
 		WaitTimeout cos.Duration `json:"wait_timeout"`
 	}
 
-	BuildMsg struct {
+	InitCodeMsg struct {
 		ID          string       `json:"id"`
 		Code        []byte       `json:"code"`
 		Deps        []byte       `json:"dependencies"`
 		Runtime     string       `json:"runtime"`
+		CommType    string       `json:"communication_type"`
 		WaitTimeout cos.Duration `json:"wait_timeout"`
 	}
 
@@ -63,7 +64,7 @@ type (
 	}
 )
 
-func (m BuildMsg) Validate() error {
+func (m *InitCodeMsg) Validate() error {
 	if len(m.Code) == 0 {
 		return fmt.Errorf("source code is empty")
 	}
@@ -72,6 +73,12 @@ func (m BuildMsg) Validate() error {
 	}
 	if _, ok := runtime.Runtimes[m.Runtime]; !ok {
 		return fmt.Errorf("unsupported runtime provided: %s", m.Runtime)
+	}
+	if m.CommType == "" {
+		m.CommType = PushCommType
+	}
+	if !cos.StringInSlice(m.CommType, commTypes) {
+		return fmt.Errorf("unsupported communication type provided: %s", m.CommType)
 	}
 	return nil
 }

@@ -8,6 +8,8 @@ package integration
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
@@ -40,6 +42,7 @@ const (
 )
 
 type (
+	transformFunc  func(r io.Reader) io.Reader
 	filesEqualFunc func(f1, f2 string) (bool, error)
 
 	testObjConfig struct {
@@ -47,6 +50,7 @@ type (
 		comm        string
 		inPath      string         // optional
 		outPath     string         // optional
+		transform   transformFunc  // optional
 		filesEqual  filesEqualFunc // optional
 		onlyLong    bool           // run only with long tests
 	}
@@ -106,29 +110,34 @@ func readExamples(fileName string) (examples []*core.TFExample, err error) {
 	return core.NewTFRecordReader(f).ReadAllExamples()
 }
 
-func testETLObject(t *testing.T, onlyLong bool, comm, transformer, inPath, outPath string, fEq filesEqualFunc) {
+func testETLObject(t *testing.T, uuid, inPath, outPath string, fTransform transformFunc, fEq filesEqualFunc) {
 	var (
-		bck                    = cmn.Bck{Provider: cmn.ProviderAIS, Name: "etl-test"}
-		testObjDir             = filepath.Join("data", "transformer", transformer)
-		inputFileName          = filepath.Join(testObjDir, "object.in")
-		expectedOutputFileName = filepath.Join(testObjDir, "object.out")
+		inputFilePath          string
+		expectedOutputFilePath string
 
-		objName        = fmt.Sprintf("%s-%s-object", transformer, cos.RandString(5))
+		bck            = cmn.Bck{Provider: cmn.ProviderAIS, Name: "etl-test"}
+		objName        = fmt.Sprintf("%s-%s-object", uuid, cos.RandString(5))
 		outputFileName = filepath.Join(t.TempDir(), objName+".out")
-
-		uuid string
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Bck: bck, Long: onlyLong})
+	buf := make([]byte, 256)
+	_, err := rand.Read(buf)
+	tassert.CheckFatal(t, err)
+	r := bytes.NewReader(buf)
 
-	if fEq == nil {
-		fEq = tutils.FilesEqual
-	}
 	if inPath != "" {
-		inputFileName = inPath
+		inputFilePath = inPath
+	} else {
+		inputFilePath = tutils.CreateFileFromReader(t, "object.in", r)
 	}
 	if outPath != "" {
-		expectedOutputFileName = outPath
+		expectedOutputFilePath = outPath
+	} else {
+		_, err := r.Seek(0, io.SeekStart)
+		tassert.CheckFatal(t, err)
+
+		r := fTransform(r)
+		expectedOutputFilePath = tutils.CreateFileFromReader(t, "object.out", r)
 	}
 
 	tlog.Logln("Creating bucket")
@@ -136,13 +145,9 @@ func testETLObject(t *testing.T, onlyLong bool, comm, transformer, inPath, outPa
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	tlog.Logln("Putting object")
-	reader, err := readers.NewFileReaderFromFile(inputFileName, cos.ChecksumNone)
+	reader, err := readers.NewFileReaderFromFile(inputFilePath, cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
 	tutils.PutObject(t, bck, objName, reader)
-
-	uuid, err = tetl.Init(baseParams, transformer, comm)
-	tassert.CheckFatal(t, err)
-	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
 	fho, err := cos.CreateFile(outputFileName)
 	tassert.CheckFatal(t, err)
@@ -153,7 +158,7 @@ func testETLObject(t *testing.T, onlyLong bool, comm, transformer, inPath, outPa
 	tassert.CheckFatal(t, err)
 
 	tlog.Logln("Compare output")
-	same, err := fEq(outputFileName, expectedOutputFileName)
+	same, err := fEq(outputFileName, expectedOutputFilePath)
 	tassert.CheckError(t, err)
 	tassert.Errorf(t, same, "file contents after transformation differ")
 }
@@ -230,21 +235,28 @@ func TestETLObject(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
+	noopTransform := func(r io.Reader) io.Reader { return r }
 	tests := []testObjConfig{
-		{transformer: tetl.Echo, comm: etl.RedirectCommType, onlyLong: true},
-		{transformer: tetl.Echo, comm: etl.RevProxyCommType, onlyLong: true},
-		{transformer: tetl.Echo, comm: etl.PushCommType, onlyLong: true},
-		{tetl.Tar2TF, etl.RedirectCommType, tar2tfIn, tar2tfOut, tfDataEqual, true},
-		{tetl.Tar2TF, etl.RevProxyCommType, tar2tfIn, tar2tfOut, tfDataEqual, true},
-		{tetl.Tar2TF, etl.PushCommType, tar2tfIn, tar2tfOut, tfDataEqual, true},
-		{tetl.Tar2tfFilters, etl.RedirectCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false},
-		{tetl.Tar2tfFilters, etl.RevProxyCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false},
-		{tetl.Tar2tfFilters, etl.PushCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false},
+		{transformer: tetl.Echo, comm: etl.RedirectCommType, transform: noopTransform, filesEqual: tutils.FilesEqual, onlyLong: true},
+		{transformer: tetl.Echo, comm: etl.RevProxyCommType, transform: noopTransform, filesEqual: tutils.FilesEqual, onlyLong: true},
+		{transformer: tetl.Echo, comm: etl.PushCommType, transform: noopTransform, filesEqual: tutils.FilesEqual, onlyLong: true},
+		{tetl.Tar2TF, etl.RedirectCommType, tar2tfIn, tar2tfOut, nil, tfDataEqual, true},
+		{tetl.Tar2TF, etl.RevProxyCommType, tar2tfIn, tar2tfOut, nil, tfDataEqual, true},
+		{tetl.Tar2TF, etl.PushCommType, tar2tfIn, tar2tfOut, nil, tfDataEqual, true},
+		{tetl.Tar2tfFilters, etl.RedirectCommType, tar2tfFiltersIn, tar2tfFiltersOut, nil, tfDataEqual, false},
+		{tetl.Tar2tfFilters, etl.RevProxyCommType, tar2tfFiltersIn, tar2tfFiltersOut, nil, tfDataEqual, false},
+		{tetl.Tar2tfFilters, etl.PushCommType, tar2tfFiltersIn, tar2tfFiltersOut, nil, tfDataEqual, false},
 	}
 
 	for _, test := range tests {
 		t.Run(test.Name(), func(t *testing.T) {
-			testETLObject(t, test.onlyLong, test.comm, test.transformer, test.inPath, test.outPath, test.filesEqual)
+			tutils.CheckSkip(t, tutils.SkipTestArgs{Long: test.onlyLong})
+
+			uuid, err := tetl.Init(baseParams, test.transformer, test.comm)
+			tassert.CheckFatal(t, err)
+			t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
+
+			testETLObject(t, uuid, test.inPath, test.outPath, test.transform, test.filesEqual)
 		})
 	}
 }
@@ -326,7 +338,7 @@ func TestETLBucket(t *testing.T) {
 	}
 }
 
-func TestETLBuild(t *testing.T) {
+func TestETLInitCode(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
@@ -338,6 +350,17 @@ def transform(input_bytes):
     md5 = hashlib.md5()
     md5.update(input_bytes)
     return md5.hexdigest().encode()
+`
+
+		md5IO = `
+import hashlib
+import sys
+
+def main():
+    md5 = hashlib.md5()
+    for chunk in sys.stdin.buffer.read():
+        md5.update(chunk)
+    sys.stdout.buffer.write(md5.hexdigest().encode())
 `
 
 		numpy = `
@@ -364,11 +387,14 @@ def transform(input_bytes: bytes) -> bytes:
 			code     string
 			deps     string
 			runtime  string
+			commType string
 			onlyLong bool
 		}{
 			{name: "simple_python2", code: md5, deps: "", runtime: runtime.Python2, onlyLong: false},
 			{name: "simple_python3", code: md5, deps: "", runtime: runtime.Python3, onlyLong: false},
 			{name: "with_deps_python3", code: numpy, deps: numpyDeps, runtime: runtime.Python3, onlyLong: true},
+
+			{name: "simple_python3_io", code: md5IO, deps: "", runtime: runtime.Python3, commType: etl.IOCommType, onlyLong: false},
 		}
 	)
 
@@ -380,20 +406,36 @@ def transform(input_bytes: bytes) -> bytes:
 	tlog.Logln("Putting objects to source bucket")
 	m.puts()
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: test.onlyLong})
+	for _, testType := range []string{"etl_object", "etl_bucket"} {
+		for _, test := range tests {
+			t.Run(testType+"__"+test.name, func(t *testing.T) {
+				tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: test.onlyLong})
 
-			uuid, err := api.ETLBuild(baseParams, etl.BuildMsg{
-				Code:        []byte(test.code),
-				Deps:        []byte(test.deps),
-				Runtime:     test.runtime,
-				WaitTimeout: cos.Duration(5 * time.Minute),
+				uuid, err := api.ETLInitCode(baseParams, etl.InitCodeMsg{
+					Code:        []byte(test.code),
+					Deps:        []byte(test.deps),
+					Runtime:     test.runtime,
+					CommType:    test.commType,
+					WaitTimeout: cos.Duration(5 * time.Minute),
+				})
+				tassert.CheckFatal(t, err)
+
+				switch testType {
+				case "etl_object":
+					t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
+
+					testETLObject(t, uuid, "", "", func(r io.Reader) io.Reader {
+						return r // TODO: Write function to transform input to md5.
+					}, func(f1, f2 string) (bool, error) {
+						return true, nil // TODO: Write function to compare output from md5.
+					})
+				case "etl_bucket":
+					testETLBucket(t, uuid, m.bck, m.num, m.fileSize, time.Minute)
+				default:
+					panic(testType)
+				}
 			})
-			tassert.CheckFatal(t, err)
-
-			testETLBucket(t, uuid, m.bck, m.num, m.fileSize, time.Minute)
-		})
+		}
 	}
 }
 

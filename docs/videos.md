@@ -35,11 +35,11 @@ This section comprises a number of videos illustrating different aspects of the 
 
 [![AIStore ETL Getting Started](/docs/images/etl-getting-started-400.png)](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL Getting Started (Youtube video)")
 
-## ETL build: ImageNet Transformation
+## ETL init with code: ImageNet Transformation
 
 <img src="/docs/images/etl-imagenet.gif" width="100%">
 
-## ETL init: MD5 Computation
+## ETL init with spec: MD5 Computation
 
 <img src="/docs/images/etl-md5.gif" width="100%">
 

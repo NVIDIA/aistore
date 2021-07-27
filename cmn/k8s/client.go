@@ -20,9 +20,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	tcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/remotecommand"
 	metrics "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
@@ -40,11 +42,14 @@ type (
 		Logs(podName string) ([]byte, error)
 		Health(podName string) (cpuCores float64, freeMem int64, err error)
 		CheckMetricsAvailability() error
+		ExecCmd(podName string, command []string,
+			stdin io.Reader, stdout, stderr io.Writer) error
 	}
 
 	// defaultClient implements Client interface.
 	defaultClient struct {
 		client    kubernetes.Interface
+		config    *rest.Config
 		namespace string
 		err       error
 	}
@@ -81,6 +86,34 @@ func (c *defaultClient) Create(v interface{}) (err error) {
 		debug.Assertf(false, "unknown entity type: %T", t)
 	}
 	return
+}
+
+func (c *defaultClient) ExecCmd(podName string, command []string,
+	stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
+	req := c.client.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Namespace(c.namespace).
+		Name(podName).
+		SubResource("exec")
+	req.VersionedParams(
+		&corev1.PodExecOptions{
+			Command: []string{"bash", "-c", strings.Join(command, " ")},
+			Stdin:   stdin != nil,
+			Stdout:  true,
+			Stderr:  stderr != nil,
+			TTY:     false,
+		},
+		scheme.ParameterCodec,
+	)
+	exec, err := remotecommand.NewSPDYExecutor(c.config, "POST", req.URL())
+	if err != nil {
+		return err
+	}
+	return exec.Stream(remotecommand.StreamOptions{
+		Stdin:  stdin,
+		Stdout: stdout,
+		Stderr: stderr,
+	})
 }
 
 func (c *defaultClient) Delete(entityType, entityName string) (err error) {
@@ -215,6 +248,7 @@ func _initClient() {
 	_defaultK8sClient = &defaultClient{
 		namespace: _namespace(),
 		client:    client,
+		config:    config,
 	}
 }
 

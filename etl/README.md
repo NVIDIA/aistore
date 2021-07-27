@@ -2,11 +2,11 @@
 
 The `etl` package compiles into `aisnode` executable to facilitate running custom ETL containers and communicating with those containers at runtime.
 
-AIStore supports both on the fly (aka *inline*) and offline user-defined dataset transformations. All the respective I/O intensive (and expensive) operation is confined to the storage cluster, with computing clients retaining all their resources to execute computation over transformed, filtered, and sorted data.
+AIStore supports both on the fly (aka online) and offline user-defined dataset transformations. All the respective I/O intensive (and expensive) operation is confined to the storage cluster, with computing clients retaining all their resources to execute computation over transformed, filtered, and sorted data.
 
 Popular use cases include - but are not limited to - *dataset augmentation* (of any kind) and filtering of AI datasets.
 
-Please refer to [ETL readme](/docs/etl.md) for the prerequisites, 3 (three) supported ais <=> container communication mechanisms, and usage examples.
+Please refer to [ETL readme](/docs/etl.md) for the prerequisites, 4 supported ais <=> container communication mechanisms, and usage examples.
 
 > [ETL readme](/docs/etl.md) also contains an overview of the architecture, important technical details, and further guidance.
 

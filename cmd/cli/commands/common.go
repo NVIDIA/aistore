@@ -70,8 +70,6 @@ const (
 	subcmdCluster    = commandCluster
 	subcmdNode       = "node"
 	subcmdPrimary    = "set-primary"
-	subcmdInit       = "init"
-	subcmdBuild      = "build"
 	subcmdList       = commandList
 	subcmdLogs       = "logs"
 	subcmdStop       = "stop"
@@ -164,6 +162,11 @@ const (
 	subcmdStgSummary   = subcmdSummary
 	subcmdStgValidate  = "validate"
 	subcmdStgMountpath = subcmdMountpath
+
+	// ETL subcommands
+	subcmdInit = "init"
+	subcmdSpec = "spec"
+	subcmdCode = "code"
 
 	// Default values for long running operations
 	refreshRateDefault = time.Second
@@ -408,6 +411,10 @@ var (
 	runtimeFlag = cli.StringFlag{
 		Name:  "runtime",
 		Usage: "runtime which should be used when running the provided code", Required: true,
+	}
+	commTypeFlag = cli.StringFlag{
+		Name:  "comm-type",
+		Usage: "communication type which should be used when running the provided code",
 	}
 	waitTimeoutFlag = cli.DurationFlag{
 		Name:  "wait-timeout",

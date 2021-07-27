@@ -379,14 +379,14 @@ const (
 	WorkerOwner = "worker" // TODO: it should be removed once get-next-bytes endpoint is ready
 
 	// ETL
-	ETL       = "etl"
-	ETLInit   = Init
-	ETLBuild  = "build"
-	ETLList   = List
-	ETLLogs   = "logs"
-	ETLObject = "object"
-	ETLStop   = Stop
-	ETLHealth = "health"
+	ETL         = "etl"
+	ETLInitSpec = "init_spec"
+	ETLInitCode = "init_code"
+	ETLList     = List
+	ETLLogs     = "logs"
+	ETLObject   = "object"
+	ETLStop     = Stop
+	ETLHealth   = "health"
 )
 
 const (
