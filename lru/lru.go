@@ -115,7 +115,7 @@ var (
 	_ xreg.Renewable = (*Factory)(nil)
 )
 
-func init() { xreg.RegGlobXact(&Factory{}) }
+func init() { xreg.RegNonBckXact(&Factory{}) }
 
 func (*Factory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
 	return &Factory{RenewBase: xreg.RenewBase{Args: args}}

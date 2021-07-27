@@ -37,7 +37,7 @@ func TestXactionRenewLRU(t *testing.T) {
 	)
 	xreg.Reset()
 
-	xreg.RegGlobXact(&lru.Factory{})
+	xreg.RegNonBckXact(&lru.Factory{})
 	defer xreg.AbortAll()
 	cos.InitShortID(0)
 
@@ -111,7 +111,7 @@ func TestXactionAbortAll(t *testing.T) {
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
 
-	xreg.RegGlobXact(&lru.Factory{})
+	xreg.RegNonBckXact(&lru.Factory{})
 	xreg.RegBckXact(&xs.MovFactory{})
 
 	xactGlob := xreg.RenewLRU(cos.GenUUID())
@@ -142,7 +142,7 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
 
-	xreg.RegGlobXact(&lru.Factory{})
+	xreg.RegNonBckXact(&lru.Factory{})
 	xreg.RegBckXact(&xs.MovFactory{})
 
 	xactGlob := xreg.RenewLRU(cos.GenUUID())
@@ -171,7 +171,7 @@ func TestXactionAbortBuckets(t *testing.T) {
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
 
-	xreg.RegGlobXact(&lru.Factory{})
+	xreg.RegNonBckXact(&lru.Factory{})
 	xreg.RegBckXact(&xs.MovFactory{})
 
 	xactGlob := xreg.RenewLRU(cos.GenUUID())

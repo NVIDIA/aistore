@@ -193,10 +193,6 @@ func RenewObjList(t cluster.Target, bck *cluster.Bck, uuid string, msg *cmn.Sele
 }
 
 func (r *registry) renewObjList(t cluster.Target, bck *cluster.Bck, uuid string, msg *cmn.SelectMsg) RenewRes {
-	xact := r.getXact(uuid)
-	if xact == nil || xact.Finished() {
-		e := r.bckXacts[cmn.ActList].New(Args{T: t, UUID: uuid, Custom: msg}, bck)
-		return r.renew(e, bck, uuid)
-	}
-	return RenewRes{&DummyEntry{xact}, nil, uuid}
+	e := r.bckXacts[cmn.ActList].New(Args{T: t, UUID: uuid, Custom: msg}, bck)
+	return r.renewByID(e, bck)
 }

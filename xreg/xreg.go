@@ -89,7 +89,7 @@ type (
 		inactive    atomic.Int64
 		entries     *entries
 		bckXacts    map[string]Renewable
-		globalXacts map[string]Renewable
+		nonbckXacts map[string]Renewable
 	}
 )
 
@@ -125,7 +125,7 @@ func newRegistry() *registry {
 	xar := &registry{
 		entries:     newRegistryEntries(),
 		bckXacts:    make(map[string]Renewable, 10),
-		globalXacts: make(map[string]Renewable, 10),
+		nonbckXacts: make(map[string]Renewable, 10),
 	}
 	hk.Reg("xactions-old", xar.hkDelOld)
 	hk.Reg("xactions-inactive", xar.hkDelInactive)
@@ -407,11 +407,18 @@ func (r *registry) hkDelOld() time.Duration {
 	return delOldInterval
 }
 
-func (r *registry) renew(entry Renewable, bck *cluster.Bck, uuids ...string) (rns RenewRes) {
+func (r *registry) renewByID(entry Renewable, bck *cluster.Bck) (rns RenewRes) {
+	flt := XactFilter{ID: entry.UUID(), Bck: bck}
+	return r._renewFlt(entry, flt)
+}
+
+func (r *registry) renew(entry Renewable, bck *cluster.Bck) (rns RenewRes) {
 	flt := XactFilter{Kind: entry.Kind(), Bck: bck}
-	if len(uuids) != 0 {
-		flt.ID = uuids[0]
-	}
+	return r._renewFlt(entry, flt)
+}
+
+func (r *registry) _renewFlt(entry Renewable, flt XactFilter) (rns RenewRes) {
+	bck := flt.Bck
 	// first, try to reuse under rlock
 	r.mtx.RLock()
 	if prevEntry := r.getRunning(flt); prevEntry != nil {

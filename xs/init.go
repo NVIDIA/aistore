@@ -12,9 +12,9 @@ import (
 
 // for additional startup-time reg-s see lru, downloader, ec
 func init() {
-	xreg.RegGlobXact(&eleFactory{})
-	xreg.RegGlobXact(&rslvrFactory{})
-	xreg.RegGlobXact(&rebFactory{})
+	xreg.RegNonBckXact(&eleFactory{})
+	xreg.RegNonBckXact(&rslvrFactory{})
+	xreg.RegNonBckXact(&rebFactory{})
 
 	xreg.RegBckXact(&MovFactory{})
 	xreg.RegBckXact(&evdFactory{kind: cmn.ActEvictObjects})

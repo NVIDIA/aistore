@@ -179,7 +179,7 @@ var (
 )
 
 func init() {
-	xreg.RegGlobXact(&dowFactory{})
+	xreg.RegNonBckXact(&dowFactory{})
 }
 
 func clientForURL(u string) *http.Client {
