@@ -13,7 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
-	"github.com/dgrijalva/jwt-go"
+	"github.com/form3tech-oss/jwt-go"
 )
 
 const (
@@ -91,6 +91,7 @@ func (*TokenMsg) JspOpts() jsp.Options { return authtokJspOpts }
 var (
 	ErrNoPermissions = errors.New("insufficient permissions")
 	ErrInvalidToken  = errors.New("invalid token")
+	ErrNoToken       = errors.New("token required")
 	ErrTokenExpired  = errors.New("token expired")
 )
 

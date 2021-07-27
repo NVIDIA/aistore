@@ -148,11 +148,8 @@ func (args *bckInitArgs) _requiresPermission(perm cmn.AccessAttrs) bool {
 }
 
 func (args *bckInitArgs) _checkACL(bck *cluster.Bck) (errCode int, err error) {
-	if err = args.p.checkACL(args.r.Header, bck, args.perms); err != nil {
-		errCode = http.StatusForbidden
-	}
-
-	return
+	err = args.p._checkACL(args.r.Header, bck, args.perms)
+	return args.p.aclErrToCode(err), err
 }
 
 // initAndTry initializes bucket and tries to add it if doesn't exist.

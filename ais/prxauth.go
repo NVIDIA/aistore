@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"errors"
 	"net/http"
 	"strings"
 
@@ -14,8 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 )
-
-var errInvalidToken = errors.New("invalid token")
 
 func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 	tokenList := &tokenList{}
@@ -41,15 +38,18 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 // Returns: is auth enabled, decoded token, error
 func (p *proxyrunner) validateToken(hdr http.Header) (*authn.Token, error) {
 	authToken := hdr.Get(cmn.HdrAuthorization)
+	if authToken == "" {
+		return nil, authn.ErrNoToken
+	}
 	idx := strings.Index(authToken, " ")
 	if idx == -1 || authToken[:idx] != cmn.AuthenticationTypeBearer {
-		return nil, errInvalidToken
+		return nil, authn.ErrNoToken
 	}
 
 	auth, err := p.authn.validateToken(authToken[idx+1:])
 	if err != nil {
 		glog.Errorf("invalid token: %v", err)
-		return nil, errInvalidToken
+		return nil, err
 	}
 
 	return auth, nil
@@ -63,7 +63,27 @@ func (p *proxyrunner) validateToken(hdr http.Header) (*authn.Token, error) {
 //   Exceptions:
 //   - read-only access to a bucket is always granted
 //   - PATCH cannot be forbidden
-func (p *proxyrunner) checkACL(hdr http.Header, bck *cluster.Bck, ace cmn.AccessAttrs) error {
+func (p *proxyrunner) checkACL(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, ace cmn.AccessAttrs) error {
+	err := p._checkACL(r.Header, bck, ace)
+	if err == nil {
+		return nil
+	}
+	p.writeErr(w, r, err, p.aclErrToCode(err))
+	return err
+}
+
+func (*proxyrunner) aclErrToCode(err error) int {
+	switch err {
+	case nil:
+		return http.StatusOK
+	case authn.ErrNoToken:
+		return http.StatusUnauthorized
+	default:
+		return http.StatusForbidden
+	}
+}
+
+func (p *proxyrunner) _checkACL(hdr http.Header, bck *cluster.Bck, ace cmn.AccessAttrs) error {
 	if p.isIntraCall(hdr) {
 		return nil
 	}

@@ -14,8 +14,8 @@ require (
 	github.com/aws/aws-sdk-go v1.38.32
 	github.com/colinmarc/hdfs/v2 v2.2.0
 	github.com/cpuguy83/go-md2man/v2 v2.0.0 // indirect
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/fatih/color v1.10.0
+	github.com/form3tech-oss/jwt-go v3.2.2+incompatible
 	github.com/frankban/quicktest v1.5.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/gofuzz v1.2.0 // indirect

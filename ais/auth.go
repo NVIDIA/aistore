@@ -100,7 +100,7 @@ func (a *authManager) validateToken(token string) (ar *authn.Token, err error) {
 	a.Lock()
 
 	if _, ok := a.revokedTokens[token]; ok {
-		ar, err = nil, authn.ErrInvalidToken
+		ar, err = nil, authn.ErrTokenExpired
 		a.Unlock()
 		return
 	}
@@ -133,7 +133,7 @@ func (a *authManager) extractTokenData(token string) (*authn.Token, error) {
 	if auth.Expires.Before(time.Now()) {
 		glog.Errorf("Expired token was used: %s", token)
 		delete(a.tokens, token)
-		return nil, fmt.Errorf("token expired")
+		return nil, authn.ErrTokenExpired
 	}
 
 	return auth, nil

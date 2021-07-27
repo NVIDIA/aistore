@@ -484,8 +484,7 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxyrunner) handleList(w http.ResponseWriter, r *http.Request, queryBcks cmn.QueryBcks, msg *cmn.ActionMsg) {
 	if queryBcks.Name == "" {
-		if err := p.checkACL(r.Header, nil, cmn.AccessListBuckets); err != nil {
-			p.writeErr(w, r, err, http.StatusUnauthorized)
+		if err := p.checkACL(w, r, nil, cmn.AccessListBuckets); err != nil {
 			return
 		}
 		p.listBuckets(w, r, queryBcks, msg)
@@ -1057,8 +1056,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		w.Write([]byte(xactID))
 	case cmn.ActAddRemoteBck:
 		// TODO: choose the best permission
-		if err := p.checkACL(r.Header, nil, cmn.AccessCreateBucket); err != nil {
-			p.writeErr(w, r, err, http.StatusUnauthorized)
+		if err := p.checkACL(w, r, nil, cmn.AccessCreateBucket); err != nil {
 			return
 		}
 		if err := p.createBucket(msg, bck); err != nil {
@@ -1104,9 +1102,8 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 
 func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, bck *cluster.Bck) {
 	bucket := bck.Name
-	err := p.checkACL(r.Header, nil, cmn.AccessCreateBucket)
+	err := p.checkACL(w, r, nil, cmn.AccessCreateBucket)
 	if err != nil {
-		p.writeErr(w, r, err, http.StatusUnauthorized)
 		return
 	}
 	if err = bck.Validate(); err != nil {
@@ -1366,8 +1363,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case cmn.ActRenameObject:
-		if err := p.checkACL(r.Header, bck, cmn.AccessObjMOVE); err != nil {
-			p.writeErr(w, r, err, http.StatusUnauthorized)
+		if err := p.checkACL(w, r, bck, cmn.AccessObjMOVE); err != nil {
 			return
 		}
 		if bck.IsRemote() {
@@ -1381,8 +1377,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		p.objMv(w, r, bck, request.items[1], &msg)
 		return
 	case cmn.ActPromote:
-		if err := p.checkACL(r.Header, bck, cmn.AccessPROMOTE); err != nil {
-			p.writeErr(w, r, err, http.StatusUnauthorized)
+		if err := p.checkACL(w, r, bck, cmn.AccessPROMOTE); err != nil {
 			return
 		}
 		if !filepath.IsAbs(msg.Name) {
@@ -2247,8 +2242,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err := p.checkACL(r.Header, nil, cmn.AccessAdmin); err != nil {
-		p.writeErr(w, r, err, http.StatusUnauthorized)
+	if err := p.checkACL(w, r, nil, cmn.AccessAdmin); err != nil {
 		return
 	}
 	// urlpath-based actions
@@ -2601,8 +2595,7 @@ func (p *proxyrunner) dsortHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	if err := p.checkACL(r.Header, nil, cmn.AccessAdmin); err != nil {
-		p.writeErr(w, r, err, http.StatusUnauthorized)
+	if err := p.checkACL(w, r, nil, cmn.AccessAdmin); err != nil {
 		return
 	}
 
