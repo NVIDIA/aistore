@@ -47,6 +47,19 @@ const (
 	evictPrefetchTimeout = 2 * time.Minute
 )
 
+type PutObjectsArgs struct {
+	ProxyURL  string
+	Bck       cmn.Bck
+	ObjPath   string
+	CksumType string
+	ObjSize   uint64
+	ObjCnt    int
+	WorkerCnt int
+	FixedSize bool
+	Ordered   bool // true - object names make sequence, false - names are random
+	IgnoreErr bool
+}
+
 func Del(proxyURL string, bck cmn.Bck, object string, wg *sync.WaitGroup, errCh chan error, silent bool) error {
 	if wg != nil {
 		defer wg.Done()
@@ -262,21 +275,6 @@ func EnsureObjectsExist(t *testing.T, params api.BaseParams, bck cmn.Bck, object
 			t.Errorf("Unexpected GetObject(%s) error: %v.", objName, err)
 		}
 	}
-}
-
-type PutObjectsArgs struct {
-	ProxyURL string
-
-	Bck       cmn.Bck
-	ObjPath   string
-	ObjCnt    int
-	ObjSize   uint64
-	FixedSize bool
-	CksumType string
-	Ordered   bool // true - object names make sequence, false - names are random
-
-	WorkerCnt int
-	IgnoreErr bool
 }
 
 func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {

@@ -141,11 +141,10 @@ func testETLObject(t *testing.T, uuid, inPath, outPath string, fTransform transf
 		expectedOutputFilePath = tutils.CreateFileFromReader(t, "object.out", r)
 	}
 
-	tlog.Logln("Creating bucket")
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	tlog.Logln("Putting object")
+	tlog.Logln("PUT object")
 	reader, err := readers.NewFileReaderFromFile(inputFilePath, cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
 	tutils.PutObject(t, bck, objName, reader)
@@ -169,7 +168,7 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, uuid string, onlyLong, cached
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: onlyLong})
 
 	objName := fmt.Sprintf("%s-%s-object", uuid, cos.RandString(5))
-	tlog.Logln("Putting object")
+	tlog.Logln("PUT object")
 	reader, err := readers.NewRandReader(cos.KiB, cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
 
@@ -297,7 +296,8 @@ func TestETLObjectCloud(t *testing.T) {
 	}
 }
 
-func TestETLObjectWithGet(t *testing.T) {
+// TODO: initial impl - revise and add many more tests
+func TestETLInline(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
@@ -317,10 +317,9 @@ func TestETLObjectWithGet(t *testing.T) {
 			tassert.CheckFatal(t, err)
 			t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
-			tlog.Logln("Creating bucket")
 			tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
-			tlog.Logln("Putting object")
+			tlog.Logln("PUT object")
 			objNames, _, err := tutils.PutRandObjs(tutils.PutObjectsArgs{
 				ProxyURL: proxyURL,
 				Bck:      bck,
@@ -330,7 +329,7 @@ func TestETLObjectWithGet(t *testing.T) {
 			tassert.CheckFatal(t, err)
 			objName := objNames[0]
 
-			tlog.Logln("Getting object with transform")
+			tlog.Logln("GET transformed object")
 			outObject := bytes.NewBuffer(nil)
 			_, err = api.GetObject(baseParams, bck, objName, api.GetObjectInput{
 				Writer: outObject,
@@ -342,6 +341,48 @@ func TestETLObjectWithGet(t *testing.T) {
 			tassert.Fatalf(t, matchesMD5, "expected transformed object to be md5 checksum")
 		})
 	}
+}
+
+func TestETLInlineMD5SingleObj(t *testing.T) {
+	var (
+		bck         = cmn.Bck{Provider: cmn.ProviderAIS, Name: "etl-test"}
+		transformer = tetl.MD5
+		comm        = etl.PushCommType
+	)
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
+	tetl.CheckNoRunningETLContainers(t, baseParams)
+
+	uuid, err := tetl.Init(baseParams, transformer, comm)
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
+
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+
+	tlog.Logln("PUT object")
+	objName := cos.RandString(10)
+	reader, err := readers.NewRandReader(cos.MiB, cos.ChecksumMD5)
+	tassert.CheckFatal(t, err)
+
+	err = api.PutObject(api.PutObjectArgs{
+		BaseParams: baseParams,
+		Bck:        bck,
+		Object:     objName,
+		Reader:     reader,
+	})
+	tassert.CheckFatal(t, err)
+
+	tlog.Logln("GET transformed object")
+	outObject := tutils.MMSA.NewSGL(0)
+	defer outObject.Free()
+	_, err = api.GetObject(baseParams, bck, objName, api.GetObjectInput{
+		Writer: outObject,
+		Query:  map[string][]string{cmn.URLParamUUID: {uuid}},
+	})
+	tassert.CheckFatal(t, err)
+
+	exp, got := reader.Cksum().Val(), string(outObject.Bytes())
+	tassert.Errorf(t, exp == got, "expected transformed object to be md5 checksum %s, got %s", exp,
+		got[:cos.Min(len(got), 16)])
 }
 
 func TestETLBucket(t *testing.T) {
@@ -367,11 +408,10 @@ func TestETLBucket(t *testing.T) {
 		}
 	)
 
-	tlog.Logln("Preparing source bucket")
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 	m.init()
 
-	tlog.Logln("Putting objects to source bucket")
+	tlog.Logf("PUT %d objects", m.num)
 	m.puts()
 
 	for _, test := range tests {
@@ -446,12 +486,11 @@ def transform(input_bytes: bytes) -> bytes:
 		}
 	)
 
-	tlog.Logln("Preparing source bucket")
 	tutils.CreateFreshBucket(t, proxyURL, m.bck, nil)
 
 	m.init()
 
-	tlog.Logln("Putting objects to source bucket")
+	tlog.Logln("PUT objects to source bucket")
 	m.puts()
 
 	for _, testType := range []string{"etl_object", "etl_bucket"} {
@@ -505,11 +544,10 @@ func TestETLBucketDryRun(t *testing.T) {
 		}
 	)
 
-	tlog.Logln("Preparing source bucket")
 	tutils.CreateFreshBucket(t, proxyURL, bckFrom, nil)
 	m.init()
 
-	tlog.Logln("Putting objects to source bucket")
+	tlog.Logf("PUT %d objects", m.num)
 	m.puts()
 
 	uuid, err := tetl.Init(baseParams, tetl.Echo, etl.RevProxyCommType)
