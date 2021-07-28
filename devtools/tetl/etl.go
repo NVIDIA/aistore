@@ -27,7 +27,7 @@ const (
 	Tar2TF        = "tar2tf"
 	Echo          = "echo"
 	EchoGolang    = "echo-go"
-	Md5           = "md5"
+	MD5           = "md5"
 	Tar2tfFilters = "tar2tf-filters"
 	tar2tfFilter  = `
 {
@@ -45,7 +45,7 @@ const (
 
 var (
 	links = map[string]string{
-		Md5:           "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml",
+		MD5:           "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml",
 		Tar2TF:        "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/tar2tf/pod.yaml",
 		Tar2tfFilters: "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/tar2tf/pod.yaml",
 		Echo:          "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/echo/pod.yaml",
@@ -57,7 +57,7 @@ var (
 
 func validateETLName(name string) error {
 	if _, ok := links[name]; !ok {
-		return fmt.Errorf("%s invalid name; expected one of %s, %s, %s", name, Echo, Tar2TF, Md5)
+		return fmt.Errorf("%s invalid name; expected one of %s, %s, %s", name, Echo, Tar2TF, MD5)
 	}
 	return nil
 }

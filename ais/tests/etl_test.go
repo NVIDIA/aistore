@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -296,6 +297,53 @@ func TestETLObjectCloud(t *testing.T) {
 	}
 }
 
+func TestETLObjectWithGet(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
+	tetl.CheckNoRunningETLContainers(t, baseParams)
+
+	var (
+		bck = cmn.Bck{Provider: cmn.ProviderAIS, Name: "etl-test"}
+
+		tests = []testObjConfig{
+			{transformer: tetl.MD5, comm: etl.PushCommType},
+		}
+	)
+
+	for _, test := range tests {
+		t.Run(test.Name(), func(t *testing.T) {
+			tutils.CheckSkip(t, tutils.SkipTestArgs{Long: test.onlyLong})
+
+			uuid, err := tetl.Init(baseParams, test.transformer, test.comm)
+			tassert.CheckFatal(t, err)
+			t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
+
+			tlog.Logln("Creating bucket")
+			tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+
+			tlog.Logln("Putting object")
+			objNames, _, err := tutils.PutRandObjs(tutils.PutObjectsArgs{
+				ProxyURL: proxyURL,
+				Bck:      bck,
+				ObjCnt:   1,
+				ObjSize:  cos.MiB,
+			})
+			tassert.CheckFatal(t, err)
+			objName := objNames[0]
+
+			tlog.Logln("Getting object with transform")
+			outObject := bytes.NewBuffer(nil)
+			_, err = api.GetObject(baseParams, bck, objName, api.GetObjectInput{
+				Writer: outObject,
+				Query:  map[string][]string{cmn.URLParamUUID: {uuid}},
+			})
+			tassert.CheckFatal(t, err)
+
+			matchesMD5 := regexp.MustCompile("^[a-fA-F0-9]{32}$").MatchReader(outObject)
+			tassert.Fatalf(t, matchesMD5, "expected transformed object to be md5 checksum")
+		})
+	}
+}
+
 func TestETLBucket(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
@@ -314,8 +362,8 @@ func TestETLBucket(t *testing.T) {
 
 		tests = []testObjConfig{
 			{transformer: tetl.Echo, comm: etl.RedirectCommType, onlyLong: true},
-			{transformer: tetl.Md5, comm: etl.RevProxyCommType},
-			{transformer: tetl.Md5, comm: etl.PushCommType, onlyLong: true},
+			{transformer: tetl.MD5, comm: etl.RevProxyCommType},
+			{transformer: tetl.MD5, comm: etl.PushCommType, onlyLong: true},
 		}
 	)
 
@@ -502,7 +550,7 @@ func TestETLSingleTransformerAtATime(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid1) })
 
-	uuid2, err := tetl.Init(baseParams, tetl.Md5, etl.RevProxyCommType)
+	uuid2, err := tetl.Init(baseParams, tetl.MD5, etl.RevProxyCommType)
 	tassert.Errorf(t, err != nil, "expected err to occur")
 	if uuid2 != "" {
 		tetl.StopETL(t, baseParams, uuid2)
