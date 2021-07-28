@@ -82,10 +82,10 @@ type (
 		active  []Renewable // running entries - finished entries are gradually removed
 		entries []Renewable
 	}
+	// All entries in the registry. The entries are periodically cleaned up
+	// to make sure that we don't keep old entries forever.
 	registry struct {
-		mtx sync.RWMutex // lock for transactions
-		// All entries in the xreg. The entries are periodically cleaned up
-		// to make sure that we don't keep old entries forever.
+		sync.RWMutex
 		inactive    atomic.Int64
 		entries     *entries
 		bckXacts    map[string]Renewable
@@ -107,6 +107,12 @@ func (r *RenewBase) Str(kind string) string {
 	}
 	return fmt.Sprintf("%s, ID=%q", prefix, r.UUID())
 }
+
+//////////////
+// RenewRes //
+//////////////
+
+func (r *RenewRes) IsRunning() bool { return r.UUID != "" }
 
 //////////////////////
 // xaction registry //
@@ -420,25 +426,25 @@ func (r *registry) renew(entry Renewable, bck *cluster.Bck) (rns RenewRes) {
 func (r *registry) _renewFlt(entry Renewable, flt XactFilter) (rns RenewRes) {
 	bck := flt.Bck
 	// first, try to reuse under rlock
-	r.mtx.RLock()
+	r.RLock()
 	if prevEntry := r.getRunning(flt); prevEntry != nil {
 		xprev := prevEntry.Get()
 		if usePrev(xprev, entry, bck) {
-			r.mtx.RUnlock()
+			r.RUnlock()
 			return RenewRes{Entry: prevEntry, UUID: xprev.ID()}
 		}
 		if wpr, err := entry.WhenPrevIsRunning(prevEntry); wpr == WprUse || err != nil {
-			r.mtx.RUnlock()
+			r.RUnlock()
 			xact := prevEntry.Get()
 			return RenewRes{Entry: prevEntry, Err: err, UUID: xact.ID()}
 		}
 	}
-	r.mtx.RUnlock()
+	r.RUnlock()
 
 	// second
-	r.mtx.Lock()
+	r.Lock()
 	rns = r.renewLocked(entry, flt, bck)
-	r.mtx.Unlock()
+	r.Unlock()
 	return
 }
 

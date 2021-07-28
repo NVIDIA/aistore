@@ -40,7 +40,7 @@ func RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, ms
 func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, msg *cmn.SelectMsg) RenewRes {
 	if xact := query.Registry.Get(msg.UUID); xact != nil {
 		if !xact.Aborted() {
-			return RenewRes{&DummyEntry{xact}, nil, msg.UUID}
+			return RenewRes{Entry: &DummyEntry{xact}, Err: nil, UUID: msg.UUID}
 		}
 		query.Registry.Delete(msg.UUID)
 	}
@@ -48,14 +48,14 @@ func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.Ob
 	err := r.entries.del(msg.UUID)
 	r.entries.mtx.Unlock()
 	if err != nil {
-		return RenewRes{&DummyEntry{nil}, err, msg.UUID}
+		return RenewRes{Entry: &DummyEntry{nil}, Err: err, UUID: msg.UUID}
 	}
 	e := &queFactory{ctx: ctx, t: t, query: q, msg: msg}
 	if err = e.Start(); err != nil {
-		return RenewRes{&DummyEntry{nil}, err, msg.UUID}
+		return RenewRes{Entry: &DummyEntry{nil}, Err: err, UUID: msg.UUID}
 	}
 	r.add(e)
-	return RenewRes{e, err, ""}
+	return RenewRes{Entry: e, Err: err, UUID: ""}
 }
 
 //////////////

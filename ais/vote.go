@@ -159,13 +159,15 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 
 func (p *proxyrunner) proxyElection(vr *VoteRecord) {
 	if p.owner.smap.get().isPrimary(p.si) {
-		glog.Infof("%s: am already in primary state", p.si)
+		glog.Infof("%s: already in primary state", p.si)
 		return
 	}
-	xele := xreg.RenewElection()
-	if xele == nil {
+	rns := xreg.RenewElection()
+	debug.AssertNoErr(rns.Err)
+	if rns.IsRunning() {
 		return
 	}
+	xele := rns.Entry.Get()
 	glog.Infoln(xele.String())
 	p.doProxyElection(vr)
 	xele.Finish(nil)

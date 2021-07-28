@@ -5,8 +5,6 @@
 package xreg
 
 import (
-	"fmt"
-
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -65,14 +63,14 @@ func RenewBucketXact(kind string, bck *cluster.Bck, args Args) (res RenewRes) {
 	return defaultReg.renewBucketXact(kind, bck, args)
 }
 
-func (r *registry) renewBucketXact(kind string, bck *cluster.Bck, args Args) (res RenewRes) {
+func (r *registry) renewBucketXact(kind string, bck *cluster.Bck, args Args) (rns RenewRes) {
 	e := r.bckXacts[kind].New(args, bck)
-	res = r.renew(e, bck)
-	if res.Err != nil {
+	rns = r.renew(e, bck)
+	if rns.Err != nil {
 		return
 	}
-	if res.UUID != "" {
-		xact := res.Entry.Get()
+	if rns.IsRunning() {
+		xact := rns.Entry.Get()
 		// NOTE: make sure existing on-demand is active to prevent it from (idle) expiration
 		//       (see demand.go hkcb())
 		if xactDemand, ok := xact.(xaction.Demand); ok {
@@ -101,9 +99,9 @@ func (r *registry) renewMakeNCopies(t cluster.Target, uuid, tag string) {
 	)
 	bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
 		if bck.Props.Mirror.Enabled {
-			res := r.renewBckMakeNCopies(t, bck, uuid, tag, int(bck.Props.Mirror.Copies))
-			if res.Err == nil {
-				xact := res.Entry.Get()
+			rns := r.renewBckMakeNCopies(t, bck, uuid, tag, int(bck.Props.Mirror.Copies))
+			if rns.Err == nil && !rns.IsRunning() {
+				xact := rns.Entry.Get()
 				go xact.Run()
 			}
 		}
@@ -113,9 +111,9 @@ func (r *registry) renewMakeNCopies(t cluster.Target, uuid, tag string) {
 	for name, ns := range cfg.Backend.Providers {
 		bmd.Range(&name, &ns, func(bck *cluster.Bck) bool {
 			if bck.Props.Mirror.Enabled {
-				res := r.renewBckMakeNCopies(t, bck, uuid, tag, int(bck.Props.Mirror.Copies))
-				if res.Err == nil {
-					xact := res.Entry.Get()
+				rns := r.renewBckMakeNCopies(t, bck, uuid, tag, int(bck.Props.Mirror.Copies))
+				if rns.Err == nil && !rns.IsRunning() {
+					xact := rns.Entry.Get()
 					go xact.Run()
 				}
 			}
@@ -128,16 +126,9 @@ func RenewBckMakeNCopies(t cluster.Target, bck *cluster.Bck, uuid, tag string, c
 	return defaultReg.renewBckMakeNCopies(t, bck, uuid, tag, copies)
 }
 
-func (r *registry) renewBckMakeNCopies(t cluster.Target, bck *cluster.Bck, uuid, tag string, copies int) (res RenewRes) {
+func (r *registry) renewBckMakeNCopies(t cluster.Target, bck *cluster.Bck, uuid, tag string, copies int) (rns RenewRes) {
 	e := r.bckXacts[cmn.ActMakeNCopies].New(Args{t, uuid, &MNCArgs{tag, copies}}, bck)
-	res = r.renew(e, bck)
-	if res.Err != nil {
-		return
-	}
-	if res.UUID != "" {
-		res.Err = fmt.Errorf("%s xaction already running", e.Kind())
-	}
-	return
+	return r.renew(e, bck)
 }
 
 func RenewDirPromote(t cluster.Target, bck *cluster.Bck, dir string, params *cmn.ActValPromote) RenewRes {

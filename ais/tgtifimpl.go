@@ -72,11 +72,12 @@ func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
 	if regToIC {
 		id = cos.GenUUID()
 	}
-
-	xlru := xreg.RenewLRU(id)
-	if xlru == nil {
+	rns := xreg.RenewLRU(id)
+	debug.AssertNoErr(rns.Err)
+	if rns.IsRunning() {
 		return
 	}
+	xlru := rns.Entry.Get()
 
 	if regToIC && xlru.ID() == id {
 		regMsg := xactRegMsg{UUID: id, Kind: cmn.ActLRU, Srcs: []string{t.si.ID()}}

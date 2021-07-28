@@ -211,10 +211,13 @@ func (reb *Manager) rebInit(md *rebArgs, notif *xaction.NotifXact) bool {
 		glog.Infof("rebalance (v%d) in %s state", md.id, stages[rebStageInit])
 	}
 
-	xact := xreg.RenewRebalance(md.id, reb.statTracker)
-	if xact == nil {
+	rns := xreg.RenewRebalance(md.id, reb.statTracker)
+	debug.AssertNoErr(rns.Err)
+	if rns.IsRunning() {
 		return false
 	}
+	xact := rns.Entry.Get()
+
 	notif.Xact = xact
 	xact.AddNotif(notif)
 

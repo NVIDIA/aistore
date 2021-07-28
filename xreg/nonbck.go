@@ -32,20 +32,16 @@ func (r *registry) regNonBckXact(entry Renewable) {
 	r.nonbckXacts[entry.Kind()] = entry
 }
 
-func RenewRebalance(id int64, statTracker stats.Tracker) cluster.Xact {
+func RenewRebalance(id int64, statTracker stats.Tracker) RenewRes {
 	return defaultReg.renewRebalance(id, statTracker)
 }
 
-func (r *registry) renewRebalance(id int64, statTracker stats.Tracker) cluster.Xact {
+func (r *registry) renewRebalance(id int64, statTracker stats.Tracker) RenewRes {
 	e := r.nonbckXacts[cmn.ActRebalance].New(Args{Custom: &RebalanceArgs{
 		ID:          xaction.RebID2S(id),
 		StatTracker: statTracker,
 	}}, nil)
-	res := r.renew(e, nil)
-	if res.UUID != "" { // previous global rebalance is still running
-		return nil
-	}
-	return res.Entry.Get()
+	return r.renew(e, nil)
 }
 
 func RenewResilver(id string) cluster.Xact { return defaultReg.renewResilver(id) }
@@ -53,31 +49,22 @@ func RenewResilver(id string) cluster.Xact { return defaultReg.renewResilver(id)
 func (r *registry) renewResilver(id string) cluster.Xact {
 	e := r.nonbckXacts[cmn.ActResilver].New(Args{UUID: id}, nil)
 	rns := r.renew(e, nil)
-	debug.Assert(rns.UUID == "") // resilver must be always preempted
+	debug.Assert(!rns.IsRunning()) // NOTE: resilver is always preempted
 	return rns.Entry.Get()
 }
 
-func RenewElection() cluster.Xact { return defaultReg.renewElection() }
+func RenewElection() RenewRes { return defaultReg.renewElection() }
 
-func (r *registry) renewElection() cluster.Xact {
+func (r *registry) renewElection() RenewRes {
 	e := r.nonbckXacts[cmn.ActElection].New(Args{}, nil)
-	rns := r.renew(e, nil)
-	if rns.UUID != "" { // previous election is still running
-		return nil
-	}
-	return rns.Entry.Get()
+	return r.renew(e, nil)
 }
 
-func RenewLRU(id string) cluster.Xact { return defaultReg.renewLRU(id) }
+func RenewLRU(id string) RenewRes { return defaultReg.renewLRU(id) }
 
-func (r *registry) renewLRU(id string) cluster.Xact {
+func (r *registry) renewLRU(id string) RenewRes {
 	e := r.nonbckXacts[cmn.ActLRU].New(Args{UUID: id}, nil)
-	res := r.renew(e, nil)
-	if res.UUID != "" { // Previous LRU is still running.
-		res.Entry.Get().Renew()
-		return nil
-	}
-	return res.Entry.Get()
+	return r.renew(e, nil)
 }
 
 func RenewDownloader(t cluster.Target, statsT stats.Tracker) RenewRes {

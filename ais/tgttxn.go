@@ -641,7 +641,7 @@ func (t *targetrunner) putArchive(c *txnServerCtx) (string /*xaction uuid*/, err
 		}
 		xact := rns.Entry.Get()
 		xactID = xact.ID()
-		debug.Assert((rns.UUID == "" && xactID == c.msg.UUID) || (rns.UUID != "" && xactID == rns.UUID))
+		debug.Assert((!rns.IsRunning() && xactID == c.msg.UUID) || (rns.IsRunning() && xactID == rns.UUID))
 
 		xarch := xact.(*xs.XactPutArchive)
 		if err := xarch.Begin(archiveMsg); err != nil {

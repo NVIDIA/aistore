@@ -32,7 +32,7 @@ func init() {
 func TestXactionRenewLRU(t *testing.T) {
 	var (
 		num    = 10
-		xactCh = make(chan cluster.Xact, num)
+		xactCh = make(chan xreg.RenewRes, num)
 		wg     = &sync.WaitGroup{}
 	)
 	xreg.Reset()
@@ -51,14 +51,13 @@ func TestXactionRenewLRU(t *testing.T) {
 	wg.Wait()
 	close(xactCh)
 
-	notNilCount := 0
-	for xact := range xactCh {
-		if xact != nil {
-			notNilCount++
+	newCnt := 0
+	for rns := range xactCh {
+		if !rns.IsRunning() {
+			newCnt++
 		}
 	}
-
-	tassert.Errorf(t, notNilCount == 1, "expected just one LRU xaction to be created, got %d", notNilCount)
+	tassert.Errorf(t, newCnt == 1, "expected just one LRU xaction to be created, got %d", newCnt)
 }
 
 func TestXactionRenewPrefetch(t *testing.T) {
@@ -114,18 +113,16 @@ func TestXactionAbortAll(t *testing.T) {
 	xreg.RegNonBckXact(&lru.Factory{})
 	xreg.RegBckXact(&xs.MovFactory{})
 
-	xactGlob := xreg.RenewLRU(cos.GenUUID())
-	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	rns := xreg.RenewBckRename(tMock, bckFrom, bckTo, cos.GenUUID(), 123, "phase")
-	xactBck := rns.Entry.Get()
-	tassert.Errorf(t, rns.Err == nil && xactBck != nil, "Xaction must be created")
+	rnsLRU := xreg.RenewLRU(cos.GenUUID())
+	tassert.Errorf(t, !rnsLRU.IsRunning(), "new LRU must be created")
+	rnsRen := xreg.RenewBckRename(tMock, bckFrom, bckTo, cos.GenUUID(), 123, "phase")
+	xactBck := rnsRen.Entry.Get()
+	tassert.Errorf(t, rnsRen.Err == nil && xactBck != nil, "Xaction must be created")
 
 	xreg.AbortAll()
 
-	tassert.Errorf(t, xactGlob != nil && xactGlob.Aborted(),
-		"AbortAllGlobal: expected global xaction to be aborted")
-	tassert.Errorf(t, xactBck != nil && xactBck.Aborted(),
-		"AbortAllGlobal: expected bucket xaction to be aborted")
+	tassert.Errorf(t, rnsLRU.Entry.Get().Aborted(), "AbortAllGlobal: expected global xaction to be aborted")
+	tassert.Errorf(t, xactBck.Aborted(), "AbortAllGlobal: expected bucket xaction to be aborted")
 }
 
 func TestXactionAbortAllGlobal(t *testing.T) {
@@ -145,15 +142,15 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 	xreg.RegNonBckXact(&lru.Factory{})
 	xreg.RegBckXact(&xs.MovFactory{})
 
-	xactGlob := xreg.RenewLRU(cos.GenUUID())
-	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	rns := xreg.RenewBckRename(tMock, bckFrom, bckTo, cos.GenUUID(), 123, "phase")
-	xactBck := rns.Entry.Get()
-	tassert.Errorf(t, rns.Err == nil && xactBck != nil, "Xaction must be created")
+	rnsLRU := xreg.RenewLRU(cos.GenUUID())
+	tassert.Errorf(t, !rnsLRU.IsRunning(), "new LRU must be created")
+	rnsRen := xreg.RenewBckRename(tMock, bckFrom, bckTo, cos.GenUUID(), 123, "phase")
+	xactBck := rnsRen.Entry.Get()
+	tassert.Errorf(t, rnsRen.Err == nil && xactBck != nil, "Xaction must be created")
 
 	xreg.AbortAll(xaction.ScopeG)
 
-	tassert.Errorf(t, xactGlob.Aborted(), "AbortAllGlobal: expected global xaction to be aborted: %s", xactGlob)
+	tassert.Errorf(t, rnsLRU.Entry.Get().Aborted(), "AbortAllGlobal: expected global xaction to be aborted")
 	tassert.Errorf(t, !xactBck.Aborted(), "AbortAllGlobal: expected bucket xaction to be running: %s", xactBck)
 }
 
@@ -174,18 +171,16 @@ func TestXactionAbortBuckets(t *testing.T) {
 	xreg.RegNonBckXact(&lru.Factory{})
 	xreg.RegBckXact(&xs.MovFactory{})
 
-	xactGlob := xreg.RenewLRU(cos.GenUUID())
-	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
+	rnsLRU := xreg.RenewLRU(cos.GenUUID())
+	tassert.Errorf(t, !rnsLRU.IsRunning(), "new LRU must be created")
 	rns := xreg.RenewBckRename(tMock, bckFrom, bckTo, cos.GenUUID(), 123, "phase")
 	xactBck := rns.Entry.Get()
 	tassert.Errorf(t, rns.Err == nil && xactBck != nil, "Xaction must be created")
 
 	xreg.AbortAllBuckets(bckFrom)
 
-	tassert.Errorf(t, xactGlob != nil && !xactGlob.Aborted(),
-		"AbortAllGlobal: expected global xaction to be running")
-	tassert.Errorf(t, xactBck != nil && xactBck.Aborted(),
-		"AbortAllGlobal: expected bucket xaction to be aborted")
+	tassert.Errorf(t, !rnsLRU.Entry.Get().Aborted(), "AbortAllGlobal: expected global xaction to keep running")
+	tassert.Errorf(t, xactBck.Aborted(), "AbortAllGlobal: expected bucket xaction to be aborted")
 }
 
 // TODO: extend this to include all cases of the Query
