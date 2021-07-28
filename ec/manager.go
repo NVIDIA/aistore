@@ -143,40 +143,36 @@ func (mgr *Manager) NewRespondXact(bck cmn.Bck) *XactRespond {
 	return NewRespondXact(mgr.t, bck, mgr)
 }
 
-func (mgr *Manager) RestoreBckGetXact(bck *cluster.Bck) *XactGet {
-	xact := mgr.getBckXacts(bck.Name).Get()
-	if xact == nil || xact.Finished() {
-		rns := xreg.RenewBucketXact(cmn.ActECGet, bck, xreg.Args{})
-		debug.AssertNoErr(rns.Err)
-		x := rns.Entry.Get()
-		xact = x.(*XactGet)
-		mgr.getBckXacts(bck.Name).SetGet(xact)
-	}
-	return xact
+func (mgr *Manager) RestoreBckGetXact(bck *cluster.Bck) (xget *XactGet) {
+	xact, err := _renewXact(bck, cmn.ActECGet)
+	debug.AssertNoErr(err) // TODO: handle, here and elsewhere
+	xget = xact.(*XactGet)
+	mgr.getBckXacts(bck.Name).SetGet(xget)
+	return
 }
 
-func (mgr *Manager) RestoreBckPutXact(bck *cluster.Bck) *XactPut {
-	xact := mgr.getBckXacts(bck.Name).Put()
-	if xact == nil || xact.Finished() {
-		rns := xreg.RenewBucketXact(cmn.ActECPut, bck, xreg.Args{})
-		debug.AssertNoErr(rns.Err)
-		x := rns.Entry.Get()
-		xact = x.(*XactPut)
-		mgr.getBckXacts(bck.Name).SetPut(xact)
-	}
-	return xact
+func (mgr *Manager) RestoreBckPutXact(bck *cluster.Bck) (xput *XactPut) {
+	xact, err := _renewXact(bck, cmn.ActECPut)
+	debug.AssertNoErr(err)
+	xput = xact.(*XactPut)
+	mgr.getBckXacts(bck.Name).SetPut(xput)
+	return
 }
 
-func (mgr *Manager) RestoreBckRespXact(bck *cluster.Bck) *XactRespond {
-	xact := mgr.getBckXacts(bck.Name).Req()
-	if xact == nil || xact.Finished() {
-		rns := xreg.RenewBucketXact(cmn.ActECRespond, bck, xreg.Args{})
-		debug.AssertNoErr(rns.Err)
-		x := rns.Entry.Get()
-		xact = x.(*XactRespond)
-		mgr.getBckXacts(bck.Name).SetReq(xact)
+func (mgr *Manager) RestoreBckRespXact(bck *cluster.Bck) (xrsp *XactRespond) {
+	xact, err := _renewXact(bck, cmn.ActECRespond)
+	debug.AssertNoErr(err)
+	xrsp = xact.(*XactRespond)
+	mgr.getBckXacts(bck.Name).SetReq(xrsp)
+	return
+}
+
+func _renewXact(bck *cluster.Bck, kind string) (cluster.Xact, error) {
+	rns := xreg.RenewBucketXact(kind, bck, xreg.Args{})
+	if rns.Err != nil {
+		return nil, rns.Err
 	}
-	return xact
+	return rns.Entry.Get(), nil
 }
 
 func (mgr *Manager) getBckXacts(bckName string) *BckXacts {
