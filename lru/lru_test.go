@@ -213,6 +213,7 @@ var _ = Describe("LRU tests", func() {
 				const numberOfFiles = 6
 
 				ini.GetFSStats = getMockGetFSStats(numberOfFiles)
+				ini.DontLinger = true
 
 				oldFiles := []fileMetadata{
 					{getRandomFileName(3), fileSize},
@@ -245,6 +246,7 @@ var _ = Describe("LRU tests", func() {
 					bavail = blocks - btaken
 					return
 				}
+				ini.DontLinger = true
 
 				// files sum up to 32Mb
 				files := []fileMetadata{
@@ -256,7 +258,7 @@ var _ = Describe("LRU tests", func() {
 				saveRandomFilesWithMetadata(filesPath, files)
 
 				// To go under lwm (50%), LRU should evict the oldest files until <=50% reached
-				// Those files are 4Mb file and 16Mb file
+				// Those files are a 4MB file and a 16MB file
 				lru.Run(ini)
 
 				filesLeft, err := os.ReadDir(filesPath)

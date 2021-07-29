@@ -56,10 +56,11 @@ type (
 		T                   cluster.Target
 		Xaction             *Xaction
 		StatsT              stats.Tracker
-		Force               bool      // Ignore LRU prop when set to be true.
 		Buckets             []cmn.Bck // list of buckets to run LRU
 		GetFSUsedPercentage func(path string) (usedPercentage int64, ok bool)
 		GetFSStats          func(path string) (blocks, bavail uint64, bsize int64, err error)
+		Force               bool // Ignore LRU prop when set to be true.
+		DontLinger          bool //  Used in tests
 	}
 
 	// minHeap keeps fileInfo sorted by access time with oldest
@@ -154,7 +155,6 @@ func Run(ini *InitLRU) {
 		num               = len(availablePaths)
 		joggers           = make(map[string]*lruJ, num)
 		parent            = &lruP{joggers: joggers, ini: *ini}
-		mpCap             = make(fs.MPCap, len(availablePaths))
 	)
 	glog.Infof("[lru] %s started: dont-evict-time %v", xlru, config.LRU.DontEvictTime)
 	if num == 0 {
@@ -193,6 +193,10 @@ repeat:
 		return
 	}
 
+	if ini.DontLinger {
+		xlru.stop()
+		return
+	}
 	// linger for a while and circle back if renewed
 	for {
 		select {
@@ -206,13 +210,15 @@ repeat:
 			break
 		}
 		time.Sleep(cos.MaxDuration(config.Timeout.MaxKeepalive.D(), 4*time.Second))
-		cs, err := fs.RefreshCapStatus(config, mpCap)
-		if err != nil {
-			xlru.stop()
-			return
-		}
-		if cs.Err != nil {
-			goto repeat
+		for _, j := range joggers {
+			repeat, err := j.checkCapAfter()
+			if err != nil {
+				xlru.stop()
+				return
+			}
+			if repeat {
+				goto repeat
+			}
 		}
 	}
 }
@@ -240,6 +246,16 @@ func (r *Xaction) Stats() cluster.XactStats {
 
 func (j *lruJ) String() string {
 	return fmt.Sprintf("%s: (%s, %s)", j.ini.T.Snode(), j.ini.Xaction, j.mpathInfo)
+}
+
+func (j *lruJ) checkCapAfter() (repeat bool, err error) {
+	usedPct, ok := j.ini.GetFSUsedPercentage(j.mpathInfo.Path)
+	if !ok {
+		_, _, _, err = j.ini.GetFSStats(j.mpathInfo.Path)
+		return
+	}
+	repeat = usedPct >= j.config.LRU.HighWM-1
+	return
 }
 
 func (j *lruJ) stop() { j.stopCh <- struct{}{} }

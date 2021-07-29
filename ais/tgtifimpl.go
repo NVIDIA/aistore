@@ -89,10 +89,10 @@ func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
 		T:                   t,
 		Xaction:             xlru.(*lru.Xaction),
 		StatsT:              t.statsT,
-		Force:               force,
 		Buckets:             bcks,
 		GetFSUsedPercentage: ios.GetFSUsedPercentage,
 		GetFSStats:          ios.GetFSStats,
+		Force:               force,
 	}
 
 	xlru.AddNotif(&xaction.NotifXact{
