@@ -65,20 +65,7 @@ func RenewBucketXact(kind string, bck *cluster.Bck, args Args) (res RenewRes) {
 
 func (r *registry) renewBucketXact(kind string, bck *cluster.Bck, args Args) (rns RenewRes) {
 	e := r.bckXacts[kind].New(args, bck)
-	rns = r.renew(e, bck)
-	if rns.Err != nil {
-		return
-	}
-	if rns.IsRunning() {
-		xact := rns.Entry.Get()
-		// NOTE: make sure existing on-demand is active to prevent it from (idle) expiration
-		//       (see demand.go hkcb())
-		if xactDemand, ok := xact.(xaction.Demand); ok {
-			xactDemand.IncPending()
-			xactDemand.DecPending()
-		}
-	}
-	return
+	return r.renew(e, bck)
 }
 
 func RenewECEncode(t cluster.Target, bck *cluster.Bck, uuid, phase string) RenewRes {

@@ -285,12 +285,11 @@ func NewBucketAccessDenied(bucket, oper string, aattrs AccessAttrs) *ErrBucketAc
 	return &ErrBucketAccessDenied{errAccessDenied{bucket, oper, aattrs}}
 }
 
-func NewErrorCapacityExceeded(highWM int64, usedPct int32, totalBytesUsed, totalBytes uint64,
-	oos bool) *ErrCapacityExceeded {
+func NewErrorCapacityExceeded(highWM int64, totalBytesUsed, totalBytes uint64, usedPct int32, oos bool) *ErrCapacityExceeded {
 	return &ErrCapacityExceeded{
 		highWM:         highWM,
 		usedPct:        usedPct,
-		totalBytes:     totalBytes,
+		totalBytes:     totalBytes, // avail + used
 		totalBytesUsed: totalBytesUsed,
 		oos:            oos,
 	}

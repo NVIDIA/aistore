@@ -411,9 +411,8 @@ func xactionCompletions(cmd string) func(ctx *cli.Context) {
 			}
 			return
 		}
-
 		xactName := c.Args().First()
-		if xaction.IsTypeBck(xactName) {
+		if xaction.IsBckScope(xactName) {
 			bucketCompletions()(c)
 			return
 		}

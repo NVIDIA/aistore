@@ -112,7 +112,24 @@ func (r *RenewBase) Str(kind string) string {
 // RenewRes //
 //////////////
 
-func (r *RenewRes) IsRunning() bool { return r.UUID != "" }
+func (rns *RenewRes) IsRunning() bool { return rns.UUID != "" }
+
+// make sure existing on-demand is active to prevent it from (idle) expiration
+// (see demand.go hkcb())
+func (rns *RenewRes) beingRenewed() {
+	if rns.Err != nil || !rns.IsRunning() {
+		return
+	}
+	xact := rns.Entry.Get()
+	// NOTE: LRU's a different mechanism to keep checking for work
+	if xact.Kind() == cmn.ActLRU {
+		return
+	}
+	if xdmnd, ok := xact.(xaction.Demand); ok {
+		xdmnd.IncPending()
+		xdmnd.DecPending()
+	}
+}
 
 //////////////////////
 // xaction registry //
@@ -415,12 +432,16 @@ func (r *registry) hkDelOld() time.Duration {
 
 func (r *registry) renewByID(entry Renewable, bck *cluster.Bck) (rns RenewRes) {
 	flt := XactFilter{ID: entry.UUID(), Bck: bck}
-	return r._renewFlt(entry, flt)
+	rns = r._renewFlt(entry, flt)
+	rns.beingRenewed()
+	return
 }
 
 func (r *registry) renew(entry Renewable, bck *cluster.Bck) (rns RenewRes) {
 	flt := XactFilter{Kind: entry.Kind(), Bck: bck}
-	return r._renewFlt(entry, flt)
+	rns = r._renewFlt(entry, flt)
+	rns.beingRenewed()
+	return
 }
 
 func (r *registry) _renewFlt(entry Renewable, flt XactFilter) (rns RenewRes) {

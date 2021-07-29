@@ -101,11 +101,8 @@ type (
 		xreg.RenewBase
 		xact *Xaction
 	}
-
 	Xaction struct {
 		xaction.DemandBase
-		Renewed           chan struct{}
-		OkRemoveMisplaced func() bool
 	}
 )
 
@@ -117,6 +114,15 @@ var (
 
 func init() { xreg.RegNonBckXact(&Factory{}) }
 
+func rmMisplaced() bool {
+	g, l := xreg.GetRebMarked(), xreg.GetResilverMarked()
+	return !g.Interrupted && !l.Interrupted && g.Xact == nil && l.Xact == nil
+}
+
+/////////////
+// Factory //
+/////////////
+
 func (*Factory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
 	return &Factory{RenewBase: xreg.RenewBase{Args: args}}
 }
@@ -124,16 +130,10 @@ func (*Factory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
 func (p *Factory) Start() error {
 	var (
 		config      = cmn.GCO.Get()
-		totallyIdle = config.Timeout.MaxHostBusy.D()
-		likelyIdle  = config.Timeout.MaxKeepalive.D()
+		likelyIdle  = cos.MaxDuration(config.Timeout.MaxKeepalive.D(), 4*time.Second)
+		totallyIdle = cos.MaxDuration(config.Timeout.MaxHostBusy.D(), 20*time.Second)
 	)
-	p.xact = &Xaction{
-		Renewed: make(chan struct{}, 10),
-		OkRemoveMisplaced: func() bool {
-			g, l := xreg.GetRebMarked(), xreg.GetResilverMarked()
-			return !g.Interrupted && !l.Interrupted && g.Xact == nil && l.Xact == nil
-		},
-	}
+	p.xact = &Xaction{}
 	p.xact.DemandBase.Init(p.UUID(), cmn.ActLRU, nil, totallyIdle, likelyIdle)
 	return nil
 }
@@ -149,16 +149,16 @@ func (p *Factory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err
 func Run(ini *InitLRU) {
 	var (
 		xlru              = ini.Xaction
-		providers         = make([]string, 0, len(cmn.Providers))
 		config            = cmn.GCO.Get()
 		availablePaths, _ = fs.Get()
 		num               = len(availablePaths)
 		joggers           = make(map[string]*lruJ, num)
 		parent            = &lruP{joggers: joggers, ini: *ini}
+		mpCap             = make(fs.MPCap, len(availablePaths))
 	)
 	glog.Infof("[lru] %s started: dont-evict-time %v", xlru, config.LRU.DontEvictTime)
 	if num == 0 {
-		glog.Warningf("[lru] no mountpaths to visit")
+		glog.Warningf("[lru] no mountpaths")
 		xlru.stop()
 		return
 	}
@@ -175,66 +175,45 @@ func Run(ini *InitLRU) {
 			p:         parent,
 		}
 	}
-
-	providers = cmn.Providers.ToSlice()
+	providers := cmn.Providers.ToSlice()
 
 repeat:
-	xlru.DemandBase.IncPending()
+	xlru.IncPending()
 	fail := atomic.Bool{}
 	for _, j := range joggers {
 		parent.wg.Add(1)
 		j.joggers = joggers
-		go func(j *lruJ) {
-			var err error
-			defer j.p.wg.Done()
-			if err = j.removeTrash(); err != nil {
-				goto ex
-			}
-			// compute the size (bytes) to free up (and do it after removing the $trash)
-			if err = j.evictSize(); err != nil {
-				goto ex
-			}
-			if j.totalSize < minEvictThresh {
-				glog.Infof("[lru] %s: used cap below threshold, nothing to do", j)
-				return
-			}
-			if len(j.ini.Buckets) != 0 {
-				glog.Infof("[lru] %s: freeing-up %s", j, cos.B2S(j.totalSize, 2))
-				err = j.jogBcks(j.ini.Buckets, j.ini.Force)
-			} else {
-				err = j.jog(providers)
-			}
-		ex:
-			if err != nil && !os.IsNotExist(err) {
-				glog.Errorf("[lru] %s: exited with err %v", j, err)
-				if fail.CAS(false, true) {
-					for _, j := range joggers {
-						j.stop()
-					}
-				}
-			}
-		}(j)
+		go j.run(providers, &fail)
 	}
 	parent.wg.Wait()
+	xlru.DecPending()
 
 	if fail.Load() {
 		xlru.stop()
 		return
 	}
+
 	// linger for a while and circle back if renewed
-	xlru.DemandBase.DecPending()
-	select {
-	case <-xlru.IdleTimer():
-		xlru.stop()
-		return
-	case <-xlru.ChanAbort():
-		xlru.stop()
-		return
-	case <-xlru.Renewed:
-		for len(xlru.Renewed) > 0 {
-			<-xlru.Renewed
+	for {
+		select {
+		case <-xlru.IdleTimer():
+			xlru.stop()
+			return
+		case <-xlru.ChanAbort():
+			xlru.stop()
+			return
+		default:
+			break
 		}
-		goto repeat
+		time.Sleep(cos.MaxDuration(config.Timeout.MaxKeepalive.D(), 4*time.Second))
+		cs, err := fs.RefreshCapStatus(config, mpCap)
+		if err != nil {
+			xlru.stop()
+			return
+		}
+		if cs.Err != nil {
+			goto repeat
+		}
 	}
 }
 
@@ -243,7 +222,6 @@ repeat:
 /////////////
 
 func (*Xaction) Run(*sync.WaitGroup) { debug.Assert(false) }
-func (r *Xaction) Renew()            { r.Renewed <- struct{}{} }
 
 func (r *Xaction) stop() {
 	r.DemandBase.Stop()
@@ -263,7 +241,40 @@ func (r *Xaction) Stats() cluster.XactStats {
 func (j *lruJ) String() string {
 	return fmt.Sprintf("%s: (%s, %s)", j.ini.T.Snode(), j.ini.Xaction, j.mpathInfo)
 }
+
 func (j *lruJ) stop() { j.stopCh <- struct{}{} }
+
+func (j *lruJ) run(providers []string, fail *atomic.Bool) {
+	var err error
+	defer j.p.wg.Done()
+	if err = j.removeTrash(); err != nil {
+		goto ex
+	}
+	// compute the size (bytes) to free up (and do it after removing the $trash)
+	if err = j.evictSize(); err != nil {
+		goto ex
+	}
+	if j.totalSize < minEvictThresh {
+		glog.Infof("[lru] %s: used cap below threshold, nothing to do", j)
+		return
+	}
+	if len(j.ini.Buckets) != 0 {
+		glog.Infof("[lru] %s: freeing-up %s", j, cos.B2S(j.totalSize, 2))
+		err = j.jogBcks(j.ini.Buckets, j.ini.Force)
+	} else {
+		err = j.jog(providers)
+	}
+ex:
+	if err == nil || cmn.IsErrBucketNought(err) || cmn.IsErrObjNought(err) {
+		return
+	}
+	glog.Errorf("[lru] %s: exited with err %v", j, err)
+	if fail.CAS(false, true) {
+		for _, j := range j.joggers {
+			j.stop()
+		}
+	}
+}
 
 func (j *lruJ) jog(providers []string) (err error) {
 	glog.Infof("%s: freeing-up %s", j, cos.B2S(j.totalSize, 2))
@@ -278,7 +289,6 @@ func (j *lruJ) jog(providers []string) (err error) {
 		if bcks, err = fs.AllMpathBcks(&opts); err != nil {
 			return
 		}
-
 		if err = j.jogBcks(bcks, false); err != nil {
 			return
 		}
@@ -293,7 +303,6 @@ func (j *lruJ) jogBcks(bcks []cmn.Bck, force bool) (err error) {
 	if len(bcks) > 1 {
 		j.sortBsize(bcks)
 	}
-
 	for _, bck := range bcks { // for each bucket under a given provider
 		var size int64
 		j.bck = bck
@@ -435,7 +444,7 @@ func (j *lruJ) evict() (size int64, err error) {
 		h                  = j.heap
 		xlru               = j.ini.Xaction
 	)
-	// 1.
+	// 1. rm older work
 	for _, workfqn := range j.oldWork {
 		finfo, erw := os.Stat(workfqn)
 		if erw == nil {
@@ -447,9 +456,9 @@ func (j *lruJ) evict() (size int64, err error) {
 		}
 	}
 	j.oldWork = j.oldWork[:0]
-	// 2.
-	f := j.ini.Xaction.OkRemoveMisplaced
-	if f == nil || f() {
+
+	// 2. rm misplaced
+	if rmMisplaced() {
 		for _, lom := range j.misplaced {
 			var (
 				fqn     = lom.FQN
@@ -474,16 +483,18 @@ func (j *lruJ) evict() (size int64, err error) {
 		}
 	}
 	j.misplaced = j.misplaced[:0]
-	// 3.
+
+	// 3. evict(sic!) and house-keep
 	for h.Len() > 0 && j.totalSize > 0 {
 		lom := heap.Pop(h).(*cluster.LOM)
-		if evictObj(lom) {
-			bevicted += lom.SizeBytes(true /*not loaded*/)
-			size += lom.SizeBytes(true)
-			fevicted++
-			if capCheck, err = j.postRemove(capCheck, lom); err != nil {
-				return
-			}
+		if !evictObj(lom) {
+			continue
+		}
+		bevicted += lom.SizeBytes(true /*not loaded*/)
+		size += lom.SizeBytes(true)
+		fevicted++
+		if capCheck, err = j.postRemove(capCheck, lom); err != nil {
+			return
 		}
 	}
 	j.ini.StatsT.Add(stats.LruEvictSize, bevicted)

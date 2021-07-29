@@ -94,7 +94,7 @@ func startXactionHandler(c *cli.Context) (err error) {
 	)
 
 	xactKind := c.Command.Name
-	if xaction.IsTypeBck(xactKind) {
+	if xaction.IsBckScope(xactKind) {
 		bck, err = parseBckURI(c, c.Args().First())
 		if err != nil {
 			return err
@@ -108,7 +108,7 @@ func startXactionHandler(c *cli.Context) (err error) {
 }
 
 func startXaction(c *cli.Context, xactKind string, bck cmn.Bck, sid string) (err error) {
-	if xaction.IsTypeBck(xactKind) {
+	if xaction.IsBckScope(xactKind) {
 		if _, err = headBucket(bck); err != nil {
 			return err
 		}

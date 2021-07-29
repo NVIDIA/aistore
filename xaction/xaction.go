@@ -167,7 +167,7 @@ func (xact *XactBase) _setEndTime(err error) {
 		}
 	}
 
-	IncInactive()
+	IncInactive() // in re: HK cleanup long-time finished
 }
 
 func (xact *XactBase) Notif() (n cluster.Notif) {

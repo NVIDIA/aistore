@@ -1031,7 +1031,7 @@ func RefreshCapStatus(config *cmn.Config, mpcap MPCap) (cs CapStatus, err error)
 	high, oos := config.LRU.HighWM, config.LRU.OOS
 	for path, mi := range availablePaths {
 		if c, err = mi.getCapacity(config, true); err != nil {
-			glog.Error(err) // TODO: handle
+			glog.Error(err)
 			return
 		}
 		cs.TotalUsed += c.Used
@@ -1045,7 +1045,7 @@ func RefreshCapStatus(config *cmn.Config, mpcap MPCap) (cs CapStatus, err error)
 	cs.PctAvg /= int32(len(availablePaths))
 	cs.OOS = int64(cs.PctMax) > oos
 	if cs.OOS || int64(cs.PctMax) > high {
-		cs.Err = cmn.NewErrorCapacityExceeded(high, cs.PctMax, cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, cs.OOS)
+		cs.Err = cmn.NewErrorCapacityExceeded(high, cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, cs.PctMax, cs.OOS)
 	}
 	// cached cap state
 	mfs.cmu.Lock()
@@ -1078,7 +1078,7 @@ func nextRefresh(config *cmn.Config) time.Duration {
 }
 
 // NOTE: Is called only and exclusively by `stats.Trunner` providing
-//  `config.Periodic.StatsTime` tick.
+//        `config.Periodic.StatsTime` tick.
 func CapPeriodic(mpcap MPCap) (cs CapStatus, updated bool, err error) {
 	config := cmn.GCO.Get()
 	mfs.cmu.RLock()

@@ -61,7 +61,7 @@ func xactionCmds() cli.Commands {
 			Flags:  startCmdsFlags[subcmdStartXaction],
 			Action: startXactionHandler,
 		}
-		if xaction.IsTypeBck(xact) {
+		if xaction.IsBckScope(xact) {
 			cmd.ArgsUsage = bucketArgument
 			cmd.BashComplete = bucketCompletions()
 		}
