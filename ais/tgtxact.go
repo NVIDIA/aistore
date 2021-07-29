@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xreg"
@@ -103,8 +104,8 @@ func (t *targetrunner) getXactByID(w http.ResponseWriter, r *http.Request, what,
 	t.writeErrSilent(w, r, err, http.StatusNotFound)
 }
 
-func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request, what string,
-	xactQuery xreg.XactFilter) {
+func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request, what string, xactQuery xreg.XactFilter) {
+	debug.Assert(what == cmn.GetWhatQueryXactStats)
 	if what != cmn.GetWhatQueryXactStats {
 		t.writeErrf(w, r, fmtUnknownQue, what)
 		return

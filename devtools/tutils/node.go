@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools"
@@ -263,6 +264,38 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 
 func WaitForNewSmap(proxyURL string, prevVersion int64) (newSmap *cluster.Smap, err error) {
 	return WaitForClusterState(proxyURL, "new smap version", prevVersion, 0, 0)
+}
+
+// WaitForRebalanceToStart waits for global rebalance to commence.
+func WaitForRebalanceToStart(baseParams api.BaseParams, args api.XactReqArgs) error {
+	debug.Assert(args.Kind == "" || args.Kind == cmn.ActRebalance)
+	args.Kind = cmn.ActRebalance
+	ctx := context.Background()
+	if args.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, args.Timeout)
+		defer cancel()
+	}
+	for {
+		xactStats, err := api.QueryXactionStats(baseParams, args)
+		if err != nil {
+			return err
+		}
+		if xactStats.Running() {
+			break
+		}
+		if len(xactStats) > 0 && xactStats.Finished() {
+			break
+		}
+		time.Sleep(api.XactPollTime)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			break
+		}
+	}
+	return nil
 }
 
 func GetTargetsMountpaths(t *testing.T, smap *cluster.Smap, params api.BaseParams) map[string][]string {

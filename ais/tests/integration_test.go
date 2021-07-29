@@ -1464,7 +1464,7 @@ func TestRenewRebalance(t *testing.T) {
 	// Step 4: Re-register target (triggers rebalance)
 	m.reregisterTarget(target)
 	xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceStartTimeout}
-	err := api.WaitForXactionToStart(baseParams, xactArgs)
+	err := tutils.WaitForRebalanceToStart(baseParams, xactArgs)
 	tassert.CheckError(t, err)
 	tlog.Logf("automatic rebalance started\n")
 
@@ -1655,7 +1655,7 @@ func TestICRebalance(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceStartTimeout}
-	api.WaitForXactionToStart(baseParams, xactArgs)
+	tutils.WaitForRebalanceToStart(baseParams, xactArgs)
 
 	tlog.Logf("Killing %s\n", icNode)
 	// cmd and args are the original command line of how the proxy is started

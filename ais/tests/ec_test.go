@@ -2550,7 +2550,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 		}
 	}()
 	xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: startTimeout}
-	err = api.WaitForXactionToStart(baseParams, xactArgs)
+	err = tutils.WaitForRebalanceToStart(baseParams, xactArgs)
 	tassert.CheckError(t, err)
 
 	tlog.Logf("Unregistering %s...\n", tgtGone.ID())

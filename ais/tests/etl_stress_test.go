@@ -5,6 +5,7 @@
 package integration
 
 import (
+	"math/rand"
 	"testing"
 	"time"
 
@@ -75,12 +76,11 @@ func TestETLBucketAbort(t *testing.T) {
 	}
 
 	xactID := etlPrepareAndStart(t, m, tetl.Echo, etl.RedirectCommType)
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBck, Timeout: 30 * time.Second}
-	err := api.WaitForXactionToStart(baseParams, args)
-	tassert.CheckFatal(t, err)
+	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBck}
+	time.Sleep(time.Duration(rand.Intn(5)) * time.Second)
 
 	tlog.Logf("Aborting ETL xaction %q\n", xactID)
-	err = api.AbortXaction(baseParams, args)
+	err := api.AbortXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 	err = tetl.WaitForAborted(baseParams, xactID, 5*time.Minute)
 	tassert.CheckFatal(t, err)
@@ -105,10 +105,6 @@ func TestETLTargetDown(t *testing.T) {
 
 	xactID := etlPrepareAndStart(t, m, tetl.Echo, etl.RedirectCommType)
 
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBck, Timeout: time.Minute}
-	err := api.WaitForXactionToStart(baseParams, args)
-	tassert.CheckFatal(t, err)
-
 	tlog.Logln("Waiting for ETL to process a few objects...")
 	time.Sleep(5 * time.Second)
 
@@ -120,7 +116,7 @@ func TestETLTargetDown(t *testing.T) {
 		tutils.WaitForRebalanceByID(t, baseParams, rebID, 30*time.Second)
 	})
 
-	err = tetl.WaitForAborted(baseParams, xactID, 5*time.Minute)
+	err := tetl.WaitForAborted(baseParams, xactID, 5*time.Minute)
 	tassert.CheckFatal(t, err)
 	tetl.WaitForContainersStopped(t, baseParams)
 }

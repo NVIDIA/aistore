@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	xactRetryInterval = time.Second
+	XactPollTime = time.Second
 )
 
 type (
@@ -253,17 +253,14 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *nl.Notif
 }
 
 // WaitForXaction waits for a given xaction to complete.
-func WaitForXaction(baseParams BaseParams, args XactReqArgs,
-	refreshIntervals ...time.Duration) (status *nl.NotifStatus, err error) {
+func WaitForXaction(baseParams BaseParams, args XactReqArgs, refreshIntervals ...time.Duration) (status *nl.NotifStatus, err error) {
 	var (
 		ctx           = context.Background()
-		retryInterval = xactRetryInterval
+		retryInterval = XactPollTime
 	)
-
 	if len(refreshIntervals) > 0 {
 		retryInterval = refreshIntervals[0]
 	}
-
 	if args.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, args.Timeout)
@@ -275,7 +272,6 @@ func WaitForXaction(baseParams BaseParams, args XactReqArgs,
 		if err != nil || status.Finished() {
 			return
 		}
-
 		time.Sleep(retryInterval)
 		select {
 		case <-ctx.Done():
@@ -284,38 +280,6 @@ func WaitForXaction(baseParams BaseParams, args XactReqArgs,
 			break
 		}
 	}
-}
-
-// WaitForXactionToStart waits for a given xaction to start.
-func WaitForXactionToStart(baseParams BaseParams, args XactReqArgs) error {
-	ctx := context.Background()
-	if args.Timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, args.Timeout)
-		defer cancel()
-	}
-
-	for {
-		xactStats, err := QueryXactionStats(baseParams, args)
-		if err != nil {
-			return err
-		}
-		if xactStats.Running() {
-			break
-		}
-		if len(xactStats) > 0 && xactStats.Finished() {
-			break
-		}
-
-		time.Sleep(xactRetryInterval)
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			break
-		}
-	}
-	return nil
 }
 
 // MakeNCopies starts an extended action (xaction) to bring a given bucket to a
@@ -371,16 +335,16 @@ func IsXactionIdle(baseParams BaseParams, args XactReqArgs) (idle bool, err erro
 
 // WaitForXactionIdle waits for a given on-demand xaction to be idle.
 func WaitForXactionIdle(baseParams BaseParams, args XactReqArgs) error {
-	// The number of consecutive 'idle' states
-	const idleMax = 3
-	ctx := context.Background()
+	const idleMax = 3 // number of consecutive 'idle' states
+	var (
+		ctx   = context.Background()
+		idles int
+	)
 	if args.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, args.Timeout)
 		defer cancel()
 	}
-
-	idles := 0
 	for {
 		idle, err := IsXactionIdle(baseParams, args)
 		if err != nil {
@@ -394,8 +358,7 @@ func WaitForXactionIdle(baseParams BaseParams, args XactReqArgs) error {
 		} else {
 			idles = 0
 		}
-
-		time.Sleep(xactRetryInterval)
+		time.Sleep(XactPollTime)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
