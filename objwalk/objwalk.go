@@ -44,7 +44,7 @@ func (w *Walk) DefaultLocalObjPage(msg *cmn.SelectMsg) (*cmn.BucketList, error) 
 
 	msg.UUID = cos.GenUUID()
 	xact := query.NewObjectsListing(w.ctx, w.t, q, msg)
-	go xact.Run()
+	go xact.Run(nil)
 
 	cos.Assert(!xact.TokenUnsatisfiable(msg.ContinuationToken))
 	return LocalObjPage(xact, msg.PageSize)

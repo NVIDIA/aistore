@@ -5,6 +5,7 @@
 package cluster
 
 import (
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -25,7 +26,7 @@ type (
 	QuiCB func(elapsed time.Duration) QuiRes // see enum below
 
 	Xact interface {
-		Run()
+		Run(*sync.WaitGroup)
 		ID() string
 		Kind() string
 		Bck() *Bck
@@ -43,7 +44,6 @@ type (
 		Stats() XactStats
 
 		// modifiers
-		Renew()
 		Finish(err error)
 		Abort()
 		AddNotif(n Notif)

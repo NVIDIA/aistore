@@ -64,7 +64,7 @@ func (r *ObjectsListingXact) stop() {
 	r.timer.Stop()
 }
 
-func (r *ObjectsListingXact) Run() {
+func (r *ObjectsListingXact) Run(*sync.WaitGroup) {
 	defer r.fetchingDone.Store(true)
 	debug.Assert(r.query.ObjectsSource != nil)
 	debug.Assert(r.query.BckSource != nil)

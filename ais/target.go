@@ -599,7 +599,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			},
 			Xact: xact,
 		})
-		go xact.Run()
+		go xact.Run(nil)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
@@ -646,7 +646,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		rns := xreg.RenewPrefetch(msg.UUID, t, request.bck, lrMsg)
 		xact := rns.Entry.Get()
-		go xact.Run()
+		go xact.Run(nil)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
@@ -1537,7 +1537,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 			return
 		}
 		xact := rns.Entry.Get()
-		go xact.Run()
+		go xact.Run(nil)
 		return
 	}
 	// 3b. promote file

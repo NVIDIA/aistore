@@ -76,7 +76,7 @@ func (r *registry) renewBckSummary(ctx context.Context, t cluster.Target, bck *c
 func (*bsummFactory) New(Args, *cluster.Bck) Renewable { debug.Assert(false); return nil }
 
 func (e *bsummFactory) Start() error {
-	go e.xact.Run()
+	go e.xact.Run(nil)
 	return nil
 }
 
@@ -92,7 +92,7 @@ func (*bsummFactory) WhenPrevIsRunning(Renewable) (w WPR, e error) { debug.Asser
 // bsummXact //
 ///////////////
 
-func (t *bsummXact) Run() {
+func (t *bsummXact) Run(*sync.WaitGroup) {
 	var (
 		buckets []*cluster.Bck
 		bmd     = t.t.Bowner().Get()

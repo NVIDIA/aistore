@@ -7,6 +7,7 @@ package xs
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -81,13 +82,14 @@ func newBckRename(uuid, kind string, bck *cluster.Bck, t cluster.Target, bckFrom
 func (r *bckRename) String() string { return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.bckFrom) }
 
 // NOTE: assuming that rebalance takes longer than resilvering
-func (r *bckRename) Run() {
+func (r *bckRename) Run(wg *sync.WaitGroup) {
 	var (
 		onlyRunning bool
 		finished    bool
 		flt         = xreg.XactFilter{ID: r.rebID, Kind: cmn.ActRebalance, OnlyRunning: &onlyRunning}
 	)
 	glog.Infoln(r.String())
+	wg.Done()
 	for !finished {
 		time.Sleep(10 * time.Second)
 		rebStats, err := xreg.GetStats(flt)

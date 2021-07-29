@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -55,7 +56,7 @@ func (*proFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 
 func (p *proFactory) Start() error {
 	xact := NewXactDirPromote(p.dir, p.Bck, p.T, p.params)
-	go xact.Run()
+	go xact.Run(nil)
 	p.xact = xact
 	return nil
 }
@@ -77,7 +78,7 @@ func NewXactDirPromote(dir string, bck *cluster.Bck, t cluster.Target, params *c
 	return
 }
 
-func (r *XactDirPromote) Run() {
+func (r *XactDirPromote) Run(*sync.WaitGroup) {
 	glog.Infoln(r.String(), r.dir, "=>", r.Bck())
 	opts := &fs.Options{
 		Dir:      r.dir,

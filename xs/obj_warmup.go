@@ -6,6 +6,8 @@
 package xs
 
 import (
+	"sync"
+
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -44,7 +46,7 @@ func (*llcFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 func (p *llcFactory) Start() error {
 	xact := newXactLLC(p.T, p.UUID(), p.Bck)
 	p.xact = xact
-	go xact.Run()
+	go xact.Run(nil)
 	return nil
 }
 
@@ -70,7 +72,7 @@ func newXactLLC(t cluster.Target, uuid string, bck *cluster.Bck) (r *xactLLC) {
 	return
 }
 
-func (r *xactLLC) Run() {
+func (r *xactLLC) Run(*sync.WaitGroup) {
 	r.XactBckJog.Run()
 	glog.Infoln(r.String())
 	err := r.XactBckJog.Wait()

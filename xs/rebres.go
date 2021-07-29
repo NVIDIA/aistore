@@ -6,6 +6,8 @@
 package xs
 
 import (
+	"sync"
+
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -83,7 +85,7 @@ func NewRebalance(id, kind string, statTracker stats.Tracker, getMarked getMarke
 	return
 }
 
-func (*Rebalance) Run() { debug.Assert(false) }
+func (*Rebalance) Run(*sync.WaitGroup) { debug.Assert(false) }
 
 // override/extend cmn.XactBase.Stats()
 func (xact *Rebalance) Stats() cluster.XactStats {
@@ -131,4 +133,4 @@ func NewResilver(id, kind string) (xact *Resilver) {
 	return
 }
 
-func (*Resilver) Run() { debug.Assert(false) }
+func (*Resilver) Run(*sync.WaitGroup) { debug.Assert(false) }

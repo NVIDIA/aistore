@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -66,7 +67,7 @@ func (p *rspFactory) Start() error {
 	)
 	xec.DemandBase.Init(cos.GenUUID(), p.Kind(), p.Bck, totallyIdle, likelyIdle)
 	p.xact = xec
-	go xec.Run()
+	go xec.Run(nil)
 	return nil
 }
 
@@ -83,7 +84,7 @@ func NewRespondXact(t cluster.Target, bck cmn.Bck, mgr *Manager) *XactRespond {
 	return runner
 }
 
-func (r *XactRespond) Run() {
+func (r *XactRespond) Run(*sync.WaitGroup) {
 	glog.Infoln(r.String())
 
 	var (

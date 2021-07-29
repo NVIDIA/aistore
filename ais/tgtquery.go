@@ -79,7 +79,7 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 		Xact:      xact,
 	})
-	go xact.Run()
+	go xact.Run(nil)
 }
 
 func (t *targetrunner) httpqueryget(w http.ResponseWriter, r *http.Request) {

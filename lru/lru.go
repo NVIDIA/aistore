@@ -242,8 +242,8 @@ repeat:
 // Xaction //
 /////////////
 
-func (*Xaction) Run()     { debug.Assert(false) }
-func (r *Xaction) Renew() { r.Renewed <- struct{}{} }
+func (*Xaction) Run(*sync.WaitGroup) { debug.Assert(false) }
+func (r *Xaction) Renew()            { r.Renewed <- struct{}{} }
 
 func (r *Xaction) stop() {
 	r.DemandBase.Stop()

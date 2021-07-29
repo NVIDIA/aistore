@@ -50,7 +50,7 @@ func (*encFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (p *encFactory) Start() error {
-	p.xact = NewXactBckEncode(p.Bck, p.T, p.UUID())
+	p.xact = newXactBckEncode(p.Bck, p.T, p.UUID())
 	return nil
 }
 
@@ -72,13 +72,14 @@ func (p *encFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 // XactBckEncode //
 ///////////////////
 
-func NewXactBckEncode(bck *cluster.Bck, t cluster.Target, uuid string) (r *XactBckEncode) {
+func newXactBckEncode(bck *cluster.Bck, t cluster.Target, uuid string) (r *XactBckEncode) {
 	r = &XactBckEncode{t: t, bck: bck, wg: &sync.WaitGroup{}, smap: t.Sowner().Get()}
 	r.InitBase(uuid, cmn.ActECEncode, bck)
 	return
 }
 
-func (r *XactBckEncode) Run() {
+func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
+	wg.Done()
 	bck := r.bck
 	if err := bck.Init(r.t.Bowner()); err != nil {
 		r.Finish(err)

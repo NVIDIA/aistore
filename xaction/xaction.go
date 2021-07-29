@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -42,6 +43,14 @@ type (
 )
 
 var IncInactive func()
+
+// common helper to go-run and wait until it actually starts running
+func GoRunW(xact cluster.Xact) {
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go xact.Run(wg)
+	wg.Wait()
+}
 
 //////////////
 // XactBase - partially implements Xact interface
@@ -174,8 +183,6 @@ func (xact *XactBase) AddNotif(n cluster.Notif) {
 	debug.Assert(xact.notif.Xact != nil && xact.notif.F != nil)
 	debug.Assert(!n.Upon(cluster.UponProgress) || xact.notif.P != nil)
 }
-
-func (*XactBase) Renew() {}
 
 func (xact *XactBase) Abort() {
 	if !xact.aborted.CAS(false, true) {

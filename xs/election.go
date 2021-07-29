@@ -6,6 +6,8 @@
 package xs
 
 import (
+	"sync"
+
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -45,4 +47,4 @@ func (*eleFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprUse, nil
 }
 
-func (*Election) Run() { debug.Assert(false) }
+func (*Election) Run(*sync.WaitGroup) { debug.Assert(false) }

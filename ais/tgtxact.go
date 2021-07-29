@@ -165,7 +165,7 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bc
 			},
 			Xact: xact,
 		})
-		go xact.Run()
+		go xact.Run(nil)
 	case cmn.ActLoadLomCache:
 		return xreg.RenewBckLoadLomCache(t, xactMsg.ID, bck)
 	// 3. cannot start

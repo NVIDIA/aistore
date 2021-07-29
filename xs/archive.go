@@ -127,7 +127,7 @@ func (p *archFactory) Start() error {
 	r.dm.SetXact(r)
 	r.dm.Open()
 
-	go r.Run()
+	xaction.GoRunW(r)
 	return nil
 }
 
@@ -201,9 +201,10 @@ func (r *XactPutArchive) Do(msg *cmn.ArchiveMsg) {
 	r.workCh <- msg
 }
 
-func (r *XactPutArchive) Run() {
+func (r *XactPutArchive) Run(wg *sync.WaitGroup) {
 	var err error
 	glog.Infoln(r.String())
+	wg.Done()
 	for {
 		select {
 		case msg := <-r.workCh:

@@ -153,7 +153,7 @@ func (r *ObjListXact) _initTraverse() {
 	go r.traverseBucket(r.msg.Clone())
 }
 
-func (r *ObjListXact) Run() {
+func (r *ObjListXact) Run(*sync.WaitGroup) {
 	glog.Infoln(r.String())
 
 	r.init()

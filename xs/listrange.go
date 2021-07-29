@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -271,7 +272,7 @@ func newEvictDelete(xargs *xreg.Args, kind string, bck *cluster.Bck, msg *cmn.Li
 	return
 }
 
-func (r *evictDelete) Run() {
+func (r *evictDelete) Run(*sync.WaitGroup) {
 	var (
 		err  error
 		smap = r.t.Sowner().Get()
@@ -346,7 +347,7 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *cluster.Bck, msg *cmn.ListR
 	return
 }
 
-func (r *prefetch) Run() {
+func (r *prefetch) Run(*sync.WaitGroup) {
 	var (
 		err  error
 		smap = r.t.Sowner().Get()

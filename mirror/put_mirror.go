@@ -7,6 +7,7 @@ package mirror
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -98,7 +99,7 @@ func runXactPut(lom *cluster.LOM, slab *memsys.Slab, t cluster.Target) (r *XactP
 		QueueSize: mirror.Burst,
 	})
 	// Run
-	go r.Run()
+	go r.Run(nil)
 	return
 }
 
@@ -120,7 +121,7 @@ func (r *XactPut) workCb(lom *cluster.LOM, buf []byte) {
 
 // control logic: stop and idle timer
 // (LOMs get dispatched directly to workers)
-func (r *XactPut) Run() {
+func (r *XactPut) Run(*sync.WaitGroup) {
 	glog.Infoln(r.String())
 	r.workers.Run()
 	for {

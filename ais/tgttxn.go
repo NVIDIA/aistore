@@ -214,7 +214,7 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 		xact := rns.Entry.Get()
 		xreg.DoAbort(cmn.ActPutCopies, c.bck)
 		c.addNotif(xact) // notify upon completion
-		go xact.Run()
+		xaction.GoRunW(xact)
 	default:
 		debug.Assert(false)
 	}
@@ -290,7 +290,7 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 			xact := rns.Entry.Get()
 			xreg.DoAbort(cmn.ActPutCopies, c.bck)
 			c.addNotif(xact) // notify upon completion
-			go xact.Run()
+			xaction.GoRunW(xact)
 		}
 		if reEC(txnSetBprops.bprops, txnSetBprops.nprops, c.bck) {
 			xreg.DoAbort(cmn.ActECEncode, c.bck)
@@ -300,7 +300,7 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 			}
 			xact := rns.Entry.Get()
 			c.addNotif(xact) // ditto
-			go xact.Run()
+			xaction.GoRunW(xact)
 		}
 	default:
 		debug.Assert(false)
@@ -389,7 +389,7 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 
 		t.gfn.local.Activate()
 		t.gfn.global.activateTimed()
-		go xact.Run()
+		xaction.GoRunW(xact) // run and wait until it starts running
 	default:
 		debug.Assert(false)
 	}
@@ -535,7 +535,7 @@ func (t *targetrunner) transCpyBck(c *txnServerCtx, msg *cmn.TransCpyBckMsg, dp 
 		}
 		xact := rns.Entry.Get()
 		c.addNotif(xact) // notify upon completion
-		go xact.Run()
+		xaction.GoRunW(xact)
 	default:
 		debug.Assert(false)
 	}
@@ -583,7 +583,7 @@ func (t *targetrunner) ecEncode(c *txnServerCtx) error {
 		}
 		xact := rns.Entry.Get()
 		c.addNotif(xact) // notify upon completion
-		go xact.Run()
+		xaction.GoRunW(xact)
 	default:
 		debug.Assert(false)
 	}

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -236,7 +237,7 @@ func (*dowFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
 func (p *dowFactory) Start() error {
 	xdl := newDownloader(p.T, p.statsT)
 	p.xact = xdl
-	go xdl.Run()
+	go xdl.Run(nil)
 	return nil
 }
 func (*dowFactory) Kind() string        { return cmn.ActDownload }
@@ -263,7 +264,7 @@ func newDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
 	return
 }
 
-func (d *Downloader) Run() {
+func (d *Downloader) Run(*sync.WaitGroup) {
 	glog.Infof("starting %s", d.Name())
 	err := d.dispatcher.run()
 	d.stop(err)

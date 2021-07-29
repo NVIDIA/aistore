@@ -7,6 +7,7 @@ package mirror
 import (
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -91,7 +92,8 @@ func newXactMNC(bck *cluster.Bck, p *mncFactory, slab *memsys.Slab) (r *xactMNC)
 	return
 }
 
-func (r *xactMNC) Run() {
+func (r *xactMNC) Run(wg *sync.WaitGroup) {
+	wg.Done()
 	if err := fs.ValidateNCopies(r.Target().Sname(), r.copies); err != nil {
 		r.Finish(err)
 		return

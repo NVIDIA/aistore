@@ -101,8 +101,7 @@ func (r *registry) renewMakeNCopies(t cluster.Target, uuid, tag string) {
 		if bck.Props.Mirror.Enabled {
 			rns := r.renewBckMakeNCopies(t, bck, uuid, tag, int(bck.Props.Mirror.Copies))
 			if rns.Err == nil && !rns.IsRunning() {
-				xact := rns.Entry.Get()
-				go xact.Run()
+				xaction.GoRunW(rns.Entry.Get())
 			}
 		}
 		return false
@@ -113,8 +112,7 @@ func (r *registry) renewMakeNCopies(t cluster.Target, uuid, tag string) {
 			if bck.Props.Mirror.Enabled {
 				rns := r.renewBckMakeNCopies(t, bck, uuid, tag, int(bck.Props.Mirror.Copies))
 				if rns.Err == nil && !rns.IsRunning() {
-					xact := rns.Entry.Get()
-					go xact.Run()
+					xaction.GoRunW(rns.Entry.Get())
 				}
 			}
 			return false

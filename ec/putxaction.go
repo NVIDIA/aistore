@@ -71,7 +71,7 @@ func (p *putFactory) Start() error {
 	)
 	xec.DemandBase.Init(cos.GenUUID(), p.Kind(), p.Bck, totallyIdle, likelyIdle)
 	p.xact = xec
-	go xec.Run()
+	go xec.Run(nil)
 	return nil
 }
 
@@ -149,7 +149,7 @@ func (r *XactPut) dispatchRequest(req *request, lom *cluster.LOM) error {
 	return nil
 }
 
-func (r *XactPut) Run() {
+func (r *XactPut) Run(*sync.WaitGroup) {
 	glog.Infoln(r.String())
 
 	var wg sync.WaitGroup

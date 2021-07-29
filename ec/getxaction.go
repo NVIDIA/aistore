@@ -7,6 +7,7 @@ package ec
 import (
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -69,7 +70,7 @@ func (p *getFactory) Start() error {
 	)
 	xec.DemandBase.Init(cos.GenUUID(), p.Kind(), p.Bck, totallyIdle, likelyIdle)
 	p.xact = xec
-	go xec.Run()
+	go xec.Run(nil)
 	return nil
 }
 func (*getFactory) Kind() string        { return cmn.ActECGet }
@@ -173,7 +174,7 @@ func (r *XactGet) dispatchRequest(req *request, lom *cluster.LOM) error {
 	return nil
 }
 
-func (r *XactGet) Run() {
+func (r *XactGet) Run(*sync.WaitGroup) {
 	glog.Infoln(r.String())
 
 	for _, jog := range r.getJoggers {

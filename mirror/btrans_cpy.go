@@ -189,9 +189,10 @@ func newXactTransCpyBck(e *cpyFactory, slab *memsys.Slab) (r *XactTransCpyBck) {
 
 func (r *XactTransCpyBck) WaitRunning() { r.wg.Wait() }
 
-func (r *XactTransCpyBck) Run() {
+func (r *XactTransCpyBck) Run(wg *sync.WaitGroup) {
 	r.dm.SetXact(r)
 	r.dm.Open()
+	wg.Done()
 
 	r.wg.Done()
 

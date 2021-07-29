@@ -58,7 +58,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 		return
 	}
 	if !rns.IsRunning() {
-		go xact.Run()
+		go xact.Run(nil)
 	}
 
 	resp := xact.(*xs.ObjListXact).Do(msg)
