@@ -1186,8 +1186,9 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 		smsg.AddProps(cmn.GetPropsDefault...)
 	}
 
-	// Vanilla HTTP buckets do not support remote listing
-	if bck.IsHTTP() {
+	// Vanilla HTTP buckets do not support remote listing.
+	// SelectArchDir needs files locally to read archive content.
+	if bck.IsHTTP() || smsg.IsFlagSet(cmn.SelectArchDir) {
 		smsg.SetFlag(cmn.SelectCached)
 	}
 

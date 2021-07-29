@@ -200,6 +200,7 @@ List all objects contained in `BUCKET` bucket.
 | `--cached` | `bool` | For a remote bucket, shows only objects that have already been downloaded and are cached on local drives (ignored for ais buckets) | `false` |
 | `--use-cache` | `bool` | Use proxy cache to speed up list object request | `false` |
 | `--start-after` | `string` | Object name after which the listing should start | `""` |
+| `--list-archive` | `bool` | Treat archives as directories and include their content into the bucket list |
 
 ### Examples
 
@@ -246,6 +247,25 @@ $ ais bucket ls ais://bucket_name --prefix "shard-1"
 NAME		SIZE		VERSION
 shard-1.tar	16.00KiB	1
 shard-10.tar	16.00KiB	1
+```
+
+#### List archive contect
+
+```console
+$ ais ls ais://abc/ --prefix log
+NAME             SIZE
+log.tar.gz      3.11KiB
+
+$ ais ls ais://abc/ --prefix log --archive
+NAME                                             SIZE
+log.tar.gz                                       3.11KiB
+    log2.tar.gz/t_2021-07-27_14-08-50.log        959B
+    log2.tar.gz/t_2021-07-27_14-10-36.log        959B
+    log2.tar.gz/t_2021-07-27_14-12-18.log        959B
+    log2.tar.gz/t_2021-07-27_14-13-23.log        295B
+    log2.tar.gz/t_2021-07-27_14-13-31.log        1.02KiB
+    log2.tar.gz/t_2021-07-27_14-14-16.log        1.71KiB
+    log2.tar.gz/t_2021-07-27_14-15-15.log        1.90KiB
 ```
 
 #### [experimental] Using proxy cache

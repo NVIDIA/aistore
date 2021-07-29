@@ -28,19 +28,11 @@ type BucketEntry struct {
 	Flags     uint16 `json:"flags,omitempty" msg:"f,omitempty"`       // object flags, like CheckExists, IsMoved etc
 }
 
-func (be *BucketEntry) CheckExists() bool {
-	return be.Flags&EntryIsCached != 0
-}
-
-func (be *BucketEntry) SetExists() {
-	be.Flags |= EntryIsCached
-}
-
-func (be *BucketEntry) IsStatusOK() bool {
-	return be.Flags&EntryStatusMask == 0
-}
-
-func (be *BucketEntry) String() string { return "{" + be.Name + "}" }
+func (be *BucketEntry) CheckExists() bool  { return be.Flags&EntryIsCached != 0 }
+func (be *BucketEntry) SetExists()         { be.Flags |= EntryIsCached }
+func (be *BucketEntry) IsStatusOK() bool   { return be.Flags&EntryStatusMask == 0 }
+func (be *BucketEntry) IsInsideArch() bool { return be.Flags&EntryInArch == 0 }
+func (be *BucketEntry) String() string     { return "{" + be.Name + "}" }
 
 func (be *BucketEntry) CopyWithProps(propsSet cos.StringSet) (ne *BucketEntry) {
 	ne = &BucketEntry{Name: be.Name}

@@ -305,6 +305,7 @@ var (
 	listBucketsFlag   = cli.StringFlag{Name: "buckets", Usage: "comma-separated list of bucket names, e.g.: 'b1,b2,b3'"}
 	validateFlag      = cli.BoolFlag{Name: "validate", Usage: "check objects health"}
 	compactPropFlag   = cli.BoolFlag{Name: "compact,c", Usage: "display properties grouped in human-readable mode"}
+	listArchiveFlag   = cli.BoolFlag{Name: "list-archive", Usage: "list archive content"}
 
 	// Config
 	configTypeFlag = cli.StringFlag{Name: "type", Usage: "show the specified configuration, one of: 'all','cluster','local'"}

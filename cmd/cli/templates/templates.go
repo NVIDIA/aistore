@@ -275,7 +275,7 @@ const (
 var (
 	// ObjectPropsMap matches BucketEntry field
 	ObjectPropsMap = map[string]string{
-		"name":       "{{$obj.Name}}",
+		"name":       "{{FormatNameArch $obj.Name $obj.Flags}}",
 		"size":       "{{FormatBytesSigned $obj.Size 2}}",
 		"checksum":   "{{$obj.Checksum}}",
 		"type":       "{{$obj.Type}}",
@@ -320,6 +320,7 @@ var (
 		"FormatACL":           fmtACL,
 		"ExtECGetStats":       extECGetStats,
 		"ExtECPutStats":       extECPutStats,
+		"FormatNameArch":      fmtNameArch,
 	}
 
 	AliasTemplate = "ALIAS\tCOMMAND\n{{range $alias, $command := .}}" +
@@ -597,4 +598,11 @@ func extECPutStats(base *xaction.BaseXactStatsExt) *ec.ExtECPutStats {
 
 func fmtMilli(val cos.Duration) string {
 	return cos.FormatMilli(time.Duration(val))
+}
+
+func fmtNameArch(val string, flags uint16) string {
+	if flags&cmn.EntryInArch == 0 {
+		return val
+	}
+	return "    " + val
 }

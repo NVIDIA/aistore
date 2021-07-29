@@ -6,12 +6,19 @@
 package xs
 
 import (
+	"archive/tar"
+	"archive/zip"
+	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -58,6 +65,10 @@ type (
 		BckList *cmn.BucketList
 		Status  int
 		Err     error
+	}
+	archEntry struct { // File inside an archive
+		name string
+		size uint64 // uncompressed size if possible
 	}
 )
 
@@ -408,6 +419,26 @@ func (r *ObjListXact) traverseBucket(msg *cmn.SelectMsg) {
 		case <-r.walkStopCh.Listen():
 			return errStopped
 		}
+		if !msg.IsFlagSet(cmn.SelectArchDir) {
+			return nil
+		}
+		archList, err := listArchive(fqn)
+		if archList == nil || err != nil {
+			return err
+		}
+		for _, archEntry := range archList {
+			e := &cmn.BucketEntry{
+				Name:  path.Join(entry.Name, archEntry.name),
+				Flags: entry.Flags | cmn.EntryInArch,
+				Size:  int64(archEntry.size),
+			}
+			select {
+			case r.objCache <- e:
+				/* do nothing */
+			case <-r.walkStopCh.Listen():
+				return errStopped
+			}
+		}
 		return nil
 	}
 	opts := &fs.WalkBckOptions{
@@ -431,4 +462,95 @@ func (r *ObjListXact) traverseBucket(msg *cmn.SelectMsg) {
 		}
 	}
 	close(r.objCache)
+}
+
+func listZip(readerAt cos.ReadReaderAt, size int64) ([]*archEntry, error) {
+	zr, err := zip.NewReader(readerAt, size)
+	if err != nil {
+		return nil, err
+	}
+	fileList := make([]*archEntry, 0, 8)
+	for _, f := range zr.File {
+		finfo := f.FileInfo()
+		if finfo.IsDir() {
+			continue
+		}
+		e := &archEntry{
+			name: f.FileHeader.Name,
+			size: f.FileHeader.UncompressedSize64,
+		}
+		fileList = append(fileList, e)
+	}
+	return fileList, nil
+}
+
+func listTar(reader io.Reader) ([]*archEntry, error) {
+	fileList := make([]*archEntry, 0, 8)
+	tr := tar.NewReader(reader)
+	for {
+		hdr, err := tr.Next()
+		if err != nil {
+			if err == io.EOF {
+				return fileList, nil
+			}
+			return nil, err
+		}
+		if hdr.FileInfo().IsDir() {
+			continue
+		}
+		e := &archEntry{
+			name: hdr.Name,
+			size: uint64(hdr.Size),
+		}
+		fileList = append(fileList, e)
+	}
+}
+
+func listTgz(reader io.Reader) ([]*archEntry, error) {
+	gzr, err := gzip.NewReader(reader)
+	if err != nil {
+		return nil, err
+	}
+	return listTar(gzr)
+}
+
+func listArchive(fqn string) ([]*archEntry, error) {
+	var arch string
+	for _, ext := range cos.ArchExtensions {
+		if strings.HasSuffix(fqn, ext) {
+			arch = ext
+			break
+		}
+	}
+	if arch == "" {
+		return nil, nil
+	}
+	// list the archive content
+	var (
+		archList []*archEntry
+		finfo    os.FileInfo
+	)
+	f, err := os.Open(fqn)
+	if err == nil {
+		switch arch {
+		case cos.ExtTar:
+			archList, err = listTar(f)
+		case cos.ExtTgz, cos.ExtTarTgz:
+			archList, err = listTgz(f)
+		case cos.ExtZip:
+			finfo, err = os.Stat(fqn)
+			if err == nil {
+				archList, err = listZip(f, finfo.Size())
+			}
+		default:
+			debug.Assert(false, arch)
+		}
+	}
+	f.Close()
+	if err != nil {
+		return nil, err
+	}
+	// Files in archive can be in arbitrary order, but paging requires them sorted
+	sort.Slice(archList, func(i, j int) bool { return archList[i].name < archList[j].name })
+	return archList, nil
 }

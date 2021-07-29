@@ -20,6 +20,7 @@ const (
 	SelectCached    = 1 << iota // list only cached (Cloud buckets only)
 	SelectMisplaced             // Include misplaced
 	SelectDeleted               // Include marked for deletion
+	SelectArchDir               // expand archives as directories
 )
 
 // ActionMsg is a JSON-formatted control structures for the REST API

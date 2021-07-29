@@ -184,6 +184,9 @@ func listObjects(c *cli.Context, bck cmn.Bck) error {
 	if flagIsSet(c, cachedFlag) {
 		msg.SetFlag(cmn.SelectCached)
 	}
+	if flagIsSet(c, listArchiveFlag) {
+		msg.SetFlag(cmn.SelectArchDir)
+	}
 	props := strings.Split(parseStrFlag(c, objPropsFlag), ",")
 	if cos.StringInSlice("all", props) {
 		msg.AddProps(cmn.GetPropsAll...)

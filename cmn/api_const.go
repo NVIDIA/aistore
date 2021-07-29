@@ -311,6 +311,7 @@ const (
 
 	// Flags
 	EntryIsCached = 1 << (EntryStatusBits + 1)
+	EntryInArch   = 1 << (EntryStatusBits + 2)
 )
 
 // List objects default page size
