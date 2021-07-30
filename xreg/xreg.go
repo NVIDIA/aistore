@@ -121,10 +121,6 @@ func (rns *RenewRes) beingRenewed() {
 		return
 	}
 	xact := rns.Entry.Get()
-	// NOTE: LRU's a different mechanism to keep checking for work
-	if xact.Kind() == cmn.ActLRU {
-		return
-	}
 	if xdmnd, ok := xact.(xaction.Demand); ok {
 		xdmnd.IncPending()
 		xdmnd.DecPending()

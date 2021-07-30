@@ -14,7 +14,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -60,7 +59,6 @@ type (
 		GetFSUsedPercentage func(path string) (usedPercentage int64, ok bool)
 		GetFSStats          func(path string) (blocks, bavail uint64, bsize int64, err error)
 		Force               bool // Ignore LRU prop when set to be true.
-		DontLinger          bool //  Used in tests
 	}
 
 	// minHeap keeps fileInfo sorted by access time with oldest
@@ -103,13 +101,12 @@ type (
 		xact *Xaction
 	}
 	Xaction struct {
-		xaction.DemandBase
+		xaction.XactBase
 	}
 )
 
 // interface guard
 var (
-	_ xaction.Demand = (*Xaction)(nil)
 	_ xreg.Renewable = (*Factory)(nil)
 )
 
@@ -129,13 +126,8 @@ func (*Factory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
 }
 
 func (p *Factory) Start() error {
-	var (
-		config      = cmn.GCO.Get()
-		likelyIdle  = cos.MaxDuration(config.Timeout.MaxKeepalive.D(), 4*time.Second)
-		totallyIdle = cos.MaxDuration(config.Timeout.MaxHostBusy.D(), 20*time.Second)
-	)
 	p.xact = &Xaction{}
-	p.xact.DemandBase.Init(p.UUID(), cmn.ActLRU, nil, totallyIdle, likelyIdle)
+	p.xact.InitBase(p.UUID(), cmn.ActLRU, nil)
 	return nil
 }
 
@@ -155,12 +147,11 @@ func Run(ini *InitLRU) {
 		num               = len(availablePaths)
 		joggers           = make(map[string]*lruJ, num)
 		parent            = &lruP{joggers: joggers, ini: *ini}
-		repeated          bool
 	)
 	glog.Infof("[lru] %s started: dont-evict-time %v", xlru, config.LRU.DontEvictTime)
 	if num == 0 {
-		glog.Warningf("[lru] no mountpaths")
-		xlru.stop()
+		glog.Warning(fs.ErrNoMountpaths)
+		xlru.Finish(fs.ErrNoMountpaths)
 		return
 	}
 	for mpath, mpathInfo := range availablePaths {
@@ -178,91 +169,32 @@ func Run(ini *InitLRU) {
 	}
 	providers := cmn.Providers.ToSlice()
 
-repeat:
-	xlru.IncPending()
-	fail := atomic.Bool{}
 	for _, j := range joggers {
 		parent.wg.Add(1)
 		j.joggers = joggers
-		go j.run(providers, &fail)
+		go j.run(providers)
 	}
 	parent.wg.Wait()
-	xlru.DecPending()
 
-	if fail.Load() {
-		xlru.stop()
-		return
+	for _, j := range joggers {
+		j.stop()
 	}
-
-	if ini.DontLinger {
-		xlru.stop()
-		return
-	}
-	// linger for a while and circle back if renewed
-	for {
-		select {
-		case <-xlru.IdleTimer():
-			xlru.stop()
-			return
-		case <-xlru.ChanAbort():
-			xlru.stop()
-			return
-		default:
-			break
-		}
-		time.Sleep(cos.MaxDuration(config.Timeout.MaxKeepalive.D(), 4*time.Second))
-		for _, j := range joggers {
-			repeat, err := j.checkCapAfter()
-			if err != nil {
-				xlru.stop()
-				return
-			}
-			if repeat && !repeated {
-				repeated = true
-				goto repeat
-			}
-		}
-	}
+	xlru.Finish(nil)
 }
-
-/////////////
-// Xaction //
-/////////////
 
 func (*Xaction) Run(*sync.WaitGroup) { debug.Assert(false) }
 
-func (r *Xaction) stop() {
-	r.DemandBase.Stop()
-	r.Finish(nil)
-}
-
-func (r *Xaction) Stats() cluster.XactStats {
-	baseStats := r.DemandBase.Stats().(*xaction.BaseXactStatsExt)
-	baseStats.Ext = &xaction.BaseXactDemandStatsExt{IsIdle: r.Pending() == 0}
-	return baseStats
-}
-
-//////////
-// lruJ //
-//////////
+//////////////////////
+// mountpath jogger //
+//////////////////////
 
 func (j *lruJ) String() string {
 	return fmt.Sprintf("%s: (%s, %s)", j.ini.T.Snode(), j.ini.Xaction, j.mpathInfo)
 }
 
-func (j *lruJ) checkCapAfter() (repeat bool, err error) {
-	usedPct, ok := j.ini.GetFSUsedPercentage(j.mpathInfo.Path)
-	if !ok {
-		_, _, _, err = j.ini.GetFSStats(j.mpathInfo.Path)
-		return
-	}
-	repeat = usedPct >= j.config.LRU.HighWM-1
-	return
-}
-
 func (j *lruJ) stop() { j.stopCh <- struct{}{} }
 
-func (j *lruJ) run(providers []string, fail *atomic.Bool) {
+func (j *lruJ) run(providers []string) {
 	var err error
 	defer j.p.wg.Done()
 	if err = j.removeTrash(); err != nil {
@@ -287,11 +219,6 @@ ex:
 		return
 	}
 	glog.Errorf("[lru] %s: exited with err %v", j, err)
-	if fail.CAS(false, true) {
-		for _, j := range j.joggers {
-			j.stop()
-		}
-	}
 }
 
 func (j *lruJ) jog(providers []string) (err error) {

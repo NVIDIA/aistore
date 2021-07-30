@@ -100,7 +100,7 @@ func newTargetLRUMock() *cluster.TargetMock {
 
 func newInitLRU(t cluster.Target) *lru.InitLRU {
 	xlru := &lru.Xaction{}
-	xlru.DemandBase.Init(cos.GenUUID(), cmn.ActLRU, nil, 2*time.Second, time.Second)
+	xlru.InitBase(cos.GenUUID(), cmn.ActLRU, nil)
 	return &lru.InitLRU{
 		Xaction:             xlru,
 		StatsT:              stats.NewTrackerMock(),
@@ -213,7 +213,6 @@ var _ = Describe("LRU tests", func() {
 				const numberOfFiles = 6
 
 				ini.GetFSStats = getMockGetFSStats(numberOfFiles)
-				ini.DontLinger = true
 
 				oldFiles := []fileMetadata{
 					{getRandomFileName(3), fileSize},
@@ -246,7 +245,6 @@ var _ = Describe("LRU tests", func() {
 					bavail = blocks - btaken
 					return
 				}
-				ini.DontLinger = true
 
 				// files sum up to 32Mb
 				files := []fileMetadata{

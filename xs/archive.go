@@ -247,14 +247,6 @@ func (r *XactPutArchive) Run(wg *sync.WaitGroup) {
 fin:
 	r.DemandBase.Stop()
 
-	q := r.dm.Quiesce(r.config.Timeout.MaxKeepalive.D())
-	if err == nil {
-		if q == cluster.QuiAborted {
-			err = cmn.NewAbortedError(r.String())
-		} else if q == cluster.QuiTimeout {
-			err = fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout)
-		}
-	}
 	r.dm.Close(err)
 	r.dm.UnregRecv()
 	r.Finish(err)
