@@ -1123,7 +1123,7 @@ rret:
 
 // Callback: remove the node from the cluster if rebalance finished successfully
 func (p *proxyrunner) removeAfterRebalance(nl nl.NotifListener, msg *cmn.ActionMsg, si *cluster.Snode) {
-	if err := nl.Err(false); err != nil || nl.Aborted() {
+	if err := nl.Err(); err != nil || nl.Aborted() {
 		glog.Errorf("Rebalance(%s) didn't finish successfully, err: %v, aborted: %v",
 			nl.UUID(), err, nl.Aborted())
 		return

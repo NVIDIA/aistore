@@ -31,7 +31,7 @@ type NotifListener interface {
 	Kind() string
 	Bcks() []cmn.Bck
 	SetErr(error)
-	Err(locked bool) error
+	Err() error
 	UUID() string
 	SetAborted()
 	Aborted() bool
@@ -160,11 +160,10 @@ func (nlb *NotifListenerBase) SetErr(err error) {
 	}
 }
 
-func (nlb *NotifListenerBase) Err(locked bool) error {
-	if !locked {
-		nlb.RLock()
-		defer nlb.RUnlock()
-	}
+// NOTE: always rlocks
+func (nlb *NotifListenerBase) Err() error {
+	nlb.RLock()
+	defer nlb.RUnlock()
 	if nlb.ErrMsg == "" {
 		return nil
 	}
@@ -216,17 +215,7 @@ func (nlb *NotifListenerBase) NodesTardy(durs ...time.Duration) (nodes cluster.N
 }
 
 func (nlb *NotifListenerBase) Status() *NotifStatus {
-	debug.AssertRWMutexRLocked(&nlb.RWMutex)
-
-	status := &NotifStatus{
-		UUID:     nlb.UUID(),
-		FinTime:  nlb.FinTime.Load(),
-		AbortedX: nlb.Aborted(),
-	}
-	if err := nlb.Err(true); err != nil {
-		status.ErrMsg = err.Error()
-	}
-	return status
+	return &NotifStatus{UUID: nlb.UUID(), FinTime: nlb.FinTime.Load(), AbortedX: nlb.Aborted()}
 }
 
 // NOTE: Results in non-critical DATA RACE when used outside `nlb.Lock()`

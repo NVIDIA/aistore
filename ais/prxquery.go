@@ -120,7 +120,7 @@ func (p *proxyrunner) httpquerygetworkertarget(w http.ResponseWriter, r *http.Re
 		return
 	}
 	state := nl.(*query.NotifListenerQuery)
-	if err := state.Err(false); err != nil {
+	if err := state.Err(); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}

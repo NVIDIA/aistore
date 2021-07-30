@@ -222,16 +222,16 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ic.p.notifs.syncStats(nl, interval)
-	nl.RLock()
-	defer nl.RUnlock()
 
-	if err := nl.Err(true); err != nil && !nl.Aborted() {
-		ic.p.writeErr(w, r, err)
-		return
+	status := nl.Status()
+	if err := nl.Err(); err != nil {
+		status.ErrMsg = err.Error()
+		if !nl.Aborted() {
+			ic.p.writeErrf(w, r, "%v: %v", nl, err)
+			return
+		}
 	}
-
-	// TODO: Also send stats, eg. progress when ready
-	w.Write(cos.MustMarshal(nl.Status()))
+	w.Write(cos.MustMarshal(status)) // TODO: include stats, e.g., progress when ready
 }
 
 // verb /v1/ic
