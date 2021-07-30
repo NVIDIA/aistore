@@ -11,7 +11,7 @@ redirect_from:
 Batch operations that run asynchronously and may take many seconds (minutes, or even hours) to execute are called eXtended actions or xactions.
 > Note: In CLI docs, the terms "xaction" and "job" are used interchangeably.
 
-AIS *xactions* run asynchronously, have one of the enumerated kinds, start/stop times, and xaction-specific statistics. For more information, please refer to this [document](/aistore/xaction/README.md).
+AIS *xactions* run asynchronously, have one of the enumerated kinds, start/stop times, and xaction-specific statistics. For more information, please refer to this [document](/xaction/README.md).
 
 ## Table of Contents
 - [Start xaction](#start-xaction)
@@ -157,12 +157,12 @@ Note: `job wait download|dsort` have slightly different options. Please see thei
 
 `ais job start dsort`
 
-Run [dSort](/aistore/dsort/README.md).
+Run [dSort](/dsort/README.md).
 [Further reference for this command can be found here.](dsort.md)
 
 ## Downloader
 
 `ais job start download`
 
-Run the AIS [Downloader](/aistore/dsort/README.md).
+Run the AIS [Downloader](/dsort/README.md).
 [Further reference for this command can be found here.](downloader.md)

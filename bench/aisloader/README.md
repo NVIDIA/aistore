@@ -167,9 +167,9 @@ By default, object sizes are randomly selected as well in the range between 1MiB
 
 #### Setting bucket properties
 
-Before starting a test, it is possible to set `mirror` or `EC` properties on a bucket (for background, please see [storage services](/aistore/docs/storage_svcs.md)).
+Before starting a test, it is possible to set `mirror` or `EC` properties on a bucket (for background, please see [storage services](/docs/storage_svcs.md)).
 
-> For background on local mirroring and erasure coding (EC), please see [storage services](/aistore/docs/storage_svcs.md).
+> For background on local mirroring and erasure coding (EC), please see [storage services](/docs/storage_svcs.md).
 
 To achieve that, use the option `-bprops`. For example:
 
@@ -351,14 +351,14 @@ format:
 * `metric_type` - can be: `gauge`, `timer`, `counter`
 * `hostname` - is the hostname of the machine on which the loader is ran
 * `loaderid` - see: `-loaderid` option
-* `metric` - can be: `latency.*`, `get.*`, `put.*` (see: [aisloader metrics](/aistore/docs/metrics.md#ais-loader-metrics))
+* `metric` - can be: `latency.*`, `get.*`, `put.*` (see: [aisloader metrics](/docs/metrics.md#ais-loader-metrics))
 
 ### Grafana
 
 Grafana helps visualize the collected statistics. It is convenient to use and
 provides numerous tools to measure and calculate different metrics.
 
-We provide simple [script](/aistore/deploy/dev/local/deploy_grafana.sh) which allows you to set
+We provide simple [script](/deploy/dev/local/deploy_grafana.sh) which allows you to set
 up the Graphite and Grafana servers which run inside separate dockers. To add
 new dashboards and panels, please follow: [grafana tutorial](http://docs.grafana.org/guides/getting_started/).
 

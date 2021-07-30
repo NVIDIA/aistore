@@ -27,7 +27,7 @@ In addition, CLI provides dataset management commands, commands to read and writ
 
 **TL;DR**: see section [CLI reference](#cli-reference) below to quickly locate useful commands. There's also a (structured as a reference) list CLI resources with numerous examples and usage guides that we constantly keep updating.
 
-[![AIStore CLI Demo](/aistore/docs/images/cli-demo-400.png)](https://youtu.be/VPIhQm2sMD8 "AIStore CLI Demo (Youtube video)")
+[![AIStore CLI Demo](/docs/images/cli-demo-400.png)](https://youtu.be/VPIhQm2sMD8 "AIStore CLI Demo (Youtube video)")
 
 ## Getting Started
 
@@ -124,22 +124,22 @@ To uninstall autocompletions, run `bash autocomplete/uninstall.sh`.
 
 | Command | Use Case |
 |---------|----------|
-| [`ais bucket`](/aistore/cmd/cli/resources/bucket.md) | Create/destroy buckets, list bucket's content, show existing buckets and their properties |
-| [`ais object`](/aistore/cmd/cli/resources/object.md) | PUT (write), GET (read), list, move (rename) and other operations on objects in a given bucket |
-| [`ais cluster`](/aistore/cmd/cli/resources/cluster.md) | Monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc. |
-| [`ais config`](/aistore/cmd/cli/resources/config.md) | Set local/global AIS cluster configurations |
-| [`ais mountpath`](/aistore/cmd/cli/resources/mpath.md) | Manage mountpaths (disks) in a given storage target |
-| [`ais etl`](/aistore/cmd/cli/resources/etl.md) | Execute custom transformations on objects |
-| [`ais job`](/aistore/cmd/cli/resources/job.md) | Query and manage jobs (aka extended actions or xactions) |
-| [`ais auth`](/aistore/cmd/cli/resources/auth.md) | Add/remove/show users, manage user roles, manage access to remote clusters |
-| [`ais show`](/aistore/cmd/cli/resources/show.md) | Show information about buckets, jobs, all other managed entities in the cluster and the cluster itself |
-| [`ais advanced`](/aistore/cmd/cli/resources/advanced.md) | Special commands intended for development and advanced usage |
-| [`ais search`](/aistore/cmd/cli/resources/search.md) | Search ais commands |
+| [`ais bucket`](/cmd/cli/resources/bucket.md) | Create/destroy buckets, list bucket's content, show existing buckets and their properties |
+| [`ais object`](/cmd/cli/resources/object.md) | PUT (write), GET (read), list, move (rename) and other operations on objects in a given bucket |
+| [`ais cluster`](/cmd/cli/resources/cluster.md) | Monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc. |
+| [`ais config`](/cmd/cli/resources/config.md) | Set local/global AIS cluster configurations |
+| [`ais mountpath`](/cmd/cli/resources/mpath.md) | Manage mountpaths (disks) in a given storage target |
+| [`ais etl`](/cmd/cli/resources/etl.md) | Execute custom transformations on objects |
+| [`ais job`](/cmd/cli/resources/job.md) | Query and manage jobs (aka extended actions or xactions) |
+| [`ais auth`](/cmd/cli/resources/auth.md) | Add/remove/show users, manage user roles, manage access to remote clusters |
+| [`ais show`](/cmd/cli/resources/show.md) | Show information about buckets, jobs, all other managed entities in the cluster and the cluster itself |
+| [`ais advanced`](/cmd/cli/resources/advanced.md) | Special commands intended for development and advanced usage |
+| [`ais search`](/cmd/cli/resources/search.md) | Search ais commands |
 
 Other CLI documentation:
-- [Attach, Detach, and monitor remote clusters](/aistore/cmd/cli/resources/remote.md)
-- [Start, Stop, and monitor downloads](/aistore/cmd/cli/resources/download.md)
-- [Distributed Sort](/aistore/cmd/cli/resources/dsort.md)
+- [Attach, Detach, and monitor remote clusters](/cmd/cli/resources/remote.md)
+- [Start, Stop, and monitor downloads](/cmd/cli/resources/download.md)
+- [Distributed Sort](/cmd/cli/resources/dsort.md)
 
 > Note: In CLI docs, the terms "xaction" and "job" are used interchangeably.
 
@@ -179,6 +179,6 @@ Supported backend providers currently include:
 * `hdfs://` - HDFS Storage
 * `ht://` (\* see below) - HTTP(S) datasets
 
-> See also: [Backend Providers](/aistore/docs/providers.md)
-> 
-> See also: [Buckets](/aistore/docs/bucket.md)
+> See also: [Backend Providers](/docs/providers.md)
+>
+> See also: [Buckets](/docs/bucket.md)

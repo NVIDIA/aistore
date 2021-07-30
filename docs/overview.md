@@ -47,7 +47,7 @@ Following is a high-level block diagram with an emphasis on supported (frontend 
 
 ## ETL
 
-AIStore is a hyper-converged architecture tailored specifically to run AI apps. To that end, we are supporting [ETL offload](/aistore/etl/README.md): the capability to run custom extract-transform-load workloads close to data on (and by) the storage cluster:
+AIStore is a hyper-converged architecture tailored specifically to run AI apps. To that end, we are supporting [ETL offload](/etl/README.md): the capability to run custom extract-transform-load workloads close to data on (and by) the storage cluster:
 
 <img src="images/etl-v3.3.png" width="450">
 
@@ -179,7 +179,7 @@ Alternatively or in parallel, you can also *prefetch* a flexibly-defined *list* 
 
 But what if the dataset in question exists in the form of (vanilla) HTTP/HTTPS URL(s)? What if there's a popular bucket in, say, Google Cloud that contains images that you'd like to bring over into your Data Center and make available locally for AI researchers?
 
-For these and similar use cases we have [AIS Downloader](/aistore/downloader/README.md) - an integrated tool that can execute massive download requests, track their progress, and populate AIStore directly from the Internet.
+For these and similar use cases we have [AIS Downloader](/downloader/README.md) - an integrated tool that can execute massive download requests, track their progress, and populate AIStore directly from the Internet.
 
 ### Existing Datasets: HTTP(S) Datasets
 
@@ -203,7 +203,7 @@ In combination, these two settings have an effect of redirecting all **unmodifie
 
 Finally, AIS can *promote* files and directories to objects. The only requirement is that the files and directories in question are colocated within AIS storage target machines.
 
-Let's consider a quick example. Say, some (or all) of the deployed storage nodes contain a directory called `/tmp/mydata`. By running the following [CLI](/aistore/cmd/cli/README.md), we could make AIS objects (**one file = one object**) out of all files scattered across all nodes:
+Let's consider a quick example. Say, some (or all) of the deployed storage nodes contain a directory called `/tmp/mydata`. By running the following [CLI](/cmd/cli/README.md), we could make AIS objects (**one file = one object**) out of all files scattered across all nodes:
 
 ```console
 $ ais object promote /tmp/mydata mybucket/ -r --keep=false
@@ -235,7 +235,7 @@ As a fast tier, AIS populates itself on demand (via *cold* GETs) and/or via its 
 ## Other Services
 
 The (quickly growing) list of services includes (but is not limited to):
-* [health monitoring and recovery](/aistore/health/fshc.md)
+* [health monitoring and recovery](/health/fshc.md)
 * [range read](http_api.md)
 * [dry-run (to measure raw network and disk performance)](performance.md#performance-testing)
 * performance and capacity monitoring with full observability via StatsD/Grafana
@@ -243,7 +243,7 @@ The (quickly growing) list of services includes (but is not limited to):
 
 > Load balancing consists in optimal selection of a local object replica and, therefore, requires buckets configured for [local mirroring](storage_svcs.md#read-load-balancing).
 
-Most notably, AIStore provides **[dSort](/aistore/dsort/README.md)** - a MapReduce layer that performs a wide variety of user-defined merge/sort *transformations* on large datasets used for/by deep learning applications.
+Most notably, AIStore provides **[dSort](/dsort/README.md)** - a MapReduce layer that performs a wide variety of user-defined merge/sort *transformations* on large datasets used for/by deep learning applications.
 
 ## dSort
 
@@ -253,7 +253,7 @@ By design, dSort tightly integrates with the AIS-object to take full advantage o
 
 ## CLI
 
-AIStore includes an easy-to-use management-and-monitoring facility called [AIS CLI](/aistore/cmd/cli/README.md). Once [installed](/aistore/cmd/cli/README.md#getting-started), to start using it, simply execute:
+AIStore includes an easy-to-use management-and-monitoring facility called [AIS CLI](/cmd/cli/README.md). Once [installed](/cmd/cli/README.md#getting-started), to start using it, simply execute:
 
  ```console
 $ export AIS_ENDPOINT=http://G
@@ -262,11 +262,11 @@ $ ais --help
 
 where `G` (above) denotes a `hostname:port` address of any AIS gateway (for developers it'll often be `localhost:8080`). Needless to say, the "exporting" must be done only once.
 
-One salient feature of AIS CLI is its Bash style [auto-completions](/aistore/cmd/cli/README.md#ais-cli-shell-auto-complete) that allow users to easily navigate supported operations and options by simply pressing the TAB key:
+One salient feature of AIS CLI is its Bash style [auto-completions](/cmd/cli/README.md#ais-cli-shell-auto-complete) that allow users to easily navigate supported operations and options by simply pressing the TAB key:
 
 <img src="images/cli-overview.gif" alt="CLI-tab" width="900" height="130">
 
-AIS CLI is currently quickly developing. For more information, please see the project's own [README](/aistore/cmd/cli/README.md).
+AIS CLI is currently quickly developing. For more information, please see the project's own [README](/cmd/cli/README.md).
 
 ## AIS no-limitations principle
 There are **no** designed-in limitations on the:

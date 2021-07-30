@@ -14,15 +14,15 @@ redirect_from:
 
 ## Global Rebalance
 
-To maintain [consistent distribution of user data at all times](https://en.wikipedia.org/wiki/Consistent_hashing#Examples_of_use), AIStore rebalances itself based on *new* versions of its [cluster map](/aistore/cluster/map.go).
+To maintain [consistent distribution of user data at all times](https://en.wikipedia.org/wiki/Consistent_hashing#Examples_of_use), AIStore rebalances itself based on *new* versions of its [cluster map](/cluster/map.go).
 
 More exactly:
 
 * When storage targets join or leave the cluster, the current *primary* (leader) proxy transactionally creates the *next* updated version of the cluster map;
-* [Synchronizes](/aistore/ais/metasync.go) the new map across the entire cluster so that each and every node gets the version;
+* [Synchronizes](/ais/metasync.go) the new map across the entire cluster so that each and every node gets the version;
 * Which further results in each AIS target starting to traverse its locally stored content, recomputing object locations,
 * And sending at least some of the objects to their respective *new* locations
-* Whereby object migration is carried out via intra-cluster optimized [communication mechanism](/aistore/transport/README.md) and over a separate [physical or logical network](/aistore/cmn/network.go), if provisioned.
+* Whereby object migration is carried out via intra-cluster optimized [communication mechanism](/transport/README.md) and over a separate [physical or logical network](/cmn/network.go), if provisioned.
 
 Thus, cluster-wide rebalancing is totally and completely decentralized. When a single server joins (or goes down in a) cluster of N servers, approximately 1/Nth of the entire namespace will get rebalanced via direct target-to-target transfers.
 
@@ -31,7 +31,7 @@ Incoming GET requests for the objects that haven't yet migrated (or are being mo
 The (rebalancing) target that must (according to the new cluster map) have the object but doesn't, will locate its "neighbor", get the object, and satisfy the original GET request transparently from the user.
 
 Similar to all other AIS modules and sub-systems, global rebalance is controlled and monitored via the documented [RESTful API](http_api.md).
-It might be easier and faster, though, to use [AIS CLI](/aistore/cmd/cli/README.md) - see next section.
+It might be easier and faster, though, to use [AIS CLI](/cmd/cli/README.md) - see next section.
 
 ## CLI: usage examples
 
@@ -95,7 +95,7 @@ DaemonID     RebID   ObjRcv  SizeRcv  ObjSent  SizeSent  StartTime       EndTime
 911875t8085  1       0       0B       1020     1.22MiB   04-28 16:05:35  04-28 16:05:53  false
 ```
 
-4. Since global rebalance is an [extended action (xaction)](/aistore/xaction/README.md), it can be also monitored via generic `show xaction` API:
+4. Since global rebalance is an [extended action (xaction)](/xaction/README.md), it can be also monitored via generic `show xaction` API:
 
 ```console
 $ ais show job xaction rebalance
@@ -119,7 +119,7 @@ In other words, global rebalance handles scaling (up and down) of the entire AIS
 
 * A [mountpath](overview.md#terminology) is a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS utilizes to store user data and AIS metadata. A mountpath can be disabled and (re)enabled, automatically or administratively, at any point during runtime. In a given cluster, a total number of mountpaths would normally compute as a direct product of `(number of storage targets) x (number of disks in each target)`.
 
-As stated, mountpath removal can be done administratively (via API) or be triggered by a disk fault (see [filesystem health checking](/aistore/health/fshc.md).
+As stated, mountpath removal can be done administratively (via API) or be triggered by a disk fault (see [filesystem health checking](/health/fshc.md).
 Irrespectively of the original cause, mountpath-level events activate resilver that in many ways performs the same set of steps as the rebalance.
 The one salient difference is that all object migrations are local (and, therefore, relatively fast(er)).
 

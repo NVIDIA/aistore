@@ -76,7 +76,7 @@ We say that "an object is cached" to indicate two separate things:
 * The object is stored in the AIS cluster.
 
 In other words, the term "cached" is simply a **shortcut** to indicate the object's immediate availability without the need to go to the object's original location.
-Being "cached" does not have any implications on an object's persistence: "cached" objects, similar to those objects that originated in a given AIS cluster, are stored 
+Being "cached" does not have any implications on an object's persistence: "cached" objects, similar to those objects that originated in a given AIS cluster, are stored
 with arbitrary (per bucket configurable) levels of redundancy, etc. In short, the same storage policies apply to "cached" and "non-cached".
 
 The following example checks whether `imagenet_train-000010.tgz` is "cached" in the bucket `imagenet`:
@@ -144,8 +144,8 @@ Supported properties:
 - `atime` - object's last access time
 - `copies` - the number of object replicas per target (empty if bucket mirroring is disabled)
 - `checksum` - object's checksum
-- `ec` - object's EC info (empty if EC is disabled for the bucket, if EC is enabled it looks like `DATA:PARITY[MODE]`, where `DATA` - the number of data slices, 
-      `PARITY` - the number of parity slices, and `MODE` is protection mode selected for the object: `replicated` - object has `PARITY` replicas on other targets, 
+- `ec` - object's EC info (empty if EC is disabled for the bucket, if EC is enabled it looks like `DATA:PARITY[MODE]`, where `DATA` - the number of data slices,
+      `PARITY` - the number of parity slices, and `MODE` is protection mode selected for the object: `replicated` - object has `PARITY` replicas on other targets,
       `encoded`  the object is erasure coded and other targets contains only encoded slices
 
 > Note: Like many other `ais show` commands, `ais show object` is aliased to `ais object show` for ease of use.
@@ -427,7 +427,7 @@ Colocation in the context means that the files in question are already located *
 | `--overwrite` or `-o` | `bool` | Overwrite destination (object) if exists | `true` |
 | `--keep` | `bool` | Keep original files | `true` |
 
-**Note:** `--keep` flag defaults to `true` and we retain the origin file to ensure safety. 
+**Note:** `--keep` flag defaults to `true` and we retain the origin file to ensure safety.
 
 ### Object names
 
@@ -516,7 +516,7 @@ Delete an object or list/range of objects from the bucket.
 - List and template deletions expect only a bucket name
 - If OBJECT_NAMEs are given, CLI sends a separate request for each object
 
-See [List/Range Operations](/aistore/docs/batch.md#listrange-operation) for more details.
+See [List/Range Operations](/docs/batch.md#listrange-operation) for more details.
 
 ### Examples
 
@@ -561,7 +561,7 @@ removed files in the range 'test-{001..003}' from ais://mybucket bucket
 
 `ais bucket evict BUCKET/[OBJECT_NAME]...`
 
-[Evict](/aistore/docs/bucket.md#prefetchevict-objects) objects from a remote bucket.
+[Evict](/docs/bucket.md#prefetchevict-objects) objects from a remote bucket.
 
 ### Options
 
@@ -575,7 +575,7 @@ removed files in the range 'test-{001..003}' from ais://mybucket bucket
 - List and template evictions expect only a bucket name
 - If OBJECT_NAMEs are given, CLI sends a separate request for each object
 
-See [List/Range Operations](/aistore/docs/batch.md#listrange-operations) for more details.
+See [List/Range Operations](/docs/batch.md#listrange-operations) for more details.
 
 ### Examples
 
@@ -600,7 +600,7 @@ aws://cloudbucket  0             0B      0%
 
 `ais job start prefetch BUCKET/ --list|--template <value>`
 
-[Prefetch](/aistore/docs/bucket.md#prefetchevict-objects) objects from the remote bucket.
+[Prefetch](/docs/bucket.md#prefetchevict-objects) objects from the remote bucket.
 
 ### Options
 
@@ -612,7 +612,7 @@ aws://cloudbucket  0             0B      0%
 
 Options `--list` and `--template` are mutually exclusive.
 
-See [List/Range Operations](/aistore/docs/batch.md#listrange-operations) for more details.
+See [List/Range Operations](/docs/batch.md#listrange-operations) for more details.
 
 ### Examples
 

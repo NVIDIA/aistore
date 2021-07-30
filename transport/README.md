@@ -77,7 +77,7 @@ Once an object is put on the wire, the corresponding completion gets queued and 
 processed by the completion handler. The handling **always entails closing of the object reader**.
 
 To reiterate: object reader is always closed by the code that handles `send completions`.
-In the case when the callback (`SendCallback`) is provided (i.e., non-nil), the closing is done 
+In the case when the callback (`SendCallback`) is provided (i.e., non-nil), the closing is done
 right after invoking the callback.
 
 Note as well that for every transmission of every object there's always a *completion*.
@@ -149,7 +149,7 @@ On the wire, each transmitted object will have the layout:
 
 The size must be known upfront, which is the current limitation.
 
-A stream (the [Stream type](/aistore/transport/send.go)) carries a sequence of objects of arbitrary sizes and contents, and overall looks as follows:
+A stream (the [Stream type](/transport/send.go)) carries a sequence of objects of arbitrary sizes and contents, and overall looks as follows:
 
 > `object1 = (**[header1]**, **[data1]**)` `object2 = (**[header2]**, **[data2]**)`, etc.
 

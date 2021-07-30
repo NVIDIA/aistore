@@ -58,13 +58,13 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | `objects` | datapath request to GET, PUT and DELETE objects, read their properties |
 | `download` | download external resources (datasets, files) into cluster |
 
-4. **URL query**, e. g., `?what=config`. In particular, All API requests that operate on buckets carry the bucket(s) specification details in the query parameters of the corresponding URL. Those details may include [backend provider](providers.md) and [namespace](providers.md#unified-global-namespace) where an empty backend provider indicates an AIS bucket (with AIStore being, effectively, the default provider) while an empty namespace parameter translates as a global (default) namespace. For exact names of the bucket-specifying URL Query parameters, please refer to this [API source](/aistore/api/bucket.go).
+4. **URL query**, e. g., `?what=config`. In particular, All API requests that operate on buckets carry the bucket(s) specification details in the query parameters of the corresponding URL. Those details may include [backend provider](providers.md) and [namespace](providers.md#unified-global-namespace) where an empty backend provider indicates an AIS bucket (with AIStore being, effectively, the default provider) while an empty namespace parameter translates as a global (default) namespace. For exact names of the bucket-specifying URL Query parameters, please refer to this [API source](/api/bucket.go).
 
 > Combined, all these elements tell the following story. They specify the most generic action (e.g., GET) and designate the target aka "resource" of this action: e. g., an entire cluster or a given AIS node. Further, they may also include context-specific and query string encoded control message to, for instance, distinguish between getting system statistics (`?what=stats`) versus system configuration (`?what=config`).
 
-> For developers and first-time users: if you deployed AIS locally having followed [these instructions](/aistore/README.md#local-non-containerized) then most likely you will have `http://localhost:8080` as the primary proxy, and generally, `http://localhost:808x` for all locally-deployed AIS daemons.
+> For developers and first-time users: if you deployed AIS locally having followed [these instructions](/README.md#local-non-containerized) then most likely you will have `http://localhost:8080` as the primary proxy, and generally, `http://localhost:808x` for all locally-deployed AIS daemons.
 
-> The reference below is "formulated" in `curl` - i.e., using `curl` command lines. It is possible, however, and often much easier (and, therefore, **preferable**), to execute the same operations using [AIS CLI](/aistore/cmd/cli/README.md).
+> The reference below is "formulated" in `curl` - i.e., using `curl` command lines. It is possible, however, and often much easier (and, therefore, **preferable**), to execute the same operations using [AIS CLI](/cmd/cli/README.md).
 
 ### API Reference
 
@@ -153,8 +153,8 @@ Curl example: `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?provider=
 
 For even more information, CLI examples, and the most recent updates, please see:
 - [Backend Providers](providers.md)
-- [CLI: operations on buckets](/aistore/cmd/cli/resources/bucket.md)
-- [CLI: operations on objects](/aistore/cmd/cli/resources/object.md)
+- [CLI: operations on buckets](/cmd/cli/resources/bucket.md)
+- [CLI: operations on objects](/cmd/cli/resources/object.md)
 - [On-Disk Layout](on-disk-layout.md)
 
 #### Supported APIs
@@ -181,7 +181,7 @@ AIStore provides an extensive list of RESTful operations to retrieve cluster cur
 | Get target statistics | GET /v1/daemon | `curl -X GET http://T/v1/daemon?what=stats` |
 | Get process info for all nodes in cluster (proxy) | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=sysinfo` |
 | Get proxy/target system info | GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=sysinfo` |
-| Get xactions' statistics (proxy) [More](/aistore/xaction/README.md)| GET /v1/cluster | `curl -i -X GET  -H 'Content-Type: application/json' -d '{"action": "stats", "name": "xactionname", "value":{"bucket":"bckname"}}' 'http://G/v1/cluster?what=xaction'` |
+| Get xactions' statistics (proxy) [More](/xaction/README.md)| GET /v1/cluster | `curl -i -X GET  -H 'Content-Type: application/json' -d '{"action": "stats", "name": "xactionname", "value":{"bucket":"bckname"}}' 'http://G/v1/cluster?what=xaction'` |
 | Get list of target's filesystems (target) | GET /v1/daemon?what=mountpaths | `curl -X GET http://T/v1/daemon?what=mountpaths` |
 | Get list of all targets' filesystems (proxy) | GET /v1/cluster?what=mountpaths | `curl -X GET http://G/v1/cluster?what=mountpaths` |
 | Get bucket list from a given target | GET /v1/daemon | `curl -X GET http://T/v1/daemon?what=bucketmd` |

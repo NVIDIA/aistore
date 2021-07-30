@@ -1,3 +1,4 @@
 .jekyll-cache
 .sass-cache
 _site
+.netlify

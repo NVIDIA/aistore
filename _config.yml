@@ -35,7 +35,7 @@ description: >
   AIStore is a lightweight object storage system with the capability to linearly
   scale-out with each added storage node and a special focus on petascale deep learning.
   See more at: github.com/NVIDIA/aistore
-baseurl: "/aistore"
+baseurl: "/"
 theme: minima
 header_pages:
   - cli/README.md

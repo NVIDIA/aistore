@@ -8,7 +8,7 @@ redirect_from:
 
 # Start, Stop, and monitor distributed parallel sorting (dSort)
 
-For background and in-depth presentation, please see this [document](/aistore/dsort/README.md).
+For background and in-depth presentation, please see this [document](/dsort/README.md).
 
 ## Table of Contents
 - [Generate Shards](#generate-shards)
@@ -45,9 +45,9 @@ The following table describes JSON/YAML keys which can be used in the specificat
 | `input_format` | `string` | name template for input shard | yes | |
 | `output_format` | `string` | name template for output shard | yes | |
 | `bck.name` | `string` | bucket name where shards objects are stored | yes | |
-| `bck.provider` | `string` | bucket backend provider, see [docs](/aistore/docs/providers.md) | no | `"ais"` |
+| `bck.provider` | `string` | bucket backend provider, see [docs](/docs/providers.md) | no | `"ais"` |
 | `output_bck.name` | `string` | bucket name where new output shards will be saved | no | same as `bck.name` |
-| `output_bck.provider` | `string` | bucket backend provider, see [docs](/aistore/docs/providers.md) | no | same as `bck.provider` |
+| `output_bck.provider` | `string` | bucket backend provider, see [docs](/docs/providers.md) | no | same as `bck.provider` |
 | `description` | `string` | description of dSort job | no | `""` |
 | `output_shard_size` | `string` | size (in bytes) of the output shard, can be in form of raw numbers `10240` or suffixed `10KB` | yes | |
 | `algorithm.kind` | `string` | determines which sorting algorithm dSort job uses, available are: `"alphanumeric"`, `"shuffle"`, `"content"` | no | `"alphanumeric"` |
@@ -64,7 +64,7 @@ The following table describes JSON/YAML keys which can be used in the specificat
 
 There's also the possibility to override some of the values from global `distributed_sort` config via job specification.
 All values are optional - if empty, the value from global `distributed_sort` config will be used.
-For more information refer to [configuration](/aistore/docs/configuration.md).
+For more information refer to [configuration](/docs/configuration.md).
 
 | Key | Type | Description |
 | --- | --- | --- |

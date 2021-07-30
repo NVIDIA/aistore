@@ -8,7 +8,7 @@ redirect_from:
 
 # User Account and Access management
 
-[AuthN](/aistore/cmd/authn/README.md) is AIS authorization server that can be deployed to manage user access to one or more AIS clusters.
+[AuthN](/cmd/authn/README.md) is AIS authorization server that can be deployed to manage user access to one or more AIS clusters.
 
 All commands (except `logout`) send requests to AuthN URL defined in AIS CLI configuration file. Configuration can be overridden with environment variable `AUTHN_URL`, e.g., `AUTHN_URL=http://10.0.0.20:52001 ais auth add ...`.
 
@@ -137,7 +137,7 @@ Issue a token for a user.
 After successful login, user's token is saved to CLI configuration directory (usually it is `~/.config/ais/`) with a filename `auth.token`.
 Next CLI runs automatically load and use the token for every request to AIS cluster.
 The saved token can be used by other applications, like `curl`.
-Please see [AuthN documentation](/aistore/cmd/authn/README.md) to read how to use AuthN API directly.
+Please see [AuthN documentation](/cmd/authn/README.md) to read how to use AuthN API directly.
 
 ## Log out
 

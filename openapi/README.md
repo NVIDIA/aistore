@@ -83,7 +83,7 @@ $ git checkout HEAD -- python/api-client
 
 First, ensure that you have followed [the instructions for generating the package](#how-to-generate-package).
 
-Next, ensure that your machine has a [local testing deployment of AIS](/aistore/README.md#local-non-containerized).
+Next, ensure that your machine has a [local testing deployment of AIS](/README.md#local-non-containerized).
 
 Note that you do not need to install the package to run tests.
 
@@ -112,7 +112,7 @@ $ pip install .
 
 This package works by creating python objects (called 'api client' in this document) representing a target or proxy.
 
-It is designed to provide a python interface of the same functionality as the [RESTful API](/aistore/docs/http_api.md)
+It is designed to provide a python interface of the same functionality as the [RESTful API](/docs/http_api.md)
 
 Operations on the client instance can be performed by using it to create another python object (called 'api instance' in this document).
 
@@ -179,21 +179,21 @@ First, create an api instance `bucket_api = ais_client.api.bucket_api.BucketApi(
 | Create ais bucket (proxy) | `bucket_api.perform_operation('mybucket', openapi_params(openapi_actions.CREATELB))` | ObjectPropertyList |
 | Destroy ais bucket (proxy) | `bucket_api.delete('mybucket', openapi_params(openapi_actions.DESTROYLB))` | None |
 | Rename ais bucket (proxy) | `bucket_api.perform_operation('oldname', openapi_params(openapi_actions.RENAMELB, name='newname'))` | ObjectPropertyList |
-| [Evict](/aistore/docs/bucket.md#evict-bucket) cloud bucket (proxy) | `bucket_api.delete('myS3bucket', openapi_params(openapi_actions.EVICTCB))` | None |
+| [Evict](/docs/bucket.md#evict-bucket) cloud bucket (proxy) | `bucket_api.delete('myS3bucket', openapi_params(openapi_actions.EVICTCB))` | None |
 | Set bucket props (proxy) | `bucket_api.set_properties('mybucket', openapi_params(openapi_actions.SETPROPS, value=openapi_models.BucketProps(provider="ais", checksum=openapi_models.BucketPropsCksum(checksum="inherit"))))` | None |
-| [Prefetch](/aistore/docs/bucket.md#prefetchevict-objects) a list of objects | `bucket_api.perform_operation('mybucket', openapi_params(openapi_actions.PREFETCH, value=openapi_models.ListParameters(objnames=["o1","o2","o3"])))` <sup>[3](#ftb3)</sup> | ObjectPropertyList |
-| [Prefetch](/aistore/docs/bucket.md#prefetchevict-objects) a range of objects | `bucket_api.perform_operation('mybucket', openapi_params(openapi_actions.PREFETCH, value=openapi_models.RangeParameters(template="__tst/test-{1000..2000}")))` <sup>[3](#ftb3)</sup> | None |
+| [Prefetch](/docs/bucket.md#prefetchevict-objects) a list of objects | `bucket_api.perform_operation('mybucket', openapi_params(openapi_actions.PREFETCH, value=openapi_models.ListParameters(objnames=["o1","o2","o3"])))` <sup>[3](#ftb3)</sup> | ObjectPropertyList |
+| [Prefetch](/docs/bucket.md#prefetchevict-objects) a range of objects | `bucket_api.perform_operation('mybucket', openapi_params(openapi_actions.PREFETCH, value=openapi_models.RangeParameters(template="__tst/test-{1000..2000}")))` <sup>[3](#ftb3)</sup> | None |
 | Delete a list of objects | `bucket_api.delete('mybucket', openapi_params(openapi_actions.DELETE, value=openapi_models.ListParameters(objnames=["o1","o2","o3"])))` <sup>[3](#ftb3)</sup> | None |
 | Delete a range of objects | `bucket_api.delete('mybucket', openapi_params(openapi_actions.DELETE, value=openapi_models.RangeParameters(prefix="__tst/test-{1000.2000}")))` <sup>[3](#ftb3)</sup> | None |
-| [Evict](/aistore/docs/bucket.md#prefetchevict-objects) a list of objects | `bucket_api.delete('mybucket', openapi_params(openapi_actions.EVICTOBJECTS, value=openapi_models.ListParameters(objnames=["o1","o2","o3"])))` <sup>[3](#ftb3)</sup> | None |
-| [Evict](/aistore/docs/bucket.md#prefetchevict-objects) a range of objects | `bucket_api.delete('mybucket', openapi_params(openapi_actions.EVICTOBJECTS, value=openapi_models.RangeParameters(prefix="__tst/test-{1000..2000}")))` <sup>[3](#ftb3)</sup> | None |
+| [Evict](/docs/bucket.md#prefetchevict-objects) a list of objects | `bucket_api.delete('mybucket', openapi_params(openapi_actions.EVICTOBJECTS, value=openapi_models.ListParameters(objnames=["o1","o2","o3"])))` <sup>[3](#ftb3)</sup> | None |
+| [Evict](/docs/bucket.md#prefetchevict-objects) a range of objects | `bucket_api.delete('mybucket', openapi_params(openapi_actions.EVICTOBJECTS, value=openapi_models.RangeParameters(prefix="__tst/test-{1000..2000}")))` <sup>[3](#ftb3)</sup> | None |
 | Get bucket props (proxy) | `bucket_api.get_properties_with_http_info('mybucket')[2]` | dict |
 
 <a name="ftb1">1</a>: Optional parameter `loc=true` can be used to retrieve just the ais buckets, this causes the `cloud` property to be the empty array
 
-<a name="ftb2">2</a>: See the [List Objects section](/aistore/docs/bucket.md#list-objects) for details.
+<a name="ftb2">2</a>: See the [List Objects section](/docs/bucket.md#list-objects) for details.
 
-<a name="ftb3">3</a>: See the [List/Range Operations section](/aistore/docs/batch.md#listrange-operations) for details.
+<a name="ftb3">3</a>: See the [List/Range Operations section](/docs/batch.md#listrange-operations) for details.
 
 #### Cluster
 
@@ -204,7 +204,7 @@ First, create an api instance `cluster_api = ais_client.api.cluster_api.ClusterA
 | Unregister storage target | cluster_api.unregister_target("15205:8083") | None |
 | Register storage target | `mNetInfo = openapi_models.NetInfo(node_ip_addr="172.16.175.41", daemon_port="8083", direct_url="http://172.16.175.41:8083")`<br>`cluster_api.register_target(openapi_models.Snode(daemon_id="43888:8083", public_net=mNetInfo, intra_control_net=mNetInfo, intra_data_net=mNetInfo))` | None |
 | Set primary proxy forcefully(primary proxy) | `cluster_api.set_primary_proxy("43888:8083")` | dict |
-| Set cluster-wide configuration (proxy) | `cluster_api.perform_operation(openapi_params(openapi_actions.SETCONFIG, name="stats_time", value="1s"))` <br> please see [runtime configuration](/aistore/docs/configuration.md#runtime-configuration) for the option list | None |
+| Set cluster-wide configuration (proxy) | `cluster_api.perform_operation(openapi_params(openapi_actions.SETCONFIG, name="stats_time", value="1s"))` <br> please see [runtime configuration](/docs/configuration.md#runtime-configuration) for the option list | None |
 | Shutdown cluster (proxy)| `cluster_api.perform_operation(openapi_params(openapi_actions.SHUTDOWN))` | None |
 | Rebalance cluster (proxy)| `cluster_api.perform_operation(openapi_params(openapi_actions.REBALANCE))` | None |
 
@@ -214,7 +214,7 @@ First, create an api instance `daemon_api = ais_client.api.daemon_api.DaemonApi(
 
 | Operation | Code Example | Return Type |
 | --- | --- | --- |
-| Update individual AIStore daemon (proxy or target) configuration | `daemon_api.perform_operation(openapi_params(openapi_actions.SETCONFIG, name="stats_time", value="1s"))` <br> please see [runtime configuration](/aistore/docs/configuration.md#runtime-configuration) for the option list | None |
+| Update individual AIStore daemon (proxy or target) configuration | `daemon_api.perform_operation(openapi_params(openapi_actions.SETCONFIG, name="stats_time", value="1s"))` <br> please see [runtime configuration](/docs/configuration.md#runtime-configuration) for the option list | None |
 | Shutdown cluster (proxy)| `daemon_api.perform_operation(openapi_params(openapi_actions.SHUTDOWN))` | None |
 | Disable mountpath in target | `daemon_api.modify_mountpath(openapi_params(openapi_actions.DISABLE, value="/mount/path"))` | None <sup>[1](#ftd1)</sup>  |
 | Enable mountpath in target | `daemon_api.modify_mountpath(openapi_params(openapi_actions.ENABLE, value="/mount/path"))` | None <sup>[1](#ftd1)</sup> |
@@ -244,7 +244,7 @@ Note that the `Copy object` operation (`object_api.put` with the kwargs `from_id
 
 First, create an api instance `sort_api = ais_client.api.sort_api.SortApi(proxyClient)`.
 
-See the files mentioned [here](/aistore/dsort/playground/README.md#python) for examples of how to use `sort_api`.
+See the files mentioned [here](/dsort/playground/README.md#python) for examples of how to use `sort_api`.
 
 #### Querying
 

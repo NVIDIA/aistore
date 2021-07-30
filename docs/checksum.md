@@ -10,7 +10,7 @@ redirect_from:
 
 1. `xxhash` is the system-default checksum.
 
-2. `xxhash` can be overridden on a bucket level; the following [CLI](/aistore/cmd/cli/README.md) example configures bucket `abc` with `sha256` and bucket `xyz` without any checksum protection whatsoever:
+2. `xxhash` can be overridden on a bucket level; the following [CLI](/cmd/cli/README.md) example configures bucket `abc` with `sha256` and bucket `xyz` without any checksum protection whatsoever:
 
 ```console
 $ ais bucket props ais://abc checksum.type  <TAB-TAB>

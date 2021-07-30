@@ -27,10 +27,10 @@ The ability to scale linearly with each added disk was, and remains, one of the 
 * [Amazon S3 API](https://docs.aws.amazon.com/s3/index.html) to run unmodified S3 apps;
 * FUSE client (`aisfs`) to access AIS objects as files;
 * arbitrary number of extremely lightweight access points;
-* easy-to-use [CLI](https://www.youtube.com/watch?v=VPIhQm2sMD8&ab_channel=AIStore) based on [auto-completions](/aistore/cmd/cli/README.md);
+* easy-to-use [CLI](https://www.youtube.com/watch?v=VPIhQm2sMD8&ab_channel=AIStore) based on [auto-completions](/cmd/cli/README.md);
 * automated cluster rebalancing upon: changes in cluster membership, drive failures and attachments, bucket renames;
-* [N-way mirroring (RAID-1), Reed–Solomon erasure coding, end-to-end data protection](/aistore/docs/storage_svcs.md).
-* [ETL offload](/aistore/docs/etl.md): running user-defined extract-transform-load workloads on (and by) performance-optimized storage cluster;
+* [N-way mirroring (RAID-1), Reed–Solomon erasure coding, end-to-end data protection](/docs/storage_svcs.md).
+* [ETL offload](/docs/etl.md): running user-defined extract-transform-load workloads on (and by) performance-optimized storage cluster;
 
 Also, AIStore:
 
@@ -49,9 +49,9 @@ Also, AIStore:
 
 AIS runs natively on Kubernetes and features open format - thus, the freedom to copy or move your data from AIS at any time using the familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
 
-For AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](/aistore/docs/overview.md) (where you can also find six alternative ways to work with existing datasets). Videos and **animated presentations** can be found at [videos](/aistore/docs/videos.md).
+For AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](/docs/overview.md) (where you can also find six alternative ways to work with existing datasets). Videos and **animated presentations** can be found at [videos](/docs/videos.md).
 
-Finally, [getting started](/aistore/docs/getting_started.md) with AIS takes only a few minutes.
+Finally, [getting started](/docs/getting_started.md) with AIS takes only a few minutes.
 
 ## Deployment options
 
@@ -61,31 +61,31 @@ The table below contains a few concrete examples:
 
 | Deployment option | Targeted audience and objective |
 | --- | ---|
-| [Local playground](/aistore/docs/getting_started.md#local-playground) | AIS developers and development, Linux or Mac OS |
+| [Local playground](/docs/getting_started.md#local-playground) | AIS developers and development, Linux or Mac OS |
 | Minimal production-ready deployment | This option utilizes preinstalled docker image and is targeting first-time users or researchers (who could immediately start training their models on smaller datasets) |
-| [Easy automated GCP/GKE deployment](/aistore/docs/getting_started.md#cloud-deployment) | Developers, first-time users, AI researchers |
+| [Easy automated GCP/GKE deployment](/docs/getting_started.md#cloud-deployment) | Developers, first-time users, AI researchers |
 | [Large-scale production deployment](https://github.com/NVIDIA/ais-k8s) | Requires Kubernetes and is provided (documented, automated) via a separate repository: [ais-k8s](https://github.com/NVIDIA/ais-k8s) |
 
-Further, there's the capability referred to as [global namespace](/aistore/providers.md#remote-ais-cluster). Simply put, as long as there’s HTTP connectivity, AIS clusters can be easily interconnected to “see” - i.e., *list*, *read*, *write*, *cache*, *evict* - each other's datasets. This ad-hoc capability, in turn, makes it possible to start small and gradually/incrementally build high-performance shared storage comprising petabytes.
+Further, there's the capability referred to as [global namespace](/providers.md#remote-ais-cluster). Simply put, as long as there’s HTTP connectivity, AIS clusters can be easily interconnected to “see” - i.e., *list*, *read*, *write*, *cache*, *evict* - each other's datasets. This ad-hoc capability, in turn, makes it possible to start small and gradually/incrementally build high-performance shared storage comprising petabytes.
 
-> For more discussion on supported deployments, please refer to [Getting Started](/aistore/docs/getting_started.md).
+> For more discussion on supported deployments, please refer to [Getting Started](/docs/getting_started.md).
 
 ## Observability
 
 There are multiple ways to monitor all aspects of AIS operation.
 
-For starters, AIS collects, logs, and reports via [StatsD](https://github.com/etsy/statsd) a fairly large and growing number of counters, latencies and throughputs including (but not limited to) those stats that reflect cluster recovery and global rebalancing, all [extended long-running operations](/aistore/xaction/README.md), and, of course, the basic read, write, list transactions, and more.
+For starters, AIS collects, logs, and reports via [StatsD](https://github.com/etsy/statsd) a fairly large and growing number of counters, latencies and throughputs including (but not limited to) those stats that reflect cluster recovery and global rebalancing, all [extended long-running operations](/xaction/README.md), and, of course, the basic read, write, list transactions, and more.
 
-> Logging interval is called `stats_time` (default `10s`) and is [configurable](/aistore/docs/configuration.md) on the level of both each specific node and the entire cluster.
+> Logging interval is called `stats_time` (default `10s`) and is [configurable](/docs/configuration.md) on the level of both each specific node and the entire cluster.
 
-In particular, all [eXtended actions](/aistore/xaction/README.md) support generic [API](/aistore/api/xaction.go) and [CLI](/aistore/cmd/cli/resources/job.md#show-job-statistics) to show both common counters (byte and object numbers) as well as operation-specific extended statistics.
+In particular, all [eXtended actions](/xaction/README.md) support generic [API](/api/xaction.go) and [CLI](/cmd/cli/resources/job.md#show-job-statistics) to show both common counters (byte and object numbers) as well as operation-specific extended statistics.
 
 > Batch operations that may take many seconds (minutes, sometimes hours) to execute are called *eXtended actions* or *xactions*. Examples include erasure coding or n-way mirroring a dataset, resharding and reshuffling a dataset, and many more.
 
 In addition, AIS subsystems integrate their own, subsystem-specific, stats - e.g.:
 
-* [dSort](/aistore/dsort/README.md)
-* [Downloader](/aistore/downloader/README.md)
+* [dSort](/dsort/README.md)
+* [Downloader](/downloader/README.md)
 
 Finally, global rebalance (that gets triggered by any membership changes - nodes joining, leaving, going down, etc.) can be further "visualized" via `ais show rebalance` CLI.
 
@@ -101,13 +101,13 @@ As far as Graphite/Grafana and Prometheus, AIS integrates with these popular bac
 
 In both of these cases, Grafana will be accessible at [localhost:3000](http://localhost:3000).
 
-> For information on AIS statistics, please see [Statistics, Collected Metrics, Visualization](/aistore/docs/metrics.md)
+> For information on AIS statistics, please see [Statistics, Collected Metrics, Visualization](/docs/metrics.md)
 
-> AIStore includes `aisloader` - the tool to stress-test and benchmark storage performance. For background, command-line options, and usage, please see [Load Generator](/aistore/bench/aisloader/README.md) and [How To Benchmark AIStore](/aistore/docs/howto_benchmark.md).
+> AIStore includes `aisloader` - the tool to stress-test and benchmark storage performance. For background, command-line options, and usage, please see [Load Generator](/bench/aisloader/README.md) and [How To Benchmark AIStore](/docs/howto_benchmark.md).
 
 ## Debug-Mode Observability
 
-For development and, more generally, for any non-production deployments AIS supports [building with debug](/aistore/Makefile), for instance:
+For development and, more generally, for any non-production deployments AIS supports [building with debug](/Makefile), for instance:
 
 ```sh
 $ MODE=debug make deploy
@@ -145,7 +145,7 @@ Configuration consists of cluster-wide (global) defaults and node-specific value
 
 Optionally and in addition, there's also a node-specific "config override" - a set of values that were changed for this node from global (inherited) defaults.
 
-[AIS configuration](/aistore/docs/configuration.md) is further described and illustrated in this [readme](/aistore/docs/configuration.md).
+[AIS configuration](/docs/configuration.md) is further described and illustrated in this [readme](/docs/configuration.md).
 
 It is important to note that configuring cluster for production requires careful consideration. For example, AIS supports 3 (**three**) logical networks and will, therefore, benefit, performance-wise, if provisioned with up to 3 isolated physical networks or VLANs. The logical networks are:
 
@@ -153,7 +153,7 @@ It is important to note that configuring cluster for production requires careful
 * intra-cluster control
 * intra-cluster data
 
-with the corresponding [JSON names](/aistore/deploy/dev/local/aisnode_config.sh), respectively:
+with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respectively:
 
 * `hostname`
 * `hostname_intra_control`
@@ -163,67 +163,67 @@ with the corresponding [JSON names](/aistore/deploy/dev/local/aisnode_config.sh)
 
 ## Assorted Tips
 
-* To enable an optional AIStore authentication server, execute `$ AUTH_ENABLED=true make deploy`. For information on AuthN server, please see [AuthN documentation](/aistore/docs/authn.md).
-* In addition to AIStore - the storage cluster, you can also deploy [aisfs](/aistore/cmd/aisfs/README.md) - to access AIS objects as files, and [AIS CLI](/aistore/cmd/cli/README.md) - to monitor, configure and manage AIS nodes and buckets.
-* AIS CLI is an easy-to-use command-line management tool supporting a growing number of commands and options (one of the first ones you may want to try could be `ais show cluster` - show the state and status of an AIS cluster). The CLI is documented in the [readme](/aistore/cmd/cli/README.md); getting started with it boils down to running `make cli` and following the prompts.
-* For more testing commands and options, please refer to the [testing README](/aistore/ais/tests/README.md).
-* For `aisnode` command-line options, see: [command-line options](/aistore/docs/command_line.md).
-* For helpful links and/or background on Go, AWS, GCP, and Deep Learning: [helpful links](/aistore/docs/helpful_links.md).
+* To enable an optional AIStore authentication server, execute `$ AUTH_ENABLED=true make deploy`. For information on AuthN server, please see [AuthN documentation](/docs/authn.md).
+* In addition to AIStore - the storage cluster, you can also deploy [aisfs](/cmd/aisfs/README.md) - to access AIS objects as files, and [AIS CLI](/cmd/cli/README.md) - to monitor, configure and manage AIS nodes and buckets.
+* AIS CLI is an easy-to-use command-line management tool supporting a growing number of commands and options (one of the first ones you may want to try could be `ais show cluster` - show the state and status of an AIS cluster). The CLI is documented in the [readme](/cmd/cli/README.md); getting started with it boils down to running `make cli` and following the prompts.
+* For more testing commands and options, please refer to the [testing README](/ais/tests/README.md).
+* For `aisnode` command-line options, see: [command-line options](/docs/command_line.md).
+* For helpful links and/or background on Go, AWS, GCP, and Deep Learning: [helpful links](/docs/helpful_links.md).
 * And again, run `make help` to find out how to build, run, and test AIStore and tools.
 
 ## Guides and References
 
-- [AIS Overview](/aistore/docs/overview.md)
-- [Tutorials](/aistore/docs/tutorials/README.md)
-- [Videos](/aistore/docs/videos.md)
-- [CLI](/aistore/cmd/cli/README.md)
-  - [Create, destroy, list, and other operations on buckets](/aistore/cmd/cli/resources/bucket.md)
-  - [GET, PUT, APPEND, PROMOTE, and other operations on objects](/aistore/cmd/cli/resources/object.md)
-  - [Cluster and Node management](/aistore/cmd/cli/resources/cluster.md)
-  - [Mountpath (Disk) management](/aistore/cmd/cli/resources/mpath.md)
-  - [Attach, Detach, and monitor remote clusters](/aistore/cmd/cli/resources/remote.md)
-  - [Start, Stop, and monitor downloads](/aistore/cmd/cli/resources/download.md)
-  - [Distributed Sort](/aistore/cmd/cli/resources/dsort.md)
-  - [User account and access management](/aistore/cmd/cli/resources/auth.md)
-  - [Job (xaction) management](/aistore/cmd/cli/resources/job.md)
-- [ETL with AIStore](/aistore/docs/etl.md)
-- [On-Disk Layout](/aistore/docs/on-disk-layout.md)
-- [System Files](/aistore/docs/sysfiles.md)
-- [Command line parameters](/aistore/docs/command_line.md)
-- [AIS Load Generator: integrated benchmark tool](/aistore/bench/aisloader/README.md)
-- [Batch List and Range Operations: Prefetch, and more](/aistore/docs/batch.md)
-- [Object checksums: Brief Theory of Operations](/aistore/docs/checksum.md)
-- [Configuration](/aistore/docs/configuration.md)
-- [Traffic patterns](/aistore/docs/traffic_patterns.md)
-- [Highly available control plane](/aistore/docs/ha.md)
-- [How to benchmark](/aistore/docs/howto_benchmark.md)
-- [RESTful API](/aistore/docs/http_api.md)
-- [FUSE with AIStore](/aistore/cmd/aisfs/README.md)
-- [Joining AIS cluster](/aistore/docs/join_cluster.md)
-- [Removing a node from AIS cluster](/aistore/docs/leave_cluster.md)
-- [AIS Buckets: definition, operations, properties](/aistore/docs/bucket.md#bucket)
-- [Statistics, Collected Metrics, Visualization](/aistore/docs/metrics.md)
-- [Performance: Tuning and Testing](/aistore/docs/performance.md)
-- [Rebalance](/aistore/docs/rebalance.md)
-- [Storage Services](/aistore/docs/storage_svcs.md)
-- [Extended Actions (xactions)](/aistore/xaction/README.md)
-- [Integrated Internet Downloader](/aistore/downloader/README.md)
-- [Docker for AIS developers](/aistore/docs/docker_main.md)
-- [Troubleshooting Cluster Operation](/aistore/docs/troubleshooting.md)
+- [AIS Overview](/docs/overview.md)
+- [Tutorials](/docs/tutorials/README.md)
+- [Videos](/docs/videos.md)
+- [CLI](/cmd/cli/README.md)
+  - [Create, destroy, list, and other operations on buckets](/cmd/cli/resources/bucket.md)
+  - [GET, PUT, APPEND, PROMOTE, and other operations on objects](/cmd/cli/resources/object.md)
+  - [Cluster and Node management](/cmd/cli/resources/cluster.md)
+  - [Mountpath (Disk) management](/cmd/cli/resources/mpath.md)
+  - [Attach, Detach, and monitor remote clusters](/cmd/cli/resources/remote.md)
+  - [Start, Stop, and monitor downloads](/cmd/cli/resources/download.md)
+  - [Distributed Sort](/cmd/cli/resources/dsort.md)
+  - [User account and access management](/cmd/cli/resources/auth.md)
+  - [Job (xaction) management](/cmd/cli/resources/job.md)
+- [ETL with AIStore](/docs/etl.md)
+- [On-Disk Layout](/docs/on-disk-layout.md)
+- [System Files](/docs/sysfiles.md)
+- [Command line parameters](/docs/command_line.md)
+- [AIS Load Generator: integrated benchmark tool](/bench/aisloader/README.md)
+- [Batch List and Range Operations: Prefetch, and more](/docs/batch.md)
+- [Object checksums: Brief Theory of Operations](/docs/checksum.md)
+- [Configuration](/docs/configuration.md)
+- [Traffic patterns](/docs/traffic_patterns.md)
+- [Highly available control plane](/docs/ha.md)
+- [How to benchmark](/docs/howto_benchmark.md)
+- [RESTful API](/docs/http_api.md)
+- [FUSE with AIStore](/cmd/aisfs/README.md)
+- [Joining AIS cluster](/docs/join_cluster.md)
+- [Removing a node from AIS cluster](/docs/leave_cluster.md)
+- [AIS Buckets: definition, operations, properties](/docs/bucket.md#bucket)
+- [Statistics, Collected Metrics, Visualization](/docs/metrics.md)
+- [Performance: Tuning and Testing](/docs/performance.md)
+- [Rebalance](/docs/rebalance.md)
+- [Storage Services](/docs/storage_svcs.md)
+- [Extended Actions (xactions)](/xaction/README.md)
+- [Integrated Internet Downloader](/downloader/README.md)
+- [Docker for AIS developers](/docs/docker_main.md)
+- [Troubleshooting Cluster Operation](/docs/troubleshooting.md)
 
 ## Selected Package READMEs
 
-- [Package `aisloader`](/aistore/bench/aisloader/README.md)
-- [Package `api`](/aistore/api/README.md)
-- [Package `cli`](/aistore/cmd/cli/README.md)
-- [Package `fuse`](/aistore/cmd/aisfs/README.md)
-- [Package `downloader`](/aistore/downloader/README.md)
-- [Package `memsys`](/aistore/memsys/README.md)
-- [Package `transport`](/aistore/transport/README.md)
-- [Package `dSort`](/aistore/dsort/README.md)
-- [Package `etl`](/aistore/etl/README.md)
-- [Package `xaction`](/aistore/xaction/README.md)
-- [Package `xmeta`](/aistore/cmd/xmeta/README.md)
+- [Package `aisloader`](/bench/aisloader/README.md)
+- [Package `api`](/api/README.md)
+- [Package `cli`](/cmd/cli/README.md)
+- [Package `fuse`](/cmd/aisfs/README.md)
+- [Package `downloader`](/downloader/README.md)
+- [Package `memsys`](/memsys/README.md)
+- [Package `transport`](/transport/README.md)
+- [Package `dSort`](/dsort/README.md)
+- [Package `etl`](/etl/README.md)
+- [Package `xaction`](/xaction/README.md)
+- [Package `xmeta`](/cmd/xmeta/README.md)
 
 ## License
 

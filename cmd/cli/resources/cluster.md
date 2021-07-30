@@ -154,7 +154,7 @@ Join a proxy to the cluster.
 Join a target to the cluster.
 
 Note: The node will try to join the cluster using an ID it detects (either in the filesystem's xattrs or on disk) or generates for itself.
-If you would like to specify an ID, you can do so while starting the [`aisnode` executable](/aistore/docs/command_line.md).
+If you would like to specify an ID, you can do so while starting the [`aisnode` executable](/docs/command_line.md).
 
 ### Examples
 
@@ -260,7 +260,7 @@ or
 `ais cluster attach ALIAS=URL [ALIAS=URL...]`
 
 Attach a remote AIS cluster to this one by the remote cluster public URL. Alias(a user-defined name) can be used instead of cluster UUID for convenience.
-For more details and background on *remote clustering*, please refer to this [document](/aistore/docs/providers.md).
+For more details and background on *remote clustering*, please refer to this [document](/docs/providers.md).
 
 ### Examples
 

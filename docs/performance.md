@@ -192,7 +192,7 @@ Metadata write policy - json tag `md_write` - was introduced specifically to sup
 | `delayed`   | cache and flush when not accessed for a while (see also: [noatime](#noatime)) |
 | `never`     | never write but always keep metadata in memory (aka "transient") |
 
-> For the most recently updated enumeration, please see the [source](/aistore/cmn/api_const.go).
+> For the most recently updated enumeration, please see the [source](/cmn/api_const.go).
 
 # Performance testing
 

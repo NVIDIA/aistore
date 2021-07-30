@@ -23,13 +23,13 @@ This tutorial consists of couple steps:
 
 Here is a general overview of these steps:
 
-![ETL Pipeline](/aistore/docs/images/etl-pipeline.png)
+![ETL Pipeline](/docs/images/etl-pipeline.png)
 
 ## Prerequisites
 
 * AIStore cluster deployed on Kubernetes. We recommend following guide below.
   * [Deploy AIStore on the cloud](https://github.com/NVIDIA/ais-k8s/blob/master/terraform/README.md)
-  * [Deploy AIStore on local Kuberenetes cluster](/aistore/docs/getting_started.md#on-premise-deployment)
+  * [Deploy AIStore on local Kuberenetes cluster](/docs/getting_started.md#on-premise-deployment)
 
 ## Prepare dataset
 
@@ -52,7 +52,7 @@ PUT "raw-train.tar" into bucket "imagenet"
 ## Prepare ETL code
 
 As we have ImageNet prepared now we need an ETL code that will do the transformation.
-Here we will use `python3` runtime to install `torch` and `torchvision` packages. 
+Here we will use `python3` runtime to install `torch` and `torchvision` packages.
 
 Our transform code will look like this (`code.py`):
 ```python

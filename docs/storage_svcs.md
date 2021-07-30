@@ -19,7 +19,7 @@ redirect_from:
 
 ## Storage Services
 
-By default, buckets inherit [global configuration](/aistore/deploy/dev/local/aisnode_config.sh). However, several distinct sections of this global configuration can be overridden at startup or at runtime on a per bucket basis. The list includes checksumming, LRU, erasure coding, and local mirroring - please see the following sections for details.
+By default, buckets inherit [global configuration](/deploy/dev/local/aisnode_config.sh). However, several distinct sections of this global configuration can be overridden at startup or at runtime on a per bucket basis. The list includes checksumming, LRU, erasure coding, and local mirroring - please see the following sections for details.
 
 ### Notation
 
@@ -64,7 +64,7 @@ To revert bucket's entire configuration back to global (configurable) defaults, 
 $ ais bucket props <bucket-name> --reset
 ```
 
-In effect, resetting bucket properties is equivalent to populating all properties with the values from the corresponding sections of the [global configuration](/aistore/deploy/dev/local/aisnode_config.sh).
+In effect, resetting bucket properties is equivalent to populating all properties with the values from the corresponding sections of the [global configuration](/deploy/dev/local/aisnode_config.sh).
 
 ## Erasure coding
 
@@ -139,7 +139,7 @@ In other words, AIS n-way mirroring is intended to withstand loss of disks, not 
 
 The service ensures is that for any given object there will be *no two replicas* sharing the same local disk.
 
-> Unlike [erasure coding](#erasure-coding) that takes care of distributing redundant content across *different* clustered nodes, local mirror is, as the name implies, local. When a bucket is [configured as a mirror](/aistore/deploy/dev/local/aisnode_config.sh), objects placed into this bucket get locally replicated and the replicas are stored in local filesystems.
+> Unlike [erasure coding](#erasure-coding) that takes care of distributing redundant content across *different* clustered nodes, local mirror is, as the name implies, local. When a bucket is [configured as a mirror](/deploy/dev/local/aisnode_config.sh), objects placed into this bucket get locally replicated and the replicas are stored in local filesystems.
 
 > As aside, note that AIS storage targets can be deployed to utilize Linux LVMs that provide a variety of RAID/mirror schemas.
 
@@ -151,7 +151,7 @@ $ ais job start mirror --copies 2 ais://b
 $ ais job start mirror --copies 3 ais://c
 ```
 
-The operations (above) are in fact [extended actions](/aistore/xaction/README.md) that run asynchronously. Both Cloud and ais buckets are supported. You can monitor completion of those operations via generic [xaction API](/aistore/xaction/README.md).
+The operations (above) are in fact [extended actions](/xaction/README.md) that run asynchronously. Both Cloud and ais buckets are supported. You can monitor completion of those operations via generic [xaction API](/xaction/README.md).
 
 Subsequently, all PUTs into an n-way configured bucket also generate **n** copies for all newly created objects. Which also goes to say that the ("makencopies") operation, in addition to creating or destroying replicas of existing objects will also automatically re-enable(if n > 1) or disable (if n == 1) mirroring as far as subsequent PUTs are concerned.
 
@@ -183,7 +183,7 @@ Any of the supported options can be utilized at any time (and without downtime) 
 
 1. **cloud backend**  - [Backend Bucket](bucket.md#backend-bucket)
 2. **mirroring** - [N-way mirror](#n-way-mirror)
-3. **copying buckets**  - [Copy Bucket](/aistore/cmd/cli/resources/bucket.md#copy-bucket)
+3. **copying buckets**  - [Copy Bucket](/cmd/cli/resources/bucket.md#copy-bucket)
 4. **erasure coding** - [Erasure coding](#erasure-coding)
 
 For instance, you first could start with plain mirroring via `ais job start mirror BUCKET --copies N`, where N would be less or equal the number of target mountpaths (disks).

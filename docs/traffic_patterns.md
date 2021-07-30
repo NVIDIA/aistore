@@ -41,7 +41,7 @@ Beyond these 5 (five) common steps the similarity between `GET` and `PUT` reques
 
 > Consistency of the Read operation (vs Write/Delete/Append) is properly enforced.
 
-![](/aistore/docs/images/ais-get-flow.png)
+![](/docs/images/ais-get-flow.png)
 
 ### Write
 
@@ -52,7 +52,7 @@ Beyond these 5 (five) common steps the similarity between `GET` and `PUT` reques
 8. When the object streaming has finished, the target sends the new version of the object to the Cloud.
 9. The target then renames the temporary work file to the fully-qualified name, writes extended attributes (which include versioning and checksum), and commits the PUT transaction.
 
-![](/aistore/docs/images/ais-put-flow.png)
+![](/docs/images/ais-put-flow.png)
 
 > Consistency of the Write operation (vs Read/Delete/Append) is properly enforced.
 
@@ -72,4 +72,4 @@ In contrast with the Read and Write datapath, `list-objects` flow "engages" all 
    The proxy also *buffers* those `list-objects` entries that do not fit one page (which is limited in size - see above).
    The proxy may also *cache* the entries for reuse across multiple clients and requests.
 
-![](/aistore/docs/images/ais-list-flow.png)
+![](/docs/images/ais-list-flow.png)

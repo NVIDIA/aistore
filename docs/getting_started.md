@@ -57,7 +57,7 @@ Finally, the [repository](https://github.com/NVIDIA/ais-k8s) hosts [Kubernetes O
 
 ## Minimal all-in-one-docker Deployment
 
-This option has the unmatched convenience of requiring an absolute minimum time and resources - please see this [README](/aistore/deploy/prod/docker/single/README.md) for details.
+This option has the unmatched convenience of requiring an absolute minimum time and resources - please see this [README](/deploy/prod/docker/single/README.md) for details.
 
 ## Local Playground
 
@@ -66,7 +66,7 @@ Local AIStore playground is not intended for production clusters and is not mean
 
 The following [video](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube video)") gives a quick intro to AIStore, along with a brief demo of the local playground and development environment.
 
-[![AIStore Developer Playground](/aistore/docs/images/dev-playground-400.png)](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube video)")
+[![AIStore Developer Playground](/docs/images/dev-playground-400.png)](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube video)")
 
 ### Deployment Script
 
@@ -81,11 +81,11 @@ $ ./deploy/scripts/clean_deploy.sh
 where:
 
 * `go get` installs sources and dependencies under your [$GOPATH](https://golang.org/cmd/go/#hdr-GOPATH_environment_variable).
-* [`clean_deploy.sh`](/aistore/docs/development.md#clean-deploy) builds various AIStore binaries (such as `aisnode` and `cli`)
+* [`clean_deploy.sh`](/docs/development.md#clean-deploy) builds various AIStore binaries (such as `aisnode` and `cli`)
 and then deploys a local cluster with 5 proxies and 5 targets by default.
 
-To specify the number of simulated nodes, you can run `clean_deploy.sh --nproxies 3 --ntargets 3`. To see more options 
-that `clean_deploy.sh` provides, [refer to its documentation](/aistore/docs/development.md#clean-deploy)
+To specify the number of simulated nodes, you can run `clean_deploy.sh --nproxies 3 --ntargets 3`. To see more options
+that `clean_deploy.sh` provides, [refer to its documentation](/docs/development.md#clean-deploy)
 
 ### Manual Deployment
 
@@ -115,7 +115,7 @@ Building aisnode: version=df24df77 providers=
 
 `make kill` will terminate local AIStore if it's already running.
 
-For more development options and tools, please refer to the [development docs](/aistore/docs/development.md).
+For more development options and tools, please refer to the [development docs](/docs/development.md).
 
 ### Testing your cluster
 
@@ -136,9 +136,9 @@ $ BUCKET=aws://myS3bucket go test ./ais/tests -v -run=download
 
 ## Kubernetes Playground
 
-In our development and testing, we make use of [Minikube](https://kubernetes.io/docs/tutorials/hello-minikube/) and the capability, further documented [here](/aistore/deploy/dev/k8s/README.md), to run Kubernetes cluster on a single development machine. There's a distinct advantage that AIStore extensions that require Kubernetes - such as [Extract-Transform-Load](etl.md), for example - can be developed rather efficiently.
+In our development and testing, we make use of [Minikube](https://kubernetes.io/docs/tutorials/hello-minikube/) and the capability, further documented [here](/deploy/dev/k8s/README.md), to run Kubernetes cluster on a single development machine. There's a distinct advantage that AIStore extensions that require Kubernetes - such as [Extract-Transform-Load](etl.md), for example - can be developed rather efficiently.
 
-* [AIStore on Minikube](/aistore/deploy/dev/k8s/README.md)
+* [AIStore on Minikube](/deploy/dev/k8s/README.md)
 
 ## HTTPS
 
@@ -168,10 +168,10 @@ $ AIS_ENDPOINT=https://localhost:8080 AIS_SKIP_VERIFY_CRT=true BUCKET=tmp go tes
 
 ## Build, Make and Development Tools
 
-As noted, the project utilizes GNU `make` to build and run things both locally and remotely (e.g., when deploying AIStore via [Kubernetes](/aistore/deploy/dev/k8s/Dockerfile). As the very first step, run `make help` for help on:
+As noted, the project utilizes GNU `make` to build and run things both locally and remotely (e.g., when deploying AIStore via [Kubernetes](/deploy/dev/k8s/Dockerfile). As the very first step, run `make help` for help on:
 
 * **building** AIS binary (called `aisnode`) deployable as both a storage target **or** a proxy/gateway;
-* **building** [CLI](/aistore/cmd/cli/README.md), [aisfs](/aistore/cmd/aisfs/README.md), and benchmark binaries;
+* **building** [CLI](/cmd/cli/README.md), [aisfs](/cmd/aisfs/README.md), and benchmark binaries;
 
 In particular, the `make` provides a growing number of developer-friendly commands to:
 
@@ -193,6 +193,6 @@ To that end, each AIS node at startup loads and parses [cgroup](https://www.kern
 
 Further, given the container's cgroup/memory limitation, each AIS node adjusts the amount of memory available for itself.
 
-> Limits on memory may affect [dSort](/aistore/dsort/README.md) performance forcing it to "spill" the content associated with in-progress resharding into local drives. The same is true for erasure-coding that also requires memory to rebuild objects from slices, etc.
+> Limits on memory may affect [dSort](/dsort/README.md) performance forcing it to "spill" the content associated with in-progress resharding into local drives. The same is true for erasure-coding that also requires memory to rebuild objects from slices, etc.
 
-> For technical details on AIS memory management, please see [this readme](/aistore/memsys/README.md).
+> For technical details on AIS memory management, please see [this readme](/memsys/README.md).

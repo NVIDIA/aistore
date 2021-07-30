@@ -16,7 +16,7 @@ We refer to those ways as [quick-start mode](#quick-start-ais-cluster) and [deve
 
 Create a containerized deployment of AIStore within seconds.
 The minimum requirements to get this working is to have Docker installed.
-If you don't have Docker and Docker-Compose installed, please see [Getting started with Docker.](/aistore/docs/docker_main.md)
+If you don't have Docker and Docker-Compose installed, please see [Getting started with Docker.](/docs/docker_main.md)
 
 > For some tests, AWS config and credential files are needed
 
@@ -71,7 +71,7 @@ Use the `./stop_docker.sh` script to stop the AIStore cluster(s) that were deplo
 
 ## Requirements
 
-> Install Docker and Docker-Compose prior to deploying a cluster. For setting up Docker services please read [Getting started with Docker.](/aistore/docs/docker_main.md)
+> Install Docker and Docker-Compose prior to deploying a cluster. For setting up Docker services please read [Getting started with Docker.](/docs/docker_main.md)
 
 [`$GOPATH`](https://golang.org/doc/code.html#GOPATH) environment variable must be defined before starting cluster deployment. Docker uses the `$GOPATH/src` directory as a bind mount for the container. The container at start builds new binaries from the current sources.
 
@@ -112,7 +112,7 @@ Note:
 * If the `-s` or `--single` and `-m` or `--multi` flag are used, then multiple networks will take precedence
 * Be sure that the aws credentials and configuration files are located outside of the script directory. The script copies AWS credentials and configuration from the provided location to `/tmp/docker_ais/aws.env` and passes this file to each container.
 
-Please see [main AIStore README](/aistore/docs/configuration.md) for more information about testing mode.
+Please see [main AIStore README](/docs/configuration.md) for more information about testing mode.
 
 Example Usage:
 
@@ -179,7 +179,7 @@ Thus, to see the `/tmp/ais` folder of container `ais${i}\_${target,proxy}\_${j}`
 
 ## Extra configuration
 
-It is possible that default settings do not work in specific cases, e.g, default networks cannot be used by AIStore container (default is `172.50.0.0/24` subnet). To fix this you can tune up variables in [deployment script](/aistore/deploy/dev/docker/deploy_docker.sh).
+It is possible that default settings do not work in specific cases, e.g, default networks cannot be used by AIStore container (default is `172.50.0.0/24` subnet). To fix this you can tune up variables in [deployment script](/deploy/dev/docker/deploy_docker.sh).
 
 Useful script variables:
 
@@ -213,7 +213,7 @@ $ BUCKET=vlocal go test -v ./tests -count 1 -p 1 -timeout 1h -url=http://172.51.
 
 ## Running benchmark tests in the Docker environment
 
-AIStore Docker clusters can also be deployed in Dry-Run mode. These modes can be activated either through the interactive interface or by passing in `-nodiskio`. See more about benchmark tests, see [AIS Loader](/aistore/bench/aisloader/README.md)
+AIStore Docker clusters can also be deployed in Dry-Run mode. These modes can be activated either through the interactive interface or by passing in `-nodiskio`. See more about benchmark tests, see [AIS Loader](/bench/aisloader/README.md)
 
 ## Utility Scripts
 

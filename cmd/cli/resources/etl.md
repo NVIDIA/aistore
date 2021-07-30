@@ -8,7 +8,7 @@ redirect_from:
 
 # CLI Reference for ETLs
 This section lists ETL management operations the AIS CLI, with `ais etl`.
-For more information and examples, please refer to [the ETL documentation](/aistore/docs/etl.md).
+For more information and examples, please refer to [the ETL documentation](/docs/etl.md).
 
 ## Table of Contents
 - [Initialize ETL](#initialize-etl)
@@ -22,7 +22,7 @@ For more information and examples, please refer to [the ETL documentation](/aist
 
 `ais etl init SPEC_FILE`
 
-Init ETL with Pod YAML specification file. The `metadata.name` attribute in the specification is used as unique ID for ETL (ref: [here](/aistore/docs/etl.md#etl-name-specifications) for information on valid ETL name).
+Init ETL with Pod YAML specification file. The `metadata.name` attribute in the specification is used as unique ID for ETL (ref: [here](/docs/etl.md#etl-name-specifications) for information on valid ETL name).
 
 Note: Currently, only one ETL can be run at a time. To run new ETLs, [stop any existing ETL](#stop-etl).
 
@@ -55,7 +55,7 @@ JGHEoo89gg
 
 `ais etl build --from-file=CODE_FILE --runtime=RUNTIME [--deps-file=DEPS_FILE] [--name=UNIQUE_ID]`
 
-Builds and initializes ETL from provided `CODE_FILE` that contains a transformation function named `transform`. The `--name` parameter is used to assign a user defined unique ID (ref: [here](/aistore/docs/etl.md#etl-name-specifications) for information on valid ETL name).
+Builds and initializes ETL from provided `CODE_FILE` that contains a transformation function named `transform`. The `--name` parameter is used to assign a user defined unique ID (ref: [here](/docs/etl.md#etl-name-specifications) for information on valid ETL name).
 The `transform` function must take `input_bytes` (raw bytes of the objects) as parameters and return the transformed object (also raw bytes that will be saved into a new object).
 
 Note: Currently, only one ETL can be run at a time. To run new ETLs, [stop any existing ETL](#stop-etl).
@@ -134,7 +134,7 @@ $ cat output.txt
 ### Examples
 
 #### Transform bucket with ETL
- 
+
 Transform every object from `src_bucket` with ETL and put new objects to `dst_bucket`.
 
 ```console

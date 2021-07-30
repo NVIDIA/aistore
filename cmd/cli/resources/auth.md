@@ -7,7 +7,7 @@ redirect_from:
 ---
 
 # CLI Reference for the Authentication Server
-For more information and examples, please refer to [the AuthN documentation](/aistore/docs/authn.md).
+For more information and examples, please refer to [the AuthN documentation](/docs/authn.md).
 
 ## Table of contents
 
@@ -34,7 +34,7 @@ For more information and examples, please refer to [the AuthN documentation](/ai
 
 ## User Account and Access management
 
-[AuthN](/aistore/docs/authn.md) is an AIS authorization server that can be deployed to manage user access to one or more AIS clusters.
+[AuthN](/docs/authn.md) is an AIS authorization server that can be deployed to manage user access to one or more AIS clusters.
 
 All commands (except `logout`) send requests to AuthN URL defined in the AIS CLI configuration file.
 Configuration can be overridden with environment variable `AUTHN_URL`, e.g., `AUTHN_URL=http://10.0.0.20:52001 ais auth add ...`.
@@ -230,7 +230,7 @@ Issue a token for a user.
 After successful login, the user's token is saved to CLI configuration directory (typically `~/.config/ais/`) with a filename `auth.token`.
 Subsequent `ais` commands automatically load and use the token for requests to the AIS cluster.
 The saved token can be used by other applications, like `curl`.
-Please see [AuthN documentation](/aistore/docs/authn.md) to read how to use AuthN API directly.
+Please see [AuthN documentation](/docs/authn.md) to read how to use AuthN API directly.
 
 By default, the AuthN token expiration is 24 hours.
 Use option `-e` or `--expire` to generate a token with custom expiration time.

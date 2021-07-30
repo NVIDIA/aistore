@@ -27,7 +27,7 @@ Further:
 
 * For additional information on working with buckets, please refer to [bucket readme](bucket.md).
 * For API reference, see [the RESTful API reference and examples](http_api.md).
-* For AIS command-line management, see [CLI](/aistore/cmd/cli/README.md).
+* For AIS command-line management, see [CLI](/cmd/cli/README.md).
 
 ## Remote AIS cluster
 
@@ -132,7 +132,7 @@ Hadoop and HDFS is well known and widely used software for distributed processin
 For years, it has been considered as a standard for big data.
 
 HDFS backend provider is a way to access files contained inside the HDFS cluster from AIStore.
-Here we will talk about standard configuration and usages (see also [full tutorial on HDFS provider](/aistore/docs/tutorials/various/hdfs_backend.md)).
+Here we will talk about standard configuration and usages (see also [full tutorial on HDFS provider](/docs/tutorials/various/hdfs_backend.md)).
 
 ### Configuration
 

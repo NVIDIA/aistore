@@ -21,7 +21,7 @@ Filesystem check includes the following tests: availability, reading existing fi
 
 ## Getting started
 
-Check FSHC configuration before deploying a cluster. All settings are in the section `fschecker` of [AIStore configuration file](/aistore/deploy/dev/local/aisnode_config.sh)
+Check FSHC configuration before deploying a cluster. All settings are in the section `fschecker` of [AIStore configuration file](/deploy/dev/local/aisnode_config.sh)
 
 | Name | Default value | Description |
 |---|---|---|

@@ -65,9 +65,9 @@ $ ais show config CASGt8088 --type local
 PROPERTY                         VALUE
 confdir                          /home/divaturi/.ais8
 log_dir                          /tmp/ais/8/log
-host_net.hostname                
-host_net.hostname_intra_control  
-host_net.hostname_intra_data     
+host_net.hostname
+host_net.hostname_intra_control
+host_net.hostname_intra_data
 host_net.port                    8088
 host_net.port_intra_control      9088
 host_net.port_intra_data         10088
@@ -132,7 +132,7 @@ lru.enabled              true
 
 Set a configuration on the global configuration by specifying key-value pairs.
 Note that local overrides (set with `ais config node`) will persist. Use `ais config reset` to remove all overrides.
-For the list of available runtime configurations, see [here](/aistore/docs/configuration.md#runtime-configuration).
+For the list of available runtime configurations, see [here](/docs/configuration.md#runtime-configuration).
 
 Key and value can be separated with `=` character or with a space.
 The former case supports both short and fully-qualified option names.
@@ -155,7 +155,7 @@ Config has been updated successfully.
 
 Set a local configuration override for a specific daemon by specifying key-value pairs.
 Even when the global (i.e. cluster) configuration is updated, these overrides will persist. Use `ais config reset` to remove all overrides.
-For the list of available runtime configurations, see [here](/aistore/docs/configuration.md#runtime-configuration).
+For the list of available runtime configurations, see [here](/docs/configuration.md#runtime-configuration).
 
 Key and value can be separated with `=` character or with a space.
 The former case supports both short and fully-qualified option names.

@@ -64,8 +64,8 @@ The primary proxy election process is as follows:
 
 ### Non-electable gateways
 
-AIStore cluster can be *stretched* to collocate its redundant gateways with the compute nodes. Those non-electable local gateways ([AIStore configuration](/aistore/deploy/dev/local/aisnode_config.sh)) will only serve as access points but will never take on the responsibility of leading the cluster.
+AIStore cluster can be *stretched* to collocate its redundant gateways with the compute nodes. Those non-electable local gateways ([AIStore configuration](/deploy/dev/local/aisnode_config.sh)) will only serve as access points but will never take on the responsibility of leading the cluster.
 
 ### Metasync
 
-By design, AIStore does not have a centralized (SPOF) shared cluster-level metadata. The metadata consists of versioned objects: cluster map, buckets (names and properties), authentication tokens. In AIStore, these objects are consistently replicated across the entire cluster – the component responsible for this is called [metasync](/aistore/ais/metasync.go). AIStore metasync makes sure to keep cluster-level metadata in-sync at all times.
+By design, AIStore does not have a centralized (SPOF) shared cluster-level metadata. The metadata consists of versioned objects: cluster map, buckets (names and properties), authentication tokens. In AIStore, these objects are consistently replicated across the entire cluster – the component responsible for this is called [metasync](/ais/metasync.go). AIStore metasync makes sure to keep cluster-level metadata in-sync at all times.

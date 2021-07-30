@@ -8,7 +8,7 @@ redirect_from:
 
 # Attach, Detach, and monitor remote clusters
 
-For details and background on *remote clustering*, please refer to this [document](/aistore/docs/providers.md).
+For details and background on *remote clustering*, please refer to this [document](/docs/providers.md).
 
 ## Attach remote cluster
 

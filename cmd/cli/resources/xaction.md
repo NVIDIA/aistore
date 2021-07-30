@@ -10,7 +10,7 @@ redirect_from:
 
 Batch operations that may take many seconds (minutes, hours) to execute are called eXtended actions or *xactions*.
 
-AIS *xactions* run asynchronously, have one of the enumerated kinds, start/stop times, and xaction-specific statistics. For more information, please refer to this [document](/aistore/xaction/README.md).
+AIS *xactions* run asynchronously, have one of the enumerated kinds, start/stop times, and xaction-specific statistics. For more information, please refer to this [document](/xaction/README.md).
 
 ## Start xaction
 

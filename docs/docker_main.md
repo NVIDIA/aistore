@@ -8,7 +8,7 @@ redirect_from:
 
 ## Introduction
 
-AIStore can be run as a cluster of Docker containers. There are two modes of operation: development and quick-start. They can be found in the [`deploy/dev/docker`](/aistore/deploy/dev/docker) directory.
+AIStore can be run as a cluster of Docker containers. There are two modes of operation: development and quick-start. They can be found in the [`deploy/dev/docker`](/deploy/dev/docker) directory.
 
 ### Development Mode
 This mode is currently used for development purposes.
@@ -17,7 +17,7 @@ All docker containers mount the same host's AIStore source directory, and then e
 > The development mode is currently being maintained and updated.
 
 ### Quick Start Mode
-Use this mode if you would like to set up a containerized, one-proxy, one-target deployment of AIStore within seconds. [See quick start AIS with Docker](/aistore/deploy/dev/docker/README.md#quick-start-ais-cluster). You just need Docker installed to quick-start AIS.
+Use this mode if you would like to set up a containerized, one-proxy, one-target deployment of AIStore within seconds. [See quick start AIS with Docker](/deploy/dev/docker/README.md#quick-start-ais-cluster). You just need Docker installed to quick-start AIS.
 
 For an introduction to Docker, please watch [Docker 101 youtube](https://www.youtube.com/watch?v=V9IJj4MzZBc)
 
@@ -132,7 +132,7 @@ Example:
 $ ./deploy_docker.sh -a=~/.aws/
 ```
 
-3. To deploy AIStore, refer to the deployment script in [`deploy/dev/docker`](/aistore/deploy/dev/docker/README.md).
+3. To deploy AIStore, refer to the deployment script in [`deploy/dev/docker`](/deploy/dev/docker/README.md).
 Please note that if you are running the service for the first time, the image build process will take some time; subsequent runs will use the cached images and be much faster.
 
 ## Helpful docker commands
@@ -141,7 +141,7 @@ Please note that if you are running the service for the first time, the image bu
 
 List all of the running containers using `docker ps`. Many commands require the CONTAINER ID or NAME fields. Example output:
 
-![docker ps](/aistore/docs/images/docker_ps.png)
+![docker ps](/docs/images/docker_ps.png)
 
 ### List All Containers
 
@@ -279,7 +279,7 @@ $ docker rmi $(docker images -q -a)
 
 Following is a super-simple presentation to showcase some of the AIS capabilities.
 
-In [Docker playground](/aistore/deploy/dev/docker/playground), you can find the scripts to download different popular AI datasets (e.g., MNIST and ImageNet). The datasets are downloaded with the AIS-integrated [Downloader](/aistore/downloader/README.md) that stores all downloaded objects directly into the AIStore.
+In [Docker playground](/deploy/dev/docker/playground), you can find the scripts to download different popular AI datasets (e.g., MNIST and ImageNet). The datasets are downloaded with the AIS-integrated [Downloader](/downloader/README.md) that stores all downloaded objects directly into the AIStore.
 
 During the download, you can monitor:
 

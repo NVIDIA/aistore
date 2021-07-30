@@ -32,7 +32,7 @@ A tool to run and compare benchmarks between current (the latest) commit and a s
 
 Utilizes `go test` and `benchcmp` tools.
 
-Is used in our [Makefile](/aistore/Makefile) for integration into CI pipeline.
+Is used in our [Makefile](/Makefile) for integration into CI pipeline.
 
 ### Usage
 
@@ -50,11 +50,11 @@ Development-only. Performs several useful commands including shutdown of a local
 $ ./clean_deploy.sh <directory used for $AIS_DIR>
 ```
 
-[More details on usage can be found here.](/aistore/docs/development.md#clean-deploy)
+[More details on usage can be found here.](/docs/development.md#clean-deploy)
 
 ## boostrap.sh
 
-Used internally by almost all our [Makefile](/aistore/Makefile) commands.
+Used internally by almost all our [Makefile](/Makefile) commands.
 
 ## utils.sh
 

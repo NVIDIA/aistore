@@ -39,25 +39,25 @@ Implementation-wise, there are many similarities between *inline* and *offline* 
 
 Most notably, AIS always runs transformations locally - *close to data*. Running *close to data* has always been one of the cornerstone design principles whereby in a deployed cluster each AIStore target proportionally contributes to the resulting cumulative bandwidth - the bandwidth that, in turn, will scale linearly with each added target.
 
-This was the principle behind *distributed shuffle* (code-named [dSort](/aistore/dsort/README.md)). And this is exactly how we have more recently implemented **AIS-ETL** - the ETL service provided by AIStore.
+This was the principle behind *distributed shuffle* (code-named [dSort](/dsort/README.md)). And this is exactly how we have more recently implemented **AIS-ETL** - the ETL service provided by AIStore.
 
 Technically, the service supports running user-provided ETL containers **and** custom Python scripts *in the* (and *by the*) storage cluster.
 
 Note AIS-ETL (service) requires [Kubernetes](https://kubernetes.io).
 
-For getting-started details and numerous examples, please refer to rest of this document and the [playbooks directory](/aistore/docs/tutorials/README.md).
+For getting-started details and numerous examples, please refer to rest of this document and the [playbooks directory](/docs/tutorials/README.md).
 
 ## Getting Started
 
 The following [video](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL Getting Started (Youtube video)") demonstrates AIStore's ETL feature using Jupyter Notebook.
 
-[![AIStore ETL Getting Started](/aistore/docs/images/etl-getting-started-400.png)](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL Getting Started (Youtube video)")
+[![AIStore ETL Getting Started](/docs/images/etl-getting-started-400.png)](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL Getting Started (Youtube video)")
 
 ## Inline ETL example
 
 <img src="/aistore/docs/images/etl-md5.gif" alt="ETL-MD5" width="80%">
 
-The example above uses [AIS CLI](/aistore/cmd/cli/README.md) to:
+The example above uses [AIS CLI](/cmd/cli/README.md) to:
 1. **Create** a new bucket;
 2. **PUT** an object into this bucket;
 3. **Init** ETL container that performs MD5 computation.
@@ -72,7 +72,7 @@ Note that both the container itself and its [YAML specification](https://raw.git
 
 <img src="/aistore/docs/images/etl-imagenet.gif" alt="ETL-ImageNet" width="80%">
 
-The example above uses [AIS CLI](/aistore/cmd/cli/README.md) to:
+The example above uses [AIS CLI](/cmd/cli/README.md) to:
 1. **Create** a new AIS bucket;
 2. **PUT** multiple TAR files containing ImageNet images into the created bucket;
 3. **Init** ETL container based only on a simple python function;
@@ -97,7 +97,7 @@ To deploy ETL-ready AIStore cluster, please refer to [Getting Started](getting_s
 >         fieldPath: spec.nodeName
 > ```
 
-To verify that your deployment is set up correctly, run the following [CLI](/aistore/cmd/cli/README.md) command:
+To verify that your deployment is set up correctly, run the following [CLI](/cmd/cli/README.md) command:
 ```console
 $ ais etl ls
 ```
@@ -126,7 +126,7 @@ In effect, a user can skip the entire step of writing own Dockerfile and buildin
 
 > If you are familiar with [FasS](https://en.wikipedia.org/wiki/Function_as_a_service), then you probably will find this type of ETL initialization the most intuitive.
 
-For detailed step-by-step tutorial on `build` request, please see [ImageNet ETL playbook](/aistore/docs/tutorials/etl/etl_imagenet_pytorch.md).
+For detailed step-by-step tutorial on `build` request, please see [ImageNet ETL playbook](/docs/tutorials/etl/etl_imagenet_pytorch.md).
 
 #### `transform` function
 
@@ -156,10 +156,10 @@ Still, since the number of supported  *runtimes* will always remain somewhat lim
 ### `init` request
 
 `Init` request covers all, even the most sophisticated, cases of ETL initialization.
-It allows running any Docker image that implements certain requirements on communication with the cluster. 
+It allows running any Docker image that implements certain requirements on communication with the cluster.
 The 'init' request requires writing a Pod specification following specification requirements.
 
-For detailed step-by-step tutorial on `init` request, please see [MD5 ETL playbook](/aistore/docs/tutorials/etl/compute_md5.md).
+For detailed step-by-step tutorial on `init` request, please see [MD5 ETL playbook](/docs/tutorials/etl/compute_md5.md).
 
 #### Requirements
 
@@ -246,8 +246,8 @@ AIStore supports both *inline* transformation of selected objects and *offline* 
 
 There are two ways to run ETL transformations:
 - HTTP RESTful API described in [API Reference section](#api-reference) of this document,
-- [ETL CLI](/aistore/cmd/cli/resources/etl.md),
-- [AIS Loader](/aistore/bench/aisloader/README.md).
+- [ETL CLI](/cmd/cli/resources/etl.md),
+- [AIS Loader](/bench/aisloader/README.md).
 
 ## API Reference
 
@@ -268,7 +268,7 @@ This section describes how to interact with ETLs via RESTful API.
 
 ## ETL name specifications
 
-Every initialized ETL has a unique `ETL_ID` associated with it, used for running transforms/computation on data or stopping the ETL. 
+Every initialized ETL has a unique `ETL_ID` associated with it, used for running transforms/computation on data or stopping the ETL.
 
 The `pod` name is used as the `ETL_ID` when an ETL is initialized using YAML specification. For instance, below YAML spec sets `ETL_ID` to `compute-md5`.
 

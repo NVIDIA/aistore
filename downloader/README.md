@@ -22,7 +22,7 @@ AIS cluster can be easily deployed on any commodity hardware, and AIS **download
 
 ## Features
 
-> By way of background, AIStore supports a number of [3rd party Backend providers](/aistore/docs/providers.md) and utilizes the providers' SDKs to access the corresponding backends.
+> By way of background, AIStore supports a number of [3rd party Backend providers](/docs/providers.md) and utilizes the providers' SDKs to access the corresponding backends.
 > For Amazon S3, that would be `aws-sdk-go` SDK, for Azure - `azure-storage-blob-go`, and so on.
 > Each SDK can be **conditionally linked** into AIS executable - the decision (to link or not to link) is made prior to deployment.
 
@@ -39,7 +39,7 @@ Downloader will then detect the SDK "presence" at runtime and use a wider range 
 Other supported features include:
 
 * Can download a single file (object), a range, an entire bucket, **and** a virtual directory in a given remote bucket.
-* Easy to use with [command line interface](/aistore/cmd/cli/resources/download.md).
+* Easy to use with [command line interface](/cmd/cli/resources/download.md).
 * Versioning and checksum support allows for an optimal download of the same source location multiple times to *incrementally* update AIS destination with source changes (if any).
 
 The rest of this document describes these and other capabilities in greater detail and illustrates them with examples.
@@ -62,7 +62,7 @@ JOB ID           STATUS          ERRORS  DESCRIPTION
 H9OjbW5FH        Finished        0       https://storage.googleapis.com/lpr-imagenet/imagenet_train-{0011..0020}.tgz -> ais://imagenet
 ```
 
-For more examples see: [Downloader CLI](/aistore/cmd/cli/resources/download.md)
+For more examples see: [Downloader CLI](/cmd/cli/resources/download.md)
 
 ## Request to download
 
@@ -80,8 +80,8 @@ AIS Downloader supports 4 (four) request types:
 > $ ais bucket create imagenet
 > ```
 >
-> Also, see [AIS API](/aistore/docs/http_api.md) for details on how to create, destroy, and list storage buckets.
-> For Python-based clients, a better starting point could be [here](/aistore/docs/overview.md#python-client).
+> Also, see [AIS API](/docs/http_api.md) for details on how to create, destroy, and list storage buckets.
+> For Python-based clients, a better starting point could be [here](/docs/overview.md#python-client).
 
 ------------
 

@@ -161,7 +161,7 @@ Any reference to "Cloud buckets" refer to remote buckets that use a public cloud
 ### Public Cloud Buckets
 
 Public Google Storage supports limited access to its data.
-If AIS cluster is deployed with Google Cloud enabled (Google Storage is selected as 3rd party Backend provider when [deploying an AIS cluster](/aistore/docs/getting_started.md#local-playground)), it allows a few operations without providing credentials:
+If AIS cluster is deployed with Google Cloud enabled (Google Storage is selected as 3rd party Backend provider when [deploying an AIS cluster](/docs/getting_started.md#local-playground)), it allows a few operations without providing credentials:
 HEAD a bucket, list bucket objects, GET an object, and HEAD an object.
 The example shows accessing a private GCP bucket and a public GCP one without user authorization.
 
@@ -198,7 +198,7 @@ images-train-000001.tar      964.74MiB
 ### Public HTTP(S) Dataset
 
 It is standard in machine learning community to publish datasets in public domains, so they can be accessed by everyone.
-AIStore has integrated tools like [downloader](/aistore/downloader/README.md) which can help in downloading those large datasets straight into provided AIS bucket.
+AIStore has integrated tools like [downloader](/downloader/README.md) which can help in downloading those large datasets straight into provided AIS bucket.
 However, sometimes using such tools is not a feasible solution.
 
 For other cases AIStore has ability to act as a reverese-proxy when accessing **any** URL.
@@ -302,7 +302,7 @@ So far, we have covered AIS and remote buckets. These abstractions are sufficien
 One way of accomplishing that could be:
 1. Prefetch cloud objects.
 2. Create AIS bucket.
-3. Use the bucket-copying [API](http_api.md) or [CLI](/aistore/cmd/cli/resources/bucket.md) to copy over the objects from the remote bucket to the newly created AIS bucket.
+3. Use the bucket-copying [API](http_api.md) or [CLI](/cmd/cli/resources/bucket.md) to copy over the objects from the remote bucket to the newly created AIS bucket.
 
 However, the extra-copying involved may prove to be time and/or space consuming. Hence, AIS-supported capability to establish an **ad-hoc** 1-to-1 relationship between a given AIS bucket and an existing cloud (*backend*).
 
@@ -342,7 +342,7 @@ NAME		 SIZE		 VERSION
 shard-0.tar	 2.50KiB	 1
 ```
 
-For more examples please refer to [CLI docs](/aistore/cmd/cli/resources/bucket.md#connectdisconnect-ais-bucket-tofrom-cloud-bucket).
+For more examples please refer to [CLI docs](/cmd/cli/resources/bucket.md#connectdisconnect-ais-bucket-tofrom-cloud-bucket).
 
 ## Bucket Properties
 
@@ -389,7 +389,7 @@ $ ais show bucket mybucket
 
 ## Bucket Access Attributes
 
-Bucket access is controlled by a single 64-bit `access` value in the [Bucket Properties structure](/aistore/cmn/api.go), whereby its bits have the following mapping as far as allowed (or denied) operations:
+Bucket access is controlled by a single 64-bit `access` value in the [Bucket Properties structure](/cmn/api.go), whereby its bits have the following mapping as far as allowed (or denied) operations:
 
 | Operation | Bit Mask |
 | --- | --- |
@@ -399,7 +399,7 @@ Bucket access is controlled by a single 64-bit `access` value in the [Bucket Pro
 | Cold GET | 0x8 |
 | DELETE | 0x16 |
 
-For instance, to make bucket `abc` read-only, execute the following [AIS CLI](/aistore/cmd/cli/README.md) command:
+For instance, to make bucket `abc` read-only, execute the following [AIS CLI](/cmd/cli/README.md) command:
 
 ```console
 $ ais bucket props abc 'access=ro'
@@ -440,7 +440,7 @@ An empty structure `{}` results in getting just the names of the objects (from t
 | `start_after` | Name of the object after which the listing should start | For example, `start_after = "baa"` will include object `object_name = "caa"` but will not `object_name = "ba"` nor `object_name = "aab"`. |
 | `continuation_token` | The token identifying the next page to retrieve | Returned in the `ContinuationToken` field from a call to ListObjects that does not retrieve all keys. When the last key is retrieved, `ContinuationToken` will be the empty string. |
 | `time_format` | The standard by which times should be formatted | Any of the following [golang time constants](http://golang.org/pkg/time/#pkg-constants): RFC822, Stamp, StampMilli, RFC822Z, RFC1123, RFC1123Z, RFC3339. The default is RFC822. |
-| `flags` | Advanced filter options | A bit field of [SelectMsg extended flags](/aistore/cmn/api.go). |
+| `flags` | Advanced filter options | A bit field of [SelectMsg extended flags](/cmn/api.go). |
 | [experimental] `use_cache` | Enables caching | With this option enabled, subsequent requests to list objects for the given bucket will be served from cache without traversing disks. For now implementation is limited to caching results for buckets which content doesn't change, otherwise the cache will be in stale state. |
 
 SelectMsg extended flags:
@@ -481,14 +481,14 @@ Alongside listing names and properties of the objects, it also allows filtering 
 
 At the high level, the idea is that a proxy dispatches a request to targets which produce output that is returned and combined by the proxy.
 
-![](/aistore/docs/images/query_high.png)
+![](/docs/images/query_high.png)
 
 *(Proxy combines and sorts the outputs returned from targets)*
 
 
 When target receives a request from the proxy, it then traverses disks applying the filters and selections on each of the object.
 
-![](/aistore/docs/images/query_target.png)
+![](/docs/images/query_target.png)
 
 *(Objects marked as green pass all the filtering and selection whereas objects marked red don't)*
 

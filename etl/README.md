@@ -14,9 +14,9 @@ AIStore supports both on the fly (aka *inline*) and offline user-defined dataset
 
 Popular use cases include - but are not limited to - *dataset augmentation* (of any kind) and filtering of AI datasets.
 
-Please refer to [ETL readme](/aistore/docs/etl.md) for the prerequisites, 3 (three) supported ais <=> container communication mechanisms, and usage examples.
+Please refer to [ETL readme](/docs/etl.md) for the prerequisites, 3 (three) supported ais <=> container communication mechanisms, and usage examples.
 
-> [ETL readme](/aistore/docs/etl.md) also contains an overview of the architecture, important technical details, and further guidance.
+> [ETL readme](/docs/etl.md) also contains an overview of the architecture, important technical details, and further guidance.
 
 ## Architecture
 
@@ -29,7 +29,7 @@ The following figure illustrates a cluster of 3 AIS proxies (gateways) and 4 sto
 <img src="/aistore/docs/images/etl-arch.png" alt="ETL architecture" width="80%">
 
 ## Management and Benchmarking
-- [AIS CLI](/aistore/cmd/cli/resources/etl.md) includes commands to start, stop, and monitor ETL at runtime.
-- [AIS Loader](/aistore/bench/aisloader/README.md) has been extended to benchmark and stress test AIS clusters by running a number of pre-defined transformations that we include with the source code.
+- [AIS CLI](/cmd/cli/resources/etl.md) includes commands to start, stop, and monitor ETL at runtime.
+- [AIS Loader](/bench/aisloader/README.md) has been extended to benchmark and stress test AIS clusters by running a number of pre-defined transformations that we include with the source code.
 
-For more information and details, please refer to [ETL readme](/aistore/docs/etl.md).
+For more information and details, please refer to [ETL readme](/docs/etl.md).
