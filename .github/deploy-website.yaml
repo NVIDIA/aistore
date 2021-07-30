@@ -1,9 +1,5 @@
 name: Deploy website on Netlify
-on:
-  push:
-    branches:
-      - master
-  pull_request:
+on: [push]
 jobs:
   deploy_website:
     runs-on: ubuntu-latest
