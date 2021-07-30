@@ -1,0 +1,24 @@
+name: Deploy website on Netlify
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Build jekyll
+        uses: helaili/jekyll-action@v2
+        with:
+          build_only: true
+      - name: Install Netfli CLI
+        run: npm install netlify-cli --save-dev
+      - name: Deploy site on Netlify
+        env:
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        run: netlify deploy --dir=_site --prod
+
