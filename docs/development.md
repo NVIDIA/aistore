@@ -1,3 +1,12 @@
+---
+layout: post
+title: DEVELOPMENT
+permalink: development
+redirect_from:
+ - development.md/
+ - /docs/development.md/
+---
+
 ## Table of Contents
 
 - [Debugging](#debugging)

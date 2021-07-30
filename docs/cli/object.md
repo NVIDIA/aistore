@@ -1,3 +1,12 @@
+---
+layout: post
+title: OBJECT
+permalink: ./cli/object
+redirect_from:
+ - ./cli/object.md/
+ - /docs/./cli/object.md/
+---
+
 # CLI Reference for Objects
 This section lists operations (such as GET, PUT, APPEND, PROMOTE) on *objects* using the AIS CLI, with `ais object`.
 
@@ -132,8 +141,8 @@ Supported properties:
 - `atime` - object's last access time
 - `copies` - the number of object replicas per target (empty if bucket mirroring is disabled)
 - `checksum` - object's checksum
-- `ec` - object's EC info (empty if EC is disabled for the bucket, if EC is enabled it looks like `DATA:PARITY[MODE]`, where `DATA` - the number of data slices, 
-      `PARITY` - the number of parity slices, and `MODE` is protection mode selected for the object: `replicated` - object has `PARITY` replicas on other targets, 
+- `ec` - object's EC info (empty if EC is disabled for the bucket, if EC is enabled it looks like `DATA:PARITY[MODE]`, where `DATA` - the number of data slices,
+      `PARITY` - the number of parity slices, and `MODE` is protection mode selected for the object: `replicated` - object has `PARITY` replicas on other targets,
       `encoded`  the object is erasure coded and other targets contains only encoded slices
 
 > Note: Like many other `ais show` commands, `ais show object` is aliased to `ais object show` for ease of use.
@@ -410,7 +419,7 @@ Colocation in the context means that the files in question are already located *
 | `--overwrite` or `-o` | `bool` | Overwrite destination (object) if exists | `true` |
 | `--keep` | `bool` | Keep original files | `true` |
 
-**Note:** `--keep` flag defaults to `true` and we retain the origin file to ensure safety. 
+**Note:** `--keep` flag defaults to `true` and we retain the origin file to ensure safety.
 
 ### Object names
 

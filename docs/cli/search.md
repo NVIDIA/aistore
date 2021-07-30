@@ -1,3 +1,12 @@
+---
+layout: post
+title: SEARCH
+permalink: ./cli/search
+redirect_from:
+ - ./cli/search.md/
+ - /docs/./cli/search.md/
+---
+
 # CLI Command Search
 
 AIS CLI is designed for easy use, without a need to spend time reading CLI docs - you should be able to start by running ais <TAB-TAB>, selecting one of the available (completion) options, and repeating until the command is ready to be entered.
@@ -9,7 +18,7 @@ If this is the case, the search command is exactly the tool that can help search
 
 ## Keyword Search
 
-Return commands containing the search word or synonym. 
+Return commands containing the search word or synonym.
 
 ```command
 $ ais search object
@@ -25,7 +34,7 @@ ais auth add user
 
 Search commands using `--regex` flag
 
-```command 
+```command
 $ ais search --regex "mv|cp"
 ais bucket cp
 ais bucket mv

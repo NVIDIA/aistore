@@ -1,3 +1,12 @@
+---
+layout: post
+title: TOOLS
+permalink: tools
+redirect_from:
+ - tools.md/
+ - /docs/tools.md/
+---
+
 ## ais
 
 This is a CLI utility used to perform operations like `create bucket`, `list objects`, `put object` etc.on the `ais` cluster.

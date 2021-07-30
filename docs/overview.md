@@ -1,3 +1,12 @@
+---
+layout: post
+title: OVERVIEW
+permalink: overview
+redirect_from:
+ - overview.md/
+ - /docs/overview.md/
+---
+
 ## Introduction
 
 Training deep learning (DL) models on petascale datasets is essential for achieving competitive and state-of-the-art performance in applications such as speech, video analytics, and object recognition. However, existing distributed filesystems were not developed for the access patterns and usability requirements of DL jobs.
@@ -134,7 +143,7 @@ AIS targets utilize local Linux filesystems including (but not limited to) xfs, 
 
 Notwithstanding, AIS stores and then maintains object replicas, erasure-coded slices, bucket metadata - in short, a variety of local and global-scope (persistent) structures - for details, please refer to:
 
-- [On-Disk Layout](on-disk-layout.md)
+- [On-Disk Layout](on_disk_layout.md)
 
 > **You can access your data with and without AIS, and without any need to *convert* or *export/import*, etc. - at any time! Your data is stored in its original native format using user-given object names. Your data can be migrated out of AIS at any time as well, and, again, without any dependency whatsoever on the AIS itself.**
 

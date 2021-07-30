@@ -1,3 +1,12 @@
+---
+layout: post
+title: LEAVE CLUSTER
+permalink: leave_cluster
+redirect_from:
+ - leave_cluster.md/
+ - /docs/leave_cluster.md/
+---
+
 ## Table of Contents
 
 - [Putting a node in maintenance](#putting-a-node-in-maintenance)
@@ -15,7 +24,7 @@ Two kinds of node removal are supported:
 
 ### Putting a node in maintenance
 
-<img src="docs/images/maintenance.png" alt="Put a node under maintenance">
+<img src="images/maintenance.png" alt="Put a node under maintenance">
 
 To take a node out of the cluster temporary while keeping it in the cluster list, put a node under maintenance (CLI):
 
@@ -64,7 +73,7 @@ It is recommended to keep automatic rebalance running automatically, but in some
 
 ### Removing a node from a cluster
 
-<img src="docs/images/decommission.png" alt="Decommission a node">
+<img src="images/decommission.png" alt="Decommission a node">
 
 To completely remove the node from the cluster, start the node decommissioning (CLI):
 
@@ -96,7 +105,7 @@ Note that removing a node with rebalance disabled can be interrupted. If a node 
 
 ### Interrupt node removal
 
-<img src="docs/images/decommission_abort.png" alt="Interrupt node removal">
+<img src="images/decommission_abort.png" alt="Interrupt node removal">
 
 While rebalance is running, the removal operation can be interrupted to get the node back to the cluster.
 Rebalance starts automatically when a node is a target and flag `--no-rebalance` is not set after the node is registered at the cluster and the cluster clears node's maintenance state.

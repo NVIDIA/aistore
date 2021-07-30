@@ -1,3 +1,12 @@
+---
+layout: post
+title: CONFIGURATION
+permalink: configuration
+redirect_from:
+ - configuration.md/
+ - /docs/configuration.md/
+---
+
 ## AIStore Configuration
 
 The first thing to keep in mind when talking about AIS configuration is that there are 3 (three) separate, and separately maintained, pieces:

@@ -1,3 +1,12 @@
+---
+layout: post
+title: ALIAS
+permalink: ./cli/alias
+redirect_from:
+ - ./cli/alias.md/
+ - /docs/./cli/alias.md/
+---
+
 # CLI Reference for Aliases
 
 AIS CLI supports user defined aliases, similar to the unix `alias` command.
@@ -60,7 +69,7 @@ Note that aliases are also shown in the app-level help message (`ais -h`).
 #### List aliases
 
 ```console
-$ ais alias 
+$ ais alias
 ALIAS   COMMAND
 get     object get
 ls      bucket ls

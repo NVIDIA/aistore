@@ -1,3 +1,12 @@
+---
+layout: post
+title: SYSFILES
+permalink: sysfiles
+redirect_from:
+ - sysfiles.md/
+ - /docs/sysfiles.md/
+---
+
 ## System Files
 
 In addition to user data, AIStore stores, maintains, and utilizes itself a relatively small number of system files that serve a variety of different purposes.

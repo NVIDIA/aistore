@@ -1,19 +1,31 @@
+---
+layout: post
+title: DOCKER MAIN
+permalink: docker_main
+redirect_from:
+ - docker_main.md/
+ - /docs/docker_main.md/
+---
+
 ## Introduction
 
 AIStore can be run as a cluster of Docker containers. There are two modes of operation: development and quick-start. They can be found in the [`deploy/dev/docker`](/deploy/dev/docker) directory.
 
 ### Development Mode
+
 This mode is currently used for development purposes.
 All docker containers mount the same host's AIStore source directory, and then execute from this single source. Upon restart (of the AIStore cluster), all changes made in the host will, therefore, take an immediate effect.
 
 > The development mode is currently being maintained and updated.
 
 ### Quick Start Mode
+
 Use this mode if you would like to set up a containerized, one-proxy, one-target deployment of AIStore within seconds. [See quick start AIS with Docker](/deploy/dev/docker/README.md#quick-start-ais-cluster). You just need Docker installed to quick-start AIS.
 
 For an introduction to Docker, please watch [Docker 101 youtube](https://www.youtube.com/watch?v=V9IJj4MzZBc)
 
 ## Install Docker and Docker Compose
+
 **Note:** Using Docker requires one of the following versions of Ubuntu:
 * Bionic 18.04 (LTS)
 * Xenial 16.04 (LTS)
@@ -133,7 +145,7 @@ Please note that if you are running the service for the first time, the image bu
 
 List all of the running containers using `docker ps`. Many commands require the CONTAINER ID or NAME fields. Example output:
 
-![docker ps](/docs/images/docker_ps.png)
+![docker ps](images/docker_ps.png)
 
 ### List All Containers
 

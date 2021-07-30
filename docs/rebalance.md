@@ -1,3 +1,12 @@
+---
+layout: post
+title: REBALANCE
+permalink: rebalance
+redirect_from:
+ - rebalance.md/
+ - /docs/rebalance.md/
+---
+
 ## Table of Contents
 
 - [Global Rebalance](#global-rebalance)

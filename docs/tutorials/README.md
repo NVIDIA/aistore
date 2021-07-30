@@ -1,3 +1,12 @@
+---
+layout: post
+title: TUTORIALS
+permalink: ./tutorials
+redirect_from:
+ - /tutorials/README.md/
+ - /docs/tutorials/README.md/
+---
+
 # Tutorials
 
 A set of convenience tutorials to assist in running and using AIStore and its various extensions.

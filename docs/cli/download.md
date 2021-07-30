@@ -1,3 +1,12 @@
+---
+layout: post
+title: DOWNLOAD
+permalink: ./cli/download
+redirect_from:
+ - ./cli/download.md/
+ - /docs/./cli/download.md/
+---
+
 # Start, Stop, and monitor downloads
 
 AIS Downloader is intended for downloading massive numbers of files (objects) and datasets from both Cloud Storage (buckets) and Internet. For details and background, please see the [downloader's own readme](/docs/downloader.md).

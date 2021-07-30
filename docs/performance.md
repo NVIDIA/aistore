@@ -1,3 +1,12 @@
+---
+layout: post
+title: PERFORMANCE
+permalink: performance
+redirect_from:
+ - performance.md/
+ - /docs/performance.md/
+---
+
 AIStore is all about the performance.
 Below you will find some tips and tricks to ensure that AIStore does deliver.
 

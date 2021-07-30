@@ -1,6 +1,14 @@
-## RESTful API
+---
+layout: post
+title: RESTFUL API
+permalink: http_api
+redirect_from:
+ - http_api.md/
+ - /docs/http_api.md/
+---
 
 ## Table of Contents
+
 - [Notation](#notation)
 - [Overview](#overview)
 - [API Reference](#api-reference)
@@ -21,6 +29,7 @@ In this README:
 > `G-or-T` - (hostname:port) of **any node** member of the cluster
 
 ### Overview
+
 AIStore supports a growing number and variety of RESTful operations. To illustrate common conventions, let's take a look at the example:
 
 ```console
@@ -152,7 +161,7 @@ For even more information, CLI examples, and the most recent updates, please see
 - [Backend Providers](providers.md)
 - [CLI: operations on buckets](/docs/cli/bucket.md)
 - [CLI: operations on objects](/docs/cli/object.md)
-- [On-Disk Layout](on-disk-layout.md)
+- [On-Disk Layout](on_disk_layout.md)
 
 ### Curl Examples
 

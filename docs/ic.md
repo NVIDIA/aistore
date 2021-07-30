@@ -1,3 +1,12 @@
+---
+layout: post
+title: IC
+permalink: ic
+redirect_from:
+ - ic.md/
+ - /docs/ic.md/
+---
+
 ## Control Plane: internal machinery to process asynchronous operations
 
 [AIStore](https://github.com/NVIDIA/aistore) supports running several asynchronous operations, that are triggered either by a user request (e.g., download, transformations, etc.) or as a result of internal cluster events (e.g., rebalance, LRU, etc.), hereby referred to as eXtended actions or **xactions**.

@@ -1,11 +1,15 @@
-**AIStore is a lightweight object storage system with the capability to linearly scale-out with each added storage node and a special focus on petascale deep learning.**
-
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Go Report Card](https://goreportcard.com/badge/github.com/NVIDIA/aistore)
+---
+layout: post
+title: AIStore - scalable storage for AI applications
+permalink: /
+redirect_from:
+ - /index.md/
+ - index.md/
+---
 
 AIStore (AIS for short) is a built from scratch, lightweight storage stack tailored for AI apps. AIS consistently shows balanced I/O distribution and linear scalability across arbitrary numbers of clustered servers, producing performance charts that look as follows:
 
-<img src="/docs/images/ais-disk-throughput-flat.png" alt="I/O distribution" width="600">
+<img src="images/ais-disk-throughput-flat.png" alt="I/O distribution" width="100%">
 
 > The picture above *comprises* 120 HDDs.
 
@@ -31,7 +35,7 @@ Also, AIStore:
 * can ad-hoc attach and "see" (read, write, list, cache, evict) datasets hosted by other AIS clusters;
 * provides unified global namespace across multiple backends:
 
-<img src="docs/images/backends.png" alt="AIStore" width="360">
+<img src="images/backends.png" alt="AIStore" width="360">
 
 * can be used as a fast cache for GCS and S3; can be populated on-demand and/or via `prefetch` and `download` APIs;
 * can be used as a standalone highly-available protected storage;

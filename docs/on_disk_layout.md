@@ -1,4 +1,11 @@
-## On-Disk Layout
+---
+layout: post
+title: ON DISK LAYOUT
+permalink: on_disk_layout
+redirect_from:
+ - on_disk_layout.md/
+ - /docs/on_disk_layout.md/
+---
 
 AIStore 3.0 introduces new on-disk layout that addresses several motivations including (but not limited to) the motivation to support multiple cloud backends. One of those Clouds can be (and starting with v3.0 **is**) AIStore itself with the immediate availability of AIS-to-AIS caching and a gamut of future capabilities: continuous data protection, DR, and more.
 

@@ -1,3 +1,12 @@
+---
+layout: post
+title: CLUSTER
+permalink: ./cli/cluster
+redirect_from:
+ - ./cli/cluster.md/
+ - /docs/./cli/cluster.md/
+---
+
 # CLI Reference for Cluster and Node (Daemon) management
 This section lists cluster and node management operations the AIS CLI, with `ais cluster`.
 

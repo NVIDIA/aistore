@@ -1,3 +1,12 @@
+---
+layout: post
+title: ETL
+permalink: ./cli/etl
+redirect_from:
+ - ./cli/etl.md/
+ - /docs/./cli/etl.md/
+---
+
 # CLI Reference for ETLs
 
 This section lists ETL management operations the AIS CLI, with `ais etl`.
@@ -130,7 +139,7 @@ $ cat output.txt
 ### Examples
 
 #### Transform bucket with ETL
- 
+
 Transform every object from `src_bucket` with ETL and put new objects to `dst_bucket`.
 
 ```console

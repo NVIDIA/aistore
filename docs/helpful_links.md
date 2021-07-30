@@ -1,3 +1,12 @@
+---
+layout: post
+title: HELPFUL_LINKS
+permalink: helpful_links
+redirect_from:
+ - helpful_links.md/
+ - /docs/helpful_links.md/
+---
+
 ## Table of Contents
 
 - [Deep Learning](#deep-learning)

@@ -1,3 +1,12 @@
+---
+layout: post
+title: CHECKSUM
+permalink: checksum
+redirect_from:
+ - checksum.md/
+ - /docs/checksum.md/
+---
+
 ## Supported Checksums and Brief Theory of Operations
 
 1. `xxhash` is the system-default checksum.

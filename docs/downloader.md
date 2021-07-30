@@ -1,3 +1,12 @@
+---
+layout: post
+title: DOWNLOADER
+permalink: downloader
+redirect_from:
+ - downloader.md/
+ - /docs/downloader.md/
+---
+
 ## Why Downloader?
 
 It probably won't be much of an exaggeration to say that the majority of popular AI datasets are available on the Internet and public remote buckets.

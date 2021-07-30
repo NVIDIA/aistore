@@ -1,3 +1,12 @@
+---
+layout: post
+title: HDFS_BACKEND
+permalink: ./tutorials/various/hdfs_backend
+redirect_from:
+ - /tutorials/various/hdfs_backend.md/
+ - /docs/tutorials/various/hdfs_backend.md/
+---
+
 # HDFS Backend Provider
 
 HDFS is an open source framework that is used to efficiently store and process large datasets ranging in sizes from gigabytes to petabytes.
@@ -20,10 +29,10 @@ $ docker run -p 8020:8020 -p 9000:9000 -p 50010:50010 -p 50070:50070 -d harisekh
 $ docker ps
 CONTAINER ID   IMAGE               COMMAND                   CREATED         STATUS         PORTS                                                                                                                                                                           NAMES
 7e565201ce17   harisekhon/hadoop   "/bin/sh -c \"/entryp…"   3 seconds ago   Up 2 seconds   8042/tcp, 0.0.0.0:8020->8020/tcp, 8088/tcp, 10020/tcp, 0.0.0.0:9000->9000/tcp, 19888/tcp, 0.0.0.0:50010->50010/tcp, 50020/tcp, 50075/tcp, 0.0.0.0:50070->50070/tcp, 50090/tcp   jovial_haslett
-$ 
+$
 $ # Now edit the `/etc/hosts` so the `7e565201ce17` hostname can be resolved.
 $ cat /etc/hosts
-127.0.0.1   7e565201ce17 
+127.0.0.1   7e565201ce17
 ```
 
 There are a couple other solutions which you can consider:

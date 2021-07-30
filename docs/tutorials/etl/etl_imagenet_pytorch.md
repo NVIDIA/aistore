@@ -1,9 +1,18 @@
+---
+layout: post
+title: ETL IMAGENET PYTORCH
+permalink: /tutorials/etl/etl_imagenet_pytorch
+redirect_from:
+ - /tutorials/etl/etl_imagenet_pytorch.md/
+ - /docs/tutorials/etl/etl_imagenet_pytorch.md/
+---
+
 # PyTorch ImageNet preprocessing with ETL
 
 In this example, we will see how to use ETL to preprocess the images of ImageNet which then can be used for training.
 The following GIF presents the whole operation:
 
-<img src="/docs/images/etl-imagenet.gif" alt="ETL-ImageNet" width="80%">
+<img src="../../images/etl-imagenet.gif" alt="ETL-ImageNet" width="100%">
 
 ## Overview
 
@@ -15,7 +24,7 @@ This tutorial consists of couple steps:
 
 Here is a general overview of these steps:
 
-![ETL Pipeline](/docs/images/etl-pipeline.png)
+![ETL Pipeline](../../images/etl-pipeline.png)
 
 ## Prerequisites
 
@@ -44,7 +53,7 @@ PUT "raw-train.tar" into bucket "imagenet"
 ## Prepare ETL code
 
 As we have ImageNet prepared now we need an ETL code that will do the transformation.
-Here we will use `python3` runtime to install `torch` and `torchvision` packages. 
+Here we will use `python3` runtime to install `torch` and `torchvision` packages.
 
 Our transform code will look like this (`code.py`):
 ```python

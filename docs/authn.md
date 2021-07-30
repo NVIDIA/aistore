@@ -1,3 +1,12 @@
+---
+layout: post
+title: AUTHN
+permalink: authn
+redirect_from:
+ - authn.md/
+ - /docs/authn.md/
+---
+
 ## Table of Contents
 
 - [Overview](#overview)

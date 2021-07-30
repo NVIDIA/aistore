@@ -1,3 +1,12 @@
+---
+layout: post
+title: ADVANCED
+permalink: ./cli/advanced
+redirect_from:
+ - ./cli/advanced.md/
+ - /docs/./cli/advanced.md/
+---
+
 # CLI Reference for `advanced` commands
 
 AIS CLI features a number of miscellaneous and advanced-usage commands.

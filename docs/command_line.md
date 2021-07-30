@@ -1,3 +1,12 @@
+---
+layout: post
+title: COMMAND LINE
+permalink: command_line
+redirect_from:
+ - command_line.md/
+ - /docs/command_line.md/
+---
+
 ### Command-Line arguments
 
 AIS proxy and AIS target (executables) both support the following command-line arguments where those that are *mandatory* are marked with `***`:

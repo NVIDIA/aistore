@@ -1,3 +1,12 @@
+---
+layout: post
+title: METRICS
+permalink: metrics
+redirect_from:
+ - metrics.md/
+ - /docs/metrics.md/
+---
+
 ## Table of Contents
 - [Background](#background)
 - [Conventions](#conventions)
@@ -163,4 +172,4 @@ All latency metrics are in milliseconds, all sizes are always in bytes.
 
 A somewhat outdated example of how these metrics show up in the Grafana dashboard follows:
 
-![AIS loader metrics](/docs/images/aisloader-statsd-grafana.png)
+![AIS loader metrics](images/aisloader-statsd-grafana.png)

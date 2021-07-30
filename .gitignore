@@ -83,3 +83,8 @@ venv.bak/
 
 # Bench
 bench/aisloader/aisloader.exe
+
+# Website related stuff
+.netlify/
+_site/
+.sass-cache/

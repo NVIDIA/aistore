@@ -1,9 +1,9 @@
+name: Build
 on:
   push:
     branches:
       - master
   pull_request:
-name: Build
 jobs:
   test:
     strategy:

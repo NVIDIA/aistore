@@ -1,3 +1,12 @@
+---
+layout: post
+title: HA
+permalink: ha
+redirect_from:
+ - ha.md/
+ - /docs/ha.md/
+---
+
 ## Table of Contents
 - [Highly Available Control Plane](#highly-available-control-plane)
     - [Bootstrap](#bootstrap)
@@ -61,4 +70,3 @@ AIStore cluster can be *stretched* to collocate its redundant gateways with the 
 ### Metasync
 
 By design, AIStore does not have a centralized (SPOF) shared cluster-level metadata. The metadata consists of versioned objects: cluster map, buckets (names and properties), authentication tokens. In AIStore, these objects are consistently replicated across the entire cluster – the component responsible for this is called [metasync](/ais/metasync.go). AIStore metasync makes sure to keep cluster-level metadata in-sync at all times.
-

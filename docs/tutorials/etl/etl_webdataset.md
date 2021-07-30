@@ -1,3 +1,12 @@
+---
+layout: post
+title: ETL WEBDATASET
+permalink: /tutorials/etl/etl_webdataset
+redirect_from:
+ - /tutorials/etl/etl_webdataset.md/
+ - /docs/tutorials/etl/etl_webdataset.md/
+---
+
 # WebDataset ImageNet preprocessing with ETL
 
 In this example, we will see how to use ETL to preprocess the images of ImageNet using [WebDataset](https://github.com/webdataset/webdataset), a PyTorch Dataset implementation providing efficient access to datasets stored in POSIX tar archives.

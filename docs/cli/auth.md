@@ -1,3 +1,12 @@
+---
+layout: post
+title: AUTH
+permalink: ./cli/auth
+redirect_from:
+ - ./cli/auth.md/
+ - /docs/./cli/auth.md/
+---
+
 # CLI Reference for the Authentication Server
 For more information and examples, please refer to [the AuthN documentation](/docs/authn.md).
 

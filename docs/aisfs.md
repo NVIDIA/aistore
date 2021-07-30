@@ -1,3 +1,12 @@
+---
+layout: post
+title: AISFS
+permalink: aisfs
+redirect_from:
+ - aisfs.md/
+ - /docs/aisfs.md/
+---
+
 ## Table of Contents
 
 - [High-level architecture](#high-level-architecture)

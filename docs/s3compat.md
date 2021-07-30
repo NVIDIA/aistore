@@ -1,3 +1,12 @@
+---
+layout: post
+title: S3COMPAT
+permalink: s3compat
+redirect_from:
+ - s3compat.md/
+ - /docs/s3compat.md/
+---
+
 ## Table of Contents
 
 - [S3 Compatibility](#s3-compatibility)
@@ -201,7 +210,7 @@ S3_ENDPOINT=10.0.0.20:51080/s3 S3_USE_HTTPS=0 python mnist.py
 
 TensorFlow on AIS training screencast:
 
-<img src="/docs/images/ais-s3-tf.gif" alt="TF training in action">
+<img src="images/ais-s3-tf.gif" alt="TF training in action">
 
 ## Boto3 Compatibility
 
