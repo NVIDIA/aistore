@@ -8,10 +8,12 @@ package xs
 import (
 	"archive/tar"
 	"archive/zip"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,6 +32,8 @@ import (
 
 const (
 	doneSendingOpcode = 31415
+
+	delayUnregRecv = time.Second
 )
 
 type (
@@ -43,6 +47,11 @@ type (
 	}
 	tarWriter struct {
 		archwi *archwi
+		w      *tar.Writer
+	}
+	tgzWriter struct {
+		archwi *archwi
+		gzw    *gzip.Writer
 		w      *tar.Writer
 	}
 	zipWriter struct {
@@ -75,12 +84,13 @@ type (
 			sync.RWMutex
 			m map[string]*archwi
 		}
-		config *cmn.Config
+		config   *cmn.Config
+		stopping atomic.Bool
 	}
 )
 
 const (
-	maxNumInParallel = 64
+	maxNumInParallel = 256
 )
 
 // interface guard
@@ -90,6 +100,7 @@ var (
 	_ lrwi           = (*archwi)(nil)
 
 	_ archWriter = (*tarWriter)(nil)
+	_ archWriter = (*tgzWriter)(nil)
 	_ archWriter = (*zipWriter)(nil)
 )
 
@@ -132,14 +143,21 @@ func (p *archFactory) Start() error {
 }
 
 func (p *archFactory) newDM(bckFrom *cluster.Bck, r *XactPutArchive) error {
-	// NOTE: transport stream name
+	// transport endpoint name (given xaction, m.b. identical across cluster)
 	trname := "arch-" + bckFrom.Provider + "-" + bckFrom.Name
 	dm, err := bundle.NewDataMover(p.T, trname, r.recvObjDM, cluster.RegularPut, bundle.Extra{Multiplier: 1})
 	if err != nil {
 		return err
 	}
 	if err := dm.RegRecv(); err != nil {
-		return err
+		if strings.Contains(err.Error(), "duplicate trname") {
+			glog.Errorf("retry reg-recv %s", trname)
+			time.Sleep(2 * delayUnregRecv)
+			err = dm.RegRecv()
+		}
+		if err != nil {
+			return err
+		}
 	}
 	r.dm = dm
 	return nil
@@ -183,6 +201,9 @@ func (r *XactPutArchive) Begin(msg *cmn.ArchiveMsg) (err error) {
 		switch msg.Mime {
 		case cos.ExtTar:
 			wi.writer = &tarWriter{archwi: wi, w: tar.NewWriter(wi.fh)}
+		case cos.ExtTgz, cos.ExtTarTgz:
+			gzw := gzip.NewWriter(wi.fh)
+			wi.writer = &tgzWriter{archwi: wi, gzw: gzw, w: tar.NewWriter(gzw)}
 		case cos.ExtZip:
 			wi.writer = &zipWriter{archwi: wi, w: zip.NewWriter(wi.fh)}
 		default:
@@ -245,10 +266,14 @@ func (r *XactPutArchive) Run(wg *sync.WaitGroup) {
 		}
 	}
 fin:
+	r.stopping.Store(true)
 	r.DemandBase.Stop()
 
 	r.dm.Close(err)
-	r.dm.UnregRecv()
+	go func() {
+		time.Sleep(delayUnregRecv)
+		r.dm.UnregRecv()
+	}()
 	r.Finish(err)
 }
 
@@ -283,6 +308,9 @@ func (r *XactPutArchive) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, er
 	}
 	defer cos.DrainReader(objReader)
 
+	if r.stopping.Load() {
+		return
+	}
 	r.pending.RLock()
 	wi, ok := r.pending.m[string(hdr.Opaque)] // NOTE: fullname
 	r.pending.RUnlock()
@@ -427,6 +455,35 @@ func (tw *tarWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Re
 		tw.archwi.errCnt.Inc()
 	}
 	tw.archwi.wmu.Unlock()
+	return
+}
+
+///////////////
+// tgzWriter //
+///////////////
+func (tzw *tgzWriter) fini() {
+	tzw.w.Close()
+	tzw.gzw.Close()
+}
+
+func (tzw *tgzWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader) (err error) {
+	tarhdr := new(tar.Header)
+	tarhdr.Typeflag = tar.TypeReg
+
+	tarhdr.Size = oah.SizeBytes()
+	tarhdr.ModTime = time.Unix(0, oah.AtimeUnix())
+	tarhdr.Name = fullname
+
+	// one at a time
+	tzw.archwi.wmu.Lock()
+	if err = tzw.w.WriteHeader(tarhdr); err == nil {
+		_, err = io.CopyBuffer(tzw.w, reader, tzw.archwi.buf)
+	}
+	if err != nil {
+		tzw.archwi.err = err
+		tzw.archwi.errCnt.Inc()
+	}
+	tzw.archwi.wmu.Unlock()
 	return
 }
 

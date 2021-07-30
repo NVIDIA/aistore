@@ -175,6 +175,12 @@ func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 				ext: cos.ExtTar, list: false,
 			},
 			{
+				ext: cos.ExtTgz, list: true,
+			},
+			{
+				ext: cos.ExtTgz, list: false,
+			},
+			{
 				ext: cos.ExtZip, list: true,
 			},
 			{
