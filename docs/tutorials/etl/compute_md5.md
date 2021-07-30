@@ -1,3 +1,12 @@
+---
+layout: post
+title: COMPUTE_MD5
+permalink: ./tutorials/etl/compute_md5
+redirect_from:
+ - ./tutorials/etl/compute_md5.md/
+ - /docs/./tutorials/etl/compute_md5.md/
+---
+
 # Compute MD5
 
 In this example, we will see how ETL can be used to do something as simple as computing MD5 of the object.

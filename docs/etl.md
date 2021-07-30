@@ -1,8 +1,17 @@
+---
+layout: post
+title: ETL
+permalink: etl
+redirect_from:
+ - etl.md/
+ - /docs/etl.md/
+---
+
 # Extract, Transform, Load (ETL) with AIStore
 
 **New** in v3.3: offline transformation and the capability to run user-defined functions (in addition to custom ETL containers). Also, bug fixes, performance improvements across the board, video and GIF presentations, and more.
 
-<img src="images/etl-v3.3.png" width="450">
+<img src="images/etl-v3.3.png" width="80%" class="center">
 
 - [Introduction](#introduction)
 - [Getting Started](#getting-started)
@@ -46,11 +55,11 @@ For getting-started details and numerous examples, please refer to rest of this 
 
 The following [video](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL Getting Started (Youtube video)") demonstrates AIStore's ETL feature using Jupyter Notebook.
 
-[![AIStore ETL Getting Started](/docs/images/etl-getting-started-400.png)](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL Getting Started (Youtube video)")
+[![AIStore ETL Getting Started](images/etl-getting-started-400.png)](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL Getting Started (Youtube video)")
 
 ## Online ETL example
 
-<img src="/docs/images/etl-md5.gif" alt="ETL-MD5" width="80%">
+<img src="images/etl-md5.gif" alt="ETL-MD5" width="80%">
 
 The example above uses [AIS CLI](/docs/cli.md) to:
 1. **Create** a new bucket;
@@ -65,7 +74,7 @@ Note that both the container itself and its [YAML specification](https://raw.git
 
 ## Offline ETL example
 
-<img src="/docs/images/etl-imagenet.gif" alt="ETL-ImageNet" width="80%">
+<img src="images/etl-imagenet.gif" alt="ETL-ImageNet" width="80%">
 
 The example above uses [AIS CLI](/docs/cli.md) to:
 1. **Create** a new AIS bucket;
@@ -151,7 +160,7 @@ Still, since the number of supported  *runtimes* will always remain somewhat lim
 ### *init spec* request
 
 *Init spec* request covers all, even the most sophisticated, cases of ETL initialization.
-It allows running any Docker image that implements certain requirements on communication with the cluster. 
+It allows running any Docker image that implements certain requirements on communication with the cluster.
 The *init spec* request requires writing a Pod specification following specification requirements.
 
 For detailed step-by-step tutorial on *init spec* request, please see [MD5 ETL playbook](/docs/tutorials/etl/compute_md5.md).
@@ -264,7 +273,7 @@ This section describes how to interact with ETLs via RESTful API.
 
 ## ETL name specifications
 
-Every initialized ETL has a unique `ETL_ID` associated with it, used for running transforms/computation on data or stopping the ETL. 
+Every initialized ETL has a unique `ETL_ID` associated with it, used for running transforms/computation on data or stopping the ETL.
 
 The `pod` name is used as the `ETL_ID` when an ETL is initialized using YAML specification. For instance, below YAML spec sets `ETL_ID` to `compute-md5`.
 

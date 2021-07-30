@@ -1,3 +1,13 @@
+---
+layout: post
+title: BUCKET
+permalink: cli/bucket
+redirect_from:
+ - cli/bucket.md/
+ - /docs/cli/bucket.md/
+ - /docs/cli/bucket.md/
+---
+
 # CLI Reference for Buckets
 This section lists operations on *buckets* using the AIS CLI, with `ais bucket`.
 For types of supported buckets (AIS, Cloud, backend, etc.) and many more examples, please see the [in-depth overview of buckets](/docs/bucket.md).

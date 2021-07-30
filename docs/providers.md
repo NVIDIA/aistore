@@ -1,3 +1,12 @@
+---
+layout: post
+title: PROVIDERS
+permalink: providers
+redirect_from:
+ - providers.md/
+ - /docs/providers.md/
+---
+
 ## Introduction
 
 AIStore natively integrates with multiple backend providers:
@@ -182,4 +191,3 @@ would all be stored in a single AIS bucket that would have a protocol prefix `ht
 
 WARNING: Currently HTTP(S) based datasets can only be used with clients which support an option of overriding the proxy for certain hosts (for e.g. `curl ... --noproxy=$(curl -s G/v1/cluster?what=target_ips)`).
 If used otherwise, we get stuck in a redirect loop, as the request to target gets redirected via proxy.
-

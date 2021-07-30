@@ -1,3 +1,12 @@
+---
+layout: post
+title: TENSORFLOW
+permalink: tensorflow
+redirect_from:
+ - tensorflow.md/
+ - /docs/tensorflow.md/
+---
+
 ## Table of Contents
 
 - [Overview](#overview)

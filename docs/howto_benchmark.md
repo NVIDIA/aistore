@@ -1,3 +1,12 @@
+---
+layout: post
+title: HOWTO_BENCHMARK
+permalink: howto_benchmark
+redirect_from:
+ - howto_benchmark.md/
+ - /docs/howto_benchmark.md/
+---
+
 ## How to benchmark with AIStore
 
 The tool we have developed is called AIS Loader (`aisloader`) - a load generator to benchmark and stress-test AIStore, or any S3-compatible backend. AIS Loader generates arbitrary read/write workloads including those (synthetic) ones that mimic training and inference workloads. The latter allows to run benchmarks in isolation and avoid compute-side bottlenecks, if any.

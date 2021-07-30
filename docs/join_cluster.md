@@ -1,3 +1,12 @@
+---
+layout: post
+title: JOIN_CLUSTER
+permalink: join_cluster
+redirect_from:
+ - join_cluster.md/
+ - /docs/join_cluster.md/
+---
+
 ## Table of Contents
 
 - [Joining a Cluster](#joining-a-cluster)
@@ -20,4 +29,3 @@ Here's how a new node joins a running AIStore cluster:
   - `discovery_url`
   - `original_url`
 - but only if those are defined and different from the previously tried.
-

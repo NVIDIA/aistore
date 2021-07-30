@@ -1,3 +1,12 @@
+---
+layout: post
+title: BATCH
+permalink: batch
+redirect_from:
+ - batch.md/
+ - /docs/batch.md/
+---
+
 ## Table of Contents
 - [List/Range Operations](#listrange-operations)
 	- [List](#list)

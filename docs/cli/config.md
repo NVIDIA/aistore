@@ -1,3 +1,12 @@
+---
+layout: post
+title: CONFIG
+permalink: ./cli/config
+redirect_from:
+ - ./cli/config.md/
+ - /docs/./cli/config.md/
+---
+
 # CLI Reference for Configurations
 This section lists configuration management operations the AIS CLI, with `ais config`.
 
@@ -57,9 +66,9 @@ $ ais show config CASGt8088 --type local
 PROPERTY                         VALUE
 confdir                          /home/divaturi/.ais8
 log_dir                          /tmp/ais/8/log
-host_net.hostname                
-host_net.hostname_intra_control  
-host_net.hostname_intra_data     
+host_net.hostname
+host_net.hostname_intra_control
+host_net.hostname_intra_data
 host_net.port                    8088
 host_net.port_intra_control      9088
 host_net.port_intra_data         10088

@@ -1,4 +1,14 @@
+---
+layout: post
+title: STORAGE SVCS
+permalink: storage_svcs
+redirect_from:
+ - storage_svcs.md/
+ - /docs/storage_svcs.md/
+---
+
 ## Table of Contents
+
 - [Storage Services](#storage-services)
   - [Notation](#notation)
 - [Checksumming](#checksumming)

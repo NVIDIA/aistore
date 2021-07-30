@@ -1,3 +1,12 @@
+---
+layout: post
+title: DOCKER_MAIN
+permalink: docker_main
+redirect_from:
+ - docker_main.md/
+ - /docs/docker_main.md/
+---
+
 ## Introduction
 
 AIStore can be run as a cluster of Docker containers. There are two modes of operation: development and quick-start. They can be found in the [`deploy/dev/docker`](/deploy/dev/docker) directory.
@@ -133,7 +142,7 @@ Please note that if you are running the service for the first time, the image bu
 
 List all of the running containers using `docker ps`. Many commands require the CONTAINER ID or NAME fields. Example output:
 
-![docker ps](/docs/images/docker_ps.png)
+![docker ps](images/docker_ps.png)
 
 ### List All Containers
 

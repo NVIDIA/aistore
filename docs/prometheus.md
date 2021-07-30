@@ -1,3 +1,12 @@
+---
+layout: post
+title: PROMETHEUS
+permalink: prometheus
+redirect_from:
+ - prometheus.md/
+ - /docs/prometheus.md/
+---
+
 ## Monitoring AIStore with Prometheus
 
 AIStore tracks a fairly substantial and growing list of performance statistics and error counters. Viewership is equally supported via:

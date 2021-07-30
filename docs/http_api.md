@@ -1,3 +1,12 @@
+---
+layout: post
+title: HTTP_API
+permalink: http_api
+redirect_from:
+ - http_api.md/
+ - /docs/http_api.md/
+---
+
 ## RESTful API
 
 ## Table of Contents

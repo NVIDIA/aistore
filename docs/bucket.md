@@ -1,3 +1,12 @@
+---
+layout: post
+title: BUCKET
+permalink: bucket
+redirect_from:
+ - bucket.md/
+ - /docs/bucket.md/
+---
+
 ## Table of Contents
 
 - [Bucket](#bucket)
@@ -473,14 +482,14 @@ Alongside listing names and properties of the objects, it also allows filtering 
 
 At the high level, the idea is that a proxy dispatches a request to targets which produce output that is returned and combined by the proxy.
 
-![](/docs/images/query_high.png)
+![](images/query_high.png)
 
 *(Proxy combines and sorts the outputs returned from targets)*
 
 
 When target receives a request from the proxy, it then traverses disks applying the filters and selections on each of the object.
 
-![](/docs/images/query_target.png)
+![](images/query_target.png)
 
 *(Objects marked as green pass all the filtering and selection whereas objects marked red don't)*
 

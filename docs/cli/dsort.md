@@ -1,3 +1,12 @@
+---
+layout: post
+title: DSORT
+permalink: ./cli/dsort
+redirect_from:
+ - ./cli/dsort.md/
+ - /docs/./cli/dsort.md/
+---
+
 # Start, Stop, and monitor distributed parallel sorting (dSort)
 
 For background and in-depth presentation, please see this [document](/docs/dsort.md).
@@ -322,4 +331,3 @@ Wait for the dSort job with given `JOB_ID` to finish.
 | --- | --- | --- | --- |
 | `--refresh` | `duration` | Refresh rate | `1s` |
 | `--progress` | `bool` | Displays progress bar | `false` |
-

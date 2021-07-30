@@ -1,4 +1,11 @@
-# Getting Started
+---
+layout: post
+title: GETTING STARTED
+permalink: getting_started
+redirect_from:
+ - getting_started.md/
+ - /docs/getting_started.md/
+---
 
 AIStore runs on a single Linux or Mac machine. Bare-metal Kubernetes and [GCP/GKE](https://cloud.google.com/kubernetes-engine) Cloud-based deployments are also supported. There are numerous other options.
 
@@ -43,7 +50,7 @@ In particular, [AIS-K8s GitHub repository](https://github.com/NVIDIA/ais-k8s/blo
 
 The following GIF illustrates steps to deploy AIS on Google Cloud Platform (GCP):
 
-<img src="/docs/images/ais-k8s-deploy.gif" alt="Kubernetes cloud deployment" width="100%">
+<img src="images/ais-k8s-deploy.gif" alt="Kubernetes cloud deployment" width="100%">
 
 Finally, the [repository](https://github.com/NVIDIA/ais-k8s) hosts [Kubernetes Operator](https://github.com/NVIDIA/ais-k8s/tree/master/operator) project that will eventually replace Helm charts and will become the main deployment, lifecycle, and operation management "vehicle" for AIStore.
 
@@ -58,7 +65,7 @@ Local AIStore playground is not intended for production clusters and is not mean
 
 The following [video](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube video)") gives a quick intro to AIStore, along with a brief demo of the local playground and development environment.
 
-[![AIStore Developer Playground](/docs/images/dev-playground-400.png)](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube video)")
+[![AIStore Developer Playground](images/dev-playground-400.png)](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube video)")
 
 ### Deployment Script
 
@@ -76,7 +83,7 @@ where:
 * [`clean_deploy.sh`](/docs/development.md#clean-deploy) builds various AIStore binaries (such as `aisnode` and `cli`)
 and then deploys a local cluster with 5 proxies and 5 targets by default.
 
-To specify the number of simulated nodes, you can run `clean_deploy.sh --nproxies 3 --ntargets 3`. To see more options 
+To specify the number of simulated nodes, you can run `clean_deploy.sh --nproxies 3 --ntargets 3`. To see more options
 that `clean_deploy.sh` provides, [refer to its documentation](/docs/development.md#clean-deploy)
 
 ### Manual Deployment
@@ -188,4 +195,3 @@ Further, given the container's cgroup/memory limitation, each AIS node adjusts t
 > Limits on memory may affect [dSort](/docs/dsort.md) performance forcing it to "spill" the content associated with in-progress resharding into local drives. The same is true for erasure-coding that also requires memory to rebuild objects from slices, etc.
 
 > For technical details on AIS memory management, please see [this readme](/memsys/README.md).
-

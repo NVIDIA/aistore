@@ -1,3 +1,12 @@
+---
+layout: post
+title: OVERVIEW
+permalink: overview
+redirect_from:
+ - overview.md/
+ - /docs/overview.md/
+---
+
 ## Introduction
 
 Training deep learning (DL) models on petascale datasets is essential for achieving competitive and state-of-the-art performance in applications such as speech, video analytics, and object recognition. However, existing distributed filesystems were not developed for the access patterns and usability requirements of DL jobs.
