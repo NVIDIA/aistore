@@ -643,6 +643,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 			},
 			skipArgs: tutils.SkipTestArgs{
 				RequiresRemoteCluster: true,
+				Long:                  true,
 			},
 		},
 		{
@@ -663,6 +664,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 					Copies:  api.Int64(3),
 				},
 			},
+			skipArgs: tutils.SkipTestArgs{Long: true},
 		},
 		{
 			name: "local_ec_2_2",
@@ -674,6 +676,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 					ObjSizeLimit: api.Int64(0),
 				},
 			},
+			skipArgs: tutils.SkipTestArgs{Long: true},
 		},
 	}
 	for _, test := range tests { // nolint:gocritic // no performance critical code

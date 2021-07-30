@@ -781,6 +781,12 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 		t.doETL(w, r, query.Get(cmn.URLParamUUID), bck, lom.ObjName)
 		return
 	}
+	filename := query.Get(cmn.URLParamArchpath)
+	if strings.HasPrefix(filename, lom.ObjName) {
+		if rel, err := filepath.Rel(lom.ObjName, filename); err == nil {
+			filename = rel
+		}
+	}
 	goi := allocGetObjInfo()
 	{
 		goi.started = started
@@ -791,7 +797,7 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 		goi.ctx = context.Background()
 		goi.ranges = rangesQuery{Range: r.Header.Get(cmn.HdrRange), Size: 0}
 		goi.archive = archiveQuery{
-			filename: query.Get(cmn.URLParamArchpath),
+			filename: filename,
 			mime:     query.Get(cmn.URLParamArchmime),
 		}
 		goi.isGFN = cos.IsParseBool(query.Get(cmn.URLParamIsGFNRequest))
