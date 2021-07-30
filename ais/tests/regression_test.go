@@ -602,7 +602,7 @@ func TestLRU(t *testing.T) {
 	}
 
 	tlog.Logf("LRU: current min space usage in the cluster: %d%%\n", usedPct)
-	tlog.Logf("Setting 'lru.lowm=%d' and 'lru.highwm=%d'\n", lowWM, highWM)
+	tlog.Logf("setting 'lru.lowm=%d' and 'lru.highwm=%d'\n", lowWM, highWM)
 
 	// All targets: set new watermarks; restore upon exit
 	oconfig := tutils.GetClusterConfig(t)

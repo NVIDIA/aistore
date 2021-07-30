@@ -155,6 +155,7 @@ func Run(ini *InitLRU) {
 		num               = len(availablePaths)
 		joggers           = make(map[string]*lruJ, num)
 		parent            = &lruP{joggers: joggers, ini: *ini}
+		repeated          bool
 	)
 	glog.Infof("[lru] %s started: dont-evict-time %v", xlru, config.LRU.DontEvictTime)
 	if num == 0 {
@@ -216,7 +217,8 @@ repeat:
 				xlru.stop()
 				return
 			}
-			if repeat {
+			if repeat && !repeated {
+				repeated = true
 				goto repeat
 			}
 		}

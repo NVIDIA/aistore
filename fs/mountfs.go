@@ -1072,7 +1072,7 @@ func nextRefresh(config *cmn.Config) time.Duration {
 		return tmin
 	}
 	debug.Assert(umin < umax)
-	debug.Assert(tmin < tmax)
+	debug.Assertf(tmin < tmax, "min %d > max %d", tmin, tmax)
 	ratio := (util - umin) * 100 / (umax - umin)
 	return time.Duration(ratio)*(tmax-tmin)/100 + tmin
 }
