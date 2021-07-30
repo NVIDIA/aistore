@@ -47,6 +47,8 @@ include:
   - assets/
 exclude:
   - fetch_upstream.sh
+  - vendor
+  - Gemfile*
 plugins:
   - jekyll-redirect-from
   - jekyll-relative-links
