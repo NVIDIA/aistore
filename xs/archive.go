@@ -50,9 +50,8 @@ type (
 		w      *tar.Writer
 	}
 	tgzWriter struct {
-		archwi *archwi
-		gzw    *gzip.Writer
-		w      *tar.Writer
+		tw  tarWriter
+		gzw *gzip.Writer
 	}
 	zipWriter struct {
 		archwi *archwi
@@ -203,7 +202,10 @@ func (r *XactPutArchive) Begin(msg *cmn.ArchiveMsg) (err error) {
 			wi.writer = &tarWriter{archwi: wi, w: tar.NewWriter(wi.fh)}
 		case cos.ExtTgz, cos.ExtTarTgz:
 			gzw := gzip.NewWriter(wi.fh)
-			wi.writer = &tgzWriter{archwi: wi, gzw: gzw, w: tar.NewWriter(gzw)}
+			wi.writer = &tgzWriter{
+				gzw: gzw,
+				tw:  tarWriter{archwi: wi, w: tar.NewWriter(gzw)},
+			}
 		case cos.ExtZip:
 			wi.writer = &zipWriter{archwi: wi, w: zip.NewWriter(wi.fh)}
 		default:
@@ -462,29 +464,12 @@ func (tw *tarWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Re
 // tgzWriter //
 ///////////////
 func (tzw *tgzWriter) fini() {
-	tzw.w.Close()
+	tzw.tw.fini()
 	tzw.gzw.Close()
 }
 
-func (tzw *tgzWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader) (err error) {
-	tarhdr := new(tar.Header)
-	tarhdr.Typeflag = tar.TypeReg
-
-	tarhdr.Size = oah.SizeBytes()
-	tarhdr.ModTime = time.Unix(0, oah.AtimeUnix())
-	tarhdr.Name = fullname
-
-	// one at a time
-	tzw.archwi.wmu.Lock()
-	if err = tzw.w.WriteHeader(tarhdr); err == nil {
-		_, err = io.CopyBuffer(tzw.w, reader, tzw.archwi.buf)
-	}
-	if err != nil {
-		tzw.archwi.err = err
-		tzw.archwi.errCnt.Inc()
-	}
-	tzw.archwi.wmu.Unlock()
-	return
+func (tzw *tgzWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader) error {
+	return tzw.tw.write(fullname, oah, reader)
 }
 
 ///////////////
