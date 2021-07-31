@@ -33,7 +33,7 @@ import (
 const (
 	doneSendingOpcode = 31415
 
-	delayUnregRecv = time.Second
+	delayUnregRecv = 200 * time.Millisecond
 )
 
 type (

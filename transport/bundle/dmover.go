@@ -39,12 +39,15 @@ type (
 			streams *Streams
 			client  transport.Client
 		}
+		stage struct {
+			regred atomic.Bool
+			opened atomic.Bool
+			laterx atomic.Bool
+		}
 		config      *cmn.Config
 		mem         *memsys.MMSA
 		compression string // enum { cmn.CompressNever, ... }
 		xact        cluster.Xact
-		opened      atomic.Bool
-		laterx      atomic.Bool
 		multiplier  int
 		sizePDU     int32
 		recvType    cluster.RecvType
@@ -120,6 +123,7 @@ func (dm *DataMover) RegRecv() (err error) {
 	if dm.useACKs() {
 		err = transport.HandleObjStream(dm.ack.trname, dm.wrapRecvACK)
 	}
+	dm.stage.regred.Store(true)
 	return
 }
 
@@ -149,10 +153,10 @@ func (dm *DataMover) Open() {
 	if dm.useACKs() {
 		dm.ack.streams = NewStreams(dm.t.Sowner(), dm.t.Snode(), dm.ack.client, ackArgs)
 	}
-	dm.opened.Store(true)
+	dm.stage.opened.Store(true)
 }
 
-func (dm *DataMover) IsOpen() bool { return dm.opened.Load() }
+func (dm *DataMover) IsOpen() bool { return dm.stage.opened.Load() }
 
 // quiesce *local* Rx
 func (dm *DataMover) Quiesce(d time.Duration) cluster.QuiRes {
@@ -160,15 +164,16 @@ func (dm *DataMover) Quiesce(d time.Duration) cluster.QuiRes {
 }
 
 func (dm *DataMover) Close(err error) {
-	debug.Assert(dm.opened.Load())    // Open() must've been called
-	dm.data.streams.Close(err == nil) // err == nil: close gracefully via `fin`, otherwise abort
+	debug.Assert(dm.stage.opened.Load()) // Open() must've been called
+	dm.data.streams.Close(err == nil)    // err == nil: close gracefully via `fin`, otherwise abort
 	if dm.useACKs() {
 		dm.ack.streams.Close(true)
 	}
+	dm.stage.opened.Store(false)
 }
 
 func (dm *DataMover) UnregRecv() {
-	if !dm.opened.Load() {
+	if !dm.stage.regred.Load() {
 		return // e.g., 2PC (begin => abort) sequence with no Open
 	}
 	dm.Quiesce(dm.config.Rebalance.Quiesce.D())
@@ -180,6 +185,7 @@ func (dm *DataMover) UnregRecv() {
 			glog.Error(err)
 		}
 	}
+	dm.stage.regred.Store(false)
 }
 
 func (dm *DataMover) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *cluster.Snode) error {
@@ -199,18 +205,18 @@ func (dm *DataMover) Bcast(obj *transport.Obj) error {
 //
 
 func (dm *DataMover) quicb(_ time.Duration /*accum. sleep time*/) cluster.QuiRes {
-	if dm.laterx.CAS(true, false) {
+	if dm.stage.laterx.CAS(true, false) {
 		return cluster.QuiActive
 	}
 	return cluster.QuiInactive
 }
 
 func (dm *DataMover) wrapRecvData(hdr transport.ObjHdr, object io.Reader, err error) {
-	dm.laterx.Store(true)
+	dm.stage.laterx.Store(true)
 	dm.data.recv(hdr, object, err)
 }
 
 func (dm *DataMover) wrapRecvACK(hdr transport.ObjHdr, object io.Reader, err error) {
-	dm.laterx.Store(true)
+	dm.stage.laterx.Store(true)
 	dm.ack.recv(hdr, object, err)
 }
