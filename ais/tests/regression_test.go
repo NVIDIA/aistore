@@ -630,6 +630,7 @@ func TestLRU(t *testing.T) {
 	tlog.Logln("starting LRU...")
 	xactID, err := api.StartXaction(baseParams, api.XactReqArgs{Kind: cmn.ActLRU})
 	tassert.CheckFatal(t, err)
+	time.Sleep(2 * time.Second) // TODO: better
 
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActLRU, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)

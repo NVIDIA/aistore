@@ -1382,14 +1382,14 @@ func (h *httprunner) writeMsgPack(w http.ResponseWriter, r *http.Request, v inte
 
 func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, v interface{}, tag string) (ok bool) {
 	_, isByteArray := v.([]byte)
-	cos.Assert(!isByteArray)
-
+	debug.Assert(!isByteArray)
+	ok = true
 	w.Header().Set(cmn.HdrContentType, cmn.ContentJSON)
 	if err := jsoniter.NewEncoder(w).Encode(v); err != nil {
 		h.handleWriteError(r, tag, err)
-		return false
+		ok = false
 	}
-	return true
+	return
 }
 
 func (h *httprunner) handleWriteError(r *http.Request, tag string, err error) {

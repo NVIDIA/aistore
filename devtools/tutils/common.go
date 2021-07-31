@@ -150,7 +150,8 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 		targets := smap.Tmap.ActiveNodes()
 		proxyURL := GetPrimaryURL()
 		baseParams := BaseAPIParams(proxyURL)
-		mpList, _ := api.GetMountpaths(baseParams, targets[0])
+		mpList, err := api.GetMountpaths(baseParams, targets[0])
+		tassert.CheckFatal(tb, err)
 		if l := len(mpList.Available); l < args.MinMountpaths {
 			tb.Skipf("%s requires at least %d mountpaths (have %d)", tb.Name(), args.MinMountpaths, l)
 		}
