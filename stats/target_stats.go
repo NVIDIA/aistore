@@ -236,7 +236,7 @@ func (r *Trunner) log(now int64, uptime time.Duration) {
 	cs, updated, _ := fs.CapPeriodic(r.MPCap)
 	if updated {
 		if cs.Err != nil {
-			go r.T.RunLRU("" /*uuid*/, false)
+			go r.T.RunLRU("" /*uuid*/, nil /*wg*/, false)
 		}
 		for mpath, fsCapacity := range r.MPCap {
 			ln, err := cos.MarshalToString(fsCapacity)

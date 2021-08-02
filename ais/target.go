@@ -338,7 +338,7 @@ func (t *targetrunner) Run() error {
 			} else if daemon.resilver.required {
 				glog.Infof("Starting resilver, reason: %s", daemon.resilver.reason)
 			}
-			t.runResilver("", false /*skipGlobMisplaced*/)
+			t.runResilver("" /*uuid*/, nil /*wg*/, false /*skipGlobMisplaced*/)
 		}()
 	}
 
@@ -838,7 +838,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if cs := fs.GetCapStatus(); cs.Err != nil {
-		go t.RunLRU("" /*uuid*/, false)
+		go t.RunLRU("" /*uuid*/, nil /*wg*/, false)
 		if cs.OOS {
 			t.writeErr(w, r, cs.Err)
 			return
@@ -1583,12 +1583,15 @@ func (t *targetrunner) fsErr(err error, filepath string) {
 	t.fshc.OnErr(filepath)
 }
 
-func (t *targetrunner) runResilver(id string, skipGlobMisplaced bool, notifs ...*xaction.NotifXact) {
+func (t *targetrunner) runResilver(id string, wg *sync.WaitGroup, skipGlobMisplaced bool, notifs ...*xaction.NotifXact) {
 	if id == "" {
 		id = cos.GenUUID()
 		regMsg := xactRegMsg{UUID: id, Kind: cmn.ActResilver, Srcs: []string{t.si.ID()}}
 		msg := t.newAmsgActVal(cmn.ActRegGlobalXaction, regMsg)
 		t.bcastAsyncIC(msg)
+	}
+	if wg != nil {
+		wg.Done() // compare w/ xaction.GoRunW(()
 	}
 	t.rebManager.RunResilver(id, skipGlobMisplaced, notifs...)
 }

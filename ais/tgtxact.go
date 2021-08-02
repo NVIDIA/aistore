@@ -7,6 +7,7 @@ package ais
 import (
 	"fmt"
 	"net/http"
+	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -140,7 +141,10 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bc
 		if bck != nil {
 			glog.Errorf(erfmb, xactMsg.Kind, bck)
 		}
-		go t.RunLRU(xactMsg.ID, xactMsg.Force != nil && *xactMsg.Force, xactMsg.Buckets...)
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		go t.RunLRU(xactMsg.ID, wg, xactMsg.Force != nil && *xactMsg.Force, xactMsg.Buckets...)
+		wg.Wait()
 	case cmn.ActResilver:
 		if bck != nil {
 			glog.Errorf(erfmb, xactMsg.Kind, bck)
@@ -152,7 +156,10 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bc
 				F:    t.callerNotifyFin,
 			},
 		}
-		go t.runResilver(xactMsg.ID, false /*skipGlobMisplaced*/, notif)
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		go t.runResilver(xactMsg.ID, wg, false /*skipGlobMisplaced*/, notif)
+		wg.Wait()
 	// 2. with bucket
 	case cmn.ActPrefetch:
 		args := &cmn.ListRangeMsg{}

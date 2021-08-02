@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/backend"
@@ -67,7 +68,7 @@ func (t *targetrunner) GFN(gfnType cluster.GFNType) cluster.GFN {
 }
 
 // RunLRU is triggered by the stats evaluation of a remaining capacity, see `target_stats.go`.
-func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
+func (t *targetrunner) RunLRU(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.Bck) {
 	regToIC := id == ""
 	if regToIC {
 		id = cos.GenUUID()
@@ -75,16 +76,17 @@ func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
 	rns := xreg.RenewLRU(id)
 	debug.AssertNoErr(rns.Err)
 	if rns.IsRunning() {
+		if wg != nil {
+			wg.Done()
+		}
 		return
 	}
 	xlru := rns.Entry.Get()
-
 	if regToIC && xlru.ID() == id {
 		regMsg := xactRegMsg{UUID: id, Kind: cmn.ActLRU, Srcs: []string{t.si.ID()}}
 		msg := t.newAmsgActVal(cmn.ActRegGlobalXaction, regMsg)
 		t.bcastAsyncIC(msg)
 	}
-
 	ini := lru.InitLRU{
 		T:                   t,
 		Xaction:             xlru.(*lru.Xaction),
@@ -94,12 +96,14 @@ func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
 		GetFSStats:          ios.GetFSStats,
 		Force:               force,
 	}
-
 	xlru.AddNotif(&xaction.NotifXact{
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 		Xact:      xlru,
 	})
-	lru.Run(&ini) // Blocking call.
+	if wg != nil {
+		wg.Done() // compare w/ xaction.GoRunW(()
+	}
+	lru.Run(&ini)
 }
 
 // slight variation vs t.doPut() above

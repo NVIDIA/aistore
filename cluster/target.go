@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -164,7 +165,7 @@ type Target interface {
 
 	// File-system related functions.
 	FSHC(err error, path string)
-	RunLRU(id string, force bool, bcks ...cmn.Bck)
+	RunLRU(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.Bck)
 
 	// Getting other interfaces.
 	DB() dbdriver.Driver

@@ -99,7 +99,7 @@ func (g *fsprungroup) _postaddmi(action string, mi *fs.MountpathInfo) {
 	xreg.AbortAllMountpathsXactions()
 	go func() {
 		if cmn.GCO.Get().Resilver.Enabled {
-			g.t.runResilver("", false /*skipGlobMisplaced*/)
+			g.t.runResilver("" /*uuid*/, nil /*wg*/, false /*skipGlobMisplaced*/)
 		}
 		xreg.RenewMakeNCopies(g.t, cos.GenUUID(), "add-mp")
 	}()
@@ -122,7 +122,7 @@ func (g *fsprungroup) _postdelmi(action string, mi *fs.MountpathInfo) {
 
 	go func() {
 		if cmn.GCO.Get().Resilver.Enabled {
-			g.t.runResilver("", false /*skipGlobMisplaced*/)
+			g.t.runResilver("" /*uuid*/, nil /*wg*/, false /*skipGlobMisplaced*/)
 		}
 		xreg.RenewMakeNCopies(g.t, cos.GenUUID(), "del-mp")
 	}()

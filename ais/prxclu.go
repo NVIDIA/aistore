@@ -720,8 +720,10 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		_ = p.bcastGroup(args)
 		freeBcastArgs(args)
 		p.unreg(msg.Action)
-	case cmn.ActXactStart, cmn.ActXactStop:
-		p.xactStarStop(w, r, msg)
+	case cmn.ActXactStart:
+		p.xactStart(w, r, msg)
+	case cmn.ActXactStop:
+		p.xactStop(w, r, msg)
 	case cmn.ActSendOwnershipTbl:
 		p.sendOwnTbl(w, r, msg)
 	case cmn.ActStartMaintenance, cmn.ActDecommissionNode, cmn.ActShutdownNode:
@@ -790,25 +792,27 @@ func (p *proxyrunner) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
 	}
 }
 
-func (p *proxyrunner) xactStarStop(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
+func (p *proxyrunner) xactStart(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	xactMsg := xaction.XactReqMsg{}
 	if err := cos.MorphMarshal(msg.Value, &xactMsg); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
-	if msg.Action == cmn.ActXactStart {
-		if xactMsg.Kind == cmn.ActRebalance {
-			p.rebalanceCluster(w, r)
-			return
-		}
-
-		xactMsg.ID = cos.GenUUID() // all other xact starts need an id
-		if xactMsg.Kind == cmn.ActResilver && xactMsg.Node != "" {
-			p.resilverOne(w, r, msg, xactMsg)
-			return
-		}
+	// rebalance
+	if xactMsg.Kind == cmn.ActRebalance {
+		p.rebalanceCluster(w, r)
+		return
 	}
 
+	xactMsg.ID = cos.GenUUID() // common for all targets
+
+	// cluster-wide resilver
+	if xactMsg.Kind == cmn.ActResilver && xactMsg.Node != "" {
+		p.resilverOne(w, r, msg, xactMsg)
+		return
+	}
+
+	// all the rest `startable` (see xaction/api.go)
 	body := cos.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: xactMsg})
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathXactions.S, Body: body}
@@ -824,12 +828,33 @@ func (p *proxyrunner) xactStarStop(w http.ResponseWriter, r *http.Request, msg *
 		return
 	}
 	freeCallResults(results)
-	if msg.Action == cmn.ActXactStart {
-		smap := p.owner.smap.get()
-		nl := xaction.NewXactNL(xactMsg.ID, xactMsg.Kind, &smap.Smap, nil)
-		p.ic.registerEqual(regIC{smap: smap, nl: nl})
-		w.Write([]byte(xactMsg.ID))
+	smap := p.owner.smap.get()
+	nl := xaction.NewXactNL(xactMsg.ID, xactMsg.Kind, &smap.Smap, nil)
+	p.ic.registerEqual(regIC{smap: smap, nl: nl})
+	w.Write([]byte(xactMsg.ID))
+}
+
+func (p *proxyrunner) xactStop(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
+	xactMsg := xaction.XactReqMsg{}
+	if err := cos.MorphMarshal(msg.Value, &xactMsg); err != nil {
+		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
+		return
 	}
+	body := cos.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: xactMsg})
+	args := allocBcastArgs()
+	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathXactions.S, Body: body}
+	args.to = cluster.Targets
+	results := p.bcastGroup(args)
+	freeBcastArgs(args)
+	for _, res := range results {
+		if res.err == nil {
+			continue
+		}
+		p.writeErr(w, r, res.error())
+		freeCallResults(results)
+		return
+	}
+	freeCallResults(results)
 }
 
 func (p *proxyrunner) rebalanceCluster(w http.ResponseWriter, r *http.Request) {

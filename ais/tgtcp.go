@@ -671,7 +671,7 @@ func (t *targetrunner) _postBMD(tag string, rmbcks []*cluster.Bck) {
 	}
 	// refresh used/avail capacity and run LRU if need be (in part, to remove $trash)
 	if _, err := fs.RefreshCapStatus(nil, nil); err != nil {
-		go t.RunLRU("" /*uuid*/, false)
+		go t.RunLRU("" /*uuid*/, nil /*wg*/, false)
 	}
 }
 
@@ -715,7 +715,7 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 	go t.rebManager.RunRebalance(&smap.Smap, newRMD.Version, notif)
 	if newRMD.Resilver != "" {
 		glog.Infof("%s: ... and resilver", t.si)
-		go t.runResilver(newRMD.Resilver, true /*skipGlobMisplaced*/)
+		go t.runResilver(newRMD.Resilver /*uuid*/, nil /*wg*/, true /*skipGlobMisplaced*/)
 	}
 	t.owner.rmd.put(newRMD)
 	return

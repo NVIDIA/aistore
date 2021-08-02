@@ -8,6 +8,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -38,21 +39,21 @@ func (*TargetMock) Snode() *Snode                                           { re
 func (*TargetMock) ClusterStarted() bool                                    { return true }
 func (*TargetMock) NodeStarted() bool                                       { return true }
 func (*TargetMock) DataClient() *http.Client                                { return http.DefaultClient }
-func (*TargetMock) RunLRU(_ string, _ bool, _ ...cmn.Bck)                   {}
+func (*TargetMock) RunLRU(string, *sync.WaitGroup, bool, ...cmn.Bck)        {}
 func (*TargetMock) Sowner() Sowner                                          { return nil }
-func (*TargetMock) FSHC(_ error, _ string)                                  {}
+func (*TargetMock) FSHC(error, string)                                      {}
 func (*TargetMock) MMSA() *memsys.MMSA                                      { return memsys.DefaultPageMM() }
 func (*TargetMock) SmallMMSA() *memsys.MMSA                                 { return memsys.DefaultSmallMM() }
-func (*TargetMock) PutObject(_ *LOM, _ PutObjectParams) error               { return nil }
-func (*TargetMock) FinalizeObj(_ *LOM, _ string) (int, error)               { return 0, nil }
-func (*TargetMock) EvictObject(_ *LOM) (int, error)                         { return 0, nil }
-func (*TargetMock) DeleteObject(_ *LOM, _ bool) (int, error)                { return 0, nil }
-func (*TargetMock) PromoteFile(_ PromoteFileParams) (*LOM, error)           { return nil, nil }
+func (*TargetMock) PutObject(*LOM, PutObjectParams) error                   { return nil }
+func (*TargetMock) FinalizeObj(*LOM, string) (int, error)                   { return 0, nil }
+func (*TargetMock) EvictObject(*LOM) (int, error)                           { return 0, nil }
+func (*TargetMock) DeleteObject(*LOM, bool) (int, error)                    { return 0, nil }
+func (*TargetMock) PromoteFile(PromoteFileParams) (*LOM, error)             { return nil, nil }
 func (*TargetMock) DB() dbdriver.Driver                                     { return nil }
-func (*TargetMock) Backend(_ *Bck) BackendProvider                          { return nil }
-func (*TargetMock) GFN(_ GFNType) GFN                                       { return nil }
-func (*TargetMock) LookupRemoteSingle(_ *LOM, _ *Snode) bool                { return false }
-func (*TargetMock) RebalanceNamespace(_ *Snode) ([]byte, int, error)        { return nil, 0, nil }
+func (*TargetMock) Backend(*Bck) BackendProvider                            { return nil }
+func (*TargetMock) GFN(GFNType) GFN                                         { return nil }
+func (*TargetMock) LookupRemoteSingle(*LOM, *Snode) bool                    { return false }
+func (*TargetMock) RebalanceNamespace(*Snode) ([]byte, int, error)          { return nil, 0, nil }
 func (*TargetMock) BMDVersionFixup(*http.Request, ...cmn.Bck)               {}
 func (*TargetMock) CopyObject(*LOM, *CopyObjectParams, bool) (int64, error) { return 0, nil }
 
