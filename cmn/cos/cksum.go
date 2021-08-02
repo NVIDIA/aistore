@@ -101,6 +101,37 @@ func ValidateCksumType(ty string, emptyOK ...bool) (err error) {
 	return
 }
 
+///////////////
+// CksumHash //
+///////////////
+
+func NewCksumHash(ty string) (ck *CksumHash) {
+	ck = &CksumHash{}
+	ck.Init(ty)
+	return
+}
+
+func (ck *CksumHash) Init(ty string) {
+	Assert(ck.H == nil)
+	ck.ty = ty
+	switch ty {
+	case ChecksumNone, "":
+		ck.ty, ck.H = ChecksumNone, newNoopHash()
+	case ChecksumXXHash:
+		ck.H = xxhash.New64()
+	case ChecksumMD5:
+		ck.H = md5.New()
+	case ChecksumCRC32C:
+		ck.H = NewCRC32C()
+	case ChecksumSHA256:
+		ck.H = sha512.New512_256()
+	case ChecksumSHA512:
+		ck.H = sha512.New()
+	default:
+		Assert(false)
+	}
+}
+
 ///////////
 // Cksum //
 ///////////
@@ -115,26 +146,6 @@ func NewCksum(ty, value string) *Cksum {
 		Assert(value == "")
 	}
 	return &Cksum{ty, value}
-}
-
-func NewCksumHash(ty string) *CksumHash {
-	switch ty {
-	case ChecksumNone, "":
-		return &CksumHash{Cksum{ty: ChecksumNone}, newNoopHash(), nil}
-	case ChecksumXXHash:
-		return &CksumHash{Cksum{ty: ty}, xxhash.New64(), nil}
-	case ChecksumMD5:
-		return &CksumHash{Cksum{ty: ty}, md5.New(), nil}
-	case ChecksumCRC32C:
-		return &CksumHash{Cksum{ty: ty}, NewCRC32C(), nil}
-	case ChecksumSHA256:
-		return &CksumHash{Cksum{ty: ty}, sha512.New512_256(), nil}
-	case ChecksumSHA512:
-		return &CksumHash{Cksum{ty: ty}, sha512.New(), nil}
-	default:
-		AssertMsg(false, ValidateCksumType(ty).Error())
-	}
-	return nil
 }
 
 func (ck *Cksum) Equal(to *Cksum) bool {

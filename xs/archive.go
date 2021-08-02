@@ -45,12 +45,12 @@ type (
 		write(nameInArch string, oah cmn.ObjAttrsHolder, reader io.Reader) error
 		fini()
 	}
-	baseWriter struct {
+	baseW struct {
 		wmul   *cos.WriterMulti
 		archwi *archwi
 	}
 	tarWriter struct {
-		baseWriter
+		baseW
 		tw *tar.Writer
 	}
 	tgzWriter struct {
@@ -58,7 +58,7 @@ type (
 		gzw *gzip.Writer
 	}
 	zipWriter struct {
-		baseWriter
+		baseW
 		zw *zip.Writer
 	}
 	archwi struct { // archival work item; implements lrwi
@@ -72,7 +72,7 @@ type (
 		wmu    sync.Mutex
 		buf    []byte
 		writer archWriter
-		cksum  *cos.CksumHash
+		cksum  cos.CksumHash
 		err    error
 		errCnt atomic.Int32
 		// finishing
@@ -187,7 +187,7 @@ func (r *XactPutArchive) Begin(msg *cmn.ArchiveMsg) (err error) {
 
 	wi := &archwi{r: r, msg: msg, lom: lom}
 	wi.fqn = fs.CSM.GenContentFQN(wi.lom, fs.WorkfileType, fs.WorkfileAppend)
-	wi.cksum = cos.NewCksumHash(lom.CksumConf().Type)
+	wi.cksum.Init(lom.CksumConf().Type)
 
 	smap := r.t.Sowner().Get()
 	wi.refc.Store(int32(smap.CountTargets() - 1))
@@ -376,6 +376,7 @@ func (r *XactPutArchive) fini(wi *archwi) (errCode int, err error) {
 		wi.cksum.Finalize()
 		wi.lom.SetCksum(&wi.cksum.Cksum)
 	}
+	glog.Errorln(wi.lom.String(), wi.cksum.Cksum.String())
 	cos.Close(wi.fh)
 
 	errCode, err = r.t.FinalizeObj(wi.lom, wi.fqn)
@@ -453,7 +454,7 @@ func (tw *tarWriter) init(wi *archwi) {
 		tw.tw = tar.NewWriter(wi.fh)
 	} else {
 		tw.wmul = cos.NewWriterMulti(wi.fh, wi.cksum.H)
-		tw.tw = tar.NewWriter(tw.baseWriter.wmul)
+		tw.tw = tar.NewWriter(tw.wmul)
 	}
 	wi.writer = tw
 }
