@@ -45,17 +45,21 @@ type (
 		write(nameInArch string, oah cmn.ObjAttrsHolder, reader io.Reader) error
 		fini()
 	}
-	tarWriter struct {
+	baseWriter struct {
+		wmul   *cos.WriterMulti
 		archwi *archwi
-		w      *tar.Writer
+	}
+	tarWriter struct {
+		baseWriter
+		tw *tar.Writer
 	}
 	tgzWriter struct {
 		tw  tarWriter
 		gzw *gzip.Writer
 	}
 	zipWriter struct {
-		archwi *archwi
-		w      *zip.Writer
+		baseWriter
+		zw *zip.Writer
 	}
 	archwi struct { // archival work item; implements lrwi
 		r   *XactPutArchive
@@ -68,6 +72,7 @@ type (
 		wmu    sync.Mutex
 		buf    []byte
 		writer archWriter
+		cksum  *cos.CksumHash
 		err    error
 		errCnt atomic.Int32
 		// finishing
@@ -182,6 +187,7 @@ func (r *XactPutArchive) Begin(msg *cmn.ArchiveMsg) (err error) {
 
 	wi := &archwi{r: r, msg: msg, lom: lom}
 	wi.fqn = fs.CSM.GenContentFQN(wi.lom, fs.WorkfileType, fs.WorkfileAppend)
+	wi.cksum = cos.NewCksumHash(lom.CksumConf().Type)
 
 	smap := r.t.Sowner().Get()
 	wi.refc.Store(int32(smap.CountTargets() - 1))
@@ -199,15 +205,14 @@ func (r *XactPutArchive) Begin(msg *cmn.ArchiveMsg) (err error) {
 		wi.buf, _ = r.t.MMSA().Alloc()
 		switch msg.Mime {
 		case cos.ExtTar:
-			wi.writer = &tarWriter{archwi: wi, w: tar.NewWriter(wi.fh)}
+			tw := &tarWriter{}
+			tw.init(wi)
 		case cos.ExtTgz, cos.ExtTarTgz:
-			gzw := gzip.NewWriter(wi.fh)
-			wi.writer = &tgzWriter{
-				gzw: gzw,
-				tw:  tarWriter{archwi: wi, w: tar.NewWriter(gzw)},
-			}
+			tzw := &tgzWriter{}
+			tzw.init(wi)
 		case cos.ExtZip:
-			wi.writer = &zipWriter{archwi: wi, w: zip.NewWriter(wi.fh)}
+			zw := &zipWriter{}
+			zw.init(wi)
 		default:
 			debug.AssertMsg(false, msg.Mime)
 			return
@@ -365,7 +370,12 @@ func (r *XactPutArchive) fini(wi *archwi) (errCode int, err error) {
 		return
 	}
 	wi.lom.SetSize(size)
-	wi.lom.SetCksum(cos.NoneCksum)
+	if wi.cksum.Ty() == cos.ChecksumNone {
+		wi.lom.SetCksum(cos.NoneCksum)
+	} else {
+		wi.cksum.Finalize()
+		wi.lom.SetCksum(&wi.cksum.Cksum)
+	}
 	cos.Close(wi.fh)
 
 	errCode, err = r.t.FinalizeObj(wi.lom, wi.fqn)
@@ -437,7 +447,18 @@ func (wi *archwi) quiesce() cluster.QuiRes {
 ///////////////
 // tarWriter //
 ///////////////
-func (tw *tarWriter) fini() { tw.w.Close() }
+func (tw *tarWriter) init(wi *archwi) {
+	tw.archwi = wi
+	if wi.cksum.Ty() == cos.ChecksumNone {
+		tw.tw = tar.NewWriter(wi.fh)
+	} else {
+		tw.wmul = cos.NewWriterMulti(wi.fh, wi.cksum.H)
+		tw.tw = tar.NewWriter(tw.baseWriter.wmul)
+	}
+	wi.writer = tw
+}
+
+func (tw *tarWriter) fini() { tw.tw.Close() }
 
 func (tw *tarWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader) (err error) {
 	tarhdr := new(tar.Header)
@@ -449,8 +470,8 @@ func (tw *tarWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Re
 
 	// one at a time
 	tw.archwi.wmu.Lock()
-	if err = tw.w.WriteHeader(tarhdr); err == nil {
-		_, err = io.CopyBuffer(tw.w, reader, tw.archwi.buf)
+	if err = tw.tw.WriteHeader(tarhdr); err == nil {
+		_, err = io.CopyBuffer(tw.tw, reader, tw.archwi.buf)
 	}
 	if err != nil {
 		tw.archwi.err = err
@@ -463,6 +484,18 @@ func (tw *tarWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Re
 ///////////////
 // tgzWriter //
 ///////////////
+func (tzw *tgzWriter) init(wi *archwi) {
+	tzw.tw.archwi = wi
+	if wi.cksum.Ty() == cos.ChecksumNone {
+		tzw.gzw = gzip.NewWriter(wi.fh)
+	} else {
+		tzw.tw.wmul = cos.NewWriterMulti(wi.fh, wi.cksum.H)
+		tzw.gzw = gzip.NewWriter(tzw.tw.wmul)
+	}
+	tzw.tw.tw = tar.NewWriter(tzw.gzw)
+	wi.writer = tzw
+}
+
 func (tzw *tgzWriter) fini() {
 	tzw.tw.fini()
 	tzw.gzw.Close()
@@ -475,7 +508,20 @@ func (tzw *tgzWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.R
 ///////////////
 // zipWriter //
 ///////////////
-func (zw *zipWriter) fini() { zw.w.Close() }
+
+// wi.writer = &zipWriter{archwi: wi, w: zip.NewWriter(wi.fh)}
+func (zw *zipWriter) init(wi *archwi) {
+	zw.archwi = wi
+	if wi.cksum.Ty() == cos.ChecksumNone {
+		zw.zw = zip.NewWriter(wi.fh)
+	} else {
+		zw.wmul = cos.NewWriterMulti(wi.fh, wi.cksum.H)
+		zw.zw = zip.NewWriter(zw.wmul)
+	}
+	wi.writer = zw
+}
+
+func (zw *zipWriter) fini() { zw.zw.Close() }
 
 func (zw *zipWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader) error {
 	ziphdr := new(zip.FileHeader)
@@ -486,7 +532,7 @@ func (zw *zipWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Re
 	ziphdr.Modified = time.Unix(0, oah.AtimeUnix())
 
 	zw.archwi.wmu.Lock()
-	zipw, err := zw.w.CreateHeader(ziphdr)
+	zipw, err := zw.zw.CreateHeader(ziphdr)
 	if err == nil {
 		_, err = io.CopyBuffer(zipw, reader, zw.archwi.buf)
 	}
