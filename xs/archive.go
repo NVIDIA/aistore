@@ -72,7 +72,7 @@ type (
 		wmu    sync.Mutex
 		buf    []byte
 		writer archWriter
-		cksum  cos.CksumHash
+		cksum  cos.CksumHashSize
 		err    error
 		errCnt atomic.Int32
 		// finishing
@@ -362,25 +362,22 @@ func (r *XactPutArchive) raiseErr(err error, errCode int) {
 }
 
 func (r *XactPutArchive) fini(wi *archwi) (errCode int, err error) {
+	var size int64
 	wi.writer.fini()
 	r.t.MMSA().Free(wi.buf)
-	size, err := wi.fh.Seek(0, io.SeekCurrent)
-	if err != nil {
-		debug.AssertNoErr(err)
-		return
-	}
+
+	wi.cksum.Finalize()
+	wi.lom.SetCksum(&wi.cksum.Cksum)
+	size = wi.cksum.Size
+
 	wi.lom.SetSize(size)
-	if wi.cksum.Ty() == cos.ChecksumNone {
-		wi.lom.SetCksum(cos.NoneCksum)
-	} else {
-		wi.cksum.Finalize()
-		wi.lom.SetCksum(&wi.cksum.Cksum)
-	}
-	glog.Errorln(wi.lom.String(), wi.cksum.Cksum.String())
 	cos.Close(wi.fh)
 
 	errCode, err = r.t.FinalizeObj(wi.lom, wi.fqn)
 	cluster.FreeLOM(wi.lom)
+
+	r.ObjectsInc()
+	r.BytesAdd(size)
 	return
 }
 
@@ -450,12 +447,8 @@ func (wi *archwi) quiesce() cluster.QuiRes {
 ///////////////
 func (tw *tarWriter) init(wi *archwi) {
 	tw.archwi = wi
-	if wi.cksum.Ty() == cos.ChecksumNone {
-		tw.tw = tar.NewWriter(wi.fh)
-	} else {
-		tw.wmul = cos.NewWriterMulti(wi.fh, wi.cksum.H)
-		tw.tw = tar.NewWriter(tw.wmul)
-	}
+	tw.wmul = cos.NewWriterMulti(wi.fh, &wi.cksum)
+	tw.tw = tar.NewWriter(tw.wmul)
 	wi.writer = tw
 }
 
@@ -487,12 +480,8 @@ func (tw *tarWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Re
 ///////////////
 func (tzw *tgzWriter) init(wi *archwi) {
 	tzw.tw.archwi = wi
-	if wi.cksum.Ty() == cos.ChecksumNone {
-		tzw.gzw = gzip.NewWriter(wi.fh)
-	} else {
-		tzw.tw.wmul = cos.NewWriterMulti(wi.fh, wi.cksum.H)
-		tzw.gzw = gzip.NewWriter(tzw.tw.wmul)
-	}
+	tzw.tw.wmul = cos.NewWriterMulti(wi.fh, &wi.cksum)
+	tzw.gzw = gzip.NewWriter(tzw.tw.wmul)
 	tzw.tw.tw = tar.NewWriter(tzw.gzw)
 	wi.writer = tzw
 }
@@ -513,12 +502,8 @@ func (tzw *tgzWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.R
 // wi.writer = &zipWriter{archwi: wi, w: zip.NewWriter(wi.fh)}
 func (zw *zipWriter) init(wi *archwi) {
 	zw.archwi = wi
-	if wi.cksum.Ty() == cos.ChecksumNone {
-		zw.zw = zip.NewWriter(wi.fh)
-	} else {
-		zw.wmul = cos.NewWriterMulti(wi.fh, wi.cksum.H)
-		zw.zw = zip.NewWriter(zw.wmul)
-	}
+	zw.wmul = cos.NewWriterMulti(wi.fh, &wi.cksum)
+	zw.zw = zip.NewWriter(zw.wmul)
 	wi.writer = zw
 }
 

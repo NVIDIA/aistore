@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"hash"
 	"hash/crc32"
+	"io"
 	"sort"
 
 	"github.com/OneOfOne/xxhash"
@@ -53,6 +54,10 @@ type (
 		H   hash.Hash
 		sum []byte
 	}
+	CksumHashSize struct {
+		CksumHash
+		Size int64
+	}
 )
 
 var checksums = StringSet{
@@ -69,37 +74,11 @@ var (
 	_ hash.Hash                  = (*noopHash)(nil)
 	_ encoding.BinaryUnmarshaler = (*noopHash)(nil)
 	_ encoding.BinaryUnmarshaler = (*noopHash)(nil)
+
+	_ io.Writer = (*CksumHashSize)(nil)
 )
 
 var NoneCksum = NewCksum(ChecksumNone, "")
-
-/////////////
-// helpers //
-/////////////
-func SupportedChecksums() (types []string) {
-	types = make([]string, 0, len(checksums))
-	for ty := range checksums {
-		types = append(types, ty)
-	}
-	sort.Strings(types)
-	for i := range types {
-		if types[i] == ChecksumNone {
-			copy(types[i:], types[i+1:])
-			types[len(types)-1] = ChecksumNone
-		}
-	}
-	return
-}
-
-func ValidateCksumType(ty string, emptyOK ...bool) (err error) {
-	if ty == "" && len(emptyOK) > 0 && emptyOK[0] {
-		return
-	}
-	if !checksums.Contains(ty) {
-		err = fmt.Errorf("invalid checksum type %q (expecting %v)", ty, SupportedChecksums())
-	}
-	return
-}
 
 ///////////////
 // CksumHash //
@@ -130,6 +109,24 @@ func (ck *CksumHash) Init(ty string) {
 	default:
 		Assert(false)
 	}
+}
+
+func (ck *CksumHash) Equal(to *Cksum) bool { return ck.Cksum.Equal(to) }
+func (ck *CksumHash) Sum() []byte          { return ck.sum }
+
+func (ck *CksumHash) Finalize() {
+	ck.sum = ck.H.Sum(nil)
+	ck.value = hex.EncodeToString(ck.sum)
+}
+
+///////////////////
+// CksumHashSize //
+///////////////////
+
+func (ck *CksumHashSize) Write(b []byte) (n int, err error) {
+	n, err = ck.H.Write(b)
+	ck.Size += int64(n)
+	return
 }
 
 ///////////
@@ -189,18 +186,6 @@ func (ck *Cksum) String() string {
 	return fmt.Sprintf("(%s,%s...)", ck.ty, ck.value[:Min(10, len(ck.value))])
 }
 
-///////////////
-// CksumHash //
-///////////////
-
-func (ck *CksumHash) Equal(to *Cksum) bool { return ck.Cksum.Equal(to) }
-func (ck *CksumHash) Sum() []byte          { return ck.sum }
-
-func (ck *CksumHash) Finalize() {
-	ck.sum = ck.H.Sum(nil)
-	ck.value = hex.EncodeToString(ck.sum)
-}
-
 /////////////
 // helpers //
 /////////////
@@ -208,6 +193,35 @@ func (ck *CksumHash) Finalize() {
 func NewCRC32C() hash.Hash {
 	return crc32.New(crc32.MakeTable(crc32.Castagnoli))
 }
+
+func SupportedChecksums() (types []string) {
+	types = make([]string, 0, len(checksums))
+	for ty := range checksums {
+		types = append(types, ty)
+	}
+	sort.Strings(types)
+	for i := range types {
+		if types[i] == ChecksumNone {
+			copy(types[i:], types[i+1:])
+			types[len(types)-1] = ChecksumNone
+		}
+	}
+	return
+}
+
+func ValidateCksumType(ty string, emptyOK ...bool) (err error) {
+	if ty == "" && len(emptyOK) > 0 && emptyOK[0] {
+		return
+	}
+	if !checksums.Contains(ty) {
+		err = fmt.Errorf("invalid checksum type %q (expecting %v)", ty, SupportedChecksums())
+	}
+	return
+}
+
+//////////////
+// noopHash //
+//////////////
 
 func newNoopHash() hash.Hash                     { return &noopHash{} }
 func (*noopHash) Write(b []byte) (int, error)    { return len(b), nil }
