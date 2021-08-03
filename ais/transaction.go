@@ -112,7 +112,6 @@ type (
 		bckTo   *cluster.Bck
 		xarch   *xs.XactPutArchive
 		msg     *cmn.ArchiveMsg
-		oldid   string
 	}
 )
 
@@ -146,13 +145,15 @@ func (txns *transactions) begin(txn txn) error {
 	}
 	txn.started(cmn.ActBegin, time.Now())
 	txns.m[txn.uuid()] = txn
-	glog.Infof("begin: %s", txn)
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s begin: %s", txns.t.si, txn)
+	}
 	return nil
 }
 
 func (txns *transactions) find(uuid, act string) (txn txn, err error) {
 	var ok bool
-	cos.Assert(act == "" /*simply find*/ || act == cmn.ActAbort || act == cmn.ActCommit)
+	debug.Assert(act == "" /*simply find*/ || act == cmn.ActAbort || act == cmn.ActCommit)
 	txns.Lock()
 	if txn, ok = txns.m[uuid]; !ok {
 		goto rerr
@@ -166,6 +167,9 @@ func (txns *transactions) find(uuid, act string) (txn txn, err error) {
 		}
 	}
 	txns.Unlock()
+	if act != "" && glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s %s: %s", txns.t.si, act, txn)
+	}
 	return
 rerr:
 	txns.Unlock()
@@ -350,7 +354,7 @@ func (txn *txnBase) started(phase string, tm ...time.Time) (ts time.Time) {
 		}
 		ts = txn.phase.commit
 	default:
-		cos.Assert(false)
+		debug.Assert(false)
 	}
 	return
 }
@@ -418,12 +422,11 @@ func (txn *txnBckBase) String() string {
 			res = fmt.Sprintf("-fail(%v)", err)
 		}
 	}
-	return fmt.Sprintf("txn-%s[%s-(v%d, v%d)-%s-%s-%s%s], bucket %s",
-		txn.kind, txn.uid, txn.smapVer, txn.bmdVer, txn.action, txn.callerName, tm, res, txn.bck.Name)
+	return fmt.Sprintf("txn-%s[%s-(v%d, v%d)-%s-%s]-%s%s]",
+		txn.kind, txn.uid, txn.smapVer, txn.bmdVer, txn.action, txn.bck.Bck.String(), tm, res)
 }
 
-func (txn *txnBckBase) commitAfter(caller string, msg *aisMsg, err error,
-	args ...interface{}) (found bool, errDone error) {
+func (txn *txnBckBase) commitAfter(caller string, msg *aisMsg, err error, args ...interface{}) (found bool, errDone error) {
 	if txn.callerName != caller || msg.UUID != txn.uuid() {
 		return
 	}
@@ -532,15 +535,8 @@ func newTxnECEncode(c *txnServerCtx, bck *cluster.Bck) (txn *txnECEncode) {
 ///////////////////
 
 func newTxnPutArchive(c *txnServerCtx, bckFrom, bckTo *cluster.Bck, xarch *xs.XactPutArchive,
-	msg *cmn.ArchiveMsg, oldid string) (txn *txnPutArchive) {
-	txn = &txnPutArchive{
-		*newTxnBckBase("arc", *bckFrom),
-		bckFrom,
-		bckTo,
-		xarch,
-		msg,
-		oldid,
-	}
+	msg *cmn.ArchiveMsg) (txn *txnPutArchive) {
+	txn = &txnPutArchive{*newTxnBckBase("arc", *bckFrom), bckFrom, bckTo, xarch, msg}
 	txn.fillFromCtx(c)
 	return
 }

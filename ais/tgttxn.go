@@ -106,7 +106,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		err = t.ecEncode(c)
 	case cmn.ActArchive:
 		var xactID string
-		xactID, err = t.putArchive(c)
+		xactID, err = t.archiveMultiObj(c)
 		if xactID != "" {
 			w.Header().Set(cmn.HdrXactionID, xactID)
 		}
@@ -599,10 +599,10 @@ func (t *targetrunner) validateECEncode(bck *cluster.Bck, msg *aisMsg) (err erro
 }
 
 ////////////////
-// putArchive //
+// archiveMultiObj //
 ////////////////
 
-func (t *targetrunner) putArchive(c *txnServerCtx) (string /*xaction uuid*/, error) {
+func (t *targetrunner) archiveMultiObj(c *txnServerCtx) (string /*xaction uuid*/, error) {
 	var xactID string
 	if err := c.bck.Init(t.owner.bmd); err != nil {
 		return xactID, err
@@ -635,19 +635,19 @@ func (t *targetrunner) putArchive(c *txnServerCtx) (string /*xaction uuid*/, err
 			return xactID, cs.Err
 		}
 
-		rns := xreg.RenewPutArchive(c.msg.UUID, t, bckFrom)
+		rns := xreg.RenewPutArchive(c.uuid, t, bckFrom)
 		if rns.Err != nil {
 			return xactID, rns.Err
 		}
 		xact := rns.Entry.Get()
 		xactID = xact.ID()
-		debug.Assert((!rns.IsRunning() && xactID == c.msg.UUID) || (rns.IsRunning() && xactID == rns.UUID))
+		debug.Assert((!rns.IsRunning() && xactID == c.uuid) || (rns.IsRunning() && xactID == rns.UUID))
 
 		xarch := xact.(*xs.XactPutArchive)
 		if err := xarch.Begin(archiveMsg); err != nil {
 			return xactID, err
 		}
-		txn := newTxnPutArchive(c, bckFrom, bckTo, xarch, archiveMsg, rns.UUID)
+		txn := newTxnPutArchive(c, bckFrom, bckTo, xarch, archiveMsg)
 		if err := t.transactions.begin(txn); err != nil {
 			return xactID, err
 		}
@@ -655,7 +655,8 @@ func (t *targetrunner) putArchive(c *txnServerCtx) (string /*xaction uuid*/, err
 		txn, err := t.transactions.find(c.uuid, cmn.ActAbort)
 		if err == nil {
 			txnArch := txn.(*txnPutArchive)
-			if txnArch.xarch != nil && txnArch.oldid == "" {
+			// if _this_ transaction initiated _that_ on-demand
+			if txnArch.xarch != nil && txnArch.xarch.ID() == c.uuid {
 				xactID = txnArch.xarch.ID()
 				txnArch.xarch.Abort()
 			}

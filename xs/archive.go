@@ -173,9 +173,12 @@ func (p *archFactory) newDM(bckFrom *cluster.Bck, r *XactPutArchive) error {
 
 // limited pre-run abort
 func (r *XactPutArchive) TxnAbort() {
-	debug.Assert(!r.dm.IsOpen())
+	err := cmn.NewAbortedError(r.String())
+	if r.dm.IsOpen() {
+		r.dm.Close(err)
+	}
 	r.dm.UnregRecv()
-	r.XactBase.Finish(cmn.NewAbortedError(r.String()))
+	r.XactBase.Finish(err)
 }
 
 func (r *XactPutArchive) Begin(msg *cmn.ArchiveMsg) (err error) {

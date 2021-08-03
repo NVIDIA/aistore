@@ -889,7 +889,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 			p.writeErr(w, r, err)
 			return
 		}
-		xactID, err := p.putArchive(bckFrom, bckTo, msg)
+		xactID, err := p.archiveMultiObj(bckFrom, bckTo, msg)
 		if err == nil {
 			w.Write([]byte(xactID))
 		} else {
