@@ -293,7 +293,7 @@ func fetchSummaries(query cmn.QueryBcks, fast, cached bool) (summaries cmn.Bucke
 //  * `backend_bck=gcp://bucket_name` with `backend_bck.name=bucket_name` and
 //    `backend_bck.provider=gcp` so they match the expected fields in structs.
 //  * `backend_bck=none` with `backend_bck.name=""` and `backend_bck.provider=""`.
-func reformatBackendProps(nvs cos.SimpleKVs) (err error) {
+func reformatBackendProps(c *cli.Context, nvs cos.SimpleKVs) (err error) {
 	var (
 		originBck cmn.Bck
 		v         string
@@ -307,8 +307,8 @@ func reformatBackendProps(nvs cos.SimpleKVs) (err error) {
 	}
 
 	if v != emptyOrigin {
-		if originBck, err = parseBckURI(nil, v, true /*requireProviderInURI*/); err != nil {
-			return fmt.Errorf("invalid format %q, err: %v", cmn.PropBackendBck, err)
+		if originBck, err = parseBckURI(c, v, true /*requireProviderInURI*/); err != nil {
+			return fmt.Errorf("invalid %q: %v", cmn.PropBackendBck, err)
 		}
 	}
 
@@ -321,7 +321,8 @@ func reformatBackendProps(nvs cos.SimpleKVs) (err error) {
 
 validate:
 	if nvs[cmn.PropBackendBckProvider] != "" && nvs[cmn.PropBackendBckName] == "" {
-		return fmt.Errorf("invalid format %q cannot be empty when %q is set", cmn.PropBackendBckName, cmn.PropBackendBckProvider)
+		return fmt.Errorf("invalid %q: bucket name cannot be empty when bucket provider (%q) is set",
+			cmn.PropBackendBckName, cmn.PropBackendBckProvider)
 	}
 	return err
 }

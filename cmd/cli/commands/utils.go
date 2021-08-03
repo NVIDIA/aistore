@@ -68,17 +68,6 @@ var (
 )
 
 type (
-	errUsage struct {
-		context       *cli.Context
-		message       string
-		bottomMessage string
-		helpData      interface{}
-		helpTemplate  string
-	}
-	errAdditionalInfo struct {
-		baseErr        error
-		additionalInfo string
-	}
 	progressBarArgs struct {
 		barType string
 		barText string
@@ -98,18 +87,6 @@ type (
 
 func isWebURL(url string) bool { return cos.IsHTTP(url) || cos.IsHTTPS(url) }
 
-func (e *errUsage) Error() string {
-	msg := helpMessage(e.helpTemplate, e.helpData)
-	if e.bottomMessage != "" {
-		msg += fmt.Sprintf("\n%s\n", e.bottomMessage)
-	}
-	if e.context.Command.Name != "" {
-		return fmt.Sprintf("Incorrect usage of \"%s %s\": %s.\n\n%s",
-			e.context.App.Name, e.context.Command.Name, e.message, msg)
-	}
-	return fmt.Sprintf("Incorrect usage of \"%s\": %s.\n\n%s", e.context.App.Name, e.message, msg)
-}
-
 func helpMessage(template string, data interface{}) string {
 	var buf bytes.Buffer
 	w := bufio.NewWriter(&buf)
@@ -119,35 +96,6 @@ func helpMessage(template string, data interface{}) string {
 	_ = w.Flush()
 
 	return buf.String()
-}
-
-func incorrectUsageError(c *cli.Context, err error) error {
-	if c == nil {
-		return err
-	}
-	return &errUsage{
-		context:      c,
-		message:      err.Error(),
-		helpData:     c.Command,
-		helpTemplate: templates.ShortUsageTmpl,
-	}
-}
-
-func incorrectUsageMsg(c *cli.Context, fmtString string, args ...interface{}) error {
-	msg := fmt.Sprintf(fmtString, args...)
-	if c == nil {
-		return errors.New(msg)
-	}
-	return &errUsage{
-		context:      c,
-		message:      msg,
-		helpData:     c.Command,
-		helpTemplate: templates.ShortUsageTmpl,
-	}
-}
-
-func objectNameArgumentNotSupported(c *cli.Context, objectName string) error {
-	return incorrectUsageMsg(c, "object name %q argument not supported", objectName)
 }
 
 func objectPropList(props *cmn.ObjectProps, selection []string) (propList []prop) {
@@ -187,26 +135,6 @@ func objectPropList(props *cmn.ObjectProps, selection []string) (propList []prop
 	return
 }
 
-func missingArgumentsError(c *cli.Context, missingArgs ...string) error {
-	cos.Assert(len(missingArgs) > 0)
-	return &errUsage{
-		context:      c,
-		message:      fmt.Sprintf("missing arguments %q", strings.Join(missingArgs, ", ")),
-		helpData:     c.Command,
-		helpTemplate: cli.CommandHelpTemplate,
-	}
-}
-
-func commandNotFoundError(c *cli.Context, cmd string) error {
-	return &errUsage{
-		context:       c,
-		message:       fmt.Sprintf("unknown command %q", cmd),
-		helpData:      c.App,
-		helpTemplate:  templates.ShortUsageTmpl,
-		bottomMessage: didYouMeanMessage(c, cmd),
-	}
-}
-
 func didYouMeanMessage(c *cli.Context, cmd string) string {
 	closestCommand, distance := findClosestCommand(cmd, c.App.VisibleCommands())
 	if distance >= cos.Max(incorrectCmdDistance, len(cmd)/2) {
@@ -240,23 +168,7 @@ func findClosestCommand(cmd string, candidates []cli.Command) (result string, di
 	return closestName, minDist
 }
 
-func (e *errAdditionalInfo) Error() string {
-	return fmt.Sprintf("%s. %s", e.baseErr.Error(), cos.StrToSentence(e.additionalInfo))
-}
-
-func newAdditionalInfoError(err error, info string) error {
-	cos.Assert(err != nil)
-	return &errAdditionalInfo{
-		baseErr:        err,
-		additionalInfo: info,
-	}
-}
-
-//
-// Smap
-//
-
-// Populates the proxy and target maps
+// Populates the proxy and target Smaps
 func fillMap() (*cluster.Smap, error) {
 	wg := &sync.WaitGroup{}
 	smap, err := api.GetClusterMap(defaultAPIParams)
@@ -327,95 +239,6 @@ func isConfigProp(s string) bool {
 	return cos.StringInSlice(s, props)
 }
 
-//
-// Scheme
-//
-
-type dlSourceBackend struct {
-	bck    cmn.Bck
-	prefix string
-}
-
-type dlSource struct {
-	link    string
-	backend dlSourceBackend
-}
-
-// Replace protocol (gs://, s3://, az://) with proper GCP/AWS/Azure URL
-func parseSource(rawURL string) (source dlSource, err error) {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return
-	}
-
-	var (
-		cloudSource dlSourceBackend
-		scheme      = u.Scheme
-		host        = u.Host
-		fullPath    = u.Path
-	)
-
-	// If `rawURL` is using `gs` or `s3` scheme ({gs/s3}://<bucket>/...)
-	// then <bucket> is considered a `Host` by `url.Parse`.
-	switch u.Scheme {
-	case cmn.GSScheme, cmn.ProviderGoogle:
-		cloudSource = dlSourceBackend{
-			bck:    cmn.Bck{Name: host, Provider: cmn.ProviderGoogle},
-			prefix: strings.TrimPrefix(fullPath, "/"),
-		}
-
-		scheme = "https"
-		host = gsHost
-		fullPath = path.Join(u.Host, fullPath)
-	case cmn.S3Scheme, cmn.ProviderAmazon:
-		cloudSource = dlSourceBackend{
-			bck:    cmn.Bck{Name: host, Provider: cmn.ProviderAmazon},
-			prefix: strings.TrimPrefix(fullPath, "/"),
-		}
-
-		scheme = "http"
-		host = s3Host
-		fullPath = path.Join(u.Host, fullPath)
-	case cmn.AZScheme, cmn.ProviderAzure:
-		// NOTE: We don't set the link here because there is no way to translate
-		//  `az://bucket/object` into Azure link without account name.
-		return dlSource{
-			link: "",
-			backend: dlSourceBackend{
-				bck:    cmn.Bck{Name: host, Provider: cmn.ProviderAzure},
-				prefix: strings.TrimPrefix(fullPath, "/"),
-			},
-		}, nil
-	case cmn.AISScheme:
-		// TODO: add support for the remote cluster
-		scheme = "http" // TODO: How about `https://`?
-		if !strings.Contains(host, ":") {
-			host += ":8080" // TODO: What if host is listening on `:80` so we don't need port?
-		}
-		fullPath = path.Join(cmn.Version, cmn.Objects, fullPath)
-	case "":
-		scheme = cmn.DefaultScheme
-	case "https", "http":
-	default:
-		err = fmt.Errorf("invalid scheme: %s", scheme)
-		return
-	}
-
-	normalizedURL := url.URL{
-		Scheme:   scheme,
-		User:     u.User,
-		Host:     host,
-		Path:     fullPath,
-		RawQuery: u.RawQuery,
-		Fragment: u.Fragment,
-	}
-	link, err := url.QueryUnescape(normalizedURL.String())
-	return dlSource{
-		link:    link,
-		backend: cloudSource,
-	}, err
-}
-
 func parseDest(c *cli.Context, uri string) (bck cmn.Bck, pathSuffix string, err error) {
 	bck, pathSuffix, err = parseBckObjectURI(c, uri, true /*optional objName*/)
 	if err != nil {
@@ -447,7 +270,7 @@ func parseBckURI(c *cli.Context, uri string, requireProviderInURI ...bool) (cmn.
 	if bck.Name == "" {
 		return bck, incorrectUsageMsg(c, "%q: missing bucket name", uri)
 	} else if err := bck.Validate(); err != nil {
-		return bck, incorrectUsageError(c, err)
+		return bck, cannotExecuteError(c, err)
 	}
 	return bck, nil
 }
@@ -481,14 +304,14 @@ func parseBckObjectURI(c *cli.Context, uri string, optObjName ...bool) (bck cmn.
 	}
 	bck, objName, err = cmn.ParseBckObjectURI(uri, opts)
 	if err != nil {
-		return bck, objName, incorrectUsageError(c, err)
+		return bck, objName, cannotExecuteError(c, err)
 	}
 
 validate:
 	if bck.Name == "" {
 		return bck, objName, incorrectUsageMsg(c, "%q: missing bucket name", uri)
 	} else if err := bck.Validate(); err != nil {
-		return bck, objName, incorrectUsageError(c, err)
+		return bck, objName, cannotExecuteError(c, err)
 	} else if objName == "" && (len(optObjName) == 0 || !optObjName[0]) {
 		return bck, objName, incorrectUsageMsg(c, "%q: missing object name", uri)
 	}
@@ -509,68 +332,6 @@ func getPrefixFromPrimary() (string, error) {
 	return cfg.Net.HTTP.Proto + "://", nil
 }
 
-//
-// Flags
-//
-
-// If the flag has multiple values (separated by comma), take the first one
-func cleanFlag(flag string) string {
-	return strings.Split(flag, ",")[0]
-}
-
-func flagIsSet(c *cli.Context, flag cli.Flag) bool {
-	// If the flag name has multiple values, take the first one
-	flagName := cleanFlag(flag.GetName())
-	return c.GlobalIsSet(flagName) || c.IsSet(flagName)
-}
-
-// Returns the value of a string flag (either parent or local scope)
-func parseStrFlag(c *cli.Context, flag cli.Flag) string {
-	flagName := cleanFlag(flag.GetName())
-	if c.GlobalIsSet(flagName) {
-		return c.GlobalString(flagName)
-	}
-	return c.String(flagName)
-}
-
-// Returns the value of an int flag (either parent or local scope)
-func parseIntFlag(c *cli.Context, flag cli.IntFlag) int {
-	flagName := cleanFlag(flag.GetName())
-	if c.GlobalIsSet(flagName) {
-		return c.GlobalInt(flagName)
-	}
-	return c.Int(flagName)
-}
-
-// Returns the value of an duration flag (either parent or local scope)
-func parseDurationFlag(c *cli.Context, flag cli.Flag) time.Duration {
-	flagName := cleanFlag(flag.GetName())
-	if c.GlobalIsSet(flagName) {
-		return c.GlobalDuration(flagName)
-	}
-	return c.Duration(flagName)
-}
-
-func parseByteFlagToInt(c *cli.Context, flag cli.Flag) (int64, error) {
-	flagValue := parseStrFlag(c, flag.(cli.StringFlag))
-	b, err := cos.S2B(flagValue)
-	if err != nil {
-		return 0, fmt.Errorf("%s (%s) is invalid, expected either a number or a number with a size suffix (kb, MB, GiB, ...)",
-			flag.GetName(), flagValue)
-	}
-	return b, nil
-}
-
-func parseChecksumFlags(c *cli.Context) []*cos.Cksum {
-	cksums := []*cos.Cksum{}
-	for _, ckflag := range checksumFlags {
-		if flagIsSet(c, ckflag) {
-			cksums = append(cksums, cos.NewCksum(ckflag.GetName(), parseStrFlag(c, ckflag)))
-		}
-	}
-	return cksums
-}
-
 func calcRefreshRate(c *cli.Context) time.Duration {
 	const (
 		refreshRateMin = time.Second
@@ -585,51 +346,6 @@ func calcRefreshRate(c *cli.Context) time.Duration {
 	}
 	return refreshRate
 }
-
-//
-// Long run parameters
-//
-
-type longRunParams struct {
-	count       int
-	refreshRate time.Duration
-}
-
-func defaultLongRunParams() *longRunParams {
-	return &longRunParams{
-		count:       countDefault,
-		refreshRate: refreshRateDefault,
-	}
-}
-
-func (p *longRunParams) isInfiniteRun() bool {
-	return p.count == infinity
-}
-
-func updateLongRunParams(c *cli.Context) error {
-	params := c.App.Metadata[metadata].(*longRunParams)
-
-	if flagIsSet(c, refreshFlag) {
-		params.refreshRate = parseDurationFlag(c, refreshFlag)
-		// Run forever unless `count` is also specified
-		params.count = infinity
-	}
-
-	if flagIsSet(c, countFlag) {
-		params.count = parseIntFlag(c, countFlag)
-		if params.count <= 0 {
-			_, _ = fmt.Fprintf(c.App.ErrWriter, "Warning: %q set to %d, but expected value >= 1. Assuming %q = %d.\n",
-				countFlag.Name, params.count, countFlag.Name, countDefault)
-			params.count = countDefault
-		}
-	}
-
-	return nil
-}
-
-//
-// Utility functions
-//
 
 // Users can pass in a comma-separated list
 func makeList(list string) []string {
@@ -884,7 +600,7 @@ func parseBckPropsFromContext(c *cli.Context) (props *cmn.BucketPropsToUpdate, e
 		return
 	}
 
-	if err = reformatBackendProps(nvs); err != nil {
+	if err = reformatBackendProps(c, nvs); err != nil {
 		return
 	}
 
@@ -1061,30 +777,6 @@ func simpleProgressBar(args ...progressBarArgs) (*mpb.Progress, []*mpb.Bar) {
 	return progress, bars
 }
 
-// TODO: integrate this with simpleProgressBar
-type progIndicator struct {
-	objName         string
-	sizeTransferred *atomic.Int64
-}
-
-func (*progIndicator) start() { fmt.Print("\033[s") }
-func (*progIndicator) stop()  { fmt.Println("") }
-
-func (pi *progIndicator) printProgress(incr int64) {
-	fmt.Print("\033[u\033[K")
-	fmt.Printf("Uploaded %s: %s", pi.objName, cos.B2S(pi.sizeTransferred.Add(incr), 2))
-}
-
-func newProgIndicator(objName string) *progIndicator {
-	return &progIndicator{objName, atomic.NewInt64(0)}
-}
-
-// get xaction progress message
-func xactProgressMsg(xactID string) string {
-	return fmt.Sprintf("use '%s %s %s %s %s' to monitor progress",
-		cliName, commandJob, commandShow, subcmdXaction, xactID)
-}
-
 func bckPropList(props *cmn.BucketProps, verbose bool) (propList []prop) {
 	if !verbose {
 		propList = []prop{
@@ -1246,4 +938,224 @@ func authNConfPairs(conf *authn.Config, prefix string) ([]prop, error) {
 		return propList[i].Name < propList[j].Name
 	})
 	return propList, err
+}
+
+//////////////
+// dlSource //
+//////////////
+
+type dlSourceBackend struct {
+	bck    cmn.Bck
+	prefix string
+}
+
+type dlSource struct {
+	link    string
+	backend dlSourceBackend
+}
+
+// Replace protocol (gs://, s3://, az://) with proper GCP/AWS/Azure URL
+func parseSource(rawURL string) (source dlSource, err error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return
+	}
+
+	var (
+		cloudSource dlSourceBackend
+		scheme      = u.Scheme
+		host        = u.Host
+		fullPath    = u.Path
+	)
+
+	// If `rawURL` is using `gs` or `s3` scheme ({gs/s3}://<bucket>/...)
+	// then <bucket> is considered a `Host` by `url.Parse`.
+	switch u.Scheme {
+	case cmn.GSScheme, cmn.ProviderGoogle:
+		cloudSource = dlSourceBackend{
+			bck:    cmn.Bck{Name: host, Provider: cmn.ProviderGoogle},
+			prefix: strings.TrimPrefix(fullPath, "/"),
+		}
+
+		scheme = "https"
+		host = gsHost
+		fullPath = path.Join(u.Host, fullPath)
+	case cmn.S3Scheme, cmn.ProviderAmazon:
+		cloudSource = dlSourceBackend{
+			bck:    cmn.Bck{Name: host, Provider: cmn.ProviderAmazon},
+			prefix: strings.TrimPrefix(fullPath, "/"),
+		}
+
+		scheme = "http"
+		host = s3Host
+		fullPath = path.Join(u.Host, fullPath)
+	case cmn.AZScheme, cmn.ProviderAzure:
+		// NOTE: We don't set the link here because there is no way to translate
+		//  `az://bucket/object` into Azure link without account name.
+		return dlSource{
+			link: "",
+			backend: dlSourceBackend{
+				bck:    cmn.Bck{Name: host, Provider: cmn.ProviderAzure},
+				prefix: strings.TrimPrefix(fullPath, "/"),
+			},
+		}, nil
+	case cmn.AISScheme:
+		// TODO: add support for the remote cluster
+		scheme = "http" // TODO: How about `https://`?
+		if !strings.Contains(host, ":") {
+			host += ":8080" // TODO: What if host is listening on `:80` so we don't need port?
+		}
+		fullPath = path.Join(cmn.Version, cmn.Objects, fullPath)
+	case "":
+		scheme = cmn.DefaultScheme
+	case "https", "http":
+	default:
+		err = fmt.Errorf("invalid scheme: %s", scheme)
+		return
+	}
+
+	normalizedURL := url.URL{
+		Scheme:   scheme,
+		User:     u.User,
+		Host:     host,
+		Path:     fullPath,
+		RawQuery: u.RawQuery,
+		Fragment: u.Fragment,
+	}
+	link, err := url.QueryUnescape(normalizedURL.String())
+	return dlSource{
+		link:    link,
+		backend: cloudSource,
+	}, err
+}
+
+///////////////////
+// longRunParams //
+///////////////////
+
+type longRunParams struct {
+	count       int
+	refreshRate time.Duration
+}
+
+func defaultLongRunParams() *longRunParams {
+	return &longRunParams{
+		count:       countDefault,
+		refreshRate: refreshRateDefault,
+	}
+}
+
+func (p *longRunParams) isInfiniteRun() bool {
+	return p.count == infinity
+}
+
+func updateLongRunParams(c *cli.Context) error {
+	params := c.App.Metadata[metadata].(*longRunParams)
+
+	if flagIsSet(c, refreshFlag) {
+		params.refreshRate = parseDurationFlag(c, refreshFlag)
+		// Run forever unless `count` is also specified
+		params.count = infinity
+	}
+
+	if flagIsSet(c, countFlag) {
+		params.count = parseIntFlag(c, countFlag)
+		if params.count <= 0 {
+			_, _ = fmt.Fprintf(c.App.ErrWriter, "Warning: %q set to %d, but expected value >= 1. Assuming %q = %d.\n",
+				countFlag.Name, params.count, countFlag.Name, countDefault)
+			params.count = countDefault
+		}
+	}
+
+	return nil
+}
+
+///////////////////
+// progIndicator //
+///////////////////
+
+// TODO: integrate this with simpleProgressBar
+type progIndicator struct {
+	objName         string
+	sizeTransferred *atomic.Int64
+}
+
+func (*progIndicator) start() { fmt.Print("\033[s") }
+func (*progIndicator) stop()  { fmt.Println("") }
+
+func (pi *progIndicator) printProgress(incr int64) {
+	fmt.Print("\033[u\033[K")
+	fmt.Printf("Uploaded %s: %s", pi.objName, cos.B2S(pi.sizeTransferred.Add(incr), 2))
+}
+
+func newProgIndicator(objName string) *progIndicator {
+	return &progIndicator{objName, atomic.NewInt64(0)}
+}
+
+// get xaction progress message
+func xactProgressMsg(xactID string) string {
+	return fmt.Sprintf("use '%s %s %s %s %s' to monitor progress",
+		cliName, commandJob, commandShow, subcmdXaction, xactID)
+}
+
+///////////////
+// CLI flags //
+///////////////
+
+// If the flag has multiple values (separated by comma), take the first one
+func cleanFlag(flag string) string {
+	return strings.Split(flag, ",")[0]
+}
+
+func flagIsSet(c *cli.Context, flag cli.Flag) bool {
+	// If the flag name has multiple values, take the first one
+	flagName := cleanFlag(flag.GetName())
+	return c.GlobalIsSet(flagName) || c.IsSet(flagName)
+}
+
+// Returns the value of a string flag (either parent or local scope)
+func parseStrFlag(c *cli.Context, flag cli.Flag) string {
+	flagName := cleanFlag(flag.GetName())
+	if c.GlobalIsSet(flagName) {
+		return c.GlobalString(flagName)
+	}
+	return c.String(flagName)
+}
+
+// Returns the value of an int flag (either parent or local scope)
+func parseIntFlag(c *cli.Context, flag cli.IntFlag) int {
+	flagName := cleanFlag(flag.GetName())
+	if c.GlobalIsSet(flagName) {
+		return c.GlobalInt(flagName)
+	}
+	return c.Int(flagName)
+}
+
+// Returns the value of an duration flag (either parent or local scope)
+func parseDurationFlag(c *cli.Context, flag cli.Flag) time.Duration {
+	flagName := cleanFlag(flag.GetName())
+	if c.GlobalIsSet(flagName) {
+		return c.GlobalDuration(flagName)
+	}
+	return c.Duration(flagName)
+}
+
+func parseByteFlagToInt(c *cli.Context, flag cli.Flag) (int64, error) {
+	flagValue := parseStrFlag(c, flag.(cli.StringFlag))
+	b, err := cos.S2B(flagValue)
+	if err != nil {
+		return 0, fmt.Errorf("%s (%s) is invalid, expected either a number or a number with a size suffix (kb, MB, GiB, ...)",
+			flag.GetName(), flagValue)
+	}
+	return b, nil
+}
+
+func parseChecksumFlags(c *cli.Context) []*cos.Cksum {
+	cksums := []*cos.Cksum{}
+	for _, ckflag := range checksumFlags {
+		if flagIsSet(c, ckflag) {
+			cksums = append(cksums, cos.NewCksum(ckflag.GetName(), parseStrFlag(c, ckflag)))
+		}
+	}
+	return cksums
 }

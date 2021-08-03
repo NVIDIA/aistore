@@ -257,7 +257,3 @@ func commandNotFoundHandler(c *cli.Context, cmd string) {
 	fmt.Fprint(c.App.ErrWriter, err.Error())
 	os.Exit(1)
 }
-
-func incorrectUsageHandler(c *cli.Context, err error, _ bool) error {
-	return incorrectUsageError(c, err)
-}
