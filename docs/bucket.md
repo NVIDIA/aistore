@@ -69,12 +69,18 @@ Example specifying (non-default) bucket properties at creation time:
 ```console
 $ ais bucket create ais://abc --bucket-props="lru.enabled=false mirror.enabled=true mirror.copies=4"
 
-# or same, in JSON format:
+# or, same using JSON:
 $ ais bucket create ais://abc --bucket-props='{"lru": {"enabled": false}, "mirror": {"enabled": true, "copies": 4}}'
 ```
 
-**IMPORTANT NOTICE:** at the time of this writing [LRU](storage_svcs.md#lru) eviction is globally enabled.
+**IMPORTANT NOTICE:**
+
+> At the time of writing, [LRU](storage_svcs.md#lru) eviction is globally enabled.
 In other words, by default a newly created bucket might become a subject to LRU eviction given configured LRU "watermarks" and current storage capacity utilization.
+
+> Use `ais bucket lru` CLI to conveniently **toggle** LRU eviction on or off.
+
+> Use `ais bucket props reset` CLI to **reset** bucket properties to cluster-wide defaults.
 
 See also:
 

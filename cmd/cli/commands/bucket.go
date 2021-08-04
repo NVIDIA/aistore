@@ -347,7 +347,7 @@ func resetBucketProps(c *cli.Context, bck cmn.Bck) (err error) {
 		return
 	}
 
-	fmt.Fprintln(c.App.Writer, "Bucket props successfully reset")
+	fmt.Fprintln(c.App.Writer, "Bucket props successfully reset to cluster defaults")
 	return
 }
 
@@ -405,6 +405,13 @@ func printBckHeadTable(c *cli.Context, props, defProps *cmn.BucketProps, section
 			for _, def := range defList {
 				if def.Name != p.Name {
 					continue
+				}
+				if def.Name == cmn.PropBucketCreated {
+					ts, err := cos.S2UnixNano(p.Value)
+					if err == nil {
+						p.Value = cos.FormatUnixNano(ts, "" /*RFC822*/)
+					}
+					propList[idx] = p
 				}
 				if def.Value != p.Value {
 					p.Value = highlight(p.Value)

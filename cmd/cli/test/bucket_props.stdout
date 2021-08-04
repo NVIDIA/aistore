@@ -10,7 +10,7 @@ lru		 Watermarks: 75%/90% | Do not evict time: 2h0m | OOS: 95%
 mirror		 2 copies
 provider	 ais
 versioning	 Enabled | Validate on WarmGET: no
-Bucket props successfully reset
+Bucket props successfully reset to cluster defaults
 Bucket props successfully updated
 "versioning.validate_warm_get" set to:"true" (was:"false")
  PROPERTY	 VALUE

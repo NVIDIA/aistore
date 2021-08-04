@@ -7,11 +7,13 @@ package commands
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/urfave/cli"
 )
 
@@ -62,6 +64,10 @@ var (
 			validateFlag,
 			verboseFlag,
 		},
+		subcmdLRU: {
+			enableFlag,
+			disableFlag,
+		},
 	}
 
 	// define separately to allow for aliasing (see alias_hdlr.go)
@@ -76,10 +82,19 @@ var (
 
 	bucketCmdSummary = cli.Command{
 		Name:         subcmdSummary,
-		Usage:        "fetch and display bucket summary",
+		Usage:        "generate and display bucket summary",
 		ArgsUsage:    optionalBucketArgument,
 		Flags:        bucketCmdsFlags[subcmdSummary],
 		Action:       summaryBucketHandler,
+		BashComplete: bucketCompletions(),
+	}
+
+	bucketCmdLRU = cli.Command{
+		Name:         subcmdLRU,
+		Usage:        "show LRU settings for a bucket; enable or disable LRU eviction",
+		ArgsUsage:    optionalBucketArgument,
+		Flags:        bucketCmdsFlags[subcmdLRU],
+		Action:       lruBucketHandler,
 		BashComplete: bucketCompletions(),
 	}
 
@@ -89,6 +104,7 @@ var (
 		Subcommands: []cli.Command{
 			bucketCmdList,
 			bucketCmdSummary,
+			bucketCmdLRU,
 			makeAlias(showCmdBucket, "", true, commandShow), // alias for `ais show`
 			{
 				Name:      commandCreate,
@@ -132,24 +148,29 @@ var (
 				BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true}),
 			},
 			{
-				Name:  subcmdProps,
-				Usage: "show, update or reset bucket properties",
+				Name:   subcmdProps,
+				Usage:  "show, update or reset bucket properties",
+				Action: showBckPropsHandler,
 				Subcommands: []cli.Command{
 					{
-						Name:         subcmdSetProps,
-						Usage:        "update bucket properties",
-						ArgsUsage:    bucketPropsArgument,
-						Flags:        bucketCmdsFlags[subcmdSetProps],
-						Action:       setPropsHandler,
-						BashComplete: bucketCompletions(bckCompletionsOpts{additionalCompletions: []cli.BashCompleteFunc{propCompletions}}),
+						Name:      subcmdSetProps,
+						Usage:     "update bucket properties",
+						ArgsUsage: bucketPropsArgument,
+						Flags:     bucketCmdsFlags[subcmdSetProps],
+						Action:    setPropsHandler,
+						BashComplete: bucketCompletions(
+							bckCompletionsOpts{additionalCompletions: []cli.BashCompleteFunc{propCompletions}},
+						),
 					},
 					{
-						Name:         subcmdResetProps,
-						Usage:        "reset bucket properties",
-						ArgsUsage:    bucketPropsArgument,
-						Flags:        bucketCmdsFlags[subcmdResetProps],
-						Action:       resetPropsHandler,
-						BashComplete: bucketCompletions(bckCompletionsOpts{additionalCompletions: []cli.BashCompleteFunc{propCompletions}}),
+						Name:      subcmdResetProps,
+						Usage:     "reset bucket properties",
+						ArgsUsage: bucketPropsArgument,
+						Flags:     bucketCmdsFlags[subcmdResetProps],
+						Action:    resetPropsHandler,
+						BashComplete: bucketCompletions(
+							bckCompletionsOpts{additionalCompletions: []cli.BashCompleteFunc{propCompletions}},
+						),
 					},
 					makeAlias(showCmdBucket, "", true, commandShow),
 				},
@@ -381,25 +402,68 @@ func resetPropsHandler(c *cli.Context) (err error) {
 	return resetBucketProps(c, bck)
 }
 
-func setPropsHandler(c *cli.Context) (err error) {
-	var origProps *cmn.BucketProps
+func lruBucketHandler(c *cli.Context) (err error) {
+	var p *cmn.BucketProps
 	bck, err := parseBckURI(c, c.Args().First())
 	if err != nil {
 		return err
 	}
-	if origProps, err = headBucket(bck); err != nil {
+	if p, err = headBucket(bck); err != nil {
 		return err
 	}
-
-	updateProps, err := parseBckPropsFromContext(c)
+	defProps, err := defaultBckProps()
 	if err != nil {
 		return err
 	}
-	updateProps.Force = flagIsSet(c, forceFlag)
+	if flagIsSet(c, enableFlag) {
+		return toggleLRU(c, bck, p, true)
+	}
+	if flagIsSet(c, disableFlag) {
+		return toggleLRU(c, bck, p, false)
+	}
+	return printBckHeadTable(c, p, defProps, "lru")
+}
 
-	newProps := origProps.Clone()
-	newProps.Apply(updateProps)
-	if newProps.Equal(origProps) { // Apply props and check for change
+func toggleLRU(c *cli.Context, bck cmn.Bck, p *cmn.BucketProps, toggle bool) (err error) {
+	const fmts = "Bucket %q: LRU is already %s, nothing to do\n"
+	if toggle && p.LRU.Enabled {
+		fmt.Fprintf(c.App.Writer, fmts, bck, "enabled")
+		return
+	}
+	if !toggle && !p.LRU.Enabled {
+		fmt.Fprintf(c.App.Writer, fmts, bck, "disabled")
+		return
+	}
+	toggledProps, err := cmn.NewBucketPropsToUpdate(cos.SimpleKVs{"lru.enabled": strconv.FormatBool(toggle)})
+	if err != nil {
+		return
+	}
+	return updateBckProps(c, bck, p, toggledProps)
+}
+
+func setPropsHandler(c *cli.Context) (err error) {
+	var currProps *cmn.BucketProps
+	bck, err := parseBckURI(c, c.Args().First())
+	if err != nil {
+		return err
+	}
+	if currProps, err = headBucket(bck); err != nil {
+		return err
+	}
+	newProps, err := parseBckPropsFromContext(c)
+	if err != nil {
+		return err
+	}
+	newProps.Force = flagIsSet(c, forceFlag)
+
+	return updateBckProps(c, bck, currProps, newProps)
+}
+
+func updateBckProps(c *cli.Context, bck cmn.Bck, currProps *cmn.BucketProps, updateProps *cmn.BucketPropsToUpdate) (err error) {
+	// Apply updated props and check for change
+	allNewProps := currProps.Clone()
+	allNewProps.Apply(updateProps)
+	if allNewProps.Equal(currProps) {
 		displayPropsEqMsg(c, bck)
 		return nil
 	}
@@ -410,7 +474,7 @@ func setPropsHandler(c *cli.Context) (err error) {
 		return newAdditionalInfoError(err, helpMsg)
 	}
 
-	showDiff(c, origProps, newProps)
+	showDiff(c, currProps, allNewProps)
 	return nil
 }
 
@@ -423,9 +487,9 @@ func displayPropsEqMsg(c *cli.Context, bck cmn.Bck) {
 	fmt.Fprintf(c.App.Writer, "Bucket %q already has the set props, nothing to do\n", bck)
 }
 
-func showDiff(c *cli.Context, origProps, newProps *cmn.BucketProps) {
+func showDiff(c *cli.Context, currProps, newProps *cmn.BucketProps) {
 	var (
-		origKV = bckPropList(origProps, true)
+		origKV = bckPropList(currProps, true)
 		newKV  = bckPropList(newProps, true)
 	)
 	for idx, prop := range newKV {

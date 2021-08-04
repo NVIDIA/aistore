@@ -367,6 +367,8 @@ var (
 		Name:  "cached",
 		Usage: "list only those objects from a remote bucket that are present locally (ie., cached)",
 	}
+	enableFlag    = cli.BoolFlag{Name: "enable", Usage: "enable"}
+	disableFlag   = cli.BoolFlag{Name: "disable", Usage: "disable"}
 	checksumFlag  = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
 	recursiveFlag = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
 	overwriteFlag = cli.BoolTFlag{Name: "overwrite,o", Usage: "overwrite destination if exists"}
