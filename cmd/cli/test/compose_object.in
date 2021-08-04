@@ -1,4 +1,4 @@
-ais bucket create ais://$BUCKET
+ais bucket create ais://$BUCKET | awk '{print $1 " " $2}'
 echo -n "0123456789" > $OBJECT_1.txt
 echo "abcdefghi" > $OBJECT_2.txt
 

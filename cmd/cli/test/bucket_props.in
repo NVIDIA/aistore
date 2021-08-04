@@ -1,4 +1,4 @@
-ais bucket create ais://$BUCKET_1
+ais bucket create ais://$BUCKET_1 | awk '{print $1 " " $2}'
 ais bucket props set ais://$BUCKET_1 'mirror.enabled=true' 'mirror.copies=2'
 
 ais bucket props set ais://$BUCKET_1 'unknown.field' // FAIL "invalid property "unknown.field""

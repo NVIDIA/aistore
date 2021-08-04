@@ -180,7 +180,7 @@ type (
 		RefDirectory *string `json:"ref_directory"`
 	}
 
-	// After parse and validation, BucketPropsToUpdate are copied to BucketProps.
+	// Once validated, BucketPropsToUpdate are copied to BucketProps.
 	// The struct may have extra fields that do not exist in BucketProps.
 	// Add tag 'copy:"skip"' to ignore those fields when copying values.
 	BucketPropsToUpdate struct {
@@ -466,7 +466,16 @@ func (c *ExtraProps) ValidateAsProps(args *ValidationArgs) error {
 // BucketProps //
 /////////////////
 
-// By default bucket props inherit global config.
+// By default, created buckets inherit their properties from the cluster (global) configuration.
+// Global configuration (aka "cluster configuration") is protected versioned, checksummed,
+// and replicated across to the entire cluster.
+//
+// See also:
+//    * github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties
+//    * BucketPropsToUpdate (above)
+//
+// Bucket properties can be changed at any time via api.SetBucketProps().
+// Bucket creation operation also allows to override the defaults, which include:
 func DefaultBckProps(cs ...*Config) *BucketProps {
 	var c *Config
 	if len(cs) > 0 {

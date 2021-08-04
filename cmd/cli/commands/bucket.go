@@ -50,7 +50,12 @@ func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BucketPropsToUpdate) (
 		}
 		return fmt.Errorf("create bucket %q failed: %s", bck, err.Error())
 	}
-	fmt.Fprintf(c.App.Writer, "%q bucket created\n", bck)
+	if props == nil {
+		fmt.Fprintf(c.App.Writer,
+			"%q created (see github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties)\n", bck)
+	} else {
+		fmt.Fprintf(c.App.Writer, "%q created\n", bck)
+	}
 	return
 }
 

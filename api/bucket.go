@@ -147,7 +147,14 @@ func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks,
 	return summaries, nil
 }
 
-// CreateBucket sends HTTP request to a proxy to create an AIS bucket with the given name.
+// CreateBucket sends HTTP request to create an AIS bucket with the given name and,
+// optionally, specific non-default properties (via cmn.BucketPropsToUpdate).
+//
+// See also:
+//    * github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties
+//    * cmn.BucketPropsToUpdate (cmn/api.go)
+//
+// Bucket properties can be also changed at any time via SetBucketProps (above).
 func CreateBucket(baseParams BaseParams, bck cmn.Bck, props *cmn.BucketPropsToUpdate) error {
 	if err := bck.Validate(); err != nil {
 		return err
@@ -161,7 +168,7 @@ func CreateBucket(baseParams BaseParams, bck cmn.Bck, props *cmn.BucketPropsToUp
 	})
 }
 
-// DestroyBucket sends HTTP request to a proxy to remove an AIS bucket with the given name.
+// DestroyBucket sends HTTP request to remove an AIS bucket with the given name.
 func DestroyBucket(baseParams BaseParams, bck cmn.Bck) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
@@ -228,7 +235,7 @@ func RenameBucket(baseParams BaseParams, fromBck, toBck cmn.Bck) (xactID string,
 	return
 }
 
-// EvictRemoteBucket sends HTTP request to a proxy to evict an entire remote bucket from the AIStore
+// EvictRemoteBucket sends HTTP request to evict an entire remote bucket from the AIStore
 // - the operation results in eliminating all traces of the specified remote bucket in the AIStore
 func EvictRemoteBucket(baseParams BaseParams, bck cmn.Bck, keepMD bool) error {
 	var q url.Values

@@ -1,4 +1,4 @@
-ais bucket create ais://$BUCKET_1 ais://$BUCKET_2
+ais bucket create ais://$BUCKET_1 ais://$BUCKET_2 | awk '{print $1 " " $2}'
 
 for d1 in {0..4}; do for d2 in {0..100}; do mkdir -p /tmp/rdir/test$d1/$d2 && echo -n $RANDOM > /tmp/rdir/test$d1/$d2/test.txt; done; done
 ais object put "/tmp/rdir/test{0..4}/{0..100}/test.txt" ais://$BUCKET_1 -y // IGNORE

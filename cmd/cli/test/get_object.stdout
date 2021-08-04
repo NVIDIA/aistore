@@ -1,4 +1,4 @@
-"ais://$BUCKET_1" bucket created
+"ais://$BUCKET_1" created
 PUT "object_1.txt" into bucket "ais://$BUCKET_1"
 GET "object_1.txt" from bucket "ais://$BUCKET_1" as "$OBJECT_1.txt" [11B]
 11

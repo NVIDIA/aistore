@@ -1,5 +1,5 @@
-"ais://$BUCKET_1" bucket created
-"ais://$BUCKET_2" bucket created
+"ais://$BUCKET_1" created
+"ais://$BUCKET_2" created
 NAME	 OBJECTS	 SIZE	 USED %
 ais://$BUCKET_1	 0	 0B	 0.00%
 NAME	 OBJECTS	 SIZE	 USED %

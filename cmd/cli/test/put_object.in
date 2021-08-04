@@ -1,5 +1,5 @@
 echo "0123456789" > $OBJECT_1.txt
-ais bucket create ais://$BUCKET_1
+ais bucket create ais://$BUCKET_1 | awk '{print $1 " " $2}'
 
 ais object put $OBJECT_1.txt ais://$BUCKET_2/object_1.txt // FAIL "bucket "ais://$BUCKET_2" does not exist"
 ais object put $OBJECT_1.txt cloud://$BUCKET_1/object_1.txt // FAIL "invalid backend provider "cloud""
@@ -35,7 +35,7 @@ for d1 in {0..4}; do for d2 in {0..4}; do mkdir -p /tmp/rdir/test$d1/$d2 && echo
 
 # test range absolute paths
 
-ais bucket create ais://$BUCKET_2
+ais bucket create ais://$BUCKET_2 | awk '{print $1 " " $2}'
 ais object put "/tmp/rdir/test{0..4}/{0..4}/test.txt" ais://$BUCKET_2 -y // IGNORE
 RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais object get ais://$BUCKET_2/test$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
 
@@ -44,7 +44,7 @@ RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais object get ais://$BUCKET_
 
 # test range relative paths
 
-ais bucket create ais://$BUCKET_3
+ais bucket create ais://$BUCKET_3 | awk '{print $1 " " $2}'
 cd /tmp && ais object put "rdir/test{0..2}/{0..2}/test.txt" ais://$BUCKET_3 -y // IGNORE
 RES=0 && for d1 in {0..2}; do for d2 in {0..2}; do ais object get ais://$BUCKET_3/test$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
 cd /tmp && ais object put "./rdir/test{0..2}/{0..2}/test.txt" ais://$BUCKET_3/subdir -y // IGNORE
@@ -52,7 +52,7 @@ RES=0 && for d1 in {0..2}; do for d2 in {0..2}; do ais object get ais://$BUCKET_
 
 # test put * absolute paths
 
-ais bucket create ais://$BUCKET_4
+ais bucket create ais://$BUCKET_4 | awk '{print $1 " " $2}'
 ais object put "/tmp/rdir/*.txt" ais://$BUCKET_4 -y -r // IGNORE
 RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais object get ais://$BUCKET_4/test$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
 ais object put "/tmp/rdir/*.txt" ais://$BUCKET_4/subdir/ -y -r // IGNORE
@@ -60,7 +60,7 @@ RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais object get ais://$BUCKET_
 
 # test put * relative paths
 
-ais bucket create ais://$BUCKET_5
+ais bucket create ais://$BUCKET_5 | awk '{print $1 " " $2}'
 cd /tmp && ais object put "rdir/*.txt" ais://$BUCKET_5 -y -r // IGNORE
 RES=0 && for d1 in {0..4}; do for d2 in {0..4}; do ais object get ais://$BUCKET_5/test$d1/$d2/test.txt /dev/null && RES=$((RES+1)); done; done && echo $RES
 cd /tmp && ais object put "rdir/*.txt" ais://$BUCKET_5/subdir -y -r // IGNORE

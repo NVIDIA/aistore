@@ -1,4 +1,4 @@
-"ais://$BUCKET_1" bucket created
+"ais://$BUCKET_1" created
 PUT "rand.txt" into bucket "ais://$BUCKET_1"
 PUT "object_1.txt" into bucket "ais://$BUCKET_1"
 PUT "cksum" into bucket "ais://$BUCKET_1"
@@ -21,7 +21,7 @@ object_1.txt		 2B  2
 object_2.txt		 11B     1
 object_3.txt         11B     1
 rand.txt 30.49MiB 1
-"ais://$BUCKET_2" bucket created
+"ais://$BUCKET_2" created
 GET "test0/0/test.txt" from bucket "ais://$BUCKET_2" as "/dev/null" [1B]
 GET "test0/1/test.txt" from bucket "ais://$BUCKET_2" as "/dev/null" [1B]
 GET "test0/2/test.txt" from bucket "ais://$BUCKET_2" as "/dev/null" [1B]
@@ -74,7 +74,7 @@ GET "subdir/test4/2/test.txt" from bucket "ais://$BUCKET_2" as "/dev/null" [1B]
 GET "subdir/test4/3/test.txt" from bucket "ais://$BUCKET_2" as "/dev/null" [1B]
 GET "subdir/test4/4/test.txt" from bucket "ais://$BUCKET_2" as "/dev/null" [1B]
 25
-"ais://$BUCKET_3" bucket created
+"ais://$BUCKET_3" created
 GET "test0/0/test.txt" from bucket "ais://$BUCKET_3" as "/dev/null" [1B]
 GET "test0/1/test.txt" from bucket "ais://$BUCKET_3" as "/dev/null" [1B]
 GET "test0/2/test.txt" from bucket "ais://$BUCKET_3" as "/dev/null" [1B]
@@ -95,7 +95,7 @@ GET "subdirtest2/0/test.txt" from bucket "ais://$BUCKET_3" as "/dev/null" [1B]
 GET "subdirtest2/1/test.txt" from bucket "ais://$BUCKET_3" as "/dev/null" [1B]
 GET "subdirtest2/2/test.txt" from bucket "ais://$BUCKET_3" as "/dev/null" [1B]
 9
-"ais://$BUCKET_4" bucket created
+"ais://$BUCKET_4" created
 GET "test0/0/test.txt" from bucket "ais://$BUCKET_4" as "/dev/null" [1B]
 GET "test0/1/test.txt" from bucket "ais://$BUCKET_4" as "/dev/null" [1B]
 GET "test0/2/test.txt" from bucket "ais://$BUCKET_4" as "/dev/null" [1B]
@@ -148,7 +148,7 @@ GET "subdir/test4/2/test.txt" from bucket "ais://$BUCKET_4" as "/dev/null" [1B]
 GET "subdir/test4/3/test.txt" from bucket "ais://$BUCKET_4" as "/dev/null" [1B]
 GET "subdir/test4/4/test.txt" from bucket "ais://$BUCKET_4" as "/dev/null" [1B]
 25
-"ais://$BUCKET_5" bucket created
+"ais://$BUCKET_5" created
 GET "test0/0/test.txt" from bucket "ais://$BUCKET_5" as "/dev/null" [1B]
 GET "test0/1/test.txt" from bucket "ais://$BUCKET_5" as "/dev/null" [1B]
 GET "test0/2/test.txt" from bucket "ais://$BUCKET_5" as "/dev/null" [1B]

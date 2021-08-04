@@ -1,11 +1,11 @@
-"ais://$BUCKET_1" bucket created
+"ais://$BUCKET_1" created
 Bucket "ais://$BUCKET_1" already exists
 "ais://$BUCKET_1" bucket destroyed
 Bucket "ais://$BUCKET_1" does not exist
-"ais://$BUCKET_1" bucket created
+"ais://$BUCKET_1" created
 "ais://$BUCKET_1" bucket destroyed
-"ais://$BUCKET_1" bucket created
-"ais://$BUCKET_2" bucket created
+"ais://$BUCKET_1" created
+"ais://$BUCKET_2" created
 "ais://$BUCKET_2" bucket destroyed
-"ais://$BUCKET_3" bucket created
-"ais://#ml/$BUCKET_1" bucket created
+"ais://$BUCKET_3" created
+"ais://#ml/$BUCKET_1" created

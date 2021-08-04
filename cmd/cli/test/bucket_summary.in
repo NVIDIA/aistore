@@ -1,6 +1,6 @@
 ais bucket summary ais://tmp // FAIL "bucket "ais://tmp" does not exist"
-ais bucket create ais://$BUCKET_1
-ais bucket create ais://$BUCKET_2
+ais bucket create ais://$BUCKET_1 | awk '{print $1 " " $2}'
+ais bucket create ais://$BUCKET_2 | awk '{print $1 " " $2}'
 ais bucket summary ais://$BUCKET_1
 ais bucket summary aiss://$BUCKET_1 // FAIL "invalid backend provider "aiss""
 

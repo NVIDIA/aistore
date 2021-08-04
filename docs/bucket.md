@@ -1,6 +1,7 @@
 ## Table of Contents
 
 - [Bucket](#bucket)
+  - [Default Bucket Properties](#default-bucket-properties)
   - [Backend Provider](#backend-provider)
 - [AIS Bucket](#ais-bucket)
   - [CLI examples: create, rename and, destroy ais bucket](#cli-examples-create-rename-and-destroy-ais-bucket)
@@ -21,17 +22,17 @@
 
 ## Bucket
 
-AIStore uses the popular-and-well-known bucket abstraction.
-In a flat storage hierarchy, bucket is a named container of user dataset(s) (represented as objects) and, simultaneously, a point of applying storage management policies: erasure coding, mirroring, etc.
+AIStore uses the popular and well-known bucket abstraction. Each object ina cluster is assigned to (and stored in) a basic container called *bucket*.
 
-Each object is assigned to (and stored in) a basic container called *bucket*.
-AIS buckets *contain* user data; in that sense they are very similar to:
+In a flat storage hierarchy, bucket is a named container of user dataset(s) (represented as objects) and, simultaneously, a point of applying storage management policies: checksumming, erasure coding, mirroring, LRU eviction, etc.
+
+AIS buckets *contain* user data performing the same function as, for instance:
 
 * [Amazon S3 buckets](https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html)
 * [Google Cloud (GCP) buckets](https://cloud.google.com/storage/docs/key-terms#buckets)
 * [Microsoft Azure Blob containers](https://docs.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction)
 
-AIS supports multiple storage backends including itself:
+In addition, AIS supports multiple storage **backends** including itself:
 
 <img src="images/supported-backends.png" alt="Supported Backends" width="500">
 
@@ -43,6 +44,44 @@ All the [supported storage services](storage_svcs.md) equally apply to all stora
 | remote buckets | When AIS is deployed as [fast tier](overview.md#fast-tier), buckets in the cloud storage can be viewed and accessed through the [RESTful API](http_api.md) in AIS, in the exact same way as ais buckets. When this happens, AIS creates local instances of said buckets which then serves as a cache. These are referred to as **3rd party backend-based buckets**. | [Checksumming](storage_svcs.md#checksumming), [LRU](storage_svcs.md#lru), [Erasure Coding](storage_svcs.md#erasure-coding), [Local mirroring and load balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
 
 3rd party backend-based and AIS buckets support the same API with a few documented exceptions. Remote buckets can be *evicted* from AIS. AIS buckets are the only buckets that can be created, renamed, and deleted via the [RESTful API](http_api.md).
+
+### Default Bucket Properties
+
+By default, created buckets inherit their properties from the cluster-wide global [configuration](configuration.md).
+Global configuration (aka "Cluster Configuration") is, effectively, a protected (versioned, checksummed) piece of metadata
+that gets replicated across to the entire cluster.
+
+Bucket creation operation allows to override the **inherited defaults**, which include:
+
+| Configuration section | References |
+| --- | --- |
+| Backend | [Backend Provider](#backend-provider) |
+| Checksum | [Supported Checksums and Brief Theory of Operations](checksum.md) |
+| LRU | [Storage Services: LRU](storage_svcs.md#lru) |
+| N-way mirror | [Storage Services: n-way mirror](storage_svcs.md#n-way-mirror) |
+| Versioning | --- |
+| Access | [Bucket Access Attributes](#bucket-access-attributes) |
+| Erasure Coding | [Storage Services: erasure coding](storage_svcs.md#erasure-coding) |
+| Metadata Persistence | --- |
+
+Example specifying (non-default) bucket properties at creation time:
+
+```console
+$ ais bucket create ais://abc --bucket-props="lru.enabled=false mirror.enabled=true mirror.copies=4"
+
+# or same, in JSON format:
+$ ais bucket create ais://abc --bucket-props='{"lru": {"enabled": false}, "mirror": {"enabled": true, "copies": 4}}'
+```
+
+**IMPORTANT NOTICE:** at the time of this writing [LRU](storage_svcs.md#lru) eviction is globally enabled.
+In other words, by default a newly created bucket might become a subject to LRU eviction given configured LRU "watermarks" and current storage capacity utilization.
+
+See also:
+
+* [api.CreateBucket() and api.SetBucketProps()](/api/bucket.go)
+* [RESTful API](http_api.md)
+* [CLI examples: listing and setting bucket properties](#cli-examples-listing-and-setting-bucket-properties)
+* [CLI documentation and many more examples](cli/bucket.md)
 
 ### Backend Provider
 

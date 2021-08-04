@@ -1,4 +1,4 @@
-"ais://$BUCKET" bucket created
+"ais://$BUCKET" created
 COMPOSE "object.txt" [20B] into bucket "ais://$BUCKET"
 0123456789abcdefghi
 COMPOSE "object1.txt" [7B] into bucket "ais://$BUCKET"
