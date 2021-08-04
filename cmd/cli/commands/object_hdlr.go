@@ -49,6 +49,7 @@ var (
 			skipMisplacedFlag,
 			includeBckNameFlag,
 			ignoreErrorFlag,
+			archpathFlag,
 		),
 		commandSetCustom: {},
 		commandPromote: {
@@ -336,6 +337,9 @@ func putRegularObjHandler(c *cli.Context) (err error) {
 	if c.NArg() < 2 {
 		return missingArgumentsError(c, "object name in the form bucket/[object]")
 	}
+	if c.NArg() > 2 {
+		return incorrectUsageMsg(c, "too many arguments")
+	}
 	if bck, objName, err = parseBckObjectURI(c, uri, true /*optional objName*/); err != nil {
 		return
 	}
@@ -351,7 +355,12 @@ func putRegularObjHandler(c *cli.Context) (err error) {
 		if objName == "" {
 			objName = filepath.Base(path)
 		}
-		fmt.Fprintf(c.App.Writer, "Put file %q to %s/%s\n", path, bck, objName)
+		archPath := parseStrFlag(c, archpathFlag)
+		if archPath != "" {
+			fmt.Fprintf(c.App.Writer, "Add file %q to archive %s/%s as %s/%s\n", path, bck, objName, objName, archPath)
+		} else {
+			fmt.Fprintf(c.App.Writer, "Put file %q to %s/%s\n", path, bck, objName)
+		}
 		return nil
 	}
 	return putObject(c, bck, objName, fileName, p.Cksum.Type)

@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"archive/tar"
 	"context"
 	"encoding"
 	"encoding/base64"
@@ -34,7 +35,7 @@ import (
 )
 
 //
-// PUT, GET, APPEND, and COPY object
+// PUT, GET, APPEND (to file | to archive), and COPY object
 //
 
 type (
@@ -92,6 +93,19 @@ type (
 		localOnly   bool // copy locally with no HRW=>target
 		finalize    bool // copies and EC (as in poi.finalize())
 		promoteFile bool // Determines if we are promoting a file.
+	}
+
+	appendArchObjInfo struct {
+		started time.Time // started time of receiving - used to calculate the recv duration
+		t       *targetrunner
+		lom     *cluster.LOM
+
+		// Reader with the content of the object.
+		r io.ReadCloser
+		// Object size aka Content-Length.
+		size     int64
+		filename string // path inside an archive
+		mime     string // archive type
 	}
 )
 
@@ -836,9 +850,9 @@ func (goi *getObjInfo) parseRange(hdr http.Header, size int64) (rrange *cmn.HTTP
 	return
 }
 
-///////////////////
-// APPEND OBJECT //
-///////////////////
+//////////////////////
+// APPEND (to file) //
+//////////////////////
 
 func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err error) {
 	filePath := aoi.hi.filePath
@@ -1209,6 +1223,94 @@ func _sendObjDM(lom *cluster.LOM, params *cluster.SendToParams) error {
 		cluster.FreeLOM(lom)
 	}
 	return params.DM.Send(o, params.Reader, params.Tsi)
+}
+
+/////////////////////////
+// APPEND (to archive) //
+/////////////////////////
+
+func (aaoi *appendArchObjInfo) appendToArch(fqn string) error {
+	fh, err := cos.OpenTarForAppend(aaoi.lom.String(), fqn)
+	if err != nil {
+		return err
+	}
+	buf, slab := aaoi.t.gmm.AllocSize(aaoi.size)
+	tw := tar.NewWriter(fh)
+	hdr := tar.Header{
+		Typeflag: tar.TypeReg,
+		Name:     aaoi.filename,
+		Size:     aaoi.size,
+		ModTime:  aaoi.started,
+		Mode:     int64(cos.PermRWR), // default value '0' - no access at all
+	}
+	tw.WriteHeader(&hdr)
+	_, err = io.CopyBuffer(tw, aaoi.r, buf)
+	tw.Close()
+	cos.Close(fh)
+	slab.Free(buf)
+	if err != nil {
+		return err
+	}
+
+	st, err := os.Stat(fqn)
+	if err != nil {
+		return err
+	}
+	aaoi.lom.SetSize(st.Size())
+	aaoi.lom.SetCksum(cos.NewCksum(cos.ChecksumNone, ""))
+	aaoi.lom.SetAtimeUnix(aaoi.started.UnixNano())
+	return nil
+}
+
+func (aaoi *appendArchObjInfo) finalize(fqn string) error {
+	if err := os.Rename(fqn, aaoi.lom.FQN); err != nil {
+		return err
+	}
+	if err := aaoi.lom.Persist(true); err != nil {
+		return err
+	}
+	if aaoi.lom.Bprops().EC.Enabled {
+		if err := ec.ECM.EncodeObject(aaoi.lom); err != nil && err != ec.ErrorECDisabled {
+			return err
+		}
+	}
+	aaoi.t.putMirror(aaoi.lom)
+	return nil
+}
+
+func (aaoi *appendArchObjInfo) begin() (string, error) {
+	workFQN := fs.CSM.GenContentFQN(aaoi.lom, fs.WorkfileType, fs.WorkfileArchive)
+	if err := os.Rename(aaoi.lom.FQN, workFQN); err != nil {
+		return "", err
+	}
+	return workFQN, nil
+}
+
+func (aaoi *appendArchObjInfo) abort(fqn string) {
+	aaoi.lom.Uncache(true)
+	if err := os.Rename(aaoi.lom.FQN, fqn); err != nil {
+		glog.Errorf("nested error while rolling back %s: %v", aaoi.lom.ObjName, err)
+	}
+}
+
+func (aaoi *appendArchObjInfo) appendObject() (errCode int, err error) {
+	if aaoi.filename == "" {
+		return http.StatusBadRequest, errors.New("archive path is not defined")
+	}
+	if aaoi.mime != cos.ExtTar { // TODO: support other archive types
+		return http.StatusBadRequest, fmt.Errorf("append is supported only for %s archives", cos.ExtTar)
+	}
+	workFQN, err := aaoi.begin()
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	if err = aaoi.appendToArch(workFQN); err == nil {
+		if err = aaoi.finalize(workFQN); err == nil {
+			return 0, nil
+		}
+	}
+	aaoi.abort(workFQN)
+	return http.StatusInternalServerError, err
 }
 
 // PUT(lom) => destination target

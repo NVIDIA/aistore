@@ -109,7 +109,7 @@ func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt,
 		extractedCount++
 
 		// .tar format pads all block to 512 bytes
-		offset += paddedSize(header.Size)
+		offset += cos.CeilAlignInt64(header.Size, cos.TarBlockSize)
 	}
 }
 
@@ -152,14 +152,14 @@ func (t *targzExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadConte
 				}
 
 				// pad to 512 bytes
-				diff := paddedSize(n) - n
+				diff := cos.CeilAlignInt64(n, cos.TarBlockSize) - n
 				if diff > 0 {
 					if _, err = gzw.Write(padBuf[:diff]); err != nil {
 						return written + n, err
 					}
 					n += diff
 				}
-				debug.Assert(diff >= 0 && diff < 512)
+				debug.Assert(diff >= 0 && diff < cos.TarBlockSize)
 			case SGLStoreType, DiskStoreType:
 				rdReader.reinit(tw, obj.Size, obj.MetadataSize)
 				if n, err = loadContent(rdReader, rec, obj); err != nil {
@@ -181,4 +181,4 @@ func (t *targzExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadConte
 
 func (*targzExtractCreator) UsingCompression() bool { return true }
 func (*targzExtractCreator) SupportsOffset() bool   { return true }
-func (*targzExtractCreator) MetadataSize() int64    { return tarBlockSize } // size of tar header with padding
+func (*targzExtractCreator) MetadataSize() int64    { return cos.TarBlockSize } // size of tar header with padding

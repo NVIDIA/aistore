@@ -17,13 +17,9 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-const (
-	tarBlockSize = 512 // Size of each block in a tar stream
-)
-
 var (
 	// Predefined padding buffer (zero-initialized).
-	padBuf [tarBlockSize]byte
+	padBuf [cos.TarBlockSize]byte
 
 	// interface guard
 	_ Creator = (*tarExtractCreator)(nil)
@@ -204,7 +200,7 @@ func (t *tarExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, e
 		extractedCount++
 
 		// .tar format pads all block to 512 bytes
-		offset += paddedSize(header.Size)
+		offset += cos.CeilAlignInt64(header.Size, cos.TarBlockSize)
 	}
 }
 
@@ -245,14 +241,14 @@ func (t *tarExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadContent
 				}
 
 				// pad to 512 bytes
-				diff := paddedSize(n) - n
+				diff := cos.CeilAlignInt64(n, cos.TarBlockSize) - n
 				if diff > 0 {
 					if _, err = tarball.Write(padBuf[:diff]); err != nil {
 						return written + n, err
 					}
 					n += diff
 				}
-				debug.Assert(diff >= 0 && diff < 512)
+				debug.Assert(diff >= 0 && diff < cos.TarBlockSize)
 			case SGLStoreType, DiskStoreType:
 				rdReader.reinit(tw, obj.Size, obj.MetadataSize)
 				if n, err = loadContent(rdReader, rec, obj); err != nil {
@@ -274,9 +270,4 @@ func (t *tarExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadContent
 
 func (*tarExtractCreator) UsingCompression() bool { return false }
 func (*tarExtractCreator) SupportsOffset() bool   { return true }
-func (*tarExtractCreator) MetadataSize() int64    { return tarBlockSize } // size of tar header with padding
-
-// Calculates padded value to 512 bytes
-func paddedSize(offset int64) int64 {
-	return offset + (-offset & (tarBlockSize - 1))
-}
+func (*tarExtractCreator) MetadataSize() int64    { return cos.TarBlockSize } // size of tar header with padding

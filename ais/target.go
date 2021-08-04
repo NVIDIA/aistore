@@ -6,6 +6,7 @@ package ais
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -874,18 +875,29 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	lom.SetAtimeUnix(started.UnixNano())
-	appendTy := query.Get(cmn.URLParamAppendType)
-	if appendTy == "" {
-		if errCode, err := t.doPut(r, lom, started); err != nil {
-			t.fsErr(err, lom.FQN)
-			t.writeErr(w, r, err, errCode)
-		}
-	} else {
-		if handle, errCode, err := t.doAppend(r, lom, started); err != nil {
-			t.writeErr(w, r, err, errCode)
-		} else {
+
+	var (
+		appendTy = query.Get(cmn.URLParamAppendType)
+		archPath = query.Get(cmn.URLParamArchpath)
+		handle   string
+		err      error
+		errCode  int
+	)
+	switch {
+	case archPath != "":
+		errCode, err = t.doAppendArch(r, lom, started)
+	case appendTy != "":
+		handle, errCode, err = t.doAppend(r, lom, started)
+		if err == nil {
 			w.Header().Set(cmn.HdrAppendHandle, handle)
+			return
 		}
+	default:
+		errCode, err = t.doPut(r, lom, started)
+	}
+	if err != nil {
+		t.fsErr(err, lom.FQN)
+		t.writeErr(w, r, err, errCode)
 	}
 }
 
@@ -1357,6 +1369,45 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 	errCode, err = poi.putObject()
 	freePutObjInfo(poi)
 	return
+}
+
+func (t *targetrunner) doAppendArch(r *http.Request, lom *cluster.LOM, started time.Time) (errCode int, err error) {
+	var (
+		sizeStr  = r.Header.Get("Content-Length")
+		query    = r.URL.Query()
+		mime     = query.Get(cmn.URLParamArchmime)
+		filename = query.Get(cmn.URLParamArchpath)
+	)
+	if strings.HasPrefix(filename, lom.ObjName) {
+		if rel, err := filepath.Rel(lom.ObjName, filename); err == nil {
+			filename = rel
+		}
+	}
+	lom.Lock(true)
+	defer lom.Unlock(true)
+	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+		if os.IsNotExist(err) {
+			return http.StatusNotFound, err
+		}
+		return http.StatusInternalServerError, err
+	}
+	aaoi := &appendArchObjInfo{
+		started:  started,
+		t:        t,
+		lom:      lom,
+		r:        r.Body,
+		filename: filename,
+		mime:     mime,
+	}
+	if sizeStr != "" {
+		if size, ers := strconv.ParseInt(sizeStr, 10, 64); ers == nil {
+			aaoi.size = size
+		}
+	}
+	if aaoi.size == 0 {
+		return http.StatusBadRequest, errors.New("size is not defined")
+	}
+	return aaoi.appendObject()
 }
 
 func (t *targetrunner) putMirror(lom *cluster.LOM) {

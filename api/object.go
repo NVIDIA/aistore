@@ -52,6 +52,11 @@ type PutObjectArgs struct {
 	Size       uint64 // optional
 }
 
+type AppendObjectArchArgs struct {
+	PutObjectArgs
+	ArchPath string
+}
+
 type PromoteArgs struct {
 	BaseParams BaseParams
 	Bck        cmn.Bck
@@ -285,6 +290,10 @@ func GetObjectWithResp(baseParams BaseParams, bck cmn.Bck, object string, option
 // Assumes that `args.Reader` is already opened and ready for usage.
 func PutObject(args PutObjectArgs) (err error) {
 	query := cmn.AddBckToQuery(nil, args.Bck)
+	return _putObject(args, query)
+}
+
+func _putObject(args PutObjectArgs, query url.Values) (err error) {
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   args.BaseParams.URL,
@@ -325,6 +334,19 @@ func PutObject(args PutObjectArgs) (err error) {
 	}
 	_, err = DoReqWithRetry(args.BaseParams.Client, newRequest, reqArgs) // nolint:bodyclose // is closed inside
 	return err
+}
+
+// Append a file to an object that is an archive(tar/tgz/zip etc).
+// NOTE: the object must exists
+func AppendObjectArch(args AppendObjectArchArgs) (err error) {
+	m, err := cos.Mime("", args.Object)
+	if err != nil {
+		return err
+	}
+	query := cmn.AddBckToQuery(nil, args.Bck)
+	query.Set(cmn.URLParamArchpath, args.ArchPath)
+	query.Set(cmn.URLParamArchmime, m)
+	return _putObject(args.PutObjectArgs, query)
 }
 
 // AppendObject builds the object which should be finished with `FlushObject` request.

@@ -167,6 +167,14 @@ func CeilAlign(val, align uint) uint {
 	return val
 }
 
+func CeilAlignInt64(val, align int64) int64 {
+	mod := val % align
+	if mod != 0 {
+		val += align - mod
+	}
+	return val
+}
+
 // FastLog2 returns floor(log2(c))
 func FastLog2(c uint64) uint {
 	for i := uint(0); ; {

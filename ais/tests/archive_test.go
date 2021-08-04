@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/NVIDIA/aistore/api"
@@ -275,6 +276,101 @@ func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 				if err != nil {
 					t.Errorf("%s/%s?%s=%s(%dB): %v", toBck.Name, objName, cmn.URLParamArchpath, entry.Name, n, err)
 				}
+			}
+		})
+	}
+}
+
+func TestArchiveAppend(t *testing.T) {
+	var (
+		fromBck = cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS}
+		toBck   = cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS}
+		m       = ioContext{
+			t:       t,
+			bck:     fromBck,
+			num:     10,
+			prefix:  "archive/",
+			ordered: true,
+		}
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		numArchs   = 1
+		numInArch  = cos.Min(m.num/2, 7)
+		numPuts    = m.num
+		archPath   = "extra/newfile"
+		subtests   = []struct {
+			ext  string // one of cos.ArchExtensions (same as: supported arch formats)
+			list bool
+		}{
+			{
+				ext: cos.ExtTar, list: true,
+			},
+		}
+	)
+	for _, test := range subtests {
+		tname := test.ext
+		t.Run(tname, func(t *testing.T) {
+			tutils.CreateFreshBucket(t, proxyURL, fromBck, nil)
+			tutils.CreateFreshBucket(t, proxyURL, toBck, nil)
+			m.init()
+			m.puts()
+
+			objName := fmt.Sprintf("test_lst%s", test.ext)
+			list := make([]string, 0, numInArch)
+			for j := 0; j < numInArch; j++ {
+				list = append(list, m.objNames[rand.Intn(numPuts)])
+			}
+			_, err := api.ArchiveList(baseParams, m.bck, toBck, objName, list)
+			tassert.CheckFatal(t, err)
+
+			wargs := api.XactReqArgs{Kind: cmn.ActArchive, Bck: m.bck}
+			api.WaitForXactionIdle(baseParams, wargs)
+
+			msg := &cmn.SelectMsg{Prefix: "test_lst"}
+			msg.AddProps(cmn.GetPropsName, cmn.GetPropsSize)
+			objList, err := api.ListObjects(baseParams, toBck, msg, 0)
+			tassert.CheckFatal(t, err)
+			for _, entry := range objList.Entries {
+				tlog.Logf("%s: %dB\n", entry.Name, entry.Size)
+			}
+			num := len(objList.Entries)
+			tassert.Errorf(t, num == numArchs, "expected %d, have %d", numArchs, num)
+
+			msg.Flags |= cmn.SelectArchDir
+			objList, err = api.ListObjects(baseParams, toBck, msg, 0)
+			tassert.CheckFatal(t, err)
+			num = len(objList.Entries)
+			expectedNum := numArchs + numArchs*numInArch
+			tassert.Errorf(t, num == expectedNum, "expected %d, have %d", expectedNum, num)
+
+			reader, _ := readers.NewRandReader(fileSize, cos.ChecksumNone)
+			putArgs := api.PutObjectArgs{
+				BaseParams: baseParams,
+				Bck:        toBck,
+				Object:     objName,
+				Reader:     reader,
+				Size:       fileSize,
+			}
+			appendArcArgs := api.AppendObjectArchArgs{
+				PutObjectArgs: putArgs,
+				ArchPath:      archPath,
+			}
+			err = api.AppendObjectArch(appendArcArgs)
+			tassert.CheckError(t, err)
+			objList, err = api.ListObjects(baseParams, toBck, msg, 0)
+			tassert.CheckError(t, err)
+			num = len(objList.Entries)
+			expectedNum = numArchs + numArchs*numInArch + 1
+			tassert.Errorf(t, num == expectedNum, "expected %d, have %d", expectedNum, num)
+			found := false
+			for _, e := range objList.Entries {
+				if strings.HasSuffix(e.Name, archPath) && e.IsInsideArch() {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("File %q is not found in archive", archPath)
 			}
 		})
 	}

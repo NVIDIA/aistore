@@ -233,12 +233,31 @@ func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err err
 		readCallback := func(n int, _ error) { bars[0].IncrBy(n) }
 		reader = cos.NewCallbackReadOpenCloser(fh, readCallback)
 	}
+
 	putArgs := api.PutObjectArgs{
 		BaseParams: defaultAPIParams,
 		Bck:        bck,
 		Object:     objName,
 		Reader:     reader,
 		Cksum:      cksum,
+	}
+
+	archPath := parseStrFlag(c, archpathFlag)
+	if archPath != "" {
+		fi, err := fh.Stat()
+		if err != nil {
+			return err
+		}
+		putArgs.Size = uint64(fi.Size())
+		appendArcArgs := api.AppendObjectArchArgs{
+			PutObjectArgs: putArgs,
+			ArchPath:      archPath,
+		}
+		err = api.AppendObjectArch(appendArcArgs)
+		if flagIsSet(c, progressBarFlag) {
+			progress.Wait()
+		}
+		return err
 	}
 
 	err = api.PutObject(putArgs)

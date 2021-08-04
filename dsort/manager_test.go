@@ -269,7 +269,7 @@ func generateRecords(recordCnt, recordObjCnt int) *extract.Records {
 				ObjectFileType: "abc",
 				StoreType:      "ab",
 				Offset:         rand.Int63(),
-				MetadataSize:   512,
+				MetadataSize:   cos.TarBlockSize,
 				Size:           rand.Int63(),
 				Extension:      "." + cos.RandString(4),
 			})
