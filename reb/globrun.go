@@ -523,11 +523,12 @@ func (rj *rebJogger) _lwalk(lom *cluster.LOM) (err error) {
 		return
 	}
 	// transmit
-	rj.m.addLomAck(lom)
 	if rj.sema == nil {
+		rj.m.addLomAck(lom)
 		rj.doSend(lom, tsi, roc)
 	} else { // rebalance.multiplier > 1
 		rj.sema.Acquire()
+		rj.m.addLomAck(lom)
 		go func() {
 			rj.doSend(lom, tsi, roc)
 			rj.sema.Release()
@@ -550,6 +551,7 @@ func _prepSend(lom *cluster.LOM) (roc cos.ReadOpenCloser, err error) {
 		goto retErr
 	}
 	if roc, err = cos.NewFileHandle(lom.FQN); err != nil {
+		roc = nil
 		goto retErr
 	}
 	roc = cos.NewDeferROC(roc, func() {
@@ -561,7 +563,7 @@ func _prepSend(lom *cluster.LOM) (roc cos.ReadOpenCloser, err error) {
 retErr:
 	lom.Unlock(false)
 	cluster.FreeLOM(clone)
-	return nil, err
+	return
 }
 
 func (rj *rebJogger) doSend(lom *cluster.LOM, tsi *cluster.Snode, roc cos.ReadOpenCloser) {
