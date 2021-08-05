@@ -38,7 +38,7 @@ const (
 	commandGenShards = "gen-shards"
 	commandGet       = "get"
 	commandList      = "ls"
-	commandPrefetch  = cmn.ActPrefetch
+	commandPrefetch  = cmn.ActPrefetchObjects
 	commandPromote   = "promote"
 	commandPut       = "put"
 	commandSetCustom = "set-custom"

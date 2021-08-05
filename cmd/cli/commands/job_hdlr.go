@@ -42,7 +42,7 @@ func xactionCmds() cli.Commands {
 	splCmdKinds := make(cos.StringSet)
 	// Add any xaction which requires a separate handler here.
 	splCmdKinds.Add(
-		cmn.ActPrefetch,
+		cmn.ActPrefetchObjects,
 		cmn.ActECEncode,
 		cmn.ActMakeNCopies,
 		cmn.ActLoadLomCache,

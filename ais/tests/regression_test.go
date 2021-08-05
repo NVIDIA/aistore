@@ -688,7 +688,7 @@ func TestPrefetchList(t *testing.T) {
 		t.Error(err)
 	}
 
-	args = api.XactReqArgs{ID: xactID, Kind: cmn.ActPrefetch, Timeout: rebalanceTimeout}
+	args = api.XactReqArgs{ID: xactID, Kind: cmn.ActPrefetchObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -739,7 +739,7 @@ func TestDeleteList(t *testing.T) {
 		xactID, err := api.DeleteList(baseParams, bck.Bck, files)
 		tassert.CheckError(t, err)
 
-		args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDelete, Timeout: rebalanceTimeout}
+		args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDeleteObjects, Timeout: rebalanceTimeout}
 		_, err = api.WaitForXaction(baseParams, args)
 		tassert.CheckFatal(t, err)
 
@@ -801,7 +801,7 @@ func TestPrefetchRange(t *testing.T) {
 
 	xactID, err = api.PrefetchRange(baseParams, bck, rng)
 	tassert.CheckError(t, err)
-	args = api.XactReqArgs{ID: xactID, Kind: cmn.ActPrefetch, Timeout: rebalanceTimeout}
+	args = api.XactReqArgs{ID: xactID, Kind: cmn.ActPrefetchObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -853,7 +853,7 @@ func TestDeleteRange(t *testing.T) {
 		tlog.Logf("Delete in range %s\n", smallrange)
 		xactID, err := api.DeleteRange(baseParams, bck.Bck, smallrange)
 		tassert.CheckError(t, err)
-		args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDelete, Timeout: rebalanceTimeout}
+		args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDeleteObjects, Timeout: rebalanceTimeout}
 		_, err = api.WaitForXaction(baseParams, args)
 		tassert.CheckFatal(t, err)
 
@@ -882,7 +882,7 @@ func TestDeleteRange(t *testing.T) {
 		// 4. Delete the big range of objects
 		xactID, err = api.DeleteRange(baseParams, bck.Bck, bigrange)
 		tassert.CheckError(t, err)
-		args = api.XactReqArgs{ID: xactID, Kind: cmn.ActDelete, Timeout: rebalanceTimeout}
+		args = api.XactReqArgs{ID: xactID, Kind: cmn.ActDeleteObjects, Timeout: rebalanceTimeout}
 		_, err = api.WaitForXaction(baseParams, args)
 		tassert.CheckFatal(t, err)
 
@@ -959,7 +959,7 @@ func TestStressDeleteRange(t *testing.T) {
 	tlog.Logf("Deleting objects in range: %s\n", partialRange)
 	xactID, err := api.DeleteRange(baseParams, bck, partialRange)
 	tassert.CheckError(t, err)
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDelete, Timeout: rebalanceTimeout}
+	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDeleteObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -991,7 +991,7 @@ func TestStressDeleteRange(t *testing.T) {
 	tlog.Logf("Deleting objects in range: %s\n", fullRange)
 	xactID, err = api.DeleteRange(baseParams, bck, fullRange)
 	tassert.CheckError(t, err)
-	args = api.XactReqArgs{ID: xactID, Kind: cmn.ActDelete, Timeout: rebalanceTimeout}
+	args = api.XactReqArgs{ID: xactID, Kind: cmn.ActDeleteObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 

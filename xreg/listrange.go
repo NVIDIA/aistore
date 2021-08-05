@@ -30,5 +30,5 @@ func RenewPrefetch(uuid string, t cluster.Target, bck *cluster.Bck, msg *cmn.Lis
 }
 
 func (r *registry) renewPrefetch(uuid string, t cluster.Target, bck *cluster.Bck, msg *cmn.ListRangeMsg) RenewRes {
-	return r.renewBucketXact(cmn.ActPrefetch, bck, Args{T: t, UUID: uuid, Custom: msg})
+	return r.renewBucketXact(cmn.ActPrefetchObjects, bck, Args{T: t, UUID: uuid, Custom: msg})
 }

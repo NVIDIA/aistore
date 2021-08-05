@@ -217,7 +217,7 @@ func (p *proxyrunner) delMultipleObjs(w http.ResponseWriter, r *http.Request, bu
 	if len(objList.Object) == 0 {
 		return
 	}
-	msg := cmn.ActionMsg{Action: cmn.ActDelete}
+	msg := cmn.ActionMsg{Action: cmn.ActDeleteObjects}
 	query := make(url.Values)
 	query.Set(cmn.URLParamProvider, cmn.ProviderAIS)
 	lrMsg := &cmn.ListRangeMsg{ObjNames: make([]string, 0, len(objList.Object))}

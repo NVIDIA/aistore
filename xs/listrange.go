@@ -76,6 +76,7 @@ type (
 		xaction.XactBase
 		lriterator
 	}
+
 	TestXFactory struct{ prfFactory } // tests only
 )
 
@@ -331,7 +332,7 @@ func (p *prfFactory) Start() error {
 	return nil
 }
 
-func (*prfFactory) Kind() string        { return cmn.ActPrefetch }
+func (*prfFactory) Kind() string        { return cmn.ActPrefetchObjects }
 func (p *prfFactory) Get() cluster.Xact { return p.xact }
 
 func (*prfFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {

@@ -25,6 +25,11 @@ type (
 		Msg     *cmn.TransCpyBckMsg
 	}
 
+	TransCpyObjsArgs struct {
+		TransCpyBckArgs
+		cmn.ListRangeMsg
+	}
+
 	ECEncodeArgs struct {
 		Phase string
 	}
@@ -145,7 +150,15 @@ func RenewTransCpyBck(t cluster.Target, uuid, kind string, custom *TransCpyBckAr
 	return defaultReg.renewTransCpyBck(t, uuid, kind, custom)
 }
 
+func RenewTransCpyObjs(t cluster.Target, uuid, kind string, custom *TransCpyObjsArgs) RenewRes {
+	return defaultReg.renewTransCpyObjs(t, uuid, kind, custom)
+}
+
 func (r *registry) renewTransCpyBck(t cluster.Target, uuid, kind string, custom *TransCpyBckArgs) RenewRes {
+	return r.renewBucketXact(kind, custom.BckTo /*NOTE: to not from*/, Args{t, uuid, custom})
+}
+
+func (r *registry) renewTransCpyObjs(t cluster.Target, uuid, kind string, custom *TransCpyObjsArgs) RenewRes {
 	return r.renewBucketXact(kind, custom.BckTo /*NOTE: to not from*/, Args{t, uuid, custom})
 }
 

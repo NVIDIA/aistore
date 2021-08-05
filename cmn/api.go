@@ -90,6 +90,11 @@ type (
 		CopyBckMsg
 	}
 
+	TransCpyListRangeMsg struct {
+		ListRangeMsg
+		TransCpyBckMsg
+	}
+
 	// MountpathList contains two lists:
 	// * Available - list of local mountpaths available to the storage target
 	// * Disabled  - list of disabled mountpaths, the mountpaths that generated

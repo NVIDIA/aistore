@@ -16,7 +16,7 @@ func BenchmarkActionMsgMarshal(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		msg := cmn.ActionMsg{
 			Name:   "test-name",
-			Action: cmn.ActDelete,
+			Action: cmn.ActDeleteObjects,
 			Value:  &cmn.ListRangeMsg{Template: "thisisatemplate"},
 		}
 		data, err := jsoniter.Marshal(&msg)

@@ -202,7 +202,7 @@ func CleanupRemoteBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix stri
 	baseParams := BaseAPIParams(proxyURL)
 	xactID, err := api.DeleteList(baseParams, bck, toDelete)
 	tassert.CheckFatal(t, err)
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDelete, Timeout: time.Minute}
+	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDeleteObjects, Timeout: time.Minute}
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 }

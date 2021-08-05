@@ -648,7 +648,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		perms   = cmn.AccessDestroyBucket
 		errCode int
 	)
-	if msg.Action == cmn.ActDelete || msg.Action == cmn.ActEvictObjects {
+	if msg.Action == cmn.ActDeleteObjects || msg.Action == cmn.ActEvictObjects {
 		perms = cmn.AccessObjDELETE
 	}
 
@@ -707,7 +707,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 				p.writeErr(w, r, err)
 			}
 		}
-	case cmn.ActDelete, cmn.ActEvictObjects:
+	case cmn.ActDeleteObjects, cmn.ActEvictObjects:
 		var xactID string
 		if msg.Action == cmn.ActEvictObjects && bck.IsAIS() {
 			p.writeErrf(w, r, fmtNotRemote, bck.Name)
@@ -1067,7 +1067,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			p.writeErr(w, r, err, errCode)
 			return
 		}
-	case cmn.ActPrefetch:
+	case cmn.ActPrefetchObjects:
 		// TODO: GET vs SYNC?
 		if bck.IsAIS() {
 			p.writeErrf(w, r, fmtNotRemote, bucket)

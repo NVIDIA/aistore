@@ -21,6 +21,8 @@ type (
 		ArchName string `json:"archname"` // must have one of the cos.ArchExtensions
 		Mime     string `json:"mime"`     // user-specified mime type takes precedence if defined
 	}
+
+	// See also: TransCpyListRangeMsg
 )
 
 // NOTE: empty ListRangeMsg{} corresponds to (range = entire bucket)

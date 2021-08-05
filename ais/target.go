@@ -579,7 +579,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 				t.writeErr(w, r, errs[0]) // only 1 err is possible for 1 bck
 			}
 		}
-	case cmn.ActDelete, cmn.ActEvictObjects:
+	case cmn.ActDeleteObjects, cmn.ActEvictObjects:
 		lrMsg := &cmn.ListRangeMsg{}
 		if err := cos.MorphMarshal(msg.Value, lrMsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
@@ -630,7 +630,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch msg.Action {
-	case cmn.ActPrefetch:
+	case cmn.ActPrefetchObjects:
 		var (
 			err   error
 			lrMsg = &cmn.ListRangeMsg{}

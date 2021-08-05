@@ -35,25 +35,25 @@ func ArchiveRange(baseParams BaseParams, fromBck, toBck cmn.Bck, archName, rng s
 // DeleteList sends HTTP request to remove a list of objects from a bucket.
 func DeleteList(baseParams BaseParams, bck cmn.Bck, filesList []string) (string, error) {
 	deleteMsg := cmn.ListRangeMsg{ObjNames: filesList}
-	return doListRangeRequest(baseParams, bck, cmn.ActDelete, deleteMsg)
+	return doListRangeRequest(baseParams, bck, cmn.ActDeleteObjects, deleteMsg)
 }
 
 // DeleteRange sends HTTP request to remove a range of objects from a bucket.
 func DeleteRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
 	deleteMsg := cmn.ListRangeMsg{Template: rng}
-	return doListRangeRequest(baseParams, bck, cmn.ActDelete, deleteMsg)
+	return doListRangeRequest(baseParams, bck, cmn.ActDeleteObjects, deleteMsg)
 }
 
 // PrefetchList sends HTTP request to prefetch a list of objects from a remote bucket.
 func PrefetchList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
 	prefetchMsg := cmn.ListRangeMsg{ObjNames: fileslist}
-	return doListRangeRequest(baseParams, bck, cmn.ActPrefetch, prefetchMsg)
+	return doListRangeRequest(baseParams, bck, cmn.ActPrefetchObjects, prefetchMsg)
 }
 
 // PrefetchRange sends HTTP request to prefetch a range of objects from a remote bucket.
 func PrefetchRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
 	prefetchMsg := cmn.ListRangeMsg{Template: rng}
-	return doListRangeRequest(baseParams, bck, cmn.ActPrefetch, prefetchMsg)
+	return doListRangeRequest(baseParams, bck, cmn.ActPrefetchObjects, prefetchMsg)
 }
 
 // EvictList sends HTTP request to evict a list of objects from a remote bucket.
@@ -71,9 +71,9 @@ func EvictRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) 
 // Handles operations on multiple objects (delete, prefetch, evict, archive)
 func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action string, msg interface{}) (xactID string, err error) {
 	switch action {
-	case cmn.ActDelete, cmn.ActEvictObjects:
+	case cmn.ActDeleteObjects, cmn.ActEvictObjects:
 		baseParams.Method = http.MethodDelete
-	case cmn.ActPrefetch:
+	case cmn.ActPrefetchObjects:
 		baseParams.Method = http.MethodPost
 	case cmn.ActArchive:
 		baseParams.Method = http.MethodPut

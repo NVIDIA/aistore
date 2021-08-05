@@ -161,7 +161,7 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bc
 		go t.runResilver(xactMsg.ID, wg, false /*skipGlobMisplaced*/, notif)
 		wg.Wait()
 	// 2. with bucket
-	case cmn.ActPrefetch:
+	case cmn.ActPrefetchObjects:
 		args := &cmn.ListRangeMsg{}
 		rns := xreg.RenewPrefetch(xactMsg.ID, t, bck, args)
 		xact := rns.Entry.Get()
@@ -179,7 +179,7 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bc
 	// 3. cannot start
 	case cmn.ActPutCopies:
 		return fmt.Errorf("cannot start %q (is driven by PUTs into a mirrored bucket)", xactMsg)
-	case cmn.ActDownload, cmn.ActEvictObjects, cmn.ActDelete, cmn.ActMakeNCopies, cmn.ActECEncode:
+	case cmn.ActDownload, cmn.ActEvictObjects, cmn.ActDeleteObjects, cmn.ActMakeNCopies, cmn.ActECEncode:
 		return fmt.Errorf("initiating %q must be done via a separate documented API", xactMsg)
 	// 4. unknown
 	case "":
