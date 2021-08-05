@@ -46,12 +46,13 @@ type (
 	// common mult-obj operation context
 	// common iterateList()/iterateRange() logic
 	lriterator struct {
-		xact             lrxact
-		t                cluster.Target
-		ctx              context.Context
-		msg              *cmn.ListRangeMsg
+		xact    lrxact
+		t       cluster.Target
+		ctx     context.Context
+		msg     *cmn.ListRangeMsg
+		freeLOM bool // free LOM upon return from lriterator.do()
+		// flags
 		ignoreBackendErr bool // ignore backend API errors
-		freeLOM          bool // free LOM upon return from lriterator.do()
 	}
 )
 
@@ -96,12 +97,11 @@ var (
 // lriterator //
 ////////////////
 
-func (r *lriterator) init(xact lrxact, t cluster.Target, msg *cmn.ListRangeMsg, ignoreBackendErr, freeLOM bool) {
+func (r *lriterator) init(xact lrxact, t cluster.Target, msg *cmn.ListRangeMsg, freeLOM bool) {
 	r.xact = xact
 	r.t = t
 	r.ctx = context.Background()
 	r.msg = msg
-	r.ignoreBackendErr = ignoreBackendErr
 	r.freeLOM = freeLOM
 }
 
@@ -210,8 +210,6 @@ func (r *lriterator) do(lom *cluster.LOM, wi lrwi, smap *cluster.Smap) error {
 		return err
 	}
 	if smap != nil {
-		// NOTE: checking cluster locality to speed up iterating - trading off
-		// rebalancing for performance (can be configurable).
 		_, local, err := lom.HrwTarget(smap)
 		if err != nil {
 			return err
@@ -267,8 +265,8 @@ func (*evdFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 
 func newEvictDelete(xargs *xreg.Args, kind string, bck *cluster.Bck, msg *cmn.ListRangeMsg) (ed *evictDelete) {
 	ed = &evictDelete{}
-	// NOTE: list defaults to aborting on errors other than non-existence
-	ed.lriterator.init(ed, xargs.T, msg, !msg.IsList() /*ignoreBackendErr*/, true /*freeLOM*/)
+	ed.lriterator.init(ed, xargs.T, msg, true /*freeLOM*/)
+	ed.lriterator.ignoreBackendErr = !msg.IsList() // NOTE: list defaults to aborting on errors other than non-existence
 	ed.InitBase(xargs.UUID, kind, bck)
 	return
 }
@@ -341,8 +339,8 @@ func (*prfFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 
 func newPrefetch(xargs *xreg.Args, kind string, bck *cluster.Bck, msg *cmn.ListRangeMsg) (prf *prefetch) {
 	prf = &prefetch{}
-	// NOTE: list defaults to aborting on errors other than non-existence
-	prf.lriterator.init(prf, xargs.T, msg, !msg.IsList() /*ignoreBackendErr*/, true /*freeLOM*/)
+	prf.lriterator.init(prf, xargs.T, msg, true /*freeLOM*/)
+	prf.lriterator.ignoreBackendErr = !msg.IsList() // NOTE: list defaults to aborting on errors other than non-existence
 	prf.InitBase(xargs.UUID, kind, bck)
 	prf.lriterator.xact = prf
 	return

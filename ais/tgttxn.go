@@ -106,7 +106,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		err = t.ecEncode(c)
 	case cmn.ActArchive:
 		var xactID string
-		xactID, err = t.archiveMultiObj(c)
+		xactID, err = t.createArchMultiObj(c)
 		if xactID != "" {
 			w.Header().Set(cmn.HdrXactionID, xactID)
 		}
@@ -599,10 +599,10 @@ func (t *targetrunner) validateECEncode(bck *cluster.Bck, msg *aisMsg) (err erro
 }
 
 ////////////////
-// archiveMultiObj //
+// createArchMultiObj //
 ////////////////
 
-func (t *targetrunner) archiveMultiObj(c *txnServerCtx) (string /*xaction uuid*/, error) {
+func (t *targetrunner) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, error) {
 	var xactID string
 	if err := c.bck.Init(t.owner.bmd); err != nil {
 		return xactID, err

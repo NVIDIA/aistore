@@ -99,8 +99,8 @@ func (*transCopyObjsFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error)
 
 func newTransCopyObjs(xargs *xreg.Args, kind string, bck *cluster.Bck, msg *xreg.TransCpyObjsArgs) (tco *transformCopyObjs) {
 	tco = &transformCopyObjs{cpMsg: msg}
-	// NOTE: list defaults to aborting on errors other than non-existence
-	tco.lriterator.init(tco, xargs.T, &msg.ListRangeMsg, !msg.IsList() /*ignoreBackendErr*/, true /*freeLOM*/)
+	tco.lriterator.init(tco, xargs.T, &msg.ListRangeMsg, true /*freeLOM*/)
+	tco.lriterator.ignoreBackendErr = !msg.IsList() // NOTE: list defaults to aborting on errors other than non-existence
 	tco.InitBase(xargs.UUID, kind, bck)
 	return
 }

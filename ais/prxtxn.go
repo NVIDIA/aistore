@@ -670,7 +670,7 @@ func _updatePropsBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 	return nil
 }
 
-func (p *proxyrunner) archiveMultiObj(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
+func (p *proxyrunner) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
 	// begin
 	c := p.prepTxnClient(msg, bckFrom, false /*waitmsync*/)
 	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.URLParamBucketTo)

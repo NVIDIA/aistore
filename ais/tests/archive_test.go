@@ -143,18 +143,18 @@ func TestGetFromArchive(t *testing.T) {
 }
 
 // PUT/create
-func TestArchiveListRange(t *testing.T) {
+func TestCreateArchMultiObj(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
-		_testArchiveListRange(t, bck)
+		_createArchMultiObj(t, bck)
 	})
 }
 
-func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
+func _createArchMultiObj(t *testing.T, bck *cluster.Bck) {
 	var (
 		m = ioContext{
 			t:       t,
 			bck:     bck.Bck,
-			num:     80,
+			num:     75,
 			prefix:  "archive/",
 			ordered: true,
 		}
@@ -166,26 +166,27 @@ func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 		numPuts    = m.num
 		fmtRange   = "%s{%d..%d}"
 		subtests   = []struct {
-			ext  string // one of cos.ArchExtensions (same as: supported arch formats)
-			list bool
+			ext            string // one of cos.ArchExtensions (same as: supported arch formats)
+			list           bool
+			inclSrcBckName bool
 		}{
 			{
 				ext: cos.ExtTar, list: true,
 			},
 			{
-				ext: cos.ExtTar, list: false,
+				ext: cos.ExtTar, list: false, inclSrcBckName: true,
 			},
 			{
 				ext: cos.ExtTgz, list: true,
 			},
 			{
-				ext: cos.ExtTgz, list: false,
+				ext: cos.ExtTgz, list: false, inclSrcBckName: true,
 			},
 			{
 				ext: cos.ExtZip, list: true,
 			},
 			{
-				ext: cos.ExtZip, list: false,
+				ext: cos.ExtZip, list: false, inclSrcBckName: true,
 			},
 		}
 	)
@@ -198,6 +199,9 @@ func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 			listOrRange = "range"
 		}
 		tname := fmt.Sprintf("%s/%s", test.ext, listOrRange)
+		if test.inclSrcBckName {
+			tname += "//" + m.bck.Name
+		}
 		t.Run(tname, func(t *testing.T) {
 			m.init()
 			m.puts()
@@ -216,7 +220,11 @@ func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 						list = append(list, m.objNames[rand.Intn(numPuts)])
 					}
 					go func(archName string, list []string) {
-						_, err := api.ArchiveList(baseParams, m.bck, toBck, archName, list)
+						msg := cmn.ArchiveMsg{ToBck: toBck, ArchName: archName}
+						msg.ListRangeMsg.ObjNames = list
+						msg.InclBckName = test.inclSrcBckName
+
+						_, err := api.CreateArchMultiObj(baseParams, m.bck, msg)
 						tassert.CheckFatal(t, err)
 					}(archName, list)
 				}
@@ -225,8 +233,11 @@ func _testArchiveListRange(t *testing.T, bck *cluster.Bck) {
 					archName := fmt.Sprintf("test_rng_%02d%s", i, test.ext)
 					start := rand.Intn(numPuts - numInArch)
 					go func(archName string, start int) {
-						rng := fmt.Sprintf(fmtRange, m.prefix, start, start+numInArch-1)
-						_, err := api.ArchiveRange(baseParams, m.bck, toBck, archName, rng)
+						msg := cmn.ArchiveMsg{ToBck: toBck, ArchName: archName}
+						msg.ListRangeMsg.Template = fmt.Sprintf(fmtRange, m.prefix, start, start+numInArch-1)
+						msg.InclBckName = test.inclSrcBckName
+
+						_, err := api.CreateArchMultiObj(baseParams, m.bck, msg)
 						tassert.CheckFatal(t, err)
 					}(archName, start)
 				}
@@ -315,20 +326,23 @@ func TestArchiveAppend(t *testing.T) {
 			m.init()
 			m.puts()
 
-			objName := fmt.Sprintf("test_lst%s", test.ext)
+			archName := fmt.Sprintf("test_lst%s", test.ext)
 			list := make([]string, 0, numInArch)
 			for j := 0; j < numInArch; j++ {
 				list = append(list, m.objNames[rand.Intn(numPuts)])
 			}
-			_, err := api.ArchiveList(baseParams, m.bck, toBck, objName, list)
+			archmsg := cmn.ArchiveMsg{ToBck: toBck, ArchName: archName}
+			archmsg.ListRangeMsg.ObjNames = list
+			_, err := api.CreateArchMultiObj(baseParams, m.bck, archmsg)
+
 			tassert.CheckFatal(t, err)
 
 			wargs := api.XactReqArgs{Kind: cmn.ActArchive, Bck: m.bck}
 			api.WaitForXactionIdle(baseParams, wargs)
 
-			msg := &cmn.SelectMsg{Prefix: "test_lst"}
-			msg.AddProps(cmn.GetPropsName, cmn.GetPropsSize)
-			objList, err := api.ListObjects(baseParams, toBck, msg, 0)
+			selmsg := &cmn.SelectMsg{Prefix: "test_lst"}
+			selmsg.AddProps(cmn.GetPropsName, cmn.GetPropsSize)
+			objList, err := api.ListObjects(baseParams, toBck, selmsg, 0)
 			tassert.CheckFatal(t, err)
 			for _, entry := range objList.Entries {
 				tlog.Logf("%s: %dB\n", entry.Name, entry.Size)
@@ -336,8 +350,8 @@ func TestArchiveAppend(t *testing.T) {
 			num := len(objList.Entries)
 			tassert.Errorf(t, num == numArchs, "expected %d, have %d", numArchs, num)
 
-			msg.Flags |= cmn.SelectArchDir
-			objList, err = api.ListObjects(baseParams, toBck, msg, 0)
+			selmsg.Flags |= cmn.SelectArchDir
+			objList, err = api.ListObjects(baseParams, toBck, selmsg, 0)
 			tassert.CheckFatal(t, err)
 			num = len(objList.Entries)
 			expectedNum := numArchs + numArchs*numInArch
@@ -347,7 +361,7 @@ func TestArchiveAppend(t *testing.T) {
 			putArgs := api.PutObjectArgs{
 				BaseParams: baseParams,
 				Bck:        toBck,
-				Object:     objName,
+				Object:     archName,
 				Reader:     reader,
 				Size:       fileSize,
 			}
@@ -357,7 +371,7 @@ func TestArchiveAppend(t *testing.T) {
 			}
 			err = api.AppendObjectArch(appendArcArgs)
 			tassert.CheckError(t, err)
-			objList, err = api.ListObjects(baseParams, toBck, msg, 0)
+			objList, err = api.ListObjects(baseParams, toBck, selmsg, 0)
 			tassert.CheckError(t, err)
 			num = len(objList.Entries)
 			expectedNum = numArchs + numArchs*numInArch + 1

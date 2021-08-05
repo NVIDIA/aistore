@@ -9,12 +9,10 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/fatih/color"
 	"github.com/urfave/cli"
 )
 
@@ -240,17 +238,12 @@ func getHandler(c *cli.Context) (err error) {
 	return getObject(c, outFile, false /*silent*/)
 }
 
-func putArchiveHandler(c *cli.Context) (err error) {
+func createArchMultiObjHandler(c *cli.Context) (err error) {
 	var (
 		bckTo, bckFrom cmn.Bck
 		objName        string
 		template       = parseStrFlag(c, templateFlag)
 		list           = parseStrFlag(c, listFlag)
-		dryRun         = flagIsSet(c, dryRunFlag)
-		cleanupSrc     = flagIsSet(c, cleanupSrcFlag)
-		skipMisplaced  = flagIsSet(c, skipMisplacedFlag)
-		includeBckName = flagIsSet(c, includeBckNameFlag)
-		ignoreError    = flagIsSet(c, ignoreErrorFlag)
 	)
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "object name in the form bucket/[object]")
@@ -274,37 +267,17 @@ func putArchiveHandler(c *cli.Context) (err error) {
 	} else {
 		bckFrom = bckTo
 	}
-
-	if dryRun {
-		fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
-		var srcDesc string
-		if list != "" {
-			srcDesc = fmt.Sprintf("list of objects %q", list)
-		} else {
-			srcDesc = fmt.Sprintf("objects matching pattern %q", template)
-		}
-		srcAction := "keep"
-		if cleanupSrc {
-			if bckFrom.IsRemote() {
-				srcAction = "evict"
-			} else {
-				red := color.New(color.FgRed).SprintFunc()
-				srcAction = red("delete")
-			}
-		}
-		w := tabwriter.NewWriter(c.App.Writer, 0, 8, 1, '\t', 0)
-		fmt.Fprintf(w, "Source\t%s of bucket %q\nDestination\t%s/%s\n", srcDesc, bckFrom, bckTo, objName)
-		fmt.Fprintf(w, "Source objects action:\t%s\nSkip misplaced objects:\t%t\n", srcAction, skipMisplaced)
-		fmt.Fprintf(w, "Ignore errors:\t%t\nDirectory structure starts with bucket name:\t%t\n", ignoreError, includeBckName)
-		w.Flush()
-		return nil
-	}
-
+	msg := cmn.ArchiveMsg{ToBck: bckTo, ArchName: objName}
+	msg.SkipMisplaced = flagIsSet(c, skipMisplacedFlag)
+	msg.IgnoreBackendErr = flagIsSet(c, ignoreErrorFlag)
+	msg.EraseSources = flagIsSet(c, cleanupSrcFlag)
+	msg.InclBckName = flagIsSet(c, includeBckNameFlag)
 	if list != "" {
-		objList := strings.Split(list, ",")
-		_, err = api.ArchiveList(defaultAPIParams, bckFrom, bckTo, objName, objList)
+		msg.ListRangeMsg.ObjNames = strings.Split(list, ",")
+		_, err = api.CreateArchMultiObj(defaultAPIParams, bckFrom, msg)
 	} else {
-		_, err = api.ArchiveRange(defaultAPIParams, bckFrom, bckTo, objName, template)
+		msg.ListRangeMsg.Template = template
+		_, err = api.CreateArchMultiObj(defaultAPIParams, bckFrom, msg)
 	}
 	if err != nil {
 		return err
@@ -368,7 +341,7 @@ func putRegularObjHandler(c *cli.Context) (err error) {
 
 func putHandler(c *cli.Context) (err error) {
 	if flagIsSet(c, archiveFlag) {
-		return putArchiveHandler(c)
+		return createArchMultiObjHandler(c)
 	}
 
 	return putRegularObjHandler(c)

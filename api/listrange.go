@@ -12,24 +12,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-// ArchiveMsg sends HTTP request to archive source objects as a tar (tgz/tar.gz, zip)
-// at the destination (for supported archiving formats, see cos.ArchExtensions)
-func ArchiveList(baseParams BaseParams, fromBck, toBck cmn.Bck, archName string, filesList []string) (string, error) {
-	archiveMsg := cmn.ArchiveMsg{
-		ListRangeMsg: cmn.ListRangeMsg{ObjNames: filesList},
-		ToBck:        toBck,
-		ArchName:     archName,
-	}
-	return doListRangeRequest(baseParams, fromBck, cmn.ActArchive, archiveMsg)
-}
-
-func ArchiveRange(baseParams BaseParams, fromBck, toBck cmn.Bck, archName, rng string) (string, error) {
-	archiveMsg := cmn.ArchiveMsg{
-		ListRangeMsg: cmn.ListRangeMsg{Template: rng},
-		ToBck:        toBck,
-		ArchName:     archName,
-	}
-	return doListRangeRequest(baseParams, fromBck, cmn.ActArchive, archiveMsg)
+// CreateArchMultiObj sends HTTP request to archive multiple objects.
+// The source and the destination buckets are defined as `fromBck` and `toBck`, respectively
+// (not necessarily distinct)
+// For supported archiving formats, see cos.ArchExtensions.
+func CreateArchMultiObj(baseParams BaseParams, fromBck cmn.Bck, msg cmn.ArchiveMsg) (string, error) {
+	return doListRangeRequest(baseParams, fromBck, cmn.ActArchive, msg)
 }
 
 // DeleteList sends HTTP request to remove a list of objects from a bucket.

@@ -13,9 +13,11 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -244,12 +246,12 @@ func (r *XactPutArchive) Run(wg *sync.WaitGroup) {
 			wi := r.pending.m[fullname]
 			r.pending.RUnlock()
 			var (
-				smap             = r.t.Sowner().Get()
-				lrit             = &lriterator{}
-				ignoreBackendErr = !msg.IsList() // list defaults to aborting on errors other than non-existence
-				freeLOM          = false         // not delegating the responsibility - doing it
+				smap    = r.t.Sowner().Get()
+				lrit    = &lriterator{}
+				freeLOM = false // not delegating the responsibility - doing it
 			)
-			lrit.init(r, r.t, &msg.ListRangeMsg, ignoreBackendErr, freeLOM)
+			lrit.init(r, r.t, &msg.ListRangeMsg, freeLOM)
+			lrit.ignoreBackendErr = msg.IgnoreBackendErr
 			if msg.IsList() {
 				err = lrit.iterateList(wi, smap)
 			} else {
@@ -331,10 +333,10 @@ func (r *XactPutArchive) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, er
 	if hdr.Opcode == doneSendingOpcode {
 		refc := wi.refc.Dec()
 		debug.Assert(refc >= 0)
-	} else {
-		debug.Assert(hdr.Opcode == 0)
-		wi.writer.write(hdr.ObjName, &hdr.ObjAttrs, objReader)
+		return
 	}
+	debug.Assert(hdr.Opcode == 0)
+	wi.writer.write(wi.nameInArch(hdr.Bck.Name, hdr.ObjName), &hdr.ObjAttrs, objReader)
 }
 
 func (r *XactPutArchive) finalize(wi *archwi, fullname string) {
@@ -433,7 +435,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) error {
 		return nil
 	}
 	debug.Assert(wi.fh != nil) // see Begin
-	err = wi.writer.write(lom.ObjName, lom, fh)
+	err = wi.writer.write(wi.nameInArch(lom.Bck().Name, lom.ObjName), lom, fh)
 	cluster.FreeLOM(lom)
 	cos.Close(fh)
 	return err
@@ -443,6 +445,17 @@ func (wi *archwi) quiesce() cluster.QuiRes {
 	return wi.r.Quiesce(wi.r.config.Timeout.MaxKeepalive.D(), func(total time.Duration) cluster.QuiRes {
 		return xaction.RefcntQuiCB(&wi.refc, wi.r.config.Timeout.SendFile.D()/2, total)
 	})
+}
+
+func (wi *archwi) nameInArch(bckName, objName string) string {
+	if !wi.msg.InclBckName {
+		return objName
+	}
+	buf := make([]byte, 0, len(bckName)+1+len(objName))
+	buf = append(buf, bckName...)
+	buf = append(buf, filepath.Separator)
+	buf = append(buf, objName...)
+	return *(*string)(unsafe.Pointer(&buf))
 }
 
 ///////////////
