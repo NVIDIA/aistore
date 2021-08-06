@@ -17,6 +17,27 @@ pre, code {
   font-size: 13px;
 }
 
+/* Do not break line for code text inside the table. */
+.nobreak td code {
+  white-space: nowrap;
+}
+
+/* Improve visuals of headers. */
+h1 {
+ font-weight: 700;
+}
+
+h2, h3, h4, h5, h6 {
+  font-weight: 500;
+}
+
+h2::before, h3::before, h4::before, h5::before {
+  display: block;
+  content: " ";
+  margin-top: -5rem;
+  height: 5rem;
+  visibility: hidden;
+
 .embed-container {
   position: relative;
   padding-bottom: 56.25%;

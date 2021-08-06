@@ -1,6 +1,6 @@
 ---
 layout: post
-title: HOWTO_BENCHMARK
+title: HOW TO BENCHMARK
 permalink: howto_benchmark
 redirect_from:
  - howto_benchmark.md/

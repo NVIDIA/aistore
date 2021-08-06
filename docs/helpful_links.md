@@ -1,6 +1,6 @@
 ---
 layout: post
-title: HELPFUL_LINKS
+title: HELPFUL LINKS
 permalink: helpful_links
 redirect_from:
  - helpful_links.md/

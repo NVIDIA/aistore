@@ -84,8 +84,6 @@ AIS Downloader supports 4 (four) request types:
 > Also, see [AIS API](/docs/http_api.md) for details on how to create, destroy, and list storage buckets.
 > For Python-based clients, a better starting point could be [here](/docs/overview.md#python-client).
 
-------------
-
 The rest of this document is structured around supported *types of downloading jobs* and can serve as an API reference for the Downloader.
 
 ## Table of Contents
