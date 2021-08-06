@@ -37,6 +37,11 @@ h2::before, h3::before, h4::before, h5::before {
   margin-top: -5rem;
   height: 5rem;
   visibility: hidden;
+}
+
+h2.post-list-heading {
+  display: none;
+}
 
 .embed-container {
   position: relative;
