@@ -191,7 +191,7 @@ func (r *XactPutArchive) Begin(msg *cmn.ArchiveMsg) (err error) {
 	debug.Assert(lom.FullName() == msg.FullName()) // relying on it
 
 	wi := &archwi{r: r, msg: msg, lom: lom}
-	wi.fqn = fs.CSM.GenContentFQN(wi.lom, fs.WorkfileType, fs.WorkfileAppend)
+	wi.fqn = fs.CSM.GenContentFQN(wi.lom, fs.WorkfileType, fs.WorkfileCreateArch)
 	wi.cksum.Init(lom.CksumConf().Type)
 
 	smap := r.t.Sowner().Get()

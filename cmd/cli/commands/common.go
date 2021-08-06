@@ -361,7 +361,6 @@ var (
 	// Object
 	offsetFlag   = cli.StringFlag{Name: "offset", Usage: "object read offset " + sizeUnits}
 	lengthFlag   = cli.StringFlag{Name: "length", Usage: "object read length " + sizeUnits}
-	archpathFlag = cli.StringFlag{Name: "archpath", Usage: "filename in archive"}
 	isCachedFlag = cli.BoolFlag{Name: "is-cached", Usage: "check if object from a remote bucket is present (cached)"}
 	cachedFlag   = cli.BoolFlag{
 		Name:  "cached",
@@ -379,9 +378,13 @@ var (
 		Name:  "chunk-size",
 		Usage: "chunk size used for each request " + sizeUnits, Value: "10MB",
 	}
-	computeCksumFlag   = cli.BoolFlag{Name: "compute-cksum", Usage: "compute the checksum with the type configured for the bucket"}
-	checksumFlags      = getCksumFlags()
-	archiveFlag        = cli.BoolFlag{Name: "archive", Usage: "create an archive from existing objects"}
+	computeCksumFlag = cli.BoolFlag{Name: "compute-cksum", Usage: "compute the checksum with the type configured for the bucket"}
+	checksumFlags    = getCksumFlags()
+
+	// archive
+	createArchFlag = cli.BoolFlag{Name: "archive", Usage: "create an archive from existing objects"}
+	archpathFlag   = cli.StringFlag{Name: "archpath", Usage: "filename in archive"}
+
 	sourceBckFlag      = cli.StringFlag{Name: "source-bck", Usage: "source bucket"}
 	cleanupSrcFlag     = cli.BoolFlag{Name: "cleanup", Usage: "delete or evict the source objects upon successful archiving"}
 	skipMisplacedFlag  = cli.BoolFlag{Name: "skip-misplaced", Usage: "skip misplaced objects"}

@@ -8,28 +8,32 @@ redirect_from:
 ---
 
 # CLI Reference for Objects
-This section lists operations (such as GET, PUT, APPEND, PROMOTE) on *objects* using the AIS CLI, with `ais object`.
+This document contains `ais object` commands, such as GET, PUT, APPEND, PROMOTE, PREFETCH, EVICT, and many more.
 
 ## Table of Contents
 - [GET object](#get-object)
 - [Print object content](#print-object-content)
 - [Show object properties](#show-object-properties)
 - [PUT object](#put-object)
+- [Delete object](#delete-object)
+- [Evict object](#evict-object)
 - [Promote files and directories](#promote-files-and-directories)
-- [Delete objects](#delete-objects)
-- [Evict objects](#evict-objects)
-- [Prefetch objects](#prefetch-objects)
 - [Move object](#move-object)
 - [Concat objects](#concat-objects)
 - [Set custom properties](#set-custom-properties)
+- [Operations on Lists and Ranges](#operations-on-lists-and-ranges)
+  - [Prefetch objects](#prefetch-objects)
+  - [Delete multiple objects](#delete-multiple-objects)
+  - [Evict multiple objects](#evict-multiple-objects)
+  - [Archive multiple objects](#archive-multiple-objects)
 
-## GET object
+# GET object
 
 `ais object get BUCKET/OBJECT_NAME [OUT_FILE]`
 
 Get an object from a bucket.  If a local file of the same name exists, the local file will be overwritten without confirmation.
 
-### Options
+## Options
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -40,7 +44,7 @@ Get an object from a bucket.  If a local file of the same name exists, the local
 
 `OUT_FILE`: filename in an existing directory or `-` for `stdout`
 
-### Save object to local file with explicit file name
+## Save object to local file with explicit file name
 
 Get the `imagenet_train-000010.tgz` object from the `imagenet` bucket and write it to a local file, `~/train-10.tgz`.
 
@@ -49,7 +53,7 @@ $ ais object get ais://imagenet/imagenet_train-000010.tgz ~/train-10.tgz
 GET "imagenet_train-000010.tgz" from bucket "imagenet" as "/home/user/train-10.tgz" [946.8MiB]
 ```
 
-### Save object to local file with implicit file name
+## Save object to local file with implicit file name
 
 If `OUT_FILE` is omitted, the local file name is implied from the object name.
 
@@ -60,7 +64,7 @@ $ ais object get imagenet/imagenet_train-000010.tgz
 GET "imagenet_train-000010.tgz" from bucket "imagenet" as "imagenet_train-000010.tgz" [946.8MiB]
 ```
 
-### Get object and print it to standard output
+## Get object and print it to standard output
 
 Get the `imagenet_train-000010.tgz` object from the `imagenet` AWS bucket and write it to standard output.
 
@@ -68,7 +72,7 @@ Get the `imagenet_train-000010.tgz` object from the `imagenet` AWS bucket and wr
 $ ais object get aws://imagenet/imagenet_train-000010.tgz -
 ```
 
-### Check if object is _cached_
+## Check if object is _cached_
 
 We say that "an object is _cached_" to indicate two separate things:
 
@@ -85,7 +89,7 @@ $ ais object get --is-cached ais://imagenet/imagenet_train-000010.tgz
 Cached: true
 ```
 
-#### Read range
+### Read range
 
 Get the contents of object `list.txt` from `texts` bucket starting from offset `1024` length `1024` and save it as `~/list.txt` file.
 
@@ -94,14 +98,14 @@ $ ais object get --offset 1024 --length 1024 ais://texts/list.txt ~/list.txt
 Read 1.00KiB (1024 B)
 ```
 
-## Print object content
+# Print object content
 
 `ais object cat BUCKET/OBJECT_NAME`
 
 Get `OBJECT_NAME` from bucket `BUCKET` and print it to standard output.
 Alias for `ais object get BUCKET/OBJECT_NAME -`.
 
-### Options
+## Options
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -109,7 +113,7 @@ Alias for `ais object get BUCKET/OBJECT_NAME -`.
 | `--length` | `string` | Read length, which can end with size suffix (k, MB, GiB, ...) |  `""` |
 | `--checksum` | `bool` | Validate the checksum of the object | `false` |
 
-### Print content of object
+## Print content of object
 
 Print content of `list.txt` from local bucket `texts` to the standard output.
 
@@ -117,7 +121,7 @@ Print content of `list.txt` from local bucket `texts` to the standard output.
 $ ais object cat ais://texts/list.txt
 ```
 
-### Read range
+## Read range
 
 Print content of object `list.txt` starting from offset `1024` length `1024` to the standard output.
 
@@ -125,7 +129,7 @@ Print content of object `list.txt` starting from offset `1024` length `1024` to 
 $ ais object cat ais://texts/list.txt --offset 1024 --length 1024
 ```
 
-## Show object properties
+# Show object properties
 
 `ais object show [--props PROP_LIST] BUCKET/OBJECT_NAME`
 
@@ -148,7 +152,7 @@ Supported properties:
 > Note: Like many other `ais show` commands, `ais show object` is aliased to `ais object show` for ease of use.
 > Both of these commands are used interchangeably throughout the documentation.
 
-### Show default object properties
+## Show default object properties
 
 Display default properties of object `list.txt` from bucket `texts`.
 
@@ -161,7 +165,7 @@ atime       06 Jan 20 14:55 PST
 version     1
 ```
 
-### Show all object properties
+## Show all object properties
 
 Display all properties of object `list.txt` from bucket `texts`.
 
@@ -178,7 +182,7 @@ copies      1
 ec          1:1[replicated]
 ```
 
-### Show selected object properties
+## Show selected object properties
 
 Show only selected (`size,version,ec`) properties.
 
@@ -190,7 +194,7 @@ version     1
 ec          2:2[replicated]
 ```
 
-## PUT object
+# PUT object
 
 `ais object put -|FILE|DIRECTORY BUCKET/[OBJECT_NAME]`<sup>[1](#ft1)</sup>
 
@@ -200,7 +204,7 @@ the object will be overwritten without confirmation.
 If CLI detects that a user is going to put more than one file, it calculates the total number of files, total data size and checks if the bucket is empty,
 then shows all gathered info to the user and asks for confirmation to continue. Confirmation request can be disabled with the option `--yes` for use in scripts.
 
-### Options
+## Options
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -220,7 +224,7 @@ then shows all gathered info to the user and asks for confirmation to continue. 
 `FILE` must point to an existing file.
 File masks and directory uploading are not supported in single-file upload mode.
 
-### Object names
+## Object names
 
 PUT command handles two possible ways to specify resulting object name if source references single file:
 - Object name is not provided: `ais object put path/to/(..)/file.go bucket/` creates object `file.go` in `bucket`
@@ -248,7 +252,7 @@ All **examples** below put into an empty bucket and the source directory structu
 
 The current user HOME directory is `/home/user`.
 
-### Put single file
+## Put single file
 
 Put a single file `img1.tar` into local bucket `mybucket`, name it `img-set-1.tar`.
 
@@ -257,7 +261,7 @@ $ ais object put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
 ```
 
-### Put single file with checksum
+## Put single file with checksum
 
 Put a single file `img1.tar` into local bucket `mybucket`, with a content checksum flag
 to override the default bucket checksum performed at the server side.
@@ -288,7 +292,7 @@ $ ais object put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --comput
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
 ```
 
-### Put single file without explicit name
+## Put single file without explicit name
 
 Put a single file `~/bck/img1.tar` into bucket `mybucket`, without explicit name.
 
@@ -297,7 +301,7 @@ $ ais object put "~/bck/img1.tar" ais://mybucket/
 # PUT /home/user/bck/img1.tar => mybucket/img-set-1.tar
 ```
 
-### Put content from STDIN
+## Put content from STDIN
 
 Read unpacked content from STDIN and put it into bucket `mybucket` with name `img-unpacked`.
 
@@ -309,7 +313,7 @@ $ tar -xOzf ~/bck/img1.tar | ais object put - ais://mybucket/img1-unpacked
 # PUT /home/user/bck/img1.tar (as stdin) => ais://mybucket/img-unpacked
 ```
 
-### Put directory into bucket
+## Put directory into bucket
 
 Put two objects, `/home/user/bck/img1.tar` and `/home/user/bck/img2.zip`, into the root of bucket `mybucket`.
 Note that the path `/home/user/bck` is a shortcut for `/home/user/bck/*` and that recursion is disabled by default.
@@ -320,7 +324,7 @@ $ ais object put "/home/user/bck" ais://mybucket
 # PUT /home/user/bck/img2.tar => img2.zip
 ```
 
-### Put directory into bucket with directory prefix
+## Put directory into bucket with directory prefix
 
 The same as above, but add `OBJECT_NAME` (`../subdir/`) prefix to objects names.
 
@@ -332,7 +336,7 @@ $ ais object put "/home/user/bck" ais://mybucket/subdir/
 # PUT /home/user/bck/extra/img3.zip => ais://mybucket/subdir/extra/img3.zip
 ```
 
-### Put directory into bucket with name prefix
+## Put directory into bucket with name prefix
 
 The same as above, but without trailing `/`.
 
@@ -344,7 +348,7 @@ $ ais object put "/home/user/bck" ais://mybucket/subdir
 # PUT /home/user/bck/extra/img3.zip => ais://mybucket/subdirextra/img3.zip
 ```
 
-### Put files from directory matching pattern
+## Put files from directory matching pattern
 
 Same as above, except that only files matching pattern `*.tar` are PUT, so the final bucket content is `tars/img1.tar` and `tars/extra/img1.tar`.
 
@@ -354,7 +358,7 @@ $ ais object put "~/bck/*.tar" ais://mybucket/tars/
 # PUT /home/user/bck/extra/img1.tar => ais://mybucket/tars/extra/img1.tar
 ```
 
-### Put files with range
+## Put files with range
 
 Put 9 files to `mybucket` using a range request. Note the formatting of object names.
 They exclude the longest parent directory of path which doesn't contain a template (`{a..b}`).
@@ -367,7 +371,7 @@ $ ais object put "~/dir/test{0..2}{0..2}.txt" ais://mybucket -y
 9 objects put into "ais://mybucket" bucket
 ```
 
-### Put files with range and custom prefix
+## Put files with range and custom prefix
 
 Same as above, except object names have additional prefix `test${d1}${d2}.txt`.
 
@@ -379,7 +383,7 @@ $ ais object put "~/dir/test{0..2}{0..2}.txt" ais://mybucket/dir/ -y
 # PUT /home/user/dir/test00.txt => ais://mybucket/dir/test00.txt and 8 more
 ```
 
-### Preview putting files with dry-run
+## Preview putting files with dry-run
 
 Preview the files that would be sent to the cluster, without really putting them.
 
@@ -391,7 +395,7 @@ $ ais object put "~/dir/test{0..2}/dir/test{0..2}.txt" ais://mybucket --dry-run
 (...)
 ```
 
-### PUT multiple directories
+## PUT multiple directories
 
 Put multiple directories into the cluster with range syntax.
 
@@ -402,14 +406,14 @@ $ ais object put "dir{0..10}" ais://mybucket -y
 # PUT "/home/user/dir0/test0.txt" => b/dir0/test0.txt and 32 more
 ```
 
-## Promote files and directories
+# Promote files and directories
 
 `ais object promote FILE|DIRECTORY BUCKET/[OBJECT_NAME]`<sup>[1](#ft1)</sup>
 
 Promote **AIS-colocated** files and directories to AIS objects in a specified bucket.
 Colocation in the context means that the files in question are already located *inside* AIStore (bare-metal or virtual) storage servers (targets).
 
-### Options
+## Options
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -421,7 +425,7 @@ Colocation in the context means that the files in question are already located *
 
 **Note:** `--keep` flag defaults to `true` and we retain the origin file to ensure safety.
 
-### Object names
+## Object names
 
 When the specified source references a directory, or a tree of nested directories, object naming is done as follows:
 
@@ -438,7 +442,7 @@ Notice that `keep` option is required - it cannot be omitted.
 
 > The usual argument for **not keeping** the original file-based content (`keep=false`) is a) saving space on the target servers and b) optimizing time to promote (larger) files and directories.
 
-### Promote a single file
+## Promote a single file
 
 Promote `/tmp/examples/example1.txt` without specified object name.
 
@@ -447,7 +451,7 @@ $ ais object promote /tmp/examples/example1.txt ais://mybucket --keep=true
 # PROMOTE /tmp/examples/example1.txt => ais://mybucket/example1.txt
 ```
 
-### Promote file while specifying custom (resulting) name
+## Promote file while specifying custom (resulting) name
 
 Promote /tmp/examples/example1.txt as object with name `example1.txt`.
 
@@ -456,7 +460,7 @@ $ ais object promote /tmp/examples/example1.txt ais://mybucket/example1.txt --ke
 # PROMOTE /tmp/examples/example1.txt => ais://mybucket/example1.txt
 ```
 
-### Promote a directory
+## Promote a directory
 
 Make AIS objects out of `/tmp/examples` files (**one file = one object**).
 `/tmp/examples` is a directory present on some (or all) of the deployed storage nodes.
@@ -465,7 +469,7 @@ Make AIS objects out of `/tmp/examples` files (**one file = one object**).
 $ ais object promote /tmp/examples ais://mybucket/ -r --keep=true
 ```
 
-### Promote directory with custom prefix
+## Promote directory with custom prefix
 
 Promote `/tmp/examples` files to AIS objects. Objects names will have `examples/` prefix.
 
@@ -473,7 +477,7 @@ Promote `/tmp/examples` files to AIS objects. Objects names will have `examples/
 $ ais object promote /tmp/examples ais://mybucket/examples/ -r --keep=false
 ```
 
-### Promote invalid path
+## Promote invalid path
 
 Try to promote a file that does not exist.
 
@@ -488,26 +492,15 @@ $ ais object promote /target/1014646t8081/nonexistent/dir/ ais://testbucket --ta
 (...) Bad Request: stat /target/1014646t8081/nonexistent/dir: no such file or directory
 ```
 
-## Delete objects
+# Delete object
 
 `ais object rm BUCKET/[OBJECT_NAME]...`
 
 Delete an object or list/range of objects from the bucket.
 
-### Options
+* For multi-object delete operation, please see: [Operations on Lists and Ranges](#operations-on-lists-and-ranges) below.
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--list` | `string` | Comma separated list of objects for list deletion | `""` |
-| `--template` | `string` | The object name template with optional range parts | `""` |
-
-- Options `--list`, `--template`, and argument(s) `OBJECT_NAME` are mutually exclusive.
-- List and template deletions expect only a bucket.
-- If OBJECT_NAMEs are given, CLI sends a separate request for each object.
-
-See [List/Range Operations](/docs/batch.md#listrange-operations) for more details.
-
-### Delete single object
+## Delete a single object
 
 Delete object `myobj.tgz` from bucket `mybucket`.
 
@@ -516,7 +509,7 @@ $ ais object rm ais://mybucket/myobj.tgz
 myobj.tgz deleted from ais://mybucket bucket
 ```
 
-### Delete multiple objects
+## Delete multiple space-separated objects
 
 Delete objects (`obj1`, `obj2`) from buckets (`aisbck`, `cloudbck`) respectively.
 
@@ -526,59 +519,19 @@ obj1.tgz deleted from ais://aisbck bucket
 obj2.tgz deleted from aws://cloudbck bucket
 ```
 
-### Delete a list of objects
+* NOTE: for each space-separated object name CLI sends a separate request.
+* For multi-object delete that operates on a `--list` or `--template`, please see: [Operations on Lists and Ranges](#operations-on-lists-and-ranges) below.
 
-Delete a list of objects (`obj1`, `obj2`, `obj3`) from bucket `mybucket`.
-
-NOTE: when specifying a comma-delimited `--list` option, make sure to use double or single quotations as shown below.
-
-```console
-$ ais object rm ais://mybucket --list "obj1, obj2, obj3"
-[obj1 obj2] removed from ais://mybucket bucket
-```
-
-### Delete a range of objects
-
-```console
-# Delete from bucket `mybucket` all objects in the range `001-003` with prefix `test-`.
-# NOTE: when specifying template (aka "range") make sure to use double or single quotation marks.
-
-$ ais object rm ais://mybucket --template "test-{001..003}"
-removed files in the range 'test-{001..003}' from ais://mybucket bucket
-```
-
-And one other example that also includes generating .tar shards:
-
-```console
-$ ais advanced gen-shards "ais://dsort-testing/shard-{001..999}.tar" --fcount 256
-Shards created: 999/999 [==============================================================] 100 %
-
-# NOTE: make sure to use double or single quotations to specify the template (aka "range")
-$ ais object rm ais://dsort-testing --template 'shard-{900..999}.tar'
-removed from ais://dsort-testing objects in the range "shard-{900..999}.tar", use 'ais job show xaction EH291ljOy' to monitor progress
-```
-
-## Evict objects
+# Evict object
 
 `ais bucket evict BUCKET/[OBJECT_NAME]...`
 
-[Evict](/docs/bucket.md#prefetchevict-objects) objects from a remote bucket.
+[Evict](/docs/bucket.md#prefetchevict-objects) object(s) from a bucket that has [remote backend](/docs/bucket.md).
 
-### Options
+* NOTE: for each space-separated object name CLI sends a separate request.
+* For multi-object eviction that operates on a `--list` or `--template`, please see: [Operations on Lists and Ranges](#operations-on-lists-and-ranges) below.
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--list` | `string` | Comma separated list of objects for list deletion | `""` |
-| `--template` | `string` | The object name template with optional range parts | `""` |
-| `--dry-run` | `bool` | Do not actually perform EVICT. Shows a few objects to be evicted |
-
-- Options `--list`, `--template`, and argument(s) `OBJECT_NAME` are mutually exclusive.
-- List and template evictions expect only a bucket.
-- If OBJECT_NAMEs are given, CLI sends a separate request for each object.
-
-See [List/Range Operations](/docs/batch.md#listrange-operations) for more details.
-
-### Evict single object
+## Evict a single object
 
 Put `file.txt` object to `cloudbucket` bucket and evict it locally.
 
@@ -598,55 +551,20 @@ NAME	           OBJECTS	 SIZE    USED %
 aws://cloudbucket  0             0B      0%
 ```
 
-### Evict a range of objects
+## Evict a range of objects
 
 ```console
 $ ais bucket evict aws://cloudbucket --template "shard-{900..999}.tar"
 ```
 
-## Prefetch objects
-
-`ais job start prefetch BUCKET/ --list|--template <value>`
-
-[Prefetch](/docs/bucket.md#prefetchevict-objects) objects from the remote bucket.
-
-### Options
-
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--list` | `string` | Comma separated list of objects for list deletion | `""` |
-| `--template` | `string` | The object name template with optional range parts | `""` |
-| `--dry-run` | `bool` | Do not actually perform PREFETCH. Shows a few objects to be prefetched |
-
-Options `--list` and `--template` are mutually exclusive.
-
-See [List/Range Operations](/docs/batch.md#listrange-operations) for more details.
-
-### Prefetch list of objects
-
-NOTE: make sure to use double or single quotations to specify the list, as shown below.
-
-```console
-# Prefetch o1, o2, and o3 from AWS bucket `cloudbucket`:
-$ ais job start prefetch aws://cloudbucket --list 'o1,o2,o3'
-```
-
-### Prefetch a range of objects
-
-```console
-# Prefetch from AWS bucket `cloudbucket` all objects in the specified range.
-# NOTE: make sure to use double or single quotations to specify the template (aka "range")
-$ ais job start prefetch aws://cloudbucket --template "shard-{001..999}.tar"
-```
-
-## Move object
+# Move object
 
 `ais object mv BUCKET/OBJECT_NAME NEW_OBJECT_NAME`
 
 Move (rename) an object within an ais bucket.  Moving objects from one bucket to another bucket is not supported.
 If the `NEW_OBJECT_NAME` already exists, it will be overwritten without confirmation.
 
-## Concat objects
+# Concat objects
 
 `ais object concat DIRNAME|FILENAME [DIRNAME|FILENAME...] BUCKET/OBJECT_NAME`
 
@@ -656,14 +574,14 @@ If an object of the same name exists, the object will be overwritten without con
 If a directory is provided, files within the directory are sent in lexical order of filename to the cluster for concatenation.
 Recursive iteration through directories and wildcards is supported in the same way as the  PUT operation.
 
-### Options
+## Options
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--recursive` or `-r` | `bool` | Enable recursive directory upload |
 | `--progress` | `bool` | Displays progress bar | `false` |
 
-### Concat two files
+## Concat two files
 
 In two separate requests sends `file1.txt` and `dir/file2.txt` to the cluster, concatenates the files keeping the order and saves them as `obj` in bucket `mybucket`.
 
@@ -671,7 +589,7 @@ In two separate requests sends `file1.txt` and `dir/file2.txt` to the cluster, c
 $ ais object concat file1.txt dir/file2.txt ais://mybucket/obj
 ```
 
-### Concat with progress bar
+## Concat with progress bar
 
 Same as above, but additionally shows progress bar of sending the files to the cluster.
 
@@ -679,7 +597,7 @@ Same as above, but additionally shows progress bar of sending the files to the c
 $ ais object concat file1.txt dir/file2.txt ais://mybucket/obj --progress
 ```
 
-### Concat files from directories
+## Concat files from directories
 
 Creates `obj` in bucket `mybucket` which is concatenation of sorted files from `dirB` with sorted files from `dirA`.
 
@@ -687,7 +605,7 @@ Creates `obj` in bucket `mybucket` which is concatenation of sorted files from `
 $ ais object concat dirB dirA ais://mybucket/obj
 ```
 
-## Set custom properties
+# Set custom properties
 
 Generally, AIS objects have two kinds of properties: system and, optionally, custom (user-defined). Unlike the system-maintained properties, such as checksum and the number of copies (or EC parity slices, etc.) custom properties may have arbitrary user-defined names and values.
 
@@ -724,3 +642,140 @@ version          1
 ```
 
 Note the flag `--props=all` used to show _all_ object's properties including the custom ones, if available.
+
+# Operations on Lists and Ranges
+
+Generally, multi-object operations are supported in two different ways:
+
+1. specifying source directory in the command line - see e.g. [Promote files and directories](#promote-files-and-directories) and [Concat objects](#concat-objects);
+2. via `--list` or `--template` options, whereby the latter supports Bash expansion syntax and can also contain prefix, such as a virtul parent directory, etc.)
+
+This section documents and exemplifies AIS CLI operating on multiple (source) objects that you can specify either explicitly or implicitly
+using the `--list` or the `--template` flags.
+
+The number of objects "involved" in a single operation does not have any designed-in limitations: all AIS targets work on a given multi-object operation simultaneously and in parallel.
+
+* **See also:** [List/Range Operations](/docs/batch.md#listrange-operations).
+
+## Prefetch objects
+
+`ais job start prefetch BUCKET/ --list|--template <value>`
+
+[Prefetch](/docs/bucket.md#prefetchevict-objects) objects from a remote bucket.
+
+### Options
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--list` | `string` | Comma separated list of objects for list deletion | `""` |
+| `--template` | `string` | The object name template with optional range parts | `""` |
+| `--dry-run` | `bool` | Do not actually perform PREFETCH. Shows a few objects to be prefetched |
+
+Options `--list` and `--template` are mutually exclusive.
+
+### Prefetch a list of objects
+
+NOTE: make sure to use double or single quotations to specify the list, as shown below.
+
+```console
+# Prefetch o1, o2, and o3 from AWS bucket `cloudbucket`:
+$ ais job start prefetch aws://cloudbucket --list 'o1,o2,o3'
+```
+
+### Prefetch a range of objects
+
+```console
+# Prefetch from AWS bucket `cloudbucket` all objects in the specified range.
+# NOTE: make sure to use double or single quotations to specify the template (aka "range")
+
+$ ais job start prefetch aws://cloudbucket --template "shard-{001..999}.tar"
+```
+
+## Delete multiple objects
+
+`ais object rm BUCKET/[OBJECT_NAME]...`
+
+Delete an object or list or range of objects from a bucket.
+
+### Options
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--list` | `string` | Comma separated list of objects for list deletion | `""` |
+| `--template` | `string` | The object name template with optional range parts | `""` |
+
+### Delete a list of objects
+
+Delete a list of objects (`obj1`, `obj2`, `obj3`) from bucket `mybucket`.
+
+NOTE: when specifying a comma-delimited `--list` option, make sure to use double or single quotations as shown below.
+
+```console
+$ ais object rm ais://mybucket --list "obj1, obj2, obj3"
+[obj1 obj2] removed from ais://mybucket bucket
+```
+
+### Delete a range of objects
+
+```console
+# Delete from bucket `mybucket` all objects in the range `001-003` with prefix `test-`.
+# NOTE: when specifying template (aka "range") make sure to use double or single quotation marks.
+
+$ ais object rm ais://mybucket --template "test-{001..003}"
+removed files in the range 'test-{001..003}' from ais://mybucket bucket
+```
+
+And one other example (that also includes generating .tar shards):
+
+```console
+$ ais advanced gen-shards "ais://dsort-testing/shard-{001..999}.tar" --fcount 256
+Shards created: 999/999 [==============================================================] 100 %
+
+# NOTE: make sure to use double or single quotations to specify the template (aka "range")
+$ ais object rm ais://dsort-testing --template 'shard-{900..999}.tar'
+removed from ais://dsort-testing objects in the range "shard-{900..999}.tar", use 'ais job show xaction EH291ljOy' to monitor progress
+```
+
+## Evict multiple objects
+
+`ais bucket evict BUCKET/[OBJECT_NAME]...`
+
+[Evict](/docs/bucket.md#prefetchevict-objects) objects from a remote bucket.
+
+### Options
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--list` | `string` | Comma separated list of objects for list deletion | `""` |
+| `--template` | `string` | The object name template with optional range parts | `""` |
+| `--dry-run` | `bool` | Do not actually perform EVICT. Shows a few objects to be evicted |
+
+Note that options `--list` and `--template` are mutually exclusive.
+
+### Evict a range of objects
+
+```console
+$ ais bucket evict aws://cloudbucket --template "shard-{900..999}.tar"
+```
+
+## Archive multiple objects
+
+This is an archive-**creating** operation that takes in multiple objects from a source bucket and archives them all into a destination bucket, where:
+
+* source and destination buckets may not necessarily be different;
+* both `--list` and `--template` options are supported
+* supported archival formats include `.tar`, `.tar.gz` (or, same, `.tgz`), and `.zip`; more extensions may be added in the future.
+* archiving is carried out asynchronously, in parallel by all AIS targets.
+
+```console
+# TAR objects `obj1`, `obj2` , `obj3` in a given (destination) bucket called `destbck`.
+# NOTE: when specifying `--list` or `--template`, make sure to use double or single quotation marks.
+
+$ ais object put ais://destbck/myarch.tar --source-bck=ais://abc --list="obj1,  obj2,obj3" --archive
+```
+
+```console
+# ZIP objects `obj1`, `obj2` , `obj3`. Note that in this example source and destination are identical.
+
+$ ais object put ais://mybck/myarch.zip --source-bck=ais://mybck --list="obj1,obj2, obj3" --archive
+```

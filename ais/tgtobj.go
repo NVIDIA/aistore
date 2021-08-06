@@ -1279,7 +1279,7 @@ func (aaoi *appendArchObjInfo) finalize(fqn string) error {
 }
 
 func (aaoi *appendArchObjInfo) begin() (string, error) {
-	workFQN := fs.CSM.GenContentFQN(aaoi.lom, fs.WorkfileType, fs.WorkfileArchive)
+	workFQN := fs.CSM.GenContentFQN(aaoi.lom, fs.WorkfileType, fs.WorkfileAppendToArch)
 	if err := os.Rename(aaoi.lom.FQN, workFQN); err != nil {
 		return "", err
 	}

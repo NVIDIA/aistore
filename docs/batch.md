@@ -17,6 +17,8 @@ redirect_from:
 
 AIStore provides two APIs to operate on groups of objects: List, and Template.
 
+For CLI documentation and examples, please see [Operations on Lists and Ranges](cli/object.md#operations-on-lists-and-ranges).
+
 #### List
 
 List APIs take a JSON array of object names, and initiate the operation on those objects.

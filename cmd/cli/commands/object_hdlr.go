@@ -39,7 +39,6 @@ var (
 			verboseFlag,
 			yesFlag,
 			computeCksumFlag,
-			archiveFlag,
 			sourceBckFlag,
 			templateFlag,
 			listFlag,
@@ -47,6 +46,7 @@ var (
 			skipMisplacedFlag,
 			includeBckNameFlag,
 			ignoreErrorFlag,
+			createArchFlag,
 			archpathFlag,
 		),
 		commandSetCustom: {},
@@ -248,9 +248,6 @@ func createArchMultiObjHandler(c *cli.Context) (err error) {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "object name in the form bucket/[object]")
 	}
-	if c.NArg() > 1 {
-		return incorrectUsageMsg(c, "only single object is supported")
-	}
 	if template == "" && list == "" {
 		return missingArgumentsError(c, "either object list or template flag")
 	}
@@ -272,8 +269,9 @@ func createArchMultiObjHandler(c *cli.Context) (err error) {
 	msg.IgnoreBackendErr = flagIsSet(c, ignoreErrorFlag)
 	msg.EraseSources = flagIsSet(c, cleanupSrcFlag)
 	msg.InclBckName = flagIsSet(c, includeBckNameFlag)
+
 	if list != "" {
-		msg.ListRangeMsg.ObjNames = strings.Split(list, ",")
+		msg.ListRangeMsg.ObjNames = makeList(list)
 		_, err = api.CreateArchMultiObj(defaultAPIParams, bckFrom, msg)
 	} else {
 		msg.ListRangeMsg.Template = template
@@ -282,16 +280,16 @@ func createArchMultiObjHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	for i := 0; ; i++ {
+	for i := 0; i < 3; i++ {
 		time.Sleep(time.Second)
 		_, err = api.HeadObject(defaultAPIParams, bckTo, objName, true /*checkExists*/)
 		if err == nil {
+			fmt.Fprintf(c.App.Writer, "Created archive %q\n", bckTo.String()+"/"+objName)
 			return nil
 		}
-		if i == 3 {
-			fmt.Fprintf(c.App.Writer, "Creating archive %q is in progress. Please wait...\n", objName)
-		}
 	}
+	fmt.Fprintf(c.App.Writer, "Creating archive %q ...\n", bckTo.String()+"/"+objName)
+	return nil
 }
 
 func putRegularObjHandler(c *cli.Context) (err error) {
@@ -340,7 +338,7 @@ func putRegularObjHandler(c *cli.Context) (err error) {
 }
 
 func putHandler(c *cli.Context) (err error) {
-	if flagIsSet(c, archiveFlag) {
+	if flagIsSet(c, createArchFlag) {
 		return createArchMultiObjHandler(c)
 	}
 

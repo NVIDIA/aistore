@@ -87,13 +87,16 @@ type FlushArgs struct {
 
 // HeadObject returns the size and version of the object specified by bucket/object.
 func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists ...bool) (*cmn.ObjectProps, error) {
-	checkIsCached := false
+	var checkIsCached bool
 	if len(checkExists) > 0 {
 		checkIsCached = checkExists[0]
 	}
 	baseParams.Method = http.MethodHead
 	query := make(url.Values)
 	query.Add(cmn.URLParamCheckExists, strconv.FormatBool(checkIsCached))
+	if checkIsCached {
+		query.Add(cmn.URLParamSilent, strconv.FormatBool(true))
+	}
 	query = cmn.AddBckToQuery(query, bck)
 
 	resp, err := doHTTPRequestGetResp(ReqParams{
