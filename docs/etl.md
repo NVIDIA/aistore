@@ -55,7 +55,7 @@ For getting-started details and numerous examples, please refer to rest of this 
 
 The following [video](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL Getting Started (Youtube video)") demonstrates AIStore's ETL feature using Jupyter Notebook.
 
-[![AIStore ETL Getting Started](images/etl-getting-started-400.png)](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL Getting Started (Youtube video)")
+{% include youtubePlayer.html id="4PHkqTSE0ls" %}
 
 ## Online ETL example
 

@@ -65,7 +65,7 @@ Local AIStore playground is not intended for production clusters and is not mean
 
 The following [video](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube video)") gives a quick intro to AIStore, along with a brief demo of the local playground and development environment.
 
-[![AIStore Developer Playground](images/dev-playground-400.png)](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube video)")
+{% include youtubePlayer.html id="ANshjHphqfI" %}
 
 ### Deployment Script
 
