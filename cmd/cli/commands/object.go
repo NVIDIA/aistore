@@ -466,14 +466,22 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName, cksumType string)
 			objName = filepath.Base(path)
 		}
 
+		archPath := parseStrFlag(c, archpathFlag)
+		if archPath != "" {
+			archPath = "/" + archPath
+		}
 		if flagIsSet(c, dryRunFlag) {
-			fmt.Fprintf(c.App.Writer, "PUT %q => \"%s/%s\"\n", path, bck.Name, objName)
+			fmt.Fprintf(c.App.Writer, "PUT %q => \"%s/%s/%s\"\n", path, bck.Name, objName, archPath)
 			return nil
 		}
 		if err := putSingleObject(c, bck, objName, path); err != nil {
 			return err
 		}
-		fmt.Fprintf(c.App.Writer, "PUT %q into bucket %q\n", objName, bck)
+		if archPath == "" {
+			fmt.Fprintf(c.App.Writer, "PUT %q into bucket %q\n", objName, bck)
+		} else {
+			fmt.Fprintf(c.App.Writer, "APPEND %q to object \"%s/%s[%s]\"\n", path, bck, objName, archPath)
+		}
 		return nil
 	}
 

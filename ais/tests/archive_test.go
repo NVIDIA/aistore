@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/NVIDIA/aistore/api"
@@ -305,10 +304,12 @@ func TestArchiveAppend(t *testing.T) {
 		}
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		numArchs   = 1
+		numArchs   = 10
+		numAdd     = 10
 		numInArch  = cos.Min(m.num/2, 7)
 		numPuts    = m.num
-		archPath   = "extra/newfile"
+		objPattern = "test_lst_%04d%s"
+		archPath   = "extra/newfile%04d"
 		subtests   = []struct {
 			ext  string // one of cos.ArchExtensions (same as: supported arch formats)
 			list bool
@@ -318,6 +319,10 @@ func TestArchiveAppend(t *testing.T) {
 			},
 		}
 	)
+	if testing.Short() {
+		numArchs = 1
+		numAdd = 2
+	}
 	for _, test := range subtests {
 		tname := test.ext
 		t.Run(tname, func(t *testing.T) {
@@ -326,16 +331,20 @@ func TestArchiveAppend(t *testing.T) {
 			m.init()
 			m.puts()
 
-			archName := fmt.Sprintf("test_lst%s", test.ext)
-			list := make([]string, 0, numInArch)
-			for j := 0; j < numInArch; j++ {
-				list = append(list, m.objNames[rand.Intn(numPuts)])
-			}
-			archmsg := cmn.ArchiveMsg{ToBck: toBck, ArchName: archName}
-			archmsg.ListRangeMsg.ObjNames = list
-			_, err := api.CreateArchMultiObj(baseParams, m.bck, archmsg)
+			for i := 0; i < numArchs; i++ {
+				archName := fmt.Sprintf(objPattern, i, test.ext)
+				list := make([]string, 0, numInArch)
+				for j := 0; j < numInArch; j++ {
+					list = append(list, m.objNames[rand.Intn(numPuts)])
+				}
+				go func(archName string, list []string) {
+					msg := cmn.ArchiveMsg{ToBck: toBck, ArchName: archName}
+					msg.ListRangeMsg.ObjNames = list
 
-			tassert.CheckFatal(t, err)
+					_, err := api.CreateArchMultiObj(baseParams, m.bck, msg)
+					tassert.CheckFatal(t, err)
+				}(archName, list)
+			}
 
 			wargs := api.XactReqArgs{Kind: cmn.ActArchive, Bck: m.bck}
 			api.WaitForXactionIdle(baseParams, wargs)
@@ -344,48 +353,35 @@ func TestArchiveAppend(t *testing.T) {
 			selmsg.AddProps(cmn.GetPropsName, cmn.GetPropsSize)
 			objList, err := api.ListObjects(baseParams, toBck, selmsg, 0)
 			tassert.CheckFatal(t, err)
-			for _, entry := range objList.Entries {
-				tlog.Logf("%s: %dB\n", entry.Name, entry.Size)
-			}
 			num := len(objList.Entries)
 			tassert.Errorf(t, num == numArchs, "expected %d, have %d", numArchs, num)
 
-			selmsg.Flags |= cmn.SelectArchDir
-			objList, err = api.ListObjects(baseParams, toBck, selmsg, 0)
-			tassert.CheckFatal(t, err)
-			num = len(objList.Entries)
-			expectedNum := numArchs + numArchs*numInArch
-			tassert.Errorf(t, num == expectedNum, "expected %d, have %d", expectedNum, num)
-
-			reader, _ := readers.NewRandReader(fileSize, cos.ChecksumNone)
-			putArgs := api.PutObjectArgs{
-				BaseParams: baseParams,
-				Bck:        toBck,
-				Object:     archName,
-				Reader:     reader,
-				Size:       fileSize,
-			}
-			appendArcArgs := api.AppendObjectArchArgs{
-				PutObjectArgs: putArgs,
-				ArchPath:      archPath,
-			}
-			err = api.AppendObjectArch(appendArcArgs)
-			tassert.CheckError(t, err)
-			objList, err = api.ListObjects(baseParams, toBck, selmsg, 0)
-			tassert.CheckError(t, err)
-			num = len(objList.Entries)
-			expectedNum = numArchs + numArchs*numInArch + 1
-			tassert.Errorf(t, num == expectedNum, "expected %d, have %d", expectedNum, num)
-			found := false
-			for _, e := range objList.Entries {
-				if strings.HasSuffix(e.Name, archPath) && e.IsInsideArch() {
-					found = true
-					break
+			for i := 0; i < numArchs; i++ {
+				for j := 0; j < numAdd; j++ {
+					archName := fmt.Sprintf(objPattern, i, test.ext)
+					reader, _ := readers.NewRandReader(fileSize, cos.ChecksumNone)
+					putArgs := api.PutObjectArgs{
+						BaseParams: baseParams,
+						Bck:        toBck,
+						Object:     archName,
+						Reader:     reader,
+						Size:       fileSize,
+					}
+					appendArcArgs := api.AppendObjectArchArgs{
+						PutObjectArgs: putArgs,
+						ArchPath:      fmt.Sprintf(archPath, j),
+					}
+					err = api.AppendObjectArch(appendArcArgs)
+					tassert.CheckError(t, err)
 				}
 			}
-			if !found {
-				t.Errorf("File %q is not found in archive", archPath)
-			}
+
+			selmsg.Flags |= cmn.SelectArchDir
+			objList, err = api.ListObjects(baseParams, toBck, selmsg, 0)
+			tassert.CheckError(t, err)
+			num = len(objList.Entries)
+			expectedNum := numArchs + numArchs*(numInArch+numAdd)
+			tassert.Errorf(t, num == expectedNum, "expected %d, have %d", expectedNum, num)
 		})
 	}
 }

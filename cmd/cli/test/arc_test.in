@@ -1,0 +1,18 @@
+echo "0123456789" > $OBJECT_1.txt
+
+ais bucket create ais://$BUCKET_1 | awk '{print $1 " " $2}'
+ais bucket create ais://$BUCKET_2 | awk '{print $1 " " $2}'
+
+ais object put $OBJECT_1.txt ais://$BUCKET_1/obj_1.txt
+ais object put $OBJECT_1.txt ais://$BUCKET_1/obj_2.txt
+ais object put $OBJECT_1.txt ais://$BUCKET_1/obj_3.txt
+
+ais object put --source-bck=ais://$BUCKET_1 --template="obj_{1..3}.txt" --archive ais://$BUCKET_2/tmpl.tar
+ais object put --source-bck=ais://$BUCKET_1 --list="obj_1.txt,obj_2.txt,obj_3.txt" --archive ais://$BUCKET_2/list.tar
+
+sleep 5 // IGNORE // wait for all archives are created
+
+ais object put $OBJECT_1.txt ais://$BUCKET_2/tmpl.tar -archpath=fourth.txt
+
+ais ls ais://$BUCKET_2 --prefix=list --list-archive | wc -l
+ais ls ais://$BUCKET_2 --prefix=tmpl --list-archive | wc -l

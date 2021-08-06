@@ -15,6 +15,7 @@ This document contains `ais object` commands, such as GET, PUT, APPEND, PROMOTE,
 - [Print object content](#print-object-content)
 - [Show object properties](#show-object-properties)
 - [PUT object](#put-object)
+- [Append file to archive](#append-file-to-archive)
 - [Delete object](#delete-object)
 - [Evict object](#evict-object)
 - [Promote files and directories](#promote-files-and-directories)
@@ -404,6 +405,36 @@ $ for d1 in {0..10}; do mkdir dir$d1 && for d2 in {0..2}; do echo "0" > dir$d1/t
 $ ais object put "dir{0..10}" ais://mybucket -y
 33 objects put into "ais://mybucket" bucket
 # PUT "/home/user/dir0/test0.txt" => b/dir0/test0.txt and 32 more
+```
+
+# Append file to archive
+
+`ais object put FILE BUCKET/OBJECT_NAME --archpath ARCH_PATH`
+
+Append a file to an existing archive in a specified bucket.
+`ARCH_PATH` defines a path inside the archive for the new file.
+
+## Examples
+
+Add a file to an archive
+
+```console
+$ # list archive content before operation
+$ ais ls ais://bck --prefix test --list-archive
+NAME                             SIZE
+test.tar                         42.00KiB
+    test.tar/main.c              40.00KiB
+
+$ # add a new file to the archive
+$ ais put readme.txt ais://bck/test.tar --archpath=doc/README
+APPEND "readme.txt" to object "ais://abc/test.tar[/doc/README]"
+
+$ # check that the archive is updated
+$ ais ls ais://bck --prefix test --list-archive
+NAME                             SIZE
+test.tar                         45.50KiB
+    test.tar/doc/README          3.11KiB
+    test.tar/main.c              40.00KiB
 ```
 
 # Promote files and directories
