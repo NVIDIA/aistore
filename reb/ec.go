@@ -285,13 +285,15 @@ func (reb *Manager) receiveMD(req *pushReq, hdr transport.ObjHdr) error {
 		return err
 	}
 	md, err := ec.LoadMetadata(ctMeta.FQN())
-	if err == nil && md.Generation != req.md.Generation {
-		return nil
-	}
-	if !os.IsNotExist(err) {
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = nil
+		}
 		return err
 	}
-
+	if md.Generation != req.md.Generation {
+		return nil
+	}
 	md.FullReplica = req.md.FullReplica
 	md.Daemons = req.md.Daemons
 	mdBytes := md.NewPack()
