@@ -1,7 +1,7 @@
 ---
 layout: post
 title: COMPUTE MD5
-permalink: /tutorials/etl/compute_md5
+permalink: /tutorials/etl/compute-md5
 redirect_from:
  - /tutorials/etl/compute_md5.md/
  - /docs/tutorials/etl/compute_md5.md/

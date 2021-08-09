@@ -8,7 +8,7 @@ kramdown:
   hard_wrap: false
   syntax_highlighter: rouge
   toc_levels: 2..3
-permalink: pretty
+permalink: /blog/:year/:month/:day/:title
 safe: false
 lsi: false
 description: >
@@ -18,11 +18,7 @@ description: >
 theme: minima
 header_pages:
   - blog.md
-  - cli.md
-  - aisfs.md
-  - downloader.md
-  - dsort.md
-  - etl.md
+  - docs.md
 include:
   - _pages/
   - assets/

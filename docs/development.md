@@ -1,9 +1,9 @@
 ---
 layout: post
 title: DEVELOPMENT
-permalink: development
+permalink: /docs/development
 redirect_from:
- - development.md/
+ - /development.md/
  - /docs/development.md/
 ---
 

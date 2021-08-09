@@ -1,9 +1,9 @@
 ---
 layout: post
 title: AISFS
-permalink: aisfs
+permalink: /docs/aisfs
 redirect_from:
- - aisfs.md/
+ - /aisfs.md/
  - /docs/aisfs.md/
 ---
 

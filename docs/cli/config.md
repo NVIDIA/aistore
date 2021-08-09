@@ -1,16 +1,16 @@
 ---
 layout: post
 title: CONFIG
-permalink: ./cli/config
+permalink: /docs/cli/config
 redirect_from:
- - ./cli/config.md/
- - /docs/./cli/config.md/
+ - /cli/config.md/
+ - /docs/cli/config.md/
 ---
 
-# CLI Reference for Configurations
 This section lists configuration management operations the AIS CLI, with `ais config`.
 
 ## Table of Contents
+
 - [Show configuration](#show-configuration)
 - [Set cluster configuration](#set-cluster-configuration)
 - [Set node configuration](#set-node-configuration)

@@ -1,10 +1,9 @@
 ---
 layout: post
 title: BUCKET
-permalink: cli/bucket
+permalink: /docs/cli/bucket
 redirect_from:
- - cli/bucket.md/
- - /docs/cli/bucket.md/
+ - /cli/bucket.md/
  - /docs/cli/bucket.md/
 ---
 

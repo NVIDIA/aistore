@@ -1,9 +1,9 @@
 ---
 layout: post
 title: OVERVIEW
-permalink: overview
+permalink: /docs/overview
 redirect_from:
- - overview.md/
+ - /overview.md/
  - /docs/overview.md/
 ---
 
@@ -44,7 +44,7 @@ The rest of this document is structured as follows:
 
 Following is a high-level block diagram with an emphasis on supported (frontend and backend) APIs and the capability to scale-out horizontally. The picture also tries to make the point that AIStore aggregates arbitrary numbers of storage servers with local drives,  whereby each drive is formatted with a local filesystem (e. g., xfs or zfs).
 
-<img src="images/ais-block.png" alt="At-a-Glance" width="600">
+![At-a-Glance](images/ais-block.png)
 
 ## ETL
 
@@ -99,17 +99,17 @@ Both **gateways** and **targets** are userspace daemons that join (and, by joini
 
 The diagram depicting AIS clustered node follows below, and makes the point that gateways and storage targets can be colocated in a single machine (or a VM) but not necessarily:
 
-<img src="images/ais-host-20-block.png" alt="One AIS machine" width="400">
+![One AIS machine](images/ais-host-20-block.png)
 
 AIS can be deployed as a self-contained standalone persistent storage cluster or a fast tier in front of any of the supported backends including Amazon S3 and Google Cloud (GCP). The built-in caching mechanism provides LRU replacement policy on a per-bucket basis while taking into account configurable high and low capacity watermarks (see [LRU](storage_svcs.md#lru) for details). AWS/GCP integration is *turnkey* and boils down to provisioning AIS targets with credentials to access Cloud-based buckets.
 
 If (compute + storage) rack is a *unit of deployment*, it may as well look as follows:
 
-<img src="images/ais-rack-20-block.png" alt="One rack" width="400">
+![One rack](images/ais-rack-20-block.png)
 
 Finally, AIS target provides a number of storage services with [S3-like RESTful API](http_api.md) on top and a MapReduce layer that we call [dSort](#dsort).
 
-<img src="images/ais-target-20-block.png" alt="AIS target block diagram" width="400">
+![AIS target block diagram](images/ais-target-20-block.png)
 
 ## Terminology
 
@@ -124,7 +124,7 @@ Finally, AIS target provides a number of storage services with [S3-like RESTful 
 In AIS, all inter- and intra-cluster networking is based on HTTP/1.1 (with HTTP/2 option currently under development).
 HTTP(S) clients execute RESTful operations vis-à-vis AIS gateways and data then moves **directly** between the clients and storage targets with no metadata servers and no extra processing in-between:
 
-<img src="images/dp-schematics-direct.png" alt="Datapath schematics" width="400">
+![Datapath schematics](images/dp-schematics-direct.png)
 
 > MDS in the diagram above stands for the metadata server(s) or service(s).
 
@@ -265,7 +265,7 @@ where `G` (above) denotes a `hostname:port` address of any AIS gateway (for deve
 
 One salient feature of AIS CLI is its Bash style [auto-completions](/docs/cli.md#ais-cli-shell-auto-complete) that allow users to easily navigate supported operations and options by simply pressing the TAB key:
 
-<img src="images/cli-overview.gif" alt="CLI-tab" width="900" height="130">
+![CLI-tab](images/cli-overview.gif)
 
 AIS CLI is currently quickly developing. For more information, please see the project's own [README](/docs/cli.md).
 

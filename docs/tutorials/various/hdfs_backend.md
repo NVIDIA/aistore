@@ -1,7 +1,7 @@
 ---
 layout: post
 title: HDFS_BACKEND
-permalink: ./tutorials/various/hdfs_backend
+permalink: /tutorials/various/hdfs-backend
 redirect_from:
  - /tutorials/various/hdfs_backend.md/
  - /docs/tutorials/various/hdfs_backend.md/

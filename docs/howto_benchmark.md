@@ -1,9 +1,9 @@
 ---
 layout: post
 title: HOW TO BENCHMARK
-permalink: howto_benchmark
+permalink: /docs/howto-benchmark
 redirect_from:
- - howto_benchmark.md/
+ - /howto_benchmark.md/
  - /docs/howto_benchmark.md/
 ---
 

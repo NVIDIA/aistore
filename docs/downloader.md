@@ -1,9 +1,9 @@
 ---
 layout: post
 title: DOWNLOADER
-permalink: downloader
+permalink: /docs/downloader
 redirect_from:
- - downloader.md/
+ - /downloader.md/
  - /docs/downloader.md/
 ---
 

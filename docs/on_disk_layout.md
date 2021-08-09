@@ -1,9 +1,9 @@
 ---
 layout: post
 title: ON DISK LAYOUT
-permalink: on_disk_layout
+permalink: /docs/on-disk-layout
 redirect_from:
- - on_disk_layout.md/
+ - /on_disk_layout.md/
  - /docs/on_disk_layout.md/
 ---
 
@@ -19,7 +19,7 @@ In addition, release 3.0 adds configurable namespaces whereby users can choose t
 
 Here's a simplified drawing depicting two [providers](providers.md), AIS and AWS, and two buckets, `ABC` and `XYZ`, respectively. In the picture, `mpath` is a single [mountpath](configuration.md) - a single disk **or** a volume formatted with a local filesystem of choice, **and** a local directory (`mpath/`):
 
-<img src="images/PBCT.png" alt="on-disk hierarchy" width="160">
+![on-disk hierarchy](images/PBCT.png)
 
 Further, each bucket would have a unified structure with several system directories (e.g., `%ec` that stores erasure coded content) and, of course, user data under `%ob` ("object") locations.
 
@@ -27,7 +27,7 @@ Needless to say, the same exact structure reproduces itself across all AIS stora
 
 With namespaces, the picture becomes only slightly more complicated. The following shows two AIS buckets, `DEF` and `GHJ`, under their respective user-defined namespaces called `#namespace-local` and `#namespace-remote`.  Unlike a local namespace of *this* cluster, the remote one would have to be prefixed with UUID - to uniquely identify another AIStore cluster hosting `GHJ` (in this example) and from where this bucket's content will be replicated or cached, on-demand or via Prefetch API and [similar](overview.md#existing-datasets).
 
-<img src="images/PBCT-with-namespaces.png" alt="with namespaces" width="240">
+![on-disk hierarchy with namespaces](images/PBCT-with-namespaces.png)
 
 ### References
 

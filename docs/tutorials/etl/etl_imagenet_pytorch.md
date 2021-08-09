@@ -1,7 +1,7 @@
 ---
 layout: post
 title: ETL IMAGENET PYTORCH
-permalink: /tutorials/etl/etl_imagenet_pytorch
+permalink: /tutorials/etl/etl-imagenet-pytorch
 redirect_from:
  - /tutorials/etl/etl_imagenet_pytorch.md/
  - /docs/tutorials/etl/etl_imagenet_pytorch.md/
@@ -12,7 +12,7 @@ redirect_from:
 In this example, we will see how to use ETL to preprocess the images of ImageNet which then can be used for training.
 The following GIF presents the whole operation:
 
-<img src="../../images/etl-imagenet.gif" alt="ETL-ImageNet" width="100%">
+![etl-imagenet](../../images/etl-imagenet.gif)
 
 ## Overview
 

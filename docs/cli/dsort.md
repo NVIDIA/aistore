@@ -1,10 +1,10 @@
 ---
 layout: post
 title: DSORT
-permalink: ./cli/dsort
+permalink: /docs/cli/dsort
 redirect_from:
- - ./cli/dsort.md/
- - /docs/./cli/dsort.md/
+ - /cli/dsort.md/
+ - /docs/cli/dsort.md/
 ---
 
 # Start, Stop, and monitor distributed parallel sorting (dSort)

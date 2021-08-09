@@ -1,10 +1,10 @@
 ---
 layout: post
 title: JOB
-permalink: ./cli/job
+permalink: /docs/cli/job
 redirect_from:
- - ./cli/job.md/
- - /docs/./cli/job.md/
+ - /cli/job.md/
+ - /docs/cli/job.md/
 ---
 
 # CLI Reference for Job (xaction) management

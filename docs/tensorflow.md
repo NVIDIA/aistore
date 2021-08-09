@@ -1,9 +1,9 @@
 ---
 layout: post
 title: TENSORFLOW
-permalink: tensorflow
+permalink: /docs/tensorflow
 redirect_from:
- - tensorflow.md/
+ - /tensorflow.md/
  - /docs/tensorflow.md/
 ---
 

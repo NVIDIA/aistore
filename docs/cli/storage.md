@@ -1,10 +1,10 @@
 ---
 layout: post
 title: STORAGE
-permalink: ./cli/storage
+permalink: /docs/cli/storage
 redirect_from:
- - ./cli/storage.md/
- - /docs/./cli/storage.md/
+ - /cli/storage.md/
+ - /docs/cli/storage.md/
 ---
 
 # Mountpath (disk) management

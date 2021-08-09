@@ -1,9 +1,9 @@
 ---
 layout: post
 title: COMMAND LINE
-permalink: command_line
+permalink: /docs/command-line
 redirect_from:
- - command_line.md/
+ - /command_line.md/
  - /docs/command_line.md/
 ---
 

@@ -1,7 +1,7 @@
 ---
 layout: post
 title: TUTORIALS
-permalink: ./tutorials
+permalink: /docs/tutorials
 redirect_from:
  - /tutorials/README.md/
  - /docs/tutorials/README.md/

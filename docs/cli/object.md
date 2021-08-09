@@ -1,10 +1,10 @@
 ---
 layout: post
 title: OBJECT
-permalink: ./cli/object
+permalink: /docs/cli/object
 redirect_from:
- - ./cli/object.md/
- - /docs/./cli/object.md/
+ - /cli/object.md/
+ - /docs/cli/object.md/
 ---
 
 # CLI Reference for Objects

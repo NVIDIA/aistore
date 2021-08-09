@@ -43,6 +43,15 @@ h2.post-list-heading {
   display: none;
 }
 
+/* Make the "blog" heading same as others */
+h1.page-heading {
+  font-size: 42px;
+  letter-spacing: -1px;
+  line-height: 1;
+  padding-bottom: 20px;
+}
+
+/* Embed containers (youtube) */
 .embed-container {
   position: relative;
   padding-bottom: 56.25%;
@@ -58,4 +67,22 @@ h2.post-list-heading {
   left: 0;
   width: 100%;
   height: 100%;
+}
+
+
+/* Changes for specific images */
+
+img[alt="etl-v3.3"] {
+  width: 80%;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+img[alt="on-disk hierarchy"] {
+  width: 160px;
+}
+
+img[alt="on-disk hierarchy with namespaces"] {
+  width: 240px;
 }

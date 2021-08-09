@@ -1,9 +1,9 @@
 ---
 layout: post
 title: ETL
-permalink: etl
+permalink: /docs/etl
 redirect_from:
- - etl.md/
+ - /etl.md/
  - /docs/etl.md/
 ---
 
@@ -11,7 +11,7 @@ redirect_from:
 
 **New** in v3.3: offline transformation and the capability to run user-defined functions (in addition to custom ETL containers). Also, bug fixes, performance improvements across the board, video and GIF presentations, and more.
 
-<img src="images/etl-v3.3.png" width="80%" class="center">
+![etl-v3.3](images/etl-v3.3.png)
 
 - [Introduction](#introduction)
 - [Getting Started](#getting-started)
@@ -59,7 +59,7 @@ The following [video](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL G
 
 ## Online ETL example
 
-<img src="images/etl-md5.gif" alt="ETL-MD5" width="80%">
+![etl-md5](images/etl-md5.gif)
 
 The example above uses [AIS CLI](/docs/cli.md) to:
 1. **Create** a new bucket;
@@ -74,7 +74,7 @@ Note that both the container itself and its [YAML specification](https://raw.git
 
 ## Offline ETL example
 
-<img src="images/etl-imagenet.gif" alt="ETL-ImageNet" width="80%">
+![etl-imagenet](images/etl-imagenet.gif)
 
 The example above uses [AIS CLI](/docs/cli.md) to:
 1. **Create** a new AIS bucket;

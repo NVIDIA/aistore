@@ -1,9 +1,9 @@
 ---
 layout: post
 title: REBALANCE
-permalink: rebalance
+permalink: /docs/rebalance
 redirect_from:
- - rebalance.md/
+ - /rebalance.md/
  - /docs/rebalance.md/
 ---
 

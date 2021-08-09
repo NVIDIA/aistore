@@ -1,13 +1,13 @@
 ---
 layout: post
 title: VIDEOS
-permalink: videos
+permalink: /docs/videos
 redirect_from:
- - videos.md/
+ - /videos.md/
  - /docs/videos.md/
 ---
 
-# Table of contents
+## Table of contents
 
 - [CLI](#cli)
   - [Top-level Commands](#top-level-commands)
@@ -18,44 +18,44 @@ redirect_from:
 - [S3 and TensorFlow: TF Training](#s3-and-tensorflow-tf-training)
 - [Developer Playground](#developer-playground)
 
-# CLI
+## CLI
 
-## Top-level Commands
+### Top-level Commands
 
-<img src="images/cli-overview.gif" width="100%">
+![cli-overview](images/cli-overview.gif)
 
-## Getting Started
+### Getting Started
 
 {% include youtubePlayer.html id="VPIhQm2sMD8" %}
 
-# Deployment: Google Cloud
+## Deployment: Google Cloud
 
-<img src="images/ais-k8s-deploy.gif" width="100%">
+![ais-k8s-deploy](images/ais-k8s-deploy.gif)
 
-# Minimal All-In-One Standalone Docker
+## Minimal All-In-One Standalone Docker
 
 * [README](/deploy/prod/docker/single/README.md)
 * [Quick Start: Ephemeral Storage](https://youtu.be/ndeCy2gy7vU)
 * [Quick Start: Persistent Storage](https://youtu.be/1AN-RYpW3bs)
 
-# Extract, Transform, Load
+## Extract, Transform, Load
 
 This section comprises a number of videos illustrating different aspects of the AIS-ETL extension. A good place to start, though, would be the following [comprehensive introduction and a Jupyter notebook walk-through](https://www.youtube.com/watch?v=4PHkqTSE0ls):
 
 {% include youtubePlayer.html id="4PHkqTSE0ls" %}
 
-## ETL init with code: ImageNet Transformation
+### ETL init with code: ImageNet Transformation
 
-<img src="images/etl-imagenet.gif" width="100%">
+![etl-imagenet](images/etl-imagenet.gif)
 
-## ETL init with spec: MD5 Computation
+### ETL init with spec: MD5 Computation
 
-<img src="images/etl-md5.gif" width="100%">
+![etl-md5](images/etl-md5.gif)
 
-# S3 and TensorFlow: TF Training
+## S3 and TensorFlow: TF Training
 
-<img src="images/ais-s3-tf.gif" width="80%">
+![ais-s3-tf](images/ais-s3-tf.gif)
 
-# Developer Playground
+## Developer Playground
 
 {% include youtubePlayer.html id="ANshjHphqfI" %}

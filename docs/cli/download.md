@@ -1,10 +1,10 @@
 ---
 layout: post
 title: DOWNLOAD
-permalink: ./cli/download
+permalink: /docs/cli/download
 redirect_from:
- - ./cli/download.md/
- - /docs/./cli/download.md/
+ - /cli/download.md/
+ - /docs/cli/download.md/
 ---
 
 # Start, Stop, and monitor downloads

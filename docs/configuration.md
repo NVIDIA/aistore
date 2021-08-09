@@ -1,9 +1,9 @@
 ---
 layout: post
 title: CONFIGURATION
-permalink: configuration
+permalink: /docs/configuration
 redirect_from:
- - configuration.md/
+ - /configuration.md/
  - /docs/configuration.md/
 ---
 
@@ -125,11 +125,11 @@ AIS production deployment, in particular, requires careful consideration of at l
 
 The following picture illustrates one section of the configuration template that, in part, includes listening port:
 
-<img src="images/ais-config-1.png" alt="Configuration: TCP port and URL" width="600">
+![Configuration: TCP port and URL](images/ais-config-1.png)
 
 Further, `test_fspaths` section (see below) corresponds to a **single local filesystem being partitioned** between both *local* and *Cloud* buckets. In other words, the `test_fspaths` configuration option is intended strictly for development.
 
-<img src="images/ais-config-2-commented.png" alt="Configuration: local filesystems" width="600">
+![Configuration: local filesystems](images/ais-config-2-commented.png)
 
 In production we use an alternative configuration called `fspaths`: the section of the [config](/deploy/dev/local/aisnode_config.sh) that includes a number of local directories, whereby each directory is based on a different local filesystem.
 
@@ -139,7 +139,7 @@ In production we use an alternative configuration called `fspaths`: the section 
 
 An example of 12 fspaths (and 12 local filesystems) follows below:
 
-<img src="images/example-12-fspaths-config.png" alt="Example: 12 fspaths" width="160">
+![Example: 12 fspaths](images/example-12-fspaths-config.png)
 
 ## Basics
 

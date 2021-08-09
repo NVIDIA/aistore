@@ -1,9 +1,9 @@
 ---
 layout: post
 title: SYSFILES
-permalink: sysfiles
+permalink: /docs/sysfiles
 redirect_from:
- - sysfiles.md/
+ - /sysfiles.md/
  - /docs/sysfiles.md/
 ---
 

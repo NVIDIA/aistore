@@ -1,10 +1,10 @@
 ---
 layout: post
 title: SEARCH
-permalink: ./cli/search
+permalink: /docs/cli/search
 redirect_from:
- - ./cli/search.md/
- - /docs/./cli/search.md/
+ - /cli/search.md/
+ - /docs/cli/search.md/
 ---
 
 # CLI Command Search

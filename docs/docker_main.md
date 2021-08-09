@@ -1,9 +1,9 @@
 ---
 layout: post
 title: DOCKER MAIN
-permalink: docker_main
+permalink: /docs/docker-main
 redirect_from:
- - docker_main.md/
+ - /docker_main.md/
  - /docs/docker_main.md/
 ---
 
@@ -302,4 +302,4 @@ $ ./playground/stress_get.sh imagenet # do gets on saved files (requires jq comm
 $ ./stop_docker.sh -l # stop docker
 ```
 
-<img src="images/playground-grafana.png" alt="Playground Grafana dashboard" width="400">
+![Playground Grafana dashboard](images/playground-grafana.png)

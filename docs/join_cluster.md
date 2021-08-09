@@ -1,9 +1,9 @@
 ---
 layout: post
 title: JOIN CLUSTER
-permalink: join_cluster
+permalink: /docs/join-cluster
 redirect_from:
- - join_cluster.md/
+ - /join_cluster.md/
  - /docs/join_cluster.md/
 ---
 

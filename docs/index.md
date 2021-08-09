@@ -4,12 +4,12 @@ title: AIStore - scalable storage for AI applications
 permalink: /
 redirect_from:
  - /index.md/
- - index.md/
+ - /README.md/
 ---
 
 AIStore (AIS for short) is a built from scratch, lightweight storage stack tailored for AI apps. AIS consistently shows balanced I/O distribution and linear scalability across arbitrary numbers of clustered servers, producing performance charts that look as follows:
 
-<img src="images/ais-disk-throughput-flat.png" alt="I/O distribution" width="100%">
+![I/O distribution](images/ais-disk-throughput-flat.png)
 
 > The picture above *comprises* 120 HDDs.
 
@@ -35,7 +35,7 @@ Also, AIStore:
 * can ad-hoc attach and "see" (read, write, list, cache, evict) datasets hosted by other AIS clusters;
 * provides unified global namespace across multiple backends:
 
-<img src="images/backends.png" alt="AIStore" width="360">
+![AIStore](images/backends.png)
 
 * can be used as a fast cache for GCS and S3; can be populated on-demand and/or via `prefetch` and `download` APIs;
 * can be used as a standalone highly-available protected storage;

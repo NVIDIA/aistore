@@ -1,9 +1,9 @@
 ---
 layout: post
 title: PERFORMANCE
-permalink: performance
+permalink: /docs/performance
 redirect_from:
- - performance.md/
+ - /performance.md/
  - /docs/performance.md/
 ---
 

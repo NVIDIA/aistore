@@ -1,9 +1,9 @@
 ---
 layout: post
 title: AUTHN
-permalink: authn
+permalink: /docs/authn
 redirect_from:
- - authn.md/
+ - /authn.md/
  - /docs/authn.md/
 ---
 
@@ -38,7 +38,7 @@ Requests without tokens are rejected.
 
 A typical workflow looks as follows:
 
-<img src="images/authn_flow.png" alt="AuthN workflow">
+![AuthN workflow](images/authn_flow.png)
 
 AuthN generates self-sufficient tokens: a proxy does not need access to AuthN to check permissions.
 Though, for security reasons, clusters should be registered at AuthN server.
@@ -47,7 +47,7 @@ AuthN broadcasts revoked tokens to all registered clusters, so they updated thei
 A workflow for the case when a token is revoked and only one cluster is registered.
 "AIS Cluster 2" is unregistered and allows requests with revoked token:
 
-<img src="images/token_revoke.png" alt="Revoke token workflow">
+![Revoke token workflow](images/token_revoke.png)
 
 AuthN supports both HTTP and HTTPS protocols. By default, AuthN starts as an HTTP server listening on port 52001.
 If you enable HTTPS access, make sure that the configuration file options `server_crt` and `server_key` point to the correct SSL certificate and key.

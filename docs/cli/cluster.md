@@ -1,10 +1,10 @@
 ---
 layout: post
 title: CLUSTER
-permalink: ./cli/cluster
+permalink: /docs/cli/cluster
 redirect_from:
- - ./cli/cluster.md/
- - /docs/./cli/cluster.md/
+ - /cli/cluster.md/
+ - /docs/cli/cluster.md/
 ---
 
 # CLI Reference for Cluster and Node (Daemon) management

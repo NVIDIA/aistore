@@ -1,9 +1,9 @@
 ---
 layout: post
 title: TROUBLESHOOTING
-permalink: troubleshooting
+permalink: /docs/troubleshooting
 redirect_from:
- - troubleshooting.md/
+ - /troubleshooting.md/
  - /docs/troubleshooting.md/
 ---
 

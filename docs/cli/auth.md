@@ -1,10 +1,10 @@
 ---
 layout: post
 title: AUTH
-permalink: ./cli/auth
+permalink: /docs/cli/auth
 redirect_from:
- - ./cli/auth.md/
- - /docs/./cli/auth.md/
+ - /cli/auth.md/
+ - /docs/cli/auth.md/
 ---
 
 # CLI Reference for the Authentication Server

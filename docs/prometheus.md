@@ -1,9 +1,9 @@
 ---
 layout: post
 title: PROMETHEUS
-permalink: prometheus
+permalink: /docs/prometheus
 redirect_from:
- - prometheus.md/
+ - /prometheus.md/
  - /docs/prometheus.md/
 ---
 
@@ -87,7 +87,7 @@ If, for whatever reason, you decide to use the "StatsD" option, you can still se
 
 First, the picture:
 
-<img src="images/statsd-exporter.png" alt="AIStore monitoring with Prometheus" width="640">
+![AIStore monitoring with Prometheus](images/statsd-exporter.png)
 
 The diagram depicts AIS cluster that runs an arbitrary number of nodes with each node periodically sending its StatsD metrics to a configured UDP address of any compliant StatsD server. In fact, [statsd_exporter](https://github.com/prometheus/statsd_exporter) is one such compliant StatsD server that happens to be available out of the box.
 

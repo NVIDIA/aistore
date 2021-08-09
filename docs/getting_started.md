@@ -1,9 +1,9 @@
 ---
 layout: post
 title: GETTING STARTED
-permalink: getting_started
+permalink: /docs/getting-started
 redirect_from:
- - getting_started.md/
+ - /getting_started.md/
  - /docs/getting_started.md/
 ---
 
@@ -50,7 +50,7 @@ In particular, [AIS-K8s GitHub repository](https://github.com/NVIDIA/ais-k8s/blo
 
 The following GIF illustrates steps to deploy AIS on Google Cloud Platform (GCP):
 
-<img src="images/ais-k8s-deploy.gif" alt="Kubernetes cloud deployment" width="100%">
+![Kubernetes cloud deployment](images/ais-k8s-deploy.gif)
 
 Finally, the [repository](https://github.com/NVIDIA/ais-k8s) hosts [Kubernetes Operator](https://github.com/NVIDIA/ais-k8s/tree/master/operator) project that will eventually replace Helm charts and will become the main deployment, lifecycle, and operation management "vehicle" for AIStore.
 

@@ -1,9 +1,9 @@
 ---
 layout: post
 title: BATCH
-permalink: batch
+permalink: /docs/batch
 redirect_from:
- - batch.md/
+ - /batch.md/
  - /docs/batch.md/
 ---
 

@@ -1,9 +1,9 @@
 ---
 layout: post
 title: TRAFFIC PATTERNS
-permalink: traffic_patterns
+permalink: /docs/traffic-patterns
 redirect_from:
- - traffic_patterns.md/
+ - /traffic_patterns.md/
  - /docs/traffic_patterns.md/
 ---
 

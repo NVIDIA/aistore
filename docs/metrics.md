@@ -1,9 +1,9 @@
 ---
 layout: post
 title: METRICS
-permalink: metrics
+permalink: /docs/metrics
 redirect_from:
- - metrics.md/
+ - /metrics.md/
  - /docs/metrics.md/
 ---
 

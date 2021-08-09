@@ -1,9 +1,9 @@
 ---
 layout: post
 title: IC
-permalink: ic
+permalink: /docs/ic
 redirect_from:
- - ic.md/
+ - /ic.md/
  - /docs/ic.md/
 ---
 
@@ -16,7 +16,6 @@ They also require constant monitoring through their life-cycle (i.e., starting t
 For efficient monitoring of extended actions, AIStore employs what we call **Information Center** (IC) - a group of proxies that “own” all the currently running (as well as already finished) xactions in the cluster. IC continuously monitors them by coordinating with other proxies and targets.
 
 In the following sections, we will briefly look into the design choices and operation of IC.
-
 
 ## Information Center (IC) Design
 
@@ -31,7 +30,7 @@ IC members maintain an in-memory table to store the information about all the as
 
 The diagram below shows a high-level flow of asynchronous operations in the presence of IC, and the different steps involved.
 
-<img src="images/ais-ic-flow.png" alt="AIStore IC flow" width="800">
+![aistore-ic-flow](images/ais-ic-flow.png)
 
 When an xaction such as `list-objects` is triggered by a user, AIStore internally performs the following steps:
 

@@ -1,10 +1,10 @@
 ---
 layout: post
 title: ADVANCED
-permalink: ./cli/advanced
+permalink: /docs/cli/advanced
 redirect_from:
- - ./cli/advanced.md/
- - /docs/./cli/advanced.md/
+ - /cli/advanced.md/
+ - /docs/cli/advanced.md/
 ---
 
 # CLI Reference for `advanced` commands

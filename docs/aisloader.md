@@ -1,9 +1,9 @@
 ---
 layout: post
 title: AISLOADER
-permalink: aisloader
+permalink: /docs/aisloader
 redirect_from:
- - aisloader.md/
+ - /aisloader.md/
  - /docs/aisloader.md/
 ---
 

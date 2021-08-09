@@ -1,9 +1,9 @@
 ---
 layout: post
 title: BUCKET
-permalink: bucket
+permalink: /docs/bucket
 redirect_from:
- - bucket.md/
+ - /bucket.md/
  - /docs/bucket.md/
 ---
 
@@ -43,7 +43,7 @@ AIS buckets *contain* user data performing the same function as, for instance:
 
 In addition, AIS supports multiple storage **backends** including itself:
 
-<img src="images/supported-backends.png" alt="Supported Backends" width="500">
+![Supported Backends](images/supported-backends.png)
 
 All the [supported storage services](storage_svcs.md) equally apply to all storage backends with only a few exceptions. The following table summarizes them.
 
@@ -457,7 +457,7 @@ The same expressed via `curl` will look as follows:
 $ curl -i -X PATCH  -H 'Content-Type: application/json' -d '{"action": "setbprops", "value": {"access": 18446744073709551587}}' http://localhost:8080/v1/buckets/abc
 ```
 
-> 18446744073709551587 = 0xffffffffffffffe3 = 0xffffffffffffffff ^ (4|8|16)
+> `18446744073709551587 = 0xffffffffffffffe3 = 0xffffffffffffffff ^ (4|8|16)`
 
 ## List Objects
 
@@ -546,7 +546,7 @@ The options for init message describe the most important values of the query.
 | --- | --- | --- |
 | `outer_select.prefix` | Prefix which all returned objects must have | For example, `prefix = "my/directory/structure/"` will include object `object_name = "my/directory/structure/object1.txt"` but will not `object_name = "my/directory/object2.txt"` |
 | `outer_select.objects_source` | Template that object names must match to | For example `objects_source = "object{00..99}.tar"` will include object `object_name = "object49.tar"` but will not `object_name = "object0.tgz"` |
-| `inner_select.props` | Properties of objects to return | A comma-separated list containing any combination of: `name,size,version,checksum,atime,target_url,copies,ec,status`. |
+| `inner_select.props` | Properties of objects to return | A comma-separated list containing any combination of: `name, size, version, checksum, atime, target_url, copies, ec, status`. |
 | `from.bucket` | Bucket in which query should be executed | |
 | `where.filter` | Filter to apply when traversing objects | Filter is recursive data structure that can describe multiple filters which should be applied. |
 

@@ -1,7 +1,7 @@
 ---
 layout: post
 title: ETL WEBDATASET
-permalink: /tutorials/etl/etl_webdataset
+permalink: /tutorials/etl/etl-webdataset
 redirect_from:
  - /tutorials/etl/etl_webdataset.md/
  - /docs/tutorials/etl/etl_webdataset.md/

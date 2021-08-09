@@ -1,9 +1,9 @@
 ---
 layout: post
 title: HELPFUL LINKS
-permalink: helpful_links
+permalink: /docs/helpful-links
 redirect_from:
- - helpful_links.md/
+ - /helpful_links.md/
  - /docs/helpful_links.md/
 ---
 

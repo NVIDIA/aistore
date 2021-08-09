@@ -1,9 +1,9 @@
 ---
 layout: post
 title: HA
-permalink: ha
+permalink: /docs/ha
 redirect_from:
- - ha.md/
+ - /ha.md/
  - /docs/ha.md/
 ---
 

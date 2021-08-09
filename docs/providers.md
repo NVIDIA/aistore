@@ -1,9 +1,9 @@
 ---
 layout: post
 title: PROVIDERS
-permalink: providers
+permalink: /docs/providers
 redirect_from:
- - providers.md/
+ - /providers.md/
  - /docs/providers.md/
 ---
 
@@ -22,7 +22,7 @@ AIStore natively integrates with multiple backend providers:
 
 The full taxonomy of the supported backends is shown below (and note that AIS supports itself on the back as well):
 
-<img src="images/supported-backends.png" alt="Supported Backends" width="500">
+![Supported Backends](images/supported-backends.png)
 
 Further:
 

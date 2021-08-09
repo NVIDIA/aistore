@@ -1,10 +1,10 @@
 ---
 layout: post
 title: ETL
-permalink: ./cli/etl
+permalink: /docs/cli/etl
 redirect_from:
- - ./cli/etl.md/
- - /docs/./cli/etl.md/
+ - /cli/etl.md/
+ - /docs/cli/etl.md/
 ---
 
 # CLI Reference for ETLs

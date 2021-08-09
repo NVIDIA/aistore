@@ -1,10 +1,10 @@
 ---
 layout: post
 title: SHOW
-permalink: ./cli/show
+permalink: /docs/cli/show
 redirect_from:
- - ./cli/show.md/
- - /docs/./cli/show.md/
+ - /cli/show.md/
+ - /docs/cli/show.md/
 ---
 
 # CLI Reference for `show` commands

@@ -1,9 +1,9 @@
 ---
 layout: post
 title: TOOLS
-permalink: tools
+permalink: /docs/tools
 redirect_from:
- - tools.md/
+ - /tools.md/
  - /docs/tools.md/
 ---
 

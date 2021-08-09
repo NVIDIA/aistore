@@ -1,9 +1,9 @@
 ---
 layout: post
 title: CHECKSUM
-permalink: checksum
+permalink: /docs/checksum
 redirect_from:
- - checksum.md/
+ - /checksum.md/
  - /docs/checksum.md/
 ---
 

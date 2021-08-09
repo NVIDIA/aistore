@@ -1,9 +1,9 @@
 ---
 layout: post
 title: RESTFUL API
-permalink: http_api
+permalink: /docs/http-api
 redirect_from:
- - http_api.md/
+ - /http_api.md/
  - /docs/http_api.md/
 ---
 
@@ -217,7 +217,7 @@ $ curl -X GET http://G/v1/cluster?what=stats
 
 This single command causes execution of multiple `GET ?what=stats` requests within the AIStore cluster, and results in a JSON-formatted consolidated output that contains both http proxy and storage targets request counters, as well as per-target used/available capacities. For example:
 
-<img src="images/ais-get-stats.png" alt="AIStore statistics" width="256">
+![AIStore statistics](images/ais-get-stats.png)
 
 More usage examples can be found in the [README that describes AIS configuration](configuration.md).
 

@@ -1,9 +1,9 @@
 ---
 layout: post
 title: CLI
-permalink: cli
+permalink: /docs/cli
 redirect_from:
- - cli.md/
+ - /cli.md/
  - /docs/cli.md/
 ---
 

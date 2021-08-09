@@ -1,10 +1,10 @@
 ---
 layout: post
 title: ALIAS
-permalink: ./cli/alias
+permalink: /docs/cli/alias
 redirect_from:
- - ./cli/alias.md/
- - /docs/./cli/alias.md/
+ - /cli/alias.md/
+ - /docs/cli/alias.md/
 ---
 
 # CLI Reference for Aliases
