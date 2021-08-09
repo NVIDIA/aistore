@@ -103,6 +103,10 @@ type (
 		txnBckBase
 		xtcp *mirror.XactTransCpyBck
 	}
+	txnTransCpyObjs struct {
+		txnBckBase
+		xtcp *xs.XactTransCopyObjs
+	}
 	txnECEncode struct {
 		txnBckBase
 	}
@@ -123,6 +127,7 @@ var (
 	_ txn = (*txnSetBucketProps)(nil)
 	_ txn = (*txnRenameBucket)(nil)
 	_ txn = (*txnTransCpyBucket)(nil)
+	_ txn = (*txnTransCpyObjs)(nil)
 	_ txn = (*txnECEncode)(nil)
 )
 
@@ -514,6 +519,21 @@ func newTxnTransCpyBucket(c *txnServerCtx, xtcp *mirror.XactTransCpyBck) (txn *t
 }
 
 func (txn *txnTransCpyBucket) abort() {
+	txn.txnBckBase.abort()
+	txn.xtcp.TxnAbort()
+}
+
+///////////////////////
+// txnTransCpyObjs //
+///////////////////////
+
+func newTxnTransCpyObjs(c *txnServerCtx, xtcp *xs.XactTransCopyObjs) (txn *txnTransCpyObjs) {
+	txn = &txnTransCpyObjs{*newTxnBckBase("tcb", *xtcp.Args().BckFrom), xtcp}
+	txn.fillFromCtx(c)
+	return
+}
+
+func (txn *txnTransCpyObjs) abort() {
 	txn.txnBckBase.abort()
 	txn.xtcp.TxnAbort()
 }

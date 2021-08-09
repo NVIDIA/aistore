@@ -156,8 +156,7 @@ func (t *targetrunner) EvictObject(lom *cluster.LOM) (errCode int, err error) {
 //   the AIS cluster (by performing a cold GET if need be).
 // - if the dst is cloud, we perform a regular PUT logic thus also making sure that the new
 //   replica gets created in the cloud bucket of _this_ AIS cluster.
-func (t *targetrunner) CopyObject(lom *cluster.LOM, params *cluster.CopyObjectParams, localOnly bool) (size int64,
-	err error) {
+func (t *targetrunner) CopyObject(lom *cluster.LOM, params *cluster.CopyObjectParams, localOnly bool) (size int64, err error) {
 	objNameTo := lom.ObjName
 	coi := allocCopyObjInfo()
 	{

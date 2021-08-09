@@ -56,6 +56,22 @@ func EvictRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) 
 	return doListRangeRequest(baseParams, bck, cmn.ActEvictObjects, evictMsg)
 }
 
+func CopyObjectsRange(baseParams BaseParams, fromBck, toBck cmn.Bck, rng string) (xactID string, err error) {
+	cpyRangeMsg := cmn.TransCpyListRangeMsg{ListRangeMsg: cmn.ListRangeMsg{Template: rng}, TransCpyBckMsg: cmn.TransCpyBckMsg{}}
+	baseParams.Method = http.MethodPost
+	q := cmn.AddBckToQuery(nil, fromBck)
+	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.URLParamBucketTo)
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPathBuckets.Join(fromBck.Name),
+		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActCopyObjects, Value: cpyRangeMsg}),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
+		Query:      q,
+	}, &xactID)
+
+	return
+}
+
 // Handles operations on multiple objects (delete, prefetch, evict, archive)
 func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action string, msg interface{}) (xactID string, err error) {
 	switch action {

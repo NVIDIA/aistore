@@ -28,22 +28,25 @@ import (
 type (
 	transCopyObjsFactory struct {
 		xreg.RenewBase
-		xact *transformCopyObjs
+		xact *XactTransCopyObjs
 		kind string
 		msg  *xreg.TransCpyObjsArgs
 	}
-	transformCopyObjs struct {
+	XactTransCopyObjs struct {
 		xaction.XactBase
 		lriterator
-		dm    *bundle.DataMover
-		cpMsg *xreg.TransCpyObjsArgs
-		refc  atomic.Int32
+		dm   *bundle.DataMover
+		args *xreg.TransCpyObjsArgs
+		// starting up
+		wg sync.WaitGroup
+		// finishing
+		refc atomic.Int32
 	}
 )
 
 // interface guard
 var (
-	_ cluster.Xact   = (*transformCopyObjs)(nil)
+	_ cluster.Xact   = (*XactTransCopyObjs)(nil)
 	_ xreg.Renewable = (*transCopyObjsFactory)(nil)
 )
 
@@ -51,10 +54,10 @@ var (
 // transform/copy objects //
 ////////////////////////////
 
-func (tco *transCopyObjsFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
+func (tco *transCopyObjsFactory) New(args xreg.Args, fromBck *cluster.Bck) xreg.Renewable {
 	msg := args.Custom.(*xreg.TransCpyObjsArgs)
 	debug.Assert(!msg.IsList() || !msg.HasTemplate())
-	np := &transCopyObjsFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: tco.kind, msg: msg}
+	np := &transCopyObjsFactory{RenewBase: xreg.RenewBase{Args: args, Bck: fromBck}, kind: tco.kind, msg: msg}
 	return np
 }
 
@@ -68,6 +71,11 @@ func (tco *transCopyObjsFactory) Start() error {
 	if tco.kind == cmn.ActETLBck {
 		sizePDU = memsys.DefaultBufSize
 	}
+
+	// TODO -- FIXME: revisit
+	smap := tco.T.Sowner().Get()
+	tco.xact.refc.Store(int32(smap.CountTargets() - 1))
+	tco.xact.wg.Add(1)
 
 	return tco.newDM(&config.Rebalance, tco.UUID(), sizePDU)
 }
@@ -97,15 +105,17 @@ func (*transCopyObjsFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error)
 	return xreg.WprKeepAndStartNew, nil
 }
 
-func newTransCopyObjs(xargs *xreg.Args, kind string, bck *cluster.Bck, msg *xreg.TransCpyObjsArgs) (tco *transformCopyObjs) {
-	tco = &transformCopyObjs{cpMsg: msg}
+func newTransCopyObjs(xargs *xreg.Args, kind string, bck *cluster.Bck, msg *xreg.TransCpyObjsArgs) (tco *XactTransCopyObjs) {
+	tco = &XactTransCopyObjs{args: msg}
 	tco.lriterator.init(tco, xargs.T, &msg.ListRangeMsg, true /*freeLOM*/)
 	tco.lriterator.ignoreBackendErr = !msg.IsList() // NOTE: list defaults to aborting on errors other than non-existence
 	tco.InitBase(xargs.UUID, kind, bck)
 	return
 }
 
-func (r *transformCopyObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) {
+func (r *XactTransCopyObjs) Args() *xreg.TransCpyObjsArgs { return r.args }
+
+func (r *XactTransCopyObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) {
 	defer transport.FreeRecv(objReader)
 	if err != nil && !cos.IsEOF(err) {
 		glog.Error(err)
@@ -144,45 +154,82 @@ func (r *transformCopyObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err 
 	}
 }
 
-func (r *transformCopyObjs) Run(*sync.WaitGroup) {
+func (r *XactTransCopyObjs) Run(*sync.WaitGroup) {
 	var (
 		err  error
 		smap = r.t.Sowner().Get()
 	)
+	r.dm.SetXact(r)
+	r.dm.Open()
+
+	r.wg.Done()
+
 	if r.msg.IsList() {
 		err = r.iterateList(r, smap)
 	} else {
 		err = r.iterateRange(r, smap)
 	}
+
+	o := transport.AllocSend()
+	o.Hdr.Opcode = doneSendingOpcode
+	r.dm.Bcast(o)
+
+	// NOTE: ref-counted quiescence, fairly short (optimal) waiting
+	config := cmn.GCO.Get()
+	optTime, maxTime := config.Timeout.MaxKeepalive.D(), config.Timeout.SendFile.D()/2
+	q := r.Quiesce(optTime, func(tot time.Duration) cluster.QuiRes { return xaction.RefcntQuiCB(&r.refc, maxTime, tot) })
+	if err == nil {
+		if q == cluster.QuiAborted {
+			err = cmn.NewAbortedError(r.String())
+		} else if q == cluster.QuiTimeout {
+			err = fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout)
+		}
+	}
+
+	// close
+	r.dm.Close(err)
+	r.dm.UnregRecv()
+
 	r.Finish(err)
 }
 
-func (r *transformCopyObjs) do(lom *cluster.LOM, lri *lriterator) (err error) {
+func (r *XactTransCopyObjs) do(lom *cluster.LOM, lri *lriterator) (err error) {
 	var size int64
-	objNameTo := cmn.ObjNameFromBck2BckMsg(lom.ObjName, r.cpMsg.Msg)
+	objNameTo := cmn.ObjNameFromBck2BckMsg(lom.ObjName, r.args.Msg)
+	buf, slab := lri.t.MMSA().Alloc()
 	params := &cluster.CopyObjectParams{}
 	{
-		params.BckTo = r.cpMsg.BckTo
+		params.BckTo = r.args.BckTo
 		params.ObjNameTo = objNameTo
 		params.DM = r.dm
-		params.DP = r.cpMsg.DP
-		params.DryRun = r.cpMsg.Msg.DryRun
+		params.Buf = buf
+		params.DP = r.args.DP
+		params.DryRun = r.args.Msg.DryRun
 	}
 	size, err = lri.t.CopyObject(lom, params, false /*localOnly*/)
+	slab.Free(buf)
 	if err != nil {
 		if cos.IsErrOOS(err) {
 			what := fmt.Sprintf("%s(%q)", r.Kind(), r.ID())
 			err = cmn.NewAbortedError(what, err.Error())
 		}
-		goto ret
+		return
 	}
 	r.ObjectsInc()
 	r.BytesAdd(size)
-	// keep checking remaining capacity
-	if cs := fs.GetCapStatus(); cs.Err != nil {
-		what := fmt.Sprintf("%s(%q)", r.Kind(), r.ID())
-		err = cmn.NewAbortedError(what, cs.Err.Error())
-	}
-ret:
 	return
+}
+
+func (r *XactTransCopyObjs) String() string {
+	return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.args.BckFrom)
+}
+
+// limited pre-run abort
+func (r *XactTransCopyObjs) TxnAbort() {
+	err := cmn.NewAbortedError(r.String())
+	if r.dm.IsOpen() {
+		r.dm.Close(err)
+	}
+	r.dm.UnregRecv()
+	r.XactBase.Finish(err)
 }

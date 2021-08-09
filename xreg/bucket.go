@@ -159,7 +159,7 @@ func (r *registry) renewTransCpyBck(t cluster.Target, uuid, kind string, custom 
 }
 
 func (r *registry) renewTransCpyObjs(t cluster.Target, uuid, kind string, custom *TransCpyObjsArgs) RenewRes {
-	return r.renewBucketXact(kind, custom.BckTo /*NOTE: to not from*/, Args{t, uuid, custom})
+	return r.renewBucketXact(kind, custom.BckFrom, Args{t, uuid, custom})
 }
 
 func RenewBckRename(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid string, rmdVersion int64, phase string) RenewRes {

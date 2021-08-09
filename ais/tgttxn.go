@@ -61,9 +61,13 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	if cmn.ReadJSON(w, r, msg) != nil {
 		return
 	}
-	if !t.ensureIntraControl(w, r, msg.Action != cmn.ActArchive /* must be primary */) {
+
+	xactDtor := xaction.XactsDtor[msg.Action]
+	onlyPrimary := xactDtor.Metasync
+	if !t.ensureIntraControl(w, r, onlyPrimary) {
 		return
 	}
+
 	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathTxn.L)
 	if err != nil {
 		return
@@ -92,16 +96,39 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActMoveBck:
 		err = t.renameBucket(c)
 	case cmn.ActCopyBck, cmn.ActETLBck:
-		tcmsg := &cmn.TransCpyBckMsg{}
+		var (
+			dp    cluster.LomReaderProvider
+			tcmsg = &cmn.TransCpyBckMsg{}
+		)
 		if err := cos.MorphMarshal(c.msg.Value, tcmsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, c.msg.Value, err)
 			return
 		}
-		if msg.Action == cmn.ActCopyBck {
-			err = t.transCpyBck(c, tcmsg, nil)
-		} else {
-			err = t.etlBucket(c, tcmsg) // Calls the common `t.transCpyBck` internally.
+		if msg.Action == cmn.ActETLBck {
+			var err error
+			if dp, err = t.etlDP(tcmsg); err != nil {
+				t.writeErr(w, r, err)
+				return
+			}
 		}
+		err = t.transCpyBck(c, tcmsg, dp)
+	case cmn.ActCopyObjects, cmn.ActETLObjects:
+		var (
+			dp      cluster.LomReaderProvider
+			tclrmsg = &cmn.TransCpyListRangeMsg{}
+		)
+		if err := cos.MorphMarshal(c.msg.Value, tclrmsg); err != nil {
+			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, c.msg.Value, err)
+			return
+		}
+		if msg.Action == cmn.ActETLObjects {
+			var err error
+			if dp, err = t.etlDP(&tclrmsg.TransCpyBckMsg); err != nil {
+				t.writeErr(w, r, err)
+				return
+			}
+		}
+		err = t.transCpyObjs(c, tclrmsg, dp)
 	case cmn.ActECEncode:
 		err = t.ecEncode(c)
 	case cmn.ActArchive:
@@ -428,24 +455,16 @@ func (t *targetrunner) validateBckRenTxn(bckFrom, bckTo *cluster.Bck, msg *aisMs
 	return nil
 }
 
-///////////////
-// etlBucket //
-///////////////
-
-// etlBucket uses transCpyBck xaction to transform an entire bucket. It creates
-// a reader based on a given ETL transformation.
-func (t *targetrunner) etlBucket(c *txnServerCtx, msg *cmn.TransCpyBckMsg) (err error) {
-	var dp cluster.LomReaderProvider
-	if err := k8s.Detect(); err != nil {
-		return err
+func (t *targetrunner) etlDP(msg *cmn.TransCpyBckMsg) (dp cluster.LomReaderProvider, err error) {
+	if err = k8s.Detect(); err != nil {
+		return
 	}
 	if msg.ID == "" {
-		return cmn.ErrETLMissingUUID
+		err = cmn.ErrETLMissingUUID
+		return
 	}
-	if dp, err = etl.NewOfflineDataProvider(msg, t.si); err != nil {
-		return nil
-	}
-	return t.transCpyBck(c, msg, dp)
+	dp, err = etl.NewOfflineDataProvider(msg, t.si)
+	return
 }
 
 // common for both bucket copy and bucket transform - does the heavy lifting
@@ -529,6 +548,88 @@ func (t *targetrunner) transCpyBck(c *txnServerCtx, msg *cmn.TransCpyBckMsg, dp 
 		debug.Assert(custom.Phase == cmn.ActBegin)
 		custom.Phase = cmn.ActCommit
 		rns := xreg.RenewTransCpyBck(t, c.uuid, c.msg.Action /*kind*/, tcp.xtcp.Args())
+		if rns.Err != nil {
+			tcp.xtcp.TxnAbort()
+			return rns.Err
+		}
+		xact := rns.Entry.Get()
+		c.addNotif(xact) // notify upon completion
+		xaction.GoRunW(xact)
+	default:
+		debug.Assert(false)
+	}
+	return nil
+}
+
+// common for both bucket copy and transform multiple objects
+func (t *targetrunner) transCpyObjs(c *txnServerCtx, msg *cmn.TransCpyListRangeMsg, dp cluster.LomReaderProvider) error {
+	if err := c.bck.Init(t.owner.bmd); err != nil {
+		return err
+	}
+	switch c.phase {
+	case cmn.ActBegin:
+		var (
+			bckTo   = c.bckTo
+			bckFrom = c.bck // from
+		)
+		// validate
+		if err := bckTo.Validate(); err != nil {
+			return err
+		}
+		if err := bckFrom.Validate(); err != nil {
+			return err
+		}
+		if cs := fs.GetCapStatus(); cs.Err != nil {
+			return cs.Err
+		}
+		if err := t.coExists(bckFrom, c.msg.Action); err != nil {
+			return err
+		}
+		bmd := t.owner.bmd.get()
+		if _, present := bmd.Get(bckFrom); !present {
+			return cmn.NewErrBckNotFound(bckFrom.Bck)
+		}
+		// begin
+		custom := &xreg.TransCpyObjsArgs{
+			TransCpyBckArgs: xreg.TransCpyBckArgs{
+				Phase:   cmn.ActBegin,
+				BckFrom: bckFrom,
+				BckTo:   bckTo,
+				DP:      dp,
+				Msg:     &msg.TransCpyBckMsg,
+			},
+			ListRangeMsg: msg.ListRangeMsg,
+		}
+		rns := xreg.RenewTransCpyObjs(t, c.uuid, c.msg.Action /*kind*/, custom)
+		if rns.Err != nil {
+			return rns.Err
+		}
+		xact := rns.Entry.Get()
+		xtcp := xact.(*xs.XactTransCopyObjs)
+		txn := newTxnTransCpyObjs(c, xtcp)
+		if err := t.transactions.begin(txn); err != nil {
+			return err
+		}
+	case cmn.ActAbort:
+		t.transactions.find(c.uuid, cmn.ActAbort)
+	case cmn.ActCommit:
+		txn, err := t.transactions.find(c.uuid, "")
+		if err != nil {
+			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+		}
+		tcp := txn.(*txnTransCpyObjs)
+		if c.query.Get(cmn.URLParamWaitMetasync) != "" {
+			if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
+				tcp.xtcp.TxnAbort()
+				return fmt.Errorf("%s %s: %v", t.si, txn, err)
+			}
+		} else {
+			t.transactions.find(c.uuid, cmn.ActCommit)
+		}
+		custom := tcp.xtcp.Args()
+		debug.Assert(custom.Phase == cmn.ActBegin)
+		custom.Phase = cmn.ActCommit
+		rns := xreg.RenewTransCpyObjs(t, c.uuid, c.msg.Action /*kind*/, tcp.xtcp.Args())
 		if rns.Err != nil {
 			tcp.xtcp.TxnAbort()
 			return rns.Err
