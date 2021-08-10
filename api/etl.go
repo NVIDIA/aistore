@@ -84,3 +84,7 @@ func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.TCBMsg
 	}, &xactID)
 	return
 }
+
+func ETLMultiObjects(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg cmn.TCObjsMsg) (xactID string, err error) {
+	return transCpyListRange(baseParams, cmn.ActETLObjects, fromBck, toBck, bckMsg)
+}

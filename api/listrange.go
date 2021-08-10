@@ -58,17 +58,20 @@ func EvictRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) 
 
 func CopyObjectsRange(baseParams BaseParams, fromBck, toBck cmn.Bck, rng string) (xactID string, err error) {
 	cpyRangeMsg := cmn.TCObjsMsg{ListRangeMsg: cmn.ListRangeMsg{Template: rng}, TCBMsg: cmn.TCBMsg{}}
+	return transCpyListRange(baseParams, cmn.ActCopyObjects, fromBck, toBck, cpyRangeMsg)
+}
+
+func transCpyListRange(baseParams BaseParams, kind string, fromBck, toBck cmn.Bck, msg cmn.TCObjsMsg) (xactID string, err error) {
 	baseParams.Method = http.MethodPost
 	q := cmn.AddBckToQuery(nil, fromBck)
 	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.URLParamBucketTo)
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(fromBck.Name),
-		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActCopyObjects, Value: cpyRangeMsg}),
+		Body:       cos.MustMarshal(cmn.ActionMsg{Action: kind, Value: msg}),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		Query:      q,
 	}, &xactID)
-
 	return
 }
 

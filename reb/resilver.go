@@ -170,6 +170,7 @@ func (rj *joggerCtx) moveObject(lom *cluster.LOM, buf []byte) {
 		}
 	}
 	size, err := rj.t.CopyObject(lom, &cluster.CopyObjectParams{BckTo: lom.Bck(), Buf: buf}, true /*local*/)
+	debug.Assert(size != cos.ContentLengthUnknown)
 	if err != nil {
 		glog.Errorf("%s: %v", lom, err)
 		// EC: Cleanup new copy of the metafile.

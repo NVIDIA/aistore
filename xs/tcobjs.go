@@ -94,7 +94,7 @@ func (p *tcoFactory) newDM(uuid string) error {
 		trname  = "transcpy-" + "-" + uuid
 		sizePDU int32
 	)
-	if p.kind == cmn.ActETLBck {
+	if p.kind == cmn.ActETLObjects {
 		sizePDU = memsys.DefaultBufSize
 	}
 	dmExtra := bundle.Extra{Multiplier: 1, SizePDU: sizePDU}
@@ -284,5 +284,15 @@ func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) {
 		return
 	}
 	wi.r.ObjectsInc()
+	// TODO -- FIXME: Add precise post-transform byte count
+	// (under ETL, sizes of transformed objects are unknown until after the transformation)
+	if size == cos.ContentLengthUnknown {
+		if err := lom.Load(false /*cacheit*/, false /*locked*/); err != nil {
+			glog.Errorf("%s: %v", lom, err)
+			size = 0
+		} else {
+			size = lom.SizeBytes()
+		}
+	}
 	wi.r.BytesAdd(size)
 }

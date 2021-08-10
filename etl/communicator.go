@@ -404,7 +404,7 @@ func (ic *ioComm) OfflineTransform(bck *cluster.Bck, objName string, _ time.Dura
 
 	return cos.NewReaderWithArgs(cos.ReaderArgs{
 		R:    r,
-		Size: -1,
+		Size: cos.ContentLengthUnknown,
 		DeferCb: func() {
 			ic.stats.objCount.Inc()
 		},

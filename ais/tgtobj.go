@@ -1194,10 +1194,8 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 			cos.Close(params.Reader)
 			return
 		}
-		if size = params.ObjAttrs.SizeBytes(); size < 0 {
-			// NOTE?: returning the current size since post-transform size cannot be known
-			size = lom.SizeBytes()
-		}
+		// NOTE: returns the cos.ContentLengthUnknown (-1) if post-transform size not known.
+		size = params.ObjAttrs.SizeBytes()
 	}
 	debug.Assert(params.ObjAttrs != nil)
 	params.BckTo = coi.BckTo

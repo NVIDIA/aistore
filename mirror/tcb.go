@@ -248,7 +248,14 @@ func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 		goto ret
 	}
 	r.ObjectsInc()
+
+	// TODO -- FIXME: Add precise post-transform byte count
+	// (under ETL, sizes of transformed objects are unknown until after the transformation)
+	if size == cos.ContentLengthUnknown {
+		size = lom.SizeBytes()
+	}
 	r.BytesAdd(size)
+
 	// keep checking remaining capacity
 	if cs := fs.GetCapStatus(); cs.Err != nil {
 		what := fmt.Sprintf("%s(%q)", r.Kind(), r.ID())

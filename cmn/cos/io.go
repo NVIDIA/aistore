@@ -18,6 +18,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
+const ContentLengthUnknown = -1
+
 type (
 	nopReader struct {
 		size   int
