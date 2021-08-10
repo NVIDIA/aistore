@@ -50,7 +50,7 @@ Following is a high-level block diagram with an emphasis on supported (frontend 
 
 AIStore is a hyper-converged architecture tailored specifically to run AI apps. To that end, we are supporting [ETL offload](/etl/README.md): the capability to run custom extract-transform-load workloads close to data on (and by) the storage cluster:
 
-<img src="images/etl-v3.3.png" width="450">
+![etl-v3.3](images/etl-v3.3.png)
 
 For background and further references, see:
 

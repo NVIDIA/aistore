@@ -1,6 +1,6 @@
 ---
 layout: post
-title: HDFS_BACKEND
+title: HDFS BACKEND
 permalink: /tutorials/various/hdfs-backend
 redirect_from:
  - /tutorials/various/hdfs_backend.md/

@@ -211,132 +211,132 @@ For the most recently updated command-line options and examples, please run `ais
 
 1. Create a 10-seconds load of 50% PUT and 50% GET requests:
 
-```console
-$ aisloader -bucket=my_ais_bucket -duration=10s -pctput=50 -provider=ais
-Found 0 existing objects
-Run configuration:
-{
-    "proxy": "http://172.50.0.2:8080",
-    "provider": "ais",
-    "bucket": "my_ais_bucket",
-    "duration": "10s",
-    "put upper bound": 0,
-    "put %": 50,
-    "minimal object size in Bytes": 1024,
-    "maximal object size in Bytes": 1048576,
-    "# workers": 1,
-    "stats interval": "10s",
-    "backed by": "sg",
-    "cleanup": true
-}
-
-Actual run duration: 10.313689487s
-
-Time      OP    Count                 	Total Bytes           	Latency(min, avg, max)              	Throughput            	Error
-01:52:52  Put   26                    	11.19GB               	296.39ms   5.70s      14.91s        	639.73MB              	0
-01:52:52  Get   16                    	3.86GB                	58.89ms    220.20ms   616.72ms      	220.56MB              	0
-01:52:52  CFG   0                     	0B                    	0.00ms     0.00ms     0.00ms        	0B                    	0
-01:52:52 Clean up ...
-01:52:54 Clean up done
-```
+    ```console
+    $ aisloader -bucket=my_ais_bucket -duration=10s -pctput=50 -provider=ais
+    Found 0 existing objects
+    Run configuration:
+    {
+        "proxy": "http://172.50.0.2:8080",
+        "provider": "ais",
+        "bucket": "my_ais_bucket",
+        "duration": "10s",
+        "put upper bound": 0,
+        "put %": 50,
+        "minimal object size in Bytes": 1024,
+        "maximal object size in Bytes": 1048576,
+        "worker count": 1,
+        "stats interval": "10s",
+        "backed by": "sg",
+        "cleanup": true
+    }
+    
+    Actual run duration: 10.313689487s
+    
+    Time      OP    Count                 	Total Bytes           	Latency(min, avg, max)              	Throughput            	Error
+    01:52:52  Put   26                    	11.19GB               	296.39ms   5.70s      14.91s        	639.73MB              	0
+    01:52:52  Get   16                    	3.86GB                	58.89ms    220.20ms   616.72ms      	220.56MB              	0
+    01:52:52  CFG   0                     	0B                    	0.00ms     0.00ms     0.00ms        	0B                    	0
+    01:52:52 Clean up ...
+    01:52:54 Clean up done
+    ```
 
 2. Time-based 100% PUT into ais bucket. Upon exit the bucket is destroyed:
 
-```console
-$ aisloader -bucket=nvais -duration 10s -cleanup=true -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -provider=ais
-```
+    ```console
+    $ aisloader -bucket=nvais -duration 10s -cleanup=true -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -provider=ais
+    ```
 
 3. Timed (for 1h) 100% GET from a Cloud bucket, no cleanup:
 
-```console
-$ aisloader -bucket=aws://nvaws -duration 1h -numworkers=30 -pctput=0 -cleanup=false
-```
+    ```console
+    $ aisloader -bucket=aws://nvaws -duration 1h -numworkers=30 -pctput=0 -cleanup=false
+    ```
 
 4. Mixed 30%/70% PUT and GET of variable-size objects to/from a Cloud bucket. PUT will generate random object names and is limited by the 10GB total size. Cleanup enabled - upon completion all generated objects and the bucket itself will be deleted:
 
-```console
-$ aisloader -bucket=s3://nvaws -duration 0s -cleanup=true -numworkers=3 -minsize=1024 -maxsize=1MB -pctput=30 -totalputsize=10G
-```
+    ```console
+    $ aisloader -bucket=s3://nvaws -duration 0s -cleanup=true -numworkers=3 -minsize=1024 -maxsize=1MB -pctput=30 -totalputsize=10G
+    ```
 
 5. PUT 1GB total into an ais bucket with cleanup disabled, object size = 1MB, duration unlimited:
 
-```console
-$ aisloader -bucket=nvais -cleanup=false -totalputsize=1G -duration=0 -minsize=1MB -maxsize=1MB -numworkers=8 -pctput=100 -provider=ais
-```
+    ```console
+    $ aisloader -bucket=nvais -cleanup=false -totalputsize=1G -duration=0 -minsize=1MB -maxsize=1MB -numworkers=8 -pctput=100 -provider=ais
+    ```
 
 6. 100% GET from an ais bucket:
 
-```console
-$ aisloader -bucket=nvais -duration 5s -numworkers=3 -pctput=0 -provider=ais -cleanup=false
-```
+    ```console
+    $ aisloader -bucket=nvais -duration 5s -numworkers=3 -pctput=0 -provider=ais -cleanup=false
+    ```
 
 7. PUT 2000 objects named as `aisloader/hex({0..2000}{loaderid})`:
 
-```console
-$ aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000 -objNamePrefix="aisloader" -cleanup=false
-```
+    ```console
+    $ aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000 -objNamePrefix="aisloader" -cleanup=false
+    ```
 
 8. Use random object names and loaderID to report statistics:
 
-```console
-$ aisloader -loaderid=10
-```
+    ```console
+    $ aisloader -loaderid=10
+    ```
 
 9. PUT objects with random name generation being based on the specified loaderID and the total number of concurrent aisloaders:
-
-```console
-$ aisloader -loaderid=10 -loadernum=20
-```
+    
+    ```console
+    $ aisloader -loaderid=10 -loadernum=20
+    ```
 
 10. Same as above except that loaderID is computed by the aisloader as `hash(loaderstring) & 0xff`:
-
-```console
-$ aisloader -loaderid=loaderstring -loaderidhashlen=8
-```
+    
+    ```console
+    $ aisloader -loaderid=loaderstring -loaderidhashlen=8
+    ```
 
 11. Print loaderID and exit (all 3 examples below) with the resulting loaderID shown on the right:
 
-```console
-$ aisloader -getloaderid (0x0)
-$ aisloader -loaderid=10 -getloaderid (0xa)
-$ aisloader -loaderid=loaderstring -loaderidhashlen=8 -getloaderid (0xdb)
-```
+    ```console
+    $ aisloader -getloaderid (0x0)
+    $ aisloader -loaderid=10 -getloaderid (0xa)
+    $ aisloader -loaderid=loaderstring -loaderidhashlen=8 -getloaderid (0xdb)
+    ```
 
 12. Destroy existing ais bucket. If the bucket is Cloud-based, delete all objects:
 
-```console
-$ aisloader -bucket=nvais -duration 0s -totalputsize=0 -cleanup=true
-```
+    ```console
+    $ aisloader -bucket=nvais -duration 0s -totalputsize=0 -cleanup=true
+    ```
 
 13. Generate load on a cluster listening on custom IP address and port:
-
-```console
-$ aisloader -ip="example.com" -port=8080
-```
+    
+    ```console
+    $ aisloader -ip="example.com" -port=8080
+    ```
 
 14. Generate load on a cluster listening on custom IP address and port from environment variable:
 
-```console
-$ AIS_ENDPOINT="examples.com:8080" aisloader
-```
+    ```console
+    $ AIS_ENDPOINT="examples.com:8080" aisloader
+    ```
 
 15. Use HTTPS when connecting to a cluster:
 
-```console
-$ aisloader -ip="https://localhost" -port=8080
-```
+    ```console
+    $ aisloader -ip="https://localhost" -port=8080
+    ```
 
 16. PUT TAR files with random files inside into a cluster:
-
-```console
-$ aisloader -bucket=my_ais_bucket -duration=10s -pctput=100 -provider=ais -readertype=tar
-```
+    
+    ```console
+    $ aisloader -bucket=my_ais_bucket -duration=10s -pctput=100 -provider=ais -readertype=tar
+    ```
 
 17. Generate load on `tar2tf` ETL. New ETL is started and then stopped at the end. TAR files are PUT to the cluster. Only available when cluster is deployed on Kubernetes.
 
-```console
-$ aisloader -bucket=my_ais_bucket -duration=10s -pctput=100 -provider=ais -readertype=tar -etl=tar2tf -cleanup=false
-```
+    ```console
+    $ aisloader -bucket=my_ais_bucket -duration=10s -pctput=100 -provider=ais -readertype=tar -etl=tar2tf -cleanup=false
+    ```
 
 ## Collecting stats
 
