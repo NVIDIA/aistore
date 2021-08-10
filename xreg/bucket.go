@@ -26,8 +26,9 @@ type (
 	}
 
 	TransCpyObjsArgs struct {
-		TransCpyBckArgs
-		cmn.ListRangeMsg
+		BckFrom *cluster.Bck
+		BckTo   *cluster.Bck
+		DP      cluster.LomReaderProvider
 	}
 
 	ECEncodeArgs struct {

@@ -879,7 +879,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		if bckTo.IsEmpty() {
 			bckTo = bckFrom
 		} else {
-			bckToArgs := bckInitArgs{p: p, w: w, r: r, bck: bckTo, msg: msg, tryOnlyRem: false, perms: cmn.AccessPUT}
+			bckToArgs := bckInitArgs{p: p, w: w, r: r, bck: bckTo, msg: msg, tryOnlyRem: true, perms: cmn.AccessPUT}
 			if bckTo, err = bckToArgs.initAndTry(bckTo.Name); err != nil {
 				p.writeErr(w, r, err)
 				return
@@ -1058,7 +1058,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		glog.Infof("%s bucket %s => %s", msg.Action, bck, bckTo)
 
 		var xactID string
-		if xactID, err = p.bucketToBucketTxn(bck, bckTo, msg, tcmsg.DryRun); err != nil {
+		if xactID, err = p.transCpy(bck, bckTo, msg, tcmsg.DryRun); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}

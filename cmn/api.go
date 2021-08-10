@@ -589,8 +589,9 @@ func (msg *TransCpyBckMsg) Validate() error {
 }
 
 // Replace extension and add suffix if provided.
-func ObjNameFromBck2BckMsg(name string, msg *TransCpyBckMsg) string {
+func (msg *TransCpyBckMsg) ToName(name string) string {
 	if msg == nil {
+		debug.AssertMsg(false, name) // TODO -- FIXME: remove
 		return name
 	}
 	if msg.Ext != nil {
@@ -604,6 +605,5 @@ func ObjNameFromBck2BckMsg(name string, msg *TransCpyBckMsg) string {
 	if msg.Prefix != "" {
 		name = msg.Prefix + name
 	}
-
 	return name
 }

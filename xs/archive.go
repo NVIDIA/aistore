@@ -110,9 +110,9 @@ var (
 	_ archWriter = (*zipWriter)(nil)
 )
 
-////////////////
+/////////////////
 // archFactory //
-////////////////
+/////////////////
 
 func (*archFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 	p := &archFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}}
@@ -248,7 +248,7 @@ func (r *XactPutArchive) Run(wg *sync.WaitGroup) {
 			var (
 				smap    = r.t.Sowner().Get()
 				lrit    = &lriterator{}
-				freeLOM = false // not delegating the responsibility - doing it
+				freeLOM = false // not delegating to iterator
 			)
 			lrit.init(r, r.t, &msg.ListRangeMsg, freeLOM)
 			lrit.ignoreBackendErr = msg.IgnoreBackendErr

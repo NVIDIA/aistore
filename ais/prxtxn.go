@@ -468,8 +468,7 @@ func _renameBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 
 // copy-bucket/offline ETL:
 // { confirm existence -- begin -- conditional metasync -- start waiting for operation done -- commit }
-func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg,
-	dryRun bool) (xactID string, err error) {
+func (p *proxyrunner) transCpy(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRun bool) (xactID string, err error) {
 	// 1. confirm existence
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
@@ -487,6 +486,9 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 	results := c.bcast(cmn.ActBegin, c.timeout.netw)
 	for _, res := range results {
 		if res.err == nil {
+			if xactID == "" {
+				xactID = res.header.Get(cmn.HdrXactionID)
+			}
 			continue
 		}
 		err = c.bcastAbort(bckFrom, res.error())
@@ -524,7 +526,9 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 
 	// 5. commit
 	_ = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
-	xactID = c.uuid
+	if xactID == "" { // TODO -- FIXME consistent assignment vs archive
+		xactID = c.uuid
+	}
 	return
 }
 

@@ -229,7 +229,7 @@ func (r *XactTransCpyBck) Run(wg *sync.WaitGroup) {
 
 func (r *XactTransCpyBck) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 	var size int64
-	objNameTo := cmn.ObjNameFromBck2BckMsg(lom.ObjName, r.args.Msg)
+	objNameTo := r.args.Msg.ToName(lom.ObjName)
 	params := allocCpObjParams()
 	{
 		params.BckTo = r.args.BckTo

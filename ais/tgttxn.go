@@ -114,6 +114,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		err = t.transCpyBck(c, tcmsg, dp)
 	case cmn.ActCopyObjects, cmn.ActETLObjects:
 		var (
+			xactID  string
 			dp      cluster.LomReaderProvider
 			tclrmsg = &cmn.TransCpyListRangeMsg{}
 		)
@@ -128,7 +129,10 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		err = t.transCpyObjs(c, tclrmsg, dp)
+		xactID, err = t.transCpyObjs(c, tclrmsg, dp)
+		if xactID != "" {
+			w.Header().Set(cmn.HdrXactionID, xactID)
+		}
 	case cmn.ActECEncode:
 		err = t.ecEncode(c)
 	case cmn.ActArchive:
@@ -515,8 +519,8 @@ func (t *targetrunner) transCpyBck(c *txnServerCtx, msg *cmn.TransCpyBckMsg, dp 
 			return rns.Err
 		}
 		xact := rns.Entry.Get()
-		xtcp := xact.(*mirror.XactTransCpyBck)
-		txn := newTxnTransCpyBucket(c, xtcp)
+		xtcb := xact.(*mirror.XactTransCpyBck)
+		txn := newTxnTransCpyBucket(c, xtcb)
 		if err := t.transactions.begin(txn); err != nil {
 			if nlpTo != nil {
 				nlpTo.Unlock()
@@ -535,21 +539,21 @@ func (t *targetrunner) transCpyBck(c *txnServerCtx, msg *cmn.TransCpyBckMsg, dp 
 		if err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
-		tcp := txn.(*txnTransCpyBucket)
+		txnTcb := txn.(*txnTransCpyBucket)
 		if c.query.Get(cmn.URLParamWaitMetasync) != "" {
 			if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
-				tcp.xtcp.TxnAbort()
+				txnTcb.xtcb.TxnAbort()
 				return fmt.Errorf("%s %s: %v", t.si, txn, err)
 			}
 		} else {
 			t.transactions.find(c.uuid, cmn.ActCommit)
 		}
-		custom := tcp.xtcp.Args()
+		custom := txnTcb.xtcb.Args()
 		debug.Assert(custom.Phase == cmn.ActBegin)
 		custom.Phase = cmn.ActCommit
-		rns := xreg.RenewTransCpyBck(t, c.uuid, c.msg.Action /*kind*/, tcp.xtcp.Args())
+		rns := xreg.RenewTransCpyBck(t, c.uuid, c.msg.Action /*kind*/, txnTcb.xtcb.Args())
 		if rns.Err != nil {
-			tcp.xtcp.TxnAbort()
+			txnTcb.xtcb.TxnAbort()
 			return rns.Err
 		}
 		xact := rns.Entry.Get()
@@ -562,9 +566,11 @@ func (t *targetrunner) transCpyBck(c *txnServerCtx, msg *cmn.TransCpyBckMsg, dp 
 }
 
 // common for both bucket copy and transform multiple objects
-func (t *targetrunner) transCpyObjs(c *txnServerCtx, msg *cmn.TransCpyListRangeMsg, dp cluster.LomReaderProvider) error {
+func (t *targetrunner) transCpyObjs(c *txnServerCtx, msg *cmn.TransCpyListRangeMsg,
+	dp cluster.LomReaderProvider) (string, error) {
+	var xactID string
 	if err := c.bck.Init(t.owner.bmd); err != nil {
-		return err
+		return xactID, err
 	}
 	switch c.phase {
 	case cmn.ActBegin:
@@ -574,73 +580,59 @@ func (t *targetrunner) transCpyObjs(c *txnServerCtx, msg *cmn.TransCpyListRangeM
 		)
 		// validate
 		if err := bckTo.Validate(); err != nil {
-			return err
+			return xactID, err
 		}
 		if err := bckFrom.Validate(); err != nil {
-			return err
+			return xactID, err
 		}
 		if cs := fs.GetCapStatus(); cs.Err != nil {
-			return cs.Err
+			return xactID, cs.Err
 		}
 		if err := t.coExists(bckFrom, c.msg.Action); err != nil {
-			return err
+			return xactID, err
 		}
 		bmd := t.owner.bmd.get()
 		if _, present := bmd.Get(bckFrom); !present {
-			return cmn.NewErrBckNotFound(bckFrom.Bck)
+			return xactID, cmn.NewErrBckNotFound(bckFrom.Bck)
 		}
 		// begin
-		custom := &xreg.TransCpyObjsArgs{
-			TransCpyBckArgs: xreg.TransCpyBckArgs{
-				Phase:   cmn.ActBegin,
-				BckFrom: bckFrom,
-				BckTo:   bckTo,
-				DP:      dp,
-				Msg:     &msg.TransCpyBckMsg,
-			},
-			ListRangeMsg: msg.ListRangeMsg,
-		}
+		custom := &xreg.TransCpyObjsArgs{BckFrom: bckFrom, BckTo: bckTo, DP: dp}
 		rns := xreg.RenewTransCpyObjs(t, c.uuid, c.msg.Action /*kind*/, custom)
 		if rns.Err != nil {
-			return rns.Err
+			return xactID, rns.Err
 		}
 		xact := rns.Entry.Get()
-		xtcp := xact.(*xs.XactTransCopyObjs)
-		txn := newTxnTransCpyObjs(c, xtcp)
+		xactID = xact.ID()
+		debug.Assert((!rns.IsRunning() && xactID == c.uuid) || (rns.IsRunning() && xactID == rns.UUID))
+
+		xtco := xact.(*xs.XactTransCopyObjs)
+		txn := newTxnTransCpyObjs(c, bckFrom, xtco, msg)
 		if err := t.transactions.begin(txn); err != nil {
-			return err
+			return xactID, err
 		}
 	case cmn.ActAbort:
-		t.transactions.find(c.uuid, cmn.ActAbort)
+		txn, err := t.transactions.find(c.uuid, cmn.ActAbort)
+		if err == nil {
+			txnTco := txn.(*txnTransCpyObjs)
+			// if _this_ transaction initiated _that_ on-demand
+			if xtco := txnTco.xtco; xtco != nil && xtco.ID() == c.uuid {
+				xactID = xtco.ID()
+				xtco.Abort()
+			}
+		}
 	case cmn.ActCommit:
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
-			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+			return xactID, fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
-		tcp := txn.(*txnTransCpyObjs)
-		if c.query.Get(cmn.URLParamWaitMetasync) != "" {
-			if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
-				tcp.xtcp.TxnAbort()
-				return fmt.Errorf("%s %s: %v", t.si, txn, err)
-			}
-		} else {
-			t.transactions.find(c.uuid, cmn.ActCommit)
-		}
-		custom := tcp.xtcp.Args()
-		debug.Assert(custom.Phase == cmn.ActBegin)
-		custom.Phase = cmn.ActCommit
-		rns := xreg.RenewTransCpyObjs(t, c.uuid, c.msg.Action /*kind*/, tcp.xtcp.Args())
-		if rns.Err != nil {
-			tcp.xtcp.TxnAbort()
-			return rns.Err
-		}
-		xact := rns.Entry.Get()
-		c.addNotif(xact) // notify upon completion
-		xaction.GoRunW(xact)
+		txnTco := txn.(*txnTransCpyObjs)
+		txnTco.xtco.Do(txnTco.msg)
+		xactID = txnTco.xtco.ID()
+		t.transactions.find(c.uuid, cmn.ActCommit)
 	default:
 		debug.Assert(false)
 	}
-	return nil
+	return xactID, nil
 }
 
 //////////////
@@ -699,9 +691,9 @@ func (t *targetrunner) validateECEncode(bck *cluster.Bck, msg *aisMsg) (err erro
 	return
 }
 
-////////////////
+////////////////////////
 // createArchMultiObj //
-////////////////
+////////////////////////
 
 func (t *targetrunner) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, error) {
 	var xactID string
@@ -748,7 +740,7 @@ func (t *targetrunner) createArchMultiObj(c *txnServerCtx) (string /*xaction uui
 		if err := xarch.Begin(archiveMsg); err != nil {
 			return xactID, err
 		}
-		txn := newTxnPutArchive(c, bckFrom, bckTo, xarch, archiveMsg)
+		txn := newTxnPutArchive(c, bckFrom, xarch, archiveMsg)
 		if err := t.transactions.begin(txn); err != nil {
 			return xactID, err
 		}
@@ -757,9 +749,9 @@ func (t *targetrunner) createArchMultiObj(c *txnServerCtx) (string /*xaction uui
 		if err == nil {
 			txnArch := txn.(*txnPutArchive)
 			// if _this_ transaction initiated _that_ on-demand
-			if txnArch.xarch != nil && txnArch.xarch.ID() == c.uuid {
-				xactID = txnArch.xarch.ID()
-				txnArch.xarch.Abort()
+			if xarch := txnArch.xarch; xarch != nil && xarch.ID() == c.uuid {
+				xactID = xarch.ID()
+				xarch.Abort()
 			}
 		}
 	case cmn.ActCommit:

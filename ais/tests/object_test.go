@@ -1444,9 +1444,9 @@ func TestCopyWithRange(t *testing.T) {
 	tlog.Logf("template: [%s]\n", template)
 	xactID, err := api.CopyObjectsRange(baseParams, bckFrom, bckTo, template)
 	tassert.CheckFatal(t, err)
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyObjects, Timeout: waitTimeout}
-	_, err = api.WaitForXaction(baseParams, args)
-	tassert.CheckFatal(t, err)
+
+	wargs := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyObjects}
+	api.WaitForXactionIdle(baseParams, wargs)
 
 	msg := &cmn.SelectMsg{Prefix: "test/"}
 	bckList, err := api.ListObjects(baseParams, bckTo, msg, 0)

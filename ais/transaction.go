@@ -101,21 +101,20 @@ type (
 	}
 	txnTransCpyBucket struct {
 		txnBckBase
-		xtcp *mirror.XactTransCpyBck
+		xtcb *mirror.XactTransCpyBck
 	}
 	txnTransCpyObjs struct {
 		txnBckBase
-		xtcp *xs.XactTransCopyObjs
+		xtco *xs.XactTransCopyObjs
+		msg  *cmn.TransCpyListRangeMsg
 	}
 	txnECEncode struct {
 		txnBckBase
 	}
 	txnPutArchive struct {
 		txnBckBase
-		bckFrom *cluster.Bck
-		bckTo   *cluster.Bck
-		xarch   *xs.XactPutArchive
-		msg     *cmn.ArchiveMsg
+		xarch *xs.XactPutArchive
+		msg   *cmn.ArchiveMsg
 	}
 )
 
@@ -512,30 +511,31 @@ func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnR
 // txnTransCpyBucket //
 ///////////////////////
 
-func newTxnTransCpyBucket(c *txnServerCtx, xtcp *mirror.XactTransCpyBck) (txn *txnTransCpyBucket) {
-	txn = &txnTransCpyBucket{*newTxnBckBase("tcb", *xtcp.Args().BckFrom), xtcp}
+func newTxnTransCpyBucket(c *txnServerCtx, xtcb *mirror.XactTransCpyBck) (txn *txnTransCpyBucket) {
+	txn = &txnTransCpyBucket{*newTxnBckBase("tcb", *xtcb.Args().BckFrom), xtcb}
 	txn.fillFromCtx(c)
 	return
 }
 
 func (txn *txnTransCpyBucket) abort() {
 	txn.txnBckBase.abort()
-	txn.xtcp.TxnAbort()
+	txn.xtcb.TxnAbort()
 }
 
 ///////////////////////
 // txnTransCpyObjs //
 ///////////////////////
 
-func newTxnTransCpyObjs(c *txnServerCtx, xtcp *xs.XactTransCopyObjs) (txn *txnTransCpyObjs) {
-	txn = &txnTransCpyObjs{*newTxnBckBase("tcb", *xtcp.Args().BckFrom), xtcp}
+func newTxnTransCpyObjs(c *txnServerCtx, bckFrom *cluster.Bck, xtco *xs.XactTransCopyObjs,
+	msg *cmn.TransCpyListRangeMsg) (txn *txnTransCpyObjs) {
+	txn = &txnTransCpyObjs{*newTxnBckBase("tco", *bckFrom), xtco, msg}
 	txn.fillFromCtx(c)
 	return
 }
 
 func (txn *txnTransCpyObjs) abort() {
 	txn.txnBckBase.abort()
-	txn.xtcp.TxnAbort()
+	txn.xtco.TxnAbort()
 }
 
 /////////////////////
@@ -554,9 +554,8 @@ func newTxnECEncode(c *txnServerCtx, bck *cluster.Bck) (txn *txnECEncode) {
 // txnPutArchive //
 ///////////////////
 
-func newTxnPutArchive(c *txnServerCtx, bckFrom, bckTo *cluster.Bck, xarch *xs.XactPutArchive,
-	msg *cmn.ArchiveMsg) (txn *txnPutArchive) {
-	txn = &txnPutArchive{*newTxnBckBase("arc", *bckFrom), bckFrom, bckTo, xarch, msg}
+func newTxnPutArchive(c *txnServerCtx, bckFrom *cluster.Bck, xarch *xs.XactPutArchive, msg *cmn.ArchiveMsg) (txn *txnPutArchive) {
+	txn = &txnPutArchive{*newTxnBckBase("arc", *bckFrom), xarch, msg}
 	txn.fillFromCtx(c)
 	return
 }

@@ -20,8 +20,8 @@ func init() {
 	xreg.RegBckXact(&evdFactory{kind: cmn.ActEvictObjects})
 	xreg.RegBckXact(&evdFactory{kind: cmn.ActDeleteObjects})
 	xreg.RegBckXact(&prfFactory{})
-	xreg.RegBckXact(&transCopyObjsFactory{kind: cmn.ActETLObjects})
-	xreg.RegBckXact(&transCopyObjsFactory{kind: cmn.ActCopyObjects})
+	xreg.RegBckXact(&tcoFactory{kind: cmn.ActETLObjects})
+	xreg.RegBckXact(&tcoFactory{kind: cmn.ActCopyObjects})
 
 	xreg.RegBckXact(&olFactory{})
 
