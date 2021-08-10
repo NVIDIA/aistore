@@ -172,13 +172,19 @@ func listBuckets(c *cli.Context, query cmn.QueryBcks) (err error) {
 
 // Lists objects in bucket
 func listObjects(c *cli.Context, bck cmn.Bck) error {
+	prefix := parseStrFlag(c, prefixFlag)
+	listArch := flagIsSet(c, listArchiveFlag)
+	return _listArchObjects(c, bck, prefix, listArch)
+}
+
+// Lists objects in bucket
+func _listArchObjects(c *cli.Context, bck cmn.Bck, prefix string, isArch bool) error {
 	objectListFilter, err := newObjectListFilter(c)
 	if err != nil {
 		return err
 	}
 
 	var (
-		prefix        = parseStrFlag(c, prefixFlag)
 		showUnmatched = flagIsSet(c, showUnmatchedFlag)
 
 		msg = &cmn.SelectMsg{
@@ -189,7 +195,7 @@ func listObjects(c *cli.Context, bck cmn.Bck) error {
 	if flagIsSet(c, cachedFlag) {
 		msg.SetFlag(cmn.SelectCached)
 	}
-	if flagIsSet(c, listArchiveFlag) {
+	if isArch {
 		msg.SetFlag(cmn.SelectArchDir)
 	}
 	props := strings.Split(parseStrFlag(c, objPropsFlag), ",")

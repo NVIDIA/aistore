@@ -51,6 +51,7 @@ const (
 	commandWait      = "wait"
 	commandAlias     = "alias"
 	commandStorage   = "storage"
+	commandArch      = "archive"
 
 	// Common Subcommands
 	// NOTE: second level subcommands are preferably verbs
@@ -130,6 +131,9 @@ const (
 	// Bucket properties subcommands
 	subcmdSetProps   = "set"
 	subcmdResetProps = "reset"
+
+	// Archive subcommands
+	subcmdAppend = "append"
 
 	// Wait subcommands
 	subcmdWaitXaction  = subcmdXaction

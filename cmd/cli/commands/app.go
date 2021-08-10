@@ -198,6 +198,7 @@ func (aisCLI *AISCLI) setupCommands() {
 		helpCommand,
 		advancedCmd,
 		storageCmd,
+		archCmd,
 		aisCLI.getAliasCmd(),
 	}
 
