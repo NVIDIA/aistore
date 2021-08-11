@@ -13,18 +13,17 @@ import (
 )
 
 type (
-	// Defines what to send to a target.
-	LomReaderProvider interface {
-		// Returned func() will be called after reading from reader is done.
+	// data provider
+	DP interface {
 		Reader(lom *LOM) (reader cos.ReadOpenCloser, objMeta cmn.ObjAttrsHolder, err error)
 	}
-	LomReader struct{}
+	LDP struct{}
 )
 
 // interface guard
-var _ LomReaderProvider = (*LomReader)(nil)
+var _ DP = (*LDP)(nil)
 
-func (*LomReader) Reader(lom *LOM) (cos.ReadOpenCloser, cmn.ObjAttrsHolder, error) {
+func (*LDP) Reader(lom *LOM) (cos.ReadOpenCloser, cmn.ObjAttrsHolder, error) {
 	var lomLoadErr, err error
 
 	lom.Lock(false)

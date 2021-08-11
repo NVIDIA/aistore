@@ -10,8 +10,8 @@ import (
 )
 
 func init() {
-	xreg.RegBckXact(&cpyFactory{kind: cmn.ActCopyBck})
-	xreg.RegBckXact(&cpyFactory{kind: cmn.ActETLBck})
+	xreg.RegBckXact(&tcbFactory{kind: cmn.ActCopyBck})
+	xreg.RegBckXact(&tcbFactory{kind: cmn.ActETLBck})
 	xreg.RegBckXact(&mncFactory{})
 	xreg.RegBckXact(&putFactory{})
 }

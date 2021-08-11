@@ -12,23 +12,21 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-type (
-	OfflineDataProvider struct {
-		bckMsg         *cmn.TransCpyBckMsg
-		comm           Communicator
-		requestTimeout time.Duration
-	}
-)
+type OfflineDataProvider struct {
+	tcbMsg         *cmn.TCBMsg
+	comm           Communicator
+	requestTimeout time.Duration
+}
 
 // interface guard
-var _ cluster.LomReaderProvider = (*OfflineDataProvider)(nil)
+var _ cluster.DP = (*OfflineDataProvider)(nil)
 
-func NewOfflineDataProvider(msg *cmn.TransCpyBckMsg, lsnode *cluster.Snode) (*OfflineDataProvider, error) {
+func NewOfflineDataProvider(msg *cmn.TCBMsg, lsnode *cluster.Snode) (*OfflineDataProvider, error) {
 	comm, err := GetCommunicator(msg.ID, lsnode)
 	if err != nil {
 		return nil, err
 	}
-	pr := &OfflineDataProvider{bckMsg: msg, comm: comm}
+	pr := &OfflineDataProvider{tcbMsg: msg, comm: comm}
 	pr.requestTimeout = time.Duration(msg.RequestTimeout)
 	return pr, nil
 }
@@ -56,11 +54,11 @@ func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cmn
 	if err != nil {
 		return nil, nil, err
 	}
-	om := &cmn.ObjAttrs{
+	oah := &cmn.ObjAttrs{
 		Size:  r.Size(),
 		Ver:   "",            // after ETL a new object
 		Cksum: cos.NoneCksum, // TODO: checksum
 		Atime: lom.AtimeUnix(),
 	}
-	return cos.NopOpener(r), om, nil
+	return cos.NopOpener(r), oah, nil
 }

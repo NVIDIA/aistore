@@ -57,7 +57,7 @@ func EvictRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) 
 }
 
 func CopyObjectsRange(baseParams BaseParams, fromBck, toBck cmn.Bck, rng string) (xactID string, err error) {
-	cpyRangeMsg := cmn.TransCpyListRangeMsg{ListRangeMsg: cmn.ListRangeMsg{Template: rng}, TransCpyBckMsg: cmn.TransCpyBckMsg{}}
+	cpyRangeMsg := cmn.TCObjsMsg{ListRangeMsg: cmn.ListRangeMsg{Template: rng}, TCBMsg: cmn.TCBMsg{}}
 	baseParams.Method = http.MethodPost
 	q := cmn.AddBckToQuery(nil, fromBck)
 	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.URLParamBucketTo)

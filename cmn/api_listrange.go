@@ -28,7 +28,7 @@ type (
 		InclBckName      bool `json:"incbn"` // include source bucket name, e.g. srcbck/obj => dstbck/arch.tar as srcbck/obj
 	}
 
-	// See also: TransCpyListRangeMsg
+	// See also: TCObjsMsg
 )
 
 // NOTE: empty ListRangeMsg{} corresponds to (range = entire bucket)

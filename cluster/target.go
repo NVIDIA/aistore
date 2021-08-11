@@ -106,7 +106,7 @@ type (
 		ObjNameTo string
 		Buf       []byte
 		DM        DataMover
-		DP        LomReaderProvider // optional
+		DP        DP // optional
 		DryRun    bool
 	}
 	SendToParams struct {

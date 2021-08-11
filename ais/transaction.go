@@ -99,14 +99,14 @@ type (
 		bckFrom *cluster.Bck
 		bckTo   *cluster.Bck
 	}
-	txnTransCpyBucket struct {
+	txnTCB struct {
 		txnBckBase
-		xtcb *mirror.XactTransCpyBck
+		xtcb *mirror.XactTCB
 	}
-	txnTransCpyObjs struct {
+	txnTCObjs struct {
 		txnBckBase
-		xtco *xs.XactTransCopyObjs
-		msg  *cmn.TransCpyListRangeMsg
+		xtco *xs.XactTCObjs
+		msg  *cmn.TCObjsMsg
 	}
 	txnECEncode struct {
 		txnBckBase
@@ -125,8 +125,8 @@ var (
 	_ txn = (*txnMakeNCopies)(nil)
 	_ txn = (*txnSetBucketProps)(nil)
 	_ txn = (*txnRenameBucket)(nil)
-	_ txn = (*txnTransCpyBucket)(nil)
-	_ txn = (*txnTransCpyObjs)(nil)
+	_ txn = (*txnTCB)(nil)
+	_ txn = (*txnTCObjs)(nil)
 	_ txn = (*txnECEncode)(nil)
 )
 
@@ -408,7 +408,7 @@ func (txn *txnBckBase) abort() {
 	glog.Infof("aborted: %s", txn)
 }
 
-// NOTE: not keeping locks for the duration; see also: txnTransCpyBucket
+// NOTE: not keeping locks for the duration; see also: txnTCB
 func (txn *txnBckBase) commit() { txn.cleanup() }
 
 func (txn *txnBckBase) String() string {
@@ -507,40 +507,40 @@ func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnR
 	return
 }
 
-///////////////////////
-// txnTransCpyBucket //
-///////////////////////
+////////////
+// txnTCB //
+////////////
 
-func newTxnTransCpyBucket(c *txnServerCtx, xtcb *mirror.XactTransCpyBck) (txn *txnTransCpyBucket) {
-	txn = &txnTransCpyBucket{*newTxnBckBase("tcb", *xtcb.Args().BckFrom), xtcb}
+func newTxnTCB(c *txnServerCtx, xtcb *mirror.XactTCB) (txn *txnTCB) {
+	txn = &txnTCB{*newTxnBckBase("tcb", *xtcb.Args().BckFrom), xtcb}
 	txn.fillFromCtx(c)
 	return
 }
 
-func (txn *txnTransCpyBucket) abort() {
+func (txn *txnTCB) abort() {
 	txn.txnBckBase.abort()
 	txn.xtcb.TxnAbort()
 }
 
-///////////////////////
-// txnTransCpyObjs //
-///////////////////////
+///////////////
+// txnTCObjs //
+///////////////
 
-func newTxnTransCpyObjs(c *txnServerCtx, bckFrom *cluster.Bck, xtco *xs.XactTransCopyObjs,
-	msg *cmn.TransCpyListRangeMsg) (txn *txnTransCpyObjs) {
-	txn = &txnTransCpyObjs{*newTxnBckBase("tco", *bckFrom), xtco, msg}
+func newTxnTCObjs(c *txnServerCtx, bckFrom *cluster.Bck, xtco *xs.XactTCObjs,
+	msg *cmn.TCObjsMsg) (txn *txnTCObjs) {
+	txn = &txnTCObjs{*newTxnBckBase("tco", *bckFrom), xtco, msg}
 	txn.fillFromCtx(c)
 	return
 }
 
-func (txn *txnTransCpyObjs) abort() {
+func (txn *txnTCObjs) abort() {
 	txn.txnBckBase.abort()
 	txn.xtco.TxnAbort()
 }
 
-/////////////////////
-// txnECEncode     //
-/////////////////////
+/////////////////
+// txnECEncode //
+/////////////////
 
 func newTxnECEncode(c *txnServerCtx, bck *cluster.Bck) (txn *txnECEncode) {
 	txn = &txnECEncode{

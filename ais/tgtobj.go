@@ -979,7 +979,7 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 	debug.Assert(coi.DP == nil)
 	if src.Bck().IsRemote() || coi.BckTo.IsRemote() {
 		// There will be no logic to create local copies etc, we can simply use copyReader
-		coi.DP = &cluster.LomReader{}
+		coi.DP = &cluster.LDP{}
 		return coi.copyReader(src, objNameTo)
 	}
 	si := coi.t.si

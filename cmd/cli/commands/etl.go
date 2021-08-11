@@ -338,7 +338,7 @@ func etlBucketHandler(c *cli.Context) (err error) {
 		return fmt.Errorf("cannot ETL bucket %q onto itself", fromBck)
 	}
 
-	msg := &cmn.TransCpyBckMsg{
+	msg := &cmn.TCBMsg{
 		ID: id,
 		CopyBckMsg: cmn.CopyBckMsg{
 			Prefix: parseStrFlag(c, cpBckPrefixFlag),

@@ -237,7 +237,7 @@ func Init(baseParams api.BaseParams, name, comm string) (string, error) {
 	return api.ETLInitSpec(baseParams, spec)
 }
 
-func ETLBucket(t *testing.T, baseParams api.BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.TransCpyBckMsg) string {
+func ETLBucket(t *testing.T, baseParams api.BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.TCBMsg) string {
 	xactID, err := api.ETLBucket(baseParams, fromBck, toBck, bckMsg)
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() {

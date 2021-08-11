@@ -97,8 +97,8 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		err = t.renameBucket(c)
 	case cmn.ActCopyBck, cmn.ActETLBck:
 		var (
-			dp    cluster.LomReaderProvider
-			tcmsg = &cmn.TransCpyBckMsg{}
+			dp    cluster.DP
+			tcmsg = &cmn.TCBMsg{}
 		)
 		if err := cos.MorphMarshal(c.msg.Value, tcmsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, c.msg.Value, err)
@@ -111,12 +111,12 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		err = t.transCpyBck(c, tcmsg, dp)
+		err = t.tcb(c, tcmsg, dp)
 	case cmn.ActCopyObjects, cmn.ActETLObjects:
 		var (
 			xactID  string
-			dp      cluster.LomReaderProvider
-			tclrmsg = &cmn.TransCpyListRangeMsg{}
+			dp      cluster.DP
+			tclrmsg = &cmn.TCObjsMsg{}
 		)
 		if err := cos.MorphMarshal(c.msg.Value, tclrmsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, c.msg.Value, err)
@@ -124,12 +124,12 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if msg.Action == cmn.ActETLObjects {
 			var err error
-			if dp, err = t.etlDP(&tclrmsg.TransCpyBckMsg); err != nil {
+			if dp, err = t.etlDP(&tclrmsg.TCBMsg); err != nil {
 				t.writeErr(w, r, err)
 				return
 			}
 		}
-		xactID, err = t.transCpyObjs(c, tclrmsg, dp)
+		xactID, err = t.tcobjs(c, tclrmsg, dp)
 		if xactID != "" {
 			w.Header().Set(cmn.HdrXactionID, xactID)
 		}
@@ -459,7 +459,7 @@ func (t *targetrunner) validateBckRenTxn(bckFrom, bckTo *cluster.Bck, msg *aisMs
 	return nil
 }
 
-func (t *targetrunner) etlDP(msg *cmn.TransCpyBckMsg) (dp cluster.LomReaderProvider, err error) {
+func (t *targetrunner) etlDP(msg *cmn.TCBMsg) (dp cluster.DP, err error) {
 	if err = k8s.Detect(); err != nil {
 		return
 	}
@@ -472,7 +472,7 @@ func (t *targetrunner) etlDP(msg *cmn.TransCpyBckMsg) (dp cluster.LomReaderProvi
 }
 
 // common for both bucket copy and bucket transform - does the heavy lifting
-func (t *targetrunner) transCpyBck(c *txnServerCtx, msg *cmn.TransCpyBckMsg, dp cluster.LomReaderProvider) error {
+func (t *targetrunner) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) error {
 	if err := c.bck.Init(t.owner.bmd); err != nil {
 		return err
 	}
@@ -513,14 +513,14 @@ func (t *targetrunner) transCpyBck(c *txnServerCtx, msg *cmn.TransCpyBckMsg, dp 
 			}
 		}
 		// begin
-		custom := &xreg.TransCpyBckArgs{Phase: cmn.ActBegin, BckFrom: bckFrom, BckTo: bckTo, DP: dp, Msg: msg}
-		rns := xreg.RenewTransCpyBck(t, c.uuid, c.msg.Action /*kind*/, custom)
+		custom := &xreg.TCBArgs{Phase: cmn.ActBegin, BckFrom: bckFrom, BckTo: bckTo, DP: dp, Msg: msg}
+		rns := xreg.RenewTCB(t, c.uuid, c.msg.Action /*kind*/, custom)
 		if rns.Err != nil {
 			return rns.Err
 		}
 		xact := rns.Entry.Get()
-		xtcb := xact.(*mirror.XactTransCpyBck)
-		txn := newTxnTransCpyBucket(c, xtcb)
+		xtcb := xact.(*mirror.XactTCB)
+		txn := newTxnTCB(c, xtcb)
 		if err := t.transactions.begin(txn); err != nil {
 			if nlpTo != nil {
 				nlpTo.Unlock()
@@ -539,7 +539,7 @@ func (t *targetrunner) transCpyBck(c *txnServerCtx, msg *cmn.TransCpyBckMsg, dp 
 		if err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
-		txnTcb := txn.(*txnTransCpyBucket)
+		txnTcb := txn.(*txnTCB)
 		if c.query.Get(cmn.URLParamWaitMetasync) != "" {
 			if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 				txnTcb.xtcb.TxnAbort()
@@ -551,7 +551,7 @@ func (t *targetrunner) transCpyBck(c *txnServerCtx, msg *cmn.TransCpyBckMsg, dp 
 		custom := txnTcb.xtcb.Args()
 		debug.Assert(custom.Phase == cmn.ActBegin)
 		custom.Phase = cmn.ActCommit
-		rns := xreg.RenewTransCpyBck(t, c.uuid, c.msg.Action /*kind*/, txnTcb.xtcb.Args())
+		rns := xreg.RenewTCB(t, c.uuid, c.msg.Action /*kind*/, txnTcb.xtcb.Args())
 		if rns.Err != nil {
 			txnTcb.xtcb.TxnAbort()
 			return rns.Err
@@ -565,9 +565,8 @@ func (t *targetrunner) transCpyBck(c *txnServerCtx, msg *cmn.TransCpyBckMsg, dp 
 	return nil
 }
 
-// common for both bucket copy and transform multiple objects
-func (t *targetrunner) transCpyObjs(c *txnServerCtx, msg *cmn.TransCpyListRangeMsg,
-	dp cluster.LomReaderProvider) (string, error) {
+func (t *targetrunner) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg,
+	dp cluster.DP) (string, error) {
 	var xactID string
 	if err := c.bck.Init(t.owner.bmd); err != nil {
 		return xactID, err
@@ -596,8 +595,8 @@ func (t *targetrunner) transCpyObjs(c *txnServerCtx, msg *cmn.TransCpyListRangeM
 			return xactID, cmn.NewErrBckNotFound(bckFrom.Bck)
 		}
 		// begin
-		custom := &xreg.TransCpyObjsArgs{BckFrom: bckFrom, BckTo: bckTo, DP: dp}
-		rns := xreg.RenewTransCpyObjs(t, c.uuid, c.msg.Action /*kind*/, custom)
+		custom := &xreg.TCObjsArgs{BckFrom: bckFrom, BckTo: bckTo, DP: dp}
+		rns := xreg.RenewTCObjs(t, c.uuid, c.msg.Action /*kind*/, custom)
 		if rns.Err != nil {
 			return xactID, rns.Err
 		}
@@ -605,15 +604,15 @@ func (t *targetrunner) transCpyObjs(c *txnServerCtx, msg *cmn.TransCpyListRangeM
 		xactID = xact.ID()
 		debug.Assert((!rns.IsRunning() && xactID == c.uuid) || (rns.IsRunning() && xactID == rns.UUID))
 
-		xtco := xact.(*xs.XactTransCopyObjs)
-		txn := newTxnTransCpyObjs(c, bckFrom, xtco, msg)
+		xtco := xact.(*xs.XactTCObjs)
+		txn := newTxnTCObjs(c, bckFrom, xtco, msg)
 		if err := t.transactions.begin(txn); err != nil {
 			return xactID, err
 		}
 	case cmn.ActAbort:
 		txn, err := t.transactions.find(c.uuid, cmn.ActAbort)
 		if err == nil {
-			txnTco := txn.(*txnTransCpyObjs)
+			txnTco := txn.(*txnTCObjs)
 			// if _this_ transaction initiated _that_ on-demand
 			if xtco := txnTco.xtco; xtco != nil && xtco.ID() == c.uuid {
 				xactID = xtco.ID()
@@ -625,7 +624,7 @@ func (t *targetrunner) transCpyObjs(c *txnServerCtx, msg *cmn.TransCpyListRangeM
 		if err != nil {
 			return xactID, fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
-		txnTco := txn.(*txnTransCpyObjs)
+		txnTco := txn.(*txnTCObjs)
 		txnTco.xtco.Do(txnTco.msg)
 		xactID = txnTco.xtco.ID()
 		t.transactions.find(c.uuid, cmn.ActCommit)

@@ -77,7 +77,7 @@ type (
 		DryRun bool   `json:"dry_run"` // Don't perform any PUT
 	}
 
-	TransCpyBckMsg struct {
+	TCBMsg struct {
 		// Resulting objects names will have this extension. Warning: if in a source bucket exist two objects with the
 		// same base name, but different extension, specifying this field might cause object overriding. This is because
 		// of resulting name conflict.
@@ -90,9 +90,9 @@ type (
 		CopyBckMsg
 	}
 
-	TransCpyListRangeMsg struct {
+	TCObjsMsg struct {
 		ListRangeMsg
-		TransCpyBckMsg
+		TCBMsg
 	}
 
 	// MountpathList contains two lists:
@@ -581,7 +581,7 @@ func NewBucketPropsToUpdate(nvs cos.SimpleKVs) (props *BucketPropsToUpdate, err 
 	return
 }
 
-func (msg *TransCpyBckMsg) Validate() error {
+func (msg *TCBMsg) Validate() error {
 	if msg.ID == "" {
 		return ErrETLMissingUUID
 	}
@@ -589,7 +589,7 @@ func (msg *TransCpyBckMsg) Validate() error {
 }
 
 // Replace extension and add suffix if provided.
-func (msg *TransCpyBckMsg) ToName(name string) string {
+func (msg *TCBMsg) ToName(name string) string {
 	if msg == nil {
 		debug.AssertMsg(false, name) // TODO -- FIXME: remove
 		return name

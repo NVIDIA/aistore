@@ -30,18 +30,18 @@ const (
 )
 
 type (
-	cpyFactory struct {
+	tcbFactory struct {
 		xreg.RenewBase
-		xact  *XactTransCpyBck
+		xact  *XactTCB
 		kind  string
 		phase string // (see "transition")
-		args  *xreg.TransCpyBckArgs
+		args  *xreg.TCBArgs
 	}
-	XactTransCpyBck struct {
+	XactTCB struct {
 		xaction.XactBckJog
 		t    cluster.Target
 		dm   *bundle.DataMover
-		args xreg.TransCpyBckArgs
+		args xreg.TCBArgs
 		// starting up
 		wg sync.WaitGroup
 		// finishing
@@ -53,8 +53,8 @@ const etlBucketParallelCnt = 2
 
 // interface guard
 var (
-	_ cluster.Xact   = (*XactTransCpyBck)(nil)
-	_ xreg.Renewable = (*cpyFactory)(nil)
+	_ cluster.Xact   = (*XactTCB)(nil)
+	_ xreg.Renewable = (*tcbFactory)(nil)
 )
 
 ///////////////////////////////////
@@ -80,23 +80,23 @@ func freeCpObjParams(a *cluster.CopyObjectParams) {
 }
 
 ////////////////
-// cpyFactory //
+// tcbFactory //
 ////////////////
 
-func (e *cpyFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
-	custom := args.Custom.(*xreg.TransCpyBckArgs)
-	p := &cpyFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: e.kind, phase: custom.Phase, args: custom}
+func (e *tcbFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
+	custom := args.Custom.(*xreg.TCBArgs)
+	p := &tcbFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: e.kind, phase: custom.Phase, args: custom}
 	return p
 }
 
-func (e *cpyFactory) Start() error {
+func (e *tcbFactory) Start() error {
 	var (
 		config    = cmn.GCO.Get()
 		sizePDU   int32
 		slab, err = e.T.MMSA().GetSlab(memsys.MaxPageSlabSize)
 	)
 	cos.AssertNoErr(err)
-	e.xact = newXactTransCpyBck(e, slab)
+	e.xact = newXactTCB(e, slab)
 	if e.kind == cmn.ActETLBck {
 		sizePDU = memsys.DefaultBufSize
 	}
@@ -110,7 +110,7 @@ func (e *cpyFactory) Start() error {
 	return e.newDM(&config.Rebalance, e.UUID(), sizePDU)
 }
 
-func (e *cpyFactory) newDM(rebcfg *cmn.RebalanceConf, uuid string, sizePDU int32) error {
+func (e *tcbFactory) newDM(rebcfg *cmn.RebalanceConf, uuid string, sizePDU int32) error {
 	const trname = "transcpy" // copy&transform transport endpoint prefix
 	dmExtra := bundle.Extra{
 		RecvAck:     nil,                    // NOTE: no ACKs
@@ -129,11 +129,11 @@ func (e *cpyFactory) newDM(rebcfg *cmn.RebalanceConf, uuid string, sizePDU int32
 	return nil
 }
 
-func (e *cpyFactory) Kind() string      { return e.kind }
-func (e *cpyFactory) Get() cluster.Xact { return e.xact }
+func (e *tcbFactory) Kind() string      { return e.kind }
+func (e *tcbFactory) Get() cluster.Xact { return e.xact }
 
-func (e *cpyFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
-	prev := prevEntry.(*cpyFactory)
+func (e *tcbFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
+	prev := prevEntry.(*tcbFactory)
 	if e.UUID() != prev.UUID() {
 		err = fmt.Errorf("%s is currently running - not starting new %q", prevEntry.Get(), e.Str(e.Kind()))
 		return
@@ -146,18 +146,18 @@ func (e *cpyFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 	return
 }
 
-/////////////////////
-// XactTransCpyBck //
-/////////////////////
+/////////////
+// XactTCB //
+/////////////
 
-func (r *XactTransCpyBck) Args() *xreg.TransCpyBckArgs { return &r.args }
+func (r *XactTCB) Args() *xreg.TCBArgs { return &r.args }
 
-func (r *XactTransCpyBck) String() string {
+func (r *XactTCB) String() string {
 	return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.args.BckFrom)
 }
 
 // limited pre-run abort
-func (r *XactTransCpyBck) TxnAbort() {
+func (r *XactTCB) TxnAbort() {
 	err := cmn.NewAbortedError(r.String())
 	if r.dm.IsOpen() {
 		r.dm.Close(err)
@@ -167,12 +167,12 @@ func (r *XactTransCpyBck) TxnAbort() {
 }
 
 //
-// XactTransCpyBck copies one bucket _into_ another with or without transformation.
+// XactTCB copies one bucket _into_ another with or without transformation.
 // args.DP.Reader() is the reader to receive transformed bytes; when nil we do a plain bucket copy.
 //
-func newXactTransCpyBck(e *cpyFactory, slab *memsys.Slab) (r *XactTransCpyBck) {
+func newXactTCB(e *tcbFactory, slab *memsys.Slab) (r *XactTCB) {
 	var parallel int
-	r = &XactTransCpyBck{t: e.T, args: *e.args}
+	r = &XactTCB{t: e.T, args: *e.args}
 	if e.kind == cmn.ActETLBck {
 		parallel = etlBucketParallelCnt // TODO: optimize with respect to disk bw and transforming computation
 	}
@@ -190,9 +190,9 @@ func newXactTransCpyBck(e *cpyFactory, slab *memsys.Slab) (r *XactTransCpyBck) {
 	return
 }
 
-func (r *XactTransCpyBck) WaitRunning() { r.wg.Wait() }
+func (r *XactTCB) WaitRunning() { r.wg.Wait() }
 
-func (r *XactTransCpyBck) Run(wg *sync.WaitGroup) {
+func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	r.dm.SetXact(r)
 	r.dm.Open()
 	wg.Done()
@@ -227,7 +227,7 @@ func (r *XactTransCpyBck) Run(wg *sync.WaitGroup) {
 	r.Finish(err)
 }
 
-func (r *XactTransCpyBck) copyObject(lom *cluster.LOM, buf []byte) (err error) {
+func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 	var size int64
 	objNameTo := r.args.Msg.ToName(lom.ObjName)
 	params := allocCpObjParams()
@@ -259,7 +259,7 @@ ret:
 	return
 }
 
-func (r *XactTransCpyBck) recv(hdr transport.ObjHdr, objReader io.Reader, err error) {
+func (r *XactTCB) recv(hdr transport.ObjHdr, objReader io.Reader, err error) {
 	defer transport.FreeRecv(objReader)
 	if err != nil && !cos.IsEOF(err) {
 		glog.Error(err)

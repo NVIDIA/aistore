@@ -208,7 +208,7 @@ func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, fileS
 	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
 	tlog.Logf("Start offline ETL %q\n", uuid)
-	xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &cmn.TransCpyBckMsg{
+	xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &cmn.TCBMsg{
 		ID:             uuid,
 		RequestTimeout: cos.Duration(requestTimeout),
 	})
@@ -556,7 +556,7 @@ func TestETLBucketDryRun(t *testing.T) {
 
 	tlog.Logf("Start offline ETL %q\n", uuid)
 	xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo,
-		&cmn.TransCpyBckMsg{ID: uuid, CopyBckMsg: cmn.CopyBckMsg{DryRun: true}})
+		&cmn.TCBMsg{ID: uuid, CopyBckMsg: cmn.CopyBckMsg{DryRun: true}})
 	tassert.CheckFatal(t, err)
 
 	args := api.XactReqArgs{ID: xactID, Timeout: time.Minute}

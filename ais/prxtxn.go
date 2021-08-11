@@ -466,9 +466,9 @@ func _renameBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 	return nil
 }
 
-// copy-bucket/offline ETL:
+// transform (or simply copy) list or range of objects, or an entire bucket
 // { confirm existence -- begin -- conditional metasync -- start waiting for operation done -- commit }
-func (p *proxyrunner) transCpy(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRun bool) (xactID string, err error) {
+func (p *proxyrunner) transformCopy(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRun bool) (xactID string, err error) {
 	// 1. confirm existence
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {

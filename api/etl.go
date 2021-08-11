@@ -69,7 +69,7 @@ func ETLObject(baseParams BaseParams, id string, bck cmn.Bck, objName string, w 
 	return
 }
 
-func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.TransCpyBckMsg) (xactID string, err error) {
+func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.TCBMsg) (xactID string, err error) {
 	if err = toBck.Validate(); err != nil {
 		return
 	}

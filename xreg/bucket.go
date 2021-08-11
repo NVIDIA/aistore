@@ -17,18 +17,18 @@ type (
 		Params *cmn.ActValPromote
 	}
 
-	TransCpyBckArgs struct {
+	TCBArgs struct {
 		Phase   string
 		BckFrom *cluster.Bck
 		BckTo   *cluster.Bck
-		DP      cluster.LomReaderProvider
-		Msg     *cmn.TransCpyBckMsg
+		DP      cluster.DP
+		Msg     *cmn.TCBMsg
 	}
 
-	TransCpyObjsArgs struct {
+	TCObjsArgs struct {
 		BckFrom *cluster.Bck
 		BckTo   *cluster.Bck
-		DP      cluster.LomReaderProvider
+		DP      cluster.DP
 	}
 
 	ECEncodeArgs struct {
@@ -147,19 +147,19 @@ func (r *registry) renewPutMirror(t cluster.Target, lom *cluster.LOM) RenewRes {
 	return r.renewBucketXact(cmn.ActPutCopies, lom.Bck(), Args{T: t, Custom: lom})
 }
 
-func RenewTransCpyBck(t cluster.Target, uuid, kind string, custom *TransCpyBckArgs) RenewRes {
-	return defaultReg.renewTransCpyBck(t, uuid, kind, custom)
+func RenewTCB(t cluster.Target, uuid, kind string, custom *TCBArgs) RenewRes {
+	return defaultReg.renewTCB(t, uuid, kind, custom)
 }
 
-func RenewTransCpyObjs(t cluster.Target, uuid, kind string, custom *TransCpyObjsArgs) RenewRes {
-	return defaultReg.renewTransCpyObjs(t, uuid, kind, custom)
+func RenewTCObjs(t cluster.Target, uuid, kind string, custom *TCObjsArgs) RenewRes {
+	return defaultReg.renewTCObjs(t, uuid, kind, custom)
 }
 
-func (r *registry) renewTransCpyBck(t cluster.Target, uuid, kind string, custom *TransCpyBckArgs) RenewRes {
+func (r *registry) renewTCB(t cluster.Target, uuid, kind string, custom *TCBArgs) RenewRes {
 	return r.renewBucketXact(kind, custom.BckTo /*NOTE: to not from*/, Args{t, uuid, custom})
 }
 
-func (r *registry) renewTransCpyObjs(t cluster.Target, uuid, kind string, custom *TransCpyObjsArgs) RenewRes {
+func (r *registry) renewTCObjs(t cluster.Target, uuid, kind string, custom *TCObjsArgs) RenewRes {
 	return r.renewBucketXact(kind, custom.BckFrom, Args{t, uuid, custom})
 }
 

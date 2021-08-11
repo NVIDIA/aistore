@@ -991,7 +991,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		w.Write([]byte(xactID))
 	case cmn.ActCopyBck, cmn.ActETLBck, cmn.ActCopyObjects, cmn.ActETLObjects:
 		var (
-			tcmsg      = &cmn.TransCpyBckMsg{}
+			tcmsg      = &cmn.TCBMsg{}
 			bckTo      *cluster.Bck
 			tryOnlyRem bool // whether non-existing bckTo must be remote (see also xaction.XactsDtor)
 		)
@@ -1015,12 +1015,12 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			tcmsg.Prefix = cpyBckMsg.Prefix
 		case cmn.ActCopyObjects, cmn.ActETLObjects:
 			tryOnlyRem = true
-			tclrmsg := &cmn.TransCpyListRangeMsg{}
+			tclrmsg := &cmn.TCObjsMsg{}
 			if err = cos.MorphMarshal(msg.Value, tclrmsg); err != nil {
 				p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 				return
 			}
-			tcmsg = &tclrmsg.TransCpyBckMsg
+			tcmsg = &tclrmsg.TCBMsg
 		}
 		userBckTo, err := newBckFromQueryUname(query, cmn.URLParamBucketTo, true /*required*/)
 		if err != nil {
@@ -1058,7 +1058,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		glog.Infof("%s bucket %s => %s", msg.Action, bck, bckTo)
 
 		var xactID string
-		if xactID, err = p.transCpy(bck, bckTo, msg, tcmsg.DryRun); err != nil {
+		if xactID, err = p.transformCopy(bck, bckTo, msg, tcmsg.DryRun); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}

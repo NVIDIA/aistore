@@ -28,15 +28,15 @@ import (
 type (
 	tcoFactory struct {
 		xreg.RenewBase
-		xact *XactTransCopyObjs
+		xact *XactTCObjs
 		kind string
-		args *xreg.TransCpyObjsArgs
+		args *xreg.TCObjsArgs
 	}
-	XactTransCopyObjs struct {
+	XactTCObjs struct {
 		xaction.DemandBase
 		t       cluster.Target
-		args    *xreg.TransCpyObjsArgs
-		workCh  chan *cmn.TransCpyListRangeMsg
+		args    *xreg.TCObjsArgs
+		workCh  chan *cmn.TCObjsMsg
 		config  *cmn.Config
 		dm      *bundle.DataMover
 		pending struct { // TODO -- FIXME: remove
@@ -45,8 +45,8 @@ type (
 		}
 	}
 	tcowi struct {
-		r   *XactTransCopyObjs
-		msg *cmn.TransCpyListRangeMsg
+		r   *XactTCObjs
+		msg *cmn.TCObjsMsg
 		// finishing
 		refc atomic.Int32
 	}
@@ -54,7 +54,7 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact   = (*XactTransCopyObjs)(nil)
+	_ cluster.Xact   = (*XactTCObjs)(nil)
 	_ xreg.Renewable = (*tcoFactory)(nil)
 )
 
@@ -64,7 +64,7 @@ var (
 
 func (p *tcoFactory) New(args xreg.Args, fromBck *cluster.Bck) xreg.Renewable {
 	np := &tcoFactory{RenewBase: xreg.RenewBase{Args: args, Bck: fromBck}, kind: p.kind}
-	np.args = args.Custom.(*xreg.TransCpyObjsArgs)
+	np.args = args.Custom.(*xreg.TCObjsArgs)
 	return np
 }
 
@@ -73,9 +73,9 @@ func (p *tcoFactory) Start() error {
 		config      = cmn.GCO.Get()
 		totallyIdle = config.Timeout.SendFile.D()
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
-		workCh      = make(chan *cmn.TransCpyListRangeMsg, maxNumInParallel)
+		workCh      = make(chan *cmn.TCObjsMsg, maxNumInParallel)
 	)
-	r := &XactTransCopyObjs{t: p.T, args: p.args, workCh: workCh, config: config}
+	r := &XactTCObjs{t: p.T, args: p.args, workCh: workCh, config: config}
 	r.pending.m = make(map[string]*tcowi, maxNumInParallel)
 	p.xact = r
 	r.DemandBase.Init(p.UUID(), p.Kind(), p.Bck, totallyIdle, likelyIdle)
@@ -118,15 +118,15 @@ func (p *tcoFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 }
 
 ///////////////////////
-// XactTransCopyObjs //
+// XactTCObjs //
 ///////////////////////
 
-func (r *XactTransCopyObjs) Do(msg *cmn.TransCpyListRangeMsg) {
+func (r *XactTCObjs) Do(msg *cmn.TCObjsMsg) {
 	r.IncPending()
 	r.workCh <- msg
 }
 
-func (r *XactTransCopyObjs) Run(wg *sync.WaitGroup) {
+func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 	var err error
 	glog.Infoln(r.String())
 	wg.Done()
@@ -194,7 +194,7 @@ func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) (err error) {
 	return
 }
 
-func (r *XactTransCopyObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) {
+func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) {
 	defer transport.FreeRecv(objReader)
 	if err != nil && !cos.IsEOF(err) {
 		glog.Error(err)
@@ -230,12 +230,12 @@ func (r *XactTransCopyObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err 
 	}
 }
 
-func (r *XactTransCopyObjs) String() string {
+func (r *XactTCObjs) String() string {
 	return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.args.BckFrom)
 }
 
 // limited pre-run abort
-func (r *XactTransCopyObjs) TxnAbort() {
+func (r *XactTCObjs) TxnAbort() {
 	err := cmn.NewAbortedError(r.String())
 	if r.dm.IsOpen() {
 		r.dm.Close(err)
