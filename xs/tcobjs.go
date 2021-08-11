@@ -39,7 +39,7 @@ type (
 		workCh  chan *cmn.TCObjsMsg
 		config  *cmn.Config
 		dm      *bundle.DataMover
-		pending struct { // TODO -- FIXME: remove
+		pending struct {
 			sync.RWMutex
 			m map[string]*tcowi
 		}

@@ -467,8 +467,7 @@ func (t *targetrunner) etlDP(msg *cmn.TCBMsg) (dp cluster.DP, err error) {
 		err = cmn.ErrETLMissingUUID
 		return
 	}
-	dp, err = etl.NewOfflineDataProvider(msg, t.si)
-	return
+	return etl.NewOfflineDataProvider(msg, t.si)
 }
 
 // common for both bucket copy and bucket transform - does the heavy lifting
@@ -625,7 +624,7 @@ func (t *targetrunner) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg,
 			return xactID, fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
 		txnTco := txn.(*txnTCObjs)
-		txnTco.xtco.Do(txnTco.msg)
+		txnTco.xtco.Do(txnTco.msg) // TODO -- FIXME c.uuid
 		xactID = txnTco.xtco.ID()
 		t.transactions.find(c.uuid, cmn.ActCommit)
 	default:
@@ -854,7 +853,7 @@ func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase
 			return c, err
 		}
 	}
-	c.bckTo, err = newBckFromQueryUname(query, cmn.URLParamBucketTo, false /*required*/)
+	c.bckTo, err = newBckFromQueryUname(query, false /*required*/)
 	if err != nil {
 		return c, err
 	}

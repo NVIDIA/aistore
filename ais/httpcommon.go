@@ -2283,11 +2283,11 @@ func newQueryBcksFromQuery(bckName string, query url.Values) (cmn.QueryBcks, err
 	return bck, nil
 }
 
-func newBckFromQueryUname(query url.Values, uparam string, required bool) (*cluster.Bck, error) {
-	uname := query.Get(uparam)
+func newBckFromQueryUname(query url.Values, required bool) (*cluster.Bck, error) {
+	uname := query.Get(cmn.URLParamBucketTo)
 	if uname == "" {
 		if required {
-			return nil, fmt.Errorf("missing %q query parameter", uparam)
+			return nil, fmt.Errorf("missing %q query parameter", cmn.URLParamBucketTo)
 		}
 		return nil, nil
 	}

@@ -466,23 +466,21 @@ func _renameBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 	return nil
 }
 
-// transform (or simply copy) list or range of objects, or an entire bucket
+// transform (or simply copy) bucket to another bucket
 // { confirm existence -- begin -- conditional metasync -- start waiting for operation done -- commit }
-func (p *proxyrunner) transformCopy(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRun bool) (xactID string, err error) {
+func (p *proxyrunner) tcb(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRun bool) (xactID string, err error) {
 	// 1. confirm existence
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
 		err = cmn.NewErrBckNotFound(bckFrom.Bck)
 		return
 	}
-
 	// 2. begin
 	var (
 		waitmsync = !dryRun
 		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
 	)
 	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.URLParamBucketTo)
-
 	results := c.bcast(cmn.ActBegin, c.timeout.netw)
 	for _, res := range results {
 		if res.err == nil {
@@ -526,9 +524,40 @@ func (p *proxyrunner) transformCopy(bckFrom, bckTo *cluster.Bck, msg *cmn.Action
 
 	// 5. commit
 	_ = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
-	if xactID == "" { // TODO -- FIXME consistent assignment vs archive
-		xactID = c.uuid
+	xactID = c.uuid
+	return
+}
+
+// transform or copy a list or a range of objects
+func (p *proxyrunner) tcobjs(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
+	// 1. confirm existence
+	bmd := p.owner.bmd.get()
+	if _, present := bmd.Get(bckFrom); !present {
+		err = cmn.NewErrBckNotFound(bckFrom.Bck)
+		return
 	}
+	// 2. begin
+	var (
+		waitmsync = false
+		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
+	)
+	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.URLParamBucketTo)
+	results := c.bcast(cmn.ActBegin, c.timeout.netw)
+	for _, res := range results {
+		if res.err == nil {
+			if xactID == "" {
+				xactID = res.header.Get(cmn.HdrXactionID)
+			}
+			continue
+		}
+		err = c.bcastAbort(bckFrom, res.error())
+		freeCallResults(results)
+		return
+	}
+	freeCallResults(results)
+
+	// 3. commit
+	_ = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
 	return
 }
 

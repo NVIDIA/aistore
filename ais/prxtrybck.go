@@ -29,7 +29,7 @@ type bckInitArgs struct {
 	msg        *cmn.ActionMsg
 
 	skipBackend bool // initialize bucket `bck.InitNoBackend`
-	tryOnlyRem  bool // try only creating remote bucket
+	onlyRemote  bool // try only creating remote bucket
 	exists      bool // marks if bucket already exists
 }
 
@@ -152,9 +152,8 @@ func (args *bckInitArgs) _checkACL(bck *cluster.Bck) (errCode int, err error) {
 	return args.p.aclErrToCode(err), err
 }
 
-// initAndTry initializes bucket and tries to add it if doesn't exist.
-// The method sets and returns err if was not successful and any point (if err
-// is set then `p.writeErr` is called so caller doesn't need to).
+// initAndTry initializes bucket and then _tries_ to add it if it doesn't exist.
+// NOTE: on error the method calls `p.writeErr` - make sure _not_ to do the same in the caller
 func (args *bckInitArgs) initAndTry(bucket string) (bck *cluster.Bck, err error) {
 	var errCode int
 	bck, errCode, err = args.init(bucket)
@@ -167,7 +166,7 @@ func (args *bckInitArgs) initAndTry(bucket string) (bck *cluster.Bck, err error)
 	}
 
 	// Should create only for remote bucket when `tryOnlyRem` flag is set.
-	if cmn.IsErrBckNotFound(err) && args.tryOnlyRem {
+	if cmn.IsErrBckNotFound(err) && args.onlyRemote {
 		args.p.writeErr(args.w, args.r, err, errCode)
 		return
 	}

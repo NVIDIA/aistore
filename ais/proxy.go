@@ -493,7 +493,7 @@ func (p *proxyrunner) handleList(w http.ResponseWriter, r *http.Request, queryBc
 			err error
 			bck = cluster.NewBckEmbed(cmn.Bck(queryBcks))
 		)
-		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: msg, perms: cmn.AccessObjLIST, tryOnlyRem: true, bck: bck}
+		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: msg, perms: cmn.AccessObjLIST, onlyRemote: true, bck: bck}
 		if bck, err = bckArgs.initAndTry(queryBcks.Name); err != nil {
 			return
 		}
@@ -511,7 +511,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request, origURL
 		bckArgs.w = w
 		bckArgs.r = r
 		bckArgs.perms = cmn.AccessGET
-		bckArgs.tryOnlyRem = true
+		bckArgs.onlyRemote = true
 	}
 	bck, objName, err := p.parseAPI(w, r, bckArgs, origURLBck...)
 	freeInitBckArgs(bckArgs)
@@ -562,7 +562,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		bckArgs.w = w
 		bckArgs.r = r
 		bckArgs.perms = perms
-		bckArgs.tryOnlyRem = true
+		bckArgs.onlyRemote = true
 	}
 	bck, objName, err := p.parseAPI(w, r, bckArgs)
 	freeInitBckArgs(bckArgs)
@@ -608,7 +608,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		bckArgs.w = w
 		bckArgs.r = r
 		bckArgs.perms = cmn.AccessObjDELETE
-		bckArgs.tryOnlyRem = true
+		bckArgs.onlyRemote = true
 	}
 	bck, objName, err := p.parseAPI(w, r, bckArgs)
 	freeInitBckArgs(bckArgs)
@@ -652,7 +652,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		perms = cmn.AccessObjDELETE
 	}
 
-	bckArgs := bckInitArgs{p: p, w: w, r: r, msg: &msg, perms: perms, tryOnlyRem: true, bck: bck}
+	bckArgs := bckInitArgs{p: p, w: w, r: r, msg: &msg, perms: perms, onlyRemote: true, bck: bck}
 	if msg.Action == cmn.ActEvictRemoteBck {
 		bck, errCode, err = bckArgs.init(bck.Name)
 		if errCode == http.StatusNotFound {
@@ -861,7 +861,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
-	args := bckInitArgs{p: p, w: w, r: r, bck: bck, msg: msg, tryOnlyRem: true}
+	args := bckInitArgs{p: p, w: w, r: r, bck: bck, msg: msg, onlyRemote: true}
 	if bck, err = args.initAndTry(bck.Name); err != nil {
 		return
 	}
@@ -879,7 +879,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		if bckTo.IsEmpty() {
 			bckTo = bckFrom
 		} else {
-			bckToArgs := bckInitArgs{p: p, w: w, r: r, bck: bckTo, msg: msg, tryOnlyRem: true, perms: cmn.AccessPUT}
+			bckToArgs := bckInitArgs{p: p, w: w, r: r, bck: bckTo, msg: msg, onlyRemote: true, perms: cmn.AccessPUT}
 			if bckTo, err = bckToArgs.initAndTry(bckTo.Name); err != nil {
 				p.writeErr(w, r, err)
 				return
@@ -921,7 +921,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		p.writeErr(w, r, err)
 		return
 	}
-	if bck.Bck.IsRemoteAIS() {
+	if bck.IsRemoteAIS() {
 		// forward to remote AIS as is, with distinct exception
 		switch msg.Action {
 		case cmn.ActInvalListCache:
@@ -945,7 +945,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 
 	// Initialize bucket; if doesn't exist try creating it (on the fly)
 	// but only if it's a remote bucket.
-	args := bckInitArgs{p: p, w: w, r: r, bck: bck, msg: msg, tryOnlyRem: true}
+	args := bckInitArgs{p: p, w: w, r: r, bck: bck, msg: msg, onlyRemote: true}
 	if bck, err = args.initAndTry(bck.Name); err != nil {
 		return
 	}
@@ -956,7 +956,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 	switch msg.Action {
 	case cmn.ActMoveBck:
 		bckFrom := bck
-		bckTo, err := newBckFromQueryUname(query, cmn.URLParamBucketTo, true /*required*/)
+		bckTo, err := newBckFromQueryUname(query, true /*required*/)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -989,80 +989,91 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			return
 		}
 		w.Write([]byte(xactID))
-	case cmn.ActCopyBck, cmn.ActETLBck, cmn.ActCopyObjects, cmn.ActETLObjects:
+	case cmn.ActCopyBck, cmn.ActETLBck:
 		var (
-			tcmsg      = &cmn.TCBMsg{}
-			bckTo      *cluster.Bck
-			tryOnlyRem bool // whether non-existing bckTo must be remote (see also xaction.XactsDtor)
+			xactID  string
+			bckTo   *cluster.Bck
+			tcbMsg  = &cmn.TCBMsg{}
+			errCode int
 		)
 		switch msg.Action {
 		case cmn.ActETLBck:
-			if err := cos.MorphMarshal(msg.Value, tcmsg); err != nil {
+			if err := cos.MorphMarshal(msg.Value, tcbMsg); err != nil {
 				p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 				return
 			}
-			if err := tcmsg.Validate(); err != nil {
+			if err := tcbMsg.Validate(); err != nil {
 				p.writeErr(w, r, err)
 				return
 			}
 		case cmn.ActCopyBck:
-			cpyBckMsg := &cmn.CopyBckMsg{}
-			if err = cos.MorphMarshal(msg.Value, cpyBckMsg); err != nil {
+			if err = cos.MorphMarshal(msg.Value, &tcbMsg.CopyBckMsg); err != nil {
 				p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 				return
 			}
-			tcmsg.DryRun = cpyBckMsg.DryRun
-			tcmsg.Prefix = cpyBckMsg.Prefix
-		case cmn.ActCopyObjects, cmn.ActETLObjects:
-			tryOnlyRem = true
-			tclrmsg := &cmn.TCObjsMsg{}
-			if err = cos.MorphMarshal(msg.Value, tclrmsg); err != nil {
-				p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
-				return
-			}
-			tcmsg = &tclrmsg.TCBMsg
 		}
-		userBckTo, err := newBckFromQueryUname(query, cmn.URLParamBucketTo, true /*required*/)
+		bckTo, err = newBckFromQueryUname(query, true /*required*/)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		if bck.Equal(userBckTo, false, true) {
-			p.writeErrf(w, r, "cannot %s bucket %q onto itself", msg.Action, bucket)
+		if bck.Equal(bckTo, false, true) {
+			p.writeErrf(w, r, "cannot %s bucket %q onto itself", msg.Action, bck)
 			return
 		}
-		var (
-			bckToArgs = bckInitArgs{p: p, w: w, r: r, bck: userBckTo, perms: cmn.AccessPUT, tryOnlyRem: tryOnlyRem}
-			errCode   int
-		)
-		if bckTo, errCode, err = bckToArgs.init(userBckTo.Name); err != nil && errCode != http.StatusNotFound {
+		// NOTE: not calling `initAndTry` - delegating bucket props cloning to the `p.tcb` below
+		bckToArgs := bckInitArgs{p: p, w: w, r: r, bck: bckTo, perms: cmn.AccessPUT, onlyRemote: false}
+		if bckTo, errCode, err = bckToArgs.init(bckTo.Name); err != nil && errCode != http.StatusNotFound {
 			p.writeErr(w, r, err, errCode)
 			return
 		}
-		if errCode == http.StatusNotFound && userBckTo.IsCloud() {
-			// If userBckTo is a remote bucket that doesn't exist (in the BMD) - try registering on the fly
+		// NOTE: creating remote on the fly
+		if errCode == http.StatusNotFound && bckTo.IsRemote() {
 			if bckTo, err = bckToArgs.try(); err != nil {
 				return
 			}
 		}
-		if bckTo == nil {
-			// It is a non-existing ais bucket.
-			bckTo = userBckTo
-		}
 		if bckTo.IsHTTP() {
-			p.writeErrf(w, r, "cannot %s HTTP bucket %q - the operation is not supported",
-				msg.Action, bucket)
+			p.writeErrf(w, r, "cannot %s to HTTP bucket %q", msg.Action, bckTo)
 			return
 		}
-
 		glog.Infof("%s bucket %s => %s", msg.Action, bck, bckTo)
-
-		var xactID string
-		if xactID, err = p.transformCopy(bck, bckTo, msg, tcmsg.DryRun); err != nil {
+		if xactID, err = p.tcb(bck, bckTo, msg, tcbMsg.DryRun); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-
+		w.Write([]byte(xactID))
+	case cmn.ActCopyObjects, cmn.ActETLObjects:
+		var (
+			xactID string
+			tcoMsg = &cmn.TCObjsMsg{}
+			bckTo  *cluster.Bck
+		)
+		if err = cos.MorphMarshal(msg.Value, tcoMsg); err != nil {
+			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
+			return
+		}
+		bckTo, err = newBckFromQueryUname(query, true /*required*/)
+		if err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+		if err = bckTo.Init(p.owner.bmd); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+		if bck.Equal(bckTo, true, true) {
+			glog.Warningf("multi-obj %s within the same bucket %q", msg.Action, bck)
+		}
+		if bckTo.IsHTTP() {
+			p.writeErrf(w, r, "cannot %s to HTTP bucket %q", msg.Action, bckTo)
+			return
+		}
+		glog.Infof("multi-obj %s %s => %s", msg.Action, bck, bckTo)
+		if xactID, err = p.tcobjs(bck, bckTo, msg); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
 		w.Write([]byte(xactID))
 	case cmn.ActAddRemoteBck:
 		// TODO: choose the best permission
@@ -1273,7 +1284,7 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, quer
 	}
 	if queryBcks.Name != "" {
 		bck := cluster.NewBckEmbed(cmn.Bck(queryBcks))
-		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: amsg, perms: cmn.AccessBckHEAD, tryOnlyRem: true, bck: bck}
+		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: amsg, perms: cmn.AccessBckHEAD, onlyRemote: true, bck: bck}
 		if _, err = bckArgs.initAndTry(queryBcks.Name); err != nil {
 			return
 		}
@@ -1408,18 +1419,15 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if err := p.parseAPIRequest(w, r, &request); err != nil {
 		return
 	}
-
-	args := bckInitArgs{p: p, w: w, r: r, tryOnlyRem: true, bck: request.bck, perms: cmn.AccessBckHEAD}
+	args := bckInitArgs{p: p, w: w, r: r, onlyRemote: true, bck: request.bck, perms: cmn.AccessBckHEAD}
 	bck, err := args.initAndTry(request.bck.Name)
 	if err != nil {
 		return
 	}
-
 	if bck.IsAIS() || !args.exists {
 		bpropsToHdr(bck, w.Header())
 		return
 	}
-
 	cloudProps, statusCode, err := p.headRemoteBck(*bck.RemoteBck(), nil)
 	if err != nil {
 		// TODO: what if HEAD fails
@@ -1486,7 +1494,7 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	if propsToUpdate.Access != nil {
 		perms |= cmn.AccessBckSetACL
 	}
-	args := bckInitArgs{p: p, w: w, r: r, bck: bck, msg: msg, skipBackend: true, tryOnlyRem: true, perms: perms}
+	args := bckInitArgs{p: p, w: w, r: r, bck: bck, msg: msg, skipBackend: true, onlyRemote: true, perms: perms}
 	if bck, err = args.initAndTry(bck.Name); err != nil {
 		return
 	}
@@ -1528,7 +1536,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request, origUR
 		bckArgs.w = w
 		bckArgs.r = r
 		bckArgs.perms = cmn.AccessObjHEAD
-		bckArgs.tryOnlyRem = true
+		bckArgs.onlyRemote = true
 	}
 	bck, objName, err := p.parseAPI(w, r, bckArgs, origURLBck...)
 	freeInitBckArgs(bckArgs)
@@ -1557,7 +1565,7 @@ func (p *proxyrunner) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 		bckArgs.w = w
 		bckArgs.r = r
 		bckArgs.perms = cmn.AccessObjHEAD
-		bckArgs.tryOnlyRem = true
+		bckArgs.onlyRemote = true
 	}
 	bck, objName, err := p.parseAPI(w, r, bckArgs)
 	freeInitBckArgs(bckArgs)
