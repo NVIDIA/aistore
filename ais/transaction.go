@@ -111,9 +111,9 @@ type (
 	txnECEncode struct {
 		txnBckBase
 	}
-	txnPutArchive struct {
+	txnCreateArchMultiObj struct {
 		txnBckBase
-		xarch *xs.XactPutArchive
+		xarch *xs.XactCreateArchMultiObj
 		msg   *cmn.ArchiveMsg
 	}
 )
@@ -550,17 +550,17 @@ func newTxnECEncode(c *txnServerCtx, bck *cluster.Bck) (txn *txnECEncode) {
 	return
 }
 
-///////////////////
-// txnPutArchive //
-///////////////////
+///////////////////////////
+// txnCreateArchMultiObj //
+///////////////////////////
 
-func newTxnPutArchive(c *txnServerCtx, bckFrom *cluster.Bck, xarch *xs.XactPutArchive, msg *cmn.ArchiveMsg) (txn *txnPutArchive) {
-	txn = &txnPutArchive{*newTxnBckBase("arc", *bckFrom), xarch, msg}
+func newTxnPutArchive(c *txnServerCtx, bckFrom *cluster.Bck, xarch *xs.XactCreateArchMultiObj, msg *cmn.ArchiveMsg) (txn *txnCreateArchMultiObj) {
+	txn = &txnCreateArchMultiObj{*newTxnBckBase("arc", *bckFrom), xarch, msg}
 	txn.fillFromCtx(c)
 	return
 }
 
-func (txn *txnPutArchive) abort() {
+func (txn *txnCreateArchMultiObj) abort() {
 	txn.txnBckBase.abort()
 	txn.xarch.TxnAbort()
 }

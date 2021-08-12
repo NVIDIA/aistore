@@ -117,9 +117,9 @@ func (p *tcoFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprUse, nil
 }
 
-///////////////////////
+////////////////
 // XactTCObjs //
-///////////////////////
+////////////////
 
 func (r *XactTCObjs) Begin(msg *cmn.TCObjsMsg) {
 	wi := &tcowi{r: r, msg: msg}
@@ -167,44 +167,25 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 		}
 	}
 fin:
+	r.fin(err)
+}
+
+func (r *XactTCObjs) fin(err error) {
+	var (
+		total time.Duration
+		l     = 1
+	)
 	r.DemandBase.Stop()
 	r.dm.Close(err)
-	l := 1
-	for i := 0; i < 32 && l > 0; i++ {
+	for total < delayUnregRecvMax && l > 0 {
 		r.pending.RLock()
 		l = len(r.pending.m)
 		r.pending.RUnlock()
 		time.Sleep(delayUnregRecv)
+		total += delayUnregRecv
 	}
 	r.dm.UnregRecv()
 	r.Finish(err)
-}
-
-func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) (err error) {
-	var size int64
-	objNameTo := wi.msg.ToName(lom.ObjName)
-	buf, slab := lri.t.MMSA().Alloc()
-	params := &cluster.CopyObjectParams{}
-	{
-		params.BckTo = wi.r.args.BckTo
-		params.ObjNameTo = objNameTo
-		params.DM = wi.r.dm
-		params.Buf = buf
-		params.DP = wi.r.args.DP
-		params.DryRun = wi.msg.DryRun
-	}
-	size, err = lri.t.CopyObject(lom, params, false /*localOnly*/)
-	slab.Free(buf)
-	if err != nil {
-		if cos.IsErrOOS(err) {
-			what := fmt.Sprintf("%s(%q)", wi.r.Kind(), wi.r.ID())
-			err = cmn.NewAbortedError(what, err.Error())
-		}
-		return
-	}
-	wi.r.ObjectsInc()
-	wi.r.BytesAdd(size)
-	return
 }
 
 // send EOI (end of iteration) to the responsible target
@@ -274,4 +255,35 @@ func (r *XactTCObjs) TxnAbort() {
 	}
 	r.dm.UnregRecv()
 	r.XactBase.Finish(err)
+}
+
+///////////
+// tcowi //
+///////////
+
+func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) (err error) {
+	var size int64
+	objNameTo := wi.msg.ToName(lom.ObjName)
+	buf, slab := lri.t.MMSA().Alloc()
+	params := &cluster.CopyObjectParams{}
+	{
+		params.BckTo = wi.r.args.BckTo
+		params.ObjNameTo = objNameTo
+		params.DM = wi.r.dm
+		params.Buf = buf
+		params.DP = wi.r.args.DP
+		params.DryRun = wi.msg.DryRun
+	}
+	size, err = lri.t.CopyObject(lom, params, false /*localOnly*/)
+	slab.Free(buf)
+	if err != nil {
+		if cos.IsErrOOS(err) {
+			what := fmt.Sprintf("%s(%q)", wi.r.Kind(), wi.r.ID())
+			err = cmn.NewAbortedError(what, err.Error())
+		}
+		return
+	}
+	wi.r.ObjectsInc()
+	wi.r.BytesAdd(size)
+	return
 }

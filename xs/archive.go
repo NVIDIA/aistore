@@ -35,13 +35,14 @@ import (
 const (
 	doneSendingOpcode = 31415
 
-	delayUnregRecv = 200 * time.Millisecond
+	delayUnregRecv    = 200 * time.Millisecond
+	delayUnregRecvMax = 10 * delayUnregRecv // NOTE: too aggressive?
 )
 
 type (
 	archFactory struct {
 		xreg.RenewBase
-		xact *XactPutArchive
+		xact *XactCreateArchMultiObj
 	}
 	archWriter interface {
 		write(nameInArch string, oah cmn.ObjAttrsHolder, reader io.Reader) error
@@ -64,7 +65,7 @@ type (
 		zw *zip.Writer
 	}
 	archwi struct { // archival work item; implements lrwi
-		r   *XactPutArchive
+		r   *XactCreateArchMultiObj
 		msg *cmn.ArchiveMsg
 		lom *cluster.LOM // of the archive
 		fqn string       // workFQN --/--
@@ -80,7 +81,7 @@ type (
 		// finishing
 		refc atomic.Int32
 	}
-	XactPutArchive struct {
+	XactCreateArchMultiObj struct {
 		xaction.DemandBase
 		t       cluster.Target
 		bckFrom *cluster.Bck
@@ -101,7 +102,7 @@ const (
 
 // interface guard
 var (
-	_ cluster.Xact   = (*XactPutArchive)(nil)
+	_ cluster.Xact   = (*XactCreateArchMultiObj)(nil)
 	_ xreg.Renewable = (*archFactory)(nil)
 	_ lrwi           = (*archwi)(nil)
 
@@ -134,7 +135,7 @@ func (p *archFactory) Start() error {
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
 		workCh      = make(chan *cmn.ArchiveMsg, maxNumInParallel)
 	)
-	r := &XactPutArchive{t: p.T, bckFrom: p.Bck, workCh: workCh, config: config}
+	r := &XactCreateArchMultiObj{t: p.T, bckFrom: p.Bck, workCh: workCh, config: config}
 	r.pending.m = make(map[string]*archwi, maxNumInParallel)
 	p.xact = r
 	r.DemandBase.Init(p.UUID(), cmn.ActArchive, p.Bck, totallyIdle, likelyIdle)
@@ -148,7 +149,7 @@ func (p *archFactory) Start() error {
 	return nil
 }
 
-func (p *archFactory) newDM(bckFrom *cluster.Bck, r *XactPutArchive) error {
+func (p *archFactory) newDM(bckFrom *cluster.Bck, r *XactCreateArchMultiObj) error {
 	// transport endpoint name (given xaction, m.b. identical across cluster)
 	trname := "arch-" + bckFrom.Provider + "-" + bckFrom.Name
 	dm, err := bundle.NewDataMover(p.T, trname, r.recvObjDM, cluster.RegularPut, bundle.Extra{Multiplier: 1})
@@ -169,12 +170,12 @@ func (p *archFactory) newDM(bckFrom *cluster.Bck, r *XactPutArchive) error {
 	return nil
 }
 
-////////////////////
-// XactPutArchive //
-////////////////////
+////////////////////////////
+// XactCreateArchMultiObj //
+////////////////////////////
 
 // limited pre-run abort
-func (r *XactPutArchive) TxnAbort() {
+func (r *XactCreateArchMultiObj) TxnAbort() {
 	err := cmn.NewAbortedError(r.String())
 	if r.dm.IsOpen() {
 		r.dm.Close(err)
@@ -183,9 +184,10 @@ func (r *XactPutArchive) TxnAbort() {
 	r.XactBase.Finish(err)
 }
 
-func (r *XactPutArchive) Begin(msg *cmn.ArchiveMsg) (err error) {
+func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 	lom := cluster.AllocLOM(msg.ArchName)
 	if err = lom.Init(msg.ToBck); err != nil {
+		// TODO -- FIXME: handle errors here and elsewhere
 		return
 	}
 	debug.Assert(lom.FullName() == msg.FullName()) // relying on it
@@ -229,12 +231,12 @@ func (r *XactPutArchive) Begin(msg *cmn.ArchiveMsg) (err error) {
 	return
 }
 
-func (r *XactPutArchive) Do(msg *cmn.ArchiveMsg) {
+func (r *XactCreateArchMultiObj) Do(msg *cmn.ArchiveMsg) {
 	r.IncPending()
 	r.workCh <- msg
 }
 
-func (r *XactPutArchive) Run(wg *sync.WaitGroup) {
+func (r *XactCreateArchMultiObj) Run(wg *sync.WaitGroup) {
 	var err error
 	glog.Infoln(r.String())
 	wg.Done()
@@ -243,8 +245,9 @@ func (r *XactPutArchive) Run(wg *sync.WaitGroup) {
 		case msg := <-r.workCh:
 			fullname := msg.FullName()
 			r.pending.RLock()
-			wi := r.pending.m[fullname]
+			wi, ok := r.pending.m[fullname]
 			r.pending.RUnlock()
+			debug.Assert(ok)
 			var (
 				smap    = r.t.Sowner().Get()
 				lrit    = &lriterator{}
@@ -269,6 +272,9 @@ func (r *XactPutArchive) Run(wg *sync.WaitGroup) {
 				go r.finalize(wi, fullname)
 			} else {
 				r.eoi(wi)
+				r.pending.Lock()
+				delete(r.pending.m, fullname)
+				r.pending.Unlock()
 				r.DecPending()
 			}
 		case <-r.IdleTimer():
@@ -278,12 +284,26 @@ func (r *XactPutArchive) Run(wg *sync.WaitGroup) {
 		}
 	}
 fin:
+	r.fin(err)
+}
+
+func (r *XactCreateArchMultiObj) fin(err error) {
 	r.stopping.Store(true)
 	r.DemandBase.Stop()
 
 	r.dm.Close(err)
 	go func() {
-		time.Sleep(delayUnregRecv)
+		var (
+			total time.Duration
+			l     = 1
+		)
+		for total < delayUnregRecvMax && l > 0 {
+			r.pending.RLock()
+			l = len(r.pending.m)
+			r.pending.RUnlock()
+			time.Sleep(delayUnregRecv)
+			total += delayUnregRecv
+		}
 		r.dm.UnregRecv()
 	}()
 	r.Finish(err)
@@ -291,14 +311,14 @@ fin:
 
 // send EOI (end of iteration) to the responsible target
 // TODO: see xs/tcobjs.go
-func (r *XactPutArchive) eoi(wi *archwi) {
+func (r *XactCreateArchMultiObj) eoi(wi *archwi) {
 	o := transport.AllocSend()
 	o.Hdr.Opcode = doneSendingOpcode
 	o.Hdr.Opaque = []byte(wi.msg.FullName())
 	r.dm.Send(o, nil, wi.tsi)
 }
 
-func (r *XactPutArchive) doSend(lom *cluster.LOM, wi *archwi, fh cos.ReadOpenCloser) {
+func (r *XactCreateArchMultiObj) doSend(lom *cluster.LOM, wi *archwi, fh cos.ReadOpenCloser) {
 	o := transport.AllocSend()
 	hdr := &o.Hdr
 	{
@@ -313,7 +333,7 @@ func (r *XactPutArchive) doSend(lom *cluster.LOM, wi *archwi, fh cos.ReadOpenClo
 	r.dm.Send(o, fh, wi.tsi)
 }
 
-func (r *XactPutArchive) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, err error) {
+func (r *XactCreateArchMultiObj) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, err error) {
 	defer transport.FreeRecv(objReader)
 	if err != nil && !cos.IsEOF(err) {
 		glog.Error(err)
@@ -340,11 +360,7 @@ func (r *XactPutArchive) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, er
 	wi.writer.write(wi.nameInArch(hdr.Bck.Name, hdr.ObjName), &hdr.ObjAttrs, objReader)
 }
 
-func (r *XactPutArchive) finalize(wi *archwi, fullname string) {
-	if wi == nil || wi.writer == nil {
-		r.DecPending()
-		return // nothing to do
-	}
+func (r *XactCreateArchMultiObj) finalize(wi *archwi, fullname string) {
 	if q := wi.quiesce(); q == cluster.QuiAborted {
 		r.raiseErr(cmn.NewAbortedError(r.String()), 0)
 	} else if q == cluster.QuiTimeout {
@@ -362,12 +378,12 @@ func (r *XactPutArchive) finalize(wi *archwi, fullname string) {
 	}
 }
 
-// TODO -- FIXME: stateful
-func (r *XactPutArchive) raiseErr(err error, errCode int) {
+// TODO -- FIXME: handle errors here and elsewhere
+func (r *XactCreateArchMultiObj) raiseErr(err error, errCode int) {
 	glog.Errorf("%s: %v(%d)", r.t.Snode(), err, errCode)
 }
 
-func (r *XactPutArchive) fini(wi *archwi) (errCode int, err error) {
+func (r *XactCreateArchMultiObj) fini(wi *archwi) (errCode int, err error) {
 	var size int64
 	wi.writer.fini()
 	r.t.MMSA().Free(wi.buf)
@@ -387,7 +403,7 @@ func (r *XactPutArchive) fini(wi *archwi) (errCode int, err error) {
 	return
 }
 
-func (r *XactPutArchive) Stats() cluster.XactStats {
+func (r *XactCreateArchMultiObj) Stats() cluster.XactStats {
 	baseStats := r.DemandBase.Stats().(*xaction.BaseXactStatsExt)
 	baseStats.Ext = &xaction.BaseXactDemandStatsExt{IsIdle: r.Pending() == 0}
 	return baseStats

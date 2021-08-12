@@ -735,7 +735,7 @@ func (t *targetrunner) createArchMultiObj(c *txnServerCtx) (string /*xaction uui
 		xactID = xact.ID()
 		debug.Assert((!rns.IsRunning() && xactID == c.uuid) || (rns.IsRunning() && xactID == rns.UUID))
 
-		xarch := xact.(*xs.XactPutArchive)
+		xarch := xact.(*xs.XactCreateArchMultiObj)
 		if err := xarch.Begin(archiveMsg); err != nil {
 			return xactID, err
 		}
@@ -746,7 +746,7 @@ func (t *targetrunner) createArchMultiObj(c *txnServerCtx) (string /*xaction uui
 	case cmn.ActAbort:
 		txn, err := t.transactions.find(c.uuid, cmn.ActAbort)
 		if err == nil {
-			txnArch := txn.(*txnPutArchive)
+			txnArch := txn.(*txnCreateArchMultiObj)
 			// if _this_ transaction initiated _that_ on-demand
 			if xarch := txnArch.xarch; xarch != nil && xarch.ID() == c.uuid {
 				xactID = xarch.ID()
@@ -758,7 +758,7 @@ func (t *targetrunner) createArchMultiObj(c *txnServerCtx) (string /*xaction uui
 		if err != nil {
 			return xactID, fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
-		txnArch := txn.(*txnPutArchive)
+		txnArch := txn.(*txnCreateArchMultiObj)
 		txnArch.xarch.Do(txnArch.msg)
 		xactID = txnArch.xarch.ID()
 		t.transactions.find(c.uuid, cmn.ActCommit)
