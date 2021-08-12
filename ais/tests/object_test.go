@@ -1420,6 +1420,8 @@ func TestCopyWithRange(t *testing.T) {
 		bckTo      = cmn.Bck{Name: "cp-range-to", Provider: cmn.ProviderAIS}
 		objList    = make([]string, 0, objCnt)
 		baseParams = tutils.BaseAPIParams(proxyURL)
+		xactID     string
+		err        error
 	)
 	tutils.CreateFreshBucket(t, proxyURL, bckFrom, nil)
 	tutils.CreateFreshBucket(t, proxyURL, bckTo, nil)
@@ -1428,22 +1430,24 @@ func TestCopyWithRange(t *testing.T) {
 			fmt.Sprintf("test/a-%04d", i),
 		)
 	}
-	for _, objName := range objList {
-		r, _ := readers.NewRandReader(objSize, cksumType)
-		err := api.PutObject(api.PutObjectArgs{
-			BaseParams: baseParams,
-			Bck:        bckFrom,
-			Object:     objName,
-			Reader:     r,
-			Size:       objSize,
-		})
+	for i := 0; i < 5; i++ {
+		for _, objName := range objList {
+			r, _ := readers.NewRandReader(objSize, cksumType)
+			err := api.PutObject(api.PutObjectArgs{
+				BaseParams: baseParams,
+				Bck:        bckFrom,
+				Object:     objName,
+				Reader:     r,
+				Size:       objSize,
+			})
+			tassert.CheckFatal(t, err)
+		}
+
+		template := "test/a-" + fmt.Sprintf("{%04d..%04d}", rangeStart, rangeStart+copyCnt-1)
+		tlog.Logf("template: [%s]\n", template)
+		xactID, err = api.CopyObjectsRange(baseParams, bckFrom, bckTo, template)
 		tassert.CheckFatal(t, err)
 	}
-
-	template := "test/a-" + fmt.Sprintf("{%04d..%04d}", rangeStart, rangeStart+copyCnt-1)
-	tlog.Logf("template: [%s]\n", template)
-	xactID, err := api.CopyObjectsRange(baseParams, bckFrom, bckTo, template)
-	tassert.CheckFatal(t, err)
 
 	wargs := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyObjects}
 	api.WaitForXactionIdle(baseParams, wargs)

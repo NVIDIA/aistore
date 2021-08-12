@@ -290,6 +290,7 @@ fin:
 }
 
 // send EOI (end of iteration) to the responsible target
+// TODO: see xs/tcobjs.go
 func (r *XactPutArchive) eoi(wi *archwi) {
 	o := transport.AllocSend()
 	o.Hdr.Opcode = doneSendingOpcode

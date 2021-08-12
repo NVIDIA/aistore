@@ -42,7 +42,10 @@ type (
 		SkipRebalance bool   `json:"skip_rebalance"`
 		CleanData     bool   `json:"clean_data"` // for decommission: remove user data
 	}
+)
 
+// Bucket LIST and Bucket Summary
+type (
 	// TODO: `UUID` should be merged into `ContinuationToken`.
 	// SelectMsg represents properties and options for listing objects.
 	SelectMsg struct {
@@ -71,12 +74,15 @@ type (
 		Cached bool   `json:"cached"`
 	}
 	BucketsSummaries []BucketSummary
+)
 
+// 1. copy & transform bucket to bucket
+// 2. multi-object copy & transform operations
+type (
 	CopyBckMsg struct {
 		Prefix string `json:"prefix"`  // Prefix added to each resulting object.
 		DryRun bool   `json:"dry_run"` // Don't perform any PUT
 	}
-
 	TCBMsg struct {
 		// Resulting objects names will have this extension. Warning: if in a source bucket exist two objects with the
 		// same base name, but different extension, specifying this field might cause object overriding. This is because
@@ -89,16 +95,18 @@ type (
 
 		CopyBckMsg
 	}
-
 	TCObjsMsg struct {
+		TxnUUID string
 		ListRangeMsg
 		TCBMsg
 	}
+)
 
-	// MountpathList contains two lists:
-	// * Available - list of local mountpaths available to the storage target
-	// * Disabled  - list of disabled mountpaths, the mountpaths that generated
-	//	         IO errors followed by (FSHC) health check, etc.
+// MountpathList contains two lists:
+// * Available - list of local mountpaths available to the storage target
+// * Disabled  - list of disabled mountpaths, the mountpaths that generated
+//	         IO errors followed by (FSHC) health check, etc.
+type (
 	MountpathList struct {
 		Available []string `json:"available"`
 		Disabled  []string `json:"disabled"`

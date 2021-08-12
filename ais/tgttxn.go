@@ -114,22 +114,22 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		err = t.tcb(c, tcmsg, dp)
 	case cmn.ActCopyObjects, cmn.ActETLObjects:
 		var (
-			xactID  string
-			dp      cluster.DP
-			tclrmsg = &cmn.TCObjsMsg{}
+			xactID string
+			dp     cluster.DP
+			tcoMsg = &cmn.TCObjsMsg{}
 		)
-		if err := cos.MorphMarshal(c.msg.Value, tclrmsg); err != nil {
+		if err := cos.MorphMarshal(c.msg.Value, tcoMsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, c.msg.Value, err)
 			return
 		}
 		if msg.Action == cmn.ActETLObjects {
 			var err error
-			if dp, err = t.etlDP(&tclrmsg.TCBMsg); err != nil {
+			if dp, err = t.etlDP(&tcoMsg.TCBMsg); err != nil {
 				t.writeErr(w, r, err)
 				return
 			}
 		}
-		xactID, err = t.tcobjs(c, tclrmsg, dp)
+		xactID, err = t.tcobjs(c, tcoMsg, dp)
 		if xactID != "" {
 			w.Header().Set(cmn.HdrXactionID, xactID)
 		}
@@ -564,8 +564,7 @@ func (t *targetrunner) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) erro
 	return nil
 }
 
-func (t *targetrunner) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg,
-	dp cluster.DP) (string, error) {
+func (t *targetrunner) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (string, error) {
 	var xactID string
 	if err := c.bck.Init(t.owner.bmd); err != nil {
 		return xactID, err
@@ -604,10 +603,12 @@ func (t *targetrunner) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg,
 		debug.Assert((!rns.IsRunning() && xactID == c.uuid) || (rns.IsRunning() && xactID == rns.UUID))
 
 		xtco := xact.(*xs.XactTCObjs)
+		msg.TxnUUID = c.uuid
 		txn := newTxnTCObjs(c, bckFrom, xtco, msg)
 		if err := t.transactions.begin(txn); err != nil {
 			return xactID, err
 		}
+		xtco.Begin(msg)
 	case cmn.ActAbort:
 		txn, err := t.transactions.find(c.uuid, cmn.ActAbort)
 		if err == nil {

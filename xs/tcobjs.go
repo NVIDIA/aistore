@@ -121,6 +121,13 @@ func (p *tcoFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 // XactTCObjs //
 ///////////////////////
 
+func (r *XactTCObjs) Begin(msg *cmn.TCObjsMsg) {
+	wi := &tcowi{r: r, msg: msg}
+	r.pending.Lock()
+	r.pending.m[msg.TxnUUID] = wi
+	r.pending.Unlock()
+}
+
 func (r *XactTCObjs) Do(msg *cmn.TCObjsMsg) {
 	r.IncPending()
 	r.workCh <- msg
@@ -136,10 +143,12 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 			var (
 				smap    = r.t.Sowner().Get()
 				lrit    = &lriterator{}
-				wi      = &tcowi{r: r, msg: msg}
 				freeLOM = false // not delegating
 			)
-			wi.refc.Store(int32(smap.CountTargets() - 1)) // TODO -- FIXME: later
+			r.pending.RLock()
+			wi := r.pending.m[msg.TxnUUID]
+			r.pending.RUnlock()
+			wi.refc.Store(int32(smap.CountTargets() - 1))
 			lrit.init(r, r.t, &msg.ListRangeMsg, freeLOM)
 			if msg.IsList() {
 				err = lrit.iterateList(wi, smap)
@@ -149,7 +158,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 			if r.Aborted() || err != nil {
 				goto fin
 			}
-			// TODO -- FIXME: broadcast doneSendingOpcode
+			r.eoi(wi)
 			r.DecPending()
 		case <-r.IdleTimer():
 			goto fin
@@ -160,10 +169,14 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 fin:
 	r.DemandBase.Stop()
 	r.dm.Close(err)
-	go func() {
+	l := 1
+	for i := 0; i < 32 && l > 0; i++ {
+		r.pending.RLock()
+		l = len(r.pending.m)
+		r.pending.RUnlock()
 		time.Sleep(delayUnregRecv)
-		r.dm.UnregRecv()
-	}()
+	}
+	r.dm.UnregRecv()
 	r.Finish(err)
 }
 
@@ -194,6 +207,15 @@ func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) (err error) {
 	return
 }
 
+// send EOI (end of iteration) to the responsible target
+// TODO: see xs/tcobjs.go
+func (r *XactTCObjs) eoi(wi *tcowi) {
+	o := transport.AllocSend()
+	o.Hdr.Opcode = doneSendingOpcode
+	o.Hdr.Opaque = []byte(wi.msg.TxnUUID)
+	r.dm.Bcast(o)
+}
+
 func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) {
 	defer transport.FreeRecv(objReader)
 	if err != nil && !cos.IsEOF(err) {
@@ -201,7 +223,17 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 		return
 	}
 	if hdr.Opcode == doneSendingOpcode {
-		// refc := r.refc.Dec() // TODO -- FIXME: later
+		txnUUID := string(hdr.Opaque)
+		r.pending.RLock()
+		wi, ok := r.pending.m[txnUUID]
+		r.pending.RUnlock()
+		debug.Assert(ok)
+		refc := wi.refc.Dec()
+		if refc == 0 {
+			r.pending.Lock()
+			delete(r.pending.m, txnUUID)
+			r.pending.Unlock()
+		}
 		return
 	}
 	debug.Assert(hdr.Opcode == 0)
