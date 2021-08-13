@@ -158,12 +158,6 @@ func (d *Snode) setName() {
 }
 
 func (d *Snode) String() string {
-	if d == nil {
-		return "<nil>"
-	}
-	if d.Name() == "" {
-		d.setName()
-	}
 	return d.Name()
 }
 
