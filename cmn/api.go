@@ -77,7 +77,6 @@ type (
 )
 
 // 1. copy & transform bucket to bucket
-// 2. multi-object copy & transform operations
 type (
 	CopyBckMsg struct {
 		Prefix string `json:"prefix"`  // Prefix added to each resulting object.
@@ -94,11 +93,6 @@ type (
 		RequestTimeout cos.Duration `json:"request_timeout,omitempty"` // optional, ETL only
 
 		CopyBckMsg
-	}
-	TCObjsMsg struct {
-		TxnUUID string
-		ListRangeMsg
-		TCBMsg
 	}
 )
 

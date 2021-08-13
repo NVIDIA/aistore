@@ -42,10 +42,9 @@ var (
 			sourceBckFlag,
 			templateFlag,
 			listFlag,
-			cleanupSrcFlag,
-			skipMisplacedFlag,
-			includeBckNameFlag,
-			ignoreErrorFlag,
+			includeSrcBucketNameFlag,
+			allowAppendToExistingFlag,
+			continueOnErrorFlag,
 			createArchFlag,
 			archpathFlag,
 		),
@@ -265,10 +264,9 @@ func createArchMultiObjHandler(c *cli.Context) (err error) {
 		bckFrom = bckTo
 	}
 	msg := cmn.ArchiveMsg{ToBck: bckTo, ArchName: objName}
-	msg.SkipMisplaced = flagIsSet(c, skipMisplacedFlag)
-	msg.IgnoreBackendErr = flagIsSet(c, ignoreErrorFlag)
-	msg.EraseSources = flagIsSet(c, cleanupSrcFlag)
-	msg.InclBckName = flagIsSet(c, includeBckNameFlag)
+	msg.InclSrcBname = flagIsSet(c, includeSrcBucketNameFlag)
+	msg.AllowAppendToExisting = flagIsSet(c, allowAppendToExistingFlag)
+	msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
 
 	if list != "" {
 		msg.ListRangeMsg.ObjNames = makeList(list)

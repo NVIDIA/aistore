@@ -309,7 +309,6 @@ var (
 	listBucketsFlag   = cli.StringFlag{Name: "buckets", Usage: "comma-separated list of bucket names, e.g.: 'b1,b2,b3'"}
 	validateFlag      = cli.BoolFlag{Name: "validate", Usage: "check objects health"}
 	compactPropFlag   = cli.BoolFlag{Name: "compact,c", Usage: "display properties grouped in human-readable mode"}
-	listArchiveFlag   = cli.BoolFlag{Name: "list-archive", Usage: "list archive content"}
 
 	// Config
 	configTypeFlag = cli.StringFlag{Name: "type", Usage: "show the specified configuration, one of: 'all','cluster','local'"}
@@ -385,14 +384,25 @@ var (
 	computeCksumFlag = cli.BoolFlag{Name: "compute-cksum", Usage: "compute the checksum with the type configured for the bucket"}
 	checksumFlags    = getCksumFlags()
 
-	// archive
-	createArchFlag = cli.BoolFlag{Name: "archive", Usage: "create an archive from existing objects"}
-	archpathFlag   = cli.StringFlag{Name: "archpath", Usage: "filename in archive"}
+	// begin archive
+	listArchiveFlag          = cli.BoolFlag{Name: "list-archive", Usage: "list archive content"}
+	createArchFlag           = cli.BoolFlag{Name: "archive", Usage: "archive a list or a range of objects"}
+	archpathFlag             = cli.StringFlag{Name: "archpath", Usage: "filename in archive"}
+	includeSrcBucketNameFlag = cli.BoolFlag{
+		Name:  "include-src-bck",
+		Usage: "include source bucket name into the names of archived objects from this bucket",
+	}
+	allowAppendToExistingFlag = cli.BoolFlag{
+		Name:  "append-to-arch",
+		Usage: "allow adding a list or a range of objects to an existing archive",
+	}
+	continueOnErrorFlag = cli.BoolFlag{
+		Name:  "cont-on-err",
+		Usage: "keep running archiving xaction in presence of errors in a any given multi-object transaction",
+	}
+	// end archive
 
-	sourceBckFlag      = cli.StringFlag{Name: "source-bck", Usage: "source bucket"}
-	cleanupSrcFlag     = cli.BoolFlag{Name: "cleanup", Usage: "delete or evict the source objects upon successful archiving"}
-	skipMisplacedFlag  = cli.BoolFlag{Name: "skip-misplaced", Usage: "skip misplaced objects"}
-	includeBckNameFlag = cli.BoolFlag{Name: "include-bck", Usage: "true - archive directory structure starts with bucket name, false - objects are put to the archive root"}
+	sourceBckFlag = cli.StringFlag{Name: "source-bck", Usage: "source bucket"}
 
 	// AuthN
 	tokenFileFlag = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to file"}

@@ -713,15 +713,15 @@ func (t *targetrunner) createArchMultiObj(c *txnServerCtx) (string /*xaction uui
 				return xactID, err
 			}
 		}
-		archiveMsg := &cmn.ArchiveMsg{}
-		if err := cos.MorphMarshal(c.msg.Value, archiveMsg); err != nil {
+		archMsg := &cmn.ArchiveMsg{}
+		if err := cos.MorphMarshal(c.msg.Value, archMsg); err != nil {
 			return xactID, fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, c.msg.Action, c.msg.Value, err)
 		}
-		mime, err := cos.Mime(archiveMsg.Mime, archiveMsg.ArchName)
+		mime, err := cos.Mime(archMsg.Mime, archMsg.ArchName)
 		if err != nil {
 			return xactID, err
 		}
-		archiveMsg.Mime = mime // set it for xarch
+		archMsg.Mime = mime // set it for xarch
 
 		if cs := fs.GetCapStatus(); cs.Err != nil {
 			return xactID, cs.Err
@@ -736,10 +736,13 @@ func (t *targetrunner) createArchMultiObj(c *txnServerCtx) (string /*xaction uui
 		debug.Assert((!rns.IsRunning() && xactID == c.uuid) || (rns.IsRunning() && xactID == rns.UUID))
 
 		xarch := xact.(*xs.XactCreateArchMultiObj)
-		if err := xarch.Begin(archiveMsg); err != nil {
+		// finalize the message and begin local transaction
+		archMsg.TxnUUID = c.uuid
+		archMsg.FromBckName = bckFrom.Name
+		if err := xarch.Begin(archMsg); err != nil {
 			return xactID, err
 		}
-		txn := newTxnPutArchive(c, bckFrom, xarch, archiveMsg)
+		txn := newTxnPutArchive(c, bckFrom, xarch, archMsg)
 		if err := t.transactions.begin(txn); err != nil {
 			return xactID, err
 		}

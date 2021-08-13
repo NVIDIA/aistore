@@ -16,10 +16,9 @@ var (
 			sourceBckFlag,
 			templateFlag,
 			listFlag,
-			cleanupSrcFlag,
-			skipMisplacedFlag,
-			includeBckNameFlag,
-			ignoreErrorFlag,
+			includeSrcBucketNameFlag,
+			allowAppendToExistingFlag,
+			continueOnErrorFlag,
 		},
 		subcmdAppend: {
 			archpathFlag,

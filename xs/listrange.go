@@ -36,12 +36,13 @@ import (
 type (
 	// one multi-object operation work item
 	lrwi interface {
-		do(*cluster.LOM, *lriterator) error
+		do(*cluster.LOM, *lriterator)
 	}
 	// two selected methods that lriterator needs for itself (a strict subset of cluster.Xact)
 	lrxact interface {
 		Bck() *cluster.Bck
 		Aborted() bool
+		Finished() bool
 	}
 	// common mult-obj operation context
 	// common iterateList()/iterateRange() logic
@@ -51,8 +52,6 @@ type (
 		ctx     context.Context
 		msg     *cmn.ListRangeMsg
 		freeLOM bool // free LOM upon return from lriterator.do()
-		// flags
-		ignoreBackendErr bool // ignore backend API errors
 	}
 )
 
@@ -119,7 +118,7 @@ func (r *lriterator) iterateRange(wi lrwi, smap *cluster.Smap) error {
 func (r *lriterator) iterateTemplate(smap *cluster.Smap, pt *cos.ParsedTemplate, wi lrwi) error {
 	getNext := pt.Iter()
 	for objName, hasNext := getNext(); hasNext; objName, hasNext = getNext() {
-		if r.xact.Aborted() {
+		if r.xact.Aborted() || r.xact.Finished() {
 			return nil
 		}
 		lom := cluster.AllocLOM(objName)
@@ -149,7 +148,10 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 		smap = nil // not needed
 	}
 	msg := &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
-	for !r.xact.Aborted() {
+	for {
+		if r.xact.Aborted() || r.xact.Finished() {
+			break
+		}
 		if bremote {
 			objList, _, err = r.t.Backend(bck).ListObjects(bck, msg)
 		} else {
@@ -163,7 +165,7 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 			if !be.IsStatusOK() {
 				continue
 			}
-			if r.xact.Aborted() {
+			if r.xact.Aborted() || r.xact.Finished() {
 				return nil
 			}
 			lom := cluster.AllocLOM(be.Name)
@@ -189,7 +191,7 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 
 func (r *lriterator) iterateList(wi lrwi, smap *cluster.Smap) error {
 	for _, objName := range r.msg.ObjNames {
-		if r.xact.Aborted() {
+		if r.xact.Aborted() || r.xact.Finished() {
 			break
 		}
 		lom := cluster.AllocLOM(objName)
@@ -218,7 +220,8 @@ func (r *lriterator) do(lom *cluster.LOM, wi lrwi, smap *cluster.Smap) error {
 			return nil
 		}
 	}
-	return wi.do(lom, r)
+	wi.do(lom, r)
+	return nil
 }
 
 // helpers ---------------
@@ -266,7 +269,6 @@ func (*evdFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 func newEvictDelete(xargs *xreg.Args, kind string, bck *cluster.Bck, msg *cmn.ListRangeMsg) (ed *evictDelete) {
 	ed = &evictDelete{}
 	ed.lriterator.init(ed, xargs.T, msg, true /*freeLOM*/)
-	ed.lriterator.ignoreBackendErr = !msg.IsList() // NOTE: list defaults to aborting on errors other than non-existence
 	ed.InitBase(xargs.UUID, kind, bck)
 	return
 }
@@ -284,23 +286,19 @@ func (r *evictDelete) Run(*sync.WaitGroup) {
 	r.Finish(err)
 }
 
-func (r *evictDelete) do(lom *cluster.LOM, _ *lriterator) error {
+func (r *evictDelete) do(lom *cluster.LOM, _ *lriterator) {
 	errCode, err := r.t.DeleteObject(lom, r.Kind() == cmn.ActEvictObjects)
 	if errCode == http.StatusNotFound {
-		return nil
+		return
 	}
 	if err != nil {
-		if cmn.IsErrObjNought(err) {
-			err = nil
-		} else if r.ignoreBackendErr {
+		if !cmn.IsErrObjNought(err) {
 			glog.Warning(err)
-			err = nil
 		}
-		return err
+		return
 	}
 	r.ObjectsInc()
 	r.BytesAdd(lom.SizeBytes(true)) // was loaded and evicted
-	return nil
 }
 
 //////////////
@@ -340,7 +338,6 @@ func (*prfFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 func newPrefetch(xargs *xreg.Args, kind string, bck *cluster.Bck, msg *cmn.ListRangeMsg) (prf *prefetch) {
 	prf = &prefetch{}
 	prf.lriterator.init(prf, xargs.T, msg, true /*freeLOM*/)
-	prf.lriterator.ignoreBackendErr = !msg.IsList() // NOTE: list defaults to aborting on errors other than non-existence
 	prf.InitBase(xargs.UUID, kind, bck)
 	prf.lriterator.xact = prf
 	return
@@ -359,26 +356,23 @@ func (r *prefetch) Run(*sync.WaitGroup) {
 	r.Finish(err)
 }
 
-func (r *prefetch) do(lom *cluster.LOM, _ *lriterator) error {
+func (r *prefetch) do(lom *cluster.LOM, _ *lriterator) {
 	var coldGet bool
 	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
 		coldGet = cmn.IsObjNotExist(err)
 		if !coldGet {
-			return err
+			return
 		}
 	}
 	if !coldGet && lom.Version() != "" && lom.VersionConf().ValidateWarmGet {
 		var err error
 		if coldGet, _, err = r.t.CheckRemoteVersion(r.ctx, lom); err != nil {
-			if r.ignoreBackendErr {
-				glog.Warning(err)
-				err = nil
-			}
-			return err
+			glog.Warning(err)
+			return
 		}
 	}
 	if !coldGet {
-		return nil
+		return
 	}
 	// Do not set Atime to current time as prefetching does not mean the object
 	// was used. At the same time, zero Atime make the lom life-span in the cache
@@ -386,18 +380,14 @@ func (r *prefetch) do(lom *cluster.LOM, _ *lriterator) error {
 	// negatve Now() for correct processing the LOM while housekeeping
 	lom.SetAtimeUnix(-time.Now().UnixNano())
 	if _, err := r.t.GetCold(r.ctx, lom, cluster.Prefetch); err != nil {
-		if err == cmn.ErrSkip {
-			err = nil
-		} else if r.ignoreBackendErr {
+		if err != cmn.ErrSkip {
 			glog.Warning(err)
-			err = nil
 		}
-		return err
+		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("prefetch: %s", lom)
 	}
 	r.ObjectsInc()
 	r.BytesAdd(lom.SizeBytes())
-	return nil
 }

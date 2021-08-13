@@ -868,14 +868,14 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	switch msg.Action {
 	case cmn.ActArchive:
 		var (
-			bckFrom    = bck
-			archiveMsg = &cmn.ArchiveMsg{}
+			bckFrom = bck
+			archMsg = &cmn.ArchiveMsg{}
 		)
-		if err := cos.MorphMarshal(msg.Value, archiveMsg); err != nil {
+		if err := cos.MorphMarshal(msg.Value, archMsg); err != nil {
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
 		}
-		bckTo := cluster.NewBckEmbed(archiveMsg.ToBck)
+		bckTo := cluster.NewBckEmbed(archMsg.ToBck)
 		if bckTo.IsEmpty() {
 			bckTo = bckFrom
 		} else {
@@ -885,7 +885,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		if _, err := cos.Mime(archiveMsg.Mime, archiveMsg.ArchName); err != nil {
+		if _, err := cos.Mime(archMsg.Mime, archMsg.ArchName); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}

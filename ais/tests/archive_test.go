@@ -221,7 +221,7 @@ func _createArchMultiObj(t *testing.T, bck *cluster.Bck) {
 					go func(archName string, list []string) {
 						msg := cmn.ArchiveMsg{ToBck: toBck, ArchName: archName}
 						msg.ListRangeMsg.ObjNames = list
-						msg.InclBckName = test.inclSrcBckName
+						msg.InclSrcBname = test.inclSrcBckName
 
 						_, err := api.CreateArchMultiObj(baseParams, m.bck, msg)
 						tassert.CheckFatal(t, err)
@@ -234,7 +234,7 @@ func _createArchMultiObj(t *testing.T, bck *cluster.Bck) {
 					go func(archName string, start int) {
 						msg := cmn.ArchiveMsg{ToBck: toBck, ArchName: archName}
 						msg.ListRangeMsg.Template = fmt.Sprintf(fmtRange, m.prefix, start, start+numInArch-1)
-						msg.InclBckName = test.inclSrcBckName
+						msg.InclSrcBname = test.inclSrcBckName
 
 						_, err := api.CreateArchMultiObj(baseParams, m.bck, msg)
 						tassert.CheckFatal(t, err)

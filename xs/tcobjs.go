@@ -261,8 +261,7 @@ func (r *XactTCObjs) TxnAbort() {
 // tcowi //
 ///////////
 
-func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) (err error) {
-	var size int64
+func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) {
 	objNameTo := wi.msg.ToName(lom.ObjName)
 	buf, slab := lri.t.MMSA().Alloc()
 	params := &cluster.CopyObjectParams{}
@@ -274,16 +273,16 @@ func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) (err error) {
 		params.DP = wi.r.args.DP
 		params.DryRun = wi.msg.DryRun
 	}
-	size, err = lri.t.CopyObject(lom, params, false /*localOnly*/)
+	size, err := lri.t.CopyObject(lom, params, false /*localOnly*/)
 	slab.Free(buf)
 	if err != nil {
 		if cos.IsErrOOS(err) {
 			what := fmt.Sprintf("%s(%q)", wi.r.Kind(), wi.r.ID())
 			err = cmn.NewAbortedError(what, err.Error())
+			// TODO -- FIXME: handle
 		}
 		return
 	}
 	wi.r.ObjectsInc()
 	wi.r.BytesAdd(size)
-	return
 }

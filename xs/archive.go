@@ -92,6 +92,7 @@ type (
 			m map[string]*archwi
 		}
 		config   *cmn.Config
+		err      atomic.Value
 		stopping atomic.Bool
 	}
 )
@@ -187,7 +188,7 @@ func (r *XactCreateArchMultiObj) TxnAbort() {
 func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 	lom := cluster.AllocLOM(msg.ArchName)
 	if err = lom.Init(msg.ToBck); err != nil {
-		// TODO -- FIXME: handle errors here and elsewhere
+		r.raiseErr(err, 0, msg.ContinueOnError)
 		return
 	}
 	debug.Assert(lom.FullName() == msg.FullName()) // relying on it
@@ -200,12 +201,19 @@ func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 	wi.refc.Store(int32(smap.CountTargets() - 1))
 	wi.tsi, err = cluster.HrwTarget(msg.ToBck.MakeUname(msg.ArchName), smap)
 	if err != nil {
+		r.raiseErr(err, 0, msg.ContinueOnError)
 		return
 	}
 
 	// NOTE: creating archive at BEGIN time; TODO: cleanup upon ABORT
 	if r.t.Snode().ID() == wi.tsi.ID() {
-		wi.fh, err = wi.lom.CreateFile(wi.fqn)
+		if errExists := fs.Access(wi.fqn); errExists != nil {
+			wi.fh, err = wi.lom.CreateFile(wi.fqn)
+		} else if wi.msg.AllowAppendToExisting {
+			// TODO -- FIXME: do APPEND
+		} else {
+			err = fmt.Errorf("%s: not allowed to append to an existing %s", r.t.Snode(), msg.FullName())
+		}
 		if err != nil {
 			return
 		}
@@ -226,7 +234,7 @@ func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 		}
 	}
 	r.pending.Lock()
-	r.pending.m[msg.FullName()] = wi
+	r.pending.m[msg.TxnUUID] = wi
 	r.pending.Unlock()
 	return
 }
@@ -243,9 +251,11 @@ func (r *XactCreateArchMultiObj) Run(wg *sync.WaitGroup) {
 	for {
 		select {
 		case msg := <-r.workCh:
-			fullname := msg.FullName()
+			if r.err.Load() != nil { // see raiseErr()
+				goto fin
+			}
 			r.pending.RLock()
-			wi, ok := r.pending.m[fullname]
+			wi, ok := r.pending.m[msg.TxnUUID]
 			r.pending.RUnlock()
 			debug.Assert(ok)
 			var (
@@ -254,7 +264,6 @@ func (r *XactCreateArchMultiObj) Run(wg *sync.WaitGroup) {
 				freeLOM = false // not delegating to iterator
 			)
 			lrit.init(r, r.t, &msg.ListRangeMsg, freeLOM)
-			lrit.ignoreBackendErr = msg.IgnoreBackendErr
 			if msg.IsList() {
 				err = lrit.iterateList(wi, smap)
 			} else {
@@ -269,11 +278,11 @@ func (r *XactCreateArchMultiObj) Run(wg *sync.WaitGroup) {
 				goto fin
 			}
 			if r.t.Snode().ID() == wi.tsi.ID() {
-				go r.finalize(wi, fullname)
+				go r.finalize(wi)
 			} else {
 				r.eoi(wi)
 				r.pending.Lock()
-				delete(r.pending.m, fullname)
+				delete(r.pending.m, msg.TxnUUID)
 				r.pending.Unlock()
 				r.DecPending()
 			}
@@ -291,6 +300,11 @@ func (r *XactCreateArchMultiObj) fin(err error) {
 	r.stopping.Store(true)
 	r.DemandBase.Stop()
 
+	if err == nil {
+		if errDetailed := r.err.Load(); errDetailed != nil {
+			err = errDetailed.(error)
+		}
+	}
 	r.dm.Close(err)
 	go func() {
 		var (
@@ -314,7 +328,7 @@ func (r *XactCreateArchMultiObj) fin(err error) {
 func (r *XactCreateArchMultiObj) eoi(wi *archwi) {
 	o := transport.AllocSend()
 	o.Hdr.Opcode = doneSendingOpcode
-	o.Hdr.Opaque = []byte(wi.msg.FullName())
+	o.Hdr.Opaque = []byte(wi.msg.TxnUUID)
 	r.dm.Send(o, nil, wi.tsi)
 }
 
@@ -325,7 +339,7 @@ func (r *XactCreateArchMultiObj) doSend(lom *cluster.LOM, wi *archwi, fh cos.Rea
 		hdr.Bck = wi.msg.ToBck
 		hdr.ObjName = lom.ObjName
 		hdr.ObjAttrs.CopyFrom(lom.ObjAttrs())
-		hdr.Opaque = []byte(wi.msg.FullName()) // NOTE
+		hdr.Opaque = []byte(wi.msg.TxnUUID)
 	}
 	o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
 		cluster.FreeLOM(lom)
@@ -344,11 +358,13 @@ func (r *XactCreateArchMultiObj) recvObjDM(hdr transport.ObjHdr, objReader io.Re
 	if r.stopping.Load() {
 		return
 	}
+	txnUUID := string(hdr.Opaque)
 	r.pending.RLock()
-	wi, ok := r.pending.m[string(hdr.Opaque)] // NOTE: fullname
+	wi, ok := r.pending.m[txnUUID]
 	r.pending.RUnlock()
 	debug.Assert(ok)
 	debug.Assert(wi.tsi.ID() == r.t.Snode().ID())
+	debug.Assert(wi.msg.TxnUUID == txnUUID)
 
 	// NOTE: best-effort via ref-counting
 	if hdr.Opcode == doneSendingOpcode {
@@ -357,30 +373,35 @@ func (r *XactCreateArchMultiObj) recvObjDM(hdr transport.ObjHdr, objReader io.Re
 		return
 	}
 	debug.Assert(hdr.Opcode == 0)
-	wi.writer.write(wi.nameInArch(hdr.Bck.Name, hdr.ObjName), &hdr.ObjAttrs, objReader)
+	wi.writer.write(wi.nameInArch(hdr.ObjName), &hdr.ObjAttrs, objReader)
 }
 
-func (r *XactCreateArchMultiObj) finalize(wi *archwi, fullname string) {
+func (r *XactCreateArchMultiObj) finalize(wi *archwi) {
 	if q := wi.quiesce(); q == cluster.QuiAborted {
-		r.raiseErr(cmn.NewAbortedError(r.String()), 0)
+		r.raiseErr(cmn.NewAbortedError(r.String()), 0, wi.msg.ContinueOnError)
 	} else if q == cluster.QuiTimeout {
-		r.raiseErr(fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout), 0)
+		r.raiseErr(fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout), 0, wi.msg.ContinueOnError)
 	}
 
 	errCode, err := r.fini(wi)
 	r.pending.Lock()
-	delete(r.pending.m, fullname)
+	delete(r.pending.m, wi.msg.TxnUUID)
 	r.pending.Unlock()
 	r.DecPending()
 
 	if err != nil {
-		r.raiseErr(err, errCode)
+		r.raiseErr(err, errCode, wi.msg.ContinueOnError)
 	}
 }
 
-// TODO -- FIXME: handle errors here and elsewhere
-func (r *XactCreateArchMultiObj) raiseErr(err error, errCode int) {
-	glog.Errorf("%s: %v(%d)", r.t.Snode(), err, errCode)
+func (r *XactCreateArchMultiObj) raiseErr(err error, errCode int, contOnErr bool) {
+	errDetailed := fmt.Errorf("%s[%s]: %v(%d)", r.t.Snode(), r, err, errCode)
+	if !contOnErr {
+		glog.Errorf("%v - terminating...", errDetailed)
+		r.err.Store(errDetailed)
+	} else {
+		glog.Warningf("%v - ingnoring, continuing to process archiving transactions", errDetailed)
+	}
 }
 
 func (r *XactCreateArchMultiObj) fini(wi *archwi) (errCode int, err error) {
@@ -412,7 +433,7 @@ func (r *XactCreateArchMultiObj) Stats() cluster.XactStats {
 ////////////
 // archwi //
 ////////////
-func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) error {
+func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 	var (
 		t       = lrit.t
 		coldGet bool
@@ -422,40 +443,42 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) error {
 	debug.Assert(lom.Bprops() != nil) // must be init-ed
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		if !cmn.IsObjNotExist(err) {
-			return err
+			wi.r.raiseErr(err, 0, wi.msg.ContinueOnError)
+			return
 		}
 		coldGet = lom.Bck().IsRemote()
 		if !coldGet {
-			return err
+			wi.r.raiseErr(err, 0, wi.msg.ContinueOnError)
+			return
 		}
 	}
 	// cold
 	if coldGet {
 		if errCode, err := t.Backend(lom.Bck()).GetObj(lrit.ctx, lom); err != nil {
 			if errCode == http.StatusNotFound || cmn.IsObjNotExist(err) {
-				return nil
+				return
 			}
-			if lrit.ignoreBackendErr {
-				glog.Warning(err)
-				err = nil
-			}
-			return err
+			wi.r.raiseErr(err, 0, wi.msg.ContinueOnError)
+			return
 		}
 	}
 	fh, err := cos.NewFileHandle(lom.FQN)
 	debug.AssertNoErr(err)
 	if err != nil {
-		return err
+		wi.r.raiseErr(err, 0, wi.msg.ContinueOnError)
+		return
 	}
 	if t.Snode().ID() != wi.tsi.ID() {
 		wi.r.doSend(lom, wi, fh)
-		return nil
+		return
 	}
 	debug.Assert(wi.fh != nil) // see Begin
-	err = wi.writer.write(wi.nameInArch(lom.Bck().Name, lom.ObjName), lom, fh)
+	err = wi.writer.write(wi.nameInArch(lom.ObjName), lom, fh)
 	cluster.FreeLOM(lom)
 	cos.Close(fh)
-	return err
+	if err != nil {
+		wi.r.raiseErr(err, 0, wi.msg.ContinueOnError)
+	}
 }
 
 func (wi *archwi) quiesce() cluster.QuiRes {
@@ -464,12 +487,12 @@ func (wi *archwi) quiesce() cluster.QuiRes {
 	})
 }
 
-func (wi *archwi) nameInArch(bckName, objName string) string {
-	if !wi.msg.InclBckName {
+func (wi *archwi) nameInArch(objName string) string {
+	if !wi.msg.InclSrcBname {
 		return objName
 	}
-	buf := make([]byte, 0, len(bckName)+1+len(objName))
-	buf = append(buf, bckName...)
+	buf := make([]byte, 0, len(wi.msg.FromBckName)+1+len(objName))
+	buf = append(buf, wi.msg.FromBckName...)
 	buf = append(buf, filepath.Separator)
 	buf = append(buf, objName...)
 	return *(*string)(unsafe.Pointer(&buf))
