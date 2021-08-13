@@ -39,6 +39,7 @@ const (
 	startupSleep              = 300 * time.Millisecond // periodically poll ClusterStarted()
 	startupDeadlineMultiplier = 2                      // deadline = startupDeadlineMultiplier * config.Timeout.Startup
 	numGorHighCheckTime       = 2 * time.Minute        // periodically log a warning if the number of goroutines remains high
+	glogPeriodicFlushTime     = 40 * time.Second       // not to have `go glog.flushDaemon`
 )
 
 const (
@@ -740,8 +741,11 @@ waitStartup:
 	statsTime := config.Periodic.StatsTime.D()
 	r.ticker = time.NewTicker(statsTime)
 	r.startedUp.Store(true)
-
-	startTime, checkNumGorHigh := mono.NanoTime(), int64(0)
+	var (
+		checkNumGorHigh   int64
+		startTime         = mono.NanoTime()
+		lastGlogFlushTime = startTime
+	)
 	for {
 		select {
 		case nv, ok := <-r.workCh:
@@ -758,6 +762,11 @@ waitStartup:
 				statsTime = config.Periodic.StatsTime.D()
 				r.ticker.Reset(statsTime)
 				logger.statsTime(statsTime)
+			}
+			now = mono.NanoTime()
+			if time.Duration(now-lastGlogFlushTime) > glogPeriodicFlushTime {
+				glog.Flush()
+				lastGlogFlushTime = mono.NanoTime()
 			}
 		case <-r.stopCh:
 			r.ticker.Stop()

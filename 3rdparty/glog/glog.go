@@ -774,12 +774,15 @@ func (*loggingT) exit(err error) {
 // file rotation. There are conflicting methods, so the file cannot be embedded.
 // l.mu is held for all its methods.
 type syncBuffer struct {
-	logger *loggingT
 	*bufio.Writer
+	logger *loggingT
 	file   *os.File
-	sev    severity
 	nbytes uint64 // The number of bytes written to this file
+	sev    severity
 }
+
+// interface guard
+var _ flushSyncWriter = (*syncBuffer)(nil)
 
 func (sb *syncBuffer) Sync() error {
 	return sb.file.Sync()
@@ -852,15 +855,6 @@ func (l *loggingT) createFiles(sev severity) error {
 	return nil
 }
 
-const flushInterval = 30 * time.Second
-
-// flushDaemon periodically flushes the log file buffers.
-func (l *loggingT) flushDaemon() {
-	for range time.NewTicker(flushInterval).C {
-		l.lockAndFlushAll()
-	}
-}
-
 // lockAndFlushAll is like flushAll but locks l.mu first.
 func (l *loggingT) lockAndFlushAll() {
 	l.mu.Lock()
@@ -873,10 +867,10 @@ func (l *loggingT) lockAndFlushAll() {
 func (l *loggingT) flushAll() {
 	// Flush from fatal down, in case there's trouble flushing.
 	for s := errorLog; s >= infoLog; s-- {
-		file := l.file[s]
-		if file != nil {
-			file.Flush() // ignore error
-			file.Sync()  // ignore error
+		sb := l.file[s]
+		if sb != nil {
+			sb.Flush() // ignore error
+			sb.Sync()  // ignore error
 		}
 	}
 }

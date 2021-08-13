@@ -79,7 +79,6 @@ func init() {
 	logging.stderrThreshold = errorLog
 
 	logging.setVState(0, nil, false)
-	go logging.flushDaemon()
 }
 
 func SetNodeName(name string) { nodeName = name }
