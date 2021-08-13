@@ -311,11 +311,14 @@ func TestArchiveAppend(t *testing.T) {
 		objPattern = "test_lst_%04d%s"
 		archPath   = "extra/newfile%04d"
 		subtests   = []struct {
-			ext  string // one of cos.ArchExtensions (same as: supported arch formats)
-			list bool
+			ext   string // one of cos.ArchExtensions (same as: supported arch formats)
+			multi bool   // false - append a single file, true - append a list of objects
 		}{
 			{
-				ext: cos.ExtTar, list: true,
+				ext: cos.ExtTar, multi: false,
+			},
+			{
+				ext: cos.ExtTar, multi: true,
 			},
 		}
 	)
@@ -324,7 +327,7 @@ func TestArchiveAppend(t *testing.T) {
 		numAdd = 2
 	}
 	for _, test := range subtests {
-		tname := test.ext
+		tname := fmt.Sprintf("%s/multi=%t", test.ext, test.multi)
 		t.Run(tname, func(t *testing.T) {
 			tutils.CreateFreshBucket(t, proxyURL, fromBck, nil)
 			tutils.CreateFreshBucket(t, proxyURL, toBck, nil)
@@ -357,23 +360,40 @@ func TestArchiveAppend(t *testing.T) {
 			tassert.Errorf(t, num == numArchs, "expected %d, have %d", numArchs, num)
 
 			for i := 0; i < numArchs; i++ {
-				for j := 0; j < numAdd; j++ {
-					archName := fmt.Sprintf(objPattern, i, test.ext)
-					reader, _ := readers.NewRandReader(fileSize, cos.ChecksumNone)
-					putArgs := api.PutObjectArgs{
-						BaseParams: baseParams,
-						Bck:        toBck,
-						Object:     archName,
-						Reader:     reader,
-						Size:       fileSize,
+				archName := fmt.Sprintf(objPattern, i, test.ext)
+				if test.multi {
+					list := make([]string, 0, numAdd)
+					for j := 0; j < numAdd; j++ {
+						list = append(list, m.objNames[rand.Intn(numPuts)])
 					}
-					appendArcArgs := api.AppendObjectArchArgs{
-						PutObjectArgs: putArgs,
-						ArchPath:      fmt.Sprintf(archPath, j),
+					msg := cmn.ArchiveMsg{ToBck: toBck, ArchName: archName, AllowAppendToExisting: true}
+					msg.ListRangeMsg.ObjNames = list
+					go func() {
+						_, err = api.CreateArchMultiObj(baseParams, fromBck, msg)
+						tassert.CheckError(t, err)
+					}()
+				} else {
+					for j := 0; j < numAdd; j++ {
+						reader, _ := readers.NewRandReader(fileSize, cos.ChecksumNone)
+						putArgs := api.PutObjectArgs{
+							BaseParams: baseParams,
+							Bck:        toBck,
+							Object:     archName,
+							Reader:     reader,
+							Size:       fileSize,
+						}
+						appendArcArgs := api.AppendObjectArchArgs{
+							PutObjectArgs: putArgs,
+							ArchPath:      fmt.Sprintf(archPath, j),
+						}
+						err = api.AppendObjectArch(appendArcArgs)
+						tassert.CheckError(t, err)
 					}
-					err = api.AppendObjectArch(appendArcArgs)
-					tassert.CheckError(t, err)
 				}
+			}
+			if test.multi {
+				wargs := api.XactReqArgs{Kind: cmn.ActArchive, Bck: m.bck}
+				api.WaitForXactionIdle(baseParams, wargs)
 			}
 
 			selmsg.Flags |= cmn.SelectArchDir

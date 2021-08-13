@@ -80,6 +80,8 @@ type (
 		errCnt atomic.Int32
 		// finishing
 		refc atomic.Int32
+		// append to archive
+		appendPos int64 // for calculate stats correctly on append operation
 	}
 	XactCreateArchMultiObj struct {
 		xaction.DemandBase
@@ -207,10 +209,15 @@ func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 
 	// NOTE: creating archive at BEGIN time; TODO: cleanup upon ABORT
 	if r.t.Snode().ID() == wi.tsi.ID() {
-		if errExists := fs.Access(wi.fqn); errExists != nil {
+		if errExists := fs.Access(wi.lom.FQN); errExists != nil {
 			wi.fh, err = wi.lom.CreateFile(wi.fqn)
 		} else if wi.msg.AllowAppendToExisting {
-			// TODO -- FIXME: do APPEND
+			switch msg.Mime {
+			case cos.ExtTar:
+				err = wi.openTarForAppend()
+			default:
+				err = fmt.Errorf("unsupported archive type %s, only %s is supported", msg.Mime, cos.ExtTar)
+			}
 		} else {
 			err = fmt.Errorf("%s: not allowed to append to an existing %s", r.t.Snode(), msg.FullName())
 		}
@@ -275,6 +282,7 @@ func (r *XactCreateArchMultiObj) Run(wg *sync.WaitGroup) {
 				wi.wmu.Unlock()
 			}
 			if r.Aborted() || err != nil {
+				wi.abort(err)
 				goto fin
 			}
 			if r.t.Snode().ID() == wi.tsi.ID() {
@@ -390,6 +398,7 @@ func (r *XactCreateArchMultiObj) finalize(wi *archwi) {
 	r.DecPending()
 
 	if err != nil {
+		wi.abort(err)
 		r.raiseErr(err, errCode, wi.msg.ContinueOnError)
 	}
 }
@@ -406,12 +415,13 @@ func (r *XactCreateArchMultiObj) raiseErr(err error, errCode int, contOnErr bool
 
 func (r *XactCreateArchMultiObj) fini(wi *archwi) (errCode int, err error) {
 	var size int64
+
 	wi.writer.fini()
 	r.t.MMSA().Free(wi.buf)
 
-	wi.cksum.Finalize()
-	wi.lom.SetCksum(&wi.cksum.Cksum)
-	size = wi.cksum.Size
+	if size, err = wi.finalize(); err != nil {
+		return http.StatusInternalServerError, err
+	}
 
 	wi.lom.SetSize(size)
 	cos.Close(wi.fh)
@@ -420,7 +430,7 @@ func (r *XactCreateArchMultiObj) fini(wi *archwi) (errCode int, err error) {
 	cluster.FreeLOM(wi.lom)
 
 	r.ObjectsInc()
-	r.BytesAdd(size)
+	r.BytesAdd(size - wi.appendPos)
 	return
 }
 
@@ -496,6 +506,47 @@ func (wi *archwi) nameInArch(objName string) string {
 	buf = append(buf, filepath.Separator)
 	buf = append(buf, objName...)
 	return *(*string)(unsafe.Pointer(&buf))
+}
+
+func (wi *archwi) openTarForAppend() (err error) {
+	if err := os.Rename(wi.lom.FQN, wi.fqn); err != nil {
+		return err
+	}
+	wi.fh, err = cos.OpenTarForAppend(wi.lom.ObjName, wi.fqn)
+	if err == nil {
+		wi.appendPos, err = wi.fh.Seek(0, io.SeekCurrent)
+		if err != nil {
+			cos.Close(wi.fh)
+			wi.abort(err)
+		}
+	}
+	return err
+}
+
+func (wi *archwi) abort(err error) {
+	if wi.appendPos == 0 {
+		return
+	}
+	if errRm := os.Rename(wi.fqn, wi.lom.FQN); errRm != nil {
+		glog.Errorf("nested error: %v --> %v", err, errRm)
+	}
+}
+
+func (wi *archwi) finalize() (size int64, err error) {
+	var cksum *cos.Cksum
+	if wi.appendPos > 0 {
+		var st os.FileInfo
+		if st, err = os.Stat(wi.fqn); err == nil {
+			size = st.Size()
+		}
+		cksum = cos.NewCksum(cos.ChecksumNone, "")
+	} else {
+		wi.cksum.Finalize()
+		cksum = &wi.cksum.Cksum
+		size = wi.cksum.Size
+	}
+	wi.lom.SetCksum(cksum)
+	return size, err
 }
 
 ///////////////
