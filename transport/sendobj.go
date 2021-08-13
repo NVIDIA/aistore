@@ -217,7 +217,7 @@ repeat:
 	case obj, ok := <-s.workCh: // next object OR idle tick
 		if !ok {
 			err = fmt.Errorf("%s closed prior to stopping", s)
-			debug.Infof("%v", err)
+			glog.Warning(err)
 			return
 		}
 		s.sendoff.obj = *obj
@@ -234,7 +234,9 @@ repeat:
 		return s.sendHdr(b)
 	case <-s.stopCh.Listen():
 		num := s.stats.Num.Load()
-		glog.Infof("%s: stopped (%d/%d)", s, s.Numcur, num)
+		if verbose {
+			glog.Infof("%s: stopped (%d/%d)", s, s.Numcur, num)
+		}
 		err = io.EOF
 		return
 	}

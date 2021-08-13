@@ -69,7 +69,7 @@ repeat:
 	case msg, ok := <-s.workCh:
 		if !ok {
 			err = fmt.Errorf("%s closed prior to stopping", s)
-			debug.Infof("%v", err)
+			glog.Warning(err)
 			return
 		}
 		s.msgoff.msg = *msg

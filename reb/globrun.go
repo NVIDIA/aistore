@@ -238,9 +238,16 @@ func (reb *Manager) rebInit(md *rebArgs, notif *xaction.NotifXact) bool {
 	}
 
 	// 4. create persistent mark
-	err := fs.PersistMarker(cmn.RebalanceMarker)
-	if err != nil {
-		glog.Errorf("Failed to create marker: %v", err)
+	if fatalErr, writeErr := fs.PersistMarker(cmn.RebalanceMarker); fatalErr != nil || writeErr != nil {
+		err := writeErr
+		if fatalErr != nil {
+			err = fatalErr
+		}
+		reb.endStreams(err)
+		xact.Abort()
+		reb.Unlock()
+		glog.Errorf("FATAL: %v, WRITE: %v", fatalErr, writeErr)
+		return false
 	}
 
 	// 5. ready - can receive objects

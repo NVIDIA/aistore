@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
@@ -19,6 +19,8 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
+const numMarkers = 1
+
 // List of AIS metadata files and directories (basenames only)
 var mdFilesDirs = []string{
 	cmn.MarkersDirName,
@@ -34,19 +36,25 @@ func MarkerExists(marker string) bool {
 	return CountPersisted(markerPath) > 0
 }
 
-func PersistMarker(marker string) error {
-	const numMarkers = 1
+func PersistMarker(marker string) (fatalErr, writeErr error) {
 	var (
 		relname            = filepath.Join(cmn.MarkersDirName, marker)
 		availableMpaths, _ = Get()
 		cnt                int
 	)
+	if len(availableMpaths) == 0 {
+		fatalErr = ErrNoMountpaths
+		return
+	}
 	for _, mi := range availableMpaths {
 		fpath := filepath.Join(mi.Path, relname)
 		if err := Access(fpath); err == nil {
 			cnt++
 			if cnt > numMarkers {
 				if err := cos.RemoveFile(fpath); err != nil {
+					if writeErr == nil {
+						writeErr = err
+					}
 					glog.Errorf("Failed to cleanup %q marker: %v", fpath, err)
 				} else {
 					cnt--
@@ -54,6 +62,7 @@ func PersistMarker(marker string) error {
 			}
 		} else if cnt < numMarkers {
 			if file, err := cos.CreateFile(fpath); err == nil {
+				writeErr = err
 				file.Close()
 				cnt++
 			} else {
@@ -62,9 +71,9 @@ func PersistMarker(marker string) error {
 		}
 	}
 	if cnt == 0 {
-		return fmt.Errorf("failed to persist %q marker (%d)", marker, len(availableMpaths))
+		fatalErr = fmt.Errorf("failed to persist %q marker (%d)", marker, len(availableMpaths))
 	}
-	return nil
+	return
 }
 
 func RemoveMarker(marker string) {

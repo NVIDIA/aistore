@@ -103,7 +103,9 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	statsif, _ := h.sessions.LoadOrStore(uid, &Stats{})
 	xxh, _ := UID2SessID(uid)
 	loghdr := fmt.Sprintf("%s[%d:%d]", trname, xxh, sessID)
-	debug.Infof("%s: start-of-stream from %s", loghdr, r.RemoteAddr)
+	if verbose {
+		glog.Infof("%s: start-of-stream from %s", loghdr, r.RemoteAddr)
+	}
 	stats := statsif.(*Stats)
 
 	// receive loop

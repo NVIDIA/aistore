@@ -166,10 +166,13 @@ func initDaemon(version, buildTime string) cos.Runner {
 	if daemon.cli.role == cmn.Proxy {
 		p := newProxy(co)
 		p.init(config)
+		glog.SetNodeName(p.si.String())
 		return p
 	}
 	t := newTarget(co)
 	t.init(config)
+	glog.SetNodeName(t.si.String())
+
 	return t
 }
 

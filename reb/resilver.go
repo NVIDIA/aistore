@@ -31,13 +31,14 @@ type (
 func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xaction.NotifXact) {
 	debug.Assert(id != "")
 
+	if fatalErr, writeErr := fs.PersistMarker(cmn.ResilverMarker); fatalErr != nil || writeErr != nil {
+		glog.Errorf("FATAL: %v, WRITE: %v", fatalErr, writeErr)
+		return
+	}
 	availablePaths, _ := fs.Get()
 	if len(availablePaths) < 2 {
 		glog.Errorf("Cannot run resilver with less than 2 mountpaths (%d)", len(availablePaths))
 		return
-	}
-	if err := fs.PersistMarker(cmn.ResilverMarker); err != nil {
-		glog.Errorf("Failed to create resilver marker, err: %v", err)
 	}
 
 	xact := xreg.RenewResilver(id).(*xs.Resilver)

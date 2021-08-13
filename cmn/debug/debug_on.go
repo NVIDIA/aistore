@@ -23,20 +23,27 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 )
 
+// Examples usage:
+// $ AIS_DEBUG="fs=4,reb=4" go test ...
+// or
+// $ AIS_DEBUG="fs=4,reb=4" make deploy ...
+//
+// See also: 3rdparty/glog/glog.go
+
 var (
 	xmodules map[uint8]*expvar.Map
 
 	smodules = map[string]uint8{
+		"transport": glog.SmoduleTransport,
 		"ais":       glog.SmoduleAIS,
+		"memsys":    glog.SmoduleMemsys,
 		"cluster":   glog.SmoduleCluster,
 		"fs":        glog.SmoduleFS,
-		"memsys":    glog.SmoduleMemsys,
-		"mirror":    glog.SmoduleMirror,
 		"reb":       glog.SmoduleReb,
-		"transport": glog.SmoduleTransport,
 		"ec":        glog.SmoduleEC,
 		"stats":     glog.SmoduleStats,
 		"ios":       glog.SmoduleIOS,
+		"xs":        glog.SmoduleXs,
 	}
 )
 

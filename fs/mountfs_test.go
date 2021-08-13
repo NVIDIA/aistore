@@ -284,15 +284,16 @@ func TestMoveMarkers(t *testing.T) {
 
 			mpath := createMountpath(t)
 
-			err := fs.PersistMarker(cmn.RebalanceMarker)
-			tassert.CheckFatal(t, err)
+			fatalErr, writeErr := fs.PersistMarker(cmn.RebalanceMarker)
+			tassert.CheckFatal(t, fatalErr)
+			tassert.CheckFatal(t, writeErr)
 
 			createMountpath(t)
 
 			exists := fs.MarkerExists(cmn.RebalanceMarker)
 			tassert.Fatalf(t, exists, "marker does not exist")
 
-			_, err = test.f(mpath.Path)
+			_, err := test.f(mpath.Path)
 			tassert.CheckFatal(t, err)
 
 			exists = fs.MarkerExists(cmn.RebalanceMarker)

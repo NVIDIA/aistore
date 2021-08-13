@@ -6,12 +6,17 @@
 package xs
 
 import (
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/xreg"
 )
 
+var verbose bool
+
 // for additional startup-time reg-s see lru, downloader, ec
 func init() {
+	verbose = bool(glog.FastV(4, glog.SmoduleXs))
+
 	xreg.RegNonBckXact(&eleFactory{})
 	xreg.RegNonBckXact(&rslvrFactory{})
 	xreg.RegNonBckXact(&rebFactory{})

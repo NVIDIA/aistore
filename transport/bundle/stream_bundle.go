@@ -68,6 +68,12 @@ type (
 // interface guard
 var _ cluster.Slistener = (*Streams)(nil)
 
+var verbose bool
+
+func init() {
+	verbose = bool(glog.FastV(4, glog.SmoduleTransport))
+}
+
 //
 // API
 //
@@ -345,7 +351,9 @@ func (sb *Streams) Resync() {
 			if sb.multiplier > 1 {
 				s = fmt.Sprintf("(%d)", k)
 			}
-			glog.Infof("%s: [+] %s%s => %s via %s", sb, ns, s, id, toURL)
+			if verbose {
+				glog.Infof("%s: [+] %s%s => %s via %s", sb, ns, s, id, toURL)
+			}
 			nrobin.stsdest[k] = ns
 		}
 		nbundle[id] = nrobin
@@ -360,7 +368,9 @@ func (sb *Streams) Resync() {
 			if !os.Terminated() {
 				os.Stop() // the node is gone but the stream appears to be still active - stop it
 			}
-			glog.Infof("%s: [-] %s => %s via %s", sb, os, id, os.URL())
+			if verbose {
+				glog.Infof("%s: [-] %s => %s via %s", sb, os, id, os.URL())
+			}
 		}
 		delete(nbundle, id)
 	}

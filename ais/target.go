@@ -260,11 +260,22 @@ func (t *targetrunner) Run() error {
 	// metrics, disks first
 	tstats := t.statsT.(*stats.Trunner)
 	availablePaths, disabledPaths := fs.Get()
+	if len(availablePaths) == 0 {
+		cos.ExitLogf("%v", fs.ErrNoMountpaths)
+	}
 	regDiskMetrics(tstats, availablePaths)
 	regDiskMetrics(tstats, disabledPaths)
 	t.statsT.RegMetrics(t.si) // + Prometheus, if configured
 
-	t.checkRestarted()
+	fatalErr, writeErr := t.checkRestarted()
+	if fatalErr != nil {
+		cos.ExitLogf("%v", fatalErr)
+	}
+	if writeErr != nil {
+		glog.Errorln("")
+		glog.Error(writeErr)
+		glog.Errorln("")
+	}
 
 	// register object type and workfile type
 	if err := fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{}); err != nil {
@@ -349,7 +360,8 @@ func (t *targetrunner) Run() error {
 	defer etl.StopAll(t) // Always try to stop running ETLs.
 
 	err = t.httprunner.run()
-	// NOTE: This must be done *after* `t.httprunner.run()` so we don't remove marker on panic.
+
+	// do it after the `run()` to retain `restarted` marker on panic
 	fs.RemoveMarker(cmn.NodeRestartedMarker)
 	return err
 }
@@ -394,12 +406,13 @@ func (t *targetrunner) Stop(err error) {
 	t.httprunner.stop(t.netServ.pub.s != nil && !isErrNoUnregister(err) /*rm from Smap*/)
 }
 
-func (t *targetrunner) checkRestarted() {
+func (t *targetrunner) checkRestarted() (fatalErr, writeErr error) {
 	if fs.MarkerExists(cmn.NodeRestartedMarker) {
 		t.statsT.Add(stats.RestartCount, 1)
-	} else if err := fs.PersistMarker(cmn.NodeRestartedMarker); err != nil {
-		glog.Error(err)
+	} else {
+		fatalErr, writeErr = fs.PersistMarker(cmn.NodeRestartedMarker)
 	}
+	return
 }
 
 //

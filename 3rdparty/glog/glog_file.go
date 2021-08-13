@@ -20,6 +20,7 @@ package glog
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"os/user"
@@ -39,25 +40,21 @@ var logDirs []string
 // See createLogDirs for the full list of possible destinations.
 var logDir string
 
-func SetLogDir(dir string) {
-	logDir = dir
-}
-
-func createLogDirs() {
-	if logDir != "" {
-		logDirs = append(logDirs, logDir)
-	}
-	logDirs = append(logDirs, filepath.Join(os.TempDir(), "aislogs"))
-}
-
 var (
-	pid      = os.Getpid()
-	program  = filepath.Base(os.Args[0])
+	pid      int
+	program  string
 	host     = "unknownhost"
 	userName = "unknownuser"
+
+	nodeName string
 )
 
+var onceLogDirs sync.Once
+
 func init() {
+	pid = os.Getpid()
+	program = filepath.Base(os.Args[0])
+
 	h, err := os.Hostname()
 	if err == nil {
 		host = shortHostname(h)
@@ -70,6 +67,34 @@ func init() {
 
 	// Sanitize userName since it may contain filepath separators on Windows.
 	userName = strings.ReplaceAll(userName, `\`, "_")
+
+	flag.BoolVar(&logging.toStderr, "logtostderr", false, "log to standard error instead of files")
+	flag.BoolVar(&logging.alsoToStderr, "alsologtostderr", false, "log to standard error as well as files")
+	flag.Var(&logging.verbosity, "v", "log level for V logs")
+	flag.Var(&logging.stderrThreshold, "stderrthreshold", "logs at or above this threshold go to stderr")
+	flag.Var(&logging.vmodule, "vmodule", "comma-separated list of pattern=N settings for file-filtered logging")
+	flag.Var(&logging.traceLocation, "log_backtrace_at", "when logging hits line file:N, emit a stack trace")
+
+	// Default stderrThreshold is ERROR.
+	logging.stderrThreshold = errorLog
+
+	logging.setVState(0, nil, false)
+	go logging.flushDaemon()
+}
+
+func SetNodeName(name string) { nodeName = name }
+
+func SetLogDir(dir string) { logDir = dir }
+
+func InfoLogName() string { return program + ".INFO" }
+func WarnLogName() string { return program + ".WARNING" }
+func ErrLogName() string  { return program + ".ERROR" }
+
+func createLogDirs() {
+	if logDir != "" {
+		logDirs = append(logDirs, logDir)
+	}
+	logDirs = append(logDirs, filepath.Join(os.TempDir(), "aislogs"))
 }
 
 // shortHostname returns its argument, truncating at the first period.
@@ -98,12 +123,6 @@ func logName(tag string, t time.Time) (name, link string) {
 		pid)
 	return name, program + "." + tag
 }
-
-func InfoLogName() string { return program + ".INFO" }
-func WarnLogName() string { return program + ".WARNING" }
-func ErrLogName() string  { return program + ".ERROR" }
-
-var onceLogDirs sync.Once
 
 // create creates a new log file and returns the file and its filename, which
 // contains tag ("INFO", "FATAL", etc.) and t.  If the file is created

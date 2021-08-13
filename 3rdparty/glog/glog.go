@@ -112,18 +112,18 @@ var severityName = []string{
 	errorLog:   "ERROR",
 }
 
-// NOTE: map in cmn/debug/debug_on.go
+// NOTE: for module names mapped to these constants, see cmn/debug/debug_on.go
 const (
 	SmoduleTransport = iota
 	SmoduleAIS
 	SmoduleMemsys
 	SmoduleCluster
-	SmoduleMirror
 	SmoduleFS
 	SmoduleReb
 	SmoduleEC
 	SmoduleStats
 	SmoduleIOS
+	SmoduleXs
 	// NOTE: guard to define the size of 'smodules' array - make sure it is always the last.
 	_smoduleLast
 )
@@ -263,8 +263,8 @@ type moduleSpec struct {
 // It holds a verbosity level and a file pattern to match.
 type modulePat struct {
 	pattern string
-	literal bool // The pattern is a literal string
 	level   Level
+	literal bool // The pattern is a literal string
 }
 
 // match reports whether the file matches the pattern.
@@ -321,7 +321,7 @@ func (*moduleSpec) Set(value string) error {
 			continue // Ignore. It's harmless but no point in paying the overhead.
 		}
 		// TODO: check syntax of filter?
-		filter = append(filter, modulePat{pattern, isLiteral(pattern), Level(v)})
+		filter = append(filter, modulePat{pattern: pattern, level: Level(v), literal: isLiteral(pattern)})
 	}
 	logging.mu.Lock()
 	defer logging.mu.Unlock()
@@ -408,21 +408,6 @@ type flushSyncWriter interface {
 	Flush() error
 	Sync() error
 	io.Writer
-}
-
-func init() {
-	flag.BoolVar(&logging.toStderr, "logtostderr", false, "log to standard error instead of files")
-	flag.BoolVar(&logging.alsoToStderr, "alsologtostderr", false, "log to standard error as well as files")
-	flag.Var(&logging.verbosity, "v", "log level for V logs")
-	flag.Var(&logging.stderrThreshold, "stderrthreshold", "logs at or above this threshold go to stderr")
-	flag.Var(&logging.vmodule, "vmodule", "comma-separated list of pattern=N settings for file-filtered logging")
-	flag.Var(&logging.traceLocation, "log_backtrace_at", "when logging hits line file:N, emit a stack trace")
-
-	// Default stderrThreshold is ERROR.
-	logging.stderrThreshold = errorLog
-
-	logging.setVState(0, nil, false)
-	go logging.flushDaemon()
 }
 
 // Flush flushes all pending log I/O.
@@ -831,6 +816,9 @@ func (sb *syncBuffer) rotateFile(now time.Time) error {
 
 	// Write header.
 	var buf bytes.Buffer
+	if nodeName != "" {
+		fmt.Fprintf(&buf, "Node: %s\n", nodeName)
+	}
 	fmt.Fprintf(&buf, "Log file created at: %s\n", now.Format("2006/01/02 15:04:05"))
 	fmt.Fprintf(&buf, "Running on machine: %s\n", host)
 	fmt.Fprintf(&buf, "Binary: Built with %s %s for %s/%s\n", runtime.Compiler, runtime.Version(), runtime.GOOS, runtime.GOARCH)

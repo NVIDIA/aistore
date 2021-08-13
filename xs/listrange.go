@@ -385,7 +385,7 @@ func (r *prefetch) do(lom *cluster.LOM, _ *lriterator) {
 		}
 		return
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if verbose {
 		glog.Infof("prefetch: %s", lom)
 	}
 	r.ObjectsInc()

@@ -71,7 +71,7 @@ func (p *rebFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 		glog.Errorf("(reb: %s) %s is greater than %s", xreb.xact, xreb.args.ID, p.args.ID)
 		wpr = xreg.WprUse
 	} else if xreb.args.ID == p.args.ID {
-		if glog.FastV(4, glog.SmoduleAIS) {
+		if verbose {
 			glog.Infof("%s already running, nothing to do", xreb.xact)
 		}
 		wpr = xreg.WprUse

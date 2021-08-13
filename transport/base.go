@@ -216,7 +216,9 @@ func (s *streamBase) isNextReq() (next bool) {
 			*s.term.reason = endOfStream
 			return
 		case <-s.stopCh.Listen():
-			glog.Infof("stream %s stopped", s)
+			if verbose {
+				glog.Infof("stream %s stopped", s)
+			}
 			*s.term.reason = reasonStopped
 			return
 		case <-s.postCh:

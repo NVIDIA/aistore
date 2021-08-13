@@ -165,8 +165,9 @@ func (r *ObjListXact) _initTraverse() {
 }
 
 func (r *ObjListXact) Run(*sync.WaitGroup) {
-	glog.Infoln(r.String())
-
+	if verbose {
+		glog.Infoln(r.String())
+	}
 	r.init()
 
 	for {
@@ -351,7 +352,7 @@ func (r *ObjListXact) getPage(marker string, cnt uint) *cmn.BucketList {
 // genNextPage calls DecPending either immediately on error or inside
 // a goroutine if some work must be done.
 func (r *ObjListXact) genNextPage(token string, cnt uint) error {
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if verbose {
 		glog.Infof("[%s] token: %q", r, r.msg.ContinuationToken)
 	}
 	if token != "" && token == r.token {
