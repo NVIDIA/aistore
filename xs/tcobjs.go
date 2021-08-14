@@ -8,6 +8,7 @@ package xs
 import (
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -79,7 +80,7 @@ func (p *tcoFactory) Start() error {
 	r.pending.m = make(map[string]*tcowi, maxNumInParallel)
 	p.xact = r
 	r.DemandBase.Init(p.UUID(), p.Kind(), p.Bck, totallyIdle, likelyIdle)
-	if err := p.newDM(p.UUID()); err != nil {
+	if err := p.newDM(); err != nil {
 		return err
 	}
 	r.dm.SetXact(r)
@@ -89,21 +90,29 @@ func (p *tcoFactory) Start() error {
 	return nil
 }
 
-func (p *tcoFactory) newDM(uuid string) error {
-	var (
-		trname  = "transcpy-" + "-" + uuid
-		sizePDU int32
-	)
+func (p *tcoFactory) newDM() error {
+	var sizePDU int32
 	if p.kind == cmn.ActETLObjects {
 		sizePDU = memsys.DefaultBufSize
 	}
+	// NOTE: transport endpoint must be identical across cluster
+	trname := "arch-" + p.args.BckFrom.Provider + "-" + p.args.BckFrom.Name
+
 	dmExtra := bundle.Extra{Multiplier: 1, SizePDU: sizePDU}
 	dm, err := bundle.NewDataMover(p.T, trname, p.xact.recv, cluster.RegularPut, dmExtra)
 	if err != nil {
 		return err
 	}
+	// TODO better
 	if err := dm.RegRecv(); err != nil {
-		return err
+		if strings.Contains(err.Error(), "duplicate trname") {
+			glog.Errorf("retry reg-recv %s", trname)
+			time.Sleep(2 * delayUnregRecv)
+			err = dm.RegRecv()
+		}
+		if err != nil {
+			return err
+		}
 	}
 	p.xact.dm = dm
 	return nil
@@ -244,7 +253,7 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 }
 
 func (r *XactTCObjs) String() string {
-	return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.args.BckFrom)
+	return fmt.Sprintf("%s=>%s", r.XactBase.String(), r.args.BckTo)
 }
 
 // limited pre-run abort

@@ -142,18 +142,19 @@ func TestGetFromArchive(t *testing.T) {
 }
 
 // PUT/create
-func TestCreateArchMultiObj(t *testing.T) {
+func TestCreateMultiObjArch(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
-		_createArchMultiObj(t, bck)
+		testMobjArch(t, bck)
 	})
 }
 
-func _createArchMultiObj(t *testing.T, bck *cluster.Bck) {
+func testMobjArch(t *testing.T, bck *cluster.Bck) {
 	var (
-		m = ioContext{
+		numPuts = 100
+		m       = ioContext{
 			t:       t,
 			bck:     bck.Bck,
-			num:     75,
+			num:     numPuts,
 			prefix:  "archive/",
 			ordered: true,
 		}
@@ -162,7 +163,6 @@ func _createArchMultiObj(t *testing.T, bck *cluster.Bck) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		numArchs   = 15
 		numInArch  = cos.Min(m.num/2, 7)
-		numPuts    = m.num
 		fmtRange   = "%s{%d..%d}"
 		subtests   = []struct {
 			ext            string // one of cos.ArchExtensions (same as: supported arch formats)
@@ -202,6 +202,9 @@ func _createArchMultiObj(t *testing.T, bck *cluster.Bck) {
 			tname += "//" + m.bck.Name
 		}
 		t.Run(tname, func(t *testing.T) {
+			if m.bck.IsRemote() {
+				m.num = numPuts >> 1
+			}
 			m.init()
 			m.puts()
 			if m.bck.IsRemote() {
@@ -216,7 +219,7 @@ func _createArchMultiObj(t *testing.T, bck *cluster.Bck) {
 					archName := fmt.Sprintf("test_lst_%02d%s", i, test.ext)
 					list := make([]string, 0, numInArch)
 					for j := 0; j < numInArch; j++ {
-						list = append(list, m.objNames[rand.Intn(numPuts)])
+						list = append(list, m.objNames[rand.Intn(m.num)])
 					}
 					go func(archName string, list []string) {
 						msg := cmn.ArchiveMsg{ToBck: toBck, ArchName: archName}
@@ -230,7 +233,7 @@ func _createArchMultiObj(t *testing.T, bck *cluster.Bck) {
 			} else {
 				for i := 0; i < numArchs; i++ {
 					archName := fmt.Sprintf("test_rng_%02d%s", i, test.ext)
-					start := rand.Intn(numPuts - numInArch)
+					start := rand.Intn(m.num - numInArch)
 					go func(archName string, start int) {
 						msg := cmn.ArchiveMsg{ToBck: toBck, ArchName: archName}
 						msg.ListRangeMsg.Template = fmt.Sprintf(fmtRange, m.prefix, start, start+numInArch-1)
@@ -291,7 +294,7 @@ func _createArchMultiObj(t *testing.T, bck *cluster.Bck) {
 	}
 }
 
-func TestArchiveAppend(t *testing.T) {
+func TestAppendToArch(t *testing.T) {
 	var (
 		fromBck = cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS}
 		toBck   = cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS}
@@ -307,7 +310,6 @@ func TestArchiveAppend(t *testing.T) {
 		numArchs   = 10
 		numAdd     = 10
 		numInArch  = cos.Min(m.num/2, 7)
-		numPuts    = m.num
 		objPattern = "test_lst_%04d%s"
 		archPath   = "extra/newfile%04d"
 		subtests   = []struct {
@@ -338,7 +340,7 @@ func TestArchiveAppend(t *testing.T) {
 				archName := fmt.Sprintf(objPattern, i, test.ext)
 				list := make([]string, 0, numInArch)
 				for j := 0; j < numInArch; j++ {
-					list = append(list, m.objNames[rand.Intn(numPuts)])
+					list = append(list, m.objNames[rand.Intn(m.num)])
 				}
 				go func(archName string, list []string) {
 					msg := cmn.ArchiveMsg{ToBck: toBck, ArchName: archName}
@@ -364,7 +366,7 @@ func TestArchiveAppend(t *testing.T) {
 				if test.multi {
 					list := make([]string, 0, numAdd)
 					for j := 0; j < numAdd; j++ {
-						list = append(list, m.objNames[rand.Intn(numPuts)])
+						list = append(list, m.objNames[rand.Intn(m.num)])
 					}
 					msg := cmn.ArchiveMsg{ToBck: toBck, ArchName: archName, AllowAppendToExisting: true}
 					msg.ListRangeMsg.ObjNames = list

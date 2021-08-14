@@ -20,6 +20,14 @@ func CreateArchMultiObj(baseParams BaseParams, fromBck cmn.Bck, msg cmn.ArchiveM
 	return doListRangeRequest(baseParams, fromBck, cmn.ActArchive, msg)
 }
 
+func CopyMultiObj(baseParams BaseParams, fromBck cmn.Bck, msg cmn.TCObjsMsg) (xactID string, err error) {
+	return doListRangeRequest(baseParams, fromBck, cmn.ActCopyObjects, msg)
+}
+
+func ETLMultiObj(baseParams BaseParams, fromBck cmn.Bck, msg cmn.TCObjsMsg) (xactID string, err error) {
+	return doListRangeRequest(baseParams, fromBck, cmn.ActETLObjects, msg)
+}
+
 // DeleteList sends HTTP request to remove a list of objects from a bucket.
 func DeleteList(baseParams BaseParams, bck cmn.Bck, filesList []string) (string, error) {
 	deleteMsg := cmn.ListRangeMsg{ObjNames: filesList}
@@ -56,31 +64,14 @@ func EvictRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) 
 	return doListRangeRequest(baseParams, bck, cmn.ActEvictObjects, evictMsg)
 }
 
-func CopyObjectsRange(baseParams BaseParams, fromBck, toBck cmn.Bck, rng string) (xactID string, err error) {
-	cpyRangeMsg := cmn.TCObjsMsg{ListRangeMsg: cmn.ListRangeMsg{Template: rng}, TCBMsg: cmn.TCBMsg{}}
-	return transCpyListRange(baseParams, cmn.ActCopyObjects, fromBck, toBck, cpyRangeMsg)
-}
-
-func transCpyListRange(baseParams BaseParams, kind string, fromBck, toBck cmn.Bck, msg cmn.TCObjsMsg) (xactID string, err error) {
-	baseParams.Method = http.MethodPost
-	q := cmn.AddBckToQuery(nil, fromBck)
-	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.URLParamBucketTo)
-	err = DoHTTPRequest(ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathBuckets.Join(fromBck.Name),
-		Body:       cos.MustMarshal(cmn.ActionMsg{Action: kind, Value: msg}),
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		Query:      q,
-	}, &xactID)
-	return
-}
-
-// Handles operations on multiple objects (delete, prefetch, evict, archive)
+// Handles multi-object (delete, prefetch, evict) operations
+// as well as (archive, copy and ETL) transactions
 func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action string, msg interface{}) (xactID string, err error) {
+	q := cmn.AddBckToQuery(nil, bck)
 	switch action {
 	case cmn.ActDeleteObjects, cmn.ActEvictObjects:
 		baseParams.Method = http.MethodDelete
-	case cmn.ActPrefetchObjects:
+	case cmn.ActPrefetchObjects, cmn.ActCopyObjects, cmn.ActETLObjects:
 		baseParams.Method = http.MethodPost
 	case cmn.ActArchive:
 		baseParams.Method = http.MethodPut
@@ -93,7 +84,7 @@ func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action string, msg i
 		Path:       cmn.URLPathBuckets.Join(bck.Name),
 		Body:       cos.MustMarshal(cmn.ActionMsg{Action: action, Value: msg}),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		Query:      cmn.AddBckToQuery(nil, bck),
+		Query:      q,
 	}, &xactID)
 	return
 }

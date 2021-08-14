@@ -1053,11 +1053,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
 		}
-		bckTo, err = newBckFromQueryUname(query, true /*required*/)
-		if err != nil {
-			p.writeErr(w, r, err)
-			return
-		}
+		bckTo = cluster.NewBckEmbed(tcoMsg.ToBck)
 		if err = bckTo.Init(p.owner.bmd); err != nil {
 			p.writeErr(w, r, err)
 			return

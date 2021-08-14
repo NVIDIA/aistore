@@ -2,7 +2,6 @@
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-
 package integration
 
 import (
@@ -383,89 +382,6 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 	exp, got := reader.Cksum().Val(), string(outObject.Bytes())
 	tassert.Errorf(t, exp == got, "expected transformed object to be md5 checksum %s, got %s", exp,
 		got[:cos.Min(len(got), 16)])
-}
-
-func TestETLMultiObjects(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
-	tetl.CheckNoRunningETLContainers(t, baseParams)
-	const (
-		objCnt      = 50
-		copyCnt     = 20
-		rangeStart  = 10
-		transformer = tetl.MD5
-		etlCommType = etl.PushCommType
-		objSize     = cos.KiB
-		cksumType   = cos.ChecksumMD5
-	)
-	var (
-		bck   = cmn.Bck{Name: "etloffline", Provider: cmn.ProviderAIS}
-		toBck = cmn.Bck{Name: "etloffline-out-" + cos.RandString(5), Provider: cmn.ProviderAIS}
-	)
-
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
-	tutils.CreateFreshBucket(t, proxyURL, toBck, nil)
-
-	for i := 0; i < objCnt; i++ {
-		r, _ := readers.NewRandReader(objSize, cksumType)
-		err := api.PutObject(api.PutObjectArgs{
-			BaseParams: baseParams,
-			Bck:        bck,
-			Object:     fmt.Sprintf("test/a-%04d", i),
-			Reader:     r,
-			Size:       objSize,
-		})
-		tassert.CheckFatal(t, err)
-	}
-
-	uuid, err := tetl.Init(baseParams, transformer, etlCommType)
-	tassert.CheckFatal(t, err)
-	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
-
-	for _, ty := range []string{"range", "list"} {
-		t.Run(ty, func(t *testing.T) {
-			testETLMultiObjects(t, uuid, bck, toBck, "test/a-"+fmt.Sprintf("{%04d..%04d}", rangeStart, rangeStart+copyCnt-1), ty)
-		})
-	}
-}
-
-func testETLMultiObjects(t *testing.T, uuid string, fromBck, toBck cmn.Bck, fileRange, opType string) {
-	pt, err := cos.ParseBashTemplate(fileRange)
-	tassert.CheckFatal(t, err)
-
-	var (
-		objList        = pt.ToSlice()
-		objCnt         = len(objList)
-		requestTimeout = 30 * time.Second
-		transCpyMsg    = cmn.TCObjsMsg{
-			TCBMsg: cmn.TCBMsg{
-				ID:             uuid,
-				RequestTimeout: cos.Duration(requestTimeout),
-			},
-		}
-	)
-
-	if opType == "list" {
-		transCpyMsg.ListRangeMsg.ObjNames = objList
-	} else {
-		transCpyMsg.ListRangeMsg.Template = fileRange
-	}
-
-	tlog.Logf("Start offline ETL %q\n", uuid)
-	xactID, err := api.ETLMultiObjects(baseParams, fromBck, toBck, transCpyMsg)
-	tassert.CheckFatal(t, err)
-
-	wargs := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLObjects}
-	err = api.WaitForXactionIdle(baseParams, wargs)
-	tassert.CheckFatal(t, err)
-
-	list, err := api.ListObjects(baseParams, toBck, nil, 0)
-	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, len(list.Entries) == objCnt, "expected %d objects from offline ETL, got %d", objCnt, len(list.Entries))
-	for _, objName := range objList {
-		err := api.DeleteObject(baseParams, toBck, objName)
-		tassert.CheckError(t, err)
-		tlog.Logf("%s/%s\n", toBck.Name, objName)
-	}
 }
 
 func TestETLBucket(t *testing.T) {

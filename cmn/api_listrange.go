@@ -34,6 +34,7 @@ type (
 		TxnUUID string `json:"-"`
 		ListRangeMsg
 		TCBMsg
+		ToBck Bck `json:"tobck"`
 	}
 )
 

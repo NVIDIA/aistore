@@ -153,12 +153,13 @@ func (p *archFactory) Start() error {
 }
 
 func (p *archFactory) newDM(bckFrom *cluster.Bck, r *XactCreateArchMultiObj) error {
-	// transport endpoint name (given xaction, m.b. identical across cluster)
+	// NOTE: transport endpoint must be identical across cluster
 	trname := "arch-" + bckFrom.Provider + "-" + bckFrom.Name
 	dm, err := bundle.NewDataMover(p.T, trname, r.recvObjDM, cluster.RegularPut, bundle.Extra{Multiplier: 1})
 	if err != nil {
 		return err
 	}
+	// TODO better
 	if err := dm.RegRecv(); err != nil {
 		if strings.Contains(err.Error(), "duplicate trname") {
 			glog.Errorf("retry reg-recv %s", trname)

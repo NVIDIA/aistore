@@ -114,21 +114,17 @@ func (xact *XactBase) Quiesce(d time.Duration, cb cluster.QuiCB) cluster.QuiRes 
 }
 
 func (xact *XactBase) String() string {
-	prefix := xact.Kind()
+	var b string
 	if xact.bck != nil {
-		prefix += "@" + xact.bck.Name
+		b = "-" + xact.bck.String()
 	}
+	stime := cos.FormatTimestamp(xact.StartTime())
+	s := fmt.Sprintf("%s[%s]%s-%s", xact.Kind(), xact.ID(), b, stime)
 	if !xact.Finished() {
-		return fmt.Sprintf("%s(%q)", prefix, xact.ID())
+		return s
 	}
-	var (
-		stime    = xact.StartTime()
-		stimestr = cos.FormatTimestamp(stime)
-		etime    = xact.EndTime()
-		d        = etime.Sub(stime)
-	)
-	return fmt.Sprintf("%s(%q) started %s ended %s (%v)",
-		prefix, xact.ID(), stimestr, cos.FormatTimestamp(etime), d)
+	etime := cos.FormatTimestamp(xact.EndTime())
+	return fmt.Sprintf("%s-%s", s, etime)
 }
 
 func (xact *XactBase) StartTime() time.Time {
