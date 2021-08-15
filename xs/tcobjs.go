@@ -180,20 +180,22 @@ fin:
 }
 
 func (r *XactTCObjs) fin(err error) {
-	var (
-		total time.Duration
-		l     = 1
-	)
 	r.DemandBase.Stop()
 	r.dm.Close(err)
-	for total < delayUnregRecvMax && l > 0 {
-		r.pending.RLock()
-		l = len(r.pending.m)
-		r.pending.RUnlock()
-		time.Sleep(delayUnregRecv)
-		total += delayUnregRecv
-	}
-	r.dm.UnregRecv()
+	go func() {
+		var (
+			total time.Duration
+			l     = 1
+		)
+		for total < delayUnregRecvMax && l > 0 {
+			r.pending.RLock()
+			l = len(r.pending.m)
+			r.pending.RUnlock()
+			time.Sleep(delayUnregRecv)
+			total += delayUnregRecv
+		}
+		r.dm.UnregRecv()
+	}()
 	r.Finish(err)
 }
 

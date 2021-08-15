@@ -205,7 +205,9 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 		//       won't work (disambiguate - store cloud version separately in custom-md)
 		if poi.recvType == cluster.RegularPut || lom.Version(true) == "" {
 			if err = lom.IncVersion(); err != nil {
-				glog.Error(err)
+				if glog.FastV(4, glog.SmoduleAIS) {
+					glog.Error(err)
+				}
 			}
 		}
 	}

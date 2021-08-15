@@ -7,6 +7,7 @@ package integration
 import (
 	"fmt"
 	"math/rand"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -126,31 +127,35 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 			if !toBck.Equal(m.bck) && toBck.IsAIS() {
 				tutils.CreateFreshBucket(t, proxyURL, toBck, nil)
 			}
-
+			var erv atomic.Value
 			if test.list {
-				for i := 0; i < numToCopy; i++ {
+				for i := 0; i < numToCopy && erv.Load() == nil; i++ {
 					list := make([]string, 0, numToCopy)
 					for j := 0; j < numToCopy; j++ {
 						list = append(list, m.objNames[rand.Intn(m.num)])
 					}
 					go func(list []string) {
 						msg := cmn.TCObjsMsg{ListRangeMsg: cmn.ListRangeMsg{ObjNames: list}, ToBck: toBck}
-						_, err := api.CopyMultiObj(baseParams, m.bck, msg)
-						tassert.CheckFatal(t, err)
+						if _, err := api.CopyMultiObj(baseParams, m.bck, msg); err != nil {
+							erv.Store(err)
+						}
 					}(list)
 				}
 			} else {
-				for i := 0; i < numToCopy; i++ {
+				for i := 0; i < numToCopy && erv.Load() == nil; i++ {
 					start := rand.Intn(m.num - numToCopy)
 					go func(start int) {
 						template := fmt.Sprintf(fmtRange, m.prefix, start, start+numToCopy-1)
 						msg := cmn.TCObjsMsg{ListRangeMsg: cmn.ListRangeMsg{Template: template}, ToBck: toBck}
-						_, err := api.CopyMultiObj(baseParams, m.bck, msg)
-						tassert.CheckFatal(t, err)
+						if _, err := api.CopyMultiObj(baseParams, m.bck, msg); err != nil {
+							erv.Store(err)
+						}
 					}(start)
 				}
 			}
-
+			if erv.Load() != nil {
+				tassert.CheckFatal(t, erv.Load().(error))
+			}
 			wargs := api.XactReqArgs{Kind: cmn.ActCopyObjects, Bck: m.bck}
 			api.WaitForXactionIdle(baseParams, wargs)
 
