@@ -8,7 +8,6 @@ package xs
 import (
 	"fmt"
 	"io"
-	"strings"
 	"sync"
 	"time"
 
@@ -75,46 +74,23 @@ func (p *tcoFactory) Start() error {
 		totallyIdle = config.Timeout.SendFile.D()
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
 		workCh      = make(chan *cmn.TCObjsMsg, maxNumInParallel)
+		err         error
+		sizePDU     int32
 	)
 	r := &XactTCObjs{t: p.T, args: p.args, workCh: workCh, config: config}
 	r.pending.m = make(map[string]*tcowi, maxNumInParallel)
 	p.xact = r
 	r.DemandBase.Init(p.UUID(), p.Kind(), p.Bck, totallyIdle, likelyIdle)
-	if err := p.newDM(); err != nil {
+	if p.kind == cmn.ActETLObjects {
+		sizePDU = memsys.DefaultBufSize
+	}
+	if r.dm, err = newArchTcoDM("tco-", p.RenewBase, r.recv, sizePDU); err != nil {
 		return err
 	}
 	r.dm.SetXact(r)
 	r.dm.Open()
 
 	xaction.GoRunW(r)
-	return nil
-}
-
-func (p *tcoFactory) newDM() error {
-	var sizePDU int32
-	if p.kind == cmn.ActETLObjects {
-		sizePDU = memsys.DefaultBufSize
-	}
-	// NOTE: transport endpoint must be identical across cluster
-	trname := "arch-" + p.args.BckFrom.Provider + "-" + p.args.BckFrom.Name
-
-	dmExtra := bundle.Extra{Multiplier: 1, SizePDU: sizePDU}
-	dm, err := bundle.NewDataMover(p.T, trname, p.xact.recv, cluster.RegularPut, dmExtra)
-	if err != nil {
-		return err
-	}
-	// TODO better
-	if err := dm.RegRecv(); err != nil {
-		if strings.Contains(err.Error(), "duplicate trname") {
-			glog.Errorf("retry reg-recv %s", trname)
-			time.Sleep(2 * delayUnregRecv)
-			err = dm.RegRecv()
-		}
-		if err != nil {
-			return err
-		}
-	}
-	p.xact.dm = dm
 	return nil
 }
 
@@ -182,20 +158,12 @@ fin:
 func (r *XactTCObjs) fin(err error) {
 	r.DemandBase.Stop()
 	r.dm.Close(err)
-	go func() {
-		var (
-			total time.Duration
-			l     = 1
-		)
-		for total < delayUnregRecvMax && l > 0 {
-			r.pending.RLock()
-			l = len(r.pending.m)
-			r.pending.RUnlock()
-			time.Sleep(delayUnregRecv)
-			total += delayUnregRecv
-		}
-		r.dm.UnregRecv()
-	}()
+	go unregArchTcoDM(r.dm, func() int {
+		r.pending.RLock()
+		l := len(r.pending.m)
+		r.pending.RUnlock()
+		return l
+	})
 	r.Finish(err)
 }
 

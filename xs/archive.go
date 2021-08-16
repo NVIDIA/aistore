@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -36,7 +35,7 @@ const (
 	doneSendingOpcode = 31415
 
 	delayUnregRecv    = 200 * time.Millisecond
-	delayUnregRecvMax = 10 * delayUnregRecv // NOTE: too aggressive?
+	delayUnregRecvMax = 16 * delayUnregRecv
 )
 
 type (
@@ -137,40 +136,19 @@ func (p *archFactory) Start() error {
 		totallyIdle = config.Timeout.SendFile.D()
 		likelyIdle  = config.Timeout.MaxKeepalive.D()
 		workCh      = make(chan *cmn.ArchiveMsg, maxNumInParallel)
+		err         error
 	)
 	r := &XactCreateArchMultiObj{t: p.T, bckFrom: p.Bck, workCh: workCh, config: config}
 	r.pending.m = make(map[string]*archwi, maxNumInParallel)
 	p.xact = r
 	r.DemandBase.Init(p.UUID(), cmn.ActArchive, p.Bck, totallyIdle, likelyIdle)
-	if err := p.newDM(p.Bck, r); err != nil {
+	if r.dm, err = newArchTcoDM("arch-", p.RenewBase, r.recvObjDM, 0); err != nil {
 		return err
 	}
 	r.dm.SetXact(r)
 	r.dm.Open()
 
 	xaction.GoRunW(r)
-	return nil
-}
-
-func (p *archFactory) newDM(bckFrom *cluster.Bck, r *XactCreateArchMultiObj) error {
-	// NOTE: transport endpoint must be identical across cluster
-	trname := "arch-" + bckFrom.Provider + "-" + bckFrom.Name
-	dm, err := bundle.NewDataMover(p.T, trname, r.recvObjDM, cluster.RegularPut, bundle.Extra{Multiplier: 1})
-	if err != nil {
-		return err
-	}
-	// TODO better
-	if err := dm.RegRecv(); err != nil {
-		if strings.Contains(err.Error(), "duplicate trname") {
-			glog.Errorf("retry reg-recv %s", trname)
-			time.Sleep(2 * delayUnregRecv)
-			err = dm.RegRecv()
-		}
-		if err != nil {
-			return err
-		}
-	}
-	r.dm = dm
 	return nil
 }
 
@@ -315,20 +293,12 @@ func (r *XactCreateArchMultiObj) fin(err error) {
 		}
 	}
 	r.dm.Close(err)
-	go func() {
-		var (
-			total time.Duration
-			l     = 1
-		)
-		for total < delayUnregRecvMax && l > 0 {
-			r.pending.RLock()
-			l = len(r.pending.m)
-			r.pending.RUnlock()
-			time.Sleep(delayUnregRecv)
-			total += delayUnregRecv
-		}
-		r.dm.UnregRecv()
-	}()
+	go unregArchTcoDM(r.dm, func() int {
+		r.pending.RLock()
+		l := len(r.pending.m)
+		r.pending.RUnlock()
+		return l
+	})
 	r.Finish(err)
 }
 
