@@ -208,7 +208,7 @@ func (dm *DataMover) quicb(_ time.Duration /*accum. sleep time*/) cluster.QuiRes
 	if dm.stage.laterx.CAS(true, false) {
 		return cluster.QuiActive
 	}
-	return cluster.QuiInactive
+	return cluster.QuiInactiveCB
 }
 
 func (dm *DataMover) wrapRecvData(hdr transport.ObjHdr, object io.Reader, err error) {

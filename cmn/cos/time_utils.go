@@ -37,7 +37,7 @@ func IsTimeZero(t time.Time) bool        { return t.IsZero() || t.UTC().Unix() =
 
 // wait duration => probing frequency
 func CalcProbeFreq(dur time.Duration) time.Duration {
-	sleep := MinDuration(dur/10, time.Second)
+	sleep := MinDuration(dur/20, time.Second)
 	sleep = MaxDuration(dur/100, sleep)
 	return MaxDuration(sleep, 10*time.Millisecond)
 }

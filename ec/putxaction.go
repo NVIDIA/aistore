@@ -63,13 +63,8 @@ func (*putFactory) New(_ xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (p *putFactory) Start() error {
-	var (
-		xec         = ECM.NewPutXact(p.Bck.Bck)
-		config      = cmn.GCO.Get()
-		totallyIdle = config.Timeout.SendFile.D()
-		likelyIdle  = config.Timeout.MaxKeepalive.D()
-	)
-	xec.DemandBase.Init(cos.GenUUID(), p.Kind(), p.Bck, totallyIdle, likelyIdle)
+	xec := ECM.NewPutXact(p.Bck.Bck)
+	xec.DemandBase.Init(cos.GenUUID(), p.Kind(), p.Bck, 0 /*use default*/)
 	p.xact = xec
 	go xec.Run(nil)
 	return nil
@@ -232,7 +227,7 @@ func (r *XactPut) cleanup(req *request, lom *cluster.LOM) {
 }
 
 func (r *XactPut) Stats() cluster.XactStats {
-	baseStats := r.DemandBase.Stats().(*xaction.BaseXactStatsExt)
+	baseStats := r.DemandBase.ExtStats()
 	st := r.stats.stats()
 	baseStats.Ext = &ExtECPutStats{
 		AvgEncodeTime:  cos.Duration(st.EncodeTime),

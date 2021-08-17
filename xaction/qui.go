@@ -19,5 +19,5 @@ func RefcntQuiCB(refc *atomic.Int32, maxTimeout, totalSoFar time.Duration) clust
 	if totalSoFar > maxTimeout {
 		return cluster.QuiTimeout
 	}
-	return cluster.QuiInactive
+	return cluster.QuiInactiveCB
 }

@@ -122,6 +122,8 @@ func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what 
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{Method: http.MethodGet, Path: cmn.URLPathXactions.S, Body: body, Query: query}
 	args.to = cluster.Targets
+	config := cmn.GCO.Get()
+	args.timeout = config.Client.Timeout.D() // NOTE: may poll for quiescence
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
 	targetResults := p._queryResults(w, r, results)

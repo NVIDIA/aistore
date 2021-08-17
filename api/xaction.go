@@ -295,8 +295,8 @@ func MakeNCopies(baseParams BaseParams, bck cmn.Bck, copies int) (xactID string,
 	return
 }
 
-// IsXactionIdle return true if an xaction is not running or idle on all targets
-func IsXactionIdle(baseParams BaseParams, args XactReqArgs) (idle bool, err error) {
+// isXactionIdle return true if an xaction is not running or idle on all targets
+func isXactionIdle(baseParams BaseParams, args XactReqArgs) (idle bool, err error) {
 	msg := xaction.XactReqMsg{
 		ID:          args.ID,
 		Kind:        args.Kind,
@@ -346,7 +346,7 @@ func WaitForXactionIdle(baseParams BaseParams, args XactReqArgs) error {
 		defer cancel()
 	}
 	for {
-		idle, err := IsXactionIdle(baseParams, args)
+		idle, err := isXactionIdle(baseParams, args)
 		if err != nil {
 			return err
 		}

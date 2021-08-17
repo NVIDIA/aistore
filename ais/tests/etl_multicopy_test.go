@@ -84,6 +84,7 @@ func TestCopyObjRange(t *testing.T) {
 }
 
 func TestCopyMultiObj(t *testing.T) {
+	t.Skipf("TODO: %s", t.Name())
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		testCopyMobj(t, bck)
 	})

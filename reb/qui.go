@@ -23,7 +23,7 @@ func (q *quiArgs) quicb(_ time.Duration /*accum. wait time*/) cluster.QuiRes {
 	if q.reb.laterx.CAS(true, false) {
 		return cluster.QuiActive
 	}
-	return cluster.QuiInactive
+	return cluster.QuiInactiveCB
 }
 
 // Uses generic xaction.Quiesce to make sure that no objects are received

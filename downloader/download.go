@@ -259,7 +259,7 @@ func (*Downloader) Name() string {
 func newDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
 	d = &Downloader{t: t, statsT: statsT}
 	d.dispatcher = newDispatcher(d)
-	d.DemandBase.Init(cos.GenUUID(), cmn.Download, nil)
+	d.DemandBase.Init(cos.GenUUID(), cmn.Download, nil /*bck*/, 0 /*use default*/)
 	instance.Inc()
 	return
 }
@@ -346,8 +346,4 @@ func (d *Downloader) checkJob(req *request) (*downloadJobInfo, error) {
 	return jInfo, nil
 }
 
-func (d *Downloader) Stats() cluster.XactStats {
-	baseStats := d.DemandBase.Stats().(*xaction.BaseXactStatsExt)
-	baseStats.Ext = &xaction.BaseXactDemandStatsExt{IsIdle: d.Pending() == 0}
-	return baseStats
-}
+func (d *Downloader) Stats() cluster.XactStats { return d.DemandBase.ExtStats() }

@@ -59,13 +59,8 @@ func (p *rspFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 }
 
 func (p *rspFactory) Start() error {
-	var (
-		xec         = ECM.NewRespondXact(p.Bck.Bck)
-		config      = cmn.GCO.Get()
-		totallyIdle = config.Timeout.SendFile.D()
-		likelyIdle  = config.Timeout.MaxKeepalive.D()
-	)
-	xec.DemandBase.Init(cos.GenUUID(), p.Kind(), p.Bck, totallyIdle, likelyIdle)
+	xec := ECM.NewRespondXact(p.Bck.Bck)
+	xec.DemandBase.Init(cos.GenUUID(), p.Kind(), p.Bck, 0 /*use default*/)
 	p.xact = xec
 	go xec.Run(nil)
 	return nil
@@ -253,8 +248,4 @@ func (r *XactRespond) stop() {
 	r.Finish(nil)
 }
 
-func (r *XactRespond) Stats() cluster.XactStats {
-	baseStats := r.DemandBase.Stats().(*xaction.BaseXactStatsExt)
-	baseStats.Ext = &xaction.BaseXactDemandStatsExt{IsIdle: r.Pending() == 0}
-	return baseStats
-}
+func (r *XactRespond) Stats() cluster.XactStats { return r.DemandBase.ExtStats() }

@@ -70,17 +70,14 @@ func (p *tcoFactory) New(args xreg.Args, fromBck *cluster.Bck) xreg.Renewable {
 
 func (p *tcoFactory) Start() error {
 	var (
-		config      = cmn.GCO.Get()
-		totallyIdle = config.Timeout.SendFile.D()
-		likelyIdle  = config.Timeout.MaxKeepalive.D()
-		workCh      = make(chan *cmn.TCObjsMsg, maxNumInParallel)
-		err         error
-		sizePDU     int32
+		workCh  = make(chan *cmn.TCObjsMsg, maxNumInParallel)
+		err     error
+		sizePDU int32
 	)
-	r := &XactTCObjs{t: p.T, args: p.args, workCh: workCh, config: config}
+	r := &XactTCObjs{t: p.T, args: p.args, workCh: workCh, config: cmn.GCO.Get()}
 	r.pending.m = make(map[string]*tcowi, maxNumInParallel)
 	p.xact = r
-	r.DemandBase.Init(p.UUID(), p.Kind(), p.Bck, totallyIdle, likelyIdle)
+	r.DemandBase.Init(p.UUID(), p.Kind(), p.Bck, 0 /*use default*/)
 	if p.kind == cmn.ActETLObjects {
 		sizePDU = memsys.DefaultBufSize
 	}
@@ -177,6 +174,8 @@ func (r *XactTCObjs) eoi(wi *tcowi) {
 }
 
 func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) {
+	r.IncPending()
+	defer r.DecPending()
 	defer transport.FreeRecv(objReader)
 	if err != nil && !cos.IsEOF(err) {
 		glog.Error(err)
@@ -235,6 +234,8 @@ func (r *XactTCObjs) TxnAbort() {
 	r.dm.UnregRecv()
 	r.XactBase.Finish(err)
 }
+
+func (r *XactTCObjs) Stats() cluster.XactStats { return r.DemandBase.ExtStats() }
 
 ///////////
 // tcowi //

@@ -31,13 +31,6 @@ import (
 	"github.com/NVIDIA/aistore/xreg"
 )
 
-const (
-	doneSendingOpcode = 31415
-
-	delayUnregRecv    = 200 * time.Millisecond
-	delayUnregRecvMax = 16 * delayUnregRecv
-)
-
 type (
 	archFactory struct {
 		xreg.RenewBase
@@ -131,18 +124,13 @@ func (p *archFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) 
 }
 
 func (p *archFactory) Start() error {
-	var (
-		config      = cmn.GCO.Get()
-		totallyIdle = config.Timeout.SendFile.D()
-		likelyIdle  = config.Timeout.MaxKeepalive.D()
-		workCh      = make(chan *cmn.ArchiveMsg, maxNumInParallel)
-		err         error
-	)
-	r := &XactCreateArchMultiObj{t: p.T, bckFrom: p.Bck, workCh: workCh, config: config}
+	var err error
+	workCh := make(chan *cmn.ArchiveMsg, maxNumInParallel)
+	r := &XactCreateArchMultiObj{t: p.T, bckFrom: p.Bck, workCh: workCh, config: cmn.GCO.Get()}
 	r.pending.m = make(map[string]*archwi, maxNumInParallel)
 	p.xact = r
-	r.DemandBase.Init(p.UUID(), cmn.ActArchive, p.Bck, totallyIdle, likelyIdle)
-	if r.dm, err = newArchTcoDM("arch-", p.RenewBase, r.recvObjDM, 0); err != nil {
+	r.DemandBase.Init(p.UUID(), cmn.ActArchive, p.Bck, 0 /*use default*/)
+	if r.dm, err = newArchTcoDM("arch-", p.RenewBase, r.recv, 0); err != nil {
 		return err
 	}
 	r.dm.SetXact(r)
@@ -326,7 +314,9 @@ func (r *XactCreateArchMultiObj) doSend(lom *cluster.LOM, wi *archwi, fh cos.Rea
 	r.dm.Send(o, fh, wi.tsi)
 }
 
-func (r *XactCreateArchMultiObj) recvObjDM(hdr transport.ObjHdr, objReader io.Reader, err error) {
+func (r *XactCreateArchMultiObj) recv(hdr transport.ObjHdr, objReader io.Reader, err error) {
+	r.IncPending()
+	defer r.DecPending()
 	defer transport.FreeRecv(objReader)
 	if err != nil && !cos.IsEOF(err) {
 		glog.Error(err)
@@ -405,11 +395,7 @@ func (r *XactCreateArchMultiObj) fini(wi *archwi) (errCode int, err error) {
 	return
 }
 
-func (r *XactCreateArchMultiObj) Stats() cluster.XactStats {
-	baseStats := r.DemandBase.Stats().(*xaction.BaseXactStatsExt)
-	baseStats.Ext = &xaction.BaseXactDemandStatsExt{IsIdle: r.Pending() == 0}
-	return baseStats
-}
+func (r *XactCreateArchMultiObj) Stats() cluster.XactStats { return r.DemandBase.ExtStats() }
 
 ////////////
 // archwi //

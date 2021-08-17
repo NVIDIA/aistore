@@ -106,9 +106,7 @@ func (p *olFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 }
 
 func newXact(t cluster.Target, bck *cluster.Bck, smsg *cmn.SelectMsg, uuid string) *ObjListXact {
-	config := cmn.GCO.Get()
-	totallyIdle := config.Timeout.MaxHostBusy.D()
-	likelyIdle := config.Timeout.MaxKeepalive.D()
+	totallyIdle := cmn.GCO.Get().Timeout.MaxHostBusy.D()
 	xact := &ObjListXact{
 		t:        t,
 		bck:      bck,
@@ -119,7 +117,7 @@ func newXact(t cluster.Target, bck *cluster.Bck, smsg *cmn.SelectMsg, uuid strin
 		lastPage: make([]*cmn.BucketEntry, 0, cacheSize),
 	}
 	debug.Assert(xact.bck.Props != nil)
-	xact.DemandBase.Init(uuid, cmn.ActList, bck, totallyIdle, likelyIdle)
+	xact.DemandBase.Init(uuid, cmn.ActList, bck, totallyIdle)
 	return xact
 }
 

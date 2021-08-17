@@ -62,13 +62,8 @@ func (*getFactory) New(_ xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (p *getFactory) Start() error {
-	var (
-		xec         = ECM.NewGetXact(p.Bck.Bck)
-		config      = cmn.GCO.Get()
-		totallyIdle = config.Timeout.SendFile.D()
-		likelyIdle  = config.Timeout.MaxKeepalive.D()
-	)
-	xec.DemandBase.Init(cos.GenUUID(), p.Kind(), p.Bck, totallyIdle, likelyIdle)
+	xec := ECM.NewGetXact(p.Bck.Bck)
+	xec.DemandBase.Init(cos.GenUUID(), p.Kind(), p.Bck, 0 /*use default*/)
 	p.xact = xec
 	go xec.Run(nil)
 	return nil
@@ -295,7 +290,7 @@ func (r *XactGet) removeMpath(mpath string) {
 }
 
 func (r *XactGet) Stats() cluster.XactStats {
-	baseStats := r.DemandBase.Stats().(*xaction.BaseXactStatsExt)
+	baseStats := r.DemandBase.ExtStats()
 	st := r.stats.stats()
 	baseStats.Ext = &ExtECGetStats{
 		AvgTime:     cos.Duration(st.DecodeTime),

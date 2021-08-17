@@ -16,17 +16,9 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 )
 
-// On-demand xaction's lifecycle is controlled by two different "idle" timeouts:
-// a) totallyIdle - interval of time until xaction stops running and self-terminates;
-// b) likelyIdle - the time to determine that xaction can be (fairly) safely terminated.
-//
-// Note that `totallyIdle` is usually measured in 10s of seconds or even minutes;
-// `likelyIdle` timeout, on the other hand, is there to establish the likelihood
-// of being idle based on the simple determination of no activity for a (certain) while.
-
 const (
-	totallyIdle = time.Minute
-	likelyIdle  = 4 * time.Second
+	pollIdle    = 3 * time.Second        // poll for relative quiescence
+	defaultIdle = time.Minute + pollIdle // hk => idle tick
 )
 
 type (
@@ -39,17 +31,16 @@ type (
 		DecPending()
 		SubPending(n int)
 	}
-	idle struct {
-		totally, likely time.Duration
-		ticks           *cos.StopCh
-	}
 	DemandBase struct {
 		XactBase
 		pending atomic.Int64
 		active  atomic.Int64
 		hkName  string
-		idle    idle
-		hkReg   atomic.Bool
+		idle    struct {
+			d     time.Duration
+			ticks *cos.StopCh
+		}
+		hkReg atomic.Bool
 	}
 )
 
@@ -57,23 +48,13 @@ type (
 // DemandBase //
 ////////////////
 
-func (r *DemandBase) Init(uuid, kind string, bck *cluster.Bck, idleTimes ...time.Duration) (xdb *DemandBase) {
-	var (
-		hkName          = kind + "/" + uuid
-		totally, likely = totallyIdle, likelyIdle
-	)
-	if len(idleTimes) != 0 {
-		debug.Assert(len(idleTimes) == 2)
-		totally, likely = idleTimes[0], idleTimes[1]
-		debug.Assert(totally > likely)
-		debug.Assert(likely > time.Second/10)
+func (r *DemandBase) Init(uuid, kind string, bck *cluster.Bck, idle time.Duration) (xdb *DemandBase) {
+	r.hkName = kind + "/" + uuid
+	r.idle.d = defaultIdle
+	if idle > 0 {
+		r.idle.d = idle
 	}
-	{
-		r.hkName = hkName
-		r.idle.totally = totally
-		r.idle.likely = likely
-		r.idle.ticks = cos.NewStopCh()
-	}
+	r.idle.ticks = cos.NewStopCh()
 	r.InitBase(uuid, kind, bck)
 	r._initIdle()
 	return
@@ -87,11 +68,9 @@ func (r *DemandBase) _initIdle() {
 
 func (r *DemandBase) hkcb() time.Duration {
 	if r.active.Swap(0) == 0 {
-		// NOTE: closing IdleTimer() channel signals a parent on-demand xaction
-		//       to finish and exit
-		r.idle.ticks.Close()
+		r.idle.ticks.Close() // signals the parent to finish and exit
 	}
-	return r.idle.totally
+	return r.idle.d
 }
 
 func (r *DemandBase) IdleTimer() <-chan struct{} { return r.idle.ticks.Listen() }
@@ -115,7 +94,9 @@ func (r *DemandBase) Stop() {
 	r.idle.ticks.Close()
 }
 
-func (r *DemandBase) Stats() cluster.XactStats {
+func (r *DemandBase) Stats() cluster.XactStats { return r.ExtStats() }
+
+func (r *DemandBase) ExtStats() *BaseXactStatsExt {
 	stats := &BaseXactStatsExt{
 		BaseXactStats: BaseXactStats{
 			IDX:         r.ID(),
@@ -130,13 +111,14 @@ func (r *DemandBase) Stats() cluster.XactStats {
 	if r.Bck() != nil {
 		stats.BckX = r.Bck().Bck
 	}
+	stats.Ext = &BaseXactDemandStatsExt{IsIdle: r.likelyIdle()}
 	return stats
 }
 
 func (r *DemandBase) Abort() {
 	var err error
 	if !r.aborted.CAS(false, true) {
-		glog.Infof("already aborted: " + r.String())
+		glog.Infoln("already aborted: " + r.String())
 		return
 	}
 	if r.Kind() != cmn.ActList {
@@ -146,7 +128,7 @@ func (r *DemandBase) Abort() {
 	}
 	r._setEndTime(err)
 	close(r.abrt)
-	glog.Infof("ABORT: " + r.String())
+	glog.Infoln("ABORT: " + r.String())
 }
 
 func (r *DemandBase) Finish(err error) {
@@ -163,18 +145,14 @@ func (r *DemandBase) Finish(err error) {
 
 // private: on-demand quiescence
 
-func (r *DemandBase) quicb(elapsed time.Duration /*accum. wait time*/) cluster.QuiRes {
-	switch {
-	case r.Pending() != 0:
-		debug.Assertf(r.Pending() > 0, "%s %d", r, r.Pending())
-		return cluster.QuiActive
-	case elapsed >= r.idle.likely:
-		return cluster.QuiTimeout
-	default:
-		return cluster.QuiInactive
+func (r *DemandBase) quicb(_ time.Duration /*accum. wait time*/) cluster.QuiRes {
+	if n := r.Pending(); n != 0 {
+		debug.Assertf(r.Pending() > 0, "%s %d", r, n)
+		return cluster.QuiActiveRet
 	}
+	return cluster.QuiInactiveCB
 }
 
 func (r *DemandBase) likelyIdle() bool {
-	return r.Quiesce(likelyIdle, r.quicb) == cluster.QuiInactive
+	return r.Quiesce(pollIdle, r.quicb) == cluster.Quiescent
 }

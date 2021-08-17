@@ -92,7 +92,7 @@ func runXactPut(lom *cluster.LOM, slab *memsys.Slab, t cluster.Target) (r *XactP
 	}
 	bck := lom.Bck()
 	r = &XactPut{mirror: mirror, workCh: make(chan cluster.LIF, mirror.Burst)}
-	r.DemandBase.Init(cos.GenUUID(), cmn.ActPutCopies, bck)
+	r.DemandBase.Init(cos.GenUUID(), cmn.ActPutCopies, bck, 0 /*use default*/)
 	r.workers = mpather.NewWorkerGroup(&mpather.WorkerGroupOpts{
 		Callback:  r.workCb,
 		Slab:      slab,
@@ -191,8 +191,4 @@ func (r *XactPut) stop() (err error) {
 	return err
 }
 
-func (r *XactPut) Stats() cluster.XactStats {
-	baseStats := r.DemandBase.Stats().(*xaction.BaseXactStatsExt)
-	baseStats.Ext = &xaction.BaseXactDemandStatsExt{IsIdle: r.Pending() == 0}
-	return baseStats
-}
+func (r *XactPut) Stats() cluster.XactStats { return r.DemandBase.ExtStats() }
