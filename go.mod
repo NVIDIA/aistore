@@ -23,14 +23,13 @@ require (
 	github.com/googleapis/gnostic v0.5.5 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
 	github.com/jacobsa/daemonize v0.0.0-20160101105449-e460293e890f
-	github.com/jacobsa/fuse v0.0.0-20210330112455-9677d0392291
+	github.com/jacobsa/fuse v0.0.0-20210811193110-7782064498ca
 	github.com/jcmturner/gokrb5/v8 v8.4.2 // indirect
 	github.com/json-iterator/go v1.1.11
 	github.com/karrick/godirwalk v1.16.1
 	github.com/klauspost/compress v1.12.2 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.6 // indirect
 	github.com/klauspost/reedsolomon v1.9.12
-	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/lufia/iostat v1.1.0
 	github.com/onsi/ginkgo v1.16.2
 	github.com/onsi/gomega v1.11.0
