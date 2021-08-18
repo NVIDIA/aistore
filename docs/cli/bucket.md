@@ -369,7 +369,10 @@ To check the status, run: ais show job xaction mvlb ais://new_bucket_name
 `ais bucket cp SRC_BUCKET DST_BUCKET`
 
 Copy an existing bucket to a new bucket.
-If destination bucket is a cloud bucket it has to exist.
+The destination bucket must exist when:
+
+- the destination bucket is a cloud one
+- a multi-object operation is requested (either flag `--list` or `--template` is set)
 
 ### Options
 | Name | Type | Description | Default |
@@ -377,6 +380,10 @@ If destination bucket is a cloud bucket it has to exist.
 | `--dry-run` | `bool` | Don't actually copy bucket, only include stats what would happen | `false` |
 | `--prefix` | `string` | Prefix added to every new object's name | `""` |
 | `--wait` | `bool` | Wait until copying of a bucket is finished | `false` |
+| `--list` | `string` | Comma-separated list of objects to copy | `""` |
+| `--template` | `string` | Copy only objects which names match the pattern | `""` |
+
+Flags `--list` and `--template` are mutually exclusive.
 
 ### Examples
 
@@ -411,6 +418,25 @@ AWS Buckets (2)
 $ ais bucket cp aws://src_bucket aws://dst_bucket
 Copying bucket "aws://src_bucket" to "aws://dst_bucket" in progress.
 To check the status, run: ais show job xaction copybck aws://dst_bucket
+```
+
+#### Copy only selected objects
+
+Copy objects `obj1.tar` and `obj1.info` from bucket `ais://bck1` to `ais://bck2`, and wait until the operation finishes.
+
+```console
+$ ais bucket cp ais://bck1 ais://bck2 --list obj1.tar,obj1.info --wait
+copying objects operation ("ais://bck1" => "ais://bck2") is in progress...
+copying objects operation succeeded.
+```
+
+Copy object with pattern matching: copy `obj2`, `obj3`, and `obj4` from `ais://bck1` to `ais://bck2`.
+Do not wait for the operation is done.
+
+```console
+$ ais bucket cp ais://bck1 ais://bck2 --template "obj{2..4}"
+copying objects operation ("ais://bck1" => "ais://bck2") is in progress...
+To check the status, run: ais show job xaction copybck ais://bck2
 ```
 
 ## Show bucket summary

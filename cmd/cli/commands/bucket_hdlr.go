@@ -17,7 +17,10 @@ import (
 	"github.com/urfave/cli"
 )
 
-const errFmtSameBucket = "cannot %s bucket %q onto itself"
+const (
+	errFmtSameBucket = "cannot %s bucket %q onto itself"
+	errFmtExclusive  = "flags %q and %q are mutually exclusive"
+)
 
 var (
 	bucketCmdsFlags = map[string][]cli.Flag{
@@ -31,6 +34,8 @@ var (
 		commandCopy: {
 			cpBckDryRunFlag,
 			cpBckPrefixFlag,
+			templateFlag,
+			listFlag,
 			waitFlag,
 		},
 		commandEvict: append(
@@ -122,12 +127,16 @@ var (
 				BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),
 			},
 			{
-				Name:         commandMv,
-				Usage:        "move an ais bucket",
-				ArgsUsage:    "BUCKET NEW_BUCKET",
-				Flags:        bucketCmdsFlags[commandMv],
-				Action:       mvBucketHandler,
-				BashComplete: oldAndNewBucketCompletions([]cli.BashCompleteFunc{}, false /* separator */, cmn.ProviderAIS),
+				Name:      commandMv,
+				Usage:     "rename/move ais bucket",
+				ArgsUsage: "BUCKET NEW_BUCKET",
+				Flags:     bucketCmdsFlags[commandMv],
+				Action:    mvBucketHandler,
+				BashComplete: oldAndNewBucketCompletions(
+					[]cli.BashCompleteFunc{},
+					false, /* separator */
+					cmn.ProviderAIS,
+				),
 			},
 			{
 				Name:      commandRemove,
@@ -308,7 +317,48 @@ func summaryBucketHandler(c *cli.Context) (err error) {
 	return showBucketSizes(c)
 }
 
+func fullBckCopy(c *cli.Context, bckFrom, bckTo cmn.Bck) (err error) {
+	msg := &cmn.CopyBckMsg{
+		Prefix: parseStrFlag(c, cpBckPrefixFlag),
+		DryRun: flagIsSet(c, cpBckDryRunFlag),
+	}
+
+	return copyBucket(c, bckFrom, bckTo, msg)
+}
+
+func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs string) (err error) {
+	const operation = "Copying objects"
+	var lrMsg cmn.ListRangeMsg
+	if listObjs != "" {
+		lrMsg.ObjNames = strings.Split(listObjs, ",")
+	} else {
+		lrMsg.Template = tmplObjs
+	}
+	msg := cmn.TCObjsMsg{
+		ListRangeMsg: lrMsg,
+		ToBck:        toBck,
+	}
+	msg.DryRun = flagIsSet(c, cpBckDryRunFlag)
+	xactID, err := api.CopyMultiObj(defaultAPIParams, fromBck, msg)
+	if err != nil {
+		return err
+	}
+	if !flagIsSet(c, waitFlag) {
+		fmt.Fprintf(c.App.Writer, fmtXactStatusCheck, operation, fromBck, toBck, cmn.ActCopyBck, toBck)
+		return nil
+	}
+	fmt.Fprintf(c.App.Writer, fmtXactStarted, operation, fromBck, toBck)
+	wargs := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyObjects}
+	if err = api.WaitForXactionIdle(defaultAPIParams, wargs); err != nil {
+		fmt.Fprintf(c.App.Writer, fmtXactFailed, operation, fromBck, toBck)
+	} else {
+		fmt.Fprint(c.App.Writer, fmtXactSucceeded)
+	}
+	return err
+}
+
 func copyBucketHandler(c *cli.Context) (err error) {
+	dryRun := flagIsSet(c, cpBckDryRunFlag)
 	bckFrom, bckTo, err := parseBcks(c)
 	if err != nil {
 		return err
@@ -320,19 +370,36 @@ func copyBucketHandler(c *cli.Context) (err error) {
 		return incorrectUsageMsg(c, errFmtSameBucket, commandCopy, bckTo)
 	}
 
-	msg := &cmn.CopyBckMsg{
-		Prefix: parseStrFlag(c, cpBckPrefixFlag),
-		DryRun: flagIsSet(c, cpBckDryRunFlag),
-	}
-
-	if msg.DryRun {
+	if dryRun {
 		// TODO: once IC is integrated with copy-bck stats, show something more relevant, like stream of object names
 		// with destination which they would have been copied to. Then additionally, make output consistent with etl
 		// dry-run output.
 		fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
 	}
 
-	return copyBucket(c, bckFrom, bckTo, msg)
+	listObjs := parseStrFlag(c, listFlag)
+	tmplObjs := parseStrFlag(c, templateFlag)
+
+	// Full bucket copy
+	if listObjs == "" && tmplObjs == "" {
+		if dryRun {
+			fmt.Fprintln(c.App.Writer, "Copying the whole bucket.")
+		}
+		return fullBckCopy(c, bckFrom, bckTo)
+	}
+
+	// Copy only objects which matches the condition
+	if listObjs != "" && tmplObjs != "" {
+		return incorrectUsageMsg(c, errFmtExclusive, listFlag.Name, templateFlag.Name)
+	}
+	if dryRun {
+		if listObjs != "" {
+			fmt.Fprintf(c.App.Writer, "Copying only objects %q.\n", listObjs)
+		} else {
+			fmt.Fprintf(c.App.Writer, "Copying the objects that match the pattern %q.\n", tmplObjs)
+		}
+	}
+	return multiObjBckCopy(c, bckFrom, bckTo, listObjs, tmplObjs)
 }
 
 func mvBucketHandler(c *cli.Context) error {

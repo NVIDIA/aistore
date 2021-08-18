@@ -1,4 +1,4 @@
-Bucket rename operation ("ais://$BUCKET_1" => "ais://$BUCKET_2") is in progress...
-Bucket rename operation succeeded.
-Bucket rename operation ("ais://$BUCKET_2" => "ais://$BUCKET_1") is in progress.
+Renaming bucket ("ais://$BUCKET_1" => "ais://$BUCKET_2")...
+Done.
+Renaming bucket ("ais://$BUCKET_2" => "ais://$BUCKET_1") is in progress.
 To check the status, run: ais show job xaction move_bck ais://$BUCKET_1
