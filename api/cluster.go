@@ -112,11 +112,16 @@ func JoinCluster(baseParams BaseParams, nodeInfo *cluster.Snode) (rebID, daemonI
 
 // SetPrimaryProxy given a daemonID sets that corresponding proxy as the
 // primary proxy of the cluster.
-func SetPrimaryProxy(baseParams BaseParams, newPrimaryID string) error {
+func SetPrimaryProxy(baseParams BaseParams, newPrimaryID string, force ...bool) error {
+	q := url.Values{}
+	if len(force) > 0 {
+		q.Add(cmn.URLParamForce, strconv.FormatBool(force[0]))
+	}
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathClusterProxy.Join(newPrimaryID),
+		Query:      q,
 	})
 }
 
