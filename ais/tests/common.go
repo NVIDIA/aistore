@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -344,6 +345,7 @@ func (m *ioContext) remotePrefetch(prefetchCnt int) {
 func (m *ioContext) del(cnt ...int) {
 	const maxErrCount = 100
 	var (
+		httpErr    *cmn.ErrHTTP
 		baseParams = tutils.BaseAPIParams()
 		msg        = &cmn.SelectMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
 	)
@@ -355,6 +357,10 @@ func (m *ioContext) del(cnt ...int) {
 	}
 
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
+	if err != nil && errors.As(err, &httpErr) && httpErr.Status == http.StatusNotFound {
+		// can also check httpErr.Message for: "bucket ... does not exist"
+		return
+	}
 	tassert.CheckFatal(m.t, err)
 
 	toRemove := objList.Entries
