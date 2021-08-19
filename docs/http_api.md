@@ -21,7 +21,7 @@ redirect_from:
   - [Storage Services](#storage-services)
   - [Multi-Object Operations](#multi-object-operations)
   - [Working with archives (TAR, TGZ, ZIP)](#working-with-archives-tar-tgz-zip)
-  - [Starting, stopping, and querying batch operations (jobs)](starting-stopping-and-querying-batch-operations-jobs)
+  - [Starting, stopping, and querying batch operations (jobs)](#starting-stopping-and-querying-batch-operations-jobs)
 - [Backend Provider](#bucket-provider)
 - [Curl Examples](#curl-examples)
 - [Querying information](#querying-information)
