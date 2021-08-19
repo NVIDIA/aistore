@@ -1,5 +1,5 @@
 ---
-: post
+layout: post
 title: RESTFUL API
 permalink: /docs/http-api
 redirect_from:
