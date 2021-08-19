@@ -122,6 +122,7 @@ Further, there's the capability referred to as [global namespace](/docs/provider
 - Batch operations
   - [Batch operations](/docs/batch.md)
   - [eXtended Actions (xactions)](/xaction/README.md)
+  - [CLI: job management](/docs/cli/job.md)
 - Topics
   - [System files](/docs/sysfiles.md)
   - [`aisnode` command line](/docs/command_line.md)

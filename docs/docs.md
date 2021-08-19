@@ -9,7 +9,7 @@ redirect_from:
 
 ### Introduction
 
-- [Brief overview](/README.doc)
+- [Brief overview](/README.md)
 - [In-depth overview](/docs/overview.md)
 - [Getting started](/docs/getting_started.md)
 - [CLI](/docs/cli.md)
@@ -59,7 +59,7 @@ redirect_from:
 - Configuration
   - [Configuration](/docs/configuration.md)
   - [CLI to view and update cluster and node config](/docs/cli/config.md)
-- Statistics
+- Observability
   - [Observability](/docs/metrics.md)
   - [Prometheus](/docs/prometheus.md)
 - For developers
@@ -70,6 +70,7 @@ redirect_from:
 - Batch operations
   - [Batch operations](/docs/batch.md)
   - [eXtended Actions (xactions)](/xaction/README.md)
+  - [CLI: job management](/docs/cli/job.md)
 - Topics
   - [System files](/docs/sysfiles.md)
   - [`aisnode` command line](/docs/command_line.md)
