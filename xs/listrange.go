@@ -7,7 +7,6 @@ package xs
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -105,7 +104,7 @@ func (r *lriterator) init(xact lrxact, t cluster.Target, msg *cmn.ListRangeMsg, 
 }
 
 func (r *lriterator) iterateRange(wi lrwi, smap *cluster.Smap) error {
-	pt, err := parseTemplate(r.msg.Template)
+	pt, err := cos.NewParsedTemplate(r.msg.Template)
 	if err != nil {
 		return err
 	}
@@ -222,25 +221,6 @@ func (r *lriterator) do(lom *cluster.LOM, wi lrwi, smap *cluster.Smap) error {
 	}
 	wi.do(lom, r)
 	return nil
-}
-
-// helpers ---------------
-
-// Parsing:
-// 1. bash-extension style: `file-{0..100}`
-// 2. at-style: `file-@100`
-// 3. if none of the above, fall back to just prefix matching
-func parseTemplate(template string) (cos.ParsedTemplate, error) {
-	if template == "" {
-		return cos.ParsedTemplate{}, errors.New("empty range template")
-	}
-	if parsed, err := cos.ParseBashTemplate(template); err == nil {
-		return parsed, nil
-	}
-	if parsed, err := cos.ParseAtTemplate(template); err == nil {
-		return parsed, nil
-	}
-	return cos.ParsedTemplate{Prefix: template}, nil
 }
 
 //////////////////

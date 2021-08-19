@@ -20,7 +20,7 @@ For more information and examples, please refer to [the ETL documentation](/docs
 - [View ETL Logs](#view-etl-logs)
 - [Stop ETL](#stop-etl)
 - [Transform object on-the-fly with given ETL](#transform-object-on-the-fly-with-given-etl)
-- [Transform the whole bucket offline with the given ETL](#transform-the-whole-bucket-offline-with-the-given-etl)
+- [Transform a bucket offline with the given ETL](#transform-a-bucket-offline-with-the-given-etl)
 
 ## Init ETL with spec
 
@@ -132,9 +132,23 @@ $ cat output.txt
 393c6706efb128fbc442d3f7d084a426
 ```
 
-## Transform the whole bucket offline with the given ETL
+## Transform a bucket offline with the given ETL
 
 `ais etl bucket ETL_ID SRC_BUCKET DST_BUCKET`
+
+Transform all or selected objects and put them into another bucket.
+
+| Flag | Type | Description |
+| --- | --- | --- |
+| `--list` | `string` | Comma-separated list of object names, e.g., 'obj1,obj2' |
+| `--template` | `string` | Template for matching object names, e.g, 'obj-{000..100}.tar' |
+| `--ext` | `string` | Mapping from old to new extensions of transformed objects |
+| `--prefix` | `string` | Prefix added to every new object name |
+| `--wait` | `bool` | Wait until operation is finished |
+| `--requests-timeout` | `duration` | Timeout for a single object transformation |
+| `--dry-run` | `bool` | Don't actually transform the bucket, only display what would happen |
+
+Flags `--list` and `--template` are mutually exclusive. If neither of them is set, the command transforms the whole bucket.
 
 ### Examples
 
@@ -154,6 +168,14 @@ The same as above, but wait for the ETL bucket to finish.
 
 ```console
 $ ais etl bucket JGHEoo89gg ais://src_bucket ais://dst_bucket --wait
+```
+
+#### Transform selected objects in bucket with ETL
+
+Transform objects `shard-10.tar`, `shard-11.tar`, and `shard-12.tar` from `src_bucket` with ETL and put new objects to `dst_bucket`.
+
+```console
+$ ais etl bucket JGHEoo89gg ais://src_bucket ais://dst_bucket --template "shard-{10..12}.tar"
 ```
 
 #### Transform bucket with ETL and additional parameters

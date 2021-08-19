@@ -326,12 +326,18 @@ func fullBckCopy(c *cli.Context, bckFrom, bckTo cmn.Bck) (err error) {
 	return copyBucket(c, bckFrom, bckTo, msg)
 }
 
-func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs string) (err error) {
-	const operation = "Copying objects"
+func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs string, etlID ...string) (err error) {
+	operation := "Copying objects"
+	if listObjs != "" && tmplObjs != "" {
+		return incorrectUsageMsg(c, errFmtExclusive, listFlag.Name, templateFlag.Name)
+	}
 	var lrMsg cmn.ListRangeMsg
 	if listObjs != "" {
 		lrMsg.ObjNames = strings.Split(listObjs, ",")
 	} else {
+		if _, err = cos.NewParsedTemplate(tmplObjs); err != nil {
+			return err
+		}
 		lrMsg.Template = tmplObjs
 	}
 	msg := cmn.TCObjsMsg{
@@ -339,7 +345,17 @@ func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs 
 		ToBck:        toBck,
 	}
 	msg.DryRun = flagIsSet(c, cpBckDryRunFlag)
-	xactID, err := api.CopyMultiObj(defaultAPIParams, fromBck, msg)
+	if flagIsSet(c, etlBucketRequestTimeout) {
+		msg.RequestTimeout = cos.Duration(etlBucketRequestTimeout.Value)
+	}
+	var xactID string
+	if len(etlID) != 0 {
+		msg.ID = etlID[0]
+		operation = "ETL objects"
+		xactID, err = api.ETLMultiObj(defaultAPIParams, fromBck, msg)
+	} else {
+		xactID, err = api.CopyMultiObj(defaultAPIParams, fromBck, msg)
+	}
 	if err != nil {
 		return err
 	}

@@ -89,6 +89,8 @@ var etlCmd = cli.Command{
 				cpBckDryRunFlag,
 				waitFlag,
 				etlBucketRequestTimeout,
+				templateFlag,
+				listFlag,
 			},
 			BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{etlIDCompletions}, 1, 2),
 		},
@@ -354,8 +356,11 @@ func etlBucketHandler(c *cli.Context) (err error) {
 		}
 		msg.Ext = extMap
 	}
-	if flagIsSet(c, etlBucketRequestTimeout) {
-		msg.RequestTimeout = cos.Duration(etlBucketRequestTimeout.Value)
+
+	tmplObjs := parseStrFlag(c, templateFlag)
+	listObjs := parseStrFlag(c, listFlag)
+	if listObjs != "" || tmplObjs != "" {
+		return multiObjBckCopy(c, fromBck, toBck, listObjs, tmplObjs, id)
 	}
 
 	xactID, err := api.ETLBucket(defaultAPIParams, fromBck, toBck, msg)

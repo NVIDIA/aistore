@@ -38,6 +38,27 @@ var (
 	ErrNonPositiveStep = errors.New("'step' is non positive number")
 )
 
+// Parsing:
+// 1. bash-extension style: `file-{0..100}-suffix`
+// 2. at-style: `file-@100-suffix`
+// 3. fmt-style: `file-%06d-suffix`
+// 4. if none of the above, fall back to just prefix matching
+func NewParsedTemplate(template string) (ParsedTemplate, error) {
+	if template == "" {
+		return ParsedTemplate{}, errors.New("empty range template")
+	}
+	if parsed, err := ParseBashTemplate(template); err == nil {
+		return parsed, nil
+	}
+	if parsed, err := ParseAtTemplate(template); err == nil {
+		return parsed, nil
+	}
+	if parsed, err := ParseFmtTemplate(template); err == nil {
+		return parsed, nil
+	}
+	return ParsedTemplate{Prefix: template}, nil
+}
+
 func (pt *ParsedTemplate) Count() int64 {
 	count := int64(1)
 	for _, tr := range pt.Ranges {
