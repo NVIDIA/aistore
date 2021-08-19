@@ -282,19 +282,6 @@ func WaitForXaction(baseParams BaseParams, args XactReqArgs, refreshIntervals ..
 	}
 }
 
-// MakeNCopies starts an extended action (xaction) to bring a given bucket to a
-// certain redundancy level (num copies).
-func MakeNCopies(baseParams BaseParams, bck cmn.Bck, copies int) (xactID string, err error) {
-	baseParams.Method = http.MethodPost
-	err = DoHTTPRequest(ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathBuckets.Join(bck.Name),
-		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMakeNCopies, Value: copies}),
-		Query:      cmn.AddBckToQuery(nil, bck),
-	}, &xactID)
-	return
-}
-
 // isXactionIdle return true if an xaction is not running or idle on all targets
 func isXactionIdle(baseParams BaseParams, args XactReqArgs) (idle bool, err error) {
 	msg := xaction.XactReqMsg{

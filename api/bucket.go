@@ -445,6 +445,19 @@ func ListObjectsInvalidateCache(params BaseParams, bck cmn.Bck) error {
 	})
 }
 
+// MakeNCopies starts an extended action (xaction) to bring a given bucket to a
+// certain redundancy level (num copies).
+func MakeNCopies(baseParams BaseParams, bck cmn.Bck, copies int) (xactID string, err error) {
+	baseParams.Method = http.MethodPost
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPathBuckets.Join(bck.Name),
+		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMakeNCopies, Value: copies}),
+		Query:      cmn.AddBckToQuery(nil, bck),
+	}, &xactID)
+	return
+}
+
 func ECEncodeBucket(baseParams BaseParams, bck cmn.Bck, data, parity int) (xactID string, err error) {
 	baseParams.Method = http.MethodPost
 	// Without `string` conversion it makes base64 from []byte in `Body`.

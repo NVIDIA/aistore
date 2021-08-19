@@ -17,9 +17,11 @@ redirect_from:
   - [Node Operations](#node-operations)
   - [Mountpaths and Disks](#mountpaths-and-disks)
   - [Bucket and Object Operations](#bucket-and-object-operations)
+  - [Footnotes](#footnotes)
   - [Storage Services](#storage-services)
   - [Multi-Object Operations](#multi-object-operations)
   - [Working with archives (TAR, TGZ, ZIP)](#working-with-archives-tar-tgz-zip)
+  - [Starting, stopping, and querying batch operations (jobs)](starting-stopping-and-querying-batch-operations-jobs)
 - [Backend Provider](#bucket-provider)
 - [Curl Examples](#curl-examples)
 - [Querying information](#querying-information)
@@ -125,14 +127,14 @@ The operations that query cluster-wide information and/or involve or otherwise a
 |--- | --- | ---|--- |
 | Add a node to cluster | (to be added) | (to be added) | `api.JoinCluster` |
 | Put node in maintenance (that is, safely and temporarily remove the node from the cluster _upon rebalancing_ the node's data between remaining nodes) | (to be added) | (to be added) | `api.StartMaintenance` |
-| Take node out of maintenancei - activate | (to be added) | (to be added) | `api.StopMaintenance` |
+| Take node out of maintenance | (to be added) | (to be added) | `api.StopMaintenance` |
 | Decommission a node | (to be added) | (to be added) | `api.Decommission` |
 | Decommission entire cluster | PUT {"action": "decommission"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "decommission"}' 'http://G-primary/v1/cluster'` | `api.DecommissionCluster` |
 | Shutdown ais node | PUT {"action": "shutdown_node", "value": {"sid": daemonID}} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown_node", "value": {"sid": "43888:8083"}}' 'http://G/v1/cluster'` | `api.ShutdownNode` |
 | Decommission entire cluster | PUT {"action": "decommission"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "decommission"}' 'http://G-primary/v1/cluster'` | `api.DecommissionCluster` |
 | Query cluster health | (to be added) | (to be added) | `api.Health` |
 | Set primary proxy | PUT /v1/cluster/proxy/new primary-proxy-id | `curl -i -X PUT 'http://G-primary/v1/cluster/proxy/26869:8080'` | `api.SetPrimaryProxy` |
-| Force-Set primary proxy | PUT /v1/daemon/proxy/proxyID | `curl -i -X PUT -G 'http://G-primary/v1/daemon/proxy/23ef189ed'  --data-urlencode "frc=true" --data-urlencode "can=http://G-new-designated-primary"`  <sup id="a6">[6](#ft6)</sup>|  |
+| Force-Set primary proxy (NOTE: advanced usage only!) | PUT /v1/daemon/proxy/proxyID | `curl -i -X PUT -G 'http://G-primary/v1/daemon/proxy/23ef189ed'  --data-urlencode "frc=true" --data-urlencode "can=http://G-new-designated-primary"` <sup id="a6">[6](#ft6)</sup>| `api.SetPrimaryProxy` |
 | Get cluster configuration | (to be added) | (to be added) | `api.GetClusterConfig` |
 | Get `BMD` | (to be added) | (to be added) | `api.GetBMD` |
 | Set cluster-wide configuration **via JSON message** (proxy) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' 'http://G/v1/cluster'`<br>• Note below the alternative way to update cluster configuration<br>• For the list of named options, see [runtime configuration](configuration.md#runtime-configuration) | `api.SetClusterConfigUsingMsg` |
@@ -172,7 +174,9 @@ The operations that are limited in scope to a single specified node and that usu
 
 ## Mountpaths and Disks
 
-Subset of the node operations to manage disks and [mountpaths](overview.md#terminology). These APIs also require specific node ID (to identify the target in the cluster to operate on):
+Special subset of node operations (see previous section) to manage disks attached to specific storage target. The corresponding AIS abstraction is called [mountpath](overview.md#terminology).
+
+These APIs also require specific node ID (to identify the target in the cluster to operate on):
 
 | Operation | HTTP action | Example | Go API |
 |--- | --- | ---|--- |
@@ -211,6 +215,8 @@ Subset of the node operations to manage disks and [mountpaths](overview.md#termi
 | [Evict](bucket.md#evict-bucket) remote bucket | DELETE {"action": "evictcb"} /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "evictcb"}' 'http://G/v1/buckets/myS3bucket'` | `api.EvictRemoteBucket` |
 | Promote file or directory | POST {"action": "promote", "name": "/home/user/dirname", "value": {"target": "234ed78", "recurs": true, "keep": true}} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"promote", "name":"/user/dir", "value": {"target": "234ed78", "trim_prefix": "/user/", "recurs": true, "keep": true} }' 'http://G/v1/buckets/abc'` <sup>[7](#ft7)</sup>| `api.PromoteFileOrDir` |
 
+## Footnotes
+
 <a name="ft1">1</a>) This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all AIStore supported commands that read or write data - usually via the URL path /v1/objects/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
 
 <a name="ft2">2</a>) See the [List Objects section](bucket.md#list-objects) for details. [↩](#a2)
@@ -234,7 +240,7 @@ Subset of the node operations to manage disks and [mountpaths](overview.md#termi
 | Operation | HTTP action | Example | Go API |
 |--- | --- | ---|--- |
 | Erasure code entire bucket | (to be added) | (to be added) | `api.ECEncodeBucket` |
-| Configure bucket as [n-way mirror](storage_svcs.md#n-way-mirror) | POST {"action": "makencopies", "value": n} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"makencopies", "value": 2}' 'http://G/v1/buckets/abc'` | (to be added) |
+| Configure bucket as [n-way mirror](storage_svcs.md#n-way-mirror) | POST {"action": "makencopies", "value": n} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"makencopies", "value": 2}' 'http://G/v1/buckets/abc'` | `api.MakeNCopies` |
 | Enable [erasure coding](storage_svcs.md#erasure-coding) protection for all objects (proxy) | POST {"action": "ecencode"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"ecencode"}' 'http://G/v1/buckets/abc'` | (to be added) |
 
 ## Multi-Object Operations
@@ -248,14 +254,32 @@ Subset of the node operations to manage disks and [mountpaths](overview.md#termi
 | | (to be added) | (to be added) | |
 | [Evict](bucket.md#prefetchevict-objects) a list of objects | DELETE '{"action":"evictobj", "value":{"objnames":"[o1[,o]]"}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evictobj", "value":{"objnames":["o1","o2","o3"]}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> | `api.EvictList` |
 | [Evict](bucket.md#prefetchevict-objects) a range of objects| DELETE '{"action":"evictobj", "value":{"template":"your-prefix{min..max}"}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evictobj", "value":{"template":"__tst/test-{1000..2000}"}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> | `api.EvictRange` |
-| | (to be added) | (to be added) | |
-| | (to be added) | (to be added) | |
+| Copy multiple objects from bucket to bucket | (to be added) | (to be added) | `api.CopyMultiObj` |
+| Copy and, simultaneously, transform multiple objects (i.e., perform user-defined offline transformation) | (to be added) | (to be added) | `api.ETLMultiObj` |
 
 ## Working with archives (TAR, TGZ, ZIP)
 
 | Operation | HTTP action | Example | Go API |
 |--- | --- | ---|--- |
-| | (to be added) | (to be added) | |
+| Create archive | (to be added) | (to be added) | `api.CreateArchMultiObj` |
+| Append to existing archive | (to be added) | (to be added) | `api.CreateArchMultiObj` |
+
+## Starting, stopping, and querying batch operations (jobs)
+
+The term we use in the code and elsewhere is [xaction](overview.md#terminology) - a shortcut for *eXtended action*. For definition and further references, see:
+
+* [Terminology](overview.md#terminology)
+* [Batch operations](batch.md)
+
+| Operation | HTTP action | Example | Go API |
+|--- | --- | ---|--- |
+| Start xaction | (to be added) | (to be added) | `api.StartXaction` |
+| Abort xaction | (to be added) | (to be added) | `api.AbortXaction` |
+| Get xaction stats by ID | (to be added) | (to be added) | `api.GetXactionStatsByID` |
+| Query xaction stats | (to be added) | (to be added) | `api.QueryXactionStats` |
+| Get xaction status | (to be added) | (to be added) | `api.GetXactionStatus` |
+| Wait for xaction to finish | (to be added) | (to be added) | `api.WaitForXaction` |
+| Wait for xaction to become idle | (to be added) | (to be added) | `api.WaitForXactionIdle` |
 
 # Backend Provider
 
