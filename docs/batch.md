@@ -7,11 +7,33 @@ redirect_from:
  - /docs/batch.md/
 ---
 
+## Introduction
+
+By definition,  *eXtended actions* (aka *xactions*) are batch operations that run asynchronously, are monitorable, can be aborted, and - most importantly - may take many seconds (minutes, sometimes hours) to execute.
+
+Examples include erasure coding or n-way mirroring a dataset, resharding and reshuffling a dataset, and many more.
+
+All [eXtended actions](/xaction/README.md) support generic [API](/api/xaction.go) and [CLI](/docs/cli/job.md#show-job-statistics) to show both common counters (byte and object numbers) as well as operation-specific extended statistics.
+
+Global rebalance that gets triggered by any membership changes (nodes joining, leaving, powercycling, etc.) can be further visualized via `ais show rebalance` CLI.
+
+AIS subsystems integrate subsystem-specific stats - e.g.:
+
+* [dSort](/docs/dsort.md)
+* [Downloader](/docs/downloader.md)
+* [ETL](/docs/etl.md)
+
+See also:
+
+> [CLI: multi-object operations](/docs/cli/object.md#operations-on-lists-and-ranges).
+> [CLI: reading, writing, and listing archives](/docs/cli/object.md).
+> [CLI: copying buckets](/docs/cli/bucket.md#copy-bucket)
+
 ## Table of Contents
 - [List/Range Operations](#listrange-operations)
-	- [List](#list)
-	- [Range](#range)
-	- [Examples](#examples)
+  - [List](#list)
+  - [Range](#range)
+  - [Examples](#examples)
 
 ## List/Range Operations
 

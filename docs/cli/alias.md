@@ -9,7 +9,7 @@ redirect_from:
 
 # CLI Reference for Aliases
 
-AIS CLI supports user defined aliases, similar to the unix `alias` command.
+AIS CLI supports user-defined aliases, similar to the Unix `alias` command.
 
 ## Table of Contents
 

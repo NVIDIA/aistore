@@ -7,20 +7,42 @@ redirect_from:
  - /docs/metrics.md/
 ---
 
+## Introduction
+
+AIStore tracks, logs, and reports a large and growing number of counters, latencies and throughputs including (but not limited to) metrics that reflect cluster recovery and global rebalancing, all [extended long-running operations](/xaction/README.md), and, of course, the basic read, write, list transactions, and more.
+
+Viewership is equally supported via:
+
+1. System logs
+2. [CLI](/docs/cli.md)
+3. [Prometheus](/docs/prometheus.md)
+4. Any [StatsD](https://github.com/etsy/statsd) compliant [backend](https://github.com/statsd/statsd/blob/master/docs/backend.md#supported-backends) including Graphite/Grafana
+
+> For general information on AIS metrics, see [Statistics, Collected Metrics, Visualization](/docs/metrics.md).
+
+> AIStore includes `aisloader` - a powerful tool that we use to simulate a variety of AI workloads. For numerous command-line options and usage examples, please see [Load Generator](/docs/aisloader.md) and [How To Benchmark AIStore](/docs/howto_benchmark.md). Or, just run the tool and see its online help. Note as well that `aisloader` is fully StatsD-enabled.
+
 ## Table of Contents
-- [Background](#background)
+- [StatsD and Prometheus](#statsd-and-prometheus)
 - [Conventions](#conventions)
-    - [Proxy metrics: IO counters](#proxy-metrics-io-counters)
-    - [Proxy metrics: error counters](#proxy-metrics-error-counters)
-    - [Proxy metrics: latencies](#proxy-metrics-latencies)
-    - [Target metrics](#target-metrics)
-    - [AIS loader metrics](#ais-loader-metrics)
+  - [Proxy metrics: IO counters](#proxy-metrics-io-counters)
+  - [Proxy metrics: error counters](#proxy-metrics-error-counters)
+  - [Proxy metrics: latencies](#proxy-metrics-latencies)
+  - [Target metrics](#target-metrics)
+  - [AIS loader metrics](#ais-loader-metrics)
+- [Debug-Mode Observability](#debug-mode-observability)
 
-## Background
+## StatsD and Prometheus
 
-AIStore generates a growing number of detailed performance metrics that can be viewed both via AIS logs and via StatsD/Grafana visualization.
+AIStore generates a growing number of detailed performance metrics. Other than AIS logs, the stats can be viewed via:
+
+* StatsD/Grafana visualization
+or
+* Prometheus visualization
 
 > [StatsD](https://github.com/etsy/statsd) publishes local statistics to a compliant backend service (e.g., [Graphite](https://graphite.readthedocs.io/en/latest/)) for easy and powerful stats aggregation and visualization.
+
+> AIStore is a fully compliant [Prometheus exporter](https://prometheus.io/docs/instrumenting/writing_exporters/) that natively supports [Prometheus](https://prometheus.io/) stats collection. There's no special configuration - the only thing required to enable the corresponding integration is letting AIStore know whether to publish its stats via StatsD **or** Prometheus.
 
 The StatsD/Grafana option imposes a certain easy-to-meet requirement on the AIStore deployment. Namely, it requires that StatsD daemon (aka service) is **deployed locally with each AIS target and with each AIS proxy**.
 
@@ -29,6 +51,8 @@ At startup AIStore daemons, both targets and gateways, try to UDP-ping their res
 If StatsD server is *not* listening on the local 8125, the local AIS target (or proxy) will then run without StatsD, and the corresponding stats won't be captured and won't be visualized.
 
 > For details on all StatsD-supported backends, please refer to [this document](https://github.com/etsy/statsd/blob/master/docs/backend.md).
+
+> For Prometheus integration, please refer to [this separate document](/docs/prometheus.md)
 
 ## Conventions
 
@@ -173,3 +197,37 @@ All latency metrics are in milliseconds, all sizes are always in bytes.
 A somewhat outdated example of how these metrics show up in the Grafana dashboard follows:
 
 ![AIS loader metrics](images/aisloader-statsd-grafana.png)
+
+## Debug-Mode Observability
+
+For development and, more generally, for any non-production deployments AIS supports [building with debug](/Makefile), for instance:
+
+```sh
+$ MODE=debug make deploy
+```
+
+As usual, debug builds incorporate more runtime checks and extra logging. But in addition AIS debug build provides a special **API endpoint** at `hostname:port/debug/vars` that can be accessed (via browser or Curl) at any time to display the current values of:
+
+* all stats counters (including error counters)
+* all latencies including keepalive
+* mountpath capacities
+* mountpath (disk) utilizations
+* total number of goroutines
+* memory stats
+
+and more.
+
+> Notation `hostname:port` stands for TCP endpoint of *any* deployed AIS node, gateway or storage target.
+
+Example output:
+
+```console
+$ curl hostname:port/debug/vars
+{
+"ais.ios": {"/ais/mp1:util%": 20, "/ais/mp2:util%": 23, "/ais/mp3:util%": 22, "/ais/mp4:util%": 25},
+"ais.stats": {"kalive.ns": 735065, "lst.n": 45, "lst.ns": 2892015, "num-goroutines": 27, "put.n": 1762, "put.ns": 1141380, "put.redir.ns": 16596465, "up.ns.time": 30012389406},
+"cmdline": ["/bin/aisnode","-config=.ais/ais.json","-local_config=.ais/ais_local.json","-role=target"],
+"memstats": {"Alloc":43209256,"TotalAlloc":57770120,"Sys":75056128,"Lookups":0,"Mallocs":215893,"Frees":103090,"HeapAlloc":43209256, ...}
+...
+}
+```

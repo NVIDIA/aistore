@@ -7,9 +7,16 @@ redirect_from:
  - /docs/cli/archive.md/
 ---
 
-# CLI Reference for Archives
-This section lists operations on *archives* using AIS CLI, with `ais archive`.
-For types of supported archives, please see [supported archive type](/cmn/cos/archive.go).
+# When objects are, in fact, archives
+
+In this document: commands to read, write, and list *archives* - objects formatted as TAR, TGZ, ZIP, etc. For the most recently updated archival types that AIS supports, please refer to [this source](/cmn/cos/archive.go).
+
+The corresponding subset of CLI commands starts with `ais archive`, from where you can TAB-TAB to the actual (reading, writing, listing) operation.
+
+See also:
+
+> [Append file to archive](/docs/cli/object.md#append-file-to-archive)
+> [Archive multiple objects](/docs/cli/object.md#archive-multiple-objects)
 
 ## Table of Contents
 - [Create archive](#create-archive)

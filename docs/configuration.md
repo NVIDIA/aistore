@@ -7,9 +7,39 @@ redirect_from:
  - /docs/configuration.md/
 ---
 
-## AIStore Configuration
+## Introduction
 
-The first thing to keep in mind when talking about AIS configuration is that there are 3 (three) separate, and separately maintained, pieces:
+AIS configuration consists of cluster-wide (global) defaults and node-specific values - the latter includes node's own hostnames (or IP addresses) and mountpaths (disks).
+
+Optionally and in addition, there's also a node-specific "config override" - a set of values that were changed for this node from global (inherited) defaults.
+
+It is important to note that configuring cluster for production requires careful consideration. For example, AIS supports 3 (**three**) logical networks and will, therefore, benefit, performance-wise, if provisioned with up to 3 isolated physical networks or VLANs. The logical networks are:
+
+* user (aka public)
+* intra-cluster control
+* intra-cluster data
+
+with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respectively:
+
+* `hostname`
+* `hostname_intra_control`
+* `hostname_intra_data`
+
+> For AIS Kubernetes deployments we recommended [Cilium](https://cilium.io) CNI.
+
+## References
+
+* To enable an optional AIStore authentication server, execute `$ AUTH_ENABLED=true make deploy`. For information on AuthN server, please see [AuthN documentation](/docs/authn.md).
+* In addition to AIStore - the storage cluster, you can also deploy [aisfs](/docs/aisfs.md) - to access AIS objects as files, and [AIS CLI](/docs/cli.md) - to monitor, configure and manage AIS nodes and buckets.
+* AIS CLI is an easy-to-use command-line management tool supporting a growing number of commands and options (one of the first ones you may want to try could be `ais show cluster` - show the state and status of an AIS cluster). The CLI is documented in the [readme](/docs/cli.md); getting started with it boils down to running `make cli` and following the prompts.
+* For more testing commands and options, please refer to the [testing README](/ais/tests/README.md).
+* For `aisnode` command-line options, see: [command-line options](/docs/command_line.md).
+* For helpful links and/or background on Go, AWS, GCP, and Deep Learning: [helpful links](/docs/helpful_links.md).
+* And again, run `make help` to find out how to build, run, and test AIStore and tools.
+
+## Cluster and Node Configuration
+
+The first thing to keep in mind is that there are 3 (three) separate, and separately maintained, pieces:
 
 1. Cluster configuration that comprises global defaults
 2. Node (local) configuration

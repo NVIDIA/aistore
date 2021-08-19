@@ -7,64 +7,75 @@ redirect_from:
  - /docs/docs.md/
 ---
 
-### Overview
+### Introduction
 
-- [AIS Overview](/docs/overview.md)
-- [On-Disk Layout](/docs/on_disk_layout.md)
-- [AIS Buckets: definition, operations, properties](/docs/bucket.md#bucket)
-
-### CLI
-
+- [Brief overview](/README.doc)
+- [In-depth overview](/docs/overview.md)
+- [Getting started](/docs/getting_started.md)
 - [CLI](/docs/cli.md)
-  - [Create, destroy, list, and other operations on buckets](/docs/cli/bucket.md)
-  - [GET, PUT, APPEND, PROMOTE, and other operations on objects](/docs/cli/object.md)
-  - [Cluster and Node management](/docs/cli/cluster.md)
-  - [Mountpath (Disk) management](/docs/cli/storage.md)
-  - [Attach, Detach, and monitor remote clusters](/docs/cli/cluster.md)
-  - [Start, Stop, and monitor downloads](/docs/cli/download.md)
-  - [Distributed Sort](/docs/cli/dsort.md)
-  - [User account and access management](/docs/cli/auth.md)
-  - [Job (xaction) management](/docs/cli/job.md)
-
-### ETL
-
-- [ETL with AIStore](/docs/etl.md)
-
-### DSort
-
-- [Distributed Sort](/docs/dsort.md)
-
-### Downloader
-
-- [Downloader](/docs/downloader.md)
-
-### AISFS
-
-- [AIS FUSE](/docs/aisfs.md)
+- [Buckets](/docs/bucket.md)
 
 ### Guides and References
 
-- [AIS Overview](/docs/overview.md)
-- [Tutorials](/docs/tutorials/README.md)
-- [Videos](/docs/videos.md)
-- [S3 compatibility](/docs/s3compat.md)
-- [System Files](/docs/sysfiles.md)
-- [Command line parameters](/docs/command_line.md)
-- [AIS Load Generator: integrated benchmark tool](/docs/aisloader.md)
-- [Batch List and Range Operations: Prefetch, and more](/docs/batch.md)
-- [Object checksums: Brief Theory of Operations](/docs/checksum.md)
-- [Configuration](/docs/configuration.md)
-- [Traffic patterns](/docs/traffic_patterns.md)
-- [Highly available control plane](/docs/ha.md)
-- [How to benchmark](/docs/howto_benchmark.md)
-- [RESTful API](/docs/http_api.md)
-- [FUSE with AIStore](/docs/aisfs.md)
-- [Joining AIS cluster](/docs/join_cluster.md)
-- [Removing a node from AIS cluster](/docs/leave_cluster.md)
-- [Statistics, Collected Metrics, Visualization](/docs/metrics.md)
-- [Performance: Tuning and Testing](/docs/performance.md)
-- [Rebalance](/docs/rebalance.md)
-- [Storage Services](/docs/storage_svcs.md)
-- [Integrated Internet Downloader](/docs/downloader.md)
-- [Docker for AIS developers](/docs/docker_main.md)
-- [Troubleshooting Cluster Operation](/docs/troubleshooting.md)
+- API
+  - [Native RESTful API](/docs/http_api.md)
+  - [S3 compatibility](/docs/s3compat.md)
+  - [Go API/SDK](/docs/http_api.md)
+- [CLI](/docs/cli.md)
+  - [Create, destroy, list, copy, rename, transform, configure, evict buckets](/docs/cli/bucket.md)
+  - [GET, PUT, APPEND, PROMOTE, and other operations on objects](/docs/cli/object.md)
+  - [Cluster and node management](/docs/cli/cluster.md)
+  - [Mountpath (disk) management](/docs/cli/storage.md)
+  - [Attach, detach, and monitor remote clusters](/docs/cli/cluster.md)
+  - [Start, stop, and monitor downloads](/docs/cli/download.md)
+  - [Distributed shuffle](/docs/cli/dsort.md)
+  - [User account and access management](/docs/cli/auth.md)
+  - [Job (aka `xaction`) management](/docs/cli/job.md)
+- Tutorials
+  - [Tutorials](/docs/tutorials/README.md)
+  - [Videos](/docs/videos.md)
+- Benchmarking and tuning Performance
+  - [AIS Load Generator: integrated benchmark tool](/docs/aisloader.md)
+  - [How to benchmark](/docs/howto_benchmark.md)
+  - [Performance tuning and testing](/docs/performance.md)
+- Buckets and Backend Providers
+  - [Backend providers](/docs/providers.md)
+  - [Buckets](/docs/bucket.md)
+- Storage Services
+  - [Storage Services](/docs/storage_svcs.md)
+  - [Checksumming: brief theory of operations](/docs/checksum.md)
+  - [S3 compatibility](/docs/s3compat.md)
+- Power tools and extensions
+  - [Distributed Shuffle](/docs/dsort.md)
+  - [Downloader](/docs/downloader.md)
+  - [Extract, Transform, Load](/docs/etl.md)
+  - Reading, writing, and listing *archives* (objects formatted as TAR, TGZ, ZIP, etc.)
+  - [Tools and utilities](/docs/tools.md)
+- Cluster Management
+  - [Joining AIS cluster](/docs/join_cluster.md)
+  - [Leaving AIS cluster](/docs/leave_cluster.md)
+  - [Global Rebalance](/docs/rebalance.md)
+  - [Troubleshooting](/docs/troubleshooting.md)
+- Configuration
+  - [Configuration](/docs/configuration.md)
+  - [CLI to view and update cluster and node config](/docs/cli/config.md)
+- Statistics
+  - [Observability](/docs/metrics.md)
+  - [Prometheus](/docs/prometheus.md)
+- For developers
+  - [Getting started](/docs/getting_started.md)
+  - [Docker](/docs/docker_main.md)
+  - [Useful scripts](/docs/development.md)
+  - Profiling, race-detecting, and more
+- Batch operations
+  - [Batch operations](/docs/batch.md)
+  - [eXtended Actions (xactions)](/xaction/README.md)
+- Topics
+  - [System files](/docs/sysfiles.md)
+  - [`aisnode` command line](/docs/command_line.md)
+  - [Traffic patterns](/docs/traffic_patterns.md)
+  - [Highly available control plane](/docs/ha.md)
+  - [File access](/docs/aisfs.md)
+  - [Downloader](/docs/downloader.md)
+  - [On-disk layout](/docs/on_disk_layout.md)
+  - [AIS Buckets: definition, operations, properties](/docs/bucket.md#bucket)

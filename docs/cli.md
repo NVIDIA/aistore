@@ -7,17 +7,17 @@ redirect_from:
  - /docs/cli.md/
 ---
 
-# Table of content
+## Table of contents
 
 - [Getting Started](#getting-started)
-- [Using AIS CLI](#using-ais-cli)
-	- [Config](#config)
-	- [First steps](#first-steps)
-	- [Global options](#global-options)
 - [AIS CLI Shell Autocomplete](#ais-cli-shell-autocomplete)
-	- [Installing](#installing)
-	- [Uninstalling](#uninstalling)
+  - [Installing](#installing)
+  - [Uninstalling](#uninstalling)
 - [CLI Reference](#cli-reference)
+- [Using AIS CLI](#using-ais-cli)
+  - [Config](#config)
+  - [First steps](#first-steps)
+  - [Global options](#global-options)
 - [Default flag and argument values via environment variables](#default-flag-and-argument-values-via-environment-variables)
 
 
@@ -36,6 +36,45 @@ You can also install [shell autocompletions](#ais-cli-shell-autocomplete) for AI
 > The rest of the README assumes that user's `PATH` environment variable contains `$GOPATH/bin` directory.
 > Run `export PATH=$PATH:$GOPATH/bin` if this is not the case for you.
 > You can read more about GOPATH environment variable [here](https://golang.org/doc/code.html#GOPATH).
+
+## AIS CLI Shell Autocomplete
+
+The CLI tool supports `bash` and `zsh` auto-complete functionality.
+
+### Installing
+
+When running `install.sh` you will be asked if you want to install autocompletions.
+To install them manually, run `bash autocomplete/install.sh`.
+
+### Uninstalling
+
+To uninstall autocompletions, run `bash autocomplete/uninstall.sh`.
+
+## CLI Reference
+
+| Command | Use Case |
+|---------|----------|
+| [`ais advanced`](/docs/cli/advanced.md) | Special commands for developers and advanced usage. |
+| [`ais alias`](/docs/cli/alias.md) | User-defined command aliases. |
+| [`ais archive`](/docs/cli/archive.md) | Read, write, and list archives (i.e., objects formatted as TAR, TGZ, ZIP, etc.) |
+| [`ais auth`](/docs/cli/auth.md) | Add/remove/show users, manage user roles, manage access to remote clusters. |
+| [`ais bucket`](/docs/cli/bucket.md) | Create/destroy buckets, list bucket's content, show existing buckets and their properties. |
+| [`ais cluster`](/docs/cli/cluster.md) | Monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc. |
+| [`ais config`](/docs/cli/config.md) | Set local/global AIS cluster configurations. |
+| [`ais etl`](/docs/cli/etl.md) | Execute custom transformations on objects. |
+| [`ais job`](/docs/cli/job.md) | Query and manage jobs (aka extended actions or xactions). |
+| [`ais object`](/docs/cli/object.md) | PUT (write), GET (read), list, move (rename) and other operations on objects in a given bucket. |
+| [`ais search`](/docs/cli/search.md) | Search `ais` commands. |
+| [`ais show`](/docs/cli/show.md) | Show information about buckets, jobs, all other managed entities in the cluster and the cluster itself. |
+| [`ais storage`](/docs/cli/storage.md) | Show capacity usage on a per bucket basis, attach/detach mountpaths (disks), run certain bucket validation logic, and more. |
+{: .nobreak}
+
+Other CLI documentation:
+- [Attach, Detach, and monitor remote clusters](/docs/cli/remote.md)
+- [Start, Stop, and monitor downloads](/docs/cli/download.md)
+- [Distributed Sort](/docs/cli/dsort.md)
+
+> Note: In CLI docs, the terms "xaction" and "job" are used interchangeably.
 
 ## Using AIS CLI
 
@@ -106,43 +145,6 @@ $ # Incorrect usage of a global option.
 $ ais bucket ls ais://bck --props all --no-color
 ```
 
-## AIS CLI Shell Autocomplete
-
-The CLI tool supports `bash` and `zsh` auto-complete functionality.
-
-### Installing
-
-When running `install.sh` you will be asked if you want to install autocompletions.
-To install them manually, run `bash autocomplete/install.sh`.
-
-### Uninstalling
-
-To uninstall autocompletions, run `bash autocomplete/uninstall.sh`.
-
-## CLI Reference
-
-| Command | Use Case |
-|---------|----------|
-| [`ais bucket`](/docs/cli/bucket.md) | Create/destroy buckets, list bucket's content, show existing buckets and their properties. |
-| [`ais object`](/docs/cli/object.md) | PUT (write), GET (read), list, move (rename) and other operations on objects in a given bucket. |
-| [`ais cluster`](/docs/cli/cluster.md) | Monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc. |
-| [`ais config`](/docs/cli/config.md) | Set local/global AIS cluster configurations. |
-| [`ais storage`](/docs/cli/storage.md) | Show capacity usage on a per bucket basis, attach/detach mountpaths (disks), run certain bucket validation logic, and more. |
-| [`ais etl`](/docs/cli/etl.md) | Execute custom transformations on objects. |
-| [`ais job`](/docs/cli/job.md) | Query and manage jobs (aka extended actions or xactions). |
-| [`ais auth`](/docs/cli/auth.md) | Add/remove/show users, manage user roles, manage access to remote clusters. |
-| [`ais show`](/docs/cli/show.md) | Show information about buckets, jobs, all other managed entities in the cluster and the cluster itself. |
-| [`ais advanced`](/docs/cli/advanced.md) | Special commands intended for development and advanced usage. |
-| [`ais search`](/docs/cli/search.md) | Search `ais` commands. |
-{: .nobreak}
-
-Other CLI documentation:
-- [Attach, Detach, and monitor remote clusters](/docs/cli/remote.md)
-- [Start, Stop, and monitor downloads](/docs/cli/download.md)
-- [Distributed Sort](/docs/cli/dsort.md)
-
-> Note: In CLI docs, the terms "xaction" and "job" are used interchangeably.
-
 ## Default flag and argument values via environment variables
 
 #### Backend Provider
@@ -159,6 +161,7 @@ Supported backend providers currently include:
 * `hdfs://` - HDFS Storage
 * `ht://` - HTTP(S) datasets
 
-> See also: [Backend Providers](/docs/providers.md)
->
-> See also: [Buckets](/docs/bucket.md)
+See also:
+
+> [Backend Providers](/docs/providers.md)
+> [Buckets: definition, operations, properties](/docs/bucket.md)
