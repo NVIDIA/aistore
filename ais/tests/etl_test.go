@@ -115,6 +115,9 @@ func testETLObject(t *testing.T, uuid, inPath, outPath string, fTransform transf
 		inputFilePath          string
 		expectedOutputFilePath string
 
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+
 		bck            = cmn.Bck{Provider: cmn.ProviderAIS, Name: "etl-test"}
 		objName        = fmt.Sprintf("%s-%s-object", uuid, cos.RandString(5))
 		outputFileName = filepath.Join(t.TempDir(), objName+".out")
@@ -163,6 +166,11 @@ func testETLObject(t *testing.T, uuid, inPath, outPath string, fTransform transf
 }
 
 func testETLObjectCloud(t *testing.T, bck cmn.Bck, uuid string, onlyLong, cached bool) {
+	var (
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+	)
+
 	// Always uses Echo transformation, as correctness of other transformations is checked in different tests.
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: onlyLong})
 
@@ -201,6 +209,9 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, uuid string, onlyLong, cached
 // Responsible for cleaning ETL xaction, ETL containers, destination bucket.
 func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, fileSize uint64, timeout time.Duration) {
 	var (
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+
 		bckTo          = cmn.Bck{Name: "etloffline-out-" + cos.RandString(5), Provider: cmn.ProviderAIS}
 		requestTimeout = 30 * time.Second
 	)
@@ -301,6 +312,9 @@ func TestETLInline(t *testing.T) {
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	var (
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+
 		bck = cmn.Bck{Provider: cmn.ProviderAIS, Name: "etl-test"}
 
 		tests = []testObjConfig{
@@ -344,6 +358,9 @@ func TestETLInline(t *testing.T) {
 
 func TestETLInlineMD5SingleObj(t *testing.T) {
 	var (
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+
 		bck         = cmn.Bck{Provider: cmn.ProviderAIS, Name: "etl-test"}
 		transformer = tetl.MD5
 		comm        = etl.PushCommType
@@ -389,6 +406,9 @@ func TestETLBucket(t *testing.T) {
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	var (
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+
 		bck    = cmn.Bck{Name: "etloffline", Provider: cmn.ProviderAIS}
 		objCnt = 10
 
@@ -461,6 +481,9 @@ def transform(input_bytes: bytes) -> bytes:
 	)
 
 	var (
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+
 		m = ioContext{
 			t:         t,
 			num:       10,
@@ -530,6 +553,9 @@ func TestETLBucketDryRun(t *testing.T) {
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	var (
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+
 		bckFrom = cmn.Bck{Name: "etloffline", Provider: cmn.ProviderAIS}
 		bckTo   = cmn.Bck{Name: "etloffline-out-" + cos.RandString(5), Provider: cmn.ProviderAIS}
 		objCnt  = 10
@@ -595,6 +621,11 @@ func TestETLSingleTransformerAtATime(t *testing.T) {
 }
 
 func TestETLHealth(t *testing.T) {
+	var (
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+	)
+
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: true})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
@@ -638,6 +669,11 @@ func TestETLHealth(t *testing.T) {
 }
 
 func TestETLList(t *testing.T) {
+	var (
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+	)
+
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
 
 	uuid, err := tetl.Init(baseParams, tetl.Echo, etl.RevProxyCommType)

@@ -306,6 +306,10 @@ func (p *proxyrunner) initSpecETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if p.forwardCP(w, r, nil, "initSpecETL") {
+		return
+	}
+
 	spec, err := io.ReadAll(r.Body)
 	if err != nil {
 		p.writeErr(w, r, err)
@@ -316,10 +320,6 @@ func (p *proxyrunner) initSpecETL(w http.ResponseWriter, r *http.Request) {
 	msg, err := etl.ValidateSpec(spec)
 	if err != nil {
 		p.writeErr(w, r, err)
-		return
-	}
-
-	if p.forwardCP(w, r, nil, "initSpecETL") {
 		return
 	}
 
@@ -335,6 +335,10 @@ func (p *proxyrunner) initCodeETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if p.forwardCP(w, r, nil, "initCodeETL") {
+		return
+	}
+
 	var msg etl.InitCodeMsg
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
@@ -347,9 +351,6 @@ func (p *proxyrunner) initCodeETL(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := msg.Validate(); err != nil {
 		p.writeErr(w, r, err)
-		return
-	}
-	if p.forwardCP(w, r, nil, "initCodeETL") {
 		return
 	}
 	if err = p.startETL(w, r, cos.MustMarshal(msg), msg.ID); err != nil {

@@ -91,21 +91,25 @@ func TestCopyMultiObj(t *testing.T) {
 }
 
 func testCopyMobj(t *testing.T, bck *cluster.Bck) {
+	const (
+		objCnt = 200
+	)
+
 	var (
-		numPuts = 200
-		m       = ioContext{
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+
+		m = ioContext{
 			t:       t,
 			bck:     bck.Bck,
-			num:     numPuts,
+			num:     objCnt,
 			prefix:  "copy-multiobj/",
 			ordered: true,
 		}
-		toBck      = cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS}
-		proxyURL   = tutils.RandomProxyURL(t)
-		baseParams = tutils.BaseAPIParams(proxyURL)
-		numToCopy  = cos.Min(m.num/2, 13)
-		fmtRange   = "%s{%d..%d}"
-		subtests   = []struct {
+		toBck     = cmn.Bck{Name: cos.RandString(10), Provider: cmn.ProviderAIS}
+		numToCopy = cos.Min(m.num/2, 13)
+		fmtRange  = "%s{%d..%d}"
+		subtests  = []struct {
 			list bool
 		}{
 			{true}, {false},
@@ -118,7 +122,7 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 		}
 		t.Run(tname, func(t *testing.T) {
 			if m.bck.IsRemote() {
-				m.num = numPuts / 3
+				m.num = objCnt / 3
 			}
 			m.init()
 			m.puts()
@@ -172,6 +176,7 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 func TestETLMultiObj(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
+
 	const (
 		objCnt      = 50
 		copyCnt     = 20
@@ -182,6 +187,9 @@ func TestETLMultiObj(t *testing.T) {
 		cksumType   = cos.ChecksumMD5
 	)
 	var (
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+
 		bck   = cmn.Bck{Name: "etloffline", Provider: cmn.ProviderAIS}
 		toBck = cmn.Bck{Name: "etloffline-out-" + cos.RandString(5), Provider: cmn.ProviderAIS}
 	)
@@ -217,6 +225,9 @@ func testETLMultiObj(t *testing.T, uuid string, fromBck, toBck cmn.Bck, fileRang
 	tassert.CheckFatal(t, err)
 
 	var (
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+
 		objList        = pt.ToSlice()
 		objCnt         = len(objList)
 		requestTimeout = 30 * time.Second
