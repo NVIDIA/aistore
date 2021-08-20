@@ -6,7 +6,7 @@
 package xs
 
 import (
-	"strings"
+	"fmt"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -21,37 +21,29 @@ const (
 	doneSendingOpcode = 31415
 
 	waitRegRecv   = 4 * time.Second
-	waitUnregRecv = waitRegRecv
+	waitUnregRecv = 2 * waitRegRecv
 )
 
-func newArchTcoDM(prefix string, r xreg.RenewBase, recv transport.ReceiveObj, sizePDU int32) (dm *bundle.DataMover, err error) {
-	trname := prefix + r.Bck.Provider + "-" + r.Bck.Name // NOTE: must be identical across cluster
+func newDM(prefix string, r xreg.RenewBase, recv transport.ReceiveObj, sizePDU int32) (dm *bundle.DataMover, err error) {
+	// NOTE:
+	// transport endpoint `trname` must be identical across all participating targets
+	bmd := r.Args.T.Bowner().Get()
+	trname := fmt.Sprintf("%s-%s-%s-%d", prefix, r.Bck.Provider, r.Bck.Name, bmd.Version)
+
 	dmExtra := bundle.Extra{Multiplier: 1, SizePDU: sizePDU}
-	dm, err = bundle.NewDataMover(r.T, trname, recv, cluster.RegularPut, dmExtra)
+	dm, err = bundle.NewDataMover(r.Args.T, trname, recv, cluster.RegularPut, dmExtra)
 	if err != nil {
 		return
 	}
-	// TODO better
 	if err = dm.RegRecv(); err != nil {
-		var total time.Duration
+		var total time.Duration // retry for upto waitRegRecv
 		glog.Error(err)
 		sleep := cos.CalcProbeFreq(waitRegRecv)
-		for err != nil && strings.Contains(err.Error(), "duplicate trname") && total < waitRegRecv {
+		for err != nil && transport.IsErrDuplicateTrname(err) && total < waitRegRecv {
 			time.Sleep(sleep)
 			total += sleep
 			err = dm.RegRecv()
 		}
 	}
 	return
-}
-
-func unregArchTcoDM(dm *bundle.DataMover, lpending func() int) {
-	sleep := cos.CalcProbeFreq(waitUnregRecv)
-	for tot := time.Duration(0); tot < waitUnregRecv; tot += sleep {
-		if lpending() == 0 {
-			break
-		}
-		time.Sleep(sleep)
-	}
-	dm.UnregRecv()
 }

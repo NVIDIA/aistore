@@ -84,17 +84,13 @@ func TestCopyObjRange(t *testing.T) {
 }
 
 func TestCopyMultiObj(t *testing.T) {
-	t.Skipf("TODO: %s", t.Name())
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		testCopyMobj(t, bck)
 	})
 }
 
 func testCopyMobj(t *testing.T, bck *cluster.Bck) {
-	const (
-		objCnt = 200
-	)
-
+	const objCnt = 200
 	var (
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)

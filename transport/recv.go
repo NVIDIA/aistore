@@ -53,6 +53,10 @@ type (
 		hkName      string   // house-keeping name
 		mm          *memsys.MMSA
 	}
+
+	ErrDuplicateTrname struct {
+		trname string
+	}
 )
 
 const cleanupInterval = time.Minute * 10
@@ -127,6 +131,13 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+////////////////////////
+// ErrDuplicateTrname //
+////////////////////////
+
+func (e *ErrDuplicateTrname) Error() string { return fmt.Sprintf("duplicate trname %q", e.trname) }
+func IsErrDuplicateTrname(e error) bool     { _, ok := e.(*ErrDuplicateTrname); return ok }
+
 /////////////
 // handler //
 /////////////
@@ -135,7 +146,7 @@ func (h *handler) handle() error {
 	mu.Lock()
 	if _, ok := handlers[h.trname]; ok {
 		mu.Unlock()
-		return fmt.Errorf("duplicate trname %q: re-registering is not permitted", h.trname)
+		return &ErrDuplicateTrname{h.trname}
 	}
 	handlers[h.trname] = h
 	mu.Unlock()

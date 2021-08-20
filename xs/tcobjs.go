@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
@@ -81,7 +82,7 @@ func (p *tcoFactory) Start() error {
 	if p.kind == cmn.ActETLObjects {
 		sizePDU = memsys.DefaultBufSize
 	}
-	if r.dm, err = newArchTcoDM("tco-", p.RenewBase, r.recv, sizePDU); err != nil {
+	if r.dm, err = newDM("tco", p.RenewBase, r.recv, sizePDU); err != nil {
 		return err
 	}
 	r.dm.SetXact(r)
@@ -155,13 +156,23 @@ fin:
 func (r *XactTCObjs) fin(err error) {
 	r.DemandBase.Stop()
 	r.dm.Close(err)
-	go unregArchTcoDM(r.dm, func() int {
-		r.pending.RLock()
-		l := len(r.pending.m)
-		r.pending.RUnlock()
-		return l
-	})
+	hk.Reg(r.ID(), r.unreg, waitUnregRecv)
 	r.Finish(err)
+}
+
+func (r *XactTCObjs) unreg() (d time.Duration) {
+	d = hk.UnregInterval
+	if r._lpending() > 0 {
+		d = waitUnregRecv
+	}
+	return
+}
+
+func (r *XactTCObjs) _lpending() (l int) {
+	r.pending.RLock()
+	l = len(r.pending.m)
+	r.pending.RUnlock()
+	return
 }
 
 // send EOI (end of iteration) to the responsible target

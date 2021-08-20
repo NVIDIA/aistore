@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
@@ -130,7 +131,7 @@ func (p *archFactory) Start() error {
 	r.pending.m = make(map[string]*archwi, maxNumInParallel)
 	p.xact = r
 	r.DemandBase.Init(p.UUID(), cmn.ActArchive, p.Bck, 0 /*use default*/)
-	if r.dm, err = newArchTcoDM("arch-", p.RenewBase, r.recv, 0); err != nil {
+	if r.dm, err = newDM("arch", p.RenewBase, r.recv, 0); err != nil {
 		return err
 	}
 	r.dm.SetXact(r)
@@ -281,13 +282,23 @@ func (r *XactCreateArchMultiObj) fin(err error) {
 		}
 	}
 	r.dm.Close(err)
-	go unregArchTcoDM(r.dm, func() int {
-		r.pending.RLock()
-		l := len(r.pending.m)
-		r.pending.RUnlock()
-		return l
-	})
+	hk.Reg(r.ID(), r.unreg, waitUnregRecv)
 	r.Finish(err)
+}
+
+func (r *XactCreateArchMultiObj) unreg() (d time.Duration) {
+	d = hk.UnregInterval
+	if r._lpending() > 0 {
+		d = waitUnregRecv
+	}
+	return
+}
+
+func (r *XactCreateArchMultiObj) _lpending() (l int) {
+	r.pending.RLock()
+	l = len(r.pending.m)
+	r.pending.RUnlock()
+	return
 }
 
 // send EOI (end of iteration) to the responsible target

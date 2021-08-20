@@ -13,12 +13,13 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/hk"
 )
 
 const (
-	pollIdle    = 3 * time.Second        // poll for relative quiescence
-	defaultIdle = time.Minute + pollIdle // hk => idle tick
+	idleRadius  = 2 * time.Second          // poll for relative quiescence
+	idleDefault = time.Minute + idleRadius // hk => idle tick
 )
 
 type (
@@ -39,6 +40,7 @@ type (
 		idle    struct {
 			d     time.Duration
 			ticks *cos.StopCh
+			last  int64 // mono.NanoTime
 		}
 		hkReg atomic.Bool
 	}
@@ -50,7 +52,7 @@ type (
 
 func (r *DemandBase) Init(uuid, kind string, bck *cluster.Bck, idle time.Duration) (xdb *DemandBase) {
 	r.hkName = kind + "/" + uuid
-	r.idle.d = defaultIdle
+	r.idle.d = idleDefault
 	if idle > 0 {
 		r.idle.d = idle
 	}
@@ -62,6 +64,7 @@ func (r *DemandBase) Init(uuid, kind string, bck *cluster.Bck, idle time.Duratio
 
 func (r *DemandBase) _initIdle() {
 	r.active.Inc()
+	r.idle.last = mono.NanoTime()
 	r.hkReg.Store(true)
 	hk.Reg(r.hkName, r.hkcb)
 }
@@ -79,14 +82,18 @@ func (r *DemandBase) Pending() int64 { return r.pending.Load() }
 func (r *DemandBase) DecPending()    { r.SubPending(1) }
 
 func (r *DemandBase) IncPending() {
-	debug.AssertMsg(r.hkReg.Load(), "unregistered at hk, forgot InitIdle?")
+	debug.Assert(r.hkReg.Load())
 	r.pending.Inc()
+	r.idle.last = 0
 	r.active.Inc()
 }
 
 func (r *DemandBase) SubPending(n int) {
-	r.pending.Sub(int64(n))
-	debug.Assert(r.Pending() >= 0)
+	nn := r.pending.Sub(int64(n))
+	debug.Assert(nn >= 0)
+	if nn == 0 {
+		r.idle.last = mono.NanoTime()
+	}
 }
 
 func (r *DemandBase) Stop() {
@@ -154,5 +161,8 @@ func (r *DemandBase) quicb(_ time.Duration /*accum. wait time*/) cluster.QuiRes 
 }
 
 func (r *DemandBase) likelyIdle() bool {
-	return r.Quiesce(pollIdle, r.quicb) == cluster.Quiescent
+	if mono.Since(r.idle.last) < 2*idleRadius {
+		return false
+	}
+	return r.Quiesce(idleRadius/2, r.quicb) == cluster.Quiescent
 }
