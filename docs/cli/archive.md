@@ -40,7 +40,7 @@ Create an archive from existing objects.
 | `--skip-misplaced` | `bool` | skip misplaced objects | `false` |
 | `--include-bck` | `bool` | true - archive directory structure starts with bucket name, false - objects are put to the archive root | `false` |
 | `--ignore-error` | `bool` | ignore error on soft failures like bucket already exists, bucket does not exist etc | `false` |
-| `--append-to-arch` | `bool` | true - append objects to an archive if it already exists, false - create new archive | `false` |
+| `--append-to-arch` | `bool` | true - append to an archive if already exists, false - create a new archive | `false` |
 
 The command must include either `--list` or `--template` option. Options `--list` and `--template` are mutually exclusive.
 
@@ -63,7 +63,7 @@ Creating archive "ais://arch.tar"
 ```
 The archive `ais://bck/arch.tar` contains 10 objects from bucket `ais://bck2`: `ais://bck2/obj-0`, `ais://bck2/obj-1` ... `ais://bck2/obj-9`.
 
-Create an archive with 3 objects and append two more:
+Create an archive consisting of 3 objects and then append 2 more:
 
 ```
 $ ais archive create ais://bck/arch1.tar --template "obj{1..3}"

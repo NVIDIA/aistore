@@ -261,8 +261,8 @@ These APIs also require specific node ID (to identify the target in the cluster 
 
 | Operation | HTTP action | Example | Go API |
 |--- | --- | ---|--- |
-| Create archive | (to be added) | (to be added) | `api.CreateArchMultiObj` |
-| Append to existing archive | (to be added) | (to be added) | `api.CreateArchMultiObj` |
+| Create multi-object archive _or_ append multiple objects to an existing one | (to be added) | (to be added) | `api.CreateArchMultiObj` |
+| APPEND to an existing archive | (to be added) | (to be added) | `api.AppendToArch` |
 
 ## Starting, stopping, and querying batch operations (jobs)
 

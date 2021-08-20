@@ -384,11 +384,11 @@ func TestAppendToArch(t *testing.T) {
 							Reader:     reader,
 							Size:       fileSize,
 						}
-						appendArcArgs := api.AppendObjectArchArgs{
+						appendArchArgs := api.AppendToArchArgs{
 							PutObjectArgs: putArgs,
 							ArchPath:      fmt.Sprintf(archPath, j),
 						}
-						err = api.AppendObjectArch(appendArcArgs)
+						err = api.AppendToArch(appendArchArgs)
 						tassert.CheckError(t, err)
 					}
 				}

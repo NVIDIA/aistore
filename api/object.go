@@ -52,7 +52,7 @@ type PutObjectArgs struct {
 	Size       uint64 // optional
 }
 
-type AppendObjectArchArgs struct {
+type AppendToArchArgs struct {
 	PutObjectArgs
 	ArchPath string
 }
@@ -287,7 +287,7 @@ func GetObjectWithResp(baseParams BaseParams, bck cmn.Bck, object string, option
 	return resp.Response, resp.n, nil
 }
 
-// PutObject creates an object from the body of the reader argument and puts
+// PutObject creates an object from the body of the reader (`args.Reader`) and puts
 // it in the specified bucket.
 //
 // Assumes that `args.Reader` is already opened and ready for usage.
@@ -339,9 +339,14 @@ func _putObject(args PutObjectArgs, query url.Values) (err error) {
 	return err
 }
 
-// Append a file to an object that is an archive(tar/tgz/zip etc).
-// NOTE: the object must exists
-func AppendObjectArch(args AppendObjectArchArgs) (err error) {
+// Append the content of a reader (`args.Reader` - e.g., an open file) to an existing
+// object formatted as one of the supported archives.
+// In other words, append to an existing archive.
+// For supported archival (mime) types, see cmn/cos/archive.go.
+// NOTE: compare with:
+//   - `api.CreateArchMultiObj`
+//   - `api.AppendObject`
+func AppendToArch(args AppendToArchArgs) (err error) {
 	m, err := cos.Mime("", args.Object)
 	if err != nil {
 		return err
@@ -352,12 +357,12 @@ func AppendObjectArch(args AppendObjectArchArgs) (err error) {
 	return _putObject(args.PutObjectArgs, query)
 }
 
-// AppendObject builds the object which should be finished with `FlushObject` request.
-// It returns handle which works as id for subsequent append requests so the
-// correct object can be identified.
-//
-// NOTE: Until `FlushObject` is called one cannot access the object yet as
-// it is yet not fully operational.
+// AppendObject adds a reader (`args.Reader` - e.g., an open file) to an object.
+// The API can be called multiple times - each call returns a handle
+// that may be used for subsequent append requests.
+// Once all the "appending" is done, the caller must call `FlushObject` API
+// to finalize the object.
+// NOTE: object becomes visible and accessible only _after_ the call to `FlushObject`.
 func AppendObject(args AppendArgs) (handle string, err error) {
 	query := make(url.Values)
 	query.Add(cmn.URLParamAppendType, cmn.AppendOp)
@@ -398,8 +403,9 @@ func AppendObject(args AppendArgs) (handle string, err error) {
 	return resp.Header.Get(cmn.HdrAppendHandle), err
 }
 
-// FlushObject should occur once all appends have finished successfully.
-// This call will create a fully operational object and requires handle to be set.
+// FlushObject must be called after all the appends (via AppendObject).
+// To "flush" it uses the handle returned by AppendObject.
+// This call will create a fully operational and accessible object.
 func FlushObject(args FlushArgs) (err error) {
 	query := make(url.Values)
 	query.Add(cmn.URLParamAppendType, cmn.FlushOp)

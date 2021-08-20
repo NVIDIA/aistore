@@ -12,10 +12,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-// CreateArchMultiObj sends HTTP request to archive multiple objects.
+// CreateArchMultiObj allows to archive multiple objects.
+// The option to append multiple objects to an existing archive is also supported.
 // The source and the destination buckets are defined as `fromBck` and `toBck`, respectively
 // (not necessarily distinct)
-// For supported archiving formats, see cos.ArchExtensions.
+// For supported archiving formats, see `cos.ArchExtensions`.
+// NOTE: compare with `api.AppendToArch`
 func CreateArchMultiObj(baseParams BaseParams, fromBck cmn.Bck, msg cmn.ArchiveMsg) (string, error) {
 	return doListRangeRequest(baseParams, fromBck, cmn.ActArchive, msg)
 }

@@ -249,11 +249,11 @@ func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err err
 			return err
 		}
 		putArgs.Size = uint64(fi.Size())
-		appendArcArgs := api.AppendObjectArchArgs{
+		appendArchArgs := api.AppendToArchArgs{
 			PutObjectArgs: putArgs,
 			ArchPath:      archPath,
 		}
-		err = api.AppendObjectArch(appendArcArgs)
+		err = api.AppendToArch(appendArchArgs)
 		if flagIsSet(c, progressBarFlag) {
 			progress.Wait()
 		}

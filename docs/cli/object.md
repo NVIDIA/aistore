@@ -411,8 +411,11 @@ $ ais object put "dir{0..10}" ais://mybucket -y
 
 `ais object put FILE BUCKET/OBJECT_NAME --archpath ARCH_PATH`
 
-Append a file to an existing archive in a specified bucket.
-`ARCH_PATH` defines a path inside the archive for the new file.
+Append a file to an existing archive in a specified bucket. More exactly,
+the command allows to append any reader (e.g., an open file) to an existing object formatted as
+one of the supported archives.
+
+Environment variable `ARCH_PATH` defines the path inside the archive for the new file.
 
 ## Examples
 
