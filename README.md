@@ -15,13 +15,12 @@ The ability to scale linearly with each added disk was, and remains, one of the 
 
 * scale-out with no downtime and no limitation;
 * arbitrary number of extremely lightweight access points;
-* highly-available control and data planes, end-to-end data protection, self-healing, erasure coding, n-way mirroring
+* highly-available control and data planes, end-to-end data protection, self-healing, n-way mirroring, k/m erasure coding;
 * comprehensive native HTTP REST to GET and PUT objects, create, destroy, list, transform, copy and configure buckets, and more;
 * [Amazon S3 API](/docs/s3compat.md) to run unmodified S3 clients and apps;
 * easy-to-use [CLI](https://www.youtube.com/watch?v=VPIhQm2sMD8&ab_channel=AIStore) based on [auto-completions](/docs/cli.md);
 * automated cluster rebalancing upon: any changes in cluster membership, drive failures and attachments, bucket renames;
-* [N-way mirroring (RAID-1), Reed–Solomon erasure coding, end-to-end data protection](/docs/storage_svcs.md).
-* [ETL offload](/docs/etl.md) - running user-defined extract-transform-load workloads on (and by) performance-optimized storage cluster;
+* [ETL offload](/docs/etl.md) - the capability to run extract-transform-load workloads on (and by) storage cluster (and close to data); offline (dataset to dataset) and inline transformation via both user-defined containers and functions are also supported.
 
 Also, AIStore:
 
