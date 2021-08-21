@@ -20,7 +20,7 @@ The ability to scale linearly with each added disk was, and remains, one of the 
 * [Amazon S3 API](/docs/s3compat.md) to run unmodified S3 clients and apps;
 * easy-to-use [CLI](https://www.youtube.com/watch?v=VPIhQm2sMD8&ab_channel=AIStore) based on [auto-completions](/docs/cli.md);
 * automated cluster rebalancing upon: any changes in cluster membership, drive failures and attachments, bucket renames;
-* [ETL offload](/docs/etl.md) - the capability to run extract-transform-load workloads on (and by) storage cluster (and close to data); offline (dataset to dataset) and inline transformation via both user-defined containers and functions are also supported.
+* [ETL offload](/docs/etl.md) - the capability to run extract-transform-load workloads on (and by) storage cluster (and close to data); offline (dataset to dataset) and inline transformations via both user-defined containers and functions are also supported.
 
 Also, AIStore:
 
