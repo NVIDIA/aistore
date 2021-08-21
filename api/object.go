@@ -173,7 +173,8 @@ func EvictObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 // `GetObjectInput.Writer`. Otherwise, it discards the response body read.
 //
 // `io.Copy` is used internally to copy response bytes from the request to the writer.
-func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (n int64, err error) {
+func GetObject(baseParams BaseParams, bck cmn.Bck, object string,
+	options ...GetObjectInput) (n int64, err error) {
 	var (
 		w   = io.Discard
 		q   url.Values
@@ -197,7 +198,8 @@ func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...Get
 
 // GetObjectReader returns reader of the requested object. It does not read body
 // bytes, nor validates a checksum. Caller is responsible for closing the reader.
-func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (r io.ReadCloser, err error) {
+func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string,
+	options ...GetObjectInput) (r io.ReadCloser, err error) {
 	var (
 		q   url.Values
 		hdr http.Header
@@ -228,7 +230,8 @@ func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string, options 
 //
 // Returns `cmn.ErrInvalidCksum` when the expected and actual checksum values
 // are different.
-func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (n int64, err error) {
+func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string,
+	options ...GetObjectInput) (n int64, err error) {
 	var (
 		w   = io.Discard
 		q   url.Values
@@ -264,7 +267,8 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, 
 // `GetObjectInput.Writer`. Otherwise, it discards the response body read.
 //
 // `io.Copy` is used internally to copy response bytes from the request to the writer.
-func GetObjectWithResp(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (*http.Response, int64, error) {
+func GetObjectWithResp(baseParams BaseParams, bck cmn.Bck, object string,
+	options ...GetObjectInput) (*http.Response, int64, error) {
 	var (
 		w   = io.Discard
 		q   url.Values
@@ -360,9 +364,9 @@ func AppendToArch(args AppendToArchArgs) (err error) {
 // AppendObject adds a reader (`args.Reader` - e.g., an open file) to an object.
 // The API can be called multiple times - each call returns a handle
 // that may be used for subsequent append requests.
-// Once all the "appending" is done, the caller must call `FlushObject` API
+// Once all the "appending" is done, the caller must call `api.FlushObject`
 // to finalize the object.
-// NOTE: object becomes visible and accessible only _after_ the call to `FlushObject`.
+// NOTE: object becomes visible and accessible only _after_ the call to `api.FlushObject`.
 func AppendObject(args AppendArgs) (handle string, err error) {
 	query := make(url.Values)
 	query.Add(cmn.URLParamAppendType, cmn.AppendOp)
@@ -403,8 +407,8 @@ func AppendObject(args AppendArgs) (handle string, err error) {
 	return resp.Header.Get(cmn.HdrAppendHandle), err
 }
 
-// FlushObject must be called after all the appends (via AppendObject).
-// To "flush" it uses the handle returned by AppendObject.
+// FlushObject must be called after all the appends (via `api.AppendObject`).
+// To "flush", it uses the handle returned by `api.AppendObject`.
 // This call will create a fully operational and accessible object.
 func FlushObject(args FlushArgs) (err error) {
 	query := make(url.Values)
@@ -441,8 +445,7 @@ func RenameObject(baseParams BaseParams, bck cmn.Bck, oldName, newName string) e
 }
 
 // PromoteFileOrDir promotes AIS-colocated files and directories to objects.
-//
-// NOTE: Advanced usage only.
+// NOTE: advanced usage.
 func PromoteFileOrDir(args *PromoteArgs) error {
 	actMsg := cmn.ActionMsg{Action: cmn.ActPromote, Name: args.FQN}
 	actMsg.Value = &cmn.ActValPromote{
