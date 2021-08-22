@@ -305,7 +305,15 @@ func waitForAsyncReqComplete(reqParams ReqParams, action string, msg *cmn.Bucket
 }
 
 // ListObjects returns list of objects in a bucket. `numObjects` is the
-// maximum number of objects returned (0 - return all objects in a bucket).
+// maximum number of objects to be returned (0 - return all objects in a bucket).
+// This API supports numerous options and flags. In particular, `cmn.SelectMsg`
+// supports "opening" objects formatted as one of the supported
+// archival types and include contents of archived directories in generated
+// result sets.
+// See also: CLI and CLI usage examples
+// See also: `cmn.SelectMsg`
+// See also: `api.ListObjectsInvalidateCache`
+// See also: `api.ListObjectsPage`
 func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObjects uint,
 	args ...*ProgressContext) (bckList *cmn.BucketList, err error) {
 	baseParams.Method = http.MethodGet
@@ -401,8 +409,12 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 }
 
 // ListObjectsPage returns the first page of bucket objects.
-// On success the function updates `smsg.ContinuationToken`, so a client can reuse
-// the message to fetch the next page.
+// On success the function updates `smsg.ContinuationToken` which client then can reuse
+// to fetch the next page.
+// See also: CLI and CLI usage examples
+// See also: `cmn.SelectMsg`
+// See also: `api.ListObjectsInvalidateCache`
+// See also: `api.ListObjects`
 func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodGet
 	if smsg == nil {
@@ -430,7 +442,7 @@ func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg) (*
 	return page, nil
 }
 
-// TODO: remove this function after introducing mechanism detecting bucket changes.
+// TODO: obsolete this function after introducing mechanism to detect remote bucket changes.
 func ListObjectsInvalidateCache(params BaseParams, bck cmn.Bck) error {
 	params.Method = http.MethodPost
 	var (

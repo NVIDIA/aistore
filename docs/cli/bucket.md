@@ -208,8 +208,8 @@ List all objects contained in `BUCKET` bucket.
 | `--no-headers` | `bool` | Display tables without headers | `false` |
 | `--cached` | `bool` | For a remote bucket, shows only objects that have already been downloaded and are cached on local drives (ignored for ais buckets) | `false` |
 | `--use-cache` | `bool` | Use proxy cache to speed up list object request | `false` |
-| `--start-after` | `string` | Object name after which the listing should start | `""` |
-| `--list-archive` | `bool` | Treat archives as directories and include their content into the bucket list |
+| `--start-after` | `string` | Object name (marker) after which the listing should start | `""` |
+| `--list-archive` | `bool` | List contents of archives (ie., objects formatted as TAR, TGZ, ZIP archives) | `false` |
 
 ### Examples
 

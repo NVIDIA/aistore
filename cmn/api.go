@@ -15,14 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-// SelectMsg extended flags
-const (
-	SelectCached    = 1 << iota // list only cached (Cloud buckets only)
-	SelectMisplaced             // Include misplaced
-	SelectDeleted               // Include marked for deletion
-	SelectArchDir               // expand archives as directories
-)
-
 // ActionMsg is a JSON-formatted control structures for the REST API
 type (
 	ActionMsg struct {
@@ -44,10 +36,16 @@ type (
 	}
 )
 
-// Bucket LIST and Bucket Summary
+// SelectMsg extended flags
+const (
+	SelectCached    = 1 << iota // list only cached (Cloud buckets only)
+	SelectMisplaced             // Include misplaced
+	SelectDeleted               // Include marked for deletion
+	SelectArchDir               // expand archives as directories
+)
+
 type (
-	// TODO: `UUID` should be merged into `ContinuationToken`.
-	// SelectMsg represents properties and options for listing objects.
+	// options and flags to list objects
 	SelectMsg struct {
 		UUID              string `json:"uuid"`               // ID to identify a single multi-page request
 		Props             string `json:"props"`              // e.g. "checksum,size"
@@ -56,22 +54,23 @@ type (
 		PageSize          uint   `json:"pagesize"`           // max entries returned by list objects call
 		StartAfter        string `json:"start_after"`        // start listing after (AIS buckets only)
 		ContinuationToken string `json:"continuation_token"` // `BucketList.ContinuationToken`
-		Flags             uint64 `json:"flags,string"`       // advanced filtering (SelectMsg extended flags)
+		Flags             uint64 `json:"flags,string"`       // enum {SelectCached, ..., SelectArchDir } - see above
 		UseCache          bool   `json:"use_cache"`          // use proxy cache to speed up listing objects
 	}
 
+	// control message to generate bucket summary or summaries
+	BucketSummaryMsg struct {
+		UUID   string `json:"uuid"`
+		Fast   bool   `json:"fast"`
+		Cached bool   `json:"cached"`
+	}
+	// bucket summary (result) for a given bucket
 	BucketSummary struct {
 		Bck
 		ObjCount       uint64  `json:"count,string"`
 		Size           uint64  `json:"size,string"`
 		TotalDisksSize uint64  `json:"disks_size,string"`
 		UsedPct        float64 `json:"used_pct"`
-	}
-	// BucketSummaryMsg represents options that can be set when asking for bucket summary.
-	BucketSummaryMsg struct {
-		UUID   string `json:"uuid"`
-		Fast   bool   `json:"fast"`
-		Cached bool   `json:"cached"`
 	}
 	BucketsSummaries []BucketSummary
 )

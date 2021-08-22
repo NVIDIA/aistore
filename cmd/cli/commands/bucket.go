@@ -169,32 +169,26 @@ func listBuckets(c *cli.Context, query cmn.QueryBcks) (err error) {
 	return
 }
 
-// Lists objects in bucket
+// Lists objects in a bucket; include archived content if requested
 func listObjects(c *cli.Context, bck cmn.Bck) error {
 	prefix := parseStrFlag(c, prefixFlag)
-	listArch := flagIsSet(c, listArchiveFlag)
-	return _listArchObjects(c, bck, prefix, listArch)
+	listArch := flagIsSet(c, listArchFlag)
+	return _doListObj(c, bck, prefix, listArch)
 }
 
-// Lists objects in bucket
-func _listArchObjects(c *cli.Context, bck cmn.Bck, prefix string, isArch bool) error {
-	objectListFilter, err := newObjectListFilter(c)
+func _doListObj(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error {
+	var (
+		showUnmatched         = flagIsSet(c, showUnmatchedFlag)
+		msg                   = &cmn.SelectMsg{Prefix: prefix}
+		objectListFilter, err = newObjectListFilter(c)
+	)
 	if err != nil {
 		return err
 	}
-
-	var (
-		showUnmatched = flagIsSet(c, showUnmatchedFlag)
-
-		msg = &cmn.SelectMsg{
-			Prefix: prefix,
-		}
-	)
-
 	if flagIsSet(c, cachedFlag) {
 		msg.SetFlag(cmn.SelectCached)
 	}
-	if isArch {
+	if listArch {
 		msg.SetFlag(cmn.SelectArchDir)
 	}
 	props := strings.Split(parseStrFlag(c, objPropsFlag), ",")
@@ -210,7 +204,6 @@ func _listArchObjects(c *cli.Context, bck cmn.Bck, prefix string, isArch bool) e
 		msg.AddProps(cmn.GetPropsStatus)
 		msg.SetFlag(cmn.SelectMisplaced)
 	}
-
 	if flagIsSet(c, startAfterFlag) {
 		msg.StartAfter = parseStrFlag(c, startAfterFlag)
 	}

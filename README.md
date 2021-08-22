@@ -81,6 +81,12 @@ Further, there's the capability referred to as [global namespace](/docs/provider
 - Tutorials
   - [Tutorials](/docs/tutorials/README.md)
   - [Videos](/docs/videos.md)
+- Power tools and extensions
+  - [Reading, writing, and listing *archives*](/docs/archive.md)
+  - [Distributed Shuffle](/docs/dsort.md)
+  - [Downloader](/docs/downloader.md)
+  - [Extract, Transform, Load](/docs/etl.md)
+  - [Tools and utilities](/docs/tools.md)
 - Benchmarking and tuning Performance
   - [AIS Load Generator: integrated benchmark tool](/docs/aisloader.md)
   - [How to benchmark](/docs/howto_benchmark.md)
@@ -92,12 +98,6 @@ Further, there's the capability referred to as [global namespace](/docs/provider
   - [Storage Services](/docs/storage_svcs.md)
   - [Checksumming: brief theory of operations](/docs/checksum.md)
   - [S3 compatibility](/docs/s3compat.md)
-- Power tools and extensions
-  - [Distributed Shuffle](/docs/dsort.md)
-  - [Downloader](/docs/downloader.md)
-  - [Extract, Transform, Load](/docs/etl.md)
-  - Reading, writing, and listing *archives* (objects formatted as TAR, TGZ, ZIP, etc.)
-  - [Tools and utilities](/docs/tools.md)
 - Cluster Management
   - [Joining AIS cluster](/docs/join_cluster.md)
   - [Leaving AIS cluster](/docs/leave_cluster.md)

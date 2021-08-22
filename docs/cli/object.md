@@ -8,7 +8,7 @@ redirect_from:
 ---
 
 # CLI Reference for Objects
-This document contains `ais object` commands, such as GET, PUT, APPEND, PROMOTE, PREFETCH, EVICT, and many more.
+This document contains `ais object` commands - the commands to read (GET), write (PUT), APPEND, PROMOTE, PREFETCH, EVICT etc. user data.
 
 ## Table of Contents
 - [GET object](#get-object)
@@ -422,7 +422,7 @@ Environment variable `ARCH_PATH` defines the path inside the archive for the new
 Add a file to an archive
 
 ```console
-$ # list archive content before operation
+$ # list archived content prior to appending new files
 $ ais ls ais://bck --prefix test --list-archive
 NAME                             SIZE
 test.tar                         42.00KiB

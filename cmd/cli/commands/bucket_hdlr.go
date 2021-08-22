@@ -61,7 +61,7 @@ var (
 			maxPagesFlag,
 			startAfterFlag,
 			cachedFlag,
-			listArchiveFlag,
+			listArchFlag,
 		},
 		subcmdSummary: {
 			cachedFlag,

@@ -385,7 +385,7 @@ var (
 	checksumFlags    = getCksumFlags()
 
 	// begin archive
-	listArchiveFlag          = cli.BoolFlag{Name: "list-archive", Usage: "list archive content"}
+	listArchFlag             = cli.BoolFlag{Name: "list-archive", Usage: "list archived content"}
 	createArchFlag           = cli.BoolFlag{Name: "archive", Usage: "archive a list or a range of objects"}
 	archpathFlag             = cli.StringFlag{Name: "archpath", Usage: "filename in archive"}
 	includeSrcBucketNameFlag = cli.BoolFlag{
