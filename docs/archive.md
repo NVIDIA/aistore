@@ -1,3 +1,12 @@
+---
+layout: post
+title: ARCHIVE
+permalink: /docs/archive
+redirect_from:
+ - /archive.md/
+ - /docs/archive.md/
+---
+
 Training on very large datasets is not easy. One of the many associated challenges is a so-called [small-file problem](https://scholar.google.com/scholar?hl=en&as_sdt=0%2C5&q=%22small+file+problem%22) - the problem that gets progressively worse given continuous random access to the entirety of an underlying dataset.
 
 Addressing the problem often means providing some sort of serialization (formatting, logic) that, ideally, also hides the fact and allows to run unmodified clients and apps. AIS approach to this and closely related problems (choices, tradeoffs) can be summarized in one word: TAR. As in: TAR archive.
