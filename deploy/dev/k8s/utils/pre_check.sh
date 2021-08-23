@@ -4,7 +4,7 @@ os=$(uname -s | tr '[:upper:]' '[:lower:]')
 # Installing minikube if not present
 install_minikube='true'
 if command -v minikube &> /dev/null; then
-  MINIKUBE_VER=$(minikube version --short 2>&1 | cut -d'v' -f3)
+  MINIKUBE_VER=$(minikube version --short 2>&1 | cut -d'v' -f2)
   if ! [[ "$MINIKUBE_VER" < "1.20.0" ]] ; then
     install_minikube='false'
   fi
