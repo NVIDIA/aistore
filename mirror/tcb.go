@@ -101,12 +101,11 @@ func (e *tcbFactory) Start() error {
 		sizePDU = memsys.DefaultBufSize
 	}
 
-	// TODO -- FIXME: revisit
+	// NOTE: to refcount doneSendingOpcode
 	smap := e.T.Sowner().Get()
 	e.xact.refc.Store(int32(smap.CountTargets() - 1))
 	e.xact.wg.Add(1)
 
-	// TODO: using rebalance config for a DM that copies objects.
 	return e.newDM(&config.Rebalance, e.UUID(), sizePDU)
 }
 
@@ -249,7 +248,7 @@ func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 	}
 	r.ObjectsInc()
 
-	// TODO -- FIXME: Add precise post-transform byte count
+	// TODO: Add precise post-transform byte count
 	// (under ETL, sizes of transformed objects are unknown until after the transformation)
 	if size == cos.ContentLengthUnknown {
 		size = lom.SizeBytes()

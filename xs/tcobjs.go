@@ -267,15 +267,11 @@ func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) {
 	size, err := lri.t.CopyObject(lom, params, false /*localOnly*/)
 	slab.Free(buf)
 	if err != nil {
-		if cos.IsErrOOS(err) {
-			what := fmt.Sprintf("%s(%q)", wi.r.Kind(), wi.r.ID())
-			err = cmn.NewAbortedError(what, err.Error())
-			// TODO -- FIXME: handle
-		}
+		// TODO -- FIXME: handle
 		return
 	}
 	wi.r.ObjectsInc()
-	// TODO -- FIXME: Add precise post-transform byte count
+	// TODO: support precise post-transform byte count
 	// (under ETL, sizes of transformed objects are unknown until after the transformation)
 	if size == cos.ContentLengthUnknown {
 		if err := lom.Load(false /*cacheit*/, false /*locked*/); err != nil {

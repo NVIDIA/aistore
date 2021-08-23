@@ -96,7 +96,8 @@ func primaryCrashElectRestart(t *testing.T) {
 	killRestorePrimary(t, proxyURL, false, nil)
 }
 
-func killRestorePrimary(t *testing.T, proxyURL string, restoreAsPrimary bool, postKill func(smap *cluster.Smap, newPrimary, oldPrimary *cluster.Snode)) *cluster.Smap {
+func killRestorePrimary(t *testing.T, proxyURL string, restoreAsPrimary bool,
+	postKill func(smap *cluster.Smap, newPrimary, oldPrimary *cluster.Snode)) *cluster.Smap {
 	var (
 		smap          = tutils.GetClusterMap(t, proxyURL)
 		proxyCount    = smap.CountActiveProxies()
@@ -272,7 +273,8 @@ func primaryAndTargetCrash(t *testing.T) {
 	err = tutils.RestoreNode(cmd, false, "proxy (prev primary)")
 	tassert.CheckFatal(t, err)
 
-	_, err = tutils.WaitForClusterState(newPrimaryURL, "to restore proxy and target", smap.Version, origProxyCount, origTargetCount)
+	_, err = tutils.WaitForClusterState(newPrimaryURL, "to restore proxy and target",
+		smap.Version, origProxyCount, origTargetCount)
 	tassert.CheckFatal(t, err)
 	tutils.WaitForRebalanceToComplete(t, tutils.BaseAPIParams(newPrimaryURL))
 }
@@ -449,7 +451,8 @@ func primaryAndProxyCrash(t *testing.T) {
 		}
 	}
 	tassert.Errorf(t, secondID != "", "not enough proxies (%d)", origProxyCount)
-	time.Sleep(30 * time.Second) // TODO -- FIXME: remove
+	n := cos.NowRand().Intn(20)
+	time.Sleep(time.Duration(n+1) * time.Second)
 
 	tlog.Logf("Killing non-primary proxy: %s - %s\n", secondURL, secondID)
 	secondCmd, err := tutils.KillNode(secondNode)
@@ -607,7 +610,8 @@ func joinWhileVoteInProgress(t *testing.T) {
 	default:
 	}
 
-	_, err = tutils.WaitForClusterState(smap.Primary.URL(cmn.NetworkPublic), "to kill mock target", smap.Version, oldProxyCnt, oldTargetCnt)
+	_, err = tutils.WaitForClusterState(smap.Primary.URL(cmn.NetworkPublic),
+		"to kill mock target", smap.Version, oldProxyCnt, oldTargetCnt)
 	tassert.CheckFatal(t, err)
 }
 
@@ -1114,7 +1118,8 @@ func hrwProxyTest(smap *cluster.Smap, idToSkip string) (pi string, err error) {
 		}
 	}
 	if pi == "" {
-		err = fmt.Errorf("cannot HRW-select proxy: current count=%d, skipped=%d", smap.CountActiveProxies(), skipped)
+		err = fmt.Errorf("cannot HRW-select proxy: current count=%d, skipped=%d",
+			smap.CountActiveProxies(), skipped)
 	}
 	return
 }
@@ -1399,7 +1404,8 @@ func icFromSmap(smap *cluster.Smap) cos.StringSet {
 func icMemberLeaveAndRejoin(t *testing.T) {
 	smap := tutils.GetClusterMap(t, proxyURL)
 	primary := smap.Primary
-	tassert.Fatalf(t, smap.ICCount() == smap.DefaultICSize(), "should have %d members in IC, has %d", smap.DefaultICSize(), smap.ICCount())
+	tassert.Fatalf(t, smap.ICCount() == smap.DefaultICSize(),
+		"should have %d members in IC, has %d", smap.DefaultICSize(), smap.ICCount())
 
 	// Primary must be an IC member
 	tassert.Fatalf(t, smap.IsIC(primary), "primary (%s) should be a IC member, (were: %s)", primary, smap.StrIC(primary))
@@ -1457,8 +1463,10 @@ func icKillAndRestorePrimary(t *testing.T) {
 	smap = killRestorePrimary(t, proxyURL, true, icCheck)
 
 	// When a node added as primary, it should add itself to IC.
-	tassert.Fatalf(t, smap.IsIC(oldPrimary), "primary (%s) should be a IC member, (were: %s)", oldPrimary, smap.StrIC(oldPrimary))
-	tassert.Errorf(t, smap.ICCount() == smap.DefaultICSize(), "should have %d members in IC, has %d", smap.DefaultICSize(), smap.ICCount())
+	tassert.Fatalf(t, smap.IsIC(oldPrimary),
+		"primary (%s) should be a IC member, (were: %s)", oldPrimary, smap.StrIC(oldPrimary))
+	tassert.Errorf(t, smap.ICCount() == smap.DefaultICSize(),
+		"should have %d members in IC, has %d", smap.DefaultICSize(), smap.ICCount())
 }
 
 func icSyncOwnershipTable(t *testing.T) {
@@ -1647,7 +1655,8 @@ func icStressCachedXactions(t *testing.T) {
 // nolint:unused // will be used when icStressCachedXaction test is enabled
 //
 // Expects objects to be numbered as {%04d}; BaseParams of primary proxy
-func startListObjRange(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, numJobs, numObjs, rangeSize int, pageSize uint) *sync.WaitGroup {
+func startListObjRange(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, numJobs, numObjs, rangeSize int,
+	pageSize uint) *sync.WaitGroup {
 	tassert.Fatalf(t, numObjs > rangeSize, "number of objects (%d) should be greater than range size (%d)", numObjs, rangeSize)
 
 	wg := &sync.WaitGroup{}
@@ -1669,7 +1678,7 @@ func startListObjRange(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, num
 				return
 			}
 			if cmn.IsStatusBadGateway(err) {
-				// TODO -- FIXME : handle internally when cache owner is killed
+				// TODO : handle cache owner getting killed
 				return
 			}
 			tassert.Errorf(t, err == nil, "List objects %s failed, err = %v", bck, err)

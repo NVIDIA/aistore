@@ -625,7 +625,7 @@ func (t *targetrunner) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP
 			return xactID, fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
 		txnTco := txn.(*txnTCObjs)
-		txnTco.xtco.Do(txnTco.msg) // TODO -- FIXME c.uuid
+		txnTco.xtco.Do(txnTco.msg)
 		xactID = txnTco.xtco.ID()
 		t.transactions.find(c.uuid, cmn.ActCommit)
 	default:

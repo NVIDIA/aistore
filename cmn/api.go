@@ -591,10 +591,6 @@ func (msg *TCBMsg) Validate() error {
 
 // Replace extension and add suffix if provided.
 func (msg *TCBMsg) ToName(name string) string {
-	if msg == nil {
-		debug.AssertMsg(false, name) // TODO -- FIXME: remove
-		return name
-	}
 	if msg.Ext != nil {
 		if idx := strings.LastIndexByte(name, '.'); idx >= 0 {
 			ext := name[:idx]
