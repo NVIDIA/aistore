@@ -25,12 +25,13 @@ func init() {
 	xreg.RegBckXact(&evdFactory{kind: cmn.ActEvictObjects})
 	xreg.RegBckXact(&evdFactory{kind: cmn.ActDeleteObjects})
 	xreg.RegBckXact(&prfFactory{})
-	xreg.RegBckXact(&tcoFactory{kind: cmn.ActETLObjects})
-	xreg.RegBckXact(&tcoFactory{kind: cmn.ActCopyObjects})
 
 	xreg.RegBckXact(&olFactory{})
 
 	xreg.RegBckXact(&proFactory{})
 	xreg.RegBckXact(&llcFactory{})
-	xreg.RegBckXact(&archFactory{})
+
+	xreg.RegBckXact(&tcoFactory{streamingF: streamingF{kind: cmn.ActETLObjects}})
+	xreg.RegBckXact(&tcoFactory{streamingF: streamingF{kind: cmn.ActCopyObjects}})
+	xreg.RegBckXact(&archFactory{streamingF: streamingF{kind: cmn.ActArchive}})
 }

@@ -27,15 +27,13 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xreg"
 )
 
 type (
 	archFactory struct {
-		xreg.RenewBase
-		xact *XactCreateArchMultiObj
+		streamingF
 	}
 	archWriter interface {
 		write(nameInArch string, oah cmn.ObjAttrsHolder, reader io.Reader) error
@@ -78,9 +76,8 @@ type (
 	}
 	XactCreateArchMultiObj struct {
 		xaction.DemandBase
-		t       cluster.Target
+		p       *archFactory
 		bckFrom *cluster.Bck
-		dm      *bundle.DataMover
 		workCh  chan *cmn.ArchiveMsg
 		pending struct {
 			sync.RWMutex
@@ -112,30 +109,22 @@ var (
 /////////////////
 
 func (*archFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
-	p := &archFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}}
+	p := &archFactory{streamingF: streamingF{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: cmn.ActArchive}}
 	return p
 }
 
-func (*archFactory) Kind() string        { return cmn.ActArchive }
-func (p *archFactory) Get() cluster.Xact { return p.xact }
-
-func (p *archFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
-	debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) // xreg.usePrev() must've returned true
-	return xreg.WprUse, nil
-}
-
 func (p *archFactory) Start() error {
-	var err error
 	workCh := make(chan *cmn.ArchiveMsg, maxNumInParallel)
-	r := &XactCreateArchMultiObj{t: p.T, bckFrom: p.Bck, workCh: workCh, config: cmn.GCO.Get()}
+	r := &XactCreateArchMultiObj{p: p, bckFrom: p.Bck, workCh: workCh, config: cmn.GCO.Get()}
 	r.pending.m = make(map[string]*archwi, maxNumInParallel)
 	p.xact = r
 	r.DemandBase.Init(p.UUID(), cmn.ActArchive, p.Bck, 0 /*use default*/)
-	if r.dm, err = newDM("arch", p.RenewBase, r.recv, 0); err != nil {
+	if err := p.newDM("arch", r.recv, 0); err != nil {
 		return err
 	}
-	r.dm.SetXact(r)
-	r.dm.Open()
+	r.p.dm = p.dm // TODO -- FIXME
+	r.p.dm.SetXact(r)
+	r.p.dm.Open()
 
 	xaction.GoRunW(r)
 	return nil
@@ -148,10 +137,10 @@ func (p *archFactory) Start() error {
 // limited pre-run abort
 func (r *XactCreateArchMultiObj) TxnAbort() {
 	err := cmn.NewAbortedError(r.String())
-	if r.dm.IsOpen() {
-		r.dm.Close(err)
+	if r.p.dm.IsOpen() {
+		r.p.dm.Close(err)
 	}
-	r.dm.UnregRecv()
+	r.p.dm.UnregRecv()
 	r.XactBase.Finish(err)
 }
 
@@ -167,7 +156,7 @@ func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 	wi.fqn = fs.CSM.GenContentFQN(wi.lom, fs.WorkfileType, fs.WorkfileCreateArch)
 	wi.cksum.Init(lom.CksumConf().Type)
 
-	smap := r.t.Sowner().Get()
+	smap := r.p.T.Sowner().Get()
 	wi.refc.Store(int32(smap.CountTargets() - 1))
 	wi.tsi, err = cluster.HrwTarget(msg.ToBck.MakeUname(msg.ArchName), smap)
 	if err != nil {
@@ -176,7 +165,7 @@ func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 	}
 
 	// NOTE: creating archive at BEGIN time; TODO: cleanup upon ABORT
-	if r.t.Snode().ID() == wi.tsi.ID() {
+	if r.p.T.Snode().ID() == wi.tsi.ID() {
 		if errExists := fs.Access(wi.lom.FQN); errExists != nil {
 			wi.fh, err = wi.lom.CreateFile(wi.fqn)
 		} else if wi.msg.AllowAppendToExisting {
@@ -187,12 +176,12 @@ func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 				err = fmt.Errorf("unsupported archive type %s, only %s is supported", msg.Mime, cos.ExtTar)
 			}
 		} else {
-			err = fmt.Errorf("%s: not allowed to append to an existing %s", r.t.Snode(), msg.FullName())
+			err = fmt.Errorf("%s: not allowed to append to an existing %s", r.p.T.Snode(), msg.FullName())
 		}
 		if err != nil {
 			return
 		}
-		wi.buf, _ = r.t.MMSA().Alloc()
+		wi.buf, _ = r.p.T.MMSA().Alloc()
 		switch msg.Mime {
 		case cos.ExtTar:
 			tw := &tarWriter{}
@@ -234,11 +223,11 @@ func (r *XactCreateArchMultiObj) Run(wg *sync.WaitGroup) {
 			r.pending.RUnlock()
 			debug.Assert(ok)
 			var (
-				smap    = r.t.Sowner().Get()
+				smap    = r.p.T.Sowner().Get()
 				lrit    = &lriterator{}
 				freeLOM = false // not delegating to iterator
 			)
-			lrit.init(r, r.t, &msg.ListRangeMsg, freeLOM)
+			lrit.init(r, r.p.T, &msg.ListRangeMsg, freeLOM)
 			if msg.IsList() {
 				err = lrit.iterateList(wi, smap)
 			} else {
@@ -253,7 +242,7 @@ func (r *XactCreateArchMultiObj) Run(wg *sync.WaitGroup) {
 				wi.abort(err)
 				goto fin
 			}
-			if r.t.Snode().ID() == wi.tsi.ID() {
+			if r.p.T.Snode().ID() == wi.tsi.ID() {
 				go r.finalize(wi)
 			} else {
 				r.eoi(wi)
@@ -281,7 +270,7 @@ func (r *XactCreateArchMultiObj) fin(err error) {
 			err = errDetailed.(error)
 		}
 	}
-	r.dm.Close(err)
+	r.p.dm.Close(err)
 	hk.Reg(r.ID(), r.unreg, waitUnregRecv)
 	r.Finish(err)
 }
@@ -307,7 +296,7 @@ func (r *XactCreateArchMultiObj) eoi(wi *archwi) {
 	o := transport.AllocSend()
 	o.Hdr.Opcode = doneSendingOpcode
 	o.Hdr.Opaque = []byte(wi.msg.TxnUUID)
-	r.dm.Send(o, nil, wi.tsi)
+	r.p.dm.Send(o, nil, wi.tsi)
 }
 
 func (r *XactCreateArchMultiObj) doSend(lom *cluster.LOM, wi *archwi, fh cos.ReadOpenCloser) {
@@ -322,7 +311,7 @@ func (r *XactCreateArchMultiObj) doSend(lom *cluster.LOM, wi *archwi, fh cos.Rea
 	o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
 		cluster.FreeLOM(lom)
 	}
-	r.dm.Send(o, fh, wi.tsi)
+	r.p.dm.Send(o, fh, wi.tsi)
 }
 
 func (r *XactCreateArchMultiObj) recv(hdr transport.ObjHdr, objReader io.Reader, err error) {
@@ -343,7 +332,7 @@ func (r *XactCreateArchMultiObj) recv(hdr transport.ObjHdr, objReader io.Reader,
 	wi, ok := r.pending.m[txnUUID]
 	r.pending.RUnlock()
 	debug.Assert(ok)
-	debug.Assert(wi.tsi.ID() == r.t.Snode().ID())
+	debug.Assert(wi.tsi.ID() == r.p.T.Snode().ID())
 	debug.Assert(wi.msg.TxnUUID == txnUUID)
 
 	// NOTE: best-effort via ref-counting
@@ -376,7 +365,7 @@ func (r *XactCreateArchMultiObj) finalize(wi *archwi) {
 }
 
 func (r *XactCreateArchMultiObj) raiseErr(err error, errCode int, contOnErr bool) {
-	errDetailed := fmt.Errorf("%s[%s]: %v(%d)", r.t.Snode(), r, err, errCode)
+	errDetailed := fmt.Errorf("%s[%s]: %v(%d)", r.p.T.Snode(), r, err, errCode)
 	if !contOnErr {
 		glog.Errorf("%v - terminating...", errDetailed)
 		r.err.Store(errDetailed)
@@ -389,7 +378,7 @@ func (r *XactCreateArchMultiObj) fini(wi *archwi) (errCode int, err error) {
 	var size int64
 
 	wi.writer.fini()
-	r.t.MMSA().Free(wi.buf)
+	r.p.T.MMSA().Free(wi.buf)
 
 	if size, err = wi.finalize(); err != nil {
 		return http.StatusInternalServerError, err
@@ -398,7 +387,7 @@ func (r *XactCreateArchMultiObj) fini(wi *archwi) (errCode int, err error) {
 	wi.lom.SetSize(size)
 	cos.Close(wi.fh)
 
-	errCode, err = r.t.FinalizeObj(wi.lom, wi.fqn)
+	errCode, err = r.p.T.FinalizeObj(wi.lom, wi.fqn)
 	cluster.FreeLOM(wi.lom)
 
 	r.ObjectsInc()
@@ -416,7 +405,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 		t       = lrit.t
 		coldGet bool
 	)
-	debug.Assert(t == wi.r.t)
+	debug.Assert(t == wi.r.p.T)
 	debug.Assert(wi.r.bckFrom.Bck.Equal(lom.Bucket()))
 	debug.Assert(lom.Bprops() != nil) // must be init-ed
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {

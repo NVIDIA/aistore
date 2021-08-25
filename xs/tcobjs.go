@@ -21,25 +21,20 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xreg"
 )
 
 type (
 	tcoFactory struct {
-		xreg.RenewBase
-		xact *XactTCObjs
-		kind string
+		streamingF
 		args *xreg.TCObjsArgs
 	}
 	XactTCObjs struct {
 		xaction.DemandBase
-		t       cluster.Target
+		p       *tcoFactory
 		args    *xreg.TCObjsArgs
 		workCh  chan *cmn.TCObjsMsg
-		config  *cmn.Config
-		dm      *bundle.DataMover
 		pending struct {
 			sync.RWMutex
 			m map[string]*tcowi
@@ -64,40 +59,29 @@ var (
 ////////////////
 
 func (p *tcoFactory) New(args xreg.Args, fromBck *cluster.Bck) xreg.Renewable {
-	np := &tcoFactory{RenewBase: xreg.RenewBase{Args: args, Bck: fromBck}, kind: p.kind}
+	np := &tcoFactory{streamingF: streamingF{RenewBase: xreg.RenewBase{Args: args, Bck: fromBck}, kind: p.kind}}
 	np.args = args.Custom.(*xreg.TCObjsArgs)
 	return np
 }
 
 func (p *tcoFactory) Start() error {
-	var (
-		workCh  = make(chan *cmn.TCObjsMsg, maxNumInParallel)
-		err     error
-		sizePDU int32
-	)
-	r := &XactTCObjs{t: p.T, args: p.args, workCh: workCh, config: cmn.GCO.Get()}
+	var sizePDU int32
+	workCh := make(chan *cmn.TCObjsMsg, maxNumInParallel)
+	r := &XactTCObjs{p: p, args: p.args, workCh: workCh}
 	r.pending.m = make(map[string]*tcowi, maxNumInParallel)
 	p.xact = r
 	r.DemandBase.Init(p.UUID(), p.Kind(), p.Bck, 0 /*use default*/)
 	if p.kind == cmn.ActETLObjects {
 		sizePDU = memsys.DefaultBufSize
 	}
-	if r.dm, err = newDM("tco", p.RenewBase, r.recv, sizePDU); err != nil {
+	if err := p.newDM("tco", r.recv, sizePDU); err != nil {
 		return err
 	}
-	r.dm.SetXact(r)
-	r.dm.Open()
+	p.dm.SetXact(r)
+	p.dm.Open()
 
 	xaction.GoRunW(r)
 	return nil
-}
-
-func (p *tcoFactory) Kind() string      { return p.kind }
-func (p *tcoFactory) Get() cluster.Xact { return p.xact }
-
-func (p *tcoFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
-	debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) // xreg.usePrev() must've returned true
-	return xreg.WprUse, nil
 }
 
 ////////////////
@@ -124,7 +108,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 		select {
 		case msg := <-r.workCh:
 			var (
-				smap    = r.t.Sowner().Get()
+				smap    = r.p.T.Sowner().Get()
 				lrit    = &lriterator{}
 				freeLOM = false // not delegating
 			)
@@ -132,7 +116,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 			wi := r.pending.m[msg.TxnUUID]
 			r.pending.RUnlock()
 			wi.refc.Store(int32(smap.CountTargets() - 1))
-			lrit.init(r, r.t, &msg.ListRangeMsg, freeLOM)
+			lrit.init(r, r.p.T, &msg.ListRangeMsg, freeLOM)
 			if msg.IsList() {
 				err = lrit.iterateList(wi, smap)
 			} else {
@@ -155,7 +139,7 @@ fin:
 
 func (r *XactTCObjs) fin(err error) {
 	r.DemandBase.Stop()
-	r.dm.Close(err)
+	r.p.dm.Close(err)
 	hk.Reg(r.ID(), r.unreg, waitUnregRecv)
 	r.Finish(err)
 }
@@ -181,7 +165,7 @@ func (r *XactTCObjs) eoi(wi *tcowi) {
 	o := transport.AllocSend()
 	o.Hdr.Opcode = doneSendingOpcode
 	o.Hdr.Opaque = []byte(wi.msg.TxnUUID)
-	r.dm.Bcast(o)
+	r.p.dm.Bcast(o)
 }
 
 func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) {
@@ -227,7 +211,7 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 		Cksum:    hdr.ObjAttrs.Cksum,
 		Started:  time.Now(),
 	}
-	if err := r.t.PutObject(lom, params); err != nil {
+	if err := r.p.T.PutObject(lom, params); err != nil {
 		glog.Error(err)
 	}
 }
@@ -239,10 +223,10 @@ func (r *XactTCObjs) String() string {
 // limited pre-run abort
 func (r *XactTCObjs) TxnAbort() {
 	err := cmn.NewAbortedError(r.String())
-	if r.dm.IsOpen() {
-		r.dm.Close(err)
+	if r.p.dm.IsOpen() {
+		r.p.dm.Close(err)
 	}
-	r.dm.UnregRecv()
+	r.p.dm.UnregRecv()
 	r.XactBase.Finish(err)
 }
 
@@ -259,7 +243,7 @@ func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) {
 	{
 		params.BckTo = wi.r.args.BckTo
 		params.ObjNameTo = objNameTo
-		params.DM = wi.r.dm
+		params.DM = wi.r.p.dm
 		params.Buf = buf
 		params.DP = wi.r.args.DP
 		params.DryRun = wi.msg.DryRun
