@@ -50,7 +50,6 @@ var _ = Describe("IterFields", func() {
 					EC: cmn.ECConf{
 						Enabled:      true,
 						ParitySlices: 1024,
-						BatchSize:    32,
 					},
 					LRU: cmn.LRUConf{},
 					Cksum: cmn.CksumConf{
@@ -75,7 +74,6 @@ var _ = Describe("IterFields", func() {
 					"ec.enabled":       true,
 					"ec.parity_slices": 1024,
 					"ec.data_slices":   0,
-					"ec.batch_size":    32,
 					"ec.objsize_limit": int64(0),
 					"ec.compression":   "",
 					"ec.disk_only":     false,
@@ -129,7 +127,6 @@ var _ = Describe("IterFields", func() {
 					"ec.enabled":       api.Bool(true),
 					"ec.parity_slices": api.Int(1024),
 					"ec.data_slices":   (*int)(nil),
-					"ec.batch_size":    (*int)(nil),
 					"ec.objsize_limit": (*int64)(nil),
 					"ec.compression":   (*string)(nil),
 					"ec.disk_only":     (*bool)(nil),

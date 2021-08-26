@@ -20,7 +20,6 @@ const (
 	versioningDisabled = "Suspended"
 
 	s3Namespace = "http://s3.amazonaws.com/doc/2006-03-01"
-	// TODO: can it be omitted? // storageClass = "STANDARD"
 
 	// Headers
 	headerETag   = "ETag"

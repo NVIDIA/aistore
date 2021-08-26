@@ -2085,7 +2085,7 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, que
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{Method: method, Path: path, Query: query, Body: body}
 	args.smap = smap
-	args.timeout = cmn.DefaultTimeout // TODO: use cmn.GCO.Get().Client.ListObjects
+	args.timeout = cmn.DefaultTimeout
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
 	for _, res := range results {
@@ -2147,7 +2147,6 @@ func (p *proxyrunner) reverseHandler(w http.ResponseWriter, r *http.Request) {
 
 // [METHOD] /v1/daemon
 func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
-	// TODO: mark internal calls with a special token?
 	switch r.Method {
 	case http.MethodGet:
 		p.httpdaeget(w, r)
@@ -2869,7 +2868,6 @@ func resolveUUIDBMD(bmds bmds) (*bucketMD, error) {
 			maxor[bmd.UUID] = bmd
 		}
 	}
-	cos.Assert(len(maxor) == len(mlist)) // TODO: remove
 	if len(maxor) == 0 {
 		return nil, errNoBMD
 	}

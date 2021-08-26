@@ -2918,7 +2918,7 @@ func TestBucketListAndSummary(t *testing.T) {
 		provider string
 		summary  bool
 		cached   bool
-		fast     bool // TODO: it makes sense only for summary
+		fast     bool // It makes sense only for summary
 	}
 
 	providers := []string{cmn.ProviderAIS}

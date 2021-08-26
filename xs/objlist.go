@@ -222,9 +222,6 @@ func (r *ObjListXact) dispatchRequest() *Resp {
 		}
 	}
 
-	// TODO: We should remove it at some point.
-	debug.Assert(r.pageIsValid(token, cnt))
-
 	objList := r.getPage(token, cnt)
 	return &Resp{
 		BckList: objList,
@@ -297,26 +294,6 @@ func (r *ObjListXact) nextPageRemote() error {
 	r.nextToken = bckList.ContinuationToken
 	r.lastPage = append(r.lastPage, bckList.Entries...)
 	return nil
-}
-
-// Called before generating a page for a proxy. It is OK if the page is
-// still in progress. If the page is done, the function ensures that the
-// local cache contains the requested data.
-func (r *ObjListXact) pageIsValid(marker string, cnt uint) bool {
-	// The same page is re-requested
-	if r.token == marker {
-		return true
-	}
-	if r.fromRemote {
-		return r.walkDone || uint(len(r.lastPage)) >= cnt
-	}
-	if cmn.TokenIncludesObject(r.token, marker) {
-		// Requested a status about page returned a few pages ago
-		return false
-	}
-	idx := r.findMarker(marker)
-	inCache := idx+cnt <= uint(len(r.lastPage))
-	return inCache || r.walkDone
 }
 
 func (r *ObjListXact) getPage(marker string, cnt uint) *cmn.BucketList {

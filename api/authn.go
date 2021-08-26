@@ -150,7 +150,6 @@ func GetUsersAuthN(baseParams BaseParams) ([]*authn.User, error) {
 		list = append(list, info)
 	}
 
-	// TODO: better sorting
 	less := func(i, j int) bool { return list[i].ID < list[j].ID }
 	sort.Slice(list, less)
 

@@ -1297,7 +1297,9 @@ func (aaoi *appendArchObjInfo) appendObject() (errCode int, err error) {
 	if aaoi.filename == "" {
 		return http.StatusBadRequest, errors.New("archive path is not defined")
 	}
-	if aaoi.mime != cos.ExtTar { // TODO: support other archive types
+	// Standard library does not support appending to archive of any type.
+	// For TAR there is a working workaround, so allow appending to TAR only.
+	if aaoi.mime != cos.ExtTar {
 		return http.StatusBadRequest, fmt.Errorf("append is supported only for %s archives", cos.ExtTar)
 	}
 	workFQN, err := aaoi.begin()

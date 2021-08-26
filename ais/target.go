@@ -381,7 +381,7 @@ func (t *targetrunner) initRecvHandlers() {
 
 		{r: cmn.Download, h: t.downloadHandler, net: accessNetIntraControl},
 		{r: cmn.Sort, h: dsort.SortHandler, net: accessControlData},
-		{r: cmn.ETL, h: t.etlHandler, net: accessNetAll}, // TODO: must be accessNetIntraControl
+		{r: cmn.ETL, h: t.etlHandler, net: accessNetAll},
 		{r: cmn.Query, h: t.queryHandler, net: accessNetPublicControl},
 
 		{r: "/" + cmn.S3, h: t.s3Handler, net: accessNetPublicData},
@@ -836,7 +836,6 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if ptime = isRedirect(query); ptime == "" && !isIntraPut(r.Header) {
-		// TODO: send TCP RST?
 		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected or replicated", t.si, r.Method)
 		return
 	}

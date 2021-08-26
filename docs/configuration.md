@@ -202,7 +202,6 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | `ec.enabled` | No | `false` | Enables or disables data protection |
 | `ec.objsize_limit` | No | `262144` | Indicated the minimum size of an object in bytes that is erasure encoded. Smaller objects are replicated |
 | `ec.parity_slices` | No | `2` | Represents the number of redundant fragments to provide protection from failures (in the range [2, 32]) |
-| `ec.batch_size` | No | `64` | Represents the number of misplaced and broken objects(with missing EC parts) processed by EC rebalance in a singe batch (in the range [4, 256]). Increasing the batch size improves rebalance time but requires more memory |
 | `ec.compression` | No | `"never"` | LZ4 compression parameters used when EC sends its fragments and replicas over network. Values: "never" - disables, "always" - compress all data, or a set of rules for LZ4, e.g "ratio=1.2" means enable compression from the start but disable when average compression ratio drops below 1.2 to save CPU resources |
 | `mirror.burst_buffer` | No | `512` | the maximum length of the queue of objects to be mirrored. When the queue length exceeds the value, a target may skip creating replicas for new objects |
 | `mirror.copies` | No | `1` | the number of local copies of an object |

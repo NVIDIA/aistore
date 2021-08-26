@@ -24,7 +24,6 @@ cat > $AIS_CONF_FILE <<EOL
 		"parity_slices": ${PARITY_SLICES:-1},
 		"compression":   "${COMPRESSION:-never}",
 		"enabled":       ${EC_ENABLED:-false},
-		"batch_size":    ${EC_BATCH_SIZE:-64},
 		"disk_only":     false
 	},
 	"log": {

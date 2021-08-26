@@ -230,7 +230,6 @@ type (
 		Compression  string `json:"compression"`   // see CompressAlways, etc. enum
 		DataSlices   int    `json:"data_slices"`   // number of data slices
 		ParitySlices int    `json:"parity_slices"` // number of parity slices/replicas
-		BatchSize    int    `json:"batch_size"`    // Batch size for EC rebalance
 		Enabled      bool   `json:"enabled"`       // EC is enabled
 		DiskOnly     bool   `json:"disk_only"`     // if true, EC does not use SGL - data goes directly to drives
 	}
@@ -238,7 +237,6 @@ type (
 		Enabled      *bool   `json:"enabled,omitempty"`
 		ObjSizeLimit *int64  `json:"objsize_limit,omitempty"`
 		DataSlices   *int    `json:"data_slices,omitempty"`
-		BatchSize    *int    `json:"batch_size,omitempty"`
 		ParitySlices *int    `json:"parity_slices,omitempty"`
 		Compression  *string `json:"compression,omitempty"`
 		DiskOnly     *bool   `json:"disk_only,omitempty"`
@@ -999,16 +997,9 @@ func (c *ECConf) Validate() error {
 		return fmt.Errorf("invalid ec.data_slices: %d (expected value in range [%d, %d])",
 			c.DataSlices, MinSliceCount, MaxSliceCount)
 	}
-	// TODO: warn about performance if number is OK but large?
 	if c.ParitySlices < MinSliceCount || c.ParitySlices > MaxSliceCount {
 		return fmt.Errorf("invalid ec.parity_slices: %d (expected value in range [%d, %d])",
 			c.ParitySlices, MinSliceCount, MaxSliceCount)
-	}
-	if c.BatchSize == 0 {
-		c.BatchSize = 64
-	}
-	if c.BatchSize < 4 || c.BatchSize > 128 {
-		return fmt.Errorf("invalid ec.batch_size: %d (must be in the range 4..128)", c.ObjSizeLimit)
 	}
 	return nil
 }

@@ -98,7 +98,7 @@ func _mvSlice(ct *cluster.CT, buf []byte) {
 	if err != nil {
 		return
 	}
-	// TODO: a slice without metafile - skip it as unusable, let LRU clean it up
+	// Slice without metafile - skip it as unusable, let LRU clean it up
 	if srcMetaFQN == "" {
 		return
 	}
