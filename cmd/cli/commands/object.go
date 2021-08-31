@@ -48,7 +48,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 	var (
 		objArgs                api.GetObjectInput
 		bck                    cmn.Bck
-		objName, archpath      string
+		objName, archPath      string
 		objLen, offset, length int64
 	)
 
@@ -67,8 +67,13 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		}
 	}
 
+	archPath = parseStrFlag(c, archpathFlag)
 	if outFile == "" {
-		outFile = filepath.Base(objName)
+		if archPath != "" {
+			outFile = filepath.Base(archPath)
+		} else {
+			outFile = filepath.Base(objName)
+		}
 	}
 
 	// just check if remote object is present (do not execute GET)
@@ -110,11 +115,11 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		objArgs.Query.Set(cmn.URLParamOrigURL, uri)
 	}
 	// TODO: validate
-	if archpath = parseStrFlag(c, archpathFlag); archpath != "" {
+	if archPath != "" {
 		if objArgs.Query == nil {
 			objArgs.Query = make(url.Values, 1)
 		}
-		objArgs.Query.Set(cmn.URLParamArchpath, archpath)
+		objArgs.Query.Set(cmn.URLParamArchpath, archPath)
 	}
 
 	if flagIsSet(c, checksumFlag) {
@@ -123,7 +128,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		objLen, err = api.GetObject(defaultAPIParams, bck, objName, objArgs)
 	}
 	if err != nil {
-		if cmn.IsStatusNotFound(err) && archpath == "" {
+		if cmn.IsStatusNotFound(err) && archPath == "" {
 			err = fmt.Errorf("object \"%s/%s\" does not exist", bck, objName)
 		}
 		return
@@ -134,7 +139,11 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		return
 	}
 	if !silent && outFile != fileStdIO {
-		fmt.Fprintf(c.App.Writer, "GET %q from bucket %q as %q [%s]\n", objName, bck, outFile, cos.B2S(objLen, 2))
+		if archPath != "" {
+			fmt.Fprintf(c.App.Writer, "GET %q from archive \"%s/%s\" as %q [%s]\n", archPath, bck, objName, outFile, cos.B2S(objLen, 2))
+		} else {
+			fmt.Fprintf(c.App.Writer, "GET %q from bucket %q as %q [%s]\n", objName, bck, outFile, cos.B2S(objLen, 2))
+		}
 	}
 	return
 }
