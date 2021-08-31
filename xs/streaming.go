@@ -9,20 +9,30 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
+	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xreg"
 )
+
+//
+// multi-object on-demand (transactional) xactions - common logic
+//
 
 const (
 	doneSendingOpcode = 31415
 
 	waitRegRecv   = 4 * time.Second
 	waitUnregRecv = 2 * waitRegRecv
+
+	maxNumInParallel = 256
 )
 
 type (
@@ -32,7 +42,17 @@ type (
 		kind string
 		dm   *bundle.DataMover
 	}
+	streamingX struct {
+		xaction.DemandBase
+		p     *streamingF
+		err   atomic.Value
+		wiCnt atomic.Int32
+	}
 )
+
+///////////////////////////
+// (common factory part) //
+///////////////////////////
 
 func (p *streamingF) Kind() string      { return p.kind }
 func (p *streamingF) Get() cluster.Xact { return p.xact }
@@ -62,6 +82,52 @@ func (p *streamingF) newDM(prefix string, recv transport.ReceiveObj, sizePDU int
 			total += sleep
 			err = p.dm.RegRecv()
 		}
+	}
+	return
+}
+
+///////////////////////////
+// (common xaction part) //
+///////////////////////////
+
+// limited pre-run abort
+func (r *streamingX) TxnAbort() {
+	err := cmn.NewAbortedError(r.String())
+	if r.p.dm.IsOpen() {
+		r.p.dm.Close(err)
+	}
+	r.p.dm.UnregRecv()
+	r.XactBase.Finish(err)
+}
+
+func (r *streamingX) Stats() cluster.XactStats { return r.DemandBase.ExtStats() }
+
+func (r *streamingX) raiseErr(err error, errCode int, contOnErr bool) {
+	errDetailed := fmt.Errorf("%s[%s]: %v(%d)", r.p.T.Snode(), r, err, errCode)
+	if !contOnErr {
+		glog.Errorf("%v - terminating...", errDetailed)
+		r.err.Store(errDetailed)
+	} else {
+		glog.Warningf("%v - ingnoring, continuing to process archiving transactions", errDetailed)
+	}
+}
+
+// send EOI (end of iteration)
+func (r *streamingX) eoi(uuid string, tsi *cluster.Snode) {
+	o := transport.AllocSend()
+	o.Hdr.Opcode = doneSendingOpcode
+	o.Hdr.Opaque = []byte(uuid)
+	if tsi != nil {
+		r.p.dm.Send(o, nil, tsi) // to the responsible target
+	} else {
+		r.p.dm.Bcast(o) // to all
+	}
+}
+
+func (r *streamingX) unreg() (d time.Duration) {
+	d = hk.UnregInterval
+	if r.wiCnt.Load() > 0 {
+		d = waitUnregRecv
 	}
 	return
 }

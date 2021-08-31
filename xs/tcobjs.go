@@ -6,7 +6,6 @@
 package xs
 
 import (
-	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -31,8 +30,7 @@ type (
 		args *xreg.TCObjsArgs
 	}
 	XactTCObjs struct {
-		xaction.DemandBase
-		p       *tcoFactory
+		streamingX
 		args    *xreg.TCObjsArgs
 		workCh  chan *cmn.TCObjsMsg
 		pending struct {
@@ -67,7 +65,7 @@ func (p *tcoFactory) New(args xreg.Args, fromBck *cluster.Bck) xreg.Renewable {
 func (p *tcoFactory) Start() error {
 	var sizePDU int32
 	workCh := make(chan *cmn.TCObjsMsg, maxNumInParallel)
-	r := &XactTCObjs{p: p, args: p.args, workCh: workCh}
+	r := &XactTCObjs{streamingX: streamingX{p: &p.streamingF}, args: p.args, workCh: workCh}
 	r.pending.m = make(map[string]*tcowi, maxNumInParallel)
 	p.xact = r
 	r.DemandBase.Init(p.UUID(), p.Kind(), p.Bck, 0 /*use default*/)
@@ -92,6 +90,7 @@ func (r *XactTCObjs) Begin(msg *cmn.TCObjsMsg) {
 	wi := &tcowi{r: r, msg: msg}
 	r.pending.Lock()
 	r.pending.m[msg.TxnUUID] = wi
+	r.wiCnt.Inc()
 	r.pending.Unlock()
 }
 
@@ -107,6 +106,9 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 	for {
 		select {
 		case msg := <-r.workCh:
+			if r.err.Load() != nil { // see raiseErr()
+				goto fin
+			}
 			var (
 				smap    = r.p.T.Sowner().Get()
 				lrit    = &lriterator{}
@@ -125,7 +127,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 			if r.Aborted() || err != nil {
 				goto fin
 			}
-			r.eoi(wi)
+			r.eoi(wi.msg.TxnUUID, nil)
 			r.DecPending()
 		case <-r.IdleTimer():
 			goto fin
@@ -142,30 +144,6 @@ func (r *XactTCObjs) fin(err error) {
 	r.p.dm.Close(err)
 	hk.Reg(r.ID(), r.unreg, waitUnregRecv)
 	r.Finish(err)
-}
-
-func (r *XactTCObjs) unreg() (d time.Duration) {
-	d = hk.UnregInterval
-	if r._lpending() > 0 {
-		d = waitUnregRecv
-	}
-	return
-}
-
-func (r *XactTCObjs) _lpending() (l int) {
-	r.pending.RLock()
-	l = len(r.pending.m)
-	r.pending.RUnlock()
-	return
-}
-
-// send EOI (end of iteration) to the responsible target
-// TODO: see xs/tcobjs.go
-func (r *XactTCObjs) eoi(wi *tcowi) {
-	o := transport.AllocSend()
-	o.Hdr.Opcode = doneSendingOpcode
-	o.Hdr.Opaque = []byte(wi.msg.TxnUUID)
-	r.p.dm.Bcast(o)
 }
 
 func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) {
@@ -186,6 +164,7 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 		if refc == 0 {
 			r.pending.Lock()
 			delete(r.pending.m, txnUUID)
+			r.wiCnt.Dec()
 			r.pending.Unlock()
 		}
 		return
@@ -216,22 +195,6 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 	}
 }
 
-func (r *XactTCObjs) String() string {
-	return fmt.Sprintf("%s=>%s", r.XactBase.String(), r.args.BckTo)
-}
-
-// limited pre-run abort
-func (r *XactTCObjs) TxnAbort() {
-	err := cmn.NewAbortedError(r.String())
-	if r.p.dm.IsOpen() {
-		r.p.dm.Close(err)
-	}
-	r.p.dm.UnregRecv()
-	r.XactBase.Finish(err)
-}
-
-func (r *XactTCObjs) Stats() cluster.XactStats { return r.DemandBase.ExtStats() }
-
 ///////////
 // tcowi //
 ///////////
@@ -251,7 +214,9 @@ func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) {
 	size, err := lri.t.CopyObject(lom, params, false /*localOnly*/)
 	slab.Free(buf)
 	if err != nil {
-		// TODO -- FIXME: handle
+		if !cmn.IsObjNotExist(err) {
+			wi.r.raiseErr(err, 0, wi.msg.ContinueOnError)
+		}
 		return
 	}
 	wi.r.ObjectsInc()
@@ -259,7 +224,7 @@ func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) {
 	// (under ETL, sizes of transformed objects are unknown until after the transformation)
 	if size == cos.ContentLengthUnknown {
 		if err := lom.Load(false /*cacheit*/, false /*locked*/); err != nil {
-			glog.Errorf("%s: %v", lom, err)
+			wi.r.raiseErr(err, 0, wi.msg.ContinueOnError)
 			size = 0
 		} else {
 			size = lom.SizeBytes()

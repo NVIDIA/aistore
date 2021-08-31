@@ -1027,7 +1027,7 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 	defer src.Unlock(exclusive)
 	if err = src.Load(false /*cache it*/, true /*locked*/); err != nil {
 		if !cmn.IsObjNotExist(err) {
-			err = fmt.Errorf("%s: err: %v", src, err)
+			err = fmt.Errorf("%s: err: %w", src, err)
 		}
 		return
 	}

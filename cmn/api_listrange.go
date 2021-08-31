@@ -35,6 +35,8 @@ type (
 		ListRangeMsg
 		TCBMsg
 		ToBck Bck `json:"tobck"`
+		// flags
+		ContinueOnError bool `json:"coer"` // keep running in presence of errors in a any given multi-object transaction
 	}
 )
 

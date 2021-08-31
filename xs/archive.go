@@ -75,22 +75,15 @@ type (
 		appendPos int64 // for calculate stats correctly on append operation
 	}
 	XactCreateArchMultiObj struct {
-		xaction.DemandBase
-		p       *archFactory
+		streamingX
 		bckFrom *cluster.Bck
 		workCh  chan *cmn.ArchiveMsg
 		pending struct {
 			sync.RWMutex
 			m map[string]*archwi
 		}
-		config   *cmn.Config
-		err      atomic.Value
-		stopping atomic.Bool
+		config *cmn.Config
 	}
-)
-
-const (
-	maxNumInParallel = 256
 )
 
 // interface guard
@@ -115,14 +108,13 @@ func (*archFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 
 func (p *archFactory) Start() error {
 	workCh := make(chan *cmn.ArchiveMsg, maxNumInParallel)
-	r := &XactCreateArchMultiObj{p: p, bckFrom: p.Bck, workCh: workCh, config: cmn.GCO.Get()}
+	r := &XactCreateArchMultiObj{streamingX: streamingX{p: &p.streamingF}, bckFrom: p.Bck, workCh: workCh, config: cmn.GCO.Get()}
 	r.pending.m = make(map[string]*archwi, maxNumInParallel)
 	p.xact = r
 	r.DemandBase.Init(p.UUID(), cmn.ActArchive, p.Bck, 0 /*use default*/)
 	if err := p.newDM("arch", r.recv, 0); err != nil {
 		return err
 	}
-	r.p.dm = p.dm // TODO -- FIXME
 	r.p.dm.SetXact(r)
 	r.p.dm.Open()
 
@@ -133,16 +125,6 @@ func (p *archFactory) Start() error {
 ////////////////////////////
 // XactCreateArchMultiObj //
 ////////////////////////////
-
-// limited pre-run abort
-func (r *XactCreateArchMultiObj) TxnAbort() {
-	err := cmn.NewAbortedError(r.String())
-	if r.p.dm.IsOpen() {
-		r.p.dm.Close(err)
-	}
-	r.p.dm.UnregRecv()
-	r.XactBase.Finish(err)
-}
 
 func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 	lom := cluster.AllocLOM(msg.ArchName)
@@ -199,6 +181,7 @@ func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 	}
 	r.pending.Lock()
 	r.pending.m[msg.TxnUUID] = wi
+	r.wiCnt.Inc()
 	r.pending.Unlock()
 	return
 }
@@ -245,9 +228,10 @@ func (r *XactCreateArchMultiObj) Run(wg *sync.WaitGroup) {
 			if r.p.T.Snode().ID() == wi.tsi.ID() {
 				go r.finalize(wi)
 			} else {
-				r.eoi(wi)
+				r.eoi(wi.msg.TxnUUID, wi.tsi)
 				r.pending.Lock()
 				delete(r.pending.m, msg.TxnUUID)
+				r.wiCnt.Dec()
 				r.pending.Unlock()
 				r.DecPending()
 			}
@@ -262,7 +246,6 @@ fin:
 }
 
 func (r *XactCreateArchMultiObj) fin(err error) {
-	r.stopping.Store(true)
 	r.DemandBase.Stop()
 
 	if err == nil {
@@ -273,30 +256,6 @@ func (r *XactCreateArchMultiObj) fin(err error) {
 	r.p.dm.Close(err)
 	hk.Reg(r.ID(), r.unreg, waitUnregRecv)
 	r.Finish(err)
-}
-
-func (r *XactCreateArchMultiObj) unreg() (d time.Duration) {
-	d = hk.UnregInterval
-	if r._lpending() > 0 {
-		d = waitUnregRecv
-	}
-	return
-}
-
-func (r *XactCreateArchMultiObj) _lpending() (l int) {
-	r.pending.RLock()
-	l = len(r.pending.m)
-	r.pending.RUnlock()
-	return
-}
-
-// send EOI (end of iteration) to the responsible target
-// TODO: see xs/tcobjs.go
-func (r *XactCreateArchMultiObj) eoi(wi *archwi) {
-	o := transport.AllocSend()
-	o.Hdr.Opcode = doneSendingOpcode
-	o.Hdr.Opaque = []byte(wi.msg.TxnUUID)
-	r.p.dm.Send(o, nil, wi.tsi)
 }
 
 func (r *XactCreateArchMultiObj) doSend(lom *cluster.LOM, wi *archwi, fh cos.ReadOpenCloser) {
@@ -324,9 +283,6 @@ func (r *XactCreateArchMultiObj) recv(hdr transport.ObjHdr, objReader io.Reader,
 	}
 	defer cos.DrainReader(objReader)
 
-	if r.stopping.Load() {
-		return
-	}
 	txnUUID := string(hdr.Opaque)
 	r.pending.RLock()
 	wi, ok := r.pending.m[txnUUID]
@@ -355,22 +311,13 @@ func (r *XactCreateArchMultiObj) finalize(wi *archwi) {
 	errCode, err := r.fini(wi)
 	r.pending.Lock()
 	delete(r.pending.m, wi.msg.TxnUUID)
+	r.wiCnt.Dec()
 	r.pending.Unlock()
 	r.DecPending()
 
 	if err != nil {
 		wi.abort(err)
 		r.raiseErr(err, errCode, wi.msg.ContinueOnError)
-	}
-}
-
-func (r *XactCreateArchMultiObj) raiseErr(err error, errCode int, contOnErr bool) {
-	errDetailed := fmt.Errorf("%s[%s]: %v(%d)", r.p.T.Snode(), r, err, errCode)
-	if !contOnErr {
-		glog.Errorf("%v - terminating...", errDetailed)
-		r.err.Store(errDetailed)
-	} else {
-		glog.Warningf("%v - ingnoring, continuing to process archiving transactions", errDetailed)
 	}
 }
 
@@ -394,8 +341,6 @@ func (r *XactCreateArchMultiObj) fini(wi *archwi) (errCode int, err error) {
 	r.BytesAdd(size - wi.appendPos)
 	return
 }
-
-func (r *XactCreateArchMultiObj) Stats() cluster.XactStats { return r.DemandBase.ExtStats() }
 
 ////////////
 // archwi //
