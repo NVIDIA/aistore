@@ -191,8 +191,9 @@ const (
 		"{{range .VisibleCategories}}" +
 		"{{ range $index, $element := .VisibleCommands}}" +
 		"{{if $index}}, {{end}}" +
-		"{{if and ( eq ( Mod $index 13 ) 0 ) ( ne $index 0 ) }}\n\t\t{{end}}" + // don't print everything in a single line
+		"{{if ( eq ( Mod $index 13 ) 12 ) }}\n\t\t{{end}}" + // limit the number printed per line
 		"{{$element.Name}}" +
+		"{{if ( eq $element.Name \"search\" ) }}\n\t\t{{end}}" + // circumvent $index wrap around for aliases
 		"{{end}}{{end}}\n" +
 		"{{if .VisibleFlags}}\tOPTIONS:\t" +
 		"{{ range $index, $flag := .VisibleFlags}}" +
