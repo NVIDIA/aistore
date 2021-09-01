@@ -585,13 +585,19 @@ func showDiff(c *cli.Context, currProps, newProps *cmn.BucketProps) {
 }
 
 func defaultListHandler(c *cli.Context) (err error) {
-	queryBcks, err := parseQueryBckURI(c, c.Args().First())
+	opts := cmn.ParseURIOpts{IsQuery: true}
+	bck, objName, err := cmn.ParseBckObjectURI(c.Args().First(), opts)
 	if err != nil {
 		return err
 	}
-
-	if queryBcks.Name == "" {
-		return listBuckets(c, queryBcks)
+	if objName != "" {
+		if flagIsSet(c, listArchFlag) {
+			return listArchHandler(c)
+		}
+		return objectNameArgumentNotSupported(c, objName)
 	}
-	return listObjects(c, cmn.Bck(queryBcks))
+	if bck.Name == "" {
+		return listBuckets(c, cmn.QueryBcks(bck))
+	}
+	return listObjects(c, bck)
 }

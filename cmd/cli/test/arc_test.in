@@ -14,5 +14,5 @@ sleep 5 // IGNORE // wait for all archives are created
 
 ais object put $OBJECT_1.txt ais://$BUCKET_2/tmpl.tar -archpath=fourth.txt
 
-ais ls ais://$BUCKET_2 --prefix=list --list-archive | wc -l
-ais ls ais://$BUCKET_2 --prefix=tmpl --list-archive | wc -l
+ais ls ais://$BUCKET_2 --prefix=list --archive | wc -l
+ais ls ais://$BUCKET_2 --prefix=tmpl --archive | wc -l
