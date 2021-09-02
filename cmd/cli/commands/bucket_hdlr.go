@@ -37,6 +37,7 @@ var (
 			templateFlag,
 			listFlag,
 			waitFlag,
+			continueOnErrorFlag,
 		},
 		commandEvict: append(
 			baseLstRngFlags,
@@ -348,6 +349,7 @@ func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs 
 	if flagIsSet(c, etlBucketRequestTimeout) {
 		msg.RequestTimeout = cos.Duration(etlBucketRequestTimeout.Value)
 	}
+	msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
 	var xactID string
 	if len(etlID) != 0 {
 		msg.ID = etlID[0]

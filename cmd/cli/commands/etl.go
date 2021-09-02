@@ -22,80 +22,91 @@ import (
 	"github.com/urfave/cli"
 )
 
-var etlCmd = cli.Command{
-	Name:  commandETL,
-	Usage: "execute custom transformations on objects",
-	Subcommands: []cli.Command{
-		{
-			Name: subcmdInit,
-			Subcommands: []cli.Command{
-				{
-					Name:      subcmdSpec,
-					Usage:     "start an ETL with YAML Pod specification",
-					ArgsUsage: "SPEC_FILE",
-					Action:    etlInitSpecHandler,
-				},
-				{
-					Name:  subcmdCode,
-					Usage: "start an ETL with transformation source code",
-					Flags: []cli.Flag{
-						fromFileFlag,
-						depsFileFlag,
-						runtimeFlag,
-						commTypeFlag,
-						waitTimeoutFlag,
-						etlUUID,
+var (
+	// flags
+	etlSubcmdsFlags = map[string][]cli.Flag{
+		subcmdCode: {
+			fromFileFlag,
+			depsFileFlag,
+			runtimeFlag,
+			commTypeFlag,
+			waitTimeoutFlag,
+			etlUUID,
+		},
+		subcmdStop: {
+			allETLStopFlag,
+		},
+		subcmdBucket: {
+			etlExtFlag,
+			cpBckPrefixFlag,
+			cpBckDryRunFlag,
+			waitFlag,
+			etlBucketRequestTimeout,
+			templateFlag,
+			listFlag,
+			continueOnErrorFlag,
+		},
+	}
+	// subcommands
+	etlCmd = cli.Command{
+		Name:  commandETL,
+		Usage: "execute custom transformations on objects",
+		Subcommands: []cli.Command{
+			{
+				Name: subcmdInit,
+				Subcommands: []cli.Command{
+					{
+						Name:      subcmdSpec,
+						Usage:     "start an ETL with YAML Pod specification",
+						ArgsUsage: "SPEC_FILE",
+						Action:    etlInitSpecHandler,
 					},
-					Action: etlInitCodeHandler,
+					{
+						Name:   subcmdCode,
+						Usage:  "start an ETL with transformation source code",
+						Flags:  etlSubcmdsFlags[subcmdCode],
+						Action: etlInitCodeHandler,
+					},
 				},
 			},
-		},
-
-		{
-			Name:   subcmdList,
-			Usage:  "list all running ETLs",
-			Action: etlListHandler,
-		},
-		{
-			Name:         subcmdLogs,
-			Usage:        "retrieve logs produced by an ETL",
-			ArgsUsage:    "ETL_ID [TARGET_ID]",
-			Action:       etlLogsHandler,
-			BashComplete: etlIDCompletions,
-		},
-		{
-			Name:         subcmdStop,
-			Usage:        "stop ETL",
-			ArgsUsage:    "[ETL_ID...]",
-			Action:       etlStopHandler,
-			BashComplete: etlIDCompletions,
-			Flags:        []cli.Flag{allETLStopFlag},
-		},
-		{
-			Name:         subcmdObject,
-			Usage:        "transform an object",
-			ArgsUsage:    "ETL_ID BUCKET/OBJECT_NAME OUTPUT",
-			Action:       etlObjectHandler,
-			BashComplete: etlIDCompletions,
-		},
-		{
-			Name:      subcmdBucket,
-			Usage:     "transform bucket and put results into another bucket",
-			ArgsUsage: "ETL_ID SRC_BUCKET DST_BUCKET",
-			Action:    etlBucketHandler,
-			Flags: []cli.Flag{
-				etlExtFlag,
-				cpBckPrefixFlag,
-				cpBckDryRunFlag,
-				waitFlag,
-				etlBucketRequestTimeout,
-				templateFlag,
-				listFlag,
+			{
+				Name:   subcmdList,
+				Usage:  "list all running ETLs",
+				Action: etlListHandler,
 			},
-			BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{etlIDCompletions}, 1, 2),
+			{
+				Name:         subcmdLogs,
+				Usage:        "retrieve logs produced by an ETL",
+				ArgsUsage:    "ETL_ID [TARGET_ID]",
+				Action:       etlLogsHandler,
+				BashComplete: etlIDCompletions,
+			},
+			{
+				Name:         subcmdStop,
+				Usage:        "stop ETL",
+				ArgsUsage:    "[ETL_ID...]",
+				Action:       etlStopHandler,
+				BashComplete: etlIDCompletions,
+				Flags:        etlSubcmdsFlags[subcmdStop],
+			},
+			{
+				Name:         subcmdObject,
+				Usage:        "transform an object",
+				ArgsUsage:    "ETL_ID BUCKET/OBJECT_NAME OUTPUT",
+				Action:       etlObjectHandler,
+				BashComplete: etlIDCompletions,
+			},
+			{
+				Name:         subcmdBucket,
+				Usage:        "transform bucket and put results into another bucket",
+				ArgsUsage:    "ETL_ID SRC_BUCKET DST_BUCKET",
+				Action:       etlBucketHandler,
+				Flags:        etlSubcmdsFlags[subcmdBucket],
+				BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{etlIDCompletions}, 1, 2),
+			},
 		},
-	},
-}
+	}
+)
 
 func etlIDCompletions(c *cli.Context) {
 	if c.NArg() != 0 {
