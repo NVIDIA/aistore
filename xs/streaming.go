@@ -103,13 +103,19 @@ func (r *streamingX) TxnAbort() {
 func (r *streamingX) Stats() cluster.XactStats { return r.DemandBase.ExtStats() }
 
 func (r *streamingX) raiseErr(err error, errCode int, contOnErr bool) {
-	errDetailed := fmt.Errorf("%s[%s]: %v(%d)", r.p.T.Snode(), r, err, errCode)
-	if !contOnErr {
-		glog.Errorf("%v - terminating...", errDetailed)
-		r.err.Store(errDetailed)
-	} else {
-		glog.Warningf("%v - ingnoring, continuing to process archiving transactions", errDetailed)
+	if cmn.IsErrAborted(err) {
+		if verbose {
+			glog.Warningf("%s[%s] aborted", r.p.T.Snode(), r)
+		}
+		return
 	}
+	errDetailed := fmt.Errorf("%s[%s]: %v(%d)", r.p.T.Snode(), r, err, errCode)
+	if contOnErr {
+		glog.Warningf("%v - ignoring...", errDetailed)
+		return
+	}
+	glog.Errorf("%v - terminating...", errDetailed)
+	r.err.Store(errDetailed)
 }
 
 // send EOI (end of iteration)
@@ -122,6 +128,21 @@ func (r *streamingX) eoi(uuid string, tsi *cluster.Snode) {
 	} else {
 		r.p.dm.Bcast(o) // to all
 	}
+}
+
+func (r *streamingX) fin(err error) error {
+	r.DemandBase.Stop()
+	if err == nil {
+		if errDetailed := r.err.Load(); errDetailed != nil {
+			err = errDetailed.(error)
+		} else if r.Aborted() {
+			err = cmn.NewAbortedError(r.String())
+		}
+	}
+	r.p.dm.Close(err)
+	hk.Reg(r.ID(), r.unreg, waitUnregRecv)
+	r.Finish(err)
+	return err
 }
 
 func (r *streamingX) unreg() (d time.Duration) {

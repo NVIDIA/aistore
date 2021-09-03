@@ -436,12 +436,13 @@ func Rename(src, dst string) error {
 	return nil
 }
 
-// RemoveFile removes object from path and ignores if the path no longer exists.
-func RemoveFile(path string) error {
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return err
+// RemoveFile removes path; returns nil upon success or if the path does not exist.
+func RemoveFile(path string) (err error) {
+	err = os.Remove(path)
+	if os.IsNotExist(err) {
+		err = nil
 	}
-	return nil
+	return
 }
 
 // and computes checksum if requested

@@ -25,7 +25,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xreg"
@@ -70,7 +69,8 @@ type (
 		err    error
 		errCnt atomic.Int32
 		// finishing
-		refc atomic.Int32
+		refc       atomic.Int32
+		finalizing atomic.Bool
 		// append to archive
 		appendPos int64 // for calculate stats correctly on append operation
 	}
@@ -146,7 +146,7 @@ func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 		return
 	}
 
-	// NOTE: creating archive at BEGIN time; TODO: cleanup upon ABORT
+	// NOTE: creating archive at BEGIN time (see cleanup)
 	if r.p.T.Snode().ID() == wi.tsi.ID() {
 		if errExists := fs.Access(wi.lom.FQN); errExists != nil {
 			wi.fh, err = wi.lom.CreateFile(wi.fqn)
@@ -222,11 +222,12 @@ func (r *XactCreateArchMultiObj) Run(wg *sync.WaitGroup) {
 				wi.wmu.Unlock()
 			}
 			if r.Aborted() || err != nil {
-				wi.abort(err)
+				wi.abortAppend(err)
 				goto fin
 			}
 			if r.p.T.Snode().ID() == wi.tsi.ID() {
-				go r.finalize(wi)
+				wi.finalizing.Store(true)
+				go r.finalize(wi) // NOTE async
 			} else {
 				r.eoi(wi.msg.TxnUUID, wi.tsi)
 				r.pending.Lock()
@@ -242,20 +243,22 @@ func (r *XactCreateArchMultiObj) Run(wg *sync.WaitGroup) {
 		}
 	}
 fin:
-	r.fin(err)
-}
-
-func (r *XactCreateArchMultiObj) fin(err error) {
-	r.DemandBase.Stop()
-
-	if err == nil {
-		if errDetailed := r.err.Load(); errDetailed != nil {
-			err = errDetailed.(error)
+	err = r.streamingX.fin(err)
+	if err != nil {
+		// cleanup: close and rm unfinished archives (NOTE: see finalize)
+		r.pending.Lock()
+		for uuid, wi := range r.pending.m {
+			if wi.finalizing.Load() {
+				continue
+			}
+			if wi.fh != nil && wi.appendPos == 0 {
+				cos.Close(wi.fh)
+				cos.RemoveFile(wi.fqn)
+			}
+			delete(r.pending.m, uuid)
 		}
+		r.pending.Unlock()
 	}
-	r.p.dm.Close(err)
-	hk.Reg(r.ID(), r.unreg, waitUnregRecv)
-	r.Finish(err)
 }
 
 func (r *XactCreateArchMultiObj) doSend(lom *cluster.LOM, wi *archwi, fh cos.ReadOpenCloser) {
@@ -308,15 +311,16 @@ func (r *XactCreateArchMultiObj) finalize(wi *archwi) {
 		r.raiseErr(fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout), 0, wi.msg.ContinueOnError)
 	}
 
-	errCode, err := r.fini(wi)
 	r.pending.Lock()
 	delete(r.pending.m, wi.msg.TxnUUID)
 	r.wiCnt.Dec()
 	r.pending.Unlock()
+
+	errCode, err := r.fini(wi)
 	r.DecPending()
 
 	if err != nil {
-		wi.abort(err)
+		wi.abortAppend(err)
 		r.raiseErr(err, errCode, wi.msg.ContinueOnError)
 	}
 }
@@ -418,17 +422,17 @@ func (wi *archwi) openTarForAppend() (err error) {
 	if err == nil {
 		wi.appendPos, err = wi.fh.Seek(0, io.SeekCurrent)
 		if err != nil {
-			cos.Close(wi.fh)
-			wi.abort(err)
+			wi.abortAppend(err)
 		}
 	}
 	return err
 }
 
-func (wi *archwi) abort(err error) {
-	if wi.appendPos == 0 {
+func (wi *archwi) abortAppend(err error) {
+	if wi.appendPos == 0 || wi.fh == nil {
 		return
 	}
+	cos.Close(wi.fh)
 	if errRm := os.Rename(wi.fqn, wi.lom.FQN); errRm != nil {
 		glog.Errorf("nested error: %v --> %v", err, errRm)
 	}

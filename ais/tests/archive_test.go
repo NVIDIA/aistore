@@ -11,11 +11,13 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/devtools/archive"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tassert"
@@ -168,12 +170,16 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 			ext            string // one of cos.ArchExtensions (same as: supported arch formats)
 			list           bool
 			inclSrcBckName bool
+			abrt           bool
 		}{
 			{
 				ext: cos.ExtTar, list: true,
 			},
 			{
 				ext: cos.ExtTar, list: false, inclSrcBckName: true,
+			},
+			{
+				ext: cos.ExtTar, list: false,
 			},
 			{
 				ext: cos.ExtTgz, list: true,
@@ -187,19 +193,30 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 			{
 				ext: cos.ExtZip, list: false, inclSrcBckName: true,
 			},
+			{
+				ext: cos.ExtZip, list: true,
+			},
 		}
 	)
 	if testing.Short() {
 		numArchs = 2
 	}
 	for _, test := range subtests {
-		listOrRange := "list"
+		var (
+			abrt        string
+			listOrRange = "list"
+		)
 		if !test.list {
 			listOrRange = "range"
 		}
-		tname := fmt.Sprintf("%s/%s", test.ext, listOrRange)
+		tm := mono.NanoTime()
+		if tm&0x1 == 0 {
+			test.abrt = true
+			abrt = "/abort"
+		}
+		tname := fmt.Sprintf("%s/%s%s", test.ext, listOrRange, abrt)
 		if test.inclSrcBckName {
-			tname += "//" + m.bck.Name
+			tname += "/incl-src=" + m.bck.Name
 		}
 		t.Run(tname, func(t *testing.T) {
 			if m.bck.IsRemote() {
@@ -245,8 +262,14 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 				}
 			}
 
-			wargs := api.XactReqArgs{Kind: cmn.ActArchive, Bck: m.bck}
-			api.WaitForXactionIdle(baseParams, wargs)
+			flt := api.XactReqArgs{Kind: cmn.ActArchive, Bck: m.bck}
+			if test.abrt {
+				time.Sleep(time.Duration(rand.Intn(5)+1) * time.Second)
+				tlog.Logln("Aborting...")
+				api.AbortXaction(baseParams, flt)
+			}
+
+			api.WaitForXactionIdle(baseParams, flt)
 
 			tlog.Logf("List %q\n", toBck)
 			msg := &cmn.SelectMsg{Prefix: "test_"}

@@ -184,11 +184,11 @@ func (xact *XactBase) AddNotif(n cluster.Notif) {
 
 func (xact *XactBase) Abort() {
 	if !xact.aborted.CAS(false, true) {
-		glog.Infof("already aborted: " + xact.String())
+		glog.Infoln("already aborted: " + xact.String())
 		return
 	}
 	close(xact.abrt)
-	glog.Infof("ABORT: " + xact.String())
+	glog.Infoln("ABORT: " + xact.String())
 }
 
 func (xact *XactBase) Finish(err error) {

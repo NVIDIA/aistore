@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
@@ -136,14 +135,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 		}
 	}
 fin:
-	r.fin(err)
-}
-
-func (r *XactTCObjs) fin(err error) {
-	r.DemandBase.Stop()
-	r.p.dm.Close(err)
-	hk.Reg(r.ID(), r.unreg, waitUnregRecv)
-	r.Finish(err)
+	_ = r.fin(err)
 }
 
 func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) {
