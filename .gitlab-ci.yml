@@ -1,4 +1,4 @@
-image: aistore/ci:1.16
+image: aistore/ci:1.17
 
 stages:
   - build
@@ -182,7 +182,7 @@ test:long:gcp:
     - make test-long
 
 test:long:hdfs:
-  image: aistore/ci:3.0-hdfs
+  image: aistore/ci:4.0-hdfs
   <<: *test_long_def
   variables:
     NUM_PROXY: 6

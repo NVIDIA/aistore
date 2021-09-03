@@ -1,3 +1,4 @@
+//go:build mono
 // +build mono
 
 // Package mono provides low-level monotonic time

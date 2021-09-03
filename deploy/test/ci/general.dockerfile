@@ -1,11 +1,11 @@
-FROM golang:1.16
+FROM golang:1.17
 
 ENV GOPATH="/go"
 ENV PATH="${GOPATH}/bin:${PATH}"
 
 RUN apt-get update -yq
-RUN apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof fuse coreutils python3-pip python3-setuptools
-RUN pip3 install yapf pylint awscli s3cmd
+RUN apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof fuse coreutils python3-pip python3-setuptools s3cmd
+RUN pip3 install yapf pylint awscli
 
 # Install `kubectl`.
 RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl

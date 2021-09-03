@@ -1,3 +1,4 @@
+//go:build !hdfs
 // +build !hdfs
 
 // Package backend contains implementation of various backend providers.

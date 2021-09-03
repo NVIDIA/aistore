@@ -1,3 +1,4 @@
+//go:build gcp
 // +build gcp
 
 // Package backend contains implementation of various backend providers.

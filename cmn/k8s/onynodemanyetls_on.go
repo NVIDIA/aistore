@@ -1,3 +1,4 @@
+//go:build onenodemanyetls
 // +build onenodemanyetls
 
 // Package k8s provides utilities for communicating with Kubernetes cluster.

@@ -50,7 +50,7 @@ require (
 	golang.org/x/mod v0.4.2 // indirect
 	golang.org/x/net v0.0.0-20210504132125-bbd867fde50d // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20210503173754-0981d6026fa6
+	golang.org/x/sys v0.0.0-20210903071746-97244b99971b
 	golang.org/x/term v0.0.0-20210503060354-a79de5458b56
 	google.golang.org/api v0.46.0
 	google.golang.org/genproto v0.0.0-20210504143626-3b2ad6ccc450 // indirect

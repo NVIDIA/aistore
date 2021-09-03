@@ -2,7 +2,7 @@
 # Dockerfile to build an aisnode Docker image
 #
 
-FROM golang:1.16 AS builder
+FROM golang:1.17 AS builder
 
 ARG mode
 ARG providers

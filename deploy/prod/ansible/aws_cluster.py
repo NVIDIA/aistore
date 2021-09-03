@@ -62,12 +62,12 @@ def load_ais_cluster(cluster_name, clients):
 
     cluster_inventory = os.path.join(os.path.dirname(__file__), 'inventory', 'cluster.ini')
     cluster_txt = os.path.join(os.path.dirname(__file__), 'inventory', 'cluster.txt')
-    with open(cluster_inventory, 'w') as c, open(cluster_txt, 'w') as ct:
+    with open(cluster_inventory, 'w', encoding="utf-8") as c, open(cluster_txt, 'w', encoding="utf-8") as ct:
         for key in ais:
             print(key)
             c.write('[' + key + ']\n')
             file = os.path.join(os.path.dirname(__file__), 'inventory', key + '.txt')
-            with open(file, 'w') as f:
+            with open(file, 'w', encoding="utf-8") as f:
                 for instance in ais[key]:
                     ip = instance.private_ip_address
                     print(ip)

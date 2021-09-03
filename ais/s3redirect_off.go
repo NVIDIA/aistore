@@ -1,3 +1,4 @@
+//go:build s3rproxy
 // +build s3rproxy
 
 // Package ais provides core functionality for the AIStore object storage.

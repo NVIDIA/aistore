@@ -1,3 +1,4 @@
+//go:build hrw
 // +build hrw
 
 // Package hrw provides a way to benchmark different HRW variants.

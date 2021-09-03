@@ -1,3 +1,4 @@
+//go:build deadbeef
 // +build deadbeef
 
 // Package memsys provides memory management and slab/SGL allocation with io.Reader and io.Writer interfaces
