@@ -275,9 +275,9 @@ func getRandomFileName(basePath string) (string, error) {
 		return "", err
 	}
 
-	files, err := file.Readdir(fshcMaxFileList)
+	files, err := file.ReadDir(fshcMaxFileList)
 	if err == nil {
-		fmap := make(map[string]os.FileInfo, len(files))
+		fmap := make(map[string]os.DirEntry, len(files))
 		for _, ff := range files {
 			fmap[ff.Name()] = ff
 		}
