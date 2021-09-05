@@ -154,9 +154,18 @@ func (nlb *NotifListenerBase) Callback(nl NotifListener, ts int64) {
 	}
 }
 
+// is called under lock
 func (nlb *NotifListenerBase) SetErr(err error) {
+	msg := err.Error()
+	if nlb.ErrMsg != "" {
+		// collapse same errors (TODO: better)
+		l := cos.Min(len(nlb.ErrMsg), len(msg), 32)
+		if nlb.ErrMsg[:l] == msg[:l] {
+			return
+		}
+	}
 	if nlb.ErrCount.Inc() == 1 {
-		nlb.ErrMsg = err.Error()
+		nlb.ErrMsg = msg
 	}
 }
 
@@ -227,7 +236,7 @@ func (nlb *NotifListenerBase) String() string {
 	)
 	if tfin := nlb.FinTime.Load(); tfin > 0 {
 		if l := nlb.ErrCount.Load(); l > 0 {
-			res = fmt.Sprintf("-fail(#errs=%d)", l)
+			res = "-" + nlb.ErrMsg
 		} else {
 			res = "-done"
 		}

@@ -105,17 +105,18 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 	for {
 		select {
 		case msg := <-r.workCh:
-			if r.err.Load() != nil { // see raiseErr()
-				goto fin
-			}
 			var (
 				smap    = r.p.T.Sowner().Get()
 				lrit    = &lriterator{}
 				freeLOM = false // not delegating
 			)
 			r.pending.RLock()
-			wi := r.pending.m[msg.TxnUUID]
+			wi, ok := r.pending.m[msg.TxnUUID]
 			r.pending.RUnlock()
+			if !ok {
+				debug.Assert(r.err.Load() != nil) // see cleanup
+				goto fin
+			}
 			wi.refc.Store(int32(smap.CountTargets() - 1))
 			lrit.init(r, r.p.T, &msg.ListRangeMsg, freeLOM)
 			if msg.IsList() {
@@ -135,7 +136,15 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 		}
 	}
 fin:
-	_ = r.fin(err)
+	err = r.fin(err)
+	if err != nil {
+		// cleanup: destroy destination iff it was created by this copy
+		r.pending.Lock()
+		for uuid := range r.pending.m {
+			delete(r.pending.m, uuid)
+		}
+		r.pending.Unlock()
+	}
 }
 
 func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) {
@@ -151,7 +160,10 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 		r.pending.RLock()
 		wi, ok := r.pending.m[txnUUID]
 		r.pending.RUnlock()
-		debug.Assert(ok)
+		if !ok {
+			debug.Assert(r.err.Load() != nil) // see cleanup
+			return
+		}
 		refc := wi.refc.Dec()
 		if refc == 0 {
 			r.pending.Lock()

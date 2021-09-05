@@ -895,6 +895,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 	tlog.Logf("Aborting download job %s\n", id1)
 	abortDownload(t, id1)
 
+	tlog.Logf("Listing %s\n", bck)
 	objs, err := tutils.ListObjectNames(proxyURL, bck, "", 0)
 	tassert.CheckError(t, err)
 	tassert.Fatalf(t, len(objs) == 0, "objects should not have been downloaded, download should have been aborted\n")

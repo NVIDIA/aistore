@@ -125,7 +125,7 @@ outer:
 				return true
 			}
 		}
-		cos.Assertf(smap.IsIC(psi), "%s, %s", psi, smap.StrIC(ic.p.si))
+		debug.Assertf(smap.IsIC(psi), "%s, %s", psi, smap.StrIC(ic.p.si))
 	}
 	if owner == ic.p.si.ID() {
 		return
@@ -242,7 +242,7 @@ func (ic *ic) handler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		ic.handlePost(w, r)
 	default:
-		cos.Assert(false)
+		debug.Assert(false)
 	}
 }
 
@@ -338,7 +338,7 @@ func (ic *ic) registerEqual(a regIC) {
 	}
 	if a.smap.IsIC(ic.p.si) {
 		err := ic.p.notifs.add(a.nl)
-		cos.AssertNoErr(err)
+		debug.AssertNoErr(err)
 	}
 	if a.smap.ICCount() > 1 {
 		ic.bcastListenIC(a.nl)
@@ -350,7 +350,7 @@ func (ic *ic) bcastListenIC(nl nl.NotifListener) {
 		actMsg = cmn.ActionMsg{Action: cmn.ActListenToNotif, Value: newNLMsg(nl)}
 		msg    = ic.p.newAmsg(&actMsg, nil)
 	)
-	cos.Assert(nl.ActiveCount() > 0)
+	debug.Assert(nl.ActiveCount() > 0)
 	ic.p.bcastAsyncIC(msg)
 }
 
@@ -410,7 +410,7 @@ func (ic *ic) syncICBundle() error {
 		return fmt.Errorf(cmn.FmtErrUnmarshal, ic.p.si, "IC bundle", cmn.BytesHead(result.bytes), err)
 	}
 
-	cos.Assertf(smap.UUID == bundle.Smap.UUID, "%s vs %s", smap.StringEx(), bundle.Smap.StringEx())
+	debug.Assertf(smap.UUID == bundle.Smap.UUID, "%s vs %s", smap.StringEx(), bundle.Smap.StringEx())
 
 	if err := ic.p.owner.smap.synchronize(ic.p.si, bundle.Smap, nil /*ms payload*/); err != nil {
 		if !isErrDowngrade(err) {

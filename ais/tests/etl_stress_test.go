@@ -52,7 +52,6 @@ def transform(input_bytes):
 	tutils.CreateFreshBucket(t, proxyURL, m.bck, nil)
 
 	m.init()
-	tlog.Logln("Putting objects to source bucket")
 	m.puts()
 
 	uuid, err := api.ETLInitCode(baseParams, etl.InitCodeMsg{
@@ -176,7 +175,6 @@ def transform(input_bytes):
 	tutils.CreateFreshBucket(t, proxyURL, bckFrom, nil)
 	m.saveClusterState()
 
-	tlog.Logln("Putting objects to source bucket")
 	m.puts()
 
 	for _, test := range tests {

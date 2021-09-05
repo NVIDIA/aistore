@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	notif "github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -471,10 +472,13 @@ func _renameBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 func (p *proxyrunner) tcb(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRun bool) (xactID string, err error) {
 	// 1. confirm existence
 	bmd := p.owner.bmd.get()
-	if _, present := bmd.Get(bckFrom); !present {
+	if _, existsFrom := bmd.Get(bckFrom); !existsFrom {
 		err = cmn.NewErrBckNotFound(bckFrom.Bck)
 		return
 	}
+	_, existsTo := bmd.Get(bckTo)
+	debug.Assert(existsTo || bckTo.IsAIS())
+
 	// 2. begin
 	var (
 		waitmsync = !dryRun
@@ -496,15 +500,15 @@ func (p *proxyrunner) tcb(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRu
 	freeCallResults(results)
 
 	// 3. update BMD locally & metasync updated BMD
+	ctx := &bmdModifier{
+		pre:   _b2bBMDPre,
+		final: p._syncBMDFinal,
+		msg:   msg,
+		txnID: c.uuid,
+		bcks:  []*cluster.Bck{bckFrom, bckTo},
+		wait:  waitmsync,
+	}
 	if !dryRun {
-		ctx := &bmdModifier{
-			pre:   _b2bBMDPre,
-			final: p._syncBMDFinal,
-			msg:   msg,
-			txnID: c.uuid,
-			bcks:  []*cluster.Bck{bckFrom, bckTo},
-			wait:  waitmsync,
-		}
 		bmd, err = p.owner.bmd.modify(ctx)
 		if err != nil {
 			debug.AssertNoErr(err)
@@ -513,6 +517,7 @@ func (p *proxyrunner) tcb(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRu
 		}
 		c.msg.BMDVersion = bmd.version()
 		if !ctx.terminate {
+			debug.Assert(!existsTo)
 			c.req.Query.Set(cmn.URLParamWaitMetasync, "true")
 		}
 	}
@@ -520,6 +525,15 @@ func (p *proxyrunner) tcb(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRu
 	// 4. IC
 	nl := xaction.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bckFrom.Bck, bckTo.Bck)
 	nl.SetOwner(equalIC)
+	// setup notification listener callback to cleanup upon failure
+	nl.F = func(nl notif.NotifListener) {
+		if errNl := nl.Err(); errNl != nil {
+			if !ctx.terminate { // undo bmd.modify() - see above
+				glog.Error(errNl)
+				p.destroyBucket(&cmn.ActionMsg{Action: cmn.ActDestroyBck}, bckTo)
+			}
+		}
+	}
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 5. commit

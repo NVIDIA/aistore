@@ -198,13 +198,13 @@ func (r *XactCreateArchMultiObj) Run(wg *sync.WaitGroup) {
 	for {
 		select {
 		case msg := <-r.workCh:
-			if r.err.Load() != nil { // see raiseErr()
-				goto fin
-			}
 			r.pending.RLock()
 			wi, ok := r.pending.m[msg.TxnUUID]
 			r.pending.RUnlock()
-			debug.Assert(ok)
+			if !ok {
+				debug.Assert(r.err.Load() != nil) // see cleanup
+				goto fin
+			}
 			var (
 				smap    = r.p.T.Sowner().Get()
 				lrit    = &lriterator{}
@@ -290,7 +290,10 @@ func (r *XactCreateArchMultiObj) recv(hdr transport.ObjHdr, objReader io.Reader,
 	r.pending.RLock()
 	wi, ok := r.pending.m[txnUUID]
 	r.pending.RUnlock()
-	debug.Assert(ok)
+	if !ok {
+		debug.Assert(r.err.Load() != nil) // see cleanup
+		return
+	}
 	debug.Assert(wi.tsi.ID() == r.p.T.Snode().ID())
 	debug.Assert(wi.msg.TxnUUID == txnUUID)
 

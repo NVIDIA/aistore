@@ -2337,7 +2337,6 @@ func TestCopyBucketSimple(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, srcBck, nil)
 	m.init()
 
-	tlog.Logln("Putting objects to the source bucket")
 	m.puts()
 
 	t.Run("Stats", func(t *testing.T) { testCopyBucketStats(t, srcBck, m) })
@@ -2356,21 +2355,19 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tassert.CheckError(t, err)
 	defer tutils.DestroyBucket(t, m.proxyURL, dstBck)
 
+	time.Sleep(time.Duration(rand.Intn(3)) * time.Second)
+
 	err = api.AbortXaction(baseParams, api.XactReqArgs{ID: xactID})
 	tassert.CheckError(t, err)
 
 	stats, err := api.GetXactionStatsByID(baseParams, xactID)
 	tassert.CheckError(t, err)
-	tassert.Errorf(t, stats.Aborted(), "failed to abort copy bucket (%s)", xactID)
+	tassert.Errorf(t, stats.Aborted(), "failed to abort copy-bucket (%s)", xactID)
 
-	// TODO -- FIXME : Aborting a CopyBucket xaction should cleanup the bucket
-	// Uncomment this part after the backend logic is ready
-
-	/* // golint:ignore // should be uncommented after fixing backend
-	// bck, err := api.ListBuckets(baseParams, cmn.QueryBcks(dstBck))
-	// tassert.CheckError(t, err)
-	// tassert.Errorf(t, !bck.Contains(cmn.QueryBcks(dstBck)), "should not contains bucket %s", dstBck)
-	*/
+	time.Sleep(time.Second)
+	bck, err := api.ListBuckets(baseParams, cmn.QueryBcks(dstBck))
+	tassert.CheckError(t, err)
+	tassert.Errorf(t, !bck.Contains(cmn.QueryBcks(dstBck)), "should not contain destination bucket %s", dstBck)
 }
 
 func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
