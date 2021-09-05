@@ -10,6 +10,7 @@ import boto.vpc
 import time
 import urllib2
 import ConfigParser
+from io import open
 from timeout import timeout
 
 # Global vars assigned from the config in load_global_defaults
