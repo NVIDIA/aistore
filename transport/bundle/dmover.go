@@ -146,6 +146,7 @@ func (dm *DataMover) Open() {
 			Net:          dm.ack.net,
 			Trname:       dm.ack.trname,
 			Extra:        &transport.Extra{Config: dm.config},
+			Ntype:        cluster.Targets,
 			ManualResync: true,
 		}
 	)
@@ -196,8 +197,12 @@ func (dm *DataMover) ACK(hdr transport.ObjHdr, cb transport.ObjSentCB, tsi *clus
 	return dm.ack.streams.Send(&transport.Obj{Hdr: hdr, Callback: cb}, nil, tsi)
 }
 
-func (dm *DataMover) Bcast(obj *transport.Obj) error {
-	return dm.data.streams.Send(obj, nil)
+func (dm *DataMover) Bcast(obj *transport.Obj) (err error) {
+	smap := dm.data.streams.Smap()
+	if smap.CountTargets() > 1 {
+		err = dm.data.streams.Send(obj, nil)
+	}
+	return
 }
 
 //

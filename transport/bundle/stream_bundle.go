@@ -213,7 +213,8 @@ func _doCmpl(obj *transport.Obj, roc cos.ReadOpenCloser, err error) {
 	}
 }
 
-func (sb *Streams) String() string { return sb.lid }
+func (sb *Streams) String() string      { return sb.lid }
+func (sb *Streams) Smap() *cluster.Smap { return sb.smap }
 
 // keep streams to => (clustered nodes as per rxNodeType) in sync at all times
 func (sb *Streams) ListenSmapChanged() {

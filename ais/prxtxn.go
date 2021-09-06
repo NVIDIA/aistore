@@ -878,7 +878,6 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 		bcks:  []*cluster.Bck{bck},
 	}
 	if _, err := p.owner.bmd.modify(ctx); err != nil {
-		debug.AssertNoErr(err)
 		return c.bcastAbort(bck, err)
 	}
 

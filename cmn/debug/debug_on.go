@@ -98,7 +98,7 @@ func Func(f func()) { f() }
 func _panic(a ...interface{}) {
 	var msg = "DEBUG PANIC: "
 	if len(a) > 0 {
-		msg += fmt.Sprint(a...)
+		msg += fmt.Sprint(a...) + ": "
 	}
 	buffer := bytes.NewBuffer(make([]byte, 0, 1024))
 	fmt.Fprint(buffer, msg)
