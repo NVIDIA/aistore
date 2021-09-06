@@ -1,4 +1,6 @@
 # pylint: disable=unused-variable
+# pylint: disable=unspecified-encoding
+
 from __future__ import print_function
 
 import logging
@@ -10,7 +12,6 @@ import boto.vpc
 import time
 import urllib2
 import ConfigParser
-from io import open
 from timeout import timeout
 
 # Global vars assigned from the config in load_global_defaults
@@ -63,12 +64,12 @@ def load_ais_cluster(cluster_name, clients):
 
     cluster_inventory = os.path.join(os.path.dirname(__file__), 'inventory', 'cluster.ini')
     cluster_txt = os.path.join(os.path.dirname(__file__), 'inventory', 'cluster.txt')
-    with open(cluster_inventory, 'w', encoding="utf-8") as c, open(cluster_txt, 'w', encoding="utf-8") as ct:
+    with open(cluster_inventory, 'w') as c, open(cluster_txt, 'w') as ct:
         for key in ais:
             print(key)
             c.write('[' + key + ']\n')
             file = os.path.join(os.path.dirname(__file__), 'inventory', key + '.txt')
-            with open(file, 'w', encoding="utf-8") as f:
+            with open(file, 'w') as f:
                 for instance in ais[key]:
                     ip = instance.private_ip_address
                     print(ip)
