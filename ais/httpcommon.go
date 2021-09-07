@@ -1544,13 +1544,13 @@ func (h *httprunner) writeErrf(w http.ResponseWriter, r *http.Request, format st
 }
 
 func (h *httprunner) writeErrURL(w http.ResponseWriter, r *http.Request) {
-	err := cmn.NewHTTPErr(r, "invalid URL Path")
+	err := cmn.NewErrHTTP(r, "invalid URL Path")
 	h.writeErr(w, r, err)
 	cmn.FreeHTTPErr(err)
 }
 
 func (h *httprunner) writeErrAct(w http.ResponseWriter, r *http.Request, action string) {
-	err := cmn.NewHTTPErr(r, fmt.Sprintf("invalid action %q", action))
+	err := cmn.NewErrHTTP(r, fmt.Sprintf("invalid action %q", action))
 	h.writeErr(w, r, err)
 	cmn.FreeHTTPErr(err)
 }
@@ -1558,7 +1558,7 @@ func (h *httprunner) writeErrAct(w http.ResponseWriter, r *http.Request, action 
 func (h *httprunner) writeErrActf(w http.ResponseWriter, r *http.Request, action string,
 	format string, a ...interface{}) {
 	detail := fmt.Sprintf(format, a...)
-	err := cmn.NewHTTPErr(r, fmt.Sprintf("invalid action %q: %s", action, detail))
+	err := cmn.NewErrHTTP(r, fmt.Sprintf("invalid action %q: %s", action, detail))
 	h.writeErr(w, r, err)
 	cmn.FreeHTTPErr(err)
 }
@@ -1589,7 +1589,7 @@ func (res *callResult) error() error {
 		if res.details != "" {
 			detail = "[" + res.details + "]"
 		}
-		return cmn.NewHTTPErr(nil, fmt.Sprintf("%v%s", res.err, detail), res.status)
+		return cmn.NewErrHTTP(nil, fmt.Sprintf("%v%s", res.err, detail), res.status)
 	}
 	if res.details == "" {
 		return res.err

@@ -43,13 +43,13 @@ type etlBootstraper struct {
 func ParsePodSpec(errCtx *cmn.ETLErrorContext, spec []byte) (*corev1.Pod, error) {
 	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode(spec, nil, nil)
 	if err != nil {
-		return nil, cmn.NewETLError(errCtx, "failed to parse pod spec: %v", err)
+		return nil, cmn.NewErrETL(errCtx, "failed to parse pod spec: %v", err)
 	}
 
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
 		kind := obj.GetObjectKind().GroupVersionKind().Kind
-		return nil, cmn.NewETLError(errCtx, "expected pod spec, got: %s", kind)
+		return nil, cmn.NewErrETL(errCtx, "expected pod spec, got: %s", kind)
 	}
 	return pod, nil
 }
@@ -79,14 +79,14 @@ func ValidateSpec(spec []byte) (msg InitSpecMsg, err error) {
 
 	// Check pod specification constraints.
 	if len(pod.Spec.Containers) != 1 {
-		return msg, cmn.NewETLError(errCtx, "unsupported number of containers (%d), expected: 1", len(pod.Spec.Containers))
+		return msg, cmn.NewErrETL(errCtx, "unsupported number of containers (%d), expected: 1", len(pod.Spec.Containers))
 	}
 	container := pod.Spec.Containers[0]
 	if len(container.Ports) != 1 {
-		return msg, cmn.NewETLError(errCtx, "unsupported number of container ports (%d), expected: 1", len(container.Ports))
+		return msg, cmn.NewErrETL(errCtx, "unsupported number of container ports (%d), expected: 1", len(container.Ports))
 	}
 	if container.Ports[0].Name != k8s.Default {
-		return msg, cmn.NewETLError(errCtx, "expected port name: %q, got: %q", k8s.Default, container.Ports[0].Name)
+		return msg, cmn.NewErrETL(errCtx, "expected port name: %q, got: %q", k8s.Default, container.Ports[0].Name)
 	}
 
 	if msg.CommType != IOCommType {
@@ -94,19 +94,19 @@ func ValidateSpec(spec []byte) (msg InitSpecMsg, err error) {
 		// Currently we need the `default` port (on which the application runs) to
 		// be same as the `readiness` probe port.
 		if container.ReadinessProbe == nil {
-			return msg, cmn.NewETLError(errCtx, "readinessProbe section is required in a container spec")
+			return msg, cmn.NewErrETL(errCtx, "readinessProbe section is required in a container spec")
 		}
 		// TODO: Add support for other health checks.
 		if container.ReadinessProbe.HTTPGet == nil {
-			return msg, cmn.NewETLError(errCtx, "httpGet missing in the readinessProbe")
+			return msg, cmn.NewErrETL(errCtx, "httpGet missing in the readinessProbe")
 		}
 		if container.ReadinessProbe.HTTPGet.Path == "" {
-			return msg, cmn.NewETLError(errCtx, "expected non-empty path for readinessProbe")
+			return msg, cmn.NewErrETL(errCtx, "expected non-empty path for readinessProbe")
 		}
 		// Currently we need the `default` port (on which the application runs)
 		// to be same as the `readiness` probe port in the pod spec.
 		if container.ReadinessProbe.HTTPGet.Port.StrVal != k8s.Default {
-			return msg, cmn.NewETLError(errCtx, "readinessProbe port must be the %q port", k8s.Default)
+			return msg, cmn.NewErrETL(errCtx, "readinessProbe port must be the %q port", k8s.Default)
 		}
 	}
 
@@ -165,7 +165,7 @@ func podTransformCommType(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (string,
 
 	commType := pod.Annotations[commTypeAnnotation]
 	if err := validateCommType(commType); err != nil {
-		return "", cmn.NewETLError(errCtx, err.Error()).WithPodName(pod.Name)
+		return "", cmn.NewErrETL(errCtx, err.Error()).WithPodName(pod.Name)
 	}
 	return commType, nil
 }
@@ -184,7 +184,7 @@ func podTransformTimeout(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (cos.Dura
 
 	v, err := time.ParseDuration(pod.Annotations[waitTimeoutAnnotation])
 	if err != nil {
-		return cos.Duration(v), cmn.NewETLError(errCtx, err.Error()).WithPodName(pod.Name)
+		return cos.Duration(v), cmn.NewErrETL(errCtx, err.Error()).WithPodName(pod.Name)
 	}
 	return cos.Duration(v), nil
 }

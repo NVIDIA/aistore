@@ -419,9 +419,9 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Read
 }
 
 func (reb *Manager) walkEC(fqn string, de fs.DirEntry) (err error) {
-	if reb.xact().Aborted() {
+	if xreb := reb.xact(); xreb.Aborted() {
 		// notify `dir.Walk` to stop iterations
-		return cmn.NewAbortedError("interrupt walk - xaction aborted")
+		return cmn.NewErrAborted(xreb.Name(), "walk-ec", nil)
 	}
 
 	if de.IsDir() {

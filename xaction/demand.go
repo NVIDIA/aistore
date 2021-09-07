@@ -130,7 +130,7 @@ func (r *DemandBase) Abort() {
 	}
 	if r.Kind() != cmn.ActList {
 		if !r.likelyIdle() {
-			err = cmn.NewAbortedError(r.String())
+			err = cmn.NewErrAborted(r.Name(), "x-demand", nil)
 		}
 	}
 	r._setEndTime(err)

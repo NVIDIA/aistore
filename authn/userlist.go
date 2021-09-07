@@ -188,7 +188,7 @@ func (m *UserManager) cluLookup(cluID, cluAlias string) string {
 func (m *UserManager) getCluster(cluID string) (*Cluster, error) {
 	cid := m.cluLookup(cluID, cluID)
 	if cid == "" {
-		return nil, cmn.NewNotFoundError("user-manager: %s cluster %q", svcName, cluID)
+		return nil, cmn.NewErrNotFound("user-manager: %s cluster %q", svcName, cluID)
 	}
 	clu := &Cluster{}
 	err := m.db.Get(clustersCollection, cid, clu)
@@ -226,7 +226,7 @@ func (m *UserManager) delUser(userID string) error {
 func (m *UserManager) delCluster(cluID string) error {
 	cid := m.cluLookup(cluID, cluID)
 	if cid == "" {
-		return cmn.NewNotFoundError("user-manager: %s cluster %q", svcName, cluID)
+		return cmn.NewErrNotFound("user-manager: %s cluster %q", svcName, cluID)
 	}
 	return m.db.Delete(clustersCollection, cid)
 }
@@ -245,7 +245,7 @@ func (m *UserManager) updateUser(userID string, updateReq *User) error {
 	uInfo := &User{}
 	err := m.db.Get(usersCollection, userID, uInfo)
 	if err != nil {
-		return cmn.NewNotFoundError("user-manager: %s user %q", svcName, userID)
+		return cmn.NewErrNotFound("user-manager: %s user %q", svcName, userID)
 	}
 	if userID == adminID && len(updateReq.Roles) != 0 {
 		return errors.New("cannot change administrator's role")
@@ -271,7 +271,7 @@ func (m *UserManager) updateRole(role string, updateReq *Role) error {
 	rInfo := &Role{}
 	err := m.db.Get(rolesCollection, role, rInfo)
 	if err != nil {
-		return cmn.NewNotFoundError("user-manager: %s role %q", svcName, role)
+		return cmn.NewErrNotFound("user-manager: %s role %q", svcName, role)
 	}
 
 	if updateReq.Desc != "" {

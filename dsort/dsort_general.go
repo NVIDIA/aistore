@@ -444,9 +444,10 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 				// We managed to pull the writer, we can safely return error.
 				var err error
 				if stopped {
-					err = cmn.NewAbortedError("wait for remote content")
+					err = cmn.NewErrAborted("wait for remote content", "", nil)
 				} else if timed {
-					err = errors.Errorf("wait for remote content has timed out (%q was waiting for %q)", ds.m.ctx.node.DaemonID, daemonID)
+					err = errors.Errorf("wait for remote content has timed out (%q was waiting for %q)",
+						ds.m.ctx.node.DaemonID, daemonID)
 				} else {
 					cos.AssertMsg(false, "pulled but not stopped or timed?!")
 				}

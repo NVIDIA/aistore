@@ -363,7 +363,7 @@ func (*notifs) markFinished(nl nl.NotifListener, tsi *cluster.Snode, srcErr erro
 		nl.SetAborted()
 		if srcErr == nil {
 			detail := fmt.Sprintf("%s, node %s", nl, tsi)
-			srcErr = cmn.NewAbortedError(nl.Kind(), detail)
+			srcErr = cmn.NewErrAborted(nl.String(), detail, nil)
 		}
 	}
 	if srcErr != nil {

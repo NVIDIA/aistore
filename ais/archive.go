@@ -67,7 +67,7 @@ func (csf *cslFile) Size() int64                { return csf.size }
 func (csf *cslFile) Close() error               { return csf.file.Close() }
 
 func notFoundInArch(filename, archname string) error {
-	return cmn.NewNotFoundError("file %q in archive %q", filename, archname)
+	return cmn.NewErrNotFound("file %q in archive %q", filename, archname)
 }
 
 /////////////////////////

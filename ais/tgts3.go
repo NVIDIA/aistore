@@ -213,7 +213,7 @@ func (t *targetrunner) delObjS3(w http.ResponseWriter, r *http.Request, items []
 	errCode, err := t.DeleteObject(lom, false)
 	if err != nil {
 		if errCode == http.StatusNotFound {
-			err := cmn.NewNotFoundError("%s: %s", t.si, lom.FullName())
+			err := cmn.NewErrNotFound("%s: %s", t.si, lom.FullName())
 			t.writeErrSilent(w, r, err, http.StatusNotFound)
 		} else {
 			t.writeErrStatusf(w, r, errCode, "error deleting %s: %v", lom, err)

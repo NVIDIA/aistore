@@ -79,7 +79,7 @@ func NewXactDirPromote(dir string, bck *cluster.Bck, t cluster.Target, params *c
 }
 
 func (r *XactDirPromote) Run(*sync.WaitGroup) {
-	glog.Infoln(r.String(), r.dir, "=>", r.Bck())
+	glog.Infoln(r.Name(), r.dir, "=>", r.Bck())
 	opts := &fs.Options{
 		Dir:      r.dir,
 		Callback: r.walk,

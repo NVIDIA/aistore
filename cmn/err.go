@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -68,7 +69,7 @@ type (
 	ErrNoMountpath struct {
 		mpath string
 	}
-	InvalidMountpathError struct {
+	ErrInvalidMountpath struct {
 		mpath string
 		cause string
 	}
@@ -78,18 +79,20 @@ type (
 	ErrXactionNotFound struct {
 		cause string
 	}
-	ObjDefunctErr struct {
+	ErrObjDefunct struct {
 		name   string // object's name
 		d1, d2 uint64 // lom.md.(bucket-ID) and lom.bck.(bucket-ID), respectively
 	}
-	ObjMetaErr struct {
+	ErrObjMeta struct {
 		name string // object's name
 		err  error  // underlying error
 	}
 	ErrAborted struct {
-		what    string
-		details string
-		cause   error
+		what string
+		ctx  string
+		err  error
+		//
+		timestamp time.Time
 	}
 	ErrNotFound struct {
 		what string
@@ -136,63 +139,7 @@ var (
 		"cannot run more than one etl, please stop the current ETL before starting another")
 )
 
-func IsErrAborted(err error) bool {
-	if _, ok := err.(*ErrAborted); ok {
-		return true
-	}
-	target := &ErrAborted{}
-	return errors.As(err, &target)
-}
-
-// IsErrorSoft returns true if the error is not critical and can be
-// ignored in some cases(e.g, when `--force` is set)
-func IsErrSoft(err error) bool {
-	if _, ok := err.(*ErrSoft); ok {
-		return true
-	}
-	target := &ErrSoft{}
-	return errors.As(err, &target)
-}
-
-////////////////////////
-// http-error helpers //
-////////////////////////
-
-func IsStatusServiceUnavailable(err error) (yes bool) {
-	hErr, ok := err.(*ErrHTTP)
-	if !ok {
-		return false
-	}
-	return hErr.Status == http.StatusServiceUnavailable
-}
-
-func IsStatusNotFound(err error) (yes bool) {
-	hErr, ok := err.(*ErrHTTP)
-	if !ok {
-		return false
-	}
-	return hErr.Status == http.StatusNotFound
-}
-
-func IsStatusBadGateway(err error) (yes bool) {
-	hErr, ok := err.(*ErrHTTP)
-	if !ok {
-		return false
-	}
-	return hErr.Status == http.StatusBadGateway
-}
-
-func IsStatusGone(err error) (yes bool) {
-	hErr, ok := err.(*ErrHTTP)
-	if !ok {
-		return false
-	}
-	return hErr.Status == http.StatusGone
-}
-
-////////////////////////////
-// structured error types //
-////////////////////////////
+// ais ErrBucketAlreadyExists
 
 func NewErrBckAlreadyExists(bck Bck) *ErrBucketAlreadyExists {
 	return &ErrBucketAlreadyExists{bck: bck}
@@ -206,6 +153,8 @@ func IsErrBucketAlreadyExists(err error) bool {
 	_, ok := err.(*ErrBucketAlreadyExists)
 	return ok
 }
+
+// remote ErrRemoteBckNotFound
 
 func NewErrRemoteBckNotFound(bck Bck) *ErrRemoteBckNotFound {
 	return &ErrRemoteBckNotFound{bck: bck}
@@ -223,6 +172,8 @@ func IsErrRemoteBckNotFound(err error) bool {
 	return ok
 }
 
+// ErrBckNotFound
+
 func NewErrBckNotFound(bck Bck) *ErrBckNotFound {
 	return &ErrBckNotFound{bck: bck}
 }
@@ -236,6 +187,8 @@ func IsErrBckNotFound(err error) bool {
 	return ok
 }
 
+// ErrRemoteBucketOffline
+
 func NewErrRemoteBckOffline(bck Bck) *ErrRemoteBucketOffline {
 	return &ErrRemoteBucketOffline{bck: bck}
 }
@@ -243,6 +196,8 @@ func NewErrRemoteBckOffline(bck Bck) *ErrRemoteBucketOffline {
 func (e *ErrRemoteBucketOffline) Error() string {
 	return fmt.Sprintf("bucket %q is currently unreachable", e.bck)
 }
+
+// ErrInvalidBucketProvider
 
 func NewErrorInvalidBucketProvider(bck Bck) *ErrInvalidBucketProvider {
 	return &ErrInvalidBucketProvider{bck: bck}
@@ -261,6 +216,8 @@ func (*ErrInvalidBucketProvider) Is(target error) bool {
 	return ok
 }
 
+// ErrBucketIsBusy
+
 func NewErrBckIsBusy(bck Bck) *ErrBucketIsBusy {
 	return &ErrBucketIsBusy{bck: bck}
 }
@@ -268,6 +225,8 @@ func NewErrBckIsBusy(bck Bck) *ErrBucketIsBusy {
 func (e *ErrBucketIsBusy) Error() string {
 	return fmt.Sprintf("bucket %q is currently busy, please retry later", e.bck)
 }
+
+// errAccessDenied & ErrBucketAccessDenied
 
 func (e *errAccessDenied) String() string {
 	return fmt.Sprintf("%s: %s access denied (%#x)", e.entity, e.operation, e.accessAttrs)
@@ -285,7 +244,9 @@ func NewBucketAccessDenied(bucket, oper string, aattrs AccessAttrs) *ErrBucketAc
 	return &ErrBucketAccessDenied{errAccessDenied{bucket, oper, aattrs}}
 }
 
-func NewErrorCapacityExceeded(highWM int64, totalBytesUsed, totalBytes uint64, usedPct int32, oos bool) *ErrCapacityExceeded {
+// ErrCapacityExceeded
+
+func NewErrCapacityExceeded(highWM int64, totalBytesUsed, totalBytes uint64, usedPct int32, oos bool) *ErrCapacityExceeded {
 	return &ErrCapacityExceeded{
 		highWM:         highWM,
 		usedPct:        usedPct,
@@ -306,33 +267,41 @@ func (e *ErrCapacityExceeded) Error() string {
 		e.usedPct, e.highWM, suffix)
 }
 
+// ErrInvalidCksum
+
 func (e *ErrInvalidCksum) Error() string {
 	return fmt.Sprintf("checksum: expected [%s], actual [%s]", e.expectedHash, e.actualHash)
 }
 
-func NewInvalidCksumError(eHash, aHash string) *ErrInvalidCksum {
+func NewErrInvalidCksum(eHash, aHash string) *ErrInvalidCksum {
 	return &ErrInvalidCksum{actualHash: aHash, expectedHash: eHash}
 }
 
 func (e *ErrInvalidCksum) Expected() string { return e.expectedHash }
 
+// ErrNoMountpath
+
 func (e *ErrNoMountpath) Error() string {
 	return "mountpath [" + e.mpath + "] doesn't exist"
 }
 
-func NewNoMountpathError(mpath string) *ErrNoMountpath {
+func NewErrNoMountpath(mpath string) *ErrNoMountpath {
 	return &ErrNoMountpath{mpath}
 }
 
-func (e *InvalidMountpathError) Error() string {
+// ErrInvalidMountpath
+
+func (e *ErrInvalidMountpath) Error() string {
 	return "invalid mountpath [" + e.mpath + "]; " + e.cause
 }
 
-func NewInvalidaMountpathError(mpath, cause string) *InvalidMountpathError {
-	return &InvalidMountpathError{mpath: mpath, cause: cause}
+func NewErrInvalidaMountpath(mpath, cause string) *ErrInvalidMountpath {
+	return &ErrInvalidMountpath{mpath: mpath, cause: cause}
 }
 
-func NewNoNodesError(role string) *ErrNoNodes {
+// ErrNoNodes
+
+func NewErrNoNodes(role string) *ErrNoNodes {
 	return &ErrNoNodes{role: role}
 }
 
@@ -344,69 +313,71 @@ func (e *ErrNoNodes) Error() string {
 	return "no available targets"
 }
 
+// ErrXactionNotFound
+
 func (e *ErrXactionNotFound) Error() string {
 	return "xaction " + e.cause + " not found"
 }
 
-func NewXactionNotFoundError(cause string) *ErrXactionNotFound {
+func NewErrXactNotFoundError(cause string) *ErrXactionNotFound {
 	return &ErrXactionNotFound{cause: cause}
 }
 
-func (e *ObjDefunctErr) Error() string {
+// ErrObjDefunct
+
+func (e *ErrObjDefunct) Error() string {
 	return fmt.Sprintf("%s is defunct (%d != %d)", e.name, e.d1, e.d2)
 }
 
-func NewObjDefunctError(name string, d1, d2 uint64) *ObjDefunctErr {
-	return &ObjDefunctErr{name, d1, d2}
+func NewErrObjDefunct(name string, d1, d2 uint64) *ErrObjDefunct {
+	return &ErrObjDefunct{name, d1, d2}
 }
 
-func (e *ObjMetaErr) Error() string {
+// ErrObjMeta
+
+func (e *ErrObjMeta) Error() string {
 	return fmt.Sprintf("object %s failed to load meta: %v", e.name, e.err)
 }
 
-func NewObjMetaErr(name string, err error) *ObjMetaErr {
-	return &ObjMetaErr{name: name, err: err}
+func NewErrObjMeta(name string, err error) *ErrObjMeta {
+	return &ErrObjMeta{name: name, err: err}
 }
 
-func NewAbortedError(what string, details ...string) *ErrAborted {
-	var d string
-	if len(details) > 0 {
-		d = details[0]
+// ErrAborted
+
+func NewErrAborted(what, ctx string, err error) *ErrAborted {
+	return &ErrAborted{what: what, ctx: ctx, err: err, timestamp: time.Now()}
+}
+
+func (e *ErrAborted) Error() (s string) {
+	if e.err == nil {
+		s = fmt.Sprintf("%s aborted @%v", e.what, e.timestamp)
+	} else {
+		s = fmt.Sprintf("%s aborted @%v, err: %v", e.what, e.timestamp, e.err)
 	}
-	return &ErrAborted{what: what, details: d}
-}
-
-func NewAbortedErrorWrapped(what string, cause error) *ErrAborted {
-	return &ErrAborted{what: what, cause: cause}
-}
-
-func (e *ErrAborted) Error() string {
-	if e.cause != nil {
-		return fmt.Sprintf("%s aborted. %s", e.what, e.cause.Error())
+	if e.ctx != "" {
+		s += " (" + e.ctx + ")"
 	}
-	if e.details != "" {
-		return fmt.Sprintf("%s aborted. %s", e.what, e.details)
+	return
+}
+
+func IsErrAborted(err error) bool {
+	if _, ok := err.(*ErrAborted); ok {
+		return true
 	}
-	return fmt.Sprintf("%s aborted", e.what)
+	target := &ErrAborted{}
+	return errors.As(err, &target)
 }
 
-func (e *ErrAborted) As(target error) bool {
-	_, ok := target.(*ErrAborted)
-	if e.cause == nil {
-		return ok
-	}
-	return ok || errors.As(e.cause, &target)
-}
+// ErrNotFound
 
-func NewFailedToCreateHTTPRequest(err error) error {
-	return fmt.Errorf("failed to create new HTTP request, err: %v", err)
-}
-
-func NewNotFoundError(format string, a ...interface{}) *ErrNotFound {
+func NewErrNotFound(format string, a ...interface{}) *ErrNotFound {
 	return &ErrNotFound{fmt.Sprintf(format, a...)}
 }
 
 func (e *ErrNotFound) Error() string { return e.what + " does not exist" }
+
+// ErrInitBackend & ErrMissingBackend
 
 func (e *ErrInitBackend) Error() string {
 	return fmt.Sprintf(
@@ -420,7 +391,9 @@ func (e *ErrMissingBackend) Error() string {
 		"%q backend is missing in the cluster configuration. Hint: consider redeploying with -override_backends command-line and the corresponding build tag.", e.Provider)
 }
 
-func NewETLError(ctx *ETLErrorContext, format string, a ...interface{}) *ErrETL {
+// ErrETL
+
+func NewErrETL(ctx *ETLErrorContext, format string, a ...interface{}) *ErrETL {
 	e := &ErrETL{
 		Reason: fmt.Sprintf(format, a...),
 	}
@@ -494,12 +467,23 @@ func (e *ErrETL) WithContext(ctx *ETLErrorContext) *ErrETL {
 		withSvcName(ctx.SvcName)
 }
 
-func NewSoftError(what string) *ErrSoft {
+// ErrSoft
+// non-critical and can be ignored in certain cases (e.g, when `--force` is set)
+
+func NewErrSoft(what string) *ErrSoft {
 	return &ErrSoft{what}
 }
 
 func (e *ErrSoft) Error() string {
 	return e.what
+}
+
+func IsErrSoft(err error) bool {
+	if _, ok := err.(*ErrSoft); ok {
+		return true
+	}
+	target := &ErrSoft{}
+	return errors.As(err, &target)
 }
 
 ////////////////////////////
@@ -525,10 +509,10 @@ func IsErrObjNought(err error) bool {
 	if IsStatusNotFound(err) {
 		return true
 	}
-	if _, ok := err.(*ObjMetaErr); ok {
+	if _, ok := err.(*ErrObjMeta); ok {
 		return true
 	}
-	if _, ok := err.(*ObjDefunctErr); ok {
+	if _, ok := err.(*ErrObjDefunct); ok {
 		return true
 	}
 	return false
@@ -549,7 +533,7 @@ func IsErrObjLevel(err error) bool    { return IsErrObjNought(err) }
 // ErrHTTP //
 /////////////
 
-func NewHTTPErr(r *http.Request, msg string, errCode ...int) (e *ErrHTTP) {
+func NewErrHTTP(r *http.Request, msg string, errCode ...int) (e *ErrHTTP) {
 	status := http.StatusBadRequest
 	if len(errCode) > 0 && errCode[0] > status {
 		status = errCode[0]
@@ -565,6 +549,38 @@ func NewHTTPErr(r *http.Request, msg string, errCode ...int) (e *ErrHTTP) {
 	return
 }
 
+func IsStatusServiceUnavailable(err error) (yes bool) {
+	hErr, ok := err.(*ErrHTTP)
+	if !ok {
+		return false
+	}
+	return hErr.Status == http.StatusServiceUnavailable
+}
+
+func IsStatusNotFound(err error) (yes bool) {
+	hErr, ok := err.(*ErrHTTP)
+	if !ok {
+		return false
+	}
+	return hErr.Status == http.StatusNotFound
+}
+
+func IsStatusBadGateway(err error) (yes bool) {
+	hErr, ok := err.(*ErrHTTP)
+	if !ok {
+		return false
+	}
+	return hErr.Status == http.StatusBadGateway
+}
+
+func IsStatusGone(err error) (yes bool) {
+	hErr, ok := err.(*ErrHTTP)
+	if !ok {
+		return false
+	}
+	return hErr.Status == http.StatusGone
+}
+
 func S2HTTPErr(r *http.Request, msg string, status int) *ErrHTTP {
 	if msg != "" {
 		var httpErr ErrHTTP
@@ -572,7 +588,7 @@ func S2HTTPErr(r *http.Request, msg string, status int) *ErrHTTP {
 			return &httpErr
 		}
 	}
-	return NewHTTPErr(r, msg, status)
+	return NewErrHTTP(r, msg, status)
 }
 
 func Err2HTTPErr(err error) (httpErr *ErrHTTP) {
@@ -588,8 +604,8 @@ func Err2HTTPErr(err error) (httpErr *ErrHTTP) {
 }
 
 // Example:
-//  Bad Request: Bucket abc does not appear to be local or does not exist:
-//  DELETE /v1/buckets/abc from (127.0.0.1:54064, vhsjxq8000) stack: (httpcommon.go:840 <- proxy.go:484 <- proxy.go:264)
+// Bad Request: Bucket abc does not appear to be local or does not exist:
+// DELETE /v1/buckets/abc from (127.0.0.1:54064, vhsjxq8000) stack: (httpcommon.go:840 <- proxy.go:484 <- proxy.go:264)
 func (e *ErrHTTP) String() (s string) {
 	s = http.StatusText(e.Status) + ": " + e.Message
 	if e.Method != "" || e.URLPath != "" {
@@ -705,7 +721,7 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int) {
 
 // Create ErrHTTP (based on `msg` and `opts`) and write it into HTTP response.
 func WriteErrMsg(w http.ResponseWriter, r *http.Request, msg string, opts ...int) {
-	httpErr := NewHTTPErr(r, msg, opts...)
+	httpErr := NewErrHTTP(r, msg, opts...)
 	httpErr.write(w, r, len(opts) > 1 /*silent*/)
 	FreeHTTPErr(httpErr)
 }

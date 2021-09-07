@@ -122,7 +122,7 @@ func (r *XactPut) workCb(lom *cluster.LOM, buf []byte) {
 // control logic: stop and idle timer
 // (LOMs get dispatched directly to workers)
 func (r *XactPut) Run(*sync.WaitGroup) {
-	glog.Infoln(r.String())
+	glog.Infoln(r.Name())
 	r.workers.Run()
 	for {
 		select {
@@ -134,7 +134,7 @@ func (r *XactPut) Run(*sync.WaitGroup) {
 			if err := r.stop(); err != nil {
 				r.Finish(err)
 			} else {
-				r.Finish(cmn.NewAbortedError(r.String()))
+				r.Finish(cmn.NewErrAborted(r.Name(), "", nil))
 			}
 			return
 		}

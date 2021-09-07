@@ -255,7 +255,7 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string,
 
 	hdrCksumValue := resp.Header.Get(cmn.HdrObjCksumVal)
 	if resp.cksumValue != hdrCksumValue {
-		return 0, cmn.NewInvalidCksumError(hdrCksumValue, resp.cksumValue)
+		return 0, cmn.NewErrInvalidCksum(hdrCksumValue, resp.cksumValue)
 	}
 	return resp.n, nil
 }
@@ -312,7 +312,7 @@ func _putObject(args PutObjectArgs, query url.Values) (err error) {
 	newRequest := func(reqArgs cmn.ReqArgs) (*http.Request, error) {
 		req, err := reqArgs.Req()
 		if err != nil {
-			return nil, cmn.NewFailedToCreateHTTPRequest(err)
+			return nil, newErrCreateHTTPRequest(err)
 		}
 
 		// The HTTP package doesn't automatically set this for files, so it has to be done manually
@@ -326,7 +326,7 @@ func _putObject(args PutObjectArgs, query url.Values) (err error) {
 			if ckVal == "" {
 				_, ckhash, err := cos.CopyAndChecksum(io.Discard, args.Reader, nil, args.Cksum.Ty())
 				if err != nil {
-					return nil, cmn.NewFailedToCreateHTTPRequest(err)
+					return nil, newErrCreateHTTPRequest(err)
 				}
 				ckVal = hex.EncodeToString(ckhash.Sum())
 			}
@@ -384,7 +384,7 @@ func AppendObject(args AppendArgs) (handle string, err error) {
 	newRequest := func(reqArgs cmn.ReqArgs) (*http.Request, error) {
 		req, err := reqArgs.Req()
 		if err != nil {
-			return nil, cmn.NewFailedToCreateHTTPRequest(err)
+			return nil, newErrCreateHTTPRequest(err)
 		}
 
 		// The HTTP package doesn't automatically set this for files, so it has to be done manually

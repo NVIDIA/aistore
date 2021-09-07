@@ -1017,7 +1017,7 @@ func (c *ECConf) ValidateAsProps(args *ValidationArgs) error {
 		return fmt.Errorf(insufficientNodes, c.DataSlices, c.ParitySlices, required, args.TargetCnt)
 	}
 	if args.TargetCnt < required {
-		return NewSoftError(fmt.Sprintf(insufficientNodes, c.DataSlices, c.ParitySlices, required, args.TargetCnt))
+		return NewErrSoft(fmt.Sprintf(insufficientNodes, c.DataSlices, c.ParitySlices, required, args.TargetCnt))
 	}
 	return nil
 }
@@ -1206,10 +1206,10 @@ func ValidateMpath(mpath string) (string, error) {
 	cleanMpath := filepath.Clean(mpath)
 
 	if cleanMpath[0] != filepath.Separator {
-		return mpath, NewInvalidaMountpathError(mpath, "mountpath must be an absolute path")
+		return mpath, NewErrInvalidaMountpath(mpath, "mountpath must be an absolute path")
 	}
 	if cleanMpath == string(filepath.Separator) {
-		return "", NewInvalidaMountpathError(mpath, "root directory is not a valid mountpath")
+		return "", NewErrInvalidaMountpath(mpath, "root directory is not a valid mountpath")
 	}
 	return cleanMpath, nil
 }

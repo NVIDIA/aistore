@@ -16,7 +16,7 @@ func TestAbortedErrorAs(t *testing.T) {
 	mockDetails := "mock details"
 	mockWhat := "mock what"
 
-	abortedError := cmn.NewAbortedError(mockWhat, mockDetails)
+	abortedError := cmn.NewErrAborted(mockWhat, mockDetails, nil)
 	tassert.Fatalf(t, cmn.IsErrAborted(abortedError), "expected errors.As to return true on the same error type")
 
 	mockError := fmt.Errorf("wrapping aborted error %w", abortedError)

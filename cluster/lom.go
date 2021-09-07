@@ -145,9 +145,9 @@ func (lif *LIF) LOM() (lom *LOM, err error) {
 		return
 	}
 	if bprops := lom.Bprops(); bprops == nil {
-		err = cmn.NewObjDefunctError(lom.String(), 0, lif.BID)
+		err = cmn.NewErrObjDefunct(lom.String(), 0, lif.BID)
 	} else if bprops.BID != lif.BID {
-		err = cmn.NewObjDefunctError(lom.String(), bprops.BID, lif.BID)
+		err = cmn.NewErrObjDefunct(lom.String(), bprops.BID, lif.BID)
 	}
 	return
 }
@@ -953,7 +953,7 @@ func (lom *LOM) _checkBucket(bmd *BMD) (err error) {
 	debug.Assert(lom.loaded())
 	err = bmd.Check(lom.bck, lom.md.bckID)
 	if err == errBucketIDMismatch {
-		err = cmn.NewObjDefunctError(lom.String(), lom.md.bckID, lom.bck.Props.BID)
+		err = cmn.NewErrObjDefunct(lom.String(), lom.md.bckID, lom.bck.Props.BID)
 	}
 	return
 }
@@ -1017,7 +1017,7 @@ beg:
 				goto beg
 			}
 		}
-		err = cmn.NewObjMetaErr(lom.ObjName, err)
+		err = cmn.NewErrObjMeta(lom.ObjName, err)
 		T.FSHC(err, lom.FQN)
 		return
 	}

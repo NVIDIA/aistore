@@ -179,9 +179,13 @@ func (r *XactTCB) String() string {
 	return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.args.BckFrom)
 }
 
+func (r *XactTCB) Name() string {
+	return fmt.Sprintf("%s <= %s", r.XactBase.Name(), r.args.BckFrom)
+}
+
 // limited pre-run abort
 func (r *XactTCB) TxnAbort() {
-	err := cmn.NewAbortedError(r.String())
+	err := cmn.NewErrAborted(r.Name(), "txn-abort", nil)
 	if r.dm.IsOpen() {
 		r.dm.Close(err)
 	}
@@ -223,7 +227,7 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	r.wg.Done()
 
 	r.XactBckJog.Run()
-	glog.Infoln(r.String(), r.args.BckFrom.Bck, "=>", r.args.BckTo.Bck)
+	glog.Infoln(r.Name())
 
 	err := r.XactBckJog.Wait()
 
@@ -240,7 +244,7 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	}
 	if err == nil {
 		if q == cluster.QuiAborted {
-			err = cmn.NewAbortedError(r.String())
+			err = cmn.NewErrAborted(r.Name(), "", nil)
 		} else if q == cluster.QuiTimeout {
 			err = fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout)
 		}
@@ -268,8 +272,7 @@ func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 	size, err = r.Target().CopyObject(lom, params, false /*localOnly*/)
 	if err != nil {
 		if cos.IsErrOOS(err) {
-			what := fmt.Sprintf("%s(%q)", r.Kind(), r.ID())
-			err = cmn.NewAbortedError(what, err.Error())
+			err = cmn.NewErrAborted(r.Name(), "copy-obj", err)
 		}
 		goto ret
 	}
@@ -284,8 +287,7 @@ func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 
 	// keep checking remaining capacity
 	if cs := fs.GetCapStatus(); cs.Err != nil {
-		what := fmt.Sprintf("%s(%q)", r.Kind(), r.ID())
-		err = cmn.NewAbortedError(what, cs.Err.Error())
+		err = cmn.NewErrAborted(r.Name(), "copy-obj", cs.Err)
 	}
 ret:
 	freeCpObjParams(params)

@@ -132,7 +132,7 @@ func (e *Aborter) ListenSmapChanged() {
 		}
 
 		if !newSmap.CompareTargets(e.currentSmap) {
-			glog.Warning(cmn.NewETLError(&cmn.ETLErrorContext{
+			glog.Warning(cmn.NewErrETL(&cmn.ETLErrorContext{
 				TID:  e.t.SID(),
 				UUID: e.uuid,
 			}, "targets have changed, aborting..."))
@@ -149,7 +149,7 @@ func (e *Aborter) ListenSmapChanged() {
 func Start(t cluster.Target, msg InitSpecMsg, opts ...StartOpts) (err error) {
 	errCtx, podName, svcName, err := tryStart(t, msg, opts...)
 	if err != nil {
-		glog.Warning(cmn.NewETLError(errCtx, "Performing cleanup after unsuccessful Start"))
+		glog.Warning(cmn.NewErrETL(errCtx, "Performing cleanup after unsuccessful Start"))
 		if err := cleanupEntities(errCtx, podName, svcName); err != nil {
 			glog.Error(err)
 		}
@@ -335,7 +335,7 @@ func (b *etlBootstraper) setupConnection() (err error) {
 		// it is accessible from target.
 		etlSocketAddr := fmt.Sprintf("%s:%d", hostIP, nodePort)
 		if err = b.checkETLConnection(etlSocketAddr); err != nil {
-			err = cmn.NewETLError(b.errCtx, err.Error())
+			err = cmn.NewErrETL(b.errCtx, err.Error())
 			return
 		}
 
@@ -384,7 +384,7 @@ func Stop(t cluster.Target, id string) error {
 
 	c, err := GetCommunicator(id, t.Snode())
 	if err != nil {
-		return cmn.NewETLError(errCtx, err.Error())
+		return cmn.NewErrETL(errCtx, err.Error())
 	}
 	errCtx.PodName = c.PodName()
 	errCtx.SvcName = c.SvcName()
@@ -417,7 +417,7 @@ func StopAll(t cluster.Target) {
 func GetCommunicator(transformID string, lsnode *cluster.Snode) (Communicator, error) {
 	c, exists := reg.getByUUID(transformID)
 	if !exists {
-		return nil, cmn.NewNotFoundError("%s: ETL %q", lsnode, transformID)
+		return nil, cmn.NewErrNotFound("%s: ETL %q", lsnode, transformID)
 	}
 	return c, nil
 }
@@ -482,7 +482,7 @@ func (b *etlBootstraper) setTransformAffinity() error {
 	prefAffinity := b.pod.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution
 
 	if reqAffinity != nil && len(reqAffinity.NodeSelectorTerms) > 0 || len(prefAffinity) > 0 {
-		return cmn.NewETLError(b.errCtx, "error in YAML spec, pod should not have any NodeAffinities defined")
+		return cmn.NewErrETL(b.errCtx, "error in YAML spec, pod should not have any NodeAffinities defined")
 	}
 
 	nodeSelector := &corev1.NodeSelector{
@@ -518,7 +518,7 @@ func (b *etlBootstraper) setTransformAntiAffinity() error {
 	prefAntiAffinity := b.pod.Spec.Affinity.PodAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution
 
 	if len(reqAntiAffinities) > 0 || len(prefAntiAffinity) > 0 {
-		return cmn.NewETLError(b.errCtx, "error in YAML spec, pod should not have any NodeAntiAffinities defined")
+		return cmn.NewErrETL(b.errCtx, "error in YAML spec, pod should not have any NodeAntiAffinities defined")
 	}
 
 	// Don't create anti-affinity limitation, to be able to run multiple ETL pods on a single machine.
@@ -616,7 +616,7 @@ func (b *etlBootstraper) waitPodReady() error {
 		client, err = k8s.GetClient()
 	)
 	if err != nil {
-		return cmn.NewETLError(b.errCtx, "%v", err)
+		return cmn.NewErrETL(b.errCtx, "%v", err)
 	}
 
 	err = wait.PollImmediate(time.Second, time.Duration(b.msg.WaitTimeout), func() (ready bool, err error) {
@@ -625,10 +625,10 @@ func (b *etlBootstraper) waitPodReady() error {
 	})
 	if err != nil {
 		if condition == nil {
-			return cmn.NewETLError(b.errCtx, "%v", err)
+			return cmn.NewErrETL(b.errCtx, "%v", err)
 		}
 		conditionStr := fmt.Sprintf("%s, reason: %s, msg: %s", condition.Type, condition.Reason, condition.Message)
-		return cmn.NewETLError(b.errCtx, "%v (pod condition: %s; expected status Ready)",
+		return cmn.NewErrETL(b.errCtx, "%v (pod condition: %s; expected status Ready)",
 			err, conditionStr)
 	}
 	return nil
@@ -667,7 +667,7 @@ func checkPodReady(client k8s.Client, podName string) (ready bool, latestCond *c
 func (b *etlBootstraper) getPodHostIP() (string, error) {
 	client, err := k8s.GetClient()
 	if err != nil {
-		return "", cmn.NewETLError(b.errCtx, err.Error())
+		return "", cmn.NewErrETL(b.errCtx, err.Error())
 	}
 	p, err := client.Pod(b.pod.Name)
 	if err != nil {
@@ -679,7 +679,7 @@ func (b *etlBootstraper) getPodHostIP() (string, error) {
 func deleteEntity(errCtx *cmn.ETLErrorContext, entityType, entityName string) error {
 	client, err := k8s.GetClient()
 	if err != nil {
-		return cmn.NewETLError(errCtx, err.Error())
+		return cmn.NewErrETL(errCtx, err.Error())
 	}
 
 	// Remove entity immediately (ignoring not found).
@@ -687,7 +687,7 @@ func deleteEntity(errCtx *cmn.ETLErrorContext, entityType, entityName string) er
 		if k8sErrors.IsNotFound(err) {
 			return nil
 		}
-		return cmn.NewETLError(errCtx, err.Error())
+		return cmn.NewErrETL(errCtx, err.Error())
 	}
 
 	err = wait.PollImmediate(time.Second, time.Minute, func() (done bool, err error) {
@@ -698,7 +698,7 @@ func deleteEntity(errCtx *cmn.ETLErrorContext, entityType, entityName string) er
 		return !exists, nil
 	})
 	if err != nil {
-		return cmn.NewETLError(errCtx, err.Error())
+		return cmn.NewErrETL(errCtx, err.Error())
 	}
 	return nil
 }
@@ -718,7 +718,7 @@ func (b *etlBootstraper) createEntity(entity string) error {
 	}
 
 	if err != nil {
-		return cmn.NewETLError(b.errCtx, "failed to create %s (err: %v)", entity, err)
+		return cmn.NewErrETL(b.errCtx, "failed to create %s (err: %v)", entity, err)
 	}
 	return nil
 }
@@ -726,18 +726,18 @@ func (b *etlBootstraper) createEntity(entity string) error {
 func (b *etlBootstraper) getServiceNodePort() (uint, error) {
 	client, err := k8s.GetClient()
 	if err != nil {
-		return 0, cmn.NewETLError(b.errCtx, err.Error())
+		return 0, cmn.NewErrETL(b.errCtx, err.Error())
 	}
 
 	s, err := client.Service(b.svc.Name)
 	if err != nil {
-		return 0, cmn.NewETLError(b.errCtx, err.Error())
+		return 0, cmn.NewErrETL(b.errCtx, err.Error())
 	}
 
 	nodePort := int(s.Spec.Ports[0].NodePort)
 	port, err := cmn.ValidatePort(nodePort)
 	if err != nil {
-		return 0, cmn.NewETLError(b.errCtx, err.Error())
+		return 0, cmn.NewErrETL(b.errCtx, err.Error())
 	}
 	return uint(port), nil
 }

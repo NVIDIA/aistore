@@ -1046,7 +1046,7 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 	}
 	if checkExists || checkExistsAny {
 		if !exists {
-			err = cmn.NewNotFoundError("%s: object %s", t.si, lom.FullName())
+			err = cmn.NewErrNotFound("%s: object %s", t.si, lom.FullName())
 			invalidHandler(w, r, err, http.StatusNotFound)
 		}
 		return
@@ -1055,7 +1055,7 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 	// 1. add cmn.HdrObj* props
 	if lom.Bck().IsAIS() {
 		if !exists {
-			err = cmn.NewNotFoundError("%s: object %s", t.si, lom.FullName())
+			err = cmn.NewErrNotFound("%s: object %s", t.si, lom.FullName())
 			invalidHandler(w, r, err, http.StatusNotFound)
 			return
 		}
@@ -1577,7 +1577,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	finfo, err := os.Stat(srcFQN)
 	if err != nil {
 		if os.IsNotExist(err) {
-			err := cmn.NewNotFoundError("%s: file %q", t.si, srcFQN)
+			err := cmn.NewErrNotFound("%s: file %q", t.si, srcFQN)
 			t.writeErr(w, r, err, http.StatusNotFound)
 			return
 		}

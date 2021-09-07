@@ -133,7 +133,7 @@ func newMountpath(mpath, tid string) (mi *MountpathInfo, err error) {
 		return
 	}
 	if err = Access(cleanMpath); err != nil {
-		return nil, cmn.NewNotFoundError("t[%s]: mountpath %q", tid, mpath)
+		return nil, cmn.NewErrNotFound("t[%s]: mountpath %q", tid, mpath)
 	}
 	if fsInfo, err = makeFsInfo(cleanMpath); err != nil {
 		return
@@ -772,7 +772,7 @@ func enable(mpath, cleanMpath, tid string) (enabledMpath *MountpathInfo, err err
 	}
 	mi, ok := disabledPaths[cleanMpath]
 	if !ok {
-		err = cmn.NewNoMountpathError(mpath)
+		err = cmn.NewErrNoMountpath(mpath)
 		return
 	}
 	debug.Assert(cleanMpath == mi.Path)
@@ -878,7 +878,7 @@ func Disable(mpath string, cb ...func()) (disabledMpath *MountpathInfo, err erro
 	if _, ok := disabledPaths[cleanMpath]; ok {
 		return nil, nil
 	}
-	return nil, cmn.NewNoMountpathError(mpath)
+	return nil, cmn.NewErrNoMountpath(mpath)
 }
 
 // Mountpaths returns both available and disabled mountpaths.
@@ -1045,7 +1045,7 @@ func RefreshCapStatus(config *cmn.Config, mpcap MPCap) (cs CapStatus, err error)
 	cs.PctAvg /= int32(len(availablePaths))
 	cs.OOS = int64(cs.PctMax) > oos
 	if cs.OOS || int64(cs.PctMax) > high {
-		cs.Err = cmn.NewErrorCapacityExceeded(high, cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, cs.PctMax, cs.OOS)
+		cs.Err = cmn.NewErrCapacityExceeded(high, cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, cs.PctMax, cs.OOS)
 	}
 	// cached cap state
 	mfs.cmu.Lock()

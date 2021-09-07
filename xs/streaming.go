@@ -92,7 +92,7 @@ func (p *streamingF) newDM(prefix string, recv transport.ReceiveObj, sizePDU int
 
 // limited pre-run abort
 func (r *streamingX) TxnAbort() {
-	err := cmn.NewAbortedError(r.String())
+	err := cmn.NewErrAborted(r.Name(), "txn-abort", nil)
 	if r.p.dm.IsOpen() {
 		r.p.dm.Close(err)
 	}
@@ -136,7 +136,7 @@ func (r *streamingX) fin(err error) error {
 		if errDetailed := r.err.Load(); errDetailed != nil {
 			err = errDetailed.(error)
 		} else if r.Aborted() {
-			err = cmn.NewAbortedError(r.String())
+			err = cmn.NewErrAborted(r.Name(), "", nil)
 		}
 	}
 	r.p.dm.Close(err)

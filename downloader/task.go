@@ -128,7 +128,7 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 	defer cos.Close(resp.Body)
 
 	if resp.StatusCode >= http.StatusBadRequest {
-		return false, cmn.NewHTTPErr(req, "", resp.StatusCode)
+		return false, cmn.NewErrHTTP(req, "", resp.StatusCode)
 	}
 
 	var (

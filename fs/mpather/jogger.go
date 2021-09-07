@@ -345,7 +345,7 @@ func (j *jogger) checkStopped() error {
 	case <-j.ctx.Done(): // Some other worker has exited with error and canceled context.
 		return j.ctx.Err()
 	case <-j.stopCh.Listen(): // Worker has been aborted.
-		return cmn.NewAbortedError(j.String())
+		return cmn.NewErrAborted(j.String(), "mpath-jog", nil)
 	default:
 		return nil
 	}

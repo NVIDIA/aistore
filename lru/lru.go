@@ -521,9 +521,9 @@ func (j *lruJ) yieldTerm() error {
 	xlru := j.ini.Xaction
 	select {
 	case <-xlru.ChanAbort():
-		return cmn.NewAbortedError(xlru.String())
+		return cmn.NewErrAborted(xlru.Name(), "", nil)
 	case <-j.stopCh:
-		return cmn.NewAbortedError(xlru.String())
+		return cmn.NewErrAborted(xlru.Name(), "", nil)
 	default:
 		if j.throttle {
 			time.Sleep(cmn.ThrottleMin)
@@ -531,7 +531,7 @@ func (j *lruJ) yieldTerm() error {
 		break
 	}
 	if xlru.Finished() {
-		return cmn.NewAbortedError(xlru.String())
+		return cmn.NewErrAborted(xlru.Name(), "", nil)
 	}
 	return nil
 }

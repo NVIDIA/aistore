@@ -5,7 +5,6 @@
 package reb
 
 import (
-	"fmt"
 	"io"
 	"path/filepath"
 	"runtime"
@@ -263,14 +262,14 @@ func (reb *Manager) rebInit(md *rebArgs, notif *xaction.NotifXact) bool {
 // when at least one bucket has EC enabled
 func (reb *Manager) runEC(md *rebArgs) error {
 	_ = reb.bcast(md, reb.rxReady) // NOTE: ignore timeout
-	if reb.xact().Aborted() {
-		return cmn.NewAbortedError(fmt.Sprintf("%s: aborted", reb.logHdr(md)))
+	if xreb := reb.xact(); xreb.Aborted() {
+		return cmn.NewErrAborted(xreb.Name(), "reb-run-ec", nil)
 	}
 
 	reb.runECjoggers()
 
-	if reb.xact().Aborted() {
-		return cmn.NewAbortedError(fmt.Sprintf("%s: aborted", reb.logHdr(md)))
+	if xreb := reb.xact(); xreb.Aborted() {
+		return cmn.NewErrAborted(xreb.Name(), "reb-run-ec", nil)
 	}
 	glog.Infof("[%s] RebalanceEC done", reb.t.SID())
 	return nil
@@ -283,8 +282,8 @@ func (reb *Manager) runNoEC(md *rebArgs) error {
 		multiplier = md.config.Rebalance.Multiplier
 	)
 	_ = reb.bcast(md, reb.rxReady) // NOTE: ignore timeout
-	if reb.xact().Aborted() {
-		return cmn.NewAbortedError(fmt.Sprintf("%s: aborted", reb.logHdr(md)))
+	if xreb := reb.xact(); xreb.Aborted() {
+		return cmn.NewErrAborted(xreb.Name(), "reb-run", nil)
 	}
 
 	wg := &sync.WaitGroup{}
@@ -302,8 +301,8 @@ func (reb *Manager) runNoEC(md *rebArgs) error {
 	}
 	wg.Wait()
 
-	if reb.xact().Aborted() {
-		return cmn.NewAbortedError(fmt.Sprintf("%s: aborted", reb.logHdr(md)))
+	if xreb := reb.xact(); xreb.Aborted() {
+		return cmn.NewErrAborted(xreb.Name(), "reb-run", nil)
 	}
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("finished rebalance walk (g%d)", md.id)
@@ -479,8 +478,8 @@ func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, arg 
 }
 
 func (rj *rebJogger) walk(fqn string, de fs.DirEntry) (err error) {
-	if rj.xreb.Aborted() || rj.xreb.Finished() {
-		return cmn.NewAbortedError("traversal", rj.xreb.String())
+	if rj.xreb.Aborted() {
+		return cmn.NewErrAborted(rj.xreb.Name(), "jog", nil)
 	}
 	if de.IsDir() {
 		return nil

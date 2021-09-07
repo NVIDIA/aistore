@@ -170,7 +170,7 @@ func (r *XactGet) dispatchRequest(req *request, lom *cluster.LOM) error {
 }
 
 func (r *XactGet) Run(*sync.WaitGroup) {
-	glog.Infoln(r.String())
+	glog.Infoln(r.Name())
 
 	for _, jog := range r.getJoggers {
 		go jog.run()

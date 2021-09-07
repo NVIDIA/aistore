@@ -115,13 +115,18 @@ func (xact *XactBase) Quiesce(d time.Duration, cb cluster.QuiCB) cluster.QuiRes 
 	return cluster.Quiescent
 }
 
-func (xact *XactBase) String() string {
+func (xact *XactBase) Name() string {
 	var b string
 	if xact.bck != nil {
 		b = "-" + xact.bck.String()
 	}
+	return fmt.Sprintf("%s[%s]%s", xact.Kind(), xact.ID(), b)
+}
+
+func (xact *XactBase) String() string {
+	name := xact.Name()
 	stime := cos.FormatTimestamp(xact.StartTime())
-	s := fmt.Sprintf("%s[%s]%s-%s", xact.Kind(), xact.ID(), b, stime)
+	s := fmt.Sprintf("%s-%s", name, stime)
 	if !xact.Finished() {
 		return s
 	}

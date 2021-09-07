@@ -103,7 +103,7 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 	select {
 	case <-r.ChanAbort():
 		jg.Stop()
-		err = cmn.NewAbortedError(r.String())
+		err = cmn.NewErrAborted(r.Name(), "", nil)
 	case <-jg.ListenFinished():
 		err = jg.Stop()
 	}

@@ -49,6 +49,10 @@ type (
 	}
 )
 
+func newErrCreateHTTPRequest(err error) error {
+	return fmt.Errorf("failed to create new HTTP request, err: %v", err)
+}
+
 // HTTPStatus returns HTTP status or (-1) for non-HTTP error.
 func HTTPStatus(err error) int {
 	if err == nil {
@@ -205,7 +209,7 @@ func checkResp(reqParams ReqParams, resp *http.Response) error {
 	}
 	if reqParams.BaseParams.Method == http.MethodHead {
 		if msg := resp.Header.Get(cmn.HdrError); msg != "" {
-			httpErr := cmn.NewHTTPErr(nil, msg, resp.StatusCode)
+			httpErr := cmn.NewErrHTTP(nil, msg, resp.StatusCode)
 			httpErr.Method, httpErr.URLPath = reqParams.BaseParams.Method, reqParams.Path
 			return httpErr
 		}
@@ -226,7 +230,7 @@ func checkResp(reqParams ReqParams, resp *http.Response) error {
 	}
 	// HEAD request does not return the body - create http error
 	// 503 is also to be preserved
-	httpErr = cmn.NewHTTPErr(nil, strMsg, resp.StatusCode)
+	httpErr = cmn.NewErrHTTP(nil, strMsg, resp.StatusCode)
 	httpErr.Method, httpErr.URLPath = reqParams.BaseParams.Method, reqParams.Path
 	return httpErr
 }

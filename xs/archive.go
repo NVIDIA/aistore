@@ -193,7 +193,7 @@ func (r *XactCreateArchMultiObj) Do(msg *cmn.ArchiveMsg) {
 
 func (r *XactCreateArchMultiObj) Run(wg *sync.WaitGroup) {
 	var err error
-	glog.Infoln(r.String())
+	glog.Infoln(r.Name())
 	wg.Done()
 	for {
 		select {
@@ -309,7 +309,7 @@ func (r *XactCreateArchMultiObj) recv(hdr transport.ObjHdr, objReader io.Reader,
 
 func (r *XactCreateArchMultiObj) finalize(wi *archwi) {
 	if q := wi.quiesce(); q == cluster.QuiAborted {
-		r.raiseErr(cmn.NewAbortedError(r.String()), 0, wi.msg.ContinueOnError)
+		r.raiseErr(cmn.NewErrAborted(r.Name(), "", nil), 0, wi.msg.ContinueOnError)
 	} else if q == cluster.QuiTimeout {
 		r.raiseErr(fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout), 0, wi.msg.ContinueOnError)
 	}

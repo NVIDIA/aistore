@@ -185,7 +185,7 @@ func (r *ObjectsListingXact) startFromBck() {
 			return nil
 		}
 		if r.putResult(&Result{entry: entry, err: err}) {
-			return cmn.NewAbortedError(r.t.Snode().DaemonID + " ResultSetXact")
+			return cmn.NewErrAborted(r.t.Snode().String()+" ResultSetXact", "query", err)
 		}
 		return nil
 	}

@@ -105,15 +105,14 @@ func (w *worker) work() error {
 			} else {
 				cluster.FreeLOM(lom)
 			}
-		case <-w.stopCh.Listen(): // Worker has been aborted.
+		case <-w.stopCh.Listen(): // ABORT
 			close(w.workCh)
 
-			// Make sure there is nothing in the `workCh` once we aborted.
-			// In case there is, this means that workers were not aborted correctly.
+			// `workCh` must be empty (if it is not, workers were not aborted correctly!)
 			_, ok := <-w.workCh
-			cos.Assert(!ok)
+			debug.Assert(!ok)
 
-			return cmn.NewAbortedError(w.String())
+			return cmn.NewErrAborted(w.String(), "mpath-work", nil)
 		}
 	}
 }

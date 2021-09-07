@@ -32,7 +32,7 @@ func (r *XactBckJog) Wait() error {
 		select {
 		case <-r.ChanAbort():
 			r.joggers.Stop()
-			return cmn.NewAbortedError(r.String())
+			return cmn.NewErrAborted(r.Name(), "x-bck-jog", nil)
 		case <-r.joggers.ListenFinished():
 			return r.joggers.Stop()
 		}

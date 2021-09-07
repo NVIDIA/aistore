@@ -201,7 +201,7 @@ func (*defaultClient) Health(podName string) (cpuCores float64, freeMem int64, e
 	ms, err := mc.MetricsV1beta1().PodMetricses(metav1.NamespaceDefault).Get(context.Background(), podName, metav1.GetOptions{})
 	if err != nil {
 		if statusErr, ok := err.(*errors.StatusError); ok && statusErr.Status().Reason == metav1.StatusReasonNotFound {
-			err = cmn.NewNotFoundError("metrics for pod %q", podName)
+			err = cmn.NewErrNotFound("metrics for pod %q", podName)
 		}
 		return 0, 0, err
 	}

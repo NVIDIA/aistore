@@ -145,7 +145,7 @@ func (r *XactPut) dispatchRequest(req *request, lom *cluster.LOM) error {
 }
 
 func (r *XactPut) Run(*sync.WaitGroup) {
-	glog.Infoln(r.String())
+	glog.Infoln(r.Name())
 
 	var wg sync.WaitGroup
 	for _, jog := range r.putJoggers {

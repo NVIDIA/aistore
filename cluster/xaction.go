@@ -35,7 +35,6 @@ type (
 		EndTime() time.Time
 		ObjCount() int64
 		BytesCount() int64
-		String() string
 		Finished() bool
 		Aborted() bool
 		AbortedAfter(time.Duration) bool
@@ -43,6 +42,10 @@ type (
 		ChanAbort() <-chan struct{}
 		Result() (interface{}, error)
 		Stats() XactStats
+
+		// reporting: log, err
+		String() string
+		Name() string
 
 		// modifiers
 		Finish(err error)

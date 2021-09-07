@@ -76,6 +76,10 @@ func (r *xactMNC) String() string {
 	return fmt.Sprintf("%s tag=%s, copies=%d", r.XactBase.String(), r.tag, r.copies)
 }
 
+func (r *xactMNC) Name() string {
+	return fmt.Sprintf("%s tag=%s, copies=%d", r.XactBase.Name(), r.tag, r.copies)
+}
+
 func newXactMNC(bck *cluster.Bck, p *mncFactory, slab *memsys.Slab) (r *xactMNC) {
 	r = &xactMNC{tag: p.args.Tag, copies: p.args.Copies}
 	debug.Assert(r.tag != "" && r.copies > 0)
@@ -99,7 +103,7 @@ func (r *xactMNC) Run(wg *sync.WaitGroup) {
 		return
 	}
 	r.XactBckJog.Run()
-	glog.Infoln(r.String())
+	glog.Infoln(r.Name())
 	err := r.XactBckJog.Wait()
 	r.Finish(err)
 }
@@ -118,8 +122,7 @@ func (r *xactMNC) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 		return nil
 	}
 	if err != nil && cos.IsErrOOS(err) {
-		what := fmt.Sprintf("%s(%q)", r.Kind(), r.ID())
-		return cmn.NewAbortedError(what, err.Error())
+		return cmn.NewErrAborted(r.Name(), "visit-obj", err)
 	}
 
 	r.ObjectsInc()
@@ -127,8 +130,7 @@ func (r *xactMNC) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 
 	if r.ObjCount()%100 == 0 {
 		if cs := fs.GetCapStatus(); cs.Err != nil {
-			what := fmt.Sprintf("%s(%q)", r.Kind(), r.ID())
-			return cmn.NewAbortedError(what, cs.Err.Error())
+			return cmn.NewErrAborted(r.Name(), "visit-obj", cs.Err)
 		}
 	}
 	return nil

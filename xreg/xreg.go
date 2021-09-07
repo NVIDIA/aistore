@@ -284,7 +284,7 @@ func (r *registry) getStats(flt XactFilter) ([]cluster.XactStats, error) {
 	if flt.Bck != nil || flt.Kind != "" {
 		// Error checks
 		if flt.Kind != "" && !xaction.IsValidKind(flt.Kind) {
-			return nil, cmn.NewXactionNotFoundError(flt.Kind)
+			return nil, cmn.NewErrXactNotFoundError(flt.Kind)
 		}
 		if flt.Bck != nil && !flt.Bck.HasProvider() {
 			return nil, fmt.Errorf("xaction %q: unknown provider for bucket %s", flt.Kind, flt.Bck.Name)
@@ -365,7 +365,7 @@ func (r *registry) matchXactsStatsByID(xactID string) ([]cluster.XactStats, erro
 		return xact.ID() == xactID
 	})
 	if len(matchedStat) == 0 {
-		return nil, cmn.NewXactionNotFoundError("ID=" + xactID)
+		return nil, cmn.NewErrXactNotFoundError("ID=" + xactID)
 	}
 	return matchedStat, nil
 }

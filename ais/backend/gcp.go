@@ -445,5 +445,5 @@ func handleObjectError(ctx context.Context, gcpClient *storage.Client, objErr er
 	if _, err := gcpClient.Bucket(bck.Name).Attrs(ctx); err != nil {
 		return gcpErrorToAISError(err, bck)
 	}
-	return http.StatusNotFound, cmn.NewNotFoundError(objErr.Error())
+	return http.StatusNotFound, cmn.NewErrNotFound(objErr.Error())
 }

@@ -80,7 +80,7 @@ func NewRespondXact(t cluster.Target, bck cmn.Bck, mgr *Manager) *XactRespond {
 }
 
 func (r *XactRespond) Run(*sync.WaitGroup) {
-	glog.Infoln(r.String())
+	glog.Infoln(r.Name())
 
 	var (
 		cfg    = cmn.GCO.Get()

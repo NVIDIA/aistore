@@ -74,7 +74,7 @@ func newXactLLC(t cluster.Target, uuid string, bck *cluster.Bck) (r *xactLLC) {
 
 func (r *xactLLC) Run(*sync.WaitGroup) {
 	r.XactBckJog.Run()
-	glog.Infoln(r.String())
+	glog.Infoln(r.Name())
 	err := r.XactBckJog.Wait()
 	r.Finish(err)
 }

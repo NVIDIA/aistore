@@ -23,7 +23,7 @@ import (
 )
 
 // Dispatcher serves as middle layer between receiving download requests
-// and serving them to joggers which actually download objects from a remote bucket.
+// and serving them to joggers which actually download objects from a remote location.
 
 type (
 	dispatcher struct {
@@ -109,7 +109,7 @@ Loop:
 				group.Go(func() error {
 					defer sema.Release()
 					if !d.dispatchDownload(job) {
-						return cmn.NewAbortedError("dispatcher")
+						return cmn.NewErrAborted(job.String(), "download", nil)
 					}
 					return nil
 				})
@@ -154,10 +154,7 @@ func (d *dispatcher) cleanupJob(jobID string) {
 	d.mtx.Unlock()
 }
 
-/*
- * dispatcher's dispatch methods (forwards request to jogger)
- */
-
+// forward request to designated jogger
 func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 	defer func() {
 		debug.Infof("[downloader] Finished dispatching job %q, now waiting for it to finish and cleanup", job.ID())
@@ -191,7 +188,7 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 					CTs: []string{fs.ObjectType},
 					Callback: func(fqn string, de fs.DirEntry) error {
 						if diffResolver.Stopped() {
-							return cmn.NewAbortedError("stopped")
+							return cmn.NewErrAborted(job.String(), "diff-resolver stopped", nil)
 						}
 						lom := &cluster.LOM{FQN: fqn}
 						if err := lom.Init(job.Bck()); err != nil {
@@ -232,7 +229,7 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 
 			for _, obj := range objs {
 				if d.checkAborted() {
-					err := cmn.NewAbortedError("dispatcher")
+					err := cmn.NewErrAborted(job.String(), "", nil)
 					diffResolver.Abort(err)
 					return
 				} else if d.checkAbortedJob(job) {
@@ -319,8 +316,8 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 
 			ok, err := d.blockingDispatchDownloadSingle(t)
 			if err != nil {
-				glog.Errorf("Download job %q failed, couldn't download object %q, aborting; err: %s", job.ID(), obj.objName, err.Error())
-				dlStore.setAborted(job.ID())
+				glog.Errorf("%s failed to download %s: %v", job, obj.objName, err)
+				dlStore.setAborted(job.ID()) // TODO -- FIXME: pass (report, handle) error, here and elsewhere
 				return ok
 			}
 			if !ok {
@@ -395,8 +392,7 @@ func (d *dispatcher) blockingDispatchDownloadSingle(task *singleObjectTask) (ok 
 
 	// Secondly, try to push the new task into queue.
 	select {
-	// FIXME: if this particular jogger is full, but others are available, dispatcher
-	//  will wait with dispatching all of the requests anyway
+	// TODO -- FIXME: currently, dispatcher halts if any given jogger is "full" but others available
 	case jogger.putCh(task) <- task:
 		return true, nil
 	case <-d.jobAbortedCh(task.job.ID()).Listen():

@@ -338,7 +338,7 @@ func WalkBck(opts *WalkBckOptions) error {
 func (wcb *walkCb) walkBckMpath(fqn string, de DirEntry) error {
 	select {
 	case <-wcb.ctx.Done():
-		return cmn.NewAbortedError("mpath: " + wcb.mpath.Path)
+		return cmn.NewErrAborted(wcb.mpath.String(), "walk-bck-mpath", nil)
 	default:
 		break
 	}
@@ -358,7 +358,7 @@ func (wcb *walkCb) walkBckMpath(fqn string, de DirEntry) error {
 
 	select {
 	case <-wcb.ctx.Done():
-		return cmn.NewAbortedError("mpath: " + wcb.mpath.Path)
+		return cmn.NewErrAborted(wcb.mpath.String(), "walk-bck-mpath", nil)
 	case wcb.workCh <- &walkEntry{fqn, de}:
 		return nil
 	}

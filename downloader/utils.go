@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 
@@ -20,6 +21,31 @@ import (
 )
 
 var errInvalidTarget = errors.New("invalid target")
+
+func countObjects(t cluster.Target, pt cos.ParsedTemplate, dir string, bck *cluster.Bck) (cnt int, err error) {
+	var (
+		smap = t.Sowner().Get()
+		sid  = t.SID()
+		iter = pt.Iter()
+		si   *cluster.Snode
+	)
+
+	for link, ok := iter(); ok; link, ok = iter() {
+		name := path.Join(dir, path.Base(link))
+		name, err = NormalizeObjName(name)
+		if err != nil {
+			return
+		}
+		si, err = cluster.HrwTarget(bck.MakeUname(name), smap)
+		if err != nil {
+			return
+		}
+		if si.ID() == sid {
+			cnt++
+		}
+	}
+	return cnt, nil
+}
 
 // buildDlObjs returns list of objects that must be downloaded by target.
 func buildDlObjs(t cluster.Target, bck *cluster.Bck, objects cos.SimpleKVs) ([]dlObj, error) {

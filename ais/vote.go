@@ -168,7 +168,7 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord) {
 		return
 	}
 	xele := rns.Entry.Get()
-	glog.Infoln(xele.String())
+	glog.Infoln(xele.Name())
 	p.doProxyElection(vr)
 	xele.Finish(nil)
 }

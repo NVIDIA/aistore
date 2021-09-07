@@ -69,16 +69,13 @@ type (
 	NotifListenerBase struct {
 		sync.RWMutex
 		Common struct {
-			UUID   string
-			Action string // async operation kind (see cmn/api_const.go)
-
-			// ownership
+			UUID        string
+			Action      string // async operation kind (see cmn/api_const.go)
 			Owned       string // "": not owned | equalIC: IC | otherwise, pid + IC
 			SmapVersion int64  // smap version in which NL is added
-
-			Bck []cmn.Bck
+			Bck         []cmn.Bck
 		}
-
+		// construction
 		Srcs              cluster.NodeMap  // expected Notifiers
 		ActiveSrcs        cluster.NodeMap  // Notifiers still running
 		F                 NotifCallback    `json:"-"` // optional listening-side callback
@@ -86,7 +83,7 @@ type (
 		lastUpdated       map[string]int64 // [daeID => last update time(nanoseconds)]
 		ProgressIntervalX time.Duration    // time interval to monitor the progress
 		addedTime         atomic.Int64     // Time when `nl` is added
-
+		// runtime
 		ErrMsg   string        // ErrMsg
 		FinTime  atomic.Int64  // timestamp when finished
 		AbortedX atomic.Bool   // sets if the xaction is Aborted
@@ -94,19 +91,22 @@ type (
 	}
 
 	NotifStatus struct {
-		UUID     string `json:"uuid"` // UUID of the xaction
-		ErrMsg   string `json:"err"`
-		FinTime  int64  `json:"end_time"` // time when xaction ended
-		AbortedX bool   `json:"aborted"`
+		UUID     string `json:"uuid"`     // UUID of the xaction
+		ErrMsg   string `json:"err"`      // error
+		FinTime  int64  `json:"end_time"` // time xaction ended
+		AbortedX bool   `json:"aborted"`  // true if aborted
 	}
 )
 
-func NewNLB(uuid string, action string, smap *cluster.Smap, srcs cluster.NodeMap, progressInterval time.Duration,
-	bck ...cmn.Bck) *NotifListenerBase {
+///////////////////////
+// notifListenerBase //
+///////////////////////
+
+func NewNLB(uuid, action string, smap *cluster.Smap, srcs cluster.NodeMap, progress time.Duration, bck ...cmn.Bck) *NotifListenerBase {
 	nlb := &NotifListenerBase{
 		Srcs:              srcs,
 		Stats:             NewNodeStats(len(srcs)),
-		ProgressIntervalX: progressInterval,
+		ProgressIntervalX: progress,
 		lastUpdated:       make(map[string]int64, len(srcs)),
 	}
 	nlb.Common.UUID = uuid
@@ -116,10 +116,6 @@ func NewNLB(uuid string, action string, smap *cluster.Smap, srcs cluster.NodeMap
 	nlb.ActiveSrcs = srcs.ActiveMap()
 	return nlb
 }
-
-///////////////////////
-// notifListenerBase //
-///////////////////////
 
 func (nlb *NotifListenerBase) Notifiers() cluster.NodeMap       { return nlb.Srcs }
 func (nlb *NotifListenerBase) ActiveNotifiers() cluster.NodeMap { return nlb.ActiveSrcs }
@@ -227,7 +223,6 @@ func (nlb *NotifListenerBase) Status() *NotifStatus {
 	return &NotifStatus{UUID: nlb.UUID(), FinTime: nlb.FinTime.Load(), AbortedX: nlb.Aborted()}
 }
 
-// NOTE: Results in non-critical DATA RACE when used outside `nlb.Lock()`
 func (nlb *NotifListenerBase) String() string {
 	var (
 		tm, res  string
@@ -236,7 +231,7 @@ func (nlb *NotifListenerBase) String() string {
 	)
 	if tfin := nlb.FinTime.Load(); tfin > 0 {
 		if l := nlb.ErrCount.Load(); l > 0 {
-			res = "-" + nlb.ErrMsg
+			res = "-" + nlb.ErrMsg // NOTE: race when used outside `nlb.Lock()` - benign, can ignore
 		} else {
 			res = "-done"
 		}

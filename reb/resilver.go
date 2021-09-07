@@ -47,7 +47,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xa
 		xact.AddNotif(notifs[0])
 	}
 
-	glog.Infoln(xact.String())
+	glog.Infoln(xact.Name())
 
 	slab, err := reb.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
 	debug.AssertNoErr(err)

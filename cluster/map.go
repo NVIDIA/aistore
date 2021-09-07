@@ -365,7 +365,7 @@ func (m *Smap) IsPrimary(si *Snode) bool {
 func (m *Smap) NewTmap(tids []string) (tmap NodeMap, err error) {
 	for _, tid := range tids {
 		if m.GetTarget(tid) == nil {
-			return nil, cmn.NewNotFoundError("new-tmap: t[%s]", tid)
+			return nil, cmn.NewErrNotFound("new-tmap: t[%s]", tid)
 		}
 	}
 	tmap = make(NodeMap, len(tids))
@@ -390,7 +390,7 @@ func (m *Smap) GetRandTarget() (tsi *Snode, err error) {
 		}
 		return tsi, nil
 	}
-	err = cmn.NewNoNodesError(cmn.Target)
+	err = cmn.NewErrNoNodes(cmn.Target)
 	return
 }
 

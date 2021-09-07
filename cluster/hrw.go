@@ -39,7 +39,7 @@ func HrwTarget(uname string, smap *Smap, inMaintenance ...bool) (si *Snode, err 
 		}
 	}
 	if si == nil {
-		err = cmn.NewNoNodesError(cmn.Target)
+		err = cmn.NewErrNoNodes(cmn.Target)
 	}
 	return
 }
@@ -128,7 +128,7 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, err error) {
 		}
 	}
 	if pi == nil {
-		err = cmn.NewNoNodesError(cmn.Proxy)
+		err = cmn.NewErrNoNodes(cmn.Proxy)
 	}
 	return
 }
@@ -173,7 +173,7 @@ func HrwTargetTask(uuid string, smap *Smap) (si *Snode, err error) {
 		}
 	}
 	if si == nil {
-		err = cmn.NewNoNodesError(cmn.Target)
+		err = cmn.NewErrNoNodes(cmn.Target)
 	}
 	return
 }

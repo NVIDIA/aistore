@@ -100,7 +100,7 @@ func (r *XactTCObjs) Do(msg *cmn.TCObjsMsg) {
 
 func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 	var err error
-	glog.Infoln(r.String())
+	glog.Infoln(r.Name())
 	wg.Done()
 	for {
 		select {

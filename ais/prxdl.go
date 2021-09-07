@@ -62,7 +62,7 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 	respCnt := len(results)
 
 	if respCnt == 0 {
-		return nil, http.StatusBadRequest, cmn.NewNoNodesError(cmn.Target)
+		return nil, http.StatusBadRequest, cmn.NewErrNoNodes(cmn.Target)
 	}
 	validResponses := make([]*callResult, 0, respCnt) // TODO: avoid allocation
 	for _, res := range results {

@@ -135,7 +135,7 @@ func (t *targetrunner) doETL(w http.ResponseWriter, r *http.Request, uuid string
 		return
 	}
 	if err := comm.OnlineTransform(w, r, bck, objName); err != nil {
-		t.writeErr(w, r, cmn.NewETLError(&cmn.ETLErrorContext{
+		t.writeErr(w, r, cmn.NewErrETL(&cmn.ETLErrorContext{
 			UUID:    uuid,
 			PodName: comm.PodName(),
 			SvcName: comm.SvcName(),

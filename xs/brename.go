@@ -79,7 +79,13 @@ func newBckRename(uuid, kind string, bck *cluster.Bck, t cluster.Target, bckFrom
 	return
 }
 
-func (r *bckRename) String() string { return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.bckFrom) }
+func (r *bckRename) String() string {
+	return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.bckFrom)
+}
+
+func (r *bckRename) Name() string {
+	return fmt.Sprintf("%s <= %s", r.XactBase.Name(), r.bckFrom)
+}
 
 // NOTE: assuming that rebalance takes longer than resilvering
 func (r *bckRename) Run(wg *sync.WaitGroup) {
@@ -88,7 +94,7 @@ func (r *bckRename) Run(wg *sync.WaitGroup) {
 		finished    bool
 		flt         = xreg.XactFilter{ID: r.rebID, Kind: cmn.ActRebalance, OnlyRunning: &onlyRunning}
 	)
-	glog.Infoln(r.String())
+	glog.Infoln(r.Name())
 	wg.Done()
 	for !finished {
 		time.Sleep(10 * time.Second)

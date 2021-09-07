@@ -276,7 +276,7 @@ func getDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, off
 		return 0, err
 	}
 	if validate && hdrCksumValue != cksumValue {
-		return 0, cmn.NewInvalidCksumError(hdrCksumValue, cksumValue)
+		return 0, cmn.NewErrInvalidCksum(hdrCksumValue, cksumValue)
 	}
 	return n, err
 }
@@ -312,7 +312,7 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool
 		return 0, httpLatencies{}, err
 	}
 	if validate && hdrCksumValue != cksumValue {
-		err = cmn.NewInvalidCksumError(hdrCksumValue, cksumValue)
+		err = cmn.NewErrInvalidCksum(hdrCksumValue, cksumValue)
 	}
 
 	latencies := httpLatencies{

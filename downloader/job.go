@@ -6,6 +6,7 @@ package downloader
 
 import (
 	"errors"
+	"fmt"
 	"path"
 	"strings"
 	"time"
@@ -43,6 +44,7 @@ type (
 		Description() string
 		Timeout() time.Duration
 		ActiveStats() (*DlStatusResp, error)
+		String() string
 
 		Notif() cluster.Notif // notifications
 		AddNotif(n cluster.Notif, job DlJob)
@@ -82,12 +84,10 @@ type (
 		objs    []dlObj
 		current int
 	}
-
-	singleDlJob struct {
+	multiDlJob struct {
 		*sliceDlJob
 	}
-
-	multiDlJob struct {
+	singleDlJob struct {
 		*sliceDlJob
 	}
 
@@ -130,13 +130,42 @@ type (
 	}
 )
 
+///////////////
+// baseDlJob //
+///////////////
+
+func newBaseDlJob(t cluster.Target, id string, bck *cluster.Bck, timeout, desc string, limits DlLimits, dlXact *Downloader) *baseDlJob {
+	// TODO: this might be inaccurate if we download 1 or 2 objects because then
+	//  other targets will have limits but will not use them.
+	if limits.BytesPerHour > 0 {
+		limits.BytesPerHour /= t.Sowner().Get().CountActiveTargets()
+	}
+
+	td, _ := time.ParseDuration(timeout)
+	return &baseDlJob{
+		id:          id,
+		bck:         bck,
+		timeout:     td,
+		description: desc,
+		t:           newThrottler(limits),
+		dlXact:      dlXact,
+	}
+}
+
 func (j *baseDlJob) ID() string             { return j.id }
 func (j *baseDlJob) Bck() cmn.Bck           { return j.bck.Bck }
 func (j *baseDlJob) Timeout() time.Duration { return j.timeout }
 func (j *baseDlJob) Description() string    { return j.description }
 func (*baseDlJob) Sync() bool               { return false }
 
-// Notifications
+func (j *baseDlJob) String() (s string) {
+	s = fmt.Sprintf("dl-job[%s]-%s", j.ID(), j.Bck())
+	if j.Description() == "" {
+		return
+	}
+	return s + "-" + j.Description()
+}
+
 func (j *baseDlJob) Notif() cluster.Notif { return j.notif }
 
 func (j *baseDlJob) AddNotif(n cluster.Notif, job DlJob) {
@@ -169,30 +198,27 @@ func (j *baseDlJob) cleanup() {
 	nl.OnFinished(j.Notif(), nil)
 }
 
-func newBaseDlJob(t cluster.Target, id string, bck *cluster.Bck, timeout, desc string, limits DlLimits, dlXact *Downloader) *baseDlJob {
-	// TODO: this might be inaccurate if we download 1 or 2 objects because then
-	//  other targets will have limits but will not use them.
-	if limits.BytesPerHour > 0 {
-		limits.BytesPerHour /= t.Sowner().Get().CountActiveTargets()
-	}
+////////////////
+// sliceDlJob -- multiDlJob -- singleDlJob //
+////////////////
 
-	td, _ := time.ParseDuration(timeout)
-	return &baseDlJob{
-		id:          id,
-		bck:         bck,
-		timeout:     td,
-		description: desc,
-		t:           newThrottler(limits),
-		dlXact:      dlXact,
+func newSliceDlJob(t cluster.Target, bck *cluster.Bck, base *baseDlJob, objects cos.SimpleKVs) (*sliceDlJob, error) {
+	objs, err := buildDlObjs(t, bck, objects)
+	if err != nil {
+		return nil, err
 	}
+	return &sliceDlJob{
+		baseDlJob: *base,
+		objs:      objs,
+	}, nil
 }
 
 func (j *sliceDlJob) Len() int { return len(j.objs) }
+
 func (j *sliceDlJob) genNext() (objs []dlObj, ok bool, err error) {
 	if j.current == len(j.objs) {
 		return nil, false, nil
 	}
-
 	if j.current+downloadBatchSize >= len(j.objs) {
 		objs = j.objs[j.current:]
 		j.current = len(j.objs)
@@ -220,6 +246,10 @@ func newMultiDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlMul
 	return &multiDlJob{sliceDlJob}, nil
 }
 
+func (j *multiDlJob) String() (s string) {
+	return "multi-" + j.baseDlJob.String()
+}
+
 func newSingleDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlSingleBody, dlXact *Downloader) (*singleDlJob, error) {
 	var (
 		objs cos.SimpleKVs
@@ -236,19 +266,110 @@ func newSingleDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlSi
 	return &singleDlJob{sliceDlJob}, nil
 }
 
-func newSliceDlJob(t cluster.Target, bck *cluster.Bck, base *baseDlJob, objects cos.SimpleKVs) (*sliceDlJob, error) {
-	objs, err := buildDlObjs(t, bck, objects)
+func (j *singleDlJob) String() (s string) {
+	return "single-" + j.baseDlJob.String()
+}
+
+////////////////
+// rangeDlJob //
+////////////////
+
+func newRangeDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlRangeBody, dlXact *Downloader) (*rangeDlJob, error) {
+	var (
+		pt  cos.ParsedTemplate
+		err error
+	)
+	// NOTE: Size of objects to be downloaded by a target will be unknown.
+	//  So proxy won't be able to sum sizes from all targets when calculating total size.
+	//  This should be taken care of somehow, as total is easy to know from range template anyway.
+	if pt, err = cos.ParseBashTemplate(payload.Template); err != nil {
+		return nil, err
+	}
+
+	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, dlXact)
+	cnt, err := countObjects(t, pt, payload.Subdir, base.bck)
 	if err != nil {
 		return nil, err
 	}
-	return &sliceDlJob{
+	job := &rangeDlJob{
 		baseDlJob: *base,
-		objs:      objs,
-	}, nil
+		t:         t,
+		iter:      pt.Iter(),
+		dir:       payload.Subdir,
+		count:     cnt,
+	}
+	return job, nil
+}
+
+func (j *rangeDlJob) SrcBck() cmn.Bck { return j.bck.Bck }
+func (j *rangeDlJob) Len() int        { return j.count }
+
+func (j *rangeDlJob) genNext() ([]dlObj, bool, error) {
+	if j.done {
+		return nil, false, nil
+	}
+	if err := j.getNextObjs(); err != nil {
+		return nil, false, err
+	}
+	return j.objs, true, nil
+}
+
+func (j *rangeDlJob) String() (s string) {
+	return fmt.Sprintf("range-%s-%d-%s", &j.baseDlJob, j.count, j.dir)
+}
+
+func (j *rangeDlJob) getNextObjs() error {
+	var (
+		smap = j.t.Sowner().Get()
+		sid  = j.t.SID()
+	)
+	j.objs = j.objs[:0]
+	for len(j.objs) < downloadBatchSize {
+		link, ok := j.iter()
+		if !ok {
+			j.done = true
+			break
+		}
+		name := path.Join(j.dir, path.Base(link))
+		obj, err := makeDlObj(smap, sid, j.bck, name, link)
+		if err != nil {
+			if err == errInvalidTarget {
+				continue
+			}
+			return err
+		}
+		j.objs = append(j.objs, obj)
+	}
+	return nil
+}
+
+//////////////////
+// backendDlJob //
+//////////////////
+
+func newBackendDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlBackendBody, dlXact *Downloader) (*backendDlJob, error) {
+	if !bck.IsRemote() {
+		return nil, errors.New("bucket download requires a remote bucket")
+	} else if bck.IsHTTP() {
+		return nil, errors.New("bucket download does not support HTTP buckets")
+	}
+	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, dlXact)
+	job := &backendDlJob{
+		baseDlJob: *base,
+		t:         t,
+		sync:      payload.Sync,
+		prefix:    payload.Prefix,
+		suffix:    payload.Suffix,
+	}
+	return job, nil
 }
 
 func (*backendDlJob) Len() int     { return -1 }
 func (j *backendDlJob) Sync() bool { return j.sync }
+
+func (j *backendDlJob) String() (s string) {
+	return fmt.Sprintf("backend-%s-%s-%s", &j.baseDlJob, j.prefix, j.suffix)
+}
 
 func (j *backendDlJob) checkObj(objName string) bool {
 	return strings.HasPrefix(objName, j.prefix) && strings.HasSuffix(objName, j.suffix)
@@ -306,111 +427,9 @@ func (j *backendDlJob) getNextObjs() error {
 	return nil
 }
 
-func (j *rangeDlJob) SrcBck() cmn.Bck { return j.bck.Bck }
-func (j *rangeDlJob) Len() int        { return j.count }
-func (j *rangeDlJob) genNext() ([]dlObj, bool, error) {
-	if j.done {
-		return nil, false, nil
-	}
-	if err := j.getNextObjs(); err != nil {
-		return nil, false, err
-	}
-	return j.objs, true, nil
-}
-
-func (j *rangeDlJob) getNextObjs() error {
-	var (
-		smap = j.t.Sowner().Get()
-		sid  = j.t.SID()
-	)
-	j.objs = j.objs[:0]
-	for len(j.objs) < downloadBatchSize {
-		link, ok := j.iter()
-		if !ok {
-			j.done = true
-			break
-		}
-		name := path.Join(j.dir, path.Base(link))
-		obj, err := makeDlObj(smap, sid, j.bck, name, link)
-		if err != nil {
-			if err == errInvalidTarget {
-				continue
-			}
-			return err
-		}
-		j.objs = append(j.objs, obj)
-	}
-	return nil
-}
-
-func newBackendDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlBackendBody, dlXact *Downloader) (*backendDlJob, error) {
-	if !bck.IsRemote() {
-		return nil, errors.New("bucket download requires a remote bucket")
-	} else if bck.IsHTTP() {
-		return nil, errors.New("bucket download does not support HTTP buckets")
-	}
-	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, dlXact)
-	job := &backendDlJob{
-		baseDlJob: *base,
-		t:         t,
-		sync:      payload.Sync,
-		prefix:    payload.Prefix,
-		suffix:    payload.Suffix,
-	}
-	return job, nil
-}
-
-func countObjects(t cluster.Target, pt cos.ParsedTemplate, dir string, bck *cluster.Bck) (cnt int, err error) {
-	var (
-		smap = t.Sowner().Get()
-		sid  = t.SID()
-		iter = pt.Iter()
-		si   *cluster.Snode
-	)
-
-	for link, ok := iter(); ok; link, ok = iter() {
-		name := path.Join(dir, path.Base(link))
-		name, err = NormalizeObjName(name)
-		if err != nil {
-			return
-		}
-		si, err = cluster.HrwTarget(bck.MakeUname(name), smap)
-		if err != nil {
-			return
-		}
-		if si.ID() == sid {
-			cnt++
-		}
-	}
-	return cnt, nil
-}
-
-func newRangeDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlRangeBody, dlXact *Downloader) (*rangeDlJob, error) {
-	var (
-		pt  cos.ParsedTemplate
-		err error
-	)
-	// NOTE: Size of objects to be downloaded by a target will be unknown.
-	//  So proxy won't be able to sum sizes from all targets when calculating total size.
-	//  This should be taken care of somehow, as total is easy to know from range template anyway.
-	if pt, err = cos.ParseBashTemplate(payload.Template); err != nil {
-		return nil, err
-	}
-
-	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, dlXact)
-	cnt, err := countObjects(t, pt, payload.Subdir, base.bck)
-	if err != nil {
-		return nil, err
-	}
-	job := &rangeDlJob{
-		baseDlJob: *base,
-		t:         t,
-		iter:      pt.Iter(),
-		dir:       payload.Subdir,
-		count:     cnt,
-	}
-	return job, nil
-}
+/////////////////////
+// downloadJobInfo //
+/////////////////////
 
 func (d *downloadJobInfo) ToDlJobInfo() DlJobInfo {
 	return DlJobInfo{
