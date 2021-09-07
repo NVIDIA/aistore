@@ -57,8 +57,17 @@ All the [supported storage services](storage_svcs.md) equally apply to all stora
 ### Default Bucket Properties
 
 By default, created buckets inherit their properties from the cluster-wide global [configuration](configuration.md).
-Global configuration (aka "Cluster Configuration") is, effectively, a protected (versioned, checksummed) piece of metadata
-that gets replicated across to the entire cluster.
+Similar to other types of cluster-wide metadata, global configuration (also referred to as "cluster configuration") 
+is protected (versioned, checksummed) and replicated across the entire cluster.
+
+**Important**:
+
+* Bucket properties can be changed at any time via `api.SetBucketProps`.
+* In addition, `api.CreateBucket` allows to specify (non-default) properties at bucket creation time.
+* Inherited defaults include (but are not limited to) checksum, LRU, versioning, n-way mirroring, and erasure-coding configurations.
+* By default, LRU is disabled for AIS (`ais://`) buckets.
+
+> Use `api.SetBucketProps` to enable LRU-based eviction on any given ais bucket (or, vice versa, disable LRU on any specific remote bucket) of your choice.
 
 Bucket creation operation allows to override the **inherited defaults**, which include:
 

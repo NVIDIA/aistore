@@ -388,7 +388,7 @@ func TestRenameObjects(t *testing.T) {
 		ProxyURL:  proxyURL,
 		Bck:       bck,
 		ObjCnt:    100,
-		CksumType: cmn.DefaultBckProps().Cksum.Type,
+		CksumType: cmn.DefaultBckProps(bck).Cksum.Type,
 	})
 	tassert.CheckFatal(t, err)
 
@@ -918,7 +918,7 @@ func TestStressDeleteRange(t *testing.T) {
 			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
-		cksumType = cmn.DefaultBckProps().Cksum.Type
+		cksumType = cmn.DefaultBckProps(bck).Cksum.Type
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)

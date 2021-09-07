@@ -895,7 +895,7 @@ func diffConfigs(actual, original []prop) []propDiff {
 
 // First, request cluster's config from the primary node that contains
 // default Cksum type. Second, generate default list of properties.
-func defaultBckProps() (*cmn.BucketProps, error) {
+func defaultBckProps(bck cmn.Bck) (*cmn.BucketProps, error) {
 	smap, err := api.GetClusterMap(defaultAPIParams)
 	if err != nil {
 		return nil, err
@@ -904,7 +904,7 @@ func defaultBckProps() (*cmn.BucketProps, error) {
 	if err != nil {
 		return nil, err
 	}
-	props := cmn.DefaultBckProps(cfg)
+	props := cmn.DefaultBckProps(bck, cfg)
 	return props, nil
 }
 

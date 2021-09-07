@@ -2282,7 +2282,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 		ObjPath:   ecTestDir,
 		ObjCnt:    o.objCount,
 		ObjSize:   fileSize,
-		CksumType: cmn.DefaultBckProps().Cksum.Type,
+		CksumType: cmn.DefaultBckProps(bckReg).Cksum.Type,
 	})
 	tassert.CheckFatal(t, err)
 

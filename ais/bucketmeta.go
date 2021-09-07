@@ -441,7 +441,7 @@ type bckPropsArgs struct {
 func defaultBckProps(args bckPropsArgs) *cmn.BucketProps {
 	var (
 		config = cmn.GCO.Get()
-		props  = cmn.DefaultBckProps(config)
+		props  = cmn.DefaultBckProps(args.bck.Bck, config)
 	)
 	debug.Assert(args.bck != nil)
 	debug.AssertNoErr(cos.ValidateCksumType(config.Cksum.Type))

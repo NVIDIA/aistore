@@ -6,7 +6,7 @@ access		 GET,HEAD-OBJECT,PUT,APPEND,DELETE-OBJECT,MOVE-OBJECT,PROMOTE,HEAD-BUCKE
 checksum	 Type: xxhash | Validate: ColdGET
 ^.*created.*$
 ec		 Disabled
-lru		 Watermarks: 75%/90% | Do not evict time: 2h0m | OOS: 95%
+lru		 Disabled
 mirror		 2 copies
 provider	 ais
 versioning	 Enabled | Validate on WarmGET: no
@@ -18,14 +18,14 @@ access		 GET,HEAD-OBJECT,PUT,APPEND,DELETE-OBJECT,MOVE-OBJECT,PROMOTE,HEAD-BUCKE
 checksum	 Type: xxhash | Validate: ColdGET
 ^.*created.*$
 ec		     Disabled
-lru		     Watermarks: 75%/90% | Do not evict time: 2h0m | OOS: 95%
+lru		     Disabled
 mirror		 Disabled
 provider	 ais
 versioning	 Enabled | Validate on WarmGET: yes
  PROPERTY		        VALUE
 lru.capacity_upd_time	 10m
 lru.dont_evict_time	     2h0m
-lru.enabled     		 true
+lru.enabled     		 false
 lru.highwm      		 90
 lru.lowwm       		 75
 lru.out_of_space         95

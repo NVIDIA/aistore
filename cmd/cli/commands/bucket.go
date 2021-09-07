@@ -370,7 +370,7 @@ func showBucketProps(c *cli.Context) (err error) {
 	if flagIsSet(c, jsonFlag) {
 		return templates.DisplayOutput(p, c.App.Writer, "", true)
 	}
-	defProps, err := defaultBckProps()
+	defProps, err := defaultBckProps(bck)
 	if err != nil {
 		return err
 	}

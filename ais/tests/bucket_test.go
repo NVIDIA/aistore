@@ -1034,7 +1034,7 @@ func TestListObjects(t *testing.T) {
 
 			tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
-			p := cmn.DefaultBckProps()
+			p := cmn.DefaultBckProps(bck)
 
 			totalObjects := 0
 			for iter := 1; iter <= iterations; iter++ {

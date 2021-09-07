@@ -496,7 +496,7 @@ func lruBucketHandler(c *cli.Context) (err error) {
 	if p, err = headBucket(bck); err != nil {
 		return err
 	}
-	defProps, err := defaultBckProps()
+	defProps, err := defaultBckProps(bck)
 	if err != nil {
 		return err
 	}

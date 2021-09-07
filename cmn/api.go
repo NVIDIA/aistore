@@ -472,23 +472,28 @@ func (c *ExtraProps) ValidateAsProps(args *ValidationArgs) error {
 // BucketProps //
 /////////////////
 
-// By default, created buckets inherit their properties from the cluster (global) configuration.
-// Global configuration (aka "cluster configuration") is protected versioned, checksummed,
-// and replicated across to the entire cluster.
+// By default, created buckets inherit their properties from the cluster (aka "global") configuration.
+// Global configuration, in turn, is protected versioned, checksummed, and replicated across the entire cluster.
 //
 // See also:
 //    * github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties
 //    * BucketPropsToUpdate (above)
 //
-// Bucket properties can be changed at any time via api.SetBucketProps().
-// Bucket creation operation also allows to override the defaults, which include:
-func DefaultBckProps(cs ...*Config) *BucketProps {
+// NOTE:
+// * Bucket properties can be changed at any time via `api.SetBucketProps`.
+// * In addition, `api.CreateBucket` allows to specify (non-default) properties at bucket creation time.
+// * Inherited defaults include checksum, LRU, etc. configurations - see below.
+// * By default, LRU is disabled for AIS (`ais://`) buckets.
+func DefaultBckProps(bck Bck, cs ...*Config) *BucketProps {
 	var c *Config
 	if len(cs) > 0 {
 		c = cs[0]
 	} else { // only in tests
 		c = GCO.Get()
 		c.Cksum.Type = cos.ChecksumXXHash
+	}
+	if bck.IsAIS() {
+		c.LRU.Enabled = false
 	}
 	return &BucketProps{
 		Cksum:      c.Cksum,
