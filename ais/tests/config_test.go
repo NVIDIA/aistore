@@ -202,11 +202,13 @@ func TestConfigSyncToNewNode(t *testing.T) {
 		proxyURL      = tutils.GetPrimaryURL()
 		smap          = tutils.GetClusterMap(t, proxyURL)
 		config        = tutils.GetClusterConfig(t)
-		proxy, err    = smap.GetRandProxy(true)
 		origProxyCnt  = smap.CountActiveProxies()
 		origTargetCnt = smap.CountActiveTargets()
 	)
+
+	proxy, err := smap.GetRandProxy(true)
 	tassert.CheckFatal(t, err)
+
 	// 1. Kill a random proxy
 	// Restart daemon and check if the config is persisted.
 	cmd, err := tutils.KillNode(proxy)

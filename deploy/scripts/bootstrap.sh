@@ -15,12 +15,13 @@ run_tests() {
   timeout="-timeout=2h"
   if [[ -n "${SHORT}" ]]; then
     short="-short"
+    shuffle="-shuffle=on"
     timeout="-timeout=30m"
   fi
 
   failed_tests=$(
     BUCKET="${BUCKET}" AIS_ENDPOINT="${AIS_ENDPOINT}" \
-      go test -v -p 1 -tags debug -parallel 4 -count 1 ${timeout} ${short} ${re} "${tests_dir}" 2>&1 \
+      go test -v -p 1 -tags debug -parallel 4 -count 1 ${timeout} ${short} ${shuffle} ${re} "${tests_dir}" 2>&1 \
     | tee -a /dev/stderr \
     | grep -ae "^---FAIL: Bench\|^--- FAIL: Test\|^FAIL[[:space:]]github.com/NVIDIA/.*$"; \
     exit ${PIPESTATUS[0]} # Exit with the status of the first command in the pipe(line).

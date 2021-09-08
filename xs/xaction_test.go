@@ -75,6 +75,7 @@ func TestXactionRenewPrefetch(t *testing.T) {
 
 	xreg.RegBckXact(&xs.TestXFactory{})
 	defer xreg.AbortAll()
+	cos.InitShortID(0)
 
 	ch := make(chan xreg.RenewRes, 10)
 	wg := &sync.WaitGroup{}
@@ -112,6 +113,7 @@ func TestXactionAbortAll(t *testing.T) {
 
 	xreg.RegNonBckXact(&lru.Factory{})
 	xreg.RegBckXact(&xs.MovFactory{})
+	cos.InitShortID(0)
 
 	rnsLRU := xreg.RenewLRU(cos.GenUUID())
 	tassert.Errorf(t, !rnsLRU.IsRunning(), "new LRU must be created")
@@ -141,6 +143,7 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 
 	xreg.RegNonBckXact(&lru.Factory{})
 	xreg.RegBckXact(&xs.MovFactory{})
+	cos.InitShortID(0)
 
 	rnsLRU := xreg.RenewLRU(cos.GenUUID())
 	tassert.Errorf(t, !rnsLRU.IsRunning(), "new LRU must be created")
@@ -170,6 +173,7 @@ func TestXactionAbortBuckets(t *testing.T) {
 
 	xreg.RegNonBckXact(&lru.Factory{})
 	xreg.RegBckXact(&xs.MovFactory{})
+	cos.InitShortID(0)
 
 	rnsLRU := xreg.RenewLRU(cos.GenUUID())
 	tassert.Errorf(t, !rnsLRU.IsRunning(), "new LRU must be created")
@@ -208,6 +212,7 @@ func TestXactionQueryFinished(t *testing.T) {
 
 	xreg.RegBckXact(&xs.TestXFactory{})
 	xreg.RegBckXact(&xs.MovFactory{})
+	cos.InitShortID(0)
 
 	rns1 := xreg.RenewBckRename(tMock, bck1, bck1, cos.GenUUID(), 123, "phase")
 	tassert.Errorf(t, rns1.Err == nil && rns1.Entry.Get() != nil, "Xaction must be created")
