@@ -35,9 +35,8 @@ type (
 		srcCh    chan *cluster.LOM
 		dstCh    chan *DstElement
 		resultCh chan DiffResolverResult
-
-		err     atomic.Value
-		stopped atomic.Bool
+		err      cos.ErrValue
+		stopped  atomic.Bool
 	}
 
 	BackendResource struct {
@@ -179,8 +178,8 @@ func (dr *DiffResolver) PushDst(v interface{}) {
 func (dr *DiffResolver) CloseDst() { close(dr.dstCh) }
 
 func (dr *DiffResolver) Next() (DiffResolverResult, error) {
-	if err := dr.err.Load(); err != nil {
-		return DiffResolverResult{}, err.(error)
+	if err := dr.err.Err(); err != nil {
+		return DiffResolverResult{}, err
 	}
 
 	r, ok := <-dr.resultCh

@@ -45,7 +45,7 @@ type (
 	streamingX struct {
 		xaction.DemandBase
 		p     *streamingF
-		err   atomic.Value
+		err   cos.ErrValue
 		wiCnt atomic.Int32
 	}
 )
@@ -109,13 +109,13 @@ func (r *streamingX) raiseErr(err error, errCode int, contOnErr bool) {
 		}
 		return
 	}
-	errDetailed := fmt.Errorf("%s[%s]: %v(%d)", r.p.T.Snode(), r, err, errCode)
+	err = fmt.Errorf("%s[%s]: %w (code=%d)", r.p.T.Snode(), r, err, errCode)
 	if contOnErr {
-		glog.Warningf("%v - ignoring...", errDetailed)
+		glog.Warningf("%v - ignoring...", err)
 		return
 	}
-	glog.Errorf("%v - terminating...", errDetailed)
-	r.err.Store(errDetailed)
+	glog.Errorf("%v - terminating...", err)
+	r.err.Store(err)
 }
 
 // send EOI (end of iteration)
@@ -133,11 +133,10 @@ func (r *streamingX) eoi(uuid string, tsi *cluster.Snode) {
 func (r *streamingX) fin(err error) error {
 	r.DemandBase.Stop()
 	if err == nil {
-		if errDetailed := r.err.Load(); errDetailed != nil {
-			err = errDetailed.(error)
-		} else if r.Aborted() {
-			err = cmn.NewErrAborted(r.Name(), "", nil)
-		}
+		err = r.err.Err()
+	}
+	if err == nil && r.Aborted() {
+		err = cmn.NewErrAborted(r.Name(), "", nil)
 	}
 	r.p.dm.Close(err)
 	hk.Reg(r.ID(), r.unreg, waitUnregRecv)

@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 type (
@@ -26,9 +27,9 @@ type (
 	}
 )
 
-///////////////
+//////////////
 // ErrValue //
-///////////////
+//////////////
 
 func (ea *ErrValue) Store(err error) {
 	if ea.cnt.Inc() == 1 {
@@ -36,19 +37,26 @@ func (ea *ErrValue) Store(err error) {
 	}
 }
 
+// NOTE: hide atomic.Value.Load() - must use Err() below
+func (*ErrValue) Load() interface{} { debug.Assert(false); return nil }
+
 func (ea *ErrValue) _load() (err error) {
 	if x := ea.Value.Load(); x != nil {
 		err = x.(error)
+		debug.Assert(err != nil)
 	}
 	return
 }
 
+func (ea *ErrValue) IsNil() bool { return ea.cnt.Load() == 0 }
+
 func (ea *ErrValue) Err() (err error) {
 	err = ea._load()
-	if err != nil {
-		if cnt := ea.cnt.Load(); cnt > 1 {
-			err = fmt.Errorf("%w (cnt=%d)", err, cnt)
-		}
+	if err == nil {
+		return
+	}
+	if cnt := ea.cnt.Load(); cnt > 1 {
+		err = fmt.Errorf("%w (cnt=%d)", err, cnt)
 	}
 	return
 }

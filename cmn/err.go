@@ -350,10 +350,9 @@ func NewErrAborted(what, ctx string, err error) *ErrAborted {
 }
 
 func (e *ErrAborted) Error() (s string) {
-	if e.err == nil {
-		s = fmt.Sprintf("%s aborted @%v", e.what, e.timestamp)
-	} else {
-		s = fmt.Sprintf("%s aborted @%v, err: %v", e.what, e.timestamp, e.err)
+	s = fmt.Sprintf("%s aborted at %s", e.what, cos.FormatTimestamp(e.timestamp))
+	if e.err != nil {
+		s = fmt.Sprintf("%s, err: %v", s, e.err)
 	}
 	if e.ctx != "" {
 		s += " (" + e.ctx + ")"

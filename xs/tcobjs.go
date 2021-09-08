@@ -114,7 +114,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 			wi, ok := r.pending.m[msg.TxnUUID]
 			r.pending.RUnlock()
 			if !ok {
-				debug.Assert(r.err.Load() != nil) // see cleanup
+				debug.Assert(!r.err.IsNil()) // see cleanup
 				goto fin
 			}
 			wi.refc.Store(int32(smap.CountTargets() - 1))
@@ -161,7 +161,7 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 		wi, ok := r.pending.m[txnUUID]
 		r.pending.RUnlock()
 		if !ok {
-			debug.Assert(r.err.Load() != nil) // see cleanup
+			debug.Assert(!r.err.IsNil()) // see cleanup
 			return
 		}
 		refc := wi.refc.Dec()
