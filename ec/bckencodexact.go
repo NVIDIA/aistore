@@ -118,7 +118,7 @@ func (r *XactBckEncode) afterECObj(lom *cluster.LOM, err error) {
 	if err == nil {
 		r.ObjectsInc()
 		r.BytesAdd(lom.SizeBytes())
-	} else {
+	} else if err != errSkipped {
 		glog.Errorf("Failed to erasure-code %s: %v", lom.FullName(), err)
 	}
 
@@ -159,7 +159,10 @@ func (r *XactBckEncode) bckEncode(lom *cluster.LOM, _ []byte) error {
 	r.beforeECObj()
 	if err = ECM.EncodeObject(lom, r.afterECObj); err != nil {
 		// Something wrong with EC, interrupt file walk - it is critical.
-		return fmt.Errorf("failed to EC object %q: %v", lom.FQN, err)
+		r.afterECObj(lom, err)
+		if err != errSkipped {
+			return fmt.Errorf("failed to EC object %q: %v", lom.FQN, err)
+		}
 	}
 	return nil
 }

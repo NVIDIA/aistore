@@ -5,6 +5,7 @@
 package ec
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -39,7 +40,10 @@ type Manager struct {
 	respBundle    atomic.Pointer
 }
 
-var ECM *Manager
+var (
+	ECM        *Manager
+	errSkipped = errors.New("skipped") // CT is skipped due to EC unsupported for the content type
+)
 
 func initManager(t cluster.Target) error {
 	var (
@@ -297,7 +301,7 @@ func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) er
 	cos.Assert(lom.MpathInfo() != nil && lom.MpathInfo().Path != "")
 	spec, _ := fs.CSM.FileSpec(lom.FQN)
 	if spec != nil && !spec.PermToProcess() {
-		return nil
+		return errSkipped
 	}
 
 	req := allocateReq(ActSplit, lom.LIF())

@@ -156,6 +156,8 @@ func (f *ContentSpecMgr) PermToProcess(fqn string) (ok bool) {
 type (
 	ObjectContentResolver   struct{}
 	WorkfileContentResolver struct{}
+	ECSliceContentResolver  struct{}
+	ECMetaContentResolver   struct{}
 )
 
 func (*ObjectContentResolver) PermToMove() bool                   { return true }
@@ -203,4 +205,24 @@ func (*WorkfileContentResolver) ParseUniqueFQN(base string) (orig string, old, o
 	}
 
 	return base[:tieIndex], filePID != pid, true
+}
+
+func (*ECSliceContentResolver) PermToMove() bool    { return true }
+func (*ECSliceContentResolver) PermToEvict() bool   { return true }
+func (*ECSliceContentResolver) PermToProcess() bool { return false }
+
+func (*ECSliceContentResolver) GenUniqueFQN(base, _ string) string { return base }
+
+func (*ECSliceContentResolver) ParseUniqueFQN(base string) (orig string, old, ok bool) {
+	return base, false, true
+}
+
+func (*ECMetaContentResolver) PermToMove() bool    { return true }
+func (*ECMetaContentResolver) PermToEvict() bool   { return true }
+func (*ECMetaContentResolver) PermToProcess() bool { return false }
+
+func (*ECMetaContentResolver) GenUniqueFQN(base, _ string) string { return base }
+
+func (*ECMetaContentResolver) ParseUniqueFQN(base string) (orig string, old, ok bool) {
+	return base, false, true
 }

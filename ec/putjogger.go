@@ -107,7 +107,12 @@ func (c *putJogger) freeResources() {
 func (c *putJogger) processRequest(req *request) {
 	var memRequired int64
 	lom, err := req.LIF.LOM()
-	defer cluster.FreeLOM(lom)
+	defer func() {
+		if req.Callback != nil {
+			req.Callback(lom, err)
+		}
+		cluster.FreeLOM(lom)
+	}()
 	if err != nil {
 		return
 	}
@@ -126,9 +131,6 @@ func (c *putJogger) processRequest(req *request) {
 	req.tm = time.Now()
 	if err = c.ec(req, lom); err != nil {
 		glog.Errorf("Failed to %s object %s (fqn: %q, err: %v)", req.Action, lom, lom.FQN, err)
-	}
-	if req.Callback != nil {
-		req.Callback(lom, err)
 	}
 }
 

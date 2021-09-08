@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 )
@@ -145,8 +144,8 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
-	_ = fs.CSM.RegisterContentType(fs.ECSliceType, &ec.SliceSpec{})
-	_ = fs.CSM.RegisterContentType(fs.ECMetaType, &ec.MetaSpec{})
+	_ = fs.CSM.RegisterContentType(fs.ECSliceType, &fs.ECSliceContentResolver{})
+	_ = fs.CSM.RegisterContentType(fs.ECMetaType, &fs.ECMetaContentResolver{})
 
 	dir := t.TempDir()
 
