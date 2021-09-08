@@ -5,30 +5,31 @@
 #  $ env IMAGE_REPO=docker.io/aistore/admin IMAGE_TAG=4.0 make -e all
 #
 
-IMAGE_TAG=.must_set_in_environment
+REGISTRY_URL ?= docker.io
 IMAGE_REPO=aistore/aisnode
+IMAGE_TAG=.must_set_in_environment
 
 DOCKER=docker
 
 build:
 	$(DOCKER) build --quiet \
 		-f Dockerfile \
-		-t $(IMAGE_REPO):$(IMAGE_TAG) \
+		-t $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG) \
 		--build-arg providers=$(AIS_BACKEND_PROVIDERS) \
 		"../../../../."
 
 build_debug:
 	$(DOCKER) build --quiet \
 		-f Dockerfile \
-		-t $(IMAGE_REPO):$(IMAGE_TAG)-debug \
+		-t $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG)-debug \
 		--build-arg mode="debug" --build-arg providers=$(AIS_BACKEND_PROVIDERS) \
 		"../../../../."
 
 push:
-	docker push $(IMAGE_REPO):$(IMAGE_TAG)
+	docker push $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG)
 
 push_debug:
-	docker push $(IMAGE_REPO):$(IMAGE_TAG)-debug
+	docker push $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG)-debug
 
 all: build push
 
