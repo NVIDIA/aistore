@@ -81,9 +81,12 @@ type (
 		newest    int64
 		heap      *minHeap
 		oldWork   []string
-		misplaced []*cluster.LOM
-		bck       cmn.Bck
-		now       int64
+		misplaced struct {
+			loms []*cluster.LOM
+			ec   []*cluster.CT // EC slices and replicas without corresponding metafiles (CT FQN -> Meta FQN)
+		}
+		bck cmn.Bck
+		now int64
 		// init-time
 		p         *lruP
 		ini       *InitLRU
@@ -159,13 +162,14 @@ func Run(ini *InitLRU) {
 		joggers[mpath] = &lruJ{
 			heap:      &h,
 			oldWork:   make([]string, 0, 64),
-			misplaced: make([]*cluster.LOM, 0, 64),
 			stopCh:    make(chan struct{}, 1),
 			mpathInfo: mpathInfo,
 			config:    config,
 			ini:       &parent.ini,
 			p:         parent,
 		}
+		joggers[mpath].misplaced.loms = make([]*cluster.LOM, 0, 64)
+		joggers[mpath].misplaced.ec = make([]*cluster.CT, 0, 64)
 	}
 	providers := cmn.Providers.ToSlice()
 
@@ -315,7 +319,7 @@ func (j *lruJ) jogBck() (size int64, err error) {
 	opts := &fs.Options{
 		Mpath:    j.mpathInfo,
 		Bck:      j.bck,
-		CTs:      []string{fs.WorkfileType, fs.ObjectType},
+		CTs:      []string{fs.WorkfileType, fs.ObjectType, fs.ECSliceType, fs.ECMetaType},
 		Callback: j.walk,
 		Sorted:   false,
 	}
@@ -328,6 +332,99 @@ func (j *lruJ) jogBck() (size int64, err error) {
 	return
 }
 
+func (j *lruJ) visitCT(parsedFQN fs.ParsedFQN, fqn string) {
+	switch parsedFQN.ContentType {
+	case fs.WorkfileType:
+		_, base := filepath.Split(fqn)
+		contentResolver := fs.CSM.RegisteredContentTypes[fs.WorkfileType]
+		_, old, ok := contentResolver.ParseUniqueFQN(base)
+		// workfiles: remove old or do nothing
+		if ok && old {
+			j.oldWork = append(j.oldWork, fqn)
+		}
+	case fs.ECSliceType:
+		// EC slices:
+		// - EC enabled: remove only slices with missing metafiles
+		// - EC disabled: remove all slices
+		ct, err := cluster.NewCTFromFQN(fqn, j.p.ini.T.Bowner())
+		if err != nil || !ct.Bck().Props.EC.Enabled {
+			j.oldWork = append(j.oldWork, fqn)
+			return
+		}
+		// TODO: use DontEvictTime when CT supports last access time
+		metaFQN := fs.CSM.GenContentFQN(ct, fs.ECMetaType, "")
+		if fs.Access(metaFQN) != nil {
+			j.misplaced.ec = append(j.misplaced.ec, ct)
+		}
+	case fs.ECMetaType:
+		// EC metafiles:
+		// - EC enabled: remove only without corresponding slice or replica
+		// - EC disabled: remove all metafiles
+		ct, err := cluster.NewCTFromFQN(fqn, j.p.ini.T.Bowner())
+		if err != nil || !ct.Bck().Props.EC.Enabled {
+			j.oldWork = append(j.oldWork, fqn)
+			return
+		}
+		// Metafile is saved the last. If there is no corresponding replica or
+		// slice, it is safe to remove the stray metafile.
+		sliceCT := ct.Clone(fs.ECSliceType)
+		if fs.Access(sliceCT.FQN()) == nil {
+			return
+		}
+		objCT := ct.Clone(fs.ObjectType)
+		if fs.Access(objCT.FQN()) == nil {
+			return
+		}
+		j.oldWork = append(j.oldWork, fqn)
+	default:
+		debug.Assertf(false, "Unsupported content type: %s", parsedFQN.ContentType)
+	}
+}
+
+func (j *lruJ) visitLOM(parsedFQN fs.ParsedFQN) {
+	if !j.allowDelObj {
+		return
+	}
+	lom := &cluster.LOM{ObjName: parsedFQN.ObjName}
+	err := lom.Init(j.bck)
+	if err != nil {
+		return
+	}
+	err = lom.Load(false /*cache it*/, false /*locked*/)
+	if err != nil {
+		return
+	}
+	if lom.AtimeUnix()+int64(j.config.LRU.DontEvictTime) > j.now {
+		return
+	}
+	if lom.HasCopies() && lom.IsCopy() {
+		return
+	}
+
+	if !lom.IsHRW() {
+		if lom.Bprops().EC.Enabled {
+			metaFQN := fs.CSM.GenContentFQN(lom, fs.ECMetaType, "")
+			if fs.Access(metaFQN) != nil {
+				j.misplaced.ec = append(j.misplaced.ec, cluster.NewCTFromLOM(lom, fs.ObjectType))
+			}
+		} else {
+			j.misplaced.loms = append(j.misplaced.loms, lom)
+		}
+		return
+	}
+
+	// do nothing if the heap's curSize >= totalSize and
+	// the file is more recent then the the heap's newest.
+	if j.curSize >= j.totalSize && lom.AtimeUnix() > j.newest {
+		return
+	}
+	heap.Push(j.heap, lom)
+	j.curSize += lom.SizeBytes()
+	if lom.AtimeUnix() > j.newest {
+		j.newest = lom.AtimeUnix()
+	}
+}
+
 func (j *lruJ) walk(fqn string, de fs.DirEntry) error {
 	if de.IsDir() {
 		return nil
@@ -335,54 +432,16 @@ func (j *lruJ) walk(fqn string, de fs.DirEntry) error {
 	if err := j.yieldTerm(); err != nil {
 		return err
 	}
-	h := j.heap
 	parsedFQN, _, err := cluster.ResolveFQN(fqn)
 	if err != nil {
 		return nil
 	}
-	// workfiles: remove old or do nothing
-	if parsedFQN.ContentType == fs.WorkfileType {
-		_, base := filepath.Split(fqn)
-		contentResolver := fs.CSM.RegisteredContentTypes[fs.WorkfileType]
-		_, old, ok := contentResolver.ParseUniqueFQN(base)
-		if ok && old {
-			j.oldWork = append(j.oldWork, fqn)
-		}
-		return nil
-	}
-	lom := &cluster.LOM{ObjName: parsedFQN.ObjName}
-	err = lom.Init(j.bck)
-	if err != nil {
-		return nil
-	}
-	if !j.allowDelObj {
-		return nil // ===>
-	}
-	err = lom.Load(false /*cache it*/, false /*locked*/)
-	if err != nil {
-		return nil
-	}
-	if lom.AtimeUnix()+int64(j.config.LRU.DontEvictTime) > j.now {
-		return nil
-	}
-	if lom.HasCopies() && lom.IsCopy() {
-		return nil
-	}
-	if !lom.IsHRW() {
-		j.misplaced = append(j.misplaced, lom)
-		return nil
+	if parsedFQN.ContentType != fs.ObjectType {
+		j.visitCT(parsedFQN, fqn)
+	} else {
+		j.visitLOM(parsedFQN)
 	}
 
-	// do nothing if the heap's curSize >= totalSize and
-	// the file is more recent then the the heap's newest.
-	if j.curSize >= j.totalSize && lom.AtimeUnix() > j.newest {
-		return nil
-	}
-	heap.Push(h, lom)
-	j.curSize += lom.SizeBytes()
-	if lom.AtimeUnix() > j.newest {
-		j.newest = lom.AtimeUnix()
-	}
 	return nil
 }
 
@@ -408,7 +467,7 @@ func (j *lruJ) evict() (size int64, err error) {
 
 	// 2. rm misplaced
 	if rmMisplaced() {
-		for _, lom := range j.misplaced {
+		for _, lom := range j.misplaced.loms {
 			var (
 				fqn     = lom.FQN
 				removed bool
@@ -425,24 +484,41 @@ func (j *lruJ) evict() (size int64, err error) {
 				removed = os.Remove(fqn) == nil
 			}
 			if removed {
-				if capCheck, err = j.postRemove(capCheck, lom); err != nil {
+				if capCheck, err = j.postRemove(capCheck, lom.SizeBytes(true /*not loaded*/)); err != nil {
 					return
 				}
 			}
 		}
 	}
-	j.misplaced = j.misplaced[:0]
+	j.misplaced.loms = j.misplaced.loms[:0]
 
-	// 3. evict(sic!) and house-keep
+	// 3. rm EC slices and replicas that are still without correcponding metafile
+	for _, ct := range j.misplaced.ec {
+		metaFQN := fs.CSM.GenContentFQN(ct, fs.ECMetaType, "")
+		if fs.Access(metaFQN) == nil {
+			continue
+		}
+		// TODO: add extra check for CT access time
+		if os.Remove(ct.FQN()) == nil {
+			// TODO: add SizeBytes for CT and use it everywhere
+			if capCheck, err = j.postRemove(capCheck, 0); err != nil {
+				return
+			}
+		}
+	}
+	j.misplaced.ec = j.misplaced.ec[:0]
+
+	// 4. evict(sic!) and house-keep
 	for h.Len() > 0 && j.totalSize > 0 {
 		lom := heap.Pop(h).(*cluster.LOM)
 		if !evictObj(lom) {
 			continue
 		}
-		bevicted += lom.SizeBytes(true /*not loaded*/)
-		size += lom.SizeBytes(true)
+		objSize := lom.SizeBytes(true /*not loaded*/)
+		bevicted += objSize
+		size += objSize
 		fevicted++
-		if capCheck, err = j.postRemove(capCheck, lom); err != nil {
+		if capCheck, err = j.postRemove(capCheck, objSize); err != nil {
 			return
 		}
 	}
@@ -453,9 +529,9 @@ func (j *lruJ) evict() (size int64, err error) {
 	return
 }
 
-func (j *lruJ) postRemove(prev int64, lom *cluster.LOM) (capCheck int64, err error) {
-	j.totalSize -= lom.SizeBytes(true /*not loaded*/)
-	capCheck = prev + lom.SizeBytes(true)
+func (j *lruJ) postRemove(prev, size int64) (capCheck int64, err error) {
+	j.totalSize -= size
+	capCheck = prev + size
 	if err = j.yieldTerm(); err != nil {
 		return
 	}
