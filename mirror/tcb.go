@@ -46,11 +46,7 @@ type (
 		wg sync.WaitGroup
 		// finishing
 		refc atomic.Int32
-		err  perr
-	}
-	perr struct {
-		sync.Mutex
-		err error
+		err  cos.ErrValue
 	}
 )
 
@@ -82,25 +78,6 @@ func allocCpObjParams() (a *cluster.CopyObjectParams) {
 func freeCpObjParams(a *cluster.CopyObjectParams) {
 	*a = cpObj0
 	cpObjPool.Put(a)
-}
-
-///////////////
-// perr TODO -- FIXME move to cmn/cos and use elsewhere instead of atomic.Value
-///////////////
-
-func (perr *perr) store(err error) {
-	perr.Lock()
-	if perr.err == nil {
-		perr.err = err
-	}
-	perr.Unlock()
-}
-
-func (perr *perr) load() (err error) {
-	perr.Lock()
-	err = perr.err
-	perr.Unlock()
-	return
 }
 
 ////////////////
@@ -240,7 +217,7 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	optTime, maxTime := config.Timeout.MaxKeepalive.D(), config.Timeout.SendFile.D()/2
 	q := r.Quiesce(optTime, func(tot time.Duration) cluster.QuiRes { return xaction.RefcntQuiCB(&r.refc, maxTime, tot) })
 	if err == nil {
-		err = r.err.load()
+		err = r.err.Err()
 	}
 	if err == nil {
 		if q == cluster.QuiAborted {
@@ -311,14 +288,14 @@ func (r *XactTCB) recv(hdr transport.ObjHdr, objReader io.Reader, err error) {
 	defer cos.DrainReader(objReader)
 
 	// drop/discard on any of the errors below
-	if r.err.load() != nil {
+	if r.err.Err() != nil {
 		return
 	}
 
 	lom := cluster.AllocLOM(hdr.ObjName)
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(hdr.Bck); err != nil {
-		r.err.store(err)
+		r.err.Store(err)
 		glog.Error(err)
 		return
 	}
@@ -336,7 +313,7 @@ func (r *XactTCB) recv(hdr transport.ObjHdr, objReader io.Reader, err error) {
 		Started:  time.Now(),
 	}
 	if err := r.t.PutObject(lom, params); err != nil {
-		r.err.store(err)
+		r.err.Store(err)
 		glog.Error(err)
 	}
 }

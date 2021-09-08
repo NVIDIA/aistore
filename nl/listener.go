@@ -5,7 +5,6 @@
 package nl
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -84,10 +83,9 @@ type (
 		ProgressIntervalX time.Duration    // time interval to monitor the progress
 		addedTime         atomic.Int64     // Time when `nl` is added
 		// runtime
-		ErrMsg   string        // ErrMsg
-		FinTime  atomic.Int64  // timestamp when finished
-		AbortedX atomic.Bool   // sets if the xaction is Aborted
-		ErrCount atomic.Uint32 // number of error encountered
+		FinTime  atomic.Int64 // timestamp when finished
+		AbortedX atomic.Bool  // sets if the xaction is Aborted
+		ErrValue cos.ErrValue // reported error and count
 	}
 
 	NotifStatus struct {
@@ -150,33 +148,8 @@ func (nlb *NotifListenerBase) Callback(nl NotifListener, ts int64) {
 	}
 }
 
-// is called under lock
-func (nlb *NotifListenerBase) SetErr(err error) {
-	msg := err.Error()
-	if nlb.ErrMsg != "" {
-		// collapse same errors (TODO: better)
-		l := cos.Min(len(nlb.ErrMsg), len(msg), 32)
-		if nlb.ErrMsg[:l] == msg[:l] {
-			return
-		}
-	}
-	if nlb.ErrCount.Inc() == 1 {
-		nlb.ErrMsg = msg
-	}
-}
-
-// NOTE: always rlocks
-func (nlb *NotifListenerBase) Err() error {
-	nlb.RLock()
-	defer nlb.RUnlock()
-	if nlb.ErrMsg == "" {
-		return nil
-	}
-	if l := nlb.ErrCount.Load(); l > 1 {
-		return fmt.Errorf("%s... (error-count=%d)", nlb.ErrMsg, l)
-	}
-	return errors.New(nlb.ErrMsg)
-}
+func (nlb *NotifListenerBase) SetErr(err error) { nlb.ErrValue.Store(err) }
+func (nlb *NotifListenerBase) Err() error       { return nlb.ErrValue.Err() }
 
 func (nlb *NotifListenerBase) SetStats(daeID string, stats interface{}) {
 	debug.AssertRWMutexLocked(&nlb.RWMutex)
@@ -230,8 +203,8 @@ func (nlb *NotifListenerBase) String() string {
 		finCount = nlb.FinCount()
 	)
 	if tfin := nlb.FinTime.Load(); tfin > 0 {
-		if l := nlb.ErrCount.Load(); l > 0 {
-			res = "-" + nlb.ErrMsg // NOTE: race when used outside `nlb.Lock()` - benign, can ignore
+		if err := nlb.ErrValue.Err(); err != nil {
+			res = "-" + err.Error()
 		} else {
 			res = "-done"
 		}

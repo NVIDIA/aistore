@@ -37,9 +37,6 @@ type (
 		Xact        cluster.Xact
 		Interrupted bool
 	}
-	ErrXactExpired struct { // return it if called (right) after self-termination
-		msg string
-	}
 )
 
 var IncInactive func()
@@ -229,10 +226,6 @@ func (xact *XactBase) Stats() cluster.XactStats {
 }
 
 // errors
-
-func NewErrXactExpired(msg string) *ErrXactExpired { return &ErrXactExpired{msg: msg} }
-func (e *ErrXactExpired) Error() string            { return e.msg }
-func IsErrXactExpired(err error) bool              { _, ok := err.(*ErrXactExpired); return ok }
 
 // RebID helpers
 

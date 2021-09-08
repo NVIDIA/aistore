@@ -12,6 +12,7 @@ import (
 	"os"
 	"syscall"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 )
 
@@ -19,11 +20,42 @@ type (
 	ErrSignal struct {
 		signal syscall.Signal
 	}
+	ErrValue struct {
+		atomic.Value
+		cnt atomic.Int64
+	}
 )
 
-///////////////////////////
-// syscall-based helpers //
-///////////////////////////
+///////////////
+// ErrValue //
+///////////////
+
+func (ea *ErrValue) Store(err error) {
+	if ea.cnt.Inc() == 1 {
+		ea.Value.Store(err)
+	}
+}
+
+func (ea *ErrValue) _load() (err error) {
+	if x := ea.Value.Load(); x != nil {
+		err = x.(error)
+	}
+	return
+}
+
+func (ea *ErrValue) Err() (err error) {
+	err = ea._load()
+	if err != nil {
+		if cnt := ea.cnt.Load(); cnt > 1 {
+			err = fmt.Errorf("%w (cnt=%d)", err, cnt)
+		}
+	}
+	return
+}
+
+////////////////////////
+// IS-syscall helpers //
+////////////////////////
 
 // likely out of socket descriptors
 func IsErrConnectionNotAvail(err error) (yes bool) {
