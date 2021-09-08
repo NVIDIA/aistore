@@ -5,6 +5,7 @@
 package xaction
 
 import (
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -34,8 +35,9 @@ type (
 	}
 	DemandBase struct {
 		XactBase
-		pending atomic.Int64
-		active  atomic.Int64
+		mu      sync.RWMutex
+		pending int64
+		active  int64
 		hkName  string
 		idle    struct {
 			d     time.Duration
@@ -63,37 +65,49 @@ func (r *DemandBase) Init(uuid, kind string, bck *cluster.Bck, idle time.Duratio
 }
 
 func (r *DemandBase) _initIdle() {
-	r.active.Inc()
+	r.active++
 	r.idle.last = mono.NanoTime()
 	r.hkReg.Store(true)
 	hk.Reg(r.hkName, r.hkcb)
 }
 
 func (r *DemandBase) hkcb() time.Duration {
-	if r.active.Swap(0) == 0 {
+	r.mu.Lock()
+	if r.active == 0 {
 		r.idle.ticks.Close() // signals the parent to finish and exit
 	}
+	r.active = 0
+	r.mu.Unlock()
 	return r.idle.d
 }
 
 func (r *DemandBase) IdleTimer() <-chan struct{} { return r.idle.ticks.Listen() }
 
-func (r *DemandBase) Pending() int64 { return r.pending.Load() }
-func (r *DemandBase) DecPending()    { r.SubPending(1) }
+func (r *DemandBase) Pending() (cnt int64) {
+	r.mu.RLock()
+	cnt = r.pending
+	r.mu.RUnlock()
+	return
+}
+func (r *DemandBase) DecPending() { r.SubPending(1) }
 
 func (r *DemandBase) IncPending() {
 	debug.Assert(r.hkReg.Load())
-	r.pending.Inc()
+	r.mu.Lock()
+	r.pending++
 	r.idle.last = 0
-	r.active.Inc()
+	r.active++
+	r.mu.Unlock()
 }
 
 func (r *DemandBase) SubPending(n int) {
-	nn := r.pending.Sub(int64(n))
-	debug.Assert(nn >= 0)
-	if nn == 0 {
+	r.mu.Lock()
+	r.pending -= int64(n)
+	debug.Assert(r.pending >= 0)
+	if r.pending == 0 {
 		r.idle.last = mono.NanoTime()
 	}
+	r.mu.Unlock()
 }
 
 func (r *DemandBase) Stop() {
@@ -161,7 +175,10 @@ func (r *DemandBase) quicb(_ time.Duration /*accum. wait time*/) cluster.QuiRes 
 }
 
 func (r *DemandBase) likelyIdle() bool {
-	if mono.Since(r.idle.last) < 2*idleRadius {
+	r.mu.RLock()
+	last := r.idle.last
+	r.mu.RUnlock()
+	if mono.Since(last) < 2*idleRadius {
 		return false
 	}
 	return r.Quiesce(idleRadius/2, r.quicb) == cluster.Quiescent
