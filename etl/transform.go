@@ -627,9 +627,20 @@ func (b *etlBootstraper) waitPodReady() error {
 		if condition == nil {
 			return cmn.NewErrETL(b.errCtx, "%v", err)
 		}
-		conditionStr := fmt.Sprintf("%s, reason: %s, msg: %s", condition.Type, condition.Reason, condition.Message)
-		return cmn.NewErrETL(b.errCtx, "%v (pod condition: %s; expected status Ready)",
-			err, conditionStr)
+		var phase corev1.PodPhase
+		if pod, err := client.Pod(b.pod.Name); err == nil {
+			phase = pod.Status.Phase
+		}
+		var runningPods []string
+		if pods, err := client.Pods(); err == nil {
+			for idx := range pods.Items {
+				runningPods = append(runningPods, pods.Items[idx].Name)
+			}
+		}
+		return cmn.NewErrETL(b.errCtx,
+			`%v (pod condition: %q, pod phase: %q, reason: %q, msg: %q, running pods: %v; expected condition: %q)`,
+			err, condition.Type, phase, condition.Reason, condition.Message, runningPods, corev1.PodReady,
+		)
 	}
 	return nil
 }

@@ -36,6 +36,7 @@ type (
 		CheckExists(entityType, entityName string) (bool, error)
 
 		Pod(name string) (*corev1.Pod, error)
+		Pods() (*corev1.PodList, error)
 		Service(name string) (*corev1.Service, error)
 		Node(name string) (*corev1.Node, error)
 
@@ -163,6 +164,10 @@ func (c *defaultClient) CheckExists(entityType, entityName string) (exists bool,
 
 func (c *defaultClient) Pod(name string) (*corev1.Pod, error) {
 	return c.pods().Get(context.Background(), name, metav1.GetOptions{})
+}
+
+func (c *defaultClient) Pods() (*corev1.PodList, error) {
+	return c.pods().List(context.Background(), metav1.ListOptions{})
 }
 
 func (c *defaultClient) Service(name string) (*corev1.Service, error) {
