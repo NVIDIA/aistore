@@ -297,7 +297,7 @@ func (r *ObjListXact) nextPageRemote() error {
 }
 
 func (r *ObjListXact) getPage(marker string, cnt uint) *cmn.BucketList {
-	debug.Assert(r.msg.UUID != "")
+	debug.Assert(cos.IsValidUUID(r.msg.UUID))
 	if r.fromRemote {
 		return &cmn.BucketList{
 			UUID:              r.msg.UUID,

@@ -142,7 +142,6 @@ func (nlb *NotifListenerBase) ActiveCount() int                 { return len(nlb
 func (nlb *NotifListenerBase) FinCount() int                    { return len(nlb.Srcs) - nlb.ActiveCount() }
 
 func (nlb *NotifListenerBase) MarkFinished(node *cluster.Snode) {
-	debug.Assert(nlb.ActiveSrcs.Contains(node.ID()))
 	delete(nlb.ActiveSrcs, node.ID())
 }
 

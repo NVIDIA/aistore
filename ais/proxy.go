@@ -2892,7 +2892,7 @@ func resolveUUIDBMD(bmds bmds) (*bucketMD, error) {
 		err = &errTgtBmdUUIDDiffer{s}
 	}
 	bmd := maxor[uuid]
-	cos.Assert(bmd.UUID != "")
+	cos.Assert(cos.IsValidUUID(bmd.UUID))
 	return bmd, err
 }
 

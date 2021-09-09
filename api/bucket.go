@@ -400,7 +400,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 		}
 
 		toRead = uint(cos.Max(int(toRead)-len(page.Entries), 0))
-		cos.Assert(page.UUID != "")
+		cos.Assert(cos.IsValidUUID(page.UUID))
 		smsg.UUID = page.UUID
 		smsg.ContinuationToken = page.ContinuationToken
 	}

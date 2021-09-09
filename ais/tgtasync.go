@@ -43,7 +43,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 		}
 	}
 	debug.Assert(msg.PageSize != 0)
-	debug.Assert(msg.UUID != "")
+	debug.Assert(cos.IsValidUUID(msg.UUID))
 
 	rns := xreg.RenewObjList(t, bck, msg.UUID, msg)
 	xact := rns.Entry.Get()

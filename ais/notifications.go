@@ -184,7 +184,7 @@ func (*notifs) String() string { return notifsName }
 
 // start listening
 func (n *notifs) add(nl nl.NotifListener) (err error) {
-	debug.Assert(cos.IsValidUUID(nl.UUID()))
+	debug.Assert(cos.IsValidUUID(nl.UUID()) || xaction.IsValidRebID(nl.UUID()))
 	if nl.ActiveCount() == 0 {
 		return fmt.Errorf("cannot add %q with no active notifiers", nl)
 	}

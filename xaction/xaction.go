@@ -54,7 +54,7 @@ func GoRunW(xact cluster.Xact) {
 //////////////
 
 func (xact *XactBase) InitBase(id, kind string, bck *cluster.Bck) {
-	debug.AssertMsg(cos.IsValidUUID(id) || isValidRebID(id), id)
+	debug.AssertMsg(cos.IsValidUUID(id) || IsValidRebID(id), id)
 	debug.AssertMsg(IsValidKind(kind), kind)
 	xact.id, xact.kind = id, kind
 	xact.abrt = make(chan struct{})
@@ -231,7 +231,7 @@ func (xact *XactBase) Stats() cluster.XactStats {
 
 func RebID2S(id int64) string          { return fmt.Sprintf("g%d", id) }
 func S2RebID(id string) (int64, error) { return strconv.ParseInt(id[1:], 10, 64) }
-func isValidRebID(id string) bool      { _, err := S2RebID(id); return err == nil }
+func IsValidRebID(id string) bool      { _, err := S2RebID(id); return err == nil }
 
 func CompareRebIDs(a, b string) int {
 	if ai, err := S2RebID(a); err != nil {

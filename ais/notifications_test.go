@@ -29,8 +29,10 @@ var _ = Describe("Notifications xaction test", func() {
 		target1ID = "target1"
 		target2ID = "target2"
 		pDaemonID = "primary-id"
-		xactID    = "xact-id"
 	)
+
+	cos.InitShortID(0)
+	xactID := cos.GenUUID()
 
 	// helper functions
 	var (
