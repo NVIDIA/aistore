@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
@@ -25,6 +26,7 @@ type (
 		id      string
 		kind    string
 		bck     *cluster.Bck
+		origBck cmn.Bck
 		sutime  atomic.Int64
 		eutime  atomic.Int64
 		objects atomic.Int64
@@ -59,6 +61,9 @@ func (xact *XactBase) InitBase(id, kind string, bck *cluster.Bck) {
 	xact.id, xact.kind = id, kind
 	xact.abrt = make(chan struct{})
 	xact.bck = bck
+	if xact.bck != nil {
+		xact.origBck = bck.Bck
+	}
 	xact.setStartTime(time.Now())
 }
 
@@ -115,7 +120,7 @@ func (xact *XactBase) Quiesce(d time.Duration, cb cluster.QuiCB) cluster.QuiRes 
 func (xact *XactBase) Name() string {
 	var b string
 	if xact.bck != nil {
-		b = "-" + xact.bck.String()
+		b = "-" + xact.origBck.String()
 	}
 	return fmt.Sprintf("%s[%s]%s", xact.Kind(), xact.ID(), b)
 }
@@ -213,14 +218,12 @@ func (xact *XactBase) Stats() cluster.XactStats {
 	stats := &BaseXactStats{
 		IDX:         xact.ID(),
 		KindX:       xact.Kind(),
+		BckX:        xact.origBck,
 		StartTimeX:  xact.StartTime(),
 		EndTimeX:    xact.EndTime(),
 		ObjCountX:   xact.ObjCount(),
 		BytesCountX: xact.BytesCount(),
 		AbortedX:    xact.Aborted(),
-	}
-	if xact.Bck() != nil {
-		stats.BckX = xact.Bck().Bck
 	}
 	return stats
 }
