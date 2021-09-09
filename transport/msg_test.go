@@ -8,7 +8,6 @@ package transport_test
 import (
 	"fmt"
 	"net/http/httptest"
-	"os"
 	"strconv"
 	"sync"
 	"testing"
@@ -55,9 +54,7 @@ func Example_msg() {
 }
 
 func Test_MsgDryRun(t *testing.T) {
-	err := os.Setenv("AIS_STREAM_DRY_RUN", "true")
-	defer os.Unsetenv("AIS_STREAM_DRY_RUN")
-	tassert.CheckFatal(t, err)
+	t.Setenv("AIS_STREAM_DRY_RUN", "true")
 
 	// fill in common shared read-only bug
 	random := newRand(mono.NanoTime())
@@ -85,7 +82,7 @@ func Test_MsgDryRun(t *testing.T) {
 				}
 				msg := &transport.Msg{Body: buf[off : off+msize]}
 				off += msize
-				err = stream.Send(msg)
+				err := stream.Send(msg)
 				tassert.CheckFatal(t, err)
 				num.Inc()
 				tsize += int64(msize)

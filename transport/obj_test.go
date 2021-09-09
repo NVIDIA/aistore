@@ -459,9 +459,7 @@ func Test_CompressedOne(t *testing.T) {
 
 	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + transport.ObjURLPath(trname)
-	err = os.Setenv("AIS_STREAM_BURST_NUM", "2")
-	tassert.CheckFatal(t, err)
-	defer os.Unsetenv("AIS_STREAM_BURST_NUM")
+	t.Setenv("AIS_STREAM_BURST_NUM", "2")
 	stream := transport.NewObjStream(httpclient, url, &transport.Extra{Compression: cmn.CompressAlways})
 
 	slab, _ := MMSA.GetSlab(memsys.MaxPageSlabSize)
@@ -511,9 +509,7 @@ func Test_CompressedOne(t *testing.T) {
 func Test_DryRun(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
-	err := os.Setenv("AIS_STREAM_DRY_RUN", "true")
-	defer os.Unsetenv("AIS_STREAM_DRY_RUN")
-	tassert.CheckFatal(t, err)
+	t.Setenv("AIS_STREAM_DRY_RUN", "true")
 
 	stream := transport.NewObjStream(nil, "dummy/null", nil)
 
@@ -580,9 +576,7 @@ func Test_CompletionCount(t *testing.T) {
 	defer transport.Unhandle(trname)
 	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + transport.ObjURLPath(trname)
-	err = os.Setenv("AIS_STREAM_BURST_NUM", "256")
-	tassert.CheckFatal(t, err)
-	defer os.Unsetenv("AIS_STREAM_BURST_NUM")
+	t.Setenv("AIS_STREAM_BURST_NUM", "256")
 	stream := transport.NewObjStream(httpclient, url, nil) // provide for sizeable queue at any point
 	random := newRand(mono.NanoTime())
 	rem := int64(0)
