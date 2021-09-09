@@ -627,19 +627,31 @@ func (b *etlBootstraper) waitPodReady() error {
 		if condition == nil {
 			return cmn.NewErrETL(b.errCtx, "%v", err)
 		}
-		var phase corev1.PodPhase
-		if pod, err := client.Pod(b.pod.Name); err == nil {
-			phase = pod.Status.Phase
-		}
-		var runningPods []string
+
+		var (
+			phase       corev1.PodPhase
+			runningPods []string
+		)
+
 		if pods, err := client.Pods(); err == nil {
 			for idx := range pods.Items {
 				runningPods = append(runningPods, pods.Items[idx].Name)
 			}
 		}
+
+		if pod, err := client.Pod(b.pod.Name); err == nil {
+			phase = pod.Status.Phase
+
+			// TODO: This should be removed once we figure out why the Pods are timing out.
+			debug.Errorf(
+				"phase: %q | conditions: %v | container_statuses: %v | init_container_statuses: %v | running_pods: %v",
+				phase, pod.Status.Conditions, pod.Status.ContainerStatuses, pod.Status.InitContainerStatuses, runningPods,
+			)
+		}
+
 		return cmn.NewErrETL(b.errCtx,
-			`%v (pod condition: %q, pod phase: %q, reason: %q, msg: %q, running pods: %v; expected condition: %q)`,
-			err, condition.Type, phase, condition.Reason, condition.Message, runningPods, corev1.PodReady,
+			`%v (pod condition: %q, pod phase: %q, reason: %q, msg: %q; expected condition: %q)`,
+			err, condition.Type, phase, condition.Reason, condition.Message, corev1.PodReady,
 		)
 	}
 	return nil
