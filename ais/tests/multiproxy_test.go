@@ -983,7 +983,6 @@ func setPrimaryTo(t *testing.T, proxyURL string, smap *cluster.Smap, directURL, 
 	if directURL == "" {
 		directURL = smap.Primary.URL(cmn.NetworkPublic)
 	}
-	// http://host:8081/v1/cluster/proxy/15205:8080
 
 	baseParams := tutils.BaseAPIParams(directURL)
 	tlog.Logf("Setting primary from %s to %s\n", smap.Primary.ID(), toID)

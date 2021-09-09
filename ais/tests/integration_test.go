@@ -1086,6 +1086,11 @@ func TestForwardCP(t *testing.T) {
 	nextProxyID, nextProxyURL, err := chooseNextProxy(m.smap)
 	tassert.CheckFatal(t, err)
 
+	t.Cleanup(func() {
+		// Restore original primary.
+		setPrimaryTo(t, m.proxyURL, m.smap, origURL, origID)
+	})
+
 	tutils.CreateFreshBucket(t, nextProxyURL, m.bck, nil)
 	tlog.Logf("Created bucket %s via non-primary %s\n", m.bck, nextProxyID)
 
