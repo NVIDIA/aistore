@@ -97,11 +97,9 @@ var (
 // listeners //
 ///////////////
 
-func newListeners() *listeners {
-	return &listeners{m: make(map[string]nl.NotifListener, 64)}
-}
+func newListeners() *listeners { return &listeners{m: make(map[string]nl.NotifListener, 64)} }
+func (l *listeners) len() int  { return len(l.m) }
 
-func (l *listeners) len() int { return len(l.m) }
 func (l *listeners) entry(uuid string) (entry nl.NotifListener, exists bool) {
 	l.RLock()
 	entry, exists = l.m[uuid]
@@ -186,14 +184,10 @@ func (*notifs) String() string { return notifsName }
 
 // start listening
 func (n *notifs) add(nl nl.NotifListener) (err error) {
-	if nl.UUID() == "" {
-		return fmt.Errorf("`nl` UUID shouldn't be empty")
-	}
-
+	debug.Assert(cos.IsValidUUID(nl.UUID()))
 	if nl.ActiveCount() == 0 {
-		return fmt.Errorf("cannot add `nl` with no active notifiers")
+		return fmt.Errorf("cannot add %q with no active notifiers", nl)
 	}
-
 	if exists := n.nls.add(nl, false /*locked*/); exists {
 		return
 	}
@@ -369,7 +363,7 @@ func (*notifs) markFinished(nl nl.NotifListener, tsi *cluster.Snode, srcErr erro
 	if srcErr != nil {
 		nl.SetErr(srcErr)
 	}
-	return nl.AllFinished() || aborted
+	return nl.ActiveCount() == 0 || aborted
 }
 
 func (n *notifs) done(nl nl.NotifListener) {

@@ -350,7 +350,6 @@ func (ic *ic) bcastListenIC(nl nl.NotifListener) {
 		actMsg = cmn.ActionMsg{Action: cmn.ActListenToNotif, Value: newNLMsg(nl)}
 		msg    = ic.p.newAmsg(&actMsg, nil)
 	)
-	debug.Assert(nl.ActiveCount() > 0)
 	ic.p.bcastAsyncIC(msg)
 }
 
