@@ -43,9 +43,9 @@ func readDiskStats(disks, _ cos.SimpleKVs) diskBlockStats {
 	return dblockStats
 }
 
-func (dbs dblockStat) Reads() int64      { return 0 } // TODO: not implemented
+func (dblockStat) Reads() int64          { return 0 } // TODO: not implemented
 func (dbs dblockStat) ReadBytes() int64  { return dbs.readBytes }
-func (dbs dblockStat) Writes() int64     { return 0 } // TODO: not implemented
+func (dblockStat) Writes() int64         { return 0 } // TODO: not implemented
 func (dbs dblockStat) WriteBytes() int64 { return dbs.writeBytes }
 func (dbs dblockStat) IOMs() int64       { return dbs.ioMs }
 func (dbs dblockStat) WriteMs() int64    { return dbs.writeMs }

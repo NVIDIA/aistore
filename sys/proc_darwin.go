@@ -5,11 +5,11 @@
 package sys
 
 // TODO: remove hardcoded constants
-func procMem(pid int) (ProcMemStats, error) {
+func procMem(_ int) (ProcMemStats, error) {
 	return ProcMemStats{}, nil
 }
 
 // TODO: remove hardcoded constants
-func procCPU(pid int) (ProcCPUStats, error) {
+func procCPU(_ int) (ProcCPUStats, error) {
 	return ProcCPUStats{}, nil
 }
