@@ -29,6 +29,8 @@ AIStore runs on commodity Linux machines with no special hardware requirements w
 * Extended attributes (`xattrs` - see below)
 * Optionally, Amazon (AWS) or Google Cloud Platform (GCP) account(s)
 
+The git repository contains integration and unit tests that may require a different (and newer) version of Go - please see [testing](#testing-your-cluster) for details.
+
 ### Linux host
 
 Depending on your Linux distribution, you may or may not have `gcc`, `sysstat`, and/or `attr` packages.
@@ -118,7 +120,11 @@ For more development options and tools, please refer to the [development docs](/
 
 ### Testing your cluster
 
-To make sure your cluster was deployed correctly, you can run some tests. For example:
+For development, health-checking a new deployment, or for any other (functional and performance testing) related reason you can run any/all of the included tests.
+
+> To run tests, [Go 1.17 or later](https://golang.org/dl/) is currently required.
+
+For example:
 
 ```console
 $ go test ./ais/tests -v -run=Mirror
