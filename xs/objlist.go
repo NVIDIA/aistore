@@ -121,8 +121,14 @@ func newXact(t cluster.Target, bck *cluster.Bck, smsg *cmn.SelectMsg, uuid strin
 	return xact
 }
 
-func (r *ObjListXact) String() string {
-	return fmt.Sprintf("%s: %s", r.t.Snode(), &r.DemandBase)
+func (r *ObjListXact) String() string { return fmt.Sprintf("%s: %s", r.t.Snode(), &r.DemandBase) }
+
+// skip on-demand idle-ness check
+func (r *ObjListXact) Abort(err error) (ok bool) {
+	if ok = r.XactBase.Abort(err); ok {
+		r.Finish(err)
+	}
+	return
 }
 
 func (r *ObjListXact) Do(msg *cmn.SelectMsg) *Resp {

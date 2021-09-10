@@ -219,7 +219,7 @@ func (r *XactGet) Run(*sync.WaitGroup) {
 	}
 }
 
-func (r *XactGet) Stop(error) { r.Abort() }
+func (r *XactGet) Stop(error) { r.Abort(nil) }
 
 func (r *XactGet) stop() {
 	r.DemandBase.Stop()

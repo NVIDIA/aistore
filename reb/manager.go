@@ -355,7 +355,7 @@ func (reb *Manager) changeStage(newStage uint32) {
 
 func (reb *Manager) recvPush(hdr transport.ObjHdr, _ io.Reader, err error) {
 	if err != nil {
-		glog.Errorf("Failed to get notification %s from %s: %v", hdr.ObjName, hdr.Bck, err)
+		glog.Errorf("%s: failed to receive notification %s from %s: %v", reb.t.Snode(), hdr.ObjName, hdr.Bck, err)
 		return
 	}
 
@@ -367,15 +367,15 @@ func (reb *Manager) recvPush(hdr transport.ObjHdr, _ io.Reader, err error) {
 
 	if req.stage == rebStageAbort && reb.RebID() <= req.rebID {
 		// a target aborted its xaction and sent the signal to others
-		glog.Warningf("Rebalance abort notification from %s", req.daemonID)
+		glog.Warningf("%s: abort notification from %s", reb.t.Snode(), req.daemonID)
 		if reb.xact() != nil {
-			reb.xact().Abort()
+			reb.xact().Abort(nil)
 		}
 		return
 	}
 
 	if reb.RebID() != req.rebID {
-		glog.Warningf("Stage %v push notification: %s", stages[req.stage], reb.rebIDMismatchMsg(req.rebID))
+		glog.Warningf("%s: stage %v push notification %s", reb.t.Snode(), stages[req.stage], reb.rebIDMismatchMsg(req.rebID))
 		return
 	}
 
@@ -498,14 +498,12 @@ func (reb *Manager) retransmit(md *rebArgs) (cnt int) {
 	return
 }
 
-// Aborts rebalance xaction and notifies all other targets.
+// Aborts global rebalance and notifies all other targets.
 func (reb *Manager) abortRebalance() {
 	xreb := reb.xact()
-	if xreb == nil || xreb.Aborted() || xreb.Finished() {
+	if xreb == nil || !xreb.Abort(nil) {
 		return
 	}
-	glog.Info("aborting rebalance...")
-	xreb.Abort()
 	var (
 		req = pushReq{
 			daemonID: reb.t.SID(),

@@ -48,13 +48,13 @@ type (
 		Name() string
 
 		// modifiers
-		Finish(err error)
-		Abort()
+		Finish(error)
+		Abort(error) bool
 		AddNotif(n Notif)
 
-		BytesAdd(cnt int64) int64
+		BytesAdd(int64) int64
 		ObjectsInc() int64
-		ObjectsAdd(cnt int64) int64
+		ObjectsAdd(int64) int64
 	}
 
 	XactStats interface {

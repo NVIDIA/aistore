@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -136,32 +135,14 @@ func (r *DemandBase) ExtStats() *BaseXactStatsExt {
 	return stats
 }
 
-func (r *DemandBase) Abort() {
-	var err error
-	if !r.aborted.CAS(false, true) {
-		glog.Infoln("already aborted: " + r.String())
-		return
+func (r *DemandBase) Abort(err error) (ok bool) {
+	if err == nil && !r.likelyIdle() {
+		err = cmn.NewErrAborted(r.Name(), "x-demand", nil)
 	}
-	if r.Kind() != cmn.ActList {
-		if !r.likelyIdle() {
-			err = cmn.NewErrAborted(r.Name(), "x-demand", nil)
-		}
+	if ok = r.XactBase.Abort(err); ok {
+		r.Finish(err)
 	}
-	r._setEndTime(err)
-	close(r.abrt)
-	glog.Infoln("ABORT: " + r.String())
-}
-
-func (r *DemandBase) Finish(err error) {
-	if r.Aborted() {
-		return
-	}
-	if cmn.IsErrAborted(err) {
-		if r.Kind() == cmn.ActList || r.likelyIdle() {
-			err = nil
-		}
-	}
-	r._setEndTime(err)
+	return
 }
 
 // private: on-demand quiescence

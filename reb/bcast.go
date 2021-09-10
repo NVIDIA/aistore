@@ -284,8 +284,8 @@ func (reb *Manager) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md 
 	// but resilver is still running. Abort local xaction with `Abort`,
 	// do not use `abortRebalance` - no need to broadcast.
 	if status.RebID == reb.RebID() && status.Aborted {
-		glog.Warningf("%s has aborted rebalance (g%d) - aborting...", tsi.ID(), status.RebID)
-		reb.xact().Abort()
+		glog.Warningf("%s aborted %s[g%d] - aborting as well...", tsi, cmn.ActRebalance, status.RebID)
+		reb.xact().Abort(nil)
 		return
 	}
 

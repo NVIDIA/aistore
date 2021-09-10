@@ -195,8 +195,8 @@ func (reb *Manager) serialize(md *rebArgs) (newerRMD, alreadyRunning bool) {
 			otherRebID, err := xaction.S2RebID(otherXreb.ID())
 			debug.AssertNoErr(err)
 			if otherRebID < md.id {
-				otherXreb.Abort()
-				glog.Warningf("%s: aborting older [%s]", logHdr, otherXreb)
+				otherXreb.Abort(nil)
+				glog.Warningf("%s: aborting older %s[%s]", logHdr, cmn.ActRebalance, otherXreb)
 			}
 		}
 		cos.Assert(!canRun)
@@ -243,7 +243,7 @@ func (reb *Manager) rebInit(md *rebArgs, notif *xaction.NotifXact) bool {
 			err = fatalErr
 		}
 		reb.endStreams(err)
-		xact.Abort()
+		xact.Abort(err)
 		reb.Unlock()
 		glog.Errorf("FATAL: %v, WRITE: %v", fatalErr, writeErr)
 		return false

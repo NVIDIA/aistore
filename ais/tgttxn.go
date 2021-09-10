@@ -616,7 +616,7 @@ func (t *targetrunner) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP
 			// if _this_ transaction initiated _that_ on-demand
 			if xtco := txnTco.xtco; xtco != nil && xtco.ID() == c.uuid {
 				xactID = xtco.ID()
-				xtco.Abort()
+				xtco.Abort(nil)
 			}
 		}
 	case cmn.ActCommit:
@@ -753,7 +753,7 @@ func (t *targetrunner) createArchMultiObj(c *txnServerCtx) (string /*xaction uui
 			// if _this_ transaction initiated _that_ on-demand
 			if xarch := txnArch.xarch; xarch != nil && xarch.ID() == c.uuid {
 				xactID = xarch.ID()
-				xarch.Abort()
+				xarch.Abort(nil)
 			}
 		}
 	case cmn.ActCommit:

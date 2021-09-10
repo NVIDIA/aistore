@@ -158,9 +158,7 @@ func (xact *XactBase) EndTime() time.Time {
 // - atomically set end-time
 // - optionally, notify listener(s)
 // - optionally, refresh local capacity stats, etc.
-func (xact *XactBase) _setEndTime(err error) {
-	xact.eutime.Store(time.Now().UnixNano())
-
+func (xact *XactBase) notifyRefresh(err error) {
 	// notifications
 	if n := xact.Notif(); n != nil {
 		nl.OnFinished(n, err)
@@ -189,18 +187,21 @@ func (xact *XactBase) AddNotif(n cluster.Notif) {
 	debug.Assert(!n.Upon(cluster.UponProgress) || xact.notif.P != nil)
 }
 
-func (xact *XactBase) Abort() {
+func (xact *XactBase) Abort(err error) (ok bool) {
 	if !xact.aborted.CAS(false, true) {
-		glog.Infoln("already aborted: " + xact.String())
+		glog.Warningf("%s already aborted", xact)
 		return
 	}
 	close(xact.abrt)
-	glog.Infoln("ABORT: " + xact.String())
+	glog.Infof("%s aborted(%v)", xact, err)
+	return true
 }
 
 func (xact *XactBase) Finish(err error) {
 	if xact.eutime.Load() == 0 {
-		xact._setEndTime(err)
+		if xact.eutime.CAS(0, time.Now().UnixNano()) {
+			xact.notifyRefresh(err)
+		}
 	}
 }
 

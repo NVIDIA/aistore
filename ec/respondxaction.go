@@ -241,7 +241,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 	}
 }
 
-func (r *XactRespond) Stop(error) { r.Abort() }
+func (r *XactRespond) Stop(err error) { r.Abort(err) }
 
 func (r *XactRespond) stop() {
 	r.DemandBase.Stop()

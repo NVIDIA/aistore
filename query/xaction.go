@@ -311,7 +311,7 @@ func (r *ObjectsListingXact) ForEach(apply func(entry *cmn.BucketEntry) error) e
 	)
 	for entry, err = r.Next(); err == nil; entry, err = r.Next() {
 		if err := apply(entry); err != nil {
-			r.Abort()
+			r.Abort(err)
 			return err
 		}
 	}

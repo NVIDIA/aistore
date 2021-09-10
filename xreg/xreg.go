@@ -240,7 +240,7 @@ func (r *registry) doAbort(kind string, bck *cluster.Bck) (aborted bool) {
 		if entry == nil {
 			return false
 		}
-		entry.Get().Abort()
+		entry.Get().Abort(nil)
 		return true
 	}
 	if bck == nil {
@@ -261,7 +261,7 @@ func (r *registry) doAbortByID(uuid string) (aborted bool) {
 	if entry == nil || entry.Finished() {
 		return false
 	}
-	entry.Abort()
+	entry.Abort(nil)
 	return true
 }
 
@@ -337,7 +337,7 @@ func (r *registry) abort(args abortArgs) {
 			abort = args.ty == "" || args.ty == xaction.XactsDtor[xact.Kind()].Scope
 		}
 		if abort {
-			xact.Abort()
+			xact.Abort(nil)
 		}
 		return true
 	})
@@ -508,7 +508,7 @@ func (r *registry) renewLocked(entry Renewable, flt XactFilter, bck *cluster.Bck
 		debug.Assert(wpr == WprAbort || wpr == WprKeepAndStartNew)
 	}
 	if wpr == WprAbort {
-		xprev.Abort()
+		xprev.Abort(nil)
 		time.Sleep(waitAbortDone) // TODO: better
 	}
 	if err = entry.Start(); err != nil {
