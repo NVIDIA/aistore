@@ -1629,9 +1629,13 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 
 		p, err := api.HeadBucket(baseParams, m.bck)
 		tassert.CheckFatal(t, err)
-		if p.Mirror.Copies != 2 {
-			t.Fatalf("%d copies != 2", p.Mirror.Copies)
-		}
+		tassert.Fatalf(t, p.Mirror.Copies == 2, "%d copies != 2", p.Mirror.Copies)
+
+		// Even though the bucket is empty, it can take a short while until the
+		// xaction is propagated and finished.
+		reqArgs := api.XactReqArgs{Kind: cmn.ActMakeNCopies, Bck: m.bck, Timeout: 10 * time.Second}
+		_, err = api.WaitForXaction(baseParams, reqArgs)
+		tassert.CheckFatal(t, err)
 	}
 
 	m.puts()
