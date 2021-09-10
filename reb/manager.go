@@ -232,11 +232,9 @@ func (reb *Manager) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unp
 
 	if stage := reb.stages.stage.Load(); stage >= rebStageFin {
 		reb.laterx.Store(true)
-		f := glog.Warningf
 		if stage > rebStageFin {
-			f = glog.Errorf
+			glog.Errorf("%s: post stage-fin receive from %s %s (stage %s)", reb.t.Snode(), tsid, lom, stages[stage])
 		}
-		f("%s: late receive from %s %s (stage %s)", reb.t.Snode(), tsid, lom, stages[stage])
 	} else if stage < rebStageTraverse {
 		glog.Errorf("%s: early receive from %s %s (stage %s)", reb.t.Snode(), tsid, lom, stages[stage])
 	}
