@@ -122,13 +122,23 @@ $ sudo rm -rf /var/lib/docker
 
 ## Starting AIStore
 
-1. If you have already installed go and configured $GOPATH execute the below command to download AIStore source code and all its dependencies.
+If not already done, [install Go](https://golang.org/doc/install) and [set $GOPATH](https://golang.org/doc/tutorial/getting-started) environment variable.
+
+The steps:
+
+1. Build `aisnode`.
 
 ```console
-$ go get -u -v github.com/NVIDIA/aistore/ais
+$ go install github.com/NVIDIA/aistore/cmd/aisnode@latest
 ```
 
-2. Set up your AWS configuration by using the the [`aws configure`](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html) command.
+2. To get all sources and use scripts, you can clone AIStore repo.
+
+```console
+$ git clone https://github.com/NVIDIA/aistore.git
+```
+
+3. Optionally, setup AWS configuration by running [`aws configure`](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html) command.
 To run AIStore Docker containers, you will need to pass your AWS config and credential directory via flag `-a=<aws directory>` CLI. By default, AWS stores config and credential files in `~/.aws/`
 Example:
 
@@ -136,8 +146,8 @@ Example:
 $ ./deploy_docker.sh -a=~/.aws/
 ```
 
-3. To deploy AIStore, refer to the deployment script in [`deploy/dev/docker`](/deploy/dev/docker/README.md).
-Please note that if you are running the service for the first time, the image build process will take some time; subsequent runs will use the cached images and be much faster.
+Building and running "containerized" AIStore is further documented at [`deploy/dev/docker`](/deploy/dev/docker/README.md).
+Please note: the image building process will take some time but only for the first time; subsequent runs will use already cached images.
 
 ## Helpful docker commands
 

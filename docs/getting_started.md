@@ -25,11 +25,9 @@ AIStore runs on commodity Linux machines with no special hardware requirements w
 > It is expected that within a given cluster, all AIS target machines are identical, hardware-wise.
 
 * [Linux](#Linux-host) (with `gcc`, `sysstat` and `attr` packages, and kernel 4.15+) or [MacOS](#MacOS-host)
-* [Go 1.16 or later](https://golang.org/dl/)
+* [Go 1.17 or later](https://golang.org/dl/)
 * Extended attributes (`xattrs` - see below)
 * Optionally, Amazon (AWS) or Google Cloud Platform (GCP) account(s)
-
-The git repository contains integration and unit tests that may require a different (and newer) version of Go - please see [testing](#testing-your-cluster) for details.
 
 ### Linux host
 
@@ -74,14 +72,13 @@ The following [video](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Devel
 Assuming that [Go](https://golang.org/dl/) toolchain is already installed, the steps to deploy AIS locally on a single development machine are:
 
 ```console
-$ cd $GOPATH/src
-$ go get -v github.com/NVIDIA/aistore/ais
-$ cd github.com/NVIDIA/aistore
+$ cd $GOPATH/src/github.com/NVIDIA
+$ git clone https://github.com/NVIDIA/aistore.git
+$ cd aistore
 $ ./deploy/scripts/clean_deploy.sh
 ```
 where:
 
-* `go get` installs sources and dependencies under your [$GOPATH](https://golang.org/cmd/go/#hdr-GOPATH_environment_variable).
 * [`clean_deploy.sh`](/docs/development.md#clean-deploy) builds various AIStore binaries (such as `aisnode` and `cli`)
 and then deploys a local cluster with 5 proxies and 5 targets by default.
 
@@ -121,8 +118,6 @@ For more development options and tools, please refer to the [development docs](/
 ### Testing your cluster
 
 For development, health-checking a new deployment, or for any other (functional and performance testing) related reason you can run any/all of the included tests.
-
-> To run tests, [Go 1.17 or later](https://golang.org/dl/) is currently required.
 
 For example:
 

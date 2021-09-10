@@ -19,7 +19,7 @@ RUN curl -LO https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd
   tar -C /usr/local -xvzf go${GOLANG_VERSION}.linux-amd64.tar.gz > /dev/null 2>&1 &&\
   rm -rf go${GOLANG_VERSION}.linux-amd64.tar.gz
 
-RUN mkdir -p /tmp/ais && go get -u github.com/rakyll/gotest
+RUN go install github.com/rakyll/gotest@latest
 
 ARG cld_provider=0
 ENV CLD_PROVIDER ${cld_provider}

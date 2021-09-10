@@ -535,16 +535,17 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request, origURL
 // PUT /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	var (
-		si       *cluster.Snode
-		nodeID   string
-		perms    cmn.AccessAttrs
-		err      error
-		smap     = p.owner.smap.get()
-		query    = r.URL.Query()
-		appendTy = query.Get(cmn.URLParamAppendType)
+		si     *cluster.Snode
+		nodeID string
+		perms  cmn.AccessAttrs
+		err    error
+
+		smap             = p.owner.smap.get()
+		query            = r.URL.Query()
+		started          = time.Now()
+		appendTyProvided = query.Has(cmn.URLParamAppendType)
 	)
-	started := time.Now()
-	if appendTy == "" {
+	if !appendTyProvided {
 		perms = cmn.AccessPUT
 	} else {
 		perms = cmn.AccessAPPEND
@@ -587,12 +588,12 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s/%s => %s (append: %v)", r.Method, bck.Name, objName, si, appendTy != "")
+		glog.Infof("%s %s/%s => %s (append: %v)", r.Method, bck.Name, objName, si, appendTyProvided)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
-	if appendTy == "" {
+	if !appendTyProvided {
 		p.statsT.Add(stats.PutCount, 1)
 	} else {
 		p.statsT.Add(stats.AppendCount, 1)

@@ -931,7 +931,7 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	getCii := cos.IsParseBool(query.Get(cmn.URLParamClusterInfo))
 	if getCii {
-		debug.Assert(query.Get(cmn.URLParamRebStatus) == "")
+		debug.Assert(!query.Has(cmn.URLParamRebStatus))
 		cii := &clusterInfo{}
 		cii.fill(&t.httprunner)
 		_ = t.writeJSON(w, r, cii, "cluster-info")

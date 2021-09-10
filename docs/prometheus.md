@@ -94,7 +94,7 @@ The diagram depicts AIS cluster that runs an arbitrary number of nodes with each
 To deploy [statsd_exporter](https://github.com/prometheus/statsd_exporter):
 
 * you could either use [prebuilt container image](https://quay.io/repository/prometheus/statsd-exporter);
-* or, `git clone` or `go get` the exporter's own repository at https://github.com/prometheus/statsd_exporter and then run it as shown above. Just take a note of the default StatsD port: **8125**.
+* or, `git clone` or `go install` the exporter's own repository at https://github.com/prometheus/statsd_exporter and then run it as shown above. Just take a note of the default StatsD port: **8125**.
 
 To test a combination of AIStore and [statsd_exporter](https://github.com/prometheus/statsd_exporter) without Prometheus, run the exporter with debug:
 

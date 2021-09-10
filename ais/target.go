@@ -889,22 +889,22 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	lom.SetAtimeUnix(started.UnixNano())
 
 	var (
-		appendTy = query.Get(cmn.URLParamAppendType)
-		archPath = query.Get(cmn.URLParamArchpath)
-		handle   string
-		err      error
-		errCode  int
+		handle  string
+		err     error
+		errCode int
+
+		archPathProvided = query.Has(cmn.URLParamArchpath)
+		appendTyProvided = query.Has(cmn.URLParamAppendType)
 	)
-	switch {
-	case archPath != "":
+	if archPathProvided {
 		errCode, err = t.doAppendArch(r, lom, started)
-	case appendTy != "":
+	} else if appendTyProvided {
 		handle, errCode, err = t.doAppend(r, lom, started)
 		if err == nil {
 			w.Header().Set(cmn.HdrAppendHandle, handle)
 			return
 		}
-	default:
+	} else {
 		errCode, err = t.doPut(r, lom, started)
 	}
 	if err != nil {
