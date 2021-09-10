@@ -388,6 +388,9 @@ func (m *ioContext) del(cnt ...int) {
 			if err != nil {
 				if cmn.IsErrObjNought(err) {
 					err = nil
+				} else if strings.Contains(err.Error(), "server closed idle connection") {
+					// see (unexported) http.exportErrServerClosedIdle in the Go source
+					err = nil
 				} else if cos.IsErrConnectionNotAvail(err) {
 					errCnt.Add(maxErrCount / 10)
 				} else {
