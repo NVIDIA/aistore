@@ -611,47 +611,25 @@ func (b *etlBootstraper) setPodEnvVariables() {
 // `readinessProbe` config specified the last step gets skipped.
 // NOTE: However, currently, we do require readinessProbe config in the ETL spec.
 func (b *etlBootstraper) waitPodReady() error {
-	var (
-		condition   *corev1.PodCondition
-		client, err = k8s.GetClient()
-	)
+	client, err := k8s.GetClient()
 	if err != nil {
 		return cmn.NewErrETL(b.errCtx, "%v", err)
 	}
 
 	err = wait.PollImmediate(time.Second, time.Duration(b.msg.WaitTimeout), func() (ready bool, err error) {
-		ready, condition, err = checkPodReady(client, b.pod.Name)
+		ready, err = checkPodReady(client, b.pod.Name)
 		return ready, err
 	})
 	if err != nil {
-		if condition == nil {
+		pod, _ := client.Pod(b.pod.Name)
+		if pod == nil {
 			return cmn.NewErrETL(b.errCtx, "%v", err)
 		}
 
-		var (
-			phase       corev1.PodPhase
-			runningPods []string
-		)
-
-		if pods, err := client.Pods(); err == nil {
-			for idx := range pods.Items {
-				runningPods = append(runningPods, pods.Items[idx].Name)
-			}
-		}
-
-		if pod, err := client.Pod(b.pod.Name); err == nil {
-			phase = pod.Status.Phase
-
-			// TODO: This should be removed once we figure out why the Pods are timing out.
-			debug.Errorf(
-				"phase: %q | conditions: %v | container_statuses: %v | init_container_statuses: %v | running_pods: %v",
-				phase, pod.Status.Conditions, pod.Status.ContainerStatuses, pod.Status.InitContainerStatuses, runningPods,
-			)
-		}
-
 		return cmn.NewErrETL(b.errCtx,
-			`%v (pod condition: %q, pod phase: %q, reason: %q, msg: %q; expected condition: %q)`,
-			err, condition.Type, phase, condition.Reason, condition.Message, corev1.PodReady,
+			`%v (pod phase: %q, pod conditions: %s; expected condition: %s)`,
+			err, pod.Status.Phase, podConditionsToString(pod.Status.Conditions),
+			podConditionToString(corev1.PodCondition{Type: corev1.PodReady, Status: corev1.ConditionTrue}),
 		)
 	}
 	return nil
@@ -661,11 +639,11 @@ func (b *etlBootstraper) waitPodReady() error {
 // `ContainersReady`, `Initialized`, `Ready`
 // (see https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle).
 // First, we check that the Pod is still running (neither succeeded, nor failed),
-// and secondly, whether the last (chronologically) transition is `Ready`.
-func checkPodReady(client k8s.Client, podName string) (ready bool, latestCond *corev1.PodCondition, err error) {
+// and secondly, whether it contains `Ready` condition.
+func checkPodReady(client k8s.Client, podName string) (ready bool, err error) {
 	var p *corev1.Pod
 	if p, err = client.Pod(podName); err != nil {
-		return false, nil, err
+		return false, err
 	}
 
 	// Pod has run to completion, either by failing or by succeeding. We don't
@@ -673,18 +651,19 @@ func checkPodReady(client k8s.Client, podName string) (ready bool, latestCond *c
 	// listen to upcoming requests and never terminate.
 	switch p.Status.Phase {
 	case corev1.PodFailed, corev1.PodSucceeded:
-		err = fmt.Errorf("pod ran to completion (phase: %s), state message: %q",
-			p.Status.Phase, p.Status.Message)
-		if cond, exists := latestCondition(p.Status.Conditions); exists {
-			return false, &cond, err
-		}
-		return false, nil, err
+		return false, fmt.Errorf(
+			"pod ran to completion (phase: %s), state message: %q",
+			p.Status.Phase, p.Status.Message,
+		)
 	}
 
-	if cond, exists := latestCondition(p.Status.Conditions); exists {
-		return cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue, &cond, nil
+	for _, cond := range p.Status.Conditions {
+		if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
+			return true, nil
+		}
 	}
-	return false, nil, nil
+
+	return false, nil
 }
 
 func (b *etlBootstraper) getPodHostIP() (string, error) {
@@ -765,16 +744,24 @@ func (b *etlBootstraper) getServiceNodePort() (uint, error) {
 	return uint(port), nil
 }
 
-func latestCondition(conditions []corev1.PodCondition) (latestCondition corev1.PodCondition, exists bool) {
-	if len(conditions) == 0 {
-		return latestCondition, false
+func podConditionsToString(conditions []corev1.PodCondition) string {
+	parts := make([]string, 0, len(conditions))
+	for _, cond := range conditions {
+		parts = append(parts, podConditionToString(cond))
 	}
+	return "[" + strings.Join(parts, ", ") + "]"
+}
 
-	latestCondition = conditions[0]
-	for _, c := range conditions[1:] {
-		if c.LastTransitionTime.After(latestCondition.LastTransitionTime.Time) {
-			latestCondition = c
-		}
+func podConditionToString(cond corev1.PodCondition) string {
+	parts := []string{
+		fmt.Sprintf("type: %q", cond.Type),
+		fmt.Sprintf("status: %q", cond.Status),
 	}
-	return latestCondition, true
+	if cond.Reason != "" {
+		parts = append(parts, fmt.Sprintf("reason: %q", cond.Reason))
+	}
+	if cond.Message != "" {
+		parts = append(parts, fmt.Sprintf("msg: %q", cond.Message))
+	}
+	return "{" + strings.Join(parts, ", ") + "}"
 }
