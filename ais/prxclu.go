@@ -538,8 +538,8 @@ func (p *proxyrunner) _updPost(ctx *smapModifier, clone *smapX) {
 		}
 	}
 	// NOTE: trigger rebalance when target with the same ID already exists
-	//       (and see mustRunRebalance() for other conditions)
-	if ctx.exists || mustRunRebalance(ctx.smap, clone) {
+	//       (and see mustRunRebalance() for all other conditions)
+	if ctx.exists || mustRunRebalance(ctx, clone) {
 		rmdCtx := &rmdModifier{
 			pre: func(_ *rmdModifier, clone *rebMD) {
 				clone.TargetIDs = []string{ctx.nsi.ID()}
@@ -629,7 +629,7 @@ func (p *proxyrunner) _newRebRMD(ctx *smapModifier, clone *smapX) {
 	if ctx.skipReb {
 		return
 	}
-	if mustRunRebalance(ctx.smap, clone) {
+	if mustRunRebalance(ctx, clone) {
 		rmdCtx := &rmdModifier{pre: func(_ *rmdModifier, clone *rebMD) { clone.inc() }}
 		rmdClone, err := p.owner.rmd.modify(rmdCtx)
 		if err != nil {
@@ -658,7 +658,7 @@ func (p *proxyrunner) _syncFinal(ctx *smapModifier, clone *smapX) {
 	}
 	debug.Assert(clone._sgl != nil)
 	wg := p.metasyncer.sync(pairs...)
-	if ctx.isTarget {
+	if ctx._mustReb {
 		wg.Wait()
 	}
 }
@@ -1022,7 +1022,7 @@ func (p *proxyrunner) stopMaintenance(w http.ResponseWriter, r *http.Request, ms
 		p.writeErrf(w, r, "node %q is not under maintenance", opts.DaemonID)
 		return
 	}
-	rebID, err := p.cancelMaintenance(msg, si, &opts)
+	rebID, err := p.cancelMaintenance(msg, &opts)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -1203,16 +1203,15 @@ func (p *proxyrunner) rebalanceAndRmSelf(msg *cmn.ActionMsg, si *cluster.Snode) 
 }
 
 // Stop rebalance, cleanup, and get the node back to the cluster.
-func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, si *cluster.Snode, opts *cmn.ActValRmNode) (rebID string, err error) {
+func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, opts *cmn.ActValRmNode) (rebID string, err error) {
 	ctx := &smapModifier{
-		pre:      p._cancelMaintPre,
-		post:     p._newRebRMD,
-		final:    p._syncFinal,
-		sid:      opts.DaemonID,
-		skipReb:  opts.SkipRebalance,
-		msg:      msg,
-		flags:    cluster.SnodeMaintenanceMask,
-		isTarget: si.IsTarget(),
+		pre:     p._cancelMaintPre,
+		post:    p._newRebRMD,
+		final:   p._syncFinal,
+		sid:     opts.DaemonID,
+		skipReb: opts.SkipRebalance,
+		msg:     msg,
+		flags:   cluster.SnodeMaintenanceMask,
 	}
 	err = p.owner.smap.modify(ctx)
 	if ctx.rmd != nil {
@@ -1430,13 +1429,12 @@ func (p *proxyrunner) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb 
 
 func (p *proxyrunner) unregNode(msg *cmn.ActionMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
 	ctx := &smapModifier{
-		pre:      p._unregNodePre,
-		post:     p._newRebRMD,
-		final:    p._syncFinal,
-		msg:      msg,
-		sid:      si.ID(),
-		skipReb:  skipReb,
-		isTarget: si.IsTarget(),
+		pre:     p._unregNodePre,
+		post:    p._newRebRMD,
+		final:   p._syncFinal,
+		msg:     msg,
+		sid:     si.ID(),
+		skipReb: skipReb,
 	}
 	err = p.owner.smap.modify(ctx)
 	return ctx.status, err
@@ -1502,7 +1500,9 @@ func (p *proxyrunner) canRunRebalance() error {
 	return nil
 }
 
-func mustRunRebalance(prev, cur *smapX) bool {
+func mustRunRebalance(ctx *smapModifier, cur *smapX) bool {
+	prev := ctx.smap
+	debug.Assert(!ctx._mustReb)
 	if !cmn.GCO.Get().Rebalance.Enabled {
 		return false
 	}
@@ -1511,6 +1511,7 @@ func mustRunRebalance(prev, cur *smapX) bool {
 			continue
 		}
 		if prev.GetNodeNotMaint(si.ID()) == nil { // added or activated
+			ctx._mustReb = true
 			return true
 		}
 	}
@@ -1519,6 +1520,7 @@ func mustRunRebalance(prev, cur *smapX) bool {
 			continue
 		}
 		if cur.GetNodeNotMaint(si.ID()) == nil { // deleted or deactivated
+			ctx._mustReb = true
 			return true
 		}
 	}

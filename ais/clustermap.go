@@ -83,7 +83,7 @@ type (
 		status   int                // http.Status* of operation
 		exists   bool               // node (nsi) added already exists in `smap`
 		skipReb  bool               // skip rebalance when target added/removed
-		isTarget bool               // the node added/removed is a target
+		_mustReb bool               // must run rebalance (modifier's internal)
 	}
 
 	rmdModifier struct {

@@ -826,12 +826,11 @@ func (p *proxyrunner) markMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) err
 		debug.AssertMsg(false, "invalid action: "+msg.Action)
 	}
 	ctx := &smapModifier{
-		pre:      p._markMaint,
-		final:    p._syncFinal,
-		sid:      si.ID(),
-		flags:    flags,
-		msg:      msg,
-		isTarget: si.IsTarget(),
+		pre:   p._markMaint,
+		final: p._syncFinal,
+		sid:   si.ID(),
+		flags: flags,
+		msg:   msg,
 	}
 	return p.owner.smap.modify(ctx)
 }
