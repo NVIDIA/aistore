@@ -1175,7 +1175,7 @@ func (h *httprunner) callerNotify(n cluster.Notif, err error, kind string) {
 	debug.Assert(kind == cmn.Progress || kind == cmn.Finished)
 	if len(dsts) == 1 && dsts[0] == equalIC {
 		for pid, psi := range smap.Pmap {
-			if smap.IsIC(psi) && pid != h.si.ID() && !smap.Pmap.InMaintenance(psi) {
+			if smap.IsIC(psi) && pid != h.si.ID() && !psi.InMaintenance() {
 				nodes = append(nodes, psi)
 			}
 		}
@@ -1282,7 +1282,7 @@ func (h *httprunner) bcastNodes(bargs *bcastArgs) sliceResults {
 				if si.ID() == h.si.ID() {
 					continue
 				}
-				if !bargs.ignoreMaintenance && nodeMap.InMaintenance(si) {
+				if !bargs.ignoreMaintenance && si.InMaintenance() {
 					continue
 				}
 				wg.Add(1)

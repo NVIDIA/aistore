@@ -353,9 +353,12 @@ func (p *proxyrunner) _setPropsPre(ctx *bmdModifier, clone *bucketMD) (err error
 
 // rename-bucket: { confirm existence -- begin -- RebID -- metasync -- commit -- wait for rebalance and unlock }
 func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
-	if rebErr := p.canStartRebalance(); rebErr != nil {
-		err = fmt.Errorf("%s: bucket %s cannot be renamed: %w", p.si, bckFrom, rebErr)
-		return
+	if err = p.canRunRebalance(); err != nil {
+		if _, ok := err.(*errNotEnoughTargets); !ok || p.owner.smap.get().CountActiveTargets() == 0 {
+			err = fmt.Errorf("%s: bucket %s cannot be renamed: %w", p.si, bckFrom, err)
+			return
+		}
+		err = nil
 	}
 	// 1. confirm existence & non-existence
 	bmd := p.owner.bmd.get()
@@ -387,12 +390,13 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 
 	// 3. update BMD locally & metasync updated BMD
 	bmdCtx := &bmdModifier{
-		pre:   _renameBMDPre,
-		final: p._syncBMDFinal,
-		msg:   msg,
-		txnID: c.uuid,
-		bcks:  []*cluster.Bck{bckFrom, bckTo},
-		wait:  waitmsync,
+		pre:          _renameBMDPre,
+		final:        p._syncBMDFinal,
+		msg:          msg,
+		txnID:        c.uuid,
+		bcks:         []*cluster.Bck{bckFrom, bckTo},
+		wait:         waitmsync,
+		singleTarget: c.smap.CountActiveTargets() == 1,
 	}
 
 	bmd, err = p.owner.bmd.modify(bmdCtx)
@@ -402,6 +406,13 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 		return
 	}
 	c.msg.BMDVersion = bmd.version()
+
+	// single target case: commit and done
+	if c.smap.CountActiveTargets() == 1 {
+		c.req.Body = cos.MustMarshal(c.msg)
+		_ = c.bcast(cmn.ActCommit, c.commitTimeout(false))
+		return
+	}
 
 	ctx := &rmdModifier{
 		pre: func(_ *rmdModifier, clone *rebMD) {
@@ -417,8 +428,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	c.msg.RMDVersion = rmd.version()
 
 	// 4. IC
-	nl := xaction.NewXactNL(c.uuid, c.msg.Action,
-		&c.smap.Smap, nil, bckFrom.Bck, bckTo.Bck)
+	nl := xaction.NewXactNL(c.uuid, c.msg.Action, &c.smap.Smap, nil, bckFrom.Bck, bckTo.Bck)
 	nl.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{smap: c.smap, nl: nl, query: c.req.Query})
 
@@ -433,16 +443,12 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	// Register rebalance `nl`
 	nl = xaction.NewXactNL(xaction.RebID2S(rmd.Version), cmn.ActRebalance, &c.smap.Smap, nil)
 	nl.SetOwner(equalIC)
-
-	// Rely on metasync to register rebalance/resilver `nl` on all IC members.  See `p.receiveRMD`.
 	err = p.notifs.add(nl)
 	debug.AssertNoErr(err)
 
 	// Register resilver `nl`
 	nl = xaction.NewXactNL(rmd.Resilver, cmn.ActResilver, &c.smap.Smap, nil)
 	nl.SetOwner(equalIC)
-
-	// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
 	err = p.notifs.add(nl)
 	debug.AssertNoErr(err)
 
@@ -462,7 +468,9 @@ func _renameBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 
 	added := clone.add(bckTo, bckTo.Props)
 	cos.Assert(added)
-	bckFrom.Props.Renamed = cmn.ActMoveBck
+	if !ctx.singleTarget {
+		bckFrom.Props.Renamed = cmn.ActMoveBck
+	}
 	clone.set(bckFrom, bckFrom.Props)
 	return nil
 }
@@ -758,11 +766,12 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, op
 		rebEnabled = cmn.GCO.Get().Rebalance.Enabled
 	)
 	if si.IsTarget() && !opts.SkipRebalance && rebEnabled {
-		if err = p.canStartRebalance(); err != nil {
-			// special case: removing the very last target
-			if _, ok := err.(*errNotEnoughTargets); !ok {
+		if err = p.canRunRebalance(); err != nil {
+			// proceed anyway when removing the very last target
+			if _, ok := err.(*errNotEnoughTargets); !ok || p.owner.smap.get().CountActiveTargets() == 0 {
 				return
 			}
+			err = nil
 		}
 	}
 	// 1. begin

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -329,9 +330,17 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regressionTestData, numPuts int, objNames []string) {
 	xactArgs := api.XactReqArgs{Kind: cmn.ActMoveBck, Bck: rtd.renamedBck, Timeout: rebalanceTimeout}
 	_, err := api.WaitForXaction(baseParams, xactArgs)
-	tassert.CheckFatal(t, err)
-	tlog.Logf("xaction (rename %s=>%s) done\n", rtd.bck, rtd.renamedBck)
-
+	if err != nil {
+		if httpErr, ok := err.(*cmn.ErrHTTP); ok && httpErr.Status == http.StatusNotFound {
+			smap := tutils.GetClusterMap(t, proxyURL)
+			if smap.CountActiveTargets() == 1 {
+				err = nil
+			}
+		}
+		tassert.CheckFatal(t, err)
+	} else {
+		tlog.Logf("xaction (rename %s=>%s) done\n", rtd.bck, rtd.renamedBck)
+	}
 	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(rtd.bck))
 	tassert.CheckFatal(t, err)
 

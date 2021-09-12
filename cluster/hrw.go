@@ -17,7 +17,7 @@ import (
 // A variant of consistent hash based on rendezvous algorithm by Thaler and Ravishankar,
 // aka highest random weight (HRW)
 
-// Returns the target with highest HRW that is "available"(e.g, is not under maintenance).
+// Returns target with the highest HRW.
 func HrwTarget(uname string, smap *Smap, inMaintenance ...bool) (si *Snode, err error) {
 	var (
 		max             uint64
@@ -28,8 +28,7 @@ func HrwTarget(uname string, smap *Smap, inMaintenance ...bool) (si *Snode, err 
 		skipMaintenance = !inMaintenance[0]
 	}
 	for _, tsi := range smap.Tmap {
-		// Assumes that sinfo.idDigest is initialized
-		if skipMaintenance && tsi.inMaintenance() {
+		if skipMaintenance && tsi.InMaintenance() {
 			continue
 		}
 		cs := xoshiro256.Hash(tsi.idDigest ^ digest)
@@ -97,7 +96,7 @@ func HrwTargetList(uname string, smap *Smap, count int) (sis Nodes, err error) {
 
 	for _, tsi := range smap.Tmap {
 		cs := xoshiro256.Hash(tsi.idDigest ^ digest)
-		if tsi.inMaintenance() {
+		if tsi.InMaintenance() {
 			continue
 		}
 		hlist.add(cs, tsi)
@@ -119,7 +118,7 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, err error) {
 		if psi.Flags.IsSet(SnodeNonElectable) {
 			continue
 		}
-		if psi.inMaintenance() {
+		if psi.InMaintenance() {
 			continue
 		}
 		if psi.idDigest >= max {
@@ -139,7 +138,7 @@ func HrwIC(smap *Smap, uuid string) (pi *Snode, err error) {
 		digest = xxhash.ChecksumString64S(uuid, cos.MLCG32)
 	)
 	for _, psi := range smap.Pmap {
-		if psi.inMaintenance() || !psi.isIC() {
+		if psi.InMaintenance() || !psi.isIC() {
 			continue
 		}
 		cs := xoshiro256.Hash(psi.idDigest ^ digest)
@@ -162,7 +161,7 @@ func HrwTargetTask(uuid string, smap *Smap) (si *Snode, err error) {
 		digest = xxhash.ChecksumString64S(uuid, cos.MLCG32)
 	)
 	for _, tsi := range smap.Tmap {
-		if tsi.inMaintenance() {
+		if tsi.InMaintenance() {
 			continue
 		}
 		// Assumes that sinfo.idDigest is initialized

@@ -207,7 +207,7 @@ func (pkr *proxyKeepalive) updateSmap() (stopped bool) {
 			if !pkr.isTimeToPing(sid) {
 				continue
 			}
-			if daemons.InMaintenance(si) {
+			if si.InMaintenance() {
 				continue
 			}
 			// pinging

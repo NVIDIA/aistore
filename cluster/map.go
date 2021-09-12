@@ -242,10 +242,9 @@ func (d *Snode) isDuplicate(n *Snode) error {
 func (d *Snode) IsProxy() bool  { return d.DaemonType == cmn.Proxy }
 func (d *Snode) IsTarget() bool { return d.DaemonType == cmn.Target }
 
-// Functions nonElectable, inMaintenance, and isIC must be used in `cluster`
-// package only. All other packages must use Smap's or NodeMap's methods
+// node flags
+func (d *Snode) InMaintenance() bool { return d.Flags.IsAnySet(SnodeMaintenanceMask) }
 func (d *Snode) nonElectable() bool  { return d.Flags.IsSet(SnodeNonElectable) }
-func (d *Snode) inMaintenance() bool { return d.Flags.IsAnySet(SnodeMaintenanceMask) }
 func (d *Snode) isIC() bool          { return d.Flags.IsSet(SnodeIC) }
 
 //////////////////////
@@ -317,7 +316,7 @@ func (m *Smap) CountProxies() int { return len(m.Pmap) }
 func (m *Smap) Count() int        { return len(m.Pmap) + len(m.Tmap) }
 func (m *Smap) CountActiveTargets() (count int) {
 	for _, t := range m.Tmap {
-		if !t.inMaintenance() {
+		if !t.InMaintenance() {
 			count++
 		}
 	}
@@ -335,7 +334,7 @@ func (m *Smap) CountNonElectable() (count int) {
 
 func (m *Smap) CountActiveProxies() (count int) {
 	for _, t := range m.Pmap {
-		if !t.inMaintenance() {
+		if !t.InMaintenance() {
 			count++
 		}
 	}
@@ -384,7 +383,7 @@ func (m *Smap) GetNode(id string) *Snode {
 
 func (m *Smap) GetRandTarget() (tsi *Snode, err error) {
 	for _, tsi = range m.Tmap {
-		if tsi.inMaintenance() {
+		if tsi.InMaintenance() {
 			tsi = nil
 			continue
 		}
@@ -397,7 +396,7 @@ func (m *Smap) GetRandTarget() (tsi *Snode, err error) {
 func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {
 	if excludePrimary {
 		for _, proxy := range m.Pmap {
-			if proxy.inMaintenance() {
+			if proxy.InMaintenance() {
 				continue
 			}
 			if m.Primary.DaemonID != proxy.DaemonID {
@@ -408,7 +407,7 @@ func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {
 	}
 	cnt := 0
 	for _, psi := range m.Pmap {
-		if psi.inMaintenance() {
+		if psi.InMaintenance() {
 			cnt++
 			continue
 		}
@@ -472,7 +471,7 @@ func (m *Smap) NonElectable(psi *Snode) (ok bool) {
 // not nil when present and _not_ in maintenance (compare w/ PresentInMaint)
 func (m *Smap) GetNodeNotMaint(sid string) (si *Snode) {
 	si = m.GetNode(sid)
-	if si != nil && si.inMaintenance() {
+	if si != nil && si.InMaintenance() {
 		si = nil
 	}
 	return
@@ -481,7 +480,7 @@ func (m *Smap) GetNodeNotMaint(sid string) (si *Snode) {
 // true when present and in maintenance (compare w/ GetNodeNotMaint)
 func (m *Smap) PresentInMaint(si *Snode) (ok bool) {
 	node := m.GetNode(si.ID())
-	return node != nil && node.inMaintenance()
+	return node != nil && node.InMaintenance()
 }
 
 func (m *Smap) IsIC(psi *Snode) (ok bool) {
@@ -525,7 +524,7 @@ func (m NodeMap) Add(snode *Snode) { debug.Assert(m != nil); m[snode.DaemonID] =
 func (m NodeMap) ActiveMap() (clone NodeMap) {
 	clone = make(NodeMap, len(m))
 	for id, node := range m {
-		if node.inMaintenance() {
+		if node.InMaintenance() {
 			continue
 		}
 		clone[id] = node
@@ -536,7 +535,7 @@ func (m NodeMap) ActiveMap() (clone NodeMap) {
 func (m NodeMap) ActiveNodes() []*Snode {
 	snodes := make([]*Snode, 0, len(m))
 	for _, node := range m {
-		if node.inMaintenance() {
+		if node.InMaintenance() {
 			continue
 		}
 		snodes = append(snodes, node)
@@ -547,11 +546,6 @@ func (m NodeMap) ActiveNodes() []*Snode {
 func (m NodeMap) Contains(daeID string) (exists bool) {
 	_, exists = m[daeID]
 	return
-}
-
-func (m NodeMap) InMaintenance(si *Snode) bool {
-	node, exists := m[si.ID()]
-	return exists && node.inMaintenance()
 }
 
 func mapsEq(a, b NodeMap) bool {

@@ -88,6 +88,7 @@ type (
 		needReMirror bool
 		needReEC     bool
 		terminate    bool
+		singleTarget bool
 	}
 )
 
