@@ -1646,9 +1646,9 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 		r.ContentLength = int64(len(body)) // Directly setting `Content-Length` header.
 	}
 	if msg != nil {
-		glog.Infof(`%s: forwarding "%s:%s" to the primary %s`, p.si, msg.Action, s, smap.Primary)
+		glog.Infof("%s: forwarding \"%s:%s\" to the primary %s", p.si, msg.Action, s, smap.Primary.StringEx())
 	} else {
-		glog.Infof("%s: forwarding %q to the primary %s", p.si, s, smap.Primary)
+		glog.Infof("%s: forwarding %q to the primary %s", p.si, s, smap.Primary.StringEx())
 	}
 	primary.rp.ServeHTTP(w, r)
 	return true

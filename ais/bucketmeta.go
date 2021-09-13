@@ -197,7 +197,7 @@ func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *cluster.Snode, caller s
 	}
 	nsiname := caller
 	if nsi != nil {
-		nsiname = nsi.String()
+		nsiname = nsi.StringEx()
 	} else if nsiname == "" {
 		nsiname = "???"
 	}

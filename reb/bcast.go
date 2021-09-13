@@ -144,22 +144,22 @@ func (reb *Manager) pingTarget(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 		_, code, err := reb.t.Health(tsi, md.config.Timeout.MaxKeepalive.D(), nil)
 		if err == nil {
 			if i > 0 {
-				glog.Infof("%s: %s is online", logHdr, tsi)
+				glog.Infof("%s: %s is online", logHdr, tsi.StringEx())
 			}
 			return true
 		}
 		if !cos.IsUnreachable(err, code) {
-			glog.Errorf("%s: health(%s) returned err %v(%d) - aborting", logHdr, tsi, err, code)
+			glog.Errorf("%s: health(%s) returned err %v(%d) - aborting", logHdr, tsi.StringEx(), err, code)
 			return
 		}
-		glog.Warningf("%s: waiting for %s, err %v(%d)", logHdr, tsi, err, code)
+		glog.Warningf("%s: waiting for %s, err %v(%d)", logHdr, tsi.StringEx(), err, code)
 		time.Sleep(sleep)
 		nver := reb.t.Sowner().Get().Version
 		if nver > ver {
 			return
 		}
 	}
-	glog.Errorf("%s: timed-out waiting for %s", logHdr, tsi)
+	glog.Errorf("%s: timed-out waiting for %s", logHdr, tsi.StringEx())
 	return
 }
 
@@ -185,7 +185,7 @@ func (reb *Manager) rxReady(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 		}
 		curwt += sleep
 	}
-	glog.Errorf("%s: timed out waiting for %s to reach %s state", logHdr, tsi, stages[rebStageTraverse])
+	glog.Errorf("%s: timed out waiting for %s to reach %s state", logHdr, tsi.StringEx(), stages[rebStageTraverse])
 	return
 }
 
@@ -224,20 +224,20 @@ func (reb *Manager) waitFinExtended(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 		var w4me bool // true: this target is waiting for ACKs from me
 		for _, si := range status.Targets {
 			if si.ID() == reb.t.SID() {
-				glog.Infof("%s: keep wack <= %s[%s]", logHdr, tsi, stages[status.Stage])
+				glog.Infof("%s: keep wack <= %s[%s]", logHdr, tsi.StringEx(), stages[status.Stage])
 				w4me = true
 				break
 			}
 		}
 		if !w4me {
-			glog.Infof("%s: %s[%s] ok (not waiting for me)", logHdr, tsi, stages[status.Stage])
+			glog.Infof("%s: %s[%s] ok (not waiting for me)", logHdr, tsi.StringEx(), stages[status.Stage])
 			ok = true
 			return
 		}
 		time.Sleep(sleepRetry)
 		curwt += sleepRetry
 	}
-	glog.Errorf("%s: timed out waiting for %s to reach %s", logHdr, tsi, stages[rebStageFin])
+	glog.Errorf("%s: timed out waiting for %s to reach %s", logHdr, tsi.StringEx(), stages[rebStageFin])
 	return
 }
 
@@ -258,33 +258,33 @@ func (reb *Manager) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md 
 		body, code, err = reb.t.Health(tsi, cmn.DefaultTimeout, query) // retry once
 	}
 	if err != nil {
-		glog.Errorf("%s: health(%s) returned err %v(%d) - aborting", logHdr, tsi, err, code)
+		glog.Errorf("%s: health(%s) returned err %v(%d) - aborting", logHdr, tsi.StringEx(), err, code)
 		reb.abortRebalance()
 		return
 	}
 	status = &Status{}
 	err = jsoniter.Unmarshal(body, status)
 	if err != nil {
-		glog.Errorf("%s: unexpected: failed to unmarshal (%s: %v)", logHdr, tsi, err)
+		glog.Errorf("%s: unexpected: failed to unmarshal (%s: %v)", logHdr, tsi.StringEx(), err)
 		reb.abortRebalance()
 		return
 	}
 	// enforce same global transaction ID
 	if status.RebID > reb.rebID.Load() {
-		glog.Errorf("%s: %s runs newer (g%d) transaction - aborting...", logHdr, tsi, status.RebID)
+		glog.Errorf("%s: %s runs newer (g%d) transaction - aborting...", logHdr, tsi.StringEx(), status.RebID)
 		reb.abortRebalance()
 		return
 	}
 	// let the target to catch-up
 	if status.RebID < reb.RebID() {
-		glog.Warningf("%s: %s runs older (g%d) transaction - keep waiting...", logHdr, tsi, status.RebID)
+		glog.Warningf("%s: %s runs older (g%d) transaction - keep waiting...", logHdr, tsi.StringEx(), status.RebID)
 		return
 	}
 	// Remote target has aborted its running rebalance with the same ID as local,
 	// but resilver is still running. Abort local xaction with `Abort`,
 	// do not use `abortRebalance` - no need to broadcast.
 	if status.RebID == reb.RebID() && status.Aborted {
-		glog.Warningf("%s aborted %s[g%d] - aborting as well...", tsi, cmn.ActRebalance, status.RebID)
+		glog.Warningf("%s aborted %s[g%d] - aborting as well...", tsi.StringEx(), cmn.ActRebalance, status.RebID)
 		reb.xact().Abort(nil)
 		return
 	}
@@ -293,6 +293,7 @@ func (reb *Manager) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md 
 		ok = true
 		return
 	}
-	glog.Infof("%s: %s[%s] not yet at the right stage %s", logHdr, tsi, stages[status.Stage], stages[desiredStage])
+	glog.Infof("%s: %s[%s] not yet at the right stage %s",
+		logHdr, tsi.StringEx(), stages[status.Stage], stages[desiredStage])
 	return
 }

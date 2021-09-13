@@ -233,7 +233,8 @@ func (reb *Manager) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unp
 	if stage := reb.stages.stage.Load(); stage >= rebStageFin {
 		reb.laterx.Store(true)
 		if stage > rebStageFin {
-			glog.Errorf("%s: post stage-fin receive from %s %s (stage %s)", reb.t.Snode(), tsid, lom, stages[stage])
+			glog.Errorf("%s: post stage-fin receive from %s %s (stage %s)",
+				reb.t.Snode(), tsid, lom, stages[stage])
 		}
 	} else if stage < rebStageTraverse {
 		glog.Errorf("%s: early receive from %s %s (stage %s)", reb.t.Snode(), tsid, lom, stages[stage])
@@ -472,17 +473,17 @@ func (reb *Manager) retransmit(md *rebArgs) (cnt int) {
 			tsi, _ := cluster.HrwTarget(lom.Uname(), md.smap)
 			if reb.t.LookupRemoteSingle(lom, tsi) {
 				if glog.FastV(4, glog.SmoduleReb) {
-					glog.Infof("%s: HEAD ok %s at %s", loghdr, lom, tsi)
+					glog.Infof("%s: HEAD ok %s at %s", loghdr, lom, tsi.StringEx())
 				}
 				delete(lomAck.q, uname)
 				continue
 			}
 			// retransmit
 			if roc, err := _prepSend(lom); err != nil {
-				glog.Errorf("%s: failed to retransmit %s => %s: %v", loghdr, lom, tsi, err)
+				glog.Errorf("%s: failed to retransmit %s => %s: %v", loghdr, lom, tsi.StringEx(), err)
 			} else {
 				rj.doSend(lom, tsi, roc)
-				glog.Warningf("%s: retransmitting %s => %s", loghdr, lom, tsi)
+				glog.Warningf("%s: retransmitting %s => %s", loghdr, lom, tsi.StringEx())
 				cnt++
 			}
 			if aborted() {

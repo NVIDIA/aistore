@@ -147,18 +147,16 @@ func (d *Snode) Digest() uint64 {
 
 func (d *Snode) ID() string   { return d.DaemonID }
 func (d *Snode) Type() string { return d.DaemonType }
-func (d *Snode) Name() string { return d.name }
-func (d *Snode) setName() {
-	if d.IsProxy() {
-		d.name = "p[" + d.DaemonID + "]"
-	} else {
-		debug.Assert(d.IsTarget())
-		d.name = "t[" + d.DaemonID + "]"
-	}
-}
 
-func (d *Snode) String() string {
-	return d.Name()
+func (d *Snode) Name() string   { return d.name }
+func (d *Snode) String() string { return d.Name() }
+func (d *Snode) setName()       { d.name = d.StringEx() }
+
+func (d *Snode) StringEx() string {
+	if d.IsProxy() {
+		return "p[" + d.DaemonID + "]"
+	}
+	return "t[" + d.DaemonID + "]"
 }
 
 func (d *Snode) nameNets() string {
@@ -307,8 +305,12 @@ func (m *Smap) StringEx() string {
 	if m == nil {
 		return "Smap <nil>"
 	}
-	return fmt.Sprintf("Smap v%d[%s, pid=%s, t=%d, p=%d]", m.Version, m.UUID, m.Primary,
-		m.CountTargets(), m.CountProxies())
+	if m.Primary == nil {
+		return fmt.Sprintf("Smap v%d[%s, primary=nil, t=%d, p=%d]", m.Version, m.UUID,
+			m.CountTargets(), m.CountProxies())
+	}
+	return fmt.Sprintf("Smap v%d[%s, primary=%s, t=%d, p=%d]", m.Version, m.UUID,
+		m.Primary.StringEx(), m.CountTargets(), m.CountProxies())
 }
 
 func (m *Smap) CountTargets() int { return len(m.Tmap) }

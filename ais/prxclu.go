@@ -319,7 +319,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if userRegister {
 		si, err := p.getDaemonInfo(nsi)
 		if err != nil {
-			p.writeErrf(w, r, "failed to obtain daemon info from %q, err: %v",
+			p.writeErrf(w, r, "failed to obtain daemon info from %q: %v",
 				nsi.URL(cmn.NetworkPublic), err)
 			return
 		}
@@ -349,7 +349,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := validateHostname(nsi.PublicNet.NodeHostname); err != nil {
-		p.writeErrf(w, r, "%s: failed to %s %s - (err: %v)", p.si, tag, nsi, err)
+		p.writeErrf(w, r, "%s: failed to %s %s - (err: %v)", p.si, tag, nsi.StringEx(), err)
 		return
 	}
 
@@ -373,10 +373,10 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 				p.writeErrf(w, r, "failed to obtain daemon info, err: %v", err)
 				return
 			} else if duplicate {
-				p.writeErrf(w, r, "duplicate node ID %q (%s, %s)", nsi.ID(), osi, nsi)
+				p.writeErrf(w, r, "duplicate node ID %q (%s, %s)", nsi.ID(), osi.StringEx(), nsi.StringEx())
 				return
 			}
-			glog.Warningf("%s: self-registering %s with duplicate node ID %q", p.si, nsi, nsi.ID())
+			glog.Warningf("%s: self-registering %s with duplicate node ID %q", p.si, nsi.StringEx(), nsi.ID())
 		}
 	}
 
@@ -384,7 +384,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	update, err := p.handleJoinKalive(nsi, regReq.Smap, tag, keepalive, nsi.Flags)
 	if !isProxy && p.NodeStarted() {
 		if p.owner.rmd.rebalance.CAS(false, regReq.RebInterrupted) && regReq.RebInterrupted {
-			glog.Errorf("%s: target %s reports interrupted rebalance", p.si, nsi)
+			glog.Errorf("%s: target %s reports interrupted rebalance", p.si, nsi.StringEx())
 		}
 	}
 	p.owner.smap.Unlock()
@@ -400,7 +400,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 	// send clu-meta to the self-registering node
 	if selfRegister {
-		glog.Infof("%s: %s %s (%s)...", p.si, tag, nsi, regReq.Smap)
+		glog.Infof("%s: %s %s (%s)...", p.si, tag, nsi.StringEx(), regReq.Smap)
 		meta, err := p.cluMeta(cmetaFillOpt{skipSmap: true})
 		if err != nil {
 			p.writeErr(w, r, err)
@@ -428,7 +428,7 @@ func (p *proxyrunner) userRegisterNode(nsi *cluster.Snode, tag string) (errCode 
 	}
 	body := cos.MustMarshal(meta)
 	if glog.FastV(3, glog.SmoduleAIS) {
-		glog.Infof("%s: %s %s => (%s)", p.si, tag, nsi, p.owner.smap.get().StringEx())
+		glog.Infof("%s: %s %s => (%s)", p.si, tag, nsi.StringEx(), p.owner.smap.get().StringEx())
 	}
 	config := cmn.GCO.Get()
 	args := callArgs{
@@ -443,9 +443,9 @@ func (p *proxyrunner) userRegisterNode(nsi *cluster.Snode, tag string) (errCode 
 	}
 	if cos.IsErrConnectionRefused(res.err) {
 		err = fmt.Errorf("failed to reach %s at %s:%s",
-			nsi, nsi.PublicNet.NodeHostname, nsi.PublicNet.DaemonPort)
+			nsi.StringEx(), nsi.PublicNet.NodeHostname, nsi.PublicNet.DaemonPort)
 	} else {
-		err = res.errorf("%s: failed to %s %s", p.si, tag, nsi)
+		err = res.errorf("%s: failed to %s %s", p.si, tag, nsi.StringEx())
 	}
 	errCode = res.status
 	return
@@ -456,7 +456,7 @@ func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, tag s
 	keepalive bool, flags cluster.SnodeFlags) (update bool, err error) {
 	smap := p.owner.smap.get()
 	if !smap.isPrimary(p.si) {
-		err = newErrNotPrimary(p.si, smap, "cannot "+tag+" "+nsi.String())
+		err = newErrNotPrimary(p.si, smap, "cannot "+tag+" "+nsi.StringEx())
 		return
 	}
 	if nsi.IsProxy() {
@@ -471,7 +471,7 @@ func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, tag s
 		}
 	}
 	// check for cluster integrity errors (cie)
-	if err = smap.validateUUID(p.si, regSmap, nsi.String(), 80 /* ciError */); err != nil {
+	if err = smap.validateUUID(p.si, regSmap, nsi.StringEx(), 80 /* ciError */); err != nil {
 		return
 	}
 	// no further checks join when cluster's starting up
@@ -593,20 +593,20 @@ func (p *proxyrunner) _updFinal(ctx *smapModifier, clone *smapX) {
 func (p *proxyrunner) addOrUpdateNode(nsi, osi *cluster.Snode, keepalive bool) bool {
 	if keepalive {
 		if osi == nil {
-			glog.Warningf("register/keepalive %s: adding back to the cluster map", nsi)
+			glog.Warningf("register/keepalive %s: adding back to the cluster map", nsi.StringEx())
 			return true
 		}
 		if !osi.Equals(nsi) {
 			if duplicate, err := p.detectDaemonDuplicate(osi, nsi); err != nil {
 				glog.Errorf("%s: %s(%s) failed to obtain daemon info, err: %v",
-					p.si, nsi, nsi.PublicNet.DirectURL, err)
+					p.si, nsi.StringEx(), nsi.PublicNet.DirectURL, err)
 				return false
 			} else if duplicate {
 				glog.Errorf("%s: %s(%s) is trying to register/keepalive with duplicate ID",
-					p.si, nsi, nsi.PublicNet.DirectURL)
+					p.si, nsi.StringEx(), nsi.PublicNet.DirectURL)
 				return false
 			}
-			glog.Warningf("%s: renewing registration %s (info changed!)", p.si, nsi)
+			glog.Warningf("%s: renewing registration %s (info changed!)", p.si, nsi.StringEx())
 			return true
 		}
 		p.keepalive.heardFrom(nsi.ID(), false /*reset*/)
@@ -617,10 +617,10 @@ func (p *proxyrunner) addOrUpdateNode(nsi, osi *cluster.Snode, keepalive bool) b
 			return true
 		}
 		if osi.Equals(nsi) {
-			glog.Infof("%s: %s is already registered", p.si, nsi)
+			glog.Infof("%s: %s is already registered", p.si, nsi.StringEx())
 			return false
 		}
-		glog.Warningf("%s: renewing %s registration %+v => %+v", p.si, nsi, osi, nsi)
+		glog.Warningf("%s: renewing %s registration %+v => %+v", p.si, nsi.StringEx(), osi, nsi)
 	}
 	return true
 }

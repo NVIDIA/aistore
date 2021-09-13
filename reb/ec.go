@@ -261,8 +261,8 @@ func (reb *Manager) findEmptyTarget(md *ec.Metadata, ct *cluster.CT, sender stri
 			_, ok := md.Daemons[tsi.ID()]
 			if !ok {
 				if glog.FastV(4, glog.SmoduleReb) {
-					glog.Infof("%s: %s[%d] not found - overwrite with new slice %d", tsi, ct.ObjectName(),
-						remoteMD.SliceID, md.SliceID)
+					glog.Infof("%s: %s[%d] not found - overwrite with new slice %d",
+						tsi.StringEx(), ct.ObjectName(), remoteMD.SliceID, md.SliceID)
 				}
 				return tsi, nil
 			}
@@ -271,7 +271,7 @@ func (reb *Manager) findEmptyTarget(md *ec.Metadata, ct *cluster.CT, sender stri
 			return tsi, nil
 		}
 		if err != nil {
-			glog.Errorf("Failed to read metadata from %s: %v", tsi, err)
+			glog.Errorf("Failed to read metadata from %s: %v", tsi.StringEx(), err)
 		}
 	}
 	return nil, errors.New("no free target")

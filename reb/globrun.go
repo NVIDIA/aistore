@@ -345,7 +345,7 @@ func (reb *Manager) rebWaitAck(md *rebArgs) (errCnt int) {
 						for _, lom := range lomack.q {
 							tsi, err := cluster.HrwTarget(lom.Uname(), md.smap)
 							if err == nil {
-								glog.Infof("waiting for %s ACK from %s", lom, tsi)
+								glog.Infof("waiting for %s ACK from %s", lom, tsi.StringEx())
 								logged = true
 								break
 							}
