@@ -407,13 +407,6 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	}
 	c.msg.BMDVersion = bmd.version()
 
-	// single target case: commit and done
-	if c.smap.CountActiveTargets() == 1 {
-		c.req.Body = cos.MustMarshal(c.msg)
-		_ = c.bcast(cmn.ActCommit, c.commitTimeout(false))
-		return
-	}
-
 	ctx := &rmdModifier{
 		pre: func(_ *rmdModifier, clone *rebMD) {
 			clone.inc()
@@ -459,18 +452,14 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 func _renameBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 	var (
 		bckFrom, bckTo  = ctx.bcks[0], ctx.bcks[1]
-		bprops, present = clone.Get(bckFrom) // TODO: Bucket could be removed during begin.
+		bprops, present = clone.Get(bckFrom)
 	)
-
-	cos.Assert(present)
+	debug.Assert(present)
 	bckFrom.Props = bprops.Clone()
 	bckTo.Props = bprops.Clone()
-
 	added := clone.add(bckTo, bckTo.Props)
 	cos.Assert(added)
-	if !ctx.singleTarget {
-		bckFrom.Props.Renamed = cmn.ActMoveBck
-	}
+	bckFrom.Props.Renamed = cmn.ActMoveBck // NOTE: state until `BMDVersionFixup` by renaming xaction
 	clone.set(bckFrom, bckFrom.Props)
 	return nil
 }

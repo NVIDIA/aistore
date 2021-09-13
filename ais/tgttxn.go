@@ -187,7 +187,7 @@ func (t *targetrunner) createBucket(c *txnServerCtx) error {
 func (t *targetrunner) _commitCreateDestroy(c *txnServerCtx) (err error) {
 	txn, err := t.transactions.find(c.uuid, "")
 	if err != nil {
-		return fmt.Errorf("%s %s: %v", t.si, txn, err)
+		return err
 	}
 	// wait for newBMD w/timeout
 	if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
@@ -227,7 +227,7 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 		debug.AssertNoErr(err)
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
-			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+			return err
 		}
 		txnMnc := txn.(*txnMakeNCopies)
 		debug.Assert(txnMnc.newCopies == copies)
@@ -305,7 +305,7 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 	case cmn.ActCommit:
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
-			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+			return err
 		}
 		txnSetBprops := txn.(*txnSetBucketProps)
 		// wait for newBMD w/timeout
@@ -400,7 +400,7 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 	case cmn.ActCommit:
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
-			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+			return err
 		}
 		txnRenB := txn.(*txnRenameBucket)
 		// wait for newBMD w/timeout
@@ -536,7 +536,7 @@ func (t *targetrunner) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) erro
 	case cmn.ActCommit:
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
-			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+			return err
 		}
 		txnTcb := txn.(*txnTCB)
 		if c.query.Get(cmn.URLParamWaitMetasync) != "" {
@@ -622,7 +622,7 @@ func (t *targetrunner) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP
 	case cmn.ActCommit:
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
-			return xactID, fmt.Errorf("%s %s: %v", t.si, txn, err)
+			return xactID, err
 		}
 		txnTco := txn.(*txnTCObjs)
 		txnTco.xtco.Do(txnTco.msg)
@@ -663,7 +663,7 @@ func (t *targetrunner) ecEncode(c *txnServerCtx) error {
 	case cmn.ActCommit:
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
-			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+			return err
 		}
 		// wait for newBMD w/timeout
 		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
@@ -759,7 +759,7 @@ func (t *targetrunner) createArchMultiObj(c *txnServerCtx) (string /*xaction uui
 	case cmn.ActCommit:
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
-			return xactID, fmt.Errorf("%s %s: %v", t.si, txn, err)
+			return xactID, err
 		}
 		txnArch := txn.(*txnCreateArchMultiObj)
 		txnArch.xarch.Do(txnArch.msg)

@@ -61,11 +61,21 @@ func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64, notif *xaction.No
 		config: cmn.GCO.Get(),
 		ecUsed: reb.t.Bowner().Get().IsECUsed(),
 	}
-
 	if !reb.rebPreInit(md) {
 		return
 	}
 	if !reb.rebInit(md, notif) {
+		return
+	}
+	// single-active-target cluster (singleATC)
+	// NOTE: compare with `rebFini`
+	if smap.CountActiveTargets() == 1 {
+		reb.stages.stage.Store(rebStageDone)
+		reb.semaCh.Release()
+		reb.dm.Close(nil)
+		reb.pushes.Close(true)
+		fs.RemoveMarker(cmn.RebalanceMarker)
+		reb.xact().Finish(nil)
 		return
 	}
 
@@ -89,6 +99,7 @@ func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64, notif *xaction.No
 	for errCnt != 0 && !reb.xact().Aborted() {
 		errCnt = reb.bcast(md, reb.waitFinExtended)
 	}
+
 	reb.rebFini(md, err)
 }
 
@@ -412,9 +423,6 @@ func (reb *Manager) rebFini(md *rebArgs, err error) {
 	reb.stages.stage.Store(rebStageDone)
 	reb.stages.cleanup()
 
-	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("global reb (g%d) in state %s: finished", md.id, stages[rebStageDone])
-	}
 	reb.semaCh.Release()
 
 	if !reb.xact().Finished() {
