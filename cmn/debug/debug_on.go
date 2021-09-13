@@ -45,6 +45,7 @@ var (
 		"stats":     glog.SmoduleStats,
 		"ios":       glog.SmoduleIOS,
 		"xs":        glog.SmoduleXs,
+		"backend":   glog.SmoduleBackend,
 	}
 )
 

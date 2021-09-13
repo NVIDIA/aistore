@@ -228,7 +228,7 @@ func (ap *azureProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckL
 			MaxResults: int32(msg.PageSize),
 		}
 	)
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("list_objects %s", cloudBck.Name)
 	}
 	if msg.ContinuationToken != "" {
@@ -270,7 +270,7 @@ func (ap *azureProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckL
 	if resp.NextMarker.Val != nil {
 		bckList.ContinuationToken = *resp.NextMarker.Val
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[list_bucket] count %d(marker: %s)", len(bckList.Entries), bckList.ContinuationToken)
 	}
 	return
@@ -337,7 +337,7 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 	if v, ok := h.EncodeCksum(resp.ContentMD5()); ok {
 		objMeta[cluster.MD5ObjMD] = v
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[head_object] %s/%s", cloudBck, lom.ObjName)
 	}
 	return
@@ -362,7 +362,7 @@ func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 	if err != nil {
 		return
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[get_object] %s", lom)
 	}
 	return
@@ -480,7 +480,7 @@ func (ap *azureProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (version stri
 	if v, ok := h.EncodeVersion(string(putResp.ETag())); ok {
 		version = v
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[put_object] %s, version: %s", lom, version)
 	}
 	return version, http.StatusOK, nil

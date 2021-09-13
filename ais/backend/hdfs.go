@@ -218,7 +218,7 @@ func (hp *hdfsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta co
 	objMeta[cmn.HdrObjSize] = strconv.FormatInt(fr.Stat().Size(), 10)
 	objMeta[cluster.VersionObjMD] = ""
 
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[head_object] %s", lom)
 	}
 	return
@@ -241,7 +241,7 @@ func (hp *hdfsProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode i
 	if err = hp.t.PutObject(lom, params); err != nil {
 		return
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[get_object] %s", lom)
 	}
 	return
@@ -311,7 +311,7 @@ finish:
 		errCode, err = hdfsErrorToAISError(err)
 		return "", errCode, err
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[put_object] %s", lom)
 	}
 
@@ -328,7 +328,7 @@ func (hp *hdfsProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 		errCode, err = hdfsErrorToAISError(err)
 		return errCode, err
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[delete_object] %s", lom)
 	}
 	return 0, nil

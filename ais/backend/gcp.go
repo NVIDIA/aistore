@@ -130,7 +130,7 @@ func (gcpp *gcpProvider) CreateBucket(_ *cluster.Bck) (errCode int, err error) {
 /////////////////
 
 func (*gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("head_bucket %s", bck.Name)
 	}
 	cloudBck := bck.RemoteBck()
@@ -159,7 +159,7 @@ func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckL
 		h        = cmn.BackendHelpers.Google
 		cloudBck = bck.RemoteBck()
 	)
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("list_objects %s", cloudBck.Name)
 	}
 
@@ -199,7 +199,7 @@ func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckL
 		bckList.Entries = append(bckList.Entries, entry)
 	}
 
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[list_bucket] count %d", len(bckList.Entries))
 	}
 
@@ -234,7 +234,7 @@ func (gcpp *gcpProvider) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, errCode in
 			Name:     battrs.Name,
 			Provider: cmn.ProviderGoogle,
 		})
-		if glog.FastV(4, glog.SmoduleAIS) {
+		if glog.FastV(4, glog.SmoduleBackend) {
 			glog.Infof("[bucket_names] %s: created %v, versioning %t",
 				battrs.Name, battrs.Created, battrs.VersioningEnabled)
 		}
@@ -268,7 +268,7 @@ func (*gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cos.
 	if v, ok := h.EncodeCksum(attrs.CRC32C); ok {
 		objMeta[cluster.CRC32CObjMD] = v
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[head_object] %s/%s", cloudBck, lom.ObjName)
 	}
 	return
@@ -293,7 +293,7 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 	if err != nil {
 		return
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[get_object] %s", lom)
 	}
 	return
@@ -379,7 +379,7 @@ func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (version stri
 	if v, ok := h.EncodeVersion(attr.Generation); ok {
 		version = v
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[put_object] %s, size %d, version %s", lom, written, version)
 	}
 	return
@@ -398,7 +398,7 @@ func (*gcpProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 		errCode, err = handleObjectError(gctx, gcpClient, err, cloudBck)
 		return
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[delete_object] %s", lom)
 	}
 	return

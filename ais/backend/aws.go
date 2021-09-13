@@ -83,7 +83,7 @@ func (*awsProvider) HeadBucket(_ context.Context, bck *cluster.Bck) (bckProps co
 		region   string
 		cloudBck = bck.RemoteBck()
 	)
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[head_bucket] %s", cloudBck.Name)
 	}
 	svc, region, _ = newClient(sessConf{bck: cloudBck}, "") // nolint:errcheck // on purpose
@@ -131,12 +131,12 @@ func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckL
 		h        = cmn.BackendHelpers.Amazon
 		cloudBck = bck.RemoteBck()
 	)
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("list_objects %s", cloudBck.Name)
 	}
 
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[list_objects]")
-	if err != nil {
+	if err != nil && glog.FastV(4, glog.SmoduleBackend) {
 		glog.Warning(err)
 	}
 
@@ -169,7 +169,7 @@ func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckL
 
 		bckList.Entries = append(bckList.Entries, entry)
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[list_bucket] count %d", len(bckList.Entries))
 	}
 
@@ -250,7 +250,7 @@ func (*awsProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err 
 
 	bcks = make(cmn.Bcks, len(result.Buckets))
 	for idx, bck := range result.Buckets {
-		if glog.FastV(4, glog.SmoduleAIS) {
+		if glog.FastV(4, glog.SmoduleBackend) {
 			glog.Infof("[bucket_names] %s: created %v", aws.StringValue(bck.Name), *bck.CreationDate)
 		}
 		bcks[idx] = cmn.Bck{
@@ -272,7 +272,7 @@ func (*awsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta cos.Si
 		cloudBck = lom.Bck().RemoteBck()
 	)
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[head_object]")
-	if err != nil {
+	if err != nil && glog.FastV(4, glog.SmoduleBackend) {
 		glog.Warning(err)
 	}
 
@@ -294,7 +294,7 @@ func (*awsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta cos.Si
 		objMeta[cluster.MD5ObjMD] = v
 	}
 
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[head_object] %s/%s", cloudBck, lom.ObjName)
 	}
 	return
@@ -319,7 +319,7 @@ func (awsp *awsProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 	if err != nil {
 		return
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[get_object] %s", lom)
 	}
 	return
@@ -338,7 +338,7 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.Re
 		cloudBck = lom.Bck().RemoteBck()
 	)
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[get_object]")
-	if err != nil {
+	if err != nil && glog.FastV(4, glog.SmoduleBackend) {
 		glog.Warning(err)
 	}
 	obj, err := svc.GetObjectWithContext(ctx, &s3.GetObjectInput{
@@ -389,7 +389,7 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (version string, e
 	defer cos.Close(r)
 
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[put_object]")
-	if err != nil {
+	if err != nil && glog.FastV(4, glog.SmoduleBackend) {
 		glog.Warning(err)
 	}
 
@@ -410,7 +410,7 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (version string, e
 	if v, ok := h.EncodeVersion(uploadOutput.VersionID); ok {
 		version = v
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[put_object] %s, version %s", lom, version)
 	}
 	return
@@ -426,7 +426,7 @@ func (*awsProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 		cloudBck = lom.Bck().RemoteBck()
 	)
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[delete_object]")
-	if err != nil {
+	if err != nil && glog.FastV(4, glog.SmoduleBackend) {
 		glog.Warning(err)
 	}
 	_, err = svc.DeleteObject(&s3.DeleteObjectInput{
@@ -437,7 +437,7 @@ func (*awsProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 		errCode, err = awsErrorToAISError(err, cloudBck)
 		return
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[delete_object] %s", lom)
 	}
 	return

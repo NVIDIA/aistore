@@ -73,7 +73,7 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 		return nil, http.StatusBadRequest, err
 	}
 
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[head_bucket] original_url: %q", origURL)
 	}
 
@@ -134,7 +134,7 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta 
 	origURL, err := getOriginalURL(ctx, bck, lom.ObjName)
 	debug.AssertNoErr(err)
 
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[head_object] original_url: %q", origURL)
 	}
 
@@ -155,7 +155,7 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta 
 		objMeta[cluster.VersionObjMD] = v
 	}
 
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[head_object] %s", lom)
 	}
 	return
@@ -175,7 +175,7 @@ func (hp *httpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode i
 	if err != nil {
 		return
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[get_object] %s", lom)
 	}
 	return
@@ -191,7 +191,7 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 	origURL, err := getOriginalURL(ctx, bck, lom.ObjName)
 	debug.AssertNoErr(err)
 
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[HTTP CLOUD][GET] original_url: %q", origURL)
 	}
 
@@ -203,7 +203,7 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 		return nil, nil, resp.StatusCode, fmt.Errorf("error occurred: %v", resp.StatusCode)
 	}
 
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleBackend) {
 		glog.Infof("[HTTP CLOUD][GET] success, size: %d", resp.ContentLength)
 	}
 
