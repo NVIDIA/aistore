@@ -42,12 +42,13 @@ func setBucket() (bck cmn.Bck, err error) {
 }
 
 func waitForCluster() error {
+	const (
+		retryCount = 30
+		sleep      = time.Second
+	)
 	var (
-		err        error
-		proxyCnt   int
-		targetCnt  int
-		retryCount = 5
-		sleep      = 5 * time.Second
+		err                        error
+		proxyCnt, targetCnt, retry int
 	)
 	pc := os.Getenv(cmn.EnvVars.NumProxy)
 	tc := os.Getenv(cmn.EnvVars.NumTarget)
@@ -61,32 +62,28 @@ func waitForCluster() error {
 			return fmt.Errorf("error EnvVars: %s. err: %v", cmn.EnvVars.NumTarget, err)
 		}
 	}
-
-	tlog.Logln("Waiting for cluster map init...")
 	_, err = tutils.WaitForClusterState(tutils.GetPrimaryURL(), "startup", -1, proxyCnt, targetCnt)
 	if err != nil {
 		return fmt.Errorf("error waiting for cluster startup, err: %v", err)
 	}
-
-	tlog.Logln("Waiting for primary health check...")
-	retry := 0
+	tlog.Logf("Pinging primary for health... ")
 	for {
-		if retry > 0 {
-			tlog.Logf("Pinging primary for health (#%d)...\n", retry+1)
+		if retry%5 == 4 {
+			fmt.Fprintf(os.Stdout, "%ds ", retry+1)
 		}
 		err = api.Health(tutils.BaseAPIParams(tutils.GetPrimaryURL()), true /*primary is ready to rebalance*/)
 		if err == nil {
-			time.Sleep(time.Second)
+			tlog.Logln("")
 			break
 		}
-		if retry == retryCount {
-			return fmt.Errorf("error waiting for cluster startup, err: %v", err)
+		if retry >= retryCount {
+			tlog.Logln("")
+			return fmt.Errorf("timed out waiting for cluster startup: %v", err)
 		}
 		retry++
 		time.Sleep(sleep)
 	}
 	tlog.Logln("Cluster is ready")
-	time.Sleep(2 * time.Second)
 	return nil
 }
 

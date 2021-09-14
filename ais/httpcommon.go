@@ -2199,7 +2199,7 @@ func (h *httprunner) healthByExternalWD(w http.ResponseWriter, r *http.Request) 
 	if callerID == "" && caller == "" {
 		readiness := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamHealthReadiness))
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: external health-ping from %s", h.si, r.RemoteAddr)
+			glog.Infof("%s: external health-ping from %s (readiness=%t)", h.si, r.RemoteAddr, readiness)
 		}
 		// respond with 503 as per https://tools.ietf.org/html/rfc7231#section-6.6.4
 		// see also:
@@ -2207,7 +2207,7 @@ func (h *httprunner) healthByExternalWD(w http.ResponseWriter, r *http.Request) 
 		if !readiness && !h.ClusterStarted() {
 			w.WriteHeader(http.StatusServiceUnavailable)
 		}
-		// TODO: establish the fact that we are healthy...
+		// NOTE: for "readiness" check always return true; otherwise, true if cluster started
 		return true
 	}
 	// intra-cluster health ping

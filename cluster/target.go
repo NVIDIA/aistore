@@ -166,6 +166,7 @@ type Target interface {
 	// File-system related functions.
 	FSHC(err error, path string)
 	RunLRU(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.Bck)
+	TrashNonExistingBucket(bck cmn.Bck)
 
 	// Getting other interfaces.
 	DB() dbdriver.Driver

@@ -132,7 +132,7 @@ The operations that query cluster-wide information and/or involve or otherwise a
 | Decommission entire cluster | PUT {"action": "decommission"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "decommission"}' 'http://G-primary/v1/cluster'` | `api.DecommissionCluster` |
 | Shutdown ais node | PUT {"action": "shutdown_node", "value": {"sid": daemonID}} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown_node", "value": {"sid": "43888:8083"}}' 'http://G/v1/cluster'` | `api.ShutdownNode` |
 | Decommission entire cluster | PUT {"action": "decommission"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "decommission"}' 'http://G-primary/v1/cluster'` | `api.DecommissionCluster` |
-| Query cluster health | (to be added) | (to be added) | `api.Health` |
+| Query cluster health | GET /v1/health | (to be added) | `api.Health` |
 | Set primary proxy | PUT /v1/cluster/proxy/new primary-proxy-id | `curl -i -X PUT 'http://G-primary/v1/cluster/proxy/26869:8080'` | `api.SetPrimaryProxy` |
 | Force-Set primary proxy (NOTE: advanced usage only!) | PUT /v1/daemon/proxy/proxyID | `curl -i -X PUT -G 'http://G-primary/v1/daemon/proxy/23ef189ed'  --data-urlencode "frc=true" --data-urlencode "can=http://G-new-designated-primary"` <sup id="a6">[6](#ft6)</sup>| `api.SetPrimaryProxy` |
 | Get cluster configuration | (to be added) | (to be added) | `api.GetClusterConfig` |
@@ -300,7 +300,7 @@ For even more information, CLI examples, and the most recent updates, please see
 
 ```console
 # List a given AWS bucket
-$ curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?provider=aws'
+# curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?provider=aws'
 
 # Using locally deployed AIS, get archived file from a remote named tar:
 $ curl -L -X GET 'http://localhost:8080/v1/objects/myGCPbucket/train-1234.tar?provider=gcp&archpath=567.jpg' --output /tmp/567.jpg
@@ -319,6 +319,7 @@ AIStore provides an extensive list of RESTful operations to retrieve cluster cur
 | Operation                                                   | HTTP action                     | Example                                                      |
 | ----------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------ |
 | Get cluster map                                             | GET /v1/daemon                  | `curl -X GET http://G/v1/daemon?what=smap`                   |
+| Get cluster health                                          | GET /v1/health                  | `curl -X GET http://G/v1/health` (and see `api.Health` for additional optional query parameters) |
 | Get proxy/target configuration                              | GET /v1/daemon                  | `curl -X GET http://G-or-T/v1/daemon?what=config`            |
 | Get proxy/target snode                                      | GET /v1/daemon                  | `curl -X GET http://G-or-T/v1/daemon?what=snode`             |
 | Get proxy/target status                                     | GET /v1/daemon                  | `curl -X GET http://G-or-T/v1/daemon?what=status`            |

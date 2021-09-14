@@ -23,13 +23,21 @@ type (
 	}
 )
 
+// to be used by external watchdogs (Kubernetes, etc.)
+// (compare with api.Health below)
 func GetProxyReadiness(params BaseParams) error {
 	params.Method = http.MethodGet
-	return DoHTTPRequest(ReqParams{
-		BaseParams: params,
-		Path:       cmn.URLPathHealth.S,
-		Query:      url.Values{cmn.URLParamHealthReadiness: []string{"true"}},
-	})
+	q := url.Values{cmn.URLParamHealthReadiness: []string{"true"}}
+	return DoHTTPRequest(ReqParams{BaseParams: params, Path: cmn.URLPathHealth.S, Query: q})
+}
+
+func Health(baseParams BaseParams, readyToRebalance ...bool) error {
+	var q url.Values
+	baseParams.Method = http.MethodGet
+	if len(readyToRebalance) > 0 && readyToRebalance[0] {
+		q = url.Values{cmn.URLParamPrimaryReadyReb: []string{"true"}}
+	}
+	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathHealth.S, Query: q})
 }
 
 // GetClusterMap retrieves AIStore cluster map.
@@ -241,15 +249,6 @@ func StopMaintenance(baseParams BaseParams, actValue *cmn.ActValRmNode) (id stri
 	baseParams.Method = http.MethodPut
 	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cos.MustMarshal(msg)}, &id)
 	return id, err
-}
-
-func Health(baseParams BaseParams, readyToRebalance ...bool) error {
-	baseParams.Method = http.MethodGet
-	q := url.Values{}
-	if len(readyToRebalance) > 0 {
-		q.Add(cmn.URLParamForce, strconv.FormatBool(readyToRebalance[0]))
-	}
-	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathHealth.S, Query: q})
 }
 
 // ShutdownCluster shuts down the whole cluster

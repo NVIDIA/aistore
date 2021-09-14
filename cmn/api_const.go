@@ -175,12 +175,11 @@ const (
 
 // User/client query params.
 const (
-	URLParamWhat            = "what"         // "smap" | "bmd" | "config" | "stats" | "xaction" ...
-	URLParamProps           = "props"        // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
-	URLParamCheckExists     = "check_cached" // true: check if object exists (aka "cached", "present")
-	URLParamHealthReadiness = "readiness"    // true: check if node can accept HTTP(S) requests
-	URLParamUUID            = "uuid"
-	URLParamRegex           = "regex" // dsort/downloader regex
+	URLParamWhat        = "what"         // "smap" | "bmd" | "config" | "stats" | "xaction" ...
+	URLParamProps       = "props"        // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
+	URLParamCheckExists = "check_cached" // true: check if object exists (aka "cached", "present")
+	URLParamUUID        = "uuid"
+	URLParamRegex       = "regex" // dsort/downloader regex
 
 	// Bucket related query params.
 	URLParamProvider  = "provider" // backend provider
@@ -203,6 +202,13 @@ const (
 	URLParamArchmime = "archmime"
 )
 
+// health
+const (
+	URLParamHealthReadiness = "readiness" // to be used by external watchdogs (e.g. K8s)
+	URLParamAskPrimary      = "apr"       // true: the caller is directing health request to primary
+	URLParamPrimaryReadyReb = "prr"       // true: check whether primary is ready to start rebalancing cluster
+)
+
 // Internal query params.
 const (
 	URLParamCheckExistsAny   = "cea" // true: lookup object in all mountpaths (NOTE: compare with URLParamCheckExists)
@@ -218,8 +224,6 @@ const (
 	URLParamRebData          = "rbd" // true: get EC rebalance data (pulling data if push way fails)
 	URLParamTaskAction       = "tac" // "start", "status", "result"
 	URLParamClusterInfo      = "cii" // true: /Health to return cluster info and status
-	URLParamAskPrimary       = "apr" // true: the caller is directing health request to primary
-	URLParamPrimaryReadyReb  = "prr" // true: check whether primary is ready to start rebalancing cluster
 	URLParamRecvType         = "rtp" // to tell user PUT from migration PUT
 
 	// dsort

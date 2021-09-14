@@ -295,7 +295,8 @@ func (mi *MountpathInfo) makePathBuf(bck cmn.Bck, contentType string, extra int)
 	if contentType != "" {
 		debug.Assert(len(contentType) == contentTypeLen)
 		ctLen = 1 + 1 + contentTypeLen
-		if bck.Props != nil && bck.Props.BID != 0 {
+		if bck.Props != nil {
+			debug.Assert(bck.Props.BID != 0)
 			mi.bpc.RLock()
 			bdir, ok := mi.bpc.m[bck.Props.BID]
 			mi.bpc.RUnlock()
@@ -388,6 +389,7 @@ func (mi *MountpathInfo) makeDelPathBck(bck cmn.Bck, bid uint64) string {
 		delete(mi.bpc.m, bid)
 	}
 	mi.bpc.Unlock()
+	debug.Assert(!(ok && bid == 0))
 	if !ok {
 		dir = mi.MakePathBck(bck)
 	}
@@ -921,22 +923,24 @@ func CreateBucket(op string, bck cmn.Bck, nilbmd bool) (errs []error) {
 	return
 }
 
-func DestroyBucket(op string, bck cmn.Bck, bid uint64) error {
-	const destroyStr = "destroy-ais-bucket-dir"
-	var n int
-	availablePaths, _ := Get()
+func DestroyBucket(op string, bck cmn.Bck, bid uint64) (err error) {
+	var (
+		availablePaths, _ = Get()
+		count             = len(availablePaths)
+		n                 int
+	)
 	for _, mi := range availablePaths {
 		dir := mi.makeDelPathBck(bck, bid)
-		if err := mi.MoveToTrash(dir); err != nil {
-			glog.Errorf("%s: failed to %s (dir: %q, err: %v)", op, destroyStr, dir, err)
+		if errMv := mi.MoveToTrash(dir); errMv != nil {
+			glog.Errorf("%s %q: failed to destroy dir %q: %v", op, bck, dir, errMv)
 		} else {
 			n++
 		}
 	}
-	if count := len(availablePaths); n < count {
-		return fmt.Errorf("bucket %s: failed to destroy %d/%d dirs", bck, count-n, count)
+	if n < count {
+		err = fmt.Errorf("%s %q: failed to destroy %d out of %d dirs", op, bck, count-n, count)
 	}
-	return nil
+	return
 }
 
 func RenameBucketDirs(bidFrom uint64, bckFrom, bckTo cmn.Bck) (err error) {

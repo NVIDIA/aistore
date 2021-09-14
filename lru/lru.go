@@ -252,8 +252,12 @@ func (j *lruJ) jogBcks(bcks []cmn.Bck, force bool) (err error) {
 		var size int64
 		j.bck = bck
 		if j.allowDelObj, err = j.allow(); err != nil {
-			// TODO: add a config option to trash those "buckets"
-			glog.Errorf("%s: %v - skipping %s", j, err, bck)
+			if cmn.IsErrBckNotFound(err) || cmn.IsErrRemoteBckNotFound(err) {
+				j.ini.T.TrashNonExistingBucket(bck)
+			} else {
+				// TODO: config option to scrub `fs.AllMpathBcks` buckets
+				glog.Errorf("%s: %v - skipping %s", j, err, bck)
+			}
 			err = nil
 			continue
 		}

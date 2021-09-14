@@ -106,7 +106,17 @@ func (t *targetrunner) RunLRU(id string, wg *sync.WaitGroup, force bool, bcks ..
 	lru.Run(&ini)
 }
 
-// slight variation vs t.doPut() above
+func (t *targetrunner) TrashNonExistingBucket(bck cmn.Bck) {
+	if err := cluster.NewBckEmbed(bck).Init(t.owner.bmd); err != nil {
+		if cmn.IsErrBckNotFound(err) || cmn.IsErrRemoteBckNotFound(err) {
+			const op = "trash-non-existing"
+			err = fs.DestroyBucket(op, bck, 0 /*unknown bid*/)
+			glog.Infof("%s: %v", op, err)
+		}
+	}
+}
+
+// essentially, t.doPut() for external use
 func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParams) error {
 	debug.Assert(params.Tag != "")
 	workFQN := fs.CSM.GenContentFQN(lom, fs.WorkfileType, params.Tag)

@@ -810,12 +810,16 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	if responded := p.healthByExternalWD(w, r); responded {
-		return
+	prr := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamPrimaryReadyReb))
+	if !prr {
+		if responded := p.healthByExternalWD(w, r); responded {
+			return
+		}
 	}
 	// piggy-backing cluster info on health
 	getCii := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamClusterInfo))
 	if getCii {
+		debug.Assert(!prr)
 		cii := &clusterInfo{}
 		cii.fill(&p.httprunner)
 		_ = p.writeJSON(w, r, cii, "cluster-info")
@@ -828,10 +832,14 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// primary
 	if smap.isPrimary(p.si) {
-		if cos.IsParseBool(r.URL.Query().Get(cmn.URLParamPrimaryReadyReb)) {
+		if prr {
 			if a, b := p.ClusterStarted(), p.owner.rmd.startup.Load(); !a || b {
 				err := fmt.Errorf(fmtErrPrimaryNotReadyYet, p.si, a, b)
-				p.writeErr(w, r, err, http.StatusServiceUnavailable)
+				if glog.FastV(4, glog.SmoduleAIS) {
+					p.writeErr(w, r, err, http.StatusServiceUnavailable)
+				} else {
+					p.writeErrSilent(w, r, err, http.StatusServiceUnavailable)
+				}
 				return
 			}
 		}
@@ -844,7 +852,7 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	if cos.IsParseBool(r.URL.Query().Get(cmn.URLParamAskPrimary)) {
+	if prr || cos.IsParseBool(r.URL.Query().Get(cmn.URLParamAskPrimary)) {
 		caller := r.Header.Get(cmn.HdrCallerName)
 		p.writeErrf(w, r, "%s (non-primary): misdirected health-of-primary request from %s, %s",
 			p.si, caller, smap.StringEx())

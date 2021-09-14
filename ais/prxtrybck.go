@@ -30,7 +30,7 @@ type bckInitArgs struct {
 
 	skipBackend bool // initialize bucket `bck.InitNoBackend`
 	onlyRemote  bool // try only creating remote bucket
-	exists      bool // marks if bucket already exists
+	exists      bool // true if bucket already exists
 }
 
 ////////////////
@@ -165,8 +165,8 @@ func (args *bckInitArgs) initAndTry(bucket string) (bck *cluster.Bck, err error)
 		return
 	}
 
-	// Should create only for remote bucket when `tryOnlyRem` flag is set.
-	if cmn.IsErrBckNotFound(err) && args.onlyRemote {
+	// args.onlyRemote: limit on the fly creation to remote buckets
+	if cmn.IsErrBckNotFound(err) /* ais bucket not found*/ && args.onlyRemote {
 		args.p.writeErr(args.w, args.r, err, errCode)
 		return
 	}

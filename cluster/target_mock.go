@@ -40,6 +40,7 @@ func (*TargetMock) ClusterStarted() bool                                    { re
 func (*TargetMock) NodeStarted() bool                                       { return true }
 func (*TargetMock) DataClient() *http.Client                                { return http.DefaultClient }
 func (*TargetMock) RunLRU(string, *sync.WaitGroup, bool, ...cmn.Bck)        {}
+func (*TargetMock) TrashNonExistingBucket(cmn.Bck)                          {}
 func (*TargetMock) Sowner() Sowner                                          { return nil }
 func (*TargetMock) FSHC(error, string)                                      {}
 func (*TargetMock) MMSA() *memsys.MMSA                                      { return memsys.DefaultPageMM() }
