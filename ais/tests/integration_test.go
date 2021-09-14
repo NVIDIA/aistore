@@ -1416,10 +1416,13 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	args := &cmn.ActValRmNode{DaemonID: targets[0].ID(), SkipRebalance: true}
 	_, err := api.StartMaintenance(tutils.BaseAPIParams(m.proxyURL), args)
 	tassert.CheckFatal(t, err)
-	n := tutils.GetClusterMap(t, m.proxyURL).CountActiveTargets()
-	if n != m.originalTargetCount-1 {
-		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
-	}
+	tutils.WaitForClusterState(
+		m.proxyURL,
+		"to remove a target",
+		m.smap.Version,
+		m.originalProxyCount,
+		m.originalTargetCount-1,
+	)
 
 	// Create ais bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
