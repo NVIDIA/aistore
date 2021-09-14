@@ -211,15 +211,16 @@ const (
 	URLParamForce            = "frc" // true: force the operation (e.g., shutdown primary and the entire cluster)
 	URLParamPrepare          = "prp" // true: request belongs to the "prepare" phase of the primary proxy election
 	URLParamNonElectable     = "nel" // true: proxy is non-electable for the primary role
-	URLParamUnixTime         = "utm" // Unix time: number of nanoseconds elapsed since 01/01/70 UTC.
+	URLParamUnixTime         = "utm" // Unix time since 01/01/70 UTC (nanoseconds)
 	URLParamIsGFNRequest     = "gfn" // true if the request is a Get-From-Neighbor
 	URLParamSilent           = "sln" // true: destination should not log errors (HEAD request)
 	URLParamRebStatus        = "rbs" // true: get detailed rebalancing status
 	URLParamRebData          = "rbd" // true: get EC rebalance data (pulling data if push way fails)
 	URLParamTaskAction       = "tac" // "start", "status", "result"
-	URLParamClusterInfo      = "cii" // true: Health to return ais.clusterInfo
-	URLParamAskPrimary       = "apr" // true: inquiring health of a (what I think must be) primary
-	URLParamRecvType         = "rtp" // to tell real PUT from migration PUT
+	URLParamClusterInfo      = "cii" // true: /Health to return cluster info and status
+	URLParamAskPrimary       = "apr" // true: the caller is directing health request to primary
+	URLParamPrimaryReadyReb  = "prr" // true: check whether primary is ready to start rebalancing cluster
+	URLParamRecvType         = "rtp" // to tell user PUT from migration PUT
 
 	// dsort
 	URLParamTotalCompressedSize       = "tcs"

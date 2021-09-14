@@ -48,6 +48,8 @@ const msgpObjListBufSize = 32 * cos.KiB
 const (
 	fmtErrInsuffMpaths1 = "%s: not enough mountpaths (%d) to configure %s as %d-way mirror"
 	fmtErrInsuffMpaths2 = "%s: not enough mountpaths (%d) to replicate %s (configured) %d times"
+
+	fmtErrPrimaryNotReadyYet = "%s primary is not ready yet to start rebalance (started=%t, starting-up=%t)"
 )
 
 type (

@@ -813,7 +813,7 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if responded := p.healthByExternalWD(w, r); responded {
 		return
 	}
-	// cluster info piggy-back
+	// piggy-backing cluster info on health
 	getCii := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamClusterInfo))
 	if getCii {
 		cii := &clusterInfo{}
@@ -822,23 +822,33 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.owner.smap.get()
-	if !smap.isValid() {
+	if err := smap.validate(); err != nil {
+		p.writeErr(w, r, err, http.StatusServiceUnavailable)
+		return
+	}
+	// primary
+	if smap.isPrimary(p.si) {
+		if cos.IsParseBool(r.URL.Query().Get(cmn.URLParamPrimaryReadyReb)) {
+			if a, b := p.ClusterStarted(), p.owner.rmd.startup.Load(); !a || b {
+				err := fmt.Errorf(fmtErrPrimaryNotReadyYet, p.si, a, b)
+				p.writeErr(w, r, err, http.StatusServiceUnavailable)
+				return
+			}
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	// non-primary
+	if !p.ClusterStarted() {
+		// keep returning 503 until cluster starts up
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	if !smap.isPrimary(p.si) {
-		// non-primary will keep returning 503 until cluster starts up
-		if !p.ClusterStarted() {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			return
-		}
-		// fail ask-primary request
-		askPrimary := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamAskPrimary))
-		if askPrimary {
-			caller := r.Header.Get(cmn.HdrCallerName)
-			p.writeErrf(w, r, "%s: health-of-primary request, caller %s, %s", p.si, caller, smap.StringEx())
-			return
-		}
+	if cos.IsParseBool(r.URL.Query().Get(cmn.URLParamAskPrimary)) {
+		caller := r.Header.Get(cmn.HdrCallerName)
+		p.writeErrf(w, r, "%s (non-primary): misdirected health-of-primary request from %s, %s",
+			p.si, caller, smap.StringEx())
+		return
 	}
 	w.WriteHeader(http.StatusOK)
 }

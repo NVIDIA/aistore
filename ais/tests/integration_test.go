@@ -180,7 +180,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	proxyURL := tutils.RandomProxyURL(t)
-	m.smap, err = tutils.WaitForClusterState(proxyURL, "to update smap", m.smap.Version, m.originalProxyCount,
+	m.smap, err = tutils.WaitForClusterState(proxyURL, "target removal", m.smap.Version, m.originalProxyCount,
 		m.originalTargetCount-1)
 	tassert.CheckError(t, err)
 
@@ -226,7 +226,8 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 
 	n := tutils.GetClusterMap(t, m.proxyURL).CountActiveTargets()
 	if n != m.originalTargetCount-1 {
-		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
+		t.Fatalf("expected %d targets after putting target in maintenance, got %d targets",
+			m.originalTargetCount-1, n)
 	}
 
 	// Register target (bring cluster to normal state)
@@ -255,9 +256,17 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	_, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
+	tutils.WaitForClusterState(
+		m.proxyURL,
+		"putting target in maintenance",
+		m.smap.Version,
+		m.originalProxyCount,
+		m.originalTargetCount-1,
+	)
+
 	n := tutils.GetClusterMap(t, m.proxyURL).CountActiveTargets()
 	if n != m.originalTargetCount-1 {
-		t.Fatalf("%d targets expected after unregister, actually %d targets",
+		t.Fatalf("expected %d targets after putting target in maintenance, got %d targets",
 			m.originalTargetCount-1, n)
 	}
 
@@ -437,7 +446,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 
 	_, err = tutils.WaitForClusterState(
 		m.proxyURL,
-		"target to be removed",
+		"putting target in maintenance",
 		m.smap.Version,
 		m.originalProxyCount,
 		m.originalTargetCount-1,
@@ -1758,7 +1767,7 @@ func TestICDecommission(t *testing.T) {
 	}
 	checkSmaps(t, m.proxyURL)
 
-	_, err = tutils.WaitForClusterState(m.proxyURL, "target decommission",
+	_, err = tutils.WaitForClusterState(m.proxyURL, "target decommissioning",
 		m.smap.Version, m.smap.CountProxies(), m.smap.CountTargets()-1)
 	tassert.CheckFatal(t, err)
 }

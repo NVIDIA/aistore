@@ -243,9 +243,13 @@ func StopMaintenance(baseParams BaseParams, actValue *cmn.ActValRmNode) (id stri
 	return id, err
 }
 
-func Health(baseParams BaseParams) error {
+func Health(baseParams BaseParams, readyToRebalance ...bool) error {
 	baseParams.Method = http.MethodGet
-	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathHealth.S})
+	q := url.Values{}
+	if len(readyToRebalance) > 0 {
+		q.Add(cmn.URLParamForce, strconv.FormatBool(readyToRebalance[0]))
+	}
+	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathHealth.S, Query: q})
 }
 
 // ShutdownCluster shuts down the whole cluster

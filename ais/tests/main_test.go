@@ -68,13 +68,13 @@ func waitForCluster() error {
 		return fmt.Errorf("error waiting for cluster startup, err: %v", err)
 	}
 
-	tlog.Logln("Waiting for primary proxy health check...")
+	tlog.Logln("Waiting for primary health check...")
 	retry := 0
 	for {
 		if retry > 0 {
 			tlog.Logf("Pinging primary for health (#%d)...\n", retry+1)
 		}
-		err = api.Health(tutils.BaseAPIParams(tutils.GetPrimaryURL()))
+		err = api.Health(tutils.BaseAPIParams(tutils.GetPrimaryURL()), true /*primary is ready to rebalance*/)
 		if err == nil {
 			time.Sleep(time.Second)
 			break

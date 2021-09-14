@@ -1271,17 +1271,18 @@ func (p *proxyrunner) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if proxyid == p.si.ID() {
-		cos.Assert(p.si.ID() == smap.Primary.ID()) // must be forwardCP-ed
+		debug.Assert(p.si.ID() == smap.Primary.ID()) // must be forwardCP-ed
 		glog.Warningf("Request to set primary to %s(self) - nothing to do", proxyid)
 		return
 	}
 	if smap.PresentInMaint(psi) {
-		p.writeErrf(w, r, "cannot set new primary: %s is under maintenance", psi)
+		err := fmt.Errorf("%s: cannot set new primary - under maintenance", psi)
+		p.writeErr(w, r, err, http.StatusServiceUnavailable)
 		return
 	}
 	if a, b := p.ClusterStarted(), p.owner.rmd.startup.Load(); !a || b {
-		p.writeErrf(w, r,
-			"%s primary is not ready yet to start rebalance (started=%t, starting-up=%t)", p.si, a, b)
+		err := fmt.Errorf(fmtErrPrimaryNotReadyYet, p.si, a, b)
+		p.writeErr(w, r, err, http.StatusServiceUnavailable)
 		return
 	}
 
@@ -1461,8 +1462,7 @@ func (p *proxyrunner) _unregNodePre(ctx *smapModifier, clone *smapX) error {
 	} else {
 		// see NOTE below
 		if a, b := p.ClusterStarted(), p.owner.rmd.startup.Load(); !a || b {
-			return fmt.Errorf("%s primary is not ready yet to start rebalance (started=%t, starting-up=%t)",
-				p.si, a, b)
+			return fmt.Errorf(fmtErrPrimaryNotReadyYet, p.si, a, b)
 		}
 		clone.delTarget(sid)
 		glog.Infof("%s %s (num targets %d)", verb, node, clone.CountTargets())
@@ -1488,8 +1488,7 @@ func (p *proxyrunner) canRunRebalance() error {
 	// hence, all rebalance-triggering events, including direct and indirect user requests
 	// (shutdown, decommission, maintenance) are not permitted and will fail.
 	if a, b := p.ClusterStarted(), p.owner.rmd.startup.Load(); !a || b {
-		return fmt.Errorf("%s primary is not ready yet to start rebalance (started=%t, starting-up=%t)",
-			p.si, a, b)
+		return fmt.Errorf(fmtErrPrimaryNotReadyYet, p.si, a, b)
 	}
 	if smap.CountActiveTargets() < 2 {
 		return &errNotEnoughTargets{p.si, smap, 2}
