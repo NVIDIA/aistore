@@ -22,8 +22,8 @@ const (
 )
 
 type (
-	NodesXactStat       map[string]*xaction.BaseXactStatsExt
-	NodesXactMultiStats map[string][]*xaction.BaseXactStatsExt
+	NodesXactStat       map[string]*xaction.BaseStatsExt
+	NodesXactMultiStats map[string][]*xaction.BaseStatsExt
 
 	XactStatsHelper interface {
 		Running() bool
@@ -34,7 +34,7 @@ type (
 
 	XactReqArgs struct {
 		ID          string
-		Kind        string    // Xaction kind, see: cmn.XactsDtor
+		Kind        string    // Xaction kind, see: cmn.Table
 		Node        string    // Optional
 		Bck         cmn.Bck   // Optional bucket
 		Buckets     []cmn.Bck // Optional: Xaction on list of buckets
@@ -149,11 +149,11 @@ func (xs NodesXactMultiStats) GetNodesXactStat(id string) (xactStat NodesXactSta
 
 // StartXaction starts a given xaction.
 func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error) {
-	if !xaction.XactsDtor[args.Kind].Startable {
+	if !xaction.Table[args.Kind].Startable {
 		return id, fmt.Errorf("cannot start \"kind=%s\" xaction", args.Kind)
 	}
 
-	xactMsg := xaction.XactReqMsg{
+	xactMsg := xaction.QueryMsg{
 		Kind: args.Kind,
 		Bck:  args.Bck,
 		Node: args.Node,
@@ -183,7 +183,7 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 	msg := cmn.ActionMsg{
 		Action: cmn.ActXactStop,
-		Value: xaction.XactReqMsg{
+		Value: xaction.QueryMsg{
 			ID:   args.ID,
 			Kind: args.Kind,
 			Bck:  args.Bck,
@@ -210,7 +210,7 @@ func GetXactionStatsByID(baseParams BaseParams, id string) (xactStat NodesXactSt
 
 // QueryXactionStats gets all xaction stats for given kind and bucket (optional).
 func QueryXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats NodesXactMultiStats, err error) {
-	msg := xaction.XactReqMsg{
+	msg := xaction.QueryMsg{
 		ID:   args.ID,
 		Kind: args.Kind,
 		Bck:  args.Bck,
@@ -231,7 +231,7 @@ func QueryXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats Nodes
 // GetXactionStatus retrieves the status of the xaction.
 func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *nl.NotifStatus, err error) {
 	baseParams.Method = http.MethodGet
-	msg := xaction.XactReqMsg{
+	msg := xaction.QueryMsg{
 		ID:   args.ID,
 		Kind: args.Kind,
 		Bck:  args.Bck,
@@ -284,7 +284,7 @@ func WaitForXaction(baseParams BaseParams, args XactReqArgs, refreshIntervals ..
 
 // isXactionIdle return true if an xaction is not running or idle on all targets
 func isXactionIdle(baseParams BaseParams, args XactReqArgs) (idle bool, err error) {
-	msg := xaction.XactReqMsg{
+	msg := xaction.QueryMsg{
 		ID:          args.ID,
 		Kind:        args.Kind,
 		Bck:         args.Bck,
@@ -309,7 +309,7 @@ func isXactionIdle(baseParams BaseParams, args XactReqArgs) (idle bool, err erro
 			if xactStat.Ext == nil {
 				continue
 			}
-			var baseExt xaction.BaseXactDemandStatsExt
+			var baseExt xaction.BaseDemandStatsExt
 			if err := cos.MorphMarshal(xactStat.Ext, &baseExt); err == nil {
 				if !baseExt.IsIdle {
 					return false, nil

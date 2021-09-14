@@ -97,11 +97,11 @@ func (args *bckInitArgs) init(bucket string) (bck *cluster.Bck, errCode int, err
 
 	// Check for msg.Action permission if permissions are not explicitly specified
 	if args.perms == 0 && args.msg != nil {
-		xactDtor, ok := xaction.XactsDtor[args.msg.Action]
-		if !ok || xactDtor.Access == 0 {
+		xactRecord, ok := xaction.Table[args.msg.Action]
+		if !ok || xactRecord.Access == 0 {
 			return
 		}
-		args.perms = xactDtor.Access
+		args.perms = xactRecord.Access
 	}
 	errCode, err = args._checkACL(bck)
 	return

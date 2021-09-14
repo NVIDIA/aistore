@@ -90,8 +90,8 @@ func (*Rebalance) Run(*sync.WaitGroup) { debug.Assert(false) }
 // override/extend cmn.XactBase.Stats()
 func (xact *Rebalance) Stats() cluster.XactStats {
 	var (
-		baseStats   = xact.XactBase.Stats().(*xaction.BaseXactStats)
-		rebStats    = stats.RebalanceTargetStats{BaseXactStats: *baseStats}
+		baseStats   = xact.XactBase.Stats().(*xaction.BaseStats)
+		rebStats    = stats.RebalanceTargetStats{BaseStats: *baseStats}
 		statsRunner = xact.statTracker
 	)
 	rebStats.Ext.RebTxCount = statsRunner.Get(stats.RebTxCount)

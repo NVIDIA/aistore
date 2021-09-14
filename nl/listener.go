@@ -63,7 +63,7 @@ type (
 
 	NodeStats struct {
 		sync.RWMutex
-		stats map[string]interface{} // daeID => Stats (e.g. cmn.BaseXactStatsExt)
+		stats map[string]interface{} // daeID => Stats (e.g. cmn.BaseStatsExt)
 	}
 
 	NotifListenerBase struct {
@@ -79,7 +79,7 @@ type (
 		Srcs        cluster.NodeMap  // all notifiers
 		ActiveSrcs  cluster.NodeMap  // running notifiers
 		F           NotifCallback    `json:"-"` // optional listening-side callback
-		Stats       *NodeStats       // [daeID => Stats (e.g. cmn.BaseXactStatsExt)]
+		Stats       *NodeStats       // [daeID => Stats (e.g. cmn.BaseStatsExt)]
 		lastUpdated map[string]int64 // [daeID => last update time(nanoseconds)]
 		progress    time.Duration    // time interval to monitor the progress
 		addedTime   atomic.Int64     // Time when `nl` is added

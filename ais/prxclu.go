@@ -110,7 +110,7 @@ func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what 
 	)
 	switch what {
 	case cmn.GetWhatQueryXactStats:
-		var xactMsg xaction.XactReqMsg
+		var xactMsg xaction.QueryMsg
 		if err := cmn.ReadJSON(w, r, &xactMsg); err != nil {
 			return
 		}
@@ -789,7 +789,7 @@ func (p *proxyrunner) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
 }
 
 func (p *proxyrunner) xactStart(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
-	xactMsg := xaction.XactReqMsg{}
+	xactMsg := xaction.QueryMsg{}
 	if err := cos.MorphMarshal(msg.Value, &xactMsg); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
@@ -831,7 +831,7 @@ func (p *proxyrunner) xactStart(w http.ResponseWriter, r *http.Request, msg *cmn
 }
 
 func (p *proxyrunner) xactStop(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
-	xactMsg := xaction.XactReqMsg{}
+	xactMsg := xaction.QueryMsg{}
 	if err := cos.MorphMarshal(msg.Value, &xactMsg); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
@@ -877,7 +877,7 @@ func (p *proxyrunner) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) resilverOne(w http.ResponseWriter, r *http.Request,
-	msg *cmn.ActionMsg, xactMsg xaction.XactReqMsg) {
+	msg *cmn.ActionMsg, xactMsg xaction.QueryMsg) {
 	smap := p.owner.smap.get()
 	si := smap.GetTarget(xactMsg.Node)
 	if si == nil {

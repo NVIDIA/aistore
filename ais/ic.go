@@ -175,7 +175,7 @@ func (ic *ic) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (n
 
 func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 	var (
-		msg      = &xaction.XactReqMsg{}
+		msg      = &xaction.QueryMsg{}
 		bck      *cluster.Bck
 		nl       nl.NotifListener
 		config   = cmn.GCO.Get()

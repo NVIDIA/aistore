@@ -116,9 +116,9 @@ func (r *DemandBase) Stop() {
 
 func (r *DemandBase) Stats() cluster.XactStats { return r.ExtStats() }
 
-func (r *DemandBase) ExtStats() *BaseXactStatsExt {
-	stats := &BaseXactStatsExt{
-		BaseXactStats: BaseXactStats{
+func (r *DemandBase) ExtStats() *BaseStatsExt {
+	stats := &BaseStatsExt{
+		BaseStats: BaseStats{
 			IDX:         r.ID(),
 			KindX:       r.Kind(),
 			StartTimeX:  r.StartTime(),
@@ -131,7 +131,7 @@ func (r *DemandBase) ExtStats() *BaseXactStatsExt {
 	if r.Bck() != nil {
 		stats.BckX = r.Bck().Bck
 	}
-	stats.Ext = &BaseXactDemandStatsExt{IsIdle: r.likelyIdle()}
+	stats.Ext = &BaseDemandStatsExt{IsIdle: r.likelyIdle()}
 	return stats
 }
 

@@ -73,7 +73,7 @@ type (
 	abortArgs struct {
 		bcks       []*cluster.Bck // run on a slice of buckets
 		ty         string         // one of { ScopeG, ScopeBck, ... } enum
-		mountpaths bool           // mountpath xactions - see xaction.XactsDtor
+		mountpaths bool           // mountpath xactions - see xaction.Table
 		all        bool           // all or matching `ty` above, if defined
 	}
 
@@ -294,7 +294,7 @@ func (r *registry) getStats(flt XactFilter) ([]cluster.XactStats, error) {
 		if flt.OnlyRunning != nil && *flt.OnlyRunning {
 			matching := make([]cluster.XactStats, 0, 10)
 			if flt.Kind == "" {
-				for kind := range xaction.XactsDtor {
+				for kind := range xaction.Table {
 					entry := r.getRunning(XactFilter{Kind: kind, Bck: flt.Bck})
 					if entry != nil {
 						matching = append(matching, entry.Get().Stats())
@@ -334,7 +334,7 @@ func (r *registry) abort(args abortArgs) {
 				}
 			}
 		} else if args.all {
-			abort = args.ty == "" || args.ty == xaction.XactsDtor[xact.Kind()].Scope
+			abort = args.ty == "" || args.ty == xaction.Table[xact.Kind()].Scope
 		}
 		if abort {
 			xact.Abort(nil)
@@ -404,7 +404,7 @@ func (r *registry) hkDelOld() time.Duration {
 		// extra check if the entry is not the most recent one for
 		// a given kind (if it is keep it anyway)
 		flt := XactFilter{Kind: entry.Kind(), OnlyRunning: &onl}
-		if xaction.XactsDtor[entry.Kind()].Scope == xaction.ScopeBck {
+		if xaction.Table[entry.Kind()].Scope == xaction.ScopeBck {
 			flt.Bck = xact.Bck()
 		}
 		if r.entries.findUnlocked(flt) == nil {
@@ -469,7 +469,7 @@ func (r *registry) _renewFlt(entry Renewable, flt XactFilter) (rns RenewRes) {
 func usePrev(xprev cluster.Xact, nentry Renewable, bck *cluster.Bck) (use bool) {
 	pkind, nkind := xprev.Kind(), nentry.Kind()
 	debug.Assertf(pkind == nkind && pkind != "", "%s != %s", pkind, nkind)
-	pdtor, ndtor := xaction.XactsDtor[pkind], xaction.XactsDtor[nkind]
+	pdtor, ndtor := xaction.Table[pkind], xaction.Table[nkind]
 	debug.Assert(pdtor.Scope == ndtor.Scope)
 	// same ID
 	if xprev.ID() != "" && xprev.ID() == nentry.UUID() {

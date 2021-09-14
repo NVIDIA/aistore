@@ -163,8 +163,8 @@ func (xact *XactBase) notifyRefresh(err error) {
 	if n := xact.Notif(); n != nil {
 		nl.OnFinished(n, err)
 	}
-	xactDtor := XactsDtor[xact.kind]
-	if xactDtor.RefreshCap {
+	xactRecord := Table[xact.kind]
+	if xactRecord.RefreshCap {
 		if cs, _ := fs.RefreshCapStatus(nil, nil); cs.Err != nil {
 			glog.Error(cs.Err) // log warning
 		}
@@ -216,7 +216,7 @@ func (xact *XactBase) BytesCount() int64          { return xact.bytes.Load() }
 func (xact *XactBase) BytesAdd(size int64) int64  { return xact.bytes.Add(size) }
 
 func (xact *XactBase) Stats() cluster.XactStats {
-	stats := &BaseXactStats{
+	stats := &BaseStats{
 		IDX:         xact.ID(),
 		KindX:       xact.Kind(),
 		BckX:        xact.origBck,

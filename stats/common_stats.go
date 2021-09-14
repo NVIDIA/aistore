@@ -128,7 +128,7 @@ type (
 	}
 
 	RebalanceTargetStats struct {
-		xaction.BaseXactStats
+		xaction.BaseStats
 		Ext ExtRebalanceStats `json:"ext"`
 	}
 

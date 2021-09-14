@@ -24,7 +24,7 @@ import (
 // verb /v1/xactions
 func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		xactMsg xaction.XactReqMsg
+		xactMsg xaction.QueryMsg
 		bck     *cluster.Bck
 	)
 	if _, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathXactions.L); err != nil {
@@ -123,7 +123,7 @@ func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request,
 	}
 }
 
-func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bck) error {
+func (t *targetrunner) cmdXactStart(xactMsg *xaction.QueryMsg, bck *cluster.Bck) error {
 	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
 	const erfmn = "xaction %q requires a bucket to start"
 
@@ -131,7 +131,7 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bc
 		return fmt.Errorf(cmn.FmtErrUnknown, t.si, "xaction kind", xactMsg.Kind)
 	}
 
-	if dtor := xaction.XactsDtor[xactMsg.Kind]; dtor.Scope == xaction.ScopeBck && bck == nil {
+	if dtor := xaction.Table[xactMsg.Kind]; dtor.Scope == xaction.ScopeBck && bck == nil {
 		return fmt.Errorf(erfmn, xactMsg.Kind)
 	}
 

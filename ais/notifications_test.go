@@ -77,7 +77,7 @@ var _ = Describe("Notifications xaction test", func() {
 			return n
 		}
 
-		baseXact = func(xactID string, counts ...int64) *xaction.BaseXactStatsExt {
+		baseXact = func(xactID string, counts ...int64) *xaction.BaseStatsExt {
 			var (
 				objCount  int64
 				byteCount int64
@@ -88,20 +88,20 @@ var _ = Describe("Notifications xaction test", func() {
 			if len(counts) > 1 {
 				byteCount = counts[1]
 			}
-			return &xaction.BaseXactStatsExt{BaseXactStats: xaction.BaseXactStats{
+			return &xaction.BaseStatsExt{BaseStats: xaction.BaseStats{
 				IDX:         xactID,
 				BytesCountX: byteCount,
 				ObjCountX:   objCount,
 			}}
 		}
 
-		finishedXact = func(xactID string, counts ...int64) (stats *xaction.BaseXactStatsExt) {
+		finishedXact = func(xactID string, counts ...int64) (stats *xaction.BaseStatsExt) {
 			stats = baseXact(xactID, counts...)
 			stats.EndTimeX = time.Now()
 			return
 		}
 
-		abortedXact = func(xactID string, counts ...int64) (stats *xaction.BaseXactStatsExt) {
+		abortedXact = func(xactID string, counts ...int64) (stats *xaction.BaseStatsExt) {
 			stats = finishedXact(xactID, counts...)
 			stats.AbortedX = true
 			return
@@ -196,7 +196,7 @@ var _ = Describe("Notifications xaction test", func() {
 			err := n.handleProgress(nl, targets[target1ID], cos.MustMarshal(statsFirst), nil)
 			Expect(err).To(BeNil())
 			val, _ := nl.NodeStats().Load(target1ID)
-			statsXact, ok := val.(*xaction.BaseXactStatsExt)
+			statsXact, ok := val.(*xaction.BaseStatsExt)
 			Expect(ok).To(BeTrue())
 			Expect(statsXact.ObjCount()).To(BeEquivalentTo(initObjCount))
 			Expect(statsXact.BytesCount()).To(BeEquivalentTo(initByteCount))
@@ -205,7 +205,7 @@ var _ = Describe("Notifications xaction test", func() {
 			err = n.handleFinished(nl, targets[target1ID], cos.MustMarshal(statsProgress), nil)
 			Expect(err).To(BeNil())
 			val, _ = nl.NodeStats().Load(target1ID)
-			statsXact, ok = val.(*xaction.BaseXactStatsExt)
+			statsXact, ok = val.(*xaction.BaseStatsExt)
 			Expect(ok).To(BeTrue())
 			Expect(statsXact.ObjCount()).To(BeEquivalentTo(updatedObjCount))
 			Expect(statsXact.BytesCount()).To(BeEquivalentTo(updatedByteCount))

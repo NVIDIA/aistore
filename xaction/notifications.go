@@ -42,7 +42,7 @@ func NewXactNL(uuid, action string, smap *cluster.Smap, srcs cluster.NodeMap, bc
 }
 
 func (*NotifXactListener) UnmarshalStats(rawMsg []byte) (stats interface{}, finished, aborted bool, err error) {
-	xactStats := &BaseXactStatsExt{}
+	xactStats := &BaseStatsExt{}
 	if err = jsoniter.Unmarshal(rawMsg, xactStats); err != nil {
 		return
 	}
@@ -63,7 +63,7 @@ func (nxb *NotifXactListener) QueryArgs() cmn.ReqArgs {
 func (nxb *NotifXactListener) AbortArgs() cmn.ReqArgs {
 	msg := cmn.ActionMsg{
 		Action: cmn.ActXactStop,
-		Value: XactReqMsg{
+		Value: QueryMsg{
 			ID: nxb.UUID(),
 		},
 	}

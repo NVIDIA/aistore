@@ -937,8 +937,8 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 	}
 
 	// only the primary can do metasync
-	xactDtor := xaction.XactsDtor[msg.Action]
-	if xactDtor.Metasync {
+	xactRecord := xaction.Table[msg.Action]
+	if xactRecord.Metasync {
 		if p.forwardCP(w, r, msg, bucket) {
 			return
 		}

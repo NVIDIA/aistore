@@ -62,8 +62,8 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	xactDtor := xaction.XactsDtor[msg.Action]
-	onlyPrimary := xactDtor.Metasync
+	xactRecord := xaction.Table[msg.Action]
+	onlyPrimary := xactRecord.Metasync
 	if !t.ensureIntraControl(w, r, onlyPrimary) {
 		return
 	}

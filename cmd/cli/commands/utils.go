@@ -418,7 +418,7 @@ func parseXactionFromArgs(c *cli.Context) (xactID, xactKind string, bck cmn.Bck,
 		xactID = xactKind
 		xactKind = ""
 	} else {
-		switch xaction.XactsDtor[xactKind].Scope {
+		switch xaction.Table[xactKind].Scope {
 		case xaction.ScopeBck:
 			// Bucket is optional.
 			if uri := c.Args().Get(1); uri != "" {
@@ -442,7 +442,7 @@ func parseXactionFromArgs(c *cli.Context) (xactID, xactKind string, bck cmn.Bck,
 // Get list of xactions
 func listXactions(onlyStartable bool) []string {
 	xactKinds := make([]string, 0)
-	for kind, meta := range xaction.XactsDtor {
+	for kind, meta := range xaction.Table {
 		if !onlyStartable || (onlyStartable && meta.Startable) {
 			xactKinds = append(xactKinds, kind)
 		}

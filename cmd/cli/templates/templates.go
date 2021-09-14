@@ -581,7 +581,7 @@ func fmtACL(acl cmn.AccessAttrs) string {
 	return acl.Describe()
 }
 
-func extECGetStats(base *xaction.BaseXactStatsExt) *ec.ExtECGetStats {
+func extECGetStats(base *xaction.BaseStatsExt) *ec.ExtECGetStats {
 	ecGet := &ec.ExtECGetStats{}
 	if err := cos.MorphMarshal(base.Ext, ecGet); err != nil {
 		return &ec.ExtECGetStats{}
@@ -589,7 +589,7 @@ func extECGetStats(base *xaction.BaseXactStatsExt) *ec.ExtECGetStats {
 	return ecGet
 }
 
-func extECPutStats(base *xaction.BaseXactStatsExt) *ec.ExtECPutStats {
+func extECPutStats(base *xaction.BaseStatsExt) *ec.ExtECPutStats {
 	ecPut := &ec.ExtECPutStats{}
 	if err := cos.MorphMarshal(base.Ext, ecPut); err != nil {
 		return &ec.ExtECPutStats{}

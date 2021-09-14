@@ -35,7 +35,7 @@ type (
 
 	targetRebStats struct {
 		targetID string
-		stats    *xaction.BaseXactStatsExt
+		stats    *xaction.BaseStatsExt
 	}
 )
 
