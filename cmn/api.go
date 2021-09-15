@@ -486,25 +486,20 @@ func (c *ExtraProps) ValidateAsProps(args *ValidationArgs) error {
 //    * BucketPropsToUpdate (above)
 //    * ais.defaultBckProps()
 func DefaultBckProps(bck Bck, cs ...*Config) *BucketProps {
-	var (
-		c     *Config
-		cksum CksumConf
-	)
+	var c *Config
 	if len(cs) > 0 {
-		c = cs[0]
-		cksum = c.Cksum
-	} else { // only in tests
-		c = GCO.Get()
-		cksum = c.Cksum
-		cksum.Type = cos.ChecksumXXHash
+		c = &Config{}
+		cos.CopyStruct(c, cs[0])
+	} else {
+		c = GCO.Clone()
+		c.Cksum.Type = cos.ChecksumXXHash
 	}
-	lru := c.LRU
 	if bck.IsAIS() {
-		lru.Enabled = false
+		c.LRU.Enabled = false
 	}
 	return &BucketProps{
-		Cksum:      cksum,
-		LRU:        lru,
+		Cksum:      c.Cksum,
+		LRU:        c.LRU,
 		Mirror:     c.Mirror,
 		Versioning: c.Versioning,
 		Access:     AccessAll,
