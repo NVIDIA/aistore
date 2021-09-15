@@ -69,15 +69,15 @@ func waitForCluster() error {
 	tlog.Logf("Pinging primary for health... ")
 	for {
 		if retry%5 == 4 {
-			fmt.Fprintf(os.Stdout, "%ds ", retry+1)
+			fmt.Fprintf(os.Stdout, "%ds --- ", retry+1)
 		}
 		err = api.Health(tutils.BaseAPIParams(tutils.GetPrimaryURL()), true /*primary is ready to rebalance*/)
 		if err == nil {
-			tlog.Logln("")
+			fmt.Fprintln(os.Stdout, "")
 			break
 		}
 		if retry >= retryCount {
-			tlog.Logln("")
+			fmt.Fprintln(os.Stdout, "")
 			return fmt.Errorf("timed out waiting for cluster startup: %v", err)
 		}
 		retry++

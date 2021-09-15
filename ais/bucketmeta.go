@@ -439,13 +439,12 @@ type bckPropsArgs struct {
 	hdr http.Header  // Header with remote bucket properties.
 }
 
-func defaultBckProps(args bckPropsArgs) *cmn.BucketProps {
-	var (
-		config = cmn.GCO.Get()
-		props  = cmn.DefaultBckProps(args.bck.Bck, config)
-	)
-	debug.Assert(args.bck != nil)
-	debug.AssertNoErr(cos.ValidateCksumType(config.Cksum.Type))
+// See also:
+//    * github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties
+//    * cmn.BucketPropsToUpdate
+//    * cmn.DefaultBckProps
+func defaultBckProps(args bckPropsArgs) (props *cmn.BucketProps) {
+	props = cmn.DefaultBckProps(args.bck.Bck)
 	props.SetProvider(args.bck.Provider)
 	switch {
 	case args.bck.IsAIS() || args.bck.HasBackendBck():
@@ -455,23 +454,24 @@ func defaultBckProps(args bckPropsArgs) *cmn.BucketProps {
 		if args.hdr != nil {
 			props = mergeRemoteBckProps(props, args.hdr)
 		}
-		// Preserve HDFS related information.
 		if args.bck.Props == nil {
-			// Since the original bucket does not have the HDFS related info,
-			// validation will fail so we must skip.
-			return props
+			// Since the original bucket does not have any HDFS related info,
+			// validation will fail, so we must skip.
+			return
 		}
+		// Use HDFS props.
 		props.Extra.HDFS = args.bck.Props.Extra.HDFS
 	case args.bck.IsRemote():
 		debug.Assert(args.hdr != nil)
 		props.Versioning.Enabled = false
+		props.LRU.Enabled = true // TODO -- FIXME: must be cmn.GCO.Get().LRU.Enabled
 		props = mergeRemoteBckProps(props, args.hdr)
 	default:
 		debug.Assert(false)
 	}
-	// For debugging purposes we can set large value - we don't need to be precise here.
-	debug.AssertNoErr(props.Validate(1000 /*targetCnt*/))
-	return props
+	err := props.Validate(9999 /*targetCnt*/)
+	debug.AssertNoErr(err)
+	return
 }
 
 func mergeRemoteBckProps(props *cmn.BucketProps, header http.Header) *cmn.BucketProps {

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -34,6 +35,10 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 		config := cmn.GCO.BeginUpdate()
 		config.ConfigDir = mpath
 		config.Cksum.Type = cos.ChecksumXXHash
+		config.LRU = cmn.LRUConf{
+			LowWM: 75, HighWM: 90, OOS: 95,
+			DontEvictTime: cos.Duration(time.Second), CapacityUpdTime: cos.Duration(time.Minute), Enabled: true,
+		}
 		cmn.GCO.CommitUpdate(config)
 		cfg = cmn.GCO.Get()
 
