@@ -464,7 +464,6 @@ func defaultBckProps(args bckPropsArgs) (props *cmn.BucketProps) {
 	case args.bck.IsRemote():
 		debug.Assert(args.hdr != nil)
 		props.Versioning.Enabled = false
-		props.LRU.Enabled = true // TODO -- FIXME: must be cmn.GCO.Get().LRU.Enabled
 		props = mergeRemoteBckProps(props, args.hdr)
 	default:
 		debug.Assert(false)
