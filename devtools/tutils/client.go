@@ -477,13 +477,12 @@ func WaitForRebalanceToComplete(t testing.TB, baseParams api.BaseParams, timeout
 		wg      = &sync.WaitGroup{}
 		errCh   = make(chan error, 2)
 	)
-
 	waitForRebalanceToStart(baseParams)
-
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
 	}
-	tlog.Logf("Waiting for rebalance and resilver to complete (timeout: %v)...\n", timeout)
+
+	tlog.Logf("Waiting for rebalance and resilver to complete (timeout %v)...\n", timeout)
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
@@ -510,7 +509,8 @@ func WaitForRebalanceToComplete(t testing.TB, baseParams api.BaseParams, timeout
 	wg.Wait()
 	close(errCh)
 	for err := range errCh {
-		t.Fatal(err)
+		tassert.CheckFatal(t, err)
+		return
 	}
 }
 

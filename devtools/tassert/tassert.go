@@ -5,12 +5,16 @@
 package tassert
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
+	"os"
 	"runtime"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 var (
@@ -30,15 +34,17 @@ func CheckFatal(tb testing.TB, err error) {
 	} else {
 		fatalities[tb.Name()] = struct{}{}
 		mu.Unlock()
-		debug.PrintStack()
-		tb.Fatal(err.Error())
+		printStack()
+		now := fmt.Sprintf("[%s]", time.Now().Format("15:04:05.000000"))
+		tb.Fatal(now, err)
 	}
 }
 
 func CheckError(tb testing.TB, err error) {
 	if err != nil {
-		debug.PrintStack()
-		tb.Error(err.Error())
+		printStack()
+		now := fmt.Sprintf("[%s]", time.Now().Format("15:04:05.000000"))
+		tb.Error(now, err)
 	}
 }
 
@@ -82,4 +88,24 @@ func SelectErr(tb testing.TB, errCh chan error, verb string, errIsFatal bool) {
 			f("Failed to %s object: %v", verb, err)
 		}
 	}
+}
+
+func printStack() {
+	fmt.Fprintln(os.Stderr, "    tassert.printStack:")
+	buffer := bytes.NewBuffer(make([]byte, 256))
+	for i := 1; i < 9; i++ {
+		_, file, line, ok := runtime.Caller(i)
+		if !ok {
+			break
+		}
+		i := strings.Index(file, "aistore")
+		if i < 0 {
+			break
+		}
+		if strings.Contains(file, "tassert") {
+			continue
+		}
+		fmt.Fprintf(buffer, "\t%s:%d\n", file[i+8:], line)
+	}
+	os.Stderr.Write(buffer.Bytes())
 }
