@@ -422,7 +422,7 @@ func NetworkCallWithRetry(args *CallWithRetryArgs) (err error) {
 			glog.Errorf("%s Failed to %s, err: %v (iter: %d, status code: %d)",
 				callerStr, args.Action, err, iter, status)
 		}
-		if cos.IsErrConnectionRefused(err) || cos.IsErrConnectionReset(err) {
+		if cos.IsRetriableConnErr(err) {
 			softErrCnt++
 		} else {
 			hardErrCnt++

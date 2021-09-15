@@ -70,18 +70,13 @@ func IsErrConnectionNotAvail(err error) (yes bool) {
 	return errors.Is(err, syscall.EADDRNOTAVAIL)
 }
 
-func IsErrConnectionRefused(err error) (yes bool) {
-	return errors.Is(err, syscall.ECONNREFUSED)
-}
+// retriable conn errs
+func IsErrConnectionRefused(err error) (yes bool) { return errors.Is(err, syscall.ECONNREFUSED) }
+func IsErrConnectionReset(err error) (yes bool)   { return errors.Is(err, syscall.ECONNRESET) }
+func IsErrBrokenPipe(err error) (yes bool)        { return errors.Is(err, syscall.EPIPE) }
 
-// TCP RST
-func IsErrConnectionReset(err error) (yes bool) {
-	return errors.Is(err, syscall.ECONNRESET) || IsErrBrokenPipe(err)
-}
-
-// Check if a given error is a broken-pipe one.
-func IsErrBrokenPipe(err error) bool {
-	return errors.Is(err, syscall.EPIPE)
+func IsRetriableConnErr(err error) (yes bool) {
+	return IsErrConnectionRefused(err) || IsErrConnectionReset(err) || IsErrBrokenPipe(err)
 }
 
 func IsErrOOS(err error) bool {

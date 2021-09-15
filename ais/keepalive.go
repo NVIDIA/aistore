@@ -512,7 +512,7 @@ func (k *keepalive) register(sendKeepalive func(time.Duration) (int, error), pri
 			// could be much shorter than the specified `timeout`. In such case
 			// we want to report the worst-case scenario, otherwise we could possibly
 			// decrease next retransmission timeout (which doesn't make much sense).
-			if cos.IsErrConnectionRefused(err) || cos.IsErrConnectionReset(err) {
+			if cos.IsErrConnectionRefused(err) || cos.IsErrConnectionReset(err) || cos.IsErrBrokenPipe(err) {
 				delta = time.Duration(k.maxKeepalive)
 			}
 			timeout = k.updateTimeoutForDaemon(primaryID, delta)

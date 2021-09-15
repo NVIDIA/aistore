@@ -534,5 +534,5 @@ func shouldRetryHTTP(err error, resp *http.Response) bool {
 	if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
 		return true
 	}
-	return err != nil && (cos.IsErrConnectionReset(err) || cos.IsErrConnectionRefused(err))
+	return err != nil && cos.IsRetriableConnErr(err)
 }
