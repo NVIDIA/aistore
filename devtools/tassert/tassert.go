@@ -91,8 +91,8 @@ func SelectErr(tb testing.TB, errCh chan error, verb string, errIsFatal bool) {
 }
 
 func printStack() {
+	var buffer bytes.Buffer
 	fmt.Fprintln(os.Stderr, "    tassert.printStack:")
-	buffer := bytes.NewBuffer(make([]byte, 256))
 	for i := 1; i < 9; i++ {
 		_, file, line, ok := runtime.Caller(i)
 		if !ok {
@@ -105,7 +105,7 @@ func printStack() {
 		if strings.Contains(file, "tassert") {
 			continue
 		}
-		fmt.Fprintf(buffer, "\t%s:%d\n", file[i+8:], line)
+		fmt.Fprintf(&buffer, "\t%s:%d\n", file[i+8:], line)
 	}
 	os.Stderr.Write(buffer.Bytes())
 }
