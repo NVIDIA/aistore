@@ -37,7 +37,7 @@ func Example_msg() {
 	}
 	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + transport.MsgURLPath(trname)
-	stream := transport.NewMsgStream(httpclient, url)
+	stream := transport.NewMsgStream(httpclient, url, cos.GenTie())
 
 	stream.Send(&transport.Msg{Body: []byte(lorem)})
 	stream.Send(&transport.Msg{Body: []byte(duis)})
@@ -74,7 +74,7 @@ func Test_MsgDryRun(t *testing.T) {
 			if testing.Short() {
 				total = cos.GiB
 			}
-			stream := transport.NewMsgStream(nil, "dry-msg"+strconv.Itoa(idx))
+			stream := transport.NewMsgStream(nil, "dry-msg"+strconv.Itoa(idx), cos.GenTie())
 			for tsize < total {
 				msize := myrand.Intn(memsys.PageSize - 64) // <= s.maxheader, zero-length OK
 				if off+msize > len(buf) {

@@ -2140,11 +2140,8 @@ func (h *httprunner) pollClusterStarted(config *cmn.Config, psi *cluster.Snode) 
 			return
 		}
 		if _, _, err := h.Health(smap.Primary, healthTimeout, query /*ask primary*/); err == nil {
-			if h.si.IsProxy() {
-				glog.Infof("%s: non-primary & cluster startup complete, %s", h.si, smap.StringEx())
-			} else {
-				glog.Infof("%s: cluster startup ok, %s", h.si, smap.StringEx())
-			}
+			rmd := h.owner.rmd.get()
+			glog.Infof("%s via primary health: cluster startup ok, %s, %s", h.si, smap.StringEx(), rmd)
 			return
 		}
 		if rediscover >= config.Timeout.Startup.D()/2 {

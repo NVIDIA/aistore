@@ -64,7 +64,7 @@ func (s *streamBase) do(body io.Reader) (err error) {
 	// init request & response
 	req, resp := fasthttp.AcquireRequest(), fasthttp.AcquireResponse()
 	req.Header.SetMethod(http.MethodPut)
-	req.SetRequestURI(s.toURL)
+	req.SetRequestURI(s.dstURL)
 	req.SetBodyStream(body, -1)
 	if s.streamer.compressed() {
 		req.Header.Set(cmn.HdrCompress, cmn.LZ4Compression)

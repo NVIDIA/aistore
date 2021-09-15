@@ -108,15 +108,16 @@ func NewStreams(sowner cluster.Sowner, lsnode *cluster.Snode, cl transport.Clien
 	if sb.extra.Config == nil {
 		sb.extra.Config = cmn.GCO.Get()
 	}
+	if !sb.extra.Compressed() {
+		sb.lid = fmt.Sprintf("sb[%s-%s-%s]", sb.lsnode.ID(), sb.network, sb.trname)
+	} else {
+		sb.lid = fmt.Sprintf("sb[%s-%s-%s[%s]]", sb.lsnode.ID(), sb.network, sb.trname,
+			cos.B2S(int64(sb.extra.Config.Compression.BlockMaxSize), 0))
+	}
+
 	// update streams when Smap changes
 	sb.Resync()
 
-	if !sb.extra.Compressed() {
-		sb.lid = fmt.Sprintf("sb[%s=>%s/%s]", sb.lsnode.ID(), sb.network, sb.trname)
-	} else {
-		sb.lid = fmt.Sprintf("sb[%s=>%s/%s[%s]]", sb.lsnode.ID(), sb.network, sb.trname,
-			cos.B2S(int64(sb.extra.Config.Compression.BlockMaxSize), 0))
-	}
 	// register this stream-bundle as Smap listener
 	if !sb.manualResync {
 		listeners.Reg(sb)
@@ -342,18 +343,18 @@ func (sb *Streams) Resync() {
 		if id == sb.lsnode.ID() {
 			continue
 		}
-		toURL := si.URL(sb.network) + transport.ObjURLPath(sb.trname) // direct destination URL
+		dstURL := si.URL(sb.network) + transport.ObjURLPath(sb.trname) // direct destination URL
 		nrobin := &robin{stsdest: make(stsdest, sb.multiplier)}
 		for k := 0; k < sb.multiplier; k++ {
 			var (
 				s  string
-				ns = transport.NewObjStream(sb.client, toURL, &sb.extra)
+				ns = transport.NewObjStream(sb.client, dstURL, id /*dstID*/, &sb.extra)
 			)
 			if sb.multiplier > 1 {
-				s = fmt.Sprintf("(%d)", k)
+				s = fmt.Sprintf("(#%d)", k+1)
 			}
 			if verbose {
-				glog.Infof("%s: [+] %s%s => %s via %s", sb, ns, s, id, toURL)
+				glog.Infof("%s: %s%s via %s", sb, ns, s, dstURL)
 			}
 			nrobin.stsdest[k] = ns
 		}

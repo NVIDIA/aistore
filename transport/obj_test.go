@@ -122,7 +122,7 @@ func Example_headers() {
 	defer ts.Close()
 
 	httpclient := transport.NewIntraDataClient()
-	stream := transport.NewObjStream(httpclient, ts.URL, nil)
+	stream := transport.NewObjStream(httpclient, ts.URL, cos.GenTie(), nil)
 
 	sendText(stream, lorem, duis)
 	stream.Fin()
@@ -203,7 +203,7 @@ func Example_obj() {
 		return
 	}
 	httpclient := transport.NewIntraDataClient()
-	stream := transport.NewObjStream(httpclient, ts.URL+transport.ObjURLPath(trname), nil)
+	stream := transport.NewObjStream(httpclient, ts.URL+transport.ObjURLPath(trname), cos.GenTie(), nil)
 	sendText(stream, lorem, duis)
 	sendText(stream, et, temporibus)
 	stream.Fin()
@@ -292,7 +292,7 @@ func Test_MultipleNetworks(t *testing.T) {
 
 		httpclient := transport.NewIntraDataClient()
 		url := ts.URL + transport.ObjURLPath(trname)
-		streams = append(streams, transport.NewObjStream(httpclient, url, nil))
+		streams = append(streams, transport.NewObjStream(httpclient, url, cos.GenTie(), nil))
 	}
 
 	totalSend := int64(0)
@@ -329,7 +329,7 @@ func Test_OnSendCallback(t *testing.T) {
 	defer transport.Unhandle(trname)
 	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + transport.ObjURLPath(trname)
-	stream := transport.NewObjStream(httpclient, url, nil)
+	stream := transport.NewObjStream(httpclient, url, cos.GenTie(), nil)
 
 	var (
 		totalSend int64
@@ -404,7 +404,7 @@ func Test_ObjAttrs(t *testing.T) {
 	defer transport.Unhandle(trname)
 	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + transport.ObjURLPath(trname)
-	stream := transport.NewObjStream(httpclient, url, nil)
+	stream := transport.NewObjStream(httpclient, url, cos.GenTie(), nil)
 
 	random := newRand(mono.NanoTime())
 	for idx, attrs := range testAttrs {
@@ -460,7 +460,7 @@ func Test_CompressedOne(t *testing.T) {
 	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + transport.ObjURLPath(trname)
 	t.Setenv("AIS_STREAM_BURST_NUM", "2")
-	stream := transport.NewObjStream(httpclient, url, &transport.Extra{Compression: cmn.CompressAlways})
+	stream := transport.NewObjStream(httpclient, url, cos.GenTie(), &transport.Extra{Compression: cmn.CompressAlways})
 
 	slab, _ := MMSA.GetSlab(memsys.MaxPageSlabSize)
 	random := newRand(mono.NanoTime())
@@ -511,7 +511,7 @@ func Test_DryRun(t *testing.T) {
 
 	t.Setenv("AIS_STREAM_DRY_RUN", "true")
 
-	stream := transport.NewObjStream(nil, "dummy/null", nil)
+	stream := transport.NewObjStream(nil, "dummy/null", cos.GenTie(), nil)
 
 	random := newRand(mono.NanoTime())
 	sgl := MMSA.NewSGL(cos.MiB)
@@ -577,7 +577,7 @@ func Test_CompletionCount(t *testing.T) {
 	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + transport.ObjURLPath(trname)
 	t.Setenv("AIS_STREAM_BURST_NUM", "256")
-	stream := transport.NewObjStream(httpclient, url, nil) // provide for sizeable queue at any point
+	stream := transport.NewObjStream(httpclient, url, cos.GenTie(), nil) // provide for sizeable queue at any point
 	random := newRand(mono.NanoTime())
 	rem := int64(0)
 	for idx := 0; idx < 10000; idx++ {
@@ -648,7 +648,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 			extra.SizePDU = transport.DefaultSizePDU
 		}
 	}
-	stream := transport.NewObjStream(httpclient, url, extra)
+	stream := transport.NewObjStream(httpclient, url, cos.GenTie(), extra)
 	trname, sessID := stream.ID()
 	now := time.Now()
 

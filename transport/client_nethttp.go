@@ -51,7 +51,7 @@ func (s *streamBase) do(body io.Reader) (err error) {
 		request  *http.Request
 		response *http.Response
 	)
-	if request, err = http.NewRequest(http.MethodPut, s.toURL, body); err != nil {
+	if request, err = http.NewRequest(http.MethodPut, s.dstURL, body); err != nil {
 		return
 	}
 	if s.streamer.compressed() {

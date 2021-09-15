@@ -97,8 +97,8 @@ func (hdr *ObjHdr) FullName() string { return filepath.Join(hdr.Bck.Name, hdr.Ob
 // object stream //
 ///////////////////
 
-func NewObjStream(client Client, toURL string, extra *Extra) (s *Stream) {
-	s = &Stream{streamBase: *newStreamBase(client, toURL, extra)}
+func NewObjStream(client Client, dstURL, dstID string, extra *Extra) (s *Stream) {
+	s = &Stream{streamBase: *newStreamBase(client, dstURL, dstID, extra)}
 	s.streamBase.streamer = s
 	if extra != nil {
 		s.callback = extra.Callback
@@ -171,8 +171,8 @@ func (s *Stream) Fin() {
 // message stream //
 ////////////////////
 
-func NewMsgStream(client Client, toURL string) (s *MsgStream) {
-	s = &MsgStream{streamBase: *newStreamBase(client, toURL, nil)}
+func NewMsgStream(client Client, dstURL, dstID string) (s *MsgStream) {
+	s = &MsgStream{streamBase: *newStreamBase(client, dstURL, dstID, nil)}
 	s.streamBase.streamer = s
 
 	burst := burst()                  // num messages the caller can post without blocking

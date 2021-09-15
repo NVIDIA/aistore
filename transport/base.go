@@ -79,11 +79,11 @@ type (
 		client   Client // http client this send-stream will use
 
 		// user-defined & queryable
-		toURL, trname   string       // http endpoint
-		sessID          int64        // stream session ID
-		sessST          atomic.Int64 // state of the TCP/HTTP session: active (connected) | inactive (disconnected)
-		stats           Stats        // stream stats
-		Numcur, Sizecur int64        // gets reset to zero upon each timeout
+		dstURL, dstID, trname string       // http endpoint
+		sessID                int64        // stream session ID
+		sessST                atomic.Int64 // state of the TCP/HTTP session: active (connected) | inactive (disconnected)
+		stats                 Stats        // stream stats
+		Numcur, Sizecur       int64        // gets reset to zero upon each timeout
 		// internals
 		lid    string        // log prefix
 		lastCh *cos.StopCh   // end of stream
@@ -113,15 +113,15 @@ type (
 // streamBase //
 ////////////////
 
-func newStreamBase(client Client, toURL string, extra *Extra) (s *streamBase) {
-	u, err := url.Parse(toURL)
+func newStreamBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) {
+	u, err := url.Parse(dstURL)
 	cos.AssertNoErr(err)
 
-	s = &streamBase{client: client, toURL: toURL}
+	s = &streamBase{client: client, dstURL: dstURL, dstID: dstID}
 
 	s.sessID = nextSID.Inc()
 	s.trname = path.Base(u.Path)
-	s.lid = fmt.Sprintf("%s[%d]", s.trname, s.sessID)
+	s.lid = fmt.Sprintf("s-%s[%d]=>%s", s.trname, s.sessID, dstID)
 
 	s.lastCh = cos.NewStopCh()
 	s.stopCh = cos.NewStopCh()
@@ -177,7 +177,7 @@ func (s *streamBase) startSend(streamable fmt.Stringer) (err error) {
 }
 
 func (s *streamBase) Stop()               { s.stopCh.Close() }
-func (s *streamBase) URL() string         { return s.toURL }
+func (s *streamBase) URL() string         { return s.dstURL }
 func (s *streamBase) ID() (string, int64) { return s.trname, s.sessID }
 func (s *streamBase) String() string      { return s.lid }
 func (s *streamBase) Terminated() (terminated bool) {

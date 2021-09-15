@@ -45,9 +45,9 @@ var (
 	program  string
 	host     = "unknownhost"
 	userName = "unknownuser"
-
-	nodeName string
 )
+
+var GetNodeName func() string
 
 var onceLogDirs sync.Once
 
@@ -80,8 +80,6 @@ func init() {
 
 	logging.setVState(0, nil, false)
 }
-
-func SetNodeName(name string) { nodeName = name }
 
 func SetLogDir(dir string) { logDir = dir }
 
