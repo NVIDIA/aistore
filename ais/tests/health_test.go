@@ -56,6 +56,8 @@ func TestPrimaryProxyHealth(t *testing.T) {
 }
 
 func TestUnregisteredProxyHealth(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal, MinProxies: 2})
+
 	var (
 		proxyURL = tutils.GetPrimaryURL()
 		smap     = tutils.GetClusterMap(t, proxyURL)

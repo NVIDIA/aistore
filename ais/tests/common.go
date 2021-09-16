@@ -144,13 +144,13 @@ func (m *ioContext) assertClusterState() {
 
 func (m *ioContext) expectTargets(n int) {
 	if m.originalTargetCount < n {
-		m.t.Fatalf("Must have %d or more targets in the cluster, have only %d", n, m.originalTargetCount)
+		m.t.Skipf("Must have %d or more targets in the cluster, have only %d", n, m.originalTargetCount)
 	}
 }
 
 func (m *ioContext) expectProxies(n int) {
 	if m.originalProxyCount < n {
-		m.t.Fatalf("Must have %d or more proxies in the cluster, have only %d", n, m.originalProxyCount)
+		m.t.Skipf("Must have %d or more proxies in the cluster, have only %d", n, m.originalProxyCount)
 	}
 }
 

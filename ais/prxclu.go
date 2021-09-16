@@ -650,7 +650,7 @@ func (p *proxyrunner) _syncFinal(ctx *smapModifier, clone *smapX) {
 		nl.SetOwner(equalIC)
 		// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
 		err := p.notifs.add(nl)
-		debug.Assert(err == nil || daemon.stopping.Load())
+		debug.Assertf(err == nil || daemon.stopping.Load(), "%v", err)
 		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
 	}
 	debug.Assert(clone._sgl != nil)

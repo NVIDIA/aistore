@@ -44,12 +44,24 @@ variables:
   stage: test-short
   tags:
     - ais
+  timeout: 19m
+  <<: *default_only_def
+  except:
+    variables:
+      - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
+  <<: *gather_logs_def
+
+.test_short_optional_template: &test_short_optional_def
+  stage: test-short
+  tags:
+    - ais
   timeout: 20m
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
       when: manual
       allow_failure: true
+  <<: *gather_logs_def
 
 .test_long_template: &test_long_def
   stage: test-long
@@ -95,25 +107,29 @@ lint:linux:
     - make fmt-check
     - make spell-check
 
+# Runs cluster with 5 proxies and 5 targets (each with 6 mountpaths).
 test:short:
-  stage: test-short
-  tags:
-    - ais
-  timeout: 19m
-  <<: *default_only_def
-  except:
-    variables:
-      - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
+  <<: *test_short_def
   variables:
     BUCKET: "ais://test"
   script:
     - deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT --deployment all
     - make test-short
     - FLAGS="--duration=10s" make test-aisloader
-  <<: *gather_logs_def
+
+# Runs cluster with 1 proxy and 1 target (with 6 mountpaths).
+test:short:minimal:
+  <<: *test_short_def
+  variables:
+    BUCKET: "ais://test"
+    NUM_PROXY: 1
+    NUM_TARGET: 1
+  script:
+    - deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT --deployment all
+    - make test-short
 
 test:short:authn:
-  <<: *test_short_def
+  <<: *test_short_optional_def
   variables:
     AUTH_ENABLED: "true"
     AUTHN_SU_NAME: "admin"
@@ -128,7 +144,7 @@ test:short:authn:
     - ais auth logout
 
 test:short:https:
-  <<: *test_short_def
+  <<: *test_short_optional_def
   variables:
     AIS_USE_HTTPS: "true"
     AIS_SKIP_VERIFY_CRT: "true"
@@ -142,7 +158,7 @@ test:short:https:
     - make test-short
 
 test:short:s3rproxy:
-  <<: *test_short_def
+  <<: *test_short_optional_def
   variables:
     BUCKET: "ais://ais-ci"
     TAGS: "s3rproxy"

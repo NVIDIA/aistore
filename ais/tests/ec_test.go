@@ -68,8 +68,8 @@ type ecOptions struct {
 // nolint:revive // modifying value-receiver on purpose
 func (o ecOptions) init(t *testing.T, proxyURL string) *ecOptions {
 	o.smap = tutils.GetClusterMap(t, proxyURL)
-	if o.smap.CountActiveTargets() < o.minTargets {
-		t.Fatalf("insufficient number of targets, required at least %d targets", o.minTargets)
+	if cnt := o.smap.CountActiveTargets(); cnt < o.minTargets {
+		t.Skipf("not enough targets in the cluster: expected at least %d, got %d", o.minTargets, cnt)
 	}
 	if o.concurrency > 0 {
 		o.sema = cos.NewDynSemaphore(o.concurrency)
@@ -541,6 +541,8 @@ func damageMetadataCksum(t *testing.T, slicePath string) {
 // Short test to make sure that EC options cannot be changed after
 // EC is enabled
 func TestECChange(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{MinTargets: 3})
+
 	var (
 		proxyURL = tutils.RandomProxyURL()
 		bck      = cmn.Bck{
@@ -2151,16 +2153,13 @@ func TestECBucketEncode(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
 	if m.smap.CountActiveTargets() < parityCnt+1 {
-		t.Fatalf("Not enough targets to run %s test, must be at least %d", t.Name(), parityCnt+1)
+		t.Skipf("Not enough targets to run %s test, must be at least %d", t.Name(), parityCnt+1)
 	}
 
 	initMountpaths(t, proxyURL)
 	tutils.CreateFreshBucket(t, proxyURL, m.bck, nil)
 
 	m.puts()
-	if t.Failed() {
-		t.FailNow()
-	}
 
 	objList, err := api.ListObjects(baseParams, m.bck, nil, 0)
 	tassert.CheckFatal(t, err)

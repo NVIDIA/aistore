@@ -2740,6 +2740,8 @@ func TestAllChecksums(t *testing.T) {
 		}
 		tag := cksumType + "/EC"
 		t.Run(tag, func(t *testing.T) {
+			tutils.CheckSkip(t, tutils.SkipTestArgs{MinTargets: 3})
+
 			started := time.Now()
 			testWarmValidation(t, cksumType, false, true)
 			tlog.Logf("Time: %v\n", time.Since(started))
