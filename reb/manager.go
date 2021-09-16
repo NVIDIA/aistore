@@ -276,32 +276,29 @@ func (reb *Manager) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unp
 	}
 }
 
-func (reb *Manager) waitForSmap() (*cluster.Smap, error) {
-	smap := (*cluster.Smap)(reb.smap.Load())
-	if smap == nil {
-		var (
-			config = cmn.GCO.Get()
-			sleep  = config.Timeout.CplaneOperation.D()
-			maxwt  = config.Rebalance.DestRetryTime.D()
-			curwt  time.Duration
-		)
-		maxwt = cos.MinDuration(maxwt, config.Timeout.SendFile.D()/3)
-		glog.Warningf("%s: waiting to start...", reb.t.Snode())
-		time.Sleep(sleep)
-		for curwt < maxwt {
-			smap = (*cluster.Smap)(reb.smap.Load())
-			if smap != nil {
-				return smap, nil
-			}
-			time.Sleep(sleep)
-			curwt += sleep
-		}
-		if curwt >= maxwt {
-			err := fmt.Errorf("%s: timed-out waiting to start", reb.t.Snode())
-			return nil, err
-		}
+func (reb *Manager) waitForSmap() (smap *cluster.Smap, err error) {
+	smap = (*cluster.Smap)(reb.smap.Load())
+	if smap != nil {
+		return
 	}
-	return smap, nil
+	var (
+		config = cmn.GCO.Get()
+		sleep  = config.Timeout.CplaneOperation.D()
+		maxwt  = config.Rebalance.DestRetryTime.D()
+		curwt  time.Duration
+	)
+	maxwt = cos.MinDuration(maxwt, config.Timeout.SendFile.D()/3)
+	glog.Warningf("%s: waiting to start...", reb.t.Snode())
+	time.Sleep(sleep)
+	for curwt < maxwt {
+		smap = (*cluster.Smap)(reb.smap.Load())
+		if smap != nil {
+			return
+		}
+		time.Sleep(sleep)
+		curwt += sleep
+	}
+	return nil, fmt.Errorf("%s: timed out waiting for usable Smap", reb.t.Snode())
 }
 
 func (reb *Manager) recvObj(hdr transport.ObjHdr, objReader io.Reader, err error) {

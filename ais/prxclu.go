@@ -441,11 +441,11 @@ func (p *proxyrunner) userRegisterNode(nsi *cluster.Snode, tag string) (errCode 
 	if res.err == nil {
 		return
 	}
-	if cos.IsErrConnectionRefused(res.err) {
-		err = fmt.Errorf("failed to reach %s at %s:%s",
-			nsi.StringEx(), nsi.PublicNet.NodeHostname, nsi.PublicNet.DaemonPort)
+	if cos.IsRetriableConnErr(res.err) {
+		err = fmt.Errorf("%s: failed to reach %s at %s:%s: %w",
+			p.si, nsi.StringEx(), nsi.PublicNet.NodeHostname, nsi.PublicNet.DaemonPort, res.err)
 	} else {
-		err = res.errorf("%s: failed to %s %s", p.si, tag, nsi.StringEx())
+		err = res.errorf("%s: failed to %s %s: %v", p.si, tag, nsi.StringEx(), res.err)
 	}
 	errCode = res.status
 	return

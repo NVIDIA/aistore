@@ -99,14 +99,14 @@ func (m *UserManager) proxyRequest(method, proxyURL, path string, injson []byte)
 			return nil
 		}
 
-		if !cos.IsErrConnectionRefused(err) {
+		if !cos.IsRetriableConnErr(err) {
 			return err
 		}
 		if time.Since(startRequest) > proxyTimeout {
-			return fmt.Errorf("sending data to primary proxy timed out")
+			return fmt.Errorf("timed out sending data to primary at %s", proxyURL)
 		}
 
-		glog.Errorf("failed to http-call %s %s: error %v", method, url, err)
+		glog.Warningf("failed to execute \"%s %s\": %v", method, url, err)
 		time.Sleep(proxyRetryTime)
 	}
 }

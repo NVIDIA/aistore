@@ -520,7 +520,7 @@ func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.C
 		if targetCnt >= ntargets {
 			glog.Infof("%s: reached expected %d targets (registered: %d)", p.si.StringEx(), ntargets, targetCnt)
 		} else {
-			glog.Warningf("%s: timed-out waiting for %d targets (registered: %d)",
+			glog.Warningf("%s: timed out waiting for %d targets (registered: %d)",
 				p.si.StringEx(), ntargets, targetCnt)
 		}
 	} else {

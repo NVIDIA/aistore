@@ -24,6 +24,8 @@ const (
 	VoteNo  Vote = "NO"
 )
 
+const maxRetryElectReq = 3
+
 type (
 	Vote string
 
@@ -236,23 +238,15 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord) {
 func (p *proxyrunner) electAmongProxies(vr *VoteRecord) (winner bool, errors cos.StringSet) {
 	var (
 		resCh = p.requestVotes(vr)
-		y, n  = 0, 0
+		y, n  int
 	)
-	errors = cos.NewStringSet()
-
 	for res := range resCh {
 		if res.err != nil {
-			if cos.IsErrConnectionRefused(res.err) {
-				if res.daemonID == vr.Primary {
-					glog.Infof("Expected response from %s (failed primary): connection refused",
-						res.daemonID)
-				} else {
-					glog.Warningf("Error response from %s: connection refused", res.daemonID)
-				}
+			if errors == nil {
+				errors = cos.NewStringSet(res.daemonID)
 			} else {
-				glog.Warningf("Error response from %s, err: %v", res.daemonID, res.err)
+				errors.Add(res.daemonID)
 			}
-			errors.Add(res.daemonID)
 			n++
 		} else {
 			if glog.FastV(4, glog.SmoduleAIS) {
@@ -554,26 +548,26 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *c
 	res := h.call(args)
 	err = res.err
 	_freeCallRes(res)
-	if err == nil {
+	if err == nil || !cos.IsRetriableConnErr(err) {
 		return
 	}
-	config := cmn.GCO.Get()
-	sleepTime := config.Timeout.CplaneOperation.D()
-	if cos.IsErrConnectionRefused(err) {
-		for i := 0; i < 2; i++ {
-			time.Sleep(sleepTime)
-			res = h.call(args)
-			err = res.err
-			_freeCallRes(res)
-			if err == nil {
-				break
-			}
-			sleepTime += sleepTime / 2
+	// retry
+	sleepTime := cmn.GCO.Get().Timeout.CplaneOperation.D() / 2
+	for i := 0; i < maxRetryElectReq; i++ {
+		time.Sleep(sleepTime)
+		res = h.call(args)
+		err = res.err
+		_freeCallRes(res)
+		if err == nil {
+			return
 		}
+		if !cos.IsRetriableConnErr(err) {
+			break
+		}
+		sleepTime += sleepTime / 2
 	}
-	if res.err != nil {
-		glog.Errorf("Failed to request election from next primary proxy: %v", res.err)
-	}
+	glog.Errorf("%s: failed to request election from the _next_ primary %s: %v",
+		h.si, nextPrimaryProxy.StringEx(), err)
 	return
 }
 

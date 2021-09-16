@@ -64,7 +64,7 @@ func WaitMapVersionSync(baseParams api.BaseParams, ctx *Ctx, timeout time.Time, 
 		daemonSmap, err := api.GetNodeClusterMap(baseParams, sid)
 		// NOTE: Retry if node returns `http.StatusServiceUnavailable` or `http.StatusBadGateway`
 		if err != nil &&
-			!cos.IsErrConnectionRefused(err) &&
+			!cos.IsRetriableConnErr(err) &&
 			!cmn.IsStatusServiceUnavailable(err) &&
 			!cmn.IsStatusBadGateway(err) {
 			return err
@@ -72,7 +72,7 @@ func WaitMapVersionSync(baseParams api.BaseParams, ctx *Ctx, timeout time.Time, 
 
 		if err == nil && daemonSmap.Version > prevVersion && daemonSmap.Version >= smap.Version {
 			idsToIgnore.Add(sid)
-			*smap = *daemonSmap // update smap for newer version
+			*smap = *daemonSmap // update Smap to a newer version
 			continue
 		}
 		if time.Now().After(timeout) {

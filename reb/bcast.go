@@ -159,7 +159,7 @@ func (reb *Manager) pingTarget(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 			return
 		}
 	}
-	glog.Errorf("%s: timed-out waiting for %s", logHdr, tsi.StringEx())
+	glog.Errorf("%s: timed out waiting for %s", logHdr, tsi.StringEx())
 	return
 }
 

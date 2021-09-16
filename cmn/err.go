@@ -132,7 +132,7 @@ type (
 var (
 	ErrSkip           = errors.New("skip")
 	ErrStartupTimeout = errors.New("startup timeout")
-	ErrQuiesceTimeout = errors.New("timed-out waiting for quiescence")
+	ErrQuiesceTimeout = errors.New("timed out waiting for quiescence")
 
 	ErrETLMissingUUID = errors.New("ETL UUID can't be empty")
 )

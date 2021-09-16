@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"runtime"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"testing"
@@ -62,14 +61,14 @@ func CheckResp(tb testing.TB, client *http.Client, req *http.Request, statusCode
 
 func Fatalf(tb testing.TB, cond bool, msg string, args ...interface{}) {
 	if !cond {
-		debug.PrintStack()
+		printStack()
 		tb.Fatalf(msg, args...)
 	}
 }
 
 func Errorf(tb testing.TB, cond bool, msg string, args ...interface{}) {
 	if !cond {
-		debug.PrintStack()
+		printStack()
 		tb.Errorf(msg, args...)
 	}
 }

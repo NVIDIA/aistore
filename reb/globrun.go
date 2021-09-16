@@ -370,7 +370,7 @@ func (reb *Manager) rebWaitAck(md *rebArgs) (errCnt int) {
 			curwt += sleep
 		}
 		if cnt > 0 {
-			glog.Warningf("%s: timed-out waiting for %d ACK(s)", logHdr, cnt)
+			glog.Warningf("%s: timed out waiting for %d ACK(s)", logHdr, cnt)
 		}
 		if reb.xact().Aborted() {
 			return
@@ -473,7 +473,7 @@ func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, arg 
 	rj.m.inQueue.Dec()
 	if err != nil {
 		rj.m.delLomAck(arg.(*cluster.LOM))
-		if bool(glog.FastV(4, glog.SmoduleReb)) || !cos.IsErrConnectionRefused(err) {
+		if bool(glog.FastV(4, glog.SmoduleReb)) || !cos.IsRetriableConnErr(err) {
 			si := rj.m.t.Snode()
 			glog.Errorf("%s: failed to send o[%s]: %v", si, hdr.FullName(), err)
 		}
