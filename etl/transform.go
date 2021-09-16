@@ -75,13 +75,11 @@ const (
 // * No idle timeout for a ETL container. It keeps running unless explicitly
 //   stopped by invoking the `Stop` API.
 //
-// * Delete of a ETL container is done in two stages. First we gracefully try to
+// * Delete of an ETL container is done in two stages. First we gracefully try to
 //   terminate the pod with a 30s timeout. Upon failure to do so, we perform
 //   a force delete.
 //
-// * A single ETL container runs per target at any point of time.
-//
-// * Recreating a ETL container with the same name will delete all running
+// * Recreating an ETL container with the same name will delete all running
 //   containers with the same name.
 
 type (
@@ -90,7 +88,7 @@ type (
 	// on ETL init. It is unregistered by Stop function. The is no
 	// synchronization between aborters on different targets. It is assumed that
 	// if one target received smap with changed targets membership, eventually
-	// each of the targets will receive it as well. Hence all ETL containers
+	// each of the targets will receive it as well. Hence, all ETL containers
 	// will be stopped.
 	Aborter struct {
 		t           cluster.Target
@@ -229,12 +227,6 @@ func tryStart(t cluster.Target, msg InitSpecMsg, opts ...StartOpts) (errCtx *cmn
 	var customEnv map[string]string
 	if len(opts) > 0 {
 		customEnv = opts[0].Env
-	}
-
-	// Make sure only one ETL is running.
-	if len(List()) > 0 {
-		err = cmn.ErrETLOnlyOne
-		return
 	}
 
 	errCtx = &cmn.ETLErrorContext{
@@ -519,20 +511,6 @@ func (b *etlBootstraper) setTransformAntiAffinity() error {
 
 	if len(reqAntiAffinities) > 0 || len(prefAntiAffinity) > 0 {
 		return cmn.NewErrETL(b.errCtx, "error in YAML spec, pod should not have any NodeAntiAffinities defined")
-	}
-
-	// Don't create anti-affinity limitation, to be able to run multiple ETL pods on a single machine.
-	// NOTE: This change allows deploying multiple different ETLs at the same time.
-	if !k8s.AllowOneNodeManyETLs {
-		reqAntiAffinities = []corev1.PodAffinityTerm{{
-			LabelSelector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					podNodeLabel: k8s.NodeName,
-				},
-			},
-			TopologyKey: nodeNameLabel,
-		}}
-		b.pod.Spec.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution = reqAntiAffinities
 	}
 
 	return nil

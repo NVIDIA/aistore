@@ -202,7 +202,6 @@ and contain all necessary fields to start the Pod.
 | Path | Reason |
 | --- | --- |
 | `spec.affinity.nodeAffinity` | Used by AIStore to colocate ETL containers with targets. |
-| `spec.affinity.nodeAntiAffinity` | Used by AIStore to require single ETL at a time. |
 
 #### Communication Mechanisms
 

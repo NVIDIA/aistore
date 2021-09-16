@@ -235,7 +235,7 @@ test:short:k8s:
   script:
     - export NUM_TARGET=3
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
-    - ONE_NODE_MANY_ETLS="1" deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT --gcp
+    - deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT --gcp
     - make test-short
     - status=$? make kill && exit $status
 
@@ -252,7 +252,7 @@ test:long:k8s:
   script:
     - export NUM_TARGET=5
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
-    - ONE_NODE_MANY_ETLS="1" deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT --gcp
+    - deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT --gcp
     - make test-run
     - status=$? make kill && exit $status
   <<: *k8s_long_exit_def
@@ -268,7 +268,6 @@ test:long:k8s:single-target:
       when: manual
       allow_failure: true
   script:
-    #  Do not set ONE_NODE_MANY_ETLS as we want to have a tests checking correctness with non-testing environment.
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
     - deploy/scripts/clean_deploy.sh --ntargets $NUM_TARGET --nproxies $NUM_PROXY --mountpoints $FS_CNT --gcp
     - status=0

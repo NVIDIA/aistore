@@ -595,7 +595,7 @@ func TestETLBucketDryRun(t *testing.T) {
 	checkETLStats(t, xactID, m.num, uint64(m.num*int(m.fileSize)))
 }
 
-func TestETLSingleTransformerAtATime(t *testing.T) {
+func TestETLMultipleTransformersAtATime(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: true})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
@@ -614,10 +614,8 @@ func TestETLSingleTransformerAtATime(t *testing.T) {
 	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid1) })
 
 	uuid2, err := tetl.Init(baseParams, tetl.MD5, etl.RevProxyCommType)
-	tassert.Errorf(t, err != nil, "expected err to occur")
-	if uuid2 != "" {
-		tetl.StopETL(t, baseParams, uuid2)
-	}
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid2) })
 }
 
 func TestETLHealth(t *testing.T) {

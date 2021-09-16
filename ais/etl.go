@@ -12,7 +12,6 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -20,8 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/etl"
 )
-
-var startETL = atomic.NewBool(false)
 
 /////////////////
 // ETL: target //
@@ -360,14 +357,6 @@ func (p *proxyrunner) initCodeETL(w http.ResponseWriter, r *http.Request) {
 
 // startETL broadcasts a build or init ETL request and ensures only one ETL is running
 func (p *proxyrunner) startETL(w http.ResponseWriter, r *http.Request, body []byte, msgID string) (err error) {
-	if !startETL.CAS(false, true) {
-		return cmn.ErrETLOnlyOne
-	}
-	defer startETL.CAS(true, false)
-	if err := p.ensureNoETLs(); err != nil {
-		return err
-	}
-
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: body}
 	args.timeout = cmn.LongTimeout
@@ -396,18 +385,6 @@ func (p *proxyrunner) startETL(w http.ResponseWriter, r *http.Request, body []by
 	p.bcastGroup(argsTerm)
 	freeBcastArgs(argsTerm)
 	return err
-}
-
-// ensureOneETL makes sure only no ETLs are running
-func (p *proxyrunner) ensureNoETLs() error {
-	etls, err := p.listETLs()
-	if err != nil {
-		return err
-	}
-	if len(etls) > 0 {
-		return cmn.ErrETLOnlyOne
-	}
-	return nil
 }
 
 // GET /v1/etl/list

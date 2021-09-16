@@ -18,4 +18,4 @@ ENV GOBIN $GOPATH/bin
 COPY . $GOPATH/src/github.com/NVIDIA/aistore/
 WORKDIR $GOPATH/src/github.com/NVIDIA/aistore
 
-RUN ONE_NODE_MANY_ETLS="1" make node
+RUN make node

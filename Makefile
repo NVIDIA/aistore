@@ -55,10 +55,6 @@ else
 	LDFLAGS = -ldflags "-w -s -X 'main.build=$(VERSION)' -X 'main.buildtime=$(BUILD)'"
 endif
 
-ifdef ONE_NODE_MANY_ETLS
-    BUILD_TAGS += onenodemanyetls
-endif
-
 ifdef AIS_DEBUG
 	# Enable `debug` tag also when `AIS_DEBUG` is set.
 	# Example AIS_DEBUG usage: $ AIS_DEBUG="fs=4,reb=4" make deploy ...

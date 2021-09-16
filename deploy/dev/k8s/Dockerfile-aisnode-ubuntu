@@ -44,7 +44,7 @@ WORKDIR $GOPATH/src/github.com/NVIDIA/aistore
 # Build it here so it is not done multiple times on each proxy/target: less
 # downloading and less time spent on everything.
 # TODO: maybe we can do it more elegantly?...
-RUN echo "MODE: ${MODE}" && CGO_ENABLED=0 AIS_BACKEND_PROVIDERS="ais aws azure gcp hdfs" ONE_NODE_MANY_ETLS="1" MODE="${MODE}" make node
+RUN echo "MODE: ${MODE}" && CGO_ENABLED=0 AIS_BACKEND_PROVIDERS="ais aws azure gcp hdfs" MODE="${MODE}" make node
 
 EXPOSE 8080
 

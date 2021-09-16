@@ -279,10 +279,7 @@ func isETLRequest(query url.Values) bool {
 
 func deploymentType() string {
 	if k8s.Detect() == nil {
-		if k8s.AllowOneNodeManyETLs {
-			return "K8s dev"
-		}
-		return "K8s"
+		return "k8s"
 	} else if cmn.GCO.Get().TestingEnv() {
 		return "dev"
 	}
