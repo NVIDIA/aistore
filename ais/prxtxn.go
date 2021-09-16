@@ -354,11 +354,8 @@ func (p *proxyrunner) _setPropsPre(ctx *bmdModifier, clone *bucketMD) (err error
 // rename-bucket: { confirm existence -- begin -- RebID -- metasync -- commit -- wait for rebalance and unlock }
 func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
 	if err = p.canRunRebalance(); err != nil {
-		if _, ok := err.(*errNotEnoughTargets); !ok || p.owner.smap.get().CountActiveTargets() == 0 {
-			err = fmt.Errorf("%s: bucket %s cannot be renamed: %w", p.si, bckFrom, err)
-			return
-		}
-		err = nil
+		err = fmt.Errorf("%s: bucket %s cannot be renamed: %w", p.si, bckFrom, err)
+		return
 	}
 	// 1. confirm existence & non-existence
 	bmd := p.owner.bmd.get()
@@ -756,11 +753,7 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, op
 	)
 	if si.IsTarget() && !opts.SkipRebalance && rebEnabled {
 		if err = p.canRunRebalance(); err != nil {
-			// proceed anyway when removing the very last target
-			if _, ok := err.(*errNotEnoughTargets); !ok || p.owner.smap.get().CountActiveTargets() == 0 {
-				return
-			}
-			err = nil
+			return
 		}
 	}
 	// 1. begin

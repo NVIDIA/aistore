@@ -477,6 +477,12 @@ func WaitForRebalanceToComplete(t testing.TB, baseParams api.BaseParams, timeout
 		wg      = &sync.WaitGroup{}
 		errCh   = make(chan error, 2)
 	)
+	smap, err := api.GetClusterMap(baseParams)
+	tassert.CheckFatal(t, err)
+	if smap.CountActiveTargets() < 2 {
+		return
+	}
+
 	waitForRebalanceToStart(baseParams)
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]

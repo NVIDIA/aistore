@@ -81,7 +81,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 
 	// 2. Put a random target under maintenance
 	tsi, _ := m.smap.GetRandTarget()
-	tlog.Logf("Put target maintenance %s\n", tsi)
+	tlog.Logf("Put target %s under maintenance\n", tsi)
 	actVal := &cmn.ActValRmNode{DaemonID: tsi.ID(), SkipRebalance: false}
 	rebID, err := api.StartMaintenance(baseParams, actVal)
 	tassert.CheckFatal(t, err)
@@ -122,7 +122,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 }
 
 func TestMaintenanceMD(t *testing.T) {
-	// NOTE: This function requires local deployment as it checks local file system for VMDs.
+	// NOTE: this test requires local deployment as it checks local filesystem for VMDs.
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal})
 
 	var (
@@ -438,11 +438,16 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 		origProxyCnt    = smap.CountActiveProxies()
 		origTargetCount = smap.CountActiveTargets()
 	)
-
 	if nodeType == cmn.Proxy {
+		if origProxyCnt == 1 {
+			t.Skipf("%s requires at least %d proxies (have %d)", t.Name(), 2, origProxyCnt)
+		}
 		node, err = smap.GetRandProxy(true)
 		pdc = 1
 	} else {
+		if origTargetCount == 0 {
+			t.Skipf("%s requires at least %d targets (have %d)", t.Name(), 1, origTargetCount)
+		}
 		node, err = smap.GetRandTarget()
 		tdc = 1
 	}
@@ -552,9 +557,13 @@ func TestShutdownListObjects(t *testing.T) {
 	tassert.CheckError(t, err)
 
 	// 3. Check if we can list all the objects.
+	if m.smap.CountActiveTargets() == 0 {
+		tlog.Logln("Shutdown single target - nothing to do")
+		return
+	}
 	tlog.Logln("Listing objects")
 	bckList, err = api.ListObjects(baseParams, bck, msg, 0)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(bckList.Entries) == m.num, "list-object should return %d objects - returned %d", m.num, len(bckList.Entries))
 	for _, entry := range bckList.Entries {
 		origEntry, ok := origEntries[entry.Name]

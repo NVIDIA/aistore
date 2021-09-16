@@ -193,7 +193,9 @@ func (xact *XactBase) Abort(err error) (ok bool) {
 		return
 	}
 	close(xact.abrt)
-	glog.Infof("%s aborted(%v)", xact, err)
+	if xact.Kind() != cmn.ActList {
+		glog.Infof("%s aborted(%v)", xact, err)
+	}
 	return true
 }
 

@@ -515,7 +515,7 @@ func (p *proxyrunner) _updPre(ctx *smapModifier, clone *smapX) error {
 	}
 	ctx.exists = clone.putNode(ctx.nsi, ctx.flags)
 	if ctx.nsi.IsTarget() {
-		// Notify targets that they need to set up GFN
+		// Notify targets to set up GFN
 		aisMsg := p.newAmsgActVal(cmn.ActStartGFN, nil)
 		notifyPairs := revsPair{clone, aisMsg}
 		_ = p.metasyncer.notify(true, notifyPairs)
@@ -532,13 +532,10 @@ func (p *proxyrunner) _updPost(ctx *smapModifier, clone *smapX) {
 		return
 	}
 	if err := p.canRunRebalance(); err != nil {
-		if _, ok := err.(*errNotEnoughTargets); !ok {
-			glog.Warning(err)
-			return
-		}
+		return
 	}
-	// NOTE: trigger rebalance when target with the same ID already exists
-	//       (and see mustRunRebalance() for all other conditions)
+	// `ctx.exists` - trigger rebalance when target with the same ID already exists
+	// (see mustRunRebalance() for all other conditions)
 	if ctx.exists || mustRunRebalance(ctx, clone) {
 		rmdCtx := &rmdModifier{
 			pre: func(_ *rmdModifier, clone *rebMD) {
@@ -569,7 +566,7 @@ func (p *proxyrunner) _updFinal(ctx *smapModifier, clone *smapX) {
 		pairs = append(pairs, revsPair{config, aisMsg})
 	}
 	pairs = append(pairs, revsPair{clone, aisMsg}, revsPair{bmd, aisMsg})
-	if ctx.rmd != nil && ctx.nsi.IsTarget() {
+	if ctx.rmd != nil && ctx.nsi.IsTarget() && mustRunRebalance(ctx, clone) {
 		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
 		nl := xaction.NewXactNL(xaction.RebID2S(ctx.rmd.version()), cmn.ActRebalance, &clone.Smap, nil)
 		nl.SetOwner(equalIC)
@@ -854,12 +851,14 @@ func (p *proxyrunner) xactStop(w http.ResponseWriter, r *http.Request, msg *cmn.
 }
 
 func (p *proxyrunner) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
+	// note operational priority over config-disabled `errRebalanceDisabled`
 	if err := p.canRunRebalance(); err != nil && err != errRebalanceDisabled {
-		if _, ok := err.(*errNotEnoughTargets); !ok {
-			p.writeErr(w, r, err)
-		} else {
-			glog.Warningf("%s: %v - nothing to do", p.si, err)
-		}
+		p.writeErr(w, r, err)
+		return
+	}
+	if smap := p.owner.smap.get(); smap.CountActiveTargets() < 2 {
+		err := &errNotEnoughTargets{p.si, smap, 2}
+		glog.Warningf("%s: %v - nothing to do", p.si, err)
 		return
 	}
 	rmdCtx := &rmdModifier{
@@ -1169,7 +1168,6 @@ func (p *proxyrunner) rebalanceAndRmSelf(msg *cmn.ActionMsg, si *cluster.Snode) 
 		smap = p.owner.smap.get()
 	)
 	if cnt := smap.CountActiveTargets(); cnt < 2 {
-		debug.Assert(cnt > 0)
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%q: removing the last target %s - no rebalance", msg.Action, si)
 		}
@@ -1472,36 +1470,35 @@ func (p *proxyrunner) _unregNodePre(ctx *smapModifier, clone *smapX) error {
 	return nil
 }
 
-// rebalance `can` and `must`
+// rebalance's `can` and `must`
 
-func (p *proxyrunner) canRunRebalance() error {
+func (p *proxyrunner) canRunRebalance() (err error) {
 	smap := p.owner.smap.get()
-	if err := smap.validate(); err != nil {
-		return err
+	if err = smap.validate(); err != nil {
+		return
 	}
 	if !smap.IsPrimary(p.si) {
-		err := newErrNotPrimary(p.si, smap)
+		err = newErrNotPrimary(p.si, smap)
 		debug.AssertNoErr(err)
-		return err
+		return
 	}
-	// NOTE: at cluster startup rebalance is handled elsewhere (see p.resumeReb) -
-	// hence, all rebalance-triggering events, including direct and indirect user requests
-	// (shutdown, decommission, maintenance) are not permitted and will fail.
+	// NOTE: Since cluster startup handles rebalance elsewhere (see p.resumeReb),
+	// all rebalance-triggering events (shutdown, decommission, maintenance, etc.)
+	// are not permitted and will fail.
 	if a, b := p.ClusterStarted(), p.owner.rmd.startup.Load(); !a || b {
 		return fmt.Errorf(fmtErrPrimaryNotReadyYet, p.si, a, b)
 	}
-	if smap.CountActiveTargets() < 2 {
-		return &errNotEnoughTargets{p.si, smap, 2}
-	}
 	if !cmn.GCO.Get().Rebalance.Enabled {
-		return errRebalanceDisabled
+		err = errRebalanceDisabled
 	}
-	return nil
+	return
 }
 
 func mustRunRebalance(ctx *smapModifier, cur *smapX) bool {
 	prev := ctx.smap
-	debug.Assert(!ctx._mustReb)
+	if ctx._mustReb {
+		return true
+	}
 	if !cmn.GCO.Get().Rebalance.Enabled {
 		return false
 	}
@@ -1511,7 +1508,7 @@ func mustRunRebalance(ctx *smapModifier, cur *smapX) bool {
 		}
 		if prev.GetNodeNotMaint(si.ID()) == nil { // added or activated
 			ctx._mustReb = true
-			return true
+			goto ret
 		}
 	}
 	for _, si := range prev.Tmap {
@@ -1520,8 +1517,12 @@ func mustRunRebalance(ctx *smapModifier, cur *smapX) bool {
 		}
 		if cur.GetNodeNotMaint(si.ID()) == nil { // deleted or deactivated
 			ctx._mustReb = true
-			return true
+			goto ret
 		}
 	}
-	return false
+ret:
+	if ctx._mustReb {
+		ctx._mustReb = prev.CountActiveTargets() != 0 && cur.CountActiveTargets() != 0
+	}
+	return ctx._mustReb
 }

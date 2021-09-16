@@ -477,12 +477,7 @@ func (t *targetrunner) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) erro
 	}
 	switch c.phase {
 	case cmn.ActBegin:
-		var (
-			bckTo          = c.bckTo
-			bckFrom        = c.bck // from
-			nlpTo, nlpFrom *cluster.NameLockPair
-		)
-		// validate
+		bckTo, bckFrom := c.bckTo, c.bck
 		if err := bckTo.Validate(); err != nil {
 			return err
 		}
@@ -499,37 +494,14 @@ func (t *targetrunner) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) erro
 		if _, present := bmd.Get(bckFrom); !present {
 			return cmn.NewErrBckNotFound(bckFrom.Bck)
 		}
-		// lock
-		nlpFrom = bckFrom.GetNameLockPair()
-		if !nlpFrom.TryRLock(c.timeout.netw / 4) {
-			return cmn.NewErrBckIsBusy(bckFrom.Bck)
-		}
-		if !msg.DryRun {
-			nlpTo = bckTo.GetNameLockPair()
-			if !nlpTo.TryLock(c.timeout.netw / 4) {
+		if nlpTo, nlpFrom, err := t._tcbBegin(c, msg, dp); err != nil {
+			if nlpFrom != nil {
 				nlpFrom.Unlock()
-				return cmn.NewErrBckIsBusy(bckTo.Bck)
 			}
-		}
-		// begin
-		custom := &xreg.TCBArgs{Phase: cmn.ActBegin, BckFrom: bckFrom, BckTo: bckTo, DP: dp, Msg: msg}
-		rns := xreg.RenewTCB(t, c.uuid, c.msg.Action /*kind*/, custom)
-		if rns.Err != nil {
-			return rns.Err
-		}
-		xact := rns.Entry.Get()
-		xtcb := xact.(*mirror.XactTCB)
-		txn := newTxnTCB(c, xtcb)
-		if err := t.transactions.begin(txn); err != nil {
 			if nlpTo != nil {
 				nlpTo.Unlock()
 			}
-			nlpFrom.Unlock()
 			return err
-		}
-		txn.nlps = []cmn.NLP{nlpFrom}
-		if nlpTo != nil {
-			txn.nlps = append(txn.nlps, nlpTo)
 		}
 	case cmn.ActAbort:
 		t.transactions.find(c.uuid, cmn.ActAbort)
@@ -562,6 +534,40 @@ func (t *targetrunner) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) erro
 		debug.Assert(false)
 	}
 	return nil
+}
+
+func (t *targetrunner) _tcbBegin(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) (nlpTo, nlpFrom *cluster.NameLockPair, err error) {
+	bckTo, bckFrom := c.bckTo, c.bck
+	nlpFrom = bckFrom.GetNameLockPair()
+	if !nlpFrom.TryRLock(c.timeout.netw / 4) {
+		nlpFrom = nil
+		err = cmn.NewErrBckIsBusy(bckFrom.Bck)
+		return
+	}
+	if !msg.DryRun {
+		nlpTo = bckTo.GetNameLockPair()
+		if !nlpTo.TryLock(c.timeout.netw / 4) {
+			nlpTo = nil
+			err = cmn.NewErrBckIsBusy(bckTo.Bck)
+			return
+		}
+	}
+	custom := &xreg.TCBArgs{Phase: cmn.ActBegin, BckFrom: bckFrom, BckTo: bckTo, DP: dp, Msg: msg}
+	rns := xreg.RenewTCB(t, c.uuid, c.msg.Action /*kind*/, custom)
+	if err = rns.Err; err != nil {
+		return
+	}
+	xact := rns.Entry.Get()
+	xtcb := xact.(*mirror.XactTCB)
+	txn := newTxnTCB(c, xtcb)
+	if err = t.transactions.begin(txn); err != nil {
+		return
+	}
+	txn.nlps = []cmn.NLP{nlpFrom}
+	if nlpTo != nil {
+		txn.nlps = append(txn.nlps, nlpTo)
+	}
+	return
 }
 
 func (t *targetrunner) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (string, error) {
