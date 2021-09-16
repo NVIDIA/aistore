@@ -74,7 +74,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	m.ensureNoErrors()
 	m.assertClusterState()
 	if rebID != "" {
-		tutils.WaitForRebalanceByID(t, baseParams, rebID)
+		tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
 	}
 }
 
@@ -210,13 +210,9 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 }
 
 func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
-	m := ioContext{
-		t: t,
-	}
-
+	m := ioContext{t: t}
 	m.saveClusterState()
-	m.expectTargets(2)
-
+	m.expectTargets(1)
 	target := m.unregisterTarget()
 
 	// Decommission the same target again.
@@ -233,7 +229,7 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	// Register target (bring cluster to normal state)
 	rebID := m.reregisterTarget(target)
 	m.assertClusterState()
-	tutils.WaitForRebalanceByID(m.t, tutils.BaseAPIParams(m.proxyURL), rebID)
+	tutils.WaitForRebalanceByID(m.t, m.originalTargetCount, tutils.BaseAPIParams(m.proxyURL), rebID)
 }
 
 func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
@@ -302,7 +298,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	rebID := m.reregisterTarget(targets[1])
 
 	// wait for rebalance to complete
-	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
+	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
 
 	m.assertClusterState()
 }
@@ -330,7 +326,7 @@ func TestAckRebalance(t *testing.T) {
 
 	// Wait for everything to finish.
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
+	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
 
 	m.gets()
 
@@ -494,7 +490,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	tassert.CheckFatal(m.t, err)
 
 	tlog.Logf("Wait for rebalance...\n")
-	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
+	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
 
 	m.gets()
 
@@ -533,7 +529,7 @@ func TestPutDuringRebalance(t *testing.T) {
 	// Wait for everything to finish.
 	wg.Wait()
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
+	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
 
 	// Main check - try to read all objects.
 	m.gets()
@@ -742,7 +738,7 @@ func TestGetDuringRebalance(t *testing.T) {
 
 	// Wait for everything to finish.
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
+	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
 	wg.Wait()
 
 	// Get objects once again to check if they are still accessible after rebalance.
@@ -1172,7 +1168,7 @@ func TestAtimeRebalance(t *testing.T) {
 	)
 	tassert.CheckFatal(t, err)
 
-	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
+	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
 
 	msg = &cmn.SelectMsg{TimeFormat: time.StampNano}
 	msg.AddProps(cmn.GetPropsAtime, cmn.GetPropsStatus)
@@ -1397,7 +1393,7 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	m.ensureNoErrors()
 	m.assertClusterState()
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalanceByID(t, baseParams, rebID)
+	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
 }
 
 // 1. Unregister target
@@ -1443,7 +1439,7 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 
 	// Wait for rebalance and do gets
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalanceByID(t, baseParams, rebID)
+	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
 
 	m.gets()
 
@@ -1741,7 +1737,7 @@ func TestICDecommission(t *testing.T) {
 		args := &cmn.ActValRmNode{DaemonID: tsi.ID()}
 		rebID, err := api.StopMaintenance(baseParams, args)
 		tassert.CheckFatal(t, err)
-		tutils.WaitForRebalanceByID(t, baseParams, rebID)
+		tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
 		tassert.CheckFatal(t, err)
 	}()
 

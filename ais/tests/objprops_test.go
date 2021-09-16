@@ -233,9 +233,9 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 	propsCleanupObjects(t, proxyURL, bck, objects)
 
 	smap := tutils.GetClusterMap(t, proxyURL)
-	l := smap.CountActiveTargets()
-	if l < 2 {
-		t.Skipf("Only %d targets found, need at least 2", l)
+	origActiveTargetCnt := smap.CountActiveTargets()
+	if origActiveTargetCnt < 2 {
+		t.Skipf("Only %d targets found, need at least 2", origActiveTargetCnt)
 	}
 
 	removeTarget, _ := smap.GetRandTarget()
@@ -270,7 +270,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 		smap.CountActiveTargets()+1,
 	)
 	tassert.CheckFatal(t, err)
-	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
+	tutils.WaitForRebalanceByID(t, origActiveTargetCnt, baseParams, rebID, rebalanceTimeout)
 
 	tlog.Logf("Reading file versions...\n")
 	reslist := testListObjects(t, proxyURL, bck, msg)

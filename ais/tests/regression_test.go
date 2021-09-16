@@ -473,7 +473,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 			rebID = m.reregisterTarget(tgt)
 		}
 		if len(removed) != 0 && rebID != "" {
-			tutils.WaitForRebalanceByID(t, baseParams, rebID)
+			tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
 		}
 	}()
 

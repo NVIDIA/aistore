@@ -101,7 +101,7 @@ func TestETLTargetDown(t *testing.T) {
 		fileSize:  512,
 		fixedSize: true,
 	}
-
+	m.saveClusterState()
 	xactID := etlPrepareAndStart(t, m, tetl.Echo, etl.RedirectCommType)
 
 	tlog.Logln("Waiting for ETL to process a few objects...")
@@ -112,7 +112,7 @@ func TestETLTargetDown(t *testing.T) {
 	t.Cleanup(func() {
 		rebID := m.reregisterTarget(unregistered)
 		// ETL xactions from subsequent tests won't be allowed to start if a rebalance is still running.
-		tutils.WaitForRebalanceByID(t, baseParams, rebID, 30*time.Second)
+		tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, 30*time.Second)
 	})
 
 	err := tetl.WaitForAborted(baseParams, xactID, 5*time.Minute)

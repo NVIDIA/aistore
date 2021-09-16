@@ -1743,7 +1743,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 		val := &cmn.ActValRmNode{DaemonID: removedTarget.ID()}
 		rebID, err := api.StopMaintenance(baseParams, val)
 		tassert.CheckError(t, err)
-		tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
+		tutils.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
 	}()
 
 	// 3. Read objects
@@ -1832,7 +1832,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 		if rebID == "" {
 			return
 		}
-		tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
+		tutils.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
 	}()
 
 	hasTarget := func(targets cluster.Nodes, target *cluster.Snode) bool {
@@ -2101,9 +2101,9 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	tassert.CheckFatal(t, err)
 	defer func() {
 		rebID, _ := tutils.RestoreTarget(t, proxyURL, removedTarget)
-		tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
+		tutils.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
 	}()
-	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
+	tutils.WaitForRebalanceByID(t, -1, baseParams, rebID, rebalanceTimeout)
 
 	newObjList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
@@ -2255,7 +2255,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 			args := &cmn.ActValRmNode{DaemonID: tgtLost.ID()}
 			rebID, err := api.StopMaintenance(baseParams, args)
 			tassert.CheckError(t, err)
-			tutils.WaitForRebalanceByID(t, baseParams, rebID)
+			tutils.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID)
 		}
 	}()
 
@@ -2298,7 +2298,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	rebID, err := api.StopMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 	registered = true
-	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
+	tutils.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
 
 	tlog.Logln("Getting the number of objects after rebalance")
 	resECNew, err := api.ListObjects(baseParams, bckEC, msg, 0)
@@ -2496,7 +2496,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 			args := &cmn.ActValRmNode{DaemonID: tgtLost.ID()}
 			rebID, err := api.StopMaintenance(baseParams, args)
 			tassert.CheckError(t, err)
-			tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
+			tutils.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
 		}
 	}()
 
@@ -2564,13 +2564,13 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	defer func() {
 		args = &cmn.ActValRmNode{DaemonID: tgtGone.ID()}
 		rebID, _ := api.StopMaintenance(baseParams, args)
-		tutils.WaitForRebalanceByID(t, baseParams, rebID)
+		tutils.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID)
 	}()
 
 	stopCh.Close()
 
 	tassert.CheckFatal(t, err)
-	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
+	tutils.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
 	tlog.Logln("Reading objects")
 	for _, obj := range resECOld.Entries {
 		_, err := api.GetObject(baseParams, bckEC, obj.Name)

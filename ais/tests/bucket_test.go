@@ -1388,7 +1388,7 @@ func TestListObjectsWithRebalance(t *testing.T) {
 
 	wg.Wait()
 	m.assertClusterState()
-	tutils.WaitForRebalanceByID(t, baseParams, rebID)
+	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
 }
 
 func TestBucketSingleProp(t *testing.T) {

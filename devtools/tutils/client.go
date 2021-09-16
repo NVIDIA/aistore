@@ -520,7 +520,10 @@ func WaitForRebalanceToComplete(t testing.TB, baseParams api.BaseParams, timeout
 	}
 }
 
-func WaitForRebalanceByID(t *testing.T, baseParams api.BaseParams, rebID string, timeouts ...time.Duration) {
+func WaitForRebalanceByID(t *testing.T, origTargetCnt int, baseParams api.BaseParams, rebID string, timeouts ...time.Duration) {
+	if origTargetCnt >= 0 && origTargetCnt < 2 {
+		return
+	}
 	timeout := 2 * time.Minute
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]

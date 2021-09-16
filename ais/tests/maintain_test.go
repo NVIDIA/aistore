@@ -175,10 +175,11 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		objPath    = "ic-decomm/"
 		fileSize   = cos.KiB
 
-		dcmTarget, _    = smap.GetRandTarget()
-		origTargetCount = smap.CountTargets()
-		origProxyCount  = smap.CountActiveProxies()
-		bck             = cmn.Bck{Name: t.Name(), Provider: cmn.ProviderAIS}
+		dcmTarget, _          = smap.GetRandTarget()
+		origTargetCount       = smap.CountTargets()
+		origActiveTargetCount = smap.CountActiveTargets()
+		origActiveProxyCount  = smap.CountActiveProxies()
+		bck                   = cmn.Bck{Name: t.Name(), Provider: cmn.ProviderAIS}
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
@@ -200,10 +201,10 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 	rebID, err := api.Decommission(baseParams, msg)
 	tassert.CheckError(t, err)
 	_, err = tutils.WaitForClusterState(proxyURL, "target decommission",
-		smap.Version, origProxyCount, origTargetCount-1, dcmTarget.ID())
+		smap.Version, origActiveProxyCount, origTargetCount-1, dcmTarget.ID())
 	tassert.CheckFatal(t, err)
 
-	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
+	tutils.WaitForRebalanceByID(t, origActiveTargetCount, baseParams, rebID, rebalanceTimeout)
 	msgList := &cmn.SelectMsg{Prefix: objPath}
 	bucketList, err := api.ListObjects(baseParams, bck, msgList, 0)
 	tassert.CheckError(t, err)
@@ -244,7 +245,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		val := &cmn.ActValRmNode{DaemonID: dcm.ID()}
 		rebID, err = api.StopMaintenance(baseParams, val)
 		tassert.CheckError(t, err)
-		tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
+		tutils.WaitForRebalanceByID(t, origActiveTargetCount, baseParams, rebID, rebalanceTimeout)
 	} else {
 		args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
 		_, err = api.WaitForXaction(baseParams, args)
@@ -309,12 +310,12 @@ func TestMaintenanceRebalance(t *testing.T) {
 				m.smap.Version, origProxyCnt, origTargetCount,
 			)
 			tassert.CheckFatal(t, err)
-			tutils.WaitForRebalanceByID(t, baseParams, rebID, time.Minute)
+			tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, time.Minute)
 		}
 		tutils.ClearMaintenance(baseParams, tsi)
 	}()
 	tlog.Logf("Wait for rebalance %s\n", rebID)
-	tutils.WaitForRebalanceByID(t, baseParams, rebID, time.Minute)
+	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, time.Minute)
 
 	smap, err := tutils.WaitForClusterState(
 		proxyURL,
@@ -338,7 +339,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	m.smap = smap
 
-	tutils.WaitForRebalanceByID(t, baseParams, rebID, time.Minute)
+	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, time.Minute)
 }
 
 func TestMaintenanceGetWhileRebalance(t *testing.T) {
@@ -386,12 +387,12 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 				m.smap.Version, origProxyCnt, origTargetCount,
 			)
 			tassert.CheckFatal(t, err)
-			tutils.WaitForRebalanceByID(t, baseParams, rebID, time.Minute)
+			tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, time.Minute)
 		}
 		tutils.ClearMaintenance(baseParams, tsi)
 	}()
 	tlog.Logf("Wait for rebalance %s\n", rebID)
-	tutils.WaitForRebalanceByID(t, baseParams, rebID, time.Minute)
+	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, time.Minute)
 
 	smap, err := tutils.WaitForClusterState(
 		proxyURL,
@@ -415,7 +416,7 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	)
 	tassert.CheckFatal(t, err)
 	m.smap = smap
-	tutils.WaitForRebalanceByID(t, baseParams, rebID, time.Minute)
+	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, time.Minute)
 }
 
 func TestNodeShutdown(t *testing.T) {
