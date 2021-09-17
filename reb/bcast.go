@@ -1,6 +1,6 @@
 // Package reb provides local resilver and global rebalance for AIStore.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
@@ -20,6 +20,8 @@ import (
 )
 
 type (
+	syncCallback func(tsi *cluster.Snode, md *rebArgs) (ok bool)
+
 	Status struct {
 		Targets     cluster.Nodes           `json:"targets"`             // targets I'm waiting for ACKs from
 		SmapVersion int64                   `json:"smap_version,string"` // current Smap version (via smapOwner)

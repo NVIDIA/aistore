@@ -1,11 +1,10 @@
 // Package reb provides local resilver and global rebalance for AIStore.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -199,35 +198,6 @@ func (reb *Manager) saveCTToDisk(req *pushReq, hdr *transport.ObjHdr, data io.Re
 	return err
 }
 
-// receiving EC CT
-func (reb *Manager) recvECData(hdr transport.ObjHdr, unpacker *cos.ByteUnpack, reader io.Reader) {
-	defer cos.DrainReader(reader)
-
-	req := &pushReq{}
-	err := unpacker.ReadAny(req)
-	if err != nil {
-		glog.Errorf("invalid push notification %s: %v", hdr.ObjName, err)
-		return
-	}
-
-	if req.rebID != reb.rebID.Load() {
-		glog.Warningf("%s: not yet started or already finished rebalancing (%d, %d)",
-			reb.t.Snode(), req.rebID, reb.rebID.Load())
-		return
-	}
-
-	if req.action == rebActUpdateMD {
-		if err := reb.receiveMD(req, hdr); err != nil {
-			glog.Errorf("failed to receive MD for %s: %v", hdr.FullName(), err)
-		}
-		return
-	}
-
-	if err := reb.receiveCT(req, hdr, reader); err != nil {
-		glog.Errorf("failed to receive CT for %s: %v", hdr.FullName(), err)
-	}
-}
-
 // Used when slice conflict is detected: a target receives a new slice and it already
 // has a slice of the same generation with different ID
 func (*Manager) renameAsWorkFile(ct *cluster.CT) (string, error) {
@@ -277,29 +247,6 @@ func (reb *Manager) findEmptyTarget(md *ec.Metadata, ct *cluster.CT, sender stri
 	return nil, errors.New("no free target")
 }
 
-// A sender sent an MD update. This target must update local information partially:
-// only list of daemons and the "main" target.
-func (reb *Manager) receiveMD(req *pushReq, hdr transport.ObjHdr) error {
-	ctMeta, err := cluster.NewCTFromBO(hdr.Bck, hdr.ObjName, reb.t.Bowner(), fs.ECMetaType)
-	if err != nil {
-		return err
-	}
-	md, err := ec.LoadMetadata(ctMeta.FQN())
-	if err != nil {
-		if os.IsNotExist(err) {
-			err = nil
-		}
-		return err
-	}
-	if md.Generation != req.md.Generation {
-		return nil
-	}
-	md.FullReplica = req.md.FullReplica
-	md.Daemons = req.md.Daemons
-	mdBytes := md.NewPack()
-	return ctMeta.Write(reb.t, bytes.NewReader(mdBytes), -1)
-}
-
 // Check if this target has a metadata for the received CT
 func (reb *Manager) detectLocalCT(req *pushReq, ct *cluster.CT) (*ec.Metadata, error) {
 	if req.action == rebActMoveCT {
@@ -341,81 +288,6 @@ func (reb *Manager) renameLocalCT(req *pushReq, ct *cluster.CT, md *ec.Metadata)
 		}
 	}
 	return
-}
-
-func (reb *Manager) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Reader) error {
-	defer cos.DrainReader(reader)
-	ct, err := cluster.NewCTFromBO(hdr.Bck, hdr.ObjName, reb.t.Bowner(), fs.ECSliceType)
-	if err != nil {
-		return err
-	}
-	md, err := reb.detectLocalCT(req, ct)
-	if err != nil {
-		glog.Errorf("%s: %v", ct.FQN(), err)
-		return err
-	}
-	// Fix the metadata: update CT locations
-	delete(req.md.Daemons, req.daemonID)
-	if md != nil && req.md.Generation < md.Generation {
-		// Local CT is newer - do not save anything
-		return nil
-	}
-	// Check for slice conflict
-	workFQN, moveTo, err := reb.renameLocalCT(req, ct, md)
-	if err != nil {
-		return err
-	}
-	req.md.FullReplica = reb.t.Snode().ID()
-	req.md.Daemons[reb.t.Snode().ID()] = uint16(req.md.SliceID)
-	if moveTo != nil {
-		req.md.Daemons[moveTo.ID()] = uint16(md.SliceID)
-	}
-	// Save received CT to local drives
-	err = reb.saveCTToDisk(req, &hdr, reader)
-	if err != nil {
-		if errRm := os.Remove(ct.FQN()); errRm != nil {
-			glog.Errorf("Failed to remove %s: %v", ct.FQN(), errRm)
-		}
-		if moveTo != nil {
-			if errMv := os.Rename(workFQN, ct.FQN()); errMv != nil {
-				glog.Errorf("Error restoring slice: %v", errMv)
-			}
-		}
-		return err
-	}
-	// Send local slice
-	if moveTo != nil {
-		req.md.SliceID = md.SliceID
-		if err = reb.sendFromDisk(ct, req.md, moveTo, workFQN); err != nil {
-			glog.Errorf("Failed to move slice to %s: %v", moveTo, err)
-		}
-	}
-	// Broadcast updated MD
-	reqMD := pushReq{daemonID: reb.t.SID(), stage: rebStageTraverse, rebID: reb.rebID.Load(), md: req.md, action: rebActUpdateMD}
-	nodes := req.md.RemoteTargets(reb.t)
-	for _, tsi := range nodes {
-		if moveTo != nil && moveTo.ID() == tsi.ID() {
-			continue
-		}
-		reb.onAir.Inc()
-		xreb := reb.xact()
-		if xreb.Aborted() {
-			err = fmt.Errorf("failed to send updated metafile: %s", xreb)
-			break
-		}
-		o := transport.AllocSend()
-		o.Hdr = transport.ObjHdr{
-			Bck:      ct.Bck().Bck,
-			ObjName:  ct.ObjectName(),
-			ObjAttrs: cmn.ObjAttrs{Size: 0},
-		}
-		o.Hdr.Opaque = reqMD.NewPack(rebMsgEC)
-		o.Callback = reb.transportECCB
-		if errSend := reb.dm.Send(o, nil, tsi); errSend != nil && err == nil {
-			err = fmt.Errorf("failed to send updated metafile: %v", err)
-		}
-	}
-	return err
 }
 
 func (reb *Manager) walkEC(fqn string, de fs.DirEntry) (err error) {

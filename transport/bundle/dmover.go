@@ -114,6 +114,7 @@ func (dm *DataMover) RecvType() cluster.RecvType { return dm.recvType }
 
 // associate xaction with data mover, primarily to sync on aborts
 func (dm *DataMover) SetXact(xact cluster.Xact) { dm.xact = xact }
+func (dm *DataMover) GetXact() cluster.Xact     { return dm.xact }
 
 // register user's receive-data (and, optionally, receive-ack) wrappers
 func (dm *DataMover) RegRecv() (err error) {
@@ -128,30 +129,34 @@ func (dm *DataMover) RegRecv() (err error) {
 }
 
 func (dm *DataMover) Open() {
-	var (
-		dataArgs = Args{
-			Net:    dm.data.net,
-			Trname: dm.data.trname,
-			Extra: &transport.Extra{
-				Compression: dm.compression,
-				Config:      dm.config,
-				MMSA:        dm.mem,
-				SizePDU:     dm.sizePDU,
-			},
-			Ntype:        cluster.Targets,
-			Multiplier:   dm.multiplier,
-			ManualResync: true,
-		}
-		ackArgs = Args{
+	dataArgs := Args{
+		Net:    dm.data.net,
+		Trname: dm.data.trname,
+		Extra: &transport.Extra{
+			Compression: dm.compression,
+			Config:      dm.config,
+			MMSA:        dm.mem,
+			SizePDU:     dm.sizePDU,
+		},
+		Ntype:        cluster.Targets,
+		Multiplier:   dm.multiplier,
+		ManualResync: true,
+	}
+	if dm.xact != nil {
+		dataArgs.Extra.SenderID = dm.xact.ID()
+	}
+	dm.data.streams = NewStreams(dm.t.Sowner(), dm.t.Snode(), dm.data.client, dataArgs)
+	if dm.useACKs() {
+		ackArgs := Args{
 			Net:          dm.ack.net,
 			Trname:       dm.ack.trname,
 			Extra:        &transport.Extra{Config: dm.config},
 			Ntype:        cluster.Targets,
 			ManualResync: true,
 		}
-	)
-	dm.data.streams = NewStreams(dm.t.Sowner(), dm.t.Snode(), dm.data.client, dataArgs)
-	if dm.useACKs() {
+		if dm.xact != nil {
+			ackArgs.Extra.SenderID = dm.xact.ID()
+		}
 		dm.ack.streams = NewStreams(dm.t.Sowner(), dm.t.Snode(), dm.ack.client, ackArgs)
 	}
 	dm.stage.opened.Store(true)
@@ -166,11 +171,21 @@ func (dm *DataMover) Quiesce(d time.Duration) cluster.QuiRes {
 
 func (dm *DataMover) Close(err error) {
 	debug.Assert(dm.stage.opened.Load()) // Open() must've been called
-	dm.data.streams.Close(err == nil)    // err == nil: close gracefully via `fin`, otherwise abort
+	if err == nil && dm.xact != nil && dm.xact.Aborted() {
+		err = cmn.NewErrAborted(dm.xact.Name(), "abort", nil)
+	}
+	dm.data.streams.Close(err == nil) // err == nil: close gracefully via `fin`, otherwise abort
 	if dm.useACKs() {
-		dm.ack.streams.Close(true)
+		dm.ack.streams.Close(err == nil)
 	}
 	dm.stage.opened.Store(false)
+}
+
+func (dm *DataMover) Abort() {
+	dm.data.streams.Abort()
+	if dm.useACKs() {
+		dm.ack.streams.Abort()
+	}
 }
 
 func (dm *DataMover) UnregRecv() {

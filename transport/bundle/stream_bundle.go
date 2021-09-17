@@ -57,7 +57,7 @@ type (
 
 	Args struct {
 		Net          string           // one of cmn.KnownNetworks, empty defaults to cmn.NetworkIntraData
-		Trname       string           // transport (flow) name
+		Trname       string           // transport endpoint name
 		Extra        *transport.Extra // additional parameters
 		Ntype        int              // cluster.Target (0) by default
 		Multiplier   int              // so-many TCP connections per Rx endpoint, with round-robin
@@ -275,6 +275,15 @@ snd:
 	}
 	s := robin.stsdest[i]
 	return s.Send(one)
+}
+
+func (sb *Streams) Abort() {
+	streams := sb.get()
+	for _, robin := range streams {
+		for _, s := range robin.stsdest {
+			s.Abort()
+		}
+	}
 }
 
 func (sb *Streams) apply(action int) {

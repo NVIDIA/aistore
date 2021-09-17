@@ -40,6 +40,7 @@ type (
 		Compression string        // see CompressAlways, etc. enum
 		MMSA        *memsys.MMSA  // compression-related buffering
 		Config      *cmn.Config   // config
+		SenderID    string        // optional send ID (e.g., xaction ID)
 		SizePDU     int32         // 0(zero): no PDUs; must be below MaxSizePDU; unknown size _requires_ PDUs
 	}
 	// stream stats

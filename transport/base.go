@@ -117,6 +117,7 @@ type (
 ////////////////
 
 func newStreamBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) {
+	var sid string
 	u, err := url.Parse(dstURL)
 	cos.AssertNoErr(err)
 
@@ -124,7 +125,6 @@ func newStreamBase(client Client, dstURL, dstID string, extra *Extra) (s *stream
 
 	s.sessID = nextSID.Inc()
 	s.trname = path.Base(u.Path)
-	s.lid = fmt.Sprintf("s-%s[%d]=>%s", s.trname, s.sessID, dstID)
 
 	s.lastCh = cos.NewStopCh()
 	s.stopCh = cos.NewStopCh()
@@ -135,6 +135,9 @@ func newStreamBase(client Client, dstURL, dstID string, extra *Extra) (s *stream
 
 	// NOTE: default overrides
 	if extra != nil {
+		if extra.SenderID != "" {
+			sid = "-" + extra.SenderID
+		}
 		if extra.IdleTimeout > 0 {
 			s.time.idleOut = extra.IdleTimeout
 		}
@@ -151,6 +154,7 @@ func newStreamBase(client Client, dstURL, dstID string, extra *Extra) (s *stream
 			s.pdu = newSendPDU(buf)
 		}
 	}
+	s.lid = fmt.Sprintf("s-%s%s[%d]=>%s", s.trname, sid, s.sessID, dstID)
 
 	if s.time.idleOut < tickUnit {
 		s.time.idleOut = tickUnit
@@ -183,6 +187,9 @@ func (s *streamBase) Stop()               { s.stopCh.Close() }
 func (s *streamBase) URL() string         { return s.dstURL }
 func (s *streamBase) ID() (string, int64) { return s.trname, s.sessID }
 func (s *streamBase) String() string      { return s.lid }
+
+func (s *streamBase) Abort() { s.Stop() } // (DM =>) SB => s.Abort() sequence (e.g. usage see otherXreb.Abort())
+
 func (s *streamBase) Terminated() (terminated bool) {
 	s.term.mu.Lock()
 	terminated = s.term.terminated

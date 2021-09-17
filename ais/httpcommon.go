@@ -2324,8 +2324,6 @@ func (h *httprunner) _isIntraCall(hdr http.Header, fromPrimary bool) (err error)
 	if ok := caller != nil && (!fromPrimary || smap.isPrimary(caller)); ok {
 		return
 	}
-	// NOTE: even if we are not able to validate the request we still trust it
-	//       when the sender's Smap is more current.
 	if callerSver != smap.vstr && callerSver != "" {
 		callerVer, erP = strconv.ParseInt(callerSver, 10, 64)
 		if erP != nil {
@@ -2333,14 +2331,16 @@ func (h *httprunner) _isIntraCall(hdr http.Header, fromPrimary bool) (err error)
 			glog.Error(erP)
 			return
 		}
+		// we still trust the request when the sender's Smap is more current
 		if callerVer > smap.version() {
-			glog.Errorf("%s: %s < caller-Smap(v%s) - proceeding anyway...", h.si, smap, callerSver)
+			glog.Errorf("%s: %s < %s-Smap(v%s) - proceeding anyway...", h.si, smap, callerName, callerSver)
+			runtime.Gosched()
 			return
 		}
 	}
 	if caller == nil {
-		// caller's Smap is not set: assume request from a newly joined node and proceed.
 		if !fromPrimary {
+			// assume request from a newly joined node and proceed
 			return nil
 		}
 		return fmt.Errorf("%s: expected %s from a valid node, %s", h.si, cmn.NetworkIntraControl, smap)
