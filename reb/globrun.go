@@ -5,6 +5,7 @@
 package reb
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -258,69 +259,81 @@ func (reb *Manager) rebSerialize(rargs *rebArgs) bool {
 
 func (reb *Manager) _serialize(rargs *rebArgs) (newerRMD, alreadyRunning bool) {
 	var (
-		sleep  = rargs.config.Timeout.CplaneOperation.D()
-		total  time.Duration
-		canRun bool
+		total    time.Duration
+		sleep    = rargs.config.Timeout.CplaneOperation.D()
+		maxTotal = cos.MaxDuration(20*sleep, 10*time.Second) // time to abort prev. streams
+		maxwt    = cos.MaxDuration(rargs.config.Rebalance.DestRetryTime.D(), 2*maxTotal)
+		acquired bool
 	)
 	for {
 		select {
 		case <-reb.semaCh.TryAcquire():
-			canRun = true
+			acquired = true
 		default:
 			runtime.Gosched()
 		}
-
-		// Compare rebIDs
 		logHdr := reb.logHdr(rargs)
 		if reb.rebID.Load() > rargs.id {
-			glog.Warningf("%s: seeing newer rebID g%d, not running", logHdr, reb.rebID.Load())
+			glog.Warningf("%s: seeing newer rebalance[g%d] - not running", logHdr, reb.rebID.Load())
 			newerRMD = true
-			if canRun {
+			if acquired {
 				reb.semaCh.Release()
 			}
 			return
 		}
 		if reb.rebID.Load() == rargs.id {
-			if canRun {
+			if acquired {
 				reb.semaCh.Release()
 			}
-			glog.Warningf("%s: g%d is already running", logHdr, rargs.id)
+			glog.Warningf("%s: rebalance[g%d] is already running", logHdr, rargs.id)
 			alreadyRunning = true
 			return
 		}
 
-		// Check current xaction
-		entry := xreg.GetRunning(xreg.XactFilter{Kind: cmn.ActRebalance})
-		if entry == nil {
-			if canRun {
-				return
-			}
-			glog.Warningf("%s: waiting for ???...", logHdr)
-		} else {
-			otherXreb := entry.Get().(*xs.Rebalance) // running or previous
-			if canRun {
-				return
-			}
-			otherRebID, err := xaction.S2RebID(otherXreb.ID())
-			debug.AssertNoErr(err)
-			if otherRebID < rargs.id {
-				if !otherXreb.Aborted() {
-					otherXreb.Abort(nil)
-					glog.Warningf("%s: aborting older %s", logHdr, otherXreb)
-				} else if total > 20*sleep {
-					glog.Errorf("%s: preempting older %s takes too much time...", logHdr, otherXreb)
-					if xreb := reb.xact(); xreb != nil && xreb.ID() == otherXreb.ID() {
-						debug.Assert(reb.dm.GetXact().ID() == otherXreb.ID())
-						glog.Warningf("%s: aborting older streams...", logHdr)
-						reb.abortStreams()
-					}
-				}
-			}
+		if acquired { // ok
+			return
 		}
-		cos.Assert(!canRun)
+
+		// try to preempt
+		err := reb._preempt(rargs, logHdr, total, maxTotal)
+		if err != nil {
+			if total > maxwt {
+				cos.ExitLogf("%v", err)
+			}
+			glog.Error(err)
+		}
 		time.Sleep(sleep)
 		total += sleep
 	}
+}
+
+func (reb *Manager) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time.Duration) (err error) {
+	entry := xreg.GetRunning(xreg.XactFilter{Kind: cmn.ActRebalance})
+	if entry == nil {
+		err = fmt.Errorf("%s: acquire/release asymmetry", logHdr)
+		debug.AssertNoErr(err)
+		return
+	}
+	otherXreb := entry.Get().(*xs.Rebalance) // running or previous
+	otherRebID, errID := xaction.S2RebID(otherXreb.ID())
+	debug.AssertNoErr(errID)
+	if otherRebID >= rargs.id {
+		return
+	}
+	if !otherXreb.Aborted() {
+		otherXreb.Abort(nil)
+		glog.Warningf("%s: aborting older %s", logHdr, otherXreb)
+		return
+	}
+	if total > maxTotal {
+		err = fmt.Errorf("%s: preempting older %s takes too much time", logHdr, otherXreb)
+		if xreb := reb.xact(); xreb != nil && xreb.ID() == otherXreb.ID() {
+			debug.Assert(reb.dm.GetXact().ID() == otherXreb.ID())
+			glog.Warningf("%s: aborting older streams...", logHdr)
+			reb.abortStreams()
+		}
+	}
+	return
 }
 
 func (reb *Manager) rebInitRenew(rargs *rebArgs, notif *xaction.NotifXact) bool {

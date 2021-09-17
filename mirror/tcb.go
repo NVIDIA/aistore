@@ -116,8 +116,8 @@ func (e *tcbFactory) newDM(rebcfg *cmn.RebalanceConf, uuid string, sizePDU int32
 		RecvAck:     nil,                    // NOTE: no ACKs
 		Compression: rebcfg.Compression,     // TODO: define separately
 		Multiplier:  int(rebcfg.Multiplier), // ditto
+		SizePDU:     sizePDU,
 	}
-	dmExtra.SizePDU = sizePDU
 	dm, err := bundle.NewDataMover(e.T, trname+"_"+uuid, e.xact.recv, cluster.RegularPut, dmExtra)
 	if err != nil {
 		return err
