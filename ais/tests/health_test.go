@@ -32,13 +32,13 @@ func unregisteredNodeHealth(t *testing.T, proxyURL string, si *cluster.Snode) {
 	} else {
 		targetCount--
 	}
-	_, err = tutils.WaitForClusterState(proxyURL, "to decommission node", smapOrig.Version, proxyCount, targetCount)
+	_, err = tutils.WaitForClusterState(proxyURL, "decommission node", smapOrig.Version, proxyCount, targetCount)
 	tassert.CheckFatal(t, err)
 	defer func() {
 		val := &cmn.ActValRmNode{DaemonID: si.ID()}
 		rebID, err := api.StopMaintenance(baseParams, val)
 		tassert.CheckFatal(t, err)
-		_, err = tutils.WaitForClusterState(proxyURL, "to node join", smapOrig.Version, smapOrig.CountActiveProxies(),
+		_, err = tutils.WaitForClusterState(proxyURL, "join node", smapOrig.Version, smapOrig.CountActiveProxies(),
 			smapOrig.CountActiveTargets())
 		tassert.CheckFatal(t, err)
 		if rebID != "" {

@@ -142,7 +142,8 @@ func GetICProxy(t testing.TB, smap *cluster.Smap, ignoreID string) *cluster.Snod
 // - number of targets in Smap is equal targetCnt, unless targetCnt == 0.
 //
 // It returns the smap which satisfies those requirements.
-func WaitForClusterStateActual(proxyURL, reason string, origVersion int64, proxyCnt, targetCnt int, syncIgnoreIDs ...string) (*cluster.Smap, error) {
+func WaitForClusterStateActual(proxyURL, reason string, origVersion int64, proxyCnt, targetCnt int,
+	syncIgnoreIDs ...string) (*cluster.Smap, error) {
 	for {
 		smap, err := WaitForClusterState(proxyURL, reason, origVersion, proxyCnt, targetCnt, syncIgnoreIDs...)
 		if err != nil {
@@ -178,7 +179,7 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 	smapChangeDeadline = timeStart.Add(2 * proxyChangeLatency)
 	opDeadline = timeStart.Add(3 * proxyChangeLatency)
 
-	tlog.Logf("Waiting for condition: (p%d, t%d, version > v%d), reason: %s\n", expPrx, expTgt, origVersion, reason)
+	tlog.Logf("Waiting for %q(p%d, t%d, Smap > v%d)\n", reason, expPrx, expTgt, origVersion)
 
 	var (
 		loopCnt    int
@@ -200,10 +201,13 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 			expPrx.satisfied(smap.CountActiveProxies()) &&
 			smap.Version > origVersion
 		if !satisfied {
-			// Still polling http://127.0.0.1:8080, Smap v802(pid=gVqZp8082) (15s)
 			if d := time.Since(timeStart); d > 7*time.Second {
-				tlog.Logf("Polling %s[%s] for (p%d, t%d, version > v%d)... (%v)\n",
-					proxyURL, smap.StringEx(), expPrx, expTgt, origVersion, d.Truncate(time.Second))
+				p := "P"
+				if smap.Primary.PublicNet.DirectURL != proxyURL {
+					p = proxyURL
+				}
+				tlog.Logf("Querying %s[%s] for (t=%d, p=%d, Smap > v%d)\n",
+					p, smap.StringEx(), expTgt, expPrx, origVersion)
 			}
 		}
 		if smap.Version != lastVersion {
@@ -541,7 +545,7 @@ func WaitForNodeToTerminate(pid int, timeout ...time.Duration) error {
 		deadline = timeout[0]
 	}
 
-	tlog.Logf("Waiting for process ID %d to terminate\n", pid)
+	tlog.Logf("Waiting for process PID=%d to terminate\n", pid)
 	var cancel context.CancelFunc
 	ctx, cancel = context.WithTimeout(ctx, deadline)
 	defer cancel()

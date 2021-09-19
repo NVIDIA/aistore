@@ -1359,14 +1359,14 @@ func TestListObjectsWithRebalance(t *testing.T) {
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
-	target := m.unregisterTarget()
+	target := m.startMaintenanceNoRebalance()
 
 	m.puts()
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		rebID = m.reregisterTarget(target)
+		rebID = m.stopMaintenance(target)
 	}()
 
 	wg.Add(1)

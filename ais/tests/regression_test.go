@@ -470,7 +470,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	defer func() {
 		var rebID string
 		for _, tgt := range removed {
-			rebID = m.reregisterTarget(tgt)
+			rebID = m.stopMaintenance(tgt)
 		}
 		if len(removed) != 0 && rebID != "" {
 			tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
@@ -479,7 +479,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 
 	targets := m.smap.Tmap.ActiveNodes()
 	for i := 0; i < targetsToUnregister; i++ {
-		tlog.Logf("Unregistering target %s\n", targets[i].ID())
+		tlog.Logf("Put %s in maintenance (no rebalance)\n", targets[i].StringEx())
 		args := &cmn.ActValRmNode{DaemonID: targets[i].ID(), SkipRebalance: true}
 		_, err := api.StartMaintenance(baseParams, args)
 		tassert.CheckFatal(t, err)
@@ -504,7 +504,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 		wg.Add(1)
 		go func(r int) {
 			defer wg.Done()
-			m.reregisterTarget(targets[r])
+			m.stopMaintenance(targets[r])
 			delete(removed, targets[r].ID())
 		}(i)
 		time.Sleep(5 * time.Second) // wait some time before reregistering next target

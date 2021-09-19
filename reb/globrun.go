@@ -311,7 +311,6 @@ func (reb *Manager) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time
 	entry := xreg.GetRunning(xreg.XactFilter{Kind: cmn.ActRebalance})
 	if entry == nil {
 		err = fmt.Errorf("%s: acquire/release asymmetry", logHdr)
-		debug.AssertNoErr(err)
 		return
 	}
 	otherXreb := entry.Get().(*xs.Rebalance) // running or previous

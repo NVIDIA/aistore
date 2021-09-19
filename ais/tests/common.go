@@ -123,7 +123,7 @@ func (m *ioContext) _cleanup() {
 func (m *ioContext) assertClusterState() {
 	smap, err := tutils.WaitForClusterState(
 		m.proxyURL,
-		"to check cluster state",
+		"check cluster state",
 		m.smap.Version,
 		m.originalProxyCount,
 		m.originalTargetCount,
@@ -188,7 +188,7 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 	tassert.CheckFatal(m.t, err)
 
 	if !m.silent {
-		tlog.Logf("PUT %d objects into bucket %s...\n", m.num, m.bck)
+		tlog.Logf("PUT %d objects %s\n", m.num, m.bck)
 	}
 
 	var ignoreErr bool
@@ -260,7 +260,7 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 	)
 
 	if !m.silent {
-		tlog.Logf("remote PUT %d objects into bucket %s...\n", objCnt, m.bck)
+		tlog.Logf("remote PUT %d objects in %s\n", objCnt, m.bck)
 	}
 
 	p, err := api.HeadBucket(baseParams, m.bck)
@@ -544,18 +544,15 @@ func (m *ioContext) ensureNoErrors() {
 	}
 }
 
-func (m *ioContext) unregisterTarget() *cluster.Snode {
+func (m *ioContext) startMaintenanceNoRebalance() *cluster.Snode {
 	target, _ := m.smap.GetRandTarget()
-	tlog.Logf("Unregister target: %s\n", target.URL(cmn.NetworkPublic))
-	args := &cmn.ActValRmNode{
-		DaemonID:      target.ID(),
-		SkipRebalance: true,
-	}
+	tlog.Logf("Put %s in maintenance\n", target.StringEx())
+	args := &cmn.ActValRmNode{DaemonID: target.ID(), SkipRebalance: true}
 	_, err := api.StartMaintenance(tutils.BaseAPIParams(m.proxyURL), args)
 	tassert.CheckFatal(m.t, err)
 	m.smap, err = tutils.WaitForClusterState(
 		m.proxyURL,
-		"target removed from the cluster",
+		"put target in maintenance",
 		m.smap.Version,
 		m.smap.CountActiveProxies(),
 		m.smap.CountActiveTargets()-1,
@@ -564,16 +561,14 @@ func (m *ioContext) unregisterTarget() *cluster.Snode {
 	return target
 }
 
-func (m *ioContext) reregisterTarget(target *cluster.Snode) (rebID string) {
+func (m *ioContext) stopMaintenance(target *cluster.Snode) (rebID string) {
 	const (
 		timeout    = time.Second * 10
 		interval   = time.Millisecond * 10
 		iterations = int(timeout / interval)
 	)
-
 	var err error
-	// T1
-	tlog.Logf("Registering target %s...\n", target.ID())
+	tlog.Logf("Take %s out of maintenance...\n", target.StringEx())
 	args := &cmn.ActValRmNode{DaemonID: target.ID()}
 	rebID, err = api.StopMaintenance(tutils.BaseAPIParams(m.proxyURL), args)
 	tassert.CheckFatal(m.t, err)
@@ -582,11 +577,7 @@ func (m *ioContext) reregisterTarget(target *cluster.Snode) (rebID string) {
 	for i := 0; i < iterations; i++ {
 		time.Sleep(interval)
 		if _, ok := smap.Tmap[target.ID()]; !ok {
-			// T2
 			smap = tutils.GetClusterMap(m.t, m.proxyURL)
-			if _, ok := smap.Tmap[target.ID()]; ok {
-				tlog.Logf("T2: registered target %s\n", target.ID())
-			}
 		} else {
 			query := cmn.QueryBcks(m.bck)
 			baseParams.URL = m.proxyURL
@@ -596,15 +587,14 @@ func (m *ioContext) reregisterTarget(target *cluster.Snode) (rebID string) {
 			baseParams.URL = target.URL(cmn.NetworkPublic)
 			targetBcks, err := api.ListBuckets(baseParams, query)
 			tassert.CheckFatal(m.t, err)
-			// T3
 			if proxyBcks.Equal(targetBcks) {
-				tlog.Logf("T3: registered target %s got updated with the new BMD\n", target.ID())
+				tlog.Logf("%s got updated with the current BMD\n", target.StringEx())
 				return
 			}
 		}
 	}
-
-	m.t.Fatalf("failed to register target %s: not in the Smap or did not receive BMD", target.ID())
+	m.t.Fatalf("failed to bring %s out of maintenance: not in the %s and/or did not get updated BMD",
+		target.StringEx(), smap.StringEx())
 	return
 }
 

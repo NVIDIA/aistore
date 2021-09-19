@@ -66,7 +66,7 @@ func waitForCluster() error {
 	if err != nil {
 		return fmt.Errorf("error waiting for cluster startup, err: %v", err)
 	}
-	tlog.Logf("Pinging primary for health... ")
+	tlog.Logf("Pinging primary for readiness ")
 	for {
 		if retry%5 == 4 {
 			fmt.Fprintf(os.Stdout, "%ds --- ", retry+1)

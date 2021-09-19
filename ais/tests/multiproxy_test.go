@@ -1421,7 +1421,8 @@ func icMemberLeaveAndRejoin(t *testing.T) {
 	for sid := range origIC {
 		tassert.Errorf(t, smap.IsIC(smap.GetProxy(sid)), "Should not remove existing IC members (%s)", sid)
 	}
-	tassert.Errorf(t, smap.ICCount() == smap.DefaultICSize(), "should have %d members in IC, has %d", smap.DefaultICSize(), smap.ICCount())
+	tassert.Errorf(t, smap.ICCount() == smap.DefaultICSize(), "should have %d members in IC, has %d",
+		smap.DefaultICSize(), smap.ICCount())
 
 	err := tutils.RestoreNode(cmd, false, "proxy")
 	tassert.CheckFatal(t, err)

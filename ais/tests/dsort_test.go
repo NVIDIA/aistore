@@ -1357,7 +1357,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 			waitForDSortPhase(t, m.proxyURL, df.managerUUID, phase, func() {
 				// It may require calling AbortXaction(rebalance) &
 				// WaitForRebalanceToComplete() before unregistering
-				target = m.unregisterTarget()
+				target = m.startMaintenanceNoRebalance()
 			})
 
 			tlog.Logln("waiting for distributed sort to finish up...")
@@ -1380,7 +1380,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 				}
 			}
 
-			rebID := m.reregisterTarget(target)
+			rebID := m.stopMaintenance(target)
 			tutils.WaitForRebalanceByID(t, -1 /*orig target cnt*/, df.baseParams, rebID)
 		},
 	)
@@ -1514,7 +1514,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 
 			df.init()
 
-			target := m.unregisterTarget()
+			target := m.startMaintenanceNoRebalance()
 
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
@@ -1526,7 +1526,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 			defer tutils.WaitForRebalanceToComplete(t, df.baseParams)
 
 			waitForDSortPhase(t, m.proxyURL, df.managerUUID, dsort.ExtractionPhase, func() {
-				m.reregisterTarget(target)
+				m.stopMaintenance(target)
 			})
 
 			tlog.Logln("waiting for distributed sort to finish up...")

@@ -2245,7 +2245,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	tgtList := o.smap.Tmap.ActiveNodes()
 	tgtLost := tgtList[0]
 
-	tlog.Logf("Unregistering %s...\n", tgtLost.ID())
+	tlog.Logf("Put %s in maintenance (no rebalance)\n", tgtLost.StringEx())
 	args := &cmn.ActValRmNode{DaemonID: tgtLost.ID(), SkipRebalance: true}
 	_, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
@@ -2293,7 +2293,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	tlog.Logf("Created %d objects in %s, %d objects in %s. Starting rebalance\n",
 		len(resECOld.Entries), bckEC, len(resRegOld.Entries), bckReg)
 
-	tlog.Logf("Registering node %s\n", tgtLost)
+	tlog.Logf("Take %s from maintenance\n", tgtLost.StringEx())
 	args = &cmn.ActValRmNode{DaemonID: tgtLost.ID()}
 	rebID, err := api.StopMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
@@ -2479,11 +2479,11 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	tgtLost := tgtList[0]
 	tgtGone := tgtList[1]
 
-	tlog.Logf("Unregistering %s...\n", tgtLost.ID())
+	tlog.Logf("Put %s in maintenance (no rebalance)\n", tgtLost.StringEx())
 	args := &cmn.ActValRmNode{DaemonID: tgtLost.ID(), SkipRebalance: true}
 	_, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
-	_, err = tutils.WaitForClusterState(proxyURL, "to remove target",
+	_, err = tutils.WaitForClusterState(proxyURL, "remove target",
 		smap.Version, smap.CountActiveProxies(), smap.CountActiveTargets()-1)
 	tassert.CheckFatal(t, err)
 	registered := false
@@ -2519,9 +2519,9 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	msg := &cmn.SelectMsg{}
 	resECOld, err := api.ListObjects(baseParams, bckEC, msg, 0)
 	tassert.CheckFatal(t, err)
-	tlog.Logf("Created %d objects in %s. Starting rebalance\n", len(resECOld.Entries), bckEC)
+	tlog.Logf("Created %d objects in %s - starting global rebalance...\n", len(resECOld.Entries), bckEC)
 
-	tlog.Logf("Registering node %s\n", tgtLost.ID())
+	tlog.Logf("Take %s from maintenance\n", tgtLost.StringEx())
 	args = &cmn.ActValRmNode{DaemonID: tgtLost.ID()}
 	_, err = api.StopMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
@@ -2552,12 +2552,12 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	err = tutils.WaitForRebalanceToStart(baseParams, xactArgs)
 	tassert.CheckError(t, err)
 
-	tlog.Logf("Unregistering %s...\n", tgtGone.ID())
 	err = api.AbortXaction(baseParams, xactArgs)
 	tassert.CheckError(t, err)
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 	tassert.CheckError(t, err)
 
+	tlog.Logf("Put %s in maintenance\n", tgtGone.StringEx())
 	args = &cmn.ActValRmNode{DaemonID: tgtGone.ID()}
 	rebID, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)

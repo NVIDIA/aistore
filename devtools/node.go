@@ -35,26 +35,29 @@ func JoinCluster(ctx *Ctx, proxyURL string, node *cluster.Snode, timeout time.Du
 	return
 }
 
+func _nextNode(smap *cluster.Smap, idsToIgnore cos.StringSet) (string, string, bool) {
+	for _, d := range smap.Pmap {
+		if !idsToIgnore.Contains(d.ID()) {
+			return d.ID(), d.PublicNet.DirectURL, true
+		}
+	}
+	for _, d := range smap.Tmap {
+		if !idsToIgnore.Contains(d.ID()) {
+			return d.ID(), d.PublicNet.DirectURL, true
+		}
+	}
+
+	return "", "", false
+}
+
 func WaitMapVersionSync(baseParams api.BaseParams, ctx *Ctx, timeout time.Time, smap *cluster.Smap, prevVersion int64,
 	idsToIgnore cos.StringSet) error {
-	ctx.Log("Waiting to sync Smap version > v%d, ignoring %+v\n", prevVersion, idsToIgnore)
-	checkAwaitingDaemon := func(smap *cluster.Smap, idsToIgnore cos.StringSet) (string, string, bool) {
-		for _, d := range smap.Pmap {
-			if !idsToIgnore.Contains(d.ID()) {
-				return d.ID(), d.PublicNet.DirectURL, true
-			}
-		}
-		for _, d := range smap.Tmap {
-			if !idsToIgnore.Contains(d.ID()) {
-				return d.ID(), d.PublicNet.DirectURL, true
-			}
-		}
-
-		return "", "", false
-	}
-	var prevSid string
+	var (
+		prevSid string
+		orig    = idsToIgnore.Clone()
+	)
 	for {
-		sid, url, exists := checkAwaitingDaemon(smap, idsToIgnore)
+		sid, _, exists := _nextNode(smap, idsToIgnore)
 		if !exists {
 			break
 		}
@@ -62,26 +65,35 @@ func WaitMapVersionSync(baseParams api.BaseParams, ctx *Ctx, timeout time.Time, 
 			time.Sleep(time.Second)
 		}
 		daemonSmap, err := api.GetNodeClusterMap(baseParams, sid)
-		// NOTE: Retry if node returns `http.StatusServiceUnavailable` or `http.StatusBadGateway`
-		if err != nil &&
-			!cos.IsRetriableConnErr(err) &&
-			!cmn.IsStatusServiceUnavailable(err) &&
-			!cmn.IsStatusBadGateway(err) {
+		if err != nil && !cos.IsRetriableConnErr(err) &&
+			!cmn.IsStatusServiceUnavailable(err) && !cmn.IsStatusBadGateway(err) /* retry as well */ {
 			return err
 		}
-
-		if err == nil && daemonSmap.Version > prevVersion && daemonSmap.Version >= smap.Version {
+		if err == nil && daemonSmap.Version > prevVersion {
 			idsToIgnore.Add(sid)
-			*smap = *daemonSmap // update Smap to a newer version
+			if daemonSmap.Version > smap.Version {
+				*smap = *daemonSmap
+			}
+			if daemonSmap.Version > prevVersion+1 {
+				// update Smap to a newer version and restart waiting
+				ctx.Log("NOTE: \"previous-Smap\" update v%d => %s from node %s",
+					prevVersion, daemonSmap.StringEx(), sid)
+				*smap = *daemonSmap
+				prevVersion = smap.Version - 1
+				idsToIgnore = orig.Clone()
+				idsToIgnore.Add(sid)
+			}
 			continue
 		}
 		if time.Now().After(timeout) {
-			return fmt.Errorf("timed out waiting for sync-ed Smap version > %d from %s (v%d)",
-				prevVersion, url, smap.Version)
+			return fmt.Errorf("timed out waiting for node %s to sync Smap > v%d", sid, prevVersion)
 		}
 		if daemonSmap != nil {
-			ctx.Log("waiting for Smap > v%d at %s (currently v%d)\n",
-				prevVersion, sid, daemonSmap.Version)
+			if snode := daemonSmap.GetNode(sid); snode != nil {
+				ctx.Log("Waiting for %s(%s) to sync Smap > v%d\n", snode.StringEx(), daemonSmap, prevVersion)
+			} else {
+				ctx.Log("Waiting for node %s(%s) to sync Smap > v%d\n", sid, daemonSmap, prevVersion)
+			}
 		}
 		prevSid = sid
 	}

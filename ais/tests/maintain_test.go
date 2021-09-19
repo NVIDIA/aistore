@@ -469,7 +469,6 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	tassert.CheckError(t, err)
 
 	// 3. Start node again.
-	tlog.Logf("Starting the node %s[%s]...\n", node, nodeType)
 	err = tutils.RestoreNode(cmd, false, nodeType)
 	tassert.CheckError(t, err)
 	smap, err = tutils.WaitForClusterState(proxyURL, "restart node",
@@ -531,7 +530,6 @@ func TestShutdownListObjects(t *testing.T) {
 
 	// Restore target after test is over.
 	t.Cleanup(func() {
-		tlog.Logf("Restoring %s\n", tsi.Name())
 		err = tutils.RestoreNode(cmd, false, cmn.Target)
 		tassert.CheckError(t, err)
 		_, err = tutils.WaitForClusterState(proxyURL, "target is back",

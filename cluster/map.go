@@ -385,14 +385,11 @@ func (m *Smap) GetNode(id string) *Snode {
 
 func (m *Smap) GetRandTarget() (tsi *Snode, err error) {
 	for _, tsi = range m.Tmap {
-		if tsi.InMaintenance() {
-			tsi = nil
-			continue
+		if !tsi.InMaintenance() {
+			return
 		}
-		return tsi, nil
 	}
-	err = cmn.NewErrNoNodes(cmn.Target)
-	return
+	return nil, cmn.NewErrNoNodes(cmn.Target)
 }
 
 func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {

@@ -487,8 +487,7 @@ func WaitForRebalanceToComplete(t testing.TB, baseParams api.BaseParams, timeout
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
 	}
-
-	tlog.Logf("Waiting for rebalance and resilver to complete (timeout %v)...\n", timeout)
+	tlog.Logf("Waiting for rebalance and resilver to complete (timeout %v)\n", timeout)
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
