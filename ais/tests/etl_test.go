@@ -512,7 +512,7 @@ def transform(input_bytes: bytes) -> bytes:
 
 	m.init()
 
-	tlog.Logln("PUT objects to source bucket")
+	tlog.Logf("PUT objects => source bucket %s\n", m.bck)
 	m.puts()
 
 	for _, testType := range []string{"etl_object", "etl_bucket"} {

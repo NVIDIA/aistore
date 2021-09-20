@@ -51,10 +51,10 @@ type (
 		Props             string `json:"props"`              // e.g. "checksum,size"
 		TimeFormat        string `json:"time_format"`        // "RFC822" default - see the enum above
 		Prefix            string `json:"prefix"`             // objname filter: return names starting with prefix
-		PageSize          uint   `json:"pagesize"`           // max entries returned by list objects call
 		StartAfter        string `json:"start_after"`        // start listing after (AIS buckets only)
 		ContinuationToken string `json:"continuation_token"` // `BucketList.ContinuationToken`
 		Flags             uint64 `json:"flags,string"`       // enum {SelectCached, ..., SelectArchDir } - see above
+		PageSize          uint   `json:"pagesize"`           // max entries returned by list objects call
 		UseCache          bool   `json:"use_cache"`          // use proxy cache to speed up listing objects
 	}
 

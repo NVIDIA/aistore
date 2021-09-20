@@ -36,11 +36,10 @@ func propsStats(t *testing.T, proxyURL string) (objChanged, bytesChanged int64) 
 func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions map[string]string,
 	msg *cmn.SelectMsg, versionEnabled bool, cksumType string) (newVersions map[string]string) {
 	newVersions = make(map[string]string, len(oldVersions))
-	tlog.Logf("Updating objects...\n")
+	tlog.Logln("Updating...")
 	r, err := readers.NewRandReader(int64(fileSize), cksumType)
 	if err != nil {
-		t.Errorf("Failed to create reader: %v", err)
-		t.Fail()
+		t.Fatalf("Failed to create reader: %v", err)
 	}
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	for fname := range oldVersions {
@@ -70,22 +69,18 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions 
 		if ver, ok = oldVersions[m.Name]; !ok {
 			continue
 		}
-		tlog.Logf("Object %s new version %s\n", m.Name, m.Version)
 		newVersions[m.Name] = m.Version
 
 		if !m.CheckExists() && bck.IsRemote() {
-			t.Errorf("Object %s/%s is not marked as cached one", bck, m.Name)
+			t.Errorf("%s/%s: not marked as cached one", bck, m.Name)
 		}
 		if !versionEnabled {
 			continue
 		}
-
 		if ver == m.Version {
-			t.Errorf("Object %s/%s version has not changed", bck, m.Name)
-			t.Fail()
+			t.Fatalf("%s/%s: version was expected to update", bck, m.Name)
 		} else if m.Version == "" {
-			t.Errorf("Object %s/%s version is empty", bck, m.Name)
-			t.Fail()
+			t.Fatalf("%s/%s: version is empty", bck, m.Name)
 		}
 	}
 
@@ -94,23 +89,18 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions 
 
 func propsReadObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList map[string]string) {
 	versChanged, bytesChanged := propsStats(t, proxyURL)
-	tlog.Logf("Version mismatch stats before test. Objects: %d, bytes fetched: %d\n", versChanged, bytesChanged)
-
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	for object := range objList {
 		_, err := api.GetObject(baseParams, bck, object)
 		if err != nil {
-			t.Errorf("Failed to read %s/%s, err: %v", bck, object, err)
+			t.Errorf("Failed to read %s/%s: %v", bck, object, err)
 			continue
 		}
 	}
-
 	versChangedFinal, bytesChangedFinal := propsStats(t, proxyURL)
-	tlog.Logf("Version mismatch stats after test. Objects: %d, bytes fetched: %d\n", versChangedFinal, bytesChangedFinal)
 	if versChanged != versChangedFinal || bytesChanged != bytesChangedFinal {
-		t.Errorf("All objects must be retreived from the cache but cold get happened: %d times (%d bytes)",
+		t.Fatalf("All objects must be retreived from the cache but cold get happened: %d times (%d bytes)",
 			versChangedFinal-versChanged, bytesChangedFinal-bytesChanged)
-		t.Fail()
 	}
 }
 
@@ -137,7 +127,6 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 	xactID, err := api.EvictList(baseParams, bck, toEvictList)
 	if err != nil {
 		t.Errorf("Failed to evict objects: %v\n", err)
-		t.Fail()
 	}
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)
@@ -167,11 +156,9 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 		if _, wasEvicted := evictMap[m.Name]; wasEvicted {
 			if m.Atime != "" {
 				t.Errorf("Evicted object %s/%s still has atime %q", bck, m.Name, m.Atime)
-				t.Fail()
 			}
 			if m.CheckExists() {
 				t.Errorf("Evicted object %s/%s is still marked as cached one", bck, m.Name)
-				t.Fail()
 			}
 		}
 
@@ -180,22 +167,20 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 		}
 
 		if m.Version == "" {
-			t.Errorf("Object %s/%s version is empty", bck, m.Name)
-			t.Fail()
+			t.Errorf("%s/%s: version is empty", bck, m.Name)
 		} else if m.Version != oldVersion {
-			t.Errorf("Object %s/%s version has changed from %s to %s", bck, m.Name, oldVersion, m.Version)
-			t.Fail()
+			t.Errorf("%s/%s: version has changed from %s to %s", bck, m.Name, oldVersion, m.Version)
 		}
 	}
 }
 
 func propsRecacheObjects(t *testing.T, proxyURL string, bck cmn.Bck, objs map[string]string, msg *cmn.SelectMsg, versionEnabled bool) {
-	tlog.Logf("Refetching objects...\n")
+	tlog.Logf("Reading...\n")
 	propsReadObjects(t, proxyURL, bck, objs)
-	tlog.Logf("Checking objects properties after refetching...\n")
+	tlog.Logf("Checking object properties...\n")
 	reslist := testListObjects(t, proxyURL, bck, msg)
 	if reslist == nil {
-		t.Fatalf("Unexpected error: no object in the bucket %s", bck)
+		t.Fatalf("Unexpected error: no objects in the bucket %s", bck)
 	}
 	var (
 		version string
@@ -205,24 +190,19 @@ func propsRecacheObjects(t *testing.T, proxyURL string, bck cmn.Bck, objs map[st
 		if version, ok = objs[m.Name]; !ok {
 			continue
 		}
-
 		if !m.CheckExists() {
-			t.Errorf("Object %s/%s is not marked as cached one", bck, m.Name)
+			t.Errorf("%s/%s:not marked as cached one", bck, m.Name)
 		}
 		if m.Atime == "" {
-			t.Errorf("Object %s/%s access time is empty", bck, m.Name)
+			t.Errorf("%s/%s: access time is empty", bck, m.Name)
 		}
-
 		if !versionEnabled {
 			continue
 		}
-
 		if m.Version == "" {
-			t.Errorf("Failed to read object %s/%s version", bck, m.Name)
-			t.Fail()
+			t.Errorf("Failed to read %s/%s version", bck, m.Name)
 		} else if version != m.Version {
-			t.Errorf("Object %s/%s versions mismatch: old[%s], new[%s]", bck, m.Name, version, m.Version)
-			t.Fail()
+			t.Errorf("%s/%s versions mismatch: expected [%s], have[%s]", bck, m.Name, version, m.Version)
 		}
 	}
 }
@@ -240,31 +220,27 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 
 	removeTarget, _ := smap.GetRandTarget()
 
-	tlog.Logf("Removing a target: %s\n", removeTarget.ID())
 	args := &cmn.ActValRmNode{DaemonID: removeTarget.ID(), SkipRebalance: true}
 	_, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 	smap, err = tutils.WaitForClusterState(
 		proxyURL,
-		"target is gone",
+		"target removed",
 		smap.Version,
 		smap.CountActiveProxies(),
 		smap.CountActiveTargets()-1,
 	)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("Target %s [%s] is removed\n", removeTarget.ID(), removeTarget.URL(cmn.NetworkPublic))
-
 	// rewrite objects and compare versions - they should change
 	newobjs := propsUpdateObjects(t, proxyURL, bck, objects, msg, versionEnabled, cksumType)
 
-	tlog.Logf("Reregistering target...\n")
 	args = &cmn.ActValRmNode{DaemonID: removeTarget.ID()}
 	rebID, err := api.StopMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 	_, err = tutils.WaitForClusterState(
 		proxyURL,
-		"to join target back",
+		"target joined",
 		smap.Version,
 		smap.CountActiveProxies(),
 		smap.CountActiveTargets()+1,
@@ -272,10 +248,9 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 	tassert.CheckFatal(t, err)
 	tutils.WaitForRebalanceByID(t, origActiveTargetCnt, baseParams, rebID, rebalanceTimeout)
 
-	tlog.Logf("Reading file versions...\n")
 	reslist := testListObjects(t, proxyURL, bck, msg)
 	if reslist == nil {
-		t.Fatalf("Unexpected error: no object in the bucket %s", bck)
+		t.Fatalf("Unexpected error: no objects in the bucket %s", bck)
 	}
 	var (
 		version  string
@@ -286,32 +261,26 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 		if version, ok = newobjs[m.Name]; !ok {
 			continue
 		}
-
 		if !m.IsStatusOK() {
 			continue
 		}
-
 		objFound++
-
 		if !m.CheckExists() && bck.IsRemote() {
-			t.Errorf("Object %s/%s is not marked as cached one", bck, m.Name)
+			t.Errorf("%s/%s: not marked as cached one", bck, m.Name)
 		}
 		if m.Atime == "" {
-			t.Errorf("Object %s/%s access time is empty", bck, m.Name)
+			t.Errorf("%s/%s: access time is empty", bck, m.Name)
 		}
-
 		if !versionEnabled {
 			continue
 		}
-
-		tlog.Logf("Object %s/%s, version before rebalance [%s], after [%s]\n", bck, m.Name, version, m.Version)
 		if version != m.Version {
-			t.Errorf("Object %s/%s version mismatch: existing [%s], expected [%s]", bck, m.Name, m.Version, version)
+			t.Errorf("%s/%s post-rebalance version mismatch: have [%s], expected [%s]", bck, m.Name, m.Version, version)
 		}
 	}
 
 	if objFound != len(objects) {
-		t.Errorf("The number of objects after rebalance differs for the number before it. Current: %d, expected %d", objFound, len(objects))
+		t.Errorf("Wrong number of objects after rebalance: have %d, expected %d", objFound, len(objects))
 	}
 }
 
@@ -320,7 +289,7 @@ func propsCleanupObjects(t *testing.T, proxyURL string, bck cmn.Bck, newVersions
 	wg := &sync.WaitGroup{}
 	for objName := range newVersions {
 		wg.Add(1)
-		go tutils.Del(proxyURL, bck, objName, wg, errCh, !testing.Verbose())
+		go tutils.Del(proxyURL, bck, objName, wg, errCh, true /*silent*/)
 	}
 	wg.Wait()
 	tassert.SelectErr(t, errCh, "delete", true)
@@ -351,38 +320,34 @@ func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType str
 	msg.AddProps(cmn.GetPropsVersion, cmn.GetPropsAtime, cmn.GetPropsStatus)
 	reslist := testListObjects(t, proxyURL, bck, msg)
 	if reslist == nil {
-		t.Fatalf("Unexpected error: no object in the bucket %s", bck)
+		t.Fatalf("Unexpected error: no objects in the bucket %s", bck)
 		return
 	}
 
 	// PUT objects must have all properties set: atime, cached, version
 	filesList := make(map[string]string)
 	for _, m := range reslist.Entries {
-		tlog.Logf("Initial version %s - %v\n", m.Name, m.Version)
+		tlog.Logf("%s/%s initial version:\t%q\n", bck, m.Name, m.Version)
 
 		if !m.CheckExists() && bck.IsRemote() {
-			t.Errorf("Object %s/%s is not marked as cached one", bck, m.Name)
+			t.Errorf("%s/%s: not marked as cached one", bck, m.Name)
 		}
-
 		if m.Atime == "" {
-			t.Errorf("Object %s/%s access time is empty", bck, m.Name)
+			t.Errorf("%s/%s: access time is empty", bck, m.Name)
 		}
-
 		filesList[m.Name] = m.Version
 		if !versionEnabled {
 			continue
 		}
-
 		if m.Version == "" {
-			t.Errorf("Failed to read object %q version", m.Name)
-			t.Fail()
+			t.Fatalf("Failed to read %s/%s version", bck, m.Name)
 		}
 	}
 
 	// rewrite objects and compare versions - they should change
 	newVersions := propsUpdateObjects(t, proxyURL, bck, filesList, msg, versionEnabled, cksumType)
 	if len(newVersions) != len(filesList) {
-		t.Errorf("Number of objects mismatch. Expected: %d objects, after update: %d", len(filesList), len(newVersions))
+		t.Errorf("Wrong number of objects: expected %d, have %d", len(filesList), len(newVersions))
 	}
 
 	// check that files are read from cache
@@ -557,7 +522,8 @@ func TestObjProps(t *testing.T) {
 					props, err := api.HeadObject(baseParams, m.bck, objName, test.checkExists)
 					if test.checkExists {
 						if test.bucketType != typeLocal && test.evict {
-							tassert.Fatalf(t, err != nil, "object should be marked as 'not exists' (it is not cached)")
+							tassert.Fatalf(t, err != nil,
+								"object should be marked as 'not exists' (it is not cached)")
 						} else {
 							tassert.CheckFatal(t, err)
 						}
@@ -620,4 +586,22 @@ func TestObjProps(t *testing.T) {
 			}
 		})
 	}
+}
+
+func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg) *cmn.BucketList {
+	if msg == nil {
+		tlog.Logf("LIST %s []\n", bck)
+	} else if msg.Prefix == "" && msg.PageSize == 0 && msg.ContinuationToken == "" {
+		tlog.Logf("LIST %s [cached: %t]\n", bck, msg.IsFlagSet(cmn.SelectCached))
+	} else {
+		tlog.Logf("LIST %s [prefix: %q, page_size: %d, cached: %t, token: %q]\n",
+			bck, msg.Prefix, msg.PageSize, msg.IsFlagSet(cmn.SelectCached), msg.ContinuationToken)
+	}
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	resList, err := api.ListObjects(baseParams, bck, msg, 0)
+	if err != nil {
+		t.Errorf("List objects %s failed, err = %v", bck, err)
+		return nil
+	}
+	return resList
 }

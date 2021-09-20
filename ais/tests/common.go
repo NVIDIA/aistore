@@ -182,20 +182,17 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 		m.remotePuts(false /*evict*/)
 		return
 	}
-
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	p, err := api.HeadBucket(baseParams, m.bck)
 	tassert.CheckFatal(m.t, err)
-
-	if !m.silent {
-		tlog.Logf("PUT %d objects %s\n", m.num, m.bck)
-	}
 
 	var ignoreErr bool
 	if len(ignoreErrs) > 0 {
 		ignoreErr = ignoreErrs[0]
 	}
-
+	if !m.silent {
+		tlog.Logf("PUT %d objects => %s\n", m.num, m.bck)
+	}
 	m.objNames, m.numPutErrs, err = tutils.PutRandObjs(tutils.PutObjectsArgs{
 		ProxyURL:  m.proxyURL,
 		Bck:       m.bck,
@@ -258,11 +255,9 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 		errCh      = make(chan error, objCnt)
 		wg         = cos.NewLimitedWaitGroup(20)
 	)
-
 	if !m.silent {
-		tlog.Logf("remote PUT %d objects in %s\n", objCnt, m.bck)
+		tlog.Logf("remote PUT %d objects => %s\n", objCnt, m.bck)
 	}
-
 	p, err := api.HeadBucket(baseParams, m.bck)
 	tassert.CheckFatal(m.t, err)
 

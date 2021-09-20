@@ -723,22 +723,6 @@ func TestHeadNonexistentBucket(t *testing.T) {
 	}
 }
 
-func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg) *cmn.BucketList {
-	if msg == nil {
-		tlog.Logf("LIST objects %s []\n", bck)
-	} else {
-		tlog.Logf("LIST objects %s [prefix: %q, page_size: %d, cached: %t, token: %q]\n",
-			bck, msg.Prefix, msg.PageSize, msg.IsFlagSet(cmn.SelectCached), msg.ContinuationToken)
-	}
-	baseParams := tutils.BaseAPIParams(proxyURL)
-	resList, err := api.ListObjects(baseParams, bck, msg, 0)
-	if err != nil {
-		t.Errorf("List objects %s failed, err = %v", bck, err)
-		return nil
-	}
-	return resList
-}
-
 // 1.	PUT file
 // 2.	Change contents of the file or change XXHash
 // 3.	GET file.

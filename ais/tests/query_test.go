@@ -235,7 +235,7 @@ func TestQueryWorkersTargetDown(t *testing.T) {
 
 	_, err = tutils.WaitForClusterState(
 		proxyURL,
-		"target is gone",
+		"target removed",
 		smap.Version,
 		smap.CountActiveProxies(),
 		smap.CountActiveTargets()-1,
