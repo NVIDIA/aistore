@@ -98,7 +98,7 @@ var _ = Describe("LOM Xattributes", func() {
 				defer lom.Unlock(true)
 				lom.SetCksum(cos.NewCksum(cos.ChecksumXXHash, "test_checksum"))
 				lom.SetVersion("dummy_version")
-				lom.SetCustom(cos.SimpleKVs{
+				lom.SetCustomMD(cos.SimpleKVs{
 					cluster.SourceObjMD:  cluster.SourceGoogleObjMD,
 					cluster.VersionObjMD: "version",
 					cluster.CRC32CObjMD:  "crc32",
@@ -122,8 +122,8 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(lom.Version()).To(BeEquivalentTo(newLom.Version()))
 				Expect(lom.GetCopies()).To(HaveLen(3))
 				Expect(lom.GetCopies()).To(BeEquivalentTo(newLom.GetCopies()))
-				Expect(lom.Custom()).To(HaveLen(3))
-				Expect(lom.Custom()).To(BeEquivalentTo(newLom.Custom()))
+				Expect(lom.GetCustomMD()).To(HaveLen(3))
+				Expect(lom.GetCustomMD()).To(BeEquivalentTo(newLom.GetCustomMD()))
 			})
 
 			It("should _not_ save meta to disk", func() {
@@ -134,7 +134,7 @@ var _ = Describe("LOM Xattributes", func() {
 				lom.SetVersion("dummy_version")
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
-				lom.SetCustom(cos.SimpleKVs{
+				lom.SetCustomMD(cos.SimpleKVs{
 					cluster.SourceObjMD:  cluster.SourceGoogleObjMD,
 					cluster.VersionObjMD: "version",
 					cluster.CRC32CObjMD:  "crc32",
@@ -161,8 +161,8 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(ver).To(BeEquivalentTo(newLom.Version()))
 				Expect(lom.GetCopies()).To(HaveLen(3))
 				Expect(lom.GetCopies()).To(BeEquivalentTo(newLom.GetCopies()))
-				Expect(lom.Custom()).To(HaveLen(3))
-				Expect(lom.Custom()).To(BeEquivalentTo(newLom.Custom()))
+				Expect(lom.GetCustomMD()).To(HaveLen(3))
+				Expect(lom.GetCustomMD()).To(BeEquivalentTo(newLom.GetCustomMD()))
 			})
 
 			It("should copy object with meta in memory", func() {
@@ -175,7 +175,7 @@ var _ = Describe("LOM Xattributes", func() {
 				lom.SetVersion("first_version")
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
-				lom.SetCustom(cos.SimpleKVs{
+				lom.SetCustomMD(cos.SimpleKVs{
 					cluster.SourceObjMD:  cluster.SourceGoogleObjMD,
 					cluster.VersionObjMD: "version",
 					cluster.CRC32CObjMD:  "crc32",
@@ -206,8 +206,8 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.Checksum()).To(BeEquivalentTo(newLom.Checksum()))
 				Expect(lom.Version()).To(BeEquivalentTo(newLom.Version()))
-				Expect(newLom.Custom()).To(HaveLen(3))
-				Expect(lom.Custom()).To(BeEquivalentTo(newLom.Custom()))
+				Expect(newLom.GetCustomMD()).To(HaveLen(3))
+				Expect(lom.GetCustomMD()).To(BeEquivalentTo(newLom.GetCustomMD()))
 			})
 
 			It("should override old values", func() {

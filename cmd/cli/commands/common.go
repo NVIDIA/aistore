@@ -472,6 +472,11 @@ var (
 		Name:  "reset",
 		Usage: "remove all custom aliases and reset to system default",
 	}
+
+	setNewCustomMDFlag = cli.BoolFlag{
+		Name:  "set-new-custom",
+		Usage: "remove existing custom keys (if any) and store new custom metadata",
+	}
 )
 
 func getCksumFlags() []cli.Flag {

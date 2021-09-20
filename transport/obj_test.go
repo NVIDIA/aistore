@@ -128,8 +128,8 @@ func Example_headers() {
 	stream.Fin()
 
 	// Output:
-	// {Bck:aws://@uuid#namespace/abc ObjName:X ObjAttrs:{Atime:663346294 Size:231 Ver:1 Cksum:(xxhash,h1...) AddMD:map[]} Opaque:[] SID: Opcode:0} (69)
-	// {Bck:ais://abracadabra ObjName:p/q/s ObjAttrs:{Atime:663346294 Size:213 Ver:222222222222222222222222 Cksum:(xxhash,h2...) AddMD:map[xx:11 yy:22]} Opaque:[49 50 51] SID: Opcode:0} (110)
+	// {Bck:aws://@uuid#namespace/abc ObjName:X ObjAttrs:{Atime:663346294 Size:231 Ver:1 Cksum:(xxhash,h1...) customMD:map[]} Opaque:[] SID: Opcode:0} (69)
+	// {Bck:ais://abracadabra ObjName:p/q/s ObjAttrs:{Atime:663346294 Size:213 Ver:222222222222222222222222 Cksum:(xxhash,h2...) customMD:map[xx:11 yy:22]} Opaque:[49 50 51] SID: Opcode:0} (110)
 }
 
 func sendText(stream *transport.Stream, txt1, txt2 string) {
@@ -151,7 +151,6 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 			Atime: 663346294,
 			Cksum: cos.NewCksum(cos.ChecksumXXHash, "h1"),
 			Ver:   "1",
-			AddMD: cos.SimpleKVs{},
 		},
 		Opaque: nil,
 	}
@@ -173,10 +172,10 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 			Atime: 663346294,
 			Cksum: cos.NewCksum(cos.ChecksumXXHash, "h2"),
 			Ver:   "222222222222222222222222",
-			AddMD: cos.SimpleKVs{"xx": "11", "yy": "22"},
 		},
 		Opaque: []byte{'1', '2', '3'},
 	}
+	hdr.ObjAttrs.SetCustomMD(cos.SimpleKVs{"xx": "11", "yy": "22"})
 	wg.Add(1)
 	stream.Send(&transport.Obj{Hdr: hdr, Reader: sgl2, Callback: cb})
 	wg.Wait()
@@ -727,8 +726,8 @@ func genStaticHeader(random *rand.Rand) (hdr transport.ObjHdr) {
 	hdr.ObjName = strconv.FormatInt(random.Int63(), 10)
 	hdr.Opaque = []byte("123456789abcdef")
 	hdr.ObjAttrs.Size = cos.GiB
-	hdr.ObjAttrs.SetCustom(strconv.FormatInt(random.Int63(), 10), "d")
-	hdr.ObjAttrs.SetCustom("e", "")
+	hdr.ObjAttrs.SetCustomKey(strconv.FormatInt(random.Int63(), 10), "d")
+	hdr.ObjAttrs.SetCustomKey("e", "")
 	hdr.ObjAttrs.SetCksum(cos.ChecksumXXHash, "xxhash")
 	return
 }
@@ -755,19 +754,19 @@ func genRandomHeader(random *rand.Rand, usePDU bool) (hdr transport.ObjHdr) {
 		} else {
 			hdr.ObjAttrs.Size = (x & 0xfffff) + 1
 		}
-		hdr.ObjAttrs.SetCustom(strconv.FormatInt(random.Int63(), 10), s)
+		hdr.ObjAttrs.SetCustomKey(strconv.FormatInt(random.Int63(), 10), s)
+		hdr.ObjAttrs.SetCustomKey(s, "")
 		hdr.ObjAttrs.SetCksum(cos.ChecksumMD5, "md5")
-		hdr.ObjAttrs.SetCustom(s, "")
 	case 2:
 		hdr.ObjAttrs.Size = (x & 0xffff) + 1
 		hdr.ObjAttrs.SetCksum(cos.ChecksumXXHash, "xxhash")
 		for i := 0; i < int(x&0x1f); i++ {
-			hdr.ObjAttrs.SetCustom(strconv.FormatInt(random.Int63(), 10), s)
+			hdr.ObjAttrs.SetCustomKey(strconv.FormatInt(random.Int63(), 10), s)
 		}
 	default:
 		hdr.ObjAttrs.Size = 0
 		hdr.ObjAttrs.Ver = s
-		hdr.ObjAttrs.SetCustom(s, "")
+		hdr.ObjAttrs.SetCustomKey(s, "")
 		hdr.ObjAttrs.SetCksum(cos.ChecksumNone, "")
 	}
 	return

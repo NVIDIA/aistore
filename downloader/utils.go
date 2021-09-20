@@ -311,7 +311,7 @@ func CompareObjects(src *cluster.LOM, dst *DstElement) (equal bool, err error) {
 		return false, nil
 	}
 
-	_, localMDPresent := src.GetCustomMD(cluster.SourceObjMD)
+	_, localMDPresent := src.GetCustomKey(cluster.SourceObjMD)
 	remoteSource := roi.md[cluster.SourceObjMD]
 	if !localMDPresent {
 		// Source is present only on the remote object. But if it's the remote
@@ -330,7 +330,7 @@ func CompareObjects(src *cluster.LOM, dst *DstElement) (equal bool, err error) {
 		return false, nil
 	}
 	for k, v := range roi.md {
-		if objValue, ok := src.GetCustomMD(k); !ok {
+		if objValue, ok := src.GetCustomKey(k); !ok {
 			// Just skip check if `lom` doesn't have some metadata.
 			continue
 		} else if v != objValue {

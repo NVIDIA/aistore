@@ -240,11 +240,10 @@ func (poi *putObjInfo) putRemote() (version string, errCode int, err error) {
 	}
 	version, errCode, err = backend.PutObj(lmfh, lom)
 	if !lom.Bck().IsRemoteAIS() {
-		customMD := cos.SimpleKVs{cluster.SourceObjMD: backend.Provider()}
+		lom.SetCustomKey(cluster.SourceObjMD, backend.Provider())
 		if version != "" {
-			customMD[cluster.VersionObjMD] = version
+			lom.SetCustomKey(cluster.VersionObjMD, version)
 		}
-		lom.SetCustom(customMD)
 	}
 	return
 }

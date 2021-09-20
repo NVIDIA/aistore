@@ -407,20 +407,20 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 	var (
 		cksumToUse *cos.Cksum
 		retryOpts  = azblob.RetryReaderOptions{MaxRetryRequests: 3}
-		customMD   = cos.SimpleKVs{
+		custom     = cos.SimpleKVs{
 			cluster.SourceObjMD: cluster.SourceAzureObjMD,
 		}
 	)
 	if v, ok := h.EncodeVersion(string(respProps.ETag())); ok {
 		lom.SetVersion(v)
-		customMD[cluster.VersionObjMD] = v
+		custom[cluster.VersionObjMD] = v
 	}
 	if v, ok := h.EncodeCksum(respProps.ContentMD5()); ok {
-		customMD[cluster.MD5ObjMD] = v
+		custom[cluster.MD5ObjMD] = v
 		cksumToUse = cos.NewCksum(cos.ChecksumMD5, v)
 	}
 
-	lom.SetCustom(customMD)
+	lom.SetCustomMD(custom)
 	setSize(ctx, resp.ContentLength())
 
 	return wrapReader(ctx, resp.Body(retryOpts)), cksumToUse, 0, nil

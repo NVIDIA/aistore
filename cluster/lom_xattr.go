@@ -321,10 +321,11 @@ func (md *lmeta) unmarshal(buf []byte) (err error) {
 			}
 		case lomCustomMD:
 			entries := strings.Split(val, customMDSepa)
-			md.AddMD = make(cos.SimpleKVs, len(entries)/2)
+			custom := make(cos.SimpleKVs, len(entries)/2)
 			for i := 0; i < len(entries); i += 2 {
-				md.AddMD[entries[i]] = entries[i+1]
+				custom[entries[i]] = entries[i+1]
 			}
+			md.SetCustomMD(custom)
 		default:
 			return errors.New(invalid + " #6")
 		}
@@ -360,10 +361,10 @@ func (md *lmeta) marshal(mm *memsys.MMSA, mdSize int64) (buf []byte) {
 		buf = _marshRecord(mm, buf, lomObjCopies, "", false)
 		buf = _marshCopies(mm, buf, md.copies)
 	}
-	if len(md.AddMD) > 0 {
+	if custom := md.GetCustomMD(); len(custom) > 0 {
 		buf = mm.Append(buf, recordSepa)
 		buf = _marshRecord(mm, buf, lomCustomMD, "", false)
-		buf = _marshCustomMD(mm, buf, md.AddMD)
+		buf = _marshCustomMD(mm, buf, custom)
 	}
 
 	// checksum, prepend, and return

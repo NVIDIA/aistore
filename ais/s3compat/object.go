@@ -114,8 +114,8 @@ func FormatTime(t time.Time) string {
 }
 
 func lomMD5(lom *cluster.LOM) string {
-	if v, exists := lom.GetCustomMD(cluster.SourceObjMD); exists && v == cluster.SourceAmazonObjMD {
-		if v, exists := lom.GetCustomMD(cluster.MD5ObjMD); exists {
+	if v, exists := lom.GetCustomKey(cluster.SourceObjMD); exists && v == cluster.SourceAmazonObjMD {
+		if v, exists := lom.GetCustomKey(cluster.MD5ObjMD); exists {
 			return v
 		}
 	}

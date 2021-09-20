@@ -138,7 +138,7 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 
 	t.setTotalSize(roi.size)
 
-	lom.SetCustom(roi.md)
+	lom.SetCustomMD(roi.md)
 	params := cluster.PutObjectParams{
 		Tag:      "dl",
 		Reader:   r,

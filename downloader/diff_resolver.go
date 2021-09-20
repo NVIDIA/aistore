@@ -210,7 +210,7 @@ func (*defaultDiffResolverCtx) IsObjFromRemote(src *cluster.LOM) (bool, error) {
 		}
 		return false, err
 	}
-	objSrc, ok := src.GetCustomMD(cluster.SourceObjMD)
+	objSrc, ok := src.GetCustomKey(cluster.SourceObjMD)
 	if !ok {
 		return false, nil
 	}

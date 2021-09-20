@@ -322,24 +322,24 @@ func (*gcpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.Re
 		return nil, nil, 0, err
 	}
 
-	customMD := cos.SimpleKVs{
+	custom := cos.SimpleKVs{
 		cluster.SourceObjMD: cluster.SourceGoogleObjMD,
 	}
 
 	if v, ok := h.EncodeVersion(attrs.Generation); ok {
 		lom.SetVersion(v)
-		customMD[cluster.VersionObjMD] = v
+		custom[cluster.VersionObjMD] = v
 	}
 	if v, ok := h.EncodeCksum(attrs.MD5); ok {
 		expectedCksm = cos.NewCksum(cos.ChecksumMD5, v)
-		customMD[cluster.MD5ObjMD] = v
+		custom[cluster.MD5ObjMD] = v
 	}
 	if v, ok := h.EncodeCksum(attrs.CRC32C); ok {
-		customMD[cluster.CRC32CObjMD] = v
+		custom[cluster.CRC32CObjMD] = v
 	}
 
 	lom.SetCksum(cksum)
-	lom.SetCustom(customMD)
+	lom.SetCustomMD(custom)
 	setSize(ctx, rc.Attrs.Size)
 	r = wrapReader(ctx, rc)
 	return

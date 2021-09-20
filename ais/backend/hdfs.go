@@ -260,12 +260,12 @@ func (hp *hdfsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 		return
 	}
 
-	customMD := cos.SimpleKVs{
+	custom := cos.SimpleKVs{
 		cluster.SourceObjMD:  cluster.SourceHDFSObjMD,
 		cluster.VersionObjMD: "",
 	}
 
-	lom.SetCustom(customMD)
+	lom.SetCustomMD(custom)
 	setSize(ctx, fr.Stat().Size())
 	return wrapReader(ctx, fr), nil, 0, nil
 }

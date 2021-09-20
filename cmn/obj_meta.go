@@ -20,14 +20,14 @@ type (
 		Version(special ...bool) string
 		Checksum() *cos.Cksum
 		AtimeUnix() int64
-		Custom() cos.SimpleKVs
+		GetCustomMD() cos.SimpleKVs
 	}
 	ObjAttrs struct {
-		Atime int64         // access time (nanoseconds since UNIX epoch)
-		Size  int64         // object size (bytes)
-		Ver   string        // object version
-		Cksum *cos.Cksum    // object checksum (NOTE: m.b. cloned)
-		AddMD cos.SimpleKVs // custom md
+		Atime    int64         // access time (nanoseconds since UNIX epoch)
+		Size     int64         // object size (bytes)
+		Ver      string        // object version
+		Cksum    *cos.Cksum    // object checksum (NOTE: m.b. cloned)
+		customMD cos.SimpleKVs // custom metadata
 	}
 )
 
@@ -39,14 +39,22 @@ func (oa *ObjAttrs) Version(_ ...bool) string  { return oa.Ver }
 func (oa *ObjAttrs) AtimeUnix() int64          { return oa.Atime }
 func (oa *ObjAttrs) Checksum() *cos.Cksum      { return oa.Cksum }
 func (oa *ObjAttrs) SetCksum(ty, val string)   { oa.Cksum = cos.NewCksum(ty, val) }
-func (oa *ObjAttrs) Custom() cos.SimpleKVs     { return oa.AddMD }
 
-func (oa *ObjAttrs) SetCustom(k, v string) {
+// custom metadata
+func (oa *ObjAttrs) GetCustomMD() cos.SimpleKVs   { return oa.customMD }
+func (oa *ObjAttrs) SetCustomMD(md cos.SimpleKVs) { oa.customMD = md }
+
+func (oa *ObjAttrs) GetCustomKey(key string) (val string, exists bool) {
+	val, exists = oa.customMD[key]
+	return
+}
+
+func (oa *ObjAttrs) SetCustomKey(k, v string) {
 	debug.Assert(k != "")
-	if oa.AddMD == nil {
-		oa.AddMD = make(cos.SimpleKVs, 4)
+	if oa.customMD == nil {
+		oa.customMD = make(cos.SimpleKVs, 4)
 	}
-	oa.AddMD[k] = v
+	oa.customMD[k] = v
 }
 
 // ObjAttrsHolder => ObjAttrs; see also: lom.CopyAttrs
@@ -58,7 +66,7 @@ func (oa *ObjAttrs) CopyFrom(oah ObjAttrsHolder, skipCksum ...bool) {
 		debug.Assert(oah.Checksum() != nil)
 		oa.Cksum = oah.Checksum().Clone() // TODO: checksum by value (***)
 	}
-	oa.AddMD = oah.Custom()
+	oa.customMD = oah.GetCustomMD()
 }
 
 // ObjAttrsHolder => http header
@@ -81,7 +89,8 @@ func ToHTTPHdr(oah ObjAttrsHolder, hdrs ...http.Header) (hdr http.Header) {
 	if v := oah.Version(true); v != "" {
 		hdr.Set(HdrObjVersion, v)
 	}
-	for k, v := range oah.Custom() {
+	custom := oah.GetCustomMD()
+	for k, v := range custom {
 		debug.Assert(k != "")
 		hdr.Add(HdrObjCustomMD, strings.Join([]string{k, v}, "="))
 	}

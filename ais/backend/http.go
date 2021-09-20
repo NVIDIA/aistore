@@ -207,15 +207,15 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 		glog.Infof("[HTTP CLOUD][GET] success, size: %d", resp.ContentLength)
 	}
 
-	customMD := cos.SimpleKVs{
+	custom := cos.SimpleKVs{
 		cluster.SourceObjMD:  cluster.SourceHTTPObjMD,
 		cluster.OrigURLObjMD: origURL,
 	}
 	if v, ok := h.EncodeVersion(resp.Header.Get(cmn.HdrETag)); ok {
-		customMD[cluster.VersionObjMD] = v
+		custom[cluster.VersionObjMD] = v
 	}
 
-	lom.SetCustom(customMD)
+	lom.SetCustomMD(custom)
 	setSize(ctx, resp.ContentLength)
 	return wrapReader(ctx, resp.Body), nil, 0, nil
 }

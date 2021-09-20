@@ -175,9 +175,10 @@ const (
 
 // User/client query params.
 const (
-	URLParamWhat        = "what"         // "smap" | "bmd" | "config" | "stats" | "xaction" ...
-	URLParamProps       = "props"        // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
-	URLParamCheckExists = "check_cached" // true: check if object exists (aka "cached", "present")
+	URLParamWhat        = "what"           // "smap" | "bmd" | "config" | "stats" | "xaction" ...
+	URLParamProps       = "props"          // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
+	URLParamNewCustom   = "set-new-custom" // remove existing custom keys (if any) and store new custom metadata
+	URLParamCheckExists = "check_cached"   // true: check if object exists (aka "cached", "present")
 	URLParamUUID        = "uuid"
 	URLParamRegex       = "regex" // dsort/downloader regex
 

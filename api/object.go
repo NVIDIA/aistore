@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
-	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -87,22 +86,28 @@ type FlushArgs struct {
 
 // HeadObject returns the size and version of the object specified by bucket/object.
 func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists ...bool) (*cmn.ObjectProps, error) {
-	var checkIsCached bool
+	var (
+		q             url.Values
+		checkIsCached bool
+	)
 	if len(checkExists) > 0 {
 		checkIsCached = checkExists[0]
 	}
 	baseParams.Method = http.MethodHead
-	query := make(url.Values)
-	query.Add(cmn.URLParamCheckExists, strconv.FormatBool(checkIsCached))
+
 	if checkIsCached {
-		query.Add(cmn.URLParamSilent, strconv.FormatBool(true))
+		q = make(url.Values, 4)
+		q = cmn.AddBckToQuery(q, bck)
+		q.Set(cmn.URLParamCheckExists, "true")
+		q.Set(cmn.URLParamSilent, "true")
+	} else {
+		q = cmn.AddBckToQuery(nil, bck)
 	}
-	query = cmn.AddBckToQuery(query, bck)
 
 	resp, err := doHTTPRequestGetResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathObjects.Join(bck.Name, object),
-		Query:      query,
+		Query:      q,
 	}, nil)
 	if err != nil {
 		return nil, err
@@ -131,16 +136,28 @@ func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists .
 	return objProps, nil
 }
 
-// Given cos.SimpleKVs (map[string]string) sets (as in: overwrites) object's custom properties
+// Given cos.SimpleKVs (map[string]string) keys and values, sets object's custom properties.
+// By default, adds new or updates existing custom keys.
+// Use `setNewCustomMDFlag` to _replace_ all existing keys with the specified (new) ones.
 // See also: HeadObject() and cmn.HdrObjCustomMD
-func SetObjectCustomProps(baseParams BaseParams, bck cmn.Bck, object string, custom cos.SimpleKVs) error {
-	actMsg := cmn.ActionMsg{Value: custom}
+func SetObjectCustomProps(baseParams BaseParams, bck cmn.Bck, object string, custom cos.SimpleKVs, setNew bool) error {
+	var (
+		actMsg = cmn.ActionMsg{Value: custom}
+		q      url.Values
+	)
+	if setNew {
+		q = make(url.Values, 4)
+		q = cmn.AddBckToQuery(q, bck)
+		q.Set(cmn.URLParamNewCustom, "true")
+	} else {
+		q = cmn.AddBckToQuery(q, bck)
+	}
 	baseParams.Method = http.MethodPatch
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathObjects.Join(bck.Name, object),
 		Body:       cos.MustMarshal(actMsg),
-		Query:      cmn.AddBckToQuery(nil, bck),
+		Query:      q,
 	})
 }
 
@@ -173,8 +190,7 @@ func EvictObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 // `GetObjectInput.Writer`. Otherwise, it discards the response body read.
 //
 // `io.Copy` is used internally to copy response bytes from the request to the writer.
-func GetObject(baseParams BaseParams, bck cmn.Bck, object string,
-	options ...GetObjectInput) (n int64, err error) {
+func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (n int64, err error) {
 	var (
 		w   = io.Discard
 		q   url.Values
@@ -198,8 +214,8 @@ func GetObject(baseParams BaseParams, bck cmn.Bck, object string,
 
 // GetObjectReader returns reader of the requested object. It does not read body
 // bytes, nor validates a checksum. Caller is responsible for closing the reader.
-func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string,
-	options ...GetObjectInput) (r io.ReadCloser, err error) {
+func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (r io.ReadCloser,
+	err error) {
 	var (
 		q   url.Values
 		hdr http.Header
@@ -209,7 +225,6 @@ func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string,
 		w, q, hdr = getObjectOptParams(options[0])
 		cos.Assert(w == nil)
 	}
-
 	q = cmn.AddBckToQuery(q, bck)
 	baseParams.Method = http.MethodGet
 	return doHTTPRequestGetRespReader(ReqParams{
@@ -355,10 +370,11 @@ func AppendToArch(args AppendToArchArgs) (err error) {
 	if err != nil {
 		return err
 	}
-	query := cmn.AddBckToQuery(nil, args.Bck)
-	query.Set(cmn.URLParamArchpath, args.ArchPath)
-	query.Set(cmn.URLParamArchmime, m)
-	return _putObject(args.PutObjectArgs, query)
+	q := make(url.Values, 4)
+	q = cmn.AddBckToQuery(q, args.Bck)
+	q.Set(cmn.URLParamArchpath, args.ArchPath)
+	q.Set(cmn.URLParamArchmime, m)
+	return _putObject(args.PutObjectArgs, q)
 }
 
 // AppendObject adds a reader (`args.Reader` - e.g., an open file) to an object.
@@ -368,16 +384,16 @@ func AppendToArch(args AppendToArchArgs) (err error) {
 // to finalize the object.
 // NOTE: object becomes visible and accessible only _after_ the call to `api.FlushObject`.
 func AppendObject(args AppendArgs) (handle string, err error) {
-	query := make(url.Values)
-	query.Add(cmn.URLParamAppendType, cmn.AppendOp)
-	query.Add(cmn.URLParamAppendHandle, args.Handle)
-	query = cmn.AddBckToQuery(query, args.Bck)
+	q := make(url.Values, 4)
+	q.Set(cmn.URLParamAppendType, cmn.AppendOp)
+	q.Set(cmn.URLParamAppendHandle, args.Handle)
+	q = cmn.AddBckToQuery(q, args.Bck)
 
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   args.BaseParams.URL,
 		Path:   cmn.URLPathObjects.Join(args.Bck.Name, args.Object),
-		Query:  query,
+		Query:  q,
 		BodyR:  args.Reader,
 	}
 
@@ -411,23 +427,24 @@ func AppendObject(args AppendArgs) (handle string, err error) {
 // To "flush", it uses the handle returned by `api.AppendObject`.
 // This call will create a fully operational and accessible object.
 func FlushObject(args FlushArgs) (err error) {
-	query := make(url.Values)
-	query.Add(cmn.URLParamAppendType, cmn.FlushOp)
-	query.Add(cmn.URLParamAppendHandle, args.Handle)
-	query = cmn.AddBckToQuery(query, args.Bck)
+	var (
+		header http.Header
+		q      = make(url.Values, 4)
+	)
+	q.Set(cmn.URLParamAppendType, cmn.FlushOp)
+	q.Set(cmn.URLParamAppendHandle, args.Handle)
+	q = cmn.AddBckToQuery(q, args.Bck)
 
-	var header http.Header
 	if args.Cksum != nil && args.Cksum.Ty() != cos.ChecksumNone {
 		header = make(http.Header)
 		header.Set(cmn.HdrObjCksumType, args.Cksum.Ty())
 		header.Set(cmn.HdrObjCksumVal, args.Cksum.Val())
 	}
-
 	args.BaseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
 		BaseParams: args.BaseParams,
 		Path:       cmn.URLPathObjects.Join(args.Bck.Name, args.Object),
-		Query:      query,
+		Query:      q,
 		Header:     header,
 	})
 }

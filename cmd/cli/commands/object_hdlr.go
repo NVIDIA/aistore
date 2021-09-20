@@ -48,7 +48,9 @@ var (
 			createArchFlag,
 			archpathFlag,
 		),
-		commandSetCustom: {},
+		commandSetCustom: {
+			setNewCustomMDFlag,
+		},
 		commandPromote: {
 			recursiveFlag,
 			overwriteFlag,

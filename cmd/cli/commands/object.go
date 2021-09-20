@@ -193,7 +193,8 @@ func setCustomProps(c *cli.Context, bck cmn.Bck, objName string) (err error) {
 			props[nv[0]] = nv[1]
 		}
 	}
-	if err = api.SetObjectCustomProps(defaultAPIParams, bck, objName, props); err != nil {
+	setNewCustom := flagIsSet(c, setNewCustomMDFlag)
+	if err = api.SetObjectCustomProps(defaultAPIParams, bck, objName, props, setNewCustom); err != nil {
 		return
 	}
 	fmt.Fprintf(c.App.Writer,

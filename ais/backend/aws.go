@@ -356,19 +356,19 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.Re
 			cksum = cos.NewCksum(*cksumType, *cksumValue)
 		}
 	}
-	customMD := cos.SimpleKVs{
+	custom := cos.SimpleKVs{
 		cluster.SourceObjMD: cluster.SourceAmazonObjMD,
 	}
 	if v, ok := h.EncodeVersion(obj.VersionId); ok {
 		lom.SetVersion(v)
-		customMD[cluster.VersionObjMD] = v
+		custom[cluster.VersionObjMD] = v
 	}
 	if v, ok := h.EncodeCksum(obj.ETag); ok {
 		expectedCksm = cos.NewCksum(cos.ChecksumMD5, v)
-		customMD[cluster.MD5ObjMD] = v
+		custom[cluster.MD5ObjMD] = v
 	}
 	lom.SetCksum(cksum)
-	lom.SetCustom(customMD)
+	lom.SetCustomMD(custom)
 	setSize(ctx, *obj.ContentLength)
 	return wrapReader(ctx, obj.Body), expectedCksm, 0, nil
 }

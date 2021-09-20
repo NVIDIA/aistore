@@ -56,7 +56,7 @@ func TestCompareObject(t *testing.T) {
 		cluster.VersionObjMD: "version",
 	}
 	src.SetSize(10)
-	src.SetCustom(customMD)
+	src.SetCustomMD(customMD)
 	equal, err := downloader.CompareObjects(src, dst)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")

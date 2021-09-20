@@ -871,7 +871,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if lom.Load(true /*cache it*/, false /*locked*/) == nil { // if exists, check custom md
-		srcProvider, hasSrc := lom.GetCustomMD(cluster.SourceObjMD)
+		srcProvider, hasSrc := lom.GetCustomKey(cluster.SourceObjMD)
 		if hasSrc && srcProvider != cluster.SourceWebObjMD {
 			bck := lom.Bck()
 			if bck.IsAIS() {
@@ -1118,6 +1118,8 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 }
 
 // PATCH /v1/objects/<bucket-name>/<object-name>
+// By default, adds or updates existing custom keys. Will remove all existing keys and
+// replace them with the specified ones _iff_ `cmn.URLParamNewCustom` is set.
 func (t *targetrunner) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg      cmn.ActionMsg
@@ -1155,10 +1157,17 @@ func (t *targetrunner) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	delOldSetNew := cos.IsParseBool(query.Get(cmn.URLParamNewCustom))
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s: %s, custom=%+v", t.si, lom, msg.Value)
+		glog.Infof("%s: %s, custom=%+v, del-old-set-new=%t", t.si, lom, msg.Value, delOldSetNew)
 	}
-	lom.SetCustom(custom)
+	if delOldSetNew {
+		lom.SetCustomMD(custom)
+	} else {
+		for key, val := range custom {
+			lom.SetCustomKey(key, val)
+		}
+	}
 	lom.Persist()
 }
 

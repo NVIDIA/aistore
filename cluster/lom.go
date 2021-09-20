@@ -179,23 +179,23 @@ func (lom *LOM) Version(special ...bool) string {
 	return lom.md.Ver
 }
 
-func (lom *LOM) Uname() string              { return lom.md.uname }
-func (lom *LOM) SetSize(size int64)         { lom.md.Size = size }
-func (lom *LOM) SetVersion(ver string)      { lom.md.Ver = ver }
-func (lom *LOM) Checksum() *cos.Cksum       { return lom.md.Cksum }
-func (lom *LOM) SetCksum(cksum *cos.Cksum)  { lom.md.Cksum = cksum }
-func (lom *LOM) Atime() time.Time           { return time.Unix(0, lom.md.Atime) }
-func (lom *LOM) AtimeUnix() int64           { return lom.md.Atime }
-func (lom *LOM) SetAtimeUnix(tu int64)      { lom.md.Atime = tu }
-func (lom *LOM) SetCustom(md cos.SimpleKVs) { lom.md.AddMD = md }
-func (lom *LOM) Custom() cos.SimpleKVs      { return lom.md.AddMD }
+func (lom *LOM) Uname() string             { return lom.md.uname }
+func (lom *LOM) SetSize(size int64)        { lom.md.Size = size }
+func (lom *LOM) SetVersion(ver string)     { lom.md.Ver = ver }
+func (lom *LOM) Checksum() *cos.Cksum      { return lom.md.Cksum }
+func (lom *LOM) SetCksum(cksum *cos.Cksum) { lom.md.Cksum = cksum }
+func (lom *LOM) Atime() time.Time          { return time.Unix(0, lom.md.Atime) }
+func (lom *LOM) AtimeUnix() int64          { return lom.md.Atime }
+func (lom *LOM) SetAtimeUnix(tu int64)     { lom.md.Atime = tu }
 
 func (lom *LOM) EqCksum(cksum *cos.Cksum) bool { return lom.md.Cksum.Equal(cksum) }
 
-func (lom *LOM) GetCustomMD(key string) (string, bool) {
-	value, exists := lom.md.AddMD[key]
-	return value, exists
-}
+// custom metadata
+func (lom *LOM) GetCustomMD() cos.SimpleKVs   { return lom.md.GetCustomMD() }
+func (lom *LOM) SetCustomMD(md cos.SimpleKVs) { lom.md.SetCustomMD(md) }
+
+func (lom *LOM) GetCustomKey(key string) (string, bool) { return lom.md.GetCustomKey(key) }
+func (lom *LOM) SetCustomKey(key, value string)         { lom.md.SetCustomKey(key, value) }
 
 // lom <= transport.ObjHdr (NOTE: caller must call freeLOM)
 func AllocLomFromHdr(hdr *transport.ObjHdr) (lom *LOM, err error) {
@@ -254,7 +254,7 @@ func (lom *LOM) FromHTTPHdr(hdr http.Header) {
 			cos.Assert(len(entry) == 2)
 			md[entry[0]] = entry[1]
 		}
-		lom.SetCustom(md)
+		lom.SetCustomMD(md)
 	}
 }
 

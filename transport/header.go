@@ -120,7 +120,8 @@ func insAttrs(off int, to []byte, attr *cmn.ObjAttrs) int {
 		off = insString(off, to, cksum.Val())
 	}
 	off = insString(off, to, attr.Ver)
-	for k, v := range attr.Custom() {
+	custom := attr.GetCustomMD()
+	for k, v := range custom {
 		debug.Assert(k != "")
 		off = insString(off, to, k)
 		off = insString(off, to, v)
@@ -211,7 +212,7 @@ func extAttrs(off int, from []byte) (n int, attr cmn.ObjAttrs) {
 			break
 		}
 		off, v = extString(off, from)
-		attr.SetCustom(k, v)
+		attr.SetCustomKey(k, v)
 	}
 	return off, attr
 }
