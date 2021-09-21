@@ -38,6 +38,7 @@ const (
 	DefaultIdleConnTimeout     = 8 * time.Second
 	DefaultWriteBufferSize     = 64 * cos.KiB
 	DefaultReadBufferSize      = 64 * cos.KiB
+	DefaultSendRecvBufferSize  = 128 * cos.KiB
 )
 
 var KnownNetworks = []string{NetworkPublic, NetworkIntraControl, NetworkIntraData}

@@ -36,28 +36,23 @@ func dialTimeout(addr string) (net.Conn, error) {
 func NewIntraDataClient() Client {
 	config := cmn.GCO.Get()
 
-	// apply global defaults
+	// compare with ais/httpcommon.go
 	wbuf, rbuf := config.Net.HTTP.WriteBufferSize, config.Net.HTTP.ReadBufferSize
 	if wbuf == 0 {
-		wbuf = cmn.DefaultWriteBufferSize // NOTE: fasthttp uses 4K
+		wbuf = cmn.DefaultWriteBufferSize // fasthttp uses 4KB
 	}
 	if rbuf == 0 {
 		rbuf = cmn.DefaultReadBufferSize // ditto
 	}
-
-	if !config.Net.HTTP.UseHTTPS {
-		return &fasthttp.Client{
-			Dial:            dialTimeout,
-			ReadBufferSize:  rbuf,
-			WriteBufferSize: wbuf,
-		}
-	}
-	return &fasthttp.Client{
+	cl := &fasthttp.Client{
 		Dial:            dialTimeout,
 		ReadBufferSize:  rbuf,
 		WriteBufferSize: wbuf,
-		TLSConfig:       &tls.Config{InsecureSkipVerify: config.Net.HTTP.SkipVerify},
 	}
+	if config.Net.HTTP.UseHTTPS {
+		cl.TLSConfig = &tls.Config{InsecureSkipVerify: config.Net.HTTP.SkipVerify}
+	}
+	return cl
 }
 
 func (s *streamBase) do(body io.Reader) (err error) {

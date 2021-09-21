@@ -28,7 +28,7 @@ func whichClient() string { return "net/http" }
 func NewIntraDataClient() (client *http.Client) {
 	config := cmn.GCO.Get()
 
-	// apply global defaults
+	// compare with ais/httpcommon.go
 	wbuf, rbuf := config.Net.HTTP.WriteBufferSize, config.Net.HTTP.ReadBufferSize
 	if wbuf == 0 {
 		wbuf = cmn.DefaultWriteBufferSize
@@ -36,9 +36,12 @@ func NewIntraDataClient() (client *http.Client) {
 	if rbuf == 0 {
 		rbuf = cmn.DefaultReadBufferSize
 	}
-
+	tcpbuf := config.Net.L4.SndRcvBufSize
+	if tcpbuf == 0 {
+		tcpbuf = cmn.DefaultSendRecvBufferSize
+	}
 	return cmn.NewClient(cmn.TransportArgs{
-		SndRcvBufSize:   config.Net.L4.SndRcvBufSize,
+		SndRcvBufSize:   tcpbuf,
 		WriteBufferSize: wbuf,
 		ReadBufferSize:  rbuf,
 		UseHTTPS:        config.Net.HTTP.UseHTTPS,

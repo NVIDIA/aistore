@@ -708,30 +708,40 @@ func (h *httprunner) init(config *cmn.Config) {
 		UseHTTPS:        config.Net.HTTP.UseHTTPS,
 		SkipVerify:      config.Net.HTTP.SkipVerify,
 	})
+	wbuf, rbuf := config.Net.HTTP.WriteBufferSize, config.Net.HTTP.ReadBufferSize
+	// NOTE: when not configured use AIS defaults (to override the usual 4KB)
+	if wbuf == 0 {
+		wbuf = cmn.DefaultWriteBufferSize
+	}
+	if rbuf == 0 {
+		rbuf = cmn.DefaultReadBufferSize
+	}
 	h.client.data = cmn.NewClient(cmn.TransportArgs{
 		Timeout:         config.Client.TimeoutLong.D(),
-		WriteBufferSize: config.Net.HTTP.WriteBufferSize,
-		ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
+		WriteBufferSize: wbuf,
+		ReadBufferSize:  rbuf,
 		UseHTTPS:        config.Net.HTTP.UseHTTPS,
 		SkipVerify:      config.Net.HTTP.SkipVerify,
 	})
 
-	bufsize := config.Net.L4.SndRcvBufSize
+	tcpbuf := config.Net.L4.SndRcvBufSize
 	if h.si.IsProxy() {
-		bufsize = 0
+		tcpbuf = 0
+	} else if tcpbuf == 0 {
+		tcpbuf = cmn.DefaultSendRecvBufferSize // ditto: targets use AIS default when not configured
 	}
 
 	muxers := newMuxers()
-	h.netServ.pub = &netServer{muxers: muxers, sndRcvBufSize: bufsize}
-	h.netServ.control = h.netServ.pub // by default, intra-control net is the same as public
+	h.netServ.pub = &netServer{muxers: muxers, sndRcvBufSize: tcpbuf}
+	h.netServ.control = h.netServ.pub // if not separately configured, intra-control net is public
 	if config.HostNet.UseIntraControl {
 		muxers = newMuxers()
 		h.netServ.control = &netServer{muxers: muxers, sndRcvBufSize: 0}
 	}
-	h.netServ.data = h.netServ.control // by default, intra-data net is the same as intra-control
+	h.netServ.data = h.netServ.control // if not configured, intra-data net is intra-control
 	if config.HostNet.UseIntraData {
 		muxers = newMuxers()
-		h.netServ.data = &netServer{muxers: muxers, sndRcvBufSize: bufsize}
+		h.netServ.data = &netServer{muxers: muxers, sndRcvBufSize: tcpbuf}
 	}
 
 	h.owner.smap = newSmapOwner(config)
