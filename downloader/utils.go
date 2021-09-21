@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -152,67 +153,51 @@ func ParseStartDownloadRequest(t cluster.Target, bck *cluster.Bck, id string, dl
 	}
 }
 
-//
-// Checksum and version validation helpers
-//
-
-type (
-	remoteObjInfo struct {
-		size int64
-		md   cos.SimpleKVs
-	}
-)
-
-// Get file info if link points to GCP, S3 or Azure.
-func roiFromLink(link string, resp *http.Response) (roi remoteObjInfo) {
+// Given URL (link) and response header parse object attrs for GCP, S3 and Azure.
+func attrsFromLink(link string, resp *http.Response, oah cmn.ObjAttrsHolder) (size int64) {
 	u, err := url.Parse(link)
-	cos.AssertNoErr(err)
-
-	if cos.IsGoogleStorageURL(u) || cos.IsGoogleAPIURL(u) {
+	debug.AssertNoErr(err)
+	switch {
+	case cos.IsGoogleStorageURL(u) || cos.IsGoogleAPIURL(u):
 		h := cmn.BackendHelpers.Google
-		roi.md = make(cos.SimpleKVs, 3)
-		roi.md[cmn.SourceObjMD] = cmn.GoogleObjMD
+		oah.SetCustomKey(cmn.SourceObjMD, cmn.GoogleObjMD)
 		if v, ok := h.EncodeVersion(resp.Header.Get(cmn.GsVersionHeader)); ok {
-			roi.md[cmn.VersionObjMD] = v
+			oah.SetCustomKey(cmn.VersionObjMD, v)
 		}
 		if hdr := resp.Header[http.CanonicalHeaderKey(cmn.GsCksumHeader)]; len(hdr) > 0 {
 			for cksumType, cksumValue := range parseGoogleCksumHeader(hdr) {
 				switch cksumType {
 				case cos.ChecksumMD5:
-					roi.md[cmn.MD5ObjMD] = cksumValue
+					oah.SetCustomKey(cmn.MD5ObjMD, cksumValue)
 				case cos.ChecksumCRC32C:
-					roi.md[cmn.CRC32CObjMD] = cksumValue
+					oah.SetCustomKey(cmn.CRC32CObjMD, cksumValue)
 				default:
 					glog.Errorf("unimplemented cksum type for custom metadata: %s", cksumType)
 				}
 			}
 		}
-	} else if cos.IsS3URL(link) {
+	case cos.IsS3URL(link):
 		h := cmn.BackendHelpers.Amazon
-		roi.md = make(cos.SimpleKVs, 3)
-		roi.md[cmn.SourceObjMD] = cmn.AmazonObjMD
+		oah.SetCustomKey(cmn.SourceObjMD, cmn.AmazonObjMD)
 		if v, ok := h.EncodeVersion(resp.Header.Get(cmn.S3VersionHeader)); ok {
-			roi.md[cmn.VersionObjMD] = v
+			oah.SetCustomKey(cmn.VersionObjMD, v)
 		}
 		if v, ok := h.EncodeCksum(resp.Header.Get(cmn.S3CksumHeader)); ok {
-			roi.md[cmn.MD5ObjMD] = v
+			oah.SetCustomKey(cmn.MD5ObjMD, v)
 		}
-	} else if cos.IsAzureURL(u) {
+	case cos.IsAzureURL(u):
 		h := cmn.BackendHelpers.Azure
-		roi.md = make(cos.SimpleKVs, 1)
-		roi.md[cmn.SourceObjMD] = cmn.AzureObjMD
+		oah.SetCustomKey(cmn.SourceObjMD, cmn.AzureObjMD)
 		if v, ok := h.EncodeVersion(resp.Header.Get(cmn.AzVersionHeader)); ok {
-			roi.md[cmn.VersionObjMD] = v
+			oah.SetCustomKey(cmn.VersionObjMD, v)
 		}
 		if v, ok := h.EncodeCksum(resp.Header.Get(cmn.AzCksumHeader)); ok {
-			roi.md[cmn.MD5ObjMD] = v
+			oah.SetCustomKey(cmn.MD5ObjMD, v)
 		}
-	} else {
-		roi.md = make(cos.SimpleKVs, 1)
-		roi.md[cmn.SourceObjMD] = cmn.WebObjMD
+	default:
+		oah.SetCustomKey(cmn.SourceObjMD, cmn.WebObjMD)
 	}
-	roi.size = resp.ContentLength
-	return
+	return resp.ContentLength
 }
 
 func parseGoogleCksumHeader(hdr []string) cos.SimpleKVs {
@@ -222,7 +207,7 @@ func parseGoogleCksumHeader(hdr []string) cos.SimpleKVs {
 	)
 	for _, v := range hdr {
 		entry := strings.SplitN(v, "=", 2)
-		cos.Assert(len(entry) == 2)
+		debug.Assert(len(entry) == 2)
 		if v, ok := h.EncodeCksum(entry[1]); ok {
 			cksums[entry[0]] = v
 		}
@@ -245,83 +230,81 @@ func headLink(link string) (*http.Response, error) {
 	return resp, nil
 }
 
-func roiFromObjMeta(objMeta cos.SimpleKVs) (roi remoteObjInfo) {
-	roi.md = make(cos.SimpleKVs, 2)
+func attrsFromObjMeta(objMeta cos.SimpleKVs, oa *cmn.ObjAttrs) {
 	switch objMeta[cmn.HdrBackendProvider] {
 	case cmn.ProviderGoogle:
-		roi.md[cmn.SourceObjMD] = cmn.GoogleObjMD
+		oa.SetCustomKey(cmn.SourceObjMD, cmn.GoogleObjMD)
 	case cmn.ProviderAmazon:
-		roi.md[cmn.SourceObjMD] = cmn.AmazonObjMD
+		oa.SetCustomKey(cmn.SourceObjMD, cmn.AmazonObjMD)
 	case cmn.ProviderAzure:
-		roi.md[cmn.SourceObjMD] = cmn.AzureObjMD
+		oa.SetCustomKey(cmn.SourceObjMD, cmn.AzureObjMD)
 	default:
 		return
 	}
 	if v, ok := objMeta[cmn.HdrObjVersion]; ok {
-		roi.md[cmn.VersionObjMD] = v
+		oa.SetCustomKey(cmn.VersionObjMD, v)
 	}
 	if v, ok := objMeta[cmn.MD5ObjMD]; ok {
-		roi.md[cmn.MD5ObjMD] = v
+		oa.SetCustomKey(cmn.MD5ObjMD, v)
 	}
 	if v, ok := objMeta[cmn.CRC32CObjMD]; ok {
-		roi.md[cmn.CRC32CObjMD] = v
+		oa.SetCustomKey(cmn.CRC32CObjMD, v)
 	}
 	if v := objMeta[cmn.HdrObjSize]; v != "" {
-		roi.size, _ = strconv.ParseInt(v, 10, 64)
+		oa.Size, _ = strconv.ParseInt(v, 10, 64)
 	}
-	return
 }
 
-func CompareObjects(src *cluster.LOM, dst *DstElement) (equal bool, err error) {
-	var roi remoteObjInfo
+func CompareObjects(lom *cluster.LOM, dst *DstElement) (equal bool, err error) {
+	var oa cmn.ObjAttrs
 	if dst.Link != "" {
-		resp, err := headLink(dst.Link)
-		if err != nil {
-			return false, err
+		resp, errHead := headLink(dst.Link)
+		if errHead != nil {
+			return false, errHead
 		}
-		roi = roiFromLink(dst.Link, resp)
+		oa.Size = attrsFromLink(dst.Link, resp, &oa)
 	} else {
 		ctx, cancel := context.WithTimeout(context.Background(), headReqTimeout)
 		defer cancel()
 		// This should succeed since we check if the bucket exists beforehand.
-		objMeta, _, err := cluster.T.Backend(src.Bck()).HeadObj(ctx, src)
-		if err != nil {
-			return false, err
+		objMeta, _, errHead := cluster.T.Backend(lom.Bck()).HeadObj(ctx, lom)
+		if errHead != nil {
+			return false, errHead
 		}
-		roi = roiFromObjMeta(objMeta)
+		attrsFromObjMeta(objMeta, &oa)
 	}
 
-	if roi.size != 0 && roi.size != src.SizeBytes() {
-		return false, nil
+	// size check
+	if oa.Size != 0 && oa.Size != lom.SizeBytes() {
+		return
 	}
 
-	_, localMDPresent := src.GetCustomKey(cmn.SourceObjMD)
-	remoteSource := roi.md[cmn.SourceObjMD]
-	if !localMDPresent {
-		// Source is present only on the remote object. But if it's the remote
-		// object it will have version set to remote version. Therefore, we can
-		// try to compare it.
-		switch remoteSource {
-		case cmn.AmazonObjMD, cmn.AzureObjMD, cmn.GoogleObjMD:
-			if src.Version() == roi.md[cmn.VersionObjMD] {
-				return true, nil
-			}
-		case cmn.WebObjMD:
-			// In case it is web we just assume the objects are equal since the
-			// name and size matches.
-			return true, nil
-		}
-		return false, nil
+	// provider ("source") check
+	remSrc, ok := oa.GetCustomKey(cmn.SourceObjMD)
+	if !ok {
+		return
 	}
-	for k, v := range roi.md {
-		if objValue, ok := src.GetCustomKey(k); !ok {
-			// Just skip check if `lom` doesn't have some metadata.
-			continue
-		} else if v != objValue {
-			// Metadata does not match - objects are different.
-			return false, nil
+	lomSrc, ok := lom.GetCustomKey(cmn.SourceObjMD)
+	if !ok || lomSrc != remSrc {
+		return
+	}
+
+	// version check
+	remVer, ok := oa.GetCustomKey(cmn.VersionObjMD)
+	if ok {
+		lomVer, ok := lom.GetCustomKey(cmn.VersionObjMD)
+		if ok && remVer == lomVer {
+			return true, nil // equality #1
 		}
 	}
-	// Cannot prove that the objects are different so assume they are equal.
-	return true, nil
+
+	// finally, ETag check
+	remEtag, ok := oa.GetCustomKey(cmn.ETag)
+	if ok {
+		lomEtag, ok := lom.GetCustomKey(cmn.ETag)
+		if ok && remEtag == lomEtag {
+			return true, nil // equality #2
+		}
+	}
+	return
 }

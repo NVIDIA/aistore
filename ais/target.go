@@ -1258,15 +1258,26 @@ func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, bck *clu
 // NOTE: Should be called only if the local copy exists.
 func (t *targetrunner) CheckRemoteVersion(ctx context.Context, lom *cluster.LOM) (vchanged bool, errCode int, err error) {
 	var objMeta cos.SimpleKVs
+	vchanged = true
 	objMeta, errCode, err = t.Backend(lom.Bck()).HeadObj(ctx, lom)
 	if err != nil {
 		err = fmt.Errorf(cmn.FmtErrFailed, t.si, "head metadata of", lom, err)
 		return
 	}
 	if remoteVersion, ok := objMeta[cmn.HdrObjVersion]; ok {
-		if lom.Version() != remoteVersion {
-			glog.Infof("%s: version changed from %s to %s", lom, lom.Version(), remoteVersion)
-			vchanged = true
+		if lom.Version() == remoteVersion {
+			vchanged = false
+			return
+		}
+		glog.Infof("%s: version changed from %s to %s", lom, lom.Version(), remoteVersion)
+		return
+	}
+	if remEtag, ok := objMeta[cmn.ETag]; ok {
+		if lomEtag, ok := lom.GetCustomKey(cmn.ETag); ok {
+			if remEtag == lomEtag {
+				vchanged = false
+				return
+			}
 		}
 	}
 	return

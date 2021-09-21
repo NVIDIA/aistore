@@ -212,12 +212,10 @@ func (hp *hdfsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta co
 		errCode, err = hdfsErrorToAISError(err)
 		return nil, errCode, err
 	}
-
-	objMeta = make(cos.SimpleKVs, 2)
+	objMeta = make(cos.SimpleKVs, 4)
 	objMeta[cmn.HdrBackendProvider] = cmn.ProviderHDFS
 	objMeta[cmn.HdrObjSize] = strconv.FormatInt(fr.Stat().Size(), 10)
 	objMeta[cmn.VersionObjMD] = ""
-
 	if verbose {
 		glog.Infof("[head_object] %s", lom)
 	}
@@ -259,13 +257,7 @@ func (hp *hdfsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 		errCode, err = hdfsErrorToAISError(err)
 		return
 	}
-
-	custom := cos.SimpleKVs{
-		cmn.SourceObjMD:  cmn.HDFSObjMD,
-		cmn.VersionObjMD: "",
-	}
-
-	lom.SetCustomMD(custom)
+	lom.SetCustomKey(cmn.SourceObjMD, cmn.HDFSObjMD)
 	setSize(ctx, fr.Stat().Size())
 	return wrapReader(ctx, fr), nil, 0, nil
 }

@@ -57,6 +57,7 @@ type (
 		Checksum() *cos.Cksum
 		AtimeUnix() int64
 		GetCustomMD() cos.SimpleKVs
+		SetCustomKey(k, v string)
 	}
 	ObjAttrs struct {
 		Atime    int64         // access time (nanoseconds since UNIX epoch)

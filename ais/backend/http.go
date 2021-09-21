@@ -153,9 +153,7 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta 
 	}
 	if v, ok := h.EncodeVersion(resp.Header.Get(cmn.HdrETag)); ok {
 		objMeta[cmn.ETag] = v
-		objMeta[cmn.VersionObjMD] = v
 	}
-
 	if verbose {
 		glog.Infof("[head_object] %s", lom)
 	}
@@ -208,16 +206,11 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 		glog.Infof("[HTTP CLOUD][GET] success, size: %d", resp.ContentLength)
 	}
 
-	custom := cos.SimpleKVs{
-		cmn.SourceObjMD:  cmn.HTTPObjMD,
-		cmn.OrigURLObjMD: origURL,
-	}
+	lom.SetCustomKey(cmn.SourceObjMD, cmn.HTTPObjMD)
+	lom.SetCustomKey(cmn.OrigURLObjMD, origURL)
 	if v, ok := h.EncodeVersion(resp.Header.Get(cmn.HdrETag)); ok {
-		custom[cmn.ETag] = v
-		custom[cmn.VersionObjMD] = v
+		lom.SetCustomKey(cmn.ETag, v)
 	}
-
-	lom.SetCustomMD(custom)
 	setSize(ctx, resp.ContentLength)
 	return wrapReader(ctx, resp.Body), nil, 0, nil
 }

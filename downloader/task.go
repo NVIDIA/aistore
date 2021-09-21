@@ -131,14 +131,10 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 		return false, cmn.NewErrHTTP(req, "", resp.StatusCode)
 	}
 
-	var (
-		r   = t.wrapReader(ctx, resp.Body)
-		roi = roiFromLink(t.obj.link, resp)
-	)
+	r := t.wrapReader(ctx, resp.Body)
+	size := attrsFromLink(t.obj.link, resp, lom)
+	t.setTotalSize(size)
 
-	t.setTotalSize(roi.size)
-
-	lom.SetCustomMD(roi.md)
 	params := cluster.PutObjectParams{
 		Tag:      "dl",
 		Reader:   r,

@@ -414,7 +414,7 @@ do:
 				glog.Error(err)
 				return
 			}
-			glog.Errorf("%v - proceeding to execute cold GET from %s", err, goi.lom.Bck())
+			glog.Errorf("%v - proceeding to cold GET from %s", err, goi.lom.Bck())
 		}
 	}
 
