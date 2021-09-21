@@ -1264,6 +1264,18 @@ func (t *targetrunner) CheckRemoteVersion(ctx context.Context, lom *cluster.LOM)
 		err = fmt.Errorf(cmn.FmtErrFailed, t.si, "head metadata of", lom, err)
 		return
 	}
+	if lom.Bck().IsHDFS() {
+		vchanged = false // cannot perform the check
+		return
+	}
+	if lom.Bck().IsRemoteAIS() && !lom.VersionConf().Enabled {
+		vchanged = false // ditto
+		return
+	}
+
+	// compare with downloader/utils.go
+
+	// check version
 	if remoteVersion, ok := objMeta[cmn.HdrObjVersion]; ok {
 		if lom.Version() == remoteVersion {
 			vchanged = false
@@ -1272,12 +1284,14 @@ func (t *targetrunner) CheckRemoteVersion(ctx context.Context, lom *cluster.LOM)
 		glog.Infof("%s: version changed from %s to %s", lom, lom.Version(), remoteVersion)
 		return
 	}
+	// check ETag
 	if remEtag, ok := objMeta[cmn.ETag]; ok {
 		if lomEtag, ok := lom.GetCustomKey(cmn.ETag); ok {
 			if remEtag == lomEtag {
 				vchanged = false
 				return
 			}
+			glog.Infof("%s: ETag changed from %s to %s", lom, lomEtag, remEtag)
 		}
 	}
 	return
