@@ -1,6 +1,6 @@
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -61,8 +61,8 @@ func (*dummyBackendProvider) GetObjReader(context.Context, *cluster.LOM) (r io.R
 	return nil, nil, 0, nil
 }
 
-func (*dummyBackendProvider) PutObj(_ io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
-	return "", http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
+func (*dummyBackendProvider) PutObj(_ io.ReadCloser, lom *cluster.LOM) (errCode int, err error) {
+	return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }
 
 func (*dummyBackendProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {

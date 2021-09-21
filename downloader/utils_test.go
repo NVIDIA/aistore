@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
@@ -51,9 +52,9 @@ func TestCompareObject(t *testing.T) {
 
 	// Modify local object to contain invalid (meta)data.
 	customMD := cos.SimpleKVs{
-		cluster.SourceObjMD:  cluster.SourceGoogleObjMD,
-		cluster.CRC32CObjMD:  "bad",
-		cluster.VersionObjMD: "version",
+		cmn.SourceObjMD:  cmn.GoogleObjMD,
+		cmn.CRC32CObjMD:  "bad",
+		cmn.VersionObjMD: "version",
 	}
 	src.SetSize(10)
 	src.SetCustomMD(customMD)
@@ -68,13 +69,13 @@ func TestCompareObject(t *testing.T) {
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")
 
 	// Check that objects are still not equal after version update.
-	customMD[cluster.VersionObjMD] = "1503349750687573"
+	customMD[cmn.VersionObjMD] = "1503349750687573"
 	equal, err = downloader.CompareObjects(src, dst)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")
 
 	// Finally, check if the objects are equal once we set all the metadata correctly.
-	customMD[cluster.CRC32CObjMD] = "30a991bd"
+	customMD[cmn.CRC32CObjMD] = "30a991bd"
 	equal, err = downloader.CompareObjects(src, dst)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, equal, "expected the objects to be equal")

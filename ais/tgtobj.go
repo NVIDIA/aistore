@@ -172,20 +172,16 @@ func (poi *putObjInfo) finalize() (errCode int, err error) {
 // poi.workFQN => LOM
 func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 	var (
-		version string
-		lom     = poi.lom
-		bck     = lom.Bck()
-		bmd     = poi.t.owner.bmd.Get()
+		lom = poi.lom
+		bck = lom.Bck()
+		bmd = poi.t.owner.bmd.Get()
 	)
 	// remote versioning
 	if bck.IsRemote() && (poi.recvType == cluster.RegularPut || poi.recvType == cluster.Finalize) {
-		version, errCode, err = poi.putRemote()
+		errCode, err = poi.putRemote()
 		if err != nil {
 			glog.Errorf("PUT %s: %v", lom, err)
 			return
-		}
-		if lom.VersionConf().Enabled {
-			lom.SetVersion(version)
 		}
 	}
 	if _, present := bmd.Get(bck); !present {
@@ -228,7 +224,7 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 	return
 }
 
-func (poi *putObjInfo) putRemote() (version string, errCode int, err error) {
+func (poi *putObjInfo) putRemote() (errCode int, err error) {
 	var (
 		lom     = poi.lom
 		backend = poi.t.Backend(lom.Bck())
@@ -238,12 +234,9 @@ func (poi *putObjInfo) putRemote() (version string, errCode int, err error) {
 		err = fmt.Errorf(cmn.FmtErrFailed, poi.t.Snode(), "open", poi.workFQN, err)
 		return
 	}
-	version, errCode, err = backend.PutObj(lmfh, lom)
+	errCode, err = backend.PutObj(lmfh, lom)
 	if !lom.Bck().IsRemoteAIS() {
-		lom.SetCustomKey(cluster.SourceObjMD, backend.Provider())
-		if version != "" {
-			lom.SetCustomKey(cluster.VersionObjMD, version)
-		}
+		lom.SetCustomKey(cmn.SourceObjMD, backend.Provider())
 	}
 	return
 }

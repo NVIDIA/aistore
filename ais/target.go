@@ -83,9 +83,12 @@ var _ cos.Runner = (*targetrunner)(nil)
 //////////////
 
 func (b backends) init(t *targetrunner, starting bool) {
-	config := cmn.GCO.Get()
+	backend.Init()
+
 	ais := backend.NewAIS(t)
 	b[cmn.ProviderAIS] = ais // ais cloud is always present
+
+	config := cmn.GCO.Get()
 	if aisConf, ok := config.Backend.ProviderConf(cmn.ProviderAIS); ok {
 		if err := ais.Apply(aisConf, "init"); err != nil {
 			glog.Errorf("%s: %v - proceeding to start anyway...", t.si, err)
@@ -871,8 +874,8 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if lom.Load(true /*cache it*/, false /*locked*/) == nil { // if exists, check custom md
-		srcProvider, hasSrc := lom.GetCustomKey(cluster.SourceObjMD)
-		if hasSrc && srcProvider != cluster.SourceWebObjMD {
+		srcProvider, hasSrc := lom.GetCustomKey(cmn.SourceObjMD)
+		if hasSrc && srcProvider != cmn.WebObjMD {
 			bck := lom.Bck()
 			if bck.IsAIS() {
 				t.writeErrf(w, r,

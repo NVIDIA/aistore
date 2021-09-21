@@ -14,6 +14,42 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
+// LOM custom metadata stored under `lomCustomMD`.
+const (
+	SourceObjMD = "source"
+	AmazonObjMD = ProviderAmazon
+	AzureObjMD  = ProviderAzure
+	GoogleObjMD = ProviderGoogle
+	HDFSObjMD   = ProviderHDFS
+	HTTPObjMD   = ProviderHTTP
+	WebObjMD    = "web"
+
+	VersionObjMD = "remote-version"
+
+	CRC32CObjMD = cos.ChecksumCRC32C
+	MD5ObjMD    = cos.ChecksumMD5
+
+	ETag = "ETag"
+
+	OrigURLObjMD = "orig_url"
+)
+
+// provider-specific header keys
+const (
+	// https://cloud.google.com/storage/docs/xml-api/reference-headers
+	GsCksumHeader   = "x-goog-hash"
+	GsVersionHeader = "x-goog-generation"
+
+	// https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
+	// https://docs.aws.amazon.com/AmazonS3/latest/API/RESTCommonResponseHeaders.html
+	S3CksumHeader   = "ETag"
+	S3VersionHeader = "x-amz-version-id"
+
+	// https://docs.microsoft.com/en-us/rest/api/storageservices/get-blob-properties#response-headers
+	AzCksumHeader   = "Content-MD5"
+	AzVersionHeader = "ETag"
+)
+
 type (
 	ObjAttrsHolder interface {
 		SizeBytes(special ...bool) int64
@@ -26,6 +62,7 @@ type (
 		Atime    int64         // access time (nanoseconds since UNIX epoch)
 		Size     int64         // object size (bytes)
 		Ver      string        // object version
+		ETag     string        // ETag
 		Cksum    *cos.Cksum    // object checksum (NOTE: m.b. cloned)
 		customMD cos.SimpleKVs // custom metadata
 	}

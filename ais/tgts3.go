@@ -137,7 +137,7 @@ func (t *targetrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, it
 	}
 	lom.SetAtimeUnix(started.UnixNano())
 
-	// TODO: dual checksumming, e.g. lom.SetCustom(cluster.SourceAmazonObjMD, ...)
+	// TODO: dual checksumming, e.g. lom.SetCustom(cmn.AmazonObjMD, ...)
 
 	if errCode, err := t.doPut(r, lom, started); err != nil {
 		t.fsErr(err, lom.FQN)

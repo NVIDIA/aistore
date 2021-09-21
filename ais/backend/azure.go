@@ -3,7 +3,7 @@
 
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -228,7 +228,7 @@ func (ap *azureProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckL
 			MaxResults: int32(msg.PageSize),
 		}
 	)
-	if glog.FastV(4, glog.SmoduleBackend) {
+	if verbose {
 		glog.Infof("list_objects %s", cloudBck.Name)
 	}
 	if msg.ContinuationToken != "" {
@@ -255,6 +255,7 @@ func (ap *azureProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckL
 			entry.Size = *blob.Properties.ContentLength
 		}
 		if msg.WantProp(cmn.GetPropsVersion) {
+			// NOTE: here and elsewhere (below), use Etag as the version
 			if v, ok := h.EncodeVersion(string(blob.Properties.Etag)); ok {
 				entry.Version = v
 			}
@@ -270,7 +271,7 @@ func (ap *azureProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckL
 	if resp.NextMarker.Val != nil {
 		bckList.ContinuationToken = *resp.NextMarker.Val
 	}
-	if glog.FastV(4, glog.SmoduleBackend) {
+	if verbose {
 		glog.Infof("[list_bucket] count %d(marker: %s)", len(bckList.Entries), bckList.ContinuationToken)
 	}
 	return
@@ -329,16 +330,15 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 	}
 	objMeta[cmn.HdrObjSize] = strconv.FormatInt(resp.ContentLength(), 10)
 	objMeta[cmn.HdrBackendProvider] = cmn.ProviderAzure
-	// Simulate object versioning:
-	// Azure provider does not have real versioning, but it has ETag.
+	// NOTE: using ETag as version
 	if v, ok := h.EncodeVersion(string(resp.ETag())); ok {
 		objMeta[cmn.HdrObjVersion] = v
 	}
 	if v, ok := h.EncodeCksum(resp.ContentMD5()); ok {
-		objMeta[cluster.MD5ObjMD] = v
+		objMeta[cmn.MD5ObjMD] = v
 	}
-	if glog.FastV(4, glog.SmoduleBackend) {
-		glog.Infof("[head_object] %s/%s", cloudBck, lom.ObjName)
+	if verbose {
+		glog.Infof("[head_object] %s", lom)
 	}
 	return
 }
@@ -362,7 +362,7 @@ func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 	if err != nil {
 		return
 	}
-	if glog.FastV(4, glog.SmoduleBackend) {
+	if verbose {
 		glog.Infof("[get_object] %s", lom)
 	}
 	return
@@ -372,15 +372,14 @@ func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 // GET OBJ READER //
 ////////////////////
 
-func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (reader io.ReadCloser,
-	expectedCksm *cos.Cksum, errCode int, err error) {
+func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (reader io.ReadCloser, expCksum *cos.Cksum,
+	errCode int, err error) {
 	var (
 		h        = cmn.BackendHelpers.Azure
 		cloudBck = lom.Bck().RemoteBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 		blobURL  = cntURL.NewBlobURL(lom.ObjName)
 	)
-
 	// Get checksum
 	respProps, err := blobURL.GetProperties(ctx, azblob.BlobAccessConditions{}, defaultKeyOptions)
 	if err != nil {
@@ -404,33 +403,28 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 		return nil, nil, resp.StatusCode(), err
 	}
 
-	var (
-		cksumToUse *cos.Cksum
-		retryOpts  = azblob.RetryReaderOptions{MaxRetryRequests: 3}
-		custom     = cos.SimpleKVs{
-			cluster.SourceObjMD: cluster.SourceAzureObjMD,
-		}
-	)
+	// custom metadata
+	lom.SetCustomKey(cmn.SourceObjMD, cmn.AzureObjMD)
 	if v, ok := h.EncodeVersion(string(respProps.ETag())); ok {
 		lom.SetVersion(v)
-		custom[cluster.VersionObjMD] = v
+		lom.SetCustomKey(cmn.ETag, v)
 	}
 	if v, ok := h.EncodeCksum(respProps.ContentMD5()); ok {
-		custom[cluster.MD5ObjMD] = v
-		cksumToUse = cos.NewCksum(cos.ChecksumMD5, v)
+		lom.SetCustomKey(cmn.MD5ObjMD, v)
+		expCksum = cos.NewCksum(cos.ChecksumMD5, v)
 	}
 
-	lom.SetCustomMD(custom)
 	setSize(ctx, resp.ContentLength())
 
-	return wrapReader(ctx, resp.Body(retryOpts)), cksumToUse, 0, nil
+	retryOpts := azblob.RetryReaderOptions{MaxRetryRequests: 3}
+	return wrapReader(ctx, resp.Body(retryOpts)), expCksum, 0, nil
 }
 
 ////////////////
 // PUT OBJECT //
 ////////////////
 
-func (ap *azureProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
+func (ap *azureProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (int, error) {
 	defer cos.Close(r)
 
 	var (
@@ -450,7 +444,7 @@ func (ap *azureProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (version stri
 	if err != nil {
 		code, errLease := azureErrorToAISError(err, cloudBck, lom.ObjName)
 		if code != http.StatusNotFound {
-			return "", code, errLease
+			return code, errLease
 		}
 	}
 	// Use BlockBlob instead of PageBlob because the latter requires
@@ -468,22 +462,23 @@ func (ap *azureProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (version stri
 	putResp, err := azblob.UploadStreamToBlockBlob(azctx, r, blobURL, opts)
 	if err != nil {
 		status, err := azureErrorToAISError(err, cloudBck, lom.ObjName)
-		return "", status, err
+		return status, err
 	}
 	resp := putResp.Response()
 	resp.Body.Close()
 	if resp.StatusCode >= http.StatusBadRequest {
 		err := fmt.Errorf(cmn.FmtErrFailed, cmn.ProviderAzure, "put object",
 			cloudBck.Name+"/"+lom.ObjName, strconv.Itoa(resp.StatusCode))
-		return "", resp.StatusCode, err
+		return resp.StatusCode, err
 	}
 	if v, ok := h.EncodeVersion(string(putResp.ETag())); ok {
-		version = v
+		lom.SetCustomKey(cmn.ETag, v) // NOTE: using ETag as version
+		lom.SetVersion(v)
 	}
-	if glog.FastV(4, glog.SmoduleBackend) {
-		glog.Infof("[put_object] %s, version: %s", lom, version)
+	if verbose {
+		glog.Infof("[put_object] %s", lom)
 	}
-	return version, http.StatusOK, nil
+	return http.StatusOK, nil
 }
 
 ///////////////////

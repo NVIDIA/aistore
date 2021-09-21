@@ -67,23 +67,6 @@ const (
 
 const prefLen = 10 // 10B prefix [ version = 1 | checksum-type | 64-bit xxhash ]
 
-// Custom metadata stored under `lomCustomMD` key.
-const (
-	SourceObjMD       = "source"
-	SourceAmazonObjMD = cmn.ProviderAmazon
-	SourceAzureObjMD  = cmn.ProviderAzure
-	SourceGoogleObjMD = cmn.ProviderGoogle
-	SourceHDFSObjMD   = cmn.ProviderHDFS
-	SourceHTTPObjMD   = cmn.ProviderHTTP
-	SourceWebObjMD    = "web"
-
-	VersionObjMD = "v"
-	CRC32CObjMD  = cos.ChecksumCRC32C
-	MD5ObjMD     = cos.ChecksumMD5
-
-	OrigURLObjMD = "orig_url"
-)
-
 // NOTE: used in tests, ignores `dirty`
 func (lom *LOM) LoadMetaFromFS() error { _, err := lom.lmfs(true); return err }
 

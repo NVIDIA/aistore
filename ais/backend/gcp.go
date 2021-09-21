@@ -3,7 +3,7 @@
 
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -130,7 +130,7 @@ func (gcpp *gcpProvider) CreateBucket(_ *cluster.Bck) (errCode int, err error) {
 /////////////////
 
 func (*gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
-	if glog.FastV(4, glog.SmoduleBackend) {
+	if verbose {
 		glog.Infof("head_bucket %s", bck.Name)
 	}
 	cloudBck := bck.RemoteBck()
@@ -151,30 +151,27 @@ func (*gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps 
 // LIST OBJECTS //
 //////////////////
 
-func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList,
-	errCode int, err error) {
-	msg.PageSize = calcPageSize(msg.PageSize, gcpp.MaxPageSize())
+func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
 	var (
 		query    *storage.Query
 		h        = cmn.BackendHelpers.Google
 		cloudBck = bck.RemoteBck()
 	)
-	if glog.FastV(4, glog.SmoduleBackend) {
+	if verbose {
 		glog.Infof("list_objects %s", cloudBck.Name)
 	}
-
+	msg.PageSize = calcPageSize(msg.PageSize, gcpp.MaxPageSize())
 	if msg.Prefix != "" {
 		query = &storage.Query{Prefix: msg.Prefix}
 	}
-
 	var (
 		it    = gcpClient.Bucket(cloudBck.Name).Objects(gctx, query)
 		pager = iterator.NewPager(it, int(msg.PageSize), msg.ContinuationToken)
 		objs  = make([]*storage.ObjectAttrs, 0, msg.PageSize)
 	)
-	nextPageToken, err := pager.NextPage(&objs)
-	if err != nil {
-		errCode, err = gcpErrorToAISError(err, cloudBck)
+	nextPageToken, errPage := pager.NextPage(&objs)
+	if errPage != nil {
+		errCode, err = gcpErrorToAISError(errPage, cloudBck)
 		return
 	}
 
@@ -198,11 +195,9 @@ func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckL
 		}
 		bckList.Entries = append(bckList.Entries, entry)
 	}
-
-	if glog.FastV(4, glog.SmoduleBackend) {
-		glog.Infof("[list_bucket] count %d", len(bckList.Entries))
+	if verbose {
+		glog.Infof("[list_objects] count %d", len(bckList.Entries))
 	}
-
 	return
 }
 
@@ -234,7 +229,7 @@ func (gcpp *gcpProvider) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, errCode in
 			Name:     battrs.Name,
 			Provider: cmn.ProviderGoogle,
 		})
-		if glog.FastV(4, glog.SmoduleBackend) {
+		if verbose {
 			glog.Infof("[bucket_names] %s: created %v, versioning %t",
 				battrs.Name, battrs.Created, battrs.VersioningEnabled)
 		}
@@ -248,10 +243,11 @@ func (gcpp *gcpProvider) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, errCode in
 
 func (*gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cos.SimpleKVs, errCode int, err error) {
 	var (
+		attrs    *storage.ObjectAttrs
 		h        = cmn.BackendHelpers.Google
 		cloudBck = lom.Bck().RemoteBck()
 	)
-	attrs, err := gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName).Attrs(ctx)
+	attrs, err = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName).Attrs(ctx)
 	if err != nil {
 		errCode, err = handleObjectError(ctx, gcpClient, err, cloudBck)
 		return
@@ -263,12 +259,12 @@ func (*gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cos.
 		objMeta[cmn.HdrObjVersion] = v
 	}
 	if v, ok := h.EncodeCksum(attrs.MD5); ok {
-		objMeta[cluster.MD5ObjMD] = v
+		objMeta[cmn.MD5ObjMD] = v
 	}
 	if v, ok := h.EncodeCksum(attrs.CRC32C); ok {
-		objMeta[cluster.CRC32CObjMD] = v
+		objMeta[cmn.CRC32CObjMD] = v
 	}
-	if glog.FastV(4, glog.SmoduleBackend) {
+	if verbose {
 		glog.Infof("[head_object] %s/%s", cloudBck, lom.ObjName)
 	}
 	return
@@ -293,7 +289,7 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 	if err != nil {
 		return
 	}
-	if glog.FastV(4, glog.SmoduleBackend) {
+	if verbose {
 		glog.Infof("[get_object] %s", lom)
 	}
 	return
@@ -303,45 +299,56 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 // GET OBJECT READER //
 ///////////////////////
 
-func (*gcpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cos.Cksum,
+func (*gcpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expCksum *cos.Cksum,
 	errCode int, err error) {
 	var (
-		h        = cmn.BackendHelpers.Google
+		attrs    *storage.ObjectAttrs
+		rc       *storage.Reader
 		cloudBck = lom.Bck().RemoteBck()
 		o        = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
 	)
-	attrs, err := o.Attrs(ctx)
+	attrs, err = o.Attrs(ctx)
 	if err != nil {
 		errCode, err = gcpErrorToAISError(err, cloudBck)
-		return nil, nil, errCode, err
+		return
 	}
-
-	cksum := cos.NewCksum(attrs.Metadata[gcpChecksumType], attrs.Metadata[gcpChecksumVal])
-	rc, err := o.NewReader(ctx)
+	rc, err = o.NewReader(ctx)
 	if err != nil {
-		return nil, nil, 0, err
+		return
 	}
 
-	custom := cos.SimpleKVs{
-		cluster.SourceObjMD: cluster.SourceGoogleObjMD,
+	// custom metadata
+	lom.SetCustomKey(cmn.SourceObjMD, cmn.GoogleObjMD)
+	if cksumType, ok := attrs.Metadata[gcpChecksumType]; ok {
+		if cksumValue, ok := attrs.Metadata[gcpChecksumVal]; ok {
+			lom.SetCksum(cos.NewCksum(cksumType, cksumValue))
+		}
 	}
-
-	if v, ok := h.EncodeVersion(attrs.Generation); ok {
-		lom.SetVersion(v)
-		custom[cluster.VersionObjMD] = v
-	}
-	if v, ok := h.EncodeCksum(attrs.MD5); ok {
-		expectedCksm = cos.NewCksum(cos.ChecksumMD5, v)
-		custom[cluster.MD5ObjMD] = v
-	}
-	if v, ok := h.EncodeCksum(attrs.CRC32C); ok {
-		custom[cluster.CRC32CObjMD] = v
-	}
-
-	lom.SetCksum(cksum)
-	lom.SetCustomMD(custom)
+	expCksum = setCustomGs(lom, attrs)
 	setSize(ctx, rc.Attrs.Size)
 	r = wrapReader(ctx, rc)
+	return
+}
+
+func setCustomGs(lom *cluster.LOM, attrs *storage.ObjectAttrs) (expCksum *cos.Cksum) {
+	h := cmn.BackendHelpers.Google
+	if v, ok := h.EncodeVersion(attrs.Generation); ok {
+		lom.SetVersion(v)
+		lom.SetCustomKey(cmn.VersionObjMD, v)
+	}
+	if v, ok := h.EncodeCksum(attrs.MD5); ok {
+		lom.SetCustomKey(cmn.MD5ObjMD, v)
+		expCksum = cos.NewCksum(cos.ChecksumMD5, v)
+	}
+	if v, ok := h.EncodeCksum(attrs.CRC32C); ok {
+		lom.SetCustomKey(cmn.CRC32CObjMD, v)
+		if expCksum == nil {
+			expCksum = cos.NewCksum(cos.ChecksumCRC32C, v)
+		}
+	}
+	if v, ok := h.EncodeCksum(attrs.Etag); ok {
+		lom.SetCustomKey(cmn.ETag, v)
+	}
 	return
 }
 
@@ -349,9 +356,10 @@ func (*gcpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.Re
 // PUT OBJECT //
 ////////////////
 
-func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
+func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err error) {
 	var (
-		h        = cmn.BackendHelpers.Google
+		attrs    *storage.ObjectAttrs
+		written  int64
 		cloudBck = lom.Bck().RemoteBck()
 		md       = make(cos.SimpleKVs, 2)
 		gcpObj   = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
@@ -361,7 +369,7 @@ func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (version stri
 
 	wc.Metadata = md
 	buf, slab := gcpp.t.MMSA().Alloc()
-	written, err := io.CopyBuffer(wc, r, buf)
+	written, err = io.CopyBuffer(wc, r, buf)
 	slab.Free(buf)
 	cos.Close(r)
 	if err != nil {
@@ -371,16 +379,14 @@ func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (version stri
 		errCode, err = gcpErrorToAISError(err, cloudBck)
 		return
 	}
-	attr, err := gcpObj.Attrs(gctx)
+	attrs, err = gcpObj.Attrs(gctx)
 	if err != nil {
 		errCode, err = handleObjectError(gctx, gcpClient, err, cloudBck)
 		return
 	}
-	if v, ok := h.EncodeVersion(attr.Generation); ok {
-		version = v
-	}
-	if glog.FastV(4, glog.SmoduleBackend) {
-		glog.Infof("[put_object] %s, size %d, version %s", lom, written, version)
+	_ = setCustomGs(lom, attrs)
+	if verbose {
+		glog.Infof("[put_object] %s, size %d", lom, written)
 	}
 	return
 }
@@ -398,7 +404,7 @@ func (*gcpProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 		errCode, err = handleObjectError(gctx, gcpClient, err, cloudBck)
 		return
 	}
-	if glog.FastV(4, glog.SmoduleBackend) {
+	if verbose {
 		glog.Infof("[delete_object] %s", lom)
 	}
 	return

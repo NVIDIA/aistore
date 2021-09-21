@@ -1,6 +1,6 @@
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -462,12 +462,15 @@ func (m *AISBackendProvider) GetObjReader(_ context.Context, lom *cluster.LOM) (
 	return r, nil, errCode, err
 }
 
-func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
-	remoteBck := lom.Bucket()
-	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
+func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err error) {
+	var (
+		aisCluster *remAISCluster
+		remoteBck  = lom.Bucket()
+	)
+	aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
 		cos.Close(r)
-		return "", errCode, err
+		return
 	}
 	var (
 		bck  = prepareBck(lom.Bucket())
@@ -482,10 +485,8 @@ func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (version 
 	)
 	if err = api.PutObject(args); err != nil {
 		errCode, err = extractErrCode(err)
-		return "", errCode, err
 	}
-	// NOTE: the caller is expected to load it and get the current version, if exists
-	return lom.Version(true), 0, nil
+	return
 }
 
 func (m *AISBackendProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {

@@ -1,6 +1,6 @@
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -73,7 +73,7 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 		return nil, http.StatusBadRequest, err
 	}
 
-	if glog.FastV(4, glog.SmoduleBackend) {
+	if verbose {
 		glog.Infof("[head_bucket] original_url: %q", origURL)
 	}
 
@@ -134,7 +134,7 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta 
 	origURL, err := getOriginalURL(ctx, bck, lom.ObjName)
 	debug.AssertNoErr(err)
 
-	if glog.FastV(4, glog.SmoduleBackend) {
+	if verbose {
 		glog.Infof("[head_object] original_url: %q", origURL)
 	}
 
@@ -152,10 +152,11 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta 
 		objMeta[cmn.HdrObjSize] = strconv.FormatInt(resp.ContentLength, 10)
 	}
 	if v, ok := h.EncodeVersion(resp.Header.Get(cmn.HdrETag)); ok {
-		objMeta[cluster.VersionObjMD] = v
+		objMeta[cmn.ETag] = v
+		objMeta[cmn.VersionObjMD] = v
 	}
 
-	if glog.FastV(4, glog.SmoduleBackend) {
+	if verbose {
 		glog.Infof("[head_object] %s", lom)
 	}
 	return
@@ -175,7 +176,7 @@ func (hp *httpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode i
 	if err != nil {
 		return
 	}
-	if glog.FastV(4, glog.SmoduleBackend) {
+	if verbose {
 		glog.Infof("[get_object] %s", lom)
 	}
 	return
@@ -191,7 +192,7 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 	origURL, err := getOriginalURL(ctx, bck, lom.ObjName)
 	debug.AssertNoErr(err)
 
-	if glog.FastV(4, glog.SmoduleBackend) {
+	if verbose {
 		glog.Infof("[HTTP CLOUD][GET] original_url: %q", origURL)
 	}
 
@@ -203,16 +204,17 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 		return nil, nil, resp.StatusCode, fmt.Errorf("error occurred: %v", resp.StatusCode)
 	}
 
-	if glog.FastV(4, glog.SmoduleBackend) {
+	if verbose {
 		glog.Infof("[HTTP CLOUD][GET] success, size: %d", resp.ContentLength)
 	}
 
 	custom := cos.SimpleKVs{
-		cluster.SourceObjMD:  cluster.SourceHTTPObjMD,
-		cluster.OrigURLObjMD: origURL,
+		cmn.SourceObjMD:  cmn.HTTPObjMD,
+		cmn.OrigURLObjMD: origURL,
 	}
 	if v, ok := h.EncodeVersion(resp.Header.Get(cmn.HdrETag)); ok {
-		custom[cluster.VersionObjMD] = v
+		custom[cmn.ETag] = v
+		custom[cmn.VersionObjMD] = v
 	}
 
 	lom.SetCustomMD(custom)
@@ -220,8 +222,8 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 	return wrapReader(ctx, resp.Body), nil, 0, nil
 }
 
-func (hp *httpProvider) PutObj(io.ReadCloser, *cluster.LOM) (string, int, error) {
-	return "", http.StatusBadRequest, fmt.Errorf(cmn.FmtErrUnsupported, hp.Provider(), "creating new objects")
+func (hp *httpProvider) PutObj(io.ReadCloser, *cluster.LOM) (int, error) {
+	return http.StatusBadRequest, fmt.Errorf(cmn.FmtErrUnsupported, hp.Provider(), "creating new objects")
 }
 
 func (hp *httpProvider) DeleteObj(*cluster.LOM) (int, error) {

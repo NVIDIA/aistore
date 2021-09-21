@@ -216,9 +216,9 @@ func (hp *hdfsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta co
 	objMeta = make(cos.SimpleKVs, 2)
 	objMeta[cmn.HdrBackendProvider] = cmn.ProviderHDFS
 	objMeta[cmn.HdrObjSize] = strconv.FormatInt(fr.Stat().Size(), 10)
-	objMeta[cluster.VersionObjMD] = ""
+	objMeta[cmn.VersionObjMD] = ""
 
-	if glog.FastV(4, glog.SmoduleBackend) {
+	if verbose {
 		glog.Infof("[head_object] %s", lom)
 	}
 	return
@@ -241,7 +241,7 @@ func (hp *hdfsProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode i
 	if err = hp.t.PutObject(lom, params); err != nil {
 		return
 	}
-	if glog.FastV(4, glog.SmoduleBackend) {
+	if verbose {
 		glog.Infof("[get_object] %s", lom)
 	}
 	return
@@ -261,8 +261,8 @@ func (hp *hdfsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 	}
 
 	custom := cos.SimpleKVs{
-		cluster.SourceObjMD:  cluster.SourceHDFSObjMD,
-		cluster.VersionObjMD: "",
+		cmn.SourceObjMD:  cmn.HDFSObjMD,
+		cmn.VersionObjMD: "",
 	}
 
 	lom.SetCustomMD(custom)
@@ -274,8 +274,7 @@ func (hp *hdfsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 // PUT OBJECT //
 ////////////////
 
-func (hp *hdfsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (version string,
-	errCode int, err error) {
+func (hp *hdfsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err error) {
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
 	fw, err := hp.c.Create(filePath)
 	if err != nil {
@@ -305,17 +304,16 @@ func (hp *hdfsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (version strin
 finish:
 	cos.Close(r)
 
-	// TODO: Cleanup if there was an error during `c.Create` or `io.Copy`. We need
-	//  to remove directories and file.
+	// TODO: Cleanup if there was an error during `c.Create` or `io.Copy` (remove directories and file).
 	if err != nil {
 		errCode, err = hdfsErrorToAISError(err)
-		return "", errCode, err
+		return errCode, err
 	}
-	if glog.FastV(4, glog.SmoduleBackend) {
+	if verbose {
 		glog.Infof("[put_object] %s", lom)
 	}
 
-	return "", 0, nil
+	return 0, nil
 }
 
 ///////////////////
@@ -328,7 +326,7 @@ func (hp *hdfsProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 		errCode, err = hdfsErrorToAISError(err)
 		return errCode, err
 	}
-	if glog.FastV(4, glog.SmoduleBackend) {
+	if verbose {
 		glog.Infof("[delete_object] %s", lom)
 	}
 	return 0, nil

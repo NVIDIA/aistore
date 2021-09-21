@@ -99,9 +99,9 @@ var _ = Describe("LOM Xattributes", func() {
 				lom.SetCksum(cos.NewCksum(cos.ChecksumXXHash, "test_checksum"))
 				lom.SetVersion("dummy_version")
 				lom.SetCustomMD(cos.SimpleKVs{
-					cluster.SourceObjMD:  cluster.SourceGoogleObjMD,
-					cluster.VersionObjMD: "version",
-					cluster.CRC32CObjMD:  "crc32",
+					cmn.SourceObjMD: cmn.GoogleObjMD,
+					cmn.ETag:        "etag",
+					cmn.CRC32CObjMD: "crc32",
 				})
 				Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
 				Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
@@ -135,9 +135,9 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
 				lom.SetCustomMD(cos.SimpleKVs{
-					cluster.SourceObjMD:  cluster.SourceGoogleObjMD,
-					cluster.VersionObjMD: "version",
-					cluster.CRC32CObjMD:  "crc32",
+					cmn.SourceObjMD: cmn.GoogleObjMD,
+					cmn.ETag:        "etag",
+					cmn.CRC32CObjMD: "crc32",
 				})
 				Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
 				Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
@@ -176,9 +176,9 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
 				lom.SetCustomMD(cos.SimpleKVs{
-					cluster.SourceObjMD:  cluster.SourceGoogleObjMD,
-					cluster.VersionObjMD: "version",
-					cluster.CRC32CObjMD:  "crc32",
+					cmn.SourceObjMD: cmn.GoogleObjMD,
+					cmn.ETag:        "etag",
+					cmn.CRC32CObjMD: "crc32",
 				})
 				Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
 				Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())

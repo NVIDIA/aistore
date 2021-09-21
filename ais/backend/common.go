@@ -1,6 +1,6 @@
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -10,8 +10,15 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 )
+
+var verbose bool
+
+func Init() {
+	verbose = bool(glog.FastV(4, glog.SmoduleBackend))
+}
 
 func creatingBucketNotSupportedErr(provider string) (errCode int, err error) {
 	return http.StatusBadRequest, fmt.Errorf(cmn.FmtErrUnsupported, provider, "creating bucket")

@@ -210,9 +210,9 @@ func (*defaultDiffResolverCtx) IsObjFromRemote(src *cluster.LOM) (bool, error) {
 		}
 		return false, err
 	}
-	objSrc, ok := src.GetCustomKey(cluster.SourceObjMD)
+	objSrc, ok := src.GetCustomKey(cmn.SourceObjMD)
 	if !ok {
 		return false, nil
 	}
-	return objSrc != cluster.SourceWebObjMD, nil
+	return objSrc != cmn.WebObjMD, nil
 }
