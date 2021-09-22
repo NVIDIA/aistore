@@ -23,9 +23,8 @@ import (
 )
 
 const (
-	retryCnt         = 10               // number of retries to external resource
-	reqTimeoutFactor = 1.2              // newTimeout = prevTimeout * reqTimeoutFactor
-	headReqTimeout   = 15 * time.Second // timeout for HEAD request to get the Content-Length
+	retryCnt         = 10  // number of retries to external resource
+	reqTimeoutFactor = 1.2 // newTimeout = prevTimeout * reqTimeoutFactor
 	internalErrorMsg = "internal server error"
 )
 

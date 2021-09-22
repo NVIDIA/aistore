@@ -334,7 +334,7 @@ write:
 	cos.Close(lmfh)
 	lmfh = nil
 	// ok
-	poi.lom.SetSize(written)
+	poi.lom.SetSize(written) // TODO: compare with non-zero lom.SizeBytes() that may have been set via oa.FromHeader()
 	if cksums.store != nil {
 		cksums.store.Finalize()
 		poi.lom.SetCksum(&cksums.store.Cksum)
@@ -639,14 +639,15 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 		glog.Errorf("GFN failure, URL %q, err: %v", reqArgs.URL(), err)
 		return
 	}
-	lom.FromHTTPHdr(resp.Header)
+	cksumToUse := lom.ObjAttrs().FromHeader(resp.Header)
 	workFQN := fs.CSM.GenContentFQN(lom, fs.WorkfileType, fs.WorkfileRemote)
 	poi := &putObjInfo{
-		t:        goi.t,
-		lom:      lom,
-		r:        resp.Body,
-		recvType: cluster.Migrated,
-		workFQN:  workFQN,
+		t:          goi.t,
+		lom:        lom,
+		r:          resp.Body,
+		recvType:   cluster.Migrated,
+		workFQN:    workFQN,
+		cksumToUse: cksumToUse,
 	}
 	if _, err := poi.putObject(); err != nil {
 		glog.Error(err)
@@ -724,7 +725,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 				size = rrange.Length // Content-Length
 			}
 		}
-		cmn.ToHTTPHdr(goi.lom, hdr)
+		goi.lom.ObjAttrs().ToHeader(hdr)
 	}
 
 	// set reader
@@ -1311,9 +1312,10 @@ func (aaoi *appendArchObjInfo) appendObject() (errCode int, err error) {
 // NOTE: always closes params.Reader, either explicitly or via Do()
 func (t *targetrunner) _sendPUT(params *cluster.SendToParams) error {
 	var (
-		hdr   = cmn.ToHTTPHdr(params.ObjAttrs)
+		hdr   = make(http.Header, 8)
 		query = cmn.AddBckToQuery(nil, params.BckTo.Bck)
 	)
+	cmn.ToHeader(params.ObjAttrs, hdr)
 	hdr.Set(cmn.HdrPutterID, t.si.ID())
 	query.Set(cmn.URLParamRecvType, strconv.Itoa(int(cluster.Migrated)))
 	reqArgs := cmn.ReqArgs{

@@ -1062,9 +1062,9 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 			invalidHandler(w, r, err, http.StatusNotFound)
 			return
 		}
-		cmn.ToHTTPHdr(lom, hdr)
+		lom.ObjAttrs().ToHeader(hdr)
 	} else if exists {
-		cmn.ToHTTPHdr(lom, hdr)
+		lom.ObjAttrs().ToHeader(hdr)
 	} else {
 		objMeta, errCode, err := t.Backend(lom.Bck()).HeadObj(context.Background(), lom)
 		if err != nil {
@@ -1386,21 +1386,20 @@ func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.
 // In both cases, new checksum is also generated and stored along with the new version.
 func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Time) (errCode int, err error) {
 	var (
-		header     = r.Header
-		cksumType  = header.Get(cmn.HdrObjCksumType)
-		cksumValue = header.Get(cmn.HdrObjCksumVal)
-		query      = r.URL.Query()
-		recvType   = query.Get(cmn.URLParamRecvType)
+		header   = r.Header
+		query    = r.URL.Query()
+		recvType = query.Get(cmn.URLParamRecvType)
 	)
-	lom.FromHTTPHdr(header) // TODO: check that values parsed here are not coming from the user
+	// TODO: oa.Size vs "Content-Length" vs actual, similar to checksum
+	cksumToUse := lom.ObjAttrs().FromHeader(header)
 	poi := allocPutObjInfo()
 	{
 		poi.started = started
 		poi.t = t
 		poi.lom = lom
 		poi.r = r.Body
-		poi.cksumToUse = cos.NewCksum(cksumType, cksumValue)
 		poi.workFQN = fs.CSM.GenContentFQN(lom, fs.WorkfileType, fs.WorkfilePut)
+		poi.cksumToUse = cksumToUse
 	}
 	if recvType != "" {
 		n, err := strconv.Atoi(recvType)

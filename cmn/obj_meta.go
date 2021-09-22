@@ -65,9 +65,8 @@ type (
 		Atime    int64         // access time (nanoseconds since UNIX epoch)
 		Size     int64         // object size (bytes)
 		Ver      string        // object version
-		ETag     string        // ETag
 		Cksum    *cos.Cksum    // object checksum (NOTE: m.b. cloned)
-		customMD cos.SimpleKVs // custom metadata
+		customMD cos.SimpleKVs // custom metadata: ETag, MD5, CRC, user-defined ...
 	}
 )
 
@@ -111,19 +110,17 @@ func (oa *ObjAttrs) CopyFrom(oah ObjAttrsHolder, skipCksum ...bool) {
 	oa.customMD = oah.GetCustomMD()
 }
 
-// ObjAttrsHolder => http header
-func ToHTTPHdr(oah ObjAttrsHolder, hdrs ...http.Header) (hdr http.Header) {
-	if len(hdrs) > 0 && hdrs[0] != nil {
-		hdr = hdrs[0]
-	} else {
-		hdr = make(http.Header, 8)
-	}
+//
+// to and from HTTP header converters (as in: HEAD /object)
+//
+
+func ToHeader(oah ObjAttrsHolder, hdr http.Header) {
 	if cksum := oah.Checksum(); !cksum.IsEmpty() {
 		hdr.Set(HdrObjCksumType, cksum.Ty())
 		hdr.Set(HdrObjCksumVal, cksum.Val())
 	}
-	if ts := oah.AtimeUnix(); ts != 0 {
-		hdr.Set(HdrObjAtime, cos.UnixNano2S(ts))
+	if at := oah.AtimeUnix(); at != 0 {
+		hdr.Set(HdrObjAtime, cos.UnixNano2S(at))
 	}
 	if n := oah.SizeBytes(true); n > 0 {
 		hdr.Set(HdrContentLength, strconv.FormatInt(n, 10))
@@ -134,7 +131,40 @@ func ToHTTPHdr(oah ObjAttrsHolder, hdrs ...http.Header) (hdr http.Header) {
 	custom := oah.GetCustomMD()
 	for k, v := range custom {
 		debug.Assert(k != "")
-		hdr.Add(HdrObjCustomMD, strings.Join([]string{k, v}, "="))
+		entry := strings.Join([]string{k, v}, "=")
+		hdr.Add(HdrObjCustomMD, entry)
+	}
+}
+
+func (oa *ObjAttrs) ToHeader(hdr http.Header) {
+	ToHeader(oa, hdr)
+}
+
+func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum) {
+	// NOTE: returning checksum separately for subsequent validation
+	if ty := hdr.Get(HdrObjCksumType); ty != "" {
+		val := hdr.Get(HdrObjCksumVal)
+		cksum = cos.NewCksum(ty, val)
+	}
+
+	if at := hdr.Get(HdrObjAtime); at != "" {
+		atime, err := cos.S2UnixNano(at)
+		debug.AssertNoErr(err)
+		oa.Atime = atime
+	}
+	if sz := hdr.Get(HdrContentLength); sz != "" {
+		size, err := strconv.ParseInt(sz, 10, 64)
+		debug.AssertNoErr(err)
+		oa.Size = size
+	}
+	if v := hdr.Get(HdrObjVersion); v != "" {
+		oa.Ver = v
+	}
+	if customMD := hdr[http.CanonicalHeaderKey(HdrObjCustomMD)]; len(customMD) > 0 {
+		for _, v := range customMD {
+			entry := strings.SplitN(v, "=", 2)
+			oa.SetCustomKey(entry[0], entry[1])
+		}
 	}
 	return
 }

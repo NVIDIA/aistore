@@ -7,7 +7,6 @@ package cluster
 import (
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -162,7 +161,7 @@ func (lom *LOM) LIF() (lif LIF) {
 // LOM //
 /////////
 
-func (lom *LOM) ObjAttrs() cmn.ObjAttrsHolder { return &lom.md.ObjAttrs }
+func (lom *LOM) ObjAttrs() *cmn.ObjAttrs { return &lom.md.ObjAttrs }
 
 func (lom *LOM) CopyAttrs(oah cmn.ObjAttrsHolder, skipCksum bool) {
 	lom.md.ObjAttrs.CopyFrom(oah, skipCksum)
@@ -235,28 +234,6 @@ func (lom *LOM) WritePolicy() (p cmn.MDWritePolicy) {
 }
 
 func (lom *LOM) loaded() bool { return lom.md.bckID != 0 }
-
-func (lom *LOM) FromHTTPHdr(hdr http.Header) {
-	// NOTE: not setting received checksum into the LOM
-	// to preserve its own local checksum
-
-	if versionEntry := hdr.Get(cmn.HdrObjVersion); versionEntry != "" {
-		lom.SetVersion(versionEntry)
-	}
-	if atimeEntry := hdr.Get(cmn.HdrObjAtime); atimeEntry != "" {
-		atime, _ := cos.S2UnixNano(atimeEntry)
-		lom.SetAtimeUnix(atime)
-	}
-	if customMD := hdr[http.CanonicalHeaderKey(cmn.HdrObjCustomMD)]; len(customMD) > 0 {
-		md := make(cos.SimpleKVs, len(customMD)*2)
-		for _, v := range customMD {
-			entry := strings.SplitN(v, "=", 2)
-			cos.Assert(len(entry) == 2)
-			md[entry[0]] = entry[1]
-		}
-		lom.SetCustomMD(md)
-	}
-}
 
 func (lom *LOM) HrwTarget(smap *Smap) (tsi *Snode, local bool, err error) {
 	tsi, err = HrwTarget(lom.Uname(), smap)
