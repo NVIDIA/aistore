@@ -255,6 +255,8 @@ func attrsFromObjMeta(objMeta cos.SimpleKVs, oa *cmn.ObjAttrs) {
 	}
 }
 
+// Use all available metadata including {size, version, ETag, MD5, CRC}
+// to compare local object with its remote counterpart.
 func CompareObjects(lom *cluster.LOM, dst *DstElement) (equal bool, err error) {
 	var oa cmn.ObjAttrs
 	if dst.Link != "" {
@@ -289,22 +291,38 @@ func CompareObjects(lom *cluster.LOM, dst *DstElement) (equal bool, err error) {
 		return
 	}
 
+	var (
+		remMeta, lomMeta                                               string
+		remVok, lomVok, remEok, lomEok, rem5ok, lom5ok, remCok, lomCok bool
+	)
 	// version check
-	remVer, ok := oa.GetCustomKey(cmn.VersionObjMD)
-	if ok {
-		lomVer, ok := lom.GetCustomKey(cmn.VersionObjMD)
-		if ok && remVer == lomVer {
-			return true, nil // equality #1
+	if remMeta, remVok = oa.GetCustomKey(cmn.VersionObjMD); remVok {
+		if lomMeta, lomVok = lom.GetCustomKey(cmn.VersionObjMD); !lomVok || remMeta != lomMeta {
+			return
 		}
 	}
-
-	// finally, ETag check
-	remEtag, ok := oa.GetCustomKey(cmn.ETag)
-	if ok {
-		lomEtag, ok := lom.GetCustomKey(cmn.ETag)
-		if ok && remEtag == lomEtag {
-			return true, nil // equality #2
+	// ETag check
+	if remMeta, remEok = oa.GetCustomKey(cmn.ETag); remEok {
+		if lomMeta, lomEok = lom.GetCustomKey(cmn.ETag); !lomEok || remMeta != lomMeta {
+			return
 		}
 	}
+	// MD5 check
+	if remMeta, rem5ok = oa.GetCustomKey(cmn.MD5ObjMD); rem5ok {
+		if lomMeta, lom5ok = lom.GetCustomKey(cmn.MD5ObjMD); !lom5ok || remMeta != lomMeta {
+			return
+		}
+	}
+	// finally, CRC check
+	if remMeta, remCok = oa.GetCustomKey(cmn.CRC32CObjMD); remCok {
+		if lomMeta, lomCok = lom.GetCustomKey(cmn.CRC32CObjMD); !lomCok || remMeta != lomMeta {
+			return
+		}
+	}
+	//
+	// NOTE: err on the of caution and assume objects are different
+	//       if none of the {version, ETag, MD5, CRC} is present
+	//
+	equal = remVok || remEok || rem5ok || remCok
 	return
 }

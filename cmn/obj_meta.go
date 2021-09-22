@@ -6,6 +6,7 @@
 package cmn
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -58,6 +59,7 @@ type (
 		AtimeUnix() int64
 		GetCustomMD() cos.SimpleKVs
 		SetCustomKey(k, v string)
+		String() string
 	}
 	ObjAttrs struct {
 		Atime    int64         // access time (nanoseconds since UNIX epoch)
@@ -71,6 +73,8 @@ type (
 
 // interface guard
 var _ ObjAttrsHolder = (*ObjAttrs)(nil)
+
+func (oa *ObjAttrs) String() string { return fmt.Sprintf("%+v, size=%d", oa.customMD, oa.Size) }
 
 func (oa *ObjAttrs) SizeBytes(_ ...bool) int64 { return oa.Size }
 func (oa *ObjAttrs) Version(_ ...bool) string  { return oa.Ver }
