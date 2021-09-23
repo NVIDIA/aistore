@@ -17,6 +17,7 @@ redirect_from:
   - [CLI example: working with remote AIS bucket](#cli-example-working-with-remote-ais-bucket)
 - [Remote Bucket](#remote-bucket)
   - [Public Cloud Buckets](#public-cloud-buckets)
+  - [Remote AIS cluster](#remote-ais-cluster)
   - [Public HTTP(S) Datasets](#public-https-dataset)
   - [Prefetch/Evict Objects](#prefetchevict-objects)
   - [Evict Remote Bucket](#evict-remote-bucket)
@@ -174,7 +175,7 @@ AIS Buckets (4)
 	  ais://@MCBgkFqp/imagenet-inflated
 $
 $ # List all buckets in the remote cluster with UUID = MCBgkFqp
-$ # Notice again the syntax: `ais://@some-string` translates as "remote AIS cluster with alias or UUID equal some-string"
+$ # Notice the syntax: `ais://@some-string` translates as "remote AIS cluster with alias or UUID equal some-string"
 $
 $ ais bucket ls ais://@MCBgkFqp
 AIS Buckets (4)
@@ -249,6 +250,21 @@ NAME                         SIZE
 images-train-000000.tar      964.77MiB
 images-train-000001.tar      964.74MiB
 ```
+
+### Remote AIS cluster
+
+AIS cluster can be *attached* to another one which provides immediate capability for one cluster to "see" and transparently access the other's buckets and objects.
+
+The functionality is termed [global namespace](providers.md#remote-ais-cluster) and is further described in the [backend providers](providers.md) readme.
+
+To support global namespace, bucket names include `@`-prefixed cluster UUID. For remote AIS clusters, remote UUID and remote aliases can be used interchangeably.
+
+For example, `ais://@remais/abc` would translate as AIS backend provider, where remote cluster would have `remais` alias.
+
+Example working with remote AIS cluster (as well as easy-to-use scripts) can be found at:
+
+* [readme for developers](development.md)
+* [CLI example: working with remote AIS bucket](#cli-example-working-with-remote-ais-bucket)
 
 ### Public HTTP(S) Dataset
 

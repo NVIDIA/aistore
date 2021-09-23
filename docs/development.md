@@ -50,7 +50,44 @@ To make it even more convenient, consider setting up an alias:
 alias cais="bash ${GOPATH}/src/github.com/NVIDIA/aistore/deploy/scripts/clean-deploy --aws --gcp"
 ```
 
-#### Example usage
+#### Example: minimal remote cluster
+
+The command below can be conveniently used to develop with remote AIS clusters and/or test related functionality.
+
+Here we run two minimal - one gateway and one target - clusters: "local" (by default, at http://localhost:8080)
+and "remote", at http://127.0.0.1:11080.
+
+> Henceforth, the terms "local cluster" and "remote cluster" are used without quotes.
+
+The script will not only deploy the two clusters - it will also assign the remote one its user-specified alias
+and attach one cluster to another, thus forming a [global namespace](providers.md#remote-ais-cluster).
+
+```console
+$ deploy/scripts/clean_deploy.sh --ntargets 1 --nproxies 1 --mountpoints 4 --deployment all --remote-alias remais
+```
+
+From here, one can create and destroy buckets, read and write data, show buckets, objects and their respective properties -
+in short, perform all supported operations on the remote cluster - either directly, via `AIS_ENDPOINT` or indirectly,
+via the (attached) local cluster. For example:
+
+```console
+# create bucket by "pointing" the CLI i(directly) to the remote cluster:
+$ AIS_ENDPOINT=http://127.0.0.1:11080 ais bucket create ais://abc
+
+# PUT an object into remote cluster's bucket:
+$ AIS_ENDPOINT=http://127.0.0.1:11080 ais put README.md ais://abc
+
+# make sure that the local cluster can "see" remote buckets (and **notice** the usage of the remote alias):
+$ ais ls ais://@remais/abc
+
+# show properties of objects stored in the remote cluster's buckets, etc.
+$ ais object show ais://@remais/abc/README.md
+```
+
+> Notice the bucket naming syntax: by convention, prefix `@` indicated remote cluster's UUIDs, and so
+`ais://@remais/abc` translates as "AIS backend provider, where remote cluster has alias `remais`".
+
+#### Example: 5 proxies and 5 targets with GCP
 
 The command below starts a cluster with 5 proxies and 5 targets with GCP cloud enabled.
 Remember to set `GOOGLE_APPLICATION_CREDENTIALS` env when using GCP cloud!

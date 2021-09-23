@@ -38,6 +38,8 @@ In other words, one AIS cluster can be *attached* to another (to transparently a
 Between two AIS clusters A and B the same exact rules apply: as soon as B gets attached to A, any read access to (remote) objects and datasets from B will have the side effect of cluster A persistently caching those objects and datasets on its own clustered servers (aka storage targets), subject to the rules and policies configured on the corresponding A's buckets.
 By *attaching* AIS clusters we are, effectively and ad-hoc, forming a unified global namespace of all individually hosted datasets.
 
+> Example working with remote AIS cluster (as well as easy-to-use scripts) can be found in the [README for developers](development.md).
+
 ### Unified Global Namespace
 
 Examples first. The following two commands attach and then show remote cluster at the address`my.remote.ais:51080`:
