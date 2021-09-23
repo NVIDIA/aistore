@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -399,7 +399,7 @@ func (m *AISBackendProvider) ListBuckets(query cmn.QueryBcks) (bcks cmn.Bcks, er
 	return
 }
 
-func (m *AISBackendProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objAttrs *cmn.ObjAttrs, errCode int, err error) {
+func (m *AISBackendProvider) HeadObj(_ context.Context, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
 	var (
 		aisCluster *remAISCluster
 		p          *cmn.ObjectProps
@@ -413,22 +413,19 @@ func (m *AISBackendProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objAt
 		errCode, err = extractErrCode(err)
 		return
 	}
-	objAttrs = &cmn.ObjAttrs{}
-	objAttrs.SetCustomKey(cmn.HdrBackendProvider, cmn.ProviderAIS)
+	oa = &cmn.ObjAttrs{}
+	oa.SetCustomKey(cmn.SourceObjMD, cmn.ProviderAIS)
 
-	// TODO -- FIXME: to be removed
+	// TODO -- FIXME: unify cmn.ObjAttrs and cmn.ObjectProps
 	debug.Assert(lom.ObjName == p.Name)
 	debug.Assert(lom.Bck().Name == p.Bck.Name)
-	objAttrs.Size = p.Size
-	objAttrs.SetCustomKey(cmn.HdrObjSize, strconv.FormatInt(p.Size, 10))
-	objAttrs.Ver = p.Version
-	objAttrs.SetCustomKey(cmn.HdrObjVersion, p.Version)
-	objAttrs.Atime = p.Atime
-	objAttrs.SetCustomKey(cmn.HdrObjAtime, cos.UnixNano2S(p.Atime))
+	oa.Size, oa.Ver, oa.Atime = p.Size, p.Version, p.Atime
 	if p.Checksum.Type != "" {
-		objAttrs.Cksum = cos.NewCksum(p.Checksum.Type, p.Checksum.Value)
-		objAttrs.SetCustomKey(cmn.HdrObjCksumType, p.Checksum.Type)
-		objAttrs.SetCustomKey(cmn.HdrObjCksumVal, p.Checksum.Value)
+		oa.Cksum = cos.NewCksum(p.Checksum.Type, p.Checksum.Value)
+	}
+	for _, v := range p.Custom {
+		entry := strings.SplitN(v, "=", 2)
+		oa.SetCustomKey(entry[0], entry[1])
 	}
 	return
 }

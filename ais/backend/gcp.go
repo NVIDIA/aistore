@@ -14,7 +14,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 
 	"cloud.google.com/go/storage"
@@ -241,7 +240,7 @@ func (gcpp *gcpProvider) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, errCode in
 // HEAD OBJECT //
 /////////////////
 
-func (*gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objAttrs *cmn.ObjAttrs, errCode int, err error) {
+func (*gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
 	var (
 		attrs    *storage.ObjectAttrs
 		h        = cmn.BackendHelpers.Google
@@ -252,17 +251,18 @@ func (*gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objAttrs *cm
 		errCode, err = handleObjectError(ctx, gcpClient, err, cloudBck)
 		return
 	}
-	objAttrs = &cmn.ObjAttrs{}
-	objAttrs.SetCustomKey(cmn.HdrBackendProvider, cmn.ProviderGoogle)
-	objAttrs.SetCustomKey(cmn.HdrObjSize, strconv.FormatInt(attrs.Size, 10))
+	oa = &cmn.ObjAttrs{}
+	oa.SetCustomKey(cmn.SourceObjMD, cmn.GoogleObjMD)
+	oa.Size = attrs.Size
 	if v, ok := h.EncodeVersion(attrs.Generation); ok {
-		objAttrs.SetCustomKey(cmn.HdrObjVersion, v)
+		oa.SetCustomKey(cmn.VersionObjMD, v)
+		oa.Ver = v
 	}
 	if v, ok := h.EncodeCksum(attrs.MD5); ok {
-		objAttrs.SetCustomKey(cmn.MD5ObjMD, v)
+		oa.SetCustomKey(cmn.MD5ObjMD, v)
 	}
 	if v, ok := h.EncodeCksum(attrs.CRC32C); ok {
-		objAttrs.SetCustomKey(cmn.CRC32CObjMD, v)
+		oa.SetCustomKey(cmn.CRC32CObjMD, v)
 	}
 	if verbose {
 		glog.Infof("[head_object] %s/%s", cloudBck, lom.ObjName)

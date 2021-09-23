@@ -381,9 +381,6 @@ func copyBucketHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	if !bckFrom.IsAIS() {
-		return incorrectUsageMsg(c, "only AIS bucket can be a source")
-	}
 	if bckFrom.Equal(bckTo) {
 		return incorrectUsageMsg(c, errFmtSameBucket, commandCopy, bckTo)
 	}

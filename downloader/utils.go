@@ -246,16 +246,10 @@ func CompareObjects(lom *cluster.LOM, dst *DstElement) (equal bool, err error) {
 	} else {
 		ctx, cancel := context.WithTimeout(context.Background(), headReqTimeout)
 		defer cancel()
-		// This should succeed since we check if the bucket exists beforehand.
 		oa, _, err = cluster.T.Backend(lom.Bck()).HeadObj(ctx, lom)
 		if err != nil {
 			return false, err
 		}
-	}
-
-	// size check
-	if oa.Size != 0 && oa.Size != lom.SizeBytes() {
-		return
 	}
 	equal = lom.Equal(oa)
 	return

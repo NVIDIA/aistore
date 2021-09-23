@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -205,7 +204,7 @@ func (*hdfsProvider) ListBuckets(cmn.QueryBcks) (buckets cmn.Bcks, errCode int, 
 // HEAD OBJECT //
 /////////////////
 
-func (hp *hdfsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objAttrs *cmn.ObjAttrs, errCode int, err error) {
+func (hp *hdfsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
 	var (
 		fr       *hdfs.FileReader
 		filePath = filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
@@ -214,9 +213,9 @@ func (hp *hdfsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objAttrs *
 		errCode, err = hdfsErrorToAISError(err)
 		return
 	}
-	objAttrs = &cmn.ObjAttrs{}
-	objAttrs.SetCustomKey(cmn.HdrBackendProvider, cmn.ProviderHDFS)
-	objAttrs.SetCustomKey(cmn.HdrObjSize, strconv.FormatInt(fr.Stat().Size(), 10))
+	oa = &cmn.ObjAttrs{}
+	oa.SetCustomKey(cmn.SourceObjMD, cmn.HDFSObjMD)
+	oa.Size = fr.Stat().Size()
 	if verbose {
 		glog.Infof("[head_object] %s", lom)
 	}

@@ -118,7 +118,6 @@ const (
 	HdrObjCksumVal  = headerPrefix + "checksum-value" // Checksum value.
 	HdrObjAtime     = headerPrefix + "atime"          // Object access time.
 	HdrObjCustomMD  = headerPrefix + "custom-md"      // Object custom metadata.
-	HdrObjSize      = headerPrefix + "size"           // Object size (bytes).
 	HdrObjVersion   = headerPrefix + "version"        // Object version/generation - ais or cloud.
 
 	// Append object header.

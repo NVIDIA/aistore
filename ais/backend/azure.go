@@ -309,7 +309,7 @@ func (ap *azureProvider) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, errCode in
 // HEAD OBJECT //
 /////////////////
 
-func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objAttrs *cmn.ObjAttrs, errCode int, err error) {
+func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
 	var (
 		resp     *azblob.BlobGetPropertiesResponse
 		h        = cmn.BackendHelpers.Azure
@@ -327,15 +327,15 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objAttr
 		errCode = resp.StatusCode()
 		return
 	}
-	objAttrs = &cmn.ObjAttrs{}
-	objAttrs.SetCustomKey(cmn.HdrBackendProvider, cmn.ProviderAzure)
-	objAttrs.SetCustomKey(cmn.HdrObjSize, strconv.FormatInt(resp.ContentLength(), 10))
-	// NOTE: using ETag as the version
+	oa = &cmn.ObjAttrs{}
+	oa.SetCustomKey(cmn.SourceObjMD, cmn.AzureObjMD)
+	oa.Size = resp.ContentLength()
 	if v, ok := h.EncodeVersion(string(resp.ETag())); ok {
-		objAttrs.SetCustomKey(cmn.HdrObjVersion, v)
+		oa.Ver = v // NOTE: using ETag as _the_ version
+		oa.SetCustomKey(cmn.ETag, v)
 	}
 	if v, ok := h.EncodeCksum(resp.ContentMD5()); ok {
-		objAttrs.SetCustomKey(cmn.MD5ObjMD, v)
+		oa.SetCustomKey(cmn.MD5ObjMD, v)
 	}
 	if verbose {
 		glog.Infof("[head_object] %s", lom)

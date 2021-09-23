@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -125,7 +124,7 @@ func getOriginalURL(ctx context.Context, bck *cluster.Bck, objName string) (stri
 	return origURL, nil
 }
 
-func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objAttrs *cmn.ObjAttrs, errCode int, err error) {
+func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
 	var (
 		h   = cmn.BackendHelpers.HTTP
 		bck = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().RemoteBck()`
@@ -144,13 +143,13 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objAttrs
 	if resp.StatusCode != http.StatusOK {
 		return nil, resp.StatusCode, fmt.Errorf("error occurred: %v", resp.StatusCode)
 	}
-	objAttrs = &cmn.ObjAttrs{}
-	objAttrs.SetCustomKey(cmn.HdrBackendProvider, cmn.ProviderHTTP)
+	oa = &cmn.ObjAttrs{}
+	oa.SetCustomKey(cmn.SourceObjMD, cmn.HTTPObjMD)
 	if resp.ContentLength >= 0 {
-		objAttrs.SetCustomKey(cmn.HdrObjSize, strconv.FormatInt(resp.ContentLength, 10))
+		oa.Size = resp.ContentLength
 	}
 	if v, ok := h.EncodeVersion(resp.Header.Get(cmn.HdrETag)); ok {
-		objAttrs.SetCustomKey(cmn.ETag, v)
+		oa.SetCustomKey(cmn.ETag, v)
 	}
 	if verbose {
 		glog.Infof("[head_object] %s", lom)

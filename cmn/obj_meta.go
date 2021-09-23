@@ -74,7 +74,9 @@ type (
 // interface guard
 var _ ObjAttrsHolder = (*ObjAttrs)(nil)
 
-func (oa *ObjAttrs) String() string { return fmt.Sprintf("%+v, size=%d", oa.customMD, oa.Size) }
+func (oa *ObjAttrs) String() string {
+	return fmt.Sprintf("%dB, v%q, %s, %+v", oa.Size, oa.Ver, oa.Cksum, oa.customMD)
+}
 
 func (oa *ObjAttrs) SizeBytes(_ ...bool) int64 { return oa.Size }
 func (oa *ObjAttrs) Version(_ ...bool) string  { return oa.Ver }
@@ -170,50 +172,81 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum) {
 	return
 }
 
+// local <=> remote equality
 //
-// Equality
+// Other than a "binary" size and version checks, rest logic goes as follows: objects are
+// considered equal if they have a) the same version and at least one matching checksum, or
+// b) the same remote "source" and at least one matching checksum, or c) two matching checksums.
 //
-
+// Note that mismatch in any given checksum type immediately renders inequality and return
+// from the function.
 func (oa *ObjAttrs) Equal(rem ObjAttrsHolder) (equal bool) {
-	var remVok, locVok, remEok, locEok, rem5ok, loc5ok, remCok, locCok bool
-	// provider ("source") check
-	remSrc, ok := rem.GetCustomKey(SourceObjMD)
-	if !ok {
-		return
-	}
-	locSrc, ok := oa.GetCustomKey(SourceObjMD)
-	if !ok || locSrc != remSrc {
+	var (
+		count   int
+		sameVer bool
+	)
+	if oa.Size != 0 && rem.SizeBytes(true) != 0 && oa.Size != rem.SizeBytes(true) {
 		return
 	}
 	// version check
-	var remMeta, locMeta string
-	if remMeta, remVok = rem.GetCustomKey(VersionObjMD); remVok {
-		if locMeta, locVok = oa.GetCustomKey(VersionObjMD); !locVok || remMeta != locMeta {
+	var ver string
+	if oa.Ver != "" && rem.Version(true) != "" {
+		if oa.Ver != rem.Version(true) {
 			return
 		}
-	}
-	// ETag check
-	if remMeta, remEok = rem.GetCustomKey(ETag); remEok {
-		if locMeta, locEok = oa.GetCustomKey(ETag); !locEok || remMeta != locMeta {
-			return
+		sameVer = true
+		ver = oa.Ver
+	} else if remMeta, ok := rem.GetCustomKey(VersionObjMD); ok && remMeta != "" {
+		if locMeta, ok := oa.GetCustomKey(VersionObjMD); ok && locMeta != "" {
+			if remMeta != locMeta {
+				return
+			}
+			sameVer = true
+			ver = locMeta
 		}
 	}
 	// MD5 check
-	if remMeta, rem5ok = rem.GetCustomKey(MD5ObjMD); rem5ok {
-		if locMeta, loc5ok = oa.GetCustomKey(MD5ObjMD); !loc5ok || remMeta != locMeta {
-			return
+	var md5 string
+	if remMeta, ok := rem.GetCustomKey(MD5ObjMD); ok {
+		if locMeta, ok := oa.GetCustomKey(MD5ObjMD); ok {
+			if remMeta != locMeta {
+				return
+			}
+			md5 = locMeta
+			count++
 		}
 	}
-	// finally, CRC check
-	if remMeta, remCok = rem.GetCustomKey(CRC32CObjMD); remCok {
-		if locMeta, locCok = oa.GetCustomKey(CRC32CObjMD); !locCok || remMeta != locMeta {
-			return
+	// ETag check
+	if remMeta, ok := rem.GetCustomKey(ETag); ok {
+		if locMeta, ok := oa.GetCustomKey(ETag); ok {
+			if remMeta != locMeta {
+				return
+			}
+			if md5 != locMeta && ver != locMeta { // against double-counting
+				count++
+			}
 		}
 	}
-	//
-	// NOTE: err on the of caution and assume objects are different
-	//       if none of the {version, ETag, MD5, CRC} is present
-	//
-	equal = remVok || remEok || rem5ok || remCok
+	// CRC check
+	if remMeta, ok := rem.GetCustomKey(CRC32CObjMD); ok {
+		if locMeta, ok := oa.GetCustomKey(CRC32CObjMD); ok {
+			if remMeta != locMeta {
+				return
+			}
+			count++
+		}
+	}
+	if count == 1 {
+		if sameVer {
+			count++
+		}
+		// remote source check
+		if remMeta, ok := rem.GetCustomKey(SourceObjMD); ok {
+			if locMeta, ok := oa.GetCustomKey(SourceObjMD); ok && remMeta == locMeta {
+				count++
+			}
+		}
+	}
+	equal = count >= 2
 	return
 }
