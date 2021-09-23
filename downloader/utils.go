@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 
@@ -233,99 +232,31 @@ func headLink(link string) (*http.Response, error) {
 	return resp, nil
 }
 
-func attrsFromObjMeta(objMeta cos.SimpleKVs, oa *cmn.ObjAttrs) {
-	switch objMeta[cmn.HdrBackendProvider] {
-	case cmn.ProviderGoogle:
-		oa.SetCustomKey(cmn.SourceObjMD, cmn.GoogleObjMD)
-	case cmn.ProviderAmazon:
-		oa.SetCustomKey(cmn.SourceObjMD, cmn.AmazonObjMD)
-	case cmn.ProviderAzure:
-		oa.SetCustomKey(cmn.SourceObjMD, cmn.AzureObjMD)
-	default:
-		return
-	}
-	if v, ok := objMeta[cmn.HdrObjVersion]; ok {
-		oa.SetCustomKey(cmn.VersionObjMD, v)
-	}
-	if v, ok := objMeta[cmn.MD5ObjMD]; ok {
-		oa.SetCustomKey(cmn.MD5ObjMD, v)
-	}
-	if v, ok := objMeta[cmn.CRC32CObjMD]; ok {
-		oa.SetCustomKey(cmn.CRC32CObjMD, v)
-	}
-	if v := objMeta[cmn.HdrObjSize]; v != "" {
-		oa.Size, _ = strconv.ParseInt(v, 10, 64)
-	}
-}
-
 // Use all available metadata including {size, version, ETag, MD5, CRC}
 // to compare local object with its remote counterpart.
 func CompareObjects(lom *cluster.LOM, dst *DstElement) (equal bool, err error) {
-	var oa cmn.ObjAttrs
+	var oa *cmn.ObjAttrs
 	if dst.Link != "" {
 		resp, errHead := headLink(dst.Link)
 		if errHead != nil {
 			return false, errHead
 		}
-		oa.Size = attrsFromLink(dst.Link, resp, &oa)
+		oa = &cmn.ObjAttrs{}
+		oa.Size = attrsFromLink(dst.Link, resp, oa)
 	} else {
 		ctx, cancel := context.WithTimeout(context.Background(), headReqTimeout)
 		defer cancel()
 		// This should succeed since we check if the bucket exists beforehand.
-		objMeta, _, errHead := cluster.T.Backend(lom.Bck()).HeadObj(ctx, lom)
-		if errHead != nil {
-			return false, errHead
+		oa, _, err = cluster.T.Backend(lom.Bck()).HeadObj(ctx, lom)
+		if err != nil {
+			return false, err
 		}
-		attrsFromObjMeta(objMeta, &oa)
 	}
 
 	// size check
 	if oa.Size != 0 && oa.Size != lom.SizeBytes() {
 		return
 	}
-
-	// provider ("source") check
-	remSrc, ok := oa.GetCustomKey(cmn.SourceObjMD)
-	if !ok {
-		return
-	}
-	lomSrc, ok := lom.GetCustomKey(cmn.SourceObjMD)
-	if !ok || lomSrc != remSrc {
-		return
-	}
-
-	var (
-		remMeta, lomMeta                                               string
-		remVok, lomVok, remEok, lomEok, rem5ok, lom5ok, remCok, lomCok bool
-	)
-	// version check
-	if remMeta, remVok = oa.GetCustomKey(cmn.VersionObjMD); remVok {
-		if lomMeta, lomVok = lom.GetCustomKey(cmn.VersionObjMD); !lomVok || remMeta != lomMeta {
-			return
-		}
-	}
-	// ETag check
-	if remMeta, remEok = oa.GetCustomKey(cmn.ETag); remEok {
-		if lomMeta, lomEok = lom.GetCustomKey(cmn.ETag); !lomEok || remMeta != lomMeta {
-			return
-		}
-	}
-	// MD5 check
-	if remMeta, rem5ok = oa.GetCustomKey(cmn.MD5ObjMD); rem5ok {
-		if lomMeta, lom5ok = lom.GetCustomKey(cmn.MD5ObjMD); !lom5ok || remMeta != lomMeta {
-			return
-		}
-	}
-	// finally, CRC check
-	if remMeta, remCok = oa.GetCustomKey(cmn.CRC32CObjMD); remCok {
-		if lomMeta, lomCok = lom.GetCustomKey(cmn.CRC32CObjMD); !lomCok || remMeta != lomMeta {
-			return
-		}
-	}
-	//
-	// NOTE: err on the of caution and assume objects are different
-	//       if none of the {version, ETag, MD5, CRC} is present
-	//
-	equal = remVok || remEok || rem5ok || remCok
+	equal = lom.Equal(oa)
 	return
 }

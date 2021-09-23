@@ -395,12 +395,14 @@ do:
 	}
 	// exists && remote|cloud: check ver if requested
 	if !coldGet && goi.lom.Bck().IsRemote() {
-		if goi.lom.Version() != "" && goi.lom.VersionConf().ValidateWarmGet {
+		if goi.lom.VersionConf().ValidateWarmGet {
+			var equal bool
 			goi.lom.Unlock(false)
-			if coldGet, errCode, err = goi.t.CheckRemoteVersion(goi.ctx, goi.lom); err != nil {
+			if equal, errCode, err = goi.t.CompareObjects(goi.ctx, goi.lom); err != nil {
 				goi.lom.Uncache(true /*delDirty*/)
 				return
 			}
+			coldGet = !equal
 			goi.lom.Lock(false)
 		}
 	}

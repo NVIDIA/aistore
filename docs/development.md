@@ -40,7 +40,7 @@ $ make help
 ### Clean deploy
 
 ```
-./clean_deploy.sh [--ntargets TARGET_CNT] [--nproxies PROXY_CNT] [--mountpoints MPOINT_CNT] [--https] [--deploy local|remote|both] [--remote-alias REMOTE_ALIAS] [--PROVIDER ...] [--debug PKG=LOG_LEVEL[,PKG=LOG_LEVEL]]
+./clean_deploy.sh [--ntargets TARGET_CNT] [--nproxies PROXY_CNT] [--mountpoints MPOINT_CNT] [--https] [--deployment local|remote|all] [--remote-alias REMOTE_ALIAS] [--PROVIDER ...] [--debug PKG=LOG_LEVEL[,PKG=LOG_LEVEL]]
 ```
 
 Performs cleanup and then deploys a new instance of an AIS cluster.

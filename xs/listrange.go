@@ -337,22 +337,16 @@ func (r *prefetch) Run(*sync.WaitGroup) {
 }
 
 func (r *prefetch) do(lom *cluster.LOM, _ *lriterator) {
-	var coldGet bool
 	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
-		coldGet = cmn.IsObjNotExist(err)
-		if !coldGet {
+		if !cmn.IsObjNotExist(err) {
 			return
 		}
-	}
-	if !coldGet && lom.Version() != "" && lom.VersionConf().ValidateWarmGet {
-		var err error
-		if coldGet, _, err = r.t.CheckRemoteVersion(r.ctx, lom); err != nil {
-			glog.Warning(err)
+	} else if lom.VersionConf().ValidateWarmGet {
+		if equal, _, err := r.t.CompareObjects(r.ctx, lom); equal || err != nil {
 			return
 		}
-	}
-	if !coldGet {
-		return
+	} else {
+		return // simply exists
 	}
 	// Do not set Atime to current time as prefetching does not mean the object
 	// was used. At the same time, zero Atime make the lom life-span in the cache

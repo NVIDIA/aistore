@@ -259,7 +259,7 @@ func (*awsProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err 
 // HEAD OBJECT //
 /////////////////
 
-func (*awsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta cos.SimpleKVs, errCode int, err error) {
+func (*awsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objAttrs *cmn.ObjAttrs, errCode int, err error) {
 	var (
 		headOutput *s3.HeadObjectOutput
 		svc        *s3.S3
@@ -270,7 +270,6 @@ func (*awsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta cos.Si
 	if err != nil && verbose {
 		glog.Warning(err)
 	}
-
 	headOutput, err = svc.HeadObject(&s3.HeadObjectInput{
 		Bucket: aws.String(cloudBck.Name),
 		Key:    aws.String(lom.ObjName),
@@ -279,18 +278,18 @@ func (*awsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta cos.Si
 		errCode, err = awsErrorToAISError(err, cloudBck)
 		return
 	}
-	objMeta = make(cos.SimpleKVs, 4)
-	objMeta[cmn.HdrBackendProvider] = cmn.ProviderAmazon
-	objMeta[cmn.HdrObjSize] = strconv.FormatInt(*headOutput.ContentLength, 10)
+	objAttrs = &cmn.ObjAttrs{}
+	objAttrs.SetCustomKey(cmn.HdrBackendProvider, cmn.ProviderAmazon)
+	objAttrs.SetCustomKey(cmn.HdrObjSize, strconv.FormatInt(*headOutput.ContentLength, 10))
 	if v, ok := h.EncodeVersion(headOutput.VersionId); ok {
-		objMeta[cmn.HdrObjVersion] = v
+		objAttrs.SetCustomKey(cmn.HdrObjVersion, v)
 	}
 	if v, ok := h.EncodeCksum(headOutput.ETag); ok {
-		objMeta[cmn.ETag] = v
+		objAttrs.SetCustomKey(cmn.ETag, v)
 		// NOTE: the checksum is _not_ multipart (see `h.EncodeCksum`) but still,
 		//       assuming SSE-S3 or plaintext encryption - see
 		//       https://docs.aws.amazon.com/AmazonS3/latest/API/API_Object.html
-		objMeta[cmn.MD5ObjMD] = v
+		objAttrs.SetCustomKey(cmn.MD5ObjMD, v)
 	}
 	if verbose {
 		glog.Infof("[head_object] %s/%s", cloudBck, lom.ObjName)

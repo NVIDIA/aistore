@@ -309,33 +309,33 @@ func (ap *azureProvider) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, errCode in
 // HEAD OBJECT //
 /////////////////
 
-func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cos.SimpleKVs,
-	errCode int, err error) {
-	objMeta = make(cos.SimpleKVs)
+func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objAttrs *cmn.ObjAttrs, errCode int, err error) {
 	var (
+		resp     *azblob.BlobGetPropertiesResponse
 		h        = cmn.BackendHelpers.Azure
 		cloudBck = lom.Bck().RemoteBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 		blobURL  = cntURL.NewBlobURL(lom.ObjName)
 	)
-	resp, err := blobURL.GetProperties(ctx, azblob.BlobAccessConditions{}, defaultKeyOptions)
-	if err != nil {
-		status, err := azureErrorToAISError(err, cloudBck, lom.ObjName)
-		return objMeta, status, err
+	if resp, err = blobURL.GetProperties(ctx, azblob.BlobAccessConditions{}, defaultKeyOptions); err != nil {
+		errCode, err = azureErrorToAISError(err, cloudBck, lom.ObjName)
+		return
 	}
 	if resp.StatusCode() >= http.StatusBadRequest {
-		err := fmt.Errorf(cmn.FmtErrFailed, cmn.ProviderAzure, "get object props of",
+		err = fmt.Errorf(cmn.FmtErrFailed, cmn.ProviderAzure, "get object props of",
 			cloudBck.Name+"/"+lom.ObjName, strconv.Itoa(resp.StatusCode()))
-		return objMeta, resp.StatusCode(), err
+		errCode = resp.StatusCode()
+		return
 	}
-	objMeta[cmn.HdrObjSize] = strconv.FormatInt(resp.ContentLength(), 10)
-	objMeta[cmn.HdrBackendProvider] = cmn.ProviderAzure
-	// NOTE: using ETag as version
+	objAttrs = &cmn.ObjAttrs{}
+	objAttrs.SetCustomKey(cmn.HdrBackendProvider, cmn.ProviderAzure)
+	objAttrs.SetCustomKey(cmn.HdrObjSize, strconv.FormatInt(resp.ContentLength(), 10))
+	// NOTE: using ETag as the version
 	if v, ok := h.EncodeVersion(string(resp.ETag())); ok {
-		objMeta[cmn.HdrObjVersion] = v
+		objAttrs.SetCustomKey(cmn.HdrObjVersion, v)
 	}
 	if v, ok := h.EncodeCksum(resp.ContentMD5()); ok {
-		objMeta[cmn.MD5ObjMD] = v
+		objAttrs.SetCustomKey(cmn.MD5ObjMD, v)
 	}
 	if verbose {
 		glog.Infof("[head_object] %s", lom)

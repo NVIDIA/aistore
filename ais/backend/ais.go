@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -288,7 +289,7 @@ func (m *AISBackendProvider) remoteCluster(uuid string) (*remAISCluster, error) 
 	return remAis, nil
 }
 
-func prepareBck(bck cmn.Bck) cmn.Bck {
+func unsetUUID(bck cmn.Bck) cmn.Bck {
 	bck.Ns.UUID = ""
 	return bck
 }
@@ -316,57 +317,50 @@ func (*AISBackendProvider) CreateBucket(_ *cluster.Bck) (errCode int, err error)
 }
 
 func (m *AISBackendProvider) HeadBucket(_ context.Context, remoteBck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
-	debug.Assert(remoteBck.Provider == cmn.ProviderAIS)
-
-	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
-	if err != nil {
-		return nil, errCode, err
+	var (
+		aisCluster *remAISCluster
+		p          *cmn.BucketProps
+	)
+	if aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID); err != nil {
+		return
 	}
-	bck := prepareBck(remoteBck.Bck)
-	p, err := api.HeadBucket(aisCluster.bp, bck)
-	if err != nil {
+	bck := unsetUUID(remoteBck.Bck)
+	if p, err = api.HeadBucket(aisCluster.bp, bck); err != nil {
 		errCode, err = extractErrCode(err)
-		return bckProps, errCode, err
+		return
 	}
 	bckProps = make(cos.SimpleKVs)
 	err = cmn.IterFields(p, func(uniqueTag string, field cmn.IterField) (e error, b bool) {
 		bckProps[uniqueTag] = fmt.Sprintf("%v", field.Value())
 		return nil, false
 	})
-	debug.AssertNoErr(err)
-	return bckProps, 0, nil
+	return
 }
 
 func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
-	debug.Assert(remoteBck.Provider == cmn.ProviderAIS)
-
-	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
-	if err != nil {
-		return nil, errCode, err
+	var aisCluster *remAISCluster
+	if aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID); err != nil {
+		return
 	}
-
 	remoteMsg := msg.Clone()
 	remoteMsg.PageSize = calcPageSize(remoteMsg.PageSize, m.MaxPageSize())
 
 	// TODO: Currently we cannot remember the `UUID` from remote cluster and
-	//  embed it into `ContinuationToken`. The problem is that when local data
-	//  is needed then all targets list cloud objects and currently we don't
-	//  support listing objects (AIS bucket) with same `UUID` from multiple clients.
-	//
+	// embed it into `ContinuationToken`. The problem is that when local data
+	// is needed then all targets list cloud objects and currently we don't
+	// support listing objects (AIS bucket) with same `UUID` from multiple clients.
 	// Clearing `remoteMsg.UUID` is necessary otherwise the remote cluster
 	// will think that it already knows this UUID and problems will arise.
 	remoteMsg.UUID = ""
 
-	bck := prepareBck(remoteBck.Bck)
-	bckList, err = api.ListObjectsPage(aisCluster.bp, bck, remoteMsg)
-	if err != nil {
+	bck := unsetUUID(remoteBck.Bck)
+	if bckList, err = api.ListObjectsPage(aisCluster.bp, bck, remoteMsg); err != nil {
 		errCode, err = extractErrCode(err)
-		return bckList, errCode, err
+		return
 	}
-	// Set original UUID of the request (UUID of remote cluster is already
-	// embedded into `ContinuationToken`).
+	// Restore original request UUID (UUID of the remote cluster is already inside `ContinuationToken`).
 	bckList.UUID = msg.UUID
-	return bckList, 0, nil
+	return
 }
 
 func (m *AISBackendProvider) listBucketsCluster(uuid string, query cmn.QueryBcks) (bcks cmn.Bcks, err error) {
@@ -405,61 +399,70 @@ func (m *AISBackendProvider) ListBuckets(query cmn.QueryBcks) (bcks cmn.Bcks, er
 	return
 }
 
-func (m *AISBackendProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objHdrMeta cos.SimpleKVs, errCode int, err error) {
-	remoteBck := lom.Bucket()
-	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
-	if err != nil {
-		return nil, errCode, err
+func (m *AISBackendProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objAttrs *cmn.ObjAttrs, errCode int, err error) {
+	var (
+		aisCluster *remAISCluster
+		p          *cmn.ObjectProps
+		remoteBck  = lom.Bucket()
+	)
+	if aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID); err != nil {
+		return
 	}
-	bck := prepareBck(remoteBck)
-	p, err := api.HeadObject(aisCluster.bp, bck, lom.ObjName)
-	if err != nil {
+	bck := unsetUUID(remoteBck)
+	if p, err = api.HeadObject(aisCluster.bp, bck, lom.ObjName); err != nil {
 		errCode, err = extractErrCode(err)
-		return nil, errCode, err
+		return
 	}
-	objHdrMeta = make(cos.SimpleKVs)
-	err = cmn.IterFields(p, func(tag string, field cmn.IterField) (e error, b bool) {
-		headerName := cmn.PropToHeader(tag)
-		objHdrMeta[headerName] = fmt.Sprintf("%v", field.Value())
-		return nil, false
-	})
-	debug.AssertNoErr(err)
-	return objHdrMeta, 0, nil
+	objAttrs = &cmn.ObjAttrs{}
+	objAttrs.SetCustomKey(cmn.HdrBackendProvider, cmn.ProviderAIS)
+
+	// TODO -- FIXME: to be removed
+	debug.Assert(lom.ObjName == p.Name)
+	debug.Assert(lom.Bck().Name == p.Bck.Name)
+	objAttrs.Size = p.Size
+	objAttrs.SetCustomKey(cmn.HdrObjSize, strconv.FormatInt(p.Size, 10))
+	objAttrs.Ver = p.Version
+	objAttrs.SetCustomKey(cmn.HdrObjVersion, p.Version)
+	objAttrs.Atime = p.Atime
+	objAttrs.SetCustomKey(cmn.HdrObjAtime, cos.UnixNano2S(p.Atime))
+	if p.Checksum.Type != "" {
+		objAttrs.Cksum = cos.NewCksum(p.Checksum.Type, p.Checksum.Value)
+		objAttrs.SetCustomKey(cmn.HdrObjCksumType, p.Checksum.Type)
+		objAttrs.SetCustomKey(cmn.HdrObjCksumVal, p.Checksum.Value)
+	}
+	return
 }
 
 func (m *AISBackendProvider) GetObj(_ context.Context, lom *cluster.LOM) (errCode int, err error) {
-	remoteBck := lom.Bucket()
-	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
-	if err != nil {
-		return errCode, err
+	var (
+		aisCluster *remAISCluster
+		r          io.ReadCloser
+		remoteBck  = lom.Bucket()
+	)
+	if aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID); err != nil {
+		return
 	}
-
-	bck := prepareBck(remoteBck)
-	r, err := api.GetObjectReader(aisCluster.bp, bck, lom.ObjName)
-	if err != nil {
+	bck := unsetUUID(remoteBck)
+	if r, err = api.GetObjectReader(aisCluster.bp, bck, lom.ObjName); err != nil {
 		return extractErrCode(err)
 	}
-
-	params := cluster.PutObjectParams{
-		Tag:      fs.WorkfileColdget,
-		Reader:   r,
-		RecvType: cluster.ColdGet,
-	}
+	params := cluster.PutObjectParams{Tag: fs.WorkfileColdget, Reader: r, RecvType: cluster.ColdGet}
 	err = m.t.PutObject(lom, params)
 	return extractErrCode(err)
 }
 
-func (m *AISBackendProvider) GetObjReader(_ context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cos.Cksum,
+func (m *AISBackendProvider) GetObjReader(_ context.Context, lom *cluster.LOM) (r io.ReadCloser, expCksum *cos.Cksum,
 	errCode int, err error) {
-	remoteBck := lom.Bucket()
-	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
-	if err != nil {
-		return nil, nil, errCode, err
+	var (
+		aisCluster *remAISCluster
+		remoteBck  = lom.Bucket()
+	)
+	if aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID); err != nil {
+		return
 	}
-
 	r, err = api.GetObjectReader(aisCluster.bp, remoteBck, lom.ObjName)
 	errCode, err = extractErrCode(err)
-	return r, nil, errCode, err
+	return
 }
 
 func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err error) {
@@ -467,22 +470,19 @@ func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode 
 		aisCluster *remAISCluster
 		remoteBck  = lom.Bucket()
 	)
-	aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID)
-	if err != nil {
+	if aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID); err != nil {
 		cos.Close(r)
 		return
 	}
-	var (
-		bck  = prepareBck(lom.Bucket())
-		args = api.PutObjectArgs{
-			BaseParams: aisCluster.bp,
-			Bck:        bck,
-			Object:     lom.ObjName,
-			Cksum:      lom.Checksum(),
-			Reader:     r.(cos.ReadOpenCloser),
-			Size:       uint64(lom.SizeBytes(true)), // It's special because it's still workfile.
-		}
-	)
+	bck := unsetUUID(remoteBck)
+	args := api.PutObjectArgs{
+		BaseParams: aisCluster.bp,
+		Bck:        bck,
+		Object:     lom.ObjName,
+		Cksum:      lom.Checksum(),
+		Reader:     r.(cos.ReadOpenCloser),
+		Size:       uint64(lom.SizeBytes(true)), // _special_ because it's still workfile.
+	}
 	if err = api.PutObject(args); err != nil {
 		errCode, err = extractErrCode(err)
 	}
@@ -490,12 +490,14 @@ func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode 
 }
 
 func (m *AISBackendProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
-	remoteBck := lom.Bucket()
-	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
-	if err != nil {
-		return errCode, err
+	var (
+		aisCluster *remAISCluster
+		remoteBck  = lom.Bucket()
+	)
+	if aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID); err != nil {
+		return
 	}
-	bck := prepareBck(remoteBck)
+	bck := unsetUUID(remoteBck)
 	err = api.DeleteObject(aisCluster.bp, bck, lom.ObjName)
 	return extractErrCode(err)
 }

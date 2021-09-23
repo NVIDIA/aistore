@@ -339,28 +339,19 @@ type (
 	forMarshaler interface {
 		forMarshal() interface{}
 	}
-
 	DiskStatsTemplateHelper struct {
 		TargetID string
 		DiskName string
 		Stat     ios.DiskStats
 	}
-
-	ObjectStatTemplateHelper struct {
-		Name  string
-		Props *cmn.ObjectProps
-	}
-
 	SmapTemplateHelper struct {
 		Smap         *cluster.Smap
 		ExtendedURLs bool
 	}
-
 	DaemonStatusTemplateHelper struct {
 		Pmap map[string]*stats.DaemonStatus `json:"pmap"`
 		Tmap map[string]*stats.DaemonStatus `json:"tmap"`
 	}
-
 	StatusTemplateHelper struct {
 		Smap   *cluster.Smap              `json:"smap"`
 		Status DaemonStatusTemplateHelper `json:"status"`

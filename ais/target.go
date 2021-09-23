@@ -1056,6 +1056,7 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 	}
 
 	// 1. add cmn.HdrObj* props
+	var size int64
 	if lom.Bck().IsAIS() {
 		if !exists {
 			err = cmn.NewErrNotFound("%s: object %s", t.si, lom.FullName())
@@ -1063,26 +1064,26 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 			return
 		}
 		lom.ObjAttrs().ToHeader(hdr)
+		size = lom.SizeBytes()
 	} else if exists {
 		lom.ObjAttrs().ToHeader(hdr)
+		size = lom.SizeBytes()
 	} else {
-		objMeta, errCode, err := t.Backend(lom.Bck()).HeadObj(context.Background(), lom)
+		objAttrs, errCode, err := t.Backend(lom.Bck()).HeadObj(context.Background(), lom)
 		if err != nil {
 			err = fmt.Errorf(cmn.FmtErrFailed, t.si, "HEAD", lom, err)
 			invalidHandler(w, r, err, errCode)
 			return
 		}
-		// 2. add Cloud props as is
-		for k, v := range objMeta {
-			hdr.Set(k, v)
-		}
+		objAttrs.ToHeader(hdr)
+		size = objAttrs.SizeBytes(true)
 	}
 
 	// 3. add cmn.ObjectProps via json-tag => headerName (dynamic)
 	objProps := cmn.ObjectProps{
 		Name:    lom.ObjName,
 		Bck:     lom.Bucket(),
-		Size:    lom.SizeBytes(),
+		Size:    size,
 		Present: exists,
 	}
 	if exists {
@@ -1256,44 +1257,18 @@ func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, bck *clu
 // CheckRemoteVersion sets `vchanged` to true if object versions differ between
 // remote object and local cache.
 // NOTE: Should be called only if the local copy exists.
-func (t *targetrunner) CheckRemoteVersion(ctx context.Context, lom *cluster.LOM) (vchanged bool, errCode int, err error) {
-	var objMeta cos.SimpleKVs
-	vchanged = true
-	objMeta, errCode, err = t.Backend(lom.Bck()).HeadObj(ctx, lom)
+func (t *targetrunner) CompareObjects(ctx context.Context, lom *cluster.LOM) (equal bool, errCode int, err error) {
+	var objAttrs *cmn.ObjAttrs
+	objAttrs, errCode, err = t.Backend(lom.Bck()).HeadObj(ctx, lom)
 	if err != nil {
 		err = fmt.Errorf(cmn.FmtErrFailed, t.si, "head metadata of", lom, err)
 		return
 	}
 	if lom.Bck().IsHDFS() {
-		vchanged = false // cannot perform the check
+		equal = true // no versioning in HDFS
 		return
 	}
-	if lom.Bck().IsRemoteAIS() && !lom.VersionConf().Enabled {
-		vchanged = false // ditto
-		return
-	}
-
-	// compare with downloader/utils.go
-
-	// check version
-	if remoteVersion, ok := objMeta[cmn.HdrObjVersion]; ok {
-		if lom.Version() == remoteVersion {
-			vchanged = false
-			return
-		}
-		glog.Infof("%s: version changed from %s to %s", lom, lom.Version(), remoteVersion)
-		return
-	}
-	// check ETag
-	if remEtag, ok := objMeta[cmn.ETag]; ok {
-		if lomEtag, ok := lom.GetCustomKey(cmn.ETag); ok {
-			if remEtag == lomEtag {
-				vchanged = false
-				return
-			}
-			glog.Infof("%s: ETag changed from %s to %s", lom, lomEtag, remEtag)
-		}
-	}
+	equal = lom.Equal(objAttrs)
 	return
 }
 

@@ -205,17 +205,18 @@ func (*hdfsProvider) ListBuckets(cmn.QueryBcks) (buckets cmn.Bcks, errCode int, 
 // HEAD OBJECT //
 /////////////////
 
-func (hp *hdfsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta cos.SimpleKVs, errCode int, err error) {
-	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
-	fr, err := hp.c.Open(filePath)
-	if err != nil {
+func (hp *hdfsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objAttrs *cmn.ObjAttrs, errCode int, err error) {
+	var (
+		fr       *hdfs.FileReader
+		filePath = filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
+	)
+	if fr, err = hp.c.Open(filePath); err != nil {
 		errCode, err = hdfsErrorToAISError(err)
-		return nil, errCode, err
+		return
 	}
-	objMeta = make(cos.SimpleKVs, 4)
-	objMeta[cmn.HdrBackendProvider] = cmn.ProviderHDFS
-	objMeta[cmn.HdrObjSize] = strconv.FormatInt(fr.Stat().Size(), 10)
-	objMeta[cmn.VersionObjMD] = ""
+	objAttrs = &cmn.ObjAttrs{}
+	objAttrs.SetCustomKey(cmn.HdrBackendProvider, cmn.ProviderHDFS)
+	objAttrs.SetCustomKey(cmn.HdrObjSize, strconv.FormatInt(fr.Stat().Size(), 10))
 	if verbose {
 		glog.Infof("[head_object] %s", lom)
 	}

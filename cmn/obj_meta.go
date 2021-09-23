@@ -58,6 +58,7 @@ type (
 		Checksum() *cos.Cksum
 		AtimeUnix() int64
 		GetCustomMD() cos.SimpleKVs
+		GetCustomKey(key string) (val string, exists bool)
 		SetCustomKey(k, v string)
 		String() string
 	}
@@ -166,5 +167,53 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum) {
 			oa.SetCustomKey(entry[0], entry[1])
 		}
 	}
+	return
+}
+
+//
+// Equality
+//
+
+func (oa *ObjAttrs) Equal(rem ObjAttrsHolder) (equal bool) {
+	var remVok, locVok, remEok, locEok, rem5ok, loc5ok, remCok, locCok bool
+	// provider ("source") check
+	remSrc, ok := rem.GetCustomKey(SourceObjMD)
+	if !ok {
+		return
+	}
+	locSrc, ok := oa.GetCustomKey(SourceObjMD)
+	if !ok || locSrc != remSrc {
+		return
+	}
+	// version check
+	var remMeta, locMeta string
+	if remMeta, remVok = rem.GetCustomKey(VersionObjMD); remVok {
+		if locMeta, locVok = oa.GetCustomKey(VersionObjMD); !locVok || remMeta != locMeta {
+			return
+		}
+	}
+	// ETag check
+	if remMeta, remEok = rem.GetCustomKey(ETag); remEok {
+		if locMeta, locEok = oa.GetCustomKey(ETag); !locEok || remMeta != locMeta {
+			return
+		}
+	}
+	// MD5 check
+	if remMeta, rem5ok = rem.GetCustomKey(MD5ObjMD); rem5ok {
+		if locMeta, loc5ok = oa.GetCustomKey(MD5ObjMD); !loc5ok || remMeta != locMeta {
+			return
+		}
+	}
+	// finally, CRC check
+	if remMeta, remCok = rem.GetCustomKey(CRC32CObjMD); remCok {
+		if locMeta, locCok = oa.GetCustomKey(CRC32CObjMD); !locCok || remMeta != locMeta {
+			return
+		}
+	}
+	//
+	// NOTE: err on the of caution and assume objects are different
+	//       if none of the {version, ETag, MD5, CRC} is present
+	//
+	equal = remVok || remEok || rem5ok || remCok
 	return
 }

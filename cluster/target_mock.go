@@ -31,8 +31,7 @@ func NewTargetMock(bo Bowner) *TargetMock {
 	return t
 }
 
-func (t *TargetMock) Bowner() Bowner { return t.BO }
-
+func (t *TargetMock) Bowner() Bowner                                        { return t.BO }
 func (*TargetMock) Sname() string                                           { return "" }
 func (*TargetMock) SID() string                                             { return "" }
 func (*TargetMock) Snode() *Snode                                           { return nil }
@@ -57,6 +56,7 @@ func (*TargetMock) LookupRemoteSingle(*LOM, *Snode) bool                    { re
 func (*TargetMock) RebalanceNamespace(*Snode) ([]byte, int, error)          { return nil, 0, nil }
 func (*TargetMock) BMDVersionFixup(*http.Request, ...cmn.Bck)               {}
 func (*TargetMock) CopyObject(*LOM, *CopyObjectParams, bool) (int64, error) { return 0, nil }
+func (*TargetMock) CompareObjects(context.Context, *LOM) (bool, int, error) { return true, 0, nil }
 
 func (*TargetMock) GetCold(context.Context, *LOM, GetColdType) (int, error) {
 	return http.StatusOK, nil
@@ -64,8 +64,4 @@ func (*TargetMock) GetCold(context.Context, *LOM, GetColdType) (int, error) {
 
 func (*TargetMock) Health(*Snode, time.Duration, url.Values) ([]byte, int, error) {
 	return nil, 0, nil
-}
-
-func (*TargetMock) CheckRemoteVersion(context.Context, *LOM) (bool, int, error) {
-	return false, 0, nil
 }

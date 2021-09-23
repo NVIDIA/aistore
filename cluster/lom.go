@@ -163,6 +163,9 @@ func (lom *LOM) LIF() (lif LIF) {
 
 func (lom *LOM) ObjAttrs() *cmn.ObjAttrs { return &lom.md.ObjAttrs }
 
+// LOM == remote-object equality check
+func (lom *LOM) Equal(rem cmn.ObjAttrsHolder) (equal bool) { return lom.ObjAttrs().Equal(rem) }
+
 func (lom *LOM) CopyAttrs(oah cmn.ObjAttrsHolder, skipCksum bool) {
 	lom.md.ObjAttrs.CopyFrom(oah, skipCksum)
 }
@@ -1097,10 +1100,6 @@ func (lom *LOM) Lock(exclusive bool) {
 	nlc.Lock(lom.Uname(), exclusive)
 }
 
-// BEWARE: `UpgradeLock` synchronizes correctly the threads which are waiting
-//  for **the same** action. Otherwise, there is still potential risk that one
-//  action will do something unexpected during `UpgradeLock` before next action
-//  which already checked conditions and is also waiting for the `UpgradeLock`.
 func (lom *LOM) UpgradeLock() (finished bool) {
 	var (
 		_, idx = lom.Hkey()

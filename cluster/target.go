@@ -74,7 +74,7 @@ type (
 
 		// with context
 		HeadBucket(ctx context.Context, bck *Bck) (bckProps cos.SimpleKVs, errCode int, err error)
-		HeadObj(ctx context.Context, lom *LOM) (objMeta cos.SimpleKVs, errCode int, err error)
+		HeadObj(ctx context.Context, lom *LOM) (objAttrs *cmn.ObjAttrs, errCode int, err error)
 		GetObj(ctx context.Context, lom *LOM) (errCode int, err error)
 		GetObjReader(ctx context.Context, lom *LOM) (r io.ReadCloser, expectedCksum *cos.Cksum, errCode int, err error)
 	}
@@ -151,7 +151,7 @@ type Target interface {
 
 	// Backend provider(s) related functions.
 	Backend(*Bck) BackendProvider
-	CheckRemoteVersion(ctx context.Context, lom *LOM) (vchanged bool, errCode int, err error)
+	CompareObjects(ctx context.Context, lom *LOM) (equal bool, errCode int, err error)
 
 	// Object related functions.
 	PutObject(lom *LOM, params PutObjectParams) (err error)

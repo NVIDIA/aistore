@@ -157,10 +157,10 @@ func (nlc *nlc) Lock(uname string, exclusive bool) {
 	}
 }
 
-// BEWARE: `UpgradeLock` synchronizes correctly the threads which are waiting
-//  for **the same** action. Otherwise, there is still potential risk that one
-//  action will do something unexpected during `UpgradeLock` before next action
-//  which already checked conditions and is also waiting for the `UpgradeLock`.
+// NOTE: `UpgradeLock` correctly synchronizes the threads which are waiting
+// for **the same** action. Otherwise, there is still potential risk that one
+// action will do something unexpected during `UpgradeLock` before next action
+// which already checked conditions and is also waiting for the `UpgradeLock`.
 func (nlc *nlc) UpgradeLock(uname string) (finished bool) {
 	nlc.mu.Lock()
 	info, found := nlc.m[uname]

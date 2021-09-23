@@ -125,19 +125,17 @@ func getOriginalURL(ctx context.Context, bck *cluster.Bck, objName string) (stri
 	return origURL, nil
 }
 
-func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cos.SimpleKVs, errCode int, err error) {
+func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objAttrs *cmn.ObjAttrs, errCode int, err error) {
 	var (
 		h   = cmn.BackendHelpers.HTTP
 		bck = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().RemoteBck()`
 	)
-
 	origURL, err := getOriginalURL(ctx, bck, lom.ObjName)
 	debug.AssertNoErr(err)
 
 	if verbose {
 		glog.Infof("[head_object] original_url: %q", origURL)
 	}
-
 	resp, err := hp.client(origURL).Head(origURL)
 	if err != nil {
 		return nil, http.StatusBadRequest, err
@@ -146,13 +144,13 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta 
 	if resp.StatusCode != http.StatusOK {
 		return nil, resp.StatusCode, fmt.Errorf("error occurred: %v", resp.StatusCode)
 	}
-	objMeta = make(cos.SimpleKVs, 2)
-	objMeta[cmn.HdrBackendProvider] = cmn.ProviderHTTP
+	objAttrs = &cmn.ObjAttrs{}
+	objAttrs.SetCustomKey(cmn.HdrBackendProvider, cmn.ProviderHTTP)
 	if resp.ContentLength >= 0 {
-		objMeta[cmn.HdrObjSize] = strconv.FormatInt(resp.ContentLength, 10)
+		objAttrs.SetCustomKey(cmn.HdrObjSize, strconv.FormatInt(resp.ContentLength, 10))
 	}
 	if v, ok := h.EncodeVersion(resp.Header.Get(cmn.HdrETag)); ok {
-		objMeta[cmn.ETag] = v
+		objAttrs.SetCustomKey(cmn.ETag, v)
 	}
 	if verbose {
 		glog.Infof("[head_object] %s", lom)

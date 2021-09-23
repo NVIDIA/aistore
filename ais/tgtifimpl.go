@@ -199,23 +199,11 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 	case cluster.GetCold:
 		for lom.UpgradeLock() {
 			// The action was performed by some other goroutine and we don't need
-			// to do it again. But we need to ensure that the operation was successful.
+			// to do it again. But we need to check on the object.
 			if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-				if cmn.IsErrObjNought(err) {
-					// Try to get `UpgradeLock` again and retry getting object.
-					glog.Errorf("%s: %s doesn't exist, err: %v - retrying...", t.si, lom, err)
-					continue
-				}
-				return http.StatusBadRequest, err
-			}
-			if vchanged, errCode, err := t.CheckRemoteVersion(ctx, lom); err != nil {
-				return errCode, err
-			} else if vchanged {
-				// Need to re-download the object as the version has changed.
-				glog.Errorf("%s: backend provider has a newer version of %s - retrying...", t.si, lom)
+				glog.Errorf("%s: %s load err: %v - retrying...", t.si, lom, err)
 				continue
 			}
-			// Object exists and version is up-to-date.
 			return 0, nil
 		}
 	default:
