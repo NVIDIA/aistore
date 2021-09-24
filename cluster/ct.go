@@ -6,6 +6,7 @@ package cluster
 
 import (
 	"io"
+	"os"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -24,6 +25,8 @@ type CT struct {
 	mpathInfo   *fs.MountpathInfo
 	uname       string
 	digest      uint64
+	size        int64
+	mtime       int64
 }
 
 // interface guard
@@ -35,6 +38,18 @@ func (ct *CT) ContentType() string          { return ct.contentType }
 func (ct *CT) Bck() *Bck                    { return ct.bck }
 func (ct *CT) Bucket() cmn.Bck              { return ct.bck.Bucket() }
 func (ct *CT) MpathInfo() *fs.MountpathInfo { return ct.mpathInfo }
+func (ct *CT) SizeBytes() int64             { return ct.size }
+func (ct *CT) MtimeUnix() int64             { return ct.mtime }
+
+func (ct *CT) LoadFromFS() error {
+	st, err := os.Stat(ct.FQN())
+	if err != nil {
+		return err
+	}
+	ct.size = st.Size()
+	ct.mtime = st.ModTime().UnixNano()
+	return nil
+}
 
 func (ct *CT) Uname() string {
 	if ct.uname == "" {

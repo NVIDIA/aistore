@@ -351,7 +351,14 @@ func (j *lruJ) visitCT(parsedFQN fs.ParsedFQN, fqn string) {
 			j.oldWork = append(j.oldWork, fqn)
 			return
 		}
-		// TODO: use DontEvictTime when CT supports last access time
+		if err := ct.LoadFromFS(); err != nil {
+			return
+		}
+		// Saving a CT is not atomic: first it saves CT, then its metafile
+		// follows. Ignore just updated CTs to avoid processing incomplete data.
+		if ct.MtimeUnix()+int64(j.config.LRU.DontEvictTime) > j.now {
+			return
+		}
 		metaFQN := fs.CSM.GenContentFQN(ct, fs.ECMetaType, "")
 		if fs.Access(metaFQN) != nil {
 			j.misplaced.ec = append(j.misplaced.ec, ct)
@@ -498,10 +505,8 @@ func (j *lruJ) evict() (size int64, err error) {
 		if fs.Access(metaFQN) == nil {
 			continue
 		}
-		// TODO: add extra check for CT access time
 		if os.Remove(ct.FQN()) == nil {
-			// TODO: add SizeBytes for CT and use it everywhere
-			if capCheck, err = j.postRemove(capCheck, 0); err != nil {
+			if capCheck, err = j.postRemove(capCheck, ct.SizeBytes()); err != nil {
 				return
 			}
 		}
