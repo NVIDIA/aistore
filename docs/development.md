@@ -87,7 +87,7 @@ $ ais object show ais://@remais/abc/README.md
 > Notice the bucket naming syntax: by convention, prefix `@` indicated remote cluster's UUIDs, and so
 `ais://@remais/abc` translates as "AIS backend provider, where remote cluster has alias `remais`".
 
-#### Example: 5 proxies and 5 targets with GCP
+#### Example: 5 proxies and 5 targets with GCP backend
 
 The command below starts a cluster with 5 proxies and 5 targets with GCP cloud enabled.
 Remember to set `GOOGLE_APPLICATION_CREDENTIALS` env when using GCP cloud!

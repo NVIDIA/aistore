@@ -13,8 +13,9 @@ redirect_from:
   - [Default Bucket Properties](#default-bucket-properties)
   - [Backend Provider](#backend-provider)
 - [AIS Bucket](#ais-bucket)
-  - [CLI examples: create, rename and, destroy ais bucket](#cli-examples-create-rename-and-destroy-ais-bucket)
-  - [CLI example: working with remote AIS bucket](#cli-example-working-with-remote-ais-bucket)
+  - [CLI: create, rename and, destroy ais bucket](#cli-create-rename-and-destroy-ais-bucket)
+  - [CLI: specifying and listing remote buckets](#cli-specifying-and-listing-remote-buckets)
+  - [CLI: working with remote AIS cluster](#cli-working-with-remote-ais-cluster)
 - [Remote Bucket](#remote-bucket)
   - [Public Cloud Buckets](#public-cloud-buckets)
   - [Remote AIS cluster](#remote-ais-cluster)
@@ -105,7 +106,7 @@ See also:
 
 * [api.CreateBucket() and api.SetBucketProps()](/api/bucket.go)
 * [RESTful API](http_api.md)
-* [CLI examples: listing and setting bucket properties](#cli-examples-listing-and-setting-bucket-properties)
+* [CLI: listing and setting bucket properties](#cli-examples-listing-and-setting-bucket-properties)
 * [CLI documentation and many more examples](cli/bucket.md)
 
 ### Backend Provider
@@ -135,7 +136,7 @@ New ais buckets must be given a unique name that does not duplicate any existing
 If you are going to use an AIS bucket as an S3-compatible one, consider changing the bucket's checksum to `MD5`.
 For details, see [S3 compatibility](s3compat.md#s3-compatibility).
 
-### CLI examples: create, rename and, destroy ais bucket
+### CLI: create, rename and, destroy ais bucket
 
 To create an ais bucket with the name `yt8m`, rename it to `yt8m_extended` and delete it, run:
 
@@ -147,7 +148,51 @@ $ ais bucket rm ais://yt8m_extended
 
 Please note that rename bucket is not an instant operation, especially if the bucket contains data. Follow the `rename` command tips to monitor when the operation completes.
 
-### CLI example: working with remote AIS bucket
+### CLI: specifying and listing remote buckets
+
+To list absolutely _all_ buckets that your AIS cluster has access to, run `ais ls`.
+
+To lists all remote (and only remote) buckets, use: `ais ls @`. For example:
+
+```console
+$ ais ls @
+
+AIS Buckets (1)
+  ais://@U-0MEX8oYt/abc
+GCP Buckets (7)
+  gcp://lpr-foo
+  gcp://lpr-bar
+  ... (another 5 buckets omitted)
+```
+
+This example assumes that there's a remote AIS cluster identified by its UUID `U-0MEX8oYt` and previously [attached](#cli-working-with-remote-ais-cluster) to the "local" one.
+
+Notice the naming notiation reference remote AIS buckets: prefix `@` in the full bucket name indicates remote cluster's UUIDs.
+
+> Complete bucket naming specification includes bucket name, backend provider and namespace (which in turn includes UUID and optional sub-name, etc.). The spec can be found in this [source](/cmn/bucket.go).
+
+And here are CLI examples of listing buckets by a given provider:
+
+#### List Google buckets:
+```console
+$ ais ls gs://
+GCP Buckets (7)
+  gcp://lpr-foo
+  gcp://lpr-bar
+  ...
+```
+
+#### List AIS buckets:
+```console
+$ ais ls ais://
+```
+
+#### List remote AIS buckets:
+```console
+$ ais ls ais://@
+```
+
+### CLI: working with remote AIS cluster
 
 AIS clusters can be attached to each other, thus forming a global (and globally accessible) namespace of all individually hosted datasets. For background and details on AIS multi-clustering, please refer to this [document](providers.md#remote-ais-cluster).
 
@@ -264,7 +309,7 @@ For example, `ais://@remais/abc` would translate as AIS backend provider, where 
 Example working with remote AIS cluster (as well as easy-to-use scripts) can be found at:
 
 * [readme for developers](development.md)
-* [CLI example: working with remote AIS bucket](#cli-example-working-with-remote-ais-bucket)
+* [working with remote AIS cluster](#cli-working-with-remote-ais-cluster)
 
 ### Public HTTP(S) Dataset
 

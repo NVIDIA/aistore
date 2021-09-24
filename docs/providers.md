@@ -105,7 +105,10 @@ Configuration-wise, the following two examples specify a single-URL and multi-UR
 > Multiple remote URLs can be provided for the same typical reasons that include fault tolerance.
 > However, once connected we will rely on the remote cluster map to retry upon connection errors and load balance.
 
-For more usage examples, please see [working with remote AIS bucket](bucket.md#cli-example-working-with-remote-ais-bucket).
+For more usage examples, please see:
+
+* [working with remote AIS cluster](bucket.md#cli-working-with-remote-ais-cluster)
+* [example: minimal remote cluster](development.md#example-minimal-remote-cluster)
 
 And one final comment:
 
