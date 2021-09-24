@@ -252,7 +252,7 @@ func (*gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.ObjA
 		return
 	}
 	oa = &cmn.ObjAttrs{}
-	oa.SetCustomKey(cmn.SourceObjMD, cmn.GoogleObjMD)
+	oa.SetCustomKey(cmn.SourceObjMD, cmn.ProviderGoogle)
 	oa.Size = attrs.Size
 	if v, ok := h.EncodeVersion(attrs.Generation); ok {
 		oa.SetCustomKey(cmn.VersionObjMD, v)
@@ -318,7 +318,7 @@ func (*gcpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.Re
 	}
 
 	// custom metadata
-	lom.SetCustomKey(cmn.SourceObjMD, cmn.GoogleObjMD)
+	lom.SetCustomKey(cmn.SourceObjMD, cmn.ProviderGoogle)
 	if cksumType, ok := attrs.Metadata[gcpChecksumType]; ok {
 		if cksumValue, ok := attrs.Metadata[gcpChecksumVal]; ok {
 			lom.SetCksum(cos.NewCksum(cksumType, cksumValue))

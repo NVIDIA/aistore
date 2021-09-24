@@ -52,7 +52,7 @@ func TestCompareObject(t *testing.T) {
 
 	// Modify local object to contain invalid (meta)data.
 	customMD := cos.SimpleKVs{
-		cmn.SourceObjMD:  cmn.AmazonObjMD,
+		cmn.SourceObjMD:  cmn.ProviderAmazon,
 		cmn.VersionObjMD: "none",
 		cmn.CRC32CObjMD:  "bad",
 		cmn.MD5ObjMD:     "worse",
@@ -76,7 +76,7 @@ func TestCompareObject(t *testing.T) {
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")
 
 	// Check that the same provider still doesn't make them equal
-	customMD[cmn.SourceObjMD] = cmn.GoogleObjMD
+	customMD[cmn.SourceObjMD] = cmn.ProviderGoogle
 	equal, err = downloader.CompareObjects(src, dst)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")

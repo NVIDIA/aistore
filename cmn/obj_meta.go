@@ -17,20 +17,18 @@ import (
 
 // LOM custom metadata stored under `lomCustomMD`.
 const (
+	// source of the cold-GET and download; the values include all
+	// 3rd party backend providers (remote AIS not including)
 	SourceObjMD = "source"
-	AmazonObjMD = ProviderAmazon
-	AzureObjMD  = ProviderAzure
-	GoogleObjMD = ProviderGoogle
-	HDFSObjMD   = ProviderHDFS
-	HTTPObjMD   = ProviderHTTP
-	WebObjMD    = "web"
 
+	// downloader' source is "web"
+	WebObjMD = "web"
+
+	// system-supported custom attrs
 	VersionObjMD = "remote-version"
-
-	CRC32CObjMD = cos.ChecksumCRC32C
-	MD5ObjMD    = cos.ChecksumMD5
-
-	ETag = "ETag"
+	CRC32CObjMD  = cos.ChecksumCRC32C
+	MD5ObjMD     = cos.ChecksumMD5
+	ETag         = "ETag"
 
 	OrigURLObjMD = "orig_url"
 )
@@ -96,12 +94,18 @@ func (oa *ObjAttrs) GetCustomKey(key string) (val string, exists bool) {
 func (oa *ObjAttrs) SetCustomKey(k, v string) {
 	debug.Assert(k != "")
 	if oa.customMD == nil {
-		oa.customMD = make(cos.SimpleKVs, 4)
+		oa.customMD = make(cos.SimpleKVs, 6)
 	}
 	oa.customMD[k] = v
 }
 
-// ObjAttrsHolder => ObjAttrs; see also: lom.CopyAttrs
+func (oa *ObjAttrs) DelCustomKeys(keys ...string) {
+	for _, key := range keys {
+		delete(oa.customMD, key)
+	}
+}
+
+// clone ObjAttrsHolder => ObjAttrs (see also lom.CopyAttrs)
 func (oa *ObjAttrs) CopyFrom(oah ObjAttrsHolder, skipCksum ...bool) {
 	oa.Atime = oah.AtimeUnix()
 	oa.Size = oah.SizeBytes()
@@ -110,7 +114,9 @@ func (oa *ObjAttrs) CopyFrom(oah ObjAttrsHolder, skipCksum ...bool) {
 		debug.Assert(oah.Checksum() != nil)
 		oa.Cksum = oah.Checksum().Clone() // TODO: checksum by value (***)
 	}
-	oa.customMD = oah.GetCustomMD()
+	for k, v := range oah.GetCustomMD() {
+		oa.SetCustomKey(k, v)
+	}
 }
 
 //
@@ -143,8 +149,8 @@ func (oa *ObjAttrs) ToHeader(hdr http.Header) {
 	ToHeader(oa, hdr)
 }
 
+// NOTE: returning checksum separately for subsequent validation
 func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum) {
-	// NOTE: returning checksum separately for subsequent validation
 	if ty := hdr.Get(HdrObjCksumType); ty != "" {
 		val := hdr.Get(HdrObjCksumVal)
 		cksum = cos.NewCksum(ty, val)
@@ -166,17 +172,20 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum) {
 	if customMD := hdr[http.CanonicalHeaderKey(HdrObjCustomMD)]; len(customMD) > 0 {
 		for _, v := range customMD {
 			entry := strings.SplitN(v, "=", 2)
+			debug.Assert(len(entry) == 2)
 			oa.SetCustomKey(entry[0], entry[1])
 		}
 	}
 	return
 }
 
-// local <=> remote equality
+// local <=> remote equality in the context of cold-GET and download. This function
+// decides whether we need to go ahead and re-read the object.
 //
 // Other than a "binary" size and version checks, rest logic goes as follows: objects are
 // considered equal if they have a) the same version and at least one matching checksum, or
 // b) the same remote "source" and at least one matching checksum, or c) two matching checksums.
+// (See also note below.)
 //
 // Note that mismatch in any given checksum type immediately renders inequality and return
 // from the function.
@@ -205,9 +214,13 @@ func (oa *ObjAttrs) Equal(rem ObjAttrsHolder) (equal bool) {
 			ver = locMeta
 		}
 	}
+	// AIS checksum check
+	if rem.Checksum().Equal(oa.Cksum) {
+		count++
+	}
 	// MD5 check
 	var md5 string
-	if remMeta, ok := rem.GetCustomKey(MD5ObjMD); ok {
+	if remMeta, ok := rem.GetCustomKey(MD5ObjMD); ok && remMeta != "" {
 		if locMeta, ok := oa.GetCustomKey(MD5ObjMD); ok {
 			if remMeta != locMeta {
 				return
@@ -217,7 +230,7 @@ func (oa *ObjAttrs) Equal(rem ObjAttrsHolder) (equal bool) {
 		}
 	}
 	// ETag check
-	if remMeta, ok := rem.GetCustomKey(ETag); ok {
+	if remMeta, ok := rem.GetCustomKey(ETag); ok && remMeta != "" {
 		if locMeta, ok := oa.GetCustomKey(ETag); ok {
 			if remMeta != locMeta {
 				return
@@ -228,7 +241,7 @@ func (oa *ObjAttrs) Equal(rem ObjAttrsHolder) (equal bool) {
 		}
 	}
 	// CRC check
-	if remMeta, ok := rem.GetCustomKey(CRC32CObjMD); ok {
+	if remMeta, ok := rem.GetCustomKey(CRC32CObjMD); ok && remMeta != "" {
 		if locMeta, ok := oa.GetCustomKey(CRC32CObjMD); ok {
 			if remMeta != locMeta {
 				return
@@ -236,6 +249,8 @@ func (oa *ObjAttrs) Equal(rem ObjAttrsHolder) (equal bool) {
 			count++
 		}
 	}
+	// NOTE: this is not good enough - need config knob (w/ default=false) to
+	//       explicitly allow the "source" to play such role.
 	if count == 1 {
 		if sameVer {
 			count++

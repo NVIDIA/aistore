@@ -328,7 +328,7 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn
 		return
 	}
 	oa = &cmn.ObjAttrs{}
-	oa.SetCustomKey(cmn.SourceObjMD, cmn.AzureObjMD)
+	oa.SetCustomKey(cmn.SourceObjMD, cmn.ProviderAzure)
 	oa.Size = resp.ContentLength()
 	if v, ok := h.EncodeVersion(string(resp.ETag())); ok {
 		oa.Ver = v // NOTE: using ETag as _the_ version
@@ -404,7 +404,7 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 	}
 
 	// custom metadata
-	lom.SetCustomKey(cmn.SourceObjMD, cmn.AzureObjMD)
+	lom.SetCustomKey(cmn.SourceObjMD, cmn.ProviderAzure)
 	if v, ok := h.EncodeVersion(string(respProps.ETag())); ok {
 		lom.SetVersion(v)
 		lom.SetCustomKey(cmn.ETag, v)

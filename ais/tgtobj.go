@@ -197,11 +197,9 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 	}
 	// ais versioning
 	if bck.IsAIS() && lom.VersionConf().Enabled {
-		// TODO: copy cloud-bucket => ais-bucket and similar scenarios where IncVersion()
-		//       won't work (disambiguate - store cloud version separately in custom-md)
-		if poi.recvType == cluster.RegularPut || lom.Version(true) == "" {
-			if err = lom.IncVersion(); err != nil {
-				if glog.FastV(4, glog.SmoduleAIS) {
+		if poi.recvType == cluster.RegularPut {
+			if remSrc, ok := lom.GetCustomKey(cmn.SourceObjMD); !ok || remSrc == "" {
+				if err = lom.IncVersion(); err != nil {
 					glog.Error(err)
 				}
 			}
@@ -234,8 +232,12 @@ func (poi *putObjInfo) putRemote() (errCode int, err error) {
 		err = fmt.Errorf(cmn.FmtErrFailed, poi.t.Snode(), "open", poi.workFQN, err)
 		return
 	}
+	if poi.recvType == cluster.RegularPut && !lom.Bck().IsRemoteAIS() {
+		// some/all of those are set by the backend.PutObj()
+		lom.ObjAttrs().DelCustomKeys(cmn.SourceObjMD, cmn.CRC32CObjMD, cmn.ETag, cmn.MD5ObjMD, cmn.VersionObjMD)
+	}
 	errCode, err = backend.PutObj(lmfh, lom)
-	if !lom.Bck().IsRemoteAIS() {
+	if err == nil && !lom.Bck().IsRemoteAIS() {
 		lom.SetCustomKey(cmn.SourceObjMD, backend.Provider())
 	}
 	return

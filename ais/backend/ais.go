@@ -425,6 +425,7 @@ func (m *AISBackendProvider) HeadObj(_ context.Context, lom *cluster.LOM) (oa *c
 	}
 	for _, v := range p.Custom {
 		entry := strings.SplitN(v, "=", 2)
+		debug.Assert(len(entry) == 2)
 		oa.SetCustomKey(entry[0], entry[1])
 	}
 	return

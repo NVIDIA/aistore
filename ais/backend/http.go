@@ -144,7 +144,7 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.
 		return nil, resp.StatusCode, fmt.Errorf("error occurred: %v", resp.StatusCode)
 	}
 	oa = &cmn.ObjAttrs{}
-	oa.SetCustomKey(cmn.SourceObjMD, cmn.HTTPObjMD)
+	oa.SetCustomKey(cmn.SourceObjMD, cmn.ProviderHTTP)
 	if resp.ContentLength >= 0 {
 		oa.Size = resp.ContentLength
 	}
@@ -203,7 +203,7 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 		glog.Infof("[HTTP CLOUD][GET] success, size: %d", resp.ContentLength)
 	}
 
-	lom.SetCustomKey(cmn.SourceObjMD, cmn.HTTPObjMD)
+	lom.SetCustomKey(cmn.SourceObjMD, cmn.ProviderHTTP)
 	lom.SetCustomKey(cmn.OrigURLObjMD, origURL)
 	if v, ok := h.EncodeVersion(resp.Header.Get(cmn.HdrETag)); ok {
 		lom.SetCustomKey(cmn.ETag, v)

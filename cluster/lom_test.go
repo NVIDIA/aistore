@@ -567,13 +567,13 @@ var _ = Describe("LOM", func() {
 			It("should correctly set and get custom metadata", func() {
 				lom := filePut(localFQN, 0)
 				lom.SetCustomMD(cos.SimpleKVs{
-					cmn.SourceObjMD: cmn.GoogleObjMD,
+					cmn.SourceObjMD: cmn.ProviderGoogle,
 					cmn.ETag:        "etag",
 					cmn.CRC32CObjMD: "crc32",
 				})
 				value, exists := lom.GetCustomKey(cmn.SourceObjMD)
 				Expect(exists).To(BeTrue())
-				Expect(value).To(Equal(cmn.GoogleObjMD))
+				Expect(value).To(Equal(cmn.ProviderGoogle))
 				_, exists = lom.GetCustomKey("unknown")
 				Expect(exists).To(BeFalse())
 			})

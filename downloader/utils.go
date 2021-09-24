@@ -162,7 +162,7 @@ func attrsFromLink(link string, resp *http.Response, oah cmn.ObjAttrsHolder) (si
 	switch {
 	case cos.IsGoogleStorageURL(u) || cos.IsGoogleAPIURL(u):
 		h := cmn.BackendHelpers.Google
-		oah.SetCustomKey(cmn.SourceObjMD, cmn.GoogleObjMD)
+		oah.SetCustomKey(cmn.SourceObjMD, cmn.ProviderGoogle)
 		if v, ok := h.EncodeVersion(resp.Header.Get(cmn.GsVersionHeader)); ok {
 			oah.SetCustomKey(cmn.VersionObjMD, v)
 		}
@@ -180,7 +180,7 @@ func attrsFromLink(link string, resp *http.Response, oah cmn.ObjAttrsHolder) (si
 		}
 	case cos.IsS3URL(link):
 		h := cmn.BackendHelpers.Amazon
-		oah.SetCustomKey(cmn.SourceObjMD, cmn.AmazonObjMD)
+		oah.SetCustomKey(cmn.SourceObjMD, cmn.ProviderAmazon)
 		if v, ok := h.EncodeVersion(resp.Header.Get(cmn.S3VersionHeader)); ok {
 			oah.SetCustomKey(cmn.VersionObjMD, v)
 		}
@@ -189,7 +189,7 @@ func attrsFromLink(link string, resp *http.Response, oah cmn.ObjAttrsHolder) (si
 		}
 	case cos.IsAzureURL(u):
 		h := cmn.BackendHelpers.Azure
-		oah.SetCustomKey(cmn.SourceObjMD, cmn.AzureObjMD)
+		oah.SetCustomKey(cmn.SourceObjMD, cmn.ProviderAzure)
 		if v, ok := h.EncodeVersion(resp.Header.Get(cmn.AzVersionHeader)); ok {
 			oah.SetCustomKey(cmn.VersionObjMD, v)
 		}

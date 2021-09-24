@@ -214,7 +214,7 @@ func (hp *hdfsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (oa *cmn.Ob
 		return
 	}
 	oa = &cmn.ObjAttrs{}
-	oa.SetCustomKey(cmn.SourceObjMD, cmn.HDFSObjMD)
+	oa.SetCustomKey(cmn.SourceObjMD, cmn.ProviderHDFS)
 	oa.Size = fr.Stat().Size()
 	if verbose {
 		glog.Infof("[head_object] %s", lom)
@@ -257,7 +257,7 @@ func (hp *hdfsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 		errCode, err = hdfsErrorToAISError(err)
 		return
 	}
-	lom.SetCustomKey(cmn.SourceObjMD, cmn.HDFSObjMD)
+	lom.SetCustomKey(cmn.SourceObjMD, cmn.ProviderHDFS)
 	setSize(ctx, fr.Stat().Size())
 	return wrapReader(ctx, fr), nil, 0, nil
 }

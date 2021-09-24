@@ -279,7 +279,7 @@ func (*awsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (oa *cmn.ObjAtt
 		return
 	}
 	oa = &cmn.ObjAttrs{}
-	oa.SetCustomKey(cmn.SourceObjMD, cmn.AmazonObjMD)
+	oa.SetCustomKey(cmn.SourceObjMD, cmn.ProviderAmazon)
 	oa.Size = *headOutput.ContentLength
 	if v, ok := h.EncodeVersion(headOutput.VersionId); ok {
 		lom.SetCustomKey(cmn.VersionObjMD, v)
@@ -348,7 +348,7 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.Re
 	}
 
 	// custom metadata
-	lom.SetCustomKey(cmn.SourceObjMD, cmn.AmazonObjMD)
+	lom.SetCustomKey(cmn.SourceObjMD, cmn.ProviderAmazon)
 	if cksumType, ok := obj.Metadata[awsChecksumType]; ok {
 		if cksumValue, ok := obj.Metadata[awsChecksumVal]; ok {
 			lom.SetCksum(cos.NewCksum(*cksumType, *cksumValue))

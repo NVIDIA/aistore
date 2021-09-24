@@ -99,7 +99,7 @@ var _ = Describe("LOM Xattributes", func() {
 				lom.SetCksum(cos.NewCksum(cos.ChecksumXXHash, "test_checksum"))
 				lom.SetVersion("dummy_version")
 				lom.SetCustomMD(cos.SimpleKVs{
-					cmn.SourceObjMD: cmn.GoogleObjMD,
+					cmn.SourceObjMD: cmn.ProviderGoogle,
 					cmn.ETag:        "etag",
 					cmn.CRC32CObjMD: "crc32",
 				})
@@ -135,7 +135,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
 				lom.SetCustomMD(cos.SimpleKVs{
-					cmn.SourceObjMD: cmn.GoogleObjMD,
+					cmn.SourceObjMD: cmn.ProviderGoogle,
 					cmn.ETag:        "etag",
 					cmn.CRC32CObjMD: "crc32",
 				})
@@ -176,7 +176,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
 				lom.SetCustomMD(cos.SimpleKVs{
-					cmn.SourceObjMD: cmn.GoogleObjMD,
+					cmn.SourceObjMD: cmn.ProviderGoogle,
 					cmn.ETag:        "etag",
 					cmn.CRC32CObjMD: "crc32",
 				})
