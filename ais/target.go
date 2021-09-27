@@ -1012,34 +1012,37 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 // so it must be done by the caller (if necessary).
 func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query url.Values, bck *cluster.Bck, lom *cluster.LOM) {
 	var (
-		err            error
 		invalidHandler = t.writeErr
 		hdr            = w.Header()
 		checkExists    = cos.IsParseBool(query.Get(cmn.URLParamCheckExists))
 		checkExistsAny = cos.IsParseBool(query.Get(cmn.URLParamCheckExistsAny))
 		silent         = cos.IsParseBool(query.Get(cmn.URLParamSilent))
+		exists         = true
 		addedEC        bool
 	)
 	if silent {
 		invalidHandler = t.writeErrSilent
 	}
-	if err = lom.Init(bck.Bck); err != nil {
+	if err := lom.Init(bck.Bck); err != nil {
 		invalidHandler(w, r, err)
 		return
 	}
-	if err = lom.Load(true /*cache it*/, false /*locked*/); err != nil && !cmn.IsObjNotExist(err) {
-		invalidHandler(w, r, err)
-		return
+	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
+		if !cmn.IsObjNotExist(err) {
+			invalidHandler(w, r, err)
+			return
+		}
+		exists = false
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		pid := query.Get(cmn.URLParamProxyID)
-		glog.Infof("%s %s <= %s", r.Method, lom, pid)
+		glog.Infof("%s %s(exists=%t) <= %s", r.Method, lom, exists, pid)
 	}
 
-	exists := err == nil
-
-	// * checkExists and checkExistsAny establish local presence of the object by looking up all mountpaths
-	// * checkExistsAny does it *even* if the object *may* not have local copies
+	// * `checkExists` and `checkExistsAny` can be used to:
+	//    a) establish local object's presence on any of the local mountpaths, and
+	//    b) if located, restore the object to its default location.
+	// * `checkExistsAny` tries to perform the b) even if the object does not have copies.
 	// * see also: GFN
 	if !exists {
 		// lookup and restore the object to its proper location
@@ -1049,76 +1052,62 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 	}
 	if checkExists || checkExistsAny {
 		if !exists {
-			err = cmn.NewErrNotFound("%s: object %s", t.si, lom.FullName())
+			err := cmn.NewErrNotFound("%s: object %s", t.si, lom.FullName())
 			invalidHandler(w, r, err, http.StatusNotFound)
 		}
 		return
 	}
 
-	// 1. add cmn.HdrObj* props
-	var size int64
+	// NOTE: compare with `api.HeadObject()`
+	// fill-in
+	op := cmn.ObjectProps{Name: lom.ObjName, Bck: lom.Bucket(), Present: exists}
 	if lom.Bck().IsAIS() {
 		if !exists {
-			err = cmn.NewErrNotFound("%s: object %s", t.si, lom.FullName())
+			err := cmn.NewErrNotFound("%s: object %s", t.si, lom.FullName())
 			invalidHandler(w, r, err, http.StatusNotFound)
 			return
 		}
-		lom.ObjAttrs().ToHeader(hdr)
-		size = lom.SizeBytes()
+		op.ObjAttrs = *lom.ObjAttrs()
 	} else if exists {
-		lom.ObjAttrs().ToHeader(hdr)
-		size = lom.SizeBytes()
+		op.ObjAttrs = *lom.ObjAttrs()
 	} else {
+		// cold HEAD
 		objAttrs, errCode, err := t.Backend(lom.Bck()).HeadObj(context.Background(), lom)
 		if err != nil {
 			err = fmt.Errorf(cmn.FmtErrFailed, t.si, "HEAD", lom, err)
 			invalidHandler(w, r, err, errCode)
 			return
 		}
-		objAttrs.ToHeader(hdr)
-		size = objAttrs.SizeBytes(true)
-	}
-
-	// 3. add cmn.ObjectProps via json-tag => headerName (dynamic)
-	objProps := cmn.ObjectProps{
-		Name:    lom.ObjName,
-		Bck:     lom.Bucket(),
-		Size:    size,
-		Present: exists,
+		op.ObjAttrs = *objAttrs
 	}
 	if exists {
-		objProps.NumCopies = lom.NumCopies()
+		op.NumCopies = lom.NumCopies()
 		if lom.Bck().Props.EC.Enabled {
 			if md, err := ec.ObjectMetadata(lom.Bck(), lom.ObjName); err == nil {
 				addedEC = true
-				objProps.DataSlices = md.Data
-				objProps.ParitySlices = md.Parity
-				objProps.IsECCopy = md.IsCopy
-				objProps.Generation = md.Generation
+				op.EC.DataSlices = md.Data
+				op.EC.ParitySlices = md.Parity
+				op.EC.IsECCopy = md.IsCopy
+				op.EC.Generation = md.Generation
 			}
 		}
 	}
-	err = cmn.IterFields(objProps, func(tag string, field cmn.IterField) (err error, b bool) {
-		v := fmt.Sprintf("%v", field.Value())
+
+	// to header
+	op.ObjAttrs.ToHeader(hdr)
+	err := cmn.IterFields(op, func(tag string, field cmn.IterField) (err error, b bool) {
 		if !addedEC && strings.HasPrefix(tag, "ec-") {
 			return nil, false
 		}
+		v := fmt.Sprintf("%v", field.Value())
 		if v == "" {
 			return nil, false
 		}
 		headerName := cmn.PropToHeader(tag)
-		if hdr.Get(headerName) == "" {
-			hdr.Set(headerName, v)
-		}
+		hdr.Set(headerName, v)
 		return nil, false
 	})
 	debug.AssertNoErr(err)
-	// hide from ETL user (reason: will change)
-	if isETLRequest(query) {
-		hdr.Del(cmn.HdrContentLength)
-		hdr.Del(cmn.HdrObjCksumVal)
-		hdr.Del(cmn.HdrObjCksumType)
-	}
 }
 
 // PATCH /v1/objects/<bucket-name>/<object-name>

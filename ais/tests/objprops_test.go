@@ -547,9 +547,9 @@ func TestObjProps(t *testing.T) {
 							tassert.Errorf(t, props.Present, "object should be present (cached)")
 						}
 						if defaultBckProp.Versioning.Enabled && (test.verEnabled || test.evict) {
-							tassert.Errorf(t, props.Version != "", "cloud object version should not be empty")
+							tassert.Errorf(t, props.Ver != "", "cloud object version should not be empty")
 						} else {
-							tassert.Errorf(t, props.Version == "" || defaultBckProp.Versioning.Enabled,
+							tassert.Errorf(t, props.Ver == "" || defaultBckProp.Versioning.Enabled,
 								"cloud object version should be empty")
 						}
 						if test.evict {
@@ -565,22 +565,22 @@ func TestObjProps(t *testing.T) {
 						)
 						if test.verEnabled {
 							tassert.Errorf(
-								t, props.Version == "1",
-								"object version (%s) different than expected (1)", props.Version,
+								t, props.Ver == "1",
+								"object version (%s) different than expected (1)", props.Ver,
 							)
 						} else {
-							tassert.Errorf(t, props.Version == "", "object version should be empty")
+							tassert.Errorf(t, props.Ver == "", "object version should be empty")
 						}
 						tassert.Errorf(t, props.Atime != 0, "expected access time to be set")
 					}
-					tassert.Errorf(t, !props.IsECCopy, "expected object not to be ec copy")
+					tassert.Errorf(t, !props.EC.IsECCopy, "expected object not to be ec copy")
 					tassert.Errorf(
-						t, props.DataSlices == 0,
-						"expected data slices (%d) to be 0", props.DataSlices,
+						t, props.EC.DataSlices == 0,
+						"expected data slices (%d) to be 0", props.EC.DataSlices,
 					)
 					tassert.Errorf(
-						t, props.ParitySlices == 0,
-						"expected parity slices (%d) to be 0", props.ParitySlices,
+						t, props.EC.ParitySlices == 0,
+						"expected parity slices (%d) to be 0", props.EC.ParitySlices,
 					)
 				}
 			}

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -402,32 +401,20 @@ func (m *AISBackendProvider) ListBuckets(query cmn.QueryBcks) (bcks cmn.Bcks, er
 func (m *AISBackendProvider) HeadObj(_ context.Context, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
 	var (
 		aisCluster *remAISCluster
-		p          *cmn.ObjectProps
+		op         *cmn.ObjectProps
 		remoteBck  = lom.Bucket()
 	)
 	if aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID); err != nil {
 		return
 	}
 	bck := unsetUUID(remoteBck)
-	if p, err = api.HeadObject(aisCluster.bp, bck, lom.ObjName); err != nil {
+	if op, err = api.HeadObject(aisCluster.bp, bck, lom.ObjName); err != nil {
 		errCode, err = extractErrCode(err)
 		return
 	}
 	oa = &cmn.ObjAttrs{}
+	*oa = op.ObjAttrs
 	oa.SetCustomKey(cmn.SourceObjMD, cmn.ProviderAIS)
-
-	// TODO -- FIXME: unify cmn.ObjAttrs and cmn.ObjectProps
-	debug.Assert(lom.ObjName == p.Name)
-	debug.Assert(lom.Bck().Name == p.Bck.Name)
-	oa.Size, oa.Ver, oa.Atime = p.Size, p.Version, p.Atime
-	if p.Checksum.Type != "" {
-		oa.Cksum = cos.NewCksum(p.Checksum.Type, p.Checksum.Value)
-	}
-	for _, v := range p.Custom {
-		entry := strings.SplitN(v, "=", 2)
-		debug.Assert(len(entry) == 2)
-		oa.SetCustomKey(entry[0], entry[1])
-	}
 	return
 }
 
@@ -453,11 +440,25 @@ func (m *AISBackendProvider) GetObjReader(_ context.Context, lom *cluster.LOM) (
 	errCode int, err error) {
 	var (
 		aisCluster *remAISCluster
+		op         *cmn.ObjectProps
 		remoteBck  = lom.Bucket()
 	)
 	if aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID); err != nil {
 		return
 	}
+	// NOTE -- TODO: piggy-back props on GET request to optimize out HEAD call
+	// attrs
+	bck := unsetUUID(remoteBck)
+	if op, err = api.HeadObject(aisCluster.bp, bck, lom.ObjName); err != nil {
+		errCode, err = extractErrCode(err)
+		return
+	}
+	oa := lom.ObjAttrs()
+	*oa = op.ObjAttrs
+	oa.SetCustomKey(cmn.SourceObjMD, cmn.ProviderAIS)
+	expCksum = oa.Cksum
+	lom.SetCksum(nil)
+	// reader
 	r, err = api.GetObjectReader(aisCluster.bp, remoteBck, lom.ObjName)
 	errCode, err = extractErrCode(err)
 	return
@@ -466,6 +467,7 @@ func (m *AISBackendProvider) GetObjReader(_ context.Context, lom *cluster.LOM) (
 func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err error) {
 	var (
 		aisCluster *remAISCluster
+		op         *cmn.ObjectProps
 		remoteBck  = lom.Bucket()
 	)
 	if aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID); err != nil {
@@ -483,7 +485,17 @@ func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode 
 	}
 	if err = api.PutObject(args); err != nil {
 		errCode, err = extractErrCode(err)
+		return
 	}
+	// NOTE -- TODO: piggy-back props on PUT request to optimize out HEAD call
+	// attrs
+	if op, err = api.HeadObject(aisCluster.bp, bck, lom.ObjName); err != nil {
+		errCode, err = extractErrCode(err)
+		return
+	}
+	oa := lom.ObjAttrs()
+	*oa = op.ObjAttrs
+	oa.SetCustomKey(cmn.SourceObjMD, cmn.ProviderAIS)
 	return
 }
 

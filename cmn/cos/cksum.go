@@ -183,7 +183,10 @@ func (ck *Cksum) String() string {
 	if ck == nil {
 		return "checksum <nil>"
 	}
-	return fmt.Sprintf("(%s,%s...)", ck.ty, ck.value[:Min(10, len(ck.value))])
+	if ck.ty == "" || ck.ty == ChecksumNone {
+		return "checksum <none>"
+	}
+	return ck.ty + "[" + ck.value + "]"
 }
 
 /////////////

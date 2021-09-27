@@ -61,11 +61,11 @@ type (
 		String() string
 	}
 	ObjAttrs struct {
-		Atime    int64         // access time (nanoseconds since UNIX epoch)
-		Size     int64         // object size (bytes)
-		Ver      string        // object version
-		Cksum    *cos.Cksum    // object checksum (NOTE: m.b. cloned)
-		customMD cos.SimpleKVs // custom metadata: ETag, MD5, CRC, user-defined ...
+		Atime    int64         `json:"-"` // access time (nanoseconds since UNIX epoch)
+		Size     int64         `json:"-"` // object size (bytes)
+		Ver      string        `json:"-"` // object version
+		Cksum    *cos.Cksum    `json:"-"` // object checksum (NOTE: m.b. cloned)
+		customMD cos.SimpleKVs `json:"-"` // custom metadata: ETag, MD5, CRC, user-defined ...
 	}
 )
 

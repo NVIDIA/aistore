@@ -758,7 +758,7 @@ func objectStats(c *cli.Context, bck cmn.Bck, object string) error {
 		selectedProps = propsFlag
 	}
 
-	props := objectPropList(objProps, selectedProps)
+	props := objectPropList(bck, objProps, selectedProps)
 	return templates.DisplayOutput(props, c.App.Writer, templates.PropsSimpleTmpl)
 }
 

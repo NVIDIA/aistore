@@ -2414,7 +2414,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 		props, err := api.HeadObject(baseParams, bck, objName)
 		if err != nil {
 			t.Errorf("HEAD for %s failed: %v", objName, err)
-		} else if props.DataSlices == 0 || props.ParitySlices == 0 {
+		} else if props.EC.DataSlices == 0 || props.EC.ParitySlices == 0 {
 			t.Errorf("%s has not EC info", objName)
 		}
 	}
@@ -2721,9 +2721,9 @@ func TestECGenerations(t *testing.T) {
 				objName := ecTestDir + fmt.Sprintf(o.pattern, i)
 				props, err := api.HeadObject(baseParams, bck, objName)
 				tassert.CheckError(t, err)
-				if err == nil && props.Generation > lastWrite[i] && props.Generation < currentTime {
+				if err == nil && props.EC.Generation > lastWrite[i] && props.EC.Generation < currentTime {
 					t.Errorf("Object %s, generation %d expected between %d and %d",
-						objName, props.Generation, lastWrite[i], currentTime)
+						objName, props.EC.Generation, lastWrite[i], currentTime)
 				}
 			}
 		})

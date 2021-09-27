@@ -211,24 +211,17 @@ type (
 // object properties
 type (
 	ObjectProps struct {
-		Name         string           `json:"name"`
-		Bck          Bck              `json:"bucket"`
-		Size         int64            `json:"size"`
-		Version      string           `json:"version"`
-		Atime        int64            `json:"atime"` // nanoseconds since Unix Epoch
-		Checksum     ObjectCksumProps `json:"checksum"`
-		Custom       []string         `json:"custom-md"`
-		Generation   int64            `json:"ec-generation"`
-		NumCopies    int              `json:"copies"`
-		DataSlices   int              `json:"ec-data"`
-		ParitySlices int              `json:"ec-parity"`
-		IsECCopy     bool             `json:"ec-replicated"`
-		Present      bool             `json:"present"`
-	}
-
-	ObjectCksumProps struct {
-		Type  string `json:"type"`
-		Value string `json:"value"`
+		ObjAttrs
+		Name      string `json:"name"`
+		Bck       Bck    `json:"bucket"`
+		NumCopies int    `json:"copies"`
+		EC        struct {
+			Generation   int64 `json:"ec-generation"`
+			DataSlices   int   `json:"ec-data"`
+			ParitySlices int   `json:"ec-parity"`
+			IsECCopy     bool  `json:"ec-replicated"`
+		}
+		Present bool `json:"present"`
 	}
 )
 

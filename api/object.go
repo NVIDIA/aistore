@@ -116,16 +116,16 @@ func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists .
 		return nil, err
 	}
 
-	objProps := &cmn.ObjectProps{}
-	err = cmn.IterFields(objProps, func(tag string, field cmn.IterField) (error, bool) {
+	// NOTE: compare with `headObject()` in target.go
+	// first, cnm.ObjAttrs
+	op := &cmn.ObjectProps{}
+	op.Cksum = op.ObjAttrs.FromHeader(resp.Header)
+	// second, all the rest
+	err = cmn.IterFields(op, func(tag string, field cmn.IterField) (error, bool) {
 		headerName := cmn.PropToHeader(tag)
 		// skip the missing ones
 		if _, ok := resp.Header[textproto.CanonicalMIMEHeaderKey(headerName)]; !ok {
 			return nil, false
-		}
-		// multi-value
-		if headerName == cmn.HdrObjCustomMD {
-			return field.SetValue(resp.Header.Values(headerName), true /*force*/), false
 		}
 		// single-value
 		return field.SetValue(resp.Header.Get(headerName), true /*force*/), false
@@ -133,7 +133,7 @@ func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists .
 	if err != nil {
 		return nil, err
 	}
-	return objProps, nil
+	return op, nil
 }
 
 // Given cos.SimpleKVs (map[string]string) keys and values, sets object's custom properties.

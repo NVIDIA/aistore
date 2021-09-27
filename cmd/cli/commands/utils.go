@@ -98,7 +98,7 @@ func helpMessage(template string, data interface{}) string {
 	return buf.String()
 }
 
-func objectPropList(props *cmn.ObjectProps, selection []string) (propList []prop) {
+func objectPropList(bck cmn.Bck, props *cmn.ObjectProps, selection []string) (propList []prop) {
 	var propValue string
 	for _, currProp := range selection {
 		switch currProp {
@@ -107,22 +107,28 @@ func objectPropList(props *cmn.ObjectProps, selection []string) (propList []prop
 		case cmn.GetPropsSize:
 			propValue = cos.B2S(props.Size, 2)
 		case cmn.GetPropsChecksum:
-			propValue = templates.FmtChecksum(props.Checksum.Value)
+			propValue = props.Cksum.String()
 		case cmn.GetPropsAtime:
 			propValue = cos.FormatUnixNano(props.Atime, "")
 		case cmn.GetPropsVersion:
-			propValue = props.Version
+			propValue = props.Ver
 		case cmn.GetPropsCached:
+			if bck.IsAIS() {
+				continue
+			}
 			propValue = templates.FmtBool(props.Present)
 		case cmn.GetPropsCopies:
 			propValue = templates.FmtCopies(props.NumCopies)
 		case cmn.GetPropsEC:
-			propValue = templates.FmtEC(props.Generation, props.DataSlices, props.ParitySlices, props.IsECCopy)
+			propValue = templates.FmtEC(
+				props.EC.Generation, props.EC.DataSlices, props.EC.ParitySlices, props.EC.IsECCopy,
+			)
 		case cmn.GetPropsCustom:
-			if len(props.Custom) == 0 {
-				continue
+			if custom := props.GetCustomMD(); len(custom) == 0 {
+				propValue = "-"
+			} else {
+				propValue = fmt.Sprintf("%+v", custom)
 			}
-			propValue = strings.Join(props.Custom, ", ")
 		default:
 			continue
 		}
