@@ -444,7 +444,8 @@ func NetworkCallWithRetry(args *CallWithRetryArgs) (err error) {
 
 	// Just print once summary of the errors. No need to repeat the log for Verbose setting.
 	if args.Verbosity == CallWithRetryLogQuiet {
-		glog.Errorf("%sFailed to %s (softErr: %d, hardErr: %d, last err: %v)", callerStr, args.Action, softErrCnt, hardErrCnt, err)
+		glog.Errorf("%sFailed to %s (softErr: %d, hardErr: %d, last err: %v)",
+			callerStr, args.Action, softErrCnt, hardErrCnt, err)
 	}
 	return
 }

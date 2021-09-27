@@ -1099,7 +1099,7 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 		if !addedEC && strings.HasPrefix(tag, "ec-") {
 			return nil, false
 		}
-		v := fmt.Sprintf("%v", field.Value())
+		v := field.String()
 		if v == "" {
 			return nil, false
 		}

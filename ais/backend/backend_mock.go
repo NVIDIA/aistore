@@ -35,7 +35,7 @@ func (*dummyBackendProvider) CreateBucket(*cluster.Bck) (errCode int, err error)
 	return creatingBucketNotSupportedErr("backend")
 }
 
-func (*dummyBackendProvider) HeadBucket(_ context.Context, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
+func (*dummyBackendProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
 	return cos.SimpleKVs{}, http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bck)
 }
 
@@ -48,11 +48,11 @@ func (*dummyBackendProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, errCode 
 	return
 }
 
-func (*dummyBackendProvider) HeadObj(_ context.Context, lom *cluster.LOM) (*cmn.ObjAttrs, int, error) {
+func (*dummyBackendProvider) HeadObj(_ ctx, lom *cluster.LOM) (*cmn.ObjAttrs, int, error) {
 	return &cmn.ObjAttrs{}, http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }
 
-func (*dummyBackendProvider) GetObj(_ context.Context, lom *cluster.LOM) (errCode int, err error) {
+func (*dummyBackendProvider) GetObj(_ ctx, lom *cluster.LOM) (errCode int, err error) {
 	return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }
 

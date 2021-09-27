@@ -28,6 +28,8 @@ type (
 	IterField interface {
 		// Value returns value of given field.
 		Value() interface{}
+		// String returns string value's representation
+		String() string
 		// SetValue sets a given value. `force` ignores `tagReadonly` and sets
 		// a given value anyway - should be used with caution.
 		SetValue(v interface{}, force ...bool) error
@@ -53,6 +55,9 @@ type (
 
 	updateFunc func(uniqueTag string, field IterField) (error, bool)
 )
+
+// interface guard
+var _ IterField = (*field)(nil)
 
 // IterFields walks the struct and calls `updf` callback at every leaf field that it
 // encounters. The (nested) names are created by joining the json tag with dot.
@@ -292,8 +297,16 @@ func mergeProps(src, dst interface{}) {
 // field //
 ///////////
 
-func (f *field) Value() interface{} {
-	return f.v.Interface()
+func (f *field) Value() interface{} { return f.v.Interface() }
+
+func (f *field) String() (s string) {
+	if f.v.Kind() == reflect.String {
+		// NOTE: this will panic if the value's type is derived from string (e.g. MDWrite)
+		s = f.Value().(string)
+	} else {
+		s = fmt.Sprintf("%v", f.Value())
+	}
+	return
 }
 
 func (f *field) SetValue(src interface{}, force ...bool) error {

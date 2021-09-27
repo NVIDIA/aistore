@@ -5,7 +5,6 @@
 package backend
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -315,7 +314,7 @@ func (*AISBackendProvider) CreateBucket(_ *cluster.Bck) (errCode int, err error)
 	return 0, nil
 }
 
-func (m *AISBackendProvider) HeadBucket(_ context.Context, remoteBck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
+func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
 	var (
 		aisCluster *remAISCluster
 		p          *cmn.BucketProps
@@ -336,7 +335,8 @@ func (m *AISBackendProvider) HeadBucket(_ context.Context, remoteBck *cluster.Bc
 	return
 }
 
-func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
+func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList,
+	errCode int, err error) {
 	var aisCluster *remAISCluster
 	if aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID); err != nil {
 		return
@@ -398,7 +398,7 @@ func (m *AISBackendProvider) ListBuckets(query cmn.QueryBcks) (bcks cmn.Bcks, er
 	return
 }
 
-func (m *AISBackendProvider) HeadObj(_ context.Context, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
+func (m *AISBackendProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
 	var (
 		aisCluster *remAISCluster
 		op         *cmn.ObjectProps
@@ -418,7 +418,7 @@ func (m *AISBackendProvider) HeadObj(_ context.Context, lom *cluster.LOM) (oa *c
 	return
 }
 
-func (m *AISBackendProvider) GetObj(_ context.Context, lom *cluster.LOM) (errCode int, err error) {
+func (m *AISBackendProvider) GetObj(_ ctx, lom *cluster.LOM) (errCode int, err error) {
 	var (
 		aisCluster *remAISCluster
 		r          io.ReadCloser
@@ -436,7 +436,7 @@ func (m *AISBackendProvider) GetObj(_ context.Context, lom *cluster.LOM) (errCod
 	return extractErrCode(err)
 }
 
-func (m *AISBackendProvider) GetObjReader(_ context.Context, lom *cluster.LOM) (r io.ReadCloser, expCksum *cos.Cksum,
+func (m *AISBackendProvider) GetObjReader(_ ctx, lom *cluster.LOM) (r io.ReadCloser, expCksum *cos.Cksum,
 	errCode int, err error) {
 	var (
 		aisCluster *remAISCluster

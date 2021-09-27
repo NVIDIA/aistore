@@ -76,7 +76,7 @@ func (awsp *awsProvider) CreateBucket(_ *cluster.Bck) (errCode int, err error) {
 // HEAD BUCKET //
 /////////////////
 
-func (*awsProvider) HeadBucket(_ context.Context, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
+func (*awsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.SimpleKVs, errCode int, err error) {
 	var (
 		svc      *s3.S3
 		region   string
@@ -259,7 +259,7 @@ func (*awsProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err 
 // HEAD OBJECT //
 /////////////////
 
-func (*awsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
+func (*awsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
 	var (
 		headOutput *s3.HeadObjectOutput
 		svc        *s3.S3

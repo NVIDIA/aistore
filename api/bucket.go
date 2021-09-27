@@ -75,7 +75,6 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p *cmn
 		resp *wrappedResp
 		path = cmn.URLPathBuckets.Join(bck.Name)
 	)
-	p = &cmn.BucketProps{}
 	baseParams.Method = http.MethodHead
 	if len(query) > 0 {
 		q = query[0]
@@ -84,7 +83,8 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p *cmn
 
 	resp, err = doHTTPRequestGetResp(ReqParams{BaseParams: baseParams, Path: path, Query: q}, nil)
 	if err == nil {
-		err = jsoniter.Unmarshal([]byte(resp.Header.Get(cmn.HdrBucketProps)), &p)
+		p = &cmn.BucketProps{}
+		err = jsoniter.Unmarshal([]byte(resp.Header.Get(cmn.HdrBucketProps)), p)
 		return
 	}
 	// try to fill in error message (HEAD response will never contain one)

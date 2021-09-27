@@ -14,6 +14,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
+type ctx = context.Context // used when omitted for shortness sake
+
 var verbose bool
 
 func Init() {
