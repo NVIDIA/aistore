@@ -1440,7 +1440,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if bck.IsAIS() || !args.exists {
-		bpropsToHdr(bck, w.Header())
+		_bpropsToHdr(bck, w.Header())
 		return
 	}
 	cloudProps, statusCode, err := p.headRemoteBck(*bck.RemoteBck(), nil)
@@ -1467,7 +1467,14 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
-	bpropsToHdr(bck, w.Header())
+	_bpropsToHdr(bck, w.Header())
+}
+
+func _bpropsToHdr(bck *cluster.Bck, hdr http.Header) {
+	if bck.Props == nil {
+		bck.Props = defaultBckProps(bckPropsArgs{bck: bck, hdr: hdr})
+	}
+	hdr.Set(cmn.HdrBucketProps, cos.MustMarshalToString(bck.Props))
 }
 
 func (p *proxyrunner) _bckHeadPre(ctx *bmdModifier, clone *bucketMD) error {

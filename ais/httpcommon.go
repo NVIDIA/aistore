@@ -2224,32 +2224,6 @@ func (h *httprunner) healthByExternalWD(w http.ResponseWriter, r *http.Request) 
 	return
 }
 
-func bpropsToHdr(bck *cluster.Bck, hdr http.Header) {
-	if bck.Props == nil {
-		bck.Props = defaultBckProps(bckPropsArgs{bck: bck, hdr: hdr})
-	}
-
-	finalProps := bck.Props.Clone()
-	cmn.IterFields(finalProps, func(fieldName string, field cmn.IterField) (error, bool) {
-		if fieldName == cmn.PropBucketVerEnabled {
-			if hdr.Get(cmn.HdrBucketVerEnabled) == "" {
-				verEnabled := field.Value().(bool)
-				hdr.Set(cmn.HdrBucketVerEnabled, strconv.FormatBool(verEnabled))
-			}
-			return nil, false
-		} else if fieldName == cmn.PropBucketCreated {
-			created := time.Unix(0, field.Value().(int64))
-			hdr.Set(cmn.HdrBucketCreated, created.Format(time.RFC3339))
-		}
-
-		hdr.Set(fieldName, fmt.Sprintf("%v", field.Value()))
-		return nil, false
-	})
-
-	props := cos.MustMarshalToString(finalProps)
-	hdr.Set(cmn.HdrBucketProps, props)
-}
-
 func selectBMDBuckets(bmd *bucketMD, query cmn.QueryBcks) cmn.Bcks {
 	var (
 		names = make(cmn.Bcks, 0, 10)

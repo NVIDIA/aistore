@@ -169,18 +169,17 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum) {
 	if v := hdr.Get(HdrObjVersion); v != "" {
 		oa.Ver = v
 	}
-	if customMD := hdr[http.CanonicalHeaderKey(HdrObjCustomMD)]; len(customMD) > 0 {
-		for _, v := range customMD {
-			entry := strings.SplitN(v, "=", 2)
-			debug.Assert(len(entry) == 2)
-			oa.SetCustomKey(entry[0], entry[1])
-		}
+	custom := hdr[http.CanonicalHeaderKey(HdrObjCustomMD)]
+	for _, v := range custom {
+		entry := strings.SplitN(v, "=", 2)
+		debug.Assert(len(entry) == 2)
+		oa.SetCustomKey(entry[0], entry[1])
 	}
 	return
 }
 
 // local <=> remote equality in the context of cold-GET and download. This function
-// decides whether we need to go ahead and re-read the object.
+// decides whether we need to go ahead and re-read the object from its remote location.
 //
 // Other than a "binary" size and version checks, rest logic goes as follows: objects are
 // considered equal if they have a) the same version and at least one matching checksum, or

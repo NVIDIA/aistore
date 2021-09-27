@@ -71,8 +71,9 @@ func patchBucketProps(baseParams BaseParams, bck cmn.Bck, body []byte, query ...
 // corresponding counterparts in the cmn.BucketProps struct.
 func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p *cmn.BucketProps, err error) {
 	var (
-		path = cmn.URLPathBuckets.Join(bck.Name)
 		q    url.Values
+		resp *wrappedResp
+		path = cmn.URLPathBuckets.Join(bck.Name)
 	)
 	p = &cmn.BucketProps{}
 	baseParams.Method = http.MethodHead
@@ -81,31 +82,31 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p *cmn
 	}
 	q = cmn.AddBckToQuery(q, bck)
 
-	resp, err := doHTTPRequestGetResp(ReqParams{BaseParams: baseParams, Path: path, Query: q}, nil)
-	// try to fill in error message (HEAD response will never contain one)
-	if err != nil {
-		if httpErr := cmn.Err2HTTPErr(err); httpErr != nil {
-			switch httpErr.Status {
-			case http.StatusUnauthorized:
-				httpErr.Message = fmt.Sprintf("Bucket %q unauthorized access", bck)
-			case http.StatusForbidden:
-				httpErr.Message = fmt.Sprintf("Bucket %q access denied", bck)
-			case http.StatusNotFound:
-				httpErr.Message = fmt.Sprintf("Bucket %q not found", bck)
-			case http.StatusGone:
-				httpErr.Message = fmt.Sprintf("Bucket %q has been removed from the backend", bck)
-			default:
-				httpErr.Message = fmt.Sprintf(
-					"Failed to access bucket %q (code: %d)",
-					bck, httpErr.Status,
-				)
-			}
-			err = httpErr
-		}
+	resp, err = doHTTPRequestGetResp(ReqParams{BaseParams: baseParams, Path: path, Query: q}, nil)
+	if err == nil {
+		err = jsoniter.Unmarshal([]byte(resp.Header.Get(cmn.HdrBucketProps)), &p)
 		return
 	}
-	err = jsoniter.Unmarshal([]byte(resp.Header.Get(cmn.HdrBucketProps)), &p)
-	return p, err
+	// try to fill in error message (HEAD response will never contain one)
+	if httpErr := cmn.Err2HTTPErr(err); httpErr != nil {
+		switch httpErr.Status {
+		case http.StatusUnauthorized:
+			httpErr.Message = fmt.Sprintf("Bucket %q unauthorized access", bck)
+		case http.StatusForbidden:
+			httpErr.Message = fmt.Sprintf("Bucket %q access denied", bck)
+		case http.StatusNotFound:
+			httpErr.Message = fmt.Sprintf("Bucket %q not found", bck)
+		case http.StatusGone:
+			httpErr.Message = fmt.Sprintf("Bucket %q has been removed from the backend", bck)
+		default:
+			httpErr.Message = fmt.Sprintf(
+				"Failed to access bucket %q (code: %d)",
+				bck, httpErr.Status,
+			)
+		}
+		err = httpErr
+	}
+	return
 }
 
 // ListBuckets returns buckets for provided query.
