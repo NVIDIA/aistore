@@ -252,9 +252,9 @@ var helpCommand = cli.Command{
 	},
 }
 
+// Print error and terminate
 func commandNotFoundHandler(c *cli.Context, cmd string) {
 	err := commandNotFoundError(c, cmd)
-	// The function has no return value (can't return an error), so it has to print the error here
 	fmt.Fprint(c.App.ErrWriter, err.Error())
 	os.Exit(1)
 }

@@ -62,6 +62,7 @@ var (
 		},
 		subcmdShowObject: {
 			objPropsFlag,
+			allPropsFlag,
 			noHeaderFlag,
 			jsonFlag,
 		},
@@ -128,7 +129,7 @@ var (
 	// define separately to allow for aliasing
 	showCmdDisk = cli.Command{
 		Name:         subcmdShowDisk,
-		Usage:        "show disk statistics for targets",
+		Usage:        "show disk stats for targets",
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        showCmdsFlags[subcmdShowDisk],
 		Action:       showDisksHandler,
@@ -413,7 +414,7 @@ func showObjectHandler(c *cli.Context) (err error) {
 	if _, err := headBucket(bck); err != nil {
 		return err
 	}
-	return objectStats(c, bck, object)
+	return showObjProps(c, bck, object)
 }
 
 func showRebalanceHandler(c *cli.Context) (err error) {

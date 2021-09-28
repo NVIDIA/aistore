@@ -176,6 +176,7 @@ func listObjects(c *cli.Context, bck cmn.Bck) error {
 	return _doListObj(c, bck, prefix, listArch)
 }
 
+// TODO: refactor and split options
 func _doListObj(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error {
 	var (
 		showUnmatched         = flagIsSet(c, showUnmatchedFlag)
@@ -198,6 +199,7 @@ func _doListObj(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error
 		msg.AddProps(cmn.GetPropsName)
 		msg.AddProps(props...)
 	}
+	// TODO: revisit
 	if flagIsSet(c, allItemsFlag) {
 		// If `all` flag is set print status of the file so that the output is easier to understand -
 		// there might be multiple files with the same name listed (e.g EC replicas)

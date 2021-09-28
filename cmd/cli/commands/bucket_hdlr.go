@@ -53,7 +53,7 @@ var (
 			templateFlag,
 			prefixFlag,
 			pageSizeFlag,
-			objPropsFlag,
+			objPropsLsFlag,
 			objLimitFlag,
 			showUnmatchedFlag,
 			allItemsFlag,
@@ -76,11 +76,12 @@ var (
 		},
 	}
 
-	// define separately to allow for aliasing (see alias_hdlr.go)
+	// list buckets, objects, and archives
+	// (TODO: define separately to allow for aliasing - see alias_hdlr.go)
 	bucketCmdList = cli.Command{
 		Name:         commandList,
 		Usage:        "list buckets and their objects",
-		Action:       defaultListHandler,
+		Action:       listAnyHandler,
 		ArgsUsage:    listCommandArgument,
 		Flags:        bucketCmdsFlags[commandList],
 		BashComplete: bucketCompletions(bckCompletionsOpts{withProviders: true}),
@@ -581,7 +582,7 @@ func showDiff(c *cli.Context, currProps, newProps *cmn.BucketProps) {
 	}
 }
 
-func defaultListHandler(c *cli.Context) (err error) {
+func listAnyHandler(c *cli.Context) (err error) {
 	opts := cmn.ParseURIOpts{IsQuery: true}
 	bck, objName, err := cmn.ParseBckObjectURI(c.Args().First(), opts)
 	if err != nil {

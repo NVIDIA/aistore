@@ -52,7 +52,7 @@ var wiProps = []string{
 func NewWalkInfo(ctx context.Context, t cluster.Target, msg *cmn.SelectMsg) *WalkInfo {
 	// TODO: this should be removed.
 	// TODO: we should take care of `msg.StartAfter`.
-	// Marker is always a file name, so we need to strip filename from path
+	// Marker is always a file name, so we need to strip filename from the path
 	markerDir := ""
 	if msg.ContinuationToken != "" {
 		markerDir = filepath.Dir(msg.ContinuationToken)
@@ -61,8 +61,8 @@ func NewWalkInfo(ctx context.Context, t cluster.Target, msg *cmn.SelectMsg) *Wal
 		}
 	}
 
-	// A small optimization: set boolean variables need* to avoid
-	// doing string search(strings.Contains) for every entry.
+	// A small optimization: set boolean variables to avoid
+	// strings.Contains() for every entry.
 	postCallback, _ := ctx.Value(CtxPostCallbackKey).(PostCallbackFunc)
 
 	propNeeded := make(map[string]bool, len(wiProps))

@@ -288,22 +288,6 @@ const (
 	LogErr  = "error"
 )
 
-// SelectMsg.Props enum
-// NOTE: DO NOT forget update `GetPropsAll` constant when a prop is added/removed.
-const (
-	GetPropsName     = "name"
-	GetPropsSize     = "size"
-	GetPropsVersion  = "version"
-	GetPropsChecksum = "checksum"
-	GetPropsAtime    = "atime"
-	GetPropsCached   = "cached"
-	GetTargetURL     = "target_url"
-	GetPropsStatus   = "status"
-	GetPropsCopies   = "copies"
-	GetPropsEC       = "ec"
-	GetPropsCustom   = "custom"
-)
-
 // BucketEntry.Flags field
 const (
 	EntryStatusBits = 5                          // N bits

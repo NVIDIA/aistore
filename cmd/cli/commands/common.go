@@ -7,6 +7,7 @@ package commands
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -260,11 +261,17 @@ var (
 	// Common
 	objPropsFlag = cli.StringFlag{
 		Name:  "props",
-		Usage: "properties to return with object names, comma separated",
-		Value: cmn.GetPropsName + "," + cmn.GetPropsSize,
+		Usage: "comma-separated list of object properties including name, size, version, ##copies, EC data and parity info, custom props",
+		Value: strings.Join(cmn.GetPropsDefault, ","),
 	}
-	prefixFlag  = cli.StringFlag{Name: "prefix", Usage: "list objects matching the given prefix"}
-	refreshFlag = cli.DurationFlag{
+	objPropsLsFlag = cli.StringFlag{
+		Name:  objPropsFlag.Name,
+		Usage: objPropsFlag.Usage,
+		Value: strings.Join(cmn.GetPropsMinimal, ","),
+	}
+	allPropsFlag = cli.BoolFlag{Name: "all", Usage: "show all object properties"}
+	prefixFlag   = cli.StringFlag{Name: "prefix", Usage: "list objects matching the given prefix"}
+	refreshFlag  = cli.DurationFlag{
 		Name:  "refresh",
 		Usage: "refresh interval for continuous monitoring, valid time units: 'ns', 'us', 'ms', 's', 'm', and 'h'",
 		Value: refreshRateDefault,
@@ -273,11 +280,11 @@ var (
 	jsonFlag        = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}
 	noHeaderFlag    = cli.BoolFlag{Name: "no-headers,H", Usage: "display tables without headers"}
 	progressBarFlag = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
-	dryRunFlag      = cli.BoolFlag{Name: "dry-run", Usage: "preview the action without really doing it"}
+	dryRunFlag      = cli.BoolFlag{Name: "dry-run", Usage: "preview the results without really running the action"}
 	verboseFlag     = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}
 	ignoreErrorFlag = cli.BoolFlag{
 		Name:  "ignore-error",
-		Usage: "ignore error on soft failures like bucket already exists, bucket does not exist etc.",
+		Usage: "ignore \"soft\" failures, such as \"bucket already exists\", etc.",
 	}
 	bucketPropsFlag = cli.StringFlag{Name: "bucket-props", Usage: "bucket properties"}
 	forceFlag       = cli.BoolFlag{Name: "force,f", Usage: "force an action"}
@@ -290,7 +297,7 @@ var (
 	// Bucket
 	startAfterFlag = cli.StringFlag{
 		Name:  "start-after",
-		Usage: "list bucket's content alphabetically starting with the first name *after* the specified key",
+		Usage: "list bucket's content alphabetically starting with the first name *after* the specified",
 	}
 	objLimitFlag = cli.IntFlag{Name: "limit", Usage: "limit object count", Value: 0} // TODO: specify default as unlimited
 	pageSizeFlag = cli.IntFlag{Name: "page-size", Usage: "maximum number of entries by list objects call", Value: 1000}

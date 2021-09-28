@@ -731,25 +731,23 @@ func calcPutRefresh(c *cli.Context) time.Duration {
 }
 
 // Displays object properties
-func objectStats(c *cli.Context, bck cmn.Bck, object string) error {
+func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 	var (
 		propsFlag     []string
 		selectedProps []string
 	)
-
 	objProps, err := api.HeadObject(defaultAPIParams, bck, object)
 	if err != nil {
 		return handleObjHeadError(err, bck, object)
 	}
-
 	if flagIsSet(c, jsonFlag) {
 		return templates.DisplayOutput(objProps, c.App.Writer, templates.PropsSimpleTmpl, true)
 	}
-
-	if flagIsSet(c, objPropsFlag) {
+	if flagIsSet(c, allPropsFlag) {
+		propsFlag = cmn.GetPropsAll
+	} else if flagIsSet(c, objPropsFlag) {
 		propsFlag = strings.Split(parseStrFlag(c, objPropsFlag), ",")
 	}
-
 	if len(propsFlag) == 0 {
 		selectedProps = cmn.GetPropsDefault
 	} else if cos.StringInSlice("all", propsFlag) {
@@ -757,7 +755,6 @@ func objectStats(c *cli.Context, bck cmn.Bck, object string) error {
 	} else {
 		selectedProps = propsFlag
 	}
-
 	props := objectPropList(bck, objProps, selectedProps)
 	return templates.DisplayOutput(props, c.App.Writer, templates.PropsSimpleTmpl)
 }

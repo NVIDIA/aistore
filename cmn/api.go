@@ -208,23 +208,6 @@ type (
 	}
 )
 
-// object properties
-type (
-	ObjectProps struct {
-		ObjAttrs
-		Name      string `json:"name"`
-		Bck       Bck    `json:"bucket"`
-		NumCopies int    `json:"copies"`
-		EC        struct {
-			Generation   int64 `json:"ec-generation"`
-			DataSlices   int   `json:"ec-data"`
-			ParitySlices int   `json:"ec-parity"`
-			IsECCopy     bool  `json:"ec-replicated"`
-		}
-		Present bool `json:"present"`
-	}
-)
-
 // sysinfo
 type (
 	CapacityInfo struct {
@@ -244,18 +227,6 @@ type (
 		Proxy  cos.JSONRawMsgs `json:"proxy"`
 		Target cos.JSONRawMsgs `json:"target"`
 	}
-)
-
-// GetPropsDefault is a list of default (most relevant) `GetProps*` options.
-// NOTE: do **NOT** forget update this array when a prop is added/removed.
-var GetPropsDefault = []string{
-	GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsAtime,
-}
-
-// GetPropsAll is a list of all `GetProps*` options.
-// NOTE: do **NOT** forget to update this array when a prop is added/removed.
-var GetPropsAll = append(GetPropsDefault,
-	GetPropsVersion, GetPropsCached, GetTargetURL, GetPropsStatus, GetPropsCopies, GetPropsEC, GetPropsCustom,
 )
 
 ////////////////

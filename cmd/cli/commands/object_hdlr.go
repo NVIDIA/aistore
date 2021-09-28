@@ -100,7 +100,7 @@ var (
 
 	objectCmd = cli.Command{
 		Name:  commandObject,
-		Usage: "PUT (write), GET (read), list, move (rename) and other operations on objects in a given bucket",
+		Usage: "put, get, rename, remove, and other operations on objects",
 		Subcommands: []cli.Command{
 			objectCmdGet,
 			objectCmdPut,
@@ -127,7 +127,7 @@ var (
 			},
 			{
 				Name:         commandPromote,
-				Usage:        "promote AIStore-local files and directories to objects",
+				Usage:        "promote AIS-local files and directories to objects",
 				ArgsUsage:    putPromoteObjectArgument,
 				Flags:        objectCmdsFlags[commandPromote],
 				Action:       promoteHandler,
@@ -135,14 +135,14 @@ var (
 			},
 			{
 				Name:      commandConcat,
-				Usage:     "concatenate multiple files into a new, single object to the specified bucket",
+				Usage:     "concatenate multiple files into a new, single object",
 				ArgsUsage: concatObjectArgument,
 				Flags:     objectCmdsFlags[commandConcat],
 				Action:    concatHandler,
 			},
 			{
 				Name:         commandCat,
-				Usage:        "print an object from the specified bucket to STDOUT",
+				Usage:        "cat an object - print the contents to STDOUT",
 				ArgsUsage:    objectArgument,
 				Flags:        objectCmdsFlags[commandCat],
 				Action:       catHandler,

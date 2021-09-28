@@ -144,9 +144,21 @@ func objectPropList(bck cmn.Bck, props *cmn.ObjectProps, selection []string) (pr
 func didYouMeanMessage(c *cli.Context, cmd string) string {
 	closestCommand, distance := findClosestCommand(cmd, c.App.VisibleCommands())
 	if distance >= cos.Max(incorrectCmdDistance, len(cmd)/2) {
+		// 2nd attempt: check misplaced `show`
+		// (that can be typed-in ex post facto as in: `ais object ... show` == `ais show object`)
+		// (feature)
+		if tail := c.Args().Tail(); len(tail) > 0 && tail[0] == commandShow {
+			sb := &strings.Builder{}
+			sb.WriteString(c.App.Name)
+			sb.WriteString(" " + commandShow)
+			sb.WriteString(" " + c.Args()[0])
+			for _, f := range c.FlagNames() {
+				sb.WriteString(" --" + f)
+			}
+			return fmt.Sprintf("Did you mean: %q?", sb.String())
+		}
 		return ""
 	}
-
 	sb := &strings.Builder{}
 	sb.WriteString(c.App.Name)
 	sb.WriteString(" " + closestCommand)
