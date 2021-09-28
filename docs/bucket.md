@@ -11,6 +11,7 @@ redirect_from:
 
 - [Bucket](#bucket)
   - [Default Bucket Properties](#default-bucket-properties)
+  - [Inherited Bucket Properties and LRU](#inherited-bucket-properties-and-lru)
   - [Backend Provider](#backend-provider)
 - [AIS Bucket](#ais-bucket)
   - [CLI: create, rename and, destroy ais bucket](#cli-create-rename-and-destroy-ais-bucket)
@@ -93,17 +94,40 @@ $ ais bucket create ais://abc --bucket-props="lru.enabled=false mirror.enabled=t
 $ ais bucket create ais://abc --bucket-props='{"lru": {"enabled": false}, "mirror": {"enabled": true, "copies": 4}}'
 ```
 
-**IMPORTANT NOTICE:**
+### Inherited Bucket Properties and LRU
 
-> At the time of writing, [LRU](storage_svcs.md#lru) eviction is globally enabled.
-In other words, by default a newly created bucket might become a subject to LRU eviction given configured LRU "watermarks" and current storage capacity utilization.
+1. [LRU](storage_svcs.md#lru) eviction triggers automatically when the percentage of used capacity exceeds configured ("high") watermark `lru.highwm`. The latter is part of bucket configuration and one of the many bucket properties that can be individually configured.
+2. By default, `lru.highwm` = `90%` of total storage space.
+3. Another important knob is `lru.enabled` that defines whether a given bucket can be a subject of LRU eviction in the first place.
+4. By default, these two and all the other knobs are [inherited](#default-bucket-properties) by a newly created bucket from [default (global, cluster-wide) configuration](configuration.md#cluster-and-node-configuration).
+5. However, those inherited defaults can be changed - [overridden](#default-bucket-properties) - both at bucket creation time, and at any later time.
 
-> Use `ais bucket lru` CLI to conveniently **toggle** LRU eviction on or off.
+Going back to [LRU](storage_svcs.md#lru), it can be disabled (or enabled) on a per bucket basis.
 
-> Use `ais bucket props reset` CLI to **reset** bucket properties to cluster-wide defaults.
+Prior to the version 3.8, [LRU](storage_svcs.md#lru) eviction **was by default globally enabled**. Starting v3.8, [LRU](storage_svcs.md#lru) is enabled by default **only for remote buckets**.
+
+> AIS buckets that have remote backends are, by definition, remote buckets. See [next section](#backend-provider) for details.
+
+In summary, starting v3.8, a newly created AIS bucket inherits default configuration that makes the bucket *non-evictable*.
+
+Useful CLI commands include:
+
+```console
+# CLI to conveniently _toggle_ LRU eviction on and off on a per-bucket basis:
+$ ais bucket lru ...
+
+# Reset bucket properties to cluster-wide defaults:
+$ ais bucket props reset ...
+
+# Evict any given bucket based on a user-defined _template_.
+# The command is one of the many supported _multi-object_ operations that run asynchronously
+# and handle arbitrary (list, range, prefix)-defined templates.
+$ ais bucket evict ...
+```
 
 See also:
 
+* [CLI: Operations on Lists and Ranges](/docs/cli/object.md#operations-on-lists-and-ranges)
 * [api.CreateBucket() and api.SetBucketProps()](/api/bucket.go)
 * [RESTful API](http_api.md)
 * [CLI: listing and setting bucket properties](#cli-examples-listing-and-setting-bucket-properties)

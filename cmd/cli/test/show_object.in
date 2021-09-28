@@ -10,3 +10,8 @@ ais show object ais://$BUCKET_1/object_1.txt --props=size,version
 ais show object ais://$BUCKET_1/object_1.txt --props=all
 
 ais show object aiss://$BUCKET_1/object_1.txt // FAIL "invalid backend provider "aiss""
+
+ais object put $OBJECT_1.txt ais://$BUCKET_1 // IGNORE
+ais object set-custom ais://$BUCKET_1/object_1.txt key1=val1 // IGNORE
+ais object set-custom ais://$BUCKET_1/object_1.txt key222=val222 // IGNORE
+ais show object ais://$BUCKET_1/object_1.txt --props=all

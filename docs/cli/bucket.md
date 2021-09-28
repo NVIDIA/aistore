@@ -497,10 +497,17 @@ All options are required and must be greater than `0`.
 
 ## Show bucket properties
 
-`ais bucket props show BUCKET [PROP_PREFIX]`
+Overall, the topic called "bucket properties" is rather involved and includes sub-topics "bucket property inhertance" and "cluster-wide global defaults". For background, please first see:
 
-List [properties](/docs/bucket.md#properties-and-options) of the bucket.
-By default, condensed form of bucket props sections is presented.
+* [Default Bucket Properties](/docs/bucket.md#default-bucket-properties)
+* [Inherited Bucket Properties and LRU](/docs/bucket.md#inherited-bucket-properties-and-lru)
+* [Backend Provider](/docs/bucket.md#backend-provider)
+* [Global cluster-wide configuration](/docs/configuration.md#cluster-and-node-configuration).
+
+Now, as far as CLI, run the following to list [properties](/docs/bucket.md#properties-and-options) of the specified bucket.
+By default, a certain compact form of bucket props sections is presented.
+
+`ais bucket props show BUCKET [PROP_PREFIX]`
 
 When `PROP_PREFIX` is set, only props that start with `PROP_PREFIX` will be displayed.
 Useful `PROP_PREFIX` are: `access, checksum, ec, lru, mirror, provider, versioning`.
