@@ -592,7 +592,7 @@ func Test_coldgetmd5(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	p, err := api.HeadBucket(baseParams, m.bck)
@@ -867,7 +867,7 @@ func testEvictRemoteBucket(t *testing.T, bck cmn.Bck, keepMD bool) {
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: m.bck})
-	m.saveClusterState()
+	m.initAndSaveCluState()
 
 	t.Cleanup(func() {
 		m.del()

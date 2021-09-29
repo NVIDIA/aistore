@@ -2149,7 +2149,7 @@ func TestECBucketEncode(t *testing.T) {
 		}
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
 	if m.smap.CountActiveTargets() < parityCnt+1 {

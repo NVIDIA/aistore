@@ -42,7 +42,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 		rebID string
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(2)
 
 	// Step 1.
@@ -72,7 +72,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	wg.Wait()
 
 	m.ensureNoErrors()
-	m.assertClusterState()
+	m.waitAndCheckCluState()
 	if rebID != "" {
 		tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
 	}
@@ -92,7 +92,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 		num:                 150000,
 	}
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(2)
 	m.expectProxies(3)
 
@@ -143,7 +143,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	wg.Wait()
 
 	m.ensureNoErrors()
-	m.assertClusterState()
+	m.waitAndCheckCluState()
 }
 
 // Similar to TestGetAndReRegisterInParallel, but instead of unregister, we kill the target
@@ -166,7 +166,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 		targetNode *cluster.Snode
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(3)
 
 	// Step 1
@@ -205,13 +205,13 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	wg.Wait()
 
 	m.ensureNoErrors()
-	m.assertClusterState()
+	m.waitAndCheckCluState()
 	tutils.WaitForRebalanceToComplete(m.t, tutils.BaseAPIParams(m.proxyURL))
 }
 
 func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	m := ioContext{t: t}
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(1)
 	target := m.startMaintenanceNoRebalance()
 
@@ -228,7 +228,7 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 
 	// Register target (bring cluster to normal state)
 	rebID := m.stopMaintenance(target)
-	m.assertClusterState()
+	m.waitAndCheckCluState()
 	tutils.WaitForRebalanceByID(m.t, m.originalTargetCount, tutils.BaseAPIParams(m.proxyURL), rebID)
 }
 
@@ -240,7 +240,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 		num: 10000,
 	}
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(3)
 
 	targets := m.smap.Tmap.ActiveNodes()
@@ -300,7 +300,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	// wait for rebalance to complete
 	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
 
-	m.assertClusterState()
+	m.waitAndCheckCluState()
 }
 
 func TestAckRebalance(t *testing.T) {
@@ -312,7 +312,7 @@ func TestAckRebalance(t *testing.T) {
 		getErrIsFatal: true,
 	}
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(3)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
@@ -331,7 +331,7 @@ func TestAckRebalance(t *testing.T) {
 	m.gets()
 
 	m.ensureNoErrors()
-	m.assertClusterState()
+	m.waitAndCheckCluState()
 }
 
 func TestStressRebalance(t *testing.T) {
@@ -341,7 +341,7 @@ func TestStressRebalance(t *testing.T) {
 		t: t,
 	}
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(4)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
@@ -360,7 +360,7 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 		getErrIsFatal: true,
 	}
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 
 	tgts := m.smap.Tmap.ActiveNodes()
 	i1 := rand.Intn(len(tgts))
@@ -414,7 +414,7 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 	wg.Wait()
 
 	m.ensureNoErrors()
-	m.assertClusterState()
+	m.waitAndCheckCluState()
 }
 
 func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
@@ -425,7 +425,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 		num: 10000,
 	}
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(3)
 
 	targets := m.smap.Tmap.ActiveNodes()
@@ -493,7 +493,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	m.gets()
 
 	m.ensureNoErrors()
-	m.assertClusterState()
+	m.waitAndCheckCluState()
 }
 
 func TestPutDuringRebalance(t *testing.T) {
@@ -504,7 +504,7 @@ func TestPutDuringRebalance(t *testing.T) {
 		num: 10000,
 	}
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(3)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
@@ -533,7 +533,7 @@ func TestPutDuringRebalance(t *testing.T) {
 	m.gets()
 
 	m.checkObjectDistribution(t)
-	m.assertClusterState()
+	m.waitAndCheckCluState()
 }
 
 func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
@@ -550,7 +550,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 		killTarget     *cluster.Snode
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(2)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
@@ -637,7 +637,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	m.ensureNoErrors()
-	m.assertClusterState()
+	m.waitAndCheckCluState()
 }
 
 func TestGetDuringLocalRebalance(t *testing.T) {
@@ -651,7 +651,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(1)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
@@ -715,7 +715,7 @@ func TestGetDuringRebalance(t *testing.T) {
 		num: 30000,
 	}
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(3)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
@@ -743,7 +743,7 @@ func TestGetDuringRebalance(t *testing.T) {
 	m.gets()
 
 	m.ensureNoErrors()
-	m.assertClusterState()
+	m.waitAndCheckCluState()
 }
 
 func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
@@ -758,7 +758,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 		t: t,
 	}
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(3)
 
 	targets := m.smap.Tmap.ActiveNodes()
@@ -800,7 +800,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	m.assertClusterState()
+	m.waitAndCheckCluState()
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 }
 
@@ -816,7 +816,7 @@ func TestMountpathRemoveAndAdd(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(2)
 
 	target, _ := m.smap.GetRandTarget()
@@ -874,7 +874,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(1)
 	target, _ := m.smap.GetRandTarget()
 
@@ -933,7 +933,7 @@ func TestLocalAndGlobalRebalanceAfterAddingMountpath(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(1)
 
 	targets := m.smap.Tmap.ActiveNodes()
@@ -1003,7 +1003,7 @@ func TestMountpathDisableAndEnable(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(1)
 
 	target, _ := m.smap.GetRandTarget()
@@ -1081,7 +1081,7 @@ func TestForwardCP(t *testing.T) {
 	}
 
 	// Step 1.
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectProxies(2)
 
 	// Step 2.
@@ -1131,7 +1131,7 @@ func TestAtimeRebalance(t *testing.T) {
 		numGetsEachFile: 2,
 	}
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(2)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
@@ -1376,7 +1376,7 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 		numGetsEachFile: 5,
 	}
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(2)
 
 	target := m.startMaintenanceNoRebalance()
@@ -1389,7 +1389,7 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	m.gets()
 
 	m.ensureNoErrors()
-	m.assertClusterState()
+	m.waitAndCheckCluState()
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
 }
@@ -1410,7 +1410,7 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	}
 
 	// Initialize ioContext
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(2)
 
 	targets := m.smap.Tmap.ActiveNodes()
@@ -1442,7 +1442,7 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	m.gets()
 
 	m.ensureNoErrors()
-	m.assertClusterState()
+	m.waitAndCheckCluState()
 }
 
 func TestRenewRebalance(t *testing.T) {
@@ -1458,7 +1458,7 @@ func TestRenewRebalance(t *testing.T) {
 		rebID string
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(2)
 
 	// Step 1: Unregister a target
@@ -1506,7 +1506,7 @@ func TestRenewRebalance(t *testing.T) {
 	tassert.CheckError(t, err)
 
 	m.ensureNoErrors()
-	m.assertClusterState()
+	m.waitAndCheckCluState()
 }
 
 func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
@@ -1521,7 +1521,7 @@ func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(1)
 
 	// Select one target at random
@@ -1580,7 +1580,7 @@ func TestGetFromMirroredBucketWithLostAllMountpath(t *testing.T) {
 		num:             10000,
 		numGetsEachFile: 4,
 	}
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 
 	// Select one target at random
@@ -1647,7 +1647,7 @@ func TestICRebalance(t *testing.T) {
 		rebID string
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(3)
 	m.expectProxies(3)
 	psi, err := m.smap.GetRandProxy(true /*exclude primary*/)
@@ -1693,7 +1693,7 @@ func TestICRebalance(t *testing.T) {
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckError(t, err)
 
-	m.assertClusterState()
+	m.waitAndCheckCluState()
 }
 
 // 1. Start decommissioning a target with rebalance
@@ -1710,7 +1710,7 @@ func TestICDecommission(t *testing.T) {
 		}
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(3)
 	m.expectProxies(3)
 	psi, err := m.smap.GetRandProxy(true /*exclude primary*/)
@@ -1768,7 +1768,7 @@ func TestICDecommission(t *testing.T) {
 
 func TestSingleResilver(t *testing.T) {
 	m := ioContext{t: t}
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 
 	// Select a random target

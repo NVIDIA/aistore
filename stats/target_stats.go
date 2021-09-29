@@ -18,6 +18,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
+	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/sys"
 )
 
 // Naming Convention:
@@ -248,6 +250,15 @@ func (r *Trunner) log(now int64, uptime time.Duration) {
 
 	// 4. append disk stats to log
 	r.logDiskStats()
+
+	// 5. memory pressure
+	memStat, err := sys.Mem()
+	debug.AssertNoErr(err)
+	if memStat.Used > memStat.Total>>2 {
+		used, free := cos.B2S(int64(memStat.Used), 0), cos.B2S(int64(memStat.Free), 0)
+		pressure := r.T.MMSA().MemPressure()
+		r.lines = append(r.lines, "memory: used "+used+", free "+free+", pressure "+memsys.MemPressureText(pressure))
+	}
 
 	// 5. log
 	for _, ln := range r.lines {

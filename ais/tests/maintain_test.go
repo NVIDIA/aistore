@@ -65,7 +65,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 		origEntries = make(map[string]*cmn.BucketEntry, 1500)
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	m.puts()
@@ -289,7 +289,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 	origProxyCnt, origTargetCount := m.smap.CountActiveProxies(), m.smap.CountActiveTargets()
 
@@ -360,7 +360,7 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 	origProxyCnt, origTargetCount := m.smap.CountActiveProxies(), m.smap.CountActiveTargets()
 
@@ -508,7 +508,7 @@ func TestShutdownListObjects(t *testing.T) {
 		origEntries = make(map[string]*cmn.BucketEntry, 1500)
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	origTargetCount := m.smap.CountActiveTargets()
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 	m.puts()

@@ -71,12 +71,41 @@ type ioContext struct {
 	numPutErrs int
 }
 
-func (m *ioContext) saveClusterState() {
+func (m *ioContext) initAndSaveCluState() {
 	m.init()
-	m.smap = tutils.GetClusterMap(m.t, m.proxyURL)
+	m.saveCluState(m.proxyURL)
+}
+
+func (m *ioContext) saveCluState(proxyURL string) {
+	m.smap = tutils.GetClusterMap(m.t, proxyURL)
 	m.originalTargetCount = m.smap.CountActiveTargets()
 	m.originalProxyCount = m.smap.CountActiveProxies()
 	tlog.Logf("targets: %d, proxies: %d\n", m.originalTargetCount, m.originalProxyCount)
+}
+
+func (m *ioContext) waitAndCheckCluState() {
+	smap, err := tutils.WaitForClusterState(
+		m.proxyURL,
+		"check cluster state",
+		m.smap.Version,
+		m.originalProxyCount,
+		m.originalTargetCount,
+	)
+	tassert.CheckFatal(m.t, err)
+	m.checkCluState(smap)
+}
+
+func (m *ioContext) checkCluState(smap *cluster.Smap) {
+	proxyCount := smap.CountActiveProxies()
+	targetCount := smap.CountActiveTargets()
+	if targetCount != m.originalTargetCount ||
+		proxyCount != m.originalProxyCount {
+		m.t.Errorf(
+			"cluster state is not preserved. targets (before: %d, now: %d); proxies: (before: %d, now: %d)",
+			targetCount, m.originalTargetCount,
+			proxyCount, m.originalProxyCount,
+		)
+	}
 }
 
 func (m *ioContext) init() {
@@ -117,28 +146,6 @@ func (m *ioContext) _cleanup() {
 	if m.bck.IsRemote() {
 		// Ensure all local objects are removed.
 		tutils.EvictRemoteBucket(m.t, m.proxyURL, m.bck)
-	}
-}
-
-func (m *ioContext) assertClusterState() {
-	smap, err := tutils.WaitForClusterState(
-		m.proxyURL,
-		"check cluster state",
-		m.smap.Version,
-		m.originalProxyCount,
-		m.originalTargetCount,
-	)
-	tassert.CheckFatal(m.t, err)
-
-	proxyCount := smap.CountActiveProxies()
-	targetCount := smap.CountActiveTargets()
-	if targetCount != m.originalTargetCount ||
-		proxyCount != m.originalProxyCount {
-		m.t.Errorf(
-			"cluster state is not preserved. targets (before: %d, now: %d); proxies: (before: %d, now: %d)",
-			targetCount, m.originalTargetCount,
-			proxyCount, m.originalProxyCount,
-		)
 	}
 }
 

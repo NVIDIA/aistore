@@ -101,7 +101,7 @@ func TestETLTargetDown(t *testing.T) {
 		fileSize:  512,
 		fixedSize: true,
 	}
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	xactID := etlPrepareAndStart(t, m, tetl.Echo, etl.RedirectCommType)
 
 	tlog.Logln("Waiting for ETL to process a few objects...")
@@ -173,7 +173,7 @@ def transform(input_bytes):
 
 	tlog.Logf("Preparing source bucket (%d objects, %s each)\n", m.num, cos.B2S(int64(m.fileSize), 2))
 	tutils.CreateFreshBucket(t, proxyURL, bckFrom, nil)
-	m.saveClusterState()
+	m.initAndSaveCluState()
 
 	m.puts()
 
@@ -238,7 +238,7 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, name, comm string) (xactID s
 
 	tlog.Logf("Preparing source bucket %q\n", bckFrom.String())
 	tutils.CreateFreshBucket(t, proxyURL, bckFrom, nil)
-	m.saveClusterState()
+	m.initAndSaveCluState()
 
 	m.puts()
 

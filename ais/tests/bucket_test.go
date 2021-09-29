@@ -1354,7 +1354,7 @@ func TestListObjectsWithRebalance(t *testing.T) {
 		rebID string
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(2)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
@@ -1387,7 +1387,7 @@ func TestListObjectsWithRebalance(t *testing.T) {
 	}()
 
 	wg.Wait()
-	m.assertClusterState()
+	m.waitAndCheckCluState()
 	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
 }
 
@@ -1405,7 +1405,7 @@ func TestBucketSingleProp(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(3)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
@@ -1611,7 +1611,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 		m.numGetsEachFile = 3
 	}
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 
 	max := cos.Max(numCopies...) + 1
 	skip := tutils.SkipTestArgs{MinMountpaths: max}
@@ -1766,7 +1766,7 @@ func TestRenameBucketEmpty(t *testing.T) {
 		}
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(1)
 
 	srcBck := m.bck
@@ -1820,7 +1820,7 @@ func TestRenameBucketNonEmpty(t *testing.T) {
 		}
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.proxyURL = tutils.RandomProxyURL(t)
 	m.expectTargets(1)
 
@@ -1873,7 +1873,7 @@ func TestRenameBucketAlreadyExistingDst(t *testing.T) {
 		}
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(1)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
@@ -1927,7 +1927,7 @@ func TestRenameBucketTwice(t *testing.T) {
 		}
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.proxyURL = tutils.RandomProxyURL(t)
 	m.expectTargets(1)
 
@@ -2004,7 +2004,7 @@ func TestRenameBucketNonExistentSrc(t *testing.T) {
 		}
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(1)
 
 	for _, srcBck := range srcBcks {
@@ -2171,7 +2171,7 @@ func TestCopyBucket(t *testing.T) {
 				tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: dstms[0].bck})
 			}
 
-			srcm.saveClusterState()
+			srcm.initAndSaveCluState()
 			srcm.expectTargets(1)
 
 			for _, dstm := range dstms {
@@ -2460,7 +2460,7 @@ func TestRenameAndCopyBucket(t *testing.T) {
 		}
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(1)
 
 	srcBck := m.bck
@@ -2540,7 +2540,7 @@ func TestCopyAndRenameBucket(t *testing.T) {
 		}
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(1)
 
 	srcBck := m.bck
@@ -2770,7 +2770,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 		numCorrupted = 13
 	}
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
@@ -2980,7 +2980,7 @@ func TestBucketListAndSummary(t *testing.T) {
 
 			cacheSize := m.num / 2 // determines number of objects which should be cached
 
-			m.saveClusterState()
+			m.initAndSaveCluState()
 			m.expectTargets(2)
 
 			expectedFiles := m.num

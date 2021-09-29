@@ -614,7 +614,7 @@ func TestDownloadStatus(t *testing.T) {
 		m          = ioContext{t: t}
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(2)
 
 	var (

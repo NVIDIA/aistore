@@ -200,9 +200,12 @@ func multiOpStress(opNames ...string) func(t *testing.T) {
 // Summing up: GCP is not suitable for any stress test, so it is skipped
 func rwstress(t *testing.T) {
 	generateRandomNames(numFiles)
+	m := ioContext{t: t}
+	m.saveCluState(tutils.RandomProxyURL())
 	t.Run("parallelputget", parallelPutGetStress)
 	t.Run("putdelete", multiOpStress(http.MethodPut, http.MethodGet))
 	t.Run("putgetdelete", multiOpStress(http.MethodPut, http.MethodGet, http.MethodDelete))
+	m.checkCluState(m.smap)
 }
 
 func TestRWStressShort(t *testing.T) {

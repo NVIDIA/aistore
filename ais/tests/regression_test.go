@@ -77,7 +77,7 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 		smap       = tutils.GetClusterMap(t, proxyURL)
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(1)
 
 	tutils.CreateFreshBucket(t, proxyURL, m.bck, nil)
@@ -146,7 +146,7 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(2)
 
 	m.puts()
@@ -452,7 +452,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 		}
 	)
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(2)
 	targetsToUnregister := m.originalTargetCount - 1
 
@@ -529,7 +529,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	tlog.Logf("Rebalance received %s in %d files\n", cos.B2S(bytesRecv, 2), filesRecv)
 
 	m.ensureNoErrors()
-	m.assertClusterState()
+	m.waitAndCheckCluState()
 }
 
 func TestGetClusterStats(t *testing.T) {
@@ -676,7 +676,7 @@ func TestPrefetchList(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(2)
 	m.puts()
 
@@ -780,7 +780,7 @@ func TestPrefetchRange(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
 
-	m.saveClusterState()
+	m.initAndSaveCluState()
 	m.expectTargets(2)
 	m.puts()
 	// 1. Parse arguments
