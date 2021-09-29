@@ -35,13 +35,13 @@ const (
 type (
 	// advanced usage: additional stream control
 	Extra struct {
-		IdleTimeout time.Duration // stream idle timeout: causes PUT to terminate (and renew on the next obj send)
-		Callback    ObjSentCB     // typical usage: to free SGLs, close files, etc.
-		Compression string        // see CompressAlways, etc. enum
-		MMSA        *memsys.MMSA  // compression-related buffering
-		Config      *cmn.Config   // config
-		SenderID    string        // optional send ID (e.g., xaction ID)
-		SizePDU     int32         // 0(zero): no PDUs; must be below MaxSizePDU; unknown size _requires_ PDUs
+		IdleTeardown time.Duration // when exceeded, causes PUT to terminate (and to renew upon the very next send)
+		Callback     ObjSentCB     // typical usage: to free SGLs, close files, etc.
+		Compression  string        // see CompressAlways, etc. enum
+		MMSA         *memsys.MMSA  // compression-related buffering
+		Config       *cmn.Config   // config
+		SenderID     string        // optional send ID (e.g., xaction ID)
+		SizePDU      int32         // 0(zero): no PDUs; must be below MaxSizePDU; unknown size _requires_ PDUs
 	}
 	// stream stats
 	Stats struct {
@@ -99,13 +99,16 @@ func (hdr *ObjHdr) FullName() string { return filepath.Join(hdr.Bck.Name, hdr.Ob
 ///////////////////
 
 func NewObjStream(client Client, dstURL, dstID string, extra *Extra) (s *Stream) {
+	if extra == nil {
+		extra = &Extra{Config: cmn.GCO.Get()}
+	} else if extra.Config == nil {
+		extra.Config = cmn.GCO.Get()
+	}
 	s = &Stream{streamBase: *newStreamBase(client, dstURL, dstID, extra)}
 	s.streamBase.streamer = s
-	if extra != nil {
-		s.callback = extra.Callback
-		if extra.Compressed() {
-			s.initCompression(extra)
-		}
+	s.callback = extra.Callback
+	if extra.Compressed() {
+		s.initCompression(extra)
 	}
 	burst := burst()                  // num objects the caller can post without blocking
 	s.workCh = make(chan *Obj, burst) // Send Qeueue (SQ)
@@ -173,7 +176,7 @@ func (s *Stream) Fin() {
 ////////////////////
 
 func NewMsgStream(client Client, dstURL, dstID string) (s *MsgStream) {
-	s = &MsgStream{streamBase: *newStreamBase(client, dstURL, dstID, nil)}
+	s = &MsgStream{streamBase: *newStreamBase(client, dstURL, dstID, &Extra{Config: cmn.GCO.Get()})}
 	s.streamBase.streamer = s
 
 	burst := burst()                  // num messages the caller can post without blocking

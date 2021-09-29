@@ -274,6 +274,11 @@ type (
 		MaxHostBusy     cos.Duration `json:"max_host_busy"`
 		Startup         cos.Duration `json:"startup_time"`
 		SendFile        cos.Duration `json:"send_file_time"`
+		// Max idle time - the time with no transmissions over a long-lived
+		// http/tcp intra-cluster connection. When exceeded, sender terminates
+		// the connection (and will then reestablish it upon the very first "next"
+		// PDU to send). Added in v3.8.
+		TransportIdleTeardown cos.Duration `json:"transport_idle_term"`
 	}
 	TimeoutConfToUpdate struct {
 		CplaneOperation *cos.Duration `json:"cplane_operation,omitempty"`
@@ -281,6 +286,8 @@ type (
 		MaxHostBusy     *cos.Duration `json:"max_host_busy,omitempty"`
 		Startup         *cos.Duration `json:"startup_time,omitempty"`
 		SendFile        *cos.Duration `json:"send_file_time,omitempty"`
+		// v3.8
+		TransportIdleTeardown *cos.Duration `json:"transport_idle_term,omitempty"`
 	}
 
 	ClientConf struct {

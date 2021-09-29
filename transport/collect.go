@@ -178,7 +178,7 @@ func (gc *collector) do() {
 		if s.time.ticks > 0 {
 			continue
 		}
-		gc.update(s, int(s.time.idleOut/tickUnit))
+		gc.update(s, int(s.time.idleTeardown/tickUnit))
 		if s.time.inSend.Swap(false) {
 			continue
 		}

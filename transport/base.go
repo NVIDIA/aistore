@@ -25,10 +25,9 @@ import (
 
 // transport defaults
 const (
-	maxHeaderSize  = memsys.PageSize
-	burstNum       = 32 // default max num objects that can be posted for sending without any back-pressure
-	defaultIdleOut = time.Second * 2
-	tickUnit       = time.Second
+	maxHeaderSize = memsys.PageSize
+	burstNum      = 32 // default num msg-s that can be posted without any back-pressure
+	tickUnit      = time.Second
 )
 
 // stream TCP/HTTP session: inactive <=> active transitions
@@ -93,10 +92,10 @@ type (
 		stopCh *cos.StopCh   // stop/abort stream
 		postCh chan struct{} // to indicate that workCh has work
 		time   struct {
-			idleOut time.Duration // idle timeout
-			inSend  atomic.Bool   // true upon Send() or Read() - info for Collector to delay cleanup
-			ticks   int           // num 1s ticks until idle timeout
-			index   int           // heap stuff
+			idleTeardown time.Duration // idle timeout
+			inSend       atomic.Bool   // true upon Send() or Read() - info for Collector to delay cleanup
+			ticks        int           // num 1s ticks until idle timeout
+			index        int           // heap stuff
 		}
 		wg        sync.WaitGroup
 		mm        *memsys.MMSA
@@ -131,35 +130,33 @@ func newStreamBase(client Client, dstURL, dstID string, extra *Extra) (s *stream
 	s.postCh = make(chan struct{}, 1)
 
 	s.mm = memsys.DefaultPageMM()
-	s.time.idleOut = defaultIdleOut
 
-	// NOTE: default overrides
-	if extra != nil {
-		if extra.SenderID != "" {
-			sid = "-" + extra.SenderID
-		}
-		if extra.IdleTimeout > 0 {
-			s.time.idleOut = extra.IdleTimeout
-		}
-		if extra.MMSA != nil {
-			s.mm = extra.MMSA
-		}
-		// NOTE: PDU-based traffic (must-have for unsized)
-		if extra.SizePDU > 0 {
-			if extra.SizePDU > MaxSizePDU {
-				debug.Assert(false)
-				extra.SizePDU = MaxSizePDU
-			}
-			buf, _ := s.mm.AllocSize(int64(extra.SizePDU))
-			s.pdu = newSendPDU(buf)
-		}
+	// default overrides
+	if extra.SenderID != "" {
+		sid = "-" + extra.SenderID
 	}
+	if extra.MMSA != nil {
+		s.mm = extra.MMSA
+	}
+	// NOTE: PDU-based traffic - MUST-have for "unsized" transmissions
+	if extra.SizePDU > 0 {
+		if extra.SizePDU > MaxSizePDU {
+			debug.Assert(false)
+			extra.SizePDU = MaxSizePDU
+		}
+		buf, _ := s.mm.AllocSize(int64(extra.SizePDU))
+		s.pdu = newSendPDU(buf)
+	}
+	if extra.IdleTeardown > 0 {
+		s.time.idleTeardown = extra.IdleTeardown
+	} else {
+		s.time.idleTeardown = extra.Config.Timeout.TransportIdleTeardown.D()
+	}
+	debug.Assertf(s.time.idleTeardown > 2*tickUnit, "%v vs. %v", s.time.idleTeardown, tickUnit)
+	s.time.ticks = int(s.time.idleTeardown / tickUnit)
+
 	s.lid = fmt.Sprintf("s-%s%s[%d]=>%s", s.trname, sid, s.sessID, dstID)
 
-	if s.time.idleOut < tickUnit {
-		s.time.idleOut = tickUnit
-	}
-	s.time.ticks = int(s.time.idleOut / tickUnit)
 	s.maxheader, _ = s.mm.AllocSize(maxHeaderSize) // NOTE: must be large enough to accommodate max-size
 	s.sessST.Store(inactive)                       // NOTE: initiate HTTP session upon the first arrival
 

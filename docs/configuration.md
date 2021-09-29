@@ -63,13 +63,16 @@ $ ais show cluster config
 $ ais show cluster config --json
 
 # 3. show cluster-wide defaults for all variables prefixed with "time"
-$ ais show cluster time
+$ ais show config cluster time
+# or, same:
+$ ais show cluster config time
 PROPERTY                         VALUE
 timeout.cplane_operation         2s
 timeout.max_keepalive            4s
 timeout.max_host_busy            20s
 timeout.startup_time             1m
 timeout.send_file_time           5m
+timeout.transport_idle_term      4s
 
 # 4. for all nodes in the cluster set startup timeout to 2 minutes
 $ ais cluster configure timeout.startup_time=2m
@@ -123,6 +126,7 @@ timeout.max_host_busy            20s     -
 timeout.max_keepalive            4s      -
 timeout.send_file_time           5m      -
 timeout.startup_time             1m      -
+timeout.transport_idle_term      4s      -
 
 # ais cluster configure CCDpt8088 timeout.startup_time=2m
 config for node "CCDpt8088" successfully updated
@@ -134,6 +138,7 @@ timeout.max_host_busy            20s     -
 timeout.max_keepalive            4s      -
 timeout.send_file_time           5m      -
 timeout.startup_time             2m      1m
+timeout.transport_idle_term      4s      -
 ```
 
 Notice the `DEFAULT` column above where `-` indicates that the corresponding value is inherited and remains unchanged.
@@ -245,6 +250,7 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | `resilver.enabled` | Yes | `true` | Enables and disables automatic reresilver after a mountpath has been added or removed. If the (automated resilvering) option is disabled, you can still use the REST API (`PUT {"action": "start", "value": {"kind": "resilver", "node": targetID}} v1/cluster`) to initiate resilvering |
 | `timeout.max_host_busy` | Yes | `20s` | Maximum latency of control-plane operations that may involve receiving new bucket metadata and associated processing |
 | `timeout.send_file_time` | Yes | `5m` | Timeout for sending/receiving an object from another target in the same cluster |
+| `timeout.transport_idle_term` | Yes | `4s` | Max idle time to temporarily teardown long-lived intra-cluster connection |
 | `vmodule` | Yes | `""` | Overrides logging level for a given modules.<br>{"name": "vmodule", "value": "target\*=2"} sets log level to 2 for target modules |
 
 # Startup override

@@ -39,6 +39,7 @@ cat > $AIS_CONF_FILE <<EOL
 	"timeout": {
 		"cplane_operation":     "2s",
 		"max_keepalive":        "4s",
+		"transport_idle_term":  "4s",
 		"max_host_busy":        "20s",
 		"startup_time":         "1m",
 		"send_file_time":       "5m"
