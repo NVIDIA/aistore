@@ -235,13 +235,14 @@ func getDaemonConfig(c *cli.Context) error {
 		section  = c.Args().Get(1)
 		useJSON  = flagIsSet(c, jsonFlag)
 		node     *cluster.Snode
+		hint     bool
 	)
 	smap, err := api.GetClusterMap(defaultAPIParams)
 	if err != nil {
 		return err
 	}
 	if node = smap.GetNode(daemonID); node == nil {
-		return fmt.Errorf("%s does not exist in the cluster (see 'ais show cluster')", daemonID)
+		return fmt.Errorf("node %q does not exist (see 'ais show cluster')", daemonID)
 	}
 
 	body, err := api.GetDaemonConfig(defaultAPIParams, node)
@@ -249,36 +250,53 @@ func getDaemonConfig(c *cli.Context) error {
 		return err
 	}
 
-	if useJSON {
-		return templates.DisplayOutput(body, c.App.Writer, "", useJSON)
-	}
-
-	cluConf, err := api.GetClusterConfig(defaultAPIParams)
-	if err != nil {
-		return err
-	}
-
+	filter := parseStrFlag(c, configTypeFlag)
 	data := struct {
 		ClusterConfig []propDiff
 		LocalConfig   []prop
 	}{}
-
-	filter := parseStrFlag(c, configTypeFlag)
+	if filter == "" {
+		hint = true
+		filter = "all"
+	}
 	if filter == "all" || filter == "local" {
 		data.LocalConfig = flattenConfig(body.LocalConfig, section)
 	}
 	if filter == "all" || filter == "cluster" {
+		cluConf, err := api.GetClusterConfig(defaultAPIParams)
+		if err != nil {
+			return err
+		}
 		flatDaemon := flattenConfig(body.ClusterConfig, section)
 		flatCluster := flattenConfig(cluConf, section)
 		data.ClusterConfig = diffConfigs(flatDaemon, flatCluster)
 	}
-	return templates.DisplayOutput(data, c.App.Writer, templates.DaemonConfigTmpl, false)
+
+	err = templates.DisplayOutput(data, c.App.Writer, templates.DaemonConfigTmpl, useJSON)
+	if err == nil && hint {
+		fmt.Fprintf(c.App.Writer,
+			"(Hint: use `--type` to select the node config's type to show: 'cluster', 'local', 'all'.)\n")
+	}
+	return err
 }
 
 // Sets config of specific daemon or cluster
 func cluConfig(c *cli.Context) error {
 	daemonID, nvs, err := daemonKeyValueArgs(c)
 	if err != nil {
+		// check whether user is trying to show it, not set
+		tail := c.Args().Tail()
+		if len(tail) > 0 && tail[0] == commandShow {
+			daemonID = c.Args().Get(0)
+			return &errUsage{
+				context: c,
+				message: "expecting key-value pairs",
+				bottomMessage: fmt.Sprintf("(Hint: to show %q config, run 'ais show config %s'.)",
+					daemonID, daemonID),
+				helpData:     c.Command,
+				helpTemplate: templates.ShortUsageTmpl,
+			}
+		}
 		return err
 	}
 

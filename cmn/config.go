@@ -229,7 +229,7 @@ type (
 		ObjSizeLimit int64  `json:"objsize_limit"` // objects below this size are replicated instead of EC'ed
 		Compression  string `json:"compression"`   // see CompressAlways, etc. enum
 		DataSlices   int    `json:"data_slices"`   // number of data slices
-		BatchSize    int    `json:"batch_size"`    // TODO: remove with the next BMD version update
+		BatchSize    int    `json:"batch_size"`    // TODO: remove with the next BMD meta-version update
 		ParitySlices int    `json:"parity_slices"` // number of parity slices/replicas
 		Enabled      bool   `json:"enabled"`       // EC is enabled
 		DiskOnly     bool   `json:"disk_only"`     // if true, EC does not use SGL - data goes directly to drives

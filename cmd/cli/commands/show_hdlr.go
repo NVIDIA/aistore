@@ -201,7 +201,7 @@ var (
 		Usage:        "show daemon or cluster configuration",
 		ArgsUsage:    showConfigArgument,
 		Flags:        showCmdsFlags[subcmdShowConfig],
-		Action:       showDaemonConfigHandler,
+		Action:       showClusterOrDaemonConfigHandler,
 		BashComplete: daemonConfigSectionCompletions,
 	}
 	showCmdRemoteAIS = cli.Command{
@@ -450,13 +450,9 @@ func showClusterConfigHandler(c *cli.Context) (err error) {
 	return getClusterConfig(c, c.Args().First())
 }
 
-func showDaemonConfigHandler(c *cli.Context) (err error) {
+func showClusterOrDaemonConfigHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, "'cluster' or daemon ID")
-	}
-	if c.Args().Get(1) == "" && !flagIsSet(c, configTypeFlag) && !flagIsSet(c, jsonFlag) {
-		cli.ShowSubcommandHelp(c)
-		return fmt.Errorf("must specify --type or a configuration prefix")
+		return missingArgumentsError(c, "'cluster' or <DAEMON_ID>")
 	}
 	filter := parseStrFlag(c, configTypeFlag)
 	if !cos.NewStringSet("all", "cluster", "local", "").Contains(filter) {

@@ -151,6 +151,10 @@ func newStreamBase(client Client, dstURL, dstID string, extra *Extra) (s *stream
 		s.time.idleTeardown = extra.IdleTeardown
 	} else {
 		s.time.idleTeardown = extra.Config.Timeout.TransportIdleTeardown.D()
+		// TODO: remove with the next config meta-version update
+		if s.time.idleTeardown == 0 {
+			s.time.idleTeardown = 4 * time.Second
+		}
 	}
 	debug.Assertf(s.time.idleTeardown > 2*tickUnit, "%v vs. %v", s.time.idleTeardown, tickUnit)
 	s.time.ticks = int(s.time.idleTeardown / tickUnit)
