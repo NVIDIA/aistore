@@ -96,24 +96,28 @@ func newRecvPDU(body io.Reader, buf []byte) (p *rpdu) {
 }
 
 func (pdu *rpdu) readHdr(loghdr string) (err error) {
+	const fmterr = "sbrk %s: invalid PDU header [plen=%d, flags=%s]"
 	var n int
 	debug.Assert(pdu.woff == 0)
 	n, err = pdu.body.Read(pdu.buf[:sizeProtoHdr])
 	if n < sizeProtoHdr {
 		if err == nil {
-			err = fmt.Errorf("sbrk %s: failed to receive pdu hdr (n=%d)", loghdr, n)
+			err = fmt.Errorf("sbrk %s: failed to receive PDU header (n=%d)", loghdr, n)
 		}
 		return
 	}
 	pdu.plen, pdu.flags, err = extProtoHdr(pdu.buf, loghdr)
-	pdu.last = pdu.flags&lastPDU != 0
+	if err != nil {
+		return
+	}
+	if pdu.flags&pduFlag == 0 || pdu.plen > MaxSizePDU || pdu.plen < 0 {
+		err = fmt.Errorf(fmterr, loghdr, pdu.plen, fl2s(pdu.flags))
+		debug.AssertNoErr(err)
+		return
+	}
 	pdu.woff = sizeProtoHdr
-	debug.Func(func() {
-		detail := fmt.Sprintf("plen=%d(flags=%s)", pdu.plen, fl2s(pdu.flags))
-		debug.AssertMsg(pdu.flags&pduFlag != 0, detail)
-		debug.AssertMsg(pdu.plen <= MaxSizePDU, detail)
-		debug.AssertMsg(pdu.plen > 0 || (pdu.plen == 0 && pdu.flags&lastPDU != 0), detail)
-	})
+	pdu.last = pdu.flags&lastPDU != 0
+	debug.Assertf(pdu.plen > 0 || (pdu.plen == 0 && pdu.last), fmterr, loghdr, pdu.plen, fl2s(pdu.flags))
 	return
 }
 

@@ -75,7 +75,8 @@ timeout.send_file_time           5m
 timeout.transport_idle_term      4s
 
 # 4. for all nodes in the cluster set startup timeout to 2 minutes
-$ ais cluster configure timeout.startup_time=2m
+$ ais config cluster timeout.startup_time=2m
+config successfully updated
 ```
 
 ## Node (local) configuration
@@ -90,9 +91,24 @@ Unlike global configuration that is replicated across all nodes there is also a 
 
 > Separately, since AIS supports n-way mirroring and erasure coding, we strongly recommend not using LVM and hardware RAID. Rather, there must be a simple 1-to-1 relationship: one local FS - one non-partitioned disk.
 
-Example
+### Example: show node's configuration
+
 ```console
-# ais show config CCDpt8088 --json | tail -20
+# ais show config CCDpt8088
+PROPERTY                                 VALUE                                                           DEFAULT
+auth.enabled                             false                                                           -
+backend.conf                             map[aws:map[] gcp:map[]]                                        -
+checksum.enable_read_range               false                                                           -
+...
+...
+(Hint: use `--type` to select the node config's type to show: 'cluster', 'local', 'all'.)
+...
+...
+```
+
+### Example: same as above, in JSON form:
+```console
+$ ais show config CCDpt8088 --json | tail -20
     "lastupdate_time": "2021-03-20 18:00:20.393881867 -0700 PDT m=+2907.143584987",
     "uuid": "ZzCknLkMi",
     "config_version": "3",
@@ -112,6 +128,24 @@ Example
         "count": 0,
         "instance": 0
     }
+```
+
+### Example: use `--type` option to show only local config
+```console
+# ais show config koLAt8081 --type local
+PROPERTY                         VALUE
+confdir                          /ais
+log_dir                          /tmp/ais/log
+host_net.hostname
+host_net.hostname_intra_control
+host_net.hostname_intra_data
+host_net.port                    51081
+host_net.port_intra_control      51082
+host_net.port_intra_data         51083
+fspaths.paths                    /ais/mp1,/ais/mp2,/ais/mp3,/ais/mp4
+test_fspaths.root                /tmp/ais
+test_fspaths.count               0
+test_fspaths.instance            0
 ```
 
 ## Per-Node override of global defaults
