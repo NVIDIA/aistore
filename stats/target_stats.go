@@ -6,6 +6,7 @@
 package stats
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 	"unsafe"
@@ -18,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/sys"
 )
 
@@ -254,10 +254,15 @@ func (r *Trunner) log(now int64, uptime time.Duration) {
 	// 5. memory pressure
 	memStat, err := sys.Mem()
 	debug.AssertNoErr(err)
-	if memStat.Used > memStat.Total>>2 {
-		used, free := cos.B2S(int64(memStat.Used), 0), cos.B2S(int64(memStat.Free), 0)
-		pressure := r.T.MMSA().MemPressure()
-		r.lines = append(r.lines, "memory: used "+used+", free "+free+", pressure "+memsys.MemPressureText(pressure))
+	if memStat.Used > memStat.Total>>1 {
+		used, free, afree := cos.B2S(int64(memStat.Used), 0), cos.B2S(int64(memStat.Free), 0), cos.B2S(int64(memStat.ActualFree), 0)
+		swap := cos.B2S(int64(memStat.SwapUsed), 0)
+		sysln := fmt.Sprintf("memory: (used %s, free %s, actfree %s, swap %s)", used, free, afree, swap)
+
+		mm := r.T.MMSA()
+		pressure, _ := mm.MemPressure(&memStat)
+		ln := fmt.Sprintf("%s, %s(%s)", sysln, mm, mm.MemPressure2S(pressure))
+		r.lines = append(r.lines, ln)
 	}
 
 	// 5. log

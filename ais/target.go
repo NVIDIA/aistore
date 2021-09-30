@@ -45,12 +45,11 @@ const (
 	bucketMDFixup    = "fixup"
 	bucketMDReceive  = "receive"
 	bucketMDRegister = "register"
-	dbName           = "ais.db"
 )
 
-const (
-	clusterClockDrift = 5 * time.Millisecond // is expected to be bounded by
-)
+const dbName = "ais.db"
+
+const clusterClockDrift = 5 * time.Millisecond // is expected to be bounded by
 
 type (
 	regstate struct {

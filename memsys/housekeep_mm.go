@@ -48,7 +48,7 @@ func (r *MMSA) FreeSpec(spec FreeSpec) {
 			spec.MinSize = sizeToGC // using default
 		}
 		mem, _ := sys.Mem()
-		r.doGC(mem.ActualFree, spec.MinSize, spec.ToOS /* force */, false)
+		r.doGC(mem.Free, spec.MinSize, spec.ToOS /* force */, false)
 	}
 }
 
@@ -69,77 +69,73 @@ func (r *MMSA) garbageCollect() time.Duration {
 		limit = int64(sizeToGC) // minimum accumulated size that triggers GC
 		depth int               // => current ring depth tbd
 	)
-
 	// 1. refresh stats and sort idle < busy
 	r.refreshStatsSortIdle()
 
-	// 2. get system memory stats
-	mem, _ := sys.Mem()
-	swapping := mem.SwapUsed > r.swap.Load()
-	if swapping {
-		r.Swapping.Store(SwappingMax)
-	} else {
-		r.Swapping.Store(r.Swapping.Load() / 2)
-	}
-	r.swap.Store(mem.SwapUsed)
+	// 2. update swapping state and compute mem-pressure ranking
+	mem, err := sys.Mem()
+	debug.AssertNoErr(err)
+	pressure, swapping := r.MemPressure(&mem)
 
 	// 3. memory is enough, free only those that are idle for a while
-	if mem.ActualFree > r.lowWM && !swapping {
+	if pressure == MemPressureLow {
 		r.minDepth.Store(minDepth)
 		if freed := r.freeIdle(freeIdleMin); freed > 0 {
 			r.toGC.Add(freed)
-			r.doGC(mem.ActualFree, sizeToGC, false, false)
+			r.doGC(mem.Free, sizeToGC, false, false)
 		}
 		goto timex
 	}
 
-	// 4. calibrate and do more aggressive freeing
-	if swapping {
+	// 4. calibrate and mem-free accordingly
+	switch pressure {
+	case OOM, MemPressureExtreme:
 		r.minDepth.Store(1)
 		depth = 2
 		limit = sizeToGC / 4
-	} else if mem.ActualFree <= r.MinFree {
+	case MemPressureHigh:
 		tmp := cos.MaxI64(r.minDepth.Load()/2, 32)
 		r.minDepth.Store(tmp)
 		depth = int(tmp)
 		limit = sizeToGC / 2
-	} else { // in-between hysteresis
-		tmp := uint64(maxDepth-minDepth) * (mem.ActualFree - r.MinFree)
-		depth = minDepth + int(tmp/(r.lowWM-r.MinFree)) // Heu #2
-		debug.Assert(depth >= minDepth && depth <= maxDepth)
-		r.minDepth.Store(minDepth / 2)
+	default: // MemPressureModerate
+		r.minDepth.Store(minDepth)
+		depth = minDepth / 2
 	}
+
+	// 5. reduce
 	for _, s := range r.sorted { // idle first
 		idle := r.statsSnapshot.Idle[s.ringIdx()]
 		if freed := s.reduce(depth, idle > 0, true /* force */); freed > 0 {
 			r.toGC.Add(freed)
-			if r.doGC(mem.ActualFree, limit, true, swapping) {
+			if r.doGC(mem.Free, limit, true, swapping) {
 				goto timex
 			}
 		}
 	}
-	// 5. still not enough? do more
-	if mem.ActualFree <= r.MinFree || swapping {
-		r.doGC(mem.ActualFree, limit, true, swapping)
+
+	// 6. GC
+	if pressure >= MemPressureHigh {
+		r.doGC(mem.Free, limit, true, swapping)
 	}
 timex:
-	return r.getNextInterval(mem.ActualFree, mem.Total, swapping)
+	return r.getNextInterval(pressure)
 }
 
-func (r *MMSA) getNextInterval(free, total uint64, swapping bool) time.Duration {
+func (r *MMSA) getNextInterval(pressure int) time.Duration {
 	var changed bool
-	switch {
-	case free > r.lowWM && free > total-total/5:
+	switch pressure {
+	case MemPressureLow:
 		if r.duration != r.TimeIval*2 {
 			r.duration = r.TimeIval * 2
 			changed = true
 		}
-	case free <= r.MinFree || swapping:
+	case OOM, MemPressureExtreme:
 		if r.duration != r.TimeIval/4 {
 			r.duration = r.TimeIval / 4
 			changed = true
 		}
-	case free <= r.lowWM:
+	case MemPressureHigh:
 		if r.duration != r.TimeIval/2 {
 			r.duration = r.TimeIval / 2
 			changed = true
@@ -151,7 +147,7 @@ func (r *MMSA) getNextInterval(free, total uint64, swapping bool) time.Duration 
 		}
 	}
 	if changed && verbose {
-		glog.Infof("%s: timer %v, free %s", r.Name, r.duration, cos.B2S(int64(free), 1))
+		glog.Infof("%s: %s, timer %v", r, r.MemPressure2S(pressure), r.duration)
 	}
 	return r.duration
 }

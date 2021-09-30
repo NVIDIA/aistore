@@ -49,7 +49,8 @@ func (lchk *lcHK) housekeep() (d time.Duration) {
 }
 
 func (lchk *lcHK) mp() (d time.Duration, tag string) {
-	switch p := lchk.mm.MemPressure(); p {
+	p, _ := lchk.mm.MemPressure()
+	switch p {
 	case memsys.OOM:
 		d = oomEvictAtime
 		tag = "OOM"

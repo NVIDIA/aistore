@@ -307,7 +307,8 @@ func useDisk(objSize int64) bool {
 	if cmn.GCO.Get().EC.DiskOnly {
 		return true
 	}
-	switch mm.MemPressure() {
+	pressure, _ := mm.MemPressure()
+	switch pressure {
 	case memsys.OOM, memsys.MemPressureExtreme:
 		return true
 	case memsys.MemPressureHigh:

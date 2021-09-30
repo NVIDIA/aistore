@@ -121,7 +121,6 @@ const NumStats = NumPageSlabs // NOTE: must be greater or equal NumSmallSlabs, o
 // =================================== MMSA config defaults ==========================================
 const (
 	minDepth      = 128                   // ring cap min; default ring growth increment
-	maxDepth      = 1024 * 16             // ring cap max
 	loadAvg       = 10                    // "idle" load average to deallocate Slabs when below
 	sizeToGC      = cos.GiB * 2           // see heuristics ("Heu")
 	minMemFree    = cos.GiB + cos.MiB*256 // default minimum memory - see extended comment above
@@ -135,7 +134,7 @@ const (
 	countThreshold = 16 // exceeding this scatter-gather count warrants selecting a larger-size Slab
 )
 
-const SwappingMax = 4 // make sure that `swapping` condition, once noted, lingers for a while
+const swappingMax = 4 // make sure that `swapping` condition, once noted, lingers for a while
 
 // memory pressure
 const (
@@ -173,17 +172,17 @@ type (
 		lowWM         uint64
 		rings         []*Slab
 		sorted        []*Slab
-		slabStats     *slabStats    // private counters and idle timestamp
-		statsSnapshot *Stats        // pre-allocated limited "snapshot" of slabStats
-		toGC          atomic.Int64  // accumulates over time and triggers GC upon reaching spec-ed limit
-		minDepth      atomic.Int64  // minimum ring depth aka length
-		swap          atomic.Uint64 // actual swap size
+		slabStats     *slabStats // private counters and idle timestamp
+		statsSnapshot *Stats     // pre-allocated limited "snapshot" of slabStats
 		slabIncStep   int64
 		maxSlabSize   int64
 		defBufSize    int64
 		numSlabs      int
-		// public - aligned
-		Swapping atomic.Int32 // max = SwappingMax; halves every r.duration unless swapping
+		// atomic state
+		toGC            atomic.Int64  // accumulates over time and triggers GC upon reaching spec-ed limit
+		minDepth        atomic.Int64  // minimum ring depth aka length
+		swap            atomic.Uint64 // actual swap size
+		swapCriticality atomic.Int32  // tracks increasing swap size up to swappingMax const
 	}
 	FreeSpec struct {
 		IdleDuration time.Duration // reduce only the slabs that are idling for at least as much time
@@ -253,6 +252,24 @@ func DefaultSmallMM() *MMSA {
 // MMSA //
 //////////
 
+func (r *MMSA) String() string {
+	minfree := cos.B2S(int64(r.MinFree), 0)
+	lowwm := cos.B2S(int64(r.lowWM), 0)
+	s := fmt.Sprintf("%s[min-free %s, low-wm %s", r.Name, minfree, lowwm)
+	if r.MinPctTotal == 0 && r.MinPctFree == 0 {
+		return s + "]"
+	}
+	return fmt.Sprintf("%s, %%-total %d, %%-free %d]", s, r.MinPctTotal, r.MinPctFree)
+}
+
+func (r *MMSA) MemPressure2S(p int) (s string) {
+	s = fmt.Sprintf("pressure '%s'", memPressureText[p])
+	if a, b := r.swap.Load(), r.swapCriticality.Load(); a != 0 || b != 0 {
+		s = fmt.Sprintf("swapping(%s, criticality '%d'), %s", cos.B2S(int64(a), 0), b, s)
+	}
+	return
+}
+
 // defines the type of Slab rings: NumSmallSlabs x 128 vs NumPageSlabs x 4K
 func (r *MMSA) isSmall() bool { return r.defBufSize == DefaultSmallBufSize }
 
@@ -276,7 +293,7 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 		}
 	}
 	if r.MinPctFree > 0 {
-		x := mem.ActualFree * uint64(r.MinPctFree) / 100
+		x := mem.Free * uint64(r.MinPctFree) / 100
 		if r.MinFree == 0 {
 			r.MinFree = x
 		} else {
@@ -287,18 +304,18 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 		r.MinFree = minMemFree
 	} else if r.MinFree < cos.GiB { // warn invalid config
 		cos.Printf("Warning: configured minimum free memory %s < %s (actual free %s)\n",
-			cos.B2S(int64(r.MinFree), 2), cos.B2S(minMemFree, 2), cos.B2S(int64(mem.ActualFree), 1))
+			cos.B2S(int64(r.MinFree), 2), cos.B2S(minMemFree, 2), cos.B2S(int64(mem.Free), 1))
 	}
 	// 3. validate actual
-	required, actual := cos.B2S(int64(r.MinFree), 2), cos.B2S(int64(mem.ActualFree), 2)
-	if mem.ActualFree < r.MinFree {
+	required, actual := cos.B2S(int64(r.MinFree), 2), cos.B2S(int64(mem.Free), 2)
+	if mem.Free < r.MinFree {
 		err = fmt.Errorf("insufficient free memory %s, minimum required %s (see %s for guidance)",
 			actual, required, readme)
 		if panicOnErr {
 			panic(err)
 		}
 	}
-	x := cos.MaxU64(r.MinFree*2, (r.MinFree+mem.ActualFree)/2)
+	x := cos.MaxU64(r.MinFree*2, (r.MinFree+mem.Free)/2)
 	r.lowWM = cos.MinU64(x, r.MinFree*3) // Heu #1: hysteresis
 
 	// 4. timer
@@ -339,9 +356,9 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 	if !r.isSmall() {
 		runtime.GC()
 	}
-	// 7. compute the first time for hk to call back
+	// 7. HK to call back (and maybe further tune-up the interval)
 	d := r.duration
-	if mem.ActualFree < r.lowWM || mem.ActualFree < minMemFree {
+	if mem.Free < r.lowWM || mem.Free < minMemFree {
 		d = r.duration / 4
 		if d < 10*time.Second {
 			d = 10 * time.Second
@@ -350,7 +367,7 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 	hk.Reg(r.Name+".gc", r.garbageCollect, d)
 	debug.Func(func() {
 		if flag.Parsed() {
-			debug.Infof("mmsa %q started", r.Name)
+			debug.Infof("%s started", r)
 		}
 	})
 	return
@@ -369,10 +386,10 @@ func (r *MMSA) Terminate() {
 	r.toGC.Add(freed)
 	mem, _ := sys.Mem()
 	swapping := mem.SwapUsed > 0
-	if r.doGC(mem.ActualFree, sizeToGC, true, swapping) {
+	if r.doGC(mem.Free, sizeToGC, true, swapping) {
 		gced = ", GC ran"
 	}
-	debug.Infof("mmsa %q terminated%s", r.Name, gced)
+	debug.Infof("%s terminated%s", r, gced)
 }
 
 // allocate SGL
@@ -418,29 +435,49 @@ func (r *MMSA) NewSGL(immediateSize int64, sbufSize ...int64) *SGL {
 	return z
 }
 
-// returns an estimate for the current memory pressured expressed as one of the enumerated values
-func (r *MMSA) MemPressure() int {
-	mem, _ := sys.Mem()
-	if mem.SwapUsed > r.swap.Load() {
-		r.Swapping.Store(SwappingMax)
+// returns an estimate for the current memory pressure expressed as enumerated values
+// also, tracks swapping stateful vars
+func (r *MMSA) MemPressure(mems ...*sys.MemStat) (pressure int, swapping bool) {
+	var (
+		mem   *sys.MemStat
+		ncrit int32
+	)
+	// 1. get mem stats
+	if len(mems) > 0 {
+		mem = mems[0]
+	} else {
+		memStat, err := sys.Mem()
+		debug.AssertNoErr(err)
+		mem = &memStat
 	}
-	if r.Swapping.Load() > 0 {
-		return OOM
-	}
-	if mem.ActualFree > r.lowWM {
-		return MemPressureLow
-	}
-	if mem.ActualFree <= r.MinFree {
-		return MemPressureExtreme
-	}
-	x := (mem.ActualFree - r.MinFree) * 100 / (r.lowWM - r.MinFree)
-	if x <= 25 {
-		return MemPressureHigh
-	}
-	return MemPressureModerate
-}
 
-func MemPressureText(v int) string { return memPressureText[v] }
+	// 2. update swapping state
+	swapping, crit := mem.SwapUsed > r.swap.Load(), r.swapCriticality.Load()
+	if swapping {
+		ncrit = cos.MinI32(swappingMax, crit+1)
+	} else {
+		ncrit = cos.MaxI32(0, crit-1)
+	}
+	r.swapCriticality.Store(ncrit)
+	r.swap.Store(mem.SwapUsed)
+
+	// 3. recompute mem pressure
+	switch {
+	case ncrit > 2:
+		return OOM, swapping
+	case ncrit > 1 || mem.ActualFree <= r.MinFree || swapping:
+		return MemPressureExtreme, swapping
+	case ncrit > 0 || mem.Free <= r.MinFree:
+		return MemPressureHigh, swapping
+	case mem.Free >= r.lowWM:
+		return MemPressureLow, swapping
+	}
+	x := (mem.Free - r.MinFree) * 100 / (r.lowWM - r.MinFree)
+	if x <= 25 {
+		return MemPressureHigh, swapping
+	}
+	return MemPressureModerate, swapping
+}
 
 // gets Slab for a given fixed buffer size that must be within expected range of sizes
 // - the range supported by _this_ MMSA (compare w/ SelectMemAndSlab())

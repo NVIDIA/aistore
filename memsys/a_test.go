@@ -135,8 +135,8 @@ func printMaxRingLen(mem *memsys.MMSA, c chan struct{}) {
 		case <-c:
 			return
 		case <-time.After(5 * time.Second):
-			if p := mem.MemPressure(); p > memsys.MemPressureLow {
-				tlog.Logf("memory pressure %s\n", memsys.MemPressureText(p))
+			if p, _ := mem.MemPressure(); p > memsys.MemPressureLow {
+				tlog.Logf("%s\n", mem.MemPressure2S(p))
 			}
 		}
 	}
