@@ -504,7 +504,7 @@ def transform(input_bytes: bytes) -> bytes:
 			{name: "simple_python3", code: md5, deps: "", runtime: runtime.Python3, onlyLong: false},
 			{name: "with_deps_python3", code: numpy, deps: numpyDeps, runtime: runtime.Python3, onlyLong: true},
 
-			{name: "simple_python3_io", code: md5IO, deps: "", runtime: runtime.Python3, commType: etl.IOCommType, onlyLong: false},
+			{name: "simple_python3_io", code: md5IO, deps: "", runtime: runtime.Python38, commType: etl.IOCommType, onlyLong: false},
 		}
 	)
 

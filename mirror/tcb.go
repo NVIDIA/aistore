@@ -257,7 +257,7 @@ func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 
 	// TODO: Add precise post-transform byte count
 	// (under ETL, sizes of transformed objects are unknown until after the transformation)
-	if size == cos.ContentLengthUnknown {
+	if size == cos.ContentLengthUnknown || size == 0 {
 		size = lom.SizeBytes()
 	}
 	r.BytesAdd(size)

@@ -18,7 +18,10 @@ spec:
           value: transform
         - name: PYTHONPATH
           value: /runtime
-      <PROBES>
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: default
       volumeMounts:
         - name: code
           mountPath: "/code"

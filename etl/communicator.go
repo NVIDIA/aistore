@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -17,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -74,8 +74,9 @@ type (
 
 	pushComm struct {
 		baseComm
-		mem *memsys.MMSA
-		uri string
+		mem     *memsys.MMSA
+		uri     string
+		command []string
 	}
 	redirectComm struct {
 		baseComm
@@ -85,11 +86,6 @@ type (
 		baseComm
 		rp  *httputil.ReverseProxy
 		uri string
-	}
-	ioComm struct {
-		baseComm
-		client  k8s.Client
-		command []string
 	}
 
 	// TODO: Generalize and move to `cos` package
@@ -148,11 +144,10 @@ func makeCommunicator(args commArgs) Communicator {
 		}
 		return &revProxyComm{baseComm: baseComm, rp: rp, uri: args.bootstraper.uri}
 	case IOCommType:
-		client, err := k8s.GetClient()
-		cos.AssertNoErr(err) // TODO: Propagate the error.
-		return &ioComm{
+		return &pushComm{
 			baseComm: baseComm,
-			client:   client,
+			mem:      args.bootstraper.t.MMSA(),
+			uri:      args.bootstraper.uri,
 			command:  args.bootstraper.originalCommand,
 		}
 	default:
@@ -222,7 +217,11 @@ func (pc *pushComm) tryDoRequest(lom *cluster.LOM, timeout time.Duration) (cos.R
 		cos.Close(fh)
 		goto finish
 	}
-
+	if len(pc.command) != 0 {
+		q := req.URL.Query()
+		q["command"] = []string{"bash", "-c", strings.Join(pc.command, " ")}
+		req.URL.RawQuery = q.Encode()
+	}
 	req.ContentLength = lom.SizeBytes()
 	req.Header.Set(cmn.HdrContentType, cmn.ContentBinary)
 	resp, err = pc.t.DataClient().Do(req) // nolint:bodyclose // Closed by the caller.
@@ -336,79 +335,6 @@ func (cw *cbWriter) Write(b []byte) (n int, err error) {
 	n, err = cw.w.Write(b)
 	cw.writeCb(n)
 	return
-}
-
-////////////
-// ioComm //
-////////////
-
-func (ic *ioComm) tryExecReq(lom *cluster.LOM, w io.Writer) error {
-	lom.Lock(false)
-	defer lom.Unlock(false)
-
-	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		return err
-	}
-
-	// `fh` is closed by Do(req).
-	fh, err := cos.NewFileHandle(lom.FQN)
-	if err != nil {
-		return err
-	}
-	defer cos.Close(fh)
-
-	ic.stats.inBytes.Add(lom.SizeBytes())
-	cw := &cbWriter{
-		w: w,
-		writeCb: func(n int) {
-			ic.stats.outBytes.Add(int64(n))
-		},
-	}
-
-	return ic.client.ExecCmd(ic.PodName(), ic.command, fh, cw, nil)
-}
-
-func (ic *ioComm) doExecReq(bck *cluster.Bck, objName string, w io.Writer) (err error) {
-	lom := cluster.AllocLOM(objName)
-	defer cluster.FreeLOM(lom)
-
-	if err = lom.Init(bck.Bck); err != nil {
-		return
-	}
-
-	err = ic.tryExecReq(lom, w)
-	if err != nil && cmn.IsObjNotExist(err) && lom.Bck().IsRemote() {
-		_, err = ic.t.GetCold(context.Background(), lom, cluster.PrefetchWait)
-		if err != nil {
-			return
-		}
-		err = ic.tryExecReq(lom, w)
-	}
-	return err
-}
-
-func (ic *ioComm) OnlineTransform(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck, objName string) (err error) {
-	defer ic.stats.objCount.Inc()
-	return ic.doExecReq(bck, objName, w)
-}
-
-func (ic *ioComm) OfflineTransform(bck *cluster.Bck, objName string, _ time.Duration) (cos.ReadCloseSizer, error) {
-	r, w := io.Pipe()
-	go func() {
-		if err := ic.doExecReq(bck, objName, w); err != nil {
-			w.CloseWithError(err)
-			return
-		}
-		w.Close()
-	}()
-
-	return cos.NewReaderWithArgs(cos.ReaderArgs{
-		R:    r,
-		Size: cos.ContentLengthUnknown,
-		DeferCb: func() {
-			ic.stats.objCount.Inc()
-		},
-	}), nil
 }
 
 ///////////

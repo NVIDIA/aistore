@@ -172,15 +172,8 @@ func InitCode(t cluster.Target, msg InitCodeMsg) error {
 	switch msg.CommType {
 	case PushCommType, RedirectCommType, RevProxyCommType:
 		podSpec = strings.ReplaceAll(podSpec, "<COMMAND>", "['sh', '-c', 'python /server.py']")
-		podSpec = strings.ReplaceAll(podSpec, "<PROBES>", `
-      readinessProbe:
-        httpGet:
-          path: /health
-          port: default
-`)
 	case IOCommType:
 		podSpec = strings.ReplaceAll(podSpec, "<COMMAND>", "['python /code/code.py']")
-		podSpec = strings.ReplaceAll(podSpec, "<PROBES>", "")
 	default:
 		cos.AssertMsg(false, msg.CommType)
 	}
@@ -252,12 +245,10 @@ func tryStart(t cluster.Target, msg InitSpecMsg, opts ...StartOpts) (errCtx *cmn
 	errCleanup := cleanupEntities(errCtx, b.pod.Name, b.svc.Name)
 	debug.AssertNoErr(errCleanup)
 
-	if msg.CommType != IOCommType {
-		// 2. Creating service.
-		svcName = b.svc.GetName()
-		if err = b.createEntity(k8s.Svc); err != nil {
-			return
-		}
+	// 2. Creating service.
+	svcName = b.svc.GetName()
+	if err = b.createEntity(k8s.Svc); err != nil {
+		return
 	}
 
 	// 3. Creating pod.
@@ -316,23 +307,21 @@ func (b *etlBootstraper) setupConnection() (err error) {
 		return
 	}
 
-	if b.msg.CommType != IOCommType {
-		// Retrieve assigned port by the service.
-		var nodePort uint
-		if nodePort, err = b.getServiceNodePort(); err != nil {
-			return
-		}
-
-		// Make sure we can access the pod via TCP socket address to ensure that
-		// it is accessible from target.
-		etlSocketAddr := fmt.Sprintf("%s:%d", hostIP, nodePort)
-		if err = b.checkETLConnection(etlSocketAddr); err != nil {
-			err = cmn.NewErrETL(b.errCtx, err.Error())
-			return
-		}
-
-		b.uri = "http://" + etlSocketAddr
+	// Retrieve assigned port by the service.
+	var nodePort uint
+	if nodePort, err = b.getServiceNodePort(); err != nil {
+		return
 	}
+
+	// Make sure we can access the pod via TCP socket address to ensure that
+	// it is accessible from target.
+	etlSocketAddr := fmt.Sprintf("%s:%d", hostIP, nodePort)
+	if err = b.checkETLConnection(etlSocketAddr); err != nil {
+		err = cmn.NewErrETL(b.errCtx, err.Error())
+		return
+	}
+
+	b.uri = "http://" + etlSocketAddr
 
 	return nil
 }
@@ -542,9 +531,6 @@ func (b *etlBootstraper) updateServiceLabels() {
 
 func (b *etlBootstraper) updateReadinessProbe() {
 	probe := b.pod.Spec.Containers[0].ReadinessProbe
-	if b.msg.CommType == IOCommType {
-		return
-	}
 
 	// If someone already set these values, we don't to touch them.
 	if probe.TimeoutSeconds != 0 || probe.PeriodSeconds != 0 {

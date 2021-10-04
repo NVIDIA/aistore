@@ -89,25 +89,23 @@ func ValidateSpec(spec []byte) (msg InitSpecMsg, err error) {
 		return msg, cmn.NewErrETL(errCtx, "expected port name: %q, got: %q", k8s.Default, container.Ports[0].Name)
 	}
 
-	if msg.CommType != IOCommType {
-		// Validate that user container supports health check.
-		// Currently we need the `default` port (on which the application runs) to
-		// be same as the `readiness` probe port.
-		if container.ReadinessProbe == nil {
-			return msg, cmn.NewErrETL(errCtx, "readinessProbe section is required in a container spec")
-		}
-		// TODO: Add support for other health checks.
-		if container.ReadinessProbe.HTTPGet == nil {
-			return msg, cmn.NewErrETL(errCtx, "httpGet missing in the readinessProbe")
-		}
-		if container.ReadinessProbe.HTTPGet.Path == "" {
-			return msg, cmn.NewErrETL(errCtx, "expected non-empty path for readinessProbe")
-		}
-		// Currently we need the `default` port (on which the application runs)
-		// to be same as the `readiness` probe port in the pod spec.
-		if container.ReadinessProbe.HTTPGet.Port.StrVal != k8s.Default {
-			return msg, cmn.NewErrETL(errCtx, "readinessProbe port must be the %q port", k8s.Default)
-		}
+	// Validate that user container supports health check.
+	// Currently we need the `default` port (on which the application runs) to
+	// be same as the `readiness` probe port.
+	if container.ReadinessProbe == nil {
+		return msg, cmn.NewErrETL(errCtx, "readinessProbe section is required in a container spec")
+	}
+	// TODO: Add support for other health checks.
+	if container.ReadinessProbe.HTTPGet == nil {
+		return msg, cmn.NewErrETL(errCtx, "httpGet missing in the readinessProbe")
+	}
+	if container.ReadinessProbe.HTTPGet.Path == "" {
+		return msg, cmn.NewErrETL(errCtx, "expected non-empty path for readinessProbe")
+	}
+	// Currently we need the `default` port (on which the application runs)
+	// to be same as the `readiness` probe port in the pod spec.
+	if container.ReadinessProbe.HTTPGet.Port.StrVal != k8s.Default {
+		return msg, cmn.NewErrETL(errCtx, "readinessProbe port must be the %q port", k8s.Default)
 	}
 
 	return msg, nil
@@ -145,7 +143,7 @@ func (b *etlBootstraper) updatePodCommand() {
 	}
 
 	b.originalCommand = b.pod.Spec.Containers[0].Command
-	b.pod.Spec.Containers[0].Command = []string{"sh", "-c", "while true; do sleep 1000000; done"}
+	b.pod.Spec.Containers[0].Command = []string{"sh", "-c", "/server"}
 }
 
 func (b *etlBootstraper) createPodSpec() (err error) {
