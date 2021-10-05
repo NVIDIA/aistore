@@ -519,7 +519,7 @@ func (mi *MountpathInfo) addEnabledDisabled(tid string, enabled bool) (err error
 ///////////////
 
 // create a new singleton
-func Init(iostater ...ios.IOStater) {
+func New(iostater ...ios.IOStater) {
 	mfs = &MountedFS{fsIDs: make(map[cos.FsID]string, 10), checkFsID: true}
 	if len(iostater) > 0 {
 		mfs.ios = iostater[0]
@@ -528,66 +528,41 @@ func Init(iostater ...ios.IOStater) {
 	}
 }
 
-// InitMpaths prepares, validates, and adds configured mountpaths.
-func InitMpaths(tid string) (changed bool, err error) {
+// bootstrap mountpaths and VMD (the `volume`)
+func InitNoVMD(tid string, config *cmn.Config) (err error) {
 	var (
-		vmd         *VMD
-		configPaths = cmn.GCO.Get().FSpaths.Paths
-	)
-	if len(configPaths) == 0 {
-		err = fmt.Errorf("no fspaths - see README => Configuration and fspaths section in the config.sh")
-		return
-	}
-	if vmd, err = initVMD(configPaths); err != nil {
-		return
-	}
-	//
-	// create mountpaths and load VMD
-	//
-	var (
+		configPaths    = config.FSpaths.Paths
 		availablePaths = make(MPI, len(configPaths))
 		disabledPaths  = make(MPI)
-		cfgpaths       = configPaths.ToSlice()
-		config         = cmn.GCO.Get()
 	)
-	if vmd == nil {
-		glog.Warningf("no VMD: populating from the config %v", cfgpaths)
-	} else {
-		glog.Infof("loaded VMD %s: validating vs config %v", vmd, cfgpaths)
-	}
-
-	// populate under lock
-	mfs.mu.Lock()
-	defer mfs.mu.Unlock()
-
-	// no VMD
-	if vmd == nil {
-		for path := range configPaths {
-			var mi *MountpathInfo
-			if mi, err = newMountpath(path, tid); err != nil {
-				return
-			}
-			if err = mi._checkExists(availablePaths); err != nil {
-				return
-			}
-			if err = mi._addEnabled(tid, availablePaths); err != nil {
-				return
-			}
-			if len(mi.Disks) == 0 && !config.TestingEnv() {
-				err = &ErrMpathNoDisks{mi}
-				return
-			}
+	for path := range configPaths {
+		var mi *MountpathInfo
+		if mi, err = newMountpath(path, tid); err != nil {
+			return
 		}
-		updatePaths(availablePaths, disabledPaths)
-		_, err = CreateNewVMD(tid)
-		return
+		if err = mi._checkExists(availablePaths); err != nil {
+			return
+		}
+		if err = mi._addEnabled(tid, availablePaths); err != nil {
+			return
+		}
+		if len(mi.Disks) == 0 && !config.TestingEnv() {
+			err = &ErrMpathNoDisks{mi}
+			return
+		}
 	}
+	updatePaths(availablePaths, disabledPaths)
+	return
+}
 
-	// existing VMD
-	if vmd.DaemonID != tid {
-		err = newVMDIDMismatchErr(vmd, tid)
-		return
-	}
+func InitVMD(tid string, vmd *VMD) (changed bool, err error) {
+	var (
+		config         = cmn.GCO.Get()
+		configPaths    = config.FSpaths.Paths
+		availablePaths = make(MPI, len(configPaths))
+		disabledPaths  = make(MPI)
+	)
+	debug.Assert(vmd.DaemonID == tid)
 	for path := range configPaths {
 		var (
 			mi      *MountpathInfo
@@ -596,7 +571,7 @@ func InitMpaths(tid string) (changed bool, err error) {
 		if mpath, exists := vmd.Mountpaths[path]; !exists {
 			enabled = true
 			changed = true
-			glog.Error(newVMDMissingMpathErr(path))
+			glog.Error(newVMDMissingMpathErr(path)) // TODO -- FIXME: when added via config versus removed/lost (below)
 		} else {
 			enabled = mpath.Enabled
 		}
@@ -627,12 +602,9 @@ func InitMpaths(tid string) (changed bool, err error) {
 		for mpath := range vmd.Mountpaths {
 			if !configPaths.Contains(mpath) {
 				changed = true
-				glog.Error(newConfigMissingMpathErr(mpath))
+				glog.Error(newConfigMissingMpathErr(mpath)) // TODO -- FIXME: getting this when mpath removed via config
 			}
 		}
-	}
-	if changed {
-		_, err = CreateNewVMD(tid)
 	}
 	return
 }

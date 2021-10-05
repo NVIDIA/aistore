@@ -32,10 +32,9 @@ type (
 		version   string      // major.minor.build (see cmd/aisnode)
 		buildTime string      // YYYY-MM-DD HH:MM:SS-TZ
 		stopping  atomic.Bool // true when exiting
-
-		resilver struct {
-			required bool   // Determines if the resilver needs to be started.
+		resilver  struct {
 			reason   string // Reason why resilver needs to be run.
+			required bool   // Determines if the resilver needs to be started.
 		}
 	}
 	cliFlags struct {
@@ -166,13 +165,13 @@ func initDaemon(version, buildTime string) cos.Runner {
 	if daemon.cli.role == cmn.Proxy {
 		p := newProxy(co)
 		p.init(config)
-		glog.Infoln("Node:", p.si.String())
+		glog.Infoln("Node", p.si.String())
 		glog.GetNodeName = p.si.Name
 		return p
 	}
 	t := newTarget(co)
 	t.init(config)
-	glog.Infoln("Node:", t.si.String())
+	glog.Infoln("Node", t.si.String())
 	glog.GetNodeName = t.si.Name
 
 	return t
@@ -206,7 +205,7 @@ func Run(version, buildTime string) int {
 		return 0
 	}
 	if e, ok := err.(*cos.ErrSignal); ok {
-		glog.Infof("Terminated OK (via signal: %v)\n", e)
+		glog.Infof("Terminated OK via %v", e)
 		return e.ExitCode()
 	}
 	if errors.Is(err, cmn.ErrStartupTimeout) {
@@ -215,7 +214,7 @@ func Run(version, buildTime string) int {
 		//       to restart the daemon if the primary gets killed or panics prior (to reaching that state)
 		glog.Errorln("Timed-out while starting up")
 	}
-	glog.Errorf("Terminated with err: %s", err)
+	glog.Errorf("Terminated with err: %v", err)
 	return 1
 }
 

@@ -121,7 +121,7 @@ func initConfig() {
 
 func createAndAddMountpath(path string) {
 	cos.CreateDir(path)
-	fs.Init()
+	fs.New()
 	fs.Add(path, "daeID")
 
 	fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})

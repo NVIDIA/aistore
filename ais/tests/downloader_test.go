@@ -391,7 +391,7 @@ func TestDownloadMultiMap(t *testing.T) {
 		id, err := api.DownloadMulti(tutils.BaseAPIParams(), generateDownloadDesc(), bck.Bck, mapping)
 		tassert.CheckFatal(t, err)
 
-		waitForDownload(t, id, 10*time.Second)
+		waitForDownload(t, id, 30*time.Second)
 		checkDownloadedObjects(t, id, bck.Bck, expectedObjects)
 
 		checkDownloadList(t)
@@ -422,7 +422,7 @@ func TestDownloadMultiList(t *testing.T) {
 		id, err := api.DownloadMulti(baseParams, generateDownloadDesc(), bck.Bck, l)
 		tassert.CheckFatal(t, err)
 
-		waitForDownload(t, id, 10*time.Second)
+		waitForDownload(t, id, 30*time.Second)
 		checkDownloadedObjects(t, id, bck.Bck, expectedObjs)
 
 		checkDownloadList(t)

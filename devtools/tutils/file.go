@@ -139,7 +139,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 	)
 
 	mios := ios.NewIOStaterMock()
-	fs.Init(mios)
+	fs.New(mios)
 	fs.DisableFsIDCheck()
 
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})

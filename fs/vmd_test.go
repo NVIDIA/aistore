@@ -27,7 +27,7 @@ func TestVMD(t *testing.T) {
 
 func testVMDCreate(t *testing.T, mpaths fs.MPI, daemonID string) {
 	var (
-		vmd, err  = fs.CreateNewVMD(daemonID)
+		vmd, err  = fs.CreateVMD(daemonID)
 		mpathsCnt = len(mpaths)
 	)
 
@@ -44,11 +44,10 @@ func testVMDCreate(t *testing.T, mpaths fs.MPI, daemonID string) {
 }
 
 func testVMDPersist(t *testing.T, daemonID string) {
-	vmd, err := fs.CreateNewVMD(daemonID)
+	vmd, err := fs.CreateVMD(daemonID)
 	tassert.CheckFatal(t, err)
 
-	available, _ := fs.Get()
-	newVMD, err := fs.LoadVMD(available)
+	newVMD, err := fs.LoadVMDTest()
 	tassert.Fatalf(t, err == nil, "expected no error while loading VMD")
 	tassert.Errorf(t, newVMD.DaemonID == vmd.DaemonID,
 		"expected VMDs to have same daemon ID. got: %s vs %s", newVMD.DaemonID, vmd.DaemonID)

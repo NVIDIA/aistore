@@ -200,7 +200,7 @@ func (t *targetrunner) init(config *cmn.Config) {
 	daemon.rg.add(fshc)
 	t.fshc = fshc
 
-	if err := ts.InitCapacity(); err != nil { // goes after fs.Init
+	if err := ts.InitCapacity(); err != nil { // goes after fs.New
 		cos.ExitLogf("%s", err)
 	}
 }
@@ -223,23 +223,54 @@ func initTID(config *cmn.Config) (tid string) {
 }
 
 func (t *targetrunner) initFs() {
-	// Initialize filesystem/mountpaths manager.
-	fs.Init()
+	var (
+		vmd    *fs.VMD
+		config = cmn.GCO.Get()
+		tid    = t.si.ID()
+	)
+	fs.New()
 
 	// fs.Mountpaths must be inited prior to all runners that utilize them.
 	// For mountpath definition, see `fs/mountfs.go`.
-	config := cmn.GCO.Get()
 	if config.TestingEnv() {
-		glog.Warningf("Using %d mpaths for testing with disabled FsID check", config.TestFSP.Count)
+		glog.Warningf("Using %d mountpaths for testing with disabled FsID check", config.TestFSP.Count)
 		fs.DisableFsIDCheck()
 	}
-
-	if changed, err := fs.InitMpaths(t.si.ID()); err != nil {
+	if v, err := fs.BootstrapVMD(tid, config.FSpaths.Paths); err != nil {
 		cos.ExitLogf("%v", err)
-	} else if changed {
-		daemon.resilver.required = true
-		daemon.resilver.reason = "mountpaths differ from last run"
+	} else {
+		vmd = v
 	}
+
+	if vmd == nil {
+		if err := fs.InitNoVMD(tid, config); err != nil {
+			cos.ExitLogf("%v", err)
+		}
+		glog.Warningf("%s: initializing new VMD %v", t.si, config.FSpaths.Paths.ToSlice())
+		if v, err := fs.CreateVMD(tid); err != nil {
+			cos.ExitLogf("%v", err)
+		} else {
+			vmd = v
+		}
+		glog.Warningf("%s: %s created", t.si, vmd)
+		return
+	}
+
+	if vmdChanged, err := fs.InitVMD(tid, vmd); err != nil {
+		cos.ExitLogf("%v", err)
+	} else if !vmdChanged {
+		glog.Infoln(vmd.String())
+		return
+	}
+
+	daemon.resilver.required = true
+	daemon.resilver.reason = "VMD change detected"
+	if v, err := fs.CreateVMD(tid); err != nil {
+		cos.ExitLogf("%v", err)
+	} else {
+		vmd = v
+	}
+	glog.Warningf("%s _changed_ and recreated", vmd)
 }
 
 func regDiskMetrics(tstats *stats.Trunner, mpi fs.MPI) {
@@ -350,7 +381,7 @@ func (t *targetrunner) Run() error {
 			if marked.Interrupted {
 				glog.Info("Resuming resilver...")
 			} else if daemon.resilver.required {
-				glog.Infof("Starting resilver, reason: %s", daemon.resilver.reason)
+				glog.Infof("Starting resilver, reason: %q", daemon.resilver.reason)
 			}
 			t.runResilver("" /*uuid*/, nil /*wg*/, false /*skipGlobMisplaced*/)
 		}()

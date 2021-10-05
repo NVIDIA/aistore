@@ -55,7 +55,7 @@ var _ = Describe("CommunicatorTest", func() {
 		mpath := filepath.Join(tmpDir, "mpath")
 		err = cos.CreateDir(mpath)
 		Expect(err).NotTo(HaveOccurred())
-		fs.Init()
+		fs.New()
 		fs.DisableFsIDCheck()
 		_, err = fs.Add(mpath, "daeID")
 		Expect(err).NotTo(HaveOccurred())

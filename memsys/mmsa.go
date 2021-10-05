@@ -120,13 +120,16 @@ const NumStats = NumPageSlabs // NOTE: must be greater or equal NumSmallSlabs, o
 //  Other important defaults are also commented below.
 // =================================== MMSA config defaults ==========================================
 const (
-	minDepth      = 128                   // ring cap min; default ring growth increment
-	loadAvg       = 10                    // "idle" load average to deallocate Slabs when below
-	sizeToGC      = cos.GiB * 2           // see heuristics ("Heu")
-	minMemFree    = cos.GiB + cos.MiB*256 // default minimum memory - see extended comment above
-	memCheckAbove = 90 * time.Second      // default memory checking frequency when above low watermark
-	freeIdleMin   = memCheckAbove         // time to reduce an idle slab to a minimum depth (see mindepth)
-	freeIdleZero  = freeIdleMin * 2       // ... to zero
+	minDepth   = 128                   // ring cap min; default ring growth increment
+	loadAvg    = 10                    // "idle" load average to deallocate Slabs when below
+	sizeToGC   = cos.GiB * 2           // see heuristics ("Heu")
+	minMemFree = cos.GiB + cos.MiB*256 // default minimum memory - see extended comment above
+)
+
+const (
+	memCheckAbove = 90 * time.Second // default memory checking frequency when above low watermark
+	freeIdleMin   = memCheckAbove    // time to reduce an idle slab to a minimum depth (see mindepth)
+	freeIdleZero  = freeIdleMin * 2  // ... to zero
 )
 
 // slab constants

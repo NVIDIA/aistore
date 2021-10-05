@@ -137,7 +137,7 @@ func (g *fsprungroup) redistributeMD() {
 			cos.ExitLogf("%v", err)
 		}
 	}
-	if _, err := fs.CreateNewVMD(g.t.si.ID()); err != nil {
+	if _, err := fs.CreateVMD(g.t.si.ID()); err != nil {
 		debug.AssertNoErr(err)
 		cos.ExitLogf("%v", err)
 	}

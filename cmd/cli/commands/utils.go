@@ -354,7 +354,6 @@ func calcRefreshRate(c *cli.Context) time.Duration {
 	const (
 		refreshRateMin = time.Second
 	)
-
 	refreshRate := refreshRateDefault
 	if flagIsSet(c, refreshFlag) {
 		refreshRate = parseDurationFlag(c, refreshFlag)

@@ -53,7 +53,7 @@ var _ = Describe("newConcAdjuster", func() {
 		err := cos.CreateDir(testingConfigDir)
 		Expect(err).ShouldNot(HaveOccurred())
 
-		fs.Init(mios)
+		fs.New(mios)
 		_, _ = fs.Add(testingConfigDir, "daeID")
 
 		config := cmn.GCO.BeginUpdate()
