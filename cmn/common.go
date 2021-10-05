@@ -16,12 +16,11 @@ import (
 	"unsafe"
 )
 
-const (
-	configHomeEnvVar = "XDG_CONFIG_HOME" // https://wiki.archlinux.org/index.php/XDG_Base_Directory
+const GitHubHome = "https://github.com/NVIDIA/aistore"
 
-	// NOTE: Taken from cloud.google.com/go/storage/storage.go (userAgent).
-	GcsUA      = "gcloud-golang-storage/20151204"
-	GithubHome = "https://github.com/NVIDIA/aistore"
+const (
+	configHomeEnvVar = "XDG_CONFIG_HOME"                // https://wiki.archlinux.org/index.php/XDG_Base_Directory
+	GcsUA            = "gcloud-golang-storage/20151204" // from cloud.google.com/go/storage/storage.go (userAgent).
 )
 
 var (

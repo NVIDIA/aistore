@@ -38,8 +38,8 @@ type (
 		info  string
 	}
 
-	// errors
-	StorageIntegrityError struct {
+	// sie#<code>
+	ErrStorageIntegrity struct {
 		msg  string
 		code int
 	}
@@ -133,20 +133,29 @@ func loadOneVMD(tid string, vmd *VMD, mpath string, l int) (*VMD, error) {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		err = newVMDLoadErr(mpath, err)
-		return nil, err
+		return nil, &ErrStorageIntegrity{
+			code: sieMetaCorrupted,
+			msg:  fmt.Sprintf("failed to load VMD from %q: %v", mpath, err),
+		}
 	}
 	if vmd == nil {
 		if tid != "" && v.DaemonID != tid {
-			return nil, newVMDIDMismatchErr(v, tid)
+			return nil, &ErrStorageIntegrity{
+				code: sieTargetIDMismatch,
+				msg:  fmt.Sprintf("%s has a different target ID: %q != %q", v, v.DaemonID, tid),
+			}
 		}
 		return v, nil
 	}
 	//
 	// validate
 	//
+	debug.Assert(vmd.DaemonID == tid || tid == "")
 	if v.DaemonID != vmd.DaemonID {
-		return nil, newVMDIDMismatchErr(v, vmd.DaemonID)
+		return nil, &ErrStorageIntegrity{
+			code: sieTargetIDMismatch,
+			msg:  fmt.Sprintf("%s has a different target ID: %q != %q", v, v.DaemonID, vmd.DaemonID),
+		}
 	}
 	if v.Version > vmd.Version {
 		if !_mpathGreaterEq(v, vmd, mpath) {
@@ -159,7 +168,10 @@ func loadOneVMD(tid string, vmd *VMD, mpath string, l int) (*VMD, error) {
 			glog.Warningf("mpath %s: VMD version mismatch: %s vs %s", mpath, vmd, v)
 		}
 	} else if !v.equal(vmd) { // NOTE: same version must be identical
-		err = newVMDMismatchErr(vmd, v, mpath)
+		err = &ErrStorageIntegrity{
+			code: sieNotEqVMD,
+			msg:  fmt.Sprintf("VMD differs: %s vs %s (%q)", vmd, v, mpath),
+		}
 	}
 	return nil, err
 }
@@ -191,7 +203,10 @@ func LoadDaemonID(mpaths cos.StringSet) (mDaeID string, err error) {
 		}
 		if mDaeID != "" {
 			if mDaeID != daeID {
-				return "", newMpathIDMismatchErr(mDaeID, daeID, mp)
+				return "", &ErrStorageIntegrity{
+					code: sieMpathIDMismatch,
+					msg:  fmt.Sprintf("target ID mismatch: %q vs %q(%q)", mDaeID, daeID, mp),
+				}
 			}
 			continue
 		}
@@ -210,63 +225,6 @@ func loadDaemonIDXattr(mpath string) (daeID string, err error) {
 		err = nil
 	}
 	return
-}
-
-////////////
-// errors //
-////////////
-
-func (sie *StorageIntegrityError) Error() string {
-	return fmt.Sprintf("[%s]: %s", siError(sie.code), sie.msg)
-}
-
-func newMpathIDMismatchErr(mainDaeID, tid, mpath string) *StorageIntegrityError {
-	return &StorageIntegrityError{
-		code: siMpathIDMismatch,
-		msg:  fmt.Sprintf("target ID mismatch: %q vs %q (%q)", mainDaeID, tid, mpath),
-	}
-}
-
-func newVMDMismatchErr(mainVMD, otherVMD *VMD, mpath string) *StorageIntegrityError {
-	return &StorageIntegrityError{
-		code: siMetaMismatch,
-		msg:  fmt.Sprintf("VMD mismatch: %s vs %s (%q)", mainVMD, otherVMD, mpath),
-	}
-}
-
-func newVMDIDMismatchErr(vmd *VMD, tid string) *StorageIntegrityError {
-	return &StorageIntegrityError{
-		code: siTargetIDMismatch,
-		msg:  fmt.Sprintf("%s has a different target ID: %q != %q", vmd, vmd.DaemonID, tid),
-	}
-}
-
-func newVMDMissingMpathErr(mpath string) *StorageIntegrityError {
-	return &StorageIntegrityError{
-		code: siMpathMissing,
-		msg:  fmt.Sprintf("mountpath %q not in VMD", mpath),
-	}
-}
-
-func newConfigMissingMpathErr(mpath string) *StorageIntegrityError {
-	return &StorageIntegrityError{
-		code: siMpathMissing,
-		msg:  fmt.Sprintf("mountpath %q in VMD but not in the config", mpath),
-	}
-}
-
-func newVMDLoadErr(mpath string, err error) *StorageIntegrityError {
-	return &StorageIntegrityError{
-		code: siMetaCorrupted,
-		msg:  fmt.Sprintf("failed to load VMD from %q: %v", mpath, err),
-	}
-}
-
-func siError(code int) string {
-	return fmt.Sprintf(
-		"storage integrity error: sie#%d - for details, see %s/blob/master/docs/troubleshooting.md",
-		code, cmn.GithubHome,
-	)
 }
 
 /////////
@@ -332,4 +290,24 @@ func (vmd *VMD) _string() string {
 		i++
 	}
 	return fmt.Sprintf("VMD v%d(%s, %v)", vmd.Version, vmd.DaemonID, mps)
+}
+
+/////////////////////////
+// ErrStorageIntegrity //
+/////////////////////////
+
+const (
+	sieMpathIDMismatch = (1 + iota) * 10
+	sieTargetIDMismatch
+	sieNotEqVMD
+	sieMetaCorrupted
+	sieFsDiffers
+)
+
+func (sie *ErrStorageIntegrity) Error() string {
+	const (
+		siePrefix = "storage integrity error: sie#"
+		fmterr    = "[%s%d - for troubleshooting, see %s/blob/master/docs/troubleshooting.md]: %s"
+	)
+	return fmt.Sprintf(fmterr, siePrefix, sie.code, cmn.GitHubHome, sie.msg)
 }

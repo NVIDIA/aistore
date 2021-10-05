@@ -16,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/hk"
@@ -75,7 +76,7 @@ import (
 // utilizes one of the existing enumerated slabs to "grow" (that is, allocate more
 // buffers from the slab) on demand. For details, look for "grow" in the iosgl.go.
 
-const readme = "https://github.com/NVIDIA/aistore/blob/master/memsys/README.md"
+const readme = cmn.GitHubHome + "/blob/master/memsys/README.md"
 
 const (
 	PageSize            = cos.KiB * 4

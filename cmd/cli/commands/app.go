@@ -24,9 +24,9 @@ const (
 	cliName  = "ais"
 	metadata = "md"
 	cliDescr = `If [Tab] completion doesn't work:
-   * download https://github.com/NVIDIA/aistore/tree/master/cmd/cli/autocomplete
+   * download ` + cmn.GitHubHome + `/tree/master/cmd/cli/autocomplete
    * and run 'install.sh'.
-   For more information, please refer to https://github.com/NVIDIA/aistore/blob/master/cmd/cli/README.md`
+   For more information, please refer to ` + cmn.GitHubHome + `/blob/master/cmd/cli/README.md`
 )
 
 var (

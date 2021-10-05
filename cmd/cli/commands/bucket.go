@@ -53,7 +53,7 @@ func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BucketPropsToUpdate) (
 	}
 	if props == nil {
 		fmt.Fprintf(c.App.Writer,
-			"%q created (see github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties)\n", bck)
+			"%q created (see %s/blob/master/docs/bucket.md#default-bucket-properties)\n", bck, cmn.GitHubHome)
 	} else {
 		fmt.Fprintf(c.App.Writer, "%q created\n", bck)
 	}

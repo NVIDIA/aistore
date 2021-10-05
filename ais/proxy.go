@@ -2923,6 +2923,6 @@ func resolveUUIDBMD(bmds bmds) (*bucketMD, error) {
 }
 
 func ciError(num int) string {
-	const s = "[%s%d - for details, see %s/blob/master/docs/troubleshooting.md]"
-	return fmt.Sprintf(s, ciePrefix, num, cmn.GithubHome)
+	const fmterr = "[%s%d - for troubleshooting, see %s/blob/master/docs/troubleshooting.md]"
+	return fmt.Sprintf(fmterr, ciePrefix, num, cmn.GitHubHome)
 }
