@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/hk"
 )
@@ -86,45 +86,48 @@ func (is *infoStore) setJob(id string, job DlJob) {
 
 func (is *infoStore) incFinished(id string) {
 	jInfo, err := is.getJob(id)
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 	jInfo.FinishedCnt.Inc()
 }
 
 func (is *infoStore) incSkipped(id string) {
 	jInfo, err := is.getJob(id)
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 	jInfo.SkippedCnt.Inc()
 	jInfo.FinishedCnt.Inc()
 }
 
 func (is *infoStore) incScheduled(id string) {
 	jInfo, err := is.getJob(id)
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 	jInfo.ScheduledCnt.Inc()
 }
 
 func (is *infoStore) incErrorCnt(id string) {
 	jInfo, err := is.getJob(id)
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 	jInfo.ErrorCnt.Inc()
 }
 
 func (is *infoStore) setAllDispatched(id string, dispatched bool) {
 	jInfo, err := is.getJob(id)
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 	jInfo.AllDispatched.Store(dispatched)
 }
 
-func (is *infoStore) markFinished(id string) {
+func (is *infoStore) markFinished(id string) error {
 	jInfo, err := is.getJob(id)
-	cos.AssertNoErr(err)
+	if err != nil {
+		debug.AssertNoErr(err)
+		return err
+	}
 	jInfo.FinishedTime.Store(time.Now())
-	cos.Assert(jInfo.valid())
+	return jInfo.valid()
 }
 
 func (is *infoStore) setAborted(id string) {
 	jInfo, err := is.getJob(id)
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 	jInfo.Aborted.Store(true)
 	// NOTE: Don't set `FinishedTime` yet as we are not fully done.
 	//       The job now can be removed but there's no guarantee

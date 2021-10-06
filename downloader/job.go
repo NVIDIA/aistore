@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -193,9 +194,12 @@ func (j *baseDlJob) throttler() *throttler { return j.t }
 
 func (j *baseDlJob) cleanup() {
 	j.throttler().stop()
-	dlStore.markFinished(j.ID())
+	err := dlStore.markFinished(j.ID())
+	if err != nil {
+		glog.Errorf("%s: %v", j, err)
+	}
 	dlStore.flush(j.ID())
-	nl.OnFinished(j.Notif(), nil)
+	nl.OnFinished(j.Notif(), err)
 }
 
 ////////////////
@@ -448,12 +452,15 @@ func (d *downloadJobInfo) ToDlJobInfo() DlJobInfo {
 }
 
 // Used for debugging purposes to ensure integrity of the struct.
-func (d *downloadJobInfo) valid() bool {
+func (d *downloadJobInfo) valid() (err error) {
 	if d.Aborted.Load() {
-		return true
+		return
 	}
 	if !d.AllDispatched.Load() {
-		return true
+		return
 	}
-	return d.ScheduledCnt.Load() == d.FinishedCnt.Load()+d.ErrorCnt.Load()
+	if a, b, c := d.ScheduledCnt.Load(), d.FinishedCnt.Load(), d.ErrorCnt.Load(); a != b+c {
+		err = fmt.Errorf("invalid: %d != %d + %d", a, b, c)
+	}
+	return
 }
