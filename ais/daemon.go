@@ -49,8 +49,10 @@ type (
 		}
 		transient        bool // false: make cmn.ConfigCLI settings permanent, true: leave them transient
 		overrideBackends bool // if true primary will metasync backends from deployment-time plain-text config
-		standby          bool // do not try to join cluster automatically upon startup - standby and wait for request
-		usage            bool // show usage and exit
+		target           struct {
+			standby bool // do not try to join cluster automatically upon startup - standby and wait for request (target-only)
+		}
+		usage bool // show usage and exit
 	}
 	rungroup struct {
 		rs    map[string]cos.Runner
@@ -75,8 +77,10 @@ func init() {
 	flag.BoolVar(&daemon.cli.transient, "transient", false,
 		"false: store customized (via config_custom) configuration\ntrue: runtime only (non-persistent)")
 	flag.BoolVar(&daemon.cli.usage, "h", false, "show usage and exit")
-	flag.BoolVar(&daemon.cli.overrideBackends, "override_backends", false, "configure remote backends at deployment time (and override previously stored configuration)")
-	flag.BoolVar(&daemon.cli.standby, "standby", false, "when starting up, do not try to join cluster - standby and wait for user request")
+	flag.BoolVar(&daemon.cli.overrideBackends, "override_backends", false, "configure remote backends at deployment time (potentially, override previously stored configuration)")
+
+	// target-only
+	flag.BoolVar(&daemon.cli.target.standby, "standby", false, "when starting up, do not try to join cluster - standby and wait for admin request (target-only)")
 
 	// primary-only:
 	flag.IntVar(&daemon.cli.primary.ntargets, "ntargets", 0, "number of storage targets expected to be joining at startup (optional, primary-only)")

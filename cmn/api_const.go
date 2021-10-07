@@ -48,8 +48,6 @@ const (
 	ActArchive         = "archive"
 	ActPrefetchObjects = "prefetch_listrange"
 	ActDownload        = "download"
-	ActRegTarget       = "regtarget"
-	ActRegProxy        = "regproxy"
 	ActNewPrimary      = "newprimary"
 	ActElection        = "election"
 	ActPutCopies       = "putcopies"
@@ -67,6 +65,10 @@ const (
 	ActStopMaintenance  = "stopmaintenance"   // cancel maintenance state
 	ActDecommissionNode = "decommission_node" // start rebalance and, when done, remove node from Smap
 	ActShutdownNode     = "shutdown_node"     // shutdown a specific node
+
+	ActAdminJoinTarget = "admin-join-target"
+	ActSelfJoinTarget  = "self-join-target"
+	ActJoinProxy       = "join-proxy"
 	// IC
 	ActSendOwnershipTbl  = "ic_send_ownership_tbl"
 	ActListenToNotif     = "watch_xaction"

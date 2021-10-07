@@ -330,7 +330,7 @@ func (t *targetrunner) Run() error {
 	smap.Tmap[t.si.ID()] = t.si
 	t.owner.smap.put(smap)
 
-	if daemon.cli.standby {
+	if daemon.cli.target.standby {
 		t.regstate.disabled.Store(true)
 		glog.Warningf("%s not joining - standing by...", t.si)
 		go func() {
@@ -342,7 +342,7 @@ func (t *targetrunner) Run() error {
 		// see endStandby()
 	} else {
 		// discover primary and join cluster (compare with manual `cmn.AdminJoin`)
-		if status, err := t.joinCluster(); err != nil {
+		if status, err := t.joinCluster(cmn.ActSelfJoinTarget); err != nil {
 			glog.Errorf("%s failed to join cluster (status: %d, err: %v)", t.si, status, err)
 			glog.Errorf("%s is terminating", t.si)
 			return err
@@ -355,7 +355,8 @@ func (t *targetrunner) Run() error {
 				return
 			}
 			if cii != nil {
-				if status, err := t.joinCluster(cii.Smap.Primary.CtrlURL, cii.Smap.Primary.PubURL); err != nil {
+				if status, err := t.joinCluster(cmn.ActSelfJoinTarget,
+					cii.Smap.Primary.CtrlURL, cii.Smap.Primary.PubURL); err != nil {
 					glog.Errorf("%s failed to re-join cluster (status: %d, err: %v)", t.si, status, err)
 					return
 				}
@@ -408,16 +409,17 @@ func (t *targetrunner) Run() error {
 	return err
 }
 
-func (t *targetrunner) endStandby() {
+func (t *targetrunner) endStartupStandby() (err error) {
 	smap := t.owner.smap.get()
-	if err := smap.validate(); err == nil {
-		t.markNodeStarted()
-		t.markClusterStarted()
-		t.regstate.disabled.Store(false)
-		glog.Infof("%s enabled and joined (%s)", t.si, smap.StringEx())
-
-		// TODO -- FIXME: initiate rebalance
+	if err = smap.validate(); err != nil {
+		return
 	}
+	daemon.cli.target.standby = false
+	t.markNodeStarted()
+	t.markClusterStarted()
+	t.regstate.disabled.Store(false)
+	glog.Infof("%s enabled and joined (%s)", t.si, smap.StringEx())
+	return
 }
 
 func (t *targetrunner) initRecvHandlers() {

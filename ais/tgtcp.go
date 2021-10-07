@@ -64,8 +64,8 @@ func (t *targetrunner) initHostIP() {
 	}
 }
 
-func (t *targetrunner) joinCluster(_ ...string) (status int, err error) {
-	res := t.join(nil)
+func (t *targetrunner) joinCluster(action string, primaryURLs ...string) (status int, err error) {
+	res := t.join(nil, primaryURLs...)
 	defer _freeCallRes(res)
 	if res.err != nil {
 		status, err = res.status, res.err
@@ -75,18 +75,18 @@ func (t *targetrunner) joinCluster(_ ...string) (status int, err error) {
 	if len(res.bytes) == 0 {
 		return
 	}
-	err = t.applyRegMeta(res.bytes, "")
+	err = t.applyRegMeta(action, res.bytes, "")
 	return
 }
 
-func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
+func (t *targetrunner) applyRegMeta(action string, body []byte, caller string) (err error) {
 	var regMeta cluMeta
 	err = jsoniter.Unmarshal(body, &regMeta)
 	if err != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, t.si, "reg-meta", cmn.BytesHead(body), err)
 		return
 	}
-	msg := t.newAmsgStr(cmn.ActRegTarget, regMeta.BMD)
+	msg := t.newAmsgStr(action, regMeta.BMD)
 
 	// Config
 	debug.Assert(regMeta.Config != nil)
@@ -343,7 +343,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 				t.writeErrf(w, r, "%s already joined (\"enabled\")- nothing to do", t.si)
 				return
 			}
-			if daemon.cli.standby {
+			if daemon.cli.target.standby {
 				glog.Infof("%s: standby => join", t.si)
 			}
 			t.keepalive.send(kaRegisterMsg)
@@ -354,11 +354,15 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 			}
 
 			caller := r.Header.Get(cmn.HdrCallerName)
-			if err := t.applyRegMeta(body, caller); err != nil {
+			if err := t.applyRegMeta(cmn.ActAdminJoinTarget, body, caller); err != nil {
 				t.writeErr(w, r, err)
 				return
 			}
-			t.endStandby()
+			if daemon.cli.target.standby {
+				if err := t.endStartupStandby(); err != nil {
+					t.writeErr(w, r, err)
+				}
+			}
 			return
 		case cmn.Mountpaths:
 			t.handleMountpathReq(w, r)
@@ -369,8 +373,8 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if status, err := t.joinCluster(); err != nil {
-		t.writeErrf(w, r, "%s: failed to register, status %d, err: %v", t.si, status, err)
+	if status, err := t.joinCluster(cmn.ActSelfJoinTarget); err != nil { // TODO -- FIXME: check
+		t.writeErrf(w, r, "%s: failed to join: %v(%d)", t.si, err, status)
 		return
 	}
 
@@ -736,10 +740,10 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 			go t.runResilver(newRMD.Resilver /*uuid*/, nil /*wg*/, true /*skipGlobMisplaced*/)
 		}
 		t.owner.rmd.put(newRMD)
-	} else if msg.Action == cmn.ActRegTarget && daemon.cli.standby { // TODO -- FIXME
-		glog.Infof("%s: standby => join", t.si)
-		if _, err := t.joinCluster(); err == nil {
-			t.endStandby()
+	} else if msg.Action == cmn.ActAdminJoinTarget && daemon.cli.target.standby { // TODO -- FIXME
+		glog.Infof("%s: standby => join (%q, %q)", t.si, msg.Action, msg.Name)
+		if _, err = t.joinCluster(msg.Action); err == nil {
+			err = t.endStartupStandby()
 		}
 	}
 	return
@@ -944,7 +948,7 @@ func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Reques
 
 // GET /v1/health (cmn.Health)
 func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
-	if t.regstate.disabled.Load() && daemon.cli.standby {
+	if t.regstate.disabled.Load() && daemon.cli.target.standby {
 		glog.Warningf("[health] %s: standing by...", t.si)
 		return
 	}
@@ -1023,7 +1027,7 @@ func (t *targetrunner) enable() error {
 		return nil
 	}
 	glog.Infof("Enabling %s", t.si)
-	if _, err := t.joinCluster(); err != nil {
+	if _, err := t.joinCluster(cmn.ActSelfJoinTarget); err != nil {
 		return err
 	}
 	t.regstate.disabled.Store(false)

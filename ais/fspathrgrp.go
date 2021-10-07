@@ -150,10 +150,10 @@ func (g *fsprungroup) checkZeroMountpaths(action string) (disabled bool) {
 		return false
 	}
 	if err := g.t.disable(); err != nil {
-		glog.Errorf("%s the last available mountpath, failed to unregister target %s (self), err: %v",
+		glog.Errorf("%s the last available mountpath, failed to unreg %s (self), err: %v",
 			action, g.t.si, err)
 	} else {
-		glog.Errorf("%s the last available mountpath and unregistered target %s (self)", action, g.t.si)
+		glog.Errorf("%s the last available mountpath and unreg %s (self)", action, g.t.si)
 	}
 	return true
 }
@@ -165,7 +165,7 @@ func (g *fsprungroup) checkEnable(action, mpath string) {
 	} else {
 		glog.Infof("%s the first mountpath %s", action, mpath)
 		if err := g.t.enable(); err != nil {
-			glog.Errorf("Failed to re-register %s (self), err: %v", g.t.si, err)
+			glog.Errorf("Failed to re-join %s (self), err: %v", g.t.si, err)
 		}
 	}
 }

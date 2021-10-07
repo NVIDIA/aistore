@@ -269,10 +269,10 @@ func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, resu
 
 func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	var (
-		regReq                                cluMeta
-		tag                                   string
-		keepalive, userRegister, selfRegister bool
-		nonElectable                          bool
+		regReq                         cluMeta
+		tag                            string
+		keepalive, adminJoin, selfJoin bool
+		nonElectable                   bool
 	)
 	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathCluster.L)
 	if err != nil {
@@ -292,7 +292,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		if cmn.ReadJSON(w, r, &regReq.SI) != nil {
 			return
 		}
-		tag, userRegister = "user-register", true
+		tag, adminJoin = "admin-join", true
 	case cmn.Keepalive:
 		if cmn.ReadJSON(w, r, &regReq) != nil {
 			return
@@ -302,25 +302,24 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		if cmn.ReadJSON(w, r, &regReq) != nil {
 			return
 		}
-		tag, selfRegister = "join", true
+		tag, selfJoin = "self-join", true
 	default:
 		p.writeErrURL(w, r)
 		return
 	}
-	if selfRegister && !p.ClusterStarted() {
+	if selfJoin && !p.ClusterStarted() {
 		p.reg.mtx.Lock()
 		p.reg.pool = append(p.reg.pool, regReq)
 		p.reg.mtx.Unlock()
 	}
 	// NOTE: The node ID is obtained from the node itself, API calls are not trusted.
-	//  Any aisnode will either detect or generate an ID for itself during startup.
-	//  For more, see `initDaemonID` in `ais/daemon.go`.
+	// Any `aisnode` will either load existing or generate new unique ID for itself during startup.
+	// For details, see `initDaemonID` (ais/daemon.go).
 	nsi := regReq.SI
-	if userRegister {
+	if adminJoin {
 		si, err := p.getDaemonInfo(nsi)
 		if err != nil {
-			p.writeErrf(w, r, "failed to obtain daemon info from %q: %v",
-				nsi.URL(cmn.NetworkPublic), err)
+			p.writeErrf(w, r, "failed to obtain node info from %q: %v", nsi.URL(cmn.NetworkPublic), err)
 			return
 		}
 		nsi.DaemonID = si.DaemonID
@@ -338,11 +337,9 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 	var (
 		isProxy = nsi.IsProxy()
-		msg     = &cmn.ActionMsg{Action: cmn.ActRegTarget}
+		msg     = &cmn.ActionMsg{Action: cmn.ActJoinProxy}
 	)
 	if isProxy {
-		msg = &cmn.ActionMsg{Action: cmn.ActRegProxy}
-
 		s := r.URL.Query().Get(cmn.URLParamNonElectable)
 		if nonElectable, err = cos.ParseBool(s); err != nil {
 			glog.Errorf("%s: failed to parse %s for non-electability: %v", p.si, s, err)
@@ -360,14 +357,20 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if nonElectable {
 		nsi.Flags = nsi.Flags.Set(cluster.SnodeNonElectable)
 	}
+	if !isProxy {
+		msg.Action, msg.Name = cmn.ActSelfJoinTarget, nsi.ID()
+		if adminJoin {
+			msg.Action = cmn.ActAdminJoinTarget
+		}
+	}
 
-	if userRegister {
-		if errCode, err := p.userRegisterNode(nsi, tag); err != nil {
+	if adminJoin {
+		if errCode, err := p.adminJoinNode(nsi, tag); err != nil {
 			p.writeErr(w, r, err, errCode)
 			return
 		}
 	}
-	if selfRegister {
+	if selfJoin {
 		if osi := smap.GetNode(nsi.ID()); osi != nil && !osi.Equals(nsi) {
 			if duplicate, err := p.detectDaemonDuplicate(osi, nsi); err != nil {
 				p.writeErrf(w, r, "failed to obtain daemon info, err: %v", err)
@@ -398,8 +401,8 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// send clu-meta to the self-registering node
-	if selfRegister {
+	// send `clu-meta` to the self-joining node
+	if selfJoin {
 		glog.Infof("%s: %s %s (%s)...", p.si, tag, nsi.StringEx(), regReq.Smap)
 		meta, err := p.cluMeta(cmetaFillOpt{skipSmap: true})
 		if err != nil {
@@ -407,7 +410,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		p.writeJSON(w, r, meta, path.Join(msg.Action, nsi.ID()) /* tag */)
-	} else if userRegister {
+	} else if adminJoin {
 		// Return the node ID and rebalance ID when the node is joined by user.
 		rebID, err := p.updateAndDistribute(nsi, msg, nsi.Flags)
 		if err != nil {
@@ -420,8 +423,8 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	go p.updateAndDistribute(nsi, msg, nsi.Flags)
 }
 
-// join(node) => cluster via API
-func (p *proxyrunner) userRegisterNode(nsi *cluster.Snode, tag string) (errCode int, err error) {
+// join cluster "manually" via admin API call
+func (p *proxyrunner) adminJoinNode(nsi *cluster.Snode, tag string) (errCode int, err error) {
 	meta, err := p.cluMeta(cmetaFillOpt{skipSmap: true})
 	if err != nil {
 		return http.StatusInternalServerError, err
@@ -488,8 +491,8 @@ func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, tag s
 	return
 }
 
-func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg,
-	flags cluster.SnodeFlags) (xactID string, err error) {
+func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg, flags cluster.SnodeFlags) (xactID string,
+	err error) {
 	ctx := &smapModifier{
 		pre:   p._updPre,
 		post:  p._updPost,

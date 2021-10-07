@@ -233,7 +233,7 @@ func (p *proxyrunner) sendKeepalive(timeout time.Duration) (status int, err erro
 	return p.httprunner.sendKeepalive(timeout)
 }
 
-func (p *proxyrunner) joinCluster(primaryURLs ...string) (status int, err error) {
+func (p *proxyrunner) joinCluster(action string, primaryURLs ...string) (status int, err error) {
 	var query url.Values
 	if smap := p.owner.smap.get(); smap.isPrimary(p.si) {
 		return 0, fmt.Errorf("%s should not be joining: is primary, %s", p.si, smap.StringEx())
@@ -251,16 +251,16 @@ func (p *proxyrunner) joinCluster(primaryURLs ...string) (status int, err error)
 	if len(res.bytes) == 0 {
 		return
 	}
-	err = p.applyRegMeta(res.bytes, "")
+	err = p.applyRegMeta(action, res.bytes, "")
 	return
 }
 
-func (p *proxyrunner) applyRegMeta(body []byte, caller string) error {
+func (p *proxyrunner) applyRegMeta(action string, body []byte, caller string) error {
 	var regMeta cluMeta
 	if err := jsoniter.Unmarshal(body, &regMeta); err != nil {
 		return fmt.Errorf(cmn.FmtErrUnmarshal, p.si, "reg-meta", cmn.BytesHead(body), err)
 	}
-	return p.receiveCluMeta(&regMeta, cmn.ActRegProxy, caller)
+	return p.receiveCluMeta(&regMeta, action, caller)
 }
 
 func (p *proxyrunner) receiveCluMeta(cluMeta *cluMeta, action, caller string) (err error) {
@@ -2411,7 +2411,7 @@ func (p *proxyrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	caller := r.Header.Get(cmn.HdrCallerName)
-	if err := p.applyRegMeta(body, caller); err != nil {
+	if err := p.applyRegMeta(cmn.ActJoinProxy, body, caller); err != nil {
 		p.writeErr(w, r, err)
 	}
 }

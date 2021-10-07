@@ -412,7 +412,7 @@ func (k *keepalive) waitStatsRunner() (stopped bool) {
 		logErr time.Duration
 		ticker *time.Ticker
 	)
-	if daemon.cli.standby {
+	if daemon.cli.target.standby {
 		ticker = time.NewTicker(waitStandby)
 	} else {
 		ticker = time.NewTicker(waitSelfJoin)
