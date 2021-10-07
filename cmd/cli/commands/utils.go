@@ -336,18 +336,12 @@ validate:
 	return
 }
 
-func getPrefixFromPrimary() (string, error) {
-	smap, err := api.GetClusterMap(defaultAPIParams)
-	if err != nil {
-		return "", err
+func getPrefixFromPrimary() string {
+	scheme, _ := cos.ParseURLScheme(clusterURL)
+	if scheme == "" {
+		scheme = "http"
 	}
-
-	cfg, err := api.GetDaemonConfig(defaultAPIParams, smap.Primary)
-	if err != nil {
-		return "", err
-	}
-
-	return cfg.Net.HTTP.Proto + "://", nil
+	return scheme + "://"
 }
 
 func calcRefreshRate(c *cli.Context) time.Duration {

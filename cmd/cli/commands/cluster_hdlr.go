@@ -208,10 +208,7 @@ func joinNodeHandler(c *cli.Context) (err error) {
 			cmn.Proxy, cmn.Target, roleProxyShort, roleTargetShort)
 	}
 
-	if prefix, err = getPrefixFromPrimary(); err != nil {
-		return
-	}
-
+	prefix = getPrefixFromPrimary()
 	netInfo := cluster.NetInfo{
 		NodeHostname: socketAddrParts[0],
 		DaemonPort:   socketAddrParts[1],
