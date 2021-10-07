@@ -121,7 +121,7 @@ if [[ ${deployment} == "remote" || ${deployment} == "all" ]]; then
       tier_endpoint="https://127.0.0.1:11080"
     fi
     sleep 5
-    retry ais cluster attach "${remote_alias}=${tier_endpoint}"
+    retry ais cluster remote-attach "${remote_alias}=${tier_endpoint}"
   fi
 fi
 

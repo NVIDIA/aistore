@@ -41,6 +41,8 @@ var (
 		},
 		subcmdDecommission: {
 			noRebalanceFlag,
+			noShutdownFlag,
+			dontRmUserDataFlag,
 		},
 	}
 
@@ -51,7 +53,7 @@ var (
 			makeAlias(showCmdCluster, "", true, commandShow), // alias for `ais show`
 			{
 				Name:      subcmdCluAttach,
-				Usage:     "attach a remote ais cluster",
+				Usage:     "attach remote ais cluster",
 				ArgsUsage: attachRemoteAISArgument,
 				Flags:     clusterCmdsFlags[subcmdAttach],
 				Action:    attachRemoteAISHandler,
@@ -66,13 +68,13 @@ var (
 			},
 			{
 				Name:   subcmdRebalance,
-				Usage:  "rebalance data among storage targets in the cluster",
+				Usage:  "rebalance ais cluster",
 				Flags:  clusterCmdsFlags[subcmdRebalance],
 				Action: startXactionHandler,
 			},
 			{
 				Name:         subcmdPrimary,
-				Usage:        "set a new primary proxy",
+				Usage:        "select a new primary proxy/gateway",
 				ArgsUsage:    daemonIDArgument,
 				Flags:        clusterCmdsFlags[subcmdPrimary],
 				Action:       setPrimaryHandler,
@@ -91,7 +93,7 @@ var (
 			},
 			{
 				Name:  subcmdMembership,
-				Usage: "manage cluster membership",
+				Usage: "manage cluster membership (scale up or down)",
 				Subcommands: []cli.Command{
 					{
 						Name:      subcmdJoin,
@@ -102,33 +104,33 @@ var (
 					},
 					{
 						Name:         subcmdStartMaint,
-						Usage:        "mark a node to be under \"maintenance\"",
+						Usage:        "put node under \"maintenance\", temporarily suspend its operation",
 						ArgsUsage:    daemonIDArgument,
 						Flags:        clusterCmdsFlags[subcmdStartMaint],
-						Action:       nodeMaintenanceHandler,
+						Action:       maintShutDecommHandler,
 						BashComplete: daemonCompletions(completeAllDaemons),
 					},
 					{
 						Name:         subcmdStopMaint,
-						Usage:        "remove a node from \"maintenance\"",
+						Usage:        "activate node by taking it back from \"maintenance\"",
 						ArgsUsage:    daemonIDArgument,
-						Action:       nodeMaintenanceHandler,
+						Action:       maintShutDecommHandler,
 						BashComplete: daemonCompletions(completeAllDaemons),
 					},
 					{
 						Name:         subcmdDecommission,
-						Usage:        "safely remove a node in the cluster",
+						Usage:        "safely and permanently remove node from the cluster",
 						ArgsUsage:    daemonIDArgument,
 						Flags:        clusterCmdsFlags[subcmdDecommission],
-						Action:       nodeMaintenanceHandler,
+						Action:       maintShutDecommHandler,
 						BashComplete: daemonCompletions(completeAllDaemons),
 					},
 					{
 						Name:         subcmdShutdown,
-						Usage:        "shutdown a node in the cluster",
+						Usage:        "shutdown a node",
 						ArgsUsage:    daemonIDArgument,
 						Flags:        clusterCmdsFlags[subcmdDecommission],
-						Action:       nodeMaintenanceHandler,
+						Action:       maintShutDecommHandler,
 						BashComplete: daemonCompletions(completeAllDaemons),
 					},
 				},
@@ -234,7 +236,7 @@ func joinNodeHandler(c *cli.Context) (err error) {
 	return
 }
 
-func nodeMaintenanceHandler(c *cli.Context) (err error) {
+func maintShutDecommHandler(c *cli.Context) (err error) {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "daemon ID")
 	}
@@ -242,13 +244,9 @@ func nodeMaintenanceHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-
-	var (
-		xactID string
-		sid    = c.Args().First()
-		action = c.Command.Name
-		node   = smap.GetNode(sid)
-	)
+	sid := c.Args().First()
+	action := c.Command.Name
+	node := smap.GetNode(sid)
 	if node == nil {
 		return fmt.Errorf("node %q does not exist", sid)
 	}
@@ -256,20 +254,39 @@ func nodeMaintenanceHandler(c *cli.Context) (err error) {
 		return fmt.Errorf("node %q is primary, cannot %s", sid, action)
 	}
 
-	skipRebalance := flagIsSet(c, noRebalanceFlag) || node.IsProxy()
+	var (
+		xactID         string
+		skipRebalance  = flagIsSet(c, noRebalanceFlag) || node.IsProxy()
+		noShutdown     = flagIsSet(c, noShutdownFlag)
+		dontRmUserData = flagIsSet(c, dontRmUserDataFlag)
+		actValue       = &cmn.ActValRmNode{DaemonID: sid, SkipRebalance: skipRebalance, NoShutdown: noShutdown}
+	)
 	if skipRebalance && node.IsTarget() {
+		fmt.Fprintf(c.App.Writer,
+			"Beware: performing %q and _not_ running global rebalance may lead to a loss of data!\n", action)
 		fmt.Fprintln(c.App.Writer,
-			"Warning: Skipping Rebalance could lead to data loss! To rebalance the cluster manually at a later time, please run: `ais job start rebalance`")
+			"To rebalance the cluster manually at a later time, please run: `ais job start rebalance`")
 	}
+	if noShutdown && action != subcmdDecommission {
+		fmt.Fprintf(c.App.Writer, "Warning: option `--%s` is valid only for %q and will be ignored\n",
+			noShutdownFlag.Name, subcmdDecommission)
+		noShutdown = false
+	}
+	if dontRmUserData && action != subcmdDecommission {
+		fmt.Fprintf(c.App.Writer, "Warning: option `--%s` is valid only for %q and will be ignored\n",
+			dontRmUserDataFlag.Name, subcmdDecommission)
+		dontRmUserData = false
+	}
+	actValue.NoShutdown = noShutdown
+	actValue.RmUserData = !dontRmUserData
 
-	actValue := &cmn.ActValRmNode{DaemonID: sid, SkipRebalance: skipRebalance}
 	switch action {
 	case subcmdStartMaint:
 		xactID, err = api.StartMaintenance(defaultAPIParams, actValue)
 	case subcmdStopMaint:
 		xactID, err = api.StopMaintenance(defaultAPIParams, actValue)
 	case subcmdDecommission:
-		xactID, err = api.Decommission(defaultAPIParams, actValue)
+		xactID, err = api.DecommissionNode(defaultAPIParams, actValue)
 	case subcmdShutdown:
 		xactID, err = api.ShutdownNode(defaultAPIParams, actValue)
 	}
@@ -280,13 +297,13 @@ func nodeMaintenanceHandler(c *cli.Context) (err error) {
 		fmt.Fprintf(c.App.Writer, fmtRebalanceStarted, xactID, xactID)
 	}
 	if action == subcmdStopMaint {
-		fmt.Fprintf(c.App.Writer, "Node %q removed from maintenance\n", sid)
+		fmt.Fprintf(c.App.Writer, "Node %q is now active (maintenance done)\n", sid)
 	} else if action == subcmdDecommission && skipRebalance {
-		fmt.Fprintf(c.App.Writer, "Node %q removed from the cluster\n", sid)
+		fmt.Fprintf(c.App.Writer, "Node %q has been decommissioned - permanently removed from the cluster\n", sid)
 	} else if action == subcmdShutdown && skipRebalance {
-		fmt.Fprintf(c.App.Writer, "Node %q is being shut down\n", sid)
-	} else {
-		fmt.Fprintf(c.App.Writer, "Node %q is under maintenance\n", sid)
+		fmt.Fprintf(c.App.Writer, "Node %q has been shutdown\n", sid)
+	} else if action == subcmdStartMaint {
+		fmt.Fprintf(c.App.Writer, "Node %q is now under maintenance\n", sid)
 	}
 	return nil
 }

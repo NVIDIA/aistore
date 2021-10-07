@@ -983,14 +983,13 @@ func (h *httprunner) parseUnregMsg(w http.ResponseWriter, r *http.Request) (*cmn
 	if err := cmn.ReadJSON(w, r, &msg, true /*optional*/); err != nil {
 		return nil, "", err
 	}
-	// NOTE: proxies don't use the unregister options so we return immediately without
-	//       unmarshalling the `msg.Value`.
+	// NOTE: `cmn.ActValRmNode` options are supported only for targets and only when decommissioning
 	if msg.Action != cmn.ActDecommissionNode || h.si.IsProxy() {
 		return nil, msg.Action, nil
 	}
-
 	var opts cmn.ActValRmNode
 	if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
+		h.writeErr(w, r, err)
 		return nil, msg.Action, err
 	}
 	return &opts, msg.Action, nil

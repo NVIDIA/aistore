@@ -597,7 +597,7 @@ func (k *keepalive) Stop(err error) {
 }
 
 func (k *keepalive) send(msg string) {
-	glog.Infof("Sending message: %s", msg)
+	glog.Infof("Sending message %q on the control channel", msg)
 	k.controlCh <- controlSignal{msg: msg}
 }
 

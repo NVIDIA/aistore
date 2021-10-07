@@ -231,7 +231,7 @@ func StartMaintenance(baseParams BaseParams, actValue *cmn.ActValRmNode) (id str
 	return id, err
 }
 
-func Decommission(baseParams BaseParams, actValue *cmn.ActValRmNode) (id string, err error) {
+func DecommissionNode(baseParams BaseParams, actValue *cmn.ActValRmNode) (id string, err error) {
 	msg := cmn.ActionMsg{
 		Action: cmn.ActDecommissionNode,
 		Value:  actValue,

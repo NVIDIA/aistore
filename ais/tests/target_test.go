@@ -53,7 +53,7 @@ func TestDeleteInvalidDaemonID(t *testing.T) {
 		DaemonID:      "abcde:abcde",
 		SkipRebalance: true,
 	}
-	if _, err := api.Decommission(tutils.BaseAPIParams(), val); err == nil {
+	if _, err := api.DecommissionNode(tutils.BaseAPIParams(), val); err == nil {
 		t.Errorf("Error is nil, expected NotFound error on a delete of a non-existing target")
 	}
 }

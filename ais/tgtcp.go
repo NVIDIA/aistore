@@ -170,11 +170,21 @@ func (t *targetrunner) daeputJSON(w http.ResponseWriter, r *http.Request) {
 		if err := t.owner.config.resetDaemonConfig(); err != nil {
 			t.writeErr(w, r, err)
 		}
-	case cmn.ActShutdown, cmn.ActDecommission:
+	case cmn.ActShutdown:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
-		t.unreg(msg.Action, msg.Action == cmn.ActDecommission /* clean data */)
+		t.unreg(msg.Action, false /*rm user data*/, false /*no shutdown*/)
+	case cmn.ActDecommission:
+		if !t.ensureIntraControl(w, r, true /* from primary */) {
+			return
+		}
+		var opts cmn.ActValRmNode
+		if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+		t.unreg(msg.Action, opts.RmUserData, opts.NoShutdown)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
@@ -365,7 +375,6 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-
 	switch apiItems[0] {
 	case cmn.Mountpaths:
 		t.handleMountpathReq(w, r)
@@ -380,24 +389,23 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) handleUnregisterReq(w http.ResponseWriter, r *http.Request) {
-	if glog.V(3) {
-		glog.Infoln("sending unregister on target keepalive control channel")
-	}
-
 	opts, action, err := t.parseUnregMsg(w, r)
 	if err != nil {
-		cmn.WriteErr(w, r, err)
 		return
 	}
-	t.unreg(action, opts != nil && opts.CleanData)
+	var rmUserData, noShutdown bool
+	if opts != nil {
+		rmUserData, noShutdown = opts.RmUserData, opts.NoShutdown
+	}
+	t.unreg(action, rmUserData, noShutdown)
 }
 
-func (t *targetrunner) unreg(action string, cleanupData bool) {
-	// Stop keepaliving
+func (t *targetrunner) unreg(action string, rmUserData, noShutdown bool) {
+	// Stop keepalive-ing
 	t.keepalive.send(kaUnregisterMsg)
 
 	// Abort all dSort jobs
-	dsort.Managers.AbortAll(errors.New("target was removed from the cluster"))
+	dsort.Managers.AbortAll(errors.New("target is being removed from the cluster via '" + action + "'"))
 
 	// Stop all xactions
 	xreg.AbortAll()
@@ -415,15 +423,13 @@ func (t *targetrunner) unreg(action string, cleanupData bool) {
 
 	writeShutdownMarker()
 	if action == cmn.ActShutdown {
+		debug.Assert(!noShutdown)
 		t.Stop(&errNoUnregister{action})
 		return
 	}
 
-	// When action is decommission, cleanup all the (meta)data
-	// before stopping the targetrunner.
-	mdOnly := !cleanupData
-	glog.Infof("%s: decommissioning, removing user data: %t", t.si, cleanupData)
-	fs.Decommission(mdOnly)
+	glog.Infof("%s: decommissioning, (remove-user-data, no-shutdown) = (%t, %t)", t.si, rmUserData, noShutdown)
+	fs.Decommission(!rmUserData /*ais metadata only*/)
 
 	err := cleanupConfigDir()
 	if err != nil {
@@ -434,7 +440,9 @@ func (t *targetrunner) unreg(action string, cleanupData bool) {
 	if err != nil {
 		glog.Errorf("failed to delete database, err: %v", err)
 	}
-	t.Stop(&errNoUnregister{action})
+	if !noShutdown {
+		t.Stop(&errNoUnregister{action})
+	}
 }
 
 func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request) {

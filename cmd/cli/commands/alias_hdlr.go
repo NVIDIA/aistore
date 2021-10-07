@@ -15,6 +15,8 @@ import (
 	"github.com/urfave/cli"
 )
 
+// NOTE: for built-in aliases, see `DefaultAliasConfig` (cmd/cli/config/config.go)
+
 const invalidAlias = "alias must start with a letter and can only contain letters, numbers, hyphens (-), and underscores (_)"
 
 func (aisCLI *AISCLI) getAliasCmd() cli.Command {

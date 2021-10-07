@@ -7,6 +7,14 @@ redirect_from:
  - /docs/cli/cluster.md/
 ---
 
+# Introduction
+
+There is a single CLI command to [grow](#join-a-node) a cluster and multiple commands - to scale it down.
+
+This (scaling down) can be done gracefully or forcefully, and also temporarily or permanently.
+
+For background, usage examples, and details, please see [this document](/docs/leave_cluster.md).
+
 # CLI Reference for Cluster and Node (Daemon) management
 This section lists cluster and node management operations the AIS CLI, with `ais cluster`.
 
@@ -146,11 +154,11 @@ Target		Disk	Read		Write		%Util
 
 ## Join a node
 
-`ais cluster membership join --type=proxy IP:PORT`
+`ais cluster add-remove-nodes join --role=proxy IP:PORT`
 
 Join a proxy to the cluster.
 
-`ais cluster membership join --type=target IP:PORT`
+`ais cluster add-remove-nodes join --role=target IP:PORT`
 
 Join a target to the cluster.
 
@@ -164,7 +172,7 @@ If you would like to specify an ID, you can do so while starting the [`aisnode` 
 Join a proxy node with socket address `192.168.0.185:8086`
 
 ```console
-$ ais cluster membership join --type=proxy 192.168.0.185:8086
+$ ais cluster add-remove-nodes join --role=proxy 192.168.0.185:8086
 Proxy with ID "23kfa10f" successfully joined the cluster.
 ```
 
@@ -172,14 +180,14 @@ Proxy with ID "23kfa10f" successfully joined the cluster.
 
 Temporarily remove an existing node from the cluster:
 
-`ais cluster membership start-maintenance DAEMON_ID`
-`ais cluster membership stop-maintenance DAEMON_ID`
+`ais cluster add-remove-nodes start-maintenance DAEMON_ID`
+`ais cluster add-remove-nodes stop-maintenance DAEMON_ID`
 
 Starting maintenance puts the node in maintenance mode, and the cluster gradually transitions to
 operating without the specified node (which is labeled `maintenance` in the cluster map). Stopping
 maintenance will revert this.
 
-`ais cluster membership shutdown DAEMON_ID`
+`ais cluster add-remove-nodes shutdown DAEMON_ID`
 
 Shutting down a node will put the node in maintenance mode first, and then shut down the `aisnode`
 process on the node.
@@ -187,7 +195,7 @@ process on the node.
 
 Permanently remove an existing node from the cluster:
 
-`ais cluster membership decommission DAEMON_ID`
+`ais cluster add-remove-nodes decommission DAEMON_ID`
 
 Decommissioning a node will safely remove a node from the cluster by triggering a cluster-wide
 rebalance first. This can be avoided by specifying `--no-rebalance`.
@@ -197,7 +205,7 @@ rebalance first. This can be avoided by specifying `--no-rebalance`.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--no-rebalance` | `bool` | By default, `ais cluster membership maintenance` and `ais cluster membership decommission` triggers a global cluster-wide rebalance. The `--no-rebalance` flag disables automatic rebalance thus providing for the administrative option to rebalance the cluster manually at a later time. BEWARE: advanced usage only! | `false` |
+| `--no-rebalance` | `bool` | By default, `ais cluster add-remove-nodes maintenance` and `ais cluster add-remove-nodes decommission` triggers a global cluster-wide rebalance. The `--no-rebalance` flag disables automatic rebalance thus providing for the administrative option to rebalance the cluster manually at a later time. BEWARE: advanced usage only! | `false` |
 
 ### Examples
 
@@ -206,13 +214,13 @@ rebalance first. This can be avoided by specifying `--no-rebalance`.
 Remove a proxy node with ID `23kfa10f` from the cluster.
 
 ```console
-$ ais cluster membership decommission 23kfa10f
+$ ais cluster add-remove-nodes decommission 23kfa10f
 Node with ID "23kfa10f" has been successfully removed from the cluster.
 ```
 
 To also end the `aisnode` process on a given node, use the `shutdown` command:
 ```console
-$ ais cluster membership shutdown 23kfa10f
+$ ais cluster add-remove-nodes shutdown 23kfa10f
 ```
 
 #### Temporarily put a node in maintenance
@@ -227,7 +235,7 @@ TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL      
 147665t8084      0.10%           31.28GiB        16%             2.458TiB        0.12%           -               70s
 165274t8087      0.10%           31.28GiB        16%             2.458TiB        0.12%           -               70s
 
-$ ais cluster membership start-maintenance 147665t8084
+$ ais cluster add-remove-nodes start-maintenance 147665t8084
 $ ais show cluster
 PROXY            MEM USED %      MEM AVAIL       UPTIME
 202446p8082      0.09%           31.28GiB        70s
@@ -241,7 +249,7 @@ TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL      
 #### Take a node out of maintenance
 
 ```console
-$ ais cluster membership stop-maintenance 147665t8084
+$ ais cluster add-remove-nodes stop-maintenance 147665t8084
 $ ais show cluster
 PROXY            MEM USED %      MEM AVAIL       UPTIME
 202446p8082      0.09%           31.28GiB        80s

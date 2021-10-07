@@ -76,14 +76,14 @@ const (
 	subcmdLogs       = "logs"
 	subcmdStop       = "stop"
 	subcmdLRU        = cmn.ActLRU
-	subcmdMembership = "membership"
+	subcmdMembership = "add-remove-nodes"
 	subcmdShutdown   = "shutdown"
 	subcmdAttach     = "attach"
 	subcmdDetach     = "detach"
 
 	// Cluster subcommands
-	subcmdCluAttach = subcmdAttach
-	subcmdCluDetach = subcmdDetach
+	subcmdCluAttach = "remote-" + subcmdAttach
+	subcmdCluDetach = "remote-" + subcmdDetach
 	subcmdCluConfig = "configure"
 	subcmdReset     = "reset"
 
@@ -459,7 +459,15 @@ var (
 	}
 	noRebalanceFlag = cli.BoolFlag{
 		Name:  "no-rebalance",
-		Usage: "do not run rebalance after putting a node under maintenance",
+		Usage: "do _not_ run global rebalance after putting node in maintenance (advanced usage only!)",
+	}
+	noShutdownFlag = cli.BoolFlag{
+		Name:  "no-shutdown",
+		Usage: "do not shutdown node upon decommissioning it from the cluster",
+	}
+	dontRmUserDataFlag = cli.BoolFlag{
+		Name:  "dont-rm-user-data",
+		Usage: "do not remove all user data when decommissioning node from the cluster (default = false)",
 	}
 
 	longRunFlags = []cli.Flag{refreshFlag, countFlag}

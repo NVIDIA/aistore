@@ -2364,14 +2364,11 @@ func (p *proxyrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-
 	if glog.V(3) {
 		glog.Infoln("sending unregister on proxy keepalive control channel")
 	}
-
 	_, action, err := p.parseUnregMsg(w, r)
 	if err != nil {
-		cmn.WriteErr(w, r, err)
 		return
 	}
 	p.unreg(action)
