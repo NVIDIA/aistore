@@ -43,11 +43,14 @@ type (
 		role             string // proxy | target
 		daemonID         string // daemon ID to assign
 		confCustom       string // "key1=value1,key2=value2" formatted to override selected entries in config
-		ntargets         int    // expected number of targets in a starting-up cluster (proxy only)
-		skipStartup      bool   // determines if the proxy should skip waiting for targets
-		transient        bool   // false: make cmn.ConfigCLI settings permanent, true: leave them transient
-		overrideBackends bool   // if true primary will metasync backends from deployment-time plain-text config
-		usage            bool   // show usage and exit
+		primary          struct {
+			ntargets    int  // expected number of targets in a starting-up cluster
+			skipStartup bool // determines if primary should skip waiting for targets to join
+		}
+		transient        bool // false: make cmn.ConfigCLI settings permanent, true: leave them transient
+		overrideBackends bool // if true primary will metasync backends from deployment-time plain-text config
+		standby          bool // do not try to join cluster automatically upon startup - standby and wait for request
+		usage            bool // show usage and exit
 	}
 	rungroup struct {
 		rs    map[string]cos.Runner
@@ -59,8 +62,8 @@ var daemon = daemonCtx{}
 
 func init() {
 	// role aka `DaemonType`
-	flag.StringVar(&daemon.cli.role, "role", "", "role of this AIS daemon: proxy | target")
-	flag.StringVar(&daemon.cli.daemonID, "daemon_id", "", "unique ID to be assigned to the AIS daemon")
+	flag.StringVar(&daemon.cli.role, "role", "", "_role_ of this aisnode: 'proxy' OR 'target'")
+	flag.StringVar(&daemon.cli.daemonID, "daemon_id", "", "user-specified node ID (advanced usage only!)")
 
 	// config itself and its command line overrides
 	flag.StringVar(&daemon.cli.globalConfigPath, "config", "",
@@ -69,13 +72,16 @@ func init() {
 		"config filename: local file that stores daemon's local configuration")
 	flag.StringVar(&daemon.cli.confCustom, "config_custom", "",
 		"\"key1=value1,key2=value2\" formatted string to override selected entries in config")
-	flag.IntVar(&daemon.cli.ntargets, "ntargets", 0, "number of storage targets to expect at startup (hint, proxy-only)")
 	flag.BoolVar(&daemon.cli.transient, "transient", false,
 		"false: store customized (via config_custom) configuration\ntrue: runtime only (non-persistent)")
-	flag.BoolVar(&daemon.cli.skipStartup, "skip_startup", false,
-		"determines if primary proxy should skip waiting for target registrations when starting up")
 	flag.BoolVar(&daemon.cli.usage, "h", false, "show usage and exit")
-	flag.BoolVar(&daemon.cli.overrideBackends, "override_backends", false, "set remote backends at deployment time")
+	flag.BoolVar(&daemon.cli.overrideBackends, "override_backends", false, "configure remote backends at deployment time (and override previously stored configuration)")
+	flag.BoolVar(&daemon.cli.standby, "standby", false, "when starting up, do not try to join cluster - standby and wait for user request")
+
+	// primary-only:
+	flag.IntVar(&daemon.cli.primary.ntargets, "ntargets", 0, "number of storage targets expected to be joining at startup (optional, primary-only)")
+	flag.BoolVar(&daemon.cli.primary.skipStartup, "skip_startup", false,
+		"whether primary, when starting up, should skip waiting for target joins (used only in tests)")
 }
 
 func initDaemon(version, buildTime string) cos.Runner {

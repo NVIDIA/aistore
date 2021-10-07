@@ -32,8 +32,8 @@ var (
 
 	URLPathCluster        = urlpath(Version, Cluster)
 	URLPathClusterProxy   = urlpath(Version, Cluster, Proxy)
-	URLPathClusterUserReg = urlpath(Version, Cluster, UserRegister)
-	URLPathClusterAutoReg = urlpath(Version, Cluster, AutoRegister)
+	URLPathClusterUserReg = urlpath(Version, Cluster, AdminJoin)
+	URLPathClusterAutoReg = urlpath(Version, Cluster, SelfJoin)
 	URLPathClusterKalive  = urlpath(Version, Cluster, Keepalive)
 	URLPathClusterDaemon  = urlpath(Version, Cluster, Daemon)
 	URLPathClusterSetConf = urlpath(Version, Cluster, ActSetConfig)
@@ -43,7 +43,7 @@ var (
 	URLPathDaemon        = urlpath(Version, Daemon)
 	URLPathDaemonProxy   = urlpath(Version, Daemon, Proxy)
 	URLPathDaemonSetConf = urlpath(Version, Daemon, ActSetConfig)
-	URLPathDaemonUserReg = urlpath(Version, Daemon, UserRegister)
+	URLPathDaemonUserReg = urlpath(Version, Daemon, AdminJoin)
 	URLPathDaemonUnreg   = urlpath(Version, Daemon, Unregister)
 
 	URLPathReverse       = urlpath(Version, Reverse)

@@ -288,7 +288,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch apiItems[0] {
-	case cmn.UserRegister: // manual by user (API)
+	case cmn.AdminJoin: // administrative join
 		if cmn.ReadJSON(w, r, &regReq.SI) != nil {
 			return
 		}
@@ -298,7 +298,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		tag, keepalive = "keepalive", true
-	case cmn.AutoRegister: // node self-register
+	case cmn.SelfJoin: // node self-register
 		if cmn.ReadJSON(w, r, &regReq) != nil {
 			return
 		}

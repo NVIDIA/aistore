@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/cluster"
@@ -54,7 +55,7 @@ const clusterClockDrift = 5 * time.Millisecond // is expected to be bounded by
 type (
 	regstate struct {
 		sync.Mutex
-		disabled bool // target was unregistered by internal event (e.g, all mountpaths are down)
+		disabled atomic.Bool // target was unregistered by internal event (e.g, all mountpaths are down)
 	}
 	backends map[string]cluster.BackendProvider
 	// main
@@ -325,35 +326,43 @@ func (t *targetrunner) Run() error {
 	if !reliable {
 		smap = newSmap()
 	}
-
-	// Add self to cluster map
+	// Add self to the cluster map
 	smap.Tmap[t.si.ID()] = t.si
 	t.owner.smap.put(smap)
 
-	// Join cluster
-	debug.Assert(!t.NodeStarted())
-	if status, err := t.joinCluster(); err != nil {
-		glog.Errorf("%s failed to join cluster (status: %d, err: %v)", t.si, status, err)
-		glog.Errorf("%s is terminating", t.si)
-		return err
-	}
-
-	t.markNodeStarted()
-
-	go func() {
-		smap := t.owner.smap.get()
-		cii := t.pollClusterStarted(config, smap.Primary)
-		if daemon.stopping.Load() {
-			return
+	if daemon.cli.standby {
+		t.regstate.disabled.Store(true)
+		glog.Warningf("%s not joining - standing by...", t.si)
+		go func() {
+			for !t.ClusterStarted() {
+				time.Sleep(2 * config.Periodic.StatsTime.D())
+				glog.Flush()
+			}
+		}()
+		// see endStandby()
+	} else {
+		// discover primary and join cluster (compare with manual `cmn.AdminJoin`)
+		if status, err := t.joinCluster(); err != nil {
+			glog.Errorf("%s failed to join cluster (status: %d, err: %v)", t.si, status, err)
+			glog.Errorf("%s is terminating", t.si)
+			return err
 		}
-		if cii != nil {
-			if status, err := t.joinCluster(cii.Smap.Primary.CtrlURL, cii.Smap.Primary.PubURL); err != nil {
-				glog.Errorf("%s failed to re-join cluster (status: %d, err: %v)", t.si, status, err)
+		t.markNodeStarted()
+		go func() {
+			smap := t.owner.smap.get()
+			cii := t.pollClusterStarted(config, smap.Primary)
+			if daemon.stopping.Load() {
 				return
 			}
-		}
-		t.markClusterStarted()
-	}()
+			if cii != nil {
+				if status, err := t.joinCluster(cii.Smap.Primary.CtrlURL, cii.Smap.Primary.PubURL); err != nil {
+					glog.Errorf("%s failed to re-join cluster (status: %d, err: %v)", t.si, status, err)
+					return
+				}
+			}
+			t.markClusterStarted()
+		}()
+	}
 
 	t.backend.init(t, true /*starting*/)
 
@@ -397,6 +406,18 @@ func (t *targetrunner) Run() error {
 	// do it after the `run()` to retain `restarted` marker on panic
 	fs.RemoveMarker(cmn.NodeRestartedMarker)
 	return err
+}
+
+func (t *targetrunner) endStandby() {
+	smap := t.owner.smap.get()
+	if err := smap.validate(); err == nil {
+		t.markNodeStarted()
+		t.markClusterStarted()
+		t.regstate.disabled.Store(false)
+		glog.Infof("%s enabled and joined (%s)", t.si, smap.StringEx())
+
+		// TODO -- FIXME: initiate rebalance
+	}
 }
 
 func (t *targetrunner) initRecvHandlers() {

@@ -78,7 +78,7 @@ func (p *proxyrunner) bootstrap() {
 	// 4.1: start as primary
 	if primary {
 		glog.Infof("%s: assuming primary role for now, starting up...", p.si.StringEx())
-		go p.primaryStartup(smap, config, daemon.cli.ntargets)
+		go p.primaryStartup(smap, config, daemon.cli.primary.ntargets)
 		return
 	}
 
@@ -212,7 +212,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 
 	p.markNodeStarted()
 
-	if !daemon.cli.skipStartup {
+	if !daemon.cli.primary.skipStartup {
 		maxVerSmap := p.acceptRegistrations(smap, loadedSmap, config, ntargets)
 		if maxVerSmap != nil {
 			if _, err := maxVerSmap.IsDuplicate(p.si); err != nil {
@@ -295,7 +295,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 
 	// 5:  persist and finalize w/ sync + BMD
 	if smap.UUID == "" {
-		if !daemon.cli.skipStartup && smap.CountTargets() == 0 {
+		if !daemon.cli.primary.skipStartup && smap.CountTargets() == 0 {
 			cos.ExitLogf("FATAL: %s cannot create a new cluster with no targets, %s", p.si, smap)
 		}
 		clone := smap.clone()

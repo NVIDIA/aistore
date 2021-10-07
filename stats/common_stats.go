@@ -35,11 +35,13 @@ import (
 )
 
 const (
-	logsMaxSizeCheckTime      = 48 * time.Minute       // periodically check the logs for max accumulated size
-	startupSleep              = 300 * time.Millisecond // periodically poll ClusterStarted()
-	startupDeadlineMultiplier = 2                      // deadline = startupDeadlineMultiplier * config.Timeout.Startup
-	numGorHighCheckTime       = 2 * time.Minute        // periodically log a warning if the number of goroutines remains high
-	glogPeriodicFlushTime     = 40 * time.Second       // not to have `go glog.flushDaemon`
+	logsMaxSizeCheckTime  = 48 * time.Minute       // periodically check the logs for max accumulated size
+	startupSleep          = 300 * time.Millisecond // periodically poll ClusterStarted()
+	numGorHighCheckTime   = 2 * time.Minute        // periodically log a warning if the number of goroutines remains high
+	glogPeriodicFlushTime = 40 * time.Second       // not to have `go glog.flushDaemon`
+
+	// TODO -- FIXME
+	startupDeadlineMultiplier = 1000 // deadline = startupDeadlineMultiplier * config.Timeout.Startup
 )
 
 const (
@@ -725,7 +727,7 @@ waitStartup:
 				return cmn.ErrStartupTimeout
 			}
 			i += startupSleep
-			if i > config.Timeout.Startup.D() {
+			if i > config.Timeout.Startup.D() { // TODO -- FIXME: factor-in standby logic
 				glog.Errorln("startup is taking unusually long time...")
 				i = 0
 			}

@@ -2400,7 +2400,7 @@ func (p *proxyrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if len(apiItems) == 0 || apiItems[0] != cmn.UserRegister {
+	if len(apiItems) == 0 || apiItems[0] != cmn.AdminJoin {
 		p.writeErrURL(w, r)
 		return
 	}

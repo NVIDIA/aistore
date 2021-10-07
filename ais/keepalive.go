@@ -404,11 +404,19 @@ func (pkr *proxyKeepalive) retry(si *cluster.Snode) (ok, stopped bool) {
 func (k *keepalive) Name() string { return k.name }
 
 func (k *keepalive) waitStatsRunner() (stopped bool) {
-	const waitStartupSleep = 300 * time.Millisecond
-	var (
-		i      time.Duration
-		ticker = time.NewTicker(waitStartupSleep)
+	const (
+		waitSelfJoin = 300 * time.Millisecond
+		waitStandby  = 5 * time.Second
 	)
+	var (
+		logErr time.Duration
+		ticker *time.Ticker
+	)
+	if daemon.cli.standby {
+		ticker = time.NewTicker(waitStandby)
+	} else {
+		ticker = time.NewTicker(waitSelfJoin)
+	}
 	defer ticker.Stop()
 
 	// Wait for stats runner to start
@@ -418,11 +426,11 @@ func (k *keepalive) waitStatsRunner() (stopped bool) {
 			if k.startedUp.Load() {
 				return false
 			}
-			i += waitStartupSleep
+			logErr += waitSelfJoin
 			config := cmn.GCO.Get()
-			if i > config.Timeout.Startup.D() {
+			if logErr > config.Timeout.Startup.D() {
 				glog.Errorln("startup is taking unusually long time...")
-				i = 0
+				logErr = 0
 			}
 		case sig := <-k.controlCh:
 			switch sig.msg {

@@ -340,14 +340,16 @@ const (
 	IC        = "ic" // information center
 
 	// l3
-	SyncSmap     = "syncsmap"
-	Keepalive    = "keepalive"
-	UserRegister = "register" // node register by admin (manual)
-	AutoRegister = "autoreg"  // node register itself into the primary proxy (automatic)
-	Unregister   = "unregister"
-	Voteres      = "result"
-	VoteInit     = "init"
-	Mountpaths   = "mountpaths"
+	SyncSmap  = "syncsmap"
+	Keepalive = "keepalive"
+
+	Voteres    = "result"
+	VoteInit   = "init"
+	Mountpaths = "mountpaths"
+
+	AdminJoin  = "join-by-admin" // when node is getting joined by admin ("manual join")
+	SelfJoin   = "self-join"     // default: node to join itself via primary that it discovers at startup ("automatic join")
+	Unregister = "unregister"    // legacy
 
 	// common
 	Init     = "init"

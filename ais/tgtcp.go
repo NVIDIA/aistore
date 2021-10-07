@@ -338,7 +338,14 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 
 	if len(apiItems) > 0 {
 		switch apiItems[0] {
-		case cmn.UserRegister:
+		case cmn.AdminJoin: // user request to join cluster (compare with `cmn.SelfJoin`)
+			if !t.regstate.disabled.Load() {
+				t.writeErrf(w, r, "%s already joined (\"enabled\")- nothing to do", t.si)
+				return
+			}
+			if daemon.cli.standby {
+				glog.Infof("%s: standby => join", t.si)
+			}
 			t.keepalive.send(kaRegisterMsg)
 			body, err := cmn.ReadBytes(r)
 			if err != nil {
@@ -349,7 +356,9 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 			caller := r.Header.Get(cmn.HdrCallerName)
 			if err := t.applyRegMeta(body, caller); err != nil {
 				t.writeErr(w, r, err)
+				return
 			}
+			t.endStandby()
 			return
 		case cmn.Mountpaths:
 			t.handleMountpathReq(w, r)
@@ -711,21 +720,28 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 				t.si, tsi, smap.StringEx(), rmd, newRMD)
 		}
 	}
-	notif := &xaction.NotifXact{
-		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
-	}
-	if msg.Action == cmn.ActRebalance {
-		glog.Infof("%s: starting user-requested rebalance", t.si)
+	if !t.regstate.disabled.Load() {
+		notif := &xaction.NotifXact{
+			NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
+		}
+		if msg.Action == cmn.ActRebalance {
+			glog.Infof("%s: starting user-requested rebalance", t.si)
+			go t.rebManager.RunRebalance(&smap.Smap, newRMD.Version, notif)
+			return
+		}
+		glog.Infof("%s: starting auto-rebalance", t.si)
 		go t.rebManager.RunRebalance(&smap.Smap, newRMD.Version, notif)
-		return
+		if newRMD.Resilver != "" {
+			glog.Infof("%s: ... and resilver", t.si)
+			go t.runResilver(newRMD.Resilver /*uuid*/, nil /*wg*/, true /*skipGlobMisplaced*/)
+		}
+		t.owner.rmd.put(newRMD)
+	} else if msg.Action == cmn.ActRegTarget && daemon.cli.standby { // TODO -- FIXME
+		glog.Infof("%s: standby => join", t.si)
+		if _, err := t.joinCluster(); err == nil {
+			t.endStandby()
+		}
 	}
-	glog.Infof("%s: starting auto-rebalance", t.si)
-	go t.rebManager.RunRebalance(&smap.Smap, newRMD.Version, notif)
-	if newRMD.Resilver != "" {
-		glog.Infof("%s: ... and resilver", t.si)
-		go t.runResilver(newRMD.Resilver /*uuid*/, nil /*wg*/, true /*skipGlobMisplaced*/)
-	}
-	t.owner.rmd.put(newRMD)
 	return
 }
 
@@ -928,6 +944,10 @@ func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Reques
 
 // GET /v1/health (cmn.Health)
 func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
+	if t.regstate.disabled.Load() && daemon.cli.standby {
+		glog.Warningf("[health] %s: standing by...", t.si)
+		return
+	}
 	if !t.NodeStarted() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
@@ -982,14 +1002,14 @@ func (t *targetrunner) disable() error {
 	t.regstate.Lock()
 	defer t.regstate.Unlock()
 
-	if t.regstate.disabled {
+	if t.regstate.disabled.Load() {
 		return nil
 	}
 	glog.Infof("Disabling %s", t.si)
 	if err := t.unregisterSelf(false); err != nil {
 		return err
 	}
-	t.regstate.disabled = true
+	t.regstate.disabled.Store(true)
 	glog.Infof("%s has been disabled (unregistered)", t.si)
 	return nil
 }
@@ -999,14 +1019,14 @@ func (t *targetrunner) enable() error {
 	t.regstate.Lock()
 	defer t.regstate.Unlock()
 
-	if !t.regstate.disabled {
+	if !t.regstate.disabled.Load() {
 		return nil
 	}
 	glog.Infof("Enabling %s", t.si)
 	if _, err := t.joinCluster(); err != nil {
 		return err
 	}
-	t.regstate.disabled = false
+	t.regstate.disabled.Store(false)
 	glog.Infof("%s has been enabled", t.si)
 	return nil
 }
