@@ -179,6 +179,7 @@ type (
 		log(now int64, uptime time.Duration)
 		doAdd(nv NamedVal64)
 		statsTime(newval time.Duration)
+		standingBy() bool
 	}
 	runnerHost interface {
 		ClusterStarted() bool
@@ -703,7 +704,8 @@ func (r *statsRunner) Get(name string) (val int64) { return r.Core.get(name) }
 func (r *statsRunner) runcommon(logger statsLogger) error {
 	var (
 		i, j   time.Duration
-		ticker = time.NewTicker(startupSleep)
+		sleep  = startupSleep
+		ticker = time.NewTicker(sleep)
 
 		// NOTE: the maximum time we agree to wait for r.daemon.ClusterStarted()
 		config   = cmn.GCO.Get()
@@ -721,13 +723,19 @@ waitStartup:
 			if r.daemon.ClusterStarted() {
 				break waitStartup
 			}
-			j += startupSleep
+			if logger.standingBy() && sleep == startupSleep {
+				sleep = config.Periodic.StatsTime.D()
+				ticker.Reset(sleep)
+				deadline = time.Hour
+				continue
+			}
+			j += sleep
 			if j > deadline {
 				ticker.Stop()
 				return cmn.ErrStartupTimeout
 			}
-			i += startupSleep
-			if i > config.Timeout.Startup.D() { // TODO -- FIXME: factor-in standby logic
+			i += sleep
+			if i > config.Timeout.Startup.D() && !logger.standingBy() {
 				glog.Errorln("startup is taking unusually long time...")
 				i = 0
 			}

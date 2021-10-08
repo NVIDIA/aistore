@@ -68,7 +68,10 @@ func (r *Prunner) GetWhatStats() interface{} {
 	return ctracker
 }
 
+//
 // statsLogger interface impl
+//
+
 func (r *Prunner) log(now int64, uptime time.Duration) {
 	r.Core.updateUptime(uptime)
 	r.Core.promLock()
@@ -89,3 +92,5 @@ func (r *Prunner) doAdd(nv NamedVal64) {
 func (r *Prunner) statsTime(newval time.Duration) {
 	r.Core.statsTime = newval
 }
+
+func (*Prunner) standingBy() bool { return false }

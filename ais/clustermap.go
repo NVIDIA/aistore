@@ -206,20 +206,20 @@ func (m *smapX) isValid() bool {
 // a stronger version of the above
 func (m *smapX) validate() error {
 	if m == nil {
-		return errors.New("is <nil>")
+		return errors.New("Smap is <nil>")
 	}
 	if m.version() == 0 {
-		return errors.New("version = 0")
+		return errors.New("Smap v0")
 	}
 	if m.Primary == nil {
-		return errors.New("primary <nil>")
+		return errors.New("Smap: primary <nil>")
 	}
 	if !m.isPresent(m.Primary) {
-		return errors.New("primary not present")
+		return errors.New("Smap: primary not present")
 	}
 	cos.Assert(m.Primary.ID() != "")
 	if !cos.IsValidUUID(m.UUID) {
-		return fmt.Errorf("invalid UUID %q", m.UUID)
+		return fmt.Errorf("Smap: invalid UUID %q", m.UUID)
 	}
 	return nil
 }

@@ -360,7 +360,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 			}
 			if daemon.cli.target.standby {
 				if err := t.endStartupStandby(); err != nil {
-					t.writeErr(w, r, err)
+					glog.Warningf("%s continue standing by: %v", t.si, err)
 				}
 			}
 			return
@@ -740,11 +740,13 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 			go t.runResilver(newRMD.Resilver /*uuid*/, nil /*wg*/, true /*skipGlobMisplaced*/)
 		}
 		t.owner.rmd.put(newRMD)
-	} else if msg.Action == cmn.ActAdminJoinTarget && daemon.cli.target.standby { // TODO -- FIXME
-		glog.Infof("%s: standby => join (%q, %q)", t.si, msg.Action, msg.Name)
+		// TODO -- FIXME: move and refactor
+	} else if msg.Action == cmn.ActAdminJoinTarget && daemon.cli.target.standby && msg.Name == t.si.ID() {
+		glog.Warningf("%s: standby => join (%q, %q)", t.si, msg.Action, msg.Name)
 		if _, err = t.joinCluster(msg.Action); err == nil {
 			err = t.endStartupStandby()
 		}
+		t.owner.rmd.put(newRMD)
 	}
 	return
 }
@@ -950,9 +952,7 @@ func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Reques
 func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if t.regstate.disabled.Load() && daemon.cli.target.standby {
 		glog.Warningf("[health] %s: standing by...", t.si)
-		return
-	}
-	if !t.NodeStarted() {
+	} else if !t.NodeStarted() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}

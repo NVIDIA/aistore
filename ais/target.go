@@ -331,6 +331,7 @@ func (t *targetrunner) Run() error {
 	t.owner.smap.put(smap)
 
 	if daemon.cli.target.standby {
+		tstats.Standby(true)
 		t.regstate.disabled.Store(true)
 		glog.Warningf("%s not joining - standing by...", t.si)
 		go func() {
@@ -418,6 +419,8 @@ func (t *targetrunner) endStartupStandby() (err error) {
 	t.markNodeStarted()
 	t.markClusterStarted()
 	t.regstate.disabled.Store(false)
+	tstats := t.statsT.(*stats.Trunner)
+	tstats.Standby(false)
 	glog.Infof("%s enabled and joined (%s)", t.si, smap.StringEx())
 	return
 }

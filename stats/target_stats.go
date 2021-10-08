@@ -72,10 +72,11 @@ const (
 type (
 	Trunner struct {
 		statsRunner
-		T     cluster.Target `json:"-"`
-		MPCap fs.MPCap       `json:"capacity"`
-		lines []string
-		disk  ios.AllDiskStats
+		T       cluster.Target `json:"-"`
+		MPCap   fs.MPCap       `json:"capacity"`
+		lines   []string
+		disk    ios.AllDiskStats
+		standby bool
 	}
 	copyRunner struct {
 		Tracker copyTracker `json:"core"`
@@ -94,7 +95,8 @@ const (
 // interface guard
 var _ cos.Runner = (*Trunner)(nil)
 
-func (r *Trunner) Run() error { return r.runcommon(r) }
+func (r *Trunner) Run() error     { return r.runcommon(r) }
+func (r *Trunner) Standby(v bool) { r.standby = v }
 
 func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
 	r.Core = &CoreStats{}
@@ -315,3 +317,5 @@ func (r *Trunner) doAdd(nv NamedVal64) {
 func (r *Trunner) statsTime(newval time.Duration) {
 	r.Core.statsTime = newval
 }
+
+func (r *Trunner) standingBy() bool { return r.standby }

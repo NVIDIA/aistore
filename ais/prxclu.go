@@ -267,6 +267,7 @@ func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, resu
 // POST /v1/cluster - joins and keepalives //
 /////////////////////////////////////////////
 
+// TODO: refactoring required (split cmn.AdminJoin and cmn.SelfJoin into separate methods, etc.)
 func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	var (
 		regReq                         cluMeta
