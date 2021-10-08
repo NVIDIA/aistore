@@ -1221,7 +1221,7 @@ func networkFailurePrimary(t *testing.T) {
 	// Check smap
 	smap, err = tutils.WaitForClusterState(
 		newPrimaryURL,
-		"original primary is gone",
+		"original primary gone",
 		smap.Version,
 		proxyCount-1,
 		targetCount,

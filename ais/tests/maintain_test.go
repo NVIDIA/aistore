@@ -81,7 +81,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 
 	// 2. Put a random target under maintenance
 	tsi, _ := m.smap.GetRandTarget()
-	tlog.Logf("Put target %s under maintenance\n", tsi)
+	tlog.Logf("Put target %s under maintenance\n", tsi.StringEx())
 	actVal := &cmn.ActValRmNode{DaemonID: tsi.ID(), SkipRebalance: false}
 	rebID, err := api.StartMaintenance(baseParams, actVal)
 	tassert.CheckFatal(t, err)
@@ -166,7 +166,6 @@ func TestMaintenanceMD(t *testing.T) {
 
 func TestMaintenanceDecommissionRebalance(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal, Long: true})
-
 	var (
 		proxyURL   = tutils.RandomProxyURL(t)
 		smap       = tutils.GetClusterMap(t, proxyURL)
@@ -181,7 +180,6 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		origActiveProxyCount  = smap.CountActiveProxies()
 		bck                   = cmn.Bck{Name: t.Name(), Provider: cmn.ProviderAIS}
 	)
-
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 	for i := 0; i < objCount; i++ {
 		objName := fmt.Sprintf("%sobj%04d", objPath, i)
@@ -209,27 +207,19 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 	bucketList, err := api.ListObjects(baseParams, bck, msgList, 0)
 	tassert.CheckError(t, err)
 	if bucketList != nil && len(bucketList.Entries) != objCount {
-		t.Errorf("Invalid number of objects: %d, expected %d", len(bucketList.Entries), objCount)
+		t.Errorf("Wrong number of objects: have %d, expected %d", len(bucketList.Entries), objCount)
 	}
 
-	tlog.Logf("wait for node is gone...\n")
-	err = tutils.WaitForNodeToTerminate(cmd.PID, 10*time.Second)
-	tassert.CheckError(t, err)
-	// TODO: something is going on inside a cluster after the node is dead.
-	// If the test restarts the node immediately, the new node reports many
-	// `pipe broken` and `EOF` messages that results in rebalance fails and
-	// the test does as well. Adding a Sleep (10-20 seconds, 3 seconds is
-	// insufficient) fixes the test.
-	time.Sleep(time.Second * 10)
+	// FIXME: must use WaitForNodeToTerminate instead of sleep
+	time.Sleep(13 * time.Second)
 
 	smap = tutils.GetClusterMap(t, proxyURL)
 	err = tutils.RestoreNode(cmd, false, "target")
 	tassert.CheckFatal(t, err)
-	smap, err = tutils.WaitForClusterState(proxyURL, "target restore",
-		smap.Version, 0, 0)
+	smap, err = tutils.WaitForClusterState(proxyURL, "target restored", smap.Version, 0, 0)
 	tassert.CheckFatal(t, err)
 
-	// If any node is in maintenance, cancel the maintenance mode
+	// If any node is in maintenance cancel the state
 	var dcm *cluster.Snode
 	for _, node := range smap.Tmap {
 		if smap.PresentInMaint(node) {

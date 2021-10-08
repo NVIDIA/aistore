@@ -278,7 +278,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		args := &cmn.ActValRmNode{DaemonID: targets[0].ID()}
-		tlog.Logf("Take %s from maintenance\n", targets[0].StringEx())
+		tlog.Logf("Take %s out of maintenance\n", targets[0].StringEx())
 		_, err = api.StopMaintenance(baseParams, args)
 		tassert.CheckFatal(t, err)
 	}()
@@ -455,7 +455,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		tlog.Logf("Take %s from maintenance\n", target0.StringEx())
+		tlog.Logf("Take %s out of maintenance\n", target0.StringEx())
 		args := &cmn.ActValRmNode{DaemonID: target0.ID()}
 		_, err = api.StopMaintenance(baseParams, args)
 		tassert.CheckFatal(t, err)

@@ -2293,7 +2293,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	tlog.Logf("Created %d objects in %s, %d objects in %s. Starting rebalance\n",
 		len(resECOld.Entries), bckEC, len(resRegOld.Entries), bckReg)
 
-	tlog.Logf("Take %s from maintenance\n", tgtLost.StringEx())
+	tlog.Logf("Take %s out of maintenance\n", tgtLost.StringEx())
 	args = &cmn.ActValRmNode{DaemonID: tgtLost.ID()}
 	rebID, err := api.StopMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
@@ -2521,7 +2521,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	tassert.CheckFatal(t, err)
 	tlog.Logf("Created %d objects in %s - starting global rebalance...\n", len(resECOld.Entries), bckEC)
 
-	tlog.Logf("Take %s from maintenance\n", tgtLost.StringEx())
+	tlog.Logf("Take %s out of maintenance\n", tgtLost.StringEx())
 	args = &cmn.ActValRmNode{DaemonID: tgtLost.ID()}
 	_, err = api.StopMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)

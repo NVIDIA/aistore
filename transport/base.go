@@ -57,8 +57,7 @@ const (
 	endOfStream   = "end-of-stream"
 	reasonStopped = "stopped"
 
-	maxRetryConnErrs = 3 // ECONNREFUSED | ECONNRESET | EPIPE
-	retrySleep       = time.Second / 2
+	retrySleep = time.Second // ECONNREFUSED | ECONNRESET | EPIPE
 )
 
 type (
@@ -253,20 +252,20 @@ func (s *streamBase) deactivate() (n int, err error) {
 }
 
 func (s *streamBase) sendLoop(dryrun bool) {
-	var retry int
+	var retried bool
 	for {
 		if s.sessST.Load() == active {
 			if dryrun {
 				s.streamer.dryrun()
 			} else if err := s.streamer.doRequest(); err != nil {
-				if !cos.IsRetriableConnErr(err) || retry >= maxRetryConnErrs {
+				if !cos.IsRetriableConnErr(err) || retried {
 					*s.term.reason = reasonError
 					s.term.err = err
 					s.streamer.errCmpl(err)
 					break
 				}
-				retry++
-				glog.Errorf("%s: %v - retrying #%d ...", s, err, retry)
+				retried = true
+				glog.Errorf("%s: %v - retrying...", s, err)
 				time.Sleep(retrySleep)
 			}
 		}

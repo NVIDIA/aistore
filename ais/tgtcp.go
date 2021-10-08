@@ -340,7 +340,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		switch apiItems[0] {
 		case cmn.AdminJoin: // user request to join cluster (compare with `cmn.SelfJoin`)
 			if !t.regstate.disabled.Load() {
-				t.writeErrf(w, r, "%s already joined (\"enabled\")- nothing to do", t.si)
+				glog.Warningf("%s already joined (\"enabled\")- nothing to do", t.si)
 				return
 			}
 			if daemon.cli.target.standby {

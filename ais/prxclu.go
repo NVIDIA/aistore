@@ -263,72 +263,68 @@ func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, resu
 	return targetResults
 }
 
-/////////////////////////////////////////////
-// POST /v1/cluster - joins and keepalives //
-/////////////////////////////////////////////
-
-// TODO: refactoring required (split cmn.AdminJoin and cmn.SelfJoin into separate methods, etc.)
+// POST /v1/cluster - handles joins and keepalives
 func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	var (
-		regReq                         cluMeta
-		tag                            string
-		keepalive, adminJoin, selfJoin bool
-		nonElectable                   bool
+		regReq       cluMeta
+		nsi          *cluster.Snode
+		operation    string // one of: admin-join, self-join, keepalive
+		nonElectable bool
 	)
 	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathCluster.L)
 	if err != nil {
 		return
 	}
-	if p.inPrimaryTransition.Load() {
-		if apiItems[0] == cmn.Keepalive {
-			// Ignore keepalive beat if the primary is in transition.
-			return
-		}
+	operation = apiItems[0]
+	// Ignore keepalive beat if the primary is in transition.
+	if p.inPrimaryTransition.Load() && operation == cmn.Keepalive {
+		return
 	}
 	if p.forwardCP(w, r, nil, "httpclupost") {
 		return
 	}
-	switch apiItems[0] {
+
+	// unmarshal and validate
+	switch operation {
 	case cmn.AdminJoin: // administrative join
 		if cmn.ReadJSON(w, r, &regReq.SI) != nil {
 			return
 		}
-		tag, adminJoin = "admin-join", true
-	case cmn.Keepalive:
+		nsi = regReq.SI
+		// node ID is obtained from the node itself. An `aisnode` either loads existing or generates a new
+		// unique ID at startup (for details, see `initDaemonID`).
+		si, err := p.getDaemonInfo(nsi)
+		if err != nil {
+			p.writeErrf(w, r, "%s: failed to obtain node info from %s: %v", p.si, nsi.StringEx(), err)
+			return
+		}
+		nsi = regReq.SI
+		nsi.DaemonID = si.DaemonID
+	case cmn.SelfJoin: // auto-join at node startup
 		if cmn.ReadJSON(w, r, &regReq) != nil {
 			return
 		}
-		tag, keepalive = "keepalive", true
-	case cmn.SelfJoin: // node self-register
+		nsi = regReq.SI
+		if !p.ClusterStarted() {
+			p.reg.mtx.Lock()
+			p.reg.pool = append(p.reg.pool, regReq)
+			p.reg.mtx.Unlock()
+		}
+	case cmn.Keepalive: // keep-alive beat
 		if cmn.ReadJSON(w, r, &regReq) != nil {
 			return
 		}
-		tag, selfJoin = "self-join", true
+		nsi = regReq.SI
 	default:
 		p.writeErrURL(w, r)
 		return
-	}
-	if selfJoin && !p.ClusterStarted() {
-		p.reg.mtx.Lock()
-		p.reg.pool = append(p.reg.pool, regReq)
-		p.reg.mtx.Unlock()
-	}
-	// NOTE: The node ID is obtained from the node itself, API calls are not trusted.
-	// Any `aisnode` will either load existing or generate new unique ID for itself during startup.
-	// For details, see `initDaemonID` (ais/daemon.go).
-	nsi := regReq.SI
-	if adminJoin {
-		si, err := p.getDaemonInfo(nsi)
-		if err != nil {
-			p.writeErrf(w, r, "failed to obtain node info from %q: %v", nsi.URL(cmn.NetworkPublic), err)
-			return
-		}
-		nsi.DaemonID = si.DaemonID
 	}
 	if err := nsi.Validate(); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
+
+	// more validation
 	if p.NodeStarted() {
 		bmd := p.owner.bmd.get()
 		if err := bmd.validateUUID(regReq.BMD, p.si, nsi, ""); err != nil {
@@ -336,21 +332,17 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	var (
-		isProxy = nsi.IsProxy()
-		msg     = &cmn.ActionMsg{Action: cmn.ActJoinProxy}
-	)
-	if isProxy {
+	if nsi.IsProxy() {
 		s := r.URL.Query().Get(cmn.URLParamNonElectable)
 		if nonElectable, err = cos.ParseBool(s); err != nil {
 			glog.Errorf("%s: failed to parse %s for non-electability: %v", p.si, s, err)
 		}
 	}
 	if err := validateHostname(nsi.PublicNet.NodeHostname); err != nil {
-		p.writeErrf(w, r, "%s: failed to %s %s - (err: %v)", p.si, tag, nsi.StringEx(), err)
+		p.writeErrf(w, r, "%s: failed to %s %s - (err: %v)", p.si, operation, nsi.StringEx(), err)
 		return
 	}
-
+	// set node flags
 	smap := p.owner.smap.get()
 	if osi := smap.GetNode(nsi.ID()); osi != nil {
 		nsi.Flags = osi.Flags
@@ -358,35 +350,29 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if nonElectable {
 		nsi.Flags = nsi.Flags.Set(cluster.SnodeNonElectable)
 	}
-	if !isProxy {
-		msg.Action, msg.Name = cmn.ActSelfJoinTarget, nsi.ID()
-		if adminJoin {
-			msg.Action = cmn.ActAdminJoinTarget
-		}
-	}
-
-	if adminJoin {
-		if errCode, err := p.adminJoinNode(nsi, tag); err != nil {
+	// call it back
+	if operation == cmn.AdminJoin {
+		if errCode, err := p.adminJoinHandshake(nsi, operation); err != nil {
 			p.writeErr(w, r, err, errCode)
 			return
 		}
-	}
-	if selfJoin {
+	} else if operation == cmn.SelfJoin {
+		// check for dup node ID
 		if osi := smap.GetNode(nsi.ID()); osi != nil && !osi.Equals(nsi) {
 			if duplicate, err := p.detectDaemonDuplicate(osi, nsi); err != nil {
-				p.writeErrf(w, r, "failed to obtain daemon info, err: %v", err)
+				p.writeErrf(w, r, "failed to obtain node info: %v", err)
 				return
 			} else if duplicate {
 				p.writeErrf(w, r, "duplicate node ID %q (%s, %s)", nsi.ID(), osi.StringEx(), nsi.StringEx())
 				return
 			}
-			glog.Warningf("%s: self-registering %s with duplicate node ID %q", p.si, nsi.StringEx(), nsi.ID())
+			glog.Warningf("%s: self-joining %s with duplicate node ID %q", p.si, nsi.StringEx(), nsi.ID())
 		}
 	}
 
 	p.owner.smap.Lock()
-	update, err := p.handleJoinKalive(nsi, regReq.Smap, tag, keepalive, nsi.Flags)
-	if !isProxy && p.NodeStarted() {
+	update, err := p.handleJoinKalive(nsi, regReq.Smap, operation, nsi.Flags)
+	if !nsi.IsProxy() && p.NodeStarted() {
 		if p.owner.rmd.rebalance.CAS(false, regReq.RebInterrupted) && regReq.RebInterrupted {
 			glog.Errorf("%s: target %s reports interrupted rebalance", p.si, nsi.StringEx())
 		}
@@ -402,16 +388,22 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// send `clu-meta` to the self-joining node
-	if selfJoin {
-		glog.Infof("%s: %s %s (%s)...", p.si, tag, nsi.StringEx(), regReq.Smap)
+	msg := &cmn.ActionMsg{Action: cmn.ActJoinProxy}
+	if operation == cmn.SelfJoin {
+		msg.Action, msg.Name = cmn.ActSelfJoinTarget, nsi.ID()
+		glog.Infof("%s: %s %s (%s)...", p.si, operation, nsi.StringEx(), regReq.Smap)
+		// send cluster-meta to the self-joining node
 		meta, err := p.cluMeta(cmetaFillOpt{skipSmap: true})
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		p.writeJSON(w, r, meta, path.Join(msg.Action, nsi.ID()) /* tag */)
-	} else if adminJoin {
+		p.writeJSON(w, r, meta, path.Join(msg.Action, nsi.ID()))
+	} else if operation == cmn.AdminJoin {
+		msg.Name = nsi.ID()
+		if !nsi.IsProxy() {
+			msg.Action = cmn.ActAdminJoinTarget
+		}
 		// Return the node ID and rebalance ID when the node is joined by user.
 		rebID, err := p.updateAndDistribute(nsi, msg, nsi.Flags)
 		if err != nil {
@@ -424,15 +416,16 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	go p.updateAndDistribute(nsi, msg, nsi.Flags)
 }
 
-// join cluster "manually" via admin API call
-func (p *proxyrunner) adminJoinNode(nsi *cluster.Snode, tag string) (errCode int, err error) {
+// when joining manually, update the node with cluster meta that does not include Smap (the later
+// gets metasync-ed upon success of this primary <=> joining node "handshake")
+func (p *proxyrunner) adminJoinHandshake(nsi *cluster.Snode, operation string) (errCode int, err error) {
 	meta, err := p.cluMeta(cmetaFillOpt{skipSmap: true})
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
 	body := cos.MustMarshal(meta)
 	if glog.FastV(3, glog.SmoduleAIS) {
-		glog.Infof("%s: %s %s => (%s)", p.si, tag, nsi.StringEx(), p.owner.smap.get().StringEx())
+		glog.Infof("%s: %s %s => (%s)", p.si, operation, nsi.StringEx(), p.owner.smap.get().StringEx())
 	}
 	config := cmn.GCO.Get()
 	args := callArgs{
@@ -449,18 +442,18 @@ func (p *proxyrunner) adminJoinNode(nsi *cluster.Snode, tag string) (errCode int
 		err = fmt.Errorf("%s: failed to reach %s at %s:%s: %w",
 			p.si, nsi.StringEx(), nsi.PublicNet.NodeHostname, nsi.PublicNet.DaemonPort, res.err)
 	} else {
-		err = res.errorf("%s: failed to %s %s: %v", p.si, tag, nsi.StringEx(), res.err)
+		err = res.errorf("%s: failed to %s %s: %v", p.si, operation, nsi.StringEx(), res.err)
 	}
 	errCode = res.status
 	return
 }
 
 // NOTE: under lock
-func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, tag string,
-	keepalive bool, flags cluster.SnodeFlags) (update bool, err error) {
+func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, operation string, flags cluster.SnodeFlags) (upd bool, err error) {
 	smap := p.owner.smap.get()
+	keepalive := operation == cmn.Keepalive
 	if !smap.isPrimary(p.si) {
-		err = newErrNotPrimary(p.si, smap, "cannot "+tag+" "+nsi.StringEx())
+		err = newErrNotPrimary(p.si, smap, "cannot "+operation+" "+nsi.StringEx())
 		return
 	}
 	if nsi.IsProxy() {
@@ -488,7 +481,7 @@ func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, tag s
 	if _, err = smap.IsDuplicate(nsi); err != nil {
 		err = errors.New(p.si.String() + ": " + err.Error())
 	}
-	update = err == nil
+	upd = err == nil
 	return
 }
 
