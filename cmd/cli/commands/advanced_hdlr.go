@@ -57,6 +57,13 @@ var (
 				Action:       loadLomCacheHandler,
 				BashComplete: bucketCompletions(),
 			},
+			{
+				Name:         subcmdRmSmap,
+				Usage:        "immediately remove node from cluster map (advanced usage - potential data loss)",
+				ArgsUsage:    daemonIDArgument,
+				Action:       removeNodeFromSmap,
+				BashComplete: daemonCompletions(completeAllDaemons),
+			},
 		},
 	}
 )
@@ -186,4 +193,25 @@ func loadLomCacheHandler(c *cli.Context) (err error) {
 	}
 
 	return startXaction(c, cmn.ActLoadLomCache, bck, "")
+}
+
+func removeNodeFromSmap(c *cli.Context) (err error) {
+	if c.NArg() == 0 {
+		return incorrectUsageMsg(c, "missing daemon ID")
+	} else if c.NArg() > 1 {
+		return incorrectUsageMsg(c, "too many arguments")
+	}
+	daemonID := c.Args().First()
+	smap, err := api.GetClusterMap(defaultAPIParams)
+	if err != nil {
+		return err
+	}
+	node := smap.GetNode(daemonID)
+	if node == nil {
+		return fmt.Errorf("node %q does not exist (see 'ais show cluster')", daemonID)
+	}
+	if smap.IsPrimary(node) {
+		return fmt.Errorf("node %s is primary: cannot remove", daemonID)
+	}
+	return api.RemoveNodeFromSmap(defaultAPIParams, daemonID)
 }

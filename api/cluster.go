@@ -288,3 +288,13 @@ func ShutdownNode(baseParams BaseParams, actValue *cmn.ActValRmNode) (id string,
 	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cos.MustMarshal(msg)}, &id)
 	return id, err
 }
+
+// Remove a node from Smap immediately.
+// Immediately removes a node from Smap (advanced usage - potential data loss)
+func RemoveNodeFromSmap(baseParams BaseParams, sid string) error {
+	baseParams.Method = http.MethodDelete
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPathClusterDaemon.Join(sid),
+	})
+}

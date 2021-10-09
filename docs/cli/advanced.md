@@ -15,6 +15,7 @@ AIS CLI features a number of miscellaneous and advanced-usage commands.
 - [Generate shards](#generate-shards)
 - [Manually Resilver](#manually-resilver)
 - [Preload bucket](#preload-bucket)
+- [Remove node from Smap](#remove-node-from-smap)
 
 ## Generate shards
 
@@ -106,4 +107,33 @@ Preload bucket's objects metadata into in-memory caches.
 
 ```console
 $ ais advanced preload ais://bucket
+```
+
+## Remove node from Smap
+
+`ais advanced remove-from-smap DAEMON_ID`
+
+Immediately remove a node from the cluster map. The primary proxy cannot be removed.
+In case of target, immediate removal may result in data loss because due to all the node's data become inaccessible.
+
+### Examples
+
+```console
+$ ais show cluster proxy
+PROXY            MEM USED %      MEM AVAIL       UPTIME
+BcnQp8083        0.17%           31.12GiB        6m50s
+xVMNp8081        0.16%           31.12GiB        6m50s
+MvwQp8080[P]     0.18%           31.12GiB        6m40s
+NnPLp8082        0.16%           31.12GiB        6m50s
+
+
+$ ais advanced remove-from-smap MvwQp8080
+Node MvwQp 8080 is primary: cannot remove
+
+$ ais advanced remove-from-smap xVMNp8081
+$ ais show cluster proxy
+PROXY            MEM USED %      MEM AVAIL       UPTIME
+BcnQp8083        0.16%           31.12GiB        8m
+NnPLp8082        0.16%           31.12GiB        8m
+MvwQp8080[P]     0.19%           31.12GiB        7m50s
 ```

@@ -1360,6 +1360,10 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
+	if smap.IsPrimary(node) {
+		p.writeErrMsg(w, r, "cannot remove primary proxy", http.StatusBadRequest)
+		return
+	}
 	if p.forwardCP(w, r, nil, sid) {
 		return
 	}
@@ -1371,8 +1375,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 			err = fmt.Errorf("expecting self-initiated removal (%s != %s)", cid, sid)
 		}
 	} else {
-		// TODO: phase-out tutils.RemoveNodeFromSmap (currently the only user)
-		//       and disallow external calls altogether
+		// Immediately removes a node from Smap (advanced usage - potential data loss)
 		errCode, err = p.callRmSelf(&cmn.ActionMsg{Action: testInitiatedRm}, node, false /*skipReb*/)
 	}
 	if err != nil {

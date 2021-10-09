@@ -6,7 +6,6 @@ package devtools
 
 import (
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
@@ -119,11 +118,7 @@ func RemoveNodeFromSmap(ctx *Ctx, proxyURL, sid string, timeout time.Duration) e
 	}
 	tlog.Logf("Remove %s from %s\n", node, smap)
 
-	baseParams.Method = http.MethodDelete
-	err = api.DoHTTPRequest(api.ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathClusterDaemon.Join(sid),
-	})
+	err = api.RemoveNodeFromSmap(baseParams, sid)
 	if err != nil {
 		return err
 	}

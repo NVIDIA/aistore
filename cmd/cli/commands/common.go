@@ -80,6 +80,7 @@ const (
 	subcmdShutdown   = "shutdown"
 	subcmdAttach     = "attach"
 	subcmdDetach     = "detach"
+	subcmdRmSmap     = "remove-from-smap"
 
 	// Cluster subcommands
 	subcmdCluAttach = "remote-" + subcmdAttach
