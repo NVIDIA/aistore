@@ -38,6 +38,7 @@ import (
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/volume"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xreg"
 )
@@ -211,7 +212,8 @@ func initTID(config *cmn.Config) (tid string) {
 	if tid = envDaemonID(cmn.Target); tid != "" {
 		return
 	}
-	if tid, err = fs.LoadDaemonID(config.FSpaths.Paths); err != nil {
+	// TODO -- FIXME: use post-bootstrap vmd.Mountpaths
+	if tid, err = fs.LoadNodeID(config.FSpaths.Paths); err != nil {
 		cos.ExitLogf("%v", err)
 	}
 	if tid != "" {
@@ -225,7 +227,7 @@ func initTID(config *cmn.Config) (tid string) {
 
 func (t *targetrunner) initFs() {
 	var (
-		vmd    *fs.VMD
+		vmd    *volume.VMD
 		config = cmn.GCO.Get()
 		tid    = t.si.ID()
 	)
@@ -237,18 +239,18 @@ func (t *targetrunner) initFs() {
 		glog.Warningf("Using %d mountpaths for testing with disabled FsID check", config.TestFSP.Count)
 		fs.DisableFsIDCheck()
 	}
-	if v, err := fs.BootstrapVMD(tid, config.FSpaths.Paths); err != nil {
+	if v, err := volume.BootstrapVMD(tid, config.FSpaths.Paths); err != nil {
 		cos.ExitLogf("%v", err)
 	} else {
 		vmd = v
 	}
 
 	if vmd == nil {
-		if err := fs.InitNoVMD(tid, config); err != nil {
+		if err := volume.InitNoVMD(tid, config); err != nil {
 			cos.ExitLogf("%v", err)
 		}
 		glog.Warningf("%s: initializing new VMD %v", t.si, config.FSpaths.Paths.ToSlice())
-		if v, err := fs.CreateVMD(tid); err != nil {
+		if v, err := volume.CreateVMD(tid); err != nil {
 			cos.ExitLogf("%v", err)
 		} else {
 			vmd = v
@@ -257,7 +259,7 @@ func (t *targetrunner) initFs() {
 		return
 	}
 
-	if vmdChanged, err := fs.InitVMD(tid, vmd); err != nil {
+	if vmdChanged, err := volume.InitVMD(tid, vmd); err != nil {
 		cos.ExitLogf("%v", err)
 	} else if !vmdChanged {
 		glog.Infoln(vmd.String())
@@ -266,7 +268,7 @@ func (t *targetrunner) initFs() {
 
 	daemon.resilver.required = true
 	daemon.resilver.reason = "VMD change detected"
-	if v, err := fs.CreateVMD(tid); err != nil {
+	if v, err := volume.CreateVMD(tid); err != nil {
 		cos.ExitLogf("%v", err)
 	} else {
 		vmd = v

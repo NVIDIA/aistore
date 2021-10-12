@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/volume"
 	"github.com/NVIDIA/aistore/xreg"
 )
 
@@ -137,7 +138,7 @@ func (g *fsprungroup) redistributeMD() {
 			cos.ExitLogf("%v", err)
 		}
 	}
-	if _, err := fs.CreateVMD(g.t.si.ID()); err != nil {
+	if _, err := volume.CreateVMD(g.t.si.ID()); err != nil {
 		debug.AssertNoErr(err)
 		cos.ExitLogf("%v", err)
 	}

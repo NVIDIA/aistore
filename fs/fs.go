@@ -1,11 +1,10 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -25,10 +24,9 @@ import (
 	"github.com/OneOfOne/xxhash"
 )
 
-const (
-	TrashDir      = "$trash"
-	daemonIDXattr = "user.ais.daemon_id"
-)
+const TrashDir = "$trash"
+
+const nodeXattrID = "user.ais.daemon_id"
 
 // Terminology:
 // - a mountpath is equivalent to (configurable) fspath - both terms are used interchangeably;
@@ -99,24 +97,15 @@ type (
 		Err        error
 		OOS        bool
 	}
-	ErrMpathNoDisks struct {
-		mi *MountpathInfo
-	}
 )
 
-var (
-	mfs *MountedFS
-
-	ErrNoMountpaths = errors.New("no mountpaths")
-)
-
-func (e *ErrMpathNoDisks) Error() string { return fmt.Sprintf("%s has no disks", e.mi) }
+var mfs *MountedFS
 
 ///////////////////
 // MountpathInfo //
 ///////////////////
 
-func newMountpath(mpath, tid string) (mi *MountpathInfo, err error) {
+func NewMountpath(mpath, tid string) (mi *MountpathInfo, err error) {
 	var (
 		cleanMpath string
 		fsInfo     FilesystemInfo
@@ -267,7 +256,7 @@ func (mi *MountpathInfo) Remove(path string) error {
 func (mi *MountpathInfo) SetDaemonIDXattr(tid string) error {
 	cos.Assert(tid != "")
 	// Validate if mountpath already has daemon ID set.
-	mpathDaeID, err := loadDaemonIDXattr(mi.Path)
+	mpathDaeID, err := _loadXattrID(mi.Path)
 	if err != nil {
 		return err
 	}
@@ -276,11 +265,11 @@ func (mi *MountpathInfo) SetDaemonIDXattr(tid string) error {
 	}
 	if mpathDaeID != "" && mpathDaeID != tid {
 		return &ErrStorageIntegrity{
-			code: sieMpathIDMismatch,
-			msg:  fmt.Sprintf("target ID mismatch: %q vs %q(%q)", tid, mpathDaeID, mi),
+			Code: SieMpathIDMismatch,
+			Msg:  fmt.Sprintf("target ID mismatch: %q vs %q(%q)", tid, mpathDaeID, mi),
 		}
 	}
-	return SetXattr(mi.Path, daemonIDXattr, []byte(tid))
+	return SetXattr(mi.Path, nodeXattrID, []byte(tid))
 }
 
 // make-path methods
@@ -466,6 +455,21 @@ func (mi *MountpathInfo) getCapacity(config *cmn.Config, refresh bool) (c Capaci
 // mountpath add/enable helpers - always call under mfs lock
 //
 
+func (mi *MountpathInfo) AddEnabled(tid string, availablePaths MPI, config *cmn.Config) (err error) {
+	if err = mi._checkExists(availablePaths); err != nil {
+		return
+	}
+	if err = mi._addEnabled(tid, availablePaths, config); err == nil {
+		mfs.fsIDs[mi.FsID] = mi.Path
+	}
+	return
+}
+
+func (mi *MountpathInfo) AddDisabled(disabledPaths MPI) {
+	disabledPaths[mi.Path] = mi
+	mfs.fsIDs[mi.FsID] = mi.Path
+}
+
 func (mi *MountpathInfo) _checkExists(availablePaths MPI) (err error) {
 	if existingMi, exists := availablePaths[mi.Path]; exists {
 		err = fmt.Errorf("failed adding %s: %s already exists", mi, existingMi)
@@ -495,17 +499,13 @@ func (mi *MountpathInfo) _addEnabled(tid string, availablePaths MPI, config *cmn
 func (mi *MountpathInfo) addEnabledDisabled(tid string, config *cmn.Config, enabled bool) (err error) {
 	availablePaths, disabledPaths := cloneMPI()
 	if enabled {
-		if err = mi._checkExists(availablePaths); err != nil {
-			return
-		}
-		if err = mi._addEnabled(tid, availablePaths, config); err != nil {
+		if err = mi.AddEnabled(tid, availablePaths, config); err != nil {
 			return
 		}
 	} else {
-		disabledPaths[mi.Path] = mi
+		mi.AddDisabled(disabledPaths)
 	}
-	mfs.fsIDs[mi.FsID] = mi.Path
-	updatePaths(availablePaths, disabledPaths)
+	PutMpaths(availablePaths, disabledPaths)
 	return
 }
 
@@ -521,90 +521,6 @@ func New(iostater ...ios.IOStater) {
 	} else {
 		mfs.ios = ios.NewIostatContext()
 	}
-}
-
-// bootstrap mountpaths and VMD (the `volume`)
-func InitNoVMD(tid string, config *cmn.Config) (err error) {
-	var (
-		configPaths    = config.FSpaths.Paths
-		availablePaths = make(MPI, len(configPaths))
-		disabledPaths  = make(MPI)
-	)
-	for path := range configPaths {
-		var mi *MountpathInfo
-		if mi, err = newMountpath(path, tid); err != nil {
-			return
-		}
-		if err = mi._checkExists(availablePaths); err != nil {
-			return
-		}
-		if err = mi._addEnabled(tid, availablePaths, config); err != nil {
-			return
-		}
-		if len(mi.Disks) == 0 && !config.TestingEnv() {
-			err = &ErrMpathNoDisks{mi}
-			return
-		}
-	}
-	updatePaths(availablePaths, disabledPaths)
-	return
-}
-
-func InitVMD(tid string, vmd *VMD) (changed bool, err error) {
-	var (
-		config         = cmn.GCO.Get()
-		availablePaths = make(MPI, len(vmd.Mountpaths))
-		disabledPaths  = make(MPI)
-	)
-	debug.Assert(vmd.DaemonID == tid)
-
-	for mpath, fsMpathMD := range vmd.Mountpaths {
-		var mi *MountpathInfo
-		mi, err = newMountpath(mpath, tid)
-		if fsMpathMD.Enabled {
-			if err != nil {
-				glog.Error(err) // TODO: remove redundant glog (here and elsewhere)
-				return
-			}
-			if mi.Path != mpath {
-				glog.Warningf("%s: cleanpath(%q) => %q", mi, mpath, mi.Path)
-			}
-			if mi.Fs != fsMpathMD.Fs || mi.FsType != fsMpathMD.FsType || mi.FsID != fsMpathMD.FsID {
-				err = &ErrStorageIntegrity{
-					code: sieFsDiffers,
-					msg: fmt.Sprintf("Warning: filesystem change detected: %+v vs %+v (is it benign?)",
-						mi.FilesystemInfo, fsMpathMD),
-				}
-				glog.Error(err)
-			}
-			if err = mi._checkExists(availablePaths); err != nil {
-				glog.Error(err)
-				return
-			}
-			if err = mi._addEnabled(tid, availablePaths, config); err != nil {
-				glog.Error(err)
-				return
-			}
-			if len(mi.Disks) == 0 && !config.TestingEnv() {
-				err = &ErrMpathNoDisks{mi}
-				glog.Errorf("Warning: %v", err)
-			}
-		} else {
-			mi.Fs = fsMpathMD.Fs
-			mi.FsType = fsMpathMD.FsType
-			mi.FsID = fsMpathMD.FsID
-			disabledPaths[mi.Path] = mi
-		}
-		mfs.fsIDs[mi.FsID] = mi.Path
-	}
-
-	updatePaths(availablePaths, disabledPaths)
-
-	if la, lc := len(availablePaths), len(config.FSpaths.Paths); la != lc {
-		glog.Warningf("number of available mountpaths (%d) differs from the configured (%d)", la, lc)
-		glog.Warningln("run 'ais storage mountpath [attach|detach]', fix the config, or ignore")
-	}
-	return
 }
 
 func Decommission(mdOnly bool) {
@@ -647,7 +563,7 @@ func NumAvail() int {
 	return len(*availablePaths)
 }
 
-func updatePaths(available, disabled MPI) {
+func PutMpaths(available, disabled MPI) {
 	mfs.available.Store(unsafe.Pointer(&available))
 	mfs.disabled.Store(unsafe.Pointer(&disabled))
 }
@@ -669,7 +585,7 @@ func cloneMPI() (MPI, MPI) {
 
 // (used only in tests - compare with AddMpath below)
 func Add(mpath, tid string) (mi *MountpathInfo, err error) {
-	mi, err = newMountpath(mpath, tid)
+	mi, err = NewMountpath(mpath, tid)
 	if err != nil {
 		return
 	}
@@ -683,7 +599,7 @@ func Add(mpath, tid string) (mi *MountpathInfo, err error) {
 // Add adds new mountpath to the target's mountpaths.
 func AddMpath(mpath, tid string, cb func()) (mi *MountpathInfo, err error) {
 	debug.Assert(tid != "")
-	mi, err = newMountpath(mpath, tid)
+	mi, err = NewMountpath(mpath, tid)
 	if err != nil {
 		return
 	}
@@ -754,16 +670,12 @@ func enable(mpath, cleanMpath, tid string, config *cmn.Config) (enabledMpath *Mo
 
 	// TODO: check tid == on-disk-tid if exists
 
-	if err = mi._checkExists(availablePaths); err != nil {
-		return
-	}
-	if err = mi._addEnabled(tid, availablePaths, config); err != nil {
+	if err = mi.AddEnabled(tid, availablePaths, config); err != nil {
 		return
 	}
 	enabledMpath = mi
 	delete(disabledPaths, cleanMpath)
-	mfs.fsIDs[mi.FsID] = mi.Path
-	updatePaths(availablePaths, disabledPaths)
+	PutMpaths(availablePaths, disabledPaths)
 	return
 }
 
@@ -779,7 +691,7 @@ func Remove(mpath string, cb ...func()) (*MountpathInfo, error) {
 	defer mfs.mu.Unlock()
 
 	// Clear daemonID xattr if set
-	if err := removeXattr(cleanMpath, daemonIDXattr); err != nil {
+	if err := removeXattr(cleanMpath, nodeXattrID); err != nil {
 		return nil, err
 	}
 
@@ -796,7 +708,7 @@ func Remove(mpath string, cb ...func()) (*MountpathInfo, error) {
 
 		delete(disabledPaths, cleanMpath)
 		delete(mfs.fsIDs, mpathInfo.FsID)
-		updatePaths(availablePaths, disabledPaths)
+		PutMpaths(availablePaths, disabledPaths)
 		return mpathInfo, nil
 	}
 
@@ -812,7 +724,7 @@ func Remove(mpath string, cb ...func()) (*MountpathInfo, error) {
 	}
 
 	moveMarkers(availablePaths, mpathInfo)
-	updatePaths(availablePaths, disabledPaths)
+	PutMpaths(availablePaths, disabledPaths)
 
 	if availCnt > 0 && len(cb) > 0 {
 		cb[0]()
@@ -838,7 +750,7 @@ func Disable(mpath string, cb ...func()) (disabledMpath *MountpathInfo, err erro
 		mfs.ios.RemoveMpath(cleanMpath)
 		delete(availablePaths, cleanMpath)
 		moveMarkers(availablePaths, mpathInfo)
-		updatePaths(availablePaths, disabledPaths)
+		PutMpaths(availablePaths, disabledPaths)
 		if l := len(availablePaths); l == 0 {
 			glog.Errorf("disabled the last available mountpath %s", mpathInfo)
 		} else {
@@ -1075,5 +987,43 @@ func CapStatusAux() (fsInfo cmn.CapacityInfo) {
 	fsInfo.Used = cs.TotalUsed
 	fsInfo.Total = cs.TotalUsed + cs.TotalAvail
 	fsInfo.PctUsed = float64(cs.PctAvg)
+	return
+}
+
+// load node ID
+
+// traverses all mountpaths to load and validate node ID
+func LoadNodeID(mpaths cos.StringSet) (mDaeID string, err error) {
+	for mp := range mpaths {
+		daeID, err := _loadXattrID(mp)
+		if err != nil {
+			return "", err
+		}
+		if daeID == "" {
+			continue
+		}
+		if mDaeID != "" {
+			if mDaeID != daeID {
+				return "", &ErrStorageIntegrity{
+					Code: SieMpathIDMismatch,
+					Msg:  fmt.Sprintf("target ID mismatch: %q vs %q(%q)", mDaeID, daeID, mp),
+				}
+			}
+			continue
+		}
+		mDaeID = daeID
+	}
+	return
+}
+
+func _loadXattrID(mpath string) (daeID string, err error) {
+	b, err := GetXattr(mpath, nodeXattrID)
+	if err == nil {
+		daeID = string(b)
+		return
+	}
+	if cos.IsErrXattrNotFound(err) {
+		err = nil
+	}
 	return
 }

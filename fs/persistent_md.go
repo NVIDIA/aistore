@@ -134,11 +134,11 @@ func PersistOnMpaths(fname, backupName string, meta jsp.Opts, atMost int, b []by
 func RemoveDaemonIDs() {
 	available, disabled := Get()
 	for _, mi := range available {
-		err := removeXattr(mi.Path, daemonIDXattr)
+		err := removeXattr(mi.Path, nodeXattrID)
 		debug.AssertNoErr(err)
 	}
 	for _, mi := range disabled {
-		err := removeXattr(mi.Path, daemonIDXattr)
+		err := removeXattr(mi.Path, nodeXattrID)
 		debug.AssertNoErr(err)
 	}
 }

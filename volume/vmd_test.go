@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package fs_test
+package volume_test
 
 import (
 	"reflect"
@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/volume"
 )
 
 func TestVMD(t *testing.T) {
@@ -27,7 +28,7 @@ func TestVMD(t *testing.T) {
 
 func testVMDCreate(t *testing.T, mpaths fs.MPI, daemonID string) {
 	var (
-		vmd, err  = fs.CreateVMD(daemonID)
+		vmd, err  = volume.CreateVMD(daemonID)
 		mpathsCnt = len(mpaths)
 	)
 
@@ -44,10 +45,10 @@ func testVMDCreate(t *testing.T, mpaths fs.MPI, daemonID string) {
 }
 
 func testVMDPersist(t *testing.T, daemonID string) {
-	vmd, err := fs.CreateVMD(daemonID)
+	vmd, err := volume.CreateVMD(daemonID)
 	tassert.CheckFatal(t, err)
 
-	newVMD, err := fs.LoadVMDTest()
+	newVMD, err := volume.LoadVMDTest()
 	tassert.Fatalf(t, err == nil, "expected no error while loading VMD")
 	tassert.Errorf(t, newVMD.DaemonID == vmd.DaemonID,
 		"expected VMDs to have same daemon ID. got: %s vs %s", newVMD.DaemonID, vmd.DaemonID)

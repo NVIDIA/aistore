@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
-	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/volume"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -73,7 +73,7 @@ func extractSmap() error   { return extractMeta(&cluster.Smap{}) }
 func extractBMD() error    { return extractMeta(&cluster.BMD{}) }
 func extractRMD() error    { return extractMeta(&cluster.RMD{}) }
 func extractConfig() error { return extractMeta(&cmn.ClusterConfig{}) }
-func extractVMD() error    { return extractMeta(&fs.VMD{}) }
+func extractVMD() error    { return extractMeta(&volume.VMD{}) }
 
 // "format*" routines require output filename
 
@@ -81,7 +81,7 @@ func formatSmap() error   { return formatMeta(&cluster.Smap{}) }
 func formatBMD() error    { return formatMeta(&cluster.BMD{}) }
 func formatRMD() error    { return formatMeta(&cluster.RMD{}) }
 func formatConfig() error { return formatMeta(&cmn.ClusterConfig{}) }
-func formatVMD() error    { return formatMeta(&fs.VMD{}) }
+func formatVMD() error    { return formatMeta(&volume.VMD{}) }
 
 func main() {
 	newFlag := flag.NewFlagSet(os.Args[0], flag.ExitOnError) // discard flags of imported packages
