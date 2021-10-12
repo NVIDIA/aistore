@@ -384,7 +384,7 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 	case cmn.Mountpaths:
 		t.handleMountpathReq(w, r)
 		return
-	case cmn.Unregister:
+	case cmn.CallbackRmFromSmap:
 		opts, action, err := t.parseUnregMsg(w, r)
 		if err != nil {
 			return
@@ -407,10 +407,8 @@ func (t *targetrunner) unreg(action string, rmUserData, noShutdown bool) {
 	// Stop all xactions
 	xreg.AbortAll()
 
-	// In case of maintenance, we only stop the keepalive daemon,
-	// the HTTPServer is still active and accepts requests.
-	if action == cmn.ActStartMaintenance || action == testInitiatedRm {
-		return
+	if action == cmn.ActStartMaintenance || action == cmn.ActCallbackRmFromSmap {
+		return // return without terminating http
 	}
 
 	// NOTE: vs metasync

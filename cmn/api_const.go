@@ -60,17 +60,20 @@ const (
 	ActStartGFN        = "metasync_start_gfn"
 	ActAttach          = "attach"
 	ActDetach          = "detach"
-	// Node maintenance
-	ActStartMaintenance = "startmaintenance"  // put into maintenance state
-	ActStopMaintenance  = "stopmaintenance"   // cancel maintenance state
-	ActDecommissionNode = "decommission_node" // start rebalance and, when done, remove node from Smap
-	ActShutdownNode     = "shutdown_node"     // shutdown a specific node
+
+	// Node maintenance & cluster membership (see the corresponding URL path words below)
+	ActStartMaintenance   = "startmaintenance"      // put into maintenance state
+	ActStopMaintenance    = "stopmaintenance"       // cancel maintenance state
+	ActDecommissionNode   = "decommission_node"     // start rebalance and, when done, remove node from Smap
+	ActShutdownNode       = "shutdown_node"         // shutdown node
+	ActCallbackRmFromSmap = "callback-rm-from-smap" // set by primary when requested (internal use only)
 
 	ActAdminJoinTarget = "admin-join-target"
 	ActSelfJoinTarget  = "self-join-target"
 	ActAdminJoinProxy  = "admin-join-proxy"
 	ActSelfJoinProxy   = "self-join-proxy"
 	ActKeepaliveUpdate = "keepalive-update"
+
 	// IC
 	ActSendOwnershipTbl  = "ic_send_ownership_tbl"
 	ActListenToNotif     = "watch_xaction"
@@ -344,16 +347,17 @@ const (
 	IC        = "ic" // information center
 
 	// l3
-	SyncSmap  = "syncsmap"
-	Keepalive = "keepalive"
+	SyncSmap = "syncsmap" // legacy
 
 	Voteres    = "result"
 	VoteInit   = "init"
 	Mountpaths = "mountpaths"
 
-	AdminJoin  = "join-by-admin" // when node is getting joined by admin ("manual join")
-	SelfJoin   = "self-join"     // default: node to join itself via primary that it discovers at startup ("automatic join")
-	Unregister = "unregister"    // legacy
+	// (see the corresponding action messages above)
+	Keepalive          = "keepalive"
+	AdminJoin          = "join-by-admin"   // when node is getting joined by admin ("manual join")
+	SelfJoin           = "self-join"       // default: node to join itself via primary that it discovers at startup ("automatic join")
+	CallbackRmFromSmap = "cb-rm-from-smap" // set by primary to request that node calls back to request removal (internal use only!)
 
 	// common
 	Init     = "init"

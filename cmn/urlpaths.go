@@ -40,11 +40,11 @@ var (
 	URLPathClusterAttach  = urlpath(Version, Cluster, ActAttach)
 	URLPathClusterDetach  = urlpath(Version, Cluster, ActDetach)
 
-	URLPathDaemon        = urlpath(Version, Daemon)
-	URLPathDaemonProxy   = urlpath(Version, Daemon, Proxy)
-	URLPathDaemonSetConf = urlpath(Version, Daemon, ActSetConfig)
-	URLPathDaemonUserReg = urlpath(Version, Daemon, AdminJoin)
-	URLPathDaemonUnreg   = urlpath(Version, Daemon, Unregister)
+	URLPathDaemon               = urlpath(Version, Daemon)
+	URLPathDaemonProxy          = urlpath(Version, Daemon, Proxy)
+	URLPathDaemonSetConf        = urlpath(Version, Daemon, ActSetConfig)
+	URLPathDaemonAdminJoin      = urlpath(Version, Daemon, AdminJoin)
+	URLPathDaemonCallbackRmSelf = urlpath(Version, Daemon, CallbackRmFromSmap)
 
 	URLPathReverse       = urlpath(Version, Reverse)
 	URLPathReverseDaemon = urlpath(Version, Reverse, Daemon)

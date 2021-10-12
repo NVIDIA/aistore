@@ -2360,12 +2360,10 @@ func (p *proxyrunner) daePathAction(w http.ResponseWriter, r *http.Request, acti
 }
 
 func (p *proxyrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
-	_, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathDaemonUnreg.L)
+	// the path includes cmn.CallbackRmFromSmap (compare with t.httpdaedelete)
+	_, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathDaemonCallbackRmSelf.L)
 	if err != nil {
 		return
-	}
-	if glog.V(3) {
-		glog.Infoln("sending unregister on proxy keepalive control channel")
 	}
 	_, action, err := p.parseUnregMsg(w, r)
 	if err != nil {

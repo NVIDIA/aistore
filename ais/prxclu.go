@@ -445,7 +445,7 @@ func (p *proxyrunner) adminJoinHandshake(nsi *cluster.Snode, apiOp string) (errC
 	config := cmn.GCO.Get()
 	args := callArgs{
 		si:      nsi,
-		req:     cmn.ReqArgs{Method: http.MethodPost, Path: cmn.URLPathDaemonUserReg.S, Body: body},
+		req:     cmn.ReqArgs{Method: http.MethodPost, Path: cmn.URLPathDaemonAdminJoin.S, Body: body},
 		timeout: config.Timeout.CplaneOperation.D(),
 	}
 	res := p.call(args)
@@ -1358,8 +1358,6 @@ func (p *proxyrunner) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 // DELET /v1/cluster - self-unregister //
 /////////////////////////////////////////
 
-const testInitiatedRm = "test-initiated-removal" // see TODO below
-
 func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathClusterDaemon.L)
 	if err != nil {
@@ -1391,7 +1389,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// Immediately removes a node from Smap (advanced usage - potential data loss)
-		errCode, err = p.callRmSelf(&cmn.ActionMsg{Action: testInitiatedRm}, node, false /*skipReb*/)
+		errCode, err = p.callRmSelf(&cmn.ActionMsg{Action: cmn.ActCallbackRmFromSmap}, node, false /*skipReb*/)
 	}
 	if err != nil {
 		p.writeErr(w, r, err, errCode)
@@ -1416,13 +1414,13 @@ func (p *proxyrunner) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb 
 	case cmn.ActShutdownNode:
 		body := cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActShutdown})
 		args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: body}
-	case cmn.ActStartMaintenance, cmn.ActDecommissionNode, testInitiatedRm:
+	case cmn.ActStartMaintenance, cmn.ActDecommissionNode, cmn.ActCallbackRmFromSmap:
 		act := &cmn.ActionMsg{Action: msg.Action}
 		if msg.Action == cmn.ActDecommissionNode {
 			act.Value = msg.Value
 		}
 		body := cos.MustMarshal(act)
-		args.req = cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathDaemonUnreg.S, Body: body}
+		args.req = cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathDaemonCallbackRmSelf.S, Body: body}
 	default:
 		debug.AssertMsg(false, "invalid action: "+msg.Action)
 	}
@@ -1434,7 +1432,7 @@ func (p *proxyrunner) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb 
 		glog.Warningf("%s: %s that is being removed via %q fails to respond: %v[%s]",
 			p.si, node, msg.Action, er, d)
 	}
-	if msg.Action == cmn.ActDecommissionNode || msg.Action == testInitiatedRm {
+	if msg.Action == cmn.ActDecommissionNode || msg.Action == cmn.ActCallbackRmFromSmap {
 		// NOTE: proceeding anyway even if all retries fail
 		errCode, err = p.unregNode(msg, si, skipReb)
 	}
