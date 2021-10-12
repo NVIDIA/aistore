@@ -68,7 +68,9 @@ const (
 
 	ActAdminJoinTarget = "admin-join-target"
 	ActSelfJoinTarget  = "self-join-target"
-	ActJoinProxy       = "join-proxy"
+	ActAdminJoinProxy  = "admin-join-proxy"
+	ActSelfJoinProxy   = "self-join-proxy"
+	ActKeepaliveUpdate = "keepalive-update"
 	// IC
 	ActSendOwnershipTbl  = "ic_send_ownership_tbl"
 	ActListenToNotif     = "watch_xaction"

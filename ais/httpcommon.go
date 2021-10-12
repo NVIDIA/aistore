@@ -977,17 +977,20 @@ func (h *httprunner) stopHTTPServer() {
 	}
 }
 
-// Return unregister node options with action type.
+// on success returns `cmn.ActValRmNode` options; on failure writes http error
 func (h *httprunner) parseUnregMsg(w http.ResponseWriter, r *http.Request) (*cmn.ActValRmNode, string, error) {
-	var msg cmn.ActionMsg
+	var (
+		msg  cmn.ActionMsg
+		opts cmn.ActValRmNode
+	)
 	if err := cmn.ReadJSON(w, r, &msg, true /*optional*/); err != nil {
 		return nil, "", err
 	}
-	// NOTE: `cmn.ActValRmNode` options are supported only for targets and only when decommissioning
+	// NOTE: `cmn.ActValRmNode` options are currently supported only by ais targets
+	//       and only when decommissioning
 	if msg.Action != cmn.ActDecommissionNode || h.si.IsProxy() {
 		return nil, msg.Action, nil
 	}
-	var opts cmn.ActValRmNode
 	if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
 		h.writeErr(w, r, err)
 		return nil, msg.Action, err

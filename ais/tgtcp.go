@@ -328,58 +328,50 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// register target
-// enable/disable mountpath
+// admin-join target | enable/disable mountpath
 func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathDaemon.L)
 	if err != nil {
 		return
 	}
-
-	if len(apiItems) > 0 {
-		switch apiItems[0] {
-		case cmn.AdminJoin: // user request to join cluster (compare with `cmn.SelfJoin`)
-			if !t.regstate.disabled.Load() {
-				glog.Warningf("%s already joined (\"enabled\")- nothing to do", t.si)
-				return
-			}
-			if daemon.cli.target.standby {
-				glog.Infof("%s: standby => join", t.si)
-			}
-			t.keepalive.send(kaRegisterMsg)
-			body, err := cmn.ReadBytes(r)
-			if err != nil {
-				t.writeErr(w, r, err)
-				return
-			}
-
-			caller := r.Header.Get(cmn.HdrCallerName)
-			if err := t.applyRegMeta(cmn.ActAdminJoinTarget, body, caller); err != nil {
-				t.writeErr(w, r, err)
-				return
-			}
-			if daemon.cli.target.standby {
-				if err := t.endStartupStandby(); err != nil {
-					glog.Warningf("%s continue standing by: %v", t.si, err)
-				}
-			}
-			return
-		case cmn.Mountpaths:
-			t.handleMountpathReq(w, r)
-			return
-		default:
-			t.writeErrURL(w, r)
-			return
-		}
+	if len(apiItems) == 0 {
+		t.writeErrURL(w, r)
+		return
 	}
-
-	if status, err := t.joinCluster(cmn.ActSelfJoinTarget); err != nil { // TODO -- FIXME: check
-		t.writeErrf(w, r, "%s: failed to join: %v(%d)", t.si, err, status)
+	apiOp := apiItems[0]
+	if apiOp == cmn.Mountpaths {
+		t.handleMountpathReq(w, r)
+		return
+	}
+	if apiOp != cmn.AdminJoin {
+		t.writeErrURL(w, r)
 		return
 	}
 
-	if glog.FastV(3, glog.SmoduleAIS) {
-		glog.Infof("Registered %s(self)", t.si)
+	// user request to join cluster (compare with `cmn.SelfJoin`)
+	if !t.regstate.disabled.Load() {
+		glog.Warningf("%s already joined (\"enabled\")- nothing to do", t.si)
+		return
+	}
+	if daemon.cli.target.standby {
+		glog.Infof("%s: transitioning standby => join", t.si)
+	}
+	t.keepalive.send(kaRegisterMsg)
+	body, err := cmn.ReadBytes(r)
+	if err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+
+	caller := r.Header.Get(cmn.HdrCallerName)
+	if err := t.applyRegMeta(cmn.ActAdminJoinTarget, body, caller); err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+	if daemon.cli.target.standby {
+		if err := t.endStartupStandby(); err != nil {
+			glog.Warningf("%s: err %v ending standby...", t.si, err)
+		}
 	}
 }
 
@@ -393,24 +385,16 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 		t.handleMountpathReq(w, r)
 		return
 	case cmn.Unregister:
-		t.handleUnregisterReq(w, r)
+		opts, action, err := t.parseUnregMsg(w, r)
+		if err != nil {
+			return
+		}
+		t.unreg(action, opts.RmUserData, opts.NoShutdown)
 		return
 	default:
 		t.writeErrURL(w, r)
 		return
 	}
-}
-
-func (t *targetrunner) handleUnregisterReq(w http.ResponseWriter, r *http.Request) {
-	opts, action, err := t.parseUnregMsg(w, r)
-	if err != nil {
-		return
-	}
-	var rmUserData, noShutdown bool
-	if opts != nil {
-		rmUserData, noShutdown = opts.RmUserData, opts.NoShutdown
-	}
-	t.unreg(action, rmUserData, noShutdown)
 }
 
 func (t *targetrunner) unreg(action string, rmUserData, noShutdown bool) {

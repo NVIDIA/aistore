@@ -266,18 +266,18 @@ func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, resu
 // POST /v1/cluster - handles joins and keepalives
 func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	var (
-		regReq       cluMeta
-		nsi          *cluster.Snode
-		operation    string // one of: admin-join, self-join, keepalive
-		nonElectable bool
+		regReq cluMeta
+		nsi    *cluster.Snode
+		apiOp  string // one of: admin-join, self-join, keepalive
+		action string // msg.Action, one: cmn.ActSelfJoinProxy, ...
 	)
 	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathCluster.L)
 	if err != nil {
 		return
 	}
-	operation = apiItems[0]
+	apiOp = apiItems[0]
 	// Ignore keepalive beat if the primary is in transition.
-	if p.inPrimaryTransition.Load() && operation == cmn.Keepalive {
+	if p.inPrimaryTransition.Load() && apiOp == cmn.Keepalive {
 		return
 	}
 	if p.forwardCP(w, r, nil, "httpclupost") {
@@ -285,7 +285,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// unmarshal and validate
-	switch operation {
+	switch apiOp {
 	case cmn.AdminJoin: // administrative join
 		if cmn.ReadJSON(w, r, &regReq.SI) != nil {
 			return
@@ -310,7 +310,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			p.reg.pool = append(p.reg.pool, regReq)
 			p.reg.mtx.Unlock()
 		}
-	case cmn.Keepalive: // keep-alive beat
+	case cmn.Keepalive: // keep-alive
 		if cmn.ReadJSON(w, r, &regReq) != nil {
 			return
 		}
@@ -323,6 +323,23 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err)
 		return
 	}
+	// given node and operation, set msg.Action
+	switch apiOp {
+	case cmn.AdminJoin:
+		if nsi.IsProxy() {
+			action = cmn.ActAdminJoinProxy
+		} else {
+			action = cmn.ActAdminJoinTarget
+		}
+	case cmn.SelfJoin:
+		if nsi.IsProxy() {
+			action = cmn.ActSelfJoinProxy
+		} else {
+			action = cmn.ActSelfJoinTarget
+		}
+	case cmn.Keepalive:
+		action = cmn.ActKeepaliveUpdate // (must be an extremely rare case)
+	}
 
 	// more validation
 	if p.NodeStarted() {
@@ -332,6 +349,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	nonElectable := false
 	if nsi.IsProxy() {
 		s := r.URL.Query().Get(cmn.URLParamNonElectable)
 		if nonElectable, err = cos.ParseBool(s); err != nil {
@@ -339,7 +357,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := validateHostname(nsi.PublicNet.NodeHostname); err != nil {
-		p.writeErrf(w, r, "%s: failed to %s %s - (err: %v)", p.si, operation, nsi.StringEx(), err)
+		p.writeErrf(w, r, "%s: failed to %s %s - (err: %v)", p.si, apiOp, nsi.StringEx(), err)
 		return
 	}
 	// set node flags
@@ -350,13 +368,13 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if nonElectable {
 		nsi.Flags = nsi.Flags.Set(cluster.SnodeNonElectable)
 	}
-	// call it back
-	if operation == cmn.AdminJoin {
-		if errCode, err := p.adminJoinHandshake(nsi, operation); err != nil {
+	if apiOp == cmn.AdminJoin {
+		// handshake: call the node with cluster-metadata included
+		if errCode, err := p.adminJoinHandshake(nsi, apiOp); err != nil {
 			p.writeErr(w, r, err, errCode)
 			return
 		}
-	} else if operation == cmn.SelfJoin {
+	} else if apiOp == cmn.SelfJoin {
 		// check for dup node ID
 		if osi := smap.GetNode(nsi.ID()); osi != nil && !osi.Equals(nsi) {
 			if duplicate, err := p.detectDaemonDuplicate(osi, nsi); err != nil {
@@ -371,40 +389,26 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p.owner.smap.Lock()
-	update, err := p.handleJoinKalive(nsi, regReq.Smap, operation, nsi.Flags)
+	update, err := p.handleJoinKalive(nsi, regReq.Smap, apiOp, nsi.Flags)
 	if !nsi.IsProxy() && p.NodeStarted() {
 		if p.owner.rmd.rebalance.CAS(false, regReq.RebInterrupted) && regReq.RebInterrupted {
 			glog.Errorf("%s: target %s reports interrupted rebalance", p.si, nsi.StringEx())
 		}
 	}
 	p.owner.smap.Unlock()
-
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
-
 	if !update {
 		return
 	}
 
-	msg := &cmn.ActionMsg{Action: cmn.ActJoinProxy}
-	if operation == cmn.SelfJoin {
-		msg.Action, msg.Name = cmn.ActSelfJoinTarget, nsi.ID()
-		glog.Infof("%s: %s %s (%s)...", p.si, operation, nsi.StringEx(), regReq.Smap)
-		// send cluster-meta to the self-joining node
-		meta, err := p.cluMeta(cmetaFillOpt{skipSmap: true})
-		if err != nil {
-			p.writeErr(w, r, err)
-			return
-		}
-		p.writeJSON(w, r, meta, path.Join(msg.Action, nsi.ID()))
-	} else if operation == cmn.AdminJoin {
-		msg.Name = nsi.ID()
-		if !nsi.IsProxy() {
-			msg.Action = cmn.ActAdminJoinTarget
-		}
-		// Return the node ID and rebalance ID when the node is joined by user.
+	msg := &cmn.ActionMsg{Action: action, Name: nsi.ID()}
+	glog.Infof("%s: %s(%q) %s (%s)...", p.si, apiOp, action, nsi.StringEx(), regReq.Smap)
+
+	if apiOp == cmn.AdminJoin {
+		// return both node ID and rebalance ID
 		rebID, err := p.updateAndDistribute(nsi, msg, nsi.Flags)
 		if err != nil {
 			p.writeErr(w, r, err)
@@ -413,19 +417,30 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		p.writeJSON(w, r, api.JoinNodeResult{DaemonID: nsi.Name(), RebalanceID: rebID}, "")
 		return
 	}
+
+	if apiOp == cmn.SelfJoin {
+		// respond to the self-joining node with cluster-meta that does not include Smap
+		meta, err := p.cluMeta(cmetaFillOpt{skipSmap: true})
+		if err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+		p.writeJSON(w, r, meta, path.Join(msg.Action, nsi.ID()))
+	}
+
 	go p.updateAndDistribute(nsi, msg, nsi.Flags)
 }
 
 // when joining manually, update the node with cluster meta that does not include Smap (the later
 // gets metasync-ed upon success of this primary <=> joining node "handshake")
-func (p *proxyrunner) adminJoinHandshake(nsi *cluster.Snode, operation string) (errCode int, err error) {
+func (p *proxyrunner) adminJoinHandshake(nsi *cluster.Snode, apiOp string) (errCode int, err error) {
 	meta, err := p.cluMeta(cmetaFillOpt{skipSmap: true})
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
 	body := cos.MustMarshal(meta)
 	if glog.FastV(3, glog.SmoduleAIS) {
-		glog.Infof("%s: %s %s => (%s)", p.si, operation, nsi.StringEx(), p.owner.smap.get().StringEx())
+		glog.Infof("%s: %s %s => (%s)", p.si, apiOp, nsi.StringEx(), p.owner.smap.get().StringEx())
 	}
 	config := cmn.GCO.Get()
 	args := callArgs{
@@ -442,18 +457,18 @@ func (p *proxyrunner) adminJoinHandshake(nsi *cluster.Snode, operation string) (
 		err = fmt.Errorf("%s: failed to reach %s at %s:%s: %w",
 			p.si, nsi.StringEx(), nsi.PublicNet.NodeHostname, nsi.PublicNet.DaemonPort, res.err)
 	} else {
-		err = res.errorf("%s: failed to %s %s: %v", p.si, operation, nsi.StringEx(), res.err)
+		err = res.errorf("%s: failed to %s %s: %v", p.si, apiOp, nsi.StringEx(), res.err)
 	}
 	errCode = res.status
 	return
 }
 
-// NOTE: under lock
-func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, operation string, flags cluster.SnodeFlags) (upd bool, err error) {
+// NOTE: executes under Smap lock
+func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, apiOp string, flags cluster.SnodeFlags) (upd bool, err error) {
 	smap := p.owner.smap.get()
-	keepalive := operation == cmn.Keepalive
+	keepalive := apiOp == cmn.Keepalive
 	if !smap.isPrimary(p.si) {
-		err = newErrNotPrimary(p.si, smap, "cannot "+operation+" "+nsi.StringEx())
+		err = newErrNotPrimary(p.si, smap, "cannot "+apiOp+" "+nsi.StringEx())
 		return
 	}
 	if nsi.IsProxy() {

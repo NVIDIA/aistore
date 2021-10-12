@@ -2411,7 +2411,7 @@ func (p *proxyrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	caller := r.Header.Get(cmn.HdrCallerName)
-	if err := p.applyRegMeta(cmn.ActJoinProxy, body, caller); err != nil {
+	if err := p.applyRegMeta(cmn.ActAdminJoinProxy, body, caller); err != nil {
 		p.writeErr(w, r, err)
 	}
 }

@@ -42,7 +42,7 @@ var (
 		subcmdDecommission: {
 			noRebalanceFlag,
 			noShutdownFlag,
-			dontRmUserDataFlag,
+			rmUserDataFlag,
 		},
 	}
 
@@ -255,11 +255,11 @@ func maintShutDecommHandler(c *cli.Context) (err error) {
 	}
 
 	var (
-		xactID         string
-		skipRebalance  = flagIsSet(c, noRebalanceFlag) || node.IsProxy()
-		noShutdown     = flagIsSet(c, noShutdownFlag)
-		dontRmUserData = flagIsSet(c, dontRmUserDataFlag)
-		actValue       = &cmn.ActValRmNode{DaemonID: sid, SkipRebalance: skipRebalance, NoShutdown: noShutdown}
+		xactID        string
+		skipRebalance = flagIsSet(c, noRebalanceFlag) || node.IsProxy()
+		noShutdown    = flagIsSet(c, noShutdownFlag)
+		rmUserData    = flagIsSet(c, rmUserDataFlag)
+		actValue      = &cmn.ActValRmNode{DaemonID: sid, SkipRebalance: skipRebalance, NoShutdown: noShutdown}
 	)
 	if skipRebalance && node.IsTarget() {
 		fmt.Fprintf(c.App.Writer,
@@ -270,16 +270,15 @@ func maintShutDecommHandler(c *cli.Context) (err error) {
 	if noShutdown && action != subcmdDecommission {
 		fmt.Fprintf(c.App.Writer, "Warning: option `--%s` is valid only for %q and will be ignored\n",
 			noShutdownFlag.Name, subcmdDecommission)
-		noShutdown = false
+	} else {
+		actValue.NoShutdown = noShutdown
 	}
-	if dontRmUserData && action != subcmdDecommission {
+	if rmUserData && action != subcmdDecommission {
 		fmt.Fprintf(c.App.Writer, "Warning: option `--%s` is valid only for %q and will be ignored\n",
-			dontRmUserDataFlag.Name, subcmdDecommission)
-		dontRmUserData = false
+			rmUserDataFlag.Name, subcmdDecommission)
+	} else {
+		actValue.RmUserData = rmUserData
 	}
-	actValue.NoShutdown = noShutdown
-	actValue.RmUserData = !dontRmUserData
-
 	switch action {
 	case subcmdStartMaint:
 		xactID, err = api.StartMaintenance(defaultAPIParams, actValue)

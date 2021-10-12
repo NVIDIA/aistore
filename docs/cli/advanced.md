@@ -113,8 +113,11 @@ $ ais advanced preload ais://bucket
 
 `ais advanced remove-from-smap DAEMON_ID`
 
-Immediately remove a node from the cluster map. The primary proxy cannot be removed.
-In case of target, immediate removal may result in data loss because due to all the node's data become inaccessible.
+Immediately remove node from the cluster map.
+
+Beware! When the node in question is ais target, the operation may (and likely will) result in a data loss that cannot be undone. Use decommission and start/stop maintenance operations to perform graceful removal.
+
+Any attempt to remove from the cluster map `primary` - ais gateway that currently acts as the primary (aka leader) - will fail.
 
 ### Examples
 

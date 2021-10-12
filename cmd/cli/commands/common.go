@@ -466,9 +466,9 @@ var (
 		Name:  "no-shutdown",
 		Usage: "do not shutdown node upon decommissioning it from the cluster",
 	}
-	dontRmUserDataFlag = cli.BoolFlag{
-		Name:  "dont-rm-user-data",
-		Usage: "do not remove all user data when decommissioning node from the cluster (default = false)",
+	rmUserDataFlag = cli.BoolFlag{
+		Name:  "rm-user-data",
+		Usage: "remove all user data when decommissioning node from the cluster",
 	}
 
 	longRunFlags = []cli.Flag{refreshFlag, countFlag}

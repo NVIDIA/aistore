@@ -163,7 +163,7 @@ func (p *proxyrunner) secondaryStartup(smap *smapX, primaryURLs ...string) error
 		smap.Primary = nil
 	}
 	p.owner.smap.put(smap)
-	if status, err := p.joinCluster(cmn.ActJoinProxy, primaryURLs...); err != nil {
+	if status, err := p.joinCluster(cmn.ActSelfJoinProxy, primaryURLs...); err != nil {
 		glog.Errorf("%s failed to join cluster (status: %d, err: %v)", p.si.StringEx(), status, err)
 		return err
 	}
@@ -177,7 +177,7 @@ func (p *proxyrunner) secondaryStartup(smap *smapX, primaryURLs ...string) error
 			return
 		}
 		if cii != nil {
-			if status, err := p.joinCluster(cmn.ActJoinProxy, cii.Smap.Primary.CtrlURL, cii.Smap.Primary.PubURL); err != nil {
+			if status, err := p.joinCluster(cmn.ActSelfJoinProxy, cii.Smap.Primary.CtrlURL, cii.Smap.Primary.PubURL); err != nil {
 				glog.Errorf("%s failed to re-join cluster (status: %d, err: %v)", p.si.StringEx(), status, err)
 				return
 			}

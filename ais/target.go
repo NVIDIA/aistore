@@ -340,7 +340,7 @@ func (t *targetrunner) Run() error {
 				glog.Flush()
 			}
 		}()
-		// see endStandby()
+		// see endStartupStandby()
 	} else {
 		// discover primary and join cluster (compare with manual `cmn.AdminJoin`)
 		if status, err := t.joinCluster(cmn.ActSelfJoinTarget); err != nil {
