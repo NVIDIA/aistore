@@ -29,7 +29,7 @@ var (
 		commandSet:       {"update", "assign", "modify"},
 		commandShow:      {"view", "display", "list"},
 		commandRemove:    {"remove", "delete", "del", "evict", "destroy"},
-		commandMv:        {"move", "rename"},
+		commandRename:    {"move", "rename"},
 		commandCopy:      {"copy", "replicate"},
 		commandGet:       {"fetch", "read"},
 		commandPrefetch:  {"load", "preload", "warmup", "cache"},

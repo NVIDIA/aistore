@@ -19,7 +19,7 @@ import (
 var (
 	objectCmdsFlags = map[string][]cli.Flag{
 		commandRemove: baseLstRngFlags,
-		commandMv:     {},
+		commandRename: {},
 		commandGet: {
 			offsetFlag,
 			lengthFlag,
@@ -107,10 +107,10 @@ var (
 			objectCmdSetCustom,
 			makeAlias(showCmdObject, "", true, commandShow), // alias for `ais show`
 			{
-				Name:      commandMv,
+				Name:      commandRename,
 				Usage:     "move an object in an ais bucket",
 				ArgsUsage: "BUCKET/OBJECT_NAME NEW_OBJECT_NAME",
-				Flags:     objectCmdsFlags[commandMv],
+				Flags:     objectCmdsFlags[commandRename],
 				Action:    mvObjectHandler,
 				BashComplete: oldAndNewBucketCompletions(
 					[]cli.BashCompleteFunc{}, true /* separator */, cmn.ProviderAIS),

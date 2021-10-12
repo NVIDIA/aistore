@@ -28,15 +28,20 @@ Further:
 
 * For additional information on working with buckets, please refer to [bucket readme](bucket.md).
 * For API reference, see [the RESTful API reference and examples](http_api.md).
-* For AIS command-line management, see [CLI](/docs/cli.md).
+* For AIS command-line management, see [CLI](cli.md).
 
 ## Remote AIS cluster
 
-In addition to the listed above 3rd party Cloud storages and non-Cloud HTTP(S) based datasets, AIS *integrates with itself* via its own RESTful API.
-In other words, one AIS cluster can be *attached* to another (to transparently access and replicate each other's distributed storage).
+In addition to the listed above 3rd party Cloud storages and non-Cloud HTTP(S) and HDFS-based backends, any given pair of AIS clusters can be organized in a way where one cluster would be providing fully-accessible *backend* to another.
 
-Between two AIS clusters A and B the same exact rules apply: as soon as B gets attached to A, any read access to (remote) objects and datasets from B will have the side effect of cluster A persistently caching those objects and datasets on its own clustered servers (aka storage targets), subject to the rules and policies configured on the corresponding A's buckets.
-By *attaching* AIS clusters we are, effectively and ad-hoc, forming a unified global namespace of all individually hosted datasets.
+Terminology:
+
+| Term | Comment |
+|--- | --- |
+| `attach` remote cluster | Allow one cluster to see remote datasets, cache those datasets on demand, copy remote buckets, list, create, and destroy remote buckets, read and write remote buckets, etc. |
+| `detach` remote cluster | Operation that (as the name implies) removes the corresponding *attachment* |
+| `alias` | An optional user-friendly alias that can be assigned at *attachment* time and be further used in all subsequent operations instead of the remote cluster's UUID |
+| `global namespace` | Refers to the capability to unambiguously indicate and access any dataset in an arbitrary network (or DAG, to be precise) of AIS clusters whereby some clusters are `attached` to another ones. By *attaching* AIS clusters we are, effectively and ad-hoc, forming a unified global namespace of all individually hosted datasets. |
 
 > Example working with remote AIS cluster (as well as easy-to-use scripts) can be found in the [README for developers](development.md).
 
@@ -45,7 +50,7 @@ By *attaching* AIS clusters we are, effectively and ad-hoc, forming a unified gl
 Examples first. The following two commands attach and then show remote cluster at the address`my.remote.ais:51080`:
 
 ```console
-$ ais cluster attach alias111=http://my.remote.ais:51080
+$ ais cluster remote-attach alias111=http://my.remote.ais:51080
 Remote cluster (alias111=http://my.remote.ais:51080) successfully attached
 $ ais show remote-cluster
 UUID      URL                     Alias     Primary         Smap  Targets  Online
@@ -69,7 +74,7 @@ Notice the difference between the first and the second lines in the printout abo
 To `detach` any of the previously configured association, simply run:
 
 ```console
-$ ais cluster detach alias111
+$ ais cluster remote-detach alias111
 $ ais show remote-cluster
 UUID        URL                       Alias     Primary         Smap  Targets  Online
 <alias222>  <other.remote.ais:51080>            n/a             n/a   n/a      no
@@ -110,10 +115,11 @@ For more usage examples, please see:
 * [working with remote AIS cluster](bucket.md#cli-working-with-remote-ais-cluster)
 * [example: minimal remote cluster](development.md#example-minimal-remote-cluster)
 
-And one final comment:
+And one more comment:
 
-You can run `ais remote attach` and/or `ais show remote-cluster` CLI to *refresh* remote configuration: check availability and reload cluster maps.
-In other words, repeating the same `ais cluster attach` command will have the side effect of refreshing all the currently configured attachments.
+You can run `ais cluster remote-attach` and/or `ais show remote-cluster` CLI to *refresh* remote configuration: **check availability** and **reload** remote cluster maps.
+
+In other words, repeating the same `ais cluster remote-attach` command will have the side effect of refreshing all the currently configured attachments.
 Or, use `ais show remote-cluster` CLI for the same exact purpose.
 
 ## Cloud object storage

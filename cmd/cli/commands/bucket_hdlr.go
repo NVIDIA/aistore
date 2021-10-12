@@ -25,7 +25,7 @@ const (
 var (
 	bucketCmdsFlags = map[string][]cli.Flag{
 		commandRemove: {ignoreErrorFlag},
-		commandMv:     {waitFlag},
+		commandRename: {waitFlag},
 		commandCreate: {
 			ignoreErrorFlag,
 			bucketPropsFlag,
@@ -129,10 +129,10 @@ var (
 				BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),
 			},
 			{
-				Name:      commandMv,
+				Name:      commandRename,
 				Usage:     "rename/move ais bucket",
 				ArgsUsage: "BUCKET NEW_BUCKET",
-				Flags:     bucketCmdsFlags[commandMv],
+				Flags:     bucketCmdsFlags[commandRename],
 				Action:    mvBucketHandler,
 				BashComplete: oldAndNewBucketCompletions(
 					[]cli.BashCompleteFunc{},
@@ -424,7 +424,7 @@ func mvBucketHandler(c *cli.Context) error {
 		return err
 	}
 	if bckFrom.Equal(bckTo) {
-		return incorrectUsageMsg(c, errFmtSameBucket, commandMv, bckTo)
+		return incorrectUsageMsg(c, errFmtSameBucket, commandRename, bckTo)
 	}
 
 	return mvBucket(c, bckFrom, bckTo)

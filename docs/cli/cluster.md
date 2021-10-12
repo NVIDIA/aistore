@@ -24,9 +24,10 @@ This section lists cluster and node management operations the AIS CLI, with `ais
 - [Show disk stats](#show-disk-stats)
 - [Join a node](#join-a-node)
 - [Remove a node](#remove-a-node)
-- [Attach remote cluster](#attach-remote-cluster)
-- [Detach remote cluster](#detach-remote-cluster)
-- [Show remote clusters](#show-remote-clusters)
+- [Remote AIS cluster](#remote-ais-cluster)
+  - [Attach remote cluster](#attach-remote-cluster)
+  - [Detach remote cluster](#detach-remote-cluster)
+  - [Show remote clusters](#show-remote-clusters)
 
 ## Cluster or Daemon status
 
@@ -260,48 +261,59 @@ TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL      
 165274t8087      0.10%           31.28GiB        16%             2.458TiB        0.12%           -               80s
 ```
 
-## Attach remote cluster
+## Remote AIS cluster
 
-`ais cluster attach UUID=URL [UUID=URL...]`
+Given an arbitrary pair of AIS clusters A and B, cluster B can be *attached* to cluster A thus in effect providing (to A) a fully-accessible (list-able, readable, writeable) *backend*.
+
+For background, terminologyi and definitions, and for many more usage examples, please see:
+
+* [Remote AIS cluster](/docs/providers.md#remote-ais-cluster)
+* [Usage examples and easy-to-use scripts for developers](/docs/development.md)
+
+### Attach remote cluster
+
+`ais cluster remote-attach UUID=URL [UUID=URL...]`
 
 or
 
-`ais cluster attach ALIAS=URL [ALIAS=URL...]`
+`ais cluster remote-attach ALIAS=URL [ALIAS=URL...]`
 
 Attach a remote AIS cluster to this one by the remote cluster public URL. Alias(a user-defined name) can be used instead of cluster UUID for convenience.
 For more details and background on *remote clustering*, please refer to this [document](/docs/providers.md).
 
-### Examples
+#### Examples
 
-First cluster is attached by its UUID, the second one gets user-friendly alias.
-
-```console
-$ ais cluster attach a345e890=http://one.remote:51080 two=http://two.remote:51080`
-```
-
-## Detach remote cluster
-
-`ais cluster detach UUID|ALIAS`
-
-Detach a remote cluster from AIS storage by its alias or UUID.
-
-### Examples
+Attach two remote clusters, the first - by its UUID, the second one - via user-friendly alias (`two`).
 
 ```console
-$ ais cluster detach two
+$ ais cluster remote-attach a345e890=http://one.remote:51080 two=http://two.remote:51080`
 ```
 
-## Show remote clusters
+### Detach remote cluster
+
+`ais cluster remote-detach UUID|ALIAS`
+
+Detach a remote cluster using its alias or UUID.
+
+#### Examples
+
+Example below assumes that the remote has user-given alias `two`:
+
+```console
+$ ais cluster remote-detach two
+```
+
+### Show remote clusters
 
 `ais show remote-cluster`
 
 Show details about attached remote clusters.
 
-### Examples
+#### Examples
 The following two commands attach and then show remote cluster at the address `my.remote.ais:51080`:
 
 ```console
-$ ais cluster attach alias111=http://my.remote.ais:51080
+$ ais cluster remote-attach alias111=http://my.remote.ais:51080
 Remote cluster (alias111=http://my.remote.ais:51080) successfully attached
 $ ais show remote-cluster
 UUID      URL                     Alias     Primary         Smap  Targets  Online
@@ -325,7 +337,7 @@ Notice the difference between the first and the second lines in the printout abo
 To `detach` any of the previously configured association, simply run:
 
 ```console
-$ ais cluster detach alias111
+$ ais cluster remote-detach alias111
 $ ais show remote-cluster
 UUID        URL                       Alias     Primary         Smap  Targets  Online
 <alias222>  <other.remote.ais:51080>            n/a             n/a   n/a      no

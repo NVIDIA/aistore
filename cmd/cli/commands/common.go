@@ -36,15 +36,14 @@ const (
 	commandCreate    = "create"
 	commandECEncode  = "ec-encode"
 	commandEvict     = "evict"
-	commandGenShards = "gen-shards"
+	commandPrefetch  = "prefetch"
 	commandGet       = "get"
 	commandList      = "ls"
-	commandPrefetch  = cmn.ActPrefetchObjects
 	commandPromote   = "promote"
 	commandPut       = "put"
 	commandSetCustom = "set-custom"
 	commandRemove    = "rm"
-	commandMv        = "mv"
+	commandRename    = "mv"
 	commandSet       = "set"
 	commandMirror    = "mirror"
 	commandStart     = cmn.ActXactStart
@@ -53,6 +52,8 @@ const (
 	commandAlias     = "alias"
 	commandStorage   = "storage"
 	commandArch      = "archive"
+
+	commandGenShards = "gen-shards"
 
 	// Common Subcommands
 	// NOTE: second level subcommands are preferably verbs
