@@ -1,6 +1,7 @@
-// Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
+// Package volume provides the volume abstraction and methods to bootstrap, store with redundancy,
+// and validate the corresponding metadata. AIS volume is built on top of mountpaths (fs package).
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package volume_test
 
@@ -28,7 +29,7 @@ func TestVMD(t *testing.T) {
 
 func testVMDCreate(t *testing.T, mpaths fs.MPI, daemonID string) {
 	var (
-		vmd, err  = volume.CreateVMD(daemonID)
+		vmd, err  = volume.NewFromMPI(daemonID)
 		mpathsCnt = len(mpaths)
 	)
 
@@ -45,7 +46,7 @@ func testVMDCreate(t *testing.T, mpaths fs.MPI, daemonID string) {
 }
 
 func testVMDPersist(t *testing.T, daemonID string) {
-	vmd, err := volume.CreateVMD(daemonID)
+	vmd, err := volume.NewFromMPI(daemonID)
 	tassert.CheckFatal(t, err)
 
 	newVMD, err := volume.LoadVMDTest()

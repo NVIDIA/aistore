@@ -138,7 +138,7 @@ func (g *fsprungroup) redistributeMD() {
 			cos.ExitLogf("%v", err)
 		}
 	}
-	if _, err := volume.CreateVMD(g.t.si.ID()); err != nil {
+	if _, err := volume.NewFromMPI(g.t.si.ID()); err != nil {
 		debug.AssertNoErr(err)
 		cos.ExitLogf("%v", err)
 	}

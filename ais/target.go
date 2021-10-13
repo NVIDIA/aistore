@@ -178,7 +178,7 @@ func (t *targetrunner) init(config *cmn.Config) {
 
 	cos.InitShortID(t.si.Digest())
 
-	t.initFs()
+	volume.Init(t, config)
 
 	t.initHostIP()
 	daemon.rg.add(t)
@@ -223,57 +223,6 @@ func initTID(config *cmn.Config) (tid string) {
 	cos.Assert(tid != "")
 	glog.Infof("t[%s] ID randomly generated", tid)
 	return
-}
-
-func (t *targetrunner) initFs() {
-	var (
-		vmd    *volume.VMD
-		config = cmn.GCO.Get()
-		tid    = t.si.ID()
-	)
-	fs.New()
-
-	// fs.Mountpaths must be inited prior to all runners that utilize them.
-	// For mountpath definition, see `fs/mountfs.go`.
-	if config.TestingEnv() {
-		glog.Warningf("Using %d mountpaths for testing with disabled FsID check", config.TestFSP.Count)
-		fs.DisableFsIDCheck()
-	}
-	if v, err := volume.BootstrapVMD(tid, config.FSpaths.Paths); err != nil {
-		cos.ExitLogf("%v", err)
-	} else {
-		vmd = v
-	}
-
-	if vmd == nil {
-		if err := volume.InitNoVMD(tid, config); err != nil {
-			cos.ExitLogf("%v", err)
-		}
-		glog.Warningf("%s: initializing new VMD %v", t.si, config.FSpaths.Paths.ToSlice())
-		if v, err := volume.CreateVMD(tid); err != nil {
-			cos.ExitLogf("%v", err)
-		} else {
-			vmd = v
-		}
-		glog.Warningf("%s: %s created", t.si, vmd)
-		return
-	}
-
-	if vmdChanged, err := volume.InitVMD(tid, vmd); err != nil {
-		cos.ExitLogf("%v", err)
-	} else if !vmdChanged {
-		glog.Infoln(vmd.String())
-		return
-	}
-
-	daemon.resilver.required = true
-	daemon.resilver.reason = "VMD change detected"
-	if v, err := volume.CreateVMD(tid); err != nil {
-		cos.ExitLogf("%v", err)
-	} else {
-		vmd = v
-	}
-	glog.Warningf("%s _changed_ and recreated", vmd)
 }
 
 func regDiskMetrics(tstats *stats.Trunner, mpi fs.MPI) {

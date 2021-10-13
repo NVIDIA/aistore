@@ -27,7 +27,7 @@ const (
 type (
 	ErrStorageIntegrity struct {
 		Msg  string
-		Code int // see enum above
+		Code int // Sie* enum above
 	}
 	ErrMpathNoDisks struct {
 		Mi *MountpathInfo
