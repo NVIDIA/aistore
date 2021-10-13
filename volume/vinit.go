@@ -37,7 +37,8 @@ func Init(t cluster.Target, config *cmn.Config) {
 
 	// NOTE happens:
 	// a) upon the very first deployment, or
-	// b) when config doesn't contain a single valid mountpath (that in turn contains an instance of VMD, possibly outdated)
+	// b) when config doesn't contain a single valid mountpath that in turn contains a copy of VMD, possibly outdated
+	// TODO: always keep local config in-sync with mountpath changes
 	if vmd == nil {
 		if err := configInitMPI(tid, config); err != nil {
 			cos.ExitLogf("%s: %v", t.Snode(), err)
@@ -52,8 +53,25 @@ func Init(t cluster.Target, config *cmn.Config) {
 		return
 	}
 
-	if err := vmdInitMPI(tid, vmd); err != nil {
+	var persist bool
+	if v, haveOld, err := vmdInitMPI(tid, config, vmd, 1 /*pass #1*/); err != nil {
 		cos.ExitLogf("%s: %v", t.Snode(), err)
+	} else {
+		if v != nil && v.Version > vmd.Version {
+			vmd = v
+			persist = true
+		}
+		if haveOld {
+			persist = true
+		}
+		if v, _, err := vmdInitMPI(tid, config, vmd, 2 /*pass #2*/); err != nil {
+			cos.ExitLogf("%s: %v", t.Snode(), err)
+		} else {
+			debug.Assert(v == nil || v.Version == vmd.Version)
+		}
+		if persist {
+			vmd.persist()
+		}
 	}
 	glog.Infoln(vmd.String())
 }
@@ -113,10 +131,9 @@ func configInitMPI(tid string, config *cmn.Config) (err error) {
 	return
 }
 
-// VMD => MPI
-func vmdInitMPI(tid string, vmd *VMD) (err error) {
+// VMD => MPI in two passes
+func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int) (maxVerVMD *VMD, haveOld bool, err error) {
 	var (
-		config         = cmn.GCO.Get()
 		availablePaths = make(fs.MPI, len(vmd.Mountpaths))
 		disabledPaths  = make(fs.MPI)
 	)
@@ -140,14 +157,27 @@ func vmdInitMPI(tid string, vmd *VMD) (err error) {
 				}
 				glog.Error(err)
 			}
-			if err = mi.AddEnabled(tid, availablePaths, config); err != nil {
-				return
+			if pass == 1 {
+				if v, old, errLoad := loadOneVMD(tid, vmd, mi.Path, len(vmd.Mountpaths)); v != nil {
+					debug.Assert(v.Version > vmd.Version)
+					maxVerVMD = v
+				} else if old {
+					debug.AssertNoErr(errLoad)
+					haveOld = true
+				} else {
+					glog.Warningf("%s: %v", mi, errLoad)
+				}
+			} else {
+				debug.Assert(pass == 2)
+				if err = mi.AddEnabled(tid, availablePaths, config); err != nil {
+					return
+				}
 			}
 			if len(mi.Disks) == 0 && !config.TestingEnv() {
 				err = &fs.ErrMpathNoDisks{Mi: mi}
 				glog.Errorf("Warning: %v", err)
 			}
-		} else {
+		} else if pass == 2 {
 			mi.Fs = fsMpathMD.Fs
 			mi.FsType = fsMpathMD.FsType
 			mi.FsID = fsMpathMD.FsID
@@ -155,8 +185,11 @@ func vmdInitMPI(tid string, vmd *VMD) (err error) {
 		}
 	}
 
+	if pass == 1 {
+		return
+	}
 	fs.PutMpaths(availablePaths, disabledPaths)
-
+	// TODO: insufficient
 	if la, lc := len(availablePaths), len(config.FSpaths.Paths); la != lc {
 		glog.Warningf("number of available mountpaths (%d) differs from the configured (%d)", la, lc)
 		glog.Warningln("run 'ais storage mountpath [attach|detach]', fix the config, or ignore")
@@ -192,7 +225,7 @@ func loadVMD(tid string, available fs.MPI) (vmd *VMD, err error) {
 	l := len(available)
 	for mpath := range available {
 		var v *VMD
-		v, err = loadOneVMD(tid, vmd, mpath, l)
+		v, _, err = loadOneVMD(tid, vmd, mpath, l)
 		if err != nil {
 			return
 		}
@@ -204,35 +237,35 @@ func loadVMD(tid string, available fs.MPI) (vmd *VMD, err error) {
 }
 
 // given mountpath return a greater-version VMD if available
-func loadOneVMD(tid string, vmd *VMD, mpath string, l int) (*VMD, error) {
+func loadOneVMD(tid string, vmd *VMD, mpath string, l int) (*VMD, bool /*have old*/, error) {
 	var (
 		v   = newVMD(l)
 		err = v.load(mpath)
 	)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, false, nil
 		}
-		return nil, &fs.ErrStorageIntegrity{
+		return nil, false, &fs.ErrStorageIntegrity{
 			Code: fs.SieMetaCorrupted,
 			Msg:  fmt.Sprintf("failed to load VMD from %q: %v", mpath, err),
 		}
 	}
 	if vmd == nil {
 		if tid != "" && v.DaemonID != tid {
-			return nil, &fs.ErrStorageIntegrity{
+			return nil, false, &fs.ErrStorageIntegrity{
 				Code: fs.SieTargetIDMismatch,
 				Msg:  fmt.Sprintf("%s has a different target ID: %q != %q", v, v.DaemonID, tid),
 			}
 		}
-		return v, nil
+		return v, false, nil
 	}
 	//
 	// validate
 	//
 	debug.Assert(vmd.DaemonID == tid || tid == "")
 	if v.DaemonID != vmd.DaemonID {
-		return nil, &fs.ErrStorageIntegrity{
+		return nil, false, &fs.ErrStorageIntegrity{
 			Code: fs.SieTargetIDMismatch,
 			Msg:  fmt.Sprintf("%s has a different target ID: %q != %q", v, v.DaemonID, vmd.DaemonID),
 		}
@@ -241,17 +274,19 @@ func loadOneVMD(tid string, vmd *VMD, mpath string, l int) (*VMD, error) {
 		if !_mpathGreaterEq(v, vmd, mpath) {
 			glog.Warningf("mpath %s: VMD version mismatch: %s vs %s", mpath, v, vmd)
 		}
-		return v, nil
+		return v, false, nil
 	}
 	if v.Version < vmd.Version {
 		if !_mpathGreaterEq(vmd, v, mpath) {
 			glog.Warningf("mpath %s: VMD version mismatch: %s vs %s", mpath, vmd, v)
 		}
-	} else if !v.equal(vmd) { // NOTE: same version must be identical
+		return nil, true, nil // true: outdated copy that must be updated
+	}
+	if !v.equal(vmd) { // same version must be identical
 		err = &fs.ErrStorageIntegrity{
 			Code: fs.SieNotEqVMD,
 			Msg:  fmt.Sprintf("VMD differs: %s vs %s (%q)", vmd, v, mpath),
 		}
 	}
-	return nil, err
+	return nil, false, err
 }
