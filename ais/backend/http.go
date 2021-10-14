@@ -110,7 +110,7 @@ func (*httpProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err
 }
 
 func getOriginalURL(ctx context.Context, bck *cluster.Bck, objName string) (string, error) {
-	origURL, ok := ctx.Value(cmn.CtxOriginalURL).(string)
+	origURL, ok := ctx.Value(cos.CtxOriginalURL).(string)
 	if !ok || origURL == "" {
 		if bck.Props == nil {
 			return "", fmt.Errorf("failed to HEAD (%s): original_url is empty", bck.Bck)

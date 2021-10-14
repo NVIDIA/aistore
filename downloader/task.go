@@ -213,8 +213,8 @@ func (t *singleObjectTask) downloadRemote(lom *cluster.LOM) error {
 	ctx, cancel := context.WithTimeout(t.downloadCtx, t.initialTimeout())
 	defer cancel()
 	wrapReader := func(r io.ReadCloser) io.ReadCloser { return t.wrapReader(ctx, r) }
-	ctx = context.WithValue(ctx, cmn.CtxReadWrapper, cmn.ReadWrapperFunc(wrapReader))
-	ctx = context.WithValue(ctx, cmn.CtxSetSize, cmn.SetSizeFunc(t.setTotalSize))
+	ctx = context.WithValue(ctx, cos.CtxReadWrapper, cos.ReadWrapperFunc(wrapReader))
+	ctx = context.WithValue(ctx, cos.CtxSetSize, cos.SetSizeFunc(t.setTotalSize))
 
 	// Do final GET (prefetch) request.
 	_, err := t.parent.t.GetCold(ctx, lom, cluster.Prefetch)

@@ -707,7 +707,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 
 	if request.bck.IsHTTP() {
 		originalURL := query.Get(cmn.URLParamOrigURL)
-		ctx = context.WithValue(ctx, cmn.CtxOriginalURL, originalURL)
+		ctx = context.WithValue(ctx, cos.CtxOriginalURL, originalURL)
 		if !inBMD && originalURL == "" {
 			err = cmn.NewErrRemoteBckNotFound(request.bck.Bck)
 			t.writeErrSilent(w, r, err, http.StatusNotFound)
@@ -829,7 +829,7 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 	}
 	if bck.IsHTTP() {
 		originalURL := query.Get(cmn.URLParamOrigURL)
-		goi.ctx = context.WithValue(goi.ctx, cmn.CtxOriginalURL, originalURL)
+		goi.ctx = context.WithValue(goi.ctx, cos.CtxOriginalURL, originalURL)
 	}
 	if errCode, err := goi.getObject(); err != nil && err != errSendingResp {
 		t.writeErr(w, r, err, errCode)

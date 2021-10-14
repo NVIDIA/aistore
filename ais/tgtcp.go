@@ -884,10 +884,10 @@ func (t *targetrunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, paylo
 		return
 	}
 	if !t.NodeStarted() { // starting up
-		debug.Assert(msg.Action != cmn.ActAttach && msg.Action != cmn.ActDetach)
+		debug.Assert(msg.Action != cmn.ActAttachRemote && msg.Action != cmn.ActDetachRemote)
 		return
 	}
-	if msg.Action == cmn.ActAttach || msg.Action == cmn.ActDetach {
+	if msg.Action == cmn.ActAttachRemote || msg.Action == cmn.ActDetachRemote {
 		// NOTE: apply the entire config: add new and _refresh_ existing
 		aisConf, ok := newConfig.Backend.ProviderConf(cmn.ProviderAIS)
 		cos.Assert(ok)

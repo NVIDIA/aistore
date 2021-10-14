@@ -58,8 +58,9 @@ const (
 	ActECRespond       = "ecresp"   // respond to other targets' EC requests
 	ActECEncode        = "ecencode" // erasure code a bucket
 	ActStartGFN        = "metasync_start_gfn"
-	ActAttach          = "attach"
-	ActDetach          = "detach"
+
+	ActAttachRemote = "attach"
+	ActDetachRemote = "detach"
 
 	// Node maintenance & cluster membership (see the corresponding URL path words below)
 	ActStartMaintenance   = "startmaintenance"      // put into maintenance state

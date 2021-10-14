@@ -37,8 +37,8 @@ var (
 	URLPathClusterKalive  = urlpath(Version, Cluster, Keepalive)
 	URLPathClusterDaemon  = urlpath(Version, Cluster, Daemon)
 	URLPathClusterSetConf = urlpath(Version, Cluster, ActSetConfig)
-	URLPathClusterAttach  = urlpath(Version, Cluster, ActAttach)
-	URLPathClusterDetach  = urlpath(Version, Cluster, ActDetach)
+	URLPathClusterAttach  = urlpath(Version, Cluster, ActAttachRemote)
+	URLPathClusterDetach  = urlpath(Version, Cluster, ActDetachRemote)
 
 	URLPathDaemon               = urlpath(Version, Daemon)
 	URLPathDaemonProxy          = urlpath(Version, Daemon, Proxy)

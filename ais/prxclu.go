@@ -1059,15 +1059,14 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 			return
 		}
 		p.setClusterConfig(w, r, toUpdate, &cmn.ActionMsg{Action: action})
-	case cmn.ActAttach, cmn.ActDetach:
-		if err := p.attachDetach(w, r, action); err != nil {
+	case cmn.ActAttachRemote, cmn.ActDetachRemote:
+		if err := p.attachDetachRemote(w, r, action); err != nil {
 			return
 		}
 	}
 }
 
-func (p *proxyrunner) attachDetach(w http.ResponseWriter, r *http.Request, action string) (err error) {
-	// TODO: Implement `ActAttach` as transactions begin -- update locally -- metasync -- commit
+func (p *proxyrunner) attachDetachRemote(w http.ResponseWriter, r *http.Request, action string) (err error) {
 	var (
 		query = r.URL.Query()
 		what  = query.Get(cmn.URLParamWhat)
@@ -1077,7 +1076,6 @@ func (p *proxyrunner) attachDetach(w http.ResponseWriter, r *http.Request, actio
 		p.writeErr(w, r, err)
 		return
 	}
-
 	ctx := &configModifier{
 		pre:   p.attachDetachRemoteAIS,
 		final: p._syncConfFinal,
@@ -1085,7 +1083,6 @@ func (p *proxyrunner) attachDetach(w http.ResponseWriter, r *http.Request, actio
 		query: query,
 		wait:  true,
 	}
-
 	if _, err = p.owner.config.modify(ctx); err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -1102,7 +1099,7 @@ func (p *proxyrunner) attachDetachRemoteAIS(ctx *configModifier, config *globalC
 		v, ok   = config.Backend.ProviderConf(cmn.ProviderAIS)
 	)
 	if !ok || v == nil {
-		if action == cmn.ActDetach {
+		if action == cmn.ActDetachRemote {
 			err = fmt.Errorf("%s: remote cluster config is empty", p.si)
 			return
 		}
@@ -1112,7 +1109,7 @@ func (p *proxyrunner) attachDetachRemoteAIS(ctx *configModifier, config *globalC
 		cos.MustMorphMarshal(v, &aisConf)
 	}
 	// detach
-	if action == cmn.ActDetach {
+	if action == cmn.ActDetachRemote {
 		for alias := range query {
 			if alias == cmn.URLParamWhat {
 				continue

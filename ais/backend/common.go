@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 type ctx = context.Context // used when omitted for shortness sake
@@ -27,15 +28,15 @@ func creatingBucketNotSupportedErr(provider string) (errCode int, err error) {
 }
 
 func wrapReader(ctx context.Context, r io.ReadCloser) io.ReadCloser {
-	if v := ctx.Value(cmn.CtxReadWrapper); v != nil {
-		return v.(cmn.ReadWrapperFunc)(r)
+	if v := ctx.Value(cos.CtxReadWrapper); v != nil {
+		return v.(cos.ReadWrapperFunc)(r)
 	}
 	return r
 }
 
 func setSize(ctx context.Context, size int64) {
-	if v := ctx.Value(cmn.CtxSetSize); v != nil {
-		v.(cmn.SetSizeFunc)(size)
+	if v := ctx.Value(cos.CtxSetSize); v != nil {
+		v.(cos.SetSizeFunc)(size)
 	}
 }
 

@@ -78,7 +78,7 @@ func (m *AISBackendProvider) Apply(v interface{}, action string) error {
 	defer m.mu.Unlock()
 
 	// detach
-	if action == cmn.ActDetach {
+	if action == cmn.ActDetachRemote {
 		for alias, uuid := range m.alias {
 			if _, ok := clusterConf[alias]; !ok {
 				if _, ok = clusterConf[uuid]; !ok {
