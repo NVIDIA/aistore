@@ -104,7 +104,7 @@ func (co *configOwner) runPre(ctx *configModifier) (clone *globalConfig, err err
 	//       to initiate one.
 	if clone == nil {
 		clone = &globalConfig{}
-		_, err = jsp.Load(cmn.GCO.GetGlobalConfigPath(), clone, jsp.Plain())
+		_, err = jsp.Load(cmn.GCO.GetInitialGconfPath(), clone, jsp.Plain())
 		if err != nil {
 			return
 		}

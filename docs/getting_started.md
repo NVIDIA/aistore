@@ -42,6 +42,51 @@ The capability called [extended attributes](https://en.wikipedia.org/wiki/Extend
 MacOS/Darwin is also supported, albeit for development only.
 Certain capabilities related to querying the state-and-status of local hardware resources (memory, CPU, disks) may be missing, which is why we **strongly** recommend Linux for production deployments.
 
+## Make
+
+AIS comes with its own build system that we use in a variety of development and production environments. The very first `make` command to run would be:
+
+```console
+$ make help
+```
+
+The output - truncated below for the sake of brevity - includes supported subcommands, environment variables, and usage examples:
+
+```console
+Useful commands:
+  aisfs                          Build 'aisfs' binary
+  aisloader                      Build 'aisloader' binary
+  all                            Build all main binaries
+  authn                          Build 'authn' binary
+  ci                             Run CI related checkers and linters (requires BUCKET variable to be set)
+  clean-client-bindings          Remove all generated client binding files
+  clean                          Remove all AIS related files and binaries
+  cli-autocompletions            Add CLI autocompletions
+  cli                            Build CLI ('ais' binary)
+  deploy                         Build 'aisnode' and deploy the specified numbers of local AIS proxies and targets
+  deploy-docker                  Deploy AIS cluster inside the dockers
+...
+...
+
+Examples:
+# Deploy cluster locally
+$ make deploy
+
+# Stop locally deployed cluster and cleanup all cluster-related data and bucket metadata (but not cluster map)
+$ make kill clean
+
+# Stop and then deploy (non-interactively) cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build executable with support for GCP and AWS
+$ make kill deploy <<< $'7\n4\n4\ny\ny\nn\nn\n'
+
+# Redeploy (4 targets, 1 proxy) cluster; build executable for debug without any backend-supporting libs; use RUN_ARGS to pass an additional command-line option '-override_backends=true' to each running node
+$ MODE=debug RUN_ARGS=-override_backends=true make kill deploy <<< $'4\n1\n4\nn\nn\nn\nn\n'
+
+# Same as above, but additionally run all the 4 targets in a standby mode
+$ MODE=debug RUN_ARGS='-override_backends=true -standby' make kill deploy <<< $'4\n1\n4\nn\nn\nn\nn\n'
+...
+...
+```
+
 ## Kubernetes Deployments
 
 For any Kubernetes deployments (including, of course, production deployments) please use a separate and dedicated [AIS-K8s GitHub](https://github.com/NVIDIA/ais-k8s/blob/master/docs/README.md) repository. The repo contains [Helm Charts](https://github.com/NVIDIA/ais-k8s/tree/master/helm/ais/charts) and detailed [Playbooks](https://github.com/NVIDIA/ais-k8s/tree/master/playbooks) that cover a variety of use cases and configurations.

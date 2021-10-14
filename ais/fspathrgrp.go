@@ -97,6 +97,13 @@ func (g *fsprungroup) removeMountpath(mpath string) (removedMi *fs.MountpathInfo
 }
 
 func (g *fsprungroup) _postaddmi(action string, mi *fs.MountpathInfo) {
+	config := cmn.GCO.Get()
+	if !config.TestingEnv() { // testing fspaths are counted not enumerated
+		localConfig := &config.LocalConfig
+		if updated := localConfig.AddPath(mi.Path); updated {
+			localConfig.Save(daemon.cli.localConfigPath)
+		}
+	}
 	xreg.AbortAllMountpathsXactions()
 	go func() {
 		if cmn.GCO.Get().Resilver.Enabled {
@@ -114,6 +121,13 @@ func (g *fsprungroup) _postaddmi(action string, mi *fs.MountpathInfo) {
 }
 
 func (g *fsprungroup) _postdelmi(action string, mi *fs.MountpathInfo) {
+	config := cmn.GCO.Get()
+	if !config.TestingEnv() { // ditto
+		localConfig := &config.LocalConfig
+		if updated := localConfig.DelPath(mi.Path); updated {
+			localConfig.Save(daemon.cli.localConfigPath)
+		}
+	}
 	xreg.AbortAllMountpathsXactions()
 
 	go mi.EvictLomCache()

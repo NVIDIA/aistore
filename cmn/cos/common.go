@@ -251,12 +251,9 @@ func (ss StringSet) Add(keys ...string) {
 	}
 }
 
-func (ss StringSet) Contains(key string) bool {
-	if len(ss) == 0 {
-		return false
-	}
-	_, ok := ss[key]
-	return ok
+func (ss StringSet) Contains(key string) (yes bool) {
+	_, yes = ss[key]
+	return
 }
 
 func (ss StringSet) Delete(key string) {

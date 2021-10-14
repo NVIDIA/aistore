@@ -84,7 +84,7 @@ type (
 		mtx      sync.Mutex     // mutex for protecting updates of config
 		c        atomic.Pointer // pointer to `Config` (cluster + local + override config)
 		oc       atomic.Pointer // pointer to `ConfigToUpdate`, override configuration on node
-		confPath atomic.Pointer
+		confPath atomic.Pointer // initial global config path
 	}
 )
 
@@ -659,11 +659,11 @@ func (gco *globalConfigOwner) DiscardUpdate() {
 	gco.mtx.Unlock()
 }
 
-func (gco *globalConfigOwner) SetGlobalConfigPath(path string) {
+func (gco *globalConfigOwner) SetInitialGconfPath(path string) {
 	gco.confPath.Store(unsafe.Pointer(&path))
 }
 
-func (gco *globalConfigOwner) GetGlobalConfigPath() (s string) {
+func (gco *globalConfigOwner) GetInitialGconfPath() (s string) {
 	return *(*string)(gco.confPath.Load())
 }
 
@@ -782,7 +782,38 @@ func (c *ClusterConfig) String() string {
 // where a single local filesystem is partitioned between all (locally running)
 // targets and is used for both local and Cloud buckets
 func (c *Config) TestingEnv() bool {
+	return c.LocalConfig.TestingEnv()
+}
+
+func (c *LocalConfig) TestingEnv() bool {
 	return c.TestFSP.Count > 0
+}
+
+func (c *LocalConfig) AddPath(mpath string) (updated bool) {
+	debug.Assert(!c.TestingEnv())
+	if !c.FSpaths.Paths.Contains(mpath) {
+		return
+	}
+	c.FSpaths.Paths.Add(mpath)
+	return true
+}
+
+func (c *LocalConfig) DelPath(mpath string) (updated bool) {
+	debug.Assert(!c.TestingEnv())
+	if !c.FSpaths.Paths.Contains(mpath) {
+		return
+	}
+	c.FSpaths.Paths.Delete(mpath)
+	return true
+}
+
+func (c *LocalConfig) Save(confPath string) error {
+	// TODO -- FIXME
+	if true {
+		glog.Warningln("saving and then loading and merging local config is not supported yet")
+		return nil
+	}
+	return jsp.SaveMeta(confPath, c, nil)
 }
 
 // validKeepaliveType returns true if the keepalive type is supported.
@@ -1409,35 +1440,39 @@ func ipv4ListsEqual(alist, blist string) bool {
 // jsp //
 /////////
 
-func LoadConfig(confPath, localConfPath, daeRole string, config *Config) (err error) {
+func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) (err error) {
 	var (
 		overrideConfig *ConfigToUpdate
 		initial        bool
 	)
-	debug.Assert(confPath != "" && localConfPath != "")
-	GCO.SetGlobalConfigPath(confPath)
+	debug.Assert(globalConfPath != "" && localConfPath != "")
+	GCO.SetInitialGconfPath(globalConfPath)
 
-	// Load local config as plain-text
-	_, err = jsp.Load(localConfPath, &config.LocalConfig, jsp.Plain())
+	// Load local config
+	_, err = jsp.LoadMeta(localConfPath, &config.LocalConfig)
 	if err != nil {
-		return fmt.Errorf("failed to load local config %q, err: %v", localConfPath, err)
+		return fmt.Errorf("failed to load plain-text local config %q: %v", localConfPath, err)
 	}
 	glog.SetLogDir(config.LogDir)
 
-	// NOTE: If last updated version of config doesn't exist in the configured location,
-	//       global config from `confPath` is loaded as plain-text
-	//       and is only used when the node starts up;
-	//       once started, the node always relies on the last
-	//       updated version of the (global|local) config from the configured location
+	// NOTE: Normally, the last updated version of config doesn't exist in the config.ConfigDir
+	//       _iff_ the node is being deployed the very first time. In which case, we load the
+	//       initial plain-text global config from the command-line/environment specified `globalConfPath`.
+	//       Once started, the node then always relies on the last updated version stored in a binary
+	//       form according to associated ClusterConfig.JspOpts()
 	globalFpath := filepath.Join(config.ConfigDir, GlobalConfigFname)
 	_, err = jsp.LoadMeta(globalFpath, &config.ClusterConfig)
-	if os.IsNotExist(err) {
-		glog.Warningf("loading plain-text (initial) global config from %q", confPath)
-		_, err = jsp.Load(confPath, &config.ClusterConfig, jsp.Plain())
-		initial = true
-	}
 	if err != nil {
-		return fmt.Errorf("failed to load global config %q, err: %v", confPath, err)
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("failed to load global config %q: %v", globalFpath, err)
+		}
+		glog.Warningf("loading initial (plain-text) global config from %q", globalConfPath)
+		_, err = jsp.Load(globalConfPath, &config.ClusterConfig, jsp.Plain())
+		if err != nil {
+			return fmt.Errorf("failed to load global config %q: %v", globalConfPath, err)
+		}
+		initial = true
+		globalFpath = globalConfPath
 	}
 	debug.Assert(initial && config.Version == 0 || !initial && config.Version > 0)
 
@@ -1485,7 +1520,7 @@ func LoadConfig(confPath, localConfPath, daeRole string, config *Config) (err er
 	}
 	glog.Infof("log.dir: %q; l4.proto: %s; port: %d; verbosity: %s",
 		config.LogDir, config.Net.L4.Proto, config.HostNet.Port, config.Log.Level)
-	glog.Infof("config_file: %q periodic.stats_time: %v", confPath, config.Periodic.StatsTime)
+	glog.Infof("config: %q periodic.stats_time: %v", globalFpath, config.Periodic.StatsTime)
 	return
 }
 

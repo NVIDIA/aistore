@@ -164,7 +164,7 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int) (maxVerVMD *
 				} else if old {
 					debug.AssertNoErr(errLoad)
 					haveOld = true
-				} else {
+				} else if errLoad != nil {
 					glog.Warningf("%s: %v", mi, errLoad)
 				}
 			} else {
@@ -172,10 +172,10 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int) (maxVerVMD *
 				if err = mi.AddEnabled(tid, availablePaths, config); err != nil {
 					return
 				}
-			}
-			if len(mi.Disks) == 0 && !config.TestingEnv() {
-				err = &fs.ErrMpathNoDisks{Mi: mi}
-				glog.Errorf("Warning: %v", err)
+				if len(mi.Disks) == 0 && !config.TestingEnv() {
+					err = &fs.ErrMpathNoDisks{Mi: mi}
+					glog.Errorf("Warning: %v", err)
+				}
 			}
 		} else if pass == 2 {
 			mi.Fs = fsMpathMD.Fs

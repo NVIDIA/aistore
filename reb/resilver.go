@@ -36,8 +36,8 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xa
 		return
 	}
 	availablePaths, _ := fs.Get()
-	if len(availablePaths) < 2 {
-		glog.Errorf("Cannot run resilver with less than 2 mountpaths (%d)", len(availablePaths))
+	if len(availablePaths) < 1 {
+		glog.Error(fs.ErrNoMountpaths)
 		return
 	}
 

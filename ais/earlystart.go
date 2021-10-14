@@ -381,7 +381,7 @@ func (p *proxyrunner) _config(uuid string) (config *globalConfig, err error) {
 		return
 	}
 	// load plain-text backends and compare
-	confPath = cmn.GCO.GetGlobalConfigPath()
+	confPath = cmn.GCO.GetInitialGconfPath()
 	_, err = jsp.Load(confPath, &c, jsp.Plain())
 	if err != nil {
 		return

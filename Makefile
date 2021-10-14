@@ -280,7 +280,8 @@ help:
 		"make deploy" "Deploy cluster locally" \
 		"make kill clean" "Stop locally deployed cluster and cleanup all cluster-related data and bucket metadata (but not cluster map)" \
 		"make kill deploy <<< $$'7\n4\n4\ny\ny\nn\nn\n'"  "Stop and then deploy (non-interactively) cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build executable with support for GCP and AWS" \
-		"MODE=debug RUN_ARGS=-override_backends=true make kill deploy <<< $$'4\n1\n4\nn\nn\nn\nn\n'"  "Redeploy (4 targets, 1 proxy) cluster; build executable for debug without any backend-supporting libs; pass additional command-line to each running node via RUN_ARGS var"\
+		"MODE=debug RUN_ARGS=-override_backends=true make kill deploy <<< $$'4\n1\n4\nn\nn\nn\nn\n'"  "Redeploy (4 targets, 1 proxy) cluster; build executable for debug without any backend-supporting libs; use RUN_ARGS to pass an additional command-line option '-override_backends=true' to each running node"\
+		"MODE=debug RUN_ARGS='-override_backends=true -standby' make kill deploy <<< $$'4\n1\n4\nn\nn\nn\nn\n'"  "Same as above, but additionally run all the 4 targets in a standby mode"\
 		"GORACE='log_path=/tmp/race' make deploy" "Deploy cluster with race detector, write reports to /tmp/race.<PID>" \
 		"MODE=debug make deploy" "Deploy cluster with aisnode (AIS target and proxy) executable built with debug symbols and debug asserts enabled" \
 		"BUCKET=tmp make test-short" "Run all short tests" \
