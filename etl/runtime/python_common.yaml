@@ -5,12 +5,12 @@ metadata:
 spec:
   containers:
     - name: server
-      image: aistore/runtime_python:2
+      image: aistore/runtime_python:<VERSION>
       imagePullPolicy: IfNotPresent
       ports:
         - name: default
           containerPort: 80
-      command: ['sh', '-c', 'python /server.py']
+      command: <COMMAND>
       env:
         - name: MOD_NAME
           value: code
@@ -18,10 +18,7 @@ spec:
           value: transform
         - name: PYTHONPATH
           value: /runtime
-      readinessProbe:
-        httpGet:
-          path: /health
-          port: default
+      <PROBES>
       volumeMounts:
         - name: code
           mountPath: "/code"
@@ -29,7 +26,7 @@ spec:
           mountPath: "/runtime"
   initContainers:
     - name: server-deps
-      image: aistore/runtime_python:2
+      image: aistore/runtime_python:<VERSION>
       imagePullPolicy: IfNotPresent
       command:
         - 'sh'

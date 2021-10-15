@@ -4,17 +4,16 @@
  */
 package runtime
 
-import _ "embed"
+import (
+	"strings"
+)
 
 type (
 	// py2 implements Runtime for "python2".
 	py2 struct{}
 )
 
-//go:embed python2.yaml
-var py2PodSpec string
-
 func (py2) Type() string        { return Python2 }
 func (py2) CodeEnvName() string { return "AISTORE_CODE" }
 func (py2) DepsEnvName() string { return "AISTORE_DEPS" }
-func (py2) PodSpec() string     { return py2PodSpec }
+func (py2) PodSpec() string     { return strings.ReplaceAll(pyPodSpec, "<VERSION>", "2") }

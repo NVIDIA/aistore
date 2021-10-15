@@ -68,7 +68,7 @@ Note: Currently, only one ETL can be run at a time. To run new ETLs, [stop any e
 > The ETL crashes if the function panics or throws an exception.
 > Therefore, error handling should be done inside the function.
 
-Note: currently only `python3` and `python2` runtimes are supported.
+All available runtimes are listed [here](/docs/etl.md#runtimes).
 
 ### Example
 
