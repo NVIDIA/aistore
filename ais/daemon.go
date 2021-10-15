@@ -140,13 +140,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 			cos.ExitLogf("Failed to update config in memory: %v", err)
 		}
 
-		overrideConfig := cmn.GCO.GetOverrideConfig()
-		if overrideConfig == nil {
-			overrideConfig = toUpdate
-		} else {
-			overrideConfig.Merge(toUpdate)
-		}
-
+		overrideConfig := cmn.GCO.MergeOverrideConfig(toUpdate)
 		if !daemon.cli.transient {
 			if err = cmn.SaveOverrideConfig(config.ConfigDir, overrideConfig); err != nil {
 				cos.ExitLogf("Failed to save override config: %v", err)

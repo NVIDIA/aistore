@@ -98,11 +98,8 @@ func (g *fsprungroup) removeMountpath(mpath string) (removedMi *fs.MountpathInfo
 
 func (g *fsprungroup) _postaddmi(action string, mi *fs.MountpathInfo) {
 	config := cmn.GCO.Get()
-	if !config.TestingEnv() { // testing fspaths are counted not enumerated
-		localConfig := &config.LocalConfig
-		if updated := localConfig.AddPath(mi.Path); updated {
-			localConfig.Save(daemon.cli.localConfigPath)
-		}
+	if !config.TestingEnv() { // as testing fspaths are counted, not enumerated
+		fspathsSaveCommit(mi.Path, true /*add*/)
 	}
 	xreg.AbortAllMountpathsXactions()
 	go func() {
@@ -123,10 +120,7 @@ func (g *fsprungroup) _postaddmi(action string, mi *fs.MountpathInfo) {
 func (g *fsprungroup) _postdelmi(action string, mi *fs.MountpathInfo) {
 	config := cmn.GCO.Get()
 	if !config.TestingEnv() { // ditto
-		localConfig := &config.LocalConfig
-		if updated := localConfig.DelPath(mi.Path); updated {
-			localConfig.Save(daemon.cli.localConfigPath)
-		}
+		fspathsSaveCommit(mi.Path, false /*add*/)
 	}
 	xreg.AbortAllMountpathsXactions()
 
@@ -141,6 +135,33 @@ func (g *fsprungroup) _postdelmi(action string, mi *fs.MountpathInfo) {
 		}
 		xreg.RenewMakeNCopies(g.t, cos.GenUUID(), "del-mp")
 	}()
+}
+
+// store updated fspaths locally as part of the 'OverrideConfigFname'
+// and commit new version of the config
+func fspathsSaveCommit(mpath string, add bool) {
+	config := cmn.GCO.BeginUpdate()
+	localConfig := &config.LocalConfig
+	if add {
+		localConfig.AddPath(mpath)
+	} else {
+		localConfig.DelPath(mpath)
+	}
+	if err := localConfig.FSpaths.Validate(config); err != nil {
+		debug.AssertNoErr(err)
+		cmn.GCO.DiscardUpdate()
+		glog.Error(err)
+		return
+	}
+	toUpdate := &cmn.ConfigToUpdate{FSpaths: &config.LocalConfig.FSpaths}
+	overrideConfig := cmn.GCO.SetLocalFSPaths(toUpdate)
+	if err := cmn.SaveOverrideConfig(config.ConfigDir, overrideConfig); err != nil {
+		debug.AssertNoErr(err)
+		cmn.GCO.DiscardUpdate()
+		glog.Error(err)
+		return
+	}
+	cmn.GCO.CommitUpdate(config)
 }
 
 // NOTE: executes under mfs lock

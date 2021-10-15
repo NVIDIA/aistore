@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -38,10 +38,11 @@ const (
 	ThrottleMin = time.Millisecond
 	ThrottleAvg = time.Millisecond * 10
 	ThrottleMax = time.Millisecond * 100
+)
 
-	// EC
-	MinSliceCount = 1  // minimum number of data or parity slices
-	MaxSliceCount = 32 // maximum number of data or parity slices
+const (
+	MinSliceCount = 1  // erasure coding: minimum number of data or parity slices
+	MaxSliceCount = 32 // erasure coding: maximum number of data or parity slices
 )
 
 const (
@@ -69,7 +70,6 @@ type (
 		Provider  string // For ExtraProps.
 		TargetCnt int    // For EC.
 	}
-
 	Validator interface {
 		Validate() error
 	}
@@ -89,16 +89,16 @@ type (
 )
 
 //
-// global configuration
+// global (aka cluster) configuration
 //
 
-// TODO: try to remove duplication *Conf v/s *ToUpdate structs
 type (
-	// Config encapsulates all configuration values used by a given daemon.
-	//
-	// Naming convention for setting/getting the particular fields is defined as
-	// joining the json tags with dot. Eg. when referring to `EC.Enabled` field
-	// one would need to write `ec.enabled`. For more info refer to `IterFields`.
+	// Config contains all configuration values used by a given ais daemon.
+	// NOTE:
+	//     Naming convention for setting/getting specific values is defined as a join:
+	//     (parent json tag . child json tag).
+	//     E.g., to set/get `EC.Enabled` use `ec.enabled`. And so on.
+	//     For details, see `IterFields`.
 	Config struct {
 		role          string `list:"omit"` // Proxy or Target
 		ClusterConfig `json:",inline"`
@@ -184,6 +184,9 @@ type (
 		// Logging
 		LogLevel *string `json:"log_level,omitempty" copy:"skip"`
 		Vmodule  *string `json:"vmodule,omitempty" copy:"skip"`
+
+		// LocalConfig
+		FSpaths *FSPathsConf `json:"fspaths,omitempty"`
 	}
 
 	BackendConf struct {
@@ -598,7 +601,7 @@ func SetConfigInMem(toUpdate *ConfigToUpdate, config *Config, asType string) (er
 			return fmt.Errorf("failed to set log level = %s, err: %v", *toUpdate.LogLevel, err)
 		}
 	}
-	err = config.Apply(*toUpdate, asType)
+	err = config.UpdateClusterConfig(*toUpdate, asType)
 	return
 }
 
@@ -621,13 +624,32 @@ func (gco *globalConfigOwner) GetOverrideConfig() *ConfigToUpdate {
 	return (*ConfigToUpdate)(gco.oc.Load())
 }
 
+func (gco *globalConfigOwner) MergeOverrideConfig(toUpdate *ConfigToUpdate) (overrideConfig *ConfigToUpdate) {
+	overrideConfig = gco.GetOverrideConfig()
+	if overrideConfig == nil {
+		overrideConfig = toUpdate
+	} else {
+		overrideConfig.Merge(toUpdate)
+	}
+	return
+}
+
+func (gco *globalConfigOwner) SetLocalFSPaths(toUpdate *ConfigToUpdate) (overrideConfig *ConfigToUpdate) {
+	overrideConfig = gco.GetOverrideConfig()
+	if overrideConfig == nil {
+		overrideConfig = toUpdate
+	} else {
+		overrideConfig.FSpaths = toUpdate.FSpaths // no merging required
+	}
+	return
+}
+
 func (gco *globalConfigOwner) PutOverrideConfig(config *ConfigToUpdate) {
 	gco.oc.Store(unsafe.Pointer(config))
 }
 
-// NOTE: CopyStruct is a shallow copy which is OK because Config has mostly values with read-only
-//       FSPaths and BackendConf being the only exceptions. May need a *proper* deep copy in the future.
-// NOTE: Cloning a large (and growing) structure may adversely affect performance.
+// CopyStruct is a shallow copy, which is fine as FSPaths and BackendConf "exceptions"
+// are taken care of separately. When cloning, beware: config is a large structure.
 func (gco *globalConfigOwner) Clone() *Config {
 	config := &Config{}
 
@@ -672,7 +694,7 @@ func (gco *globalConfigOwner) Update(cluConfig *ClusterConfig) (err error) {
 	config.ClusterConfig = *cluConfig
 	override := gco.GetOverrideConfig()
 	if override != nil {
-		err = config.Apply(*override, Daemon)
+		err = config.UpdateClusterConfig(*override, Daemon) // update and validate
 	} else {
 		err = config.Validate()
 	}
@@ -719,10 +741,11 @@ var (
 	_ json.Unmarshaler = (*FSPathsConf)(nil)
 )
 
-/////////////////////////////////
-// Config and its nested *Conf //
-/////////////////////////////////
+/////////////////////////////////////////////
+// Config and its nested (Cluster | Local) //
+/////////////////////////////////////////////
 
+// main config validator
 func (c *Config) Validate() error {
 	if c.ConfigDir == "" {
 		return errors.New("invalid confdir value (must be non-empty)")
@@ -759,13 +782,24 @@ func (c *Config) SetRole(role string) {
 	c.role = role
 }
 
-func (c *Config) Apply(updateConf ConfigToUpdate, asType string) (err error) {
+func (c *Config) UpdateClusterConfig(updateConf ConfigToUpdate, asType string) (err error) {
 	err = c.ClusterConfig.Apply(updateConf, asType)
 	if err != nil {
 		return
 	}
 	return c.Validate()
 }
+
+// TestingEnv returns true if config is set to a development environment
+// where a single local filesystem is partitioned between all (locally running)
+// targets and is used for both local and Cloud buckets
+func (c *Config) TestingEnv() bool {
+	return c.LocalConfig.TestingEnv()
+}
+
+///////////////////
+// ClusterConfig //
+///////////////////
 
 func (c *ClusterConfig) Apply(updateConf ConfigToUpdate, asType string) error {
 	return copyProps(updateConf, c, asType)
@@ -778,48 +812,27 @@ func (c *ClusterConfig) String() string {
 	return fmt.Sprintf("Conf v%d[%s]", c.Version, c.UUID)
 }
 
-// TestingEnv returns true if config is set to a development environment
-// where a single local filesystem is partitioned between all (locally running)
-// targets and is used for both local and Cloud buckets
-func (c *Config) TestingEnv() bool {
-	return c.LocalConfig.TestingEnv()
-}
+/////////////////
+// LocalConfig //
+/////////////////
 
 func (c *LocalConfig) TestingEnv() bool {
 	return c.TestFSP.Count > 0
 }
 
-func (c *LocalConfig) AddPath(mpath string) (updated bool) {
+func (c *LocalConfig) AddPath(mpath string) {
 	debug.Assert(!c.TestingEnv())
-	if !c.FSpaths.Paths.Contains(mpath) {
-		return
-	}
 	c.FSpaths.Paths.Add(mpath)
-	return true
 }
 
-func (c *LocalConfig) DelPath(mpath string) (updated bool) {
+func (c *LocalConfig) DelPath(mpath string) {
 	debug.Assert(!c.TestingEnv())
-	if !c.FSpaths.Paths.Contains(mpath) {
-		return
-	}
 	c.FSpaths.Paths.Delete(mpath)
-	return true
 }
 
-func (c *LocalConfig) Save(confPath string) error {
-	// TODO -- FIXME
-	if true {
-		glog.Warningln("saving and then loading and merging local config is not supported yet")
-		return nil
-	}
-	return jsp.SaveMeta(confPath, c, nil)
-}
-
-// validKeepaliveType returns true if the keepalive type is supported.
-func validKeepaliveType(t string) bool {
-	return t == KeepaliveHeartbeatType || t == KeepaliveAverageType
-}
+/////////////////////////////////////////
+// BackendConf (part of ClusterConfig) //
+/////////////////////////////////////////
 
 func (c *BackendConf) UnmarshalJSON(data []byte) error {
 	return jsoniter.Unmarshal(data, &c.Conf)
@@ -947,6 +960,10 @@ func (c *BackendConf) EqualRemAIS(o *BackendConf) bool {
 	return true
 }
 
+//////////////////////////////////////
+// DiskConf (part of ClusterConfig) //
+//////////////////////////////////////
+
 func (c *DiskConf) Validate() (err error) {
 	lwm, hwm, maxwm := c.DiskUtilLowWM, c.DiskUtilHighWM, c.DiskUtilMaxWM
 	if lwm <= 0 || hwm <= lwm || maxwm <= hwm || maxwm > 100 {
@@ -965,6 +982,10 @@ func (c *DiskConf) Validate() (err error) {
 	return nil
 }
 
+/////////////////////////////////////
+// LRUConf (part of ClusterConfig) //
+/////////////////////////////////////
+
 func (c *LRUConf) Validate() (err error) {
 	lwm, hwm, oos := c.LowWM, c.HighWM, c.OOS
 	if lwm <= 0 || hwm < lwm || oos < hwm || oos > 100 {
@@ -980,6 +1001,10 @@ func (c *LRUConf) ValidateAsProps(_ *ValidationArgs) (err error) {
 	return c.Validate()
 }
 
+///////////////////////////////////////
+// CksumConf (part of ClusterConfig) //
+///////////////////////////////////////
+
 func (c *CksumConf) Validate() (err error) {
 	return cos.ValidateCksumType(c.Type)
 }
@@ -992,12 +1017,20 @@ func (c *CksumConf) ShouldValidate() bool {
 	return c.ValidateColdGet || c.ValidateObjMove || c.ValidateWarmGet
 }
 
+////////////////////////////////////////
+// VersionConf (part of ClusterConfig) //
+////////////////////////////////////////
+
 func (c *VersionConf) Validate() error {
 	if !c.Enabled && c.ValidateWarmGet {
 		return errors.New("versioning.validate_warm_get requires versioning to be enabled")
 	}
 	return nil
 }
+
+////////////////////////////////////////
+// MirrorConf (part of ClusterConfig) //
+////////////////////////////////////////
 
 func (c *MirrorConf) Validate() error {
 	if c.UtilThresh < 0 || c.UtilThresh > 100 {
@@ -1020,6 +1053,10 @@ func (c *MirrorConf) ValidateAsProps(_ *ValidationArgs) error {
 	return c.Validate()
 }
 
+///////////////////////////////////////////
+// MDWritePolicy (part of ClusterConfig) //
+///////////////////////////////////////////
+
 func (c MDWritePolicy) Validate() (err error) {
 	if c.IsImmediate() || c == WriteDelayed || c == WriteNever {
 		return
@@ -1028,6 +1065,10 @@ func (c MDWritePolicy) Validate() (err error) {
 }
 
 func (c MDWritePolicy) ValidateAsProps(_ *ValidationArgs) (err error) { return c.Validate() }
+
+////////////////////////////////////
+// ECConf (part of ClusterConfig) //
+////////////////////////////////////
 
 func (c *ECConf) Validate() error {
 	if c.ObjSizeLimit < 0 {
@@ -1062,12 +1103,14 @@ func (c *ECConf) ValidateAsProps(args *ValidationArgs) error {
 	return nil
 }
 
-func (*TimeoutConf) Validate() error    { return nil }
-func (*ClientConf) Validate() error     { return nil }
-func (*RebalanceConf) Validate() error  { return nil }
-func (*ResilverConf) Validate() error   { return nil }
-func (*PeriodConf) Validate() error     { return nil }
-func (*DownloaderConf) Validate() error { return nil }
+///////////////////////////////////////////
+// KeepaliveConf (part of ClusterConfig) //
+///////////////////////////////////////////
+
+// validKeepaliveType returns true if the keepalive type is supported.
+func validKeepaliveType(t string) bool {
+	return t == KeepaliveHeartbeatType || t == KeepaliveAverageType
+}
 
 func (c *KeepaliveConf) Validate() (err error) {
 	if !validKeepaliveType(c.Proxy.Name) {
@@ -1078,6 +1121,20 @@ func (c *KeepaliveConf) Validate() (err error) {
 	}
 	return nil
 }
+
+func KeepaliveRetryDuration(cs ...*Config) time.Duration {
+	var c *Config
+	if len(cs) != 0 {
+		c = cs[0]
+	} else {
+		c = GCO.Get()
+	}
+	return c.Timeout.CplaneOperation.D() * time.Duration(c.Keepalive.RetryFactor)
+}
+
+/////////////////////////////////////
+// NetConf (part of ClusterConfig) //
+/////////////////////////////////////
 
 func (c *NetConf) Validate() (err error) {
 	if !cos.StringInSlice(c.L4.Proto, supportedL4Protos) {
@@ -1091,6 +1148,10 @@ func (c *NetConf) Validate() (err error) {
 	}
 	return nil
 }
+
+/////////////////////////////////////////////
+// LocalNetConfig (part of LocalNetConfig) //
+/////////////////////////////////////////////
 
 func (c *LocalNetConfig) Validate(contextConfig *Config) (err error) {
 	c.Hostname = strings.ReplaceAll(c.Hostname, " ", "")
@@ -1142,6 +1203,10 @@ func (c *LocalNetConfig) Validate(contextConfig *Config) (err error) {
 	return
 }
 
+///////////////////////////////////////
+// DSortConf (part of ClusterConfig) //
+///////////////////////////////////////
+
 func (c *DSortConf) Validate() (err error) {
 	return c.ValidateWithOpts(false)
 }
@@ -1179,6 +1244,10 @@ func (c *DSortConf) ValidateWithOpts(allowEmpty bool) (err error) {
 	}
 	return nil
 }
+
+///////////////////////////////////////
+// FSPathsConf (part of LocalConfig) //
+///////////////////////////////////////
 
 func (c *FSPathsConf) UnmarshalJSON(data []byte) (err error) {
 	m := cos.NewStringSet()
@@ -1218,6 +1287,10 @@ func (c *FSPathsConf) Validate(contextConfig *Config) (err error) {
 	return nil
 }
 
+//////////////////////////////////////////
+// TestfspathConf (part of LocalConfig) //
+//////////////////////////////////////////
+
 func (c *TestfspathConf) Validate(contextConfig *Config) (err error) {
 	// Don't validate in production environment.
 	if !contextConfig.TestingEnv() || contextConfig.role != Target {
@@ -1254,6 +1327,10 @@ func ValidateMpath(mpath string) (string, error) {
 	return cleanMpath, nil
 }
 
+/////////////////////////////////////////////
+// CompressionConf (part of ClusterConfig) //
+/////////////////////////////////////////////
+
 // NOTE: uncompressed block sizes - the enum currently supported by the github.com/pierrec/lz4
 func (c *CompressionConf) Validate() (err error) {
 	if c.BlockMaxSize != 64*cos.KiB && c.BlockMaxSize != 256*cos.KiB &&
@@ -1263,15 +1340,16 @@ func (c *CompressionConf) Validate() (err error) {
 	return nil
 }
 
-func KeepaliveRetryDuration(cs ...*Config) time.Duration {
-	var c *Config
-	if len(cs) != 0 {
-		c = cs[0]
-	} else {
-		c = GCO.Get()
-	}
-	return c.Timeout.CplaneOperation.D() * time.Duration(c.Keepalive.RetryFactor)
-}
+//
+// remaining no-op validators
+//
+
+func (*TimeoutConf) Validate() error    { return nil }
+func (*ClientConf) Validate() error     { return nil }
+func (*RebalanceConf) Validate() error  { return nil }
+func (*ResilverConf) Validate() error   { return nil }
+func (*PeriodConf) Validate() error     { return nil }
+func (*DownloaderConf) Validate() error { return nil }
 
 ///////////////////
 // feature flags //
@@ -1299,9 +1377,9 @@ func (cflags FeatureFlags) Describe() string {
 	return s
 }
 
-///////////////////////////
-//    ConfigToUpdate     //
-//////////////////////////
+////////////////////
+// ConfigToUpdate //
+////////////////////
 
 // FillFromQuery populates ConfigToUpdate from URL query values
 func (ctu *ConfigToUpdate) FillFromQuery(query url.Values) error {
@@ -1483,8 +1561,14 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) (
 	}
 
 	if overrideConfig != nil {
+		// update config with locally-stored 'OverrideConfigFname' and validate the result
 		GCO.PutOverrideConfig(overrideConfig)
-		err = config.Apply(*overrideConfig, Daemon)
+		if overrideConfig.FSpaths != nil {
+			// separately, override local config's fspaths
+			config.LocalConfig.FSpaths = *overrideConfig.FSpaths
+			overrideConfig.FSpaths = nil
+		}
+		err = config.UpdateClusterConfig(*overrideConfig, Daemon) // update and validate
 	} else {
 		err = config.Validate()
 	}
@@ -1492,45 +1576,43 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) (
 		return
 	}
 
+	// create dirs
 	if err = cos.CreateDir(config.LogDir); err != nil {
-		return fmt.Errorf("failed to create log dir %q, err: %v", config.LogDir, err)
+		return fmt.Errorf("failed to create log dir %q: %v", config.LogDir, err)
 	}
-
 	if config.TestingEnv() && daeRole == Target {
-		// Creating directories which were filled in `config.Validate()`.
 		debug.Assert(config.TestFSP.Count == len(config.FSpaths.Paths))
 		for mpath := range config.FSpaths.Paths {
-			// If the `mpath` already exists (eg. it was not removed after kill)
-			// this call will be no-op.
 			if err := cos.CreateDir(mpath); err != nil {
-				return fmt.Errorf("failed to create %s mountpath in testing env, err: %v", mpath, err)
+				return fmt.Errorf("failed to create %s mountpath in testing env: %v", mpath, err)
 			}
 		}
 	}
 
-	// glog rotate
+	// log rotate
 	glog.MaxSize = config.Log.MaxSize
 	if glog.MaxSize > cos.GiB {
 		glog.Warningf("log.max_size %d exceeded 1GB, setting the default 1MB", glog.MaxSize)
 		glog.MaxSize = cos.MiB
 	}
-
+	// log level
 	if err = SetLogLevel(config, config.Log.Level); err != nil {
-		return fmt.Errorf("failed to set log level %q, err: %s", config.Log.Level, err)
+		return fmt.Errorf("failed to set log level %q: %s", config.Log.Level, err)
 	}
+	// log header
 	glog.Infof("log.dir: %q; l4.proto: %s; port: %d; verbosity: %s",
 		config.LogDir, config.Net.L4.Proto, config.HostNet.Port, config.Log.Level)
 	glog.Infof("config: %q periodic.stats_time: %v", globalFpath, config.Periodic.StatsTime)
 	return
 }
 
-func SaveOverrideConfig(configDir string, config *ConfigToUpdate) error {
-	return jsp.SaveMeta(path.Join(configDir, OverrideConfigFname), config, nil)
+func SaveOverrideConfig(configDir string, toUpdate *ConfigToUpdate) error {
+	return jsp.SaveMeta(path.Join(configDir, OverrideConfigFname), toUpdate, nil)
 }
 
-func loadOverrideConfig(configDir string) (config *ConfigToUpdate, err error) {
-	config = &ConfigToUpdate{}
-	_, err = jsp.LoadMeta(path.Join(configDir, OverrideConfigFname), config)
+func loadOverrideConfig(configDir string) (toUpdate *ConfigToUpdate, err error) {
+	toUpdate = &ConfigToUpdate{}
+	_, err = jsp.LoadMeta(path.Join(configDir, OverrideConfigFname), toUpdate)
 	if os.IsNotExist(err) {
 		err = nil
 	}
