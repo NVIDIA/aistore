@@ -143,7 +143,17 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.QueryMsg, bck *cluster.Bck)
 		}
 		wg := &sync.WaitGroup{}
 		wg.Add(1)
-		go t.RunLRU(xactMsg.ID, wg, xactMsg.Force != nil && *xactMsg.Force, xactMsg.Buckets...)
+
+		ext := &xaction.QueryMsgLRU{}
+		if err := cos.MorphMarshal(xactMsg.Ext, ext); err != nil {
+			return err
+		}
+
+		if ext.Cleanup {
+			go t.runStorageCleanup(xactMsg.ID, wg, ext.Force, xactMsg.Buckets...)
+		} else {
+			go t.RunLRU(xactMsg.ID, wg, ext.Force, xactMsg.Buckets...)
+		}
 		wg.Wait()
 	case cmn.ActResilver:
 		if bck != nil {

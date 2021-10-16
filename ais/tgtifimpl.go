@@ -69,6 +69,14 @@ func (t *targetrunner) GFN(gfnType cluster.GFNType) cluster.GFN {
 
 // RunLRU is triggered by the stats evaluation of a remaining capacity, see `target_stats.go`.
 func (t *targetrunner) RunLRU(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.Bck) {
+	t.runLRUCleanup(id, wg, force, false /*cleanup*/, bcks...)
+}
+
+func (t *targetrunner) runStorageCleanup(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.Bck) {
+	t.runLRUCleanup(id, wg, force, true /*cleanup*/, bcks...)
+}
+
+func (t *targetrunner) runLRUCleanup(id string, wg *sync.WaitGroup, force, cleanup bool, bcks ...cmn.Bck) {
 	regToIC := id == ""
 	if regToIC {
 		id = cos.GenUUID()
@@ -95,6 +103,7 @@ func (t *targetrunner) RunLRU(id string, wg *sync.WaitGroup, force bool, bcks ..
 		GetFSUsedPercentage: ios.GetFSUsedPercentage,
 		GetFSStats:          ios.GetFSStats,
 		Force:               force,
+		Cleanup:             cleanup,
 	}
 	xlru.AddNotif(&xaction.NotifXact{
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},

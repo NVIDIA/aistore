@@ -169,6 +169,7 @@ const (
 	subcmdStgSummary   = subcmdSummary
 	subcmdStgValidate  = "validate"
 	subcmdStgMountpath = subcmdMountpath
+	subcmdStgCleanup   = "cleanup"
 
 	// ETL subcommands
 	subcmdInit = "init"

@@ -6,6 +6,10 @@
 package commands
 
 import (
+	"fmt"
+
+	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
 
@@ -19,6 +23,7 @@ var (
 		),
 		subcmdStgValidate:  {},
 		subcmdStgMountpath: {},
+		subcmdStgCleanup:   {},
 	}
 
 	storageCmd = cli.Command{
@@ -43,6 +48,42 @@ var (
 			},
 			mpathCmd,
 			showCmdDisk,
+			{
+				Name:         subcmdStgCleanup,
+				Usage:        "cleanup storage: remove trash, obsolete workfiles",
+				ArgsUsage:    listCommandArgument,
+				Flags:        storageCmdFlags[subcmdStgCleanup],
+				Action:       cleanupStorageHandler,
+				BashComplete: bucketCompletions(),
+			},
 		},
 	}
 )
+
+func cleanupStorageHandler(c *cli.Context) (err error) {
+	var (
+		bck cmn.Bck
+		id  string
+	)
+	if c.NArg() != 0 {
+		bck, err = parseBckURI(c, c.Args().First())
+		if err != nil {
+			return err
+		}
+		if _, err = headBucket(bck); err != nil {
+			return err
+		}
+	}
+	xactArgs := api.XactReqArgs{Kind: cmn.ActLRU, Bck: bck, Cleanup: true}
+	if id, err = api.StartXaction(defaultAPIParams, xactArgs); err != nil {
+		return
+	}
+
+	if id != "" {
+		fmt.Fprintf(c.App.Writer, "Started storage cleanup %q, %s\n", id, xactProgressMsg(id))
+	} else {
+		fmt.Fprintf(c.App.Writer, "Started storage cleanup\n")
+	}
+
+	return
+}

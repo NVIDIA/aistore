@@ -32,13 +32,18 @@ type (
 	}
 
 	QueryMsg struct {
-		ID          string    `json:"id"`
-		Kind        string    `json:"kind"`
-		Bck         cmn.Bck   `json:"bck"`
-		OnlyRunning *bool     `json:"show_active"`
-		Force       *bool     `json:"force"`             // true: force LRU
-		Buckets     []cmn.Bck `json:"buckets,omitempty"` // list of buckets on which LRU should run
-		Node        string    `json:"node,omitempty"`
+		ID          string      `json:"id"`
+		Kind        string      `json:"kind"`
+		Bck         cmn.Bck     `json:"bck"`
+		OnlyRunning *bool       `json:"show_active"`
+		Buckets     []cmn.Bck   `json:"buckets,omitempty"` // list of buckets on which LRU should run
+		Node        string      `json:"node,omitempty"`
+		Ext         interface{} `json:"ext"`
+	}
+
+	QueryMsgLRU struct {
+		Force   bool `json:"force"`
+		Cleanup bool `json:"cleanup"`
 	}
 )
 

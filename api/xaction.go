@@ -40,6 +40,7 @@ type (
 		Buckets     []cmn.Bck // Optional: Xaction on list of buckets
 		Timeout     time.Duration
 		Force       bool // Optional: force LRU
+		Cleanup     bool // Optional: LRU(false) or cleanup(true)
 		OnlyRunning bool // Read only active xactions
 	}
 )
@@ -159,9 +160,13 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 		Node: args.Node,
 	}
 
-	if args.Buckets != nil {
-		xactMsg.Buckets = args.Buckets
-		xactMsg.Force = Bool(args.Force)
+	if args.Kind == cmn.ActLRU {
+		ext := &xaction.QueryMsgLRU{Cleanup: args.Cleanup}
+		if args.Buckets != nil {
+			xactMsg.Buckets = args.Buckets
+			ext.Force = args.Force
+		}
+		xactMsg.Ext = ext
 	}
 
 	msg := cmn.ActionMsg{

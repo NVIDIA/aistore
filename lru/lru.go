@@ -59,6 +59,7 @@ type (
 		GetFSUsedPercentage func(path string) (usedPercentage int64, ok bool)
 		GetFSStats          func(path string) (blocks, bavail uint64, bsize int64, err error)
 		Force               bool // Ignore LRU prop when set to be true.
+		Cleanup             bool // True - only remove trash, False - run LRU
 	}
 
 	// minHeap keeps fileInfo sorted by access time with oldest
@@ -204,13 +205,15 @@ func (j *lruJ) run(providers []string) {
 	if err = j.removeTrash(); err != nil {
 		goto ex
 	}
-	// compute the size (bytes) to free up (and do it after removing the $trash)
-	if err = j.evictSize(); err != nil {
-		goto ex
-	}
-	if j.totalSize < minEvictThresh {
-		glog.Infof("[lru] %s: used cap below threshold, nothing to do", j)
-		return
+	if !j.p.ini.Cleanup {
+		// compute the size (bytes) to free up (and do it after removing the $trash)
+		if err = j.evictSize(); err != nil {
+			goto ex
+		}
+		if j.totalSize < minEvictThresh {
+			glog.Infof("[lru] %s: used cap below threshold, nothing to do", j)
+			return
+		}
 	}
 	if len(j.ini.Buckets) != 0 {
 		glog.Infof("[lru] %s: freeing-up %s", j, cos.B2S(j.totalSize, 2))
@@ -269,15 +272,17 @@ func (j *lruJ) jogBcks(bcks []cmn.Bck, force bool) (err error) {
 		if size, err = j.jogBck(); err != nil {
 			return
 		}
-		if size < cos.KiB {
-			continue
-		}
-		// recompute size-to-evict
-		if err = j.evictSize(); err != nil {
-			return
-		}
-		if j.totalSize < cos.KiB {
-			return
+		if !j.p.ini.Cleanup {
+			if size < cos.KiB {
+				continue
+			}
+			// recompute size-to-evict
+			if err = j.evictSize(); err != nil {
+				return
+			}
+			if j.totalSize < cos.KiB {
+				return
+			}
 		}
 	}
 	return
@@ -417,6 +422,10 @@ func (j *lruJ) visitLOM(parsedFQN fs.ParsedFQN) {
 		} else {
 			j.misplaced.loms = append(j.misplaced.loms, lom)
 		}
+		return
+	}
+
+	if j.p.ini.Cleanup {
 		return
 	}
 
