@@ -29,17 +29,19 @@ func Init(t cluster.Target, config *cmn.Config) {
 		glog.Warningf("Using %d mountpaths for testing with disabled filesystem ID check", config.TestFSP.Count)
 		fs.DisableFsIDCheck()
 	}
+	// boostrap from a local-config referenced location; two points:
+	// a) local-config is kept in sync with mountpath changes (see ais/fspathgrp)
+	// b) disk-label based bootstrapping can be done but can wait (see comment below)
 	if v, err := configLoadVMD(tid, config.FSpaths.Paths); err != nil {
 		cos.ExitLogf("%s: %v", t.Snode(), err)
 	} else {
 		vmd = v
 	}
 
-	// NOTE happens:
-	// a) upon the very first deployment, or
-	// b) when config doesn't contain a single valid mountpath that in turn contains a copy of VMD, possibly outdated
-	// TODO: always keep local config in-sync with mountpath changes
 	if vmd == nil {
+		// a) VMD is nil upon the very first deployment, or
+		// b) when the config doesn't contain a single valid mountpath
+		//    (that in turn contains a copy of VMD, possibly outdated (but that's ok))
 		if err := configInitMPI(tid, config); err != nil {
 			cos.ExitLogf("%s: %v", t.Snode(), err)
 		}
@@ -53,6 +55,8 @@ func Init(t cluster.Target, config *cmn.Config) {
 		return
 	}
 
+	// use loaded VMD to find the most recently updated (the current) one and, simultaneously,
+	// initialize MPI
 	var persist bool
 	if v, haveOld, err := vmdInitMPI(tid, config, vmd, 1 /*pass #1*/); err != nil {
 		cos.ExitLogf("%s: %v", t.Snode(), err)

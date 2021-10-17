@@ -186,27 +186,30 @@ func findClosestCommand(cmd string, candidates []cli.Command) (result string, di
 	return closestName, minDist
 }
 
-// Populates the proxy and target Smaps
+// Get cluster map and use it to retrieve node status for each clustered node
 func fillMap() (*cluster.Smap, error) {
 	wg := &sync.WaitGroup{}
 	smap, err := api.GetClusterMap(defaultAPIParams)
 	if err != nil {
 		return nil, err
 	}
-	// Get the primary proxy's smap
-	smapPrimary, err := api.GetNodeClusterMap(defaultAPIParams, smap.Primary.ID())
-	if err != nil {
-		return nil, err
+	if smap.Primary.PublicNet.DirectURL != defaultAPIParams.URL {
+		// TODO: cluster map (Smap) is replicated & synchronized across all nodes, and so
+		//       this step can be made optional/configurable with default='not doing it'
+		smapPrimary, err := api.GetNodeClusterMap(defaultAPIParams, smap.Primary.ID())
+		if err != nil {
+			return nil, err
+		}
+		smap = smapPrimary
 	}
-
-	proxyCount := smapPrimary.CountProxies()
-	targetCount := smapPrimary.CountTargets()
+	proxyCount := smap.CountProxies()
+	targetCount := smap.CountTargets()
 
 	wg.Add(proxyCount + targetCount)
-	retrieveStatus(smapPrimary.Pmap, proxy, wg)
-	retrieveStatus(smapPrimary.Tmap, target, wg)
+	retrieveStatus(smap.Pmap, proxy, wg)
+	retrieveStatus(smap.Tmap, target, wg)
 	wg.Wait()
-	return smapPrimary, nil
+	return smap, nil
 }
 
 func retrieveStatus(nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStatus, wg *sync.WaitGroup) {

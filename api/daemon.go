@@ -59,6 +59,7 @@ func AddMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string) 
 	})
 }
 
+// TODO: pass cluster.Node to make it consistent with Add/Enable
 func RemoveMountpath(baseParams BaseParams, nodeID, mountpath string) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
@@ -82,6 +83,7 @@ func EnableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 	})
 }
 
+// TODO: ditto
 func DisableMountpath(baseParams BaseParams, nodeID, mountpath string) error {
 	baseParams.Method = http.MethodPost
 	return DoHTTPRequest(ReqParams{

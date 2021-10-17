@@ -26,34 +26,57 @@ var (
 		Subcommands: []cli.Command{
 			makeAlias(showCmdMpath, "", true, commandShow), // alias for `ais show`
 			{
-				Name:      subcmdDiskAttach,
-				Usage:     "attach a mountpath (i.e. disk or volume)",
-				ArgsUsage: diskAttachArgument,
-				Flags:     mpathCmdsFlags[subcmdDiskAttach],
-				Action:    diskAttachHandler,
+				Name:         subcmdDiskAttach,
+				Usage:        "attach mountpath (i.e., disk or RAID) to target node",
+				ArgsUsage:    diskAttachArgument,
+				Flags:        mpathCmdsFlags[subcmdDiskAttach],
+				Action:       diskAttachHandler,
+				BashComplete: daemonCompletions(completeTargets),
 			},
 			{
-				Name:      subcmdDiskDetach,
-				Usage:     "detach a mountpath",
-				ArgsUsage: diskDetachArgument,
-				Flags:     mpathCmdsFlags[subcmdDiskDetach],
-				Action:    diskDetachHandler,
+				Name:         subcmdDiskDetach,
+				Usage:        "detach mountpath (i.e., disk or RAID) from target node",
+				ArgsUsage:    diskDetachArgument,
+				Flags:        mpathCmdsFlags[subcmdDiskDetach],
+				Action:       diskDetachHandler,
+				BashComplete: daemonCompletions(completeTargets),
 			},
 		},
 	}
 )
 
 func diskAttachHandler(c *cli.Context) (err error) {
+	return _diskAttachDetach(c, true /*attach*/)
+}
+
+func diskDetachHandler(c *cli.Context) (err error) {
+	return _diskAttachDetach(c, false /*attach*/)
+}
+
+func _diskAttachDetach(c *cli.Context, attach bool) error {
+	action, acted := "attach", "attached"
+	if !attach {
+		action, acted = "detach", "detached"
+	}
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, daemonMountpathPairArgument)
 	}
-
-	kvs, err := makePairs(c.Args())
+	smap, err := fillMap()
 	if err != nil {
 		return err
 	}
-	smap, err := fillMap()
+	kvs, err := makePairs(c.Args())
 	if err != nil {
+		// check whether user typed target ID with no mountpath
+		first, tail, nodeID := c.Args().First(), c.Args().Tail(), ""
+		if len(tail) == 0 {
+			nodeID = first
+		} else {
+			nodeID = tail[len(tail)-1]
+		}
+		if nodeID != "" && smap.GetTarget(nodeID) != nil {
+			return fmt.Errorf("target %s: missing mountpath to %s", first, action)
+		}
 		return err
 	}
 	for nodeID, mountpath := range kvs {
@@ -61,40 +84,21 @@ func diskAttachHandler(c *cli.Context) (err error) {
 		if si == nil {
 			si = smap.GetProxy(nodeID)
 			if si == nil {
-				return fmt.Errorf("daemon %q does not exist", nodeID)
+				return fmt.Errorf("node %q does not exist", nodeID)
 			}
-			return fmt.Errorf("daemon %q is a proxy, run \"ais show cluster target\" to list targets", nodeID)
+			return fmt.Errorf("node %q is a proxy, <TAB-TAB> target IDs or run \"ais show cluster target\" to select target",
+				nodeID)
 		}
-		if err := api.AddMountpath(defaultAPIParams, si, mountpath); err != nil {
-			return err
+		if attach {
+			if err := api.AddMountpath(defaultAPIParams, si, mountpath); err != nil {
+				return err
+			}
+		} else {
+			if err := api.RemoveMountpath(defaultAPIParams, si.ID(), mountpath); err != nil {
+				return err
+			}
 		}
-		fmt.Fprintf(c.App.Writer, "Node %q attached mountpath %q\n", si.DaemonID, mountpath)
-	}
-	return nil
-}
-
-func diskDetachHandler(c *cli.Context) (err error) {
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, daemonMountpathPairArgument)
-	}
-
-	kvs, err := makePairs(c.Args())
-	if err != nil {
-		return err
-	}
-	smap, err := fillMap()
-	if err != nil {
-		return err
-	}
-	for nodeID, mountpath := range kvs {
-		si := smap.GetTarget(nodeID)
-		if si == nil {
-			return fmt.Errorf("daemon with ID (%s) does not exist", nodeID)
-		}
-		if err := api.RemoveMountpath(defaultAPIParams, si.DaemonID, mountpath); err != nil {
-			return err
-		}
-		fmt.Fprintf(c.App.Writer, "Node %q detached mountpath %q\n", si.DaemonID, mountpath)
+		fmt.Fprintf(c.App.Writer, "Node %q %s mountpath %q\n", si.ID(), acted, mountpath)
 	}
 	return nil
 }
