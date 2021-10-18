@@ -132,10 +132,19 @@ client-bindings:
 #
 # local deployment (intended for developers)
 #
-.PHONY: deploy
+.PHONY: deploy run restart
 
-deploy: ## Build 'aisnode' and deploy the specified numbers of local AIS proxies and targets
+## Build 'aisnode' and parse command-line to generate configurations
+## and deploy the specified numbers of local AIS (proxy and target) daemons
+deploy:
 	@"$(DEPLOY_DIR)/deploy.sh" $(RUN_ARGS)
+
+## Same as `deploy` except for (not) generating daemon configurations.
+## Use `make run` to restart cluster and utilize existing daemon configs.
+run:
+	@"$(DEPLOY_DIR)/deploy.sh" $(RUN_ARGS) --dont-generate-configs
+
+restart: kill run
 
 #
 # cleanup local deployment (cached objects, logs, and executables)
@@ -279,11 +288,12 @@ help:
 	@printf "  $(cyan)%s$(term-reset)\n    %s\n\n" \
 		"make deploy" "Deploy cluster locally" \
 		"make kill clean" "Stop locally deployed cluster and cleanup all cluster-related data and bucket metadata (but not cluster map)" \
-		"make kill deploy <<< $$'7\n4\n4\ny\ny\nn\nn\n'"  "Stop and then deploy (non-interactively) cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build executable with support for GCP and AWS" \
-		"MODE=debug RUN_ARGS=-override_backends=true make kill deploy <<< $$'4\n1\n4\nn\nn\nn\nn\n'"  "Redeploy (4 targets, 1 proxy) cluster; build executable for debug without any backend-supporting libs; use RUN_ARGS to pass an additional command-line option '-override_backends=true' to each running node"\
+		"make kill deploy <<< $$'7\n4\n4\ny\ny\nn\nn\n'"  "Shutdown and then (non-interactively) generate local configs and deploy a cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build 'aisnode' executable with the support for GCP and AWS backends" \
+		"make restart <<< $$'7\n4\n4\ny\ny\nn\nn\n'"  "Restart a cluster of 7 targets (4 mountpaths each) and 2 proxies; utilize previously generated (pre-shutdown) local configurations" \
+		"MODE=debug RUN_ARGS=-override_backends=true make kill deploy <<< $$'4\n1\n4\nn\nn\nn\nn\n'"  "Redeploy (4 targets + 1 proxy) cluster; build executable for debug without any backend-supporting libs; use RUN_ARGS to pass an additional command-line option '-override_backends=true' to each running node"\
 		"MODE=debug RUN_ARGS='-override_backends=true -standby' make kill deploy <<< $$'4\n1\n4\nn\nn\nn\nn\n'"  "Same as above, but additionally run all the 4 targets in a standby mode"\
 		"GORACE='log_path=/tmp/race' make deploy" "Deploy cluster with race detector, write reports to /tmp/race.<PID>" \
-		"MODE=debug make deploy" "Deploy cluster with aisnode (AIS target and proxy) executable built with debug symbols and debug asserts enabled" \
+		"MODE=debug make deploy" "Deploy cluster with 'aisnode' (AIS target and proxy) executable built with debug symbols and debug asserts enabled" \
 		"BUCKET=tmp make test-short" "Run all short tests" \
 		"BUCKET=<existing-cloud-bucket> make test-long" "Run all tests" \
 		"BUCKET=tmp make ci" "Run style, lint, and spell checks, as well as all short tests" \

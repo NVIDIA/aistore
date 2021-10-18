@@ -75,8 +75,14 @@ $ make deploy
 # Stop locally deployed cluster and cleanup all cluster-related data and bucket metadata (but not cluster map)
 $ make kill clean
 
-# Stop and then deploy (non-interactively) cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build executable with support for GCP and AWS
+# Stop and then deploy (non-interactively) cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build `aisnode` executable with the support for GCP and AWS backends
 $ make kill deploy <<< $'7\n4\n4\ny\ny\nn\nn\n'
+
+# Shutdown and then (non-interactively) generate local configs and deploy a cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build executable with the support for GCP and AWS backends
+$ make kill deploy <<< $'7\n4\n4\ny\ny\nn\nn\n'
+
+# Restart a cluster of 7 targets (4 mountpaths each) and 2 proxies; utilize previously generated (pre-shutdown) local configurations
+$ make restart <<< $'7\n4\n4\ny\ny\nn\nn\n'
 
 # Redeploy (4 targets, 1 proxy) cluster; build executable for debug without any backend-supporting libs; use RUN_ARGS to pass an additional command-line option '-override_backends=true' to each running node
 $ MODE=debug RUN_ARGS=-override_backends=true make kill deploy <<< $'4\n1\n4\nn\nn\nn\nn\n'
@@ -120,15 +126,25 @@ Assuming that [Go](https://golang.org/dl/) toolchain is already installed, the s
 $ cd $GOPATH/src/github.com/NVIDIA
 $ git clone https://github.com/NVIDIA/aistore.git
 $ cd aistore
+# optionally, run `make mod-tidy` to preload dependencies
 $ ./deploy/scripts/clean_deploy.sh
+
+$ ais show cluster
 ```
 where:
 
-* [`clean_deploy.sh`](/docs/development.md#clean-deploy) builds various AIStore binaries (such as `aisnode` and `cli`)
-and then deploys a local cluster with 5 proxies and 5 targets by default.
+* [`clean_deploy.sh`](/docs/development.md#clean-deploy) with no arguments builds AIStore binaries (such as `aisnode` and `ais` CLI)
+and then deploys a local cluster with 5 proxies and 5 targets. Examples:
 
-To specify the number of simulated nodes, you can run `clean_deploy.sh --nproxies 3 --ntargets 3`. To see more options
-that `clean_deploy.sh` provides, [refer to its documentation](/docs/development.md#clean-deploy)
+```console
+# Deploy 7 targets and 1 proxy:
+$ clean_deploy.sh --nproxies 1 --ntargets 7
+
+# Same as above, plus built-in support for GCP (cloud storage):
+$ clean_deploy.sh --nproxies 1 --ntargets 7 --gcp
+```
+
+For more options and detailed description, run `make help` and see: [`clean_deploy.sh`](/docs/development.md#clean-deploy).
 
 ### Manual Deployment
 

@@ -125,21 +125,23 @@ STATSD_CONF_FILE=$AIS_CONF_DIR/statsd.conf
 #
 # generate conf file(s) based on the settings/selections above
 #
-for (( c=START; c<=END; c++ )); do
-  AIS_CONF_DIR="$HOME/.ais$NEXT_TIER$c"
-  INSTANCE=$c
-  mkdir -p "$AIS_CONF_DIR"
-  AIS_CONF_FILE="$AIS_CONF_DIR/ais.json"
-  AIS_LOCAL_CONF_FILE="$AIS_CONF_DIR/ais_local.json"
-  AIS_LOG_DIR="$LOG_ROOT/$c/log"
-  source "${AISTORE_DIR}/deploy/dev/local/aisnode_config.sh"
+if [ "${@: -1}" != "--dont-generate-configs" ]; then
+  for (( c=START; c<=END; c++ )); do
+    AIS_CONF_DIR="$HOME/.ais$NEXT_TIER$c"
+    INSTANCE=$c
+    mkdir -p "$AIS_CONF_DIR"
+    AIS_CONF_FILE="$AIS_CONF_DIR/ais.json"
+    AIS_LOCAL_CONF_FILE="$AIS_CONF_DIR/ais_local.json"
+    AIS_LOG_DIR="$LOG_ROOT/$c/log"
+    source "${AISTORE_DIR}/deploy/dev/local/aisnode_config.sh"
 
-  ((PORT++))
-  ((PORT_INTRA_CONTROL++))
-  ((PORT_INTRA_DATA++))
-done
+    ((PORT++))
+    ((PORT_INTRA_CONTROL++))
+    ((PORT_INTRA_DATA++))
+  done
+fi
 
-# run proxy and storage targets
+# run all daemons
 CMD="${GOPATH}/bin/aisnode"
 for (( c=START; c<=END; c++ )); do
   AIS_CONF_DIR="$HOME/.ais${NEXT_TIER}$c"
