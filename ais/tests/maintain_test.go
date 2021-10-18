@@ -249,7 +249,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 	}
 }
 
-func countVMDTargets(tsMpaths map[string][]string) (total int) {
+func countVMDTargets(tsMpaths map[*cluster.Snode][]string) (total int) {
 	for _, mpaths := range tsMpaths {
 		for _, mpath := range mpaths {
 			if _, err := os.Stat(filepath.Join(mpath, cmn.VmdFname)); err == nil {

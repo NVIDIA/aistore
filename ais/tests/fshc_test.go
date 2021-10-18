@@ -324,7 +324,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 	selectedTarget, selectedMpath, selectedMpathList := md.randomTargetMpath()
 	tlog.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
 	defer func() {
-		if err := api.RemoveMountpath(md.baseParams, selectedTarget.ID(), selectedMpath); err != nil {
+		if err := api.RemoveMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
 			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget, err)
 		}
 		if err := api.AddMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
@@ -376,7 +376,7 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 	tlog.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
 	tutils.CreateFreshBucket(t, md.proxyURL, md.bck, nil)
 	defer func() {
-		if err := api.RemoveMountpath(md.baseParams, selectedTarget.ID(), selectedMpath); err != nil {
+		if err := api.RemoveMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
 			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget, err)
 		}
 		if err := api.AddMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
@@ -478,7 +478,7 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 
 	tlog.Logf("Removing all mountpaths from target: %s\n", target)
 	for _, mpath := range oldMpaths.Available {
-		err = api.DisableMountpath(baseParams, target.ID(), mpath)
+		err = api.DisableMountpath(baseParams, target, mpath)
 		tassert.CheckFatal(t, err)
 	}
 
@@ -525,7 +525,7 @@ func TestFSAddMPathRestartNode(t *testing.T) {
 	tlog.Logf("Adding a mountpath to target: %s\n", target.StringEx())
 	err = api.AddMountpath(baseParams, target, tmpMpath)
 	tassert.CheckFatal(t, err)
-	defer api.RemoveMountpath(baseParams, target.ID(), tmpMpath)
+	defer api.RemoveMountpath(baseParams, target, tmpMpath)
 
 	newMpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
@@ -585,7 +585,7 @@ func TestFSDisableMpathsRestart(t *testing.T) {
 	mpaths := oldMpaths.Available[:mpathCnt-1]
 	for _, mpath := range mpaths {
 		tlog.Logf("Disable mountpath %q on target %s\n", mpath, target.ID())
-		err = api.DisableMountpath(baseParams, target.ID(), mpath)
+		err = api.DisableMountpath(baseParams, target, mpath)
 		tassert.CheckFatal(t, err)
 	}
 

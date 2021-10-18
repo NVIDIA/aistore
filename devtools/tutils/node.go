@@ -302,12 +302,12 @@ func WaitForRebalanceToStart(baseParams api.BaseParams, args api.XactReqArgs) er
 	return nil
 }
 
-func GetTargetsMountpaths(t *testing.T, smap *cluster.Smap, params api.BaseParams) map[string][]string {
-	mpathsByTarget := make(map[string][]string, smap.CountTargets())
+func GetTargetsMountpaths(t *testing.T, smap *cluster.Smap, params api.BaseParams) map[*cluster.Snode][]string {
+	mpathsByTarget := make(map[*cluster.Snode][]string, smap.CountTargets())
 	for _, target := range smap.Tmap {
 		mpl, err := api.GetMountpaths(params, target)
 		tassert.CheckError(t, err)
-		mpathsByTarget[target.DaemonID] = mpl.Available
+		mpathsByTarget[target] = mpl.Available
 	}
 
 	return mpathsByTarget

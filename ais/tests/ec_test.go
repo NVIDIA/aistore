@@ -1985,7 +1985,7 @@ func TestECEmergencyMpath(t *testing.T) {
 	mpathID := o.rnd.Intn(len(mpathList.Available))
 	removeMpath := mpathList.Available[mpathID]
 	tlog.Logf("Disabling a mountpath %s at target: %s\n", removeMpath, removeTarget.ID())
-	err = api.DisableMountpath(baseParams, removeTarget.ID(), removeMpath)
+	err = api.DisableMountpath(baseParams, removeTarget, removeMpath)
 	tassert.CheckFatal(t, err)
 	defer func() {
 		// Enable mountpah
@@ -2375,7 +2375,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 		t.Fatalf("%s has only %d mountpaths, required 2 or more", tgtLost.ID(), len(lostFSList.Available))
 	}
 	lostPath := lostFSList.Available[0]
-	err = api.RemoveMountpath(baseParams, tgtLost.ID(), lostPath)
+	err = api.RemoveMountpath(baseParams, tgtLost, lostPath)
 	tassert.CheckFatal(t, err)
 
 	wg := sync.WaitGroup{}
@@ -2642,18 +2642,18 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	}()
 	// Choose `parity` random mpaths and disable them
 	i := 0
-	for sid, paths := range allMpaths {
+	for tsi, paths := range allMpaths {
 		mpath := paths[rand.Intn(len(paths))]
-		uid := sid + "/" + mpath
+		uid := tsi.ID() + "/" + mpath
 		if _, ok := removed[uid]; ok {
 			continue
 		}
-		err := api.RemoveMountpath(baseParams, sid, mpath)
+		err := api.RemoveMountpath(baseParams, tsi, mpath)
 		tassert.CheckFatal(t, err)
-		rmMpath := &removedMpath{si: o.smap.GetTarget(sid), mpath: mpath}
+		rmMpath := &removedMpath{si: tsi, mpath: mpath}
 		removed[uid] = rmMpath
 		i++
-		tlog.Logf("%d. Disabled %s : %s\n", i, sid, mpath)
+		tlog.Logf("%d. Disabled %s : %s\n", i, tsi.StringEx(), mpath)
 		if i >= o.parityCnt {
 			break
 		}

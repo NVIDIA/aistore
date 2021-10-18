@@ -94,7 +94,7 @@ func _diskAttachDetach(c *cli.Context, attach bool) error {
 				return err
 			}
 		} else {
-			if err := api.RemoveMountpath(defaultAPIParams, si.ID(), mountpath); err != nil {
+			if err := api.RemoveMountpath(defaultAPIParams, si, mountpath); err != nil {
 				return err
 			}
 		}

@@ -1444,7 +1444,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 						for target, mpath := range mountpaths {
 							if adding {
 								tlog.Logf("removing mountpath %q from %s...\n", mpath, target.ID())
-								err := api.RemoveMountpath(df.baseParams, target.ID(), mpath)
+								err := api.RemoveMountpath(df.baseParams, target, mpath)
 								tassert.CheckError(t, err)
 								err = os.RemoveAll(mpath)
 								tassert.CheckError(t, err)
@@ -1473,7 +1473,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 								tassert.CheckFatal(t, err)
 							} else {
 								tlog.Logf("removing mountpath %q from %s...\n", mpath, target.ID())
-								err := api.RemoveMountpath(df.baseParams, target.ID(), mpath)
+								err := api.RemoveMountpath(df.baseParams, target, mpath)
 								tassert.CheckFatal(t, err)
 							}
 						}
