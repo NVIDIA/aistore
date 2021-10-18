@@ -48,6 +48,8 @@ var (
 
 	bucketReg *regexp.Regexp
 	nsReg     *regexp.Regexp
+
+	thisNodeName string
 )
 
 func init() {
@@ -56,6 +58,8 @@ func init() {
 	GCO = &globalConfigOwner{}
 	GCO.c.Store(unsafe.Pointer(&Config{}))
 }
+
+func SetNodeName(name string) { thisNodeName = name }
 
 // WaitForFunc executes a function in goroutine and waits for it to finish.
 // If the function runs longer than `timeLong` WaitForFunc notifies a user

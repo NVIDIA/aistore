@@ -125,6 +125,7 @@ type (
 		URLPath    string `json:"url_path"`
 		RemoteAddr string `json:"remote_addr"`
 		Caller     string `json:"caller"`
+		Node       string `json:"node"`
 		trace      []byte
 	}
 )
@@ -538,11 +539,11 @@ func NewErrHTTP(r *http.Request, msg string, errCode ...int) (e *ErrHTTP) {
 	e = allocHTTPErr()
 	e.Status, e.Message = status, msg
 	if r != nil {
-		e.Method, e.URLPath, e.RemoteAddr = r.Method, r.URL.Path, r.RemoteAddr
-		if caller := r.Header.Get(HdrCallerName); caller != "" {
-			e.Caller = caller
-		}
+		e.Method, e.URLPath = r.Method, r.URL.Path
+		e.RemoteAddr = r.RemoteAddr
+		e.Caller = r.Header.Get(HdrCallerName)
 	}
+	e.Node = thisNodeName
 	return
 }
 
@@ -616,12 +617,11 @@ func (e *ErrHTTP) String() (s string) {
 			s += " " + e.URLPath
 		}
 	}
-	if e.RemoteAddr != "" {
-		s += " from (" + e.RemoteAddr
-		if e.Caller != "" {
-			s += ", " + e.Caller
-		}
-		s += ")"
+	if thisNodeName != "" && !strings.Contains(e.Message, thisNodeName) {
+		s += " (failed at " + thisNodeName + ")"
+	}
+	if e.Caller != "" {
+		s += " (called by " + e.Caller + ")"
 	}
 	return s + " (" + string(e.trace) + ")"
 }

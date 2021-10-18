@@ -107,15 +107,16 @@ func (e *ErrSignal) Error() string               { return fmt.Sprintf("Signal %d
 
 // Exitf writes formatted message to STDOUT and exits with non-zero status code.
 func Exitf(f string, a ...interface{}) {
-	fmt.Fprintf(os.Stderr, f, a...)
-	fmt.Fprintln(os.Stderr)
+	msg := fmt.Sprintf("FATAL ERROR: "+f+"\n", a...)
+	fmt.Fprint(os.Stderr, msg)
 	os.Exit(1)
 }
 
-// ExitLogf is wrapper around `Exitf` with `glog` logging. It should be used
-// instead `Exitf` if the `glog` was initialized.
+// ExitLogf is glog + Exitf. To be used when `glog` is used as well.
 func ExitLogf(f string, a ...interface{}) {
-	glog.Errorf("FATAL ERROR: "+f, a...)
+	msg := fmt.Sprintf("FATAL ERROR: "+f+"\n", a...)
+	glog.Error(msg)
 	glog.Flush()
-	Exitf(f, a...)
+	fmt.Fprint(os.Stderr, msg)
+	os.Exit(1)
 }

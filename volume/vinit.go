@@ -120,7 +120,7 @@ func configInitMPI(tid string, config *cmn.Config) (err error) {
 	)
 	for path := range configPaths {
 		var mi *fs.MountpathInfo
-		if mi, err = fs.NewMountpath(path, tid); err != nil {
+		if mi, err = fs.NewMountpath(path); err != nil {
 			return
 		}
 		if err = mi.AddEnabled(tid, availablePaths, config); err != nil {
@@ -145,7 +145,7 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int) (maxVerVMD *
 
 	for mpath, fsMpathMD := range vmd.Mountpaths {
 		var mi *fs.MountpathInfo
-		mi, err = fs.NewMountpath(mpath, tid)
+		mi, err = fs.NewMountpath(mpath)
 		if fsMpathMD.Enabled {
 			if err != nil {
 				return

@@ -105,7 +105,7 @@ var mfs *MountedFS
 // MountpathInfo //
 ///////////////////
 
-func NewMountpath(mpath, tid string) (mi *MountpathInfo, err error) {
+func NewMountpath(mpath string) (mi *MountpathInfo, err error) {
 	var (
 		cleanMpath string
 		fsInfo     FilesystemInfo
@@ -114,7 +114,7 @@ func NewMountpath(mpath, tid string) (mi *MountpathInfo, err error) {
 		return
 	}
 	if err = Access(cleanMpath); err != nil {
-		return nil, cmn.NewErrNotFound("t[%s]: mountpath %q", tid, mpath)
+		return nil, cmn.NewErrNotFound("mountpath %q", mpath)
 	}
 	if fsInfo, err = makeFsInfo(cleanMpath); err != nil {
 		return
@@ -585,7 +585,7 @@ func cloneMPI() (MPI, MPI) {
 
 // (used only in tests - compare with AddMpath below)
 func Add(mpath, tid string) (mi *MountpathInfo, err error) {
-	mi, err = NewMountpath(mpath, tid)
+	mi, err = NewMountpath(mpath)
 	if err != nil {
 		return
 	}
@@ -596,10 +596,10 @@ func Add(mpath, tid string) (mi *MountpathInfo, err error) {
 	return
 }
 
-// Add adds new mountpath to the target's mountpaths.
+// Add adds new mountpath to the existing target's mountpaths.
 func AddMpath(mpath, tid string, cb func()) (mi *MountpathInfo, err error) {
 	debug.Assert(tid != "")
-	mi, err = NewMountpath(mpath, tid)
+	mi, err = NewMountpath(mpath)
 	if err != nil {
 		return
 	}

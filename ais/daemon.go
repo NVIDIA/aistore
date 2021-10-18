@@ -171,12 +171,14 @@ func initDaemon(version, buildTime string) cos.Runner {
 		p.init(config)
 		glog.Infoln("Node", p.si.String())
 		glog.GetNodeName = p.si.Name
+		cmn.SetNodeName(p.si.Name())
 		return p
 	}
 	t := newTarget(co)
 	t.init(config)
 	glog.Infoln("Node", t.si.String())
 	glog.GetNodeName = t.si.Name
+	cmn.SetNodeName(t.si.Name())
 
 	return t
 }
