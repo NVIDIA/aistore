@@ -462,11 +462,14 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err := cmn.ReadJSON(w, r, &msg); err != nil {
-		return
-	}
 	if len(apiItems) > 0 {
 		bckName = apiItems[0]
+	}
+	if r.ContentLength == 0 && r.Header.Get(cmn.HdrContentType) != cmn.ContentJSON {
+		// must be an "easy URL" request, e.g.: curl -L -X GET 'http://aistore/ais/abc'
+		msg = cmn.ActionMsg{Action: cmn.ActList, Value: &cmn.SelectMsg{}}
+	} else if err := cmn.ReadJSON(w, r, &msg); err != nil {
+		return
 	}
 	if queryBcks, err = newQueryBcksFromQuery(bckName, r.URL.Query()); err != nil {
 		p.writeErr(w, r, err)

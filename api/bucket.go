@@ -123,7 +123,6 @@ func ListBuckets(baseParams BaseParams, queryBcks cmn.QueryBcks) (cmn.Bcks, erro
 		body  = cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActList})
 		query = cmn.AddBckToQuery(nil, cmn.Bck(queryBcks))
 	)
-
 	baseParams.Method = http.MethodGet
 	err := DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
