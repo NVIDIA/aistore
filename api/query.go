@@ -33,7 +33,7 @@ func InitQuery(baseParams BaseParams, objectsTemplate string, bck cmn.Bck, filte
 
 	initMsg := query.InitMsg{QueryMsg: qMsg, WorkersCnt: workersCnt}
 
-	err := DoHTTPRequest(ReqParams{
+	err := DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathQueryInit.S,
 		Body:       cos.MustMarshal(initMsg),
@@ -45,7 +45,7 @@ func NextQueryResults(baseParams BaseParams, handle string, size uint) ([]*cmn.B
 	var objectsNames []*cmn.BucketEntry
 
 	baseParams.Method = http.MethodGet
-	err := DoHTTPRequest(ReqParams{
+	err := DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathQueryNext.S,
 		Body:       cos.MustMarshal(query.NextMsg{Handle: handle, Size: size}),
@@ -56,7 +56,7 @@ func NextQueryResults(baseParams BaseParams, handle string, size uint) ([]*cmn.B
 
 func QueryWorkerTarget(baseParams BaseParams, handle string, workerID uint) (daemonID string, err error) {
 	baseParams.Method = http.MethodGet
-	err = DoHTTPRequest(ReqParams{
+	err = DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathQueryWorker.S,
 		Body:       cos.MustMarshal(query.NextMsg{Handle: handle, WorkerID: workerID}),

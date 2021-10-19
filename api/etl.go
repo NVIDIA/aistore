@@ -16,13 +16,13 @@ import (
 
 func ETLInitSpec(baseParams BaseParams, spec []byte) (id string, err error) {
 	baseParams.Method = http.MethodPost
-	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathETLInitSpec.S, Body: spec}, &id)
+	err = DoHTTPReqResp(ReqParams{BaseParams: baseParams, Path: cmn.URLPathETLInitSpec.S, Body: spec}, &id)
 	return id, err
 }
 
 func ETLInitCode(baseParams BaseParams, msg etl.InitCodeMsg) (id string, err error) {
 	baseParams.Method = http.MethodPost
-	err = DoHTTPRequest(ReqParams{
+	err = DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathETLInitCode.S,
 		Body:       cos.MustMarshal(msg),
@@ -32,7 +32,7 @@ func ETLInitCode(baseParams BaseParams, msg etl.InitCodeMsg) (id string, err err
 
 func ETLList(baseParams BaseParams) (list []etl.Info, err error) {
 	baseParams.Method = http.MethodGet
-	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathETLList.S}, &list)
+	err = DoHTTPReqResp(ReqParams{BaseParams: baseParams, Path: cmn.URLPathETLList.S}, &list)
 	return list, err
 }
 
@@ -42,14 +42,14 @@ func ETLLogs(baseParams BaseParams, id string, targetID ...string) (logs etl.Pod
 	if len(targetID) > 0 && targetID[0] != "" {
 		path = cos.JoinWords(path, targetID[0])
 	}
-	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: path}, &logs)
+	err = DoHTTPReqResp(ReqParams{BaseParams: baseParams, Path: path}, &logs)
 	return logs, err
 }
 
 func ETLHealth(params BaseParams, id string) (healths etl.PodsHealthMsg, err error) {
 	params.Method = http.MethodGet
 	path := cmn.URLPathETLHealth.Join(id)
-	err = DoHTTPRequest(ReqParams{BaseParams: params, Path: path}, &healths)
+	err = DoHTTPReqResp(ReqParams{BaseParams: params, Path: path}, &healths)
 	return healths, err
 }
 
@@ -76,7 +76,7 @@ func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.TCBMsg
 	baseParams.Method = http.MethodPost
 	q := cmn.AddBckToQuery(nil, fromBck)
 	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.URLParamBucketTo)
-	err = DoHTTPRequest(ReqParams{
+	err = DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(fromBck.Name),
 		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActETLBck, Value: bckMsg}),

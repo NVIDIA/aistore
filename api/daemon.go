@@ -34,7 +34,7 @@ type GetLogInput struct {
 // mountpaths or error.
 func GetMountpaths(baseParams BaseParams, node *cluster.Snode) (mpl *cmn.MountpathList, err error) {
 	baseParams.Method = http.MethodGet
-	err = DoHTTPRequest(ReqParams{
+	err = DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.S,
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatMountpaths}},
@@ -95,7 +95,7 @@ func DisableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath stri
 // GetDaemonConfig returns the configuration of a specific daemon in a cluster.
 func GetDaemonConfig(baseParams BaseParams, node *cluster.Snode) (config *cmn.Config, err error) {
 	baseParams.Method = http.MethodGet
-	err = DoHTTPRequest(ReqParams{
+	err = DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.S,
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatConfig}},
@@ -121,7 +121,7 @@ func GetDaemonLog(baseParams BaseParams, node *cluster.Snode, args GetLogInput) 
 		q.Set(cmn.URLParamSev, args.Severity)
 	}
 	baseParams.Method = http.MethodGet
-	_, err = doHTTPRequestGetResp(ReqParams{
+	err = DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.S,
 		Query:      q,
@@ -133,7 +133,7 @@ func GetDaemonLog(baseParams BaseParams, node *cluster.Snode, args GetLogInput) 
 // GetDaemonStatus returns information about specific node in a cluster.
 func GetDaemonStatus(baseParams BaseParams, node *cluster.Snode) (daeInfo *stats.DaemonStatus, err error) {
 	baseParams.Method = http.MethodGet
-	err = DoHTTPRequest(ReqParams{
+	err = DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.S,
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatDaemonStatus}},

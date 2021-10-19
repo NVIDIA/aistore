@@ -16,7 +16,7 @@ import (
 func StartDSort(baseParams BaseParams, rs dsort.RequestSpec) (string, error) {
 	baseParams.Method = http.MethodPost
 	var id string
-	err := DoHTTPRequest(ReqParams{
+	err := DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathdSort.S,
 		Body:       cos.MustMarshal(rs),
@@ -35,7 +35,7 @@ func AbortDSort(baseParams BaseParams, managerUUID string) error {
 
 func MetricsDSort(baseParams BaseParams, managerUUID string) (metrics map[string]*dsort.Metrics, err error) {
 	baseParams.Method = http.MethodGet
-	err = DoHTTPRequest(ReqParams{
+	err = DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathdSort.S,
 		Query:      url.Values{cmn.URLParamUUID: []string{managerUUID}},
@@ -55,7 +55,7 @@ func RemoveDSort(baseParams BaseParams, managerUUID string) error {
 func ListDSort(baseParams BaseParams, regex string) (jobsInfos []*dsort.JobInfo, err error) {
 	baseParams.Method = http.MethodGet
 
-	err = DoHTTPRequest(ReqParams{
+	err = DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathdSort.S,
 		Query:      url.Values{cmn.URLParamRegex: []string{regex}},

@@ -107,7 +107,7 @@ func DownloadGetList(baseParams BaseParams, regex string) (dlList downloader.DlJ
 		Regex: regex,
 	}
 	baseParams.Method = http.MethodGet
-	err = DoHTTPRequest(ReqParams{
+	err = DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDownload.S,
 		Body:       cos.MustMarshal(dlBody),
@@ -142,11 +142,11 @@ func RemoveDownload(baseParams BaseParams, id string) error {
 
 func doDlDownloadRequest(reqParams ReqParams) (string, error) {
 	var resp downloader.DlPostResp
-	err := DoHTTPRequest(reqParams, &resp)
+	err := DoHTTPReqResp(reqParams, &resp)
 	return resp.ID, err
 }
 
 func doDlStatusRequest(reqParams ReqParams) (resp downloader.DlStatusResp, err error) {
-	err = DoHTTPRequest(reqParams, &resp)
+	err = DoHTTPReqResp(reqParams, &resp)
 	return resp, err
 }

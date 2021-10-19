@@ -1682,7 +1682,8 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 // reverse-proxy request
 func (p *proxyrunner) reverseNodeRequest(w http.ResponseWriter, r *http.Request, si *cluster.Snode) {
 	parsedURL, err := url.Parse(si.URL(cmn.NetworkPublic))
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
+	r.ContentLength = cos.ContentLengthUnknown // TODO -- FIXME: research more
 	p.reverseRequest(w, r, si.ID(), parsedURL)
 }
 

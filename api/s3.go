@@ -24,7 +24,7 @@ func GetObjectS3(baseParams BaseParams, bck cmn.Bck, objectName string, options 
 	}
 	q = cmn.AddBckToQuery(q, bck)
 	baseParams.Method = http.MethodGet
-	resp, err := doHTTPRequestGetResp(ReqParams{
+	resp, err := doResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathS3.Join(bck.Name, objectName),
 		Query:      q,

@@ -576,7 +576,7 @@ func GetNamedTargetStats(trunner *stats.Trunner, name string) int64 {
 func GetDaemonStats(t *testing.T, u string) (stats map[string]interface{}) {
 	baseParams := BaseAPIParams(u)
 	baseParams.Method = http.MethodGet
-	err := api.DoHTTPRequest(api.ReqParams{
+	err := api.DoHTTPReqResp(api.ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDaemon.S,
 		Query:      url.Values{cmn.URLParamWhat: {cmn.GetWhatStats}},

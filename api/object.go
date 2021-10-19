@@ -26,63 +26,56 @@ const (
 	httpRetryRateSleep = 1500 * time.Millisecond
 )
 
-// GetObjectInput is used to hold optional parameters for GetObject and GetObjectWithValidation
-type GetObjectInput struct {
-	// If not specified otherwise, the Writer field defaults to io.Discard
-	Writer io.Writer
-	// Map of strings as keys and string slices as values used for url formulation
-	Query url.Values
-	// Custom header values passed with GET request
-	Header http.Header
-}
-
-// ReplicateObjectInput is used to hold optional parameters for PutObject when it is used for replication
-type ReplicateObjectInput struct {
-	// Used to set the request header to determine whether PUT object request is for replication in AIStore
-	SourceURL string
-}
-
-type PutObjectArgs struct {
-	BaseParams BaseParams
-	Bck        cmn.Bck
-	Object     string
-	Cksum      *cos.Cksum
-	Reader     cos.ReadOpenCloser
-	Size       uint64 // optional
-}
-
-type AppendToArchArgs struct {
-	PutObjectArgs
-	ArchPath string
-}
-
-type PromoteArgs struct {
-	BaseParams BaseParams
-	Bck        cmn.Bck
-	Object     string
-	Target     string
-	FQN        string
-	Recursive  bool
-	Overwrite  bool
-	KeepOrig   bool
-}
-
-type AppendArgs struct {
-	BaseParams BaseParams
-	Bck        cmn.Bck
-	Object     string
-	Handle     string
-	Reader     cos.ReadOpenCloser
-	Size       int64
-}
-
-type FlushArgs struct {
-	BaseParams BaseParams
-	Bck        cmn.Bck
-	Object     string
-	Handle     string
-	Cksum      *cos.Cksum
-}
+type (
+	GetObjectInput struct {
+		// If not specified otherwise, the Writer field defaults to io.Discard
+		Writer io.Writer
+		// Map of strings as keys and string slices as values used for url formulation
+		Query url.Values
+		// Custom header values passed with GET request
+		Header http.Header
+	}
+	PutObjectArgs struct {
+		BaseParams BaseParams
+		Bck        cmn.Bck
+		Object     string
+		Cksum      *cos.Cksum
+		Reader     cos.ReadOpenCloser
+		Size       uint64 // optional
+	}
+	AppendToArchArgs struct {
+		PutObjectArgs
+		ArchPath string
+	}
+	PromoteArgs struct {
+		BaseParams BaseParams
+		Bck        cmn.Bck
+		Object     string
+		Target     string
+		FQN        string
+		Recursive  bool
+		Overwrite  bool
+		KeepOrig   bool
+	}
+	AppendArgs struct {
+		BaseParams BaseParams
+		Bck        cmn.Bck
+		Object     string
+		Handle     string
+		Reader     cos.ReadOpenCloser
+		Size       int64
+	}
+	FlushArgs struct {
+		BaseParams BaseParams
+		Bck        cmn.Bck
+		Object     string
+		Handle     string
+		Cksum      *cos.Cksum
+	}
+	ReplicateObjectInput struct { // TODO: obsolete - remove
+		SourceURL string
+	}
+)
 
 // HeadObject returns the size and version of the object specified by bucket/object.
 func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists ...bool) (*cmn.ObjectProps, error) {
@@ -104,7 +97,7 @@ func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists .
 		q = cmn.AddBckToQuery(nil, bck)
 	}
 
-	resp, err := doHTTPRequestGetResp(ReqParams{
+	resp, err := doResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathObjects.Join(bck.Name, object),
 		Query:      q,
@@ -200,7 +193,7 @@ func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...Get
 		w, q, hdr = getObjectOptParams(options[0])
 	}
 	baseParams.Method = http.MethodGet
-	resp, err := doHTTPRequestGetResp(ReqParams{
+	resp, err := doResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathObjects.Join(bck.Name, object),
 		Query:      cmn.AddBckToQuery(q, bck),
@@ -227,7 +220,7 @@ func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string, options 
 	}
 	q = cmn.AddBckToQuery(q, bck)
 	baseParams.Method = http.MethodGet
-	return doHTTPRequestGetRespReader(ReqParams{
+	return doReader(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathObjects.Join(bck.Name, object),
 		Query:      q,
@@ -257,7 +250,7 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string,
 	}
 	baseParams.Method = http.MethodGet
 
-	resp, err := doHTTPRequestGetResp(ReqParams{
+	resp, err := doResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathObjects.Join(bck.Name, object),
 		Query:      cmn.AddBckToQuery(q, bck),
@@ -294,7 +287,7 @@ func GetObjectWithResp(baseParams BaseParams, bck cmn.Bck, object string,
 	}
 	q = cmn.AddBckToQuery(q, bck)
 	baseParams.Method = http.MethodGet
-	resp, err := doHTTPRequestGetResp(ReqParams{
+	resp, err := doResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathObjects.Join(bck.Name, object),
 		Query:      q,

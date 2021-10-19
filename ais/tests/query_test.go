@@ -272,7 +272,7 @@ func TestQuerySingleWorkerNext(t *testing.T) {
 	baseParams.URL = si.URL(cmn.NetworkPublic)
 
 	buf := bytes.NewBuffer(nil)
-	err = api.DoHTTPRequest(api.ReqParams{
+	err = api.DoHTTPReqResp(api.ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathQueryNext.S,
 		Body:       cos.MustMarshal(query.NextMsg{Handle: handle, Size: 10}),

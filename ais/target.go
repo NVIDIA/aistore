@@ -1238,7 +1238,7 @@ func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, bck *clu
 		return
 	}
 
-	w.Header().Set("Content-Length", strconv.FormatInt(finfo.Size(), 10))
+	w.Header().Set(cmn.HdrContentLength, strconv.FormatInt(finfo.Size(), 10))
 	_, err = io.Copy(w, file) // No need for `io.CopyBuffer` as `sendfile` syscall will be used.
 	cos.Close(file)
 	if err != nil {
@@ -1320,7 +1320,7 @@ func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.
 	var (
 		cksumValue    = r.Header.Get(cmn.HdrObjCksumVal)
 		cksumType     = r.Header.Get(cmn.HdrObjCksumType)
-		contentLength = r.Header.Get("Content-Length")
+		contentLength = r.Header.Get(cmn.HdrContentLength)
 		query         = r.URL.Query()
 		handle        = query.Get(cmn.URLParamAppendHandle)
 	)
@@ -1379,7 +1379,7 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 		}
 		poi.recvType = cluster.RecvType(n)
 	}
-	sizeStr := header.Get("Content-Length")
+	sizeStr := header.Get(cmn.HdrContentLength)
 	if sizeStr != "" {
 		if size, ers := strconv.ParseInt(sizeStr, 10, 64); ers == nil {
 			poi.size = size
@@ -1392,7 +1392,7 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 
 func (t *targetrunner) doAppendArch(r *http.Request, lom *cluster.LOM, started time.Time) (errCode int, err error) {
 	var (
-		sizeStr  = r.Header.Get("Content-Length")
+		sizeStr  = r.Header.Get(cmn.HdrContentLength)
 		query    = r.URL.Query()
 		mime     = query.Get(cmn.URLParamArchmime)
 		filename = query.Get(cmn.URLParamArchpath)

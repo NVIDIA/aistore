@@ -55,7 +55,7 @@ func LoginUser(baseParams BaseParams, userID, pass string, expire *time.Duration
 	baseParams.Method = http.MethodPost
 
 	rec := authn.LoginMsg{Password: pass, ExpiresIn: expire}
-	err = DoHTTPRequest(ReqParams{
+	err = DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathUsers.Join(userID),
 		Body:       cos.MustMarshal(rec),
@@ -101,7 +101,7 @@ func GetClusterAuthN(baseParams BaseParams, spec authn.Cluster) ([]*authn.Cluste
 		path = cos.JoinWords(path, spec.ID)
 	}
 	clusters := &authn.ClusterList{}
-	err := DoHTTPRequest(ReqParams{
+	err := DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       path,
 	}, clusters)
@@ -120,7 +120,7 @@ func GetRoleAuthN(baseParams BaseParams, roleID string) (*authn.Role, error) {
 	}
 	rInfo := &authn.Role{}
 	baseParams.Method = http.MethodGet
-	err := DoHTTPRequest(ReqParams{
+	err := DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cos.JoinWords(cmn.URLPathRoles.S, roleID),
 	}, &rInfo)
@@ -131,7 +131,7 @@ func GetRolesAuthN(baseParams BaseParams) ([]*authn.Role, error) {
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPathRoles.S
 	roles := make([]*authn.Role, 0)
-	err := DoHTTPRequest(ReqParams{
+	err := DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       path,
 	}, &roles)
@@ -143,7 +143,7 @@ func GetRolesAuthN(baseParams BaseParams) ([]*authn.Role, error) {
 func GetUsersAuthN(baseParams BaseParams) ([]*authn.User, error) {
 	baseParams.Method = http.MethodGet
 	users := make(map[string]*authn.User, 4)
-	err := DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathUsers.S}, &users)
+	err := DoHTTPReqResp(ReqParams{BaseParams: baseParams, Path: cmn.URLPathUsers.S}, &users)
 
 	list := make([]*authn.User, 0, len(users))
 	for _, info := range users {
@@ -162,7 +162,7 @@ func GetUserAuthN(baseParams BaseParams, userID string) (*authn.User, error) {
 	}
 	uInfo := &authn.User{}
 	baseParams.Method = http.MethodGet
-	err := DoHTTPRequest(ReqParams{
+	err := DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cos.JoinWords(cmn.URLPathUsers.S, userID),
 	}, &uInfo)
@@ -196,7 +196,7 @@ func RevokeToken(baseParams BaseParams, token string) error {
 func GetAuthNConfig(baseParams BaseParams) (*authn.Config, error) {
 	conf := &authn.Config{}
 	baseParams.Method = http.MethodGet
-	err := DoHTTPRequest(ReqParams{
+	err := DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDaemon.S,
 	}, &conf)

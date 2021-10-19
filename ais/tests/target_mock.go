@@ -89,7 +89,11 @@ func registerMockTarget(proxyURL string, smap *cluster.Smap) error {
 	}
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	baseParams.Method = http.MethodPost
-	err = api.DoHTTPRequest(api.ReqParams{BaseParams: baseParams, Path: cmn.URLPathClusterAutoReg.S, Body: jsonDaemonInfo})
+	err = api.DoHTTPRequest(api.ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPathClusterAutoReg.S,
+		Body:       jsonDaemonInfo,
+	})
 	return err
 }
 

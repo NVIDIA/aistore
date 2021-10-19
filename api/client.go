@@ -1,6 +1,6 @@
 // Package api provides AIStore API over HTTP(S)
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -16,6 +16,8 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tinylib/msgp/msgp"
 )
+
+var hdrContentJSON = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
 
 type (
 	BaseParams struct {
@@ -64,60 +66,61 @@ func HTTPStatus(err error) int {
 	return -1 // invalid
 }
 
-// DoHTTPRequest sends one HTTP request and decodes the `v` structure
-// (if provided) from `resp.Body`.
-func DoHTTPRequest(reqParams ReqParams, vs ...interface{}) error {
-	var v interface{}
-	if len(vs) > 0 {
-		v = vs[0]
+// uses do() to make request; if successful, checks, drains, and closes the response body
+func DoHTTPRequest(reqParams ReqParams) error {
+	resp, err := do(reqParams)
+	if err != nil {
+		return err
 	}
-	_, err := doHTTPRequestGetResp(reqParams, v)
+	err = checkResp(reqParams, resp)
+	cos.DrainReader(resp.Body)
+	resp.Body.Close()
 	return err
 }
 
-// doHTTPRequestGetResp makes HTTP request, retries on connection refused or
-// reset errors, decodes the `v` structure (if provided) from `resp.Body` and
-// returns the whole response.
-//
-// The function returns an error if response status code is >= 400.
-func doHTTPRequestGetResp(reqParams ReqParams, v interface{}) (*wrappedResp, error) {
-	resp, err := doHTTPRequestGetHTTPResp(reqParams)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	return readResp(reqParams, resp, v)
+// uses doResp() to make request and decode response
+func DoHTTPReqResp(reqParams ReqParams, v interface{}) error {
+	_, err := doResp(reqParams, v)
+	return err
 }
 
-// doHTTPRequestGetResp makes HTTP request, retries on connection refused or
-// reset errors, and returns response body. The caller is responsible for
-// closing returned reader.
+// doResp makes http request via do(), decodes the `v` structure from the `resp.Body` (if provided),
+// and returns the entire wrapped response.
 //
-// The function returns an error if response status code is >= 400.
-func doHTTPRequestGetRespReader(reqParams ReqParams) (io.ReadCloser, error) {
-	resp, err := doHTTPRequestGetHTTPResp(reqParams)
+// The function returns an error if the response status code is >= 400.
+func doResp(reqParams ReqParams, v interface{}) (wrap *wrappedResp, err error) {
+	var resp *http.Response
+	resp, err = do(reqParams)
 	if err != nil {
 		return nil, err
 	}
+	wrap, err = readResp(reqParams, resp, v)
+	resp.Body.Close()
+	return
+}
 
+// same as above except that it returns response body (as io.ReadCloser) for subsequent reading
+func doReader(reqParams ReqParams) (io.ReadCloser, error) {
+	resp, err := do(reqParams)
+	if err != nil {
+		return nil, err
+	}
 	if err := checkResp(reqParams, resp); err != nil {
 		resp.Body.Close()
 		return nil, err
 	}
-
 	return resp.Body, nil
 }
 
-func doHTTPRequestGetHTTPResp(reqParams ReqParams) (resp *http.Response, err error) {
+// makes HTTP request, retries on connection-refused and reset errors, and returns the response
+func do(reqParams ReqParams) (resp *http.Response, err error) {
 	var (
 		reqBody io.Reader
 		req     *http.Request
 	)
-
 	if reqParams.Body != nil {
 		reqBody = bytes.NewBuffer(reqParams.Body)
 	}
-
 	urlPath := reqParams.BaseParams.URL + reqParams.Path
 	req, err = http.NewRequest(reqParams.BaseParams.Method, urlPath, reqBody)
 	if err != nil {
@@ -142,7 +145,6 @@ func doHTTPRequestGetHTTPResp(reqParams ReqParams) (resp *http.Response, err err
 		BackOff:   true,
 		IsClient:  true,
 	})
-
 	if err != nil {
 		err = fmt.Errorf("failed to %s, err: %w", reqParams.BaseParams.Method, err)
 	}

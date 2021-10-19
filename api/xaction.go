@@ -17,9 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/xaction"
 )
 
-const (
-	XactPollTime = time.Second
-)
+const XactPollTime = time.Second
 
 type (
 	NodesXactStat       map[string]*xaction.BaseStatsExt
@@ -175,7 +173,7 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 	}
 
 	baseParams.Method = http.MethodPut
-	err = DoHTTPRequest(ReqParams{
+	err = DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
@@ -224,7 +222,7 @@ func QueryXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats Nodes
 		msg.OnlyRunning = Bool(true)
 	}
 	baseParams.Method = http.MethodGet
-	err = DoHTTPRequest(ReqParams{
+	err = DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
@@ -246,7 +244,7 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *nl.Notif
 	}
 
 	status = &nl.NotifStatus{}
-	err = DoHTTPRequest(ReqParams{
+	err = DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
@@ -297,7 +295,7 @@ func isXactionIdle(baseParams BaseParams, args XactReqArgs) (idle bool, err erro
 	}
 	var xactStats NodesXactMultiStats
 	baseParams.Method = http.MethodGet
-	err = DoHTTPRequest(ReqParams{
+	err = DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
