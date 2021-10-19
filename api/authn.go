@@ -28,9 +28,13 @@ func AddUser(baseParams BaseParams, newUser *authn.User) error {
 	if err != nil {
 		return err
 	}
-
 	baseParams.Method = http.MethodPost
-	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathUsers.S, Body: msg})
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPathUsers.S,
+		Body:       msg,
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
+	})
 }
 
 func UpdateUser(baseParams BaseParams, newUser *authn.User) error {
@@ -40,6 +44,7 @@ func UpdateUser(baseParams BaseParams, newUser *authn.User) error {
 		BaseParams: baseParams,
 		Path:       cmn.URLPathUsers.Join(newUser.ID),
 		Body:       msg,
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	})
 }
 
@@ -59,6 +64,7 @@ func LoginUser(baseParams BaseParams, userID, pass string, expire *time.Duration
 		BaseParams: baseParams,
 		Path:       cmn.URLPathUsers.Join(userID),
 		Body:       cos.MustMarshal(rec),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	}, &token)
 	if err != nil {
 		return nil, err
@@ -73,7 +79,12 @@ func LoginUser(baseParams BaseParams, userID, pass string, expire *time.Duration
 func RegisterClusterAuthN(baseParams BaseParams, cluSpec authn.Cluster) error {
 	msg := cos.MustMarshal(cluSpec)
 	baseParams.Method = http.MethodPost
-	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathClusters.S, Body: msg})
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPathClusters.S,
+		Body:       msg,
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
+	})
 }
 
 func UpdateClusterAuthN(baseParams BaseParams, cluSpec authn.Cluster) error {
@@ -83,6 +94,7 @@ func UpdateClusterAuthN(baseParams BaseParams, cluSpec authn.Cluster) error {
 		BaseParams: baseParams,
 		Path:       cmn.URLPathClusters.Join(cluSpec.ID),
 		Body:       msg,
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	})
 }
 
@@ -172,7 +184,12 @@ func GetUserAuthN(baseParams BaseParams, userID string) (*authn.User, error) {
 func AddRoleAuthN(baseParams BaseParams, roleSpec *authn.Role) error {
 	msg := cos.MustMarshal(roleSpec)
 	baseParams.Method = http.MethodPost
-	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathRoles.S, Body: msg})
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPathRoles.S,
+		Body:       msg,
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
+	})
 }
 
 func DeleteRoleAuthN(baseParams BaseParams, role string) error {
@@ -190,6 +207,7 @@ func RevokeToken(baseParams BaseParams, token string) error {
 		Body:       cos.MustMarshal(msg),
 		BaseParams: baseParams,
 		Path:       cmn.URLPathTokens.S,
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	})
 }
 
@@ -209,5 +227,6 @@ func SetAuthNConfig(baseParams BaseParams, conf *authn.ConfigToUpdate) error {
 		Body:       cos.MustMarshal(conf),
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDaemon.S,
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	})
 }

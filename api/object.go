@@ -150,6 +150,7 @@ func SetObjectCustomProps(baseParams BaseParams, bck cmn.Bck, object string, cus
 		BaseParams: baseParams,
 		Path:       cmn.URLPathObjects.Join(bck.Name, object),
 		Body:       cos.MustMarshal(actMsg),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		Query:      q,
 	})
 }
@@ -172,6 +173,7 @@ func EvictObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 		BaseParams: baseParams,
 		Path:       cmn.URLPathObjects.Join(bck.Name, object),
 		Body:       cos.MustMarshal(actMsg),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		Query:      cmn.AddBckToQuery(nil, bck),
 	})
 }
@@ -450,6 +452,7 @@ func RenameObject(baseParams BaseParams, bck cmn.Bck, oldName, newName string) e
 		BaseParams: baseParams,
 		Path:       cmn.URLPathObjects.Join(bck.Name, oldName),
 		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActRenameObject, Name: newName}),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		Query:      cmn.AddBckToQuery(nil, bck),
 	})
 }
@@ -471,6 +474,7 @@ func PromoteFileOrDir(args *PromoteArgs) error {
 		BaseParams: args.BaseParams,
 		Path:       cmn.URLPathObjects.Join(args.Bck.Name),
 		Body:       cos.MustMarshal(actMsg),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		Query:      cmn.AddBckToQuery(nil, args.Bck),
 	})
 }

@@ -93,6 +93,7 @@ func registerMockTarget(proxyURL string, smap *cluster.Smap) error {
 		BaseParams: baseParams,
 		Path:       cmn.URLPathClusterAutoReg.S,
 		Body:       jsonDaemonInfo,
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	})
 	return err
 }

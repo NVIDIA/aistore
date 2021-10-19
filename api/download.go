@@ -53,6 +53,7 @@ func DownloadWithParam(baseParams BaseParams, dlt downloader.DlType, body interf
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDownload.S,
 		Body:       cos.MustMarshal(downloader.DlBody{Type: dlt, RawMessage: msg}),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	})
 }
 
@@ -85,58 +86,52 @@ func DownloadBackend(baseParams BaseParams, description string, bck cmn.Bck, pre
 }
 
 func DownloadStatus(baseParams BaseParams, id string, onlyActiveTasks ...bool) (downloader.DlStatusResp, error) {
-	dlBody := downloader.DlAdminBody{
-		ID: id,
-	}
-
+	dlBody := downloader.DlAdminBody{ID: id}
 	if len(onlyActiveTasks) > 0 {
 		// Status of only active downloader tasks. Skip details of finished/errored tasks
 		dlBody.OnlyActiveTasks = onlyActiveTasks[0]
 	}
-
 	baseParams.Method = http.MethodGet
 	return doDlStatusRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDownload.S,
 		Body:       cos.MustMarshal(dlBody),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	})
 }
 
 func DownloadGetList(baseParams BaseParams, regex string) (dlList downloader.DlJobInfos, err error) {
-	dlBody := downloader.DlAdminBody{
-		Regex: regex,
-	}
+	dlBody := downloader.DlAdminBody{Regex: regex}
 	baseParams.Method = http.MethodGet
 	err = DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDownload.S,
 		Body:       cos.MustMarshal(dlBody),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	}, &dlList)
 	sort.Sort(dlList)
 	return dlList, err
 }
 
 func AbortDownload(baseParams BaseParams, id string) error {
-	dlBody := downloader.DlAdminBody{
-		ID: id,
-	}
+	dlBody := downloader.DlAdminBody{ID: id}
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDownloadAbort.S,
 		Body:       cos.MustMarshal(dlBody),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	})
 }
 
 func RemoveDownload(baseParams BaseParams, id string) error {
-	dlBody := downloader.DlAdminBody{
-		ID: id,
-	}
+	dlBody := downloader.DlAdminBody{ID: id}
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathDownloadRemove.S,
 		Body:       cos.MustMarshal(dlBody),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	})
 }
 

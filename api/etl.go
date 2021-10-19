@@ -26,6 +26,7 @@ func ETLInitCode(baseParams BaseParams, msg etl.InitCodeMsg) (id string, err err
 		BaseParams: baseParams,
 		Path:       cmn.URLPathETLInitCode.S,
 		Body:       cos.MustMarshal(msg),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	}, &id)
 	return id, err
 }
@@ -80,6 +81,7 @@ func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.TCBMsg
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(fromBck.Name),
 		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActETLBck, Value: bckMsg}),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		Query:      q,
 	}, &xactID)
 	return

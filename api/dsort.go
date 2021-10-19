@@ -14,12 +14,13 @@ import (
 )
 
 func StartDSort(baseParams BaseParams, rs dsort.RequestSpec) (string, error) {
-	baseParams.Method = http.MethodPost
 	var id string
+	baseParams.Method = http.MethodPost
 	err := DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathdSort.S,
 		Body:       cos.MustMarshal(rs),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	}, &id)
 	return id, err
 }

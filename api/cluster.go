@@ -112,6 +112,7 @@ func JoinCluster(baseParams BaseParams, nodeInfo *cluster.Snode) (rebID, daemonI
 		BaseParams: baseParams,
 		Path:       cmn.URLPathClusterUserReg.S,
 		Body:       cos.MustMarshal(nodeInfo),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	}, &info)
 	return info.RebalanceID, info.DaemonID, err
 }
@@ -158,7 +159,13 @@ func SetClusterConfigUsingMsg(baseParams BaseParams, configToUpdate *cmn.ConfigT
 		q.Add(cmn.ActTransient, strconv.FormatBool(transient[0]))
 	}
 	baseParams.Method = http.MethodPut
-	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cos.MustMarshal(msg), Query: q})
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPathCluster.S,
+		Body:       cos.MustMarshal(msg),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
+		Query:      q,
+	})
 }
 
 // ResetClusterConfig resets the configuration of all nodes to the cluster configuration
@@ -168,6 +175,7 @@ func ResetClusterConfig(baseParams BaseParams) error {
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActResetConfig}),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	})
 }
 
@@ -225,7 +233,12 @@ func StartMaintenance(baseParams BaseParams, actValue *cmn.ActValRmNode) (id str
 		Value:  actValue,
 	}
 	baseParams.Method = http.MethodPut
-	err = DoHTTPReqResp(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cos.MustMarshal(msg)}, &id)
+	err = DoHTTPReqResp(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPathCluster.S,
+		Body:       cos.MustMarshal(msg),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
+	}, &id)
 	return id, err
 }
 
@@ -235,7 +248,12 @@ func DecommissionNode(baseParams BaseParams, actValue *cmn.ActValRmNode) (id str
 		Value:  actValue,
 	}
 	baseParams.Method = http.MethodPut
-	err = DoHTTPReqResp(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cos.MustMarshal(msg)}, &id)
+	err = DoHTTPReqResp(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPathCluster.S,
+		Body:       cos.MustMarshal(msg),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
+	}, &id)
 	return id, err
 }
 
@@ -245,7 +263,12 @@ func StopMaintenance(baseParams BaseParams, actValue *cmn.ActValRmNode) (id stri
 		Value:  actValue,
 	}
 	baseParams.Method = http.MethodPut
-	err = DoHTTPReqResp(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cos.MustMarshal(msg)}, &id)
+	err = DoHTTPReqResp(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPathCluster.S,
+		Body:       cos.MustMarshal(msg),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
+	}, &id)
 	return id, err
 }
 
@@ -257,6 +280,7 @@ func ShutdownCluster(baseParams BaseParams) error {
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	})
 	return err
 }
@@ -269,6 +293,7 @@ func DecommissionCluster(baseParams BaseParams) error {
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	})
 	if cos.IsEOF(err) {
 		err = nil
@@ -283,7 +308,12 @@ func ShutdownNode(baseParams BaseParams, actValue *cmn.ActValRmNode) (id string,
 		Value:  actValue,
 	}
 	baseParams.Method = http.MethodPut
-	err = DoHTTPReqResp(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cos.MustMarshal(msg)}, &id)
+	err = DoHTTPReqResp(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPathCluster.S,
+		Body:       cos.MustMarshal(msg),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
+	}, &id)
 	return id, err
 }
 

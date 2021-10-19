@@ -177,6 +177,7 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		Query:      cmn.AddBckToQuery(nil, args.Bck),
 	}, &id)
 	return id, err
@@ -186,17 +187,14 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 	msg := cmn.ActionMsg{
 		Action: cmn.ActXactStop,
-		Value: xaction.QueryMsg{
-			ID:   args.ID,
-			Kind: args.Kind,
-			Bck:  args.Bck,
-		},
+		Value:  xaction.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck},
 	}
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		Query:      cmn.AddBckToQuery(nil, args.Bck),
 	})
 }
@@ -213,11 +211,7 @@ func GetXactionStatsByID(baseParams BaseParams, id string) (xactStat NodesXactSt
 
 // QueryXactionStats gets all xaction stats for given kind and bucket (optional).
 func QueryXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats NodesXactMultiStats, err error) {
-	msg := xaction.QueryMsg{
-		ID:   args.ID,
-		Kind: args.Kind,
-		Bck:  args.Bck,
-	}
+	msg := xaction.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck}
 	if args.OnlyRunning {
 		msg.OnlyRunning = Bool(true)
 	}
@@ -226,6 +220,7 @@ func QueryXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats Nodes
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatQueryXactStats}},
 	}, &xactStats)
 	return xactStats, err
@@ -234,23 +229,17 @@ func QueryXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats Nodes
 // GetXactionStatus retrieves the status of the xaction.
 func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *nl.NotifStatus, err error) {
 	baseParams.Method = http.MethodGet
-	msg := xaction.QueryMsg{
-		ID:   args.ID,
-		Kind: args.Kind,
-		Bck:  args.Bck,
-	}
+	msg := xaction.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck}
 	if args.OnlyRunning {
 		msg.OnlyRunning = Bool(true)
 	}
-
 	status = &nl.NotifStatus{}
 	err = DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
-		Query: url.Values{
-			cmn.URLParamWhat: []string{cmn.GetWhatStatus},
-		},
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
+		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatStatus}},
 	}, status)
 	return
 }
@@ -299,6 +288,7 @@ func isXactionIdle(baseParams BaseParams, args XactReqArgs) (idle bool, err erro
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Body:       cos.MustMarshal(msg),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatQueryXactStats}},
 	}, &xactStats)
 	if err != nil {

@@ -53,8 +53,9 @@ func AddMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string) 
 		Path:       cmn.URLPathReverseDaemon.Join(cmn.Mountpaths),
 		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathAdd, Value: mountpath}),
 		Header: http.Header{
-			cmn.HdrNodeID:  []string{node.ID()},
-			cmn.HdrNodeURL: []string{node.URL(cmn.NetworkPublic)},
+			cmn.HdrNodeID:      []string{node.ID()},
+			cmn.HdrNodeURL:     []string{node.URL(cmn.NetworkPublic)},
+			cmn.HdrContentType: []string{cmn.ContentJSON},
 		},
 	})
 }
@@ -66,8 +67,9 @@ func EnableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 		Path:       cmn.URLPathReverseDaemon.Join(cmn.Mountpaths),
 		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathEnable, Value: mountpath}),
 		Header: http.Header{
-			cmn.HdrNodeID:  []string{node.ID()},
-			cmn.HdrNodeURL: []string{node.URL(cmn.NetworkPublic)},
+			cmn.HdrNodeID:      []string{node.ID()},
+			cmn.HdrNodeURL:     []string{node.URL(cmn.NetworkPublic)},
+			cmn.HdrContentType: []string{cmn.ContentJSON},
 		},
 	})
 }
@@ -78,7 +80,10 @@ func RemoveMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.Join(cmn.Mountpaths),
 		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathRemove, Value: mountpath}),
-		Header:     http.Header{cmn.HdrNodeID: []string{node.ID()}},
+		Header: http.Header{
+			cmn.HdrNodeID:      []string{node.ID()},
+			cmn.HdrContentType: []string{cmn.ContentJSON},
+		},
 	})
 }
 
@@ -88,7 +93,10 @@ func DisableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath stri
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.Join(cmn.Mountpaths),
 		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathDisable, Value: mountpath}),
-		Header:     http.Header{cmn.HdrNodeID: []string{node.ID()}},
+		Header: http.Header{
+			cmn.HdrNodeID:      []string{node.ID()},
+			cmn.HdrContentType: []string{cmn.ContentJSON},
+		},
 	})
 }
 
@@ -177,6 +185,9 @@ func ResetDaemonConfig(baseParams BaseParams, nodeID string) error {
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.S,
 		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActResetConfig}),
-		Header:     http.Header{cmn.HdrNodeID: []string{nodeID}},
+		Header: http.Header{
+			cmn.HdrNodeID:      []string{nodeID},
+			cmn.HdrContentType: []string{cmn.ContentJSON},
+		},
 	})
 }

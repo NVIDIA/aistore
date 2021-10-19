@@ -7,6 +7,7 @@ package integration
 import (
 	"bytes"
 	"fmt"
+	"net/http"
 	"sort"
 	"testing"
 	"time"
@@ -276,6 +277,7 @@ func TestQuerySingleWorkerNext(t *testing.T) {
 		BaseParams: baseParams,
 		Path:       cmn.URLPathQueryNext.S,
 		Body:       cos.MustMarshal(query.NextMsg{Handle: handle, Size: 10}),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	}, buf)
 	tassert.CheckFatal(t, err)
 

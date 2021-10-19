@@ -646,13 +646,13 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 		if n == 0 {
 			break
 		}
-
 		baseParams := tutils.BaseAPIParams(v.URL(cmn.NetworkPublic))
 		baseParams.Method = http.MethodPut
 		err = api.DoHTTPRequest(api.ReqParams{
 			BaseParams: baseParams,
 			Path:       cmn.URLPathDaemon.Join(cmn.SyncSmap),
 			Body:       jsonMap,
+			Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		})
 		tassert.CheckFatal(t, err)
 		n--

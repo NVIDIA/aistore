@@ -37,6 +37,7 @@ func InitQuery(baseParams BaseParams, objectsTemplate string, bck cmn.Bck, filte
 		BaseParams: baseParams,
 		Path:       cmn.URLPathQueryInit.S,
 		Body:       cos.MustMarshal(initMsg),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	}, &handle)
 	return handle, err
 }
@@ -49,6 +50,7 @@ func NextQueryResults(baseParams BaseParams, handle string, size uint) ([]*cmn.B
 		BaseParams: baseParams,
 		Path:       cmn.URLPathQueryNext.S,
 		Body:       cos.MustMarshal(query.NextMsg{Handle: handle, Size: size}),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	}, &objectsNames)
 
 	return objectsNames, err
@@ -60,6 +62,7 @@ func QueryWorkerTarget(baseParams BaseParams, handle string, workerID uint) (dae
 		BaseParams: baseParams,
 		Path:       cmn.URLPathQueryWorker.S,
 		Body:       cos.MustMarshal(query.NextMsg{Handle: handle, WorkerID: workerID}),
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 	}, &daemonID)
 	return
 }

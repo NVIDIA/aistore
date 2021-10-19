@@ -17,8 +17,6 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
-var hdrContentJSON = http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}}
-
 type (
 	BaseParams struct {
 		Client *http.Client
@@ -78,7 +76,7 @@ func DoHTTPRequest(reqParams ReqParams) error {
 	return err
 }
 
-// uses doResp() to make request and decode response
+// uses doResp() to make request and decode response into `v`
 func DoHTTPReqResp(reqParams ReqParams, v interface{}) error {
 	_, err := doResp(reqParams, v)
 	return err

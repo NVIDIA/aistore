@@ -85,7 +85,7 @@ func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action string, msg i
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(bck.Name),
 		Body:       cos.MustMarshal(cmn.ActionMsg{Action: action, Value: msg}),
-		Header:     hdrContentJSON,
+		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		Query:      q,
 	}, &xactID)
 	return
