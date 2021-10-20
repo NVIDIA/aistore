@@ -1686,7 +1686,6 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 func (p *proxyrunner) reverseNodeRequest(w http.ResponseWriter, r *http.Request, si *cluster.Snode) {
 	parsedURL, err := url.Parse(si.URL(cmn.NetworkPublic))
 	debug.AssertNoErr(err)
-	r.ContentLength = cos.ContentLengthUnknown // TODO -- FIXME: research more
 	p.reverseRequest(w, r, si.ID(), parsedURL)
 }
 
@@ -1771,7 +1770,11 @@ func (p *proxyrunner) listBuckets(w http.ResponseWriter, r *http.Request, query 
 		p.writeErr(w, r, err)
 		return
 	}
-	r.Body = io.NopCloser(bytes.NewBuffer(cos.MustMarshal(msg)))
+	bodyCopy := cos.MustMarshal(msg)
+	// NOTE: as the original r.Body has been already read and closed we always reset Content-Length;
+	// (e.g. when it changes: curl -L -X GET -H 'Content-Type: application/json' -d '{"action": "list"}' ...)
+	r.ContentLength = int64(len(bodyCopy))
+	r.Body = io.NopCloser(bytes.NewBuffer(bodyCopy))
 	p.reverseNodeRequest(w, r, si)
 }
 

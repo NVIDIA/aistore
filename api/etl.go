@@ -14,9 +14,9 @@ import (
 	"github.com/NVIDIA/aistore/etl"
 )
 
-func ETLInitSpec(baseParams BaseParams, spec []byte) (id string, err error) {
+func ETLInitSpec(baseParams BaseParams, podspec []byte /*yaml*/) (id string, err error) {
 	baseParams.Method = http.MethodPost
-	err = DoHTTPReqResp(ReqParams{BaseParams: baseParams, Path: cmn.URLPathETLInitSpec.S, Body: spec}, &id)
+	err = DoHTTPReqResp(ReqParams{BaseParams: baseParams, Path: cmn.URLPathETLInitSpec.S, Body: podspec}, &id)
 	return id, err
 }
 
