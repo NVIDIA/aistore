@@ -125,7 +125,7 @@ STATSD_CONF_FILE=$AIS_CONF_DIR/statsd.conf
 #
 # generate conf file(s) based on the settings/selections above
 #
-if [ "${@: -1}" != "--dont-generate-configs" ]; then
+if [ "${!#}" != "--dont-generate-configs" ]; then
   for (( c=START; c<=END; c++ )); do
     AIS_CONF_DIR="$HOME/.ais$NEXT_TIER$c"
     INSTANCE=$c
