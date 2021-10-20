@@ -28,19 +28,12 @@ var (
 
 	storageCmd = cli.Command{
 		Name:  commandStorage,
-		Usage: "monitor and manage AIS storage: used and total capacity, add/remove mountpaths",
+		Usage: "monitor and manage clustered storage",
 		Subcommands: []cli.Command{
-			{
-				Name:         subcmdStgSummary,
-				Usage:        "show bucket sizes and percentages of used capacity on a per-bucket basis",
-				ArgsUsage:    listCommandArgument,
-				Flags:        storageCmdFlags[subcmdStgSummary],
-				Action:       showBucketSizes,
-				BashComplete: bucketCompletions(),
-			},
+			showCmdStgSummary,
 			{
 				Name:         subcmdStgValidate,
-				Usage:        "check buckets for errors: detect misplaced objects and objects that have insufficient number of copies",
+				Usage:        "check buckets for misplaced objects and objects that have insufficient numbers of copies or EC slices",
 				ArgsUsage:    listCommandArgument,
 				Flags:        storageCmdFlags[subcmdStgValidate],
 				Action:       showObjectHealth,
@@ -50,7 +43,7 @@ var (
 			showCmdDisk,
 			{
 				Name:         subcmdStgCleanup,
-				Usage:        "cleanup storage: remove trash, obsolete workfiles",
+				Usage:        "perform storage cleanup: remove deleted trash and old/obsolete workfiles",
 				ArgsUsage:    listCommandArgument,
 				Flags:        storageCmdFlags[subcmdStgCleanup],
 				Action:       cleanupStorageHandler,

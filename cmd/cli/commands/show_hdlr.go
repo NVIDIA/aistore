@@ -111,29 +111,37 @@ var (
 		Name:  commandShow,
 		Usage: "show information about buckets, jobs, all other managed entities in the cluster and the cluster itself",
 		Subcommands: []cli.Command{
-			makeAlias(authCmdShow, "", true, commandAuth),               // alias for `ais auth show`
-			makeAlias(storageCmd, commandStorage, true, commandStorage), // alias for `ais storage ...`
-			showCmdDisk,
+			makeAlias(authCmdShow, "", true, commandAuth), // alias for `ais auth show`
+			// makeAlias(storageCmd, commandStorage, true, commandStorage), // alias for `ais storage ...`
 			showCmdObject,
 			showCmdCluster,
 			showCmdRebalance,
 			showCmdBucket,
 			showCmdConfig,
 			showCmdRemoteAIS,
-			showCmdMpath,
+			showCmdStorage,
 			showCmdJob,
 			showCmdLog,
 		},
 	}
 
-	// define separately to allow for aliasing
-	showCmdDisk = cli.Command{
-		Name:         subcmdShowDisk,
-		Usage:        "show disk stats for targets",
-		ArgsUsage:    optionalTargetIDArgument,
-		Flags:        showCmdsFlags[subcmdShowDisk],
-		Action:       showDisksHandler,
-		BashComplete: daemonCompletions(completeTargets),
+	showCmdStorage = cli.Command{
+		Name:      subcmdShowStorage,
+		Usage:     "show storage usage and utilization, disks and mountpaths",
+		ArgsUsage: "[TARGET_ID]",
+		Flags:     showCmdsFlags[subcmdShowStorage],
+		Action:    showStorageHandler,
+		BashComplete: func(c *cli.Context) {
+			if c.NArg() == 0 {
+				fmt.Printf("%s\n%s\n%s\n", subcmdShowDisk, subcmdShowMpath, subcmdStgSummary)
+			}
+			daemonCompletions(completeTargets)(c)
+		},
+		Subcommands: []cli.Command{
+			showCmdDisk,
+			showCmdMpath,
+			showCmdStgSummary,
+		},
 	}
 	showCmdObject = cli.Command{
 		Name:         subcmdShowObject,
@@ -220,14 +228,6 @@ var (
 		Action:       showDaemonLogHandler,
 		BashComplete: daemonCompletions(completeAllDaemons),
 	}
-	showCmdMpath = cli.Command{
-		Name:         subcmdShowMpath,
-		Usage:        "show target mountpaths",
-		ArgsUsage:    optionalTargetIDArgument,
-		Flags:        showCmdsFlags[subcmdShowMpath],
-		Action:       showMpathHandler,
-		BashComplete: daemonCompletions(completeTargets),
-	}
 	showCmdJob = cli.Command{
 		Name:  subcmdShowJob,
 		Usage: "show running and completed jobs (xactions)",
@@ -268,6 +268,32 @@ var (
 		Flags:        showCmdsFlags[subcmdShowXaction],
 		Action:       showXactionHandler,
 		BashComplete: xactionCompletions(""),
+	}
+
+	// `show storage` sub-commands
+	showCmdDisk = cli.Command{
+		Name:         subcmdShowDisk,
+		Usage:        "show disk utilization and read/write statistics",
+		ArgsUsage:    optionalTargetIDArgument,
+		Flags:        showCmdsFlags[subcmdShowDisk],
+		Action:       showDisksHandler,
+		BashComplete: daemonCompletions(completeTargets),
+	}
+	showCmdStgSummary = cli.Command{
+		Name:         subcmdStgSummary,
+		Usage:        "show bucket sizes and %% of used capacity on a per-bucket basis",
+		ArgsUsage:    listCommandArgument,
+		Flags:        storageCmdFlags[subcmdStgSummary],
+		Action:       showBucketSizes,
+		BashComplete: bucketCompletions(),
+	}
+	showCmdMpath = cli.Command{
+		Name:         subcmdShowMpath,
+		Usage:        "show target mountpaths",
+		ArgsUsage:    optionalTargetIDArgument,
+		Flags:        showCmdsFlags[subcmdShowMpath],
+		Action:       showMpathHandler,
+		BashComplete: daemonCompletions(completeTargets),
 	}
 )
 
@@ -317,6 +343,10 @@ func showClusterHandler(c *cli.Context) (err error) {
 		return
 	}
 	return clusterDaemonStatus(c, primarySmap, daemonID, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag), flagIsSet(c, verboseFlag))
+}
+
+func showStorageHandler(c *cli.Context) (err error) {
+	return showDisksHandler(c)
 }
 
 func showXactionHandler(c *cli.Context) (err error) {

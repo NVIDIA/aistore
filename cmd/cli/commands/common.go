@@ -111,8 +111,14 @@ const (
 	subcmdShowLog       = subcmdLog
 	subcmdShowRemoteAIS = "remote-cluster"
 	subcmdShowCluster   = subcmdCluster
-	subcmdShowMpath     = subcmdMountpath
-	subcmdShowJob       = commandJob
+
+	subcmdShowStorage  = commandStorage
+	subcmdShowMpath    = subcmdMountpath
+	subcmdShowJob      = commandJob
+	subcmdStgSummary   = subcmdSummary
+	subcmdStgValidate  = "validate"
+	subcmdStgMountpath = subcmdMountpath
+	subcmdStgCleanup   = "cleanup"
 
 	// Remove subcommands
 	subcmdRemoveDownload = subcmdDownload
@@ -164,12 +170,6 @@ const (
 	subcmdK8s        = "kubectl"
 	subcmdK8sSvc     = "svc"
 	subcmdK8sCluster = commandCluster
-
-	// Bucket subcommands
-	subcmdStgSummary   = subcmdSummary
-	subcmdStgValidate  = "validate"
-	subcmdStgMountpath = subcmdMountpath
-	subcmdStgCleanup   = "cleanup"
 
 	// ETL subcommands
 	subcmdInit = "init"

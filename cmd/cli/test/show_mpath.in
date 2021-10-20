@@ -1,2 +1,2 @@
-ais show mountpath // IGNORE
-ais show mountpath --json // IGNORE
+ais show storage mountpath // IGNORE
+ais show storage mountpath --json // IGNORE

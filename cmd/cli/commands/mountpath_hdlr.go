@@ -12,7 +12,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-// TODO: attach/enable/detach/disable mountpath
+// TODO: enable/disable mountpath
 
 var (
 	mpathCmdsFlags = map[string][]cli.Flag{
@@ -21,13 +21,14 @@ var (
 	}
 
 	mpathCmd = cli.Command{
-		Name:  commandMountpath,
-		Usage: "manage mountpaths (disks) in a given storage target",
+		Name:   commandMountpath,
+		Usage:  "show and attach/detach target mountpaths",
+		Action: showMpathHandler,
 		Subcommands: []cli.Command{
 			makeAlias(showCmdMpath, "", true, commandShow), // alias for `ais show`
 			{
 				Name:         subcmdDiskAttach,
-				Usage:        "attach mountpath (i.e., disk or RAID) to target node",
+				Usage:        "attach mountpath (i.e., formatted disk or RAID) to a target node",
 				ArgsUsage:    diskAttachArgument,
 				Flags:        mpathCmdsFlags[subcmdDiskAttach],
 				Action:       diskAttachHandler,
@@ -35,7 +36,7 @@ var (
 			},
 			{
 				Name:         subcmdDiskDetach,
-				Usage:        "detach mountpath (i.e., disk or RAID) from target node",
+				Usage:        "detach mountpath (i.e., formatted disk or RAID) from a target node",
 				ArgsUsage:    diskDetachArgument,
 				Flags:        mpathCmdsFlags[subcmdDiskDetach],
 				Action:       diskDetachHandler,
