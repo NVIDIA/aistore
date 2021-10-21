@@ -7,7 +7,7 @@ redirect_from:
  - /docs/configuration.md/
 ---
 
-# Introduction
+## Introduction
 
 AIS configuration consists of cluster-wide (global) defaults and node-specific values - the latter includes node's own hostnames (or IP addresses) and mountpaths (disks).
 
@@ -27,7 +27,7 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
 
 > For AIS Kubernetes deployments we recommended [Cilium](https://cilium.io) CNI.
 
-# References
+## References
 
 * To enable an optional AIStore authentication server, execute `$ AUTH_ENABLED=true make deploy`. For information on AuthN server, please see [AuthN documentation](/docs/authn.md).
 * In addition to AIStore - the storage cluster, you can also deploy [aisfs](/docs/aisfs.md) - to access AIS objects as files, and [AIS CLI](/docs/cli.md) - to monitor, configure and manage AIS nodes and buckets.
@@ -37,7 +37,7 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
 * For helpful links and/or background on Go, AWS, GCP, and Deep Learning: [helpful links](/docs/helpful_links.md).
 * And again, run `make help` to find out how to build, run, and test AIStore and tools.
 
-# Cluster and Node Configuration
+## Cluster and Node Configuration
 
 The first thing to keep in mind is that there are 3 (three) separate, and separately maintained, pieces:
 
@@ -47,7 +47,7 @@ The first thing to keep in mind is that there are 3 (three) separate, and separa
 
 Specifically:
 
-## Cluster Config
+### Cluster Config
 
 In the documentation and in the code we can say "global configuration" or, same, "cluster configuration". The point, though, is that global config is replicated, versioned, checksummed, compressed, and - most importantly - applies to the entire cluster, all current (and future) node members.
 
@@ -79,7 +79,7 @@ $ ais config cluster timeout.startup_time=2m
 config successfully updated
 ```
 
-## Node (local) configuration
+### Node (local) configuration
 
 Unlike global configuration that is replicated across all nodes there is also a node-specific configuration comprising:
 
@@ -91,7 +91,7 @@ Unlike global configuration that is replicated across all nodes there is also a 
 
 > Separately, since AIS supports n-way mirroring and erasure coding, we strongly recommend not using LVM and hardware RAID. Rather, there must be a simple 1-to-1 relationship: one local FS - one non-partitioned disk.
 
-### Example: show node's configuration
+#### Example: show node's configuration
 
 ```console
 # ais show config CCDpt8088
@@ -106,7 +106,8 @@ checksum.enable_read_range               false                                  
 ...
 ```
 
-### Example: same as above, in JSON form:
+#### Example: same as above, in JSON form:
+
 ```console
 $ ais show config CCDpt8088 --json | tail -20
     "lastupdate_time": "2021-03-20 18:00:20.393881867 -0700 PDT m=+2907.143584987",
@@ -130,7 +131,8 @@ $ ais show config CCDpt8088 --json | tail -20
     }
 ```
 
-### Example: use `--type` option to show only local config
+#### Example: use `--type` option to show only local config
+
 ```console
 # ais show config koLAt8081 --type local
 PROPERTY                         VALUE
@@ -148,7 +150,7 @@ test_fspaths.count               0
 test_fspaths.instance            0
 ```
 
-## Per-Node override of global defaults
+### Per-Node override of global defaults
 
 Finally, each clustered node can individually override *inherited* defaults. For example:
 
@@ -210,7 +212,7 @@ An example of 12 fspaths (and 12 local filesystems) follows below:
 
 ![Example: 12 fspaths](images/example-12-fspaths-config.png)
 
-# Basics
+## Basics
 
 First, some basic facts:
 
@@ -287,7 +289,7 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | `timeout.transport_idle_term` | Yes | `4s` | Max idle time to temporarily teardown long-lived intra-cluster connection |
 | `vmodule` | Yes | `""` | Overrides logging level for a given modules.<br>{"name": "vmodule", "value": "target\*=2"} sets log level to 2 for target modules |
 
-# Startup override
+## Startup override
 
 AIS command-line allows to override configuration at AIS node's startup. For example:
 
@@ -320,7 +322,7 @@ $ aisnode -config=/etc/ais.json -local_config=/etc/ais_local.json -role=target -
 
 > Please see [AIS command-line](command_line.md) for other command-line options and details.
 
-# Managing mountpaths
+## Managing mountpaths
 
 Configuration option `fspaths` specifies the list of local directories where storage targets store objects. An `fspath` aka `mountpath` (both terms are used interchangeably) is a local directory serviced by a local filesystem.
 
@@ -330,7 +332,7 @@ Configuration option `fspaths` specifies the list of local directories where sto
 
 AIStore [HTTP API](http_api.md) makes it possible to list, add, remove, enable, and disable a `fspath` (and, therefore, the corresponding local filesystem) at runtime. Filesystem's health checker (FSHC) monitors the health of all local filesystems: a filesystem that "accumulates" I/O errors will be disabled and taken out, as far as the AIStore built-in mechanism of object distribution. For further details about FSHC, please refer to [FSHC readme](/health/fshc.md).
 
-# Disabling extended attributes
+## Disabling extended attributes
 
 To make sure that AIStore does not utilize xattrs, configure `checksum.type`=`none`, `versioning.enabled`=`true`,
 and `md_write`=`never` for all targets in a AIStore cluster.
@@ -348,11 +350,11 @@ Disable extended attributes only if you need fast and **temporary** storage.
 Without xattrs, a node loses its objects after the node reboots.
 If extended attributes are disabled globally when deploying a cluster, node IDs are not permanent and a node can change its ID after it restarts.
 
-# Enabling HTTPS
+## Enabling HTTPS
 
 To switch from HTTP protocol to an encrypted HTTPS, configure `net.http.use_https`=`true` and modify `net.http.server_crt` and `net.http.server_key` values so they point to your OpenSSL certificate and key files respectively (see [AIStore configuration](/deploy/dev/local/aisnode_config.sh)).
 
-# Filesystem Health Checker
+## Filesystem Health Checker
 
 Default installation enables filesystem health checker component called FSHC. FSHC can be also disabled via section "fshc" of the [configuration](/deploy/dev/local/aisnode_config.sh).
 
@@ -360,21 +362,22 @@ When enabled, FSHC gets notified on every I/O error upon which it performs exten
 
 Please see [FSHC readme](/health/fshc.md) for further details.
 
-# Networking
+## Networking
 
 In addition to user-accessible public network, AIStore will optionally make use of the two other networks: internal (or intra-cluster) and replication. If configured via the [net section of the configuration](/deploy/dev/local/aisnode_config.sh), the intra-cluster network is utilized for latency-sensitive control plane communications including keep-alive and [metasync](ha.md#metasync). The replication network is used, as the name implies, for a variety of replication workloads.
 
 All the 3 (three) networking options are enumerated [here](/cmn/network.go).
 
-# Reverse proxy
+## Reverse proxy
 
 AIStore gateway can act as a reverse proxy vis-à-vis AIStore storage targets. This functionality is limited to GET requests only and must be used with caution and consideration. Related [configuration variable](/deploy/dev/local/aisnode_config.sh) is called `rproxy` - see sub-section `http` of the section `net`. For further details, please refer to [this readme](rproxy.md).
 
-# Curl examples
+## Curl examples
 
 The following assumes that `G` and `T` are the (hostname:port) of one of the deployed gateways (in a given AIS cluster) and one of the targets, respectively.
 
-## Cluster-wide operation (all nodes)
+### Cluster-wide operation (all nodes)
+
 * Set the stats logging interval to 1 second
 
 ```console
@@ -389,21 +392,21 @@ $ curl -i -X PUT 'http://G/v1/cluster/setconfig?periodic.stats_time=1s'
 
 > Notice the two alternative ways to form the requests.
 
-## Cluster-wide operation (all nodes)
+### Cluster-wide operation (all nodes)
 * Set the stats logging interval to 2 minutes
 
 ```console
 $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "periodic.stats_time", "value": "2m"}' 'http://G/v1/cluster'
 ```
 
-## Cluster-wide operation (all nodes)
+### Cluster-wide operation (all nodes)
 * Elevate log verbosity to `4` for all sources matching `ais/targ*` regex
 
 ```console
 $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "vmodule", "value": "ais/targ*=4"}' 'http://G/v1/cluster'
 ```
 
-## Single-node operation (single node)
+### Single-node operation (single node)
 * Set log verbosity to `1` for all source files that match the `ais/targ*` regex
 
 ```console
@@ -416,7 +419,7 @@ or, same:
 $ curl -i -X PUT 'http://T/v1/daemon/setconfig?vmodule=ais/targ*=1'
 ```
 
-# CLI examples
+## CLI examples
 
 [AIS CLI](/docs/cli.md) is an integrated management-and-monitoring command line tool. The following CLI command sequence, first - finds out all AIS knobs that contain substring "time" in their names, second - modifies `list_timeout` from 2 minutes to 5 minutes, and finally, displays the modified value:
 
@@ -431,14 +434,14 @@ $ ais show config --type all 844974_8080 --json | jq '.timeout.list_timeout'
 
 The example above demonstrates cluster-wide configuration update but note: single-node updates are also supported.
 
-## Cluster-wide operation (all nodes)
+### Cluster-wide operation (all nodes)
 * Set `periodic.stats_time` = 1 minute, `periodic.iostat_time_long` = 4 seconds
 
 ```console
 $ ais config cluster periodic.stats_time=1m disk.iostat_time_long=4s
 ```
 
-## Single-node operation (single node)
+### Single-node operation (single node)
 AIS configuration includes a section called `disk`. The `disk` in turn contains several knobs - one of those knobs is `disk.iostat_time_long`, another - `disk.disk_util_low_wm`. To update one or both of those named variables on all or one of the clustered nodes, you could:
 * Set `disk.iostat_time_long` = 3 seconds, `disk.disk_util_low_wm` = 40 percent on daemon with ID `target1`
 
