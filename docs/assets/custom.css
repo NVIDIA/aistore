@@ -70,7 +70,7 @@ h1.page-heading {
 }
 
 
-/* Changes for specific images */
+/* Changes to specific images */
 
 img[alt="etl-v3.3"] {
   width: 80%;
@@ -85,4 +85,11 @@ img[alt="on-disk hierarchy"] {
 
 img[alt="on-disk hierarchy with namespaces"] {
   width: 240px;
+}
+
+img[alt="AIS-ETL Block Diagram"] {
+  width: 80%;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
 }
