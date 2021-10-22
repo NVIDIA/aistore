@@ -93,3 +93,10 @@ img[alt="AIS-ETL Block Diagram"] {
   margin-left: auto;
   margin-right: auto;
 }
+
+img[alt="AIS-ETL Overview"] {
+  width: 80%;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
