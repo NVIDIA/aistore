@@ -7,40 +7,20 @@ redirect_from:
  - /docs/etl.md/
 ---
 
-# Extract, Transform, Load (ETL) with AIStore
-
-**New** in v3.3: offline transformation and the capability to run user-defined functions (in addition to custom ETL containers). Also, bug fixes, performance improvements across the board, video and GIF presentations, and more.
-
-![etl-v3.3](images/etl-v3.3.png)
-
-- [Introduction](#introduction)
-- [Getting Started](#getting-started)
-- [Online ETL example](#online-etl-example)
-- [Offline ETL example](#offline-etl-example)
-- [Kubernetes Deployment](#kubernetes-deployment)
-- [Defining and initializing ETL](#defining-and-initializing-etl)
-- [Transforming objects](#transforming-objects)
-- [API Reference](#api-reference)
-- [ETL name specifications](#etl-name-specifications)
-
-## Introduction
-
 **ETL** stands for **E**xtract, **T**ransform, **L**oad. More specifically:
 
 * **E**xtract - data from different original formats and/or multiple sources;
 * **T**ransform - to the unified common format optimized for subsequent computation (e.g., training deep learning model);
 * **L**oad - transformed data into a new destination - e.g., a storage system that supports high-performance computing over large scale datasets.
 
-The latter can be AIStore. In fact, AIS is designed from the ground up to support all 3 stages of the ETL pre (or post) processing. You can easily task AIS cluster with running custom transformations:
+The latter can be AIStore (AIS). In fact, the system is designed from the ground up to support all 3 stages of the ETL pre (or post) processing. You can easily task AIS cluster with running custom transformations:
 
-* *online* - that is, transforming datasets on the fly by virtue of (randomly) reading them and streaming a resulting transformed output directly to (computing) clients that perform those reads;
+* *inline* - that is, transforming datasets on the fly by virtue of (randomly) reading them and streaming a resulting transformed output directly to (computing) clients that perform those reads;
 * *offline* - storing transformed output as a new dataset that AIStore will make available for any number of future computations.
 
-Implementation-wise, there are many similarities between *online* and *offline* transformations on the one hand, and between *offline* transformation and copying datasets, on the other.
-The latter has been one of the supported AIStore storage services for quite a while; in the v3.3 we have amended it to become, effectively, a *no-op* transformation.
+> Implementation-wise, *offline* transformations of any kind, on the one hand, and copying datasets, on the other, are closely related - the latter being, effectively, a *no-op* offline transformation.
 
-Most notably, AIS always runs transformations locally - *close to data*.
-Running *close to data* has always been one of the cornerstone design principles whereby in a deployed cluster each AIStore target proportionally contributes to the resulting cumulative bandwidth - the bandwidth that, in turn, will scale linearly with each added target.
+Most notably, AIS always runs transformations locally - *close to data*. Running *close to data* has always been one of the cornerstone design principles whereby in a deployed cluster each AIStore target proportionally contributes to the resulting cumulative bandwidth - the bandwidth that, in turn, will scale linearly with each added target.
 
 This was the principle behind *distributed shuffle* (code-named [dSort](/docs/dsort.md)).
 And this is exactly how we have more recently implemented **AIS-ETL** - the ETL service provided by AIStore.
@@ -49,7 +29,21 @@ Technically, the service supports running user-provided ETL containers **and** c
 
 Note AIS-ETL (service) requires [Kubernetes](https://kubernetes.io).
 
-For getting-started details and numerous examples, please refer to rest of this document and the [playbooks directory](/docs/tutorials/README.md).
+## Other references
+
+* For getting-started steps and usage examples, see the [tutorials](/docs/tutorials/README.md).
+* For technical blogs with in-depth background and even more usage examples, please see https://aiatscale.org/blog.
+
+The rest of this text is organized as follows:
+
+- [Getting Started](#getting-started)
+- [Inline ETL example](#inline-etl-example)
+- [Offline ETL example](#offline-etl-example)
+- [Kubernetes Deployment](#kubernetes-deployment)
+- [Defining and initializing ETL](#defining-and-initializing-etl)
+- [Transforming objects](#transforming-objects)
+- [API Reference](#api-reference)
+- [ETL name specifications](#etl-name-specifications)
 
 ## Getting Started
 
@@ -57,7 +51,7 @@ The following [video](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL G
 
 {% include youtubePlayer.html id="4PHkqTSE0ls" %}
 
-## Online ETL example
+## Inline ETL example
 
 ![etl-md5](images/etl-md5.gif)
 
@@ -249,7 +243,7 @@ metadata:
 
 ## Transforming objects
 
-AIStore supports both *online* transformation of selected objects and *offline* transformation of an entire bucket.
+AIStore supports both *inline* transformation of selected objects and *offline* transformation of an entire bucket.
 
 There are two ways to run ETL transformations:
 - HTTP RESTful API described in [API Reference section](#api-reference) of this document,
