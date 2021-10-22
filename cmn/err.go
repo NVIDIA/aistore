@@ -30,6 +30,7 @@ import (
 const (
 	stackTracePrefix = "stack: ["
 
+	FmtErrIntegrity      = "[%s%d, for troubleshooting see %s/blob/master/docs/troubleshooting.md]"
 	FmtErrUnmarshal      = "%s: failed to unmarshal %s (%s), err: %w"
 	FmtErrMorphUnmarshal = "%s: failed to unmarshal %s (%T), err: %v"
 	FmtErrUnsupported    = "%s: %s is not supported"

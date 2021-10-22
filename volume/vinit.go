@@ -121,10 +121,10 @@ func configInitMPI(tid string, config *cmn.Config) (err error) {
 	for path := range configPaths {
 		var mi *fs.MountpathInfo
 		if mi, err = fs.NewMountpath(path); err != nil {
-			return
+			goto rerr
 		}
 		if err = mi.AddEnabled(tid, availablePaths, config); err != nil {
-			return
+			goto rerr
 		}
 		if len(mi.Disks) == 0 && !config.TestingEnv() {
 			err = &fs.ErrMpathNoDisks{Mi: mi}
@@ -132,6 +132,10 @@ func configInitMPI(tid string, config *cmn.Config) (err error) {
 		}
 	}
 	fs.PutMpaths(availablePaths, disabledPaths)
+	return
+
+rerr:
+	err = fmt.Errorf("invalid fspaths configuration: %v", err)
 	return
 }
 
@@ -148,6 +152,7 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int) (maxVerVMD *
 		mi, err = fs.NewMountpath(mpath)
 		if fsMpathMD.Enabled {
 			if err != nil {
+				err = &fs.ErrStorageIntegrity{Code: fs.SieMpathNotFound, Msg: err.Error()}
 				return
 			}
 			if mi.Path != mpath {

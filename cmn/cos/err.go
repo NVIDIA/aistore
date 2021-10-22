@@ -105,14 +105,14 @@ func (e *ErrSignal) Error() string               { return fmt.Sprintf("Signal %d
 // Abnormal Termination //
 //////////////////////////
 
-// Exitf writes formatted message to STDOUT and exits with non-zero status code.
+// Exitf writes formatted message to STDERR and exits with non-zero status code.
 func Exitf(f string, a ...interface{}) {
 	msg := fmt.Sprintf("FATAL ERROR: "+f+"\n", a...)
 	fmt.Fprint(os.Stderr, msg)
 	os.Exit(1)
 }
 
-// ExitLogf is glog + Exitf. To be used when `glog` is used as well.
+// ExitLogf is glog + Exitf.
 func ExitLogf(f string, a ...interface{}) {
 	msg := fmt.Sprintf("FATAL ERROR: "+f+"\n", a...)
 	glog.Error(msg)

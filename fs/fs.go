@@ -703,7 +703,7 @@ func Remove(mpath string, cb ...func()) (*MountpathInfo, error) {
 	)
 	if mpathInfo, exists = availablePaths[cleanMpath]; !exists {
 		if mpathInfo, exists = disabledPaths[cleanMpath]; !exists {
-			return nil, fmt.Errorf("tried to remove non-existing mountpath: %v", mpath)
+			return nil, fmt.Errorf("cannot remove non-existing mountpath %q", mpath)
 		}
 
 		delete(disabledPaths, cleanMpath)
@@ -720,7 +720,7 @@ func Remove(mpath string, cb ...func()) (*MountpathInfo, error) {
 	if availCnt == 0 {
 		glog.Errorf("removed the last available mountpath %s", mpathInfo)
 	} else {
-		glog.Infof("removed mountpath %s (%d remain(s) active)", mpathInfo, availCnt)
+		glog.Infof("removed mountpath %s (remain available: %d)", mpathInfo, availCnt)
 	}
 
 	moveMarkers(availablePaths, mpathInfo)

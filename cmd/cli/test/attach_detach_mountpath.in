@@ -3,7 +3,7 @@ ais storage mountpath detach // FAIL
 ais storage mountpath attach something // FAIL "invalid key-value pair "something""
 ais storage mountpath detach something // FAIL "invalid key-value pair "something""
 ais storage mountpath attach $RANDOM_TARGET=/nonexisting // FAIL "does not exist"
-ais storage mountpath detach $RANDOM_TARGET=/nonexisting // FAIL "tried to remove non-existing mountpath: /nonexisting"
+ais storage mountpath detach $RANDOM_TARGET=/nonexisting // FAIL "cannot remove non-existing mountpath "/nonexisting""
 
 ais storage mountpath detach $RANDOM_TARGET=$RANDOM_MOUNTPATH
 ais storage mountpath attach $RANDOM_TARGET=$RANDOM_MOUNTPATH

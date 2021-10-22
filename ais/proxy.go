@@ -39,7 +39,7 @@ import (
 
 const (
 	whatRenamedLB = "renamedlb"
-	ciePrefix     = "cluster integrity error: cie#"
+	ciePrefix     = "cluster integrity error cie#"
 	listBuckets   = "listBuckets"
 )
 
@@ -2925,6 +2925,5 @@ func resolveUUIDBMD(bmds bmds) (*bucketMD, error) {
 }
 
 func ciError(num int) string {
-	const fmterr = "[%s%d - for troubleshooting, see %s/blob/master/docs/troubleshooting.md]"
-	return fmt.Sprintf(fmterr, ciePrefix, num, cmn.GitHubHome)
+	return fmt.Sprintf(cmn.FmtErrIntegrity, ciePrefix, num, cmn.GitHubHome)
 }

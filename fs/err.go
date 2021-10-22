@@ -17,11 +17,11 @@ const (
 	SieNotEqVMD
 	SieMetaCorrupted
 	SieFsDiffers
+	SieMpathNotFound
 )
 
 const (
-	siePrefix = "storage integrity error: sie#"
-	fmterr    = "[%s%d - for troubleshooting, see %s/blob/master/docs/troubleshooting.md]: %s"
+	siePrefix = "storage integrity error sie#"
 )
 
 type (
@@ -39,5 +39,6 @@ var ErrNoMountpaths = errors.New("no mountpaths")
 func (e *ErrMpathNoDisks) Error() string { return fmt.Sprintf("%s has no disks", e.Mi) }
 
 func (sie *ErrStorageIntegrity) Error() string {
-	return fmt.Sprintf(fmterr, siePrefix, sie.Code, cmn.GitHubHome, sie.Msg)
+	err := fmt.Errorf(cmn.FmtErrIntegrity, siePrefix, sie.Code, cmn.GitHubHome)
+	return fmt.Sprintf("%v: %s", err, sie.Msg)
 }

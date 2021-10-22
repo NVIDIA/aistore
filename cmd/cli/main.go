@@ -5,11 +5,11 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 
 	"github.com/NVIDIA/aistore/cmd/cli/commands"
-	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 const (
@@ -31,11 +31,16 @@ func main() {
 	dispatchInterruptHandler()
 
 	if err := commands.Init(); err != nil {
-		cos.Exitf("%v", err)
+		exitf("%v", err)
 	}
 
 	aisCLI := commands.New(build, version)
 	if err := aisCLI.Run(os.Args); err != nil {
-		cos.Exitf("%v", err)
+		exitf("%v", err)
 	}
+}
+
+func exitf(f string, a ...interface{}) {
+	fmt.Fprintf(os.Stderr, f+"\n", a...)
+	os.Exit(1)
 }
