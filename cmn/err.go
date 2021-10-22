@@ -650,7 +650,18 @@ func (e *ErrHTTP) write(w http.ResponseWriter, r *http.Request, silent bool) {
 		e.populateStackTrace()
 	}
 	if !silent {
-		glog.Errorln(e.String())
+		s := e.String()
+		if thisNodeName != "" && !strings.Contains(e.Message, thisNodeName) {
+			// node name instead of generic stack:
+			replaced1 := strings.Replace(s, stackTracePrefix, thisNodeName+": ", 1)
+			if replaced1 != s {
+				replaced2 := strings.Replace(replaced1, " (failed at "+thisNodeName+")", "", 1)
+				if replaced2 != replaced1 {
+					s = replaced2
+				}
+			}
+		}
+		glog.Errorln(s)
 	}
 	// Make sure that the caller is aware that we return JSON error.
 	w.Header().Set(HdrContentType, ContentJSON)
