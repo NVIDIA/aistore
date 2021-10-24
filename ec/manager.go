@@ -294,7 +294,7 @@ func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) er
 	// we will start xaction to satisfy this request
 	if required := lom.Bprops().EC.RequiredEncodeTargets(); !isECCopy && int(targetCnt) < required {
 		glog.Warningf("not enough targets to encode the object; actual: %v, required: %v", targetCnt, required)
-		return ErrorInsufficientTargets
+		return cmn.ErrNotEnoughTargets
 	}
 
 	cos.Assert(lom.FQN != "")
@@ -338,7 +338,7 @@ func (mgr *Manager) RestoreObject(lom *cluster.LOM) error {
 	// NOTE: Restore replica object is done with GFN, safe to always abort.
 	if required := lom.Bprops().EC.RequiredRestoreTargets(); int(targetCnt) < required {
 		glog.Warningf("not enough targets to restore the object; actual: %v, required: %v", targetCnt, required)
-		return ErrorInsufficientTargets
+		return cmn.ErrNotEnoughTargets
 	}
 
 	cos.Assert(lom.MpathInfo() != nil && lom.MpathInfo().Path != "")

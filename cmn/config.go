@@ -1085,22 +1085,23 @@ func (c *ECConf) Validate() error {
 	return nil
 }
 
-func (c *ECConf) ValidateAsProps(args *ValidationArgs) error {
-	const insufficientNodes = "EC config (%d data, %d parity) slices requires at least %d targets (have %d)"
+func (c *ECConf) ValidateAsProps(args *ValidationArgs) (err error) {
 	if !c.Enabled {
-		return nil
+		return
 	}
-	if err := c.Validate(); err != nil {
-		return err
+	if err = c.Validate(); err != nil {
+		return
 	}
 	required := c.RequiredEncodeTargets()
+	if required <= args.TargetCnt {
+		return
+	}
+	err = fmt.Errorf("%v: EC configuration (%d data and %d parity slices) requires at least %d (have %d)",
+		ErrNotEnoughTargets, c.DataSlices, c.ParitySlices, required, args.TargetCnt)
 	if c.ParitySlices > args.TargetCnt {
-		return fmt.Errorf(insufficientNodes, c.DataSlices, c.ParitySlices, required, args.TargetCnt)
+		return
 	}
-	if args.TargetCnt < required {
-		return NewErrSoft(fmt.Sprintf(insufficientNodes, c.DataSlices, c.ParitySlices, required, args.TargetCnt))
-	}
-	return nil
+	return NewErrSoft(err.Error())
 }
 
 ///////////////////////////////////////////

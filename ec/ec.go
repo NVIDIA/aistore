@@ -181,10 +181,9 @@ var (
 	reqPool  sync.Pool
 	mm       *memsys.MMSA // memory manager and slab/SGL allocator
 
-	ErrorECDisabled          = errors.New("EC is disabled for bucket")
-	ErrorNoMetafile          = errors.New("no metafile")
-	ErrorNotFound            = errors.New("not found")
-	ErrorInsufficientTargets = errors.New("insufficient targets")
+	ErrorECDisabled = errors.New("EC is disabled for bucket")
+	ErrorNoMetafile = errors.New("no metafile")
+	ErrorNotFound   = errors.New("not found")
 )
 
 func allocateReq(action string, lif cluster.LIF) (req *request) {

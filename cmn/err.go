@@ -132,11 +132,11 @@ type (
 )
 
 var (
-	ErrSkip           = errors.New("skip")
-	ErrStartupTimeout = errors.New("startup timeout")
-	ErrQuiesceTimeout = errors.New("timed out waiting for quiescence")
-
-	ErrETLMissingUUID = errors.New("ETL UUID can't be empty")
+	ErrSkip             = errors.New("skip")
+	ErrStartupTimeout   = errors.New("startup timeout")
+	ErrQuiesceTimeout   = errors.New("timed out waiting for quiescence")
+	ErrNotEnoughTargets = errors.New("not enough target nodes")
+	ErrETLMissingUUID   = errors.New("ETL UUID can't be empty")
 )
 
 // ais ErrBucketAlreadyExists
