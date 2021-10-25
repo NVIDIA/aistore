@@ -28,9 +28,8 @@ type (
 	}
 )
 
-func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xaction.NotifXact) {
-	debug.Assert(id != "")
-
+func (reb *Manager) RunResilver(uuid string, skipGlobMisplaced bool, notifs ...*xaction.NotifXact) {
+	debug.Assert(cos.IsValidUUID(uuid))
 	if fatalErr, writeErr := fs.PersistMarker(cmn.ResilverMarker); fatalErr != nil || writeErr != nil {
 		glog.Errorf("FATAL: %v, WRITE: %v", fatalErr, writeErr)
 		return
@@ -41,7 +40,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xa
 		return
 	}
 
-	xact := xreg.RenewResilver(id).(*xs.Resilver)
+	xact := xreg.RenewResilver(uuid).(*xs.Resilver)
 	if len(notifs) != 0 {
 		notifs[0].Xact = xact
 		xact.AddNotif(notifs[0])
@@ -67,9 +66,9 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xa
 	select {
 	case <-xact.ChanAbort():
 		if err := jg.Stop(); err != nil {
-			glog.Errorf("Resilver (id=%q) aborted, stopped with err: %v", id, err)
+			glog.Errorf("Resilver (uuid=%q) aborted, stopped with err: %v", uuid, err)
 		} else {
-			glog.Infof("Resilver (id=%q) aborted", id)
+			glog.Infof("Resilver (uuid=%q) aborted", uuid)
 		}
 	case <-jg.ListenFinished():
 		fs.RemoveMarker(cmn.ResilverMarker)

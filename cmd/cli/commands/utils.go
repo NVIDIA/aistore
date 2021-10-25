@@ -215,9 +215,9 @@ func fillMap() (*cluster.Smap, error) {
 func retrieveStatus(nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStatus, wg *sync.WaitGroup) {
 	fill := func(node *cluster.Snode) {
 		obj, _ := api.GetDaemonStatus(defaultAPIParams, node)
-		if node.Flags.IsSet(cluster.SnodeMaintenance) {
+		if node.Flags.IsSet(cluster.NodeFlagMaint) {
 			obj.Status = "maintenance"
-		} else if node.Flags.IsSet(cluster.SnodeDecommission) {
+		} else if node.Flags.IsSet(cluster.NodeFlagDecomm) {
 			obj.Status = "decommission"
 		}
 		mu.Lock()

@@ -75,15 +75,15 @@ type (
 		smap *smapX // smap before pre-modifcation
 		rmd  *rebMD // latest rebMD post modification
 
-		msg      *cmn.ActionMsg     // action modifying smap (cmn.Act*)
-		nsi      *cluster.Snode     // new node to be added
-		nid      string             // DaemonID of candidate primary to vote
-		sid      string             // DaemonID of node to modify
-		flags    cluster.SnodeFlags // enum cmn.Snode* to set or clear
-		status   int                // http.Status* of operation
-		exists   bool               // node (nsi) added already exists in `smap`
-		skipReb  bool               // skip rebalance when target added/removed
-		_mustReb bool               // must run rebalance (modifier's internal)
+		msg      *cmn.ActionMsg // action modifying smap (cmn.Act*)
+		nsi      *cluster.Snode // new node to be added
+		nid      string         // DaemonID of candidate primary to vote
+		sid      string         // DaemonID of node to modify
+		flags    cos.BitFlags   // enum cmn.Snode* to set or clear
+		status   int            // http.Status* of operation
+		exists   bool           // node (nsi) added already exists in `smap`
+		skipReb  bool           // skip rebalance when target added/removed
+		_mustReb bool           // must run rebalance (modifier's internal)
 	}
 
 	rmdModifier struct {
@@ -282,7 +282,7 @@ func (m *smapX) delProxy(pid string) {
 	m.Version++
 }
 
-func (m *smapX) putNode(nsi *cluster.Snode, flags cluster.SnodeFlags) (exists bool) {
+func (m *smapX) putNode(nsi *cluster.Snode, flags cos.BitFlags) (exists bool) {
 	id := nsi.ID()
 	nsi.Flags = flags
 	if nsi.IsProxy() {
@@ -406,7 +406,7 @@ func (m *smapX) pp() string {
 	return string(s)
 }
 
-func (m *smapX) _applyFlags(si *cluster.Snode, newFlags cluster.SnodeFlags) {
+func (m *smapX) _applyFlags(si *cluster.Snode, newFlags cos.BitFlags) {
 	si.Flags = newFlags
 	if si.IsTarget() {
 		m.Tmap[si.ID()] = si
@@ -417,17 +417,17 @@ func (m *smapX) _applyFlags(si *cluster.Snode, newFlags cluster.SnodeFlags) {
 }
 
 // Must be called under lock
-func (m *smapX) setNodeFlags(sid string, flags cluster.SnodeFlags) {
+func (m *smapX) setNodeFlags(sid string, flags cos.BitFlags) {
 	si := m.GetNode(sid)
 	newFlags := si.Flags.Set(flags)
-	if flags.IsAnySet(cluster.SnodeMaintenanceMask) {
+	if flags.IsAnySet(cluster.NodeFlagsMaintDecomm) {
 		newFlags = newFlags.Clear(cluster.SnodeIC)
 	}
 	m._applyFlags(si, newFlags)
 }
 
 // Must be called under lock
-func (m *smapX) clearNodeFlags(id string, flags cluster.SnodeFlags) {
+func (m *smapX) clearNodeFlags(id string, flags cos.BitFlags) {
 	si := m.GetNode(id)
 	m._applyFlags(si, si.Flags.Clear(flags))
 }

@@ -798,14 +798,17 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, op
 
 // Put node under maintenance
 func (p *proxyrunner) markMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) error {
-	var flags cluster.SnodeFlags
+	var flags cos.BitFlags
 	switch msg.Action {
 	case cmn.ActDecommissionNode:
-		flags = cluster.SnodeDecommission
+		flags = cluster.NodeFlagDecomm
 	case cmn.ActStartMaintenance, cmn.ActShutdownNode:
-		flags = cluster.SnodeMaintenance
+		flags = cluster.NodeFlagMaint
 	default:
-		debug.AssertMsg(false, "invalid action: "+msg.Action)
+		err := fmt.Errorf(fmtErrInvaldAction, msg.Action,
+			[]string{cmn.ActDecommissionNode, cmn.ActStartMaintenance, cmn.ActShutdownNode})
+		debug.AssertNoErr(err)
+		return err
 	}
 	ctx := &smapModifier{
 		pre:   p._markMaint,

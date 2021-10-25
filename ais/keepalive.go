@@ -207,7 +207,7 @@ func (pkr *proxyKeepalive) updateSmap() (stopped bool) {
 			if !pkr.isTimeToPing(sid) {
 				continue
 			}
-			if si.InMaintenance() {
+			if si.IsAnySet(cluster.NodeFlagsMaintDecomm) {
 				continue
 			}
 			// pinging

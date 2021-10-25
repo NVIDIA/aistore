@@ -50,6 +50,8 @@ const (
 	fmtErrInsuffMpaths2 = "%s: not enough mountpaths (%d) to replicate %s (configured) %d times"
 
 	fmtErrPrimaryNotReadyYet = "%s primary is not ready yet to start rebalance (started=%t, starting-up=%t)"
+
+	fmtErrInvaldAction = "invalid action %q (expected one of %v)"
 )
 
 type (
@@ -1189,7 +1191,7 @@ func (h *httprunner) callerNotify(n cluster.Notif, err error, kind string) {
 	debug.Assert(kind == cmn.Progress || kind == cmn.Finished)
 	if len(dsts) == 1 && dsts[0] == equalIC {
 		for pid, psi := range smap.Pmap {
-			if smap.IsIC(psi) && pid != h.si.ID() && !psi.InMaintenance() {
+			if smap.IsIC(psi) && pid != h.si.ID() && !psi.IsAnySet(cluster.NodeFlagsMaintDecomm) {
 				nodes = append(nodes, psi)
 			}
 		}
@@ -1296,7 +1298,7 @@ func (h *httprunner) bcastNodes(bargs *bcastArgs) sliceResults {
 				if si.ID() == h.si.ID() {
 					continue
 				}
-				if !bargs.ignoreMaintenance && si.InMaintenance() {
+				if !bargs.ignoreMaintenance && si.IsAnySet(cluster.NodeFlagsMaintDecomm) {
 					continue
 				}
 				wg.Add(1)
@@ -1434,7 +1436,7 @@ func _checkAction(msg *cmn.ActionMsg, expectedActions ...string) (err error) {
 		found = found || msg.Action == action
 	}
 	if !found {
-		err = fmt.Errorf("invalid action %q, expected one of: %v", msg.Action, expectedActions)
+		err = fmt.Errorf(fmtErrInvaldAction, msg.Action, expectedActions)
 	}
 	return
 }

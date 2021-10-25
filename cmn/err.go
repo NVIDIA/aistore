@@ -282,7 +282,7 @@ func (e *ErrInvalidCksum) Expected() string { return e.expectedHash }
 // ErrNoMountpath
 
 func (e *ErrNoMountpath) Error() string {
-	return "mountpath [" + e.mpath + "] doesn't exist"
+	return "mountpath " + e.mpath + " does not exist"
 }
 
 func NewErrNoMountpath(mpath string) *ErrNoMountpath {

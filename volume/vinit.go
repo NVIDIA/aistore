@@ -131,7 +131,7 @@ func configInitMPI(tid string, config *cmn.Config) (err error) {
 			return
 		}
 	}
-	fs.PutMpaths(availablePaths, disabledPaths)
+	fs.PutMPI(availablePaths, disabledPaths)
 	return
 
 rerr:
@@ -197,7 +197,7 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int) (maxVerVMD *
 	if pass == 1 {
 		return
 	}
-	fs.PutMpaths(availablePaths, disabledPaths)
+	fs.PutMPI(availablePaths, disabledPaths)
 	// TODO: insufficient
 	if la, lc := len(availablePaths), len(config.FSpaths.Paths); la != lc {
 		glog.Warningf("number of available mountpaths (%d) differs from the configured (%d)", la, lc)

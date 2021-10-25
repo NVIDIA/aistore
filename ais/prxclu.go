@@ -464,7 +464,7 @@ func (p *proxyrunner) adminJoinHandshake(nsi *cluster.Snode, apiOp string) (errC
 }
 
 // NOTE: executes under Smap lock
-func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, apiOp string, flags cluster.SnodeFlags) (upd bool, err error) {
+func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, apiOp string, flags cos.BitFlags) (upd bool, err error) {
 	smap := p.owner.smap.get()
 	keepalive := apiOp == cmn.Keepalive
 	if !smap.isPrimary(p.si) {
@@ -500,7 +500,7 @@ func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, apiOp
 	return
 }
 
-func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg, flags cluster.SnodeFlags) (xactID string,
+func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg, flags cos.BitFlags) (xactID string,
 	err error) {
 	ctx := &smapModifier{
 		pre:   p._updPre,
@@ -1218,7 +1218,7 @@ func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, opts *cmn.ActValRmNo
 		sid:     opts.DaemonID,
 		skipReb: opts.SkipRebalance,
 		msg:     msg,
-		flags:   cluster.SnodeMaintenanceMask,
+		flags:   cluster.NodeFlagsMaintDecomm,
 	}
 	err = p.owner.smap.modify(ctx)
 	if ctx.rmd != nil {
@@ -1419,7 +1419,10 @@ func (p *proxyrunner) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb 
 		body := cos.MustMarshal(act)
 		args.req = cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathDaemonCallbackRmSelf.S, Body: body}
 	default:
-		debug.AssertMsg(false, "invalid action: "+msg.Action)
+		err = fmt.Errorf(fmtErrInvaldAction, msg.Action,
+			[]string{cmn.ActShutdownNode, cmn.ActStartMaintenance, cmn.ActDecommissionNode, cmn.ActCallbackRmFromSmap})
+		debug.AssertNoErr(err)
+		return
 	}
 	glog.Infof("%s: removing node %s via %q", p.si, node, msg.Action)
 	res := p.call(args)
@@ -1513,7 +1516,7 @@ func mustRunRebalance(ctx *smapModifier, cur *smapX) bool {
 		return false
 	}
 	for _, si := range cur.Tmap {
-		if si.IsProxy() || si.InMaintenance() {
+		if si.IsProxy() || si.IsAnySet(cluster.NodeFlagsMaintDecomm) {
 			continue
 		}
 		if prev.GetNodeNotMaint(si.ID()) == nil { // added or activated
@@ -1522,7 +1525,7 @@ func mustRunRebalance(ctx *smapModifier, cur *smapX) bool {
 		}
 	}
 	for _, si := range prev.Tmap {
-		if si.IsProxy() || si.InMaintenance() {
+		if si.IsProxy() || si.IsAnySet(cluster.NodeFlagsMaintDecomm) {
 			continue
 		}
 		if cur.GetNodeNotMaint(si.ID()) == nil { // deleted or deactivated

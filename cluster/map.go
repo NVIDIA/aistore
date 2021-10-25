@@ -1,6 +1,6 @@
 // Package cluster provides common interfaces and local access to cluster-level metadata
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package cluster
 
@@ -29,19 +29,17 @@ const (
 // number of broadcasting goroutines <= cmn.NumCPU() * MaxBcastMultiplier
 const MaxBcastMultiplier = 2
 
-// enum: Snode flags
+// enum Snode.Flags
 const (
-	SnodeNonElectable = 1 << iota
+	SnodeNonElectable cos.BitFlags = 1 << iota
 	SnodeIC
-	SnodeMaintenance
-	SnodeDecommission
+	NodeFlagMaint
+	NodeFlagDecomm
 )
 
-const (
-	SnodeMaintenanceMask SnodeFlags = SnodeMaintenance | SnodeDecommission
+const NodeFlagsMaintDecomm = NodeFlagMaint | NodeFlagDecomm
 
-	icGroupSize = 3 // desirable gateway count in the Information Center
-)
+const icGroupSize = 3 // desirable gateway count in the Information Center
 
 type (
 	// interface to Get current cluster-map instance
@@ -49,8 +47,6 @@ type (
 		Get() (smap *Smap)
 		Listeners() SmapListeners
 	}
-
-	SnodeFlags uint64
 
 	// Snode's networking info
 	NetInfo struct {
@@ -62,13 +58,13 @@ type (
 
 	// Snode - a node (gateway or target) in a cluster
 	Snode struct {
-		DaemonID        string      `json:"daemon_id"`
-		DaemonType      string      `json:"daemon_type"`       // enum: "target" or "proxy"
-		PublicNet       NetInfo     `json:"public_net"`        // cmn.NetworkPublic
-		IntraControlNet NetInfo     `json:"intra_control_net"` // cmn.NetworkIntraControl
-		IntraDataNet    NetInfo     `json:"intra_data_net"`    // cmn.NetworkIntraData
-		Flags           SnodeFlags  `json:"flags"`             // enum { SnodeNonElectable, SnodeIC, ... }
-		Ext             interface{} `json:"ext,omitempty"`     // within meta-version extensions
+		DaemonID        string       `json:"daemon_id"`
+		DaemonType      string       `json:"daemon_type"`       // enum: "target" or "proxy"
+		PublicNet       NetInfo      `json:"public_net"`        // cmn.NetworkPublic
+		IntraControlNet NetInfo      `json:"intra_control_net"` // cmn.NetworkIntraControl
+		IntraDataNet    NetInfo      `json:"intra_data_net"`    // cmn.NetworkIntraData
+		Flags           cos.BitFlags `json:"flags"`             // enum { SnodeNonElectable, SnodeIC, ... } - see above
+		Ext             interface{}  `json:"ext,omitempty"`     // within meta-version extensions
 		// runtime
 		idDigest uint64
 		name     string
@@ -99,26 +95,6 @@ type (
 )
 
 func MaxBcastParallel() int { return sys.NumCPU() * MaxBcastMultiplier }
-
-////////////////
-// SnodeFlags //
-////////////////
-
-func (f SnodeFlags) Set(flags SnodeFlags) SnodeFlags {
-	return f | flags
-}
-
-func (f SnodeFlags) Clear(flags SnodeFlags) SnodeFlags {
-	return f &^ flags
-}
-
-func (f SnodeFlags) IsSet(flags SnodeFlags) bool {
-	return f&flags == flags
-}
-
-func (f SnodeFlags) IsAnySet(flags SnodeFlags) bool {
-	return f&flags != 0
-}
 
 ///////////
 // Snode //
@@ -241,9 +217,9 @@ func (d *Snode) IsProxy() bool  { return d.DaemonType == cmn.Proxy }
 func (d *Snode) IsTarget() bool { return d.DaemonType == cmn.Target }
 
 // node flags
-func (d *Snode) InMaintenance() bool { return d.Flags.IsAnySet(SnodeMaintenanceMask) }
-func (d *Snode) nonElectable() bool  { return d.Flags.IsSet(SnodeNonElectable) }
-func (d *Snode) isIC() bool          { return d.Flags.IsSet(SnodeIC) }
+func (d *Snode) IsAnySet(flags cos.BitFlags) bool { return d.Flags.IsAnySet(flags) }
+func (d *Snode) nonElectable() bool               { return d.Flags.IsSet(SnodeNonElectable) }
+func (d *Snode) isIC() bool                       { return d.Flags.IsSet(SnodeIC) }
 
 //////////////////////
 //	  NetInfo       //
@@ -318,7 +294,7 @@ func (m *Smap) CountProxies() int { return len(m.Pmap) }
 func (m *Smap) Count() int        { return len(m.Pmap) + len(m.Tmap) }
 func (m *Smap) CountActiveTargets() (count int) {
 	for _, t := range m.Tmap {
-		if !t.InMaintenance() {
+		if !t.IsAnySet(NodeFlagsMaintDecomm) {
 			count++
 		}
 	}
@@ -336,7 +312,7 @@ func (m *Smap) CountNonElectable() (count int) {
 
 func (m *Smap) CountActiveProxies() (count int) {
 	for _, t := range m.Pmap {
-		if !t.InMaintenance() {
+		if !t.IsAnySet(NodeFlagsMaintDecomm) {
 			count++
 		}
 	}
@@ -385,7 +361,7 @@ func (m *Smap) GetNode(id string) *Snode {
 
 func (m *Smap) GetRandTarget() (tsi *Snode, err error) {
 	for _, tsi = range m.Tmap {
-		if !tsi.InMaintenance() {
+		if !tsi.IsAnySet(NodeFlagsMaintDecomm) {
 			return
 		}
 	}
@@ -395,7 +371,7 @@ func (m *Smap) GetRandTarget() (tsi *Snode, err error) {
 func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {
 	if excludePrimary {
 		for _, proxy := range m.Pmap {
-			if proxy.InMaintenance() {
+			if proxy.IsAnySet(NodeFlagsMaintDecomm) {
 				continue
 			}
 			if m.Primary.DaemonID != proxy.DaemonID {
@@ -406,7 +382,7 @@ func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {
 	}
 	cnt := 0
 	for _, psi := range m.Pmap {
-		if psi.InMaintenance() {
+		if psi.IsAnySet(NodeFlagsMaintDecomm) {
 			cnt++
 			continue
 		}
@@ -470,7 +446,7 @@ func (m *Smap) NonElectable(psi *Snode) (ok bool) {
 // not nil when present and _not_ in maintenance (compare w/ PresentInMaint)
 func (m *Smap) GetNodeNotMaint(sid string) (si *Snode) {
 	si = m.GetNode(sid)
-	if si != nil && si.InMaintenance() {
+	if si != nil && si.IsAnySet(NodeFlagsMaintDecomm) {
 		si = nil
 	}
 	return
@@ -479,7 +455,7 @@ func (m *Smap) GetNodeNotMaint(sid string) (si *Snode) {
 // true when present and in maintenance (compare w/ GetNodeNotMaint)
 func (m *Smap) PresentInMaint(si *Snode) (ok bool) {
 	node := m.GetNode(si.ID())
-	return node != nil && node.InMaintenance()
+	return node != nil && node.IsAnySet(NodeFlagsMaintDecomm)
 }
 
 func (m *Smap) IsIC(psi *Snode) (ok bool) {
@@ -523,7 +499,7 @@ func (m NodeMap) Add(snode *Snode) { debug.Assert(m != nil); m[snode.DaemonID] =
 func (m NodeMap) ActiveMap() (clone NodeMap) {
 	clone = make(NodeMap, len(m))
 	for id, node := range m {
-		if node.InMaintenance() {
+		if node.IsAnySet(NodeFlagsMaintDecomm) {
 			continue
 		}
 		clone[id] = node
@@ -534,7 +510,7 @@ func (m NodeMap) ActiveMap() (clone NodeMap) {
 func (m NodeMap) ActiveNodes() []*Snode {
 	snodes := make([]*Snode, 0, len(m))
 	for _, node := range m {
-		if node.InMaintenance() {
+		if node.IsAnySet(NodeFlagsMaintDecomm) {
 			continue
 		}
 		snodes = append(snodes, node)

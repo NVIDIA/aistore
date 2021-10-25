@@ -40,7 +40,7 @@ func _hrwTarget(uname string, smap *Smap, skipMaint bool) (si *Snode, err error)
 		digest = xxhash.ChecksumString64S(uname, cos.MLCG32)
 	)
 	for _, tsi := range smap.Tmap {
-		if skipMaint && tsi.InMaintenance() {
+		if skipMaint && tsi.IsAnySet(NodeFlagsMaintDecomm) {
 			continue
 		}
 		cs := xoshiro256.Hash(tsi.idDigest ^ digest)
@@ -71,7 +71,7 @@ func HrwTargetList(uname string, smap *Smap, count int) (sis Nodes, err error) {
 
 	for _, tsi := range smap.Tmap {
 		cs := xoshiro256.Hash(tsi.idDigest ^ digest)
-		if tsi.InMaintenance() {
+		if tsi.IsAnySet(NodeFlagsMaintDecomm) {
 			continue
 		}
 		hlist.add(cs, tsi)
@@ -93,7 +93,7 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, err error) {
 		if psi.Flags.IsSet(SnodeNonElectable) {
 			continue
 		}
-		if psi.InMaintenance() {
+		if psi.IsAnySet(NodeFlagsMaintDecomm) {
 			continue
 		}
 		if psi.idDigest >= max {
@@ -113,7 +113,7 @@ func HrwIC(smap *Smap, uuid string) (pi *Snode, err error) {
 		digest = xxhash.ChecksumString64S(uuid, cos.MLCG32)
 	)
 	for _, psi := range smap.Pmap {
-		if psi.InMaintenance() || !psi.isIC() {
+		if psi.IsAnySet(NodeFlagsMaintDecomm) || !psi.isIC() {
 			continue
 		}
 		cs := xoshiro256.Hash(psi.idDigest ^ digest)
@@ -136,7 +136,7 @@ func HrwTargetTask(uuid string, smap *Smap) (si *Snode, err error) {
 		digest = xxhash.ChecksumString64S(uuid, cos.MLCG32)
 	)
 	for _, tsi := range smap.Tmap {
-		if tsi.InMaintenance() {
+		if tsi.IsAnySet(NodeFlagsMaintDecomm) {
 			continue
 		}
 		// Assumes that sinfo.idDigest is initialized
@@ -157,17 +157,19 @@ func HrwMpath(uname string) (mi *fs.MountpathInfo, digest uint64, err error) {
 		max               uint64
 		availablePaths, _ = fs.Get()
 	)
-	if len(availablePaths) == 0 {
-		err = fs.ErrNoMountpaths
-		return
-	}
 	digest = xxhash.ChecksumString64S(uname, cos.MLCG32)
 	for _, mpathInfo := range availablePaths {
+		if mpathInfo.IsAnySet(fs.FlagsDisableRemove) {
+			continue
+		}
 		cs := xoshiro256.Hash(mpathInfo.PathDigest ^ digest)
 		if cs >= max {
 			max = cs
 			mi = mpathInfo
 		}
+	}
+	if mi == nil {
+		err = fs.ErrNoMountpaths
 	}
 	return
 }

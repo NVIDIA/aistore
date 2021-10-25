@@ -1653,15 +1653,15 @@ func (t *targetrunner) fsErr(err error, filepath string) {
 	t.fshc.OnErr(filepath)
 }
 
-func (t *targetrunner) runResilver(id string, wg *sync.WaitGroup, skipGlobMisplaced bool, notifs ...*xaction.NotifXact) {
-	if id == "" {
-		id = cos.GenUUID()
-		regMsg := xactRegMsg{UUID: id, Kind: cmn.ActResilver, Srcs: []string{t.si.ID()}}
+func (t *targetrunner) runResilver(uuid string, wg *sync.WaitGroup, skipGlobMisplaced bool, notifs ...*xaction.NotifXact) {
+	if uuid == "" {
+		uuid = cos.GenUUID()
+		regMsg := xactRegMsg{UUID: uuid, Kind: cmn.ActResilver, Srcs: []string{t.si.ID()}}
 		msg := t.newAmsgActVal(cmn.ActRegGlobalXaction, regMsg)
 		t.bcastAsyncIC(msg)
 	}
 	if wg != nil {
 		wg.Done() // compare w/ xaction.GoRunW(()
 	}
-	t.rebManager.RunResilver(id, skipGlobMisplaced, notifs...)
+	t.rebManager.RunResilver(uuid, skipGlobMisplaced, notifs...)
 }
