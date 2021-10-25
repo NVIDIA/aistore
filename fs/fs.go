@@ -30,11 +30,11 @@ const nodeXattrID = "user.ais.daemon_id"
 
 // enum MountpathInfo.Flags
 const (
-	FlagDisable cos.BitFlags = 1 << iota
-	FlagRemove
+	FlagBeingDisabled cos.BitFlags = 1 << iota
+	FlagBeingRemoved
 )
 
-const FlagsDisableRemove = FlagDisable | FlagRemove
+const FlagBeingDisabledOrRemoved = FlagBeingDisabled | FlagBeingRemoved
 
 // Terminology:
 // - a mountpath is equivalent to (configurable) fspath - both terms are used interchangeably;
@@ -476,7 +476,7 @@ func (mi *MountpathInfo) AddEnabled(tid string, availablePaths MPI, config *cmn.
 	if err = mi._addEnabled(tid, availablePaths, config); err == nil {
 		mfs.fsIDs[mi.FsID] = mi.Path
 	}
-	mi.flags = mi.flags.Clear(FlagsDisableRemove)
+	mi.flags = mi.flags.Clear(FlagBeingDisabledOrRemoved)
 	return
 }
 
@@ -757,7 +757,7 @@ func BeginDisableRemove(action string, flags cos.BitFlags, mpath string) (mi *Mo
 		cleanMpath string
 		exists     bool
 	)
-	debug.Assert(flags.IsAnySet(FlagsDisableRemove))
+	debug.Assert(flags.IsAnySet(FlagBeingDisabledOrRemoved))
 	if cleanMpath, err = cmn.ValidateMpath(mpath); err != nil {
 		return
 	}

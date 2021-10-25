@@ -90,7 +90,7 @@ func (g *fsprungroup) postAddmi(action string, mi *fs.MountpathInfo) {
 // change if mountpath actually was disabled.
 func (g *fsprungroup) disableMountpath(mpath string) (disabledMi *fs.MountpathInfo, err error) {
 	var nothingToDo, gfnActive bool
-	if nothingToDo, err = g.preDelmi(cmn.ActMountpathDisable, fs.FlagDisable, mpath); err != nil {
+	if nothingToDo, err = g.preDelmi(cmn.ActMountpathDisable, fs.FlagBeingDisabled, mpath); err != nil {
 		return
 	}
 	if nothingToDo {
@@ -113,7 +113,7 @@ func (g *fsprungroup) disableMountpath(mpath string) (disabledMi *fs.MountpathIn
 // change if the mountpath was actually removed.
 func (g *fsprungroup) removeMountpath(mpath string) (removedMi *fs.MountpathInfo, err error) {
 	var nothingToDo, gfnActive bool
-	if nothingToDo, err = g.preDelmi(cmn.ActMountpathRemove, fs.FlagRemove, mpath); err != nil {
+	if nothingToDo, err = g.preDelmi(cmn.ActMountpathRemove, fs.FlagBeingRemoved, mpath); err != nil {
 		return
 	}
 	if nothingToDo {

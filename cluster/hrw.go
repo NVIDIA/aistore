@@ -159,7 +159,7 @@ func HrwMpath(uname string) (mi *fs.MountpathInfo, digest uint64, err error) {
 	)
 	digest = xxhash.ChecksumString64S(uname, cos.MLCG32)
 	for _, mpathInfo := range availablePaths {
-		if mpathInfo.IsAnySet(fs.FlagsDisableRemove) {
+		if mpathInfo.IsAnySet(fs.FlagBeingDisabledOrRemoved) {
 			continue
 		}
 		cs := xoshiro256.Hash(mpathInfo.PathDigest ^ digest)
