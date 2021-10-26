@@ -2375,7 +2375,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 		t.Fatalf("%s has only %d mountpaths, required 2 or more", tgtLost.ID(), len(lostFSList.Available))
 	}
 	lostPath := lostFSList.Available[0]
-	err = api.RemoveMountpath(baseParams, tgtLost, lostPath)
+	err = api.DetachMountpath(baseParams, tgtLost, lostPath)
 	tassert.CheckFatal(t, err)
 
 	wg := sync.WaitGroup{}
@@ -2391,7 +2391,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	wg.Wait()
 	tlog.Logf("Created %d objects\n", o.objCount)
 
-	err = api.AddMountpath(baseParams, tgtLost, lostPath)
+	err = api.AttachMountpath(baseParams, tgtLost, lostPath)
 	tassert.CheckFatal(t, err)
 	// loop above may fail (even if AddMountpath works) and mark a test failed
 	if t.Failed() {
@@ -2636,7 +2636,7 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	removed := make(map[string]*removedMpath, o.parityCnt)
 	defer func() {
 		for _, rmMpath := range removed {
-			err := api.AddMountpath(baseParams, rmMpath.si, rmMpath.mpath)
+			err := api.AttachMountpath(baseParams, rmMpath.si, rmMpath.mpath)
 			tassert.CheckError(t, err)
 		}
 	}()
@@ -2648,7 +2648,7 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 		if _, ok := removed[uid]; ok {
 			continue
 		}
-		err := api.RemoveMountpath(baseParams, tsi, mpath)
+		err := api.DetachMountpath(baseParams, tsi, mpath)
 		tassert.CheckFatal(t, err)
 		rmMpath := &removedMpath{si: tsi, mpath: mpath}
 		removed[uid] = rmMpath

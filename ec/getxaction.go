@@ -193,9 +193,9 @@ func (r *XactGet) Run(*sync.WaitGroup) {
 			}
 		case mpathRequest := <-r.mpathReqCh:
 			switch mpathRequest.action {
-			case cmn.ActMountpathAdd:
+			case cmn.ActMountpathAttach:
 				r.addMpath(mpathRequest.mpath)
-			case cmn.ActMountpathRemove:
+			case cmn.ActMountpathDetach:
 				r.removeMpath(mpathRequest.mpath)
 			}
 		case <-r.IdleTimer():

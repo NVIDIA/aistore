@@ -47,7 +47,7 @@ func (g *fsprungroup) enableMountpath(mpath string) (enabledMi *fs.MountpathInfo
 
 // addMountpath adds mountpath and notifies necessary runners about the change
 // if the mountpath was actually added.
-func (g *fsprungroup) addMountpath(mpath string) (addedMi *fs.MountpathInfo, err error) {
+func (g *fsprungroup) attachMountpath(mpath string) (addedMi *fs.MountpathInfo, err error) {
 	gfnActive := g.t.gfn.local.Activate()
 	addedMi, err = fs.AddMpath(mpath, g.t.si.ID(), g.redistributeMD)
 	if err != nil || addedMi == nil {
@@ -57,7 +57,7 @@ func (g *fsprungroup) addMountpath(mpath string) (addedMi *fs.MountpathInfo, err
 		return
 	}
 
-	g.postAddmi(cmn.ActMountpathAdd, addedMi)
+	g.postAddmi(cmn.ActMountpathAttach, addedMi)
 	return
 }
 
@@ -111,9 +111,9 @@ func (g *fsprungroup) disableMountpath(mpath string) (disabledMi *fs.MountpathIn
 
 // removeMountpath removes mountpath and notifies necessary runners about the
 // change if the mountpath was actually removed.
-func (g *fsprungroup) removeMountpath(mpath string) (removedMi *fs.MountpathInfo, err error) {
+func (g *fsprungroup) detachMountpath(mpath string) (removedMi *fs.MountpathInfo, err error) {
 	var nothingToDo, gfnActive bool
-	if nothingToDo, err = g.preDelmi(cmn.ActMountpathRemove, fs.FlagBeingRemoved, mpath); err != nil {
+	if nothingToDo, err = g.preDelmi(cmn.ActMountpathDetach, fs.FlagBeingDetached, mpath); err != nil {
 		return
 	}
 	if nothingToDo {
@@ -128,7 +128,7 @@ func (g *fsprungroup) removeMountpath(mpath string) (removedMi *fs.MountpathInfo
 		return
 	}
 
-	g.postDelmi(cmn.ActMountpathRemove, removedMi)
+	g.postDelmi(cmn.ActMountpathDetach, removedMi)
 	return
 }
 

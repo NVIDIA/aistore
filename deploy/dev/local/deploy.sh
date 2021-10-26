@@ -97,7 +97,7 @@ fi
 START=0
 END=$((TARGET_CNT + PROXY_CNT - 1))
 
-echo "Number of local cache directories (enter 0 for preconfigured filesystems):"
+echo "Number of local mountpaths (enter 0 for preconfigured filesystems):"
 read test_fspath_cnt
 is_number ${test_fspath_cnt}
 TEST_FSPATH_COUNT=${test_fspath_cnt}

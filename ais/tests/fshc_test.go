@@ -324,10 +324,10 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 	selectedTarget, selectedMpath, selectedMpathList := md.randomTargetMpath()
 	tlog.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
 	defer func() {
-		if err := api.RemoveMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
+		if err := api.DetachMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
 			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget, err)
 		}
-		if err := api.AddMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
+		if err := api.AttachMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
 			t.Logf("Failed to add mpath %s of %s: %v", selectedMpath, selectedTarget, err)
 		}
 
@@ -376,10 +376,10 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 	tlog.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
 	tutils.CreateFreshBucket(t, md.proxyURL, md.bck, nil)
 	defer func() {
-		if err := api.RemoveMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
+		if err := api.DetachMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
 			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget, err)
 		}
-		if err := api.AddMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
+		if err := api.AttachMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
 			t.Logf("Failed to add mpath %s of %s: %v", selectedMpath, selectedTarget, err)
 		}
 
@@ -523,9 +523,9 @@ func TestFSAddMPathRestartNode(t *testing.T) {
 	defer os.Remove(tmpMpath)
 
 	tlog.Logf("Adding a mountpath to target: %s\n", target.StringEx())
-	err = api.AddMountpath(baseParams, target, tmpMpath)
+	err = api.AttachMountpath(baseParams, target, tmpMpath)
 	tassert.CheckFatal(t, err)
-	defer api.RemoveMountpath(baseParams, target, tmpMpath)
+	defer api.DetachMountpath(baseParams, target, tmpMpath)
 
 	newMpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)

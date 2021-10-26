@@ -459,10 +459,10 @@ func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request
 		t.handleEnableMountpathReq(w, r, mountpath)
 	case cmn.ActMountpathDisable:
 		t.handleDisableMountpathReq(w, r, mountpath)
-	case cmn.ActMountpathAdd:
-		t.handleAddMountpathReq(w, r, mountpath)
-	case cmn.ActMountpathRemove:
-		t.handleRemoveMountpathReq(w, r, mountpath)
+	case cmn.ActMountpathAttach:
+		t.handleAttachMountpathReq(w, r, mountpath)
+	case cmn.ActMountpathDetach:
+		t.handleDetachMountpathReq(w, r, mountpath)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
@@ -516,8 +516,8 @@ func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.
 	dsort.Managers.AbortAll(fmt.Errorf("mountpath %s has been disabled", disabledMi))
 }
 
-func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Request, mpath string) {
-	addedMi, err := t.fsprg.addMountpath(mpath)
+func (t *targetrunner) handleAttachMountpathReq(w http.ResponseWriter, r *http.Request, mpath string) {
+	addedMi, err := t.fsprg.attachMountpath(mpath)
 	if err != nil {
 		t.writeErr(w, r, err)
 		return
@@ -537,11 +537,11 @@ func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Requ
 	}
 
 	// TODO: Currently, dSort doesn't handle adding/enabling mountpaths at runtime
-	dsort.Managers.AbortAll(fmt.Errorf("mountpath %s has been added", addedMi))
+	dsort.Managers.AbortAll(fmt.Errorf("attached %s", addedMi))
 }
 
-func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.Request, mpath string) {
-	removedMi, err := t.fsprg.removeMountpath(mpath)
+func (t *targetrunner) handleDetachMountpathReq(w http.ResponseWriter, r *http.Request, mpath string) {
+	removedMi, err := t.fsprg.detachMountpath(mpath)
 	if err != nil {
 		t.writeErrf(w, r, err.Error())
 		return
@@ -549,7 +549,7 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 	if removedMi == nil {
 		return
 	}
-	dsort.Managers.AbortAll(fmt.Errorf("mpath %q has been removed", removedMi))
+	dsort.Managers.AbortAll(fmt.Errorf("detached %s", removedMi))
 }
 
 func (t *targetrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag, caller string, silent bool) (err error) {

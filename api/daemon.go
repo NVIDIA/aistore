@@ -46,12 +46,12 @@ func GetMountpaths(baseParams BaseParams, node *cluster.Snode) (mpl *cmn.Mountpa
 	return mpl, err
 }
 
-func AddMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string) error {
+func AttachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string) error {
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.Join(cmn.Mountpaths),
-		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathAdd, Value: mountpath}),
+		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathAttach, Value: mountpath}),
 		Header: http.Header{
 			cmn.HdrNodeID:      []string{node.ID()},
 			cmn.HdrNodeURL:     []string{node.URL(cmn.NetworkPublic)},
@@ -74,12 +74,12 @@ func EnableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 	})
 }
 
-func RemoveMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string) error {
+func DetachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathReverseDaemon.Join(cmn.Mountpaths),
-		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathRemove, Value: mountpath}),
+		Body:       cos.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathDetach, Value: mountpath}),
 		Header: http.Header{
 			cmn.HdrNodeID:      []string{node.ID()},
 			cmn.HdrContentType: []string{cmn.ContentJSON},

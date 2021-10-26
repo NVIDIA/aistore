@@ -1292,6 +1292,7 @@ func (c *FSPathsConf) Validate(contextConfig *Config) (err error) {
 // TestfspathConf (part of LocalConfig) //
 //////////////////////////////////////////
 
+// validate root and (NOTE: testing only) generate and fill-in counted FSpaths.Paths
 func (c *TestfspathConf) Validate(contextConfig *Config) (err error) {
 	// Don't validate in production environment.
 	if !contextConfig.TestingEnv() || contextConfig.role != Target {
@@ -1304,7 +1305,6 @@ func (c *TestfspathConf) Validate(contextConfig *Config) (err error) {
 	}
 	c.Root = cleanMpath
 
-	// Configure `FSpaths.Paths` as all components, on load, refer to it.
 	contextConfig.FSpaths.Paths = make(cos.StringSet, c.Count)
 	for i := 0; i < c.Count; i++ {
 		mpath := filepath.Join(c.Root, fmt.Sprintf("mp%d", i+1))
@@ -1316,6 +1316,23 @@ func (c *TestfspathConf) Validate(contextConfig *Config) (err error) {
 	return nil
 }
 
+func (c *TestfspathConf) ValidateMpath(p string) (err error) {
+	debug.Assert(c.Count > 0)
+	for i := 0; i < c.Count; i++ {
+		mpath := filepath.Join(c.Root, fmt.Sprintf("mp%d", i+1))
+		if c.Instance > 0 {
+			mpath = filepath.Join(mpath, strconv.Itoa(c.Instance))
+		}
+		if strings.HasPrefix(p, mpath) {
+			return
+		}
+	}
+	err = fmt.Errorf("%q does not appear to be a valid testing mountpath where (root=%q, count=%d)",
+		p, c.Root, c.Count)
+	return
+}
+
+// common mountpath validation (NOTE: calls filepath.Clean() every time)
 func ValidateMpath(mpath string) (string, error) {
 	cleanMpath := filepath.Clean(mpath)
 
