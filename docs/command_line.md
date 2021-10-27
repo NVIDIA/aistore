@@ -9,9 +9,19 @@ redirect_from:
 
 ### Command-Line arguments
 
-AIS proxy and AIS target (executables) both support the following command-line arguments where those that are *mandatory* are marked with `***`:
+There is a single AIS node (`aisnode`) binary that functions either as AIS proxy (gateway) or AIS target, depending on the `-role` option - examples follow below:
 
+```console
+# Example deploying `aisnode` proxy
+$ aisnode -config=/etc/ais/config.json -local_config=/etc/ais/local_config.json -role=proxy -ntargets=16
+
+# Example deploying `aisnode` target (ie., storage server)
+$ aisnode -config=/etc/ais/config.json -local_config=/etc/ais/local_config.json -role=target
 ```
+
+The common executable, typically called `aisnode`, supports the following command-line arguments:
+
+```console
   -alsologtostderr
         log to standard error as well as files
   -config string
@@ -19,7 +29,7 @@ AIS proxy and AIS target (executables) both support the following command-line a
   -config_custom string
         "key1=value1,key2=value2" formatted string to override selected entries in config
   -daemon_id string
-        unique ID to be assigned to the AIS daemon
+        user-specified node ID (advanced usage only!)
   -h    show usage and exit
   -local_config string
         config filename: local file that stores daemon's local configuration
@@ -28,38 +38,29 @@ AIS proxy and AIS target (executables) both support the following command-line a
   -logtostderr
         log to standard error instead of files
   -ntargets int
-        number of storage targets to expect at startup (hint, proxy-only)
+        number of storage targets expected to be joining at startup (optional, primary-only)
   -override_backends
-        set remote backends at deployment time
+        configure remote backends at deployment time (potentially, override previously stored configuration)
   -role string
-        role of this AIS daemon: proxy | target
+        _role_ of this aisnode: 'proxy' OR 'target'
   -skip_startup
-        determines if primary proxy should skip waiting for target registrations when starting up
+        whether primary, when starting up, should skip waiting for target joins (used only in tests)
+  -standby
+        when starting up, do not try to join cluster - standby and wait for admin request (target-only)
   -stderrthreshold value
         logs at or above this threshold go to stderr
   -transient
-        false: apply command-line args to the configuration and save the latter to disk
-        true: keep it transient (for this run only)
+        false: store customized (via config_custom) configuration
+        true: runtime only (non-persistent)
   -v value
         log level for V logs
   -vmodule value
         comma-separated list of pattern=N settings for file-filtered logging
 
-   Usage:
-        aisnode -role=<proxy|target> -config=</dir/config.json> -local_config=</dir/local-config.json> ...
-
 ```
 
-> For the most recently updated set of command-line options, run `aisnode` with empty command-line:
+For usage and the most recently updated set of command-line options, run `aisnode` with empty command-line:
 
 ```console
 $ $GOPATH/bin/aisnode
 ```
-
-Example:
-
-```console
-$ $GOPATH/bin/aisnode -config=/etc/ais.json -local_config=/etc/ais_local.json -role=target -daemon_id=aistarget1
-```
-
-The command starts a target daemon with ID `aistarget1` and the specified global and local configurations from `/etc/ais.json` and `/etc/ais_local.json`, respectively.

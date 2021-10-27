@@ -21,9 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/sys"
 )
 
-const usecli = `
-   Usage:
-        aisnode -role=<proxy|target> -config=</dir/config.json> -local_config=</dir/local-config.json> ...`
+const usecli = " -role=<proxy|target> -config=</dir/config.json> -local_config=</dir/local-config.json> ..."
 
 type (
 	daemonCtx struct {
@@ -96,8 +94,10 @@ func initDaemon(version, buildTime string) cos.Runner {
 	)
 	flag.Parse()
 	if daemon.cli.usage || len(os.Args[1:]) == 0 {
-		flag.Usage()
-		cos.Exitf(usecli)
+		fmt.Fprintln(os.Stderr, "  Usage: "+os.Args[0]+usecli+"\n")
+		flag.PrintDefaults()
+		fmt.Fprintln(os.Stderr, "\n  Usage:\n\t"+os.Args[0]+usecli)
+		os.Exit(1)
 	}
 	if daemon.cli.role != cmn.Proxy && daemon.cli.role != cmn.Target {
 		cos.ExitLogf("Invalid daemon's role %q, expecting %q or %q", daemon.cli.role, cmn.Proxy, cmn.Target)
