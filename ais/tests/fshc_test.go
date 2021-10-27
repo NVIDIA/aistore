@@ -327,7 +327,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 		if err := api.DetachMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
 			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget, err)
 		}
-		if err := api.AttachMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
+		if err := api.AttachMountpath(md.baseParams, selectedTarget, selectedMpath, false /*force*/); err != nil {
 			t.Logf("Failed to add mpath %s of %s: %v", selectedMpath, selectedTarget, err)
 		}
 
@@ -379,7 +379,7 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 		if err := api.DetachMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
 			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget, err)
 		}
-		if err := api.AttachMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
+		if err := api.AttachMountpath(md.baseParams, selectedTarget, selectedMpath, false /*force*/); err != nil {
 			t.Logf("Failed to add mpath %s of %s: %v", selectedMpath, selectedTarget, err)
 		}
 
@@ -523,7 +523,7 @@ func TestFSAddMPathRestartNode(t *testing.T) {
 	defer os.Remove(tmpMpath)
 
 	tlog.Logf("Adding a mountpath to target: %s\n", target.StringEx())
-	err = api.AttachMountpath(baseParams, target, tmpMpath)
+	err = api.AttachMountpath(baseParams, target, tmpMpath, true /*force*/)
 	tassert.CheckFatal(t, err)
 	defer api.DetachMountpath(baseParams, target, tmpMpath)
 

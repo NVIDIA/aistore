@@ -517,7 +517,8 @@ func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.
 }
 
 func (t *targetrunner) handleAttachMountpathReq(w http.ResponseWriter, r *http.Request, mpath string) {
-	addedMi, err := t.fsprg.attachMountpath(mpath)
+	force := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamForce))
+	addedMi, err := t.fsprg.attachMountpath(mpath, force)
 	if err != nil {
 		t.writeErr(w, r, err)
 		return

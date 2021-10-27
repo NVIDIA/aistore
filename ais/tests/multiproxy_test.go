@@ -986,7 +986,7 @@ func setPrimaryTo(t *testing.T, proxyURL string, smap *cluster.Smap, directURL, 
 
 	baseParams := tutils.BaseAPIParams(directURL)
 	tlog.Logf("Setting primary from %s to %s\n", smap.Primary.ID(), toID)
-	err := api.SetPrimaryProxy(baseParams, toID)
+	err := api.SetPrimaryProxy(baseParams, toID, false /*force*/)
 	tassert.CheckFatal(t, err)
 
 	newSmap, err = tutils.WaitForNewSmap(proxyURL, smap.Version)

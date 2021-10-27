@@ -91,7 +91,7 @@ func _diskAttachDetach(c *cli.Context, attach bool) error {
 				nodeID)
 		}
 		if attach {
-			if err := api.AttachMountpath(defaultAPIParams, si, mountpath); err != nil {
+			if err := api.AttachMountpath(defaultAPIParams, si, mountpath, false /*force*/); err != nil {
 				return err
 			}
 		} else {

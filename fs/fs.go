@@ -485,6 +485,7 @@ func (mi *MountpathInfo) AddDisabled(disabledPaths MPI) {
 	mfs.fsIDs[mi.FsID] = mi.Path
 }
 
+// TODO: extend `force=true` to disregard "filesystem sharing" (see AddMpath)
 func (mi *MountpathInfo) _checkExists(availablePaths MPI) (err error) {
 	if existingMi, exists := availablePaths[mi.Path]; exists {
 		err = fmt.Errorf("failed adding %s: %s already exists", mi, existingMi)
@@ -603,7 +604,7 @@ func cloneMPI() (availableCopy, disabledCopy MPI) {
 	return availableCopy, disabledCopy
 }
 
-// (used only in tests - compare with AddMpath below)
+// (used only in _unit_ tests - compare with AddMpath below)
 func Add(mpath, tid string) (mi *MountpathInfo, err error) {
 	mi, err = NewMountpath(mpath)
 	if err != nil {
@@ -616,8 +617,9 @@ func Add(mpath, tid string) (mi *MountpathInfo, err error) {
 	return
 }
 
-// Add adds new mountpath to the existing target's mountpaths.
-func AddMpath(mpath, tid string, cb func()) (mi *MountpathInfo, err error) {
+// Add adds new mountpath to the target's `availablePaths`
+// TODO: extend `force=true` to disregard "filesystem sharing"
+func AddMpath(mpath, tid string, cb func(), force bool) (mi *MountpathInfo, err error) {
 	debug.Assert(tid != "")
 	mi, err = NewMountpath(mpath)
 	if err != nil {
@@ -626,7 +628,10 @@ func AddMpath(mpath, tid string, cb func()) (mi *MountpathInfo, err error) {
 	config := cmn.GCO.Get()
 	if config.TestingEnv() {
 		if err = config.LocalConfig.TestFSP.ValidateMpath(mi.Path); err != nil {
-			return
+			if !force {
+				return
+			}
+			glog.Errorf("%v - ignoring since force=%t", err, force)
 		}
 	}
 	mfs.mu.Lock()

@@ -46,7 +46,8 @@ func GetMountpaths(baseParams BaseParams, node *cluster.Snode) (mpl *cmn.Mountpa
 	return mpl, err
 }
 
-func AttachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string) error {
+// TODO: rewrite tests that come here with force
+func AttachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string, force bool) error {
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
@@ -57,6 +58,7 @@ func AttachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 			cmn.HdrNodeURL:     []string{node.URL(cmn.NetworkPublic)},
 			cmn.HdrContentType: []string{cmn.ContentJSON},
 		},
+		Query: url.Values{cmn.URLParamForce: []string{strconv.FormatBool(force)}},
 	})
 }
 

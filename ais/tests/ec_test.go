@@ -2391,7 +2391,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	wg.Wait()
 	tlog.Logf("Created %d objects\n", o.objCount)
 
-	err = api.AttachMountpath(baseParams, tgtLost, lostPath)
+	err = api.AttachMountpath(baseParams, tgtLost, lostPath, false /*force*/)
 	tassert.CheckFatal(t, err)
 	// loop above may fail (even if AddMountpath works) and mark a test failed
 	if t.Failed() {
@@ -2636,7 +2636,7 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	removed := make(map[string]*removedMpath, o.parityCnt)
 	defer func() {
 		for _, rmMpath := range removed {
-			err := api.AttachMountpath(baseParams, rmMpath.si, rmMpath.mpath)
+			err := api.AttachMountpath(baseParams, rmMpath.si, rmMpath.mpath, false /*force*/)
 			tassert.CheckError(t, err)
 		}
 	}()

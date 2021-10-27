@@ -842,7 +842,7 @@ func TestMountpathRemoveAndAdd(t *testing.T) {
 
 	// Add target mountpath again
 	for _, mpath := range oldMountpaths.Available {
-		err = api.AttachMountpath(baseParams, target, mpath)
+		err = api.AttachMountpath(baseParams, target, mpath, true /*force*/)
 		tassert.CheckFatal(t, err)
 	}
 
@@ -897,7 +897,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	m.puts()
 
 	// Add new mountpath to target
-	err := api.AttachMountpath(baseParams, target, newMountpath)
+	err := api.AttachMountpath(baseParams, target, newMountpath, true /*force*/)
 	tassert.CheckFatal(t, err)
 
 	tutils.WaitForRebalanceToComplete(t, tutils.BaseAPIParams(m.proxyURL), rebalanceTimeout)
@@ -953,7 +953,7 @@ func TestLocalAndGlobalRebalanceAfterAddingMountpath(t *testing.T) {
 		err := containers.DockerCreateMpathDir(0, newMountpath)
 		tassert.CheckFatal(t, err)
 		for _, target := range targets {
-			err = api.AttachMountpath(baseParams, target, newMountpath)
+			err = api.AttachMountpath(baseParams, target, newMountpath, true /*force*/)
 			tassert.CheckFatal(t, err)
 		}
 	} else {
@@ -961,7 +961,7 @@ func TestLocalAndGlobalRebalanceAfterAddingMountpath(t *testing.T) {
 		for idx, target := range targets {
 			mountpath := filepath.Join(newMountpath, fmt.Sprintf("%d", idx))
 			cos.CreateDir(mountpath)
-			err := api.AttachMountpath(baseParams, target, mountpath)
+			err := api.AttachMountpath(baseParams, target, mountpath, true /*force*/)
 			tassert.CheckFatal(t, err)
 		}
 	}
@@ -1563,7 +1563,7 @@ func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
 
 	// Step 6: Add previously removed mountpath
 	tlog.Logf("Add mountpath %s on target %s\n", mpath, target.ID())
-	err = api.AttachMountpath(baseParams, target, mpath)
+	err = api.AttachMountpath(baseParams, target, mpath, false /*force*/)
 	tassert.CheckFatal(t, err)
 
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
@@ -1623,7 +1623,7 @@ func TestGetFromMirroredBucketWithLostAllMountpath(t *testing.T) {
 	// Step 6: Add previously removed mountpath
 	tlog.Logf("Add mountpaths on target %s\n", target.ID())
 	for _, mpath := range mpList.Available[1:] {
-		err = api.AttachMountpath(baseParams, target, mpath)
+		err = api.AttachMountpath(baseParams, target, mpath, false /*force*/)
 		tassert.CheckFatal(t, err)
 	}
 

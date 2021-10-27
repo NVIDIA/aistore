@@ -47,9 +47,9 @@ func (g *fsprungroup) enableMountpath(mpath string) (enabledMi *fs.MountpathInfo
 
 // addMountpath adds mountpath and notifies necessary runners about the change
 // if the mountpath was actually added.
-func (g *fsprungroup) attachMountpath(mpath string) (addedMi *fs.MountpathInfo, err error) {
+func (g *fsprungroup) attachMountpath(mpath string, force bool) (addedMi *fs.MountpathInfo, err error) {
 	gfnActive := g.t.gfn.local.Activate()
-	addedMi, err = fs.AddMpath(mpath, g.t.si.ID(), g.redistributeMD)
+	addedMi, err = fs.AddMpath(mpath, g.t.si.ID(), g.redistributeMD, force)
 	if err != nil || addedMi == nil {
 		if !gfnActive {
 			g.t.gfn.local.Deactivate()

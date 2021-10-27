@@ -319,7 +319,7 @@ func setPrimaryHandler(c *cli.Context) (err error) {
 	if _, ok := primarySmap.Pmap[daemonID]; !ok {
 		return incorrectUsageMsg(c, "%s: is not a proxy", daemonID)
 	}
-	err = api.SetPrimaryProxy(defaultAPIParams, daemonID)
+	err = api.SetPrimaryProxy(defaultAPIParams, daemonID, false /*force*/)
 	if err == nil {
 		fmt.Fprintf(c.App.Writer, "%s is now a new primary\n", daemonID)
 	}
