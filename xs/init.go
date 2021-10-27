@@ -20,6 +20,7 @@ func Init() {
 	xreg.RegNonBckXact(&eleFactory{})
 	xreg.RegNonBckXact(&rslvrFactory{})
 	xreg.RegNonBckXact(&rebFactory{})
+	xreg.RegNonBckXact(&StoreClnFactory{})
 
 	xreg.RegBckXact(&MovFactory{})
 	xreg.RegBckXact(&evdFactory{kind: cmn.ActEvictObjects})

@@ -30,11 +30,12 @@ type (
 // `Startable`, `Owned`, etc.
 var Table = map[string]Record{
 	// bucket-less xactions that will typically have a 'cluster' scope (with resilver being a notable exception)
-	cmn.ActLRU:       {Scope: ScopeG, Startable: true, Mountpath: true},
-	cmn.ActElection:  {Scope: ScopeG, Startable: false},
-	cmn.ActResilver:  {Scope: ScopeT, Startable: true, Mountpath: true},
-	cmn.ActRebalance: {Scope: ScopeG, Startable: true, Metasync: true, Owned: false, Mountpath: true},
-	cmn.ActDownload:  {Scope: ScopeG, Startable: false, Mountpath: true},
+	cmn.ActLRU:          {Scope: ScopeG, Startable: true, Mountpath: true},
+	cmn.ActStoreCleanup: {Scope: ScopeG, Startable: true, Mountpath: true},
+	cmn.ActElection:     {Scope: ScopeG, Startable: false},
+	cmn.ActResilver:     {Scope: ScopeT, Startable: true, Mountpath: true},
+	cmn.ActRebalance:    {Scope: ScopeG, Startable: true, Metasync: true, Owned: false, Mountpath: true},
+	cmn.ActDownload:     {Scope: ScopeG, Startable: false, Mountpath: true},
 
 	// xactions that run on a given bucket or buckets
 	cmn.ActECGet:           {Scope: ScopeBck, Startable: false},

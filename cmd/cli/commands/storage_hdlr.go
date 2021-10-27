@@ -67,7 +67,7 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 			return err
 		}
 	}
-	xactArgs := api.XactReqArgs{Kind: cmn.ActLRU, Bck: bck, Cleanup: true}
+	xactArgs := api.XactReqArgs{Kind: cmn.ActStoreCleanup, Bck: bck}
 	if id, err = api.StartXaction(defaultAPIParams, xactArgs); err != nil {
 		return
 	}

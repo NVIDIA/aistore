@@ -42,8 +42,7 @@ type (
 	}
 
 	QueryMsgLRU struct {
-		Force   bool `json:"force"`
-		Cleanup bool `json:"cleanup"`
+		Force bool `json:"force"`
 	}
 )
 

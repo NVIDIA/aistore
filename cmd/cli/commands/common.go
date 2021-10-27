@@ -120,7 +120,7 @@ const (
 	subcmdStgSummary   = subcmdSummary
 	subcmdStgValidate  = "validate"
 	subcmdStgMountpath = subcmdMountpath
-	subcmdStgCleanup   = "cleanup"
+	subcmdStgCleanup   = "storage-cleanup"
 
 	// Remove subcommands
 	subcmdRemoveDownload = subcmdDownload

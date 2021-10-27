@@ -349,31 +349,5 @@ var _ = Describe("LRU tests", func() {
 				Expect(numFilesLeft).To(BeNumerically("==", numberOfCreatedFiles))
 			})
 		})
-
-		Describe("evict trash directory", func() {
-			It("should totally evict trash directory", func() {
-				var (
-					mpaths, _ = fs.Get()
-					mpath     = mpaths[basePath]
-				)
-
-				saveRandomFiles(filesPath, 10)
-				Expect(filesPath).To(BeADirectory())
-
-				err := mpath.MoveToTrash(filesPath)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(filesPath).NotTo(BeADirectory())
-
-				files, err := os.ReadDir(mpath.MakePathTrash())
-				Expect(err).NotTo(HaveOccurred())
-				Expect(len(files)).To(Equal(1))
-
-				lru.Run(ini)
-
-				files, err = os.ReadDir(mpath.MakePathTrash())
-				Expect(err).NotTo(HaveOccurred())
-				Expect(len(files)).To(Equal(0))
-			})
-		})
 	})
 })

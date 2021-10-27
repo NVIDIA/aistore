@@ -47,6 +47,7 @@ func xactionCmds() cli.Commands {
 		cmn.ActMakeNCopies,
 		cmn.ActLoadLomCache,
 		cmn.ActLRU,
+		cmn.ActStoreCleanup,
 		cmn.ActResilver,
 	)
 

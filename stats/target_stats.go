@@ -34,6 +34,8 @@ const (
 	GetColdSize    = "get.cold.size"
 	LruEvictSize   = "lru.evict.size"
 	LruEvictCount  = "lru.evict.n"
+	StoreRmSize    = "stg.rm.size"
+	StoreRmCount   = "stg.rm.n"
 	VerChangeCount = "vchange.n"
 	VerChangeSize  = "vchange.size"
 	// rebalance
@@ -164,6 +166,8 @@ func (r *Trunner) RegMetrics(node *cluster.Snode) {
 	r.reg(GetThroughput, KindThroughput)
 	r.reg(LruEvictSize, KindCounter)
 	r.reg(LruEvictCount, KindCounter)
+	r.reg(StoreRmSize, KindCounter)
+	r.reg(StoreRmCount, KindCounter)
 	r.reg(VerChangeCount, KindCounter)
 	r.reg(VerChangeSize, KindCounter)
 	r.reg(GetRedirLatency, KindLatency)

@@ -67,6 +67,13 @@ func (r *registry) renewLRU(id string) RenewRes {
 	return r.renew(e, nil)
 }
 
+func RenewStoreCleanup(id string) RenewRes { return defaultReg.renewStoreCleanup(id) }
+
+func (r *registry) renewStoreCleanup(id string) RenewRes {
+	e := r.nonbckXacts[cmn.ActStoreCleanup].New(Args{UUID: id}, nil)
+	return r.renew(e, nil)
+}
+
 func RenewDownloader(t cluster.Target, statsT stats.Tracker) RenewRes {
 	return defaultReg.renewDownloader(t, statsT)
 }

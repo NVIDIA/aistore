@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xs"
 )
 
 // interface guard
@@ -58,14 +59,6 @@ func (t *targetrunner) Backend(bck *cluster.Bck) cluster.BackendProvider {
 
 // RunLRU is triggered by the stats evaluation of a remaining capacity, see `target_stats.go`.
 func (t *targetrunner) RunLRU(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.Bck) {
-	t.runLRUCleanup(id, wg, force, false /*cleanup*/, bcks...)
-}
-
-func (t *targetrunner) runStorageCleanup(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.Bck) {
-	t.runLRUCleanup(id, wg, force, true /*cleanup*/, bcks...)
-}
-
-func (t *targetrunner) runLRUCleanup(id string, wg *sync.WaitGroup, force, cleanup bool, bcks ...cmn.Bck) {
 	regToIC := id == ""
 	if regToIC {
 		id = cos.GenUUID()
@@ -92,7 +85,6 @@ func (t *targetrunner) runLRUCleanup(id string, wg *sync.WaitGroup, force, clean
 		GetFSUsedPercentage: ios.GetFSUsedPercentage,
 		GetFSStats:          ios.GetFSStats,
 		Force:               force,
-		Cleanup:             cleanup,
 	}
 	xlru.AddNotif(&xaction.NotifXact{
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
@@ -102,6 +94,41 @@ func (t *targetrunner) runLRUCleanup(id string, wg *sync.WaitGroup, force, clean
 		wg.Done() // compare w/ xaction.GoRunW(()
 	}
 	lru.Run(&ini)
+}
+
+func (t *targetrunner) runStorageCleanup(id string, wg *sync.WaitGroup, bcks ...cmn.Bck) {
+	regToIC := id == ""
+	if regToIC {
+		id = cos.GenUUID()
+	}
+	rns := xreg.RenewStoreCleanup(id)
+	debug.AssertNoErr(rns.Err)
+	if rns.IsRunning() {
+		if wg != nil {
+			wg.Done()
+		}
+		return
+	}
+	xcln := rns.Entry.Get()
+	if regToIC && xcln.ID() == id {
+		regMsg := xactRegMsg{UUID: id, Kind: cmn.ActStoreCleanup, Srcs: []string{t.si.ID()}}
+		msg := t.newAmsgActVal(cmn.ActRegGlobalXaction, regMsg)
+		t.bcastAsyncIC(msg)
+	}
+	ini := xs.InitStoreCln{
+		T:       t,
+		Xaction: xcln.(*xs.StoreClnXaction),
+		StatsT:  t.statsT,
+		Buckets: bcks,
+	}
+	xcln.AddNotif(&xaction.NotifXact{
+		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
+		Xact:      xcln,
+	})
+	if wg != nil {
+		wg.Done() // compare w/ xaction.GoRunW(()
+	}
+	xs.RunStoreClean(&ini)
 }
 
 func (t *targetrunner) TrashNonExistingBucket(bck cmn.Bck) {

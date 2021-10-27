@@ -23,6 +23,7 @@ const (
 	ActRebalance       = "rebalance"
 	ActResilver        = "resilver"
 	ActLRU             = "lru"
+	ActStoreCleanup    = "stg_cleanup"
 	ActCreateBck       = "create_bck"
 	ActDestroyBck      = "destroy_bck"     // destroy bucket data and metadata
 	ActAddRemoteBck    = "add_remotebck"   // register (existing) remote bucket into AIS
