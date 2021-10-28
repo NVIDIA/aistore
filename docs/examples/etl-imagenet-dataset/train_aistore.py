@@ -144,7 +144,7 @@ def main_worker(gpu, ngpus_per_node, args):
     # Data loading code
     train_loader = torch.utils.data.DataLoader(
         aistore.pytorch.Dataset(
-            "http://aistore-sample-proxy:51080", Bck("imagenet"),
+            "http://aistore-sample-proxy:51080", Bck("imagenet"),  # AIS IP address or hostname
             prefix="train/", transform_id="imagenet-train",
             transform_filter=lambda object_name: object_name.endswith('.jpg'),
         ),
