@@ -64,6 +64,8 @@ Further, there's the capability referred to as [global namespace](/docs/provider
 
 ## Guides and References
 
+- [Getting Started](/docs/getting_started.md)
+- [Technical Blog](https://aiatscale.org/blog)
 - API
   - [Native RESTful API](/docs/http_api.md)
   - [S3 compatibility](/docs/s3compat.md)
