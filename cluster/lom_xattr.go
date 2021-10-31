@@ -237,8 +237,7 @@ func (md *lmeta) unmarshal(buf []byte) (err error) {
 	actualCksum = xxhash.Checksum64S(buf[prefLen:], cos.MLCG32)
 	expectedCksum = binary.BigEndian.Uint64(buf[2:])
 	if expectedCksum != actualCksum {
-		s := fmt.Sprintf("%v", md)
-		return cos.NewBadMetaCksumError(expectedCksum, actualCksum, s)
+		return cos.NewBadMetaCksumError(expectedCksum, actualCksum, md.String())
 	}
 
 	for off := 0; !last; {

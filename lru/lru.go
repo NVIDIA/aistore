@@ -154,8 +154,8 @@ func Run(ini *InitLRU) {
 	)
 	glog.Infof("[lru] %s started: dont-evict-time %v", xlru, config.LRU.DontEvictTime)
 	if num == 0 {
-		glog.Warning(fs.ErrNoMountpaths)
-		xlru.Finish(fs.ErrNoMountpaths)
+		glog.Warning(cmn.ErrNoMountpaths)
+		xlru.Finish(cmn.ErrNoMountpaths)
 		return
 	}
 	for mpath, mpathInfo := range availablePaths {
@@ -577,7 +577,7 @@ func (j *lruJ) _throttle(usedPct int64) (err error) {
 		if usedPct < (j.config.LRU.LowWM+j.config.LRU.HighWM)/2 {
 			j.throttle = true
 		}
-		time.Sleep(cmn.ThrottleMax)
+		time.Sleep(cmn.ThrottleMaxDur)
 		err = j.yieldTerm()
 	}
 	return
@@ -620,7 +620,7 @@ func (j *lruJ) yieldTerm() error {
 		return cmn.NewErrAborted(xlru.Name(), "", nil)
 	default:
 		if j.throttle {
-			time.Sleep(cmn.ThrottleMin)
+			time.Sleep(cmn.ThrottleMinDur)
 		}
 		break
 	}

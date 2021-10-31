@@ -234,7 +234,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 			return errors.Errorf("error in ExtractShard, file: %s, err: %v", f.Name(), err)
 		}
 
-		metrics.Lock()
+		metrics.mu.Lock()
 		metrics.ExtractedRecordCnt += int64(extractedCount)
 		metrics.ExtractedCnt++
 
@@ -259,7 +259,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 			metrics.ShardExtractionStats.updateTime(dur)
 			metrics.ShardExtractionStats.updateThroughput(extractedSize, dur)
 		}
-		metrics.Unlock()
+		metrics.mu.Unlock()
 
 		if warnPossibleOOM {
 			msg := fmt.Sprintf("(estimated) total size of records (%d) will possibly exceed available memory (%s) during sorting phase", estimateTotalRecordsSize, m.rs.MaxMemUsage)
@@ -283,9 +283,9 @@ func (m *Manager) extractLocalShards() (err error) {
 	metrics.begin()
 	defer metrics.finish()
 
-	metrics.Lock()
+	metrics.mu.Lock()
 	metrics.TotalCnt = m.rs.InputFormat.Template.Count()
-	metrics.Unlock()
+	metrics.mu.Unlock()
 
 	group, ctx := errgroup.WithContext(context.Background())
 	namesIt := m.rs.InputFormat.Template.Iter()
@@ -453,7 +453,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	}
 
 exit:
-	metrics.Lock()
+	metrics.mu.Lock()
 	metrics.CreatedCnt++
 	if si.DaemonID != m.ctx.node.DaemonID {
 		metrics.MovedShardCnt++
@@ -463,7 +463,7 @@ exit:
 		metrics.ShardCreationStats.updateTime(dur)
 		metrics.ShardCreationStats.updateThroughput(n, dur)
 	}
-	metrics.Unlock()
+	metrics.mu.Unlock()
 
 	return nil
 }
@@ -568,9 +568,9 @@ func (m *Manager) participateInRecordDistribution(targetOrder cluster.Nodes) (cu
 
 			m.recManager.Records.Drain() // we do not need it anymore
 
-			metrics.Lock()
+			metrics.mu.Lock()
 			metrics.SentStats.updateTime(time.Since(beforeSend))
-			metrics.Unlock()
+			metrics.mu.Unlock()
 			return
 		}
 
@@ -592,9 +592,9 @@ func (m *Manager) participateInRecordDistribution(targetOrder cluster.Nodes) (cu
 		}
 		expectedReceived++
 
-		metrics.Lock()
+		metrics.mu.Lock()
 		metrics.RecvStats.updateTime(time.Since(beforeRecv))
-		metrics.Unlock()
+		metrics.mu.Unlock()
 
 		t := targetOrder[:0]
 		for i, d = range targetOrder {
@@ -669,7 +669,7 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 		return nil, errors.New("invalid max size of shard was specified when using external key map")
 	}
 
-	req, err := http.NewRequest(http.MethodGet, m.rs.OrderFileURL, nil)
+	req, err := http.NewRequest(http.MethodGet, m.rs.OrderFileURL, http.NoBody)
 	if err != nil {
 		return nil, err
 	}

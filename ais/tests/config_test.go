@@ -39,14 +39,14 @@ func TestConfig(t *testing.T) {
 			nperiodic.StatsTime, configRegression["periodic.stats_time"])
 	} else {
 		o := operiodic.StatsTime
-		tutils.SetClusterConfig(t, cos.SimpleKVs{"periodic.stats_time": fmt.Sprintf("%v", o)})
+		tutils.SetClusterConfig(t, cos.SimpleKVs{"periodic.stats_time": o.String()})
 	}
 	if v, _ := time.ParseDuration(configRegression["lru.dont_evict_time"]); nlruconfig.DontEvictTime != cos.Duration(v) {
 		t.Errorf("DontEvictTime was not set properly: %v, should be: %v",
 			nlruconfig.DontEvictTime, configRegression["lru.dont_evict_time"])
 	} else {
 		o := olruconfig.DontEvictTime
-		tutils.SetClusterConfig(t, cos.SimpleKVs{"lru.dont_evict_time": fmt.Sprintf("%v", o)})
+		tutils.SetClusterConfig(t, cos.SimpleKVs{"lru.dont_evict_time": o.String()})
 	}
 
 	if v, _ := time.ParseDuration(configRegression["lru.capacity_upd_time"]); nlruconfig.CapacityUpdTime != cos.Duration(v) {
@@ -54,7 +54,7 @@ func TestConfig(t *testing.T) {
 			nlruconfig.CapacityUpdTime, configRegression["lru.capacity_upd_time"])
 	} else {
 		o := olruconfig.CapacityUpdTime
-		tutils.SetClusterConfig(t, cos.SimpleKVs{"lru.capacity_upd_time": fmt.Sprintf("%v", o)})
+		tutils.SetClusterConfig(t, cos.SimpleKVs{"lru.capacity_upd_time": o.String()})
 	}
 	if hw, err := strconv.Atoi(configRegression["lru.highwm"]); err != nil {
 		t.Fatalf("Error parsing HighWM: %v", err)

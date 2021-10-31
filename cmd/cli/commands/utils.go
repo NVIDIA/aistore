@@ -58,6 +58,8 @@ const (
 	incorrectCmdDistance = 3
 )
 
+const refreshRateMinDur = time.Second
+
 var (
 	clusterURL        string
 	defaultHTTPClient *http.Client
@@ -348,15 +350,9 @@ func getPrefixFromPrimary() string {
 }
 
 func calcRefreshRate(c *cli.Context) time.Duration {
-	const (
-		refreshRateMin = time.Second
-	)
 	refreshRate := refreshRateDefault
 	if flagIsSet(c, refreshFlag) {
-		refreshRate = parseDurationFlag(c, refreshFlag)
-		if refreshRate < refreshRateMin {
-			refreshRate = refreshRateMin
-		}
+		refreshRate = cos.MaxDuration(parseDurationFlag(c, refreshFlag), refreshRateMinDur)
 	}
 	return refreshRate
 }

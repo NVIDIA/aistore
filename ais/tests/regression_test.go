@@ -53,12 +53,12 @@ var (
 	LowWaterMark     = int32(60)
 	UpdTime          = time.Second * 20
 	configRegression = map[string]string{
-		"periodic.stats_time":   fmt.Sprintf("%v", UpdTime),
+		"periodic.stats_time":   UpdTime.String(),
 		"lru.enabled":           "true",
 		"lru.lowwm":             fmt.Sprintf("%d", LowWaterMark),
 		"lru.highwm":            fmt.Sprintf("%d", HighWaterMark),
-		"lru.capacity_upd_time": fmt.Sprintf("%v", UpdTime),
-		"lru.dont_evict_time":   fmt.Sprintf("%v", UpdTime),
+		"lru.capacity_upd_time": UpdTime.String(),
+		"lru.dont_evict_time":   UpdTime.String(),
 	}
 )
 
@@ -621,8 +621,8 @@ func TestLRU(t *testing.T) {
 		tutils.SetClusterConfig(t, cos.SimpleKVs{
 			"lru.lowwm":             lowWMStr,
 			"lru.highwm":            highWMStr,
-			"lru.dont_evict_time":   fmt.Sprintf("%v", oconfig.LRU.DontEvictTime),
-			"lru.capacity_upd_time": fmt.Sprintf("%v", oconfig.LRU.CapacityUpdTime),
+			"lru.dont_evict_time":   oconfig.LRU.DontEvictTime.String(),
+			"lru.capacity_upd_time": oconfig.LRU.CapacityUpdTime.String(),
 		})
 	}()
 

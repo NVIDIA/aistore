@@ -43,7 +43,7 @@ func PersistMarker(marker string) (fatalErr, writeErr error) {
 		cnt                int
 	)
 	if len(availableMpaths) == 0 {
-		fatalErr = ErrNoMountpaths
+		fatalErr = cmn.ErrNoMountpaths
 		return
 	}
 	for _, mi := range availableMpaths {

@@ -337,7 +337,7 @@ func getConfig(server string) (httpLatencies, error) {
 	tctx := newTraceCtx()
 
 	url := server + cmn.URLPathDaemon.S
-	req, _ := http.NewRequest(http.MethodGet, url, nil)
+	req, _ := http.NewRequest(http.MethodGet, url, http.NoBody)
 	req.URL.RawQuery = api.GetWhatRawQuery(cmn.GetWhatConfig, "")
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))
 

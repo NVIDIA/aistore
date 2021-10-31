@@ -220,7 +220,7 @@ func parseGoogleCksumHeader(hdr []string) cos.SimpleKVs {
 func headLink(link string) (*http.Response, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), headReqTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, link, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, link, http.NoBody)
 	if err != nil {
 		return nil, err
 	}

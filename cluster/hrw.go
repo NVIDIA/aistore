@@ -169,7 +169,7 @@ func HrwMpath(uname string) (mi *fs.MountpathInfo, digest uint64, err error) {
 		}
 	}
 	if mi == nil {
-		err = fs.ErrNoMountpaths
+		err = cmn.ErrNoMountpaths
 	}
 	return
 }

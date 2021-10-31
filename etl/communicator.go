@@ -369,9 +369,9 @@ func (c *baseComm) getWithTimeout(url string, timeout time.Duration) (r cos.Read
 	if timeout != 0 {
 		var ctx context.Context
 		ctx, cancel = context.WithTimeout(context.Background(), timeout)
-		req, err = http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		req, err = http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	} else {
-		req, err = http.NewRequest(http.MethodGet, url, nil)
+		req, err = http.NewRequest(http.MethodGet, url, http.NoBody)
 	}
 	if err != nil {
 		goto finish

@@ -41,7 +41,7 @@ func (e *errUsage) Error() string {
 		return fmt.Sprintf("Incorrect usage of \"%s %s\": %s.\n\n%s",
 			e.context.App.Name, e.context.Command.Name, e.message, msg)
 	}
-	return fmt.Sprintf("Incorrect usage of \"%s\": %s.\n\n%s", e.context.App.Name, e.message, msg)
+	return fmt.Sprintf("Incorrect usage of %q: %s.\n\n%s", e.context.App.Name, e.message, msg)
 }
 
 ///////////////////////

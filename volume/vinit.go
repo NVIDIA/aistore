@@ -32,7 +32,7 @@ func Init(t cluster.Target, config *cmn.Config) {
 	// boostrap from a local-config referenced location; two points:
 	// a) local-config is kept in sync with mountpath changes (see ais/fspathgrp)
 	// b) disk-label based bootstrapping can be done but can wait (see comment below)
-	if v, err := configLoadVMD(tid, config.FSpaths.Paths); err != nil {
+	if v, err := configLoadVMD(tid, config.FSP.Paths); err != nil {
 		cos.ExitLogf("%s: %v", t.Snode(), err)
 	} else {
 		vmd = v
@@ -45,7 +45,7 @@ func Init(t cluster.Target, config *cmn.Config) {
 		if err := configInitMPI(tid, config); err != nil {
 			cos.ExitLogf("%s: %v", t.Snode(), err)
 		}
-		glog.Warningf("%s: initializing mountpaths and creating new VMD from %v config", t.Snode(), config.FSpaths.Paths.ToSlice())
+		glog.Warningf("%s: initializing mountpaths and creating new VMD from %v config", t.Snode(), config.FSP.Paths.ToSlice())
 		if v, err := NewFromMPI(tid); err != nil {
 			cos.ExitLogf("%s: %v", t.Snode(), err)
 		} else {
@@ -114,7 +114,7 @@ func newVMD(expectedSize int) *VMD {
 // config => MPI
 func configInitMPI(tid string, config *cmn.Config) (err error) {
 	var (
-		configPaths    = config.FSpaths.Paths
+		configPaths    = config.FSP.Paths
 		availablePaths = make(fs.MPI, len(configPaths))
 		disabledPaths  = make(fs.MPI)
 	)
@@ -127,7 +127,7 @@ func configInitMPI(tid string, config *cmn.Config) (err error) {
 			goto rerr
 		}
 		if len(mi.Disks) == 0 && !config.TestingEnv() {
-			err = &fs.ErrMpathNoDisks{Mi: mi}
+			err = &fs.ErrMountpathNoDisks{Mi: mi}
 			return
 		}
 	}
@@ -135,7 +135,7 @@ func configInitMPI(tid string, config *cmn.Config) (err error) {
 	return
 
 rerr:
-	err = fmt.Errorf("invalid fspaths configuration: %v", err)
+	err = cmn.NewErrInvalidFSPathsConf(err)
 	return
 }
 
@@ -182,7 +182,7 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int) (maxVerVMD *
 					return
 				}
 				if len(mi.Disks) == 0 && !config.TestingEnv() {
-					err = &fs.ErrMpathNoDisks{Mi: mi}
+					err = &fs.ErrMountpathNoDisks{Mi: mi}
 					glog.Errorf("Warning: %v", err)
 				}
 			}
@@ -199,7 +199,7 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int) (maxVerVMD *
 	}
 	fs.PutMPI(availablePaths, disabledPaths)
 	// TODO: insufficient
-	if la, lc := len(availablePaths), len(config.FSpaths.Paths); la != lc {
+	if la, lc := len(availablePaths), len(config.FSP.Paths); la != lc {
 		glog.Warningf("number of available mountpaths (%d) differs from the configured (%d)", la, lc)
 		glog.Warningln("run 'ais storage mountpath [attach|detach]', fix the config, or ignore")
 	}

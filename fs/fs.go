@@ -638,7 +638,7 @@ func AddMpath(mpath, tid string, cb func(), force bool) (mi *MountpathInfo, err 
 	err = mi.addEnabledDisabled(tid, config, true /*enabled*/)
 	if err == nil && len(mi.Disks) == 0 {
 		if !config.TestingEnv() {
-			err = &ErrMpathNoDisks{mi}
+			err = &ErrMountpathNoDisks{mi}
 		}
 	}
 	if err == nil {
@@ -693,7 +693,7 @@ func enable(mpath, cleanMpath, tid string, config *cmn.Config) (enabledMpath *Mo
 	}
 	mi, ok := disabledPaths[cleanMpath]
 	if !ok {
-		err = cmn.NewErrNoMountpath(mpath)
+		err = cmn.NewErrMountpathNotFound(mpath)
 		return
 	}
 	debug.Assert(cleanMpath == mi.Path)
@@ -733,7 +733,7 @@ func Remove(mpath string, cb ...func()) (*MountpathInfo, error) {
 	)
 	if mpathInfo, exists = availablePaths[cleanMpath]; !exists {
 		if mpathInfo, exists = disabledPaths[cleanMpath]; !exists {
-			return nil, cmn.NewErrNoMountpath(mpath)
+			return nil, cmn.NewErrMountpathNotFound(mpath)
 		}
 
 		delete(disabledPaths, cleanMpath)
@@ -777,7 +777,7 @@ func BeginDisableRemove(action string, flags cos.BitFlags, mpath string) (mi *Mo
 	availablePaths, disabledPaths := Get()
 	if mi, exists = availablePaths[cleanMpath]; !exists {
 		if mi, exists = disabledPaths[cleanMpath]; !exists {
-			err = cmn.NewErrNoMountpath(mpath)
+			err = cmn.NewErrMountpathNotFound(mpath)
 			return
 		}
 		glog.Infof("%s(%q) is already _completely_ disabled - nothing to do", mi, action)
@@ -829,7 +829,7 @@ func Disable(mpath string, cb ...func()) (disabledMpath *MountpathInfo, err erro
 	if _, ok := disabledPaths[cleanMpath]; ok {
 		return nil, nil
 	}
-	return nil, cmn.NewErrNoMountpath(mpath)
+	return nil, cmn.NewErrMountpathNotFound(mpath)
 }
 
 // Mountpaths returns both available and disabled mountpaths.
@@ -975,7 +975,7 @@ func RefreshCapStatus(config *cmn.Config, mpcap MPCap) (cs CapStatus, err error)
 		c                 Capacity
 	)
 	if len(availablePaths) == 0 {
-		err = ErrNoMountpaths
+		err = cmn.ErrNoMountpaths
 		return
 	}
 	if config == nil {

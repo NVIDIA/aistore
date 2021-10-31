@@ -363,7 +363,7 @@ func (sg *joggerSyncGroup) abortAsyncTasks() error {
 func (j *jogger) throttle() {
 	curUtil := fs.GetMpathUtil(j.mpathInfo.Path)
 	if curUtil >= j.config.Disk.DiskUtilHighWM {
-		time.Sleep(cmn.ThrottleMin)
+		time.Sleep(cmn.ThrottleMinDur)
 	}
 }
 

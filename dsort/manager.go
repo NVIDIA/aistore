@@ -626,10 +626,10 @@ func (m *Manager) unlock() {
 func (m *Manager) sentCallback(hdr transport.ObjHdr, rc io.ReadCloser, x interface{}, err error) {
 	if m.Metrics.extended {
 		dur := mono.Since(x.(int64))
-		m.Metrics.Creation.Lock()
+		m.Metrics.Creation.mu.Lock()
 		m.Metrics.Creation.LocalSendStats.updateTime(dur)
 		m.Metrics.Creation.LocalSendStats.updateThroughput(hdr.ObjAttrs.Size, dur)
-		m.Metrics.Creation.Unlock()
+		m.Metrics.Creation.mu.Unlock()
 	}
 
 	if sgl, ok := rc.(*memsys.SGL); ok {

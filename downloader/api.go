@@ -99,7 +99,7 @@ func (db DlBody) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 	debug.Assert(b[0] == '{' && b[len(b)-1] == '}')
-	s := fmt.Sprintf(`{"type": "%s", %s}`, db.Type, string(b[1:len(b)-1]))
+	s := fmt.Sprintf(`{"type": %q, %s}`, db.Type, string(b[1:len(b)-1]))
 	return []byte(s), nil
 }
 

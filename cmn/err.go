@@ -67,13 +67,18 @@ type (
 		expectedHash string
 		actualHash   string
 	}
-	ErrNoMountpath struct {
+
+	ErrMountpathNotFound struct {
 		mpath string
 	}
 	ErrInvalidMountpath struct {
 		mpath string
 		cause string
 	}
+	ErrInvalidFSPathsConf struct {
+		err error
+	}
+
 	ErrNoNodes struct {
 		role string
 	}
@@ -137,6 +142,7 @@ var (
 	ErrQuiesceTimeout   = errors.New("timed out waiting for quiescence")
 	ErrNotEnoughTargets = errors.New("not enough target nodes")
 	ErrETLMissingUUID   = errors.New("ETL UUID can't be empty")
+	ErrNoMountpaths     = errors.New("no mountpaths")
 )
 
 // ais ErrBucketAlreadyExists
@@ -279,14 +285,14 @@ func NewErrInvalidCksum(eHash, aHash string) *ErrInvalidCksum {
 
 func (e *ErrInvalidCksum) Expected() string { return e.expectedHash }
 
-// ErrNoMountpath
+// ErrMountpathNotFound
 
-func (e *ErrNoMountpath) Error() string {
+func (e *ErrMountpathNotFound) Error() string {
 	return "mountpath " + e.mpath + " does not exist"
 }
 
-func NewErrNoMountpath(mpath string) *ErrNoMountpath {
-	return &ErrNoMountpath{mpath}
+func NewErrMountpathNotFound(mpath string) *ErrMountpathNotFound {
+	return &ErrMountpathNotFound{mpath}
 }
 
 // ErrInvalidMountpath
@@ -297,6 +303,16 @@ func (e *ErrInvalidMountpath) Error() string {
 
 func NewErrInvalidaMountpath(mpath, cause string) *ErrInvalidMountpath {
 	return &ErrInvalidMountpath{mpath: mpath, cause: cause}
+}
+
+// ErrInvalidFSPathsConf
+
+func NewErrInvalidFSPathsConf(err error) *ErrInvalidFSPathsConf {
+	return &ErrInvalidFSPathsConf{err}
+}
+
+func (e *ErrInvalidFSPathsConf) Error() string {
+	return fmt.Sprintf("invalid \"fspaths\" configuration: %v", e.err)
 }
 
 // ErrNoNodes

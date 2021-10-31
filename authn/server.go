@@ -321,7 +321,7 @@ func (a *Server) userLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	repl := fmt.Sprintf(`{"token": "%s"}`, tokenString)
+	repl := fmt.Sprintf(`{"token": %q}`, tokenString)
 	writeBytes(w, []byte(repl), "auth")
 }
 

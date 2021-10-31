@@ -8,7 +8,7 @@ package stats
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	rfs "io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -68,6 +68,9 @@ const (
 
 // NOTE: all supported metrics
 var kinds = []string{KindCounter, KindGauge, KindLatency, KindThroughput, KindComputedThroughput, KindSpecial}
+
+// sample name ais.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
+var logtypes = []string{".INFO.", ".WARNING.", ".ERROR."}
 
 // CoreStats stats
 const (
@@ -837,38 +840,34 @@ func recycleLogs() time.Duration {
 
 func removeLogs(config *cmn.Config) {
 	maxtotal := int64(config.Log.MaxTotal)
-	logfinfos, err := ioutil.ReadDir(config.LogDir)
+	dentries, err := os.ReadDir(config.LogDir)
 	if err != nil {
 		glog.Errorf("GC logs: cannot read log dir %s, err: %v", config.LogDir, err)
 		_ = cos.CreateDir(config.LogDir) // FIXME: (local non-containerized + kill/restart under test)
 		return
 	}
-	// sample name ais.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
-	logtypes := []string{".INFO.", ".WARNING.", ".ERROR."}
 	for _, logtype := range logtypes {
-		var (
-			tot   = int64(0)
-			infos = make([]os.FileInfo, 0, len(logfinfos))
-		)
-		for _, logfi := range logfinfos {
-			if logfi.IsDir() {
+		var tot int64
+		finfos := make([]rfs.FileInfo, 0, len(dentries))
+		for _, dent := range dentries {
+			if dent.IsDir() || !dent.Type().IsRegular() {
 				continue
 			}
-			if !strings.Contains(logfi.Name(), ".log.") {
+			if n := dent.Name(); !strings.Contains(n, ".log.") || !strings.Contains(n, logtype) {
 				continue
 			}
-			if strings.Contains(logfi.Name(), logtype) {
-				tot += logfi.Size()
-				infos = append(infos, logfi)
+			if finfo, err := dent.Info(); err == nil {
+				tot += finfo.Size()
+				finfos = append(finfos, finfo)
 			}
 		}
 		if tot > maxtotal {
-			removeOlderLogs(tot, maxtotal, config.LogDir, logtype, infos)
+			removeOlderLogs(tot, maxtotal, config.LogDir, logtype, finfos)
 		}
 	}
 }
 
-func removeOlderLogs(tot, maxtotal int64, logdir, logtype string, filteredInfos []os.FileInfo) {
+func removeOlderLogs(tot, maxtotal int64, logdir, logtype string, filteredInfos []rfs.FileInfo) {
 	l := len(filteredInfos)
 	if l <= 1 {
 		glog.Warningf("GC logs: cannot cleanup %s, dir %s, tot %d, max %d", logtype, logdir, tot, maxtotal)

@@ -88,11 +88,11 @@ func (r *XactRespond) Run(*sync.WaitGroup) {
 	)
 	defer ticker.Stop()
 
-	// as of now all requests are equal. Some may get throttling later
+	// as of now all requests are equal (TODO: throttle)
 	for {
 		select {
 		case <-ticker.C:
-			if s := fmt.Sprintf("%v", r.stats.stats()); s != "" {
+			if s := r.stats.stats().String(); s != "" {
 				glog.Info(s)
 			}
 		case <-r.IdleTimer():

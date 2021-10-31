@@ -32,7 +32,7 @@ type testStruct struct {
 func (ts *testStruct) equal(other testStruct) bool {
 	return ts.I == other.I &&
 		ts.S == other.S &&
-		string(ts.B) == string(other.B) &&
+		bytes.Equal(ts.B, other.B) &&
 		ts.ST.I64 == other.ST.I64 &&
 		reflect.DeepEqual(ts.M, other.M)
 }

@@ -109,7 +109,7 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 	ctx, cancel := context.WithTimeout(t.downloadCtx, timeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, t.obj.link, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, t.obj.link, http.NoBody)
 	if err != nil {
 		return true, err
 	}

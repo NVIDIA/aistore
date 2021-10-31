@@ -36,7 +36,7 @@ func (reb *Manager) RunResilver(uuid string, skipGlobMisplaced bool, notifs ...*
 	}
 	availablePaths, _ := fs.Get()
 	if len(availablePaths) < 1 {
-		glog.Error(fs.ErrNoMountpaths)
+		glog.Error(cmn.ErrNoMountpaths)
 		return
 	}
 

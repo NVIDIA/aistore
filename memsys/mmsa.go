@@ -128,9 +128,9 @@ const (
 )
 
 const (
-	memCheckAbove = 90 * time.Second // default memory checking frequency when above low watermark
-	freeIdleMin   = memCheckAbove    // time to reduce an idle slab to a minimum depth (see mindepth)
-	freeIdleZero  = freeIdleMin * 2  // ... to zero
+	memCheckAbove  = 90 * time.Second   // default memory checking frequency when above low watermark
+	freeIdleMinDur = memCheckAbove      // time to reduce an idle slab to a minimum depth (see mindepth)
+	freeIdleZero   = freeIdleMinDur * 2 // ... to zero
 )
 
 // slab constants

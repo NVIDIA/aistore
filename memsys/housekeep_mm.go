@@ -27,7 +27,7 @@ func (r *MMSA) FreeSpec(spec FreeSpec) {
 		}
 	} else {
 		if spec.IdleDuration == 0 {
-			spec.IdleDuration = freeIdleMin // using the default
+			spec.IdleDuration = freeIdleMinDur // using the default
 		}
 		stats := r.GetStats()
 		for _, s := range r.rings {
@@ -80,7 +80,7 @@ func (r *MMSA) garbageCollect() time.Duration {
 	// 3. memory is enough, free only those that are idle for a while
 	if pressure == MemPressureLow {
 		r.minDepth.Store(minDepth)
-		if freed := r.freeIdle(freeIdleMin); freed > 0 {
+		if freed := r.freeIdle(freeIdleMinDur); freed > 0 {
 			r.toGC.Add(freed)
 			r.doGC(mem.Free, sizeToGC, false, false)
 		}

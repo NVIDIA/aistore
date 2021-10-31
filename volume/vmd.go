@@ -92,7 +92,7 @@ func (vmd *VMD) persist() (err error) {
 		return
 	}
 	if availCnt == 0 {
-		glog.Errorf("cannot store VMD: %v", fs.ErrNoMountpaths)
+		glog.Errorf("cannot store VMD: %v", cmn.ErrNoMountpaths)
 		return
 	}
 	return fmt.Errorf("failed to store VMD on any of the mountpaths (%d)", availCnt)

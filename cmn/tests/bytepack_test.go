@@ -5,6 +5,7 @@
 package tests
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -111,8 +112,7 @@ func TestBytePackStruct(t *testing.T) {
 
 	readFirst := &pck{}
 	readSecond := &pck{}
-	bytes := packer.Bytes()
-	unpacker := cos.NewUnpacker(bytes)
+	unpacker := cos.NewUnpacker(packer.Bytes())
 	err := unpacker.ReadAny(readFirst)
 	tassert.CheckFatal(t, err)
 	err = unpacker.ReadAny(readSecond)
@@ -127,14 +127,14 @@ func TestBytePackStruct(t *testing.T) {
 	if second.id != readSecond.id ||
 		second.group != readSecond.group ||
 		second.name != readSecond.name ||
-		string(second.data) != string(readSecond.data) ||
+		!bytes.Equal(second.data, readSecond.data) ||
 		readSecond.parent == nil {
 		t.Errorf("Second: Read %+v mismatches original %+v", readSecond, second)
 	}
 	if second.parent.id != readSecond.parent.id ||
 		second.parent.group != readSecond.parent.group ||
 		second.parent.name != readSecond.parent.name ||
-		string(second.parent.data) != string(readSecond.parent.data) ||
+		!bytes.Equal(second.parent.data, readSecond.parent.data) ||
 		readSecond.parent.parent != nil {
 		t.Errorf("Second inner: Read %+v mismatches original %+v", readSecond.parent, second.parent)
 	}

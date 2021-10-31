@@ -186,7 +186,6 @@ func clusterDecommissionHandler(c *cli.Context) (err error) {
 }
 
 func joinNodeHandler(c *cli.Context) (err error) {
-	const ()
 	var (
 		daemonType, prefix, socketAddr, rebID string
 		socketAddrParts                       []string

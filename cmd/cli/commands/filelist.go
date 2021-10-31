@@ -6,13 +6,13 @@ package commands
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 type (
@@ -44,20 +44,24 @@ func cutPrefixFromPath(path, base string) string {
 // returns only files inside the 'path' directory that matches mask. No recursion
 func filesInDirByMask(path, trimPrefix, appendPrefix, mask string) ([]fileToObj, error) {
 	files := make([]fileToObj, 0)
-	fList, err := ioutil.ReadDir(path)
+	dentries, err := os.ReadDir(path)
 	if err != nil {
 		return nil, err
 	}
-	for _, f := range fList {
-		if f.IsDir() {
+	for _, dent := range dentries {
+		if dent.IsDir() || !dent.Type().IsRegular() {
 			continue
 		}
-		if matched, _ := filepath.Match(mask, filepath.Base(f.Name())); matched {
-			fullPath := filepath.Join(path, f.Name())
+		if matched, err := filepath.Match(mask, filepath.Base(dent.Name())); !matched || err != nil {
+			continue
+		}
+		if finfo, err := dent.Info(); err == nil {
+			debug.Assert(finfo.Name() == dent.Name())
+			fullPath := filepath.Join(path, dent.Name())
 			fo := fileToObj{
 				name: appendPrefix + cutPrefixFromPath(fullPath, trimPrefix), // empty strings ignored
 				path: fullPath,
-				size: f.Size(),
+				size: finfo.Size(),
 			}
 			files = append(files, fo)
 		}

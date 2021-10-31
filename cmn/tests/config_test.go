@@ -46,10 +46,10 @@ func TestConfigFSPaths(t *testing.T) {
 	err = cmn.LoadConfig(confPath, localConfPath, cmn.Target, &newConfig)
 	tassert.CheckFatal(t, err)
 
-	mpaths := localConf.FSpaths.Paths
-	tassert.Fatalf(t, len(newConfig.FSpaths.Paths) == len(mpaths), "mountpath count %v != %v", len(newConfig.FSpaths.Paths), len(mpaths))
+	mpaths := localConf.FSP.Paths
+	tassert.Fatalf(t, len(newConfig.FSP.Paths) == len(mpaths), "mountpath count %v != %v", len(newConfig.FSP.Paths), len(mpaths))
 	for p := range mpaths {
-		tassert.Fatalf(t, newConfig.FSpaths.Paths.Contains(p), "%q not in config FSpaths", p)
+		tassert.Fatalf(t, newConfig.FSP.Paths.Contains(p), "%q not in config FSP", p)
 	}
 }
 

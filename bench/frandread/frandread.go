@@ -9,7 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"math/rand"
 	"os"
@@ -271,20 +270,20 @@ func fileNamesFromList(fileNames []string) []string {
 }
 
 func fileNamesFromDir(dir string, fileNames []string) []string {
-	dentries, err := ioutil.ReadDir(dir)
+	dentries, err := os.ReadDir(dir)
 	if err != nil {
 		panic(err)
 	}
-	for _, finfo := range dentries {
-		if !finfo.Mode().IsRegular() {
+	for _, dent := range dentries {
+		if dent.IsDir() || !dent.Type().IsRegular() {
 			continue
 		}
 		if cliv.pattern != "" {
-			if matched, _ := filepath.Match(cliv.pattern, filepath.Base(finfo.Name())); !matched {
+			if matched, _ := filepath.Match(cliv.pattern, filepath.Base(dent.Name())); !matched {
 				continue
 			}
 		}
-		fname := filepath.Join(dir, finfo.Name())
+		fname := filepath.Join(dir, dent.Name())
 		fileNames = append(fileNames, fname)
 	}
 	return fileNames

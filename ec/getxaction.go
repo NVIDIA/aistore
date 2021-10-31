@@ -5,7 +5,6 @@
 package ec
 
 import (
-	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -187,7 +186,7 @@ func (r *XactGet) Run(*sync.WaitGroup) {
 		select {
 		case <-ticker.C:
 			if glog.FastV(4, glog.SmoduleEC) {
-				if s := fmt.Sprintf("%v", r.ECStats()); s != "" {
+				if s := r.ECStats().String(); s != "" {
 					glog.Info(s)
 				}
 			}

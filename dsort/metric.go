@@ -91,9 +91,8 @@ func newDetailedStats() *DetailedStats {
 // PhaseInfo contains general stats and state for given phase. It is base struct
 // which is extended by actual phases structs.
 type PhaseInfo struct {
-	sync.Mutex `json:"-"`
-	Start      time.Time `json:"started_time"`
-	End        time.Time `json:"end_time"`
+	Start time.Time `json:"started_time"`
+	End   time.Time `json:"end_time"`
 	// Elapsed time (in seconds) from start to given point of time or end when
 	// phase has finished.
 	Elapsed time.Duration `json:"elapsed"`
@@ -102,24 +101,28 @@ type PhaseInfo struct {
 	// Finished specifies if phase has finished. If running and finished is
 	// false this means that the phase did not have started yet.
 	Finished bool `json:"finished"`
+	//
+	// private
+	//
+	mu sync.Mutex `json:"-"`
 }
 
 // begin marks phase as in progress.
 func (pi *PhaseInfo) begin() {
-	pi.Lock()
+	pi.mu.Lock()
 	pi.Running = true
 	pi.Start = time.Now()
-	pi.Unlock()
+	pi.mu.Unlock()
 }
 
 // finish marks phase as finished.
 func (pi *PhaseInfo) finish() {
-	pi.Lock()
+	pi.mu.Lock()
 	pi.Running = false
 	pi.Finished = true
 	pi.End = time.Now()
 	pi.Elapsed = pi.End.Sub(pi.Start) / time.Second
-	pi.Unlock()
+	pi.mu.Unlock()
 }
 
 // LocalExtraction contains metrics for first phase of DSort.
@@ -240,16 +243,16 @@ func (m *Metrics) setAbortedTo(b bool) {
 
 // Lock locks all phases to make sure that all of them can be updated.
 func (m *Metrics) lock() {
-	m.Extraction.Lock()
-	m.Sorting.Lock()
-	m.Creation.Lock()
+	m.Extraction.mu.Lock()
+	m.Sorting.mu.Lock()
+	m.Creation.mu.Lock()
 }
 
 // Unlock unlocks all phases.
 func (m *Metrics) unlock() {
-	m.Creation.Unlock()
-	m.Sorting.Unlock()
-	m.Extraction.Unlock()
+	m.Creation.mu.Unlock()
+	m.Sorting.mu.Unlock()
+	m.Extraction.mu.Unlock()
 }
 
 func (m *Metrics) ElapsedTime() time.Duration {

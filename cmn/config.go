@@ -35,9 +35,9 @@ const (
 )
 
 const (
-	ThrottleMin = time.Millisecond
-	ThrottleAvg = time.Millisecond * 10
-	ThrottleMax = time.Millisecond * 100
+	ThrottleMinDur = time.Millisecond
+	ThrottleAvgDur = time.Millisecond * 10
+	ThrottleMaxDur = time.Millisecond * 100
 )
 
 const (
@@ -140,8 +140,8 @@ type (
 		ConfigDir string         `json:"confdir"`
 		LogDir    string         `json:"log_dir"`
 		HostNet   LocalNetConfig `json:"host_net"`
-		FSpaths   FSPathsConf    `json:"fspaths"`
-		TestFSP   TestfspathConf `json:"test_fspaths"`
+		FSP       FSPConf        `json:"fspaths"`
+		TestFSP   TestFSPConf    `json:"test_fspaths"`
 	}
 
 	// Network config specific to node
@@ -186,7 +186,7 @@ type (
 		Vmodule  *string `json:"vmodule,omitempty" copy:"skip"`
 
 		// LocalConfig
-		FSpaths *FSPathsConf `json:"fspaths,omitempty"`
+		FSP *FSPConf `json:"fspaths,omitempty"`
 	}
 
 	BackendConf struct {
@@ -429,7 +429,7 @@ type (
 		ValidateWarmGet *bool `json:"validate_warm_get,omitempty"`
 	}
 
-	TestfspathConf struct {
+	TestFSPConf struct {
 		Root     string `json:"root"`
 		Count    int    `json:"count"`
 		Instance int    `json:"instance"`
@@ -542,7 +542,7 @@ type (
 		DSorterMemThreshold *string       `json:"dsorter_mem_threshold,omitempty"`
 	}
 
-	FSPathsConf struct {
+	FSPConf struct {
 		Paths cos.StringSet `json:"paths,omitempty"`
 	}
 
@@ -639,7 +639,7 @@ func (gco *globalConfigOwner) SetLocalFSPaths(toUpdate *ConfigToUpdate) (overrid
 	if overrideConfig == nil {
 		overrideConfig = toUpdate
 	} else {
-		overrideConfig.FSpaths = toUpdate.FSpaths // no merging required
+		overrideConfig.FSP = toUpdate.FSP // no merging required
 	}
 	return
 }
@@ -737,8 +737,8 @@ var (
 
 	_ json.Marshaler   = (*BackendConf)(nil)
 	_ json.Unmarshaler = (*BackendConf)(nil)
-	_ json.Marshaler   = (*FSPathsConf)(nil)
-	_ json.Unmarshaler = (*FSPathsConf)(nil)
+	_ json.Marshaler   = (*FSPConf)(nil)
+	_ json.Unmarshaler = (*FSPConf)(nil)
 )
 
 /////////////////////////////////////////////
@@ -759,7 +759,7 @@ func (c *Config) Validate() error {
 	if err := c.LocalConfig.HostNet.Validate(c); err != nil {
 		return err
 	}
-	if err := c.LocalConfig.FSpaths.Validate(c); err != nil {
+	if err := c.LocalConfig.FSP.Validate(c); err != nil {
 		return err
 	}
 	if err := c.LocalConfig.TestFSP.Validate(c); err != nil {
@@ -822,12 +822,12 @@ func (c *LocalConfig) TestingEnv() bool {
 
 func (c *LocalConfig) AddPath(mpath string) {
 	debug.Assert(!c.TestingEnv())
-	c.FSpaths.Paths.Add(mpath)
+	c.FSP.Paths.Add(mpath)
 }
 
 func (c *LocalConfig) DelPath(mpath string) {
 	debug.Assert(!c.TestingEnv())
-	c.FSpaths.Paths.Delete(mpath)
+	c.FSP.Paths.Delete(mpath)
 }
 
 /////////////////////////////////////////
@@ -1246,11 +1246,11 @@ func (c *DSortConf) ValidateWithOpts(allowEmpty bool) (err error) {
 	return nil
 }
 
-///////////////////////////////////////
-// FSPathsConf (part of LocalConfig) //
-///////////////////////////////////////
+///////////////////////////////////
+// FSPConf (part of LocalConfig) //
+///////////////////////////////////
 
-func (c *FSPathsConf) UnmarshalJSON(data []byte) (err error) {
+func (c *FSPConf) UnmarshalJSON(data []byte) (err error) {
 	m := cos.NewStringSet()
 	err = jsoniter.Unmarshal(data, &m)
 	if err != nil {
@@ -1260,11 +1260,11 @@ func (c *FSPathsConf) UnmarshalJSON(data []byte) (err error) {
 	return
 }
 
-func (c *FSPathsConf) MarshalJSON() (data []byte, err error) {
+func (c *FSPConf) MarshalJSON() (data []byte, err error) {
 	return cos.MustMarshal(c.Paths), nil
 }
 
-func (c *FSPathsConf) Validate(contextConfig *Config) (err error) {
+func (c *FSPConf) Validate(contextConfig *Config) (err error) {
 	debug.Assertf(cos.StringInSlice(contextConfig.role, []string{Proxy, Target}),
 		"unexpected role: %q", contextConfig.role)
 
@@ -1273,7 +1273,7 @@ func (c *FSPathsConf) Validate(contextConfig *Config) (err error) {
 		return nil
 	}
 	if len(c.Paths) == 0 {
-		return fmt.Errorf("expected at least one mountpath in fspaths config")
+		return NewErrInvalidFSPathsConf(ErrNoMountpaths)
 	}
 	cleanMpaths := make(map[string]struct{})
 
@@ -1288,12 +1288,12 @@ func (c *FSPathsConf) Validate(contextConfig *Config) (err error) {
 	return nil
 }
 
-//////////////////////////////////////////
-// TestfspathConf (part of LocalConfig) //
-//////////////////////////////////////////
+///////////////////////////////////////
+// TestFSPConf (part of LocalConfig) //
+///////////////////////////////////////
 
-// validate root and (NOTE: testing only) generate and fill-in counted FSpaths.Paths
-func (c *TestfspathConf) Validate(contextConfig *Config) (err error) {
+// validate root and (NOTE: testing only) generate and fill-in counted FSP.Paths
+func (c *TestFSPConf) Validate(contextConfig *Config) (err error) {
 	// Don't validate in production environment.
 	if !contextConfig.TestingEnv() || contextConfig.role != Target {
 		return nil
@@ -1305,18 +1305,18 @@ func (c *TestfspathConf) Validate(contextConfig *Config) (err error) {
 	}
 	c.Root = cleanMpath
 
-	contextConfig.FSpaths.Paths = make(cos.StringSet, c.Count)
+	contextConfig.FSP.Paths = make(cos.StringSet, c.Count)
 	for i := 0; i < c.Count; i++ {
 		mpath := filepath.Join(c.Root, fmt.Sprintf("mp%d", i+1))
 		if c.Instance > 0 {
 			mpath = filepath.Join(mpath, strconv.Itoa(c.Instance))
 		}
-		contextConfig.FSpaths.Paths.Add(mpath)
+		contextConfig.FSP.Paths.Add(mpath)
 	}
 	return nil
 }
 
-func (c *TestfspathConf) ValidateMpath(p string) (err error) {
+func (c *TestFSPConf) ValidateMpath(p string) (err error) {
 	debug.Assert(c.Count > 0)
 	for i := 0; i < c.Count; i++ {
 		mpath := filepath.Join(c.Root, fmt.Sprintf("mp%d", i+1))
@@ -1581,10 +1581,10 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) (
 	if overrideConfig != nil {
 		// update config with locally-stored 'OverrideConfigFname' and validate the result
 		GCO.PutOverrideConfig(overrideConfig)
-		if overrideConfig.FSpaths != nil {
+		if overrideConfig.FSP != nil {
 			// separately, override local config's fspaths
-			config.LocalConfig.FSpaths = *overrideConfig.FSpaths
-			overrideConfig.FSpaths = nil
+			config.LocalConfig.FSP = *overrideConfig.FSP
+			overrideConfig.FSP = nil
 		}
 		err = config.UpdateClusterConfig(*overrideConfig, Daemon) // update and validate
 	} else {
@@ -1599,8 +1599,8 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) (
 		return fmt.Errorf("failed to create log dir %q: %v", config.LogDir, err)
 	}
 	if config.TestingEnv() && daeRole == Target {
-		debug.Assert(config.TestFSP.Count == len(config.FSpaths.Paths))
-		for mpath := range config.FSpaths.Paths {
+		debug.Assert(config.TestFSP.Count == len(config.FSP.Paths))
+		for mpath := range config.FSP.Paths {
 			if err := cos.CreateDir(mpath); err != nil {
 				return fmt.Errorf("failed to create %s mountpath in testing env: %v", mpath, err)
 			}

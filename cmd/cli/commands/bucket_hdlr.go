@@ -469,8 +469,8 @@ func evictHandler(c *cli.Context) (err error) {
 
 	// List and range flags are invalid with object argument(s)
 	if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
-		return incorrectUsageMsg(c, "flags %q are invalid when object names provided",
-			strings.Join([]string{listFlag.Name, templateFlag.Name}, ", "))
+		return incorrectUsageMsg(c, "flags %q, %q cannot be used together with object name arguments",
+			listFlag.Name, templateFlag.Name)
 	}
 
 	// Object argument(s) given by the user; operation on given object(s).

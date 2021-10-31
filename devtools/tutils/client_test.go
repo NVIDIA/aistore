@@ -196,7 +196,7 @@ func TestMain(m *testing.M) {
 
 		errCb := func(statusCode int, f string, a ...interface{}) {
 			w.WriteHeader(statusCode)
-			w.Write([]byte(fmt.Sprintf(f, a...)))
+			fmt.Fprintf(w, f, a...)
 		}
 
 		// Verify checksum.

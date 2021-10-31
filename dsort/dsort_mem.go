@@ -331,9 +331,9 @@ func (ds *dsorterMem) createShardsLocally() (err error) {
 	metrics := ds.m.Metrics.Creation
 	metrics.begin()
 	defer metrics.finish()
-	metrics.Lock()
+	metrics.mu.Lock()
 	metrics.ToCreate = int64(len(phaseInfo.metadata.Shards))
-	metrics.Unlock()
+	metrics.mu.Unlock()
 
 	var (
 		wg     = &sync.WaitGroup{}
@@ -497,10 +497,10 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 			err = ds.creationPhase.connector.connectReader(rec.MakeUniqueName(obj), r, hdr.ObjAttrs.Size)
 			if ds.m.Metrics.extended {
 				dur := mono.Since(beforeSend)
-				ds.m.Metrics.Creation.Lock()
+				ds.m.Metrics.Creation.mu.Lock()
 				ds.m.Metrics.Creation.LocalSendStats.updateTime(dur)
 				ds.m.Metrics.Creation.LocalSendStats.updateThroughput(hdr.ObjAttrs.Size, dur)
-				ds.m.Metrics.Creation.Unlock()
+				ds.m.Metrics.Creation.mu.Unlock()
 			}
 			cos.Close(r)
 		} else {
@@ -604,10 +604,10 @@ func (ds *dsorterMem) makeRecvResponseFunc() transport.ReceiveObj {
 
 		if ds.m.Metrics.extended {
 			dur := mono.Since(beforeSend)
-			metrics.Lock()
+			metrics.mu.Lock()
 			metrics.LocalRecvStats.updateTime(dur)
 			metrics.LocalRecvStats.updateThroughput(hdr.ObjAttrs.Size, dur)
-			metrics.Unlock()
+			metrics.mu.Unlock()
 		}
 	}
 }

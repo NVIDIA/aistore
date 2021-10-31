@@ -24,7 +24,7 @@ import (
 )
 
 type Manager struct {
-	sync.RWMutex
+	mu sync.RWMutex
 
 	t         cluster.Target
 	smap      *cluster.Smap
@@ -180,8 +180,8 @@ func _renewXact(bck *cluster.Bck, kind string) (cluster.Xact, error) {
 }
 
 func (mgr *Manager) getBckXacts(bckName string) *BckXacts {
-	mgr.Lock()
-	defer mgr.Unlock()
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
 	return mgr.getBckXactsUnlocked(bckName)
 }
 
@@ -366,15 +366,15 @@ func (mgr *Manager) enableBck(bck *cluster.Bck) {
 }
 
 func (mgr *Manager) BucketsMDChanged() error {
-	mgr.Lock()
+	mgr.mu.Lock()
 	newBckMD := mgr.t.Bowner().Get()
 	oldBckMD := mgr.bmd
 	if newBckMD.Version <= mgr.bmd.Version {
-		mgr.Unlock()
+		mgr.mu.Unlock()
 		return nil
 	}
 	mgr.bmd = newBckMD
-	mgr.Unlock()
+	mgr.mu.Unlock()
 
 	if newBckMD.IsECUsed() && !oldBckMD.IsECUsed() {
 		if err := mgr.initECBundles(); err != nil {
@@ -413,7 +413,7 @@ func (mgr *Manager) ListenSmapChanged() {
 	targetCnt := mgr.smap.CountActiveTargets()
 	mgr.targetCnt.Store(int32(targetCnt))
 
-	mgr.Lock()
+	mgr.mu.Lock()
 
 	// Manager is initialized before being registered for smap changes
 	// bckMD will be present at this point
@@ -442,7 +442,7 @@ func (mgr *Manager) ListenSmapChanged() {
 		return false
 	})
 
-	mgr.Unlock()
+	mgr.mu.Unlock()
 }
 
 // implementing cluster.Slistener interface

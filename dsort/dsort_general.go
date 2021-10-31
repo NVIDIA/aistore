@@ -232,9 +232,9 @@ func (ds *dsorterGeneral) createShardsLocally() (err error) {
 	metrics := ds.m.Metrics.Creation
 	metrics.begin()
 	defer metrics.finish()
-	metrics.Lock()
+	metrics.mu.Lock()
 	metrics.ToCreate = int64(len(phaseInfo.metadata.Shards))
-	metrics.Unlock()
+	metrics.mu.Unlock()
 
 	group, ctx := errgroup.WithContext(context.Background())
 
@@ -379,9 +379,9 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 				}
 				if ds.m.Metrics.extended {
 					delta := mono.Since(beforeSend)
-					metrics.Lock()
+					metrics.mu.Lock()
 					metrics.RequestStats.updateTime(delta)
-					metrics.Unlock()
+					metrics.mu.Unlock()
 
 					ds.m.ctx.stats.AddMany(
 						stats.NamedVal64{Name: stats.DSortCreationReqCount, Value: 1},
@@ -422,9 +422,9 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 
 			if ds.m.Metrics.extended {
 				delta := mono.Since(beforeRecv)
-				metrics.Lock()
+				metrics.mu.Lock()
 				metrics.ResponseStats.updateTime(delta)
-				metrics.Unlock()
+				metrics.mu.Unlock()
 
 				ds.m.ctx.stats.AddMany(
 					stats.NamedVal64{Name: stats.DSortCreationRespCount, Value: 1},
@@ -563,10 +563,10 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 func (ds *dsorterGeneral) responseCallback(hdr transport.ObjHdr, rc io.ReadCloser, x interface{}, err error) {
 	if ds.m.Metrics.extended {
 		dur := mono.Since(x.(int64))
-		ds.m.Metrics.Creation.Lock()
+		ds.m.Metrics.Creation.mu.Lock()
 		ds.m.Metrics.Creation.LocalSendStats.updateTime(dur)
 		ds.m.Metrics.Creation.LocalSendStats.updateThroughput(hdr.ObjAttrs.Size, dur)
-		ds.m.Metrics.Creation.Unlock()
+		ds.m.Metrics.Creation.mu.Unlock()
 	}
 
 	if sgl, ok := rc.(*memsys.SGL); ok {
@@ -615,10 +615,10 @@ func (ds *dsorterGeneral) makeRecvResponseFunc() transport.ReceiveObj {
 
 		if ds.m.Metrics.extended {
 			dur := mono.Since(beforeSend)
-			metrics.Lock()
+			metrics.mu.Lock()
 			metrics.LocalRecvStats.updateTime(dur)
 			metrics.LocalRecvStats.updateThroughput(writer.n, dur)
-			metrics.Unlock()
+			metrics.mu.Unlock()
 		}
 	}
 }

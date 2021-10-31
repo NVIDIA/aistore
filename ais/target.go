@@ -213,7 +213,7 @@ func initTID(config *cmn.Config) (tid string) {
 		return
 	}
 	// TODO -- FIXME: use post-bootstrap vmd.Mountpaths
-	if tid, err = fs.LoadNodeID(config.FSpaths.Paths); err != nil {
+	if tid, err = fs.LoadNodeID(config.FSP.Paths); err != nil {
 		cos.ExitLogf("%v", err)
 	}
 	if tid != "" {
@@ -246,7 +246,7 @@ func (t *targetrunner) Run() error {
 	tstats := t.statsT.(*stats.Trunner)
 	availablePaths, disabledPaths := fs.Get()
 	if len(availablePaths) == 0 {
-		cos.ExitLogf("%v", fs.ErrNoMountpaths)
+		cos.ExitLogf("%v", cmn.ErrNoMountpaths)
 	}
 	regDiskMetrics(tstats, availablePaths)
 	regDiskMetrics(tstats, disabledPaths)
@@ -1439,7 +1439,7 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 		nanotim := mono.NanoTime()
 		if nanotim&0x7 == 7 {
 			if mpathCnt == 0 {
-				glog.Errorf("%s: %v", t.si, fs.ErrNoMountpaths)
+				glog.Errorf("%s: %v", t.si, cmn.ErrNoMountpaths)
 			} else {
 				glog.Errorf(fmtErrInsuffMpaths2, t.si, mpathCnt, lom, mconfig.Copies)
 			}

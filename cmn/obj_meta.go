@@ -140,8 +140,7 @@ func ToHeader(oah ObjAttrsHolder, hdr http.Header) {
 	custom := oah.GetCustomMD()
 	for k, v := range custom {
 		debug.Assert(k != "")
-		entry := strings.Join([]string{k, v}, "=")
-		hdr.Add(HdrObjCustomMD, entry)
+		hdr.Add(HdrObjCustomMD, k+"="+v)
 	}
 }
 

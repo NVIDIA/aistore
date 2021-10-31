@@ -141,9 +141,10 @@ func newTransportServer(primary *proxyrunner, s *metaSyncServer, ch chan<- trans
 		cnt++
 		status, err := sf(w, r, cnt)
 		ch <- transportData{isProxy, id, cnt}
-		if err != nil {
-			http.Error(w, err.Error(), status)
+		if err == nil {
+			return
 		}
+		http.Error(w, err.Error(), status)
 	}
 
 	// creates the test proxy/target server and add to primary proxy's smap

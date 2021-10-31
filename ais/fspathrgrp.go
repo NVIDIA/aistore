@@ -186,13 +186,13 @@ func fspathsSaveCommit(mpath string, add bool) {
 	} else {
 		localConfig.DelPath(mpath)
 	}
-	if err := localConfig.FSpaths.Validate(config); err != nil {
+	if err := localConfig.FSP.Validate(config); err != nil {
 		debug.AssertNoErr(err)
 		cmn.GCO.DiscardUpdate()
 		glog.Error(err)
 		return
 	}
-	toUpdate := &cmn.ConfigToUpdate{FSpaths: &config.LocalConfig.FSpaths}
+	toUpdate := &cmn.ConfigToUpdate{FSP: &config.LocalConfig.FSP}
 	overrideConfig := cmn.GCO.SetLocalFSPaths(toUpdate)
 	if err := cmn.SaveOverrideConfig(config.ConfigDir, overrideConfig); err != nil {
 		debug.AssertNoErr(err)

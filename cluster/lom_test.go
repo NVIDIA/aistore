@@ -239,7 +239,7 @@ var _ = Describe("LOM", func() {
 				),
 				Entry(
 					"missing content type",
-					filepath.Join(mpaths[0]),
+					mpaths[0],
 				),
 				Entry(
 					"missing bucket type",

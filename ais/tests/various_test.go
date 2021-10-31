@@ -15,7 +15,7 @@ import (
 func TestInvalidHTTPMethod(t *testing.T) {
 	proxyURL := tutils.RandomProxyURL(t)
 
-	req, err := http.NewRequest("TEST", proxyURL, nil)
+	req, err := http.NewRequest("TEST", proxyURL, http.NoBody)
 	tassert.CheckFatal(t, err)
 	tassert.CheckResp(t, tutils.HTTPClient, req, http.StatusBadRequest)
 }
