@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
 
@@ -16,8 +17,12 @@ import (
 
 var (
 	mpathCmdsFlags = map[string][]cli.Flag{
-		subcmdDiskAttach: {},
-		subcmdDiskDetach: {},
+		subcmdMpathAttach: {
+			forceFlag,
+		},
+		subcmdMpathEnable:  {},
+		subcmdMpathDetach:  {},
+		subcmdMpathDisable: {},
 	}
 
 	mpathCmd = cli.Command{
@@ -27,44 +32,53 @@ var (
 		Subcommands: []cli.Command{
 			makeAlias(showCmdMpath, "", true, commandShow), // alias for `ais show`
 			{
-				Name:         subcmdDiskAttach,
+				Name:         subcmdMpathAttach,
 				Usage:        "attach mountpath (i.e., formatted disk or RAID) to a target node",
-				ArgsUsage:    diskAttachArgument,
-				Flags:        mpathCmdsFlags[subcmdDiskAttach],
-				Action:       diskAttachHandler,
+				ArgsUsage:    daemonMountpathPairArgument,
+				Flags:        mpathCmdsFlags[subcmdMpathAttach],
+				Action:       mpathAttachHandler,
 				BashComplete: daemonCompletions(completeTargets),
 			},
 			{
-				Name:         subcmdDiskDetach,
+				Name:         subcmdMpathEnable,
+				Usage:        "(re)enable target's mountpath",
+				ArgsUsage:    daemonMountpathPairArgument,
+				Flags:        mpathCmdsFlags[subcmdMpathEnable],
+				Action:       mpathEnableHandler,
+				BashComplete: daemonCompletions(completeTargets),
+			},
+			{
+				Name:         subcmdMpathDetach,
 				Usage:        "detach mountpath (i.e., formatted disk or RAID) from a target node",
-				ArgsUsage:    diskDetachArgument,
-				Flags:        mpathCmdsFlags[subcmdDiskDetach],
-				Action:       diskDetachHandler,
+				ArgsUsage:    daemonMountpathPairArgument,
+				Flags:        mpathCmdsFlags[subcmdMpathDetach],
+				Action:       mpathDetachHandler,
+				BashComplete: daemonCompletions(completeTargets),
+			},
+			{
+				Name:         subcmdMpathDisable,
+				Usage:        "disable mountpath (deactivate but keep in a target's volume)",
+				ArgsUsage:    daemonMountpathPairArgument,
+				Flags:        mpathCmdsFlags[subcmdMpathDisable],
+				Action:       mpathDisableHandler,
 				BashComplete: daemonCompletions(completeTargets),
 			},
 		},
 	}
 )
 
-func diskAttachHandler(c *cli.Context) (err error) {
-	return _diskAttachDetach(c, true /*attach*/)
-}
+func mpathAttachHandler(c *cli.Context) (err error)  { return mpathAction(c, cmn.ActMountpathAttach) }
+func mpathEnableHandler(c *cli.Context) (err error)  { return mpathAction(c, cmn.ActMountpathEnable) }
+func mpathDetachHandler(c *cli.Context) (err error)  { return mpathAction(c, cmn.ActMountpathDetach) }
+func mpathDisableHandler(c *cli.Context) (err error) { return mpathAction(c, cmn.ActMountpathDisable) }
 
-func diskDetachHandler(c *cli.Context) (err error) {
-	return _diskAttachDetach(c, false /*attach*/)
-}
-
-func _diskAttachDetach(c *cli.Context, attach bool) error {
-	action, acted := "attach", "attached"
-	if !attach {
-		action, acted = "detach", "detached"
-	}
+func mpathAction(c *cli.Context, action string) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, daemonMountpathPairArgument)
 	}
-	smap, err := fillMap()
-	if err != nil {
-		return err
+	smap, errMap := fillMap()
+	if errMap != nil {
+		return errMap
 	}
 	kvs, err := makePairs(c.Args())
 	if err != nil {
@@ -81,7 +95,11 @@ func _diskAttachDetach(c *cli.Context, attach bool) error {
 		return err
 	}
 	for nodeID, mountpath := range kvs {
-		si := smap.GetTarget(nodeID)
+		var (
+			err   error
+			acted string
+			si    = smap.GetTarget(nodeID)
+		)
 		if si == nil {
 			si = smap.GetProxy(nodeID)
 			if si == nil {
@@ -90,14 +108,24 @@ func _diskAttachDetach(c *cli.Context, attach bool) error {
 			return fmt.Errorf("node %q is a proxy, <TAB-TAB> target IDs or run \"ais show cluster target\" to select target",
 				nodeID)
 		}
-		if attach {
-			if err := api.AttachMountpath(defaultAPIParams, si, mountpath, false /*force*/); err != nil {
-				return err
-			}
-		} else {
-			if err := api.DetachMountpath(defaultAPIParams, si, mountpath); err != nil {
-				return err
-			}
+		switch action {
+		case cmn.ActMountpathAttach:
+			acted = "attached"
+			err = api.AttachMountpath(defaultAPIParams, si, mountpath, flagIsSet(c, forceFlag))
+		case cmn.ActMountpathEnable:
+			acted = "enabled"
+			err = api.EnableMountpath(defaultAPIParams, si, mountpath)
+		case cmn.ActMountpathDetach:
+			acted = "detached"
+			err = api.DetachMountpath(defaultAPIParams, si, mountpath)
+		case cmn.ActMountpathDisable:
+			acted = "disabled"
+			err = api.DisableMountpath(defaultAPIParams, si, mountpath)
+		default:
+			return incorrectUsageMsg(c, "invalid mountpath action %q", action)
+		}
+		if err != nil {
+			return err
 		}
 		fmt.Fprintf(c.App.Writer, "Node %q %s mountpath %q\n", si.ID(), acted, mountpath)
 	}

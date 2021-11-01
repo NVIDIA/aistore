@@ -257,17 +257,17 @@ const (
 	// Command `show mountpath`
 	TargetMpathListTmpl = "{{range $p := . }}" +
 		"{{ $p.DaemonID }}\n" +
-		"{{if and (eq (len $p.Available) 0) (eq (len $p.Disabled) 0)}}" +
+		"{{if and (eq (len $p.Mpl.Available) 0) (eq (len $p.Mpl.Disabled) 0)}}" +
 		"\tNo mountpath\n" +
 		"{{else}}" +
-		"{{if ne (len $p.Available) 0}}" +
+		"{{if ne (len $p.Mpl.Available) 0}}" +
 		"\tAvailable:\n" +
-		"{{range $mp := $p.Available }}" +
+		"{{range $mp := $p.Mpl.Available }}" +
 		"\t\t{{ $mp }}\n" +
 		"{{end}}{{end}}" +
-		"{{if ne (len $p.Disabled) 0}}" +
+		"{{if ne (len $p.Mpl.Disabled) 0}}" +
 		"\tDisabled:\n" +
-		"{{range $mp := $p.Disabled }}" +
+		"{{range $mp := $p.Mpl.Disabled }}" +
 		"\t\t{{ $mp }}\n" +
 		"{{end}}{{end}}" +
 		"{{end}}{{end}}"

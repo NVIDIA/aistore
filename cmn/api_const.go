@@ -83,11 +83,11 @@ const (
 )
 
 const (
-	// Actions to manipulate mountpaths (/v1/daemon/mountpaths)
-	ActMountpathEnable  = "enable-mp"
-	ActMountpathDisable = "disable-mp"
+	// Actions on mountpaths (/v1/daemon/mountpaths)
 	ActMountpathAttach  = "attach-mp"
+	ActMountpathEnable  = "enable-mp"
 	ActMountpathDetach  = "detach-mp"
+	ActMountpathDisable = "disable-mp"
 
 	// Actions on xactions
 	ActXactStop  = Stop

@@ -34,9 +34,8 @@ type (
 	}
 
 	targetMpath struct {
-		DaemonID  string   `json:"daemon_id"`
-		Available []string `json:"available"`
-		Disabled  []string `json:"disabled"`
+		DaemonID string
+		Mpl      *cmn.MountpathList
 	}
 )
 
@@ -557,13 +556,15 @@ func showRemoteAISHandler(c *cli.Context) (err error) {
 	return
 }
 
-func showMpathHandler(c *cli.Context) (err error) {
-	daemonID := c.Args().First()
+func showMpathHandler(c *cli.Context) error {
+	var (
+		nodes    []*cluster.Snode
+		daemonID = c.Args().First()
+	)
 	smap, err := api.GetClusterMap(defaultAPIParams)
 	if err != nil {
 		return err
 	}
-	var nodes []*cluster.Snode
 	if daemonID != "" {
 		tgt := smap.GetTarget(daemonID)
 		if tgt == nil {
@@ -588,9 +589,8 @@ func showMpathHandler(c *cli.Context) (err error) {
 				erCh <- err
 			} else {
 				mpCh <- &targetMpath{
-					DaemonID:  node.ID(),
-					Available: mpl.Available,
-					Disabled:  mpl.Disabled,
+					DaemonID: node.ID(),
+					Mpl:      mpl,
 				}
 			}
 		}(node)
@@ -606,7 +606,7 @@ func showMpathHandler(c *cli.Context) (err error) {
 		mpls = append(mpls, mp)
 	}
 	sort.Slice(mpls, func(i, j int) bool {
-		return mpls[i].DaemonID < mpls[j].DaemonID // ascending by node id/name
+		return mpls[i].DaemonID < mpls[j].DaemonID // ascending by node id
 	})
 	useJSON := flagIsSet(c, jsonFlag)
 	return templates.DisplayOutput(mpls, c.App.Writer, templates.TargetMpathListTmpl, useJSON)

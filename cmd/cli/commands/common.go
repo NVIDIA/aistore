@@ -60,7 +60,7 @@ const (
 	subcmdDsort      = cmn.DSortNameLowercase
 	subcmdSmap       = cmn.GetWhatSmap
 	subcmdBMD        = cmn.GetWhatBMD
-	subcmdDisk       = cmn.GetWhatDiskStats
+	subcmdMpath      = cmn.GetWhatDiskStats
 	subcmdConfig     = cmn.GetWhatConfig
 	subcmdLog        = cmn.GetWhatLog
 	subcmdRebalance  = cmn.ActRebalance
@@ -89,9 +89,11 @@ const (
 	subcmdCluConfig = "configure"
 	subcmdReset     = "reset"
 
-	// Disk subcommands
-	subcmdDiskAttach = subcmdAttach
-	subcmdDiskDetach = subcmdDetach
+	// Mountpath (disk) actions
+	subcmdMpathAttach  = subcmdAttach
+	subcmdMpathEnable  = "enable"
+	subcmdMpathDetach  = subcmdDetach
+	subcmdMpathDisable = "disable"
 
 	// Node subcommands
 	subcmdJoin         = "join"
@@ -100,7 +102,7 @@ const (
 	subcmdDecommission = "decommission"
 
 	// Show subcommands
-	subcmdShowDisk      = subcmdDisk
+	subcmdShowDisk      = subcmdMpath
 	subcmdShowDownload  = subcmdDownload
 	subcmdShowDsort     = subcmdDsort
 	subcmdShowObject    = subcmdObject
@@ -221,8 +223,6 @@ const (
 	nodeConfigArgument        = daemonIDArgument + " " + keyValuePairsArgument
 	attachRemoteAISArgument   = aliasURLPairArgument
 	detachRemoteAISArgument   = aliasArgument
-	diskAttachArgument        = daemonMountpathPairArgument
-	diskDetachArgument        = daemonMountpathPairArgument
 	joinNodeArgument          = "IP:PORT"
 	startDownloadArgument     = "SOURCE DESTINATION"
 	jsonSpecArgument          = "JSON_SPECIFICATION"
