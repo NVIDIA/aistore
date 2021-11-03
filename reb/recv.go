@@ -1,4 +1,4 @@
-// Package reb provides local resilver and global rebalance for AIStore.
+// Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
@@ -22,7 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/xreg"
 )
 
-func (reb *Manager) recvObj(hdr transport.ObjHdr, objReader io.Reader, err error) {
+func (reb *Reb) recvObj(hdr transport.ObjHdr, objReader io.Reader, err error) {
 	defer transport.FreeRecv(objReader)
 	if err != nil {
 		glog.Error(err)
@@ -50,7 +50,7 @@ func (reb *Manager) recvObj(hdr transport.ObjHdr, objReader io.Reader, err error
 	reb.recvECData(hdr, unpacker, objReader)
 }
 
-func (reb *Manager) recvAck(hdr transport.ObjHdr, _ io.Reader, err error) {
+func (reb *Reb) recvAck(hdr transport.ObjHdr, _ io.Reader, err error) {
 	if err != nil {
 		glog.Error(err)
 		return
@@ -76,7 +76,7 @@ func (reb *Manager) recvAck(hdr transport.ObjHdr, _ io.Reader, err error) {
 // Rx non-EC //
 ///////////////
 
-func (reb *Manager) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacker *cos.ByteUnpack, objReader io.Reader) {
+func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacker *cos.ByteUnpack, objReader io.Reader) {
 	defer cos.DrainReader(objReader)
 
 	ack := &regularAck{}
@@ -147,7 +147,7 @@ func (reb *Manager) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unp
 	}
 }
 
-func (reb *Manager) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
+func (reb *Reb) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
 	ack := &regularAck{}
 	if err := unpacker.ReadAny(ack); err != nil {
 		glog.Errorf("Failed to parse acknowledge: %v", err)
@@ -176,7 +176,7 @@ func (reb *Manager) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpac
 // Rx EC //
 ///////////
 
-func (reb *Manager) recvPush(hdr transport.ObjHdr, _ io.Reader, err error) {
+func (reb *Reb) recvPush(hdr transport.ObjHdr, _ io.Reader, err error) {
 	if err != nil {
 		glog.Errorf("%s: failed to receive notification %s from %s: %v", reb.t.Snode(), hdr.ObjName, hdr.Bck, err)
 		return
@@ -205,7 +205,7 @@ func (reb *Manager) recvPush(hdr transport.ObjHdr, _ io.Reader, err error) {
 	reb.stages.setStage(req.daemonID, req.stage)
 }
 
-func (*Manager) recvECAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
+func (*Reb) recvECAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
 	ack := &ecAck{}
 	if err := unpacker.ReadAny(ack); err != nil {
 		glog.Errorf("Failed to unmarshal EC ACK for %s: %v", hdr.FullName(), err)
@@ -215,7 +215,7 @@ func (*Manager) recvECAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) {
 
 // A sender sent an MD update. This target must update local information partially:
 // only list of daemons and the "main" target.
-func (reb *Manager) receiveMD(req *pushReq, hdr transport.ObjHdr) error {
+func (reb *Reb) receiveMD(req *pushReq, hdr transport.ObjHdr) error {
 	ctMeta, err := cluster.NewCTFromBO(hdr.Bck, hdr.ObjName, reb.t.Bowner(), fs.ECMetaType)
 	if err != nil {
 		return err
@@ -236,7 +236,7 @@ func (reb *Manager) receiveMD(req *pushReq, hdr transport.ObjHdr) error {
 	return ctMeta.Write(reb.t, bytes.NewReader(mdBytes), -1)
 }
 
-func (reb *Manager) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Reader) error {
+func (reb *Reb) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Reader) error {
 	defer cos.DrainReader(reader)
 	ct, err := cluster.NewCTFromBO(hdr.Bck, hdr.ObjName, reb.t.Bowner(), fs.ECSliceType)
 	if err != nil {
@@ -312,7 +312,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Read
 }
 
 // receiving EC CT
-func (reb *Manager) recvECData(hdr transport.ObjHdr, unpacker *cos.ByteUnpack, reader io.Reader) {
+func (reb *Reb) recvECData(hdr transport.ObjHdr, unpacker *cos.ByteUnpack, reader io.Reader) {
 	defer cos.DrainReader(reader)
 
 	req := &pushReq{}

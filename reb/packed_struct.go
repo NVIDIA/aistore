@@ -1,4 +1,4 @@
-// Package reb provides local resilver and global rebalance for AIStore.
+// Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
@@ -169,11 +169,11 @@ func (req *pushReq) Unpack(unpacker *cos.ByteUnpack) error {
 	return unpacker.ReadAny(req.md)
 }
 
-func (*Manager) encodePushReq(req *pushReq) []byte {
+func (*Reb) encodePushReq(req *pushReq) []byte {
 	return req.NewPack(rebMsgPushStage)
 }
 
-func (*Manager) decodePushReq(buf []byte) (*pushReq, error) {
+func (*Reb) decodePushReq(buf []byte) (*pushReq, error) {
 	var (
 		req      = &pushReq{}
 		unpacker = cos.NewUnpacker(buf)

@@ -698,11 +698,11 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 		}
 		if msg.Action == cmn.ActRebalance {
 			glog.Infof("%s: starting user-requested rebalance", t.si)
-			go t.rebManager.RunRebalance(&smap.Smap, newRMD.Version, notif)
+			go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif)
 			return
 		}
 		glog.Infof("%s: starting auto-rebalance", t.si)
-		go t.rebManager.RunRebalance(&smap.Smap, newRMD.Version, notif)
+		go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif)
 		if newRMD.Resilver != "" {
 			glog.Infof("%s: ... and resilver", t.si)
 			go t.runResilver(newRMD.Resilver /*uuid*/, nil /*wg*/, true /*skipGlobMisplaced*/)
@@ -954,7 +954,7 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	getRebStatus := cos.IsParseBool(query.Get(cmn.URLParamRebStatus))
 	if getRebStatus {
 		status := &reb.Status{}
-		t.rebManager.RebStatus(status)
+		t.reb.RebStatus(status)
 		if ok := t.writeJSON(w, r, status, "rebalance-status"); !ok {
 			return
 		}

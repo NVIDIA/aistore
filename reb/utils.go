@@ -1,4 +1,4 @@
-// Package reb provides local resilver and global rebalance for AIStore.
+// Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
@@ -18,22 +18,22 @@ import (
 	"github.com/NVIDIA/aistore/xs"
 )
 
-func (reb *Manager) RebID() int64           { return reb.rebID.Load() }
-func (reb *Manager) FilterAdd(uname []byte) { reb.filterGFN.Insert(uname) }
+func (reb *Reb) RebID() int64           { return reb.rebID.Load() }
+func (reb *Reb) FilterAdd(uname []byte) { reb.filterGFN.Insert(uname) }
 
-func (reb *Manager) xact() *xs.Rebalance        { return (*xs.Rebalance)(reb.xreb.Load()) }
-func (reb *Manager) setXact(xact *xs.Rebalance) { reb.xreb.Store(unsafe.Pointer(xact)) }
+func (reb *Reb) xact() *xs.Rebalance        { return (*xs.Rebalance)(reb.xreb.Load()) }
+func (reb *Reb) setXact(xact *xs.Rebalance) { reb.xreb.Store(unsafe.Pointer(xact)) }
 
-func (reb *Manager) logHdr(md *rebArgs) string {
+func (reb *Reb) logHdr(md *rebArgs) string {
 	stage := stages[reb.stages.stage.Load()]
 	return fmt.Sprintf("%s[g%d,v%d,%s]", reb.t.Snode(), md.id, md.smap.Version, stage)
 }
 
-func (reb *Manager) rebIDMismatchMsg(remoteID int64) string {
+func (reb *Reb) rebIDMismatchMsg(remoteID int64) string {
 	return fmt.Sprintf("rebalance IDs mismatch: local %d, remote %d", reb.RebID(), remoteID)
 }
 
-func (reb *Manager) _waitForSmap() (smap *cluster.Smap, err error) {
+func (reb *Reb) _waitForSmap() (smap *cluster.Smap, err error) {
 	smap = (*cluster.Smap)(reb.smap.Load())
 	if smap != nil {
 		return
@@ -58,7 +58,7 @@ func (reb *Manager) _waitForSmap() (smap *cluster.Smap, err error) {
 	return nil, fmt.Errorf("%s: timed out waiting for usable Smap", reb.t.Snode())
 }
 
-func (reb *Manager) getStats() (s *stats.ExtRebalanceStats) {
+func (reb *Reb) getStats() (s *stats.ExtRebalanceStats) {
 	s = &stats.ExtRebalanceStats{}
 	statsRunner := reb.statTracker
 	s.RebTxCount = statsRunner.Get(stats.RebTxCount)
@@ -72,7 +72,7 @@ func (reb *Manager) getStats() (s *stats.ExtRebalanceStats) {
 // Rebalance moves to the next stage:
 // - update internal stage
 // - send notification to all other targets that this one is in a new stage
-func (reb *Manager) changeStage(newStage uint32) {
+func (reb *Reb) changeStage(newStage uint32) {
 	// first, set own stage
 	reb.stages.stage.Store(newStage)
 	var (
@@ -89,7 +89,7 @@ func (reb *Manager) changeStage(newStage uint32) {
 }
 
 // Aborts global rebalance and notifies all other targets.
-func (reb *Manager) abortRebalance() {
+func (reb *Reb) abortRebalance() {
 	xreb := reb.xact()
 	if xreb == nil || !xreb.Abort(nil) {
 		return
@@ -110,7 +110,7 @@ func (reb *Manager) abortRebalance() {
 
 // Returns if the target is quiescent: transport queue is empty, or xaction
 // has already aborted or finished.
-func (reb *Manager) isQuiescent() bool {
+func (reb *Reb) isQuiescent() bool {
 	// Finished or aborted xaction = no traffic
 	xact := reb.xact()
 	if xact == nil || xact.Aborted() || xact.Finished() {
@@ -125,9 +125,9 @@ func (reb *Manager) isQuiescent() bool {
 // lomAcks TODO: lomAck.q[lom.Uname()] = lom.Bprops().BID and, subsequently, LIF => LOM reinit
 /////////////
 
-func (reb *Manager) lomAcks() *[cos.MultiSyncMapCount]*lomAcks { return &reb.lomacks }
+func (reb *Reb) lomAcks() *[cos.MultiSyncMapCount]*lomAcks { return &reb.lomacks }
 
-func (reb *Manager) addLomAck(lom *cluster.LOM) {
+func (reb *Reb) addLomAck(lom *cluster.LOM) {
 	_, idx := lom.Hkey()
 	lomAck := reb.lomAcks()[idx]
 	lomAck.mu.Lock()
@@ -135,7 +135,7 @@ func (reb *Manager) addLomAck(lom *cluster.LOM) {
 	lomAck.mu.Unlock()
 }
 
-func (reb *Manager) delLomAck(lom *cluster.LOM) {
+func (reb *Reb) delLomAck(lom *cluster.LOM) {
 	_, idx := lom.Hkey()
 	lomAck := reb.lomAcks()[idx]
 	lomAck.mu.Lock()

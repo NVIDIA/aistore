@@ -1,4 +1,4 @@
-// Package reb provides local resilver and global rebalance for AIStore.
+// Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
@@ -12,7 +12,7 @@ import (
 
 type quiArgs struct {
 	md   *rebArgs
-	reb  *Manager
+	reb  *Reb
 	done func(md *rebArgs) bool
 }
 
@@ -28,13 +28,13 @@ func (q *quiArgs) quicb(_ time.Duration /*accum. wait time*/) cluster.QuiRes {
 
 // Uses generic xaction.Quiesce to make sure that no objects are received
 // during a given `maxWait` interval of time.
-func (reb *Manager) quiesce(md *rebArgs, maxWait time.Duration, cb func(md *rebArgs) bool) cluster.QuiRes {
+func (reb *Reb) quiesce(md *rebArgs, maxWait time.Duration, cb func(md *rebArgs) bool) cluster.QuiRes {
 	q := &quiArgs{md, reb, cb}
 	return reb.xact().Quiesce(maxWait, q.quicb)
 }
 
 // Returns true if all transport queues are empty
-func (reb *Manager) nodesQuiescent(md *rebArgs) (quiescent bool) {
+func (reb *Reb) nodesQuiescent(md *rebArgs) (quiescent bool) {
 	locStage := reb.stages.stage.Load()
 	for _, si := range md.smap.Tmap {
 		if si.ID() == reb.t.SID() && !reb.isQuiescent() {

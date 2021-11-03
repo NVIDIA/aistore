@@ -36,6 +36,7 @@ import (
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
+	"github.com/NVIDIA/aistore/res"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/volume"
@@ -65,7 +66,8 @@ type (
 		backend      backends
 		fshc         *health.FSHC
 		fsprg        fsprungroup
-		rebManager   *reb.Manager
+		reb          *reb.Reb
+		res          *res.Res
 		dbDriver     dbdriver.Driver
 		transactions transactions
 		gfn          struct {
@@ -330,7 +332,8 @@ func (t *targetrunner) Run() error {
 	// transactions
 	t.transactions.init(t)
 
-	t.rebManager = reb.NewManager(t, config, t.statsT)
+	t.reb = reb.New(t, config, t.statsT)
+	t.res = res.New(t)
 
 	// register storage target's handler(s) and start listening
 	t.initRecvHandlers()
@@ -1664,5 +1667,5 @@ func (t *targetrunner) runResilver(uuid string, wg *sync.WaitGroup, skipGlobMisp
 	if wg != nil {
 		wg.Done() // compare w/ xaction.GoRunW(()
 	}
-	t.rebManager.RunResilver(uuid, skipGlobMisplaced, notifs...)
+	t.res.RunResilver(uuid, skipGlobMisplaced, notifs...)
 }

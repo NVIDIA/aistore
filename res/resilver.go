@@ -1,8 +1,8 @@
-// Package reb provides local resilver and global rebalance for AIStore.
+// Package res provides local volume resilvering upon mountpath-attach and similar
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
-package reb
+package res
 
 import (
 	"os"
@@ -26,11 +26,18 @@ type (
 		xact cluster.Xact
 		t    cluster.Target
 	}
+	Res struct {
+		t cluster.Target
+	}
 )
 
-func (reb *Manager) RunResilver(uuid string, skipGlobMisplaced bool, notifs ...*xaction.NotifXact) {
+func New(t cluster.Target) *Res {
+	return &Res{t: t}
+}
+
+func (res *Res) RunResilver(uuid string, skipGlobMisplaced bool, notifs ...*xaction.NotifXact) {
 	debug.Assert(cos.IsValidUUID(uuid))
-	defer reb.t.GFN(cluster.GFNLocal).Deactivate()
+	defer res.t.GFN(cluster.GFNLocal).Deactivate()
 	if fatalErr, writeErr := fs.PersistMarker(cmn.ResilverMarker); fatalErr != nil || writeErr != nil {
 		glog.Errorf("FATAL: %v, WRITE: %v", fatalErr, writeErr)
 		return
@@ -49,12 +56,12 @@ func (reb *Manager) RunResilver(uuid string, skipGlobMisplaced bool, notifs ...*
 
 	glog.Infoln(xact.Name())
 
-	slab, err := reb.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
+	slab, err := res.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
 	debug.AssertNoErr(err)
 
-	jctx := &joggerCtx{xact: xact, t: reb.t}
+	jctx := &joggerCtx{xact: xact, t: res.t}
 	jg := mpather.NewJoggerGroup(&mpather.JoggerGroupOpts{
-		T:                     reb.t,
+		T:                     res.t,
 		CTs:                   []string{fs.ObjectType, fs.ECSliceType},
 		VisitObj:              jctx.visitObj,
 		VisitCT:               jctx.visitCT,

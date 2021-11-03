@@ -1,4 +1,4 @@
-// Package reb provides local resilver and global rebalance for AIStore.
+// Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
@@ -40,7 +40,7 @@ type (
 ////////////////////////////////////////////
 
 // via GET /v1/health (cmn.Health)
-func (reb *Manager) RebStatus(status *Status) {
+func (reb *Reb) RebStatus(status *Status) {
 	reb.RLock()
 	var (
 		targets    cluster.Nodes
@@ -114,7 +114,7 @@ ret:
 }
 
 // main method
-func (reb *Manager) bcast(md *rebArgs, cb syncCallback) (errCnt int) {
+func (reb *Reb) bcast(md *rebArgs, cb syncCallback) (errCnt int) {
 	var cnt atomic.Int32
 	wg := cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), len(md.smap.Tmap))
 	for _, tsi := range md.smap.Tmap {
@@ -136,7 +136,7 @@ func (reb *Manager) bcast(md *rebArgs, cb syncCallback) (errCnt int) {
 
 // pingTarget checks if target is running (type syncCallback)
 // TODO: reuse keepalive
-func (reb *Manager) pingTarget(tsi *cluster.Snode, md *rebArgs) (ok bool) {
+func (reb *Reb) pingTarget(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 	var (
 		ver    = md.smap.Version
 		sleep  = md.config.Timeout.CplaneOperation.D()
@@ -166,7 +166,7 @@ func (reb *Manager) pingTarget(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 }
 
 // wait for target to get ready to receive objects (type syncCallback)
-func (reb *Manager) rxReady(tsi *cluster.Snode, md *rebArgs) (ok bool) {
+func (reb *Reb) rxReady(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 	var (
 		sleep  = md.config.Timeout.CplaneOperation.D() * 2
 		maxwt  = md.config.Rebalance.DestRetryTime.D() + md.config.Rebalance.DestRetryTime.D()/2
@@ -194,7 +194,7 @@ func (reb *Manager) rxReady(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 // wait for the target to reach strage = rebStageFin (i.e., finish traversing and sending)
 // if the target that has reached rebStageWaitAck but not yet in the rebStageFin stage,
 // separately check whether it is waiting for my ACKs
-func (reb *Manager) waitFinExtended(tsi *cluster.Snode, md *rebArgs) (ok bool) {
+func (reb *Reb) waitFinExtended(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 	var (
 		sleep      = md.config.Timeout.CplaneOperation.D()
 		maxwt      = md.config.Rebalance.DestRetryTime.D()
@@ -245,7 +245,7 @@ func (reb *Manager) waitFinExtended(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 
 // calls tsi.reb.RebStatus() and handles conditions; may abort the current xreb
 // returns OK if the desiredStage has been reached
-func (reb *Manager) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md *rebArgs) (status *Status, ok bool) {
+func (reb *Reb) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md *rebArgs) (status *Status, ok bool) {
 	var (
 		sleepRetry = cmn.KeepaliveRetryDuration(md.config)
 		logHdr     = reb.logHdr(md)

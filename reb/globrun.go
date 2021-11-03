@@ -1,4 +1,4 @@
-// Package reb provides local resilver and global rebalance for AIStore.
+// Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
@@ -64,7 +64,7 @@ var stages = map[uint32]string{
 }
 
 type (
-	Manager struct {
+	Reb struct {
 		sync.RWMutex
 		t           cluster.Target
 		dm          *bundle.DataMover
@@ -93,7 +93,7 @@ type (
 		q  map[string]*cluster.LOM // on the wire, waiting for ACK
 	}
 	joggerBase struct {
-		m    *Manager
+		m    *Reb
 		xreb cluster.Xact
 		wg   *sync.WaitGroup
 	}
@@ -112,13 +112,13 @@ type (
 	}
 )
 
-func NewManager(t cluster.Target, config *cmn.Config, st stats.Tracker) *Manager {
+func New(t cluster.Target, config *cmn.Config, st stats.Tracker) *Reb {
 	ecClient := cmn.NewClient(cmn.TransportArgs{
 		Timeout:    config.Client.Timeout.D(),
 		UseHTTPS:   config.Net.HTTP.UseHTTPS,
 		SkipVerify: config.Net.HTTP.SkipVerify,
 	})
-	reb := &Manager{
+	reb := &Reb{
 		t:           t,
 		filterGFN:   filter.NewDefaultFilter(),
 		statTracker: st,
@@ -141,7 +141,7 @@ func NewManager(t cluster.Target, config *cmn.Config, st stats.Tracker) *Manager
 }
 
 // NOTE: these receive handlers are statically present throughout: unreg never done
-func (reb *Manager) registerRecv() {
+func (reb *Reb) registerRecv() {
 	if err := reb.dm.RegRecv(); err != nil {
 		cos.ExitLogf("%v", err)
 	}
@@ -158,12 +158,12 @@ func (reb *Manager) registerRecv() {
 // main method: serialized to run one at a time and goes through controlled enumerated stages
 // A note on stage management:
 // 1. Non-EC and EC rebalances run in parallel
-// 2. Execution starts after the `Manager` sets the current stage to rebStageTraverse
+// 2. Execution starts after the `Reb` sets the current stage to rebStageTraverse
 // 3. Only EC rebalance changes the current stage
 // 4. Global rebalance performs checks such as `stage > rebStageTraverse` or
 //    `stage < rebStageWaitAck`. Since all EC stages are between
 //    `Traverse` and `WaitAck` non-EC rebalance does not "notice" stage changes.
-func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64, notif *xaction.NotifXact) {
+func (reb *Reb) RunRebalance(smap *cluster.Smap, id int64, notif *xaction.NotifXact) {
 	rargs := &rebArgs{id: id, smap: smap, config: cmn.GCO.Get(), ecUsed: reb.t.Bowner().Get().IsECUsed()}
 	logHdr := reb.logHdr(rargs)
 	glog.Infof("%s: initializing...", logHdr)
@@ -214,7 +214,7 @@ func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64, notif *xaction.No
 //    whether a bucket is erasure coded (goroutine is not used).
 // 2. Multi-bucket rebalance may start both non-EC and EC in parallel.
 //    It then waits until everything finishes.
-func (reb *Manager) run(rargs *rebArgs) error {
+func (reb *Reb) run(rargs *rebArgs) error {
 	// 6. Capture stats, start mpath joggers
 	reb.stages.stage.Store(rebStageTraverse)
 
@@ -237,7 +237,7 @@ func (reb *Manager) run(rargs *rebArgs) error {
 	return group.Wait()
 }
 
-func (reb *Manager) rebSerialize(rargs *rebArgs) bool {
+func (reb *Reb) rebSerialize(rargs *rebArgs) bool {
 	// 1. check whether other targets are up and running
 	if errCnt := reb.bcast(rargs, reb.pingTarget); errCnt > 0 {
 		return false
@@ -257,7 +257,7 @@ func (reb *Manager) rebSerialize(rargs *rebArgs) bool {
 	return true
 }
 
-func (reb *Manager) _serialize(rargs *rebArgs) (newerRMD, alreadyRunning bool) {
+func (reb *Reb) _serialize(rargs *rebArgs) (newerRMD, alreadyRunning bool) {
 	var (
 		total    time.Duration
 		sleep    = rargs.config.Timeout.CplaneOperation.D()
@@ -307,7 +307,7 @@ func (reb *Manager) _serialize(rargs *rebArgs) (newerRMD, alreadyRunning bool) {
 	}
 }
 
-func (reb *Manager) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time.Duration) (err error) {
+func (reb *Reb) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time.Duration) (err error) {
 	entry := xreg.GetRunning(xreg.XactFilter{Kind: cmn.ActRebalance})
 	if entry == nil {
 		err = fmt.Errorf("%s: acquire/release asymmetry", logHdr)
@@ -335,7 +335,7 @@ func (reb *Manager) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time
 	return
 }
 
-func (reb *Manager) rebInitRenew(rargs *rebArgs, notif *xaction.NotifXact) bool {
+func (reb *Reb) rebInitRenew(rargs *rebArgs, notif *xaction.NotifXact) bool {
 	reb.stages.stage.Store(rebStageInit)
 	rns := xreg.RenewRebalance(rargs.id, reb.statTracker)
 	debug.AssertNoErr(rns.Err)
@@ -386,7 +386,7 @@ func (reb *Manager) rebInitRenew(rargs *rebArgs, notif *xaction.NotifXact) bool 
 	return true
 }
 
-func (reb *Manager) beginStreams() {
+func (reb *Reb) beginStreams() {
 	debug.Assert(reb.stages.stage.Load() == rebStageInit)
 
 	xreb := reb.xact()
@@ -399,12 +399,12 @@ func (reb *Manager) beginStreams() {
 	reb.inQueue.Store(0)
 }
 
-func (reb *Manager) abortStreams() {
+func (reb *Reb) abortStreams() {
 	reb.dm.Abort()
 	reb.pushes.Abort()
 }
 
-func (reb *Manager) endStreams(err error) {
+func (reb *Reb) endStreams(err error) {
 	if reb.stages.stage.CAS(rebStageFin, rebStageFinStreams) {
 		reb.dm.Close(err)
 		reb.pushes.Close(true)
@@ -412,7 +412,7 @@ func (reb *Manager) endStreams(err error) {
 }
 
 // when at least one bucket has EC enabled
-func (reb *Manager) runEC(rargs *rebArgs) error {
+func (reb *Reb) runEC(rargs *rebArgs) error {
 	_ = reb.bcast(rargs, reb.rxReady) // NOTE: ignore timeout
 	if xreb := reb.xact(); xreb.Aborted() {
 		return cmn.NewErrAborted(xreb.Name(), "reb-run-ec", nil)
@@ -428,7 +428,7 @@ func (reb *Manager) runEC(rargs *rebArgs) error {
 }
 
 // when no bucket has EC enabled
-func (reb *Manager) runNoEC(rargs *rebArgs) error {
+func (reb *Reb) runNoEC(rargs *rebArgs) error {
 	var (
 		ver        = rargs.smap.Version
 		multiplier = rargs.config.Rebalance.Multiplier
@@ -462,7 +462,7 @@ func (reb *Manager) runNoEC(rargs *rebArgs) error {
 	return nil
 }
 
-func (reb *Manager) rebWaitAck(rargs *rebArgs) (errCnt int) {
+func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 	reb.changeStage(rebStageWaitAck)
 	logHdr := reb.logHdr(rargs)
 	sleep := rargs.config.Timeout.CplaneOperation.D() // NOTE: TODO: used throughout; must be separately assigned and calibrated
@@ -541,7 +541,7 @@ func (reb *Manager) rebWaitAck(rargs *rebArgs) (errCnt int) {
 	return
 }
 
-func (reb *Manager) retransmit(rargs *rebArgs) (cnt int) {
+func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 	aborted := func() (yes bool) {
 		yes = reb.xact().Aborted()
 		yes = yes || (rargs.smap.Version != reb.t.Sowner().Get().Version)
@@ -600,7 +600,7 @@ func (reb *Manager) retransmit(rargs *rebArgs) (cnt int) {
 	return
 }
 
-func (reb *Manager) rebFini(rargs *rebArgs, err error) {
+func (reb *Reb) rebFini(rargs *rebArgs, err error) {
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("finishing rebalance (reb_args: %s)", reb.logHdr(rargs))
 	}

@@ -1,4 +1,4 @@
-// Package reb provides local resilver and global rebalance for AIStore.
+// Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
@@ -44,7 +44,7 @@ import (
 //        update their metafiles. Targets do not overwrite their metafiles with a new
 //        one. They update only `Daemons` and `FullReplica` fields.
 
-func (reb *Manager) runECjoggers() {
+func (reb *Reb) runECjoggers() {
 	var (
 		wg                = &sync.WaitGroup{}
 		availablePaths, _ = fs.Get()
@@ -73,7 +73,7 @@ func (reb *Manager) runECjoggers() {
 }
 
 // mountpath walker - walks through files in /meta/ directory
-func (reb *Manager) jogEC(mpathInfo *fs.MountpathInfo, bck cmn.Bck, wg *sync.WaitGroup) {
+func (reb *Reb) jogEC(mpathInfo *fs.MountpathInfo, bck cmn.Bck, wg *sync.WaitGroup) {
 	defer wg.Done()
 	opts := &fs.Options{
 		Mpath: mpathInfo,
@@ -94,7 +94,7 @@ func (reb *Manager) jogEC(mpathInfo *fs.MountpathInfo, bck cmn.Bck, wg *sync.Wai
 
 // Sends local CT along with EC metadata to default target.
 // The CT is on a local drive and not loaded into SGL. Just read and send.
-func (reb *Manager) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *cluster.Snode, workFQN ...string) (err error) {
+func (reb *Reb) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *cluster.Snode, workFQN ...string) (err error) {
 	var (
 		lom    *cluster.LOM
 		roc    cos.ReadOpenCloser
@@ -165,7 +165,7 @@ func (reb *Manager) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *clus
 	return
 }
 
-func (reb *Manager) transportECCB(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
+func (reb *Reb) transportECCB(_ transport.ObjHdr, _ io.ReadCloser, _ interface{}, _ error) {
 	reb.onAir.Dec()
 }
 
@@ -173,7 +173,7 @@ func (reb *Manager) transportECCB(_ transport.ObjHdr, _ io.ReadCloser, _ interfa
 //   1. Full object/replica is received
 //   2. A CT is received and this target is not the default target (it
 //      means that the CTs came from default target after EC had been rebuilt)
-func (reb *Manager) saveCTToDisk(req *pushReq, hdr *transport.ObjHdr, data io.Reader) error {
+func (reb *Reb) saveCTToDisk(req *pushReq, hdr *transport.ObjHdr, data io.Reader) error {
 	cos.Assert(req.md != nil)
 	var (
 		err error
@@ -200,7 +200,7 @@ func (reb *Manager) saveCTToDisk(req *pushReq, hdr *transport.ObjHdr, data io.Re
 
 // Used when slice conflict is detected: a target receives a new slice and it already
 // has a slice of the same generation with different ID
-func (*Manager) renameAsWorkFile(ct *cluster.CT) (string, error) {
+func (*Reb) renameAsWorkFile(ct *cluster.CT) (string, error) {
 	fqn := ct.Make(fs.WorkfileType)
 	// Using os.Rename is safe as both CT and Workfile on the same mountpath
 	if err := os.Rename(ct.FQN(), fqn); err != nil {
@@ -213,7 +213,7 @@ func (*Manager) renameAsWorkFile(ct *cluster.CT) (string, error) {
 // Used when in slice conflict: this target is a "main" one and receieves a full
 // replica but this target contains a slice of the object. So, the existing slice
 // send to any free target.
-func (reb *Manager) findEmptyTarget(md *ec.Metadata, ct *cluster.CT, sender string) (*cluster.Snode, error) {
+func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *cluster.CT, sender string) (*cluster.Snode, error) {
 	sliceCnt := md.Data + md.Parity + 2
 	hrwList, err := cluster.HrwTargetList(ct.Bck().MakeUname(ct.ObjectName()), reb.t.Sowner().Get(), sliceCnt)
 	if err != nil {
@@ -248,7 +248,7 @@ func (reb *Manager) findEmptyTarget(md *ec.Metadata, ct *cluster.CT, sender stri
 }
 
 // Check if this target has a metadata for the received CT
-func (reb *Manager) detectLocalCT(req *pushReq, ct *cluster.CT) (*ec.Metadata, error) {
+func (reb *Reb) detectLocalCT(req *pushReq, ct *cluster.CT) (*ec.Metadata, error) {
 	if req.action == rebActMoveCT {
 		// internal CT move after slice conflict - save always
 		return nil, nil
@@ -271,7 +271,7 @@ func (reb *Manager) detectLocalCT(req *pushReq, ct *cluster.CT) (*ec.Metadata, e
 // - move slice to a workfile directory
 // - return Snode that must receive the local slice, and workfile path
 // - the caller saves received CT to local drives, and then sends workfile
-func (reb *Manager) renameLocalCT(req *pushReq, ct *cluster.CT, md *ec.Metadata) (
+func (reb *Reb) renameLocalCT(req *pushReq, ct *cluster.CT, md *ec.Metadata) (
 	workFQN string, moveTo *cluster.Snode, err error) {
 	if md == nil || req.action == rebActMoveCT {
 		return
@@ -290,7 +290,7 @@ func (reb *Manager) renameLocalCT(req *pushReq, ct *cluster.CT, md *ec.Metadata)
 	return
 }
 
-func (reb *Manager) walkEC(fqn string, de fs.DirEntry) (err error) {
+func (reb *Reb) walkEC(fqn string, de fs.DirEntry) (err error) {
 	if xreb := reb.xact(); xreb.Aborted() {
 		// notify `dir.Walk` to stop iterations
 		return cmn.NewErrAborted(xreb.Name(), "walk-ec", nil)

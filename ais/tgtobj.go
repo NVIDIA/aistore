@@ -805,7 +805,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 	// have to resend them in rebalance. In case of a race between rebalance
 	// and GFN, the former wins and it will result in double send.
 	if goi.isGFN {
-		goi.t.rebManager.FilterAdd([]byte(goi.lom.Uname()))
+		goi.t.reb.FilterAdd([]byte(goi.lom.Uname()))
 	}
 
 	delta := mono.SinceNano(goi.nanotim)
