@@ -7,12 +7,15 @@ package res
 import (
 	"os"
 	"path/filepath"
+	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
@@ -21,13 +24,18 @@ import (
 	"github.com/NVIDIA/aistore/xs"
 )
 
+const timedDuration = time.Minute / 2 // see also: timedDuration in tgtgfn.go
+
 type (
+	Res struct {
+		t cluster.Target
+		// last or current resilver's time interval
+		begin atomic.Int64
+		end   atomic.Int64
+	}
 	joggerCtx struct {
 		xact cluster.Xact
 		t    cluster.Target
-	}
-	Res struct {
-		t cluster.Target
 	}
 )
 
@@ -35,9 +43,33 @@ func New(t cluster.Target) *Res {
 	return &Res{t: t}
 }
 
+func (res *Res) IsActive() (yes bool) {
+	begin := res.begin.Load()
+	if begin == 0 {
+		return
+	}
+	now := mono.NanoTime()
+	if time.Duration(now-begin) < timedDuration {
+		yes = true
+	} else {
+		end := res.end.Load()
+		yes = end == 0 || time.Duration(now-end) < timedDuration
+	}
+	return
+}
+
+func (res *Res) _begin() {
+	res.begin.Store(mono.NanoTime())
+	res.end.Store(0)
+}
+
+func (res *Res) _end() {
+	res.end.Store(mono.NanoTime())
+}
+
 func (res *Res) RunResilver(uuid string, skipGlobMisplaced bool, notifs ...*xaction.NotifXact) {
-	debug.Assert(cos.IsValidUUID(uuid))
-	defer res.t.GFN(cluster.GFNLocal).Deactivate()
+	res._begin()
+	defer res._end()
 	if fatalErr, writeErr := fs.PersistMarker(cmn.ResilverMarker); fatalErr != nil || writeErr != nil {
 		glog.Errorf("FATAL: %v, WRITE: %v", fatalErr, writeErr)
 		return
@@ -68,6 +100,7 @@ func (res *Res) RunResilver(uuid string, skipGlobMisplaced bool, notifs ...*xact
 		Slab:                  slab,
 		SkipGloballyMisplaced: skipGlobMisplaced,
 	})
+	res.end.Store(0)
 	jg.Run()
 
 	// Wait for abort or joggers to finish.

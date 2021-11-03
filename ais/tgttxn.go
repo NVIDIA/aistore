@@ -418,8 +418,7 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 		}
 		c.addNotif(xact) // notify upon completion
 
-		t.gfn.local.Activate()
-		t.gfn.global.activateTimed()
+		t.gfn.activateTimed()
 		xaction.GoRunW(xact) // run and wait until it starts running
 	default:
 		debug.Assert(false)
@@ -794,9 +793,9 @@ func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
 		if cause := xreg.CheckBucketsBusy(); cause != nil {
 			return fmt.Errorf("cannot start maintenance: (xaction: %q) is in progress", cause.Get())
 		}
-		t.gfn.global.activateTimed()
+		t.gfn.activateTimed()
 	case cmn.ActAbort:
-		t.gfn.global.abortTimed()
+		t.gfn.abortTimed()
 	case cmn.ActCommit:
 		var opts cmn.ActValRmNode
 		if err := cos.MorphMarshal(c.msg.Value, &opts); err != nil {

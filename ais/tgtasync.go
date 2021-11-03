@@ -70,7 +70,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 	debug.Assert(resp.Status == http.StatusOK)
 	debug.Assert(resp.BckList.UUID != "")
 
-	if fs.MarkerExists(cmn.RebalanceMarker) || t.gfn.global.active() {
+	if fs.MarkerExists(cmn.RebalanceMarker) || t.gfn.isActive() {
 		resp.BckList.Flags |= cmn.BckListFlagRebalance
 	}
 

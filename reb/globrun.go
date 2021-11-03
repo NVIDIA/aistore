@@ -186,9 +186,8 @@ func (reb *Reb) RunRebalance(smap *cluster.Smap, id int64, notif *xaction.NotifX
 	}
 
 	// At this point only one rebalance is running so we can safely enable regular GFN.
-	gfn := reb.t.GFN(cluster.GFNGlobal)
-	gfn.Activate()
-	defer gfn.Deactivate()
+	reb.t.ActivateGFN()
+	defer reb.t.DeactivateGFN()
 
 	errCnt := 0
 	err := reb.run(rargs)

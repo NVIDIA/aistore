@@ -542,7 +542,7 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, errCode int, err er
 		tname                = goi.t.si.String()
 		marked               = xreg.GetResilverMarked()
 		interrupted, running = marked.Interrupted, marked.Xact != nil
-		gfnActive            = goi.t.gfn.local.active()
+		gfnActive            = goi.t.res.IsActive()
 		ecEnabled            = goi.lom.Bprops().EC.Enabled
 	)
 	tsi, err = cluster.HrwTargetAll(goi.lom.Uname(), &smap.Smap) // include targets in maintenance
@@ -571,7 +571,7 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, errCode int, err er
 	if running {
 		doubleCheck = true
 	}
-	gfnActive = goi.t.gfn.global.active()
+	gfnActive = goi.t.gfn.isActive()
 	if running && tsi.ID() != goi.t.si.ID() {
 		if goi.t.LookupRemoteSingle(goi.lom, tsi) {
 			gfnNode = tsi

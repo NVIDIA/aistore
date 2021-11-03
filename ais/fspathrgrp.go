@@ -32,15 +32,10 @@ func (g *fsprungroup) init(t *targetrunner) {
 // enableMountpath enables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
 func (g *fsprungroup) enableMountpath(mpath string) (enabledMi *fs.MountpathInfo, err error) {
-	gfnActive := g.t.gfn.local.Activate()
 	enabledMi, err = fs.EnableMpath(mpath, g.t.si.ID(), g.redistributeMD)
 	if err != nil || enabledMi == nil {
-		if !gfnActive {
-			g.t.gfn.local.Deactivate()
-		}
 		return
 	}
-
 	g.postAddmi(cmn.ActMountpathEnable, enabledMi)
 	return
 }
@@ -48,12 +43,8 @@ func (g *fsprungroup) enableMountpath(mpath string) (enabledMi *fs.MountpathInfo
 // addMountpath adds mountpath and notifies necessary runners about the change
 // if the mountpath was actually added.
 func (g *fsprungroup) attachMountpath(mpath string, force bool) (addedMi *fs.MountpathInfo, err error) {
-	gfnActive := g.t.gfn.local.Activate()
 	addedMi, err = fs.AddMpath(mpath, g.t.si.ID(), g.redistributeMD, force)
 	if err != nil || addedMi == nil {
-		if !gfnActive {
-			g.t.gfn.local.Deactivate()
-		}
 		return
 	}
 
@@ -89,19 +80,15 @@ func (g *fsprungroup) postAddmi(action string, mi *fs.MountpathInfo) {
 // disableMountpath disables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
 func (g *fsprungroup) disableMountpath(mpath string) (rmi *fs.MountpathInfo, err error) {
-	var nothingToDo, gfnActive bool
+	var nothingToDo bool
 	if nothingToDo, err = g._preDD(cmn.ActMountpathDisable, fs.FlagBeingDisabled, mpath); err != nil {
 		return
 	}
 	if nothingToDo {
 		return
 	}
-	gfnActive = g.t.gfn.local.Activate()
 	rmi, err = fs.Disable(mpath, g.redistributeMD)
 	if err != nil || rmi == nil {
-		if !gfnActive {
-			g.t.gfn.local.Deactivate()
-		}
 		return
 	}
 	g._postDD(cmn.ActMountpathDisable, rmi)
@@ -111,19 +98,15 @@ func (g *fsprungroup) disableMountpath(mpath string) (rmi *fs.MountpathInfo, err
 // removeMountpath removes mountpath and notifies necessary runners about the
 // change if the mountpath was actually removed.
 func (g *fsprungroup) detachMountpath(mpath string) (rmi *fs.MountpathInfo, err error) {
-	var nothingToDo, gfnActive bool
+	var nothingToDo bool
 	if nothingToDo, err = g._preDD(cmn.ActMountpathDetach, fs.FlagBeingDetached, mpath); err != nil {
 		return
 	}
 	if nothingToDo {
 		return
 	}
-	gfnActive = g.t.gfn.local.Activate()
 	rmi, err = fs.Remove(mpath, g.redistributeMD)
 	if err != nil || rmi == nil {
-		if !gfnActive {
-			g.t.gfn.local.Deactivate()
-		}
 		return
 	}
 	g._postDD(cmn.ActMountpathDetach, rmi)

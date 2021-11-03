@@ -193,7 +193,7 @@ func newProxy(co *configOwner) *proxyrunner {
 func newTarget(co *configOwner) *targetrunner {
 	t := &targetrunner{backend: make(backends, 8)}
 	t.name = cmn.Target
-	t.gfn.local.tag, t.gfn.global.tag = "local GFN", "global GFN"
+	t.gfn.tag = "global GFN"
 	t.owner.bmd = newBMDOwnerTgt()
 	t.owner.config = co
 	return t

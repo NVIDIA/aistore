@@ -14,44 +14,18 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 )
 
-type (
-	baseGFN struct {
-		tag    string
-		lookup atomic.Bool
-	}
-	// The state that may influence GET logic when mountpath is added/enabled
-	localGFN struct {
-		baseGFN
-	}
-	// The state that may influence GET logic when new target joins cluster
-	globalGFN struct {
-		baseGFN
-		mtx sync.Mutex
-		exp atomic.Int64
-		upd atomic.Int64
-	}
-)
-
 const timedDuration = time.Minute + time.Minute/2
 
-//////////////
-// base gfn //
-//////////////
-
-func (gfn *baseGFN) active() bool { return gfn.lookup.Load() }
-
-func (gfn *baseGFN) Activate() bool {
-	previous := gfn.lookup.Swap(true)
-	if !previous {
-		glog.Infoln(gfn.tag, "on")
+type (
+	// get-from-neighbors state
+	globalGFN struct {
+		tag    string
+		mtx    sync.Mutex
+		exp    atomic.Int64
+		upd    atomic.Int64
+		lookup atomic.Bool
 	}
-	return previous
-}
-
-func (gfn *baseGFN) Deactivate() {
-	gfn.lookup.Store(false)
-	glog.Infoln(gfn.tag, "off")
-}
+)
 
 ////////////////
 // global gfn //
@@ -66,7 +40,12 @@ func (gfn *globalGFN) Activate() bool {
 	return previous
 }
 
-func (gfn *globalGFN) active() bool {
+func (gfn *globalGFN) Deactivate() {
+	gfn.lookup.Store(false)
+	glog.Infoln(gfn.tag, "off")
+}
+
+func (gfn *globalGFN) isActive() bool {
 	return gfn.lookup.Load() || (gfn.exp.Load() != 0 && gfn.upd.Load() > 0)
 }
 

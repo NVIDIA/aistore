@@ -37,6 +37,8 @@ func (t *targetrunner) FSHC(err error, path string) { t.fsErr(err, path) }
 func (t *targetrunner) MMSA() *memsys.MMSA          { return t.gmm }
 func (t *targetrunner) SmallMMSA() *memsys.MMSA     { return t.smm }
 func (t *targetrunner) DB() dbdriver.Driver         { return t.dbDriver }
+func (t *targetrunner) ActivateGFN()                { t.gfn.Activate() }
+func (t *targetrunner) DeactivateGFN()              { t.gfn.Deactivate() }
 
 func (t *targetrunner) Backend(bck *cluster.Bck) cluster.BackendProvider {
 	if bck.Bck.IsRemoteAIS() {
@@ -54,17 +56,6 @@ func (t *targetrunner) Backend(bck *cluster.Bck) cluster.BackendProvider {
 	}
 	c, _ := backend.NewDummyBackend(t)
 	return c
-}
-
-func (t *targetrunner) GFN(gfnType cluster.GFNType) cluster.GFN {
-	switch gfnType {
-	case cluster.GFNLocal:
-		return &t.gfn.local
-	case cluster.GFNGlobal:
-		return &t.gfn.global
-	}
-	cos.AssertMsg(false, "Invalid GFN type")
-	return nil
 }
 
 // RunLRU is triggered by the stats evaluation of a remaining capacity, see `target_stats.go`.

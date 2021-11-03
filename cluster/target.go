@@ -49,14 +49,6 @@ const (
 	GetCold
 )
 
-// GFNType and enum
-type GFNType int
-
-const (
-	GFNGlobal GFNType = iota
-	GFNLocal
-)
-
 //
 // ais target's types and interfaces
 //
@@ -170,7 +162,9 @@ type Target interface {
 
 	// Getting other interfaces.
 	DB() dbdriver.Driver
-	GFN(gfnType GFNType) GFN
+
+	ActivateGFN()
+	DeactivateGFN()
 
 	// Other.
 	BMDVersionFixup(r *http.Request, bck ...cmn.Bck)

@@ -70,11 +70,8 @@ type (
 		res          *res.Res
 		dbDriver     dbdriver.Driver
 		transactions transactions
-		gfn          struct {
-			local  localGFN
-			global globalGFN
-		}
-		regstate regstate // the state of being registered with the primary, can be (en/dis)abled via API
+		gfn          globalGFN
+		regstate     regstate // the state of being registered with the primary, can be (en/dis)abled via API
 	}
 )
 

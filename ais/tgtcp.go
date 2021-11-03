@@ -106,7 +106,7 @@ func (t *targetrunner) applyRegMeta(action string, body []byte, caller string) (
 	// The latter is driven by regMetasync (see regMetasync.go) distributing updated cluster map.
 	// To handle incoming GETs within this window (which would typically take a few seconds or less)
 	// we need to have the current cluster-wide regMetadata and the temporary gfn state:
-	t.gfn.global.activateTimed()
+	t.gfn.activateTimed()
 
 	// BMD
 	if err = t.receiveBMD(regMeta.BMD, msg, nil /*ms payload */, bucketMDRegister, caller, true /*silent*/); err != nil {
@@ -912,7 +912,7 @@ func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Reques
 	}
 
 	if newSmap != nil && msg.Action == cmn.ActStartGFN {
-		t.gfn.global.activateTimed()
+		t.gfn.activateTimed()
 	}
 }
 
