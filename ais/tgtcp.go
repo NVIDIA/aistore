@@ -970,19 +970,19 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // unregisters the target and marks it as disabled by an internal event
-func (t *targetrunner) disable() error {
+func (t *targetrunner) disable(msg string) {
 	t.regstate.Lock()
 	defer t.regstate.Unlock()
 
 	if t.regstate.disabled.Load() {
-		return nil
+		return // nothing to do
 	}
 	if err := t.unregisterSelf(false); err != nil {
-		return err
+		glog.Errorf("%s but failed to remove self from Smap: %v", msg, err)
+		return
 	}
 	t.regstate.disabled.Store(true)
-	glog.Warningf("%s (self): disabled and removed from Smap", t.si)
-	return nil
+	glog.Errorf("Warning: %s => disabled and removed self from Smap", msg)
 }
 
 // registers the target again if it was disabled by and internal event

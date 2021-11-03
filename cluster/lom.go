@@ -1056,14 +1056,14 @@ func EvictLomCache(b *Bck) {
 
 func lomCaches() []*sync.Map {
 	var (
+		i                 int
 		availablePaths, _ = fs.Get()
 		cachesCnt         = len(availablePaths) * cos.MultiSyncMapCount
 		caches            = make([]*sync.Map, cachesCnt)
-		i                 = 0
 	)
-	for _, mpathInfo := range availablePaths {
+	for _, mi := range availablePaths {
 		for idx := 0; idx < cos.MultiSyncMapCount; idx++ {
-			caches[i] = mpathInfo.LomCache(idx)
+			caches[i] = mi.LomCache(idx)
 			i++
 		}
 	}
