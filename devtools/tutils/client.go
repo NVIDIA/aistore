@@ -519,6 +519,33 @@ func WaitForRebalanceToComplete(t testing.TB, baseParams api.BaseParams, timeout
 	}
 }
 
+func WaitForResilver(t *testing.T, baseParams api.BaseParams, timeouts ...time.Duration) {
+	timeout := 10 * api.XactPollTime
+	if len(timeouts) > 0 {
+		timeout = timeouts[0]
+	}
+
+	// TODO -- FIXME: concurrency trouble when tests disable multiple mountpaths back to back
+	time.Sleep(5 * time.Second)
+
+	xactArgs := api.XactReqArgs{Kind: cmn.ActResilver, OnlyRunning: true, Timeout: timeout}
+	for i := 0; i < 10; i++ {
+		_, err := api.WaitForXaction(baseParams, xactArgs)
+		if err == nil {
+			return
+		}
+		if httpErr, ok := err.(*cmn.ErrHTTP); ok {
+			if httpErr.Status == http.StatusNotFound { // keep waiting for timeout
+				time.Sleep(api.XactPollTime)
+				continue
+			}
+			tassert.CheckFatal(t, httpErr)
+		} else {
+			tassert.CheckFatal(t, err)
+		}
+	}
+}
+
 func WaitForRebalanceByID(t *testing.T, origTargetCnt int, baseParams api.BaseParams, rebID string, timeouts ...time.Duration) {
 	if origTargetCnt >= 0 && origTargetCnt < 2 {
 		return
@@ -535,7 +562,7 @@ func WaitForRebalanceByID(t *testing.T, origTargetCnt int, baseParams api.BasePa
 // waitForRebalanceToStart waits until Rebalance _or_ Resilver starts
 func waitForRebalanceToStart(baseParams api.BaseParams) {
 	const (
-		sleep   = time.Second
+		sleep   = api.XactPollTime
 		waitFor = 10 * sleep
 	)
 	var (
@@ -644,7 +671,7 @@ func isErrAcceptable(err error) bool {
 
 func WaitForXactionByID(id string, timeouts ...time.Duration) error {
 	var (
-		retryInterval = time.Second
+		retryInterval = api.XactPollTime
 		args          = api.XactReqArgs{ID: id}
 		ctx           = context.Background()
 	)

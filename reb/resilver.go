@@ -30,6 +30,7 @@ type (
 
 func (reb *Manager) RunResilver(uuid string, skipGlobMisplaced bool, notifs ...*xaction.NotifXact) {
 	debug.Assert(cos.IsValidUUID(uuid))
+	defer reb.t.GFN(cluster.GFNLocal).Deactivate()
 	if fatalErr, writeErr := fs.PersistMarker(cmn.ResilverMarker); fatalErr != nil || writeErr != nil {
 		glog.Errorf("FATAL: %v, WRITE: %v", fatalErr, writeErr)
 		return
@@ -74,7 +75,6 @@ func (reb *Manager) RunResilver(uuid string, skipGlobMisplaced bool, notifs ...*
 		fs.RemoveMarker(cmn.ResilverMarker)
 	}
 
-	reb.t.GFN(cluster.GFNLocal).Deactivate()
 	xact.Finish(nil)
 }
 
@@ -190,7 +190,8 @@ func (rj *joggerCtx) moveObject(lom *cluster.LOM, buf []byte) {
 
 	rj.xact.BytesAdd(size)
 	rj.xact.ObjectsInc()
-	// NOTE: Rely on LRU to remove "misplaced".
+
+	// NOTE: not deleting _misplaced_ and copied - delegating to `storage cleanup` and/or LRU
 }
 
 func (rj *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (err error) {

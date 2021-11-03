@@ -44,7 +44,7 @@ variables:
   stage: test-short
   tags:
     - ais
-  timeout: 19m
+  timeout: 21m
   <<: *default_only_def
   except:
     variables:

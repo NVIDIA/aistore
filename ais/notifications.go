@@ -326,13 +326,11 @@ func (*notifs) handleProgress(nl nl.NotifListener, tsi *cluster.Snode, data []by
 	return
 }
 
-func (n *notifs) handleFinished(nl nl.NotifListener, tsi *cluster.Snode, data []byte,
-	srcErr error) (err error) {
+func (n *notifs) handleFinished(nl nl.NotifListener, tsi *cluster.Snode, data []byte, srcErr error) (err error) {
 	var (
 		stats   interface{}
 		aborted bool
 	)
-
 	nl.Lock()
 	// data can either be `nil` or a valid encoded stats
 	if data != nil {
@@ -340,10 +338,8 @@ func (n *notifs) handleFinished(nl nl.NotifListener, tsi *cluster.Snode, data []
 		debug.AssertNoErr(err)
 		nl.SetStats(tsi.ID(), stats)
 	}
-
 	done := n.markFinished(nl, tsi, srcErr, aborted)
 	nl.Unlock()
-
 	if done {
 		n.done(nl)
 	}

@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -1654,6 +1654,7 @@ func (t *targetrunner) fsErr(err error, filepath string) {
 }
 
 func (t *targetrunner) runResilver(uuid string, wg *sync.WaitGroup, skipGlobMisplaced bool, notifs ...*xaction.NotifXact) {
+	// with no cluster-wide UUID it's a local run
 	if uuid == "" {
 		uuid = cos.GenUUID()
 		regMsg := xactRegMsg{UUID: uuid, Kind: cmn.ActResilver, Srcs: []string{t.si.ID()}}

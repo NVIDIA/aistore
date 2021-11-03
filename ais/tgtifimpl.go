@@ -363,11 +363,10 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 // implements health.fspathDispatcher interface
 //
 
-func (t *targetrunner) DisableMountpath(mpath, reason string) (disabled bool, err error) {
-	var disabledMi *fs.MountpathInfo
+func (t *targetrunner) DisableMpath(mpath, reason string) (err error) {
 	glog.Warningf("Disabling mountpath %s: %s", mpath, reason)
-	disabledMi, err = t.fsprg.disableMountpath(mpath)
-	return disabledMi != nil, err
+	_, err = t.fsprg.disableMountpath(mpath)
+	return
 }
 
 func (t *targetrunner) RebalanceNamespace(si *cluster.Snode) (b []byte, status int, err error) {

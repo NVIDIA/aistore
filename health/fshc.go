@@ -30,7 +30,7 @@ const (
 // for mountpath definition, see fs/mountfs.go
 type (
 	fspathDispatcher interface {
-		DisableMountpath(path, reason string) (disabled bool, err error)
+		DisableMpath(mpath, reason string) (err error)
 	}
 	FSHC struct {
 		dispatcher fspathDispatcher // listener is notified upon mountpath events (disabled, etc.)
@@ -116,11 +116,8 @@ func (f *FSHC) runMpathTest(mpath, filepath string) {
 		return
 	}
 	glog.Errorf("Disabling mountpath %s...", mpath)
-	disabled, err := f.dispatcher.DisableMountpath(mpath, whyFailed.Error())
-	if err != nil {
+	if err := f.dispatcher.DisableMpath(mpath, whyFailed.Error()); err != nil {
 		glog.Errorf("Failed to disable mountpath: %s", err.Error())
-	} else if !disabled {
-		glog.Errorf("Failed to disabled mountpath: %s. Mountpath already disabled", mpath)
 	}
 }
 

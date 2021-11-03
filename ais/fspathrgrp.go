@@ -137,7 +137,7 @@ func (g *fsprungroup) preDelmi(action string, flags cos.BitFlags, mpath string) 
 		rmi      *fs.MountpathInfo
 		numAvail int
 	)
-	if rmi, numAvail, err = fs.BeginDisableRemove(action, flags, mpath); err != nil {
+	if rmi, numAvail, err = fs.BeginDD(action, flags, mpath); err != nil {
 		return
 	}
 	if rmi == nil {

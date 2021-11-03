@@ -181,7 +181,6 @@ func (xact *XactBase) Notif() (n cluster.Notif) {
 }
 
 func (xact *XactBase) AddNotif(n cluster.Notif) {
-	debug.Assert(xact.notif == nil) // currently, "add" means "set"
 	xact.notif = n.(*NotifXact)
 	debug.Assert(xact.notif.Xact != nil && xact.notif.F != nil)
 	debug.Assert(!n.Upon(cluster.UponProgress) || xact.notif.P != nil)
@@ -200,10 +199,9 @@ func (xact *XactBase) Abort(err error) (ok bool) {
 }
 
 func (xact *XactBase) Finish(err error) {
-	if xact.eutime.Load() == 0 {
-		if xact.eutime.CAS(0, time.Now().UnixNano()) {
-			xact.notifyRefresh(err)
-		}
+	if xact.eutime.CAS(0, 1) {
+		xact.eutime.Store(time.Now().UnixNano())
+		xact.notifyRefresh(err)
 	}
 }
 

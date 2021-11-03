@@ -30,8 +30,7 @@ type GetLogInput struct {
 	Severity string // one of: {cmn.LogInfo, ...}
 }
 
-// GetMountpaths given the direct public URL of the target, returns its
-// mountpaths or error.
+// GetMountpaths given the direct public URL of the target, returns the target's mountpaths or error.
 func GetMountpaths(baseParams BaseParams, node *cluster.Snode) (mpl *cmn.MountpathList, err error) {
 	baseParams.Method = http.MethodGet
 	err = DoHTTPReqResp(ReqParams{
@@ -46,7 +45,7 @@ func GetMountpaths(baseParams BaseParams, node *cluster.Snode) (mpl *cmn.Mountpa
 	return mpl, err
 }
 
-// TODO: rewrite tests that come here with force
+// TODO: rewrite tests that come here with `force`
 func AttachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string, force bool) error {
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{

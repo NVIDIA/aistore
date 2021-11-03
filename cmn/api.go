@@ -98,11 +98,13 @@ type (
 
 // MountpathList contains two lists:
 // * Available - list of local mountpaths available to the storage target
+// * WaitingDD - waiting for resilvering completion to be detached or disabled (moved to `Disabled`)
 // * Disabled  - list of disabled mountpaths, the mountpaths that generated
 //	         IO errors followed by (FSHC) health check, etc.
 type (
 	MountpathList struct {
 		Available []string `json:"available"`
+		WaitingDD []string `json:"waiting_dd"`
 		Disabled  []string `json:"disabled"`
 	}
 )

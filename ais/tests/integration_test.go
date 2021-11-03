@@ -820,11 +820,19 @@ func TestMountpathRemoveAndAdd(t *testing.T) {
 	m.expectTargets(2)
 
 	target, _ := m.smap.GetRandTarget()
+	tname := target.StringEx()
 	// Remove all mountpaths for one target
-	oldMountpaths, err := api.GetMountpaths(baseParams, target)
+	origMountpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 
-	for _, mpath := range oldMountpaths.Available {
+	if len(origMountpaths.WaitingDD) != 0 || len(origMountpaths.Disabled) != 0 {
+		tlog.Logf("Warning %s: orig mountpaths (avail=%d, dd=%d, disabled=%d)\n", tname,
+			len(origMountpaths.Available), len(origMountpaths.WaitingDD), len(origMountpaths.Disabled))
+	} else {
+		tlog.Logf("%s: orig avail mountpaths=%d\n", tname, len(origMountpaths.Available))
+	}
+
+	for _, mpath := range origMountpaths.Available {
 		err = api.DetachMountpath(baseParams, target, mpath)
 		tassert.CheckFatal(t, err)
 	}
@@ -834,14 +842,14 @@ func TestMountpathRemoveAndAdd(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	if len(mountpaths.Available) != 0 {
-		t.Fatalf("Target should not have any paths available")
+		t.Fatalf("%s should not have any paths available: %d", tname, len(mountpaths.Available))
 	}
 
 	// Create ais bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	// Add target mountpath again
-	for _, mpath := range oldMountpaths.Available {
+	for _, mpath := range origMountpaths.Available {
 		err = api.AttachMountpath(baseParams, target, mpath, true /*force*/)
 		tassert.CheckFatal(t, err)
 	}
@@ -850,8 +858,11 @@ func TestMountpathRemoveAndAdd(t *testing.T) {
 	mountpaths, err = api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 
-	if len(mountpaths.Available) != len(oldMountpaths.Available) {
-		t.Fatalf("Target should have old mountpath available restored")
+	tlog.Logf("%s: mountpaths (avail=%d, dd=%d, disabled=%d)\n", tname,
+		len(mountpaths.Available), len(mountpaths.WaitingDD), len(mountpaths.Disabled))
+	if len(mountpaths.Available) != len(origMountpaths.Available) {
+		t.Fatalf("%s not all mountpaths restored: %d, %d", tname,
+			len(mountpaths.Available), len(origMountpaths.Available))
 	}
 
 	// Put and read random files
@@ -1006,11 +1017,18 @@ func TestMountpathDisableAndEnable(t *testing.T) {
 	m.initAndSaveCluState()
 	m.expectTargets(1)
 
+	// Remove all mountpaths on the target
 	target, _ := m.smap.GetRandTarget()
-	// Remove all mountpaths for one target
-	oldMountpaths, err := api.GetMountpaths(baseParams, target)
+	tname := target.StringEx()
+	origMountpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 
+	if len(origMountpaths.WaitingDD) != 0 || len(origMountpaths.Disabled) != 0 {
+		tlog.Logf("Warning %s: orig mountpaths (avail=%d, dd=%d, disabled=%d)\n", tname,
+			len(origMountpaths.Available), len(origMountpaths.WaitingDD), len(origMountpaths.Disabled))
+	} else {
+		tlog.Logf("%s: orig avail mountpaths=%d\n", tname, len(origMountpaths.Available))
+	}
 	disabled := make(cos.StringSet)
 	defer func() {
 		for mpath := range disabled {
@@ -1021,7 +1039,7 @@ func TestMountpathDisableAndEnable(t *testing.T) {
 			tutils.WaitForRebalanceToComplete(t, baseParams)
 		}
 	}()
-	for _, mpath := range oldMountpaths.Available {
+	for _, mpath := range origMountpaths.Available {
 		err := api.DisableMountpath(baseParams, target, mpath)
 		tassert.CheckFatal(t, err)
 		disabled.Add(mpath)
@@ -1032,18 +1050,18 @@ func TestMountpathDisableAndEnable(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	if len(mountpaths.Available) != 0 {
-		t.Fatalf("Target should not have any paths available")
+		t.Fatalf("%s should not have any mountpaths available (%d)", tname, len(mountpaths.Available))
 	}
-
-	if len(mountpaths.Disabled) != len(oldMountpaths.Available) {
-		t.Fatalf("Not all mountpaths were added to disabled paths")
+	if len(mountpaths.Disabled)+len(mountpaths.WaitingDD) != len(origMountpaths.Available) {
+		t.Fatalf("%s: not all mountpaths were added to disabled (%d, %d, %d)", tname,
+			len(mountpaths.Disabled), len(mountpaths.WaitingDD), len(origMountpaths.Available))
 	}
 
 	// Create ais bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
-	// Add target mountpath again
-	for _, mpath := range oldMountpaths.Available {
+	// Re-enable target mountpaths
+	for _, mpath := range origMountpaths.Available {
 		err := api.EnableMountpath(baseParams, target, mpath)
 		tassert.CheckFatal(t, err)
 		disabled.Delete(mpath)
@@ -1053,15 +1071,13 @@ func TestMountpathDisableAndEnable(t *testing.T) {
 	mountpaths, err = api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 
-	if len(mountpaths.Available) != len(oldMountpaths.Available) {
-		t.Fatalf("Target should have old mountpath available restored")
+	if len(mountpaths.Available) != len(origMountpaths.Available) || len(mountpaths.Disabled) != 0 {
+		t.Fatalf("%s: not all available mountpaths got re-enabled (avail=%d, orig-avail=%d, dd=%d, disabled=%d)",
+			tname, len(mountpaths.Available),
+			len(origMountpaths.Available), len(mountpaths.WaitingDD), len(mountpaths.Disabled))
 	}
 
-	if len(mountpaths.Disabled) != 0 {
-		t.Fatalf("Not all disabled mountpaths were enabled")
-	}
-
-	tlog.Logf("waiting for ais bucket %s to appear on all targets\n", m.bck)
+	tlog.Logf("waiting for bucket %s to show up on all targets\n", m.bck)
 	err = tutils.WaitForBucket(m.proxyURL, cmn.QueryBcks(m.bck), true /*exists*/)
 	tassert.CheckFatal(t, err)
 

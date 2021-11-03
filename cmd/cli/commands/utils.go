@@ -919,8 +919,11 @@ func defaultBckProps(bck cmn.Bck) (*cmn.BucketProps, error) {
 }
 
 // Wait for an Xaction to complete, and print if it aborted
-func waitForXactionCompletion(defaultAPIParams api.BaseParams, args api.XactReqArgs, refreshIntervals ...time.Duration) (err error) {
-	status, err := api.WaitForXaction(defaultAPIParams, args, refreshIntervals...)
+func waitForXactionCompletion(defaultAPIParams api.BaseParams, args api.XactReqArgs) (err error) {
+	if args.Timeout == 0 {
+		args.Timeout = time.Minute // TODO: make it a flag and an argument with configurable default
+	}
+	status, err := api.WaitForXaction(defaultAPIParams, args)
 	if err != nil {
 		return err
 	}

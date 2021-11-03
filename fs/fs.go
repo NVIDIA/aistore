@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"syscall"
 	"time"
@@ -34,7 +35,7 @@ const (
 	FlagBeingDetached
 )
 
-const FlagBeingDisabledOrDetached = FlagBeingDisabled | FlagBeingDetached
+const FlagWaitingDD = FlagBeingDisabled | FlagBeingDetached
 
 // Terminology:
 // - a mountpath is equivalent to (configurable) fspath - both terms are used interchangeably;
@@ -145,18 +146,21 @@ func (mi *MountpathInfo) IsAnySet(flags cos.BitFlags) bool { return mi.flags.IsA
 func (mi *MountpathInfo) String() string { return mi._string() }
 
 func (mi *MountpathInfo) _string() string {
-	if mi.info != "" {
+	if mi.info == "" {
+		switch len(mi.Disks) {
+		case 0:
+			mi.info = fmt.Sprintf("mp[%s, fs=%s]", mi.Path, mi.Fs)
+		case 1:
+			mi.info = fmt.Sprintf("mp[%s, %s]", mi.Path, mi.Disks[0])
+		default:
+			mi.info = fmt.Sprintf("mp[%s, %v]", mi.Path, mi.Disks)
+		}
+	}
+	if !mi.IsAnySet(FlagWaitingDD) {
 		return mi.info
 	}
-	switch len(mi.Disks) {
-	case 0:
-		mi.info = fmt.Sprintf("mp[%s, fs=%s]", mi.Path, mi.Fs)
-	case 1:
-		mi.info = fmt.Sprintf("mp[%s, %s]", mi.Path, mi.Disks[0])
-	default:
-		mi.info = fmt.Sprintf("mp[%s, %v]", mi.Path, mi.Disks)
-	}
-	return mi.info
+	l := len(mi.info)
+	return mi.info[:l-1] + ", waiting-dd]"
 }
 
 func (mi *MountpathInfo) LomCache(idx int) *sync.Map { return mi.lomCaches.Get(idx) }
@@ -476,11 +480,12 @@ func (mi *MountpathInfo) AddEnabled(tid string, availablePaths MPI, config *cmn.
 	if err = mi._addEnabled(tid, availablePaths, config); err == nil {
 		mfs.fsIDs[mi.FsID] = mi.Path
 	}
-	mi.flags = mi.flags.Clear(FlagBeingDisabledOrDetached)
+	mi.flags = mi.flags.Clear(FlagWaitingDD)
 	return
 }
 
 func (mi *MountpathInfo) AddDisabled(disabledPaths MPI) {
+	mi.flags = mi.flags.Clear(FlagWaitingDD)
 	disabledPaths[mi.Path] = mi
 	mfs.fsIDs[mi.FsID] = mi.Path
 }
@@ -511,23 +516,37 @@ func (mi *MountpathInfo) _addEnabled(tid string, availablePaths MPI, config *cmn
 	return nil
 }
 
-// with cloning
-func (mi *MountpathInfo) addEnabledDisabled(tid string, config *cmn.Config, enabled bool) (err error) {
-	availablePaths, disabledPaths := cloneMPI()
-	if enabled {
-		if err = mi.AddEnabled(tid, availablePaths, config); err != nil {
-			return
-		}
-	} else {
-		mi.AddDisabled(disabledPaths)
+// under lock: clones and adds self to available
+func (mi *MountpathInfo) _cloneAddEnabled(tid string, config *cmn.Config) (err error) {
+	debug.Assert(!mi.IsAnySet(FlagWaitingDD)) // m.b. new
+	availablePaths, disabledPaths := Get()
+	if _, ok := disabledPaths[mi.Path]; ok {
+		return fmt.Errorf("%s exists and is currently disabled (hint: did you want to enable it?)", mi)
 	}
-	PutMPI(availablePaths, disabledPaths)
+
+	// dd-transition
+	if ddmi, ok := availablePaths[mi.Path]; ok && ddmi.IsAnySet(FlagWaitingDD) {
+		availableCopy := _cloneOne(availablePaths)
+		glog.Warningf("%s (%s): interrupting dd-transition - adding&enabling", mi, ddmi)
+		availableCopy[mi.Path] = mi
+		putAvailMPI(availableCopy)
+		return
+	}
+
+	// add new mp
+	if err = mi._checkExists(availablePaths); err != nil {
+		return
+	}
+	availableCopy := _cloneOne(availablePaths)
+	if err = mi.AddEnabled(tid, availableCopy, config); err == nil {
+		putAvailMPI(availableCopy)
+	}
 	return
 }
 
-///////////////
-// MountedFS //
-///////////////
+/////////////////////
+// MountedFS & MPI //
+/////////////////////
 
 // create a new singleton
 func New(iostater ...ios.IOStater) {
@@ -562,15 +581,12 @@ func Decommission(mdOnly bool) {
 	}
 }
 
-//////////////////////////////
-// `ios` package delegators //
-//////////////////////////////
-
+// `ios` delegations
 func GetAllMpathUtils() (utils *ios.MpathsUtils) { return mfs.ios.GetAllMpathUtils() }
 func GetMpathUtil(mpath string) int64            { return mfs.ios.GetMpathUtil(mpath) }
 func FillDiskStats(m ios.AllDiskStats)           { mfs.ios.FillDiskStats(m) }
 
-// DisableFsIDCheck disables fsid checking when adding new mountpath
+// DisableFsIDCheck disables fsid checking when adding new mountpath (testing-only)
 func DisableFsIDCheck() { mfs.checkFsID = false }
 
 // Returns number of available mountpaths
@@ -585,6 +601,29 @@ func putDisabMPI(disabled MPI)  { mfs.disabled.Store(unsafe.Pointer(&disabled)) 
 func PutMPI(available, disabled MPI) {
 	putAvailMPI(available)
 	putDisabMPI(disabled)
+}
+
+func MountpathsToLists() (mpl *cmn.MountpathList) {
+	availablePaths, disabledPaths := Get()
+	mpl = &cmn.MountpathList{
+		Available: make([]string, 0, len(availablePaths)),
+		WaitingDD: make([]string, 0),
+		Disabled:  make([]string, 0, len(disabledPaths)),
+	}
+	for _, mi := range availablePaths {
+		if mi.IsAnySet(FlagWaitingDD) {
+			mpl.WaitingDD = append(mpl.WaitingDD, mi.Path)
+		} else {
+			mpl.Available = append(mpl.Available, mi.Path)
+		}
+	}
+	for mpath := range disabledPaths {
+		mpl.Disabled = append(mpl.Disabled, mpath)
+	}
+	sort.Strings(mpl.Available)
+	sort.Strings(mpl.WaitingDD)
+	sort.Strings(mpl.Disabled)
+	return
 }
 
 // NOTE: must be under mfs lock
@@ -612,7 +651,7 @@ func Add(mpath, tid string) (mi *MountpathInfo, err error) {
 	}
 	config := cmn.GCO.Get()
 	mfs.mu.Lock()
-	err = mi.addEnabledDisabled(tid, config, true /*enabled*/)
+	err = mi._cloneAddEnabled(tid, config)
 	mfs.mu.Unlock()
 	return
 }
@@ -632,10 +671,11 @@ func AddMpath(mpath, tid string, cb func(), force bool) (mi *MountpathInfo, err 
 				return
 			}
 			glog.Errorf("%v - ignoring since force=%t", err, force)
+			err = nil
 		}
 	}
 	mfs.mu.Lock()
-	err = mi.addEnabledDisabled(tid, config, true /*enabled*/)
+	err = mi._cloneAddEnabled(tid, config)
 	if err == nil && len(mi.Disks) == 0 {
 		if !config.TestingEnv() {
 			err = &ErrMountpathNoDisks{mi}
@@ -685,27 +725,47 @@ func EnableMpath(mpath, tid string, cb func()) (enabledMpath *MountpathInfo, err
 }
 
 func enable(mpath, cleanMpath, tid string, config *cmn.Config) (enabledMpath *MountpathInfo, err error) {
-	availablePaths, disabledPaths := cloneMPI()
-	if _, ok := availablePaths[cleanMpath]; ok { // nothing to do
-		_, ok = disabledPaths[cleanMpath]
-		debug.Assert(!ok)
+	availablePaths, disabledPaths := Get()
+	mi, ok := availablePaths[cleanMpath]
+
+	// dd-transition
+	if ok {
+		debug.Assert(cleanMpath == mi.Path)
+		if _, ok = disabledPaths[cleanMpath]; ok {
+			glog.Errorf("FATAL: %s vs (%v, %v)", mi, availablePaths.toSlice(), disabledPaths.toSlice())
+			debug.Assert(false)
+			return
+		}
+		if mi.IsAnySet(FlagWaitingDD) {
+			availableCopy := _cloneOne(availablePaths)
+			mi, ok = availableCopy[cleanMpath]
+			debug.Assert(ok)
+			glog.Warningf("%s: re-enabling during dd-transition", mi)
+			mi.flags = mi.flags.Clear(FlagWaitingDD)
+			enabledMpath = mi
+			putAvailMPI(availableCopy)
+		} else if glog.FastV(4, glog.SmoduleFS) {
+			glog.Infof("%s: %s is already available, nothing to do", tid, mi)
+		}
 		return
 	}
-	mi, ok := disabledPaths[cleanMpath]
+
+	// re-enable
+	mi, ok = disabledPaths[cleanMpath]
 	if !ok {
 		err = cmn.NewErrMountpathNotFound(mpath)
 		return
 	}
 	debug.Assert(cleanMpath == mi.Path)
-
-	// TODO: check tid == on-disk-tid if exists
-
-	if err = mi.AddEnabled(tid, availablePaths, config); err != nil {
+	availableCopy, disabledCopy := cloneMPI()
+	mi, ok = disabledCopy[cleanMpath]
+	debug.Assert(ok)
+	if err = mi.AddEnabled(tid, availableCopy, config); err != nil {
 		return
 	}
 	enabledMpath = mi
-	delete(disabledPaths, cleanMpath)
-	PutMPI(availablePaths, disabledPaths)
+	delete(disabledCopy, cleanMpath)
+	PutMPI(availableCopy, disabledCopy)
 	return
 }
 
@@ -762,12 +822,13 @@ func Remove(mpath string, cb ...func()) (*MountpathInfo, error) {
 	return mpathInfo, nil
 }
 
-func BeginDisableRemove(action string, flags cos.BitFlags, mpath string) (mi *MountpathInfo, numAvail int, err error) {
+// begin (disable | detach) transaction: CoW-mark the corresponding mountpath
+func BeginDD(action string, flags cos.BitFlags, mpath string) (mi *MountpathInfo, numAvail int, err error) {
 	var (
 		cleanMpath string
 		exists     bool
 	)
-	debug.Assert(flags.IsAnySet(FlagBeingDisabledOrDetached))
+	debug.Assert(flags.IsAnySet(FlagWaitingDD))
 	if cleanMpath, err = cmn.ValidateMpath(mpath); err != nil {
 		return
 	}
@@ -796,9 +857,9 @@ func BeginDisableRemove(action string, flags cos.BitFlags, mpath string) (mi *Mo
 	return
 }
 
-// Disable disables a mountpath.
-// It returns disabled mountpath if it was actually disabled - moved from enabled to disabled.
-// Otherwise it returns nil, even if the mountpath existed (but was already disabled).
+// Disables a mountpath, i.e., removes it from usage but keeps in the volume
+// (for possible future re-enablement). If successful, returns the disabled mountpath.
+// Otherwise, returns nil (also in the case if the mountpath was already disabled).
 func Disable(mpath string, cb ...func()) (disabledMpath *MountpathInfo, err error) {
 	cleanMpath, err := cmn.ValidateMpath(mpath)
 	if err != nil {
@@ -1090,4 +1151,20 @@ func _loadXattrID(mpath string) (daeID string, err error) {
 		err = nil
 	}
 	return
+}
+
+/////////
+// MPI //
+/////////
+
+func (mpi MPI) toSlice() []string {
+	var (
+		paths = make([]string, len(mpi))
+		idx   int
+	)
+	for key := range mpi {
+		paths[idx] = key
+		idx++
+	}
+	return paths
 }

@@ -64,12 +64,12 @@ func newMockFSDispatcher(mpathsToFail ...string) *MockFSDispatcher {
 	}
 }
 
-func (d *MockFSDispatcher) DisableMountpath(path, reason string) (disabled bool, err error) {
-	d.faultDetected = cos.StringInSlice(path, d.faultyPaths)
+func (d *MockFSDispatcher) DisableMpath(mpath, reason string) (err error) {
+	d.faultDetected = cos.StringInSlice(mpath, d.faultyPaths)
 	if d.faultDetected {
-		return false, fmt.Errorf("fault detected: %s", reason)
+		err = fmt.Errorf("fault detected: %s", reason)
 	}
-	return true, nil
+	return
 }
 
 func setupTests(t *testing.T) {

@@ -245,26 +245,25 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *nl.Notif
 }
 
 // WaitForXaction waits for a given xaction to complete.
-func WaitForXaction(baseParams BaseParams, args XactReqArgs, refreshIntervals ...time.Duration) (status *nl.NotifStatus, err error) {
+func WaitForXaction(baseParams BaseParams, args XactReqArgs, sleeps ...time.Duration) (status *nl.NotifStatus, err error) {
 	var (
-		ctx           = context.Background()
-		retryInterval = XactPollTime
+		ctx   = context.Background()
+		sleep = XactPollTime
 	)
-	if len(refreshIntervals) > 0 {
-		retryInterval = refreshIntervals[0]
+	if len(sleeps) > 0 {
+		sleep = sleeps[0]
 	}
 	if args.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, args.Timeout)
 		defer cancel()
 	}
-
 	for {
 		status, err = GetXactionStatus(baseParams, args)
 		if err != nil || status.Finished() {
 			return
 		}
-		time.Sleep(retryInterval)
+		time.Sleep(sleep)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()

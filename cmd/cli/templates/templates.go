@@ -258,7 +258,7 @@ const (
 	TargetMpathListTmpl = "{{range $p := . }}" +
 		"{{ $p.DaemonID }}\n" +
 		"{{if and (eq (len $p.Mpl.Available) 0) (eq (len $p.Mpl.Disabled) 0)}}" +
-		"\tNo mountpath\n" +
+		"\tNo mountpaths\n" +
 		"{{else}}" +
 		"{{if ne (len $p.Mpl.Available) 0}}" +
 		"\tAvailable:\n" +
@@ -268,6 +268,11 @@ const (
 		"{{if ne (len $p.Mpl.Disabled) 0}}" +
 		"\tDisabled:\n" +
 		"{{range $mp := $p.Mpl.Disabled }}" +
+		"\t\t{{ $mp }}\n" +
+		"{{end}}{{end}}" +
+		"{{if ne (len $p.Mpl.WaitingDD) 0}}" +
+		"\tTransitioning to disabled or detached pending resilver:\n" +
+		"{{range $mp := $p.Mpl.WaitingDD }}" +
 		"\t\t{{ $mp }}\n" +
 		"{{end}}{{end}}" +
 		"{{end}}{{end}}"

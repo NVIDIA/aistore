@@ -190,7 +190,7 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// for queries of type {Kind: cmn.ActRebalance}
+	// for queries of the type {Kind: cmn.ActRebalance}
 	if msg.ID == "" && ic.redirectToIC(w, r) {
 		return
 	}
@@ -205,6 +205,7 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
 	flt := nlFilter{ID: msg.ID, Kind: msg.Kind, Bck: bck, OnlyRunning: msg.OnlyRunning}
 	withRetry(func() bool {
 		nl, exists = ic.p.notifs.find(flt)

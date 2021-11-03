@@ -270,22 +270,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		ws := t.statsT.GetWhatStats()
 		t.writeJSON(w, r, ws, httpdaeWhat)
 	case cmn.GetWhatMountpaths:
-		mpList := cmn.MountpathList{}
-		availablePaths, disabledPaths := fs.Get()
-		mpList.Available = make([]string, len(availablePaths))
-		mpList.Disabled = make([]string, len(disabledPaths))
-
-		idx := 0
-		for mpath := range availablePaths {
-			mpList.Available[idx] = mpath
-			idx++
-		}
-		idx = 0
-		for mpath := range disabledPaths {
-			mpList.Disabled[idx] = mpath
-			idx++
-		}
-		t.writeJSON(w, r, &mpList, httpdaeWhat)
+		t.writeJSON(w, r, fs.MountpathsToLists(), httpdaeWhat)
 	case cmn.GetWhatDaemonStatus:
 		var rebStats *stats.RebalanceTargetStats
 		if entry := xreg.GetLatest(xreg.XactFilter{Kind: cmn.ActRebalance}); entry != nil {
@@ -445,30 +430,30 @@ func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request
 	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
-	mountpath, ok := msg.Value.(string)
+	mpath, ok := msg.Value.(string)
 	if !ok {
 		t.writeErrMsg(w, r, "invalid mountpath value in request")
 		return
 	}
-	if mountpath == "" {
+	if mpath == "" {
 		t.writeErrMsg(w, r, "mountpath is not defined")
 		return
 	}
 	switch msg.Action {
 	case cmn.ActMountpathEnable:
-		t.handleEnableMountpathReq(w, r, mountpath)
-	case cmn.ActMountpathDisable:
-		t.handleDisableMountpathReq(w, r, mountpath)
+		t.enableMpath(w, r, mpath)
 	case cmn.ActMountpathAttach:
-		t.handleAttachMountpathReq(w, r, mountpath)
+		t.attachMpath(w, r, mpath)
+	case cmn.ActMountpathDisable:
+		t.disableMpath(w, r, mpath)
 	case cmn.ActMountpathDetach:
-		t.handleDetachMountpathReq(w, r, mountpath)
+		t.detachMpath(w, r, mpath)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
 }
 
-func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.Request, mpath string) {
+func (t *targetrunner) enableMpath(w http.ResponseWriter, r *http.Request, mpath string) {
 	enabledMi, err := t.fsprg.enableMountpath(mpath)
 	if err != nil {
 		if _, ok := err.(*cmn.ErrMountpathNotFound); ok {
@@ -498,25 +483,7 @@ func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.R
 	dsort.Managers.AbortAll(fmt.Errorf("mountpath %s has been enabled", enabledMi))
 }
 
-func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.Request, mpath string) {
-	disabledMi, err := t.fsprg.disableMountpath(mpath)
-	if err != nil {
-		if _, ok := err.(*cmn.ErrMountpathNotFound); ok {
-			t.writeErr(w, r, err, http.StatusNotFound)
-		} else {
-			// cmn.ErrInvalidMountpath
-			t.writeErr(w, r, err)
-		}
-		return
-	}
-	if disabledMi == nil {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-	dsort.Managers.AbortAll(fmt.Errorf("mountpath %s has been disabled", disabledMi))
-}
-
-func (t *targetrunner) handleAttachMountpathReq(w http.ResponseWriter, r *http.Request, mpath string) {
+func (t *targetrunner) attachMpath(w http.ResponseWriter, r *http.Request, mpath string) {
 	force := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamForce))
 	addedMi, err := t.fsprg.attachMountpath(mpath, force)
 	if err != nil {
@@ -541,7 +508,25 @@ func (t *targetrunner) handleAttachMountpathReq(w http.ResponseWriter, r *http.R
 	dsort.Managers.AbortAll(fmt.Errorf("attached %s", addedMi))
 }
 
-func (t *targetrunner) handleDetachMountpathReq(w http.ResponseWriter, r *http.Request, mpath string) {
+func (t *targetrunner) disableMpath(w http.ResponseWriter, r *http.Request, mpath string) {
+	disabledMi, err := t.fsprg.disableMountpath(mpath)
+	if err != nil {
+		if _, ok := err.(*cmn.ErrMountpathNotFound); ok {
+			t.writeErr(w, r, err, http.StatusNotFound)
+		} else {
+			// cmn.ErrInvalidMountpath
+			t.writeErr(w, r, err)
+		}
+		return
+	}
+	if disabledMi == nil {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	dsort.Managers.AbortAll(fmt.Errorf("mountpath %s has been disabled", disabledMi))
+}
+
+func (t *targetrunner) detachMpath(w http.ResponseWriter, r *http.Request, mpath string) {
 	removedMi, err := t.fsprg.detachMountpath(mpath)
 	if err != nil {
 		t.writeErrf(w, r, err.Error())
@@ -992,12 +977,11 @@ func (t *targetrunner) disable() error {
 	if t.regstate.disabled.Load() {
 		return nil
 	}
-	glog.Infof("Disabling %s", t.si)
 	if err := t.unregisterSelf(false); err != nil {
 		return err
 	}
 	t.regstate.disabled.Store(true)
-	glog.Infof("%s has been disabled (unregistered)", t.si)
+	glog.Warningf("%s (self): disabled and removed from Smap", t.si)
 	return nil
 }
 
