@@ -27,6 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
+	"github.com/NVIDIA/aistore/res"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xaction"
@@ -454,7 +455,7 @@ func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request
 }
 
 func (t *targetrunner) enableMpath(w http.ResponseWriter, r *http.Request, mpath string) {
-	enabledMi, err := t.fsprg.enableMountpath(mpath)
+	enabledMi, err := t.fsprg.enableMpath(mpath)
 	if err != nil {
 		if _, ok := err.(*cmn.ErrMountpathNotFound); ok {
 			t.writeErr(w, r, err, http.StatusNotFound)
@@ -485,7 +486,7 @@ func (t *targetrunner) enableMpath(w http.ResponseWriter, r *http.Request, mpath
 
 func (t *targetrunner) attachMpath(w http.ResponseWriter, r *http.Request, mpath string) {
 	force := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamForce))
-	addedMi, err := t.fsprg.attachMountpath(mpath, force)
+	addedMi, err := t.fsprg.attachMpath(mpath, force)
 	if err != nil {
 		t.writeErr(w, r, err)
 		return
@@ -509,7 +510,7 @@ func (t *targetrunner) attachMpath(w http.ResponseWriter, r *http.Request, mpath
 }
 
 func (t *targetrunner) disableMpath(w http.ResponseWriter, r *http.Request, mpath string) {
-	disabledMi, err := t.fsprg.disableMountpath(mpath)
+	disabledMi, err := t.fsprg.disableMpath(mpath)
 	if err != nil {
 		if _, ok := err.(*cmn.ErrMountpathNotFound); ok {
 			t.writeErr(w, r, err, http.StatusNotFound)
@@ -527,7 +528,7 @@ func (t *targetrunner) disableMpath(w http.ResponseWriter, r *http.Request, mpat
 }
 
 func (t *targetrunner) detachMpath(w http.ResponseWriter, r *http.Request, mpath string) {
-	removedMi, err := t.fsprg.detachMountpath(mpath)
+	removedMi, err := t.fsprg.detachMpath(mpath)
 	if err != nil {
 		t.writeErrf(w, r, err.Error())
 		return
@@ -705,7 +706,7 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 		go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif)
 		if newRMD.Resilver != "" {
 			glog.Infof("%s: ... and resilver", t.si)
-			go t.runResilver(newRMD.Resilver /*uuid*/, nil /*wg*/, true /*skipGlobMisplaced*/)
+			go t.runResilver(res.Args{UUID: newRMD.Resilver, SkipGlobMisplaced: true}, nil /*wg*/)
 		}
 		t.owner.rmd.put(newRMD)
 		// TODO -- FIXME: move and refactor

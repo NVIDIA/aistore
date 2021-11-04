@@ -732,7 +732,7 @@ func enable(mpath, cleanMpath, tid string, config *cmn.Config) (enabledMpath *Mo
 	if ok {
 		debug.Assert(cleanMpath == mi.Path)
 		if _, ok = disabledPaths[cleanMpath]; ok {
-			glog.Errorf("FATAL: %s vs (%v, %v)", mi, availablePaths.toSlice(), disabledPaths.toSlice())
+			glog.Errorf("FATAL: %s vs (%s, %s)", mi, availablePaths, disabledPaths)
 			debug.Assert(false)
 			return
 		}
@@ -1156,6 +1156,10 @@ func _loadXattrID(mpath string) (daeID string, err error) {
 /////////
 // MPI //
 /////////
+
+func (mpi MPI) String() string {
+	return fmt.Sprintf("%v", mpi.toSlice())
+}
 
 func (mpi MPI) toSlice() []string {
 	var (

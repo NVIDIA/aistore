@@ -6,12 +6,14 @@ package ais
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/res"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/volume"
 	"github.com/NVIDIA/aistore/xreg"
@@ -29,30 +31,30 @@ func (g *fsprungroup) init(t *targetrunner) {
 // add | re-enable
 //
 
-// enableMountpath enables mountpath and notifies necessary runners about the
+// enableMpath enables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
-func (g *fsprungroup) enableMountpath(mpath string) (enabledMi *fs.MountpathInfo, err error) {
+func (g *fsprungroup) enableMpath(mpath string) (enabledMi *fs.MountpathInfo, err error) {
 	enabledMi, err = fs.EnableMpath(mpath, g.t.si.ID(), g.redistributeMD)
 	if err != nil || enabledMi == nil {
 		return
 	}
-	g.postAddmi(cmn.ActMountpathEnable, enabledMi)
+	g._postAdd(cmn.ActMountpathEnable, enabledMi)
 	return
 }
 
-// addMountpath adds mountpath and notifies necessary runners about the change
+// attachMpath adds mountpath and notifies necessary runners about the change
 // if the mountpath was actually added.
-func (g *fsprungroup) attachMountpath(mpath string, force bool) (addedMi *fs.MountpathInfo, err error) {
+func (g *fsprungroup) attachMpath(mpath string, force bool) (addedMi *fs.MountpathInfo, err error) {
 	addedMi, err = fs.AddMpath(mpath, g.t.si.ID(), g.redistributeMD, force)
 	if err != nil || addedMi == nil {
 		return
 	}
 
-	g.postAddmi(cmn.ActMountpathAttach, addedMi)
+	g._postAdd(cmn.ActMountpathAttach, addedMi)
 	return
 }
 
-func (g *fsprungroup) postAddmi(action string, mi *fs.MountpathInfo) {
+func (g *fsprungroup) _postAdd(action string, mi *fs.MountpathInfo) {
 	config := cmn.GCO.Get()
 	if !config.TestingEnv() { // as testing fspaths are counted, not enumerated
 		fspathsSaveCommit(mi.Path, true /*add*/)
@@ -60,7 +62,7 @@ func (g *fsprungroup) postAddmi(action string, mi *fs.MountpathInfo) {
 	xreg.AbortAllMountpathsXactions()
 	go func() {
 		if cmn.GCO.Get().Resilver.Enabled {
-			g.t.runResilver("" /*uuid*/, nil /*wg*/, false /*skipGlobMisplaced*/)
+			g.t.runResilver(res.Args{}, nil /*wg*/)
 		}
 		xreg.RenewMakeNCopies(g.t, cos.GenUUID(), action)
 	}()
@@ -77,9 +79,9 @@ func (g *fsprungroup) postAddmi(action string, mi *fs.MountpathInfo) {
 // remove | disable
 //
 
-// disableMountpath disables mountpath and notifies necessary runners about the
+// disableMpath disables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
-func (g *fsprungroup) disableMountpath(mpath string) (rmi *fs.MountpathInfo, err error) {
+func (g *fsprungroup) disableMpath(mpath string) (rmi *fs.MountpathInfo, err error) {
 	var nothingToDo bool
 	if nothingToDo, err = g._preDD(cmn.ActMountpathDisable, fs.FlagBeingDisabled, mpath); err != nil {
 		return
@@ -95,9 +97,9 @@ func (g *fsprungroup) disableMountpath(mpath string) (rmi *fs.MountpathInfo, err
 	return
 }
 
-// removeMountpath removes mountpath and notifies necessary runners about the
+// detachMpath removes mountpath and notifies necessary runners about the
 // change if the mountpath was actually removed.
-func (g *fsprungroup) detachMountpath(mpath string) (rmi *fs.MountpathInfo, err error) {
+func (g *fsprungroup) detachMpath(mpath string) (rmi *fs.MountpathInfo, err error) {
 	var nothingToDo bool
 	if nothingToDo, err = g._preDD(cmn.ActMountpathDetach, fs.FlagBeingDetached, mpath); err != nil {
 		return
@@ -139,8 +141,17 @@ func (g *fsprungroup) _preDD(action string, flags cos.BitFlags, mpath string) (n
 		return
 	}
 
-	glog.Infof("%s: %q %s - starting to resilver", g.t.si, action, rmi)
-	g.t.runResilver("" /*uuid*/, nil /*wg*/, true /*skipGlobMisplaced*/) // TODO: optimize for the special case
+	if g.t.res.IsActive() {
+		glog.Infof("%s: %q %s - starting to resilver", g.t.si, action, rmi)
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		go g.t.runResilver(res.Args{}, wg)
+		wg.Wait()
+		return
+	}
+	// otherwise, block on this single mountpath (NOTE: optimization for special case)
+	glog.Infof("%s: %q - resilvering data _off_ of %s", g.t.si, action, rmi)
+	g.t.runResilver(res.Args{Mpath: rmi.Path}, nil /*wg*/)
 	return
 }
 

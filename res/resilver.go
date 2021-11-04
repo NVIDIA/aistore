@@ -33,6 +33,12 @@ type (
 		begin atomic.Int64
 		end   atomic.Int64
 	}
+	Args struct {
+		UUID              string
+		Notif             *xaction.NotifXact
+		Mpath             string
+		SkipGlobMisplaced bool
+	}
 	joggerCtx struct {
 		xact cluster.Xact
 		t    cluster.Target
@@ -67,7 +73,7 @@ func (res *Res) _end() {
 	res.end.Store(mono.NanoTime())
 }
 
-func (res *Res) RunResilver(uuid string, skipGlobMisplaced bool, notifs ...*xaction.NotifXact) {
+func (res *Res) RunResilver(args Args) {
 	res._begin()
 	defer res._end()
 	if fatalErr, writeErr := fs.PersistMarker(cmn.ResilverMarker); fatalErr != nil || writeErr != nil {
@@ -80,26 +86,33 @@ func (res *Res) RunResilver(uuid string, skipGlobMisplaced bool, notifs ...*xact
 		return
 	}
 
-	xact := xreg.RenewResilver(uuid).(*xs.Resilver)
-	if len(notifs) != 0 {
-		notifs[0].Xact = xact
-		xact.AddNotif(notifs[0])
+	xact := xreg.RenewResilver(args.UUID).(*xs.Resilver)
+	if args.Notif != nil {
+		args.Notif.Xact = xact
+		xact.AddNotif(args.Notif)
 	}
-
 	glog.Infoln(xact.Name())
 
+	// jogger group
+	var jg *mpather.JoggerGroup
 	slab, err := res.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
 	debug.AssertNoErr(err)
-
 	jctx := &joggerCtx{xact: xact, t: res.t}
-	jg := mpather.NewJoggerGroup(&mpather.JoggerGroupOpts{
+	opts := &mpather.JoggerGroupOpts{
 		T:                     res.t,
 		CTs:                   []string{fs.ObjectType, fs.ECSliceType},
 		VisitObj:              jctx.visitObj,
 		VisitCT:               jctx.visitCT,
 		Slab:                  slab,
-		SkipGloballyMisplaced: skipGlobMisplaced,
-	})
+		SkipGloballyMisplaced: args.SkipGlobMisplaced,
+	}
+	if args.Mpath == "" {
+		jg = mpather.NewJoggerGroup(opts)
+	} else {
+		jg = mpather.NewJoggerGroup(opts, args.Mpath)
+	}
+
+	// run
 	res.end.Store(0)
 	jg.Run()
 
@@ -107,9 +120,9 @@ func (res *Res) RunResilver(uuid string, skipGlobMisplaced bool, notifs ...*xact
 	select {
 	case <-xact.ChanAbort():
 		if err := jg.Stop(); err != nil {
-			glog.Errorf("Resilver (uuid=%q) aborted, stopped with err: %v", uuid, err)
+			glog.Errorf("Resilver (uuid=%q) aborted, stopped with err: %v", args.UUID, err)
 		} else {
-			glog.Infof("Resilver (uuid=%q) aborted", uuid)
+			glog.Infof("Resilver (uuid=%q) aborted", args.UUID)
 		}
 	case <-jg.ListenFinished():
 		fs.RemoveMarker(cmn.ResilverMarker)

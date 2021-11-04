@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"golang.org/x/sync/errgroup"
@@ -72,7 +73,7 @@ type (
 
 		ctx       context.Context
 		opts      *JoggerGroupOpts
-		mpathInfo *fs.MountpathInfo
+		mi        *fs.MountpathInfo
 		config    *cmn.Config
 		stopCh    *cos.StopCh
 		syncGroup *joggerSyncGroup
@@ -87,19 +88,36 @@ type (
 	}
 )
 
-func NewJoggerGroup(opts *JoggerGroupOpts) *JoggerGroup {
-	cos.Assert(!opts.IncludeCopy || (opts.IncludeCopy && opts.DoLoad > noLoad))
-
+func NewJoggerGroup(opts *JoggerGroupOpts, selectedMpaths ...string) *JoggerGroup {
 	var (
-		mpaths, _ = fs.Get()
-		wg, ctx   = errgroup.WithContext(context.Background())
-		joggers   = make(map[string]*jogger, len(mpaths))
+		joggers           map[string]*jogger
+		availablePaths, _ = fs.Get()
+		wg, ctx           = errgroup.WithContext(context.Background())
+		l                 = len(selectedMpaths)
 	)
+	debug.Assert(!opts.IncludeCopy || (opts.IncludeCopy && opts.DoLoad > noLoad))
 
-	for _, mpathInfo := range mpaths {
-		joggers[mpathInfo.Path] = newJogger(ctx, opts, mpathInfo)
+	if l == 0 {
+		joggers = make(map[string]*jogger, len(availablePaths))
+	} else {
+		joggers = make(map[string]*jogger, l)
 	}
-
+	for _, mi := range availablePaths {
+		if l == 0 {
+			joggers[mi.Path] = newJogger(ctx, opts, mi)
+			continue
+		}
+		for _, mpath := range selectedMpaths {
+			if mi, ok := availablePaths[mpath]; ok {
+				joggers[mi.Path] = newJogger(ctx, opts, mi)
+			}
+		}
+	}
+	if len(joggers) == 0 {
+		glog.Errorf("%v: (%s, %v)", cmn.ErrNoMountpaths, availablePaths, selectedMpaths)
+		debug.Assert(false)
+		return nil
+	}
 	jg := &JoggerGroup{
 		wg:         wg,
 		joggers:    joggers,
@@ -132,7 +150,7 @@ func (jg *JoggerGroup) markFinished() {
 	}
 }
 
-func newJogger(ctx context.Context, opts *JoggerGroupOpts, mpathInfo *fs.MountpathInfo) *jogger {
+func newJogger(ctx context.Context, opts *JoggerGroupOpts, mi *fs.MountpathInfo) *jogger {
 	var syncGroup *joggerSyncGroup
 	if opts.Parallel > 1 {
 		var (
@@ -154,7 +172,7 @@ func newJogger(ctx context.Context, opts *JoggerGroupOpts, mpathInfo *fs.Mountpa
 	return &jogger{
 		ctx:       ctx,
 		opts:      opts,
-		mpathInfo: mpathInfo,
+		mi:        mi,
 		config:    cmn.GCO.Get(),
 		stopCh:    cos.NewStopCh(),
 		syncGroup: syncGroup,
@@ -202,7 +220,7 @@ func (j *jogger) run() error {
 
 func (j *jogger) runBck(bck cmn.Bck) (aborted bool, err error) {
 	opts := &fs.Options{
-		Mpath:    j.mpathInfo,
+		Mpath:    j.mi,
 		Bck:      bck,
 		CTs:      j.opts.CTs,
 		Callback: j.jog,
@@ -361,11 +379,11 @@ func (sg *joggerSyncGroup) abortAsyncTasks() error {
 }
 
 func (j *jogger) throttle() {
-	curUtil := fs.GetMpathUtil(j.mpathInfo.Path)
+	curUtil := fs.GetMpathUtil(j.mi.Path)
 	if curUtil >= j.config.Disk.DiskUtilHighWM {
 		time.Sleep(cmn.ThrottleMinDur)
 	}
 }
 
 func (j *jogger) abort()         { j.stopCh.Close() }
-func (j *jogger) String() string { return fmt.Sprintf("jogger [%s/%s]", j.mpathInfo, j.opts.Bck) }
+func (j *jogger) String() string { return fmt.Sprintf("jogger [%s/%s]", j.mi, j.opts.Bck) }

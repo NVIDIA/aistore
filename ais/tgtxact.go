@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/nl"
+	"github.com/NVIDIA/aistore/res"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xreg"
 )
@@ -168,7 +169,7 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.QueryMsg, bck *cluster.Bck)
 		}
 		wg := &sync.WaitGroup{}
 		wg.Add(1)
-		go t.runResilver(xactMsg.ID, wg, false /*skipGlobMisplaced*/, notif)
+		go t.runResilver(res.Args{UUID: xactMsg.ID, Notif: notif}, wg)
 		wg.Wait()
 	// 2. with bucket
 	case cmn.ActPrefetchObjects:

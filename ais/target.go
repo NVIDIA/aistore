@@ -344,7 +344,7 @@ func (t *targetrunner) Run() error {
 			} else if daemon.resilver.required {
 				glog.Infof("Starting resilver, reason: %q", daemon.resilver.reason)
 			}
-			t.runResilver("" /*uuid*/, nil /*wg*/, false /*skipGlobMisplaced*/)
+			t.runResilver(res.Args{}, nil /*wg*/)
 		}()
 	}
 
@@ -1652,16 +1652,16 @@ func (t *targetrunner) fsErr(err error, filepath string) {
 	t.fshc.OnErr(filepath)
 }
 
-func (t *targetrunner) runResilver(uuid string, wg *sync.WaitGroup, skipGlobMisplaced bool, notifs ...*xaction.NotifXact) {
+func (t *targetrunner) runResilver(args res.Args, wg *sync.WaitGroup) {
 	// with no cluster-wide UUID it's a local run
-	if uuid == "" {
-		uuid = cos.GenUUID()
-		regMsg := xactRegMsg{UUID: uuid, Kind: cmn.ActResilver, Srcs: []string{t.si.ID()}}
+	if args.UUID == "" {
+		args.UUID = cos.GenUUID()
+		regMsg := xactRegMsg{UUID: args.UUID, Kind: cmn.ActResilver, Srcs: []string{t.si.ID()}}
 		msg := t.newAmsgActVal(cmn.ActRegGlobalXaction, regMsg)
 		t.bcastAsyncIC(msg)
 	}
 	if wg != nil {
 		wg.Done() // compare w/ xaction.GoRunW(()
 	}
-	t.res.RunResilver(uuid, skipGlobMisplaced, notifs...)
+	t.res.RunResilver(args)
 }
