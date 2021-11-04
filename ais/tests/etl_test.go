@@ -656,7 +656,7 @@ func TestETLHealth(t *testing.T) {
 		}
 
 		httpErr, ok := err.(*cmn.ErrHTTP)
-		tassert.Fatalf(t, ok && httpErr.Status == http.StatusNotFound, "Unexpected error %v, expected 404", err)
+		tassert.Errorf(t, ok && httpErr.Status == http.StatusNotFound, "Unexpected error %v, expected 404", err)
 		tlog.Logf("ETL %q not found in metrics, retrying...\n", uuid)
 		time.Sleep(10 * time.Second)
 	}
