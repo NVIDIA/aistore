@@ -70,7 +70,6 @@ type (
 		res          *res.Res
 		dbDriver     dbdriver.Driver
 		transactions transactions
-		gfn          globalGFN
 		regstate     regstate // the state of being registered with the primary, can be (en/dis)abled via API
 	}
 )

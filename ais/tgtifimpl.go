@@ -37,8 +37,6 @@ func (t *targetrunner) FSHC(err error, path string) { t.fsErr(err, path) }
 func (t *targetrunner) MMSA() *memsys.MMSA          { return t.gmm }
 func (t *targetrunner) SmallMMSA() *memsys.MMSA     { return t.smm }
 func (t *targetrunner) DB() dbdriver.Driver         { return t.dbDriver }
-func (t *targetrunner) ActivateGFN()                { t.gfn.Activate() }
-func (t *targetrunner) DeactivateGFN()              { t.gfn.Deactivate() }
 
 func (t *targetrunner) Backend(bck *cluster.Bck) cluster.BackendProvider {
 	if bck.Bck.IsRemoteAIS() {

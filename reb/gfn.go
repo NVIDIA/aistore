@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
-package ais
+package reb
 
 import (
 	"sync"
@@ -16,40 +16,23 @@ import (
 
 const timedDuration = time.Minute + time.Minute/2
 
-type (
-	// get-from-neighbors state
-	globalGFN struct {
-		tag    string
-		mtx    sync.Mutex
-		exp    atomic.Int64
-		upd    atomic.Int64
-		lookup atomic.Bool
-	}
-)
+const tag = "global GFN"
 
-////////////////
-// global gfn //
-////////////////
-
-func (gfn *globalGFN) Activate() bool {
-	previous := gfn.lookup.Swap(true)
-	if !previous {
-		gfn.upd.Store(0)
-		glog.Infoln(gfn.tag, "on")
-	}
-	return previous
+// get-from-neighbors (GFN) state
+type gfnCtx struct {
+	mtx    sync.Mutex
+	exp    atomic.Int64
+	upd    atomic.Int64
+	lookup atomic.Bool
 }
 
-func (gfn *globalGFN) Deactivate() {
-	gfn.lookup.Store(false)
-	glog.Infoln(gfn.tag, "off")
-}
+var gfn = &gfnCtx{}
 
-func (gfn *globalGFN) isActive() bool {
+func IsActiveGFN() bool {
 	return gfn.lookup.Load() || (gfn.exp.Load() != 0 && gfn.upd.Load() > 0)
 }
 
-func (gfn *globalGFN) activateTimed() {
+func ActivateTimedGFN() {
 	if gfn.lookup.Load() {
 		return
 	}
@@ -59,16 +42,27 @@ func (gfn *globalGFN) activateTimed() {
 	if gfn.exp.Swap(now+timedDuration.Nanoseconds()) == 0 {
 		gfn.upd.Store(1)
 		gfn.mtx.Unlock()
-		hk.Reg(gfn.tag, gfn.hk)
-		glog.Infoln(gfn.tag, "on timed", upd)
+		hk.Reg(tag, deactivateTimed)
+		glog.Infoln(tag, "on timed", upd)
 	} else {
 		upd = gfn.upd.Inc()
 		gfn.mtx.Unlock()
-		glog.Infoln(gfn.tag, "on timed", upd)
+		glog.Infoln(tag, "on timed", upd)
 	}
 }
 
-func (gfn *globalGFN) hk() time.Duration {
+// Deactivates timed GFN only if timed GFN has been activated only once before.
+func AbortTimedGFN() {
+	gfn.mtx.Lock()
+	if gfn.upd.Load() > 0 {
+		gfn.upd.Dec()
+	}
+	gfn.mtx.Unlock()
+}
+
+// private
+
+func deactivateTimed() time.Duration {
 	gfn.mtx.Lock()
 	now := mono.NanoTime()
 	exp := gfn.exp.Swap(0)
@@ -76,7 +70,7 @@ func (gfn *globalGFN) hk() time.Duration {
 		gfn.upd.Store(0)
 		gfn.mtx.Unlock()
 		if exp > 0 {
-			glog.Infoln(gfn.tag, "off timed")
+			glog.Infoln(tag, "off timed")
 		}
 		return hk.UnregInterval
 	}
@@ -85,11 +79,16 @@ func (gfn *globalGFN) hk() time.Duration {
 	return time.Duration(exp - now + 100)
 }
 
-// Deactivates timed GFN only if timed GFN has been activated only once before.
-func (gfn *globalGFN) abortTimed() {
-	gfn.mtx.Lock()
-	if gfn.upd.Load() > 0 {
-		gfn.upd.Dec()
+func activateGFN() bool {
+	previous := gfn.lookup.Swap(true)
+	if !previous {
+		gfn.upd.Store(0)
+		glog.Infoln(tag, "on")
 	}
-	gfn.mtx.Unlock()
+	return previous
+}
+
+func deactivateGFN() {
+	gfn.lookup.Store(false)
+	glog.Infoln(tag, "off")
 }

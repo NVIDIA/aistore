@@ -163,9 +163,6 @@ type Target interface {
 	// Getting other interfaces.
 	DB() dbdriver.Driver
 
-	ActivateGFN()
-	DeactivateGFN()
-
 	// Other.
 	BMDVersionFixup(r *http.Request, bck ...cmn.Bck)
 	RebalanceNamespace(si *Snode) (body []byte, errCode int, err error)

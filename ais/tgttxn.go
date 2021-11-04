@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/nl"
+	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xreg"
 	"github.com/NVIDIA/aistore/xs"
@@ -418,7 +419,7 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 		}
 		c.addNotif(xact) // notify upon completion
 
-		t.gfn.activateTimed()
+		reb.ActivateTimedGFN()
 		xaction.GoRunW(xact) // run and wait until it starts running
 	default:
 		debug.Assert(false)
@@ -793,9 +794,9 @@ func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
 		if cause := xreg.CheckBucketsBusy(); cause != nil {
 			return fmt.Errorf("cannot start maintenance: (xaction: %q) is in progress", cause.Get())
 		}
-		t.gfn.activateTimed()
+		reb.ActivateTimedGFN()
 	case cmn.ActAbort:
-		t.gfn.abortTimed()
+		reb.AbortTimedGFN()
 	case cmn.ActCommit:
 		var opts cmn.ActValRmNode
 		if err := cos.MorphMarshal(c.msg.Value, &opts); err != nil {

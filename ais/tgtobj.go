@@ -29,6 +29,7 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xreg"
@@ -571,7 +572,7 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, errCode int, err er
 	if running {
 		doubleCheck = true
 	}
-	gfnActive = goi.t.gfn.isActive()
+	gfnActive = reb.IsActiveGFN()
 	if running && tsi.ID() != goi.t.si.ID() {
 		if goi.t.LookupRemoteSingle(goi.lom, tsi) {
 			gfnNode = tsi

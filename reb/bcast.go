@@ -41,7 +41,7 @@ type (
 
 // via GET /v1/health (cmn.Health)
 func (reb *Reb) RebStatus(status *Status) {
-	reb.RLock()
+	reb.mu.RLock()
 	var (
 		targets    cluster.Nodes
 		config     = cmn.GCO.Get()
@@ -61,7 +61,7 @@ func (reb *Reb) RebStatus(status *Status) {
 	}
 	beginStats := (*stats.ExtRebalanceStats)(reb.beginStats.Load())
 	curStats := reb.getStats()
-	reb.RUnlock()
+	reb.mu.RUnlock()
 	// stats
 	if beginStats == nil {
 		return

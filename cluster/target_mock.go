@@ -51,8 +51,6 @@ func (*TargetMock) DeleteObject(*LOM, bool) (int, error)                    { re
 func (*TargetMock) PromoteFile(PromoteFileParams) (*LOM, error)             { return nil, nil }
 func (*TargetMock) DB() dbdriver.Driver                                     { return nil }
 func (*TargetMock) Backend(*Bck) BackendProvider                            { return nil }
-func (*TargetMock) ActivateGFN()                                            {}
-func (*TargetMock) DeactivateGFN()                                          {}
 func (*TargetMock) LookupRemoteSingle(*LOM, *Snode) bool                    { return false }
 func (*TargetMock) RebalanceNamespace(*Snode) ([]byte, int, error)          { return nil, 0, nil }
 func (*TargetMock) BMDVersionFixup(*http.Request, ...cmn.Bck)               {}

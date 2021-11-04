@@ -65,7 +65,7 @@ var stages = map[uint32]string{
 
 type (
 	Reb struct {
-		sync.RWMutex
+		mu          sync.RWMutex
 		t           cluster.Target
 		dm          *bundle.DataMover
 		pushes      *bundle.Streams // broadcast notifications
@@ -186,8 +186,8 @@ func (reb *Reb) RunRebalance(smap *cluster.Smap, id int64, notif *xaction.NotifX
 	}
 
 	// At this point only one rebalance is running so we can safely enable regular GFN.
-	reb.t.ActivateGFN()
-	defer reb.t.DeactivateGFN()
+	activateGFN()
+	defer deactivateGFN()
 
 	errCnt := 0
 	err := reb.run(rargs)
@@ -346,7 +346,7 @@ func (reb *Reb) rebInitRenew(rargs *rebArgs, notif *xaction.NotifXact) bool {
 	notif.Xact = xact
 	xact.AddNotif(notif)
 
-	reb.Lock()
+	reb.mu.Lock()
 	reb.setXact(xact.(*xs.Rebalance))
 
 	// 3. init streams and data structures
@@ -370,7 +370,7 @@ func (reb *Reb) rebInitRenew(rargs *rebArgs, notif *xaction.NotifXact) bool {
 		}
 		reb.endStreams(err)
 		xact.Abort(err)
-		reb.Unlock()
+		reb.mu.Unlock()
 		glog.Errorf("FATAL: %v, WRITE: %v", fatalErr, writeErr)
 		return false
 	}
@@ -380,7 +380,7 @@ func (reb *Reb) rebInitRenew(rargs *rebArgs, notif *xaction.NotifXact) bool {
 	reb.rebID.Store(rargs.id)
 	reb.stages.cleanup()
 
-	reb.Unlock()
+	reb.mu.Unlock()
 	glog.Infof("%s: running %s", reb.logHdr(rargs), reb.xact())
 	return true
 }

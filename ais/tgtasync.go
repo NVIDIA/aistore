@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/xreg"
 	"github.com/NVIDIA/aistore/xs"
 )
@@ -70,7 +71,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 	debug.Assert(resp.Status == http.StatusOK)
 	debug.Assert(resp.BckList.UUID != "")
 
-	if fs.MarkerExists(cmn.RebalanceMarker) || t.gfn.isActive() {
+	if fs.MarkerExists(cmn.RebalanceMarker) || reb.IsActiveGFN() {
 		resp.BckList.Flags |= cmn.BckListFlagRebalance
 	}
 
