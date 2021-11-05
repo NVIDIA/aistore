@@ -9,9 +9,14 @@ package memsys
 import (
 	"testing"
 
+	"github.com/NVIDIA/aistore/hk"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
+
+func init() {
+	hk.TestInit()
+}
 
 func TestMemsys(t *testing.T) {
 	RegisterFailHandler(Fail)

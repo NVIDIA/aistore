@@ -60,12 +60,20 @@ var DefaultHK *housekeeper
 // interface guard
 var _ cos.Runner = (*housekeeper)(nil)
 
-func init() {
+func TestInit() { _init(false) }
+func Init()     { _init(true) }
+
+func _init(mustRun bool) {
 	DefaultHK = &housekeeper{
 		workCh:  make(chan request, 512),
 		stopCh:  cos.NewStopCh(),
 		sigCh:   make(chan os.Signal, 1),
 		actions: &timedActions{},
+	}
+	if mustRun {
+		DefaultHK.running.Store(false)
+	} else {
+		DefaultHK.running.Store(true) // tests only
 	}
 	heap.Init(DefaultHK.actions)
 }
@@ -92,15 +100,23 @@ func (tc *timedActions) Pop() interface{} {
 // housekeeper //
 /////////////////
 
-func Reg(name string, f CleanupFunc, initialInterval ...time.Duration) {
-	var interval time.Duration
-	if len(initialInterval) > 0 {
-		interval = initialInterval[0]
+func WaitRunning() {
+	for !DefaultHK.running.Load() {
+		time.Sleep(time.Second)
 	}
-	if !DefaultHK.running.Load() {
-		fmt.Fprintf(os.Stderr, "%s not running, cannot reg %q", DefaultHK.Name(), name)
+}
+
+func _checkRunning(name, act string) {
+	if DefaultHK.running.Load() {
 		return
 	}
+	err := fmt.Errorf("%s is not running, cannot %s %q", DefaultHK.Name(), act, name)
+	debug.AssertNoErr(err)
+	glog.Error(err)
+}
+
+func Reg(name string, f CleanupFunc, interval time.Duration) {
+	_checkRunning(name, "reg")
 	DefaultHK.workCh <- request{
 		registering:     true,
 		name:            name,
@@ -110,6 +126,7 @@ func Reg(name string, f CleanupFunc, initialInterval ...time.Duration) {
 }
 
 func Unreg(name string) {
+	_checkRunning(name, "unreg")
 	DefaultHK.workCh <- request{
 		registering: false,
 		name:        name,

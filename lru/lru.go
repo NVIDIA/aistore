@@ -114,7 +114,7 @@ var (
 	_ xreg.Renewable = (*Factory)(nil)
 )
 
-func init() { xreg.RegNonBckXact(&Factory{}) }
+func Init() { xreg.RegNonBckXact(&Factory{}) }
 
 func rmMisplaced() bool {
 	g, l := xreg.GetRebMarked(), xreg.GetResilverMarked()

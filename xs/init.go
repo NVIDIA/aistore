@@ -14,7 +14,7 @@ import (
 var verbose bool
 
 // for additional startup-time reg-s see lru, downloader, ec
-func init() {
+func Init() {
 	verbose = bool(glog.FastV(4, glog.SmoduleXs))
 
 	xreg.RegNonBckXact(&eleFactory{})

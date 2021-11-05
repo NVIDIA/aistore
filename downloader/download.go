@@ -180,7 +180,7 @@ var (
 	_ io.ReadCloser  = (*progressReader)(nil)
 )
 
-func init() {
+func Init() {
 	xreg.RegNonBckXact(&dowFactory{})
 }
 

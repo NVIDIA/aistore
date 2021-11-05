@@ -135,7 +135,7 @@ func (rns *RenewRes) beingRenewed() {
 // In addition, the registry retains already finished xactions subject to lazy cleanup via `hk`.
 var defaultReg *registry
 
-func init() {
+func Init() {
 	defaultReg = newRegistry()
 	xaction.IncInactive = defaultReg.incInactive
 }
@@ -150,10 +150,10 @@ func newRegistry() *registry {
 	}
 }
 
-// periodic registry cleanups
-func RegHK() {
-	hk.Reg("xactions-old", defaultReg.hkDelOld)
-	hk.Reg("xactions-inactive", defaultReg.hkDelInactive)
+// register w/housekeeper periodic registry cleanups
+func RegWithHK() {
+	hk.Reg("xactions-old", defaultReg.hkDelOld, 0 /*time.Duration*/)
+	hk.Reg("xactions-inactive", defaultReg.hkDelInactive, 0 /*time.Duration*/)
 }
 
 func GetXact(uuid string) (xact cluster.Xact) { return defaultReg.getXact(uuid) }

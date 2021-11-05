@@ -17,8 +17,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/hk"
+	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/sys"
+	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xs"
 )
 
 const usecli = " -role=<proxy|target> -config=</dir/config.json> -local_config=</dir/local-config.json> ..."
@@ -52,9 +56,13 @@ type (
 		}
 		usage bool // show usage and exit
 	}
+	runRet struct {
+		name string
+		err  error
+	}
 	rungroup struct {
 		rs    map[string]cos.Runner
-		errCh chan error
+		errCh chan runRet
 	}
 )
 
@@ -163,8 +171,16 @@ func initDaemon(version, buildTime string) cos.Runner {
 		cos.B2S(int64(memStat.Total), 0), cos.B2S(int64(memStat.Free), 0), cos.B2S(int64(memStat.ActualFree), 0))
 
 	daemon.rg = &rungroup{rs: make(map[string]cos.Runner, 8)}
+	hk.Init()
 	daemon.rg.add(hk.DefaultHK)
 
+	// reg xaction factories in an orderly fashion
+	xreg.Init()
+	xs.Init()
+	lru.Init()
+	downloader.Init()
+
+	// fork (proxy | target)
 	co := newConfigOwner(config)
 	if daemon.cli.role == cmn.Proxy {
 		p := newProxy(co)
@@ -203,7 +219,7 @@ func Run(version, buildTime string) int {
 	defer glog.Flush() // always flush
 
 	rmain := initDaemon(version, buildTime)
-	err := daemon.rg.run(rmain)
+	err := daemon.rg.runAll(rmain)
 
 	if err == nil {
 		glog.Infoln("Terminated OK")
@@ -235,39 +251,45 @@ func (g *rungroup) add(r cos.Runner) {
 	g.rs[r.Name()] = r
 }
 
-func (g *rungroup) run(mainRunner cos.Runner) error {
-	var mainDone atomic.Bool
-	g.errCh = make(chan error, len(g.rs))
+func (g *rungroup) run(r cos.Runner) {
+	err := r.Run()
+	if err != nil {
+		glog.Warningf("runner [%s] exited with err [%v]", r.Name(), err)
+	}
+	g.errCh <- runRet{r.Name(), err}
+}
+
+func (g *rungroup) runAll(mainRunner cos.Runner) error {
+	g.errCh = make(chan runRet, len(g.rs))
 	daemon.stopping.Store(false)
+
+	// run all, housekeeper first
+	go g.run(hk.DefaultHK)
+	runtime.Gosched()
+	hk.WaitRunning()
 	for _, r := range g.rs {
-		go func(r cos.Runner) {
-			err := r.Run()
-			if err != nil {
-				glog.Warningf("runner [%s] exited with err [%v]", r.Name(), err)
-			}
-			if r.Name() == mainRunner.Name() {
-				mainDone.Store(true) // load it only once
-			}
-			g.errCh <- err
-		}(r)
+		if r.Name() == hk.DefaultHK.Name() {
+			continue
+		}
+		go g.run(r)
 	}
 
 	// Stop all runners, target (or proxy) first.
-	err := <-g.errCh
+	ret := <-g.errCh
 	daemon.stopping.Store(true)
-	if !mainDone.Load() {
-		mainRunner.Stop(err)
+	if ret.name != mainRunner.Name() {
+		mainRunner.Stop(ret.err)
 	}
 	for _, r := range g.rs {
 		if r.Name() != mainRunner.Name() {
-			r.Stop(err)
+			r.Stop(ret.err)
 		}
 	}
 	// Wait for all terminations.
 	for i := 0; i < len(g.rs)-1; i++ {
 		<-g.errCh
 	}
-	return err
+	return ret.err
 }
 
 ///////////////

@@ -8,9 +8,14 @@ package cluster_test
 import (
 	"testing"
 
+	"github.com/NVIDIA/aistore/hk"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
+
+func init() {
+	hk.TestInit()
+}
 
 func TestCluster(t *testing.T) {
 	RegisterFailHandler(Fail)

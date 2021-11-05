@@ -20,13 +20,18 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/xreg"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
+func init() {
+	xreg.Init()
+	hk.TestInit()
+}
+
 func TestLRUMain(t *testing.T) {
 	RegisterFailHandler(Fail)
-	go hk.DefaultHK.Run()
 	RunSpecs(t, "LRU Suite")
 }
 

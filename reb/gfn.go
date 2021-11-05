@@ -42,7 +42,7 @@ func ActivateTimedGFN() {
 	if gfn.exp.Swap(now+timedDuration.Nanoseconds()) == 0 {
 		gfn.upd.Store(1)
 		gfn.mtx.Unlock()
-		hk.Reg(tag, deactivateTimed)
+		hk.Reg(tag, deactivateTimed, 0 /*time.Duration*/)
 		glog.Infoln(tag, "on timed", upd)
 	} else {
 		upd = gfn.upd.Inc()

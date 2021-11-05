@@ -20,6 +20,9 @@ import (
 )
 
 func init() {
+	xreg.Init()
+	xs.Init()
+
 	config := cmn.GCO.BeginUpdate()
 	config.ConfigDir = "/tmp/ais-tests"
 	config.Timeout.CplaneOperation = cos.Duration(2 * time.Second)

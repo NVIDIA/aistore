@@ -237,7 +237,7 @@ func (b *queryBuffer) set(id string, entries []*cmn.BucketEntry, size uint) {
 
 func newQueryBuffers() *queryBuffers {
 	b := &queryBuffers{}
-	hk.Reg("query-buffer", b.housekeep)
+	hk.Reg("query-buffer", b.housekeep, bufferHkInterval)
 	return b
 }
 
@@ -448,7 +448,7 @@ func (c *queryCache) invalidate() {
 
 func newQueryCaches() *queryCaches {
 	c := &queryCaches{}
-	hk.Reg("query-cache", c.housekeep)
+	hk.Reg("query-cache", c.housekeep, cacheHkInterval)
 	return c
 }
 

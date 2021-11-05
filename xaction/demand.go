@@ -67,7 +67,7 @@ func (r *DemandBase) _initIdle() {
 	r.active++
 	r.idle.last = mono.NanoTime()
 	r.hkReg.Store(true)
-	hk.Reg(r.hkName, r.hkcb)
+	hk.Reg(r.hkName, r.hkcb, 0 /*time.Duration*/)
 }
 
 func (r *DemandBase) hkcb() time.Duration {

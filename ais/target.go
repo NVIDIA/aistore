@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -205,6 +206,36 @@ func (t *targetrunner) init(config *cmn.Config) {
 	}
 }
 
+func (t *targetrunner) initHostIP() {
+	var hostIP string
+	if hostIP = os.Getenv("AIS_HOST_IP"); hostIP == "" {
+		return
+	}
+	var (
+		config  = cmn.GCO.Get()
+		port    = config.HostNet.Port
+		extAddr = net.ParseIP(hostIP)
+		extPort = port
+	)
+	if portStr := os.Getenv("AIS_HOST_PORT"); portStr != "" {
+		portNum, err := cmn.ParsePort(portStr)
+		cos.AssertNoErr(err)
+		extPort = portNum
+	}
+	t.si.PublicNet.NodeHostname = extAddr.String()
+	t.si.PublicNet.DaemonPort = strconv.Itoa(extPort)
+	t.si.PublicNet.DirectURL = fmt.Sprintf("%s://%s:%d", config.Net.HTTP.Proto, extAddr.String(), extPort)
+	glog.Infof("AIS_HOST_IP=%s; PubNetwork=%s", hostIP, t.si.URL(cmn.NetworkPublic))
+
+	// applies to intra-cluster networks unless separately defined
+	if !config.HostNet.UseIntraControl {
+		t.si.IntraControlNet = t.si.PublicNet
+	}
+	if !config.HostNet.UseIntraData {
+		t.si.IntraDataNet = t.si.PublicNet
+	}
+}
+
 func initTID(config *cmn.Config) (tid string) {
 	var err error
 	if tid = envDaemonID(cmn.Target); tid != "" {
@@ -334,8 +365,9 @@ func (t *targetrunner) Run() error {
 	t.initRecvHandlers()
 
 	ec.Init(t)
+	mirror.Init()
 
-	xreg.RegHK()
+	xreg.RegWithHK()
 
 	marked := xreg.GetResilverMarked()
 	if marked.Interrupted || daemon.resilver.required {

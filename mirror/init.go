@@ -9,7 +9,7 @@ import (
 	"github.com/NVIDIA/aistore/xreg"
 )
 
-func init() {
+func Init() {
 	xreg.RegBckXact(&tcbFactory{kind: cmn.ActCopyBck})
 	xreg.RegBckXact(&tcbFactory{kind: cmn.ActETLBck})
 	xreg.RegBckXact(&mncFactory{})

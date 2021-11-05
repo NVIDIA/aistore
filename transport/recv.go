@@ -150,7 +150,7 @@ func (h *handler) handle() error {
 	}
 	handlers[h.trname] = h
 	mu.Unlock()
-	hk.Reg(h.hkName, h.cleanupOldSessions)
+	hk.Reg(h.hkName, h.cleanupOldSessions, 0 /*time.Duration*/)
 	return nil
 }
 

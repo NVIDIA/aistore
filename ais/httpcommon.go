@@ -751,7 +751,9 @@ func (h *httprunner) init(config *cmn.Config) {
 	h.owner.rmd.load()
 
 	h.gmm = memsys.DefaultPageMM()
+	h.gmm.RegWithHK() // note: housekeeper must be running (see daemon runAll)
 	h.smm = memsys.DefaultSmallMM()
+	h.smm.RegWithHK()
 }
 
 func newMuxers() cmn.HTTPMuxers {

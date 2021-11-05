@@ -277,6 +277,18 @@ func (r *MMSA) MemPressure2S(p int) (s string) {
 // defines the type of Slab rings: NumSmallSlabs x 128 vs NumPageSlabs x 4K
 func (r *MMSA) isSmall() bool { return r.defBufSize == DefaultSmallBufSize }
 
+func (r *MMSA) RegWithHK() {
+	d := r.duration
+	mem, _ := sys.Mem()
+	if mem.Free < r.lowWM || mem.Free < minMemFree {
+		d = r.duration / 4
+		if d < 10*time.Second {
+			d = 10 * time.Second
+		}
+	}
+	hk.Reg(r.Name+".gc", r.garbageCollect, d)
+}
+
 // initialize new MMSA instance
 func (r *MMSA) Init(panicOnErr bool) (err error) {
 	cos.Assert(r.Name != "")
@@ -360,15 +372,6 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 	if !r.isSmall() {
 		runtime.GC()
 	}
-	// 7. HK to call back (and maybe further tune-up the interval)
-	d := r.duration
-	if mem.Free < r.lowWM || mem.Free < minMemFree {
-		d = r.duration / 4
-		if d < 10*time.Second {
-			d = 10 * time.Second
-		}
-	}
-	hk.Reg(r.Name+".gc", r.garbageCollect, d)
 	debug.Func(func() {
 		if flag.Parsed() {
 			debug.Infof("%s started", r)
