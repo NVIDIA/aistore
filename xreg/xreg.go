@@ -140,18 +140,21 @@ func init() {
 	xaction.IncInactive = defaultReg.incInactive
 }
 
+func TestReset() { defaultReg = newRegistry() } // tests only
+
 func newRegistry() *registry {
-	xar := &registry{
+	return &registry{
 		entries:     newRegistryEntries(),
-		bckXacts:    make(map[string]Renewable, 10),
-		nonbckXacts: make(map[string]Renewable, 10),
+		bckXacts:    make(map[string]Renewable, 32),
+		nonbckXacts: make(map[string]Renewable, 32),
 	}
-	hk.Reg("xactions-old", xar.hkDelOld)
-	hk.Reg("xactions-inactive", xar.hkDelInactive)
-	return xar
 }
 
-func Reset() { defaultReg = newRegistry() } // tests only
+// periodic registry cleanups
+func RegHK() {
+	hk.Reg("xactions-old", defaultReg.hkDelOld)
+	hk.Reg("xactions-inactive", defaultReg.hkDelInactive)
+}
 
 func GetXact(uuid string) (xact cluster.Xact) { return defaultReg.getXact(uuid) }
 

@@ -210,7 +210,6 @@ func initTID(config *cmn.Config) (tid string) {
 	if tid = envDaemonID(cmn.Target); tid != "" {
 		return
 	}
-	// TODO -- FIXME: use post-bootstrap vmd.Mountpaths
 	if tid, err = fs.LoadNodeID(config.FSP.Paths); err != nil {
 		cos.ExitLogf("%v", err)
 	}
@@ -335,6 +334,8 @@ func (t *targetrunner) Run() error {
 	t.initRecvHandlers()
 
 	ec.Init(t)
+
+	xreg.RegHK()
 
 	marked := xreg.GetResilverMarked()
 	if marked.Interrupted || daemon.resilver.required {

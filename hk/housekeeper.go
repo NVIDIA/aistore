@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -48,6 +49,7 @@ type (
 		actions *timedActions
 		timer   *time.Timer
 		workCh  chan request
+		running atomic.Bool
 	}
 
 	CleanupFunc = func() time.Duration
@@ -95,6 +97,10 @@ func Reg(name string, f CleanupFunc, initialInterval ...time.Duration) {
 	if len(initialInterval) > 0 {
 		interval = initialInterval[0]
 	}
+	if !DefaultHK.running.Load() {
+		fmt.Fprintf(os.Stderr, "%s not running, cannot reg %q", DefaultHK.Name(), name)
+		return
+	}
 	DefaultHK.workCh <- request{
 		registering:     true,
 		name:            name,
@@ -112,6 +118,11 @@ func Unreg(name string) {
 
 func (*housekeeper) Name() string { return "housekeeper" }
 
+func (hk *housekeeper) terminate() {
+	hk.timer.Stop()
+	hk.running.Store(false)
+}
+
 func (hk *housekeeper) Run() (err error) {
 	signal.Notify(hk.sigCh,
 		syscall.SIGHUP,  // kill -SIGHUP XXXX
@@ -120,8 +131,9 @@ func (hk *housekeeper) Run() (err error) {
 		syscall.SIGQUIT, // kill -SIGQUIT XXXX
 	)
 	hk.timer = time.NewTimer(time.Hour)
-	defer hk.timer.Stop()
+	defer hk.terminate()
 
+	hk.running.Store(true)
 	for {
 		select {
 		case <-hk.stopCh.Listen():

@@ -35,7 +35,7 @@ func TestXactionRenewLRU(t *testing.T) {
 		xactCh = make(chan xreg.RenewRes, num)
 		wg     = &sync.WaitGroup{}
 	)
-	xreg.Reset()
+	xreg.TestReset()
 
 	xreg.RegNonBckXact(&lru.Factory{})
 	defer xreg.AbortAll()
@@ -70,7 +70,7 @@ func TestXactionRenewPrefetch(t *testing.T) {
 		)
 		tMock = cluster.NewTargetMock(bmd)
 	)
-	xreg.Reset()
+	xreg.TestReset()
 	bmd.Add(bck)
 
 	xreg.RegBckXact(&xs.TestXFactory{})
@@ -107,7 +107,7 @@ func TestXactionAbortAll(t *testing.T) {
 		bckTo   = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 		tMock   = cluster.NewTargetMock(bmd)
 	)
-	xreg.Reset()
+	xreg.TestReset()
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
 
@@ -134,7 +134,7 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 		bckTo   = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 		tMock   = cluster.NewTargetMock(bmd)
 	)
-	xreg.Reset()
+	xreg.TestReset()
 
 	defer xreg.AbortAll()
 
@@ -164,7 +164,7 @@ func TestXactionAbortBuckets(t *testing.T) {
 		bckTo   = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 		tMock   = cluster.NewTargetMock(bmd)
 	)
-	xreg.Reset()
+	xreg.TestReset()
 
 	defer xreg.AbortAll()
 
@@ -202,7 +202,7 @@ func TestXactionQueryFinished(t *testing.T) {
 		bck3  = cluster.NewBck("test3", cmn.ProviderGoogle, cmn.NsGlobal)
 		tMock = cluster.NewTargetMock(bmd)
 	)
-	xreg.Reset()
+	xreg.TestReset()
 
 	defer xreg.AbortAll()
 
