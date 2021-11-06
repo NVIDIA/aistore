@@ -22,7 +22,7 @@ Also, for insights and specific requirements from a deep-learning perspective, p
 
 The rest of this document is structured as follows:
 
-- [At-a-Glance](#at-a-glance)
+- [At a glance](#at-a-glance)
 - [ETL](#etl)
 - [Recently Added](#recently-added)
 - [Design Philosophy](#design-philosophy)
@@ -38,10 +38,9 @@ The rest of this document is structured as follows:
 - [CLI](#cli)
 - [AIS no-limitations principle](#ais-no-limitations-principle)
 
+## At a glance
 
-## At-a-Glance
-
-Following is a high-level block diagram with an emphasis on supported (frontend and backend) APIs and the capability to scale-out horizontally. The picture also tries to make the point that AIStore aggregates arbitrary numbers of storage servers with local drives,  whereby each drive is formatted with a local filesystem (e. g., xfs or zfs).
+Following is a high-level block diagram with an emphasis on supported frontend and backend APIs, and the capability to scale-out horizontally. The picture also tries to make the point that AIStore aggregates arbitrary numbers of storage servers with local drives, whereby each drive is formatted with a local filesystem (e.g., xfs or zfs).
 
 ![At-a-Glance](images/ais-block.png)
 
@@ -58,22 +57,9 @@ For background and further references, see:
 
 ## Recently Added
 
-- (**new**) [AIS Kubernetes Operator](https://github.com/NVIDIA/ais-k8s)
-- (**new**) DNS hostnames - public and intra-cluster networks;
-- (**new**) HDFS backend;
-- (**new**) Cluster and node shutdown and decommission (API, CLI);
-- bucket ACLs, users and roles, bucket and cluster level permissions;
-- [CLI](videos.md#cli-top-level-commands) (category, action, subject) auto-completions;
-- (**new**) Metadata and system data versioning and backward compatibility;
-- List objects v2: optimized `list-objects` to greatly reduce response times;
-- (**new**) Query objects: extends `list-objects` with advanced filtering capabilities;
-- (**new**) Downloader:  an option to keep AIS bucket in-sync with a (downloaded) destination;
-- (**new**) Build-time option to run AIS cluster in a reverese-proxy mode;
-- and more (for details, see https://github.com/NVIDIA/aistore/releases).
-
-In addition to AIS (native) REST API and CLI with extended capabilities to manipulate distributed content, AIStore also supports a growing list of [Backend providers](providers.md).
-
-Each specific capability is separately documented elsewhere. In particular, supported backend providers and *unified global namespace* are described [here](providers.md).
+- [v3.7](https://github.com/NVIDIA/aistore/releases/tag/3.7)
+- [v3.6](https://github.com/NVIDIA/aistore/releases/tag/3.6)
+- [v3.4](https://github.com/NVIDIA/aistore/releases/tag/3.4)
 
 ## Design Philosophy
 
