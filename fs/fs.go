@@ -732,8 +732,9 @@ func enable(mpath, cleanMpath, tid string, config *cmn.Config) (enabledMpath *Mo
 	if ok {
 		debug.Assert(cleanMpath == mi.Path)
 		if _, ok = disabledPaths[cleanMpath]; ok {
-			glog.Errorf("FATAL: %s vs (%s, %s)", mi, availablePaths, disabledPaths)
-			debug.Assert(false)
+			err = fmt.Errorf("FATAL: %s vs (%s, %s)", mi, availablePaths, disabledPaths)
+			glog.Error(err)
+			debug.AssertNoErr(err)
 			return
 		}
 		if mi.IsAnySet(FlagWaitingDD) {
@@ -780,46 +781,48 @@ func Remove(mpath string, cb ...func()) (*MountpathInfo, error) {
 	mfs.mu.Lock()
 	defer mfs.mu.Unlock()
 
-	// Clear daemonID xattr if set
+	// Clear target ID if set
 	if err := removeXattr(cleanMpath, nodeXattrID); err != nil {
 		return nil, err
 	}
-
-	var (
-		exists    bool
-		mpathInfo *MountpathInfo
-
-		availablePaths, disabledPaths = cloneMPI()
-	)
-	if mpathInfo, exists = availablePaths[cleanMpath]; !exists {
-		if mpathInfo, exists = disabledPaths[cleanMpath]; !exists {
+	availablePaths, disabledPaths := Get()
+	mi, exists := availablePaths[cleanMpath]
+	if !exists {
+		if mi, exists = disabledPaths[cleanMpath]; !exists {
 			return nil, cmn.NewErrMountpathNotFound(mpath)
 		}
-
-		delete(disabledPaths, cleanMpath)
-		delete(mfs.fsIDs, mpathInfo.FsID)
-		PutMPI(availablePaths, disabledPaths)
-		return mpathInfo, nil
+		debug.Assert(cleanMpath == mi.Path)
+		disabledCopy := _cloneOne(disabledPaths)
+		delete(disabledCopy, cleanMpath)
+		delete(mfs.fsIDs, mi.FsID) // optional, benign
+		putDisabMPI(disabledCopy)
+		return mi, nil
 	}
+	debug.Assert(cleanMpath == mi.Path)
 
+	if _, exists = disabledPaths[cleanMpath]; exists {
+		err := fmt.Errorf("FATAL: %s vs (%s, %s)", mi, availablePaths, disabledPaths)
+		glog.Error(err)
+		debug.AssertNoErr(err)
+		return nil, err
+	}
+	availableCopy := _cloneOne(availablePaths)
 	mfs.ios.RemoveMpath(cleanMpath)
-	delete(availablePaths, cleanMpath)
-	delete(mfs.fsIDs, mpathInfo.FsID)
+	delete(availableCopy, cleanMpath)
+	delete(mfs.fsIDs, mi.FsID)
 
-	availCnt := len(availablePaths)
+	availCnt := len(availableCopy)
 	if availCnt == 0 {
-		glog.Errorf("removed the last available mountpath %s", mpathInfo)
+		glog.Errorf("removed the last available mountpath %s", mi)
 	} else {
-		glog.Infof("removed mountpath %s (remain available: %d)", mpathInfo, availCnt)
+		glog.Infof("removed mountpath %s (remain available: %d)", mi, availCnt)
 	}
-
-	moveMarkers(availablePaths, mpathInfo)
-	PutMPI(availablePaths, disabledPaths)
-
+	moveMarkers(availableCopy, mi)
+	putAvailMPI(availableCopy)
 	if availCnt > 0 && len(cb) > 0 {
 		cb[0]()
 	}
-	return mpathInfo, nil
+	return mi, nil
 }
 
 // begin (disable | detach) transaction: CoW-mark the corresponding mountpath
@@ -841,13 +844,11 @@ func BeginDD(action string, flags cos.BitFlags, mpath string) (mi *MountpathInfo
 			err = cmn.NewErrMountpathNotFound(mpath)
 			return
 		}
-		glog.Infof("%s(%q) is already _completely_ disabled - nothing to do", mi, action)
+		glog.Infof("%s(%q) is already fully disabled - nothing to do", mi, action)
 		mi = nil
 		numAvail = len(availablePaths)
 		return
 	}
-
-	// TODO: evict this mi's LOM cache
 
 	availableCopy := _cloneOne(availablePaths)
 	mi = availableCopy[cleanMpath]
@@ -869,26 +870,36 @@ func Disable(mpath string, cb ...func()) (disabledMpath *MountpathInfo, err erro
 	mfs.mu.Lock()
 	defer mfs.mu.Unlock()
 
-	availablePaths, disabledPaths := cloneMPI()
-	if mpathInfo, ok := availablePaths[cleanMpath]; ok {
-		disabledPaths[cleanMpath] = mpathInfo
+	availablePaths, disabledPaths := Get()
+	if mi, ok := availablePaths[cleanMpath]; ok {
+		debug.Assert(cleanMpath == mi.Path)
+		if _, ok = disabledPaths[cleanMpath]; ok {
+			err = fmt.Errorf("FATAL: %s vs (%s, %s)", mi, availablePaths, disabledPaths)
+			glog.Error(err)
+			debug.AssertNoErr(err)
+			return
+		}
+		availableCopy, disabledCopy := cloneMPI()
+		mi.flags = mi.flags.Clear(FlagWaitingDD)
+		disabledCopy[cleanMpath] = mi
 		mfs.ios.RemoveMpath(cleanMpath)
-		delete(availablePaths, cleanMpath)
-		moveMarkers(availablePaths, mpathInfo)
-		PutMPI(availablePaths, disabledPaths)
+		delete(availableCopy, cleanMpath)
+		delete(mfs.fsIDs, mi.FsID)
+		moveMarkers(availableCopy, mi)
+		PutMPI(availableCopy, disabledCopy)
 		if l := len(availablePaths); l == 0 {
-			glog.Errorf("disabled the last available mountpath %s", mpathInfo)
+			glog.Errorf("disabled the last available mountpath %s", mi)
 		} else {
 			if len(cb) > 0 {
 				cb[0]()
 			}
-			glog.Infof("disabled mountpath %s (%d remain(s) active)", mpathInfo, l)
+			glog.Infof("disabled mountpath %s (%d remain(s) active)", mi, l)
 		}
-		return mpathInfo, nil
+		return mi, nil
 	}
 
 	if _, ok := disabledPaths[cleanMpath]; ok {
-		return nil, nil
+		return nil, nil // nothing to do
 	}
 	return nil, cmn.NewErrMountpathNotFound(mpath)
 }
