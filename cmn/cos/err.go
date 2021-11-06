@@ -115,7 +115,7 @@ func Exitf(f string, a ...interface{}) {
 // ExitLogf is glog + Exitf.
 func ExitLogf(f string, a ...interface{}) {
 	msg := fmt.Sprintf("FATAL ERROR: "+f+"\n", a...)
-	glog.Error(msg)
+	glog.ErrorDepth(1, msg)
 	glog.Flush()
 	fmt.Fprint(os.Stderr, msg)
 	os.Exit(1)
