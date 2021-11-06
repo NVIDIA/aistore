@@ -29,12 +29,11 @@ if [[ "$metrics" == "y" ]]; then
   pushd $tmpdir
   git clone https://github.com/prometheus-operator/kube-prometheus.git
 
-  pushd kube-operator
+  pushd kube-prometheus
   # NOTE: Taken from https://github.com/prometheus-operator/kube-prometheus#quickstart.
   # Create the namespace and CRDs, and then wait for them to be available before creating the remaining resources.
   kubectl create -f manifests/setup
-  # timeout = 300s
-  for i in {1..30}; do if `kubectl get servicemonitors --all-namespaces`; then break; fi; sleep 10; done
+  until kubectl get servicemonitors --all-namespaces ; do sleep 1; done
   kubectl create -f manifests/
   popd
 
