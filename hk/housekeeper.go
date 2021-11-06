@@ -106,17 +106,23 @@ func WaitRunning() {
 	}
 }
 
-func _checkRunning(name, act string) {
-	if DefaultHK.running.Load() {
-		return
+func (hk *housekeeper) checkRunning(name, act string) {
+	for !DefaultHK.running.Load() {
+		select {
+		case <-hk.stopCh.Listen():
+			err := fmt.Errorf("%s is not running, cannot %s %q", DefaultHK.Name(), act, name)
+			debug.AssertNoErr(err)
+			glog.Error(err)
+			return
+		default:
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
-	err := fmt.Errorf("%s is not running, cannot %s %q", DefaultHK.Name(), act, name)
-	debug.AssertNoErr(err)
-	glog.Error(err)
 }
 
 func Reg(name string, f CleanupFunc, interval time.Duration) {
-	_checkRunning(name, "reg")
+	DefaultHK.checkRunning(name, "reg")
 	DefaultHK.workCh <- request{
 		registering:     true,
 		name:            name,
@@ -126,7 +132,7 @@ func Reg(name string, f CleanupFunc, interval time.Duration) {
 }
 
 func Unreg(name string) {
-	_checkRunning(name, "unreg")
+	DefaultHK.checkRunning(name, "unreg")
 	DefaultHK.workCh <- request{
 		registering: false,
 		name:        name,
