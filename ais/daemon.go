@@ -266,7 +266,7 @@ func (g *rungroup) runAll(mainRunner cos.Runner) error {
 	// run all, housekeeper first
 	go g.run(hk.DefaultHK)
 	runtime.Gosched()
-	hk.WaitRunning()
+	hk.WaitStarted()
 	for _, r := range g.rs {
 		if r.Name() == hk.DefaultHK.Name() {
 			continue

@@ -16,7 +16,7 @@ import (
 func TestHousekeeper(t *testing.T) {
 	hk.TestInit()
 	go hk.DefaultHK.Run()
-	hk.WaitRunning()
+	hk.WaitStarted()
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Housekeeper Suite")
 }

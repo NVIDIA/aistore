@@ -100,21 +100,28 @@ func (tc *timedActions) Pop() interface{} {
 // housekeeper //
 /////////////////
 
-func WaitRunning() {
+func WaitStarted() {
 	for !DefaultHK.running.Load() {
 		time.Sleep(time.Second)
 	}
 }
 
 func (hk *housekeeper) checkRunning(name, act string) {
-	for !DefaultHK.running.Load() {
+	const fmterr = "%s is not running, cannot %s %q"
+	var catchIt bool
+	for !hk.running.Load() {
 		select {
 		case <-hk.stopCh.Listen():
-			err := fmt.Errorf("%s is not running, cannot %s %q", DefaultHK.Name(), act, name)
-			debug.AssertNoErr(err)
+			err := fmt.Errorf(fmterr, hk.Name(), act, name)
 			glog.Error(err)
+			debug.AssertNoErr(err)
 			return
 		default:
+			if !catchIt { // TODO: try fix & remove
+				catchIt = true
+				err := fmt.Errorf(fmterr, hk.Name(), act, name)
+				glog.ErrorDepth(1, err)
+			}
 			break
 		}
 		time.Sleep(500 * time.Millisecond)
