@@ -236,7 +236,7 @@ func TestParseFQN(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
 			mios := ios.NewIOStaterMock()
-			fs.New(mios)
+			fs.TestNew(mios)
 			fs.DisableFsIDCheck()
 
 			for _, mpath := range tt.mpaths {
@@ -328,7 +328,7 @@ func TestMakeAndParseFQN(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(strings.Join([]string{tt.mpath, tt.bck.String(), tt.contentType, tt.objName}, "|"), func(t *testing.T) {
 			mios := ios.NewIOStaterMock()
-			fs.New(mios)
+			fs.TestNew(mios)
 			fs.DisableFsIDCheck()
 
 			if _, err := os.Stat(tt.mpath); os.IsNotExist(err) {
@@ -341,7 +341,7 @@ func TestMakeAndParseFQN(t *testing.T) {
 			fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 			fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
-			mpaths, _ := fs.Get()
+			mpaths := fs.GetAvail()
 			fqn := mpaths[tt.mpath].MakePathFQN(tt.bck, tt.contentType, tt.objName)
 
 			parsedFQN, err := fs.ParseFQN(fqn)
@@ -375,14 +375,14 @@ func BenchmarkParseFQN(b *testing.B) {
 		bck   = cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 	)
 
-	fs.New(mios)
+	fs.TestNew(mios)
 	fs.DisableFsIDCheck()
 	cos.CreateDir(mpath)
 	defer os.RemoveAll(mpath)
 	fs.Add(mpath, "daeID")
 	fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 
-	mpaths, _ := fs.Get()
+	mpaths := fs.GetAvail()
 	fqn := mpaths[mpath].MakePathFQN(bck, fs.ObjectType, "super/long/name")
 	b.ResetTimer()
 

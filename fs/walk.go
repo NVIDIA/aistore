@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/karrick/godirwalk"
@@ -41,12 +40,10 @@ type (
 	}
 
 	Options struct {
-		Dir string
-
-		Mpath *MountpathInfo
-		Bck   cmn.Bck
-		CTs   []string
-
+		Dir         string
+		Mi          *MountpathInfo
+		Bck         cmn.Bck
+		CTs         []string
 		ErrCallback errFunc
 		Callback    WalkFunc
 		Slab        *memsys.Slab
@@ -75,7 +72,7 @@ type (
 		dirEntry DirEntry
 	}
 	walkCb struct {
-		mpath    *MountpathInfo
+		mi       *MountpathInfo
 		validate WalkFunc
 		ctx      context.Context
 		workCh   chan *walkEntry
@@ -155,17 +152,17 @@ func Walk(opts *Options) error {
 		err  error
 		ew   = &errCallbackWrapper{}
 	)
-	cos.Assert(opts.ErrCallback == nil)   // `ErrCallback` is not used yet - using the default one below
+	debug.Assert(opts.ErrCallback == nil) // `ErrCallback` is not used yet - using the default one below
 	opts.ErrCallback = ew.PathErrToAction // Default error callback halts on bucket-level and lom `errThreshold` errors
 
 	if opts.Dir != "" {
 		fqns = append(fqns, opts.Dir)
 	} else {
-		cos.Assert(len(opts.CTs) > 0)
+		debug.Assert(len(opts.CTs) > 0)
 		if opts.Bck.Name != "" {
 			// walk specific content-types inside the bucket.
 			for _, ct := range opts.CTs {
-				fqns = append(fqns, opts.Mpath.MakePathCT(opts.Bck, ct))
+				fqns = append(fqns, opts.Mi.MakePathCT(opts.Bck, ct))
 			}
 		} else {
 			// all content-type paths for all bucket subdirectories
@@ -228,7 +225,7 @@ func allMpathCTpaths(opts *Options) (fqns []string, err error) {
 			continue
 		}
 		for _, ct := range opts.CTs {
-			fqns = append(fqns, opts.Mpath.MakePathCT(bck, ct))
+			fqns = append(fqns, opts.Mi.MakePathCT(bck, ct))
 		}
 	}
 	return
@@ -253,7 +250,7 @@ func AllMpathBcks(opts *Options) (bcks []cmn.Bck, err error) {
 func mpathChildren(opts *Options) (children []string, err error) {
 	var (
 		scratch []byte
-		fqn     = opts.Mpath.MakePathBck(opts.Bck)
+		fqn     = opts.Mi.MakePathBck(opts.Bck)
 		slab    = opts.Slab
 	)
 	if slab == nil {
@@ -278,37 +275,34 @@ func mpathChildren(opts *Options) (children []string, err error) {
 
 func WalkBck(opts *WalkBckOptions) error {
 	var (
-		mpaths, _ = Get()
-		mpathChs  = make([]chan *walkEntry, len(mpaths))
-
-		group, ctx = errgroup.WithContext(context.Background())
+		availablePaths = GetAvail()
+		mpathChs       = make([]chan *walkEntry, len(availablePaths))
+		group, ctx     = errgroup.WithContext(context.Background())
 	)
-
-	for i := 0; i < len(mpaths); i++ {
+	for i := 0; i < len(availablePaths); i++ {
 		mpathChs[i] = make(chan *walkEntry, mpathQueueSize)
 	}
-
-	cos.Assert(opts.Mpath == nil)
+	debug.Assert(opts.Mi == nil)
 	idx := 0
-	for _, mpath := range mpaths {
-		group.Go(func(idx int, mpath *MountpathInfo) func() error {
+	for _, mi := range availablePaths {
+		group.Go(func(idx int, mi *MountpathInfo) func() error {
 			return func() error {
 				var (
 					o      = opts.Options
 					workCh = mpathChs[idx]
 				)
 				defer close(workCh)
-				o.Mpath = mpath
-				wcb := &walkCb{mpath: mpath, validate: opts.ValidateCallback, ctx: ctx, workCh: workCh}
+				o.Mi = mi
+				wcb := &walkCb{mi: mi, validate: opts.ValidateCallback, ctx: ctx, workCh: workCh}
 				o.Callback = wcb.walkBckMpath
 				return Walk(&o)
 			}
-		}(idx, mpath))
+		}(idx, mi))
 		idx++
 	}
 
 	// TODO: handle case when `opts.Sorted == false`
-	cos.Assert(opts.Sorted)
+	debug.Assert(opts.Sorted)
 	group.Go(func() error {
 		h := &objInfos{}
 		heap.Init(h)
@@ -338,7 +332,7 @@ func WalkBck(opts *WalkBckOptions) error {
 func (wcb *walkCb) walkBckMpath(fqn string, de DirEntry) error {
 	select {
 	case <-wcb.ctx.Done():
-		return cmn.NewErrAborted(wcb.mpath.String(), "walk-bck-mpath", nil)
+		return cmn.NewErrAborted(wcb.mi.String(), "walk-bck-mpath", nil)
 	default:
 		break
 	}
@@ -358,7 +352,7 @@ func (wcb *walkCb) walkBckMpath(fqn string, de DirEntry) error {
 
 	select {
 	case <-wcb.ctx.Done():
-		return cmn.NewErrAborted(wcb.mpath.String(), "walk-bck-mpath", nil)
+		return cmn.NewErrAborted(wcb.mi.String(), "walk-bck-mpath", nil)
 	case wcb.workCh <- &walkEntry{fqn, de}:
 		return nil
 	}

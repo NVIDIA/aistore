@@ -366,7 +366,7 @@ func (lom *LOM) DelExtraCopies(fqn ...string) (removed bool, err error) {
 	if lom._whingeCopy() {
 		return
 	}
-	availablePaths, _ := fs.Get()
+	availablePaths := fs.GetAvail()
 	for _, mi := range availablePaths {
 		copyFQN := mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
 		if _, ok := lom.md.copies[copyFQN]; ok {
@@ -421,7 +421,7 @@ func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 		lom.Unlock(true)
 		return true // nothing to do
 	}
-	availablePaths, _ := fs.Get()
+	availablePaths := fs.GetAvail()
 	buf, slab := T.MMSA().Alloc()
 	for path, mi := range availablePaths {
 		if path == lom.mpathInfo.Path {
@@ -636,9 +636,9 @@ func (lom *LOM) bestCopy() (fqn string) {
 // (see also bestCopy above)
 func (lom *LOM) BestMpath() (mi *fs.MountpathInfo) {
 	var (
-		availablePaths, _ = fs.Get()
-		mpathUtils        = fs.GetAllMpathUtils()
-		minUtil           = int64(101)
+		availablePaths = fs.GetAvail()
+		mpathUtils     = fs.GetAllMpathUtils()
+		minUtil        = int64(101)
 	)
 	for mpath, mpathInfo := range availablePaths {
 		if !lom.haveMpath(mpath) {
@@ -1056,10 +1056,10 @@ func EvictLomCache(b *Bck) {
 
 func lomCaches() []*sync.Map {
 	var (
-		i                 int
-		availablePaths, _ = fs.Get()
-		cachesCnt         = len(availablePaths) * cos.MultiSyncMapCount
-		caches            = make([]*sync.Map, cachesCnt)
+		i              int
+		availablePaths = fs.GetAvail()
+		cachesCnt      = len(availablePaths) * cos.MultiSyncMapCount
+		caches         = make([]*sync.Map, cachesCnt)
 	)
 	for _, mi := range availablePaths {
 		for idx := 0; idx < cos.MultiSyncMapCount; idx++ {

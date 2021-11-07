@@ -18,7 +18,7 @@ import (
 // placed here because it requires fs to set up the testing environment
 
 func TestMountpathSearchValid(t *testing.T) {
-	New()
+	TestNew(nil)
 
 	mpath := "/tmp/abc"
 	createDirs(mpath)
@@ -32,7 +32,7 @@ func TestMountpathSearchValid(t *testing.T) {
 }
 
 func TestMountpathSearchInvalid(t *testing.T) {
-	New()
+	TestNew(nil)
 
 	mpath := "/tmp/abc"
 	createDirs(mpath)
@@ -45,7 +45,7 @@ func TestMountpathSearchInvalid(t *testing.T) {
 }
 
 func TestMountpathSearchWhenNoAvailable(t *testing.T) {
-	New()
+	TestNew(nil)
 	oldMPs := setAvailableMountPaths("")
 	mpathInfo, _ := Path2MpathInfo("xabc")
 	tassert.Errorf(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
@@ -57,7 +57,7 @@ func TestSearchWithASuffixToAnotherValue(t *testing.T) {
 	config.TestFSP.Count = 1
 	cmn.GCO.CommitUpdate(config)
 
-	New()
+	TestNew(nil)
 	dirs := []string{"/tmp/x", "/tmp/x/y", "/tmp/x/y/abc", "/tmp/x/yabc"}
 	createDirs(dirs...)
 	defer removeDirs(dirs...)
@@ -78,7 +78,7 @@ func TestSearchWithASuffixToAnotherValue(t *testing.T) {
 }
 
 func TestSimilarCases(t *testing.T) {
-	New()
+	TestNew(nil)
 	dirs := []string{"/tmp/abc", "/tmp/abx"}
 	createDirs(dirs...)
 	defer removeDirs(dirs...)
@@ -100,7 +100,7 @@ func TestSimilarCases(t *testing.T) {
 
 func TestSimilarCasesWithRoot(t *testing.T) {
 	// root is an invalid mountpath
-	New()
+	TestNew(nil)
 	mpath := "/tmp/abc"
 	createDirs(mpath)
 	defer removeDirs(mpath)
@@ -114,7 +114,7 @@ func TestSimilarCasesWithRoot(t *testing.T) {
 func setAvailableMountPaths(paths ...string) []string {
 	DisableFsIDCheck()
 
-	availablePaths, _ := Get()
+	availablePaths := GetAvail()
 	oldPaths := make([]string, 0, len(availablePaths))
 	for _, mpathInfo := range availablePaths {
 		oldPaths = append(oldPaths, mpathInfo.Path)

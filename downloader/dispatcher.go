@@ -68,12 +68,10 @@ func (d *dispatcher) run() (err error) {
 		sema       = cos.NewSemaphore(5 * fs.NumAvail())
 		group, ctx = errgroup.WithContext(context.Background())
 	)
-
-	availablePaths, _ := fs.Get()
+	availablePaths := fs.GetAvail()
 	for mpath := range availablePaths {
 		d.addJogger(mpath)
 	}
-
 	// Release semaphore and allow other goroutines to work.
 	d.startupSema.markStarted()
 

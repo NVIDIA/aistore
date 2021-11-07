@@ -53,7 +53,7 @@ var _ = Describe("newConcAdjuster", func() {
 		err := cos.CreateDir(testingConfigDir)
 		Expect(err).ShouldNot(HaveOccurred())
 
-		fs.New(mios)
+		fs.TestNew(mios)
 		_, _ = fs.Add(testingConfigDir, "daeID")
 
 		config := cmn.GCO.BeginUpdate()
@@ -96,7 +96,7 @@ var _ = Describe("newConcAdjuster", func() {
 			perfectLimit = 13
 			perfectUtil  = int(cfg.Disk.DiskUtilMaxWM+cfg.Disk.DiskUtilHighWM) / 2
 		)
-		availablePaths, _ := fs.Get()
+		availablePaths := fs.GetAvail()
 		mpathInfo := availablePaths[testingConfigDir]
 
 		adjuster := newConcAdjuster(0, 1)

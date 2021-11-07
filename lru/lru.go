@@ -132,12 +132,12 @@ func (p *Factory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err
 
 func Run(ini *InitLRU) {
 	var (
-		xlru              = ini.Xaction
-		config            = cmn.GCO.Get()
-		availablePaths, _ = fs.Get()
-		num               = len(availablePaths)
-		joggers           = make(map[string]*lruJ, num)
-		parent            = &lruP{joggers: joggers, ini: *ini}
+		xlru           = ini.Xaction
+		config         = cmn.GCO.Get()
+		availablePaths = fs.GetAvail()
+		num            = len(availablePaths)
+		joggers        = make(map[string]*lruJ, num)
+		parent         = &lruP{joggers: joggers, ini: *ini}
 	)
 	glog.Infof("[lru] %s started: dont-evict-time %v", xlru, config.LRU.DontEvictTime)
 	if num == 0 {
@@ -213,8 +213,8 @@ func (j *lruJ) jog(providers []string) (err error) {
 		var (
 			bcks []cmn.Bck
 			opts = fs.Options{
-				Mpath: j.mpathInfo,
-				Bck:   cmn.Bck{Provider: provider, Ns: cmn.NsGlobal},
+				Mi:  j.mpathInfo,
+				Bck: cmn.Bck{Provider: provider, Ns: cmn.NsGlobal},
 			}
 		)
 		if bcks, err = fs.AllMpathBcks(&opts); err != nil {
@@ -273,7 +273,7 @@ func (j *lruJ) jogBck() (size int64, err error) {
 
 	// 2. collect
 	opts := &fs.Options{
-		Mpath:    j.mpathInfo,
+		Mi:       j.mpathInfo,
 		Bck:      j.bck,
 		CTs:      []string{fs.ObjectType},
 		Callback: j.walk,

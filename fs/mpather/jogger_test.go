@@ -213,7 +213,7 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 		}
 		out = tutils.PrepareObjects(t, desc)
 
-		mpaths, _   = fs.Get()
+		mpaths      = fs.GetAvail()
 		counters    = make(map[string]*atomic.Int32, len(mpaths))
 		failOnMpath *fs.MountpathInfo
 		failed      atomic.Bool

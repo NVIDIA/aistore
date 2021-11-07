@@ -243,8 +243,8 @@ func (t *bsummXact) Run(*sync.WaitGroup) {
 
 func (t *bsummXact) doBckSummaryFast(bck *cluster.Bck) (objCount, size uint64, err error) {
 	var (
-		availablePaths, _ = fs.Get()
-		group, _          = errgroup.WithContext(context.Background())
+		availablePaths = fs.GetAvail()
+		group, _       = errgroup.WithContext(context.Background())
 	)
 
 	for _, mpathInfo := range availablePaths {

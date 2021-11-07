@@ -61,7 +61,7 @@ var _ = Describe("LOM", func() {
 	config.TestFSP.Count = 1
 	cmn.GCO.CommitUpdate(config)
 
-	fs.New()
+	fs.TestNew(nil)
 	fs.DisableFsIDCheck()
 	for _, mpath := range mpaths {
 		_, _ = fs.Add(mpath, "daeID")

@@ -87,7 +87,7 @@ func initConfig() {
 
 func createAndAddMountpath(path string) {
 	cos.CreateDir(path)
-	fs.New()
+	fs.TestNew(nil)
 	fs.Add(path, "daeID")
 
 	fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
@@ -136,7 +136,7 @@ var _ = Describe("Storage cleanup tests", func() {
 			t = newTargetLRUMock()
 			ini = newInitStoreCln(t)
 
-			mpaths, _ := fs.Get()
+			mpaths := fs.GetAvail()
 			bck := cmn.Bck{Name: bucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 			bckAnother = cmn.Bck{Name: bucketNameAnother, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 			filesPath = mpaths[basePath].MakePathCT(bck, fs.ObjectType)
@@ -152,8 +152,8 @@ var _ = Describe("Storage cleanup tests", func() {
 		Describe("evict trash directory", func() {
 			It("should totally evict trash directory", func() {
 				var (
-					mpaths, _ = fs.Get()
-					mpath     = mpaths[basePath]
+					mpaths = fs.GetAvail()
+					mpath  = mpaths[basePath]
 				)
 
 				saveRandomFiles(filesPath, 10)

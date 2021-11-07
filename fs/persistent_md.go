@@ -38,9 +38,9 @@ func MarkerExists(marker string) bool {
 
 func PersistMarker(marker string) (fatalErr, writeErr error) {
 	var (
-		relname            = filepath.Join(cmn.MarkersDirName, marker)
-		availableMpaths, _ = Get()
-		cnt                int
+		cnt             int
+		relname         = filepath.Join(cmn.MarkersDirName, marker)
+		availableMpaths = GetAvail()
 	)
 	if len(availableMpaths) == 0 {
 		fatalErr = cmn.ErrNoMountpaths
@@ -78,8 +78,8 @@ func PersistMarker(marker string) (fatalErr, writeErr error) {
 
 func RemoveMarker(marker string) {
 	var (
-		availableMpaths, _ = Get()
-		relname            = filepath.Join(cmn.MarkersDirName, marker)
+		availableMpaths = GetAvail()
+		relname         = filepath.Join(cmn.MarkersDirName, marker)
 	)
 	for _, mi := range availableMpaths {
 		if err := cos.RemoveFile(filepath.Join(mi.Path, relname)); err != nil {
@@ -94,9 +94,9 @@ func RemoveMarker(marker string) {
 // Returns how many times it has successfully stored a file.
 func PersistOnMpaths(fname, backupName string, meta jsp.Opts, atMost int, b []byte, sgl *memsys.SGL) (cnt, availCnt int) {
 	var (
-		wto                io.WriterTo
-		availableMpaths, _ = Get()
-		bcnt               int
+		wto             io.WriterTo
+		bcnt            int
+		availableMpaths = GetAvail()
 	)
 	availCnt = len(availableMpaths)
 	debug.Assert(atMost > 0)
@@ -144,7 +144,7 @@ func RemoveDaemonIDs() {
 }
 
 func CountPersisted(fname string) (cnt int) {
-	available, _ := Get()
+	available := GetAvail()
 	for mpath := range available {
 		fpath := filepath.Join(mpath, fname)
 		if err := Access(fpath); err == nil {

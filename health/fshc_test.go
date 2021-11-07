@@ -30,7 +30,7 @@ func initMountpaths(t *testing.T) {
 	config.TestFSP.Count = 1
 	cmn.GCO.CommitUpdate(config)
 
-	fs.New()
+	fs.TestNew(nil)
 	fs.DisableFsIDCheck()
 	for i := 1; i <= 4; i++ {
 		mpath := fmt.Sprintf("%s/%d", fsCheckerTmpDir, i)

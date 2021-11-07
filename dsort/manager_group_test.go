@@ -37,7 +37,7 @@ var _ = Describe("ManagerGroup", func() {
 		db := dbdriver.NewDBMock()
 		mgrp = NewManagerGroup(db, false /* skip hk*/)
 
-		fs.New()
+		fs.TestNew(nil)
 		fs.Add(testingConfigDir, "daeID")
 	})
 

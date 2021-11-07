@@ -35,7 +35,7 @@ var _ = Describe("Mirror", func() {
 	config.TestFSP.Count = 1
 	cmn.GCO.CommitUpdate(config)
 
-	fs.New()
+	fs.TestNew(nil)
 	fs.DisableFsIDCheck()
 	_, _ = fs.Add(mpath, "daeID")
 	_, _ = fs.Add(mpath2, "daeID")

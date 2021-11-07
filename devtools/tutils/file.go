@@ -139,7 +139,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 	)
 
 	mios := ios.NewIOStaterMock()
-	fs.New(mios)
+	fs.TestNew(mios)
 	fs.DisableFsIDCheck()
 
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
@@ -215,10 +215,8 @@ func PrepareMountPaths(t *testing.T, cnt int) fs.MPI {
 	PrepareObjects(t, ObjectsDesc{
 		MountpathsCnt: cnt,
 	})
-
 	AssertMountpathCount(t, cnt, 0)
-	available, _ := fs.Get()
-	return available
+	return fs.GetAvail()
 }
 
 func RemoveMountPaths(t *testing.T, mpaths fs.MPI) {

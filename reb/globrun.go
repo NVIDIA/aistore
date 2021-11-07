@@ -107,7 +107,7 @@ type (
 		id     int64
 		smap   *cluster.Smap
 		config *cmn.Config
-		paths  fs.MPI
+		apaths fs.MPI
 		ecUsed bool
 	}
 )
@@ -252,7 +252,7 @@ func (reb *Reb) rebSerialize(rargs *rebArgs) bool {
 	if rargs.smap.Version == 0 {
 		rargs.smap = reb.t.Sowner().Get()
 	}
-	rargs.paths, _ = fs.Get()
+	rargs.apaths = fs.GetAvail()
 	return true
 }
 
@@ -438,7 +438,7 @@ func (reb *Reb) runNoEC(rargs *rebArgs) error {
 	}
 
 	wg := &sync.WaitGroup{}
-	for _, mpathInfo := range rargs.paths {
+	for _, mpathInfo := range rargs.apaths {
 		var sema *cos.DynSemaphore
 		if multiplier > 1 {
 			sema = cos.NewDynSemaphore(int(multiplier))
@@ -518,8 +518,8 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 
 		// NOTE: requires locally migrated objects *not* to be removed at the src
 		aPaths, _ := fs.Get()
-		if len(aPaths) > len(rargs.paths) {
-			glog.Warningf("%s: mountpath changes detected (%d, %d)", logHdr, len(aPaths), len(rargs.paths))
+		if len(aPaths) > len(rargs.apaths) {
+			glog.Warningf("%s: mountpath changes detected (%d, %d)", logHdr, len(aPaths), len(rargs.apaths))
 		}
 
 		// 8. synchronize
@@ -641,7 +641,7 @@ func (rj *rebJogger) jog(mpathInfo *fs.MountpathInfo) {
 	defer rj.wg.Done()
 
 	opts := &fs.Options{
-		Mpath:    mpathInfo,
+		Mi:       mpathInfo,
 		CTs:      []string{fs.ObjectType},
 		Callback: rj.walk,
 		Sorted:   false,

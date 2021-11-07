@@ -154,8 +154,8 @@ func HrwTargetTask(uuid string, smap *Smap) (si *Snode, err error) {
 
 func HrwMpath(uname string) (mi *fs.MountpathInfo, digest uint64, err error) {
 	var (
-		max               uint64
-		availablePaths, _ = fs.Get()
+		max            uint64
+		availablePaths = fs.GetAvail()
 	)
 	digest = xxhash.ChecksumString64S(uname, cos.MLCG32)
 	for _, mpathInfo := range availablePaths {

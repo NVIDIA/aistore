@@ -549,13 +549,20 @@ func (mi *MountpathInfo) _cloneAddEnabled(tid string, config *cmn.Config) (err e
 /////////////////////
 
 // create a new singleton
-func New(iostater ...ios.IOStater) {
+func New() {
 	mfs = &MountedFS{fsIDs: make(map[cos.FsID]string, 10), checkFsID: true}
-	if len(iostater) > 0 {
-		mfs.ios = iostater[0]
-	} else {
+	mfs.ios = ios.NewIostatContext()
+}
+
+// used only in tests
+func TestNew(iostater ios.IOStater) {
+	mfs = &MountedFS{fsIDs: make(map[cos.FsID]string, 10), checkFsID: true}
+	if iostater == nil {
 		mfs.ios = ios.NewIostatContext()
+	} else {
+		mfs.ios = iostater
 	}
+	PutMPI(make(MPI, 10), make(MPI, 10))
 }
 
 func Decommission(mdOnly bool) {
@@ -904,28 +911,28 @@ func Disable(mpath string, cb ...func()) (disabledMpath *MountpathInfo, err erro
 	return nil, cmn.NewErrMountpathNotFound(mpath)
 }
 
-// Mountpaths returns both available and disabled mountpaths.
+// returns both available and disabled mountpaths (compare with GetAvail)
 func Get() (MPI, MPI) {
 	var (
 		availablePaths = (*MPI)(mfs.available.Load())
 		disabledPaths  = (*MPI)(mfs.disabled.Load())
 	)
-	if availablePaths == nil {
-		tmp := make(MPI, 10)
-		availablePaths = &tmp
-	}
-	if disabledPaths == nil {
-		tmp := make(MPI, 10)
-		disabledPaths = &tmp
-	}
+	debug.Assert(availablePaths != nil)
+	debug.Assert(disabledPaths != nil)
 	return *availablePaths, *disabledPaths
+}
+
+func GetAvail() MPI {
+	availablePaths := (*MPI)(mfs.available.Load())
+	debug.Assert(availablePaths != nil)
+	return *availablePaths
 }
 
 func CreateBucket(op string, bck cmn.Bck, nilbmd bool) (errs []error) {
 	var (
-		availablePaths, _ = Get()
-		totalDirs         = len(availablePaths) * len(CSM.RegisteredContentTypes)
-		totalCreatedDirs  int
+		availablePaths   = GetAvail()
+		totalDirs        = len(availablePaths) * len(CSM.RegisteredContentTypes)
+		totalCreatedDirs int
 	)
 	for _, mi := range availablePaths {
 		num, err := mi.createBckDirs(bck, nilbmd)
@@ -946,9 +953,9 @@ func CreateBucket(op string, bck cmn.Bck, nilbmd bool) (errs []error) {
 
 func DestroyBucket(op string, bck cmn.Bck, bid uint64) (err error) {
 	var (
-		availablePaths, _ = Get()
-		count             = len(availablePaths)
-		n                 int
+		n              int
+		availablePaths = GetAvail()
+		count          = len(availablePaths)
 	)
 	for _, mi := range availablePaths {
 		dir := mi.makeDelPathBck(bck, bid)
@@ -965,7 +972,7 @@ func DestroyBucket(op string, bck cmn.Bck, bid uint64) (err error) {
 }
 
 func RenameBucketDirs(bidFrom uint64, bckFrom, bckTo cmn.Bck) (err error) {
-	availablePaths, _ := Get()
+	availablePaths := GetAvail()
 	renamed := make([]*MountpathInfo, 0, len(availablePaths))
 	for _, mi := range availablePaths {
 		fromPath := mi.makeDelPathBck(bckFrom, bidFrom)
@@ -1043,8 +1050,8 @@ func GetCapStatus() (cs CapStatus) {
 
 func RefreshCapStatus(config *cmn.Config, mpcap MPCap) (cs CapStatus, err error) {
 	var (
-		availablePaths, _ = Get()
-		c                 Capacity
+		c              Capacity
+		availablePaths = GetAvail()
 	)
 	if len(availablePaths) == 0 {
 		err = cmn.ErrNoMountpaths

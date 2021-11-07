@@ -55,7 +55,7 @@ var _ = Describe("LOM Xattributes", func() {
 		_, _ = fs.Add(xattrMpath, "daeID")
 		_, _ = fs.Add(copyMpath, "daeID")
 
-		available, _ := fs.Get()
+		available := fs.GetAvail()
 		copyMpathInfo = available[copyMpath]
 
 		tMock = cluster.NewTargetMock(bmdMock)

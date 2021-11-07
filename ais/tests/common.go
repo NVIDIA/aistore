@@ -923,7 +923,7 @@ func initMountpaths(t *testing.T, proxyURL string) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal})
 	fsOnce.Do(initFS)
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	fs.New()
+	fs.TestNew(nil)
 	fs.DisableFsIDCheck()
 	smap := tutils.GetClusterMap(t, proxyURL)
 	for _, target := range smap.Tmap {

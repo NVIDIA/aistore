@@ -126,7 +126,7 @@ func initConfig() {
 
 func createAndAddMountpath(path string) {
 	cos.CreateDir(path)
-	fs.New()
+	fs.TestNew(nil)
 	fs.Add(path, "daeID")
 
 	fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
@@ -181,7 +181,7 @@ var _ = Describe("LRU tests", func() {
 			t = newTargetLRUMock()
 			ini = newInitLRU(t)
 
-			mpaths, _ := fs.Get()
+			mpaths := fs.GetAvail()
 			bck := cmn.Bck{Name: bucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 			bckAnother = cmn.Bck{Name: bucketNameAnother, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 			filesPath = mpaths[basePath].MakePathCT(bck, fs.ObjectType)

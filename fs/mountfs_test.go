@@ -150,7 +150,7 @@ func TestMountpathDisableAlreadyDisabled(t *testing.T) {
 }
 
 func TestMountpathEnableNonExisting(t *testing.T) {
-	fs.New()
+	fs.TestNew(nil)
 	_, err := fs.Enable("/tmp")
 	tassert.Errorf(t, err != nil, "enabling nonexisting mountpath should end with error")
 
@@ -210,7 +210,7 @@ func TestMountpathEnableAlreadyEnabled(t *testing.T) {
 }
 
 func TestMountpathsAddMultipleWithSameFSID(t *testing.T) {
-	fs.New(ios.NewIOStaterMock())
+	fs.TestNew(ios.NewIOStaterMock())
 
 	mpath := "/tmp/abc"
 	tutils.AddMpath(t, mpath)
@@ -242,7 +242,7 @@ func TestMoveToTrash(t *testing.T) {
 	mpath := t.TempDir()
 	tutils.AddMpath(t, mpath)
 
-	mpaths, _ := fs.Get()
+	mpaths := fs.GetAvail()
 	mi := mpaths[mpath]
 
 	// Initially trash directory should not exist.
@@ -303,14 +303,14 @@ func TestMoveMarkers(t *testing.T) {
 }
 
 func initFS() {
-	fs.New(ios.NewIOStaterMock())
+	fs.TestNew(ios.NewIOStaterMock())
 	fs.DisableFsIDCheck()
 }
 
 func createMountpath(t *testing.T) *fs.MountpathInfo {
 	mpathDir := t.TempDir()
 	tutils.AddMpath(t, mpathDir)
-	mpaths, _ := fs.Get()
+	mpaths := fs.GetAvail()
 	return mpaths[mpathDir]
 }
 

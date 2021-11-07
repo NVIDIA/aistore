@@ -106,12 +106,12 @@ func (p *StoreClnFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.
 
 func RunStoreClean(ini *InitStoreCln) {
 	var (
-		xlru              = ini.Xaction
-		config            = cmn.GCO.Get()
-		availablePaths, _ = fs.Get()
-		num               = len(availablePaths)
-		joggers           = make(map[string]*cleanJ, num)
-		parent            = &cleanP{joggers: joggers, ini: *ini}
+		xlru           = ini.Xaction
+		config         = cmn.GCO.Get()
+		availablePaths = fs.GetAvail()
+		num            = len(availablePaths)
+		joggers        = make(map[string]*cleanJ, num)
+		parent         = &cleanP{joggers: joggers, ini: *ini}
 	)
 	glog.Infof("[cleanup] %s started: dont-evict-time %v", xlru, config.LRU.DontEvictTime)
 	if num == 0 {
@@ -181,8 +181,8 @@ func (j *cleanJ) jog(providers []string) (err error) {
 		var (
 			bcks []cmn.Bck
 			opts = fs.Options{
-				Mpath: j.mpathInfo,
-				Bck:   cmn.Bck{Provider: provider, Ns: cmn.NsGlobal},
+				Mi:  j.mpathInfo,
+				Bck: cmn.Bck{Provider: provider, Ns: cmn.NsGlobal},
 			}
 		)
 		if bcks, err = fs.AllMpathBcks(&opts); err != nil {
@@ -236,7 +236,7 @@ func (j *cleanJ) removeTrash() error {
 
 func (j *cleanJ) jogBck() (size int64, err error) {
 	opts := &fs.Options{
-		Mpath:    j.mpathInfo,
+		Mi:       j.mpathInfo,
 		Bck:      j.bck,
 		CTs:      []string{fs.WorkfileType, fs.ObjectType, fs.ECSliceType, fs.ECMetaType},
 		Callback: j.walk,

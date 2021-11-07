@@ -40,8 +40,8 @@ type (
 
 func NewWorkerGroup(opts *WorkerGroupOpts) *WorkerGroup {
 	var (
-		mpaths, _ = fs.Get()
-		workers   = make(map[string]*worker, len(mpaths))
+		mpaths  = fs.GetAvail()
+		workers = make(map[string]*worker, len(mpaths))
 	)
 	debug.Assert(opts.QueueSize > 0) // expect buffered channels
 	for _, mpathInfo := range mpaths {

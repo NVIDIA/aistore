@@ -154,9 +154,9 @@ func ParseMpathInfo(fqn string) (info *MountpathInfo, relativePath string, err e
 // with the longest common prefix and the relative path to this mpath
 func Path2MpathInfo(path string) (info *MountpathInfo, relativePath string) {
 	var (
-		availablePaths, _ = Get()
-		cleanedPath       = filepath.Clean(path)
-		max               int
+		max            int
+		availablePaths = GetAvail()
+		cleanedPath    = filepath.Clean(path)
 	)
 	for mpath, mpathInfo := range availablePaths {
 		rel, ok := pathPrefixMatch(mpath, cleanedPath)

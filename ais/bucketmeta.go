@@ -334,20 +334,17 @@ func newBMDOwnerTgt() *bmdOwnerTgt {
 
 func (bo *bmdOwnerTgt) init() {
 	var (
-		available, _ = fs.Get()
-		bmd          *bucketMD
+		bmd       *bucketMD
+		available = fs.GetAvail()
 	)
-
 	if bmd = loadBMD(available, cmn.BmdFname); bmd != nil {
 		glog.Infof("loaded %s", bmd)
 		goto finalize
 	}
-
 	if bmd = loadBMD(available, cmn.BmdPreviousFname); bmd != nil {
 		glog.Errorf("loaded previous version of the %s (%q)", bmd, cmn.BmdPreviousFname)
 		goto finalize
 	}
-
 	bmd = newBucketMD()
 	glog.Warningf("initializing new %s", bmd)
 

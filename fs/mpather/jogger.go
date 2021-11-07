@@ -90,10 +90,10 @@ type (
 
 func NewJoggerGroup(opts *JoggerGroupOpts, selectedMpaths ...string) *JoggerGroup {
 	var (
-		joggers           map[string]*jogger
-		availablePaths, _ = fs.Get()
-		wg, ctx           = errgroup.WithContext(context.Background())
-		l                 = len(selectedMpaths)
+		joggers        map[string]*jogger
+		availablePaths = fs.GetAvail()
+		wg, ctx        = errgroup.WithContext(context.Background())
+		l              = len(selectedMpaths)
 	)
 	debug.Assert(!opts.IncludeCopy || (opts.IncludeCopy && opts.DoLoad > noLoad))
 
@@ -220,7 +220,7 @@ func (j *jogger) run() error {
 
 func (j *jogger) runBck(bck cmn.Bck) (aborted bool, err error) {
 	opts := &fs.Options{
-		Mpath:    j.mi,
+		Mi:       j.mi,
 		Bck:      bck,
 		CTs:      j.opts.CTs,
 		Callback: j.jog,

@@ -46,10 +46,10 @@ import (
 
 func (reb *Reb) runECjoggers() {
 	var (
-		wg                = &sync.WaitGroup{}
-		availablePaths, _ = fs.Get()
-		cfg               = cmn.GCO.Get()
-		b                 = reb.xact().Bck()
+		wg             = &sync.WaitGroup{}
+		availablePaths = fs.GetAvail()
+		cfg            = cmn.GCO.Get()
+		b              = reb.xact().Bck()
 	)
 	for _, mpathInfo := range availablePaths {
 		bck := cmn.Bck{Provider: cmn.ProviderAIS}
@@ -76,10 +76,9 @@ func (reb *Reb) runECjoggers() {
 func (reb *Reb) jogEC(mpathInfo *fs.MountpathInfo, bck cmn.Bck, wg *sync.WaitGroup) {
 	defer wg.Done()
 	opts := &fs.Options{
-		Mpath: mpathInfo,
-		Bck:   bck,
-		CTs:   []string{fs.ECMetaType},
-
+		Mi:       mpathInfo,
+		Bck:      bck,
+		CTs:      []string{fs.ECMetaType},
 		Callback: reb.walkEC,
 		Sorted:   false,
 	}

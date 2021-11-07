@@ -229,7 +229,7 @@ func configLoadVMD(tid string, configPaths cos.StringSet) (vmd *VMD, err error) 
 // - Returns error on failure to validate or load existing VMD.
 func loadVMD(tid string, available fs.MPI) (vmd *VMD, err error) {
 	if available == nil {
-		available, _ = fs.Get()
+		available = fs.GetAvail()
 	}
 	l := len(available)
 	for mpath := range available {

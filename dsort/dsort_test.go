@@ -211,7 +211,7 @@ func (tctx *testContext) setup() {
 
 	mm = memsys.DefaultPageMM()
 
-	fs.New()
+	fs.TestNew(nil)
 	err := cos.CreateDir(testDir)
 	Expect(err).NotTo(HaveOccurred())
 	_, err = fs.Add(testDir, "daeID")

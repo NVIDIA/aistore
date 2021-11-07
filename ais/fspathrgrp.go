@@ -206,7 +206,7 @@ func (g *fsprungroup) redistributeMD() {
 }
 
 func (g *fsprungroup) checkEnable(action, mpath string) {
-	availablePaths, _ := fs.Get()
+	availablePaths := fs.GetAvail()
 	if len(availablePaths) > 1 {
 		glog.Infof("%s mountpath %s", action, mpath)
 	} else {

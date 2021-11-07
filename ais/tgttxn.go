@@ -441,7 +441,7 @@ func (t *targetrunner) validateBckRenTxn(bckFrom, bckTo *cluster.Bck, msg *aisMs
 	if _, present := bmd.Get(bckTo); present {
 		return cmn.NewErrBckAlreadyExists(bckTo.Bck)
 	}
-	availablePaths, _ := fs.Get()
+	availablePaths := fs.GetAvail()
 	for _, mpathInfo := range availablePaths {
 		path := mpathInfo.MakePathCT(bckTo.Bck, fs.ObjectType)
 		if err := fs.Access(path); err != nil {
