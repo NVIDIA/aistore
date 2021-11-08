@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/backend"
@@ -19,14 +18,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/ios"
-	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
-	"github.com/NVIDIA/aistore/xs"
 )
 
 // interface guard
@@ -55,90 +48,6 @@ func (t *targetrunner) Backend(bck *cluster.Bck) cluster.BackendProvider {
 	}
 	c, _ := backend.NewDummyBackend(t)
 	return c
-}
-
-// RunLRU is triggered by the stats evaluation of a remaining capacity, see `target_stats.go`.
-func (t *targetrunner) RunLRU(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.Bck) {
-	regToIC := id == ""
-	if regToIC {
-		id = cos.GenUUID()
-	}
-	rns := xreg.RenewLRU(id)
-	debug.AssertNoErr(rns.Err)
-	if rns.IsRunning() {
-		if wg != nil {
-			wg.Done()
-		}
-		return
-	}
-	xlru := rns.Entry.Get()
-	if regToIC && xlru.ID() == id {
-		regMsg := xactRegMsg{UUID: id, Kind: cmn.ActLRU, Srcs: []string{t.si.ID()}}
-		msg := t.newAmsgActVal(cmn.ActRegGlobalXaction, regMsg)
-		t.bcastAsyncIC(msg)
-	}
-	ini := lru.InitLRU{
-		T:                   t,
-		Xaction:             xlru.(*lru.Xaction),
-		StatsT:              t.statsT,
-		Buckets:             bcks,
-		GetFSUsedPercentage: ios.GetFSUsedPercentage,
-		GetFSStats:          ios.GetFSStats,
-		Force:               force,
-	}
-	xlru.AddNotif(&xaction.NotifXact{
-		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
-		Xact:      xlru,
-	})
-	if wg != nil {
-		wg.Done() // compare w/ xaction.GoRunW(()
-	}
-	lru.Run(&ini)
-}
-
-func (t *targetrunner) runStorageCleanup(id string, wg *sync.WaitGroup, bcks ...cmn.Bck) {
-	regToIC := id == ""
-	if regToIC {
-		id = cos.GenUUID()
-	}
-	rns := xreg.RenewStoreCleanup(id)
-	debug.AssertNoErr(rns.Err)
-	if rns.IsRunning() {
-		if wg != nil {
-			wg.Done()
-		}
-		return
-	}
-	xcln := rns.Entry.Get()
-	if regToIC && xcln.ID() == id {
-		regMsg := xactRegMsg{UUID: id, Kind: cmn.ActStoreCleanup, Srcs: []string{t.si.ID()}}
-		msg := t.newAmsgActVal(cmn.ActRegGlobalXaction, regMsg)
-		t.bcastAsyncIC(msg)
-	}
-	ini := xs.InitStoreCln{
-		T:       t,
-		Xaction: xcln.(*xs.StoreClnXaction),
-		StatsT:  t.statsT,
-		Buckets: bcks,
-	}
-	xcln.AddNotif(&xaction.NotifXact{
-		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
-		Xact:      xcln,
-	})
-	if wg != nil {
-		wg.Done() // compare w/ xaction.GoRunW(()
-	}
-	xs.RunStoreClean(&ini)
-}
-
-func (t *targetrunner) TrashNonExistingBucket(bck cmn.Bck) {
-	if err := cluster.NewBckEmbed(bck).Init(t.owner.bmd); err != nil {
-		if cmn.IsErrBckNotFound(err) || cmn.IsErrRemoteBckNotFound(err) {
-			const op = "trash-non-existing"
-			err = fs.DestroyBucket(op, bck, 0 /*unknown bid*/)
-			glog.Infof("%s: %v", op, err)
-		}
-	}
 }
 
 // essentially, t.doPut() for external use

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sync"
 	"testing"
 
 	"github.com/NVIDIA/aistore/cluster"
@@ -70,12 +71,13 @@ func newTargetLRUMock() *cluster.TargetMock {
 }
 
 func newInitStoreCln(t cluster.Target) *xs.InitStoreCln {
-	xstg := &xs.StoreClnXaction{}
-	xstg.InitBase(cos.GenUUID(), cmn.ActLRU, nil)
+	xcln := &xs.StoreClnXaction{}
+	xcln.InitBase(cos.GenUUID(), cmn.ActLRU, nil)
 	return &xs.InitStoreCln{
-		Xaction: xstg,
+		Xaction: xcln,
 		StatsT:  stats.NewTrackerMock(),
 		T:       t,
+		WG:      &sync.WaitGroup{},
 	}
 }
 
@@ -135,6 +137,7 @@ var _ = Describe("Storage cleanup tests", func() {
 			createAndAddMountpath(basePath)
 			t = newTargetLRUMock()
 			ini = newInitStoreCln(t)
+			ini.WG.Add(1)
 
 			mpaths := fs.GetAvail()
 			bck := cmn.Bck{Name: bucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
@@ -167,7 +170,7 @@ var _ = Describe("Storage cleanup tests", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(files)).To(Equal(1))
 
-				xs.RunStoreClean(ini)
+				xs.RunStoreCleanup(ini)
 
 				files, err = os.ReadDir(mpath.MakePathTrash())
 				Expect(err).NotTo(HaveOccurred())

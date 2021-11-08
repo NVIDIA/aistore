@@ -181,40 +181,51 @@ func (mi *MountpathInfo) MakePathTrash() string { return filepath.Join(mi.Path, 
 // 1. Synchronously gets temporary directory name
 // 2. Synchronously renames old folder to temporary directory
 func (mi *MountpathInfo) MoveToTrash(dir string) error {
-	// Loose assumption: removing something which doesn't exist is fine.
-	if err := Access(dir); err != nil && os.IsNotExist(err) {
-		return nil
-	}
-Retry:
-	var (
-		trashDir = mi.MakePathTrash()
-		tmpDir   = filepath.Join(trashDir, fmt.Sprintf("$dir-%d", mono.NanoTime()))
-	)
-	if err := cos.CreateDir(trashDir); err != nil {
-		return err
-	}
-	if err := os.Rename(dir, tmpDir); err != nil {
-		if os.IsExist(err) {
-			// Slow path: `tmpDir` already exists so let's retry. It should
-			// never happen but who knows...
-			glog.Warningf("directory %q already exist in trash", tmpDir)
-			goto Retry
-		}
+	if err := Access(dir); err != nil {
 		if os.IsNotExist(err) {
-			// Someone removed `dir` before `os.Rename`, nothing more to do.
 			return nil
 		}
+		glog.Errorf("%s: %v", mi, err)
+	}
+	cs := GetCapStatus()
+	if cs.Err != nil {
+		if err := os.RemoveAll(dir); err != nil {
+			glog.Errorf("FATAL: %s %s: failed to remove, err: %v", mi, cs, err)
+			return err
+		}
+		glog.Errorf("%s %s: removed %q instead of placing it in trash", mi, cs, dir)
+		return nil
+	}
+tmpExists:
+	trashDir := mi.MakePathTrash()
+	tmpDir := filepath.Join(trashDir, fmt.Sprintf("$dir-%d", mono.NanoTime()))
+	err := cos.CreateDir(trashDir)
+	if err != nil {
+		if cos.IsErrOOS(err) {
+			goto oos
+		}
 		return err
 	}
-	// TODO: remove and make it work when the space is extremely constrained (J)
-	debug.Func(func() {
-		go func() {
-			if err := os.RemoveAll(tmpDir); err != nil {
-				glog.Errorf("RemoveAll for %q failed with %v", tmpDir, err)
-			}
-		}()
-	})
-	return nil
+	err = os.Rename(dir, tmpDir)
+	if err == nil {
+		return nil
+	}
+	if os.IsExist(err) {
+		glog.Warningf("%q already exists in trash", tmpDir) // should never happen
+		goto tmpExists
+	}
+	if os.IsNotExist(err) {
+		return nil // benign
+	}
+	if !cos.IsErrOOS(err) {
+		return err
+	}
+oos:
+	glog.Errorf("%s %s: no space left to trash %q (err=%v) - removing it right away", mi, cs, dir, err)
+	if nested := os.RemoveAll(dir); nested != nil {
+		glog.Errorf("FATAL: %s (%v, %v)", mi, err, nested)
+	}
+	return err
 }
 
 func (mi *MountpathInfo) IsIdle(config *cmn.Config) bool {
@@ -1121,7 +1132,7 @@ func CapPeriodic(mpcap MPCap) (cs CapStatus, updated bool, err error) {
 	}
 	mfs.cmu.RUnlock()
 	cs, err = RefreshCapStatus(config, mpcap)
-	updated = true
+	updated = err == nil
 	return
 }
 
@@ -1189,4 +1200,25 @@ func (mpi MPI) toSlice() []string {
 		idx++
 	}
 	return paths
+}
+
+///////////////
+// CapStatus //
+///////////////
+
+func (cs CapStatus) String() (str string) {
+	var (
+		totalUsed  = cos.B2S(int64(cs.TotalUsed), 1)
+		totalAvail = cos.B2S(int64(cs.TotalAvail), 1)
+	)
+	str = fmt.Sprintf("cap(used=%s, avail=%s, avg-use=%d%%, max-use=%d%%", totalUsed, totalAvail, cs.PctAvg, cs.PctMax)
+	if cs.Err != nil {
+		if cs.OOS {
+			str += ", OOS"
+		} else {
+			str += ", err=" + cs.Err.Error()
+		}
+	}
+	str += ")"
+	return
 }

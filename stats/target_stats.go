@@ -129,7 +129,7 @@ func (r *Trunner) InitCapacity() error {
 		return err
 	}
 	if cs.Err != nil {
-		glog.Errorf("%s: %v", r.T.Snode(), cs.Err)
+		glog.Errorf("%s: %s", r.T.Snode(), cs)
 	}
 	return nil
 }
@@ -241,10 +241,10 @@ func (r *Trunner) log(now int64, uptime time.Duration) {
 	}
 
 	// 3. capacity
-	cs, updated, _ := fs.CapPeriodic(r.MPCap)
+	cs, updated, errfs := fs.CapPeriodic(r.MPCap)
 	if updated {
 		if cs.Err != nil {
-			go r.T.RunLRU("" /*uuid*/, nil /*wg*/, false)
+			r.T.OOS(&cs)
 		}
 		for mpath, fsCapacity := range r.MPCap {
 			ln, err := cos.MarshalToString(fsCapacity)
@@ -252,6 +252,8 @@ func (r *Trunner) log(now int64, uptime time.Duration) {
 			debug.SetExpvar(glog.SmoduleStats, mpath+":cap%", int64(fsCapacity.PctUsed))
 			r.lines = append(r.lines, mpath+": "+ln)
 		}
+	} else if errfs != nil {
+		glog.Error(errfs)
 	}
 
 	// 4. append disk stats to log

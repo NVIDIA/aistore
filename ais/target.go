@@ -893,7 +893,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if cs := fs.GetCapStatus(); cs.Err != nil {
-		go t.RunLRU("" /*uuid*/, nil /*wg*/, false)
+		cs = t.OOS(nil)
 		if cs.OOS {
 			t.writeErr(w, r, cs.Err)
 			return
@@ -1666,7 +1666,6 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	// TODO: inc stats
 }
 
-// fshc wakes up FSHC and makes it to run filesystem check immediately if err != nil
 func (t *targetrunner) fsErr(err error, filepath string) {
 	if !cmn.GCO.Get().FSHC.Enabled {
 		return
@@ -1674,11 +1673,16 @@ func (t *targetrunner) fsErr(err error, filepath string) {
 	if !cos.IsIOError(err) {
 		return
 	}
-	glog.Errorf("FSHC: fqn %s, err %v", filepath, err)
 	mpathInfo, _ := fs.Path2MpathInfo(filepath)
 	if mpathInfo == nil {
 		return
 	}
+	if cos.IsErrOOS(err) {
+		cs := t.OOS(nil)
+		glog.Errorf("%s: %s", t.si, cs)
+		return
+	}
+	glog.Errorf("%s: waking up FSHC to check %q for err %v", t.si, filepath, err)
 	keyName := mpathInfo.Path
 	// keyName is the mountpath is the fspath - counting IO errors on a per basis..
 	t.statsT.AddMany(stats.NamedVal64{Name: stats.ErrIOCount, NameSuffix: keyName, Value: 1})

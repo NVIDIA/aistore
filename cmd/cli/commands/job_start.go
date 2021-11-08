@@ -77,7 +77,7 @@ var (
 			},
 			{
 				Name:   subcmdLRU,
-				Usage:  fmt.Sprintf("start an %q xaction", cmn.ActLRU),
+				Usage:  fmt.Sprintf("start %q xaction", cmn.ActLRU),
 				Flags:  startCmdsFlags[subcmdLRU],
 				Action: startLRUHandler,
 			},

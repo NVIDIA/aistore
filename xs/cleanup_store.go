@@ -28,7 +28,8 @@ type (
 		T       cluster.Target
 		Xaction *StoreClnXaction
 		StatsT  stats.Tracker
-		Buckets []cmn.Bck // list of buckets to run LRU
+		Buckets []cmn.Bck // optional list of specific buckets to cleanup
+		WG      *sync.WaitGroup
 	}
 
 	// parent - contains mpath joggers
@@ -60,8 +61,7 @@ type (
 		// runtime
 		allowDelObj bool
 	}
-
-	StoreClnFactory struct {
+	storeClnFactory struct {
 		xreg.RenewBase
 		xact *StoreClnXaction
 	}
@@ -72,7 +72,7 @@ type (
 
 // interface guard
 var (
-	_ xreg.Renewable = (*StoreClnFactory)(nil)
+	_ xreg.Renewable = (*storeClnFactory)(nil)
 )
 
 func rmMisplaced() bool {
@@ -86,37 +86,42 @@ func (*StoreClnXaction) Run(*sync.WaitGroup) { debug.Assert(false) }
 // Factory //
 /////////////
 
-func (*StoreClnFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
-	return &StoreClnFactory{RenewBase: xreg.RenewBase{Args: args}}
+func (*storeClnFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
+	return &storeClnFactory{RenewBase: xreg.RenewBase{Args: args}}
 }
 
-func (p *StoreClnFactory) Start() error {
+func (p *storeClnFactory) Start() error {
 	p.xact = &StoreClnXaction{}
 	p.xact.InitBase(p.UUID(), cmn.ActStoreCleanup, nil)
 	return nil
 }
 
-func (*StoreClnFactory) Kind() string        { return cmn.ActStoreCleanup }
-func (p *StoreClnFactory) Get() cluster.Xact { return p.xact }
+func (*storeClnFactory) Kind() string        { return cmn.ActStoreCleanup }
+func (p *storeClnFactory) Get() cluster.Xact { return p.xact }
 
-func (p *StoreClnFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
+func (p *storeClnFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	err = fmt.Errorf("%s is already running - not starting %q", prevEntry.Get(), p.Str(p.Kind()))
 	return
 }
 
-func RunStoreClean(ini *InitStoreCln) {
+func RunStoreCleanup(ini *InitStoreCln) {
 	var (
-		xlru           = ini.Xaction
+		xcln           = ini.Xaction
 		config         = cmn.GCO.Get()
 		availablePaths = fs.GetAvail()
 		num            = len(availablePaths)
 		joggers        = make(map[string]*cleanJ, num)
 		parent         = &cleanP{joggers: joggers, ini: *ini}
+		running        bool
 	)
-	glog.Infof("[cleanup] %s started: dont-evict-time %v", xlru, config.LRU.DontEvictTime)
+	defer func() {
+		if !running && ini.WG != nil {
+			ini.WG.Done()
+		}
+	}()
 	if num == 0 {
-		glog.Warning(cmn.ErrNoMountpaths)
-		xlru.Finish(cmn.ErrNoMountpaths)
+		xcln.Finish(cmn.ErrNoMountpaths)
+		glog.Error(cmn.ErrNoMountpaths)
 		return
 	}
 	for mpath, mpathInfo := range availablePaths {
@@ -132,18 +137,24 @@ func RunStoreClean(ini *InitStoreCln) {
 		joggers[mpath].misplaced.ec = make([]*cluster.CT, 0, 64)
 	}
 	providers := cmn.Providers.ToSlice()
-
 	for _, j := range joggers {
 		parent.wg.Add(1)
 		j.joggers = joggers
 		go j.run(providers)
+	}
+
+	cs := fs.GetCapStatus()
+	glog.Infof("[store-cleanup] %s started, %s", xcln, cs)
+	running = true
+	if ini.WG != nil {
+		ini.WG.Done()
 	}
 	parent.wg.Wait()
 
 	for _, j := range joggers {
 		j.stop()
 	}
-	xlru.Finish(nil)
+	xcln.Finish(nil)
 }
 
 //////////////////////
@@ -363,7 +374,7 @@ func (j *cleanJ) evict() (size int64, err error) {
 	var (
 		fevicted, bevicted int64
 		capCheck           int64
-		xlru               = j.ini.Xaction
+		xcln               = j.ini.Xaction
 	)
 	// 1. rm older work
 	for _, workfqn := range j.oldWork {
@@ -421,8 +432,8 @@ func (j *cleanJ) evict() (size int64, err error) {
 
 	j.ini.StatsT.Add(stats.StoreRmSize, bevicted)
 	j.ini.StatsT.Add(stats.StoreRmCount, fevicted)
-	xlru.ObjectsAdd(fevicted)
-	xlru.BytesAdd(bevicted)
+	xcln.ObjectsAdd(fevicted)
+	xcln.BytesAdd(bevicted)
 	return
 }
 
@@ -441,17 +452,17 @@ func (j *cleanJ) postRemove(prev, size int64) (capCheck int64, err error) {
 }
 
 func (j *cleanJ) yieldTerm() error {
-	xlru := j.ini.Xaction
+	xcln := j.ini.Xaction
 	select {
-	case <-xlru.ChanAbort():
-		return cmn.NewErrAborted(xlru.Name(), "", nil)
+	case <-xcln.ChanAbort():
+		return cmn.NewErrAborted(xcln.Name(), "", nil)
 	case <-j.stopCh:
-		return cmn.NewErrAborted(xlru.Name(), "", nil)
+		return cmn.NewErrAborted(xcln.Name(), "", nil)
 	default:
 		break
 	}
-	if xlru.Finished() {
-		return cmn.NewErrAborted(xlru.Name(), "", nil)
+	if xcln.Finished() {
+		return cmn.NewErrAborted(xcln.Name(), "", nil)
 	}
 	return nil
 }

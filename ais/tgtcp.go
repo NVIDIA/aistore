@@ -628,8 +628,8 @@ func (t *targetrunner) _postBMD(tag string, rmbcks []*cluster.Bck) {
 		}
 	}
 	// refresh used/avail capacity and run LRU if need be (in part, to remove $trash)
-	if _, err := fs.RefreshCapStatus(nil, nil); err != nil {
-		go t.RunLRU("" /*uuid*/, nil /*wg*/, false)
+	if cs := fs.GetCapStatus(); cs.Err != nil {
+		_ = t.OOS(nil)
 	}
 }
 

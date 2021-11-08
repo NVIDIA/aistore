@@ -56,6 +56,7 @@ type (
 		Buckets             []cmn.Bck // list of buckets to run LRU
 		GetFSUsedPercentage func(path string) (usedPercentage int64, ok bool)
 		GetFSStats          func(path string) (blocks, bavail uint64, bsize int64, err error)
+		WG                  *sync.WaitGroup
 		Force               bool // Ignore LRU prop when set to be true.
 	}
 
@@ -138,8 +139,13 @@ func Run(ini *InitLRU) {
 		num            = len(availablePaths)
 		joggers        = make(map[string]*lruJ, num)
 		parent         = &lruP{joggers: joggers, ini: *ini}
+		running        bool
 	)
-	glog.Infof("[lru] %s started: dont-evict-time %v", xlru, config.LRU.DontEvictTime)
+	defer func() {
+		if !running && ini.WG != nil {
+			ini.WG.Done()
+		}
+	}()
 	if num == 0 {
 		glog.Warning(cmn.ErrNoMountpaths)
 		xlru.Finish(cmn.ErrNoMountpaths)
@@ -162,6 +168,11 @@ func Run(ini *InitLRU) {
 		parent.wg.Add(1)
 		j.joggers = joggers
 		go j.run(providers)
+	}
+	glog.Infof("[lru] %s started: dont-evict-time %v", xlru, config.LRU.DontEvictTime)
+	running = true
+	if ini.WG != nil {
+		ini.WG.Done()
 	}
 	parent.wg.Wait()
 
@@ -186,7 +197,7 @@ func (j *lruJ) stop() { j.stopCh <- struct{}{} }
 func (j *lruJ) run(providers []string) {
 	var err error
 	defer j.p.wg.Done()
-	// compute the size (bytes) to free up (and do it after removing the $trash)
+	// compute the size (bytes) to free up
 	if err = j.evictSize(); err != nil {
 		goto ex
 	}
@@ -238,12 +249,7 @@ func (j *lruJ) jogBcks(bcks []cmn.Bck, force bool) (err error) {
 		var size int64
 		j.bck = bck
 		if j.allowDelObj, err = j.allow(); err != nil {
-			if cmn.IsErrBckNotFound(err) || cmn.IsErrRemoteBckNotFound(err) {
-				j.ini.T.TrashNonExistingBucket(bck)
-			} else {
-				// TODO: config option to scrub `fs.AllMpathBcks` buckets
-				glog.Errorf("%s: %v - skipping %s", j, err, bck)
-			}
+			glog.Errorf("%s: %v - skipping %s (Hint: run 'ais storage cleanup' to cleanup)", j, err, bck)
 			err = nil
 			continue
 		}
