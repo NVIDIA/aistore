@@ -1052,7 +1052,7 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 	case cmn.Proxy:
 		// cluster-wide: designate a new primary proxy administratively
 		p.cluSetPrimary(w, r)
-	case cmn.ActSetConfig: // setconfig via query parameters and "?n1=v1&n2=v2..."
+	case cmn.ActSetConfig: // set-config via query parameters and "?n1=v1&n2=v2..."
 		toUpdate := &cmn.ConfigToUpdate{}
 		if err := toUpdate.FillFromQuery(query); err != nil {
 			p.writeErrf(w, r, err.Error())

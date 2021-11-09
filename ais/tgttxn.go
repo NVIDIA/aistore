@@ -150,7 +150,12 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		t.writeErrAct(w, r, msg.Action)
 	}
 	if err != nil {
-		t.writeErr(w, r, err)
+		if cmn.IsErrCapacityExceeded(err) {
+			cs := t.OOS(nil)
+			t.writeErrf(w, r, "%s: %v", cs, err)
+		} else {
+			t.writeErr(w, r, err)
+		}
 	}
 }
 

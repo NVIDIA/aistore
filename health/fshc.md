@@ -27,7 +27,7 @@ Disable FSHC on a given target:
 
 ```console
 $ curl -i -X PUT -H 'Content-Type: application/json' \
-	-d '{"action": "setconfig","name": "fschecker_enabled", "value": "false"}' \
+	-d '{"action": "set-config","name": "fschecker_enabled", "value": "false"}' \
 	http://localhost:8084/v1/daemon
 ```
 
@@ -35,6 +35,6 @@ Enable FSHC on a given target:
 
 ```console
 $ curl -i -X PUT -H 'Content-Type: application/json' \
-	-d '{"action": "setconfig","name": "fschecker_enabled", "value": "true"}' \
+	-d '{"action": "set-config","name": "fschecker_enabled", "value": "true"}' \
 	http://localhost:8084/v1/daemon
 ```

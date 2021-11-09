@@ -273,6 +273,11 @@ func (e *ErrCapacityExceeded) Error() string {
 		e.usedPct, e.highWM, suffix)
 }
 
+func IsErrCapacityExceeded(err error) bool {
+	_, ok := err.(*ErrCapacityExceeded)
+	return ok
+}
+
 // ErrInvalidCksum
 
 func (e *ErrInvalidCksum) Error() string {

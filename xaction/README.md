@@ -81,7 +81,7 @@ Stats request results in list of requested xactions. Statistics of each xaction 
 [
    {
       "id":1,
-      "kind":"ecget",
+      "kind":"ec-get",
       "bucket":"test",
       "startTime":"2019-04-15T12:40:18.721697505-07:00",
       "endTime":"0001-01-01T00:00:00Z",
@@ -89,7 +89,7 @@ Stats request results in list of requested xactions. Statistics of each xaction 
    },
    {
       "id":2,
-      "kind":"ecput",
+      "kind":"ec-put",
       "bucket":"test",
       "startTime":"2019-04-15T12:40:18.721723865-07:00",
       "endTime":"0001-01-01T00:00:00Z",

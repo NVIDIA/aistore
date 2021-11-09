@@ -2307,7 +2307,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch msg.Action {
-	case cmn.ActSetConfig: // setconfig #2 - via action message
+	case cmn.ActSetConfig: // set-config #2 - via action message
 		p.setDaemonConfigMsg(w, r, &msg)
 	case cmn.ActResetConfig:
 		if err := p.owner.config.resetDaemonConfig(); err != nil {
@@ -2359,7 +2359,7 @@ func (p *proxyrunner) daePathAction(w http.ResponseWriter, r *http.Request, acti
 			return
 		}
 		glog.Infof("%s: %s %s done", p.si, cmn.SyncSmap, newsmap)
-	case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
+	case cmn.ActSetConfig: // set-config #1 - via query parameters and "?n1=v1&n2=v2..."
 		p.setDaemonConfigQuery(w, r)
 	default:
 		p.writeErrAct(w, r, action)

@@ -34,15 +34,16 @@ func (t *targetrunner) OOS(csRefreshed *fs.CapStatus) (cs fs.CapStatus) {
 			return
 		}
 	}
-	if cs.Err == nil {
-		return
-	}
 	glog.Warningf("%s: %s", t.si, cs)
 	go t.runStoreCleanup("" /*uuid*/, nil /*wg*/)
 	if cs.OOS {
-		// TODO: LRU (xaction) must take a back seat when cleanup is running
-		time.Sleep(2 * time.Second)
-		go t.runLRU("" /*uuid*/, nil /*wg*/, false)
+		// TODO: when cleanup is running LRU must take a back seat (rm sleep & revise)
+		go func() {
+			config := cmn.GCO.Get()
+			sleep := cos.MinDuration(config.Timeout.MaxHostBusy.D(), time.Minute)
+			time.Sleep(sleep)
+			t.runLRU("" /*uuid*/, nil /*wg*/, false)
+		}()
 	}
 	return
 }
@@ -59,9 +60,10 @@ func (t *targetrunner) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ..
 		}
 		return
 	}
-	debug.AssertNoErr(rns.Err)
+	debug.AssertNoErr(rns.Err) // see xlru.WhenPrevIsRunning() and xreg logic
 	xlru := rns.Entry.Get()
 	if regToIC && xlru.ID() == id {
+		// pre-existing UUID: notify IC members
 		regMsg := xactRegMsg{UUID: id, Kind: cmn.ActLRU, Srcs: []string{t.si.ID()}}
 		msg := t.newAmsgActVal(cmn.ActRegGlobalXaction, regMsg)
 		t.bcastAsyncIC(msg)
@@ -95,9 +97,10 @@ func (t *targetrunner) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cm
 		}
 		return
 	}
-	debug.AssertNoErr(rns.Err)
+	debug.AssertNoErr(rns.Err) // see xcln.WhenPrevIsRunning() and xreg logic
 	xcln := rns.Entry.Get()
 	if regToIC && xcln.ID() == id {
+		// pre-existing UUID: notify IC members
 		regMsg := xactRegMsg{UUID: id, Kind: cmn.ActStoreCleanup, Srcs: []string{t.si.ID()}}
 		msg := t.newAmsgActVal(cmn.ActRegGlobalXaction, regMsg)
 		t.bcastAsyncIC(msg)

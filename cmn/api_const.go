@@ -23,51 +23,51 @@ const (
 	ActRebalance       = "rebalance"
 	ActResilver        = "resilver"
 	ActLRU             = "lru"
-	ActStoreCleanup    = "stg_cleanup"
-	ActCreateBck       = "create_bck"
-	ActDestroyBck      = "destroy_bck"     // destroy bucket data and metadata
-	ActAddRemoteBck    = "add_remotebck"   // register (existing) remote bucket into AIS
-	ActEvictRemoteBck  = "evict_remotebck" // evict remote bucket's data
-	ActMoveBck         = "move_bck"
-	ActCopyBck         = "copybck"
-	ActETLBck          = "etlbck"
-	ActCopyObjects     = "copy_listrange"
-	ActETLObjects      = "etl_listrange"
-	ActSetConfig       = "setconfig"
-	ActResetConfig     = "resetconfig"
-	ActSetBprops       = "setbprops"
-	ActResetBprops     = "resetbprops"
-	ActResyncBprops    = "resyncbprops"
+	ActStoreCleanup    = "cleanup-store"
+	ActCreateBck       = "create-bck"
+	ActDestroyBck      = "destroy-bck"      // destroy bucket data and metadata
+	ActAddRemoteBck    = "add-remote-bck"   // register (existing) remote bucket into AIS
+	ActEvictRemoteBck  = "evict-remote-bck" // evict remote bucket's data
+	ActMoveBck         = "move-bck"
+	ActCopyBck         = "copy-bck"
+	ActETLBck          = "etl-bck"
+	ActCopyObjects     = "copy-listrange"
+	ActETLObjects      = "etl-listrange"
+	ActSetConfig       = "set-config"
+	ActResetConfig     = "reset-config"
+	ActSetBprops       = "set-bprops"
+	ActResetBprops     = "reset-bprops"
+	ActResyncBprops    = "resync-bprops"
 	ActList            = "list"
-	ActQueryObjects    = "queryobj"
-	ActInvalListCache  = "invallistobjcache"
+	ActQueryObjects    = "query-objs"
+	ActInvalListCache  = "inval-listobj-cache"
 	ActSummary         = "summary"
-	ActRenameObject    = "renameobj"
+	ActRenameObject    = "rename-obj"
 	ActPromote         = "promote"
-	ActEvictObjects    = "evictobj_listrange"
-	ActDeleteObjects   = "delete_listrange"
+	ActEvictObjects    = "evict-listrange"
+	ActDeleteObjects   = "delete-listrange"
 	ActArchive         = "archive"
-	ActPrefetchObjects = "prefetch_listrange"
+	ActPrefetchObjects = "prefetch-listrange"
 	ActDownload        = "download"
-	ActNewPrimary      = "newprimary"
+	ActNewPrimary      = "new-primary"
 	ActElection        = "election"
-	ActPutCopies       = "putcopies"
-	ActMakeNCopies     = "makencopies"
-	ActLoadLomCache    = "loadlomcache"
-	ActECGet           = "ecget"    // erasure decode objects
-	ActECPut           = "ecput"    // erasure encode objects
-	ActECRespond       = "ecresp"   // respond to other targets' EC requests
-	ActECEncode        = "ecencode" // erasure code a bucket
-	ActStartGFN        = "metasync_start_gfn"
+	ActPutCopies       = "put-copies"
+	ActMakeNCopies     = "make-n-copies"
+	ActLoadLomCache    = "load-lom-cache"
+	ActECGet           = "ec-get"    // erasure decode objects
+	ActECPut           = "ec-put"    // erasure encode objects
+	ActECRespond       = "ec-resp"   // respond to other targets' EC requests
+	ActECEncode        = "ec-encode" // erasure code a bucket
+	ActStartGFN        = "start-gfn"
 
 	ActAttachRemote = "attach"
 	ActDetachRemote = "detach"
 
 	// Node maintenance & cluster membership (see the corresponding URL path words below)
-	ActStartMaintenance   = "startmaintenance"      // put into maintenance state
-	ActStopMaintenance    = "stopmaintenance"       // cancel maintenance state
-	ActDecommissionNode   = "decommission_node"     // start rebalance and, when done, remove node from Smap
-	ActShutdownNode       = "shutdown_node"         // shutdown node
+	ActStartMaintenance   = "start-maintenance"     // put into maintenance state
+	ActStopMaintenance    = "stop-maintenance"      // cancel maintenance state
+	ActDecommissionNode   = "decommission-node"     // start rebalance and, when done, remove node from Smap
+	ActShutdownNode       = "shutdown-node"         // shutdown node
 	ActCallbackRmFromSmap = "callback-rm-from-smap" // set by primary when requested (internal use only)
 
 	ActAdminJoinTarget = "admin-join-target"
@@ -77,10 +77,10 @@ const (
 	ActKeepaliveUpdate = "keepalive-update"
 
 	// IC
-	ActSendOwnershipTbl  = "ic_send_ownership_tbl"
-	ActListenToNotif     = "watch_xaction"
-	ActMergeOwnershipTbl = "merge_ownership_tbl"
-	ActRegGlobalXaction  = "reg_global_xaction"
+	ActSendOwnershipTbl  = "ic-send-own-tbl"
+	ActListenToNotif     = "watch-xaction"
+	ActMergeOwnershipTbl = "ic-merge-own-tbl"
+	ActRegGlobalXaction  = "reg-global-xaction"
 )
 
 const (

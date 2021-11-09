@@ -133,7 +133,7 @@ func (t *targetrunner) daeputJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch msg.Action {
-	case cmn.ActSetConfig: // setconfig #2 - via action message
+	case cmn.ActSetConfig: // set-config #2 - via action message
 		t.setDaemonConfigMsg(w, r, &msg)
 	case cmn.ActResetConfig:
 		if err := t.owner.config.resetDaemonConfig(); err != nil {
@@ -175,7 +175,7 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiIt
 		glog.Infof("%s: %s %s done", t.si, cmn.SyncSmap, newsmap)
 	case cmn.Mountpaths:
 		t.handleMountpathReq(w, r)
-	case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
+	case cmn.ActSetConfig: // set-config #1 - via query parameters and "?n1=v1&n2=v2..."
 		t.setDaemonConfigQuery(w, r)
 	}
 }
@@ -341,6 +341,10 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 	case cmn.CallbackRmFromSmap:
 		opts, action, err := t.parseUnregMsg(w, r)
 		if err != nil {
+			return
+		}
+		if opts == nil {
+			glog.Warningf("%s: remove from Smap via (%q, action=%s) - nothing to do", t.si, apiItems[0], action)
 			return
 		}
 		t.unreg(action, opts.RmUserData, opts.NoShutdown)

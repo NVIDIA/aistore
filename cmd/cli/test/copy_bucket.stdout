@@ -1,6 +1,6 @@
 "ais://$BUCKET_1" created
 "ais://$BUCKET_2" created
 Copying bucket ("ais://$BUCKET_1" => "ais://$BUCKET_2") is in progress.
-To check the status, run: ais show job xaction copybck ais://$BUCKET_2
+To check the status, run: ais show job xaction copy-bck ais://$BUCKET_2
 NODE	 ID	 KIND	 BUCKET	 OBJECTS	 BYTES	 START	 END	 ABORTED
 NODE	 ID	 KIND	 BUCKET	 OBJECTS	 BYTES	 START	 END	 ABORTED

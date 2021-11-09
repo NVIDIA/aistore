@@ -381,13 +381,13 @@ The following assumes that `G` and `T` are the (hostname:port) of one of the dep
 * Set the stats logging interval to 1 second
 
 ```console
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "periodic.stats_time", "value": "1s"}' 'http://G/v1/cluster'
+$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "set-config","name": "periodic.stats_time", "value": "1s"}' 'http://G/v1/cluster'
 ```
 
 or, same:
 
 ```console
-$ curl -i -X PUT 'http://G/v1/cluster/setconfig?periodic.stats_time=1s'
+$ curl -i -X PUT 'http://G/v1/cluster/set-config?periodic.stats_time=1s'
 ```
 
 > Notice the two alternative ways to form the requests.
@@ -396,27 +396,27 @@ $ curl -i -X PUT 'http://G/v1/cluster/setconfig?periodic.stats_time=1s'
 * Set the stats logging interval to 2 minutes
 
 ```console
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "periodic.stats_time", "value": "2m"}' 'http://G/v1/cluster'
+$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "set-config","name": "periodic.stats_time", "value": "2m"}' 'http://G/v1/cluster'
 ```
 
 ### Cluster-wide operation (all nodes)
 * Elevate log verbosity to `4` for all sources matching `ais/targ*` regex
 
 ```console
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "vmodule", "value": "ais/targ*=4"}' 'http://G/v1/cluster'
+$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "set-config","name": "vmodule", "value": "ais/targ*=4"}' 'http://G/v1/cluster'
 ```
 
 ### Single-node operation (single node)
 * Set log verbosity to `1` for all source files that match the `ais/targ*` regex
 
 ```console
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "vmodule", "value": "ais/targ*=1"}' 'http://T/v1/daemon'
+$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "set-config","name": "vmodule", "value": "ais/targ*=1"}' 'http://T/v1/daemon'
 ```
 
 or, same:
 
 ```console
-$ curl -i -X PUT 'http://T/v1/daemon/setconfig?vmodule=ais/targ*=1'
+$ curl -i -X PUT 'http://T/v1/daemon/set-config?vmodule=ais/targ*=1'
 ```
 
 ## CLI examples

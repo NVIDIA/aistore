@@ -34,34 +34,34 @@ func TestActMsgRawUnmarshal(t *testing.T) {
 		{
 			action: ActEvictObjects,
 			vals: []string{
-				`{"action":"evictobj_listrange","value":{"template":"__tst/test-{1000..2000}"}}`,
-				`{"action":"evictobj_listrange","value":{"objnames":["o1","o2","o3"]}}`,
+				`{"action":"evict-listrange","value":{"template":"__tst/test-{1000..2000}"}}`,
+				`{"action":"evict-listrange","value":{"objnames":["o1","o2","o3"]}}`,
 			},
 		},
 		{
 			action: ActPrefetchObjects,
 			vals: []string{
-				`{"action":"prefetch_listrange","value":{"template":"__tst/test-{1000..2000}"}}`,
-				`{"action":"prefetch_listrange","value":{"objnames":["o1","o2","o3"]}}`,
+				`{"action":"prefetch-listrange","value":{"template":"__tst/test-{1000..2000}"}}`,
+				`{"action":"prefetch-listrange","value":{"objnames":["o1","o2","o3"]}}`,
 			},
 		},
 		{
 			action: ActDeleteObjects,
 			vals: []string{
-				`{"action":"delete_listrange","value":{"template":"__tst/test-{1000..2000}"}}`,
-				`{"action":"delete_listrange","value":{"objnames":["o1","o2","o3"]}}`,
+				`{"action":"delete-listrange","value":{"template":"__tst/test-{1000..2000}"}}`,
+				`{"action":"delete-listrange","value":{"objnames":["o1","o2","o3"]}}`,
 			},
 		},
 		{
 			action: ActSetBprops,
 			vals: []string{
-				`{"action":"setbprops","value":{"checksum": {"type": "sha256"}, "mirror": {"enable": true}}}`,
+				`{"action":"set-bprops","value":{"checksum": {"type": "sha256"}, "mirror": {"enable": true}}}`,
 			},
 		},
 		{
 			action: ActCreateBck,
 			vals: []string{
-				`{"action":"create_bck","value":{"checksum": {"type": "sha256"}, "mirror": {"enable": true}}}`,
+				`{"action":"create-bck","value":{"checksum": {"type": "sha256"}, "mirror": {"enable": true}}}`,
 			},
 		},
 		{

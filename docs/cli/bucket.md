@@ -151,7 +151,7 @@ Removing remote buckets is not supported.
 
 ```console
 $ ais bucket rm aws://bucket_name
-Operation "destroy_bck" is not supported by "aws://bucket_name"
+Operation "destroy-bck" is not supported by "aws://bucket_name"
 ```
 
 ## List buckets
@@ -394,7 +394,7 @@ Copy AIS bucket `src_bucket` to AIS bucket `dst_bucket`.
 ```console
 $ ais bucket cp ais://src_bucket ais://dst_bucket
 Copying bucket "ais://bucket_name" to "ais://dst_bucket" in progress.
-To check the status, run: ais show job xaction copybck ais://dst_bucket
+To check the status, run: ais show job xaction copy-bck ais://dst_bucket
 ```
 
 #### Copy AIS bucket and wait until finish
@@ -417,7 +417,7 @@ AWS Buckets (2)
   aws://dst_bucket
 $ ais bucket cp aws://src_bucket aws://dst_bucket
 Copying bucket "aws://src_bucket" to "aws://dst_bucket" in progress.
-To check the status, run: ais show job xaction copybck aws://dst_bucket
+To check the status, run: ais show job xaction copy-bck aws://dst_bucket
 ```
 
 #### Copy only selected objects
@@ -436,7 +436,7 @@ Do not wait for the operation is done.
 ```console
 $ ais bucket cp ais://bck1 ais://bck2 --template "obj{2..4}"
 copying objects operation ("ais://bck1" => "ais://bck2") is in progress...
-To check the status, run: ais show job xaction copybck ais://bck2
+To check the status, run: ais show job xaction copy-bck ais://bck2
 ```
 
 ## Show bucket summary

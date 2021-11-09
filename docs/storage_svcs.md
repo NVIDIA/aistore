@@ -60,7 +60,7 @@ Example of setting bucket properties:
 $ ais bucket props <bucket-name> lru.lowwm=1 lru.highwm=100 lru.enabled=true
 ```
 
-To revert bucket's entire configuration back to global (configurable) defaults, use `"action":"resetbprops"` with the same PATCH endpoint, e.g.:
+To revert bucket's entire configuration back to global (configurable) defaults, use `"action":"reset-bprops"` with the same PATCH endpoint, e.g.:
 
 ```console
 $ ais bucket props <bucket-name> --reset
@@ -155,7 +155,7 @@ $ ais job start mirror --copies 3 ais://c
 
 The operations (above) are in fact [extended actions](/xaction/README.md) that run asynchronously. Both Cloud and ais buckets are supported. You can monitor completion of those operations via generic [xaction API](/xaction/README.md).
 
-Subsequently, all PUTs into an n-way configured bucket also generate **n** copies for all newly created objects. Which also goes to say that the ("makencopies") operation, in addition to creating or destroying replicas of existing objects will also automatically re-enable(if n > 1) or disable (if n == 1) mirroring as far as subsequent PUTs are concerned.
+Subsequently, all PUTs into an n-way configured bucket also generate **n** copies for all newly created objects. Which also goes to say that the ("make-n-copies") operation, in addition to creating or destroying replicas of existing objects will also automatically re-enable(if n > 1) or disable (if n == 1) mirroring as far as subsequent PUTs are concerned.
 
 Note again that number of local replicas is defined on a per-bucket basis.
 

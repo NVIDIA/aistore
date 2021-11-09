@@ -130,16 +130,16 @@ The operations that query cluster-wide information and/or involve or otherwise a
 | Take node out of maintenance | (to be added) | (to be added) | `api.StopMaintenance` |
 | Decommission a node | (to be added) | (to be added) | `api.Decommission` |
 | Decommission entire cluster | PUT {"action": "decommission"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "decommission"}' 'http://G-primary/v1/cluster'` | `api.DecommissionCluster` |
-| Shutdown ais node | PUT {"action": "shutdown_node", "value": {"sid": daemonID}} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown_node", "value": {"sid": "43888:8083"}}' 'http://G/v1/cluster'` | `api.ShutdownNode` |
+| Shutdown ais node | PUT {"action": "shutdown-node", "value": {"sid": daemonID}} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown-node", "value": {"sid": "43888:8083"}}' 'http://G/v1/cluster'` | `api.ShutdownNode` |
 | Decommission entire cluster | PUT {"action": "decommission"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "decommission"}' 'http://G-primary/v1/cluster'` | `api.DecommissionCluster` |
 | Query cluster health | GET /v1/health | (to be added) | `api.Health` |
 | Set primary proxy | PUT /v1/cluster/proxy/new primary-proxy-id | `curl -i -X PUT 'http://G-primary/v1/cluster/proxy/26869:8080'` | `api.SetPrimaryProxy` |
 | Force-Set primary proxy (NOTE: advanced usage only!) | PUT /v1/daemon/proxy/proxyID | `curl -i -X PUT -G 'http://G-primary/v1/daemon/proxy/23ef189ed'  --data-urlencode "frc=true" --data-urlencode "can=http://G-new-designated-primary"` <sup id="a6">[6](#ft6)</sup>| `api.SetPrimaryProxy` |
 | Get cluster configuration | (to be added) | (to be added) | `api.GetClusterConfig` |
 | Get `BMD` | (to be added) | (to be added) | `api.GetBMD` |
-| Set cluster-wide configuration **via JSON message** (proxy) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' 'http://G/v1/cluster'`<br>• Note below the alternative way to update cluster configuration<br>• For the list of named options, see [runtime configuration](configuration.md) | `api.SetClusterConfigUsingMsg` |
-| Set cluster-wide configuration **via URL query** | PUT /v1/cluster/setconfig/?name1=value1&name2=value2&... | `curl -i -X PUT 'http://G/v1/cluster/setconfig?stats_time=33s&log.loglevel=4'`<br>• Allows to update multiple values in one shot<br>• For the list of named configuration options, see [runtime configuration](configuration.md) | `api.SetClusterConfig` |
-| Reset cluster-wide configuration | PUT {"action": "resetconfig"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "resetconfig"}' 'http://G/v1/cluster'` | `api.ResetClusterConfig` |
+| Set cluster-wide configuration **via JSON message** (proxy) | PUT {"action": "set-config", "name": "some-name", "value": "other-value"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "set-config","name": "stats_time", "value": "1s"}' 'http://G/v1/cluster'`<br>• Note below the alternative way to update cluster configuration<br>• For the list of named options, see [runtime configuration](configuration.md) | `api.SetClusterConfigUsingMsg` |
+| Set cluster-wide configuration **via URL query** | PUT /v1/cluster/set-config/?name1=value1&name2=value2&... | `curl -i -X PUT 'http://G/v1/cluster/set-config?stats_time=33s&log.loglevel=4'`<br>• Allows to update multiple values in one shot<br>• For the list of named configuration options, see [runtime configuration](configuration.md) | `api.SetClusterConfig` |
+| Reset cluster-wide configuration | PUT {"action": "reset-config"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "reset-config"}' 'http://G/v1/cluster'` | `api.ResetClusterConfig` |
 | Shutdown cluster | PUT {"action": "shutdown"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' 'http://G-primary/v1/cluster'` | `api.ShutdownCluster` |
 | Rebalance cluster | PUT {"action": "start", "value": {"kind": "rebalance"}} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "start", "value": {"kind": "rebalance"}}' 'http://G/v1/cluster'` | `api.StartXaction` |
 | Resilver cluster | PUT {"action": "start", "value": {"kind": "resilver"}} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "start", "value": {"kind": "resilver"}}' 'http://G/v1/cluster'` | `api.StartXaction` |
@@ -166,11 +166,11 @@ The operations that are limited in scope to a single specified node and that usu
 | Get node log | (to be added) | (to be added) | `api.GetDaemonLog` |
 | Get node status | (to be added) | (to be added) | `api.GetDaemonStatus` |
 | Get node config | (to be added) | (to be added) | `api.GetDaemonConfig` |
-| Set node configuration | PUT /v1/daemon/setconfig/?name1=value1&name2=value2&... | `curl -i -X PUT 'http://G-or-T/v1/daemon/setconfig?stats_time=33s&log.loglevel=4'`<br>• Allows to update multiple values in one shot<br>• For the list of named configuration options, see [runtime configuration](configuration.md) | `api.SetDaemonConfig` |
-| Reset node configuration | PUT {"action": "resetconfig"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "resetconfig"}' 'http://G-or-T/v1/daemon'` | `api.ResetDaemonConfig` |
+| Set node configuration | PUT /v1/daemon/set-config/?name1=value1&name2=value2&... | `curl -i -X PUT 'http://G-or-T/v1/daemon/set-config?stats_time=33s&log.loglevel=4'`<br>• Allows to update multiple values in one shot<br>• For the list of named configuration options, see [runtime configuration](configuration.md) | `api.SetDaemonConfig` |
+| Reset node configuration | PUT {"action": "reset-config"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "reset-config"}' 'http://G-or-T/v1/daemon'` | `api.ResetDaemonConfig` |
 | Get target IO (aka disk) statistics | (to be added) | (to be added) | `api.GetTargetDiskStats` |
 | Set (i.e., update) node config | (to be added) | (to be added) | `api.SetDaemonConfig` |
-| Reset AIS node configuration | PUT {"action": "resetconfig"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "resetconfig"}' 'http://G-or-T/v1/daemon'` | `api.ResetDaemonConfig` |
+| Reset AIS node configuration | PUT {"action": "reset-config"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "reset-config"}' 'http://G-or-T/v1/daemon'` | `api.ResetDaemonConfig` |
 
 ### Mountpaths and Disks
 
@@ -191,10 +191,10 @@ These APIs also require specific node ID (to identify the target in the cluster 
 | Operation | HTTP action | Example | Go API |
 |--- | --- | ---|--- |
 | List [bucket](bucket.md) names | GET {"action": "list"} /v1/buckets/ | `curl -L -X GET  -H 'Content-Type: application/json' -d '{"action": "list"}' 'http://G/v1/buckets/'` | `api.ListBuckets` |
-| Create [bucket](bucket.md) | POST {"action": "create_bck"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "create_bck"}' 'http://G/v1/buckets/abc'` | `api.CreateBucket` |
-| Destroy [bucket](bucket.md) | DELETE {"action": "destroy_bck"} /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "destroy_bck"}' 'http://G/v1/buckets/abc'` | `api.DestroyBucket` |
-| Rename ais [bucket](bucket.md) | POST {"action": "move_bck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "move_bck" }' 'http://G/v1/buckets/from-name?bck=<bck>&bckto=<to-bck>'` | `api.RenameBucket` |
-| Copy [bucket](bucket.md) | POST {"action": "copybck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "copybck", }}}' 'http://G/v1/buckets/from-name?bck=<bck>&bckto=<to-bck>'` | `api.CopyBucket` |
+| Create [bucket](bucket.md) | POST {"action": "create-bck"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "create-bck"}' 'http://G/v1/buckets/abc'` | `api.CreateBucket` |
+| Destroy [bucket](bucket.md) | DELETE {"action": "destroy-bck"} /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "destroy-bck"}' 'http://G/v1/buckets/abc'` | `api.DestroyBucket` |
+| Rename ais [bucket](bucket.md) | POST {"action": "move-bck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "move-bck" }' 'http://G/v1/buckets/from-name?bck=<bck>&bckto=<to-bck>'` | `api.RenameBucket` |
+| Copy [bucket](bucket.md) | POST {"action": "copy-bck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "copy-bck", }}}' 'http://G/v1/buckets/from-name?bck=<bck>&bckto=<to-bck>'` | `api.CopyBucket` |
 | Rename/move object (ais buckets only) | POST {"action": "rename", "name": new-name} /v1/objects/bucket-name/object-name | `curl -i -X POST -L -H 'Content-Type: application/json' -d '{"action": "rename", "name": "dir2/DDDDDD"}' 'http://G/v1/objects/mybucket/dir1/CCCCCC'` <sup id="a3">[3](#ft3)</sup> | `api.RenameObject` |
 | Check if an object from a remote bucket *is present*  | HEAD /v1/objects/bucket-name/object-name | `curl -L --head 'http://G/v1/objects/mybucket/myobject?check_cached=true'` | `api.HeadObject` |
 | GET object | GET /v1/objects/bucket-name/object-name | `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject' -o myobject` <sup id="a1">[1](#ft1)</sup> | `api.GetObject`, `api.GetObjectWithValidation`, `api.GetObjectReader`, `api.GetObjectWithResp` |
@@ -207,8 +207,8 @@ These APIs also require specific node ID (to identify the target in the cluster 
 | APPEND to object | PUT /v1/objects/bucket-name/object-name?appendty=append&handle= | `curl -L -X PUT 'http://G/v1/objects/myS3bucket/myobject?appendty=append&handle=' -T filenameToUpload-partN`  <sup>[8](#ft8)</sup> | `api.AppendObject` |
 | Finalize APPEND | PUT /v1/objects/bucket-name/object-name?appendty=flush&handle=obj-handle | `curl -L -X PUT 'http://G/v1/objects/myS3bucket/myobject?appendty=flush&handle=obj-handle'`  <sup>[8](#ft8)</sup> | `api.FlushObject` |
 | Delete object | DELETE /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L 'http://G/v1/objects/mybucket/myobject'` | `api.DeleteObject` |
-| Set [bucket properties](bucket.md#bucket-properties) (proxy) | PATCH {"action": "setbprops"} /v1/buckets/bucket-name | `curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"setbprops", "value": {"checksum": {"type": "sha256"}, "mirror": {"enable": true}, "force": false}' 'http://G/v1/buckets/abc'`  <sup id="a9">[9](#ft9)</sup> | `api.SetBucketProps` |
-| Reset [bucket properties](bucket.md#bucket-properties) (proxy) | PATCH {"action": "resetbprops"} /v1/buckets/bucket-name | `curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"resetbprops"}' 'http://G/v1/buckets/abc'` | `api.ResetBucketProps` |
+| Set [bucket properties](bucket.md#bucket-properties) (proxy) | PATCH {"action": "set-bprops"} /v1/buckets/bucket-name | `curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"set-bprops", "value": {"checksum": {"type": "sha256"}, "mirror": {"enable": true}, "force": false}' 'http://G/v1/buckets/abc'`  <sup id="a9">[9](#ft9)</sup> | `api.SetBucketProps` |
+| Reset [bucket properties](bucket.md#bucket-properties) (proxy) | PATCH {"action": "reset-bprops"} /v1/buckets/bucket-name | `curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"reset-bprops"}' 'http://G/v1/buckets/abc'` | `api.ResetBucketProps` |
 | [Evict](bucket.md#prefetchevict-objects) object | DELETE '{"action": "evictobj"}' /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "evictobj"}' 'http://G/v1/objects/mybucket/myobject'` | `api.EvictObject` |
 | [Evict](bucket.md#evict-bucket) remote bucket | DELETE {"action": "evictcb"} /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "evictcb"}' 'http://G/v1/buckets/myS3bucket'` | `api.EvictRemoteBucket` |
 | Promote file or directory | POST {"action": "promote", "name": "/home/user/dirname", "value": {"target": "234ed78", "recurs": true, "keep": true}} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"promote", "name":"/user/dir", "value": {"target": "234ed78", "trim_prefix": "/user/", "recurs": true, "keep": true} }' 'http://G/v1/buckets/abc'` <sup>[7](#ft7)</sup>| `api.PromoteFileOrDir` |
@@ -218,8 +218,8 @@ These APIs also require specific node ID (to identify the target in the cluster 
 | Operation | HTTP action | Example | Go API |
 |--- | --- | ---|--- |
 | Erasure code entire bucket | (to be added) | (to be added) | `api.ECEncodeBucket` |
-| Configure bucket as [n-way mirror](storage_svcs.md#n-way-mirror) | POST {"action": "makencopies", "value": n} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"makencopies", "value": 2}' 'http://G/v1/buckets/abc'` | `api.MakeNCopies` |
-| Enable [erasure coding](storage_svcs.md#erasure-coding) protection for all objects (proxy) | POST {"action": "ecencode"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"ecencode"}' 'http://G/v1/buckets/abc'` | (to be added) |
+| Configure bucket as [n-way mirror](storage_svcs.md#n-way-mirror) | POST {"action": "make-n-copies", "value": n} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"make-n-copies", "value": 2}' 'http://G/v1/buckets/abc'` | `api.MakeNCopies` |
+| Enable [erasure coding](storage_svcs.md#erasure-coding) protection for all objects (proxy) | POST {"action": "ec-encode"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"ec-encode"}' 'http://G/v1/buckets/abc'` | (to be added) |
 
 ### Multi-Object Operations
 
