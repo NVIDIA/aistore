@@ -1,9 +1,10 @@
-// Package lru provides least recently used cache replacement policy for stored objects
-// and serves as a generic garbage-collection mechanism for orphaned workfiles.
+// Package lrucln provides storage cleanup and eviction functionality (the latter based on the
+// least recently used cache replacement). It also serves as a built-in garbage-collection
+// mechanism for orphaned workfiles.
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
-package xs
+package lrucln
 
 import (
 	"fmt"
@@ -23,25 +24,32 @@ import (
 	"github.com/NVIDIA/aistore/xreg"
 )
 
+// TODO: unify and refactor (lru, cleanup-store)
+
 type (
-	InitStoreCln struct {
+	IniCln struct {
 		T       cluster.Target
-		Xaction *StoreClnXaction
+		Xaction *XactCln
 		StatsT  stats.Tracker
 		Buckets []cmn.Bck // optional list of specific buckets to cleanup
 		WG      *sync.WaitGroup
 	}
-
-	// parent - contains mpath joggers
-	cleanP struct {
-		wg      sync.WaitGroup
-		joggers map[string]*cleanJ
-		ini     InitStoreCln
+	XactCln struct {
+		xaction.XactBase
 	}
+)
 
-	// cleanJ represents a single cleanup context and a single /jogger/
+// private
+type (
+	// parent (contains mpath joggers)
+	clnP struct {
+		wg      sync.WaitGroup
+		joggers map[string]*clnJ
+		ini     IniCln
+	}
+	// clnJ represents a single cleanup context and a single /jogger/
 	// that traverses and evicts a single given mountpath.
-	cleanJ struct {
+	clnJ struct {
 		// runtime
 		totalSize int64
 		oldWork   []string
@@ -52,27 +60,24 @@ type (
 		bck cmn.Bck
 		now int64
 		// init-time
-		p         *cleanP
-		ini       *InitStoreCln
-		stopCh    chan struct{}
-		joggers   map[string]*cleanJ
-		mpathInfo *fs.MountpathInfo
-		config    *cmn.Config
+		p       *clnP
+		ini     *IniCln
+		stopCh  chan struct{}
+		joggers map[string]*clnJ
+		mi      *fs.MountpathInfo
+		config  *cmn.Config
 		// runtime
 		allowDelObj bool
 	}
-	storeClnFactory struct {
+	clnFactory struct {
 		xreg.RenewBase
-		xact *StoreClnXaction
-	}
-	StoreClnXaction struct {
-		xaction.XactBase
+		xact *XactCln
 	}
 )
 
 // interface guard
 var (
-	_ xreg.Renewable = (*storeClnFactory)(nil)
+	_ xreg.Renewable = (*clnFactory)(nil)
 )
 
 func rmMisplaced() bool {
@@ -80,42 +85,41 @@ func rmMisplaced() bool {
 	return !g.Interrupted && !l.Interrupted && g.Xact == nil && l.Xact == nil
 }
 
-func (*StoreClnXaction) Run(*sync.WaitGroup) { debug.Assert(false) }
+func (*XactCln) Run(*sync.WaitGroup) { debug.Assert(false) }
 
-/////////////
-// Factory //
-/////////////
+////////////////
+// clnFactory //
+////////////////
 
-func (*storeClnFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
-	return &storeClnFactory{RenewBase: xreg.RenewBase{Args: args}}
+func (*clnFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
+	return &clnFactory{RenewBase: xreg.RenewBase{Args: args}}
 }
 
-func (p *storeClnFactory) Start() error {
-	p.xact = &StoreClnXaction{}
+func (p *clnFactory) Start() error {
+	p.xact = &XactCln{}
 	p.xact.InitBase(p.UUID(), cmn.ActStoreCleanup, nil)
 	return nil
 }
 
-func (*storeClnFactory) Kind() string        { return cmn.ActStoreCleanup }
-func (p *storeClnFactory) Get() cluster.Xact { return p.xact }
+func (*clnFactory) Kind() string        { return cmn.ActStoreCleanup }
+func (p *clnFactory) Get() cluster.Xact { return p.xact }
 
-func (p *storeClnFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
+func (p *clnFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	err = fmt.Errorf("%s is already running - not starting %q", prevEntry.Get(), p.Str(p.Kind()))
 	return
 }
 
-func RunStoreCleanup(ini *InitStoreCln) {
+func RunCleanup(ini *IniCln) {
 	var (
 		xcln           = ini.Xaction
 		config         = cmn.GCO.Get()
 		availablePaths = fs.GetAvail()
 		num            = len(availablePaths)
-		joggers        = make(map[string]*cleanJ, num)
-		parent         = &cleanP{joggers: joggers, ini: *ini}
-		running        bool
+		joggers        = make(map[string]*clnJ, num)
+		parent         = &clnP{joggers: joggers, ini: *ini}
 	)
 	defer func() {
-		if !running && ini.WG != nil {
+		if ini.WG != nil {
 			ini.WG.Done()
 		}
 	}()
@@ -124,14 +128,14 @@ func RunStoreCleanup(ini *InitStoreCln) {
 		glog.Error(cmn.ErrNoMountpaths)
 		return
 	}
-	for mpath, mpathInfo := range availablePaths {
-		joggers[mpath] = &cleanJ{
-			oldWork:   make([]string, 0, 64),
-			stopCh:    make(chan struct{}, 1),
-			mpathInfo: mpathInfo,
-			config:    config,
-			ini:       &parent.ini,
-			p:         parent,
+	for mpath, mi := range availablePaths {
+		joggers[mpath] = &clnJ{
+			oldWork: make([]string, 0, 64),
+			stopCh:  make(chan struct{}, 1),
+			mi:      mi,
+			config:  config,
+			ini:     &parent.ini,
+			p:       parent,
 		}
 		joggers[mpath].misplaced.loms = make([]*cluster.LOM, 0, 64)
 		joggers[mpath].misplaced.ec = make([]*cluster.CT, 0, 64)
@@ -144,10 +148,10 @@ func RunStoreCleanup(ini *InitStoreCln) {
 	}
 
 	cs := fs.GetCapStatus()
-	glog.Infof("[store-cleanup] %s started, %s", xcln, cs)
-	running = true
+	glog.Infof("%s started, %s", xcln, cs)
 	if ini.WG != nil {
 		ini.WG.Done()
+		ini.WG = nil
 	}
 	parent.wg.Wait()
 
@@ -155,26 +159,28 @@ func RunStoreCleanup(ini *InitStoreCln) {
 		j.stop()
 	}
 	xcln.Finish(nil)
+	cs = fs.GetCapStatus()
+	glog.Infof("%s finished, %s", xcln, cs)
 }
 
 //////////////////////
 // mountpath jogger //
 //////////////////////
 
-func (j *cleanJ) String() string {
-	return fmt.Sprintf("%s: (%s, %s)", j.ini.T.Snode(), j.ini.Xaction, j.mpathInfo)
+func (j *clnJ) String() string {
+	return fmt.Sprintf("%s: jog-%s", j.ini.Xaction, j.mi)
 }
 
-func (j *cleanJ) stop() { j.stopCh <- struct{}{} }
+func (j *clnJ) stop() { j.stopCh <- struct{}{} }
 
-func (j *cleanJ) run(providers []string) {
+func (j *clnJ) run(providers []string) {
 	var err error
 	defer j.p.wg.Done()
 	if err = j.removeTrash(); err != nil {
 		goto ex
 	}
 	if len(j.ini.Buckets) != 0 {
-		glog.Infof("[lru] %s: freeing-up %s", j, cos.B2S(j.totalSize, 2))
+		glog.Infof("%s: freeing-up %s", j, cos.B2S(j.totalSize, 2))
 		err = j.jogBcks(j.ini.Buckets)
 	} else {
 		err = j.jog(providers)
@@ -183,16 +189,16 @@ ex:
 	if err == nil || cmn.IsErrBucketNought(err) || cmn.IsErrObjNought(err) {
 		return
 	}
-	glog.Errorf("[lru] %s: exited with err %v", j, err)
+	glog.Errorf("%s: exited with err %v", j, err)
 }
 
-func (j *cleanJ) jog(providers []string) (err error) {
+func (j *clnJ) jog(providers []string) (err error) {
 	glog.Infof("%s: freeing-up %s", j, cos.B2S(j.totalSize, 2))
 	for _, provider := range providers { // for each provider (NOTE: ordering is random)
 		var (
 			bcks []cmn.Bck
 			opts = fs.Options{
-				Mi:  j.mpathInfo,
+				Mi:  j.mi,
 				Bck: cmn.Bck{Provider: provider, Ns: cmn.NsGlobal},
 			}
 		)
@@ -206,7 +212,7 @@ func (j *cleanJ) jog(providers []string) (err error) {
 	return
 }
 
-func (j *cleanJ) jogBcks(bcks []cmn.Bck) (err error) {
+func (j *clnJ) jogBcks(bcks []cmn.Bck) (err error) {
 	if len(bcks) == 0 {
 		return
 	}
@@ -229,8 +235,8 @@ func (j *cleanJ) jogBcks(bcks []cmn.Bck) (err error) {
 	return
 }
 
-func (j *cleanJ) removeTrash() error {
-	trashDir := j.mpathInfo.MakePathTrash()
+func (j *clnJ) removeTrash() error {
+	trashDir := j.mi.MakePathTrash()
 	return fs.Scanner(trashDir, func(fqn string, de fs.DirEntry) error {
 		if de.IsDir() {
 			if err := os.RemoveAll(fqn); err != nil && !os.IsNotExist(err) {
@@ -245,9 +251,9 @@ func (j *cleanJ) removeTrash() error {
 	})
 }
 
-func (j *cleanJ) jogBck() (size int64, err error) {
+func (j *clnJ) jogBck() (size int64, err error) {
 	opts := &fs.Options{
-		Mi:       j.mpathInfo,
+		Mi:       j.mi,
 		Bck:      j.bck,
 		CTs:      []string{fs.WorkfileType, fs.ObjectType, fs.ECSliceType, fs.ECMetaType},
 		Callback: j.walk,
@@ -261,7 +267,7 @@ func (j *cleanJ) jogBck() (size int64, err error) {
 	return
 }
 
-func (j *cleanJ) visitCT(parsedFQN fs.ParsedFQN, fqn string) {
+func (j *clnJ) visitCT(parsedFQN fs.ParsedFQN, fqn string) {
 	switch parsedFQN.ContentType {
 	case fs.WorkfileType:
 		_, base := filepath.Split(fqn)
@@ -317,7 +323,7 @@ func (j *cleanJ) visitCT(parsedFQN fs.ParsedFQN, fqn string) {
 	}
 }
 
-func (j *cleanJ) visitLOM(parsedFQN fs.ParsedFQN) {
+func (j *clnJ) visitLOM(parsedFQN fs.ParsedFQN) {
 	if !j.allowDelObj {
 		return
 	}
@@ -350,7 +356,7 @@ func (j *cleanJ) visitLOM(parsedFQN fs.ParsedFQN) {
 	}
 }
 
-func (j *cleanJ) walk(fqn string, de fs.DirEntry) error {
+func (j *clnJ) walk(fqn string, de fs.DirEntry) error {
 	if de.IsDir() {
 		return nil
 	}
@@ -370,7 +376,7 @@ func (j *cleanJ) walk(fqn string, de fs.DirEntry) error {
 	return nil
 }
 
-func (j *cleanJ) evict() (size int64, err error) {
+func (j *clnJ) evict() (size int64, err error) {
 	var (
 		fevicted, bevicted int64
 		capCheck           int64
@@ -437,7 +443,7 @@ func (j *cleanJ) evict() (size int64, err error) {
 	return
 }
 
-func (j *cleanJ) postRemove(prev, size int64) (capCheck int64, err error) {
+func (j *clnJ) postRemove(prev, size int64) (capCheck int64, err error) {
 	j.totalSize -= size
 	capCheck = prev + size
 	if err = j.yieldTerm(); err != nil {
@@ -451,7 +457,7 @@ func (j *cleanJ) postRemove(prev, size int64) (capCheck int64, err error) {
 	return
 }
 
-func (j *cleanJ) yieldTerm() error {
+func (j *clnJ) yieldTerm() error {
 	xcln := j.ini.Xaction
 	select {
 	case <-xcln.ChanAbort():
@@ -467,7 +473,7 @@ func (j *cleanJ) yieldTerm() error {
 	return nil
 }
 
-func (j *cleanJ) allow() (ok bool, err error) {
+func (j *clnJ) allow() (ok bool, err error) {
 	var (
 		bowner = j.ini.T.Bowner()
 		b      = cluster.NewBckEmbed(j.bck)

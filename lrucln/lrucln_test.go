@@ -1,9 +1,8 @@
-// Package lru provides least recently used cache replacement policy for stored objects
-// and serves as a generic garbage-collection mechanism for orphaned workfiles.
+// Package lrucln_test is a unit test for the package.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package lru_test
+package lrucln_test
 
 import (
 	"crypto/rand"
@@ -18,22 +17,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
-	"github.com/NVIDIA/aistore/lru"
+	"github.com/NVIDIA/aistore/lrucln"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xreg"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
-
-func init() {
-	xreg.Init()
-	hk.TestInit()
-}
-
-func TestLRUMain(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "LRU Suite")
-}
 
 const (
 	initialDiskUsagePct  = 0.9
@@ -42,14 +31,24 @@ const (
 	numberOfCreatedFiles = 45
 	fileSize             = 10 * cos.MiB
 	blockSize            = cos.KiB
-	basePath             = "/tmp/lru-tests"
-	bucketName           = "lru-bck"
+	basePath             = "/tmp/lrucln-tests"
+	bucketName           = "lrucln-bck"
 	bucketNameAnother    = bucketName + "-another"
 )
 
 type fileMetadata struct {
 	name string
 	size int64
+}
+
+func init() {
+	xreg.Init()
+	hk.TestInit()
+}
+
+func TestMain(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "LRU-Cleanup Suite")
 }
 
 func namesFromFilesMetadatas(fileMetadata []fileMetadata) []string {
@@ -103,15 +102,25 @@ func newTargetLRUMock() *cluster.TargetMock {
 	return tMock
 }
 
-func newInitLRU(t cluster.Target) *lru.InitLRU {
-	xlru := &lru.Xaction{}
+func newIniLRU(t cluster.Target) *lrucln.IniLRU {
+	xlru := &lrucln.XactLRU{}
 	xlru.InitBase(cos.GenUUID(), cmn.ActLRU, nil)
-	return &lru.InitLRU{
+	return &lrucln.IniLRU{
 		Xaction:             xlru,
 		StatsT:              stats.NewTrackerMock(),
 		T:                   t,
 		GetFSUsedPercentage: mockGetFSUsedPercentage,
 		GetFSStats:          getMockGetFSStats(numberOfCreatedFiles),
+	}
+}
+
+func newInitStoreCln(t cluster.Target) *lrucln.IniCln {
+	xcln := &lrucln.XactCln{}
+	xcln.InitBase(cos.GenUUID(), cmn.ActLRU, nil)
+	return &lrucln.IniCln{
+		Xaction: xcln,
+		StatsT:  stats.NewTrackerMock(),
+		T:       t,
 	}
 }
 
@@ -163,13 +172,11 @@ func saveRandomFiles(filesPath string, filesNumber int) {
 	}
 }
 
-var _ = Describe("LRU tests", func() {
+var _ = Describe("LRU-Cleanup tests", func() {
 	cos.InitShortID(0)
 	Describe("Run", func() {
 		var (
-			t   *cluster.TargetMock
-			ini *lru.InitLRU
-
+			t          *cluster.TargetMock
 			filesPath  string
 			fpAnother  string
 			bckAnother cmn.Bck
@@ -179,8 +186,6 @@ var _ = Describe("LRU tests", func() {
 			initConfig()
 			createAndAddMountpath(basePath)
 			t = newTargetLRUMock()
-			ini = newInitLRU(t)
-
 			mpaths := fs.GetAvail()
 			bck := cmn.Bck{Name: bucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 			bckAnother = cmn.Bck{Name: bucketNameAnother, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
@@ -195,14 +200,18 @@ var _ = Describe("LRU tests", func() {
 		})
 
 		Describe("evict files", func() {
+			var ini *lrucln.IniLRU
+			BeforeEach(func() {
+				ini = newIniLRU(t)
+			})
 			It("should not fail when there are no files", func() {
-				lru.Run(ini)
+				lrucln.RunLRU(ini)
 			})
 
 			It("should evict correct number of files", func() {
 				saveRandomFiles(filesPath, numberOfCreatedFiles)
 
-				lru.Run(ini)
+				lrucln.RunLRU(ini)
 
 				files, err := os.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
@@ -228,7 +237,7 @@ var _ = Describe("LRU tests", func() {
 				time.Sleep(1 * time.Second)
 				saveRandomFiles(filesPath, 3)
 
-				lru.Run(ini)
+				lrucln.RunLRU(ini)
 
 				files, err := os.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
@@ -262,7 +271,7 @@ var _ = Describe("LRU tests", func() {
 
 				// To go under lwm (50%), LRU should evict the oldest files until <=50% reached
 				// Those files are a 4MB file and a 16MB file
-				lru.Run(ini)
+				lrucln.RunLRU(ini)
 
 				filesLeft, err := os.ReadDir(filesPath)
 				Expect(len(filesLeft)).To(Equal(2))
@@ -280,7 +289,7 @@ var _ = Describe("LRU tests", func() {
 
 				ini.Buckets = []cmn.Bck{bckAnother}
 				ini.Force = true // Ignore LRU enabled
-				lru.Run(ini)
+				lrucln.RunLRU(ini)
 
 				files, err := os.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
@@ -301,6 +310,10 @@ var _ = Describe("LRU tests", func() {
 		})
 
 		Describe("not evict files", func() {
+			var ini *lrucln.IniLRU
+			BeforeEach(func() {
+				ini = newIniLRU(t)
+			})
 			It("should do nothing when disk usage is below hwm", func() {
 				const numberOfFiles = 4
 				config := cmn.GCO.BeginUpdate()
@@ -312,7 +325,7 @@ var _ = Describe("LRU tests", func() {
 
 				saveRandomFiles(filesPath, numberOfFiles)
 
-				lru.Run(ini)
+				lrucln.RunLRU(ini)
 
 				files, err := os.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
@@ -329,7 +342,7 @@ var _ = Describe("LRU tests", func() {
 
 				saveRandomFiles(filesPath, numberOfFiles)
 
-				lru.Run(ini)
+				lrucln.RunLRU(ini)
 
 				files, err := os.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
@@ -340,13 +353,43 @@ var _ = Describe("LRU tests", func() {
 				saveRandomFiles(fpAnother, numberOfCreatedFiles)
 
 				ini.Buckets = []cmn.Bck{bckAnother} // bckAnother has LRU disabled
-				lru.Run(ini)
+				lrucln.RunLRU(ini)
 
 				filesAnother, err := os.ReadDir(fpAnother)
 				Expect(err).NotTo(HaveOccurred())
 
 				numFilesLeft := len(filesAnother)
 				Expect(numFilesLeft).To(BeNumerically("==", numberOfCreatedFiles))
+			})
+		})
+
+		Describe("cleanup: evict trash directory", func() {
+			var ini *lrucln.IniCln
+			BeforeEach(func() {
+				ini = newInitStoreCln(t)
+			})
+			It("should totally evict trash directory", func() {
+				var (
+					mpaths = fs.GetAvail()
+					mpath  = mpaths[basePath]
+				)
+
+				saveRandomFiles(filesPath, 10)
+				Expect(filesPath).To(BeADirectory())
+
+				err := mpath.MoveToTrash(filesPath)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(filesPath).NotTo(BeADirectory())
+
+				files, err := os.ReadDir(mpath.MakePathTrash())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(files)).To(Equal(1))
+
+				lrucln.RunCleanup(ini)
+
+				files, err = os.ReadDir(mpath.MakePathTrash())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(files)).To(Equal(0))
 			})
 		})
 	})

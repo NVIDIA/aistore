@@ -15,11 +15,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
-	"github.com/NVIDIA/aistore/lru"
+	"github.com/NVIDIA/aistore/lrucln"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xreg"
-	"github.com/NVIDIA/aistore/xs"
 )
 
 // triggers by the out-of-space condition or suspicion of thereof
@@ -68,9 +67,9 @@ func (t *targetrunner) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ..
 		msg := t.newAmsgActVal(cmn.ActRegGlobalXaction, regMsg)
 		t.bcastAsyncIC(msg)
 	}
-	ini := lru.InitLRU{
+	ini := lrucln.IniLRU{
 		T:                   t,
-		Xaction:             xlru.(*lru.Xaction),
+		Xaction:             xlru.(*lrucln.XactLRU),
 		StatsT:              t.statsT,
 		Buckets:             bcks,
 		GetFSUsedPercentage: ios.GetFSUsedPercentage,
@@ -82,7 +81,7 @@ func (t *targetrunner) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ..
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 		Xact:      xlru,
 	})
-	lru.Run(&ini)
+	lrucln.RunLRU(&ini)
 }
 
 func (t *targetrunner) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cmn.Bck) {
@@ -105,9 +104,9 @@ func (t *targetrunner) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cm
 		msg := t.newAmsgActVal(cmn.ActRegGlobalXaction, regMsg)
 		t.bcastAsyncIC(msg)
 	}
-	ini := xs.InitStoreCln{
+	ini := lrucln.IniCln{
 		T:       t,
-		Xaction: xcln.(*xs.StoreClnXaction),
+		Xaction: xcln.(*lrucln.XactCln),
 		StatsT:  t.statsT,
 		Buckets: bcks,
 		WG:      wg,
@@ -116,7 +115,7 @@ func (t *targetrunner) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cm
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 		Xact:      xcln,
 	})
-	xs.RunStoreCleanup(&ini)
+	lrucln.RunCleanup(&ini)
 }
 
 func (t *targetrunner) TrashNonExistingBucket(bck cmn.Bck) {

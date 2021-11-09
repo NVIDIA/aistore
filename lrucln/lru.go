@@ -1,9 +1,10 @@
-// Package lru provides least recently used cache replacement policy for stored objects
-// and serves as a generic garbage-collection mechanism for orphaned workfiles.
+// Package lrucln provides storage cleanup and eviction functionality (the latter based on the
+// least recently used cache replacement). It also serves as a built-in garbage-collection
+// mechanism for orphaned workfiles.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
-package lru
+package lrucln
 
 import (
 	"container/heap"
@@ -24,8 +25,8 @@ import (
 	"github.com/NVIDIA/aistore/xreg"
 )
 
-// The LRU module implements a well-known least-recently-used cache replacement policy.
-//
+// TODO: unify and refactor (lru, cleanup-store)
+
 // LRU-driven eviction is based on the two configurable watermarks: config.LRU.LowWM and
 // config.LRU.HighWM (section "lru" in the /deploy/dev/local/aisnode_config.sh).
 // When and if exceeded, AIStore target will start gradually evicting objects from its
@@ -40,18 +41,16 @@ import (
 //   - runLRU - to initiate a new LRU extended action on the local target
 // All other methods are private to this module and are used only internally.
 
-// TODO: extend LRU to remove CTs beyond just []string{fs.ObjectType}
-
-// LRU defaults/tunables
+// tunables
 const (
 	minEvictThresh = 10 * cos.MiB
 	capCheckThresh = 256 * cos.MiB // capacity checking threshold, when exceeded may result in lru throttling
 )
 
 type (
-	InitLRU struct {
+	IniLRU struct {
 		T                   cluster.Target
-		Xaction             *Xaction
+		Xaction             *XactLRU
 		StatsT              stats.Tracker
 		Buckets             []cmn.Bck // list of buckets to run LRU
 		GetFSUsedPercentage func(path string) (usedPercentage int64, ok bool)
@@ -59,16 +58,21 @@ type (
 		WG                  *sync.WaitGroup
 		Force               bool // Ignore LRU prop when set to be true.
 	}
+	XactLRU struct {
+		xaction.XactBase
+	}
+)
 
-	// minHeap keeps fileInfo sorted by access time with oldest
-	// on top of the heap.
+// private
+type (
+	// minHeap keeps fileInfo sorted by access time with oldest on top of the heap.
 	minHeap []*cluster.LOM
 
-	// parent - contains mpath joggers
+	// parent (contains mpath joggers)
 	lruP struct {
 		wg      sync.WaitGroup
 		joggers map[string]*lruJ
-		ini     InitLRU
+		ini     IniLRU
 	}
 
 	// lruJ represents a single LRU context and a single /jogger/
@@ -82,56 +86,56 @@ type (
 		bck       cmn.Bck
 		now       int64
 		// init-time
-		p         *lruP
-		ini       *InitLRU
-		stopCh    chan struct{}
-		joggers   map[string]*lruJ
-		mpathInfo *fs.MountpathInfo
-		config    *cmn.Config
+		p       *lruP
+		ini     *IniLRU
+		stopCh  chan struct{}
+		joggers map[string]*lruJ
+		mi      *fs.MountpathInfo
+		config  *cmn.Config
 		// runtime
 		throttle    bool
 		allowDelObj bool
 	}
-
-	Factory struct {
+	lruFactory struct {
 		xreg.RenewBase
-		xact *Xaction
+		xact *XactLRU
 	}
-	Xaction struct {
-		xaction.XactBase
-	}
+	TestFactory = lruFactory // unit tests only
 )
 
 // interface guard
 var (
-	_ xreg.Renewable = (*Factory)(nil)
+	_ xreg.Renewable = (*lruFactory)(nil)
 )
 
-func Init() { xreg.RegNonBckXact(&Factory{}) }
-
-/////////////
-// Factory //
-/////////////
-
-func (*Factory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
-	return &Factory{RenewBase: xreg.RenewBase{Args: args}}
+func Init() {
+	xreg.RegNonBckXact(&lruFactory{})
+	xreg.RegNonBckXact(&clnFactory{})
 }
 
-func (p *Factory) Start() error {
-	p.xact = &Xaction{}
+////////////////
+// lruFactory //
+////////////////
+
+func (*lruFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
+	return &lruFactory{RenewBase: xreg.RenewBase{Args: args}}
+}
+
+func (p *lruFactory) Start() error {
+	p.xact = &XactLRU{}
 	p.xact.InitBase(p.UUID(), cmn.ActLRU, nil)
 	return nil
 }
 
-func (*Factory) Kind() string        { return cmn.ActLRU }
-func (p *Factory) Get() cluster.Xact { return p.xact }
+func (*lruFactory) Kind() string        { return cmn.ActLRU }
+func (p *lruFactory) Get() cluster.Xact { return p.xact }
 
-func (p *Factory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
+func (p *lruFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	err = fmt.Errorf("%s is already running - not starting %q", prevEntry.Get(), p.Str(p.Kind()))
 	return
 }
 
-func Run(ini *InitLRU) {
+func RunLRU(ini *IniLRU) {
 	var (
 		xlru           = ini.Xaction
 		config         = cmn.GCO.Get()
@@ -139,10 +143,9 @@ func Run(ini *InitLRU) {
 		num            = len(availablePaths)
 		joggers        = make(map[string]*lruJ, num)
 		parent         = &lruP{joggers: joggers, ini: *ini}
-		running        bool
 	)
 	defer func() {
-		if !running && ini.WG != nil {
+		if ini.WG != nil {
 			ini.WG.Done()
 		}
 	}()
@@ -151,15 +154,15 @@ func Run(ini *InitLRU) {
 		xlru.Finish(cmn.ErrNoMountpaths)
 		return
 	}
-	for mpath, mpathInfo := range availablePaths {
+	for mpath, mi := range availablePaths {
 		h := make(minHeap, 0, 64)
 		joggers[mpath] = &lruJ{
-			heap:      &h,
-			stopCh:    make(chan struct{}, 1),
-			mpathInfo: mpathInfo,
-			config:    config,
-			ini:       &parent.ini,
-			p:         parent,
+			heap:   &h,
+			stopCh: make(chan struct{}, 1),
+			mi:     mi,
+			config: config,
+			ini:    &parent.ini,
+			p:      parent,
 		}
 	}
 	providers := cmn.Providers.ToSlice()
@@ -169,10 +172,11 @@ func Run(ini *InitLRU) {
 		j.joggers = joggers
 		go j.run(providers)
 	}
-	glog.Infof("[lru] %s started: dont-evict-time %v", xlru, config.LRU.DontEvictTime)
-	running = true
+	cs := fs.GetCapStatus()
+	glog.Infof("%s started, dont-evict-time %v, %s", xlru, config.LRU.DontEvictTime, cs)
 	if ini.WG != nil {
 		ini.WG.Done()
+		ini.WG = nil
 	}
 	parent.wg.Wait()
 
@@ -180,16 +184,18 @@ func Run(ini *InitLRU) {
 		j.stop()
 	}
 	xlru.Finish(nil)
+	cs = fs.GetCapStatus()
+	glog.Infof("%s finished, %s", xlru, cs)
 }
 
-func (*Xaction) Run(*sync.WaitGroup) { debug.Assert(false) }
+func (*XactLRU) Run(*sync.WaitGroup) { debug.Assert(false) }
 
 //////////////////////
 // mountpath jogger //
 //////////////////////
 
 func (j *lruJ) String() string {
-	return fmt.Sprintf("%s: (%s, %s)", j.ini.T.Snode(), j.ini.Xaction, j.mpathInfo)
+	return fmt.Sprintf("%s: jog-%s", j.ini.Xaction, j.mi)
 }
 
 func (j *lruJ) stop() { j.stopCh <- struct{}{} }
@@ -202,11 +208,11 @@ func (j *lruJ) run(providers []string) {
 		goto ex
 	}
 	if j.totalSize < minEvictThresh {
-		glog.Infof("[lru] %s: used cap below threshold, nothing to do", j)
+		glog.Infof("%s: used cap below threshold, nothing to do", j)
 		return
 	}
 	if len(j.ini.Buckets) != 0 {
-		glog.Infof("[lru] %s: freeing-up %s", j, cos.B2S(j.totalSize, 2))
+		glog.Infof("%s: freeing-up %s", j, cos.B2S(j.totalSize, 2))
 		err = j.jogBcks(j.ini.Buckets, j.ini.Force)
 	} else {
 		err = j.jog(providers)
@@ -215,7 +221,7 @@ ex:
 	if err == nil || cmn.IsErrBucketNought(err) || cmn.IsErrObjNought(err) {
 		return
 	}
-	glog.Errorf("[lru] %s: exited with err %v", j, err)
+	glog.Errorf("%s: exited with err %v", j, err)
 }
 
 func (j *lruJ) jog(providers []string) (err error) {
@@ -224,7 +230,7 @@ func (j *lruJ) jog(providers []string) (err error) {
 		var (
 			bcks []cmn.Bck
 			opts = fs.Options{
-				Mi:  j.mpathInfo,
+				Mi:  j.mi,
 				Bck: cmn.Bck{Provider: provider, Ns: cmn.NsGlobal},
 			}
 		)
@@ -279,7 +285,7 @@ func (j *lruJ) jogBck() (size int64, err error) {
 
 	// 2. collect
 	opts := &fs.Options{
-		Mi:       j.mpathInfo,
+		Mi:       j.mi,
 		Bck:      j.bck,
 		CTs:      []string{fs.ObjectType},
 		Callback: j.walk,
@@ -388,7 +394,7 @@ func (j *lruJ) postRemove(prev, size int64) (capCheck int64, err error) {
 	j.allowDelObj, _ = j.allow()
 	j.config = cmn.GCO.Get()
 	j.now = time.Now().UnixNano()
-	usedPct, ok := j.ini.GetFSUsedPercentage(j.mpathInfo.Path)
+	usedPct, ok := j.ini.GetFSUsedPercentage(j.mi.Path)
 	if ok && usedPct < j.config.LRU.HighWM {
 		err = j._throttle(usedPct)
 	}
@@ -396,12 +402,12 @@ func (j *lruJ) postRemove(prev, size int64) (capCheck int64, err error) {
 }
 
 func (j *lruJ) _throttle(usedPct int64) (err error) {
-	if j.mpathInfo.IsIdle(j.config) {
+	if j.mi.IsIdle(j.config) {
 		return
 	}
 	// throttle self
 	ratioCapacity := cos.Ratio(j.config.LRU.HighWM, j.config.LRU.LowWM, usedPct)
-	curr := fs.GetMpathUtil(j.mpathInfo.Path)
+	curr := fs.GetMpathUtil(j.mi.Path)
 	ratioUtilization := cos.Ratio(j.config.Disk.DiskUtilHighWM, j.config.Disk.DiskUtilLowWM, curr)
 	if ratioUtilization > ratioCapacity {
 		if usedPct < (j.config.LRU.LowWM+j.config.LRU.HighWM)/2 {
@@ -427,7 +433,7 @@ func evictObj(lom *cluster.LOM) (ok bool) {
 
 func (j *lruJ) evictSize() (err error) {
 	lwm, hwm := j.config.LRU.LowWM, j.config.LRU.HighWM
-	blocks, bavail, bsize, err := j.ini.GetFSStats(j.mpathInfo.Path)
+	blocks, bavail, bsize, err := j.ini.GetFSStats(j.mi.Path)
 	if err != nil {
 		return err
 	}
@@ -467,7 +473,7 @@ func (j *lruJ) sortBsize(bcks []cmn.Bck) {
 		v uint64
 	}, len(bcks))
 	for i := range bcks {
-		path := j.mpathInfo.MakePathCT(bcks[i], fs.ObjectType)
+		path := j.mi.MakePathCT(bcks[i], fs.ObjectType)
 		sized[i].b = bcks[i]
 		sized[i].v, _ = ios.GetDirSize(path)
 	}

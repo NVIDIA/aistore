@@ -19,12 +19,6 @@ import (
 )
 
 type (
-	MovFactory struct {
-		xreg.RenewBase
-		xact  *bckRename
-		phase string
-		args  *xreg.BckRenameArgs
-	}
 	bckRename struct {
 		xaction.XactBase
 		t       cluster.Target
@@ -32,28 +26,35 @@ type (
 		bckTo   *cluster.Bck
 		rebID   string
 	}
+	bmvFactory struct {
+		xreg.RenewBase
+		xact  *bckRename
+		phase string
+		args  *xreg.BckRenameArgs
+	}
+	TestBmvFactory = bmvFactory
 )
 
 // interface guard
 var (
 	_ cluster.Xact   = (*bckRename)(nil)
-	_ xreg.Renewable = (*MovFactory)(nil)
+	_ xreg.Renewable = (*bmvFactory)(nil)
 )
 
-func (*MovFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
-	p := &MovFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, args: args.Custom.(*xreg.BckRenameArgs)}
+func (*bmvFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
+	p := &bmvFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, args: args.Custom.(*xreg.BckRenameArgs)}
 	return p
 }
 
-func (*MovFactory) Kind() string        { return cmn.ActMoveBck }
-func (p *MovFactory) Get() cluster.Xact { return p.xact }
+func (*bmvFactory) Kind() string        { return cmn.ActMoveBck }
+func (p *bmvFactory) Get() cluster.Xact { return p.xact }
 
-func (p *MovFactory) Start() error {
+func (p *bmvFactory) Start() error {
 	p.xact = newBckRename(p.UUID(), p.Kind(), p.Bck, p.T, p.args.BckFrom, p.args.BckTo, p.args.RebID)
 	return nil
 }
 
-func (p *MovFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
+func (p *bmvFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	if p.phase == cmn.ActBegin {
 		if !prevEntry.Get().Finished() {
 			err = fmt.Errorf("%s: cannot(%s=>%s) older rename still in progress", p.Kind(), p.args.BckFrom, p.args.BckTo)
@@ -61,7 +62,7 @@ func (p *MovFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 		}
 		// TODO: more checks
 	}
-	prev := prevEntry.(*MovFactory)
+	prev := prevEntry.(*bmvFactory)
 	bckEq := prev.args.BckTo.Equal(p.args.BckTo, false /*sameID*/, false /* same backend */)
 	if prev.phase == cmn.ActBegin && p.phase == cmn.ActCommit && bckEq {
 		prev.phase = cmn.ActCommit // transition

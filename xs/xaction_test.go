@@ -13,7 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
-	"github.com/NVIDIA/aistore/lru"
+	"github.com/NVIDIA/aistore/lrucln"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xreg"
 	"github.com/NVIDIA/aistore/xs"
@@ -40,7 +40,7 @@ func TestXactionRenewLRU(t *testing.T) {
 	)
 	xreg.TestReset()
 
-	xreg.RegNonBckXact(&lru.Factory{})
+	xreg.RegNonBckXact(&lrucln.TestFactory{})
 	defer xreg.AbortAll()
 	cos.InitShortID(0)
 
@@ -114,8 +114,8 @@ func TestXactionAbortAll(t *testing.T) {
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
 
-	xreg.RegNonBckXact(&lru.Factory{})
-	xreg.RegBckXact(&xs.MovFactory{})
+	xreg.RegNonBckXact(&lrucln.TestFactory{})
+	xreg.RegBckXact(&xs.TestBmvFactory{})
 	cos.InitShortID(0)
 
 	rnsLRU := xreg.RenewLRU(cos.GenUUID())
@@ -144,8 +144,8 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
 
-	xreg.RegNonBckXact(&lru.Factory{})
-	xreg.RegBckXact(&xs.MovFactory{})
+	xreg.RegNonBckXact(&lrucln.TestFactory{})
+	xreg.RegBckXact(&xs.TestBmvFactory{})
 	cos.InitShortID(0)
 
 	rnsLRU := xreg.RenewLRU(cos.GenUUID())
@@ -174,8 +174,8 @@ func TestXactionAbortBuckets(t *testing.T) {
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
 
-	xreg.RegNonBckXact(&lru.Factory{})
-	xreg.RegBckXact(&xs.MovFactory{})
+	xreg.RegNonBckXact(&lrucln.TestFactory{})
+	xreg.RegBckXact(&xs.TestBmvFactory{})
 	cos.InitShortID(0)
 
 	rnsLRU := xreg.RenewLRU(cos.GenUUID())
@@ -214,7 +214,7 @@ func TestXactionQueryFinished(t *testing.T) {
 	bmd.Add(bck3)
 
 	xreg.RegBckXact(&xs.TestXFactory{})
-	xreg.RegBckXact(&xs.MovFactory{})
+	xreg.RegBckXact(&xs.TestBmvFactory{})
 	cos.InitShortID(0)
 
 	rns1 := xreg.RenewBckRename(tMock, bck1, bck1, cos.GenUUID(), 123, "phase")
