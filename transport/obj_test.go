@@ -74,7 +74,7 @@ func TestMain(t *testing.M) {
 	if duration, err = time.ParseDuration(d); err != nil {
 		cos.Exitf("Invalid duration %q", d)
 	}
-	MMSA = memsys.DefaultPageMM()
+	MMSA = memsys.TestDefaultPageMM()
 
 	sc := transport.Init()
 	go sc.Run()
@@ -452,7 +452,7 @@ func Test_CompressedOne(t *testing.T) {
 	ts := httptest.NewServer(objmux)
 	defer ts.Close()
 
-	err := transport.HandleObjStream(trname, receive10G, memsys.DefaultPageMM() /* optionally, specify memsys*/)
+	err := transport.HandleObjStream(trname, receive10G, memsys.TestDefaultPageMM() /* optionally, specify memsys*/)
 	tassert.CheckFatal(t, err)
 	defer transport.Unhandle(trname)
 

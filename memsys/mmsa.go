@@ -125,6 +125,8 @@ const (
 	loadAvg    = 10                    // "idle" load average to deallocate Slabs when below
 	sizeToGC   = cos.GiB * 2           // see heuristics ("Heu")
 	minMemFree = cos.GiB + cos.MiB*256 // default minimum memory - see extended comment above
+
+	minMemFreeTests = cos.MiB * 320 // minimum free to run tests
 )
 
 const (
@@ -231,7 +233,7 @@ func init() {
 // default page-based memory-manager-slab-allocator (MMSA) for packages other than `ais`
 func DefaultPageMM() *MMSA {
 	gmmOnce.Do(func() {
-		gmm.Init(true)
+		gmm.Init(false, true)
 		if smm != nil {
 			smm.Sibling = gmm
 			gmm.Sibling = smm
@@ -243,13 +245,33 @@ func DefaultPageMM() *MMSA {
 // default small-size MMSA
 func DefaultSmallMM() *MMSA {
 	smmOnce.Do(func() {
-		smm.Init(true)
+		smm.Init(false, true)
 		if gmm != nil {
 			gmm.Sibling = smm
 			smm.Sibling = gmm
 		}
 	})
 	return smm
+}
+
+func TestDefaultPageMM() *MMSA {
+	_freeAtInit()
+	gmm.MinFree = minMemFreeTests
+	return DefaultPageMM()
+}
+
+func TestDefaultSmallMM() *MMSA {
+	_freeAtInit()
+	smm.MinFree = minMemFreeTests
+	return DefaultSmallMM()
+}
+
+func _freeAtInit() {
+	mem, _ := sys.Mem()
+	if mem.Free < minMemFree {
+		cos.FreeMemToOS()
+		runtime.Gosched()
+	}
 }
 
 //////////
@@ -290,13 +312,14 @@ func (r *MMSA) RegWithHK() {
 }
 
 // initialize new MMSA instance
-func (r *MMSA) Init(panicOnErr bool) (err error) {
-	cos.Assert(r.Name != "")
+func (r *MMSA) Init(panicOnEnvErr, panicOnInsufFreeErr bool) (err error) {
+	debug.Assert(r.Name != "")
 	// 1. environment overrides defaults and MMSA{...} hard-codings
 	if err = r.env(); err != nil {
-		if panicOnErr {
+		if panicOnEnvErr {
 			panic(err)
 		}
+		glog.Error(err)
 	}
 	// 2. compute minFree - mem size that must remain free at all times
 	mem, _ := sys.Mem()
@@ -327,9 +350,10 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 	if mem.Free < r.MinFree {
 		err = fmt.Errorf("insufficient free memory %s, minimum required %s (see %s for guidance)",
 			actual, required, readme)
-		if panicOnErr {
+		if panicOnInsufFreeErr {
 			panic(err)
 		}
+		glog.Error(err)
 	}
 	x := cos.MaxU64(r.MinFree*2, (r.MinFree+mem.Free)/2)
 	r.lowWM = cos.MinU64(x, r.MinFree*3) // Heu #1: hysteresis

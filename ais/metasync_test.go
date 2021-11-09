@@ -96,7 +96,7 @@ func newPrimary() *proxyrunner {
 	o.put(newBucketMD())
 	p.owner.bmd = o
 
-	p.gmm = memsys.DefaultPageMM()
+	p.gmm = memsys.TestDefaultPageMM()
 	return p
 }
 

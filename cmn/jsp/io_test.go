@@ -91,7 +91,7 @@ func TestDecodeAndEncode(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			var (
 				v testStruct
-				b = memsys.DefaultPageMM().NewSGL(cos.MiB)
+				b = memsys.TestDefaultPageMM().NewSGL(cos.MiB)
 			)
 			defer b.Free()
 
@@ -115,7 +115,7 @@ func TestDecodeAndEncode(t *testing.T) {
 }
 
 func TestDecodeAndEncodeFuzz(t *testing.T) {
-	b := memsys.DefaultPageMM().NewSGL(cos.MiB)
+	b := memsys.TestDefaultPageMM().NewSGL(cos.MiB)
 	defer b.Free()
 
 	for i := 0; i < 10000; i++ {
@@ -153,7 +153,7 @@ func BenchmarkEncode(b *testing.B) {
 	}
 	for _, bench := range benches {
 		b.Run(bench.name, func(b *testing.B) {
-			body := memsys.DefaultPageMM().NewSGL(cos.MiB)
+			body := memsys.TestDefaultPageMM().NewSGL(cos.MiB)
 			defer func() {
 				b.StopTimer()
 				body.Free()
@@ -185,7 +185,7 @@ func BenchmarkDecode(b *testing.B) {
 	}
 	for _, bench := range benches {
 		b.Run(bench.name, func(b *testing.B) {
-			sgl := memsys.DefaultPageMM().NewSGL(cos.MiB)
+			sgl := memsys.TestDefaultPageMM().NewSGL(cos.MiB)
 			err := jsp.Encode(sgl, bench.v, bench.opts)
 			tassert.CheckFatal(b, err)
 			network, err := sgl.ReadAll()

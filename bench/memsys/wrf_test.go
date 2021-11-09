@@ -37,9 +37,9 @@ func BenchmarkWRF(b *testing.B) {
 
 func wrf(b *testing.B, payloadSz int64) {
 	// 1. init default MMSAs
-	gmm := memsys.DefaultPageMM()
+	gmm := memsys.TestDefaultPageMM()
 	defer gmm.Terminate()
-	smm := memsys.DefaultSmallMM()
+	smm := memsys.TestDefaultSmallMM()
 	defer smm.Terminate()
 
 	// 2. equalize initial conditions

@@ -103,7 +103,7 @@ func genShardsHandler(c *cli.Context) error {
 	}
 
 	mem := &memsys.MMSA{Name: "dsort-cli"}
-	if err := mem.Init(false); err != nil {
+	if err := mem.Init(false /*panic env err*/, false /*panic insuff mem err*/); err != nil {
 		return err
 	}
 
