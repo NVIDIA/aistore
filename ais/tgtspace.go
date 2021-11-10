@@ -6,7 +6,6 @@ package ais
 
 import (
 	"sync"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -15,13 +14,13 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
-	"github.com/NVIDIA/aistore/lrucln"
 	"github.com/NVIDIA/aistore/nl"
+	"github.com/NVIDIA/aistore/space"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xreg"
 )
 
-// triggers by the out-of-space condition or suspicion of thereof
+// triggers by an out-of-space condition or a suspicion of thereof
 func (t *targetrunner) OOS(csRefreshed *fs.CapStatus) (cs fs.CapStatus) {
 	var err error
 	if csRefreshed != nil {
@@ -33,17 +32,16 @@ func (t *targetrunner) OOS(csRefreshed *fs.CapStatus) (cs fs.CapStatus) {
 			return
 		}
 	}
-	glog.Warningf("%s: %s", t.si, cs)
-	go t.runStoreCleanup("" /*uuid*/, nil /*wg*/)
-	if cs.OOS {
-		// TODO: when cleanup is running LRU must take a back seat (rm sleep & revise)
-		go func() {
-			config := cmn.GCO.Get()
-			sleep := cos.MinDuration(config.Timeout.MaxHostBusy.D(), time.Minute)
-			time.Sleep(sleep)
-			t.runLRU("" /*uuid*/, nil /*wg*/, false)
-		}()
+	if cs.Err != nil {
+		glog.Warningf("%s: %s", t.si, cs)
 	}
+	// run serially, cleanup first and LRU iff out-of-space persists
+	go func() {
+		cs := t.runStoreCleanup("" /*uuid*/, nil /*wg*/)
+		if cs.Err != nil {
+			t.runLRU("" /*uuid*/, nil /*wg*/, false)
+		}
+	}()
 	return
 }
 
@@ -67,9 +65,9 @@ func (t *targetrunner) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ..
 		msg := t.newAmsgActVal(cmn.ActRegGlobalXaction, regMsg)
 		t.bcastAsyncIC(msg)
 	}
-	ini := lrucln.IniLRU{
+	ini := space.IniLRU{
 		T:                   t,
-		Xaction:             xlru.(*lrucln.XactLRU),
+		Xaction:             xlru.(*space.XactLRU),
 		StatsT:              t.statsT,
 		Buckets:             bcks,
 		GetFSUsedPercentage: ios.GetFSUsedPercentage,
@@ -81,10 +79,10 @@ func (t *targetrunner) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ..
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 		Xact:      xlru,
 	})
-	lrucln.RunLRU(&ini)
+	space.RunLRU(&ini)
 }
 
-func (t *targetrunner) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cmn.Bck) {
+func (t *targetrunner) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cmn.Bck) fs.CapStatus {
 	regToIC := id == ""
 	if regToIC {
 		id = cos.GenUUID()
@@ -94,7 +92,7 @@ func (t *targetrunner) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cm
 		if wg != nil {
 			wg.Done()
 		}
-		return
+		return fs.CapStatus{}
 	}
 	debug.AssertNoErr(rns.Err) // see xcln.WhenPrevIsRunning() and xreg logic
 	xcln := rns.Entry.Get()
@@ -104,9 +102,9 @@ func (t *targetrunner) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cm
 		msg := t.newAmsgActVal(cmn.ActRegGlobalXaction, regMsg)
 		t.bcastAsyncIC(msg)
 	}
-	ini := lrucln.IniCln{
+	ini := space.IniCln{
 		T:       t,
-		Xaction: xcln.(*lrucln.XactCln),
+		Xaction: xcln.(*space.XactCln),
 		StatsT:  t.statsT,
 		Buckets: bcks,
 		WG:      wg,
@@ -115,7 +113,7 @@ func (t *targetrunner) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cm
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 		Xact:      xcln,
 	})
-	lrucln.RunCleanup(&ini)
+	return space.RunCleanup(&ini)
 }
 
 func (t *targetrunner) TrashNonExistingBucket(bck cmn.Bck) {

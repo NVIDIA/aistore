@@ -1,10 +1,10 @@
-// Package lrucln provides storage cleanup and eviction functionality (the latter based on the
+// Package space provides storage cleanup and eviction functionality (the latter based on the
 // least recently used cache replacement). It also serves as a built-in garbage-collection
 // mechanism for orphaned workfiles.
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
-package lrucln
+package space
 
 import (
 	"fmt"
@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -46,12 +47,17 @@ type (
 		wg      sync.WaitGroup
 		joggers map[string]*clnJ
 		ini     IniCln
+		cs      struct {
+			a fs.CapStatus // initial
+			b fs.CapStatus // post removal of 'deleted' ($trash)
+			c fs.CapStatus // upon finishing
+		}
+		jcnt atomic.Int32
 	}
 	// clnJ represents a single cleanup context and a single /jogger/
 	// that traverses and evicts a single given mountpath.
 	clnJ struct {
 		// runtime
-		totalSize int64
 		oldWork   []string
 		misplaced struct {
 			loms []*cluster.LOM
@@ -66,8 +72,6 @@ type (
 		joggers map[string]*clnJ
 		mi      *fs.MountpathInfo
 		config  *cmn.Config
-		// runtime
-		allowDelObj bool
 	}
 	clnFactory struct {
 		xreg.RenewBase
@@ -76,14 +80,7 @@ type (
 )
 
 // interface guard
-var (
-	_ xreg.Renewable = (*clnFactory)(nil)
-)
-
-func rmMisplaced() bool {
-	g, l := xreg.GetRebMarked(), xreg.GetResilverMarked()
-	return !g.Interrupted && !l.Interrupted && g.Xact == nil && l.Xact == nil
-}
+var _ xreg.Renewable = (*clnFactory)(nil)
 
 func (*XactCln) Run(*sync.WaitGroup) { debug.Assert(false) }
 
@@ -109,7 +106,7 @@ func (p *clnFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 	return
 }
 
-func RunCleanup(ini *IniCln) {
+func RunCleanup(ini *IniCln) fs.CapStatus {
 	var (
 		xcln           = ini.Xaction
 		config         = cmn.GCO.Get()
@@ -126,7 +123,7 @@ func RunCleanup(ini *IniCln) {
 	if num == 0 {
 		xcln.Finish(cmn.ErrNoMountpaths)
 		glog.Error(cmn.ErrNoMountpaths)
-		return
+		return fs.CapStatus{}
 	}
 	for mpath, mi := range availablePaths {
 		joggers[mpath] = &clnJ{
@@ -140,6 +137,7 @@ func RunCleanup(ini *IniCln) {
 		joggers[mpath].misplaced.loms = make([]*cluster.LOM, 0, 64)
 		joggers[mpath].misplaced.ec = make([]*cluster.CT, 0, 64)
 	}
+	parent.jcnt.Store(int32(len(joggers)))
 	providers := cmn.Providers.ToSlice()
 	for _, j := range joggers {
 		parent.wg.Add(1)
@@ -147,8 +145,12 @@ func RunCleanup(ini *IniCln) {
 		go j.run(providers)
 	}
 
-	cs := fs.GetCapStatus()
-	glog.Infof("%s started, %s", xcln, cs)
+	parent.cs.a = fs.GetCapStatus()
+	if parent.cs.a.Err != nil {
+		glog.Warningf("%s started, %s", xcln, parent.cs.a)
+	} else {
+		glog.Infof("%s started, %s", xcln, parent.cs.a)
+	}
 	if ini.WG != nil {
 		ini.WG.Done()
 		ini.WG = nil
@@ -159,8 +161,25 @@ func RunCleanup(ini *IniCln) {
 		j.stop()
 	}
 	xcln.Finish(nil)
-	cs = fs.GetCapStatus()
-	glog.Infof("%s finished, %s", xcln, cs)
+	parent.cs.c, _ = fs.RefreshCapStatus(nil, nil)
+	if parent.cs.c.Err != nil {
+		glog.Warningf("%s finished, %s", xcln, parent.cs.c)
+	} else {
+		glog.Infof("%s finished, %s", xcln, parent.cs.c)
+	}
+	return parent.cs.c
+}
+
+func (p *clnP) rmMisplaced() bool {
+	g, l := xreg.GetRebMarked(), xreg.GetResilverMarked()
+	if g.Xact != nil || l.Xact != nil {
+		return false
+	}
+	// NOTE: high-watermark warranted
+	if p.cs.a.Err != nil {
+		return true
+	}
+	return !g.Interrupted && !l.Interrupted
 }
 
 //////////////////////
@@ -174,81 +193,131 @@ func (j *clnJ) String() string {
 func (j *clnJ) stop() { j.stopCh <- struct{}{} }
 
 func (j *clnJ) run(providers []string) {
-	var err error
+	const f = "%s: freed space %s (not including removed 'deleted')"
+	var (
+		size     int64
+		err, erm error
+	)
 	defer j.p.wg.Done()
-	if err = j.removeTrash(); err != nil {
-		goto ex
+	erm = j.removeTrash()
+	if erm != nil {
+		glog.Error(erm)
 	}
 	if len(j.ini.Buckets) != 0 {
-		glog.Infof("%s: freeing-up %s", j, cos.B2S(j.totalSize, 2))
-		err = j.jogBcks(j.ini.Buckets)
+		size, err = j.jogBcks(j.ini.Buckets)
 	} else {
-		err = j.jog(providers)
+		size, err = j.jog(providers)
 	}
-ex:
-	if err == nil || cmn.IsErrBucketNought(err) || cmn.IsErrObjNought(err) {
-		return
+	if err == nil {
+		err = erm
 	}
-	glog.Errorf("%s: exited with err %v", j, err)
-}
-
-func (j *clnJ) jog(providers []string) (err error) {
-	glog.Infof("%s: freeing-up %s", j, cos.B2S(j.totalSize, 2))
-	for _, provider := range providers { // for each provider (NOTE: ordering is random)
-		var (
-			bcks []cmn.Bck
-			opts = fs.Options{
-				Mi:  j.mi,
-				Bck: cmn.Bck{Provider: provider, Ns: cmn.NsGlobal},
-			}
-		)
-		if bcks, err = fs.AllMpathBcks(&opts); err != nil {
+	if err == nil {
+		if size == 0 {
 			return
 		}
-		if err = j.jogBcks(bcks); err != nil {
-			return
+		glog.Infof(f, j, cos.B2S(size, 1))
+	} else {
+		glog.Errorf(f+", err %v", j, cos.B2S(size, 1), err)
+	}
+}
+
+func (j *clnJ) jog(providers []string) (size int64, rerr error) {
+	for _, provider := range providers { // for each provider (NOTE: ordering is random)
+		var (
+			sz   int64
+			bcks []cmn.Bck
+			err  error
+			opts = fs.Options{Mi: j.mi, Bck: cmn.Bck{Provider: provider, Ns: cmn.NsGlobal}}
+		)
+		if bcks, err = fs.AllMpathBcks(&opts); err != nil {
+			glog.Error(err)
+			if rerr == nil {
+				rerr = err
+			}
+			continue
+		}
+		if len(bcks) == 0 {
+			continue
+		}
+		sz, err = j.jogBcks(bcks)
+		size += sz
+		if err != nil && rerr == nil {
+			rerr = err
 		}
 	}
 	return
 }
 
-func (j *clnJ) jogBcks(bcks []cmn.Bck) (err error) {
-	if len(bcks) == 0 {
-		return
-	}
+func (j *clnJ) jogBcks(bcks []cmn.Bck) (size int64, rerr error) {
+	bowner := j.ini.T.Bowner()
 	for _, bck := range bcks { // for each bucket under a given provider
+		var (
+			sz  int64
+			err error
+			b   = cluster.NewBckEmbed(bck)
+		)
 		j.bck = bck
-		if j.allowDelObj, err = j.allow(); err != nil {
+		err = b.Init(bowner)
+		if err != nil {
 			if cmn.IsErrBckNotFound(err) || cmn.IsErrRemoteBckNotFound(err) {
 				j.ini.T.TrashNonExistingBucket(bck)
 			} else {
 				// TODO: config option to scrub `fs.AllMpathBcks` buckets
 				glog.Errorf("%s: %v - skipping %s", j, err, bck)
 			}
-			err = nil
 			continue
 		}
-		if _, err = j.jogBck(); err != nil {
-			return
+		sz, err = j.jogBck()
+		size += sz
+		if err != nil && rerr == nil {
+			rerr = err
 		}
 	}
 	return
 }
 
-func (j *clnJ) removeTrash() error {
+func (j *clnJ) removeTrash() (rerr error) {
 	trashDir := j.mi.MakePathTrash()
-	return fs.Scanner(trashDir, func(fqn string, de fs.DirEntry) error {
-		if de.IsDir() {
-			if err := os.RemoveAll(fqn); err != nil && !os.IsNotExist(err) {
-				glog.Errorf("%s: %v", j, err)
-				return err
-			}
-		} else if err := os.Remove(fqn); err != nil && !os.IsNotExist(err) {
-			glog.Errorf("%s: %v", j, err)
-			return err
+	dentries, err := os.ReadDir(trashDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			cos.CreateDir(trashDir)
+			err = nil
 		}
-		return nil
-	})
+		rerr = err
+		goto ret
+	}
+	for _, dent := range dentries {
+		fqn := filepath.Join(trashDir, dent.Name())
+		if !dent.IsDir() {
+			glog.Errorf("%s: unexpected non-directory item %q in 'deleted'", j, fqn)
+			continue
+		}
+		if err = os.RemoveAll(fqn); err == nil {
+			continue
+		}
+		if !os.IsNotExist(err) {
+			glog.Errorf("%s: failed to remove %q from 'deleted', err %v", j, fqn, err)
+			if rerr == nil {
+				rerr = err
+			}
+		}
+	}
+ret:
+	if cnt := j.p.jcnt.Dec(); cnt > 0 {
+		return
+	}
+	j.p.cs.b, err = fs.RefreshCapStatus(nil, nil)
+	if err != nil {
+		glog.Errorf("%s: %v", j, err)
+	} else {
+		if j.p.cs.b.Err != nil {
+			glog.Warningf("%s post-rm('deleted'), %s", j.ini.Xaction, j.p.cs.b)
+		} else {
+			glog.Infof("%s post-rm('deleted'), %s", j.ini.Xaction, j.p.cs.b)
+		}
+	}
+	return
 }
 
 func (j *clnJ) jogBck() (size int64, err error) {
@@ -324,9 +393,6 @@ func (j *clnJ) visitCT(parsedFQN fs.ParsedFQN, fqn string) {
 }
 
 func (j *clnJ) visitLOM(parsedFQN fs.ParsedFQN) {
-	if !j.allowDelObj {
-		return
-	}
 	lom := &cluster.LOM{ObjName: parsedFQN.ObjName}
 	err := lom.Init(j.bck)
 	if err != nil {
@@ -339,7 +405,6 @@ func (j *clnJ) visitLOM(parsedFQN fs.ParsedFQN) {
 	if lom.IsHRW() {
 		return
 	}
-
 	if lom.AtimeUnix()+int64(j.config.LRU.DontEvictTime) > j.now {
 		return
 	}
@@ -387,16 +452,19 @@ func (j *clnJ) evict() (size int64, err error) {
 		finfo, erw := os.Stat(workfqn)
 		if erw == nil {
 			if err := cos.RemoveFile(workfqn); err != nil {
-				glog.Warningf("Failed to remove old work %q: %v", workfqn, err)
+				glog.Errorf("Failed to remove old work %q: %v", workfqn, err)
 			} else {
 				size += finfo.Size()
+				glog.Errorln("rm old work", j.String(), workfqn, size) // DEBUG
 			}
 		}
 	}
 	j.oldWork = j.oldWork[:0]
 
 	// 2. rm misplaced
-	if rmMisplaced() {
+	rmMispl := j.p.rmMisplaced()
+	glog.Errorln("rm misplaced", j.String(), rmMispl) // DEBUG
+	if rmMispl {
 		for _, lom := range j.misplaced.loms {
 			var (
 				fqn     = lom.FQN
@@ -436,22 +504,20 @@ func (j *clnJ) evict() (size int64, err error) {
 	}
 	j.misplaced.ec = j.misplaced.ec[:0]
 
-	j.ini.StatsT.Add(stats.StoreRmSize, bevicted)
-	j.ini.StatsT.Add(stats.StoreRmCount, fevicted)
+	j.ini.StatsT.Add(stats.CleanupStoreSize, bevicted) // TODO -- FIXME
+	j.ini.StatsT.Add(stats.CleanupStoreCount, fevicted)
 	xcln.ObjectsAdd(fevicted)
 	xcln.BytesAdd(bevicted)
 	return
 }
 
 func (j *clnJ) postRemove(prev, size int64) (capCheck int64, err error) {
-	j.totalSize -= size
 	capCheck = prev + size
 	if err = j.yieldTerm(); err != nil {
 		return
 	}
 	// init, recompute, and throttle - once per capCheckThresh
 	capCheck = 0
-	j.allowDelObj, _ = j.allow()
 	j.config = cmn.GCO.Get()
 	j.now = time.Now().UnixNano()
 	return
@@ -471,16 +537,4 @@ func (j *clnJ) yieldTerm() error {
 		return cmn.NewErrAborted(xcln.Name(), "", nil)
 	}
 	return nil
-}
-
-func (j *clnJ) allow() (ok bool, err error) {
-	var (
-		bowner = j.ini.T.Bowner()
-		b      = cluster.NewBckEmbed(j.bck)
-	)
-	if err = b.Init(bowner); err != nil {
-		return
-	}
-	ok = b.Props.LRU.Enabled && b.Allow(cmn.AccessObjDELETE) == nil
-	return
 }

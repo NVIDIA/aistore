@@ -41,6 +41,13 @@ const (
 )
 
 const (
+	// TODO: Storage Cleanup watermark, i.e., used capacity percentage that triggers cleanup
+	// (compare with config.LRU.High/LowWM).
+	// NOTE: must have its own config section (with config.LRU amended accordingly).
+	StoreCleanupWM = 65
+)
+
+const (
 	MinSliceCount = 1  // erasure coding: minimum number of data or parity slices
 	MaxSliceCount = 32 // erasure coding: maximum number of data or parity slices
 )

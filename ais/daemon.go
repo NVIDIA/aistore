@@ -19,7 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/hk"
-	"github.com/NVIDIA/aistore/lrucln"
+	"github.com/NVIDIA/aistore/space"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xreg"
 	"github.com/NVIDIA/aistore/xs"
@@ -177,7 +177,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 	// reg xaction factories in an orderly fashion
 	xreg.Init()
 	xs.Init()
-	lrucln.Init()
+	space.Init()
 	downloader.Init()
 
 	// fork (proxy | target)

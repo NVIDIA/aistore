@@ -1,8 +1,8 @@
-// Package lrucln_test is a unit test for the package.
+// Package space_test is a unit test for the package.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
-package lrucln_test
+package space_test
 
 import (
 	"crypto/rand"
@@ -17,7 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
-	"github.com/NVIDIA/aistore/lrucln"
+	"github.com/NVIDIA/aistore/space"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xreg"
 	. "github.com/onsi/ginkgo"
@@ -31,8 +31,8 @@ const (
 	numberOfCreatedFiles = 45
 	fileSize             = 10 * cos.MiB
 	blockSize            = cos.KiB
-	basePath             = "/tmp/lrucln-tests"
-	bucketName           = "lrucln-bck"
+	basePath             = "/tmp/space-tests"
+	bucketName           = "space-bck"
 	bucketNameAnother    = bucketName + "-another"
 )
 
@@ -102,10 +102,10 @@ func newTargetLRUMock() *cluster.TargetMock {
 	return tMock
 }
 
-func newIniLRU(t cluster.Target) *lrucln.IniLRU {
-	xlru := &lrucln.XactLRU{}
+func newIniLRU(t cluster.Target) *space.IniLRU {
+	xlru := &space.XactLRU{}
 	xlru.InitBase(cos.GenUUID(), cmn.ActLRU, nil)
-	return &lrucln.IniLRU{
+	return &space.IniLRU{
 		Xaction:             xlru,
 		StatsT:              stats.NewTrackerMock(),
 		T:                   t,
@@ -114,10 +114,10 @@ func newIniLRU(t cluster.Target) *lrucln.IniLRU {
 	}
 }
 
-func newInitStoreCln(t cluster.Target) *lrucln.IniCln {
-	xcln := &lrucln.XactCln{}
+func newInitStoreCln(t cluster.Target) *space.IniCln {
+	xcln := &space.XactCln{}
 	xcln.InitBase(cos.GenUUID(), cmn.ActLRU, nil)
-	return &lrucln.IniCln{
+	return &space.IniCln{
 		Xaction: xcln,
 		StatsT:  stats.NewTrackerMock(),
 		T:       t,
@@ -200,18 +200,18 @@ var _ = Describe("LRU-Cleanup tests", func() {
 		})
 
 		Describe("evict files", func() {
-			var ini *lrucln.IniLRU
+			var ini *space.IniLRU
 			BeforeEach(func() {
 				ini = newIniLRU(t)
 			})
 			It("should not fail when there are no files", func() {
-				lrucln.RunLRU(ini)
+				space.RunLRU(ini)
 			})
 
 			It("should evict correct number of files", func() {
 				saveRandomFiles(filesPath, numberOfCreatedFiles)
 
-				lrucln.RunLRU(ini)
+				space.RunLRU(ini)
 
 				files, err := os.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
@@ -237,7 +237,7 @@ var _ = Describe("LRU-Cleanup tests", func() {
 				time.Sleep(1 * time.Second)
 				saveRandomFiles(filesPath, 3)
 
-				lrucln.RunLRU(ini)
+				space.RunLRU(ini)
 
 				files, err := os.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
@@ -271,7 +271,7 @@ var _ = Describe("LRU-Cleanup tests", func() {
 
 				// To go under lwm (50%), LRU should evict the oldest files until <=50% reached
 				// Those files are a 4MB file and a 16MB file
-				lrucln.RunLRU(ini)
+				space.RunLRU(ini)
 
 				filesLeft, err := os.ReadDir(filesPath)
 				Expect(len(filesLeft)).To(Equal(2))
@@ -289,7 +289,7 @@ var _ = Describe("LRU-Cleanup tests", func() {
 
 				ini.Buckets = []cmn.Bck{bckAnother}
 				ini.Force = true // Ignore LRU enabled
-				lrucln.RunLRU(ini)
+				space.RunLRU(ini)
 
 				files, err := os.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
@@ -310,7 +310,7 @@ var _ = Describe("LRU-Cleanup tests", func() {
 		})
 
 		Describe("not evict files", func() {
-			var ini *lrucln.IniLRU
+			var ini *space.IniLRU
 			BeforeEach(func() {
 				ini = newIniLRU(t)
 			})
@@ -325,7 +325,7 @@ var _ = Describe("LRU-Cleanup tests", func() {
 
 				saveRandomFiles(filesPath, numberOfFiles)
 
-				lrucln.RunLRU(ini)
+				space.RunLRU(ini)
 
 				files, err := os.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
@@ -342,7 +342,7 @@ var _ = Describe("LRU-Cleanup tests", func() {
 
 				saveRandomFiles(filesPath, numberOfFiles)
 
-				lrucln.RunLRU(ini)
+				space.RunLRU(ini)
 
 				files, err := os.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
@@ -353,7 +353,7 @@ var _ = Describe("LRU-Cleanup tests", func() {
 				saveRandomFiles(fpAnother, numberOfCreatedFiles)
 
 				ini.Buckets = []cmn.Bck{bckAnother} // bckAnother has LRU disabled
-				lrucln.RunLRU(ini)
+				space.RunLRU(ini)
 
 				filesAnother, err := os.ReadDir(fpAnother)
 				Expect(err).NotTo(HaveOccurred())
@@ -364,7 +364,7 @@ var _ = Describe("LRU-Cleanup tests", func() {
 		})
 
 		Describe("cleanup: evict trash directory", func() {
-			var ini *lrucln.IniCln
+			var ini *space.IniCln
 			BeforeEach(func() {
 				ini = newInitStoreCln(t)
 			})
@@ -385,7 +385,7 @@ var _ = Describe("LRU-Cleanup tests", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(files)).To(Equal(1))
 
-				lrucln.RunCleanup(ini)
+				space.RunCleanup(ini)
 
 				files, err = os.ReadDir(mpath.MakePathTrash())
 				Expect(err).NotTo(HaveOccurred())

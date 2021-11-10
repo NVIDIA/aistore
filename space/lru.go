@@ -1,10 +1,10 @@
-// Package lrucln provides storage cleanup and eviction functionality (the latter based on the
+// Package space provides storage cleanup and eviction functionality (the latter based on the
 // least recently used cache replacement). It also serves as a built-in garbage-collection
 // mechanism for orphaned workfiles.
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
-package lrucln
+package space
 
 import (
 	"container/heap"
@@ -43,8 +43,8 @@ import (
 
 // tunables
 const (
-	minEvictThresh = 10 * cos.MiB
-	capCheckThresh = 256 * cos.MiB // capacity checking threshold, when exceeded may result in lru throttling
+	minEvictThresh = 10 * cos.MiB  // to run or not to run
+	capCheckThresh = 256 * cos.MiB // capacity checking threshold (in re: periodic throttle)
 )
 
 type (
@@ -104,14 +104,7 @@ type (
 )
 
 // interface guard
-var (
-	_ xreg.Renewable = (*lruFactory)(nil)
-)
-
-func Init() {
-	xreg.RegNonBckXact(&lruFactory{})
-	xreg.RegNonBckXact(&clnFactory{})
-}
+var _ xreg.Renewable = (*lruFactory)(nil)
 
 ////////////////
 // lruFactory //

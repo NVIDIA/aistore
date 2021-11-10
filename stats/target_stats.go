@@ -1,7 +1,7 @@
 // Package stats provides methods and functionality to register, track, log,
 // and StatsD-notify statistics that, for the most part, include "counter" and "latency" kinds.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package stats
 
@@ -30,14 +30,14 @@ import (
 //  -> "*.id" - ID
 const (
 	// KindCounter - QPS and byte counts (always incremented, never reset)
-	GetColdCount   = "get.cold.n"
-	GetColdSize    = "get.cold.size"
-	LruEvictSize   = "lru.evict.size"
-	LruEvictCount  = "lru.evict.n"
-	StoreRmSize    = "stg.rm.size"
-	StoreRmCount   = "stg.rm.n"
-	VerChangeCount = "vchange.n"
-	VerChangeSize  = "vchange.size"
+	GetColdCount      = "get.cold.n"
+	GetColdSize       = "get.cold.size"
+	LruEvictSize      = "lru.evict.size"
+	LruEvictCount     = "lru.evict.n"
+	CleanupStoreSize  = "cleanup.store.size"
+	CleanupStoreCount = "cleanup.store.n"
+	VerChangeCount    = "vchange.n"
+	VerChangeSize     = "vchange.size"
 	// rebalance
 	RebTxCount = "reb.tx.n"
 	RebTxSize  = "reb.tx.size"
@@ -166,8 +166,8 @@ func (r *Trunner) RegMetrics(node *cluster.Snode) {
 	r.reg(GetThroughput, KindThroughput)
 	r.reg(LruEvictSize, KindCounter)
 	r.reg(LruEvictCount, KindCounter)
-	r.reg(StoreRmSize, KindCounter)
-	r.reg(StoreRmCount, KindCounter)
+	r.reg(CleanupStoreSize, KindCounter)
+	r.reg(CleanupStoreCount, KindCounter)
 	r.reg(VerChangeCount, KindCounter)
 	r.reg(VerChangeSize, KindCounter)
 	r.reg(GetRedirLatency, KindLatency)
@@ -243,7 +243,7 @@ func (r *Trunner) log(now int64, uptime time.Duration) {
 	// 3. capacity
 	cs, updated, errfs := fs.CapPeriodic(r.MPCap)
 	if updated {
-		if cs.Err != nil {
+		if cs.Err != nil || cs.PctMax > cmn.StoreCleanupWM {
 			r.T.OOS(&cs)
 		}
 		for mpath, fsCapacity := range r.MPCap {

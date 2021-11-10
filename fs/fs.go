@@ -193,7 +193,7 @@ func (mi *MountpathInfo) MoveToTrash(dir string) error {
 			glog.Errorf("FATAL: %s %s: failed to remove, err: %v", mi, cs, err)
 			return err
 		}
-		glog.Errorf("%s %s: removed %q instead of placing it in trash", mi, cs, dir)
+		glog.Errorf("%s %s: removed %q instead of placing it in 'deleted'", mi, cs, dir)
 		return nil
 	}
 tmpExists:
@@ -211,7 +211,7 @@ tmpExists:
 		return nil
 	}
 	if os.IsExist(err) {
-		glog.Warningf("%q already exists in trash", tmpDir) // should never happen
+		glog.Warningf("%q already exists in 'deleted'", tmpDir) // should never happen
 		goto tmpExists
 	}
 	if os.IsNotExist(err) {
@@ -221,7 +221,7 @@ tmpExists:
 		return err
 	}
 oos:
-	glog.Errorf("%s %s: no space left to trash %q (err=%v) - removing it right away", mi, cs, dir, err)
+	glog.Errorf("%s %s: OOS (err=%v) - not recycling via 'deleted', removing %q right away", mi, cs, err, dir)
 	if nested := os.RemoveAll(dir); nested != nil {
 		glog.Errorf("FATAL: %s (%v, %v)", mi, err, nested)
 	}
@@ -1102,12 +1102,13 @@ func RefreshCapStatus(config *cmn.Config, mpcap MPCap) (cs CapStatus, err error)
 // recompute next time to refresh cached capacity stats (mfs.capStatus)
 func nextRefresh(config *cmn.Config) time.Duration {
 	var (
-		util = int64(mfs.capStatus.PctAvg) // NOTE: average not max
-		umin = cos.MaxI64(config.LRU.HighWM-10, config.LRU.LowWM)
+		util = int64(mfs.capStatus.PctMax)
+		umin = cos.MinI64(config.LRU.HighWM-10, config.LRU.LowWM)
 		umax = config.LRU.OOS
 		tmax = config.LRU.CapacityUpdTime.D()
 		tmin = config.Periodic.StatsTime.D()
 	)
+	umin = cos.MinI64(umin, cmn.StoreCleanupWM) // calibrate potentially further down
 	if util <= umin {
 		return tmax
 	}
