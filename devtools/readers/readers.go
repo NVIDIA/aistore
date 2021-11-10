@@ -59,8 +59,6 @@ type (
 	}
 )
 
-var mmsa = memsys.DefaultPageMM()
-
 // interface guard
 var (
 	_ Reader = (*randReader)(nil)
@@ -149,6 +147,7 @@ func NewRandReader(size int64, cksumType string) (Reader, error) {
 		cksum *cos.Cksum
 		err   error
 		seed  = mono.NanoTime()
+		mmsa  = memsys.TestDefaultPageMM()
 	)
 	slab, err := mmsa.GetSlab(memsys.DefaultBufSize)
 	if err != nil {
@@ -222,6 +221,7 @@ func NewFileReader(filepath, name string, size int64, cksumType string) (Reader,
 		cksumHash *cos.CksumHash
 		fn        = path.Join(filepath, name)
 		f, err    = os.OpenFile(fn, os.O_RDWR|os.O_CREATE, cos.PermRWR)
+		mmsa      = memsys.TestDefaultPageMM()
 	)
 	if err != nil {
 		return nil, err
@@ -346,6 +346,7 @@ func copyRandWithHash(w io.Writer, size int64, cksumType string, rnd *rand.Rand)
 	var (
 		cksum   *cos.CksumHash
 		rem     = size
+		mmsa    = memsys.TestDefaultPageMM()
 		buf, s  = mmsa.Alloc()
 		blkSize = int64(len(buf))
 	)

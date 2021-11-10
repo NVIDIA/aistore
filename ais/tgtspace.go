@@ -117,11 +117,17 @@ func (t *targetrunner) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cm
 }
 
 func (t *targetrunner) TrashNonExistingBucket(bck cmn.Bck) {
-	if err := cluster.NewBckEmbed(bck).Init(t.owner.bmd); err != nil {
-		if cmn.IsErrBckNotFound(err) || cmn.IsErrRemoteBckNotFound(err) {
-			const op = "trash-non-existing"
-			err = fs.DestroyBucket(op, bck, 0 /*unknown bid*/)
-			glog.Infof("%s: %v", op, err)
+	const op = "trash-non-existing"
+	b := cluster.NewBckEmbed(bck)
+	err := b.Init(t.owner.bmd)
+	if err == nil {
+		return
+	}
+	if cmn.IsErrBckNotFound(err) || cmn.IsErrRemoteBckNotFound(err) {
+		if err = fs.DestroyBucket(op, bck, 0 /*unknown bid*/); err == nil {
+			glog.Infof("%s: %s %s", t.si, op, bck)
+		} else {
+			glog.Errorf("%s: failed to %s %s, err %v", t.si, op, bck, err)
 		}
 	}
 }

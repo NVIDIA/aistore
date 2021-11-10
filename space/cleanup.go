@@ -444,7 +444,6 @@ func (j *clnJ) walk(fqn string, de fs.DirEntry) error {
 func (j *clnJ) evict() (size int64, err error) {
 	var (
 		fevicted, bevicted int64
-		capCheck           int64
 		xcln               = j.ini.Xaction
 	)
 	// 1. rm older work
@@ -452,19 +451,19 @@ func (j *clnJ) evict() (size int64, err error) {
 		finfo, erw := os.Stat(workfqn)
 		if erw == nil {
 			if err := cos.RemoveFile(workfqn); err != nil {
-				glog.Errorf("Failed to remove old work %q: %v", workfqn, err)
+				glog.Errorf("%s: failed to rm old work %q: %v", j, workfqn, err)
 			} else {
 				size += finfo.Size()
-				glog.Errorln("rm old work", j.String(), workfqn, size) // DEBUG
+				if verbose {
+					glog.Infof("%s: rm old work %q, size=%d", j, workfqn, size)
+				}
 			}
 		}
 	}
 	j.oldWork = j.oldWork[:0]
 
 	// 2. rm misplaced
-	rmMispl := j.p.rmMisplaced()
-	glog.Errorln("rm misplaced", j.String(), rmMispl) // DEBUG
-	if rmMispl {
+	if j.p.rmMisplaced() {
 		for _, lom := range j.misplaced.loms {
 			var (
 				fqn     = lom.FQN
@@ -482,7 +481,10 @@ func (j *clnJ) evict() (size int64, err error) {
 				removed = os.Remove(fqn) == nil
 			}
 			if removed {
-				if capCheck, err = j.postRemove(capCheck, lom.SizeBytes(true /*not loaded*/)); err != nil {
+				if verbose {
+					glog.Infof("%s: rm misplaced %q, size=%d", j, lom, lom.SizeBytes(true /*not loaded*/))
+				}
+				if err = j.yieldTerm(); err != nil {
 					return
 				}
 			}
@@ -497,7 +499,7 @@ func (j *clnJ) evict() (size int64, err error) {
 			continue
 		}
 		if os.Remove(ct.FQN()) == nil {
-			if capCheck, err = j.postRemove(capCheck, ct.SizeBytes()); err != nil {
+			if err = j.yieldTerm(); err != nil {
 				return
 			}
 		}
@@ -508,18 +510,6 @@ func (j *clnJ) evict() (size int64, err error) {
 	j.ini.StatsT.Add(stats.CleanupStoreCount, fevicted)
 	xcln.ObjectsAdd(fevicted)
 	xcln.BytesAdd(bevicted)
-	return
-}
-
-func (j *clnJ) postRemove(prev, size int64) (capCheck int64, err error) {
-	capCheck = prev + size
-	if err = j.yieldTerm(); err != nil {
-		return
-	}
-	// init, recompute, and throttle - once per capCheckThresh
-	capCheck = 0
-	j.config = cmn.GCO.Get()
-	j.now = time.Now().UnixNano()
 	return
 }
 

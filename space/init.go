@@ -7,10 +7,15 @@
 package space
 
 import (
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/xreg"
 )
+
+var verbose bool
 
 func Init() {
 	xreg.RegNonBckXact(&lruFactory{})
 	xreg.RegNonBckXact(&clnFactory{})
+
+	verbose = bool(glog.FastV(4, glog.SmoduleSpace))
 }
