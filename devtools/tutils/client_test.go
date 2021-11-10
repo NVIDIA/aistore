@@ -33,7 +33,7 @@ func TestPutFile(t *testing.T) {
 
 func TestPutSG(t *testing.T) {
 	size := int64(10)
-	sgl := tutils.MMSA.NewSGL(size)
+	sgl := tutils.MMSA().NewSGL(size)
 	defer sgl.Free()
 	err := putSG(sgl, size, cos.ChecksumXXHash)
 	if err != nil {
@@ -110,7 +110,7 @@ func BenchmarkPutRandWithHash1M(b *testing.B) {
 }
 
 func BenchmarkPutSGWithHash1M(b *testing.B) {
-	sgl := tutils.MMSA.NewSGL(cos.MiB)
+	sgl := tutils.MMSA().NewSGL(cos.MiB)
 	defer sgl.Free()
 
 	for i := 0; i < b.N; i++ {
@@ -140,7 +140,7 @@ func BenchmarkPutRandNoHash1M(b *testing.B) {
 }
 
 func BenchmarkPutSGNoHash1M(b *testing.B) {
-	sgl := tutils.MMSA.NewSGL(cos.MiB)
+	sgl := tutils.MMSA().NewSGL(cos.MiB)
 	defer sgl.Free()
 
 	for i := 0; i < b.N; i++ {
@@ -175,7 +175,7 @@ func BenchmarkPutRandWithHash1MParallel(b *testing.B) {
 
 func BenchmarkPutSGWithHash1MParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
-		sgl := tutils.MMSA.NewSGL(cos.MiB)
+		sgl := tutils.MMSA().NewSGL(cos.MiB)
 		defer sgl.Free()
 
 		for pb.Next() {

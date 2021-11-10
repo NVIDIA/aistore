@@ -79,7 +79,7 @@ func TestJoggerGroupParallel(t *testing.T) {
 	)
 	defer os.RemoveAll(out.Dir)
 
-	slab, err := tutils.MMSA.GetSlab(memsys.PageSize)
+	slab, err := tutils.MMSA().GetSlab(memsys.PageSize)
 	tassert.CheckFatal(t, err)
 
 	baseJgOpts := &mpather.JoggerGroupOpts{

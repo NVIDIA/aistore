@@ -81,13 +81,10 @@ var (
 	}
 	AuthToken string
 
-	MMSA *memsys.MMSA
-
 	DevtoolsCtx *devtools.Ctx
 )
 
 func init() {
-	MMSA = memsys.DefaultPageMM()
 	envURL := os.Getenv(cmn.EnvVars.Endpoint)
 	// Since tests do not have access to cluster configuration, the tests
 	// detect client type by the primary proxy URL passed by a user.
@@ -100,6 +97,10 @@ func init() {
 		Client: HTTPClient,
 		Log:    tlog.Logf,
 	}
+}
+
+func MMSA() *memsys.MMSA {
+	return memsys.TestDefaultPageMM()
 }
 
 // InitLocalCluster initializes tutils component with AIS cluster that must be either:
