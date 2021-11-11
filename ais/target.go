@@ -600,7 +600,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	request := &apiRequest{after: 1, prefix: cmn.URLPathBuckets.L}
-	if err := t.parseAPIRequest(w, r, request); err != nil {
+	if err := t.parseReq(w, r, request); err != nil {
 		return
 	}
 	if err := request.bck.Init(t.owner.bmd); err != nil {
@@ -616,7 +616,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 
 	switch msg.Action {
 	case cmn.ActEvictRemoteBck:
-		keepMD := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamKeepBckMD))
+		keepMD := cos.IsParseBool(request.query.Get(cmn.URLParamKeepBckMD))
 		// HDFS buckets will always keep metadata so they can re-register later
 		if request.bck.IsHDFS() || keepMD {
 			nlp := request.bck.GetNameLockPair()
@@ -668,7 +668,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	request := &apiRequest{prefix: cmn.URLPathBuckets.L, after: 1}
-	if err := t.parseAPIRequest(w, r, request); err != nil {
+	if err := t.parseReq(w, r, request); err != nil {
 		return
 	}
 
@@ -712,17 +712,16 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	var (
 		bucketProps cos.SimpleKVs
+		err         error
 		code        int
-		inBMD       = true
 		ctx         = context.Background()
 		hdr         = w.Header()
-		query       = r.URL.Query()
 		request     = &apiRequest{after: 1, prefix: cmn.URLPathBuckets.L}
-		err         error
 	)
-	if err = t.parseAPIRequest(w, r, request); err != nil {
+	if err = t.parseReq(w, r, request); err != nil {
 		return
 	}
+	inBMD := true
 	if err = request.bck.Init(t.owner.bmd); err != nil {
 		if !cmn.IsErrRemoteBckNotFound(err) { // is ais
 			t.writeErr(w, r, err)
@@ -731,14 +730,14 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		inBMD = false
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		pid := query.Get(cmn.URLParamProxyID)
+		pid := request.query.Get(cmn.URLParamProxyID)
 		glog.Infof("%s %s <= %s", r.Method, request.bck, pid)
 	}
 
-	cos.Assert(!request.bck.IsAIS())
+	debug.Assert(!request.bck.IsAIS())
 
 	if request.bck.IsHTTP() {
-		originalURL := query.Get(cmn.URLParamOrigURL)
+		originalURL := request.query.Get(cmn.URLParamOrigURL)
 		ctx = context.WithValue(ctx, cos.CtxOriginalURL, originalURL)
 		if !inBMD && originalURL == "" {
 			err = cmn.NewErrRemoteBckNotFound(request.bck.Bck)
@@ -789,23 +788,21 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 // check whether the object exists locally. Version is checked as well if configured.
 func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	var (
-		query    = r.URL.Query()
-		ptime    = isRedirect(query)
 		features = cmn.GCO.Get().Client.Features
 		request  = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
 	)
-
+	if err := t.parseReq(w, r, request); err != nil {
+		return
+	}
+	ptime := isRedirect(request.query)
 	if !t.isIntraCall(r.Header) && ptime == "" && !features.IsSet(cmn.FeatureDirectAccess) {
 		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
 			t.si, r.Method, r.RemoteAddr)
 		return
 	}
-	if err := t.parseAPIRequest(w, r, request); err != nil {
-		return
-	}
 
 	lom := cluster.AllocLOM(request.items[1])
-	t.getObject(w, r, query, request.bck, lom)
+	t.getObject(w, r, request.query, request.bck, lom)
 	cluster.FreeLOM(lom)
 }
 
@@ -871,21 +868,16 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 
 // PUT /v1/objects/bucket-name/object-name
 func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
-	var (
-		query   = r.URL.Query()
-		ptime   string
-		request = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
-	)
-
-	if ptime = isRedirect(query); ptime == "" && !isIntraPut(r.Header) {
+	request := &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
+	if err := t.parseReq(w, r, request); err != nil {
+		return
+	}
+	ptime := isRedirect(request.query)
+	if ptime == "" && !isIntraPut(r.Header) {
 		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected or replicated", t.si, r.Method)
 		return
 	}
-	if err := t.parseAPIRequest(w, r, request); err != nil {
-		return
-	}
 	objName := request.items[1]
-
 	started := time.Now()
 	if ptime != "" {
 		if redelta := ptLatency(started, ptime); redelta != 0 {
@@ -931,12 +923,11 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	lom.SetAtimeUnix(started.UnixNano())
 
 	var (
-		handle  string
-		err     error
-		errCode int
-
-		archPathProvided = query.Has(cmn.URLParamArchpath)
-		appendTyProvided = query.Has(cmn.URLParamAppendType)
+		handle           string
+		err              error
+		errCode          int
+		archPathProvided = request.query.Has(cmn.URLParamArchpath)
+		appendTyProvided = request.query.Has(cmn.URLParamAppendType)
 	)
 	if archPathProvided {
 		errCode, err = t.doAppendArch(r, lom, started)
@@ -959,22 +950,20 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg     aisMsg
-		evict   bool
-		query   = r.URL.Query()
 		request = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
 	)
 	if err := cmn.ReadJSON(w, r, &msg, true); err != nil {
 		return
 	}
-	if isRedirect(query) == "" {
+	if err := t.parseReq(w, r, request); err != nil {
+		return
+	}
+	if isRedirect(request.query) == "" {
 		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected", t.si, r.Method)
 		return
 	}
-	if err := t.parseAPIRequest(w, r, request); err != nil {
-		return
-	}
 
-	evict = msg.Action == cmn.ActEvictObjects
+	evict := msg.Action == cmn.ActEvictObjects
 	lom := cluster.AllocLOM(request.items[1])
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(request.bck.Bck); err != nil {
@@ -1031,19 +1020,18 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	var (
 		features = cmn.GCO.Get().Client.Features
-		query    = r.URL.Query()
 		request  = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
 	)
-	if isRedirect(query) == "" && !t.isIntraCall(r.Header) && !features.IsSet(cmn.FeatureDirectAccess) {
+	if err := t.parseReq(w, r, request); err != nil {
+		return
+	}
+	if isRedirect(request.query) == "" && !t.isIntraCall(r.Header) && !features.IsSet(cmn.FeatureDirectAccess) {
 		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
 			t.si, r.Method, r.RemoteAddr)
 		return
 	}
-	if err := t.parseAPIRequest(w, r, request); err != nil {
-		return
-	}
 	lom := cluster.AllocLOM(request.items[1] /*objName*/)
-	t.headObject(w, r, query, request.bck, lom)
+	t.headObject(w, r, request.query, request.bck, lom)
 	cluster.FreeLOM(lom)
 }
 
@@ -1156,15 +1144,14 @@ func (t *targetrunner) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg      cmn.ActionMsg
 		features = cmn.GCO.Get().Client.Features
-		query    = r.URL.Query()
 		request  = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
 	)
-	if isRedirect(query) == "" && !t.isIntraCall(r.Header) && !features.IsSet(cmn.FeatureDirectAccess) {
-		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
-			t.si, r.Method, r.RemoteAddr)
+	if err := t.parseReq(w, r, request); err != nil {
 		return
 	}
-	if err := t.parseAPIRequest(w, r, request); err != nil {
+	if isRedirect(request.query) == "" && !t.isIntraCall(r.Header) && !features.IsSet(cmn.FeatureDirectAccess) {
+		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
+			t.si, r.Method, r.RemoteAddr)
 		return
 	}
 	if cmn.ReadJSON(w, r, &msg) != nil {
@@ -1189,7 +1176,7 @@ func (t *targetrunner) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	delOldSetNew := cos.IsParseBool(query.Get(cmn.URLParamNewCustom))
+	delOldSetNew := cos.IsParseBool(request.query.Get(cmn.URLParamNewCustom))
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s: %s, custom=%+v, del-old-set-new=%t", t.si, lom, msg.Value, delOldSetNew)
 	}
@@ -1210,10 +1197,9 @@ func (t *targetrunner) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 // Returns a slice. Does not use GFN.
 func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
 	request := &apiRequest{after: 3, prefix: cmn.URLPathEC.L, bckIdx: 1}
-	if err := t.parseAPIRequest(w, r, request); err != nil {
+	if err := t.parseReq(w, r, request); err != nil {
 		return
 	}
-
 	switch request.items[0] {
 	case ec.URLMeta:
 		t.sendECMetafile(w, r, request.bck, request.items[2])
@@ -1542,7 +1528,7 @@ func (t *targetrunner) DeleteObject(lom *cluster.LOM, evict bool) (int, error) {
 // TODO: unify with PromoteFile (refactor)
 func (t *targetrunner) objMv(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	request := &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
-	if err := t.parseAPIRequest(w, r, request); err != nil {
+	if err := t.parseReq(w, r, request); err != nil {
 		return
 	}
 	lom := cluster.AllocLOM(request.items[1])
@@ -1594,7 +1580,7 @@ func (t *targetrunner) objMv(w http.ResponseWriter, r *http.Request, msg *cmn.Ac
 func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	const fmtErr = "%s: %s failed: "
 	request := &apiRequest{after: 1, prefix: cmn.URLPathObjects.L}
-	if err := t.parseAPIRequest(w, r, request); err != nil {
+	if err := t.parseReq(w, r, request); err != nil {
 		return
 	}
 	promoteArgs := cmn.ActValPromote{}

@@ -328,10 +328,10 @@ func (p *proxyrunner) Stop(err error) {
 // http /bucket and /objects handlers //
 ////////////////////////////////////////
 
-func (p *proxyrunner) parseAPI(w http.ResponseWriter, r *http.Request, bckArgs *bckInitArgs,
+func (p *proxyrunner) parseReqAndTry(w http.ResponseWriter, r *http.Request, bckArgs *bckInitArgs,
 	origURLBck ...string) (bck *cluster.Bck, objName string, err error) {
 	request := apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
-	if err = p.parseAPIRequest(w, r, &request); err != nil {
+	if err = p.parseReq(w, r, &request); err != nil {
 		return
 	}
 	bckArgs.bck = request.bck
@@ -516,7 +516,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request, origURL
 		bckArgs.perms = cmn.AccessGET
 		bckArgs.onlyRemote = true
 	}
-	bck, objName, err := p.parseAPI(w, r, bckArgs, origURLBck...)
+	bck, objName, err := p.parseReqAndTry(w, r, bckArgs, origURLBck...)
 	freeInitBckArgs(bckArgs)
 	if err != nil {
 		return
@@ -568,7 +568,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		bckArgs.perms = perms
 		bckArgs.onlyRemote = true
 	}
-	bck, objName, err := p.parseAPI(w, r, bckArgs)
+	bck, objName, err := p.parseReqAndTry(w, r, bckArgs)
 	freeInitBckArgs(bckArgs)
 
 	if err != nil {
@@ -614,7 +614,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		bckArgs.perms = cmn.AccessObjDELETE
 		bckArgs.onlyRemote = true
 	}
-	bck, objName, err := p.parseAPI(w, r, bckArgs)
+	bck, objName, err := p.parseReqAndTry(w, r, bckArgs)
 	freeInitBckArgs(bckArgs)
 	if err != nil {
 		return
@@ -642,20 +642,17 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		msg     = cmn.ActionMsg{}
 		request = &apiRequest{msg: &msg, after: 1, prefix: cmn.URLPathBuckets.L}
 	)
-	if err = p.parseAPIRequest(w, r, request); err != nil {
+	if err = p.parseReq(w, r, request); err != nil {
 		return
 	}
-
 	var (
 		bck     = request.bck
-		query   = r.URL.Query()
 		perms   = cmn.AccessDestroyBucket
 		errCode int
 	)
 	if msg.Action == cmn.ActDeleteObjects || msg.Action == cmn.ActEvictObjects {
 		perms = cmn.AccessObjDELETE
 	}
-
 	bckArgs := bckInitArgs{p: p, w: w, r: r, msg: &msg, perms: perms, onlyRemote: true, bck: bck}
 	if msg.Action == cmn.ActEvictRemoteBck {
 		bck, errCode, err = bckArgs.init(bck.Name)
@@ -717,7 +714,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			p.writeErrf(w, r, fmtNotRemote, bck.Name)
 			return
 		}
-		if xactID, err = p.doListRange(r.Method, bck.Name, &msg, query); err != nil {
+		if xactID, err = p.doListRange(r.Method, bck.Name, &msg, request.query); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
@@ -1391,7 +1388,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	if msg.Action == cmn.ActRenameObject {
 		request.after = 2
 	}
-	if err := p.parseAPIRequest(w, r, request); err != nil {
+	if err := p.parseReq(w, r, request); err != nil {
 		return
 	}
 
@@ -1434,7 +1431,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	request := apiRequest{after: 1, prefix: cmn.URLPathBuckets.L}
-	if err := p.parseAPIRequest(w, r, &request); err != nil {
+	if err := p.parseReq(w, r, &request); err != nil {
 		return
 	}
 	args := bckInitArgs{p: p, w: w, r: r, onlyRemote: true, bck: request.bck, perms: cmn.AccessBckHEAD}
@@ -1508,7 +1505,7 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 		msg           = &cmn.ActionMsg{Value: &propsToUpdate}
 		request       = &apiRequest{after: 1, prefix: cmn.URLPathBuckets.L, msg: &msg}
 	)
-	if err = p.parseAPIRequest(w, r, request); err != nil {
+	if err = p.parseReq(w, r, request); err != nil {
 		return
 	}
 	if p.forwardCP(w, r, msg, "httpbckpatch") {
@@ -1563,7 +1560,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request, origUR
 		bckArgs.perms = cmn.AccessObjHEAD
 		bckArgs.onlyRemote = true
 	}
-	bck, objName, err := p.parseAPI(w, r, bckArgs, origURLBck...)
+	bck, objName, err := p.parseReqAndTry(w, r, bckArgs, origURLBck...)
 	freeInitBckArgs(bckArgs)
 	if err != nil {
 		return
@@ -1592,7 +1589,7 @@ func (p *proxyrunner) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 		bckArgs.perms = cmn.AccessObjHEAD
 		bckArgs.onlyRemote = true
 	}
-	bck, objName, err := p.parseAPI(w, r, bckArgs)
+	bck, objName, err := p.parseReqAndTry(w, r, bckArgs)
 	freeInitBckArgs(bckArgs)
 	if err != nil {
 		return

@@ -249,6 +249,7 @@ type (
 		msg    interface{}  // in/out: if not nil, Body is unmarshaled to the msg
 		items  []string     // out: URL items after the prefix
 		bck    *cluster.Bck // out: initialized bucket
+		query  url.Values   // r.URL.Query()
 	}
 )
 
@@ -547,7 +548,7 @@ func (h *httprunner) Snode() *cluster.Snode    { return h.si }
 func (h *httprunner) Bowner() cluster.Bowner   { return h.owner.bmd }
 func (h *httprunner) Sowner() cluster.Sowner   { return h.owner.smap }
 
-func (h *httprunner) parseAPIRequest(w http.ResponseWriter, r *http.Request, args *apiRequest) (err error) {
+func (h *httprunner) parseReq(w http.ResponseWriter, r *http.Request, args *apiRequest) (err error) {
 	debug.Assert(len(args.prefix) != 0)
 	args.items, err = h.checkRESTItems(w, r, args.after, false, args.prefix)
 	if err != nil {
@@ -555,7 +556,8 @@ func (h *httprunner) parseAPIRequest(w http.ResponseWriter, r *http.Request, arg
 	}
 	debug.Assert(len(args.items) > args.bckIdx)
 	bckName := args.items[args.bckIdx]
-	args.bck, err = newBckFromQuery(bckName, r.URL.Query())
+	args.query = r.URL.Query()
+	args.bck, err = newBckFromQuery(bckName, args.query)
 	if err != nil {
 		h.writeErr(w, r, err)
 		return
