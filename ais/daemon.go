@@ -171,7 +171,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 		cos.B2S(int64(memStat.Total), 0), cos.B2S(int64(memStat.Free), 0), cos.B2S(int64(memStat.ActualFree), 0))
 
 	daemon.rg = &rungroup{rs: make(map[string]cos.Runner, 8)}
-	hk.Init()
+	hk.Init(&daemon.stopping)
 	daemon.rg.add(hk.DefaultHK)
 
 	// reg xaction factories in an orderly fashion

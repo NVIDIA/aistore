@@ -30,37 +30,37 @@ func ETLMultiObj(baseParams BaseParams, fromBck cmn.Bck, msg cmn.TCObjsMsg) (xac
 	return doListRangeRequest(baseParams, fromBck, cmn.ActETLObjects, msg)
 }
 
-// DeleteList sends HTTP request to remove a list of objects from a bucket.
+// DeleteList sends request to remove a list of objects from a bucket.
 func DeleteList(baseParams BaseParams, bck cmn.Bck, filesList []string) (string, error) {
 	deleteMsg := cmn.ListRangeMsg{ObjNames: filesList}
 	return doListRangeRequest(baseParams, bck, cmn.ActDeleteObjects, deleteMsg)
 }
 
-// DeleteRange sends HTTP request to remove a range of objects from a bucket.
+// DeleteRange sends request to remove a range of objects from a bucket.
 func DeleteRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
 	deleteMsg := cmn.ListRangeMsg{Template: rng}
 	return doListRangeRequest(baseParams, bck, cmn.ActDeleteObjects, deleteMsg)
 }
 
-// PrefetchList sends HTTP request to prefetch a list of objects from a remote bucket.
+// PrefetchList sends request to prefetch a list of objects from a remote bucket.
 func PrefetchList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
 	prefetchMsg := cmn.ListRangeMsg{ObjNames: fileslist}
 	return doListRangeRequest(baseParams, bck, cmn.ActPrefetchObjects, prefetchMsg)
 }
 
-// PrefetchRange sends HTTP request to prefetch a range of objects from a remote bucket.
+// PrefetchRange sends request to prefetch a range of objects from a remote bucket.
 func PrefetchRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
 	prefetchMsg := cmn.ListRangeMsg{Template: rng}
 	return doListRangeRequest(baseParams, bck, cmn.ActPrefetchObjects, prefetchMsg)
 }
 
-// EvictList sends HTTP request to evict a list of objects from a remote bucket.
+// EvictList sends request to evict a list of objects from a remote bucket.
 func EvictList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
 	evictMsg := cmn.ListRangeMsg{ObjNames: fileslist}
 	return doListRangeRequest(baseParams, bck, cmn.ActEvictObjects, evictMsg)
 }
 
-// EvictRange sends HTTP request to evict a range of objects from a remote bucket.
+// EvictRange sends request to evict a range of objects from a remote bucket.
 func EvictRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
 	evictMsg := cmn.ListRangeMsg{Template: rng}
 	return doListRangeRequest(baseParams, bck, cmn.ActEvictObjects, evictMsg)

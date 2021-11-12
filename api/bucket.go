@@ -158,7 +158,7 @@ func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks,
 	return summaries, nil
 }
 
-// CreateBucket sends HTTP request to create an AIS bucket with the given name and,
+// CreateBucket sends request to create an AIS bucket with the given name and,
 // optionally, specific non-default properties (via cmn.BucketPropsToUpdate).
 //
 // See also:
@@ -180,7 +180,7 @@ func CreateBucket(baseParams BaseParams, bck cmn.Bck, props *cmn.BucketPropsToUp
 	})
 }
 
-// DestroyBucket sends HTTP request to remove an AIS bucket with the given name.
+// DestroyBucket sends request to remove an AIS bucket with the given name.
 func DestroyBucket(baseParams BaseParams, bck cmn.Bck) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
@@ -250,8 +250,8 @@ func RenameBucket(baseParams BaseParams, fromBck, toBck cmn.Bck) (xactID string,
 	return
 }
 
-// EvictRemoteBucket sends HTTP request to evict an entire remote bucket from the AIStore
-// - the operation results in eliminating all traces of the specified remote bucket in the AIStore
+// EvictRemoteBucket sends request to evict an entire remote bucket from the AIStore
+// - keepMD: evict objects but keep bucket metadata
 func EvictRemoteBucket(baseParams BaseParams, bck cmn.Bck, keepMD bool) error {
 	var q url.Values
 	baseParams.Method = http.MethodDelete

@@ -204,6 +204,11 @@ func (e *ErrRemoteBucketOffline) Error() string {
 	return fmt.Sprintf("bucket %q is currently unreachable", e.bck)
 }
 
+func isErrRemoteBucketOffline(err error) bool {
+	_, ok := err.(*ErrRemoteBucketOffline)
+	return ok
+}
+
 // ErrInvalidBucketProvider
 
 func NewErrorInvalidBucketProvider(bck Bck) *ErrInvalidBucketProvider {
@@ -331,7 +336,7 @@ func (e *ErrNoNodes) Error() string {
 	if e.role == Proxy {
 		return "no available proxies"
 	}
-	cos.Assert(e.role == Target)
+	debug.Assert(e.role == Target)
 	return "no available targets"
 }
 
@@ -355,6 +360,11 @@ func NewErrObjDefunct(name string, d1, d2 uint64) *ErrObjDefunct {
 	return &ErrObjDefunct{name, d1, d2}
 }
 
+func isErrObjDefunct(err error) bool {
+	_, ok := err.(*ErrObjDefunct)
+	return ok
+}
+
 // ErrObjMeta
 
 func (e *ErrObjMeta) Error() string {
@@ -363,6 +373,11 @@ func (e *ErrObjMeta) Error() string {
 
 func NewErrObjMeta(name string, err error) *ErrObjMeta {
 	return &ErrObjMeta{name: name, err: err}
+}
+
+func isErrObjMeta(err error) bool {
+	_, ok := err.(*ErrObjMeta)
+	return ok
 }
 
 // ErrAborted
@@ -513,30 +528,11 @@ func IsErrSoft(err error) bool {
 
 // nought: not a thing
 func IsErrBucketNought(err error) bool {
-	if _, ok := err.(*ErrBckNotFound); ok {
-		return true
-	}
-	if _, ok := err.(*ErrRemoteBckNotFound); ok {
-		return true
-	}
-	_, ok := err.(*ErrRemoteBucketOffline)
-	return ok
+	return IsErrBckNotFound(err) || IsErrRemoteBckNotFound(err) || isErrRemoteBucketOffline(err)
 }
 
 func IsErrObjNought(err error) bool {
-	if IsObjNotExist(err) {
-		return true
-	}
-	if IsStatusNotFound(err) {
-		return true
-	}
-	if _, ok := err.(*ErrObjMeta); ok {
-		return true
-	}
-	if _, ok := err.(*ErrObjDefunct); ok {
-		return true
-	}
-	return false
+	return IsObjNotExist(err) || IsStatusNotFound(err) || isErrObjMeta(err) || isErrObjDefunct(err)
 }
 
 func IsObjNotExist(err error) bool {

@@ -659,14 +659,15 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bckArgs := bckInitArgs{p: p, w: w, r: r, msg: &msg, perms: perms, bck: bck}
 	bckArgs.createAIS = false
-	bckArgs.lookupRemote = true // TODO -- FIXME: must work without lookups
+	bckArgs.lookupRemote = true
 	if msg.Action == cmn.ActEvictRemoteBck {
+		bckArgs.lookupRemote = false
 		bck, errCode, err = bckArgs.init(bck.Name)
-		if errCode == http.StatusNotFound {
-			return // remote bucket not in BMD - ignore error
-		}
 		if err != nil {
-			p.writeErr(w, r, err, errCode)
+			if errCode != http.StatusNotFound && !cmn.IsErrRemoteBckNotFound(err) {
+				p.writeErr(w, r, err, errCode)
+			}
+			return
 		}
 	} else if bck, err = bckArgs.initAndTry(bck.Name); err != nil {
 		return

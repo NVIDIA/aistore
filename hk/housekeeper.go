@@ -44,12 +44,13 @@ type (
 	timedActions []timedAction
 
 	housekeeper struct {
-		stopCh  *cos.StopCh
-		sigCh   chan os.Signal
-		actions *timedActions
-		timer   *time.Timer
-		workCh  chan request
-		running atomic.Bool
+		stopCh   *cos.StopCh
+		sigCh    chan os.Signal
+		actions  *timedActions
+		timer    *time.Timer
+		workCh   chan request
+		running  atomic.Bool
+		stopping *atomic.Bool
 	}
 
 	CleanupFunc = func() time.Duration
@@ -60,8 +61,15 @@ var DefaultHK *housekeeper
 // interface guard
 var _ cos.Runner = (*housekeeper)(nil)
 
-func TestInit() { _init(false) }
-func Init()     { _init(true) }
+func TestInit() {
+	_init(false)
+	DefaultHK.stopping = &atomic.Bool{} // dummy
+}
+
+func Init(stopping *atomic.Bool) {
+	_init(true)
+	DefaultHK.stopping = stopping
+}
 
 func _init(mustRun bool) {
 	DefaultHK = &housekeeper{
@@ -117,7 +125,7 @@ func Reg(name string, f CleanupFunc, interval time.Duration) {
 }
 
 func Unreg(name string) {
-	debug.Assert(DefaultHK.running.Load())
+	debug.Assert(DefaultHK.stopping.Load() || DefaultHK.running.Load())
 	DefaultHK.workCh <- request{
 		registering: false,
 		name:        name,
