@@ -276,7 +276,7 @@ func _doListObj(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error
 	ctx := api.NewProgressContext(cb, longCommandTime)
 
 	// retrieve the entire bucket list and print it
-	objList, err := api.ListObjects(defaultAPIParams, bck, msg, uint(limit), ctx)
+	objList, err := api.ListObjectsWithOpts(defaultAPIParams, bck, msg, uint(limit), ctx, false)
 	if err != nil {
 		return err
 	}

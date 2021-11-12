@@ -348,7 +348,7 @@ func (m *ioContext) del(cnt ...int) {
 	var (
 		httpErr    *cmn.ErrHTTP
 		baseParams = tutils.BaseAPIParams()
-		msg        = &cmn.SelectMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
+		smsg       = &cmn.SelectMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
 	)
 
 	exists, err := api.DoesBucketExist(baseParams, cmn.QueryBcks(m.bck))
@@ -356,11 +356,17 @@ func (m *ioContext) del(cnt ...int) {
 	if !exists {
 		return
 	}
-
-	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
-	if err != nil && errors.As(err, &httpErr) && httpErr.Status == http.StatusNotFound {
-		// can also check httpErr.Message for: "bucket ... does not exist"
-		return
+	// TODO -- FIXME: set dont-lookup-remote-bucket = true (the last arg)
+	objList, err := api.ListObjectsWithOpts(baseParams, m.bck, smsg, 0, nil, false)
+	if err != nil {
+		if errors.As(err, &httpErr) && httpErr.Status == http.StatusNotFound {
+			return
+		}
+		emsg := err.Error()
+		// ignore client timeout awaiting headers
+		if strings.Contains(emsg, "awaiting") && strings.Contains(emsg, "headers") {
+			return
+		}
 	}
 	tassert.CheckFatal(m.t, err)
 

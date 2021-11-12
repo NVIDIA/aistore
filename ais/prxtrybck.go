@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xaction"
 )
@@ -23,14 +24,17 @@ type bckInitArgs struct {
 	r       *http.Request
 	perms   cmn.AccessAttrs // cmn.AccessGET, cmn.AccessPATCH etc.
 	reqBody []byte          // request body of original request
+	query   url.Values      // r.URL.Query()
 
 	origURLBck string
 	bck        *cluster.Bck
 	msg        *cmn.ActionMsg
 
-	skipBackend bool // initialize bucket `bck.InitNoBackend`
-	onlyRemote  bool // try only creating remote bucket
-	exists      bool // true if bucket already exists
+	skipBackend  bool // initialize bucket via `bck.InitNoBackend`
+	createAIS    bool // create ais bucket on the fly
+	lookupRemote bool // handle ErrRemoteBckNotFound to discover _remote_ bucket on the fly (and add to BMD)
+
+	exists bool // true if bucket already exists
 }
 
 ////////////////
@@ -59,11 +63,14 @@ func freeInitBckArgs(a *bckInitArgs) {
 // lookup and add bucket on the fly        //
 /////////////////////////////////////////////
 
-// init initializes bucket and checks access permissions.
+func dontLookupRemote(query url.Values) bool {
+	return query.Has(cmn.URLParamDontLookupRemoteBck) && cos.IsParseBool(query.Get(cmn.URLParamDontLookupRemoteBck))
+}
+
+// args.init initializes bucket and checks access permissions.
 func (args *bckInitArgs) init(bucket string) (bck *cluster.Bck, errCode int, err error) {
 	if args.bck == nil {
-		query := args.r.URL.Query()
-		args.bck, err = newBckFromQuery(bucket, query)
+		args.bck, err = newBckFromQuery(bucket, args.query)
 		if err != nil {
 			errCode = http.StatusBadRequest
 			return
@@ -164,17 +171,21 @@ func (args *bckInitArgs) initAndTry(bucket string) (bck *cluster.Bck, err error)
 		args.p.writeErr(args.w, args.r, err, errCode)
 		return
 	}
-
-	// args.onlyRemote: limit on the fly creation to remote buckets
-	if cmn.IsErrBckNotFound(err) /* ais bucket not found*/ && args.onlyRemote {
-		args.p.writeErr(args.w, args.r, err, errCode)
-		return
-	}
-
 	if !cmn.IsErrBucketNought(err) {
 		args.p.writeErr(args.w, args.r, err, http.StatusBadRequest)
 		return
 	}
+	// create ais bucket on the fly?
+	if cmn.IsErrBckNotFound(err) /* ais bucket not found*/ && !args.createAIS {
+		args.p.writeErr(args.w, args.r, err, errCode)
+		return
+	}
+	// create remote bucket on the fly?  ("creation" with respect to BMD, that is)
+	if cmn.IsErrRemoteBckNotFound(err) && !args.lookupRemote {
+		args.p.writeErr(args.w, args.r, err, errCode)
+		return
+	}
+
 	bck, err = args.try()
 	return
 }
@@ -239,7 +250,7 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 	if bck.IsHTTP() {
 		if args.origURLBck != "" {
 			remoteProps.Set(cmn.HdrOrigURLBck, args.origURLBck)
-		} else if origURL := args.r.URL.Query().Get(cmn.URLParamOrigURL); origURL != "" {
+		} else if origURL := args.query.Get(cmn.URLParamOrigURL); origURL != "" {
 			hbo, err := cmn.NewHTTPObjPath(origURL)
 			if err != nil {
 				errCode = http.StatusBadRequest
@@ -274,7 +285,7 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 func (args *bckInitArgs) _lookup(bck *cluster.Bck) (header http.Header, statusCode int, err error) {
 	q := url.Values{}
 	if bck.IsHTTP() {
-		origURL := args.r.URL.Query().Get(cmn.URLParamOrigURL)
+		origURL := args.query.Get(cmn.URLParamOrigURL)
 		q.Set(cmn.URLParamOrigURL, origURL)
 	}
 	return args.p.headRemoteBck(bck.Bck, q)

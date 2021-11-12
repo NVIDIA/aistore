@@ -235,6 +235,8 @@ const (
 	URLParamClusterInfo      = "cii" // true: /Health to return cluster info and status
 	URLParamRecvType         = "rtp" // to tell user PUT from migration PUT
 
+	URLParamDontLookupRemoteBck = "dlrb" // true: do not try to lookup remote buckets on the fly (overrides the default)
+
 	// dsort
 	URLParamTotalCompressedSize       = "tcs"
 	URLParamTotalInputShardsExtracted = "tise"

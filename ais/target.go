@@ -537,7 +537,11 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	t.ensureLatestBMD(msg, r)
 	switch msg.Action {
 	case cmn.ActList:
-		t.handleList(w, r, queryBcks, msg)
+		if queryBcks.Name == "" {
+			t.listBuckets(w, r, queryBcks)
+			return
+		}
+		t.handleListObjects(w, r, queryBcks, msg)
 	case cmn.ActSummary:
 		t.handleSummary(w, r, queryBcks, msg)
 	default:
@@ -545,32 +549,27 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) handleList(w http.ResponseWriter, r *http.Request, queryBcks cmn.QueryBcks, msg *aisMsg) {
-	if queryBcks.Name == "" {
-		t.listBuckets(w, r, queryBcks)
-	} else {
-		bck := cluster.NewBckEmbed(cmn.Bck(queryBcks))
-		if err := bck.Init(t.owner.bmd); err != nil {
-			if cmn.IsErrRemoteBckNotFound(err) {
-				t.BMDVersionFixup(r)
-				err = bck.Init(t.owner.bmd)
-			}
-			if err != nil {
-				t.writeErr(w, r, err)
-				return
-			}
+func (t *targetrunner) handleListObjects(w http.ResponseWriter, r *http.Request, queryBcks cmn.QueryBcks, msg *aisMsg) {
+	bck := cluster.NewBckEmbed(cmn.Bck(queryBcks))
+	if err := bck.Init(t.owner.bmd); err != nil {
+		if cmn.IsErrRemoteBckNotFound(err) {
+			t.BMDVersionFixup(r)
+			err = bck.Init(t.owner.bmd)
 		}
-		begin := mono.NanoTime()
-		if ok := t.listObjects(w, r, bck, msg); !ok {
+		if err != nil {
+			t.writeErr(w, r, err)
 			return
 		}
-
-		delta := mono.SinceNano(begin)
-		t.statsT.AddMany(
-			stats.NamedVal64{Name: stats.ListCount, Value: 1},
-			stats.NamedVal64{Name: stats.ListLatency, Value: delta},
-		)
 	}
+	begin := mono.NanoTime()
+	if ok := t.listObjects(w, r, bck, msg); !ok {
+		return
+	}
+	delta := mono.SinceNano(begin)
+	t.statsT.AddMany(
+		stats.NamedVal64{Name: stats.ListCount, Value: 1},
+		stats.NamedVal64{Name: stats.ListLatency, Value: delta},
+	)
 }
 
 func (t *targetrunner) handleSummary(w http.ResponseWriter, r *http.Request, queryBcks cmn.QueryBcks, msg *aisMsg) {

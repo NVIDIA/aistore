@@ -23,20 +23,19 @@ const (
 	maxPollInterval     = 10 * time.Second
 )
 
+// "progress bar" control structures and context
 type (
-	// ProgressInfo to notify a caller about an operation progress. The operation
-	// returns negative values for data that unavailable(e.g, Total or Percent for ListObjects).
+	// negative values indicate that progress information is unavailable
 	ProgressInfo struct {
 		Percent float64
 		Count   int
 		Total   int
 	}
 	ProgressContext struct {
-		startTime time.Time // time when operation was started
-		callAfter time.Time // call a callback only after this point in time
+		startTime time.Time // time when operation started
+		callAfter time.Time // call the callback only after
 		callback  ProgressCallback
-
-		info ProgressInfo
+		info      ProgressInfo
 	}
 	ProgressCallback = func(pi *ProgressContext)
 )
@@ -331,36 +330,43 @@ func waitForAsyncReqComplete(reqParams ReqParams, action string, msg *cmn.Bucket
 // See also: `cmn.SelectMsg`
 // See also: `api.ListObjectsInvalidateCache`
 // See also: `api.ListObjectsPage`
-func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObjects uint,
-	args ...*ProgressContext) (bckList *cmn.BucketList, err error) {
-	baseParams.Method = http.MethodGet
-	if smsg == nil {
-		smsg = &cmn.SelectMsg{}
-	}
+func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObjects uint) (*cmn.BucketList, error) {
+	return ListObjectsWithOpts(baseParams, bck, smsg, numObjects, nil, false)
+}
+
+// additional (advance-usage) arguments include:
+// - "progress-bar" context
+// - option to override the system default and _not_ try to lookup remote bucket
+func ListObjectsWithOpts(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObjects uint,
+	progress *ProgressContext, dontLookupRemote bool) (bckList *cmn.BucketList, err error) {
 	var (
-		ctx  *ProgressContext
+		q    url.Values
 		path = cmn.URLPathBuckets.Join(bck.Name)
 		hdr  = http.Header{
 			cmn.HdrAccept:      []string{cmn.ContentMsgPack},
 			cmn.HdrContentType: []string{cmn.ContentJSON},
 		}
-		q         = cmn.AddBckToQuery(url.Values{}, bck)
-		reqParams = ReqParams{BaseParams: baseParams, Path: path, Header: hdr, Query: q}
-		nextPage  = &cmn.BucketList{}
-		toRead    = numObjects
-		listAll   = numObjects == 0
+		nextPage = &cmn.BucketList{}
+		toRead   = numObjects
+		listAll  = numObjects == 0
 	)
+	baseParams.Method = http.MethodGet
+	if smsg == nil {
+		smsg = &cmn.SelectMsg{}
+	}
+	if dontLookupRemote {
+		q = url.Values{cmn.URLParamDontLookupRemoteBck: []string{"true"}}
+	}
+	q = cmn.AddBckToQuery(q, bck)
 	bckList = &cmn.BucketList{}
 	smsg.UUID = ""
 	smsg.ContinuationToken = ""
-	if len(args) != 0 {
-		ctx = args[0]
-	}
 
 	// `rem` holds the remaining number of objects to list (that is, unless we are listing
 	// the entire bucket). Each iteration lists a page of objects and reduces the `rem`
 	// counter accordingly. When the latter gets below page size, we perform the final
 	// iteration for the reduced page.
+	reqParams := ReqParams{BaseParams: baseParams, Path: path, Header: hdr, Query: q}
 	for pageNum := 1; listAll || toRead > 0; pageNum++ {
 		if !listAll {
 			smsg.PageSize = toRead
@@ -401,12 +407,12 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 			bckList.ContinuationToken = page.ContinuationToken
 		}
 
-		if ctx != nil && ctx.mustFire() {
-			ctx.info.Count = len(bckList.Entries)
+		if progress != nil && progress.mustFire() {
+			progress.info.Count = len(bckList.Entries)
 			if page.ContinuationToken == "" {
-				ctx.finish()
+				progress.finish()
 			}
-			ctx.callback(ctx)
+			progress.callback(progress)
 		}
 
 		if page.ContinuationToken == "" { // Listed all objects.
