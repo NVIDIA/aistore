@@ -128,7 +128,7 @@ func newStreamBase(client Client, dstURL, dstID string, extra *Extra) (s *stream
 	s.stopCh = cos.NewStopCh()
 	s.postCh = make(chan struct{}, 1)
 
-	s.mm = memsys.DefaultPageMM()
+	s.mm = memsys.PageMM()
 
 	// default overrides
 	if extra.SenderID != "" {

@@ -19,6 +19,9 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
+// go test -v -bench=. -tags=debug
+// go test -v -bench=. -tags=debug -benchtime=10s -benchmem
+
 type testStruct struct {
 	I  int    `json:"a,omitempty"`
 	S  string `json:"zero"`
@@ -90,10 +93,14 @@ func TestDecodeAndEncode(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var (
-				v testStruct
-				b = memsys.TestDefaultPageMM().NewSGL(cos.MiB)
+				v    testStruct
+				mmsa = memsys.TestPageMM()
+				b    = mmsa.NewSGL(cos.MiB)
 			)
-			defer b.Free()
+			defer func() {
+				b.Free()
+				mmsa.Terminate(false)
+			}()
 
 			err := jsp.Encode(b, test.v, test.opts)
 			tassert.CheckFatal(t, err)
@@ -115,8 +122,12 @@ func TestDecodeAndEncode(t *testing.T) {
 }
 
 func TestDecodeAndEncodeFuzz(t *testing.T) {
-	b := memsys.TestDefaultPageMM().NewSGL(cos.MiB)
-	defer b.Free()
+	mmsa := memsys.TestPageMM()
+	b := mmsa.NewSGL(cos.MiB)
+	defer func() {
+		b.Free()
+		mmsa.Terminate(false)
+	}()
 
 	for i := 0; i < 10000; i++ {
 		var (
@@ -151,9 +162,11 @@ func BenchmarkEncode(b *testing.B) {
 		{name: "compress", v: makeStaticStruct(), opts: jsp.Options{Compress: true}},
 		{name: "ccs", v: makeStaticStruct(), opts: jsp.CCSign(7)},
 	}
+	mmsa := memsys.TestPageMM()
+	defer mmsa.Terminate(false)
 	for _, bench := range benches {
 		b.Run(bench.name, func(b *testing.B) {
-			body := memsys.TestDefaultPageMM().NewSGL(cos.MiB)
+			body := mmsa.NewSGL(cos.MiB)
 			defer func() {
 				b.StopTimer()
 				body.Free()
@@ -185,7 +198,12 @@ func BenchmarkDecode(b *testing.B) {
 	}
 	for _, bench := range benches {
 		b.Run(bench.name, func(b *testing.B) {
-			sgl := memsys.TestDefaultPageMM().NewSGL(cos.MiB)
+			mmsa := memsys.TestPageMM()
+			sgl := mmsa.NewSGL(cos.MiB)
+			defer func() {
+				mmsa.Terminate(false)
+			}()
+
 			err := jsp.Encode(sgl, bench.v, bench.opts)
 			tassert.CheckFatal(b, err)
 			network, err := sgl.ReadAll()

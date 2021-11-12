@@ -60,7 +60,7 @@ func (config *globalConfig) marshal() []byte {
 }
 
 func (config *globalConfig) _encode(immSize int64) (sgl *memsys.SGL) {
-	sgl = memsys.DefaultPageMM().NewSGL(immSize)
+	sgl = memsys.PageMM().NewSGL(immSize)
 	err := jsp.Encode(sgl, config, config.JspOpts())
 	debug.AssertNoErr(err)
 	return

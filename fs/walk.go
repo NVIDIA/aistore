@@ -177,7 +177,7 @@ func Walk(opts *Options) error {
 		scratch []byte
 	)
 	if slab == nil {
-		mmsa := memsys.DefaultPageMM()
+		mmsa := memsys.PageMM()
 		scratch, slab = mmsa.AllocSize(memsys.PageSize * 2)
 	} else {
 		scratch = slab.Alloc()
@@ -254,7 +254,7 @@ func mpathChildren(opts *Options) (children []string, err error) {
 		slab    = opts.Slab
 	)
 	if slab == nil {
-		mmsa := memsys.DefaultPageMM()
+		mmsa := memsys.PageMM()
 		scratch, slab = mmsa.AllocSize(memsys.PageSize * 2)
 	} else {
 		scratch = slab.Alloc()

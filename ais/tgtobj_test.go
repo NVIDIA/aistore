@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -100,7 +101,8 @@ func BenchmarkObjPut(b *testing.B) {
 		{8 * cos.MiB},
 		{16 * cos.MiB},
 	}
-
+	mmsa := memsys.TestPageMM()
+	readers.Init(mmsa)
 	for _, bench := range benches {
 		b.Run(cos.B2S(bench.fileSize, 2), func(b *testing.B) {
 			lom := cluster.AllocLOM("objname")

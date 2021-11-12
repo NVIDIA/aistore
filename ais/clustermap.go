@@ -116,7 +116,7 @@ func (m *smapX) marshal() []byte {
 }
 
 func (m *smapX) _encode(immSize int64) (sgl *memsys.SGL) {
-	sgl = memsys.DefaultPageMM().NewSGL(immSize)
+	sgl = memsys.PageMM().NewSGL(immSize)
 	err := jsp.Encode(sgl, m, m.JspOpts())
 	debug.AssertNoErr(err)
 	return

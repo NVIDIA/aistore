@@ -388,7 +388,7 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tlog.Logln("GET transformed object")
-	outObject := tutils.MMSA().NewSGL(0)
+	outObject := mmsa.NewSGL(0)
 	defer outObject.Free()
 	_, err = api.GetObject(baseParams, bck, objName, api.GetObjectInput{
 		Writer: outObject,

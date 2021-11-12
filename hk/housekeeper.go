@@ -106,30 +106,8 @@ func WaitStarted() {
 	}
 }
 
-func (hk *housekeeper) checkRunning(name, act string) {
-	const fmterr = "%s is not running, cannot %s %q"
-	var catchIt bool
-	for !hk.running.Load() {
-		select {
-		case <-hk.stopCh.Listen():
-			err := fmt.Errorf(fmterr, hk.Name(), act, name)
-			glog.Error(err)
-			debug.AssertNoErr(err)
-			return
-		default:
-			if !catchIt { // TODO: try fix & remove
-				catchIt = true
-				err := fmt.Errorf(fmterr, hk.Name(), act, name)
-				glog.ErrorDepth(1, err)
-			}
-			break
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-}
-
 func Reg(name string, f CleanupFunc, interval time.Duration) {
-	DefaultHK.checkRunning(name, "reg")
+	debug.Assert(DefaultHK.running.Load())
 	DefaultHK.workCh <- request{
 		registering:     true,
 		name:            name,
@@ -139,7 +117,7 @@ func Reg(name string, f CleanupFunc, interval time.Duration) {
 }
 
 func Unreg(name string) {
-	DefaultHK.checkRunning(name, "unreg")
+	debug.Assert(DefaultHK.running.Load())
 	DefaultHK.workCh <- request{
 		registering: false,
 		name:        name,

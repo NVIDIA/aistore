@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 const (
@@ -47,6 +48,8 @@ func worker(jobs <-chan func()) {
 }
 
 func main() {
+	mmsa := memsys.TestPageMM()
+	readers.Init(mmsa)
 	flag.Parse()
 	jobs := make(chan func(), files)
 

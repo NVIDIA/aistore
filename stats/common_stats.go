@@ -265,7 +265,7 @@ func (s *CoreStats) init(node *cluster.Snode, size int) {
 	s.Tracker.regCommonMetrics(node)
 
 	// reusable sgl => (udp) => StatsD
-	s.sgl = memsys.DefaultPageMM().NewSGL(memsys.PageSize)
+	s.sgl = memsys.PageMM().NewSGL(memsys.PageSize)
 }
 
 // NOTE: nil StatsD client means that we provide metrics to Prometheus (see below)

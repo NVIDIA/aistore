@@ -215,14 +215,14 @@ func HandleObjStream(trname string, rxObj ReceiveObj, mems ...*memsys.MMSA) erro
 	if len(mems) > 0 {
 		mm = mems[0]
 	} else {
-		mm = memsys.DefaultPageMM()
+		mm = memsys.PageMM()
 	}
 	h := &handler{trname: trname, rxObj: rxObj, hkName: ObjURLPath(trname), mm: mm}
 	return h.handle()
 }
 
 func HandleMsgStream(trname string, rxMsg ReceiveMsg) error {
-	mm := memsys.DefaultSmallMM()
+	mm := memsys.ByteMM()
 	h := &handler{trname: trname, rxMsg: rxMsg, hkName: MsgURLPath(trname), mm: mm}
 	return h.handle()
 }

@@ -18,7 +18,7 @@ import (
 )
 
 var _ = Describe("SGL", func() {
-	mm := DefaultPageMM()
+	mm := PageMM()
 
 	randReader := func(size int64) ([]byte, io.Reader) {
 		buf := make([]byte, size)

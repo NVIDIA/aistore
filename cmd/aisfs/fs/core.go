@@ -46,7 +46,7 @@ var (
 )
 
 func init() {
-	glMem2 = memsys.DefaultPageMM()
+	glMem2 = memsys.PageMM()
 }
 
 type (

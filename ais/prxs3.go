@@ -142,7 +142,7 @@ func (p *proxyrunner) bckNamesToS3(w http.ResponseWriter) {
 		}
 		return false
 	})
-	sgl := memsys.DefaultPageMM().NewSGL(0)
+	sgl := memsys.PageMM().NewSGL(0)
 	resp.MustMarshal(sgl)
 	w.Header().Set(cmn.HdrContentType, cmn.ContentXML)
 	sgl.WriteTo(w)
@@ -293,7 +293,7 @@ func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, bucket s
 	resp := s3compat.NewListObjectResult()
 	resp.ContinuationToken = smsg.ContinuationToken
 	resp.FillFromAisBckList(objList, &smsg)
-	sgl := memsys.DefaultPageMM().NewSGL(0)
+	sgl := memsys.PageMM().NewSGL(0)
 	resp.MustMarshal(sgl)
 	w.Header().Set(cmn.HdrContentType, cmn.ContentXML)
 	sgl.WriteTo(w)
@@ -498,7 +498,7 @@ func (p *proxyrunner) getBckVersioningS3(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	resp := s3compat.NewVersioningConfiguration(bck.Props.Versioning.Enabled)
-	sgl := memsys.DefaultPageMM().NewSGL(0)
+	sgl := memsys.PageMM().NewSGL(0)
 	resp.MustMarshal(sgl)
 	w.Header().Set(cmn.HdrContentType, cmn.ContentXML)
 	sgl.WriteTo(w)

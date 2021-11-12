@@ -85,8 +85,8 @@ const (
 )
 
 const (
-	gmmName = ".dflt.mm"
-	smmName = ".dflt.mm.small"
+	gmmName = "pmm"
+	smmName = "smm"
 )
 
 // page slabs: pagesize increments up to MaxPageSlabSize
@@ -172,8 +172,8 @@ type (
 		TimeIval    time.Duration // interval of time to watch for low memory and make steps
 		MinPctTotal int           // same, via percentage of total
 		MinPctFree  int           // ditto, as % of free at init time
-		Sibling     *MMSA         // sibling mem manager to delegate allocations of need be
 		// private
+		sibling       *MMSA
 		duration      time.Duration
 		lowWM         uint64
 		rings         []*Slab
@@ -231,47 +231,48 @@ func init() {
 }
 
 // default page-based memory-manager-slab-allocator (MMSA) for packages other than `ais`
-func DefaultPageMM() *MMSA {
+func PageMM() *MMSA {
 	gmmOnce.Do(func() {
 		gmm.Init(false, true)
 		if smm != nil {
-			smm.Sibling = gmm
-			gmm.Sibling = smm
+			smm.sibling = gmm
+			gmm.sibling = smm
 		}
 	})
 	return gmm
 }
 
 // default small-size MMSA
-func DefaultSmallMM() *MMSA {
+func ByteMM() *MMSA {
 	smmOnce.Do(func() {
 		smm.Init(false, true)
 		if gmm != nil {
-			gmm.Sibling = smm
-			smm.Sibling = gmm
+			gmm.sibling = smm
+			smm.sibling = gmm
 		}
 	})
 	return smm
 }
 
-func TestDefaultPageMM() *MMSA {
-	_freeAtInit()
-	gmm.MinFree = minMemFreeTests
-	return DefaultPageMM()
-}
-
-func TestDefaultSmallMM() *MMSA {
-	_freeAtInit()
-	smm.MinFree = minMemFreeTests
-	return DefaultSmallMM()
-}
-
-func _freeAtInit() {
-	mem, _ := sys.Mem()
-	if mem.Free < minMemFree {
-		cos.FreeMemToOS()
-		runtime.Gosched()
+func TestPageMM(name ...string) (mm *MMSA) {
+	mm = &MMSA{defBufSize: DefaultBufSize, MinFree: minMemFreeTests}
+	if len(name) == 0 {
+		mm.Name = "pmm.test"
+	} else {
+		mm.Name = name[0]
 	}
+	mm.Init(true, true)
+	return
+}
+
+func TestByteMM(pmm *MMSA) (mm *MMSA) {
+	mm = &MMSA{Name: "smm.test", defBufSize: DefaultSmallBufSize, MinFree: minMemFreeTests}
+	mm.Init(true, true)
+	mm.sibling = pmm
+	if pmm != nil {
+		pmm.sibling = mm
+	}
+	return
 }
 
 //////////
@@ -405,12 +406,14 @@ func (r *MMSA) Init(panicOnEnvErr, panicOnInsufFreeErr bool) (err error) {
 }
 
 // terminate this MMSA instance and, possibly, GC as well
-func (r *MMSA) Terminate() {
+func (r *MMSA) Terminate(unregHK bool) {
 	var (
 		freed int64
 		gced  string
 	)
-	hk.Unreg(r.Name + ".gc")
+	if unregHK {
+		hk.Unreg(r.Name + ".gc")
+	}
 	for _, s := range r.rings {
 		freed += s.cleanup()
 	}
@@ -543,9 +546,9 @@ func (r *MMSA) Alloc() (buf []byte, slab *Slab) {
 func (r *MMSA) Free(buf []byte) {
 	size := int64(cap(buf))
 	if size > r.maxSlabSize && r.isSmall() {
-		r.Sibling.Free(buf)
+		r.sibling.Free(buf)
 	} else if size < r.slabIncStep && !r.isSmall() {
-		r.Sibling.Free(buf)
+		r.sibling.Free(buf)
 	} else {
 		debug.Assert(size%r.slabIncStep == 0)
 		debug.Assert(size/r.slabIncStep <= int64(r.numSlabs))
@@ -559,10 +562,10 @@ func (r *MMSA) Free(buf []byte) {
 // and its Slab
 func (r *MMSA) SelectMemAndSlab(size int64) (mmsa *MMSA, slab *Slab) {
 	if size > r.maxSlabSize && r.isSmall() {
-		return r.Sibling, r.Sibling._selectSlab(size)
+		return r.sibling, r.sibling._selectSlab(size)
 	}
 	if size < r.slabIncStep && !r.isSmall() {
-		return r.Sibling, r.Sibling._selectSlab(size)
+		return r.sibling, r.sibling._selectSlab(size)
 	}
 	mmsa, slab = r, r._selectSlab(size)
 	return

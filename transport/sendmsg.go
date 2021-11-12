@@ -119,7 +119,7 @@ func (s *MsgStream) inSend() bool { return s.msgoff.ins == inHdr }
 func (s *MsgStream) dryrun() {
 	var (
 		body = io.NopCloser(s)
-		h    = &handler{trname: s.trname, mm: memsys.DefaultSmallMM()}
+		h    = &handler{trname: s.trname, mm: memsys.ByteMM()}
 		it   = iterator{handler: h, body: body, hbuf: make([]byte, maxHeaderSize)}
 	)
 	for {

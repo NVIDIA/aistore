@@ -752,9 +752,9 @@ func (h *httprunner) init(config *cmn.Config) {
 	h.owner.rmd = newRMDOwner()
 	h.owner.rmd.load()
 
-	h.gmm = memsys.DefaultPageMM()
+	h.gmm = memsys.PageMM()
 	h.gmm.RegWithHK() // note: housekeeper must be running (see daemon runAll)
-	h.smm = memsys.DefaultSmallMM()
+	h.smm = memsys.ByteMM()
 	h.smm.RegWithHK()
 }
 

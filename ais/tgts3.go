@@ -96,7 +96,7 @@ func (t *targetrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items [
 		LastModified: s3compat.FormatTime(lom.Atime()),
 		ETag:         cksumValue,
 	}
-	sgl := memsys.DefaultPageMM().NewSGL(0)
+	sgl := memsys.PageMM().NewSGL(0)
 	result.MustMarshal(sgl)
 	w.Header().Set(cmn.HdrContentType, cmn.ContentXML)
 	sgl.WriteTo(w)

@@ -24,6 +24,10 @@ import (
 
 var baseParams api.BaseParams
 
+func init() {
+	readers.Init(memsys.TestPageMM())
+}
+
 func TestPutFile(t *testing.T) {
 	err := putFile(1024, cos.ChecksumXXHash)
 	if err != nil {
@@ -33,8 +37,12 @@ func TestPutFile(t *testing.T) {
 
 func TestPutSG(t *testing.T) {
 	size := int64(10)
-	sgl := tutils.MMSA().NewSGL(size)
-	defer sgl.Free()
+	mmsa := memsys.TestByteMM(nil)
+	sgl := mmsa.NewSGL(size)
+	defer func() {
+		sgl.Free()
+		mmsa.Terminate(false)
+	}()
 	err := putSG(sgl, size, cos.ChecksumXXHash)
 	if err != nil {
 		t.Fatal(err)
@@ -110,8 +118,12 @@ func BenchmarkPutRandWithHash1M(b *testing.B) {
 }
 
 func BenchmarkPutSGWithHash1M(b *testing.B) {
-	sgl := tutils.MMSA().NewSGL(cos.MiB)
-	defer sgl.Free()
+	mmsa := memsys.TestPageMM()
+	sgl := mmsa.NewSGL(cos.MiB)
+	defer func() {
+		sgl.Free()
+		mmsa.Terminate(false)
+	}()
 
 	for i := 0; i < b.N; i++ {
 		err := putSG(sgl, 1024*1024, cos.ChecksumXXHash)
@@ -140,8 +152,12 @@ func BenchmarkPutRandNoHash1M(b *testing.B) {
 }
 
 func BenchmarkPutSGNoHash1M(b *testing.B) {
-	sgl := tutils.MMSA().NewSGL(cos.MiB)
-	defer sgl.Free()
+	mmsa := memsys.TestPageMM()
+	sgl := mmsa.NewSGL(cos.MiB)
+	defer func() {
+		sgl.Free()
+		mmsa.Terminate(false)
+	}()
 
 	for i := 0; i < b.N; i++ {
 		err := putSG(sgl, 1024*1024, cos.ChecksumNone)
@@ -175,8 +191,11 @@ func BenchmarkPutRandWithHash1MParallel(b *testing.B) {
 
 func BenchmarkPutSGWithHash1MParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
-		sgl := tutils.MMSA().NewSGL(cos.MiB)
-		defer sgl.Free()
+		mmsa := memsys.TestPageMM()
+		sgl := mmsa.NewSGL(cos.MiB)
+		defer func() {
+			mmsa.Terminate(false)
+		}()
 
 		for pb.Next() {
 			err := putSG(sgl, 1024*1024, cos.ChecksumXXHash)

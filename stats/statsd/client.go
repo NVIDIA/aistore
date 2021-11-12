@@ -71,7 +71,7 @@ func New(ip string, port int, prefix string, probe bool) (*Client, error) {
 		conn.Close()
 		return &Client{}, err
 	}
-	smm = memsys.DefaultSmallMM()
+	smm = memsys.ByteMM()
 	client := &Client{conn, server, prefix, true /*opened*/}
 	if !probe {
 		return client, nil

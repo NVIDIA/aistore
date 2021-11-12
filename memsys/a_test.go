@@ -95,7 +95,7 @@ func Test_Sleep(t *testing.T) {
 	}
 	wg.Wait()
 	close(c)
-	mem.Terminate()
+	mem.Terminate(false)
 }
 
 func Test_NoSleep(t *testing.T) {
@@ -126,7 +126,7 @@ func Test_NoSleep(t *testing.T) {
 	}
 	wg.Wait()
 	close(c)
-	mem.Terminate()
+	mem.Terminate(false)
 }
 
 func printMaxRingLen(mem *memsys.MMSA, c chan struct{}) {

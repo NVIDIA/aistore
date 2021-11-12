@@ -76,10 +76,14 @@ func TestJoggerGroupParallel(t *testing.T) {
 		}
 		out     = tutils.PrepareObjects(t, desc)
 		counter *atomic.Int32
-	)
-	defer os.RemoveAll(out.Dir)
 
-	slab, err := tutils.MMSA().GetSlab(memsys.PageSize)
+		mmsa = memsys.TestPageMM()
+	)
+	defer func() {
+		mmsa.Terminate(false)
+		os.RemoveAll(out.Dir)
+	}()
+	slab, err := mmsa.GetSlab(memsys.PageSize)
 	tassert.CheckFatal(t, err)
 
 	baseJgOpts := &mpather.JoggerGroupOpts{

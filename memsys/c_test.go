@@ -34,7 +34,7 @@ const (
 func TestSGLStressN(t *testing.T) {
 	mem := &memsys.MMSA{MinPctFree: 50, Name: "cmem"}
 	err := mem.Init(false /*panic env err*/, false /*panic insuff mem err*/)
-	defer mem.Terminate()
+	defer mem.Terminate(false)
 	if err != nil {
 		t.Fatal(err)
 	}

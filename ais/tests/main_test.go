@@ -17,13 +17,17 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools"
+	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 var (
 	proxyURL   string
 	baseParams api.BaseParams
+
+	mmsa *memsys.MMSA
 )
 
 func setBucket() (bck cmn.Bck, err error) {
@@ -121,6 +125,10 @@ func TestMain(m *testing.M) {
 	}
 
 	rand.Seed(time.Now().UnixNano())
+
+	mmsa = memsys.TestPageMM()
+	readers.Init(mmsa)
+
 	m.Run()
 	return
 

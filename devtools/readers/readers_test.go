@@ -17,6 +17,10 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
+func init() {
+	readers.Init(memsys.TestPageMM())
+}
+
 func TestFileReader(t *testing.T) {
 	r, err := readers.NewFileReader("/tmp", "seek", 10240, cos.ChecksumNone)
 	if err != nil {
@@ -239,7 +243,8 @@ func TestRandReader(t *testing.T) {
 }
 
 func TestSGReader(t *testing.T) {
-	mmsa := memsys.TestDefaultPageMM()
+	mmsa := memsys.TestPageMM()
+	defer mmsa.Terminate(false)
 	{
 		// Basic read
 		size := int64(1024)
@@ -316,9 +321,12 @@ func BenchmarkRandReaderCreateWithHash1M(b *testing.B) {
 }
 
 func BenchmarkSGReaderCreateWithHash1M(b *testing.B) {
-	mmsa := memsys.TestDefaultPageMM()
+	mmsa := memsys.TestPageMM()
 	sgl := mmsa.NewSGL(cos.MiB)
-	defer sgl.Free()
+	defer func() {
+		sgl.Free()
+		mmsa.Terminate(false)
+	}()
 
 	for i := 0; i < b.N; i++ {
 		sgl.Reset()
@@ -359,9 +367,12 @@ func BenchmarkRandReaderCreateNoHash1M(b *testing.B) {
 }
 
 func BenchmarkSGReaderCreateNoHash1M(b *testing.B) {
-	mmsa := memsys.TestDefaultPageMM()
+	mmsa := memsys.TestPageMM()
 	sgl := mmsa.NewSGL(cos.MiB)
-	defer sgl.Free()
+	defer func() {
+		sgl.Free()
+		mmsa.Terminate(false)
+	}()
 
 	for i := 0; i < b.N; i++ {
 		sgl.Reset()

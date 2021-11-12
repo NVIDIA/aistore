@@ -60,7 +60,7 @@ ut et voluptates repudiandae sint et molestiae non-recusandae.`
 var (
 	objmux   *mux.ServeMux
 	msgmux   *mux.ServeMux
-	MMSA     *memsys.MMSA
+	pmm      *memsys.MMSA
 	duration time.Duration // test duration
 )
 
@@ -74,7 +74,7 @@ func TestMain(t *testing.M) {
 	if duration, err = time.ParseDuration(d); err != nil {
 		cos.Exitf("Invalid duration %q", d)
 	}
-	MMSA = memsys.TestDefaultPageMM()
+	pmm = memsys.TestPageMM()
 
 	sc := transport.Init()
 	go sc.Run()
@@ -137,7 +137,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 	cb := func(transport.ObjHdr, io.ReadCloser, interface{}, error) {
 		wg.Done()
 	}
-	sgl1 := MMSA.NewSGL(0)
+	sgl1 := pmm.NewSGL(0)
 	sgl1.Write([]byte(txt1))
 	hdr := transport.ObjHdr{
 		Bck: cmn.Bck{
@@ -158,7 +158,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 	stream.Send(&transport.Obj{Hdr: hdr, Reader: sgl1, Callback: cb})
 	wg.Wait()
 
-	sgl2 := MMSA.NewSGL(0)
+	sgl2 := pmm.NewSGL(0)
 	sgl2.Write([]byte(txt2))
 	hdr = transport.ObjHdr{
 		Bck: cmn.Bck{
@@ -417,7 +417,7 @@ func Test_ObjAttrs(t *testing.T) {
 				Opaque:   []byte{byte(idx)},
 			}
 		)
-		slab, err := MMSA.GetSlab(memsys.PageSize)
+		slab, err := pmm.GetSlab(memsys.PageSize)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -452,7 +452,7 @@ func Test_CompressedOne(t *testing.T) {
 	ts := httptest.NewServer(objmux)
 	defer ts.Close()
 
-	err := transport.HandleObjStream(trname, receive10G, memsys.TestDefaultPageMM() /* optionally, specify memsys*/)
+	err := transport.HandleObjStream(trname, receive10G, memsys.TestPageMM() /* optionally, specify memsys*/)
 	tassert.CheckFatal(t, err)
 	defer transport.Unhandle(trname)
 
@@ -461,7 +461,7 @@ func Test_CompressedOne(t *testing.T) {
 	t.Setenv("AIS_STREAM_BURST_NUM", "2")
 	stream := transport.NewObjStream(httpclient, url, cos.GenTie(), &transport.Extra{Compression: cmn.CompressAlways})
 
-	slab, _ := MMSA.GetSlab(memsys.MaxPageSlabSize)
+	slab, _ := pmm.GetSlab(memsys.MaxPageSlabSize)
 	random := newRand(mono.NanoTime())
 	buf := slab.Alloc()
 	_, _ = random.Read(buf)
@@ -513,9 +513,9 @@ func Test_DryRun(t *testing.T) {
 	stream := transport.NewObjStream(nil, "dummy/null", cos.GenTie(), nil)
 
 	random := newRand(mono.NanoTime())
-	sgl := MMSA.NewSGL(cos.MiB)
+	sgl := pmm.NewSGL(cos.MiB)
 	defer sgl.Free()
-	buf, slab := MMSA.AllocSize(cos.KiB * 128)
+	buf, slab := pmm.AllocSize(cos.KiB * 128)
 	defer slab.Free(buf)
 	for sgl.Len() < cos.MiB {
 		random.Read(buf)
@@ -804,7 +804,7 @@ func makeRandReader(random *rand.Rand, usePDU bool) (transport.ObjHdr, *randRead
 	if hdr.ObjSize() == 0 {
 		return hdr, nil
 	}
-	slab, err := MMSA.GetSlab(memsys.DefaultBufSize)
+	slab, err := pmm.GetSlab(memsys.DefaultBufSize)
 	if err != nil {
 		panic("Failed getting slab: " + err.Error())
 	}

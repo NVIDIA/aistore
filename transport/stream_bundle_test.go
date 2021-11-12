@@ -20,7 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 )
@@ -93,7 +93,7 @@ func Test_Bundle(t *testing.T) {
 func testBundle(t *testing.T, nvs cos.SimpleKVs) {
 	var (
 		numCompleted atomic.Int64
-		MMSA         = tutils.MMSA()
+		mmsa         = memsys.TestPageMM("mm.bundle.test") // NOTE: a separate instance for the bundle test
 		network      = cmn.NetworkIntraData
 		trname       = "bundle" + nvs["block"]
 		tss          = make([]*httptest.Server, 0, 32)
@@ -108,6 +108,7 @@ func testBundle(t *testing.T, nvs cos.SimpleKVs) {
 		for _, ts := range tss {
 			ts.Close()
 		}
+		mmsa.Terminate(false)
 	}()
 	smap.Version = 1
 
@@ -131,8 +132,8 @@ func testBundle(t *testing.T, nvs cos.SimpleKVs) {
 		sowner         = &sowner{}
 		lsnode         = cluster.Snode{DaemonID: "local"}
 		random         = newRand(mono.NanoTime())
-		wbuf, slab     = MMSA.Alloc()
-		extra          = &transport.Extra{Compression: nvs["compression"], MMSA: MMSA}
+		wbuf, slab     = mmsa.Alloc()
+		extra          = &transport.Extra{Compression: nvs["compression"], MMSA: mmsa}
 		size, prevsize int64
 		multiplier     = int(random.Int63()%13) + 4
 		num            int

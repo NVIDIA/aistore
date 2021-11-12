@@ -221,7 +221,7 @@ func (m *bucketMD) marshal() []byte {
 }
 
 func (m *bucketMD) _encode() (sgl *memsys.SGL) {
-	sgl = memsys.DefaultPageMM().NewSGL(bmdImmSize)
+	sgl = memsys.PageMM().NewSGL(bmdImmSize)
 	err := jsp.Encode(sgl, m, m.JspOpts())
 	debug.AssertNoErr(err)
 	bmdImmSize = cos.MaxI64(bmdImmSize, sgl.Len())

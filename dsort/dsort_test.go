@@ -209,7 +209,7 @@ func (tctx *testContext) setup() {
 	tctx.errCh = make(chan error, tctx.targetCnt)
 	tctx.wg = &sync.WaitGroup{}
 
-	mm = memsys.TestDefaultPageMM()
+	mm = memsys.TestPageMM()
 
 	fs.TestNew(nil)
 	err := cos.CreateDir(testDir)

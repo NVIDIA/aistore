@@ -24,7 +24,6 @@ import (
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools"
 	"github.com/NVIDIA/aistore/devtools/tlog"
-	"github.com/NVIDIA/aistore/memsys"
 )
 
 const (
@@ -97,10 +96,6 @@ func init() {
 		Client: HTTPClient,
 		Log:    tlog.Logf,
 	}
-}
-
-func MMSA() *memsys.MMSA {
-	return memsys.TestDefaultPageMM()
 }
 
 // InitLocalCluster initializes tutils component with AIS cluster that must be either:

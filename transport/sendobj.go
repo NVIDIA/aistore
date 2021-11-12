@@ -88,7 +88,7 @@ func (s *Stream) initCompression(extra *Extra) {
 	s.lz4s.frameChecksum = config.Compression.Checksum
 	mem := extra.MMSA
 	if mem == nil {
-		mem = memsys.DefaultPageMM()
+		mem = memsys.PageMM()
 	}
 	if s.lz4s.blockMaxSize >= memsys.MaxPageSlabSize {
 		s.lz4s.sgl = mem.NewSGL(memsys.MaxPageSlabSize, memsys.MaxPageSlabSize)
@@ -335,7 +335,7 @@ func (s *Stream) inSend() bool { return s.sendoff.ins >= inHdr || s.sendoff.ins 
 func (s *Stream) dryrun() {
 	var (
 		body = io.NopCloser(s)
-		h    = &handler{trname: s.trname, mm: memsys.DefaultPageMM()}
+		h    = &handler{trname: s.trname, mm: memsys.PageMM()}
 		it   = iterator{handler: h, body: body, hbuf: make([]byte, maxHeaderSize)}
 	)
 	for {

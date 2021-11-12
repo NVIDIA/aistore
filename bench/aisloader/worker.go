@@ -21,7 +21,8 @@ import (
 var mmsa *memsys.MMSA
 
 func init() {
-	mmsa = memsys.DefaultPageMM()
+	mmsa = memsys.PageMM()
+	readers.Init(mmsa)
 }
 
 func doPut(wo *workOrder) {
