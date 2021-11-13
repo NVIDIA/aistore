@@ -53,7 +53,7 @@ func (*mncFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (p *mncFactory) Start() error {
-	slab, err := p.T.MMSA().GetSlab(memsys.MaxPageSlabSize)
+	slab, err := p.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
 	cos.AssertNoErr(err)
 	p.xact = newXactMNC(p.Bck, p, slab)
 	return nil

@@ -43,7 +43,7 @@ var (
 			showCmdDisk,
 			{
 				Name:         subcmdStgCleanup,
-				Usage:        "perform storage cleanup: remove deleted trash and old/obsolete workfiles",
+				Usage:        "perform storage cleanup: remove deleted objects and old/obsolete workfiles",
 				ArgsUsage:    listCommandArgument,
 				Flags:        storageCmdFlags[subcmdStgCleanup],
 				Action:       cleanupStorageHandler,

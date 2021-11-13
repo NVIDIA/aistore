@@ -39,8 +39,8 @@ func (*TargetMock) ClusterStarted() bool     { return true }
 func (*TargetMock) NodeStarted() bool        { return true }
 func (*TargetMock) DataClient() *http.Client { return http.DefaultClient }
 func (*TargetMock) Sowner() Sowner           { return nil }
-func (*TargetMock) MMSA() *memsys.MMSA       { return memsys.PageMM() }
-func (*TargetMock) SmallMMSA() *memsys.MMSA  { return memsys.ByteMM() }
+func (*TargetMock) PageMM() *memsys.MMSA     { return memsys.PageMM() }
+func (*TargetMock) ByteMM() *memsys.MMSA     { return memsys.ByteMM() }
 
 func (*TargetMock) PutObject(*LOM, PutObjectParams) error                   { return nil }
 func (*TargetMock) FinalizeObj(*LOM, string) (int, error)                   { return 0, nil }
@@ -65,4 +65,3 @@ func (*TargetMock) Health(*Snode, time.Duration, url.Values) ([]byte, int, error
 
 func (*TargetMock) FSHC(error, string)             {}
 func (*TargetMock) OOS(*fs.CapStatus) fs.CapStatus { return fs.CapStatus{} }
-func (*TargetMock) TrashNonExistingBucket(cmn.Bck) {}

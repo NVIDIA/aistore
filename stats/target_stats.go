@@ -267,7 +267,7 @@ func (r *Trunner) log(now int64, uptime time.Duration) {
 		swap := cos.B2S(int64(memStat.SwapUsed), 0)
 		sysln := fmt.Sprintf("memory: (used %s, free %s, actfree %s, swap %s)", used, free, afree, swap)
 
-		mm := r.T.MMSA()
+		mm := r.T.PageMM()
 		pressure, _ := mm.MemPressure(&memStat)
 		ln := fmt.Sprintf("%s, %s(%s)", sysln, mm, mm.MemPressure2S(pressure))
 		r.lines = append(r.lines, ln)

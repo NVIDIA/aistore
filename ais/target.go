@@ -45,12 +45,6 @@ import (
 	"github.com/NVIDIA/aistore/xreg"
 )
 
-const (
-	bucketMDFixup    = "fixup"
-	bucketMDReceive  = "receive"
-	bucketMDRegister = "register"
-)
-
 const dbName = "ais.db"
 
 const clusterClockDrift = 5 * time.Millisecond // is expected to be bounded by
@@ -883,9 +877,18 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 			t.statsT.Add(stats.PutRedirLatency, redelta)
 		}
 	}
-	if cs := fs.GetCapStatus(); cs.Err != nil {
+	if cs := fs.GetCapStatus(); cs.Err != nil || cs.PctMax > cmn.StoreCleanupWM {
+		glog.Warningf("%s: %s", t.si, cs)
+		// NOTE: as we often run functional tests on low capacity
+		debug.Func(func() {
+			availablePaths := fs.GetAvail()
+			for _, mi := range availablePaths {
+				os.RemoveAll(mi.DeletedDir())
+			}
+		})
 		cs = t.OOS(nil)
 		if cs.OOS {
+			// fail this write
 			t.writeErr(w, r, cs.Err)
 			return
 		}

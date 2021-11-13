@@ -203,7 +203,7 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 func (c *getJogger) restoreReplicatedFromMemory(ctx *restoreCtx) error {
 	var (
 		writer *memsys.SGL
-		mm     = c.parent.t.SmallMMSA()
+		mm     = c.parent.t.ByteMM()
 	)
 	// Try to read replica from targets one by one until the replica is downloaded
 	for node := range ctx.nodes {
@@ -257,7 +257,7 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 	var (
 		writer *os.File
 		n      int64
-		mm     = c.parent.t.SmallMMSA()
+		mm     = c.parent.t.ByteMM()
 	)
 	// Try to read a replica from targets one by one until the replica is downloaded
 	objFQN := ctx.lom.FQN
@@ -379,7 +379,7 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 
 	iReq := newIntraReq(reqGet, ctx.meta, ctx.lom.Bck())
 	iReq.isSlice = true
-	mm := c.parent.t.SmallMMSA()
+	mm := c.parent.t.ByteMM()
 	request := iReq.NewPack(mm)
 	hdr := transport.ObjHdr{
 		Bck:     ctx.lom.Bck().Bck,

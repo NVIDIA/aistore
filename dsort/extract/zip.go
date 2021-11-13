@@ -46,7 +46,7 @@ type (
 
 func newZipRecordDataReader(t cluster.Target) *zipRecordDataReader {
 	rd := &zipRecordDataReader{}
-	rd.metadataBuf, rd.slab = t.SmallMMSA().Alloc()
+	rd.metadataBuf, rd.slab = t.ByteMM().Alloc()
 	return rd
 }
 
@@ -112,7 +112,7 @@ func (z *zipExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, e
 		return extractedSize, extractedCount, err
 	}
 
-	buf, slab := z.t.MMSA().AllocSize(lom.SizeBytes())
+	buf, slab := z.t.PageMM().AllocSize(lom.SizeBytes())
 	defer slab.Free(buf)
 
 	for _, f := range zr.File {

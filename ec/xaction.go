@@ -200,13 +200,13 @@ func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn s
 		ObjAttrs: objAttrs,
 		Opcode:   act,
 	}
-	rHdr.Opaque = ireq.NewPack(r.t.SmallMMSA())
+	rHdr.Opaque = ireq.NewPack(r.t.ByteMM())
 
 	r.ObjectsInc()
 	r.BytesAdd(objAttrs.Size)
 	r.IncPending()
 	cb := func(hdr transport.ObjHdr, _ io.ReadCloser, _ interface{}, err error) {
-		r.t.SmallMMSA().Free(hdr.Opaque)
+		r.t.ByteMM().Free(hdr.Opaque)
 		if err != nil {
 			glog.Errorf("Failed to send %s: %v", hdr.FullName(), err)
 		}
@@ -350,7 +350,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 	req := newIntraReq(src.reqType, src.metadata, lom.Bck())
 	req.isSlice = src.isSlice
 
-	mm := r.t.SmallMMSA()
+	mm := r.t.ByteMM()
 	putData := req.NewPack(mm)
 	objAttrs := cmn.ObjAttrs{
 		Size:  src.size,

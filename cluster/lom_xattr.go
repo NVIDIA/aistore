@@ -75,7 +75,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 		size      int64
 		read      []byte
 		mdSize    = maxLmeta.Load()
-		mm        = T.SmallMMSA()
+		mm        = T.ByteMM()
 		buf, slab = mm.AllocSize(mdSize)
 	)
 	read, err = fs.GetXattrBuf(lom.FQN, XattrLOM, buf)
@@ -186,7 +186,7 @@ func (lom *LOM) flushAtime(atime time.Time) (err error) {
 
 func (lom *LOM) marshal() (buf []byte, mm *memsys.MMSA) {
 	lmsize := maxLmeta.Load()
-	mm = T.SmallMMSA()
+	mm = T.ByteMM()
 	buf = lom.md.marshal(mm, lmsize)
 	size := int64(len(buf))
 	debug.Assert(size <= xattrMaxSize)

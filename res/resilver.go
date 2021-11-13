@@ -95,7 +95,7 @@ func (res *Res) RunResilver(args Args) {
 
 	// jogger group
 	var jg *mpather.JoggerGroup
-	slab, err := res.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
+	slab, err := res.t.PageMM().GetSlab(memsys.MaxPageSlabSize)
 	debug.AssertNoErr(err)
 	jctx := &joggerCtx{xact: xact, t: res.t}
 	opts := &mpather.JoggerGroupOpts{

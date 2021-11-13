@@ -90,7 +90,7 @@ func (h *tarFileHeader) toTarHeader(size int64) *tar.Header {
 
 func newTarRecordDataReader(t cluster.Target) *tarRecordDataReader {
 	rd := &tarRecordDataReader{}
-	rd.metadataBuf, rd.slab = t.SmallMMSA().Alloc()
+	rd.metadataBuf, rd.slab = t.ByteMM().Alloc()
 	return rd
 }
 
@@ -148,7 +148,7 @@ func (t *tarExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, e
 		tr     = tar.NewReader(r)
 	)
 
-	buf, slab := t.t.MMSA().AllocSize(lom.SizeBytes())
+	buf, slab := t.t.PageMM().AllocSize(lom.SizeBytes())
 	defer slab.Free(buf)
 
 	offset := int64(0)

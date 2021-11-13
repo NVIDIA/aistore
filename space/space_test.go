@@ -48,7 +48,7 @@ func init() {
 
 func TestMain(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "LRU-Cleanup Suite")
+	RunSpecs(t, "Space Evict/Cleanup")
 }
 
 func namesFromFilesMetadatas(fileMetadata []fileMetadata) []string {
@@ -172,7 +172,7 @@ func saveRandomFiles(filesPath string, filesNumber int) {
 	}
 }
 
-var _ = Describe("LRU-Cleanup tests", func() {
+var _ = Describe("space evict/cleanup tests", func() {
 	cos.InitShortID(0)
 	Describe("Run", func() {
 		var (
@@ -186,11 +186,11 @@ var _ = Describe("LRU-Cleanup tests", func() {
 			initConfig()
 			createAndAddMountpath(basePath)
 			t = newTargetLRUMock()
-			mpaths := fs.GetAvail()
+			availablePaths := fs.GetAvail()
 			bck := cmn.Bck{Name: bucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 			bckAnother = cmn.Bck{Name: bucketNameAnother, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
-			filesPath = mpaths[basePath].MakePathCT(bck, fs.ObjectType)
-			fpAnother = mpaths[basePath].MakePathCT(bckAnother, fs.ObjectType)
+			filesPath = availablePaths[basePath].MakePathCT(bck, fs.ObjectType)
+			fpAnother = availablePaths[basePath].MakePathCT(bckAnother, fs.ObjectType)
 			cos.CreateDir(filesPath)
 			cos.CreateDir(fpAnother)
 		})
@@ -363,31 +363,31 @@ var _ = Describe("LRU-Cleanup tests", func() {
 			})
 		})
 
-		Describe("cleanup: evict trash directory", func() {
+		Describe("cleanup 'deleted'", func() {
 			var ini *space.IniCln
 			BeforeEach(func() {
 				ini = newInitStoreCln(t)
 			})
-			It("should totally evict trash directory", func() {
+			It("should remove all deleted items", func() {
 				var (
-					mpaths = fs.GetAvail()
-					mpath  = mpaths[basePath]
+					availablePaths = fs.GetAvail()
+					mi             = availablePaths[basePath]
 				)
 
 				saveRandomFiles(filesPath, 10)
 				Expect(filesPath).To(BeADirectory())
 
-				err := mpath.MoveToTrash(filesPath)
+				err := mi.MoveToDeleted(filesPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(filesPath).NotTo(BeADirectory())
 
-				files, err := os.ReadDir(mpath.MakePathTrash())
+				files, err := os.ReadDir(mi.DeletedDir())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(files)).To(Equal(1))
 
 				space.RunCleanup(ini)
 
-				files, err = os.ReadDir(mpath.MakePathTrash())
+				files, err = os.ReadDir(mi.DeletedDir())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(files)).To(Equal(0))
 			})

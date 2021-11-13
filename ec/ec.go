@@ -268,7 +268,7 @@ func (s *slice) reopenReader() (reader cos.ReadOpenCloser, err error) {
 }
 
 func Init(t cluster.Target) {
-	mm = t.MMSA()
+	mm = t.PageMM()
 
 	fs.CSM.RegisterContentType(fs.ECSliceType, &fs.ECSliceContentResolver{})
 	fs.CSM.RegisterContentType(fs.ECMetaType, &fs.ECMetaContentResolver{})

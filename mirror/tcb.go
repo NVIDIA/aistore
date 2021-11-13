@@ -94,7 +94,7 @@ func (e *tcbFactory) Start() error {
 	var (
 		config    = cmn.GCO.Get()
 		sizePDU   int32
-		slab, err = e.T.MMSA().GetSlab(memsys.MaxPageSlabSize)
+		slab, err = e.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
 	)
 	cos.AssertNoErr(err)
 	e.xact = newXactTCB(e, slab)

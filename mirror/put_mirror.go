@@ -62,7 +62,7 @@ func (*putFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (p *putFactory) Start() error {
-	slab, err := p.T.MMSA().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
+	slab, err := p.T.PageMM().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	cos.AssertNoErr(err)
 	xact, err := runXactPut(p.lom, slab, p.T)
 	if err != nil {

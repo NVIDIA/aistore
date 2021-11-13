@@ -236,7 +236,7 @@ func TestMountpathAddAndDisableMultiple(t *testing.T) {
 	tutils.AssertMountpathCount(t, 1, 1)
 }
 
-func TestMoveToTrash(t *testing.T) {
+func TestMoveToDeleted(t *testing.T) {
 	initFS()
 
 	mpath := t.TempDir()
@@ -245,11 +245,11 @@ func TestMoveToTrash(t *testing.T) {
 	mpaths := fs.GetAvail()
 	mi := mpaths[mpath]
 
-	// Initially trash directory should not exist.
-	tutils.CheckPathNotExists(t, mi.MakePathTrash())
+	// Initially .$deleted directory should not exist.
+	tutils.CheckPathNotExists(t, mi.DeletedDir())
 
 	// Removing path that don't exist is still good.
-	err := mi.MoveToTrash("/path/to/wonderland")
+	err := mi.MoveToDeleted("/path/to/wonderland")
 	tassert.CheckFatal(t, err)
 
 	for i := 0; i < 5; i++ {
@@ -262,11 +262,11 @@ func TestMoveToTrash(t *testing.T) {
 
 		tutils.CheckPathExists(t, topDir, true /*dir*/)
 
-		err = mi.MoveToTrash(topDir)
+		err = mi.MoveToDeleted(topDir)
 		tassert.CheckFatal(t, err)
 
 		tutils.CheckPathNotExists(t, topDir)
-		tutils.CheckPathExists(t, mi.MakePathTrash(), true /*dir*/)
+		tutils.CheckPathExists(t, mi.DeletedDir(), true /*dir*/)
 	}
 }
 

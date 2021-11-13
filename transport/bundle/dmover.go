@@ -71,7 +71,7 @@ var _ cluster.DataMover = (*DataMover)(nil)
 // be `Migrated`, and `RegularPut` for others(e.g, CopyBucket).
 func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, recvType cluster.RecvType,
 	extra Extra) (*DataMover, error) {
-	dm := &DataMover{t: t, config: cmn.GCO.Get(), mem: t.MMSA()}
+	dm := &DataMover{t: t, config: cmn.GCO.Get(), mem: t.PageMM()}
 	if extra.Multiplier == 0 {
 		extra.Multiplier = int(dm.config.Rebalance.Multiplier)
 	}

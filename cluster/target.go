@@ -137,9 +137,9 @@ type Target interface {
 	Sname() string
 	SID() string
 
-	// Memory related functions.
-	MMSA() *memsys.MMSA
-	SmallMMSA() *memsys.MMSA
+	// Memory allocators.
+	PageMM() *memsys.MMSA
+	ByteMM() *memsys.MMSA
 
 	// Backend provider(s) related functions.
 	Backend(*Bck) BackendProvider
@@ -158,7 +158,6 @@ type Target interface {
 	// File-system related functions.
 	FSHC(err error, path string)
 	OOS(*fs.CapStatus) fs.CapStatus
-	TrashNonExistingBucket(bck cmn.Bck)
 
 	// Getting other interfaces.
 	DB() dbdriver.Driver

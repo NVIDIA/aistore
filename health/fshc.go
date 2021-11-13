@@ -21,6 +21,8 @@ import (
 const (
 	fshcFileSize    = 10 * cos.MiB // size of temporary file which will test writing and reading the mountpath
 	fshcMaxFileList = 100          // maximum number of files to read by Readdir
+
+	fshcTemp = "fshc"
 )
 
 // When an IO error is triggered, it runs a few tests to make sure that the
@@ -135,26 +137,26 @@ func tryReadFile(fqn string) error {
 }
 
 // Creates a random file in a random directory inside a mountpath.
-func tryWriteFile(mountpath string, fileSize int64) error {
+func tryWriteFile(mpath string, fileSize int64) error {
 	const ftag = "temp file"
 	// Do not test a mountpath if it is already disabled. To avoid a race
 	// when a lot of PUTs fail and each one calls FSHC, FSHC disables
 	// the mountpath on the first run, so all other tryWriteFile are redundant
 	available, disabled := fs.Get()
-	if _, ok := disabled[mountpath]; ok {
+	if _, ok := disabled[mpath]; ok {
 		return nil
 	}
-	mpath, ok := available[mountpath]
+	mi, ok := available[mpath]
 	if !ok {
-		glog.Warningf("[fshc] Tried to write %s to non-existing mountpath %q", ftag, mountpath)
+		glog.Warningf("[fshc] Tried to write %s to non-existing mountpath %q", ftag, mpath)
 		return nil
 	}
 
-	pathTrash := mpath.MakePathTrash()
-	if err := cos.CreateDir(pathTrash); err != nil {
-		return fmt.Errorf("failed to create directory %s: %w", pathTrash, err)
+	tmpDir := mi.TempDir(fshcTemp)
+	if err := cos.CreateDir(tmpDir); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", tmpDir, err)
 	}
-	tmpFileName := filepath.Join(pathTrash, "fshc-try-write-"+cos.RandString(10))
+	tmpFileName := filepath.Join(tmpDir, "fshc-try-write-"+cos.RandString(10))
 	tmpFile, err := fs.DirectOpen(tmpFileName, os.O_RDWR|os.O_CREATE|os.O_TRUNC, cos.PermRWR)
 	if err != nil {
 		return fmt.Errorf("failed to create %s, err: %w", ftag, err)

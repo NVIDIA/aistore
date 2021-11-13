@@ -33,6 +33,12 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+const (
+	bmdFixup = "fixup"
+	bmdRecv  = "receive"
+	bmdReg   = "register"
+)
+
 func (t *targetrunner) joinCluster(action string, primaryURLs ...string) (status int, err error) {
 	res := t.join(nil, primaryURLs...)
 	defer _freeCallRes(res)
@@ -78,7 +84,7 @@ func (t *targetrunner) applyRegMeta(action string, body []byte, caller string) (
 	reb.ActivateTimedGFN()
 
 	// BMD
-	if err = t.receiveBMD(regMeta.BMD, msg, nil /*ms payload */, bucketMDRegister, caller, true /*silent*/); err != nil {
+	if err = t.receiveBMD(regMeta.BMD, msg, nil /*ms payload */, bmdReg, caller, true /*silent*/); err != nil {
 		if isErrDowngrade(err) {
 			err = nil
 		} else {
@@ -625,13 +631,13 @@ func (t *targetrunner) _postBMD(tag string, rmbcks []*cluster.Bck) {
 			}
 		}(rmbcks...)
 	}
-	if tag != bucketMDRegister {
+	if tag != bmdReg {
 		// ecmanager will get updated BMD upon its init()
 		if err := ec.ECM.BucketsMDChanged(); err != nil {
 			glog.Errorf("Failed to initialize EC manager: %v", err)
 		}
 	}
-	// refresh used/avail capacity and run LRU if need be (in part, to remove $trash)
+	// since some buckets may have been destroyed
 	if cs := fs.GetCapStatus(); cs.Err != nil {
 		_ = t.OOS(nil)
 	}
@@ -763,7 +769,7 @@ func (t *targetrunner) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
 	if daemon.stopping.Load() {
 		return
 	}
-	if err := t.receiveBMD(newBucketMD, msg, nil, bucketMDFixup, caller, true /*silent*/); err != nil && !isErrDowngrade(err) {
+	if err := t.receiveBMD(newBucketMD, msg, nil, bmdFixup, caller, true /*silent*/); err != nil && !isErrDowngrade(err) {
 		glog.Error(err)
 	}
 }
@@ -822,7 +828,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 		errSmap = t.receiveSmap(newSmap, msgSmap, payload, caller, nil)
 	}
 	if errBMD == nil && newBMD != nil {
-		errBMD = t.receiveBMD(newBMD, msgBMD, payload, bucketMDReceive, caller, false /*silent*/)
+		errBMD = t.receiveBMD(newBMD, msgBMD, payload, bmdRecv, caller, false /*silent*/)
 	}
 	if errRMD == nil && newRMD != nil {
 		errRMD = t.receiveRMD(newRMD, msgRMD, caller)

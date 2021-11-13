@@ -286,7 +286,7 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 }
 
 func (c *putJogger) ctSendCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ interface{}, err error) {
-	c.parent.t.SmallMMSA().Free(hdr.Opaque)
+	c.parent.t.ByteMM().Free(hdr.Opaque)
 	if err != nil {
 		glog.Errorf("failed to send o[%s]: %v", hdr.FullName(), err)
 	}
@@ -310,7 +310,7 @@ func (c *putJogger) cleanup(lom *cluster.LOM) error {
 		return err
 	}
 
-	mm := c.parent.t.SmallMMSA()
+	mm := c.parent.t.ByteMM()
 	request := newIntraReq(reqDel, nil, lom.Bck()).NewPack(mm)
 	o := transport.AllocSend()
 	o.Hdr = transport.ObjHdr{Bck: lom.Bucket(), ObjName: lom.ObjName, Opaque: request, Opcode: reqDel}

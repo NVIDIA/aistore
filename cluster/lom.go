@@ -85,7 +85,7 @@ func Init(t Target) {
 		return
 	}
 	initLomLocker()
-	initLomCacheHK(t.MMSA(), t)
+	initLomCacheHK(t.PageMM(), t)
 	T = t
 }
 
@@ -422,7 +422,7 @@ func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 		return true // nothing to do
 	}
 	availablePaths := fs.GetAvail()
-	buf, slab := T.MMSA().Alloc()
+	buf, slab := T.PageMM().Alloc()
 	for path, mi := range availablePaths {
 		if path == lom.mpathInfo.Path {
 			continue

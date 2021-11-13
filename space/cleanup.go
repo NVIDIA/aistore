@@ -49,7 +49,7 @@ type (
 		ini     IniCln
 		cs      struct {
 			a fs.CapStatus // initial
-			b fs.CapStatus // post removal of 'deleted' ($trash)
+			b fs.CapStatus // capacity after removing 'deleted'
 			c fs.CapStatus // upon finishing
 		}
 		jcnt atomic.Int32
@@ -199,7 +199,7 @@ func (j *clnJ) run(providers []string) {
 		err, erm error
 	)
 	defer j.p.wg.Done()
-	erm = j.removeTrash()
+	erm = j.removeDeleted()
 	if erm != nil {
 		glog.Error(erm)
 	}
@@ -260,7 +260,12 @@ func (j *clnJ) jogBcks(bcks []cmn.Bck) (size int64, rerr error) {
 		err = b.Init(bowner)
 		if err != nil {
 			if cmn.IsErrBckNotFound(err) || cmn.IsErrRemoteBckNotFound(err) {
-				j.ini.T.TrashNonExistingBucket(bck)
+				const act = "delete non-existing"
+				if err = fs.DestroyBucket(act, bck, 0 /*unknown bid*/); err == nil {
+					glog.Infof("%s: %s %s", j, act, bck)
+				} else {
+					glog.Errorf("%s: failed to %s %s, err %v", j, act, bck, err)
+				}
 			} else {
 				// TODO: config option to scrub `fs.AllMpathBcks` buckets
 				glog.Errorf("%s: %v - skipping %s", j, err, bck)
@@ -276,40 +281,15 @@ func (j *clnJ) jogBcks(bcks []cmn.Bck) (size int64, rerr error) {
 	return
 }
 
-func (j *clnJ) removeTrash() (rerr error) {
-	trashDir := j.mi.MakePathTrash()
-	dentries, err := os.ReadDir(trashDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			cos.CreateDir(trashDir)
-			err = nil
-		}
-		rerr = err
-		goto ret
-	}
-	for _, dent := range dentries {
-		fqn := filepath.Join(trashDir, dent.Name())
-		if !dent.IsDir() {
-			glog.Errorf("%s: unexpected non-directory item %q in 'deleted'", j, fqn)
-			continue
-		}
-		if err = os.RemoveAll(fqn); err == nil {
-			continue
-		}
-		if !os.IsNotExist(err) {
-			glog.Errorf("%s: failed to remove %q from 'deleted', err %v", j, fqn, err)
-			if rerr == nil {
-				rerr = err
-			}
-		}
-	}
-ret:
+func (j *clnJ) removeDeleted() (err error) {
+	var errCap error
+	err = j.mi.RemoveDeleted(j.String())
 	if cnt := j.p.jcnt.Dec(); cnt > 0 {
 		return
 	}
-	j.p.cs.b, err = fs.RefreshCapStatus(nil, nil)
+	j.p.cs.b, errCap = fs.RefreshCapStatus(nil, nil)
 	if err != nil {
-		glog.Errorf("%s: %v", j, err)
+		glog.Errorf("%s: %v", j, errCap)
 	} else {
 		if j.p.cs.b.Err != nil {
 			glog.Warningf("%s post-rm('deleted'), %s", j.ini.Xaction, j.p.cs.b)

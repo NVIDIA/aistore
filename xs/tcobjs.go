@@ -205,7 +205,7 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 
 func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) {
 	objNameTo := wi.msg.ToName(lom.ObjName)
-	buf, slab := lri.t.MMSA().Alloc()
+	buf, slab := lri.t.PageMM().Alloc()
 	params := &cluster.CopyObjectParams{}
 	{
 		params.BckTo = wi.r.args.BckTo

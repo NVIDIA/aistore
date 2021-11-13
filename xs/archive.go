@@ -163,7 +163,7 @@ func (r *XactCreateArchMultiObj) Begin(msg *cmn.ArchiveMsg) (err error) {
 		if err != nil {
 			return
 		}
-		wi.buf, _ = r.p.T.MMSA().Alloc()
+		wi.buf, _ = r.p.T.PageMM().Alloc()
 		switch msg.Mime {
 		case cos.ExtTar:
 			tw := &tarWriter{}
@@ -332,7 +332,7 @@ func (r *XactCreateArchMultiObj) fini(wi *archwi) (errCode int, err error) {
 	var size int64
 
 	wi.writer.fini()
-	r.p.T.MMSA().Free(wi.buf)
+	r.p.T.PageMM().Free(wi.buf)
 
 	if size, err = wi.finalize(); err != nil {
 		return http.StatusInternalServerError, err

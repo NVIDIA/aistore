@@ -25,8 +25,6 @@ import (
 	"github.com/OneOfOne/xxhash"
 )
 
-const TrashDir = "$trash"
-
 const nodeXattrID = "user.ais.daemon_id"
 
 // enum MountpathInfo.Flags
@@ -173,59 +171,6 @@ func (mi *MountpathInfo) EvictLomCache() {
 			return true
 		})
 	}
-}
-
-func (mi *MountpathInfo) MakePathTrash() string { return filepath.Join(mi.Path, TrashDir) }
-
-// MoveToTrash removes directory in steps:
-// 1. Synchronously gets temporary directory name
-// 2. Synchronously renames old folder to temporary directory
-func (mi *MountpathInfo) MoveToTrash(dir string) error {
-	if err := Access(dir); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		glog.Errorf("%s: %v", mi, err)
-	}
-	cs := GetCapStatus()
-	if cs.Err != nil {
-		if err := os.RemoveAll(dir); err != nil {
-			glog.Errorf("FATAL: %s %s: failed to remove, err: %v", mi, cs, err)
-			return err
-		}
-		glog.Errorf("%s %s: removed %q instead of placing it in 'deleted'", mi, cs, dir)
-		return nil
-	}
-tmpExists:
-	trashDir := mi.MakePathTrash()
-	tmpDir := filepath.Join(trashDir, fmt.Sprintf("$dir-%d", mono.NanoTime()))
-	err := cos.CreateDir(trashDir)
-	if err != nil {
-		if cos.IsErrOOS(err) {
-			goto oos
-		}
-		return err
-	}
-	err = os.Rename(dir, tmpDir)
-	if err == nil {
-		return nil
-	}
-	if os.IsExist(err) {
-		glog.Warningf("%q already exists in 'deleted'", tmpDir) // should never happen
-		goto tmpExists
-	}
-	if os.IsNotExist(err) {
-		return nil // benign
-	}
-	if !cos.IsErrOOS(err) {
-		return err
-	}
-oos:
-	glog.Errorf("%s %s: OOS (err=%v) - not recycling via 'deleted', removing %q right away", mi, cs, err, dir)
-	if nested := os.RemoveAll(dir); nested != nil {
-		glog.Errorf("FATAL: %s (%v, %v)", mi, err, nested)
-	}
-	return err
 }
 
 func (mi *MountpathInfo) IsIdle(config *cmn.Config) bool {
@@ -970,7 +915,7 @@ func DestroyBucket(op string, bck cmn.Bck, bid uint64) (err error) {
 	)
 	for _, mi := range availablePaths {
 		dir := mi.makeDelPathBck(bck, bid)
-		if errMv := mi.MoveToTrash(dir); errMv != nil {
+		if errMv := mi.MoveToDeleted(dir); errMv != nil {
 			glog.Errorf("%s %q: failed to destroy dir %q: %v", op, bck, dir, errMv)
 		} else {
 			n++

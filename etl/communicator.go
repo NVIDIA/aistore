@@ -122,7 +122,7 @@ func makeCommunicator(args commArgs) Communicator {
 	case PushCommType:
 		return &pushComm{
 			baseComm: baseComm,
-			mem:      args.bootstraper.t.MMSA(),
+			mem:      args.bootstraper.t.PageMM(),
 			uri:      args.bootstraper.uri,
 		}
 	case RedirectCommType:
@@ -146,7 +146,7 @@ func makeCommunicator(args commArgs) Communicator {
 	case IOCommType:
 		return &pushComm{
 			baseComm: baseComm,
-			mem:      args.bootstraper.t.MMSA(),
+			mem:      args.bootstraper.t.PageMM(),
 			uri:      args.bootstraper.uri,
 			command:  args.bootstraper.originalCommand,
 		}
