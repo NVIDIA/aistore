@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools"
 	"github.com/NVIDIA/aistore/devtools/tlog"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 const (
@@ -81,6 +82,9 @@ var (
 	AuthToken string
 
 	DevtoolsCtx *devtools.Ctx
+
+	pmm *memsys.MMSA
+	smm *memsys.MMSA
 )
 
 func init() {
@@ -97,6 +101,8 @@ func init() {
 		Log:    tlog.Logf,
 	}
 }
+
+func InitMM(pageMM, byteMM *memsys.MMSA) { pmm, smm = pageMM, byteMM }
 
 // InitLocalCluster initializes tutils component with AIS cluster that must be either:
 //  1. the cluster must be deployed locally using `make deploy` command and accessible @ localhost:8080, or

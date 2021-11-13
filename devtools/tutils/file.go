@@ -161,7 +161,11 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 		return nil
 	}
 
-	tMock = cluster.NewTargetMock(bmd)
+	if pmm != nil {
+		tMock = cluster.NewTargetMock(bmd, pmm, smm)
+	} else {
+		tMock = cluster.NewTargetMock(bmd)
+	}
 
 	errs := fs.CreateBucket("testing", bck, false /*nilbmd*/)
 	if len(errs) > 0 {

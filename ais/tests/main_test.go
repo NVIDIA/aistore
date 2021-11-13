@@ -27,7 +27,7 @@ var (
 	proxyURL   string
 	baseParams api.BaseParams
 
-	mmsa *memsys.MMSA
+	pmm, smm *memsys.MMSA
 )
 
 func setBucket() (bck cmn.Bck, err error) {
@@ -126,8 +126,10 @@ func TestMain(m *testing.M) {
 
 	rand.Seed(time.Now().UnixNano())
 
-	mmsa = memsys.TestPageMM()
-	readers.Init(mmsa)
+	pmm = memsys.TestPageMM()
+	smm = memsys.TestByteMM(pmm)
+	readers.Init(pmm)
+	tutils.InitMM(pmm, smm)
 
 	m.Run()
 	return

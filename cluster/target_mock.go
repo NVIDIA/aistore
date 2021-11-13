@@ -8,6 +8,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -19,19 +20,53 @@ import (
 // interface guard
 var _ Target = (*TargetMock)(nil)
 
-// TargetMock implements Target interface with mocked return values.
-type TargetMock struct {
-	BO Bowner
+var (
+	pmm  *memsys.MMSA
+	smm  *memsys.MMSA
+	once sync.Once
+)
+
+// unit tests only
+func _init() {
+	pmm = memsys.TestPageMM()
+	smm = memsys.TestByteMM(pmm)
 }
 
-func NewTargetMock(bo Bowner) *TargetMock {
+// TargetMock implements Target interface with mocked return values.
+type TargetMock struct {
+	BO  Bowner
+	pmm *memsys.MMSA
+	smm *memsys.MMSA
+}
+
+func NewTargetMock(bo Bowner, mm ...*memsys.MMSA) *TargetMock {
 	t := &TargetMock{BO: bo}
 	T = t
 	initLomLocker()
+	if len(mm) > 0 {
+		t.pmm, t.smm = mm[0], mm[1]
+	}
 	return t
 }
 
-func (t *TargetMock) Bowner() Bowner         { return t.BO }
+func (t *TargetMock) Bowner() Bowner { return t.BO }
+
+func (t *TargetMock) PageMM() *memsys.MMSA {
+	if t.pmm != nil {
+		return t.pmm
+	}
+	once.Do(_init)
+	return pmm
+}
+
+func (t *TargetMock) ByteMM() *memsys.MMSA {
+	if t.smm != nil {
+		return t.smm
+	}
+	once.Do(_init)
+	return smm
+}
+
 func (*TargetMock) Sname() string            { return "" }
 func (*TargetMock) SID() string              { return "" }
 func (*TargetMock) Snode() *Snode            { return nil }
@@ -39,8 +74,6 @@ func (*TargetMock) ClusterStarted() bool     { return true }
 func (*TargetMock) NodeStarted() bool        { return true }
 func (*TargetMock) DataClient() *http.Client { return http.DefaultClient }
 func (*TargetMock) Sowner() Sowner           { return nil }
-func (*TargetMock) PageMM() *memsys.MMSA     { return memsys.PageMM() }
-func (*TargetMock) ByteMM() *memsys.MMSA     { return memsys.ByteMM() }
 
 func (*TargetMock) PutObject(*LOM, PutObjectParams) error                   { return nil }
 func (*TargetMock) FinalizeObj(*LOM, string) (int, error)                   { return 0, nil }
