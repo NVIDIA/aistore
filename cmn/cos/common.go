@@ -306,6 +306,14 @@ func Printf(format string, a ...interface{}) {
 	}
 }
 
+func Errorf(format string, a ...interface{}) {
+	if flag.Parsed() {
+		glog.ErrorDepth(1, fmt.Sprintf(format, a...))
+	} else {
+		fmt.Fprintf(os.Stderr, format+"\n", a...)
+	}
+}
+
 // FreeMemToOS calls GC and returns allocated memory to OS after that
 // Use to clean up memory after a huge amount of memory becomes "free" to
 // return it to OS immediately without waiting for GC does it automatically

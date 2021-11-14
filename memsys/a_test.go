@@ -68,7 +68,7 @@ func Test_Sleep(t *testing.T) {
 	}
 
 	mem := &memsys.MMSA{TimeIval: time.Second * 20, MinFree: cos.GiB, Name: "amem"}
-	err := mem.Init(false /*panic env err*/, false /*panic insuff mem err*/)
+	err := mem.Init(0, false /*panic env err*/, false /*panic insuff mem*/)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func Test_NoSleep(t *testing.T) {
 	}
 
 	mem := &memsys.MMSA{TimeIval: time.Second * 20, MinPctTotal: 5, Name: "bmem"}
-	err := mem.Init(false /*panic env err*/, false /*panic insuff mem err*/)
+	err := mem.Init(0, false /*panic env err*/, false /*panic insuff mem*/)
 	if err != nil {
 		t.Fatal(err)
 	}

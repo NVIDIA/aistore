@@ -1,15 +1,13 @@
 // Package memsys provides memory management and slab/SGL allocation with io.Reader and io.Writer interfaces
 // on top of scatter-gather lists of reusable buffers.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package memsys
 
 import (
-	"flag"
 	"fmt"
 	"os"
-	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -19,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/sys"
 )
 
@@ -121,12 +118,13 @@ const NumStats = NumPageSlabs // NOTE: must be greater or equal NumSmallSlabs, o
 //  Other important defaults are also commented below.
 // =================================== MMSA config defaults ==========================================
 const (
-	minDepth   = 128                   // ring cap min; default ring growth increment
-	loadAvg    = 10                    // "idle" load average to deallocate Slabs when below
-	sizeToGC   = cos.GiB * 2           // see heuristics ("Heu")
-	minMemFree = cos.GiB + cos.MiB*256 // default minimum memory - see extended comment above
+	minDepth   = 128                  // ring cap min; default ring growth increment
+	loadAvg    = 10                   // "idle" load average to deallocate Slabs when below
+	sizeToGC   = cos.GiB * 2          // see heuristics ("Heu")
+	minMemFree = cos.GiB + cos.GiB>>1 // default minimum memory (see description above)
 
 	minMemFreeTests = cos.MiB * 320 // minimum free to run tests
+	maxMemUsedTests = cos.GiB * 6   // maximum tests allowed to allocate
 )
 
 const (
@@ -141,15 +139,6 @@ const (
 )
 
 const swappingMax = 4 // make sure that `swapping` condition, once noted, lingers for a while
-
-// memory pressure
-const (
-	MemPressureLow = iota
-	MemPressureModerate
-	MemPressureHigh
-	MemPressureExtreme
-	OOM
-)
 
 type (
 	Slab struct {
@@ -208,222 +197,25 @@ type (
 	}
 )
 
-var (
-	gmm              *MMSA     // page-based MMSA for usage by packages *other than* `ais`
-	smm              *MMSA     // memory manager for *small-size* allocations
-	gmmOnce, smmOnce sync.Once // ensures singleton-ness
-
-	memPressureText = map[int]string{
-		MemPressureLow:      "low",
-		MemPressureModerate: "moderate",
-		MemPressureHigh:     "high",
-		MemPressureExtreme:  "extreme",
-		OOM:                 "OOM",
-	}
-
-	verbose bool
-)
-
-func init() {
-	gmm = &MMSA{Name: gmmName, defBufSize: DefaultBufSize}
-	smm = &MMSA{Name: smmName, defBufSize: DefaultSmallBufSize}
-	verbose = bool(glog.FastV(4, glog.SmoduleMemsys))
-}
-
-// default page-based memory-manager-slab-allocator (MMSA) for packages other than `ais`
-func PageMM() *MMSA {
-	gmmOnce.Do(func() {
-		gmm.Init(false, true)
-		if smm != nil {
-			smm.sibling = gmm
-			gmm.sibling = smm
-		}
-	})
-	return gmm
-}
-
-// default small-size MMSA
-func ByteMM() *MMSA {
-	smmOnce.Do(func() {
-		smm.Init(false, true)
-		if gmm != nil {
-			gmm.sibling = smm
-			smm.sibling = gmm
-		}
-	})
-	return smm
-}
-
-func TestPageMM(name ...string) (mm *MMSA) {
-	mm = &MMSA{defBufSize: DefaultBufSize, MinFree: minMemFreeTests}
-	if len(name) == 0 {
-		mm.Name = "pmm.test"
-	} else {
-		mm.Name = name[0]
-	}
-	mm.Init(true, true)
-	return
-}
-
-func TestByteMM(pmm *MMSA) (mm *MMSA) {
-	mm = &MMSA{Name: "smm.test", defBufSize: DefaultSmallBufSize, MinFree: minMemFreeTests}
-	mm.Init(true, true)
-	mm.sibling = pmm
-	if pmm != nil {
-		pmm.sibling = mm
-	}
-	return
-}
-
 //////////
 // MMSA //
 //////////
 
 func (r *MMSA) String() string {
-	minfree := cos.B2S(int64(r.MinFree), 0)
-	lowwm := cos.B2S(int64(r.lowWM), 0)
-	s := fmt.Sprintf("%s[min-free %s, low-wm %s", r.Name, minfree, lowwm)
-	if r.MinPctTotal == 0 && r.MinPctFree == 0 {
-		return s + "]"
-	}
-	return fmt.Sprintf("%s, %%-total %d, %%-free %d]", s, r.MinPctTotal, r.MinPctFree)
+	mem, err := sys.Mem()
+	debug.AssertNoErr(err)
+	return r.Str(&mem)
 }
 
-func (r *MMSA) MemPressure2S(p int) (s string) {
-	s = fmt.Sprintf("pressure '%s'", memPressureText[p])
-	if a, b := r.swap.Load(), r.swapCriticality.Load(); a != 0 || b != 0 {
-		s = fmt.Sprintf("swapping(%s, criticality '%d'), %s", cos.B2S(int64(a), 0), b, s)
-	}
-	return
-}
-
-// defines the type of Slab rings: NumSmallSlabs x 128 vs NumPageSlabs x 4K
-func (r *MMSA) isSmall() bool { return r.defBufSize == DefaultSmallBufSize }
-
-func (r *MMSA) RegWithHK() {
-	d := r.duration
-	mem, _ := sys.Mem()
-	if mem.Free < r.lowWM || mem.Free < minMemFree {
-		d = r.duration / 4
-		if d < 10*time.Second {
-			d = 10 * time.Second
-		}
-	}
-	hk.Reg(r.Name+".gc", r.garbageCollect, d)
-}
-
-// initialize new MMSA instance
-func (r *MMSA) Init(panicOnEnvErr, panicOnInsufFreeErr bool) (err error) {
-	debug.Assert(r.Name != "")
-	// 1. environment overrides defaults and MMSA{...} hard-codings
-	if err = r.env(); err != nil {
-		if panicOnEnvErr {
-			panic(err)
-		}
-		glog.Error(err)
-	}
-	// 2. compute minFree - mem size that must remain free at all times
-	mem, _ := sys.Mem()
-	if r.MinPctTotal > 0 {
-		x := mem.Total * uint64(r.MinPctTotal) / 100
-		if r.MinFree == 0 {
-			r.MinFree = x
-		} else {
-			r.MinFree = cos.MinU64(r.MinFree, x)
-		}
-	}
-	if r.MinPctFree > 0 {
-		x := mem.Free * uint64(r.MinPctFree) / 100
-		if r.MinFree == 0 {
-			r.MinFree = x
-		} else {
-			r.MinFree = cos.MinU64(r.MinFree, x)
-		}
-	}
-	if r.MinFree == 0 {
-		r.MinFree = minMemFree
-	} else if r.MinFree < cos.GiB { // warn invalid config
-		cos.Printf("Warning: configured minimum free memory %s < %s (actual free %s)\n",
-			cos.B2S(int64(r.MinFree), 2), cos.B2S(minMemFree, 2), cos.B2S(int64(mem.Free), 1))
-	}
-	// 3. validate actual
-	required, actual := cos.B2S(int64(r.MinFree), 2), cos.B2S(int64(mem.Free), 2)
-	if mem.Free < r.MinFree {
-		err = fmt.Errorf("insufficient free memory %s, minimum required %s (see %s for guidance)",
-			actual, required, readme)
-		if panicOnInsufFreeErr {
-			panic(err)
-		}
-		glog.Error(err)
-	}
-	x := cos.MaxU64(r.MinFree*2, (r.MinFree+mem.Free)/2)
-	r.lowWM = cos.MinU64(x, r.MinFree*3) // Heu #1: hysteresis
-
-	// 4. timer
-	if r.TimeIval == 0 {
-		r.TimeIval = memCheckAbove
-	}
-	r.duration = r.TimeIval
-
-	// 5. final construction steps
-	r.swap.Store(mem.SwapUsed)
-	r.minDepth.Store(minDepth)
-	r.toGC.Store(0)
-
-	// init rings and slabs
-	r.slabIncStep, r.maxSlabSize, r.numSlabs = PageSlabIncStep, MaxPageSlabSize, NumPageSlabs
-	if r.isSmall() {
-		r.slabIncStep, r.maxSlabSize, r.numSlabs = SmallSlabIncStep, MaxSmallSlabSize, NumSmallSlabs
-	}
-	r.slabStats = &slabStats{}
-	r.statsSnapshot = &Stats{}
-	r.rings = make([]*Slab, r.numSlabs)
-	r.sorted = make([]*Slab, r.numSlabs)
-	for i := 0; i < r.numSlabs; i++ {
-		bufSize := r.slabIncStep * int64(i+1)
-		slab := &Slab{
-			m:       r,
-			tag:     r.Name + "." + cos.B2S(bufSize, 0),
-			bufSize: bufSize,
-			get:     make([][]byte, 0, minDepth),
-			put:     make([][]byte, 0, minDepth),
-		}
-		slab.pMinDepth = &r.minDepth
-		r.rings[i] = slab
-		r.sorted[i] = slab
-	}
-
-	// 6. GC at init time but only non-small
-	if !r.isSmall() {
-		runtime.GC()
-	}
-	debug.Func(func() {
-		if flag.Parsed() {
-			debug.Infof("%s started", r)
-		}
-	})
-	return
-}
-
-// terminate this MMSA instance and, possibly, GC as well
-func (r *MMSA) Terminate(unregHK bool) {
+func (r *MMSA) Str(mem *sys.MemStat) string {
 	var (
-		freed int64
-		gced  string
+		used, free, afree = cos.B2S(int64(mem.Used), 0), cos.B2S(int64(mem.Free), 0), cos.B2S(int64(mem.ActualFree), 0)
+		pressure, _       = r.MemPressure(mem)
+		minfree           = cos.B2S(int64(r.MinFree), 0)
+		lowwm             = cos.B2S(int64(r.lowWM), 0)
 	)
-	if unregHK {
-		hk.Unreg(r.Name + ".gc")
-	}
-	for _, s := range r.rings {
-		freed += s.cleanup()
-	}
-	r.toGC.Add(freed)
-	mem, _ := sys.Mem()
-	swapping := mem.SwapUsed > 0
-	if r.doGC(mem.Free, sizeToGC, true, swapping) {
-		gced = ", GC ran"
-	}
-	debug.Infof("%s terminated%s", r, gced)
+	return fmt.Sprintf("%s[(used %s, free %s, actfree %s), (min-free %s, low-wm %s), %s]", r.Name,
+		used, free, afree, minfree, lowwm, r.MemPressure2S(pressure))
 }
 
 // allocate SGL
@@ -467,50 +259,6 @@ func (r *MMSA) NewSGL(immediateSize int64, sbufSize ...int64) *SGL {
 	}
 	slab.muget.Unlock()
 	return z
-}
-
-// returns an estimate for the current memory pressure expressed as enumerated values
-// also, tracks swapping stateful vars
-func (r *MMSA) MemPressure(mems ...*sys.MemStat) (pressure int, swapping bool) {
-	var (
-		mem   *sys.MemStat
-		ncrit int32
-	)
-	// 1. get mem stats
-	if len(mems) > 0 {
-		mem = mems[0]
-	} else {
-		memStat, err := sys.Mem()
-		debug.AssertNoErr(err)
-		mem = &memStat
-	}
-
-	// 2. update swapping state
-	swapping, crit := mem.SwapUsed > r.swap.Load(), r.swapCriticality.Load()
-	if swapping {
-		ncrit = cos.MinI32(swappingMax, crit+1)
-	} else {
-		ncrit = cos.MaxI32(0, crit-1)
-	}
-	r.swapCriticality.Store(ncrit)
-	r.swap.Store(mem.SwapUsed)
-
-	// 3. recompute mem pressure
-	switch {
-	case ncrit > 2:
-		return OOM, swapping
-	case ncrit > 1 || mem.ActualFree <= r.MinFree || swapping:
-		return MemPressureExtreme, swapping
-	case ncrit > 0 || mem.Free <= r.MinFree:
-		return MemPressureHigh, swapping
-	case mem.Free >= r.lowWM:
-		return MemPressureLow, swapping
-	}
-	x := (mem.Free - r.MinFree) * 100 / (r.lowWM - r.MinFree)
-	if x <= 25 {
-		return MemPressureHigh, swapping
-	}
-	return MemPressureModerate, swapping
 }
 
 // gets Slab for a given fixed buffer size that must be within expected range of sizes
@@ -720,7 +468,7 @@ func (s *Slab) reduce(todepth int, isIdle, force bool) (freed int64) {
 	}
 	if cnt > 0 {
 		if verbose {
-			glog.Infof("%s(f=%t, i=%t): reduce lput %d => %d", s.tag, force, isIdle, lput, lput-cnt)
+			glog.Infof("%s(f=%t, i=%t): reduce lput %d => %d", s.tag, force, isIdle, lput, lput-cnt) // DEBUG
 		}
 		for ; cnt > 0; cnt-- {
 			lput--

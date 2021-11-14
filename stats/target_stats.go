@@ -6,7 +6,6 @@
 package stats
 
 import (
-	"fmt"
 	"strconv"
 	"time"
 	"unsafe"
@@ -263,14 +262,8 @@ func (r *Trunner) log(now int64, uptime time.Duration) {
 	memStat, err := sys.Mem()
 	debug.AssertNoErr(err)
 	if memStat.Used > memStat.Total>>1 {
-		used, free, afree := cos.B2S(int64(memStat.Used), 0), cos.B2S(int64(memStat.Free), 0), cos.B2S(int64(memStat.ActualFree), 0)
-		swap := cos.B2S(int64(memStat.SwapUsed), 0)
-		sysln := fmt.Sprintf("memory: (used %s, free %s, actfree %s, swap %s)", used, free, afree, swap)
-
 		mm := r.T.PageMM()
-		pressure, _ := mm.MemPressure(&memStat)
-		ln := fmt.Sprintf("%s, %s(%s)", sysln, mm, mm.MemPressure2S(pressure))
-		r.lines = append(r.lines, ln)
+		r.lines = append(r.lines, mm.Str(&memStat))
 	}
 
 	// 5. log

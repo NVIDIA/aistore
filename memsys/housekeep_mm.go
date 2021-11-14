@@ -106,7 +106,8 @@ func (r *MMSA) garbageCollect() time.Duration {
 	// 5. reduce
 	for _, s := range r.sorted { // idle first
 		idle := r.statsSnapshot.Idle[s.ringIdx()]
-		if freed := s.reduce(depth, idle > 0, true /* force */); freed > 0 {
+		freed := s.reduce(depth, idle > 0, true /* force */)
+		if freed > 0 {
 			r.toGC.Add(freed)
 			if r.doGC(mem.Free, limit, true, swapping) {
 				goto timex
