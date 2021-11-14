@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
@@ -162,9 +163,9 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 	}
 
 	if pmm != nil {
-		tMock = cluster.NewTargetMock(bmd, pmm, smm)
+		tMock = mock.NewTarget(bmd, pmm, smm)
 	} else {
-		tMock = cluster.NewTargetMock(bmd)
+		tMock = mock.NewTarget(bmd)
 	}
 
 	errs := fs.CreateBucket("testing", bck, false /*nilbmd*/)

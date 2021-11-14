@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
@@ -44,7 +45,6 @@ var _ = Describe("LOM Xattributes", func() {
 				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, MDWrite: "never", BID: 202},
 			),
 		)
-		tMock cluster.Target
 	)
 
 	BeforeEach(func() {
@@ -58,8 +58,7 @@ var _ = Describe("LOM Xattributes", func() {
 		available := fs.GetAvail()
 		copyMpathInfo = available[copyMpath]
 
-		tMock = cluster.NewTargetMock(bmdMock)
-		cluster.Init(tMock)
+		_ = mock.NewTarget(bmdMock)
 	})
 
 	AfterEach(func() {

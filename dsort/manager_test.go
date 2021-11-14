@@ -12,7 +12,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
@@ -29,7 +29,7 @@ var _ = Describe("Init", func() {
 	})
 
 	It("should init with tar extension", func() {
-		m := &Manager{ctx: dsortContext{t: cluster.NewTargetMock(nil)}}
+		m := &Manager{ctx: dsortContext{t: mock.NewTarget(nil)}}
 		m.lock()
 		defer m.unlock()
 		sr := &ParsedRequestSpec{Extension: cos.ExtTar, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
@@ -38,7 +38,7 @@ var _ = Describe("Init", func() {
 	})
 
 	It("should init with tgz extension", func() {
-		m := &Manager{ctx: dsortContext{t: cluster.NewTargetMock(nil)}}
+		m := &Manager{ctx: dsortContext{t: mock.NewTarget(nil)}}
 		m.lock()
 		defer m.unlock()
 		sr := &ParsedRequestSpec{Extension: cos.ExtTarTgz, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
@@ -47,7 +47,7 @@ var _ = Describe("Init", func() {
 	})
 
 	It("should init with tar.gz extension", func() {
-		m := &Manager{ctx: dsortContext{t: cluster.NewTargetMock(nil)}}
+		m := &Manager{ctx: dsortContext{t: mock.NewTarget(nil)}}
 		m.lock()
 		defer m.unlock()
 		sr := &ParsedRequestSpec{Extension: cos.ExtTgz, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
@@ -56,7 +56,7 @@ var _ = Describe("Init", func() {
 	})
 
 	It("should init with zip extension", func() {
-		m := &Manager{ctx: dsortContext{t: cluster.NewTargetMock(nil)}}
+		m := &Manager{ctx: dsortContext{t: mock.NewTarget(nil)}}
 		m.lock()
 		defer m.unlock()
 		sr := &ParsedRequestSpec{Extension: cos.ExtZip, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}

@@ -81,11 +81,10 @@ var (
 
 func Init(t Target) {
 	initBckLocker()
-	if t == nil {
+	if t == nil { // am proxy
 		return
 	}
 	initLomLocker()
-	initLomCacheHK(t.PageMM(), t)
 	T = t
 }
 

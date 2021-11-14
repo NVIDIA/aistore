@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dbdriver"
@@ -271,7 +272,7 @@ func (tctx *testContext) setup() {
 			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}},
 		),
 	)
-	ctx.t = cluster.NewTargetMock(bmdMock)
+	ctx.t = mock.NewTarget(bmdMock)
 
 	tctx.smap = smap
 	tctx.targets = targets

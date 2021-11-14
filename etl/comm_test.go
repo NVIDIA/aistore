@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
@@ -60,7 +61,7 @@ var _ = Describe("CommunicatorTest", func() {
 		_, err = fs.Add(mpath, "daeID")
 		Expect(err).NotTo(HaveOccurred())
 
-		tMock = cluster.NewTargetMock(bmdMock)
+		tMock = mock.NewTarget(bmdMock)
 		// cluster.InitLomLocker(tMock)
 
 		// Create an object.

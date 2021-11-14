@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
@@ -71,7 +72,7 @@ func TestXactionRenewPrefetch(t *testing.T) {
 			"test", cmn.ProviderGoogle, cmn.NsGlobal,
 			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}},
 		)
-		tMock = cluster.NewTargetMock(bmd)
+		tMock = mock.NewTarget(bmd)
 	)
 	xreg.TestReset()
 	bmd.Add(bck)
@@ -108,7 +109,7 @@ func TestXactionAbortAll(t *testing.T) {
 		bmd     = cluster.NewBaseBownerMock()
 		bckFrom = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 		bckTo   = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
-		tMock   = cluster.NewTargetMock(bmd)
+		tMock   = mock.NewTarget(bmd)
 	)
 	xreg.TestReset()
 	bmd.Add(bckFrom)
@@ -135,7 +136,7 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 		bmd     = cluster.NewBaseBownerMock()
 		bckFrom = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 		bckTo   = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
-		tMock   = cluster.NewTargetMock(bmd)
+		tMock   = mock.NewTarget(bmd)
 	)
 	xreg.TestReset()
 
@@ -165,7 +166,7 @@ func TestXactionAbortBuckets(t *testing.T) {
 		bmd     = cluster.NewBaseBownerMock()
 		bckFrom = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 		bckTo   = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
-		tMock   = cluster.NewTargetMock(bmd)
+		tMock   = mock.NewTarget(bmd)
 	)
 	xreg.TestReset()
 
@@ -203,7 +204,7 @@ func TestXactionQueryFinished(t *testing.T) {
 		bck1  = cluster.NewBck("test1", cmn.ProviderAIS, cmn.NsGlobal)
 		bck2  = cluster.NewBck("test2", cmn.ProviderAIS, cmn.NsGlobal)
 		bck3  = cluster.NewBck("test3", cmn.ProviderGoogle, cmn.NsGlobal)
-		tMock = cluster.NewTargetMock(bmd)
+		tMock = mock.NewTarget(bmd)
 	)
 	xreg.TestReset()
 

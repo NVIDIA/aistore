@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/readers"
@@ -65,7 +66,7 @@ var _ = Describe("Mirror", func() {
 	BeforeEach(func() {
 		_ = cos.CreateDir(mpath)
 		_ = cos.CreateDir(mpath2)
-		_ = cluster.NewTargetMock(bmdMock)
+		_ = mock.NewTarget(bmdMock)
 	})
 
 	AfterEach(func() {

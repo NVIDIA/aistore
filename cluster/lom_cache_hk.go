@@ -29,8 +29,9 @@ type lcHK struct {
 
 var lchk lcHK
 
-func initLomCacheHK(mm *memsys.MMSA, t Target) {
-	lchk.mm, lchk.t = mm, t
+func RegLomCacheWithHK(t Target) {
+	lchk.t = t
+	lchk.mm = t.PageMM()
 	lchk.running.Store(false)
 	hk.Reg("lom-cache.gc", lchk.housekeep, iniEvictAtime)
 }

@@ -263,6 +263,7 @@ func (t *targetrunner) Run() error {
 	t.httprunner.init(config)
 
 	cluster.Init(t)
+	cluster.RegLomCacheWithHK(t)
 
 	// metrics, disks first
 	tstats := t.statsT.(*stats.Trunner)
@@ -881,8 +882,11 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		glog.Warningf("%s: %s", t.si, cs)
 		// NOTE: as we often run functional tests on low capacity
 		debug.Func(func() {
-			availablePaths := fs.GetAvail()
-			for _, mi := range availablePaths {
+			available, disabled := fs.Get()
+			for _, mi := range available {
+				os.RemoveAll(mi.DeletedDir())
+			}
+			for _, mi := range disabled {
 				os.RemoveAll(mi.DeletedDir())
 			}
 		})

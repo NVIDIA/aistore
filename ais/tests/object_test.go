@@ -21,6 +21,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/containers"
@@ -754,7 +755,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	p, err := api.HeadBucket(baseParams, m.bck)
 	tassert.CheckFatal(t, err)
 
-	_ = cluster.NewTargetMock(cluster.NewBaseBownerMock(
+	_ = mock.NewTarget(cluster.NewBaseBownerMock(
 		cluster.NewBck(
 			m.bck.Name, m.bck.Provider, cmn.NsGlobal,
 			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, Extra: p.Extra, BID: 0xa73b9f11},
@@ -943,7 +944,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		_          = cluster.NewTargetMock(cluster.NewBaseBownerMock(
+		_          = mock.NewTarget(cluster.NewBaseBownerMock(
 			cluster.NewBck(
 				m.bck.Name, cmn.ProviderAIS, cmn.NsGlobal,
 				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, BID: 1},

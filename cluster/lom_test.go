@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
@@ -70,31 +71,28 @@ var _ = Describe("LOM", func() {
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
-	var (
-		bmd = cluster.NewBaseBownerMock(
-			cluster.NewBck(
-				bucketLocalA, cmn.ProviderAIS, cmn.NsGlobal,
-				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumNone}, BID: 1},
-			),
-			cluster.NewBck(
-				bucketLocalB, cmn.ProviderAIS, cmn.NsGlobal,
-				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, LRU: cmn.LRUConf{Enabled: true}, BID: 2},
-			),
-			cluster.NewBck(
-				bucketLocalC, cmn.ProviderAIS, cmn.NsGlobal,
-				&cmn.BucketProps{
-					Cksum:  cmn.CksumConf{Type: cos.ChecksumXXHash},
-					LRU:    cmn.LRUConf{Enabled: true},
-					Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
-					BID:    3,
-				},
-			),
-			cluster.NewBck(sameBucketName, cmn.ProviderAIS, cmn.NsGlobal, &cmn.BucketProps{BID: 4}),
-			cluster.NewBck(bucketCloudA, cmn.ProviderAmazon, cmn.NsGlobal, &cmn.BucketProps{BID: 5}),
-			cluster.NewBck(bucketCloudB, cmn.ProviderAmazon, cmn.NsGlobal, &cmn.BucketProps{BID: 6}),
-			cluster.NewBck(sameBucketName, cmn.ProviderAmazon, cmn.NsGlobal, &cmn.BucketProps{BID: 7}),
-		)
-		tMock cluster.Target
+	bmd := cluster.NewBaseBownerMock(
+		cluster.NewBck(
+			bucketLocalA, cmn.ProviderAIS, cmn.NsGlobal,
+			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumNone}, BID: 1},
+		),
+		cluster.NewBck(
+			bucketLocalB, cmn.ProviderAIS, cmn.NsGlobal,
+			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, LRU: cmn.LRUConf{Enabled: true}, BID: 2},
+		),
+		cluster.NewBck(
+			bucketLocalC, cmn.ProviderAIS, cmn.NsGlobal,
+			&cmn.BucketProps{
+				Cksum:  cmn.CksumConf{Type: cos.ChecksumXXHash},
+				LRU:    cmn.LRUConf{Enabled: true},
+				Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
+				BID:    3,
+			},
+		),
+		cluster.NewBck(sameBucketName, cmn.ProviderAIS, cmn.NsGlobal, &cmn.BucketProps{BID: 4}),
+		cluster.NewBck(bucketCloudA, cmn.ProviderAmazon, cmn.NsGlobal, &cmn.BucketProps{BID: 5}),
+		cluster.NewBck(bucketCloudB, cmn.ProviderAmazon, cmn.NsGlobal, &cmn.BucketProps{BID: 6}),
+		cluster.NewBck(sameBucketName, cmn.ProviderAmazon, cmn.NsGlobal, &cmn.BucketProps{BID: 7}),
 	)
 
 	BeforeEach(func() {
@@ -109,8 +107,7 @@ var _ = Describe("LOM", func() {
 		for _, mpath := range mpaths {
 			_, _ = fs.Add(mpath, "daeID")
 		}
-		tMock = cluster.NewTargetMock(bmd)
-		cluster.Init(tMock)
+		_ = mock.NewTarget(bmd)
 	})
 
 	AfterEach(func() {

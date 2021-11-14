@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
@@ -74,7 +75,7 @@ func getMockGetFSStats(currentFilesNum int) func(string) (uint64, uint64, int64,
 	}
 }
 
-func newTargetLRUMock() *cluster.TargetMock {
+func newTargetLRUMock() *mock.TargetMock {
 	// Bucket owner mock, required for LOM
 	var (
 		bmdMock = cluster.NewBaseBownerMock(
@@ -97,7 +98,7 @@ func newTargetLRUMock() *cluster.TargetMock {
 				},
 			),
 		)
-		tMock = cluster.NewTargetMock(bmdMock)
+		tMock = mock.NewTarget(bmdMock)
 	)
 	return tMock
 }
@@ -176,7 +177,7 @@ var _ = Describe("space evict/cleanup tests", func() {
 	cos.InitShortID(0)
 	Describe("Run", func() {
 		var (
-			t          *cluster.TargetMock
+			t          *mock.TargetMock
 			filesPath  string
 			fpAnother  string
 			bckAnother cmn.Bck
