@@ -42,12 +42,11 @@ type fileMetadata struct {
 	size int64
 }
 
-func init() {
+func TestSpace(t *testing.T) {
 	xreg.Init()
 	hk.TestInit()
-}
+	cos.InitShortID(0)
 
-func TestMain(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Space Evict/Cleanup")
 }
@@ -174,7 +173,6 @@ func saveRandomFiles(filesPath string, filesNumber int) {
 }
 
 var _ = Describe("space evict/cleanup tests", func() {
-	cos.InitShortID(0)
 	Describe("Run", func() {
 		var (
 			t          *mock.TargetMock
