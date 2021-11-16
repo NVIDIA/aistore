@@ -115,8 +115,10 @@ const (
 const NumStats = NumPageSlabs // NOTE: must be >= NumSmallSlabs
 
 const (
-	optDepth = 128                  // ring "depth", i.e., num free bufs we trend to (see grow())
-	minDepth = 4                    // depth when idle or under OOM
+	optDepth = 128  // ring "depth", i.e., num free bufs we trend to (see grow())
+	minDepth = 4    // depth when idle or under OOM
+	maxDepth = 4096 // exceeding warrants reallocation
+
 	loadAvg  = 10                   // "idle" load average to deallocate Slabs when below
 	sizeToGC = cos.GiB + cos.GiB>>1 // see heuristics ("Heu")
 )
@@ -491,8 +493,16 @@ func (s *Slab) cleanup() (freed int64) {
 		s.put[i] = nil
 		freed += s.Size()
 	}
-	s.get = s.get[:0]
-	s.put = s.put[:0]
+	if cap(s.get) > maxDepth {
+		s.get = make([][]byte, 0, optDepth)
+	} else {
+		s.get = s.get[:0]
+	}
+	if cap(s.put) > maxDepth {
+		s.put = make([][]byte, 0, optDepth)
+	} else {
+		s.put = s.put[:0]
+	}
 	s.pos = 0
 
 	debug.Assert(len(s.get) == 0 && len(s.put) == 0)
