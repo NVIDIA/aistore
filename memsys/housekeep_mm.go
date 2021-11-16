@@ -18,6 +18,12 @@ import (
 	"github.com/NVIDIA/aistore/sys"
 )
 
+const (
+	memCheckAbove  = 90 * time.Second   // default memory checking frequency when above low watermark
+	freeIdleMinDur = memCheckAbove      // time to reduce an idle slab to a minimum depth (see mindepth)
+	freeIdleZero   = freeIdleMinDur * 2 // ... to zero
+)
+
 // API: on-demand memory freeing to the user-provided specification
 func (r *MMSA) FreeSpec(spec FreeSpec) {
 	var freed int64
@@ -63,8 +69,8 @@ func (r *MMSA) GetStats() (stats *Stats) {
 // private
 //
 
-// garbageCollect is called periodically by the system's house-keeper (hk)
-func (r *MMSA) garbageCollect() time.Duration {
+// hkcb is called periodically by the system's house-keeper (hk)
+func (r *MMSA) hkcb() time.Duration {
 	var (
 		limit = int64(sizeToGC) // minimum accumulated size that triggers GC
 		depth int               // => current ring depth tbd
@@ -84,14 +90,14 @@ func (r *MMSA) garbageCollect() time.Duration {
 			r.toGC.Add(freed)
 			r.doGC(mem.Free, sizeToGC, false, false)
 		}
-		goto timex
+		goto ex
 	}
 
 	// 4. calibrate and mem-free accordingly
 	switch pressure {
 	case OOM, MemPressureExtreme:
-		r.minDepth.Store(1)
-		depth = 2
+		r.minDepth.Store(4)
+		depth = 4
 		limit = sizeToGC / 4
 	case MemPressureHigh:
 		tmp := cos.MaxI64(r.minDepth.Load()/2, 32)
@@ -110,7 +116,7 @@ func (r *MMSA) garbageCollect() time.Duration {
 		if freed > 0 {
 			r.toGC.Add(freed)
 			if r.doGC(mem.Free, limit, true, swapping) {
-				goto timex
+				goto ex
 			}
 		}
 	}
@@ -119,11 +125,11 @@ func (r *MMSA) garbageCollect() time.Duration {
 	if pressure >= MemPressureHigh {
 		r.doGC(mem.Free, limit, true, swapping)
 	}
-timex:
-	return r.getNextInterval(pressure)
+ex:
+	return r.hkIval(pressure, &mem)
 }
 
-func (r *MMSA) getNextInterval(pressure int) time.Duration {
+func (r *MMSA) hkIval(pressure int, mem *sys.MemStat) time.Duration {
 	var changed bool
 	switch pressure {
 	case MemPressureLow:
@@ -131,24 +137,19 @@ func (r *MMSA) getNextInterval(pressure int) time.Duration {
 			r.duration = r.TimeIval * 2
 			changed = true
 		}
-	case OOM, MemPressureExtreme:
-		if r.duration != r.TimeIval/4 {
-			r.duration = r.TimeIval / 4
-			changed = true
-		}
-	case MemPressureHigh:
-		if r.duration != r.TimeIval/2 {
-			r.duration = r.TimeIval / 2
-			changed = true
-		}
-	default:
+	case MemPressureModerate:
 		if r.duration != r.TimeIval {
 			r.duration = r.TimeIval
 			changed = true
 		}
+	default:
+		if r.duration != r.TimeIval/2 {
+			r.duration = r.TimeIval / 2
+			changed = true
+		}
 	}
-	if changed && verbose {
-		glog.Infof("%s: %s, timer %v", r, r.MemPressure2S(pressure), r.duration)
+	if (pressure > MemPressureHigh) || (changed && verbose) {
+		glog.Infof("%s (next house-keep in %v)", r.Str(mem), r.duration)
 	}
 	return r.duration
 }
@@ -206,15 +207,15 @@ func (r *MMSA) freeIdle(duration time.Duration) (freed int64) {
 			if x > 0 {
 				freed += x
 				if verbose {
-					glog.Infof("%s: idle for %v - cleanup", s.tag, idle)
+					glog.Infof("%s idle for %v: cleanup %s", s.tag, idle, cos.B2S(x, 1))
 				}
 			}
 		} else {
-			x := s.reduce(minDepth, true /* idle */, false /* force */)
+			x := s.reduce(minDepth, true /*idle*/, false /*force*/)
 			if x > 0 {
 				freed += x
 				if verbose {
-					glog.Infof("%s: idle for %v - reduced %s", s.tag, idle, cos.B2S(x, 1))
+					glog.Infof("%s idle for %v: reduce %s", s.tag, idle, cos.B2S(x, 1))
 				}
 			}
 		}
@@ -241,7 +242,7 @@ func (r *MMSA) doGC(free uint64, minsize int64, force, swapping bool) (gced bool
 	}
 	str := fmt.Sprintf(
 		"%s: GC(force: %t, swapping: %t); load: %.2f; free: %s; toGC: %s",
-		r.Name, force, swapping, avg.One, cos.B2S(int64(free), 1), cos.B2S(toGC, 2))
+		r.name, force, swapping, avg.One, cos.B2S(int64(free), 1), cos.B2S(toGC, 2))
 	if force || swapping { // Heu #4
 		glog.Warning(str)
 		glog.Warning("freeing memory to OS...")

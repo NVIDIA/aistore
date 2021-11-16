@@ -8,7 +8,6 @@ import (
 	"context"
 	"net/http"
 	"net/url"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
@@ -21,51 +20,18 @@ import (
 // interface guard
 var _ cluster.Target = (*TargetMock)(nil)
 
-var (
-	pmm  *memsys.MMSA
-	smm  *memsys.MMSA
-	once sync.Once
-)
-
-// unit tests only
-func _init() {
-	pmm = memsys.TestPageMM()
-	smm = memsys.TestByteMM(pmm)
-}
-
 // TargetMock provides cluster.Target interface with mocked return values.
 type TargetMock struct {
-	BO  cluster.Bowner
-	pmm *memsys.MMSA
-	smm *memsys.MMSA
+	BO cluster.Bowner
 }
 
-func NewTarget(bo cluster.Bowner, mm ...*memsys.MMSA) *TargetMock {
+func NewTarget(bo cluster.Bowner) *TargetMock {
 	t := &TargetMock{BO: bo}
-	if len(mm) > 0 {
-		t.pmm, t.smm = mm[0], mm[1]
-	}
 	cluster.Init(t)
 	return t
 }
 
 func (t *TargetMock) Bowner() cluster.Bowner { return t.BO }
-
-func (t *TargetMock) PageMM() *memsys.MMSA {
-	if t.pmm != nil {
-		return t.pmm
-	}
-	once.Do(_init)
-	return pmm
-}
-
-func (t *TargetMock) ByteMM() *memsys.MMSA {
-	if t.smm != nil {
-		return t.smm
-	}
-	once.Do(_init)
-	return smm
-}
 
 func (*TargetMock) Sname() string            { return "" }
 func (*TargetMock) SID() string              { return "" }
@@ -74,6 +40,9 @@ func (*TargetMock) ClusterStarted() bool     { return true }
 func (*TargetMock) NodeStarted() bool        { return true }
 func (*TargetMock) DataClient() *http.Client { return http.DefaultClient }
 func (*TargetMock) Sowner() cluster.Sowner   { return nil }
+
+func (*TargetMock) PageMM() *memsys.MMSA { return memsys.PageMM() }
+func (*TargetMock) ByteMM() *memsys.MMSA { return memsys.ByteMM() }
 
 func (*TargetMock) PutObject(*cluster.LOM, cluster.PutObjectParams) error       { return nil }
 func (*TargetMock) FinalizeObj(*cluster.LOM, string) (int, error)               { return 0, nil }

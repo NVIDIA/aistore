@@ -62,8 +62,8 @@ func Init() *StreamCollector {
 func (*StreamCollector) Name() string { return "stream_collector" }
 
 func (sc *StreamCollector) Run() (err error) {
-	cos.Printf("Intra-cluster networking: %s client", whichClient())
-	cos.Printf("Starting %s", sc.Name())
+	cos.Infof("Intra-cluster networking: %s client", whichClient())
+	cos.Infof("Starting %s", sc.Name())
 	return gc.run()
 }
 

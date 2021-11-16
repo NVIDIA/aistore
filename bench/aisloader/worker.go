@@ -18,17 +18,10 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
-var mmsa *memsys.MMSA
-
-func init() {
-	mmsa = memsys.PageMM()
-	readers.Init(mmsa)
-}
-
 func doPut(wo *workOrder) {
 	var sgl *memsys.SGL
 	if runParams.usingSG {
-		sgl = mmsa.NewSGL(wo.size)
+		sgl = memsys.PageMM().NewSGL(wo.size)
 		defer func() {
 			// FIXME: due to critical bug (https://github.com/golang/go/issues/30597)
 			// we need to postpone `sgl.Free` to a little bit later time, otherwise

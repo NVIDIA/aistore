@@ -65,10 +65,6 @@ var (
 	_ Reader = (*tarReader)(nil)
 )
 
-var pmm *memsys.MMSA
-
-func Init(mm *memsys.MMSA) { pmm = mm } // NOTE: must be done
-
 // Read implements the Reader interface.
 func (r *randReader) Read(buf []byte) (int, error) {
 	available := r.size - r.offset
@@ -152,7 +148,7 @@ func NewRandReader(size int64, cksumType string) (Reader, error) {
 		err   error
 		seed  = mono.NanoTime()
 	)
-	slab, err := pmm.GetSlab(memsys.DefaultBufSize)
+	slab, err := memsys.PageMM().GetSlab(memsys.DefaultBufSize)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +227,7 @@ func NewFileReader(filepath, name string, size int64, cksumType string) (Reader,
 	if size == -1 {
 		// Assuming that the file already exists and contains data.
 		if cksumType != cos.ChecksumNone {
-			buf, slab := pmm.Alloc()
+			buf, slab := memsys.PageMM().Alloc()
 			_, cksumHash, err = cos.CopyAndChecksum(io.Discard, f, buf, cksumType)
 			slab.Free(buf)
 		}
@@ -348,7 +344,7 @@ func copyRandWithHash(w io.Writer, size int64, cksumType string, rnd *rand.Rand)
 	var (
 		cksum   *cos.CksumHash
 		rem     = size
-		buf, s  = pmm.Alloc()
+		buf, s  = memsys.PageMM().Alloc()
 		blkSize = int64(len(buf))
 	)
 	defer s.Free(buf)

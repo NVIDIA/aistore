@@ -81,11 +81,6 @@ const (
 	DefaultSmallBufSize = cos.KiB
 )
 
-const (
-	gmmName = "pmm"
-	smmName = "smm"
-)
-
 // page slabs: pagesize increments up to MaxPageSlabSize
 const (
 	MaxPageSlabSize = 128 * cos.KiB
@@ -118,19 +113,9 @@ const NumStats = NumPageSlabs // NOTE: must be greater or equal NumSmallSlabs, o
 //  Other important defaults are also commented below.
 // =================================== MMSA config defaults ==========================================
 const (
-	minDepth   = 128                  // ring cap min; default ring growth increment
-	loadAvg    = 10                   // "idle" load average to deallocate Slabs when below
-	sizeToGC   = cos.GiB * 2          // see heuristics ("Heu")
-	minMemFree = cos.GiB + cos.GiB>>1 // default minimum memory (see description above)
-
-	minMemFreeTests = cos.MiB * 320 // minimum free to run tests
-	maxMemUsedTests = cos.GiB * 6   // maximum tests allowed to allocate
-)
-
-const (
-	memCheckAbove  = 90 * time.Second   // default memory checking frequency when above low watermark
-	freeIdleMinDur = memCheckAbove      // time to reduce an idle slab to a minimum depth (see mindepth)
-	freeIdleZero   = freeIdleMinDur * 2 // ... to zero
+	minDepth = 128         // ring cap min; default ring growth increment
+	loadAvg  = 10          // "idle" load average to deallocate Slabs when below
+	sizeToGC = cos.GiB * 2 // see heuristics ("Heu")
 )
 
 // slab constants
@@ -156,12 +141,13 @@ type (
 	}
 	MMSA struct {
 		// public
-		Name        string
 		MinFree     uint64        // memory that must be available at all times
 		TimeIval    time.Duration // interval of time to watch for low memory and make steps
 		MinPctTotal int           // same, via percentage of total
 		MinPctFree  int           // ditto, as % of free at init time
 		// private
+		name          string
+		info          string
 		sibling       *MMSA
 		duration      time.Duration
 		lowWM         uint64
@@ -209,13 +195,12 @@ func (r *MMSA) String() string {
 
 func (r *MMSA) Str(mem *sys.MemStat) string {
 	var (
-		used, free, afree = cos.B2S(int64(mem.Used), 0), cos.B2S(int64(mem.Free), 0), cos.B2S(int64(mem.ActualFree), 0)
-		pressure, _       = r.MemPressure(mem)
-		minfree           = cos.B2S(int64(r.MinFree), 0)
-		lowwm             = cos.B2S(int64(r.lowWM), 0)
+		used, free  = cos.B2S(int64(mem.Used), 0), cos.B2S(int64(mem.Free), 0)
+		afree       = cos.B2S(int64(mem.ActualFree), 0)
+		p, swapping = r.MemPressure(mem)
+		sp          = r.MemPressure2S(p, swapping)
 	)
-	return fmt.Sprintf("%s[(used %s, free %s, actfree %s), (min-free %s, low-wm %s), %s]", r.Name,
-		used, free, afree, minfree, lowwm, r.MemPressure2S(pressure))
+	return fmt.Sprintf("%s[(used %s, free %s, actfree %s), %s, %s]", r.name, used, free, afree, r.info, sp)
 }
 
 // allocate SGL
@@ -455,7 +440,8 @@ func (s *Slab) grow(cnt int) {
 	}
 }
 
-func (s *Slab) reduce(todepth int, isIdle, force bool) (freed int64) {
+func (s *Slab) reduce(todepth int, isIdle, force bool) int64 {
+	var pfreed, gfreed int64
 	s.muput.Lock()
 	lput := len(s.put)
 	cnt := lput - todepth
@@ -467,17 +453,17 @@ func (s *Slab) reduce(todepth int, isIdle, force bool) (freed int64) {
 		}
 	}
 	if cnt > 0 {
-		if verbose {
-			glog.Infof("%s(f=%t, i=%t): reduce lput %d => %d", s.tag, force, isIdle, lput, lput-cnt) // DEBUG
-		}
 		for ; cnt > 0; cnt-- {
 			lput--
 			s.put[lput] = nil
-			freed += s.Size()
+			pfreed += s.Size()
 		}
 		s.put = s.put[:lput]
 	}
 	s.muput.Unlock()
+	if pfreed > 0 && verbose {
+		glog.Infof("%s(f=%t, i=%t): reduce lput %d => %d, freed=%d", s.tag, force, isIdle, lput, lput-cnt, pfreed)
+	}
 
 	s.muget.Lock()
 	lget := len(s.get) - s.pos
@@ -490,17 +476,17 @@ func (s *Slab) reduce(todepth int, isIdle, force bool) (freed int64) {
 		}
 	}
 	if cnt > 0 {
-		if verbose {
-			glog.Infof("%s(f=%t, i=%t): reduce lget %d => %d", s.tag, force, isIdle, lget, lget-cnt)
-		}
 		for ; cnt > 0; cnt-- {
 			s.get[s.pos] = nil
 			s.pos++
-			freed += s.Size()
+			gfreed += s.Size()
 		}
 	}
 	s.muget.Unlock()
-	return
+	if gfreed > 0 && verbose {
+		glog.Infof("%s(f=%t, i=%t): reduce lget %d => %d, freed=%d", s.tag, force, isIdle, lget, lget-cnt, gfreed)
+	}
+	return pfreed + gfreed
 }
 
 func (s *Slab) cleanup() (freed int64) {

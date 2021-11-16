@@ -13,7 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/memsys"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -43,9 +42,6 @@ var _ = Describe("Mirror", func() {
 	_, _ = fs.Add(mpath2, "daeID")
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
-
-	mmsa := memsys.TestPageMM()
-	readers.Init(mmsa)
 
 	var (
 		props = &cmn.BucketProps{

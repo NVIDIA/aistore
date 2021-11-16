@@ -760,7 +760,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 			m.bck.Name, m.bck.Provider, cmn.NsGlobal,
 			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, Extra: p.Extra, BID: 0xa73b9f11},
 		),
-	), pmm, smm)
+	))
 
 	initMountpaths(t, proxyURL)
 
@@ -950,7 +950,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, BID: 1},
 			),
 			cluster.NewBckEmbed(m.bck),
-		), pmm, smm)
+		))
 		cksumConf = cmn.DefaultBckProps(m.bck).Cksum
 	)
 

@@ -6,7 +6,6 @@
 package memsys
 
 import (
-	"flag"
 	"fmt"
 	"runtime"
 	"sync"
@@ -19,42 +18,49 @@ import (
 	"github.com/NVIDIA/aistore/sys"
 )
 
-// memory pressure
 const (
-	MemPressureLow = iota
-	MemPressureModerate
-	MemPressureHigh
-	MemPressureExtreme
-	OOM
+	minMemFree      = cos.GiB + cos.GiB>>1 // default minimum memory (see description above)
+	minMemFreeTests = cos.MiB * 320        // minimum free to run tests
+	maxMemUsedTests = cos.GiB * 10         // maximum tests allowed to allocate
 )
 
 var (
-	gmm              *MMSA     // page-based MMSA for usage by packages *other than* `ais`
-	smm              *MMSA     // memory manager for *small-size* allocations
+	gmm              *MMSA     // page-based system allocator
+	smm              *MMSA     // slab allocator for small sizes in the range 1 - 4K
 	gmmOnce, smmOnce sync.Once // ensures singleton-ness
-
-	memPressureText = map[int]string{
-		MemPressureLow:      "low",
-		MemPressureModerate: "moderate",
-		MemPressureHigh:     "high",
-		MemPressureExtreme:  "extreme",
-		OOM:                 "OOM",
-	}
-
-	verbose bool
+	verbose          bool
 )
 
-func init() {
-	gmm = &MMSA{Name: gmmName, defBufSize: DefaultBufSize}
-	smm = &MMSA{Name: smmName, defBufSize: DefaultSmallBufSize}
+func Init(gmmName, smmName string) {
+	debug.Assert(gmm == nil && smm == nil)
+	gmm = &MMSA{name: gmmName + ".gmm", defBufSize: DefaultBufSize}
+	smm = &MMSA{name: smmName + ".smm", defBufSize: DefaultSmallBufSize}
 	verbose = bool(glog.FastV(4, glog.SmoduleMemsys))
-	verbose = true // DEBUG
 }
 
-// default page-based memory-manager-slab-allocator (MMSA) for packages other than `ais`
+func testInit(gmmName, smmName string) {
+	debug.Assert(gmm == nil && smm == nil)
+	gmm = &MMSA{name: gmmName + ".pmm", defBufSize: DefaultBufSize, MinFree: minMemFreeTests}
+	smm = &MMSA{name: smmName + ".smm", defBufSize: DefaultSmallBufSize, MinFree: minMemFreeTests}
+}
+
+func (r *MMSA) TestName(name string) { r.name = name } // memsys unit tests only
+
+func NewMMSA(name string) (mem *MMSA, err error) {
+	mem = &MMSA{name: name + ".test.pmm", defBufSize: DefaultBufSize, MinFree: minMemFreeTests}
+	err = mem.Init(0, false /*panic env err*/, false /*panic insuff mem*/)
+	return
+}
+
+// system page-based memory-manager-slab-allocator (MMSA)
 func PageMM() *MMSA {
 	gmmOnce.Do(func() {
-		gmm.Init(0 /*unlimited*/, false, true)
+		var maxUse int64
+		if gmm == nil {
+			testInit("test", "test")
+			maxUse = maxMemUsedTests
+		}
+		gmm.Init(maxUse, false, true)
 		if smm != nil {
 			smm.sibling = gmm
 			gmm.sibling = smm
@@ -63,37 +69,21 @@ func PageMM() *MMSA {
 	return gmm
 }
 
-// default small-size MMSA
+// system small-size allocator (range 1 - 4K)
 func ByteMM() *MMSA {
 	smmOnce.Do(func() {
-		smm.Init(0 /*unlimited*/, false, true)
+		var maxUse int64
+		if smm == nil {
+			testInit("test", "test")
+			maxUse = maxMemUsedTests
+		}
+		smm.Init(maxUse, false, true)
 		if gmm != nil {
 			gmm.sibling = smm
 			smm.sibling = gmm
 		}
 	})
 	return smm
-}
-
-func TestPageMM(name ...string) (mm *MMSA) {
-	mm = &MMSA{defBufSize: DefaultBufSize, MinFree: minMemFreeTests}
-	if len(name) == 0 {
-		mm.Name = "pmm.test"
-	} else {
-		mm.Name = name[0]
-	}
-	mm.Init(maxMemUsedTests /*absolute usage limit*/, true, true)
-	return
-}
-
-func TestByteMM(pmm *MMSA) (mm *MMSA) {
-	mm = &MMSA{Name: "smm.test", defBufSize: DefaultSmallBufSize, MinFree: minMemFreeTests}
-	mm.Init(maxMemUsedTests /*ditto*/, true, true)
-	mm.sibling = pmm
-	if pmm != nil {
-		pmm.sibling = mm
-	}
-	return
 }
 
 // defines the type of Slab rings: NumSmallSlabs x 128 vs NumPageSlabs x 4K
@@ -108,12 +98,12 @@ func (r *MMSA) RegWithHK() {
 			d = 10 * time.Second
 		}
 	}
-	hk.Reg(r.Name+".gc", r.garbageCollect, d)
+	hk.Reg(r.name+".gc", r.hkcb, d)
 }
 
 // initialize new MMSA instance
-func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOnInsufFreeErr bool) (err error) {
-	debug.Assert(r.Name != "")
+func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOnInsufFree bool) (err error) {
+	debug.Assert(r.name != "")
 	// 1. environment overrides defaults and MMSA{...} hard-codings
 	if err = r.env(); err != nil {
 		if panicOnEnvErr {
@@ -145,19 +135,13 @@ func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOnInsufFreeErr bool) (err 
 	}
 	if r.MinFree == 0 {
 		r.MinFree = minMemFree
-	} else if r.MinFree < minMemFree { // warn invalid config
-		cos.Errorf("Warning: configured min-free memory %s < %s (absolute minimum)",
-			cos.B2S(int64(r.MinFree), 2), cos.B2S(minMemFree, 2))
 	}
-	r.lowWM = cos.MaxU64(r.MinFree*2, mem.Free/2) // Heu #1: hysteresis
-	if maxUse > 0 {
-		r.lowWM = uint64(cos.MaxI64(int64(r.lowWM), int64(mem.Free)-maxUse))
-	}
+	r.lowWM = (r.MinFree+mem.Free)>>1 - (r.MinFree+mem.Free)>>4 // a quarter of
 
 	// 3. validate
 	if mem.Free < r.MinFree+cos.MiB*16 {
 		err = fmt.Errorf("insufficient free memory %s (see %s for guidance)", r.Str(&mem), readme)
-		if panicOnInsufFreeErr {
+		if panicOnInsufFree {
 			panic(err)
 		}
 		cos.Errorf("%v", err)
@@ -180,6 +164,9 @@ func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOnInsufFreeErr bool) (err 
 	r.toGC.Store(0)
 
 	// init rings and slabs
+	if r.defBufSize == 0 {
+		r.defBufSize = DefaultBufSize
+	}
 	r.slabIncStep, r.maxSlabSize, r.numSlabs = PageSlabIncStep, MaxPageSlabSize, NumPageSlabs
 	if r.isSmall() {
 		r.slabIncStep, r.maxSlabSize, r.numSlabs = SmallSlabIncStep, MaxSmallSlabSize, NumSmallSlabs
@@ -192,7 +179,7 @@ func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOnInsufFreeErr bool) (err 
 		bufSize := r.slabIncStep * int64(i+1)
 		slab := &Slab{
 			m:       r,
-			tag:     r.Name + "." + cos.B2S(bufSize, 0),
+			tag:     r.name + "." + cos.B2S(bufSize, 0),
 			bufSize: bufSize,
 			get:     make([][]byte, 0, minDepth),
 			put:     make([][]byte, 0, minDepth),
@@ -206,11 +193,8 @@ func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOnInsufFreeErr bool) (err 
 	if !r.isSmall() {
 		runtime.GC()
 	}
-	debug.Func(func() {
-		if flag.Parsed() {
-			debug.Infof("%s started", r)
-		}
-	})
+	r.info = fmt.Sprintf("(min-free %s, low-wm %s)", cos.B2S(int64(r.MinFree), 0), cos.B2S(int64(r.lowWM), 0))
+	cos.Infof("%s started", r.Str(&mem))
 	return
 }
 
@@ -221,7 +205,7 @@ func (r *MMSA) Terminate(unregHK bool) {
 		gced  string
 	)
 	if unregHK {
-		hk.Unreg(r.Name + ".gc")
+		hk.Unreg(r.name + ".gc")
 	}
 	for _, s := range r.rings {
 		freed += s.cleanup()
@@ -233,57 +217,4 @@ func (r *MMSA) Terminate(unregHK bool) {
 		gced = ", GC ran"
 	}
 	debug.Infof("%s terminated%s", r, gced)
-}
-
-// returns an estimate for the current memory pressure expressed as enumerated values
-// also, tracks swapping stateful vars
-func (r *MMSA) MemPressure(mems ...*sys.MemStat) (pressure int, swapping bool) {
-	var (
-		mem   *sys.MemStat
-		ncrit int32
-	)
-	// 1. get mem stats
-	if len(mems) > 0 {
-		mem = mems[0]
-	} else {
-		memStat, err := sys.Mem()
-		debug.AssertNoErr(err)
-		mem = &memStat
-	}
-
-	// 2. update swapping state
-	swapping, crit := mem.SwapUsed > r.swap.Load(), r.swapCriticality.Load()
-	if swapping {
-		ncrit = cos.MinI32(swappingMax, crit+1)
-	} else {
-		ncrit = cos.MaxI32(0, crit-1)
-	}
-	r.swapCriticality.Store(ncrit)
-	r.swap.Store(mem.SwapUsed)
-
-	// 3. recompute mem pressure
-	switch {
-	case ncrit > 2:
-		return OOM, swapping
-	case ncrit > 1 || mem.ActualFree <= r.MinFree || swapping:
-		return MemPressureExtreme, swapping
-	case ncrit > 0 || mem.Free <= r.MinFree:
-		return MemPressureHigh, swapping
-	case mem.Free >= r.lowWM:
-		return MemPressureLow, swapping
-	}
-	pressure = MemPressureModerate
-	x := (mem.Free - r.MinFree) * 100 / (r.lowWM - r.MinFree)
-	if x < 50 {
-		pressure = MemPressureHigh
-	}
-	return
-}
-
-func (r *MMSA) MemPressure2S(p int) (s string) {
-	s = fmt.Sprintf("pressure '%s'", memPressureText[p])
-	if a, b := r.swap.Load(), r.swapCriticality.Load(); a != 0 || b != 0 {
-		s = fmt.Sprintf("swapping(%s, criticality '%d'), %s", cos.B2S(int64(a), 0), b, s)
-	}
-	return
 }

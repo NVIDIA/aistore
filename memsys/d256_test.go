@@ -63,7 +63,8 @@ func BenchmarkSmallAlloc32K(b *testing.B) {
 }
 
 func benchAlloc(b *testing.B, objsiz, sbufSize int64) {
-	mem := &memsys.MMSA{MinPctFree: 50, Name: "dmem"}
+	mem := &memsys.MMSA{MinPctFree: 50}
+	mem.TestName("dmem")
 	err := mem.Init(0, false /*panic env err*/, false /*panic insuff mem*/)
 	defer mem.Terminate(false)
 	if err != nil {
@@ -115,7 +116,8 @@ func BenchmarkSmallWrite32K(b *testing.B) {
 }
 
 func benchWrite(b *testing.B, objsiz, sbufSize int64) {
-	mem := &memsys.MMSA{MinPctFree: 50, Name: "dmem"}
+	mem := &memsys.MMSA{MinPctFree: 50}
+	mem.TestName("emem")
 	err := mem.Init(0, false /*panic env err*/, false /*panic insuff mem*/)
 	defer mem.Terminate(false)
 	if err != nil {
@@ -170,7 +172,8 @@ func BenchmarkSmallWRF32K(b *testing.B) {
 }
 
 func benchWRF(b *testing.B, objsiz, sbufSize int64) {
-	mem := &memsys.MMSA{MinPctFree: 50, Name: "dmem"}
+	mem := &memsys.MMSA{MinPctFree: 50}
+	mem.TestName("fmem")
 	err := mem.Init(0, false /*panic env err*/, false /*panic insuff mem*/)
 	cha := make(chan *memsys.SGL, 1024*16)
 	defer mem.Terminate(false)
@@ -230,7 +233,8 @@ func BenchmarkLargeFile32K(b *testing.B) {
 }
 
 func benchFile(b *testing.B, sbufSize int64) {
-	mem := &memsys.MMSA{MinPctFree: 50, Name: "dmem"}
+	mem := &memsys.MMSA{MinPctFree: 50}
+	mem.TestName("gmem")
 	err := mem.Init(0, false /*panic env err*/, false /*panic insuff mem*/)
 	defer mem.Terminate(false)
 	if err != nil {

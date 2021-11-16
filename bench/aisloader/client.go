@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 const longListTime = 10 * time.Second
@@ -400,7 +401,7 @@ func readResponse(r *http.Response, w io.Writer, src, cksumType string) (int64, 
 		return 0, "", fmt.Errorf("bad status %d from %s, err: %v", r.StatusCode, src, err)
 	}
 
-	buf, slab := mmsa.Alloc()
+	buf, slab := memsys.PageMM().Alloc()
 	defer slab.Free(buf)
 
 	n, cksum, err = cos.CopyAndChecksum(w, r.Body, buf, cksumType)

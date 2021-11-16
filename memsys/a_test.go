@@ -67,7 +67,8 @@ func Test_Sleep(t *testing.T) {
 		duration = 4 * time.Second
 	}
 
-	mem := &memsys.MMSA{TimeIval: time.Second * 20, MinFree: cos.GiB, Name: "amem"}
+	mem := &memsys.MMSA{TimeIval: time.Second * 20, MinFree: cos.GiB}
+	mem.TestName("amem")
 	err := mem.Init(0, false /*panic env err*/, false /*panic insuff mem*/)
 	if err != nil {
 		t.Fatal(err)
@@ -103,7 +104,8 @@ func Test_NoSleep(t *testing.T) {
 		duration = 4 * time.Second
 	}
 
-	mem := &memsys.MMSA{TimeIval: time.Second * 20, MinPctTotal: 5, Name: "bmem"}
+	mem := &memsys.MMSA{TimeIval: time.Second * 20, MinPctTotal: 5}
+	mem.TestName("bmem")
 	err := mem.Init(0, false /*panic env err*/, false /*panic insuff mem*/)
 	if err != nil {
 		t.Fatal(err)
@@ -135,8 +137,8 @@ func printMaxRingLen(mem *memsys.MMSA, c chan struct{}) {
 		case <-c:
 			return
 		case <-time.After(5 * time.Second):
-			if p, _ := mem.MemPressure(); p > memsys.MemPressureLow {
-				tlog.Logf("%s\n", mem.MemPressure2S(p))
+			if p, swapping := mem.MemPressure(); p > memsys.MemPressureLow {
+				tlog.Logf("%s\n", mem.MemPressure2S(p, swapping))
 			}
 		}
 	}

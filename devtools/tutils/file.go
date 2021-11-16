@@ -162,11 +162,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 		return nil
 	}
 
-	if pmm != nil {
-		tMock = mock.NewTarget(bmd, pmm, smm)
-	} else {
-		tMock = mock.NewTarget(bmd)
-	}
+	tMock = mock.NewTarget(bmd)
 
 	errs := fs.CreateBucket("testing", bck, false /*nilbmd*/)
 	if len(errs) > 0 {

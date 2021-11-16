@@ -53,12 +53,6 @@ type (
 	msgSortHelper []transportData
 )
 
-var mmsa *memsys.MMSA
-
-func init() {
-	mmsa = memsys.TestPageMM()
-}
-
 // serverTCPAddr takes a string in format of "http://ip:port" and returns its ip and port
 func serverTCPAddr(u string) cluster.NetInfo {
 	s := strings.TrimPrefix(u, "http://")
@@ -102,7 +96,7 @@ func newPrimary() *proxyrunner {
 	o.put(newBucketMD())
 	p.owner.bmd = o
 
-	p.gmm = mmsa
+	p.gmm = memsys.PageMM()
 	return p
 }
 

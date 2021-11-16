@@ -34,6 +34,7 @@ import (
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/health"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
@@ -170,6 +171,8 @@ func (t *targetrunner) init(config *cmn.Config) {
 	t.si.Init(initTID(config), cmn.Target)
 
 	cos.InitShortID(t.si.Digest())
+
+	memsys.Init(t.si.ID(), t.si.ID())
 
 	volume.Init(t, config)
 

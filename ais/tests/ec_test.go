@@ -29,6 +29,7 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 const (
@@ -1685,7 +1686,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	// Encoding will fail if even one is missing, restoring should still work
 	o.dataCnt++
 
-	sgl := pmm.NewSGL(0)
+	sgl := memsys.PageMM().NewSGL(0)
 	defer sgl.Free()
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
@@ -1933,7 +1934,7 @@ func TestECEmergencyMpath(t *testing.T) {
 	}
 	initMountpaths(t, proxyURL)
 
-	sgl := pmm.NewSGL(0)
+	sgl := memsys.PageMM().NewSGL(0)
 	defer sgl.Free()
 
 	bckProps := defaultECBckProps(o)

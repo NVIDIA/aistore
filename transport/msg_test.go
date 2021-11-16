@@ -58,7 +58,7 @@ func Test_MsgDryRun(t *testing.T) {
 
 	// fill in common shared read-only bug
 	random := newRand(mono.NanoTime())
-	buf, slab := pmm.AllocSize(cos.MiB)
+	buf, slab := memsys.PageMM().AllocSize(cos.MiB)
 	defer slab.Free(buf)
 	random.Read(buf)
 

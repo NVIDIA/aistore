@@ -30,6 +30,7 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/etl/runtime"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/go-tfdata/tfdata/core"
 )
 
@@ -388,7 +389,7 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tlog.Logln("GET transformed object")
-	outObject := pmm.NewSGL(0)
+	outObject := memsys.PageMM().NewSGL(0)
 	defer outObject.Free()
 	_, err = api.GetObject(baseParams, bck, objName, api.GetObjectInput{
 		Writer: outObject,

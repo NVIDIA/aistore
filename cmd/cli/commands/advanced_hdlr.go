@@ -102,8 +102,8 @@ func genShardsHandler(c *cli.Context) error {
 		return fmt.Errorf("extension %q is invalid, should be one of %q", ext, strings.Join(supportedExts, ", "))
 	}
 
-	mem := &memsys.MMSA{Name: "dsort-cli"}
-	if err := mem.Init(0 /*unlimited*/, false /*panic env err*/, false /*panic insuff mem*/); err != nil {
+	mem, err := memsys.NewMMSA("dsort-cli")
+	if err != nil {
 		return err
 	}
 

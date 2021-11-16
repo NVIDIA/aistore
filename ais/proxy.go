@@ -29,6 +29,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
@@ -102,7 +103,10 @@ func (p *proxyrunner) init(config *cmn.Config) {
 	p.initNetworks()
 	p.si.Init(initPID(config), cmn.Proxy)
 
+	memsys.Init(p.si.ID(), p.si.ID())
+
 	cos.InitShortID(p.si.Digest())
+
 	p.initClusterCIDR()
 	daemon.rg.add(p)
 

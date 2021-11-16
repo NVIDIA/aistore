@@ -298,7 +298,7 @@ func CopyStruct(dst, src interface{}) {
 	reflect.ValueOf(dst).Elem().Set(y.Elem())
 }
 
-func Printf(format string, a ...interface{}) {
+func Infof(format string, a ...interface{}) {
 	if flag.Parsed() {
 		glog.InfoDepth(1, fmt.Sprintf(format, a...))
 	} else {

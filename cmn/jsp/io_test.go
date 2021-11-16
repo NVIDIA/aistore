@@ -94,13 +94,10 @@ func TestDecodeAndEncode(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			var (
 				v    testStruct
-				mmsa = memsys.TestPageMM()
+				mmsa = memsys.PageMM()
 				b    = mmsa.NewSGL(cos.MiB)
 			)
-			defer func() {
-				b.Free()
-				mmsa.Terminate(false)
-			}()
+			defer b.Free()
 
 			err := jsp.Encode(b, test.v, test.opts)
 			tassert.CheckFatal(t, err)
@@ -122,12 +119,9 @@ func TestDecodeAndEncode(t *testing.T) {
 }
 
 func TestDecodeAndEncodeFuzz(t *testing.T) {
-	mmsa := memsys.TestPageMM()
+	mmsa := memsys.PageMM()
 	b := mmsa.NewSGL(cos.MiB)
-	defer func() {
-		b.Free()
-		mmsa.Terminate(false)
-	}()
+	defer b.Free()
 
 	for i := 0; i < 10000; i++ {
 		var (
@@ -162,8 +156,7 @@ func BenchmarkEncode(b *testing.B) {
 		{name: "compress", v: makeStaticStruct(), opts: jsp.Options{Compress: true}},
 		{name: "ccs", v: makeStaticStruct(), opts: jsp.CCSign(7)},
 	}
-	mmsa := memsys.TestPageMM()
-	defer mmsa.Terminate(false)
+	mmsa := memsys.PageMM()
 	for _, bench := range benches {
 		b.Run(bench.name, func(b *testing.B) {
 			body := mmsa.NewSGL(cos.MiB)
@@ -198,11 +191,9 @@ func BenchmarkDecode(b *testing.B) {
 	}
 	for _, bench := range benches {
 		b.Run(bench.name, func(b *testing.B) {
-			mmsa := memsys.TestPageMM()
+			mmsa, _ := memsys.NewMMSA("jsp")
+			defer mmsa.Terminate(false)
 			sgl := mmsa.NewSGL(cos.MiB)
-			defer func() {
-				mmsa.Terminate(false)
-			}()
 
 			err := jsp.Encode(sgl, bench.v, bench.opts)
 			tassert.CheckFatal(b, err)
