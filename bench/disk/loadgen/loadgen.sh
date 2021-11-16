@@ -1,22 +1,21 @@
 if [[ "$#" -lt 1 ]]; then
-    # print all mountpoints
-    echo "available mountpoints (pass as args to run):"
+    # Print all mountpaths.
+    echo "available mountpaths (pass as args to run):"
     lsblk | grep -e "disk" -e "raid" -e "part" | awk '{print $7}' | grep -ve "^$"
     exit 0
 fi
 
-for mountpoint in "$@"
-do
-    lsblk | grep -e "disk" -e "raid" -e "part" | awk '{print $7}' | grep -ve "^$" | grep -Fx "${mountpoint}" &> /dev/null
+for mountpath in "$@"; do
+    lsblk | grep -e "disk" -e "raid" -e "part" | awk '{print $7}' | grep -ve "^$" | grep -Fx "${mountpath}" &> /dev/null
     if [[ "$?" -ne 0 ]]; then
-      echo "${mountpoint} is not in a valid mountpoint (re-run without args to get list)"
+      echo "${mountpath} is not in a valid mountpath (re-run without args to get list)"
       exit 1
     fi
 done
 
 if [[ -z "$seconds" ]]; then
     seconds=50
-fi  
+fi
 if [[ "$seconds" =~ ^[\-0-9]+$ ]] && (( "$seconds" > 0)); then
   echo "Benchmark running for $seconds seconds."
 else
@@ -26,7 +25,7 @@ fi
 
 if [[ -z "$workers" ]]; then
     workers=1
-fi 
+fi
 if [[ "$workers" =~ ^[\-0-9]+$ ]] && (( "$workers" > 0)); then
   echo "Running $workers workers."
 else
@@ -36,7 +35,7 @@ fi
 
 if [[ -z "$iobatch" ]]; then
     iobatch=1000
-fi  
+fi
 if [[ "$iobatch" =~ ^[0-9]*[1-9][0-9]*$ ]]; then
   echo "Performing $iobatch operations per batch"
 else
@@ -47,7 +46,7 @@ fi
 
 if [[ -z "$pct_read" ]]; then
     pct_read=75
-fi 
+fi
 if [[ "$pct_read" =~ ^[\-0-9]+$ ]] && (( "$pct_read" >= 0)) && (( "$pct_read" <= 100)); then
   echo "Doing $pct_read percent read."
 else
@@ -69,18 +68,17 @@ fi
 foldername="dutil-bench-stress-dir"
 files=""
 i=0
-for mountpoint in "$@"
-do
+for mountpath in "$@"; do
     if [[ ! -z $files ]]; then
        files="${files}:"
     fi
 
-    mpoint="$(echo -n ${mountpoint} | sed -e "s,/\+$,,")/${foldername}"
-    rm -rf $mpoint
-    mkdir -m 777 -p $mpoint
+    mpath="$(echo -n ${mountpath} | sed -e "s,/\+$,,")/${foldername}"
+    rm -rf ${mpath}
+    mkdir -m 777 -p ${mpath}
 
     i=$((i + 1))
-    file="${mpoint}/$i"
+    file="${mpath}/$i"
     files="${files}${file}"
 done
 
@@ -114,8 +112,7 @@ echo "end time: $(date +\"%D.%T.%N\")"
 
 rm -rf $confname
 
-for mountpoint in "$@"
-do
-    mpoint="$(echo -n ${mountpoint} | sed -e "s,/\+$,,")/${foldername}"
-    rm -rf $mpoint
+for mountpath in "$@"; do
+    mpath="$(echo -n ${mountpath} | sed -e "s,/\+$,,")/${foldername}"
+    rm -rf ${mpath}
 done

@@ -40,7 +40,7 @@ $ make help
 ### Clean deploy
 
 ```
-./clean_deploy.sh [--ntargets TARGET_CNT] [--nproxies PROXY_CNT] [--mountpoints MPOINT_CNT] [--https] [--deployment local|remote|all] [--remote-alias REMOTE_ALIAS] [--PROVIDER ...] [--debug PKG=LOG_LEVEL[,PKG=LOG_LEVEL]]
+./clean_deploy.sh [--target-cnt TARGET_CNT] [--proxy-cnt PROXY_CNT] [--mountpath-cnt MOUNTPATH_CNT] [--https] [--deployment local|remote|all] [--remote-alias REMOTE_ALIAS] [--PROVIDER ...] [--debug PKG=LOG_LEVEL[,PKG=LOG_LEVEL]]
 ```
 
 Performs cleanup and then deploys a new instance of an AIS cluster.
@@ -63,7 +63,7 @@ The script will not only deploy the two clusters - it will also assign the remot
 and attach one cluster to another, thus forming a [global namespace](providers.md#remote-ais-cluster).
 
 ```console
-$ deploy/scripts/clean_deploy.sh --ntargets 1 --nproxies 1 --mountpoints 4 --deployment all --remote-alias remais
+$ deploy/scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt 4 --deployment all --remote-alias remais
 ```
 
 From here, one can create and destroy buckets, read and write data, show buckets, objects and their respective properties -
@@ -103,16 +103,16 @@ The example below deploys:
 - with AWS support
 
 ```console
-$ bash ./deploy/scripts/clean-deploy --deployment all --remote-alias remoteAIS -ntargets 3 -nproxies 3 --aws
+$ bash ./deploy/scripts/clean-deploy --deployment all --remote-alias remoteAIS --target-cnt 3 --proxy-cnt 3 --aws
 ```
 
 #### Options
 
 | Option | Description |
 | ------ | ----------- |
-| `--ntargets` | Number of targets to start (default: 5) |
-| `--nproxies` | Number of proxies to start (default: 5) |
-| `--mountpoints` | Number of mountpoints to use (default: 5) |
+| `--target-cnt` | Number of targets to start (default: 5) |
+| `--proxy-cnt` | Number of proxies to start (default: 5) |
+| `--mountpath-cnt` | Number of mountpaths to use (default: 5) |
 | `--PROVIDER` | Specifies the backend provider(s). Can be: `--aws`, `--azure`, `--gcp`, `--hdfs` |
 | `--loopback` | Provision loopback devices |
 | `--deployment` | Choose which AIS cluster to deploy. `local` to deploy only one AIS cluster, `remote` to only start an AIS-behind-AIS cluster, and `all` to deploy both the local and remote clusters. |

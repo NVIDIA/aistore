@@ -138,10 +138,10 @@ and then deploys a local cluster with 5 proxies and 5 targets. Examples:
 
 ```console
 # Deploy 7 targets and 1 proxy:
-$ clean_deploy.sh --nproxies 1 --ntargets 7
+$ clean_deploy.sh --proxy-cnt 1 --target-cnt 7
 
 # Same as above, plus built-in support for GCP (cloud storage):
-$ clean_deploy.sh --nproxies 1 --ntargets 7 --gcp
+$ clean_deploy.sh --proxy-cnt 1 --target-cnt 7 --gcp
 ```
 
 For more options and detailed description, run `make help` and see: [`clean_deploy.sh`](/docs/development.md#clean-deploy).

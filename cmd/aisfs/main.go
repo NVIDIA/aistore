@@ -75,7 +75,7 @@ func runDaemon(mountPath string, errorSink io.Writer) (err error) {
 	//
 	// 2) Executable working directory might not be the same as
 	//    the current working directory, so it's important to
-	//    pass an absolute path of the mountpoint directory.
+	//    pass an absolute path of the mountpath directory.
 	executableArgs = append([]string{"--wait"}, os.Args[1:len(os.Args)-1]...)
 	executableArgs = append(executableArgs, mountPath)
 

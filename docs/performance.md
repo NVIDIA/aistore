@@ -114,7 +114,7 @@ Storage-wise, each local `ais_local.json` config must be looking as follows:
 }
 ```
 
-* Each local path from the `fspaths` section above must be (or contain as a prefix) a mountpoint of a local filesystem.
+* Each local path from the `fspaths` section above must be (or contain as a prefix) a mountpath of a local filesystem.
 * Each local filesystem (above) must utilize one or more data drives, whereby none of the data drives is shared between two or more local filesystems.
 * Each filesystem must be fine-tuned for reading large files/blocks/xfersizes.
 

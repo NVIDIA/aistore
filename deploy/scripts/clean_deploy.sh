@@ -28,9 +28,9 @@ azure_provider="n"
 gcp_provider="n"
 hdfs_provider="n"
 loopback="n"
-targets=5
-proxies=5
-mpoints=5
+target_cnt=5
+proxy_cnt=5
+mountpath_cnt=5
 deployment="local"
 remote_alias="rmtais"
 cleanup="false"
@@ -42,21 +42,21 @@ USAGE:
   ./clean_deploy.sh [options...]
 
 OPTIONS:
-  --ntargets     Number of targets to start (default: 5)
-  --nproxies     Number of proxies to start (default: 5)
-  --mountpoints  Number of mountpoints to use (default: 5)
-  --cleanup      Perform cleanup of data and metadata (default: not set)
-  --deployment   Choose which AIS cluster to deploy. One of: 'local', 'remote', 'all' (default: 'local')
-  --remote-alias Alias to assign to the remote cluster (default: 'rmtais')
-  --aws          Builds support for aws as a backend provider
-  --azure        Builds support for azure as a backend provider
-  --gcp          Builds support for gcp as a backend provider
-  --hdfs         Builds support for hdfs as a backend provider
-  --loopback     Provision loopback devices
-  --dir          The root directory of the aistore repository
-  --debug        Change the logging level of particular package(s)
-  --https        Start cluster with HTTPS enabled
-  -h, --help     Show this help text
+  --target-cnt    Number of targets to start (default: 5)
+  --proxy-cnt     Number of proxies to start (default: 5)
+  --mountpath-cnt Number of mountpaths to use (default: 5)
+  --cleanup       Perform cleanup of data and metadata
+  --deployment    Choose which AIS cluster to deploy. One of: 'local', 'remote', 'all' (default: 'local')
+  --remote-alias  Alias to assign to the remote cluster (default: 'rmtais')
+  --aws           Builds support for aws as a backend provider
+  --azure         Builds support for azure as a backend provider
+  --gcp           Builds support for gcp as a backend provider
+  --hdfs          Builds support for hdfs as a backend provider
+  --loopback      Provision loopback devices
+  --dir           The root directory of the aistore repository
+  --debug         Change the logging level of particular package(s)
+  --https         Start cluster with HTTPS enabled
+  -h, --help      Show this help text
 "
 
 export MODE="debug" # By default start in debug mode
@@ -74,9 +74,9 @@ while (( "$#" )); do
     --debug) export AIS_DEBUG=$2; shift; shift;;
     --deployment) deployment=$2; shift; shift;;
     --remote-alias) remote_alias=$2; shift; shift;;
-    --ntargets) targets=$2; shift; shift;;
-    --nproxies) proxies=$2; shift; shift;;
-    --mountpoints) mpoints=$2; shift; shift;;
+    --target-cnt) target_cnt=$2; shift; shift;;
+    --proxy-cnt) proxy_cnt=$2; shift; shift;;
+    --mountpath-cnt) mountpath_cnt=$2; shift; shift;;
     --cleanup) cleanup="true"; shift;;
     --https)
       export AIS_USE_HTTPS="true"
@@ -106,7 +106,7 @@ if [[ ${cleanup} == "true" ]]; then
 fi
 
 if [[ ${deployment} == "local" || ${deployment} == "all" ]]; then
-  echo -e "${targets}\n${proxies}\n${mpoints}\n${aws_provider}\n${gcp_provider}\n${azure_provider}\n${hdfs_provider}\n${loopback}\n" | make deploy
+  echo -e "${target_cnt}\n${proxy_cnt}\n${mountpath_cnt}\n${aws_provider}\n${gcp_provider}\n${azure_provider}\n${hdfs_provider}\n${loopback}\n" | make deploy
 fi
 
 make -j8 authn aisloader aisfs cli 1>/dev/null # Build binaries in parallel
