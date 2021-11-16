@@ -141,12 +141,12 @@ func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOnInsufFree bool) (err err
 	// 3. validate min-free & low-wm
 	if mem.Free < r.MinFree+minMemFree {
 		err = fmt.Errorf("insufficient free memory %s (see %s for guidance)", r.Str(&mem), readme)
-		if panicOnInsufFree && (r.isPage() || mem.Free >= r.MinFree+cos.MiB) {
+		if panicOnInsufFree && (r.isPage() || mem.Free <= r.MinFree+cos.MiB) {
 			panic(err)
 		}
 		cos.Errorf("%v", err)
 
-		r.lowWM = r.MinFree + minMemFreeTests
+		r.lowWM = cos.MinU64(r.lowWM, r.MinFree+minMemFreeTests)
 		r.info = ""
 	}
 

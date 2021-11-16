@@ -35,8 +35,6 @@ const (
 
 	scopeConfig = "config"
 	scopeSpec   = "spec"
-
-	maxTarballCnt = 1001
 )
 
 var (
@@ -1338,7 +1336,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 					m:                m,
 					dsorterType:      dsorterType,
 					outputTempl:      "output-{0..100000}",
-					tarballCnt:       maxTarballCnt,
+					tarballCnt:       2000,
 					fileInTarballCnt: 500,
 				}
 				target *cluster.Snode
@@ -1389,7 +1387,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 }
 
 func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	t.Skipf("Skipping %s pending OOS investigation", t.Name())
 
 	const newMountpath = "/tmp/ais/mountpath"
 
@@ -1406,7 +1404,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 							m:                m,
 							dsorterType:      dsorterType,
 							outputTempl:      "output-{0..100000}",
-							tarballCnt:       maxTarballCnt,
+							tarballCnt:       2000,
 							fileInTarballCnt: 200,
 						}
 
@@ -1506,7 +1504,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 					m:                m,
 					dsorterType:      dsorterType,
 					outputTempl:      "output-{0..100000}",
-					tarballCnt:       maxTarballCnt,
+					tarballCnt:       4000,
 					fileInTarballCnt: 200,
 				}
 			)
