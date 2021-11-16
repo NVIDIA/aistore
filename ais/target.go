@@ -880,16 +880,6 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 	if cs := fs.GetCapStatus(); cs.Err != nil || cs.PctMax > cmn.StoreCleanupWM {
 		glog.Warningf("%s: %s", t.si, cs)
-		// NOTE: as we often run functional tests on low capacity
-		debug.Func(func() {
-			available, disabled := fs.Get()
-			for _, mi := range available {
-				os.RemoveAll(mi.DeletedDir())
-			}
-			for _, mi := range disabled {
-				os.RemoveAll(mi.DeletedDir())
-			}
-		})
 		cs = t.OOS(nil)
 		if cs.OOS {
 			// fail this write

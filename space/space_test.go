@@ -380,13 +380,13 @@ var _ = Describe("space evict/cleanup tests", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(filesPath).NotTo(BeADirectory())
 
-				files, err := os.ReadDir(mi.DeletedDir())
+				files, err := os.ReadDir(mi.DeletedRoot())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(files)).To(Equal(1))
 
 				space.RunCleanup(ini)
 
-				files, err = os.ReadDir(mi.DeletedDir())
+				files, err = os.ReadDir(mi.DeletedRoot())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(files)).To(Equal(0))
 			})

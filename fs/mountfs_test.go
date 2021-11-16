@@ -246,7 +246,7 @@ func TestMoveToDeleted(t *testing.T) {
 	mi := mpaths[mpath]
 
 	// Initially .$deleted directory should not exist.
-	tutils.CheckPathNotExists(t, mi.DeletedDir())
+	tutils.CheckPathNotExists(t, mi.DeletedRoot())
 
 	// Removing path that don't exist is still good.
 	err := mi.MoveToDeleted("/path/to/wonderland")
@@ -266,7 +266,7 @@ func TestMoveToDeleted(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		tutils.CheckPathNotExists(t, topDir)
-		tutils.CheckPathExists(t, mi.DeletedDir(), true /*dir*/)
+		tutils.CheckPathExists(t, mi.DeletedRoot(), true /*dir*/)
 	}
 }
 

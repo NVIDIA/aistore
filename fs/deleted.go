@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -19,7 +20,7 @@ import (
 
 const deletedRoot = ".$deleted"
 
-func (mi *MountpathInfo) DeletedDir() string {
+func (mi *MountpathInfo) DeletedRoot() string {
 	return filepath.Join(mi.Path, deletedRoot)
 }
 
@@ -28,17 +29,17 @@ func (mi *MountpathInfo) TempDir(dir string) string {
 }
 
 func (mi *MountpathInfo) RemoveDeleted(who string) (rerr error) {
-	deletedDir := mi.DeletedDir()
-	dentries, err := os.ReadDir(deletedDir)
+	delroot := mi.DeletedRoot()
+	dentries, err := os.ReadDir(delroot)
 	if err != nil {
 		if os.IsNotExist(err) {
-			cos.CreateDir(deletedDir)
+			cos.CreateDir(delroot)
 			err = nil
 		}
 		return err
 	}
 	for _, dent := range dentries {
-		fqn := filepath.Join(deletedDir, dent.Name())
+		fqn := filepath.Join(delroot, dent.Name())
 		if !dent.IsDir() {
 			err := fmt.Errorf("%s: unexpected non-directory item %q in 'deleted'", who, fqn)
 			debug.AssertNoErr(err)
@@ -61,52 +62,56 @@ func (mi *MountpathInfo) RemoveDeleted(who string) (rerr error) {
 // MoveToDeleted removes directory in steps:
 // 1. Synchronously gets temporary directory name
 // 2. Synchronously renames old folder to temporary directory
-func (mi *MountpathInfo) MoveToDeleted(dir string) error {
-	if err := Access(dir); err != nil {
+func (mi *MountpathInfo) MoveToDeleted(dir string) (err error) {
+	var base, tmpBase, tmpDst string
+	err = Access(dir)
+	if err != nil {
 		if os.IsNotExist(err) {
-			return nil
+			err = nil
 		}
-		glog.Errorf("%s: %v", mi, err)
+		return
 	}
 	cs := GetCapStatus()
 	if cs.Err != nil {
-		if err := os.RemoveAll(dir); err != nil {
-			glog.Errorf("FATAL: %s %s: failed to remove, err: %v", mi, cs, err)
-			return err
-		}
-		glog.Errorf("%s %s: removed %q instead of placing it in 'deleted'", mi, cs, dir)
-		return nil
+		goto rm // not moving - removing
 	}
-tmpExists:
-	var (
-		tmpDir     string
-		deletedDir = mi.DeletedDir()
-	)
-	err := cos.CreateDir(deletedDir)
+	base = filepath.Base(dir)
+	tmpBase = mi.TempDir(base)
+	err = cos.CreateDir(tmpBase)
 	if err != nil {
 		if cos.IsErrOOS(err) {
-			goto oos
+			cs.OOS = true
 		}
+		goto rm
+	}
+	tmpDst = filepath.Join(tmpBase, strconv.FormatInt(mono.NanoTime(), 10))
+	if err = os.Rename(dir, tmpDst); err == nil {
+		return
+	}
+	if cos.IsErrOOS(err) {
+		cs.OOS = true
+	}
+rm:
+	// not placing in 'deleted' - removing right away
+	errRm := os.RemoveAll(dir)
+	if errRm != nil && !os.IsNotExist(errRm) && err == nil {
+		err = errRm
+	}
+	if !cs.OOS {
 		return err
 	}
-	tmpDir = filepath.Join(deletedDir, fmt.Sprintf("$dir-%d", mono.NanoTime()))
-	if err = os.Rename(dir, tmpDir); err == nil {
-		return nil
-	}
-	if os.IsExist(err) {
-		glog.Warningf("%q already exists in 'deleted'", tmpDir) // should never happen
-		goto tmpExists
-	}
-	if os.IsNotExist(err) {
-		return nil // consider benign
-	}
-	if !cos.IsErrOOS(err) {
-		return err
-	}
-oos:
-	glog.Errorf("%s %s: OOS (err=%v) - not recycling via 'deleted', removing %q right away", mi, cs, err, dir)
-	if nested := os.RemoveAll(dir); nested != nil {
-		glog.Errorf("FATAL: %s (%v, %v)", mi, err, nested)
-	}
+	glog.Errorf("%s %s: OOS (%v)", mi, cs, err)
+
+	// NOTE: to run functional tests on low capacity
+	// TODO: tune-up OOS handling and then remove
+	debug.Func(func() {
+		available, disabled := Get()
+		for _, mi := range available {
+			os.RemoveAll(mi.DeletedRoot())
+		}
+		for _, mi := range disabled {
+			os.RemoveAll(mi.DeletedRoot())
+		}
+	})
 	return err
 }

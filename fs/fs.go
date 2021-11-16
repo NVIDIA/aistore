@@ -916,7 +916,8 @@ func DestroyBucket(op string, bck cmn.Bck, bid uint64) (err error) {
 	for _, mi := range availablePaths {
 		dir := mi.makeDelPathBck(bck, bid)
 		if errMv := mi.MoveToDeleted(dir); errMv != nil {
-			glog.Errorf("%s %q: failed to destroy dir %q: %v", op, bck, dir, errMv)
+			glog.Errorf("%s %q: failed to rm dir %q: %v", op, bck, dir, errMv)
+			// TODO: call fshc
 		} else {
 			n++
 		}
