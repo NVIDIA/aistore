@@ -35,6 +35,8 @@ const (
 
 	scopeConfig = "config"
 	scopeSpec   = "spec"
+
+	maxTarballCnt = 1001
 )
 
 var (
@@ -1336,7 +1338,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 					m:                m,
 					dsorterType:      dsorterType,
 					outputTempl:      "output-{0..100000}",
-					tarballCnt:       2000,
+					tarballCnt:       maxTarballCnt,
 					fileInTarballCnt: 500,
 				}
 				target *cluster.Snode
@@ -1404,7 +1406,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 							m:                m,
 							dsorterType:      dsorterType,
 							outputTempl:      "output-{0..100000}",
-							tarballCnt:       2000,
+							tarballCnt:       maxTarballCnt,
 							fileInTarballCnt: 200,
 						}
 
@@ -1504,7 +1506,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 					m:                m,
 					dsorterType:      dsorterType,
 					outputTempl:      "output-{0..100000}",
-					tarballCnt:       4000,
+					tarballCnt:       maxTarballCnt,
 					fileInTarballCnt: 200,
 				}
 			)

@@ -71,10 +71,6 @@ func (r *MMSA) GetStats() (stats *Stats) {
 
 // hkcb is called periodically by the system's house-keeper (hk)
 func (r *MMSA) hkcb() time.Duration {
-	var (
-		limit = int64(sizeToGC) // minimum accumulated size that triggers GC
-		depth int               // => current ring depth tbd
-	)
 	// 1. refresh stats and sort idle < busy
 	r.refreshStatsSortIdle()
 
@@ -85,38 +81,45 @@ func (r *MMSA) hkcb() time.Duration {
 
 	// 3. memory is enough, free only those that are idle for a while
 	if pressure == MemPressureLow {
-		r.minDepth.Store(minDepth)
-		if freed := r.freeIdle(freeIdleMinDur); freed > 0 {
+		r.optDepth.Store(optDepth)
+		if freed := r.freeIdle(); freed > 0 {
 			r.toGC.Add(freed)
 			r.doGC(mem.Free, sizeToGC, false, false)
 		}
-		goto ex
+		return r.hkIval(pressure, &mem)
 	}
 
 	// 4. calibrate and mem-free accordingly
+	var (
+		limit = int64(sizeToGC) // minimum accumulated size that triggers GC
+		depth int               // => current ring depth tbd
+	)
 	switch pressure {
 	case OOM, MemPressureExtreme:
-		r.minDepth.Store(4)
-		depth = 4
+		r.optDepth.Store(minDepth)
+		depth = minDepth
 		limit = sizeToGC / 4
 	case MemPressureHigh:
-		tmp := cos.MaxI64(r.minDepth.Load()/2, 32)
-		r.minDepth.Store(tmp)
+		tmp := cos.MaxI64(r.optDepth.Load()/2, optDepth/4)
+		r.optDepth.Store(tmp)
 		depth = int(tmp)
 		limit = sizeToGC / 2
 	default: // MemPressureModerate
-		r.minDepth.Store(minDepth)
-		depth = minDepth / 2
+		r.optDepth.Store(optDepth)
+		depth = optDepth / 2
 	}
 
 	// 5. reduce
+	var gced bool
 	for _, s := range r.sorted { // idle first
-		idle := r.statsSnapshot.Idle[s.ringIdx()]
-		freed := s.reduce(depth, idle > 0, true /* force */)
+		if idle := r.statsSnapshot.Idle[s.ringIdx()]; idle > freeIdleMinDur/2 {
+			depth = minDepth
+		}
+		freed := s.reduce(depth)
 		if freed > 0 {
 			r.toGC.Add(freed)
-			if r.doGC(mem.Free, limit, true, swapping) {
-				goto ex
+			if !gced {
+				gced = r.doGC(mem.Free, limit, true, swapping)
 			}
 		}
 	}
@@ -125,7 +128,6 @@ func (r *MMSA) hkcb() time.Duration {
 	if pressure >= MemPressureHigh {
 		r.doGC(mem.Free, limit, true, swapping)
 	}
-ex:
 	return r.hkIval(pressure, &mem)
 }
 
@@ -196,28 +198,25 @@ func (r *MMSA) idleLess(i, j int) bool {
 
 // freeIdle traverses and deallocates idle slabs- those that were not used for at
 // least the specified duration; returns freed size
-func (r *MMSA) freeIdle(duration time.Duration) (freed int64) {
+func (r *MMSA) freeIdle() (total int64) {
 	for _, s := range r.rings {
-		idle := r.statsSnapshot.Idle[s.ringIdx()]
-		if idle < duration {
+		var (
+			freed int64
+			idle  = r.statsSnapshot.Idle[s.ringIdx()]
+		)
+		switch {
+		case idle > freeIdleZero:
+			freed = s.cleanup()
+		case idle > freeIdleMinDur:
+			freed = s.reduce(optDepth / 4)
+		case idle > freeIdleMinDur/2:
+			freed = s.reduce(optDepth / 2)
+		default:
 			continue
 		}
-		if idle > freeIdleZero {
-			x := s.cleanup()
-			if x > 0 {
-				freed += x
-				if verbose {
-					glog.Infof("%s idle for %v: cleanup %s", s.tag, idle, cos.B2S(x, 1))
-				}
-			}
-		} else {
-			x := s.reduce(minDepth, true /*idle*/, false /*force*/)
-			if x > 0 {
-				freed += x
-				if verbose {
-					glog.Infof("%s idle for %v: reduce %s", s.tag, idle, cos.B2S(x, 1))
-				}
-			}
+		total += freed
+		if verbose && freed > 0 {
+			glog.Infof("%s idle for %v: freed %s", s.tag, idle, cos.B2S(freed, 1))
 		}
 	}
 	return

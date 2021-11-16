@@ -20,7 +20,7 @@ import (
 
 const (
 	minMemFree      = cos.GiB + cos.GiB>>1 // default minimum memory (see description above)
-	minMemFreeTests = cos.MiB * 320        // minimum free to run tests
+	minMemFreeTests = cos.MiB * 256        // minimum free to run tests
 	maxMemUsedTests = cos.GiB * 10         // maximum tests allowed to allocate
 )
 
@@ -86,8 +86,8 @@ func ByteMM() *MMSA {
 	return smm
 }
 
-// defines the type of Slab rings: NumSmallSlabs x 128 vs NumPageSlabs x 4K
-func (r *MMSA) isSmall() bool { return r.defBufSize == DefaultSmallBufSize }
+// NOTE: byte rings vs page rings: NumSmallSlabs x 128 vs. NumPageSlabs x 4K, respectively
+func (r *MMSA) isPage() bool { return r.defBufSize == DefaultBufSize }
 
 func (r *MMSA) RegWithHK() {
 	d := r.duration
@@ -138,18 +138,16 @@ func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOnInsufFree bool) (err err
 	}
 	r.lowWM = (r.MinFree+mem.Free)>>1 - (r.MinFree+mem.Free)>>4 // a quarter of
 
-	// 3. validate
-	if mem.Free < r.MinFree+cos.MiB*16 {
+	// 3. validate min-free & low-wm
+	if mem.Free < r.MinFree+minMemFree {
 		err = fmt.Errorf("insufficient free memory %s (see %s for guidance)", r.Str(&mem), readme)
-		if panicOnInsufFree {
+		if panicOnInsufFree && (r.isPage() || mem.Free >= r.MinFree+cos.MiB) {
 			panic(err)
 		}
 		cos.Errorf("%v", err)
-	}
-	if r.lowWM < r.MinFree+minMemFree {
-		err = fmt.Errorf("Warning: insufficient free memory %s (see %s)", r.Str(&mem), readme)
-		cos.Errorf("%v", err)
+
 		r.lowWM = r.MinFree + minMemFreeTests
+		r.info = ""
 	}
 
 	// 4. timer
@@ -160,7 +158,7 @@ func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOnInsufFree bool) (err err
 
 	// 5. final construction steps
 	r.swap.Store(mem.SwapUsed)
-	r.minDepth.Store(minDepth)
+	r.optDepth.Store(optDepth)
 	r.toGC.Store(0)
 
 	// init rings and slabs
@@ -168,7 +166,7 @@ func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOnInsufFree bool) (err err
 		r.defBufSize = DefaultBufSize
 	}
 	r.slabIncStep, r.maxSlabSize, r.numSlabs = PageSlabIncStep, MaxPageSlabSize, NumPageSlabs
-	if r.isSmall() {
+	if !r.isPage() {
 		r.slabIncStep, r.maxSlabSize, r.numSlabs = SmallSlabIncStep, MaxSmallSlabSize, NumSmallSlabs
 	}
 	r.slabStats = &slabStats{}
@@ -181,19 +179,18 @@ func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOnInsufFree bool) (err err
 			m:       r,
 			tag:     r.name + "." + cos.B2S(bufSize, 0),
 			bufSize: bufSize,
-			get:     make([][]byte, 0, minDepth),
-			put:     make([][]byte, 0, minDepth),
+			get:     make([][]byte, 0, optDepth),
+			put:     make([][]byte, 0, optDepth),
 		}
-		slab.pMinDepth = &r.minDepth
+		slab.pMinDepth = &r.optDepth
 		r.rings[i] = slab
 		r.sorted[i] = slab
 	}
 
 	// 6. GC at init time but only non-small
-	if !r.isSmall() {
+	if r.isPage() {
 		runtime.GC()
 	}
-	r.info = fmt.Sprintf("(min-free %s, low-wm %s)", cos.B2S(int64(r.MinFree), 0), cos.B2S(int64(r.lowWM), 0))
 	cos.Infof("%s started", r.Str(&mem))
 	return
 }

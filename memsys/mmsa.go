@@ -75,6 +75,23 @@ import (
 
 const readme = cmn.GitHubHome + "/blob/master/memsys/README.md"
 
+// =================================== tunables ==========================================
+// The minimum memory (that must remain available) gets computed as follows:
+// 1) environment AIS_MINMEM_FREE takes precedence over everything else;
+// 2) if AIS_MINMEM_FREE is not defined, environment variables AIS_MINMEM_PCT_TOTAL and/or
+//    AIS_MINMEM_PCT_FREE define percentages to compute the minimum based on total
+//    or the currently available memory, respectively;
+// 3) with no environment, the minimum is computed based on the following MMSA member variables:
+//	* MinFree     uint64        // memory that must be available at all times
+//	* MinPctTotal int           // same, via percentage of total
+//	* MinPctFree  int           // ditto, as % of free at init time
+//     (example:
+//         mm := &memsys.MMSA{MinPctTotal: 4, MinFree: cos.GiB * 2}
+//     )
+//  4) finally, if none of the above is specified, the constant `minMemFree` below is used
+//  Other important defaults are also commented below.
+// =================================== MMSA config defaults ==========================================
+
 const (
 	PageSize            = cos.KiB * 4
 	DefaultBufSize      = PageSize * 8
@@ -94,28 +111,14 @@ const (
 	SmallSlabIncStep = 128
 	NumSmallSlabs    = MaxSmallSlabSize / SmallSlabIncStep // = 32
 )
-const NumStats = NumPageSlabs // NOTE: must be greater or equal NumSmallSlabs, otherwise out-of-bounds at init time
 
-// =================================== MMSA config defaults ==========================================
-// The minimum memory (that must remain available) gets computed as follows:
-// 1) environment AIS_MINMEM_FREE takes precedence over everything else;
-// 2) if AIS_MINMEM_FREE is not defined, environment variables AIS_MINMEM_PCT_TOTAL and/or
-//    AIS_MINMEM_PCT_FREE define percentages to compute the minimum based on total
-//    or the currently available memory, respectively;
-// 3) with no environment, the minimum is computed based on the following MMSA member variables:
-//	* MinFree     uint64        // memory that must be available at all times
-//	* MinPctTotal int           // same, via percentage of total
-//	* MinPctFree  int           // ditto, as % of free at init time
-//     (example:
-//         mm := &memsys.MMSA{MinPctTotal: 4, MinFree: cos.GiB * 2}
-//     )
-//  4) finally, if none of the above is specified, the constant `minMemFree` below is used
-//  Other important defaults are also commented below.
-// =================================== MMSA config defaults ==========================================
+const NumStats = NumPageSlabs // NOTE: must be >= NumSmallSlabs
+
 const (
-	minDepth = 128         // ring cap min; default ring growth increment
-	loadAvg  = 10          // "idle" load average to deallocate Slabs when below
-	sizeToGC = cos.GiB * 2 // see heuristics ("Heu")
+	optDepth = 128                  // ring "depth", i.e., num free bufs we trend to (see grow())
+	minDepth = 4                    // depth when idle or under OOM
+	loadAvg  = 10                   // "idle" load average to deallocate Slabs when below
+	sizeToGC = cos.GiB + cos.GiB>>1 // see heuristics ("Heu")
 )
 
 // slab constants
@@ -161,7 +164,7 @@ type (
 		numSlabs      int
 		// atomic state
 		toGC            atomic.Int64  // accumulates over time and triggers GC upon reaching spec-ed limit
-		minDepth        atomic.Int64  // minimum ring depth aka length
+		optDepth        atomic.Int64  // ring "depth", i.e., num free bufs we trend to (see grow())
 		swap            atomic.Uint64 // actual swap size
 		swapCriticality atomic.Int32  // tracks increasing swap size up to swappingMax const
 	}
@@ -200,6 +203,9 @@ func (r *MMSA) Str(mem *sys.MemStat) string {
 		p, swapping = r.MemPressure(mem)
 		sp          = r.MemPressure2S(p, swapping)
 	)
+	if r.info == "" {
+		r.info = fmt.Sprintf("(min-free %s, low-wm %s)", cos.B2S(int64(r.MinFree), 0), cos.B2S(int64(r.lowWM), 0))
+	}
 	return fmt.Sprintf("%s[(used %s, free %s, actfree %s), %s, %s]", r.name, used, free, afree, r.info, sp)
 }
 
@@ -278,9 +284,9 @@ func (r *MMSA) Alloc() (buf []byte, slab *Slab) {
 
 func (r *MMSA) Free(buf []byte) {
 	size := int64(cap(buf))
-	if size > r.maxSlabSize && r.isSmall() {
+	if size > r.maxSlabSize && !r.isPage() {
 		r.sibling.Free(buf)
-	} else if size < r.slabIncStep && !r.isSmall() {
+	} else if size < r.slabIncStep && r.isPage() {
 		r.sibling.Free(buf)
 	} else {
 		debug.Assert(size%r.slabIncStep == 0)
@@ -294,10 +300,10 @@ func (r *MMSA) Free(buf []byte) {
 // Given a known, expected or minimum size to allocate, selects MMSA (page or small, if initialized)
 // and its Slab
 func (r *MMSA) SelectMemAndSlab(size int64) (mmsa *MMSA, slab *Slab) {
-	if size > r.maxSlabSize && r.isSmall() {
+	if size > r.maxSlabSize && !r.isPage() {
 		return r.sibling, r.sibling._selectSlab(size)
 	}
-	if size < r.slabIncStep && !r.isSmall() {
+	if size < r.slabIncStep && r.isPage() {
 		return r.sibling, r.sibling._selectSlab(size)
 	}
 	mmsa, slab = r, r._selectSlab(size)
@@ -412,13 +418,15 @@ func (s *Slab) _allocSlow() (buf []byte) {
 	debug.Assert(len(s.get) == s.pos)
 	s.muput.Lock()
 	lput := len(s.put)
-	if cnt := curMinDepth - lput; cnt > 0 {
+	if cnt := (curMinDepth - lput) >> 1; cnt > 0 {
+		if verbose {
+			glog.Infof("%s: grow by %d to %d, caps=(%d, %d)", s.tag, cnt, lput+cnt, cap(s.get), cap(s.put))
+		}
 		s.grow(cnt)
 	}
 	s.get, s.put = s.put, s.get
 
 	debug.Assert(len(s.put) == s.pos)
-	debug.Assert(len(s.get) >= curMinDepth)
 
 	s.put = s.put[:0]
 	s.muput.Unlock()
@@ -431,27 +439,17 @@ func (s *Slab) _allocSlow() (buf []byte) {
 }
 
 func (s *Slab) grow(cnt int) {
-	if verbose {
-		glog.Infof("%s: grow by %d => %d", s.tag, cnt, len(s.put)+cnt)
-	}
 	for ; cnt > 0; cnt-- {
 		buf := make([]byte, s.Size())
 		s.put = append(s.put, buf)
 	}
 }
 
-func (s *Slab) reduce(todepth int, isIdle, force bool) int64 {
+func (s *Slab) reduce(todepth int) int64 {
 	var pfreed, gfreed int64
 	s.muput.Lock()
 	lput := len(s.put)
 	cnt := lput - todepth
-	if isIdle {
-		if force {
-			cnt = cos.Max(cnt, lput/2) // Heu #6
-		} else {
-			cnt = cos.Min(cnt, lput/2) // Heu #7
-		}
-	}
 	if cnt > 0 {
 		for ; cnt > 0; cnt-- {
 			lput--
@@ -462,19 +460,12 @@ func (s *Slab) reduce(todepth int, isIdle, force bool) int64 {
 	}
 	s.muput.Unlock()
 	if pfreed > 0 && verbose {
-		glog.Infof("%s(f=%t, i=%t): reduce lput %d => %d, freed=%d", s.tag, force, isIdle, lput, lput-cnt, pfreed)
+		glog.Infof("%s: reduce lput %d to %d (freed %dB)", s.tag, lput, lput-cnt, pfreed)
 	}
 
 	s.muget.Lock()
 	lget := len(s.get) - s.pos
 	cnt = lget - todepth
-	if isIdle {
-		if force {
-			cnt = cos.Max(cnt, lget/2) // Heu #9
-		} else {
-			cnt = cos.Min(cnt, lget/2) // Heu #10
-		}
-	}
 	if cnt > 0 {
 		for ; cnt > 0; cnt-- {
 			s.get[s.pos] = nil
@@ -484,7 +475,7 @@ func (s *Slab) reduce(todepth int, isIdle, force bool) int64 {
 	}
 	s.muget.Unlock()
 	if gfreed > 0 && verbose {
-		glog.Infof("%s(f=%t, i=%t): reduce lget %d => %d, freed=%d", s.tag, force, isIdle, lget, lget-cnt, gfreed)
+		glog.Infof("%s: reduce lget %d to %d (freed %dB)", s.tag, lget, lget-cnt, gfreed)
 	}
 	return pfreed + gfreed
 }
