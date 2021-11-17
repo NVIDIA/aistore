@@ -32,22 +32,20 @@ var (
 
 func Init(gmmName, smmName string) {
 	debug.Assert(gmm == nil && smm == nil)
-	gmm = &MMSA{name: gmmName + ".gmm", defBufSize: DefaultBufSize}
-	smm = &MMSA{name: smmName + ".smm", defBufSize: DefaultSmallBufSize}
+	gmm = &MMSA{Name: gmmName + ".gmm", defBufSize: DefaultBufSize}
+	smm = &MMSA{Name: smmName + ".smm", defBufSize: DefaultSmallBufSize}
 	verbose = bool(glog.FastV(4, glog.SmoduleMemsys))
 }
 
 func testInit(gmmName, smmName string) {
 	debug.Assert(gmm == nil && smm == nil)
-	gmm = &MMSA{name: gmmName + ".pmm", defBufSize: DefaultBufSize, MinFree: minMemFreeTests}
-	smm = &MMSA{name: smmName + ".smm", defBufSize: DefaultSmallBufSize, MinFree: minMemFreeTests}
+	gmm = &MMSA{Name: gmmName + ".pmm", defBufSize: DefaultBufSize, MinFree: minMemFreeTests}
+	smm = &MMSA{Name: smmName + ".smm", defBufSize: DefaultSmallBufSize, MinFree: minMemFreeTests}
 }
 
-func (r *MMSA) TestName(name string) { r.name = name } // memsys unit tests only
-
 func NewMMSA(name string) (mem *MMSA, err error) {
-	mem = &MMSA{name: name + ".test.pmm", defBufSize: DefaultBufSize, MinFree: minMemFreeTests}
-	err = mem.Init(0, false /*panic env err*/, false /*panic insuff mem*/)
+	mem = &MMSA{Name: name + ".test.pmm", defBufSize: DefaultBufSize, MinFree: minMemFreeTests}
+	err = mem.Init(0, false, false)
 	return
 }
 
@@ -102,12 +100,12 @@ func (r *MMSA) RegWithHK() {
 	if mem.Free < r.lowWM || mem.Free < minMemFree {
 		d >>= 1
 	}
-	hk.Reg(r.name+".gc", r.hkcb, d)
+	hk.Reg(r.Name+".gc", r.hkcb, d)
 }
 
 // initialize new MMSA instance
 func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOOM bool) (err error) {
-	debug.Assert(r.name != "")
+	debug.Assert(r.Name != "")
 	// 1. environment overrides defaults and MMSA{...} hard-codings
 	if err = r.env(); err != nil {
 		if panicOnEnvErr {
@@ -141,6 +139,7 @@ func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOOM bool) (err error) {
 		r.MinFree = minMemFree
 	}
 	r.lowWM = (r.MinFree+mem.Free)>>1 - (r.MinFree+mem.Free)>>4 // a quarter of
+	r.lowWM = cos.MaxU64(r.lowWM, r.MinFree+minMemFreeTests)
 
 	// 3. validate min-free & low-wm
 	if mem.Free < cos.MinU64(r.MinFree*2, r.MinFree+minMemFree) {
@@ -180,7 +179,7 @@ func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOOM bool) (err error) {
 		bufSize := r.slabIncStep * int64(i+1)
 		slab := &Slab{
 			m:       r,
-			tag:     r.name + "." + cos.B2S(bufSize, 0),
+			tag:     r.Name + "." + cos.B2S(bufSize, 0),
 			bufSize: bufSize,
 			get:     make([][]byte, 0, optDepth),
 			put:     make([][]byte, 0, optDepth),
@@ -205,7 +204,7 @@ func (r *MMSA) Terminate(unregHK bool) {
 		gced  string
 	)
 	if unregHK {
-		hk.Unreg(r.name + ".gc")
+		hk.Unreg(r.Name + ".gc")
 	}
 	for _, s := range r.rings {
 		freed += s.cleanup()

@@ -1387,8 +1387,6 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 }
 
 func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
-	t.Skipf("Skipping %s pending OOS investigation", t.Name())
-
 	const newMountpath = "/tmp/ais/mountpath"
 
 	runDSortTest(

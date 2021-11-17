@@ -150,8 +150,8 @@ type (
 		TimeIval    time.Duration // interval of time to watch for low memory and make steps
 		MinPctTotal int           // same, via percentage of total
 		MinPctFree  int           // ditto, as % of free at init time
+		Name        string
 		// private
-		name          string
 		info          string
 		sibling       *MMSA
 		lowWM         uint64
@@ -208,7 +208,7 @@ func (r *MMSA) Str(mem *sys.MemStat) string {
 	if r.info == "" {
 		r.info = fmt.Sprintf("(min-free %s, low-wm %s)", cos.B2S(int64(r.MinFree), 0), cos.B2S(int64(r.lowWM), 0))
 	}
-	return fmt.Sprintf("%s[(used %s, free %s, actfree %s), %s, %s]", r.name, used, free, afree, r.info, sp)
+	return fmt.Sprintf("%s[(used %s, free %s, actfree %s), %s, %s]", r.Name, used, free, afree, r.info, sp)
 }
 
 // allocate SGL

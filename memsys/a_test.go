@@ -62,17 +62,13 @@ func TestMain(t *testing.M) {
 	os.Exit(t.Run())
 }
 
-func Test_Sleep(t *testing.T) {
+func Test_Sleep(*testing.T) {
 	if testing.Short() {
 		duration = 4 * time.Second
 	}
 
-	mem := &memsys.MMSA{TimeIval: time.Second * 20, MinFree: cos.GiB}
-	mem.TestName("amem")
-	err := mem.Init(0, false /*panic env err*/, false /*panic insuff mem*/)
-	if err != nil {
-		t.Fatal(err)
-	}
+	mem := &memsys.MMSA{Name: "amem", TimeIval: time.Second * 20, MinFree: cos.GiB}
+	mem.Init(0, false, false)
 
 	wg := &sync.WaitGroup{}
 	random := cos.NowRand()
@@ -99,17 +95,13 @@ func Test_Sleep(t *testing.T) {
 	mem.Terminate(false)
 }
 
-func Test_NoSleep(t *testing.T) {
+func Test_NoSleep(*testing.T) {
 	if testing.Short() {
 		duration = 4 * time.Second
 	}
 
-	mem := &memsys.MMSA{TimeIval: time.Second * 20, MinPctTotal: 5}
-	mem.TestName("bmem")
-	err := mem.Init(0, false /*panic env err*/, false /*panic insuff mem*/)
-	if err != nil {
-		t.Fatal(err)
-	}
+	mem := &memsys.MMSA{Name: "bmem", TimeIval: time.Second * 20, MinPctTotal: 5}
+	mem.Init(0, false, false)
 	go printStats(mem)
 
 	wg := &sync.WaitGroup{}
