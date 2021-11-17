@@ -537,7 +537,6 @@ where the fields are defined as follows:
 var redactFnames = map[string]int{
 	"target_stats.go": 0,
 	"proxy_stats.go":  0,
-	"log_iostat.go":   0,
 }
 
 func (l *loggingT) header(s severity, depth int) (*buffer, string, int) {

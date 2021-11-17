@@ -86,7 +86,7 @@ func (r *MMSA) hkcb() time.Duration {
 			r.toGC.Add(freed)
 			r.doGC(mem.Free, sizeToGC, false, false)
 		}
-		return r.hkIval(pressure, &mem)
+		return r.hkIval(pressure)
 	}
 
 	// 4. calibrate and mem-free accordingly
@@ -128,32 +128,18 @@ func (r *MMSA) hkcb() time.Duration {
 	if pressure >= MemPressureHigh {
 		r.doGC(mem.Free, limit, true, swapping)
 	}
-	return r.hkIval(pressure, &mem)
+	return r.hkIval(pressure)
 }
 
-func (r *MMSA) hkIval(pressure int, mem *sys.MemStat) time.Duration {
-	var changed bool
+func (r *MMSA) hkIval(pressure int) time.Duration {
 	switch pressure {
 	case MemPressureLow:
-		if r.duration != r.TimeIval*2 {
-			r.duration = r.TimeIval * 2
-			changed = true
-		}
+		return r.TimeIval * 2
 	case MemPressureModerate:
-		if r.duration != r.TimeIval {
-			r.duration = r.TimeIval
-			changed = true
-		}
+		return r.TimeIval
 	default:
-		if r.duration != r.TimeIval/2 {
-			r.duration = r.TimeIval / 2
-			changed = true
-		}
+		return r.TimeIval / 2
 	}
-	if (pressure > MemPressureHigh) || (changed && verbose) {
-		glog.Infof("%s (next house-keep in %v)", r.Str(mem), r.duration)
-	}
-	return r.duration
 }
 
 // 1) refresh internal stats

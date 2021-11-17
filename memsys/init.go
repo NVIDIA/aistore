@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -55,12 +54,16 @@ func NewMMSA(name string) (mem *MMSA, err error) {
 // system page-based memory-manager-slab-allocator (MMSA)
 func PageMM() *MMSA {
 	gmmOnce.Do(func() {
-		var maxUse int64
+		var (
+			maxUse   int64
+			panicOOM = true
+		)
 		if gmm == nil {
 			testInit("test", "test")
 			maxUse = maxMemUsedTests
+			panicOOM = false
 		}
-		gmm.Init(maxUse, false, true)
+		gmm.Init(maxUse, false, panicOOM)
 		if smm != nil {
 			smm.sibling = gmm
 			gmm.sibling = smm
@@ -72,12 +75,16 @@ func PageMM() *MMSA {
 // system small-size allocator (range 1 - 4K)
 func ByteMM() *MMSA {
 	smmOnce.Do(func() {
-		var maxUse int64
+		var (
+			maxUse   int64
+			panicOOM = true
+		)
 		if smm == nil {
 			testInit("test", "test")
 			maxUse = maxMemUsedTests
+			panicOOM = false
 		}
-		smm.Init(maxUse, false, true)
+		smm.Init(maxUse, false, panicOOM)
 		if gmm != nil {
 			gmm.sibling = smm
 			smm.sibling = gmm
@@ -90,19 +97,16 @@ func ByteMM() *MMSA {
 func (r *MMSA) isPage() bool { return r.defBufSize == DefaultBufSize }
 
 func (r *MMSA) RegWithHK() {
-	d := r.duration
+	d := r.TimeIval
 	mem, _ := sys.Mem()
 	if mem.Free < r.lowWM || mem.Free < minMemFree {
-		d = r.duration / 4
-		if d < 10*time.Second {
-			d = 10 * time.Second
-		}
+		d >>= 1
 	}
 	hk.Reg(r.name+".gc", r.hkcb, d)
 }
 
 // initialize new MMSA instance
-func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOnInsufFree bool) (err error) {
+func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOOM bool) (err error) {
 	debug.Assert(r.name != "")
 	// 1. environment overrides defaults and MMSA{...} hard-codings
 	if err = r.env(); err != nil {
@@ -139,9 +143,9 @@ func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOnInsufFree bool) (err err
 	r.lowWM = (r.MinFree+mem.Free)>>1 - (r.MinFree+mem.Free)>>4 // a quarter of
 
 	// 3. validate min-free & low-wm
-	if mem.Free < r.MinFree+minMemFree {
+	if mem.Free < cos.MinU64(r.MinFree*2, r.MinFree+minMemFree) {
 		err = fmt.Errorf("insufficient free memory %s (see %s for guidance)", r.Str(&mem), readme)
-		if panicOnInsufFree && (r.isPage() || mem.Free <= r.MinFree+cos.MiB) {
+		if panicOOM && (r.isPage() || mem.Free <= r.MinFree+cos.MiB) {
 			panic(err)
 		}
 		cos.Errorf("%v", err)
@@ -154,7 +158,6 @@ func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOnInsufFree bool) (err err
 	if r.TimeIval == 0 {
 		r.TimeIval = memCheckAbove
 	}
-	r.duration = r.TimeIval
 
 	// 5. final construction steps
 	r.swap.Store(mem.SwapUsed)

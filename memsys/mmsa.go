@@ -154,7 +154,6 @@ type (
 		name          string
 		info          string
 		sibling       *MMSA
-		duration      time.Duration
 		lowWM         uint64
 		rings         []*Slab
 		sorted        []*Slab

@@ -882,7 +882,6 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if cs := fs.GetCapStatus(); cs.Err != nil || cs.PctMax > cmn.StoreCleanupWM {
-		glog.Warningf("%s: %s", t.si, cs)
 		cs = t.OOS(nil)
 		if cs.OOS {
 			// fail this write

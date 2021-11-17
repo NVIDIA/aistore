@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/sys"
 )
 
@@ -261,8 +262,8 @@ func (r *Trunner) log(now int64, uptime time.Duration) {
 	// 5. memory pressure
 	memStat, err := sys.Mem()
 	debug.AssertNoErr(err)
-	if memStat.Used > memStat.Total>>1 {
-		mm := r.T.PageMM()
+	mm := r.T.PageMM()
+	if p, _ := mm.MemPressure(&memStat); p >= memsys.MemPressureHigh {
 		r.lines = append(r.lines, mm.Str(&memStat))
 	}
 

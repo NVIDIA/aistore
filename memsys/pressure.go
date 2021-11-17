@@ -49,6 +49,7 @@ func (r *MMSA) MemPressure(mems ...*sys.MemStat) (pressure int, swapping bool) {
 		mem = &memStat
 	}
 
+	// TODO -- FIXME: this piece of code must move and be called strictly by HK
 	// 2. update swapping state
 	swapping, crit = mem.SwapUsed > r.swap.Load(), r.swapCriticality.Load()
 	if swapping {
@@ -69,7 +70,6 @@ func (r *MMSA) MemPressure(mems ...*sys.MemStat) (pressure int, swapping bool) {
 		return MemPressureHigh, swapping
 	case mem.Free >= r.lowWM:
 		debug.Assert(ncrit == 0 && !swapping)
-		r.swap.Store(0) // reset
 		return MemPressureLow, swapping
 	}
 	pressure = MemPressureModerate
