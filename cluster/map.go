@@ -195,18 +195,19 @@ func (d *Snode) isDuplicate(n *Snode) error {
 	for _, ni := range nu {
 		np, err := url.Parse(ni)
 		if err != nil {
-			return fmt.Errorf("failed to parse %s URL %q: %v", n, ni, err)
+			return fmt.Errorf("FATAL: failed to parse %s URL %q: %v", n.StringEx(), ni, err)
 		}
 		for _, di := range du {
 			dp, err := url.Parse(di)
 			if err != nil {
-				return fmt.Errorf("failed to parse %s URL %q: %v", d, di, err)
+				return fmt.Errorf("FATAL: failed to parse %s URL %q: %v", d.StringEx(), di, err)
 			}
 			if np.Host == dp.Host {
-				return fmt.Errorf("duplicate IPs: %s and %s share the same %q", d, n, np.Host)
+				return fmt.Errorf("duplicate IPs: %s and %s share the same %q (hint: node ID changed or lost/renewed?)",
+					d.StringEx(), n.StringEx(), np.Host)
 			}
 			if ni == di {
-				return fmt.Errorf("duplicate URLs: %s and %s share the same %q", d, n, ni)
+				return fmt.Errorf("duplicate URLs: %s and %s share the same %q", d.StringEx(), n.StringEx(), ni)
 			}
 		}
 	}
