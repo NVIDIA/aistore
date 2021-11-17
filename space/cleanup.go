@@ -170,16 +170,17 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 	return parent.cs.c
 }
 
-func (p *clnP) rmMisplaced() bool {
+func (p *clnP) rmMisplaced() (yes bool) {
 	g, l := xreg.GetRebMarked(), xreg.GetResilverMarked()
 	if g.Xact != nil || l.Xact != nil {
-		return false
+		return
 	}
-	// NOTE: high-watermark warranted
-	if p.cs.a.Err != nil {
-		return true
+	yes = !g.Interrupted && !l.Interrupted
+	if yes && p.cs.a.Err != nil {
+		glog.Errorf("%s: %s but not removing misplaced/obsolete copies in presence of interrupted rebalance",
+			p.ini.Xaction, p.cs.a.String())
 	}
-	return !g.Interrupted && !l.Interrupted
+	return
 }
 
 //////////////////////
