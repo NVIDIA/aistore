@@ -29,7 +29,7 @@ const nodeXattrID = "user.ais.daemon_id"
 
 // enum MountpathInfo.Flags
 const (
-	FlagBeingDisabled cos.BitFlags = 1 << iota
+	FlagBeingDisabled uint64 = 1 << iota
 	FlagBeingDetached
 )
 
@@ -49,8 +49,8 @@ type (
 		PathDigest     uint64   // used for HRW
 		Disks          []string // owned disks (ios.FsDisks map => slice)
 
-		// flags
-		flags cos.BitFlags
+		// bit flags (atomic)
+		flags uint64
 		// LOM caches
 		lomCaches cos.MultiSyncMap
 		// bucket path cache
@@ -138,8 +138,13 @@ func NewMountpath(mpath string) (mi *MountpathInfo, err error) {
 }
 
 // flags
-func (mi *MountpathInfo) setFlags(flags cos.BitFlags)      { mi.flags = mi.flags.Set(flags) }
-func (mi *MountpathInfo) IsAnySet(flags cos.BitFlags) bool { return mi.flags.IsAnySet(flags) }
+func (mi *MountpathInfo) setFlags(flags uint64) (ok bool) {
+	return cos.SetfAtomic(&mi.flags, flags)
+}
+
+func (mi *MountpathInfo) IsAnySet(flags uint64) bool {
+	return cos.IsAnySetfAtomic(&mi.flags, flags)
+}
 
 func (mi *MountpathInfo) String() string { return mi._string() }
 
@@ -436,12 +441,12 @@ func (mi *MountpathInfo) AddEnabled(tid string, availablePaths MPI, config *cmn.
 	if err = mi._addEnabled(tid, availablePaths, config); err == nil {
 		mfs.fsIDs[mi.FsID] = mi.Path
 	}
-	mi.flags = mi.flags.Clear(FlagWaitingDD)
+	cos.ClearfAtomic(&mi.flags, FlagWaitingDD)
 	return
 }
 
 func (mi *MountpathInfo) AddDisabled(disabledPaths MPI) {
-	mi.flags = mi.flags.Clear(FlagWaitingDD)
+	cos.ClearfAtomic(&mi.flags, FlagWaitingDD)
 	disabledPaths[mi.Path] = mi
 	mfs.fsIDs[mi.FsID] = mi.Path
 }
@@ -705,7 +710,7 @@ func enable(mpath, cleanMpath, tid string, config *cmn.Config) (enabledMpath *Mo
 			mi, ok = availableCopy[cleanMpath]
 			debug.Assert(ok)
 			glog.Warningf("%s: re-enabling during dd-transition", mi)
-			mi.flags = mi.flags.Clear(FlagWaitingDD)
+			cos.ClearfAtomic(&mi.flags, FlagWaitingDD)
 			enabledMpath = mi
 			putAvailMPI(availableCopy)
 		} else if glog.FastV(4, glog.SmoduleFS) {
@@ -789,12 +794,12 @@ func Remove(mpath string, cb ...func()) (*MountpathInfo, error) {
 }
 
 // begin (disable | detach) transaction: CoW-mark the corresponding mountpath
-func BeginDD(action string, flags cos.BitFlags, mpath string) (mi *MountpathInfo, numAvail int, err error) {
+func BeginDD(action string, flags uint64, mpath string) (mi *MountpathInfo, numAvail int, err error) {
 	var (
 		cleanMpath string
 		exists     bool
 	)
-	debug.Assert(flags.IsAnySet(FlagWaitingDD))
+	debug.Assert(cos.BitFlags(flags).IsAnySet(cos.BitFlags(FlagWaitingDD)))
 	if cleanMpath, err = cmn.ValidateMpath(mpath); err != nil {
 		return
 	}
@@ -815,7 +820,8 @@ func BeginDD(action string, flags cos.BitFlags, mpath string) (mi *MountpathInfo
 
 	availableCopy := _cloneOne(availablePaths)
 	mi = availableCopy[cleanMpath]
-	mi.setFlags(flags)
+	ok := mi.setFlags(flags)
+	debug.AssertMsg(ok, mi.String()) // NOTE: under lock
 	putAvailMPI(availableCopy)
 	numAvail = len(availableCopy) - 1
 	return
@@ -843,7 +849,7 @@ func Disable(mpath string, cb ...func()) (disabledMpath *MountpathInfo, err erro
 			return
 		}
 		availableCopy, disabledCopy := cloneMPI()
-		mi.flags = mi.flags.Clear(FlagWaitingDD)
+		cos.ClearfAtomic(&mi.flags, FlagWaitingDD)
 		disabledCopy[cleanMpath] = mi
 		mfs.ios.RemoveMpath(cleanMpath)
 		delete(availableCopy, cleanMpath)

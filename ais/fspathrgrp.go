@@ -115,7 +115,7 @@ func (g *fsprungroup) detachMpath(mpath string) (rmi *fs.MountpathInfo, err erro
 	return
 }
 
-func (g *fsprungroup) _preDD(action string, flags cos.BitFlags, mpath string) (nothingToDo bool, err error) {
+func (g *fsprungroup) _preDD(action string, flags uint64, mpath string) (nothingToDo bool, err error) {
 	var (
 		rmi      *fs.MountpathInfo
 		numAvail int

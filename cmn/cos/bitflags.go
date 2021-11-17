@@ -4,6 +4,8 @@
  */
 package cos
 
+import "sync/atomic"
+
 type BitFlags uint64
 
 func (f BitFlags) Set(flags BitFlags) BitFlags {
@@ -20,4 +22,22 @@ func (f BitFlags) IsSet(flags BitFlags) bool {
 
 func (f BitFlags) IsAnySet(flags BitFlags) bool {
 	return f&flags != 0
+}
+
+// atomic
+
+func SetfAtomic(f *uint64, flags uint64) (ok bool) {
+	return atomic.CompareAndSwapUint64(f, *f, *f|flags)
+}
+
+func ClearfAtomic(f *uint64, flags uint64) (ok bool) {
+	return atomic.CompareAndSwapUint64(f, *f, *f&^flags)
+}
+
+func IsSetfAtomic(f *uint64, flags uint64) (yes bool) {
+	return atomic.LoadUint64(f)&flags == flags
+}
+
+func IsAnySetfAtomic(f *uint64, flags uint64) (yes bool) {
+	return atomic.LoadUint64(f)&flags != 0
 }
