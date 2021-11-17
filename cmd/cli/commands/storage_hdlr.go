@@ -23,7 +23,10 @@ var (
 		),
 		subcmdStgValidate:  {},
 		subcmdStgMountpath: {},
-		subcmdStgCleanup:   {},
+		subcmdStgCleanup: {
+			waitFlag,
+			waitTimeoutFlag,
+		},
 	}
 
 	storageCmd = cli.Command{
@@ -61,10 +64,10 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 	if c.NArg() != 0 {
 		bck, err = parseBckURI(c, c.Args().First())
 		if err != nil {
-			return err
+			return
 		}
 		if _, err = headBucket(bck); err != nil {
-			return err
+			return
 		}
 	}
 	xactArgs := api.XactReqArgs{Kind: cmn.ActStoreCleanup, Bck: bck}
@@ -72,11 +75,23 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	if id != "" {
-		fmt.Fprintf(c.App.Writer, "Started storage cleanup %q, %s\n", id, xactProgressMsg(id))
-	} else {
-		fmt.Fprintf(c.App.Writer, "Started storage cleanup\n")
+	if !flagIsSet(c, waitFlag) {
+		if id != "" {
+			fmt.Fprintf(c.App.Writer, "Started storage cleanup %q, %s\n", id, xactProgressMsg(id))
+		} else {
+			fmt.Fprintf(c.App.Writer, "Started storage cleanup\n")
+		}
+		return
 	}
 
+	fmt.Fprintf(c.App.Writer, "Started storage cleanup %s...\n", id)
+	wargs := api.XactReqArgs{ID: id, Kind: cmn.ActStoreCleanup}
+	if flagIsSet(c, waitTimeoutFlag) {
+		wargs.Timeout = parseDurationFlag(c, waitTimeoutFlag)
+	}
+	if err := api.WaitForXactionIdle(defaultAPIParams, wargs); err != nil {
+		return err
+	}
+	fmt.Fprint(c.App.Writer, fmtXactSucceeded)
 	return
 }
