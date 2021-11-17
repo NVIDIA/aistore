@@ -160,7 +160,7 @@ func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOOM bool) (err error) {
 	}
 
 	// 5. final construction steps
-	r.swap.Store(mem.SwapUsed)
+	r.swap.size.Store(mem.SwapUsed)
 	r.optDepth.Store(optDepth)
 	r.toGC.Store(0)
 
@@ -211,10 +211,8 @@ func (r *MMSA) Terminate(unregHK bool) {
 		freed += s.cleanup()
 	}
 	r.toGC.Add(freed)
-	mem, _ := sys.Mem()
-	swapping := mem.SwapUsed > 0
-	if r.doGC(mem.Free, sizeToGC, true, swapping) {
-		gced = ", GC ran"
+	if r.doGC(sizeToGC, true) {
+		gced = " (GC-ed)"
 	}
 	debug.Infof("%s terminated%s", r, gced)
 }

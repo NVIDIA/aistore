@@ -164,10 +164,12 @@ type (
 		defBufSize    int64
 		numSlabs      int
 		// atomic state
-		toGC            atomic.Int64  // accumulates over time and triggers GC upon reaching spec-ed limit
-		optDepth        atomic.Int64  // ring "depth", i.e., num free bufs we trend to (see grow())
-		swap            atomic.Uint64 // actual swap size
-		swapCriticality atomic.Int32  // tracks increasing swap size up to swappingMax const
+		toGC     atomic.Int64 // accumulates over time and triggers GC upon reaching spec-ed limit
+		optDepth atomic.Int64 // ring "depth", i.e., num free bufs we trend to (see grow())
+		swap     struct {
+			size atomic.Uint64 // actual swap size
+			crit atomic.Int32  // tracks increasing swap size up to swappingMax const
+		}
 	}
 	FreeSpec struct {
 		IdleDuration time.Duration // reduce only the slabs that are idling for at least as much time
@@ -199,10 +201,9 @@ func (r *MMSA) String() string {
 
 func (r *MMSA) Str(mem *sys.MemStat) string {
 	var (
-		used, free  = cos.B2S(int64(mem.Used), 0), cos.B2S(int64(mem.Free), 0)
-		afree       = cos.B2S(int64(mem.ActualFree), 0)
-		p, swapping = r.MemPressure(mem)
-		sp          = r.MemPressure2S(p, swapping)
+		used, free = cos.B2S(int64(mem.Used), 0), cos.B2S(int64(mem.Free), 0)
+		afree      = cos.B2S(int64(mem.ActualFree), 0)
+		sp         = r.pressure2S(r.Pressure(mem))
 	)
 	if r.info == "" {
 		r.info = fmt.Sprintf("(min-free %s, low-wm %s)", cos.B2S(int64(r.MinFree), 0), cos.B2S(int64(r.lowWM), 0))

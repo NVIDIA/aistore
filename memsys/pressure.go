@@ -16,31 +16,40 @@ import (
 // memory _pressure_
 
 const (
-	MemPressureLow = iota
-	MemPressureModerate
-	MemPressureHigh
-	MemPressureExtreme
+	PressureLow = iota
+	PressureModerate
+	PressureHigh
+	PressureExtreme
 	OOM
 )
 
 const highLowThreshold = 40
 
 var memPressureText = map[int]string{
-	MemPressureLow:      "low",
-	MemPressureModerate: "moderate",
-	MemPressureHigh:     "high",
-	MemPressureExtreme:  "extreme",
-	OOM:                 "OOM",
+	PressureLow:      "low",
+	PressureModerate: "moderate",
+	PressureHigh:     "high",
+	PressureExtreme:  "extreme",
+	OOM:              "OOM",
+}
+
+// update swapping state
+func (r *MMSA) updSwap(mem *sys.MemStat) {
+	var ncrit int32
+	swapping, crit := mem.SwapUsed > r.swap.size.Load(), r.swap.crit.Load()
+	if swapping {
+		ncrit = cos.MinI32(swappingMax, crit+1)
+	} else {
+		ncrit = cos.MaxI32(0, crit-1)
+	}
+	r.swap.crit.Store(ncrit)
+	r.swap.size.Store(mem.SwapUsed)
 }
 
 // returns an estimate for the current memory pressure expressed as enumerated values
 // also, tracks swapping stateful vars
-func (r *MMSA) MemPressure(mems ...*sys.MemStat) (pressure int, swapping bool) {
-	var (
-		mem         *sys.MemStat
-		crit, ncrit int32
-	)
-	// 1. get mem stats
+func (r *MMSA) Pressure(mems ...*sys.MemStat) (pressure int) {
+	var mem *sys.MemStat
 	if len(mems) > 0 {
 		mem = mems[0]
 	} else {
@@ -49,41 +58,32 @@ func (r *MMSA) MemPressure(mems ...*sys.MemStat) (pressure int, swapping bool) {
 		mem = &memStat
 	}
 
-	// TODO -- FIXME: this piece of code must move and be called strictly by HK
-	// 2. update swapping state
-	swapping, crit = mem.SwapUsed > r.swap.Load(), r.swapCriticality.Load()
-	if swapping {
-		ncrit = cos.MinI32(swappingMax, crit+1)
-	} else {
-		ncrit = cos.MaxI32(0, crit-1)
-	}
-	r.swapCriticality.CAS(crit, ncrit)
-	r.swap.Store(mem.SwapUsed)
-
-	// 3. recompute mem pressure
+	ncrit := r.swap.crit.Load()
 	switch {
 	case ncrit > 2:
-		return OOM, swapping
-	case ncrit > 1 || mem.ActualFree <= r.MinFree || swapping:
-		return MemPressureExtreme, swapping
-	case ncrit > 0 || mem.Free <= r.MinFree:
-		return MemPressureHigh, swapping
+		return OOM
+	case ncrit > 1 || mem.ActualFree <= r.MinFree:
+		return PressureExtreme
+	case ncrit > 0:
+		return PressureHigh
+	case mem.Free <= r.MinFree:
+		return PressureHigh
 	case mem.Free >= r.lowWM:
-		debug.Assert(ncrit == 0 && !swapping)
-		return MemPressureLow, swapping
+		return PressureLow
 	}
-	pressure = MemPressureModerate
+
+	pressure = PressureModerate
 	x := (mem.Free - r.MinFree) * 100 / (r.lowWM - r.MinFree)
 	if x < highLowThreshold {
-		pressure = MemPressureHigh
+		pressure = PressureHigh
 	}
 	return
 }
 
-func (r *MMSA) MemPressure2S(p int, swapping bool) (s string) {
-	s = fmt.Sprintf("pressure '%s'", memPressureText[p])
-	if swapping {
-		s = fmt.Sprintf("swapping(%d)", r.swapCriticality.Load())
+func (r *MMSA) pressure2S(p int) (sp string) {
+	sp = "pressure '" + memPressureText[p] + "'"
+	if crit := r.swap.crit.Load(); crit > 0 {
+		sp = fmt.Sprintf("%s, swapping(%d)", sp, crit)
 	}
 	return
 }

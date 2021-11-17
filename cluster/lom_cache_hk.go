@@ -50,15 +50,15 @@ func (lchk *lcHK) housekeep() (d time.Duration) {
 }
 
 func (lchk *lcHK) mp() (d time.Duration, tag string) {
-	p, _ := lchk.mm.MemPressure()
+	p := lchk.mm.Pressure()
 	switch p {
 	case memsys.OOM:
 		d = oomEvictAtime
 		tag = "OOM"
-	case memsys.MemPressureExtreme:
+	case memsys.PressureExtreme:
 		d = mpeEvictAtime
 		tag = "extreme"
-	case memsys.MemPressureHigh:
+	case memsys.PressureHigh:
 		d = mphEvictAtime
 		tag = "high"
 	default:

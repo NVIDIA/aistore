@@ -6,7 +6,6 @@
 package memsys
 
 import (
-	"fmt"
 	"runtime"
 	"sort"
 	"time"
@@ -53,8 +52,7 @@ func (r *MMSA) FreeSpec(spec FreeSpec) {
 		if spec.MinSize == 0 {
 			spec.MinSize = sizeToGC // using default
 		}
-		mem, _ := sys.Mem()
-		r.doGC(mem.Free, spec.MinSize, spec.ToOS /* force */, false)
+		r.doGC(spec.MinSize, spec.ToOS /* force */)
 	}
 }
 
@@ -77,34 +75,35 @@ func (r *MMSA) hkcb() time.Duration {
 	// 2. update swapping state and compute mem-pressure ranking
 	mem, err := sys.Mem()
 	debug.AssertNoErr(err)
-	pressure, swapping := r.MemPressure(&mem)
+	r.updSwap(&mem)
+	pressure := r.Pressure(&mem)
 
 	// 3. memory is enough, free only those that are idle for a while
-	if pressure == MemPressureLow {
+	if pressure == PressureLow {
 		r.optDepth.Store(optDepth)
 		if freed := r.freeIdle(); freed > 0 {
 			r.toGC.Add(freed)
-			r.doGC(mem.Free, sizeToGC, false, false)
+			r.doGC(sizeToGC, false)
 		}
 		return r.hkIval(pressure)
 	}
 
 	// 4. calibrate and mem-free accordingly
 	var (
-		limit = int64(sizeToGC) // minimum accumulated size that triggers GC
+		mingc = int64(sizeToGC) // minimum accumulated size that triggers GC
 		depth int               // => current ring depth tbd
 	)
 	switch pressure {
-	case OOM, MemPressureExtreme:
+	case OOM, PressureExtreme:
 		r.optDepth.Store(minDepth)
 		depth = minDepth
-		limit = sizeToGC / 4
-	case MemPressureHigh:
+		mingc = sizeToGC / 4
+	case PressureHigh:
 		tmp := cos.MaxI64(r.optDepth.Load()/2, optDepth/4)
 		r.optDepth.Store(tmp)
 		depth = int(tmp)
-		limit = sizeToGC / 2
-	default: // MemPressureModerate
+		mingc = sizeToGC / 2
+	default: // PressureModerate
 		r.optDepth.Store(optDepth)
 		depth = optDepth / 2
 	}
@@ -119,23 +118,23 @@ func (r *MMSA) hkcb() time.Duration {
 		if freed > 0 {
 			r.toGC.Add(freed)
 			if !gced {
-				gced = r.doGC(mem.Free, limit, true, swapping)
+				gced = r.doGC(mingc, true)
 			}
 		}
 	}
 
 	// 6. GC
-	if pressure >= MemPressureHigh {
-		r.doGC(mem.Free, limit, true, swapping)
+	if pressure >= PressureHigh {
+		r.doGC(mingc, true)
 	}
 	return r.hkIval(pressure)
 }
 
 func (r *MMSA) hkIval(pressure int) time.Duration {
 	switch pressure {
-	case MemPressureLow:
+	case PressureLow:
 		return r.TimeIval * 2
-	case MemPressureModerate:
+	case PressureModerate:
 		return r.TimeIval
 	default:
 		return r.TimeIval / 2
@@ -212,28 +211,25 @@ func (r *MMSA) freeIdle() (total int64) {
 // 1) upon periodic freeing of idle slabs
 // 2) after forceful reduction of the /less/ active slabs (done when memory is running low)
 // 3) on demand via MMSA.Free()
-func (r *MMSA) doGC(free uint64, minsize int64, force, swapping bool) (gced bool) {
+func (r *MMSA) doGC(mingc int64, force bool) (gced bool) {
 	avg, err := sys.LoadAverage()
 	if err != nil {
-		glog.Errorf("Failed to load averages, err: %v", err)
-		avg.One = 999 // fall thru on purpose
+		glog.Errorf("Failed to load averages, err: %v", err) // (should never happen)
+		avg.One = 999
 	}
-	if avg.One > loadAvg && !force && !swapping { // Heu #3
+	if avg.One > loadAvg /*idle*/ && !force { // NOTE
 		return
 	}
-	toGC := r.toGC.Load()
-	if toGC < minsize {
+	togc := r.toGC.Load()
+	if togc < mingc {
 		return
 	}
-	str := fmt.Sprintf(
-		"%s: GC(force: %t, swapping: %t); load: %.2f; free: %s; toGC: %s",
-		r.name, force, swapping, avg.One, cos.B2S(int64(free), 1), cos.B2S(toGC, 2))
-	if force || swapping { // Heu #4
-		glog.Warning(str)
-		glog.Warning("freeing memory to OS...")
-		cos.FreeMemToOS() // forces GC followed by an attempt to return memory to the OS
-	} else { // Heu #5
-		glog.Infof(str)
+	sgc := cos.B2S(togc, 1)
+	if force {
+		glog.Warningf("%s: freeing %s to the OS (load %.2f)", r, sgc, avg.One)
+		cos.FreeMemToOS()
+	} else {
+		glog.Warningf("%s: GC %s (load %.2f)", r, sgc, avg.One)
 		runtime.GC()
 	}
 	gced = true

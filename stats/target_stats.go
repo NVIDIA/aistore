@@ -263,7 +263,7 @@ func (r *Trunner) log(now int64, uptime time.Duration) {
 	memStat, err := sys.Mem()
 	debug.AssertNoErr(err)
 	mm := r.T.PageMM()
-	if p, _ := mm.MemPressure(&memStat); p >= memsys.MemPressureHigh {
+	if p := mm.Pressure(&memStat); p >= memsys.PressureHigh {
 		r.lines = append(r.lines, mm.Str(&memStat))
 	}
 
