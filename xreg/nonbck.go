@@ -1,4 +1,4 @@
-// Package registry provides core functionality for the AIStore extended actions xreg.
+// Package xreg provides registry and (renew, find) functions for AIS eXtended Actions (xactions).
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -11,15 +11,6 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
 )
-
-type RebalanceArgs struct {
-	ID          string
-	StatTracker stats.Tracker
-}
-
-//////////////
-// registry //
-//////////////
 
 func RegNonBckXact(entry Renewable) { defaultReg.regNonBckXact(entry) }
 
@@ -37,10 +28,10 @@ func RenewRebalance(id int64, statTracker stats.Tracker) RenewRes {
 }
 
 func (r *registry) renewRebalance(id int64, statTracker stats.Tracker) RenewRes {
-	e := r.nonbckXacts[cmn.ActRebalance].New(Args{Custom: &RebalanceArgs{
-		ID:          xaction.RebID2S(id),
-		StatTracker: statTracker,
-	}}, nil)
+	e := r.nonbckXacts[cmn.ActRebalance].New(Args{
+		UUID:   xaction.RebID2S(id),
+		Custom: statTracker,
+	}, nil)
 	return r.renew(e, nil)
 }
 

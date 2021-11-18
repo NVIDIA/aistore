@@ -1,4 +1,4 @@
-// Package registry provides core functionality for the AIStore extended actions xreg.
+// Package xreg provides registry and (renew, find) functions for AIS eXtended Actions (xactions).
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -22,8 +22,8 @@ type (
 		query *query.ObjectsQuery
 		msg   *cmn.SelectMsg
 	}
-	// Serves to return the result of renewing
-	DummyEntry struct {
+	// Serves to return the result of renewing.
+	dummyEntry struct {
 		xact cluster.Xact
 	}
 )
@@ -31,6 +31,7 @@ type (
 // interface guard
 var (
 	_ Renewable = (*queFactory)(nil)
+	_ Renewable = (*dummyEntry)(nil)
 )
 
 func RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, msg *cmn.SelectMsg) RenewRes {
@@ -40,7 +41,7 @@ func RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, ms
 func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, msg *cmn.SelectMsg) RenewRes {
 	if xact := query.Registry.Get(msg.UUID); xact != nil {
 		if !xact.Aborted() {
-			return RenewRes{Entry: &DummyEntry{xact}, Err: nil, UUID: msg.UUID}
+			return RenewRes{Entry: &dummyEntry{xact}, Err: nil, UUID: msg.UUID}
 		}
 		query.Registry.Delete(msg.UUID)
 	}
@@ -48,21 +49,19 @@ func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.Ob
 	err := r.entries.del(msg.UUID)
 	r.entries.mtx.Unlock()
 	if err != nil {
-		return RenewRes{Entry: &DummyEntry{nil}, Err: err, UUID: msg.UUID}
+		return RenewRes{Entry: &dummyEntry{nil}, Err: err, UUID: msg.UUID}
 	}
 	e := &queFactory{ctx: ctx, t: t, query: q, msg: msg}
 	if err = e.Start(); err != nil {
-		return RenewRes{Entry: &DummyEntry{nil}, Err: err, UUID: msg.UUID}
+		return RenewRes{Entry: &dummyEntry{nil}, Err: err, UUID: msg.UUID}
 	}
 	r.add(e)
 	return RenewRes{Entry: e, Err: err, UUID: ""}
 }
 
-//////////////
+////////////////
 // queFactory //
-//////////////
-
-func (*queFactory) New(Args, *cluster.Bck) Renewable { debug.Assert(false); return nil }
+////////////////
 
 func (e *queFactory) Start() (err error) {
 	if query.Registry.Get(e.msg.UUID) != nil {
@@ -76,24 +75,19 @@ func (e *queFactory) Start() (err error) {
 func (*queFactory) Kind() string        { return cmn.ActQueryObjects }
 func (e *queFactory) Get() cluster.Xact { return e.xact }
 
-// never called
+func (*queFactory) New(Args, *cluster.Bck) Renewable             { debug.Assert(false); return nil }
 func (*queFactory) Bucket() *cluster.Bck                         { debug.Assert(false); return nil }
 func (*queFactory) UUID() string                                 { debug.Assert(false); return "" }
 func (*queFactory) WhenPrevIsRunning(Renewable) (w WPR, e error) { debug.Assert(false); return }
 
 ////////////////
-// DummyEntry //
+// dummyEntry //
 ////////////////
 
-// interface guard
-var (
-	_ Renewable = (*DummyEntry)(nil)
-)
-
-func (*DummyEntry) New(Args, *cluster.Bck) Renewable         { return nil }
-func (*DummyEntry) Start() error                             { return nil }
-func (*DummyEntry) Kind() string                             { return "" }
-func (*DummyEntry) UUID() string                             { return "" }
-func (*DummyEntry) Bucket() *cluster.Bck                     { return nil }
-func (d *DummyEntry) Get() cluster.Xact                      { return d.xact }
-func (*DummyEntry) WhenPrevIsRunning(Renewable) (WPR, error) { return WprUse, nil }
+func (*dummyEntry) New(Args, *cluster.Bck) Renewable         { return nil }
+func (*dummyEntry) Start() error                             { return nil }
+func (*dummyEntry) Kind() string                             { return "" }
+func (*dummyEntry) UUID() string                             { return "" }
+func (*dummyEntry) Bucket() *cluster.Bck                     { return nil }
+func (d *dummyEntry) Get() cluster.Xact                      { return d.xact }
+func (*dummyEntry) WhenPrevIsRunning(Renewable) (WPR, error) { return WprUse, nil }

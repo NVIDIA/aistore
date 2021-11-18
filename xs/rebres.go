@@ -20,16 +20,14 @@ import (
 // rebalance & resilver xactions
 
 type (
-	getMarked  = func() xaction.XactMarked
 	rebFactory struct {
 		xreg.RenewBase
-		xact *Rebalance
-		args *xreg.RebalanceArgs
+		xact         *Rebalance
+		statsTracker stats.Tracker
 	}
 	Rebalance struct {
 		xaction.XactBase
-		statTracker  stats.Tracker // extended stats
-		getRebMarked getMarked
+		statsTracker stats.Tracker // extended stats
 	}
 	rslvrFactory struct {
 		xreg.RenewBase
@@ -53,11 +51,11 @@ var (
 ///////////////
 
 func (*rebFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
-	return &rebFactory{RenewBase: xreg.RenewBase{Args: args}, args: args.Custom.(*xreg.RebalanceArgs)}
+	return &rebFactory{RenewBase: xreg.RenewBase{Args: args}, statsTracker: args.Custom.(stats.Tracker)}
 }
 
 func (p *rebFactory) Start() error {
-	p.xact = NewRebalance(p.args.ID, p.Kind(), p.args.StatTracker, xreg.GetRebMarked)
+	p.xact = NewRebalance(p.Args.UUID, p.Kind(), p.statsTracker)
 	return nil
 }
 
@@ -67,10 +65,10 @@ func (p *rebFactory) Get() cluster.Xact { return p.xact }
 func (p *rebFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	xreb := prevEntry.(*rebFactory)
 	wpr = xreg.WprAbort
-	if xreb.args.ID > p.args.ID {
-		glog.Errorf("(reb: %s) %s is greater than %s", xreb.xact, xreb.args.ID, p.args.ID)
+	if xreb.Args.UUID > p.Args.UUID {
+		glog.Errorf("(reb: %s) %s is greater than %s", xreb.xact, xreb.Args.UUID, p.Args.UUID)
 		wpr = xreg.WprUse
-	} else if xreb.args.ID == p.args.ID {
+	} else if xreb.Args.UUID == p.Args.UUID {
 		if verbose {
 			glog.Infof("%s already running, nothing to do", xreb.xact)
 		}
@@ -79,8 +77,8 @@ func (p *rebFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 	return
 }
 
-func NewRebalance(id, kind string, statTracker stats.Tracker, getMarked getMarked) (xact *Rebalance) {
-	xact = &Rebalance{statTracker: statTracker, getRebMarked: getMarked}
+func NewRebalance(id, kind string, statTracker stats.Tracker) (xact *Rebalance) {
+	xact = &Rebalance{statsTracker: statTracker}
 	xact.InitBase(id, kind, nil)
 	return
 }
@@ -92,13 +90,13 @@ func (xact *Rebalance) Stats() cluster.XactStats {
 	var (
 		baseStats   = xact.XactBase.Stats().(*xaction.BaseStats)
 		rebStats    = stats.RebalanceTargetStats{BaseStats: *baseStats}
-		statsRunner = xact.statTracker
+		statsRunner = xact.statsTracker
 	)
 	rebStats.Ext.RebTxCount = statsRunner.Get(stats.RebTxCount)
 	rebStats.Ext.RebTxSize = statsRunner.Get(stats.RebTxSize)
 	rebStats.Ext.RebRxCount = statsRunner.Get(stats.RebRxCount)
 	rebStats.Ext.RebRxSize = statsRunner.Get(stats.RebRxSize)
-	if marked := xact.getRebMarked(); marked.Xact != nil {
+	if marked := xreg.GetRebMarked(); marked.Xact != nil {
 		var err error
 		rebStats.Ext.RebID, err = xaction.S2RebID(marked.Xact.ID())
 		debug.AssertNoErr(err)

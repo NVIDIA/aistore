@@ -1,4 +1,4 @@
-// Package registry provides core functionality for the AIStore extended actions xreg.
+// Package xreg provides registry and (renew, find) functions for AIS eXtended Actions (xactions).
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
