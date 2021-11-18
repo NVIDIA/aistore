@@ -126,6 +126,9 @@ func TestManager(t *testing.T) {
 }
 
 func TestToken(t *testing.T) {
+	if testing.Short() {
+		t.Skipf("skipping %s in short mode", t.Name())
+	}
 	var (
 		err    error
 		token  string

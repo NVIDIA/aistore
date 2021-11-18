@@ -42,14 +42,252 @@ type fileMetadata struct {
 	size int64
 }
 
-func TestSpace(t *testing.T) {
+var gT *testing.T
+
+func TestEvictCleanup(t *testing.T) {
 	xreg.Init()
 	hk.TestInit()
 	cos.InitShortID(0)
 
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Space Evict/Cleanup")
+	gT = t
+	RunSpecs(t, t.Name())
 }
+
+var _ = Describe("space evict/cleanup tests", func() {
+	Describe("Run", func() {
+		var (
+			t          *mock.TargetMock
+			filesPath  string
+			fpAnother  string
+			bckAnother cmn.Bck
+		)
+
+		BeforeEach(func() {
+			initConfig()
+			createAndAddMountpath(basePath)
+			t = newTargetLRUMock()
+			availablePaths := fs.GetAvail()
+			bck := cmn.Bck{Name: bucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+			bckAnother = cmn.Bck{Name: bucketNameAnother, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+			filesPath = availablePaths[basePath].MakePathCT(bck, fs.ObjectType)
+			fpAnother = availablePaths[basePath].MakePathCT(bckAnother, fs.ObjectType)
+			cos.CreateDir(filesPath)
+			cos.CreateDir(fpAnother)
+		})
+
+		AfterEach(func() {
+			os.RemoveAll(basePath)
+		})
+
+		Describe("evict files", func() {
+			var ini *space.IniLRU
+			BeforeEach(func() {
+				ini = newIniLRU(t)
+			})
+			It("should not fail when there are no files", func() {
+				space.RunLRU(ini)
+			})
+
+			It("should evict correct number of files", func() {
+				if testing.Short() {
+					Skip("skipping in short mode")
+				}
+				saveRandomFiles(filesPath, numberOfCreatedFiles)
+
+				space.RunLRU(ini)
+
+				files, err := os.ReadDir(filesPath)
+				Expect(err).NotTo(HaveOccurred())
+				numberOfFilesLeft := len(files)
+
+				// too few files evicted
+				Expect(float64(numberOfFilesLeft) / numberOfCreatedFiles * initialDiskUsagePct).To(BeNumerically("<=", 0.01*lwm))
+				// to many files evicted
+				Expect(float64(numberOfFilesLeft+1) / numberOfCreatedFiles * initialDiskUsagePct).To(BeNumerically(">", 0.01*lwm))
+			})
+
+			It("should evict the oldest files", func() {
+				const numberOfFiles = 6
+
+				ini.GetFSStats = getMockGetFSStats(numberOfFiles)
+
+				oldFiles := []fileMetadata{
+					{getRandomFileName(3), fileSize},
+					{getRandomFileName(4), fileSize},
+					{getRandomFileName(5), fileSize},
+				}
+				saveRandomFilesWithMetadata(filesPath, oldFiles)
+				time.Sleep(1 * time.Second)
+				saveRandomFiles(filesPath, 3)
+
+				space.RunLRU(ini)
+
+				files, err := os.ReadDir(filesPath)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(files)).To(Equal(3))
+
+				oldFilesNames := namesFromFilesMetadatas(oldFiles)
+				for _, name := range files {
+					Expect(cos.StringInSlice(name.Name(), oldFilesNames)).To(BeFalse())
+				}
+			})
+
+			It("should evict files of different sizes", func() {
+				const totalSize = 32 * cos.MiB
+				if testing.Short() {
+					Skip("skipping in short mode")
+				}
+
+				ini.GetFSStats = func(string) (blocks, bavail uint64, bsize int64, err error) {
+					bsize = blockSize
+					btaken := uint64(totalSize / blockSize)
+					blocks = uint64(float64(btaken) / initialDiskUsagePct)
+					bavail = blocks - btaken
+					return
+				}
+
+				// files sum up to 32Mb
+				files := []fileMetadata{
+					{getRandomFileName(0), int64(4 * cos.MiB)},
+					{getRandomFileName(1), int64(16 * cos.MiB)},
+					{getRandomFileName(2), int64(4 * cos.MiB)},
+					{getRandomFileName(3), int64(8 * cos.MiB)},
+				}
+				saveRandomFilesWithMetadata(filesPath, files)
+
+				// To go under lwm (50%), LRU should evict the oldest files until <=50% reached
+				// Those files are a 4MB file and a 16MB file
+				space.RunLRU(ini)
+
+				filesLeft, err := os.ReadDir(filesPath)
+				Expect(len(filesLeft)).To(Equal(2))
+				Expect(err).NotTo(HaveOccurred())
+
+				correctFilenamesLeft := namesFromFilesMetadatas(files[2:])
+				for _, name := range filesLeft {
+					Expect(cos.StringInSlice(name.Name(), correctFilenamesLeft)).To(BeTrue())
+				}
+			})
+
+			It("should evict only files from requested bucket [ignores LRU prop]", func() {
+				if testing.Short() {
+					Skip("skipping in short mode")
+				}
+				saveRandomFiles(fpAnother, numberOfCreatedFiles)
+				saveRandomFiles(filesPath, numberOfCreatedFiles)
+
+				ini.Buckets = []cmn.Bck{bckAnother}
+				ini.Force = true // Ignore LRU enabled
+				space.RunLRU(ini)
+
+				files, err := os.ReadDir(filesPath)
+				Expect(err).NotTo(HaveOccurred())
+				filesAnother, err := os.ReadDir(fpAnother)
+				Expect(err).NotTo(HaveOccurred())
+
+				numFilesLeft := len(files)
+				numFilesLeftAnother := len(filesAnother)
+
+				// files not evicted from bucket
+				Expect(numFilesLeft).To(BeNumerically("==", numberOfCreatedFiles))
+
+				// too few files evicted
+				Expect(float64(numFilesLeftAnother) / numberOfCreatedFiles * initialDiskUsagePct).To(BeNumerically("<=", 0.01*lwm))
+				// to many files evicted
+				Expect(float64(numFilesLeftAnother+1) / numberOfCreatedFiles * initialDiskUsagePct).To(BeNumerically(">", 0.01*lwm))
+			})
+		})
+
+		Describe("not evict files", func() {
+			var ini *space.IniLRU
+			BeforeEach(func() {
+				ini = newIniLRU(t)
+			})
+			It("should do nothing when disk usage is below hwm", func() {
+				const numberOfFiles = 4
+				config := cmn.GCO.BeginUpdate()
+				config.LRU.HighWM = 95
+				config.LRU.LowWM = 40
+				cmn.GCO.CommitUpdate(config)
+
+				ini.GetFSStats = getMockGetFSStats(numberOfFiles)
+
+				saveRandomFiles(filesPath, numberOfFiles)
+
+				space.RunLRU(ini)
+
+				files, err := os.ReadDir(filesPath)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(files)).To(Equal(numberOfFiles))
+			})
+
+			It("should do nothing if dontevict time was not reached", func() {
+				const numberOfFiles = 6
+				config := cmn.GCO.BeginUpdate()
+				config.LRU.DontEvictTime = cos.Duration(5 * time.Minute)
+				cmn.GCO.CommitUpdate(config)
+
+				ini.GetFSStats = getMockGetFSStats(numberOfFiles)
+
+				saveRandomFiles(filesPath, numberOfFiles)
+
+				space.RunLRU(ini)
+
+				files, err := os.ReadDir(filesPath)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(files)).To(Equal(numberOfFiles))
+			})
+
+			It("should not evict if LRU disabled and force is false", func() {
+				saveRandomFiles(fpAnother, numberOfCreatedFiles)
+
+				ini.Buckets = []cmn.Bck{bckAnother} // bckAnother has LRU disabled
+				space.RunLRU(ini)
+
+				filesAnother, err := os.ReadDir(fpAnother)
+				Expect(err).NotTo(HaveOccurred())
+
+				numFilesLeft := len(filesAnother)
+				Expect(numFilesLeft).To(BeNumerically("==", numberOfCreatedFiles))
+			})
+		})
+
+		Describe("cleanup 'deleted'", func() {
+			var ini *space.IniCln
+			BeforeEach(func() {
+				ini = newInitStoreCln(t)
+			})
+			It("should remove all deleted items", func() {
+				var (
+					availablePaths = fs.GetAvail()
+					mi             = availablePaths[basePath]
+				)
+
+				saveRandomFiles(filesPath, 10)
+				Expect(filesPath).To(BeADirectory())
+
+				err := mi.MoveToDeleted(filesPath)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(filesPath).NotTo(BeADirectory())
+
+				files, err := os.ReadDir(mi.DeletedRoot())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(files)).To(Equal(1))
+
+				space.RunCleanup(ini)
+
+				files, err = os.ReadDir(mi.DeletedRoot())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(files)).To(Equal(0))
+			})
+		})
+	})
+})
+
+//
+// test helpers & utilities
+//
 
 func namesFromFilesMetadatas(fileMetadata []fileMetadata) []string {
 	result := make([]string, len(fileMetadata))
@@ -171,225 +409,3 @@ func saveRandomFiles(filesPath string, filesNumber int) {
 		saveRandomFile(path.Join(filesPath, getRandomFileName(i)), fileSize)
 	}
 }
-
-var _ = Describe("space evict/cleanup tests", func() {
-	Describe("Run", func() {
-		var (
-			t          *mock.TargetMock
-			filesPath  string
-			fpAnother  string
-			bckAnother cmn.Bck
-		)
-
-		BeforeEach(func() {
-			initConfig()
-			createAndAddMountpath(basePath)
-			t = newTargetLRUMock()
-			availablePaths := fs.GetAvail()
-			bck := cmn.Bck{Name: bucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
-			bckAnother = cmn.Bck{Name: bucketNameAnother, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
-			filesPath = availablePaths[basePath].MakePathCT(bck, fs.ObjectType)
-			fpAnother = availablePaths[basePath].MakePathCT(bckAnother, fs.ObjectType)
-			cos.CreateDir(filesPath)
-			cos.CreateDir(fpAnother)
-		})
-
-		AfterEach(func() {
-			os.RemoveAll(basePath)
-		})
-
-		Describe("evict files", func() {
-			var ini *space.IniLRU
-			BeforeEach(func() {
-				ini = newIniLRU(t)
-			})
-			It("should not fail when there are no files", func() {
-				space.RunLRU(ini)
-			})
-
-			It("should evict correct number of files", func() {
-				saveRandomFiles(filesPath, numberOfCreatedFiles)
-
-				space.RunLRU(ini)
-
-				files, err := os.ReadDir(filesPath)
-				Expect(err).NotTo(HaveOccurred())
-				numberOfFilesLeft := len(files)
-
-				// too few files evicted
-				Expect(float64(numberOfFilesLeft) / numberOfCreatedFiles * initialDiskUsagePct).To(BeNumerically("<=", 0.01*lwm))
-				// to many files evicted
-				Expect(float64(numberOfFilesLeft+1) / numberOfCreatedFiles * initialDiskUsagePct).To(BeNumerically(">", 0.01*lwm))
-			})
-
-			It("should evict the oldest files", func() {
-				const numberOfFiles = 6
-
-				ini.GetFSStats = getMockGetFSStats(numberOfFiles)
-
-				oldFiles := []fileMetadata{
-					{getRandomFileName(3), fileSize},
-					{getRandomFileName(4), fileSize},
-					{getRandomFileName(5), fileSize},
-				}
-				saveRandomFilesWithMetadata(filesPath, oldFiles)
-				time.Sleep(1 * time.Second)
-				saveRandomFiles(filesPath, 3)
-
-				space.RunLRU(ini)
-
-				files, err := os.ReadDir(filesPath)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(len(files)).To(Equal(3))
-
-				oldFilesNames := namesFromFilesMetadatas(oldFiles)
-				for _, name := range files {
-					Expect(cos.StringInSlice(name.Name(), oldFilesNames)).To(BeFalse())
-				}
-			})
-
-			It("should evict files of different sizes", func() {
-				const totalSize = 32 * cos.MiB
-
-				ini.GetFSStats = func(string) (blocks, bavail uint64, bsize int64, err error) {
-					bsize = blockSize
-					btaken := uint64(totalSize / blockSize)
-					blocks = uint64(float64(btaken) / initialDiskUsagePct)
-					bavail = blocks - btaken
-					return
-				}
-
-				// files sum up to 32Mb
-				files := []fileMetadata{
-					{getRandomFileName(0), int64(4 * cos.MiB)},
-					{getRandomFileName(1), int64(16 * cos.MiB)},
-					{getRandomFileName(2), int64(4 * cos.MiB)},
-					{getRandomFileName(3), int64(8 * cos.MiB)},
-				}
-				saveRandomFilesWithMetadata(filesPath, files)
-
-				// To go under lwm (50%), LRU should evict the oldest files until <=50% reached
-				// Those files are a 4MB file and a 16MB file
-				space.RunLRU(ini)
-
-				filesLeft, err := os.ReadDir(filesPath)
-				Expect(len(filesLeft)).To(Equal(2))
-				Expect(err).NotTo(HaveOccurred())
-
-				correctFilenamesLeft := namesFromFilesMetadatas(files[2:])
-				for _, name := range filesLeft {
-					Expect(cos.StringInSlice(name.Name(), correctFilenamesLeft)).To(BeTrue())
-				}
-			})
-
-			It("should evict only files from requested bucket [ignores LRU prop]", func() {
-				saveRandomFiles(fpAnother, numberOfCreatedFiles)
-				saveRandomFiles(filesPath, numberOfCreatedFiles)
-
-				ini.Buckets = []cmn.Bck{bckAnother}
-				ini.Force = true // Ignore LRU enabled
-				space.RunLRU(ini)
-
-				files, err := os.ReadDir(filesPath)
-				Expect(err).NotTo(HaveOccurred())
-				filesAnother, err := os.ReadDir(fpAnother)
-				Expect(err).NotTo(HaveOccurred())
-
-				numFilesLeft := len(files)
-				numFilesLeftAnother := len(filesAnother)
-
-				// files not evicted from bucket
-				Expect(numFilesLeft).To(BeNumerically("==", numberOfCreatedFiles))
-
-				// too few files evicted
-				Expect(float64(numFilesLeftAnother) / numberOfCreatedFiles * initialDiskUsagePct).To(BeNumerically("<=", 0.01*lwm))
-				// to many files evicted
-				Expect(float64(numFilesLeftAnother+1) / numberOfCreatedFiles * initialDiskUsagePct).To(BeNumerically(">", 0.01*lwm))
-			})
-		})
-
-		Describe("not evict files", func() {
-			var ini *space.IniLRU
-			BeforeEach(func() {
-				ini = newIniLRU(t)
-			})
-			It("should do nothing when disk usage is below hwm", func() {
-				const numberOfFiles = 4
-				config := cmn.GCO.BeginUpdate()
-				config.LRU.HighWM = 95
-				config.LRU.LowWM = 40
-				cmn.GCO.CommitUpdate(config)
-
-				ini.GetFSStats = getMockGetFSStats(numberOfFiles)
-
-				saveRandomFiles(filesPath, numberOfFiles)
-
-				space.RunLRU(ini)
-
-				files, err := os.ReadDir(filesPath)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(len(files)).To(Equal(numberOfFiles))
-			})
-
-			It("should do nothing if dontevict time was not reached", func() {
-				const numberOfFiles = 6
-				config := cmn.GCO.BeginUpdate()
-				config.LRU.DontEvictTime = cos.Duration(5 * time.Minute)
-				cmn.GCO.CommitUpdate(config)
-
-				ini.GetFSStats = getMockGetFSStats(numberOfFiles)
-
-				saveRandomFiles(filesPath, numberOfFiles)
-
-				space.RunLRU(ini)
-
-				files, err := os.ReadDir(filesPath)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(len(files)).To(Equal(numberOfFiles))
-			})
-
-			It("should not evict if LRU disabled and force is false", func() {
-				saveRandomFiles(fpAnother, numberOfCreatedFiles)
-
-				ini.Buckets = []cmn.Bck{bckAnother} // bckAnother has LRU disabled
-				space.RunLRU(ini)
-
-				filesAnother, err := os.ReadDir(fpAnother)
-				Expect(err).NotTo(HaveOccurred())
-
-				numFilesLeft := len(filesAnother)
-				Expect(numFilesLeft).To(BeNumerically("==", numberOfCreatedFiles))
-			})
-		})
-
-		Describe("cleanup 'deleted'", func() {
-			var ini *space.IniCln
-			BeforeEach(func() {
-				ini = newInitStoreCln(t)
-			})
-			It("should remove all deleted items", func() {
-				var (
-					availablePaths = fs.GetAvail()
-					mi             = availablePaths[basePath]
-				)
-
-				saveRandomFiles(filesPath, 10)
-				Expect(filesPath).To(BeADirectory())
-
-				err := mi.MoveToDeleted(filesPath)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(filesPath).NotTo(BeADirectory())
-
-				files, err := os.ReadDir(mi.DeletedRoot())
-				Expect(err).NotTo(HaveOccurred())
-				Expect(len(files)).To(Equal(1))
-
-				space.RunCleanup(ini)
-
-				files, err = os.ReadDir(mi.DeletedRoot())
-				Expect(err).NotTo(HaveOccurred())
-				Expect(len(files)).To(Equal(0))
-			})
-		})
-	})
-})

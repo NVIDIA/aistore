@@ -1388,6 +1388,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 
 func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 	const newMountpath = "/tmp/ais/mountpath"
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: false, types: dsorterTypes, phases: dsortPhases},

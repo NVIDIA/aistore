@@ -8,6 +8,7 @@ package ais_test
 import (
 	"testing"
 
+	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/xreg"
 	. "github.com/onsi/ginkgo"
@@ -21,5 +22,6 @@ func init() {
 
 func TestAIS(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "AIS Suite")
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	RunSpecs(t, t.Name())
 }

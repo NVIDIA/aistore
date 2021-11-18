@@ -19,5 +19,5 @@ func init() {
 
 func TestCluster(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Cluster Suite")
+	RunSpecs(t, t.Name())
 }

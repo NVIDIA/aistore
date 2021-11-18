@@ -13,5 +13,5 @@ import (
 
 func TestMirror(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Mirror Suite")
+	RunSpecs(t, t.Name())
 }

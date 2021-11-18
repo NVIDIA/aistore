@@ -7,11 +7,13 @@ package tests
 import (
 	"testing"
 
+	"github.com/NVIDIA/aistore/devtools/tutils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 func TestCmn(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Cmn Suite")
+	RunSpecs(t, t.Name())
 }

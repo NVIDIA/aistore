@@ -11,7 +11,10 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestTransform(t *testing.T) {
+func TestETLTransform(t *testing.T) {
+	if testing.Short() {
+		t.Skipf("skipping %s in short mode", t.Name())
+	}
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Transformer Suite")
+	RunSpecs(t, t.Name())
 }

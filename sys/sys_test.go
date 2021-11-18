@@ -76,6 +76,9 @@ func TestMemoryStats(t *testing.T) {
 }
 
 func TestProc(t *testing.T) {
+	if testing.Short() {
+		t.Skipf("skipping %s in short mode", t.Name())
+	}
 	checkSkipOS(t, "darwin")
 
 	pid := os.Getpid()

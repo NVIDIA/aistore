@@ -13,6 +13,9 @@ import (
 )
 
 func TestAtomic(t *testing.T) {
+	if testing.Short() {
+		t.Skipf("skipping %s in short mode", t.Name())
+	}
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Atomic Suite")
+	RunSpecs(t, t.Name())
 }

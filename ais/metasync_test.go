@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
@@ -199,6 +200,7 @@ func TestMetaSyncDeepCopy(t *testing.T) {
 // for each test case, it creates a primary proxy, starts the metasync instance, run the test case,
 // verifies the result, and stop the syncer.
 func TestMetaSyncTransport(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	tcs := []struct {
 		name  string
 		testf func(*testing.T, *proxyrunner, *metasyncer) ([]transportData, []transportData)

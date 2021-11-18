@@ -59,28 +59,36 @@ func Test_Bundle(t *testing.T) {
 				"unsized":     "yes",
 			},
 		},
-		{
-			name: "compress-block-1M",
-			nvs: cos.SimpleKVs{
-				"compression": cmn.CompressAlways,
-				"block":       "1MiB",
+	}
+	if !testing.Short() {
+		testsLong := []struct {
+			name string
+			nvs  cos.SimpleKVs
+		}{
+			{
+				name: "compress-block-1M",
+				nvs: cos.SimpleKVs{
+					"compression": cmn.CompressAlways,
+					"block":       "1MiB",
+				},
 			},
-		},
-		{
-			name: "compress-block-256K",
-			nvs: cos.SimpleKVs{
-				"compression": cmn.CompressAlways,
-				"block":       "256KiB",
+			{
+				name: "compress-block-256K",
+				nvs: cos.SimpleKVs{
+					"compression": cmn.CompressAlways,
+					"block":       "256KiB",
+				},
 			},
-		},
-		{
-			name: "compress-block-256K-unsized",
-			nvs: cos.SimpleKVs{
-				"compression": cmn.CompressAlways,
-				"block":       "256KiB",
-				"unsized":     "yes",
+			{
+				name: "compress-block-256K-unsized",
+				nvs: cos.SimpleKVs{
+					"compression": cmn.CompressAlways,
+					"block":       "256KiB",
+					"unsized":     "yes",
+				},
 			},
-		},
+		}
+		tests = append(tests, testsLong...)
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

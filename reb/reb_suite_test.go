@@ -13,5 +13,5 @@ import (
 
 func TestRebPkg(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Rebalance Suite")
+	RunSpecs(t, t.Name())
 }

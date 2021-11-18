@@ -11,7 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestFS(t *testing.T) {
+func TestAISFS(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "fuse/fs suite")
+	RunSpecs(t, t.Name())
 }

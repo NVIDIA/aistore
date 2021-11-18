@@ -43,6 +43,7 @@ func TestNormalizeObjName(t *testing.T) {
 }
 
 func TestCompareObject(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
 		src = prepareObject(t)
 		dst = &downloader.DstElement{

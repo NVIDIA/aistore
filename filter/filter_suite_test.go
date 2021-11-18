@@ -13,5 +13,5 @@ import (
 
 func TestFilter(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Filter Suite")
+	RunSpecs(t, t.Name())
 }

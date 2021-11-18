@@ -29,7 +29,7 @@ func TestE2ES3(t *testing.T) {
 
 	config.DefaultReporterConfig.SlowSpecThreshold = 15 * time.Second.Seconds()
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "E2E")
+	RunSpecs(t, t.Name())
 }
 
 var _ = Describe("E2E AWS Compatibility Tests", func() {

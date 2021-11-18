@@ -15,6 +15,9 @@ import (
 )
 
 func TestUpgradeLock(t *testing.T) {
+	if testing.Short() {
+		t.Skipf("skipping %s in short mode", t.Name())
+	}
 	for _, test := range []string{"downgrade", "unlock"} {
 		t.Run(test, func(t *testing.T) {
 			const threadCnt = 10000

@@ -181,25 +181,28 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 			{
 				ext: cos.ExtTar, list: false,
 			},
+		}
+		subtestsLong = []struct {
+			ext            string // one of cos.ArchExtensions (same as: supported arch formats)
+			list           bool
+			inclSrcBckName bool
+			abrt           bool
+		}{
 			{
-				ext: cos.ExtTgz, list: true,
+				ext: cos.ExtTar, list: true,
 			},
 			{
-				ext: cos.ExtTgz, list: false, inclSrcBckName: true,
+				ext: cos.ExtTar, list: false, inclSrcBckName: true,
 			},
 			{
-				ext: cos.ExtZip, list: true,
-			},
-			{
-				ext: cos.ExtZip, list: false, inclSrcBckName: true,
-			},
-			{
-				ext: cos.ExtZip, list: true,
+				ext: cos.ExtTar, list: false,
 			},
 		}
 	)
 	if testing.Short() {
 		numArchs = 2
+	} else { // test-long
+		subtests = append(subtests, subtestsLong...)
 	}
 	for _, test := range subtests {
 		var (

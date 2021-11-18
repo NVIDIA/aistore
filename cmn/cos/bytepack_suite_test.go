@@ -12,6 +12,9 @@ import (
 )
 
 func TestBytePacker(t *testing.T) {
+	if testing.Short() {
+		t.Skipf("skipping %s in short mode", t.Name())
+	}
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "BytePacker suite")
+	RunSpecs(t, t.Name())
 }

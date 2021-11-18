@@ -13,6 +13,9 @@ import (
 )
 
 func TestFsIDMarshal(t *testing.T) {
+	if testing.Short() {
+		t.Skipf("skipping %s in short mode", t.Name())
+	}
 	tests := []struct {
 		fsID FsID
 	}{

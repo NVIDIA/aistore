@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
+	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 )
@@ -54,6 +55,7 @@ func Example_msg() {
 }
 
 func Test_MsgDryRun(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	t.Setenv("AIS_STREAM_DRY_RUN", "true")
 
 	// fill in common shared read-only bug

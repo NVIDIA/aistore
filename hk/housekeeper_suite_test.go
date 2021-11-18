@@ -18,5 +18,5 @@ func TestHousekeeper(t *testing.T) {
 	go hk.DefaultHK.Run()
 	hk.WaitStarted()
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Housekeeper Suite")
+	RunSpecs(t, t.Name())
 }

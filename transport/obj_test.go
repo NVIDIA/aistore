@@ -214,6 +214,7 @@ func Example_obj() {
 
 // test random streaming
 func Test_OneStream(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	ts := httptest.NewServer(objmux)
 	defer ts.Close()
 
@@ -549,6 +550,7 @@ func Test_DryRun(t *testing.T) {
 }
 
 func Test_CompletionCount(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
 		numSent                   int64
 		numCompleted, numReceived atomic.Int64

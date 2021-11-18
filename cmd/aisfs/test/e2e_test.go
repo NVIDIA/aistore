@@ -36,7 +36,7 @@ func TestE2E(t *testing.T) {
 
 	config.DefaultReporterConfig.SlowSpecThreshold = 10 * time.Second.Seconds()
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "E2E")
+	RunSpecs(t, t.Name())
 }
 
 var _ = Describe("E2E FUSE Tests", func() {

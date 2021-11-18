@@ -5,15 +5,13 @@
 package extract
 
 import (
-	"fmt"
 	"testing"
 
-	"github.com/NVIDIA/aistore/cmn"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 func TestExtract(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, fmt.Sprintf("%s Extract Suite", cmn.DSortName))
+	RunSpecs(t, t.Name())
 }

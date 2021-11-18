@@ -20,5 +20,5 @@ func init() {
 
 func TestMemsys(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Memsys Suite")
+	RunSpecs(t, t.Name())
 }
