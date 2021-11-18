@@ -96,7 +96,7 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 	if args.RemoteBck {
 		proxyURL := GetPrimaryURL()
 		if !isRemoteBucket(tb, proxyURL, args.Bck) {
-			tb.Skipf("%s requires a remote bucket", tb.Name())
+			tb.Skipf("%s requires a remote bucket (have %q)", tb.Name(), args.Bck)
 		}
 	}
 	if args.CloudBck {

@@ -110,7 +110,7 @@ func (d *Snode) Init(id, daeType string) {
 	debug.Assert(d.DaemonID == "" && d.DaemonType == "")
 	debug.Assert(id != "" && daeType != "")
 	d.DaemonID, d.DaemonType = id, daeType
-	d.setName()
+	d.SetName()
 	d.Digest()
 }
 
@@ -126,7 +126,12 @@ func (d *Snode) Type() string { return d.DaemonType }
 
 func (d *Snode) Name() string   { return d.name }
 func (d *Snode) String() string { return d.Name() }
-func (d *Snode) setName()       { d.name = d.StringEx() }
+
+func (d *Snode) SetName() {
+	name := d.StringEx()
+	cos.AssertMsg(d.name == "" || d.name == name, d.name+" vs. "+name)
+	d.name = name
+}
 
 func (d *Snode) StringEx() string {
 	if d.IsProxy() {

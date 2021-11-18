@@ -692,7 +692,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 			} else {
 				test.skipArgs.Bck = test.backendBck
 				if !test.backendBck.IsCloud() {
-					t.Skip("backend bucket is required to be a cloud bucket")
+					t.Skipf("backend bucket must be a Cloud bucket (have %q)", test.backendBck)
 				}
 			}
 			tutils.CheckSkip(t, test.skipArgs)

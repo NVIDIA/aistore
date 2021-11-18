@@ -109,14 +109,22 @@ func multiOp(opNames ...string) func(string, string, cmn.Bck) opRes {
 }
 
 func reportErr(t *testing.T, errCh chan opRes, ignoreStatusNotFound bool) {
+	const maxErrCount = 10
+	var i int
 	for opRes := range errCh {
-		if opRes.err != nil {
-			status := api.HTTPStatus(opRes.err)
-			if status == http.StatusNotFound && ignoreStatusNotFound {
-				continue
-			}
-			t.Errorf("%s failed %v", opRes.op, opRes.err)
+		if opRes.err == nil {
+			continue
 		}
+		status := api.HTTPStatus(opRes.err)
+		if status == http.StatusNotFound && ignoreStatusNotFound {
+			continue
+		}
+		i++
+		if i > maxErrCount {
+			t.Fatalf("%s failed %v", opRes.op, opRes.err)
+			return
+		}
+		t.Errorf("%s failed %v", opRes.op, opRes.err)
 	}
 }
 

@@ -292,7 +292,7 @@ loop:
 				cnt++
 			} else {
 				metaction += unknownDaemonID
-				glog.Warningf("%s: %s not present in the %s (old %s)", pkr.p.si, sid, clone, ctx.smap)
+				glog.Warningf("%s not present in the %s (old %s)", sid, clone, ctx.smap)
 			}
 			metaction += ":" + sid + "] "
 
@@ -354,7 +354,7 @@ func (pkr *proxyKeepalive) ping(to *cluster.Snode) (ok, stopped bool, delta time
 	if err == nil {
 		return true, false, delta
 	}
-	glog.Warningf("initial keepalive failed, err: %v(%d) - retrying...", err, status)
+	glog.Warningf("%s fails to respond, err: %v(%d) - retrying...", to.StringEx(), err, status)
 	ok, stopped = pkr.retry(to)
 	return ok, stopped, cmn.DefaultTimeout
 }
@@ -381,14 +381,15 @@ func (pkr *proxyKeepalive) retry(si *cluster.Snode) (ok, stopped bool) {
 			i++
 			if i == kaNumRetries {
 				smap := pkr.p.owner.smap.get()
-				glog.Warningf("%s: keepalive failed after %d attempts - removing %s from %s",
-					pkr.p.si, i, si, smap)
+				sname := si.StringEx()
+				glog.Warningf("Failed to keepalive %s after %d attempts - removing %s from the %s",
+					sname, i, sname, smap)
 				return false, false
 			}
 			if cos.IsUnreachable(err, status) {
 				continue
 			}
-			glog.Warningf("%s: keepalive: unexpected error %v(%d) from %s", pkr.p.si, err, status, si)
+			glog.Warningf("Unexpected error %v(%d) from %s", err, status, si.StringEx())
 		case sig := <-pkr.controlCh:
 			if sig.msg == kaStopMsg {
 				return false, true
@@ -471,7 +472,7 @@ func (k *keepalive) Run() error {
 			case kaErrorMsg:
 				if mono.Since(lastCheck) >= cmn.KeepaliveRetryDuration() {
 					lastCheck = mono.NanoTime()
-					glog.Infof("keepalive triggered by %v", sig.err)
+					glog.Infof("triggered by %v", sig.err)
 					if stopped := k.k.doKeepalive(); stopped {
 						ticker.Stop()
 						return nil
@@ -498,12 +499,13 @@ func (k *keepalive) register(sendKeepalive func(time.Duration) (int, error), pri
 		now         = mono.NanoTime()
 		status, err = sendKeepalive(timeout)
 		delta       = mono.SinceNano(now)
+		pname       = "primary[" + primaryID + "]"
 	)
 	k.statsT.Add(stats.KeepAliveLatency, delta)
 	if err == nil {
 		return
 	}
-	glog.Warningf("%s => p[%s] keepalive failed: %v(%d)", hname, primaryID, err, status)
+	glog.Warningf("%s => %s keepalive failed: %v(%d)", hname, pname, err, status)
 	var (
 		ticker = time.NewTicker(cmn.KeepaliveRetryDuration())
 		i      int
@@ -525,11 +527,11 @@ func (k *keepalive) register(sendKeepalive func(time.Duration) (int, error), pri
 			}
 			timeout = k.updateTimeoutForDaemon(primaryID, delta)
 			if err == nil {
-				glog.Infof("%s: keepalive OK after %d attempt(s)", hname, i)
+				glog.Infof("%s: OK after %d attempt(s)", hname, i)
 				return
 			}
 			if i == kaNumRetries {
-				glog.Warningf("%s: keepalive failed after %d attempts, removing from Smap", hname, i)
+				glog.Warningf("%s: failed to keepalive with %s after %d attempts", hname, pname, i)
 				return true
 			}
 			if cos.IsUnreachable(err, status) {
@@ -538,9 +540,9 @@ func (k *keepalive) register(sendKeepalive func(time.Duration) (int, error), pri
 			if daemon.stopping.Load() {
 				return true
 			}
-			s := fmt.Sprintf("%s: unexpected response %v(%T,%d)", hname, err, err, status)
-			debug.AssertMsg(false, s)
-			glog.Warningln(s)
+			err = fmt.Errorf("%s: unexpected response from %s: %v(%d)", hname, pname, err, status)
+			debug.AssertNoErr(err)
+			glog.Warning(err)
 		case sig := <-k.controlCh:
 			if sig.msg == kaStopMsg {
 				return true

@@ -254,6 +254,7 @@ func (m *smapX) addTarget(tsi *cluster.Snode) {
 	if m.containsID(tsi.ID()) {
 		cos.Assertf(false, "FATAL: duplicate daemon ID: %q", tsi.ID())
 	}
+	tsi.SetName()
 	m.Tmap[tsi.ID()] = tsi
 	m.Version++
 }
@@ -262,6 +263,7 @@ func (m *smapX) addProxy(psi *cluster.Snode) {
 	if m.containsID(psi.ID()) {
 		cos.Assertf(false, "FATAL: duplicate daemon ID: %q", psi.ID())
 	}
+	psi.SetName()
 	m.Pmap[psi.ID()] = psi
 	m.Version++
 }
