@@ -71,8 +71,10 @@ func (t *targetrunner) initSpecETL(w http.ResponseWriter, r *http.Request) {
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
-	if err := etl.Start(t, msg); err != nil {
+
+	if err := etl.InitSpec(t, msg); err != nil {
 		t.writeErr(w, r, err)
+		return
 	}
 }
 
@@ -84,8 +86,10 @@ func (t *targetrunner) initCodeETL(w http.ResponseWriter, r *http.Request) {
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
+
 	if err := etl.InitCode(t, msg); err != nil {
 		t.writeErr(w, r, err)
+		return
 	}
 }
 
@@ -101,6 +105,7 @@ func (t *targetrunner) stopETL(w http.ResponseWriter, r *http.Request) {
 			statusCode = http.StatusNotFound
 		}
 		t.writeErr(w, r, err, statusCode)
+		return
 	}
 }
 

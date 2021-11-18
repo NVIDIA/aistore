@@ -62,7 +62,7 @@ func GoRunW(xact cluster.Xact) {
 //////////////
 
 func (xact *XactBase) InitBase(id, kind string, bck *cluster.Bck) {
-	debug.AssertMsg(cos.IsValidUUID(id) || IsValidRebID(id), id)
+	debug.AssertMsg(kind == cmn.ActETLInline || cos.IsValidUUID(id) || IsValidRebID(id), id)
 	debug.AssertMsg(IsValidKind(kind), kind)
 	xact.id, xact.kind = id, kind
 	xact.abrt = make(chan struct{})

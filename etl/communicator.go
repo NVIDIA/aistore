@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -48,18 +47,14 @@ type (
 		// to perform on-the-fly transformation.
 		OfflineTransform(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error)
 
+		Stop()
+
 		CommStats
 	}
 
 	commArgs struct {
 		listener    cluster.Slistener
 		bootstraper *etlBootstraper
-	}
-
-	commStats struct {
-		objCount atomic.Int64
-		inBytes  atomic.Int64
-		outBytes atomic.Int64
 	}
 
 	baseComm struct {
@@ -69,7 +64,7 @@ type (
 		name    string
 		podName string
 
-		stats *commStats
+		xact cluster.Xact
 	}
 
 	pushComm struct {
@@ -114,8 +109,7 @@ func makeCommunicator(args commArgs) Communicator {
 		t:         args.bootstraper.t,
 		name:      args.bootstraper.originalPodName,
 		podName:   args.bootstraper.pod.Name,
-
-		stats: &commStats{},
+		xact:      args.bootstraper.xact,
 	}
 
 	switch args.bootstraper.msg.CommType {
@@ -160,9 +154,13 @@ func (c baseComm) Name() string    { return c.name }
 func (c baseComm) PodName() string { return c.podName }
 func (c baseComm) SvcName() string { return c.podName /*pod name is same as service name*/ }
 
-func (c baseComm) ObjCount() int64 { return c.stats.objCount.Load() }
-func (c baseComm) InBytes() int64  { return c.stats.inBytes.Load() }
-func (c baseComm) OutBytes() int64 { return c.stats.outBytes.Load() }
+func (c baseComm) ObjCount() int64 { return c.xact.Objs() }
+func (c baseComm) InBytes() int64  { return c.xact.InBytes() }
+func (c baseComm) OutBytes() int64 { return c.xact.OutBytes() }
+
+func (c *baseComm) Stop() {
+	c.xact.Finish(nil)
+}
 
 //////////////
 // pushComm //
@@ -188,12 +186,17 @@ func (pc *pushComm) doRequest(bck *cluster.Bck, objName string, timeout time.Dur
 }
 
 func (pc *pushComm) tryDoRequest(lom *cluster.LOM, timeout time.Duration) (cos.ReadCloseSizer, error) {
+	if pc.xact.Aborted() {
+		return nil, cmn.NewErrAborted(pc.xact.Name(), "try-request", nil)
+	}
+
 	lom.Lock(false)
 	defer lom.Unlock(false)
 
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		return nil, err
 	}
+	size := lom.SizeBytes()
 
 	// `fh` is closed by Do(req).
 	fh, err := cos.NewFileHandle(lom.FQN)
@@ -222,7 +225,7 @@ func (pc *pushComm) tryDoRequest(lom *cluster.LOM, timeout time.Duration) (cos.R
 		q["command"] = []string{"bash", "-c", strings.Join(pc.command, " ")}
 		req.URL.RawQuery = q.Encode()
 	}
-	req.ContentLength = lom.SizeBytes()
+	req.ContentLength = size
 	req.Header.Set(cmn.HdrContentType, cmn.ContentBinary)
 	resp, err = pc.t.DataClient().Do(req) // nolint:bodyclose // Closed by the caller.
 finish:
@@ -233,16 +236,15 @@ finish:
 		return nil, err
 	}
 
-	pc.stats.inBytes.Add(lom.SizeBytes())
 	return cos.NewReaderWithArgs(cos.ReaderArgs{
 		R:      resp.Body,
 		Size:   resp.ContentLength,
-		ReadCb: func(i int, err error) { pc.stats.outBytes.Add(int64(i)) },
+		ReadCb: func(i int, err error) { pc.xact.OutObjsAdd(1, int64(i)) },
 		DeferCb: func() {
 			if cancel != nil {
 				cancel()
 			}
-			pc.stats.objCount.Inc()
+			pc.xact.InObjsAdd(1, size)
 		},
 	}), nil
 }
@@ -274,11 +276,15 @@ func (pc *pushComm) OfflineTransform(bck *cluster.Bck, objName string, timeout t
 //////////////////
 
 func (rc *redirectComm) OnlineTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
+	if rc.xact.Aborted() {
+		return cmn.NewErrAborted(rc.xact.Name(), "try-request", nil)
+	}
+
 	size, err := determineSize(bck, objName)
 	if err != nil {
 		return err
 	}
-	rc.stats.inBytes.Add(size)
+	rc.xact.InObjsAdd(1, size)
 
 	// TODO: Is there way to determine `rc.stats.outBytes`?
 	redirectURL := cos.JoinPath(rc.uri, transformerPath(bck, objName))
@@ -291,10 +297,9 @@ func (rc *redirectComm) OfflineTransform(bck *cluster.Bck, objName string, timeo
 	if err != nil {
 		return nil, err
 	}
-	rc.stats.inBytes.Add(size)
 
 	etlURL := cos.JoinPath(rc.uri, transformerPath(bck, objName))
-	return rc.getWithTimeout(etlURL, timeout)
+	return rc.getWithTimeout(etlURL, size, timeout)
 }
 
 //////////////////
@@ -306,7 +311,7 @@ func (pc *revProxyComm) OnlineTransform(w http.ResponseWriter, r *http.Request, 
 	if err != nil {
 		return err
 	}
-	pc.stats.inBytes.Add(size)
+	pc.xact.InObjsAdd(1, size)
 
 	// TODO: Is there way to determine `rc.stats.outBytes`?
 	path := transformerPath(bck, objName)
@@ -321,10 +326,9 @@ func (pc *revProxyComm) OfflineTransform(bck *cluster.Bck, objName string, timeo
 	if err != nil {
 		return nil, err
 	}
-	pc.stats.inBytes.Add(size)
 
 	etlURL := cos.JoinPath(pc.uri, transformerPath(bck, objName))
-	return pc.getWithTimeout(etlURL, timeout)
+	return pc.getWithTimeout(etlURL, size, timeout)
 }
 
 //////////////
@@ -360,7 +364,11 @@ func transformerPath(bck *cluster.Bck, objName string) string {
 	return "/" + url.PathEscape(bck.MakeUname(objName))
 }
 
-func (c *baseComm) getWithTimeout(url string, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
+func (c *baseComm) getWithTimeout(url string, size int64, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
+	if c.xact.Aborted() {
+		return nil, cmn.NewErrAborted(c.xact.Name(), "try-request", nil)
+	}
+
 	var (
 		req    *http.Request
 		resp   *http.Response
@@ -388,12 +396,12 @@ finish:
 	return cos.NewReaderWithArgs(cos.ReaderArgs{
 		R:      resp.Body,
 		Size:   resp.ContentLength,
-		ReadCb: func(i int, err error) { c.stats.outBytes.Add(int64(i)) },
+		ReadCb: func(i int, err error) { c.xact.OutObjsAdd(1, int64(i)) },
 		DeferCb: func() {
 			if cancel != nil {
 				cancel()
 			}
-			c.stats.objCount.Inc()
+			c.xact.InObjsAdd(1, size)
 		},
 	}), nil
 }

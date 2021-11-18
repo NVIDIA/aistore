@@ -36,6 +36,7 @@ var Table = map[string]Record{
 	cmn.ActResilver:     {Scope: ScopeT, Startable: true, Mountpath: true},
 	cmn.ActRebalance:    {Scope: ScopeG, Startable: true, Metasync: true, Owned: false, Mountpath: true},
 	cmn.ActDownload:     {Scope: ScopeG, Startable: false, Mountpath: true},
+	cmn.ActETLInline:    {Scope: ScopeG, Startable: false, Mountpath: false},
 
 	// xactions that run on a given bucket or buckets
 	cmn.ActECGet:           {Scope: ScopeBck, Startable: false},

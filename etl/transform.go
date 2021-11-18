@@ -144,7 +144,7 @@ func (e *Aborter) ListenSmapChanged() {
 	}()
 }
 
-func Start(t cluster.Target, msg InitSpecMsg, opts ...StartOpts) (err error) {
+func InitSpec(t cluster.Target, msg InitSpecMsg, opts ...StartOpts) (err error) {
 	errCtx, podName, svcName, err := tryStart(t, msg, opts...)
 	if err != nil {
 		glog.Warning(cmn.NewErrETL(errCtx, "Performing cleanup after unsuccessful Start"))
@@ -179,7 +179,7 @@ func InitCode(t cluster.Target, msg InitCodeMsg) error {
 	}
 
 	// Finally, start the ETL with declared Pod specification.
-	return Start(t, InitSpecMsg{
+	return InitSpec(t, InitSpecMsg{
 		ID:          msg.ID,
 		Spec:        []byte(podSpec),
 		CommType:    msg.CommType,
@@ -264,6 +264,8 @@ func tryStart(t cluster.Target, msg InitSpecMsg, opts ...StartOpts) (errCtx *cmn
 	if err = b.setupConnection(); err != nil {
 		return
 	}
+
+	b.setupXaction()
 
 	c := makeCommunicator(commArgs{
 		listener:    newAborter(t, msg.ID),
@@ -352,6 +354,13 @@ func (b *etlBootstraper) createServiceSpec() {
 	b.errCtx.SvcName = b.svc.Name
 }
 
+func (b *etlBootstraper) setupXaction() {
+	rns := xreg.RenewETL(b.t, b.msg)
+	debug.AssertNoErr(rns.Err)
+	debug.Assert(!rns.IsRunning())
+	b.xact = rns.Entry.Get()
+}
+
 // Stop deletes all occupied by the ETL resources, including Pods and Services.
 // It unregisters ETL smap listener.
 func Stop(t cluster.Target, id string) error {
@@ -377,6 +386,8 @@ func Stop(t cluster.Target, id string) error {
 	if c := reg.removeByUUID(id); c != nil {
 		t.Sowner().Listeners().Unreg(c)
 	}
+
+	c.Stop()
 
 	return nil
 }

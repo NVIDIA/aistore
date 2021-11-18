@@ -49,9 +49,12 @@ type (
 		AddNotif(n Notif)
 
 		// common stats
+		Objs() int64
 		ObjsAdd(int, int64)    // locally processed
 		OutObjsAdd(int, int64) // transmit
 		InObjsAdd(int, int64)  // receive
+		InBytes() int64
+		OutBytes() int64
 	}
 
 	XactionSnap interface {

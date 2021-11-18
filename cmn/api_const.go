@@ -31,6 +31,7 @@ const (
 	ActECGet           = "ec-get"    // erasure decode objects
 	ActECPut           = "ec-put"    // erasure encode objects
 	ActECRespond       = "ec-resp"   // respond to other targets' EC requests
+	ActETLInline       = "etl-inline"
 	ActETLBck          = "etl-bck"
 	ActETLObjects      = "etl-listrange"
 	ActElection        = "election"

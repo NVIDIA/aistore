@@ -73,3 +73,15 @@ func (r *registry) renewDownloader(t cluster.Target, statsT stats.Tracker) Renew
 	}, nil)
 	return r.renew(e, nil)
 }
+
+func RenewETL(t cluster.Target, msg interface{}) RenewRes {
+	return defaultReg.renewETL(t, msg)
+}
+
+func (r *registry) renewETL(t cluster.Target, msg interface{}) RenewRes {
+	e := r.nonbckXacts[cmn.ActETLInline].New(Args{
+		T:      t,
+		Custom: msg,
+	}, nil)
+	return r.renew(e, nil)
+}
