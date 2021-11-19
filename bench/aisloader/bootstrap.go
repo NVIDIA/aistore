@@ -736,7 +736,7 @@ func Start(version, build, buildtime string) error {
 	}
 
 	if runParams.cleanUp.Val {
-		fmt.Printf("BEWARE: cleanup is enabled, bucket %s will be destroyed upon termination!\n\n", runParams.bck)
+		fmt.Printf("BEWARE: cleanup is enabled, bucket %s will be destroyed upon termination!\n", runParams.bck)
 		time.Sleep(time.Second)
 	}
 
@@ -1090,6 +1090,7 @@ func completeWorkOrder(wo *workOrder) {
 }
 
 func cleanup() {
+	time.Sleep(time.Second)
 	fmt.Println(prettyTimestamp() + " Cleaning up...")
 	if bucketObjsNames != nil {
 		// `bucketObjsNames` has been actually assigned to/initialized.
