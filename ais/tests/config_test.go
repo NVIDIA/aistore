@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
+	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
 
@@ -173,13 +174,16 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 		errWMConfigNotExpected, newLowWM, daemonConfig.Disk.DiskUtilLowWM)
 
 	// Restart daemon and check if the config is persisted.
+	tlog.Logf("Killing %s\n", proxy.StringEx())
 	cmd, err := tutils.KillNode(proxy)
 	tassert.CheckFatal(t, err)
-	smap, err = tutils.WaitForClusterState(proxyURL, "kill node", smap.Version, origProxyCnt-1, origTargetCnt)
+	time.Sleep(time.Second)
+	smap, err = tutils.WaitForClusterState(proxyURL, "remove proxy", smap.Version, origProxyCnt-1, origTargetCnt)
 	tassert.CheckError(t, err)
+	time.Sleep(time.Second)
 	err = tutils.RestoreNode(cmd, false, cmn.Proxy)
 	tassert.CheckFatal(t, err)
-	_, err = tutils.WaitForClusterState(proxyURL, "restore node", smap.Version, origProxyCnt, origTargetCnt)
+	_, err = tutils.WaitForClusterState(proxyURL, "restore proxy", smap.Version, origProxyCnt, origTargetCnt)
 	tassert.CheckFatal(t, err)
 
 	err = tutils.WaitNodeReady(proxy.URL(cmn.NetworkPublic))
@@ -211,6 +215,7 @@ func TestConfigSyncToNewNode(t *testing.T) {
 
 	// 1. Kill a random proxy
 	// Restart daemon and check if the config is persisted.
+	tlog.Logf("Killing %s\n", proxy.StringEx())
 	cmd, err := tutils.KillNode(proxy)
 	tassert.CheckFatal(t, err)
 
@@ -220,7 +225,7 @@ func TestConfigSyncToNewNode(t *testing.T) {
 		})
 	})
 
-	smap, err = tutils.WaitForClusterState(proxyURL, "kill node", smap.Version, origProxyCnt-1, origTargetCnt)
+	smap, err = tutils.WaitForClusterState(proxyURL, "remove node", smap.Version, origProxyCnt-1, origTargetCnt)
 	tassert.CheckError(t, err)
 
 	// 2. After proxy is killed, update cluster configuration
@@ -230,6 +235,7 @@ func TestConfigSyncToNewNode(t *testing.T) {
 	})
 
 	// 3. Restore killed proxy
+	time.Sleep(time.Second)
 	err = tutils.RestoreNode(cmd, false, cmn.Proxy)
 	tassert.CheckFatal(t, err)
 	_, err = tutils.WaitForClusterState(proxyURL, "restore node", smap.Version, origProxyCnt, origTargetCnt)

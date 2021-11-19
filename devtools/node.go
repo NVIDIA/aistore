@@ -78,7 +78,7 @@ func WaitMapVersionSync(baseParams api.BaseParams, ctx *Ctx, timeout time.Time, 
 				if prevVersion < 0 {
 					ctx.Log("%s (from node %s)\n", daemonSmap.StringEx(), sid)
 				} else {
-					ctx.Log("updating _previous_ Smap v%d to %s (from node %s)\n",
+					ctx.Log("Updating previous Smap v%d to %s (from node %s)\n",
 						prevVersion, daemonSmap.StringEx(), sid)
 				}
 				*smap = *daemonSmap

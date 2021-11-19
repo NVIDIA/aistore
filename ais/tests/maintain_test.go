@@ -143,6 +143,7 @@ func TestMaintenanceMD(t *testing.T) {
 	msg := &cmn.ActValRmNode{DaemonID: dcmTarget.ID(), SkipRebalance: true}
 	_, err := api.DecommissionNode(baseParams, msg)
 	tassert.CheckFatal(t, err)
+	time.Sleep(time.Second)
 	_, err = tutils.WaitForClusterState(proxyURL, "target decommission", smap.Version, smap.CountActiveProxies(),
 		smap.CountTargets()-1)
 	tassert.CheckFatal(t, err)
@@ -151,6 +152,7 @@ func TestMaintenanceMD(t *testing.T) {
 	tassert.Errorf(t, vmdTargets == smap.CountTargets()-1, "expected VMD to be found on %d targets, got %d.",
 		smap.CountTargets()-1, vmdTargets)
 
+	time.Sleep(time.Second)
 	err = tutils.RestoreNode(cmd, false, "target")
 	tassert.CheckFatal(t, err)
 	_, err = tutils.WaitForClusterState(proxyURL, "target decommission",
