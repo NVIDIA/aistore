@@ -115,7 +115,7 @@ func WaitStarted() {
 }
 
 func Reg(name string, f CleanupFunc, interval time.Duration) {
-	debug.Assert(DefaultHK.running.Load())
+	debug.Assert(DefaultHK.stopping.Load() || DefaultHK.running.Load())
 	DefaultHK.workCh <- request{
 		registering:     true,
 		name:            name,

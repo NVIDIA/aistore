@@ -116,7 +116,7 @@ func RemoveNodeFromSmap(ctx *Ctx, proxyURL, sid string, timeout time.Duration) e
 	if node != nil && smap.IsPrimary(node) {
 		return fmt.Errorf("unregistering primary proxy is not allowed")
 	}
-	tlog.Logf("Remove %s from %s\n", node, smap)
+	tlog.Logf("Remove %s from %s\n", node.StringEx(), smap)
 
 	err = api.RemoveNodeFromSmap(baseParams, sid)
 	if err != nil {

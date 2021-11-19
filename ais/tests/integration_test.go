@@ -419,12 +419,10 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 
 func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-
 	m := ioContext{
 		t:   t,
 		num: 10000,
 	}
-
 	m.initAndSaveCluState()
 	m.expectTargets(3)
 
@@ -464,7 +462,6 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	// Unregister target 1 in parallel
 	go func() {
 		defer wg.Done()
-		tlog.Logf("Remove %s from Smap\n", target1.StringEx())
 		err = tutils.RemoveNodeFromSmap(m.proxyURL, target1.ID())
 		tassert.CheckFatal(t, err)
 	}()
@@ -475,7 +472,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	// Register target 1 to bring cluster to original state
 	sleep := time.Duration(rand.Intn(5))*time.Second + time.Millisecond
 	time.Sleep(sleep)
-	tlog.Logf("Join target %s\n", target1.StringEx())
+	tlog.Logf("Join %s back\n", target1.StringEx())
 	rebID, err := tutils.JoinCluster(m.proxyURL, target1)
 	tassert.CheckFatal(t, err)
 	_, err = tutils.WaitForClusterState(
@@ -487,8 +484,9 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	)
 	tassert.CheckFatal(m.t, err)
 
-	tlog.Logf("Wait for rebalance...\n")
-	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
+	tlog.Logf("Wait for rebalance (%q?)...\n", rebID)
+	time.Sleep(sleep)
+	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	m.gets()
 
