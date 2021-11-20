@@ -1657,7 +1657,7 @@ func (t *targetrunner) fsErr(err error, filepath string) {
 	if !cos.IsIOError(err) {
 		return
 	}
-	mpathInfo, _ := fs.Path2MpathInfo(filepath)
+	mpathInfo := fs.Path2Mpath(filepath)
 	if mpathInfo == nil {
 		return
 	}

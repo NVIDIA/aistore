@@ -97,21 +97,8 @@ rm:
 	if errRm != nil && !os.IsNotExist(errRm) && err == nil {
 		err = errRm
 	}
-	if !cs.OOS {
-		return err
+	if cs.OOS {
+		glog.Errorf("%s %s: OOS (%v)", mi, cs, err)
 	}
-	glog.Errorf("%s %s: OOS (%v)", mi, cs, err)
-
-	// NOTE: to run functional tests on low capacity
-	// TODO: tune-up OOS handling and then remove
-	debug.Func(func() {
-		available, disabled := Get()
-		for _, mi := range available {
-			os.RemoveAll(mi.DeletedRoot())
-		}
-		for _, mi := range disabled {
-			os.RemoveAll(mi.DeletedRoot())
-		}
-	})
 	return err
 }

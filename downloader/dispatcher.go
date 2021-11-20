@@ -133,7 +133,7 @@ func (d *dispatcher) addJogger(mpath string) {
 		glog.Warningf("Attempted to add an already existing mountpath %q", mpath)
 		return
 	}
-	mpathInfo, _ := fs.Path2MpathInfo(mpath)
+	mpathInfo := fs.Path2Mpath(mpath)
 	if mpathInfo == nil {
 		glog.Errorf("Attempted to add a mountpath %q with no corresponding filesystem", mpath)
 		return

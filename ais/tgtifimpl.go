@@ -230,7 +230,7 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 		//
 		// TODO: Try to determine if `params.SrcFQN` and `dstFQN` are on the device
 		//  without requiring it to be on the same mountpath.
-		info, _, err := fs.ParseMpathInfo(params.SrcFQN)
+		info, _, err := fs.FQN2Mpath(params.SrcFQN)
 		copyFile = err != nil || info.Path != lom.MpathInfo().Path
 	}
 	if copyFile {

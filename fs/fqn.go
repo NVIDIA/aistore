@@ -44,12 +44,10 @@ func ParseFQN(fqn string) (parsed ParsedFQN, err error) {
 		rel           string
 		itemIdx, prev int
 	)
-
-	parsed.MpathInfo, rel, err = ParseMpathInfo(fqn)
+	parsed.MpathInfo, rel, err = FQN2Mpath(fqn)
 	if err != nil {
 		return
 	}
-
 	for i := 0; i < len(rel); i++ {
 		if rel[i] != filepath.Separator {
 			continue
@@ -120,51 +118,53 @@ func ParseFQN(fqn string) (parsed ParsedFQN, err error) {
 		prev = i + 1
 	}
 
-	err = fmt.Errorf("fqn is invalid: %s", fqn)
+	err = fmt.Errorf("fqn %s is invalid", fqn)
 	return
 }
 
-// ParseMpathInfo matches and extracts <mpath> from the FQN and returns the rest of FQN.
-func ParseMpathInfo(fqn string) (info *MountpathInfo, relativePath string, err error) {
-	var (
-		available = (*MPI)(mfs.available.Load())
-		max       = 0
-	)
-	if available == nil {
-		err = fmt.Errorf("failed to get mountpaths, fqn: %s", fqn)
+// FQN2Mpath matches FQN to mountpath and returns the mountpath info and the relative path.
+func FQN2Mpath(fqn string) (found *MountpathInfo, relativePath string, err error) {
+	availablePaths := GetAvail()
+	if len(availablePaths) == 0 {
+		err = cmn.ErrNoMountpaths
 		return
 	}
-	availablePaths := *available
-	for mpath, mpathInfo := range availablePaths {
+	for mpath, mi := range availablePaths {
 		l := len(mpath)
-		if len(fqn) > l && l > max && fqn[0:l] == mpath && fqn[l] == filepath.Separator {
-			info = mpathInfo
+		if len(fqn) > l && fqn[0:l] == mpath && fqn[l] == filepath.Separator {
+			found = mi
 			relativePath = fqn[l+1:]
-			max = l
+			return
 		}
 	}
-	if info == nil {
-		err = fmt.Errorf("no mountpath match FQN: %s", fqn)
-		return
+	err = fmt.Errorf("not found mountpath for fqn %s", fqn)
+
+	// make an extra effort to lookup in disabled
+	_, disabledPaths := Get()
+	for mpath, mi := range disabledPaths {
+		l := len(mpath)
+		if len(fqn) > l && fqn[0:l] == mpath && fqn[l] == filepath.Separator {
+			err = fmt.Errorf("mountpath %s for fqn %s exists but is disabled", mi, fqn)
+			return
+		}
 	}
 	return
 }
 
-// Path2MpathInfo takes in any path (fqn or mpath) and returns the mpathInfo of the mpath
-// with the longest common prefix and the relative path to this mpath
-func Path2MpathInfo(path string) (info *MountpathInfo, relativePath string) {
+// Path2Mpath takes in any file path (e.g., ../../a/b/c) and returns the matching `mpathInfo`,
+// if exists
+func Path2Mpath(path string) (found *MountpathInfo) {
 	var (
 		max            int
 		availablePaths = GetAvail()
 		cleanedPath    = filepath.Clean(path)
 	)
-	for mpath, mpathInfo := range availablePaths {
+	for mpath, mi := range availablePaths {
 		rel, ok := pathPrefixMatch(mpath, cleanedPath)
 		if ok && len(mpath) > max {
-			info = mpathInfo
+			found = mi
 			max = len(mpath)
-			relativePath = rel
-			if relativePath == "." {
+			if rel == "." {
 				break
 			}
 		}

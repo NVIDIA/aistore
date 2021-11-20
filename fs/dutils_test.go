@@ -25,7 +25,7 @@ func TestMountpathSearchValid(t *testing.T) {
 	defer removeDirs(mpath)
 
 	oldMPs := setAvailableMountPaths(mpath)
-	mpathInfo, _ := Path2MpathInfo("/tmp/abc/test")
+	mpathInfo := Path2Mpath("/tmp/abc/test")
 	longestPrefix := mpathInfo.Path
 	tassert.Errorf(t, longestPrefix == mpath, "Actual: [%s]. Expected: [%s]", longestPrefix, mpath)
 	setAvailableMountPaths(oldMPs...)
@@ -39,7 +39,7 @@ func TestMountpathSearchInvalid(t *testing.T) {
 	defer removeDirs(mpath)
 
 	oldMPs := setAvailableMountPaths(mpath)
-	mpathInfo, _ := Path2MpathInfo("xabc")
+	mpathInfo := Path2Mpath("xabc")
 	tassert.Errorf(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
 	setAvailableMountPaths(oldMPs...)
 }
@@ -47,7 +47,7 @@ func TestMountpathSearchInvalid(t *testing.T) {
 func TestMountpathSearchWhenNoAvailable(t *testing.T) {
 	TestNew(nil)
 	oldMPs := setAvailableMountPaths("")
-	mpathInfo, _ := Path2MpathInfo("xabc")
+	mpathInfo := Path2Mpath("xabc")
 	tassert.Errorf(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
 	setAvailableMountPaths(oldMPs...)
 }
@@ -64,14 +64,14 @@ func TestSearchWithASuffixToAnotherValue(t *testing.T) {
 
 	oldMPs := setAvailableMountPaths("/tmp/x", "/tmp/x/y")
 
-	mpathInfo, _ := Path2MpathInfo("xabc")
+	mpathInfo := Path2Mpath("xabc")
 	tassert.Errorf(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
 
-	mpathInfo, _ = Path2MpathInfo("/tmp/x/yabc")
+	mpathInfo = Path2Mpath("/tmp/x/yabc")
 	longestPrefix := mpathInfo.Path
 	tassert.Errorf(t, longestPrefix == "/tmp/x", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp/x")
 
-	mpathInfo, _ = Path2MpathInfo("/tmp/x/y/abc")
+	mpathInfo = Path2Mpath("/tmp/x/y/abc")
 	longestPrefix = mpathInfo.Path
 	tassert.Errorf(t, longestPrefix == "/tmp/x/y", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp/x")
 	setAvailableMountPaths(oldMPs...)
@@ -85,15 +85,15 @@ func TestSimilarCases(t *testing.T) {
 
 	oldMPs := setAvailableMountPaths("/tmp/abc")
 
-	mpathInfo, _ := Path2MpathInfo("/tmp/abc")
+	mpathInfo := Path2Mpath("/tmp/abc")
 	longestPrefix := mpathInfo.Path
 	tassert.Errorf(t, longestPrefix == "/tmp/abc", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp/abc")
 
-	mpathInfo, _ = Path2MpathInfo("/tmp/abc/")
+	mpathInfo = Path2Mpath("/tmp/abc/")
 	longestPrefix = mpathInfo.Path
 	tassert.Errorf(t, longestPrefix == "/tmp/abc", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp/abc")
 
-	mpathInfo, _ = Path2MpathInfo("/abx")
+	mpathInfo = Path2Mpath("/abx")
 	tassert.Errorf(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "/abx")
 	setAvailableMountPaths(oldMPs...)
 }
@@ -106,7 +106,7 @@ func TestSimilarCasesWithRoot(t *testing.T) {
 	defer removeDirs(mpath)
 
 	oldMPs := setAvailableMountPaths(mpath, "/")
-	mpathInfo, _ := Path2MpathInfo("/abx")
+	mpathInfo := Path2Mpath("/abx")
 	tassert.Errorf(t, mpathInfo == nil, "Expected mpathInfo to be nil when no valid matching mountpath")
 	setAvailableMountPaths(oldMPs...)
 }

@@ -101,22 +101,6 @@ func TestParseFQN(t *testing.T) {
 			cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal},
 			fs.ObjectType, "folder/objname", false,
 		},
-		{
-			"multiple mpaths matching, choose the longest",
-			tmpMpath + "/super/long/long/@aws/bucket/%ob/folder/objname",
-			[]string{tmpMpath + "/super/long", tmpMpath + "/super/long/long"},
-			tmpMpath + "/super/long/long",
-			cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal},
-			fs.ObjectType, "folder/objname", false,
-		},
-		{
-			"dirty mpath",
-			tmpMpath + "/super/long/long/@gcp/bucket/%ob/folder/objname",
-			[]string{tmpMpath + "/super/long", tmpMpath + "/.////super/../super//./long///////////long"},
-			tmpMpath + "/super/long/long",
-			cmn.Bck{Name: "bucket", Provider: cmn.ProviderGoogle, Ns: cmn.NsGlobal},
-			fs.ObjectType, "folder/objname", false,
-		},
 
 		// bad
 		{
