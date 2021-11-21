@@ -64,9 +64,9 @@ func (f *FSHC) Run() error {
 	for {
 		select {
 		case filePath := <-f.fileListCh:
-			mpathInfo := fs.Path2Mpath(filePath)
-			if mpathInfo == nil {
-				glog.Errorf("Failed to get mountpath for file %s", filePath)
+			mpathInfo, err := fs.Path2Mpath(filePath)
+			if err != nil {
+				glog.Error(err)
 				break
 			}
 

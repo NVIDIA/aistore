@@ -2877,7 +2877,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	}
 
 	if containers.DockerRunning() {
-		tlog.Logln("Skipping object corruption test in docker")
+		tlog.Logf("skipping %s object corruption (docker is not supported)\n", t.Name())
 		return
 	}
 

@@ -562,7 +562,7 @@ func crashAndFastRestore(t *testing.T) {
 
 func joinWhileVoteInProgress(t *testing.T) {
 	if containers.DockerRunning() {
-		t.Skip("Skipping because mocking is not supported for docker cluster")
+		t.Skipf("skipping %s (docker is not supported)", t.Name())
 	}
 	var (
 		proxyURL     = tutils.RandomProxyURL(t)

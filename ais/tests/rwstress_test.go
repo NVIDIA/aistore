@@ -147,14 +147,8 @@ func cleanRWStress(bck cmn.Bck, cksumType string) {
 func parallelPutGetStress(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		if bck.IsRemote() {
-			switch bck.RemoteBck().Provider {
-			case cmn.ProviderGoogle:
-				t.Skip("Stress test is unavailable for GCP")
-			case cmn.ProviderHDFS:
-				t.Skip("HDFS backend does not correctly handle overwriting files (#1135)")
-			}
+			t.Skipf("skipping %s for remote buckets", t.Name())
 		}
-
 		var (
 			errChanSize = numLoops * numFiles * 2
 			errCh       = make(chan opRes, errChanSize)
@@ -174,14 +168,8 @@ func multiOpStress(opNames ...string) func(t *testing.T) {
 	return func(t *testing.T) {
 		runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 			if bck.IsRemote() {
-				switch bck.RemoteBck().Provider {
-				case cmn.ProviderGoogle:
-					t.Skip("Stress test is unavailable for GCP")
-				case cmn.ProviderHDFS:
-					t.Skip("HDFS backend does not correctly handle overwriting files (#1135)")
-				}
+				t.Skipf("skipping %s for remote buckets", t.Name())
 			}
-
 			var (
 				errChanSize = numLoops * numFiles * 3
 				errCh       = make(chan opRes, errChanSize)

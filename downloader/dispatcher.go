@@ -129,15 +129,8 @@ func (d *dispatcher) stop() {
 }
 
 func (d *dispatcher) addJogger(mpath string) {
-	if _, ok := d.joggers[mpath]; ok {
-		glog.Warningf("Attempted to add an already existing mountpath %q", mpath)
-		return
-	}
-	mpathInfo := fs.Path2Mpath(mpath)
-	if mpathInfo == nil {
-		glog.Errorf("Attempted to add a mountpath %q with no corresponding filesystem", mpath)
-		return
-	}
+	_, ok := d.joggers[mpath]
+	debug.Assert(!ok)
 	j := newJogger(d, mpath)
 	go j.jog()
 	d.joggers[mpath] = j

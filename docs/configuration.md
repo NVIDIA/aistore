@@ -85,11 +85,9 @@ Unlike global configuration that is replicated across all nodes there is also a 
 
 * local config and log directories
 * network configuration, including node's hostname(s) or IP addresses
-* node's mountpaths
+* node's [mountpaths](#managing-mountpaths)
 
-> Terminology: *mountpath* is a triplet **(local filesystem, disks this LFS utilizes, directory where AIS will store its metadata and user data)**. The following "share-nothing" rules are enforced: different mountpaths use different local filesystems, whereby each local FS uses its own disks.
-
-> Separately, since AIS supports n-way mirroring and erasure coding, we strongly recommend not using LVM and hardware RAID. Rather, there must be a simple 1-to-1 relationship: one local FS - one non-partitioned disk.
+> Since AIS supports n-way mirroring and erasure coding, we typically recommend not using LVMs and hardware RAIDs.
 
 #### Example: show node's configuration
 
@@ -202,11 +200,9 @@ Further, `test_fspaths` section (see below) corresponds to a **single local file
 
 ![Configuration: local filesystems](images/ais-config-2-commented.png)
 
-In production we use an alternative configuration called `fspaths`: the section of the [config](/deploy/dev/local/aisnode_config.sh) that includes a number of local directories, whereby each directory is based on a different local filesystem.
+In production, we use an alternative configuration called `fspaths`: the section of the [config](/deploy/dev/local/aisnode_config.sh) that includes a number of local directories, whereby each directory is based on a different local filesystem.
 
-> Terminology: *mountpath* is a triplet **(local filesystem (LFS), disks that this LFS utilizes, LFS directory)**. The following rules are enforced: 1) different mountpaths use different LFSes, and 2) different LFSes use different disks.
-
-> The terms `fspath` (aka `filesystem path`) and `mountpath` are used interchangeably throughout AIStore docs and sources. When `fspath` configuration is enabled, the 1-to-1 relationship between configured `mountpaths` and local filesystems is enforced and validated at all times.
+For `fspath` and `mountpath` terminology and details, please see section [Managing Mountpaths](#managing-mountpaths) in this document.
 
 An example of 12 fspaths (and 12 local filesystems) follows below:
 
@@ -324,11 +320,15 @@ $ aisnode -config=/etc/ais.json -local_config=/etc/ais_local.json -role=target -
 
 ## Managing mountpaths
 
-Configuration option `fspaths` specifies the list of local directories where storage targets store objects. An `fspath` aka `mountpath` (both terms are used interchangeably) is a local directory serviced by a local filesystem.
+* [Mountpath](overview.md#terminology) - is a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS can fully own and utilize (to store user data and system metadata). Note that any given disk (or RAID) can have (at most) one mountpath (meaning **no disk sharing**) and mountpath directories cannot be nested. Further:
+   - a mountpath can be temporarily disabled and (re)enabled;
+   - a mountpath can also be detached and (re)attached, thus effectively supporting growth and "shrinkage" of local capacity;
+   - it is safe to execute the 4 listed operations (enable, disable, attach, detach) at any point during runtime;
+   - in a typical deployment, the total number of mountpaths would compute as a direct product of (number of storage targets) x (number of disks in each target).
 
-> There must be a 1-to-1 relationship between `fspath` and an underlying local filesystem. Note as well that this may be not the case for the development environments where multiple mountpaths are allowed to coexist within a single filesystem (e.g., tmpfs).
+Configuration option `fspaths` specifies the list of local mountpath directories. Each configured `fspath` is, simply, a local directory that provides the basis for AIS `mountpath`.
 
-> AIS [mountpath](overview.md#terminology) is a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS utilizes to store user data and AIS metadata. A mountpath can be disabled and (re)enabled, automatically or administratively, at any point during runtime. In a given cluster, a total number of mountpaths would normally compute as a direct product of (number of storage targets) x (number of disks in each target).
+> In regards **non-sharing of disks** between mountpaths: for development we make an exception, such that multiple mountpaths are actually allowed to share a disk and coexist within a single filesystem. This is done strictly for development convenience, though.
 
 AIStore [HTTP API](http_api.md) makes it possible to list, add, remove, enable, and disable a `fspath` (and, therefore, the corresponding local filesystem) at runtime. Filesystem's health checker (FSHC) monitors the health of all local filesystems: a filesystem that "accumulates" I/O errors will be disabled and taken out, as far as the AIStore built-in mechanism of object distribution. For further details about FSHC, please refer to [FSHC readme](/health/fshc.md).
 

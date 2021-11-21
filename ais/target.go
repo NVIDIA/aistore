@@ -1651,13 +1651,10 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 }
 
 func (t *targetrunner) fsErr(err error, filepath string) {
-	if !cmn.GCO.Get().FSHC.Enabled {
+	if !cmn.GCO.Get().FSHC.Enabled || !cos.IsIOError(err) {
 		return
 	}
-	if !cos.IsIOError(err) {
-		return
-	}
-	mpathInfo := fs.Path2Mpath(filepath)
+	mpathInfo, _ := fs.Path2Mpath(filepath)
 	if mpathInfo == nil {
 		return
 	}

@@ -162,12 +162,10 @@ func TestRProxyGCS(t *testing.T) {
 		tlog.Logf("JSON download speed:   %s\n", cos.B2S(speedJSON, 1))
 	*/
 	ratio := float64(speedHTTP) / float64(speedCold)
-	if ratio <= 1 {
-		tlog.Logln("Warning:")
-		tlog.Logf("Warning: HTTP (cached) download is slower Cold (ratio = %.1f)\n", ratio)
-		tlog.Logln("Warning:")
-	} else {
-		tlog.Logf("HTTP (cached) is faster than Cold (ratio = %.1f)\n", ratio)
+	if ratio < 0.8 {
+		tlog.Logf("Cached download is %.1f slower than Cold\n", ratio)
+	} else if ratio > 1.2 {
+		tlog.Logf("HTTP is %.1f faster than Cold\n", ratio)
 	}
 }
 

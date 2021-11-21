@@ -104,6 +104,14 @@ func TestParseFQN(t *testing.T) {
 
 		// bad
 		{
+			"nested mountpaths",
+			tmpMpath + "/super/long/long/@aws/bucket/%ob/folder/objname",
+			[]string{tmpMpath + "/super/long", tmpMpath + "/super/long/long"},
+			"",
+			cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal},
+			fs.ObjectType, "folder/objname", true,
+		},
+		{
 			"too short name",
 			tmpMpath + "/bucket/objname",
 			[]string{tmpMpath},

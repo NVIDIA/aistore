@@ -153,21 +153,7 @@ func FQN2Mpath(fqn string) (found *MountpathInfo, relativePath string, err error
 
 // Path2Mpath takes in any file path (e.g., ../../a/b/c) and returns the matching `mpathInfo`,
 // if exists
-func Path2Mpath(path string) (found *MountpathInfo) {
-	var (
-		max            int
-		availablePaths = GetAvail()
-		cleanedPath    = filepath.Clean(path)
-	)
-	for mpath, mi := range availablePaths {
-		rel, ok := pathPrefixMatch(mpath, cleanedPath)
-		if ok && len(mpath) > max {
-			found = mi
-			max = len(mpath)
-			if rel == "." {
-				break
-			}
-		}
-	}
+func Path2Mpath(path string) (found *MountpathInfo, err error) {
+	found, _, err = FQN2Mpath(filepath.Clean(path))
 	return
 }

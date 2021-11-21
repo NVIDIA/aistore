@@ -30,43 +30,6 @@ func init() {
 	CSM = &ContentSpecMgr{RegisteredContentTypes: make(map[string]ContentResolver, 8)}
 }
 
-// A simplified version of the filepath.Rel that determines the
-// relative path of targ (target) to mpath. Note that mpath and
-// targ must be clean (as in: filepath.Clean)
-// pathPrefixMatch will only return true if the targ is equivalent to
-// mpath + relative path.
-func pathPrefixMatch(mpath, targ string) (rel string, match bool) {
-	if len(mpath) == len(targ) && mpath == targ {
-		return ".", true
-	}
-	bl := len(mpath)
-	tl := len(targ)
-	var b0, bi, t0, ti int
-	for {
-		for bi < bl && mpath[bi] != filepath.Separator {
-			bi++
-		}
-		for ti < tl && targ[ti] != filepath.Separator {
-			ti++
-		}
-		if targ[t0:ti] != mpath[b0:bi] {
-			break
-		}
-		if bi < bl {
-			bi++
-		}
-		if ti < tl {
-			ti++
-		}
-		b0 = bi
-		t0 = ti
-	}
-	if b0 != bl {
-		return "", false
-	}
-	return targ[t0:], true
-}
-
 func IsDirEmpty(dir string) (names []string, empty bool, err error) {
 	var f *os.File
 	f, err = os.Open(dir)
