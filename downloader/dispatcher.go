@@ -148,13 +148,13 @@ func (d *dispatcher) cleanupJob(jobID string) {
 // forward request to designated jogger
 func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 	defer func() {
-		debug.Infof("[downloader] Finished dispatching job %q, now waiting for it to finish and cleanup", job.ID())
+		debug.Infof("Waiting for job %q", job.ID())
 		d.waitFor(job.ID())
-		debug.Infof("[downloader] Job %q has finished waiting for all tasks to finish", job.ID())
+		debug.Infof("Job %q finished waiting for all tasks", job.ID())
 		d.cleanupJob(job.ID())
-		debug.Infof("[downloader] Cleaned up after job %q", job.ID())
+		debug.Infof("Job %q cleaned up", job.ID())
 		job.cleanup()
-		debug.Infof("[downloader] Job %q has fully finished", job.ID())
+		debug.Infof("Job %q has finished", job.ID())
 	}()
 
 	if aborted := d.checkAborted(); aborted || d.checkAbortedJob(job) {
@@ -396,8 +396,7 @@ func (d *dispatcher) blockingDispatchDownloadSingle(task *singleObjectTask) (ok 
 }
 
 func (d *dispatcher) dispatchAdminReq(req *request) (resp interface{}, statusCode int, err error) {
-	debug.Infof("[downloader] Dispatching admin request (id: %q, action: %q, onlyActive: %t)", req.id, req.action, req.onlyActive)
-	defer debug.Infof("[downloader] Finished admin request (id: %q, action: %q, onlyActive: %t)", req.id, req.action, req.onlyActive)
+	debug.Infof("Admin request (id: %q, action: %q, onlyActive: %t)", req.id, req.action, req.onlyActive)
 
 	// Need to make sure that the dispatcher has fully initialized and started,
 	// and it's ready for processing the requests.
@@ -413,7 +412,7 @@ func (d *dispatcher) dispatchAdminReq(req *request) (resp interface{}, statusCod
 	case actList:
 		_handleList(req)
 	default:
-		cos.Assertf(false, "%v; %v", req, req.action)
+		debug.Assertf(false, "%v; %v", req, req.action)
 	}
 	r := req.response
 	return r.value, r.statusCode, r.err
@@ -535,19 +534,20 @@ func (ss *startupSema) markStarted() {
 }
 
 func (ss *startupSema) waitForStartup() {
-	if ss.started.Load() {
-		return
-	}
-
 	const (
 		sleep   = 500 * time.Millisecond
 		timeout = 10 * time.Second
+		errmsg  = "FATAL: dispatcher takes too much time to start"
 	)
-	for slept := time.Duration(0); !ss.started.Load(); slept += sleep {
+	if ss.started.Load() {
+		return
+	}
+	for total := time.Duration(0); !ss.started.Load(); total += sleep {
 		time.Sleep(sleep)
-
-		// If we are sleeping for more than `timeout` then there is something
-		// wrong. This should never happen even on the slowest machines.
-		cos.AssertMsg(slept < timeout, "dispatcher takes impossible time to start")
+		// should never happen even on slowest machines
+		debug.AssertMsg(total < timeout, errmsg)
+		if total >= timeout && total < timeout+sleep*2 {
+			glog.Errorln(errmsg)
+		}
 	}
 }

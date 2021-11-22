@@ -12,12 +12,12 @@ import (
 	"sync"
 )
 
+func ON() bool { return false }
+
 func NewExpvar(_ uint8)                    {}
 func SetExpvar(_ uint8, _ string, _ int64) {}
 
-func Errorln(_ ...interface{})          {}
-func Errorf(_ string, _ ...interface{}) {}
-func Infof(_ string, _ ...interface{})  {}
+func Infof(_ string, _ ...interface{}) {}
 
 func Func(_ func()) {}
 

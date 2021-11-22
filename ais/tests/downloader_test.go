@@ -137,47 +137,6 @@ func checkDownloadedObjects(t *testing.T, id string, bck cmn.Bck, objects []stri
 	)
 }
 
-func downloaderCompleted(t *testing.T, targetID string, targetsStats api.NodesXactMultiStats) bool {
-	downloaderStat, exists := targetsStats[targetID]
-	for _, xaction := range downloaderStat {
-		if xaction.Running() {
-			tlog.Logf("%s in progress for %s\n", xaction.Kind(), targetID)
-			return false
-		}
-	}
-
-	tassert.Fatalf(t, exists, "Target %s not found in downloader stats", targetID)
-	return true
-}
-
-func waitForDownloaderToFinish(t *testing.T, baseParams api.BaseParams, targetID string, timeouts ...time.Duration) {
-	start := time.Now()
-	timeout := time.Duration(0)
-	if len(timeouts) > 0 {
-		timeout = timeouts[0]
-	}
-
-	tlog.Logf("Waiting %s for downloader to finish\n", timeout)
-	time.Sleep(time.Second * 2)
-
-	xactArgs := api.XactReqArgs{Kind: cmn.ActDownload}
-	for {
-		time.Sleep(time.Second)
-		downloaderStats, err := api.QueryXactionStats(baseParams, xactArgs)
-		tassert.CheckFatal(t, err)
-
-		if downloaderCompleted(t, targetID, downloaderStats) {
-			tlog.Logf("Downloader has finished\n")
-			return
-		}
-
-		if timeout != 0 && time.Since(start) > timeout {
-			tassert.Fatalf(t, false, "downloader has not finished before %s", timeout)
-			return
-		}
-	}
-}
-
 func downloadObject(t *testing.T, bck cmn.Bck, objName, link string, shouldBeSkipped bool) {
 	id, err := api.DownloadSingle(tutils.BaseAPIParams(), generateDownloadDesc(), bck, objName, link)
 	tassert.CheckError(t, err)
@@ -841,8 +800,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
-		objsCnt = 100
-
+		objsCnt  = 100
 		template = "storage.googleapis.com/nvdata-openimages/openimages-train-{000000..000050}.tar"
 		m        = make(map[string]string, objsCnt)
 	)
@@ -859,39 +817,41 @@ func TestDownloadMpathEvents(t *testing.T) {
 
 	id1, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck, template)
 	tassert.CheckFatal(t, err)
-	tlog.Logf("Started large download job %s, meant to be aborted\n", id1)
+	tlog.Logf("Started very large download job %s (intended to be aborted)\n", id1)
 
 	// Abort just in case something goes wrong.
 	t.Cleanup(func() {
 		abortDownload(t, id1)
 	})
 
-	tlog.Logln("Wait a while for downloaders to pick the job as they start in goroutine")
+	tlog.Logln("Wait a while for downloaders to pick up...")
 	time.Sleep(3 * time.Second)
 
 	smap := tutils.GetClusterMap(t, proxyURL)
-	removeTarget, _ := smap.GetRandTarget()
+	selectedTarget, _ := smap.GetRandTarget()
 
-	mpathList, err := api.GetMountpaths(baseParams, removeTarget)
+	mpathList, err := api.GetMountpaths(baseParams, selectedTarget)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(mpathList.Available) >= 2, "%s requires 2 or more mountpaths", t.Name())
 
 	mpathID := cos.NowRand().Intn(len(mpathList.Available))
 	removeMpath := mpathList.Available[mpathID]
-	tlog.Logf("Disabling a mountpath %s at target: %s\n", removeMpath, removeTarget.ID())
-	err = api.DisableMountpath(baseParams, removeTarget, removeMpath)
+	tlog.Logf("Disabling mountpath %q at %s\n", removeMpath, selectedTarget.StringEx())
+	err = api.DisableMountpath(baseParams, selectedTarget, removeMpath)
 	tassert.CheckFatal(t, err)
 
 	defer func() {
-		tlog.Logf("Enabling mountpath %s at target %s...\n", removeMpath, removeTarget.ID())
-		err = api.EnableMountpath(baseParams, removeTarget, removeMpath)
+		tlog.Logf("Enabling mountpath %q at %s\n", removeMpath, selectedTarget.StringEx())
+		err = api.EnableMountpath(baseParams, selectedTarget, removeMpath)
 		tassert.CheckFatal(t, err)
 	}()
 
-	// Wait until downloader is aborted.
-	waitForDownloaderToFinish(t, baseParams, removeTarget.ID(), 30*time.Second)
+	// Wait for resilver
+	args := api.XactReqArgs{Node: selectedTarget.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
+	_, err = api.WaitForXaction(baseParams, args)
+	tassert.CheckFatal(t, err)
 
-	// Downloader finished on required target, safe to abort the rest.
+	// Downloader finished on the target `selectedTarget`, safe to abort the rest.
 	tlog.Logf("Aborting download job %s\n", id1)
 	abortDownload(t, id1)
 

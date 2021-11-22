@@ -157,9 +157,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 	}
 
 	daemon.version, daemon.buildTime = version, buildTime
-	glog.Infof("| version: %s | build-time: %s |\n", version, buildTime)
-	debug.Errorln("starting with debug asserts/logs")
-
+	glog.Infof("| version: %s | build-time: %s | debug: %t |\n", version, buildTime, debug.ON())
 	containerized := sys.Containerized()
 	cpus := sys.NumCPU()
 	glog.Infof("num CPUs(%d, %d), container %t", cpus, runtime.NumCPU(), containerized)

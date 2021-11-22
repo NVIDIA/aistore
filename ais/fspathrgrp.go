@@ -59,7 +59,6 @@ func (g *fsprungroup) _postAdd(action string, mi *fs.MountpathInfo) {
 	if !config.TestingEnv() { // as testing fspaths are counted, not enumerated
 		fspathsSaveCommit(mi.Path, true /*add*/)
 	}
-	xreg.AbortAllMountpathsXactions()
 	go func() {
 		if cmn.GCO.Get().Resilver.Enabled {
 			g.t.runResilver(res.Args{}, nil /*wg*/)
@@ -134,7 +133,6 @@ func (g *fsprungroup) _preDD(action string, flags uint64, mpath string) (nothing
 	}
 
 	rmi.EvictLomCache()
-	xreg.AbortAllMountpathsXactions() // TODO: remove
 
 	if !cmn.GCO.Get().Resilver.Enabled {
 		glog.Infof("%s: %q %s but resilvering is globally disabled, nothing to do", g.t.si, action, rmi)
@@ -150,7 +148,7 @@ func (g *fsprungroup) _preDD(action string, flags uint64, mpath string) (nothing
 		return
 	}
 	// otherwise, block on this single mountpath (NOTE: optimization for special case)
-	glog.Infof("%s: %q - resilvering data _off_ of %s", g.t.si, action, rmi)
+	glog.Infof("%s: %q - resilvering data off of the %s", g.t.si, action, rmi)
 	g.t.runResilver(res.Args{Mpath: rmi.Path}, nil /*wg*/)
 	return
 }

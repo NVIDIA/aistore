@@ -55,6 +55,8 @@ func init() {
 	loadLogLevel()
 }
 
+func ON() bool { return true }
+
 func NewExpvar(smodule uint8) {
 	var smod string
 	for k, v := range smodules {
@@ -77,18 +79,6 @@ func SetExpvar(smodule uint8, name string, val int64) {
 		m.Set(name, v)
 	}
 	v.Set(val)
-}
-
-func Errorln(a ...interface{}) {
-	if len(a) == 1 {
-		glog.ErrorDepth(1, "[DEBUG] ", a[0])
-		return
-	}
-	Errorf("%v", a)
-}
-
-func Errorf(f string, a ...interface{}) {
-	glog.ErrorDepth(1, fmt.Sprintf("[DEBUG] "+f, a...))
 }
 
 func Infof(f string, a ...interface{}) {

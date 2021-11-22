@@ -202,6 +202,7 @@ func (xact *XactBase) Finish(err error) {
 	if xact.eutime.CAS(0, 1) {
 		xact.eutime.Store(time.Now().UnixNano())
 		xact.notifyRefresh(err)
+		glog.Infof("%s finished(%v)", xact, err)
 	}
 }
 
