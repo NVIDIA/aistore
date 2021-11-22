@@ -28,7 +28,7 @@ cat > $AIS_CONF_FILE <<EOL
 	},
 	"log": {
 		"level":     "${AIS_LOG_LEVEL:-3}",
-		"max_size":  4194304,
+		"max_size":  524288,
 		"max_total": 67108864
 	},
 	"periodic": {

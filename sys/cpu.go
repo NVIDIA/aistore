@@ -40,14 +40,13 @@ func NumCPU() int         { return contCPUs }
 // SetMaxProcs sets GOMAXPROCS = NumCPU unless already overridden via Go environment
 func SetMaxProcs() {
 	if val, exists := os.LookupEnv(maxProcsEnvVar); exists {
-		glog.Infof("GOMAXPROCS is already set via Go environment: %q", val)
+		glog.Warningf("GOMAXPROCS is set via Go environment %q: %q", maxProcsEnvVar, val)
 		return
 	}
 	maxprocs := runtime.GOMAXPROCS(0)
 	ncpu := NumCPU()
-	glog.Infof("GOMAXPROCS %d, num CPUs %d", maxprocs, ncpu)
 	if maxprocs > ncpu {
-		glog.Infof("Reducing GOMAXPROCS to %d (num CPUs)", ncpu)
+		glog.Warningf("Reducing GOMAXPROCS (%d) to %d (num CPUs)", maxprocs, ncpu)
 		runtime.GOMAXPROCS(ncpu)
 	}
 }

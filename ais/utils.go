@@ -177,10 +177,11 @@ func detectLocalIPv4(addrList []*localIPv4Info) (ip net.IP, err error) {
 		}
 		return ip, nil
 	}
-
-	glog.Warningf("%d IPv4s available", len(addrList))
-	for _, addr := range addrList {
-		glog.Warningf("    %#v\n", *addr)
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%d IPv4s:", len(addrList))
+		for _, addr := range addrList {
+			glog.Infof("    %#v\n", *addr)
+		}
 	}
 	if ip = net.ParseIP(addrList[0].ipv4); ip == nil {
 		return nil, fmt.Errorf("failed to parse IP address: %s", addrList[0].ipv4)

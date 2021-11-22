@@ -59,8 +59,6 @@ func init() {
 	GCO.c.Store(unsafe.Pointer(&Config{}))
 }
 
-func SetNodeName(name string) { thisNodeName = name }
-
 // WaitForFunc executes a function in goroutine and waits for it to finish.
 // If the function runs longer than `timeLong` WaitForFunc notifies a user
 // that the user should wait for the result

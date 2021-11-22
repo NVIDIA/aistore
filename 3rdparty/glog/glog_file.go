@@ -47,7 +47,7 @@ var (
 	userName = "unknownuser"
 )
 
-var GetNodeName func() string
+var FileHeaderCB func() string
 
 var onceLogDirs sync.Once
 

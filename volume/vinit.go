@@ -45,7 +45,7 @@ func Init(t cluster.Target, config *cmn.Config) {
 		if err := configInitMPI(tid, config); err != nil {
 			cos.ExitLogf("%s: %v", t.Snode(), err)
 		}
-		glog.Warningf("%s: initializing mountpaths and creating new VMD from %v config", t.Snode(), config.FSP.Paths.ToSlice())
+		glog.Warningf("%s: creating new VMD from %v config", t.Snode(), config.FSP.Paths.ToSlice())
 		if v, err := NewFromMPI(tid); err != nil {
 			cos.ExitLogf("%s: %v", t.Snode(), err)
 		} else {

@@ -819,12 +819,17 @@ func (sb *syncBuffer) rotateFile(now time.Time) error {
 	sb.Writer = bufio.NewWriterSize(sb.file, bufferSize)
 
 	// Write header.
-	var buf bytes.Buffer
-	if GetNodeName != nil {
-		fmt.Fprintf(&buf, "Node: %s\n", GetNodeName())
+	var (
+		buf  bytes.Buffer
+		x    = fmt.Sprintf("host %s, %s for %s/%s\n", host, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+		snow = now.Format("2006/01/02 15:04:05")
+	)
+	if FileHeaderCB == nil {
+		fmt.Fprintf(&buf, "Started up at %s, %s", snow, x)
+	} else {
+		fmt.Fprintf(&buf, "Created at %s, %s", snow, x)
+		fmt.Fprint(&buf, FileHeaderCB())
 	}
-	fmt.Fprintf(&buf, "Created at %s, host %s, %s for %s/%s\n", now.Format("2006/01/02 15:04:05"),
-		host, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	n, err := sb.file.Write(buf.Bytes())
 	sb.nbytes += uint64(n)
 	return err

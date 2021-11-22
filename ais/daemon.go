@@ -157,16 +157,17 @@ func initDaemon(version, buildTime string) cos.Runner {
 	}
 
 	daemon.version, daemon.buildTime = version, buildTime
-	glog.Infof("| version: %s | build-time: %s | debug: %t |\n", version, buildTime, debug.ON())
-	containerized := sys.Containerized()
+	loghdr := fmt.Sprintf("Version %s, build time %s, debug %t", version, buildTime, debug.ON())
+	glog.Infoln(loghdr)
+	cmn.AppGloghdr(loghdr)
 	cpus := sys.NumCPU()
-	glog.Infof("num CPUs(%d, %d), container %t", cpus, runtime.NumCPU(), containerized)
+	if containerized := sys.Containerized(); containerized {
+		loghdr = fmt.Sprintf("CPUs(%d, runtime=%d), containerized", cpus, runtime.NumCPU())
+	} else {
+		loghdr = fmt.Sprintf("CPUs(%d, runtime=%d)", cpus, runtime.NumCPU())
+	}
+	glog.Infoln(loghdr)
 	sys.SetMaxProcs()
-
-	memStat, err := sys.Mem()
-	debug.AssertNoErr(err)
-	glog.Infof("Memory total: %s, free: %s(actual free %s)",
-		cos.B2S(int64(memStat.Total), 0), cos.B2S(int64(memStat.Free), 0), cos.B2S(int64(memStat.ActualFree), 0))
 
 	daemon.rg = &rungroup{rs: make(map[string]cos.Runner, 8)}
 	hk.Init(&daemon.stopping)
@@ -183,15 +184,13 @@ func initDaemon(version, buildTime string) cos.Runner {
 	if daemon.cli.role == cmn.Proxy {
 		p := newProxy(co)
 		p.init(config)
-		glog.Infoln("Node", p.si.String())
-		glog.GetNodeName = p.si.Name
+		cmn.AppGloghdr("Node: " + p.si.Name() + ", " + loghdr)
 		cmn.SetNodeName(p.si.Name())
 		return p
 	}
 	t := newTarget(co)
 	t.init(config)
-	glog.Infoln("Node", t.si.String())
-	glog.GetNodeName = t.si.Name
+	cmn.AppGloghdr("Node: " + t.si.Name() + ", " + loghdr)
 	cmn.SetNodeName(t.si.Name())
 
 	return t
