@@ -7,7 +7,6 @@ package memsys
 
 import (
 	"fmt"
-	"runtime"
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -19,7 +18,7 @@ import (
 
 const (
 	minMemFree      = cos.GiB + cos.GiB>>1 // default minimum memory (see description above)
-	minMemFreeTests = cos.MiB * 256        // minimum free to run tests
+	minMemFreeTests = cos.MiB * 128        // minimum free to run tests
 	maxMemUsedTests = cos.GiB * 10         // maximum tests allowed to allocate
 )
 
@@ -144,11 +143,10 @@ func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOOM bool) (err error) {
 	// 3. validate min-free & low-wm
 	if mem.Free < cos.MinU64(r.MinFree*2, r.MinFree+minMemFree) {
 		err = fmt.Errorf("insufficient free memory %s (see %s for guidance)", r.Str(&mem), readme)
-		if panicOOM && (r.isPage() || mem.Free <= r.MinFree+cos.MiB) {
+		cos.Errorf("%v", err)
+		if panicOOM && mem.Free <= r.MinFree+minMemFreeTests {
 			panic(err)
 		}
-		cos.Errorf("%v", err)
-
 		r.lowWM = cos.MinU64(r.lowWM, r.MinFree+minMemFreeTests)
 		r.info = ""
 	}
@@ -189,10 +187,6 @@ func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOOM bool) (err error) {
 		r.sorted[i] = slab
 	}
 
-	// 6. GC at init time but only non-small
-	if r.isPage() {
-		runtime.GC()
-	}
 	cos.Infof("%s started", r.Str(&mem))
 	return
 }

@@ -21,7 +21,7 @@ func TestVMD(t *testing.T) {
 		daemonID  = "testDaemonID"
 	)
 	mpaths := tutils.PrepareMountPaths(t, mpathsCnt)
-	defer tutils.RemoveMountPaths(t, mpaths)
+	defer tutils.RemoveMpaths(t, mpaths)
 
 	t.Run("CreateNewVMD", func(t *testing.T) { testVMDCreate(t, mpaths, daemonID) })
 	t.Run("VMDPersist", func(t *testing.T) { testVMDPersist(t, daemonID) })

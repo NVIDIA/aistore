@@ -1272,7 +1272,6 @@ func (c *FSPConf) MarshalJSON() (data []byte, err error) {
 }
 
 func (c *FSPConf) Validate(contextConfig *Config) error {
-	const fmterr = "nesting is not permitted: %q contains %q"
 	debug.Assertf(cos.StringInSlice(contextConfig.role, []string{Proxy, Target}),
 		"unexpected role: %q", contextConfig.role)
 
@@ -1291,20 +1290,13 @@ func (c *FSPConf) Validate(contextConfig *Config) error {
 			return err
 		}
 		l := len(mpath)
-		// nested loop to disallow nesting
+		// disallow mountpath nesting
 		for mpath2 := range cleanMpaths {
-			if l2 := len(mpath2); l2 < l {
-				if mpath[0:l2] == mpath2 && mpath[l2] == filepath.Separator {
-					err := fmt.Errorf(fmterr, mpath, mpath2)
-					return NewErrInvalidFSPathsConf(err)
-				}
-			} else if l < l2 {
-				if mpath2[0:l] == mpath && mpath2[l] == filepath.Separator {
-					err := fmt.Errorf(fmterr, mpath2, mpath)
-					return NewErrInvalidFSPathsConf(err)
-				}
-			} else if mpath2 == mpath {
+			if mpath2 == mpath {
 				err := fmt.Errorf("%q (%q) is duplicated", mpath, fspath)
+				return NewErrInvalidFSPathsConf(err)
+			}
+			if err := IsNestedMpath(mpath, l, mpath2); err != nil {
 				return NewErrInvalidFSPathsConf(err)
 			}
 		}
@@ -1312,6 +1304,21 @@ func (c *FSPConf) Validate(contextConfig *Config) error {
 	}
 	c.Paths = cleanMpaths
 	return nil
+}
+
+func IsNestedMpath(a string, la int, b string) (err error) {
+	const fmterr = "mountpath nesting is not permitted: %q contains %q"
+	lb := len(b)
+	if la > lb {
+		if a[0:lb] == b && a[lb] == filepath.Separator {
+			err = fmt.Errorf(fmterr, a, b)
+		}
+	} else if la < lb {
+		if b[0:la] == a && b[la] == filepath.Separator {
+			err = fmt.Errorf(fmterr, b, a)
+		}
+	}
+	return
 }
 
 ///////////////////////////////////////

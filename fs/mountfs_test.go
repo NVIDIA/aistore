@@ -34,7 +34,7 @@ func TestMountpathAddExisting(t *testing.T) {
 func TestMountpathAddValid(t *testing.T) {
 	initFS()
 
-	mpaths := []string{"/tmp/clouder", "/tmp/locals", "/tmp/locals/err"}
+	mpaths := []string{"/tmp/clouder", "/tmp/locals/abc", "/tmp/locals/err"}
 	for _, mpath := range mpaths {
 		tutils.AddMpath(t, mpath)
 	}

@@ -28,7 +28,7 @@ func checkMarkersExist(t *testing.T, xs ...markerEntry) {
 func TestMarkers(t *testing.T) {
 	const mpathsCnt = 5
 	mpaths := tutils.PrepareMountPaths(t, mpathsCnt)
-	defer tutils.RemoveMountPaths(t, mpaths)
+	defer tutils.RemoveMpaths(t, mpaths)
 
 	checkMarkersExist(t,
 		markerEntry{marker: cmn.RebalanceMarker, exists: false},
@@ -71,7 +71,7 @@ func TestMarkers(t *testing.T) {
 func TestMarkersClear(t *testing.T) {
 	const mpathsCnt = 5
 	mpaths := tutils.PrepareMountPaths(t, mpathsCnt)
-	defer tutils.RemoveMountPaths(t, mpaths)
+	defer tutils.RemoveMpaths(t, mpaths)
 
 	checkMarkersExist(t,
 		markerEntry{marker: cmn.RebalanceMarker, exists: false},

@@ -220,7 +220,7 @@ func PrepareMountPaths(t *testing.T, cnt int) fs.MPI {
 	return fs.GetAvail()
 }
 
-func RemoveMountPaths(t *testing.T, mpaths fs.MPI) {
+func RemoveMpaths(t *testing.T, mpaths fs.MPI) {
 	for _, mpath := range mpaths {
 		removedMP, err := fs.Remove(mpath.Path)
 		tassert.CheckError(t, err)
@@ -236,7 +236,7 @@ func AddMpath(t *testing.T, path string) {
 		os.RemoveAll(path)
 	})
 	_, err = fs.Add(path, "daeID")
-	tassert.Errorf(t, err == nil, "Adding a mountpath %q failed, err %v", path, err)
+	tassert.Errorf(t, err == nil, "Failed adding mountpath %q, err: %v", path, err)
 }
 
 func AssertMountpathCount(t *testing.T, availableCount, disabledCount int) {

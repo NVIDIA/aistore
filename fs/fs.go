@@ -457,6 +457,13 @@ func (mi *MountpathInfo) _checkExists(availablePaths MPI) (err error) {
 		err = fmt.Errorf("failed adding %s: %s already exists", mi, existingMi)
 	} else if existingPath, exists := mfs.fsIDs[mi.FsID]; exists && mfs.checkFsID {
 		err = fmt.Errorf("FSID %v: filesystem sharing is not allowed: %s vs %q", mi.FsID, mi, existingPath)
+	} else {
+		l := len(mi.Path)
+		for mpath := range availablePaths {
+			if err = cmn.IsNestedMpath(mi.Path, l, mpath); err != nil {
+				break
+			}
+		}
 	}
 	return
 }

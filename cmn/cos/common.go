@@ -309,6 +309,7 @@ func Infof(format string, a ...interface{}) {
 func Errorf(format string, a ...interface{}) {
 	if flag.Parsed() {
 		glog.ErrorDepth(1, fmt.Sprintf(format, a...))
+		glog.Flush()
 	} else {
 		fmt.Fprintf(os.Stderr, format+"\n", a...)
 	}

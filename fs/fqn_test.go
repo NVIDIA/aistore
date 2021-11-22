@@ -27,6 +27,7 @@ func TestParseFQN(t *testing.T) {
 		wantContentType string
 		wantObjName     string
 		wantErr         bool
+		wantAddErr      bool
 	}{
 		// good
 		{
@@ -36,6 +37,7 @@ func TestParseFQN(t *testing.T) {
 			tmpMpath,
 			cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: cmn.Ns{Name: "namespace"}},
 			fs.ObjectType, "objname", false,
+			false,
 		},
 		{
 			"smoke test (namespace global)",
@@ -44,6 +46,7 @@ func TestParseFQN(t *testing.T) {
 			tmpMpath,
 			cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal},
 			fs.ObjectType, "objname", false,
+			false,
 		},
 		{
 			"content type (work)",
@@ -52,6 +55,7 @@ func TestParseFQN(t *testing.T) {
 			tmpMpath,
 			cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal},
 			fs.WorkfileType, "objname", false,
+			false,
 		},
 		{
 			"cloud as bucket type (aws)",
@@ -60,6 +64,7 @@ func TestParseFQN(t *testing.T) {
 			tmpMpath,
 			cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal},
 			fs.ObjectType, "objname", false,
+			false,
 		},
 		{
 			"cloud as bucket type (gcp)",
@@ -68,6 +73,7 @@ func TestParseFQN(t *testing.T) {
 			tmpMpath,
 			cmn.Bck{Name: "bucket", Provider: cmn.ProviderGoogle, Ns: cmn.NsGlobal},
 			fs.ObjectType, "objname", false,
+			false,
 		},
 		{
 			"non-empty namespace",
@@ -76,6 +82,7 @@ func TestParseFQN(t *testing.T) {
 			tmpMpath,
 			cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: cmn.Ns{Name: "namespace"}},
 			fs.ObjectType, "objname", false,
+			false,
 		},
 		{
 			"cloud namespace",
@@ -84,6 +91,7 @@ func TestParseFQN(t *testing.T) {
 			tmpMpath,
 			cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: cmn.Ns{UUID: "uuid", Name: "namespace"}},
 			fs.ObjectType, "objname", false,
+			false,
 		},
 		{
 			"long mount path name",
@@ -92,6 +100,7 @@ func TestParseFQN(t *testing.T) {
 			tmpMpath + "/super/long",
 			cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal},
 			fs.ObjectType, "objname", false,
+			false,
 		},
 		{
 			"long mount path name and objname in folder",
@@ -100,16 +109,18 @@ func TestParseFQN(t *testing.T) {
 			tmpMpath + "/super/long",
 			cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal},
 			fs.ObjectType, "folder/objname", false,
+			false,
 		},
 
 		// bad
 		{
 			"nested mountpaths",
 			tmpMpath + "/super/long/long/@aws/bucket/%ob/folder/objname",
-			[]string{tmpMpath + "/super/long", tmpMpath + "/super/long/long"},
+			[]string{"/super/long", "/super/long/long"},
 			"",
 			cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal},
 			fs.ObjectType, "folder/objname", true,
+			true,
 		},
 		{
 			"too short name",
@@ -118,6 +129,7 @@ func TestParseFQN(t *testing.T) {
 			"",
 			cmn.Bck{},
 			"", "", true,
+			false,
 		},
 		{
 			"invalid content type (not prefixed with '%')",
@@ -126,6 +138,7 @@ func TestParseFQN(t *testing.T) {
 			"",
 			cmn.Bck{},
 			"", "", true,
+			false,
 		},
 		{
 			"invalid content type (empty)",
@@ -134,6 +147,7 @@ func TestParseFQN(t *testing.T) {
 			"",
 			cmn.Bck{},
 			"", "", true,
+			false,
 		},
 		{
 			"invalid content type (unknown)",
@@ -142,6 +156,7 @@ func TestParseFQN(t *testing.T) {
 			"",
 			cmn.Bck{},
 			"", "", true,
+			false,
 		},
 		{
 			"empty bucket name",
@@ -150,6 +165,7 @@ func TestParseFQN(t *testing.T) {
 			"",
 			cmn.Bck{},
 			"", "", true,
+			false,
 		},
 		{
 			"empty bucket name (without slash)",
@@ -158,6 +174,7 @@ func TestParseFQN(t *testing.T) {
 			"",
 			cmn.Bck{},
 			"", "", true,
+			false,
 		},
 		{
 			"empty object name",
@@ -166,6 +183,7 @@ func TestParseFQN(t *testing.T) {
 			"",
 			cmn.Bck{},
 			"", "", true,
+			false,
 		},
 		{
 			"empty backend provider",
@@ -174,6 +192,7 @@ func TestParseFQN(t *testing.T) {
 			"",
 			cmn.Bck{},
 			"", "", true,
+			false,
 		},
 		{
 			"invalid backend provider (not prefixed with '@')",
@@ -182,6 +201,7 @@ func TestParseFQN(t *testing.T) {
 			"",
 			cmn.Bck{},
 			"", "", true,
+			false,
 		},
 		{
 			"invalid backend provider (unknown)",
@@ -190,6 +210,7 @@ func TestParseFQN(t *testing.T) {
 			"",
 			cmn.Bck{},
 			"", "", true,
+			false,
 		},
 		{
 			"invalid backend provider (cloud)",
@@ -198,6 +219,7 @@ func TestParseFQN(t *testing.T) {
 			"",
 			cmn.Bck{},
 			"", "", true,
+			false,
 		},
 		{
 			"invalid cloud namespace",
@@ -206,6 +228,7 @@ func TestParseFQN(t *testing.T) {
 			"",
 			cmn.Bck{},
 			"", "", true,
+			false,
 		},
 		{
 			"no matching mountpath",
@@ -214,6 +237,7 @@ func TestParseFQN(t *testing.T) {
 			"",
 			cmn.Bck{},
 			"", "", true,
+			false,
 		},
 		{
 			"fqn is mpath",
@@ -222,6 +246,7 @@ func TestParseFQN(t *testing.T) {
 			"",
 			cmn.Bck{},
 			"", "", true,
+			false,
 		},
 	}
 
@@ -237,7 +262,9 @@ func TestParseFQN(t *testing.T) {
 					defer os.RemoveAll(mpath)
 				}
 				_, err := fs.Add(mpath, "daeID")
-				tassert.CheckFatal(t, err)
+				if err != nil && !tt.wantAddErr {
+					tassert.CheckFatal(t, err)
+				}
 			}
 			fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 			fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
