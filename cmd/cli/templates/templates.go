@@ -31,6 +31,11 @@ const (
 	primarySuffix      = "[P]"
 	nonElectableSuffix = "[-]"
 
+	xactStateFinished = "Finished"
+	xactStateRunning  = "Running"
+	xactStateIdle     = "Idle"
+	xactStateAborted  = "Aborted"
+
 	// Smap
 	SmapHeader = "NODE\t TYPE\t PUBLIC URL" +
 		"{{ if (eq $.ExtendedURLs true) }}\t INTRA CONTROL URL\t INTRA DATA URL{{end}}" +
@@ -107,7 +112,7 @@ const (
 	XactionsBodyTmpl     = XactionsBaseBodyTmpl + XactionsExtBodyTmpl
 	XactionsBaseBodyTmpl = XactionStatsHeader +
 		"{{range $daemon := $.Stats }}" + XactionBody + "{{end}}"
-	XactionStatsHeader = "NODE\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t ABORTED\n"
+	XactionStatsHeader = "NODE\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\n"
 	XactionBody        = "{{range $key, $xact := $daemon.Stats}}" + XactionStatsBody + "{{end}}" +
 		"{{if $daemon.Stats}}\t \t \t \t \t \t \t \t{{if $.Verbose}} \t {{end}}\n{{end}}"
 	XactionStatsBody = "{{ $daemon.DaemonID }}\t " +
@@ -118,7 +123,7 @@ const (
 		"{{if (eq $xact.BytesCountX 0) }}-{{else}}{{FormatBytesSigned $xact.BytesCountX 2}}{{end}}\t " +
 		"{{FormatTime $xact.StartTimeX}}\t " +
 		"{{if (IsUnsetTime $xact.EndTimeX)}}-{{else}}{{FormatTime $xact.EndTimeX}}{{end}}\t " +
-		"{{$xact.AbortedX}}\n"
+		"{{FormatXactState $xact}}\n"
 	XactionsExtBodyTmpl = "{{if $.Verbose }}" + // if not nil
 		"\n{{range $daemon := $.Stats }}" +
 		"{{if $daemon.Stats}}NODE\t {{$daemon.DaemonID}}\n" +
@@ -327,6 +332,7 @@ var (
 		"ExtECGetStats":       extECGetStats,
 		"ExtECPutStats":       extECPutStats,
 		"FormatNameArch":      fmtNameArch,
+		"FormatXactState":     fmtXactState,
 	}
 
 	AliasTemplate = "ALIAS\tCOMMAND\n{{range $alias, $command := .}}" +
@@ -602,4 +608,24 @@ func fmtNameArch(val string, flags uint16) string {
 		return val
 	}
 	return "    " + val
+}
+
+func fmtXactState(xact *xaction.BaseStatsExt) string {
+	if xact.AbortedX {
+		return xactStateAborted
+	}
+	if !xact.EndTimeX.IsZero() {
+		return xactStateFinished
+	}
+
+	if xact.Ext != nil {
+		var ext xaction.BaseDemandStatsExt
+		if err := cos.MorphMarshal(xact.Ext, &ext); err == nil {
+			if ext.IsIdle {
+				return xactStateIdle
+			}
+		}
+	}
+
+	return xactStateRunning
 }

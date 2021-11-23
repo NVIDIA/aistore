@@ -100,8 +100,8 @@ DaemonID     RebID   ObjRcv  SizeRcv  ObjSent  SizeSent  StartTime       EndTime
 
 ```console
 $ ais show job xaction rebalance
-NODE             ID      KIND            BUCKET  OBJECTS         BYTES           START           END     ABORTED
-181883t8089      g2      rebalance       -       1058            1.27MiB         04-28 16:10:14  -       false
+NODE             ID      KIND            BUCKET  OBJECTS         BYTES           START           END     STATE
+181883t8089      g2      rebalance       -       1058            1.27MiB         04-28 16:10:14  -       Running
 ...
 ```
 
