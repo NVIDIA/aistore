@@ -71,8 +71,8 @@ type ioContext struct {
 	numPutErrs int
 }
 
-func (m *ioContext) initAndSaveCluState() {
-	m.init()
+func (m *ioContext) initWithCleanupAndSaveState() {
+	m.initWithCleanup()
 	m.saveCluState(m.proxyURL)
 }
 
@@ -108,7 +108,7 @@ func (m *ioContext) checkCluState(smap *cluster.Smap) {
 	}
 }
 
-func (m *ioContext) init() {
+func (m *ioContext) initWithCleanup() {
 	m.proxyURL = tutils.RandomProxyURL()
 	if m.proxyURL == "" {
 		// if random selection failed, use RO url
@@ -138,6 +138,8 @@ func (m *ioContext) init() {
 		// Remove unnecessary local objects.
 		tutils.EvictRemoteBucket(m.t, m.proxyURL, m.bck)
 	}
+
+	// cleanup m.bck upon exit from the test
 	m.t.Cleanup(m._cleanup)
 }
 

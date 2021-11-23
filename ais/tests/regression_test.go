@@ -77,10 +77,10 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 		smap       = tutils.GetClusterMap(t, proxyURL)
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(1)
 
-	tutils.CreateFreshBucket(t, proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
 
 	m.puts()
 
@@ -146,7 +146,7 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(2)
 
 	m.puts()
@@ -221,10 +221,10 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		t.Skip(fmt.Sprintf("%q requires setting Xattrs, doesn't work with docker", t.Name()))
 	}
 
-	m.init()
+	m.initWithCleanup()
 	initMountpaths(t, proxyURL)
 
-	tutils.CreateFreshBucket(t, proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
 
 	m.puts()
 
@@ -247,7 +247,7 @@ func TestRegressionBuckets(t *testing.T) {
 		}
 		proxyURL = tutils.RandomProxyURL(t)
 	)
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 	doBucketRegressionTest(t, proxyURL, regressionTestData{bck: bck})
 }
 
@@ -268,7 +268,7 @@ func TestRenameBucket(t *testing.T) {
 	)
 	for _, wait := range []bool{true, false} {
 		t.Run(fmt.Sprintf("wait=%v", wait), func(t *testing.T) {
-			tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+			tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 			tutils.DestroyBucket(t, proxyURL, renamedBck) // cleanup post Ctrl-C etc.
 			defer tutils.DestroyBucket(t, proxyURL, renamedBck)
 
@@ -299,7 +299,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	m.init()
+	m.initWithCleanup()
 	m.puts()
 
 	if rtd.rename {
@@ -391,7 +391,7 @@ func TestRenameObjects(t *testing.T) {
 		}
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	objNames, _, err := tutils.PutRandObjs(tutils.PutObjectsArgs{
 		ProxyURL:  proxyURL,
@@ -452,7 +452,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 		}
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(2)
 	targetsToUnregister := m.originalTargetCount - 1
 
@@ -492,7 +492,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	tlog.Logf("The cluster now has %d target(s)\n", smap.CountActiveTargets())
 
 	// Step 2: PUT objects into a newly created bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 	m.puts()
 
 	// Step 3: Start performing GET requests
@@ -581,7 +581,7 @@ func TestLRU(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
-	m.init()
+	m.initWithCleanup()
 	m.remotePuts(false /*evict*/)
 
 	// Remember targets' watermarks
@@ -676,7 +676,7 @@ func TestPrefetchList(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(2)
 	m.puts()
 
@@ -780,7 +780,7 @@ func TestPrefetchRange(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(2)
 	m.puts()
 	// 1. Parse arguments
@@ -930,7 +930,7 @@ func TestStressDeleteRange(t *testing.T) {
 		cksumType = cmn.DefaultBckProps(bck).Cksum.Type
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	// 1. PUT
 	tlog.Logln("putting objects...")

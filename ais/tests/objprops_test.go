@@ -308,7 +308,7 @@ func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType str
 		proxyURL = tutils.RandomProxyURL()
 	)
 
-	m.init()
+	m.initWithCleanup()
 	m.puts()
 
 	t.Cleanup(func() {
@@ -468,18 +468,18 @@ func TestObjProps(t *testing.T) {
 				prefix:    "props/obj-",
 			}
 
-			m.init()
+			m.initWithCleanup()
 
 			switch test.bucketType {
 			case typeCloud:
 				m.bck = cliBck
 				tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 			case typeLocal:
-				tutils.CreateFreshBucket(t, proxyURL, m.bck, nil)
+				tutils.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
 			case typeRemoteAIS:
 				tutils.CheckSkip(t, tutils.SkipTestArgs{RequiresRemoteCluster: true})
 				m.bck.Ns.UUID = tutils.RemoteCluster.UUID
-				tutils.CreateFreshBucket(t, proxyURL, m.bck, nil)
+				tutils.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
 			default:
 				tassert.CheckFatal(t, fmt.Errorf("unknown type %q", test.bucketType))
 

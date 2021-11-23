@@ -42,11 +42,11 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 		rebID string
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(2)
 
 	// Step 1.
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	// Step 2.
 	target := m.startMaintenanceNoRebalance()
@@ -92,12 +92,12 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 		num:                 150000,
 	}
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(2)
 	m.expectProxies(3)
 
 	// Step 1.
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	// Step 2.
 	target := m.startMaintenanceNoRebalance()
@@ -166,7 +166,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 		targetNode *cluster.Snode
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(3)
 
 	// Step 1
@@ -185,7 +185,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	tassert.CheckError(t, err)
 
 	// Step 2
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	// Step 3
 	m.puts()
@@ -211,7 +211,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 
 func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	m := ioContext{t: t}
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(1)
 	target := m.startMaintenanceNoRebalance()
 
@@ -240,12 +240,12 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 		num: 10000,
 	}
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(3)
 
 	targets := m.smap.Tmap.ActiveNodes()
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	// Unregister target[0]
 	args := &cmn.ActValRmNode{DaemonID: targets[0].ID(), SkipRebalance: true}
@@ -312,10 +312,10 @@ func TestAckRebalance(t *testing.T) {
 		getErrIsFatal: true,
 	}
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(3)
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	target := m.startMaintenanceNoRebalance()
 
@@ -341,10 +341,10 @@ func TestStressRebalance(t *testing.T) {
 		t: t,
 	}
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(4)
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	for i := 1; i <= 3; i++ {
 		tlog.Logf("Iteration #%d ======\n", i)
@@ -360,7 +360,7 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 		getErrIsFatal: true,
 	}
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 
 	tgts := m.smap.Tmap.ActiveNodes()
 	i1 := rand.Intn(len(tgts))
@@ -423,12 +423,12 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 		t:   t,
 		num: 10000,
 	}
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(3)
 
 	targets := m.smap.Tmap.ActiveNodes()
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	target0, target1 := targets[0], targets[1]
 	args := &cmn.ActValRmNode{DaemonID: target0.ID(), SkipRebalance: true}
@@ -502,10 +502,10 @@ func TestPutDuringRebalance(t *testing.T) {
 		num: 10000,
 	}
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(3)
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	target := m.startMaintenanceNoRebalance()
 
@@ -548,10 +548,10 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 		killTarget     *cluster.Snode
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(2)
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	// Select a random target to disable one of its mountpaths,
 	// and another random target to unregister.
@@ -649,10 +649,10 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(1)
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	target, _ := m.smap.GetRandTarget()
 	mpList, err := api.GetMountpaths(baseParams, target)
@@ -713,10 +713,10 @@ func TestGetDuringRebalance(t *testing.T) {
 		num: 30000,
 	}
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(3)
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	target := m.startMaintenanceNoRebalance()
 
@@ -756,7 +756,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 		t: t,
 	}
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(3)
 
 	targets := m.smap.Tmap.ActiveNodes()
@@ -794,7 +794,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 
 		go func() {
 			defer wg.Done()
-			tutils.CreateFreshBucket(t, m.proxyURL, bck, nil)
+			tutils.CreateBucketWithCleanup(t, m.proxyURL, bck, nil)
 		}()
 	}
 	wg.Wait()
@@ -814,7 +814,7 @@ func TestMountpathRemoveAndAdd(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(2)
 
 	target, _ := m.smap.GetRandTarget()
@@ -844,7 +844,7 @@ func TestMountpathRemoveAndAdd(t *testing.T) {
 	}
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	// Add target mountpath again
 	for _, mpath := range origMountpaths.Available {
@@ -883,11 +883,11 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(1)
 	target, _ := m.smap.GetRandTarget()
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	if containers.DockerRunning() {
 		err := containers.DockerCreateMpathDir(0, newMountpath)
@@ -942,12 +942,12 @@ func TestLocalAndGlobalRebalanceAfterAddingMountpath(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(1)
 
 	targets := m.smap.Tmap.ActiveNodes()
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	defer func() {
 		if !containers.DockerRunning() {
@@ -1012,7 +1012,7 @@ func TestMountpathDisableAndEnable(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(1)
 
 	// Remove all mountpaths on the target
@@ -1056,7 +1056,7 @@ func TestMountpathDisableAndEnable(t *testing.T) {
 	}
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	// Re-enable target mountpaths
 	for _, mpath := range origMountpaths.Available {
@@ -1095,7 +1095,7 @@ func TestForwardCP(t *testing.T) {
 	}
 
 	// Step 1.
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectProxies(2)
 
 	// Step 2.
@@ -1108,7 +1108,7 @@ func TestForwardCP(t *testing.T) {
 		setPrimaryTo(t, m.proxyURL, m.smap, origURL, origID)
 	})
 
-	tutils.CreateFreshBucket(t, nextProxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, nextProxyURL, m.bck, nil)
 	tlog.Logf("Created bucket %s via non-primary %s\n", m.bck, nextProxyID)
 
 	// Step 3.
@@ -1145,10 +1145,10 @@ func TestAtimeRebalance(t *testing.T) {
 		numGetsEachFile: 2,
 	}
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(2)
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	target := m.startMaintenanceNoRebalance()
 
@@ -1222,7 +1222,7 @@ func TestAtimeLocalGet(t *testing.T) {
 		objectContent = readers.NewBytesReader([]byte("file content"))
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	err := api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objectName, Reader: objectContent})
 	tassert.CheckFatal(t, err)
@@ -1362,7 +1362,7 @@ func TestAtimeLocalPut(t *testing.T) {
 		objectContent = readers.NewBytesReader([]byte("dummy content"))
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	timeBeforePut := time.Now()
 	err := api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objectName, Reader: objectContent})
@@ -1390,12 +1390,12 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 		numGetsEachFile: 5,
 	}
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(2)
 
 	target := m.startMaintenanceNoRebalance()
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	rebID := m.stopMaintenance(target)
 
@@ -1424,7 +1424,7 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	}
 
 	// Initialize ioContext
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(2)
 
 	targets := m.smap.Tmap.ActiveNodes()
@@ -1442,7 +1442,7 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	)
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	m.puts()
 
@@ -1472,14 +1472,14 @@ func TestRenewRebalance(t *testing.T) {
 		rebID string
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(2)
 
 	// Step 1: Unregister a target
 	target := m.startMaintenanceNoRebalance()
 
 	// Step 2: Create an ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	// Step 3: PUT objects in the bucket
 	m.puts()
@@ -1535,7 +1535,7 @@ func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(1)
 
 	// Select one target at random
@@ -1547,7 +1547,7 @@ func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
 	}
 
 	// Step 1: Create a local bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	// Step 2: Make the bucket redundant
 	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
@@ -1586,7 +1586,7 @@ func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
 	m.ensureNoErrors()
 }
 
-func TestGetFromMirroredBucketWithLostAllMountpath(t *testing.T) {
+func TestGetFromMirroredBucketWithLostAllMpathsExceptOne(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	m := ioContext{
@@ -1594,22 +1594,21 @@ func TestGetFromMirroredBucketWithLostAllMountpath(t *testing.T) {
 		num:             10000,
 		numGetsEachFile: 4,
 	}
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 
-	// Select one target at random
+	// Select a random target
 	target, _ := m.smap.GetRandTarget()
 	mpList, err := api.GetMountpaths(baseParams, target)
 	mpathCount := len(mpList.Available)
 	tassert.CheckFatal(t, err)
 	if mpathCount < 3 {
-		t.Fatalf("%s requires at least 3 mountpaths per target", t.Name())
+		t.Skipf("%s requires at least 3 mountpaths per target (%s has %d)", t.Name(), target.StringEx(), mpathCount)
 	}
 
-	// Step 1: Create a local bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
-	// Step 2: Make the bucket redundant
+	// Make the bucket n-copy mirrored
 	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{
 			Enabled: api.Bool(true),
@@ -1620,30 +1619,96 @@ func TestGetFromMirroredBucketWithLostAllMountpath(t *testing.T) {
 		t.Fatalf("Failed to make the bucket redundant: %v", err)
 	}
 
-	// Step 3: PUT objects in the bucket
+	// PUT
 	m.puts()
 	m.ensureNumCopies(mpathCount)
 
-	// Step 4: Remove almost all mountpaths
-	tlog.Logf("Remove mountpaths on target %s\n", target.ID())
-	for _, mpath := range mpList.Available[1:] {
+	// Remove all mountpaths except one
+	tlog.Logf("Remove all except one (%q) mountpath on target %s\n", mpList.Available[0], target.StringEx())
+	for i, mpath := range mpList.Available[1:] {
 		err = api.DetachMountpath(baseParams, target, mpath)
-		tassert.CheckFatal(t, err)
+		if err != nil {
+			for j := 0; j < i; j++ {
+				api.AttachMountpath(baseParams, target, mpList.Available[j+1], false /*force*/)
+			}
+			tassert.CheckFatal(t, err)
+		}
+		time.Sleep(time.Second)
 	}
 
-	// Step 5: GET objects from the bucket
+	// Wait for resilver
+	args := api.XactReqArgs{Node: target.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
+	_, err = api.WaitForXaction(baseParams, args)
+	tassert.CheckFatal(t, err)
+
+	// GET
 	m.gets()
 
-	// Step 6: Add previously removed mountpath
-	tlog.Logf("Add mountpaths on target %s\n", target.ID())
+	// Add previously removed mountpaths
+	tlog.Logf("Restore mountpaths on %s\n", target.StringEx())
 	for _, mpath := range mpList.Available[1:] {
 		err = api.AttachMountpath(baseParams, target, mpath, false /*force*/)
 		tassert.CheckFatal(t, err)
+		time.Sleep(time.Second)
 	}
 
-	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	// Wait for resilver
+	_, err = api.WaitForXaction(baseParams, args)
+	tassert.CheckFatal(t, err)
 
 	m.ensureNumCopies(mpathCount)
+	m.ensureNoErrors()
+}
+
+// TODO: remove all except one mountpath, reduce sleep, increase stress...
+func TestGetNonRedundantWithDisabledMountpath(t *testing.T) {
+	m := ioContext{
+		t:               t,
+		num:             1000,
+		numGetsEachFile: 2,
+	}
+	m.initWithCleanupAndSaveState()
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
+
+	// Select a random target
+	target, _ := m.smap.GetRandTarget()
+	mpList, err := api.GetMountpaths(baseParams, target)
+	mpathCount := len(mpList.Available)
+	tassert.CheckFatal(t, err)
+	if mpathCount < 2 {
+		t.Skipf("%s requires at least 2 mountpaths per target (%s has %d)", t.Name(), target.StringEx(), mpathCount)
+	}
+
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+
+	// PUT
+	m.puts()
+
+	tlog.Logf("Disable %q on target %s\n", mpList.Available[0], target.StringEx())
+	err = api.DisableMountpath(baseParams, target, mpList.Available[0])
+	tassert.CheckFatal(t, err)
+	time.Sleep(time.Second)
+
+	// Wait for resilver TODO -- FIXME: revise
+	args := api.XactReqArgs{Node: target.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
+	_, err = api.WaitForXaction(baseParams, args)
+	tassert.CheckFatal(t, err)
+	time.Sleep(3 * time.Second)
+	_, err = api.WaitForXaction(baseParams, args)
+	tassert.CheckFatal(t, err)
+
+	// GET
+	m.gets()
+
+	// Add previously disabled mountpaths
+	tlog.Logf("Re-enable %q on target %s\n", mpList.Available[0], target.StringEx())
+	err = api.EnableMountpath(baseParams, target, mpList.Available[0])
+	tassert.CheckFatal(t, err)
+
+	// Wait for resilver
+	_, err = api.WaitForXaction(baseParams, args)
+	tassert.CheckFatal(t, err)
+
 	m.ensureNoErrors()
 }
 
@@ -1661,7 +1726,7 @@ func TestICRebalance(t *testing.T) {
 		rebID string
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(3)
 	m.expectProxies(3)
 	psi, err := m.smap.GetRandProxy(true /*exclude primary*/)
@@ -1669,7 +1734,7 @@ func TestICRebalance(t *testing.T) {
 	m.proxyURL = psi.URL(cmn.NetworkPublic)
 	icNode := tutils.GetICProxy(t, m.smap, psi.ID())
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	m.puts()
 
@@ -1724,7 +1789,7 @@ func TestICDecommission(t *testing.T) {
 		}
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(3)
 	m.expectProxies(3)
 	psi, err := m.smap.GetRandProxy(true /*exclude primary*/)
@@ -1733,7 +1798,7 @@ func TestICDecommission(t *testing.T) {
 	tlog.Logf("Monitoring node: %s\n", psi)
 	icNode := tutils.GetICProxy(t, m.smap, psi.ID())
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	m.puts()
 
@@ -1782,7 +1847,7 @@ func TestICDecommission(t *testing.T) {
 
 func TestSingleResilver(t *testing.T) {
 	m := ioContext{t: t}
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 
 	// Select a random target

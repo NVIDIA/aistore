@@ -81,7 +81,7 @@ func TestObjectInvalidName(t *testing.T) {
 		{op: getOP, objName: "/././../../../../log/aisnode.INFO"},
 	}
 
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	for _, test := range tests {
 		t.Run(test.op, func(t *testing.T) {
@@ -233,7 +233,7 @@ func TestAppendObject(t *testing.T) {
 				content = objHead + objBody + objTail
 				objSize = len(content)
 			)
-			tutils.CreateFreshBucket(t, proxyURL, bck, &cmn.BucketPropsToUpdate{
+			tutils.CreateBucketWithCleanup(t, proxyURL, bck, &cmn.BucketPropsToUpdate{
 				Cksum: &cmn.CksumConfToUpdate{
 					Type: api.String(cksumType),
 				},
@@ -362,7 +362,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	tutils.CreateFreshBucket(t, proxyURL, bckLocal, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bckLocal, nil)
 
 	// PUT
 	tlog.Logf("Putting %s and %s into buckets...\n", fileName1, fileName2)
@@ -454,7 +454,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bckRemote})
 
-	tutils.CreateFreshBucket(t, proxyURL, bckLocal, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bckLocal, nil)
 
 	bucketPropsLocal := &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{
@@ -593,7 +593,7 @@ func Test_coldgetmd5(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	p, err := api.HeadBucket(baseParams, m.bck)
@@ -653,7 +653,7 @@ func TestHeadBucket(t *testing.T) {
 		}
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	bckPropsToUpdate := &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{
@@ -744,7 +744,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	m.init()
+	m.initWithCleanup()
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
@@ -850,7 +850,7 @@ func testEvictRemoteAISBucket(t *testing.T) {
 			UUID: tutils.RemoteCluster.UUID,
 		},
 	}
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 	testEvictRemoteBucket(t, bck, false)
 }
 
@@ -868,7 +868,7 @@ func testEvictRemoteBucket(t *testing.T, bck cmn.Bck, keepMD bool) {
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: m.bck})
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 
 	t.Cleanup(func() {
 		m.del()
@@ -954,7 +954,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		cksumConf = cmn.DefaultBckProps(m.bck).Cksum
 	)
 
-	m.init()
+	m.initWithCleanup()
 
 	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("test %q requires write access to xattrs, doesn't work with docker", t.Name()))
@@ -962,7 +962,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 
 	initMountpaths(t, proxyURL)
 
-	tutils.CreateFreshBucket(t, proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
 
 	m.puts()
 
@@ -1048,7 +1048,7 @@ func TestRangeRead(t *testing.T) {
 			cksumProps = bck.CksumConf()
 		)
 
-		m.init()
+		m.initWithCleanup()
 		m.puts()
 		if m.bck.IsRemote() {
 			defer m.del()
@@ -1354,7 +1354,7 @@ func TestPutObjectWithChecksum(t *testing.T) {
 		objData      = []byte("I am object data")
 		badCksumVal  = "badchecksum"
 	)
-	tutils.CreateFreshBucket(t, proxyURL, bckLocal, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bckLocal, nil)
 	putArgs := api.PutObjectArgs{
 		BaseParams: baseParams,
 		Bck:        bckLocal,

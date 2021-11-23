@@ -180,10 +180,11 @@ func newJogger(ctx context.Context, opts *JoggerGroupOpts, mi *fs.MountpathInfo)
 }
 
 func (j *jogger) run() error {
-	defer j.opts.onFinish()
-
+	defer func() {
+		glog.Infof("%s finished", j)
+		j.opts.onFinish()
+	}()
 	glog.Infof("%s started", j)
-
 	if j.opts.Slab != nil {
 		if j.opts.Parallel <= 1 {
 			j.bufs = [][]byte{j.opts.Slab.Alloc()}
@@ -205,15 +206,16 @@ func (j *jogger) run() error {
 		aborted bool
 		err     error
 	)
-
-	// In case the bucket is not specified, walk in bucket-by-bucket fashion.
+	// walk all buckets, one at a time
 	if j.opts.Bck.IsEmpty() {
-		j.opts.T.Bowner().Get().Range(nil, nil, func(bck *cluster.Bck) bool {
+		bmd := j.opts.T.Bowner().Get()
+		bmd.Range(nil, nil, func(bck *cluster.Bck) bool {
 			aborted, err = j.runBck(bck.Bck)
 			return err != nil || aborted
 		})
 		return err
 	}
+	// walk the specified bucket
 	_, err = j.runBck(j.opts.Bck)
 	return err
 }
@@ -299,7 +301,7 @@ func (j *jogger) visitFQN(fqn string, buf []byte) error {
 
 	if j.opts.SkipGloballyMisplaced {
 		uname := ct.Bck().MakeUname(ct.ObjectName())
-		tsi, err := cluster.HrwTarget(uname, j.opts.T.Sowner().Get()) // TODO: should we get smap once?
+		tsi, err := cluster.HrwTarget(uname, j.opts.T.Sowner().Get())
 		if err != nil {
 			return err
 		}

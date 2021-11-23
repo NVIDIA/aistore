@@ -65,8 +65,8 @@ func TestMaintenanceListObjects(t *testing.T) {
 		origEntries = make(map[string]*cmn.BucketEntry, 1500)
 	)
 
-	m.initAndSaveCluState()
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	m.initWithCleanupAndSaveState()
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	m.puts()
 	// 1. Perform list-object and populate entries map
@@ -182,7 +182,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		origActiveProxyCount  = smap.CountActiveProxies()
 		bck                   = cmn.Bck{Name: t.Name(), Provider: cmn.ProviderAIS}
 	)
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 	for i := 0; i < objCount; i++ {
 		objName := fmt.Sprintf("%sobj%04d", objPath, i)
 		r, _ := readers.NewRandReader(int64(fileSize), cos.ChecksumXXHash)
@@ -281,8 +281,8 @@ func TestMaintenanceRebalance(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	m.initAndSaveCluState()
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	m.initWithCleanupAndSaveState()
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 	origProxyCnt, origTargetCount := m.smap.CountActiveProxies(), m.smap.CountActiveTargets()
 
 	m.puts()
@@ -352,8 +352,8 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	m.initAndSaveCluState()
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	m.initWithCleanupAndSaveState()
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 	origProxyCnt, origTargetCount := m.smap.CountActiveProxies(), m.smap.CountActiveTargets()
 
 	m.puts()
@@ -501,9 +501,9 @@ func TestShutdownListObjects(t *testing.T) {
 		origEntries = make(map[string]*cmn.BucketEntry, 1500)
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	origTargetCount := m.smap.CountActiveTargets()
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 	m.puts()
 
 	// 1. Perform list-object and populate entries map.

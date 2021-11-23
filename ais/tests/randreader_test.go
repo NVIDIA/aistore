@@ -27,7 +27,7 @@ func TestRandomReaderPutStress(t *testing.T) {
 		cksumType  = cmn.DefaultBckProps(bck).Cksum.Type
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	for i := 0; i < numworkers; i++ {
 		wg.Add(1)

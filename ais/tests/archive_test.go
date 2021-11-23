@@ -231,13 +231,13 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 			if m.bck.IsRemote() {
 				m.num = numPuts >> 1
 			}
-			m.init()
+			m.initWithCleanup()
 			m.puts()
 			if m.bck.IsRemote() {
 				defer m.del()
 			}
 			if !toBck.Equal(m.bck) && toBck.IsAIS() {
-				tutils.CreateFreshBucket(t, proxyURL, toBck, nil)
+				tutils.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
 			}
 
 			if test.list {
@@ -363,9 +363,9 @@ func TestAppendToArch(t *testing.T) {
 	for _, test := range subtests {
 		tname := fmt.Sprintf("%s/multi=%t", test.ext, test.multi)
 		t.Run(tname, func(t *testing.T) {
-			tutils.CreateFreshBucket(t, proxyURL, fromBck, nil)
-			tutils.CreateFreshBucket(t, proxyURL, toBck, nil)
-			m.init()
+			tutils.CreateBucketWithCleanup(t, proxyURL, fromBck, nil)
+			tutils.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
+			m.initWithCleanup()
 			m.puts()
 
 			for i := 0; i < numArchs; i++ {

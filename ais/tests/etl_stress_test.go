@@ -49,9 +49,9 @@ def transform(input_bytes):
 	}
 
 	tlog.Logln("Preparing source bucket")
-	tutils.CreateFreshBucket(t, proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
 
-	m.init()
+	m.initWithCleanup()
 	m.puts()
 
 	uuid, err := api.ETLInitCode(baseParams, etl.InitCodeMsg{
@@ -101,7 +101,7 @@ func TestETLTargetDown(t *testing.T) {
 		fileSize:  512,
 		fixedSize: true,
 	}
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	xactID := etlPrepareAndStart(t, m, tetl.Echo, etl.RedirectCommType)
 
 	tlog.Logln("Waiting for ETL to process a few objects...")
@@ -172,8 +172,8 @@ def transform(input_bytes):
 	)
 
 	tlog.Logf("Preparing source bucket (%d objects, %s each)\n", m.num, cos.B2S(int64(m.fileSize), 2))
-	tutils.CreateFreshBucket(t, proxyURL, bckFrom, nil)
-	m.initAndSaveCluState()
+	tutils.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
+	m.initWithCleanupAndSaveState()
 
 	m.puts()
 
@@ -237,8 +237,8 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, name, comm string) (xactID s
 	m.bck = bckFrom
 
 	tlog.Logf("Preparing source bucket %q\n", bckFrom.String())
-	tutils.CreateFreshBucket(t, proxyURL, bckFrom, nil)
-	m.initAndSaveCluState()
+	tutils.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
+	m.initWithCleanupAndSaveState()
 
 	m.puts()
 

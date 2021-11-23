@@ -19,13 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 )
 
-type (
-	GFN interface {
-		Activate() bool
-		Deactivate()
-	}
-)
-
 // poi RecvType and enum
 type RecvType int
 

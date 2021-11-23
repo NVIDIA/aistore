@@ -69,7 +69,7 @@ func BenchmarkECEncode(b *testing.B) {
 				Name:     fmt.Sprintf("bench-ec-enc-%d", len(objSizes)*ecIdx+szIdx),
 				Provider: cmn.ProviderAIS,
 			}
-			tutils.CreateFreshBucket(b, proxyURL, bck, nil)
+			tutils.CreateBucketWithCleanup(b, proxyURL, bck, nil)
 			fillBucket(b, proxyURL, bck, uint64(size), objCount)
 
 			b.Run(test.name, func(b *testing.B) {
@@ -111,7 +111,7 @@ func BenchmarkECRebalance(b *testing.B) {
 				Name:     fmt.Sprintf("bench-reb-%d", len(objSizes)*ecIdx+szIdx),
 				Provider: cmn.ProviderAIS,
 			}
-			tutils.CreateFreshBucket(b, proxyURL, bck, nil)
+			tutils.CreateBucketWithCleanup(b, proxyURL, bck, nil)
 
 			smap, err := api.GetClusterMap(baseParams)
 			tassert.CheckFatal(b, err)
@@ -163,7 +163,7 @@ func BenchmarkRebalance(b *testing.B) {
 
 	for _, size := range objSizes {
 		objCount := int(bckSize/size) + 1
-		tutils.CreateFreshBucket(b, proxyURL, bck, nil)
+		tutils.CreateBucketWithCleanup(b, proxyURL, bck, nil)
 
 		smap, err := api.GetClusterMap(baseParams)
 		tassert.CheckFatal(b, err)

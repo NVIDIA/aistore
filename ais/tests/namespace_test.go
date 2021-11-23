@@ -166,8 +166,8 @@ func TestNamespace(t *testing.T) {
 				RequiresRemoteCluster: test.remote,
 			})
 
-			m1.init()
-			m2.init()
+			m1.initWithCleanup()
+			m2.initWithCleanup()
 
 			origBuckets := listAllBuckets(t, baseParams, test.remote)
 			err := api.CreateBucket(baseParams, m1.bck, nil)
@@ -278,8 +278,8 @@ func TestRemoteWithAliasAndUUID(t *testing.T) {
 		}
 	)
 
-	m1.init()
-	m2.init()
+	m1.initWithCleanup()
+	m2.initWithCleanup()
 
 	err := api.CreateBucket(baseParams, m1.bck, nil)
 	tassert.CheckFatal(t, err)
@@ -330,7 +330,7 @@ func TestRemoteWithSilentBucketDestroy(t *testing.T) {
 		}
 	)
 
-	m.init()
+	m.initWithCleanup()
 
 	err := api.CreateBucket(baseParams, m.bck, nil)
 	tassert.CheckFatal(t, err)

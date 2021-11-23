@@ -132,3 +132,9 @@ func NewResilver(id, kind string) (xact *Resilver) {
 }
 
 func (*Resilver) Run(*sync.WaitGroup) { debug.Assert(false) }
+
+// TODO -- FIXME: check "resilver-marked" and unify with rebalance
+func (xact *Resilver) Stats() cluster.XactStats {
+	baseStats := xact.XactBase.Stats().(*xaction.BaseStats)
+	return baseStats
+}

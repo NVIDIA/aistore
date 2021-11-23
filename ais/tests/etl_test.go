@@ -144,7 +144,7 @@ func testETLObject(t *testing.T, uuid, inPath, outPath string, fTransform transf
 		expectedOutputFilePath = tutils.CreateFileFromReader(t, "object.out", r)
 	}
 
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	tlog.Logln("PUT object")
@@ -331,7 +331,7 @@ func TestETLInline(t *testing.T) {
 			tassert.CheckFatal(t, err)
 			t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
-			tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+			tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 			tlog.Logln("PUT object")
 			objNames, _, err := tutils.PutRandObjs(tutils.PutObjectsArgs{
@@ -373,7 +373,7 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	tlog.Logln("PUT object")
 	objName := cos.RandString(10)
@@ -428,8 +428,8 @@ func TestETLBucket(t *testing.T) {
 		}
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
-	m.init()
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	m.initWithCleanup()
 
 	tlog.Logf("PUT %d objects", m.num)
 	m.puts()
@@ -509,9 +509,9 @@ def transform(input_bytes: bytes) -> bytes:
 		}
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
 
-	m.init()
+	m.initWithCleanup()
 
 	tlog.Logf("PUT objects => source bucket %s\n", m.bck)
 	m.puts()
@@ -570,8 +570,8 @@ func TestETLBucketDryRun(t *testing.T) {
 		}
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bckFrom, nil)
-	m.init()
+	tutils.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
+	m.initWithCleanup()
 
 	tlog.Logf("PUT %d objects", m.num)
 	m.puts()

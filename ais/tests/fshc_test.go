@@ -320,7 +320,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 		t.Fatal("No available mountpaths found")
 	}
 
-	tutils.CreateFreshBucket(t, md.proxyURL, md.bck, nil)
+	tutils.CreateBucketWithCleanup(t, md.proxyURL, md.bck, nil)
 	selectedTarget, selectedMpath, selectedMpathList := md.randomTargetMpath()
 	tlog.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
 	defer func() {
@@ -374,7 +374,7 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 
 	selectedTarget, selectedMpath, selectedMap := md.randomTargetMpath()
 	tlog.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
-	tutils.CreateFreshBucket(t, md.proxyURL, md.bck, nil)
+	tutils.CreateBucketWithCleanup(t, md.proxyURL, md.bck, nil)
 	defer func() {
 		if err := api.DetachMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
 			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget, err)

@@ -863,7 +863,7 @@ func Disable(mpath string, cb ...func()) (disabledMpath *MountpathInfo, err erro
 		delete(mfs.fsIDs, mi.FsID)
 		moveMarkers(availableCopy, mi)
 		PutMPI(availableCopy, disabledCopy)
-		if l := len(availablePaths); l == 0 {
+		if l := len(availableCopy); l == 0 {
 			glog.Errorf("disabled the last available mountpath %s", mi)
 		} else {
 			if len(cb) > 0 {

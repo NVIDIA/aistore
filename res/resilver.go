@@ -206,8 +206,7 @@ func (rj *joggerCtx) moveObject(lom *cluster.LOM, buf []byte) {
 		return
 	}
 
-	// First, copy metafile if EC is enables. Copy the object only if the
-	// metafile has been copies successfully
+	// If EC is enabled, first copy the metafile and then, if successful, copy the object
 	if lom.Bprops().EC.Enabled {
 		newMpath, _, err := cluster.ResolveFQN(lom.HrwFQN)
 		if err != nil {
@@ -223,10 +222,9 @@ func (rj *joggerCtx) moveObject(lom *cluster.LOM, buf []byte) {
 		}
 	}
 	size, err := rj.t.CopyObject(lom, &cluster.CopyObjectParams{BckTo: lom.Bck(), Buf: buf}, true /*local*/)
-	debug.Assert(size != cos.ContentLengthUnknown)
 	if err != nil {
 		glog.Errorf("%s: %v", lom, err)
-		// EC: Cleanup new copy of the metafile.
+		// EC cleanup and return
 		if metaNewPath != "" {
 			if err = os.Remove(metaNewPath); err != nil {
 				glog.Warningf("%s: nested (%s: %v)", lom, metaNewPath, err)
@@ -234,6 +232,7 @@ func (rj *joggerCtx) moveObject(lom *cluster.LOM, buf []byte) {
 		}
 		return
 	}
+	debug.Assert(size != cos.ContentLengthUnknown)
 	// EC: Remove the original metafile.
 	if metaOldPath != "" {
 		if err := os.Remove(metaOldPath); err != nil {

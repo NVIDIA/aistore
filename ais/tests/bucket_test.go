@@ -67,7 +67,7 @@ func TestListBuckets(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{})
 	tassert.CheckFatal(t, err)
@@ -135,7 +135,7 @@ func TestDefaultBucketProps(t *testing.T) {
 		"ec.parity_slices": fmt.Sprintf("%d", globalConfig.EC.ParitySlices),
 	})
 
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	p, err := api.HeadBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
@@ -166,7 +166,7 @@ func TestCreateWithBucketProps(t *testing.T) {
 		},
 		MDWrite: api.MDWritePolicy("never"),
 	}
-	tutils.CreateFreshBucket(t, proxyURL, bck, propsToSet)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, propsToSet)
 
 	p, err := api.HeadBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
@@ -229,7 +229,7 @@ func testCreateDestroyRemoteAISBucket(t *testing.T, withObjects bool) {
 			UUID: tutils.RemoteCluster.UUID,
 		},
 	}
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 	_, err := api.HeadBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
 	if withObjects {
@@ -240,7 +240,7 @@ func testCreateDestroyRemoteAISBucket(t *testing.T, withObjects bool) {
 			fixedSize: true,
 			bck:       bck,
 		}
-		m.init()
+		m.initWithCleanup()
 		m.puts()
 	}
 
@@ -279,7 +279,7 @@ func overwriteLomCache(mdwrite cmn.MDWritePolicy, t *testing.T) {
 	if testing.Short() {
 		m.num = 50
 	}
-	m.init()
+	m.initWithCleanup()
 	m.smap = tutils.GetClusterMap(m.t, m.proxyURL)
 
 	for _, target := range m.smap.Tmap.ActiveNodes() {
@@ -293,7 +293,7 @@ func overwriteLomCache(mdwrite cmn.MDWritePolicy, t *testing.T) {
 		Mirror:  &cmn.MirrorConfToUpdate{Enabled: api.Bool(true)},
 		MDWrite: api.MDWritePolicy(mdwrite),
 	}
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, propsToSet)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, propsToSet)
 
 	m.puts()
 	// TODO: must be able to wait for cmn.ActPutCopies
@@ -356,7 +356,7 @@ func TestStressCreateDestroyBucket(t *testing.T) {
 				silent: true,
 			}
 
-			m.init()
+			m.initWithCleanup()
 
 			for i := 0; i < iterCount; i++ {
 				if err := api.CreateBucket(baseParams, m.bck, nil); err != nil {
@@ -421,7 +421,7 @@ func TestResetBucketProps(t *testing.T) {
 		"ec.parity_slices": fmt.Sprintf("%d", globalConfig.EC.ParitySlices),
 	})
 
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	defaultProps, err := api.HeadBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
@@ -504,7 +504,7 @@ func TestSetInvalidBucketProps(t *testing.T) {
 		}
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -530,7 +530,7 @@ func TestListObjectsRemoteBucketVersions(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RemoteBck: true, Bck: m.bck})
 
-	m.init()
+	m.initWithCleanup()
 
 	p, err := api.HeadBucket(baseParams, m.bck)
 	tassert.CheckFatal(t, err)
@@ -572,7 +572,7 @@ func TestListObjectsSmoke(t *testing.T) {
 			msg   = &cmn.SelectMsg{PageSize: 10}
 		)
 
-		m.init()
+		m.initWithCleanup()
 		m.puts()
 		if m.bck.IsRemote() {
 			defer m.del()
@@ -610,7 +610,7 @@ func TestListObjectsGoBack(t *testing.T) {
 			m.num = 300
 		}
 
-		m.init()
+		m.initWithCleanup()
 		m.puts()
 		if m.bck.IsRemote() {
 			defer m.del()
@@ -679,7 +679,7 @@ func TestListObjectsRerequestPage(t *testing.T) {
 			m.num = 50
 		}
 
-		m.init()
+		m.initWithCleanup()
 		m.puts()
 		if m.bck.IsRemote() {
 			defer m.del()
@@ -727,7 +727,7 @@ func TestListObjectsStartAfter(t *testing.T) {
 			m.num = 20
 		}
 
-		m.init()
+		m.initWithCleanup()
 		m.puts()
 		if m.bck.IsRemote() {
 			defer m.del()
@@ -769,7 +769,7 @@ func TestListObjectsProps(t *testing.T) {
 			m.num = rand.Intn(250) + 100
 		}
 
-		m.init()
+		m.initWithCleanup()
 		m.puts()
 		if m.bck.IsRemote() {
 			defer m.del()
@@ -866,7 +866,7 @@ func TestListObjectsRemoteCached(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
-	m.init()
+	m.initWithCleanup()
 
 	for _, evict := range []bool{false, true} {
 		tlog.Logf("list remote objects with evict=%t\n", evict)
@@ -918,7 +918,7 @@ func TestListObjectsRandProxy(t *testing.T) {
 			m.num = rand.Intn(300) + 100
 		}
 
-		m.init()
+		m.initWithCleanup()
 		m.puts()
 		if m.bck.IsRemote() {
 			defer m.del()
@@ -959,7 +959,7 @@ func TestListObjectsRandPageSize(t *testing.T) {
 			m.num = rand.Intn(200) + 100
 		}
 
-		m.init()
+		m.initWithCleanup()
 		m.puts()
 		if m.bck.IsRemote() {
 			defer m.del()
@@ -1032,7 +1032,7 @@ func TestListObjects(t *testing.T) {
 				prefixes sync.Map
 			)
 
-			tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+			tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 			p := cmn.DefaultBckProps(bck)
 
@@ -1187,7 +1187,7 @@ func TestListObjectsPrefix(t *testing.T) {
 				}
 			} else {
 				bck = cmn.Bck{Name: testBucketName, Provider: provider}
-				tutils.CreateFreshBucket(t, proxyURL, bck, nil)
+				tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 			}
 
 			objNames := make([]string, 0, objCnt)
@@ -1301,9 +1301,9 @@ func TestListObjectsCache(t *testing.T) {
 		totalIters = 5
 	}
 
-	m.init()
+	m.initWithCleanup()
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 	m.puts()
 
 	for _, useCache := range []bool{true, false} {
@@ -1354,10 +1354,10 @@ func TestListObjectsWithRebalance(t *testing.T) {
 		rebID string
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(2)
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	target := m.startMaintenanceNoRebalance()
 
@@ -1405,10 +1405,10 @@ func TestBucketSingleProp(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(3)
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	tlog.Logf("Changing bucket %q properties...\n", m.bck)
 
@@ -1611,13 +1611,13 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 		m.numGetsEachFile = 3
 	}
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 
 	max := cos.Max(numCopies...) + 1
 	skip := tutils.SkipTestArgs{MinMountpaths: max}
 	tutils.CheckSkip(t, skip)
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 	{
 		baseParams := tutils.BaseAPIParams()
 		_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
@@ -1683,7 +1683,7 @@ func TestRemoteBucketMirror(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
-	m.init()
+	m.initWithCleanup()
 	m.remotePuts(true /*evict*/)
 
 	// enable mirror
@@ -1723,8 +1723,8 @@ func TestBucketReadOnly(t *testing.T) {
 		num:             10,
 		numGetsEachFile: 2,
 	}
-	m.init()
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	m.initWithCleanup()
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 	baseParams := tutils.BaseAPIParams()
 
 	m.puts()
@@ -1739,7 +1739,7 @@ func TestBucketReadOnly(t *testing.T) {
 	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{Access: api.AccessAttrs(aattrs)})
 	tassert.CheckFatal(t, err)
 
-	m.init()
+	m.initWithCleanup()
 	m.puts(true /*ignoreErr*/)
 	tassert.Fatalf(t, m.numPutErrs == m.num, "num failed PUTs %d, expecting %d", m.numPutErrs, m.num)
 
@@ -1748,7 +1748,7 @@ func TestBucketReadOnly(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// write some more and destroy
-	m.init()
+	m.initWithCleanup()
 	m.puts(true /*ignoreErr*/)
 	tassert.Fatalf(t, m.numPutErrs == 0, "num failed PUTs %d, expecting 0 (zero)", m.numPutErrs)
 }
@@ -1766,11 +1766,11 @@ func TestRenameBucketEmpty(t *testing.T) {
 		}
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(1)
 
 	srcBck := m.bck
-	tutils.CreateFreshBucket(t, m.proxyURL, srcBck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, srcBck, nil)
 	defer func() {
 		tutils.DestroyBucket(t, m.proxyURL, dstBck)
 	}()
@@ -1820,12 +1820,12 @@ func TestRenameBucketNonEmpty(t *testing.T) {
 		}
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.proxyURL = tutils.RandomProxyURL(t)
 	m.expectTargets(1)
 
 	srcBck := m.bck
-	tutils.CreateFreshBucket(t, m.proxyURL, srcBck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, srcBck, nil)
 	defer func() {
 		// This bucket should be present.
 		tutils.DestroyBucket(t, m.proxyURL, dstBck)
@@ -1873,14 +1873,14 @@ func TestRenameBucketAlreadyExistingDst(t *testing.T) {
 		}
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(1)
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	m.setRandBucketProps()
 
-	tutils.CreateFreshBucket(t, m.proxyURL, tmpBck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, tmpBck, nil)
 
 	// Rename it
 	tlog.Logf("try rename %s => %s\n", m.bck, tmpBck)
@@ -1927,12 +1927,12 @@ func TestRenameBucketTwice(t *testing.T) {
 		}
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.proxyURL = tutils.RandomProxyURL(t)
 	m.expectTargets(1)
 
 	srcBck := m.bck
-	tutils.CreateFreshBucket(t, m.proxyURL, srcBck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, srcBck, nil)
 	defer func() {
 		// This bucket should not be present (thus ignoring error) but
 		// try to delete in case something failed.
@@ -2004,7 +2004,7 @@ func TestRenameBucketNonExistentSrc(t *testing.T) {
 		}
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(1)
 
 	for _, srcBck := range srcBcks {
@@ -2031,7 +2031,7 @@ func TestRenameBucketWithBackend(t *testing.T) {
 		}
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck,
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck,
 		&cmn.BucketPropsToUpdate{BackendBck: &cmn.BckToUpdate{
 			Name:     api.String(cliBck.Name),
 			Provider: api.String(cliBck.Provider),
@@ -2171,22 +2171,22 @@ func TestCopyBucket(t *testing.T) {
 				tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: dstms[0].bck})
 			}
 
-			srcm.initAndSaveCluState()
+			srcm.initWithCleanupAndSaveState()
 			srcm.expectTargets(1)
 
 			for _, dstm := range dstms {
-				dstm.init()
+				dstm.initWithCleanup()
 			}
 
 			if bckTest.IsAIS() {
-				tutils.CreateFreshBucket(t, srcm.proxyURL, srcm.bck, nil)
+				tutils.CreateBucketWithCleanup(t, srcm.proxyURL, srcm.bck, nil)
 				srcm.setRandBucketProps()
 			}
 
 			if test.dstBckExist {
 				for _, dstm := range dstms {
 					if !dstm.bck.IsRemote() {
-						tutils.CreateFreshBucket(t, dstm.proxyURL, dstm.bck, nil)
+						tutils.CreateBucketWithCleanup(t, dstm.proxyURL, dstm.bck, nil)
 						dstm.setRandBucketProps()
 					}
 				}
@@ -2338,8 +2338,8 @@ func TestCopyBucketSimple(t *testing.T) {
 	}
 
 	tlog.Logln("Preparing a source bucket")
-	tutils.CreateFreshBucket(t, proxyURL, srcBck, nil)
-	m.init()
+	tutils.CreateBucketWithCleanup(t, proxyURL, srcBck, nil)
+	m.initWithCleanup()
 
 	m.puts()
 
@@ -2460,11 +2460,11 @@ func TestRenameAndCopyBucket(t *testing.T) {
 		}
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(1)
 
 	srcBck := m.bck
-	tutils.CreateFreshBucket(t, m.proxyURL, srcBck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, srcBck, nil)
 	defer func() {
 		tutils.DestroyBucket(t, m.proxyURL, dstBck1)
 		tutils.DestroyBucket(t, m.proxyURL, dstBck2)
@@ -2540,11 +2540,11 @@ func TestCopyAndRenameBucket(t *testing.T) {
 		}
 	)
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	m.expectTargets(1)
 
 	srcBck := m.bck
-	tutils.CreateFreshBucket(t, m.proxyURL, srcBck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, srcBck, nil)
 	defer func() {
 		tutils.DestroyBucket(t, m.proxyURL, dstBck1)
 		tutils.DestroyBucket(t, m.proxyURL, dstBck2)
@@ -2618,9 +2618,9 @@ func TestBackendBucket(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{CloudBck: true, Bck: remoteBck})
 
-	m.init()
+	m.initWithCleanup()
 
-	tutils.CreateFreshBucket(t, proxyURL, aisBck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, aisBck, nil)
 
 	p, err := api.HeadBucket(baseParams, remoteBck)
 	tassert.CheckFatal(t, err)
@@ -2770,9 +2770,9 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 		numCorrupted = 13
 	}
 
-	m.initAndSaveCluState()
+	m.initWithCleanupAndSaveState()
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	{
 		if mirrored {
@@ -2980,12 +2980,12 @@ func TestBucketListAndSummary(t *testing.T) {
 
 			cacheSize := m.num / 2 // determines number of objects which should be cached
 
-			m.initAndSaveCluState()
+			m.initWithCleanupAndSaveState()
 			m.expectTargets(2)
 
 			expectedFiles := m.num
 			if bckTest.IsAIS() {
-				tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
+				tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 				m.puts()
 			} else if bckTest.IsRemote() {
 				m.bck.Name = cliBck.Name

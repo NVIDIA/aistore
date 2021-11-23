@@ -41,8 +41,8 @@ func TestCopyObjRange(t *testing.T) {
 		xactID     string
 		err        error
 	)
-	tutils.CreateFreshBucket(t, proxyURL, bckFrom, nil)
-	tutils.CreateFreshBucket(t, proxyURL, bckTo, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bckTo, nil)
 	for i := 0; i < objCnt; i++ {
 		objList = append(objList,
 			fmt.Sprintf("test/a-%04d", i),
@@ -120,13 +120,13 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 			if m.bck.IsRemote() {
 				m.num = objCnt / 3
 			}
-			m.init()
+			m.initWithCleanup()
 			m.puts()
 			if m.bck.IsRemote() {
 				defer m.del()
 			}
 			if !toBck.Equal(m.bck) && toBck.IsAIS() {
-				tutils.CreateFreshBucket(t, proxyURL, toBck, nil)
+				tutils.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
 			}
 			var erv atomic.Value
 			if test.list {
@@ -190,8 +190,8 @@ func TestETLMultiObj(t *testing.T) {
 		toBck = cmn.Bck{Name: "etloffline-out-" + cos.RandString(5), Provider: cmn.ProviderAIS}
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
-	tutils.CreateFreshBucket(t, proxyURL, toBck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tutils.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
 
 	for i := 0; i < objCnt; i++ {
 		r, _ := readers.NewRandReader(objSize, cksumType)

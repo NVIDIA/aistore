@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
@@ -144,7 +145,11 @@ func FQN2Mpath(fqn string) (found *MountpathInfo, relativePath string, err error
 	for mpath, mi := range disabledPaths {
 		l := len(mpath)
 		if len(fqn) > l && fqn[0:l] == mpath && fqn[l] == filepath.Separator {
-			err = fmt.Errorf("mountpath %s for fqn %s exists but is disabled", mi, fqn)
+			// TODO -- FIXME: revisit zero-ing out error
+			glog.Errorf("mountpath %s for fqn %s exists but is disabled", mi, fqn)
+			err = nil
+			found = mi
+			relativePath = fqn[l+1:]
 			return
 		}
 	}

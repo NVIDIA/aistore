@@ -158,7 +158,7 @@ func (g *fsprungroup) _postDD(action string, mi *fs.MountpathInfo) {
 	if !config.TestingEnv() { // testing fspaths are counted, not enumerated
 		fspathsSaveCommit(mi.Path, false /*add*/)
 	}
-	glog.Infof("%s: %s %q done", g.t.si, mi, action)
+	glog.Infof("%s: %s %q done (resilver-is-running=%t)", g.t.si, mi, action, g.t.res.IsActive())
 }
 
 // store updated fspaths locally as part of the 'OverrideConfigFname'

@@ -35,7 +35,7 @@ func TestSmoke(t *testing.T) {
 					m.num = 1000
 				}
 
-				m.init()
+				m.initWithCleanup()
 
 				m.puts()
 				m.gets()
