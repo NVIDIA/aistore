@@ -80,9 +80,9 @@ func (g *fsprungroup) _postAdd(action string, mi *fs.MountpathInfo) {
 
 // disableMpath disables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
-func (g *fsprungroup) disableMpath(mpath string) (rmi *fs.MountpathInfo, err error) {
+func (g *fsprungroup) disableMpath(mpath string, dontResilver bool) (rmi *fs.MountpathInfo, err error) {
 	var nothingToDo bool
-	if nothingToDo, err = g._preDD(cmn.ActMountpathDisable, fs.FlagBeingDisabled, mpath); err != nil {
+	if nothingToDo, err = g._preDD(cmn.ActMountpathDisable, fs.FlagBeingDisabled, mpath, dontResilver); err != nil {
 		return
 	}
 	if nothingToDo {
@@ -98,9 +98,9 @@ func (g *fsprungroup) disableMpath(mpath string) (rmi *fs.MountpathInfo, err err
 
 // detachMpath removes mountpath and notifies necessary runners about the
 // change if the mountpath was actually removed.
-func (g *fsprungroup) detachMpath(mpath string) (rmi *fs.MountpathInfo, err error) {
+func (g *fsprungroup) detachMpath(mpath string, dontResilver bool) (rmi *fs.MountpathInfo, err error) {
 	var nothingToDo bool
-	if nothingToDo, err = g._preDD(cmn.ActMountpathDetach, fs.FlagBeingDetached, mpath); err != nil {
+	if nothingToDo, err = g._preDD(cmn.ActMountpathDetach, fs.FlagBeingDetached, mpath, dontResilver); err != nil {
 		return
 	}
 	if nothingToDo {
@@ -114,7 +114,7 @@ func (g *fsprungroup) detachMpath(mpath string) (rmi *fs.MountpathInfo, err erro
 	return
 }
 
-func (g *fsprungroup) _preDD(action string, flags uint64, mpath string) (nothingToDo bool, err error) {
+func (g *fsprungroup) _preDD(action string, flags uint64, mpath string, dontResilver bool) (nothingToDo bool, err error) {
 	var (
 		rmi      *fs.MountpathInfo
 		numAvail int
@@ -134,7 +134,7 @@ func (g *fsprungroup) _preDD(action string, flags uint64, mpath string) (nothing
 
 	rmi.EvictLomCache()
 
-	if !cmn.GCO.Get().Resilver.Enabled {
+	if dontResilver || !cmn.GCO.Get().Resilver.Enabled {
 		glog.Infof("%s: %q %s but resilvering is globally disabled, nothing to do", g.t.si, action, rmi)
 		return
 	}

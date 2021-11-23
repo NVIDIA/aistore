@@ -223,7 +223,6 @@ const (
 	URLParamCheckExistsAny   = "cea" // true: lookup object in all mountpaths (NOTE: compare with URLParamCheckExists)
 	URLParamProxyID          = "pid" // ID of the redirecting proxy.
 	URLParamPrimaryCandidate = "can" // ID of the candidate for the primary proxy.
-	URLParamForce            = "frc" // true: force the operation (e.g., shutdown primary and the entire cluster)
 	URLParamPrepare          = "prp" // true: request belongs to the "prepare" phase of the primary proxy election
 	URLParamNonElectable     = "nel" // true: proxy is non-electable for the primary role
 	URLParamUnixTime         = "utm" // Unix time since 01/01/70 UTC (nanoseconds)
@@ -235,7 +234,12 @@ const (
 	URLParamClusterInfo      = "cii" // true: /Health to return cluster info and status
 	URLParamRecvType         = "rtp" // to tell user PUT from migration PUT
 
-	URLParamDontLookupRemoteBck = "dlrb" // true: do not try to lookup remote buckets on the fly (overrides the default)
+	// force the operation; allows to overcome certain restrictions (e.g., shutdown primary and the entire cluster)
+	// or errors (e.g., attach invalid mountpath)
+	URLParamForce = "frc"
+
+	URLParamDontLookupRemoteBck = "dntlrb" // true: do not try to lookup remote buckets on the fly (overrides the default)
+	URLParamDontResilver        = "dntres" // true: do not resilver data off of mountpaths that are being disabled/detached
 
 	// dsort
 	URLParamTotalCompressedSize       = "tcs"

@@ -837,7 +837,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 	mpathID := cos.NowRand().Intn(len(mpathList.Available))
 	removeMpath := mpathList.Available[mpathID]
 	tlog.Logf("Disabling mountpath %q at %s\n", removeMpath, selectedTarget.StringEx())
-	err = api.DisableMountpath(baseParams, selectedTarget, removeMpath)
+	err = api.DisableMountpath(baseParams, selectedTarget, removeMpath, false /*dont-resil*/)
 	tassert.CheckFatal(t, err)
 
 	defer func() {

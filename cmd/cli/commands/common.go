@@ -464,6 +464,10 @@ var (
 		Name:  "no-rebalance",
 		Usage: "do _not_ run global rebalance after putting node in maintenance (advanced usage only!)",
 	}
+	noResilverFlag = cli.BoolFlag{
+		Name:  "no-resilver",
+		Usage: "do _not_ resilver data off of the mountpaths that are being disabled or detached",
+	}
 	noShutdownFlag = cli.BoolFlag{
 		Name:  "no-shutdown",
 		Usage: "do not shutdown node upon decommissioning it from the cluster",

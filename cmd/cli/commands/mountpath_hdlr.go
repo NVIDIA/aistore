@@ -20,9 +20,13 @@ var (
 		subcmdMpathAttach: {
 			forceFlag,
 		},
-		subcmdMpathEnable:  {},
-		subcmdMpathDetach:  {},
-		subcmdMpathDisable: {},
+		subcmdMpathEnable: {},
+		subcmdMpathDetach: {
+			noResilverFlag,
+		},
+		subcmdMpathDisable: {
+			noResilverFlag,
+		},
 	}
 
 	mpathCmd = cli.Command{
@@ -117,10 +121,10 @@ func mpathAction(c *cli.Context, action string) error {
 			err = api.EnableMountpath(defaultAPIParams, si, mountpath)
 		case cmn.ActMountpathDetach:
 			acted = "detached"
-			err = api.DetachMountpath(defaultAPIParams, si, mountpath)
+			err = api.DetachMountpath(defaultAPIParams, si, mountpath, flagIsSet(c, noResilverFlag))
 		case cmn.ActMountpathDisable:
 			acted = "disabled"
-			err = api.DisableMountpath(defaultAPIParams, si, mountpath)
+			err = api.DisableMountpath(defaultAPIParams, si, mountpath, flagIsSet(c, noResilverFlag))
 		default:
 			return incorrectUsageMsg(c, "invalid mountpath action %q", action)
 		}

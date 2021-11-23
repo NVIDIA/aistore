@@ -488,7 +488,8 @@ func (t *targetrunner) attachMpath(w http.ResponseWriter, r *http.Request, mpath
 }
 
 func (t *targetrunner) disableMpath(w http.ResponseWriter, r *http.Request, mpath string) {
-	disabledMi, err := t.fsprg.disableMpath(mpath)
+	dontResilver := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamDontResilver))
+	disabledMi, err := t.fsprg.disableMpath(mpath, dontResilver)
 	if err != nil {
 		if _, ok := err.(*cmn.ErrMountpathNotFound); ok {
 			t.writeErr(w, r, err, http.StatusNotFound)
@@ -506,7 +507,8 @@ func (t *targetrunner) disableMpath(w http.ResponseWriter, r *http.Request, mpat
 }
 
 func (t *targetrunner) detachMpath(w http.ResponseWriter, r *http.Request, mpath string) {
-	removedMi, err := t.fsprg.detachMpath(mpath)
+	dontResilver := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamDontResilver))
+	removedMi, err := t.fsprg.detachMpath(mpath, dontResilver)
 	if err != nil {
 		t.writeErrf(w, r, err.Error())
 		return

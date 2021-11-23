@@ -75,7 +75,11 @@ func EnableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 	})
 }
 
-func DetachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string) error {
+func DetachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string, dontResilver bool) error {
+	var q url.Values
+	if dontResilver {
+		q = url.Values{cmn.URLParamDontResilver: []string{"true"}}
+	}
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
@@ -85,10 +89,15 @@ func DetachMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 			cmn.HdrNodeID:      []string{node.ID()},
 			cmn.HdrContentType: []string{cmn.ContentJSON},
 		},
+		Query: q,
 	})
 }
 
-func DisableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string) error {
+func DisableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string, dontResilver bool) error {
+	var q url.Values
+	if dontResilver {
+		q = url.Values{cmn.URLParamDontResilver: []string{"true"}}
+	}
 	baseParams.Method = http.MethodPost
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
@@ -98,6 +107,7 @@ func DisableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath stri
 			cmn.HdrNodeID:      []string{node.ID()},
 			cmn.HdrContentType: []string{cmn.ContentJSON},
 		},
+		Query: q,
 	})
 }
 

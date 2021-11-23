@@ -573,7 +573,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	// Disable mountpaths temporarily
 	mpath := mpList.Available[0]
 	tlog.Logf("Disable mountpath on target %s\n", selectedTarget.ID())
-	err = api.DisableMountpath(baseParams, selectedTarget, mpath)
+	err = api.DisableMountpath(baseParams, selectedTarget, mpath, false /*dont-resil*/)
 	tassert.CheckFatal(t, err)
 
 	args := &cmn.ActValRmNode{DaemonID: killTarget.ID(), SkipRebalance: true}
@@ -670,7 +670,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 
 	// Disable mountpaths temporarily
 	for _, mp := range mpaths {
-		err = api.DisableMountpath(baseParams, target, mp)
+		err = api.DisableMountpath(baseParams, target, mp, false /*dont-resil*/)
 		tassert.CheckFatal(t, err)
 	}
 
@@ -831,7 +831,7 @@ func TestMountpathRemoveAndAdd(t *testing.T) {
 	}
 
 	for _, mpath := range origMountpaths.Available {
-		err = api.DetachMountpath(baseParams, target, mpath)
+		err = api.DetachMountpath(baseParams, target, mpath, false /*dont-resil*/)
 		tassert.CheckFatal(t, err)
 	}
 
@@ -915,11 +915,11 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 
 	// Remove new mountpath from target
 	if containers.DockerRunning() {
-		if err := api.DetachMountpath(baseParams, target, newMountpath); err != nil {
+		if err := api.DetachMountpath(baseParams, target, newMountpath, false /*dont-resil*/); err != nil {
 			t.Error(err.Error())
 		}
 	} else {
-		err = api.DetachMountpath(baseParams, target, newMountpath)
+		err = api.DetachMountpath(baseParams, target, newMountpath, false /*dont-resil*/)
 		tassert.CheckFatal(t, err)
 	}
 
@@ -985,7 +985,7 @@ func TestLocalAndGlobalRebalanceAfterAddingMountpath(t *testing.T) {
 		err := containers.DockerRemoveMpathDir(0, newMountpath)
 		tassert.CheckFatal(t, err)
 		for _, target := range targets {
-			if err := api.DetachMountpath(baseParams, target, newMountpath); err != nil {
+			if err := api.DetachMountpath(baseParams, target, newMountpath, false /*dont-resil*/); err != nil {
 				t.Error(err.Error())
 			}
 		}
@@ -993,7 +993,7 @@ func TestLocalAndGlobalRebalanceAfterAddingMountpath(t *testing.T) {
 		for idx, target := range targets {
 			mountpath := filepath.Join(newMountpath, fmt.Sprintf("%d", idx))
 			os.RemoveAll(mountpath)
-			if err := api.DetachMountpath(baseParams, target, mountpath); err != nil {
+			if err := api.DetachMountpath(baseParams, target, mountpath, false /*dont-resil*/); err != nil {
 				t.Error(err.Error())
 			}
 		}
@@ -1038,7 +1038,7 @@ func TestMountpathDisableAndEnable(t *testing.T) {
 		}
 	}()
 	for _, mpath := range origMountpaths.Available {
-		err := api.DisableMountpath(baseParams, target, mpath)
+		err := api.DisableMountpath(baseParams, target, mpath, true /*dont-resil*/)
 		tassert.CheckFatal(t, err)
 		disabled.Add(mpath)
 	}
@@ -1567,7 +1567,7 @@ func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
 	// Step 4: Remove a mountpath (simulates disk loss)
 	mpath := mpList.Available[0]
 	tlog.Logf("Remove mountpath %s on target %s\n", mpath, target.ID())
-	err = api.DetachMountpath(baseParams, target, mpath)
+	err = api.DetachMountpath(baseParams, target, mpath, false /*dont-resil*/)
 	tassert.CheckFatal(t, err)
 
 	// Step 5: GET objects from the bucket
@@ -1626,7 +1626,7 @@ func TestGetFromMirroredBucketWithLostAllMpathsExceptOne(t *testing.T) {
 	// Remove all mountpaths except one
 	tlog.Logf("Remove all except one (%q) mountpath on target %s\n", mpList.Available[0], target.StringEx())
 	for i, mpath := range mpList.Available[1:] {
-		err = api.DetachMountpath(baseParams, target, mpath)
+		err = api.DetachMountpath(baseParams, target, mpath, false /*dont-resil*/)
 		if err != nil {
 			for j := 0; j < i; j++ {
 				api.AttachMountpath(baseParams, target, mpList.Available[j+1], false /*force*/)
@@ -1686,7 +1686,7 @@ func TestGetNonRedundantWithDisabledMountpath(t *testing.T) {
 	m.puts()
 
 	tlog.Logf("Disable %q on target %s\n", mpList.Available[0], target.StringEx())
-	err = api.DisableMountpath(baseParams, target, mpList.Available[0])
+	err = api.DisableMountpath(baseParams, target, mpList.Available[0], false /*dont-resil*/)
 	tassert.CheckFatal(t, err)
 	time.Sleep(time.Second)
 
