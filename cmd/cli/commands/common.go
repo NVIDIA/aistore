@@ -178,6 +178,11 @@ const (
 	subcmdSpec = "spec"
 	subcmdCode = "code"
 
+	// CLI config subcommands
+	subcmdCLI     = "cli"
+	subcmdCLIShow = commandShow
+	subcmdCLISet  = "set"
+
 	// Default values for long running operations
 	refreshRateDefault = time.Second
 	countDefault       = 1
@@ -498,6 +503,11 @@ var (
 	setNewCustomMDFlag = cli.BoolFlag{
 		Name:  "set-new-custom",
 		Usage: "remove existing custom keys (if any) and store new custom metadata",
+	}
+
+	cliConfigPathFlag = cli.BoolFlag{
+		Name:  "path",
+		Usage: "display path to the AIS CLI configuration",
 	}
 )
 

@@ -7,6 +7,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -134,4 +135,8 @@ func Save(cfg *Config) error {
 		return fmt.Errorf("failed to save config file: %v", err)
 	}
 	return nil
+}
+
+func Path() string {
+	return filepath.Join(ConfigDirPath, configFileName)
 }

@@ -46,6 +46,7 @@ var (
 				Action:       cluResetConfigHandler,
 				BashComplete: daemonCompletions(completeAllDaemons),
 			},
+			settingsCmd,
 		},
 	}
 )
