@@ -8,6 +8,7 @@ package commands
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmd/cli/config"
@@ -20,59 +21,36 @@ import (
 const invalidAlias = "alias must start with a letter and can only contain letters, numbers, hyphens (-), and underscores (_)"
 
 func (aisCLI *AISCLI) getAliasCmd() cli.Command {
-	return cli.Command{
-		Name:      commandAlias,
-		Usage:     "create top-level alias to a CLI command",
-		ArgsUsage: aliasCmdArgument,
-		Flags:     []cli.Flag{resetAliasFlag},
-		Action:    aisCLI.aliasHandler,
+	aliasCmd := cli.Command{
+		Name:   commandAlias,
+		Usage:  "manage top-level aliases",
+		Action: showCLIAliasHandler,
+		Subcommands: []cli.Command{
+			{
+				Name:   subcmdCLIAliasShow,
+				Usage:  "display list of aliases",
+				Action: showCLIAliasHandler,
+			},
+			{
+				Name:      subcmdCLIAliasRm,
+				Usage:     "remove existing alias",
+				ArgsUsage: aliasCmdArgument,
+				Action:    rmCLIAliasHandler,
+			},
+			{
+				Name:   subcmdCLIAliasReset,
+				Usage:  "reset aliases to default",
+				Action: resetCLIAliasHandler,
+			},
+			{
+				Name:      subcmdCLIAliasSet,
+				Usage:     "add new or update existing alias",
+				ArgsUsage: aliasSetCmdArgument,
+				Action:    aisCLI.setCLIAliasHandler,
+			},
+		},
 	}
-}
-
-func (aisCLI *AISCLI) aliasHandler(c *cli.Context) (err error) {
-	if flagIsSet(c, resetAliasFlag) {
-		return resetAliases(c)
-	}
-	if !c.Args().Present() {
-		return listAliases(c)
-	}
-	return aisCLI.addAlias(c)
-}
-
-func listAliases(c *cli.Context) (err error) {
-	return templates.DisplayOutput(cfg.Aliases, c.App.Writer, templates.AliasTemplate)
-}
-
-func resetAliases(c *cli.Context) (err error) {
-	cfg.Aliases = config.DefaultAliasConfig
-	if err := config.Save(cfg); err != nil {
-		return err
-	}
-
-	fmt.Fprintln(c.App.Writer, "aliases reset to default")
-	return
-}
-
-func (aisCLI *AISCLI) addAlias(c *cli.Context) (err error) {
-	var (
-		input = strings.Split(strings.Join(c.Args(), " "), "=")
-		alias = input[0]
-		orig  = input[1]
-	)
-	if !validateAlias(alias) {
-		return fmt.Errorf(invalidAlias)
-	}
-	if cmd := aisCLI.resolveCmd(orig); cmd == nil {
-		return fmt.Errorf("command %q not found", orig)
-	}
-
-	cfg.Aliases[alias] = orig
-	if err := config.Save(cfg); err != nil {
-		return err
-	}
-
-	fmt.Fprintf(c.App.Writer, "aliased %q=%q\n", alias, orig)
-	return
+	return aliasCmd
 }
 
 // initAliases reads cfg.Aliases and returns all aliases.
@@ -84,7 +62,6 @@ func (aisCLI *AISCLI) initAliases() (aliasCmds []cli.Command) {
 			aliasCmds = append(aliasCmds, makeAlias(*cmd, orig, false, alias))
 		}
 	}
-
 	return
 }
 
@@ -151,4 +128,69 @@ func makeAlias(cmd cli.Command, aliasFor string, silentAlias bool, newName ...st
 	}
 
 	return cmd
+}
+
+func resetCLIAliasHandler(c *cli.Context) (err error) {
+	cfg.Aliases = config.DefaultAliasConfig
+	if err := config.Save(cfg); err != nil {
+		return err
+	}
+
+	fmt.Fprintln(c.App.Writer, "Aliases reset to default")
+	return
+}
+
+func showCLIAliasHandler(c *cli.Context) (err error) {
+	aliases := make([]prop, 0, len(cfg.Aliases))
+	for k, v := range cfg.Aliases {
+		aliases = append(aliases, prop{Name: k, Value: v})
+	}
+	sort.Slice(aliases, func(i, j int) bool {
+		return aliases[i].Name < aliases[j].Name
+	})
+	return templates.DisplayOutput(aliases, c.App.Writer, templates.AliasTemplate, false)
+}
+
+func rmCLIAliasHandler(c *cli.Context) (err error) {
+	alias := c.Args().First()
+	if alias == "" {
+		return missingArgumentsError(c, "alias")
+	}
+	if _, ok := cfg.Aliases[alias]; !ok {
+		return fmt.Errorf("alias %q does not exist", alias)
+	}
+	delete(cfg.Aliases, alias)
+	return config.Save(cfg)
+}
+
+func (aisCLI *AISCLI) setCLIAliasHandler(c *cli.Context) (err error) {
+	alias := c.Args().First()
+	if alias == "" {
+		return missingArgumentsError(c, "alias")
+	}
+	if !validateAlias(alias) {
+		return fmt.Errorf(invalidAlias)
+	}
+
+	if c.NArg() < 2 {
+		return missingArgumentsError(c, "command")
+	}
+	oldCmd, ok := cfg.Aliases[alias]
+	newCmd := ""
+	for _, arg := range c.Args().Tail() {
+		if newCmd != "" {
+			newCmd += " "
+		}
+		newCmd += arg
+	}
+	if cmd := aisCLI.resolveCmd(newCmd); cmd == nil {
+		return fmt.Errorf("%q is not AIS command", newCmd)
+	}
+	cfg.Aliases[alias] = newCmd
+	if ok {
+		fmt.Fprintf(c.App.Writer, "Alias %q new command %q (was: %q)\n", alias, newCmd, oldCmd)
+	} else {
+		fmt.Fprintf(c.App.Writer, "Aliased %q = %q\n", newCmd, alias)
+	}
+	return config.Save(cfg)
 }

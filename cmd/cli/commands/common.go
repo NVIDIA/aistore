@@ -179,9 +179,13 @@ const (
 	subcmdCode = "code"
 
 	// CLI config subcommands
-	subcmdCLI     = "cli"
-	subcmdCLIShow = commandShow
-	subcmdCLISet  = "set"
+	subcmdCLI           = "cli"
+	subcmdCLIShow       = commandShow
+	subcmdCLISet        = subcmdSetProps
+	subcmdCLIAliasShow  = commandShow
+	subcmdCLIAliasRm    = commandRemove
+	subcmdCLIAliasSet   = subcmdCLISet
+	subcmdCLIAliasReset = subcmdResetProps
 
 	// Default values for long running operations
 	refreshRateDefault = time.Second
@@ -252,7 +256,8 @@ const (
 	deleteTokenArgument       = "TOKEN | TOKEN_FILE"
 
 	// Alias
-	aliasCmdArgument = "AIS_COMMAND"
+	aliasCmdArgument    = "AIS_COMMAND"
+	aliasSetCmdArgument = "ALIAS AIS_COMMAND"
 
 	// Search
 	searchArgument = "KEYWORD [KEYWORD...]"
@@ -492,12 +497,6 @@ var (
 	transientFlag = cli.BoolFlag{
 		Name:  "transient",
 		Usage: "to update config temporarily",
-	}
-
-	// Alias
-	resetAliasFlag = cli.BoolFlag{
-		Name:  "reset",
-		Usage: "remove all custom aliases and reset to system default",
 	}
 
 	setNewCustomMDFlag = cli.BoolFlag{

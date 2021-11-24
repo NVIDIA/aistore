@@ -335,8 +335,8 @@ var (
 		"FormatXactState":     fmtXactState,
 	}
 
-	AliasTemplate = "ALIAS\tCOMMAND\n{{range $alias, $command := .}}" +
-		"{{ $alias }}\t{{ $command }}\n" +
+	AliasTemplate = "ALIAS\tCOMMAND\n{{range $alias := .}}" +
+		"{{ $alias.Name }}\t{{ $alias.Value }}\n" +
 		"{{end}}"
 
 	HelpTemplateFuncMap = template.FuncMap{

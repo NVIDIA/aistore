@@ -15,6 +15,7 @@ This section lists configuration management operations the AIS CLI, with `ais co
 - [Set cluster configuration](#set-cluster-configuration)
 - [Set node configuration](#set-node-configuration)
 - [Reset configuration](#reset-configuration)
+- [AIS CLI configuration](#ais-cli-configuration)
 
 ## Show configuration
 
@@ -195,4 +196,69 @@ config successfully reset for all nodes
 ```console
 $ ais config reset CMhHp8082
 config for node "CMhHp8082" successfully reset
+```
+
+## AIS CLI configuration
+
+### Show CLI configuration
+
+`ais config cli show [--path] [--json]`
+
+Display the current CLI configuration.
+If `--path` is set, display only the path to the CLI configuration file.
+
+#### Examples
+
+```console
+$ ais config cli show
+PROPERTY                         VALUE
+aliases                          map[get:object get ls:bucket ls put:object put]
+auth.url                         http://127.0.0.1:52001
+cluster.default_ais_host         http://127.0.0.1:8080
+cluster.default_docker_host      http://172.50.0.2:8080
+cluster.skip_verify_crt          false
+cluster.url                      http://127.0.0.1:8080
+default_provider                 ais
+timeout.http_timeout             0s
+timeout.tcp_timeout              60s
+
+$ ais config cli show --path
+/home/user/.config/ais/config.json
+```
+
+### Change CLI configuration
+
+`ais config cli set KEY=VALUE [KEY=VALUE...]`
+
+Modify the CLI configuration. The configuration file is updated only if **all** new options are applied without errors.
+If an option name does not exist or value is incorrect the operation is aborted.
+
+#### Examples
+
+```console
+$ ais config cli set timeout.tcp_timeout 61s
+"timeout.tcp_timeout" set to: "61s" (was: "60s")
+
+$ ais config cli show --json
+{
+    "cluster": {
+        "url": "http://127.0.0.1:8080",
+        "default_ais_host": "http://127.0.0.1:8080",
+        "default_docker_host": "http://172.50.0.2:8080",
+        "skip_verify_crt": false
+    },
+    "timeout": {
+        "tcp_timeout": "61s",
+        "http_timeout": "0s"
+    },
+    "auth": {
+        "url": "http://127.0.0.1:52001"
+    },
+    "aliases": {
+        "get": "object get",
+        "ls": "bucket ls",
+        "put": "object put"
+    },
+    "default_provider": "ais"
+}
 ```

@@ -15,18 +15,20 @@ AIS CLI supports user-defined aliases, similar to the Unix `alias` command.
 
 ## Create an Alias
 
-`ais alias ALIAS=AIS_COMMAND`
+`ais alias set ALIAS AIS_COMMAND`
 
 Create an alias "`ALIAS`" for `AIS_COMMAND`.
 
-Note: ALIAS must be one word, or possibly multiple words connected with - (hyphen) or _ (underscore).
-For example, `ais alias show-clu=show cluster` is valid, but `ais alias show clu=show cluster` is not.
+Note: ALIAS is always a single word, or possibly multiple words connected with - (hyphen) or _ (underscore). The rest of arguments is the full command.
+The command can be put inside quotes for readability.
+
+For example, `ais alias set show-clu show cluster` and `ais alias set show-clu "show cluster"` creates the same alias.
 
 ### Examples
 
 ```console
-$ ais alias sc=show cluster
-aliased "show cluster"="sc"
+$ ais alias sc "show cluster"
+Aliased "show cluster"="sc"
 
 $ ais sc
 PROXY            MEM USED %      MEM AVAIL       UPTIME
@@ -55,9 +57,34 @@ TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL      
 CASGt8088        0.35%           15.43GiB        14.00%          1.951TiB        0.11%           -               24h     dev      online
 ```
 
+## Remove Alias
+
+`ais alias rm ALIAS`
+
+Removes existing alias "`ALIAS`".
+
+### Examples
+
+```console
+$ ais alias
+ALIAS   COMMAND
+get     object get
+ls      bucket ls
+put     object put
+sc      show cluster
+
+$ ais alias rm sc
+
+$ ais alias
+ALIAS   COMMAND
+get     object get
+ls      bucket ls
+put     object put
+```
+
 ## List Aliases
 
-`ais alias`
+`ais alias show` or `ais alias`
 
 List all created aliases.
 Similar to how the `alias` command works, `ais alias` lists all aliases when no arguments are provided.
@@ -75,8 +102,8 @@ get     object get
 ls      bucket ls
 put     object put
 
-$ ais alias sc=show cluster
-aliased "sc"="show cluster"
+$ ais alias set sc "show cluster"
+Aliased "sc"="show cluster"
 
 $ ais alias
 ALIAS   COMMAND
@@ -126,9 +153,9 @@ GLOBAL OPTIONS:
    --version, -V  print only the version
 ```
 
-## List Aliases
+## Reset Aliases
 
-`ais alias --reset`
+`ais alias reset`
 
 Clear all created aliases, and only keep the defaults.
 
@@ -142,8 +169,8 @@ ls      bucket ls
 put     object put
 sc      show cluster
 
-$ ais alias --reset
-aliases reset to default
+$ ais alias reset
+Aliases reset to default
 
 $ ais alias
 ALIAS   COMMAND
