@@ -113,6 +113,7 @@ type (
 		Smap           *smapX         `json:"smap"`
 		BMD            *bucketMD      `json:"bmd"`
 		RMD            *rebMD         `json:"rmd"`
+		EtlMD          *etlMD         `json:"etlMD"`
 		Config         *globalConfig  `json:"config"`
 		SI             *cluster.Snode `json:"si"`
 		RebInterrupted bool           `json:"reb_interrupted"`
@@ -196,6 +197,7 @@ type (
 			bmd    bmdOwner
 			rmd    *rmdOwner
 			config *configOwner
+			etlMD  etlOwner
 		}
 		startup struct {
 			cluster atomic.Bool // determines if the cluster has started up
@@ -1791,6 +1793,36 @@ func (h *httprunner) extractConfig(payload msPayload, caller string) (newConfig 
 	return
 }
 
+func (h *httprunner) extractEtlMD(payload msPayload, caller string) (newMD *etlMD, msg *aisMsg, err error) {
+	if _, ok := payload[revsEtlMDTag]; !ok {
+		return
+	}
+	newMD, msg = newEtlMD(), &aisMsg{}
+	etlMDValue := payload[revsEtlMDTag]
+	reader := bytes.NewBuffer(etlMDValue)
+	if _, err1 := jsp.Decode(io.NopCloser(reader), newMD, newMD.JspOpts(), "extractEtlMD"); err1 != nil {
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new EtlMD", cmn.BytesHead(etlMDValue), err1)
+		return
+	}
+	if msgValue, ok := payload[revsEtlMDTag+revsActionTag]; ok {
+		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cmn.BytesHead(msgValue), err1)
+			return
+		}
+	}
+	etlMD := h.owner.etlMD.get()
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("extract %s%s", newMD, _msdetail(etlMD.Version, msg, caller))
+	}
+	if newMD.version() <= etlMD.version() {
+		if newMD.version() < etlMD.version() {
+			err = newErrDowngrade(h.si, etlMD.String(), newMD.String())
+		}
+		newMD = nil
+	}
+	return
+}
+
 func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *smapX, msg *aisMsg, err error) {
 	if _, ok := payload[revsSmapTag]; !ok {
 		return
@@ -1925,6 +1957,30 @@ func (h *httprunner) receiveSmap(newSmap *smapX, msg *aisMsg, payload msPayload,
 	}
 	if cb != nil {
 		cb(newSmap, smap)
+	}
+	return
+}
+
+func (h *httprunner) receiveEtlMD(newEtlMD *etlMD, msg *aisMsg, payload msPayload,
+	caller string, cb func(newELT *etlMD, oldETL *etlMD)) (err error) {
+	if newEtlMD == nil {
+		return
+	}
+	etlMD := h.owner.etlMD.get()
+	glog.Infof("receive %s%s", newEtlMD.StringEx(), _msdetail(etlMD.Version, msg, caller))
+
+	h.owner.etlMD.Lock()
+	etlMD = h.owner.etlMD.get()
+	if newEtlMD.version() <= etlMD.version() {
+		h.owner.etlMD.Unlock()
+		return newErrDowngrade(h.si, etlMD.String(), newEtlMD.String())
+	}
+	err = h.owner.etlMD.putPersist(newEtlMD, payload)
+	h.owner.etlMD.Unlock()
+	debug.AssertNoErr(err)
+
+	if cb != nil {
+		cb(newEtlMD, etlMD)
 	}
 	return
 }

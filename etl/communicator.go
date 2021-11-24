@@ -112,7 +112,7 @@ func makeCommunicator(args commArgs) Communicator {
 		xact:      args.bootstraper.xact,
 	}
 
-	switch args.bootstraper.msg.CommType {
+	switch args.bootstraper.msg.CommTypeX {
 	case PushCommType:
 		return &pushComm{
 			baseComm: baseComm,
@@ -145,7 +145,7 @@ func makeCommunicator(args commArgs) Communicator {
 			command:  args.bootstraper.originalCommand,
 		}
 	default:
-		cos.AssertMsg(false, args.bootstraper.msg.CommType)
+		cos.AssertMsg(false, args.bootstraper.msg.CommTypeX)
 	}
 	return nil
 }

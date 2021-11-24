@@ -569,6 +569,7 @@ func (p *proxyrunner) _updFinal(ctx *smapModifier, clone *smapX) {
 	var (
 		tokens = p.authn.revokedTokenList()
 		bmd    = p.owner.bmd.get()
+		etlMD  = p.owner.etlMD.get()
 		aisMsg = p.newAmsg(ctx.msg, bmd)
 		pairs  = make([]revsPair, 0, 5)
 	)
@@ -577,7 +578,7 @@ func (p *proxyrunner) _updFinal(ctx *smapModifier, clone *smapX) {
 	} else if config != nil {
 		pairs = append(pairs, revsPair{config, aisMsg})
 	}
-	pairs = append(pairs, revsPair{clone, aisMsg}, revsPair{bmd, aisMsg})
+	pairs = append(pairs, revsPair{clone, aisMsg}, revsPair{bmd, aisMsg}, revsPair{etlMD, aisMsg})
 	if ctx.rmd != nil && ctx.nsi.IsTarget() && mustRunRebalance(ctx, clone) {
 		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
 		nl := xaction.NewXactNL(xaction.RebID2S(ctx.rmd.version()), cmn.ActRebalance, &clone.Smap, nil)

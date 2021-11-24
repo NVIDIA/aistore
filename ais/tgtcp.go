@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/ec"
+	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/nl"
@@ -813,11 +814,12 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 	}
 	// 1. extract
 	var (
-		caller                    = r.Header.Get(cmn.HdrCallerName)
-		newConf, msgConf, errConf = t.extractConfig(payload, caller)
-		newSmap, msgSmap, errSmap = t.extractSmap(payload, caller)
-		newBMD, msgBMD, errBMD    = t.extractBMD(payload, caller)
-		newRMD, msgRMD, errRMD    = t.extractRMD(payload, caller)
+		caller                       = r.Header.Get(cmn.HdrCallerName)
+		newConf, msgConf, errConf    = t.extractConfig(payload, caller)
+		newSmap, msgSmap, errSmap    = t.extractSmap(payload, caller)
+		newBMD, msgBMD, errBMD       = t.extractBMD(payload, caller)
+		newRMD, msgRMD, errRMD       = t.extractRMD(payload, caller)
+		newEtlMD, msgEtlMD, errEtlMD = t.extractEtlMD(payload, caller)
 	)
 	// 2. apply
 	if errConf == nil && newConf != nil {
@@ -832,13 +834,26 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 	if errRMD == nil && newRMD != nil {
 		errRMD = t.receiveRMD(newRMD, msgRMD, caller)
 	}
+	if errEtlMD == nil && newEtlMD != nil {
+		errEtlMD = t.receiveEtlMD(newEtlMD, msgEtlMD, payload, caller, t._etlMDChange)
+	}
 	// 3. respond
-	if errConf == nil && errSmap == nil && errBMD == nil && errRMD == nil {
+	if errConf == nil && errSmap == nil && errBMD == nil && errRMD == nil && errEtlMD == nil {
 		return
 	}
 	cii.fill(&t.httprunner)
-	err.message(errConf, errSmap, errBMD, errRMD, nil)
+	err.message(errConf, errSmap, errBMD, errRMD, errEtlMD, nil)
 	t.writeErr(w, r, errors.New(cos.MustMarshalToString(err)), http.StatusConflict)
+}
+
+func (t *targetrunner) _etlMDChange(newEtlMD, oldEtlMD *etlMD) {
+	for key := range oldEtlMD.ETLs {
+		if _, ok := newEtlMD.ETLs[key]; ok {
+			continue
+		}
+		// TODO: stop only when running
+		etl.Stop(t, key)
+	}
 }
 
 func (t *targetrunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPayload, caller string) (err error) {

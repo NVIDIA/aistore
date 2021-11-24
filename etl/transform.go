@@ -164,25 +164,27 @@ func InitCode(t cluster.Target, msg InitCodeMsg) error {
 	var (
 		// We clean up the `msg.ID` as K8s doesn't allow `_` and uppercase
 		// letters in the names.
-		name    = k8s.CleanName(msg.ID)
+		name    = k8s.CleanName(msg.IDX)
 		podSpec = r.PodSpec()
 	)
 
 	podSpec = strings.ReplaceAll(podSpec, "<NAME>", name)
-	switch msg.CommType {
+	switch msg.CommTypeX {
 	case PushCommType, RedirectCommType, RevProxyCommType:
 		podSpec = strings.ReplaceAll(podSpec, "<COMMAND>", "['sh', '-c', 'python /server.py']")
 	case IOCommType:
 		podSpec = strings.ReplaceAll(podSpec, "<COMMAND>", "['python /code/code.py']")
 	default:
-		cos.AssertMsg(false, msg.CommType)
+		cos.AssertMsg(false, msg.CommTypeX)
 	}
 
 	// Finally, start the ETL with declared Pod specification.
 	return InitSpec(t, InitSpecMsg{
-		ID:          msg.ID,
+		InitMsgBase: InitMsgBase{
+			IDX:       msg.IDX,
+			CommTypeX: msg.CommTypeX,
+		},
 		Spec:        []byte(podSpec),
-		CommType:    msg.CommType,
 		WaitTimeout: msg.WaitTimeout,
 	}, StartOpts{Env: map[string]string{
 		r.CodeEnvName(): string(msg.Code),
@@ -219,7 +221,7 @@ func tryStart(t cluster.Target, msg InitSpecMsg, opts StartOpts) (errCtx *cmn.ET
 
 	errCtx = &cmn.ETLErrorContext{
 		TID:  t.SID(),
-		UUID: msg.ID,
+		UUID: msg.IDX,
 	}
 
 	b := &etlBootstraper{
@@ -263,11 +265,11 @@ func tryStart(t cluster.Target, msg InitSpecMsg, opts StartOpts) (errCtx *cmn.ET
 	b.setupXaction()
 
 	c := makeCommunicator(commArgs{
-		listener:    newAborter(t, msg.ID),
+		listener:    newAborter(t, msg.IDX),
 		bootstraper: b,
 	})
 	// NOTE: Communicator is put to registry only if the whole tryStart was successful.
-	if err = reg.put(msg.ID, c); err != nil {
+	if err = reg.put(msg.IDX, c); err != nil {
 		return
 	}
 	t.Sowner().Listeners().Reg(c)

@@ -248,7 +248,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 			}
 		}
 		// NOTE: use regpool to try to upgrade all the four revs: Smap, BMD, RMD, and global Config
-		before.Smap, before.BMD, before.RMD = clone, p.owner.bmd.get(), p.owner.rmd.get()
+		before.Smap, before.BMD, before.RMD, before.EtlMD = clone, p.owner.bmd.get(), p.owner.rmd.get(), p.owner.etlMD.get()
 		before.Config, _ = p.owner.config.get()
 
 		smap = p.regpoolMaxVer(&before, &after)
@@ -260,11 +260,11 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		msg := p.newAmsgStr(metaction1, after.BMD)
 		wg := p.metasyncer.sync(revsPair{smap, msg}, revsPair{after.BMD, msg})
 
-		glog.Infof("%s: loaded %s (merged %s, added %d), loaded %s, %s, %s", p.si.StringEx(),
+		glog.Infof("%s: loaded %s (merged %s, added %d), loaded %s, %s, %s, %s", p.si.StringEx(),
 			loadedSmap, before.Smap.StringEx(),
-			added, before.BMD.StringEx(), before.RMD, before.Config)
-		glog.Infof("%s: regpool %s, %s, %s, %s", p.si.StringEx(), smap.StringEx(),
-			after.BMD.StringEx(), after.RMD, after.Config)
+			added, before.BMD.StringEx(), before.RMD, before.Config, before.EtlMD.StringEx())
+		glog.Infof("%s: regpool %s, %s, %s, %s, %s", p.si.StringEx(), smap.StringEx(),
+			after.BMD.StringEx(), after.RMD, after.Config, after.EtlMD.StringEx())
 
 		wg.Wait()
 	} else {
@@ -343,10 +343,19 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		cos.ExitLogf("%v", err)
 	}
 
-	// 8. metasync (smap, config & bmd) and startup as primary
+	// 8. initialize EtlMD
+	etlMD := p.owner.etlMD.get().clone()
+	if etlMD.Version == 0 {
+		etlMD.Version = 1 // init EtlMD
+		if err := p.owner.etlMD.putPersist(etlMD, nil); err != nil {
+			cos.ExitLogf("%v", err)
+		}
+	}
+
+	// 9. metasync (smap, config, etlMD & bmd) and startup as primary
 	var (
 		aisMsg = p.newAmsgStr(metaction2, bmd)
-		pairs  = []revsPair{{smap, aisMsg}, {bmd, aisMsg}, {cluConfig, aisMsg}}
+		pairs  = []revsPair{{smap, aisMsg}, {bmd, aisMsg}, {cluConfig, aisMsg}, {etlMD, aisMsg}}
 	)
 	wg := p.metasyncer.sync(pairs...)
 	wg.Wait()
@@ -743,6 +752,9 @@ func (p *proxyrunner) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out
 				out.Config = svm.Config
 			}
 		}
+
+		// TODO: maxver of EtlMD
+
 		if svm.Smap != nil && svm.VoteInProgress {
 			var s string
 			if svm.Smap.Primary != nil {
@@ -857,6 +869,8 @@ func (p *proxyrunner) regpoolMaxVer(before, after *cluMeta) (smap *smapX) {
 			cos.ExitLogf("FATAL: %v", err)
 		}
 	}
+
+	// TODO: implement EtlMD
 ret:
 	if after.Smap.version() == 0 || !cos.IsValidUUID(after.Smap.UUID) {
 		after.Smap.UUID, after.Smap.CreationTime = newClusterUUID()

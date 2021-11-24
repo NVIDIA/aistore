@@ -152,7 +152,7 @@ func etlInitSpecHandler(c *cli.Context) (err error) {
 	}
 
 	// msg.ID is `metadata.name` from podSpec
-	if err = etlExists(msg.ID); err != nil {
+	if err = etlExists(msg.ID()); err != nil {
 		return
 	}
 
@@ -172,12 +172,12 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 		return fmt.Errorf("%s flag cannot be empty", fromFileFlag.Name)
 	}
 
-	msg.ID = parseStrFlag(c, etlUUID)
-	if msg.ID != "" {
-		if err = cos.ValidateID(msg.ID); err != nil {
+	msg.IDX = parseStrFlag(c, etlUUID)
+	if msg.ID() != "" {
+		if err = cos.ValidateID(msg.ID()); err != nil {
 			return
 		}
-		if err = etlExists(msg.ID); err != nil {
+		if err = etlExists(msg.ID()); err != nil {
 			return
 		}
 	}
@@ -194,15 +194,15 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 	}
 
 	msg.Runtime = parseStrFlag(c, runtimeFlag)
-	msg.CommType = parseStrFlag(c, commTypeFlag)
-	if msg.CommType != "" {
+	msg.CommTypeX = parseStrFlag(c, commTypeFlag)
+	if msg.CommTypeX != "" {
 		// Missing `/` at the end, eg. `hpush:/` (should be `hpush://`)
-		if strings.HasSuffix(msg.CommType, ":/") {
-			msg.CommType += "/"
+		if strings.HasSuffix(msg.CommTypeX, ":/") {
+			msg.CommTypeX += "/"
 		}
 		// Missing `://` at the end, eg. `hpush` (should be `hpush://`)
-		if !strings.HasSuffix(msg.CommType, "://") {
-			msg.CommType += "://"
+		if !strings.HasSuffix(msg.CommTypeX, "://") {
+			msg.CommTypeX += "://"
 		}
 	}
 	msg.WaitTimeout = cos.Duration(parseDurationFlag(c, waitTimeoutFlag))

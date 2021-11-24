@@ -207,6 +207,7 @@ func newTarget(co *configOwner) *targetrunner {
 	t := &targetrunner{backend: make(backends, 8)}
 	t.name = cmn.Target
 	t.owner.bmd = newBMDOwnerTgt()
+	t.owner.etlMD = newEtlMDOwnerTgt()
 	t.owner.config = co
 	return t
 }

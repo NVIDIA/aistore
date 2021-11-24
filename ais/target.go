@@ -298,6 +298,7 @@ func (t *targetrunner) Run() error {
 
 	// Init meta-owners and load local instances
 	t.owner.bmd.init()
+	t.owner.etlMD.init()
 
 	smap, reliable := t.tryLoadSmap()
 	if !reliable {

@@ -97,6 +97,10 @@ func newPrimary() *proxyrunner {
 	o.put(newBucketMD())
 	p.owner.bmd = o
 
+	e := newEtlMDOwnerPrx(config)
+	e.put(newEtlMD())
+	p.owner.etlMD = e
+
 	p.gmm = memsys.PageMM()
 	return p
 }

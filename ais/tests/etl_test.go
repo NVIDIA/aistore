@@ -532,10 +532,12 @@ def transform(input_bytes: bytes) -> bytes:
 				tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: test.onlyLong})
 
 				uuid, err := api.ETLInitCode(baseParams, etl.InitCodeMsg{
+					InitMsgBase: etl.InitMsgBase{
+						CommTypeX: test.commType,
+					},
 					Code:        []byte(test.code),
 					Deps:        []byte(test.deps),
 					Runtime:     test.runtime,
-					CommType:    test.commType,
 					WaitTimeout: cos.Duration(5 * time.Minute),
 				})
 				tassert.CheckFatal(t, err)

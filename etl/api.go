@@ -7,24 +7,27 @@ package etl
 import (
 	"fmt"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/etl/runtime"
 )
 
 type (
+	InitMsgBase struct {
+		IDX       string `json:"id"`
+		CommTypeX string `json:"communication_type"`
+	}
 	InitSpecMsg struct {
-		ID          string       `json:"id"`
+		InitMsgBase
 		Spec        []byte       `json:"spec"`
-		CommType    string       `json:"communication_type"`
 		WaitTimeout cos.Duration `json:"wait_timeout"`
 	}
 
 	InitCodeMsg struct {
-		ID          string       `json:"id"`
+		InitMsgBase
 		Code        []byte       `json:"code"`
 		Deps        []byte       `json:"dependencies"`
 		Runtime     string       `json:"runtime"`
-		CommType    string       `json:"communication_type"`
 		WaitTimeout cos.Duration `json:"wait_timeout"`
 	}
 
@@ -64,6 +67,15 @@ type (
 	}
 )
 
+// interface guard
+var (
+	_ InitMsg = (*InitCodeMsg)(nil)
+	_ InitMsg = (*InitSpecMsg)(nil)
+)
+
+func (m InitMsgBase) CommType() string { return m.CommTypeX }
+func (m InitMsgBase) ID() string       { return m.IDX }
+
 func (m *InitCodeMsg) Validate() error {
 	if len(m.Code) == 0 {
 		return fmt.Errorf("source code is empty")
@@ -74,13 +86,21 @@ func (m *InitCodeMsg) Validate() error {
 	if _, ok := runtime.Runtimes[m.Runtime]; !ok {
 		return fmt.Errorf("unsupported runtime provided: %s", m.Runtime)
 	}
-	if m.CommType == "" {
-		m.CommType = PushCommType
+	if m.CommTypeX == "" {
+		m.CommTypeX = PushCommType
 	}
-	if !cos.StringInSlice(m.CommType, commTypes) {
-		return fmt.Errorf("unsupported communication type provided: %s", m.CommType)
+	if !cos.StringInSlice(m.CommTypeX, commTypes) {
+		return fmt.Errorf("unsupported communication type provided: %s", m.CommTypeX)
 	}
 	return nil
+}
+
+func (*InitCodeMsg) InitType() string {
+	return cmn.ETLInitCode
+}
+
+func (*InitSpecMsg) InitType() string {
+	return cmn.ETLInitSpec
 }
 
 func (p PodsLogsMsg) Len() int           { return len(p) }

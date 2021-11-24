@@ -197,6 +197,15 @@ func (g *fsprungroup) redistributeMD() {
 			cos.ExitLogf("%v", err)
 		}
 	}
+
+	if !hasEnoughEtlMDCopies() {
+		eo := g.t.owner.etlMD
+		if err := eo.persist(eo.get(), nil); err != nil {
+			debug.AssertNoErr(err)
+			cos.ExitLogf("%v", err)
+		}
+	}
+
 	if _, err := volume.NewFromMPI(g.t.si.ID()); err != nil {
 		debug.AssertNoErr(err)
 		cos.ExitLogf("%v", err)

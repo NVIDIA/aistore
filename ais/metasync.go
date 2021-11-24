@@ -79,6 +79,7 @@ const (
 	revsBMDTag   = "BMD"
 	revsConfTag  = "Conf"
 	revsTokenTag = "token"
+	revsEtlMDTag = "etl"
 
 	revsMaxTags   = 5
 	revsActionTag = "-action" // prefix revs tag

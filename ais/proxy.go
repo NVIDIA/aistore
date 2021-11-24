@@ -158,8 +158,10 @@ func (p *proxyrunner) Run() error {
 	p.httprunner.init(config)
 	p.httprunner.electable = p
 	p.owner.bmd = newBMDOwnerPrx(config)
+	p.owner.etlMD = newEtlMDOwnerPrx(config)
 
-	p.owner.bmd.init() // initialize owner and load BMD
+	p.owner.bmd.init()   // initialize owner and load BMD
+	p.owner.etlMD.init() // initialize owner and load EtlMD
 
 	cluster.Init(nil /*cluster.Target*/)
 
@@ -305,6 +307,14 @@ func (p *proxyrunner) receiveCluMeta(cluMeta *cluMeta, action, caller string) (e
 		}
 	} else {
 		glog.Infof("%s: synch %s", p.si, cluMeta.RMD)
+	}
+	// EtlMD
+	if err = p.receiveEtlMD(cluMeta.EtlMD, msg, nil, caller, nil); err != nil {
+		if !isErrDowngrade(err) {
+			glog.Errorf(cmn.FmtErrFailed, p.si, "sync", cluMeta.EtlMD, err)
+		}
+	} else {
+		glog.Infof("%s: synch %s", p.si, cluMeta.EtlMD)
 	}
 	return
 }
@@ -767,12 +777,13 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// 1. extract
 	var (
-		caller                    = r.Header.Get(cmn.HdrCallerName)
-		newConf, msgConf, errConf = p.extractConfig(payload, caller)
-		newSmap, msgSmap, errSmap = p.extractSmap(payload, caller)
-		newBMD, msgBMD, errBMD    = p.extractBMD(payload, caller)
-		newRMD, msgRMD, errRMD    = p.extractRMD(payload, caller)
-		revokedTokens, errTokens  = p.extractRevokedTokenList(payload, caller)
+		caller                       = r.Header.Get(cmn.HdrCallerName)
+		newConf, msgConf, errConf    = p.extractConfig(payload, caller)
+		newSmap, msgSmap, errSmap    = p.extractSmap(payload, caller)
+		newBMD, msgBMD, errBMD       = p.extractBMD(payload, caller)
+		newRMD, msgRMD, errRMD       = p.extractRMD(payload, caller)
+		newEtlMD, msgEtlMD, errEtlMD = p.extractEtlMD(payload, caller)
+		revokedTokens, errTokens     = p.extractRevokedTokenList(payload, caller)
 	)
 	// 2. apply
 	if errConf == nil && newConf != nil {
@@ -787,15 +798,18 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	if errRMD == nil && newRMD != nil {
 		errRMD = p.receiveRMD(newRMD, msgRMD, caller)
 	}
+	if errEtlMD == nil && newEtlMD != nil {
+		errEtlMD = p.receiveEtlMD(newEtlMD, msgEtlMD, payload, caller, nil)
+	}
 	if errTokens == nil && revokedTokens != nil {
 		p.authn.updateRevokedList(revokedTokens)
 	}
 	// 3. respond
-	if errConf == nil && errSmap == nil && errBMD == nil && errRMD == nil && errTokens == nil {
+	if errConf == nil && errSmap == nil && errBMD == nil && errRMD == nil && errTokens == nil && errEtlMD == nil {
 		return
 	}
 	cii.fill(&p.httprunner)
-	err.message(errConf, errSmap, errBMD, errRMD, errTokens)
+	err.message(errConf, errSmap, errBMD, errRMD, errEtlMD, errTokens)
 	p.writeErr(w, r, errors.New(cos.MustMarshalToString(err)), http.StatusConflict)
 }
 
@@ -2610,8 +2624,9 @@ func (p *proxyrunner) _becomeFinal(ctx *smapModifier, clone *smapX) {
 	var (
 		bmd   = p.owner.bmd.get()
 		rmd   = p.owner.rmd.get()
+		etlMD = p.owner.etlMD.get()
 		msg   = p.newAmsgStr(cmn.ActNewPrimary, bmd)
-		pairs = []revsPair{{clone, msg}, {bmd, msg}, {rmd, msg}}
+		pairs = []revsPair{{clone, msg}, {bmd, msg}, {rmd, msg}, {etlMD, msg}}
 	)
 	config, err := p.ensureConfigPrimaryURL()
 	if err != nil {
@@ -2620,7 +2635,7 @@ func (p *proxyrunner) _becomeFinal(ctx *smapModifier, clone *smapX) {
 	if config != nil {
 		pairs = append(pairs, revsPair{config, msg})
 	}
-	glog.Infof("%s: distributing (%s, %s, %s) with newly elected primary (self)", p.si, clone, bmd, rmd)
+	glog.Infof("%s: distributing (%s, %s, %s, %s) with newly elected primary (self)", p.si, clone, bmd, rmd, etlMD)
 	debug.Assert(clone._sgl != nil)
 	_ = p.metasyncer.sync(pairs...)
 	p.syncNewICOwners(ctx.smap, clone)

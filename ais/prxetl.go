@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/etl"
 )
 
@@ -90,7 +91,7 @@ func (p *proxyrunner) initSpecETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = p.startETL(w, r, cos.MustMarshal(msg), msg.ID); err != nil {
+	if err = p.startETL(w, r, &msg); err != nil {
 		p.writeErr(w, r, err)
 	}
 }
@@ -110,9 +111,10 @@ func (p *proxyrunner) initCodeETL(w http.ResponseWriter, r *http.Request) {
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
-	if msg.ID == "" {
-		msg.ID = cos.GenUUID()
-	} else if err = cos.ValidateID(msg.ID); err != nil {
+	// TODO: Make ID required
+	if msg.IDX == "" {
+		msg.IDX = cos.GenUUID()
+	} else if err = cos.ValidateID(msg.IDX); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
@@ -120,15 +122,15 @@ func (p *proxyrunner) initCodeETL(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err)
 		return
 	}
-	if err = p.startETL(w, r, cos.MustMarshal(msg), msg.ID); err != nil {
+	if err = p.startETL(w, r, &msg); err != nil {
 		p.writeErr(w, r, err)
 	}
 }
 
 // startETL broadcasts a build or init ETL request and ensures only one ETL is running
-func (p *proxyrunner) startETL(w http.ResponseWriter, r *http.Request, body []byte, msgID string) (err error) {
+func (p *proxyrunner) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg) (err error) {
 	args := allocBcastArgs()
-	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: body}
+	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: cos.MustMarshal(msg)}
 	args.timeout = cmn.LongTimeout
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
@@ -141,8 +143,16 @@ func (p *proxyrunner) startETL(w http.ResponseWriter, r *http.Request, body []by
 	}
 	freeCallResults(results)
 	if err == nil {
+		ctx := &etlMDModifier{
+			pre:   _addETLPre,
+			final: p._syncEtlMDFinal,
+			msg:   msg,
+		}
+
+		p.owner.etlMD.modify(ctx)
+
 		// All init calls have succeeded, return UUID.
-		w.Write([]byte(msgID))
+		w.Write([]byte(msg.ID()))
 		return
 	}
 
@@ -150,11 +160,24 @@ func (p *proxyrunner) startETL(w http.ResponseWriter, r *http.Request, body []by
 	// (Termination calls may succeed for the targets that already succeeded in starting ETL,
 	//  or fail otherwise - ignore the failures).
 	argsTerm := allocBcastArgs()
-	argsTerm.req = cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathETLStop.Join(msgID)}
+	argsTerm.req = cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathETLStop.Join(msg.ID())}
 	argsTerm.timeout = cmn.LongTimeout
 	p.bcastGroup(argsTerm)
 	freeBcastArgs(argsTerm)
 	return err
+}
+
+func _addETLPre(ctx *etlMDModifier, clone *etlMD) (_ error) {
+	debug.Assert(ctx.msg != nil)
+	clone.add(ctx.msg)
+	return
+}
+
+func (p *proxyrunner) _syncEtlMDFinal(ctx *etlMDModifier, clone *etlMD) {
+	wg := p.metasyncer.sync(revsPair{clone, p.newAmsgStr("etl-reg", nil)})
+	if ctx.wait {
+		wg.Wait()
+	}
 }
 
 // GET /v1/etl/list
@@ -326,5 +349,6 @@ func (p *proxyrunner) stopETL(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, res.error())
 		break
 	}
+	// TODO: implement using ETL modifier
 	freeCallResults(results)
 }

@@ -111,7 +111,9 @@ var _ = Describe("CommunicatorTest", func() {
 				bootstraper: &etlBootstraper{
 					t: tMock,
 					msg: InitSpecMsg{
-						CommType: commType,
+						InitMsgBase: InitMsgBase{
+							CommTypeX: commType,
+						},
 					},
 
 					pod:  pod,

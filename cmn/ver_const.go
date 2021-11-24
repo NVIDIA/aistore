@@ -26,10 +26,11 @@ import "github.com/NVIDIA/aistore/cmn/jsp"
 const AIStoreSoftwareVersion = "3.8.rc1"
 
 const (
-	MetaverSmap = 1 // Smap (cluster map) formatting version (jsp)
-	MetaverBMD  = 1 // BMD (bucket metadata) --/-- (jsp)
-	MetaverRMD  = 1 // Rebalance MD (jsp)
-	MetaverVMD  = 1 // Volume MD (jsp)
+	MetaverSmap  = 1 // Smap (cluster map) formatting version (jsp)
+	MetaverBMD   = 1 // BMD (bucket metadata) --/-- (jsp)
+	MetaverRMD   = 1 // Rebalance MD (jsp)
+	MetaverVMD   = 1 // Volume MD (jsp)
+	MetaverEtlMD = 1 // ETL MD (jsp)
 
 	MetaverLOM = 1 // LOM
 

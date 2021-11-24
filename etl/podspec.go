@@ -63,15 +63,15 @@ func ValidateSpec(spec []byte) (msg InitSpecMsg, err error) {
 		return msg, err
 	}
 	errCtx.ETLName = pod.GetName()
-	msg.ID = pod.GetName()
+	msg.IDX = pod.GetName()
 
-	if err := cos.ValidateID(msg.ID); err != nil {
+	if err := cos.ValidateID(msg.IDX); err != nil {
 		err = fmt.Errorf("pod name not in valid ID format, err: %v", err)
 		return msg, err
 	}
 
 	// Check annotations.
-	if msg.CommType, err = podTransformCommType(errCtx, pod); err != nil {
+	if msg.CommTypeX, err = podTransformCommType(errCtx, pod); err != nil {
 		return msg, err
 	}
 	if msg.WaitTimeout, err = podTransformTimeout(errCtx, pod); err != nil {
@@ -139,7 +139,7 @@ func (b *etlBootstraper) preparePodSpec() (err error) {
 }
 
 func (b *etlBootstraper) updatePodCommand() {
-	if b.msg.CommType != IOCommType {
+	if b.msg.CommTypeX != IOCommType {
 		return
 	}
 
