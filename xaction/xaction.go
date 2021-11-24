@@ -218,14 +218,14 @@ func (xact *XactBase) BytesAdd(size int64) int64  { return xact.bytes.Add(size) 
 
 func (xact *XactBase) Stats() cluster.XactStats {
 	stats := &BaseStats{
-		IDX:         xact.ID(),
-		KindX:       xact.Kind(),
-		BckX:        xact.origBck,
-		StartTimeX:  xact.StartTime(),
-		EndTimeX:    xact.EndTime(),
-		ObjCountX:   xact.ObjCount(),
-		BytesCountX: xact.BytesCount(),
-		AbortedX:    xact.Aborted(),
+		ID:         xact.ID(),
+		Kind:       xact.Kind(),
+		Bck:        xact.origBck,
+		StartTime:  xact.StartTime(),
+		EndTime:    xact.EndTime(),
+		ObjCount:   xact.ObjCount(),
+		BytesCount: xact.BytesCount(),
+		AbortedX:   xact.Aborted(),
 	}
 	return stats
 }

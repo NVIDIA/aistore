@@ -14,14 +14,14 @@ import (
 
 type (
 	BaseStats struct {
-		IDX         string    `json:"id"`
-		KindX       string    `json:"kind"`
-		BckX        cmn.Bck   `json:"bck"`
-		StartTimeX  time.Time `json:"start_time"`
-		EndTimeX    time.Time `json:"end_time"`
-		ObjCountX   int64     `json:"obj_count,string"`
-		BytesCountX int64     `json:"bytes_count,string"`
-		AbortedX    bool      `json:"aborted"`
+		ID         string    `json:"id"`
+		Kind       string    `json:"kind"`
+		Bck        cmn.Bck   `json:"bck"`
+		StartTime  time.Time `json:"start_time"`
+		EndTime    time.Time `json:"end_time"`
+		ObjCount   int64     `json:"obj_count,string"`
+		BytesCount int64     `json:"bytes_count,string"`
+		AbortedX   bool      `json:"aborted"`
 	}
 	BaseStatsExt struct {
 		BaseStats
@@ -53,16 +53,9 @@ var _ cluster.XactStats = (*BaseStats)(nil)
 // BaseStats //
 ///////////////
 
-func (b *BaseStats) ID() string           { return b.IDX }
-func (b *BaseStats) Kind() string         { return b.KindX }
-func (b *BaseStats) Bck() cmn.Bck         { return b.BckX }
-func (b *BaseStats) StartTime() time.Time { return b.StartTimeX }
-func (b *BaseStats) EndTime() time.Time   { return b.EndTimeX }
-func (b *BaseStats) ObjCount() int64      { return b.ObjCountX }
-func (b *BaseStats) BytesCount() int64    { return b.BytesCountX }
-func (b *BaseStats) Aborted() bool        { return b.AbortedX }
-func (b *BaseStats) Running() bool        { return b.EndTimeX.IsZero() }
-func (b *BaseStats) Finished() bool       { return !b.EndTimeX.IsZero() }
+func (b *BaseStats) Aborted() bool  { return b.AbortedX }
+func (b *BaseStats) Running() bool  { return b.EndTime.IsZero() }
+func (b *BaseStats) Finished() bool { return !b.EndTime.IsZero() }
 
 //////////////
 // QueryMsg //

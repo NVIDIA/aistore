@@ -103,8 +103,8 @@ func (xact *Rebalance) Stats() cluster.XactStats {
 	} else {
 		rebStats.Ext.RebID = 0
 	}
-	rebStats.ObjCountX = rebStats.Ext.RebTxCount + rebStats.Ext.RebRxCount
-	rebStats.BytesCountX = rebStats.Ext.RebTxSize + rebStats.Ext.RebRxSize
+	rebStats.ObjCount = rebStats.Ext.RebTxCount + rebStats.Ext.RebRxCount
+	rebStats.BytesCount = rebStats.Ext.RebTxSize + rebStats.Ext.RebRxSize
 	return &rebStats
 }
 

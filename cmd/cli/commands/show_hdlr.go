@@ -386,18 +386,18 @@ func showXactionHandler(c *cli.Context) (err error) {
 	for daemonID, daemonStats := range xactStats {
 		sort.Slice(daemonStats, func(i, j int) bool {
 			di, dj := daemonStats[i], daemonStats[j]
-			if di.Kind() == dj.Kind() {
+			if di.Kind == dj.Kind {
 				// ascending by running
 				if di.Running() && dj.Running() {
-					return di.StartTime().After(dj.StartTime()) // descending by start time (if both running)
+					return di.StartTime.After(dj.StartTime) // descending by start time (if both running)
 				} else if di.Running() && !dj.Running() {
 					return true
 				} else if !di.Running() && dj.Running() {
 					return false
 				}
-				return di.EndTime().After(dj.EndTime()) // descending by end time
+				return di.EndTime.After(dj.EndTime) // descending by end time
 			}
-			return di.Kind() < dj.Kind() // ascending by kind
+			return di.Kind < dj.Kind // ascending by kind
 		})
 
 		s := daemonTemplateStats{

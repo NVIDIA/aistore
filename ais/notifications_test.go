@@ -89,15 +89,15 @@ var _ = Describe("Notifications xaction test", func() {
 				byteCount = counts[1]
 			}
 			return &xaction.BaseStatsExt{BaseStats: xaction.BaseStats{
-				IDX:         xactID,
-				BytesCountX: byteCount,
-				ObjCountX:   objCount,
+				ID:         xactID,
+				BytesCount: byteCount,
+				ObjCount:   objCount,
 			}}
 		}
 
 		finishedXact = func(xactID string, counts ...int64) (stats *xaction.BaseStatsExt) {
 			stats = baseXact(xactID, counts...)
-			stats.EndTimeX = time.Now()
+			stats.EndTime = time.Now()
 			return
 		}
 
@@ -198,8 +198,8 @@ var _ = Describe("Notifications xaction test", func() {
 			val, _ := nl.NodeStats().Load(target1ID)
 			statsXact, ok := val.(*xaction.BaseStatsExt)
 			Expect(ok).To(BeTrue())
-			Expect(statsXact.ObjCount()).To(BeEquivalentTo(initObjCount))
-			Expect(statsXact.BytesCount()).To(BeEquivalentTo(initByteCount))
+			Expect(statsXact.ObjCount).To(BeEquivalentTo(initObjCount))
+			Expect(statsXact.BytesCount).To(BeEquivalentTo(initByteCount))
 
 			// Next a Finished notification with stats
 			err = n.handleFinished(nl, targets[target1ID], cos.MustMarshal(statsProgress), nil)
@@ -207,8 +207,8 @@ var _ = Describe("Notifications xaction test", func() {
 			val, _ = nl.NodeStats().Load(target1ID)
 			statsXact, ok = val.(*xaction.BaseStatsExt)
 			Expect(ok).To(BeTrue())
-			Expect(statsXact.ObjCount()).To(BeEquivalentTo(updatedObjCount))
-			Expect(statsXact.BytesCount()).To(BeEquivalentTo(updatedByteCount))
+			Expect(statsXact.ObjCount).To(BeEquivalentTo(updatedObjCount))
+			Expect(statsXact.BytesCount).To(BeEquivalentTo(updatedByteCount))
 		})
 	})
 

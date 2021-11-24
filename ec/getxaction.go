@@ -298,6 +298,6 @@ func (r *XactGet) Stats() cluster.XactStats {
 		AvgQueueLen: st.QueueLen,
 		IsIdle:      r.Pending() == 0,
 	}
-	baseStats.ObjCountX = st.GetReq
+	baseStats.ObjCount = st.GetReq
 	return baseStats
 }

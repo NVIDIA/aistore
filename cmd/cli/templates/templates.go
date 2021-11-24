@@ -116,8 +116,8 @@ const (
 	XactionBody        = "{{range $key, $xact := $daemon.Stats}}" + XactionStatsBody + "{{end}}" +
 		"{{if $daemon.Stats}}\t \t \t \t \t \t \t \t{{if $.Verbose}} \t {{end}}\n{{end}}"
 	XactionStatsBody = "{{ $daemon.DaemonID }}\t " +
-		"{{if $xact.IDX}}{{$xact.IDX}}{{else}}-{{end}}\t " +
-		"{{$xact.KindX}}\t " +
+		"{{if $xact.ID}}{{$xact.IDX}}{{else}}-{{end}}\t " +
+		"{{$xact.Kind}}\t " +
 		"{{if $xact.BckX.Name}}{{$xact.BckX.Name}}{{else}}-{{end}}\t " +
 		"{{if (eq $xact.ObjCountX 0) }}-{{else}}{{$xact.ObjCountX}}{{end}}\t " +
 		"{{if (eq $xact.BytesCountX 0) }}-{{else}}{{FormatBytesSigned $xact.BytesCountX 2}}{{end}}\t " +
@@ -420,7 +420,7 @@ func fmtXactStatus(tStatus *stats.TargetStatus) string {
 	if tStats.Aborted() {
 		return "aborted"
 	}
-	if tStats.EndTime().IsZero() {
+	if tStats.EndTime.IsZero() {
 		return "running"
 	}
 	return "finished"
@@ -614,7 +614,7 @@ func fmtXactState(xact *xaction.BaseStatsExt) string {
 	if xact.AbortedX {
 		return xactStateAborted
 	}
-	if !xact.EndTimeX.IsZero() {
+	if !xact.EndTime.IsZero() {
 		return xactStateFinished
 	}
 

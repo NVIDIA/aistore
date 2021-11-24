@@ -411,8 +411,8 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 			}
 		}
 		sort.Slice(allStats, func(i, j int) bool {
-			if allStats[i].stats.ID() != allStats[j].stats.ID() {
-				return allStats[i].stats.ID() > allStats[j].stats.ID()
+			if allStats[i].stats.ID != allStats[j].stats.ID {
+				return allStats[i].stats.ID > allStats[j].stats.ID
 			}
 			return allStats[i].targetID < allStats[j].targetID
 		})
@@ -423,19 +423,19 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 		prevID := ""
 		for _, sts := range allStats {
 			if flagIsSet(c, allXactionsFlag) {
-				if prevID != "" && sts.stats.ID() != prevID {
+				if prevID != "" && sts.stats.ID != prevID {
 					fmt.Fprintln(tw, strings.Repeat("\t ", 9 /*colCount*/))
 				}
 				displayRebStats(tw, sts)
 			} else {
-				if prevID != "" && sts.stats.ID() != prevID {
+				if prevID != "" && sts.stats.ID != prevID {
 					break
 				}
 				latestAborted = latestAborted || sts.stats.AbortedX
-				latestFinished = latestFinished || !sts.stats.EndTime().IsZero()
+				latestFinished = latestFinished || !sts.stats.EndTime.IsZero()
 				displayRebStats(tw, sts)
 			}
-			prevID = sts.stats.ID()
+			prevID = sts.stats.ID
 		}
 		tw.Flush()
 
@@ -466,14 +466,14 @@ func displayRebStats(tw *tabwriter.Writer, st *targetRebStats) {
 	}
 
 	endTime := "-"
-	if !st.stats.EndTime().IsZero() {
-		endTime = st.stats.EndTime().Format("01-02 15:04:05")
+	if !st.stats.EndTime.IsZero() {
+		endTime = st.stats.EndTime.Format("01-02 15:04:05")
 	}
-	startTime := st.stats.StartTime().Format("01-02 15:04:05")
+	startTime := st.stats.StartTime.Format("01-02 15:04:05")
 
 	fmt.Fprintf(tw,
 		"%s\t %s\t %d\t %s\t %d\t %s\t %s\t %s\t %t\n",
-		st.stats.ID(), st.targetID,
+		st.stats.ID, st.targetID,
 		extRebStats.RebRxCount, cos.B2S(extRebStats.RebRxSize, 2),
 		extRebStats.RebTxCount, cos.B2S(extRebStats.RebTxSize, 2),
 		startTime, endTime, st.stats.Aborted(),

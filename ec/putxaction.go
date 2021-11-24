@@ -242,7 +242,7 @@ func (r *XactPut) Stats() cluster.XactStats {
 		IsIdle:         r.Pending() == 0,
 	}
 
-	baseStats.ObjCountX = st.PutReq + st.DelReq
-	baseStats.BytesCountX = st.EncodeSize
+	baseStats.ObjCount = st.PutReq + st.DelReq
+	baseStats.BytesCount = st.EncodeSize
 	return baseStats
 }

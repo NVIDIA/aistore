@@ -7,8 +7,6 @@ package cluster
 import (
 	"sync"
 	"time"
-
-	"github.com/NVIDIA/aistore/cmn"
 )
 
 type QuiRes int
@@ -58,13 +56,6 @@ type (
 	}
 
 	XactStats interface {
-		ID() string
-		Kind() string
-		Bck() cmn.Bck
-		StartTime() time.Time
-		EndTime() time.Time
-		ObjCount() int64
-		BytesCount() int64
 		Aborted() bool
 		Running() bool
 		Finished() bool

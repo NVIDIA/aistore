@@ -119,17 +119,17 @@ func (r *DemandBase) Stats() cluster.XactStats { return r.ExtStats() }
 func (r *DemandBase) ExtStats() *BaseStatsExt {
 	stats := &BaseStatsExt{
 		BaseStats: BaseStats{
-			IDX:         r.ID(),
-			KindX:       r.Kind(),
-			StartTimeX:  r.StartTime(),
-			EndTimeX:    r.EndTime(),
-			ObjCountX:   r.ObjCount(),
-			BytesCountX: r.BytesCount(),
-			AbortedX:    r.Aborted(),
+			ID:         r.ID(),
+			Kind:       r.Kind(),
+			StartTime:  r.StartTime(),
+			EndTime:    r.EndTime(),
+			ObjCount:   r.ObjCount(),
+			BytesCount: r.BytesCount(),
+			AbortedX:   r.Aborted(),
 		},
 	}
 	if r.Bck() != nil {
-		stats.BckX = r.Bck().Bck
+		stats.Bck = r.Bck().Bck
 	}
 	stats.Ext = &BaseDemandStatsExt{IsIdle: r.likelyIdle()}
 	return stats

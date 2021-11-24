@@ -64,14 +64,14 @@ func (xs NodesXactStat) Aborted() bool {
 
 func (xs NodesXactStat) ObjCount() (count int64) {
 	for _, stat := range xs {
-		count += stat.ObjCount()
+		count += stat.ObjCount
 	}
 	return
 }
 
 func (xs NodesXactStat) BytesCount() (count int64) {
 	for _, stat := range xs {
-		count += stat.BytesCount()
+		count += stat.BytesCount
 	}
 	return
 }
@@ -85,11 +85,11 @@ func (xs NodesXactStat) TotalRunningTime() time.Duration {
 	)
 	for _, stat := range xs {
 		running = running || stat.Running()
-		if stat.StartTime().Before(start) {
-			start = stat.StartTime()
+		if stat.StartTime.Before(start) {
+			start = stat.StartTime
 		}
-		if stat.EndTime().After(end) {
-			end = stat.EndTime()
+		if stat.EndTime.After(end) {
+			end = stat.EndTime
 		}
 	}
 
@@ -126,7 +126,7 @@ func (xs NodesXactMultiStats) Aborted() bool {
 func (xs NodesXactMultiStats) ObjCount() (count int64) {
 	for _, targetStats := range xs {
 		for _, xaction := range targetStats {
-			count += xaction.ObjCount()
+			count += xaction.ObjCount
 		}
 	}
 	return
@@ -136,7 +136,7 @@ func (xs NodesXactMultiStats) GetNodesXactStat(id string) (xactStat NodesXactSta
 	xactStat = make(NodesXactStat)
 	for target, stats := range xs {
 		for _, stat := range stats {
-			if stat.ID() == id {
+			if stat.ID == id {
 				xactStat[target] = stat
 				break
 			}
