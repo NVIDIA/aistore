@@ -171,7 +171,7 @@ func (r *XactPut) mainLoop() {
 		select {
 		case <-ticker.C:
 			if glog.FastV(4, glog.SmoduleEC) {
-				if s := fmt.Sprintf("%v", r.Stats()); s != "" {
+				if s := fmt.Sprintf("%v", r.Snap()); s != "" {
 					glog.Info(s)
 				}
 			}
@@ -226,10 +226,10 @@ func (r *XactPut) cleanup(req *request, lom *cluster.LOM) {
 	}
 }
 
-func (r *XactPut) Stats() cluster.XactStats {
-	baseStats := r.DemandBase.ExtStats()
+func (r *XactPut) Snap() cluster.XactionSnap {
+	baseSnap := r.DemandBase.ExtSnap()
 	st := r.stats.stats()
-	baseStats.Ext = &ExtECPutStats{
+	baseSnap.Ext = &ExtECPutStats{
 		AvgEncodeTime:  cos.Duration(st.EncodeTime),
 		EncodeSize:     st.EncodeSize,
 		EncodeCount:    st.PutReq,
@@ -242,7 +242,7 @@ func (r *XactPut) Stats() cluster.XactStats {
 		IsIdle:         r.Pending() == 0,
 	}
 
-	baseStats.ObjCount = st.PutReq + st.DelReq
-	baseStats.BytesCount = st.EncodeSize
-	return baseStats
+	baseSnap.Stats.Objs = st.PutReq + st.DelReq // TODO: support in and out
+	baseSnap.Stats.Bytes = st.EncodeSize
+	return baseSnap
 }

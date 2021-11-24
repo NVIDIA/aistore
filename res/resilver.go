@@ -241,7 +241,7 @@ func (rj *joggerCtx) moveObject(lom *cluster.LOM, buf []byte) {
 	}
 
 	rj.xact.BytesAdd(size)
-	rj.xact.ObjectsInc()
+	rj.xact.ObjsInc()
 
 	// NOTE: not deleting _misplaced_ and copied - delegating to `storage cleanup` and/or LRU
 }

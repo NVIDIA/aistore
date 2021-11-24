@@ -20,8 +20,8 @@ import (
 const XactPollTime = time.Second
 
 type (
-	NodesXactStat       map[string]*xaction.BaseStatsExt
-	NodesXactMultiStats map[string][]*xaction.BaseStatsExt
+	NodesXactStat       map[string]*xaction.SnapExt
+	NodesXactMultiStats map[string][]*xaction.SnapExt
 
 	XactStatsHelper interface {
 		Running() bool
@@ -63,15 +63,15 @@ func (xs NodesXactStat) Aborted() bool {
 }
 
 func (xs NodesXactStat) ObjCount() (count int64) {
-	for _, stat := range xs {
-		count += stat.ObjCount
+	for _, snap := range xs {
+		count += snap.Stats.Objs
 	}
 	return
 }
 
 func (xs NodesXactStat) BytesCount() (count int64) {
-	for _, stat := range xs {
-		count += stat.BytesCount
+	for _, snap := range xs {
+		count += snap.Stats.Bytes
 	}
 	return
 }
@@ -125,8 +125,8 @@ func (xs NodesXactMultiStats) Aborted() bool {
 
 func (xs NodesXactMultiStats) ObjCount() (count int64) {
 	for _, targetStats := range xs {
-		for _, xaction := range targetStats {
-			count += xaction.ObjCount
+		for _, snap := range targetStats {
+			count += snap.Stats.Objs
 		}
 	}
 	return
@@ -134,10 +134,10 @@ func (xs NodesXactMultiStats) ObjCount() (count int64) {
 
 func (xs NodesXactMultiStats) GetNodesXactStat(id string) (xactStat NodesXactStat) {
 	xactStat = make(NodesXactStat)
-	for target, stats := range xs {
-		for _, stat := range stats {
-			if stat.ID == id {
-				xactStat[target] = stat
+	for target, snaps := range xs {
+		for _, snap := range snaps {
+			if snap.ID == id {
+				xactStat[target] = snap
 				break
 			}
 		}

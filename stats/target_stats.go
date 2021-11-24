@@ -38,11 +38,11 @@ const (
 	CleanupStoreCount = "cleanup.store.n"
 	VerChangeCount    = "vchange.n"
 	VerChangeSize     = "vchange.size"
-	// rebalance
-	RebTxCount = "reb.tx.n"
-	RebTxSize  = "reb.tx.size"
-	RebRxCount = "reb.rx.n"
-	RebRxSize  = "reb.rx.size"
+	// transmit/receive
+	OutObjCount = "out.obj.n"
+	OutObjSize  = "out.obj.size"
+	InObjCount  = "in.obj.n"
+	InObjSize   = "in.obj.size"
 	// errors
 	ErrCksumCount    = "err.cksum.n"
 	ErrCksumSize     = "err.cksum.size"
@@ -180,11 +180,11 @@ func (r *Trunner) RegMetrics(node *cluster.Snode) {
 
 	r.reg(ErrIOCount, KindCounter)
 
-	// rebalance
-	r.reg(RebTxCount, KindCounter)
-	r.reg(RebTxSize, KindCounter)
-	r.reg(RebRxCount, KindCounter)
-	r.reg(RebRxSize, KindCounter)
+	// transmit/receive
+	r.reg(OutObjCount, KindCounter)
+	r.reg(OutObjSize, KindCounter)
+	r.reg(InObjCount, KindCounter)
+	r.reg(InObjSize, KindCounter)
 
 	// special
 	r.reg(RestartCount, KindCounter)

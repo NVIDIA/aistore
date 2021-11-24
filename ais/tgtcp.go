@@ -247,11 +247,11 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatMountpaths:
 		t.writeJSON(w, r, fs.MountpathsToLists(), httpdaeWhat)
 	case cmn.GetWhatDaemonStatus:
-		var rebStats *stats.RebalanceTargetStats
+		var rebStats *stats.RebalanceTargetSnap
 		if entry := xreg.GetLatest(xreg.XactFilter{Kind: cmn.ActRebalance}); entry != nil {
 			var ok bool
 			if xact := entry.Get(); xact != nil {
-				rebStats, ok = xact.Stats().(*stats.RebalanceTargetStats)
+				rebStats, ok = xact.Snap().(*stats.RebalanceTargetSnap)
 				debug.Assert(ok)
 			}
 		}

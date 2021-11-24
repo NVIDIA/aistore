@@ -253,7 +253,7 @@ func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 		}
 		goto ret
 	}
-	r.ObjectsInc()
+	r.ObjsInc()
 
 	// TODO: Add precise post-transform byte count
 	// (under ETL, sizes of transformed objects are unknown until after the transformation)

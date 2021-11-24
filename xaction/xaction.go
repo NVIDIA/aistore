@@ -29,8 +29,14 @@ type (
 		origBck cmn.Bck
 		sutime  atomic.Int64
 		eutime  atomic.Int64
-		objects atomic.Int64
-		bytes   atomic.Int64
+		stats   struct {
+			objs     atomic.Int64 // locally processed
+			bytes    atomic.Int64
+			outobjs  atomic.Int64 // transmit
+			outbytes atomic.Int64
+			inobjs   atomic.Int64 // receive
+			inbytes  atomic.Int64
+		}
 		abrt    chan struct{}
 		aborted atomic.Bool
 		notif   *NotifXact
@@ -210,27 +216,49 @@ func (*XactBase) Result() (interface{}, error) {
 	return nil, errors.New("getting result is not implemented")
 }
 
-func (xact *XactBase) ObjCount() int64            { return xact.objects.Load() }
-func (xact *XactBase) ObjectsInc() int64          { return xact.objects.Inc() }
-func (xact *XactBase) ObjectsAdd(cnt int64) int64 { return xact.objects.Add(cnt) }
-func (xact *XactBase) BytesCount() int64          { return xact.bytes.Load() }
-func (xact *XactBase) BytesAdd(size int64) int64  { return xact.bytes.Add(size) }
+// base stats: locally processed
+func (xact *XactBase) Objs() int64              { return xact.stats.objs.Load() }
+func (xact *XactBase) ObjsInc() int64           { return xact.stats.objs.Inc() }
+func (xact *XactBase) ObjsAdd(cnt int64) int64  { return xact.stats.objs.Add(cnt) }
+func (xact *XactBase) Bytes() int64             { return xact.stats.bytes.Load() }
+func (xact *XactBase) BytesInc() int64          { return xact.stats.bytes.Inc() }
+func (xact *XactBase) BytesAdd(cnt int64) int64 { return xact.stats.bytes.Add(cnt) }
 
-func (xact *XactBase) Stats() cluster.XactStats {
-	stats := &BaseStats{
-		ID:         xact.ID(),
-		Kind:       xact.Kind(),
-		Bck:        xact.origBck,
-		StartTime:  xact.StartTime(),
-		EndTime:    xact.EndTime(),
-		ObjCount:   xact.ObjCount(),
-		BytesCount: xact.BytesCount(),
-		AbortedX:   xact.Aborted(),
+// base stats: transmit
+func (xact *XactBase) OutObjs() int64              { return xact.stats.outobjs.Load() }
+func (xact *XactBase) OutObjsInc() int64           { return xact.stats.outobjs.Inc() }
+func (xact *XactBase) OutObjsAdd(cnt int64) int64  { return xact.stats.outobjs.Add(cnt) }
+func (xact *XactBase) OutBytes() int64             { return xact.stats.outbytes.Load() }
+func (xact *XactBase) OutBytesInc() int64          { return xact.stats.outbytes.Inc() }
+func (xact *XactBase) OutBytesAdd(cnt int64) int64 { return xact.stats.outbytes.Add(cnt) }
+
+// base stats: receive
+func (xact *XactBase) InObjs() int64              { return xact.stats.inobjs.Load() }
+func (xact *XactBase) InObjsInc() int64           { return xact.stats.inobjs.Inc() }
+func (xact *XactBase) InObjsAdd(cnt int64) int64  { return xact.stats.inobjs.Add(cnt) }
+func (xact *XactBase) InBytes() int64             { return xact.stats.inbytes.Load() }
+func (xact *XactBase) InBytesInc() int64          { return xact.stats.inbytes.Inc() }
+func (xact *XactBase) InBytesAdd(cnt int64) int64 { return xact.stats.inbytes.Add(cnt) }
+
+func (xact *XactBase) Snap() cluster.XactionSnap {
+	stats := &Snap{
+		ID:        xact.ID(),
+		Kind:      xact.Kind(),
+		Bck:       xact.origBck,
+		StartTime: xact.StartTime(),
+		EndTime:   xact.EndTime(),
+		Stats: Stats{
+			Objs:     xact.Objs(),     // locally processed
+			Bytes:    xact.Bytes(),    //
+			OutObjs:  xact.OutObjs(),  // transmit
+			OutBytes: xact.OutBytes(), //
+			InObjs:   xact.InObjs(),   // receive
+			InBytes:  xact.InBytes(),
+		},
+		AbortedX: xact.Aborted(),
 	}
 	return stats
 }
-
-// errors
 
 // RebID helpers
 

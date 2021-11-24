@@ -344,7 +344,7 @@ func (r *XactCreateArchMultiObj) fini(wi *archwi) (errCode int, err error) {
 	errCode, err = r.p.T.FinalizeObj(wi.lom, wi.fqn)
 	cluster.FreeLOM(wi.lom)
 
-	r.ObjectsInc()
+	r.ObjsInc()
 	r.BytesAdd(size - wi.appendPos)
 	return
 }

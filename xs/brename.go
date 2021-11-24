@@ -99,7 +99,7 @@ func (r *bckRename) Run(wg *sync.WaitGroup) {
 	wg.Done()
 	for !finished {
 		time.Sleep(10 * time.Second)
-		rebStats, err := xreg.GetStats(flt)
+		rebStats, err := xreg.GetSnap(flt)
 		debug.AssertNoErr(err)
 		for _, stat := range rebStats {
 			finished = finished || stat.Finished()

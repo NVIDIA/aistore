@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xs"
 )
 
@@ -58,14 +59,13 @@ func (reb *Reb) _waitForSmap() (smap *cluster.Smap, err error) {
 	return nil, fmt.Errorf("%s: timed out waiting for usable Smap", reb.t.Snode())
 }
 
-func (reb *Reb) getStats() (s *stats.ExtRebalanceStats) {
-	s = &stats.ExtRebalanceStats{}
+func (reb *Reb) getStats() (s *xaction.Stats) {
+	s = &xaction.Stats{}
 	statsRunner := reb.statTracker
-	s.RebTxCount = statsRunner.Get(stats.RebTxCount)
-	s.RebTxSize = statsRunner.Get(stats.RebTxSize)
-	s.RebRxCount = statsRunner.Get(stats.RebRxCount)
-	s.RebRxSize = statsRunner.Get(stats.RebRxSize)
-	s.RebID = reb.rebID.Load()
+	s.OutObjs = statsRunner.Get(stats.OutObjCount)
+	s.OutBytes = statsRunner.Get(stats.OutObjSize)
+	s.InObjs = statsRunner.Get(stats.InObjCount)
+	s.InBytes = statsRunner.Get(stats.InObjSize)
 	return
 }
 

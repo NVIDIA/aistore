@@ -114,18 +114,22 @@ func (r *DemandBase) Stop() {
 	r.idle.ticks.Close()
 }
 
-func (r *DemandBase) Stats() cluster.XactStats { return r.ExtStats() }
+func (r *DemandBase) Snap() cluster.XactionSnap { return r.ExtSnap() }
 
-func (r *DemandBase) ExtStats() *BaseStatsExt {
-	stats := &BaseStatsExt{
-		BaseStats: BaseStats{
-			ID:         r.ID(),
-			Kind:       r.Kind(),
-			StartTime:  r.StartTime(),
-			EndTime:    r.EndTime(),
-			ObjCount:   r.ObjCount(),
-			BytesCount: r.BytesCount(),
-			AbortedX:   r.Aborted(),
+func (r *DemandBase) ExtSnap() *SnapExt {
+	stats := &SnapExt{
+		Snap: Snap{
+			ID:        r.ID(),
+			Kind:      r.Kind(),
+			StartTime: r.StartTime(),
+			EndTime:   r.EndTime(),
+			Stats: Stats{
+				InObjs:   r.InObjs(),
+				InBytes:  r.InBytes(),
+				OutObjs:  r.OutObjs(),
+				OutBytes: r.OutBytes(),
+			},
+			AbortedX: r.Aborted(),
 		},
 	}
 	if r.Bck() != nil {

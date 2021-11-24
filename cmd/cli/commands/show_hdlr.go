@@ -25,7 +25,7 @@ import (
 type (
 	daemonTemplateStats struct {
 		DaemonID string
-		Stats    []*xaction.BaseStatsExt
+		Stats    []*xaction.SnapExt
 	}
 
 	xactionTemplateCtx struct {

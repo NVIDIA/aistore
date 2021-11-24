@@ -101,8 +101,8 @@ func (t *singleObjectTask) download() {
 		stats.NamedVal64{Name: stats.DownloadSize, Value: t.currentSize.Load()},
 		stats.NamedVal64{Name: stats.DownloadLatency, Value: int64(t.ended.Load().Sub(t.started.Load()))},
 	)
-	t.parent.ObjectsInc()
-	t.parent.BytesAdd(t.currentSize.Load())
+	t.parent.ObjsInc()                      // TODO: must be InObjsInc
+	t.parent.BytesAdd(t.currentSize.Load()) // ditto bytes
 }
 
 func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Duration) (fatal bool, err error) {

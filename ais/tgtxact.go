@@ -99,7 +99,7 @@ func (t *targetrunner) getXactByID(w http.ResponseWriter, r *http.Request, what,
 	}
 	xact := xreg.GetXact(uuid)
 	if xact != nil {
-		t.writeJSON(w, r, xact.Stats(), what)
+		t.writeJSON(w, r, xact.Snap(), what)
 		return
 	}
 	err := cmn.NewErrXactNotFoundError("[" + uuid + "]")
@@ -112,7 +112,7 @@ func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request,
 		t.writeErrf(w, r, fmtUnknownQue, what)
 		return
 	}
-	stats, err := xreg.GetStats(xactQuery)
+	stats, err := xreg.GetSnap(xactQuery)
 	if err == nil {
 		t.writeJSON(w, r, stats, what)
 		return

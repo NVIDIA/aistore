@@ -113,7 +113,7 @@ func (r *XactPut) workCb(lom *cluster.LOM, buf []byte) {
 	if _, err := addCopies(lom, copies, buf); err != nil {
 		glog.Error(err)
 	} else {
-		r.ObjectsAdd(int64(copies))
+		r.InObjsAdd(int64(copies))
 	}
 	r.DecPending() // to support action renewal on-demand
 	cluster.FreeLOM(lom)
@@ -191,4 +191,4 @@ func (r *XactPut) stop() (err error) {
 	return err
 }
 
-func (r *XactPut) Stats() cluster.XactStats { return r.DemandBase.ExtStats() }
+func (r *XactPut) Stats() cluster.XactionSnap { return r.DemandBase.ExtSnap() }

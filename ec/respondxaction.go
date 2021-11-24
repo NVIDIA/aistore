@@ -233,7 +233,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 			glog.Error(err)
 			return
 		}
-		r.ObjectsInc()
+		r.ObjsInc()
 		r.BytesAdd(hdr.ObjAttrs.Size)
 	default:
 		// should be unreachable
@@ -248,4 +248,4 @@ func (r *XactRespond) stop() {
 	r.Finish(nil)
 }
 
-func (r *XactRespond) Stats() cluster.XactStats { return r.DemandBase.ExtStats() }
+func (r *XactRespond) Snap() cluster.XactionSnap { return r.DemandBase.ExtSnap() }

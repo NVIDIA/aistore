@@ -85,27 +85,26 @@ func NewRebalance(id, kind string, statTracker stats.Tracker) (xact *Rebalance) 
 
 func (*Rebalance) Run(*sync.WaitGroup) { debug.Assert(false) }
 
-// override/extend cmn.XactBase.Stats()
-func (xact *Rebalance) Stats() cluster.XactStats {
+func (xact *Rebalance) Snap() cluster.XactionSnap {
 	var (
-		baseStats   = xact.XactBase.Stats().(*xaction.BaseStats)
-		rebStats    = stats.RebalanceTargetStats{BaseStats: *baseStats}
+		baseSnap    = xact.XactBase.Snap().(*xaction.Snap)
+		rebSnap     = stats.RebalanceTargetSnap{Snap: *baseSnap}
 		statsRunner = xact.statsTracker
 	)
-	rebStats.Ext.RebTxCount = statsRunner.Get(stats.RebTxCount)
-	rebStats.Ext.RebTxSize = statsRunner.Get(stats.RebTxSize)
-	rebStats.Ext.RebRxCount = statsRunner.Get(stats.RebRxCount)
-	rebStats.Ext.RebRxSize = statsRunner.Get(stats.RebRxSize)
+	rebSnap.Stats.OutObjs = statsRunner.Get(stats.OutObjCount)
+	rebSnap.Stats.OutBytes = statsRunner.Get(stats.OutObjSize)
+	rebSnap.Stats.InObjs = statsRunner.Get(stats.InObjCount)
+	rebSnap.Stats.InBytes = statsRunner.Get(stats.InObjSize)
 	if marked := xreg.GetRebMarked(); marked.Xact != nil {
 		var err error
-		rebStats.Ext.RebID, err = xaction.S2RebID(marked.Xact.ID())
+		rebSnap.RebID, err = xaction.S2RebID(marked.Xact.ID())
 		debug.AssertNoErr(err)
 	} else {
-		rebStats.Ext.RebID = 0
+		rebSnap.RebID = 0
 	}
-	rebStats.ObjCount = rebStats.Ext.RebTxCount + rebStats.Ext.RebRxCount
-	rebStats.BytesCount = rebStats.Ext.RebTxSize + rebStats.Ext.RebRxSize
-	return &rebStats
+	rebSnap.Stats.Objs = rebSnap.Stats.OutObjs + rebSnap.Stats.InObjs
+	rebSnap.Stats.Bytes = rebSnap.Stats.OutBytes + rebSnap.Stats.InBytes
+	return &rebSnap
 }
 
 //////////////
@@ -134,7 +133,7 @@ func NewResilver(id, kind string) (xact *Resilver) {
 func (*Resilver) Run(*sync.WaitGroup) { debug.Assert(false) }
 
 // TODO -- FIXME: check "resilver-marked" and unify with rebalance
-func (xact *Resilver) Stats() cluster.XactStats {
-	baseStats := xact.XactBase.Stats().(*xaction.BaseStats)
+func (xact *Resilver) Snap() cluster.XactionSnap {
+	baseStats := xact.XactBase.Snap().(*xaction.Snap)
 	return baseStats
 }

@@ -489,7 +489,7 @@ func (j *clnJ) evict() (size int64, err error) {
 
 	j.ini.StatsT.Add(stats.CleanupStoreSize, bevicted) // TODO -- FIXME
 	j.ini.StatsT.Add(stats.CleanupStoreCount, fevicted)
-	xcln.ObjectsAdd(fevicted)
+	xcln.ObjsAdd(fevicted)
 	xcln.BytesAdd(bevicted)
 	return
 }

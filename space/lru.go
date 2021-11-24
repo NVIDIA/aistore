@@ -367,7 +367,7 @@ func (j *lruJ) evict() (size int64, err error) {
 	}
 	j.ini.StatsT.Add(stats.LruEvictSize, bevicted)
 	j.ini.StatsT.Add(stats.LruEvictCount, fevicted)
-	xlru.ObjectsAdd(fevicted)
+	xlru.ObjsAdd(fevicted)
 	xlru.BytesAdd(bevicted)
 	return
 }

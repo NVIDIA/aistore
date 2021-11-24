@@ -158,8 +158,8 @@ func (reb *Reb) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *cluster.
 		return
 	}
 	reb.statTracker.AddMany(
-		stats.NamedVal64{Name: stats.RebTxCount, Value: 1},
-		stats.NamedVal64{Name: stats.RebTxSize, Value: o.Hdr.ObjAttrs.Size},
+		stats.NamedVal64{Name: stats.OutObjCount, Value: 1},
+		stats.NamedVal64{Name: stats.OutObjSize, Value: o.Hdr.ObjAttrs.Size},
 	)
 	return
 }

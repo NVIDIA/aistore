@@ -116,13 +116,13 @@ const (
 	XactionBody        = "{{range $key, $xact := $daemon.Stats}}" + XactionStatsBody + "{{end}}" +
 		"{{if $daemon.Stats}}\t \t \t \t \t \t \t \t{{if $.Verbose}} \t {{end}}\n{{end}}"
 	XactionStatsBody = "{{ $daemon.DaemonID }}\t " +
-		"{{if $xact.ID}}{{$xact.IDX}}{{else}}-{{end}}\t " +
+		"{{if $xact.ID}}{{$xact.ID}}{{else}}-{{end}}\t " +
 		"{{$xact.Kind}}\t " +
-		"{{if $xact.BckX.Name}}{{$xact.BckX.Name}}{{else}}-{{end}}\t " +
-		"{{if (eq $xact.ObjCountX 0) }}-{{else}}{{$xact.ObjCountX}}{{end}}\t " +
-		"{{if (eq $xact.BytesCountX 0) }}-{{else}}{{FormatBytesSigned $xact.BytesCountX 2}}{{end}}\t " +
-		"{{FormatTime $xact.StartTimeX}}\t " +
-		"{{if (IsUnsetTime $xact.EndTimeX)}}-{{else}}{{FormatTime $xact.EndTimeX}}{{end}}\t " +
+		"{{if $xact.Bck.Name}}{{$xact.Bck.Name}}{{else}}-{{end}}\t " +
+		"{{if (eq $xact.Stats.Objs 0) }}-{{else}}{{$xact.Stats.Objs}}{{end}}\t " +
+		"{{if (eq $xact.Stats.Bytes 0) }}-{{else}}{{FormatBytesSigned $xact.Stats.Bytes 2}}{{end}}\t " +
+		"{{FormatTime $xact.StartTime}}\t " +
+		"{{if (IsUnsetTime $xact.EndTime)}}-{{else}}{{FormatTime $xact.EndTime}}{{end}}\t " +
 		"{{FormatXactState $xact}}\n"
 	XactionsExtBodyTmpl = "{{if $.Verbose }}" + // if not nil
 		"\n{{range $daemon := $.Stats }}" +
@@ -138,17 +138,17 @@ const (
 		"{{range $daemon := $.Stats }}" + XactionECGetBody + "{{end}}"
 	XactionECGetBody      = "{{range $key, $xact := $daemon.Stats}}" + XactionECGetStatsBody + "{{end}}"
 	XactionECGetStatsBody = "{{ $daemon.DaemonID }}\t " +
-		"{{if $xact.BckX.Name}}{{$xact.BckX.Name}}{{else}}-{{end}}\t " +
-		"{{if (eq $xact.ObjCountX 0) }}-{{else}}{{$xact.ObjCountX}}{{end}}\t " +
-		"{{if (eq $xact.BytesCountX 0) }}-{{else}}{{FormatBytesSigned $xact.BytesCountX 2}}{{end}}\t " +
+		"{{if $xact.Bck.Name}}{{$xact.Bck.Name}}{{else}}-{{end}}\t " +
+		"{{if (eq $xact.Stats.Objs 0) }}-{{else}}{{$xact.Stats.Objs}}{{end}}\t " +
+		"{{if (eq $xact.Bytes 0) }}-{{else}}{{FormatBytesSigned $xact.Bytes 2}}{{end}}\t " +
 
 		"{{ $ext := ExtECGetStats $xact }}" +
 		"{{if (eq $ext.ErrCount 0) }}-{{else}}{{$ext.ErrCount}}{{end}}\t " +
 		"{{if (eq $ext.AvgQueueLen 0.0) }}-{{else}}{{ FormatFloat $ext.AvgQueueLen}}{{end}}\t " +
 		"{{if (eq $ext.AvgObjTime 0) }}-{{else}}{{FormatMilli $ext.AvgObjTime}}{{end}}\t " +
 
-		"{{FormatTime $xact.StartTimeX}}\t " +
-		"{{if (IsUnsetTime $xact.EndTimeX)}}-{{else}}{{FormatTime $xact.EndTimeX}}{{end}}\t " +
+		"{{FormatTime $xact.StartTime}}\t " +
+		"{{if (IsUnsetTime $xact.EndTime)}}-{{else}}{{FormatTime $xact.EndTime}}{{end}}\t " +
 		"{{$xact.AbortedX}}\n"
 
 	XactionECPutStatsHeader = "NODE\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t ENC TIME\t START\t END\t ABORTED\n"
@@ -166,8 +166,8 @@ const (
 		"{{if (eq $ext.AvgObjTime 0) }}-{{else}}{{FormatMilli $ext.AvgObjTime}}{{end}}\t " +
 		"{{if (eq $ext.AvgEncodeTime 0) }}-{{else}}{{FormatMilli $ext.AvgEncodeTime}}{{end}}\t " +
 
-		"{{FormatTime $xact.StartTimeX}}\t " +
-		"{{if (IsUnsetTime $xact.EndTimeX)}}-{{else}}{{FormatTime $xact.EndTimeX}}{{end}}\t " +
+		"{{FormatTime $xact.StartTime}}\t " +
+		"{{if (IsUnsetTime $xact.EndTime)}}-{{else}}{{FormatTime $xact.EndTime}}{{end}}\t " +
 		"{{$xact.AbortedX}}\n"
 
 	// Buckets templates
@@ -583,7 +583,7 @@ func fmtACL(acl cmn.AccessAttrs) string {
 	return acl.Describe()
 }
 
-func extECGetStats(base *xaction.BaseStatsExt) *ec.ExtECGetStats {
+func extECGetStats(base *xaction.SnapExt) *ec.ExtECGetStats {
 	ecGet := &ec.ExtECGetStats{}
 	if err := cos.MorphMarshal(base.Ext, ecGet); err != nil {
 		return &ec.ExtECGetStats{}
@@ -591,7 +591,7 @@ func extECGetStats(base *xaction.BaseStatsExt) *ec.ExtECGetStats {
 	return ecGet
 }
 
-func extECPutStats(base *xaction.BaseStatsExt) *ec.ExtECPutStats {
+func extECPutStats(base *xaction.SnapExt) *ec.ExtECPutStats {
 	ecPut := &ec.ExtECPutStats{}
 	if err := cos.MorphMarshal(base.Ext, ecPut); err != nil {
 		return &ec.ExtECPutStats{}
@@ -610,7 +610,7 @@ func fmtNameArch(val string, flags uint16) string {
 	return "    " + val
 }
 
-func fmtXactState(xact *xaction.BaseStatsExt) string {
+func fmtXactState(xact *xaction.SnapExt) string {
 	if xact.AbortedX {
 		return xactStateAborted
 	}

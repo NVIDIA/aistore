@@ -212,7 +212,7 @@ func (t *bsummXact) Run(*sync.WaitGroup) {
 							summary.ObjCount++
 						}
 
-						t.ObjectsInc()
+						t.ObjsInc()
 						t.BytesAdd(v.Size)
 					}
 
@@ -269,7 +269,7 @@ func (t *bsummXact) doBckSummaryFast(bck *cluster.Bck) (objCount, size uint64, e
 				gatomic.AddUint64(&objCount, uint64(fileCount))
 				gatomic.AddUint64(&size, dirSize)
 
-				t.ObjectsAdd(int64(fileCount))
+				t.ObjsAdd(int64(fileCount))
 				t.BytesAdd(int64(dirSize))
 				return nil
 			}

@@ -128,8 +128,8 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 		glog.Infof("%s: from %s %s", reb.t.Snode(), tsid, lom)
 	}
 	reb.statTracker.AddMany(
-		stats.NamedVal64{Name: stats.RebRxCount, Value: 1},
-		stats.NamedVal64{Name: stats.RebRxSize, Value: hdr.ObjAttrs.Size},
+		stats.NamedVal64{Name: stats.InObjCount, Value: 1},
+		stats.NamedVal64{Name: stats.InObjSize, Value: hdr.ObjAttrs.Size},
 	)
 	// ACK
 	tsi := smap.GetTarget(tsid)

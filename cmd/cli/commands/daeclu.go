@@ -35,7 +35,7 @@ type (
 
 	targetRebStats struct {
 		targetID string
-		stats    *xaction.BaseStatsExt
+		stats    *xaction.SnapExt
 	}
 )
 
@@ -460,11 +460,6 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 }
 
 func displayRebStats(tw *tabwriter.Writer, st *targetRebStats) {
-	extRebStats := &stats.ExtRebalanceStats{}
-	if err := cos.MorphMarshal(st.stats.Ext, &extRebStats); err != nil {
-		return
-	}
-
 	endTime := "-"
 	if !st.stats.EndTime.IsZero() {
 		endTime = st.stats.EndTime.Format("01-02 15:04:05")
@@ -474,8 +469,8 @@ func displayRebStats(tw *tabwriter.Writer, st *targetRebStats) {
 	fmt.Fprintf(tw,
 		"%s\t %s\t %d\t %s\t %d\t %s\t %s\t %s\t %t\n",
 		st.stats.ID, st.targetID,
-		extRebStats.RebRxCount, cos.B2S(extRebStats.RebRxSize, 2),
-		extRebStats.RebTxCount, cos.B2S(extRebStats.RebTxSize, 2),
+		st.stats.Snap.Stats.InObjs, cos.B2S(st.stats.Snap.Stats.InBytes, 2),
+		st.stats.Snap.Stats.OutObjs, cos.B2S(st.stats.Snap.Stats.OutBytes, 2),
 		startTime, endTime, st.stats.Aborted(),
 	)
 }

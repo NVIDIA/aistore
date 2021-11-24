@@ -2387,10 +2387,9 @@ func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 
 	stats, err := api.GetXactionStatsByID(baseParams, xactID)
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, stats.ObjCount() == int64(m.num), "Stats expected to return %d objects in total", m.num)
+	tassert.Errorf(t, stats.ObjCount() == int64(m.num), "expected %d objects in total, got %d", m.num, stats.ObjCount())
 	expectedBytesCnt := int64(m.fileSize * uint64(m.num))
-	tassert.Errorf(t, stats.BytesCount() == expectedBytesCnt, "Stats expected to return %d bytes, got %d",
-		expectedBytesCnt, stats.BytesCount())
+	tassert.Errorf(t, stats.BytesCount() == expectedBytesCnt, "expected %d bytes, got %d", expectedBytesCnt, stats.BytesCount())
 }
 
 func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext) {

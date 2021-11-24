@@ -261,7 +261,7 @@ func TestXactionQueryFinished(t *testing.T) {
 				query.Kind = xactBck1.Kind()
 			}
 			query.OnlyRunning = &tc.showActive
-			stats, err := xreg.GetStats(query)
+			stats, err := xreg.GetSnap(query)
 			tassert.Errorf(t, err == nil, "Error fetching Xact Stats %v for query %v", err, query)
 			tassert.Errorf(t, len(stats) == tc.expectedStatsLen, "Length of result: %d != %d", len(stats), tc.expectedStatsLen)
 		})

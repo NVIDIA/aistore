@@ -267,9 +267,9 @@ func (r *registry) doAbortByID(uuid string) (aborted bool) {
 	return true
 }
 
-func GetStats(flt XactFilter) ([]cluster.XactStats, error) { return defaultReg.getStats(flt) }
+func GetSnap(flt XactFilter) ([]cluster.XactionSnap, error) { return defaultReg.getSnap(flt) }
 
-func (r *registry) getStats(flt XactFilter) ([]cluster.XactStats, error) {
+func (r *registry) getSnap(flt XactFilter) ([]cluster.XactionSnap, error) {
 	if flt.ID != "" {
 		if flt.OnlyRunning == nil || (flt.OnlyRunning != nil && *flt.OnlyRunning) {
 			return r.matchXactsStatsByID(flt.ID)
@@ -294,18 +294,18 @@ func (r *registry) getStats(flt XactFilter) ([]cluster.XactStats, error) {
 
 		// TODO: investigate how does the following fare against genericMatcher
 		if flt.OnlyRunning != nil && *flt.OnlyRunning {
-			matching := make([]cluster.XactStats, 0, 10)
+			matching := make([]cluster.XactionSnap, 0, 10)
 			if flt.Kind == "" {
 				for kind := range xaction.Table {
 					entry := r.getRunning(XactFilter{Kind: kind, Bck: flt.Bck})
 					if entry != nil {
-						matching = append(matching, entry.Get().Stats())
+						matching = append(matching, entry.Get().Snap())
 					}
 				}
 			} else {
 				entry := r.getRunning(XactFilter{Kind: flt.Kind, Bck: flt.Bck})
 				if entry != nil {
-					matching = append(matching, entry.Get().Stats())
+					matching = append(matching, entry.Get().Snap())
 				}
 			}
 			return matching, nil
@@ -345,7 +345,7 @@ func (r *registry) abort(args abortArgs) {
 	})
 }
 
-func (r *registry) matchingXactsStats(match func(xact cluster.Xact) bool) []cluster.XactStats {
+func (r *registry) matchingXactsStats(match func(xact cluster.Xact) bool) []cluster.XactionSnap {
 	matchingEntries := make([]Renewable, 0, 20)
 	r.entries.forEach(func(entry Renewable) bool {
 		if !match(entry.Get()) {
@@ -355,14 +355,14 @@ func (r *registry) matchingXactsStats(match func(xact cluster.Xact) bool) []clus
 		return true
 	})
 	// TODO: we cannot do this inside `forEach` because - nested locks
-	sts := make([]cluster.XactStats, 0, len(matchingEntries))
+	sts := make([]cluster.XactionSnap, 0, len(matchingEntries))
 	for _, entry := range matchingEntries {
-		sts = append(sts, entry.Get().Stats())
+		sts = append(sts, entry.Get().Snap())
 	}
 	return sts
 }
 
-func (r *registry) matchXactsStatsByID(xactID string) ([]cluster.XactStats, error) {
+func (r *registry) matchXactsStatsByID(xactID string) ([]cluster.XactionSnap, error) {
 	matchedStat := r.matchingXactsStats(func(xact cluster.Xact) bool {
 		return xact.ID() == xactID
 	})

@@ -100,7 +100,7 @@ func (r *streamingX) TxnAbort() {
 	r.XactBase.Finish(err)
 }
 
-func (r *streamingX) Stats() cluster.XactStats { return r.DemandBase.ExtStats() }
+func (r *streamingX) Snap() cluster.XactionSnap { return r.DemandBase.ExtSnap() }
 
 func (r *streamingX) raiseErr(err error, errCode int, contOnErr bool) {
 	if cmn.IsErrAborted(err) {

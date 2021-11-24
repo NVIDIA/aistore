@@ -132,21 +132,13 @@ type (
 		cmu       sync.RWMutex // ctracker vs Prometheus Collect()
 	}
 
-	RebalanceTargetStats struct {
-		xaction.BaseStats
-		Ext ExtRebalanceStats `json:"ext"`
-	}
-
-	ExtRebalanceStats struct {
-		RebTxCount int64 `json:"reb.tx.n,string"`
-		RebTxSize  int64 `json:"reb.tx.size,string"`
-		RebRxCount int64 `json:"reb.rx.n,string"`
-		RebRxSize  int64 `json:"reb.rx.size,string"`
-		RebID      int64 `json:"glob.id,string"`
+	RebalanceTargetSnap struct {
+		xaction.Snap
+		RebID int64 `json:"glob.id,string"`
 	}
 
 	TargetStatus struct {
-		RebalanceStats *RebalanceTargetStats `json:"rebalance_stats,omitempty"`
+		RebalanceStats *RebalanceTargetSnap `json:"rebalance_stats,omitempty"`
 	}
 
 	DaemonStatus struct {
@@ -165,9 +157,8 @@ type (
 
 // interface guard
 var (
-	_ Tracker           = (*Prunner)(nil)
-	_ Tracker           = (*Trunner)(nil)
-	_ cluster.XactStats = (*RebalanceTargetStats)(nil)
+	_ Tracker = (*Prunner)(nil)
+	_ Tracker = (*Trunner)(nil)
 )
 
 //

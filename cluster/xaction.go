@@ -31,15 +31,19 @@ type (
 		Bck() *Bck
 		StartTime() time.Time
 		EndTime() time.Time
-		ObjCount() int64
-		BytesCount() int64
+		Objs() int64     // locally processed
+		Bytes() int64    //
+		OutObjs() int64  // transmit
+		OutBytes() int64 //
+		InObjs() int64   // receive
+		InBytes() int64
 		Finished() bool
 		Aborted() bool
 		AbortedAfter(time.Duration) bool
 		Quiesce(time.Duration, QuiCB) QuiRes
 		ChanAbort() <-chan struct{}
 		Result() (interface{}, error)
-		Stats() XactStats
+		Snap() XactionSnap
 
 		// reporting: log, err
 		String() string
@@ -50,12 +54,19 @@ type (
 		Abort(error) bool
 		AddNotif(n Notif)
 
-		BytesAdd(int64) int64
-		ObjectsInc() int64
-		ObjectsAdd(int64) int64
+		// stats
+		BytesAdd(int64) int64    // locally processed
+		ObjsInc() int64          //
+		ObjsAdd(int64) int64     //
+		OutBytesAdd(int64) int64 // transmit
+		OutObjsInc() int64       //
+		OutObjsAdd(int64) int64  //
+		InBytesAdd(int64) int64  // receive
+		InObjsInc() int64
+		InObjsAdd(int64) int64
 	}
 
-	XactStats interface {
+	XactionSnap interface {
 		Aborted() bool
 		Running() bool
 		Finished() bool

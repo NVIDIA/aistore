@@ -77,7 +77,7 @@ var _ = Describe("Notifications xaction test", func() {
 			return n
 		}
 
-		baseXact = func(xactID string, counts ...int64) *xaction.BaseStatsExt {
+		baseXact = func(xactID string, counts ...int64) *xaction.SnapExt {
 			var (
 				objCount  int64
 				byteCount int64
@@ -88,20 +88,22 @@ var _ = Describe("Notifications xaction test", func() {
 			if len(counts) > 1 {
 				byteCount = counts[1]
 			}
-			return &xaction.BaseStatsExt{BaseStats: xaction.BaseStats{
-				ID:         xactID,
-				BytesCount: byteCount,
-				ObjCount:   objCount,
+			return &xaction.SnapExt{Snap: xaction.Snap{
+				ID: xactID,
+				Stats: xaction.Stats{
+					Bytes: byteCount,
+					Objs:  objCount,
+				},
 			}}
 		}
 
-		finishedXact = func(xactID string, counts ...int64) (stats *xaction.BaseStatsExt) {
+		finishedXact = func(xactID string, counts ...int64) (stats *xaction.SnapExt) {
 			stats = baseXact(xactID, counts...)
 			stats.EndTime = time.Now()
 			return
 		}
 
-		abortedXact = func(xactID string, counts ...int64) (stats *xaction.BaseStatsExt) {
+		abortedXact = func(xactID string, counts ...int64) (stats *xaction.SnapExt) {
 			stats = finishedXact(xactID, counts...)
 			stats.AbortedX = true
 			return
@@ -196,19 +198,19 @@ var _ = Describe("Notifications xaction test", func() {
 			err := n.handleProgress(nl, targets[target1ID], cos.MustMarshal(statsFirst), nil)
 			Expect(err).To(BeNil())
 			val, _ := nl.NodeStats().Load(target1ID)
-			statsXact, ok := val.(*xaction.BaseStatsExt)
+			statsXact, ok := val.(*xaction.SnapExt)
 			Expect(ok).To(BeTrue())
-			Expect(statsXact.ObjCount).To(BeEquivalentTo(initObjCount))
-			Expect(statsXact.BytesCount).To(BeEquivalentTo(initByteCount))
+			Expect(statsXact.Stats.Objs).To(BeEquivalentTo(initObjCount))
+			Expect(statsXact.Stats.Bytes).To(BeEquivalentTo(initByteCount))
 
 			// Next a Finished notification with stats
 			err = n.handleFinished(nl, targets[target1ID], cos.MustMarshal(statsProgress), nil)
 			Expect(err).To(BeNil())
 			val, _ = nl.NodeStats().Load(target1ID)
-			statsXact, ok = val.(*xaction.BaseStatsExt)
+			statsXact, ok = val.(*xaction.SnapExt)
 			Expect(ok).To(BeTrue())
-			Expect(statsXact.ObjCount).To(BeEquivalentTo(updatedObjCount))
-			Expect(statsXact.BytesCount).To(BeEquivalentTo(updatedByteCount))
+			Expect(statsXact.Stats.Objs).To(BeEquivalentTo(updatedObjCount))
+			Expect(statsXact.Stats.Bytes).To(BeEquivalentTo(updatedByteCount))
 		})
 	})
 

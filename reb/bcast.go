@@ -14,7 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xreg"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -23,15 +23,15 @@ type (
 	syncCallback func(tsi *cluster.Snode, md *rebArgs) (ok bool)
 
 	Status struct {
-		Targets     cluster.Nodes           `json:"targets"`             // targets I'm waiting for ACKs from
-		SmapVersion int64                   `json:"smap_version,string"` // current Smap version (via smapOwner)
-		RebVersion  int64                   `json:"reb_version,string"`  // Smap version of *this* rebalancing op
-		RebID       int64                   `json:"reb_id,string"`       // rebalance ID
-		StatsDelta  stats.ExtRebalanceStats `json:"stats_delta"`         // objects and sizes sent/recv-ed
-		Stage       uint32                  `json:"stage"`               // the current stage - see enum above
-		Aborted     bool                    `json:"aborted"`             // aborted?
-		Running     bool                    `json:"running"`             // running?
-		Quiescent   bool                    `json:"quiescent"`           // true when queue is empty
+		Targets     cluster.Nodes `json:"targets"`             // targets I'm waiting for ACKs from
+		SmapVersion int64         `json:"smap_version,string"` // current Smap version (via smapOwner)
+		RebVersion  int64         `json:"reb_version,string"`  // Smap version of *this* rebalancing op
+		RebID       int64         `json:"reb_id,string"`       // rebalance ID
+		StatsDelta  xaction.Stats `json:"stats_delta"`         // transmitted/received since the prev req.
+		Stage       uint32        `json:"stage"`               // the current stage - see enum above
+		Aborted     bool          `json:"aborted"`             // aborted?
+		Running     bool          `json:"running"`             // running?
+		Quiescent   bool          `json:"quiescent"`           // true when queue is empty
 	}
 )
 
@@ -59,17 +59,17 @@ func (reb *Reb) RebStatus(status *Status) {
 	if rsmap != nil {
 		status.RebVersion = rsmap.Version
 	}
-	beginStats := (*stats.ExtRebalanceStats)(reb.beginStats.Load())
+	beginStats := (*xaction.Stats)(reb.beginStats.Load())
 	curStats := reb.getStats()
 	reb.mu.RUnlock()
 	// stats
 	if beginStats == nil {
 		return
 	}
-	status.StatsDelta.RebTxCount = curStats.RebTxCount - beginStats.RebTxCount
-	status.StatsDelta.RebTxSize = curStats.RebTxSize - beginStats.RebTxSize
-	status.StatsDelta.RebRxCount = curStats.RebRxCount - beginStats.RebRxCount
-	status.StatsDelta.RebRxSize = curStats.RebRxSize - beginStats.RebRxSize
+	status.StatsDelta.OutObjs = curStats.OutObjs - beginStats.OutObjs
+	status.StatsDelta.OutBytes = curStats.OutBytes - beginStats.OutBytes
+	status.StatsDelta.InObjs = curStats.InObjs - beginStats.InObjs
+	status.StatsDelta.InBytes = curStats.InBytes - beginStats.InBytes
 
 	// wack info
 	if status.Stage != rebStageWaitAck {

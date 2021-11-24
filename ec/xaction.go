@@ -177,7 +177,8 @@ func newReplicaResponse(attrs *cmn.ObjAttrs, bck *cluster.Bck,
 // encoding or to send requested "object" to a client. In the latter case
 // if the local object does not exist, it sends an empty body and sets
 // exists=false in response header
-func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn string, bck *cluster.Bck, objName string, md *Metadata) (err error) {
+func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn string, bck *cluster.Bck, objName string,
+	md *Metadata) (err error) {
 	var (
 		reader   cos.ReadOpenCloser
 		objAttrs cmn.ObjAttrs
@@ -202,8 +203,8 @@ func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn s
 	}
 	rHdr.Opaque = ireq.NewPack(r.t.ByteMM())
 
-	r.ObjectsInc()
-	r.BytesAdd(objAttrs.Size)
+	r.ObjsInc()               // TODO: must be out-inc
+	r.BytesAdd(objAttrs.Size) // ditto
 	r.IncPending()
 	cb := func(hdr transport.ObjHdr, _ io.ReadCloser, _ interface{}, err error) {
 		r.t.ByteMM().Free(hdr.Opaque)

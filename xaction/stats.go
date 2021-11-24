@@ -13,18 +13,27 @@ import (
 )
 
 type (
-	BaseStats struct {
-		ID         string    `json:"id"`
-		Kind       string    `json:"kind"`
-		Bck        cmn.Bck   `json:"bck"`
-		StartTime  time.Time `json:"start_time"`
-		EndTime    time.Time `json:"end_time"`
-		ObjCount   int64     `json:"obj_count,string"`
-		BytesCount int64     `json:"bytes_count,string"`
-		AbortedX   bool      `json:"aborted"`
+	Snap struct {
+		ID        string    `json:"id"`
+		Kind      string    `json:"kind"`
+		Bck       cmn.Bck   `json:"bck"`
+		StartTime time.Time `json:"start-time"`
+		EndTime   time.Time `json:"end-time"`
+		Stats     Stats     `json:"stats"`
+		AbortedX  bool      `json:"aborted"`
 	}
-	BaseStatsExt struct {
-		BaseStats
+
+	Stats struct {
+		Objs     int64 `json:"loc-objs,string"`  // locally processed
+		Bytes    int64 `json:"loc-bytes,string"` //
+		OutObjs  int64 `json:"out-objs,string"`  // transmit
+		OutBytes int64 `json:"out-bytes,string"` //
+		InObjs   int64 `json:"in-objs,string"`   // receive
+		InBytes  int64 `json:"in-bytes,string"`
+	}
+
+	SnapExt struct {
+		Snap
 		Ext interface{} `json:"ext"`
 	}
 	BaseDemandStatsExt struct {
@@ -47,15 +56,15 @@ type (
 )
 
 // interface guard
-var _ cluster.XactStats = (*BaseStats)(nil)
+var _ cluster.XactionSnap = (*Snap)(nil)
 
 ///////////////
-// BaseStats //
+// Snap //
 ///////////////
 
-func (b *BaseStats) Aborted() bool  { return b.AbortedX }
-func (b *BaseStats) Running() bool  { return b.EndTime.IsZero() }
-func (b *BaseStats) Finished() bool { return !b.EndTime.IsZero() }
+func (b *Snap) Aborted() bool  { return b.AbortedX }
+func (b *Snap) Running() bool  { return b.EndTime.IsZero() }
+func (b *Snap) Finished() bool { return !b.EndTime.IsZero() }
 
 //////////////
 // QueryMsg //

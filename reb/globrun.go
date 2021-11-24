@@ -679,8 +679,8 @@ func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, arg 
 		return
 	}
 	rj.m.statTracker.AddMany(
-		stats.NamedVal64{Name: stats.RebTxCount, Value: 1},
-		stats.NamedVal64{Name: stats.RebTxSize, Value: hdr.ObjAttrs.Size},
+		stats.NamedVal64{Name: stats.OutObjCount, Value: 1},
+		stats.NamedVal64{Name: stats.OutObjSize, Value: hdr.ObjAttrs.Size},
 	)
 }
 

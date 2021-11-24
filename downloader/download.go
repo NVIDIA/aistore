@@ -347,4 +347,4 @@ func (d *Downloader) checkJob(req *request) (*downloadJobInfo, error) {
 	return jInfo, nil
 }
 
-func (d *Downloader) Stats() cluster.XactStats { return d.DemandBase.ExtStats() }
+func (d *Downloader) Snap() cluster.XactionSnap { return d.DemandBase.ExtSnap() }

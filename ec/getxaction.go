@@ -288,16 +288,16 @@ func (r *XactGet) removeMpath(mpath string) {
 	delete(r.getJoggers, mpath)
 }
 
-func (r *XactGet) Stats() cluster.XactStats {
-	baseStats := r.DemandBase.ExtStats()
+func (r *XactGet) Snap() cluster.XactionSnap {
+	baseSnap := r.DemandBase.ExtSnap()
 	st := r.stats.stats()
-	baseStats.Ext = &ExtECGetStats{
+	baseSnap.Ext = &ExtECGetStats{
 		AvgTime:     cos.Duration(st.DecodeTime),
 		ErrCount:    st.DecodeErr,
 		AvgObjTime:  cos.Duration(st.ObjTime),
 		AvgQueueLen: st.QueueLen,
 		IsIdle:      r.Pending() == 0,
 	}
-	baseStats.ObjCount = st.GetReq
-	return baseStats
+	baseSnap.Stats.Objs = st.GetReq
+	return baseSnap
 }
