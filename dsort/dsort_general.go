@@ -384,8 +384,8 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 					metrics.mu.Unlock()
 
 					ds.m.ctx.stats.AddMany(
-						stats.NamedVal64{Name: stats.DSortCreationReqCount, Value: 1},
-						stats.NamedVal64{Name: stats.DSortCreationReqLatency, Value: int64(delta)},
+						cos.NamedVal64{Name: stats.DSortCreationReqCount, Value: 1},
+						cos.NamedVal64{Name: stats.DSortCreationReqLatency, Value: int64(delta)},
 					)
 				}
 				wg.Done()
@@ -427,8 +427,8 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 				metrics.mu.Unlock()
 
 				ds.m.ctx.stats.AddMany(
-					stats.NamedVal64{Name: stats.DSortCreationRespCount, Value: 1},
-					stats.NamedVal64{Name: stats.DSortCreationRespLatency, Value: int64(delta)},
+					cos.NamedVal64{Name: stats.DSortCreationRespCount, Value: 1},
+					cos.NamedVal64{Name: stats.DSortCreationRespLatency, Value: int64(delta)},
 				)
 			}
 

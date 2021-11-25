@@ -1,7 +1,7 @@
 // Package transport provides streaming object-based transport over http for intra-cluster continuous
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -42,13 +42,6 @@ type (
 		Config       *cmn.Config   // config
 		SenderID     string        // optional send ID (e.g., xaction ID)
 		SizePDU      int32         // 0(zero): no PDUs; must be below MaxSizePDU; unknown size _requires_ PDUs
-	}
-	// stream stats
-	Stats struct {
-		Num            atomic.Int64 // number of transferred objects including zero size (header-only) objects
-		Size           atomic.Int64 // transferred object size (does not include transport headers)
-		Offset         atomic.Int64 // stream offset, in bytes
-		CompressedSize atomic.Int64 // compressed size (NOTE: converges to the actual compressed size over time)
 	}
 	EndpointStats map[uint64]*Stats // all stats for a given (network, trname) endpoint indexed by session ID
 

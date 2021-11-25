@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/sys"
+	"github.com/NVIDIA/aistore/transport"
 )
 
 // Naming Convention:
@@ -38,11 +39,13 @@ const (
 	CleanupStoreCount = "cleanup.store.n"
 	VerChangeCount    = "vchange.n"
 	VerChangeSize     = "vchange.size"
-	// transmit/receive
-	OutObjCount = "out.obj.n"
-	OutObjSize  = "out.obj.size"
-	InObjCount  = "in.obj.n"
-	InObjSize   = "in.obj.size"
+
+	// intra-cluster transmit & receive
+	StreamsOutObjCount = transport.OutObjCount
+	StreamsOutObjSize  = transport.OutObjSize
+	StreamsInObjCount  = transport.InObjCount
+	StreamsInObjSize   = transport.InObjSize
+
 	// errors
 	ErrCksumCount    = "err.cksum.n"
 	ErrCksumSize     = "err.cksum.size"
@@ -115,7 +118,7 @@ func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
 	r.statsRunner.daemon = t
 
 	r.statsRunner.stopCh = make(chan struct{}, 4)
-	r.statsRunner.workCh = make(chan NamedVal64, 256)
+	r.statsRunner.workCh = make(chan cos.NamedVal64, 256)
 
 	r.Core.initMetricClient(t.Snode(), &r.statsRunner)
 	return &r.statsRunner.startedUp
@@ -180,11 +183,11 @@ func (r *Trunner) RegMetrics(node *cluster.Snode) {
 
 	r.reg(ErrIOCount, KindCounter)
 
-	// transmit/receive
-	r.reg(OutObjCount, KindCounter)
-	r.reg(OutObjSize, KindCounter)
-	r.reg(InObjCount, KindCounter)
-	r.reg(InObjSize, KindCounter)
+	// streams
+	r.reg(StreamsOutObjCount, KindCounter)
+	r.reg(StreamsOutObjSize, KindCounter)
+	r.reg(StreamsInObjCount, KindCounter)
+	r.reg(StreamsInObjSize, KindCounter)
 
 	// special
 	r.reg(RestartCount, KindCounter)
@@ -303,7 +306,7 @@ func (r *Trunner) logDiskStats() {
 	}
 }
 
-func (r *Trunner) doAdd(nv NamedVal64) {
+func (r *Trunner) doAdd(nv cos.NamedVal64) {
 	var (
 		s     = r.Core
 		name  = nv.Name

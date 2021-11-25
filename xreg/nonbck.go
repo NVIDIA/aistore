@@ -23,15 +23,12 @@ func (r *registry) regNonBckXact(entry Renewable) {
 	r.nonbckXacts[entry.Kind()] = entry
 }
 
-func RenewRebalance(id int64, statTracker stats.Tracker) RenewRes {
-	return defaultReg.renewRebalance(id, statTracker)
+func RenewRebalance(id int64) RenewRes {
+	return defaultReg.renewRebalance(id)
 }
 
-func (r *registry) renewRebalance(id int64, statTracker stats.Tracker) RenewRes {
-	e := r.nonbckXacts[cmn.ActRebalance].New(Args{
-		UUID:   xaction.RebID2S(id),
-		Custom: statTracker,
-	}, nil)
+func (r *registry) renewRebalance(id int64) RenewRes {
+	e := r.nonbckXacts[cmn.ActRebalance].New(Args{UUID: xaction.RebID2S(id)}, nil)
 	return r.renew(e, nil)
 }
 

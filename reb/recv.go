@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xreg"
 )
@@ -103,7 +102,7 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 
 	if stage := reb.stages.stage.Load(); stage >= rebStageFin {
 		reb.laterx.Store(true)
-		if stage > rebStageFin {
+		if stage > rebStageFin && glog.FastV(4, glog.SmoduleReb) {
 			glog.Errorf("%s: post stage-fin receive from %s %s (stage %s)",
 				reb.t.Snode(), tsid, lom, stages[stage])
 		}
@@ -127,10 +126,9 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 	if glog.FastV(5, glog.SmoduleReb) {
 		glog.Infof("%s: from %s %s", reb.t.Snode(), tsid, lom)
 	}
-	reb.statTracker.AddMany(
-		stats.NamedVal64{Name: stats.InObjCount, Value: 1},
-		stats.NamedVal64{Name: stats.InObjSize, Value: hdr.ObjAttrs.Size},
-	)
+	xreb := reb.xact()
+	xreb.InObjsAdd(1)
+	xreb.InBytesAdd(hdr.ObjAttrs.Size)
 	// ACK
 	tsi := smap.GetTarget(tsid)
 	if tsi == nil {

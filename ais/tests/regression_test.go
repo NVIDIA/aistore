@@ -459,10 +459,10 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	// Step 0: Collect rebalance stats
 	clusterStats := tutils.GetClusterStats(t, m.proxyURL)
 	for targetID, targetStats := range clusterStats.Target {
-		filesSentOrig[targetID] = tutils.GetNamedTargetStats(targetStats, stats.OutObjCount)
-		filesRecvOrig[targetID] = tutils.GetNamedTargetStats(targetStats, stats.InObjCount)
-		bytesSentOrig[targetID] = tutils.GetNamedTargetStats(targetStats, stats.OutObjSize)
-		bytesRecvOrig[targetID] = tutils.GetNamedTargetStats(targetStats, stats.InObjSize)
+		filesSentOrig[targetID] = tutils.GetNamedTargetStats(targetStats, stats.StreamsOutObjCount)
+		filesRecvOrig[targetID] = tutils.GetNamedTargetStats(targetStats, stats.StreamsInObjCount)
+		bytesSentOrig[targetID] = tutils.GetNamedTargetStats(targetStats, stats.StreamsOutObjSize)
+		bytesRecvOrig[targetID] = tutils.GetNamedTargetStats(targetStats, stats.StreamsInObjSize)
 	}
 
 	// Step 1: Unregister multiple targets
@@ -518,10 +518,10 @@ func TestReregisterMultipleTargets(t *testing.T) {
 
 	clusterStats = tutils.GetClusterStats(t, m.proxyURL)
 	for targetID, targetStats := range clusterStats.Target {
-		filesSent += tutils.GetNamedTargetStats(targetStats, stats.OutObjCount) - filesSentOrig[targetID]
-		filesRecv += tutils.GetNamedTargetStats(targetStats, stats.InObjCount) - filesRecvOrig[targetID]
-		bytesSent += tutils.GetNamedTargetStats(targetStats, stats.OutObjSize) - bytesSentOrig[targetID]
-		bytesRecv += tutils.GetNamedTargetStats(targetStats, stats.InObjSize) - bytesRecvOrig[targetID]
+		filesSent += tutils.GetNamedTargetStats(targetStats, stats.StreamsOutObjCount) - filesSentOrig[targetID]
+		filesRecv += tutils.GetNamedTargetStats(targetStats, stats.StreamsInObjCount) - filesRecvOrig[targetID]
+		bytesSent += tutils.GetNamedTargetStats(targetStats, stats.StreamsOutObjSize) - bytesSentOrig[targetID]
+		bytesRecv += tutils.GetNamedTargetStats(targetStats, stats.StreamsInObjSize) - bytesRecvOrig[targetID]
 	}
 
 	// Step 5: Log rebalance stats

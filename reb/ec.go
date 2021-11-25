@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 )
 
@@ -83,7 +82,8 @@ func (reb *Reb) jogEC(mpathInfo *fs.MountpathInfo, bck cmn.Bck, wg *sync.WaitGro
 		Sorted:   false,
 	}
 	if err := fs.Walk(opts); err != nil {
-		if reb.xact().Aborted() || reb.xact().Finished() {
+		xreb := reb.xact()
+		if xreb.Aborted() || xreb.Finished() {
 			glog.Infof("aborting traversal")
 		} else {
 			glog.Warningf("failed to traverse, err: %v", err)
@@ -157,10 +157,9 @@ func (reb *Reb) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *cluster.
 		err = fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
 		return
 	}
-	reb.statTracker.AddMany(
-		stats.NamedVal64{Name: stats.OutObjCount, Value: 1},
-		stats.NamedVal64{Name: stats.OutObjSize, Value: o.Hdr.ObjAttrs.Size},
-	)
+	xreb := reb.xact()
+	xreb.OutObjsAdd(1)
+	xreb.OutBytesAdd(o.Hdr.ObjAttrs.Size)
 	return
 }
 

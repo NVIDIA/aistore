@@ -156,8 +156,8 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 		lom.Unlock(true)
 	case cluster.GetCold:
 		t.statsT.AddMany(
-			stats.NamedVal64{Name: stats.GetColdCount, Value: 1},
-			stats.NamedVal64{Name: stats.GetColdSize, Value: lom.SizeBytes()},
+			cos.NamedVal64{Name: stats.GetColdCount, Value: 1},
+			cos.NamedVal64{Name: stats.GetColdSize, Value: lom.SizeBytes()},
 		)
 		lom.DowngradeLock()
 	default:

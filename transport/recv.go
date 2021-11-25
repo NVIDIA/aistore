@@ -206,7 +206,13 @@ func (it *iterator) rxloop(uid uint64, loghdr string) (err error) {
 				}
 				err = eofOK(err)
 				h.rxObj(obj.hdr, obj, err)
+				// this stream stats
 				it.stats.Num.Inc()
+				// target stats
+				statsTracker.Add(InObjCount, 1)
+				if !obj.IsUnsized() { // TODO: unsized
+					statsTracker.Add(InObjSize, obj.Size())
+				}
 			} else if err != nil && err != io.EOF {
 				h.rxObj(ObjHdr{}, nil, err)
 			}

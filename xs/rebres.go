@@ -22,16 +22,15 @@ import (
 type (
 	rebFactory struct {
 		xreg.RenewBase
-		xact         *Rebalance
-		statsTracker stats.Tracker
+		xact *Rebalance
 	}
-	Rebalance struct {
-		xaction.XactBase
-		statsTracker stats.Tracker // extended stats
-	}
-	rslvrFactory struct {
+	resFactory struct {
 		xreg.RenewBase
 		xact *Resilver
+	}
+
+	Rebalance struct {
+		xaction.XactBase
 	}
 	Resilver struct {
 		xaction.XactBase
@@ -43,7 +42,7 @@ var (
 	_ cluster.Xact   = (*Rebalance)(nil)
 	_ xreg.Renewable = (*rebFactory)(nil)
 	_ cluster.Xact   = (*Resilver)(nil)
-	_ xreg.Renewable = (*rslvrFactory)(nil)
+	_ xreg.Renewable = (*resFactory)(nil)
 )
 
 ///////////////
@@ -51,11 +50,11 @@ var (
 ///////////////
 
 func (*rebFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
-	return &rebFactory{RenewBase: xreg.RenewBase{Args: args}, statsTracker: args.Custom.(stats.Tracker)}
+	return &rebFactory{RenewBase: xreg.RenewBase{Args: args}}
 }
 
 func (p *rebFactory) Start() error {
-	p.xact = NewRebalance(p.Args.UUID, p.Kind(), p.statsTracker)
+	p.xact = NewRebalance(p.Args.UUID, p.Kind())
 	return nil
 }
 
@@ -77,8 +76,8 @@ func (p *rebFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 	return
 }
 
-func NewRebalance(id, kind string, statTracker stats.Tracker) (xact *Rebalance) {
-	xact = &Rebalance{statsTracker: statTracker}
+func NewRebalance(id, kind string) (xact *Rebalance) {
+	xact = &Rebalance{}
 	xact.InitBase(id, kind, nil)
 	return
 }
@@ -88,13 +87,6 @@ func (*Rebalance) Run(*sync.WaitGroup) { debug.Assert(false) }
 func (xact *Rebalance) Snap() cluster.XactionSnap {
 	rebSnap := &stats.RebalanceSnap{}
 	xact.ToSnap(&rebSnap.Snap)
-
-	st := xact.statsTracker
-	rebSnap.Stats.OutObjs = st.Get(stats.OutObjCount)
-	rebSnap.Stats.OutBytes = st.Get(stats.OutObjSize)
-	rebSnap.Stats.InObjs = st.Get(stats.InObjCount)
-	rebSnap.Stats.InBytes = st.Get(stats.InObjSize)
-
 	if marked := xreg.GetRebMarked(); marked.Xact != nil {
 		id, err := xaction.S2RebID(marked.Xact.ID())
 		debug.AssertNoErr(err)
@@ -111,18 +103,18 @@ func (xact *Rebalance) Snap() cluster.XactionSnap {
 // Resilver //
 //////////////
 
-func (*rslvrFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
-	return &rslvrFactory{RenewBase: xreg.RenewBase{Args: args}}
+func (*resFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
+	return &resFactory{RenewBase: xreg.RenewBase{Args: args}}
 }
 
-func (p *rslvrFactory) Start() error {
+func (p *resFactory) Start() error {
 	p.xact = NewResilver(p.UUID(), p.Kind())
 	return nil
 }
 
-func (*rslvrFactory) Kind() string                                       { return cmn.ActResilver }
-func (p *rslvrFactory) Get() cluster.Xact                                { return p.xact }
-func (*rslvrFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) { return xreg.WprAbort, nil }
+func (*resFactory) Kind() string                                       { return cmn.ActResilver }
+func (p *resFactory) Get() cluster.Xact                                { return p.xact }
+func (*resFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) { return xreg.WprAbort, nil }
 
 func NewResilver(id, kind string) (xact *Resilver) {
 	xact = &Resilver{}

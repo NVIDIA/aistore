@@ -246,13 +246,24 @@ func (xact *XactBase) ToSnap(snap *Snap) {
 	snap.Bck = xact.origBck
 	snap.StartTime = xact.StartTime()
 	snap.EndTime = xact.EndTime()
-	snap.Stats.Objs = xact.Objs()         // locally processed
-	snap.Stats.Bytes = xact.Bytes()       //
-	snap.Stats.OutObjs = xact.OutObjs()   // transmit
-	snap.Stats.OutBytes = xact.OutBytes() //
-	snap.Stats.InObjs = xact.InObjs()     // receive
-	snap.Stats.InBytes = xact.InBytes()
 	snap.AbortedX = xact.Aborted()
+
+	xact.ToStats(&snap.Stats)
+}
+
+func (xact *XactBase) GetStats() (stats *Stats) {
+	stats = &Stats{}
+	xact.ToStats(stats)
+	return
+}
+
+func (xact *XactBase) ToStats(stats *Stats) {
+	stats.Objs = xact.Objs()         // locally processed
+	stats.Bytes = xact.Bytes()       //
+	stats.OutObjs = xact.OutObjs()   // transmit
+	stats.OutBytes = xact.OutBytes() //
+	stats.InObjs = xact.InObjs()     // receive
+	stats.InBytes = xact.InBytes()
 }
 
 // RebID helpers

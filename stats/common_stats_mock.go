@@ -5,7 +5,10 @@
  */
 package stats
 
-import "github.com/NVIDIA/aistore/cluster"
+import (
+	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn/cos"
+)
 
 type (
 	TrackerMock struct{}
@@ -22,7 +25,7 @@ func (*TrackerMock) StartedUp() bool            { return true }
 func (*TrackerMock) Add(string, int64)          {}
 func (*TrackerMock) Get(string) int64           { return 0 }
 func (*TrackerMock) AddErrorHTTP(string, int64) {}
-func (*TrackerMock) AddMany(...NamedVal64)      {}
+func (*TrackerMock) AddMany(...cos.NamedVal64)  {}
 func (*TrackerMock) RegMetrics(*cluster.Snode)  {}
 func (*TrackerMock) CoreStats() *CoreStats      { return nil }
 func (*TrackerMock) GetWhatStats() interface{}  { return nil }

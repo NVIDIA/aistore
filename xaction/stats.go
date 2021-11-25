@@ -19,7 +19,7 @@ type (
 		Bck       cmn.Bck   `json:"bck"`
 		StartTime time.Time `json:"start-time"`
 		EndTime   time.Time `json:"end-time"`
-		Stats     Stats     `json:"stats"`
+		Stats     Stats     `json:"stats"` // common stats counters (see below)
 		AbortedX  bool      `json:"aborted"`
 	}
 

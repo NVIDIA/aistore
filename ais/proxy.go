@@ -1300,8 +1300,8 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 
 	delta := mono.SinceNano(begin)
 	p.statsT.AddMany(
-		stats.NamedVal64{Name: stats.ListCount, Value: 1},
-		stats.NamedVal64{Name: stats.ListLatency, Value: delta},
+		cos.NamedVal64{Name: stats.ListCount, Value: 1},
+		cos.NamedVal64{Name: stats.ListLatency, Value: delta},
 	)
 }
 

@@ -54,7 +54,7 @@ func (r *Prunner) Init(p cluster.Node) *atomic.Bool {
 	r.statsRunner.daemon = p
 
 	r.statsRunner.stopCh = make(chan struct{}, 4)
-	r.statsRunner.workCh = make(chan NamedVal64, 256)
+	r.statsRunner.workCh = make(chan cos.NamedVal64, 256)
 
 	r.Core.initMetricClient(p.Snode(), &r.statsRunner)
 
@@ -84,7 +84,7 @@ func (r *Prunner) log(now int64, uptime time.Duration) {
 	}
 }
 
-func (r *Prunner) doAdd(nv NamedVal64) {
+func (r *Prunner) doAdd(nv cos.NamedVal64) {
 	s := r.Core
 	s.doAdd(nv.Name, nv.NameSuffix, nv.Value)
 }

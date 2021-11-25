@@ -57,6 +57,15 @@ ut et voluptates repudiandae sint et molestiae non-recusandae.`
 	text = lorem + duis + et + temporibus
 )
 
+type dummyStatsTracker struct{}
+
+// interface guard
+var _ cos.StatsTracker = (*dummyStatsTracker)(nil)
+
+func (*dummyStatsTracker) Add(string, int64)         {}
+func (*dummyStatsTracker) Get(string) int64          { return 0 }
+func (*dummyStatsTracker) AddMany(...cos.NamedVal64) {}
+
 var (
 	objmux   *mux.ServeMux
 	msgmux   *mux.ServeMux
@@ -74,7 +83,7 @@ func TestMain(t *testing.M) {
 		cos.Exitf("Invalid duration %q", d)
 	}
 
-	sc := transport.Init()
+	sc := transport.Init(&dummyStatsTracker{})
 	go sc.Run()
 
 	objmux = mux.NewServeMux()

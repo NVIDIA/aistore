@@ -108,20 +108,14 @@ const (
 
 type (
 	Tracker interface {
+		cos.StatsTracker
+
 		StartedUp() bool
-		Add(name string, val int64)
-		Get(name string) int64
 		AddErrorHTTP(method string, val int64)
-		AddMany(namedVal64 ...NamedVal64)
 		CoreStats() *CoreStats
 		GetWhatStats() interface{}
 		RegMetrics(node *cluster.Snode)
 		IsPrometheus() bool
-	}
-	NamedVal64 struct {
-		Name       string
-		NameSuffix string // forces immediate send when non-empty (see NOTE below)
-		Value      int64
 	}
 	CoreStats struct {
 		Tracker   statsTracker
@@ -166,7 +160,7 @@ type (
 	// implemented by the stats runners
 	statsLogger interface {
 		log(now int64, uptime time.Duration)
-		doAdd(nv NamedVal64)
+		doAdd(nv cos.NamedVal64)
 		statsTime(newval time.Duration)
 		standingBy() bool
 	}
@@ -177,7 +171,7 @@ type (
 	statsRunner struct {
 		name        string
 		stopCh      chan struct{}
-		workCh      chan NamedVal64
+		workCh      chan cos.NamedVal64
 		ticker      *time.Ticker
 		Core        *CoreStats  `json:"core"`
 		ctracker    copyTracker // to avoid making it at runtime
@@ -810,9 +804,9 @@ func (r *statsRunner) Stop(err error) {
 
 // common impl
 // NOTE: currently, proxy's stats == common and hardcoded
-func (r *statsRunner) Add(name string, val int64) { r.workCh <- NamedVal64{Name: name, Value: val} }
+func (r *statsRunner) Add(name string, val int64) { r.workCh <- cos.NamedVal64{Name: name, Value: val} }
 
-func (r *statsRunner) AddMany(nvs ...NamedVal64) {
+func (r *statsRunner) AddMany(nvs ...cos.NamedVal64) {
 	for _, nv := range nvs {
 		r.workCh <- nv
 	}
@@ -889,16 +883,16 @@ func removeOlderLogs(tot, maxtotal int64, logdir, logtype string, filteredInfos 
 func (r *statsRunner) AddErrorHTTP(method string, val int64) {
 	switch method {
 	case http.MethodGet:
-		r.workCh <- NamedVal64{Name: ErrGetCount, Value: val}
+		r.workCh <- cos.NamedVal64{Name: ErrGetCount, Value: val}
 	case http.MethodDelete:
-		r.workCh <- NamedVal64{Name: ErrDeleteCount, Value: val}
+		r.workCh <- cos.NamedVal64{Name: ErrDeleteCount, Value: val}
 	case http.MethodPost:
-		r.workCh <- NamedVal64{Name: ErrPostCount, Value: val}
+		r.workCh <- cos.NamedVal64{Name: ErrPostCount, Value: val}
 	case http.MethodPut:
-		r.workCh <- NamedVal64{Name: ErrPutCount, Value: val}
+		r.workCh <- cos.NamedVal64{Name: ErrPutCount, Value: val}
 	case http.MethodHead:
-		r.workCh <- NamedVal64{Name: ErrHeadCount, Value: val}
+		r.workCh <- cos.NamedVal64{Name: ErrHeadCount, Value: val}
 	default:
-		r.workCh <- NamedVal64{Name: ErrCount, Value: val}
+		r.workCh <- cos.NamedVal64{Name: ErrCount, Value: val}
 	}
 }

@@ -18,7 +18,7 @@ func Init() {
 	verbose = bool(glog.FastV(4, glog.SmoduleXs))
 
 	xreg.RegNonBckXact(&eleFactory{})
-	xreg.RegNonBckXact(&rslvrFactory{})
+	xreg.RegNonBckXact(&resFactory{})
 	xreg.RegNonBckXact(&rebFactory{})
 
 	xreg.RegBckXact(&bmvFactory{})

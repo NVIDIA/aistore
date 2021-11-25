@@ -13,9 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xs"
 )
 
@@ -57,16 +55,6 @@ func (reb *Reb) _waitForSmap() (smap *cluster.Smap, err error) {
 		curwt += sleep
 	}
 	return nil, fmt.Errorf("%s: timed out waiting for usable Smap", reb.t.Snode())
-}
-
-func (reb *Reb) getStats() (s *xaction.Stats) {
-	s = &xaction.Stats{}
-	statsRunner := reb.statTracker
-	s.OutObjs = statsRunner.Get(stats.OutObjCount)
-	s.OutBytes = statsRunner.Get(stats.OutObjSize)
-	s.InObjs = statsRunner.Get(stats.InObjCount)
-	s.InBytes = statsRunner.Get(stats.InObjSize)
-	return
 }
 
 // Rebalance moves to the next stage:

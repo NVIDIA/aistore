@@ -136,8 +136,8 @@ func (poi *putObjInfo) putObject() (int, error) {
 	if poi.recvType == cluster.RegularPut {
 		delta := time.Since(poi.started)
 		poi.t.statsT.AddMany(
-			stats.NamedVal64{Name: stats.PutCount, Value: 1},
-			stats.NamedVal64{Name: stats.PutLatency, Value: int64(delta)},
+			cos.NamedVal64{Name: stats.PutCount, Value: 1},
+			cos.NamedVal64{Name: stats.PutLatency, Value: int64(delta)},
 		)
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("PUT %s: %s", lom, delta)
@@ -328,8 +328,8 @@ write:
 		if !cksums.given.Equal(cksums.expct) {
 			err = cos.NewBadDataCksumError(cksums.expct, &cksums.given.Cksum, poi.lom.String())
 			poi.t.statsT.AddMany(
-				stats.NamedVal64{Name: stats.ErrCksumCount, Value: 1},
-				stats.NamedVal64{Name: stats.ErrCksumSize, Value: written},
+				cos.NamedVal64{Name: stats.ErrCksumCount, Value: 1},
+				cos.NamedVal64{Name: stats.ErrCksumSize, Value: written},
 			)
 			return
 		}
@@ -811,9 +811,9 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 
 	delta := mono.SinceNano(goi.nanotim)
 	goi.t.statsT.AddMany(
-		stats.NamedVal64{Name: stats.GetThroughput, Value: written},
-		stats.NamedVal64{Name: stats.GetLatency, Value: delta},
-		stats.NamedVal64{Name: stats.GetCount, Value: 1},
+		cos.NamedVal64{Name: stats.GetThroughput, Value: written},
+		cos.NamedVal64{Name: stats.GetLatency, Value: delta},
+		cos.NamedVal64{Name: stats.GetCount, Value: 1},
 	)
 	return
 }
@@ -932,8 +932,8 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 
 	delta := time.Since(aoi.started)
 	aoi.t.statsT.AddMany(
-		stats.NamedVal64{Name: stats.AppendCount, Value: 1},
-		stats.NamedVal64{Name: stats.AppendLatency, Value: int64(delta)},
+		cos.NamedVal64{Name: stats.AppendCount, Value: 1},
+		cos.NamedVal64{Name: stats.AppendLatency, Value: int64(delta)},
 	)
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("PUT %s: %s", aoi.lom, delta)

@@ -23,7 +23,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/filter"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
@@ -65,21 +64,21 @@ var stages = map[uint32]string{
 
 type (
 	Reb struct {
-		mu          sync.RWMutex
-		t           cluster.Target
-		dm          *bundle.DataMover
-		pushes      *bundle.Streams // broadcast notifications
-		statTracker stats.Tracker
-		filterGFN   *filter.Filter
-		smap        atomic.Pointer // new smap which will be soon live
-		lomacks     [cos.MultiSyncMapCount]*lomAcks
-		awaiting    struct {
+		mu        sync.RWMutex
+		t         cluster.Target
+		dm        *bundle.DataMover
+		pushes    *bundle.Streams // broadcast notifications
+		filterGFN *filter.Filter
+		smap      atomic.Pointer // new smap which will be soon live
+		lomacks   [cos.MultiSyncMapCount]*lomAcks
+		awaiting  struct {
 			mu      sync.Mutex
 			targets cluster.Nodes // targets for which we are waiting for
 			ts      int64         // last time we have recomputed
 		}
 		semaCh     *cos.Semaphore
-		beginStats atomic.Pointer // *stats.ExtRebalanceStats
+		beginStats atomic.Pointer
+		curStats   xaction.Stats
 		xreb       atomic.Pointer // *xaction.Rebalance
 		stages     *nodeStages
 		ecClient   *http.Client
@@ -94,7 +93,7 @@ type (
 	}
 	joggerBase struct {
 		m    *Reb
-		xreb cluster.Xact
+		xreb *xs.Rebalance
 		wg   *sync.WaitGroup
 	}
 	rebJogger struct {
@@ -112,18 +111,17 @@ type (
 	}
 )
 
-func New(t cluster.Target, config *cmn.Config, st stats.Tracker) *Reb {
+func New(t cluster.Target, config *cmn.Config) *Reb {
 	ecClient := cmn.NewClient(cmn.TransportArgs{
 		Timeout:    config.Client.Timeout.D(),
 		UseHTTPS:   config.Net.HTTP.UseHTTPS,
 		SkipVerify: config.Net.HTTP.SkipVerify,
 	})
 	reb := &Reb{
-		t:           t,
-		filterGFN:   filter.NewDefaultFilter(),
-		statTracker: st,
-		stages:      newNodeStages(),
-		ecClient:    ecClient,
+		t:         t,
+		filterGFN: filter.NewDefaultFilter(),
+		stages:    newNodeStages(),
+		ecClient:  ecClient,
 	}
 	rebcfg := &config.Rebalance
 	dmExtra := bundle.Extra{
@@ -336,7 +334,7 @@ func (reb *Reb) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time.Dur
 
 func (reb *Reb) rebInitRenew(rargs *rebArgs, notif *xaction.NotifXact) bool {
 	reb.stages.stage.Store(rebStageInit)
-	rns := xreg.RenewRebalance(rargs.id, reb.statTracker)
+	rns := xreg.RenewRebalance(rargs.id)
 	debug.AssertNoErr(rns.Err)
 	if rns.IsRunning() {
 		return false
@@ -347,10 +345,11 @@ func (reb *Reb) rebInitRenew(rargs *rebArgs, notif *xaction.NotifXact) bool {
 	xact.AddNotif(notif)
 
 	reb.mu.Lock()
-	reb.setXact(xact.(*xs.Rebalance))
+	xreb := xact.(*xs.Rebalance)
+	reb.setXact(xreb)
 
 	// 3. init streams and data structures
-	reb.beginStats.Store(unsafe.Pointer(reb.getStats()))
+	reb.beginStats.Store(unsafe.Pointer(xreb.GetStats()))
 	reb.beginStreams()
 	if reb.awaiting.targets == nil {
 		reb.awaiting.targets = make(cluster.Nodes, 0, maxWackTargets)
@@ -678,10 +677,9 @@ func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, arg 
 		}
 		return
 	}
-	rj.m.statTracker.AddMany(
-		stats.NamedVal64{Name: stats.OutObjCount, Value: 1},
-		stats.NamedVal64{Name: stats.OutObjSize, Value: hdr.ObjAttrs.Size},
-	)
+	xreb := rj.xreb
+	xreb.OutObjsAdd(1)
+	xreb.OutBytesAdd(hdr.ObjAttrs.Size)
 }
 
 func (rj *rebJogger) walk(fqn string, de fs.DirEntry) (err error) {

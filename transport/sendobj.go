@@ -314,12 +314,16 @@ func (s *Stream) eoObj(err error) {
 		err = fmt.Errorf("%s: %s offset %d != size", s, obj, s.sendoff.off)
 		goto exit
 	}
+	// this stream stats
 	s.stats.Size.Add(objSize)
 	s.Numcur++
 	s.stats.Num.Inc()
 	if verbose {
 		glog.Infof("%s: sent %s (%d/%d)", s, obj, s.Numcur, s.stats.Num.Load())
 	}
+	// target stats
+	statsTracker.Add(OutObjCount, 1)
+	statsTracker.Add(OutObjSize, objSize)
 exit:
 	if err != nil {
 		glog.Errorln(err)

@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -290,7 +291,7 @@ func (tctx *testContext) teardown() {
 }
 
 var _ = Describe("Distributed Sort", func() {
-	sc := transport.Init()
+	sc := transport.Init(&stats.Trunner{})
 	go sc.Run()
 
 	Describe("participateInRecordDistribution", func() {

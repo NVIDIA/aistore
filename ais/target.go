@@ -182,7 +182,7 @@ func (t *targetrunner) init(config *cmn.Config) {
 	ts := &stats.Trunner{T: t} // iostat below
 	startedUp := ts.Init(t)
 	daemon.rg.add(ts)
-	t.statsT = ts
+	t.statsT = ts // stats tracker
 
 	k := newTargetKeepalive(t, ts, startedUp)
 	daemon.rg.add(k)
@@ -191,7 +191,7 @@ func (t *targetrunner) init(config *cmn.Config) {
 	t.fsprg.init(t) // subgroup of the daemon.rg rungroup
 
 	// Stream Collector - a singleton object with responsibilities that include:
-	sc := transport.Init()
+	sc := transport.Init(ts)
 	daemon.rg.add(sc)
 
 	fshc := health.NewFSHC(t)
@@ -356,7 +356,7 @@ func (t *targetrunner) Run() error {
 	// transactions
 	t.transactions.init(t)
 
-	t.reb = reb.New(t, config, t.statsT)
+	t.reb = reb.New(t, config)
 	t.res = res.New(t)
 
 	// register storage target's handler(s) and start listening
@@ -565,8 +565,8 @@ func (t *targetrunner) handleListObjects(w http.ResponseWriter, r *http.Request,
 	}
 	delta := mono.SinceNano(begin)
 	t.statsT.AddMany(
-		stats.NamedVal64{Name: stats.ListCount, Value: 1},
-		stats.NamedVal64{Name: stats.ListLatency, Value: delta},
+		cos.NamedVal64{Name: stats.ListCount, Value: 1},
+		cos.NamedVal64{Name: stats.ListLatency, Value: delta},
 	)
 }
 
@@ -1508,8 +1508,8 @@ func (t *targetrunner) DeleteObject(lom *cluster.LOM, evict bool) (int, error) {
 		} else if evict {
 			cos.Assert(lom.Bck().IsRemote())
 			t.statsT.AddMany(
-				stats.NamedVal64{Name: stats.LruEvictCount, Value: 1},
-				stats.NamedVal64{Name: stats.LruEvictSize, Value: size},
+				cos.NamedVal64{Name: stats.LruEvictCount, Value: 1},
+				cos.NamedVal64{Name: stats.LruEvictSize, Value: size},
 			)
 		}
 	}
@@ -1666,7 +1666,7 @@ func (t *targetrunner) fsErr(err error, filepath string) {
 	glog.Errorf("%s: waking up FSHC to check %q for err %v", t.si, filepath, err)
 	keyName := mpathInfo.Path
 	// keyName is the mountpath is the fspath - counting IO errors on a per basis..
-	t.statsT.AddMany(stats.NamedVal64{Name: stats.ErrIOCount, NameSuffix: keyName, Value: 1})
+	t.statsT.AddMany(cos.NamedVal64{Name: stats.ErrIOCount, NameSuffix: keyName, Value: 1})
 	t.fshc.OnErr(filepath)
 }
 

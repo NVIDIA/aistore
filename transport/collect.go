@@ -1,7 +1,7 @@
 // Package transport provides streaming object-based transport over http for intra-cluster continuous
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -43,9 +43,9 @@ var _ cos.Runner = (*StreamCollector)(nil)
 // 2. provides each stream with its own idle timer (with timeout measured in ticks - see tickUnit)
 // 3. deactivates idle streams
 
-func Init() *StreamCollector {
+func Init(st cos.StatsTracker) *StreamCollector {
 	debug.Assert(gc == nil)
-
+	statsTracker = st
 	// real stream collector
 	gc = &collector{
 		stopCh:  cos.NewStopCh(),

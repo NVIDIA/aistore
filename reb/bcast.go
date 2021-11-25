@@ -60,16 +60,16 @@ func (reb *Reb) RebStatus(status *Status) {
 		status.RebVersion = rsmap.Version
 	}
 	beginStats := (*xaction.Stats)(reb.beginStats.Load())
-	curStats := reb.getStats()
 	reb.mu.RUnlock()
 	// stats
 	if beginStats == nil {
 		return
 	}
-	status.StatsDelta.OutObjs = curStats.OutObjs - beginStats.OutObjs
-	status.StatsDelta.OutBytes = curStats.OutBytes - beginStats.OutBytes
-	status.StatsDelta.InObjs = curStats.InObjs - beginStats.InObjs
-	status.StatsDelta.InBytes = curStats.InBytes - beginStats.InBytes
+	reb.xact().ToStats(&reb.curStats)
+	status.StatsDelta.OutObjs = reb.curStats.OutObjs - beginStats.OutObjs
+	status.StatsDelta.OutBytes = reb.curStats.OutBytes - beginStats.OutBytes
+	status.StatsDelta.InObjs = reb.curStats.InObjs - beginStats.InObjs
+	status.StatsDelta.InBytes = reb.curStats.InBytes - beginStats.InBytes
 
 	// wack info
 	if status.Stage != rebStageWaitAck {

@@ -98,8 +98,8 @@ func (t *singleObjectTask) download() {
 	dlStore.incFinished(t.jobID())
 
 	t.parent.statsT.AddMany(
-		stats.NamedVal64{Name: stats.DownloadSize, Value: t.currentSize.Load()},
-		stats.NamedVal64{Name: stats.DownloadLatency, Value: int64(t.ended.Load().Sub(t.started.Load()))},
+		cos.NamedVal64{Name: stats.DownloadSize, Value: t.currentSize.Load()},
+		cos.NamedVal64{Name: stats.DownloadLatency, Value: int64(t.ended.Load().Sub(t.started.Load()))},
 	)
 	t.parent.ObjsAdd(1)                     // TODO: must be InObjsInc
 	t.parent.BytesAdd(t.currentSize.Load()) // ditto bytes
