@@ -203,7 +203,7 @@ func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn s
 	}
 	rHdr.Opaque = ireq.NewPack(r.t.ByteMM())
 
-	r.ObjsInc()               // TODO: must be out-inc
+	r.ObjsAdd(1)              // TODO: must be out-inc
 	r.BytesAdd(objAttrs.Size) // ditto
 	r.IncPending()
 	cb := func(hdr transport.ObjHdr, _ io.ReadCloser, _ interface{}, err error) {

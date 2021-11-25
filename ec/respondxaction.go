@@ -233,7 +233,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 			glog.Error(err)
 			return
 		}
-		r.ObjsInc()
+		r.ObjsAdd(1)
 		r.BytesAdd(hdr.ObjAttrs.Size)
 	default:
 		// should be unreachable

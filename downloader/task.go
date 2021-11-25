@@ -101,7 +101,7 @@ func (t *singleObjectTask) download() {
 		stats.NamedVal64{Name: stats.DownloadSize, Value: t.currentSize.Load()},
 		stats.NamedVal64{Name: stats.DownloadLatency, Value: int64(t.ended.Load().Sub(t.started.Load()))},
 	)
-	t.parent.ObjsInc()                      // TODO: must be InObjsInc
+	t.parent.ObjsAdd(1)                     // TODO: must be InObjsInc
 	t.parent.BytesAdd(t.currentSize.Load()) // ditto bytes
 }
 

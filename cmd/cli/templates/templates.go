@@ -411,16 +411,14 @@ func calcCap(daemon *stats.DaemonStatus) (total uint64) {
 	return total
 }
 
-func fmtXactStatus(tStatus *stats.TargetStatus) string {
-	if tStatus == nil || tStatus.RebalanceStats == nil {
+func fmtXactStatus(rebSnap *stats.RebalanceSnap) string {
+	if rebSnap == nil {
 		return "-"
 	}
-
-	tStats := tStatus.RebalanceStats
-	if tStats.Aborted() {
+	if rebSnap.Aborted() {
 		return "aborted"
 	}
-	if tStats.EndTime.IsZero() {
+	if rebSnap.EndTime.IsZero() {
 		return "running"
 	}
 	return "finished"

@@ -86,25 +86,25 @@ func NewRebalance(id, kind string, statTracker stats.Tracker) (xact *Rebalance) 
 func (*Rebalance) Run(*sync.WaitGroup) { debug.Assert(false) }
 
 func (xact *Rebalance) Snap() cluster.XactionSnap {
-	var (
-		baseSnap    = xact.XactBase.Snap().(*xaction.Snap)
-		rebSnap     = stats.RebalanceTargetSnap{Snap: *baseSnap}
-		statsRunner = xact.statsTracker
-	)
-	rebSnap.Stats.OutObjs = statsRunner.Get(stats.OutObjCount)
-	rebSnap.Stats.OutBytes = statsRunner.Get(stats.OutObjSize)
-	rebSnap.Stats.InObjs = statsRunner.Get(stats.InObjCount)
-	rebSnap.Stats.InBytes = statsRunner.Get(stats.InObjSize)
+	rebSnap := &stats.RebalanceSnap{}
+	xact.ToSnap(&rebSnap.Snap)
+
+	st := xact.statsTracker
+	rebSnap.Stats.OutObjs = st.Get(stats.OutObjCount)
+	rebSnap.Stats.OutBytes = st.Get(stats.OutObjSize)
+	rebSnap.Stats.InObjs = st.Get(stats.InObjCount)
+	rebSnap.Stats.InBytes = st.Get(stats.InObjSize)
+
 	if marked := xreg.GetRebMarked(); marked.Xact != nil {
-		var err error
-		rebSnap.RebID, err = xaction.S2RebID(marked.Xact.ID())
+		id, err := xaction.S2RebID(marked.Xact.ID())
 		debug.AssertNoErr(err)
+		rebSnap.RebID = id
 	} else {
 		rebSnap.RebID = 0
 	}
 	rebSnap.Stats.Objs = rebSnap.Stats.OutObjs + rebSnap.Stats.InObjs
 	rebSnap.Stats.Bytes = rebSnap.Stats.OutBytes + rebSnap.Stats.InBytes
-	return &rebSnap
+	return rebSnap
 }
 
 //////////////

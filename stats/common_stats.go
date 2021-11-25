@@ -132,22 +132,17 @@ type (
 		cmu       sync.RWMutex // ctracker vs Prometheus Collect()
 	}
 
-	RebalanceTargetSnap struct {
+	RebalanceSnap struct {
 		xaction.Snap
 		RebID int64 `json:"glob.id,string"`
 	}
-
-	TargetStatus struct {
-		RebalanceStats *RebalanceTargetSnap `json:"rebalance_stats,omitempty"`
-	}
-
 	DaemonStatus struct {
 		Snode       *cluster.Snode `json:"snode"`
 		Stats       *CoreStats     `json:"daemon_stats"`
 		Capacity    fs.MPCap       `json:"capacity"`
 		SysInfo     cos.SysInfo    `json:"sys_info"`
 		SmapVersion int64          `json:"smap_version,string"`
-		TStatus     *TargetStatus  `json:"target_status,omitempty"`
+		RebSnap     *RebalanceSnap `json:"rebalance_snap,omitempty"`
 		Status      string         `json:"status"`
 		DeployedOn  string         `json:"deployment"`
 		Version     string         `json:"ais_version"` // major.minor.build

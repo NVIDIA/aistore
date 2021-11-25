@@ -247,11 +247,11 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatMountpaths:
 		t.writeJSON(w, r, fs.MountpathsToLists(), httpdaeWhat)
 	case cmn.GetWhatDaemonStatus:
-		var rebStats *stats.RebalanceTargetSnap
+		var rebSnap *stats.RebalanceSnap
 		if entry := xreg.GetLatest(xreg.XactFilter{Kind: cmn.ActRebalance}); entry != nil {
 			var ok bool
 			if xact := entry.Get(); xact != nil {
-				rebStats, ok = xact.Snap().(*stats.RebalanceTargetSnap)
+				rebSnap, ok = xact.Snap().(*stats.RebalanceSnap)
 				debug.Assert(ok)
 			}
 		}
@@ -260,7 +260,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			SmapVersion: t.owner.smap.get().Version,
 			SysInfo:     sys.FetchSysInfo(),
 			Stats:       t.statsT.CoreStats(),
-			TStatus:     &stats.TargetStatus{RebalanceStats: rebStats},
+			RebSnap:     rebSnap,
 			DeployedOn:  deploymentType(),
 			Version:     daemon.version,
 			BuildTime:   daemon.buildTime,

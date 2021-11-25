@@ -212,7 +212,7 @@ func (t *bsummXact) Run(*sync.WaitGroup) {
 							summary.ObjCount++
 						}
 
-						t.ObjsInc()
+						t.ObjsAdd(1)
 						t.BytesAdd(v.Size)
 					}
 

@@ -133,7 +133,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 			glog.Error(err)
 		}
 	} else if lom != nil { // nil when (placement = different target)
-		r.ObjsInc()
+		r.ObjsAdd(1)
 		r.BytesAdd(lom.SizeBytes())
 		cluster.FreeLOM(lom)
 	}

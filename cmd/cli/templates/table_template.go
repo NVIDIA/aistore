@@ -180,7 +180,7 @@ func newTableTargets(ts map[string]*stats.DaemonStatus, hideDeployments, hideSta
 			fmt.Sprintf("%.2f%%", calcCapPercentage(status)),
 			cos.UnsignedB2S(calcCap(status), 3),
 			fmt.Sprintf("%.2f%%", status.SysInfo.PctCPUUsed),
-			fmtXactStatus(status.TStatus),
+			fmtXactStatus(status.RebSnap),
 			fmtDuration(extractStat(status.Stats, "up.ns.time")),
 			status.DeployedOn,
 			status.Status,

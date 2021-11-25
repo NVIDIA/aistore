@@ -117,26 +117,13 @@ func (r *DemandBase) Stop() {
 func (r *DemandBase) Snap() cluster.XactionSnap { return r.ExtSnap() }
 
 func (r *DemandBase) ExtSnap() *SnapExt {
-	stats := &SnapExt{
-		Snap: Snap{
-			ID:        r.ID(),
-			Kind:      r.Kind(),
-			StartTime: r.StartTime(),
-			EndTime:   r.EndTime(),
-			Stats: Stats{
-				InObjs:   r.InObjs(),
-				InBytes:  r.InBytes(),
-				OutObjs:  r.OutObjs(),
-				OutBytes: r.OutBytes(),
-			},
-			AbortedX: r.Aborted(),
-		},
-	}
+	snap := &SnapExt{}
+	r.ToSnap(&snap.Snap)
 	if r.Bck() != nil {
-		stats.Bck = r.Bck().Bck
+		snap.Bck = r.Bck().Bck
 	}
-	stats.Ext = &BaseDemandStatsExt{IsIdle: r.likelyIdle()}
-	return stats
+	snap.Ext = &BaseDemandStatsExt{IsIdle: r.likelyIdle()}
+	return snap
 }
 
 func (r *DemandBase) Abort(err error) (ok bool) {

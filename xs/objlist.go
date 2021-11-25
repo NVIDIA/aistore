@@ -236,7 +236,7 @@ func (r *ObjListXact) dispatchRequest() *Resp {
 }
 
 func (r *ObjListXact) walkCallback(lom *cluster.LOM) {
-	r.ObjsInc()
+	r.ObjsAdd(1)
 	r.BytesAdd(lom.SizeBytes())
 }
 

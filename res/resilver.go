@@ -40,7 +40,7 @@ type (
 		SkipGlobMisplaced bool
 	}
 	joggerCtx struct {
-		xact cluster.Xact
+		xres *xs.Resilver
 		t    cluster.Target
 	}
 )
@@ -86,18 +86,18 @@ func (res *Res) RunResilver(args Args) {
 		return
 	}
 
-	xact := xreg.RenewResilver(args.UUID).(*xs.Resilver)
+	xres := xreg.RenewResilver(args.UUID).(*xs.Resilver)
 	if args.Notif != nil {
-		args.Notif.Xact = xact
-		xact.AddNotif(args.Notif)
+		args.Notif.Xact = xres
+		xres.AddNotif(args.Notif)
 	}
-	glog.Infoln(xact.Name())
+	glog.Infoln(xres.Name())
 
 	// jogger group
 	var jg *mpather.JoggerGroup
 	slab, err := res.t.PageMM().GetSlab(memsys.MaxPageSlabSize)
 	debug.AssertNoErr(err)
-	jctx := &joggerCtx{xact: xact, t: res.t}
+	jctx := &joggerCtx{xres: xres, t: res.t}
 	opts := &mpather.JoggerGroupOpts{
 		T:                     res.t,
 		CTs:                   []string{fs.ObjectType, fs.ECSliceType},
@@ -118,7 +118,7 @@ func (res *Res) RunResilver(args Args) {
 
 	// Wait for abort or joggers to finish.
 	select {
-	case <-xact.ChanAbort():
+	case <-xres.ChanAbort():
 		if err := jg.Stop(); err != nil {
 			glog.Errorf("Resilver (uuid=%q) aborted, stopped with err: %v", args.UUID, err)
 		} else {
@@ -128,7 +128,7 @@ func (res *Res) RunResilver(args Args) {
 		fs.RemoveMarker(cmn.ResilverMarker)
 	}
 
-	xact.Finish(nil)
+	xres.Finish(nil)
 }
 
 // Copies a slice and its metafile (if exists) to the current mpath. At the
@@ -240,8 +240,8 @@ func (rj *joggerCtx) moveObject(lom *cluster.LOM, buf []byte) {
 		}
 	}
 
-	rj.xact.BytesAdd(size)
-	rj.xact.ObjsInc()
+	rj.xres.BytesAdd(size)
+	rj.xres.ObjsAdd(1)
 
 	// NOTE: not deleting _misplaced_ and copied - delegating to `storage cleanup` and/or LRU
 }

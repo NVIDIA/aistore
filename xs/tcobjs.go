@@ -223,7 +223,7 @@ func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) {
 		}
 		return
 	}
-	wi.r.ObjsInc()
+	wi.r.ObjsAdd(1)
 	// TODO: support precise post-transform byte count
 	// (under ETL, sizes of transformed objects are unknown until after the transformation)
 	if size == cos.ContentLengthUnknown {

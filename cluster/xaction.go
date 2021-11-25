@@ -53,17 +53,6 @@ type (
 		Finish(error)
 		Abort(error) bool
 		AddNotif(n Notif)
-
-		// stats
-		BytesAdd(int64) int64    // locally processed
-		ObjsInc() int64          //
-		ObjsAdd(int64) int64     //
-		OutBytesAdd(int64) int64 // transmit
-		OutObjsInc() int64       //
-		OutObjsAdd(int64) int64  //
-		InBytesAdd(int64) int64  // receive
-		InObjsInc() int64
-		InObjsAdd(int64) int64
 	}
 
 	XactionSnap interface {

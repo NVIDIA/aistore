@@ -241,7 +241,7 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 		Daemons:     make(cos.MapStrUint16, reqTargets),
 	}
 
-	c.parent.ObjsInc() // TODO: support in and out
+	c.parent.ObjsAdd(1) // TODO: support in and out
 	c.parent.BytesAdd(lom.SizeBytes())
 
 	ctx, err := c.newCtx(lom, meta)

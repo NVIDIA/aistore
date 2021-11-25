@@ -218,46 +218,41 @@ func (*XactBase) Result() (interface{}, error) {
 
 // base stats: locally processed
 func (xact *XactBase) Objs() int64              { return xact.stats.objs.Load() }
-func (xact *XactBase) ObjsInc() int64           { return xact.stats.objs.Inc() }
 func (xact *XactBase) ObjsAdd(cnt int64) int64  { return xact.stats.objs.Add(cnt) }
 func (xact *XactBase) Bytes() int64             { return xact.stats.bytes.Load() }
-func (xact *XactBase) BytesInc() int64          { return xact.stats.bytes.Inc() }
 func (xact *XactBase) BytesAdd(cnt int64) int64 { return xact.stats.bytes.Add(cnt) }
 
 // base stats: transmit
 func (xact *XactBase) OutObjs() int64              { return xact.stats.outobjs.Load() }
-func (xact *XactBase) OutObjsInc() int64           { return xact.stats.outobjs.Inc() }
 func (xact *XactBase) OutObjsAdd(cnt int64) int64  { return xact.stats.outobjs.Add(cnt) }
 func (xact *XactBase) OutBytes() int64             { return xact.stats.outbytes.Load() }
-func (xact *XactBase) OutBytesInc() int64          { return xact.stats.outbytes.Inc() }
 func (xact *XactBase) OutBytesAdd(cnt int64) int64 { return xact.stats.outbytes.Add(cnt) }
 
 // base stats: receive
 func (xact *XactBase) InObjs() int64              { return xact.stats.inobjs.Load() }
-func (xact *XactBase) InObjsInc() int64           { return xact.stats.inobjs.Inc() }
 func (xact *XactBase) InObjsAdd(cnt int64) int64  { return xact.stats.inobjs.Add(cnt) }
 func (xact *XactBase) InBytes() int64             { return xact.stats.inbytes.Load() }
-func (xact *XactBase) InBytesInc() int64          { return xact.stats.inbytes.Inc() }
 func (xact *XactBase) InBytesAdd(cnt int64) int64 { return xact.stats.inbytes.Add(cnt) }
 
 func (xact *XactBase) Snap() cluster.XactionSnap {
-	stats := &Snap{
-		ID:        xact.ID(),
-		Kind:      xact.Kind(),
-		Bck:       xact.origBck,
-		StartTime: xact.StartTime(),
-		EndTime:   xact.EndTime(),
-		Stats: Stats{
-			Objs:     xact.Objs(),     // locally processed
-			Bytes:    xact.Bytes(),    //
-			OutObjs:  xact.OutObjs(),  // transmit
-			OutBytes: xact.OutBytes(), //
-			InObjs:   xact.InObjs(),   // receive
-			InBytes:  xact.InBytes(),
-		},
-		AbortedX: xact.Aborted(),
-	}
-	return stats
+	snap := &Snap{}
+	xact.ToSnap(snap)
+	return snap
+}
+
+func (xact *XactBase) ToSnap(snap *Snap) {
+	snap.ID = xact.ID()
+	snap.Kind = xact.Kind()
+	snap.Bck = xact.origBck
+	snap.StartTime = xact.StartTime()
+	snap.EndTime = xact.EndTime()
+	snap.Stats.Objs = xact.Objs()         // locally processed
+	snap.Stats.Bytes = xact.Bytes()       //
+	snap.Stats.OutObjs = xact.OutObjs()   // transmit
+	snap.Stats.OutBytes = xact.OutBytes() //
+	snap.Stats.InObjs = xact.InObjs()     // receive
+	snap.Stats.InBytes = xact.InBytes()
+	snap.AbortedX = xact.Aborted()
 }
 
 // RebID helpers
