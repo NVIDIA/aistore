@@ -481,6 +481,9 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 	}
 
 	return func(hdr transport.ObjHdr, object io.Reader, err error) {
+		ds.m.inFlightInc()
+		defer ds.m.inFlightDec()
+
 		transport.FreeRecv(object)
 		req := remoteRequest{}
 		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
@@ -585,7 +588,12 @@ func (ds *dsorterGeneral) postExtraction() {
 func (ds *dsorterGeneral) makeRecvResponseFunc() transport.ReceiveObj {
 	metrics := ds.m.Metrics.Creation
 	return func(hdr transport.ObjHdr, object io.Reader, err error) {
-		defer transport.FreeRecv(object)
+		ds.m.inFlightInc()
+		defer func() {
+			transport.FreeRecv(object)
+			ds.m.inFlightDec()
+		}()
+
 		if err != nil {
 			ds.m.abort(err)
 			return
@@ -594,6 +602,10 @@ func (ds *dsorterGeneral) makeRecvResponseFunc() transport.ReceiveObj {
 
 		writer := ds.pullStreamWriter(hdr.ObjName)
 		if writer == nil { // was removed after timing out
+			return
+		}
+
+		if ds.m.aborted() {
 			return
 		}
 

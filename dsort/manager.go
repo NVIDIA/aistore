@@ -117,7 +117,8 @@ type (
 			count atomic.Int32 // Number of FileMeta slices received, defining what step in the sort a target is in.
 			ch    chan int32
 		}
-		refCount        atomic.Int64 // Reference counter used to determine if we can do cleanup
+		refCount        atomic.Int64 // Reference counter used to determine if we can do cleanup.
+		inFlight        atomic.Int64 // Reference counter that counts number of in-flight stream requests.
 		state           progressState
 		extractionPhase struct {
 			adjuster *concAdjuster
@@ -361,6 +362,9 @@ func (m *Manager) finalCleanup() {
 		glog.Error(err)
 	}
 
+	// Wait for all in-flight stream requests after cleaning up streams.
+	m.waitForInFlight()
+
 	if err := m.dsorter.finalCleanup(); err != nil {
 		glog.Error(err)
 	}
@@ -552,6 +556,16 @@ func (m *Manager) decrementRef(by int64) {
 			return
 		}
 		m.unlock()
+	}
+}
+
+func (m *Manager) inFlightInc() { m.inFlight.Inc() }
+func (m *Manager) inFlightDec() { m.inFlight.Dec() }
+
+// waitForInFlight waits for all in-flight stream requests to finish.
+func (m *Manager) waitForInFlight() {
+	for m.inFlight.Load() > 0 {
+		time.Sleep(200 * time.Millisecond)
 	}
 }
 
