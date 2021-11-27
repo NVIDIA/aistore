@@ -206,9 +206,14 @@ func ReportXactionStatus(baseParams api.BaseParams, xactID string, stopCh *cos.S
 					tlog.Logf("Failed to get xaction stats; err %v\n", err)
 					continue
 				}
-				bps := float64(stats.BytesCount()) / time.Since(xactStart).Seconds()
+				locObjs, outObjs, inObjs := stats.ObjCounts()
+				tlog.Logf("ETL %q progress: (objs=%d, outObjs=%d, inObjs=%d) out of %d objects\n",
+					xactID, locObjs, outObjs, inObjs, totalObj)
+				locBytes, outBytes, inBytes := stats.ByteCounts()
+				bps := float64(locBytes+outBytes) / time.Since(xactStart).Seconds()
 				bpsStr := fmt.Sprintf("%s/s", cos.B2S(int64(bps), 2))
-				tlog.Logf("ETL %q already transformed %d/%d objects (%s) (%s)\n", xactID, stats.ObjCount(), totalObj, cos.B2S(stats.BytesCount(), 2), bpsStr)
+				tlog.Logf("ETL %q progress: (bytes=%d, outBytes=%d, inBytes=%d), %sBps\n",
+					xactID, locBytes, outBytes, inBytes, bpsStr)
 			case <-stopCh.Listen():
 				return
 			}

@@ -2387,9 +2387,13 @@ func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 
 	stats, err := api.GetXactionStatsByID(baseParams, xactID)
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, stats.ObjCount() == int64(m.num), "expected %d objects in total, got %d", m.num, stats.ObjCount())
+	objs, outObjs, inObjs := stats.ObjCounts()
+	tassert.Errorf(t, objs+outObjs == int64(m.num), "expected %d objects in total, got (objs=%d, outObjs=%d, inObjs=%d)",
+		m.num, objs, outObjs, inObjs)
 	expectedBytesCnt := int64(m.fileSize * uint64(m.num))
-	tassert.Errorf(t, stats.BytesCount() == expectedBytesCnt, "expected %d bytes, got %d", expectedBytesCnt, stats.BytesCount())
+	locBytes, outBytes, inBytes := stats.ByteCounts()
+	tassert.Errorf(t, locBytes+outBytes == expectedBytesCnt, "expected %d bytes in total, got (locBytes=%d, outBytes=%d, inBytes=%d)",
+		expectedBytesCnt, locBytes, outBytes, inBytes)
 }
 
 func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext) {
@@ -2429,9 +2433,15 @@ func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 
 	stats, err := api.GetXactionStatsByID(baseParams, xactID)
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, stats.ObjCount() == int64(m.num), "dry run stats expected to return %d objects", m.num)
+
+	locObjs, outObjs, inObjs := stats.ObjCounts()
+	tassert.Errorf(t, locObjs+outObjs == int64(m.num), "expected %d objects, got (locObjs=%d, outObjs=%d, inObjs=%d)",
+		m.num, locObjs, outObjs, inObjs)
+
+	locBytes, outBytes, inBytes := stats.ByteCounts()
 	expectedBytesCnt := int64(m.fileSize * uint64(m.num))
-	tassert.Errorf(t, stats.BytesCount() == expectedBytesCnt, "dry run stats expected to return %d bytes, got %d", expectedBytesCnt, stats.BytesCount())
+	tassert.Errorf(t, locBytes+outBytes == expectedBytesCnt, "expected %d bytes, got (locBytes=%d, outBytes=%d, inBytes=%d)",
+		expectedBytesCnt, locBytes, outBytes, inBytes)
 
 	exists, err := api.DoesBucketExist(baseParams, cmn.QueryBcks(dstBck))
 	tassert.CheckFatal(t, err)

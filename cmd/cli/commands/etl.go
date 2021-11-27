@@ -391,13 +391,17 @@ func etlBucketHandler(c *cli.Context) (err error) {
 		return nil
 	}
 
-	stat, err := api.GetXactionStatsByID(defaultAPIParams, xactID)
+	stats, err := api.GetXactionStatsByID(defaultAPIParams, xactID)
 	if err != nil {
 		return err
 	}
 
 	fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
-	fmt.Fprintf(c.App.Writer, "%d objects (%s) would have been put into bucket %s", stat.ObjCount(), cos.B2S(stat.BytesCount(), 2), toBck.String())
+
+	locObjs, outObjs, inObjs := stats.ObjCounts()
+	fmt.Fprintf(c.App.Writer, "ETL object stats: locally transformed=%d, sent=%d, received=%d", locObjs, outObjs, inObjs)
+	locBytes, outBytes, inBytes := stats.ByteCounts()
+	fmt.Fprintf(c.App.Writer, "ETL byte stats: locally transformed=%d, sent=%d, received=%d", locBytes, outBytes, inBytes)
 	return nil
 }
 

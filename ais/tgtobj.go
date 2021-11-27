@@ -983,7 +983,13 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 		coi.DP = &cluster.LDP{}
 		return coi.copyReader(src, objNameTo)
 	}
-
+	if coi.DryRun {
+		defer func() {
+			if err == nil && coi.Xact != nil {
+				coi.Xact.ObjsAdd(1, size)
+			}
+		}()
+	}
 	si := coi.t.si
 	if !coi.localOnly {
 		smap := coi.t.owner.smap.Get()
@@ -1087,7 +1093,13 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 	if si, err = cluster.HrwTarget(coi.BckTo.MakeUname(objNameTo), coi.t.owner.smap.Get()); err != nil {
 		return
 	}
-
+	if coi.DryRun {
+		defer func() {
+			if err == nil && coi.Xact != nil {
+				coi.Xact.ObjsAdd(1, size)
+			}
+		}()
+	}
 	if si.ID() != coi.t.si.ID() {
 		params := allocSendParams()
 		{
@@ -1144,9 +1156,6 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 }
 
 func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (size int64, err error) {
-	debug.Assert(coi.DryRun)
-	debug.Assert(coi.DP != nil)
-
 	var reader io.ReadCloser
 	if reader, _, err = coi.DP.Reader(lom); err != nil {
 		return 0, err

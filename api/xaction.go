@@ -62,16 +62,20 @@ func (xs NodesXactStat) Aborted() bool {
 	return false
 }
 
-func (xs NodesXactStat) ObjCount() (count int64) {
+func (xs NodesXactStat) ObjCounts() (locObjs, outObjs, inObjs int64) {
 	for _, snap := range xs {
-		count += snap.Stats.Objs + snap.Stats.OutObjs // TODO: extend to support in and out objs/bytes
+		locObjs += snap.Stats.Objs
+		outObjs += snap.Stats.OutObjs
+		inObjs += snap.Stats.InObjs
 	}
 	return
 }
 
-func (xs NodesXactStat) BytesCount() (count int64) {
+func (xs NodesXactStat) ByteCounts() (locBytes, outBytes, inBytes int64) {
 	for _, snap := range xs {
-		count += snap.Stats.Bytes + snap.Stats.OutBytes // TODO: ditto
+		locBytes += snap.Stats.Bytes
+		outBytes += snap.Stats.OutBytes
+		inBytes += snap.Stats.InBytes
 	}
 	return
 }

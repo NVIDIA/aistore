@@ -94,8 +94,10 @@ func (xact *Rebalance) Snap() cluster.XactionSnap {
 	} else {
 		rebSnap.RebID = 0
 	}
-	rebSnap.Stats.Objs = rebSnap.Stats.OutObjs + rebSnap.Stats.InObjs
-	rebSnap.Stats.Bytes = rebSnap.Stats.OutBytes + rebSnap.Stats.InBytes
+	// NOTE: the number of rebalanced objects _is_ the number of transmitted objects
+	//       (definition)
+	rebSnap.Stats.Objs = rebSnap.Stats.OutObjs
+	rebSnap.Stats.Bytes = rebSnap.Stats.OutBytes
 	return rebSnap
 }
 
