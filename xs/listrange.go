@@ -277,8 +277,7 @@ func (r *evictDelete) do(lom *cluster.LOM, _ *lriterator) {
 		}
 		return
 	}
-	r.ObjsAdd(1)
-	r.BytesAdd(lom.SizeBytes(true)) // was loaded and evicted
+	r.ObjsAdd(1, lom.SizeBytes(true)) // loaded and evicted
 }
 
 //////////////
@@ -362,6 +361,5 @@ func (r *prefetch) do(lom *cluster.LOM, _ *lriterator) {
 	if verbose {
 		glog.Infof("prefetch: %s", lom)
 	}
-	r.ObjsAdd(1)
-	r.BytesAdd(lom.SizeBytes())
+	r.ObjsAdd(1, lom.SizeBytes())
 }

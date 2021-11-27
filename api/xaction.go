@@ -64,14 +64,14 @@ func (xs NodesXactStat) Aborted() bool {
 
 func (xs NodesXactStat) ObjCount() (count int64) {
 	for _, snap := range xs {
-		count += snap.Stats.Objs
+		count += snap.Stats.Objs + snap.Stats.OutObjs // TODO: extend to support in and out objs/bytes
 	}
 	return
 }
 
 func (xs NodesXactStat) BytesCount() (count int64) {
 	for _, snap := range xs {
-		count += snap.Stats.Bytes
+		count += snap.Stats.Bytes + snap.Stats.OutBytes // TODO: ditto
 	}
 	return
 }

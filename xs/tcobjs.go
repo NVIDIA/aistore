@@ -214,6 +214,7 @@ func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) {
 		params.Buf = buf
 		params.DP = wi.r.args.DP
 		params.DryRun = wi.msg.DryRun
+		params.Xact = wi.r
 	}
 	size, err := lri.t.CopyObject(lom, params, false /*localOnly*/)
 	slab.Free(buf)
@@ -223,16 +224,12 @@ func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) {
 		}
 		return
 	}
-	wi.r.ObjsAdd(1)
-	// TODO: support precise post-transform byte count
-	// (under ETL, sizes of transformed objects are unknown until after the transformation)
-	if size == cos.ContentLengthUnknown {
-		if err := lom.Load(false /*cacheit*/, false /*locked*/); err != nil {
-			wi.r.raiseErr(err, 0, wi.msg.ContinueOnError)
-			size = 0
-		} else {
-			size = lom.SizeBytes()
-		}
+	if size != cos.ContentLengthUnknown {
+		return
 	}
-	wi.r.BytesAdd(size)
+	// under ETL, sizes of transformed objects are unknown until after the transformation
+	// TODO: support precise post-transform byte count
+	if err := lom.Load(false /*cacheit*/, false /*locked*/); err != nil {
+		wi.r.raiseErr(err, 0, wi.msg.ContinueOnError)
+	}
 }

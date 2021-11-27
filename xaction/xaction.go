@@ -217,22 +217,35 @@ func (*XactBase) Result() (interface{}, error) {
 }
 
 // base stats: locally processed
-func (xact *XactBase) Objs() int64              { return xact.stats.objs.Load() }
-func (xact *XactBase) ObjsAdd(cnt int64) int64  { return xact.stats.objs.Add(cnt) }
-func (xact *XactBase) Bytes() int64             { return xact.stats.bytes.Load() }
-func (xact *XactBase) BytesAdd(cnt int64) int64 { return xact.stats.bytes.Add(cnt) }
+func (xact *XactBase) Objs() int64  { return xact.stats.objs.Load() }
+func (xact *XactBase) Bytes() int64 { return xact.stats.bytes.Load() }
+
+func (xact *XactBase) ObjsAdd(cnt int, size int64) {
+	xact.stats.objs.Add(int64(cnt))
+	xact.stats.bytes.Add(size)
+}
 
 // base stats: transmit
-func (xact *XactBase) OutObjs() int64              { return xact.stats.outobjs.Load() }
-func (xact *XactBase) OutObjsAdd(cnt int64) int64  { return xact.stats.outobjs.Add(cnt) }
-func (xact *XactBase) OutBytes() int64             { return xact.stats.outbytes.Load() }
-func (xact *XactBase) OutBytesAdd(cnt int64) int64 { return xact.stats.outbytes.Add(cnt) }
+func (xact *XactBase) OutObjs() int64  { return xact.stats.outobjs.Load() }
+func (xact *XactBase) OutBytes() int64 { return xact.stats.outbytes.Load() }
+
+func (xact *XactBase) OutObjsAdd(cnt int, size int64) {
+	xact.stats.outobjs.Add(int64(cnt))
+	if size > 0 { // not unsized
+		xact.stats.outbytes.Add(size)
+	}
+}
 
 // base stats: receive
-func (xact *XactBase) InObjs() int64              { return xact.stats.inobjs.Load() }
-func (xact *XactBase) InObjsAdd(cnt int64) int64  { return xact.stats.inobjs.Add(cnt) }
-func (xact *XactBase) InBytes() int64             { return xact.stats.inbytes.Load() }
-func (xact *XactBase) InBytesAdd(cnt int64) int64 { return xact.stats.inbytes.Add(cnt) }
+func (xact *XactBase) InObjs() int64  { return xact.stats.inobjs.Load() }
+func (xact *XactBase) InBytes() int64 { return xact.stats.inbytes.Load() }
+
+func (xact *XactBase) InObjsAdd(cnt int, size int64) {
+	xact.stats.inobjs.Add(int64(cnt))
+	if size > 0 { // not unsized
+		xact.stats.inbytes.Add(size)
+	}
+}
 
 func (xact *XactBase) Snap() cluster.XactionSnap {
 	snap := &Snap{}

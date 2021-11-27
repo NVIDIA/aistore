@@ -221,7 +221,7 @@ func (rj *joggerCtx) moveObject(lom *cluster.LOM, buf []byte) {
 			return
 		}
 	}
-	size, err := rj.t.CopyObject(lom, &cluster.CopyObjectParams{BckTo: lom.Bck(), Buf: buf}, true /*local*/)
+	size, err := rj.t.CopyObject(lom, &cluster.CopyObjectParams{BckTo: lom.Bck(), Buf: buf, Xact: rj.xres}, true /*local*/)
 	if err != nil {
 		glog.Errorf("%s: %v", lom, err)
 		// EC cleanup and return
@@ -239,9 +239,6 @@ func (rj *joggerCtx) moveObject(lom *cluster.LOM, buf []byte) {
 			glog.Warningf("%s: failed to cleanup old metafile %q: %v", lom, metaOldPath, err)
 		}
 	}
-
-	rj.xres.BytesAdd(size)
-	rj.xres.ObjsAdd(1)
 
 	// NOTE: not deleting _misplaced_ and copied - delegating to `storage cleanup` and/or LRU
 }

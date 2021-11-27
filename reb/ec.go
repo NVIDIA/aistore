@@ -158,8 +158,7 @@ func (reb *Reb) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *cluster.
 		return
 	}
 	xreb := reb.xact()
-	xreb.OutObjsAdd(1)
-	xreb.OutBytesAdd(o.Hdr.ObjAttrs.Size)
+	xreb.OutObjsAdd(1, o.Hdr.ObjAttrs.Size)
 	return
 }
 

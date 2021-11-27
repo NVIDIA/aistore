@@ -31,12 +31,6 @@ type (
 		Bck() *Bck
 		StartTime() time.Time
 		EndTime() time.Time
-		Objs() int64     // locally processed
-		Bytes() int64    //
-		OutObjs() int64  // transmit
-		OutBytes() int64 //
-		InObjs() int64   // receive
-		InBytes() int64
 		Finished() bool
 		Aborted() bool
 		AbortedAfter(time.Duration) bool
@@ -53,6 +47,11 @@ type (
 		Finish(error)
 		Abort(error) bool
 		AddNotif(n Notif)
+
+		// common stats
+		ObjsAdd(int, int64)    // locally processed
+		OutObjsAdd(int, int64) // transmit
+		InObjsAdd(int, int64)  // receive
 	}
 
 	XactionSnap interface {

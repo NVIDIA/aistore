@@ -125,9 +125,7 @@ func (r *xactMNC) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 		return cmn.NewErrAborted(r.Name(), "visit-obj", err)
 	}
 
-	r.ObjsAdd(1)
-	r.BytesAdd(size)
-
+	r.ObjsAdd(1, size)
 	if r.Objs()%100 == 0 {
 		if cs := fs.GetCapStatus(); cs.Err != nil {
 			return cmn.NewErrAborted(r.Name(), "visit-obj", cs.Err)

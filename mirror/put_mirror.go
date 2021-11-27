@@ -113,7 +113,7 @@ func (r *XactPut) workCb(lom *cluster.LOM, buf []byte) {
 	if _, err := addCopies(lom, copies, buf); err != nil {
 		glog.Error(err)
 	} else {
-		r.InObjsAdd(int64(copies))
+		r.InObjsAdd(copies, int64(copies)*lom.SizeBytes())
 	}
 	r.DecPending() // to support action renewal on-demand
 	cluster.FreeLOM(lom)

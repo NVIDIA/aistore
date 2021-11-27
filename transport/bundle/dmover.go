@@ -112,7 +112,7 @@ func (dm *DataMover) NetD() string               { return dm.data.net }
 func (dm *DataMover) NetC() string               { return dm.ack.net }
 func (dm *DataMover) RecvType() cluster.RecvType { return dm.recvType }
 
-// associate xaction with data mover, primarily to sync on aborts
+// xaction that drives and utilizes this data mover
 func (dm *DataMover) SetXact(xact cluster.Xact) { dm.xact = xact }
 func (dm *DataMover) GetXact() cluster.Xact     { return dm.xact }
 
@@ -204,8 +204,12 @@ func (dm *DataMover) UnregRecv() {
 	dm.stage.regred.Store(false)
 }
 
-func (dm *DataMover) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *cluster.Snode) error {
-	return dm.data.streams.Send(obj, roc, tsi)
+func (dm *DataMover) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *cluster.Snode) (err error) {
+	err = dm.data.streams.Send(obj, roc, tsi)
+	if err == nil && !obj.IsLast() { // TODO -- FIXME: use opcodes
+		dm.xact.OutObjsAdd(1, obj.Size())
+	}
+	return
 }
 
 func (dm *DataMover) ACK(hdr transport.ObjHdr, cb transport.ObjSentCB, tsi *cluster.Snode) error {
@@ -232,6 +236,7 @@ func (dm *DataMover) quicb(_ time.Duration /*accum. sleep time*/) cluster.QuiRes
 }
 
 func (dm *DataMover) wrapRecvData(hdr transport.ObjHdr, object io.Reader, err error) {
+	dm.xact.InObjsAdd(1, hdr.ObjAttrs.Size)
 	dm.stage.laterx.Store(true)
 	dm.data.recv(hdr, object, err)
 }

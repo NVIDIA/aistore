@@ -235,10 +235,7 @@ func (r *ObjListXact) dispatchRequest() *Resp {
 	}
 }
 
-func (r *ObjListXact) walkCallback(lom *cluster.LOM) {
-	r.ObjsAdd(1)
-	r.BytesAdd(lom.SizeBytes())
-}
+func (r *ObjListXact) walkCallback(*cluster.LOM) { r.ObjsAdd(1, 0) }
 
 func (r *ObjListXact) walkCtx() context.Context {
 	return context.WithValue(

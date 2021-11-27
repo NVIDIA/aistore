@@ -127,8 +127,7 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 		glog.Infof("%s: from %s %s", reb.t.Snode(), tsid, lom)
 	}
 	xreb := reb.xact()
-	xreb.InObjsAdd(1)
-	xreb.InBytesAdd(hdr.ObjAttrs.Size)
+	xreb.InObjsAdd(1, hdr.ObjAttrs.Size)
 	// ACK
 	tsi := smap.GetTarget(tsid)
 	if tsi == nil {

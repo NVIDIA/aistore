@@ -132,9 +132,8 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		} else {
 			glog.Error(err)
 		}
-	} else if lom != nil { // nil when (placement = different target)
-		r.ObjsAdd(1)
-		r.BytesAdd(lom.SizeBytes())
+	} else if lom != nil { // locally placed (PromoteFile returns nil when sending remotely)
+		r.ObjsAdd(1, lom.SizeBytes())
 		cluster.FreeLOM(lom)
 	}
 	return nil

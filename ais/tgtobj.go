@@ -977,11 +977,13 @@ func combineAppendHandle(nodeID, filePath string, partialCksum *cos.CksumHash) s
 
 func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int64, err error) {
 	debug.Assert(coi.DP == nil)
+	// remote to remote:
+	// since we don't need to create local copies we can simply use copyReader
 	if src.Bck().IsRemote() || coi.BckTo.IsRemote() {
-		// There will be no logic to create local copies etc, we can simply use copyReader
 		coi.DP = &cluster.LDP{}
 		return coi.copyReader(src, objNameTo)
 	}
+
 	si := coi.t.si
 	if !coi.localOnly {
 		smap := coi.t.owner.smap.Get()
@@ -989,7 +991,8 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 			return
 		}
 	}
-	// remote copy
+
+	// to remote
 	if si.ID() != coi.t.si.ID() {
 		params := allocSendParams()
 		{
@@ -1001,6 +1004,7 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 		freeSendParams(params)
 		return
 	}
+
 	// dry-run
 	if coi.DryRun {
 		// TODO: replace with something similar to src.FQN == dst.FQN, but dstBck might not exist.
@@ -1009,6 +1013,7 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 		}
 		return src.SizeBytes(), nil
 	}
+
 	// local copy
 	dst := cluster.AllocLOM(objNameTo)
 	defer cluster.FreeLOM(dst)
@@ -1051,6 +1056,11 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 	}
 	err = err2
 	cluster.FreeLOM(dst2)
+	// xaction stats: inc locally processed (and see data mover for in and out objs)
+	if coi.Xact != nil {
+		debug.Assert(coi.DM == nil || coi.Xact == coi.DM.GetXact())
+		coi.Xact.ObjsAdd(1, src.SizeBytes())
+	}
 	return
 }
 
@@ -1121,11 +1131,16 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 		Reader:   reader,
 		RecvType: recvType,
 	}
-	if err := coi.t.PutObject(dst, params); err != nil {
-		return 0, err
+	if err = coi.t.PutObject(dst, params); err != nil {
+		return
 	}
-
-	return lom.SizeBytes(), nil
+	// xaction stats: inc locally processed (and see data mover for in and out objs)
+	size = lom.SizeBytes()
+	if coi.Xact != nil {
+		debug.Assert(coi.DM == nil || coi.Xact == coi.DM.GetXact())
+		coi.Xact.ObjsAdd(1, size)
+	}
+	return
 }
 
 func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (size int64, err error) {
@@ -1203,6 +1218,8 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 	if params.DM != nil {
 		err = _sendObjDM(lom, params)
 	} else {
+		// TODO: currently, these sends are not accounted for in xactions stats
+		//       (see data mover for in and out counters)
 		err = coi.t._sendPUT(params)
 	}
 	return

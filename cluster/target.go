@@ -70,7 +70,7 @@ type (
 
 	DataMover interface {
 		RegRecv() error
-		SetXact(xact Xact)
+		GetXact() Xact
 		Open()
 		Close(err error)
 		UnregRecv()
@@ -92,6 +92,7 @@ type (
 		Buf       []byte
 		DM        DataMover
 		DP        DP // optional
+		Xact      Xact
 		DryRun    bool
 	}
 	SendToParams struct {

@@ -90,10 +90,12 @@ func (t *targetrunner) EvictObject(lom *cluster.LOM) (errCode int, err error) {
 	return
 }
 
-// CopyObject creates a replica of an object (the `lom` argument) in accordance with the
-// `params` specification.  The destination _may_ have a different name and be located
-// in a different bucket.
-// There are a few possible scenarios:
+// CopyObject creates either a full replica of an object (the `lom` argument)
+//     - or -
+// transforms the object and places it at the destination, in accordance with the `params`.
+//
+// The destination _may_ have a different name and _may_ be located in a different bucket.
+// Scenarios include (but are not limited to):
 // - if both src and dst LOMs are from local buckets the copying then takes place between AIS targets
 //   (of this same cluster);
 // - if the src is located in a remote bucket, we always first make sure it is also present in
@@ -112,7 +114,7 @@ func (t *targetrunner) CopyObject(lom *cluster.LOM, params *cluster.CopyObjectPa
 	if params.ObjNameTo != "" {
 		objNameTo = params.ObjNameTo
 	}
-	if params.DP != nil {
+	if params.DP != nil { // NOTE: w/ transformation
 		return coi.copyReader(lom, objNameTo)
 	}
 	size, err = coi.copyObject(lom, objNameTo)

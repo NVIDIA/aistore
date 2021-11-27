@@ -211,9 +211,7 @@ func (t *bsummXact) Run(*sync.WaitGroup) {
 						if bck.IsAIS() || (!bck.IsAIS() && shouldListCB) {
 							summary.ObjCount++
 						}
-
-						t.ObjsAdd(1)
-						t.BytesAdd(v.Size)
+						t.ObjsAdd(1, v.Size)
 					}
 
 					if list.ContinuationToken == "" {
@@ -268,9 +266,7 @@ func (t *bsummXact) doBckSummaryFast(bck *cluster.Bck) (objCount, size uint64, e
 
 				gatomic.AddUint64(&objCount, uint64(fileCount))
 				gatomic.AddUint64(&size, dirSize)
-
-				t.ObjsAdd(int64(fileCount))
-				t.BytesAdd(int64(dirSize))
+				t.ObjsAdd(fileCount, int64(dirSize))
 				return nil
 			}
 		}(mpathInfo))

@@ -762,8 +762,7 @@ func (c *getJogger) restoreEncoded(ctx *restoreCtx) error {
 		return err
 	}
 
-	c.parent.ObjsAdd(1) // TODO: support in and out
-	c.parent.BytesAdd(ctx.meta.Size)
+	c.parent.ObjsAdd(1, ctx.meta.Size)
 
 	// main replica is ready to download by a client.
 	if err := c.uploadRestoredSlices(ctx, restored); err != nil {

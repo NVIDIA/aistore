@@ -91,12 +91,10 @@ func (e *tcbFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (e *tcbFactory) Start() error {
-	var (
-		config    = cmn.GCO.Get()
-		sizePDU   int32
-		slab, err = e.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
-	)
+	var sizePDU int32
+	slab, err := e.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
 	cos.AssertNoErr(err)
+
 	e.xact = newXactTCB(e, slab)
 	if e.kind == cmn.ActETLBck {
 		sizePDU = memsys.DefaultBufSize
@@ -107,7 +105,9 @@ func (e *tcbFactory) Start() error {
 	e.xact.refc.Store(int32(smap.CountTargets() - 1))
 	e.xact.wg.Add(1)
 
-	return e.newDM(&config.Rebalance, e.UUID(), sizePDU)
+	config := cmn.GCO.Get()
+	err = e.newDM(&config.Rebalance, e.UUID(), sizePDU)
+	return err
 }
 
 func (e *tcbFactory) newDM(rebcfg *cmn.RebalanceConf, uuid string, sizePDU int32) error {
@@ -125,6 +125,7 @@ func (e *tcbFactory) newDM(rebcfg *cmn.RebalanceConf, uuid string, sizePDU int32
 	if err := dm.RegRecv(); err != nil {
 		return err
 	}
+	dm.SetXact(e.xact)
 	e.xact.dm = dm
 	return nil
 }
@@ -235,7 +236,6 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 }
 
 func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
-	var size int64
 	objNameTo := r.args.Msg.ToName(lom.ObjName)
 	params := allocCpObjParams()
 	{
@@ -244,27 +244,15 @@ func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 		params.Buf = buf
 		params.DM = r.dm
 		params.DP = r.args.DP
+		params.Xact = r
 		params.DryRun = r.args.Msg.DryRun
 	}
-	size, err = r.Target().CopyObject(lom, params, false /*localOnly*/)
+	_, err = r.Target().CopyObject(lom, params, false /*localOnly*/)
 	if err != nil {
 		if cos.IsErrOOS(err) {
 			err = cmn.NewErrAborted(r.Name(), "copy-obj", err)
 		}
 		goto ret
-	}
-	r.ObjsAdd(1)
-
-	// TODO: Add precise post-transform byte count
-	// (under ETL, sizes of transformed objects are unknown until after the transformation)
-	if size == cos.ContentLengthUnknown || size == 0 {
-		size = lom.SizeBytes()
-	}
-	r.BytesAdd(size)
-
-	// keep checking remaining capacity
-	if cs := fs.GetCapStatus(); cs.Err != nil {
-		err = cmn.NewErrAborted(r.Name(), "copy-obj", cs.Err)
 	}
 ret:
 	freeCpObjParams(params)
