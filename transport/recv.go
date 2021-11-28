@@ -262,7 +262,7 @@ func (it *iterator) nextObj(loghdr string, hlen int) (obj *objReader, err error)
 		return
 	}
 	hdr := ExtObjHeader(it.hbuf, hlen)
-	if hdr.IsLast() {
+	if hdr.isFin() {
 		err = io.EOF
 		return
 	}
@@ -282,7 +282,7 @@ func (it *iterator) nextMsg(loghdr string, hlen int) (msg Msg, err error) {
 	}
 	debug.Assertf(n == hlen, "%d != %d", n, hlen)
 	msg = ExtMsg(it.hbuf, hlen)
-	if msg.IsLast() {
+	if msg.isFin() {
 		err = io.EOF
 	}
 	return

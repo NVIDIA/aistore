@@ -244,12 +244,11 @@ func checkETLStats(t *testing.T, xactID string, expectedObjCnt int, expectedByte
 		expectedObjCnt, locObjs, outObjs, inObjs)
 
 	if expectedBytesCnt == 0 {
-		return // we don't know the precise size
+		return // don't know the size
 	}
 	locBytes, outBytes, inBytes := stats.ByteCounts()
-
-	// TODO -- FIXME: assert expected byte counts
-	tlog.Logf("Stats (bytes): expected %d, got (locBytes=%d, outBytes=%d, inBytes=%d)", expectedBytesCnt,
+	// TODO -- FIXME: expected 5120, got (locBytes=2048, outBytes=0, inBytes=0)
+	tlog.Logf("Stats (bytes): expected %d, got (locBytes=%d, outBytes=%d, inBytes=%d)\n", expectedBytesCnt,
 		locBytes, outBytes, inBytes)
 }
 

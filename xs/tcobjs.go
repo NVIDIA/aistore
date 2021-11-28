@@ -155,7 +155,7 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 		glog.Error(err)
 		return
 	}
-	if hdr.Opcode == doneSendingOpcode {
+	if hdr.Opcode == OpcTxnDone {
 		txnUUID := string(hdr.Opaque)
 		r.pending.RLock()
 		wi, ok := r.pending.m[txnUUID]

@@ -116,7 +116,7 @@ func Example_headers() {
 			hlen = int(binary.BigEndian.Uint64(body[off:]))
 			off += 16 // hlen and hlen-checksum
 			hdr = transport.ExtObjHeader(body[off:], hlen)
-			if !hdr.IsLast() {
+			if !transport.ReservedOpcode(hdr.Opcode) {
 				fmt.Printf("%+v (%d)\n", hdr, hlen)
 				off += hlen + int(hdr.ObjAttrs.Size)
 			} else {

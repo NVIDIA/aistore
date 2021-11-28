@@ -298,7 +298,7 @@ func (r *XactCreateArchMultiObj) recv(hdr transport.ObjHdr, objReader io.Reader,
 	debug.Assert(wi.msg.TxnUUID == txnUUID)
 
 	// NOTE: best-effort via ref-counting
-	if hdr.Opcode == doneSendingOpcode {
+	if hdr.Opcode == OpcTxnDone {
 		refc := wi.refc.Dec()
 		debug.Assert(refc >= 0)
 		return

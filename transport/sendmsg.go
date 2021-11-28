@@ -10,7 +10,6 @@ import (
 	"io"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -59,7 +58,7 @@ func (s *MsgStream) Read(b []byte) (n int, err error) {
 	if s.inSend() {
 		msg := &s.msgoff.msg
 		n, err = s.send(b)
-		if msg.IsLast() {
+		if msg.isFin() {
 			err = io.EOF
 		}
 		return
@@ -73,7 +72,7 @@ repeat:
 			return
 		}
 		s.msgoff.msg = *msg
-		if s.msgoff.msg.IsIdleTick() {
+		if s.msgoff.msg.isIdleTick() {
 			if len(s.workCh) > 0 {
 				goto repeat
 			}
@@ -103,7 +102,7 @@ func (s *MsgStream) send(b []byte) (n int, err error) {
 		}
 		s.msgoff.ins = inEOB
 		s.msgoff.off = 0
-		if s.msgoff.msg.IsLast() {
+		if s.msgoff.msg.isFin() {
 			if verbose {
 				glog.Infof("%s: sent last", s)
 			}
@@ -157,28 +156,9 @@ func (s *MsgStream) closeAndFree() {
 // gc: post idle tick if idle
 func (s *MsgStream) idleTick() {
 	if len(s.workCh) == 0 && s.sessST.CAS(active, inactive) {
-		s.workCh <- &Msg{Flags: tickMarker}
+		s.workCh <- &Msg{Opcode: opcIdleTick}
 		if verbose {
 			glog.Infof("%s: active => inactive", s)
 		}
 	}
-}
-
-////////////////////
-// Msg and MsgHdr //
-////////////////////
-
-func (msg *Msg) IsLast() bool     { return msg.Flags == lastMarker }
-func (msg *Msg) IsIdleTick() bool { return msg.Flags == tickMarker }
-func (*Msg) IsHeaderOnly() bool   { return true }
-
-func (msg *Msg) String() string {
-	if msg.IsLast() {
-		return "smsg-last"
-	}
-	if msg.IsIdleTick() {
-		return "smsg-tick"
-	}
-	l := cos.Min(len(msg.Body), 16)
-	return fmt.Sprintf("smsg-[%s](len=%d)", msg.Body[:l], l)
 }

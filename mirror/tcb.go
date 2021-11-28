@@ -25,10 +25,6 @@ import (
 	"github.com/NVIDIA/aistore/xreg"
 )
 
-const (
-	doneSendingOpcode = 27182
-)
-
 type (
 	tcbFactory struct {
 		xreg.RenewBase
@@ -49,6 +45,8 @@ type (
 		err  cos.ErrValue
 	}
 )
+
+const OpcTxnDone = 27182
 
 const etlBucketParallelCnt = 2
 
@@ -100,7 +98,7 @@ func (e *tcbFactory) Start() error {
 		sizePDU = memsys.DefaultBufSize
 	}
 
-	// NOTE: to refcount doneSendingOpcode
+	// NOTE: to refcount OpcTxnDone
 	smap := e.T.Sowner().Get()
 	e.xact.refc.Store(int32(smap.CountTargets() - 1))
 	e.xact.wg.Add(1)
@@ -210,7 +208,7 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	err := r.XactBckJog.Wait()
 
 	o := transport.AllocSend()
-	o.Hdr.Opcode = doneSendingOpcode
+	o.Hdr.Opcode = OpcTxnDone
 	r.dm.Bcast(o)
 
 	// NOTE: ref-counted quiescence, fairly short (optimal) waiting
@@ -266,7 +264,7 @@ func (r *XactTCB) recv(hdr transport.ObjHdr, objReader io.Reader, err error) {
 		return
 	}
 	// NOTE: best-effort via ref-counting
-	if hdr.Opcode == doneSendingOpcode {
+	if hdr.Opcode == OpcTxnDone {
 		refc := r.refc.Dec()
 		debug.Assert(refc >= 0)
 		return

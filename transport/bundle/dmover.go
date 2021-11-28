@@ -206,7 +206,7 @@ func (dm *DataMover) UnregRecv() {
 
 func (dm *DataMover) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *cluster.Snode) (err error) {
 	err = dm.data.streams.Send(obj, roc, tsi)
-	if err == nil && !obj.IsLast() { // TODO -- FIXME: use opcodes
+	if err == nil && !transport.ReservedOpcode(obj.Hdr.Opcode) {
 		dm.xact.OutObjsAdd(1, obj.Size())
 	}
 	return

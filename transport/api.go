@@ -8,6 +8,7 @@ package transport
 import (
 	"fmt"
 	"io"
+	"math"
 	"path/filepath"
 	"reflect"
 	"time"
@@ -25,6 +26,15 @@ import (
 ///////////////////
 // object stream //
 ///////////////////
+
+// range of 16 `Obj.Hdr.Opcode` and `Msg.Opcode` values
+// reserved for _internal_ use
+const (
+	opcFin = iota + math.MaxUint16 - 16
+	opcIdleTick
+)
+
+func ReservedOpcode(opc int) bool { return opc >= opcFin }
 
 const (
 	SizeUnknown    = -1
@@ -52,7 +62,7 @@ type (
 		ObjAttrs cmn.ObjAttrs // attributes/metadata of the sent object
 		Opaque   []byte       // custom control (optional)
 		SID      string       // sender node ID
-		Opcode   int          // custom opcode (optional)
+		Opcode   int          // (see reserved range above)
 	}
 	// object to transmit
 	Obj struct {
@@ -72,8 +82,9 @@ type (
 	ObjSentCB func(ObjHdr, io.ReadCloser, interface{}, error)
 
 	Msg struct {
-		Flags int64
-		Body  []byte
+		SID    string // sender node ID
+		Opcode int    // (see reserved range above)
+		Body   []byte
 	}
 
 	// stream collector
@@ -135,7 +146,7 @@ func NewObjStream(client Client, dstURL, dstID string, extra *Extra) (s *Stream)
 //   network errors that may cause sudden and instant termination of the underlying
 //   stream(s).
 func (s *Stream) Send(obj *Obj) (err error) {
-	debug.Assert(len(obj.Hdr.Opaque) < len(s.maxheader)-int(unsafe.Sizeof(Obj{})))
+	debug.Assert(len(obj.Hdr.Opaque) < len(s.maxheader)-int(unsafe.Sizeof(Obj{}))) // must fit
 
 	if err = s.startSend(obj); err != nil {
 		s.doCmpl(obj, err) // take a shortcut
@@ -160,7 +171,7 @@ func (s *Stream) Send(obj *Obj) (err error) {
 }
 
 func (s *Stream) Fin() {
-	_ = s.Send(&Obj{Hdr: ObjHdr{ObjAttrs: cmn.ObjAttrs{Size: lastMarker}}})
+	_ = s.Send(&Obj{Hdr: ObjHdr{Opcode: opcFin}})
 	s.wg.Wait()
 }
 
@@ -195,7 +206,7 @@ func (s *MsgStream) Send(msg *Msg) (err error) {
 }
 
 func (s *MsgStream) Fin() {
-	_ = s.Send(&Msg{Flags: lastMarker})
+	_ = s.Send(&Msg{Opcode: opcFin})
 	s.wg.Wait()
 }
 

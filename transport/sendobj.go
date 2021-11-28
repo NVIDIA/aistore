@@ -1,7 +1,7 @@
 // Package transport provides streaming object-based transport over http for intra-cluster continuous
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -10,7 +10,6 @@ import (
 	"io"
 	"runtime"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -61,7 +60,7 @@ func (s *Stream) terminate() {
 
 	s.Stop()
 
-	obj := Obj{Hdr: ObjHdr{ObjAttrs: cmn.ObjAttrs{Size: lastMarker}}}
+	obj := Obj{Hdr: ObjHdr{Opcode: opcFin}}
 	s.cmplCh <- cmpl{obj, s.term.err}
 	s.term.mu.Unlock()
 
@@ -111,7 +110,7 @@ func (s *Stream) cmplLoop() {
 	for {
 		cmpl, ok := <-s.cmplCh
 		obj := &cmpl.obj
-		if !ok || obj.IsLast() {
+		if !ok || obj.Hdr.isFin() {
 			break
 		}
 		s.doCmpl(&cmpl.obj, cmpl.err)
@@ -126,7 +125,7 @@ func (s *Stream) abortPending(err error, completions bool) {
 	}
 	if completions {
 		for cmpl := range s.cmplCh {
-			if !cmpl.obj.IsLast() {
+			if !cmpl.obj.Hdr.isFin() {
 				s.doCmpl(&cmpl.obj, cmpl.err)
 			}
 		}
@@ -185,7 +184,7 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 		if !obj.IsHeaderOnly() {
 			return s.sendData(b)
 		}
-		if obj.IsLast() {
+		if obj.Hdr.isFin() {
 			err = io.EOF
 			return
 		}
@@ -222,7 +221,7 @@ repeat:
 		}
 		s.sendoff.obj = *obj
 		obj = &s.sendoff.obj
-		if obj.IsIdleTick() {
+		if obj.Hdr.isIdleTick() {
 			if len(s.workCh) > 0 {
 				goto repeat
 			}
@@ -261,7 +260,7 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 		s.sendoff.ins = inData
 	}
 	s.sendoff.off = 0
-	if obj.IsLast() {
+	if obj.Hdr.isFin() {
 		if verbose {
 			glog.Infof("%s: sent last", s)
 		}
@@ -392,40 +391,12 @@ func (s *Stream) closeAndFree() {
 // gc: post idle tick if idle
 func (s *Stream) idleTick() {
 	if len(s.workCh) == 0 && s.sessST.CAS(active, inactive) {
-		s.workCh <- &Obj{Hdr: ObjHdr{ObjAttrs: cmn.ObjAttrs{Size: tickMarker}}}
+		s.workCh <- &Obj{Hdr: ObjHdr{Opcode: opcIdleTick}}
 		if verbose {
 			glog.Infof("%s: active => inactive", s)
 		}
 	}
 }
-
-////////////////////
-// Obj and ObjHdr //
-////////////////////
-
-func (obj *Obj) IsLast() bool       { return obj.Hdr.IsLast() }
-func (obj *Obj) IsIdleTick() bool   { return obj.Hdr.ObjAttrs.Size == tickMarker }
-func (obj *Obj) IsHeaderOnly() bool { return obj.Hdr.IsHeaderOnly() }
-func (obj *Obj) IsUnsized() bool    { return obj.Hdr.IsUnsized() }
-
-func (obj *Obj) Size() int64 { return obj.Hdr.ObjSize() }
-
-func (obj *Obj) String() string {
-	s := fmt.Sprintf("sobj-%s", obj.Hdr.FullName())
-	if obj.IsHeaderOnly() {
-		return s
-	}
-	return fmt.Sprintf("%s(size=%d)", s, obj.Hdr.ObjAttrs.Size)
-}
-
-func (obj *Obj) SetPrc(n int) {
-	obj.prc = atomic.NewInt64(int64(n))
-}
-
-func (hdr *ObjHdr) IsLast() bool       { return hdr.ObjAttrs.Size == lastMarker }
-func (hdr *ObjHdr) IsUnsized() bool    { return hdr.ObjAttrs.Size == SizeUnknown }
-func (hdr *ObjHdr) IsHeaderOnly() bool { return hdr.ObjAttrs.Size == 0 || hdr.IsLast() }
-func (hdr *ObjHdr) ObjSize() int64     { return hdr.ObjAttrs.Size }
 
 ///////////
 // Stats //
@@ -444,7 +415,7 @@ func (stats *Stats) CompressionRatio() float64 {
 func (lz4s *lz4Stream) Read(b []byte) (n int, err error) {
 	var (
 		sendoff = &lz4s.s.sendoff
-		last    = sendoff.obj.IsLast()
+		last    = sendoff.obj.Hdr.isFin()
 		retry   = 64 // insist on returning n > 0 (note that lz4 compresses /blocks/)
 	)
 	if lz4s.sgl.Len() > 0 {

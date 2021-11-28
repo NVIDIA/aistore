@@ -8,7 +8,6 @@ package transport
 import (
 	"fmt"
 	"io"
-	"math"
 	"net/url"
 	"os"
 	"path"
@@ -42,12 +41,6 @@ const (
 	inPDU
 	inData
 	inEOB
-)
-
-// send-side markers
-const (
-	lastMarker = math.MaxInt64              // end of stream: send and receive
-	tickMarker = math.MaxInt64 ^ 0xa5a5a5a5 // idle tick - send side only
 )
 
 // termination: reasons

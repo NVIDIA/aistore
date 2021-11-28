@@ -1,14 +1,16 @@
 // Package transport provides streaming object-based transport over http for intra-cluster continuous
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -59,7 +61,8 @@ func insObjHeader(hbuf []byte, hdr *ObjHdr, usePDU bool) (off int) {
 
 func insMsg(hbuf []byte, msg *Msg) (off int) {
 	off = sizeProtoHdr
-	off = insInt64(off, hbuf, msg.Flags)
+	off = insString(off, hbuf, msg.SID)
+	off = insUint16(off, hbuf, msg.Opcode)
 	off = insBytes(off, hbuf, msg.Body)
 	word1 := uint64(off-sizeProtoHdr) | msgFlag
 	insUint64(0, hbuf, word1)
@@ -95,7 +98,7 @@ func insBytes(off int, to, b []byte) int {
 }
 
 func insUint16(off int, to []byte, i int) int {
-	debug.Assert(i >= 0 && i < 32768)
+	debug.Assert(i >= 0 && i < math.MaxUint16)
 	binary.BigEndian.PutUint16(to[off:], uint16(i))
 	return off + cos.SizeofI16
 }
@@ -164,7 +167,8 @@ func ExtObjHeader(body []byte, hlen int) (hdr ObjHdr) {
 
 func ExtMsg(body []byte, hlen int) (msg Msg) {
 	var off int
-	off, msg.Flags = extInt64(0, body)
+	off, msg.SID = extString(0, body)
+	off, msg.Opcode = extUint16(off, body)
 	off, msg.Body = extBytes(off, body)
 	debug.Assertf(off == hlen, "off %d, hlen %d", off, hlen)
 	return
@@ -216,3 +220,53 @@ func extAttrs(off int, from []byte) (n int, attr cmn.ObjAttrs) {
 	}
 	return off, attr
 }
+
+////////////////////
+// Obj and ObjHdr //
+////////////////////
+
+func (obj *Obj) IsHeaderOnly() bool { return obj.Hdr.IsHeaderOnly() }
+func (obj *Obj) IsUnsized() bool    { return obj.Hdr.IsUnsized() }
+
+func (obj *Obj) Size() int64 { return obj.Hdr.ObjSize() }
+
+func (obj *Obj) String() string {
+	s := fmt.Sprintf("sobj-%s", obj.Hdr.FullName())
+	if obj.IsHeaderOnly() {
+		return s
+	}
+	return fmt.Sprintf("%s(size=%d)", s, obj.Hdr.ObjAttrs.Size)
+}
+
+func (obj *Obj) SetPrc(n int) {
+	obj.prc = atomic.NewInt64(int64(n))
+}
+
+func (hdr *ObjHdr) IsUnsized() bool    { return hdr.ObjAttrs.Size == SizeUnknown }
+func (hdr *ObjHdr) IsHeaderOnly() bool { return hdr.ObjAttrs.Size == 0 }
+func (hdr *ObjHdr) ObjSize() int64     { return hdr.ObjAttrs.Size }
+
+// reserved opcodes
+func (hdr *ObjHdr) isFin() bool      { return hdr.Opcode == opcFin }
+func (hdr *ObjHdr) isIdleTick() bool { return hdr.Opcode == opcIdleTick }
+
+////////////////////
+// Msg and MsgHdr //
+////////////////////
+
+func (*Msg) IsHeaderOnly() bool { return true }
+
+func (msg *Msg) String() string {
+	if msg.isFin() {
+		return "smsg-last"
+	}
+	if msg.isIdleTick() {
+		return "smsg-tick"
+	}
+	l := cos.Min(len(msg.Body), 16)
+	return fmt.Sprintf("smsg-[%s](len=%d)", msg.Body[:l], l)
+}
+
+// reserved opcodes
+func (msg *Msg) isFin() bool      { return msg.Opcode == opcFin }
+func (msg *Msg) isIdleTick() bool { return msg.Opcode == opcIdleTick }

@@ -26,9 +26,9 @@ import (
 // multi-object on-demand (transactional) xactions - common logic
 //
 
-const (
-	doneSendingOpcode = 31415
+const OpcTxnDone = 27182
 
+const (
 	waitRegRecv   = 4 * time.Second
 	waitUnregRecv = 2 * waitRegRecv
 
@@ -121,7 +121,7 @@ func (r *streamingX) raiseErr(err error, errCode int, contOnErr bool) {
 // send EOI (end of iteration)
 func (r *streamingX) eoi(uuid string, tsi *cluster.Snode) {
 	o := transport.AllocSend()
-	o.Hdr.Opcode = doneSendingOpcode
+	o.Hdr.Opcode = OpcTxnDone
 	o.Hdr.Opaque = []byte(uuid)
 	if tsi != nil {
 		r.p.dm.Send(o, nil, tsi) // to the responsible target
