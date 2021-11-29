@@ -233,7 +233,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	getWhat := r.URL.Query().Get(cmn.URLParamWhat)
 	httpdaeWhat := "httpdaeget-" + getWhat
 	switch getWhat {
-	case cmn.GetWhatConfig, cmn.GetWhatSmap, cmn.GetWhatBMD, cmn.GetWhatSmapVote, cmn.GetWhatSnode, cmn.GetWhatLog:
+	case cmn.GetWhatConfig, cmn.GetWhatSmap, cmn.GetWhatBMD, cmn.GetWhatSmapVote, cmn.GetWhatSnode, cmn.GetWhatLog, cmn.GetWhatStats:
 		t.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatSysInfo:
 		tsysinfo := cmn.TSysInfo{
@@ -241,9 +241,6 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			CapacityInfo: fs.CapStatusAux(),
 		}
 		t.writeJSON(w, r, tsysinfo, httpdaeWhat)
-	case cmn.GetWhatStats:
-		ws := t.statsT.GetWhatStats()
-		t.writeJSON(w, r, ws, httpdaeWhat)
 	case cmn.GetWhatMountpaths:
 		t.writeJSON(w, r, fs.MountpathsToLists(), httpdaeWhat)
 	case cmn.GetWhatDaemonStatus:

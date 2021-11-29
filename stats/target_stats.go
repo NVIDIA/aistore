@@ -83,10 +83,6 @@ type (
 		disk    ios.AllDiskStats
 		standby bool
 	}
-	copyRunner struct {
-		Tracker copyTracker `json:"core"`
-		MPCap   fs.MPCap    `json:"capacity"`
-	}
 )
 
 const (
@@ -206,10 +202,10 @@ func (r *Trunner) RegMetrics(node *cluster.Snode) {
 	r.Core.initProm(node)
 }
 
-func (r *Trunner) GetWhatStats() interface{} {
-	ctracker := make(copyTracker, 48)
-	r.Core.copyCumulative(ctracker)
-	return &copyRunner{Tracker: ctracker, MPCap: r.MPCap}
+func (r *Trunner) GetWhatStats() (ds *DaemonStats) {
+	ds = r.statsRunner.GetWhatStats()
+	ds.MPCap = r.MPCap
+	return
 }
 
 func (r *Trunner) log(now int64, uptime time.Duration) {

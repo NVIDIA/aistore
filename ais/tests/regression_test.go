@@ -532,6 +532,26 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	m.waitAndCheckCluState()
 }
 
+func TestGetNodeStats(t *testing.T) {
+	proxyURL := tutils.RandomProxyURL(t)
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	smap := tutils.GetClusterMap(t, proxyURL)
+
+	proxy, err := smap.GetRandProxy(false)
+	tassert.CheckFatal(t, err)
+	tlog.Logf("%s:\n", proxy.StringEx())
+	stats, err := api.GetDaemonStats(baseParams, proxy)
+	tassert.CheckFatal(t, err)
+	tlog.Logf("%+v\n", stats)
+
+	target, err := smap.GetRandTarget()
+	tassert.CheckFatal(t, err)
+	tlog.Logf("%s:\n", target.StringEx())
+	stats, err = api.GetDaemonStats(baseParams, target)
+	tassert.CheckFatal(t, err)
+	tlog.Logf("%+v\n", stats)
+}
+
 func TestGetClusterStats(t *testing.T) {
 	proxyURL := tutils.RandomProxyURL(t)
 	smap := tutils.GetClusterMap(t, proxyURL)

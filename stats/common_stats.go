@@ -113,7 +113,7 @@ type (
 		StartedUp() bool
 		AddErrorHTTP(method string, val int64)
 		CoreStats() *CoreStats
-		GetWhatStats() interface{}
+		GetWhatStats() *DaemonStats
 		RegMetrics(node *cluster.Snode)
 		IsPrometheus() bool
 	}
@@ -141,6 +141,10 @@ type (
 		DeployedOn  string         `json:"deployment"`
 		Version     string         `json:"ais_version"` // major.minor.build
 		BuildTime   string         `json:"build_time"`  // YYYY-MM-DD HH:MM:SS-TZ
+	}
+	DaemonStats struct {
+		Tracker copyTracker `json:"core"`
+		MPCap   fs.MPCap    `json:"capacity"`
 	}
 )
 
@@ -622,6 +626,12 @@ func (tracker statsTracker) regCommonMetrics(node *cluster.Snode) {
 var (
 	_ prometheus.Collector = (*statsRunner)(nil)
 )
+
+func (r *statsRunner) GetWhatStats() *DaemonStats {
+	ctracker := make(copyTracker, 48)
+	r.Core.copyCumulative(ctracker)
+	return &DaemonStats{Tracker: ctracker}
+}
 
 func (r *statsRunner) IsPrometheus() bool { return r.Core.isPrometheus() }
 

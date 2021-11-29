@@ -131,6 +131,19 @@ func GetDaemonConfig(baseParams BaseParams, node *cluster.Snode) (config *cmn.Co
 	return config, nil
 }
 
+func GetDaemonStats(baseParams BaseParams, node *cluster.Snode) (ds *stats.DaemonStats, err error) {
+	baseParams.Method = http.MethodGet
+	err = DoHTTPReqResp(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPathReverseDaemon.S,
+		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatStats}},
+		Header: http.Header{
+			cmn.HdrNodeID: []string{node.ID()},
+		},
+	}, &ds)
+	return ds, err
+}
+
 // GetDaemonLog returns log of a specific daemon in a cluster.
 func GetDaemonLog(baseParams BaseParams, node *cluster.Snode, args GetLogInput) (err error) {
 	w := args.Writer

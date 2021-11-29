@@ -1492,6 +1492,9 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		cos.Close(file)
 		slab.Free(buf)
 		return
+	case cmn.GetWhatStats:
+		ws := h.statsT.GetWhatStats()
+		h.writeJSON(w, r, ws, what)
 	default:
 		h.writeErrf(w, r, "invalid GET /daemon request: unrecognized what=%s", what)
 		return

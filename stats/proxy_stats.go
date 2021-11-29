@@ -61,13 +61,6 @@ func (r *Prunner) Init(p cluster.Node) *atomic.Bool {
 	return &r.statsRunner.startedUp
 }
 
-// TODO: fix the scope of the return type
-func (r *Prunner) GetWhatStats() interface{} {
-	ctracker := make(copyTracker, 24)
-	r.Core.copyCumulative(ctracker)
-	return ctracker
-}
-
 //
 // statsLogger interface impl
 //

@@ -373,7 +373,7 @@ func ShutdownNode(_ *testing.T, baseParams api.BaseParams, node *cluster.Snode) 
 		daemonID = node.ID()
 		port     = node.PublicNet.DaemonPort
 	)
-	tlog.Logf("Shutting down %s\n", node.Name())
+	tlog.Logf("Shutting down %s\n", node.StringEx())
 	cmd.Node = node
 	if containers.DockerRunning() {
 		tlog.Logf("Stopping container %s\n", daemonID)

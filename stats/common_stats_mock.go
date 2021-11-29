@@ -28,5 +28,5 @@ func (*TrackerMock) AddErrorHTTP(string, int64) {}
 func (*TrackerMock) AddMany(...cos.NamedVal64)  {}
 func (*TrackerMock) RegMetrics(*cluster.Snode)  {}
 func (*TrackerMock) CoreStats() *CoreStats      { return nil }
-func (*TrackerMock) GetWhatStats() interface{}  { return nil }
+func (*TrackerMock) GetWhatStats() *DaemonStats { return nil }
 func (*TrackerMock) IsPrometheus() bool         { return false }

@@ -2261,11 +2261,8 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			p.handlePendingRenamedLB(renamedBucket)
 		}
 		fallthrough // fallthrough
-	case cmn.GetWhatConfig, cmn.GetWhatSmapVote, cmn.GetWhatSnode, cmn.GetWhatLog:
+	case cmn.GetWhatConfig, cmn.GetWhatSmapVote, cmn.GetWhatSnode, cmn.GetWhatLog, cmn.GetWhatStats:
 		p.httprunner.httpdaeget(w, r)
-	case cmn.GetWhatStats:
-		ws := p.statsT.GetWhatStats()
-		p.writeJSON(w, r, ws, what)
 	case cmn.GetWhatSysInfo:
 		p.writeJSON(w, r, sys.FetchSysInfo(), what)
 	case cmn.GetWhatSmap:
