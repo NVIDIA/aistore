@@ -281,14 +281,14 @@ func WaitForRebalanceToStart(baseParams api.BaseParams, args api.XactReqArgs) er
 		defer cancel()
 	}
 	for {
-		xactStats, err := api.QueryXactionSnaps(baseParams, args)
+		snaps, err := api.QueryXactionSnaps(baseParams, args)
 		if err != nil {
 			return err
 		}
-		if xactStats.Running() {
+		if snaps.Running() {
 			break
 		}
-		if len(xactStats) > 0 && xactStats.Finished() {
+		if len(snaps) > 0 && snaps.Finished() {
 			break
 		}
 		time.Sleep(api.XactPollTime)

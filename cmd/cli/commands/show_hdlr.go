@@ -23,14 +23,14 @@ import (
 )
 
 type (
-	daemonTemplateStats struct {
-		DaemonID string
-		Stats    []*xaction.SnapExt
+	daemonTemplateXactSnaps struct {
+		DaemonID  string
+		XactSnaps []*xaction.SnapExt
 	}
 
 	xactionTemplateCtx struct {
-		Stats   *[]daemonTemplateStats
-		Verbose bool
+		ClusterXactSnaps *[]daemonTemplateXactSnaps
+		Verbose          bool
 	}
 
 	targetMpath struct {
@@ -349,43 +349,43 @@ func showStorageHandler(c *cli.Context) (err error) {
 }
 
 func showXactionHandler(c *cli.Context) (err error) {
-	xactID, xactKind, bck, err := parseXactionFromArgs(c)
-	if err != nil {
-		return err
+	xactID, xactKind, bck, errP := parseXactionFromArgs(c)
+	if errP != nil {
+		return errP
 	}
-	var xactStats api.NodesXactMultiSnap
 	latest := !flagIsSet(c, allXactionsFlag)
 	if xactID != "" {
 		latest = false
 	}
 
-	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck, OnlyRunning: latest}
-	xactStats, err = api.QueryXactionSnaps(defaultAPIParams, xactArgs)
-
+	var (
+		xs       api.NodesXactMultiSnap
+		xactArgs = api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck, OnlyRunning: latest}
+	)
+	xs, err = api.QueryXactionSnaps(defaultAPIParams, xactArgs)
 	if err != nil {
 		return
 	}
-
 	if flagIsSet(c, activeFlag) {
-		for daemonID, daemonStats := range xactStats {
-			if len(daemonStats) == 0 {
+		for tid, snaps := range xs {
+			if len(snaps) == 0 {
 				continue
 			}
-			runningStats := xactStats[daemonID][:0]
-			for _, xact := range daemonStats {
+			runningStats := xs[tid][:0]
+			for _, xact := range snaps {
 				if xact.Running() {
 					runningStats = append(runningStats, xact)
 				}
 			}
-			xactStats[daemonID] = runningStats
+			xs[tid] = runningStats
 		}
 	}
 
-	dts := make([]daemonTemplateStats, len(xactStats))
+	dts := make([]daemonTemplateXactSnaps, len(xs))
 	i := 0
-	for daemonID, daemonStats := range xactStats {
-		sort.Slice(daemonStats, func(i, j int) bool {
-			di, dj := daemonStats[i], daemonStats[j]
+	for tid, snaps := range xs {
+		sort.Slice(snaps, func(i, j int) bool {
+			di, dj := snaps[i], snaps[j]
 			if di.Kind == dj.Kind {
 				// ascending by running
 				if di.Running() && dj.Running() {
@@ -400,19 +400,15 @@ func showXactionHandler(c *cli.Context) (err error) {
 			return di.Kind < dj.Kind // ascending by kind
 		})
 
-		s := daemonTemplateStats{
-			DaemonID: daemonID,
-			Stats:    daemonStats,
-		}
-		dts[i] = s
+		dts[i] = daemonTemplateXactSnaps{DaemonID: tid, XactSnaps: snaps}
 		i++
 	}
 	sort.Slice(dts, func(i, j int) bool {
 		return dts[i].DaemonID < dts[j].DaemonID // ascending by node id/name
 	})
 	ctx := xactionTemplateCtx{
-		Stats:   &dts,
-		Verbose: flagIsSet(c, verboseFlag),
+		ClusterXactSnaps: &dts,
+		Verbose:          flagIsSet(c, verboseFlag),
 	}
 
 	useJSON := flagIsSet(c, jsonFlag)

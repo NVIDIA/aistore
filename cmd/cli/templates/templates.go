@@ -111,10 +111,10 @@ const (
 	// Xactions templates
 	XactionsBodyTmpl     = XactionsBaseBodyTmpl + XactionsExtBodyTmpl
 	XactionsBaseBodyTmpl = XactionStatsHeader +
-		"{{range $daemon := $.Stats }}" + XactionBody + "{{end}}"
+		"{{range $daemon := $.ClusterXactSnaps }}" + XactionBody + "{{end}}"
 	XactionStatsHeader = "NODE\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\n"
-	XactionBody        = "{{range $key, $xact := $daemon.Stats}}" + XactionStatsBody + "{{end}}" +
-		"{{if $daemon.Stats}}\t \t \t \t \t \t \t \t{{if $.Verbose}} \t {{end}}\n{{end}}"
+	XactionBody        = "{{range $key, $xact := $daemon.XactSnaps}}" + XactionStatsBody + "{{end}}" +
+		"{{if $daemon.XactSnaps}}\t \t \t \t \t \t \t \t{{if $.Verbose}} \t {{end}}\n{{end}}"
 	XactionStatsBody = "{{ $daemon.DaemonID }}\t " +
 		"{{if $xact.ID}}{{$xact.ID}}{{else}}-{{end}}\t " +
 		"{{$xact.Kind}}\t " +
@@ -125,9 +125,9 @@ const (
 		"{{if (IsUnsetTime $xact.EndTime)}}-{{else}}{{FormatTime $xact.EndTime}}{{end}}\t " +
 		"{{FormatXactState $xact}}\n"
 	XactionsExtBodyTmpl = "{{if $.Verbose }}" + // if not nil
-		"\n{{range $daemon := $.Stats }}" +
-		"{{if $daemon.Stats}}NODE\t {{$daemon.DaemonID}}\n" +
-		"{{range $key, $xact := $daemon.Stats}}" +
+		"\n{{range $daemon := $.ClusterXactSnaps }}" +
+		"{{if $daemon.XactSnaps}}NODE\t {{$daemon.DaemonID}}\n" +
+		"{{range $key, $xact := $daemon.XactSnaps}}" +
 		"{{range $name,$val := $xact.Ext}}{{ $name }}\t {{$val}}\n{{end}}" +
 		"{{end}}\n" +
 		"{{end}}" +
@@ -135,12 +135,12 @@ const (
 
 	XactionECGetStatsHeader = "NODE\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t START\t END\t ABORTED\n"
 	XactionECGetBodyTmpl    = XactionECGetStatsHeader +
-		"{{range $daemon := $.Stats }}" + XactionECGetBody + "{{end}}"
-	XactionECGetBody      = "{{range $key, $xact := $daemon.Stats}}" + XactionECGetStatsBody + "{{end}}"
+		"{{range $daemon := $.ClusterXactSnaps }}" + XactionECGetBody + "{{end}}"
+	XactionECGetBody      = "{{range $key, $xact := $daemon.XactSnaps}}" + XactionECGetStatsBody + "{{end}}"
 	XactionECGetStatsBody = "{{ $daemon.DaemonID }}\t " +
 		"{{if $xact.Bck.Name}}{{$xact.Bck.Name}}{{else}}-{{end}}\t " +
 		"{{if (eq $xact.Stats.Objs 0) }}-{{else}}{{$xact.Stats.Objs}}{{end}}\t " +
-		"{{if (eq $xact.Bytes 0) }}-{{else}}{{FormatBytesSigned $xact.Bytes 2}}{{end}}\t " +
+		"{{if (eq $xact.Stats.Bytes 0) }}-{{else}}{{FormatBytesSigned $xact.Stats.Bytes 2}}{{end}}\t " +
 
 		"{{ $ext := ExtECGetStats $xact }}" +
 		"{{if (eq $ext.ErrCount 0) }}-{{else}}{{$ext.ErrCount}}{{end}}\t " +
@@ -153,12 +153,12 @@ const (
 
 	XactionECPutStatsHeader = "NODE\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t ENC TIME\t START\t END\t ABORTED\n"
 	XactionECPutBodyTmpl    = XactionECPutStatsHeader +
-		"{{range $daemon := $.Stats }}" + XactionECPutBody + "{{end}}"
-	XactionECPutBody      = "{{range $key, $xact := $daemon.Stats}}" + XactionECPutStatsBody + "{{end}}"
+		"{{range $daemon := $.ClusterXactSnaps }}" + XactionECPutBody + "{{end}}"
+	XactionECPutBody      = "{{range $key, $xact := $daemon.XactSnaps}}" + XactionECPutStatsBody + "{{end}}"
 	XactionECPutStatsBody = "{{ $daemon.DaemonID }}\t " +
-		"{{if $xact.BckX.Name}}{{$xact.BckX.Name}}{{else}}-{{end}}\t " +
-		"{{if (eq $xact.ObjCountX 0) }}-{{else}}{{$xact.ObjCountX}}{{end}}\t " +
-		"{{if (eq $xact.BytesCountX 0) }}-{{else}}{{FormatBytesSigned $xact.BytesCountX 2}}{{end}}\t " +
+		"{{if $xact.Bck.Name}}{{$xact.Bck.Name}}{{else}}-{{end}}\t " +
+		"{{if (eq $xact.Stats.Objs 0) }}-{{else}}{{$xact.Stats.Objs}}{{end}}\t " +
+		"{{if (eq $xact.Stats.Bytes 0) }}-{{else}}{{FormatBytesSigned $xact.Stats.Bytes 2}}{{end}}\t " +
 
 		"{{ $ext := ExtECPutStats $xact }}" +
 		"{{if (eq $ext.EncodeErrCount 0) }}-{{else}}{{$ext.EncodeErrCount}}{{end}}\t " +
