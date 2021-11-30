@@ -2364,9 +2364,9 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	err = api.AbortXaction(baseParams, api.XactReqArgs{ID: xactID})
 	tassert.CheckError(t, err)
 
-	stats, err := api.GetXactionStatsByID(baseParams, xactID)
+	snaps, err := api.GetXactionSnapsByID(baseParams, xactID)
 	tassert.CheckError(t, err)
-	tassert.Errorf(t, stats.Aborted(), "failed to abort copy-bucket (%s)", xactID)
+	tassert.Errorf(t, snaps.Aborted(), "failed to abort copy-bucket (%s)", xactID)
 
 	time.Sleep(time.Second)
 	bck, err := api.ListBuckets(baseParams, cmn.QueryBcks(dstBck))
@@ -2385,13 +2385,13 @@ func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	stats, err := api.GetXactionStatsByID(baseParams, xactID)
+	snaps, err := api.GetXactionSnapsByID(baseParams, xactID)
 	tassert.CheckFatal(t, err)
-	objs, outObjs, inObjs := stats.ObjCounts()
+	objs, outObjs, inObjs := snaps.ObjCounts()
 	tassert.Errorf(t, objs+outObjs == int64(m.num), "expected %d objects in total, got (objs=%d, outObjs=%d, inObjs=%d)",
 		m.num, objs, outObjs, inObjs)
 	expectedBytesCnt := int64(m.fileSize * uint64(m.num))
-	locBytes, outBytes, inBytes := stats.ByteCounts()
+	locBytes, outBytes, inBytes := snaps.ByteCounts()
 	tassert.Errorf(t, locBytes+outBytes == expectedBytesCnt, "expected %d bytes in total, got (locBytes=%d, outBytes=%d, inBytes=%d)",
 		expectedBytesCnt, locBytes, outBytes, inBytes)
 }
@@ -2431,14 +2431,14 @@ func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	stats, err := api.GetXactionStatsByID(baseParams, xactID)
+	snaps, err := api.GetXactionSnapsByID(baseParams, xactID)
 	tassert.CheckFatal(t, err)
 
-	locObjs, outObjs, inObjs := stats.ObjCounts()
+	locObjs, outObjs, inObjs := snaps.ObjCounts()
 	tassert.Errorf(t, locObjs+outObjs == int64(m.num), "expected %d objects, got (locObjs=%d, outObjs=%d, inObjs=%d)",
 		m.num, locObjs, outObjs, inObjs)
 
-	locBytes, outBytes, inBytes := stats.ByteCounts()
+	locBytes, outBytes, inBytes := snaps.ByteCounts()
 	expectedBytesCnt := int64(m.fileSize * uint64(m.num))
 	tassert.Errorf(t, locBytes+outBytes == expectedBytesCnt, "expected %d bytes, got (locBytes=%d, outBytes=%d, inBytes=%d)",
 		expectedBytesCnt, locBytes, outBytes, inBytes)

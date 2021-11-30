@@ -235,10 +235,10 @@ func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, fileS
 
 // NOTE: BytesCount references number of bytes *before* the transformation.
 func checkETLStats(t *testing.T, xactID string, expectedObjCnt int, expectedBytesCnt uint64) {
-	stats, err := api.GetXactionStatsByID(baseParams, xactID)
+	snaps, err := api.GetXactionSnapsByID(baseParams, xactID)
 	tassert.CheckFatal(t, err)
 
-	locObjs, outObjs, inObjs := stats.ObjCounts()
+	locObjs, outObjs, inObjs := snaps.ObjCounts()
 
 	tassert.Errorf(t, locObjs+outObjs == int64(expectedObjCnt), "expected %d objects, got (locObjs=%d, outObjs=%d, inObjs=%d)",
 		expectedObjCnt, locObjs, outObjs, inObjs)
@@ -246,7 +246,7 @@ func checkETLStats(t *testing.T, xactID string, expectedObjCnt int, expectedByte
 	if expectedBytesCnt == 0 {
 		return // don't know the size
 	}
-	locBytes, outBytes, inBytes := stats.ByteCounts()
+	locBytes, outBytes, inBytes := snaps.ByteCounts()
 	// TODO -- FIXME: expected 5120, got (locBytes=2048, outBytes=0, inBytes=0)
 	tlog.Logf("Stats (bytes): expected %d, got (locBytes=%d, outBytes=%d, inBytes=%d)\n", expectedBytesCnt,
 		locBytes, outBytes, inBytes)

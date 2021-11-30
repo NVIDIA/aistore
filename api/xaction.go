@@ -17,11 +17,14 @@ import (
 	"github.com/NVIDIA/aistore/xaction"
 )
 
-const XactPollTime = time.Second
+const (
+	XactPollTime       = time.Second
+	numConsecutiveIdle = 3 // number of consecutive 'idle' states
+)
 
 type (
-	NodesXactStat       map[string]*xaction.SnapExt
-	NodesXactMultiStats map[string][]*xaction.SnapExt
+	NodesXactSnap      map[string]*xaction.SnapExt
+	NodesXactMultiSnap map[string][]*xaction.SnapExt
 
 	XactStatsHelper interface {
 		Running() bool
@@ -41,113 +44,6 @@ type (
 		OnlyRunning bool // Read only active xactions
 	}
 )
-
-func (xs NodesXactStat) Running() bool {
-	for _, stat := range xs {
-		if stat.Running() {
-			return true
-		}
-	}
-	return false
-}
-
-func (xs NodesXactStat) Finished() bool { return !xs.Running() }
-
-func (xs NodesXactStat) Aborted() bool {
-	for _, stat := range xs {
-		if stat.Aborted() {
-			return true
-		}
-	}
-	return false
-}
-
-func (xs NodesXactStat) ObjCounts() (locObjs, outObjs, inObjs int64) {
-	for _, snap := range xs {
-		locObjs += snap.Stats.Objs
-		outObjs += snap.Stats.OutObjs
-		inObjs += snap.Stats.InObjs
-	}
-	return
-}
-
-func (xs NodesXactStat) ByteCounts() (locBytes, outBytes, inBytes int64) {
-	for _, snap := range xs {
-		locBytes += snap.Stats.Bytes
-		outBytes += snap.Stats.OutBytes
-		inBytes += snap.Stats.InBytes
-	}
-	return
-}
-
-func (xs NodesXactStat) TotalRunningTime() time.Duration {
-	var (
-		start = time.Now()
-		end   time.Time
-
-		running = false
-	)
-	for _, stat := range xs {
-		running = running || stat.Running()
-		if stat.StartTime.Before(start) {
-			start = stat.StartTime
-		}
-		if stat.EndTime.After(end) {
-			end = stat.EndTime
-		}
-	}
-
-	if running {
-		end = time.Now()
-	}
-	return end.Sub(start)
-}
-
-func (xs NodesXactMultiStats) Running() bool {
-	for _, targetStats := range xs {
-		for _, xaction := range targetStats {
-			if xaction.Running() {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func (xs NodesXactMultiStats) Finished() bool { return !xs.Running() }
-
-func (xs NodesXactMultiStats) Aborted() bool {
-	for _, targetStats := range xs {
-		for _, xaction := range targetStats {
-			if xaction.Aborted() {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func (xs NodesXactMultiStats) ObjCount() (count int64) {
-	for _, targetStats := range xs {
-		for _, snap := range targetStats {
-			count += snap.Stats.Objs
-		}
-	}
-	return
-}
-
-func (xs NodesXactMultiStats) GetNodesXactStat(id string) (xactStat NodesXactStat) {
-	xactStat = make(NodesXactStat)
-	for target, snaps := range xs {
-		for _, snap := range snaps {
-			if snap.ID == id {
-				xactStat[target] = snap
-				break
-			}
-		}
-	}
-	return
-}
 
 // StartXaction starts a given xaction.
 func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error) {
@@ -204,18 +100,18 @@ func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 	})
 }
 
-// GetXactionStatsByID gets all xaction stats for given id.
-func GetXactionStatsByID(baseParams BaseParams, id string) (xactStat NodesXactStat, err error) {
-	xactStats, err := QueryXactionStats(baseParams, XactReqArgs{ID: id})
+// GetXactionSnapsByID gets all xaction snaps for a given xaction id.
+func GetXactionSnapsByID(baseParams BaseParams, xactID string) (nxs NodesXactSnap, err error) {
+	xs, err := QueryXactionSnaps(baseParams, XactReqArgs{ID: xactID})
 	if err != nil {
 		return
 	}
-	xactStat = xactStats.GetNodesXactStat(id)
+	nxs = xs.nodesXactSnap(xactID)
 	return
 }
 
-// QueryXactionStats gets all xaction stats for given kind and bucket (optional).
-func QueryXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats NodesXactMultiStats, err error) {
+// QueryXactionSnaps gets all xaction snaps based on the specified selection.
+func QueryXactionSnaps(baseParams BaseParams, args XactReqArgs) (xs NodesXactMultiSnap, err error) {
 	msg := xaction.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck}
 	if args.OnlyRunning {
 		msg.OnlyRunning = Bool(true)
@@ -227,8 +123,8 @@ func QueryXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats Nodes
 		Body:       cos.MustMarshal(msg),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatQueryXactStats}},
-	}, &xactStats)
-	return xactStats, err
+	}, &xs)
+	return xs, err
 }
 
 // GetXactionStatus retrieves the status of the xaction.
@@ -280,13 +176,15 @@ func WaitForXaction(baseParams BaseParams, args XactReqArgs, sleeps ...time.Dura
 
 // isXactionIdle return true if an xaction is not running or idle on all targets
 func isXactionIdle(baseParams BaseParams, args XactReqArgs) (idle bool, err error) {
-	msg := xaction.QueryMsg{
-		ID:          args.ID,
-		Kind:        args.Kind,
-		Bck:         args.Bck,
-		OnlyRunning: Bool(true),
-	}
-	var xactStats NodesXactMultiStats
+	var (
+		xs  NodesXactMultiSnap
+		msg = xaction.QueryMsg{
+			ID:          args.ID,
+			Kind:        args.Kind,
+			Bck:         args.Bck,
+			OnlyRunning: Bool(true),
+		}
+	)
 	baseParams.Method = http.MethodGet
 	err = DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
@@ -294,20 +192,20 @@ func isXactionIdle(baseParams BaseParams, args XactReqArgs) (idle bool, err erro
 		Body:       cos.MustMarshal(msg),
 		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatQueryXactStats}},
-	}, &xactStats)
+	}, &xs)
 	if err != nil {
 		return false, err
 	}
-	if len(xactStats) == 0 {
+	if len(xs) == 0 {
 		return true, err
 	}
-	for _, xactStatList := range xactStats {
-		for _, xactStat := range xactStatList {
-			if xactStat.Ext == nil {
+	for _, xs := range xs {
+		for _, xsnap := range xs {
+			if xsnap.Ext == nil {
 				continue
 			}
 			var baseExt xaction.BaseDemandStatsExt
-			if err := cos.MorphMarshal(xactStat.Ext, &baseExt); err == nil {
+			if err := cos.MorphMarshal(xsnap.Ext, &baseExt); err == nil {
 				if !baseExt.IsIdle {
 					return false, nil
 				}
@@ -319,7 +217,6 @@ func isXactionIdle(baseParams BaseParams, args XactReqArgs) (idle bool, err erro
 
 // WaitForXactionIdle waits for a given on-demand xaction to be idle.
 func WaitForXactionIdle(baseParams BaseParams, args XactReqArgs) error {
-	const idleMax = 3 // number of consecutive 'idle' states
 	var (
 		ctx   = context.Background()
 		idles int
@@ -335,7 +232,7 @@ func WaitForXactionIdle(baseParams BaseParams, args XactReqArgs) error {
 			return err
 		}
 		if idle {
-			if idles == idleMax {
+			if idles == numConsecutiveIdle {
 				return nil
 			}
 			idles++
@@ -350,4 +247,106 @@ func WaitForXactionIdle(baseParams BaseParams, args XactReqArgs) error {
 			break
 		}
 	}
+}
+
+///////////////////
+// NodesXactSnap //
+///////////////////
+
+func (nxs NodesXactSnap) running() bool {
+	for _, snap := range nxs {
+		if snap.Running() {
+			return true
+		}
+	}
+	return false
+}
+
+func (nxs NodesXactSnap) Finished() bool { return !nxs.running() }
+
+func (nxs NodesXactSnap) Aborted() bool {
+	for _, snap := range nxs {
+		if snap.Aborted() {
+			return true
+		}
+	}
+	return false
+}
+
+func (nxs NodesXactSnap) ObjCounts() (locObjs, outObjs, inObjs int64) {
+	for _, snap := range nxs {
+		locObjs += snap.Stats.Objs
+		outObjs += snap.Stats.OutObjs
+		inObjs += snap.Stats.InObjs
+	}
+	return
+}
+
+func (nxs NodesXactSnap) ByteCounts() (locBytes, outBytes, inBytes int64) {
+	for _, snap := range nxs {
+		locBytes += snap.Stats.Bytes
+		outBytes += snap.Stats.OutBytes
+		inBytes += snap.Stats.InBytes
+	}
+	return
+}
+
+func (nxs NodesXactSnap) TotalRunningTime() time.Duration {
+	var (
+		start   = time.Now()
+		end     time.Time
+		running bool
+	)
+	for _, snap := range nxs {
+		running = running || snap.Running()
+		if snap.StartTime.Before(start) {
+			start = snap.StartTime
+		}
+		if snap.EndTime.After(end) {
+			end = snap.EndTime
+		}
+	}
+	if running {
+		end = time.Now()
+	}
+	return end.Sub(start)
+}
+
+////////////////////////
+// NodesXactMultiSnap //
+////////////////////////
+
+func (xs NodesXactMultiSnap) Running() bool {
+	for _, snaps := range xs {
+		for _, xsnap := range snaps {
+			if xsnap.Running() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (xs NodesXactMultiSnap) Finished() bool { return !xs.Running() }
+
+func (xs NodesXactMultiSnap) ObjCount() (count int64) {
+	for _, targetStats := range xs {
+		for _, snap := range targetStats {
+			count += snap.Stats.Objs
+		}
+	}
+	return
+}
+
+func (xs NodesXactMultiSnap) nodesXactSnap(xactID string) (nxs NodesXactSnap) {
+	nxs = make(NodesXactSnap)
+	for tid, snaps := range xs {
+		for _, xsnap := range snaps {
+			if xsnap.ID == xactID {
+				nxs[tid] = xsnap
+				break
+			}
+		}
+	}
+	return
 }

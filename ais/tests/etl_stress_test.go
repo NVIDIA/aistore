@@ -213,9 +213,9 @@ def transform(input_bytes):
 			etlDoneCh.Close()
 			tassert.CheckFatal(t, err)
 
-			stats, err := api.GetXactionStatsByID(baseParams, xactID)
+			snaps, err := api.GetXactionSnapsByID(baseParams, xactID)
 			tassert.CheckFatal(t, err)
-			tlog.Logf("ETL Bucket took %s\n", stats.TotalRunningTime())
+			tlog.Logf("ETL Bucket took %s\n", snaps.TotalRunningTime())
 
 			objList, err := api.ListObjects(baseParams, bckTo, nil, 0)
 			tassert.CheckFatal(t, err)

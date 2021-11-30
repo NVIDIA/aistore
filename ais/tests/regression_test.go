@@ -723,12 +723,12 @@ func TestPrefetchList(t *testing.T) {
 
 	// 4. Ensure that all the prefetches occurred.
 	xactArgs := api.XactReqArgs{ID: xactID, Timeout: rebalanceTimeout}
-	xactStats, err := api.QueryXactionStats(baseParams, xactArgs)
+	snaps, err := api.QueryXactionSnaps(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
-	if xactStats.ObjCount() != int64(m.num) {
+	if snaps.ObjCount() != int64(m.num) {
 		t.Errorf(
 			"did not prefetch all files: missing %d of %d",
-			int64(m.num)-xactStats.ObjCount(), m.num,
+			int64(m.num)-snaps.ObjCount(), m.num,
 		)
 	}
 }
@@ -836,12 +836,12 @@ func TestPrefetchRange(t *testing.T) {
 
 	// 4. Ensure that all the prefetches occurred
 	xactArgs := api.XactReqArgs{ID: xactID, Timeout: rebalanceTimeout}
-	xactStats, err := api.QueryXactionStats(baseParams, xactArgs)
+	snaps, err := api.QueryXactionSnaps(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
-	if xactStats.ObjCount() != int64(len(files)) {
+	if snaps.ObjCount() != int64(len(files)) {
 		t.Errorf(
 			"did not prefetch all files: missing %d of %d",
-			int64(len(files))-xactStats.ObjCount(), len(files),
+			int64(len(files))-snaps.ObjCount(), len(files),
 		)
 	}
 }
@@ -1041,6 +1041,6 @@ func TestXactionNotFound(t *testing.T) {
 		missingID = "incorrect"
 	)
 
-	_, err := api.GetXactionStatsByID(baseParams, missingID)
+	_, err := api.GetXactionSnapsByID(baseParams, missingID)
 	tutils.CheckErrIsNotFound(t, err)
 }

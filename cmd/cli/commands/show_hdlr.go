@@ -353,14 +353,14 @@ func showXactionHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	var xactStats api.NodesXactMultiStats
+	var xactStats api.NodesXactMultiSnap
 	latest := !flagIsSet(c, allXactionsFlag)
 	if xactID != "" {
 		latest = false
 	}
 
 	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck, OnlyRunning: latest}
-	xactStats, err = api.QueryXactionStats(defaultAPIParams, xactArgs)
+	xactStats, err = api.QueryXactionSnaps(defaultAPIParams, xactArgs)
 
 	if err != nil {
 		return

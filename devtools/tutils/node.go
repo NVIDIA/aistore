@@ -281,7 +281,7 @@ func WaitForRebalanceToStart(baseParams api.BaseParams, args api.XactReqArgs) er
 		defer cancel()
 	}
 	for {
-		xactStats, err := api.QueryXactionStats(baseParams, args)
+		xactStats, err := api.QueryXactionSnaps(baseParams, args)
 		if err != nil {
 			return err
 		}

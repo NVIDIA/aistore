@@ -201,7 +201,7 @@ func ReportXactionStatus(baseParams api.BaseParams, xactID string, stopCh *cos.S
 			select {
 			case <-etlTicker.C:
 				// Check number of objects transformed.
-				stats, err := api.GetXactionStatsByID(baseParams, xactID)
+				stats, err := api.GetXactionSnapsByID(baseParams, xactID)
 				if err != nil {
 					tlog.Logf("Failed to get xaction stats; err %v\n", err)
 					continue

@@ -97,15 +97,15 @@ var _ = Describe("Notifications xaction test", func() {
 			}}
 		}
 
-		finishedXact = func(xactID string, counts ...int64) (stats *xaction.SnapExt) {
-			stats = baseXact(xactID, counts...)
-			stats.EndTime = time.Now()
+		finishedXact = func(xactID string, counts ...int64) (snap *xaction.SnapExt) {
+			snap = baseXact(xactID, counts...)
+			snap.EndTime = time.Now()
 			return
 		}
 
-		abortedXact = func(xactID string, counts ...int64) (stats *xaction.SnapExt) {
-			stats = finishedXact(xactID, counts...)
-			stats.AbortedX = true
+		abortedXact = func(xactID string, counts ...int64) (snap *xaction.SnapExt) {
+			snap = finishedXact(xactID, counts...)
+			snap.AbortedX = true
 			return
 		}
 
@@ -147,8 +147,8 @@ var _ = Describe("Notifications xaction test", func() {
 	Describe("handleMsg", func() {
 		It("should add node to finished set on receiving finished stats", func() {
 			Expect(nl.FinCount()).To(BeEquivalentTo(0))
-			stats := finishedXact(xactID)
-			err := n.handleFinished(nl, targets[target1ID], cos.MustMarshal(stats), nil)
+			snap := finishedXact(xactID)
+			err := n.handleFinished(nl, targets[target1ID], cos.MustMarshal(snap), nil)
 			Expect(err).To(BeNil())
 			Expect(nl.ActiveNotifiers().Contains(target1ID)).To(BeFalse())
 			Expect(nl.Finished()).To(BeFalse())
@@ -156,9 +156,9 @@ var _ = Describe("Notifications xaction test", func() {
 
 		It("should set error when source sends an error message", func() {
 			Expect(nl.Err()).To(BeNil())
-			stats := finishedXact(xactID)
+			snap := finishedXact(xactID)
 			srcErr := errors.New("some error")
-			err := n.handleFinished(nl, targets[target1ID], cos.MustMarshal(stats), srcErr)
+			err := n.handleFinished(nl, targets[target1ID], cos.MustMarshal(snap), srcErr)
 			Expect(err).To(BeNil())
 			Expect(srcErr).To(BeEquivalentTo(nl.Err()))
 			Expect(nl.ActiveNotifiers().Contains(target1ID)).To(BeFalse())
@@ -167,17 +167,17 @@ var _ = Describe("Notifications xaction test", func() {
 		It("should finish when all the Notifiers finished", func() {
 			Expect(nl.FinCount()).To(BeEquivalentTo(0))
 			n.add(nl)
-			stats := finishedXact(xactID)
-			n.handleFinished(nl, targets[target1ID], cos.MustMarshal(stats), nil)
-			err := n.handleFinished(nl, targets[target2ID], cos.MustMarshal(stats), nil)
+			snap := finishedXact(xactID)
+			n.handleFinished(nl, targets[target1ID], cos.MustMarshal(snap), nil)
+			err := n.handleFinished(nl, targets[target2ID], cos.MustMarshal(snap), nil)
 			Expect(err).To(BeNil())
 			Expect(nl.FinCount()).To(BeEquivalentTo(len(targets)))
 			Expect(nl.Finished()).To(BeTrue())
 		})
 
 		It("should be done if xaction Aborted", func() {
-			stats := abortedXact(xactID)
-			err := n.handleFinished(nl, targets[target1ID], cos.MustMarshal(stats), nil)
+			snap := abortedXact(xactID)
+			err := n.handleFinished(nl, targets[target1ID], cos.MustMarshal(snap), nil)
 			Expect(err).To(BeNil())
 			Expect(nl.Aborted()).To(BeTrue())
 			Expect(nl.Err()).NotTo(BeNil())
@@ -198,19 +198,19 @@ var _ = Describe("Notifications xaction test", func() {
 			err := n.handleProgress(nl, targets[target1ID], cos.MustMarshal(statsFirst), nil)
 			Expect(err).To(BeNil())
 			val, _ := nl.NodeStats().Load(target1ID)
-			statsXact, ok := val.(*xaction.SnapExt)
+			snap, ok := val.(*xaction.SnapExt)
 			Expect(ok).To(BeTrue())
-			Expect(statsXact.Stats.Objs).To(BeEquivalentTo(initObjCount))
-			Expect(statsXact.Stats.Bytes).To(BeEquivalentTo(initByteCount))
+			Expect(snap.Stats.Objs).To(BeEquivalentTo(initObjCount))
+			Expect(snap.Stats.Bytes).To(BeEquivalentTo(initByteCount))
 
 			// Next a Finished notification with stats
 			err = n.handleFinished(nl, targets[target1ID], cos.MustMarshal(statsProgress), nil)
 			Expect(err).To(BeNil())
 			val, _ = nl.NodeStats().Load(target1ID)
-			statsXact, ok = val.(*xaction.SnapExt)
+			snap, ok = val.(*xaction.SnapExt)
 			Expect(ok).To(BeTrue())
-			Expect(statsXact.Stats.Objs).To(BeEquivalentTo(updatedObjCount))
-			Expect(statsXact.Stats.Bytes).To(BeEquivalentTo(updatedByteCount))
+			Expect(snap.Stats.Objs).To(BeEquivalentTo(updatedObjCount))
+			Expect(snap.Stats.Bytes).To(BeEquivalentTo(updatedByteCount))
 		})
 	})
 

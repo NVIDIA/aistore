@@ -1866,7 +1866,7 @@ func TestSingleResilver(t *testing.T) {
 
 	// Make sure other nodes were not resilvered
 	args = api.XactReqArgs{ID: id}
-	xactStats, err := api.QueryXactionStats(baseParams, args)
+	snaps, err := api.QueryXactionSnaps(baseParams, args)
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, len(xactStats) == 1, "expected only 1 resilver")
+	tassert.Errorf(t, len(snaps) == 1, "expected only 1 resilver")
 }

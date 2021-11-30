@@ -33,9 +33,9 @@ type (
 		stats    ios.AllDiskStats
 	}
 
-	targetRebStats struct {
-		targetID string
-		stats    *xaction.SnapExt
+	targetRebSnap struct {
+		tid  string
+		snap *xaction.SnapExt
 	}
 )
 
@@ -387,7 +387,7 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 	// run until rebalance is completed
 	xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance}
 	for {
-		rebStats, err := api.QueryXactionStats(defaultAPIParams, xactArgs)
+		rebSnaps, err := api.QueryXactionSnaps(defaultAPIParams, xactArgs)
 		if err != nil {
 			switch err := err.(type) {
 			case *cmn.ErrHTTP:
@@ -401,41 +401,41 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 			}
 		}
 
-		allStats := make([]*targetRebStats, 0, 100)
-		for daemonID, daemonStats := range rebStats {
+		allSnaps := make([]*targetRebSnap, 0, 100)
+		for daemonID, daemonStats := range rebSnaps {
 			for _, sts := range daemonStats {
-				allStats = append(allStats, &targetRebStats{
-					targetID: daemonID,
-					stats:    sts,
+				allSnaps = append(allSnaps, &targetRebSnap{
+					tid:  daemonID,
+					snap: sts,
 				})
 			}
 		}
-		sort.Slice(allStats, func(i, j int) bool {
-			if allStats[i].stats.ID != allStats[j].stats.ID {
-				return allStats[i].stats.ID > allStats[j].stats.ID
+		sort.Slice(allSnaps, func(i, j int) bool {
+			if allSnaps[i].snap.ID != allSnaps[j].snap.ID {
+				return allSnaps[i].snap.ID > allSnaps[j].snap.ID
 			}
-			return allStats[i].targetID < allStats[j].targetID
+			return allSnaps[i].tid < allSnaps[j].tid
 		})
 
 		// NOTE: If changing header do not forget to change `colCount` couple
 		//  lines below and `displayRebStats` logic.
 		fmt.Fprintln(tw, "REB ID\t NODE\t OBJECTS RECV\t SIZE RECV\t OBJECTS SENT\t SIZE SENT\t START TIME\t END TIME\t ABORTED")
 		prevID := ""
-		for _, sts := range allStats {
+		for _, sts := range allSnaps {
 			if flagIsSet(c, allXactionsFlag) {
-				if prevID != "" && sts.stats.ID != prevID {
+				if prevID != "" && sts.snap.ID != prevID {
 					fmt.Fprintln(tw, strings.Repeat("\t ", 9 /*colCount*/))
 				}
 				displayRebStats(tw, sts)
 			} else {
-				if prevID != "" && sts.stats.ID != prevID {
+				if prevID != "" && sts.snap.ID != prevID {
 					break
 				}
-				latestAborted = latestAborted || sts.stats.AbortedX
-				latestFinished = latestFinished || !sts.stats.EndTime.IsZero()
+				latestAborted = latestAborted || sts.snap.AbortedX
+				latestFinished = latestFinished || !sts.snap.EndTime.IsZero()
 				displayRebStats(tw, sts)
 			}
-			prevID = sts.stats.ID
+			prevID = sts.snap.ID
 		}
 		tw.Flush()
 
@@ -459,18 +459,18 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 	return nil
 }
 
-func displayRebStats(tw *tabwriter.Writer, st *targetRebStats) {
+func displayRebStats(tw *tabwriter.Writer, st *targetRebSnap) {
 	endTime := "-"
-	if !st.stats.EndTime.IsZero() {
-		endTime = st.stats.EndTime.Format("01-02 15:04:05")
+	if !st.snap.EndTime.IsZero() {
+		endTime = st.snap.EndTime.Format("01-02 15:04:05")
 	}
-	startTime := st.stats.StartTime.Format("01-02 15:04:05")
+	startTime := st.snap.StartTime.Format("01-02 15:04:05")
 
 	fmt.Fprintf(tw,
 		"%s\t %s\t %d\t %s\t %d\t %s\t %s\t %s\t %t\n",
-		st.stats.ID, st.targetID,
-		st.stats.Snap.Stats.InObjs, cos.B2S(st.stats.Snap.Stats.InBytes, 2),
-		st.stats.Snap.Stats.OutObjs, cos.B2S(st.stats.Snap.Stats.OutBytes, 2),
-		startTime, endTime, st.stats.Aborted(),
+		st.snap.ID, st.tid,
+		st.snap.Snap.Stats.InObjs, cos.B2S(st.snap.Snap.Stats.InBytes, 2),
+		st.snap.Snap.Stats.OutObjs, cos.B2S(st.snap.Snap.Stats.OutBytes, 2),
+		startTime, endTime, st.snap.Aborted(),
 	)
 }
