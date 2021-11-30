@@ -1,4 +1,4 @@
-// Package cluster provides local access to cluster-level metadata
+// Package mock provides mock implementation for cluster interfaces.
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
