@@ -27,8 +27,8 @@ func propsStats(t *testing.T, proxyURL string) (objChanged, bytesChanged int64) 
 	bytesChanged = 0
 
 	for _, v := range cstats.Target {
-		objChanged += tutils.GetNamedTargetStats(v, stats.VerChangeCount)
-		bytesChanged += tutils.GetNamedTargetStats(v, stats.VerChangeSize)
+		objChanged += tutils.GetNamedStatsVal(v, stats.VerChangeCount)
+		bytesChanged += tutils.GetNamedStatsVal(v, stats.VerChangeSize)
 	}
 	return
 }

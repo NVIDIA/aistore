@@ -130,6 +130,8 @@ type (
 		xaction.Snap
 		RebID int64 `json:"glob.id,string"`
 	}
+
+	// REST API
 	DaemonStatus struct {
 		Snode       *cluster.Snode `json:"snode"`
 		Stats       *CoreStats     `json:"daemon_stats"`
@@ -143,8 +145,16 @@ type (
 		BuildTime   string         `json:"build_time"`  // YYYY-MM-DD HH:MM:SS-TZ
 	}
 	DaemonStats struct {
-		Tracker copyTracker `json:"core"`
+		Tracker copyTracker `json:"tracker"`
 		MPCap   fs.MPCap    `json:"capacity"`
+	}
+	ClusterStats struct {
+		Proxy  *DaemonStats            `json:"proxy"`
+		Target map[string]*DaemonStats `json:"target"`
+	}
+	ClusterStatsRaw struct {
+		Proxy  *DaemonStats    `json:"proxy"`
+		Target cos.JSONRawMsgs `json:"target"`
 	}
 )
 

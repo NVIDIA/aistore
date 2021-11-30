@@ -459,10 +459,10 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	// Step 0: Collect rebalance stats
 	clusterStats := tutils.GetClusterStats(t, m.proxyURL)
 	for targetID, targetStats := range clusterStats.Target {
-		filesSentOrig[targetID] = tutils.GetNamedTargetStats(targetStats, stats.StreamsOutObjCount)
-		filesRecvOrig[targetID] = tutils.GetNamedTargetStats(targetStats, stats.StreamsInObjCount)
-		bytesSentOrig[targetID] = tutils.GetNamedTargetStats(targetStats, stats.StreamsOutObjSize)
-		bytesRecvOrig[targetID] = tutils.GetNamedTargetStats(targetStats, stats.StreamsInObjSize)
+		filesSentOrig[targetID] = tutils.GetNamedStatsVal(targetStats, stats.StreamsOutObjCount)
+		filesRecvOrig[targetID] = tutils.GetNamedStatsVal(targetStats, stats.StreamsInObjCount)
+		bytesSentOrig[targetID] = tutils.GetNamedStatsVal(targetStats, stats.StreamsOutObjSize)
+		bytesRecvOrig[targetID] = tutils.GetNamedStatsVal(targetStats, stats.StreamsInObjSize)
 	}
 
 	// Step 1: Unregister multiple targets
@@ -518,10 +518,10 @@ func TestReregisterMultipleTargets(t *testing.T) {
 
 	clusterStats = tutils.GetClusterStats(t, m.proxyURL)
 	for targetID, targetStats := range clusterStats.Target {
-		filesSent += tutils.GetNamedTargetStats(targetStats, stats.StreamsOutObjCount) - filesSentOrig[targetID]
-		filesRecv += tutils.GetNamedTargetStats(targetStats, stats.StreamsInObjCount) - filesRecvOrig[targetID]
-		bytesSent += tutils.GetNamedTargetStats(targetStats, stats.StreamsOutObjSize) - bytesSentOrig[targetID]
-		bytesRecv += tutils.GetNamedTargetStats(targetStats, stats.StreamsInObjSize) - bytesRecvOrig[targetID]
+		filesSent += tutils.GetNamedStatsVal(targetStats, stats.StreamsOutObjCount) - filesSentOrig[targetID]
+		filesRecv += tutils.GetNamedStatsVal(targetStats, stats.StreamsInObjCount) - filesRecvOrig[targetID]
+		bytesSent += tutils.GetNamedStatsVal(targetStats, stats.StreamsOutObjSize) - bytesSentOrig[targetID]
+		bytesRecv += tutils.GetNamedStatsVal(targetStats, stats.StreamsInObjSize) - bytesRecvOrig[targetID]
 	}
 
 	// Step 5: Log rebalance stats
@@ -614,8 +614,8 @@ func TestLRU(t *testing.T) {
 
 	// Find out min usage % across all targets
 	for k, v := range cluStats.Target {
-		filesEvicted[k] = tutils.GetNamedTargetStats(v, "lru.evict.n")
-		bytesEvicted[k] = tutils.GetNamedTargetStats(v, "lru.evict.size")
+		filesEvicted[k] = tutils.GetNamedStatsVal(v, "lru.evict.n")
+		bytesEvicted[k] = tutils.GetNamedStatsVal(v, "lru.evict.size")
 		for _, c := range v.MPCap {
 			usedPct = cos.MinI32(usedPct, c.PctUsed)
 		}
@@ -668,8 +668,8 @@ func TestLRU(t *testing.T) {
 	tlog.Logln("checking the results...")
 	cluStats = tutils.GetClusterStats(t, proxyURL)
 	for k, v := range cluStats.Target {
-		diffFilesEvicted := tutils.GetNamedTargetStats(v, "lru.evict.n") - filesEvicted[k]
-		diffBytesEvicted := tutils.GetNamedTargetStats(v, "lru.evict.size") - bytesEvicted[k]
+		diffFilesEvicted := tutils.GetNamedStatsVal(v, "lru.evict.n") - filesEvicted[k]
+		diffBytesEvicted := tutils.GetNamedStatsVal(v, "lru.evict.size") - bytesEvicted[k]
 		tlog.Logf(
 			"Target %s: evicted %d objects - %s (%dB) total\n",
 			k, diffFilesEvicted, cos.B2S(diffBytesEvicted, 2), diffBytesEvicted,

@@ -106,6 +106,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what string) {
 	var (
 		body  []byte
+		xflt  string
 		query = r.URL.Query()
 	)
 	switch what {
@@ -114,6 +115,7 @@ func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what 
 		if err := cmn.ReadJSON(w, r, &xactMsg); err != nil {
 			return
 		}
+		xflt = xactMsg.String()
 		body = cos.MustMarshal(xactMsg)
 	default:
 		p.writeErrStatusf(w, r, http.StatusBadRequest, "invalid `what`: %v", what)
@@ -127,9 +129,11 @@ func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what 
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
 	targetResults := p._queryResults(w, r, results)
-	if targetResults != nil {
-		p.writeJSON(w, r, targetResults, what)
+	if len(targetResults) == 0 {
+		p.writeErrMsg(w, r, "xaction \""+xflt+"\" not found", http.StatusNotFound)
+		return
 	}
+	p.writeJSON(w, r, targetResults, what)
 }
 
 func (p *proxyrunner) queryClusterSysinfo(w http.ResponseWriter, r *http.Request, what string) {
@@ -205,7 +209,7 @@ func (p *proxyrunner) queryClusterStats(w http.ResponseWriter, r *http.Request, 
 	}
 	out := &stats.ClusterStatsRaw{}
 	out.Target = targetStats
-	out.Proxy = p.statsT.CoreStats()
+	out.Proxy = p.statsT.GetWhatStats()
 	_ = p.writeJSON(w, r, out, what)
 }
 
@@ -256,10 +260,6 @@ func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, resu
 		targetResults[res.si.ID()] = res.bytes
 	}
 	freeCallResults(results)
-	if len(targetResults) == 0 {
-		p.writeErrMsg(w, r, "xaction not found", http.StatusNotFound)
-		return nil
-	}
 	return targetResults
 }
 

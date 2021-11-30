@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/stats"
+	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -585,21 +586,30 @@ func waitForRebalanceToStart(baseParams api.BaseParams) {
 	}
 }
 
-func GetClusterStats(t *testing.T, proxyURL string) (stats stats.ClusterStats) {
+func GetClusterStats(t *testing.T, proxyURL string) (scs stats.ClusterStats) {
 	baseParams := BaseAPIParams(proxyURL)
-	clusterStats, err := api.GetClusterStats(baseParams)
+	raw, err := api.GetClusterStats(baseParams)
 	tassert.CheckFatal(t, err)
-	return clusterStats
+	scs.Proxy = raw.Proxy
+	scs.Target = make(map[string]*stats.DaemonStats)
+	for tid := range raw.Target {
+		var ts stats.DaemonStats
+		if err := jsoniter.Unmarshal(raw.Target[tid], &ts); err == nil {
+			scs.Target[tid] = &ts
+		}
+	}
+	return
 }
 
-func GetNamedTargetStats(trunner *stats.Trunner, name string) int64 {
-	v, ok := trunner.Core.Tracker[name]
+func GetNamedStatsVal(ds *stats.DaemonStats, name string) int64 {
+	v, ok := ds.Tracker[name]
 	if !ok {
 		return 0
 	}
 	return v.Value
 }
 
+// TOD -- FIXME: obsolete - remove and reimpl. the test that calls it
 func GetDaemonStats(t *testing.T, u string) (stats map[string]interface{}) {
 	baseParams := BaseAPIParams(u)
 	baseParams.Method = http.MethodGet

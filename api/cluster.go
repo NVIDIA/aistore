@@ -73,7 +73,7 @@ func GetClusterSysInfo(baseParams BaseParams) (sysInfo cmn.ClusterSysInfo, err e
 }
 
 // GetClusterStats retrieves AIStore cluster stats (all targets and current proxy).
-func GetClusterStats(baseParams BaseParams) (clusterStats stats.ClusterStats, err error) {
+func GetClusterStats(baseParams BaseParams) (clusterStats stats.ClusterStatsRaw, err error) {
 	baseParams.Method = http.MethodGet
 	err = DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,

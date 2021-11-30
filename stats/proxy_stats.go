@@ -15,19 +15,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-type (
-	Prunner struct {
-		statsRunner
-	}
-	ClusterStats struct {
-		Proxy  *CoreStats          `json:"proxy"`
-		Target map[string]*Trunner `json:"target"`
-	}
-	ClusterStatsRaw struct {
-		Proxy  *CoreStats      `json:"proxy"`
-		Target cos.JSONRawMsgs `json:"target"`
-	}
-)
+type Prunner struct {
+	statsRunner
+}
 
 /////////////
 // Prunner //
