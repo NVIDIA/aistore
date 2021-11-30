@@ -32,14 +32,12 @@ var (
 func Init(gmmName, smmName string) {
 	debug.Assert(gmm == nil && smm == nil)
 	gmm = &MMSA{Name: gmmName + ".gmm", defBufSize: DefaultBufSize}
+	gmm.Init(0, false, true)
 	smm = &MMSA{Name: smmName + ".smm", defBufSize: DefaultSmallBufSize}
+	smm.Init(0, false, true)
+	smm.sibling = gmm
+	gmm.sibling = smm
 	verbose = bool(glog.FastV(4, glog.SmoduleMemsys))
-}
-
-func testInit(gmmName, smmName string) {
-	debug.Assert(gmm == nil && smm == nil)
-	gmm = &MMSA{Name: gmmName + ".pmm", defBufSize: DefaultBufSize, MinFree: minMemFreeTests}
-	smm = &MMSA{Name: smmName + ".smm", defBufSize: DefaultSmallBufSize, MinFree: minMemFreeTests}
 }
 
 func NewMMSA(name string) (mem *MMSA, err error) {
@@ -51,20 +49,16 @@ func NewMMSA(name string) (mem *MMSA, err error) {
 // system page-based memory-manager-slab-allocator (MMSA)
 func PageMM() *MMSA {
 	gmmOnce.Do(func() {
-		var (
-			maxUse   int64
-			panicOOM = true
-		)
 		if gmm == nil {
-			testInit("test", "test")
-			maxUse = maxMemUsedTests
-			panicOOM = false
+			// tests only
+			gmm = &MMSA{Name: "test.pmm", defBufSize: DefaultBufSize, MinFree: minMemFreeTests}
+			gmm.Init(maxMemUsedTests, false, false)
+			if smm != nil {
+				smm.sibling = gmm
+				gmm.sibling = smm
+			}
 		}
-		gmm.Init(maxUse, false, panicOOM)
-		if smm != nil {
-			smm.sibling = gmm
-			gmm.sibling = smm
-		}
+		debug.Assert(gmm.rings != nil)
 	})
 	return gmm
 }
@@ -72,20 +66,16 @@ func PageMM() *MMSA {
 // system small-size allocator (range 1 - 4K)
 func ByteMM() *MMSA {
 	smmOnce.Do(func() {
-		var (
-			maxUse   int64
-			panicOOM = true
-		)
 		if smm == nil {
-			testInit("test", "test")
-			maxUse = maxMemUsedTests
-			panicOOM = false
+			// tests only
+			smm = &MMSA{Name: "test.smm", defBufSize: DefaultSmallBufSize, MinFree: minMemFreeTests}
+			smm.Init(maxMemUsedTests, false, false)
+			if gmm != nil {
+				gmm.sibling = smm
+				smm.sibling = gmm
+			}
 		}
-		smm.Init(maxUse, false, panicOOM)
-		if gmm != nil {
-			gmm.sibling = smm
-			smm.sibling = gmm
-		}
+		debug.Assert(smm.rings != nil)
 	})
 	return smm
 }
