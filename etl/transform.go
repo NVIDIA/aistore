@@ -144,8 +144,8 @@ func (e *Aborter) ListenSmapChanged() {
 	}()
 }
 
-func InitSpec(t cluster.Target, msg InitSpecMsg, opts ...StartOpts) (err error) {
-	errCtx, podName, svcName, err := tryStart(t, msg, opts...)
+func InitSpec(t cluster.Target, msg InitSpecMsg, opts StartOpts) (err error) {
+	errCtx, podName, svcName, err := tryStart(t, msg, opts)
 	if err != nil {
 		glog.Warning(cmn.NewErrETL(errCtx, "Performing cleanup after unsuccessful Start"))
 		if err := cleanupEntities(errCtx, podName, svcName); err != nil {
@@ -213,14 +213,9 @@ func cleanupEntities(errCtx *cmn.ETLErrorContext, podName, svcName string) (err 
 // * podName - non-empty if at least one attempt of creating pod was executed
 // * svcName - non-empty if at least one attempt of creating service was executed
 // * err - any error occurred which should be passed further.
-func tryStart(t cluster.Target, msg InitSpecMsg, opts ...StartOpts) (errCtx *cmn.ETLErrorContext,
+func tryStart(t cluster.Target, msg InitSpecMsg, opts StartOpts) (errCtx *cmn.ETLErrorContext,
 	podName, svcName string, err error) {
 	cos.Assert(k8s.NodeName != "") // Corresponding 'if' done at the beginning of the request.
-
-	var customEnv map[string]string
-	if len(opts) > 0 {
-		customEnv = opts[0].Env
-	}
 
 	errCtx = &cmn.ETLErrorContext{
 		TID:  t.SID(),
@@ -231,7 +226,7 @@ func tryStart(t cluster.Target, msg InitSpecMsg, opts ...StartOpts) (errCtx *cmn
 		errCtx: errCtx,
 		t:      t,
 		msg:    msg,
-		env:    customEnv,
+		env:    opts.Env,
 	}
 
 	// Parse spec template and fill Pod object with necessary fields.

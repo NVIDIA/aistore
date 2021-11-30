@@ -72,7 +72,7 @@ func (t *targetrunner) initSpecETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := etl.InitSpec(t, msg); err != nil {
+	if err := etl.InitSpec(t, msg, etl.StartOpts{}); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
