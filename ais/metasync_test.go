@@ -20,12 +20,12 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -65,7 +65,7 @@ func serverTCPAddr(u string) cluster.NetInfo {
 func newPrimary() *proxyrunner {
 	var (
 		p       = &proxyrunner{}
-		tracker = stats.NewTrackerMock()
+		tracker = mock.NewStatsTracker()
 		smap    = newSmap()
 	)
 

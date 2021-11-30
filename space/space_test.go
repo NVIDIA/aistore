@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/space"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xreg"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -345,7 +344,7 @@ func newIniLRU(t cluster.Target) *space.IniLRU {
 	xlru.InitBase(cos.GenUUID(), cmn.ActLRU, nil)
 	return &space.IniLRU{
 		Xaction:             xlru,
-		StatsT:              stats.NewTrackerMock(),
+		StatsT:              mock.NewStatsTracker(),
 		T:                   t,
 		GetFSUsedPercentage: mockGetFSUsedPercentage,
 		GetFSStats:          getMockGetFSStats(numberOfCreatedFiles),
@@ -357,7 +356,7 @@ func newInitStoreCln(t cluster.Target) *space.IniCln {
 	xcln.InitBase(cos.GenUUID(), cmn.ActLRU, nil)
 	return &space.IniCln{
 		Xaction: xcln,
-		StatsT:  stats.NewTrackerMock(),
+		StatsT:  mock.NewStatsTracker(),
 		T:       t,
 	}
 }

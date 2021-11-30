@@ -14,10 +14,10 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/nl"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -51,7 +51,7 @@ var _ = Describe("Notifications xaction test", func() {
 		}
 
 		mockProxyRunner = func(name string) *proxyrunner {
-			tracker := &stats.TrackerMock{}
+			tracker := &mock.StatsTracker{}
 			p := &proxyrunner{
 				httprunner: httprunner{
 					si:     mockNode(name, cmn.Proxy),

@@ -7,12 +7,12 @@ package fs_test
 import (
 	"testing"
 
+	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/ios"
 )
 
 func TestMountpathAddNonExisting(t *testing.T) {
@@ -210,7 +210,7 @@ func TestMountpathEnableAlreadyEnabled(t *testing.T) {
 }
 
 func TestMountpathsAddMultipleWithSameFSID(t *testing.T) {
-	fs.TestNew(ios.NewIOStaterMock())
+	fs.TestNew(mock.NewIOStater())
 
 	mpath := "/tmp/abc"
 	tutils.AddMpath(t, mpath)
@@ -303,7 +303,7 @@ func TestMoveMarkers(t *testing.T) {
 }
 
 func initFS() {
-	fs.TestNew(ios.NewIOStaterMock())
+	fs.TestNew(mock.NewIOStater())
 	fs.DisableFsIDCheck()
 }
 

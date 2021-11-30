@@ -8,9 +8,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
 	. "github.com/onsi/ginkgo"
@@ -34,7 +34,7 @@ var _ = Describe("ManagerGroup", func() {
 		config := cmn.GCO.BeginUpdate()
 		config.ConfigDir = testingConfigDir
 		cmn.GCO.CommitUpdate(config)
-		db := dbdriver.NewDBMock()
+		db := mock.NewDBDriver()
 		mgrp = NewManagerGroup(db, false /* skip hk*/)
 
 		fs.TestNew(nil)

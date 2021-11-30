@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/ios"
 )
 
 type (
@@ -139,7 +138,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 		tMock cluster.Target
 	)
 
-	mios := ios.NewIOStaterMock()
+	mios := mock.NewIOStater()
 	fs.TestNew(mios)
 	fs.DisableFsIDCheck()
 

@@ -14,11 +14,11 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/stats"
 )
 
 const (
@@ -72,7 +72,7 @@ func TestMain(m *testing.M) {
 
 	t.httprunner.init(config)
 
-	t.statsT = stats.NewTrackerMock()
+	t.statsT = mock.NewStatsTracker()
 	cluster.Init(t)
 
 	bck := cluster.NewBck(testBucket, cmn.ProviderAIS, cmn.NsGlobal)

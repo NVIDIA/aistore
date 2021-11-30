@@ -13,12 +13,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/ios"
 )
 
 func TestWalkBck(t *testing.T) {
@@ -36,7 +36,7 @@ func TestWalkBck(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			fs.TestNew(ios.NewIOStaterMock())
+			fs.TestNew(mock.NewIOStater())
 			fs.DisableFsIDCheck()
 			_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 
@@ -124,7 +124,7 @@ func TestWalkBckSkipDir(t *testing.T) {
 		mpaths        = make(map[string]*mpathMeta)
 	)
 
-	fs.TestNew(ios.NewIOStaterMock())
+	fs.TestNew(mock.NewIOStater())
 	fs.DisableFsIDCheck()
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 

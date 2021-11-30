@@ -9,11 +9,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/ios"
 )
 
 func TestParseFQN(t *testing.T) {
@@ -252,7 +252,7 @@ func TestParseFQN(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
-			mios := ios.NewIOStaterMock()
+			mios := mock.NewIOStater()
 			fs.TestNew(mios)
 			fs.DisableFsIDCheck()
 
@@ -346,7 +346,7 @@ func TestMakeAndParseFQN(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(strings.Join([]string{tt.mpath, tt.bck.String(), tt.contentType, tt.objName}, "|"), func(t *testing.T) {
-			mios := ios.NewIOStaterMock()
+			mios := mock.NewIOStater()
 			fs.TestNew(mios)
 			fs.DisableFsIDCheck()
 
@@ -390,7 +390,7 @@ var parsedFQN fs.ParsedFQN
 func BenchmarkParseFQN(b *testing.B) {
 	var (
 		mpath = "/tmp/mpath"
-		mios  = ios.NewIOStaterMock()
+		mios  = mock.NewIOStater()
 		bck   = cmn.Bck{Name: "bucket", Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 	)
 

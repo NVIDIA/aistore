@@ -23,10 +23,7 @@ import (
 // - compacting is executed when the database size is greater than the size
 //   after previous compacting by `AutoShrinkPercentage`(50%)
 
-const (
-	autoShrinkSize = cos.MiB
-	collectionSepa = "##"
-)
+const autoShrinkSize = cos.MiB
 
 type (
 	BuntDriver struct {
@@ -66,16 +63,7 @@ func makePath(collection, key string) string {
 	if strings.HasSuffix(collection, "##") {
 		return collection + key
 	}
-	return collection + collectionSepa + key
-}
-
-// Extract collection and key names from full key path
-func parsePath(path string) (string, string) { // nolint:unparam // unused now but will be used later
-	pos := strings.Index(path, collectionSepa)
-	if pos < 0 {
-		return path, ""
-	}
-	return path[:pos], path[pos+len(collectionSepa):]
+	return collection + CollectionSepa + key
 }
 
 func (bd *BuntDriver) Close() error {
@@ -136,7 +124,7 @@ func (bd *BuntDriver) List(collection, pattern string) ([]string, error) {
 	filter = makePath(collection, pattern)
 	err := bd.driver.View(func(tx *buntdb.Tx) error {
 		tx.AscendKeys(filter, func(path, _ string) bool {
-			_, key := parsePath(path)
+			_, key := ParsePath(path)
 			if key != "" {
 				keys = append(keys, key)
 			}
@@ -174,7 +162,7 @@ func (bd *BuntDriver) GetAll(collection, pattern string) (map[string]string, err
 	filter = makePath(collection, pattern)
 	err := bd.driver.View(func(tx *buntdb.Tx) error {
 		tx.AscendKeys(filter, func(path, val string) bool {
-			_, key := parsePath(path)
+			_, key := ParsePath(path)
 			if key != "" {
 				values[key] = val
 			}

@@ -4,7 +4,10 @@
  */
 package dbdriver
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // General info:
 // ## Collection ##
@@ -21,6 +24,8 @@ import "fmt"
 // ## Errors ##
 //   Different databases use different ways to returns erros. A driver must
 //   convert original ones to `dbdriver` package errors for clients.
+
+const CollectionSepa = "##"
 
 type (
 	Driver interface {
@@ -52,6 +57,15 @@ type (
 		key        string
 	}
 )
+
+// Extract collection and key names from full key path
+func ParsePath(path string) (string, string) {
+	pos := strings.Index(path, CollectionSepa)
+	if pos < 0 {
+		return path, ""
+	}
+	return path[:pos], path[pos+len(CollectionSepa):]
+}
 
 func NewErrNotFound(collection, key string) *ErrNotFound {
 	return &ErrNotFound{collection: collection, key: key}

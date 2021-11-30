@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/ios"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -47,7 +47,7 @@ func calcSemaLimit(acquire, release func()) int {
 }
 
 var _ = Describe("newConcAdjuster", func() {
-	mios := ios.NewIOStaterMock()
+	mios := mock.NewIOStater()
 
 	BeforeEach(func() {
 		err := cos.CreateDir(testingConfigDir)

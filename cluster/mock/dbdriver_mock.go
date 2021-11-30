@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package dbdriver
+package mock
 
 import (
 	"sort"
@@ -10,27 +10,31 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/dbdriver"
 	jsoniter "github.com/json-iterator/go"
 )
 
-type DBMock struct {
+type DBDriver struct {
 	mtx    sync.RWMutex
 	values map[string]string
 }
 
 // interface guard
-var _ Driver = (*DBMock)(nil)
+var _ dbdriver.Driver = (*DBDriver)(nil)
 
-func NewDBMock() Driver                                { return &DBMock{values: make(map[string]string)} }
-func (*DBMock) makePath(collection, key string) string { return collection + collectionSepa + key }
-func (*DBMock) Close() error                           { return nil }
+func NewDBDriver() dbdriver.Driver { return &DBDriver{values: make(map[string]string)} }
+func (*DBDriver) Close() error     { return nil }
 
-func (bd *DBMock) Set(collection, key string, object interface{}) error {
+func (*DBDriver) makePath(collection, key string) string {
+	return collection + dbdriver.CollectionSepa + key
+}
+
+func (bd *DBDriver) Set(collection, key string, object interface{}) error {
 	b := cos.MustMarshal(object)
 	return bd.SetString(collection, key, string(b))
 }
 
-func (bd *DBMock) Get(collection, key string, object interface{}) error {
+func (bd *DBDriver) Get(collection, key string, object interface{}) error {
 	s, err := bd.GetString(collection, key)
 	if err != nil {
 		return err
@@ -38,7 +42,7 @@ func (bd *DBMock) Get(collection, key string, object interface{}) error {
 	return jsoniter.Unmarshal([]byte(s), object)
 }
 
-func (bd *DBMock) SetString(collection, key, data string) error {
+func (bd *DBDriver) SetString(collection, key, data string) error {
 	bd.mtx.Lock()
 	defer bd.mtx.Unlock()
 	name := bd.makePath(collection, key)
@@ -46,30 +50,30 @@ func (bd *DBMock) SetString(collection, key, data string) error {
 	return nil
 }
 
-func (bd *DBMock) GetString(collection, key string) (string, error) {
+func (bd *DBDriver) GetString(collection, key string) (string, error) {
 	bd.mtx.RLock()
 	defer bd.mtx.RUnlock()
 	name := bd.makePath(collection, key)
 	value, ok := bd.values[name]
 	if !ok {
-		return "", NewErrNotFound(collection, key)
+		return "", dbdriver.NewErrNotFound(collection, key)
 	}
 	return value, nil
 }
 
-func (bd *DBMock) Delete(collection, key string) error {
+func (bd *DBDriver) Delete(collection, key string) error {
 	bd.mtx.Lock()
 	defer bd.mtx.Unlock()
 	name := bd.makePath(collection, key)
 	_, ok := bd.values[name]
 	if !ok {
-		return NewErrNotFound(collection, key)
+		return dbdriver.NewErrNotFound(collection, key)
 	}
 	delete(bd.values, name)
 	return nil
 }
 
-func (bd *DBMock) List(collection, pattern string) ([]string, error) {
+func (bd *DBDriver) List(collection, pattern string) ([]string, error) {
 	var (
 		keys   = make([]string, 0)
 		filter string
@@ -79,7 +83,7 @@ func (bd *DBMock) List(collection, pattern string) ([]string, error) {
 	filter = bd.makePath(collection, pattern)
 	for k := range bd.values {
 		if strings.HasPrefix(k, filter) {
-			_, key := parsePath(k)
+			_, key := dbdriver.ParsePath(k)
 			if key != "" {
 				keys = append(keys, k)
 			}
@@ -89,7 +93,7 @@ func (bd *DBMock) List(collection, pattern string) ([]string, error) {
 	return keys, nil
 }
 
-func (bd *DBMock) DeleteCollection(collection string) error {
+func (bd *DBDriver) DeleteCollection(collection string) error {
 	keys, err := bd.List(collection, "")
 	bd.mtx.Lock()
 	defer bd.mtx.Unlock()
@@ -102,7 +106,7 @@ func (bd *DBMock) DeleteCollection(collection string) error {
 	return nil
 }
 
-func (bd *DBMock) GetAll(collection, pattern string) (map[string]string, error) {
+func (bd *DBDriver) GetAll(collection, pattern string) (map[string]string, error) {
 	var (
 		values = make(map[string]string)
 		filter string
@@ -112,7 +116,7 @@ func (bd *DBMock) GetAll(collection, pattern string) (map[string]string, error) 
 	filter = bd.makePath(collection, pattern)
 	for k, v := range bd.values {
 		if strings.HasPrefix(k, filter) {
-			_, key := parsePath(k)
+			_, key := dbdriver.ParsePath(k)
 			if key != "" {
 				values[key] = v
 			}

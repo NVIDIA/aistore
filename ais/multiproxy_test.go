@@ -12,10 +12,10 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tutils"
-	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -37,7 +37,7 @@ type (
 func newDiscoverServerPrimary() *proxyrunner {
 	var (
 		p       = &proxyrunner{}
-		tracker = stats.NewTrackerMock()
+		tracker = mock.NewStatsTracker()
 	)
 	p.si = cluster.NewSnode("primary", cmn.Proxy, cluster.NetInfo{}, cluster.NetInfo{}, cluster.NetInfo{})
 	p.client.data = &http.Client{}

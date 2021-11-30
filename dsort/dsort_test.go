@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -149,7 +148,7 @@ func newTargetMock(daemonID string, smap *testSmap) *targetNodeMock {
 		DSorterType: DSorterGeneralType,
 	}
 
-	db := dbdriver.NewDBMock()
+	db := mock.NewDBDriver()
 	dsortManagers := NewManagerGroup(db, true /*skip hk*/)
 	dsortManager, err := dsortManagers.Add(globalManagerUUID)
 	Expect(err).ShouldNot(HaveOccurred())

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/devtools/tassert"
@@ -116,7 +117,7 @@ func testUserDelete(mgr *UserManager, t *testing.T) {
 }
 
 func TestManager(t *testing.T) {
-	driver := dbdriver.NewDBMock()
+	driver := mock.NewDBDriver()
 	mgr, err := NewUserManager(driver)
 	tassert.CheckError(t, err)
 	createUsers(mgr, t)
@@ -135,7 +136,7 @@ func TestToken(t *testing.T) {
 		secret = Conf.Server.Secret
 	)
 
-	driver := dbdriver.NewDBMock()
+	driver := mock.NewDBDriver()
 	mgr, err := NewUserManager(driver)
 	tassert.CheckError(t, err)
 	createUsers(mgr, t)
