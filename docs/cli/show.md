@@ -51,7 +51,14 @@ Show object details.
 [Refer to `ais object` documentation for more.](object.md#show-object-properties)
 
 ## `ais show cluster`
-Show cluster details.
+Show cluster and node details.
+
+The command supports a variety of scoping options and (sub-command) specifiers:
+
+```console
+# ais show cluster <TAB-TAB>
+bmd   config   proxy   smap   stats   target    [DAEMON_ID ...]
+```
 
 [Refer to `ais cluster` documentation for more.](cluster.md#cluster-or-daemon-status)
 

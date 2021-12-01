@@ -21,6 +21,7 @@ This section lists cluster and node management operations the AIS CLI, with `ais
 ## Table of Contents
 - [Cluster or Daemon status](#cluster-or-daemon-status)
 - [Show cluster map](#show-cluster-map)
+- [Show cluster stats](#show-cluster-stats)
 - [Show disk stats](#show-disk-stats)
 - [Join a node](#join-a-node)
 - [Remove a node](#remove-a-node)
@@ -113,6 +114,108 @@ Non-Electable:
 
 Primary Proxy: pufGp8080
 Proxies: 5       Targets: 5      Smap Version: 14
+```
+## Show cluster stats
+
+`ais show cluster stats [DAEMON_ID] [STATS_PREFIX]`
+
+Show current (live) statistics, including:
+* utilization percentages
+* used and available storage capacity
+* variety of latencies including list-objects and intra-cluster control comm.
+* networking stats (transmitted and received object numbers and total bytes), and more.
+
+For a broader background and details, please see [Monitoring AIStore with Prometheus](/docs/prometheus.md).
+
+The scope of the `ais show cluster stats` command can be a specific node (denoted by `DAEMON_ID`) or the entire cluster.
+In the latter case, the command displays aggregated counters and cluster-wide averages, where applicable.
+
+### Options
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--json, -j` | `bool` | JSON format           | `false` |
+| `--human`    | `bool` | human-readable output | `false` |
+
+### Examples
+
+```console
+# Use `--human` option
+$ ais cluster show stats target.dl
+PROPERTY         VALUE
+target.dl.ns     228747302
+target.dl.size   848700
+
+$ ais cluster show stats target.dl --human
+PROPERTY         VALUE
+target.dl.ns     228.747302ms
+target.dl.size   828.81KiB
+```
+
+```console
+# Excerpt from global stats to show both proxy and target grouping
+$ ais cluster show stats
+PROPERTY                         VALUE
+proxy.get.n                      90
+proxy.get.ns                     0
+proxy.lst.n                      5
+proxy.lst.ns                     17250254
+...
+target.dl.ns                     228747302
+target.dl.size                   848700
+target.get.bps                   422657829
+target.get.n                     90
+target.get.ns                    33319026
+```
+
+```console
+# Detailed node statistics
+$ ais cluster show stats sCFgt15AB --human
+PROPERTY                 VALUE
+append.ns                0
+dl.ns                    229.142325ms
+dl.size                  132.61KiB
+dsort.creation.req.ns    0
+dsort.creation.resp.ns   0
+err.dl.n                 4
+err.get.n                14
+get.bps                  74MiB/s
+get.n                    19
+get.ns                   36.782125ms
+get.redir.ns             459.786µs
+kalive.ns                619.869272ms
+kalive.ns.max            0
+kalive.ns.min            0
+lst.n                    7
+lst.ns                   3.695827ms
+put.n                    40
+put.ns                   485.817135ms
+put.redir.ns             75.654033ms
+streams.in.obj.n         139
+streams.out.obj.n        175
+streams.out.obj.size     283.90MiB
+up.ns.time               169m
+mountpath.0.path         /tmp/ais/mp1/8
+mountpath.0.used         21.64GiB
+mountpath.0.avail        28.33GiB
+mountpath.0.%used        43
+...
+```
+
+```console
+# Filtering to show only those metrics that have specific prefix
+$ ais show cluster stats sCFgt15AB put
+PROPERTY         VALUE
+put.n            183864
+put.ns           42711506911
+put.redir.ns     105969922088
+
+# And the same in human-readable format
+$ ais show cluster stats sCFgt15AB put --human
+PROPERTY         VALUE
+put.n            183864
+put.ns           42.711506911s
+put.redir.ns     1m45.969922088s
 ```
 
 ## Show disk stats

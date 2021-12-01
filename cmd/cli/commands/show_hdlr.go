@@ -690,10 +690,10 @@ func showClusterTotalStats(c *cli.Context) (err error) {
 	// TODO: extract to map->slice function.
 	props := make([]*prop, 0, len(st.Proxy.Tracker))
 	for k, v := range st.Proxy.Tracker {
-		name := "proxy." + k
-		if filter != "" && !strings.HasPrefix(name, filter) {
+		if filter != "" && !strings.HasPrefix(k, filter) {
 			continue
 		}
+		name := "proxy." + k
 		props = append(props, &prop{Name: name, Value: fmtStatValue(k, v.Value, human)})
 	}
 	tgtStats := make(map[string]int64)
@@ -718,10 +718,10 @@ func showClusterTotalStats(c *cli.Context) (err error) {
 
 	// TODO: extract to map->slice function.
 	for k, v := range tgtStats {
-		name := "target." + k
-		if filter != "" && !strings.HasPrefix(name, filter) {
+		if filter != "" && !strings.HasPrefix(k, filter) {
 			continue
 		}
+		name := "target." + k
 		props = append(props, &prop{Name: name, Value: fmtStatValue(k, v, human)})
 	}
 
