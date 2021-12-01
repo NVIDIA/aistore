@@ -1,6 +1,6 @@
 // Package mono_test contains standard vs monotonic clock benchmark
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package mono_test
 

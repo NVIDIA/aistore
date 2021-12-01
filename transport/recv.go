@@ -1,7 +1,7 @@
 // Package transport provides streaming object-based transport over http for intra-cluster continuous
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -205,13 +205,18 @@ func (it *iterator) rxloop(uid uint64, loghdr string) (err error) {
 					obj.pdu.reset()
 				}
 				err = eofOK(err)
+				size, off := obj.hdr.ObjAttrs.Size, obj.off
 				h.rxObj(obj.hdr, obj, err)
-				// this stream stats
-				it.stats.Num.Inc()
-				// target stats
-				statsTracker.Add(InObjCount, 1)
-				if !obj.IsUnsized() { // TODO: unsized
-					statsTracker.Add(InObjSize, obj.Size())
+				// stats
+				if err == nil {
+					it.stats.Num.Inc()              // this stream stats
+					statsTracker.Add(InObjCount, 1) // stats/target_stats.go
+					if size >= 0 {
+						statsTracker.Add(InObjSize, size)
+					} else {
+						debug.Assert(size == SizeUnknown)
+						statsTracker.Add(InObjSize, obj.off-off)
+					}
 				}
 			} else if err != nil && err != io.EOF {
 				h.rxObj(ObjHdr{}, nil, err)
@@ -302,7 +307,7 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 		b = b[:int(rem)]
 	}
 	n, err = obj.body.Read(b)
-	obj.off += int64(n) // NOTE: `GORACE` here can be safely ignored, see above
+	obj.off += int64(n) // NOTE: `GORACE` complaining here can be safely ignored
 	switch err {
 	case nil:
 		if obj.off >= obj.Size() {

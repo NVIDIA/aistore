@@ -1,6 +1,6 @@
 // Package main for the `aisloader` executable.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	version   = "1.2"
+	version   = "1.3"
 	build     string
 	buildtime string
 )

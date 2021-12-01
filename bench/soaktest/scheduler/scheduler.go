@@ -1,6 +1,6 @@
 // Package scheduler provides scheduling of recipes and regression within soaktest
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package scheduler
 

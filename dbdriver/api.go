@@ -1,6 +1,6 @@
 // Package dbdriver provides a local database server for the AIStore object storage.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package dbdriver
 

@@ -1,6 +1,6 @@
 // Package filter implements fully features dynamic probabilistic filter.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package filter
 

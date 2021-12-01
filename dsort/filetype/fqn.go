@@ -2,7 +2,7 @@
 // This content type is used when creating files during local extraction phase if no memory is
 // left to be used by the given dsort process.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package filetype
 

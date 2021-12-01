@@ -1,6 +1,6 @@
 // Package s3compat provides Amazon S3 compatibility layer
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package s3compat
 

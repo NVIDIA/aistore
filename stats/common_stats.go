@@ -248,14 +248,15 @@ func match(s string, prefs []string) bool {
 func (s *CoreStats) init(node *cluster.Snode, size int) {
 	s.Tracker = make(statsTracker, size)
 	s.promDesc = make(promDesc, size)
-	// NOTE:
-	// accessible in debug mode via host:port/debug/vars
-	// * all counters including errors
-	// * latencies including keepalive
-	// * mountpath capacities
-	// * mountpath (disk) utilizations (see ios)
-	// * total number of goroutines
-	debug.NewExpvar(glog.SmoduleStats)
+
+	// debug.NewExpvar & debug.SetExpvar could be placed here and elsewhere to visualize:
+	//     * all counters including errors
+	//     * latencies including keepalive
+	//     * mountpath capacities
+	//     * mountpath (disk) utilizations
+	//     * total number of goroutines, etc.
+	// (access via host:port/debug/vars in debug mode)
+
 	s.Tracker.regCommonMetrics(node)
 
 	// reusable sgl => (udp) => StatsD
@@ -502,7 +503,6 @@ func (s *CoreStats) copyT(ctracker copyTracker, idlePrefs []string) (idle bool) 
 	if !s.isPrometheus() {
 		s.statsdC.SendSGL(s.sgl)
 	}
-	debug.SetExpvar(glog.SmoduleStats, "num-goroutines", int64(runtime.NumGoroutine()))
 	return
 }
 

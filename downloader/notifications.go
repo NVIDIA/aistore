@@ -1,6 +1,6 @@
 // Package cmn provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package downloader
 

@@ -248,7 +248,6 @@ func (r *Trunner) log(now int64, uptime time.Duration) {
 		for mpath, fsCapacity := range r.MPCap {
 			ln, err := cos.MarshalToString(fsCapacity)
 			debug.AssertNoErr(err)
-			debug.SetExpvar(glog.SmoduleStats, mpath+":cap%", int64(fsCapacity.PctUsed))
 			r.lines = append(r.lines, mpath+": "+ln)
 		}
 	} else if errfs != nil {

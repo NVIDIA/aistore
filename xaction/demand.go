@@ -1,6 +1,6 @@
 // Package demand provides core functionality for the AIStore on-demand extended actions.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package xaction
 

@@ -1,6 +1,6 @@
 // Package objwalk provides core functionality for reading the list of a bucket objects
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package walkinfo
 

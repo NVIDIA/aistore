@@ -1,6 +1,6 @@
 // Package templates provides the set of templates used to format output for the CLI.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package templates
 

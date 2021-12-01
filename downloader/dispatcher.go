@@ -1,6 +1,6 @@
 // Package downloader implements functionality to download resources into AIS cluster from external source.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package downloader
 

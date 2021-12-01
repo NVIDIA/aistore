@@ -1,6 +1,6 @@
 // Package report provides the framework for collecting results of the soaktest
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package report
 

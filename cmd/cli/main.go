@@ -1,6 +1,6 @@
 // Package cli is used as command-line interpreter for AIS
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	version = "0.6"
+	version = "0.8"
 )
 
 var build string

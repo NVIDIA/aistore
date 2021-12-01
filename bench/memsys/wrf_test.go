@@ -1,6 +1,6 @@
 // Package memsys_test contains the corresponding micro-benchmarks.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package memsys_test
 

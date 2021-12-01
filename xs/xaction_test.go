@@ -1,6 +1,6 @@
 // Package xs_test contains xs unit test.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 package xs_test
 
