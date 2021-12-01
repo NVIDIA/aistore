@@ -92,11 +92,9 @@ const (
 	ErrDownloadCount = "err.dl.n"
 
 	// KindLatency
-	GetLatency          = "get.ns"
-	ListLatency         = "lst.ns"
-	KeepAliveMinLatency = "kalive.min.ns"
-	KeepAliveMaxLatency = "kalive.max.ns"
-	KeepAliveLatency    = "kalive.ns"
+	GetLatency       = "get.ns"
+	ListLatency      = "lst.ns"
+	KeepAliveLatency = "kalive.ns"
 
 	// KindSpecial
 	Uptime = "up.ns.time"
@@ -612,8 +610,6 @@ func (tracker statsTracker) regCommonMetrics(node *cluster.Snode) {
 	tracker.register(node, ListCount, KindCounter, true)
 	tracker.register(node, GetLatency, KindLatency, true)
 	tracker.register(node, ListLatency, KindLatency, true)
-	tracker.register(node, KeepAliveMinLatency, KindLatency, true)
-	tracker.register(node, KeepAliveMaxLatency, KindLatency, true)
 	tracker.register(node, KeepAliveLatency, KindLatency, true)
 	tracker.register(node, ErrCount, KindCounter, true)
 	tracker.register(node, ErrGetCount, KindCounter, true)

@@ -53,7 +53,6 @@ type proxyKeepalive struct {
 	keepalive
 	stoppedCh  chan struct{}
 	toRemoveCh chan string
-	latencyCh  chan time.Duration
 }
 
 type keepalive struct {
@@ -210,24 +209,9 @@ func (pkr *proxyKeepalive) updateSmap() (stopped bool) {
 			if si.IsAnySet(cluster.NodeFlagsMaintDecomm) {
 				continue
 			}
-			// pinging
+			// do keepalive
 			wg.Add(1)
-			go func(si *cluster.Snode) {
-				defer wg.Done()
-				if len(pkr.stoppedCh) > 0 {
-					return
-				}
-				ok, s, lat := pkr.ping(si)
-				if s {
-					pkr.stoppedCh <- struct{}{}
-				}
-				if !ok {
-					pkr.toRemoveCh <- si.ID()
-				}
-				if lat != cmn.DefaultTimeout {
-					pkr.latencyCh <- lat
-				}
-			}(si)
+			go pkr.do(si, wg)
 		}
 	}
 	wg.Wait()
@@ -235,7 +219,6 @@ func (pkr *proxyKeepalive) updateSmap() (stopped bool) {
 		pkr.closeCh()
 		return
 	}
-	pkr.statsMinMaxLat(pkr.latencyCh)
 	if len(pkr.toRemoveCh) == 0 {
 		return
 	}
@@ -251,22 +234,51 @@ func (pkr *proxyKeepalive) updateSmap() (stopped bool) {
 	return
 }
 
+func (pkr *proxyKeepalive) do(si *cluster.Snode, wg cos.WG) {
+	defer wg.Done()
+	if len(pkr.stoppedCh) > 0 {
+		return
+	}
+	ok, stopped := pkr._pingRetry(si)
+	if stopped {
+		pkr.stoppedCh <- struct{}{}
+	}
+	if !ok {
+		pkr.toRemoveCh <- si.ID()
+	}
+}
+
+func (pkr *proxyKeepalive) _pingRetry(to *cluster.Snode) (ok, stopped bool) {
+	var (
+		timeout        = time.Duration(pkr.timeoutStatsForDaemon(to.ID()).timeout)
+		t              = mono.NanoTime()
+		_, status, err = pkr.p.Health(to, timeout, nil)
+	)
+	delta := mono.Since(t)
+	pkr.updateTimeoutForDaemon(to.ID(), delta)
+	pkr.statsT.Add(stats.KeepAliveLatency, int64(delta))
+
+	if err == nil {
+		return true, false
+	}
+	glog.Warningf("%s fails to respond, err: %v(%d) - retrying...", to.StringEx(), err, status)
+	ok, stopped = pkr.retry(to)
+	return ok, stopped
+}
+
 func (pkr *proxyKeepalive) openCh(daemonCnt int) {
 	if pkr.stoppedCh == nil || cap(pkr.stoppedCh) < daemonCnt {
 		pkr.stoppedCh = make(chan struct{}, daemonCnt*2)
 		pkr.toRemoveCh = make(chan string, daemonCnt*2)
-		pkr.latencyCh = make(chan time.Duration, daemonCnt*2)
 	}
 	debug.Assert(len(pkr.stoppedCh) == 0)
 	debug.Assert(len(pkr.toRemoveCh) == 0)
-	debug.Assert(len(pkr.latencyCh) == 0)
 }
 
 func (pkr *proxyKeepalive) closeCh() {
 	close(pkr.stoppedCh)
 	close(pkr.toRemoveCh)
-	close(pkr.latencyCh)
-	pkr.stoppedCh, pkr.toRemoveCh, pkr.latencyCh = nil, nil, nil
+	pkr.stoppedCh, pkr.toRemoveCh = nil, nil
 }
 
 func (pkr *proxyKeepalive) _pre(ctx *smapModifier, clone *smapX) error {
@@ -314,49 +326,6 @@ func (pkr *proxyKeepalive) _final(ctx *smapModifier, clone *smapX) {
 	msg := pkr.p.newAmsg(ctx.msg, nil)
 	debug.Assert(clone._sgl != nil)
 	_ = pkr.p.metasyncer.sync(revsPair{clone, msg})
-}
-
-// min & max keepalive stats
-func (pkr *proxyKeepalive) statsMinMaxLat(latencyCh chan time.Duration) {
-	min, max := time.Hour, time.Duration(0)
-loop:
-	for {
-		select {
-		case lat := <-latencyCh:
-			if min > lat && lat != 0 {
-				min = lat
-			}
-			if max < lat {
-				max = lat
-			}
-		default:
-			break loop
-		}
-	}
-	if min != time.Hour {
-		pkr.statsT.Add(stats.KeepAliveMinLatency, int64(min))
-	}
-	if max != 0 {
-		pkr.statsT.Add(stats.KeepAliveMaxLatency, int64(max))
-	}
-}
-
-func (pkr *proxyKeepalive) ping(to *cluster.Snode) (ok, stopped bool, delta time.Duration) {
-	var (
-		timeout        = time.Duration(pkr.timeoutStatsForDaemon(to.ID()).timeout)
-		t              = mono.NanoTime()
-		_, status, err = pkr.p.Health(to, timeout, nil)
-	)
-	delta = mono.Since(t)
-	pkr.updateTimeoutForDaemon(to.ID(), delta)
-	pkr.statsT.Add(stats.KeepAliveLatency, int64(delta))
-
-	if err == nil {
-		return true, false, delta
-	}
-	glog.Warningf("%s fails to respond, err: %v(%d) - retrying...", to.StringEx(), err, status)
-	ok, stopped = pkr.retry(to)
-	return ok, stopped, cmn.DefaultTimeout
 }
 
 func (pkr *proxyKeepalive) retry(si *cluster.Snode) (ok, stopped bool) {
