@@ -236,7 +236,7 @@ const (
 	joinNodeArgument          = "IP:PORT"
 	startDownloadArgument     = "SOURCE DESTINATION"
 	jsonSpecArgument          = "JSON_SPECIFICATION"
-	showStatsArgument         = "[DAEMON_ID] [STATS_PREFIX]"
+	showStatsArgument         = "[DAEMON_ID] [STATS_FILTER]"
 
 	// Xactions
 	xactionArgument = "XACTION_NAME"
@@ -303,7 +303,7 @@ var (
 	}
 	bucketPropsFlag = cli.StringFlag{Name: "bucket-props", Usage: "bucket properties"}
 	forceFlag       = cli.BoolFlag{Name: "force,f", Usage: "force an action"}
-	humanFlag       = cli.BoolFlag{Name: "human", Usage: "human-readable output"}
+	rawFlag         = cli.BoolFlag{Name: "raw", Usage: "display exact values instead of human-readable ones"}
 
 	allXactionsFlag = cli.BoolTFlag{Name: "all", Usage: "show all xactions, including finished"}
 	allItemsFlag    = cli.BoolTFlag{Name: "all", Usage: "list all items"} // TODO: differentiate bucket names vs objects

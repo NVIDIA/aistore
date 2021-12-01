@@ -97,7 +97,7 @@ Display details about the most recent rebalance xaction.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--refresh [N]` | `string` | watch the rebalance until it finishes or CTRL-C is pressed. Display the current stats every N seconds, where N ends with time suffix: s, m. If N is not defined it prints stats every 1 second | `1s` |
+| `--refresh N` | `string` | watch the rebalance until it finishes or CTRL-C is pressed. Display the current stats every N seconds, where N ends with time suffix: s, m | ` ` |
 | `--all` | `bool` | If set, show all rebalance xactions | `false` |
 
 ### Example

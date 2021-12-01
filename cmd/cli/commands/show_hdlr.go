@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"text/tabwriter"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
@@ -106,7 +107,8 @@ var (
 		},
 		subcmdShowClusterStats: {
 			jsonFlag,
-			humanFlag,
+			rawFlag,
+			refreshFlag,
 		},
 	}
 
@@ -627,6 +629,14 @@ func fmtStatValue(name string, value int64, human bool) string {
 	return fmt.Sprintf("%v", value)
 }
 
+func appendStatToProps(props []*prop, name string, value int64, prefix, filter string, human bool) []*prop {
+	name = prefix + name
+	if filter != "" && !strings.Contains(name, filter) {
+		return props
+	}
+	return append(props, &prop{Name: name, Value: fmtStatValue(name, value, human)})
+}
+
 func showDaemonStats(c *cli.Context, node *cluster.Snode) error {
 	stats, err := api.GetDaemonStats(defaultAPIParams, node)
 	if err != nil {
@@ -636,15 +646,11 @@ func showDaemonStats(c *cli.Context, node *cluster.Snode) error {
 		return templates.DisplayOutput(stats, c.App.Writer, templates.ConfigTmpl, true)
 	}
 
-	human := flagIsSet(c, humanFlag)
+	human := !flagIsSet(c, rawFlag)
 	filter := c.Args().Get(1)
-	// TODO: extract to map->slice function.
-	props := make([]prop, 0, len(stats.Tracker))
+	props := make([]*prop, 0, len(stats.Tracker))
 	for k, v := range stats.Tracker {
-		if filter != "" && !strings.HasPrefix(k, filter) {
-			continue
-		}
-		props = append(props, prop{Name: k, Value: fmtStatValue(k, v.Value, human)})
+		props = appendStatToProps(props, k, v.Value, "", filter, human)
 	}
 	sort.Slice(props, func(i, j int) bool {
 		return props[i].Name < props[j].Name
@@ -664,10 +670,10 @@ func showDaemonStats(c *cli.Context, node *cluster.Snode) error {
 				continue
 			}
 			props = append(props,
-				prop{Name: prefix + "path", Value: mpath},
-				prop{Name: prefix + "used", Value: fmtStatValue(".size", int64(mstat.Used), human)},
-				prop{Name: prefix + "avail", Value: fmtStatValue(".size", int64(mstat.Avail), human)},
-				prop{Name: prefix + "%used", Value: fmt.Sprintf("%d", mstat.PctUsed)})
+				&prop{Name: prefix + "path", Value: mpath},
+				&prop{Name: prefix + "used", Value: fmtStatValue(".size", int64(mstat.Used), human)},
+				&prop{Name: prefix + "avail", Value: fmtStatValue(".size", int64(mstat.Avail), human)},
+				&prop{Name: prefix + "%used", Value: fmt.Sprintf("%d", mstat.PctUsed)})
 			mID++
 		}
 	}
@@ -685,16 +691,11 @@ func showClusterTotalStats(c *cli.Context) (err error) {
 		return templates.DisplayOutput(st, c.App.Writer, templates.TargetMpathListTmpl, json)
 	}
 
-	human := flagIsSet(c, humanFlag)
+	human := !flagIsSet(c, rawFlag)
 	filter := c.Args().Get(0)
-	// TODO: extract to map->slice function.
 	props := make([]*prop, 0, len(st.Proxy.Tracker))
 	for k, v := range st.Proxy.Tracker {
-		if filter != "" && !strings.HasPrefix(k, filter) {
-			continue
-		}
-		name := "proxy." + k
-		props = append(props, &prop{Name: name, Value: fmtStatValue(k, v.Value, human)})
+		props = appendStatToProps(props, k, v.Value, "proxy.", filter, human)
 	}
 	tgtStats := make(map[string]int64)
 	for _, tgt := range st.Target {
@@ -716,13 +717,8 @@ func showClusterTotalStats(c *cli.Context) (err error) {
 		}
 	}
 
-	// TODO: extract to map->slice function.
 	for k, v := range tgtStats {
-		if filter != "" && !strings.HasPrefix(k, filter) {
-			continue
-		}
-		name := "target." + k
-		props = append(props, &prop{Name: name, Value: fmtStatValue(k, v, human)})
+		props = appendStatToProps(props, k, v, "target.", filter, human)
 	}
 
 	sort.Slice(props, func(i, j int) bool {
@@ -738,12 +734,24 @@ func showClusterStatsHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	if c.NArg() != 0 {
-		node := smap.GetNode(c.Args().First())
-		if node != nil {
-			return showDaemonStats(c, node)
-		}
+	var node *cluster.Snode
+	daemonID := c.Args().First()
+	if daemonID != "" {
+		node = smap.GetNode(daemonID)
 	}
+	refresh := flagIsSet(c, refreshFlag)
+	sleep := calcRefreshRate(c)
 
-	return showClusterTotalStats(c)
+	for {
+		if node != nil {
+			err = showDaemonStats(c, node)
+		} else {
+			err = showClusterTotalStats(c)
+		}
+		if err != nil || !refresh {
+			return err
+		}
+
+		time.Sleep(sleep)
+	}
 }

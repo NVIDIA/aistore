@@ -46,7 +46,7 @@ If nothing is set, information from all the daemons in the AIS cluster is displa
 | --- | --- | --- | --- |
 | `--json, -j` | `bool` | Output in JSON format | `false` |
 | `--count` | `int` | Total number of generated reports | `1` |
-| `--refresh` | `string` | Time duration between reports | `1s` |
+| `--refresh N` | `string` | Time duration between reports where N is time interval ends with m, s, ms | ` ` |
 | `--no-headers` | `bool` | Display tables without headers | `false` |
 
 ### Examples
@@ -117,7 +117,7 @@ Proxies: 5       Targets: 5      Smap Version: 14
 ```
 ## Show cluster stats
 
-`ais show cluster stats [DAEMON_ID] [STATS_PREFIX]`
+`ais show cluster stats [DAEMON_ID] [STATS_FILTER]`
 
 Show current (live) statistics, including:
 * utilization percentages
@@ -135,26 +135,29 @@ In the latter case, the command displays aggregated counters and cluster-wide av
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--json, -j` | `bool` | JSON format           | `false` |
-| `--human`    | `bool` | human-readable output | `false` |
+| `--raw`    | `bool` | display exact raw statistics values instead of human-readable ones | `false` |
+| `--refresh N` | `string` | display the current stats every N seconds, where N ends with time suffix: s, m. Press `Ctrl+C` to stop monitoring | ` ` |
 
 ### Examples
 
+Use `--raw` option
+
 ```console
-# Use `--human` option
-$ ais cluster show stats target.dl
+$ ais cluster show stats target.dl --raw
 PROPERTY         VALUE
 target.dl.ns     228747302
 target.dl.size   848700
 
-$ ais cluster show stats target.dl --human
+$ ais cluster show stats target.dl
 PROPERTY         VALUE
 target.dl.ns     228.747302ms
 target.dl.size   828.81KiB
 ```
 
+Excerpt from global stats to show both proxy and target grouping
+
 ```console
-# Excerpt from global stats to show both proxy and target grouping
-$ ais cluster show stats
+$ ais cluster show stats --raw
 PROPERTY                         VALUE
 proxy.get.n                      90
 proxy.get.ns                     0
@@ -168,9 +171,10 @@ target.get.n                     90
 target.get.ns                    33319026
 ```
 
+Detailed node statistics
+
 ```console
-# Detailed node statistics
-$ ais cluster show stats sCFgt15AB --human
+$ ais cluster show stats sCFgt15AB
 PROPERTY                 VALUE
 append.ns                0
 dl.ns                    229.142325ms
@@ -202,25 +206,51 @@ mountpath.0.%used        43
 ...
 ```
 
+Filtering to show only those metrics that contain specific substring
+
 ```console
-# Filtering to show only those metrics that have specific prefix
-$ ais show cluster stats sCFgt15AB put
+$ ais show cluster stats sCFgt15AB put --raw
 PROPERTY         VALUE
 put.n            183864
 put.ns           42711506911
 put.redir.ns     105969922088
 
 # And the same in human-readable format
-$ ais show cluster stats sCFgt15AB put --human
+$ ais show cluster stats sCFgt15AB put
 PROPERTY         VALUE
 put.n            183864
 put.ns           42.711506911s
 put.redir.ns     1m45.969922088s
 ```
 
+Monitor the statistics every 2 seconds
+
+```console
+$ ais cluster show stats sCFgt8088 put --refresh 2s
+PROPERTY         VALUE
+put.n            24
+put.ns           306.935732ms
+put.redir.ns     106.648013ms
+
+PROPERTY         VALUE
+put.n            24
+put.ns           306.935732ms
+put.redir.ns     106.648013ms
+
+PROPERTY         VALUE
+put.n            26
+put.ns           327.711826ms
+put.redir.ns     108.714872ms
+
+PROPERTY         VALUE
+put.n            32
+put.ns           416.776232ms
+put.redir.ns     115.384523ms
+```
+
 ## Show disk stats
 
-`ais show disk [TARGET_ID]`
+`ais show storage disk [TARGET_ID]`
 
 Show the disk stats of the `TARGET_ID`. If `TARGET_ID` isn't given, disk stats for all targets will be shown.
 
@@ -230,7 +260,7 @@ Show the disk stats of the `TARGET_ID`. If `TARGET_ID` isn't given, disk stats f
 | --- | --- | --- | --- |
 | `--json, -j` | `bool` | Output in JSON format | `false` |
 | `--count` | `int` | Total number of generated reports | `1` |
-| `--refresh` | `string` | Time duration between reports | `1s` |
+| `--refresh N` | `string` | Time duration between reports where N is time interval ends with time suffix m, s, ms | ` ` |
 | `--no-headers` | `bool` | Display tables without headers | `false` |
 
 ### Examples
@@ -240,7 +270,7 @@ Show the disk stats of the `TARGET_ID`. If `TARGET_ID` isn't given, disk stats f
 Display 5 reports with disk statistics of all targets with 10s intervals between each report.
 
 ```console
-$ ais show disk --count 2 --refresh 10s
+$ ais show storage disk --count 2 --refresh 10s
 Target		Disk	Read		Write		%Util
 163171t8088	sda	6.00KiB/s	171.00KiB/s	49
 948212t8089	sda	6.00KiB/s	171.00KiB/s	49

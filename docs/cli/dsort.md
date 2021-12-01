@@ -204,7 +204,7 @@ Lists all dSort jobs if the `JOB_ID` argument is omitted.
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--regex` | `string` | Regex for the description of dSort jobs | `""` |
-| `--refresh` | `duration` | Refreshing rate of the progress bar refresh or metrics refresh | `1s` |
+| `--refresh N` | `duration` | Refreshing rate of the progress bar refresh or metrics refresh where N is the time interval with suffix s, m, ms | ` ` |
 | `--verbose, -v` | `bool` | Show detailed metrics | `false` |
 | `--log` | `string` | Path to file where the metrics will be saved (does not work with progress bar) | `/tmp/dsort_run.txt` |
 | `--json, -j` | `bool` | Show only json metrics | `false` |
@@ -329,5 +329,5 @@ Wait for the dSort job with given `JOB_ID` to finish.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--refresh` | `duration` | Refresh rate | `1s` |
+| `--refresh N` | `duration` | Refresh rate | `1s` |
 | `--progress` | `bool` | Displays progress bar | `false` |

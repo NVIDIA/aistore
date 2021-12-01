@@ -277,7 +277,7 @@ Show download jobs or status of a specific job.
 | --- | --- | --- | --- |
 | `--regex` | `string` | Regex for the description of download jobs | `""` |
 | `--progress` | `bool` | Displays progress bar | `false` |
-| `--refresh` | `duration` | Refresh rate of the progress bar | `1s` |
+| `--refresh N` | `duration` | Refresh rate of the progress bar where N is the time interval with suffix m, s, ms | `1s` |
 | `--verbose` | `bool` | Verbose output | `false` |
 
 ### Examples
@@ -316,5 +316,5 @@ Wait for the download job with given `JOB_ID` to finish.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--refresh` | `duration` | Refresh rate | `1s` |
+| `--refresh N` | `duration` | Refresh rate where N is the time interval with suffix m, s, ms | `1s` |
 | `--progress` | `bool` | Displays progress bar | `false` |
