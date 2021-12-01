@@ -600,12 +600,12 @@ func (ds *dsorterGeneral) makeRecvResponseFunc() transport.ReceiveObj {
 		}
 		defer cos.DrainReader(object)
 
-		writer := ds.pullStreamWriter(hdr.ObjName)
-		if writer == nil { // was removed after timing out
+		if ds.m.aborted() {
 			return
 		}
 
-		if ds.m.aborted() {
+		writer := ds.pullStreamWriter(hdr.ObjName)
+		if writer == nil { // was removed after timing out
 			return
 		}
 
