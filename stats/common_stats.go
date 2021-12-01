@@ -94,8 +94,8 @@ const (
 	// KindLatency
 	GetLatency          = "get.ns"
 	ListLatency         = "lst.ns"
-	KeepAliveMinLatency = "kalive.ns.min"
-	KeepAliveMaxLatency = "kalive.ns.max"
+	KeepAliveMinLatency = "kalive.min.ns"
+	KeepAliveMaxLatency = "kalive.max.ns"
 	KeepAliveLatency    = "kalive.ns"
 
 	// KindSpecial

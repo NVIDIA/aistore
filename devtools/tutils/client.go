@@ -26,7 +26,6 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tlog"
 	"github.com/NVIDIA/aistore/stats"
-	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -586,19 +585,11 @@ func waitForRebalanceToStart(baseParams api.BaseParams) {
 	}
 }
 
-func GetClusterStats(t *testing.T, proxyURL string) (scs stats.ClusterStats) {
+func GetClusterStats(t *testing.T, proxyURL string) stats.ClusterStats {
 	baseParams := BaseAPIParams(proxyURL)
-	raw, err := api.GetClusterStats(baseParams)
+	scs, err := api.GetClusterStats(baseParams)
 	tassert.CheckFatal(t, err)
-	scs.Proxy = raw.Proxy
-	scs.Target = make(map[string]*stats.DaemonStats)
-	for tid := range raw.Target {
-		var ts stats.DaemonStats
-		if err := jsoniter.Unmarshal(raw.Target[tid], &ts); err == nil {
-			scs.Target[tid] = &ts
-		}
-	}
-	return
+	return scs
 }
 
 func GetNamedStatsVal(ds *stats.DaemonStats, name string) int64 {

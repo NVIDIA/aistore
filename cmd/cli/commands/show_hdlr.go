@@ -104,6 +104,10 @@ var (
 		subcmdShowLog: {
 			logSevFlag,
 		},
+		subcmdShowClusterStats: {
+			jsonFlag,
+			humanFlag,
+		},
 	}
 
 	showCmd = cli.Command{
@@ -153,12 +157,12 @@ var (
 	showCmdCluster = cli.Command{
 		Name:      subcmdShowCluster,
 		Usage:     "show cluster details",
-		ArgsUsage: "[DAEMON_ID|DAEMON_TYPE|smap|bmd|config]",
+		ArgsUsage: "[DAEMON_ID|DAEMON_TYPE|smap|bmd|config|stats]",
 		Flags:     showCmdsFlags[subcmdShowCluster],
 		Action:    showClusterHandler,
 		BashComplete: func(c *cli.Context) {
 			if c.NArg() == 0 {
-				fmt.Printf("%s\n%s\n%s\n%s\n%s\n", cmn.Proxy, cmn.Target, subcmdSmap, subcmdBMD, subcmdConfig)
+				fmt.Printf("%s\n%s\n%s\n%s\n%s\n%s\n", cmn.Proxy, cmn.Target, subcmdSmap, subcmdBMD, subcmdConfig, subcmdShowClusterStats)
 			}
 			daemonCompletions(completeAllDaemons)(c)
 		},
@@ -185,6 +189,14 @@ var (
 				ArgsUsage: showClusterConfigArgument,
 				Flags:     showCmdsFlags[subcmdShowConfig],
 				Action:    showClusterConfigHandler,
+			},
+			{
+				Name:         subcmdShowClusterStats,
+				Usage:        "show cluster statistics",
+				ArgsUsage:    showStatsArgument,
+				Flags:        showCmdsFlags[subcmdShowClusterStats],
+				Action:       showClusterStatsHandler,
+				BashComplete: daemonCompletions(completeAllDaemons),
 			},
 		},
 	}
@@ -606,4 +618,132 @@ func showMpathHandler(c *cli.Context) error {
 	})
 	useJSON := flagIsSet(c, jsonFlag)
 	return templates.DisplayOutput(mpls, c.App.Writer, templates.TargetMpathListTmpl, useJSON)
+}
+
+func fmtStatValue(name string, value int64, human bool) string {
+	if human {
+		return formatStatHuman(name, value)
+	}
+	return fmt.Sprintf("%v", value)
+}
+
+func showDaemonStats(c *cli.Context, node *cluster.Snode) error {
+	stats, err := api.GetDaemonStats(defaultAPIParams, node)
+	if err != nil {
+		return err
+	}
+	if flagIsSet(c, jsonFlag) {
+		return templates.DisplayOutput(stats, c.App.Writer, templates.ConfigTmpl, true)
+	}
+
+	human := flagIsSet(c, humanFlag)
+	filter := c.Args().Get(1)
+	// TODO: extract to map->slice function.
+	props := make([]prop, 0, len(stats.Tracker))
+	for k, v := range stats.Tracker {
+		if filter != "" && !strings.HasPrefix(k, filter) {
+			continue
+		}
+		props = append(props, prop{Name: k, Value: fmtStatValue(k, v.Value, human)})
+	}
+	sort.Slice(props, func(i, j int) bool {
+		return props[i].Name < props[j].Name
+	})
+	if node.IsTarget() {
+		mID := 0
+		// Make mountpaths always sorted.
+		mpathSorted := make([]string, 0, len(stats.MPCap))
+		for mpath := range stats.MPCap {
+			mpathSorted = append(mpathSorted, mpath)
+		}
+		sort.Strings(mpathSorted)
+		for _, mpath := range mpathSorted {
+			mstat := stats.MPCap[mpath]
+			prefix := fmt.Sprintf("mountpath.%d.", mID)
+			if filter != "" && !strings.HasPrefix(prefix, filter) {
+				continue
+			}
+			props = append(props,
+				prop{Name: prefix + "path", Value: mpath},
+				prop{Name: prefix + "used", Value: fmtStatValue(".size", int64(mstat.Used), human)},
+				prop{Name: prefix + "avail", Value: fmtStatValue(".size", int64(mstat.Avail), human)},
+				prop{Name: prefix + "%used", Value: fmt.Sprintf("%d", mstat.PctUsed)})
+			mID++
+		}
+	}
+	return templates.DisplayOutput(props, c.App.Writer, templates.ConfigTmpl, false)
+}
+
+func showClusterTotalStats(c *cli.Context) (err error) {
+	st, err := api.GetClusterStats(defaultAPIParams)
+	if err != nil {
+		return err
+	}
+
+	json := flagIsSet(c, jsonFlag)
+	if json {
+		return templates.DisplayOutput(st, c.App.Writer, templates.TargetMpathListTmpl, json)
+	}
+
+	human := flagIsSet(c, humanFlag)
+	filter := c.Args().Get(0)
+	// TODO: extract to map->slice function.
+	props := make([]*prop, 0, len(st.Proxy.Tracker))
+	for k, v := range st.Proxy.Tracker {
+		name := "proxy." + k
+		if filter != "" && !strings.HasPrefix(name, filter) {
+			continue
+		}
+		props = append(props, &prop{Name: name, Value: fmtStatValue(k, v.Value, human)})
+	}
+	tgtStats := make(map[string]int64)
+	for _, tgt := range st.Target {
+		for k, v := range tgt.Tracker {
+			if strings.HasSuffix(k, ".time") {
+				continue
+			}
+			if totalVal, ok := tgtStats[k]; ok {
+				v.Value += totalVal
+			}
+			tgtStats[k] = v.Value
+		}
+	}
+	// Replace all "*.ns" counters with their average values.
+	tgtCnt := int64(len(st.Target))
+	for k, v := range tgtStats {
+		if strings.HasSuffix(k, ".ns") {
+			tgtStats[k] = v / tgtCnt
+		}
+	}
+
+	// TODO: extract to map->slice function.
+	for k, v := range tgtStats {
+		name := "target." + k
+		if filter != "" && !strings.HasPrefix(name, filter) {
+			continue
+		}
+		props = append(props, &prop{Name: name, Value: fmtStatValue(k, v, human)})
+	}
+
+	sort.Slice(props, func(i, j int) bool {
+		return props[i].Name < props[j].Name
+	})
+
+	return templates.DisplayOutput(props, c.App.Writer, templates.ConfigTmpl, false)
+}
+
+func showClusterStatsHandler(c *cli.Context) (err error) {
+	smap, err := api.GetClusterMap(defaultAPIParams)
+	if err != nil {
+		return err
+	}
+
+	if c.NArg() != 0 {
+		node := smap.GetNode(c.Args().First())
+		if node != nil {
+			return showDaemonStats(c, node)
+		}
+	}
+
+	return showClusterTotalStats(c)
 }

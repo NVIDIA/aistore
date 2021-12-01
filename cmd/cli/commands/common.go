@@ -102,17 +102,18 @@ const (
 	subcmdDecommission = "decommission"
 
 	// Show subcommands
-	subcmdShowDisk      = subcmdMpath
-	subcmdShowDownload  = subcmdDownload
-	subcmdShowDsort     = subcmdDsort
-	subcmdShowObject    = subcmdObject
-	subcmdShowXaction   = subcmdXaction
-	subcmdShowRebalance = subcmdRebalance
-	subcmdShowBucket    = subcmdBucket
-	subcmdShowConfig    = subcmdConfig
-	subcmdShowLog       = subcmdLog
-	subcmdShowRemoteAIS = "remote-cluster"
-	subcmdShowCluster   = subcmdCluster
+	subcmdShowDisk         = subcmdMpath
+	subcmdShowDownload     = subcmdDownload
+	subcmdShowDsort        = subcmdDsort
+	subcmdShowObject       = subcmdObject
+	subcmdShowXaction      = subcmdXaction
+	subcmdShowRebalance    = subcmdRebalance
+	subcmdShowBucket       = subcmdBucket
+	subcmdShowConfig       = subcmdConfig
+	subcmdShowLog          = subcmdLog
+	subcmdShowRemoteAIS    = "remote-cluster"
+	subcmdShowCluster      = subcmdCluster
+	subcmdShowClusterStats = "stats"
 
 	subcmdShowStorage  = commandStorage
 	subcmdShowMpath    = subcmdMountpath
@@ -235,6 +236,7 @@ const (
 	joinNodeArgument          = "IP:PORT"
 	startDownloadArgument     = "SOURCE DESTINATION"
 	jsonSpecArgument          = "JSON_SPECIFICATION"
+	showStatsArgument         = "[DAEMON_ID] [STATS_PREFIX]"
 
 	// Xactions
 	xactionArgument = "XACTION_NAME"
@@ -301,6 +303,7 @@ var (
 	}
 	bucketPropsFlag = cli.StringFlag{Name: "bucket-props", Usage: "bucket properties"}
 	forceFlag       = cli.BoolFlag{Name: "force,f", Usage: "force an action"}
+	humanFlag       = cli.BoolFlag{Name: "human", Usage: "human-readable output"}
 
 	allXactionsFlag = cli.BoolTFlag{Name: "all", Usage: "show all xactions, including finished"}
 	allItemsFlag    = cli.BoolTFlag{Name: "all", Usage: "list all items"} // TODO: differentiate bucket names vs objects

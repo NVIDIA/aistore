@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
+	jsoniter "github.com/json-iterator/go"
 )
 
 type JoinNodeResult struct {
@@ -73,13 +74,27 @@ func GetClusterSysInfo(baseParams BaseParams) (sysInfo cmn.ClusterSysInfo, err e
 }
 
 // GetClusterStats retrieves AIStore cluster stats (all targets and current proxy).
-func GetClusterStats(baseParams BaseParams) (clusterStats stats.ClusterStatsRaw, err error) {
+func GetClusterStats(baseParams BaseParams) (clusterStats stats.ClusterStats, err error) {
+	var rawStats stats.ClusterStatsRaw
 	baseParams.Method = http.MethodGet
 	err = DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathCluster.S,
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatStats}},
-	}, &clusterStats)
+	}, &rawStats)
+	if err != nil {
+		return
+	}
+
+	clusterStats.Proxy = rawStats.Proxy
+	clusterStats.Target = make(map[string]*stats.DaemonStats)
+	for tid := range rawStats.Target {
+		var ts stats.DaemonStats
+		if err := jsoniter.Unmarshal(rawStats.Target[tid], &ts); err == nil {
+			clusterStats.Target[tid] = &ts
+		}
+	}
+
 	return
 }
 

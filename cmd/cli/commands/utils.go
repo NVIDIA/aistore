@@ -38,6 +38,7 @@ import (
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
 	"github.com/vbauerster/mpb/v4/decor"
+	"k8s.io/apimachinery/pkg/util/duration"
 )
 
 const (
@@ -951,6 +952,25 @@ func authNConfPairs(conf *authn.Config, prefix string) ([]prop, error) {
 		return propList[i].Name < propList[j].Name
 	})
 	return propList, err
+}
+
+func formatStatHuman(name string, value int64) string {
+	if value == 0 {
+		return "0"
+	}
+	switch {
+	case strings.HasSuffix(name, ".ns"):
+		dur := time.Duration(value)
+		return dur.String()
+	case strings.HasSuffix(name, ".time"):
+		dur := time.Duration(value)
+		return duration.HumanDuration(dur)
+	case strings.HasSuffix(name, ".size"):
+		return cos.B2S(value, 2)
+	case strings.HasSuffix(name, ".bps"):
+		return cos.B2S(value, 0) + "/s"
+	}
+	return fmt.Sprintf("%d", value)
 }
 
 //////////////
