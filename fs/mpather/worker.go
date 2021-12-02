@@ -7,7 +7,6 @@ package mpather
 import (
 	"fmt"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -88,7 +87,6 @@ func newWorker(opts *WorkerGroupOpts, mpathInfo *fs.MountpathInfo) *worker {
 
 func (w *worker) work() error {
 	var buf []byte
-	glog.Infof("%s started", w)
 	if w.opts.Slab != nil {
 		buf = w.opts.Slab.Alloc()
 		defer w.opts.Slab.Free(buf)

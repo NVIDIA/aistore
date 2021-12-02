@@ -168,7 +168,12 @@ func _overback(err error) error {
 
 func (t *targetrunner) init(config *cmn.Config) {
 	t.initNetworks()
-	t.si.Init(initTID(config), cmn.Target)
+	tid, generated := initTID(config)
+	if generated && len(config.FSP.Paths) > 0 {
+		// in an unlikely case of losing all mountpath-stored IDs but still having a volume
+		tid = volume.RecoverTID(tid, config.FSP.Paths)
+	}
+	t.si.Init(tid, cmn.Target)
 
 	cos.InitShortID(t.si.Digest())
 
@@ -233,7 +238,7 @@ func (t *targetrunner) initHostIP() {
 	}
 }
 
-func initTID(config *cmn.Config) (tid string) {
+func initTID(config *cmn.Config) (tid string, generated bool) {
 	var err error
 	if tid = envDaemonID(cmn.Target); tid != "" {
 		return
@@ -247,6 +252,7 @@ func initTID(config *cmn.Config) (tid string) {
 	tid = generateDaemonID(cmn.Target, config)
 	cos.Assert(tid != "")
 	glog.Infof("t[%s] ID randomly generated", tid)
+	generated = true
 	return
 }
 

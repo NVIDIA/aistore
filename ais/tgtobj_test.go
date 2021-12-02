@@ -66,7 +66,8 @@ func TestMain(m *testing.M) {
 	t = newTarget(co)
 	t.name = cmn.Target
 	t.initNetworks()
-	t.si.Init(initTID(config), cmn.Target)
+	tid, _ := initTID(config)
+	t.si.Init(tid, cmn.Target)
 
 	fs.Add(testMountpath, t.si.ID())
 

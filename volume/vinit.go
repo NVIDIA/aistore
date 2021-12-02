@@ -29,9 +29,9 @@ func Init(t cluster.Target, config *cmn.Config) {
 		glog.Warningf("Using %d mountpaths for testing with disabled filesystem ID check", config.TestFSP.Count)
 		fs.DisableFsIDCheck()
 	}
-	// boostrap from a local-config referenced location; two points:
-	// a) local-config is kept in sync with mountpath changes (see ais/fspathgrp)
-	// b) disk-label based bootstrapping can be done but can wait (see comment below)
+	// bootstrap from a local-config referenced location; two points:
+	// a) local-config is kept in-sync with mountpath changes (see ais/fspathgrp)
+	// b) disk label for absolute referencing - can wait (TODO)
 	if v, err := configLoadVMD(tid, config.FSP.Paths); err != nil {
 		cos.ExitLogf("%s: %v", t.Snode(), err)
 	} else {
@@ -39,7 +39,7 @@ func Init(t cluster.Target, config *cmn.Config) {
 	}
 
 	if vmd == nil {
-		// a) VMD is nil upon the very first deployment, or
+		// a) the very first deployment when volume does not exist, or
 		// b) when the config doesn't contain a single valid mountpath
 		//    (that in turn contains a copy of VMD, possibly outdated (but that's ok))
 		if err := configInitMPI(tid, config); err != nil {
@@ -202,6 +202,31 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int) (maxVerVMD *
 	if la, lc := len(availablePaths), len(config.FSP.Paths); la != lc {
 		glog.Warningf("number of available mountpaths (%d) differs from the configured (%d)", la, lc)
 		glog.Warningln("run 'ais storage mountpath [attach|detach]', fix the config, or ignore")
+	}
+	return
+}
+
+// pre-loading to try to recover lost tid
+func RecoverTID(generatedID string, configPaths cos.StringSet) (tid string) {
+	debug.Assert(cos.IsValidUUID(generatedID))
+	available := make(fs.MPI, len(configPaths)) // temp MPI to attempt loading
+	for mpath := range configPaths {
+		available[mpath] = nil
+	}
+	vmd := newVMD(len(available))
+	for mpath := range available {
+		if err := vmd.load(mpath); err == nil {
+			debug.Assert(vmd.DaemonID != "" && vmd.DaemonID != generatedID)
+			if tid == "" {
+				glog.Warningf("recovered lost target ID %q from mpath %s", vmd.DaemonID, mpath)
+				tid = vmd.DaemonID
+			} else if tid != vmd.DaemonID {
+				cos.ExitLogf("multiple conflicting target IDs %q(%q) vs %q", vmd.DaemonID, mpath, tid)
+			}
+		}
+	}
+	if tid == "" {
+		tid = generatedID
 	}
 	return
 }
