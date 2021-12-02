@@ -215,14 +215,15 @@ func RecoverTID(generatedID string, configPaths cos.StringSet) (tid string) {
 	}
 	vmd := newVMD(len(available))
 	for mpath := range available {
-		if err := vmd.load(mpath); err == nil {
-			debug.Assert(vmd.DaemonID != "" && vmd.DaemonID != generatedID)
-			if tid == "" {
-				glog.Warningf("recovered lost target ID %q from mpath %s", vmd.DaemonID, mpath)
-				tid = vmd.DaemonID
-			} else if tid != vmd.DaemonID {
-				cos.ExitLogf("multiple conflicting target IDs %q(%q) vs %q", vmd.DaemonID, mpath, tid)
-			}
+		if err := vmd.load(mpath); err != nil {
+			continue
+		}
+		debug.Assert(vmd.DaemonID != "" && vmd.DaemonID != generatedID)
+		if tid == "" {
+			glog.Warningf("recovered lost target ID %q from mpath %s", vmd.DaemonID, mpath)
+			tid = vmd.DaemonID
+		} else if tid != vmd.DaemonID {
+			cos.ExitLogf("multiple conflicting target IDs %q(%q) vs %q", vmd.DaemonID, mpath, tid)
 		}
 	}
 	if tid == "" {

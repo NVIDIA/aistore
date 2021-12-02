@@ -128,7 +128,10 @@ func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what 
 	args.timeout = config.Client.Timeout.D() // NOTE: may poll for quiescence
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
-	targetResults := p._queryResults(w, r, results)
+	targetResults, erred := p._queryResults(w, r, results)
+	if erred {
+		return
+	}
 	if len(targetResults) == 0 {
 		p.writeErrMsg(w, r, "xaction \""+xflt+"\" not found", http.StatusNotFound)
 		return
@@ -203,8 +206,8 @@ func (p *proxyrunner) cluSysinfo(r *http.Request, timeout time.Duration, to int)
 }
 
 func (p *proxyrunner) queryClusterStats(w http.ResponseWriter, r *http.Request, what string) {
-	targetStats := p._queryTargets(w, r)
-	if targetStats == nil {
+	targetStats, erred := p._queryTargets(w, r)
+	if targetStats == nil || erred {
 		return
 	}
 	out := &stats.ClusterStatsRaw{}
@@ -214,8 +217,8 @@ func (p *proxyrunner) queryClusterStats(w http.ResponseWriter, r *http.Request, 
 }
 
 func (p *proxyrunner) queryClusterMountpaths(w http.ResponseWriter, r *http.Request, what string) {
-	targetMountpaths := p._queryTargets(w, r)
-	if targetMountpaths == nil {
+	targetMountpaths, erred := p._queryTargets(w, r)
+	if targetMountpaths == nil || erred {
 		return
 	}
 	out := &ClusterMountpathsRaw{}
@@ -225,7 +228,7 @@ func (p *proxyrunner) queryClusterMountpaths(w http.ResponseWriter, r *http.Requ
 
 // helper methods for querying targets
 
-func (p *proxyrunner) _queryTargets(w http.ResponseWriter, r *http.Request) cos.JSONRawMsgs {
+func (p *proxyrunner) _queryTargets(w http.ResponseWriter, r *http.Request) (cos.JSONRawMsgs, bool) {
 	var (
 		err  error
 		body []byte
@@ -234,7 +237,7 @@ func (p *proxyrunner) _queryTargets(w http.ResponseWriter, r *http.Request) cos.
 		body, err = cmn.ReadBytes(r)
 		if err != nil {
 			p.writeErr(w, r, err)
-			return nil
+			return nil, true
 		}
 	}
 	config := cmn.GCO.Get()
@@ -246,8 +249,8 @@ func (p *proxyrunner) _queryTargets(w http.ResponseWriter, r *http.Request) cos.
 	return p._queryResults(w, r, results)
 }
 
-func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, results sliceResults) cos.JSONRawMsgs {
-	targetResults := make(cos.JSONRawMsgs, len(results))
+func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, results sliceResults) (tres cos.JSONRawMsgs, erred bool) {
+	tres = make(cos.JSONRawMsgs, len(results))
 	for _, res := range results {
 		if res.status == http.StatusNotFound {
 			continue
@@ -255,12 +258,13 @@ func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, resu
 		if res.err != nil {
 			p.writeErr(w, r, res.error())
 			freeCallResults(results)
-			return nil
+			tres, erred = nil, true
+			return
 		}
-		targetResults[res.si.ID()] = res.bytes
+		tres[res.si.ID()] = res.bytes
 	}
 	freeCallResults(results)
-	return targetResults
+	return
 }
 
 // POST /v1/cluster - handles joins and keepalives

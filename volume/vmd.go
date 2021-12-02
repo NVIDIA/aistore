@@ -77,13 +77,13 @@ func (vmd *VMD) addMountpath(mi *fs.MountpathInfo, enabled bool) {
 func (vmd *VMD) load(mpath string) (err error) {
 	fpath := filepath.Join(mpath, cmn.VmdFname)
 	if vmd.cksum, err = jsp.LoadMeta(fpath, vmd); err != nil {
-		return err
+		return
 	}
 	if vmd.DaemonID == "" {
-		debug.Assert(false) // Cannot happen in normal environment.
-		return fmt.Errorf("daemon id is empty for vmd on %q", mpath)
+		debug.Assert(false) // cannot happen
+		err = fmt.Errorf("target ID is empty for vmd on %q", mpath)
 	}
-	return nil
+	return
 }
 
 func (vmd *VMD) persist() (err error) {
