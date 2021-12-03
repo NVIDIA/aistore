@@ -208,7 +208,6 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int) (maxVerVMD *
 
 // pre-loading to try to recover lost tid
 func RecoverTID(generatedID string, configPaths cos.StringSet) (tid string) {
-	debug.Assert(cos.IsValidUUID(generatedID))
 	available := make(fs.MPI, len(configPaths)) // temp MPI to attempt loading
 	for mpath := range configPaths {
 		available[mpath] = nil

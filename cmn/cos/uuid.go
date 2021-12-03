@@ -16,15 +16,17 @@ import (
 const (
 	// Alphabet for generating UUIDs similar to the shortid.DEFAULT_ABC
 	// NOTE: len(uuidABC) > 0x3f - see GenTie()
-	uuidABC  = "-5nZJDft6LuzsjGNpPwY7rQa39vehq4i1cV2FROo8yHSlC0BUEdWbIxMmTgKXAk_"
-	minIDLen = 5
-	maxIDLen = 21
+	uuidABC = "-5nZJDft6LuzsjGNpPwY7rQa39vehq4i1cV2FROo8yHSlC0BUEdWbIxMmTgKXAk_"
+
+	lenShortID   = 9  // UUID length, as per https://github.com/teris-io/shortid#id-length
+	lenDaemonID  = 8  // via cryptographic rand
+	lenTooLongID = 32 // suspiciously long
 )
 
 var (
 	sid     *shortid.Shortid
 	rtie    atomic.Int32
-	idRegex = regexp.MustCompile("^[A-Za-z][A-Za-z0-9-_]{4,20}$")
+	idRegex *regexp.Regexp
 )
 
 func InitShortID(seed uint64) {
@@ -46,15 +48,17 @@ func GenUUID() (uuid string) {
 }
 
 func IsValidUUID(uuid string) bool {
-	const idlen = 9 // as per https://github.com/teris-io/shortid#id-length
-	return len(uuid) >= idlen && isAlpha(uuid[0])
+	return len(uuid) >= lenShortID && isAlpha(uuid[0])
 }
 
 func isAlpha(c byte) bool {
 	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
-// misc
+//
+// 3-letter tie breaker (fast)
+//
+
 func GenTie() string {
 	tie := rtie.Add(1)
 	b0 := uuidABC[tie&0x3f]
@@ -63,13 +67,38 @@ func GenTie() string {
 	return string([]byte{b0, b1, b2})
 }
 
-func ValidateID(id string) error {
-	if len(id) <= minIDLen || len(id) >= maxIDLen {
-		return fmt.Errorf("invalid ID: length should be > %d and < %d", minIDLen, maxIDLen)
-	}
+//
+// ETL ID
+//
 
+func ValidateEtlID(id string) error {
+	return _validateID(id, 6)
+}
+
+func _validateID(id string, minlen int) error {
+	if len(id) < minlen {
+		return fmt.Errorf("ID %q is invalid: too short", id)
+	}
+	if len(id) >= lenTooLongID {
+		return fmt.Errorf("ID %q is invalid: too long", id)
+	}
 	if !idRegex.MatchString(id) {
-		return fmt.Errorf("invalid ID: can contain only alphabets, numbers, '_', or '-'")
+		return fmt.Errorf("ID %q is invalid: can only contain [A-Za-z0-9-_]", id)
 	}
 	return nil
+}
+
+//
+// Daemon ID
+//
+
+func GenDaemonID() string { return RandStringStrong(lenDaemonID) }
+
+func GenTestingDaemonID(suffix string) string {
+	l := Max(lenDaemonID-len(suffix), 3)
+	return RandStringStrong(l) + suffix
+}
+
+func ValidateDaemonID(id string) error {
+	return _validateID(id, lenDaemonID)
 }

@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"os"
 	"reflect"
+	"regexp"
 	"runtime"
 	"runtime/debug"
 	"sort"
@@ -85,13 +86,14 @@ func init() {
 	rtie.Store(1013)
 
 	jsonConf := jsoniter.Config{
-		EscapeHTML:             false, // We don't send HTMLs.
-		ValidateJsonRawMessage: false, // RawMessages are validated by morphing.
-		// Need to be sure that we have exactly the same struct as user requested.
-		DisallowUnknownFields: true,
-		SortMapKeys:           true,
+		EscapeHTML:             false, // we don't send HTMLs
+		ValidateJsonRawMessage: false, // RawMessages are validated by "morphing"
+		DisallowUnknownFields:  true,  // make sure we have exactly the struct user requested.
+		SortMapKeys:            true,
 	}
 	JSON = jsonConf.Froze()
+
+	idRegex = regexp.MustCompile("^[A-Za-z][A-Za-z0-9-_]{4,20}$")
 }
 
 //////////////////////

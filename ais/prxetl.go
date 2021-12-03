@@ -114,7 +114,7 @@ func (p *proxyrunner) initCodeETL(w http.ResponseWriter, r *http.Request) {
 	// TODO: Make ID required
 	if msg.IDX == "" {
 		msg.IDX = cos.GenUUID()
-	} else if err = cos.ValidateID(msg.IDX); err != nil {
+	} else if err = cos.ValidateEtlID(msg.IDX); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}

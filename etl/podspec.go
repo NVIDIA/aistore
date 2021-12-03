@@ -65,8 +65,8 @@ func ValidateSpec(spec []byte) (msg InitSpecMsg, err error) {
 	errCtx.ETLName = pod.GetName()
 	msg.IDX = pod.GetName()
 
-	if err := cos.ValidateID(msg.IDX); err != nil {
-		err = fmt.Errorf("pod name not in valid ID format, err: %v", err)
+	if err := cos.ValidateEtlID(msg.IDX); err != nil {
+		err = fmt.Errorf("invalid pod name: %v", err)
 		return msg, err
 	}
 

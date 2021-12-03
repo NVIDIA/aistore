@@ -180,7 +180,7 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 
 	msg.IDX = parseStrFlag(c, etlUUID)
 	if msg.ID() != "" {
-		if err = cos.ValidateID(msg.ID()); err != nil {
+		if err = cos.ValidateEtlID(msg.ID()); err != nil {
 			return
 		}
 		if err = etlExists(msg.ID()); err != nil {

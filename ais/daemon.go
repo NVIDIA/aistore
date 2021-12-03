@@ -309,16 +309,15 @@ func envDaemonID(daemonType string) (daemonID string) {
 	return
 }
 
-func generateDaemonID(daemonType string, config *cmn.Config) string {
+func genDaemonID(daemonType string, config *cmn.Config) string {
 	if !config.TestingEnv() {
 		return cos.GenDaemonID()
 	}
-	daemonID := cos.RandStringStrong(4)
 	switch daemonType {
 	case cmn.Target:
-		return fmt.Sprintf("%st%d", daemonID, config.HostNet.Port)
+		return cos.GenTestingDaemonID(fmt.Sprintf("t%d", config.HostNet.Port))
 	case cmn.Proxy:
-		return fmt.Sprintf("%sp%d", daemonID, config.HostNet.Port)
+		return cos.GenTestingDaemonID(fmt.Sprintf("p%d", config.HostNet.Port))
 	}
 	cos.AssertMsg(false, daemonType)
 	return ""

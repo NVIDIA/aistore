@@ -67,7 +67,3 @@ func RandStringStrong(n int) string {
 func NowRand() *rand.Rand {
 	return rand.New(rand.NewSource(mono.NanoTime()))
 }
-
-func GenDaemonID() string {
-	return RandStringStrong(8)
-}

@@ -126,6 +126,9 @@ func (p *proxyrunner) init(config *cmn.Config) {
 
 func initPID(config *cmn.Config) (pid string) {
 	if pid = envDaemonID(cmn.Proxy); pid != "" {
+		if err := cos.ValidateDaemonID(pid); err != nil {
+			glog.Errorf("Warning: %v", err)
+		}
 		return
 	}
 	// try to read ID
@@ -133,11 +136,12 @@ func initPID(config *cmn.Config) (pid string) {
 		glog.Infof("p[%s] from %q", pid, cmn.ProxyIDFname)
 		return
 	}
-	pid = generateDaemonID(cmn.Proxy, config)
-	cos.Assert(pid != "")
+	pid = genDaemonID(cmn.Proxy, config)
+	err := cos.ValidateDaemonID(pid)
+	debug.AssertNoErr(err)
 
 	// store ID on disk
-	err := os.WriteFile(filepath.Join(config.ConfigDir, cmn.ProxyIDFname), []byte(pid), cos.PermRWR)
+	err = os.WriteFile(filepath.Join(config.ConfigDir, cmn.ProxyIDFname), []byte(pid), cos.PermRWR)
 	debug.AssertNoErr(err)
 	glog.Infof("p[%s] ID randomly generated", pid)
 	return

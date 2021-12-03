@@ -239,18 +239,24 @@ func (t *targetrunner) initHostIP() {
 }
 
 func initTID(config *cmn.Config) (tid string, generated bool) {
-	var err error
 	if tid = envDaemonID(cmn.Target); tid != "" {
+		if err := cos.ValidateDaemonID(tid); err != nil {
+			glog.Errorf("Warning: %v", err)
+		}
 		return
 	}
+
+	var err error
 	if tid, err = fs.LoadNodeID(config.FSP.Paths); err != nil {
 		cos.ExitLogf("%v", err)
 	}
 	if tid != "" {
 		return
 	}
-	tid = generateDaemonID(cmn.Target, config)
-	cos.Assert(tid != "")
+
+	tid = genDaemonID(cmn.Target, config)
+	err = cos.ValidateDaemonID(tid)
+	debug.AssertNoErr(err)
 	glog.Infof("t[%s] ID randomly generated", tid)
 	generated = true
 	return
