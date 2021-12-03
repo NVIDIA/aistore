@@ -68,9 +68,31 @@ Show mountpath list for targets.
 [Refer to `ais mountpath` documentation for more.](mpath.md#show-mountpaths)
 
 ## `ais show job`
-Show information about various jobs.
+Show long-running jobs (aka [xactions](/docs/batch.md)). Example:
 
-[Refer to `ais job` documentation for more.](job.md#show-job-statistics)
+```console
+$ ais show job xaction ugoFtqUrrm
+NODE          ID            KIND         BUCKET                     OBJECTS     BYTES        START           END             STATE
+ugoFtqUrrm    vOYSo5pHG     ec-get       mybucket-ec-rebalance      -           -            12-03 10:32:25  -               Running
+ugoFtqUrrm    b4Ks45pHv     ec-get       mybucket-obj-n-slice       9           42.36MiB     12-03 10:31:33  -               Running
+ugoFtqUrrm    vUYSo5pHvS    ec-put       mybucket-ec-rebalance      3           1.43MiB      12-03 10:32:25  -               Running
+ugoFtqUrrm    Kobs45pHvS    ec-put       mybucket-obj-n-slice       9           4.75MiB      12-03 10:31:33  -               Running
+ugoFtqUrrm    U8UcSo5pHv    ec-resp      mybucket-ec-rebalance      18          89.45MiB     12-03 10:32:25  -               Running
+ugoFtqUrrm    M8M6sodqmv    ec-resp      mybucket-obj-n-slice       13          64.49MiB     12-03 10:31:34  -               Idle
+ugoFtqUrrm    Ioa31VqaB     list         mybucket-ec-rebalance      5           -            12-03 10:32:32  12-03 10:32:42  Aborted
+ugoFtqUrrm    X3H381Vqau    list         mybucket-ec-rebalance      3           -            12-03 10:32:29  12-03 10:32:42  Aborted
+ugoFtqUrrm    g5            rebalance    -                          6           25.59MiB     12-03 10:32:32  12-03 10:32:39  Finished
+```
+
+For details and many more examples, please refer to:
+
+- [`ais show job`](/docs/cli/job.md)
+- [`ais show job dsort`](/docs/cli/dsort.md)
+- [`ais show job download`](/docs/cli/download.md)
+- [`ais show rebalance`](/docs/rebalance.md)
+- [multi-object operations](/docs/cli/object.md#operations-on-lists-and-ranges)
+- [reading, writing, and listing archives](/docs/cli/object.md)
+- [copying buckets](/docs/cli/bucket.md#copy-bucket)
 
 ---
 

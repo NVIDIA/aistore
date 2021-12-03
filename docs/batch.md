@@ -13,9 +13,13 @@ By definition,  *eXtended actions* (aka *xactions*) are batch operations that ru
 
 Examples include erasure coding or n-way mirroring a dataset, resharding and reshuffling a dataset, and many more.
 
+> In the source code, all supported - and the most recently updated - *xactions* are enumerated [here](https://github.com/NVIDIA/aistore/blob/master/xaction/table.go).
+
 All [eXtended actions](/xaction/README.md) support generic [API](/api/xaction.go) and [CLI](/docs/cli/job.md#show-job-statistics) to show both common counters (byte and object numbers) as well as operation-specific extended statistics.
 
 Global rebalance that gets triggered by any membership changes (nodes joining, leaving, powercycling, etc.) can be further visualized via `ais show rebalance` CLI.
+
+> Rebalance and a few other AIS jobs have their own CLI extensions. Generally, though, you can always monitor *xactions* via `ais show job xaction` command that also supports verbose mode and other options.
 
 AIS subsystems integrate subsystem-specific stats - e.g.:
 
@@ -23,11 +27,12 @@ AIS subsystems integrate subsystem-specific stats - e.g.:
 * [Downloader](/docs/downloader.md)
 * [ETL](/docs/etl.md)
 
-See also:
+Related CLI documentation:
 
-> [CLI: multi-object operations](/docs/cli/object.md#operations-on-lists-and-ranges).
-> [CLI: reading, writing, and listing archives](/docs/cli/object.md).
-> [CLI: copying buckets](/docs/cli/bucket.md#copy-bucket)
+* [CLI: `ais show job`](/docs/cli/job.md)
+* [CLI: multi-object operations](/docs/cli/object.md#operations-on-lists-and-ranges)
+* [CLI: reading, writing, and listing archives](/docs/cli/object.md)
+* [CLI: copying buckets](/docs/cli/bucket.md#copy-bucket)
 
 ## Table of Contents
 - [List/Range Operations](#listrange-operations)

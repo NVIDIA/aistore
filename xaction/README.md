@@ -21,9 +21,26 @@ Xactions start running based on a wide variety of runtime conditions that includ
 
 Further, to reduce congestion and minimize interference with user-generated workload, extended actions (self-)throttle themselves based on configurable watermarks. The latter include `disk_util_low_wm` and `disk_util_high_wm` (see [configuration](/deploy/dev/local/aisnode_config.sh)). Roughly speaking, the idea is that when local disk utilization falls below the low watermark (`disk_util_low_wm`) extended actions that utilize local storage can run at full throttle. And vice versa.
 
-The amount of throttling that a given xaction imposes on itself is always defined by a combination of dynamic factors. 
+The amount of throttling that a given xaction imposes on itself is always defined by a combination of dynamic factors.
 To give concrete examples, an extended action that runs LRU evictions performs its "balancing act" by taking into account the remaining storage capacity **and** the current utilization of the local filesystems.
 The mirroring (xaction) takes into account congestion on its communication channel that callers use for posting requests to create local replicas.
+
+---------------------------------------------------------------
+
+**NOTE (Dec 2021):** rest of this document is somewhat **outdated** and must be revisited. For the most recently updated information on running and monitoring *xactions*, please see:
+
+* [Batch operations](/docs/batch.md)
+* [CLI documentation](/docs/cli.md), and in particular:
+  - [`ais show job`](/docs/cli/job.md)
+  - [`ais show job dsort`](/docs/cli/dsort.md)
+  - [`ais show job download`](/docs/cli/download.md)
+  - [`ais show rebalance`](/docs/rebalance.md)
+  - [multi-object operations](/docs/cli/object.md#operations-on-lists-and-ranges)
+  - [reading, writing, and listing archives](/docs/cli/object.md)
+  - [copying buckets](/docs/cli/bucket.md#copy-bucket)
+
+---------------------------------------------------------------
+
 
 Supported extended actions are enumerated in the [user-facing API](/cmn/api.go) and include:
 
@@ -56,7 +73,7 @@ The request looks as follows:
     ```console
     $ curl -i -X GET  -H 'Content-Type: application/json' -d '{"action": "actiontype", "name": "xactionname", "value":{"bucket":"bucketname"}}' 'http://G/v1/cluster?what=xaction'
     ```
-    
+
     Response of a query to proxy is a map of daemonID -> target's response. If any of targets responded with error status code, the proxy's response
     will result in the same error response.
 
