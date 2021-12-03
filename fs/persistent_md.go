@@ -76,16 +76,18 @@ func PersistMarker(marker string) (fatalErr, writeErr error) {
 	return
 }
 
-func RemoveMarker(marker string) {
+func RemoveMarker(marker string) (err error) {
 	var (
 		availableMpaths = GetAvail()
 		relname         = filepath.Join(cmn.MarkersDirName, marker)
 	)
 	for _, mi := range availableMpaths {
-		if err := cos.RemoveFile(filepath.Join(mi.Path, relname)); err != nil {
-			glog.Errorf("Failed to cleanup %q from %q: %v", relname, mi.Path, err)
+		if er1 := cos.RemoveFile(filepath.Join(mi.Path, relname)); er1 != nil {
+			glog.Errorf("Failed to remove %q marker from %q: %v", relname, mi.Path, er1)
+			err = er1
 		}
 	}
+	return
 }
 
 // PersistOnMpaths persists `what` on mountpaths under "mountpath.Path/path" filename.

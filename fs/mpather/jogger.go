@@ -180,11 +180,7 @@ func newJogger(ctx context.Context, opts *JoggerGroupOpts, mi *fs.MountpathInfo)
 }
 
 func (j *jogger) run() error {
-	defer func() {
-		glog.Infof("%s finished", j)
-		j.opts.onFinish()
-	}()
-	glog.Infof("%s started", j)
+	defer j.opts.onFinish()
 	if j.opts.Slab != nil {
 		if j.opts.Parallel <= 1 {
 			j.bufs = [][]byte{j.opts.Slab.Alloc()}

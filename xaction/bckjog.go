@@ -14,7 +14,6 @@ type XactBckJog struct {
 	XactBase
 	t       cluster.Target
 	joggers *mpather.JoggerGroup
-	doneCh  chan struct{}
 }
 
 func (r *XactBckJog) Init(id, kind string, bck *cluster.Bck, opts *mpather.JoggerGroupOpts) {
@@ -24,7 +23,6 @@ func (r *XactBckJog) Init(id, kind string, bck *cluster.Bck, opts *mpather.Jogge
 }
 
 func (r *XactBckJog) Run()                   { r.joggers.Run() }
-func (r *XactBckJog) DoneCh() chan struct{}  { return r.doneCh }
 func (r *XactBckJog) Target() cluster.Target { return r.t }
 
 func (r *XactBckJog) Wait() error {

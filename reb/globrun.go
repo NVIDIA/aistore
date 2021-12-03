@@ -605,7 +605,9 @@ func (reb *Reb) rebFini(rargs *rebArgs, err error) {
 
 	// prior to closing the streams
 	if q := reb.quiesce(rargs, rargs.config.Rebalance.Quiesce.D(), reb.nodesQuiescent); q != cluster.QuiAborted {
-		fs.RemoveMarker(cmn.RebalanceMarker)
+		if errM := fs.RemoveMarker(cmn.RebalanceMarker); errM == nil {
+			glog.Infof("%s: %s removed marker ok", reb.t.Snode(), reb.xact())
+		}
 	}
 	reb.endStreams(err)
 	reb.filterGFN.Reset()

@@ -112,23 +112,33 @@ func (res *Res) RunResilver(args Args) {
 		jg = mpather.NewJoggerGroup(opts, args.Mpath)
 	}
 
-	// run
+	// run and block waiting
 	res.end.Store(0)
 	jg.Run()
+	err = res.wait(jg, xres)
 
-	// Wait for abort or joggers to finish.
-	select {
-	case <-xres.ChanAbort():
-		if err := jg.Stop(); err != nil {
-			glog.Errorf("Resilver (uuid=%q) aborted, stopped with err: %v", args.UUID, err)
-		} else {
-			glog.Infof("Resilver (uuid=%q) aborted", args.UUID)
+	xres.Finish(err)
+}
+
+// Wait for an abort or for resilvering joggers to finish.
+func (res *Res) wait(jg *mpather.JoggerGroup, xres *xs.Resilver) (err error) {
+	tsi := res.t.Snode()
+	for {
+		select {
+		case <-xres.ChanAbort():
+			if err = jg.Stop(); err != nil {
+				glog.Errorf("%s: %s aborted, err: %v", tsi, xres, err)
+			} else {
+				glog.Infof("%s: %s aborted", tsi, xres)
+			}
+			return cmn.NewErrAborted(xres.Name(), "", err)
+		case <-jg.ListenFinished():
+			if err = fs.RemoveMarker(cmn.ResilverMarker); err == nil {
+				glog.Infof("%s: %s removed marker ok", tsi, xres)
+			}
+			return
 		}
-	case <-jg.ListenFinished():
-		fs.RemoveMarker(cmn.ResilverMarker)
 	}
-
-	xres.Finish(nil)
 }
 
 // Copies a slice and its metafile (if exists) to the current mpath. At the

@@ -1662,11 +1662,13 @@ func TestGetFromMirroredBucketWithLostAllMpathsExceptOne(t *testing.T) {
 
 // TODO: remove all except one mountpath, run short, reduce sleep, increase stress...
 func TestGetNonRedundantWithDisabledMountpath(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	m := ioContext{
 		t:               t,
 		num:             1000,
 		numGetsEachFile: 2,
+	}
+	if testing.Short() {
+		m.num = 50
 	}
 	m.initWithCleanupAndSaveState()
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
@@ -1688,23 +1690,21 @@ func TestGetNonRedundantWithDisabledMountpath(t *testing.T) {
 	tlog.Logf("Disable %q on target %s\n", mpList.Available[0], target.StringEx())
 	err = api.DisableMountpath(baseParams, target, mpList.Available[0], false /*dont-resil*/)
 	tassert.CheckFatal(t, err)
-	time.Sleep(time.Second)
+	time.Sleep(4 * time.Second)
 
-	// Wait for resilver TODO -- FIXME: revise
+	// Wait for resilvering
 	args := api.XactReqArgs{Node: target.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
-	_, err = api.WaitForXaction(baseParams, args)
-	tassert.CheckFatal(t, err)
-	time.Sleep(3 * time.Second)
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	// GET
 	m.gets()
 
-	// Add previously disabled mountpaths
+	// Add previously disabled mountpath
 	tlog.Logf("Re-enable %q on target %s\n", mpList.Available[0], target.StringEx())
 	err = api.EnableMountpath(baseParams, target, mpList.Available[0])
 	tassert.CheckFatal(t, err)
+	time.Sleep(4 * time.Second)
 
 	// Wait for resilver
 	_, err = api.WaitForXaction(baseParams, args)
