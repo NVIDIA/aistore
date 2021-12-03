@@ -58,7 +58,7 @@ func stopXactionHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "xaction name or id")
 	}
 
-	xactID, xactKind, bck, err := parseXactionFromArgs(c)
+	_, xactID, xactKind, bck, err := parseXactionFromArgs(c)
 	if err != nil {
 		return err
 	}

@@ -66,7 +66,7 @@ func waitXactionHandler(c *cli.Context) error {
 		return missingArgumentsError(c, "xaction name")
 	}
 
-	xactID, xactKind, bck, err := parseXactionFromArgs(c)
+	_, xactID, xactKind, bck, err := parseXactionFromArgs(c)
 	if err != nil {
 		return err
 	}

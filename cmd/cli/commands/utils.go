@@ -422,22 +422,43 @@ ret:
 	return
 }
 
-// Parses [XACTION_ID|XACTION_NAME] [BUCKET]
-func parseXactionFromArgs(c *cli.Context) (xactID, xactKind string, bck cmn.Bck, err error) {
+// Parses [TARGET_ID] [XACTION_ID|XACTION_NAME] [BUCKET]
+func parseXactionFromArgs(c *cli.Context) (nodeID, xactID, xactKind string, bck cmn.Bck, err error) {
+	var smap *cluster.Smap
+	smap, err = api.GetClusterMap(defaultAPIParams)
+	if err != nil {
+		return
+	}
+	shift := 0
 	xactKind = c.Args().Get(0)
+	if node := smap.GetProxy(xactKind); node != nil {
+		return "", "", "", bck, fmt.Errorf("daemon %q is a proxy", xactKind)
+	}
+	if node := smap.GetTarget(xactKind); node != nil {
+		nodeID = xactKind
+		xactKind = c.Args().Get(1)
+		shift++
+	}
+
+	uri := c.Args().Get(1 + shift)
 	if !xaction.IsValidKind(xactKind) {
 		xactID = xactKind
 		xactKind = ""
-	} else {
+		uri = c.Args().Get(1 + shift)
+	} else if strings.Contains(xactKind, "://") {
+		uri = xactKind
+		xactKind = ""
+	}
+	if uri != "" {
 		switch xaction.Table[xactKind].Scope {
 		case xaction.ScopeBck:
 			// Bucket is optional.
 			if uri := c.Args().Get(1); uri != "" {
 				if bck, err = parseBckURI(c, uri); err != nil {
-					return "", "", bck, err
+					return "", "", "", bck, err
 				}
 				if _, err = headBucket(bck); err != nil {
-					return "", "", bck, err
+					return "", "", "", bck, err
 				}
 			}
 		default:
@@ -1191,4 +1212,52 @@ func parseChecksumFlags(c *cli.Context) []*cos.Cksum {
 		}
 	}
 	return cksums
+}
+
+func flattenXactStats(snap *xaction.SnapExt) []*prop {
+	props := make([]*prop, 0)
+	if snap == nil {
+		return props
+	}
+	fmtTime := func(t time.Time) string {
+		if t.IsZero() {
+			return "-"
+		}
+		return t.Format("01-02 15:04:05")
+	}
+	props = append(props,
+		// Start xaction properties with a dot to make them first alphabetically
+		&prop{Name: ".id", Value: snap.ID},
+		&prop{Name: ".kind", Value: snap.Kind},
+		&prop{Name: ".bck", Value: snap.Bck.String()},
+		&prop{Name: ".start", Value: fmtTime(snap.StartTime)},
+		&prop{Name: ".end", Value: fmtTime(snap.EndTime)},
+		&prop{Name: ".aborted", Value: fmt.Sprintf("%t", snap.AbortedX)},
+
+		&prop{Name: "loc.obj.n", Value: fmt.Sprintf("%d", snap.Stats.Objs)},
+		&prop{Name: "loc.obj.size", Value: formatStatHuman(".size", snap.Stats.Bytes)},
+		&prop{Name: "in.obj.n", Value: fmt.Sprintf("%d", snap.Stats.InObjs)},
+		&prop{Name: "in.obj.size", Value: formatStatHuman(".size", snap.Stats.InBytes)},
+		&prop{Name: "out.obj.n", Value: fmt.Sprintf("%d", snap.Stats.OutObjs)},
+		&prop{Name: "out.obj.size", Value: formatStatHuman(".size", snap.Stats.OutBytes)},
+	)
+	if extStats, ok := snap.Ext.(map[string]interface{}); ok {
+		for k, v := range extStats {
+			var value string
+			if strings.HasSuffix(k, ".size") {
+				val := v.(string)
+				if i, err := strconv.ParseInt(val, 10, 64); err == nil {
+					value = cos.B2S(i, 2)
+				}
+			}
+			if value == "" {
+				value = fmt.Sprintf("%v", v)
+			}
+			props = append(props, &prop{Name: k, Value: value})
+		}
+	}
+	sort.Slice(props, func(i, j int) bool {
+		return props[i].Name < props[j].Name
+	})
+	return props
 }

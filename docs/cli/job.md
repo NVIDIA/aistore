@@ -77,10 +77,11 @@ Stopped "lru" xaction.
 
 ## Show Job Statistics
 
-`ais show job xaction [XACTION_ID|XACTION_NAME] [BUCKET]`
+`ais show job xaction [TARGET_ID] [XACTION_ID|XACTION_NAME] [BUCKET]`
 
-Display details about `XACTION_ID` or `XACTION_NAME` xaction. If no arguments are given, displays details about all xactions.
-The second argument is used to determine the bucket name if it is required.
+Display details about `XACTION_ID` or `XACTION_NAME` xaction of a target `TARGET_ID`. If no arguments are given, displays details about all xactions.
+The last argument is used to determine the bucket name if it is required.
+Any argument can be omitted but the existing ones must be put in the correct order.
 
 Note: `job show download|dsort` have slightly different options. Please see their documentation for more:
 * [`job show download`](download.md#show-download-jobs-and-job-status)
@@ -123,7 +124,7 @@ The output contains a few extra columns:
 | `--json` | `bool` | Output details in JSON format | `false` |
 | `--all` | `bool` | If set, additionally displays old, finished xactions | `false` |
 | `--active` | `bool` | If set, displays only running xactions | `false` |
-| `--verbose` `-v` | `bool` | If set, displays extended information about xactions where available | `false` |
+| `--verbose` `-v` | `bool` | If set, displays all xaction statistics including extended ones. If the number of xaction to display is greater than one, the flag is ignored. | `false` |
 
 Certain extended actions have additional CLI. In particular, rebalance stats can also be displayed using the following command:
 
@@ -137,6 +138,45 @@ Display details about the most recent rebalance xaction.
 | `--all` | `bool` | If set, show all rebalance xactions | `false` |
 
 Output of this command differs from the generic xaction output.
+
+### Examples
+
+Default compact tabular view:
+
+```console
+$ ais job show xaction FXjl0NWGOU --all
+NODE             ID              KIND    BUCKET                          OBJECTS         BYTES           START           END             STATE
+zXZXt8084        FXjl0NWGOU      ec-put  TESTAISBUCKET-ec-mpaths         5               4.56MiB         12-02 13:04:50  12-02 13:04:50  Aborted
+```
+
+Verbose tabular view:
+
+```console
+$ ais job show xaction FXjl0NWGOU --all -v
+PROPERTY                 VALUE
+.aborted                 true
+.bck                     ais://TESTAISBUCKET-ec-mpaths
+.end                     12-02 13:04:50
+.id                      FXjl0NWGOU
+.kind                    ec-put
+.start                   12-02 13:04:50
+ec.delete.err.n          0
+ec.delete.n              0
+ec.delete.time           0s
+ec.encode.err.n          0
+ec.encode.n              5
+ec.encode.size           4.56MiB
+ec.encode.time           16.964552ms
+ec.obj.process.time      17.142239ms
+ec.queue.len.n           0
+in.obj.n                 0
+in.obj.size              0
+is_idle                  true
+loc.obj.n                5
+loc.obj.size             4.56MiB
+out.obj.n                0
+out.obj.size             0
+```
 
 ## Wait for Jobs
 

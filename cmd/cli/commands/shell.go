@@ -401,6 +401,36 @@ func putPromoteObjectCompletions(c *cli.Context) {
 // Xaction //
 /////////////
 
+func daemonXactionCompletions(ctx *cli.Context) {
+	if ctx.NArg() > 2 {
+		return
+	}
+	xactSet := ctx.NArg() != 0
+	xactName := ctx.Args().First()
+	if ctx.NArg() == 0 {
+		daemonCompletions(completeTargets)(ctx)
+	} else {
+		smap, err := api.GetClusterMap(cliAPIParams(clusterURL))
+		if err != nil {
+			return
+		}
+		if node := smap.GetTarget(ctx.Args().First()); node != nil {
+			xactSet = false
+			xactName = ctx.Args().Get(1)
+		}
+	}
+	if !xactSet {
+		for kind := range xaction.Table {
+			fmt.Println(kind)
+		}
+		return
+	}
+	if xaction.IsBckScope(xactName) {
+		bucketCompletions()(ctx)
+		return
+	}
+}
+
 func xactionCompletions(cmd string) func(ctx *cli.Context) {
 	return func(c *cli.Context) {
 		if c.NArg() == 0 {

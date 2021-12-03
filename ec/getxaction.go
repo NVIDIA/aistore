@@ -37,10 +37,10 @@ type (
 
 	// Runtime EC statistics for restore xaction
 	ExtECGetStats struct {
-		AvgTime     cos.Duration `json:"ec.decode.time"`
+		AvgTime     cos.Duration `json:"ec.decode.ns"`
 		ErrCount    int64        `json:"ec.decode.err.n,string"`
-		AvgObjTime  cos.Duration `json:"ec.obj.process.time"`
-		AvgQueueLen float64      `json:"ec.queue.len.n"`
+		AvgObjTime  cos.Duration `json:"ec.obj.process.ns"`
+		AvgQueueLen float64      `json:"ec.queue.len.f"`
 		IsIdle      bool         `json:"is_idle"`
 	}
 )

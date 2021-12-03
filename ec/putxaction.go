@@ -34,15 +34,15 @@ type (
 	}
 	// Runtime EC statistics for PUT xaction
 	ExtECPutStats struct {
-		AvgEncodeTime  cos.Duration `json:"ec.encode.time"`
-		AvgDeleteTime  cos.Duration `json:"ec.delete.time"`
+		AvgEncodeTime  cos.Duration `json:"ec.encode.ns"`
+		AvgDeleteTime  cos.Duration `json:"ec.delete.ns"`
 		EncodeCount    int64        `json:"ec.encode.n,string"`
 		DeleteCount    int64        `json:"ec.delete.n,string"`
 		EncodeSize     int64        `json:"ec.encode.size,string"`
 		EncodeErrCount int64        `json:"ec.encode.err.n,string"`
 		DeleteErrCount int64        `json:"ec.delete.err.n,string"`
-		AvgObjTime     cos.Duration `json:"ec.obj.process.time"`
-		AvgQueueLen    float64      `json:"ec.queue.len.n"`
+		AvgObjTime     cos.Duration `json:"ec.obj.process.ns"`
+		AvgQueueLen    float64      `json:"ec.queue.len.f"`
 		IsIdle         bool         `json:"is_idle"`
 	}
 )

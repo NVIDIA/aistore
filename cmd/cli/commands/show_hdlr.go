@@ -29,11 +29,6 @@ type (
 		XactSnaps []*xaction.SnapExt
 	}
 
-	xactionTemplateCtx struct {
-		ClusterXactSnaps *[]daemonTemplateXactSnaps
-		Verbose          bool
-	}
-
 	targetMpath struct {
 		DaemonID string
 		Mpl      *cmn.MountpathList
@@ -276,11 +271,11 @@ var (
 	showCmdXaction = cli.Command{
 		Name:         subcmdShowXaction,
 		Usage:        "show xaction details",
-		ArgsUsage:    "[XACTION_ID|XACTION_NAME] [BUCKET]",
+		ArgsUsage:    "[TARGET_ID] [XACTION_ID|XACTION_NAME] [BUCKET]",
 		Description:  xactionDesc(false),
 		Flags:        showCmdsFlags[subcmdShowXaction],
 		Action:       showXactionHandler,
-		BashComplete: xactionCompletions(""),
+		BashComplete: daemonXactionCompletions,
 	}
 
 	// `show storage` sub-commands
@@ -363,7 +358,7 @@ func showStorageHandler(c *cli.Context) (err error) {
 }
 
 func showXactionHandler(c *cli.Context) (err error) {
-	xactID, xactKind, bck, errP := parseXactionFromArgs(c)
+	nodeID, xactID, xactKind, bck, errP := parseXactionFromArgs(c)
 	if errP != nil {
 		return errP
 	}
@@ -395,6 +390,14 @@ func showXactionHandler(c *cli.Context) (err error) {
 		}
 	}
 
+	if nodeID != "" {
+		for tid := range xs {
+			if tid != nodeID {
+				delete(xs, tid)
+			}
+		}
+	}
+
 	dts := make([]daemonTemplateXactSnaps, len(xs))
 	i := 0
 	for tid, snaps := range xs {
@@ -420,23 +423,35 @@ func showXactionHandler(c *cli.Context) (err error) {
 	sort.Slice(dts, func(i, j int) bool {
 		return dts[i].DaemonID < dts[j].DaemonID // ascending by node id/name
 	})
-	ctx := xactionTemplateCtx{
-		ClusterXactSnaps: &dts,
-		Verbose:          flagIsSet(c, verboseFlag),
+
+	// To display verbose stats the list must have less than 2 records
+	canVerbose := len(dts) == 0 || (len(dts) == 1 && len(dts[0].XactSnaps) < 2)
+	if !canVerbose && flagIsSet(c, verboseFlag) {
+		fmt.Fprintf(c.App.ErrWriter, "Option `--verbose` is ignored when multiple xactions are displayed.\n")
 	}
 
 	useJSON := flagIsSet(c, jsonFlag)
 	if useJSON {
-		return templates.DisplayOutput(ctx, c.App.Writer, templates.XactionsBodyTmpl, useJSON)
+		return templates.DisplayOutput(dts, c.App.Writer, templates.XactionsBodyTmpl, useJSON)
+	}
+
+	if canVerbose && flagIsSet(c, verboseFlag) {
+		var props []*prop
+		if len(dts) == 0 || len(dts[0].XactSnaps) == 0 {
+			props = make([]*prop, 0)
+		} else {
+			props = flattenXactStats(dts[0].XactSnaps[0])
+		}
+		return templates.DisplayOutput(props, c.App.Writer, templates.PropsSimpleTmpl, useJSON)
 	}
 
 	switch xactKind {
 	case cmn.ActECGet:
-		return templates.DisplayOutput(ctx, c.App.Writer, templates.XactionECGetBodyTmpl, useJSON)
+		return templates.DisplayOutput(dts, c.App.Writer, templates.XactionECGetBodyTmpl, useJSON)
 	case cmn.ActECPut:
-		return templates.DisplayOutput(ctx, c.App.Writer, templates.XactionECPutBodyTmpl, useJSON)
+		return templates.DisplayOutput(dts, c.App.Writer, templates.XactionECPutBodyTmpl, useJSON)
 	default:
-		return templates.DisplayOutput(ctx, c.App.Writer, templates.XactionsBodyTmpl, useJSON)
+		return templates.DisplayOutput(dts, c.App.Writer, templates.XactionsBodyTmpl, useJSON)
 	}
 }
 
