@@ -89,6 +89,14 @@ var (
 				Action:       cleanupStorageHandler,
 				BashComplete: bucketCompletions(),
 			},
+			{
+				Name: commandETL,
+				Subcommands: []cli.Command{
+					initCmdETL,
+					objCmdETL,
+					bckCmdETL,
+				},
+			},
 		},
 	}
 )

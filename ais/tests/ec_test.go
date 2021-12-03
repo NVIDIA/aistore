@@ -2637,7 +2637,7 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	removed := make(map[string]*removedMpath, o.parityCnt)
 	defer func() {
 		for _, rmMpath := range removed {
-			err := api.AttachMountpath(baseParams, rmMpath.si, rmMpath.mpath, false /*force*/)
+			err := api.AttachMountpath(baseParams, rmMpath.si, rmMpath.mpath, true /*force*/)
 			tassert.CheckError(t, err)
 		}
 	}()
@@ -2649,7 +2649,7 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 		if _, ok := removed[uid]; ok {
 			continue
 		}
-		err := api.DetachMountpath(baseParams, tsi, mpath, false /*dont-resil*/)
+		err := api.DetachMountpath(baseParams, tsi, mpath, true /*dont-resil*/)
 		tassert.CheckFatal(t, err)
 		rmMpath := &removedMpath{si: tsi, mpath: mpath}
 		removed[uid] = rmMpath

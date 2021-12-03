@@ -243,6 +243,7 @@ var (
 			showCmdDownload,
 			showCmdDsort,
 			showCmdXaction,
+			appendSubcommand(makeAlias(showCmdETL, "", true, commandETL), logsCmdETL),
 		},
 	}
 	showCmdDownload = cli.Command{

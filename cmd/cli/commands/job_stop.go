@@ -48,6 +48,7 @@ var (
 				Action:       stopDsortHandler,
 				BashComplete: dsortIDRunningCompletions,
 			},
+			makeAlias(stopCmdETL, "", true, commandETL),
 		},
 	}
 )
