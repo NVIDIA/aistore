@@ -35,6 +35,8 @@ The mirroring (xaction) takes into account congestion on its communication chann
   - [`ais show job dsort`](/docs/cli/dsort.md)
   - [`ais show job download`](/docs/cli/download.md)
   - [`ais show rebalance`](/docs/rebalance.md)
+* And also:
+  - [`ais etl`](/docs/cli/etl.md)
   - [multi-object operations](/docs/cli/object.md#operations-on-lists-and-ranges)
   - [reading, writing, and listing archives](/docs/cli/object.md)
   - [copying buckets](/docs/cli/bucket.md#copy-bucket)

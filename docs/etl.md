@@ -29,10 +29,17 @@ Technically, the service supports running user-provided ETL containers **and** c
 
 Note AIS-ETL (service) requires [Kubernetes](https://kubernetes.io).
 
-## Other references
+## References
 
-* For getting-started steps and usage examples, see the [tutorials](/docs/tutorials/README.md).
-* For technical blogs with in-depth background and even more usage examples, please see https://aiatscale.org/blog.
+* For technical blogs with in-depth background and working real-life examples, see:
+  - [ETL: Introduction](https://aiatscale.org/blog/2021/10/21/ais-etl-1)
+  - [ETL: Using AIS/PyTorch connector to transform ImageNet](https://aiatscale.org/blog/2021/10/22/ais-etl-2)
+  - [ETL: Using WebDataset to train on a sharded dataset](https://aiatscale.org/blog/2021/10/29/ais-etl-3)
+* For step-by-step tutorials, see:
+  - [PyTorch ImageNet preprocessing](/docs/tutorials/etl/etl_imagenet_pytorch.md)
+  - [Compute MD5 of the object](/docs/tutorials/etl/compute_md5.md)
+* For quick CLI introduction and reference, see [ETL CLI](/docs/cli/etl.md)
+
 
 The rest of this text is organized as follows:
 

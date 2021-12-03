@@ -9,8 +9,13 @@ redirect_from:
 
 # CLI Reference for ETLs
 
-This section lists ETL management operations the AIS CLI, with `ais etl`.
-For more information and examples, please refer to [the ETL documentation](/docs/etl.md).
+This section documents ETL management operations with `ais etl`. But first, note:
+
+> As with [global rebalance](/docs/rebalance.md), [dSort](/docs/dsort.md), and [download](/docs/download.md), all ETL management commands can be also executed via `ais job` and `ais show` - the commands that, by definition, support all AIS *xactions*, including AIS-ETL
+
+For background on AIS-ETL, getting-started steps, working examples, and tutorials, please refer to:
+
+* [ETL documentation](/docs/etl.md)
 
 ## Table of Contents
 
@@ -24,7 +29,7 @@ For more information and examples, please refer to [the ETL documentation](/docs
 
 ## Init ETL with spec
 
-`ais etl init spec SPEC_FILE`
+`ais etl init spec SPEC_FILE` or `ais job start etl init`
 
 Init ETL with Pod YAML specification file. The `metadata.name` attribute in the specification is used as unique ID for ETL (ref: [here](/docs/etl.md#etl-name-specifications) for information on valid ETL name).
 
@@ -88,7 +93,7 @@ JGHEoo89gg
 
 ## List ETLs
 
-`ais etl ls`
+`ais etl ls` or, same, `ais job show etl`
 
 Lists all available ETLs.
 
@@ -101,7 +106,7 @@ It is possible to pass an additional parameter to specify a particular `TARGET_I
 
 ## Stop ETL
 
-`ais etl stop ETL_ID`
+`ais etl stop ETL_ID` or, same, `ais job stop etl`
 
 Stop ETL with the specified id.
 
