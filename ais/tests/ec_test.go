@@ -2484,7 +2484,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	args := &cmn.ActValRmNode{DaemonID: tgtLost.ID(), SkipRebalance: true}
 	_, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
-	_, err = tutils.WaitForClusterState(proxyURL, "remove target",
+	_, err = tutils.WaitForClusterState(proxyURL, "target removed",
 		smap.Version, smap.CountActiveProxies(), smap.CountActiveTargets()-1)
 	tassert.CheckFatal(t, err)
 	registered := false

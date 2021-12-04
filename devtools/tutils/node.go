@@ -202,12 +202,11 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 			smap.Version > origVersion
 		if !satisfied {
 			if d := time.Since(timeStart); d > 7*time.Second {
-				p := "P"
+				p := "primary"
 				if smap.Primary.PublicNet.DirectURL != proxyURL {
 					p = proxyURL
 				}
-				tlog.Logf("Querying %s[%s] for (t=%d, p=%d, Smap > v%d)\n",
-					p, smap.StringEx(), expTgt, expPrx, origVersion)
+				tlog.Logf("Polling %s[%s] for (t=%d, p=%d, Smap > v%d)\n", p, smap, expTgt, expPrx, origVersion)
 			}
 		}
 		if smap.Version != lastVersion {

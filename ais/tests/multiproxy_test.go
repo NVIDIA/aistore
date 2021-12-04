@@ -170,7 +170,7 @@ func killRestoreDiffIP(t *testing.T, nodeType string) {
 	)
 
 	if nodeType == cmn.Proxy {
-		node, err = smap.GetRandProxy(true)
+		node, err = smap.GetRandProxy(true /*exclude primary*/)
 		pdc = 1
 	} else {
 		node, err = smap.GetRandTarget()
@@ -180,6 +180,7 @@ func killRestoreDiffIP(t *testing.T, nodeType string) {
 
 killRestore:
 	cfg := tutils.GetDaemonConfig(t, node)
+	tlog.Logf("Killing %s\n", node.StringEx())
 	cmd, err := tutils.KillNode(node)
 	tassert.CheckFatal(t, err)
 
@@ -286,41 +287,27 @@ func proxyCrash(t *testing.T) {
 	smap := tutils.GetClusterMap(t, proxyURL)
 	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTargets(), smap.CountActiveProxies())
 
-	primaryURL, primaryID := smap.Primary.URL(cmn.NetworkPublic), smap.Primary.ID()
-	tlog.Logf("Primary proxy: %s\n", primaryURL)
+	primaryURL := smap.Primary.URL(cmn.NetworkPublic)
+	tlog.Logf("Primary: %s\n", smap.Primary.StringEx())
 
-	var (
-		secondURL      string
-		secondID       string
-		secondNode     *cluster.Snode
-		origProxyCount = smap.CountActiveProxies()
-	)
+	origProxyCount := smap.CountActiveProxies()
+	secondNode, err := smap.GetRandProxy(true /*exclude primary*/)
+	tassert.CheckFatal(t, err)
 
-	// Select a random non-primary proxy
-	for k, v := range smap.Pmap {
-		if k != primaryID {
-			secondURL = v.URL(cmn.NetworkPublic)
-			secondID = v.ID()
-			secondNode = v
-			break
-		}
-	}
-
-	tlog.Logf("Killing non-primary proxy: %s - %s\n", secondURL, secondID)
+	tlog.Logf("Killing non-primary %s\n", secondNode.StringEx())
 	secondCmd, err := tutils.KillNode(secondNode)
 	tassert.CheckFatal(t, err)
 
-	smap, err = tutils.WaitForClusterState(primaryURL, "propagate new Smap",
-		smap.Version, origProxyCount-1, 0)
+	smap, err = tutils.WaitForClusterState(primaryURL, "proxy removed", smap.Version, origProxyCount-1, 0)
 	tassert.CheckFatal(t, err)
 
 	err = tutils.RestoreNode(secondCmd, false, "proxy")
 	tassert.CheckFatal(t, err)
 
-	smap, err = tutils.WaitForClusterState(primaryURL, "restore", smap.Version, origProxyCount, 0)
+	smap, err = tutils.WaitForClusterState(primaryURL, "proxy restoreid", smap.Version, origProxyCount, 0)
 	tassert.CheckFatal(t, err)
 
-	if _, ok := smap.Pmap[secondID]; !ok {
+	if _, ok := smap.Pmap[secondNode.ID()]; !ok {
 		t.Fatalf("Non-primary proxy did not rejoin the cluster.")
 	}
 }
@@ -429,7 +416,7 @@ func primaryAndProxyCrash(t *testing.T) {
 		origProxyCount              = smap.CountActiveProxies()
 		oldPrimaryURL, oldPrimaryID = smap.Primary.URL(cmn.NetworkPublic), smap.Primary.ID()
 		secondNode                  *cluster.Snode
-		secondURL, secondID         string
+		secondID                    string
 	)
 	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTargets(), smap.CountActiveProxies())
 
@@ -446,7 +433,7 @@ func primaryAndProxyCrash(t *testing.T) {
 	for k, v := range smap.Pmap {
 		if k != newPrimaryID && k != oldPrimaryID {
 			secondNode = v
-			secondURL, secondID = secondNode.URL(cmn.NetworkPublic), secondNode.ID()
+			secondID = secondNode.ID()
 			break
 		}
 	}
@@ -454,7 +441,7 @@ func primaryAndProxyCrash(t *testing.T) {
 	n := cos.NowRand().Intn(20)
 	time.Sleep(time.Duration(n+1) * time.Second)
 
-	tlog.Logf("Killing non-primary proxy: %s - %s\n", secondURL, secondID)
+	tlog.Logf("Killing non-primary: %s\n", secondNode.StringEx())
 	secondCmd, err := tutils.KillNode(secondNode)
 	tassert.CheckFatal(t, err)
 

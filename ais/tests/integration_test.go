@@ -161,8 +161,6 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 			numGetsEachFile: 5,
 			fileSize:        cos.KiB * 2,
 		}
-		targetURL  string
-		targetID   string
 		targetNode *cluster.Snode
 	)
 
@@ -172,15 +170,12 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	// Step 1
 	// Select a random target
 	targetNode, _ = m.smap.GetRandTarget()
-	targetURL = targetNode.PublicNet.DirectURL
-	targetID = targetNode.ID()
-
-	tlog.Logf("Killing target: %s - %s\n", targetURL, targetID)
+	tlog.Logf("Killing %s\n", targetNode.StringEx())
 	tcmd, err := tutils.KillNode(targetNode)
 	tassert.CheckFatal(t, err)
 
 	proxyURL := tutils.RandomProxyURL(t)
-	m.smap, err = tutils.WaitForClusterState(proxyURL, "target removal", m.smap.Version, m.originalProxyCount,
+	m.smap, err = tutils.WaitForClusterState(proxyURL, "target removed", m.smap.Version, m.originalProxyCount,
 		m.originalTargetCount-1)
 	tassert.CheckError(t, err)
 
@@ -1746,7 +1741,7 @@ func TestICRebalance(t *testing.T) {
 	xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceStartTimeout}
 	tutils.WaitForRebalanceToStart(baseParams, xactArgs)
 
-	tlog.Logf("Killing %s\n", icNode)
+	tlog.Logf("Killing %s\n", icNode.StringEx())
 	// cmd and args are the original command line of how the proxy is started
 	cmd, err := tutils.KillNode(icNode)
 	tassert.CheckFatal(t, err)
@@ -1818,7 +1813,7 @@ func TestICDecommission(t *testing.T) {
 	}()
 
 	tassert.CheckFatal(t, err)
-	tlog.Logf("Killing %s\n", icNode)
+	tlog.Logf("Killing %s\n", icNode.StringEx())
 
 	// cmd and args are the original command line of how the proxy is started
 	cmd, err := tutils.KillNode(icNode)

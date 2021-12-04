@@ -497,7 +497,6 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 }
 
 func TestFSAddMPathRestartNode(t *testing.T) {
-	t.Skip("enable after targets load mount paths from VMD on startup")
 	var (
 		target *cluster.Snode
 
@@ -508,24 +507,25 @@ func TestFSAddMPathRestartNode(t *testing.T) {
 		targetCnt  = smap.CountActiveTargets()
 		tmpMpath   = "/tmp/testmp"
 	)
-
 	if targetCnt < 2 {
 		t.Skip("The number of targets must be at least 2")
 	}
-
 	target, _ = smap.GetRandTarget()
 	oldMpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 	numMpaths := len(oldMpaths.Available)
-	tassert.Fatalf(t, numMpaths != 0, "target %s doesn't have available mountpaths", target.StringEx())
+	tassert.Fatalf(t, numMpaths != 0, "target %s doesn't have mountpaths", target.StringEx())
 
 	cos.CreateDir(tmpMpath)
-	defer os.Remove(tmpMpath)
-
-	tlog.Logf("Adding a mountpath to target: %s\n", target.StringEx())
+	tlog.Logf("Adding mountpath to %s\n", target.StringEx())
 	err = api.AttachMountpath(baseParams, target, tmpMpath, true /*force*/)
 	tassert.CheckFatal(t, err)
-	defer api.DetachMountpath(baseParams, target, tmpMpath, true /*dont-resil*/)
+
+	t.Cleanup(func() {
+		api.DetachMountpath(baseParams, target, tmpMpath, true /*dont-resil*/)
+		time.Sleep(time.Second)
+		os.Remove(tmpMpath)
+	})
 
 	newMpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
@@ -534,11 +534,14 @@ func TestFSAddMPathRestartNode(t *testing.T) {
 		"should add new mountpath - available %d!=%d", numMpaths+1, len(newMpaths.Available))
 
 	// Kill and restore target
+	tlog.Logf("Killing %s\n", target.StringEx())
 	tcmd, err := tutils.KillNode(target)
 	tassert.CheckFatal(t, err)
-	tutils.RestoreNode(tcmd, false, "target")
+	smap, err = tutils.WaitForClusterState(proxyURL, "target removed", smap.Version, proxyCnt, targetCnt-1)
 
-	smap, err = tutils.WaitForClusterState(smap.Primary.URL(cmn.NetworkPublic), "restore", smap.Version,
+	tassert.CheckError(t, err)
+	tutils.RestoreNode(tcmd, false, "target")
+	smap, err = tutils.WaitForClusterState(smap.Primary.URL(cmn.NetworkPublic), "target restored", smap.Version,
 		proxyCnt, targetCnt)
 	tassert.CheckFatal(t, err)
 	if _, ok := smap.Tmap[target.ID()]; !ok {

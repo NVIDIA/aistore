@@ -104,14 +104,15 @@ func TestConfigGet(t *testing.T) {
 }
 
 func TestConfigSetGlobal(t *testing.T) {
-	var ecCondition bool
-	smap := tutils.GetClusterMap(t, tutils.GetPrimaryURL())
-	config := tutils.GetClusterConfig(t)
-	check := func(snode *cluster.Snode, c *cmn.Config) {
-		tassert.Errorf(t, c.EC.Enabled == ecCondition,
-			"%s expected 'ec.enabled' to be %v, got %v", snode, ecCondition, c.EC.Enabled)
-	}
-
+	var (
+		ecCondition bool
+		smap        = tutils.GetClusterMap(t, tutils.GetPrimaryURL())
+		config      = tutils.GetClusterConfig(t)
+		check       = func(snode *cluster.Snode, c *cmn.Config) {
+			tassert.Errorf(t, c.EC.Enabled == ecCondition,
+				"%s expected 'ec.enabled' to be %v, got %v", snode, ecCondition, c.EC.Enabled)
+		}
+	)
 	ecCondition = !config.EC.Enabled
 	toUpdate := &cmn.ConfigToUpdate{EC: &cmn.ECConfToUpdate{
 		Enabled: api.Bool(ecCondition),
@@ -134,8 +135,8 @@ func TestConfigFailOverrideClusterOnly(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		smap       = tutils.GetClusterMap(t, proxyURL)
 		config     = tutils.GetClusterConfig(t)
-		proxy, err = smap.GetRandProxy(false)
 	)
+	proxy, err := smap.GetRandProxy(false /*exclude primary*/)
 	tassert.CheckFatal(t, err)
 
 	// Try overriding cluster only config on a daemon
@@ -156,13 +157,13 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 		baseParams    = tutils.BaseAPIParams(proxyURL)
 		smap          = tutils.GetClusterMap(t, proxyURL)
 		config        = tutils.GetClusterConfig(t)
-		proxy, err    = smap.GetRandProxy(true)
 		origProxyCnt  = smap.CountActiveProxies()
 		origTargetCnt = smap.CountActiveTargets()
 	)
+	proxy, err := smap.GetRandProxy(true /*exclude primary*/)
 	tassert.CheckFatal(t, err)
 
-	// Override a cluster config on daemon
+	// Override cluster config on the selected proxy
 	newLowWM := config.Disk.DiskUtilLowWM - 10
 	err = api.SetDaemonConfig(baseParams, proxy.DaemonID, cos.SimpleKVs{
 		"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM),
@@ -173,21 +174,17 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 	tassert.Errorf(t, daemonConfig.Disk.DiskUtilLowWM == newLowWM,
 		errWMConfigNotExpected, newLowWM, daemonConfig.Disk.DiskUtilLowWM)
 
-	// Restart daemon and check if the config is persisted.
+	// Restart and check that config persisted
 	tlog.Logf("Killing %s\n", proxy.StringEx())
 	cmd, err := tutils.KillNode(proxy)
 	tassert.CheckFatal(t, err)
-	time.Sleep(time.Second)
-	smap, err = tutils.WaitForClusterState(proxyURL, "remove proxy", smap.Version, origProxyCnt-1, origTargetCnt)
+	smap, err = tutils.WaitForClusterState(proxyURL, "proxy removed", smap.Version, origProxyCnt-1, origTargetCnt)
 	tassert.CheckError(t, err)
-	time.Sleep(3 * time.Second)
+
 	err = tutils.RestoreNode(cmd, false, cmn.Proxy)
 	tassert.CheckFatal(t, err)
-	_, err = tutils.WaitForClusterState(proxyURL, "restore proxy", smap.Version, origProxyCnt, origTargetCnt)
+	_, err = tutils.WaitForClusterState(proxyURL, "proxy restored", smap.Version, origProxyCnt, origTargetCnt)
 	tassert.CheckFatal(t, err)
-
-	err = tutils.WaitNodeReady(proxy.URL(cmn.NetworkPublic))
-	tassert.CheckError(t, err)
 
 	daemonConfig = tutils.GetDaemonConfig(t, proxy)
 	tassert.Fatalf(t, daemonConfig.Disk.DiskUtilLowWM == newLowWM,
@@ -209,12 +206,10 @@ func TestConfigSyncToNewNode(t *testing.T) {
 		origProxyCnt  = smap.CountActiveProxies()
 		origTargetCnt = smap.CountActiveTargets()
 	)
-
-	proxy, err := smap.GetRandProxy(true)
+	proxy, err := smap.GetRandProxy(true /*exclude primary*/)
 	tassert.CheckFatal(t, err)
 
 	// 1. Kill a random proxy
-	// Restart daemon and check if the config is persisted.
 	tlog.Logf("Killing %s\n", proxy.StringEx())
 	cmd, err := tutils.KillNode(proxy)
 	tassert.CheckFatal(t, err)
@@ -225,7 +220,7 @@ func TestConfigSyncToNewNode(t *testing.T) {
 		})
 	})
 
-	smap, err = tutils.WaitForClusterState(proxyURL, "remove node", smap.Version, origProxyCnt-1, origTargetCnt)
+	smap, err = tutils.WaitForClusterState(proxyURL, "proxy removed", smap.Version, origProxyCnt-1, origTargetCnt)
 	tassert.CheckError(t, err)
 
 	// 2. After proxy is killed, update cluster configuration
@@ -234,15 +229,11 @@ func TestConfigSyncToNewNode(t *testing.T) {
 		"ec.enabled": strconv.FormatBool(newECEnabled),
 	})
 
-	// 3. Restore killed proxy
-	time.Sleep(3 * time.Second)
+	// 3. Restart proxy
 	err = tutils.RestoreNode(cmd, false, cmn.Proxy)
 	tassert.CheckFatal(t, err)
-	_, err = tutils.WaitForClusterState(proxyURL, "restore node", smap.Version, origProxyCnt, origTargetCnt)
+	_, err = tutils.WaitForClusterState(proxyURL, "proxy restored", smap.Version, origProxyCnt, origTargetCnt)
 	tassert.CheckFatal(t, err)
-
-	err = tutils.WaitNodeReady(proxy.URL(cmn.NetworkPublic))
-	tassert.CheckError(t, err)
 
 	// 4. Ensure the proxy has lastest updated config
 	daemonConfig := tutils.GetDaemonConfig(t, proxy)
@@ -268,8 +259,8 @@ func TestConfigOverrideAndResetDaemon(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		smap       = tutils.GetClusterMap(t, proxyURL)
 		config     = tutils.GetClusterConfig(t)
-		proxy, err = smap.GetRandProxy(true)
 	)
+	proxy, err := smap.GetRandProxy(true /*exclude primary*/)
 	tassert.CheckFatal(t, err)
 
 	// Override a cluster config on daemon
@@ -294,15 +285,14 @@ func TestConfigOverrideAndResetDaemon(t *testing.T) {
 func TestConfigOverrideAndResetCluster(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal, MinProxies: 2})
 	var (
-		proxyURL   = tutils.GetPrimaryURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
-		smap       = tutils.GetClusterMap(t, proxyURL)
-		config     = tutils.GetClusterConfig(t)
-		newLowWM   = config.Disk.DiskUtilLowWM - 10
-		proxy, err = smap.GetRandProxy(true)
-
 		daemonConfig *cmn.Config
+		proxyURL     = tutils.GetPrimaryURL()
+		baseParams   = tutils.BaseAPIParams(proxyURL)
+		smap         = tutils.GetClusterMap(t, proxyURL)
+		config       = tutils.GetClusterConfig(t)
+		newLowWM     = config.Disk.DiskUtilLowWM - 10
 	)
+	proxy, err := smap.GetRandProxy(true /*exclude primary*/)
 	tassert.CheckFatal(t, err)
 
 	// Override a cluster config on daemon and primary
