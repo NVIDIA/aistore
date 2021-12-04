@@ -68,7 +68,7 @@ func Test_Sleep(*testing.T) {
 	}
 
 	mem := &memsys.MMSA{Name: "amem", TimeIval: time.Second * 20, MinFree: cos.GiB}
-	mem.Init(0, false, false)
+	mem.Init(0)
 
 	wg := &sync.WaitGroup{}
 	random := cos.NowRand()
@@ -101,7 +101,7 @@ func Test_NoSleep(*testing.T) {
 	}
 
 	mem := &memsys.MMSA{Name: "bmem", TimeIval: time.Second * 20, MinPctTotal: 5}
-	mem.Init(0, false, false)
+	mem.Init(0)
 	go printStats(mem)
 
 	wg := &sync.WaitGroup{}

@@ -1662,13 +1662,11 @@ func TestGetFromMirroredBucketWithLostAllMpathsExceptOne(t *testing.T) {
 
 // TODO: remove all except one mountpath, run short, reduce sleep, increase stress...
 func TestGetNonRedundantWithDisabledMountpath(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	m := ioContext{
 		t:               t,
 		num:             1000,
 		numGetsEachFile: 2,
-	}
-	if testing.Short() {
-		m.num = 50
 	}
 	m.initWithCleanupAndSaveState()
 	baseParams := tutils.BaseAPIParams(m.proxyURL)

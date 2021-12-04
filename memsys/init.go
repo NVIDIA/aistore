@@ -32,9 +32,9 @@ var (
 func Init(gmmName, smmName string) {
 	debug.Assert(gmm == nil && smm == nil)
 	gmm = &MMSA{Name: gmmName + ".gmm", defBufSize: DefaultBufSize}
-	gmm.Init(0, false, true)
+	gmm.Init(0)
 	smm = &MMSA{Name: smmName + ".smm", defBufSize: DefaultSmallBufSize}
-	smm.Init(0, false, true)
+	smm.Init(0)
 	smm.sibling = gmm
 	gmm.sibling = smm
 	verbose = bool(glog.FastV(4, glog.SmoduleMemsys))
@@ -42,7 +42,7 @@ func Init(gmmName, smmName string) {
 
 func NewMMSA(name string) (mem *MMSA, err error) {
 	mem = &MMSA{Name: name + ".test.pmm", defBufSize: DefaultBufSize, MinFree: minMemFreeTests}
-	err = mem.Init(0, false, false)
+	err = mem.Init(0)
 	return
 }
 
@@ -52,7 +52,7 @@ func PageMM() *MMSA {
 		if gmm == nil {
 			// tests only
 			gmm = &MMSA{Name: "test.pmm", defBufSize: DefaultBufSize, MinFree: minMemFreeTests}
-			gmm.Init(maxMemUsedTests, false, false)
+			gmm.Init(maxMemUsedTests)
 			if smm != nil {
 				smm.sibling = gmm
 				gmm.sibling = smm
@@ -69,7 +69,7 @@ func ByteMM() *MMSA {
 		if smm == nil {
 			// tests only
 			smm = &MMSA{Name: "test.smm", defBufSize: DefaultSmallBufSize, MinFree: minMemFreeTests}
-			smm.Init(maxMemUsedTests, false, false)
+			smm.Init(maxMemUsedTests)
 			if gmm != nil {
 				gmm.sibling = smm
 				smm.sibling = gmm
@@ -93,13 +93,10 @@ func (r *MMSA) RegWithHK() {
 }
 
 // initialize new MMSA instance
-func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOOM bool) (err error) {
+func (r *MMSA) Init(maxUse int64) (err error) {
 	debug.Assert(r.Name != "")
 	// 1. environment overrides defaults and MMSA{...} hard-codings
 	if err = r.env(); err != nil {
-		if panicOnEnvErr {
-			panic(err)
-		}
 		cos.Errorf("%v", err)
 	}
 
@@ -134,9 +131,6 @@ func (r *MMSA) Init(maxUse int64, panicOnEnvErr, panicOOM bool) (err error) {
 	if mem.Free < cos.MinU64(r.MinFree*2, r.MinFree+minMemFree) {
 		err = fmt.Errorf("insufficient free memory %s (see %s for guidance)", r.Str(&mem), readme)
 		cos.Errorf("%v", err)
-		if panicOOM && mem.Free <= r.MinFree+minMemFreeTests {
-			panic(err)
-		}
 		r.lowWM = cos.MinU64(r.lowWM, r.MinFree+minMemFreeTests)
 		r.info = ""
 	}

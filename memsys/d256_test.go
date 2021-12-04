@@ -64,7 +64,7 @@ func BenchmarkSmallAlloc32K(b *testing.B) {
 
 func benchAlloc(b *testing.B, objsiz, sbufSize int64) {
 	mem := &memsys.MMSA{Name: "dmem", MinPctFree: 50}
-	mem.Init(0, false, false)
+	mem.Init(0)
 	defer mem.Terminate(false)
 
 	// reset initial conditions & start b-timer
@@ -113,7 +113,7 @@ func BenchmarkSmallWrite32K(b *testing.B) {
 
 func benchWrite(b *testing.B, objsiz, sbufSize int64) {
 	mem := &memsys.MMSA{Name: "emem", MinPctFree: 50}
-	mem.Init(0, false, false)
+	mem.Init(0)
 	defer mem.Terminate(false)
 
 	// reset initial conditions & start b-timer
@@ -165,7 +165,7 @@ func BenchmarkSmallWRF32K(b *testing.B) {
 
 func benchWRF(b *testing.B, objsiz, sbufSize int64) {
 	mem := &memsys.MMSA{Name: "fmem", MinPctFree: 50}
-	mem.Init(0, false, false)
+	mem.Init(0)
 	defer mem.Terminate(false)
 	cha := make(chan *memsys.SGL, 1024*16)
 
@@ -222,7 +222,7 @@ func BenchmarkLargeFile32K(b *testing.B) {
 
 func benchFile(b *testing.B, sbufSize int64) {
 	mem := &memsys.MMSA{Name: "gmem", MinPctFree: 50}
-	mem.Init(0, false, false)
+	mem.Init(0)
 	defer mem.Terminate(false)
 
 	// reset initial conditions
