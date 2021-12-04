@@ -497,6 +497,7 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 }
 
 func TestFSAddMPathRestartNode(t *testing.T) {
+	t.Skipf("skipping %s", t.Name())
 	var (
 		target *cluster.Snode
 

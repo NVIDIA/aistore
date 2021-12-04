@@ -1657,6 +1657,14 @@ func TestGetFromMirroredBucketWithLostAllMpathsExceptOne(t *testing.T) {
 
 // TODO: remove all except one mountpath, run short, reduce sleep, increase stress...
 func TestGetNonRedundantWithDisabledMountpath(t *testing.T) {
+	testNonRedundantMpathDD(t, cmn.ActMountpathDisable)
+}
+
+func TestGetNonRedundantWithDetachedMountpath(t *testing.T) {
+	testNonRedundantMpathDD(t, cmn.ActMountpathDetach)
+}
+
+func testNonRedundantMpathDD(t *testing.T, action string) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	m := ioContext{
 		t:               t,
@@ -1680,8 +1688,12 @@ func TestGetNonRedundantWithDisabledMountpath(t *testing.T) {
 	// PUT
 	m.puts()
 
-	tlog.Logf("Disable %q on target %s\n", mpList.Available[0], target.StringEx())
-	err = api.DisableMountpath(baseParams, target, mpList.Available[0], false /*dont-resil*/)
+	tlog.Logf("%s %q on target %s\n", action, mpList.Available[0], target.StringEx())
+	if action == cmn.ActMountpathDisable {
+		err = api.DisableMountpath(baseParams, target, mpList.Available[0], false /*dont-resil*/)
+	} else {
+		err = api.DetachMountpath(baseParams, target, mpList.Available[0], false /*dont-resil*/)
+	}
 	tassert.CheckFatal(t, err)
 	time.Sleep(4 * time.Second)
 
@@ -1693,9 +1705,14 @@ func TestGetNonRedundantWithDisabledMountpath(t *testing.T) {
 	// GET
 	m.gets()
 
-	// Add previously disabled mountpath
-	tlog.Logf("Re-enable %q on target %s\n", mpList.Available[0], target.StringEx())
-	err = api.EnableMountpath(baseParams, target, mpList.Available[0])
+	// Add previously disabled or detached mountpath
+	if action == cmn.ActMountpathDisable {
+		tlog.Logf("Re-enable %q on target %s\n", mpList.Available[0], target.StringEx())
+		err = api.EnableMountpath(baseParams, target, mpList.Available[0])
+	} else {
+		tlog.Logf("Re-attach %q on target %s\n", mpList.Available[0], target.StringEx())
+		err = api.AttachMountpath(baseParams, target, mpList.Available[0], false /*force*/)
+	}
 	tassert.CheckFatal(t, err)
 	time.Sleep(4 * time.Second)
 
