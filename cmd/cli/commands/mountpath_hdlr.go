@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
@@ -93,6 +94,7 @@ func mpathAction(c *cli.Context, action string) error {
 		} else {
 			nodeID = tail[len(tail)-1]
 		}
+		nodeID = cluster.N2ID(nodeID)
 		if nodeID != "" && smap.GetTarget(nodeID) != nil {
 			return fmt.Errorf("target %s: missing mountpath to %s", first, action)
 		}
@@ -102,8 +104,9 @@ func mpathAction(c *cli.Context, action string) error {
 		var (
 			err   error
 			acted string
-			si    = smap.GetTarget(nodeID)
 		)
+		nodeID = cluster.N2ID(nodeID)
+		si := smap.GetTarget(nodeID)
 		if si == nil {
 			si = smap.GetProxy(nodeID)
 			if si == nil {

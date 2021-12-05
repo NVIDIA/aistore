@@ -133,11 +133,21 @@ func (d *Snode) SetName() {
 	d.name = name
 }
 
+func Pname(pid string) string { return "p[" + pid + "]" }
+func Tname(tid string) string { return "t[" + tid + "]" }
+
+func N2ID(name string) string {
+	if len(name) > 2 && (name[:2] == "t[" || name[:2] == "p[") {
+		return name[2 : len(name)-1]
+	}
+	return name
+}
+
 func (d *Snode) StringEx() string {
 	if d.IsProxy() {
-		return "p[" + d.DaemonID + "]"
+		return Pname(d.DaemonID)
 	}
-	return "t[" + d.DaemonID + "]"
+	return Tname(d.DaemonID)
 }
 
 func (d *Snode) nameNets() string {

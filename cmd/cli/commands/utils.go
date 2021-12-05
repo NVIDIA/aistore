@@ -88,6 +88,11 @@ type (
 	}
 )
 
+func argDaemonID(c *cli.Context) string {
+	daemonID := c.Args().First()
+	return cluster.N2ID(daemonID)
+}
+
 func isWebURL(url string) bool { return cos.IsHTTP(url) || cos.IsHTTPS(url) }
 
 func helpMessage(template string, data interface{}) string {
@@ -209,8 +214,8 @@ func fillMap() (*cluster.Smap, error) {
 	targetCount := smap.CountTargets()
 
 	wg.Add(proxyCount + targetCount)
-	retrieveStatus(smap.Pmap, proxy, wg)
-	retrieveStatus(smap.Tmap, target, wg)
+	retrieveStatus(smap.Pmap, pmapStatus, wg)
+	retrieveStatus(smap.Tmap, tmapStatus, wg)
 	wg.Wait()
 	return smap, nil
 }

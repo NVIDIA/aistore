@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/authn"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -25,7 +26,7 @@ import (
 // Cluster / Daemon //
 //////////////////////
 
-type daemonKindCompletion = int
+type daemonKindCompletion int
 
 const (
 	completeTargets daemonKindCompletion = iota
@@ -160,12 +161,12 @@ func suggestDaemon(what daemonKindCompletion) {
 	}
 	if what != completeTargets {
 		for dae := range smap.Pmap {
-			fmt.Println(dae)
+			fmt.Println(cluster.Pname(dae))
 		}
 	}
 	if what != completeProxies {
 		for dae := range smap.Tmap {
-			fmt.Println(dae)
+			fmt.Println(cluster.Tname(dae))
 		}
 	}
 }

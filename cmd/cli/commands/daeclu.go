@@ -40,8 +40,8 @@ type (
 )
 
 var (
-	proxy  = make(map[string]*stats.DaemonStatus, 8)
-	target = make(map[string]*stats.DaemonStatus, 8)
+	pmapStatus = make(map[string]*stats.DaemonStatus, 8)
+	tmapStatus = make(map[string]*stats.DaemonStatus, 8)
 )
 
 // Gets Smap from a given node (`daemonID`) and displays it
@@ -116,13 +116,13 @@ func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, us
 	body := templates.StatusTemplateHelper{
 		Smap: smap,
 		Status: templates.DaemonStatusTemplateHelper{
-			Pmap: proxy,
-			Tmap: target,
+			Pmap: pmapStatus,
+			Tmap: tmapStatus,
 		},
 	}
-	if res, proxyOK := proxy[daemonID]; proxyOK {
+	if res, proxyOK := pmapStatus[daemonID]; proxyOK {
 		return templates.DisplayOutput(res, c.App.Writer, templates.NewProxyTable(res, smap).Template(hideHeader), useJSON)
-	} else if res, targetOK := target[daemonID]; targetOK {
+	} else if res, targetOK := tmapStatus[daemonID]; targetOK {
 		return templates.DisplayOutput(res, c.App.Writer, templates.NewTargetTable(res).Template(hideHeader), useJSON)
 	} else if daemonID == cmn.Proxy {
 		template := templates.NewProxiesTable(&body.Status, smap, true, verbose).Template(hideHeader)
@@ -141,17 +141,17 @@ func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, us
 
 // Displays the disk stats of a target
 func daemonDiskStats(c *cli.Context, daemonID string, useJSON, hideHeader bool) error {
-	if _, ok := proxy[daemonID]; ok {
-		return fmt.Errorf("daemon with ID %q is a proxy, but \"%s %s %s\" works only for targets",
+	if _, ok := pmapStatus[daemonID]; ok {
+		return fmt.Errorf("daemon ID=%q is a proxy, but \"%s %s %s\" works only for targets",
 			daemonID, cliName, commandShow, subcmdShowDisk)
 	}
-	if _, ok := target[daemonID]; daemonID != "" && !ok {
-		return fmt.Errorf("target ID %q invalid - no such target", daemonID)
+	if _, ok := tmapStatus[daemonID]; daemonID != "" && !ok {
+		return fmt.Errorf("target ID=%q does not exist", daemonID)
 	}
 
 	targets := map[string]*stats.DaemonStatus{daemonID: {}}
 	if daemonID == "" {
-		targets = target
+		targets = tmapStatus
 	}
 
 	diskStats, err := getDiskStats(targets)
@@ -231,7 +231,7 @@ func getClusterConfig(c *cli.Context, section string) error {
 // Displays the config of a daemon
 func getDaemonConfig(c *cli.Context) error {
 	var (
-		daemonID = c.Args().Get(0)
+		daemonID = argDaemonID(c)
 		section  = c.Args().Get(1)
 		useJSON  = flagIsSet(c, jsonFlag)
 		node     *cluster.Snode
@@ -328,7 +328,7 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cos.SimpleKVs, err
 		propList        = cmn.ConfigPropList()
 		daemonOnlyProps []string
 	)
-	daemonID = args.First()
+	daemonID = argDaemonID(c)
 
 	// Case when DAEMON_ID is not provided by the user:
 	// 1. name-value pair separated with '=': `ais set log.level=5`

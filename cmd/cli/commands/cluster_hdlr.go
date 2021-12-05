@@ -243,22 +243,23 @@ func maintShutDecommHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	sid := c.Args().First()
-	action := c.Command.Name
-	node := smap.GetNode(sid)
+	var (
+		action   = c.Command.Name
+		daemonID = argDaemonID(c)
+		node     = smap.GetNode(daemonID)
+	)
 	if node == nil {
-		return fmt.Errorf("node %q does not exist", sid)
+		return fmt.Errorf("node %q does not exist", daemonID)
 	}
 	if smap.IsPrimary(node) {
-		return fmt.Errorf("node %q is primary, cannot %s", sid, action)
+		return fmt.Errorf("node %q is primary, cannot %s", daemonID, action)
 	}
-
 	var (
 		xactID        string
 		skipRebalance = flagIsSet(c, noRebalanceFlag) || node.IsProxy()
 		noShutdown    = flagIsSet(c, noShutdownFlag)
 		rmUserData    = flagIsSet(c, rmUserDataFlag)
-		actValue      = &cmn.ActValRmNode{DaemonID: sid, SkipRebalance: skipRebalance, NoShutdown: noShutdown}
+		actValue      = &cmn.ActValRmNode{DaemonID: daemonID, SkipRebalance: skipRebalance, NoShutdown: noShutdown}
 	)
 	if skipRebalance && node.IsTarget() {
 		fmt.Fprintf(c.App.Writer,
@@ -295,19 +296,19 @@ func maintShutDecommHandler(c *cli.Context) (err error) {
 		fmt.Fprintf(c.App.Writer, fmtRebalanceStarted, xactID, xactID)
 	}
 	if action == subcmdStopMaint {
-		fmt.Fprintf(c.App.Writer, "Node %q is now active (maintenance done)\n", sid)
+		fmt.Fprintf(c.App.Writer, "Node %q is now active (maintenance done)\n", daemonID)
 	} else if action == subcmdDecommission && skipRebalance {
-		fmt.Fprintf(c.App.Writer, "Node %q has been decommissioned - permanently removed from the cluster\n", sid)
+		fmt.Fprintf(c.App.Writer, "Node %q has been decommissioned - permanently removed from the cluster\n", daemonID)
 	} else if action == subcmdShutdown && skipRebalance {
-		fmt.Fprintf(c.App.Writer, "Node %q has been shutdown\n", sid)
+		fmt.Fprintf(c.App.Writer, "Node %q has been shutdown\n", daemonID)
 	} else if action == subcmdStartMaint {
-		fmt.Fprintf(c.App.Writer, "Node %q is now under maintenance\n", sid)
+		fmt.Fprintf(c.App.Writer, "Node %q is currently under maintenance\n", daemonID)
 	}
 	return nil
 }
 
 func setPrimaryHandler(c *cli.Context) (err error) {
-	daemonID := c.Args().First()
+	daemonID := argDaemonID(c)
 	if daemonID == "" {
 		return missingArgumentsError(c, "proxy daemon ID")
 	}

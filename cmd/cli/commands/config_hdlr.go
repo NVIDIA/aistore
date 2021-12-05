@@ -59,7 +59,7 @@ func cluConfigHandler(c *cli.Context) (err error) {
 }
 
 func cluResetConfigHandler(c *cli.Context) (err error) {
-	daemonID := c.Args().First()
+	daemonID := argDaemonID(c)
 	if daemonID == "" {
 		if err := api.ResetClusterConfig(defaultAPIParams); err != nil {
 			return err

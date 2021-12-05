@@ -307,7 +307,7 @@ var (
 )
 
 func showDisksHandler(c *cli.Context) (err error) {
-	daemonID := c.Args().First()
+	daemonID := argDaemonID(c)
 	if _, err = fillMap(); err != nil {
 		return
 	}
@@ -342,7 +342,7 @@ func showDsortHandler(c *cli.Context) (err error) {
 }
 
 func showClusterHandler(c *cli.Context) (err error) {
-	daemonID := c.Args().First()
+	daemonID := argDaemonID(c)
 	primarySmap, err := fillMap()
 	if err != nil {
 		return
@@ -482,8 +482,8 @@ func showBckPropsHandler(c *cli.Context) (err error) {
 
 func showSmapHandler(c *cli.Context) (err error) {
 	var (
-		daemonID    = c.Args().First()
 		primarySmap *cluster.Smap
+		daemonID    = argDaemonID(c)
 	)
 	if primarySmap, err = fillMap(); err != nil {
 		return
@@ -531,10 +531,10 @@ func showDaemonLogHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	sid := c.Args().First()
-	node := smap.GetNode(sid)
+	daemonID := argDaemonID(c)
+	node := smap.GetNode(daemonID)
 	if node == nil {
-		return fmt.Errorf("%s does not exist (see 'ais show cluster')", sid)
+		return fmt.Errorf("node %q does not exist (see 'ais show cluster')", daemonID)
 	}
 
 	sev := strings.ToLower(parseStrFlag(c, logSevFlag))
@@ -584,8 +584,8 @@ func showRemoteAISHandler(c *cli.Context) (err error) {
 
 func showMpathHandler(c *cli.Context) error {
 	var (
+		daemonID = argDaemonID(c)
 		nodes    []*cluster.Snode
-		daemonID = c.Args().First()
 	)
 	smap, err := api.GetClusterMap(defaultAPIParams)
 	if err != nil {
@@ -749,9 +749,10 @@ func showClusterStatsHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-
-	var node *cluster.Snode
-	daemonID := c.Args().First()
+	var (
+		node     *cluster.Snode
+		daemonID = argDaemonID(c)
+	)
 	if daemonID != "" {
 		node = smap.GetNode(daemonID)
 	}
