@@ -283,7 +283,6 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | `timeout.max_host_busy` | Yes | `20s` | Maximum latency of control-plane operations that may involve receiving new bucket metadata and associated processing |
 | `timeout.send_file_time` | Yes | `5m` | Timeout for sending/receiving an object from another target in the same cluster |
 | `timeout.transport_idle_term` | Yes | `4s` | Max idle time to temporarily teardown long-lived intra-cluster connection |
-| `vmodule` | Yes | `""` | Overrides logging level for a given modules.<br>{"name": "vmodule", "value": "target\*=2"} sets log level to 2 for target modules |
 
 ## Startup override
 
@@ -400,23 +399,25 @@ $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "set-config"
 ```
 
 ### Cluster-wide operation (all nodes)
-* Elevate log verbosity to `4` for all sources matching `ais/targ*` regex
+* Set the default number of n-way copies to 4 (can still be redefined on a per-bucket basis)
 
 ```console
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "set-config","name": "vmodule", "value": "ais/targ*=4"}' 'http://G/v1/cluster'
+$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "set-config","name": "mirror.copies", "value": "4"}' 'http://G/v1/cluster'
+
+# or, same using CLI:
+$ ais config cluster mirror.copies 4
 ```
 
 ### Single-node operation (single node)
-* Set log verbosity to `1` for all source files that match the `ais/targ*` regex
+* Set log level = 1
 
 ```console
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "set-config","name": "vmodule", "value": "ais/targ*=1"}' 'http://T/v1/daemon'
-```
+$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "set-config","name": "log.level", "value": "1"}' 'http://T/v1/daemon'
+# or, same:
+$ curl -i -X PUT 'http://T/v1/daemon/set-config?log.level=1'
 
-or, same:
-
-```console
-$ curl -i -X PUT 'http://T/v1/daemon/set-config?vmodule=ais/targ*=1'
+# or, same using CLI (assuming the node in question is t[tZktGpbM]):
+$ ais config node t[tZktGpbM] log.level 1
 ```
 
 ## CLI examples

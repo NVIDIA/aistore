@@ -598,11 +598,6 @@ func (*ConfigToUpdate) JspOpts() jsp.Options { return configJspOpts }
 var GCO *globalConfigOwner
 
 func SetConfigInMem(toUpdate *ConfigToUpdate, config *Config, asType string) (err error) {
-	if toUpdate.Vmodule != nil {
-		if err := SetGLogVModule(*toUpdate.Vmodule); err != nil {
-			return fmt.Errorf("failed to set vmodule = %s, err: %v", *toUpdate.Vmodule, err)
-		}
-	}
 	if toUpdate.LogLevel != nil {
 		if err := SetLogLevel(config, *toUpdate.LogLevel); err != nil {
 			return fmt.Errorf("failed to set log level = %s, err: %v", *toUpdate.LogLevel, err)
@@ -1493,29 +1488,12 @@ func SetLogLevel(config *Config, loglevel string) (err error) {
 	return
 }
 
-// setGLogVModule sets glog's vmodule flag
-// sets 'v' as is, no verificaton is done here
-// syntax for v: target=5,proxy=1, p*=3, etc
-func SetGLogVModule(v string) error {
-	f := flag.Lookup("vmodule")
-	if f == nil {
-		return nil
-	}
-
-	err := f.Value.Set(v)
-	if err == nil {
-		glog.Info("log level vmodule changed to ", v)
-	}
-
-	return err
-}
-
 func ConfigPropList(scopes ...string) []string {
 	scope := Cluster
 	if len(scopes) > 0 {
 		scope = scopes[0]
 	}
-	propList := []string{"vmodule"}
+	propList := make([]string, 0, 48)
 	err := IterFields(Config{}, func(tag string, _ IterField) (err error, b bool) {
 		propList = append(propList, tag)
 		return

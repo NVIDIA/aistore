@@ -54,9 +54,6 @@ The common executable, typically called `aisnode`, supports the following comman
         true: runtime only (non-persistent)
   -v value
         log level for V logs
-  -vmodule value
-        comma-separated list of pattern=N settings for file-filtered logging
-
 ```
 
 For usage and the most recently updated set of command-line options, run `aisnode` with empty command-line:
