@@ -287,14 +287,21 @@ func cluConfig(c *cli.Context) error {
 		// check whether user is trying to show it, not set
 		tail := c.Args().Tail()
 		if len(tail) > 0 && tail[0] == commandShow {
-			daemonID = c.Args().Get(0)
 			return &errUsage{
 				context: c,
-				message: "expecting key-value pairs",
+				message: "expecting key=value pairs",
 				bottomMessage: fmt.Sprintf("(Hint: to show %q config, run 'ais show config %s'.)",
 					daemonID, daemonID),
 				helpData:     c.Command,
 				helpTemplate: templates.ShortUsageTmpl,
+			}
+		}
+		if strings.Contains(err.Error(), "key=value pair") && daemonID != "" {
+			// show what we can and still return err
+			if daemonID != c.Args().First() {
+				_ = showClusterOrDaemonConfigHandler(c) // nolint:errcheck // on purpose
+			} else {
+				_ = showClusterConfigHandler(c) // nolint:errcheck // on purpose
 			}
 		}
 		return err
@@ -319,7 +326,7 @@ func cluConfig(c *cli.Context) error {
 
 func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cos.SimpleKVs, err error) {
 	if c.NArg() == 0 {
-		return "", nil, missingArgumentsError(c, "attribute name-value pairs")
+		return "", nil, missingKeyValueError(c)
 	}
 
 	var (
@@ -330,10 +337,7 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cos.SimpleKVs, err
 	)
 	daemonID = argDaemonID(c)
 
-	// Case when DAEMON_ID is not provided by the user:
-	// 1. name-value pair separated with '=': `ais set log.level=5`
-	// 2. name-value pair separated with space: `ais set log.level 5`. In this case
-	//		the first word is looked up in cmn.ConfigPropList
+	// separated with '=' `log.level=5` or space `log.level 5`
 	if cos.StringInSlice(args.First(), propList) || strings.Contains(args.First(), keyAndValueSeparator) {
 		daemonID = ""
 		kvs = args
@@ -349,28 +353,31 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cos.SimpleKVs, err
 				// Even - updating cluster configuration (a few key/value pairs)
 				err = fmt.Errorf("option %q does not exist (hint: run 'show config DAEMON_ID --json' to show list of options)", daemonID)
 			} else {
-				// Odd - updating daemon configuration (daemon ID + a few key/value pairs)
-				err = fmt.Errorf("node ID %q does not exist (hint: run 'show cluster' to show nodes)", daemonID)
+				if daemonID == c.Args().First() {
+					err = fmt.Errorf("expecting [DAEMON_ID] key=value pair(s), got %q", daemonID)
+				} else {
+					err = fmt.Errorf("node ID %q does not exist (hint: run 'show cluster')", daemonID)
+				}
 			}
-			return "", nil, err
+			return daemonID, nil, err
 		}
 		daemonOnlyProps = cmn.ConfigPropList(cmn.Daemon)
 	}
 
 	if len(kvs) == 0 {
-		return "", nil, missingArgumentsError(c, "attribute name-value pairs")
+		return daemonID, nil, missingKeyValueError(c)
 	}
 
 	if nvs, err = makePairs(kvs); err != nil {
-		return "", nil, err
+		return daemonID, nil, err
 	}
 
 	for k := range nvs {
 		if !cos.StringInSlice(k, propList) {
-			return "", nil, fmt.Errorf("invalid property name %q", k)
+			return daemonID, nil, fmt.Errorf("invalid property name %q", k)
 		}
 		if daemonOnlyProps != nil && !cos.StringInSlice(k, daemonOnlyProps) {
-			return "", nil, fmt.Errorf("setting daemon configuration %q not allowed", k)
+			return daemonID, nil, fmt.Errorf("setting daemon configuration %q not allowed", k)
 		}
 	}
 

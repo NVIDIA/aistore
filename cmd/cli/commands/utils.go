@@ -390,7 +390,7 @@ func makePairs(args []string) (nvs cos.SimpleKVs, err error) {
 		} else {
 			// last name without a value
 			if i == ll-1 {
-				return nil, fmt.Errorf("invalid key-value pair %q", args[i])
+				return nil, fmt.Errorf("invalid key=value pair %q", args[i])
 			}
 			nvs[args[i]] = args[i+1]
 			i += 2

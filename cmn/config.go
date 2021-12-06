@@ -189,8 +189,8 @@ type (
 		Proxy       *ProxyConfToUpdate       `json:"proxy,omitempty"`
 
 		// Logging
-		LogLevel *string `json:"log_level,omitempty" copy:"skip"`
-		Vmodule  *string `json:"vmodule,omitempty" copy:"skip"`
+		LogLevel *string `json:"log_level,omitempty" copy:"skip"` // TODO: review vs Log.Level
+		Vmodule  *string `json:"vmodule,omitempty" copy:"skip"`   // obsolete; TODO: remove with the next meta-version update
 
 		// LocalConfig
 		FSP *FSPConf `json:"fspaths,omitempty"`
@@ -1441,7 +1441,7 @@ func (ctu *ConfigToUpdate) FillFromQuery(query url.Values) error {
 		}
 		anyExists = true
 		name, value := strings.ToLower(key), query.Get(key)
-		if name == "log.level" {
+		if name == "log_level" {
 			ctu.LogLevel = &value
 			continue
 		}
@@ -1515,7 +1515,7 @@ func ConfigPropList(scopes ...string) []string {
 	if len(scopes) > 0 {
 		scope = scopes[0]
 	}
-	propList := []string{"vmodule", "log_level", "log.level"}
+	propList := []string{"vmodule"}
 	err := IterFields(Config{}, func(tag string, _ IterField) (err error, b bool) {
 		propList = append(propList, tag)
 		return

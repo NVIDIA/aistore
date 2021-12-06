@@ -566,8 +566,10 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *c
 		}
 		sleepTime += sleepTime / 2
 	}
-	glog.Errorf("%s: failed to request election from the _next_ primary %s: %v",
-		h.si, nextPrimaryProxy.StringEx(), err)
+	if !daemon.stopping.Load() {
+		glog.Errorf("%s: failed to request election from the _next_ primary %s: %v",
+			h.si, nextPrimaryProxy.StringEx(), err)
+	}
 	return
 }
 

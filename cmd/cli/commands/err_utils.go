@@ -100,6 +100,10 @@ func missingArgumentsError(c *cli.Context, missingArgs ...string) error {
 	return _errUsage(c, msg)
 }
 
+func missingKeyValueError(c *cli.Context) error {
+	return missingArgumentsError(c, "attribute key=value pairs")
+}
+
 func objectNameArgumentNotSupported(c *cli.Context, objectName string) error {
 	msg := fmt.Sprintf("object name %q argument not supported", objectName)
 	return _errUsage(c, msg)

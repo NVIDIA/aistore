@@ -26,7 +26,6 @@ var (
 		subcmdList: {
 			objPropsFlag,
 			allPropsFlag,
-			allItemsFlag,
 		},
 	}
 

@@ -71,7 +71,7 @@ func showCLIConfigHandler(c *cli.Context) (err error) {
 
 func setCLIConfigHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, "attribute name-value pairs")
+		return missingKeyValueError(c)
 	}
 
 	var nvs cos.SimpleKVs
