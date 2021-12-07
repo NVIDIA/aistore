@@ -142,7 +142,11 @@ Notwithstanding, AIS stores and then maintains object replicas, erasure-coded sl
 
 ## Existing Datasets
 
-One common way to use AIStore includes the most basic step: populating it with an existing dataset, or datasets from remote buckets (AWS, Google Cloud, Azure, or HDFS) or any vanilla HTTP(S) resources. To this end, AIS provides 6 (six) easy ways ranging from the (conventional) on-demand caching to (advanced) *promoting* of colocated files and directories:
+Common way to use AIStore include the most fundamental and, often, the very first step: populating AIS cluster with an existing dataset, or datasets. Those (datasets) can come from remote buckets (AWS, Google Cloud, Azure, or HDFS), local files, or any vanilla HTTP(S) locations.
+
+To this end, AIS provides 6 (six) easy ways ranging from the conventional on-demand caching to *promoting* colocated files and directories, and more.
+
+> Related references and examples include this [technical blog](https://aiatscale.org/blog/2021/12/07/cp-files-to-ais) that shows how to copy a file-based dataset in two easy steps.
 
 1. [Cold GET](#existing-datasets-cold-get)
 2. [Prefetch](#existing-datasets-batch-prefetch)

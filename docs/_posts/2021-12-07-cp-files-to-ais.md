@@ -42,7 +42,7 @@ $ ais job start prefetch ht://ZDE1YzE0NzhiNWFkMQ --template 'shard-{001..999}.ta
 
 Here we run Python's own `http.server` to listen on port `51061` and serve the files from the directory that we have previously `cd-ed` into (`/tmp`, in the example).
 
-Of course, the port, the directory, and the filenames above are all randomly chosen for purely **illustrative purposes**. The main point the example is trying to make is that HTTP connectivity of any kind immediately opens up a number of easy ways to migrate or replicate any data that exists in files.  
+Of course, the port, the directory, and the filenames above are all randomly chosen for purely **illustrative purposes**. The main point the example is trying to make is that HTTP connectivity of any kind immediately opens up a number of easy ways to migrate or replicate any data that exists in files.
 
 As far as aforementioned *implementation variations*, they include running, for instance, Go-based HTTP server instead of the Python's:
 
@@ -61,7 +61,7 @@ As far as aforementioned *implementation variations*, they include running, for 
 $ go run htserver.go
 ```
 
- and using AIS [downloader](https://github.com/NVIDIA/aistore/blob/master/docs/downloader.md) extension instead of the exemplified above multi-object `prefetch`:
+ and using AIS [downloader](https://github.com/NVIDIA/aistore/blob/master/docs/downloader.md) extension instead of the multi-object `prefetch`:
 
 ```bash
 # Step 2. download files =============================
