@@ -104,12 +104,16 @@ var (
 // xaction
 
 func startXactionHandler(c *cli.Context) (err error) {
+	xactKind := c.Command.Name
+	return startXactionKindHandler(c, xactKind)
+}
+
+func startXactionKindHandler(c *cli.Context, xactKind string) (err error) {
 	var (
 		bck cmn.Bck
 		sid string
 	)
 
-	xactKind := c.Command.Name
 	if xaction.IsBckScope(xactKind) {
 		bck, err = parseBckURI(c, c.Args().First())
 		if err != nil {

@@ -435,7 +435,7 @@ func parseXactionFromArgs(c *cli.Context) (nodeID, xactID, xactKind string, bck 
 		return
 	}
 	shift := 0
-	xactKind = c.Args().Get(0)
+	xactKind = argDaemonID(c)
 	if node := smap.GetProxy(xactKind); node != nil {
 		return "", "", "", bck, fmt.Errorf("daemon %q is a proxy", xactKind)
 	}

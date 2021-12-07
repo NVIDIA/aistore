@@ -6,6 +6,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -30,9 +31,8 @@ var (
 		subcmdCluConfig: {
 			transientFlag,
 		},
-		subcmdShutdown:  {},
-		subcmdRebalance: {},
-		subcmdPrimary:   {},
+		subcmdShutdown: {},
+		subcmdPrimary:  {},
 		subcmdJoin: {
 			roleFlag,
 		},
@@ -43,6 +43,11 @@ var (
 			noRebalanceFlag,
 			noShutdownFlag,
 			rmUserDataFlag,
+		},
+		commandStart: {},
+		commandStop:  {},
+		commandShow: {
+			allXactionsFlag,
 		},
 	}
 
@@ -67,10 +72,28 @@ var (
 				BashComplete: suggestRemote,
 			},
 			{
-				Name:   subcmdRebalance,
-				Usage:  "rebalance ais cluster",
-				Flags:  clusterCmdsFlags[subcmdRebalance],
-				Action: startXactionHandler,
+				Name: subcmdRebalance,
+				Subcommands: []cli.Command{
+					{
+						Name:   commandStart,
+						Usage:  "rebalance ais cluster",
+						Flags:  clusterCmdsFlags[commandStart],
+						Action: startClusterRebalanceHandler,
+					},
+					{
+						Name:   commandStop,
+						Usage:  "stop rebalancing ais cluster",
+						Flags:  clusterCmdsFlags[commandStop],
+						Action: stopClusterRebalanceHandler,
+					},
+					{
+						Name:         commandShow,
+						Usage:        "show ais cluster rebalance",
+						Flags:        clusterCmdsFlags[commandShow],
+						BashComplete: daemonCompletions(completeTargets),
+						Action:       showClusterRebalanceHandler,
+					},
+				},
 			},
 			{
 				Name:         subcmdPrimary,
@@ -324,4 +347,47 @@ func setPrimaryHandler(c *cli.Context) (err error) {
 		fmt.Fprintf(c.App.Writer, "%s is now a new primary\n", daemonID)
 	}
 	return err
+}
+
+func startClusterRebalanceHandler(c *cli.Context) (err error) {
+	return startXactionKindHandler(c, cmn.ActRebalance)
+}
+
+func stopClusterRebalanceHandler(c *cli.Context) (err error) {
+	xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, OnlyRunning: true}
+	var xs api.NodesXactMultiSnap
+	xs, err = api.QueryXactionSnaps(defaultAPIParams, xactArgs)
+	if err != nil {
+		return
+	}
+	rebID := ""
+outer:
+	for _, snaps := range xs {
+		for _, snap := range snaps {
+			rebID = snap.ID
+			break outer
+		}
+	}
+
+	if rebID == "" {
+		return errors.New("rebalance is not running")
+	}
+
+	xactArgs = api.XactReqArgs{ID: rebID, Kind: cmn.ActRebalance}
+	if err = api.AbortXaction(defaultAPIParams, xactArgs); err != nil {
+		return
+	}
+	_, err = fmt.Fprintf(c.App.Writer, "Stopped %s %q\n", cmn.ActRebalance, rebID)
+	return
+}
+
+func showClusterRebalanceHandler(c *cli.Context) (err error) {
+	nodeID, xactID, xactKind, bck, errP := parseXactionFromArgs(c)
+	if errP != nil {
+		return errP
+	}
+	if xactID == "" && xactKind == "" {
+		xactKind = cmn.ActRebalance
+	}
+	return _showXactList(c, nodeID, xactID, xactKind, bck)
 }

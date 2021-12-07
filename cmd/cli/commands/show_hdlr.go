@@ -363,6 +363,10 @@ func showXactionHandler(c *cli.Context) (err error) {
 	if errP != nil {
 		return errP
 	}
+	return _showXactList(c, nodeID, xactID, xactKind, bck)
+}
+
+func _showXactList(c *cli.Context, nodeID, xactID, xactKind string, bck cmn.Bck) (err error) {
 	latest := !flagIsSet(c, allXactionsFlag)
 	if xactID != "" {
 		latest = false

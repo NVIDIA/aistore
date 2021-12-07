@@ -62,7 +62,7 @@ var (
 )
 
 func listArchHandler(c *cli.Context) (err error) {
-	bck, objName, err := parseBckObjectURI(c, c.Args().First(), false)
+	bck, objName, err := parseBckObjectURI(c, c.Args().First(), true)
 	if err != nil {
 		return err
 	}
