@@ -12,10 +12,10 @@ AIStore supports [numerous ways](https://github.com/NVIDIA/aistore/blob/master/d
 
 Ultimately, the only precondition is that there is a *directory* you can access that contains files to migrate or copy. It turns out that **everything else** can be done in two easy steps:
 
-1) run local http server
-2) [prefetch](https://github.com/NVIDIA/aistore/blob/master/docs/cli/object.md#operations-on-lists-and-ranges) or [download](https://github.com/NVIDIA/aistore/blob/master/docs/downloader.md) the files.
+1. run local http server
+2. [prefetch](https://github.com/NVIDIA/aistore/blob/master/docs/cli/object.md#operations-on-lists-and-ranges) or [download](https://github.com/NVIDIA/aistore/blob/master/docs/downloader.md) the files.
 
-Implementation-wise, both #1 and #2 have multiple variations, and we'll consider at least some of them below. But first, let's take a look at an example:
+Implementation-wise, both Step 1 and Step 2 have multiple variations and we'll consider at least some of them below. But first, let's take a look at an example:
 
 ```bash
 # Let's assume, the files we want to copy are located under /tmp/abc:
@@ -26,17 +26,22 @@ shard-001.tar
 ...
 shard-999.tar
 
-# Step 1. run local http server =============================
+# Step 1. run local http server
+# =============================
 $ python3 -m http.server --bind 0.0.0.0 51061
-  # use AIS CLI to make sure the files are readable
+
+# use AIS CLI to make sure the files are readable
 $ ais object get http://localhost:51061/abc/hello-world
 
-# Step 2. prefetch the files ===================
-  # keep using AIS CLI to list HTTP buckets
-  # (and note that AIS will create one on the fly after the very first successful `GET`)
+# Step 2. get all files in the range 'shard-{001..999}.tar'
+# =========================================================
+
+# keep using AIS CLI to list HTTP buckets
+# (and note that AIS will create one on the fly after the very first successful `GET`)
 $ ais ls ht://
 ht://ZDE1YzE0NzhiNWFkMQ
-  # run batch `prefetch` job to load bash-expansion templated names from this bucket
+
+# run batch `prefetch` job to load bash-expansion templated names from this bucket
 $ ais job start prefetch ht://ZDE1YzE0NzhiNWFkMQ --template 'shard-{001..999}.tar'
 ```
 
@@ -57,20 +62,27 @@ As far as aforementioned *implementation variations*, they include running, for 
 7 func main() {
 8 	http.ListenAndServe(":52062", http.FileServer(http.Dir("/tmp")))
 9 }
-# Step 1. run local http server =============================
+
+# Step 1. run local http server
+# =============================
+
 $ go run htserver.go
 ```
 
- and using AIS [downloader](https://github.com/NVIDIA/aistore/blob/master/docs/downloader.md) extension instead of the multi-object `prefetch`:
+and then using AIS [downloader](https://github.com/NVIDIA/aistore/blob/master/docs/downloader.md) extension instead of the multi-object `prefetch` that we have used above:
 
 ```bash
-# Step 2. download files =============================
-  # `hostname` below indicates the hostname or IP address of the machine where
-  # we are running `go run htserver.go` command;
-  # also note that the destination bucket `ais://abc` will be created iff it doesn't exist
+# Step 2. download 10 files named shard-{001..010}.tar
+# ====================================================
+
+# `hostname` below indicates the hostname or IP address of the machine where
+# we are running `go run htserver.go`;
+# also note that the destination bucket `ais://abc` will be created iff it doesn't exist
 $ ais job start download "http://hostname:52062/abc/shard-{001..010}.tar" ais://abc
 GUsQcjEPY
 Run `ais show job download GUsQcjEPY --progress` to monitor the progress.
+
+# list objects in the bucket we have just created:
 $ ais ls ais://abc
 NAME             SIZE
 shard-001.tar    151.13KiB
