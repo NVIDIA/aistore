@@ -47,7 +47,7 @@ func CheckError(tb testing.TB, err error) {
 	}
 }
 
-func CheckResp(tb testing.TB, client *http.Client, req *http.Request, statusCode ...int) {
+func DoAndCheckResp(tb testing.TB, client *http.Client, req *http.Request, statusCode ...int) {
 	resp, err := client.Do(req)
 	CheckFatal(tb, err)
 	resp.Body.Close()

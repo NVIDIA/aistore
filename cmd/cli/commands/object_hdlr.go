@@ -25,7 +25,6 @@ var (
 			archpathFlag,
 			checksumFlag,
 			isCachedFlag,
-			forceFlag,
 		},
 		commandPut: append(
 			checksumFlags,

@@ -173,19 +173,19 @@ func TestRProxyInvalidURL(t *testing.T) {
 	var (
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
+		client     = tutils.NewClientWithProxy(proxyURL)
 	)
-
-	client := tutils.NewClientWithProxy(proxyURL)
-
 	tests := []struct {
 		url        string
 		statusCode int
+		doAndCheck bool
 	}{
-		{url: "http://archive.ics.uci.edu/ml/datasets/Abalone", statusCode: http.StatusBadRequest},
-		{url: "http://storage.googleapis.com/kubernetes-release/release", statusCode: http.StatusNotFound},
-		{url: "http://invalid.invaliddomain.com/test/webpage.txt", statusCode: http.StatusBadRequest}, // Invalid domain
+		// case 1
+		{url: "http://storage.googleapis.com/kubernetes-release/release", statusCode: http.StatusNotFound, doAndCheck: true},
+		{url: "http://invalid.invaliddomain.com/test/webpage.txt", statusCode: http.StatusBadRequest, doAndCheck: true}, // Invalid domain
+		// case 2
+		{url: "http://archive.ics.uci.edu/ml/datasets/Abalone", doAndCheck: false},
 	}
-
 	for _, test := range tests {
 		hbo, err := cmn.NewHTTPObjPath(test.url)
 		tassert.CheckError(t, err)
@@ -193,10 +193,20 @@ func TestRProxyInvalidURL(t *testing.T) {
 
 		req, err := http.NewRequest(http.MethodGet, test.url, http.NoBody)
 		tassert.CheckFatal(t, err)
-		tassert.CheckResp(t, client, req, test.statusCode, http.StatusForbidden)
+		if test.doAndCheck {
+			// case 1: bad response on GET followed by a failure to HEAD
+			tassert.DoAndCheckResp(t, client, req, test.statusCode, http.StatusForbidden)
+			_, err = api.HeadBucket(baseParams, hbo.Bck)
+			tassert.Errorf(t, err != nil, "shouldn't create bucket (%s) for invalid resource URL %q", hbo.Bck, test.url)
+		} else {
+			// case 2: cannot GET but can still do a HEAD (even though ETag is not provided)
+			resp, err := client.Do(req)
+			resp.Body.Close()
+			tassert.Errorf(t, err != nil, "expecting error executing GET %q", test.url)
+			_, err = api.HeadBucket(baseParams, hbo.Bck)
+			tassert.CheckError(t, err)
+		}
 
-		_, err = api.HeadBucket(baseParams, hbo.Bck)
-		tassert.Errorf(t, err != nil, "shouldn't create bucket (%s) for invalid resource URL", hbo.Bck)
 		api.DestroyBucket(baseParams, hbo.Bck)
 	}
 }

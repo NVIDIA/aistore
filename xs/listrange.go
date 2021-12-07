@@ -145,6 +145,9 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 	bremote := bck.IsRemote()
 	if !bremote {
 		smap = nil // not needed
+	} else if bck.IsHTTP() {
+		return fmt.Errorf("cannot list bucket %s for prefix %q (plain HTTP buckets are not list-able) - use alternative templating",
+			bck, prefix)
 	}
 	msg := &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
 	for {

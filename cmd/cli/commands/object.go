@@ -61,7 +61,8 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		return
 	}
 
-	if !bck.IsHTTP() || !flagIsSet(c, forceFlag) {
+	// NOTE: skip HEAD-ing http (ht://) buckets
+	if !bck.IsHTTP() {
 		if _, err = headBucket(bck); err != nil {
 			return
 		}
