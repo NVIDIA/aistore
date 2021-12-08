@@ -13,27 +13,31 @@ AIStore (AIS for short) is a built from scratch, lightweight storage stack tailo
 
 > The picture above *comprises* 120 HDDs.
 
-The ability to scale linearly with each added disk was, and remains, one of the main incentives behind AIStore. Much of the development is also driven by the ideas to offload dataset transformation and other I/O intensive stages of the ETL pipelines.
+The ability to scale linearly with each added disk was, and remains, one of the main incentives behind AIStore. Much of the development is also driven by the ideas to [offload dataset transformations](https://aiatscale.org/blog/2021/10/21/ais-etl-1) to AIS clusters.
 
 ## Features
 
-* scale-out with no downtime and no limitation;
+* scale out with no downtime and no limitation;
 * arbitrary number of extremely lightweight access points;
 * highly-available control and data planes, end-to-end data protection, self-healing, n-way mirroring, k/m erasure coding;
-* comprehensive native HTTP REST to GET and PUT objects, create, destroy, list, transform, copy and configure buckets, and more;
-* [Amazon S3 API](/docs/s3compat.md) to run unmodified S3 clients and apps;
-* easy-to-use [CLI](https://www.youtube.com/watch?v=VPIhQm2sMD8&ab_channel=AIStore) based on [auto-completions](/docs/cli.md);
-* automated cluster rebalancing upon: any changes in cluster membership, drive failures and attachments, bucket renames;
-* [ETL offload](/docs/etl.md) - the capability to run extract-transform-load workloads on (and by) storage cluster (and close to data); offline (dataset to dataset) and inline transformations via both user-defined containers and functions are also supported.
+* comprehensive native HTTP-based (S3-like) API, as well as
+  * compliant [Amazon S3 API](/docs/s3compat.md) to run unmodified S3 clients and apps;
+* automated cluster rebalancing upon any changes in cluster membership, drive failures and attachments, bucket renames;
+* [ETL offload](/docs/etl.md) via offline (dataset to dataset) or inline (on-the-fly) transformations.
 
 Also, AIStore:
 
-* can be deployed on any commodity hardware - effectively, on any Linux with a disk;
-* supports single-command infrastructure and software deployment on Google Cloud Platform via [ais-k8s GitHub repo](https://github.com/NVIDIA/ais-k8s);
-* supports Amazon S3, Google Cloud, and Microsoft Azure backends (and all S3, GCS, and Azure-compliant object storages);
-* can ad-hoc attach and "see" (read, write, list, cache, evict) datasets hosted by other AIS clusters;
-* natively supports reading, writing, and listing [archives](/docs/cli/archive.md) - objects formatted as TAR, TGZ, ZIP;
-* provides unified global namespace across multiple backends:
+* can be deployed on any commodity hardware - effectively, on any Linux machine(s);
+* provides for easy Kubernetes deployment via a separate GitHub repo with
+  * step-by-step [deployment playbooks](https://github.com/NVIDIA/ais-k8s/tree/master/playbooks), and
+  * [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/tree/master/operator);
+* contains integrated [CLI](/docs/cli.md) for easy management and monitoring;
+* can ad-hoc attach remote AIS clusters, thus gaining immediate access to the respective hosted datasets
+  * (referred to as [global namespace](/docs/providers.md#remote-ais-cluster) capability);
+* natively reads, writes, and lists [popular archives](/docs/cli/archive.md) including tar, tar.gz, and zip
+  * [distributed shuffle](/docs/dsort.md) of those archival formats is also supported;
+* fully supports Amazon S3, Google Cloud, and Microsoft Azure backends
+  * providing [unified global namespace](/docs/bucket.md) simultaneously across multiple backends:
 
 ![AIStore](images/backends.png)
 
@@ -50,24 +54,33 @@ Finally, [getting started](/docs/getting_started.md) with AIS takes only a few m
 
 ## Deployment options
 
-There is a vast spectrum of possible deployments - primarily due to the fact that the essential prerequisites boil down to having Linux with a disk.
-This results in a practically unlimited set of options from all-in-one (AIS gateway + AIS target) docker container to a petascale bare-metal cluster of any size, and from a single development VM or workstation to multiple racks of high-end servers.
+The prerequisites boil down to having Linux with a disk. The result is a practically unlimited set of deployment options ranging from [all-in-one container](/docs/videos.md#minimal-all-in-one-standalone-docker) to a petascale bare-metal cluster of any size, from a single VM to multiple racks of high-end servers.
 
-The table below contains a few concrete examples:
+Use cases include:
 
 | Deployment option | Targeted audience and objective |
 | --- | ---|
 | [Local playground](/docs/getting_started.md#local-playground) | AIS developers and development, Linux or Mac OS |
 | Minimal production-ready deployment | This option utilizes preinstalled docker image and is targeting first-time users or researchers (who could immediately start training their models on smaller datasets) |
 | [Easy automated GCP/GKE deployment](/docs/getting_started.md#kubernetes-deployments) | Developers, first-time users, AI researchers |
-| [Large-scale production deployment](https://github.com/NVIDIA/ais-k8s) | Requires Kubernetes and is provided (documented, automated) via a separate repository: [ais-k8s](https://github.com/NVIDIA/ais-k8s) |
+| [Large-scale production deployment](https://github.com/NVIDIA/ais-k8s) | Requires Kubernetes and is provided via a separate repository: [ais-k8s](https://github.com/NVIDIA/ais-k8s) |
 
-Further, there's the capability referred to as [global namespace](/docs/providers.md#remote-ais-cluster). Simply put, as long as there’s HTTP connectivity, AIS clusters can be easily interconnected to “see” - i.e., *list*, *read*, *write*, *cache*, *evict* - each other's datasets. This ad-hoc capability, in turn, makes it possible to start small and gradually/incrementally build high-performance shared storage comprising petabytes.
+Further, there's the capability referred to as [global namespace](/docs/providers.md#remote-ais-cluster): given HTTP(S) connectivity, AIS clusters can be easily interconnected to "see" each other's datasets. Hence, the idea to start "small" to gradually and incrementally build high-performance shared capacity.
 
 > For detailed discussion on supported deployments, please refer to [Getting Started](/docs/getting_started.md).
 
+## Related Software
+
+When it comes to PyTorch, [WebDataset](https://github.com/webdataset/webdataset) is the preferred AIStore client.
+
+> WebDataset is a PyTorch Dataset (IterableDataset) implementation providing efficient access to datasets stored in POSIX tar archives.
+
+Further references include technical blog titled [AIStore & ETL: Using WebDataset to train on a sharded dataset](https://aiatscale.org/blog/2021/10/29/ais-etl-3) where you can also find easy step-by-step instruction.
+
 ## Guides and References
 
+- [Getting Started](/docs/getting_started.md)
+- [Technical Blog](https://aiatscale.org/blog)
 - API
   - [Native RESTful API](/docs/http_api.md)
   - [S3 compatibility](/docs/s3compat.md)
