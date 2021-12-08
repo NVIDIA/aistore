@@ -99,7 +99,7 @@ func newPrimary() *proxyrunner {
 
 	e := newEtlMDOwnerPrx(config)
 	e.put(newEtlMD())
-	p.owner.etlMD = e
+	p.owner.etl = e
 
 	p.gmm = memsys.PageMM()
 	return p

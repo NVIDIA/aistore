@@ -162,10 +162,10 @@ func (p *proxyrunner) Run() error {
 	p.httprunner.init(config)
 	p.httprunner.electable = p
 	p.owner.bmd = newBMDOwnerPrx(config)
-	p.owner.etlMD = newEtlMDOwnerPrx(config)
+	p.owner.etl = newEtlMDOwnerPrx(config)
 
-	p.owner.bmd.init()   // initialize owner and load BMD
-	p.owner.etlMD.init() // initialize owner and load EtlMD
+	p.owner.bmd.init() // initialize owner and load BMD
+	p.owner.etl.init() // initialize owner and load EtlMD
 
 	cluster.Init(nil /*cluster.Target*/)
 
@@ -2628,18 +2628,23 @@ func (p *proxyrunner) _becomeFinal(ctx *smapModifier, clone *smapX) {
 	var (
 		bmd   = p.owner.bmd.get()
 		rmd   = p.owner.rmd.get()
-		etlMD = p.owner.etlMD.get()
 		msg   = p.newAmsgStr(cmn.ActNewPrimary, bmd)
-		pairs = []revsPair{{clone, msg}, {bmd, msg}, {rmd, msg}, {etlMD, msg}}
+		pairs = []revsPair{{clone, msg}, {bmd, msg}, {rmd, msg}}
 	)
+	glog.Infof("%s: distributing (%s, %s, %s) with newly elected primary (self)", p.si, clone, bmd, rmd)
 	config, err := p.ensureConfigPrimaryURL()
 	if err != nil {
 		glog.Error(err)
 	}
 	if config != nil {
 		pairs = append(pairs, revsPair{config, msg})
+		glog.Infof("%s: plus %s", p.si, config)
 	}
-	glog.Infof("%s: distributing (%s, %s, %s, %s) with newly elected primary (self)", p.si, clone, bmd, rmd, etlMD)
+	etl := p.owner.etl.get()
+	if etl != nil && etl.version() > 0 {
+		pairs = append(pairs, revsPair{etl, msg})
+		glog.Infof("%s: plus %s", p.si, etl)
+	}
 	debug.Assert(clone._sgl != nil)
 	_ = p.metasyncer.sync(pairs...)
 	p.syncNewICOwners(ctx.smap, clone)

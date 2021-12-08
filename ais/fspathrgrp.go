@@ -199,7 +199,7 @@ func (g *fsprungroup) redistributeMD() {
 	}
 
 	if !hasEnoughEtlMDCopies() {
-		eo := g.t.owner.etlMD
+		eo := g.t.owner.etl
 		if err := eo.persist(eo.get(), nil); err != nil {
 			debug.AssertNoErr(err)
 			cos.ExitLogf("%v", err)

@@ -149,7 +149,7 @@ func (p *proxyrunner) startETL(w http.ResponseWriter, r *http.Request, msg etl.I
 			msg:   msg,
 		}
 
-		p.owner.etlMD.modify(ctx)
+		p.owner.etl.modify(ctx)
 
 		// All init calls have succeeded, return UUID.
 		w.Write([]byte(msg.ID()))

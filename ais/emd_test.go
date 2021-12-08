@@ -109,7 +109,7 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 
 			It(fmt.Sprintf("should correctly load etlMD for %s", node), func() {
 				eowner.init()
-				Expect(eowner.Get()).To(Equal(&etlMD.EtlMD))
+				Expect(eowner.Get()).To(Equal(&etlMD.MD))
 			})
 
 			It(fmt.Sprintf("should save and load etlMD using jsp methods for %s", node), func() {
@@ -162,7 +162,7 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 				eowner = makeEtlMDOwner()
 				eowner.init()
 
-				Expect(eowner.Get()).NotTo(Equal(&etlMD.EtlMD))
+				Expect(eowner.Get()).NotTo(Equal(&etlMD.MD))
 			})
 		})
 	}

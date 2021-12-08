@@ -127,6 +127,7 @@ type (
 		skipBMD       bool
 		skipRMD       bool
 		skipConfig    bool
+		skipEtlMD     bool
 		fillRebMarker bool
 	}
 
@@ -151,6 +152,9 @@ type (
 		Config struct {
 			Version int64 `json:"version,string"`
 		} `json:"config"`
+		EtlMD struct {
+			Version int64 `json:"version,string"`
+		} `json:"etlmd"`
 		Flags struct {
 			VoteInProgress bool `json:"vote_in_progress"`
 			ClusterStarted bool `json:"cluster_started"`
@@ -194,10 +198,10 @@ type (
 		}
 		owner struct {
 			smap   *smapOwner
-			bmd    bmdOwner
+			bmd    bmdOwner // interface with proxy and target impl-s
 			rmd    *rmdOwner
 			config *configOwner
-			etlMD  etlOwner
+			etl    etlOwner // ditto
 		}
 		startup struct {
 			cluster atomic.Bool // determines if the cluster has started up
@@ -592,6 +596,9 @@ func (h *httprunner) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
 	}
 	if !opts.skipRMD {
 		cm.RMD = h.owner.rmd.get()
+	}
+	if !opts.skipEtlMD {
+		cm.EtlMD = h.owner.etl.get()
 	}
 	if h.si.IsTarget() && opts.fillRebMarker {
 		rebMarked := xreg.GetRebMarked()
@@ -1810,9 +1817,10 @@ func (h *httprunner) extractEtlMD(payload msPayload, caller string) (newMD *etlM
 			return
 		}
 	}
-	etlMD := h.owner.etlMD.get()
+	etlMD := h.owner.etl.get()
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("extract %s%s", newMD, _msdetail(etlMD.Version, msg, caller))
+		glog.Errorf("extract %s%s", newMD, _msdetail(etlMD.Version, msg, caller))
 	}
 	if newMD.version() <= etlMD.version() {
 		if newMD.version() < etlMD.version() {
@@ -1966,17 +1974,20 @@ func (h *httprunner) receiveEtlMD(newEtlMD *etlMD, msg *aisMsg, payload msPayloa
 	if newEtlMD == nil {
 		return
 	}
-	etlMD := h.owner.etlMD.get()
+	etlMD := h.owner.etl.get()
 	glog.Infof("receive %s%s", newEtlMD.StringEx(), _msdetail(etlMD.Version, msg, caller))
 
-	h.owner.etlMD.Lock()
-	etlMD = h.owner.etlMD.get()
+	h.owner.etl.Lock()
+	etlMD = h.owner.etl.get()
 	if newEtlMD.version() <= etlMD.version() {
-		h.owner.etlMD.Unlock()
-		return newErrDowngrade(h.si, etlMD.String(), newEtlMD.String())
+		h.owner.etl.Unlock()
+		if newEtlMD.version() < etlMD.version() {
+			err = newErrDowngrade(h.si, etlMD.String(), newEtlMD.String())
+		}
+		return
 	}
-	err = h.owner.etlMD.putPersist(newEtlMD, payload)
-	h.owner.etlMD.Unlock()
+	err = h.owner.etl.putPersist(newEtlMD, payload)
+	h.owner.etl.Unlock()
 	debug.AssertNoErr(err)
 
 	if cb != nil {
@@ -2140,6 +2151,7 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Dur
 			skipBMD:       skipPrxKalive,
 			skipRMD:       keepalive,
 			skipConfig:    keepalive,
+			skipEtlMD:     keepalive,
 			fillRebMarker: !keepalive,
 		}
 	)
@@ -2466,12 +2478,14 @@ func (cii *clusterInfo) fill(h *httprunner) {
 		smap = h.owner.smap.get()
 		bmd  = h.owner.bmd.get()
 		rmd  = h.owner.rmd.get()
+		etl  = h.owner.etl.get()
 	)
 	cii.fillSmap(smap)
 	cii.BMD.Version = bmd.version()
 	cii.BMD.UUID = bmd.UUID
 	cii.RMD.Version = rmd.Version
 	cii.Config.Version = h.owner.config.version()
+	cii.EtlMD.Version = etl.version()
 	cii.Flags.ClusterStarted = h.ClusterStarted()
 	cii.Flags.NodeStarted = h.NodeStarted()
 }

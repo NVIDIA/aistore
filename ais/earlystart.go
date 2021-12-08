@@ -248,7 +248,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 			}
 		}
 		// NOTE: use regpool to try to upgrade all the four revs: Smap, BMD, RMD, and global Config
-		before.Smap, before.BMD, before.RMD, before.EtlMD = clone, p.owner.bmd.get(), p.owner.rmd.get(), p.owner.etlMD.get()
+		before.Smap, before.BMD, before.RMD, before.EtlMD = clone, p.owner.bmd.get(), p.owner.rmd.get(), p.owner.etl.get()
 		before.Config, _ = p.owner.config.get()
 
 		smap = p.regpoolMaxVer(&before, &after)
@@ -343,19 +343,10 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		cos.ExitLogf("%v", err)
 	}
 
-	// 8. initialize EtlMD
-	etlMD := p.owner.etlMD.get().clone()
-	if etlMD.Version == 0 {
-		etlMD.Version = 1 // init EtlMD
-		if err := p.owner.etlMD.putPersist(etlMD, nil); err != nil {
-			cos.ExitLogf("%v", err)
-		}
-	}
-
-	// 9. metasync (smap, config, etlMD & bmd) and startup as primary
+	// 8. metasync (smap, config, etlMD & bmd) and startup as primary
 	var (
 		aisMsg = p.newAmsgStr(metaction2, bmd)
-		pairs  = []revsPair{{smap, aisMsg}, {bmd, aisMsg}, {cluConfig, aisMsg}, {etlMD, aisMsg}}
+		pairs  = []revsPair{{smap, aisMsg}, {bmd, aisMsg}, {cluConfig, aisMsg}}
 	)
 	wg := p.metasyncer.sync(pairs...)
 	wg.Wait()

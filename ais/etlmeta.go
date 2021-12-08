@@ -29,14 +29,14 @@ var etlMDImmSize int64
 
 type (
 	etlMD struct {
-		etl.EtlMD
+		etl.MD
 		_sgl  *memsys.SGL // jsp-formatted
 		cksum *cos.Cksum  // EtlMD checksum
 	}
 
 	etlOwner interface {
 		sync.Locker
-		Get() *etl.EtlMD
+		Get() *etl.MD
 
 		init()
 		get() (etlMD *etlMD)
@@ -73,14 +73,14 @@ var (
 
 // c-tor
 func newEtlMD() *etlMD {
-	etls := make(etl.ETLs, 16)
-	return &etlMD{EtlMD: etl.EtlMD{ETLs: etls}}
+	etls := make(etl.ETLs, 2)
+	return &etlMD{MD: etl.MD{ETLs: etls}}
 }
 
 // as revs
 func (*etlMD) tag() string             { return revsEtlMDTag }
 func (e *etlMD) version() int64        { return e.Version }
-func (*etlMD) jit(p *proxyrunner) revs { return p.owner.etlMD.get() }
+func (*etlMD) jit(p *proxyrunner) revs { return p.owner.etl.get() }
 func (e *etlMD) sgl() *memsys.SGL      { return e._sgl }
 func (e *etlMD) marshal() []byte {
 	e._sgl = e._encode()
@@ -89,7 +89,6 @@ func (e *etlMD) marshal() []byte {
 
 func (e *etlMD) _encode() (sgl *memsys.SGL) {
 	sgl = memsys.PageMM().NewSGL(etlMDImmSize)
-	// TODO: make similar to other MD
 	err := jsp.Encode(sgl, e, jsp.CCSign(cmn.MetaverEtlMD))
 	debug.AssertNoErr(err)
 	etlMDImmSize = cos.MaxI64(etlMDImmSize, sgl.Len())
@@ -117,11 +116,9 @@ func (e *etlMD) add(spec etl.InitMsg) {
 // etlMDOwnerBase //
 //////////////////
 
-func (eo *etlMDOwnerBase) Get() *etl.EtlMD { return &eo.get().EtlMD }
-func (eo *etlMDOwnerBase) get() *etlMD     { return (*etlMD)(eo.etlMD.Load()) }
-func (eo *etlMDOwnerBase) put(etlMD *etlMD) {
-	eo.etlMD.Store(unsafe.Pointer(etlMD))
-}
+func (eo *etlMDOwnerBase) Get() *etl.MD     { return &eo.get().MD }
+func (eo *etlMDOwnerBase) get() *etlMD      { return (*etlMD)(eo.etlMD.Load()) }
+func (eo *etlMDOwnerBase) put(etlMD *etlMD) { eo.etlMD.Store(unsafe.Pointer(etlMD)) }
 
 // write metasync-sent bytes directly (no json)
 func (*etlMDOwnerBase) persistBytes(payload msPayload, fpath string) (done bool) {
@@ -133,7 +130,7 @@ func (*etlMDOwnerBase) persistBytes(payload msPayload, fpath string) (done bool)
 		return
 	}
 	var (
-		etlMD *etl.EtlMD
+		etlMD *etl.MD
 		wto   = bytes.NewBuffer(etlMDValue)
 		err   = jsp.SaveMeta(fpath, etlMD, wto)
 	)

@@ -30,10 +30,8 @@ type (
 
 	ETLs map[string]InitMsg
 
-	// EtlMD aka "ETL metadata" is used to distribute information
-	// of all ETL
-	//revive:disable-next-line Ignore stutter warning for readability
-	EtlMD struct {
+	// ETL metadata
+	MD struct {
 		Version int64       `json:"version"`
 		ETLs    ETLs        `json:"etls"`
 		Ext     interface{} `json:"ext,omitempty"` // within meta-version extensions
@@ -47,14 +45,14 @@ var (
 	_ json.Marshaler   = (*ETLs)(nil)
 	_ json.Unmarshaler = (*ETLs)(nil)
 
-	_ jsp.Opts = (*EtlMD)(nil)
+	_ jsp.Opts = (*MD)(nil)
 )
 
-func (e *EtlMD) Add(spec InitMsg) {
+func (e *MD) Add(spec InitMsg) {
 	e.ETLs[spec.ID()] = spec
 }
 
-func (e *EtlMD) Get(id string) (msg InitMsg, present bool) {
+func (e *MD) Get(id string) (msg InitMsg, present bool) {
 	if e == nil {
 		return
 	}
@@ -62,7 +60,7 @@ func (e *EtlMD) Get(id string) (msg InitMsg, present bool) {
 	return
 }
 
-func (e *EtlMD) Del(id string) (deleted bool) {
+func (e *MD) Del(id string) (deleted bool) {
 	if _, present := e.ETLs[id]; !present {
 		return
 	}
@@ -70,14 +68,14 @@ func (e *EtlMD) Del(id string) (deleted bool) {
 	return true
 }
 
-func (e *EtlMD) StringEx() string {
+func (e *MD) StringEx() string {
 	if e == nil {
 		return "EtlMD <nil>"
 	}
 	return fmt.Sprintf("EtlMD v%d[%d]", e.Version, len(e.ETLs))
 }
 
-func (e *EtlMD) String() string {
+func (e *MD) String() string {
 	if e == nil {
 		return "EtlMD <nil>"
 	}
@@ -112,4 +110,4 @@ func (e *ETLs) UnmarshalJSON(data []byte) (err error) {
 	return
 }
 
-func (*EtlMD) JspOpts() jsp.Options { return etlMDJspOpts }
+func (*MD) JspOpts() jsp.Options { return etlMDJspOpts }
