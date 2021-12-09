@@ -12,8 +12,8 @@ AIStore supports [numerous ways](https://github.com/NVIDIA/aistore/blob/master/d
 
 Ultimately, the only precondition is that there is a *directory* you can access that contains files to migrate or copy. It turns out that **everything else** can be done in two easy steps:
 
-1. run local http server
-2. [prefetch](https://github.com/NVIDIA/aistore/blob/master/docs/cli/object.md#operations-on-lists-and-ranges) or [download](https://github.com/NVIDIA/aistore/blob/master/docs/downloader.md) the files.
+1. Run local HTTP server.
+2. [Prefetch](https://github.com/NVIDIA/aistore/blob/master/docs/cli/object.md#operations-on-lists-and-ranges) or [download](https://github.com/NVIDIA/aistore/blob/master/docs/downloader.md) the files.
 
 Implementation-wise, both Step 1 and Step 2 have multiple variations and we'll consider at least some of them below. But first, let's take a look at an example:
 
@@ -45,33 +45,29 @@ ht://ZDE1YzE0NzhiNWFkMQ
 $ ais job start prefetch ht://ZDE1YzE0NzhiNWFkMQ --template 'shard-{001..999}.tar'
 ```
 
-Here we run Python's own `http.server` to listen on port `51061` and serve the files from the directory that we have previously `cd-ed` into (`/tmp`, in the example).
+Here we run Python's own `http.server` to listen on port `51061` and serve the files from the directory that we have previously `cd`-ed into (`/tmp`, in the example).
 
 Of course, the port, the directory, and the filenames above are all randomly chosen for purely **illustrative purposes**. The main point the example is trying to make is that HTTP connectivity of any kind immediately opens up a number of easy ways to migrate or replicate any data that exists in files.
 
-As far as aforementioned *implementation variations*, they include running, for instance, Go-based HTTP server instead of the Python's:
+As far as aforementioned *implementation variations*, they include running, for instance, Go-based HTTP server instead of the Python's (`htserver.go`):
 
 ```go
-# cat htserver.go
-1 package main
-2
-3 import (
-4 	"net/http"
-5 )
-6
-7 func main() {
-8 	http.ListenAndServe(":52062", http.FileServer(http.Dir("/tmp")))
-9 }
+package main
 
-# Step 1. run local http server
-# =============================
+import "net/http"
 
-$ go run htserver.go
+func main() {
+	http.ListenAndServe(":52062", http.FileServer(http.Dir("/tmp")))
+}
 ```
 
 and then using AIS [downloader](https://github.com/NVIDIA/aistore/blob/master/docs/downloader.md) extension instead of the multi-object `prefetch` that we have used above:
 
 ```bash
+# Step 1. run local http server
+# =============================
+$ go run htserver.go
+
 # Step 2. download 10 files named shard-{001..010}.tar
 # ====================================================
 
