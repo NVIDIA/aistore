@@ -99,7 +99,6 @@ type (
 	rebJogger struct {
 		joggerBase
 		smap *cluster.Smap
-		sema *cos.DynSemaphore
 		ver  int64
 	}
 	rebArgs struct {
@@ -427,10 +426,7 @@ func (reb *Reb) runEC(rargs *rebArgs) error {
 
 // when no bucket has EC enabled
 func (reb *Reb) runNoEC(rargs *rebArgs) error {
-	var (
-		ver        = rargs.smap.Version
-		multiplier = rargs.config.Rebalance.Multiplier
-	)
+	ver := rargs.smap.Version
 	_ = reb.bcast(rargs, reb.rxReady) // NOTE: ignore timeout
 	if xreb := reb.xact(); xreb.Aborted() {
 		return cmn.NewErrAborted(xreb.Name(), "reb-run", nil)
@@ -438,13 +434,9 @@ func (reb *Reb) runNoEC(rargs *rebArgs) error {
 
 	wg := &sync.WaitGroup{}
 	for _, mpathInfo := range rargs.apaths {
-		var sema *cos.DynSemaphore
-		if multiplier > 1 {
-			sema = cos.NewDynSemaphore(int(multiplier))
-		}
 		rl := &rebJogger{
 			joggerBase: joggerBase{m: reb, xreb: reb.xact(), wg: wg},
-			smap:       rargs.smap, sema: sema, ver: ver,
+			smap:       rargs.smap, ver: ver,
 		}
 		wg.Add(1)
 		go rl.jog(mpathInfo)
@@ -660,12 +652,6 @@ func (rj *rebJogger) jog(mpathInfo *fs.MountpathInfo) {
 		}
 		return rj.m.xact().Aborted()
 	})
-
-	if rj.sema != nil {
-		// Make sure that all sends have finished by acquiring all semaphores.
-		rj.sema.Acquire(rj.sema.Size())
-		rj.sema.Release(rj.sema.Size())
-	}
 }
 
 // send completion
@@ -734,16 +720,9 @@ func (rj *rebJogger) _lwalk(lom *cluster.LOM) (err error) {
 	if roc, err = _prepSend(lom); err != nil {
 		return
 	}
-	// transmit (TODO: add a no-op semaphore)
-	if rj.sema == nil {
-		rj.m.addLomAck(lom)
-		rj.doSend(lom, tsi, roc)
-	} else { // rebalance.multiplier > 1
-		rj.sema.Acquire()
-		rj.m.addLomAck(lom)
-		rj.doSend(lom, tsi, roc)
-		rj.sema.Release()
-	}
+	// transmit
+	rj.m.addLomAck(lom)
+	rj.doSend(lom, tsi, roc)
 	return
 }
 
