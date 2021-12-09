@@ -213,7 +213,13 @@ func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *cluster.Snode, caller s
 func (*bucketMD) tag() string             { return revsBMDTag }
 func (m *bucketMD) version() int64        { return m.Version }
 func (*bucketMD) jit(p *proxyrunner) revs { return p.owner.bmd.get() }
-func (m *bucketMD) sgl() *memsys.SGL      { return m._sgl }
+
+func (m *bucketMD) sgl() *memsys.SGL {
+	if m._sgl.IsNil() {
+		return nil
+	}
+	return m._sgl
+}
 
 func (m *bucketMD) marshal() []byte {
 	m._sgl = m._encode()
@@ -397,13 +403,20 @@ func loadBMD(mpaths fs.MPI, path string) (mainBMD *bucketMD) {
 		if bmd == nil {
 			continue
 		}
-		if mainBMD != nil {
-			if !mainBMD.cksum.Equal(bmd.cksum) {
-				cos.ExitLogf("BMD is different (%q): %v vs %v", mpath, mainBMD, bmd)
-			}
+		if mainBMD == nil {
+			mainBMD = bmd
 			continue
 		}
-		mainBMD = bmd
+		if mainBMD.cksum.Equal(bmd.cksum) {
+			continue
+		}
+		if mainBMD.Version == bmd.Version {
+			cos.ExitLogf("BMD is different (%q): %v vs %v", mpath, mainBMD, bmd)
+		}
+		glog.Errorf("Warning: detected different BMD versions (%q): %v != %v", mpath, mainBMD, bmd)
+		if mainBMD.Version < bmd.Version {
+			mainBMD = bmd
+		}
 	}
 	return
 }

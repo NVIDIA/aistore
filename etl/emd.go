@@ -7,7 +7,6 @@ package etl
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -68,18 +67,11 @@ func (e *MD) Del(id string) (deleted bool) {
 	return true
 }
 
-func (e *MD) StringEx() string {
-	if e == nil {
-		return "EtlMD <nil>"
-	}
-	return fmt.Sprintf("EtlMD v%d[%d]", e.Version, len(e.ETLs))
-}
-
 func (e *MD) String() string {
 	if e == nil {
 		return "EtlMD <nil>"
 	}
-	return "EtlMD v" + strconv.FormatInt(e.Version, 10)
+	return fmt.Sprintf("EtlMD v%d(%d)", e.Version, len(e.ETLs))
 }
 
 func (e ETLs) MarshalJSON() ([]byte, error) {

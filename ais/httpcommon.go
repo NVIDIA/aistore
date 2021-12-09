@@ -1975,7 +1975,7 @@ func (h *httprunner) receiveEtlMD(newEtlMD *etlMD, msg *aisMsg, payload msPayloa
 		return
 	}
 	etlMD := h.owner.etl.get()
-	glog.Infof("receive %s%s", newEtlMD.StringEx(), _msdetail(etlMD.Version, msg, caller))
+	glog.Infof("receive %s%s", newEtlMD, _msdetail(etlMD.Version, msg, caller))
 
 	h.owner.etl.Lock()
 	etlMD = h.owner.etl.get()

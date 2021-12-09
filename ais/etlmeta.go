@@ -30,8 +30,8 @@ var etlMDImmSize int64
 type (
 	etlMD struct {
 		etl.MD
-		_sgl  *memsys.SGL // jsp-formatted
-		cksum *cos.Cksum  // EtlMD checksum
+		cksum *cos.Cksum
+		_sgl  *memsys.SGL
 	}
 
 	etlOwner interface {
@@ -81,18 +81,18 @@ func newEtlMD() *etlMD {
 func (*etlMD) tag() string             { return revsEtlMDTag }
 func (e *etlMD) version() int64        { return e.Version }
 func (*etlMD) jit(p *proxyrunner) revs { return p.owner.etl.get() }
-func (e *etlMD) sgl() *memsys.SGL      { return e._sgl }
-func (e *etlMD) marshal() []byte {
-	e._sgl = e._encode()
-	return e._sgl.Bytes()
-}
+func (*etlMD) sgl() *memsys.SGL        { return nil }
 
-func (e *etlMD) _encode() (sgl *memsys.SGL) {
-	sgl = memsys.PageMM().NewSGL(etlMDImmSize)
-	err := jsp.Encode(sgl, e, jsp.CCSign(cmn.MetaverEtlMD))
+// always remarshal (TODO: unify and optimize across all cluster-level metadata types)
+func (e *etlMD) marshal() []byte {
+	if e._sgl != nil {
+		e._sgl.Free()
+	}
+	e._sgl = memsys.PageMM().NewSGL(etlMDImmSize)
+	err := jsp.Encode(e._sgl, e, jsp.CCSign(cmn.MetaverEtlMD))
 	debug.AssertNoErr(err)
-	etlMDImmSize = cos.MaxI64(etlMDImmSize, sgl.Len())
-	return
+	etlMDImmSize = cos.MaxI64(etlMDImmSize, e._sgl.Len())
+	return e._sgl.Bytes()
 }
 
 func (e *etlMD) clone() *etlMD {
@@ -103,7 +103,6 @@ func (e *etlMD) clone() *etlMD {
 	for id, etl := range e.ETLs {
 		dst.ETLs[id] = etl
 	}
-	dst._sgl = nil
 	return dst
 }
 
@@ -161,13 +160,7 @@ func (eo *etlMDOwnerPrx) init() {
 
 func (eo *etlMDOwnerPrx) putPersist(etlMD *etlMD, payload msPayload) (err error) {
 	if !eo.persistBytes(payload, eo.fpath) {
-		debug.Assert(etlMD._sgl == nil)
-		etlMD._sgl = etlMD._encode()
-		err = jsp.SaveMeta(eo.fpath, etlMD, etlMD._sgl)
-		if err != nil {
-			etlMD._sgl.Free()
-			etlMD._sgl = nil
-		}
+		err = jsp.SaveMeta(eo.fpath, etlMD, nil)
 	}
 	if err == nil {
 		eo.put(etlMD)
@@ -180,7 +173,12 @@ func (*etlMDOwnerPrx) persist(_ *etlMD, _ msPayload) (err error) { debug.Assert(
 func (eo *etlMDOwnerPrx) _pre(ctx *etlMDModifier) (clone *etlMD, err error) {
 	eo.Lock()
 	defer eo.Unlock()
-	clone = eo.get().clone()
+	etlMD := eo.get()
+	if etlMD._sgl != nil {
+		etlMD._sgl.Free()
+		etlMD._sgl = nil
+	}
+	clone = etlMD.clone()
 	if err = ctx.pre(ctx, clone); err != nil {
 		return
 	}
@@ -190,17 +188,10 @@ func (eo *etlMDOwnerPrx) _pre(ctx *etlMDModifier) (clone *etlMD, err error) {
 
 func (eo *etlMDOwnerPrx) modify(ctx *etlMDModifier) (clone *etlMD, err error) {
 	if clone, err = eo._pre(ctx); err != nil {
-		if clone._sgl != nil {
-			clone._sgl.Free()
-			clone._sgl = nil
-		}
 		return
 	}
 	if ctx.final != nil {
 		ctx.final(ctx, clone)
-	} else if clone._sgl != nil {
-		clone._sgl.Free()
-		clone._sgl = nil
 	}
 	return
 }
@@ -237,20 +228,16 @@ func (eo *etlMDOwnerTgt) putPersist(etlMD *etlMD, payload msPayload) (err error)
 }
 
 func (*etlMDOwnerTgt) persist(clone *etlMD, payload msPayload) (err error) {
-	var (
-		b   []byte
-		sgl *memsys.SGL
-	)
+	var b []byte
 	if payload != nil {
 		if etlMDValue := payload[revsEtlMDTag]; etlMDValue != nil {
 			b = etlMDValue
 		}
 	}
 	if b == nil {
-		sgl = clone._encode()
-		defer sgl.Free()
+		b = clone.marshal()
 	}
-	cnt, availCnt := fs.PersistOnMpaths(cmn.EmdFname, "" /*backup*/, clone, etlMDCopies, b, sgl)
+	cnt, availCnt := fs.PersistOnMpaths(cmn.EmdFname, "" /*backup*/, clone, etlMDCopies, b, nil /*sgl*/)
 	if cnt > 0 {
 		return
 	}
@@ -274,13 +261,23 @@ func loadEtlMD(mpaths fs.MPI, path string) (mainEtlMD *etlMD) {
 		if etlMD == nil {
 			continue
 		}
-		if mainEtlMD != nil {
-			if !mainEtlMD.cksum.Equal(etlMD.cksum) {
-				cos.ExitLogf("EtlMD is different (%q): %v vs %v", mpath, mainEtlMD, etlMD)
-			}
+		if mainEtlMD == nil {
+			mainEtlMD = etlMD
 			continue
 		}
-		mainEtlMD = etlMD
+		if !mainEtlMD.cksum.Equal(etlMD.cksum) {
+			cos.ExitLogf("EtlMD is different (%q): %v vs %v", mpath, mainEtlMD, etlMD)
+		}
+		if mainEtlMD.cksum.Equal(etlMD.cksum) {
+			continue
+		}
+		if mainEtlMD.Version == etlMD.Version {
+			cos.ExitLogf("EtlMD is different (%q): %v vs %v", mpath, mainEtlMD, etlMD)
+		}
+		glog.Errorf("Warning: detected different EtlMD versions (%q): %v != %v", mpath, mainEtlMD, etlMD)
+		if mainEtlMD.Version < etlMD.Version {
+			mainEtlMD = etlMD
+		}
 	}
 	return
 }

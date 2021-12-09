@@ -262,9 +262,9 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 
 		glog.Infof("%s: loaded %s (merged %s, added %d), loaded %s, %s, %s, %s", p.si.StringEx(),
 			loadedSmap, before.Smap.StringEx(),
-			added, before.BMD.StringEx(), before.RMD, before.Config, before.EtlMD.StringEx())
+			added, before.BMD.StringEx(), before.RMD, before.Config, before.EtlMD)
 		glog.Infof("%s: regpool %s, %s, %s, %s, %s", p.si.StringEx(), smap.StringEx(),
-			after.BMD.StringEx(), after.RMD, after.Config, after.EtlMD.StringEx())
+			after.BMD.StringEx(), after.RMD, after.Config, after.EtlMD)
 
 		wg.Wait()
 	} else {

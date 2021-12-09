@@ -52,7 +52,13 @@ var _ revs = (*globalConfig)(nil)
 func (*globalConfig) tag() string             { return revsConfTag }
 func (config *globalConfig) version() int64   { return config.Version }
 func (*globalConfig) jit(p *proxyrunner) revs { g, _ := p.owner.config.get(); return g }
-func (config *globalConfig) sgl() *memsys.SGL { return config._sgl }
+
+func (config *globalConfig) sgl() *memsys.SGL {
+	if config._sgl.IsNil() {
+		return nil
+	}
+	return config._sgl
+}
 
 func (config *globalConfig) marshal() []byte {
 	config._sgl = config._encode(0)
