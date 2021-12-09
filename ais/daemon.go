@@ -52,7 +52,10 @@ type (
 		transient        bool // false: make cmn.ConfigCLI settings permanent, true: leave them transient
 		overrideBackends bool // if true primary will metasync backends from deployment-time plain-text config
 		target           struct {
-			standby bool // do not try to join cluster automatically upon startup - standby and wait for request (target-only)
+			// do not try to auto-join cluster upon startup - stand by and wait for admin request
+			standby bool
+			// allow: disk sharing by multiple mountpaths and mountpaths with no disks whatsoever
+			allowSharedDisksAndNoDisks bool
 		}
 		usage bool // show usage and exit
 	}
@@ -86,7 +89,8 @@ func init() {
 	flag.BoolVar(&daemon.cli.overrideBackends, "override_backends", false, "configure remote backends at deployment time (potentially, override previously stored configuration)")
 
 	// target-only
-	flag.BoolVar(&daemon.cli.target.standby, "standby", false, "when starting up, do not try to join cluster - standby and wait for admin request (target-only)")
+	flag.BoolVar(&daemon.cli.target.standby, "standby", false, "when starting up, do not try to auto-join cluster - stand by and wait for admin request (target-only)")
+	flag.BoolVar(&daemon.cli.target.allowSharedDisksAndNoDisks, "allow_shared_no_disks", false, "disk sharing by multiple mountpaths and mountpaths with no disks whatsoever (target-only)")
 
 	// primary-only:
 	flag.IntVar(&daemon.cli.primary.ntargets, "ntargets", 0, "number of storage targets expected to be joining at startup (optional, primary-only)")

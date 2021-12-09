@@ -18,17 +18,13 @@ import (
 )
 
 // initializes mountpaths and volume; on SIE (storage integrity error) terminates and exits
-func Init(t cluster.Target, config *cmn.Config) {
+func Init(t cluster.Target, config *cmn.Config, allowSharedDisksAndNoDisks bool) {
 	var (
 		vmd *VMD
 		tid = t.Snode().ID()
 	)
-	fs.New() // new and empty
+	fs.New(allowSharedDisksAndNoDisks || config.TestingEnv()) // new and empty
 
-	if config.TestingEnv() {
-		glog.Warningf("Using %d mountpaths for testing with disabled filesystem ID check", config.TestFSP.Count)
-		fs.DisableFsIDCheck()
-	}
 	// bootstrap from a local-config referenced location; two points:
 	// a) local-config is kept in-sync with mountpath changes (see ais/fspathgrp)
 	// b) disk label for absolute referencing - can wait (TODO)
@@ -126,8 +122,7 @@ func configInitMPI(tid string, config *cmn.Config) (err error) {
 		if err = mi.AddEnabled(tid, availablePaths, config); err != nil {
 			goto rerr
 		}
-		if len(mi.Disks) == 0 && !config.TestingEnv() {
-			err = &fs.ErrMountpathNoDisks{Mi: mi}
+		if err = mi.CheckDisks(); err != nil {
 			return
 		}
 	}
@@ -181,8 +176,7 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int) (maxVerVMD *
 				if err = mi.AddEnabled(tid, availablePaths, config); err != nil {
 					return
 				}
-				if len(mi.Disks) == 0 && !config.TestingEnv() {
-					err = &fs.ErrMountpathNoDisks{Mi: mi}
+				if err = mi.CheckDisks(); err != nil {
 					glog.Errorf("Warning: %v", err)
 				}
 			}

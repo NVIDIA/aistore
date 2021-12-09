@@ -80,9 +80,6 @@ type (
 		// determining if there are any duplications of file system - we allow
 		// only one mountpath per file system.
 		fsIDs map[cos.FsID]string
-		// checkFsID determines if we should actually check FSID when adding new
-		// mountpath. By default it is set to true.
-		checkFsID bool
 		// Available mountpaths - mountpaths which are used to store the data.
 		available atomic.Pointer
 		// Disabled mountpaths - mountpaths which for some reason did not pass
@@ -97,6 +94,10 @@ type (
 			curr, next int64
 		}
 		capStatus CapStatus
+
+		// allow disk sharing by multiple mountpaths and mountpaths with no disks whatsoever
+		// (default = false)
+		allowSharedDisksAndNoDisks bool
 	}
 	CapStatus struct {
 		TotalUsed  uint64 // bytes
@@ -455,7 +456,7 @@ func (mi *MountpathInfo) AddDisabled(disabledPaths MPI) {
 func (mi *MountpathInfo) _checkExists(availablePaths MPI) (err error) {
 	if existingMi, exists := availablePaths[mi.Path]; exists {
 		err = fmt.Errorf("failed adding %s: %s already exists", mi, existingMi)
-	} else if existingPath, exists := mfs.fsIDs[mi.FsID]; exists && mfs.checkFsID {
+	} else if existingPath, exists := mfs.fsIDs[mi.FsID]; exists && !mfs.allowSharedDisksAndNoDisks {
 		err = fmt.Errorf("FSID %v: filesystem sharing is not allowed: %s vs %q", mi.FsID, mi, existingPath)
 	} else {
 		l := len(mi.Path)
@@ -512,19 +513,29 @@ func (mi *MountpathInfo) _cloneAddEnabled(tid string, config *cmn.Config) (err e
 	return
 }
 
+func (mi *MountpathInfo) CheckDisks() (err error) {
+	if !mfs.allowSharedDisksAndNoDisks && len(mi.Disks) == 0 {
+		err = &ErrMountpathNoDisks{Mi: mi}
+	}
+	return
+}
+
 /////////////////////
 // MountedFS & MPI //
 /////////////////////
 
 // create a new singleton
-func New() {
-	mfs = &MountedFS{fsIDs: make(map[cos.FsID]string, 10), checkFsID: true}
+func New(allowSharedDisksAndNoDisks bool) {
+	if allowSharedDisksAndNoDisks {
+		glog.Warningln("allowed disk sharing by multiple mountpaths and mountpaths with no disks")
+	}
+	mfs = &MountedFS{fsIDs: make(map[cos.FsID]string, 10), allowSharedDisksAndNoDisks: allowSharedDisksAndNoDisks}
 	mfs.ios = ios.NewIostatContext()
 }
 
 // used only in tests
 func TestNew(iostater ios.IOStater) {
-	mfs = &MountedFS{fsIDs: make(map[cos.FsID]string, 10), checkFsID: true}
+	mfs = &MountedFS{fsIDs: make(map[cos.FsID]string, 10), allowSharedDisksAndNoDisks: false}
 	if iostater == nil {
 		mfs.ios = ios.NewIostatContext()
 	} else {
@@ -561,8 +572,8 @@ func GetAllMpathUtils() (utils *ios.MpathsUtils) { return mfs.ios.GetAllMpathUti
 func GetMpathUtil(mpath string) int64            { return mfs.ios.GetMpathUtil(mpath) }
 func FillDiskStats(m ios.AllDiskStats)           { mfs.ios.FillDiskStats(m) }
 
-// DisableFsIDCheck disables fsid checking when adding new mountpath (testing-only)
-func DisableFsIDCheck() { mfs.checkFsID = false }
+// TestDisableValidation disables fsid checking and allows mountpaths without disks (testing-only)
+func TestDisableValidation() { mfs.allowSharedDisksAndNoDisks = true }
 
 // Returns number of available mountpaths
 func NumAvail() int {
@@ -651,10 +662,8 @@ func AddMpath(mpath, tid string, cb func(), force bool) (mi *MountpathInfo, err 
 	}
 	mfs.mu.Lock()
 	err = mi._cloneAddEnabled(tid, config)
-	if err == nil && len(mi.Disks) == 0 {
-		if !config.TestingEnv() {
-			err = &ErrMountpathNoDisks{mi}
-		}
+	if err == nil {
+		err = mi.CheckDisks()
 	}
 	if err == nil {
 		cb()

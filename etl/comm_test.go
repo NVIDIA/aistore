@@ -57,7 +57,7 @@ var _ = Describe("CommunicatorTest", func() {
 		err = cos.CreateDir(mpath)
 		Expect(err).NotTo(HaveOccurred())
 		fs.TestNew(nil)
-		fs.DisableFsIDCheck()
+		fs.TestDisableValidation()
 		_, err = fs.Add(mpath, "daeID")
 		Expect(err).NotTo(HaveOccurred())
 

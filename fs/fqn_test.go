@@ -254,7 +254,7 @@ func TestParseFQN(t *testing.T) {
 		t.Run(tt.testName, func(t *testing.T) {
 			mios := mock.NewIOStater()
 			fs.TestNew(mios)
-			fs.DisableFsIDCheck()
+			fs.TestDisableValidation()
 
 			for _, mpath := range tt.mpaths {
 				if _, err := os.Stat(mpath); os.IsNotExist(err) {
@@ -348,7 +348,7 @@ func TestMakeAndParseFQN(t *testing.T) {
 		t.Run(strings.Join([]string{tt.mpath, tt.bck.String(), tt.contentType, tt.objName}, "|"), func(t *testing.T) {
 			mios := mock.NewIOStater()
 			fs.TestNew(mios)
-			fs.DisableFsIDCheck()
+			fs.TestDisableValidation()
 
 			if _, err := os.Stat(tt.mpath); os.IsNotExist(err) {
 				cos.CreateDir(tt.mpath)
@@ -395,7 +395,7 @@ func BenchmarkParseFQN(b *testing.B) {
 	)
 
 	fs.TestNew(mios)
-	fs.DisableFsIDCheck()
+	fs.TestDisableValidation()
 	cos.CreateDir(mpath)
 	defer os.RemoveAll(mpath)
 	fs.Add(mpath, "daeID")

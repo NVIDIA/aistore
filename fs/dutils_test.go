@@ -107,7 +107,7 @@ func TestSimilarCasesWithRoot(t *testing.T) {
 }
 
 func setAvailableMountPaths(t *testing.T, paths ...string) []string {
-	DisableFsIDCheck()
+	TestDisableValidation()
 
 	availablePaths := GetAvail()
 	oldPaths := make([]string, 0, len(availablePaths))

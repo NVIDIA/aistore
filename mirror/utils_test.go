@@ -37,7 +37,7 @@ var _ = Describe("Mirror", func() {
 	cmn.GCO.CommitUpdate(config)
 
 	fs.TestNew(nil)
-	fs.DisableFsIDCheck()
+	fs.TestDisableValidation()
 	_, _ = fs.Add(mpath, "daeID")
 	_, _ = fs.Add(mpath2, "daeID")
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})

@@ -51,7 +51,7 @@ var _ = Describe("LOM Xattributes", func() {
 		_ = cos.CreateDir(xattrMpath)
 		_ = cos.CreateDir(copyMpath)
 
-		fs.DisableFsIDCheck()
+		fs.TestDisableValidation()
 		_, _ = fs.Add(xattrMpath, "daeID")
 		_, _ = fs.Add(copyMpath, "daeID")
 

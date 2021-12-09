@@ -304,7 +304,7 @@ func TestMoveMarkers(t *testing.T) {
 
 func initFS() {
 	fs.TestNew(mock.NewIOStater())
-	fs.DisableFsIDCheck()
+	fs.TestDisableValidation()
 }
 
 func createMountpath(t *testing.T) *fs.MountpathInfo {

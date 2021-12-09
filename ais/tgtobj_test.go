@@ -56,7 +56,7 @@ func TestMain(m *testing.M) {
 	cos.CreateDir(testMountpath)
 	defer os.RemoveAll(testMountpath)
 	fs.TestNew(nil)
-	fs.DisableFsIDCheck()
+	fs.TestDisableValidation()
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 

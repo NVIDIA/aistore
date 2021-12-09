@@ -140,7 +140,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 
 	mios := mock.NewIOStater()
 	fs.TestNew(mios)
-	fs.DisableFsIDCheck()
+	fs.TestDisableValidation()
 
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
