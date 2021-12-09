@@ -734,17 +734,15 @@ func (rj *rebJogger) _lwalk(lom *cluster.LOM) (err error) {
 	if roc, err = _prepSend(lom); err != nil {
 		return
 	}
-	// transmit
+	// transmit (TODO: add a no-op semaphore)
 	if rj.sema == nil {
 		rj.m.addLomAck(lom)
 		rj.doSend(lom, tsi, roc)
 	} else { // rebalance.multiplier > 1
 		rj.sema.Acquire()
 		rj.m.addLomAck(lom)
-		go func() {
-			rj.doSend(lom, tsi, roc)
-			rj.sema.Release()
-		}()
+		rj.doSend(lom, tsi, roc)
+		rj.sema.Release()
 	}
 	return
 }
