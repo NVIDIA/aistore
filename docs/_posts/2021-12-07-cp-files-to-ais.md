@@ -93,7 +93,7 @@ shard-009.tar    161.32KiB
 shard-010.tar    124.11KiB
 ```
 
-Other than a different, albeit still arbitrary, listening port and a user-selected destination bucket, other minor differences include explicitly naming the directory from which we want to serve files. And also an attempt to indicate that if *it* works for `localhost` it'll work for any valid `hostname` or IP address. For as long as the latter is visible over HTTP.
+Other than a different, albeit still arbitrary, listening port and a user-selected destination bucket, minor differences include explicitly naming the directory from which we want to serve files. And also an attempt to indicate that if *it* works for `localhost` it'll work for any valid `hostname` or IP address. For as long as the latter is visible over HTTP.
 
 ## References
 
