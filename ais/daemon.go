@@ -55,7 +55,10 @@ type (
 			// do not try to auto-join cluster upon startup - stand by and wait for admin request
 			standby bool
 			// allow: disk sharing by multiple mountpaths and mountpaths with no disks whatsoever
+			// (usage: testing, minikube env, etc.)
 			allowSharedDisksAndNoDisks bool
+			// force starting up with a lost or missing mountpath
+			startWithLostMountpath bool
 		}
 		usage bool // show usage and exit
 	}
@@ -91,6 +94,7 @@ func init() {
 	// target-only
 	flag.BoolVar(&daemon.cli.target.standby, "standby", false, "when starting up, do not try to auto-join cluster - stand by and wait for admin request (target-only)")
 	flag.BoolVar(&daemon.cli.target.allowSharedDisksAndNoDisks, "allow_shared_no_disks", false, "disk sharing by multiple mountpaths and mountpaths with no disks whatsoever (target-only)")
+	flag.BoolVar(&daemon.cli.target.startWithLostMountpath, "start_with_lost_mountpath", false, "force starting up with a lost or missing mountpath (target-only)")
 
 	// primary-only:
 	flag.IntVar(&daemon.cli.primary.ntargets, "ntargets", 0, "number of storage targets expected to be joining at startup (optional, primary-only)")

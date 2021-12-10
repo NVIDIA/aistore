@@ -179,7 +179,8 @@ func (t *targetrunner) init(config *cmn.Config) {
 
 	memsys.Init(t.si.ID(), t.si.ID())
 
-	newVol := volume.Init(t, config, daemon.cli.target.allowSharedDisksAndNoDisks)
+	newVol := volume.Init(t, config,
+		daemon.cli.target.allowSharedDisksAndNoDisks, daemon.cli.target.startWithLostMountpath)
 
 	t.initHostIP()
 	daemon.rg.add(t)

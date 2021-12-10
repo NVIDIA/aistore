@@ -84,11 +84,11 @@ $ make kill deploy <<< $'7\n4\n4\ny\ny\nn\nn\n'
 # Restart a cluster of 7 targets (4 mountpaths each) and 2 proxies; utilize previously generated (pre-shutdown) local configurations
 $ make restart <<< $'7\n4\n4\ny\ny\nn\nn\n'
 
-# Redeploy (4 targets, 1 proxy) cluster; build executable for debug without any backend-supporting libs; use RUN_ARGS to pass an additional command-line option '-override_backends=true' to each running node
-$ MODE=debug RUN_ARGS=-override_backends=true make kill deploy <<< $'4\n1\n4\nn\nn\nn\nn\n'
+# Redeploy (4 targets, 1 proxy) cluster; build executable for debug without any backend-supporting libraries; use RUN_ARGS to pass an additional command-line option ('-override_backends=true') to each running node
+$ RUN_ARGS=-override_backends MODE=debug make kill deploy <<< $'4\n1\n4\nn\nn\nn\nn\n'
 
-# Same as above, but additionally run all the 4 targets in a standby mode
-$ MODE=debug RUN_ARGS='-override_backends=true -standby' make kill deploy <<< $'4\n1\n4\nn\nn\nn\nn\n'
+# Same as above, but additionally run all 4 targets in a standby mode
+$ RUN_ARGS='-override_backends -standby' MODE=debug make kill deploy <<< $'4\n1\n4\nn\nn\nn\nn\n'
 ...
 ...
 ```

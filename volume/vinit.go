@@ -18,7 +18,7 @@ import (
 )
 
 // initializes mountpaths and volume; on SIE (storage integrity error) terminates and exits
-func Init(t cluster.Target, config *cmn.Config, allowSharedDisksAndNoDisks bool) (created bool) {
+func Init(t cluster.Target, config *cmn.Config, allowSharedDisksAndNoDisks, ignoreMissingMountpath bool) (created bool) {
 	var (
 		vmd *VMD
 		tid = t.Snode().ID()
@@ -55,7 +55,7 @@ func Init(t cluster.Target, config *cmn.Config, allowSharedDisksAndNoDisks bool)
 	// use loaded VMD to find the most recently updated (the current) one and, simultaneously,
 	// initialize MPI
 	var persist bool
-	if v, haveOld, err := vmdInitMPI(tid, config, vmd, 1 /*pass #1*/); err != nil {
+	if v, haveOld, err := vmdInitMPI(tid, config, vmd, 1 /*pass #1*/, ignoreMissingMountpath); err != nil {
 		cos.ExitLogf("%s: %v", t.Snode(), err)
 	} else {
 		if v != nil && v.Version > vmd.Version {
@@ -65,7 +65,7 @@ func Init(t cluster.Target, config *cmn.Config, allowSharedDisksAndNoDisks bool)
 		if haveOld {
 			persist = true
 		}
-		if v, _, err := vmdInitMPI(tid, config, vmd, 2 /*pass #2*/); err != nil {
+		if v, _, err := vmdInitMPI(tid, config, vmd, 2 /*pass #2*/, ignoreMissingMountpath); err != nil {
 			cos.ExitLogf("%s: %v", t.Snode(), err)
 		} else {
 			debug.Assert(v == nil || v.Version == vmd.Version)
@@ -128,6 +128,10 @@ func configInitMPI(tid string, config *cmn.Config) (err error) {
 			return
 		}
 	}
+	if len(availablePaths) == 0 {
+		err = cmn.ErrNoMountpaths
+		goto rerr
+	}
 	fs.PutMPI(availablePaths, disabledPaths)
 	return
 
@@ -137,7 +141,8 @@ rerr:
 }
 
 // VMD => MPI in two passes
-func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int) (maxVerVMD *VMD, haveOld bool, err error) {
+func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissingMountpath bool) (maxVerVMD *VMD,
+	haveOld bool, err error) {
 	var (
 		availablePaths = make(fs.MPI, len(vmd.Mountpaths))
 		disabledPaths  = make(fs.MPI)
@@ -150,18 +155,42 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int) (maxVerVMD *
 		if fsMpathMD.Enabled {
 			if err != nil {
 				err = &fs.ErrStorageIntegrity{Code: fs.SieMpathNotFound, Msg: err.Error()}
+				if pass == 1 || ignoreMissingMountpath {
+					glog.Errorf("%v (pass=%d, ignore-missing=%t)", err, pass, ignoreMissingMountpath)
+					err = nil
+					continue
+				}
 				return
 			}
 			if mi.Path != mpath {
 				glog.Warningf("%s: cleanpath(%q) => %q", mi, mpath, mi.Path)
 			}
-			if mi.Fs != fsMpathMD.Fs || mi.FsType != fsMpathMD.FsType || mi.FsID != fsMpathMD.FsID {
+			if mi.Fs != fsMpathMD.Fs || mi.FsType != fsMpathMD.FsType {
 				err = &fs.ErrStorageIntegrity{
 					Code: fs.SieFsDiffers,
-					Msg: fmt.Sprintf("Warning: filesystem change detected: %+v vs %+v (is it benign?)",
-						mi.FilesystemInfo, fsMpathMD),
+					Msg:  fmt.Sprintf("lost or missing mountpath %q (%+v vs %+v)", mpath, mi.FilesystemInfo, *fsMpathMD),
 				}
-				glog.Error(err)
+				if pass == 1 || ignoreMissingMountpath {
+					glog.Errorf("%v (pass=%d, ignore-missing=%t)", err, pass, ignoreMissingMountpath)
+					err = nil
+					continue
+				}
+				return
+			}
+			if mi.FsID != fsMpathMD.FsID {
+				err = &fs.ErrStorageIntegrity{
+					Code: fs.SieFsDiffers,
+					Msg: fmt.Sprintf("Warning: filesystem under mountpath %q has changed its ID: %+v vs %+v (benign?)",
+						mpath, mi.FilesystemInfo, *fsMpathMD),
+				}
+				// NOTE: there's the potential to conflate:
+				// a) filesystem ID change upon reboot vs. b) missing filesystem (and mountpath).
+				// In the latter case, we may end up trying to use a different filesystem
+				// (with a different ID, of course) and then still failing with
+				// "filesystem sharing is not allowed" error.
+				// See also: `allowSharedDisksAndNoDisks` and `startWithLostMountpath`
+				glog.Errorf("%v (pass=%d, ignore-missing=%t)", err, pass, ignoreMissingMountpath)
+				err = nil
 			}
 			if pass == 1 {
 				if v, old, errLoad := loadOneVMD(tid, vmd, mi.Path, len(vmd.Mountpaths)); v != nil {
@@ -192,6 +221,13 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int) (maxVerVMD *
 
 	if pass == 1 {
 		return
+	}
+	if len(availablePaths) == 0 {
+		if len(disabledPaths) == 0 {
+			err = cmn.ErrNoMountpaths
+			return
+		}
+		glog.Errorf("Warning: %v (avail=%d, disabled=%d)", err, len(availablePaths), len(disabledPaths))
 	}
 	fs.PutMPI(availablePaths, disabledPaths)
 	// TODO: insufficient
