@@ -92,10 +92,13 @@ If `DAEMON_ID` is not set, it will show the smap of the daemon that the `AIS_END
 
 #### Show smap from a given node
 
-Show smap copy of daemon with ID `ETURp8083`.
+Ask a specific node for its cluster map (Smap) replica:
 
 ```console
-$ ais show cluster smap ETURp8083
+$ ais show cluster smap <TAB-TAB>
+... p[ETURp8083] ...
+
+$ ais show cluster smap p[ETURp8083]
 NODE             TYPE    PUBLIC URL
 ETURp8083        proxy   http://127.0.0.1:8083
 WEQRp8084        proxy   http://127.0.0.1:8084
@@ -115,6 +118,7 @@ Non-Electable:
 Primary Proxy: pufGp8080
 Proxies: 5       Targets: 5      Smap Version: 14
 ```
+
 ## Show cluster stats
 
 `ais show cluster stats [DAEMON_ID] [STATS_FILTER]`
@@ -140,10 +144,44 @@ In the latter case, the command displays aggregated counters and cluster-wide av
 
 ### Examples
 
-Use `--raw` option
+Monitor cluster performance with a 10 seconds refresh interval:
+
+```console
+$ ais show cluster stats --refresh 10s
+PROPERTY                         VALUE
+proxy.get.n                      60000
+proxy.kalive.ns                  72.651942ms
+proxy.lst.n                      1
+proxy.lst.ns                     10.17283ms
+proxy.put.n                      86531
+proxy.up.ns.time                 5m30s
+target.append.ns                 0
+target.disk.sda.avg.rsize        298636
+target.disk.sda.avg.wsize        1077943
+target.disk.sda.util             33
+...
+target.streams.in.obj.n          24168
+target.streams.in.obj.size       149.39MiB
+target.streams.out.obj.n         24168
+target.streams.out.obj.size      110.23MiB
+```
+
+Monitor intra-cluster networking at a 3s seconds interval:
+
+```console
+$ ais show cluster stats streams --refresh 3s
+
+target.streams.in.obj.n          41288
+target.streams.in.obj.size       4.01GiB
+target.streams.out.obj.n         41288
+target.streams.out.obj.size      194.98MiB
+```
+
+Use `--raw` option:
 
 ```console
 $ ais cluster show stats target.dl --raw
+
 PROPERTY         VALUE
 target.dl.ns     228747302
 target.dl.size   848700
@@ -154,10 +192,11 @@ target.dl.ns     228.747302ms
 target.dl.size   828.81KiB
 ```
 
-Excerpt from global stats to show both proxy and target grouping
+Excerpt from global stats to show both proxy and target grouping:
 
 ```console
 $ ais cluster show stats --raw
+
 PROPERTY                         VALUE
 proxy.get.n                      90
 proxy.get.ns                     0
@@ -171,10 +210,11 @@ target.get.n                     90
 target.get.ns                    33319026
 ```
 
-Detailed node statistics
+Detailed node statistics:
 
 ```console
-$ ais cluster show stats sCFgt15AB
+$ ais cluster show stats t[sCFgt15AB]
+
 PROPERTY                 VALUE
 append.ns                0
 dl.ns                    229.142325ms
@@ -209,24 +249,26 @@ mountpath.0.%used        43
 Filtering to show only those metrics that contain specific substring
 
 ```console
-$ ais show cluster stats sCFgt15AB put --raw
+$ ais show cluster stats t[sCFgt15AB] put --raw
+
 PROPERTY         VALUE
 put.n            183864
 put.ns           42711506911
-put.redir.ns     105969922088
+put.redir.ns     105969
 
 # And the same in human-readable format
-$ ais show cluster stats sCFgt15AB put
+$ ais show cluster stats t[sCFgt15AB] put
 PROPERTY         VALUE
 put.n            183864
 put.ns           42.711506911s
-put.redir.ns     1m45.969922088s
+put.redir.ns     0.106ms
 ```
 
-Monitor the statistics every 2 seconds
+Monitor node's statistics with a 2 seconds refresh interval
 
 ```console
-$ ais cluster show stats sCFgt8088 put --refresh 2s
+$ ais cluster show stats t[sCFgt15AB] put --refresh 2s
+
 PROPERTY         VALUE
 put.n            24
 put.ns           306.935732ms
@@ -343,21 +385,29 @@ rebalance first. This can be avoided by specifying `--no-rebalance`.
 
 ### Examples
 
-#### Remove/Unregister node
+#### Decommission node
 
-Remove a proxy node with ID `23kfa10f` from the cluster.
+Permananently remove proxy p[omWp8083] from the cluster:
 
 ```console
-$ ais cluster add-remove-nodes decommission 23kfa10f
-Node with ID "23kfa10f" has been successfully removed from the cluster.
+$ ais cluster add-remove-nodes decommission <TAB-TAB>
+p[cFOp8082]   p[Hqhp8085]   p[omWp8083]   t[bFat8087]   t[Icjt8089]   t[ofPt8091]
+p[dpKp8084]   p[NGVp8081]   p[Uerp8080]   t[erbt8086]   t[IDDt8090]   t[TKSt8088]
+
+$ ais cluster add-remove-nodes decommission p[omWp8083]
+
+Node "omWp8083" has been successfully removed from the cluster.
 ```
 
-To also end the `aisnode` process on a given node, use the `shutdown` command:
+To terminate `aisnode` on a given machine, use the `shutdown` command, e.g.:
+
 ```console
-$ ais cluster add-remove-nodes shutdown 23kfa10f
+$ ais cluster add-remove-nodes shutdown t[23kfa10f]
 ```
 
-#### Temporarily put a node in maintenance
+Similar to the `maintenance` option, `shutdown` triggers global rebalancing followed by shutting down the correspondoing `aisnode` process (target `t[23kfa10f]` in the example above).
+
+#### Temporarily put node in maintenance
 
 ```console
 $ ais show cluster
@@ -383,7 +433,7 @@ TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL      
 #### Take a node out of maintenance
 
 ```console
-$ ais cluster add-remove-nodes stop-maintenance 147665t8084
+$ ais cluster add-remove-nodes stop-maintenance t[147665t8084]
 $ ais show cluster
 PROXY            MEM USED %      MEM AVAIL       UPTIME
 202446p8082      0.09%           31.28GiB        80s

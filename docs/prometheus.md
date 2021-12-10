@@ -14,7 +14,7 @@ AIStore tracks a growing list of performance counters, utilization percentages, 
 Viewership is equally supported via:
 * AIS node logs
 * [CLI](/docs/cli.md), and specifically
-* [`ais show cluster stats` command](/docs/cli/cluster.md)
+* [`ais show cluster stats`](/docs/cli/cluster.md) command
 
 On the monitoring backend side, AIS equally supports:
 * [StatsD](https://github.com/etsy/statsd) with any compliant backend (e.g., Graphite/Grafana), and
