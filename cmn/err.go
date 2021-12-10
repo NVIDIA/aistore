@@ -413,6 +413,13 @@ func NewErrNotFound(format string, a ...interface{}) *ErrNotFound {
 
 func (e *ErrNotFound) Error() string { return e.what + " does not exist" }
 
+func IsErrNotFound(err error) bool {
+	if _, ok := err.(*ErrNotFound); ok {
+		return true
+	}
+	return errors.Is(err, &ErrNotFound{})
+}
+
 // ErrInitBackend & ErrMissingBackend
 
 func (e *ErrInitBackend) Error() string {
@@ -539,8 +546,7 @@ func IsObjNotExist(err error) bool {
 	if os.IsNotExist(err) {
 		return true
 	}
-	_, ok := err.(*ErrNotFound)
-	return ok
+	return IsErrNotFound(err)
 }
 
 func IsErrBucketLevel(err error) bool { return IsErrBucketNought(err) }
@@ -732,7 +738,7 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int) {
 		}
 		httpErr.Status = status
 		httpErr.write(w, r, len(opts) > 1 /*silent*/)
-	} else if errors.Is(err, &ErrNotFound{}) {
+	} else if IsErrNotFound(err) {
 		if len(opts) > 0 {
 			// Override the status code.
 			opts[0] = http.StatusNotFound

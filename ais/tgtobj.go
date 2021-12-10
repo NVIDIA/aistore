@@ -740,7 +740,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 		if goi.archive.filename != "" {
 			csl, err = goi.freadArch(lmfh)
 			if err != nil {
-				if _, ok := err.(*cmn.ErrNotFound); ok {
+				if cmn.IsErrNotFound(err) {
 					errCode = http.StatusNotFound
 				} else {
 					err = fmt.Errorf(cmn.FmtErrFailed, goi.t.si,

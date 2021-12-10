@@ -394,7 +394,7 @@ func (a *Server) httpSrvDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.users.delCluster(apiItems[0]); err != nil {
-		if errors.Is(err, &cmn.ErrNotFound{}) {
+		if cmn.IsErrNotFound(err) {
 			cmn.WriteErr(w, r, err, http.StatusNotFound)
 		} else {
 			cmn.WriteErr(w, r, err, http.StatusInternalServerError)
@@ -412,7 +412,7 @@ func (a *Server) httpSrvGet(w http.ResponseWriter, r *http.Request) {
 		cid := apiItems[0]
 		clu, err := a.users.getCluster(cid)
 		if err != nil {
-			if errors.Is(err, &cmn.ErrNotFound{}) {
+			if cmn.IsErrNotFound(err) {
 				cmn.WriteErr(w, r, err, http.StatusNotFound)
 			} else {
 				cmn.WriteErr(w, r, err, http.StatusInternalServerError)
@@ -539,7 +539,7 @@ func (a *Server) httpRolePut(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("Update role %s\n", role)
 	}
 	if err := a.users.updateRole(role, updateReq); err != nil {
-		if errors.Is(err, &cmn.ErrNotFound{}) {
+		if cmn.IsErrNotFound(err) {
 			cmn.WriteErr(w, r, err, http.StatusNotFound)
 		} else {
 			cmn.WriteErr(w, r, err)
