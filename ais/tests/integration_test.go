@@ -1019,6 +1019,13 @@ func TestMountpathDisableAndEnable(t *testing.T) {
 	if len(origMountpaths.WaitingDD) != 0 || len(origMountpaths.Disabled) != 0 {
 		tlog.Logf("Warning %s: orig mountpaths (avail=%d, dd=%d, disabled=%d)\n", tname,
 			len(origMountpaths.Available), len(origMountpaths.WaitingDD), len(origMountpaths.Disabled))
+		for _, mpath := range origMountpaths.Disabled {
+			err = api.EnableMountpath(baseParams, target, mpath)
+			tlog.Logf("Warning %s: late enable %q, err=%v\n", tname, mpath, err)
+			time.Sleep(2 * time.Second)
+		}
+		origMountpaths, err = api.GetMountpaths(baseParams, target)
+		tassert.CheckFatal(t, err)
 	} else {
 		tlog.Logf("%s: orig avail mountpaths=%d\n", tname, len(origMountpaths.Available))
 	}
@@ -1043,10 +1050,10 @@ func TestMountpathDisableAndEnable(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	if len(mountpaths.Available) != 0 {
-		t.Fatalf("%s should not have any mountpaths available (%d)", tname, len(mountpaths.Available))
+		t.Fatalf("%s should not have any mountpaths left (%d)", tname, len(mountpaths.Available))
 	}
 	if len(mountpaths.Disabled)+len(mountpaths.WaitingDD) != len(origMountpaths.Available) {
-		t.Fatalf("%s: not all mountpaths were added to disabled (%d, %d, %d)", tname,
+		t.Fatalf("%s: not all mountpaths were disabled (%d, %d, %d)", tname,
 			len(mountpaths.Disabled), len(mountpaths.WaitingDD), len(origMountpaths.Available))
 	}
 
@@ -1635,6 +1642,11 @@ func TestGetFromMirroredBucketWithLostAllMpathsExceptOne(t *testing.T) {
 	args := api.XactReqArgs{Node: target.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
+
+	// Wait for mirroring to finish
+	flt := api.XactReqArgs{Kind: cmn.ActPutCopies, Bck: m.bck}
+	api.WaitForXactionIdle(baseParams, flt)
+	time.Sleep(3 * time.Second) // pending writes
 
 	// GET
 	m.gets()
