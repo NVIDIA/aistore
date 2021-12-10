@@ -30,7 +30,7 @@ func (t *targetrunner) SID() string                 { return t.si.ID() }
 func (t *targetrunner) FSHC(err error, path string) { t.fsErr(err, path) }
 func (t *targetrunner) PageMM() *memsys.MMSA        { return t.gmm }
 func (t *targetrunner) ByteMM() *memsys.MMSA        { return t.smm }
-func (t *targetrunner) DB() dbdriver.Driver         { return t.dbDriver }
+func (t *targetrunner) DB() dbdriver.Driver         { return t.db }
 
 func (t *targetrunner) Backend(bck *cluster.Bck) cluster.BackendProvider {
 	if bck.Bck.IsRemoteAIS() {

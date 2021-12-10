@@ -20,11 +20,13 @@ import (
 )
 
 type fsprungroup struct {
-	t *targetrunner
+	t      *targetrunner
+	newVol bool
 }
 
-func (g *fsprungroup) init(t *targetrunner) {
+func (g *fsprungroup) init(t *targetrunner, newVol bool) {
 	g.t = t
+	g.newVol = newVol
 }
 
 //
@@ -55,10 +57,7 @@ func (g *fsprungroup) attachMpath(mpath string, force bool) (addedMi *fs.Mountpa
 }
 
 func (g *fsprungroup) _postAdd(action string, mi *fs.MountpathInfo) {
-	config := cmn.GCO.Get()
-	if !config.TestingEnv() { // as testing fspaths are counted, not enumerated
-		fspathsSaveCommit(mi.Path, true /*add*/)
-	}
+	fspathsConfigAddDel(mi.Path, true /*add*/)
 	go func() {
 		if cmn.GCO.Get().Resilver.Enabled {
 			g.t.runResilver(res.Args{}, nil /*wg*/)
@@ -154,17 +153,18 @@ func (g *fsprungroup) _preDD(action string, flags uint64, mpath string, dontResi
 }
 
 func (g *fsprungroup) _postDD(action string, mi *fs.MountpathInfo) {
-	config := cmn.GCO.Get()
-	if !config.TestingEnv() { // testing fspaths are counted, not enumerated
-		fspathsSaveCommit(mi.Path, false /*add*/)
-	}
+	fspathsConfigAddDel(mi.Path, false /*add*/)
 	glog.Infof("%s: %s %q done (resilver-is-running=%t)", g.t.si, mi, action, g.t.res.IsActive())
 }
 
 // store updated fspaths locally as part of the 'OverrideConfigFname'
 // and commit new version of the config
-func fspathsSaveCommit(mpath string, add bool) {
-	config := cmn.GCO.BeginUpdate()
+func fspathsConfigAddDel(mpath string, add bool) {
+	config := cmn.GCO.Get()
+	if config.TestingEnv() { // since testing fspaths are counted, not enumerated
+		return
+	}
+	config = cmn.GCO.BeginUpdate()
 	localConfig := &config.LocalConfig
 	if add {
 		localConfig.AddPath(mpath)
@@ -177,6 +177,11 @@ func fspathsSaveCommit(mpath string, add bool) {
 		glog.Error(err)
 		return
 	}
+	// do
+	fspathsSave(config)
+}
+
+func fspathsSave(config *cmn.Config) {
 	toUpdate := &cmn.ConfigToUpdate{FSP: &config.LocalConfig.FSP}
 	overrideConfig := cmn.GCO.SetLocalFSPaths(toUpdate)
 	if err := cmn.SaveOverrideConfig(config.ConfigDir, overrideConfig); err != nil {

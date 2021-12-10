@@ -18,7 +18,7 @@ import (
 )
 
 // initializes mountpaths and volume; on SIE (storage integrity error) terminates and exits
-func Init(t cluster.Target, config *cmn.Config, allowSharedDisksAndNoDisks bool) {
+func Init(t cluster.Target, config *cmn.Config, allowSharedDisksAndNoDisks bool) (created bool) {
 	var (
 		vmd *VMD
 		tid = t.Snode().ID()
@@ -48,6 +48,7 @@ func Init(t cluster.Target, config *cmn.Config, allowSharedDisksAndNoDisks bool)
 			vmd = v
 		}
 		glog.Warningf("%s: %s created", t.Snode(), vmd)
+		created = true
 		return
 	}
 
@@ -74,6 +75,7 @@ func Init(t cluster.Target, config *cmn.Config, allowSharedDisksAndNoDisks bool)
 		}
 	}
 	glog.Infoln(vmd.String())
+	return
 }
 
 // MPI => VMD

@@ -64,7 +64,7 @@ type (
 		fsprg        fsprungroup
 		reb          *reb.Reb
 		res          *res.Res
-		dbDriver     dbdriver.Driver
+		db           dbdriver.Driver
 		transactions transactions
 		regstate     regstate // the state of being registered with the primary, can be (en/dis)abled via API
 	}
@@ -179,7 +179,7 @@ func (t *targetrunner) init(config *cmn.Config) {
 
 	memsys.Init(t.si.ID(), t.si.ID())
 
-	volume.Init(t, config, daemon.cli.target.allowSharedDisksAndNoDisks)
+	newVol := volume.Init(t, config, daemon.cli.target.allowSharedDisksAndNoDisks)
 
 	t.initHostIP()
 	daemon.rg.add(t)
@@ -193,7 +193,7 @@ func (t *targetrunner) init(config *cmn.Config) {
 	daemon.rg.add(k)
 	t.keepalive = k
 
-	t.fsprg.init(t) // subgroup of the daemon.rg rungroup
+	t.fsprg.init(t, newVol) // subgroup of the daemon.rg rungroup
 
 	// Stream Collector - a singleton object with responsibilities that include:
 	sc := transport.Init(ts)
@@ -353,18 +353,23 @@ func (t *targetrunner) Run() error {
 				}
 			}
 			t.markClusterStarted()
+
+			if t.fsprg.newVol && !config.TestingEnv() {
+				config := cmn.GCO.BeginUpdate()
+				fspathsSave(config)
+			}
 		}()
 	}
 
 	t.backend.init(t, true /*starting*/)
 
-	driver, err := dbdriver.NewBuntDB(filepath.Join(config.ConfigDir, dbName))
+	db, err := dbdriver.NewBuntDB(filepath.Join(config.ConfigDir, dbName))
 	if err != nil {
 		glog.Errorf("Failed to initialize DB: %v", err)
 		return err
 	}
-	t.dbDriver = driver
-	defer cos.Close(driver)
+	t.db = db
+	defer cos.Close(db)
 
 	// transactions
 	t.transactions.init(t)
@@ -392,7 +397,7 @@ func (t *targetrunner) Run() error {
 		}()
 	}
 
-	dsort.InitManagers(driver)
+	dsort.InitManagers(db)
 	dsort.RegisterNode(t.owner.smap, t.owner.bmd, t.si, t, t.statsT)
 
 	defer etl.StopAll(t) // Always try to stop running ETLs.
@@ -416,6 +421,12 @@ func (t *targetrunner) endStartupStandby() (err error) {
 	tstats := t.statsT.(*stats.Trunner)
 	tstats.Standby(false)
 	glog.Infof("%s enabled and joined (%s)", t.si, smap.StringEx())
+
+	config := cmn.GCO.Get()
+	if t.fsprg.newVol && !config.TestingEnv() {
+		config = cmn.GCO.BeginUpdate()
+		fspathsSave(config)
+	}
 	return
 }
 
