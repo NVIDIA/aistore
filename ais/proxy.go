@@ -2422,7 +2422,7 @@ func (p *proxyrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxyrunner) unreg(action string) {
 	// Stop keepaliving
-	p.keepalive.send(kaUnregisterMsg)
+	p.keepalive.send(kaSuspendMsg)
 
 	// In case of maintenance, we only stop the keepalive daemon,
 	// the HTTPServer is still active and accepts requests.
@@ -2450,7 +2450,10 @@ func (p *proxyrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		p.writeErrURL(w, r)
 		return
 	}
-	p.keepalive.send(kaRegisterMsg)
+	if !p.keepalive.paused() {
+		glog.Warningf("%s: keepalive is already active - proceeding to resume (and reset) anyway", p.si)
+	}
+	p.keepalive.send(kaResumeMsg)
 	body, err := cmn.ReadBytes(r)
 	if err != nil {
 		p.writeErr(w, r, err)

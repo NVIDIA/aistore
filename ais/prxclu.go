@@ -1432,7 +1432,7 @@ func (p *proxyrunner) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb 
 		debug.AssertNoErr(err)
 		return
 	}
-	glog.Infof("%s: removing node %s via %q", p.si, node, msg.Action)
+	glog.Infof("%s: removing node %s via %q (skip-reb=%t)", p.si, node, msg.Action, skipReb)
 	res := p.call(args)
 	er, d := res.err, res.details
 	_freeCallRes(res)

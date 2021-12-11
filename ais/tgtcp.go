@@ -308,13 +308,17 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 
 	// user request to join cluster (compare with `cmn.SelfJoin`)
 	if !t.regstate.disabled.Load() {
-		glog.Warningf("%s already joined (\"enabled\")- nothing to do", t.si)
+		if t.keepalive.paused() {
+			t.keepalive.send(kaResumeMsg)
+		} else {
+			glog.Warningf("%s already joined (\"enabled\")- nothing to do", t.si)
+		}
 		return
 	}
 	if daemon.cli.target.standby {
 		glog.Infof("%s: transitioning standby => join", t.si)
 	}
-	t.keepalive.send(kaRegisterMsg)
+	t.keepalive.send(kaResumeMsg)
 	body, err := cmn.ReadBytes(r)
 	if err != nil {
 		t.writeErr(w, r, err)
@@ -343,15 +347,20 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 		t.handleMountpathReq(w, r)
 		return
 	case cmn.CallbackRmFromSmap:
-		opts, action, err := t.parseUnregMsg(w, r)
+		var (
+			noShutdown, rmUserData bool
+			opts, action, err      = t.parseUnregMsg(w, r)
+		)
 		if err != nil {
 			return
 		}
 		if opts == nil {
-			glog.Warningf("%s: remove from Smap via (%q, action=%s) - nothing to do", t.si, apiItems[0], action)
-			return
+			glog.Warningf("%s: remove from Smap via (%q, action=%s)", t.si, apiItems[0], action)
+			noShutdown = true
+		} else {
+			noShutdown, rmUserData = opts.NoShutdown, opts.RmUserData
 		}
-		t.unreg(action, opts.RmUserData, opts.NoShutdown)
+		t.unreg(action, rmUserData, noShutdown)
 		return
 	default:
 		t.writeErrURL(w, r)
@@ -361,7 +370,7 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 
 func (t *targetrunner) unreg(action string, rmUserData, noShutdown bool) {
 	// Stop keepalive-ing
-	t.keepalive.send(kaUnregisterMsg)
+	t.keepalive.send(kaSuspendMsg)
 
 	// Abort all dSort jobs
 	dsort.Managers.AbortAll(errors.New("target is being removed from the cluster via '" + action + "'"))

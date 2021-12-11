@@ -20,10 +20,10 @@ import (
 )
 
 const (
-	kaErrorMsg      = "error"
-	kaStopMsg       = "stop"
-	kaRegisterMsg   = "register"
-	kaUnregisterMsg = "unregister"
+	kaErrorMsg   = "error"
+	kaStopMsg    = "stop"
+	kaResumeMsg  = "resume"
+	kaSuspendMsg = "suspend"
 
 	kaNumRetries = 3
 )
@@ -40,6 +40,7 @@ type keepaliver interface {
 	doKeepalive() (stopped bool)
 	isTimeToPing(sid string) bool
 	send(msg string)
+	paused() bool
 	cfg(config *cmn.Config) *cmn.KeepaliveTrackerConf
 }
 
@@ -56,14 +57,15 @@ type proxyKeepalive struct {
 }
 
 type keepalive struct {
-	name       string
-	k          keepaliver
-	kt         KeepaliveTracker
-	tt         *timeoutTracker
-	statsT     stats.Tracker
-	controlCh  chan controlSignal
-	inProgress atomic.Int64 // A toggle used only by the primary proxy.
-	startedUp  *atomic.Bool
+	name         string
+	k            keepaliver
+	kt           KeepaliveTracker
+	tt           *timeoutTracker
+	statsT       stats.Tracker
+	controlCh    chan controlSignal
+	inProgress   atomic.Int64 // A toggle used only by the primary proxy.
+	startedUp    *atomic.Bool
+	tickerPaused atomic.Bool
 
 	// cached config
 	maxKeepalive int64
@@ -421,6 +423,7 @@ func (k *keepalive) Run() error {
 		ticker    = time.NewTicker(k.interval)
 		lastCheck int64
 	)
+	k.tickerPaused.Store(false)
 	for {
 		select {
 		case <-ticker.C:
@@ -430,11 +433,12 @@ func (k *keepalive) Run() error {
 			k.configUpdate(config.Timeout.MaxKeepalive.D(), k.k.cfg(config))
 		case sig := <-k.controlCh:
 			switch sig.msg {
-			case kaRegisterMsg:
+			case kaResumeMsg:
+				ticker.Reset(k.interval)
+				k.tickerPaused.Store(false)
+			case kaSuspendMsg:
 				ticker.Stop()
-				ticker = time.NewTicker(k.interval)
-			case kaUnregisterMsg:
-				ticker.Stop()
+				k.tickerPaused.Store(true)
 			case kaStopMsg:
 				ticker.Stop()
 				return nil
@@ -576,9 +580,11 @@ func (k *keepalive) Stop(err error) {
 }
 
 func (k *keepalive) send(msg string) {
-	glog.Infof("Sending message %q on the control channel", msg)
+	glog.Infof("Sending %q on the control channel", msg)
 	k.controlCh <- controlSignal{msg: msg}
 }
+
+func (k *keepalive) paused() bool { return k.tickerPaused.Load() }
 
 ///////////////
 // HBTracker //
