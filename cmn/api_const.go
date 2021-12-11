@@ -364,8 +364,8 @@ const (
 
 	// (see the corresponding action messages above)
 	Keepalive          = "keepalive"
-	AdminJoin          = "join-by-admin"   // when node is getting joined by admin ("manual join")
-	SelfJoin           = "self-join"       // default: node to join itself via primary that it discovers at startup ("automatic join")
+	AdminJoin          = "join-by-admin"   // when node is joined by admin ("manual join")
+	SelfJoin           = "autoreg"         // auto-join cluster at startup
 	CallbackRmFromSmap = "cb-rm-from-smap" // set by primary to request that node calls back to request removal (internal use only!)
 
 	// common
