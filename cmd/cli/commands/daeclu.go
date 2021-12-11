@@ -273,7 +273,7 @@ func getDaemonConfig(c *cli.Context) error {
 	}
 
 	err = templates.DisplayOutput(data, c.App.Writer, templates.DaemonConfigTmpl, useJSON)
-	if err == nil && hint {
+	if err == nil && hint && !useJSON {
 		fmt.Fprintf(c.App.Writer,
 			"(Hint: use `--type` to select the node config's type to show: 'cluster', 'local', 'all'.)\n")
 	}
