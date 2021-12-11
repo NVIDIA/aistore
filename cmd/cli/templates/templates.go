@@ -25,6 +25,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/duration"
 )
 
+const (
+	UnknownVal = "-"
+	NotSetVal  = "-"
+)
+
 // Templates for output
 // ** Changing the structure of the objects server side needs to make sure that this will still work **
 const (
@@ -406,7 +411,7 @@ func calcCap(daemon *stats.DaemonStatus) (total uint64) {
 
 func fmtXactStatus(rebSnap *stats.RebalanceSnap) string {
 	if rebSnap == nil {
-		return "-"
+		return UnknownVal
 	}
 	if rebSnap.Aborted() {
 		return "aborted"
@@ -456,13 +461,13 @@ func FmtChecksum(checksum string) string {
 	if checksum != "" {
 		return checksum
 	}
-	return "-"
+	return UnknownVal
 }
 
 // FmtCopies formats an int to a string, where 0 becomes "-"
 func FmtCopies(copies int) string {
 	if copies == 0 {
-		return "-"
+		return UnknownVal
 	}
 	return fmt.Sprint(copies)
 }
@@ -471,7 +476,7 @@ func FmtCopies(copies int) string {
 // readable string for CLI, e.g. "1:2[encoded]"
 func FmtEC(gen int64, data, parity int, isCopy bool) string {
 	if data == 0 {
-		return "-"
+		return UnknownVal
 	}
 	info := fmt.Sprintf("%d:%d (gen %d)", data, parity, gen)
 	if isCopy {
@@ -498,11 +503,10 @@ func fmtDaemonID(id string, smap cluster.Smap) string {
 // Displays the output in either JSON or tabular form
 // if formatJSON == true, outputTemplate is omitted
 func DisplayOutput(object interface{}, writer io.Writer, outputTemplate string, formatJSON ...bool) error {
-	useJSON := false
+	var useJSON bool
 	if len(formatJSON) > 0 {
 		useJSON = formatJSON[0]
 	}
-
 	if useJSON {
 		if o, ok := object.(forMarshaler); ok {
 			object = o.forMarshal()
@@ -530,7 +534,7 @@ func DisplayOutput(object interface{}, writer io.Writer, outputTemplate string, 
 
 func fmtStringList(lst []string) string {
 	if len(lst) == 0 {
-		return "-"
+		return UnknownVal
 	}
 	return fmtStringListGeneric(lst, ",")
 }
@@ -548,7 +552,7 @@ func fmtStringListGeneric(lst []string, sep string) string {
 
 func fmtFeatureFlags(flags cmn.FeatureFlags) string {
 	if flags == 0 {
-		return "-"
+		return NotSetVal
 	}
 	return fmt.Sprintf("%s(%s)", flags, flags.Describe())
 }
@@ -569,7 +573,7 @@ func (h *DaemonStatusTemplateHelper) Deployments() cos.StringSet {
 
 func fmtACL(acl cmn.AccessAttrs) string {
 	if acl == 0 {
-		return "-"
+		return UnknownVal
 	}
 	return acl.Describe()
 }

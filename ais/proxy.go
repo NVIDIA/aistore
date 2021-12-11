@@ -839,14 +839,15 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	prr := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamPrimaryReadyReb))
+	query := r.URL.Query()
+	prr := cos.IsParseBool(query.Get(cmn.URLParamPrimaryReadyReb))
 	if !prr {
 		if responded := p.healthByExternalWD(w, r); responded {
 			return
 		}
 	}
 	// piggy-backing cluster info on health
-	getCii := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamClusterInfo))
+	getCii := cos.IsParseBool(query.Get(cmn.URLParamClusterInfo))
 	if getCii {
 		debug.Assert(!prr)
 		cii := &clusterInfo{}
@@ -881,7 +882,7 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	if prr || cos.IsParseBool(r.URL.Query().Get(cmn.URLParamAskPrimary)) {
+	if prr || cos.IsParseBool(query.Get(cmn.URLParamAskPrimary)) {
 		caller := r.Header.Get(cmn.HdrCallerName)
 		p.writeErrf(w, r, "%s (non-primary): misdirected health-of-primary request from %s, %s",
 			p.si, caller, smap.StringEx())

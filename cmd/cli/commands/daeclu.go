@@ -467,7 +467,7 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 }
 
 func displayRebStats(tw *tabwriter.Writer, st *targetRebSnap) {
-	endTime := "-"
+	endTime := templates.NotSetVal
 	if !st.snap.EndTime.IsZero() {
 		endTime = st.snap.EndTime.Format("01-02 15:04:05")
 	}

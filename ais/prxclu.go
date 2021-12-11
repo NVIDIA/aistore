@@ -1038,9 +1038,19 @@ func (p *proxyrunner) stopMaintenance(w http.ResponseWriter, r *http.Request, ms
 		return
 	}
 	if !smap.PresentInMaint(si) {
-		p.writeErrf(w, r, "node %q is not under maintenance", opts.DaemonID)
+		p.writeErrf(w, r, "node %q is not under maintenance", si.StringEx())
 		return
 	}
+	timeout := cmn.GCO.Get().Timeout.CplaneOperation.D()
+	if _, _, err := p.Health(si, timeout, nil); err != nil {
+		time.Sleep(timeout * 2)
+		if _, status, err := p.Health(si, timeout, nil); err != nil && status != http.StatusServiceUnavailable {
+			// (note that health() returns 503 when starting up)
+			p.writeErrf(w, r, "node %q is unreachable, err: %v(%d)", si.StringEx(), err, status)
+			return
+		}
+	}
+
 	rebID, err := p.cancelMaintenance(msg, &opts)
 	if err != nil {
 		p.writeErr(w, r, err)

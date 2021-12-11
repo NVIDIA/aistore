@@ -124,12 +124,29 @@ func newTableProxies(ps map[string]*stats.DaemonStatus, smap *cluster.Smap, hide
 
 	table := newTemplateTable(headers...)
 	for _, status := range ps {
+		memUsed := fmt.Sprintf("%.2f%%", status.SysInfo.PctMemUsed)
+		if status.SysInfo.PctMemUsed == 0 {
+			memUsed = "-"
+		}
+		memAvail := cos.UnsignedB2S(status.SysInfo.MemAvail, 2)
+		if status.SysInfo.MemAvail == 0 {
+			memAvail = "-"
+		}
+		upns := extractStat(status.Stats, "up.ns.time")
+		uptime := fmtDuration(upns)
+		if upns == 0 {
+			uptime = "-"
+		}
+		deployedOn := status.DeployedOn
+		if deployedOn == "" {
+			deployedOn = "-"
+		}
 		row := []string{
 			fmtDaemonID(status.Snode.ID(), *smap),
-			fmt.Sprintf("%.2f%%", status.SysInfo.PctMemUsed),
-			cos.UnsignedB2S(status.SysInfo.MemAvail, 2),
-			fmtDuration(extractStat(status.Stats, "up.ns.time")),
-			status.DeployedOn,
+			memUsed,
+			memAvail,
+			uptime,
+			deployedOn,
 			status.Status,
 			status.Version,
 			status.BuildTime,

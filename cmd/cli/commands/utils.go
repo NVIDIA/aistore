@@ -133,7 +133,7 @@ func objectPropList(bck cmn.Bck, props *cmn.ObjectProps, selection []string) (pr
 			)
 		case cmn.GetPropsCustom:
 			if custom := props.GetCustomMD(); len(custom) == 0 {
-				propValue = "-"
+				propValue = templates.NotSetVal
 			} else {
 				propValue = fmt.Sprintf("%+v", custom)
 			}
@@ -916,7 +916,7 @@ func diffConfigs(actual, original []prop) []propDiff {
 				continue
 			}
 			if o.Value == a.Value {
-				item.Old = "-"
+				item.Old = templates.NotSetVal
 			} else {
 				item.Old = o.Value
 			}
@@ -1226,7 +1226,7 @@ func flattenXactStats(snap *xaction.SnapExt) []*prop {
 	}
 	fmtTime := func(t time.Time) string {
 		if t.IsZero() {
-			return "-"
+			return templates.NotSetVal
 		}
 		return t.Format("01-02 15:04:05")
 	}
