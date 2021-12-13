@@ -12,8 +12,10 @@ redirect_from:
 This text is intended to help troubleshooting AIStore operation. Easy-to-use TAB-completion based [CLI](/docs/cli.md) is one of the first tools to consider, and of the first commands would be the one that shows the state of the cluster:
 
 ```console
-$ ais show cluster <TAB>-<TAB>
+$ ais show cluster <TAB-TAB>
 ...  proxy         smap          target
+p[202446p8082] ...
+t[147665t8084] ...
 ```
 
 Meaning, you can run `ais show cluster` (the short version), and you can also run it with any of the additional completions listed above.
@@ -39,10 +41,11 @@ TARGET           MEM USED %    MEM AVAIL       CAP USED %      CAP AVAIL       C
 Since at any given time there's only one primary gateway, you may also find it useful to be able to designate a different one administratively. This is easy - example:
 
 ```console
-$ ais cluster set-primary <TAB>-<TAB>
-202446p8082  279128p8080  928059p8081
-$ ais cluster set-primary 279128p8080
+$ ais cluster set-primary <TAB-TAB>
+p[202446p8082]  p[279128p8080]  p[928059p8081]
+$ ais cluster set-primary p[279128p8080]
 279128p8080 has been set as a new primary proxy
+
 $ ais show cluster
 PROXY            MEM USED %    MEM AVAIL       UPTIME
 202446p8082      0.08%         31.28GiB        46m

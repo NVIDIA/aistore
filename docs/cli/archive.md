@@ -11,7 +11,7 @@ redirect_from:
 
 In this document: commands to read, write, and list *archives* - objects formatted as TAR, TGZ, ZIP, etc. For the most recently updated archival types that AIS supports, please refer to [this source](/cmn/cos/archive.go).
 
-The corresponding subset of CLI commands starts with `ais archive`, from where you can TAB-TAB to the actual (reading, writing, listing) operation.
+The corresponding subset of CLI commands starts with `ais archive`, from where you can <TAB-TAB> to the actual (reading, writing, listing) operation.
 
 See also:
 

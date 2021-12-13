@@ -133,7 +133,7 @@ NnPLp8082        0.16%           31.12GiB        6m50s
 $ ais advanced remove-from-smap MvwQp8080
 Node MvwQp 8080 is primary: cannot remove
 
-$ ais advanced remove-from-smap xVMNp8081
+$ ais advanced remove-from-smap p[xVMNp8081]
 $ ais show cluster proxy
 PROXY            MEM USED %      MEM AVAIL       UPTIME
 BcnQp8083        0.16%           31.12GiB        8m

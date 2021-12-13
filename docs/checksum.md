@@ -16,11 +16,11 @@ redirect_from:
 	```console
 	$ ais bucket props ais://abc checksum.type  <TAB-TAB>
 	crc32c   md5      none     sha256   sha512   xxhash
-	
+
 	$ ais bucket props ais://abc checksum.type sha256
 	Bucket props successfully updated
 	"checksum.type" set to:"sha256" (was:"xxhash")
-	
+
 	$ ais bucket props ais://xyz checksum.type none
 	Bucket props successfully updated
 	"checksum.type" set to:"none" (was:"xxhash")

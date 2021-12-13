@@ -71,7 +71,7 @@ Show mountpath list for targets.
 Show long-running jobs (aka [xactions](/docs/batch.md)). Example:
 
 ```console
-$ ais show job xaction ugoFtqUrrm
+$ ais show job xaction t[ugoFtqUrrm]
 NODE          ID            KIND         BUCKET                     OBJECTS     BYTES        START           END             STATE
 ugoFtqUrrm    vOYSo5pHG     ec-get       mybucket-ec-rebalance      -           -            12-03 10:32:25  -               Running
 ugoFtqUrrm    b4Ks45pHv     ec-get       mybucket-obj-n-slice       9           42.36MiB     12-03 10:31:33  -               Running
@@ -156,12 +156,13 @@ There are 3 enumerated log severities and, respectively, 3 types of logs generat
 ### Example 1. Show "info" log:
 
 ```console
-# Use [Tab] auto-completion to select a node (run `ais show cluster` to show details)
+# Use <TAB-TAB> auto-completion to select a node (run `ais show cluster` to show details)
 $ ais show log
-f6ytNhIhb   OqlWpgwrY  ...
+p[f6ytNhIhb]   p[OqlWpgwrY] ...
+t[jkrt8Nkqi]   t[Juwzq371P] ...
 
-# Type `O`[Tab] to complete the node ID and then use `less` (for instance) to search, scroll or page down (or up), etc.
-$ ais show log OqlWpgwrY | less
+# Type `p[O`<TAB-TAB> to complete the node ID and then use `less` (for instance) to search, scroll or page down (or up), etc.
+$ ais show log p[OqlWpgwrY] | less
 
 Log file created at: 2021/04/11 10:58:38
 Running on machine: u18044

@@ -520,7 +520,7 @@ $ ais bucket create ais://testbucket
 "ais://testbucket" bucket created
 $ ais show cluster
 TARGET          MEM USED %  MEM AVAIL   CAP USED %  CAP AVAIL   CPU USED %  REBALANCE
-1014646t8081    0.00%	    4.00GiB	    59%         375.026GiB  0.00%	    finished
+1014646t8081    0.00%	    4.00GiB	59%         375.026GiB  0.00%	    finished
 ...
 $ ais object promote /target/1014646t8081/nonexistent/dir/ ais://testbucket --target 1014646t8081 --keep=false
 (...) Bad Request: stat /target/1014646t8081/nonexistent/dir: no such file or directory
