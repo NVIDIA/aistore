@@ -364,7 +364,7 @@ var (
 	progressIntervalFlag = cli.StringFlag{
 		Name:  "progress-interval",
 		Value: downloader.DownloadProgressInterval.String(),
-		Usage: "interval(in secs) at which progress will be monitored, e.g. '10s'",
+		Usage: "progress interval for continuous monitoring, valid time units: 'ns', 'us', 'ms', 's', 'm', and 'h' (e.g. '10s')",
 	}
 	// dSort
 	fileSizeFlag = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "size of file in a shard"}

@@ -53,7 +53,7 @@ If the `DESTINATION` bucket doesn't exist, a new bucket with the default propert
 | `--limit-bytes-per-hour,--limit-bph,--bph` | `string` | Limit the number of bytes (can end with suffix (k, MB, GiB, ...)) that all targets can download per hour | `""` (unlimited) |
 | `--object-list,--from` | `string` | Path to file containing JSON array of strings with object names to download | `""` |
 | `--progress` | `bool` | Show download progress for each job and wait until all files are downloaded | `false` |
-| `--progress-interval` | `string` | Rate at which progress of a download job will be monitored | `"1s"` |
+| `--progress-interval` | `duration` | Progress interval for continuous monitoring. The usual unit suffixes are supported and include `s` (seconds) and `m` (minutes). Press `Ctrl+C` to stop. | `"10s"` |
 | `--wait` | `bool` | Wait until all files are downloaded. No progress is displayed, only a brief summary after downloading finishes | `false` |
 
 ### Examples
@@ -279,7 +279,7 @@ Show download jobs or status of a specific job.
 | --- | --- | --- | --- |
 | `--regex` | `string` | Regex for the description of download jobs | `""` |
 | `--progress` | `bool` | Displays progress bar | `false` |
-| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include m (for minutes), s (seconds), ms (milliseconds) | `1s` |
+| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include `m` (for minutes), `s` (seconds), `ms` (milliseconds) | `1s` |
 | `--verbose` | `bool` | Verbose output | `false` |
 
 ### Examples
@@ -318,5 +318,5 @@ Wait for the download job with given `JOB_ID` to finish.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include m (for minutes), s (seconds), ms (milliseconds). Ctrl-C to stop monitoring. | `1s` |
+| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include `m` (for minutes), `s` (seconds), `ms` (milliseconds). Ctrl-C to stop monitoring. | `1s` |
 | `--progress` | `bool` | Displays progress bar | `false` |

@@ -134,7 +134,7 @@ Display details about the most recent rebalance xaction.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include m (for minutes), s (seconds), ms (milliseconds). Ctrl-C to stop monitoring. | ` ` |
+| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include `m` (for minutes), `s` (seconds), `ms` (milliseconds). Ctrl-C to stop monitoring. | ` ` |
 | `--all` | `bool` | If set, show all rebalance xactions | `false` |
 
 Output of this command differs from the generic xaction output.
@@ -192,7 +192,7 @@ Note: `job wait download|dsort` have slightly different options. Please see thei
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include m (for minutes), s (seconds), ms (milliseconds) | ` ` |
+| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include `m` (for minutes), `s` (seconds), `ms` (milliseconds) | ` ` |
 
 ## Distributed Sort
 

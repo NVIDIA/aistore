@@ -46,7 +46,7 @@ If nothing is set, information from all the daemons in the AIS cluster is displa
 | --- | --- | --- | --- |
 | `--json, -j` | `bool` | Output in JSON format | `false` |
 | `--count` | `int` | Total number of generated reports | `1` |
-| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include m (for minutes), s (seconds), ms (milliseconds) | ` ` |
+| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include `m` (for minutes), `s` (seconds), `ms` (milliseconds) | ` ` |
 | `--no-headers` | `bool` | Display tables without headers | `false` |
 
 ### Examples
@@ -140,7 +140,7 @@ In the latter case, the command displays aggregated counters and cluster-wide av
 | --- | --- | --- | --- |
 | `--json, -j` | `bool` | JSON format           | `false` |
 | `--raw`    | `bool` | display exact raw statistics values instead of human-readable ones | `false` |
-| `--refresh` | `duration` | refresh interval - time duration between reports. The usual unit suffixes are supported and include m (for minutes), s (seconds), ms (milliseconds). Press `Ctrl+C` to stop monitoring | ` ` |
+| `--refresh` | `duration` | refresh interval - time duration between reports. The usual unit suffixes are supported and include `m` (for minutes), `s` (seconds), `ms` (milliseconds). Press `Ctrl+C` to stop monitoring | ` ` |
 
 ### Examples
 
@@ -302,7 +302,7 @@ Show the disk stats of the `TARGET_ID`. If `TARGET_ID` isn't given, disk stats f
 | --- | --- | --- | --- |
 | `--json, -j` | `bool` | Output in JSON format | `false` |
 | `--count` | `int` | Total number of generated reports | `1` |
-| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include m (for minutes), s (seconds), ms (milliseconds) | ` ` |
+| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include `m` (for minutes), `s` (seconds), `ms` (milliseconds) | ` ` |
 | `--no-headers` | `bool` | Display tables without headers | `false` |
 
 ### Examples
