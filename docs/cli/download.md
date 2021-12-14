@@ -52,7 +52,9 @@ If the `DESTINATION` bucket doesn't exist, a new bucket with the default propert
 | `--limit-connections,--conns` | `int` | Number of connections each target can make concurrently (each target can handle at most #mountpaths connections) | `0` (unlimited - at most #mountpaths connections) |
 | `--limit-bytes-per-hour,--limit-bph,--bph` | `string` | Limit the number of bytes (can end with suffix (k, MB, GiB, ...)) that all targets can download per hour | `""` (unlimited) |
 | `--object-list,--from` | `string` | Path to file containing JSON array of strings with object names to download | `""` |
-| `--monitor-interval` | `string` | Rate at which progress of a download job will be monitored | `"1s"` |
+| `--progress` | `bool` | Show download progress for each job and wait until all files are downloaded | `false` |
+| `--progress-interval` | `string` | Rate at which progress of a download job will be monitored | `"1s"` |
+| `--wait` | `bool` | Wait until all files are downloaded. No progress is displayed, only a brief summary after downloading finishes | `false` |
 
 ### Examples
 

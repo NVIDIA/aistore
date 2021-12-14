@@ -371,7 +371,7 @@ var (
 	logFlag      = cli.StringFlag{Name: "log", Usage: "path to file where the metrics will be saved"}
 	cleanupFlag  = cli.BoolFlag{
 		Name:  "cleanup",
-		Usage: "remove old bucket and create it again. WARNING: it removes all objects that were present in the old bucket",
+		Usage: "remove old bucket and create it again (warning: removes all objects that were present in the old bucket)",
 	}
 	concurrencyFlag = cli.IntFlag{
 		Name: "conc", Value: 10,

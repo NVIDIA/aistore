@@ -26,6 +26,13 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+const (
+	dlWarningFmt  = "Warning: %d of %d download jobs failed, for details run `ais show job download %s -v`.\n"
+	dlProgressFmt = "Run `ais show job download %s --progress` to monitor the progress.\n"
+
+	dlDelayCheck = 2 * time.Second
+)
+
 var (
 	startCmdsFlags = map[string][]cli.Flag{
 		subcmdStartXaction: {},
@@ -35,6 +42,10 @@ var (
 			limitConnectionsFlag,
 			objectsListFlag,
 			progressIntervalFlag,
+			progressBarFlag,
+			waitFlag,
+			limitBytesPerHourFlag,
+			syncFlag,
 		},
 		subcmdStartDsort: {
 			specFileFlag,
@@ -328,15 +339,16 @@ func startDownloadHandler(c *cli.Context) error {
 	}
 
 	fmt.Fprintln(c.App.Writer, id)
-	fmt.Fprintf(c.App.Writer, "Run `ais show job download %s --progress` to monitor the progress.\n", id)
 
 	if flagIsSet(c, progressBarFlag) {
-		err = pbDownload(c, id)
-	} else if flagIsSet(c, waitFlag) {
-		err = waitDownload(c, id)
+		return pbDownload(c, id)
 	}
 
-	return err
+	if flagIsSet(c, waitFlag) {
+		return wtDownload(c, id)
+	}
+
+	return bgDownload(c, id)
 }
 
 func pbDownload(c *cli.Context, id string) (err error) {
@@ -348,6 +360,38 @@ func pbDownload(c *cli.Context, id string) (err error) {
 
 	fmt.Fprintln(c.App.Writer, downloadingResult)
 	return nil
+}
+
+func wtDownload(c *cli.Context, id string) error {
+	if err := waitDownload(c, id); err != nil {
+		return err
+	}
+	resp, err := api.DownloadStatus(defaultAPIParams, id, true /*only active*/)
+	if err != nil {
+		return err
+	}
+	if resp.ErrorCnt != 0 {
+		fmt.Fprintf(c.App.ErrWriter, dlWarningFmt, resp.ErrorCnt, resp.ScheduledCnt, id)
+	} else {
+		fmt.Fprintf(c.App.Writer, "All files (%d files) successfully downloaded.\n", resp.FinishedCnt)
+	}
+	return nil
+}
+
+func bgDownload(c *cli.Context, id string) error {
+	// In a non-interactive mode, allow the downloader to start jobs before checking.
+	time.Sleep(dlDelayCheck)
+
+	resp, err := api.DownloadStatus(defaultAPIParams, id, true /*only active*/)
+	if err != nil {
+		return err
+	}
+	if resp.ErrorCnt != 0 {
+		fmt.Fprintf(c.App.ErrWriter, dlWarningFmt, resp.ErrorCnt, resp.ScheduledCnt, id)
+	} else if !flagIsSet(c, waitFlag) {
+		fmt.Fprintf(c.App.Writer, dlProgressFmt, id)
+	}
+	return err
 }
 
 func waitDownload(c *cli.Context, id string) (err error) {

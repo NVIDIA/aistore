@@ -71,7 +71,10 @@ func (d downloadingResult) String() string {
 	}
 
 	if d.finished {
-		return "All files successfully downloaded."
+		if d.errFiles == 0 {
+			return "All files successfully downloaded."
+		}
+		return fmt.Sprintf("Download jobs finished with errors.\nObjects downloaded: %d, failed downloads: %d.", d.finishedFiles, d.errFiles)
 	}
 
 	var sb strings.Builder
