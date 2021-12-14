@@ -279,7 +279,7 @@ Show download jobs or status of a specific job.
 | --- | --- | --- | --- |
 | `--regex` | `string` | Regex for the description of download jobs | `""` |
 | `--progress` | `bool` | Displays progress bar | `false` |
-| `--refresh N` | `duration` | Refresh rate of the progress bar where N is the time interval with suffix m, s, ms | `1s` |
+| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include m (for minutes), s (seconds), ms (milliseconds) | `1s` |
 | `--verbose` | `bool` | Verbose output | `false` |
 
 ### Examples
@@ -318,5 +318,5 @@ Wait for the download job with given `JOB_ID` to finish.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--refresh N` | `duration` | Refresh rate where N is the time interval with suffix m, s, ms | `1s` |
+| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include m (for minutes), s (seconds), ms (milliseconds). Ctrl-C to stop monitoring. | `1s` |
 | `--progress` | `bool` | Displays progress bar | `false` |

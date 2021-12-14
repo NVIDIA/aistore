@@ -119,7 +119,7 @@ Display details about the most recent rebalance xaction.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--refresh N` | `string` | watch the rebalance until it finishes or CTRL-C is pressed. Display the current stats every N seconds, where N ends with time suffix: s, m | ` ` |
+| `--refresh` | `duration` | Watch global rebalance at a given refresh interval. The usual unit suffixes are supported and include m (for minutes), s (seconds), ms (milliseconds). Press Ctrl-C to stop monitoring. | ` ` |
 | `--all` | `bool` | If set, show all rebalance xactions | `false` |
 
 ### Example

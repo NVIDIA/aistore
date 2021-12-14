@@ -213,7 +213,7 @@ then shows all gathered info to the user and asks for confirmation to continue. 
 | `--yes, -y` | `bool` | Answer `yes` to every confirmation prompt | `false` |
 | `--conc` | `int` | Number of concurrent `PUT` requests limit | `10` |
 | `--recursive, -r` | `bool` | Enable recursive directory upload | `false` |
-| `--refresh` | `string` | Frequency of the reporting the progress (in milliseconds), may contain multiplicative suffix `s`(second) or `m`(minute). Zero value disables periodical refresh | `0` if verbose mode is on, `5s` otherwise |
+| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include m (for minutes), s (seconds), ms (milliseconds). Zero value stops periodical refresh. | `0` if verbose mode is on, `5s` otherwise |
 | `--dry-run` | `bool` | Do not actually perform PUT. Shows a few files to be uploaded and corresponding object names for used arguments |
 | `--progress` | `bool` | Displays progress bar. Together with `--verbose` shows upload progress for every single file | `false` |
 | `--chunk-size` | `string` | Chunk size used for each request, can contain prefix 'b', 'KiB', 'MB' (only applicable when reading from STDIN) | `10MB` |
