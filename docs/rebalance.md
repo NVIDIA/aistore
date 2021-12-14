@@ -135,10 +135,10 @@ Examples:
 
 ```console
 $ ais advanced resilver # all targets will be resilvered
-Started resilver "NGxmOthtE", use 'ais show job xaction NGxmOthtE' to monitor progress
+Started resilver "NGxmOthtE", use 'ais show job xaction NGxmOthtE' to monitor the progress
 
 $ ais advanced resilver BUQOt8086  # resilver a single node
-Started resilver "NGxmOthtE", use 'ais show job xaction NGxmOthtE' to monitor progress
+Started resilver "NGxmOthtE", use 'ais show job xaction NGxmOthtE' to monitor the progress
 ```
 
 Automated resilvering can also be disabled. Just like with `rebalance`, the resulting config can be viewed through the CLI:

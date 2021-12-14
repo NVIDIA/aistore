@@ -91,10 +91,10 @@ If `TARGET_ID` is specified, only that node will be resilvered. Otherwise, all t
 
 ```console
 $ ais advanced resilver # all targets will be resilvered
-Started resilver "NGxmOthtE", use 'ais show job xaction NGxmOthtE' to monitor progress
+Started resilver "NGxmOthtE", use 'ais show job xaction NGxmOthtE' to monitor the progress
 
 $ ais advanced resilver BUQOt8086  # resilver a single node
-Started resilver "NGxmOthtE", use 'ais show job xaction NGxmOthtE' to monitor progress
+Started resilver "NGxmOthtE", use 'ais show job xaction NGxmOthtE' to monitor the progress
 ```
 
 ## Preload bucket

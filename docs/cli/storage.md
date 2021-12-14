@@ -7,16 +7,43 @@ redirect_from:
  - /docs/cli/storage.md/
 ---
 
-# Mountpath (disk) management
+`ais storage` commands supports the following subcommands:
 
-> A *mountpath* is a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS utilizes to store user data and AIS metadata. A mountpath can be disabled and (re)enabled, automatically or administratively, at any point during runtime. In a given cluster, a total number of mountpaths would normally compute as a direct product of (number of storage targets) x (number of disks in each target).
+```console
+$ ais storage <TAB-TAB>
+cleanup     disk        mountpath   summary     validate
+```
+
+As always, each subcommand (above) will have its own help and usage examples - the latter possibly spread across multiple markdowns.
+
+> You can easily look up examples and descriptions of any keyword via a simple `find`, for instance:
+
+```console
+$ find . -type f -name "*.md" | xargs grep "ais.*mountpath"
+```
 
 ## Table of Contents
+- [Storage cleanup](#storage-cleanup)
 - [Show capacity usage](#show-capacity-usage)
 - [Validate buckets](#validate-buckets)
+- [Mountpath (and disk) management](#mountpath-and-disk-management)
 - [Show mountpaths](#show-mountpaths)
 - [Attach mountpath](#attach-mountpath)
 - [Detach mountpath](#detach-mountpath)
+
+## Storage cleanup
+
+As all other supported batch operations (aka `xactions`), cleanup runs asynchronously and can be monitored during its run, e.g.:
+
+```console
+# ais storage cleanup
+Started storage cleanup "BlpmlObF8", use 'ais job show xaction BlpmlObF8' to monitor the progress
+```
+
+Further references:
+
+* [Batch operations](/docs/batch.md)
+* [`ais show job`](/docs/cli/job.md)
 
 ## Show capacity usage
 
@@ -91,6 +118,10 @@ ais://bck2        3               1               0
 
 The bucket `ais://bck2` has 3 objects and one of them is misplaced, i.e. it is inaccessible by a client.
 It results in `ais ls ais://bck2` returns only 2 objects.
+
+## Mountpath (and disk) management
+
+> A *mountpath* is a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS utilizes to store user data and AIS metadata. A mountpath can be disabled and (re)enabled, automatically or administratively, at any point during runtime. In a given cluster, a total number of mountpaths would normally compute as a direct product of (number of storage targets) x (number of disks in each target).
 
 ## Show mountpaths
 

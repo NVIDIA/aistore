@@ -767,7 +767,7 @@ Shards created: 999/999 [=======================================================
 
 # NOTE: make sure to use double or single quotations to specify the template (aka "range")
 $ ais object rm ais://dsort-testing --template 'shard-{900..999}.tar'
-removed from ais://dsort-testing objects in the range "shard-{900..999}.tar", use 'ais job show xaction EH291ljOy' to monitor progress
+removed from ais://dsort-testing objects in the range "shard-{900..999}.tar", use 'ais job show xaction EH291ljOy' to monitor the progress
 ```
 
 ## Evict multiple objects

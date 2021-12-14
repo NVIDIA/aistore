@@ -9,7 +9,22 @@ redirect_from:
 
 # Introduction
 
-There is a single CLI command to [grow](#join-a-node) a cluster and multiple commands - to scale it down.
+`ais cluster` commands supports the following subcommands:
+
+```console
+$ ais cluster <TAB-TAB>
+add-remove-nodes  decommission  rebalance  remote-attach  remote-detach  set-primary  show  shutdown
+```
+
+As always, each subcommand (above) will have its own help and usage examples - the latter possibly spread across multiple markdowns.
+
+> For any keyword or text of any kind, you can easily look up examples and descriptions (if available) via a simple `find`, for instance:
+
+```console
+$ find . -type f -name "*.md" | xargs grep "ais.*mountpath"
+```
+
+Note that there is a single CLI command to [grow](#join-a-node) a cluster and multiple commands to scale it down.
 
 This (scaling down) can be done gracefully or forcefully, and also temporarily or permanently.
 

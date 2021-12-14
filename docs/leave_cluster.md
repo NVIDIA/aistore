@@ -31,7 +31,7 @@ To take a node out of the cluster temporary while keeping it in the cluster list
 ```console
 $ ais cluster add-remove-nodes start-maintenance 59262t8087
 Node "59262t8087" is under maintenance
-Started rebalance "g1", use 'ais show job xaction g1' to monitor progress
+Started rebalance "g1", use 'ais show job xaction g1' to monitor the progress
 ```
 
 Alternative way is to shut down the node which additionally stops all AIS services on the node after putting it under maintenance:
@@ -39,7 +39,7 @@ Alternative way is to shut down the node which additionally stops all AIS servic
 ```console
 $ ais cluster add-remove-nodes shutdown 59262t8087
 Node "59262t8087" is under maintenance
-Started rebalance "g1", use 'ais show job xaction g1' to monitor progress
+Started rebalance "g1", use 'ais show job xaction g1' to monitor the progress
 ```
 
 If the node is a target, after a quick preparation, the cluster starts rebalance. When the rebalance finishes, it is safe to turn the node off.
@@ -60,7 +60,7 @@ After getting the notification, the cluster clears the maintenance state and sta
 ```console
 $ ais cluster add-remove-nodes stop-maintenance 59262t8087
 Node "59262t8087" maintenance stopped
-Started rebalance "g3", use 'ais show job xaction g3' to monitor progress
+Started rebalance "g3", use 'ais show job xaction g3' to monitor the progress
 ```
 
 To skip automatic rebalance, provide flag `--no-rebalance`.
@@ -80,7 +80,7 @@ To completely remove the node from the cluster, start the node decommissioning (
 ```console
 $ ais cluster add-remove-nodes decommission 59262t8087
 Node "59262t8087" is under maintenance
-Started rebalance "g1", use 'ais show job xaction g1' to monitor progress
+Started rebalance "g1", use 'ais show job xaction g1' to monitor the progress
 ```
 
 When the rebalance finishes, the cluster removes the node automatically from the list.
@@ -98,7 +98,7 @@ If the node is a target, the node will be shut down after the rebalance has fini
 ```console
 $ ais cluster add-remove-nodes shutdown 59262t8087
 Node "59262t8087" is being shut down
-Started rebalance "g1", use 'ais show job xaction g1' to monitor progress
+Started rebalance "g1", use 'ais show job xaction g1' to monitor the progress
 ```
 
 Note that removing a node with rebalance disabled can be interrupted. If a node is removed by mistake, you have to join it manually with `ais cluster add-remove-nodes join` command.
@@ -113,7 +113,7 @@ Rebalance starts automatically when a node is a target and flag `--no-rebalance`
 ```console
 $ ais cluster add-remove-nodes stop-maintenance 59262t8087
 Node "59262t8087" maintenance stopped
-Started rebalance "g3", use 'ais show job xaction g3' to monitor progress
+Started rebalance "g3", use 'ais show job xaction g3' to monitor the progress
 ```
 
 The node starts accepting all the requests after joining the cluster and after the cluster clears node's maintenance state. You do not have to wait until the rebalance is done.
