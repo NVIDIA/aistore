@@ -375,7 +375,7 @@ func NewErrObjMeta(name string, err error) *ErrObjMeta {
 	return &ErrObjMeta{name: name, err: err}
 }
 
-func isErrObjMeta(err error) bool {
+func IsErrObjMeta(err error) bool {
 	_, ok := err.(*ErrObjMeta)
 	return ok
 }
@@ -539,7 +539,7 @@ func IsErrBucketNought(err error) bool {
 }
 
 func IsErrObjNought(err error) bool {
-	return IsObjNotExist(err) || IsStatusNotFound(err) || isErrObjMeta(err) || isErrObjDefunct(err)
+	return IsObjNotExist(err) || IsStatusNotFound(err) || IsErrObjMeta(err) || isErrObjDefunct(err)
 }
 
 func IsObjNotExist(err error) bool {

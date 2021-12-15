@@ -313,7 +313,7 @@ func (j *clnJ) jogBck() (size int64, err error) {
 	if err = fs.Walk(opts); err != nil {
 		return
 	}
-	size, err = j.evict()
+	size, err = j.rmLeftovers()
 	return
 }
 
@@ -373,14 +373,21 @@ func (j *clnJ) visitCT(parsedFQN fs.ParsedFQN, fqn string) {
 	}
 }
 
-func (j *clnJ) visitLOM(parsedFQN fs.ParsedFQN) {
-	lom := &cluster.LOM{ObjName: parsedFQN.ObjName}
+func (j *clnJ) visitLOM(fqn string) {
+	lom := &cluster.LOM{FQN: fqn}
 	err := lom.Init(j.bck)
 	if err != nil {
 		return
 	}
+	// TODO: lom.Load now returns just fmt.Error string for xattr troubles.
+	// It must return designated errors for damaged/missing xattrs etc to
+	// provide a fine-grained error statistics for a user.
 	err = lom.Load(false /*cache it*/, false /*locked*/)
 	if err != nil {
+		// TODO:
+		// - remove the file on some errors
+		// - update correct counters (add counters for noXattr, damagedXattr etc)
+		glog.Errorf("Fail to load LOM %q: %v", fqn, err)
 		return
 	}
 	if lom.IsHRW() {
@@ -416,13 +423,14 @@ func (j *clnJ) walk(fqn string, de fs.DirEntry) error {
 	if parsedFQN.ContentType != fs.ObjectType {
 		j.visitCT(parsedFQN, fqn)
 	} else {
-		j.visitLOM(parsedFQN)
+		j.visitLOM(fqn)
 	}
 
 	return nil
 }
 
-func (j *clnJ) evict() (size int64, err error) {
+// TODO: remove disfunctional files as soon as possible without adding them to slices.
+func (j *clnJ) rmLeftovers() (size int64, err error) {
 	var (
 		fevicted, bevicted int64
 		xcln               = j.ini.Xaction
@@ -435,6 +443,8 @@ func (j *clnJ) evict() (size int64, err error) {
 				glog.Errorf("%s: failed to rm old work %q: %v", j, workfqn, err)
 			} else {
 				size += finfo.Size()
+				fevicted++
+				bevicted += finfo.Size()
 				if verbose {
 					glog.Infof("%s: rm old work %q, size=%d", j, workfqn, size)
 				}
@@ -445,12 +455,12 @@ func (j *clnJ) evict() (size int64, err error) {
 
 	// 2. rm misplaced
 	if j.p.rmMisplaced() {
-		for _, lom := range j.misplaced.loms {
+		for _, mlom := range j.misplaced.loms {
 			var (
-				fqn     = lom.FQN
+				fqn     = mlom.FQN
 				removed bool
 			)
-			lom = &cluster.LOM{ObjName: lom.ObjName} // yes placed
+			lom := &cluster.LOM{ObjName: mlom.ObjName} // yes placed
 			if lom.Init(j.bck) != nil {
 				removed = os.Remove(fqn) == nil
 			} else if lom.FromFS() != nil {
@@ -458,12 +468,11 @@ func (j *clnJ) evict() (size int64, err error) {
 			} else {
 				removed, _ = lom.DelExtraCopies(fqn)
 			}
-			if !removed && lom.FQN != fqn {
-				removed = os.Remove(fqn) == nil
-			}
 			if removed {
+				fevicted++
+				bevicted += mlom.SizeBytes(true /*not loaded*/)
 				if verbose {
-					glog.Infof("%s: rm misplaced %q, size=%d", j, lom, lom.SizeBytes(true /*not loaded*/))
+					glog.Infof("%s: rm misplaced %q, size=%d", j, mlom, mlom.SizeBytes(true /*not loaded*/))
 				}
 				if err = j.yieldTerm(); err != nil {
 					return
@@ -480,6 +489,8 @@ func (j *clnJ) evict() (size int64, err error) {
 			continue
 		}
 		if os.Remove(ct.FQN()) == nil {
+			fevicted++
+			bevicted += ct.SizeBytes()
 			if err = j.yieldTerm(); err != nil {
 				return
 			}
