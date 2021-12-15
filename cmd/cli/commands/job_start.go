@@ -29,8 +29,6 @@ import (
 const (
 	dlWarningFmt  = "Warning: %d of %d download jobs failed, for details run `ais show job download %s -v`.\n"
 	dlProgressFmt = "Run `ais show job download %s --progress` to monitor the progress.\n"
-
-	dlDelayCheck = 2 * time.Second
 )
 
 var (
@@ -378,17 +376,33 @@ func wtDownload(c *cli.Context, id string) error {
 	return nil
 }
 
-func bgDownload(c *cli.Context, id string) error {
+func bgDownload(c *cli.Context, id string) (err error) {
+	const (
+		checkTimeout  = 5 * time.Second
+		checkInterval = time.Second
+	)
+	var (
+		passed time.Duration
+		resp   downloader.DlStatusResp
+	)
 	// In a non-interactive mode, allow the downloader to start jobs before checking.
-	time.Sleep(dlDelayCheck)
-
-	resp, err := api.DownloadStatus(defaultAPIParams, id, true /*only active*/)
-	if err != nil {
-		return err
+	for passed < checkTimeout {
+		time.Sleep(checkInterval)
+		passed += checkInterval
+		resp, err = api.DownloadStatus(defaultAPIParams, id, true /*only active*/)
+		if err != nil {
+			return err
+		}
+		if resp.ErrorCnt != 0 || resp.FinishedCnt != 0 || resp.FinishedTime.UnixNano() != 0 {
+			break
+		}
 	}
+
 	if resp.ErrorCnt != 0 {
 		fmt.Fprintf(c.App.ErrWriter, dlWarningFmt, resp.ErrorCnt, resp.ScheduledCnt, id)
-	} else if !flagIsSet(c, waitFlag) {
+	} else if resp.FinishedTime.UnixNano() != 0 {
+		fmt.Fprintf(c.App.Writer, "All files (%d files) successfully downloaded.\n", resp.FinishedCnt)
+	} else {
 		fmt.Fprintf(c.App.Writer, dlProgressFmt, id)
 	}
 	return err
