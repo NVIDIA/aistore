@@ -6,9 +6,9 @@ author: Alex Aizman
 categories: aistore
 ---
 
-AIStore v3.8 is a significant upgrade delivering [long-awaited features, stabilization fixes, and performance improvements](https://github.com/NVIDIA/aistore/releases/tag/3.8). There's also the cumulative effect of continuous functional and stress testing. Combined with (continuous) refactoring to optimize and reinforce the codebase, this creates a certain sense of achieved *milestone*.
+AIStore v3.8 is a significant upgrade delivering [long-awaited features, stabilization fixes, and performance improvements](https://github.com/NVIDIA/aistore/releases/tag/3.8). There's also the cumulative effect of continuous functional and stress testing combined with (continuous) refactoring to optimize and reinforce the codebase.
 
-Speaking of which, here's what's new:
+In other words, a certain achieved *milestone* that includes:
 
 ## Storage cleanup
 
