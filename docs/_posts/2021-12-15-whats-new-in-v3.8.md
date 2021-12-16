@@ -10,22 +10,6 @@ AIStore v3.8 is a significant upgrade delivering [long-awaited features, stabili
 
 In other words, a certain achieved *milestone* that includes:
 
-## Storage cleanup
-
-Cleanup, as the name implies, is tasked with safely removing already deleted objects (that we keep for a while to support future [undeletion](https://en.wikipedia.org/wiki/Undeletion)). Subject to being cleaned up also are:
-
-* workfiles resulting from interrupted workloads
-* unfinished erasure-coded slices
-* misplaced replicas left behind during global rebalancing
-
-and similar. In short, all sorts of "artifacts" of distributed migration, replication, and erasure coding.
-
-Like LRU-based cluster-wide eviction, cleanup runs automatically or [administratively](/docs/cli/storage.md). Cleanup triggers automatically when the system exceeds 65% (or configured) of total used capacity. But note:
-
-> Automatic cleanup always runs _prior_ to automatic LRU eviction, so that the latter would take into account updated used and available percentages.
-
-> LRU eviction is separately configured on a per-bucket basis with cluster-wide inheritable defaults set as follows: enabled for Cloud buckets, disabled for AIS buckets that have no remote backend.
-
 ## ETL
 
 AIS-ETL is designed around the idea to run custom *transforming* containers directly on AIS target nodes. Typical flow includes the following steps:
@@ -41,7 +25,27 @@ The new "io://" communicator acts as a simple executor of external commands *by*
 
 Additionally, v3.8 integrates ETL (jobs) with [xactions](/docs/batch.md) thus providing consistency in terms of starting/stopping and managing/monitoring. All existing APIs and [CLIs](/docs/cli/job.md) that are common for all [xactions](/docs/batch.md) are supported out of the box.
 
-Finally, v3.8 introduces persistent ETL metadata as a new replicated-versioned-protected metadata type. The implementation leverages existing mechanism to keep AIS nodes in-sync with added, removed, and updated ETL specifications. The ultimate objective is to run an arbitrary mix of inline and offline ETLs while simultaneously viewing their (persistent) specs and making necessary changes.
+Finally, v3.8 introduces persistent ETL metadata as a new replicated-versioned-and-protected metadata type. The implementation leverages existing mechanism to keep clustered nodes in-sync with added, removed, and updated ETL specifications. The ultimate objective is to be able to run an arbitrary mix of inline and offline ETLs while simultaneously viewing and *editing* their (persistent) specs.
+
+Further reading:
+- [Using AIS/PyTorch connector to transform ImageNet](https://aiatscale.org/blog/2021/10/22/ais-etl-2)
+- [Using WebDataset to train on a sharded dataset](https://aiatscale.org/blog/2021/10/29/ais-etl-3)
+
+## Storage cleanup
+
+Cleanup, as the name implies, is tasked with safely removing already deleted objects (that we keep for a while to support future [undeletion](https://en.wikipedia.org/wiki/Undeletion)). Subject to being cleaned up also are:
+
+* workfiles resulting from interrupted workloads
+* unfinished erasure-coded slices
+* misplaced replicas left behind during global rebalancing
+
+and similar. In short, all sorts of "artifacts" of distributed migration, replication, and erasure coding.
+
+Like LRU-based cluster-wide eviction, cleanup runs automatically or [administratively](/docs/cli/storage.md). Cleanup triggers automatically when the system exceeds 65% (or configured) of total used capacity. But note:
+
+> Automatic cleanup always runs _prior_ to automatic LRU eviction, so that the latter would take into account updated used and available percentages.
+
+> LRU eviction is separately configured on a per-bucket basis with cluster-wide inheritable defaults set as follows: enabled for Cloud buckets, disabled for AIS buckets that have no remote backend.
 
 ## Custom object metadata
 
