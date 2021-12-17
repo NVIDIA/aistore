@@ -59,13 +59,13 @@ func (ct *CT) Uname() string {
 }
 
 func (ct *CT) Lock(exclusive bool) {
-	idx := hkIdx(ct.digest)
+	idx := lcacheIdx(ct.digest)
 	nlc := getLomLocker(idx)
 	nlc.Lock(ct.Uname(), exclusive)
 }
 
 func (ct *CT) Unlock(exclusive bool) {
-	idx := hkIdx(ct.digest)
+	idx := lcacheIdx(ct.digest)
 	nlc := getLomLocker(idx)
 	nlc.Unlock(ct.Uname(), exclusive)
 }

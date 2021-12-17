@@ -112,23 +112,25 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	return
 }
 
-// NOTE (beware): not checking lom.loaded()
-func (lom *LOM) Persist(stores ...bool) (err error) {
+func (lom *LOM) Persist() (err error) {
 	if !lom.WritePolicy().IsImmediate() {
 		lom.md.makeDirty()
-		lom.ReCache(true)
+		if !lom.IsCopy() {
+			if lom.AtimeUnix() == 0 {
+				lom.SetAtimeUnix(time.Now().UnixNano())
+			}
+			lom.ReCache(true)
+		}
 		return
 	}
 	buf, mm := lom.marshal()
 	if err = fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
 		T.FSHC(err, lom.FQN)
 	} else {
-		var store bool
-		if len(stores) > 0 {
-			store = stores[0]
-		}
 		lom.md.clearDirty()
-		lom.ReCache(store)
+		if !lom.IsCopy() {
+			lom.ReCache(lom.AtimeUnix() != 0)
+		}
 		lom.md.bckID = lom.Bprops().BID
 	}
 	mm.Free(buf)

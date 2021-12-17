@@ -129,7 +129,7 @@ func (c *getJogger) ec(req *request) {
 	}
 	if err == nil {
 		c.parent.stats.updateObjTime(time.Since(req.putTime))
-		err = ctx.lom.Persist(true)
+		err = ctx.lom.Persist()
 	}
 	c.freeCtx(ctx)
 	c.finalizeReq(req, err)

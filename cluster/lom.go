@@ -261,21 +261,7 @@ func (lom *LOM) _whingeCopy() (yes bool) {
 }
 
 func (lom *LOM) HasCopies() bool { return lom.NumCopies() > 1 }
-
-// NumCopies returns a total number of copies: other  mountpaths + self.
-func (lom *LOM) NumCopies() int {
-	if len(lom.md.copies) == 0 {
-		return 1
-	}
-	debug.AssertFunc(func() (ok bool) {
-		_, ok = lom.md.copies[lom.FQN]
-		if !ok {
-			glog.Errorf("missing self (%s) in copies %v", lom.FQN, lom.md.copies)
-		}
-		return
-	})
-	return len(lom.md.copies)
-}
+func (lom *LOM) NumCopies() int  { return cos.Max(len(lom.md.copies), 1) }
 
 // GetCopies returns all copies (NOTE that copies include self)
 // NOTE: caller must take a lock
@@ -290,11 +276,11 @@ func (lom *LOM) GetCopies() fs.MPI {
 // given an existing (on-disk) object, determines whether it is a _copy_
 // (compare with isMirror below)
 func (lom *LOM) IsCopy() bool {
-	if !lom.HasCopies() || lom.IsHRW() {
+	if lom.IsHRW() {
 		return false
 	}
+	// misplaced or a copy
 	_, ok := lom.md.copies[lom.FQN]
-	debug.Assert(ok)
 	return ok
 }
 
@@ -605,6 +591,7 @@ func (lom *LOM) IncVersion() error {
 	return nil
 }
 
+// load-balanced GET
 func (lom *LOM) LBGet() (fqn string) {
 	if !lom.HasCopies() {
 		return lom.FQN
@@ -833,13 +820,11 @@ func (lom *LOM) Clone(fqn string) *LOM {
 // 8) periodic (lazy) eviction followed by access-time synchronization: see LomCacheRunner
 // =======================================================================================
 
-func hkIdx(digest uint64) int {
+func lcacheIdx(digest uint64) int {
 	return int(digest & (cos.MultiSyncMapCount - 1))
 }
 
-func (lom *LOM) Hkey() (string, int) {
-	return lom.md.uname, hkIdx(lom.mpathDigest)
-}
+func (lom *LOM) LcacheIdx() int { return lcacheIdx(lom.mpathDigest) }
 
 func (lom *LOM) Init(bck cmn.Bck) (err error) {
 	if lom.FQN != "" {
@@ -892,13 +877,12 @@ func (lom *LOM) Init(bck cmn.Bck) (err error) {
 //   if false, try Rlock temporarily *if and only when* reading from FS
 func (lom *LOM) Load(cacheit, locked bool) (err error) {
 	var (
-		hkey, idx = lom.Hkey()
-		lcache    = lom.mpathInfo.LomCache(idx)
-		bmd       = T.Bowner().Get()
+		lcache, lmd = lom.fromCache()
+		bmd         = T.Bowner().Get()
 	)
-	if md, ok := lcache.Load(hkey); ok { // fast path
-		lmeta := md.(*lmeta)
-		lom.md = *lmeta
+	// fast path
+	if lmd != nil {
+		lom.md = *lmd
 		err = lom._checkBucket(bmd)
 		return
 	}
@@ -920,10 +904,9 @@ func (lom *LOM) Load(cacheit, locked bool) (err error) {
 	if err != nil {
 		return
 	}
-	if cacheit {
-		md := &lmeta{}
-		*md = lom.md
-		lcache.Store(hkey, md)
+	if cacheit && lcache != nil {
+		md := lom.md
+		lcache.Store(lom.md.uname, &md)
 	}
 	return
 }
@@ -938,40 +921,48 @@ func (lom *LOM) _checkBucket(bmd *BMD) (err error) {
 }
 
 func (lom *LOM) ReCache(store bool) {
-	var (
-		hkey, idx = lom.Hkey()
-		lcache    = lom.mpathInfo.LomCache(idx)
-		md        = &lmeta{}
-	)
-	if !store {
-		_, store = lcache.Load(hkey) // refresh an existing one
+	debug.Assert(!lom.IsCopy()) // not caching copies
+	lcache, lmd := lom.fromCache()
+	if !store && lmd == nil {
+		return
 	}
-	if store {
-		*md = lom.md
-		md.bckID = lom.Bprops().BID
-		lom.md.bckID = md.bckID
-		debug.Assert(md.bckID != 0)
-		lcache.Store(hkey, md)
-	}
+	// store new or refresh existing
+	md := lom.md
+	md.bckID = lom.Bprops().BID
+	lom.md.bckID = md.bckID
+	debug.Assert(md.bckID != 0)
+	lcache.Store(lom.md.uname, &md)
 }
 
 func (lom *LOM) Uncache(delDirty bool) {
-	debug.Assert(!lom.IsCopy()) // not caching copies
-	var (
-		hkey, idx = lom.Hkey()
-		lcache    = lom.mpathInfo.LomCache(idx)
-	)
-	if delDirty {
-		lcache.Delete(hkey)
+	debug.Assert(!lom.IsCopy()) // must not duplicate
+	lcache, lmd := lom.fromCache()
+	if lmd == nil {
 		return
 	}
-	if md, ok := lcache.Load(hkey); ok {
-		lmeta := md.(*lmeta)
-		if lmeta.isDirty() {
+	if delDirty || !lmd.isDirty() {
+		lcache.Delete(lom.md.uname)
+	}
+}
+
+func (lom *LOM) fromCache() (lcache *sync.Map, lmd *lmeta) {
+	var (
+		mi  = lom.mpathInfo
+		idx = lom.LcacheIdx()
+	)
+	if !lom.IsHRW() {
+		hmi, digest, err := HrwMpath(lom.md.uname)
+		if err != nil {
 			return
 		}
+		debug.Assert(digest == lom.mpathDigest)
+		mi = hmi
 	}
-	lcache.Delete(hkey)
+	lcache = mi.LomCache(idx)
+	if md, ok := lcache.Load(lom.md.uname); ok {
+		lmd = md.(*lmeta)
+	}
+	return
 }
 
 func (lom *LOM) FromFS() (err error) {
@@ -1077,48 +1068,48 @@ func getLomLocker(idx int) *nlc { return &lomLocker[idx] }
 
 func (lom *LOM) IsLocked() (int /*rc*/, bool /*exclusive*/) {
 	var (
-		_, idx = lom.Hkey()
-		nlc    = getLomLocker(idx)
+		idx = lom.LcacheIdx()
+		nlc = getLomLocker(idx)
 	)
 	return nlc.IsLocked(lom.Uname())
 }
 
 func (lom *LOM) TryLock(exclusive bool) bool {
 	var (
-		_, idx = lom.Hkey()
-		nlc    = getLomLocker(idx)
+		idx = lom.LcacheIdx()
+		nlc = getLomLocker(idx)
 	)
 	return nlc.TryLock(lom.Uname(), exclusive)
 }
 
 func (lom *LOM) Lock(exclusive bool) {
 	var (
-		_, idx = lom.Hkey()
-		nlc    = getLomLocker(idx)
+		idx = lom.LcacheIdx()
+		nlc = getLomLocker(idx)
 	)
 	nlc.Lock(lom.Uname(), exclusive)
 }
 
 func (lom *LOM) UpgradeLock() (finished bool) {
 	var (
-		_, idx = lom.Hkey()
-		nlc    = getLomLocker(idx)
+		idx = lom.LcacheIdx()
+		nlc = getLomLocker(idx)
 	)
 	return nlc.UpgradeLock(lom.Uname())
 }
 
 func (lom *LOM) DowngradeLock() {
 	var (
-		_, idx = lom.Hkey()
-		nlc    = getLomLocker(idx)
+		idx = lom.LcacheIdx()
+		nlc = getLomLocker(idx)
 	)
 	nlc.DowngradeLock(lom.Uname())
 }
 
 func (lom *LOM) Unlock(exclusive bool) {
 	var (
-		_, idx = lom.Hkey()
-		nlc    = getLomLocker(idx)
+		idx = lom.LcacheIdx()
+		nlc = getLomLocker(idx)
 	)
 	nlc.Unlock(lom.Uname(), exclusive)
 }

@@ -116,7 +116,7 @@ func (reb *Reb) isQuiescent() bool {
 func (reb *Reb) lomAcks() *[cos.MultiSyncMapCount]*lomAcks { return &reb.lomacks }
 
 func (reb *Reb) addLomAck(lom *cluster.LOM) {
-	_, idx := lom.Hkey()
+	idx := lom.LcacheIdx()
 	lomAck := reb.lomAcks()[idx]
 	lomAck.mu.Lock()
 	lomAck.q[lom.Uname()] = lom
@@ -124,7 +124,7 @@ func (reb *Reb) addLomAck(lom *cluster.LOM) {
 }
 
 func (reb *Reb) delLomAck(lom *cluster.LOM) {
-	_, idx := lom.Hkey()
+	idx := lom.LcacheIdx()
 	lomAck := reb.lomAcks()[idx]
 	lomAck.mu.Lock()
 	if lomOrig, ok := lomAck.q[lom.Uname()]; ok {

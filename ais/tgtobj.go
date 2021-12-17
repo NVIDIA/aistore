@@ -216,7 +216,7 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 			glog.Errorf("PUT %s: failed to delete old copies [%v], proceeding to PUT anyway...", lom, errdc)
 		}
 	}
-	err = lom.Persist(true)
+	err = lom.Persist()
 	if err != nil {
 		lom.Uncache(true /*delDirty*/)
 	}
@@ -1290,7 +1290,7 @@ func (aaoi *appendArchObjInfo) finalize(fqn string) error {
 	if err := os.Rename(fqn, aaoi.lom.FQN); err != nil {
 		return err
 	}
-	if err := aaoi.lom.Persist(true); err != nil {
+	if err := aaoi.lom.Persist(); err != nil {
 		return err
 	}
 	if aaoi.lom.Bprops().EC.Enabled {
