@@ -423,10 +423,18 @@ func fmtXactStatus(rebSnap *stats.RebalanceSnap) string {
 }
 
 func fmtObjStatus(obj *cmn.BucketEntry) string {
-	if obj.IsStatusOK() {
+	switch obj.Status() {
+	case cmn.ObjStatusOK:
 		return "ok"
+	case cmn.ObjStatusMovedNode:
+		return "misplaced(cluster)"
+	case cmn.ObjStatusMovedMpath:
+		return "misplaced(mountpath)"
+	case cmn.ObjStatusDeleted:
+		return "deleted"
+	default:
+		return "invalid"
 	}
-	return "moved"
 }
 
 var ConfigSectionTmpl = []string{

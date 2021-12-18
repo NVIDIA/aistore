@@ -30,7 +30,8 @@ type BucketEntry struct {
 
 func (be *BucketEntry) CheckExists() bool  { return be.Flags&EntryIsCached != 0 }
 func (be *BucketEntry) SetExists()         { be.Flags |= EntryIsCached }
-func (be *BucketEntry) IsStatusOK() bool   { return be.Flags&EntryStatusMask == 0 }
+func (be *BucketEntry) IsStatusOK() bool   { return be.Status() == 0 }
+func (be *BucketEntry) Status() uint16     { return be.Flags & EntryStatusMask }
 func (be *BucketEntry) IsInsideArch() bool { return be.Flags&EntryInArch != 0 }
 func (be *BucketEntry) String() string     { return "{" + be.Name + "}" }
 

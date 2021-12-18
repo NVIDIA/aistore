@@ -43,6 +43,7 @@ const (
 	SelectMisplaced             // Include misplaced
 	SelectDeleted               // Include marked for deletion
 	SelectArchDir               // expand archives as directories
+	SelectOnlyNames             // Return only object names and statuses (for faster listing)
 )
 
 type (

@@ -192,19 +192,29 @@ func _doListObj(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error
 	if listArch {
 		msg.SetFlag(cmn.SelectArchDir)
 	}
-	props := strings.Split(parseStrFlag(c, objPropsFlag), ",")
-	if cos.StringInSlice("all", props) {
-		msg.AddProps(cmn.GetPropsAll...)
-	} else {
-		msg.AddProps(cmn.GetPropsName)
-		msg.AddProps(props...)
-	}
-	// TODO: revisit
 	if flagIsSet(c, allItemsFlag) {
-		// If `all` flag is set print status of the file so that the output is easier to understand -
-		// there might be multiple files with the same name listed (e.g EC replicas)
-		msg.AddProps(cmn.GetPropsStatus)
 		msg.SetFlag(cmn.SelectMisplaced)
+	}
+	props := strings.Split(parseStrFlag(c, objPropsFlag), ",")
+	if flagIsSet(c, onlyNamesFlag) {
+		msg.SetFlag(cmn.SelectOnlyNames)
+		msg.Props = cmn.GetPropsName
+		if cos.StringInSlice("all", props) || cos.StringInSlice(cmn.GetPropsStatus, props) {
+			msg.AddProps(cmn.GetPropsStatus)
+		}
+	} else {
+		if cos.StringInSlice("all", props) {
+			msg.AddProps(cmn.GetPropsAll...)
+		} else {
+			msg.AddProps(cmn.GetPropsName)
+			msg.AddProps(props...)
+		}
+	}
+	if flagIsSet(c, allItemsFlag) {
+		// If `all` flag is set print status of the file. Multiple files with
+		// the same name can be displayed (e.g, due to mirroring, EC), so
+		// the status helps to tell the real object from its replicas.
+		msg.AddProps(cmn.GetPropsStatus)
 	}
 	if flagIsSet(c, startAfterFlag) {
 		msg.StartAfter = parseStrFlag(c, startAfterFlag)

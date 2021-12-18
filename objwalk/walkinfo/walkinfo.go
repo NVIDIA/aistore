@@ -49,6 +49,10 @@ var wiProps = []string{
 	cmn.GetTargetURL,
 }
 
+func isObjMoved(status uint16) bool {
+	return status == cmn.ObjStatusMovedNode || status == cmn.ObjStatusMovedMpath
+}
+
 func NewWalkInfo(ctx context.Context, t cluster.Target, msg *cmn.SelectMsg) *WalkInfo {
 	// TODO: this should be removed.
 	// TODO: we should take care of `msg.StartAfter`.
@@ -119,27 +123,42 @@ func (wi *WalkInfo) SetObjectFilter(f cluster.ObjectFilter) {
 	wi.objectFilter = f
 }
 
+// Returns true if the LOM matches all criteria for including the object
+// to the resulting bucket list.
+func (wi *WalkInfo) matchObj(lom *cluster.LOM) bool {
+	if !cmn.ObjNameContainsPrefix(lom.ObjName, wi.prefix) {
+		return false
+	}
+	if wi.Marker != "" && cmn.TokenIncludesObject(wi.Marker, lom.ObjName) {
+		return false
+	}
+	if wi.msg.IsFlagSet(cmn.SelectOnlyNames) {
+		return true
+	}
+	return wi.objectFilter == nil || wi.objectFilter(lom)
+}
+
 // Adds an info about cached object to the list if:
 //  - its name starts with prefix (if prefix is set)
 //  - it has not been already returned by previous page request
 //  - this target responses getobj request for the object
+// NOTE: When only object names are requested, objectFilter and postCallback
+//       are not called because there will be no metadata to look at (see
+//       WalkInfo.Callback() for details)
 func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntry {
-	objName := lom.ObjName
-	if !cmn.ObjNameContainsPrefix(objName, wi.prefix) {
-		return nil
-	}
-	if wi.Marker != "" && cmn.TokenIncludesObject(wi.Marker, objName) {
-		return nil
-	}
-	if wi.objectFilter != nil && !wi.objectFilter(lom) {
+	if !wi.matchObj(lom) {
 		return nil
 	}
 
 	// add the obj to the page
 	fileInfo := &cmn.BucketEntry{
-		Name:  objName,
+		Name:  lom.ObjName,
 		Flags: objStatus | cmn.EntryIsCached,
 	}
+	if wi.msg.IsFlagSet(cmn.SelectOnlyNames) {
+		return fileInfo
+	}
+
 	if wi.needAtime() {
 		fileInfo.Atime = cos.FormatUnixNano(lom.AtimeUnix(), wi.timeFormat)
 	}
@@ -164,13 +183,11 @@ func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntr
 	return fileInfo
 }
 
-// Since objwalk returns only "accessible" objects by default, it always needs
-// LOM to check if an object is misplaced etc. On the other hand, skipping LOM
-// loading and checking increases bucket list performance. So, when we need
-// extra speed, we can add extra Flag to SelectMsg to skip everything
-// LOM-related and decrease time taken by listing the entire bucket.
-// It may be useful only for huge buckets: reading list of a  bucket with 5
-// million objects takes about a minutes, and skipping LOM saves ~5s.
+// By default, Callback does a few syscalls to load file attributes and xatrrs
+// to fill the object info. If a client needs only object names, the bucket
+// list can be sped up by setting the flag cmn.SelectOnlyNames which skips
+// calling expensive filesystem requests. When cmn.SelectOnlyNames is set, the
+// Callback fills only object name and status.
 func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (*cmn.BucketEntry, error) {
 	if de.IsDir() {
 		return nil, nil
@@ -181,6 +198,25 @@ func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (*cmn.BucketEntry, erro
 	if err := lom.Init(cmn.Bck{}); err != nil {
 		return nil, err
 	}
+
+	_, local, err := lom.HrwTarget(wi.smap)
+	if err != nil {
+		return nil, err
+	}
+	if !local {
+		objStatus = cmn.ObjStatusMovedNode
+	} else if !lom.IsHRW() {
+		objStatus = cmn.ObjStatusMovedMpath
+	}
+
+	if isObjMoved(objStatus) && !wi.msg.IsFlagSet(cmn.SelectMisplaced) {
+		return nil, nil
+	}
+	// SelectOnlyNames skips loading object's metadata.
+	if wi.msg.IsFlagSet(cmn.SelectOnlyNames) {
+		return wi.lsObject(lom, objStatus), nil
+	}
+
 	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
 		if cmn.IsErrObjNought(err) {
 			return nil, nil
@@ -188,20 +224,6 @@ func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (*cmn.BucketEntry, erro
 		return nil, err
 	}
 	if lom.IsCopy() {
-		return nil, nil
-	}
-	if !lom.IsHRW() {
-		objStatus = cmn.ObjStatusMoved
-	} else {
-		_, local, err := lom.HrwTarget(wi.smap)
-		if err != nil {
-			return nil, err
-		}
-		if !local {
-			objStatus = cmn.ObjStatusMoved
-		}
-	}
-	if objStatus == cmn.ObjStatusMoved && !wi.msg.IsFlagSet(cmn.SelectMisplaced) {
 		return nil, nil
 	}
 	return wi.lsObject(lom, objStatus), nil

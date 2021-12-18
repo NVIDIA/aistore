@@ -60,7 +60,7 @@ All the [supported storage services](storage_svcs.md) equally apply to all stora
 ### Default Bucket Properties
 
 By default, created buckets inherit their properties from the cluster-wide global [configuration](configuration.md).
-Similar to other types of cluster-wide metadata, global configuration (also referred to as "cluster configuration") 
+Similar to other types of cluster-wide metadata, global configuration (also referred to as "cluster configuration")
 is protected (versioned, checksummed) and replicated across the entire cluster.
 
 **Important**:
@@ -587,6 +587,9 @@ SelectMsg extended flags:
 | --- | --- | --- |
 | `SelectCached` | `1` | For remote buckets only: return only objects that are cached on AIS drives, i.e. objects that can be read without accessing to the Cloud |
 | `SelectMisplaced` | `2` | Include objects that are on incorrect target or mountpath |
+| `SelectDeleted` | `4` | Include objects marked as deleted |
+| `SelectArchDir` | `8` | If an object is an archive, include its content into object list |
+| `SelectOnlyNames` | `16` | Do not retrieve object attributes for faster bucket listing. In this mode, all fields of the response, except object names and statuses, are empty |
 
 We say that "an object is cached" to indicate two separate things:
 

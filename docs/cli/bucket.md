@@ -210,6 +210,7 @@ List all objects contained in `BUCKET` bucket.
 | `--use-cache` | `bool` | Use proxy cache to speed up list object request | `false` |
 | `--start-after` | `string` | Object name (marker) after which the listing should start | `""` |
 | `--list-archive` | `bool` | List contents of archives (ie., objects formatted as TAR, TGZ, ZIP archives) | `false` |
+| `--only-names` | `bool` | Lightweight request that retrieves only object names. If `--only-names` is set, all fields enumerated in the flag `--props` are ignored except `name` and `status` | `false` |
 
 ### Examples
 

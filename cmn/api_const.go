@@ -320,7 +320,8 @@ const (
 const (
 	// Status
 	ObjStatusOK = iota
-	ObjStatusMoved
+	ObjStatusMovedNode
+	ObjStatusMovedMpath
 	ObjStatusDeleted // TODO: reserved for future when we introduce delayed delete of the object/bucket
 
 	// Flags
