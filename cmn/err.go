@@ -89,10 +89,6 @@ type (
 		name   string // object's name
 		d1, d2 uint64 // lom.md.(bucket-ID) and lom.bck.(bucket-ID), respectively
 	}
-	ErrObjMeta struct {
-		name string // object's name
-		err  error  // underlying error
-	}
 	ErrAborted struct {
 		what string
 		ctx  string
@@ -133,6 +129,10 @@ type (
 		Caller     string `json:"caller"`
 		Node       string `json:"node"`
 		trace      []byte
+	}
+
+	ErrLmetaCorrupted struct {
+		err error
 	}
 )
 
@@ -365,21 +365,6 @@ func isErrObjDefunct(err error) bool {
 	return ok
 }
 
-// ErrObjMeta
-
-func (e *ErrObjMeta) Error() string {
-	return fmt.Sprintf("object %s failed to load meta: %v", e.name, e.err)
-}
-
-func NewErrObjMeta(name string, err error) *ErrObjMeta {
-	return &ErrObjMeta{name: name, err: err}
-}
-
-func IsErrObjMeta(err error) bool {
-	_, ok := err.(*ErrObjMeta)
-	return ok
-}
-
 // ErrAborted
 
 func NewErrAborted(what, ctx string, err error) *ErrAborted {
@@ -539,7 +524,7 @@ func IsErrBucketNought(err error) bool {
 }
 
 func IsErrObjNought(err error) bool {
-	return IsObjNotExist(err) || IsStatusNotFound(err) || IsErrObjMeta(err) || isErrObjDefunct(err)
+	return IsObjNotExist(err) || IsStatusNotFound(err) || isErrObjDefunct(err)
 }
 
 func IsObjNotExist(err error) bool {
@@ -723,6 +708,18 @@ func (e *ErrHTTP) populateStackTrace() {
 	}
 	fmt.Fprint(buffer, "]")
 	e.trace = buffer.Bytes()
+}
+
+///////////////////////
+// ErrLmetaCorrupted //
+///////////////////////
+
+func NewErrLmetaCorrupted(err error) *ErrLmetaCorrupted { return &ErrLmetaCorrupted{err} }
+func (e *ErrLmetaCorrupted) Error() string              { return e.err.Error() }
+
+func IsErrLmetaCorrupted(err error) bool {
+	_, ok := err.(*ErrLmetaCorrupted)
+	return ok
 }
 
 //////////////////////////////

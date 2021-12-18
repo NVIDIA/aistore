@@ -71,6 +71,7 @@ const prefLen = 10 // 10B prefix [ version = 1 | checksum-type | 64-bit xxhash ]
 func (lom *LOM) LoadMetaFromFS() error { _, err := lom.lmfs(true); return err }
 
 func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
+	const getxattr = "getxattr"
 	var (
 		size      int64
 		read      []byte
@@ -82,6 +83,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	if err != nil {
 		slab.Free(buf)
 		if err != syscall.ERANGE {
+			err = os.NewSyscallError(getxattr, err)
 			return
 		}
 		debug.Assert(mdSize < xattrMaxSize)
@@ -90,13 +92,14 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 		read, err = fs.GetXattrBuf(lom.FQN, XattrLOM, buf)
 		if err != nil {
 			slab.Free(buf)
+			err = os.NewSyscallError(getxattr, err)
 			return
 		}
 	}
 	size = int64(len(read))
 	if size == 0 {
 		glog.Errorf("%s[%s]: ENOENT", lom, lom.FQN)
-		err = syscall.ENOENT
+		err = os.NewSyscallError(getxattr, syscall.ENOENT)
 		slab.Free(buf)
 		return
 	}
@@ -107,6 +110,8 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	err = md.unmarshal(read)
 	if err == nil {
 		_recomputeMdSize(size, mdSize)
+	} else {
+		err = cmn.NewErrLmetaCorrupted(err)
 	}
 	slab.Free(buf)
 	return
@@ -216,7 +221,7 @@ func (md *lmeta) makeDirty()    { md.atimefs |= lomDirtyMask }
 func (md *lmeta) clearDirty()   { md.atimefs &= ^lomDirtyMask }
 func (md *lmeta) isDirty() bool { return md.atimefs&lomDirtyMask == lomDirtyMask }
 
-func (md *lmeta) unmarshal(buf []byte) (err error) {
+func (md *lmeta) unmarshal(buf []byte) error {
 	const invalid = "invalid lmeta"
 	var (
 		payload                           string
@@ -321,7 +326,7 @@ func (md *lmeta) unmarshal(buf []byte) (err error) {
 	if !haveSize {
 		return errors.New(invalid + " #8")
 	}
-	return
+	return nil
 }
 
 func (md *lmeta) marshal(mm *memsys.MMSA, mdSize int64) (buf []byte) {

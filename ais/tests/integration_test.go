@@ -1566,10 +1566,16 @@ func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
 	m.puts()
 	m.ensureNumCopies(copies)
 
-	// Step 4: Remove a mountpath (simulates disk loss)
+	// Step 4: Remove a mountpath
 	mpath := mpList.Available[0]
 	tlog.Logf("Remove mountpath %s on target %s\n", mpath, target.ID())
 	err = api.DetachMountpath(baseParams, target, mpath, false /*dont-resil*/)
+	tassert.CheckFatal(t, err)
+
+	// Wait for resilvering
+	time.Sleep(2 * time.Second)
+	args := api.XactReqArgs{Node: target.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
+	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	// Step 5: GET objects from the bucket
@@ -1582,7 +1588,10 @@ func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
 	err = api.AttachMountpath(baseParams, target, mpath, false /*force*/)
 	tassert.CheckFatal(t, err)
 
-	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	// Wait for resilvering
+	time.Sleep(2 * time.Second)
+	_, err = api.WaitForXaction(baseParams, args)
+	tassert.CheckFatal(t, err)
 
 	m.ensureNumCopies(copies)
 	m.ensureNoErrors()

@@ -596,12 +596,12 @@ func (lom *LOM) LBGet() (fqn string) {
 	if !lom.HasCopies() {
 		return lom.FQN
 	}
-	return lom.bestCopy()
+	return lom.leastUtilCopy()
 }
 
 // NOTE: reconsider counting GETs (and the associated overhead)
 //       vs ios.refreshIostatCache() (and the associated delay)
-func (lom *LOM) bestCopy() (fqn string) {
+func (lom *LOM) leastUtilCopy() (fqn string) {
 	var (
 		mpathUtils = fs.GetAllMpathUtils()
 		minUtil    = mpathUtils.Util(lom.mpathInfo.Path)
@@ -618,19 +618,20 @@ func (lom *LOM) bestCopy() (fqn string) {
 	return
 }
 
-// returns the least utilized mountpath that does _not_ have a copy yet
-// (see also bestCopy above)
-func (lom *LOM) BestMpath() (mi *fs.MountpathInfo) {
+// returns the least utilized mountpath that does _not_ have a copy of this `lom` yet
+// (compare with leastUtilCopy())
+func (lom *LOM) LeastUtilNoCopy() (mi *fs.MountpathInfo) {
 	var (
 		availablePaths = fs.GetAvail()
 		mpathUtils     = fs.GetAllMpathUtils()
 		minUtil        = int64(101)
 	)
 	for mpath, mpathInfo := range availablePaths {
-		if !lom.haveMpath(mpath) {
-			if util := mpathUtils.Util(mpath); util < minUtil {
-				minUtil, mi = util, mpathInfo
-			}
+		if lom.haveMpath(mpath) || mpathInfo.IsAnySet(fs.FlagWaitingDD) {
+			continue
+		}
+		if util := mpathUtils.Util(mpath); util < minUtil {
+			minUtil, mi = util, mpathInfo
 		}
 	}
 	return
@@ -974,26 +975,25 @@ beg:
 	finfo, err = os.Stat(lom.FQN)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			err = fmt.Errorf("%s: errstat %w", lom, err)
+			err = os.NewSyscallError("stat", err)
 			T.FSHC(err, lom.FQN)
 		}
 		return
 	}
 	if _, err = lom.lmfs(true); err != nil {
-		if err == syscall.ENODATA || err == syscall.ENOENT {
-			if retry {
+		if retry {
+			if errno := cos.UnwrapSyscallErr(err); errno == syscall.ENODATA || errno == syscall.ENOENT {
 				runtime.Gosched()
 				retry = false
 				goto beg
 			}
 		}
-		err = cmn.NewErrObjMeta(lom.ObjName, err)
 		T.FSHC(err, lom.FQN)
 		return
 	}
 	// fstat & atime
 	if lom.md.Size != finfo.Size() { // corruption or tampering
-		return fmt.Errorf("%s: errsize (%d != %d)", lom, lom.md.Size, finfo.Size())
+		return cmn.NewErrLmetaCorrupted(fmt.Errorf("errsize (%d != %d)", lom.md.Size, finfo.Size()))
 	}
 	atime := ios.GetATime(finfo)
 	lom.md.Atime = atime.UnixNano()

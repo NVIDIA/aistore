@@ -70,7 +70,7 @@ func addCopies(lom *cluster.LOM, copies int, buf []byte) (size int64, err error)
 			mi    *fs.MountpathInfo
 			clone *cluster.LOM
 		)
-		if mi = lom.BestMpath(); mi == nil {
+		if mi = lom.LeastUtilNoCopy(); mi == nil {
 			err = fmt.Errorf("%s (copies=%d): cannot find dst mountpath", lom, lom.NumCopies())
 			return
 		}

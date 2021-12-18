@@ -65,6 +65,13 @@ func (ea *ErrValue) Err() (err error) {
 // IS-syscall helpers //
 ////////////////////////
 
+func UnwrapSyscallErr(err error) error {
+	if syscallErr, ok := err.(*os.SyscallError); ok {
+		return syscallErr.Unwrap()
+	}
+	return nil
+}
+
 // likely out of socket descriptors
 func IsErrConnectionNotAvail(err error) (yes bool) {
 	return errors.Is(err, syscall.EADDRNOTAVAIL)

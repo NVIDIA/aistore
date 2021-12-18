@@ -533,17 +533,17 @@ func (m *ioContext) ensureNumCopies(expectedCopies int) {
 	}
 	tlog.Logf("objects (total, copies) = (%d, %v)\n", total, copiesToNumObjects)
 	if total != m.num {
-		m.t.Fatalf("list_objects: expecting %d objects, got %d", m.num, total)
+		m.t.Errorf("list_objects: expecting %d objects, got %d", m.num, total)
 	}
 
 	if len(copiesToNumObjects) != 1 {
 		s, _ := jsoniter.MarshalIndent(copiesToNumObjects, "", " ")
-		m.t.Fatalf("some objects do not have expected number of copies: %s", s)
+		m.t.Errorf("some objects do not have expected number of copies: %s", s)
 	}
 
 	for copies := range copiesToNumObjects {
 		if copies != expectedCopies {
-			m.t.Fatalf("Expecting %d objects all to have %d replicas, got: %d", total, expectedCopies, copies)
+			m.t.Errorf("Expecting %d objects all to have %d replicas, got: %d", total, expectedCopies, copies)
 		}
 	}
 }

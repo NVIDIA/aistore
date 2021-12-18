@@ -286,7 +286,7 @@ var _ = Describe("LOM Xattributes", func() {
 					b[2]++ // changing first byte of meta checksum
 					Expect(fs.SetXattr(localFQN, cluster.XattrLOM, b)).NotTo(HaveOccurred())
 					err = lom.LoadMetaFromFS()
-					Expect(err).To(MatchError(&cos.ErrBadCksum{}))
+					Expect(err.Error()).To(ContainSubstring("BAD META CHECKSUM"))
 				})
 
 				It("should fail when checksum type is invalid", func() {
@@ -341,7 +341,7 @@ var _ = Describe("LOM Xattributes", func() {
 					Expect(fs.SetXattr(localFQN, cluster.XattrLOM, b)).NotTo(HaveOccurred())
 
 					err = lom.LoadMetaFromFS()
-					Expect(err).To(MatchError(&cos.ErrBadCksum{}))
+					Expect(err.Error()).To(ContainSubstring("BAD META CHECKSUM"))
 				})
 			})
 		})
