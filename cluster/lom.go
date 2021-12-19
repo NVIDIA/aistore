@@ -1132,3 +1132,37 @@ func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
 	fh, err = os.OpenFile(fqn, os.O_CREATE|os.O_WRONLY, cos.PermRWR)
 	return
 }
+
+// permission to overwrite objects that were previously read from:
+// a) any remote backend that is currently not configured as the bucket's backend
+// b) HTPP ("ht://") since it's not writable
+func (lom *LOM) AllowDisconnectedBackend(loaded bool) (err error) {
+	bck := lom.Bck()
+	// allowed
+	if bck.Props.Access.Has(cmn.AceDisconnectedBackend) {
+		return
+	}
+	if !loaded {
+		// doesn't exist
+		if lom.Load(true /*cache it*/, false /*locked*/) != nil {
+			return
+		}
+	}
+	// not allowed & exists & no remote source
+	srcProvider, hasSrc := lom.GetCustomKey(cmn.SourceObjMD)
+	if !hasSrc {
+		return
+	}
+	// case 1
+	if bck.IsAIS() {
+		goto rerr
+	}
+	// case 2
+	if b := bck.RemoteBck(); b != nil && b.Provider == srcProvider {
+		return
+	}
+rerr:
+	msg := fmt.Sprintf("%s(downoaded from %q)", lom, srcProvider)
+	err = cmn.NewObjectAccessDenied(msg, cmn.AccessOp(cmn.AceDisconnectedBackend), bck.Props.Access)
+	return
+}

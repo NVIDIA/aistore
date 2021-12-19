@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/backend"
@@ -215,20 +216,19 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 	// local; NOTE: cluster.FreeLOM(lom) by the caller
 	err = lom.Load(false /*cache it*/, false /*locked*/)
 	if err == nil && !params.Overwrite {
-		glog.Errorf("[promote] %s already exists", lom)
+		glog.Warningf("[promote] %s already exists", lom) // TODO: NFS shares and such visible to all targets
 		return
 	}
 	var (
 		cksum    *cos.CksumHash
 		fileSize int64
 		workFQN  string
-		poi      = &putObjInfo{t: t, lom: lom}
 	)
 	copyFile := params.KeepOrig
 	if !params.KeepOrig {
 		// To use `params.SrcFQN` as `workFQN` we must be sure that they are on
 		// the same device. Right now, we do it by ensuring that they are on the
-		// same mountpath but this is stronger assumption.
+		// same mountpath but this is a stronger assumption.
 		//
 		// TODO: Try to determine if `params.SrcFQN` and `dstFQN` are on the device
 		//  without requiring it to be on the same mountpath.
@@ -273,14 +273,16 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 		}
 	}
 
+	poi := &putObjInfo{started: time.Now(), t: t, lom: lom}
 	poi.workFQN = workFQN
 	lom.SetSize(fileSize)
-	if _, err = poi.finalize(); err == nil {
-		nlom = lom
-		if !params.KeepOrig {
-			if err := cos.RemoveFile(params.SrcFQN); err != nil {
-				glog.Errorf("[promote] Failed to remove source file %q, err: %v", params.SrcFQN, err)
-			}
+	if _, err = poi.finalize(); err != nil {
+		return
+	}
+	nlom = lom
+	if !params.KeepOrig {
+		if err := cos.RemoveFile(params.SrcFQN); err != nil {
+			glog.Errorf("[promote] Failed to remove source file %q, err: %v", params.SrcFQN, err)
 		}
 	}
 	return

@@ -22,7 +22,7 @@ type bckInitArgs struct {
 	p       *proxyrunner
 	w       http.ResponseWriter
 	r       *http.Request
-	perms   cmn.AccessAttrs // cmn.AccessGET, cmn.AccessPATCH etc.
+	perms   cmn.AccessAttrs // cmn.AceGET, cmn.AcePATCH etc.
 	reqBody []byte          // request body of original request
 	query   url.Values      // r.URL.Query()
 
@@ -120,7 +120,7 @@ func (args *bckInitArgs) _checkRemoteBckPermissions() (err error) {
 		return
 	}
 
-	if args._requiresPermission(cmn.AccessMoveBucket) {
+	if args._requiresPermission(cmn.AceMoveBucket) {
 		goto retErr
 	}
 
@@ -130,12 +130,12 @@ func (args *bckInitArgs) _checkRemoteBckPermissions() (err error) {
 	}
 
 	// HTTP buckets should fail on PUT and bucket rename operations
-	if args.bck.IsHTTP() && args._requiresPermission(cmn.AccessPUT) {
+	if args.bck.IsHTTP() && args._requiresPermission(cmn.AcePUT) {
 		goto retErr
 	}
 
 	// Destroy and Rename/Move are not permitted.
-	if args.bck.IsCloud() && args._requiresPermission(cmn.AccessDestroyBucket) &&
+	if args.bck.IsCloud() && args._requiresPermission(cmn.AceDestroyBucket) &&
 		args.msg.Action == cmn.ActDestroyBck {
 		goto retErr
 	}

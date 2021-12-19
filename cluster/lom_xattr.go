@@ -118,6 +118,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 }
 
 func (lom *LOM) Persist() (err error) {
+	// write-never or write-delayed
 	if !lom.WritePolicy().IsImmediate() {
 		lom.md.makeDirty()
 		if !lom.IsCopy() {
@@ -128,8 +129,11 @@ func (lom *LOM) Persist() (err error) {
 		}
 		return
 	}
+
+	// write-immediate (default)
 	buf, mm := lom.marshal()
 	if err = fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
+		lom.Uncache(true /*delDirty*/)
 		T.FSHC(err, lom.FQN)
 	} else {
 		lom.md.clearDirty()

@@ -47,21 +47,21 @@ var Table = map[string]Record{
 	cmn.ActArchive:         {Scope: ScopeBck, Startable: false, RefreshCap: true},
 	cmn.ActCopyObjects:     {Scope: ScopeBck, Startable: false, RefreshCap: true},
 	cmn.ActETLObjects:      {Scope: ScopeBck, Startable: false, RefreshCap: true},
-	cmn.ActMoveBck:         {Scope: ScopeBck, Access: cmn.AccessMoveBucket, Startable: false, Metasync: true, Owned: false, Mountpath: true},
+	cmn.ActMoveBck:         {Scope: ScopeBck, Access: cmn.AceMoveBucket, Startable: false, Metasync: true, Owned: false, Mountpath: true},
 	cmn.ActCopyBck:         {Scope: ScopeBck, Access: cmn.AccessRW, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
 	cmn.ActETLBck:          {Scope: ScopeBck, Access: cmn.AccessRW, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
 	cmn.ActECEncode:        {Scope: ScopeBck, Access: cmn.AccessRW, Startable: true, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
-	cmn.ActEvictObjects:    {Scope: ScopeBck, Access: cmn.AccessObjDELETE, Startable: false, RefreshCap: true, Mountpath: true},
-	cmn.ActDeleteObjects:   {Scope: ScopeBck, Access: cmn.AccessObjDELETE, Startable: false, RefreshCap: true, Mountpath: true},
+	cmn.ActEvictObjects:    {Scope: ScopeBck, Access: cmn.AceObjDELETE, Startable: false, RefreshCap: true, Mountpath: true},
+	cmn.ActDeleteObjects:   {Scope: ScopeBck, Access: cmn.AceObjDELETE, Startable: false, RefreshCap: true, Mountpath: true},
 	cmn.ActLoadLomCache:    {Scope: ScopeBck, Startable: true, Mountpath: true},
 	cmn.ActPrefetchObjects: {Scope: ScopeBck, Access: cmn.AccessRW, RefreshCap: true, Startable: true},
-	cmn.ActPromote:         {Scope: ScopeBck, Access: cmn.AccessPROMOTE, Startable: false, RefreshCap: true},
-	cmn.ActQueryObjects:    {Scope: ScopeBck, Access: cmn.AccessObjLIST, Startable: false, Metasync: false, Owned: true},
-	cmn.ActList:            {Scope: ScopeBck, Access: cmn.AccessObjLIST, Startable: false, Metasync: false, Owned: true},
-	cmn.ActInvalListCache:  {Scope: ScopeBck, Access: cmn.AccessObjLIST, Startable: false},
+	cmn.ActPromote:         {Scope: ScopeBck, Access: cmn.AcePromote, Startable: false, RefreshCap: true},
+	cmn.ActQueryObjects:    {Scope: ScopeBck, Access: cmn.AceObjLIST, Startable: false, Metasync: false, Owned: true},
+	cmn.ActList:            {Scope: ScopeBck, Access: cmn.AceObjLIST, Startable: false, Metasync: false, Owned: true},
+	cmn.ActInvalListCache:  {Scope: ScopeBck, Access: cmn.AceObjLIST, Startable: false},
 
 	// other
-	cmn.ActSummary: {Scope: ScopeO, Access: cmn.AccessObjLIST | cmn.AccessBckHEAD, Startable: false, Metasync: false, Owned: true, Mountpath: true},
+	cmn.ActSummary: {Scope: ScopeO, Access: cmn.AceObjLIST | cmn.AceBckHEAD, Startable: false, Metasync: false, Owned: true, Mountpath: true},
 }
 
 func IsValidKind(kind string) bool { _, ok := Table[kind]; return ok }

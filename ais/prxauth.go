@@ -115,7 +115,7 @@ func (p *proxyrunner) _checkACL(hdr http.Header, bck *cluster.Bck, ace cmn.Acces
 		// PATCH and ACL are always allowed in two cases:
 		// - a user is a superuser
 		// - AuthN is disabled
-		ace &^= (cmn.AccessPATCH | cmn.AccessBckSetACL)
+		ace &^= (cmn.AcePATCH | cmn.AceBckSetACL)
 	}
 	if ace == 0 {
 		return nil

@@ -888,7 +888,10 @@ func TestDownloadOverrideObject(t *testing.T) {
 
 	clearDownloadList(t)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	// disallow updating downloaded objects
+	aattrs := cmn.AccessAll &^ cmn.AceDisconnectedBackend
+	props := &cmn.BucketPropsToUpdate{Access: api.AccessAttrs(aattrs)}
+	tutils.CreateBucketWithCleanup(t, proxyURL, bck, props)
 
 	downloadObject(t, bck, objName, link, false /*shouldBeSkipped*/)
 	oldProps := verifyProps(t, bck, objName, expectedSize, "1")
@@ -932,8 +935,6 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 
 	clearDownloadList(t)
 
-	tutils.CreateBucketWithCleanup(t, proxyURL, bck, nil)
-
 	downloadObject(t, bck, objName, link, false /*shouldBeSkipped*/)
 	oldProps := verifyProps(t, bck, objName, expectedSize, "1")
 
@@ -946,7 +947,7 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 		Cksum:      r.Cksum(),
 		Reader:     r,
 	})
-	tassert.Fatalf(t, err == nil, "expected: err!=nil, got: %v", err)
+	tassert.Fatalf(t, err == nil, "expected: err nil, got: %v", err)
 	verifyProps(t, bck, objName, newSize, "2")
 
 	downloadObject(t, bck, objName, link, false /*shouldBeSkipped*/)

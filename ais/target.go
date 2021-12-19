@@ -927,23 +927,12 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if lom.Load(true /*cache it*/, false /*locked*/) == nil { // if exists, check custom md
-		srcProvider, hasSrc := lom.GetCustomKey(cmn.SourceObjMD)
-		if hasSrc && srcProvider != cmn.WebObjMD {
-			bck := lom.Bck()
-			if bck.IsAIS() {
-				t.writeErrf(w, r,
-					"bucket %s: cannot override %s-downloaded object", bck, srcProvider)
-				return
-			}
-			if b := bck.RemoteBck(); b != nil && b.Provider != srcProvider {
-				t.writeErrf(w, r,
-					"bucket %s: cannot override %s-downloaded object", b, srcProvider)
-				return
-			}
+	if lom.Load(true, false) == nil { // TODO -- FIXME: remove this outer `if`
+		if err := lom.AllowDisconnectedBackend(false /*loaded*/); err != nil {
+			t.writeErr(w, r, err)
+			return
 		}
 	}
-	lom.SetAtimeUnix(started.UnixNano())
 
 	var (
 		handle           string

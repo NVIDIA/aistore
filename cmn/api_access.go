@@ -16,49 +16,54 @@ type AccessAttrs uint64
 // ACL aka access permissions
 const (
 	// object level
-	AccessGET     = AccessAttrs(1) << iota
-	AccessObjHEAD // get object props
-	AccessPUT
-	AccessAPPEND
-	AccessObjDELETE
-	AccessObjMOVE
-	AccessPROMOTE
+	AceGET     = AccessAttrs(1) << iota
+	AceObjHEAD // permission to get object props
+	AcePUT
+	AceAPPEND
+	AceObjDELETE
+	AceObjMOVE
+	AcePromote
+	// permission to overwrite objects that were previously read from:
+	// a) any remote backend that is currently not configured as the bucket's backend
+	// b) HTPP ("ht://") since it's not writable
+	AceDisconnectedBackend
 	// bucket metadata
-	AccessBckHEAD   // get bucket props and ACL
-	AccessObjLIST   // list objects in a bucket
-	AccessPATCH     // set bucket props
-	AccessBckSetACL // set bucket permissions
+	AceBckHEAD   // get bucket props and ACL
+	AceObjLIST   // list objects in a bucket
+	AcePATCH     // set bucket props
+	AceBckSetACL // set bucket permissions
 	// cluster level
-	AccessListBuckets
-	AccessCreateBucket
-	AccessDestroyBucket
-	AccessMoveBucket
-	AccessAdmin
+	AceListBuckets
+	AceCreateBucket
+	AceDestroyBucket
+	AceMoveBucket
+	AceAdmin
 	// note: must be the last one
-	AccessMax
+	AceMax
 )
 
 // access => operation
 var accessOp = map[AccessAttrs]string{
 	// object
-	AccessGET:       "GET",
-	AccessObjHEAD:   "HEAD-OBJECT",
-	AccessPUT:       "PUT",
-	AccessAPPEND:    "APPEND",
-	AccessObjDELETE: "DELETE-OBJECT",
-	AccessObjMOVE:   "MOVE-OBJECT",
-	AccessPROMOTE:   "PROMOTE",
+	AceGET:                 "GET",
+	AceObjHEAD:             "HEAD-OBJECT",
+	AcePUT:                 "PUT",
+	AceAPPEND:              "APPEND",
+	AceObjDELETE:           "DELETE-OBJECT",
+	AceObjMOVE:             "MOVE-OBJECT",
+	AcePromote:             "PROMOTE",
+	AceDisconnectedBackend: "DISCONNECTED-BACKEND",
 	// bucket
-	AccessBckHEAD:   "HEAD-BUCKET",
-	AccessObjLIST:   "LIST-OBJECTS",
-	AccessPATCH:     "PATCH",
-	AccessBckSetACL: "SET-BUCKET-ACL",
+	AceBckHEAD:   "HEAD-BUCKET",
+	AceObjLIST:   "LIST-OBJECTS",
+	AcePATCH:     "PATCH",
+	AceBckSetACL: "SET-BUCKET-ACL",
 	// cluster
-	AccessListBuckets:   "LIST-BUCKETS",
-	AccessCreateBucket:  "CREATE-BUCKET",
-	AccessDestroyBucket: "DESTROY-BUCKET",
-	AccessMoveBucket:    "MOVE-BUCKET",
-	AccessAdmin:         "ADMIN",
+	AceListBuckets:   "LIST-BUCKETS",
+	AceCreateBucket:  "CREATE-BUCKET",
+	AceDestroyBucket: "DESTROY-BUCKET",
+	AceMoveBucket:    "MOVE-BUCKET",
+	AceAdmin:         "ADMIN",
 }
 
 // derived (convenience) constants
@@ -68,24 +73,18 @@ const (
 	AllowAllAccess = "su"
 
 	// read-only and read-write access to bucket
-	AccessRO             = AccessGET | AccessObjHEAD | AccessBckHEAD | AccessObjLIST
+	AccessRO             = AceGET | AceObjHEAD | AceBckHEAD | AceObjLIST
 	AllowReadOnlyAccess  = "ro"
-	AccessRW             = AccessRO | AccessPUT | AccessAPPEND | AccessObjDELETE | AccessObjMOVE
+	AccessRW             = AccessRO | AcePUT | AceAPPEND | AceObjDELETE | AceObjMOVE
 	AllowReadWriteAccess = "rw"
 
 	AccessNone = AccessAttrs(0)
 
 	// permission to perform cluster-level ops
-	AccessCluster = AccessListBuckets | AccessCreateBucket | AccessDestroyBucket | AccessMoveBucket |
-		AccessAdmin
+	AccessCluster = AceListBuckets | AceCreateBucket | AceDestroyBucket | AceMoveBucket | AceAdmin
 )
 
 // verbs
-const (
-	AllowAccess = "allow"
-	DenyAccess  = "deny"
-)
-
 func SupportedPermissions() []string {
 	accList := []string{"ro", "rw", "su"}
 	for _, v := range accessOp {
@@ -102,48 +101,48 @@ func (a AccessAttrs) Describe() string {
 		return "No access"
 	}
 	accList := make([]string, 0, 24)
-	if a.Has(AccessGET) {
-		accList = append(accList, accessOp[AccessGET])
+	if a.Has(AceGET) {
+		accList = append(accList, accessOp[AceGET])
 	}
-	if a.Has(AccessObjHEAD) {
-		accList = append(accList, accessOp[AccessObjHEAD])
+	if a.Has(AceObjHEAD) {
+		accList = append(accList, accessOp[AceObjHEAD])
 	}
-	if a.Has(AccessPUT) {
-		accList = append(accList, accessOp[AccessPUT])
+	if a.Has(AcePUT) {
+		accList = append(accList, accessOp[AcePUT])
 	}
-	if a.Has(AccessAPPEND) {
-		accList = append(accList, accessOp[AccessAPPEND])
+	if a.Has(AceAPPEND) {
+		accList = append(accList, accessOp[AceAPPEND])
 	}
-	if a.Has(AccessObjDELETE) {
-		accList = append(accList, accessOp[AccessObjDELETE])
+	if a.Has(AceObjDELETE) {
+		accList = append(accList, accessOp[AceObjDELETE])
 	}
-	if a.Has(AccessObjMOVE) {
-		accList = append(accList, accessOp[AccessObjMOVE])
+	if a.Has(AceObjMOVE) {
+		accList = append(accList, accessOp[AceObjMOVE])
 	}
-	if a.Has(AccessPROMOTE) {
-		accList = append(accList, accessOp[AccessPROMOTE])
+	if a.Has(AcePromote) {
+		accList = append(accList, accessOp[AcePromote])
 	}
 	//
-	if a.Has(AccessBckHEAD) {
-		accList = append(accList, accessOp[AccessBckHEAD])
+	if a.Has(AceBckHEAD) {
+		accList = append(accList, accessOp[AceBckHEAD])
 	}
-	if a.Has(AccessObjLIST) {
-		accList = append(accList, accessOp[AccessObjLIST])
+	if a.Has(AceObjLIST) {
+		accList = append(accList, accessOp[AceObjLIST])
 	}
-	if a.Has(AccessMoveBucket) {
-		accList = append(accList, accessOp[AccessMoveBucket])
+	if a.Has(AceMoveBucket) {
+		accList = append(accList, accessOp[AceMoveBucket])
 	}
-	if a.Has(AccessPATCH) {
-		accList = append(accList, accessOp[AccessPATCH])
+	if a.Has(AcePATCH) {
+		accList = append(accList, accessOp[AcePATCH])
 	}
-	if a.Has(AccessDestroyBucket) {
-		accList = append(accList, accessOp[AccessDestroyBucket])
+	if a.Has(AceDestroyBucket) {
+		accList = append(accList, accessOp[AceDestroyBucket])
 	}
-	if a.Has(AccessBckSetACL) {
-		accList = append(accList, accessOp[AccessBckSetACL])
+	if a.Has(AceBckSetACL) {
+		accList = append(accList, accessOp[AceBckSetACL])
 	}
-	if a.Has(AccessAdmin) {
-		accList = append(accList, accessOp[AccessAdmin])
+	if a.Has(AceAdmin) {
+		accList = append(accList, accessOp[AceAdmin])
 	}
 	return strings.Join(accList, ",")
 }

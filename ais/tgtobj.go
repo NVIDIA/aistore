@@ -216,10 +216,8 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 			glog.Errorf("PUT %s: failed to delete old copies [%v], proceeding to PUT anyway...", lom, errdc)
 		}
 	}
+	lom.SetAtimeUnix(poi.started.UnixNano())
 	err = lom.Persist()
-	if err != nil {
-		lom.Uncache(true /*delDirty*/)
-	}
 	return
 }
 
@@ -406,6 +404,11 @@ do:
 				return
 			}
 			coldGet = !equal
+			if coldGet {
+				if err = goi.lom.AllowDisconnectedBackend(true /*loaded*/); err != nil {
+					return
+				}
+			}
 			goi.lom.Lock(false)
 		}
 	}
@@ -1290,6 +1293,7 @@ func (aaoi *appendArchObjInfo) finalize(fqn string) error {
 	if err := os.Rename(fqn, aaoi.lom.FQN); err != nil {
 		return err
 	}
+	aaoi.lom.SetAtimeUnix(aaoi.started.UnixNano())
 	if err := aaoi.lom.Persist(); err != nil {
 		return err
 	}

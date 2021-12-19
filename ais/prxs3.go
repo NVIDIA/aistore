@@ -178,7 +178,7 @@ func (p *proxyrunner) delBckS3(w http.ResponseWriter, r *http.Request, bucket st
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
-	if err := bck.Allow(cmn.AccessDestroyBucket); err != nil {
+	if err := bck.Allow(cmn.AceDestroyBucket); err != nil {
 		p.writeErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -204,7 +204,7 @@ func (p *proxyrunner) delMultipleObjs(w http.ResponseWriter, r *http.Request, bu
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
-	if err := bck.Allow(cmn.AccessObjDELETE); err != nil {
+	if err := bck.Allow(cmn.AceObjDELETE); err != nil {
 		p.writeErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -248,7 +248,7 @@ func (p *proxyrunner) headBckS3(w http.ResponseWriter, r *http.Request, bucket s
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
-	if err := bck.Allow(cmn.AccessBckHEAD); err != nil {
+	if err := bck.Allow(cmn.AceBckHEAD); err != nil {
 		p.writeErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -315,7 +315,7 @@ func (p *proxyrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items []
 		p.writeErr(w, r, err)
 		return
 	}
-	if err := bckSrc.Allow(cmn.AccessGET); err != nil {
+	if err := bckSrc.Allow(cmn.AceGET); err != nil {
 		p.writeErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -333,7 +333,7 @@ func (p *proxyrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items []
 		smap = p.owner.smap.get()
 		err  error
 	)
-	if err = bckDst.Allow(cmn.AccessPUT); err != nil {
+	if err = bckDst.Allow(cmn.AcePUT); err != nil {
 		p.writeErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -367,7 +367,7 @@ func (p *proxyrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, ite
 		smap = p.owner.smap.get()
 		err  error
 	)
-	if err = bck.Allow(cmn.AccessPUT); err != nil {
+	if err = bck.Allow(cmn.AcePUT); err != nil {
 		p.writeErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -410,7 +410,7 @@ func (p *proxyrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []s
 		smap = p.owner.smap.get()
 		err  error
 	)
-	if err = bck.Allow(cmn.AccessGET); err != nil {
+	if err = bck.Allow(cmn.AceGET); err != nil {
 		p.writeErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -439,7 +439,7 @@ func (p *proxyrunner) headObjS3(w http.ResponseWriter, r *http.Request, items []
 		p.writeErr(w, r, err)
 		return
 	}
-	if err := bck.Allow(cmn.AccessObjHEAD); err != nil {
+	if err := bck.Allow(cmn.AceObjHEAD); err != nil {
 		p.writeErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -473,7 +473,7 @@ func (p *proxyrunner) delObjS3(w http.ResponseWriter, r *http.Request, items []s
 		smap = p.owner.smap.get()
 		err  error
 	)
-	if err = bck.Allow(cmn.AccessObjDELETE); err != nil {
+	if err = bck.Allow(cmn.AceObjDELETE); err != nil {
 		p.writeErr(w, r, err, http.StatusForbidden)
 		return
 	}
