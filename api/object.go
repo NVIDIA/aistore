@@ -77,7 +77,43 @@ type (
 	}
 )
 
-// HeadObject returns the size and version of the object specified by bucket/object.
+///////////////////
+// PutObjectArgs //
+///////////////////
+
+func (args *PutObjectArgs) put(reqArgs cmn.ReqArgs) (*http.Request, error) {
+	req, err := reqArgs.Req()
+	if err != nil {
+		return nil, newErrCreateHTTPRequest(err)
+	}
+	// Go http doesn't automatically set this for files, so to handle redirect we do it here.
+	req.GetBody = func() (io.ReadCloser, error) {
+		return args.Reader.Open()
+	}
+	if args.Cksum != nil && args.Cksum.Ty() != cos.ChecksumNone {
+		req.Header.Set(cmn.HdrObjCksumType, args.Cksum.Ty())
+		ckVal := args.Cksum.Value()
+		if ckVal == "" {
+			_, ckhash, err := cos.CopyAndChecksum(io.Discard, args.Reader, nil, args.Cksum.Ty())
+			if err != nil {
+				return nil, newErrCreateHTTPRequest(err)
+			}
+			ckVal = hex.EncodeToString(ckhash.Sum())
+		}
+		req.Header.Set(cmn.HdrObjCksumVal, ckVal)
+	}
+	if args.Size != 0 {
+		req.ContentLength = int64(args.Size) // as per https://tools.ietf.org/html/rfc7230#section-3.3.2
+	}
+	setAuthToken(req, args.BaseParams)
+	return req, nil
+}
+
+//
+// object-level API
+//
+
+// HeadObject returns the object properties; can be conventionally used to establish existence.
 func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists ...bool) (*cmn.ObjectProps, error) {
 	var (
 		q             url.Values
@@ -271,14 +307,14 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string,
 }
 
 // GetObjectWithResp returns the response of the request and length of the object.
-// Does not validate checksum of the object in the response.
+// Does not validate the checksum of the object in the response.
 //
 // Writes the response body to a writer if one is specified in the optional
 // `GetObjectInput.Writer`. Otherwise, it discards the response body read.
 //
 // `io.Copy` is used internally to copy response bytes from the request to the writer.
-func GetObjectWithResp(baseParams BaseParams, bck cmn.Bck, object string,
-	options ...GetObjectInput) (*http.Response, int64, error) {
+func GetObjectWithResp(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (*http.Response,
+	int64, error) {
 	var (
 		w   = io.Discard
 		q   url.Values
@@ -307,10 +343,6 @@ func GetObjectWithResp(baseParams BaseParams, bck cmn.Bck, object string,
 // Assumes that `args.Reader` is already opened and ready for usage.
 func PutObject(args PutObjectArgs) (err error) {
 	query := cmn.AddBckToQuery(nil, args.Bck)
-	return _putObject(args, query)
-}
-
-func _putObject(args PutObjectArgs, query url.Values) (err error) {
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   args.BaseParams.URL,
@@ -318,39 +350,8 @@ func _putObject(args PutObjectArgs, query url.Values) (err error) {
 		Query:  query,
 		BodyR:  args.Reader,
 	}
-
-	newRequest := func(reqArgs cmn.ReqArgs) (*http.Request, error) {
-		req, err := reqArgs.Req()
-		if err != nil {
-			return nil, newErrCreateHTTPRequest(err)
-		}
-
-		// The HTTP package doesn't automatically set this for files, so it has to be done manually
-		// If it wasn't set, we would need to deal with the redirect manually.
-		req.GetBody = func() (io.ReadCloser, error) {
-			return args.Reader.Open()
-		}
-		if args.Cksum != nil && args.Cksum.Ty() != cos.ChecksumNone {
-			req.Header.Set(cmn.HdrObjCksumType, args.Cksum.Ty())
-			ckVal := args.Cksum.Value()
-			if ckVal == "" {
-				_, ckhash, err := cos.CopyAndChecksum(io.Discard, args.Reader, nil, args.Cksum.Ty())
-				if err != nil {
-					return nil, newErrCreateHTTPRequest(err)
-				}
-				ckVal = hex.EncodeToString(ckhash.Sum())
-			}
-			req.Header.Set(cmn.HdrObjCksumVal, ckVal)
-		}
-		if args.Size != 0 {
-			req.ContentLength = int64(args.Size) // as per https://tools.ietf.org/html/rfc7230#section-3.3.2
-		}
-
-		setAuthToken(req, args.BaseParams)
-		return req, nil
-	}
-	_, err = DoReqWithRetry(args.BaseParams.Client, newRequest, reqArgs) // nolint:bodyclose // is closed inside
-	return err
+	_, err = DoReqWithRetry(args.BaseParams.Client, args.put, reqArgs) // nolint:bodyclose // is closed inside
+	return
 }
 
 // Append the content of a reader (`args.Reader` - e.g., an open file) to an existing
@@ -369,7 +370,16 @@ func AppendToArch(args AppendToArchArgs) (err error) {
 	q = cmn.AddBckToQuery(q, args.Bck)
 	q.Set(cmn.URLParamArchpath, args.ArchPath)
 	q.Set(cmn.URLParamArchmime, m)
-	return _putObject(args.PutObjectArgs, q)
+	reqArgs := cmn.ReqArgs{
+		Method: http.MethodPut,
+		Base:   args.BaseParams.URL,
+		Path:   cmn.URLPathObjects.Join(args.Bck.Name, args.Object),
+		Query:  q,
+		BodyR:  args.Reader,
+	}
+	putArgs := &args.PutObjectArgs
+	_, err = DoReqWithRetry(args.BaseParams.Client, putArgs.put, reqArgs) // nolint:bodyclose // is closed inside
+	return
 }
 
 // AppendObject adds a reader (`args.Reader` - e.g., an open file) to an object.

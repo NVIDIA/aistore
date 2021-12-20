@@ -92,13 +92,12 @@ func Put(proxyURL string, bck cmn.Bck, object string, reader readers.Reader, err
 		Reader:     reader,
 	}
 	err := api.PutObject(putArgs)
-	if errCh == nil {
-		if err != nil {
-			fmt.Println("Error channel is not given, do not know how to report error", err)
-		}
+	if err == nil {
 		return
 	}
-	if err != nil {
+	if errCh == nil {
+		fmt.Printf("PUT %s/%s failed, err: %v (nil error channel)\n", bck.String(), object, err)
+	} else {
 		errCh <- err
 	}
 }
