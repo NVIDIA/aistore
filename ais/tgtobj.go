@@ -216,7 +216,9 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 			glog.Errorf("PUT %s: failed to delete old copies [%v], proceeding to PUT anyway...", lom, errdc)
 		}
 	}
-	lom.SetAtimeUnix(poi.started.UnixNano())
+	if poi.recvType != cluster.Migrated {
+		lom.SetAtimeUnix(poi.started.UnixNano())
+	}
 	err = lom.Persist()
 	return
 }
