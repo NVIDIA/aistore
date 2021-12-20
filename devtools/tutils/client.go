@@ -328,6 +328,7 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 						Cksum:      reader.Cksum(),
 						Reader:     reader,
 						Size:       size,
+						SkipVC:     true,
 					})
 					putCnt.Inc()
 					if err != nil {

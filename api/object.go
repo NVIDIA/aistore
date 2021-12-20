@@ -22,7 +22,7 @@ const (
 	httpRetrySleep = 100 * time.Millisecond // a sleep between HTTP request retries
 	// Sleep between HTTP retries for error[rate of change requests exceeds limit] - must be > 1s:
 	// From https://cloud.google.com/storage/quotas#objects
-	//   There is an update limit on each object of once per second ...
+	//    "There is an update limit on each object of once per second..."
 	httpRetryRateSleep = 1500 * time.Millisecond
 )
 
@@ -42,6 +42,12 @@ type (
 		Cksum      *cos.Cksum
 		Reader     cos.ReadOpenCloser
 		Size       uint64 // optional
+		// Skip loading existing object's metadata in order to
+		// compare its Checksum and update its existing Version (if exists);
+		// can be used to reduce PUT latency when:
+		// - we massively write a new content into a bucket, and/or
+		// - we simply don't care.
+		SkipVC bool
 	}
 	AppendToArchArgs struct {
 		PutObjectArgs
@@ -343,6 +349,9 @@ func GetObjectWithResp(baseParams BaseParams, bck cmn.Bck, object string, option
 // Assumes that `args.Reader` is already opened and ready for usage.
 func PutObject(args PutObjectArgs) (err error) {
 	query := cmn.AddBckToQuery(nil, args.Bck)
+	if args.SkipVC {
+		query.Set(cmn.URLParamSkipVC, "true")
+	}
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   args.BaseParams.URL,

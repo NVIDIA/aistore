@@ -118,9 +118,12 @@ func (t *targetrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, it
 		t.writeErr(w, r, errS3Obj)
 		return
 	}
-	var err error
-	objName := path.Join(items[1:]...)
-	lom := cluster.AllocLOM(objName)
+
+	var (
+		err     error
+		objName = path.Join(items[1:]...)
+		lom     = cluster.AllocLOM(objName)
+	)
 	defer cluster.FreeLOM(lom)
 	if err = lom.Init(bck.Bck); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
@@ -133,13 +136,14 @@ func (t *targetrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, it
 		}
 	}
 	if lom.Bck().IsAIS() && lom.VersionConf().Enabled {
-		lom.Load(true /*cache it*/, false /*locked*/) // load it to see the current version
+		// load it to see the current version; TODO: skipVC
+		lom.Load(true /*cache it*/, false /*locked*/)
 	}
 	lom.SetAtimeUnix(started.UnixNano())
 
 	// TODO: dual checksumming, e.g. lom.SetCustom(cmn.ProviderAmazon, ...)
 
-	if errCode, err := t.doPut(r, lom, started); err != nil {
+	if errCode, err := t.doPut(r, lom, started, r.URL.Query(), false /*skipVC*/); err != nil {
 		t.fsErr(err, lom.FQN)
 		t.writeErr(w, r, err, errCode)
 		return

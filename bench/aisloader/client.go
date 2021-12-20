@@ -224,6 +224,7 @@ func put(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum, reader c
 			Object:     object,
 			Cksum:      cksum,
 			Reader:     reader,
+			SkipVC:     true,
 		}
 	)
 	return api.PutObject(args)

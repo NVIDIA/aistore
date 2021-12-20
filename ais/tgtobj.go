@@ -50,6 +50,7 @@ type (
 		workFQN    string           // temp fqn to be renamed
 		recvType   cluster.RecvType // enum { RegularPut, Cold, Migrated, ... }
 		skipEC     bool             // true: do not erasure-encode when finalizing
+		skipVC     bool             // true: do not try to load existing version and do not compare checksums
 	}
 
 	getObjInfo struct {
@@ -115,10 +116,9 @@ type (
 ////////////////
 
 func (poi *putObjInfo) putObject() (int, error) {
-	debug.Assert(cluster.RegularPut <= poi.recvType && poi.recvType <= cluster.Migrated)
 	lom := poi.lom
 	// optimize out if the checksums do match
-	if !poi.cksumToUse.IsEmpty() {
+	if !poi.skipVC && !poi.cksumToUse.IsEmpty() {
 		if lom.EqCksum(poi.cksumToUse) {
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("%s is valid %s: PUT is a no-op", lom, poi.cksumToUse)
@@ -199,7 +199,10 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 	// ais versioning
 	if bck.IsAIS() && lom.VersionConf().Enabled {
 		if poi.recvType == cluster.RegularPut {
-			if remSrc, ok := lom.GetCustomKey(cmn.SourceObjMD); !ok || remSrc == "" {
+			if poi.skipVC {
+				err = lom.IncVersion()
+				debug.Assert(err == nil)
+			} else if remSrc, ok := lom.GetCustomKey(cmn.SourceObjMD); !ok || remSrc == "" {
 				if err = lom.IncVersion(); err != nil {
 					glog.Error(err)
 				}
@@ -305,7 +308,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	// compute checksum and save it as part of the object metadata
 	cksums.store = cos.NewCksumHash(conf.Type)
 	writers = append(writers, cksums.store.H)
-	if conf.ShouldValidate() && !poi.cksumToUse.IsEmpty() {
+	if !poi.skipVC && conf.ShouldValidate() && !poi.cksumToUse.IsEmpty() {
 		// if validate-cold-get and the cksum is provided we should also check md5 hash (aws, gcp)
 		// or if the object is migrated, and `conf.ValidateObjMove` we should check with existing checksum
 		cksums.expct = poi.cksumToUse
@@ -1233,7 +1236,7 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 		err = _sendObjDM(lom, params)
 	} else {
 		// TODO: currently, these sends are not accounted for in xactions stats
-		//       (see data mover for in and out counters)
+		//       (see data mover for `in` and `out` counters)
 		err = coi.t._sendPUT(params)
 	}
 	return
@@ -1354,7 +1357,7 @@ func (t *targetrunner) _sendPUT(params *cluster.SendToParams) error {
 	)
 	cmn.ToHeader(params.ObjAttrs, hdr)
 	hdr.Set(cmn.HdrPutterID, t.si.ID())
-	query.Set(cmn.URLParamRecvType, strconv.Itoa(int(cluster.Migrated)))
+	query.Set(cmn.URLParamRecvType, strconv.Itoa(int(cluster.Migrated))) // NOTE: recvType migrated
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   params.Tsi.URL(cmn.NetworkIntraData),

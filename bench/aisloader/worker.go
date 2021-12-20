@@ -27,6 +27,7 @@ func doPut(wo *workOrder) {
 			// we need to postpone `sgl.Free` to a little bit later time, otherwise
 			// we will experience 'read after free'. Sleep time is number taken
 			// from thin air - increase if panics are still happening.
+			// TODO: optimize via buffering and channelizing to a single goroutine
 			go func() {
 				time.Sleep(4 * time.Second)
 				sgl.Free()

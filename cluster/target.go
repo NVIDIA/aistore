@@ -84,7 +84,7 @@ type (
 		RecvType   RecvType
 		Cksum      *cos.Cksum // Checksum to check.
 		Started    time.Time
-		SkipEncode bool // Do not run EC encode after finalizing.
+		SkipEncode bool // Do not run erasure-code when finalizing.
 	}
 	CopyObjectParams struct {
 		BckTo     *Bck

@@ -210,6 +210,13 @@ const (
 	// Archive filename and format (mime type)
 	URLParamArchpath = "archpath"
 	URLParamArchmime = "archmime"
+
+	// Skip loading existing object's metadata in order to
+	// compare its Checksum and update its existing Version (if exists);
+	// can be used to reduce PUT latency when:
+	// - we massively write a new content into a bucket, and/or
+	// - we simply don't care.
+	URLParamSkipVC = "skip_vc"
 )
 
 // health

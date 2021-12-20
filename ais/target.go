@@ -927,30 +927,35 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if lom.Load(true, false) == nil { // TODO -- FIXME: remove this outer `if`
-		if err := lom.AllowDisconnectedBackend(false /*loaded*/); err != nil {
-			t.writeErr(w, r, err)
-			return
-		}
-	}
 
 	var (
 		handle           string
-		err              error
+		err, errdb       error
 		errCode          int
+		skipVC           = cos.IsParseBool(request.query.Get(cmn.URLParamSkipVC))
 		archPathProvided = request.query.Has(cmn.URLParamArchpath)
 		appendTyProvided = request.query.Has(cmn.URLParamAppendType)
 	)
+	if skipVC {
+		errdb = lom.AllowDisconnectedBackend(false)
+	} else if lom.Load(true, false) == nil {
+		errdb = lom.AllowDisconnectedBackend(true)
+	}
+	if errdb != nil {
+		t.writeErr(w, r, errdb)
+		return
+	}
+
 	if archPathProvided {
-		errCode, err = t.doAppendArch(r, lom, started)
+		errCode, err = t.doAppendArch(r, lom, started, request.query)
 	} else if appendTyProvided {
-		handle, errCode, err = t.doAppend(r, lom, started)
+		handle, errCode, err = t.doAppend(r, lom, started, request.query)
 		if err == nil {
 			w.Header().Set(cmn.HdrAppendHandle, handle)
 			return
 		}
 	} else {
-		errCode, err = t.doPut(r, lom, started)
+		errCode, err = t.doPut(r, lom, started, request.query, skipVC)
 	}
 	if err != nil {
 		t.fsErr(err, lom.FQN)
@@ -1346,12 +1351,12 @@ func (t *targetrunner) _listBcks(query cmn.QueryBcks, cfg *cmn.Config) (names cm
 	return
 }
 
-func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.Time) (newHandle string, errCode int, err error) {
+func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.Time, query url.Values) (newHandle string,
+	errCode int, err error) {
 	var (
 		cksumValue    = r.Header.Get(cmn.HdrObjCksumVal)
 		cksumType     = r.Header.Get(cmn.HdrObjCksumType)
 		contentLength = r.Header.Get(cmn.HdrContentLength)
-		query         = r.URL.Query()
 		handle        = query.Get(cmn.URLParamAppendHandle)
 	)
 
@@ -1385,10 +1390,10 @@ func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.
 // Cloud bucket:
 //  - returned version ID is the version
 // In both cases, new checksum is also generated and stored along with the new version.
-func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Time) (errCode int, err error) {
+func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Time, query url.Values,
+	skipVC bool) (errCode int, err error) {
 	var (
 		header   = r.Header
-		query    = r.URL.Query()
 		recvType = query.Get(cmn.URLParamRecvType)
 	)
 	// TODO: oa.Size vs "Content-Length" vs actual, similar to checksum
@@ -1401,16 +1406,15 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 		poi.r = r.Body
 		poi.workFQN = fs.CSM.GenContentFQN(lom, fs.WorkfileType, fs.WorkfilePut)
 		poi.cksumToUse = cksumToUse
+		poi.recvType = cluster.RegularPut
+		poi.skipVC = skipVC
 	}
 	if recvType != "" {
 		n, err := strconv.Atoi(recvType)
-		if err != nil {
-			return http.StatusBadRequest, fmt.Errorf(cmn.FmtErrFailed, t.si, "parse", "receive type", err)
-		}
+		debug.AssertNoErr(err)
 		poi.recvType = cluster.RecvType(n)
 	}
-	sizeStr := header.Get(cmn.HdrContentLength)
-	if sizeStr != "" {
+	if sizeStr := header.Get(cmn.HdrContentLength); sizeStr != "" {
 		if size, ers := strconv.ParseInt(sizeStr, 10, 64); ers == nil {
 			poi.size = size
 		}
@@ -1420,10 +1424,9 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 	return
 }
 
-func (t *targetrunner) doAppendArch(r *http.Request, lom *cluster.LOM, started time.Time) (errCode int, err error) {
+func (t *targetrunner) doAppendArch(r *http.Request, lom *cluster.LOM, started time.Time, query url.Values) (errCode int, err error) {
 	var (
 		sizeStr  = r.Header.Get(cmn.HdrContentLength)
-		query    = r.URL.Query()
 		mime     = query.Get(cmn.URLParamArchmime)
 		filename = query.Get(cmn.URLParamArchpath)
 	)
