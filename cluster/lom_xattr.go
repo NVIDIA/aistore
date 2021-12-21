@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/OneOfOne/xxhash"
 )
@@ -68,7 +69,19 @@ const (
 const prefLen = 10 // 10B prefix [ version = 1 | checksum-type | 64-bit xxhash ]
 
 // NOTE: used in tests, ignores `dirty`
-func (lom *LOM) LoadMetaFromFS() error { _, err := lom.lmfs(true); return err }
+func (lom *LOM) LoadMetaFromFS() (err error) {
+	var finfo os.FileInfo
+	if _, err = lom.lmfs(true); err != nil {
+		return
+	}
+	if finfo, err = os.Stat(lom.FQN); err != nil {
+		return
+	}
+	atime := ios.GetATime(finfo)
+	lom.md.Atime = atime.UnixNano()
+	lom.md.atimefs = uint64(lom.md.Atime)
+	return
+}
 
 func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	const getxattr = "getxattr"

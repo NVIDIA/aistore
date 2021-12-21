@@ -554,7 +554,7 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 		p.owner.rmd.Unlock()
 	}
 
-	if svm.Config != nil {
+	if svm.Config != nil && svm.Config.UUID != "" {
 		p.owner.config.Lock()
 		config := cmn.GCO.Get()
 		if config.Version < svm.Config.version() {

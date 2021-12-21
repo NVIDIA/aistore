@@ -8,6 +8,7 @@ package xs
 import (
 	"io"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -191,8 +192,12 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 		// finalized.
 		RecvType: cluster.RegularPut,
 		Cksum:    hdr.ObjAttrs.Cksum,
-		Started:  lom.Atime(),
 	}
+	if lom.AtimeUnix() == 0 {
+		// TODO -- FIXME: sender must be setting it, remove this `if` when fixed
+		lom.SetAtimeUnix(time.Now().UnixNano())
+	}
+	params.Started = lom.Atime()
 	if err := r.p.T.PutObject(lom, params); err != nil {
 		glog.Error(err)
 	}

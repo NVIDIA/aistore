@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/mock"
@@ -193,6 +194,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 				tassert.CheckFatal(t, err)
 
 				lom.SetSize(desc.ObjectSize)
+				lom.SetAtimeUnix(time.Now().UnixNano())
 				err = lom.Persist()
 				tassert.CheckFatal(t, err)
 			case fs.WorkfileType, fs.ECSliceType, fs.ECMetaType:

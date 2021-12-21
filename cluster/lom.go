@@ -1000,7 +1000,6 @@ beg:
 	}
 	atime := ios.GetATime(finfo)
 	lom.md.Atime = atime.UnixNano()
-	debug.Assert(lom.md.Atime > 0)
 	lom.md.atimefs = uint64(lom.md.Atime)
 	return
 }

@@ -302,6 +302,7 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 		return err
 	}
 
+	ctx.lom.SetAtimeUnix(time.Now().UnixNano())
 	if err := ctx.lom.Persist(); err != nil {
 		return err
 	}

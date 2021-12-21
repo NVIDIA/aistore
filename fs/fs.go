@@ -179,6 +179,20 @@ func (mi *MountpathInfo) EvictLomCache() {
 	}
 }
 
+func (mi *MountpathInfo) evictLomBucketCache(bck cmn.Bck) {
+	for idx := 0; idx < cos.MultiSyncMapCount; idx++ {
+		cache := mi.LomCache(idx)
+		cache.Range(func(hkey interface{}, _ interface{}) bool {
+			uname := hkey.(string)
+			b, _ := cmn.ParseUname(uname)
+			if b.Equal(bck) {
+				cache.Delete(hkey)
+			}
+			return true
+		})
+	}
+}
+
 func (mi *MountpathInfo) IsIdle(config *cmn.Config) bool {
 	curr := mfs.ios.GetMpathUtil(mi.Path)
 	return curr >= 0 && curr < config.Disk.DiskUtilLowWM
@@ -936,6 +950,7 @@ func DestroyBucket(op string, bck cmn.Bck, bid uint64) (err error) {
 		count          = len(availablePaths)
 	)
 	for _, mi := range availablePaths {
+		mi.evictLomBucketCache(bck)
 		dir := mi.makeDelPathBck(bck, bid)
 		if errMv := mi.MoveToDeleted(dir); errMv != nil {
 			glog.Errorf("%s %q: failed to rm dir %q: %v", op, bck, dir, errMv)

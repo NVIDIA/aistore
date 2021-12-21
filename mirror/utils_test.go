@@ -6,6 +6,7 @@ package mirror
 
 import (
 	"os"
+	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/mock"
@@ -74,6 +75,7 @@ var _ = Describe("Mirror", func() {
 			createTestFile(bucketPath, testObjectName, testObjectSize)
 			lom := newBasicLom(defaultObjFQN)
 			lom.SetSize(testObjectSize)
+			lom.SetAtimeUnix(time.Now().UnixNano())
 			Expect(lom.Persist()).NotTo(HaveOccurred())
 			Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 
