@@ -59,9 +59,11 @@ import (
 	"github.com/NVIDIA/aistore/bench/aisloader/stats"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/devtools/readers"
 	"github.com/NVIDIA/aistore/devtools/tetl"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats/statsd"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
@@ -74,6 +76,9 @@ const (
 
 	myName           = "loader"
 	randomObjNameLen = 32
+
+	wo2FreeSize  = 8192
+	wo2FreeDelay = 3 * time.Second
 )
 
 type (
@@ -88,6 +93,7 @@ type (
 		end       time.Time
 		latencies httpLatencies
 		cksumType string
+		sgl       *memsys.SGL
 	}
 
 	params struct {
@@ -173,6 +179,7 @@ var (
 	rnd              *rand.Rand
 	workOrders       chan *workOrder
 	workOrderResults chan *workOrder
+	wo2Free          []*workOrder
 	intervalStats    sts
 	accumulatedStats sts
 	bucketObjsNames  namegetter.ObjectNameGetter
@@ -776,6 +783,9 @@ func Start(version, build, buildtime string) error {
 		wg.Add(1)
 		go worker(workOrders, workOrderResults, wg, &numGets)
 	}
+	if runParams.putPct != 0 {
+		wo2Free = make([]*workOrder, 0, wo2FreeSize)
+	}
 
 	timer := time.NewTimer(runParams.duration.Val)
 
@@ -835,43 +845,38 @@ MainLoop:
 		}
 
 		// Prioritize showing stats otherwise we will dropping the stats intervals.
-		if runParams.statsShowInterval > 0 {
-			select {
-			case <-statsTicker.C:
-				accumulatedStats.aggregate(intervalStats)
-				writeStats(statsWriter, runParams.jsonFormat, false /* final */, intervalStats, accumulatedStats)
-				sendStatsdStats(&intervalStats)
-				intervalStats = newStats(time.Now())
-			default:
-				break
-			}
+		select {
+		case <-statsTicker.C:
+			accumulatedStats.aggregate(intervalStats)
+			writeStats(statsWriter, runParams.jsonFormat, false /* final */, intervalStats, accumulatedStats)
+			sendStatsdStats(&intervalStats)
+			intervalStats = newStats(time.Now())
+		default:
+			break
 		}
 
 		select {
 		case <-timer.C:
 			break MainLoop
 		case wo := <-workOrderResults:
-			completeWorkOrder(wo)
+			completeWorkOrder(wo, false)
 			if runParams.statsShowInterval == 0 && runParams.putSizeUpperBound != 0 {
 				accumulatedStats.aggregate(intervalStats)
 				intervalStats = newStats(time.Now())
 			}
-
 			if err := postNewWorkOrder(); err != nil {
 				_, _ = fmt.Fprint(os.Stderr, err.Error())
 				break MainLoop
 			}
 		case <-statsTicker.C:
-			if runParams.statsShowInterval > 0 {
-				accumulatedStats.aggregate(intervalStats)
-				writeStats(statsWriter, runParams.jsonFormat, false /* final */, intervalStats, accumulatedStats)
-				sendStatsdStats(&intervalStats)
-				intervalStats = newStats(time.Now())
-			}
+			accumulatedStats.aggregate(intervalStats)
+			writeStats(statsWriter, runParams.jsonFormat, false /* final */, intervalStats, accumulatedStats)
+			sendStatsdStats(&intervalStats)
+			intervalStats = newStats(time.Now())
 		case sig := <-osSigChan:
 			switch sig {
 			case syscall.SIGHUP:
-				msg := "Collecting detailed latency info is "
+				msg := "Detailed latency info is "
 				if traceHTTPSig.Toggle() {
 					msg += "disabled"
 				} else {
@@ -890,12 +895,12 @@ Done:
 	timer.Stop()
 	statsTicker.Stop()
 	close(workOrders)
-	wg.Wait() // wait until all workers are done (notified by closing work order channel)
+	wg.Wait() // wait until all workers complete their work
 
 	// Process left over work orders
 	close(workOrderResults)
 	for wo := range workOrderResults {
-		completeWorkOrder(wo)
+		completeWorkOrder(wo, true)
 	}
 
 	fmt.Printf("\nActual run duration: %v\n", time.Since(tsStart))
@@ -991,25 +996,23 @@ func newGetConfigWorkOrder() *workOrder {
 }
 
 func postNewWorkOrder() (err error) {
-	var wo *workOrder
-
 	if runParams.getConfig {
-		wo = newGetConfigWorkOrder()
-	} else {
-		if rnd.Intn(99) < runParams.putPct {
-			if wo, err = newPutWorkOrder(); err != nil {
-				return err
-			}
-		} else {
-			if wo, err = newGetWorkOrder(); err != nil {
-				return err
-			}
-		}
+		workOrders <- newGetConfigWorkOrder()
+		return
 	}
 
-	cos.Assert(wo != nil)
+	var wo *workOrder
+	if rnd.Intn(99) < runParams.putPct {
+		if wo, err = newPutWorkOrder(); err != nil {
+			return err
+		}
+	} else {
+		if wo, err = newGetWorkOrder(); err != nil {
+			return err
+		}
+	}
 	workOrders <- wo
-	return nil
+	return
 }
 
 func validateWorkOrder(wo *workOrder, delta time.Duration) error {
@@ -1021,7 +1024,7 @@ func validateWorkOrder(wo *workOrder, delta time.Duration) error {
 	return nil
 }
 
-func completeWorkOrder(wo *workOrder) {
+func completeWorkOrder(wo *workOrder, terminating bool) {
 	delta := timeDelta(wo.end, wo.start)
 
 	if wo.err == nil && traceHTTPSig.Load() {
@@ -1076,6 +1079,27 @@ func completeWorkOrder(wo *workOrder) {
 			intervalStats.put.AddErr()
 			intervalStats.statsd.Put.AddErr()
 		}
+		if wo.sgl != nil && !terminating {
+			now := time.Now()
+			debug.Assert(!wo.end.IsZero())
+			// NOTE:
+			// due to the critical bug (https://github.com/golang/go/issues/30597)
+			// we are delaying `sgl.Free` for a little while.
+			for i, w := range wo2Free {
+				if now.Sub(w.end) > wo2FreeDelay {
+					w.sgl.Free()
+					continue
+				}
+				if i == 0 {
+					break
+				}
+				l := len(wo2Free)
+				copy(wo2Free, wo2Free[i:])
+				wo2Free = wo2Free[:l-i]
+				break
+			}
+			wo2Free = append(wo2Free, wo)
+		}
 	case opConfig:
 		if wo.err == nil {
 			intervalStats.getConfig.Add(1, delta)
@@ -1085,7 +1109,7 @@ func completeWorkOrder(wo *workOrder) {
 			intervalStats.getConfig.AddErr()
 		}
 	default:
-		// Should not be here
+		debug.Assert(false) // Should never be here
 	}
 }
 

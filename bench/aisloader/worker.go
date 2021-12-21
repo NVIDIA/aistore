@@ -22,17 +22,7 @@ func doPut(wo *workOrder) {
 	var sgl *memsys.SGL
 	if runParams.usingSG {
 		sgl = memsys.PageMM().NewSGL(wo.size)
-		defer func() {
-			// FIXME: due to critical bug (https://github.com/golang/go/issues/30597)
-			// we need to postpone `sgl.Free` to a little bit later time, otherwise
-			// we will experience 'read after free'. Sleep time is number taken
-			// from thin air - increase if panics are still happening.
-			// TODO: optimize via buffering and channelizing to a single goroutine
-			go func() {
-				time.Sleep(4 * time.Second)
-				sgl.Free()
-			}()
-		}()
+		wo.sgl = sgl
 	}
 
 	r, err := readers.NewReader(readers.ParamReader{
