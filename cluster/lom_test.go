@@ -280,7 +280,7 @@ var _ = Describe("LOM", func() {
 				err := lom.Init(cmn.Bck{})
 				lom.SetSize(int64(testFileSize))
 				Expect(err).NotTo(HaveOccurred())
-				Expect(lom.Persist()).NotTo(HaveOccurred())
+				Expect(persist(lom)).NotTo(HaveOccurred())
 				err = lom.Load(false, false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.SizeBytes()).To(BeEquivalentTo(testFileSize))
@@ -299,7 +299,8 @@ var _ = Describe("LOM", func() {
 				lom := &cluster.LOM{FQN: localFQN}
 				err := lom.Init(cmn.Bck{})
 				Expect(err).NotTo(HaveOccurred())
-				Expect(lom.Persist()).NotTo(HaveOccurred())
+				lom.SetAtimeUnix(desiredAtime.UnixNano()) // TODO -- FIXME
+				Expect(persist(lom)).NotTo(HaveOccurred())
 				err = lom.Load(false, false)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -313,7 +314,8 @@ var _ = Describe("LOM", func() {
 				lom := &cluster.LOM{FQN: localFQN}
 				err := lom.Init(cmn.Bck{})
 				Expect(err).NotTo(HaveOccurred())
-				Expect(lom.Persist()).NotTo(HaveOccurred())
+				lom.SetAtimeUnix(desiredAtime.UnixNano()) // TODO -- FIXME
+				Expect(persist(lom)).NotTo(HaveOccurred())
 				err = lom.Load(false, false)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -419,7 +421,7 @@ var _ = Describe("LOM", func() {
 					Expect(lom.ValidateMetaChecksum()).NotTo(HaveOccurred())
 
 					lom.SetCksum(cos.NewCksum(cos.ChecksumXXHash, "wrong checksum"))
-					lom.Persist()
+					Expect(persist(lom)).NotTo(HaveOccurred())
 					Expect(lom.ValidateContentChecksum()).To(HaveOccurred())
 				})
 
@@ -549,7 +551,7 @@ var _ = Describe("LOM", func() {
 			It("should be able to get version", func() {
 				lom := filePut(localFQN, 0)
 				lom.SetVersion(desiredVersion)
-				Expect(lom.Persist()).NotTo(HaveOccurred())
+				Expect(persist(lom)).NotTo(HaveOccurred())
 
 				err := lom.Load(false, false)
 				Expect(err).ToNot(HaveOccurred())
@@ -634,7 +636,7 @@ var _ = Describe("LOM", func() {
 
 			lom.SetSize(int64(testFileSize))
 			lom.SetVersion(desiredVersion)
-			Expect(lom.Persist()).NotTo(HaveOccurred())
+			Expect(persist(lom)).NotTo(HaveOccurred())
 			lom.Uncache(false)
 			Expect(err).NotTo(HaveOccurred())
 			err = lom.Load(false, false)
@@ -905,7 +907,7 @@ var _ = Describe("LOM", func() {
 
 				// Delete copy and check if it's gone.
 				Expect(lom.DelCopies(mirrorFQNs[1])).ToNot(HaveOccurred())
-				Expect(lom.Persist()).ToNot(HaveOccurred())
+				Expect(persist(lom)).ToNot(HaveOccurred())
 				Expect(mirrorFQNs[1]).NotTo(BeAnExistingFile())
 
 				// Reload default object and check if the lom was correctly updated.
@@ -933,7 +935,7 @@ var _ = Describe("LOM", func() {
 
 				// Delete copy and check if it's gone.
 				Expect(lom.DelCopies(mirrorFQNs[1])).ToNot(HaveOccurred())
-				Expect(lom.Persist()).ToNot(HaveOccurred())
+				Expect(persist(lom)).ToNot(HaveOccurred())
 				Expect(mirrorFQNs[1]).NotTo(BeAnExistingFile())
 
 				// Reload default object and check if the lom was correctly updated.
@@ -975,7 +977,7 @@ var _ = Describe("LOM", func() {
 
 				// Delete all copies and check if they are gone.
 				Expect(lom.DelAllCopies()).NotTo(HaveOccurred())
-				Expect(lom.Persist()).ToNot(HaveOccurred())
+				Expect(persist(lom)).ToNot(HaveOccurred())
 				Expect(mirrorFQNs[1]).NotTo(BeAnExistingFile())
 				Expect(mirrorFQNs[2]).NotTo(BeAnExistingFile())
 
@@ -1048,7 +1050,7 @@ func filePut(fqn string, size int) *cluster.LOM {
 	lom := NewBasicLom(fqn)
 	lom.SetSize(int64(size))
 	lom.IncVersion()
-	Expect(lom.Persist()).NotTo(HaveOccurred())
+	Expect(persist(lom)).NotTo(HaveOccurred())
 	lom.Uncache(false)
 	return lom
 }
@@ -1082,4 +1084,11 @@ func expectEqualBck(left, right cmn.Bck) {
 	right.Props = left.Props
 	_ = Expect(left).To(Equal(right))
 	right.Props = p
+}
+
+func persist(lom *cluster.LOM) error {
+	if lom.AtimeUnix() == 0 {
+		lom.SetAtimeUnix(time.Now().UnixNano())
+	}
+	return lom.Persist()
 }

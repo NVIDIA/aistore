@@ -1229,17 +1229,16 @@ func TestAtimeLocalGet(t *testing.T) {
 	err := api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objectName, Reader: objectContent})
 	tassert.CheckFatal(t, err)
 
-	timeAfterPut := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
+	putAtime, putAtimeFormatted := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
 
 	// Get object so that atime is updated
 	_, err = api.GetObject(baseParams, bck, objectName)
 	tassert.CheckFatal(t, err)
 
-	timeAfterGet := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
+	getAtime, getAtimeFormatted := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
 
-	if !(timeAfterGet.After(timeAfterPut)) {
-		t.Errorf("Expected PUT atime (%s) to be before subsequent GET atime (%s).",
-			timeAfterGet.Format(time.RFC3339Nano), timeAfterPut.Format(time.RFC3339Nano))
+	if !(getAtime.After(putAtime)) {
+		t.Errorf("Expected PUT atime (%s) to be before GET atime (%s)", putAtimeFormatted, getAtimeFormatted)
 	}
 }
 
@@ -1264,11 +1263,11 @@ func TestAtimeColdGet(t *testing.T) {
 	_, err := api.GetObject(baseParams, bck, objectName)
 	tassert.CheckFatal(t, err)
 
-	timeAfterGet := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
+	getAtime, getAtimeFormatted := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
+	tassert.Fatalf(t, !getAtime.IsZero(), "GET atime is zero")
 
-	if !(timeAfterGet.After(timeAfterPut)) {
-		t.Errorf("Expected PUT atime (%s) to be before subsequent GET atime (%s).",
-			timeAfterGet.Format(time.RFC3339Nano), timeAfterPut.Format(time.RFC3339Nano))
+	if !(getAtime.After(timeAfterPut)) {
+		t.Errorf("Expected PUT atime (%s) to be before GET atime (%s)", timeAfterPut.Format(time.RFC3339Nano), getAtimeFormatted)
 	}
 }
 
@@ -1370,11 +1369,11 @@ func TestAtimeLocalPut(t *testing.T) {
 	err := api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objectName, Reader: objectContent})
 	tassert.CheckFatal(t, err)
 
-	timeAfterPut := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
+	putAtime, putAtimeFormatted := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
 
-	if !(timeAfterPut.After(timeBeforePut)) {
-		t.Errorf("Expected atime after PUT (%s) to be after atime before PUT (%s).",
-			timeAfterPut.Format(time.RFC3339Nano), timeBeforePut.Format(time.RFC3339Nano))
+	if !(putAtime.After(timeBeforePut)) {
+		t.Errorf("Expected atime after PUT (%s) to be after atime before PUT (%s)",
+			putAtimeFormatted, timeBeforePut.Format(time.RFC3339Nano))
 	}
 }
 

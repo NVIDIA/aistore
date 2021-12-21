@@ -118,13 +118,14 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 }
 
 func (lom *LOM) Persist() (err error) {
-	// write-never or write-delayed
-	if !lom.WritePolicy().IsImmediate() {
+	atime := lom.AtimeUnix()
+	// the value is time.Parse(time.RFC3339Nano, "2000-01-01T23:59:00Z")
+	// context: a) caller is expected to set atime, and b) prefetch sets negative `-now`
+	debug.Assert(atime < -946771140000000000 || atime > 946771140000000000)
+
+	if atime < 0 /*prefetch*/ || !lom.WritePolicy().IsImmediate() /*write-never or delayed*/ {
 		lom.md.makeDirty()
 		if !lom.IsCopy() {
-			if lom.AtimeUnix() == 0 {
-				lom.SetAtimeUnix(time.Now().UnixNano())
-			}
 			lom.ReCache(true)
 		}
 		return

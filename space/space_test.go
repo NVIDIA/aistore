@@ -392,6 +392,7 @@ func saveRandomFile(filename string, size int64) {
 	Expect(err).NotTo(HaveOccurred())
 	lom.SetSize(size)
 	lom.IncVersion()
+	lom.SetAtimeUnix(time.Now().UnixNano())
 	Expect(lom.Persist()).NotTo(HaveOccurred())
 }
 

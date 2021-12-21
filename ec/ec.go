@@ -375,7 +375,7 @@ func RequestECMeta(bck cmn.Bck, objName string, si *cluster.Snode, client *http.
 }
 
 // Saves the main replica to local drives
-func WriteObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int64) error {
+func writeObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int64) error {
 	if size > 0 {
 		reader = io.LimitReader(reader, size)
 	}
@@ -389,6 +389,7 @@ func WriteObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int6
 		Reader:     readCloser,
 		RecvType:   cluster.Migrated, // to avoid changing version
 		SkipEncode: true,
+		Started:    time.Now(),
 	}
 	return t.PutObject(lom, params)
 }
@@ -458,7 +459,7 @@ func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) (e
 		}
 	}
 	lom.Unlock(false)
-	if err = WriteObject(t, lom, args.Reader, lom.SizeBytes(true)); err != nil {
+	if err = writeObject(t, lom, args.Reader, lom.SizeBytes(true)); err != nil {
 		return
 	}
 	if !args.Cksum.IsEmpty() && args.Cksum.Value() != "" { // NOTE: empty value

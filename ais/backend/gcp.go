@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"cloud.google.com/go/storage"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -284,6 +285,7 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 		Reader:   reader,
 		RecvType: cluster.ColdGet,
 		Cksum:    cksumToUse,
+		Started:  time.Now(),
 	}
 	err = gcpp.t.PutObject(lom, params)
 	if err != nil {

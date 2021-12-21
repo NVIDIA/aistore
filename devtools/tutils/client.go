@@ -365,7 +365,7 @@ func PutObjectInRemoteBucketWithoutCachingLocally(t *testing.T, bck cmn.Bck, obj
 	tassert.CheckFatal(t, err)
 }
 
-func GetObjectAtime(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, object, timeFormat string) time.Time {
+func GetObjectAtime(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, object, timeFormat string) (time.Time, string) {
 	msg := &cmn.SelectMsg{Props: cmn.GetPropsAtime, TimeFormat: timeFormat, Prefix: object}
 	bucketList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
@@ -374,12 +374,12 @@ func GetObjectAtime(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, object
 		if entry.Name == object {
 			atime, err := time.Parse(timeFormat, entry.Atime)
 			tassert.CheckFatal(t, err)
-			return atime
+			return atime, entry.Atime
 		}
 	}
 
 	tassert.Fatalf(t, false, "Cannot find %s in bucket %s", object, bck)
-	return time.Time{}
+	return time.Time{}, ""
 }
 
 // WaitForDSortToFinish waits until all dSorts jobs finished without failure or

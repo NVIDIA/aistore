@@ -219,8 +219,9 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 			glog.Errorf("PUT %s: failed to delete old copies [%v], proceeding to PUT anyway...", lom, errdc)
 		}
 	}
-	if poi.recvType != cluster.Migrated {
+	if lom.AtimeUnix() == 0 {
 		lom.SetAtimeUnix(poi.started.UnixNano())
+		debug.Assert(lom.AtimeUnix() != 0)
 	}
 	err = lom.Persist()
 	return
@@ -1141,7 +1142,7 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 	}
 
 	// Set the correct recvType: some transactions must update the object
-	// in the Cloud(if destination is a Cloud bucket).
+	// in the Cloud(iff the destination is a Cloud bucket).
 	recvType := cluster.Migrated
 	if coi.DM != nil {
 		recvType = coi.DM.RecvType()
@@ -1150,6 +1151,7 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 		Tag:      "copy-dp",
 		Reader:   reader,
 		RecvType: recvType,
+		Started:  lom.Atime(),
 	}
 	if err = coi.t.PutObject(dst, params); err != nil {
 		return

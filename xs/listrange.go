@@ -350,10 +350,10 @@ func (r *prefetch) do(lom *cluster.LOM, _ *lriterator) {
 	} else {
 		return // simply exists
 	}
-	// Do not set Atime to current time as prefetching does not mean the object
-	// was used. At the same time, zero Atime make the lom life-span in the cache
-	// too short - the first housekeeping removes it. Set the special value:
-	// negatve Now() for correct processing the LOM while housekeeping
+	// NOTE: not setting atime as prefetching does not mean the object is being accessed.
+	// On the other hand, zero atime makes the object's lifespan in the cache too short - the first
+	// housekeeping traversal will remove it. Set special `-now` value for subsequent correction.
+	// (see cluster/lom_cache_hk.go)
 	lom.SetAtimeUnix(-time.Now().UnixNano())
 	if _, err := r.t.GetCold(r.ctx, lom, cluster.Prefetch); err != nil {
 		if err != cmn.ErrSkip {

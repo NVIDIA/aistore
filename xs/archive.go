@@ -339,6 +339,7 @@ func (r *XactCreateArchMultiObj) fini(wi *archwi) (errCode int, err error) {
 	}
 
 	wi.lom.SetSize(size)
+	wi.lom.SetAtimeUnix(time.Now().UnixNano())
 	cos.Close(wi.fh)
 
 	errCode, err = r.p.T.FinalizeObj(wi.lom, wi.fqn)

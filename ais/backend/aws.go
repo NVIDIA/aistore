@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -316,6 +317,7 @@ func (awsp *awsProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 		Reader:   r,
 		RecvType: cluster.ColdGet,
 		Cksum:    expCksum,
+		Started:  time.Now(),
 	}
 	err = awsp.t.PutObject(lom, params)
 	if verbose {

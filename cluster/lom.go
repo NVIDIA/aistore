@@ -725,6 +725,9 @@ recomp:
 	}
 	if lom.md.Cksum.IsEmpty() { // store computed
 		lom.md.Cksum = cksums.comp.Clone()
+		if !lom.loaded() {
+			lom.SetAtimeUnix(time.Now().UnixNano())
+		}
 		if err = lom.Persist(); err != nil {
 			lom.md.Cksum = cksums.stor
 		}

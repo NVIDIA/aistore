@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -165,6 +166,7 @@ func (hp *httpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode i
 		Tag:      fs.WorkfileColdget,
 		Reader:   reader,
 		RecvType: cluster.ColdGet,
+		Started:  time.Now(),
 	}
 	err = hp.t.PutObject(lom, params)
 	if err != nil {

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -116,7 +115,7 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 		Reader:   io.NopCloser(objReader),
 		RecvType: cluster.Migrated,
 		Cksum:    hdr.ObjAttrs.Cksum,
-		Started:  time.Now(),
+		Started:  lom.Atime(),
 	}
 	if err := reb.t.PutObject(lom, params); err != nil {
 		glog.Error(err)

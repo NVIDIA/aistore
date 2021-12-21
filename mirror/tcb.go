@@ -296,7 +296,7 @@ func (r *XactTCB) recv(hdr transport.ObjHdr, objReader io.Reader, err error) {
 		// finalized in case of destination is Cloud.
 		RecvType: cluster.RegularPut,
 		Cksum:    hdr.ObjAttrs.Cksum,
-		Started:  time.Now(),
+		Started:  lom.Atime(),
 	}
 	if err := r.t.PutObject(lom, params); err != nil {
 		r.err.Store(err)

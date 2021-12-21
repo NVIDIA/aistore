@@ -53,7 +53,7 @@ func (t *targetrunner) Backend(bck *cluster.Bck) cluster.BackendProvider {
 
 // essentially, t.doPut() for external use
 func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParams) error {
-	debug.Assert(params.Tag != "")
+	debug.Assert(params.Tag != "" && !params.Started.IsZero())
 	workFQN := fs.CSM.GenContentFQN(lom, fs.WorkfileType, params.Tag)
 	poi := allocPutObjInfo()
 	{

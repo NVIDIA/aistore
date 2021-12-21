@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api"
@@ -431,7 +432,12 @@ func (m *AISBackendProvider) GetObj(_ ctx, lom *cluster.LOM) (errCode int, err e
 	if r, err = api.GetObjectReader(aisCluster.bp, bck, lom.ObjName); err != nil {
 		return extractErrCode(err)
 	}
-	params := cluster.PutObjectParams{Tag: fs.WorkfileColdget, Reader: r, RecvType: cluster.ColdGet}
+	params := cluster.PutObjectParams{
+		Tag:      fs.WorkfileColdget,
+		Reader:   r,
+		RecvType: cluster.ColdGet,
+		Started:  time.Now(),
+	}
 	err = m.t.PutObject(lom, params)
 	return extractErrCode(err)
 }

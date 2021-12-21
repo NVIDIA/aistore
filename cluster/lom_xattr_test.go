@@ -104,7 +104,7 @@ var _ = Describe("LOM Xattributes", func() {
 				})
 				Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
 				Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
-				Expect(lom.Persist()).NotTo(HaveOccurred())
+				Expect(persist(lom)).NotTo(HaveOccurred())
 
 				b, err := fs.GetXattr(localFQN, cluster.XattrLOM)
 				Expect(b).ToNot(BeEmpty())
@@ -131,7 +131,7 @@ var _ = Describe("LOM Xattributes", func() {
 				defer lom.Unlock(true)
 				lom.SetCksum(cos.NewCksum(cos.ChecksumXXHash, "test_checksum"))
 				lom.SetVersion("dummy_version")
-				Expect(lom.Persist()).NotTo(HaveOccurred())
+				Expect(persist(lom)).NotTo(HaveOccurred())
 
 				lom.SetCustomMD(cos.SimpleKVs{
 					cmn.SourceObjMD: cmn.ProviderGoogle,
@@ -140,7 +140,7 @@ var _ = Describe("LOM Xattributes", func() {
 				})
 				Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
 				Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
-				Expect(lom.Persist()).NotTo(HaveOccurred())
+				Expect(persist(lom)).NotTo(HaveOccurred())
 
 				b, err := fs.GetXattr(cachedFQN, cluster.XattrLOM)
 				Expect(b).To(BeEmpty())
@@ -172,7 +172,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(err).NotTo(HaveOccurred())
 				lom.SetCksum(cksumHash.Clone())
 				lom.SetVersion("first_version")
-				Expect(lom.Persist()).NotTo(HaveOccurred())
+				Expect(persist(lom)).NotTo(HaveOccurred())
 
 				lom.SetCustomMD(cos.SimpleKVs{
 					cmn.SourceObjMD: cmn.ProviderGoogle,
@@ -182,7 +182,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
 				Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
 				lom.SetVersion("second_version")
-				Expect(lom.Persist()).NotTo(HaveOccurred())
+				Expect(persist(lom)).NotTo(HaveOccurred())
 
 				b, err := fs.GetXattr(cachedFQN, cluster.XattrLOM)
 				Expect(b).To(BeEmpty())
@@ -222,7 +222,7 @@ var _ = Describe("LOM Xattributes", func() {
 				lom.SetVersion("dummy_version2")
 				Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
 				Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
-				Expect(lom.Persist()).NotTo(HaveOccurred())
+				Expect(persist(lom)).NotTo(HaveOccurred())
 
 				b, err := fs.GetXattr(localFQN, cluster.XattrLOM)
 				Expect(b).ToNot(BeEmpty())
@@ -253,7 +253,7 @@ var _ = Describe("LOM Xattributes", func() {
 				lom1.SetVersion("dummy_version")
 				Expect(lom1.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
 				Expect(lom1.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
-				Expect(lom1.Persist()).NotTo(HaveOccurred())
+				Expect(persist(lom1)).NotTo(HaveOccurred())
 
 				err := lom2.LoadMetaFromFS()
 				Expect(err).NotTo(HaveOccurred())
@@ -276,7 +276,7 @@ var _ = Describe("LOM Xattributes", func() {
 					lom.SetVersion("dummy_version")
 					Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
 					Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
-					Expect(lom.Persist()).NotTo(HaveOccurred())
+					Expect(persist(lom)).NotTo(HaveOccurred())
 				})
 
 				It("should fail when checksum does not match", func() {
