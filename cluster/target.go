@@ -83,7 +83,7 @@ type (
 		Reader     io.ReadCloser
 		RecvType   RecvType
 		Cksum      *cos.Cksum // Checksum to check.
-		Started    time.Time
+		Atime      time.Time
 		SkipEncode bool // Do not run erasure-code when finalizing.
 	}
 	CopyObjectParams struct {

@@ -166,7 +166,7 @@ func (hp *httpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode i
 		Tag:      fs.WorkfileColdget,
 		Reader:   reader,
 		RecvType: cluster.ColdGet,
-		Started:  time.Now(),
+		Atime:    time.Now(),
 	}
 	err = hp.t.PutObject(lom, params)
 	if err != nil {

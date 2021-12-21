@@ -317,7 +317,7 @@ func (awsp *awsProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 		Reader:   r,
 		RecvType: cluster.ColdGet,
 		Cksum:    expCksum,
-		Started:  time.Now(),
+		Atime:    time.Now(),
 	}
 	err = awsp.t.PutObject(lom, params)
 	if verbose {

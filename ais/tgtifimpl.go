@@ -53,7 +53,7 @@ func (t *targetrunner) Backend(bck *cluster.Bck) cluster.BackendProvider {
 
 // essentially, t.doPut() for external use
 func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParams) error {
-	debug.Assert(params.Tag != "" && !params.Started.IsZero())
+	debug.Assert(params.Tag != "" && !params.Atime.IsZero())
 	workFQN := fs.CSM.GenContentFQN(lom, fs.WorkfileType, params.Tag)
 	poi := allocPutObjInfo()
 	{
@@ -61,7 +61,7 @@ func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParam
 		poi.lom = lom
 		poi.r = params.Reader
 		poi.workFQN = workFQN
-		poi.started = params.Started
+		poi.atime = params.Atime
 		poi.recvType = params.RecvType
 		poi.skipEC = params.SkipEncode
 	}
@@ -273,7 +273,7 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 		}
 	}
 
-	poi := &putObjInfo{started: time.Now(), t: t, lom: lom}
+	poi := &putObjInfo{atime: time.Now(), t: t, lom: lom}
 	poi.workFQN = workFQN
 	lom.SetSize(fileSize)
 	if _, err = poi.finalize(); err != nil {

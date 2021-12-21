@@ -358,7 +358,7 @@ func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 		Reader:   reader,
 		RecvType: cluster.ColdGet,
 		Cksum:    cksumToUse,
-		Started:  time.Now(),
+		Atime:    time.Now(),
 	}
 	err = ap.t.PutObject(lom, params)
 	if err != nil {

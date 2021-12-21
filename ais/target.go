@@ -1400,7 +1400,7 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 	cksumToUse := lom.ObjAttrs().FromHeader(header)
 	poi := allocPutObjInfo()
 	{
-		poi.started = started
+		poi.atime = started
 		poi.t = t
 		poi.lom = lom
 		poi.r = r.Body

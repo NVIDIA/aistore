@@ -362,9 +362,9 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 				Tag: "dsort",
 				// NOTE: We cannot allow `PutObject` to close original reader
 				// on error as it can cause panic when `CreateShard` writes data.
-				Reader:  io.NopCloser(r),
-				Cksum:   nil,
-				Started: beforeCreation,
+				Reader: io.NopCloser(r),
+				Cksum:  nil,
+				Atime:  beforeCreation,
 			}
 			if err = m.ctx.t.PutObject(lom, params); err == nil {
 				n = lom.SizeBytes()

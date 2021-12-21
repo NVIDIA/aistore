@@ -41,7 +41,7 @@ import (
 
 type (
 	putObjInfo struct {
-		started    time.Time
+		atime      time.Time
 		t          *targetrunner
 		lom        *cluster.LOM
 		r          io.ReadCloser    // reader that has the content
@@ -134,7 +134,7 @@ func (poi *putObjInfo) putObject() (int, error) {
 		return errCode, err
 	}
 	if poi.recvType == cluster.RegularPut {
-		delta := time.Since(poi.started)
+		delta := time.Since(poi.atime)
 		poi.t.statsT.AddMany(
 			cos.NamedVal64{Name: stats.PutCount, Value: 1},
 			cos.NamedVal64{Name: stats.PutLatency, Value: int64(delta)},
@@ -220,7 +220,7 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 		}
 	}
 	if lom.AtimeUnix() == 0 {
-		lom.SetAtimeUnix(poi.started.UnixNano())
+		lom.SetAtimeUnix(poi.atime.UnixNano())
 		debug.Assert(lom.AtimeUnix() != 0)
 	}
 	err = lom.Persist()
@@ -1151,7 +1151,7 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 		Tag:      "copy-dp",
 		Reader:   reader,
 		RecvType: recvType,
-		Started:  lom.Atime(),
+		Atime:    lom.Atime(),
 	}
 	if err = coi.t.PutObject(dst, params); err != nil {
 		return

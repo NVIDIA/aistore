@@ -301,7 +301,7 @@ func (r *XactTCB) recv(hdr transport.ObjHdr, objReader io.Reader, err error) {
 		// TODO -- FIXME: sender must be setting it, remove this `if` when fixed
 		lom.SetAtimeUnix(time.Now().UnixNano())
 	}
-	params.Started = lom.Atime()
+	params.Atime = lom.Atime()
 	if err := r.t.PutObject(lom, params); err != nil {
 		r.err.Store(err)
 		glog.Error(err)

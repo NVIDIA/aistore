@@ -1577,18 +1577,19 @@ func TestBucketInvalidName(t *testing.T) {
 func TestLocalMirror(t *testing.T) {
 	tests := []struct {
 		numCopies []int // each of the number in the list represents the number of copies enforced on the bucket
+		tag       string
 		skipArgs  tutils.SkipTestArgs
 	}{
 		// set number `copies = 1` - no copies should be created
-		{numCopies: []int{1}},
+		{numCopies: []int{1}, tag: "copies=1"},
 		// set number `copies = 2` - one additional copy for each object should be created
-		{numCopies: []int{2}},
+		{numCopies: []int{2}, tag: "copies=2"},
 		// first set number of copies to 2, then to 3
-		{numCopies: []int{2, 3}, skipArgs: tutils.SkipTestArgs{Long: true}},
+		{numCopies: []int{2, 3}, skipArgs: tutils.SkipTestArgs{Long: true}, tag: "copies=2-then-3"},
 	}
 
 	for _, test := range tests {
-		t.Run(fmt.Sprintf("%v", test.numCopies), func(t *testing.T) {
+		t.Run(test.tag, func(t *testing.T) {
 			tutils.CheckSkip(t, test.skipArgs)
 			testLocalMirror(t, test.numCopies)
 		})

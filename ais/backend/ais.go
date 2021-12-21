@@ -436,7 +436,7 @@ func (m *AISBackendProvider) GetObj(_ ctx, lom *cluster.LOM) (errCode int, err e
 		Tag:      fs.WorkfileColdget,
 		Reader:   r,
 		RecvType: cluster.ColdGet,
-		Started:  time.Now(),
+		Atime:    time.Now(),
 	}
 	err = m.t.PutObject(lom, params)
 	return extractErrCode(err)

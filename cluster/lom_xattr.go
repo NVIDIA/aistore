@@ -68,6 +68,8 @@ const (
 
 const prefLen = 10 // 10B prefix [ version = 1 | checksum-type | 64-bit xxhash ]
 
+const getxattr = "getxattr" // syscall
+
 // NOTE: used in tests, ignores `dirty`
 func (lom *LOM) LoadMetaFromFS() (err error) {
 	var finfo os.FileInfo
@@ -83,8 +85,14 @@ func (lom *LOM) LoadMetaFromFS() (err error) {
 	return
 }
 
+func whinge(err error) (*lmeta, error) {
+	if cos.IsErrXattrNotFound(err) {
+		return nil, cmn.NewErrLmetaNotFound(err)
+	}
+	return nil, os.NewSyscallError(getxattr, err)
+}
+
 func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
-	const getxattr = "getxattr"
 	var (
 		size      int64
 		read      []byte
@@ -96,8 +104,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	if err != nil {
 		slab.Free(buf)
 		if err != syscall.ERANGE {
-			err = os.NewSyscallError(getxattr, err)
-			return
+			return whinge(err)
 		}
 		debug.Assert(mdSize < xattrMaxSize)
 		// 2nd attempt: max-size
@@ -105,8 +112,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 		read, err = fs.GetXattrBuf(lom.FQN, XattrLOM, buf)
 		if err != nil {
 			slab.Free(buf)
-			err = os.NewSyscallError(getxattr, err)
-			return
+			return whinge(err)
 		}
 	}
 	size = int64(len(read))

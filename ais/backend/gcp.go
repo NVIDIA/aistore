@@ -285,7 +285,7 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 		Reader:   reader,
 		RecvType: cluster.ColdGet,
 		Cksum:    cksumToUse,
-		Started:  time.Now(),
+		Atime:    time.Now(),
 	}
 	err = gcpp.t.PutObject(lom, params)
 	if err != nil {

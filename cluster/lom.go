@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -971,25 +970,28 @@ func (lom *LOM) fromCache() (lcache *sync.Map, lmd *lmeta) {
 
 func (lom *LOM) FromFS() (err error) {
 	var (
-		finfo os.FileInfo
-		retry = true
+		finfo   os.FileInfo
+		retried bool
 	)
-beg:
-	finfo, err = os.Stat(lom.FQN)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			err = os.NewSyscallError("stat", err)
-			T.FSHC(err, lom.FQN)
-		}
-		return
-	}
-	if _, err = lom.lmfs(true); err != nil {
-		if retry {
-			if errno := cos.UnwrapSyscallErr(err); errno == syscall.ENODATA || errno == syscall.ENOENT {
-				runtime.Gosched()
-				retry = false
-				goto beg
+	for {
+		finfo, err = os.Stat(lom.FQN)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				err = os.NewSyscallError("stat", err)
+				T.FSHC(err, lom.FQN)
 			}
+			return
+		}
+		if _, err = lom.lmfs(true); err == nil {
+			break
+		}
+		if cmn.IsErrLmetaNotFound(err) {
+			if !retried {
+				runtime.Gosched()
+				retried = true
+				continue
+			}
+			return
 		}
 		T.FSHC(err, lom.FQN)
 		return

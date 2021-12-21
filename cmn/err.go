@@ -134,6 +134,9 @@ type (
 	ErrLmetaCorrupted struct {
 		err error
 	}
+	ErrLmetaNotFound struct {
+		err error
+	}
 )
 
 var (
@@ -528,7 +531,7 @@ func IsErrBucketNought(err error) bool {
 }
 
 func IsErrObjNought(err error) bool {
-	return IsObjNotExist(err) || IsStatusNotFound(err) || isErrObjDefunct(err)
+	return IsObjNotExist(err) || IsStatusNotFound(err) || isErrObjDefunct(err) || IsErrLmetaNotFound(err)
 }
 
 func IsObjNotExist(err error) bool {
@@ -715,7 +718,7 @@ func (e *ErrHTTP) populateStackTrace() {
 }
 
 ///////////////////////
-// ErrLmetaCorrupted //
+// ErrLmetaCorrupted & ErrLmetaNotFound
 ///////////////////////
 
 func NewErrLmetaCorrupted(err error) *ErrLmetaCorrupted { return &ErrLmetaCorrupted{err} }
@@ -723,6 +726,14 @@ func (e *ErrLmetaCorrupted) Error() string              { return e.err.Error() }
 
 func IsErrLmetaCorrupted(err error) bool {
 	_, ok := err.(*ErrLmetaCorrupted)
+	return ok
+}
+
+func NewErrLmetaNotFound(err error) *ErrLmetaNotFound { return &ErrLmetaNotFound{err} }
+func (e *ErrLmetaNotFound) Error() string             { return e.err.Error() }
+
+func IsErrLmetaNotFound(err error) bool {
+	_, ok := err.(*ErrLmetaNotFound)
 	return ok
 }
 

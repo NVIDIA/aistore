@@ -115,7 +115,7 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 		Reader:   io.NopCloser(objReader),
 		RecvType: cluster.Migrated,
 		Cksum:    hdr.ObjAttrs.Cksum,
-		Started:  lom.Atime(),
+		Atime:    lom.Atime(),
 	}
 	if err := reb.t.PutObject(lom, params); err != nil {
 		glog.Error(err)

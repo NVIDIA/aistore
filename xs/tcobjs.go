@@ -197,7 +197,7 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 		// TODO -- FIXME: sender must be setting it, remove this `if` when fixed
 		lom.SetAtimeUnix(time.Now().UnixNano())
 	}
-	params.Started = lom.Atime()
+	params.Atime = lom.Atime()
 	if err := r.p.T.PutObject(lom, params); err != nil {
 		glog.Error(err)
 	}

@@ -389,7 +389,7 @@ func writeObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int6
 		Reader:     readCloser,
 		RecvType:   cluster.Migrated, // to avoid changing version
 		SkipEncode: true,
-		Started:    time.Now(),
+		Atime:      time.Now(),
 	}
 	return t.PutObject(lom, params)
 }
