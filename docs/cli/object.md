@@ -209,14 +209,24 @@ then shows all gathered info to the user and asks for confirmation to continue. 
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--verbose, -v` | `bool` | Enable printing the result of every PUT | `false` |
-| `--yes, -y` | `bool` | Answer `yes` to every confirmation prompt | `false` |
-| `--conc` | `int` | Number of concurrent `PUT` requests limit | `10` |
-| `--recursive, -r` | `bool` | Enable recursive directory upload | `false` |
-| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include `m` (for minutes), `s` (seconds), `ms` (milliseconds). Zero value stops periodical refresh. | `0` if verbose mode is on, `5s` otherwise |
-| `--dry-run` | `bool` | Do not actually perform PUT. Shows a few files to be uploaded and corresponding object names for used arguments |
-| `--progress` | `bool` | Displays progress bar. Together with `--verbose` shows upload progress for every single file | `false` |
-| `--chunk-size` | `string` | Chunk size used for each request, can contain prefix 'b', 'KiB', 'MB' (only applicable when reading from STDIN) | `10MB` |
+| `--chunk-size` 	| `string`   | chunk size used for each request (all IEC and SI units are supported, e.g.: b, B, KB, KiB, k, MiB, mb, etc.) | "10MB" |
+| `--conc` 		| `int`      | limits number of concurrent put requests and number of concurrent shards created | 10 |
+| `--dry-run`   	| `bool`     | preview the results without really running the action |
+| `--progress`  	| `bool`     | display progress bar |
+| `--recursive, -r`	| `bool`     | recursive operation |
+| `--refresh`      	| `duration` | refresh interval for continuous monitoring, valid time units: 'ns', 'us', 'ms', 's', 'm', and 'h' | 1s |
+| `--verbose, -v`  	| `bool`     | verbose |
+| `--yes, -y`      	| `bool`     | assume 'yes' for all questions |
+| `--compute-checksum` 	| `bool`     | compute checksum configured for the bucket |
+| `--source-bck`	| `string`   | source bucket |
+| `--template` 		| `string`   | template for matching object names, e.g.: 'shard-{900..999}.tar' |
+| `--list` 		| `string`   | comma-separated list of object names, e.g.: 'o1,o2,o3' |
+| `--include-src-bck`  	| `bool`     | include source bucket name into the names of archived objects from this bucket |
+| `--append-to-arch`	| `bool`     | allow adding a list or a range of objects to an existing archive |
+| `--cont-on-err`   	| `bool`     | keep running archiving xaction in presence of errors in a any given multi-object transaction |
+| `--archive`       	| `bool`     | archive a list or a range of objects |
+| `--archpath` 		| `string`   | filename in archive |
+| `--skip-vc` 	 	| `bool`     | skip loading object metadata (and the associated checksum & version related processing) |
 
 <a name="ft1">1</a> `FILE|DIRECTORY` should point to a file or a directory. Wildcards are supported, but they work a bit differently from shell wildcards.
  Symbols `*` and `?` can be used only in a file name pattern. Directory names cannot include wildcards. Only a file name is matched, not full file path, so `/home/user/*.tar --recursive` matches not only `.tar` files inside `/home/user` but any `.tar` file in any `/home/user/` subdirectory.
@@ -299,6 +309,7 @@ Put a single file `~/bck/img1.tar` into bucket `mybucket`, without explicit name
 
 ```console
 $ ais object put "~/bck/img1.tar" ais://mybucket/
+
 # PUT /home/user/bck/img1.tar => mybucket/img-set-1.tar
 ```
 
@@ -321,6 +332,7 @@ Note that the path `/home/user/bck` is a shortcut for `/home/user/bck/*` and tha
 
 ```console
 $ ais object put "/home/user/bck" ais://mybucket
+
 # PUT /home/user/bck/img1.tar => img1.tar
 # PUT /home/user/bck/img2.tar => img2.zip
 ```
@@ -331,6 +343,7 @@ The same as above, but add `OBJECT_NAME` (`../subdir/`) prefix to objects names.
 
 ```console
 $ ais object put "/home/user/bck" ais://mybucket/subdir/
+
 # PUT /home/user/bck/img1.tar => ais://mybucket/subdir/img1.tar
 # PUT /home/user/bck/img2.tar => ais://mybucket/subdir/img2.zip
 # PUT /home/user/bck/extra/img1.tar => ais://mybucket/subdir/extra/img1.tar
@@ -343,6 +356,7 @@ The same as above, but without trailing `/`.
 
 ```console
 $ ais object put "/home/user/bck" ais://mybucket/subdir
+
 # PUT /home/user/bck/img1.tar => ais://mybucket/subdirimg1.tar
 # PUT /home/user/bck/img2.tar => ais://mybucket/subdirimg2.zip
 # PUT /home/user/bck/extra/img1.tar => ais://mybucket/subdirextra/img1.tar
@@ -380,6 +394,7 @@ Same as above, except object names have additional prefix `test${d1}${d2}.txt`.
 $ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
 
 $ ais object put "~/dir/test{0..2}{0..2}.txt" ais://mybucket/dir/ -y
+
 9 objects put into "ais://mybucket" bucket
 # PUT /home/user/dir/test00.txt => ais://mybucket/dir/test00.txt and 8 more
 ```
@@ -391,6 +406,7 @@ Preview the files that would be sent to the cluster, without really putting them
 ```bash
 $ for d1 in {0..2}; do for d2 in {0..2}; mkdir -p ~/dir/test${d1}/dir && do echo "0" > ~/dir/test${d1}/dir/test${d2}.txt; done; done
 $ ais object put "~/dir/test{0..2}/dir/test{0..2}.txt" ais://mybucket --dry-run
+
 [DRY RUN] No modifications on the cluster
 /home/user/dir/test0/dir/test0.txt => ais://mybucket/test0/dir/test0.txt
 (...)
@@ -406,6 +422,21 @@ $ ais object put "dir{0..10}" ais://mybucket -y
 33 objects put into "ais://mybucket" bucket
 # PUT "/home/user/dir0/test0.txt" => b/dir0/test0.txt and 32 more
 ```
+
+## PUT multiple directories with the `--skip-vc` option
+
+> The `--skip-vc` option allows AIS to skip loading existing object's metadata to perform metadata-associated processing (such as comparing source and destination checksums, for instance). In certain scenarios (e.g., massive uploading of new files that cannot be present in the bucket) this can help reduce PUT latency.
+
+```bash
+$ for d1 in {0..10}; do mkdir dir$d1 && for d2 in {0..2}; do echo "0" > dir$d1/test${d2}.txt; done; done
+$ ais object put "dir{0..10}" ais://mybucket -y --skip-vc
+
+Files to upload:
+EXTENSION        COUNT   SIZE
+.txt             33      66B
+TOTAL            33      66B
+```
+
 
 # Append file to archive
 

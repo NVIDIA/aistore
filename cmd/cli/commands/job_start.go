@@ -99,7 +99,8 @@ var (
 				BashComplete: bucketCompletions(),
 			},
 			{
-				Name: commandETL,
+				Name:  commandETL,
+				Usage: "start ETL job on the cluster",
 				Subcommands: []cli.Command{
 					initCmdETL,
 					objCmdETL,
@@ -536,7 +537,7 @@ func startPrefetchHandler(c *cli.Context) (err error) {
 		return incorrectUsageMsg(c, "missing bucket")
 	}
 	if c.NArg() > 1 {
-		return incorrectUsageMsg(c, "too many arguments")
+		return incorrectUsageMsg(c, "too many arguments or unrecognized option '%+v'", c.Args()[1:])
 	}
 	bck, err := parseBckURI(c, c.Args().First())
 	if err != nil {

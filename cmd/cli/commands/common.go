@@ -6,12 +6,10 @@
 package commands
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/urfave/cli"
 )
@@ -395,7 +393,6 @@ var (
 	}
 	enableFlag    = cli.BoolFlag{Name: "enable", Usage: "enable"}
 	disableFlag   = cli.BoolFlag{Name: "disable", Usage: "disable"}
-	checksumFlag  = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
 	recursiveFlag = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
 	overwriteFlag = cli.BoolTFlag{Name: "overwrite,o", Usage: "overwrite destination if exists"}
 	keepOrigFlag  = cli.BoolTFlag{Name: "keep", Usage: "keep original file"}
@@ -405,8 +402,12 @@ var (
 		Name:  "chunk-size",
 		Usage: "chunk size used for each request " + sizeUnits, Value: "10MB",
 	}
-	computeCksumFlag = cli.BoolFlag{Name: "compute-cksum", Usage: "compute the checksum with the type configured for the bucket"}
-	checksumFlags    = getCksumFlags()
+
+	cksumFlag        = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
+	computeCksumFlag = cli.BoolFlag{Name: "compute-checksum", Usage: "compute checksum configured for the bucket"}
+	skipVerCksumFlag = cli.BoolFlag{Name: "skip-vc", Usage: "skip loading object metadata (and the associated checksum & version related processing)"}
+
+	supportedCksumFlags = initSupportedCksumFlags()
 
 	// begin archive
 	listArchFlag             = cli.BoolFlag{Name: "archive", Usage: "list archived content"}
@@ -513,20 +514,3 @@ var (
 		Usage: "display path to the AIS CLI configuration",
 	}
 )
-
-func getCksumFlags() []cli.Flag {
-	var (
-		checksums = cos.SupportedChecksums()
-		flags     = make([]cli.Flag, 0, len(checksums)-1)
-	)
-	for _, cksum := range checksums {
-		if cksum == cos.ChecksumNone {
-			continue
-		}
-		flags = append(flags, cli.StringFlag{
-			Name:  cksum,
-			Usage: fmt.Sprintf("hex encoded string of the %s checksum", cksum),
-		})
-	}
-	return flags
-}

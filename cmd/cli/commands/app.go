@@ -178,7 +178,7 @@ func (aisCLI *AISCLI) init(build, version string) {
 		Name:  "version, V",
 		Usage: "print only the version",
 	}
-
+	initJobSubcmds()
 	aisCLI.setupCommands()
 }
 

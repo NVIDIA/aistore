@@ -163,6 +163,7 @@ CreateShards:
 					Bck:        bck,
 					Object:     name,
 					Reader:     sgl,
+					SkipVC:     true,
 				}
 				return api.PutObject(putArgs)
 			}
@@ -185,7 +186,7 @@ func loadLomCacheHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return incorrectUsageMsg(c, "missing bucket name")
 	} else if c.NArg() > 1 {
-		return incorrectUsageMsg(c, "too many arguments")
+		return incorrectUsageMsg(c, "too many arguments or unrecognized option '%+v'", c.Args()[1:])
 	}
 
 	if bck, err = parseBckURI(c, c.Args().First()); err != nil {
@@ -199,7 +200,7 @@ func removeNodeFromSmap(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return incorrectUsageMsg(c, "missing daemon ID")
 	} else if c.NArg() > 1 {
-		return incorrectUsageMsg(c, "too many arguments")
+		return incorrectUsageMsg(c, "too many arguments or unrecognized option '%+v'", c.Args()[1:])
 	}
 	daemonID := argDaemonID(c)
 	smap, err := api.GetClusterMap(defaultAPIParams)

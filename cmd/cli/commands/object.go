@@ -123,7 +123,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		objArgs.Query.Set(cmn.URLParamArchpath, archPath)
 	}
 
-	if flagIsSet(c, checksumFlag) {
+	if flagIsSet(c, cksumFlag) {
 		objLen, err = api.GetObjectWithValidation(defaultAPIParams, bck, objName, objArgs)
 	} else {
 		objLen, err = api.GetObject(defaultAPIParams, bck, objName, objArgs)
@@ -251,6 +251,7 @@ func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err err
 		Object:     objName,
 		Reader:     reader,
 		Cksum:      cksum,
+		SkipVC:     flagIsSet(c, skipVerCksumFlag),
 	}
 
 	archPath := parseStrFlag(c, archpathFlag)
@@ -687,7 +688,13 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 		}
 		countReader := cos.NewCallbackReadOpenCloser(reader, updateBar)
 
-		putArgs := api.PutObjectArgs{BaseParams: defaultAPIParams, Bck: p.bck, Object: f.name, Reader: countReader}
+		putArgs := api.PutObjectArgs{
+			BaseParams: defaultAPIParams,
+			Bck:        p.bck,
+			Object:     f.name,
+			Reader:     countReader,
+			SkipVC:     flagIsSet(c, skipVerCksumFlag),
+		}
 		if err := api.PutObject(putArgs); err != nil {
 			str := fmt.Sprintf("Failed to put object %q: %v\n", f.name, err)
 			if showProgress {

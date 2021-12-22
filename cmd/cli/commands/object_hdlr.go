@@ -23,11 +23,11 @@ var (
 			offsetFlag,
 			lengthFlag,
 			archpathFlag,
-			checksumFlag,
+			cksumFlag,
 			isCachedFlag,
 		},
 		commandPut: append(
-			checksumFlags,
+			supportedCksumFlags,
 			chunkSizeFlag,
 			concurrencyFlag,
 			dryRunFlag,
@@ -45,6 +45,7 @@ var (
 			continueOnErrorFlag,
 			createArchFlag,
 			archpathFlag,
+			skipVerCksumFlag,
 		),
 		commandSetCustom: {
 			setNewCustomMDFlag,
@@ -64,7 +65,7 @@ var (
 			offsetFlag,
 			lengthFlag,
 			archpathFlag,
-			checksumFlag,
+			cksumFlag,
 			forceFlag,
 		},
 	}
@@ -307,7 +308,7 @@ func putRegularObjHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "object name in the form bucket/[object]")
 	}
 	if c.NArg() > 2 {
-		return incorrectUsageMsg(c, "too many arguments")
+		return incorrectUsageMsg(c, "too many arguments or unrecognized option '%+v'", c.Args()[2:])
 	}
 	if bck, objName, err = parseBckObjectURI(c, uri, true /*optional objName*/); err != nil {
 		return

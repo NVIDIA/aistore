@@ -30,14 +30,17 @@ var (
 	}
 )
 
-// dynamically add some commands to `ais job start`
-func init() {
-	jobSubcmds[0].Subcommands = append(jobSubcmds[0].Subcommands, bucketSpecificCmds...)
-	jobSubcmds[0].Subcommands = append(jobSubcmds[0].Subcommands, xactionCmds()...)
+func initJobSubcmds() {
+	// add to `ais job start`
+	jobStartSubcmds := jobSubcmds[0].Subcommands
+	jobStartSubcmds = append(jobStartSubcmds, storageSvcCmds...)
+	jobStartSubcmds = append(jobStartSubcmds, xactionCmds()...)
+
+	jobSubcmds[0].Subcommands = jobStartSubcmds
 }
 
 func xactionCmds() cli.Commands {
-	cmds := make(cli.Commands, 0)
+	cmds := make(cli.Commands, 0, 16)
 
 	splCmdKinds := make(cos.StringSet)
 	// Add any xaction which requires a separate handler here.

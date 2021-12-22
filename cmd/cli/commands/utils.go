@@ -1211,7 +1211,7 @@ func parseByteFlagToInt(c *cli.Context, flag cli.Flag) (int64, error) {
 
 func parseChecksumFlags(c *cli.Context) []*cos.Cksum {
 	cksums := []*cos.Cksum{}
-	for _, ckflag := range checksumFlags {
+	for _, ckflag := range supportedCksumFlags {
 		if flagIsSet(c, ckflag) {
 			cksums = append(cksums, cos.NewCksum(ckflag.GetName(), parseStrFlag(c, ckflag)))
 		}

@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	bucketSpecificCmdsFlags = map[string][]cli.Flag{
+	storageSvcCmdsFlags = map[string][]cli.Flag{
 		commandMirror: {
 			copiesFlag,
 		},
@@ -23,12 +23,12 @@ var (
 		},
 	}
 
-	bucketSpecificCmds = []cli.Command{
+	storageSvcCmds = []cli.Command{
 		{
 			Name:         commandMirror,
 			Usage:        "configure and start mirroring a bucket",
 			ArgsUsage:    bucketArgument,
-			Flags:        bucketSpecificCmdsFlags[commandMirror],
+			Flags:        storageSvcCmdsFlags[commandMirror],
 			Action:       setCopiesHandler,
 			BashComplete: bucketCompletions(),
 		},
@@ -36,7 +36,7 @@ var (
 			Name:         commandECEncode,
 			Usage:        "erasure code a bucket",
 			ArgsUsage:    bucketArgument,
-			Flags:        bucketSpecificCmdsFlags[commandECEncode],
+			Flags:        storageSvcCmdsFlags[commandECEncode],
 			Action:       ecEncodeHandler,
 			BashComplete: bucketCompletions(),
 		},

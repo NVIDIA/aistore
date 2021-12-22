@@ -65,13 +65,13 @@ var (
 		Subcommands: []cli.Command{
 			{
 				Name:      subcmdSpec,
-				Usage:     "start an ETL with YAML Pod specification",
+				Usage:     "start ETL job with YAML Pod specification",
 				ArgsUsage: "SPEC_FILE",
 				Action:    etlInitSpecHandler,
 			},
 			{
 				Name:   subcmdCode,
-				Usage:  "start an ETL with transformation source code",
+				Usage:  "start ETL job using the specified transforming function or script",
 				Flags:  etlSubcmdsFlags[subcmdCode],
 				Action: etlInitCodeHandler,
 			},
