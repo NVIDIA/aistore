@@ -66,22 +66,16 @@ func addCopies(lom *cluster.LOM, copies int, buf []byte) (size int64, err error)
 	//  While copying we may find out that some copies do not exist -
 	//  these copies will be removed and `NumCopies()` will decrease.
 	for lom.NumCopies() < copies {
-		var (
-			mi    *fs.MountpathInfo
-			clone *cluster.LOM
-		)
+		var mi *fs.MountpathInfo
 		if mi = lom.LeastUtilNoCopy(); mi == nil {
 			err = fmt.Errorf("%s (copies=%d): cannot find dst mountpath", lom, lom.NumCopies())
 			return
 		}
-		copyFQN := mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
-		if clone, err = lom.CopyObject(copyFQN, buf); err != nil {
+		if err = lom.Copy(mi, buf); err != nil {
 			glog.Errorln(err)
-			cluster.FreeLOM(clone)
 			return
 		}
 		size += lom.SizeBytes()
-		cluster.FreeLOM(clone)
 	}
 	return
 }

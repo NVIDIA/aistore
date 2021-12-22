@@ -68,8 +68,8 @@ var _ = Describe("LOM", func() {
 		_, _ = fs.Add(mpath, "daeID")
 	}
 
-	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
-	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
+	_ = fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
+	_ = fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 	bmd := cluster.NewBaseBownerMock(
 		cluster.NewBck(
@@ -654,7 +654,7 @@ var _ = Describe("LOM", func() {
 				lom.Lock(true)
 				defer lom.Unlock(true)
 			}
-			dst, err = lom.CopyObject(fqn, make([]byte, testFileSize))
+			dst, err = lom.Copy2FQN(fqn, make([]byte, testFileSize))
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(dst.FQN).To(BeARegularFile())
 			Expect(dst.SizeBytes()).To(BeEquivalentTo(testFileSize))

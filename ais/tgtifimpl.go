@@ -54,7 +54,7 @@ func (t *targetrunner) Backend(bck *cluster.Bck) cluster.BackendProvider {
 // essentially, t.doPut() for external use
 func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParams) error {
 	debug.Assert(params.Tag != "" && !params.Atime.IsZero())
-	workFQN := fs.CSM.GenContentFQN(lom, fs.WorkfileType, params.Tag)
+	workFQN := fs.CSM.Gen(lom, fs.WorkfileType, params.Tag)
 	poi := allocPutObjInfo()
 	{
 		poi.t = t
@@ -236,7 +236,7 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 		copyFile = err != nil || info.Path != lom.MpathInfo().Path
 	}
 	if copyFile {
-		workFQN = fs.CSM.GenContentFQN(lom, fs.WorkfileType, fs.WorkfilePut)
+		workFQN = fs.CSM.Gen(lom, fs.WorkfileType, fs.WorkfilePut)
 
 		buf, slab := t.gmm.Alloc()
 		fileSize, cksum, err = cos.CopyFile(params.SrcFQN, workFQN, buf, lom.CksumConf().Type)

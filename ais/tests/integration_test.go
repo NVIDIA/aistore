@@ -1563,7 +1563,7 @@ func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
 
 	// Step 3: PUT objects in the bucket
 	m.puts()
-	m.ensureNumCopies(copies)
+	m.ensureNumCopies(copies, false)
 
 	// Step 4: Remove a mountpath
 	mpath := mpList.Available[0]
@@ -1580,7 +1580,7 @@ func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
 	// Step 5: GET objects from the bucket
 	m.gets()
 
-	m.ensureNumCopies(copies)
+	m.ensureNumCopies(copies, true /*greaterOk*/)
 
 	// Step 6: Add previously removed mountpath
 	tlog.Logf("Add mountpath %s on target %s\n", mpath, target.ID())
@@ -1592,7 +1592,7 @@ func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	m.ensureNumCopies(copies)
+	m.ensureNumCopies(copies, true)
 	m.ensureNoErrors()
 }
 
@@ -1631,7 +1631,7 @@ func TestGetFromMirroredBucketWithLostAllMpathsExceptOne(t *testing.T) {
 
 	// PUT
 	m.puts()
-	m.ensureNumCopies(mpathCount)
+	m.ensureNumCopies(mpathCount, false /*greaterOk*/)
 
 	// Remove all mountpaths except one
 	tlog.Logf("Remove all except one (%q) mountpath on target %s\n", mpList.Available[0], target.StringEx())
@@ -1671,7 +1671,7 @@ func TestGetFromMirroredBucketWithLostAllMpathsExceptOne(t *testing.T) {
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	m.ensureNumCopies(mpathCount)
+	m.ensureNumCopies(mpathCount, true /*greaterOk*/)
 	m.ensureNoErrors()
 }
 

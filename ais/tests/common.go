@@ -507,7 +507,7 @@ func (m *ioContext) stopGets() {
 	m.stopCh <- struct{}{}
 }
 
-func (m *ioContext) ensureNumCopies(expectedCopies int) {
+func (m *ioContext) ensureNumCopies(expectedCopies int, greaterOk bool) {
 	var (
 		baseParams = tutils.BaseAPIParams()
 		total      int
@@ -529,7 +529,11 @@ func (m *ioContext) ensureNumCopies(expectedCopies int) {
 			m.t.Errorf("%s/%s: access time is empty", m.bck, entry.Name)
 		}
 		total++
-		copiesToNumObjects[int(entry.Copies)]++
+		if greaterOk && int(entry.Copies) > expectedCopies {
+			copiesToNumObjects[expectedCopies]++
+		} else {
+			copiesToNumObjects[int(entry.Copies)]++
+		}
 	}
 	tlog.Logf("objects (total, copies) = (%d, %v)\n", total, copiesToNumObjects)
 	if total != m.num {
@@ -921,10 +925,10 @@ func initFS() {
 	config.Backend = cfg.Backend
 	cmn.GCO.CommitUpdate(config)
 
-	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
-	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
-	_ = fs.CSM.RegisterContentType(fs.ECSliceType, &fs.ECSliceContentResolver{})
-	_ = fs.CSM.RegisterContentType(fs.ECMetaType, &fs.ECMetaContentResolver{})
+	_ = fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
+	_ = fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
+	_ = fs.CSM.Reg(fs.ECSliceType, &fs.ECSliceContentResolver{})
+	_ = fs.CSM.Reg(fs.ECMetaType, &fs.ECMetaContentResolver{})
 }
 
 func initMountpaths(t *testing.T, proxyURL string) {

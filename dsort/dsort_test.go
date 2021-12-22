@@ -218,7 +218,7 @@ func (tctx *testContext) setup() {
 	_, err = fs.Add(testDir, "daeID")
 	Expect(err).NotTo(HaveOccurred())
 
-	fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
+	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
 
 	config := cmn.GCO.BeginUpdate()
 	config.HostNet.UseIntraControl = false

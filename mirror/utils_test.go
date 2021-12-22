@@ -41,8 +41,8 @@ var _ = Describe("Mirror", func() {
 	fs.TestDisableValidation()
 	_, _ = fs.Add(mpath, "daeID")
 	_, _ = fs.Add(mpath2, "daeID")
-	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
-	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
+	_ = fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
+	_ = fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 	var (
 		props = &cmn.BucketProps{
@@ -83,7 +83,7 @@ var _ = Describe("Mirror", func() {
 			lom.Lock(true)
 			defer lom.Unlock(true)
 			copyFQN := mi2.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
-			clone, err := lom.CopyObject(copyFQN, nil)
+			clone, err := lom.Copy2FQN(copyFQN, nil)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(expectedCopyFQN).To(BeARegularFile())
 			Expect(clone.SizeBytes()).To(BeEquivalentTo(testObjectSize))

@@ -444,7 +444,7 @@ func generateSlicesToDisk(ctx *encodeCtx) error {
 
 	conf := ctx.lom.CksumConf()
 	for i := 0; i < ctx.paritySlices; i++ {
-		workFQN := fs.CSM.GenContentFQN(ctx.lom, fs.WorkfileType, fmt.Sprintf("ec-write-%d", i))
+		workFQN := fs.CSM.Gen(ctx.lom, fs.WorkfileType, fmt.Sprintf("ec-write-%d", i))
 		writer, err := ctx.lom.CreateFile(workFQN)
 		if err != nil {
 			return err

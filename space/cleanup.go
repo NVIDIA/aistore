@@ -321,7 +321,7 @@ func (j *clnJ) visitCT(parsedFQN fs.ParsedFQN, fqn string) {
 	switch parsedFQN.ContentType {
 	case fs.WorkfileType:
 		_, base := filepath.Split(fqn)
-		contentResolver := fs.CSM.RegisteredContentTypes[fs.WorkfileType]
+		contentResolver := fs.CSM.Resolver(fs.WorkfileType)
 		_, old, ok := contentResolver.ParseUniqueFQN(base)
 		// workfiles: remove old or do nothing
 		if ok && old {
@@ -344,7 +344,7 @@ func (j *clnJ) visitCT(parsedFQN fs.ParsedFQN, fqn string) {
 		if ct.MtimeUnix()+int64(j.config.LRU.DontEvictTime) > j.now {
 			return
 		}
-		metaFQN := fs.CSM.GenContentFQN(ct, fs.ECMetaType, "")
+		metaFQN := fs.CSM.Gen(ct, fs.ECMetaType, "")
 		if fs.Access(metaFQN) != nil {
 			j.misplaced.ec = append(j.misplaced.ec, ct)
 		}
@@ -400,7 +400,7 @@ func (j *clnJ) visitLOM(fqn string) {
 		return
 	}
 	if lom.Bprops().EC.Enabled {
-		metaFQN := fs.CSM.GenContentFQN(lom, fs.ECMetaType, "")
+		metaFQN := fs.CSM.Gen(lom, fs.ECMetaType, "")
 		if fs.Access(metaFQN) != nil {
 			j.misplaced.ec = append(j.misplaced.ec, cluster.NewCTFromLOM(lom, fs.ObjectType))
 		}
@@ -484,7 +484,7 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 
 	// 3. rm EC slices and replicas that are still without correcponding metafile
 	for _, ct := range j.misplaced.ec {
-		metaFQN := fs.CSM.GenContentFQN(ct, fs.ECMetaType, "")
+		metaFQN := fs.CSM.Gen(ct, fs.ECMetaType, "")
 		if fs.Access(metaFQN) == nil {
 			continue
 		}

@@ -30,7 +30,7 @@ func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt,
 	var (
 		size    int64
 		header  *tar.Header
-		workFQN = fs.CSM.GenContentFQN(lom, filetype.DSortFileType, "") // tarFQN
+		workFQN = fs.CSM.Gen(lom, filetype.DSortFileType, "") // tarFQN
 	)
 
 	gzr, err := gzip.NewReader(r)

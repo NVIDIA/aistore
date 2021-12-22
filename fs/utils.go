@@ -19,15 +19,13 @@ const maxNumCopies = 16
 var (
 	pid  int64 = 0xDEADBEEF   // pid of the current process
 	spid       = "0xDEADBEEF" // string version of the pid
-
-	CSM *ContentSpecMgr
 )
 
 func init() {
 	pid = int64(os.Getpid())
 	spid = strconv.FormatInt(pid, 16)
 
-	CSM = &ContentSpecMgr{RegisteredContentTypes: make(map[string]ContentResolver, 8)}
+	CSM = &contentSpecMgr{m: make(map[string]ContentResolver, 8)}
 }
 
 func IsDirEmpty(dir string) (names []string, empty bool, err error) {

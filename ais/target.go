@@ -302,10 +302,10 @@ func (t *targetrunner) Run() error {
 	}
 
 	// register object type and workfile type
-	if err := fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{}); err != nil {
+	if err := fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}); err != nil {
 		cos.ExitLogf("%v", err)
 	}
-	if err := fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{}); err != nil {
+	if err := fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{}); err != nil {
 		cos.ExitLogf("%v", err)
 	}
 
@@ -1404,7 +1404,7 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 		poi.t = t
 		poi.lom = lom
 		poi.r = r.Body
-		poi.workFQN = fs.CSM.GenContentFQN(lom, fs.WorkfileType, fs.WorkfilePut)
+		poi.workFQN = fs.CSM.Gen(lom, fs.WorkfileType, fs.WorkfilePut)
 		poi.cksumToUse = cksumToUse
 		poi.recvType = cluster.RegularPut
 		poi.skipVC = skipVC

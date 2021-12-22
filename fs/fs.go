@@ -199,7 +199,7 @@ func (mi *MountpathInfo) IsIdle(config *cmn.Config) bool {
 }
 
 func (mi *MountpathInfo) CreateMissingBckDirs(bck cmn.Bck) (err error) {
-	for contentType := range CSM.RegisteredContentTypes {
+	for contentType := range CSM.m {
 		dir := mi.MakePathCT(bck, contentType)
 		if err = Access(dir); err == nil {
 			continue
@@ -376,7 +376,7 @@ func (mi *MountpathInfo) makeDelPathBck(bck cmn.Bck, bid uint64) string {
 
 // Creates all CT directories for a given (mountpath, bck) - NOTE handling of empty dirs
 func (mi *MountpathInfo) createBckDirs(bck cmn.Bck, nilbmd bool) (num int, err error) {
-	for contentType := range CSM.RegisteredContentTypes {
+	for contentType := range CSM.m {
 		dir := mi.MakePathCT(bck, contentType)
 		if err := Access(dir); err == nil {
 			if nilbmd {
@@ -923,7 +923,7 @@ func GetAvail() MPI {
 func CreateBucket(op string, bck cmn.Bck, nilbmd bool) (errs []error) {
 	var (
 		availablePaths   = GetAvail()
-		totalDirs        = len(availablePaths) * len(CSM.RegisteredContentTypes)
+		totalDirs        = len(availablePaths) * len(CSM.m)
 		totalCreatedDirs int
 	)
 	for _, mi := range availablePaths {

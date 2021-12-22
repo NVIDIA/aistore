@@ -57,8 +57,8 @@ func TestMain(m *testing.M) {
 	defer os.RemoveAll(testMountpath)
 	fs.TestNew(nil)
 	fs.TestDisableValidation()
-	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
-	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
+	_ = fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
+	_ = fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 	// target
 	config := cmn.GCO.Get()

@@ -261,7 +261,7 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 	)
 	// Try to read a replica from targets one by one until the replica is downloaded
 	objFQN := ctx.lom.FQN
-	tmpFQN := fs.CSM.GenContentFQN(ctx.lom, fs.WorkfileType, "ec-restore-repl")
+	tmpFQN := fs.CSM.Gen(ctx.lom, fs.WorkfileType, "ec-restore-repl")
 
 	for node := range ctx.nodes {
 		uname := unique(node, ctx.lom.Bck(), ctx.lom.ObjName)
@@ -353,7 +353,7 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 		var writer *slice
 		if ctx.toDisk {
 			prefix := fmt.Sprintf("ec-restore-%d", v.SliceID)
-			fqn := fs.CSM.GenContentFQN(ctx.lom, fs.WorkfileType, prefix)
+			fqn := fs.CSM.Gen(ctx.lom, fs.WorkfileType, prefix)
 			fh, err := ctx.lom.CreateFile(fqn)
 			if err != nil {
 				return err
@@ -410,7 +410,7 @@ func newSliceWriter(ctx *restoreCtx, writers []io.Writer, restored []*slice,
 	cksums []*cos.CksumHash, cksumType string, idx int, sliceSize int64) error {
 	if ctx.toDisk {
 		prefix := fmt.Sprintf("ec-rebuild-%d", idx)
-		fqn := fs.CSM.GenContentFQN(ctx.lom, fs.WorkfileType, prefix)
+		fqn := fs.CSM.Gen(ctx.lom, fs.WorkfileType, prefix)
 		file, err := ctx.lom.CreateFile(fqn)
 		if err != nil {
 			return err

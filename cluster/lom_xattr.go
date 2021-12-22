@@ -85,7 +85,7 @@ func (lom *LOM) LoadMetaFromFS() (err error) {
 	return
 }
 
-func whinge(err error) (*lmeta, error) {
+func whingeLmeta(err error) (*lmeta, error) {
 	if cos.IsErrXattrNotFound(err) {
 		return nil, cmn.NewErrLmetaNotFound(err)
 	}
@@ -104,7 +104,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	if err != nil {
 		slab.Free(buf)
 		if err != syscall.ERANGE {
-			return whinge(err)
+			return whingeLmeta(err)
 		}
 		debug.Assert(mdSize < xattrMaxSize)
 		// 2nd attempt: max-size
@@ -112,7 +112,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 		read, err = fs.GetXattrBuf(lom.FQN, XattrLOM, buf)
 		if err != nil {
 			slab.Free(buf)
-			return whinge(err)
+			return whingeLmeta(err)
 		}
 	}
 	size = int64(len(read))

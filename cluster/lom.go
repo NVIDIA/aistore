@@ -249,7 +249,7 @@ func (lom *LOM) HrwTarget(smap *Smap) (tsi *Snode, local bool, err error) {
 // copy management //
 /////////////////////
 
-func (lom *LOM) _whingeCopy() (yes bool) {
+func (lom *LOM) whingeCopy() (yes bool) {
 	if !lom.IsCopy() {
 		return
 	}
@@ -347,7 +347,7 @@ func (lom *LOM) DelAllCopies() (err error) {
 
 // DelExtraCopies deletes objects which are not part of lom.md.copies metadata (leftovers).
 func (lom *LOM) DelExtraCopies(fqn ...string) (removed bool, err error) {
-	if lom._whingeCopy() {
+	if lom.whingeCopy() {
 		return
 	}
 	availablePaths := fs.GetAvail()
@@ -441,12 +441,50 @@ func (lom *LOM) _restore(fqn string, buf []byte) (dst *LOM, err error) {
 		return
 	}
 	// restore at default location
-	dst, err = src.CopyObject(lom.FQN, buf)
+	dst, err = src.Copy2FQN(lom.FQN, buf)
 	return
 }
 
-// NOTE: caller is responsible for locking
-func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
+// create a true lom copy to increment lom.md.copies
+// (compare with lom.Copy2FQN below)
+func (lom *LOM) Copy(mi *fs.MountpathInfo, buf []byte) (err error) {
+	var (
+		size    int64
+		copyFQN = mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
+		workFQN = mi.MakePathFQN(lom.Bucket(), fs.WorkfileType, fs.WorkfileCopy+"."+lom.ObjName)
+	)
+	size, _, err = cos.CopyFile(lom.FQN, workFQN, buf, cos.ChecksumNone) // TODO: checksumming
+	if err != nil {
+		return
+	}
+	if lom.SizeBytes() != size {
+		return lom.whingeSize(size)
+	}
+	if err = cos.Rename(workFQN, copyFQN); err != nil {
+		if errRemove := cos.RemoveFile(workFQN); errRemove != nil {
+			glog.Errorf(fmtNestedErr, errRemove)
+		}
+		return
+	}
+	if lom.md.copies == nil {
+		lom.md.copies = make(fs.MPI, 2)
+	}
+	lom.md.copies[copyFQN] = mi
+	if err = lom.Persist(); err != nil {
+		delete(lom.md.copies, copyFQN)
+		if errRemove := os.Remove(copyFQN); errRemove != nil {
+			glog.Errorf("nested err: %v", errRemove)
+		}
+		return
+	}
+	err = lom.syncMetaWithCopies()
+	return
+}
+
+// copy object => any local destination
+// recommended for copying between different buckets (compare with lom.Copy() above)
+// NOTE: `lom` source must be w-locked
+func (lom *LOM) Copy2FQN(dstFQN string, buf []byte) (dst *LOM, err error) {
 	var (
 		dstCksum  *cos.CksumHash
 		srcCksum  = lom.Checksum()
@@ -479,7 +517,7 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		dst.SetVersion(lomInitialVersion)
 	}
 
-	workFQN := fs.CSM.GenContentFQN(dst, fs.WorkfileType, fs.WorkfilePut)
+	workFQN := fs.CSM.Gen(dst, fs.WorkfileType, fs.WorkfileCopy)
 	_, dstCksum, err = cos.CopyFile(lom.FQN, workFQN, buf, cksumType)
 	if err != nil {
 		return
@@ -998,12 +1036,16 @@ func (lom *LOM) FromFS() (err error) {
 	}
 	// fstat & atime
 	if lom.md.Size != finfo.Size() { // corruption or tampering
-		return cmn.NewErrLmetaCorrupted(fmt.Errorf("errsize (%d != %d)", lom.md.Size, finfo.Size()))
+		return cmn.NewErrLmetaCorrupted(lom.whingeSize(finfo.Size()))
 	}
 	atime := ios.GetATime(finfo)
 	lom.md.Atime = atime.UnixNano()
 	lom.md.atimefs = uint64(lom.md.Atime)
 	return
+}
+
+func (lom *LOM) whingeSize(size int64) error {
+	return fmt.Errorf("errsize (%d != %d)", lom.md.Size, size)
 }
 
 func (lom *LOM) Remove() (err error) {

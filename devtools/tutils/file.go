@@ -143,10 +143,10 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 	fs.TestNew(mios)
 	fs.TestDisableValidation()
 
-	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
-	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
-	_ = fs.CSM.RegisterContentType(fs.ECSliceType, &fs.ECSliceContentResolver{})
-	_ = fs.CSM.RegisterContentType(fs.ECMetaType, &fs.ECMetaContentResolver{})
+	_ = fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
+	_ = fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
+	_ = fs.CSM.Reg(fs.ECSliceType, &fs.ECSliceContentResolver{})
+	_ = fs.CSM.Reg(fs.ECMetaType, &fs.ECMetaContentResolver{})
 
 	dir := t.TempDir()
 

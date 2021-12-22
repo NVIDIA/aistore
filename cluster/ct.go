@@ -120,14 +120,14 @@ func NewCTFromBO(bck cmn.Bck, objName string, b Bowner, ctType ...string) (ct *C
 	} else {
 		ct.contentType = ctType[0]
 	}
-	ct.fqn = fs.CSM.GenContentFQN(ct, ct.contentType, "")
+	ct.fqn = fs.CSM.Gen(ct, ct.contentType, "")
 	return
 }
 
 // Construct CT from LOM and change ContentType and FQN
 func NewCTFromLOM(lom *LOM, ctType string) *CT {
 	return &CT{
-		fqn:         fs.CSM.GenContentFQN(lom, ctType, ""),
+		fqn:         fs.CSM.Gen(lom, ctType, ""),
 		objName:     lom.ObjName,
 		contentType: ctType,
 		bck:         lom.Bck(),
@@ -139,7 +139,7 @@ func NewCTFromLOM(lom *LOM, ctType string) *CT {
 // Clone CT and change ContentType and FQN
 func (ct *CT) Clone(ctType string) *CT {
 	return &CT{
-		fqn:         fs.CSM.GenContentFQN(ct, ctType, ""),
+		fqn:         fs.CSM.Gen(ct, ctType, ""),
 		objName:     ct.objName,
 		contentType: ctType,
 		bck:         ct.bck,
@@ -155,7 +155,7 @@ func (ct *CT) Make(toType string, pref ...string /*optional prefix*/) string {
 	if len(pref) > 0 {
 		prefix = pref[0]
 	}
-	return fs.CSM.GenContentFQN(ct, toType, prefix)
+	return fs.CSM.Gen(ct, toType, prefix)
 }
 
 // Save CT to local drives. If workFQN is set, it saves in two steps: first,

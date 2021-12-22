@@ -159,9 +159,9 @@ func RegisterNode(smapOwner cluster.Sowner, bmdOwner cluster.Bowner, snode *clus
 
 	if ctx.node.IsTarget() {
 		mm = t.PageMM()
-		err := fs.CSM.RegisterContentType(filetype.DSortFileType, &filetype.DSortFile{})
+		err := fs.CSM.Reg(filetype.DSortFileType, &filetype.DSortFile{})
 		cos.AssertNoErr(err)
-		err = fs.CSM.RegisterContentType(filetype.DSortWorkfileType, &filetype.DSortFile{})
+		err = fs.CSM.Reg(filetype.DSortWorkfileType, &filetype.DSortFile{})
 		cos.AssertNoErr(err)
 	}
 }

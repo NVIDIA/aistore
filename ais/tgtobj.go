@@ -654,7 +654,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 		return
 	}
 	cksumToUse := lom.ObjAttrs().FromHeader(resp.Header)
-	workFQN := fs.CSM.GenContentFQN(lom, fs.WorkfileType, fs.WorkfileRemote)
+	workFQN := fs.CSM.Gen(lom, fs.WorkfileType, fs.WorkfileRemote)
 	poi := &putObjInfo{
 		t:          goi.t,
 		lom:        lom,
@@ -869,7 +869,7 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 	case cmn.AppendOp:
 		var f *os.File
 		if filePath == "" {
-			filePath = fs.CSM.GenContentFQN(aoi.lom, fs.WorkfileType, fs.WorkfileAppend)
+			filePath = fs.CSM.Gen(aoi.lom, fs.WorkfileType, fs.WorkfileAppend)
 			f, err = aoi.lom.CreateFile(filePath)
 			if err != nil {
 				errCode = http.StatusInternalServerError
@@ -1062,7 +1062,7 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 			return
 		}
 	}
-	dst2, err2 := src.CopyObject(dst.FQN, coi.Buf)
+	dst2, err2 := src.Copy2FQN(dst.FQN, coi.Buf)
 	if err2 == nil {
 		size = src.SizeBytes()
 		if coi.finalize {
@@ -1314,7 +1314,7 @@ func (aaoi *appendArchObjInfo) finalize(fqn string) error {
 }
 
 func (aaoi *appendArchObjInfo) begin() (string, error) {
-	workFQN := fs.CSM.GenContentFQN(aaoi.lom, fs.WorkfileType, fs.WorkfileAppendToArch)
+	workFQN := fs.CSM.Gen(aaoi.lom, fs.WorkfileType, fs.WorkfileAppendToArch)
 	if err := os.Rename(aaoi.lom.FQN, workFQN); err != nil {
 		return "", err
 	}
