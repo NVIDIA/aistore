@@ -17,7 +17,7 @@ require (
 	github.com/json-iterator/go v1.1.12
 	github.com/karrick/godirwalk v1.16.1
 	github.com/klauspost/reedsolomon v1.9.13
-	github.com/lufia/iostat v1.1.1
+	github.com/lufia/iostat v1.2.1
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.16.0
 	github.com/pierrec/lz4/v3 v3.3.3
