@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/mock"
@@ -70,6 +71,7 @@ var _ = Describe("CommunicatorTest", func() {
 		Expect(err).NotTo(HaveOccurred())
 		err = createRandomFile(lom.FQN, dataSize)
 		Expect(err).NotTo(HaveOccurred())
+		lom.SetAtimeUnix(time.Now().UnixNano())
 		lom.SetSize(dataSize)
 		err = lom.Persist()
 		Expect(err).NotTo(HaveOccurred())

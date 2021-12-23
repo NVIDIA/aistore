@@ -2688,12 +2688,14 @@ func TestBackendBucket(t *testing.T) {
 		aisObjList.Entries, cachedObjName,
 	)
 
-	// Disconnect backend bucket.
+	// Disconnect backend bucket while denying (the default) cmn.AceDisconnectedBackend permission
+	aattrs := cmn.AccessAll &^ cmn.AceDisconnectedBackend
 	_, err = api.SetBucketProps(baseParams, aisBck, &cmn.BucketPropsToUpdate{
 		BackendBck: &cmn.BckToUpdate{
 			Name:     api.String(""),
 			Provider: api.String(""),
 		},
+		Access: api.AccessAttrs(aattrs),
 	})
 	tassert.CheckFatal(t, err)
 	p, err = api.HeadBucket(baseParams, aisBck)

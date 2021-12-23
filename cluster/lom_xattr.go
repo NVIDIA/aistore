@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/OneOfOne/xxhash"
 )
@@ -70,19 +69,29 @@ const prefLen = 10 // 10B prefix [ version = 1 | checksum-type | 64-bit xxhash ]
 
 const getxattr = "getxattr" // syscall
 
+// used in tests
+func (lom *LOM) AcquireAtimefs() error {
+	_, atime, err := lom.finfoAtime()
+	if err != nil {
+		return err
+	}
+	lom.md.Atime = atime
+	lom.md.atimefs = uint64(atime)
+	return nil
+}
+
 // NOTE: used in tests, ignores `dirty`
-func (lom *LOM) LoadMetaFromFS() (err error) {
-	var finfo os.FileInfo
-	if _, err = lom.lmfs(true); err != nil {
-		return
+func (lom *LOM) LoadMetaFromFS() error {
+	_, atime, err := lom.finfoAtime()
+	if err != nil {
+		return err
 	}
-	if finfo, err = os.Stat(lom.FQN); err != nil {
-		return
+	if _, err := lom.lmfs(true); err != nil {
+		return err
 	}
-	atime := ios.GetATime(finfo)
-	lom.md.Atime = atime.UnixNano()
-	lom.md.atimefs = uint64(lom.md.Atime)
-	return
+	lom.md.Atime = atime
+	lom.md.atimefs = uint64(atime)
+	return nil
 }
 
 func whingeLmeta(err error) (*lmeta, error) {

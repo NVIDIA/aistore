@@ -1006,13 +1006,22 @@ func (lom *LOM) fromCache() (lcache *sync.Map, lmd *lmeta) {
 	return
 }
 
+func (lom *LOM) finfoAtime() (finfo os.FileInfo, atime int64, err error) {
+	if finfo, err = os.Stat(lom.FQN); err != nil {
+		return
+	}
+	atime = ios.GetATime(finfo).UnixNano()
+	return
+}
+
 func (lom *LOM) FromFS() (err error) {
 	var (
 		finfo   os.FileInfo
+		atimefs int64
 		retried bool
 	)
 	for {
-		finfo, err = os.Stat(lom.FQN)
+		finfo, atimefs, err = lom.finfoAtime()
 		if err != nil {
 			if !os.IsNotExist(err) {
 				err = os.NewSyscallError("stat", err)
@@ -1038,9 +1047,8 @@ func (lom *LOM) FromFS() (err error) {
 	if lom.md.Size != finfo.Size() { // corruption or tampering
 		return cmn.NewErrLmetaCorrupted(lom.whingeSize(finfo.Size()))
 	}
-	atime := ios.GetATime(finfo)
-	lom.md.Atime = atime.UnixNano()
-	lom.md.atimefs = uint64(lom.md.Atime)
+	lom.md.Atime = atimefs
+	lom.md.atimefs = uint64(atimefs)
 	return
 }
 

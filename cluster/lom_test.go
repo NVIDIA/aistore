@@ -299,8 +299,8 @@ var _ = Describe("LOM", func() {
 				lom := &cluster.LOM{FQN: localFQN}
 				err := lom.Init(cmn.Bck{})
 				Expect(err).NotTo(HaveOccurred())
-				lom.SetAtimeUnix(desiredAtime.UnixNano()) // TODO -- FIXME
-				Expect(persist(lom)).NotTo(HaveOccurred())
+				lom.AcquireAtimefs()
+				Expect(lom.Persist()).NotTo(HaveOccurred())
 				err = lom.Load(false, false)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -314,8 +314,8 @@ var _ = Describe("LOM", func() {
 				lom := &cluster.LOM{FQN: localFQN}
 				err := lom.Init(cmn.Bck{})
 				Expect(err).NotTo(HaveOccurred())
-				lom.SetAtimeUnix(desiredAtime.UnixNano()) // TODO -- FIXME
-				Expect(persist(lom)).NotTo(HaveOccurred())
+				lom.AcquireAtimefs()
+				Expect(lom.Persist()).NotTo(HaveOccurred())
 				err = lom.Load(false, false)
 				Expect(err).NotTo(HaveOccurred())
 
