@@ -255,8 +255,7 @@ func SizeGEFilterMsg(n int64) *FilterMsg {
 func VersionFilter(min, max int) cluster.ObjectFilter {
 	return func(lom *cluster.LOM) bool {
 		intVersion, err := strconv.Atoi(lom.Version())
-		cos.AssertNoErr(err)
-		return intVersion >= min && intVersion <= max
+		return err == nil && intVersion >= min && intVersion <= max
 	}
 }
 

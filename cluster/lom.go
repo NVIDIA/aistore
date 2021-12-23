@@ -1014,34 +1014,27 @@ func (lom *LOM) finfoAtime() (finfo os.FileInfo, atime int64, err error) {
 	return
 }
 
-func (lom *LOM) FromFS() (err error) {
-	var (
-		finfo   os.FileInfo
-		atimefs int64
-		retried bool
-	)
-	for {
-		finfo, atimefs, err = lom.finfoAtime()
-		if err != nil {
-			if !os.IsNotExist(err) {
-				err = os.NewSyscallError("stat", err)
-				T.FSHC(err, lom.FQN)
-			}
-			return
+func (lom *LOM) FromFS() error {
+	finfo, atimefs, err := lom.finfoAtime()
+	if err != nil {
+		if !os.IsNotExist(err) {
+			err = os.NewSyscallError("stat", err)
+			T.FSHC(err, lom.FQN)
 		}
-		if _, err = lom.lmfs(true); err == nil {
-			break
-		}
+		return err
+	}
+	if _, err = lom.lmfs(true); err != nil {
+		// retry once
 		if cmn.IsErrLmetaNotFound(err) {
-			if !retried {
-				runtime.Gosched()
-				retried = true
-				continue
-			}
-			return
+			runtime.Gosched()
+			_, err = lom.lmfs(true)
 		}
-		T.FSHC(err, lom.FQN)
-		return
+	}
+	if err != nil {
+		if !cmn.IsErrLmetaNotFound(err) {
+			T.FSHC(err, lom.FQN)
+		}
+		return err
 	}
 	// fstat & atime
 	if lom.md.Size != finfo.Size() { // corruption or tampering
@@ -1049,7 +1042,7 @@ func (lom *LOM) FromFS() (err error) {
 	}
 	lom.md.Atime = atimefs
 	lom.md.atimefs = uint64(atimefs)
-	return
+	return nil
 }
 
 func (lom *LOM) whingeSize(size int64) error {
