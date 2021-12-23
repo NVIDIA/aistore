@@ -80,6 +80,11 @@ type (
 		TryRLock(timeout time.Duration) bool
 		Unlock()
 	}
+
+	ParseURIOpts struct {
+		DefaultProvider string // If set the provider will be used as provider.
+		IsQuery         bool   // Determines if the URI should be parsed as query.
+	}
 )
 
 var (
@@ -158,11 +163,6 @@ func NormalizeProvider(provider string) (string, error) {
 		}
 		return provider, nil
 	}
-}
-
-type ParseURIOpts struct {
-	DefaultProvider string // If set the provider will be used as provider.
-	IsQuery         bool   // Determines if the URI should be parsed as query.
 }
 
 // Parses "[provider://][@uuid#namespace][/][bucketName[/objectName]]"
@@ -267,13 +267,13 @@ func (n Ns) Uname() string {
 }
 
 func (n Ns) Validate() error {
-	if !nsReg.MatchString(n.UUID) || !nsReg.MatchString(n.Name) {
-		return fmt.Errorf(
-			"namespace (uuid: %q, name: %q) may only contain letters, numbers, dashes (-), underscores (_)",
-			n.UUID, n.Name,
-		)
+	if isAlphaPlus(n.UUID, false /*with period*/) && isAlphaPlus(n.Name, false) {
+		return nil
 	}
-	return nil
+	return fmt.Errorf(
+		"namespace (uuid: %q, name: %q) may only contain letters, numbers, dashes (-), underscores (_)",
+		n.UUID, n.Name,
+	)
 }
 
 func (n Ns) Contains(other Ns) bool {
@@ -308,10 +308,6 @@ func (b Bck) Equal(other Bck) bool {
 	return b.Name == other.Name && b.Provider == other.Provider && b.Ns == other.Ns
 }
 
-func (b *Bck) Valid() bool {
-	return b.Validate() == nil
-}
-
 func (b *Bck) Validate() (err error) {
 	if err := b.ValidateName(); err != nil {
 		return err
@@ -324,12 +320,11 @@ func (b *Bck) Validate() (err error) {
 }
 
 func (b *Bck) ValidateName() (err error) {
-	const nameHelp = "may only contain letters, numbers, dashes (-), underscores (_), and dots (.)"
-	if b.Name == "" || b.Name == "." || !bucketReg.MatchString(b.Name) {
-		return fmt.Errorf("bucket name %q is invalid: %v", b.Name, nameHelp)
+	if b.Name == "" || b.Name == "." {
+		return fmt.Errorf(fmtErrBckName, b.Name)
 	}
-	if strings.Contains(b.Name, "..") {
-		return fmt.Errorf("bucket name %q cannot contain '..'", b.Name)
+	if !isAlphaPlus(b.Name, true /*with period*/) {
+		err = fmt.Errorf(fmtErrBckName, b.Name)
 	}
 	return
 }

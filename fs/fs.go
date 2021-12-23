@@ -345,14 +345,14 @@ func (mi *MountpathInfo) MakePathBck(bck cmn.Bck) string {
 }
 
 func (mi *MountpathInfo) MakePathCT(bck cmn.Bck, contentType string) string {
-	debug.AssertFunc(bck.Valid, bck)
+	debug.AssertMsg(bck.Validate() == nil, bck.String())
 	debug.Assert(contentType != "")
 	buf := mi.makePathBuf(bck, contentType, 0)
 	return *(*string)(unsafe.Pointer(&buf))
 }
 
 func (mi *MountpathInfo) MakePathFQN(bck cmn.Bck, contentType, objName string) string {
-	debug.AssertFunc(bck.Valid, bck)
+	debug.AssertMsg(bck.Validate() == nil, bck.String())
 	debug.Assert(contentType != "" && objName != "")
 	buf := mi.makePathBuf(bck, contentType, 1+len(objName))
 	buf = append(buf, filepath.Separator)

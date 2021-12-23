@@ -36,6 +36,8 @@ const (
 	FmtErrUnsupported    = "%s: %s is not supported"
 	FmtErrUnknown        = "%s: unknown %s %q"
 	FmtErrFailed         = "%s: failed to %s %s, err: %v" // node: action object, error
+
+	fmtErrBckName = "bucket name %q is invalid: may only contain letters, numbers, dashes (-), underscores (_), and dots (.)"
 )
 
 type (
