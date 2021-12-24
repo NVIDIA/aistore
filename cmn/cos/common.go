@@ -10,7 +10,6 @@ import (
 	"math/rand"
 	"os"
 	"reflect"
-	"regexp"
 	"runtime"
 	"runtime/debug"
 	"sort"
@@ -92,8 +91,6 @@ func init() {
 		SortMapKeys:            true,
 	}
 	JSON = jsonConf.Froze()
-
-	idRegex = regexp.MustCompile("^[A-Za-z][A-Za-z0-9-_]{4,20}$")
 }
 
 //////////////////////

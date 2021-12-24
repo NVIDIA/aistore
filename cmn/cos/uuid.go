@@ -7,7 +7,6 @@ package cos
 import (
 	"fmt"
 	"math/rand"
-	"regexp"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/teris-io/shortid"
@@ -24,9 +23,8 @@ const (
 )
 
 var (
-	sid     *shortid.Shortid
-	rtie    atomic.Int32
-	idRegex *regexp.Regexp
+	sid  *shortid.Shortid
+	rtie atomic.Int32
 )
 
 func InitShortID(seed uint64) {
@@ -49,6 +47,23 @@ func GenUUID() (uuid string) {
 
 func IsValidUUID(uuid string) bool {
 	return len(uuid) >= lenShortID && isAlpha(uuid[0])
+}
+
+// alpha-numeric++ including letters, numbers, dashes (-), and underscores (_)
+// period (.) is allowed conditionally except for '..'
+func IsAlphaPlus(s string, withPeriod bool) bool {
+	for i, c := range s {
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' {
+			continue
+		}
+		if c != '.' {
+			return false
+		}
+		if !withPeriod || (i < len(s)-1 && s[i+1] == '.') {
+			return false
+		}
+	}
+	return true
 }
 
 func isAlpha(c byte) bool {
@@ -75,17 +90,17 @@ func ValidateEtlID(id string) error {
 	return _validateID(id, 6)
 }
 
-func _validateID(id string, minlen int) error {
+func _validateID(id string, minlen int) (err error) {
 	if len(id) < minlen {
 		return fmt.Errorf("ID %q is invalid: too short", id)
 	}
 	if len(id) >= lenTooLongID {
 		return fmt.Errorf("ID %q is invalid: too long", id)
 	}
-	if !idRegex.MatchString(id) {
-		return fmt.Errorf("ID %q is invalid: can only contain [A-Za-z0-9-_]", id)
+	if !isAlpha(id[0]) || !IsAlphaPlus(id, false /*with period*/) {
+		err = fmt.Errorf("ID %q is invalid: must start with a letter and can only contain [A-Za-z0-9-_]", id)
 	}
-	return nil
+	return
 }
 
 //

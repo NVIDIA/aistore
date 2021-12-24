@@ -114,23 +114,6 @@ func AppConfigPath(appName string) (configDir string) {
 	return
 }
 
-// alpha-numeric++ including letters, numbers, dashes (-), and underscores (_)
-// period (.) is allowed conditionally except for '..'
-func isAlphaPlus(s string, withPeriod bool) bool {
-	for i, c := range s {
-		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' {
-			continue
-		}
-		if c != '.' {
-			return false
-		}
-		if !withPeriod || (i < len(s)-1 && s[i+1] == '.') {
-			return false
-		}
-	}
-	return true
-}
-
 // ExpandPath replaces common abbreviations in file path (eg. `~` with absolute
 // path to the current user home directory) and cleans the path.
 func ExpandPath(path string) string {

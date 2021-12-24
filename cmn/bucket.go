@@ -267,7 +267,7 @@ func (n Ns) Uname() string {
 }
 
 func (n Ns) Validate() error {
-	if isAlphaPlus(n.UUID, false /*with period*/) && isAlphaPlus(n.Name, false) {
+	if cos.IsAlphaPlus(n.UUID, false /*with period*/) && cos.IsAlphaPlus(n.Name, false) {
 		return nil
 	}
 	return fmt.Errorf(
@@ -323,7 +323,7 @@ func (b *Bck) ValidateName() (err error) {
 	if b.Name == "" || b.Name == "." {
 		return fmt.Errorf(fmtErrBckName, b.Name)
 	}
-	if !isAlphaPlus(b.Name, true /*with period*/) {
+	if !cos.IsAlphaPlus(b.Name, true /*with period*/) {
 		err = fmt.Errorf(fmtErrBckName, b.Name)
 	}
 	return
