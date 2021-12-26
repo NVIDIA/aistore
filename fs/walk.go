@@ -188,20 +188,27 @@ func Walk(opts *Options) error {
 		ScratchBuffer: scratch,
 	}
 	for _, fqn := range fqns {
-		if err1 := godirwalk.Walk(fqn, gOpts); err1 != nil && !os.IsNotExist(err1) {
-			if cmn.IsErrAborted(err1) {
-				// Errors different from cmn.ErrAborted should not be overwritten
-				// by cmn.ErrAborted. Assign err = err1 only when there wasn't any other error
-				if err == nil {
-					err = err1
-				}
-			} else {
-				if err1 != context.Canceled {
-					glog.Error(err1)
-				}
+		err1 := godirwalk.Walk(fqn, gOpts)
+		if err1 == nil || os.IsNotExist(err1) {
+			continue
+		}
+		// NOTE: mountpath is getting detached or disabled
+		if cmn.IsErrMountpathNotFound(err1) {
+			glog.Error(err1)
+			continue
+		}
+		if cmn.IsErrAborted(err1) {
+			// Errors different from cmn.ErrAborted should not be overwritten
+			// by cmn.ErrAborted. Assign err = err1 only when there wasn't any other error
+			if err == nil {
 				err = err1
 			}
+			continue
 		}
+		if err1 != context.Canceled {
+			glog.Error(err1)
+		}
+		err = err1
 	}
 	slab.Free(scratch)
 	return err

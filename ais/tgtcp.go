@@ -442,7 +442,7 @@ func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request
 func (t *targetrunner) enableMpath(w http.ResponseWriter, r *http.Request, mpath string) {
 	enabledMi, err := t.fsprg.enableMpath(mpath)
 	if err != nil {
-		if _, ok := err.(*cmn.ErrMountpathNotFound); ok {
+		if cmn.IsErrMountpathNotFound(err) {
 			t.writeErr(w, r, err, http.StatusNotFound)
 		} else {
 			// cmn.ErrInvalidMountpath
@@ -498,7 +498,7 @@ func (t *targetrunner) disableMpath(w http.ResponseWriter, r *http.Request, mpat
 	dontResilver := cos.IsParseBool(r.URL.Query().Get(cmn.URLParamDontResilver))
 	disabledMi, err := t.fsprg.disableMpath(mpath, dontResilver)
 	if err != nil {
-		if _, ok := err.(*cmn.ErrMountpathNotFound); ok {
+		if cmn.IsErrMountpathNotFound(err) {
 			t.writeErr(w, r, err, http.StatusNotFound)
 		} else {
 			// cmn.ErrInvalidMountpath

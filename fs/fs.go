@@ -345,14 +345,12 @@ func (mi *MountpathInfo) MakePathBck(bck cmn.Bck) string {
 }
 
 func (mi *MountpathInfo) MakePathCT(bck cmn.Bck, contentType string) string {
-	debug.AssertMsg(bck.Validate() == nil, bck.String())
 	debug.Assert(contentType != "")
 	buf := mi.makePathBuf(bck, contentType, 0)
 	return *(*string)(unsafe.Pointer(&buf))
 }
 
 func (mi *MountpathInfo) MakePathFQN(bck cmn.Bck, contentType, objName string) string {
-	debug.AssertMsg(bck.Validate() == nil, bck.String())
 	debug.Assert(contentType != "" && objName != "")
 	buf := mi.makePathBuf(bck, contentType, 1+len(objName))
 	buf = append(buf, filepath.Separator)
@@ -752,7 +750,7 @@ func enable(mpath, cleanMpath, tid string, config *cmn.Config) (enabledMpath *Mo
 	// re-enable
 	mi, ok = disabledPaths[cleanMpath]
 	if !ok {
-		err = cmn.NewErrMountpathNotFound(mpath)
+		err = cmn.NewErrMountpathNotFound(mpath, "" /*fqn*/, false /*disabled*/)
 		return
 	}
 	debug.Assert(cleanMpath == mi.Path)
@@ -787,7 +785,7 @@ func Remove(mpath string, cb ...func()) (*MountpathInfo, error) {
 	mi, exists := availablePaths[cleanMpath]
 	if !exists {
 		if mi, exists = disabledPaths[cleanMpath]; !exists {
-			return nil, cmn.NewErrMountpathNotFound(mpath)
+			return nil, cmn.NewErrMountpathNotFound(mpath, "" /*fqn*/, false /*disabled*/)
 		}
 		debug.Assert(cleanMpath == mi.Path)
 		disabledCopy := _cloneOne(disabledPaths)
@@ -839,7 +837,7 @@ func BeginDD(action string, flags uint64, mpath string) (mi *MountpathInfo, numA
 	availablePaths, disabledPaths := Get()
 	if mi, exists = availablePaths[cleanMpath]; !exists {
 		if mi, exists = disabledPaths[cleanMpath]; !exists {
-			err = cmn.NewErrMountpathNotFound(mpath)
+			err = cmn.NewErrMountpathNotFound(mpath, "" /*fqn*/, false /*disabled*/)
 			return
 		}
 		glog.Infof("%s(%q) is already fully disabled - nothing to do", mi, action)
@@ -900,7 +898,7 @@ func Disable(mpath string, cb ...func()) (disabledMpath *MountpathInfo, err erro
 	if _, ok := disabledPaths[cleanMpath]; ok {
 		return nil, nil // nothing to do
 	}
-	return nil, cmn.NewErrMountpathNotFound(mpath)
+	return nil, cmn.NewErrMountpathNotFound(mpath, "" /*fqn*/, false /*disabled*/)
 }
 
 // returns both available and disabled mountpaths (compare with GetAvail)

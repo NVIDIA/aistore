@@ -94,18 +94,21 @@ func (res *Res) RunResilver(args Args) {
 	glog.Infoln(xres.Name())
 
 	// jogger group
-	var jg *mpather.JoggerGroup
-	slab, err := res.t.PageMM().GetSlab(memsys.MaxPageSlabSize)
+	var (
+		jg        *mpather.JoggerGroup
+		slab, err = res.t.PageMM().GetSlab(memsys.MaxPageSlabSize)
+		jctx      = &joggerCtx{xres: xres, t: res.t}
+
+		opts = &mpather.JoggerGroupOpts{
+			T:                     res.t,
+			CTs:                   []string{fs.ObjectType, fs.ECSliceType},
+			VisitObj:              jctx.visitObj,
+			VisitCT:               jctx.visitCT,
+			Slab:                  slab,
+			SkipGloballyMisplaced: args.SkipGlobMisplaced,
+		}
+	)
 	debug.AssertNoErr(err)
-	jctx := &joggerCtx{xres: xres, t: res.t}
-	opts := &mpather.JoggerGroupOpts{
-		T:                     res.t,
-		CTs:                   []string{fs.ObjectType, fs.ECSliceType},
-		VisitObj:              jctx.visitObj,
-		VisitCT:               jctx.visitCT,
-		Slab:                  slab,
-		SkipGloballyMisplaced: args.SkipGlobMisplaced,
-	}
 	if args.Mpath == "" {
 		jg = mpather.NewJoggerGroup(opts)
 	} else {
@@ -202,59 +205,102 @@ func _moveECMeta(ct *cluster.CT, srcMpath, dstMpath *fs.MountpathInfo, buf []byt
 	return "", "", err
 }
 
-// Copies an object and its metafile (if exists) to the resilver mpath. At the
-// end does proper cleanup: removes ether source files(on success), or
-// destination files(on copy failure)
-func (rj *joggerCtx) moveObject(lom *cluster.LOM, buf []byte) {
+// TODO -- FIXME: update `in` and `out` resilver stats
+//
+// TODO: revisit error handling with respect to: which other ones are critical enough to abort
+// TODO: refactor EC bits
+// TODO: check for OOS preemptively
+// NOTE: not deleting _misplaced_ and successfully copied objects -
+//       delegating to `storage cleanup`
+func (jg *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) error {
 	var (
-		metaOldPath string
-		metaNewPath string
-		err         error
+		hlom  *cluster.LOM
+		xname = jg.xres.Name()
 	)
-	// Skip those that are _not_ locally misplaced.
-	if lom.IsHRW() {
-		return
+	if !lom.TryLock(true) {
+		return nil // skipping _busy_
 	}
-
-	// If EC is enabled, first copy the metafile and then, if successful, copy the object
-	if lom.Bprops().EC.Enabled {
+	defer func() {
+		lom.Unlock(true)
+		if hlom != nil {
+			cluster.FreeLOM(hlom)
+		}
+	}()
+	// EC metafile
+	var metaOldPath, metaNewPath string
+	if !lom.IsHRW() && lom.Bprops().EC.Enabled {
+		// first, copy the metafile and then, if successful, the object
 		newMpath, _, err := cluster.ResolveFQN(lom.HrwFQN)
 		if err != nil {
-			glog.Warningf("%s: %v", lom, err)
-			return
+			glog.Warningf("%s: %s %v", xname, lom, err)
+			return nil
 		}
 		ct := cluster.NewCTFromLOM(lom, fs.ObjectType)
 		metaOldPath, metaNewPath, err = _moveECMeta(ct, lom.MpathInfo(), newMpath.MpathInfo, buf)
 		if err != nil {
-			glog.Warningf("%s: failed to move metafile %q -> %q: %v",
-				lom, lom.MpathInfo().Path, newMpath.MpathInfo.Path, err)
-			return
+			glog.Warningf("%s: failed to copy metafile %s %q -> %q: %v",
+				xname, lom, lom.MpathInfo().Path, newMpath.MpathInfo.Path, err)
+			return nil
 		}
 	}
-	size, err := rj.t.CopyObject(lom, &cluster.CopyObjectParams{BckTo: lom.Bck(), Buf: buf, Xact: rj.xres}, true /*local*/)
-	if err != nil {
-		glog.Errorf("%s: %v", lom, err)
-		// EC cleanup and return
-		if metaNewPath != "" {
-			if err = os.Remove(metaNewPath); err != nil {
-				glog.Warningf("%s: nested (%s: %v)", lom, metaNewPath, err)
+	//
+	// check hrw location and copies; fix all of the above, if need be
+	//
+	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+		return nil
+	}
+	for {
+		mi, isHrw := lom.ToMpath()
+		if mi == nil {
+			break
+		}
+		if isHrw {
+			err := lom.Copy(mi, buf)
+			if err != nil {
+				glog.Errorf("%s: failed to restore %s, err: %v", xname, lom, err)
+				// EC cleanup and return
+				if metaNewPath != "" {
+					if err = os.Remove(metaNewPath); err != nil {
+						glog.Warningf("%s: nested (%s %s: %v)", xname, lom, metaNewPath, err)
+					}
+				}
+				return err
 			}
+			hrwFQN := mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
+			hlom = cluster.AllocLOMbyFQN(hrwFQN)
+
+			err = hlom.Init(lom.Bucket())
+			if err != nil {
+				glog.Errorf("%s: %s %v", xname, hlom, err) // e.g., "bucket removed"
+				return err
+			}
+			debug.Assert(hlom.MpathInfo().Path == mi.Path)
+			hlom.Uncache(false /*delDirty*/)
+			err = hlom.Load(false /*cache it*/, true /*locked*/)
+			if err != nil {
+				debug.AssertNoErr(err)
+				return err
+			}
+			// can swap on the fly
+			lom = hlom
+			continue
 		}
-		return
+		err := lom.Copy(mi, buf)
+		if err == nil {
+			continue
+		}
+		if cos.IsErrOOS(err) {
+			err = cmn.NewErrAborted(xname, "visit-obj", err)
+		}
+		glog.Warningf("%s: failed to copy %s to %s, err: %v", xname, lom, mi, err)
+		break
 	}
-	debug.Assert(size != cos.ContentLengthUnknown)
-	// EC: Remove the original metafile.
+	// EC: remove old metafile
 	if metaOldPath != "" {
 		if err := os.Remove(metaOldPath); err != nil {
-			glog.Warningf("%s: failed to cleanup old metafile %q: %v", lom, metaOldPath, err)
+			glog.Warningf("%s: failed to cleanup %s old metafile %q: %v", xname, lom, metaOldPath, err)
 		}
 	}
-
-	// NOTE: not deleting _misplaced_ and copied - delegating to `storage cleanup` and/or LRU
-}
-
-func (rj *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (err error) {
-	rj.moveObject(lom, buf)
 	return nil
 }
 

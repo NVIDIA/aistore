@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
@@ -124,7 +123,7 @@ func ParseFQN(fqn string) (parsed ParsedFQN, err error) {
 	return
 }
 
-// FQN2Mpath matches FQN to mountpath and returns the mountpath info and the relative path.
+// FQN2Mpath matches FQN to mountpath and returns the mountpath and the relative path.
 func FQN2Mpath(fqn string) (found *MountpathInfo, relativePath string, err error) {
 	availablePaths := GetAvail()
 	if len(availablePaths) == 0 {
@@ -139,21 +138,17 @@ func FQN2Mpath(fqn string) (found *MountpathInfo, relativePath string, err error
 			return
 		}
 	}
-	err = fmt.Errorf("not found mountpath for fqn %s", fqn)
 
 	// make an extra effort to lookup in disabled
 	_, disabledPaths := Get()
-	for mpath, mi := range disabledPaths {
+	for mpath := range disabledPaths {
 		l := len(mpath)
 		if len(fqn) > l && fqn[0:l] == mpath && fqn[l] == filepath.Separator {
-			// TODO -- FIXME: revisit zero-ing out error
-			glog.Errorf("mountpath %s for fqn %s exists but is disabled", mi, fqn)
-			err = nil
-			found = mi
-			relativePath = fqn[l+1:]
+			err = cmn.NewErrMountpathNotFound("" /*mpath*/, fqn, true /*disabled*/)
 			return
 		}
 	}
+	err = cmn.NewErrMountpathNotFound("" /*mpath*/, fqn, false /*disabled*/)
 	return
 }
 

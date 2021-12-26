@@ -71,7 +71,9 @@ type (
 	}
 
 	ErrMountpathNotFound struct {
-		mpath string
+		mpath    string
+		fqn      string
+		disabled bool
 	}
 	ErrInvalidMountpath struct {
 		mpath string
@@ -308,11 +310,26 @@ func (e *ErrInvalidCksum) Expected() string { return e.expectedHash }
 // ErrMountpathNotFound
 
 func (e *ErrMountpathNotFound) Error() string {
-	return "mountpath " + e.mpath + " does not exist"
+	if e.mpath != "" {
+		if e.disabled {
+			return "mountpath " + e.mpath + " is disabled"
+		}
+		return "mountpath " + e.mpath + " does not exist"
+	}
+	debug.Assert(e.fqn != "")
+	if e.disabled {
+		return "mountpath for fqn " + e.fqn + " is disabled"
+	}
+	return "mountpath for fqn " + e.fqn + " does not exist"
 }
 
-func NewErrMountpathNotFound(mpath string) *ErrMountpathNotFound {
-	return &ErrMountpathNotFound{mpath}
+func NewErrMountpathNotFound(mpath, fqn string, disabled bool) *ErrMountpathNotFound {
+	return &ErrMountpathNotFound{mpath: mpath, fqn: fqn, disabled: disabled}
+}
+
+func IsErrMountpathNotFound(err error) bool {
+	_, ok := err.(*ErrMountpathNotFound)
+	return ok
 }
 
 // ErrInvalidMountpath
