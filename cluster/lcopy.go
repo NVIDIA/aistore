@@ -217,12 +217,23 @@ func (lom *LOM) _restore(fqn string, buf []byte) (dst *LOM, err error) {
 
 // increment the object's num copies by (well) copying the former
 // (compare with lom.Copy2FQN below)
-// TODO -- FIXME: check (and skip copying) if the destination exists and is identical
 func (lom *LOM) Copy(mi *fs.MountpathInfo, buf []byte) (err error) {
 	var (
 		copyFQN = mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
 		workFQN = mi.MakePathFQN(lom.Bucket(), fs.WorkfileType, fs.WorkfileCopy+"."+lom.ObjName)
 	)
+	// check if the copy destination exists and then skip copying if it's also identical
+	if _, errExists := os.Stat(copyFQN); errExists == nil {
+		cplom := AllocLOMbyFQN(copyFQN)
+		defer FreeLOM(cplom)
+		if errExists = cplom.Init(lom.Bucket()); errExists == nil {
+			if errExists = cplom.Load(false /*cache it*/, true /*locked*/); errExists == nil && cplom.Equal(lom) {
+				goto add
+			}
+		}
+	}
+
+	// copy
 	_, _, err = cos.CopyFile(lom.FQN, workFQN, buf, cos.ChecksumNone) // TODO: checksumming
 	if err != nil {
 		return
@@ -233,6 +244,8 @@ func (lom *LOM) Copy(mi *fs.MountpathInfo, buf []byte) (err error) {
 		}
 		return
 	}
+add:
+	// add md and persist
 	lom.AddCopy(copyFQN, mi)
 	err = lom.Persist()
 	if err != nil {

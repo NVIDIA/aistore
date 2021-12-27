@@ -5,6 +5,7 @@
 package res
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -209,9 +210,13 @@ func _moveECMeta(ct *cluster.CT, srcMpath, dstMpath *fs.MountpathInfo, buf []byt
 // TODO: revisit EC bits and check for OOS preemptively
 // NOTE: not deleting extra copies - delegating to `storage cleanup`
 func (jg *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (errHrw error) {
+	const maxRetries = 3
 	var (
-		hlom  *cluster.LOM
-		xname = jg.xres.Name()
+		orig   = lom
+		hlom   *cluster.LOM
+		xname  = jg.xres.Name()
+		size   int64
+		copied bool
 	)
 	if !lom.TryLock(true) {
 		return nil // skipping _busy_ objects
@@ -220,6 +225,9 @@ func (jg *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (errHrw error) {
 		lom.Unlock(true)
 		if hlom != nil {
 			cluster.FreeLOM(hlom)
+		}
+		if copied && errHrw == nil {
+			jg.xres.ObjsAdd(1, size)
 		}
 	}()
 
@@ -244,12 +252,14 @@ func (jg *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (errHrw error) {
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		return nil
 	}
-
+	size = lom.SizeBytes()
 	// 2. fix hrw location; fail and subsequently abort if unsuccessful
+	var retries int
 	mi, isHrw := lom.ToMpath()
 	if mi == nil {
-		goto ret
+		goto ret // nothing to do
 	}
+redo:
 	if isHrw {
 		hlom, errHrw = jg.fixHrw(lom, mi, buf)
 		if errHrw != nil {
@@ -264,9 +274,9 @@ func (jg *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (errHrw error) {
 			}
 			return
 		}
-		jg.xres.ObjsAdd(1, lom.SizeBytes())
 		// can swap on the fly
 		lom = hlom
+		copied = true
 	}
 
 	// 3. fix copies
@@ -275,16 +285,30 @@ func (jg *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (errHrw error) {
 		if mi == nil {
 			break
 		}
-		debug.Assert(!isHrw) // m.b. done above
+		if isHrw {
+			// redo hlom in an unlikely event
+			retries++
+			if retries > maxRetries {
+				errHrw = fmt.Errorf("%s: hrw mountpaths keep changing (%s(%s) => %s => %s ...)",
+					xname, orig, orig.MpathInfo(), hlom.MpathInfo(), mi)
+				glog.Error(errHrw)
+				return
+			}
+			copied = false
+			cluster.FreeLOM(hlom)
+			lom, hlom = orig, nil
+			config := cmn.GCO.Get()
+			time.Sleep(config.Timeout.CplaneOperation.D() / 2)
+			goto redo
+		}
 		err := lom.Copy(mi, buf)
 		if err == nil {
-			jg.xres.ObjsAdd(1, lom.SizeBytes())
+			copied = true
 			continue
 		}
 		if cos.IsErrOOS(err) {
 			err = cmn.NewErrAborted(xname, "visit-obj", err)
-		}
-		if !os.IsNotExist(errHrw) && !strings.Contains(errHrw.Error(), "does not exist") {
+		} else if !os.IsNotExist(err) && !strings.Contains(err.Error(), "does not exist") {
 			glog.Warningf("%s: failed to copy %s to %s, err: %v", xname, lom, mi, err)
 		}
 		break

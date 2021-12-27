@@ -633,7 +633,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	m.waitAndCheckCluState()
 }
 
-func TestGetDuringLocalRebalance(t *testing.T) {
+func TestGetDuringResilver(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
@@ -864,7 +864,7 @@ func TestMountpathRemoveAndAdd(t *testing.T) {
 	m.ensureNoErrors()
 }
 
-func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
+func TestResilverAfterAddingMountpath(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	const newMountpath = "/tmp/ais/mountpath"
