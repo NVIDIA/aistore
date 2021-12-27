@@ -7,6 +7,7 @@ package res
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -205,20 +206,15 @@ func _moveECMeta(ct *cluster.CT, srcMpath, dstMpath *fs.MountpathInfo, buf []byt
 	return "", "", err
 }
 
-// TODO -- FIXME: update `in` and `out` resilver stats
-//
-// TODO: revisit error handling with respect to: which other ones are critical enough to abort
-// TODO: refactor EC bits
-// TODO: check for OOS preemptively
-// NOTE: not deleting _misplaced_ and successfully copied objects -
-//       delegating to `storage cleanup`
-func (jg *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) error {
+// TODO: revisit EC bits and check for OOS preemptively
+// NOTE: not deleting extra copies - delegating to `storage cleanup`
+func (jg *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (errHrw error) {
 	var (
 		hlom  *cluster.LOM
 		xname = jg.xres.Name()
 	)
 	if !lom.TryLock(true) {
-		return nil // skipping _busy_
+		return nil // skipping _busy_ objects
 	}
 	defer func() {
 		lom.Unlock(true)
@@ -226,75 +222,74 @@ func (jg *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) error {
 			cluster.FreeLOM(hlom)
 		}
 	}()
-	// EC metafile
+
+	// 1. fix EC metafile
 	var metaOldPath, metaNewPath string
 	if !lom.IsHRW() && lom.Bprops().EC.Enabled {
-		// first, copy the metafile and then, if successful, the object
-		newMpath, _, err := cluster.ResolveFQN(lom.HrwFQN)
-		if err != nil {
-			glog.Warningf("%s: %s %v", xname, lom, err)
+		// copy metafile
+		newMpath, _, errEc := cluster.ResolveFQN(lom.HrwFQN)
+		if errEc != nil {
+			glog.Warningf("%s: %s %v", xname, lom, errEc)
 			return nil
 		}
 		ct := cluster.NewCTFromLOM(lom, fs.ObjectType)
-		metaOldPath, metaNewPath, err = _moveECMeta(ct, lom.MpathInfo(), newMpath.MpathInfo, buf)
-		if err != nil {
-			glog.Warningf("%s: failed to copy metafile %s %q -> %q: %v",
-				xname, lom, lom.MpathInfo().Path, newMpath.MpathInfo.Path, err)
+		metaOldPath, metaNewPath, errEc = _moveECMeta(ct, lom.MpathInfo(), newMpath.MpathInfo, buf)
+		if errEc != nil {
+			glog.Warningf("%s: failed to copy EC metafile %s %q -> %q: %v",
+				xname, lom, lom.MpathInfo().Path, newMpath.MpathInfo.Path, errEc)
 			return nil
 		}
 	}
-	//
-	// check hrw location and copies; fix all of the above, if need be
-	//
+
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		return nil
 	}
+
+	// 2. fix hrw location; fail and subsequently abort if unsuccessful
+	mi, isHrw := lom.ToMpath()
+	if mi == nil {
+		goto ret
+	}
+	if isHrw {
+		hlom, errHrw = jg.fixHrw(lom, mi, buf)
+		if errHrw != nil {
+			if !os.IsNotExist(errHrw) && !strings.Contains(errHrw.Error(), "does not exist") {
+				glog.Errorf("%s: failed to restore %s, errHrw: %v", xname, lom, errHrw)
+			}
+			// EC cleanup and return
+			if metaNewPath != "" {
+				if errHrw = os.Remove(metaNewPath); errHrw != nil {
+					glog.Warningf("%s: nested (%s %s: %v)", xname, lom, metaNewPath, errHrw)
+				}
+			}
+			return
+		}
+		jg.xres.ObjsAdd(1, lom.SizeBytes())
+		// can swap on the fly
+		lom = hlom
+	}
+
+	// 3. fix copies
 	for {
 		mi, isHrw := lom.ToMpath()
 		if mi == nil {
 			break
 		}
-		if isHrw {
-			err := lom.Copy(mi, buf)
-			if err != nil {
-				glog.Errorf("%s: failed to restore %s, err: %v", xname, lom, err)
-				// EC cleanup and return
-				if metaNewPath != "" {
-					if err = os.Remove(metaNewPath); err != nil {
-						glog.Warningf("%s: nested (%s %s: %v)", xname, lom, metaNewPath, err)
-					}
-				}
-				return err
-			}
-			hrwFQN := mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
-			hlom = cluster.AllocLOMbyFQN(hrwFQN)
-
-			err = hlom.Init(lom.Bucket())
-			if err != nil {
-				glog.Errorf("%s: %s %v", xname, hlom, err) // e.g., "bucket removed"
-				return err
-			}
-			debug.Assert(hlom.MpathInfo().Path == mi.Path)
-			hlom.Uncache(false /*delDirty*/)
-			err = hlom.Load(false /*cache it*/, true /*locked*/)
-			if err != nil {
-				debug.AssertNoErr(err)
-				return err
-			}
-			// can swap on the fly
-			lom = hlom
-			continue
-		}
+		debug.Assert(!isHrw) // m.b. done above
 		err := lom.Copy(mi, buf)
 		if err == nil {
+			jg.xres.ObjsAdd(1, lom.SizeBytes())
 			continue
 		}
 		if cos.IsErrOOS(err) {
 			err = cmn.NewErrAborted(xname, "visit-obj", err)
 		}
-		glog.Warningf("%s: failed to copy %s to %s, err: %v", xname, lom, mi, err)
+		if !os.IsNotExist(errHrw) && !strings.Contains(errHrw.Error(), "does not exist") {
+			glog.Warningf("%s: failed to copy %s to %s, err: %v", xname, lom, mi, err)
+		}
 		break
 	}
+ret:
 	// EC: remove old metafile
 	if metaOldPath != "" {
 		if err := os.Remove(metaOldPath); err != nil {
@@ -302,6 +297,23 @@ func (jg *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) error {
 		}
 	}
 	return nil
+}
+
+func (*joggerCtx) fixHrw(lom *cluster.LOM, mi *fs.MountpathInfo, buf []byte) (hlom *cluster.LOM, err error) {
+	if err = lom.Copy(mi, buf); err != nil {
+		return
+	}
+	hrwFQN := mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
+	hlom = cluster.AllocLOMbyFQN(hrwFQN)
+	if err = hlom.Init(lom.Bucket()); err != nil {
+		return
+	}
+	debug.Assert(hlom.MpathInfo().Path == mi.Path)
+
+	// uncache and reload
+	hlom.Uncache(false /*delDirty*/)
+	err = hlom.Load(false /*cache it*/, true /*locked*/)
+	return
 }
 
 func (*joggerCtx) visitCT(ct *cluster.CT, buf []byte) (err error) {

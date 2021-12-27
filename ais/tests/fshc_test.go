@@ -399,7 +399,7 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 	md.runTestSync(http.MethodGet, selectedTarget, selectedMpath, selectedMap, objList, suffix)
 }
 
-func TestFSCheckerEnablingMpath(t *testing.T) {
+func TestFSCheckerEnablingMountpath(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
 		proxyURL   = tutils.RandomProxyURL()
@@ -556,7 +556,7 @@ func TestFSAddMPathRestartNode(t *testing.T) {
 		"should include newly added mount path after restore - available %d!=%d", numMpaths+1, len(newMpaths.Available))
 }
 
-func TestFSDisableMpathsRestart(t *testing.T) {
+func TestFSDisableMountpathsRestart(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{
 		Long:               true,
 		MinMountpaths:      3,

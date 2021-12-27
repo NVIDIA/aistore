@@ -792,7 +792,7 @@ func TestDownloadIntoNonexistentBucket(t *testing.T) {
 	api.DestroyBucket(baseParams, bck)
 }
 
-func TestDownloadMpathEvents(t *testing.T) {
+func TestDownloadMountpath(t *testing.T) {
 	var (
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -846,7 +846,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}()
 
-	// Wait for resilver
+	// Wait for resilvering
 	args := api.XactReqArgs{Node: selectedTarget.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)

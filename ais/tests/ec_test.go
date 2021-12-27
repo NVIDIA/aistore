@@ -1901,7 +1901,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 // - gets all objects
 // - nothing must fail
 // - enable the mountpath back
-func TestECEmergencyMpath(t *testing.T) {
+func TestECEmergencyMountpath(t *testing.T) {
 	const (
 		smallEvery = 4
 	)
@@ -2399,7 +2399,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 		t.FailNow()
 	}
 
-	tlog.Logf("Wait for resilver to complete...\n")
+	tlog.Logf("Wait for resilvering to complete...\n")
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	msg := &cmn.SelectMsg{Props: cmn.GetPropsSize}

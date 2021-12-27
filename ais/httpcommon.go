@@ -1167,8 +1167,7 @@ func (h *httprunner) call(args callArgs) (res *callResult) {
 	} else {
 		res.bytes, res.err = io.ReadAll(resp.Body)
 		if res.err != nil {
-			res.details = fmt.Sprintf(
-				"failed to HTTP-call %s (%s %s), read response err: %v",
+			res.details = fmt.Sprintf("failed to call %s (%s %s), read response err: %v",
 				sid, args.req.Method, args.req.URL(), res.err,
 			)
 			return

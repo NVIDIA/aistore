@@ -305,7 +305,7 @@ func GetTargetsMountpaths(t *testing.T, smap *cluster.Smap, params api.BaseParam
 	mpathsByTarget := make(map[*cluster.Snode][]string, smap.CountTargets())
 	for _, target := range smap.Tmap {
 		mpl, err := api.GetMountpaths(params, target)
-		tassert.CheckError(t, err)
+		tassert.CheckFatal(t, err)
 		mpathsByTarget[target] = mpl.Available
 	}
 

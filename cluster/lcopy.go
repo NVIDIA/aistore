@@ -423,9 +423,9 @@ func (lom *LOM) ToMpath() (mi *fs.MountpathInfo, isHrw bool) {
 		return
 	}
 	mi = lom.LeastUtilNoCopy()
-	if mi == nil {
-		glog.Errorf("%s: not enough mountpaths (%d) available for (%d) copies (have %d)", // DEBUG
-			lom, len(availablePaths), expCopies, gotCopies)
+	if mi == nil && glog.FastV(4, glog.SmoduleCluster) {
+		glog.Warningf("%s: not enough mountpaths (%d) to place (%d/%d) copies",
+			lom, len(availablePaths), gotCopies, expCopies)
 	}
 	return
 }
