@@ -23,15 +23,6 @@ func getFSStats(path string) (fsStats unix.Statfs_t, err error) {
 	return
 }
 
-func GetFSUsedPercentage(path string) (usedPercentage int64, ok bool) {
-	totalBlocks, blocksAvailable, _, err := GetFSStats(path)
-	if err != nil {
-		return
-	}
-	usedBlocks := totalBlocks - blocksAvailable
-	return int64(usedBlocks * 100 / totalBlocks), true
-}
-
 func GetDirSize(dirPath string) (uint64, error) {
 	// NOTE: we ignore the error since the `du` will exit with status 1 code
 	// in case there was a file that could not be accessed (not enough permissions).

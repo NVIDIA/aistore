@@ -117,7 +117,7 @@ var _ = Describe("newConcAdjuster", func() {
 			}
 
 			curUtil := perfectUtil * curLimit / perfectLimit
-			mios.Utils.Store(testingConfigDir, int64(curUtil))
+			mios.Utils.Set(testingConfigDir, int64(curUtil))
 
 			time.Sleep(time.Millisecond) // make sure that concurrency adjuster processed all information
 		}

@@ -542,14 +542,14 @@ func New(allowSharedDisksAndNoDisks bool) {
 		glog.Warningln("allowed disk sharing by multiple mountpaths and mountpaths with no disks")
 	}
 	mfs = &MountedFS{fsIDs: make(map[cos.FsID]string, 10), allowSharedDisksAndNoDisks: allowSharedDisksAndNoDisks}
-	mfs.ios = ios.NewIostatContext()
+	mfs.ios = ios.New()
 }
 
 // used only in tests
 func TestNew(iostater ios.IOStater) {
 	mfs = &MountedFS{fsIDs: make(map[cos.FsID]string, 10), allowSharedDisksAndNoDisks: false}
 	if iostater == nil {
-		mfs.ios = ios.NewIostatContext()
+		mfs.ios = ios.New()
 	} else {
 		mfs.ios = iostater
 	}
@@ -580,9 +580,9 @@ func Decommission(mdOnly bool) {
 }
 
 // `ios` delegations
-func GetAllMpathUtils() (utils *ios.MpathsUtils) { return mfs.ios.GetAllMpathUtils() }
-func GetMpathUtil(mpath string) int64            { return mfs.ios.GetMpathUtil(mpath) }
-func FillDiskStats(m ios.AllDiskStats)           { mfs.ios.FillDiskStats(m) }
+func GetAllMpathUtils() (utils *ios.MpathUtil) { return mfs.ios.GetAllMpathUtils() }
+func GetMpathUtil(mpath string) int64          { return mfs.ios.GetMpathUtil(mpath) }
+func FillDiskStats(m ios.AllDiskStats)         { mfs.ios.FillDiskStats(m) }
 
 // TestDisableValidation disables fsid checking and allows mountpaths without disks (testing-only)
 func TestDisableValidation() { mfs.allowSharedDisksAndNoDisks = true }

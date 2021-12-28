@@ -143,7 +143,7 @@ func (ca *concAdjuster) run() {
 			)
 			ca.mu.RLock()
 			for mpath, adjuster := range ca.adjusters {
-				util := utils.Util(mpath)
+				util := utils.Get(mpath)
 
 				adjuster.lastUtils = append(adjuster.lastUtils, util)
 				if len(adjuster.lastUtils) > lastInfoCnt {

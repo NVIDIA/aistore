@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xreg"
@@ -373,30 +374,53 @@ func (j *clnJ) visitCT(parsedFQN fs.ParsedFQN, fqn string) {
 	}
 }
 
-func (j *clnJ) visitLOM(fqn string) {
+// TODO: add stats error counters (stats.ErrLmetaCorruptedCount, ...)
+// TODO: revisit rm-ed byte counting
+func (j *clnJ) visitObj(fqn string) {
 	lom := &cluster.LOM{FQN: fqn}
-	err := lom.Init(j.bck)
-	if err != nil {
+	if err := lom.Init(j.bck); err != nil {
 		return
 	}
-	// TODO: lom.Load now returns just fmt.Error string for xattr troubles.
-	// It must return designated errors for damaged/missing xattrs etc to
-	// provide a fine-grained error statistics for a user.
-	err = lom.Load(false /*cache it*/, false /*locked*/)
-	if err != nil {
-		// TODO:
-		// - remove the file on some errors
-		// - update correct counters (add counters for noXattr, damagedXattr etc)
-		glog.Errorf("Fail to load LOM %q: %v", fqn, err)
+	// handle load err
+	if errLoad := lom.Load(false /*cache it*/, false /*locked*/); errLoad != nil {
+		_, atime, err := ios.FinfoAtime(lom.FQN)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				err = os.NewSyscallError("stat", err)
+				j.ini.T.FSHC(err, lom.FQN)
+			}
+			return
+		}
+		// too early to remove anything
+		if atime+int64(j.config.LRU.DontEvictTime) < j.now {
+			return
+		}
+		if cmn.IsErrLmetaCorrupted(err) {
+			if err := cos.RemoveFile(lom.FQN); err != nil {
+				glog.Errorf("%s: failed to rm MD-corrupted %s: %v (nested: %v)", j, lom, errLoad, err)
+			} else {
+				glog.Errorf("%s: removed MD-corrupted %s: %v", j, lom, errLoad)
+			}
+		} else if cmn.IsErrLmetaNotFound(err) {
+			if err := cos.RemoveFile(lom.FQN); err != nil {
+				glog.Errorf("%s: failed to rm no-MD %s: %v (nested: %v)", j, lom, errLoad, err)
+			} else {
+				glog.Errorf("%s: removed no-MD %s: %v", j, lom, errLoad)
+			}
+		}
 		return
 	}
-	if lom.IsHRW() {
-		return
-	}
+	// too early
 	if lom.AtimeUnix()+int64(j.config.LRU.DontEvictTime) > j.now {
 		return
 	}
-	if lom.HasCopies() && lom.IsCopy() {
+	if lom.IsHRW() {
+		if lom.HasCopies() {
+			j.rmExtraCopies(lom)
+		}
+		return
+	}
+	if lom.IsCopy() {
 		return
 	}
 	if lom.Bprops().EC.Enabled {
@@ -406,6 +430,26 @@ func (j *clnJ) visitLOM(fqn string) {
 		}
 	} else {
 		j.misplaced.loms = append(j.misplaced.loms, lom)
+	}
+}
+
+func (j *clnJ) rmExtraCopies(lom *cluster.LOM) {
+	if !lom.TryLock(true) {
+		return // must be busy
+	}
+	defer lom.Unlock(true)
+	// reload under lock and check atime - again
+	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+		return
+	}
+	if lom.AtimeUnix()+int64(j.config.LRU.DontEvictTime) > j.now {
+		return
+	}
+	if lom.IsCopy() {
+		return // extremely unlikely but ok
+	}
+	if _, err := lom.DelExtraCopies(); err != nil {
+		glog.Errorf("%s: failed delete redundant copies of %s: %v", j, lom, err)
 	}
 }
 
@@ -423,7 +467,7 @@ func (j *clnJ) walk(fqn string, de fs.DirEntry) error {
 	if parsedFQN.ContentType != fs.ObjectType {
 		j.visitCT(parsedFQN, fqn)
 	} else {
-		j.visitLOM(fqn)
+		j.visitObj(fqn)
 	}
 
 	return nil

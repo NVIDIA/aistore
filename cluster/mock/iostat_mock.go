@@ -12,13 +12,13 @@ var _ ios.IOStater = (*IOStater)(nil)
 
 type (
 	IOStater struct {
-		Utils ios.MpathsUtils
+		Utils ios.MpathUtil
 	}
 )
 
 func NewIOStater() *IOStater                                   { return &IOStater{} }
-func (m *IOStater) GetAllMpathUtils() *ios.MpathsUtils         { return &m.Utils }
-func (m *IOStater) GetMpathUtil(mpath string) int64            { return m.Utils.Util(mpath) }
+func (m *IOStater) GetAllMpathUtils() *ios.MpathUtil           { return &m.Utils }
+func (m *IOStater) GetMpathUtil(mpath string) int64            { return m.Utils.Get(mpath) }
 func (*IOStater) AddMpath(string, string) (ios.FsDisks, error) { return nil, nil }
 func (*IOStater) RemoveMpath(string)                           {}
 func (*IOStater) LogAppend(l []string) []string                { return l }

@@ -192,8 +192,8 @@ func (lom *LOM) Atime() time.Time      { return time.Unix(0, lom.md.Atime) }
 func (lom *LOM) AtimeUnix() int64      { return lom.md.Atime }
 func (lom *LOM) SetAtimeUnix(tu int64) { lom.md.Atime = tu }
 
-// 946771140000000000 = time.Parse(time.RFC3339Nano, "2000-01-01T23:59:00Z")
-// (background: caller is generally expected to set atime, and (b) prefetch sets negative `-now`)
+// 946771140000000000 = time.Parse(time.RFC3339Nano, "2000-01-01T23:59:00Z").UnixNano()
+// and note that prefetch sets atime=-now
 func isValidAtime(atime int64) bool {
 	return atime < -946771140000000000 || atime > 946771140000000000
 }
@@ -636,16 +636,8 @@ func (lom *LOM) fromCache() (lcache *sync.Map, lmd *lmeta) {
 	return
 }
 
-func (lom *LOM) finfoAtime() (finfo os.FileInfo, atime int64, err error) {
-	if finfo, err = os.Stat(lom.FQN); err != nil {
-		return
-	}
-	atime = ios.GetATime(finfo).UnixNano()
-	return
-}
-
 func (lom *LOM) FromFS() error {
-	finfo, atimefs, err := lom.finfoAtime()
+	finfo, atimefs, err := ios.FinfoAtime(lom.FQN)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			err = os.NewSyscallError("stat", err)

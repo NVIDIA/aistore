@@ -115,7 +115,8 @@ func (lom *LOM) DelAllCopies() (err error) {
 	return lom.DelCopies(copiesFQN...)
 }
 
-// DelExtraCopies deletes objects which are not part of lom.md.copies metadata (leftovers).
+// DelExtraCopies deletes obj replicas that are not part of the lom.md.copies metadata
+// (cleanup)
 func (lom *LOM) DelExtraCopies(fqn ...string) (removed bool, err error) {
 	if lom.whingeCopy() {
 		return
@@ -355,13 +356,13 @@ func (lom *LOM) LBGet() (fqn string) {
 func (lom *LOM) leastUtilCopy() (fqn string) {
 	var (
 		mpathUtils = fs.GetAllMpathUtils()
-		minUtil    = mpathUtils.Util(lom.mpathInfo.Path)
+		minUtil    = mpathUtils.Get(lom.mpathInfo.Path)
 		copies     = lom.GetCopies()
 	)
 	fqn = lom.FQN
 	for copyFQN, copyMPI := range copies {
 		if copyFQN != lom.FQN {
-			if util := mpathUtils.Util(copyMPI.Path); util < minUtil {
+			if util := mpathUtils.Get(copyMPI.Path); util < minUtil {
 				fqn, minUtil = copyFQN, util
 			}
 		}
@@ -381,7 +382,7 @@ func (lom *LOM) LeastUtilNoCopy() (mi *fs.MountpathInfo) {
 		if lom.haveMpath(mpath) || mpathInfo.IsAnySet(fs.FlagWaitingDD) {
 			continue
 		}
-		if util := mpathUtils.Util(mpath); util < minUtil {
+		if util := mpathUtils.Get(mpath); util < minUtil {
 			minUtil, mi = util, mpathInfo
 		}
 	}
@@ -400,6 +401,7 @@ func (lom *LOM) haveMpath(mpath string) bool {
 	return false
 }
 
+// must be called under w-lock
 // returns mountpath destination to copy this object, or nil if no copying is required
 // - checks hrw location first, and
 // - checks copies (if any) against the current configuation and available mountpaths;

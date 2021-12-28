@@ -219,7 +219,7 @@ func (jg *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (errHrw error) {
 		copied bool
 	)
 	if !lom.TryLock(true) {
-		return nil // skipping _busy_ objects
+		return nil // must be _busy_
 	}
 	defer func() {
 		lom.Unlock(true)

@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/OneOfOne/xxhash"
 )
@@ -71,7 +72,7 @@ const getxattr = "getxattr" // syscall
 
 // used in tests
 func (lom *LOM) AcquireAtimefs() error {
-	_, atime, err := lom.finfoAtime()
+	_, atime, err := ios.FinfoAtime(lom.FQN)
 	if err != nil {
 		return err
 	}
@@ -82,7 +83,7 @@ func (lom *LOM) AcquireAtimefs() error {
 
 // NOTE: used in tests, ignores `dirty`
 func (lom *LOM) LoadMetaFromFS() error {
-	_, atime, err := lom.finfoAtime()
+	_, atime, err := ios.FinfoAtime(lom.FQN)
 	if err != nil {
 		return err
 	}
@@ -147,6 +148,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 
 func (lom *LOM) Persist() (err error) {
 	atime := lom.AtimeUnix()
+	// caller is expected to set atime
 	debug.Assert(isValidAtime(atime))
 
 	if atime < 0 /*prefetch*/ || !lom.WritePolicy().IsImmediate() /*write-never or delayed*/ {
