@@ -179,16 +179,24 @@ func (lom *LOM) Version(special ...bool) string {
 	return lom.md.Ver
 }
 
-func (lom *LOM) Uname() string             { return lom.md.uname }
-func (lom *LOM) SetSize(size int64)        { lom.md.Size = size }
-func (lom *LOM) SetVersion(ver string)     { lom.md.Ver = ver }
-func (lom *LOM) Checksum() *cos.Cksum      { return lom.md.Cksum }
-func (lom *LOM) SetCksum(cksum *cos.Cksum) { lom.md.Cksum = cksum }
-func (lom *LOM) Atime() time.Time          { return time.Unix(0, lom.md.Atime) }
-func (lom *LOM) AtimeUnix() int64          { return lom.md.Atime }
-func (lom *LOM) SetAtimeUnix(tu int64)     { lom.md.Atime = tu }
+func (lom *LOM) Uname() string { return lom.md.uname }
 
+func (lom *LOM) SetSize(size int64)    { lom.md.Size = size }
+func (lom *LOM) SetVersion(ver string) { lom.md.Ver = ver }
+
+func (lom *LOM) Checksum() *cos.Cksum          { return lom.md.Cksum }
+func (lom *LOM) SetCksum(cksum *cos.Cksum)     { lom.md.Cksum = cksum }
 func (lom *LOM) EqCksum(cksum *cos.Cksum) bool { return lom.md.Cksum.Equal(cksum) }
+
+func (lom *LOM) Atime() time.Time      { return time.Unix(0, lom.md.Atime) }
+func (lom *LOM) AtimeUnix() int64      { return lom.md.Atime }
+func (lom *LOM) SetAtimeUnix(tu int64) { lom.md.Atime = tu }
+
+// 946771140000000000 = time.Parse(time.RFC3339Nano, "2000-01-01T23:59:00Z")
+// (background: caller is generally expected to set atime, and (b) prefetch sets negative `-now`)
+func isValidAtime(atime int64) bool {
+	return atime < -946771140000000000 || atime > 946771140000000000
+}
 
 // custom metadata
 func (lom *LOM) GetCustomMD() cos.SimpleKVs   { return lom.md.GetCustomMD() }
@@ -590,6 +598,7 @@ func (lom *LOM) ReCache(store bool) {
 	}
 	// store new or refresh existing
 	md := lom.md
+	md.cpAtime(lmd)
 	md.bckID = lom.Bprops().BID
 	lom.md.bckID = md.bckID
 	debug.Assert(md.bckID != 0)
@@ -602,6 +611,7 @@ func (lom *LOM) Uncache(delDirty bool) {
 		return
 	}
 	if delDirty || !lmd.isDirty() {
+		lom.md.cpAtime(lmd)
 		lcache.Delete(lom.md.uname)
 	}
 }

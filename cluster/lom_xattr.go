@@ -147,9 +147,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 
 func (lom *LOM) Persist() (err error) {
 	atime := lom.AtimeUnix()
-	// the value is time.Parse(time.RFC3339Nano, "2000-01-01T23:59:00Z")
-	// context: a) caller is expected to set atime, and b) prefetch sets negative `-now`
-	debug.Assert(atime < -946771140000000000 || atime > 946771140000000000)
+	debug.Assert(isValidAtime(atime))
 
 	if atime < 0 /*prefetch*/ || !lom.WritePolicy().IsImmediate() /*write-never or delayed*/ {
 		lom.md.makeDirty()
@@ -440,4 +438,13 @@ func _marshCustomMD(mm *memsys.MMSA, buf []byte, md cos.SimpleKVs) []byte {
 		}
 	}
 	return buf
+}
+
+func (md *lmeta) cpAtime(from *lmeta) {
+	if from == nil || !isValidAtime(from.Atime) {
+		return
+	}
+	if !isValidAtime(md.Atime) || (md.Atime > 0 && md.Atime < from.Atime) {
+		md.Atime = from.Atime
+	}
 }
