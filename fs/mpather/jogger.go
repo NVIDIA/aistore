@@ -90,10 +90,10 @@ type (
 
 func NewJoggerGroup(opts *JoggerGroupOpts, selectedMpaths ...string) *JoggerGroup {
 	var (
-		joggers        map[string]*jogger
-		availablePaths = fs.GetAvail()
-		wg, ctx        = errgroup.WithContext(context.Background())
-		l              = len(selectedMpaths)
+		joggers                       map[string]*jogger
+		availablePaths, disabledPaths = fs.Get()
+		wg, ctx                       = errgroup.WithContext(context.Background())
+		l                             = len(selectedMpaths)
 	)
 	debug.Assert(!opts.IncludeCopy || (opts.IncludeCopy && opts.DoLoad > noLoad))
 
@@ -113,17 +113,19 @@ func NewJoggerGroup(opts *JoggerGroupOpts, selectedMpaths ...string) *JoggerGrou
 			}
 		}
 	}
-	if len(joggers) == 0 {
-		glog.Errorf("%v: (%s, %v)", cmn.ErrNoMountpaths, availablePaths, selectedMpaths)
-		debug.Assert(false)
-		return nil
-	}
 	jg := &JoggerGroup{
 		wg:         wg,
 		joggers:    joggers,
 		finishedCh: cos.NewStopCh(),
 	}
 	opts.onFinish = jg.markFinished
+
+	// NOTE: this jogger group is a no-op
+	if len(joggers) == 0 {
+		glog.Errorf("%v: avail=%v, disabled=%v, selected=%v",
+			cmn.ErrNoMountpaths, availablePaths, disabledPaths, selectedMpaths)
+		jg.finishedCh.Close()
+	}
 	return jg
 }
 

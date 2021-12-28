@@ -22,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -71,7 +70,7 @@ type (
 
 	HTTPMuxers map[string]*mux.ServeMux // by http.Method
 
-	CallWithRetryArgs struct {
+	RetryArgs struct {
 		Call    func() (int, error)
 		IsFatal func(error) bool
 
@@ -94,9 +93,9 @@ type (
 )
 
 const (
-	CallWithRetryLogVerbose = iota
-	CallWithRetryLogQuiet
-	CallWithRetryLogOff
+	RetryLogVerbose = iota
+	RetryLogQuiet
+	RetryLogOff
 )
 
 // ErrNoOverlap is returned by serveContent's parseRange if first-byte-pos of
@@ -378,49 +377,43 @@ func (m HTTPMuxers) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusBadRequest)
 }
 
-func NetworkCallWithRetry(args *CallWithRetryArgs) (err error) {
-	debug.Assert(args.SoftErr > 0 || args.HardErr > 0)
-
+func NetworkCallWithRetry(args *RetryArgs) (err error) {
+	var (
+		hardErrCnt, softErrCnt, iter uint
+		status                       int
+		nonEmptyErr                  error
+		callerStr                    string
+		sleep                        = args.Sleep
+		config                       = GCO.Get()
+	)
 	if args.Sleep == 0 {
 		if args.IsClient {
 			args.Sleep = time.Second / 2
 		} else {
-			config := GCO.Get()
-			debug.Assert(config.Timeout.CplaneOperation > 0)
 			args.Sleep = config.Timeout.CplaneOperation.D() / 4
 		}
 	}
-
-	callerStr := ""
 	if args.Caller != "" {
 		callerStr = args.Caller + ": "
 	}
 	if args.Action == "" {
 		args.Action = "call"
 	}
-
-	var (
-		sleep                        = args.Sleep
-		hardErrCnt, softErrCnt, iter uint
-		nonEmptyErr                  error
-	)
 	for hardErrCnt, softErrCnt, iter = uint(0), uint(0), uint(1); ; iter++ {
-		var status int
 		if status, err = args.Call(); err == nil {
-			if args.Verbosity < CallWithRetryLogOff && (hardErrCnt > 0 || softErrCnt > 0) {
-				glog.Warningf(
-					"%s Successful %s, after errors (softErr: %d, hardErr: %d, last err: %v)",
+			if args.Verbosity == RetryLogVerbose && (hardErrCnt > 0 || softErrCnt > 0) {
+				glog.Warningf("%s Successful %s after (soft/hard errors: %d/%d, last: %v)",
 					callerStr, args.Action, softErrCnt, hardErrCnt, nonEmptyErr)
 			}
 			return
 		}
+		// handle
 		nonEmptyErr = err
 		if args.IsFatal != nil && args.IsFatal(err) {
 			return
 		}
-		if args.Verbosity < CallWithRetryLogQuiet {
-			glog.Errorf("%s Failed to %s, err: %v (iter: %d, status code: %d)",
-				callerStr, args.Action, err, iter, status)
+		if args.Verbosity == RetryLogVerbose {
+			glog.Errorf("%s Failed to %s, iter %d, err: %v(%d)", callerStr, args.Action, iter, err, status)
 		}
 		if cos.IsRetriableConnErr(err) {
 			softErrCnt++
@@ -431,8 +424,6 @@ func NetworkCallWithRetry(args *CallWithRetryArgs) (err error) {
 			if args.IsClient {
 				sleep = cos.MinDuration(sleep+(args.Sleep/2), 4*time.Second)
 			} else {
-				config := GCO.Get()
-				debug.Assert(config.Timeout.MaxKeepalive > 0)
 				sleep = cos.MinDuration(sleep+(args.Sleep/2), config.Timeout.MaxKeepalive.D())
 			}
 		}
@@ -441,10 +432,9 @@ func NetworkCallWithRetry(args *CallWithRetryArgs) (err error) {
 		}
 		time.Sleep(sleep)
 	}
-
-	// Just print once summary of the errors. No need to repeat the log for Verbose setting.
-	if args.Verbosity == CallWithRetryLogQuiet {
-		glog.Errorf("%sFailed to %s (softErr: %d, hardErr: %d, last err: %v)",
+	// Quiet: print once the summary (Verbose: no need)
+	if args.Verbosity == RetryLogQuiet {
+		glog.Errorf("%sFailed to %s (soft/hard errors: %d/%d, last: %v)",
 			callerStr, args.Action, softErrCnt, hardErrCnt, err)
 	}
 	return

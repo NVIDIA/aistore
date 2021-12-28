@@ -829,6 +829,11 @@ func TestMountpathRemoveAndAdd(t *testing.T) {
 		err = api.DetachMountpath(baseParams, target, mpath, false /*dont-resil*/)
 		tassert.CheckFatal(t, err)
 	}
+	// Wait for resilvering
+	time.Sleep(2 * time.Second)
+	args := api.XactReqArgs{Node: target.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
+	_, err = api.WaitForXaction(baseParams, args)
+	tassert.CheckFatal(t, err)
 
 	// Check if mountpaths were actually removed
 	mountpaths, err := api.GetMountpaths(baseParams, target)
@@ -847,6 +852,11 @@ func TestMountpathRemoveAndAdd(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
+	// Wait for resilvering
+	time.Sleep(2 * time.Second)
+	_, err = api.WaitForXaction(baseParams, args)
+	tassert.CheckFatal(t, err)
+
 	// Check if mountpaths were actually added
 	mountpaths, err = api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
@@ -862,6 +872,8 @@ func TestMountpathRemoveAndAdd(t *testing.T) {
 	m.puts()
 	m.gets()
 	m.ensureNoErrors()
+
+	time.Sleep(5 * time.Second)
 }
 
 func TestResilverAfterAddingMountpath(t *testing.T) {

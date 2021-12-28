@@ -343,7 +343,15 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		cos.ExitLogf("%v", err)
 	}
 
-	// 8. metasync (smap, config, etlMD & bmd) and startup as primary
+	// 8. initialize etl
+	etlMD := p.owner.etl.get().clone()
+	if etlMD.Version > 0 {
+		if err := p.owner.etl.putPersist(etlMD, nil); err != nil {
+			glog.Errorf("%s: failed to persist etl metadata, err %v - proceeding anyway...", p.si, err)
+		}
+	}
+
+	// 9. metasync (smap, config, etl & bmd) and startup as primary
 	var (
 		aisMsg = p.newAmsgStr(metaction2, bmd)
 		pairs  = []revsPair{{smap, aisMsg}, {bmd, aisMsg}, {cluConfig, aisMsg}}
@@ -353,13 +361,17 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	p.markClusterStarted()
 	glog.Infof("%s: primary & cluster startup complete (%s, %s)", p.si.StringEx(), smap.StringEx(), bmd.StringEx())
 
+	if etlMD.Version > 0 {
+		_ = p.metasyncer.sync(revsPair{etlMD, aisMsg})
+	}
+
 	// Clear regpool
 	p.reg.mtx.Lock()
 	p.reg.pool = p.reg.pool[:0]
 	p.reg.pool = nil
 	p.reg.mtx.Unlock()
 
-	// 9. resume rebalance if needed
+	// 10. resume rebalance if needed
 	if config.Rebalance.Enabled {
 		p.resumeReb(smap, config)
 	}

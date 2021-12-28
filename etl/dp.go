@@ -42,14 +42,14 @@ func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cmn
 		return 0, err
 	}
 	// TODO: Check if ETL pod is healthy and wait some more if not (yet).
-	err = cmn.NetworkCallWithRetry(&cmn.CallWithRetryArgs{
+	err = cmn.NetworkCallWithRetry(&cmn.RetryArgs{
 		Call:      call,
 		Action:    "etl-obj-" + lom.Uname(),
 		SoftErr:   5,
 		HardErr:   2,
 		Sleep:     50 * time.Millisecond,
 		BackOff:   true,
-		Verbosity: cmn.CallWithRetryLogQuiet,
+		Verbosity: cmn.RetryLogQuiet,
 	})
 	if err != nil {
 		return nil, nil, err

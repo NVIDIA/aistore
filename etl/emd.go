@@ -1,6 +1,6 @@
 // Package etl provides utilities to initialize and use transformation pods.
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  */
 package etl
 
@@ -10,7 +10,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -22,18 +21,23 @@ type (
 		InitType() string
 	}
 
-	jsonETL struct {
-		Type string              `json:"type,string"`
-		Msg  jsoniter.RawMessage `json:"msg"`
-	}
-
 	ETLs map[string]InitMsg
 
 	// ETL metadata
 	MD struct {
-		Version int64       `json:"version"`
-		ETLs    ETLs        `json:"etls"`
-		Ext     interface{} `json:"ext,omitempty"` // within meta-version extensions
+		Version int64
+		ETLs    ETLs
+		Ext     interface{}
+	}
+
+	jsonETL struct {
+		Type string              `json:"type,string"`
+		Msg  jsoniter.RawMessage `json:"msg"`
+	}
+	jsonMD struct {
+		Version int64              `json:"version"`
+		ETLs    map[string]jsonETL `json:"etls"`
+		Ext     interface{}        `json:"ext,omitempty"` // within meta-version extensions
 	}
 )
 
@@ -41,15 +45,19 @@ var etlMDJspOpts = jsp.CCSign(cmn.MetaverEtlMD)
 
 // interface guard
 var (
-	_ json.Marshaler   = (*ETLs)(nil)
-	_ json.Unmarshaler = (*ETLs)(nil)
+	_ json.Marshaler   = (*MD)(nil)
+	_ json.Unmarshaler = (*MD)(nil)
 
 	_ jsp.Opts = (*MD)(nil)
 )
 
-func (e *MD) Add(spec InitMsg) {
-	e.ETLs[spec.ID()] = spec
-}
+////////
+// MD //
+////////
+
+func (e *MD) Init(l int)         { e.ETLs = make(ETLs, l) }
+func (e *MD) Add(spec InitMsg)   { e.ETLs[spec.ID()] = spec }
+func (*MD) JspOpts() jsp.Options { return etlMDJspOpts }
 
 func (e *MD) Get(id string) (msg InitMsg, present bool) {
 	if e == nil {
@@ -74,32 +82,34 @@ func (e *MD) String() string {
 	return fmt.Sprintf("EtlMD v%d(%d)", e.Version, len(e.ETLs))
 }
 
-func (e ETLs) MarshalJSON() ([]byte, error) {
-	jETL := make(map[string]jsonETL, len(e))
-	for k, v := range e {
-		jETL[k] = jsonETL{v.InitType(), cos.MustMarshal(v)}
+func (e *MD) MarshalJSON() ([]byte, error) {
+	jsonMD := jsonMD{
+		Version: e.Version,
+		ETLs:    make(map[string]jsonETL, len(e.ETLs)),
+		Ext:     e.Ext,
 	}
-	return jsoniter.Marshal(jETL)
+	for k, v := range e.ETLs {
+		jsonMD.ETLs[k] = jsonETL{v.InitType(), cos.MustMarshal(v)}
+	}
+	return jsoniter.Marshal(jsonMD)
 }
 
-func (e *ETLs) UnmarshalJSON(data []byte) (err error) {
-	jETL := make(map[string]jsonETL, 16)
-	if err = jsoniter.Unmarshal(data, &jETL); err != nil {
+func (e *MD) UnmarshalJSON(data []byte) (err error) {
+	jsonMD := &jsonMD{}
+	if err = jsoniter.Unmarshal(data, jsonMD); err != nil {
 		return
 	}
-	debug.Assert(e != nil)
-	for k, v := range jETL {
+	e.Version, e.Ext = jsonMD.Version, jsonMD.Ext
+	e.ETLs = make(ETLs, len(jsonMD.ETLs))
+	for k, v := range jsonMD.ETLs {
 		if v.Type == cmn.ETLInitCode {
-			(*e)[k] = &InitCodeMsg{}
+			e.ETLs[k] = &InitCodeMsg{}
 		} else if v.Type == cmn.ETLInitSpec {
-			(*e)[k] = &InitSpecMsg{}
+			e.ETLs[k] = &InitSpecMsg{}
 		}
-
-		if err = jsoniter.Unmarshal(v.Msg, (*e)[k]); err != nil {
-			return
+		if err = jsoniter.Unmarshal(v.Msg, e.ETLs[k]); err != nil {
+			break
 		}
 	}
 	return
 }
-
-func (*MD) JspOpts() jsp.Options { return etlMDJspOpts }

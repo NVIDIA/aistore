@@ -72,9 +72,10 @@ var (
 )
 
 // c-tor
-func newEtlMD() *etlMD {
-	etls := make(etl.ETLs, 2)
-	return &etlMD{MD: etl.MD{ETLs: etls}}
+func newEtlMD() (e *etlMD) {
+	e = &etlMD{}
+	e.MD.Init(4)
+	return
 }
 
 // as revs
@@ -97,9 +98,8 @@ func (e *etlMD) marshal() []byte {
 
 func (e *etlMD) clone() *etlMD {
 	dst := &etlMD{}
-	// deep copy
 	*dst = *e
-	dst.ETLs = make(etl.ETLs, len(e.ETLs))
+	dst.Init(len(e.ETLs))
 	for id, etl := range e.ETLs {
 		dst.ETLs[id] = etl
 	}

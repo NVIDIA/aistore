@@ -135,9 +135,9 @@ func do(reqParams ReqParams) (resp *http.Response, err error) {
 		return 0, err
 	}
 
-	err = cmn.NetworkCallWithRetry(&cmn.CallWithRetryArgs{
+	err = cmn.NetworkCallWithRetry(&cmn.RetryArgs{
 		Call:      call,
-		Verbosity: cmn.CallWithRetryLogOff,
+		Verbosity: cmn.RetryLogOff,
 		SoftErr:   httpMaxRetries,
 		Sleep:     httpRetrySleep,
 		BackOff:   true,
