@@ -888,6 +888,11 @@ func testEvictRemoteBucket(t *testing.T, bck cmn.Bck, keepMD bool) {
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, bProps.Mirror.Enabled, "test property hasn't changed")
 
+	// Wait for async mirroring to finish
+	flt := api.XactReqArgs{Kind: cmn.ActMakeNCopies, Bck: m.bck}
+	api.WaitForXactionIdle(baseParams, flt)
+	time.Sleep(time.Second)
+
 	err = api.EvictRemoteBucket(baseParams, m.bck, keepMD)
 	tassert.CheckFatal(t, err)
 

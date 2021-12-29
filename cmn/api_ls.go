@@ -6,7 +6,6 @@
 package cmn
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -20,6 +19,9 @@ const (
 	LsDeleted               // include obj-s marked for deletion (TODO)
 	LsArchDir               // expand archives as directories
 	LsOnlyNames             // return only object names and statuses (for faster listing)
+
+	// cache list-objects results and use this cache to speed-up
+	UseListObjsCache
 )
 
 type (
@@ -32,7 +34,6 @@ type (
 		ContinuationToken string `json:"continuation_token"` // `BucketList.ContinuationToken`
 		Flags             uint64 `json:"flags,string"`       // enum {LsPresent, ...} - see above
 		PageSize          uint   `json:"pagesize"`           // max entries returned by list objects call
-		UseCache          bool   `json:"use_cache"`          // use proxy cache to speed up listing objects
 	}
 )
 
@@ -42,33 +43,33 @@ type (
 
 // NeedLocalMD indicates that ListObjects for a remote bucket needs
 // to include AIS-maintained metadata: access time, etc.
-func (msg *ListObjsMsg) NeedLocalMD() bool {
-	return msg.WantProp(GetPropsAtime) ||
-		msg.WantProp(GetPropsStatus) ||
-		msg.WantProp(GetPropsCopies) ||
-		msg.WantProp(GetPropsCached)
+func (lsmsg *ListObjsMsg) NeedLocalMD() bool {
+	return lsmsg.WantProp(GetPropsAtime) ||
+		lsmsg.WantProp(GetPropsStatus) ||
+		lsmsg.WantProp(GetPropsCopies) ||
+		lsmsg.WantProp(GetPropsCached)
 }
 
 // WantProp returns true if msg request requires to return propName property.
-func (msg *ListObjsMsg) WantProp(propName string) bool {
+func (lsmsg *ListObjsMsg) WantProp(propName string) bool {
 	debug.Assert(!strings.ContainsRune(propName, ','))
-	return strings.Contains(msg.Props, propName)
+	return strings.Contains(lsmsg.Props, propName)
 }
 
-func (msg *ListObjsMsg) AddProps(propNames ...string) {
+func (lsmsg *ListObjsMsg) AddProps(propNames ...string) {
 	for _, propName := range propNames {
-		if msg.WantProp(propName) {
+		if lsmsg.WantProp(propName) {
 			continue
 		}
-		if msg.Props != "" {
-			msg.Props += ","
+		if lsmsg.Props != "" {
+			lsmsg.Props += ","
 		}
-		msg.Props += propName
+		lsmsg.Props += propName
 	}
 }
 
-func (msg *ListObjsMsg) PropsSet() (s cos.StringSet) {
-	props := strings.Split(msg.Props, ",")
+func (lsmsg *ListObjsMsg) PropsSet() (s cos.StringSet) {
+	props := strings.Split(lsmsg.Props, ",")
 	s = make(cos.StringSet, len(props))
 	for _, p := range props {
 		s.Add(p)
@@ -76,15 +77,11 @@ func (msg *ListObjsMsg) PropsSet() (s cos.StringSet) {
 	return s
 }
 
-func (msg *ListObjsMsg) SetFlag(flag uint64)         { msg.Flags |= flag }
-func (msg *ListObjsMsg) IsFlagSet(flags uint64) bool { return msg.Flags&flags == flags }
+func (lsmsg *ListObjsMsg) SetFlag(flag uint64)         { lsmsg.Flags |= flag }
+func (lsmsg *ListObjsMsg) IsFlagSet(flags uint64) bool { return lsmsg.Flags&flags == flags }
 
-func (msg *ListObjsMsg) ListObjectsCacheID(bck Bck) string {
-	return fmt.Sprintf("%s/%s", bck.String(), msg.Prefix)
-}
-
-func (msg *ListObjsMsg) Clone() *ListObjsMsg {
+func (lsmsg *ListObjsMsg) Clone() *ListObjsMsg {
 	c := &ListObjsMsg{}
-	cos.CopyStruct(c, msg)
+	cos.CopyStruct(c, lsmsg)
 	return c
 }

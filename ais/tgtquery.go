@@ -57,16 +57,16 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		ctx = context.Background()
 		// TODO: we should use `q` directly instead of passing everything in
 		//  additional, redundant `ListObjsMsg`.
-		smsg = &cmn.ListObjsMsg{
+		lsmsg = &cmn.ListObjsMsg{
 			UUID:   handle,
 			Prefix: q.ObjectsSource.Prefix,
 			Props:  q.Select.Props,
 		}
 	)
 	if q.Cached {
-		smsg.Flags = cmn.LsPresent
+		lsmsg.Flags = cmn.LsPresent
 	}
-	rns := xreg.RenewQuery(ctx, t, q, smsg)
+	rns := xreg.RenewQuery(ctx, t, q, lsmsg)
 	if rns.Err != nil {
 		t.writeErr(w, r, rns.Err)
 		return

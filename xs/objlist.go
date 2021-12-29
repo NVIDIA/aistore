@@ -105,12 +105,12 @@ func (p *olFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprUse, nil
 }
 
-func newXact(t cluster.Target, bck *cluster.Bck, smsg *cmn.ListObjsMsg, uuid string) *ObjListXact {
+func newXact(t cluster.Target, bck *cluster.Bck, lsmsg *cmn.ListObjsMsg, uuid string) *ObjListXact {
 	totallyIdle := cmn.GCO.Get().Timeout.MaxHostBusy.D()
 	xact := &ObjListXact{
 		t:        t,
 		bck:      bck,
-		msg:      smsg,
+		msg:      lsmsg,
 		workCh:   make(chan *cmn.ListObjsMsg),
 		respCh:   make(chan *Resp),
 		stopCh:   cos.NewStopCh(),
@@ -178,9 +178,7 @@ func (r *ObjListXact) Run(*sync.WaitGroup) {
 		select {
 		case msg := <-r.workCh:
 			// Copy only the values that can change between calls
-			debug.Assert(r.msg.UseCache == msg.UseCache)
-			debug.Assert(r.msg.Prefix == msg.Prefix)
-			debug.Assert(r.msg.Flags == msg.Flags)
+			debug.Assert(r.msg.Prefix == msg.Prefix && r.msg.Flags == msg.Flags)
 			r.msg.ContinuationToken = msg.ContinuationToken
 			r.msg.PageSize = msg.PageSize
 			r.respCh <- r.dispatchRequest()

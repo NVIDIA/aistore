@@ -291,7 +291,7 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 			num := len(objList.Entries)
 			tassert.Errorf(t, num == numArchs, "expected %d, have %d", numArchs, num)
 
-			msg.Flags |= cmn.LsArchDir
+			msg.SetFlag(cmn.LsArchDir)
 			objList, err = api.ListObjects(baseParams, toBck, msg, 0)
 			tassert.CheckFatal(t, err)
 			num = len(objList.Entries)
@@ -386,9 +386,9 @@ func TestAppendToArch(t *testing.T) {
 			wargs := api.XactReqArgs{Kind: cmn.ActArchive, Bck: m.bck}
 			api.WaitForXactionIdle(baseParams, wargs)
 
-			selmsg := &cmn.ListObjsMsg{Prefix: "test_lst"}
-			selmsg.AddProps(cmn.GetPropsName, cmn.GetPropsSize)
-			objList, err := api.ListObjects(baseParams, toBck, selmsg, 0)
+			lsmsg := &cmn.ListObjsMsg{Prefix: "test_lst"}
+			lsmsg.AddProps(cmn.GetPropsName, cmn.GetPropsSize)
+			objList, err := api.ListObjects(baseParams, toBck, lsmsg, 0)
 			tassert.CheckFatal(t, err)
 			num := len(objList.Entries)
 			tassert.Errorf(t, num == numArchs, "expected %d, have %d", numArchs, num)
@@ -430,8 +430,8 @@ func TestAppendToArch(t *testing.T) {
 				api.WaitForXactionIdle(baseParams, wargs)
 			}
 
-			selmsg.Flags |= cmn.LsArchDir
-			objList, err = api.ListObjects(baseParams, toBck, selmsg, 0)
+			lsmsg.SetFlag(cmn.LsArchDir)
+			objList, err = api.ListObjects(baseParams, toBck, lsmsg, 0)
 			tassert.CheckError(t, err)
 			num = len(objList.Entries)
 			expectedNum := numArchs + numArchs*(numInArch+numAdd)

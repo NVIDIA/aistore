@@ -1244,10 +1244,10 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 	var (
 		err     error
 		bckList *cmn.BucketList
-		smsg    = cmn.ListObjsMsg{}
+		lsmsg   = cmn.ListObjsMsg{}
 		smap    = p.owner.smap.get()
 	)
-	if err := cos.MorphMarshal(amsg.Value, &smsg); err != nil {
+	if err := cos.MorphMarshal(amsg.Value, &lsmsg); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, amsg.Action, amsg.Value, err)
 		return
 	}
@@ -1257,41 +1257,41 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 	}
 
 	// If props were not explicitly specified always return default ones.
-	if smsg.Props == "" {
-		smsg.AddProps(cmn.GetPropsDefault...)
+	if lsmsg.Props == "" {
+		lsmsg.AddProps(cmn.GetPropsDefault...)
 	}
 
 	// Vanilla HTTP buckets do not support remote listing.
 	// LsArchDir needs files locally to read archive content.
-	if bck.IsHTTP() || smsg.IsFlagSet(cmn.LsArchDir) {
-		smsg.SetFlag(cmn.LsPresent)
+	if bck.IsHTTP() || lsmsg.IsFlagSet(cmn.LsArchDir) {
+		lsmsg.SetFlag(cmn.LsPresent)
 	}
 
-	locationIsAIS := bck.IsAIS() || smsg.IsFlagSet(cmn.LsPresent)
-	if smsg.UUID == "" {
+	locationIsAIS := bck.IsAIS() || lsmsg.IsFlagSet(cmn.LsPresent)
+	if lsmsg.UUID == "" {
 		var nl nl.NotifListener
-		smsg.UUID = cos.GenUUID()
-		if locationIsAIS || smsg.NeedLocalMD() {
-			nl = xaction.NewXactNL(smsg.UUID,
+		lsmsg.UUID = cos.GenUUID()
+		if locationIsAIS || lsmsg.NeedLocalMD() {
+			nl = xaction.NewXactNL(lsmsg.UUID,
 				cmn.ActList, &smap.Smap, nil, bck.Bck)
 		} else {
 			// random target to execute `list-objects` on a Cloud bucket
 			si, _ := smap.GetRandTarget()
-			nl = xaction.NewXactNL(smsg.UUID, cmn.ActList,
+			nl = xaction.NewXactNL(lsmsg.UUID, cmn.ActList,
 				&smap.Smap, cluster.NodeMap{si.ID(): si}, bck.Bck)
 		}
 		nl.SetHrwOwner(&smap.Smap)
 		p.ic.registerEqual(regIC{nl: nl, smap: smap, msg: amsg})
 	}
 
-	if p.ic.reverseToOwner(w, r, smsg.UUID, amsg) {
+	if p.ic.reverseToOwner(w, r, lsmsg.UUID, amsg) {
 		return
 	}
 
 	if locationIsAIS {
-		bckList, err = p.listObjectsAIS(bck, smsg)
+		bckList, err = p.listObjectsAIS(bck, lsmsg)
 	} else {
-		bckList, err = p.listObjectsRemote(bck, smsg)
+		bckList, err = p.listObjectsRemote(bck, lsmsg)
 		// TODO: `status == http.StatusGone` At this point we know that this
 		//       remote bucket exists and is offline. We should somehow try to list
 		//       cached objects. This isn't easy as we basically need to start a new
@@ -1331,9 +1331,9 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, quer
 		err       error
 		uuid      string
 		summaries cmn.BucketsSummaries
-		smsg      cmn.BucketSummaryMsg
+		lsmsg     cmn.BucketSummaryMsg
 	)
-	if err := cos.MorphMarshal(amsg.Value, &smsg); err != nil {
+	if err := cos.MorphMarshal(amsg.Value, &lsmsg); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, amsg.Action, amsg.Value, err)
 		return
 	}
@@ -1348,9 +1348,9 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, quer
 	}
 	id := r.URL.Query().Get(cmn.URLParamUUID)
 	if id != "" {
-		smsg.UUID = id
+		lsmsg.UUID = id
 	}
-	if summaries, uuid, err = p.gatherBucketSummary(queryBcks, &smsg); err != nil {
+	if summaries, uuid, err = p.gatherBucketSummary(queryBcks, &lsmsg); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
@@ -1909,37 +1909,37 @@ func (p *proxyrunner) checkBckTaskResp(uuid string, results sliceResults) (allOK
 // listObjectsAIS reads object list from all targets, combines, sorts and returns
 // the final list. Excess of object entries from each target is remembered in the
 // buffer (see: `queryBuffers`) so we won't request the same objects again.
-func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.ListObjsMsg) (allEntries *cmn.BucketList, err error) {
+func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, lsmsg cmn.ListObjsMsg) (allEntries *cmn.BucketList, err error) {
 	var (
 		aisMsg    *aisMsg
 		args      *bcastArgs
 		entries   []*cmn.BucketEntry
 		results   sliceResults
 		smap      = p.owner.smap.get()
-		cacheID   = cacheReqID{bck: bck.Bck, prefix: smsg.Prefix}
-		token     = smsg.ContinuationToken
-		props     = smsg.PropsSet()
+		cacheID   = cacheReqID{bck: bck.Bck, prefix: lsmsg.Prefix}
+		token     = lsmsg.ContinuationToken
+		props     = lsmsg.PropsSet()
 		hasEnough bool
 		flags     uint32
 	)
-	if smsg.PageSize == 0 {
-		smsg.PageSize = cmn.DefaultListPageSizeAIS
+	if lsmsg.PageSize == 0 {
+		lsmsg.PageSize = cmn.DefaultListPageSizeAIS
 	}
-	pageSize := smsg.PageSize
+	pageSize := lsmsg.PageSize
 
 	// TODO: Before checking cache and buffer we should check if there is another
 	//  request already in-flight that requests the same page as we do - if yes
 	//  then we should just patiently wait for the cache to get populated.
 
-	if smsg.UseCache {
+	if lsmsg.IsFlagSet(cmn.UseListObjsCache) {
 		entries, hasEnough = p.qm.c.get(cacheID, token, pageSize)
 		if hasEnough {
 			goto end
 		}
 		// Request for all the props if (cache should always have all entries).
-		smsg.AddProps(cmn.GetPropsAll...)
+		lsmsg.AddProps(cmn.GetPropsAll...)
 	}
-	entries, hasEnough = p.qm.b.get(smsg.UUID, token, pageSize)
+	entries, hasEnough = p.qm.b.get(lsmsg.UUID, token, pageSize)
 	if hasEnough {
 		// We have enough in the buffer to fulfill the request.
 		goto endWithCache
@@ -1948,9 +1948,9 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.ListObjsMsg) (al
 	// User requested some page but we don't have enough (but we may have part
 	// of the full page). Therefore, we must ask targets for page starting from
 	// what we have locally, so we don't re-request the objects.
-	smsg.ContinuationToken = p.qm.b.last(smsg.UUID, token)
+	lsmsg.ContinuationToken = p.qm.b.last(lsmsg.UUID, token)
 
-	aisMsg = p.newAmsgActVal(cmn.ActList, &smsg)
+	aisMsg = p.newAmsgActVal(cmn.ActList, &lsmsg)
 	args = allocBcastArgs()
 	args.req = cmn.ReqArgs{
 		Method: http.MethodGet,
@@ -1973,18 +1973,18 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.ListObjsMsg) (al
 		}
 		objList := res.v.(*cmn.BucketList)
 		flags |= objList.Flags
-		p.qm.b.set(smsg.UUID, res.si.ID(), objList.Entries, pageSize)
+		p.qm.b.set(lsmsg.UUID, res.si.ID(), objList.Entries, pageSize)
 	}
 	freeCallResults(results)
-	entries, hasEnough = p.qm.b.get(smsg.UUID, token, pageSize)
+	entries, hasEnough = p.qm.b.get(lsmsg.UUID, token, pageSize)
 	cos.Assert(hasEnough)
 
 endWithCache:
-	if smsg.UseCache {
+	if lsmsg.IsFlagSet(cmn.UseListObjsCache) {
 		p.qm.c.set(cacheID, token, entries, pageSize)
 	}
 end:
-	if smsg.UseCache && !props.All(cmn.GetPropsAll...) {
+	if lsmsg.IsFlagSet(cmn.UseListObjsCache) && !props.All(cmn.GetPropsAll...) {
 		// Since cache keeps entries with whole subset props we must create copy
 		// of the entries with smaller subset of props (if we would change the
 		// props of the `entries` it would also affect entries inside cache).
@@ -1996,7 +1996,7 @@ end:
 	}
 
 	allEntries = &cmn.BucketList{
-		UUID:    smsg.UUID,
+		UUID:    lsmsg.UUID,
 		Entries: entries,
 		Flags:   flags,
 	}
@@ -2010,15 +2010,15 @@ end:
 // (cloud or remote AIS). If request requires local data then it is broadcast
 // to all targets which perform traverse on the disks, otherwise random target
 // is chosen to perform cloud listing.
-func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.ListObjsMsg) (allEntries *cmn.BucketList, err error) {
-	if smsg.StartAfter != "" {
-		return nil, fmt.Errorf("list-objects %q option for remote buckets is not yet supported", smsg.StartAfter)
+func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, lsmsg cmn.ListObjsMsg) (allEntries *cmn.BucketList, err error) {
+	if lsmsg.StartAfter != "" {
+		return nil, fmt.Errorf("list-objects %q option for remote buckets is not yet supported", lsmsg.StartAfter)
 	}
 	var (
 		smap       = p.owner.smap.get()
 		config     = cmn.GCO.Get()
 		reqTimeout = config.Client.ListObjects.D()
-		aisMsg     = p.newAmsgActVal(cmn.ActList, &smsg)
+		aisMsg     = p.newAmsgActVal(cmn.ActList, &lsmsg)
 		args       = allocBcastArgs()
 		results    sliceResults
 	)
@@ -2028,13 +2028,13 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.ListObjsMsg) 
 		Query:  cmn.AddBckToQuery(nil, bck.Bck),
 		Body:   cos.MustMarshal(aisMsg),
 	}
-	if smsg.NeedLocalMD() {
+	if lsmsg.NeedLocalMD() {
 		args.timeout = reqTimeout
 		args.smap = smap
 		args.fv = func() interface{} { return &cmn.BucketList{} }
 		results = p.bcastGroup(args)
 	} else {
-		nl, exists := p.notifs.entry(smsg.UUID)
+		nl, exists := p.notifs.entry(lsmsg.UUID)
 		debug.Assert(exists) // NOTE: we register listobj xaction before starting to list
 		for _, si := range nl.Notifiers() {
 			res := p.call(callArgs{si: si, req: args.req, timeout: reqTimeout, v: &cmn.BucketList{}})
@@ -2066,7 +2066,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.ListObjsMsg) 
 		glog.Infof("Objects after merge: %d, token: %q", len(allEntries.Entries), allEntries.ContinuationToken)
 	}
 
-	if smsg.WantProp(cmn.GetTargetURL) {
+	if lsmsg.WantProp(cmn.GetTargetURL) {
 		for _, e := range allEntries.Entries {
 			si, err := cluster.HrwTarget(bck.MakeUname(e.Name), &smap.Smap)
 			if err == nil {

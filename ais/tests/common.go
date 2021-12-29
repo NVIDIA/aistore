@@ -350,7 +350,7 @@ func (m *ioContext) del(cnt ...int) {
 	var (
 		httpErr    *cmn.ErrHTTP
 		baseParams = tutils.BaseAPIParams()
-		smsg       = &cmn.ListObjsMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
+		lsmsg      = &cmn.ListObjsMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
 	)
 
 	exists, err := api.DoesBucketExist(baseParams, cmn.QueryBcks(m.bck))
@@ -359,7 +359,7 @@ func (m *ioContext) del(cnt ...int) {
 		return
 	}
 	// TODO -- FIXME: set dont-lookup-remote-bucket = true (the last arg)
-	objList, err := api.ListObjectsWithOpts(baseParams, m.bck, smsg, 0, nil, false)
+	objList, err := api.ListObjectsWithOpts(baseParams, m.bck, lsmsg, 0, nil, false)
 	if err != nil {
 		if errors.As(err, &httpErr) && httpErr.Status == http.StatusNotFound {
 			return

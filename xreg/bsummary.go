@@ -186,14 +186,14 @@ func (t *bsummXact) Run(*sync.WaitGroup) {
 					msg.Cached = true
 				}
 
-				smsg := &cmn.ListObjsMsg{Props: cmn.GetPropsSize}
+				lsmsg := &cmn.ListObjsMsg{Props: cmn.GetPropsSize}
 				if msg.Cached {
-					smsg.Flags = cmn.LsPresent
+					lsmsg.Flags = cmn.LsPresent
 				}
 				for {
-					walk := objwalk.NewWalk(context.Background(), t.t, bck, smsg)
+					walk := objwalk.NewWalk(context.Background(), t.t, bck, lsmsg)
 					if bck.IsAIS() {
-						list, err = walk.DefaultLocalObjPage(smsg)
+						list, err = walk.DefaultLocalObjPage(lsmsg)
 					} else {
 						list, err = walk.RemoteObjPage()
 					}
@@ -219,7 +219,7 @@ func (t *bsummXact) Run(*sync.WaitGroup) {
 					}
 
 					list.Entries = nil
-					smsg.ContinuationToken = list.ContinuationToken
+					lsmsg.ContinuationToken = list.ContinuationToken
 				}
 			}
 

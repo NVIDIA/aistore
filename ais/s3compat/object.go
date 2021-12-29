@@ -80,11 +80,11 @@ func (r *ListObjectResult) MustMarshal(sgl *memsys.SGL) {
 	cos.AssertNoErr(err)
 }
 
-func (r *ListObjectResult) Add(entry *cmn.BucketEntry, smsg *cmn.ListObjsMsg) {
-	r.Contents = append(r.Contents, entryToS3(entry, smsg))
+func (r *ListObjectResult) Add(entry *cmn.BucketEntry, lsmsg *cmn.ListObjsMsg) {
+	r.Contents = append(r.Contents, entryToS3(entry, lsmsg))
 }
 
-func entryToS3(entry *cmn.BucketEntry, smsg *cmn.ListObjsMsg) *ObjInfo {
+func entryToS3(entry *cmn.BucketEntry, lsmsg *cmn.ListObjsMsg) *ObjInfo {
 	objInfo := &ObjInfo{
 		Key:          entry.Name,
 		LastModified: entry.Atime,
@@ -94,17 +94,17 @@ func entryToS3(entry *cmn.BucketEntry, smsg *cmn.ListObjsMsg) *ObjInfo {
 	// Some S3 clients do not tolerate empty or missing LastModified, so fill it
 	// with a zero time if the object was not accessed yet
 	if objInfo.LastModified == "" {
-		objInfo.LastModified = cos.FormatUnixNano(defaultLastModified, smsg.TimeFormat)
+		objInfo.LastModified = cos.FormatUnixNano(defaultLastModified, lsmsg.TimeFormat)
 	}
 	return objInfo
 }
 
-func (r *ListObjectResult) FillFromAisBckList(bckList *cmn.BucketList, smsg *cmn.ListObjsMsg) {
+func (r *ListObjectResult) FillFromAisBckList(bckList *cmn.BucketList, lsmsg *cmn.ListObjsMsg) {
 	r.KeyCount = len(bckList.Entries)
 	r.IsTruncated = bckList.ContinuationToken != ""
 	r.ContinuationToken = bckList.ContinuationToken
 	for _, e := range bckList.Entries {
-		r.Add(e, smsg)
+		r.Add(e, lsmsg)
 	}
 }
 

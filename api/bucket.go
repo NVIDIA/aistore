@@ -265,7 +265,7 @@ func EvictRemoteBucket(baseParams BaseParams, bck cmn.Bck, keepMD bool) error {
 }
 
 // Polling:
-// 1. The function sends the requests as is (smsg.UUID should be empty) to initiate
+// 1. The function sends the requests as is (lsmsg.UUID should be empty) to initiate
 //    asynchronous task. The destination returns ID of a newly created task
 // 2. Starts polling: request destination with received UUID in a loop while
 //    the destination returns StatusAccepted=task is still running
@@ -327,14 +327,14 @@ func waitForAsyncReqComplete(reqParams ReqParams, action string, msg *cmn.Bucket
 // See also: `cmn.ListObjsMsg`
 // See also: `api.ListObjectsInvalidateCache`
 // See also: `api.ListObjectsPage`
-func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.ListObjsMsg, numObjects uint) (*cmn.BucketList, error) {
-	return ListObjectsWithOpts(baseParams, bck, smsg, numObjects, nil, false)
+func ListObjects(baseParams BaseParams, bck cmn.Bck, lsmsg *cmn.ListObjsMsg, numObjects uint) (*cmn.BucketList, error) {
+	return ListObjectsWithOpts(baseParams, bck, lsmsg, numObjects, nil, false)
 }
 
 // additional (advance-usage) arguments include:
 // - "progress-bar" context
 // - option to override the system default and _not_ try to lookup remote bucket
-func ListObjectsWithOpts(baseParams BaseParams, bck cmn.Bck, smsg *cmn.ListObjsMsg, numObjects uint,
+func ListObjectsWithOpts(baseParams BaseParams, bck cmn.Bck, lsmsg *cmn.ListObjsMsg, numObjects uint,
 	progress *ProgressContext, dontLookupRemote bool) (bckList *cmn.BucketList, err error) {
 	var (
 		q    url.Values
@@ -348,16 +348,16 @@ func ListObjectsWithOpts(baseParams BaseParams, bck cmn.Bck, smsg *cmn.ListObjsM
 		listAll  = numObjects == 0
 	)
 	baseParams.Method = http.MethodGet
-	if smsg == nil {
-		smsg = &cmn.ListObjsMsg{}
+	if lsmsg == nil {
+		lsmsg = &cmn.ListObjsMsg{}
 	}
 	if dontLookupRemote {
 		q = url.Values{cmn.URLParamDontLookupRemoteBck: []string{"true"}}
 	}
 	q = cmn.AddBckToQuery(q, bck)
 	bckList = &cmn.BucketList{}
-	smsg.UUID = ""
-	smsg.ContinuationToken = ""
+	lsmsg.UUID = ""
+	lsmsg.ContinuationToken = ""
 
 	// `rem` holds the remaining number of objects to list (that is, unless we are listing
 	// the entire bucket). Each iteration lists a page of objects and reduces the `rem`
@@ -366,9 +366,9 @@ func ListObjectsWithOpts(baseParams BaseParams, bck cmn.Bck, smsg *cmn.ListObjsM
 	reqParams := ReqParams{BaseParams: baseParams, Path: path, Header: hdr, Query: q}
 	for pageNum := 1; listAll || toRead > 0; pageNum++ {
 		if !listAll {
-			smsg.PageSize = toRead
+			lsmsg.PageSize = toRead
 		}
-		actMsg := cmn.ActionMsg{Action: cmn.ActList, Value: smsg}
+		actMsg := cmn.ActionMsg{Action: cmn.ActList, Value: lsmsg}
 		reqParams.Body = cos.MustMarshal(actMsg)
 		page := nextPage
 
@@ -413,33 +413,33 @@ func ListObjectsWithOpts(baseParams BaseParams, bck cmn.Bck, smsg *cmn.ListObjsM
 		}
 
 		if page.ContinuationToken == "" { // Listed all objects.
-			smsg.ContinuationToken = ""
+			lsmsg.ContinuationToken = ""
 			break
 		}
 
 		toRead = uint(cos.Max(int(toRead)-len(page.Entries), 0))
 		cos.Assert(cos.IsValidUUID(page.UUID))
-		smsg.UUID = page.UUID
-		smsg.ContinuationToken = page.ContinuationToken
+		lsmsg.UUID = page.UUID
+		lsmsg.ContinuationToken = page.ContinuationToken
 	}
 
 	return bckList, err
 }
 
 // ListObjectsPage returns the first page of bucket objects.
-// On success the function updates `smsg.ContinuationToken` which client then can reuse
+// On success the function updates `lsmsg.ContinuationToken` which client then can reuse
 // to fetch the next page.
 // See also: CLI and CLI usage examples
 // See also: `cmn.ListObjsMsg`
 // See also: `api.ListObjectsInvalidateCache`
 // See also: `api.ListObjects`
-func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.ListObjsMsg) (*cmn.BucketList, error) {
+func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, lsmsg *cmn.ListObjsMsg) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodGet
-	if smsg == nil {
-		smsg = &cmn.ListObjsMsg{}
+	if lsmsg == nil {
+		lsmsg = &cmn.ListObjsMsg{}
 	}
 	var (
-		actMsg    = cmn.ActionMsg{Action: cmn.ActList, Value: smsg}
+		actMsg    = cmn.ActionMsg{Action: cmn.ActList, Value: lsmsg}
 		reqParams = ReqParams{
 			BaseParams: baseParams,
 			Path:       cmn.URLPathBuckets.Join(bck.Name),
@@ -457,8 +457,8 @@ func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.ListObjsMsg) 
 	if err := DoHTTPReqResp(reqParams, page); err != nil {
 		return nil, err
 	}
-	smsg.UUID = page.UUID
-	smsg.ContinuationToken = page.ContinuationToken
+	lsmsg.UUID = page.UUID
+	lsmsg.ContinuationToken = page.ContinuationToken
 	return page, nil
 }
 

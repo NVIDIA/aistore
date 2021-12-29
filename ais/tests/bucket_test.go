@@ -775,7 +775,10 @@ func TestListObjectsProps(t *testing.T) {
 			defer m.del()
 		}
 		checkProps := func(useCache bool, props []string, f func(entry *cmn.BucketEntry)) {
-			msg := &cmn.ListObjsMsg{PageSize: 100, UseCache: useCache}
+			msg := &cmn.ListObjsMsg{PageSize: 100}
+			if useCache {
+				msg.SetFlag(cmn.UseListObjsCache)
+			}
 			msg.AddProps(props...)
 			objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 			tassert.CheckFatal(t, err)
@@ -1312,12 +1315,11 @@ func TestListObjectsCache(t *testing.T) {
 			for iter := 0; iter < totalIters; iter++ {
 				var (
 					started = time.Now()
-					msg     = &cmn.ListObjsMsg{
-						PageSize: uint(rand.Intn(20)) + 4,
-						UseCache: useCache,
-					}
+					msg     = &cmn.ListObjsMsg{PageSize: uint(rand.Intn(20)) + 4}
 				)
-
+				if useCache {
+					msg.SetFlag(cmn.UseListObjsCache)
+				}
 				objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 				tassert.CheckFatal(t, err)
 
