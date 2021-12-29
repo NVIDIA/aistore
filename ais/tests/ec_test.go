@@ -436,7 +436,7 @@ func assertBucketSize(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objC
 }
 
 func bucketSize(t *testing.T, baseParams api.BaseParams, bck cmn.Bck) int {
-	msg := &cmn.SelectMsg{Props: "size,status"}
+	msg := &cmn.ListObjsMsg{Props: "size,status"}
 	objList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	return len(objList.Entries)
@@ -1250,7 +1250,7 @@ func TestECStress(t *testing.T) {
 			newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
 			doECPutsAndCheck(t, baseParams, bck, o)
 
-			msg := &cmn.SelectMsg{Props: "size,status"}
+			msg := &cmn.ListObjsMsg{Props: "size,status"}
 			objList, err := api.ListObjects(baseParams, bck, msg, 0)
 			tassert.CheckFatal(t, err)
 			tassert.Fatalf(t, len(objList.Entries) == o.objCount,
@@ -1310,12 +1310,12 @@ func TestECStressManyBuckets(t *testing.T) {
 	}()
 	wg.Wait()
 
-	msg := &cmn.SelectMsg{Props: "size,status"}
+	msg := &cmn.ListObjsMsg{Props: "size,status"}
 	objList, err := api.ListObjects(baseParams, bck1, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(objList.Entries) == o1.objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck1, len(objList.Entries), o1.objCount)
 
-	msg = &cmn.SelectMsg{Props: "size,status"}
+	msg = &cmn.ListObjsMsg{Props: "size,status"}
 	objList, err = api.ListObjects(baseParams, bck2, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(objList.Entries) == o2.objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck2, len(objList.Entries), o2.objCount)
@@ -1442,7 +1442,7 @@ func ecStressCore(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	delta := time.Since(started)
 	t.Logf("Total test time %v\n", delta)
 
-	msg := &cmn.SelectMsg{Props: "size,status"}
+	msg := &cmn.ListObjsMsg{Props: "size,status"}
 	objList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(objList.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(objList.Entries), o.objCount)
@@ -1549,7 +1549,7 @@ func TestECXattrs(t *testing.T) {
 		}
 	}
 
-	msg := &cmn.SelectMsg{Props: "size,status,version"}
+	msg := &cmn.ListObjsMsg{Props: "size,status,version"}
 	objList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
@@ -1645,7 +1645,7 @@ func TestECDestroyBucket(t *testing.T) {
 	doECPutsAndCheck(t, baseParams, bck, o)
 
 	// check if get requests are successful
-	msg := &cmn.SelectMsg{Props: "size,status,version"}
+	msg := &cmn.ListObjsMsg{Props: "size,status,version"}
 	objList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(objList.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(objList.Entries), o.objCount)
@@ -1752,7 +1752,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 
 	// 4. Check that ListObjects returns correct number of items
 	tlog.Logln("Reading bucket list...")
-	msg := &cmn.SelectMsg{Props: "size,status,version"}
+	msg := &cmn.ListObjsMsg{Props: "size,status,version"}
 	objList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(objList.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(objList.Entries), o.objCount)
@@ -2000,7 +2000,7 @@ func TestECEmergencyMountpath(t *testing.T) {
 
 	// 4. Check that ListObjects returns correct number of items
 	tlog.Logf("DONE\nReading bucket list...\n")
-	msg := &cmn.SelectMsg{Props: "size,status,version"}
+	msg := &cmn.ListObjsMsg{Props: "size,status,version"}
 	objList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	if len(objList.Entries) != o.objCount {
@@ -2090,7 +2090,7 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 		t.FailNow()
 	}
 
-	msg := &cmn.SelectMsg{Props: cmn.GetPropsSize}
+	msg := &cmn.ListObjsMsg{Props: cmn.GetPropsSize}
 	oldObjList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tlog.Logf("%d objects created, starting rebalance\n", len(oldObjList.Entries))
@@ -2286,7 +2286,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	})
 	tassert.CheckFatal(t, err)
 
-	msg := &cmn.SelectMsg{}
+	msg := &cmn.ListObjsMsg{}
 	resECOld, err := api.ListObjects(baseParams, bckEC, msg, 0)
 	tassert.CheckFatal(t, err)
 	resRegOld, err := api.ListObjects(baseParams, bckReg, msg, 0)
@@ -2402,7 +2402,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	tlog.Logf("Wait for resilvering to complete...\n")
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
-	msg := &cmn.SelectMsg{Props: cmn.GetPropsSize}
+	msg := &cmn.ListObjsMsg{Props: cmn.GetPropsSize}
 	resEC, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tlog.Logf("%d objects in %s after rebalance\n", len(resEC.Entries), bck)
@@ -2517,7 +2517,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 		t.FailNow()
 	}
 
-	msg := &cmn.SelectMsg{}
+	msg := &cmn.ListObjsMsg{}
 	resECOld, err := api.ListObjects(baseParams, bckEC, msg, 0)
 	tassert.CheckFatal(t, err)
 	tlog.Logf("Created %d objects in %s - starting global rebalance...\n", len(resECOld.Entries), bckEC)
@@ -2628,7 +2628,7 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 		t.FailNow()
 	}
 
-	msg := &cmn.SelectMsg{Props: cmn.GetPropsSize}
+	msg := &cmn.ListObjsMsg{Props: cmn.GetPropsSize}
 	objList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tlog.Logf("%d objects created, removing %d mountpaths\n", len(objList.Entries), o.parityCnt)

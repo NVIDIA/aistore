@@ -1656,7 +1656,7 @@ func startListObjRange(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, num
 			time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
 			var (
 				after = fmt.Sprintf("%04d", rand.Intn(numObjs-1-rangeSize))
-				msg   = &cmn.SelectMsg{PageSize: pageSize, StartAfter: after}
+				msg   = &cmn.ListObjsMsg{PageSize: pageSize, StartAfter: after}
 			)
 
 			resList, err := api.ListObjects(baseParams, bck, msg, uint(rangeSize))

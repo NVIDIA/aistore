@@ -180,24 +180,24 @@ func listObjects(c *cli.Context, bck cmn.Bck) error {
 func _doListObj(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error {
 	var (
 		showUnmatched         = flagIsSet(c, showUnmatchedFlag)
-		msg                   = &cmn.SelectMsg{Prefix: prefix}
+		msg                   = &cmn.ListObjsMsg{Prefix: prefix}
 		objectListFilter, err = newObjectListFilter(c)
 	)
 	if err != nil {
 		return err
 	}
 	if flagIsSet(c, cachedFlag) {
-		msg.SetFlag(cmn.SelectCached)
+		msg.SetFlag(cmn.LsPresent)
 	}
 	if listArch {
-		msg.SetFlag(cmn.SelectArchDir)
+		msg.SetFlag(cmn.LsArchDir)
 	}
 	if flagIsSet(c, allItemsFlag) {
-		msg.SetFlag(cmn.SelectMisplaced)
+		msg.SetFlag(cmn.LsMisplaced)
 	}
 	props := strings.Split(parseStrFlag(c, objPropsFlag), ",")
 	if flagIsSet(c, onlyNamesFlag) {
-		msg.SetFlag(cmn.SelectOnlyNames)
+		msg.SetFlag(cmn.LsOnlyNames)
 		msg.Props = cmn.GetPropsName
 		if cos.StringInSlice("all", props) || cos.StringInSlice(cmn.GetPropsStatus, props) {
 			msg.AddProps(cmn.GetPropsStatus)

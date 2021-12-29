@@ -40,17 +40,17 @@ type (
 	olFactory struct {
 		xreg.RenewBase
 		xact *ObjListXact
-		msg  *cmn.SelectMsg
+		msg  *cmn.ListObjsMsg
 	}
 	ObjListXact struct {
 		xaction.DemandBase
 		t   cluster.Target
 		bck *cluster.Bck
-		msg *cmn.SelectMsg
+		msg *cmn.ListObjsMsg
 
-		workCh chan *cmn.SelectMsg // Incoming requests.
-		respCh chan *Resp          // Outgoing responses.
-		stopCh *cos.StopCh         // Informs about stopped xaction.
+		workCh chan *cmn.ListObjsMsg // Incoming requests.
+		respCh chan *Resp            // Outgoing responses.
+		stopCh *cos.StopCh           // Informs about stopped xaction.
 
 		objCache   chan *cmn.BucketEntry // local cache filled when idle
 		lastPage   []*cmn.BucketEntry    // last sent page and a little more
@@ -88,7 +88,7 @@ var (
 )
 
 func (*olFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
-	p := &olFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, msg: args.Custom.(*cmn.SelectMsg)}
+	p := &olFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, msg: args.Custom.(*cmn.ListObjsMsg)}
 	return p
 }
 
@@ -105,13 +105,13 @@ func (p *olFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprUse, nil
 }
 
-func newXact(t cluster.Target, bck *cluster.Bck, smsg *cmn.SelectMsg, uuid string) *ObjListXact {
+func newXact(t cluster.Target, bck *cluster.Bck, smsg *cmn.ListObjsMsg, uuid string) *ObjListXact {
 	totallyIdle := cmn.GCO.Get().Timeout.MaxHostBusy.D()
 	xact := &ObjListXact{
 		t:        t,
 		bck:      bck,
 		msg:      smsg,
-		workCh:   make(chan *cmn.SelectMsg),
+		workCh:   make(chan *cmn.ListObjsMsg),
 		respCh:   make(chan *Resp),
 		stopCh:   cos.NewStopCh(),
 		lastPage: make([]*cmn.BucketEntry, 0, cacheSize),
@@ -131,7 +131,7 @@ func (r *ObjListXact) Abort(err error) (ok bool) {
 	return
 }
 
-func (r *ObjListXact) Do(msg *cmn.SelectMsg) *Resp {
+func (r *ObjListXact) Do(msg *cmn.ListObjsMsg) *Resp {
 	// The guarantee here is that we either put something on the channel and our
 	// request will be processed (since the `workCh` is unbuffered) or we receive
 	// message that the xaction has been stopped.
@@ -144,7 +144,7 @@ func (r *ObjListXact) Do(msg *cmn.SelectMsg) *Resp {
 }
 
 func (r *ObjListXact) init() {
-	r.fromRemote = !r.bck.IsAIS() && !r.msg.IsFlagSet(cmn.SelectCached)
+	r.fromRemote = !r.bck.IsAIS() && !r.msg.IsFlagSet(cmn.LsPresent)
 	if r.fromRemote {
 		return
 	}
@@ -381,7 +381,7 @@ func (r *ObjListXact) discardObsolete(token string) {
 	r.lastPage = r.lastPage[:l-j]
 }
 
-func (r *ObjListXact) traverseBucket(msg *cmn.SelectMsg) {
+func (r *ObjListXact) traverseBucket(msg *cmn.ListObjsMsg) {
 	wi := walkinfo.NewWalkInfo(r.walkCtx(), r.t, msg)
 	defer r.walkWg.Done()
 	cb := func(fqn string, de fs.DirEntry) error {
@@ -398,7 +398,7 @@ func (r *ObjListXact) traverseBucket(msg *cmn.SelectMsg) {
 		case <-r.walkStopCh.Listen():
 			return errStopped
 		}
-		if !msg.IsFlagSet(cmn.SelectArchDir) {
+		if !msg.IsFlagSet(cmn.LsArchDir) {
 			return nil
 		}
 		archList, err := listArchive(fqn)

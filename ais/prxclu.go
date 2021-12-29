@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -418,7 +417,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			p.writeErr(w, r, err)
 			return
 		}
-		p.writeJSON(w, r, api.JoinNodeResult{DaemonID: nsi.Name(), RebalanceID: rebID}, "")
+		p.writeJSON(w, r, cmn.JoinNodeResult{DaemonID: nsi.Name(), RebalanceID: rebID}, "")
 		return
 	}
 

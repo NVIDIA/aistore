@@ -151,7 +151,7 @@ func (*gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps 
 // LIST OBJECTS //
 //////////////////
 
-func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
+func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *cmn.ListObjsMsg) (bckList *cmn.BucketList, errCode int, err error) {
 	var (
 		query    *storage.Query
 		h        = cmn.BackendHelpers.Google

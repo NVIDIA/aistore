@@ -22,7 +22,7 @@ import (
 // listObjects returns a list of objects in a bucket (with optional prefix).
 func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actMsg *aisMsg) (ok bool) {
 	var (
-		msg   *cmn.SelectMsg
+		msg   *cmn.ListObjsMsg
 		query = r.URL.Query()
 	)
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -33,7 +33,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, actMsg.Action, actMsg.Value, err)
 		return
 	}
-	if !bck.IsAIS() && !msg.IsFlagSet(cmn.SelectCached) {
+	if !bck.IsAIS() && !msg.IsFlagSet(cmn.LsPresent) {
 		maxCloudPageSize := t.Backend(bck).MaxPageSize()
 		if msg.PageSize > maxCloudPageSize {
 			t.writeErrf(w, r, "page size %d exceeds the supported maximum (%d)", msg.PageSize, maxCloudPageSize)

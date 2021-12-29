@@ -17,11 +17,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-type JoinNodeResult struct {
-	DaemonID    string `json:"daemon_id"`
-	RebalanceID string `json:"rebalance_id"`
-}
-
 // to be used by external watchdogs (Kubernetes, etc.)
 // (compare with api.Health below)
 func GetProxyReadiness(params BaseParams) error {
@@ -121,7 +116,7 @@ func GetRemoteAIS(baseParams BaseParams) (aisInfo cmn.BackendInfoAIS, err error)
 
 // JoinCluster add a node to a cluster.
 func JoinCluster(baseParams BaseParams, nodeInfo *cluster.Snode) (rebID, daemonID string, err error) {
-	var info JoinNodeResult
+	var info cmn.JoinNodeResult
 	baseParams.Method = http.MethodPost
 	err = DoHTTPReqResp(ReqParams{
 		BaseParams: baseParams,

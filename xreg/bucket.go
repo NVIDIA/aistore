@@ -178,11 +178,11 @@ func (r *registry) renewBckRename(t cluster.Target, bckFrom, bckTo *cluster.Bck,
 	return r.renewBucketXact(cmn.ActMoveBck, bckTo, Args{t, uuid, custom})
 }
 
-func RenewObjList(t cluster.Target, bck *cluster.Bck, uuid string, msg *cmn.SelectMsg) RenewRes {
+func RenewObjList(t cluster.Target, bck *cluster.Bck, uuid string, msg *cmn.ListObjsMsg) RenewRes {
 	return defaultReg.renewObjList(t, bck, uuid, msg)
 }
 
-func (r *registry) renewObjList(t cluster.Target, bck *cluster.Bck, uuid string, msg *cmn.SelectMsg) RenewRes {
+func (r *registry) renewObjList(t cluster.Target, bck *cluster.Bck, uuid string, msg *cmn.ListObjsMsg) RenewRes {
 	e := r.bckXacts[cmn.ActList].New(Args{T: t, UUID: uuid, Custom: msg}, bck)
 	return r.renewByID(e, bck)
 }

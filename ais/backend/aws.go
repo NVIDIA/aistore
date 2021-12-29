@@ -122,7 +122,7 @@ func (*awsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.SimpleKVs,
 // LIST OBJECTS //
 //////////////////
 
-func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
+func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *cmn.ListObjsMsg) (bckList *cmn.BucketList, errCode int, err error) {
 	var (
 		svc      *s3.S3
 		h        = cmn.BackendHelpers.Amazon

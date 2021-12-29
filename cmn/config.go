@@ -1003,6 +1003,14 @@ func (c *LRUConf) ValidateAsProps(_ *ValidationArgs) (err error) {
 	return c.Validate()
 }
 
+func (c *LRUConf) String() string {
+	if !c.Enabled {
+		return "Disabled"
+	}
+	return fmt.Sprintf("Watermarks: %d%%/%d%% | Do not evict time: %v | OOS: %v%%",
+		c.LowWM, c.HighWM, c.DontEvictTime, c.OOS)
+}
+
 ///////////////////////////////////////
 // CksumConf (part of ClusterConfig) //
 ///////////////////////////////////////
@@ -1019,6 +1027,30 @@ func (c *CksumConf) ShouldValidate() bool {
 	return c.ValidateColdGet || c.ValidateObjMove || c.ValidateWarmGet
 }
 
+func (c *CksumConf) String() string {
+	if c.Type == cos.ChecksumNone {
+		return "Disabled"
+	}
+
+	toValidate := make([]string, 0)
+	add := func(val bool, name string) {
+		if val {
+			toValidate = append(toValidate, name)
+		}
+	}
+	add(c.ValidateColdGet, "ColdGET")
+	add(c.ValidateWarmGet, "WarmGET")
+	add(c.ValidateObjMove, "ObjectMove")
+	add(c.EnableReadRange, "ReadRange")
+
+	toValidateStr := "Nothing"
+	if len(toValidate) > 0 {
+		toValidateStr = strings.Join(toValidate, ",")
+	}
+
+	return fmt.Sprintf("Type: %s | Validate: %s", c.Type, toValidateStr)
+}
+
 ////////////////////////////////////////
 // VersionConf (part of ClusterConfig) //
 ////////////////////////////////////////
@@ -1028,6 +1060,21 @@ func (c *VersionConf) Validate() error {
 		return errors.New("versioning.validate_warm_get requires versioning to be enabled")
 	}
 	return nil
+}
+
+func (c *VersionConf) String() string {
+	if !c.Enabled {
+		return "Disabled"
+	}
+
+	text := "Enabled | Validate on WarmGET: "
+	if c.ValidateWarmGet {
+		text += "yes"
+	} else {
+		text += "no"
+	}
+
+	return text
 }
 
 ////////////////////////////////////////
@@ -1053,6 +1100,14 @@ func (c *MirrorConf) ValidateAsProps(_ *ValidationArgs) error {
 		return nil
 	}
 	return c.Validate()
+}
+
+func (c *MirrorConf) String() string {
+	if !c.Enabled {
+		return "Disabled"
+	}
+
+	return fmt.Sprintf("%d copies", c.Copies)
 }
 
 ///////////////////////////////////////////
@@ -1104,6 +1159,23 @@ func (c *ECConf) ValidateAsProps(args *ValidationArgs) (err error) {
 		return
 	}
 	return NewErrSoft(err.Error())
+}
+
+func (c *ECConf) String() string {
+	if !c.Enabled {
+		return "Disabled"
+	}
+	objSizeLimit := c.ObjSizeLimit
+	return fmt.Sprintf("%d:%d (%s)", c.DataSlices, c.ParitySlices, cos.B2S(objSizeLimit, 0))
+}
+
+func (c *ECConf) RequiredEncodeTargets() int {
+	// data slices + parity slices + 1 target for original object
+	return c.DataSlices + c.ParitySlices + 1
+}
+
+func (c *ECConf) RequiredRestoreTargets() int {
+	return c.DataSlices
 }
 
 ///////////////////////////////////////////
@@ -1392,10 +1464,26 @@ func (c *CompressionConf) Validate() (err error) {
 
 func (*TimeoutConf) Validate() error    { return nil }
 func (*ClientConf) Validate() error     { return nil }
-func (*RebalanceConf) Validate() error  { return nil }
-func (*ResilverConf) Validate() error   { return nil }
 func (*PeriodConf) Validate() error     { return nil }
 func (*DownloaderConf) Validate() error { return nil }
+
+func (*RebalanceConf) Validate() error { return nil }
+
+func (c *RebalanceConf) String() string {
+	if c.Enabled {
+		return "Enabled"
+	}
+	return "Disabled"
+}
+
+func (*ResilverConf) Validate() error { return nil }
+
+func (c *ResilverConf) String() string {
+	if c.Enabled {
+		return "Enabled"
+	}
+	return "Disabled"
+}
 
 ///////////////////
 // feature flags //

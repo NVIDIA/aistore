@@ -1171,7 +1171,7 @@ func TestAtimeRebalance(t *testing.T) {
 	// Get atime in a format that includes nanoseconds to properly check if it
 	// was updated in atime cache (if it wasn't, then the returned atime would
 	// be different from the original one, but the difference could be very small).
-	msg := &cmn.SelectMsg{TimeFormat: time.StampNano}
+	msg := &cmn.ListObjsMsg{TimeFormat: time.StampNano}
 	msg.AddProps(cmn.GetPropsAtime, cmn.GetPropsStatus)
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	bucketList, err := api.ListObjects(baseParams, m.bck, msg, 0)
@@ -1196,7 +1196,7 @@ func TestAtimeRebalance(t *testing.T) {
 
 	tutils.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
 
-	msg = &cmn.SelectMsg{TimeFormat: time.StampNano}
+	msg = &cmn.ListObjsMsg{TimeFormat: time.StampNano}
 	msg.AddProps(cmn.GetPropsAtime, cmn.GetPropsStatus)
 	bucketListReb, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
@@ -1347,7 +1347,7 @@ func TestAtimePrefetch(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	timeFormat := time.RFC3339Nano
-	msg := &cmn.SelectMsg{Props: cmn.GetPropsAtime, TimeFormat: timeFormat, Prefix: objPath}
+	msg := &cmn.ListObjsMsg{Props: cmn.GetPropsAtime, TimeFormat: timeFormat, Prefix: objPath}
 	bucketList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	if len(bucketList.Entries) != numObjs {

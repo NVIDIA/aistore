@@ -30,7 +30,7 @@ type (
 		xaction.XactBase    // ID() serves as well as a query handle
 		t                   cluster.Target
 		ctx                 context.Context
-		msg                 *cmn.SelectMsg
+		msg                 *cmn.ListObjsMsg
 		timer               *time.Timer
 		mtx                 sync.Mutex
 		buff                []*cmn.BucketEntry
@@ -46,7 +46,7 @@ type (
 	}
 )
 
-func NewObjectsListing(ctx context.Context, t cluster.Target, query *ObjectsQuery, msg *cmn.SelectMsg) (x *ObjectsListingXact) {
+func NewObjectsListing(ctx context.Context, t cluster.Target, query *ObjectsQuery, msg *cmn.ListObjsMsg) (x *ObjectsListingXact) {
 	x = &ObjectsListingXact{
 		t:        t,
 		ctx:      ctx,
@@ -144,7 +144,7 @@ func (r *ObjectsListingXact) startFromBck() {
 	bck := r.query.BckSource.Bck
 
 	// TODO: filtering for cloud buckets is not yet supported.
-	if bck.IsCloud() && !r.msg.IsFlagSet(cmn.SelectCached) {
+	if bck.IsCloud() && !r.msg.IsFlagSet(cmn.LsPresent) {
 		si, err := cluster.HrwTargetTask(r.ID(), r.t.Sowner().Get())
 		if err != nil {
 			// TODO: should we handle it somehow?

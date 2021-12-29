@@ -28,7 +28,7 @@ type (
 		prefix       string
 		Marker       string
 		markerDir    string
-		msg          *cmn.SelectMsg
+		msg          *cmn.ListObjsMsg
 		timeFormat   string
 	}
 
@@ -53,7 +53,7 @@ func isObjMoved(status uint16) bool {
 	return status == cmn.ObjStatusMovedNode || status == cmn.ObjStatusMovedMpath
 }
 
-func NewWalkInfo(ctx context.Context, t cluster.Target, msg *cmn.SelectMsg) *WalkInfo {
+func NewWalkInfo(ctx context.Context, t cluster.Target, msg *cmn.ListObjsMsg) *WalkInfo {
 	// TODO: this should be removed.
 	// TODO: we should take care of `msg.StartAfter`.
 	// Marker is always a file name, so we need to strip filename from the path
@@ -132,7 +132,7 @@ func (wi *WalkInfo) matchObj(lom *cluster.LOM) bool {
 	if wi.Marker != "" && cmn.TokenIncludesObject(wi.Marker, lom.ObjName) {
 		return false
 	}
-	if wi.msg.IsFlagSet(cmn.SelectOnlyNames) {
+	if wi.msg.IsFlagSet(cmn.LsOnlyNames) {
 		return true
 	}
 	return wi.objectFilter == nil || wi.objectFilter(lom)
@@ -155,7 +155,7 @@ func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntr
 		Name:  lom.ObjName,
 		Flags: objStatus | cmn.EntryIsCached,
 	}
-	if wi.msg.IsFlagSet(cmn.SelectOnlyNames) {
+	if wi.msg.IsFlagSet(cmn.LsOnlyNames) {
 		return fileInfo
 	}
 
@@ -185,8 +185,8 @@ func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntr
 
 // By default, Callback does a few syscalls to load file attributes and xatrrs
 // to fill the object info. If a client needs only object names, the bucket
-// list can be sped up by setting the flag cmn.SelectOnlyNames which skips
-// calling expensive filesystem requests. When cmn.SelectOnlyNames is set, the
+// list can be sped up by setting the flag cmn.LsOnlyNames which skips
+// calling expensive filesystem requests. When cmn.LsOnlyNames is set, the
 // Callback fills only object name and status.
 func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (*cmn.BucketEntry, error) {
 	if de.IsDir() {
@@ -209,11 +209,11 @@ func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (*cmn.BucketEntry, erro
 		objStatus = cmn.ObjStatusMovedMpath
 	}
 
-	if isObjMoved(objStatus) && !wi.msg.IsFlagSet(cmn.SelectMisplaced) {
+	if isObjMoved(objStatus) && !wi.msg.IsFlagSet(cmn.LsMisplaced) {
 		return nil, nil
 	}
-	// SelectOnlyNames skips loading object's metadata.
-	if wi.msg.IsFlagSet(cmn.SelectOnlyNames) {
+	// LsOnlyNames skips loading object's metadata.
+	if wi.msg.IsFlagSet(cmn.LsOnlyNames) {
 		return wi.lsObject(lom, objStatus), nil
 	}
 

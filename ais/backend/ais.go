@@ -336,7 +336,7 @@ func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *cluster.Bck) (bckProps
 	return
 }
 
-func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList,
+func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *cmn.ListObjsMsg) (bckList *cmn.BucketList,
 	errCode int, err error) {
 	var aisCluster *remAISCluster
 	if aisCluster, err = m.remoteCluster(remoteBck.Ns.UUID); err != nil {

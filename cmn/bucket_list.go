@@ -12,7 +12,7 @@ import "github.com/NVIDIA/aistore/cmn/cos"
 //go:generate msgp -tests=false -marshal=false
 
 // BucketEntry corresponds to a single entry in the BucketList and
-// contains file and directory metadata as per the SelectMsg
+// contains file and directory metadata as per the ListObjsMsg
 // Flags is a bit field:
 // 0-2: objects status, all statuses are mutually exclusive, so it can hold up
 //      to 8 different statuses. Now only OK=0, Moved=1, Deleted=2 are supported
@@ -21,7 +21,7 @@ type BucketEntry struct {
 	Name      string `json:"name" msg:"n"`                            // name of the object - NOTE: Does not include the bucket name.
 	Size      int64  `json:"size,string,omitempty" msg:"s,omitempty"` // size in bytes
 	Checksum  string `json:"checksum,omitempty" msg:"cs,omitempty"`   // checksum
-	Atime     string `json:"atime,omitempty" msg:"a,omitempty"`       // formatted as per SelectMsg.TimeFormat
+	Atime     string `json:"atime,omitempty" msg:"a,omitempty"`       // formatted as per ListObjsMsg.TimeFormat
 	Version   string `json:"version,omitempty" msg:"v,omitempty"`     // version/generation ID. In GCP it is int64, in AWS it is a string
 	TargetURL string `json:"target_url,omitempty" msg:"t,omitempty"`  // URL of target which has the entry
 	Copies    int16  `json:"copies,omitempty" msg:"c,omitempty"`      // ## copies (non-replicated = 1)

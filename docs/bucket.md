@@ -578,10 +578,10 @@ An empty structure `{}` results in getting just the names of the objects (from t
 | `start_after` | Name of the object after which the listing should start | For example, `start_after = "baa"` will include object `object_name = "caa"` but will not `object_name = "ba"` nor `object_name = "aab"`. |
 | `continuation_token` | The token identifying the next page to retrieve | Returned in the `ContinuationToken` field from a call to ListObjects that does not retrieve all keys. When the last key is retrieved, `ContinuationToken` will be the empty string. |
 | `time_format` | The standard by which times should be formatted | Any of the following [golang time constants](http://golang.org/pkg/time/#pkg-constants): RFC822, Stamp, StampMilli, RFC822Z, RFC1123, RFC1123Z, RFC3339. The default is RFC822. |
-| `flags` | Advanced filter options | A bit field of [SelectMsg extended flags](/cmn/api.go). |
+| `flags` | Advanced filter options | A bit field of [ListObjsMsg extended flags](/cmn/api.go). |
 | [experimental] `use_cache` | Enables caching | With this option enabled, subsequent requests to list objects for the given bucket will be served from cache without traversing disks. For now implementation is limited to caching results for buckets which content doesn't change, otherwise the cache will be in stale state. |
 
-SelectMsg extended flags:
+ListObjsMsg extended flags:
 
 | Name | Value | Description |
 | --- | --- | --- |

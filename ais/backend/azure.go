@@ -216,7 +216,7 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 // LIST OBJECTS //
 //////////////////
 
-func (ap *azureProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
+func (ap *azureProvider) ListObjects(bck *cluster.Bck, msg *cmn.ListObjsMsg) (bckList *cmn.BucketList, errCode int, err error) {
 	msg.PageSize = calcPageSize(msg.PageSize, ap.MaxPageSize())
 
 	var (

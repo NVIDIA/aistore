@@ -20,7 +20,7 @@ type (
 		ctx   context.Context
 		t     cluster.Target
 		query *query.ObjectsQuery
-		msg   *cmn.SelectMsg
+		msg   *cmn.ListObjsMsg
 	}
 	// Serves to return the result of renewing.
 	dummyEntry struct {
@@ -34,11 +34,11 @@ var (
 	_ Renewable = (*dummyEntry)(nil)
 )
 
-func RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, msg *cmn.SelectMsg) RenewRes {
+func RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, msg *cmn.ListObjsMsg) RenewRes {
 	return defaultReg.RenewQuery(ctx, t, q, msg)
 }
 
-func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, msg *cmn.SelectMsg) RenewRes {
+func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, msg *cmn.ListObjsMsg) RenewRes {
 	if xact := query.Registry.Get(msg.UUID); xact != nil {
 		if !xact.Aborted() {
 			return RenewRes{Entry: &dummyEntry{xact}, Err: nil, UUID: msg.UUID}

@@ -99,7 +99,7 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 	return
 }
 
-func (*httpProvider) ListObjects(*cluster.Bck, *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
+func (*httpProvider) ListObjects(*cluster.Bck, *cmn.ListObjsMsg) (bckList *cmn.BucketList, errCode int, err error) {
 	debug.Assert(false)
 	return
 }

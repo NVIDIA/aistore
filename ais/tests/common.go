@@ -170,7 +170,7 @@ func (m *ioContext) checkObjectDistribution(t *testing.T) {
 	)
 	tlog.Logf("Checking if each target has a required number of object in bucket %s...\n", m.bck)
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	bucketList, err := api.ListObjects(baseParams, m.bck, &cmn.SelectMsg{Props: cmn.GetTargetURL}, 0)
+	bucketList, err := api.ListObjects(baseParams, m.bck, &cmn.ListObjsMsg{Props: cmn.GetTargetURL}, 0)
 	tassert.CheckFatal(t, err)
 	for _, obj := range bucketList.Entries {
 		targetObjectCount[obj.TargetURL]++
@@ -241,7 +241,7 @@ func (m *ioContext) remotePuts(evict bool, overrides ...bool) {
 func (m *ioContext) remoteRefill() {
 	var (
 		baseParams = tutils.BaseAPIParams()
-		msg        = &cmn.SelectMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
+		msg        = &cmn.ListObjsMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
 	)
 
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
@@ -303,7 +303,7 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 func (m *ioContext) evict() {
 	var (
 		baseParams = tutils.BaseAPIParams()
-		msg        = &cmn.SelectMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
+		msg        = &cmn.ListObjsMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
 	)
 
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
@@ -320,7 +320,7 @@ func (m *ioContext) evict() {
 func (m *ioContext) remotePrefetch(prefetchCnt int) {
 	var (
 		baseParams = tutils.BaseAPIParams()
-		msg        = &cmn.SelectMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
+		msg        = &cmn.ListObjsMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
 	)
 
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
@@ -350,7 +350,7 @@ func (m *ioContext) del(cnt ...int) {
 	var (
 		httpErr    *cmn.ErrHTTP
 		baseParams = tutils.BaseAPIParams()
-		smsg       = &cmn.SelectMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
+		smsg       = &cmn.ListObjsMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
 	)
 
 	exists, err := api.DoesBucketExist(baseParams, cmn.QueryBcks(m.bck))
@@ -518,7 +518,7 @@ func (m *ioContext) ensureNumCopies(expectedCopies int, greaterOk bool) {
 	tassert.CheckFatal(m.t, err)
 
 	// List Bucket - primarily for the copies
-	msg := &cmn.SelectMsg{Flags: cmn.SelectCached, Prefix: m.prefix}
+	msg := &cmn.ListObjsMsg{Flags: cmn.LsPresent, Prefix: m.prefix}
 	msg.AddProps(cmn.GetPropsCopies, cmn.GetPropsAtime, cmn.GetPropsStatus)
 	objectList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
@@ -812,7 +812,7 @@ func prefixLookupDefault(t *testing.T, proxyURL string, bck cmn.Bck, fileNames [
 	for i := 0; i < len(letters); i++ {
 		key := letters[i : i+1]
 		lookFor := fmt.Sprintf("%s/%s", prefixDir, key)
-		msg := &cmn.SelectMsg{Prefix: lookFor}
+		msg := &cmn.ListObjsMsg{Prefix: lookFor}
 		objList, err := api.ListObjects(baseParams, bck, msg, 0)
 		if err != nil {
 			t.Errorf("List files with prefix failed, err = %v", err)
@@ -861,7 +861,7 @@ func prefixLookupCornerCases(t *testing.T, proxyURL string, bck cmn.Bck, objName
 		}
 
 		tlog.Logf("%d. Prefix: %s [%s]\n", idx, test.title, p)
-		msg := &cmn.SelectMsg{Prefix: p}
+		msg := &cmn.ListObjsMsg{Prefix: p}
 		objList, err := api.ListObjects(baseParams, bck, msg, 0)
 		if err != nil {
 			t.Errorf("List files with prefix failed, err = %v", err)

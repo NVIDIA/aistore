@@ -399,7 +399,7 @@ func (j *backendDlJob) getNextObjs() error {
 	)
 	j.objs = j.objs[:0]
 	for len(j.objs) < downloadBatchSize {
-		msg := &cmn.SelectMsg{
+		msg := &cmn.ListObjsMsg{
 			Prefix:            j.prefix,
 			ContinuationToken: j.continuationToken,
 			PageSize:          backend.MaxPageSize(),

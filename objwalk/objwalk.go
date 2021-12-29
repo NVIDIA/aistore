@@ -20,11 +20,11 @@ type (
 		ctx context.Context
 		t   cluster.Target
 		bck *cluster.Bck
-		msg *cmn.SelectMsg
+		msg *cmn.ListObjsMsg
 	}
 )
 
-func NewWalk(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.SelectMsg) *Walk {
+func NewWalk(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.ListObjsMsg) *Walk {
 	return &Walk{
 		ctx: ctx,
 		t:   t,
@@ -35,7 +35,7 @@ func NewWalk(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.S
 
 // DefaultLocalObjPage should be used when there's no need to persist results for a longer period of time.
 // It's supposed to be used when results are needed immediately.
-func (w *Walk) DefaultLocalObjPage(msg *cmn.SelectMsg) (*cmn.BucketList, error) {
+func (w *Walk) DefaultLocalObjPage(msg *cmn.ListObjsMsg) (*cmn.BucketList, error) {
 	var (
 		objSrc = &query.ObjectsSource{}
 		bckSrc = &query.BucketSource{Bck: w.bck}
@@ -71,10 +71,10 @@ func LocalObjPage(xact *query.ObjectsListingXact, objectsCnt uint) (*cmn.BucketL
 // After reading cloud object list, the function fills it with information
 // that is available only locally(copies, targetURL etc).
 func (w *Walk) RemoteObjPage() (*cmn.BucketList, error) {
-	if w.msg.IsFlagSet(cmn.SelectCached) {
+	if w.msg.IsFlagSet(cmn.LsPresent) {
 		return w.DefaultLocalObjPage(w.msg)
 	}
-	msg := &cmn.SelectMsg{}
+	msg := &cmn.ListObjsMsg{}
 	*msg = *w.msg
 	objList, _, err := w.t.Backend(w.bck).ListObjects(w.bck, msg)
 	if err != nil {

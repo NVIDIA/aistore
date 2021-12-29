@@ -114,7 +114,7 @@ func (hp *hdfsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.Simple
 // LIST OBJECTS //
 //////////////////
 
-func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList,
+func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *cmn.ListObjsMsg) (bckList *cmn.BucketList,
 	errCode int, err error) {
 	msg.PageSize = calcPageSize(msg.PageSize, hp.MaxPageSize())
 

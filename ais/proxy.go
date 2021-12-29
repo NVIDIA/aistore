@@ -489,7 +489,7 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.ContentLength == 0 && r.Header.Get(cmn.HdrContentType) != cmn.ContentJSON {
 		// must be an "easy URL" request, e.g.: curl -L -X GET 'http://aistore/ais/abc'
-		msg = &cmn.ActionMsg{Action: cmn.ActList, Value: &cmn.SelectMsg{}}
+		msg = &cmn.ActionMsg{Action: cmn.ActList, Value: &cmn.ListObjsMsg{}}
 	} else if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
@@ -1244,7 +1244,7 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 	var (
 		err     error
 		bckList *cmn.BucketList
-		smsg    = cmn.SelectMsg{}
+		smsg    = cmn.ListObjsMsg{}
 		smap    = p.owner.smap.get()
 	)
 	if err := cos.MorphMarshal(amsg.Value, &smsg); err != nil {
@@ -1262,12 +1262,12 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 	}
 
 	// Vanilla HTTP buckets do not support remote listing.
-	// SelectArchDir needs files locally to read archive content.
-	if bck.IsHTTP() || smsg.IsFlagSet(cmn.SelectArchDir) {
-		smsg.SetFlag(cmn.SelectCached)
+	// LsArchDir needs files locally to read archive content.
+	if bck.IsHTTP() || smsg.IsFlagSet(cmn.LsArchDir) {
+		smsg.SetFlag(cmn.LsPresent)
 	}
 
-	locationIsAIS := bck.IsAIS() || smsg.IsFlagSet(cmn.SelectCached)
+	locationIsAIS := bck.IsAIS() || smsg.IsFlagSet(cmn.LsPresent)
 	if smsg.UUID == "" {
 		var nl nl.NotifListener
 		smsg.UUID = cos.GenUUID()
@@ -1909,7 +1909,7 @@ func (p *proxyrunner) checkBckTaskResp(uuid string, results sliceResults) (allOK
 // listObjectsAIS reads object list from all targets, combines, sorts and returns
 // the final list. Excess of object entries from each target is remembered in the
 // buffer (see: `queryBuffers`) so we won't request the same objects again.
-func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allEntries *cmn.BucketList, err error) {
+func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.ListObjsMsg) (allEntries *cmn.BucketList, err error) {
 	var (
 		aisMsg    *aisMsg
 		args      *bcastArgs
@@ -2010,7 +2010,7 @@ end:
 // (cloud or remote AIS). If request requires local data then it is broadcast
 // to all targets which perform traverse on the disks, otherwise random target
 // is chosen to perform cloud listing.
-func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (allEntries *cmn.BucketList, err error) {
+func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.ListObjsMsg) (allEntries *cmn.BucketList, err error) {
 	if smsg.StartAfter != "" {
 		return nil, fmt.Errorf("list-objects %q option for remote buckets is not yet supported", smsg.StartAfter)
 	}

@@ -37,7 +37,7 @@ const (
 	SizeofI32 = int(unsafe.Sizeof(uint32(0)))
 	SizeofI16 = int(unsafe.Sizeof(uint16(0)))
 
-	RFC822 = time.RFC822 // SelectMsg.TimeFormat enum
+	RFC822 = time.RFC822 // ListObjsMsg.TimeFormat enum
 
 	MLCG32 = 1103515245 // xxhash seed
 

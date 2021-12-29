@@ -5,6 +5,8 @@
  */
 package cmn
 
+import "path/filepath"
+
 // used in multi-object (list|range) operations
 type (
 	// List of object names _or_ a template specifying { Prefix, Regex, and/or Range }
@@ -44,3 +46,8 @@ type (
 
 func (lrm *ListRangeMsg) IsList() bool      { return len(lrm.ObjNames) > 0 }
 func (lrm *ListRangeMsg) HasTemplate() bool { return lrm.Template != "" }
+
+////////////////
+// ArchiveMsg //
+////////////////
+func (msg *ArchiveMsg) FullName() string { return filepath.Join(msg.ToBck.Name, msg.ArchName) }

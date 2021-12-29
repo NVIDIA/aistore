@@ -5,7 +5,7 @@
  */
 package cmn
 
-// SelectMsg and HEAD(object) enum
+// ListObjsMsg and HEAD(object) enum
 // NOTE: compare with `ObjectProps` below and popular lists of selected props (below as well)
 const (
 	GetPropsName     = "name"

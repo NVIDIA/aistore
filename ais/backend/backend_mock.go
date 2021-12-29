@@ -39,7 +39,7 @@ func (*dummyBackendProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.S
 	return cos.SimpleKVs{}, http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bck)
 }
 
-func (*dummyBackendProvider) ListObjects(bck *cluster.Bck, _ *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
+func (*dummyBackendProvider) ListObjects(bck *cluster.Bck, _ *cmn.ListObjsMsg) (bckList *cmn.BucketList, errCode int, err error) {
 	return nil, http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bck)
 }
 
