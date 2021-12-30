@@ -163,6 +163,9 @@ func (poi *putObjInfo) finalize() (errCode int, err error) {
 	if !poi.skipEC {
 		if ecErr := ec.ECM.EncodeObject(poi.lom); ecErr != nil && ecErr != ec.ErrorECDisabled {
 			err = ecErr
+			if cmn.IsErrCapacityExceeded(err) {
+				errCode = http.StatusInsufficientStorage
+			}
 			return
 		}
 	}
@@ -355,8 +358,8 @@ write:
 
 func (goi *getObjInfo) getObject() (errCode int, err error) {
 	var (
-		cs                                            fs.CapStatus
-		doubleCheck, retry, retried, coldGet, capRead bool
+		cs                                   fs.CapStatus
+		doubleCheck, retry, retried, coldGet bool
 	)
 	// under lock: lom init, restore from cluster
 	goi.lom.Lock(false)
@@ -369,7 +372,6 @@ do:
 			errCode = http.StatusInternalServerError
 			return
 		}
-		capRead = true // set flag to avoid calling later
 		cs = fs.GetCapStatus()
 		if cs.OOS {
 			// Immediate return for no space left to restore object.
@@ -382,7 +384,7 @@ do:
 	if coldGet && goi.lom.Bck().IsAIS() {
 		// try lookup and restore
 		goi.lom.Unlock(false)
-		doubleCheck, errCode, err = goi.tryRestoreObject()
+		doubleCheck, errCode, err = goi.restoreFromAny(false /*skipLomRestore*/)
 		if doubleCheck && err != nil {
 			lom2 := &cluster.LOM{ObjName: goi.lom.ObjName}
 			er2 := lom2.Init(goi.lom.Bucket())
@@ -421,7 +423,7 @@ do:
 
 	// checksum validation, if requested
 	if !coldGet && goi.lom.CksumConf().ValidateWarmGet {
-		coldGet, errCode, err = goi.tryRecoverObject()
+		coldGet, errCode, err = goi.recoverObj()
 		if err != nil {
 			if !coldGet {
 				goi.lom.Unlock(false)
@@ -434,8 +436,7 @@ do:
 
 	// 3. coldget
 	if coldGet {
-		if !capRead {
-			capRead = true
+		if cs.IsNil() {
 			cs = fs.GetCapStatus()
 		}
 		if cs.OOS {
@@ -467,12 +468,12 @@ get:
 }
 
 // validate checksum; if corrupted try to recover from other replicas or EC slices
-func (goi *getObjInfo) tryRecoverObject() (coldGet bool, code int, err error) {
+func (goi *getObjInfo) recoverObj() (coldGet bool, code int, err error) {
 	var (
 		lom     = goi.lom
 		retried bool
 	)
-retry:
+validate:
 	err = lom.ValidateMetaChecksum()
 	if err == nil {
 		err = lom.ValidateContentChecksum()
@@ -512,24 +513,24 @@ retry:
 		retried = true
 		goi.lom.Unlock(false)
 		// lookup and restore the object from local replicas
-		restored := lom.RestoreObjectFromAny()
+		restored := lom.RestoreToLocation()
 		goi.lom.Lock(false)
 		if restored {
 			glog.Warningf("%s: recovered corrupted %s from local replica", goi.t.si, lom)
 			code = 0
-			goto retry
+			goto validate
 		}
 	}
 	if lom.Bprops().EC.Enabled {
 		retried = true
 		goi.lom.Unlock(false)
 		cos.RemoveFile(lom.FQN)
-		_, code, err = goi.tryRestoreObject()
+		_, code, err = goi.restoreFromAny(true /*skipLomRestore*/)
 		goi.lom.Lock(false)
 		if err == nil {
 			glog.Warningf("%s: recovered corrupted %s from EC slices", goi.t.si, lom)
 			code = 0
-			goto retry
+			goto validate
 		}
 	}
 
@@ -540,12 +541,12 @@ retry:
 	return
 }
 
-// an attempt to restore an object that is missing in the ais bucket - from:
-// 1) local FS
-// 2) other FSes or targets when resilvering (rebalancing) is running (aka GFN)
+// attempt to restore an object from any/all of the below:
+// 1) local copies (other FSes on this target)
+// 2) other targets (when resilvering or rebalancing is running (aka GFN))
 // 3) other targets if the bucket erasure coded
 // 4) Cloud
-func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, errCode int, err error) {
+func (goi *getObjInfo) restoreFromAny(skipLomRestore bool) (doubleCheck bool, errCode int, err error) {
 	var (
 		tsi, gfnNode         *cluster.Snode
 		smap                 = goi.t.owner.smap.get()
@@ -559,14 +560,16 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, errCode int, err er
 	if err != nil {
 		return
 	}
-	if interrupted || running || gfnActive {
-		if goi.lom.RestoreObjectFromAny() { // get-from-neighbor local (mountpaths) variety
-			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("%s restored", goi.lom)
+	if !skipLomRestore {
+		if interrupted || running || gfnActive {
+			if goi.lom.RestoreToLocation() { // from copies
+				if glog.FastV(4, glog.SmoduleAIS) {
+					glog.Infof("%s restored", goi.lom)
+				}
+				return
 			}
-			return
+			doubleCheck = running
 		}
-		doubleCheck = running
 	}
 
 	// FIXME: if there're not enough EC targets to restore a "sliced" object,
@@ -602,8 +605,9 @@ gfn:
 		}
 	}
 
-	// restore from existing EC slices if possible
-	if ecErr := ec.ECM.RestoreObject(goi.lom); ecErr == nil {
+	// restore from existing EC slices, if possible
+	ecErr := ec.ECM.RestoreObject(goi.lom)
+	if ecErr == nil {
 		ecErr = goi.lom.Load(true /*cache it*/, false /*locked*/) // TODO: optimize locking
 		debug.AssertNoErr(ecErr)
 		if ecErr == nil {
@@ -615,6 +619,10 @@ gfn:
 		err = fmt.Errorf(cmn.FmtErrFailed, tname, "load EC-recovered", goi.lom, ecErr)
 	} else if ecErr != ec.ErrorECDisabled {
 		err = fmt.Errorf(cmn.FmtErrFailed, tname, "EC-recover", goi.lom, ecErr)
+		if cmn.IsErrCapacityExceeded(ecErr) {
+			errCode = http.StatusInsufficientStorage
+		}
+		return
 	}
 
 	if err != nil {
@@ -1347,7 +1355,11 @@ func (aaoi *appendArchObjInfo) appendObject() (errCode int, err error) {
 		}
 	}
 	aaoi.abort(workFQN)
-	return http.StatusInternalServerError, err
+	errCode = http.StatusInternalServerError
+	if cmn.IsErrCapacityExceeded(err) {
+		errCode = http.StatusInsufficientStorage
+	}
+	return
 }
 
 // PUT(lom) => destination target

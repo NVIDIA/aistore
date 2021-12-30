@@ -106,7 +106,7 @@ func (t *targetrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items [
 func (t *targetrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	started := time.Now()
 	if cs := fs.GetCapStatus(); cs.OOS {
-		t.writeErr(w, r, cs.Err)
+		t.writeErr(w, r, cs.Err, http.StatusInsufficientStorage)
 		return
 	}
 	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)

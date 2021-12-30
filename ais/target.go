@@ -910,7 +910,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		cs = t.OOS(nil)
 		if cs.OOS {
 			// fail this write
-			t.writeErr(w, r, cs.Err)
+			t.writeErr(w, r, cs.Err, http.StatusInsufficientStorage)
 			return
 		}
 	}
@@ -1091,7 +1091,7 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 	if !exists {
 		// lookup and restore the object to its proper location
 		if (checkExists && lom.HasCopies()) || checkExistsAny {
-			exists = lom.RestoreObjectFromAny()
+			exists = lom.RestoreToLocation()
 		}
 	}
 	if checkExists || checkExistsAny {

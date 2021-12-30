@@ -1204,3 +1204,7 @@ func (cs CapStatus) String() (str string) {
 	str += ")"
 	return
 }
+
+func (cs CapStatus) IsNil() bool {
+	return cs.TotalUsed == 0 && cs.TotalAvail == 0
+}

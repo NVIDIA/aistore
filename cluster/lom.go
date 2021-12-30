@@ -261,6 +261,9 @@ func (lom *LOM) String() string {
 	if lom.info != "" {
 		return lom.info
 	}
+	if glog.FastV(4, glog.SmoduleCluster) {
+		return lom._string(lom.bck.String())
+	}
 	return lom._string(lom.bck.Name)
 }
 
@@ -626,7 +629,8 @@ func (lom *LOM) fromCache() (lcache *sync.Map, lmd *lmeta) {
 		if err != nil {
 			return
 		}
-		debug.Assert(digest == lom.mpathDigest)
+		// TODO -- FIXME: digest == lom.mpathDigest
+		_ = digest
 		mi = hmi
 	}
 	lcache = mi.LomCache(idx)
@@ -672,16 +676,20 @@ func (lom *LOM) whingeSize(size int64) error {
 }
 
 func (lom *LOM) Remove() (err error) {
-	// caller must take wlock
+	// caller must take w-lock
+	// TODO -- FIXME: making a (read-only) exception to rm corrupted obj in the GET path
 	debug.AssertFunc(func() bool {
 		rc, exclusive := lom.IsLocked()
 		return exclusive || rc > 0
 	})
 	lom.Uncache(true /*delDirty*/)
 	err = cos.RemoveFile(lom.FQN)
+	if os.IsNotExist(err) {
+		err = nil
+	}
 	for copyFQN := range lom.md.copies {
-		if err := cos.RemoveFile(copyFQN); err != nil {
-			glog.Error(err)
+		if erc := cos.RemoveFile(copyFQN); erc != nil && !os.IsNotExist(erc) {
+			err = erc
 		}
 	}
 	lom.md.bckID = 0

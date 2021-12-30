@@ -992,5 +992,5 @@ func detectNewBucket(oldList, newList cmn.Bcks) (cmn.Bck, error) {
 			return nbck, nil
 		}
 	}
-	return cmn.Bck{}, fmt.Errorf("new bucket is not found (old: %d buckets, new: %d buckets)", len(oldList), len(newList))
+	return cmn.Bck{}, fmt.Errorf("new bucket is not found (old: %v, new: %v)", oldList, newList)
 }

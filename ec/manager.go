@@ -282,11 +282,9 @@ func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) er
 	if !lom.Bprops().EC.Enabled {
 		return ErrorECDisabled
 	}
-
 	if cs := fs.GetCapStatus(); cs.Err != nil {
 		return cs.Err
 	}
-
 	isECCopy := IsECCopy(lom.SizeBytes(), &lom.Bprops().EC)
 	targetCnt := mgr.targetCnt.Load()
 
@@ -296,9 +294,6 @@ func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) er
 		glog.Warningf("not enough targets to encode the object; actual: %v, required: %v", targetCnt, required)
 		return cmn.ErrNotEnoughTargets
 	}
-
-	cos.Assert(lom.FQN != "")
-	cos.Assert(lom.MpathInfo() != nil && lom.MpathInfo().Path != "")
 	spec, _ := fs.CSM.FileSpec(lom.FQN)
 	if spec != nil && !spec.PermToProcess() {
 		return errSkipped

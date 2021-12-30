@@ -61,6 +61,8 @@ func RandomObjDir(dirLen, maxDepth int) (dir string) {
 
 func SetXattrCksum(fqn string, bck cmn.Bck, cksum *cos.Cksum) error {
 	lom := &cluster.LOM{FQN: fqn}
+	// NOTE: this is an intentional hack to go ahead and corrupt the checksum
+	//       - init and/or load errors are ignored on purpose
 	_ = lom.Init(bck)
 	_ = lom.LoadMetaFromFS()
 	lom.SetCksum(cksum)

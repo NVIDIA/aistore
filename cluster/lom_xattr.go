@@ -153,12 +153,14 @@ func (lom *LOM) Persist() (err error) {
 
 	if atime < 0 /*prefetch*/ || !lom.WritePolicy().IsImmediate() /*write-never or delayed*/ {
 		lom.md.makeDirty()
-		if !lom.IsCopy() {
-			lom.ReCache(true)
+		if lom.Bprops() != nil {
+			if !lom.IsCopy() {
+				lom.ReCache(true)
+			}
+			lom.md.bckID = lom.Bprops().BID
 		}
 		return
 	}
-
 	// write-immediate (default)
 	buf, mm := lom.marshal()
 	if err = fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
@@ -166,10 +168,12 @@ func (lom *LOM) Persist() (err error) {
 		T.FSHC(err, lom.FQN)
 	} else {
 		lom.md.clearDirty()
-		if !lom.IsCopy() {
-			lom.ReCache(lom.AtimeUnix() != 0)
+		if lom.Bprops() != nil {
+			if !lom.IsCopy() {
+				lom.ReCache(lom.AtimeUnix() != 0)
+			}
+			lom.md.bckID = lom.Bprops().BID
 		}
-		lom.md.bckID = lom.Bprops().BID
 	}
 	mm.Free(buf)
 	return

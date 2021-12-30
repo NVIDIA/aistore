@@ -81,7 +81,10 @@ func Load(filepath string, v interface{}, opts Options) (checksum *cos.Cksum, er
 		return
 	}
 	checksum, err = Decode(file, v, opts, filepath)
-	if err != nil && errors.Is(err, &cos.ErrBadCksum{}) {
+	if err == nil {
+		return
+	}
+	if errors.Is(err, &cos.ErrBadCksum{}) {
 		if errRm := os.Remove(filepath); errRm == nil {
 			if flag.Parsed() {
 				glog.Errorf("bad checksum: removing %s", filepath)
@@ -89,7 +92,6 @@ func Load(filepath string, v interface{}, opts Options) (checksum *cos.Cksum, er
 		} else if flag.Parsed() {
 			glog.Errorf("bad checksum: failed to remove %s: %v", filepath, errRm)
 		}
-		return
 	}
 	return
 }

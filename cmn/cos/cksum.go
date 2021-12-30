@@ -279,7 +279,7 @@ func (e *ErrBadCksum) Error() string {
 	return fmt.Sprintf("%s (%v != %v)%s", e.prefix, e.a, e.b, context)
 }
 
-func (*ErrBadCksum) Is(target error) bool {
-	_, ok := target.(*ErrBadCksum)
+func IsErrBadCksum(err error) bool {
+	_, ok := err.(*ErrBadCksum)
 	return ok
 }

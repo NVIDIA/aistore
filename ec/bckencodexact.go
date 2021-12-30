@@ -139,7 +139,7 @@ func (r *XactBckEncode) bckEncode(lom *cluster.LOM, _ []byte) error {
 	}
 	mdFQN, _, err := cluster.HrwFQN(lom.Bck(), fs.ECMetaType, lom.ObjName)
 	if err != nil {
-		glog.Warningf("metadata FQN generation failed %q: %v", lom.FQN, err)
+		glog.Warningf("metadata FQN generation failed %q: %v", lom, err)
 		return nil
 	}
 	_, err = os.Stat(mdFQN)
@@ -157,10 +157,10 @@ func (r *XactBckEncode) bckEncode(lom *cluster.LOM, _ []byte) error {
 	// That means all objects have been processed and xaction can finalize.
 	r.beforeECObj()
 	if err = ECM.EncodeObject(lom, r.afterECObj); err != nil {
-		// Something wrong with EC, interrupt file walk - it is critical.
+		// something went wrong: abort xaction
 		r.afterECObj(lom, err)
 		if err != errSkipped {
-			return fmt.Errorf("failed to EC object %q: %v", lom.FQN, err)
+			return err
 		}
 	}
 	return nil
