@@ -123,17 +123,17 @@ func (t *targetrunner) CopyObject(lom *cluster.LOM, params *cluster.CopyObjectPa
 	return
 }
 
-// recomputes checksum if called with a bad one. TODO: optimize
-func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster.GetColdType) (errCode int, err error) {
+// recomputes checksum if called with a bad one.
+func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster.PrefetchType) (errCode int, err error) {
 	switch ty {
-	case cluster.Prefetch:
+	case cluster.PTPrefetch:
 		if !lom.TryLock(true) {
 			glog.Warningf("%s: skipping prefetch: %s is busy", t.si, lom)
 			return 0, cmn.ErrSkip
 		}
-	case cluster.PrefetchWait:
+	case cluster.PTPrefetchWait:
 		lom.Lock(true)
-	case cluster.GetCold:
+	case cluster.PTGetCold:
 		for lom.UpgradeLock() {
 			// The action was performed by some other goroutine and we don't need
 			// to do it again. But we need to check on the object.
@@ -155,9 +155,9 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 	}
 
 	switch ty {
-	case cluster.Prefetch, cluster.PrefetchWait:
+	case cluster.PTPrefetch, cluster.PTPrefetchWait:
 		lom.Unlock(true)
-	case cluster.GetCold:
+	case cluster.PTGetCold:
 		if err = lom.Load(true /*cache it*/, true /*locked*/); err == nil {
 			t.statsT.AddMany(
 				cos.NamedVal64{Name: stats.GetColdCount, Value: 1},
@@ -166,7 +166,7 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 		}
 		lom.DowngradeLock()
 	default:
-		debug.Assertf(false, "get-cold-type=%d", ty)
+		debug.Assert(false)
 	}
 	return
 }

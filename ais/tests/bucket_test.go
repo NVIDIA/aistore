@@ -1677,7 +1677,7 @@ func TestRemoteBucketMirror(t *testing.T) {
 	var (
 		m = &ioContext{
 			t:      t,
-			num:    64,
+			num:    128,
 			bck:    cliBck,
 			prefix: t.Name(),
 		}

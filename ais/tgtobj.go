@@ -434,25 +434,23 @@ do:
 		}
 	}
 
-	// 3. coldget
+	// go ahead to read the respective backend (ie., cold-GET)
 	if coldGet {
 		if cs.IsNil() {
 			cs = fs.GetCapStatus()
 		}
 		if cs.OOS {
-			// No space left to prefetch object.
 			goi.lom.Unlock(false)
 			errCode, err = http.StatusInsufficientStorage, cs.Err
 			return
 		}
 		goi.lom.SetAtimeUnix(goi.started.UnixNano())
-		if errCode, err = goi.t.GetCold(goi.ctx, goi.lom, cluster.GetCold); err != nil {
+		if errCode, err = goi.t.GetCold(goi.ctx, goi.lom, cluster.PTGetCold); err != nil {
 			return
 		}
-		goi.t.putMirror(goi.lom)
 	}
 
-	// 4. get locally and stream back
+	// get locally and stream back
 get:
 	retry, errCode, err = goi.finalize(coldGet)
 	if retry && !retried {

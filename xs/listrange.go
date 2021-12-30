@@ -355,7 +355,7 @@ func (r *prefetch) do(lom *cluster.LOM, _ *lriterator) {
 	// housekeeping traversal will remove it. Set special `-now` value for subsequent correction.
 	// (see cluster/lom_cache_hk.go)
 	lom.SetAtimeUnix(-time.Now().UnixNano())
-	if _, err := r.t.GetCold(r.ctx, lom, cluster.Prefetch); err != nil {
+	if _, err := r.t.GetCold(r.ctx, lom, cluster.PTPrefetch); err != nil {
 		if err != cmn.ErrSkip {
 			glog.Warning(err)
 		}

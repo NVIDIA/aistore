@@ -29,17 +29,17 @@ const (
 	Finalize
 )
 
-// GetColdType and enum
-type GetColdType uint8
+// PrefetchType and enum
+type PrefetchType uint8
 
 const (
-	// Prefetch errors if lock is not available to be acquired immediately.
-	// Otherwise acquire, create an object, release the lock.
-	Prefetch GetColdType = iota
-	// PrefetchWait waits until a lock is acquired, create an object, release the lock.
-	PrefetchWait
-	// GetCold waits until a lock is acquired, create an object, downgrade the lock.
-	GetCold
+	// PTPrefetch: returns error if the lock cannot be acquired immediately.
+	// If acquired: write an object, release the lock.
+	PTPrefetch PrefetchType = iota
+	// PTPrefetchWait: wait until a lock is acquired, write, release the lock.
+	PTPrefetchWait
+	// PTGetCold: wait to lock, write, downgrade the lock.
+	PTGetCold
 )
 
 //
@@ -145,7 +145,7 @@ type Target interface {
 	EvictObject(lom *LOM) (errCode int, err error)
 	DeleteObject(lom *LOM, evict bool) (errCode int, err error)
 	CopyObject(lom *LOM, params *CopyObjectParams, localOnly bool) (int64, error)
-	GetCold(ctx context.Context, lom *LOM, getType GetColdType) (errCode int, err error)
+	GetCold(ctx context.Context, lom *LOM, getType PrefetchType) (errCode int, err error)
 	PromoteFile(params PromoteFileParams) (lom *LOM, err error)
 	LookupRemoteSingle(lom *LOM, si *Snode) bool
 

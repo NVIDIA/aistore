@@ -65,7 +65,7 @@ func (*TargetMock) CompareObjects(context.Context, *cluster.LOM) (bool, int, err
 	return true, 0, nil
 }
 
-func (*TargetMock) GetCold(context.Context, *cluster.LOM, cluster.GetColdType) (int, error) {
+func (*TargetMock) GetCold(context.Context, *cluster.LOM, cluster.PrefetchType) (int, error) {
 	return http.StatusOK, nil
 }
 

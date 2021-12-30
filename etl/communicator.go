@@ -176,7 +176,7 @@ func (pc *pushComm) doRequest(bck *cluster.Bck, objName string, timeout time.Dur
 
 	r, err = pc.tryDoRequest(lom, timeout)
 	if err != nil && cmn.IsObjNotExist(err) && bck.IsRemote() {
-		_, err = pc.t.GetCold(context.Background(), lom, cluster.PrefetchWait)
+		_, err = pc.t.GetCold(context.Background(), lom, cluster.PTPrefetchWait)
 		if err != nil {
 			return nil, err
 		}
