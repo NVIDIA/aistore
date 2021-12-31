@@ -433,10 +433,10 @@ func (m *AISBackendProvider) GetObj(_ ctx, lom *cluster.LOM) (errCode int, err e
 		return extractErrCode(err)
 	}
 	params := cluster.PutObjectParams{
-		Tag:      fs.WorkfileColdget,
-		Reader:   r,
-		RecvType: cluster.ColdGet,
-		Atime:    time.Now(),
+		Tag:    fs.WorkfileColdget,
+		Reader: r,
+		OWT:    cmn.OwtGetUpgLock,
+		Atime:  time.Now(),
 	}
 	err = m.t.PutObject(lom, params)
 	return extractErrCode(err)

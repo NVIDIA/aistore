@@ -240,7 +240,7 @@ const (
 	URLParamRebData          = "rbd" // true: get EC rebalance data (pulling data if push way fails)
 	URLParamTaskAction       = "tac" // "start", "status", "result"
 	URLParamClusterInfo      = "cii" // true: /Health to return cluster info and status
-	URLParamRecvType         = "rtp" // to tell user PUT from migration PUT
+	URLParamOWT              = "owt" // object write transaction enum { OwtPut, ..., OwtGet* }
 
 	// force the operation; allows to overcome certain restrictions (e.g., shutdown primary and the entire cluster)
 	// or errors (e.g., attach invalid mountpath)

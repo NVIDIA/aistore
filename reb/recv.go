@@ -111,11 +111,11 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip-checksum*/) // see "PUT is a no-op"
 	params := cluster.PutObjectParams{
-		Tag:      fs.WorkfilePut,
-		Reader:   io.NopCloser(objReader),
-		RecvType: cluster.Migrated,
-		Cksum:    hdr.ObjAttrs.Cksum,
-		Atime:    lom.Atime(),
+		Tag:    fs.WorkfilePut,
+		Reader: io.NopCloser(objReader),
+		OWT:    cmn.OwtMigrate,
+		Cksum:  hdr.ObjAttrs.Cksum,
+		Atime:  lom.Atime(),
 	}
 	if err := reb.t.PutObject(lom, params); err != nil {
 		glog.Error(err)

@@ -387,7 +387,7 @@ func writeObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int6
 	params := cluster.PutObjectParams{
 		Tag:        "ec",
 		Reader:     readCloser,
-		RecvType:   cluster.Migrated, // to avoid changing version
+		OWT:        cmn.OwtMigrate, // to avoid changing version
 		SkipEncode: true,
 		Atime:      time.Now(),
 	}

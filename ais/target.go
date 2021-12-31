@@ -1393,8 +1393,8 @@ func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.
 func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Time, query url.Values,
 	skipVC bool) (errCode int, err error) {
 	var (
-		header   = r.Header
-		recvType = query.Get(cmn.URLParamRecvType)
+		header = r.Header
+		owt    = query.Get(cmn.URLParamOWT)
 	)
 	// TODO: oa.Size vs "Content-Length" vs actual, similar to checksum
 	cksumToUse := lom.ObjAttrs().FromHeader(header)
@@ -1406,13 +1406,13 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 		poi.r = r.Body
 		poi.workFQN = fs.CSM.Gen(lom, fs.WorkfileType, fs.WorkfilePut)
 		poi.cksumToUse = cksumToUse
-		poi.recvType = cluster.RegularPut
+		poi.owt = cmn.OwtPut
 		poi.skipVC = skipVC
 	}
-	if recvType != "" {
-		n, err := strconv.Atoi(recvType)
+	if owt != "" {
+		n, err := strconv.Atoi(owt)
 		debug.AssertNoErr(err)
-		poi.recvType = cluster.RecvType(n)
+		poi.owt = cmn.OWT(n)
 	}
 	if sizeStr := header.Get(cmn.HdrContentLength); sizeStr != "" {
 		if size, ers := strconv.ParseInt(sizeStr, 10, 64); ers == nil {

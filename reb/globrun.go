@@ -128,7 +128,7 @@ func New(t cluster.Target, config *cmn.Config) *Reb {
 		Compression: rebcfg.Compression,
 		Multiplier:  int(rebcfg.Multiplier),
 	}
-	dm, err := bundle.NewDataMover(t, trname, reb.recvObj, cluster.Migrated, dmExtra)
+	dm, err := bundle.NewDataMover(t, trname, reb.recvObj, cmn.OwtMigrate, dmExtra)
 	if err != nil {
 		cos.ExitLogf("%v", err)
 	}

@@ -233,10 +233,10 @@ func (hp *hdfsProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode i
 		return errCode, err
 	}
 	params := cluster.PutObjectParams{
-		Tag:      fs.WorkfileColdget,
-		Reader:   reader,
-		RecvType: cluster.ColdGet,
-		Atime:    time.Now(),
+		Tag:    fs.WorkfileColdget,
+		Reader: reader,
+		OWT:    cmn.OwtGetUpgLock,
+		Atime:  time.Now(),
 	}
 	if err = hp.t.PutObject(lom, params); err != nil {
 		return

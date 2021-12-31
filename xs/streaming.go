@@ -69,7 +69,7 @@ func (p *streamingF) newDM(prefix string, recv transport.ReceiveObj, sizePDU int
 	trname := fmt.Sprintf("%s-%s-%s-%d", prefix, p.Bck.Provider, p.Bck.Name, bmd.Version)
 
 	dmExtra := bundle.Extra{Multiplier: 1, SizePDU: sizePDU}
-	p.dm, err = bundle.NewDataMover(p.Args.T, trname, recv, cluster.RegularPut, dmExtra)
+	p.dm, err = bundle.NewDataMover(p.Args.T, trname, recv, cmn.OwtPut, dmExtra)
 	if err != nil {
 		return
 	}

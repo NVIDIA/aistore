@@ -134,10 +134,10 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 	t.setTotalSize(size)
 
 	params := cluster.PutObjectParams{
-		Tag:      "dl",
-		Reader:   r,
-		RecvType: cluster.RegularPut,
-		Atime:    t.started.Load(),
+		Tag:    "dl",
+		Reader: r,
+		OWT:    cmn.OwtPut,
+		Atime:  t.started.Load(),
 	}
 	if err := t.parent.t.PutObject(lom, params); err != nil {
 		return true, err
@@ -216,7 +216,7 @@ func (t *singleObjectTask) downloadRemote(lom *cluster.LOM) error {
 	ctx = context.WithValue(ctx, cos.CtxSetSize, cos.SetSizeFunc(t.setTotalSize))
 
 	// Do final GET (prefetch) request.
-	_, err := t.parent.t.GetCold(ctx, lom, cluster.PTTryLock)
+	_, err := t.parent.t.GetCold(ctx, lom, cmn.OwtGetTryLock)
 	return err
 }
 

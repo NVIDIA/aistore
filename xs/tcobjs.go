@@ -187,11 +187,11 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 		Tag:    fs.WorkfilePut,
 		Reader: io.NopCloser(objReader),
 		// Transaction is used only by CopyBucket and ETL. In both cases new objects
-		// are created at the destination. Setting `RegularPut` type informs `c.t.PutObject`
-		// that it must PUT the object to the Cloud as well after the local data are
-		// finalized.
-		RecvType: cluster.RegularPut,
-		Cksum:    hdr.ObjAttrs.Cksum,
+		// are created at the destination. Setting `OwtPut` type informs `t.PutObject()`
+		// that it must PUT the object to the remote backend as well
+		// (but only after the local transaction is done and finalized).
+		OWT:   cmn.OwtPut,
+		Cksum: hdr.ObjAttrs.Cksum,
 	}
 	if lom.AtimeUnix() == 0 {
 		// TODO -- FIXME: sender must be setting it, remove this `if` when fixed

@@ -50,7 +50,7 @@ type (
 		xact        cluster.Xact
 		multiplier  int
 		sizePDU     int32
-		recvType    cluster.RecvType
+		owt         cmn.OWT
 	}
 	// additional (and optional) params for new data mover
 	Extra struct {
@@ -64,12 +64,12 @@ type (
 // interface guard
 var _ cluster.DataMover = (*DataMover)(nil)
 
-// recvType is mandatory DM property: a data mover passes the property to
+// owt is mandatory DM property: a data mover passes the property to
 // `target.PutObject` to make to finalize an object properly after the object
 // is saved to local drives(e.g, PUT the object to the Cloud as well).
-// For DMs that does not create new objects(e.g, rebalance), recvType should
-// be `Migrated`, and `RegularPut` for others(e.g, CopyBucket).
-func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, recvType cluster.RecvType,
+// For DMs that do not create new objects(e.g, rebalance), owt should
+// be set to `OwtMigrate`; all others are expected to have `OwtPut` (see e.g, CopyBucket).
+func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, owt cmn.OWT,
 	extra Extra) (*DataMover, error) {
 	dm := &DataMover{t: t, config: cmn.GCO.Get(), mem: t.PageMM()}
 	if extra.Multiplier == 0 {
@@ -78,7 +78,7 @@ func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, 
 	if extra.Multiplier > 8 {
 		return nil, fmt.Errorf("invalid multiplier %d", extra.Multiplier)
 	}
-	dm.recvType = recvType
+	dm.owt = owt
 	dm.multiplier = extra.Multiplier
 	dm.sizePDU = extra.SizePDU
 	switch extra.Compression {
@@ -107,10 +107,10 @@ func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, 
 	return dm, nil
 }
 
-func (dm *DataMover) useACKs() bool              { return dm.ack.recv != nil }
-func (dm *DataMover) NetD() string               { return dm.data.net }
-func (dm *DataMover) NetC() string               { return dm.ack.net }
-func (dm *DataMover) RecvType() cluster.RecvType { return dm.recvType }
+func (dm *DataMover) useACKs() bool { return dm.ack.recv != nil }
+func (dm *DataMover) NetD() string  { return dm.data.net }
+func (dm *DataMover) NetC() string  { return dm.ack.net }
+func (dm *DataMover) OWT() cmn.OWT  { return dm.owt }
 
 // xaction that drives and utilizes this data mover
 func (dm *DataMover) SetXact(xact cluster.Xact) { dm.xact = xact }

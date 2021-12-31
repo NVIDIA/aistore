@@ -44,13 +44,13 @@ type (
 		atime      time.Time
 		t          *targetrunner
 		lom        *cluster.LOM
-		r          io.ReadCloser    // reader that has the content
-		cksumToUse *cos.Cksum       // if available (not `none`), can be validated and will be stored
-		size       int64            // object size aka Content-Length
-		workFQN    string           // temp fqn to be renamed
-		recvType   cluster.RecvType // enum { RegularPut, Cold, Migrated, ... }
-		skipEC     bool             // true: do not erasure-encode when finalizing
-		skipVC     bool             // true: do not try to load existing version and do not compare checksums
+		r          io.ReadCloser // reader that has the content
+		cksumToUse *cos.Cksum    // if available (not `none`), can be validated and will be stored
+		size       int64         // object size aka Content-Length
+		workFQN    string        // temp fqn to be renamed
+		owt        cmn.OWT       // object write transaction enum { OwtPut, ..., OwtGet* }
+		skipEC     bool          // true: do not erasure-encode when finalizing
+		skipVC     bool          // true: do not try to load existing version and do not compare checksums
 	}
 
 	getObjInfo struct {
@@ -133,7 +133,7 @@ func (poi *putObjInfo) putObject() (int, error) {
 	if errCode, err := poi.finalize(); err != nil {
 		return errCode, err
 	}
-	if poi.recvType == cluster.RegularPut {
+	if poi.owt == cmn.OwtPut {
 		delta := time.Since(poi.atime)
 		poi.t.statsT.AddMany(
 			cos.NamedVal64{Name: stats.PutCount, Value: 1},
@@ -181,7 +181,7 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 		bmd = poi.t.owner.bmd.Get()
 	)
 	// remote versioning
-	if bck.IsRemote() && (poi.recvType == cluster.RegularPut || poi.recvType == cluster.Finalize) {
+	if bck.IsRemote() && (poi.owt == cmn.OwtPut || poi.owt == cmn.OwtFinalize) {
 		errCode, err = poi.putRemote()
 		if err != nil {
 			glog.Errorf("PUT %s: %v", lom, err)
@@ -194,12 +194,9 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 		return
 	}
 
-	if poi.recvType == cluster.ColdGet {
+	if poi.owt == cmn.OwtGetUpgLock {
 		// see t.GetCold() impl
-		debug.AssertFunc(func() bool {
-			_, exclusive := lom.IsLocked()
-			return exclusive
-		})
+		debug.AssertFunc(func() bool { _, exclusive := lom.IsLocked(); return exclusive })
 	} else {
 		lom.Lock(true)
 		defer lom.Unlock(true)
@@ -207,7 +204,7 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 
 	// ais versioning
 	if bck.IsAIS() && lom.VersionConf().Enabled {
-		if poi.recvType == cluster.RegularPut {
+		if poi.owt == cmn.OwtPut {
 			if poi.skipVC {
 				err = lom.IncVersion()
 				debug.Assert(err == nil)
@@ -246,7 +243,7 @@ func (poi *putObjInfo) putRemote() (errCode int, err error) {
 		err = fmt.Errorf(cmn.FmtErrFailed, poi.t.Snode(), "open", poi.workFQN, err)
 		return
 	}
-	if poi.recvType == cluster.RegularPut && !lom.Bck().IsRemoteAIS() {
+	if poi.owt == cmn.OwtPut && !lom.Bck().IsRemoteAIS() {
 		// some/all of those are set by the backend.PutObj()
 		lom.ObjAttrs().DelCustomKeys(cmn.SourceObjMD, cmn.CRC32CObjMD, cmn.ETag, cmn.MD5ObjMD, cmn.VersionObjMD)
 	}
@@ -308,7 +305,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 		poi.lom.SetCksum(cos.NoneCksum)
 		goto write
 	}
-	if poi.recvType == cluster.Migrated && !conf.ShouldValidate() && !poi.cksumToUse.IsEmpty() {
+	if poi.owt == cmn.OwtMigrate && !conf.ShouldValidate() && !poi.cksumToUse.IsEmpty() {
 		// if migration validation is not configured we can just take
 		// the checksum that has arrived with the object (and compute it if not present)
 		poi.lom.SetCksum(poi.cksumToUse)
@@ -451,7 +448,7 @@ do:
 			return
 		}
 		goi.lom.SetAtimeUnix(goi.started.UnixNano())
-		if errCode, err = goi.t.GetCold(goi.ctx, goi.lom, cluster.PTGetCold); err != nil {
+		if errCode, err = goi.t.GetCold(goi.ctx, goi.lom, cmn.OwtGetUpgLock); err != nil {
 			return
 		}
 	}
@@ -671,7 +668,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 		t:          goi.t,
 		lom:        lom,
 		r:          resp.Body,
-		recvType:   cluster.Migrated,
+		owt:        cmn.OwtMigrate,
 		workFQN:    workFQN,
 		cksumToUse: cksumToUse,
 	}
@@ -1153,17 +1150,17 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 		return 0, err
 	}
 
-	// Set the correct recvType: some transactions must update the object
+	// Set the correct owt: some transactions must update the object
 	// in the Cloud(iff the destination is a Cloud bucket).
-	recvType := cluster.Migrated
+	owt := cmn.OwtMigrate
 	if coi.DM != nil {
-		recvType = coi.DM.RecvType()
+		owt = coi.DM.OWT()
 	}
 	params := cluster.PutObjectParams{
-		Tag:      "copy-dp",
-		Reader:   reader,
-		RecvType: recvType,
-		Atime:    lom.Atime(),
+		Tag:    "copy-dp",
+		Reader: reader,
+		OWT:    owt,
+		Atime:  lom.Atime(),
 	}
 	if err = coi.t.PutObject(dst, params); err != nil {
 		return
@@ -1375,7 +1372,7 @@ func (t *targetrunner) _sendPUT(params *cluster.SendToParams) error {
 	)
 	cmn.ToHeader(params.ObjAttrs, hdr)
 	hdr.Set(cmn.HdrPutterID, t.si.ID())
-	query.Set(cmn.URLParamRecvType, strconv.Itoa(int(cluster.Migrated))) // NOTE: recvType migrated
+	query.Set(cmn.URLParamOWT, strconv.Itoa(int(cmn.OwtMigrate)))
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   params.Tsi.URL(cmn.NetworkIntraData),

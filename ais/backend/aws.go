@@ -313,11 +313,11 @@ func (awsp *awsProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 		return
 	}
 	params := cluster.PutObjectParams{
-		Tag:      fs.WorkfileColdget,
-		Reader:   r,
-		RecvType: cluster.ColdGet,
-		Cksum:    expCksum,
-		Atime:    time.Now(),
+		Tag:    fs.WorkfileColdget,
+		Reader: r,
+		OWT:    cmn.OwtGetUpgLock,
+		Cksum:  expCksum,
+		Atime:  time.Now(),
 	}
 	err = awsp.t.PutObject(lom, params)
 	if verbose {

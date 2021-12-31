@@ -19,29 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 )
 
-// poi RecvType and enum
-type RecvType int
-
-const (
-	RegularPut RecvType = iota
-	ColdGet
-	Migrated
-	Finalize
-)
-
-// PrefetchType and enum
-type PrefetchType uint8
-
-const (
-	// PTTryLock: returns error if the lock cannot be acquired immediately.
-	// If acquired: write an object, release the lock.
-	PTTryLock PrefetchType = iota
-	// PTLock: wait until a lock is acquired, write, release the lock.
-	PTLock
-	// PTGetCold: wait to lock, write, downgrade the lock.
-	PTGetCold
-)
-
 //
 // ais target's types and interfaces
 //
@@ -76,12 +53,12 @@ type (
 		UnregRecv()
 		Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *Snode) error
 		ACK(hdr transport.ObjHdr, cb transport.ObjSentCB, tsi *Snode) error
-		RecvType() RecvType
+		OWT() cmn.OWT
 	}
 	PutObjectParams struct {
 		Tag        string // Used to distinguish between different PUT operation.
 		Reader     io.ReadCloser
-		RecvType   RecvType
+		OWT        cmn.OWT
 		Cksum      *cos.Cksum // Checksum to check.
 		Atime      time.Time
 		SkipEncode bool // Do not run erasure-code when finalizing.
@@ -145,7 +122,7 @@ type Target interface {
 	EvictObject(lom *LOM) (errCode int, err error)
 	DeleteObject(lom *LOM, evict bool) (errCode int, err error)
 	CopyObject(lom *LOM, params *CopyObjectParams, localOnly bool) (int64, error)
-	GetCold(ctx context.Context, lom *LOM, getType PrefetchType) (errCode int, err error)
+	GetCold(ctx context.Context, lom *LOM, owt cmn.OWT) (errCode int, err error)
 	PromoteFile(params PromoteFileParams) (lom *LOM, err error)
 	LookupRemoteSingle(lom *LOM, si *Snode) bool
 
