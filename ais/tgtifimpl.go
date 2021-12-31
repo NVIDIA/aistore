@@ -123,16 +123,18 @@ func (t *targetrunner) CopyObject(lom *cluster.LOM, params *cluster.CopyObjectPa
 	return
 }
 
-// recomputes checksum if called with a bad one.
 func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster.PrefetchType) (errCode int, err error) {
+	// 1. lock
 	switch ty {
-	case cluster.PTPrefetch:
-		if !lom.TryLock(true) {
-			glog.Warningf("%s: skipping prefetch: %s is busy", t.si, lom)
-			return 0, cmn.ErrSkip
+	case cluster.PTTryLock, cluster.PTLock:
+		if ty == cluster.PTTryLock {
+			if !lom.TryLock(true) {
+				glog.Warningf("%s: %s is busy (ty=%d)", t.si, lom, ty)
+				return 0, cmn.ErrSkip
+			}
+		} else {
+			lom.Lock(true)
 		}
-	case cluster.PTPrefetchWait:
-		lom.Lock(true)
 	case cluster.PTGetCold:
 		for lom.UpgradeLock() {
 			// The action was performed by some other goroutine and we don't need
@@ -144,18 +146,20 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 			return 0, nil
 		}
 	default:
-		debug.Assertf(false, "%v", ty)
+		debug.Assert(false)
 		return
 	}
 
+	// 2. get from remote
 	if errCode, err = t.Backend(lom.Bck()).GetObj(ctx, lom); err != nil {
 		lom.Unlock(true)
-		glog.Errorf("%s: failed to GET remote %s: %v(%d)", t.si, lom.FullName(), err, errCode)
+		glog.Errorf("%s: failed to GET remote %s (ty=%d): %v(%d)", t.si, lom.FullName(), ty, err, errCode)
 		return
 	}
 
+	// 3. unlock or downgrade
 	switch ty {
-	case cluster.PTPrefetch, cluster.PTPrefetchWait:
+	case cluster.PTTryLock, cluster.PTLock:
 		lom.Unlock(true)
 	case cluster.PTGetCold:
 		if err = lom.Load(true /*cache it*/, true /*locked*/); err == nil {
@@ -163,8 +167,12 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 				cos.NamedVal64{Name: stats.GetColdCount, Value: 1},
 				cos.NamedVal64{Name: stats.GetColdSize, Value: lom.SizeBytes()},
 			)
+			lom.DowngradeLock()
+		} else {
+			errCode = http.StatusInternalServerError
+			lom.Unlock(true)
+			glog.Errorf("%s: unexpected failure to load %s (ty=%d): %v", t.si, lom.FullName(), ty, err)
 		}
-		lom.DowngradeLock()
 	default:
 		debug.Assert(false)
 	}

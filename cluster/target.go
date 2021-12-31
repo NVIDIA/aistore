@@ -33,11 +33,11 @@ const (
 type PrefetchType uint8
 
 const (
-	// PTPrefetch: returns error if the lock cannot be acquired immediately.
+	// PTTryLock: returns error if the lock cannot be acquired immediately.
 	// If acquired: write an object, release the lock.
-	PTPrefetch PrefetchType = iota
-	// PTPrefetchWait: wait until a lock is acquired, write, release the lock.
-	PTPrefetchWait
+	PTTryLock PrefetchType = iota
+	// PTLock: wait until a lock is acquired, write, release the lock.
+	PTLock
 	// PTGetCold: wait to lock, write, downgrade the lock.
 	PTGetCold
 )

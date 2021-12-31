@@ -216,7 +216,7 @@ func (t *singleObjectTask) downloadRemote(lom *cluster.LOM) error {
 	ctx = context.WithValue(ctx, cos.CtxSetSize, cos.SetSizeFunc(t.setTotalSize))
 
 	// Do final GET (prefetch) request.
-	_, err := t.parent.t.GetCold(ctx, lom, cluster.PTPrefetch)
+	_, err := t.parent.t.GetCold(ctx, lom, cluster.PTTryLock)
 	return err
 }
 

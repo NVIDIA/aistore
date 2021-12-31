@@ -193,12 +193,18 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 		errCode = http.StatusBadRequest
 		return
 	}
+
 	if poi.recvType == cluster.ColdGet {
-		debug.Assert(!lom.TryLock(true)) // cold GET: caller must take a lock
+		// see t.GetCold() impl
+		debug.AssertFunc(func() bool {
+			_, exclusive := lom.IsLocked()
+			return exclusive
+		})
 	} else {
 		lom.Lock(true)
 		defer lom.Unlock(true)
 	}
+
 	// ais versioning
 	if bck.IsAIS() && lom.VersionConf().Enabled {
 		if poi.recvType == cluster.RegularPut {
@@ -450,13 +456,13 @@ do:
 		}
 	}
 
-	// get locally and stream back
+	// read locally and stream back
 get:
 	retry, errCode, err = goi.finalize(coldGet)
 	if retry && !retried {
 		debug.Assert(err != errSendingResp)
-		glog.Warningf("GET %s: uncaching and retrying...", goi.lom)
-		retried = true // NOTE: retry only once
+		glog.Warningf("GET %s: retrying...", goi.lom)
+		retried = true // only once
 		goi.lom.Uncache(true /*delDirty*/)
 		goto do
 	}
