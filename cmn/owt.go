@@ -5,16 +5,19 @@
  */
 package cmn
 
-// Object Write transaction type
+// Object Write Transaction (OWT) is used to control some of the aspects of creating
+// new objects in the cluster.
+// In particular, OwtGet* group below simultaneously specifies cold-GET variations
+// (that all involve reading from a remote backend) and the associated locking
+// (that will always reflect a tradeoff between consistency and parallelism)
 type OWT int
 
 const (
-	OwtPut OWT = iota
-	OwtMigrate
-	OwtFinalize
-
-	// cold (ie., remote) GET variations
-	OwtGetTryLock // if !try-lock(exclusive) { return error }
-	OwtGetLock    // lock(exclusive)
-	OwtGetUpgLock // upgrade(read-lock)
+	OwtPut             OWT = iota // PUT
+	OwtMigrate                    // used when migrating objects during global rebalance
+	OwtFinalize                   // to finalize object archives
+	OwtGetTryLock                 // if !try-lock(exclusive) { return error }; read from remote; ...
+	OwtGetLock                    // lock(exclusive); read from remote; ...
+	OwtGet                        // GET (with upgrading read-lock in the local-write path)
+	OwtGetPrefetchLock            // used for maximum parallelism when prefetching
 )

@@ -52,7 +52,7 @@ func (*dummyBackendProvider) HeadObj(_ ctx, lom *cluster.LOM) (*cmn.ObjAttrs, in
 	return &cmn.ObjAttrs{}, http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }
 
-func (*dummyBackendProvider) GetObj(_ ctx, lom *cluster.LOM) (errCode int, err error) {
+func (*dummyBackendProvider) GetObj(_ ctx, lom *cluster.LOM, _ cmn.OWT) (errCode int, err error) {
 	return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }
 

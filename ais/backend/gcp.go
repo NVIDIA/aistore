@@ -275,7 +275,7 @@ func (*gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.ObjA
 // GET OBJECT //
 ////////////////
 
-func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
+func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (errCode int, err error) {
 	reader, cksumToUse, errCode, err := gcpp.GetObjReader(ctx, lom)
 	if err != nil {
 		return errCode, err
@@ -283,7 +283,7 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 	params := cluster.PutObjectParams{
 		Tag:    fs.WorkfileColdget,
 		Reader: reader,
-		OWT:    cmn.OwtGetUpgLock,
+		OWT:    owt,
 		Cksum:  cksumToUse,
 		Atime:  time.Now(),
 	}

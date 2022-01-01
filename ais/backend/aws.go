@@ -303,7 +303,7 @@ func (*awsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode 
 // GET OBJECT //
 ////////////////
 
-func (awsp *awsProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
+func (awsp *awsProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (errCode int, err error) {
 	var (
 		r        io.ReadCloser
 		expCksum *cos.Cksum
@@ -315,7 +315,7 @@ func (awsp *awsProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 	params := cluster.PutObjectParams{
 		Tag:    fs.WorkfileColdget,
 		Reader: r,
-		OWT:    cmn.OwtGetUpgLock,
+		OWT:    owt,
 		Cksum:  expCksum,
 		Atime:  time.Now(),
 	}

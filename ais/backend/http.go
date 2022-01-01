@@ -157,7 +157,7 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.
 	return
 }
 
-func (hp *httpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
+func (hp *httpProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (errCode int, err error) {
 	reader, _, errCode, err := hp.GetObjReader(ctx, lom)
 	if err != nil {
 		return errCode, err
@@ -165,7 +165,7 @@ func (hp *httpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode i
 	params := cluster.PutObjectParams{
 		Tag:    fs.WorkfileColdget,
 		Reader: reader,
-		OWT:    cmn.OwtGetUpgLock,
+		OWT:    owt,
 		Atime:  time.Now(),
 	}
 	err = hp.t.PutObject(lom, params)

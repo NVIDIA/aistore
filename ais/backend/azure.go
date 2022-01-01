@@ -348,7 +348,7 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn
 // GET OBJECT //
 ////////////////
 
-func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
+func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (errCode int, err error) {
 	reader, cksumToUse, errCode, err := ap.GetObjReader(ctx, lom)
 	if err != nil {
 		return errCode, err
@@ -356,7 +356,7 @@ func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 	params := cluster.PutObjectParams{
 		Tag:    fs.WorkfileColdget,
 		Reader: reader,
-		OWT:    cmn.OwtGetUpgLock,
+		OWT:    owt,
 		Cksum:  cksumToUse,
 		Atime:  time.Now(),
 	}

@@ -194,10 +194,19 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 		return
 	}
 
-	if poi.owt == cmn.OwtGetUpgLock {
-		// see t.GetCold() impl
+	// NOTE: see GetCold() implementation and cmn.OWT
+	switch poi.owt {
+	case cmn.OwtGetTryLock, cmn.OwtGetLock, cmn.OwtGet:
 		debug.AssertFunc(func() bool { _, exclusive := lom.IsLocked(); return exclusive })
-	} else {
+	case cmn.OwtGetPrefetchLock:
+		if !lom.TryLock(true) {
+			if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Warningf("%s(owt=%d) is busy", lom, poi.owt)
+			}
+			return 0, cmn.ErrSkip // e.g. prefetch can skip it and keep on going
+		}
+		defer lom.Unlock(true)
+	default:
 		lom.Lock(true)
 		defer lom.Unlock(true)
 	}
@@ -448,7 +457,8 @@ do:
 			return
 		}
 		goi.lom.SetAtimeUnix(goi.started.UnixNano())
-		if errCode, err = goi.t.GetCold(goi.ctx, goi.lom, cmn.OwtGetUpgLock); err != nil {
+		// (will upgrade rlock => wlock)
+		if errCode, err = goi.t.GetCold(goi.ctx, goi.lom, cmn.OwtGet); err != nil {
 			return
 		}
 	}

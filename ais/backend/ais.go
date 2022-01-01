@@ -419,7 +419,7 @@ func (m *AISBackendProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs,
 	return
 }
 
-func (m *AISBackendProvider) GetObj(_ ctx, lom *cluster.LOM) (errCode int, err error) {
+func (m *AISBackendProvider) GetObj(_ ctx, lom *cluster.LOM, owt cmn.OWT) (errCode int, err error) {
 	var (
 		aisCluster *remAISCluster
 		r          io.ReadCloser
@@ -435,7 +435,7 @@ func (m *AISBackendProvider) GetObj(_ ctx, lom *cluster.LOM) (errCode int, err e
 	params := cluster.PutObjectParams{
 		Tag:    fs.WorkfileColdget,
 		Reader: r,
-		OWT:    cmn.OwtGetUpgLock,
+		OWT:    owt,
 		Atime:  time.Now(),
 	}
 	err = m.t.PutObject(lom, params)

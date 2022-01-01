@@ -37,7 +37,7 @@ type (
 		// with context
 		HeadBucket(ctx context.Context, bck *Bck) (bckProps cos.SimpleKVs, errCode int, err error)
 		HeadObj(ctx context.Context, lom *LOM) (objAttrs *cmn.ObjAttrs, errCode int, err error)
-		GetObj(ctx context.Context, lom *LOM) (errCode int, err error)
+		GetObj(ctx context.Context, lom *LOM, owt cmn.OWT) (errCode int, err error)
 		GetObjReader(ctx context.Context, lom *LOM) (r io.ReadCloser, expectedCksum *cos.Cksum, errCode int, err error)
 	}
 

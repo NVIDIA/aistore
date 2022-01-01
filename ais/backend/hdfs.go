@@ -227,7 +227,7 @@ func (hp *hdfsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errC
 // GET OBJECT //
 ////////////////
 
-func (hp *hdfsProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
+func (hp *hdfsProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (errCode int, err error) {
 	reader, _, errCode, err := hp.GetObjReader(ctx, lom)
 	if err != nil {
 		return errCode, err
@@ -235,7 +235,7 @@ func (hp *hdfsProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode i
 	params := cluster.PutObjectParams{
 		Tag:    fs.WorkfileColdget,
 		Reader: reader,
-		OWT:    cmn.OwtGetUpgLock,
+		OWT:    owt,
 		Atime:  time.Now(),
 	}
 	if err = hp.t.PutObject(lom, params); err != nil {

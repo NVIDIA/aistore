@@ -22,9 +22,9 @@ import (
 	"github.com/NVIDIA/aistore/xreg"
 )
 
-// Assorted list/range xactions: evict, delete, prefetch multiple objects
+// Assorted multi-object (list/range templated) xactions: evict, delete, prefetch multiple objects
 //
-// Supported ranges:
+// Supported range syntax includes:
 //   1. bash-extension style: `file-{0..100}`
 //   2. at-style: `file-@100`
 //   3. if none of the above, fall back to just prefix matching
@@ -351,11 +351,12 @@ func (r *prefetch) do(lom *cluster.LOM, _ *lriterator) {
 		return // simply exists
 	}
 	// NOTE: not setting atime as prefetching does not mean the object is being accessed.
-	// On the other hand, zero atime makes the object's lifespan in the cache too short - the first
-	// housekeeping traversal will remove it. Set special `-now` value for subsequent correction.
-	// (see cluster/lom_cache_hk.go)
+	//       On the other hand, zero atime makes the object's lifespan in the cache too short - the first
+	//       housekeeping traversal will remove it. Using neative `-now` value for subsequent correction
+	//       (see cluster/lom_cache_hk.go).
+	// NOTE: minimal locking, optimistic concurrency
 	lom.SetAtimeUnix(-time.Now().UnixNano())
-	if _, err := r.t.GetCold(r.ctx, lom, cmn.OwtGetTryLock); err != nil {
+	if _, err := r.t.GetCold(r.ctx, lom, cmn.OwtGetPrefetchLock); err != nil {
 		if err != cmn.ErrSkip {
 			glog.Warning(err)
 		}

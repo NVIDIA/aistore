@@ -373,7 +373,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 	}
 	// cold
 	if coldGet {
-		if errCode, err := t.Backend(lom.Bck()).GetObj(lrit.ctx, lom); err != nil {
+		if errCode, err := t.GetCold(lrit.ctx, lom, cmn.OwtGetLock); err != nil {
 			if errCode == http.StatusNotFound || cmn.IsObjNotExist(err) {
 				return
 			}
