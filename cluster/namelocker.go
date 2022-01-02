@@ -90,37 +90,30 @@ func (nlc *nlc) IsLocked(uname string) (rc int, exclusive bool) {
 
 func (nlc *nlc) TryLock(uname string, exclusive bool) bool {
 	nlc.mu.Lock()
+	defer nlc.mu.Unlock()
 
-	realLi, found := nlc.m[uname]
-	li := &lockInfo{}
+	li, found := nlc.m[uname]
+	// wlock
 	if exclusive {
 		if found {
-			nlc.mu.Unlock()
 			return false
 		}
-		nlc.m[uname] = li
-		li.exclusive = true
-		nlc.mu.Unlock()
+		nlc.m[uname] = &lockInfo{exclusive: true}
 		return true
 	}
-
 	// rlock
-	if found {
-		if realLi.exclusive {
-			nlc.mu.Unlock()
-			return false
-		}
-		// cannot take a read lock if there is someone waiting for the upgrade
-		if realLi.waiting > 0 {
-			nlc.mu.Unlock()
-			return false
-		}
-	} else {
-		nlc.m[uname] = li // the 1st rlock
-		realLi = li
+	if !found {
+		nlc.m[uname] = &lockInfo{rc: 1}
+		return true
 	}
-	realLi.rc++
-	nlc.mu.Unlock()
+	if li.exclusive {
+		return false
+	}
+	// can't rlock if there's someone trying to upgrade
+	if li.waiting > 0 {
+		return false
+	}
+	li.rc++
 	return true
 }
 
