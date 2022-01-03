@@ -310,7 +310,7 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 
 func (t *targetrunner) DisableMpath(mpath, reason string) (err error) {
 	glog.Warningf("Disabling mountpath %s: %s", mpath, reason)
-	_, err = t.fsprg.disableMpath(mpath, false /*dont-resilver*/)
+	_, err = t.fsprg.disableMpath(mpath, true /*dont-resilver*/) // NOTE: not resilvering upon FSCH calling
 	return
 }
 

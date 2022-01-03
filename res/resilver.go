@@ -38,8 +38,11 @@ type (
 	Args struct {
 		UUID              string
 		Notif             *xaction.NotifXact
-		Mpath             string
+		Rmi               *fs.MountpathInfo
+		Action            string
+		PostDD            func(rmi *fs.MountpathInfo, action string, err error)
 		SkipGlobMisplaced bool
+		SingleRmiJogger   bool
 	}
 	joggerCtx struct {
 		xres *xs.Resilver
@@ -87,13 +90,11 @@ func (res *Res) RunResilver(args Args) {
 		glog.Error(cmn.ErrNoMountpaths)
 		return
 	}
-
 	xres := xreg.RenewResilver(args.UUID).(*xs.Resilver)
 	if args.Notif != nil {
 		args.Notif.Xact = xres
 		xres.AddNotif(args.Notif)
 	}
-	glog.Infoln(xres.Name())
 
 	// jogger group
 	var (
@@ -111,12 +112,18 @@ func (res *Res) RunResilver(args Args) {
 		}
 	)
 	debug.AssertNoErr(err)
-	if args.Mpath == "" {
-		jg = mpather.NewJoggerGroup(opts)
-		glog.Infof("%s (num=%d)", xres.Name(), jg.Num())
+	debug.Assert(args.PostDD == nil || (args.Action == cmn.ActMountpathDetach || args.Action == cmn.ActMountpathDisable))
+
+	if args.SingleRmiJogger {
+		jg = mpather.NewJoggerGroup(opts, args.Rmi.Path)
+		glog.Infof("%s, action %q, jogger->(%q)", xres.Name(), args.Action, args.Rmi)
 	} else {
-		jg = mpather.NewJoggerGroup(opts, args.Mpath)
-		glog.Infof("%s (mp=%q)", xres.Name(), args.Mpath)
+		jg = mpather.NewJoggerGroup(opts)
+		if args.Rmi != nil {
+			glog.Infof("%s, action %q, rmi %s, num %d", xres.Name(), args.Action, args.Rmi, jg.Num())
+		} else {
+			glog.Infof("%s, num %d", xres.Name(), jg.Num())
+		}
 	}
 
 	// run and block waiting
@@ -124,6 +131,10 @@ func (res *Res) RunResilver(args Args) {
 	jg.Run()
 	err = res.wait(jg, xres)
 
+	// callback to, finally, detach-disable
+	if args.PostDD != nil {
+		args.PostDD(args.Rmi, args.Action, err)
+	}
 	xres.Finish(err)
 }
 
@@ -220,9 +231,8 @@ func (jg *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (errHrw error) {
 		size   int64
 		copied bool
 	)
-	if !lom.TryLock(true) {
-		return nil // must be _busy_
-	}
+	lom.Lock(true) // alternatively, try-lock and skip
+	// cleanup
 	defer func() {
 		lom.Unlock(true)
 		if hlom != nil {

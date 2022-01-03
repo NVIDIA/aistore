@@ -79,82 +79,74 @@ func (g *fsprungroup) _postAdd(action string, mi *fs.MountpathInfo) {
 
 // disableMpath disables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
-func (g *fsprungroup) disableMpath(mpath string, dontResilver bool) (rmi *fs.MountpathInfo, err error) {
-	var nothingToDo bool
-	if nothingToDo, err = g._preDD(cmn.ActMountpathDisable, fs.FlagBeingDisabled, mpath, dontResilver); err != nil {
-		return
-	}
-	if nothingToDo {
-		return
-	}
-	rmi, err = fs.Disable(mpath, g.redistributeMD)
-	if err != nil || rmi == nil {
-		return
-	}
-	g._postDD(cmn.ActMountpathDisable, rmi)
-	return
+func (g *fsprungroup) disableMpath(mpath string, dontResilver bool) (*fs.MountpathInfo, error) {
+	return g.doDD(cmn.ActMountpathDisable, fs.FlagBeingDisabled, mpath, dontResilver)
 }
 
 // detachMpath removes mountpath and notifies necessary runners about the
 // change if the mountpath was actually removed.
-func (g *fsprungroup) detachMpath(mpath string, dontResilver bool) (rmi *fs.MountpathInfo, err error) {
-	var nothingToDo bool
-	if nothingToDo, err = g._preDD(cmn.ActMountpathDetach, fs.FlagBeingDetached, mpath, dontResilver); err != nil {
-		return
-	}
-	if nothingToDo {
-		return
-	}
-	rmi, err = fs.Remove(mpath, g.redistributeMD)
-	if err != nil || rmi == nil {
-		return
-	}
-	g._postDD(cmn.ActMountpathDetach, rmi)
-	return
+func (g *fsprungroup) detachMpath(mpath string, dontResilver bool) (*fs.MountpathInfo, error) {
+	return g.doDD(cmn.ActMountpathDetach, fs.FlagBeingDetached, mpath, dontResilver)
 }
 
-func (g *fsprungroup) _preDD(action string, flags uint64, mpath string, dontResilver bool) (nothingToDo bool, err error) {
-	var (
-		rmi      *fs.MountpathInfo
-		numAvail int
-	)
+func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilver bool) (rmi *fs.MountpathInfo, err error) {
+	var numAvail int
 	if rmi, numAvail, err = fs.BeginDD(action, flags, mpath); err != nil {
 		return
 	}
 	if rmi == nil {
-		nothingToDo = true
 		return
 	}
 	if numAvail == 0 {
-		s := fmt.Sprintf("%s: lost (via %q) the last available mountpath", g.t.si, action)
-		g.t.disable(s) // TODO: handle failure to remove self from Smap
+		s := fmt.Sprintf("%s: lost (via %q) the last available mountpath %q", g.t.si, action, rmi)
+		g.postDD(rmi, action, nil /*error*/) // go ahead to disable/detach
+		g.t.disable(s)                       // TODO: handle an unlikely failure to remove self from Smap
 		return
 	}
 
 	rmi.EvictLomCache()
 
 	if dontResilver || !cmn.GCO.Get().Resilver.Enabled {
-		glog.Infof("%s: %q %s but resilvering is globally disabled, nothing to do", g.t.si, action, rmi)
+		glog.Infof("%s: %q %s but resilvering=(%t, %t)", g.t.si, action, rmi,
+			!dontResilver, cmn.GCO.Get().Resilver.Enabled)
+		g.postDD(rmi, action, nil /*error*/) // ditto (compare with the one below)
 		return
 	}
 
-	if g.t.res.IsActive() {
-		glog.Infof("%s: %q %s - starting to resilver", g.t.si, action, rmi)
-		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go g.t.runResilver(res.Args{}, wg)
-		wg.Wait()
-		return
+	prevActive := g.t.res.IsActive()
+	glog.Infof("%s: %q %s - starting to resilver (prev-is-active=%t)", g.t.si, action, rmi, prevActive)
+	args := res.Args{
+		Rmi:             rmi,
+		Action:          action,
+		PostDD:          g.postDD,    // callback when done
+		SingleRmiJogger: !prevActive, // NOTE: optimization for the special/common case
 	}
-	// otherwise, block on this single mountpath (NOTE: optimization for special case)
-	glog.Infof("%s: %q - resilvering data off of the %s", g.t.si, action, rmi)
-	g.t.runResilver(res.Args{Mpath: rmi.Path}, nil /*wg*/)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go g.t.runResilver(args, wg)
+	wg.Wait()
+
 	return
 }
 
-func (g *fsprungroup) _postDD(action string, mi *fs.MountpathInfo) {
-	fspathsConfigAddDel(mi.Path, false /*add*/)
-	glog.Infof("%s: %s %q done (resilver-is-running=%t)", g.t.si, mi, action, g.t.res.IsActive())
+// is called async when resilvering's done
+func (g *fsprungroup) postDD(rmi *fs.MountpathInfo, action string, err error) {
+	if err != nil {
+		glog.Errorf("%s postDD: failed to %q %s, err %v", g.t.si, action, rmi, err)
+		return
+	}
+	if action == cmn.ActMountpathDetach {
+		_, err = fs.Remove(rmi.Path, g.redistributeMD)
+	} else {
+		debug.Assert(action == cmn.ActMountpathDisable)
+		_, err = fs.Disable(rmi.Path, g.redistributeMD)
+	}
+	if err != nil {
+		glog.Error(err)
+		return
+	}
+	fspathsConfigAddDel(rmi.Path, false /*add*/)
+	glog.Infof("%s postDD: %s %q done", g.t.si, rmi, action)
 }
 
 // store updated fspaths locally as part of the 'OverrideConfigFname'

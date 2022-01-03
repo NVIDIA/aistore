@@ -88,10 +88,14 @@ func (nlc *nlc) IsLocked(uname string) (rc int, exclusive bool) {
 	return int(lockInfo.rc), lockInfo.exclusive
 }
 
-func (nlc *nlc) TryLock(uname string, exclusive bool) bool {
+func (nlc *nlc) TryLock(uname string, exclusive bool) (locked bool) {
 	nlc.mu.Lock()
-	defer nlc.mu.Unlock()
+	locked = nlc.try(uname, exclusive)
+	nlc.mu.Unlock()
+	return
+}
 
+func (nlc *nlc) try(uname string, exclusive bool) bool {
 	li, found := nlc.m[uname]
 	// wlock
 	if exclusive {

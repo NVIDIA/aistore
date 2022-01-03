@@ -261,19 +261,15 @@ func (lom *LOM) String() string {
 	if lom.info != "" {
 		return lom.info
 	}
-	if glog.FastV(4, glog.SmoduleCluster) {
-		return lom._string(lom.bck.String())
-	}
-	return lom._string(lom.bck.Name)
+	return lom._string(bool(glog.FastV(4, glog.SmoduleCluster)))
 }
 
-func (lom *LOM) _string(b string) string {
-	var (
-		a string
-		s = "o[" + b + "/" + lom.ObjName
-	)
-	if glog.FastV(4, glog.SmoduleCluster) {
-		s += fmt.Sprintf(" %s (%s)", lom.mpathInfo.Fs, lom.FQN)
+func (lom *LOM) StringEx() string { return lom._string(true) }
+
+func (lom *LOM) _string(verbose bool) string {
+	var a, s string
+	if verbose {
+		s = "o[" + lom.bck.String() + "/" + lom.ObjName + ", " + lom.mpathInfo.String()
 		if lom.md.Size != 0 {
 			s += " size=" + cos.B2S(lom.md.Size, 1)
 		}
@@ -283,6 +279,8 @@ func (lom *LOM) _string(b string) string {
 		if lom.md.Cksum != nil {
 			s += " " + lom.md.Cksum.String()
 		}
+	} else {
+		s = "o[" + lom.bck.Name + "/" + lom.ObjName
 	}
 	if lom.loaded() {
 		if lom.IsCopy() {
