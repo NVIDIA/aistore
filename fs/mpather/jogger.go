@@ -129,6 +129,8 @@ func NewJoggerGroup(opts *JoggerGroupOpts, selectedMpaths ...string) *JoggerGrou
 	return jg
 }
 
+func (jg *JoggerGroup) Num() int { return len(jg.joggers) }
+
 func (jg *JoggerGroup) Run() {
 	for _, jogger := range jg.joggers {
 		jg.wg.Go(jogger.run)

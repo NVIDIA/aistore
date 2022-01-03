@@ -1730,9 +1730,9 @@ func testNonRedundantMpathDD(t *testing.T, action string) {
 		err = api.DetachMountpath(baseParams, target, mpList.Available[0], false /*dont-resil*/)
 	}
 	tassert.CheckFatal(t, err)
-	time.Sleep(4 * time.Second)
 
 	// Wait for resilvering
+	time.Sleep(time.Second)
 	args := api.XactReqArgs{Node: target.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
@@ -1749,13 +1749,14 @@ func testNonRedundantMpathDD(t *testing.T, action string) {
 		err = api.AttachMountpath(baseParams, target, mpList.Available[0], false /*force*/)
 	}
 	tassert.CheckFatal(t, err)
-	time.Sleep(4 * time.Second)
 
 	// Wait for resilvering
+	time.Sleep(time.Second)
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	m.ensureNoErrors()
+	time.Sleep(4 * time.Second)
 }
 
 // 1. Start rebalance

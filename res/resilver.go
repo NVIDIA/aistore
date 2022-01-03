@@ -26,7 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/xs"
 )
 
-const timedDuration = time.Minute / 2 // see also: timedDuration in tgtgfn.go
+const timedDuration = 4 * time.Second // see also: timedDuration in tgtgfn.go
 
 type (
 	Res struct {
@@ -113,8 +113,10 @@ func (res *Res) RunResilver(args Args) {
 	debug.AssertNoErr(err)
 	if args.Mpath == "" {
 		jg = mpather.NewJoggerGroup(opts)
+		glog.Infof("%s (num=%d)", xres.Name(), jg.Num())
 	} else {
 		jg = mpather.NewJoggerGroup(opts, args.Mpath)
+		glog.Infof("%s (mp=%q)", xres.Name(), args.Mpath)
 	}
 
 	// run and block waiting
