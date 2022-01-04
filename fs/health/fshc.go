@@ -149,7 +149,7 @@ func tryWriteFile(mpath string, fileSize int64) error {
 	}
 	mi, ok := available[mpath]
 	if !ok {
-		glog.Warningf("[fshc] Tried to write %s to non-existing mountpath %q", ftag, mpath)
+		glog.Warningf("Tried to write %s to non-existing mountpath %q", ftag, mpath)
 		return nil
 	}
 
@@ -165,10 +165,10 @@ func tryWriteFile(mpath string, fileSize int64) error {
 
 	defer func() {
 		if err := tmpFile.Close(); err != nil {
-			glog.Errorf("[fshc] Failed to close %s %q, err: %v", ftag, tmpFileName, err)
+			glog.Errorf("Failed to close %s %q, err: %v", ftag, tmpFileName, err)
 		}
 		if err := cos.RemoveFile(tmpFileName); err != nil {
-			glog.Errorf("[fshc] Failed to remove %s %q, err: %v", ftag, tmpFileName, err)
+			glog.Errorf("Failed to remove %s %q, err: %v", ftag, tmpFileName, err)
 		}
 	}()
 
@@ -191,10 +191,10 @@ func tryWriteFile(mpath string, fileSize int64) error {
 func testMountpath(filePath, mountpath string,
 	maxTestFiles, fileSize int) (readFails, writeFails int, accessible bool) {
 	if glog.V(4) {
-		glog.Infof("[fshc] Testing mountpath %q", mountpath)
+		glog.Infof("Testing mountpath %q", mountpath)
 	}
 	if _, err := os.Stat(mountpath); err != nil {
-		glog.Errorf("[fshc] Mountpath %q is unavailable", mountpath)
+		glog.Errorf("Mountpath %q is unavailable", mountpath)
 		return 0, 0, false
 	}
 
@@ -206,7 +206,7 @@ func testMountpath(filePath, mountpath string,
 			totalReads++
 
 			if err := tryReadFile(filePath); err != nil {
-				glog.Errorf("[fshc] Failed to read file (fqn: %q, read_fails: %d, err: %v)", filePath, readFails, err)
+				glog.Errorf("Failed to read file (fqn: %q, read_fails: %d, err: %v)", filePath, readFails, err)
 				if cos.IsIOError(err) {
 					readFails++
 				}
@@ -220,7 +220,7 @@ func testMountpath(filePath, mountpath string,
 		if err == io.EOF {
 			// No files in the mountpath.
 			if glog.V(4) {
-				glog.Infof("[fshc] Mountpath %q contains no files", mountpath)
+				glog.Infof("Mountpath %q contains no files", mountpath)
 			}
 			break
 		}
@@ -229,17 +229,16 @@ func testMountpath(filePath, mountpath string,
 			if cos.IsIOError(err) {
 				readFails++
 			}
-			glog.Errorf(
-				"[fshc] Failed to select a random file (mountpath: %q, read_fails: %d, err: %v)",
+			glog.Errorf("Failed to select a random file (mountpath: %q, read_fails: %d, err: %v)",
 				mountpath, readFails, err,
 			)
 			continue
 		}
 		if glog.V(4) {
-			glog.Infof("[fshc] Reading random file (fqn: %q)", fqn)
+			glog.Infof("Reading random file (fqn: %q)", fqn)
 		}
 		if err = tryReadFile(fqn); err != nil {
-			glog.Errorf("[fshc] Failed to read random file (fqn: %q, err: %v)", fqn, err)
+			glog.Errorf("Failed to read file (fqn: %q, err: %v)", fqn, err)
 			if cos.IsIOError(err) {
 				readFails++
 			}
@@ -250,7 +249,7 @@ func testMountpath(filePath, mountpath string,
 	for totalWrites < maxTestFiles {
 		totalWrites++
 		if err := tryWriteFile(mountpath, int64(fileSize)); err != nil {
-			glog.Errorf("[fshc] Failed to write to a random file (mountpath: %q, err: %v)", mountpath, err)
+			glog.Errorf("Failed to write file (mountpath: %q, err: %v)", mountpath, err)
 			if cos.IsIOError(err) {
 				writeFails++
 			}
@@ -258,8 +257,7 @@ func testMountpath(filePath, mountpath string,
 	}
 
 	if readFails != 0 || writeFails != 0 {
-		glog.Errorf(
-			"[fshc] Mountpath results (mountpath: %q, read_fails: %d, total_reads: %d, write_fails: %d, total_writes: %d)",
+		glog.Errorf("Mountpath results (mountpath: %q, read_fails: %d, total_reads: %d, write_fails: %d, total_writes: %d)",
 			mountpath, readFails, totalReads, writeFails, totalWrites,
 		)
 	}

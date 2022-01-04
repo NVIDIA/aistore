@@ -322,13 +322,13 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 
 	tutils.CreateBucketWithCleanup(t, md.proxyURL, md.bck, nil)
 	selectedTarget, selectedMpath, selectedMpathList := md.randomTargetMpath()
-	tlog.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
+	tlog.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget.StringEx())
 	defer func() {
 		if err := api.DetachMountpath(md.baseParams, selectedTarget, selectedMpath, true /*dont-resil*/); err != nil {
-			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget, err)
+			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget.StringEx(), err)
 		}
 		if err := api.AttachMountpath(md.baseParams, selectedTarget, selectedMpath, false /*force*/); err != nil {
-			t.Logf("Failed to add mpath %s of %s: %v", selectedMpath, selectedTarget, err)
+			t.Logf("Failed to add mpath %s of %s: %v", selectedMpath, selectedTarget.StringEx(), err)
 		}
 
 		tutils.WaitForRebalAndResil(t, md.baseParams, rebalanceTimeout)
@@ -373,14 +373,14 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 	defer tutils.SetClusterConfig(t, cos.SimpleKVs{"fshc.enabled": "true"})
 
 	selectedTarget, selectedMpath, selectedMap := md.randomTargetMpath()
-	tlog.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
+	tlog.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget.StringEx())
 	tutils.CreateBucketWithCleanup(t, md.proxyURL, md.bck, nil)
 	defer func() {
 		if err := api.DetachMountpath(md.baseParams, selectedTarget, selectedMpath, true /*dont-resil*/); err != nil {
-			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget, err)
+			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget.StringEx(), err)
 		}
 		if err := api.AttachMountpath(md.baseParams, selectedTarget, selectedMpath, false /*force*/); err != nil {
-			t.Logf("Failed to add mpath %s of %s: %v", selectedMpath, selectedTarget, err)
+			t.Logf("Failed to add mpath %s of %s: %v", selectedMpath, selectedTarget.StringEx(), err)
 		}
 
 		tutils.WaitForRebalAndResil(t, md.baseParams, rebalanceTimeout)
@@ -476,7 +476,7 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 		t.Fatalf("Target %s does not have available mountpaths", target)
 	}
 
-	tlog.Logf("Removing all mountpaths from target: %s\n", target)
+	tlog.Logf("Removing all mountpaths from target: %s\n", target.StringEx())
 	for _, mpath := range oldMpaths.Available {
 		err = api.DisableMountpath(baseParams, target, mpath, true /*dont-resil*/)
 		tassert.CheckFatal(t, err)

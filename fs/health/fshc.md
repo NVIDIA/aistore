@@ -3,7 +3,7 @@ Filesystem Health Checker (FSHC)
 
 ## Overview
 
-FSHC monitors and manages filesystems used by AIStore. Every time AIStore triggers an IO error when reading or writing data, FSHC checks health of the filesystem. Checking a filesystem includes testing the filesystem availability, reading existing data, and creating temporary files. A filesystem that does not pass the test is automatically disabled and excluded from all next AIStore operations. Once a disabled filesystem is repaired, it can be marked as available for AIStore again.
+FSHC monitors and manages filesystems used by AIStore. Every time AIStore triggers an IO error, FSHC checks health of the corresponding filesystem. Checking includes testing the filesystem availability, reading existing data, and creating temporary files. A filesystem that does not pass the test is automatically disabled and excluded from all next AIStore operations. Once a disabled filesystem is repaired, it can be marked as available for AIStore again.
 
 ### How FSHC detects a faulty filesystem
 
