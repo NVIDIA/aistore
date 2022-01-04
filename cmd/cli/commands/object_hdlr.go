@@ -302,13 +302,13 @@ func putRegularObjHandler(c *cli.Context) (err error) {
 	)
 
 	if c.NArg() < 1 {
-		return missingArgumentsError(c, "file to upload", "object name in the form bucket/[object]")
+		return missingArgumentsError(c, "file to put", "object name in the form bucket/[object]")
 	}
 	if c.NArg() < 2 {
 		return missingArgumentsError(c, "object name in the form bucket/[object]")
 	}
 	if c.NArg() > 2 {
-		return incorrectUsageMsg(c, "too many arguments or unrecognized option '%+v'", c.Args()[2:])
+		return incorrectUsageMsg(c, "too many arguments _or_ unrecognized option '%+v'", c.Args()[2:])
 	}
 	if bck, objName, err = parseBckObjectURI(c, uri, true /*optional objName*/); err != nil {
 		return
@@ -350,7 +350,7 @@ func concatHandler(c *cli.Context) (err error) {
 		objName string
 	)
 	if c.NArg() < 1 {
-		return missingArgumentsError(c, "at least one file to upload", "object name in the form bucket/[object]")
+		return missingArgumentsError(c, "at least one file to put", "object name in the form bucket/[object]")
 	}
 	if c.NArg() < 2 {
 		return missingArgumentsError(c, "object name in the form bucket/object")

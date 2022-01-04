@@ -508,10 +508,10 @@ func (r *registry) renewLocked(entry Renewable, flt XactFilter, bck *cluster.Bck
 			return RenewRes{Entry: prevEntry, Err: err, UUID: xprev.ID()}
 		}
 		debug.Assert(wpr == WprAbort || wpr == WprKeepAndStartNew)
-	}
-	if wpr == WprAbort {
-		xprev.Abort(nil)
-		time.Sleep(waitAbortDone) // TODO: better
+		if wpr == WprAbort {
+			xprev.Abort(cmn.ErrXactRenew)
+			time.Sleep(waitAbortDone) // TODO: better
+		}
 	}
 	if err = entry.Start(); err != nil {
 		return RenewRes{Entry: nil, Err: err, UUID: ""}

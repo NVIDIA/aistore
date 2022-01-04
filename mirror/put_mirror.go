@@ -186,7 +186,7 @@ func (r *XactPut) stop() (err error) {
 	}
 	if n > 0 {
 		r.SubPending(n)
-		err = fmt.Errorf("%s: dropped %d object(s)", r, n)
+		err = fmt.Errorf("%s: dropped (ie., failed to mirror) %d object%s", r, n, cos.Plural(n))
 	}
 	return err
 }

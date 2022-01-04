@@ -305,7 +305,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 	if rtd.rename {
 		// Rename bucket fails when rebalance or resilver is running.
 		// Ensure rebalance or resilver isn't running before performing a rename.
-		tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+		tutils.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
 
 		_, err := api.RenameBucket(baseParams, rtd.bck, rtd.renamedBck)
 		tassert.CheckFatal(t, err)
@@ -514,7 +514,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	m.stopGets()
 
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	tutils.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
 
 	clusterStats = tutils.GetClusterStats(t, m.proxyURL)
 	for targetID, targetStats := range clusterStats.Target {

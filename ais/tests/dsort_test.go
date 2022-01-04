@@ -1356,7 +1356,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 
 			waitForDSortPhase(t, m.proxyURL, df.managerUUID, phase, func() {
 				// It may require calling AbortXaction(rebalance) &
-				// WaitForRebalanceToComplete() before unregistering
+				// WaitForRebalAndResil() before unregistering
 				target = m.startMaintenanceNoRebalance()
 			})
 
@@ -1438,7 +1438,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 
 					t.Cleanup(func() {
 						// Wait for any resilver that might be still running.
-						tutils.WaitForRebalanceToComplete(t, df.baseParams)
+						tutils.WaitForRebalAndResil(t, df.baseParams)
 
 						for target, mpath := range mountpaths {
 							if adding {
@@ -1454,7 +1454,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 							}
 						}
 
-						tutils.WaitForRebalanceToComplete(t, df.baseParams)
+						tutils.WaitForRebalAndResil(t, df.baseParams)
 					})
 
 					tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
@@ -1522,7 +1522,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 			tlog.Logln("starting distributed sort...")
 			df.start()
 
-			defer tutils.WaitForRebalanceToComplete(t, df.baseParams)
+			defer tutils.WaitForRebalAndResil(t, df.baseParams)
 
 			waitForDSortPhase(t, m.proxyURL, df.managerUUID, dsort.ExtractionPhase, func() {
 				m.stopMaintenance(target)

@@ -150,6 +150,7 @@ var (
 	ErrNotEnoughTargets = errors.New("not enough target nodes")
 	ErrETLMissingUUID   = errors.New("ETL UUID can't be empty")
 	ErrNoMountpaths     = errors.New("no mountpaths")
+	ErrXactRenew        = errors.New("abort previous, start new")
 )
 
 // ais ErrBucketAlreadyExists
@@ -408,12 +409,20 @@ func (e *ErrAborted) Error() (s string) {
 	return
 }
 
-func IsErrAborted(err error) bool {
-	if _, ok := err.(*ErrAborted); ok {
-		return true
+func (e *ErrAborted) Unwrap() (err error) { return e.err }
+
+func IsErrAborted(err error) bool { return AsErrAborted(err) != nil }
+
+func AsErrAborted(err error) (errAborted *ErrAborted) {
+	var ok bool
+	if errAborted, ok = err.(*ErrAborted); ok {
+		return
 	}
 	target := &ErrAborted{}
-	return errors.As(err, &target)
+	if errors.As(err, &target) {
+		errAborted = target
+	}
+	return
 }
 
 // ErrNotFound

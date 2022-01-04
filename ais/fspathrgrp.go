@@ -114,7 +114,11 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 	}
 
 	prevActive := g.t.res.IsActive()
-	glog.Infof("%s: %q %s - starting to resilver (prev-is-active=%t)", g.t.si, action, rmi, prevActive)
+	if prevActive {
+		glog.Infof("%s: %q %s: starting to resilver when previous (resilvering) is active", g.t.si, action, rmi)
+	} else {
+		glog.Infof("%s: %q %s: starting to resilver", g.t.si, action, rmi)
+	}
 	args := res.Args{
 		Rmi:             rmi,
 		Action:          action,
@@ -129,12 +133,18 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 	return
 }
 
-// is called async when resilvering's done
 func (g *fsprungroup) postDD(rmi *fs.MountpathInfo, action string, err error) {
+	// 1. error
 	if err != nil {
-		glog.Errorf("%s postDD: failed to %q %s, err %v", g.t.si, action, rmi, err)
+		if errAborted := cmn.AsErrAborted(err); errAborted == nil {
+			glog.Errorf("%s: failed to %q %s, err %v", g.t.si, action, rmi, err)
+		} else {
+			glog.Errorf("%s: %q %s: %v (cause %v)", g.t.si, action, rmi, err, errAborted.Unwrap())
+		}
 		return
 	}
+
+	// 2. this action
 	if action == cmn.ActMountpathDetach {
 		_, err = fs.Remove(rmi.Path, g.redistributeMD)
 	} else {
@@ -146,7 +156,29 @@ func (g *fsprungroup) postDD(rmi *fs.MountpathInfo, action string, err error) {
 		return
 	}
 	fspathsConfigAddDel(rmi.Path, false /*add*/)
-	glog.Infof("%s postDD: %s %q done", g.t.si, rmi, action)
+	glog.Infof("%s: %s %q done", g.t.si, rmi, action)
+
+	// 3. the case of multiple overlapping detach _or_ disable operations
+	//    (ie., commit previously aborted xs.Resilver, if any)
+	availablePaths := fs.GetAvail()
+	for _, mi := range availablePaths {
+		if !mi.IsAnySet(fs.FlagWaitingDD) {
+			continue
+		}
+		// TODO: assumption that `action` is the same for all
+		if action == cmn.ActMountpathDetach {
+			_, err = fs.Remove(mi.Path, g.redistributeMD)
+		} else {
+			debug.Assert(action == cmn.ActMountpathDisable)
+			_, err = fs.Disable(mi.Path, g.redistributeMD)
+		}
+		if err != nil {
+			glog.Error(err)
+			return
+		}
+		fspathsConfigAddDel(mi.Path, false /*add*/)
+		glog.Infof("%s: %s %q - was previously aborted and now done", g.t.si, mi, action)
+	}
 }
 
 // store updated fspaths locally as part of the 'OverrideConfigFname'

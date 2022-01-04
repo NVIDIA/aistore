@@ -2400,7 +2400,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	}
 
 	tlog.Logf("Wait for resilvering to complete...\n")
-	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	tutils.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
 
 	msg := &cmn.ListObjsMsg{Props: cmn.GetPropsSize}
 	resEC, err := api.ListObjects(baseParams, bck, msg, 0)
@@ -2458,7 +2458,7 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 			o.parityCnt = test.parity
 			o.dataCnt = test.data
 			newLocalBckWithProps(t, baseParams, bckEC, defaultECBckProps(o), o)
-			defer tutils.WaitForRebalanceToComplete(t, baseParams)
+			defer tutils.WaitForRebalAndResil(t, baseParams)
 			ecAndRegularUnregisterWhileRebalancing(t, o, bckEC)
 
 			// Make sure that the next test gets accurate (without any intermediate modifications) smap.
@@ -2555,7 +2555,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 
 	err = api.AbortXaction(baseParams, xactArgs)
 	tassert.CheckError(t, err)
-	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	tutils.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
 	tassert.CheckError(t, err)
 
 	tlog.Logf("Put %s in maintenance\n", tgtGone.StringEx())

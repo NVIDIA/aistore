@@ -501,7 +501,7 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 			curwt += sleep
 		}
 		if cnt > 0 {
-			glog.Warningf("%s: timed out waiting for %d ACK(s)", logHdr, cnt)
+			glog.Warningf("%s: timed out waiting for %d ACK%s", logHdr, cnt, cos.Plural(cnt))
 		}
 		if reb.xact().Aborted() {
 			return

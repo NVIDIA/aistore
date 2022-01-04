@@ -402,7 +402,7 @@ func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) (err err
 
 	// ask a user for confirmation
 	if !flagIsSet(c, yesFlag) {
-		if ok := confirm(c, fmt.Sprintf("Proceed uploading to bucket %q?", bck)); !ok {
+		if ok := confirm(c, fmt.Sprintf("Proceed putting to bucket %q?", bck)); !ok {
 			return errors.New("operation canceled")
 		}
 	}
@@ -720,10 +720,11 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 	}
 
 	if failed := errCount.Load(); failed != 0 {
-		return fmt.Errorf("failed to upload: %d object(s)", failed)
+		return fmt.Errorf("failed to put %d object%s", failed, cos.Plural(int(failed)))
 	}
 
-	_, _ = fmt.Fprintf(c.App.Writer, "%d objects put into %q bucket\n", len(p.files), p.bck)
+	_, _ = fmt.Fprintf(c.App.Writer, "put %d object%s into %q bucket\n",
+		len(p.files), cos.Plural(len(p.files)), p.bck)
 	return nil
 }
 

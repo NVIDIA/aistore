@@ -500,7 +500,7 @@ func (k *keepalive) register(sendKeepalive func(time.Duration) (int, error), pri
 			}
 			timeout = k.updateTimeoutForDaemon(primaryID, delta)
 			if err == nil {
-				glog.Infof("%s: OK after %d attempt(s)", hname, i)
+				glog.Infof("%s: OK after %d attempt%s", hname, i, cos.Plural(i))
 				return
 			}
 			if i == kaNumRetries {

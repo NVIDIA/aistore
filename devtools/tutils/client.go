@@ -471,7 +471,7 @@ func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList []string) 
 // If they were not started, this function treats them as completed
 // and returns. If timeout set, if any of rebalances doesn't complete before timeout
 // the function ends with fatal.
-func WaitForRebalanceToComplete(t testing.TB, baseParams api.BaseParams, timeouts ...time.Duration) {
+func WaitForRebalAndResil(t testing.TB, baseParams api.BaseParams, timeouts ...time.Duration) {
 	var (
 		timeout = 2 * time.Minute
 		wg      = &sync.WaitGroup{}

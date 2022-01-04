@@ -102,7 +102,8 @@ func isTestPassed(mpath string, readErrors, writeErrors int, available bool) (pa
 
 	passed = readErrors < config.ErrorLimit && writeErrors < config.ErrorLimit
 	if !passed {
-		err = fmt.Errorf("too many errors: %d read error(s), %d write error(s)", readErrors, writeErrors)
+		err = fmt.Errorf("too many errors: %d read error%s, %d write error%s",
+			readErrors, cos.Plural(readErrors), writeErrors, cos.Plural(writeErrors))
 	}
 	return passed, err
 }

@@ -142,7 +142,7 @@ func BenchmarkECRebalance(b *testing.B) {
 				args := &cmn.ActValRmNode{DaemonID: tgtLost.ID()}
 				_, err = api.StopMaintenance(baseParams, args)
 				tassert.CheckError(b, err)
-				tutils.WaitForRebalanceToComplete(b, baseParams, rebalanceTime)
+				tutils.WaitForRebalAndResil(b, baseParams, rebalanceTime)
 			})
 		}
 	}
@@ -179,7 +179,7 @@ func BenchmarkRebalance(b *testing.B) {
 			args := &cmn.ActValRmNode{DaemonID: tgtLost.ID()}
 			_, err := api.StopMaintenance(baseParams, args)
 			tassert.CheckError(b, err)
-			tutils.WaitForRebalanceToComplete(b, baseParams, rebalanceTime)
+			tutils.WaitForRebalAndResil(b, baseParams, rebalanceTime)
 		})
 	}
 }

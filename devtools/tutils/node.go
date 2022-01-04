@@ -654,7 +654,7 @@ func EnsureOrigClusterState(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	if tgtCnt != afterTargetCnt {
-		WaitForRebalanceToComplete(t, BaseAPIParams(proxyURL))
+		WaitForRebalAndResil(t, BaseAPIParams(proxyURL))
 	}
 }
 

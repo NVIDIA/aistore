@@ -450,7 +450,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	pid, cmd, err := tutils.ShutdownNode(t, baseParams, node)
 	tassert.CheckFatal(t, err)
 	if nodeType == cmn.Target {
-		tutils.WaitForRebalanceToComplete(t, baseParams)
+		tutils.WaitForRebalAndResil(t, baseParams)
 	}
 
 	// 2. Make sure the node has been shut down.
@@ -478,7 +478,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	tassert.CheckError(t, err)
 
 	if nodeType == cmn.Target {
-		tutils.WaitForRebalanceToComplete(t, baseParams)
+		tutils.WaitForRebalAndResil(t, baseParams)
 	}
 }
 
@@ -536,11 +536,11 @@ func TestShutdownListObjects(t *testing.T) {
 			m.smap.Version, 0, origTargetCount)
 		tassert.CheckError(t, err)
 
-		tutils.WaitForRebalanceToComplete(t, baseParams)
+		tutils.WaitForRebalAndResil(t, baseParams)
 	})
 
 	// Wait for reb, shutdown to complete.
-	tutils.WaitForRebalanceToComplete(t, baseParams)
+	tutils.WaitForRebalAndResil(t, baseParams)
 	tassert.CheckError(t, err)
 	err = tutils.WaitForNodeToTerminate(pid, nodeOffTimeout)
 	tassert.CheckError(t, err)

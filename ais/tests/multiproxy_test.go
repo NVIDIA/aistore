@@ -220,7 +220,7 @@ killRestore:
 	}
 
 	if nodeType == cmn.Target {
-		tutils.WaitForRebalanceToComplete(t, tutils.BaseAPIParams(proxyURL))
+		tutils.WaitForRebalAndResil(t, tutils.BaseAPIParams(proxyURL))
 	}
 }
 
@@ -277,7 +277,7 @@ func primaryAndTargetCrash(t *testing.T) {
 	_, err = tutils.WaitForClusterState(newPrimaryURL, "restore proxy and target",
 		smap.Version, origProxyCount, origTargetCount)
 	tassert.CheckFatal(t, err)
-	tutils.WaitForRebalanceToComplete(t, tutils.BaseAPIParams(newPrimaryURL))
+	tutils.WaitForRebalAndResil(t, tutils.BaseAPIParams(newPrimaryURL))
 }
 
 // A very simple test to check if a primary proxy can detect non-primary one
@@ -510,7 +510,7 @@ func targetRejoin(t *testing.T) {
 	if _, ok := smap.Tmap[id]; !ok {
 		t.Fatalf("Restarted target %s did not rejoin the cluster", id)
 	}
-	tutils.WaitForRebalanceToComplete(t, tutils.BaseAPIParams(proxyURL))
+	tutils.WaitForRebalAndResil(t, tutils.BaseAPIParams(proxyURL))
 }
 
 // crashAndFastRestore kills the primary and restores it before a new leader is elected
@@ -894,7 +894,7 @@ func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
 		tassert.CheckError(t, err)
 	}
 
-	tutils.WaitForRebalanceToComplete(t, tutils.BaseAPIParams(proxyURL))
+	tutils.WaitForRebalAndResil(t, tutils.BaseAPIParams(proxyURL))
 }
 
 // proxyStress starts a group of workers doing put/get/del in sequence against primary proxy,

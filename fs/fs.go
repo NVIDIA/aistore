@@ -890,7 +890,7 @@ func Disable(mpath string, cb ...func()) (disabledMpath *MountpathInfo, err erro
 			if len(cb) > 0 {
 				cb[0]()
 			}
-			glog.Infof("disabled mountpath %s (%d remain(s) active)", mi, l)
+			glog.Infof("disabled mountpath %s (%d remain%s active)", mi, l, cos.Plural(l))
 		}
 		return mi, nil
 	}

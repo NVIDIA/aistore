@@ -326,3 +326,11 @@ func FreeMemToOS(d ...time.Duration) {
 	runtime.GC()
 	debug.FreeOSMemory()
 }
+
+// (common use)
+func Plural(num int) (s string) {
+	if num > 1 {
+		s = "(s)"
+	}
+	return
+}

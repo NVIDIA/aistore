@@ -6,7 +6,7 @@ package cos
 
 import "strings"
 
-// based on wikipedia article: https://en.wikipedia.org/wiki/Damerau–Levenshtein_distance
+// based on Wikipedia https://en.wikipedia.org/wiki/Damerau–Levenshtein_distance
 func DamerauLevenstheinDistance(s, t string) int {
 	distances := make([][]int, len(s)+1)
 	for i := range distances {
