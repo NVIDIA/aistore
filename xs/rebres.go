@@ -41,6 +41,7 @@ type (
 var (
 	_ cluster.Xact   = (*Rebalance)(nil)
 	_ xreg.Renewable = (*rebFactory)(nil)
+
 	_ cluster.Xact   = (*Resilver)(nil)
 	_ xreg.Renewable = (*resFactory)(nil)
 )

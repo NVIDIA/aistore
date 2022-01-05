@@ -183,10 +183,10 @@ func (r *ObjListXact) Run(*sync.WaitGroup) {
 			r.msg.PageSize = msg.PageSize
 			r.respCh <- r.dispatchRequest()
 		case <-r.IdleTimer():
-			r.stop()
+			r.stop(nil)
 			return
-		case <-r.ChanAbort():
-			r.stop()
+		case errCause := <-r.ChanAbort():
+			r.stop(errCause)
 			return
 		}
 	}
@@ -199,13 +199,13 @@ func (r *ObjListXact) stopWalk() {
 	}
 }
 
-func (r *ObjListXact) stop() {
+func (r *ObjListXact) stop(err error) {
 	r.DemandBase.Stop()
 	r.stopCh.Close()
 	// NOTE: Not closing `r.workCh` as it potentially could result in "sending on closed channel" panic.
 	close(r.respCh)
 	r.stopWalk()
-	r.Finish(nil)
+	r.Finish(err)
 }
 
 func (r *ObjListXact) dispatchRequest() *Resp {

@@ -238,7 +238,10 @@ func (r *XactCreateArchMultiObj) Run(wg *sync.WaitGroup) {
 			}
 		case <-r.IdleTimer():
 			goto fin
-		case <-r.ChanAbort():
+		case errCause := <-r.ChanAbort():
+			if err == nil {
+				err = errCause
+			}
 			goto fin
 		}
 	}

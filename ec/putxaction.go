@@ -196,7 +196,7 @@ func (r *XactPut) mainLoop() {
 	}
 }
 
-func (r *XactPut) Stop(error) { r.Abort(nil) }
+func (r *XactPut) Stop(err error) { r.Abort(err) }
 
 func (r *XactPut) stop() {
 	r.DemandBase.Stop()

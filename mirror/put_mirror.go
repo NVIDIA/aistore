@@ -130,12 +130,13 @@ func (r *XactPut) Run(*sync.WaitGroup) {
 			err := r.stop()
 			r.Finish(err)
 			return
-		case <-r.ChanAbort():
+		case errCause := <-r.ChanAbort():
 			if err := r.stop(); err != nil {
-				r.Finish(err)
+				glog.Errorf("%s aborted (cause %v), traversal err %v", r, errCause, err)
 			} else {
-				r.Finish(cmn.NewErrAborted(r.Name(), "", nil))
+				glog.Infof("%s aborted (cause %v)", r, errCause)
 			}
+			r.Finish(cmn.NewErrAborted(r.Name(), "", errCause))
 			return
 		}
 	}

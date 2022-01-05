@@ -143,13 +143,13 @@ func (res *Res) wait(jg *mpather.JoggerGroup, xres *xs.Resilver) (err error) {
 	tsi := res.t.Snode()
 	for {
 		select {
-		case <-xres.ChanAbort():
+		case errCause := <-xres.ChanAbort():
 			if err = jg.Stop(); err != nil {
-				glog.Errorf("%s: %s aborted, err: %v", tsi, xres, err)
+				glog.Errorf("%s: %s aborted (cause %v), traversal err %v", tsi, xres, errCause, err)
 			} else {
-				glog.Infof("%s: %s aborted", tsi, xres)
+				glog.Infof("%s: %s aborted (cause %v)", tsi, xres, errCause)
 			}
-			return cmn.NewErrAborted(xres.Name(), "", err)
+			return cmn.NewErrAborted(xres.Name(), "", errCause)
 		case <-jg.ListenFinished():
 			if err = fs.RemoveMarker(cmn.ResilverMarker); err == nil {
 				glog.Infof("%s: %s removed marker ok", tsi, xres)
@@ -232,6 +232,7 @@ func (jg *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (errHrw error) {
 		copied bool
 	)
 	lom.Lock(true) // alternatively, try-lock and skip
+
 	// cleanup
 	defer func() {
 		lom.Unlock(true)

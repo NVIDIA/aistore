@@ -81,7 +81,10 @@ type (
 )
 
 // interface guard
-var _ xreg.Renewable = (*clnFactory)(nil)
+var (
+	_ xreg.Renewable = (*clnFactory)(nil)
+	_ cluster.Xact   = (*XactCln)(nil)
+)
 
 func (*XactCln) Run(*sync.WaitGroup) { debug.Assert(false) }
 
@@ -551,8 +554,8 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 func (j *clnJ) yieldTerm() error {
 	xcln := j.ini.Xaction
 	select {
-	case <-xcln.ChanAbort():
-		return cmn.NewErrAborted(xcln.Name(), "", nil)
+	case errCause := <-xcln.ChanAbort():
+		return cmn.NewErrAborted(xcln.Name(), "", errCause)
 	case <-j.stopCh:
 		return cmn.NewErrAborted(xcln.Name(), "", nil)
 	default:

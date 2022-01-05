@@ -467,7 +467,7 @@ func (t *targetrunner) Stop(err error) {
 		f = glog.Warningf
 	}
 	f("Stopping %s, err: %v", t.si, err)
-	xreg.AbortAll()
+	xreg.AbortAll(err)
 	t.httprunner.stop(t.netServ.pub.s != nil && !isErrNoUnregister(err) /*rm from Smap*/)
 }
 

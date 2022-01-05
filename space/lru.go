@@ -104,7 +104,10 @@ type (
 )
 
 // interface guard
-var _ xreg.Renewable = (*lruFactory)(nil)
+var (
+	_ xreg.Renewable = (*lruFactory)(nil)
+	_ cluster.Xact   = (*XactLRU)(nil)
+)
 
 ////////////////
 // lruFactory //
@@ -442,8 +445,8 @@ func (j *lruJ) evictSize() (err error) {
 func (j *lruJ) yieldTerm() error {
 	xlru := j.ini.Xaction
 	select {
-	case <-xlru.ChanAbort():
-		return cmn.NewErrAborted(xlru.Name(), "", nil)
+	case errCause := <-xlru.ChanAbort():
+		return cmn.NewErrAborted(xlru.Name(), "", errCause)
 	case <-j.stopCh:
 		return cmn.NewErrAborted(xlru.Name(), "", nil)
 	default:

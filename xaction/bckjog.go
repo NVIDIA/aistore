@@ -28,9 +28,9 @@ func (r *XactBckJog) Target() cluster.Target { return r.t }
 func (r *XactBckJog) Wait() error {
 	for {
 		select {
-		case <-r.ChanAbort():
+		case errCause := <-r.ChanAbort():
 			r.joggers.Stop()
-			return cmn.NewErrAborted(r.Name(), "x-bck-jog", nil)
+			return cmn.NewErrAborted(r.Name(), "x-bck-jog", errCause)
 		case <-r.joggers.ListenFinished():
 			return r.joggers.Stop()
 		}

@@ -81,8 +81,8 @@ Loop:
 		case <-d.parent.IdleTimer():
 			glog.Infof("%s has timed out. Exiting...", d.parent.Name())
 			break Loop
-		case <-d.parent.ChanAbort():
-			glog.Infof("%s has been aborted. Exiting...", d.parent.Name())
+		case errCause := <-d.parent.ChanAbort():
+			glog.Infof("%s has been aborted (cause %v). Exiting...", d.parent.Name(), errCause)
 			break Loop
 		case <-ctx.Done():
 			break Loop
@@ -98,8 +98,8 @@ Loop:
 			case <-d.parent.IdleTimer():
 				glog.Infof("%s has timed out. Exiting...", d.parent.Name())
 				break Loop
-			case <-d.parent.ChanAbort():
-				glog.Infof("%s has been aborted. Exiting...", d.parent.Name())
+			case errCause := <-d.parent.ChanAbort():
+				glog.Infof("%s has been aborted (cause %v). Exiting...", d.parent.Name(), errCause)
 				break Loop
 			case <-ctx.Done():
 				break Loop

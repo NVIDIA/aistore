@@ -96,10 +96,10 @@ func (r *XactRespond) Run(*sync.WaitGroup) {
 				glog.Info(s)
 			}
 		case <-r.IdleTimer():
-			r.stop()
+			r.stop(nil)
 			return
-		case <-r.ChanAbort():
-			r.stop()
+		case errCause := <-r.ChanAbort():
+			r.stop(errCause)
 			return
 		}
 	}
@@ -242,9 +242,9 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 
 func (r *XactRespond) Stop(err error) { r.Abort(err) }
 
-func (r *XactRespond) stop() {
+func (r *XactRespond) stop(err error) {
 	r.DemandBase.Stop()
-	r.Finish(nil)
+	r.Finish(err)
 }
 
 func (r *XactRespond) Snap() cluster.XactionSnap { return r.DemandBase.ExtSnap() }

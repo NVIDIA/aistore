@@ -532,6 +532,10 @@ func (mi *MountpathInfo) CheckDisks() (err error) {
 	return
 }
 
+func (mi *MountpathInfo) AbortDD() {
+	cos.ClearfAtomic(&mi.flags, FlagWaitingDD)
+}
+
 /////////////////////
 // MountedFS & MPI //
 /////////////////////

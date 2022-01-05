@@ -37,7 +37,7 @@ type (
 			inobjs   atomic.Int64 // receive
 			inbytes  atomic.Int64
 		}
-		abrt    chan struct{}
+		abrt    chan error
 		aborted atomic.Bool
 		notif   *NotifXact
 	}
@@ -65,7 +65,7 @@ func (xact *XactBase) InitBase(id, kind string, bck *cluster.Bck) {
 	debug.AssertMsg(kind == cmn.ActETLInline || cos.IsValidUUID(id) || IsValidRebID(id), id)
 	debug.AssertMsg(IsValidKind(kind), kind)
 	xact.id, xact.kind = id, kind
-	xact.abrt = make(chan struct{})
+	xact.abrt = make(chan error, 1)
 	xact.bck = bck
 	if xact.bck != nil {
 		xact.origBck = bck.Bck
@@ -73,12 +73,12 @@ func (xact *XactBase) InitBase(id, kind string, bck *cluster.Bck) {
 	xact.setStartTime(time.Now())
 }
 
-func (xact *XactBase) ID() string                 { return xact.id }
-func (xact *XactBase) Kind() string               { return xact.kind }
-func (xact *XactBase) Bck() *cluster.Bck          { return xact.bck }
-func (xact *XactBase) Finished() bool             { return xact.eutime.Load() != 0 }
-func (xact *XactBase) ChanAbort() <-chan struct{} { return xact.abrt }
-func (xact *XactBase) Aborted() bool              { return xact.aborted.Load() }
+func (xact *XactBase) ID() string              { return xact.id }
+func (xact *XactBase) Kind() string            { return xact.kind }
+func (xact *XactBase) Bck() *cluster.Bck       { return xact.bck }
+func (xact *XactBase) Finished() bool          { return xact.eutime.Load() != 0 }
+func (xact *XactBase) ChanAbort() <-chan error { return xact.abrt }
+func (xact *XactBase) Aborted() bool           { return xact.aborted.Load() }
 
 func (xact *XactBase) AbortedAfter(d time.Duration) (aborted bool) {
 	sleep := cos.CalcProbeFreq(d)
@@ -197,6 +197,7 @@ func (xact *XactBase) Abort(err error) (ok bool) {
 		glog.Warningf("%s already aborted", xact)
 		return
 	}
+	xact.abrt <- err
 	close(xact.abrt)
 	if xact.Kind() != cmn.ActList {
 		glog.Infof("%s aborted(%v)", xact, err)

@@ -5,6 +5,7 @@
 package xs_test
 
 import (
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -42,7 +43,7 @@ func TestXactionRenewLRU(t *testing.T) {
 	xreg.TestReset()
 
 	xreg.RegNonBckXact(&space.TestFactory{})
-	defer xreg.AbortAll()
+	defer xreg.AbortAll(nil)
 	cos.InitShortID(0)
 
 	wg.Add(num)
@@ -78,7 +79,7 @@ func TestXactionRenewPrefetch(t *testing.T) {
 	bmd.Add(bck)
 
 	xreg.RegBckXact(&xs.TestXFactory{})
-	defer xreg.AbortAll()
+	defer xreg.AbortAll(nil)
 	cos.InitShortID(0)
 
 	ch := make(chan xreg.RenewRes, 10)
@@ -125,7 +126,7 @@ func TestXactionAbortAll(t *testing.T) {
 	xactBck := rnsRen.Entry.Get()
 	tassert.Errorf(t, rnsRen.Err == nil && xactBck != nil, "Xaction must be created")
 
-	xreg.AbortAll()
+	xreg.AbortAll(errors.New("test-abort-all"))
 
 	tassert.Errorf(t, rnsLRU.Entry.Get().Aborted(), "AbortAllGlobal: expected global xaction to be aborted")
 	tassert.Errorf(t, xactBck.Aborted(), "AbortAllGlobal: expected bucket xaction to be aborted")
@@ -140,7 +141,7 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 	)
 	xreg.TestReset()
 
-	defer xreg.AbortAll()
+	defer xreg.AbortAll(errors.New("test-abort-global"))
 
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
@@ -155,7 +156,7 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 	xactBck := rnsRen.Entry.Get()
 	tassert.Errorf(t, rnsRen.Err == nil && xactBck != nil, "Xaction must be created")
 
-	xreg.AbortAll(xaction.ScopeG)
+	xreg.AbortAll(errors.New("test-abort-g"), xaction.ScopeG)
 
 	tassert.Errorf(t, rnsLRU.Entry.Get().Aborted(), "AbortAllGlobal: expected global xaction to be aborted")
 	tassert.Errorf(t, !xactBck.Aborted(), "AbortAllGlobal: expected bucket xaction to be running: %s", xactBck)
@@ -170,7 +171,7 @@ func TestXactionAbortBuckets(t *testing.T) {
 	)
 	xreg.TestReset()
 
-	defer xreg.AbortAll()
+	defer xreg.AbortAll(errors.New("abort-buckets"))
 
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
@@ -185,7 +186,7 @@ func TestXactionAbortBuckets(t *testing.T) {
 	xactBck := rns.Entry.Get()
 	tassert.Errorf(t, rns.Err == nil && xactBck != nil, "Xaction must be created")
 
-	xreg.AbortAllBuckets(bckFrom)
+	xreg.AbortAllBuckets(nil, bckFrom)
 
 	tassert.Errorf(t, !rnsLRU.Entry.Get().Aborted(), "AbortAllGlobal: expected global xaction to keep running")
 	tassert.Errorf(t, xactBck.Aborted(), "AbortAllGlobal: expected bucket xaction to be aborted")
@@ -208,7 +209,7 @@ func TestXactionQueryFinished(t *testing.T) {
 	)
 	xreg.TestReset()
 
-	defer xreg.AbortAll()
+	defer xreg.AbortAll(nil)
 
 	bmd.Add(bck1)
 	bmd.Add(bck2)

@@ -249,7 +249,7 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 			return fmt.Errorf("%s %s: %v", t.si, txn, rns.Err)
 		}
 		xact := rns.Entry.Get()
-		xreg.DoAbort(cmn.ActPutCopies, c.bck)
+		xreg.DoAbort(cmn.ActPutCopies, c.bck, errors.New("make-n-copies"))
 		c.addNotif(xact) // notify upon completion
 		xaction.GoRunW(xact)
 	default:
@@ -325,12 +325,12 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 				return fmt.Errorf("%s %s: %v", t.si, txn, rns.Err)
 			}
 			xact := rns.Entry.Get()
-			xreg.DoAbort(cmn.ActPutCopies, c.bck)
+			xreg.DoAbort(cmn.ActPutCopies, c.bck, errors.New("re-mirror"))
 			c.addNotif(xact) // notify upon completion
 			xaction.GoRunW(xact)
 		}
 		if reEC(txnSetBprops.bprops, txnSetBprops.nprops, c.bck) {
-			xreg.DoAbort(cmn.ActECEncode, c.bck)
+			xreg.DoAbort(cmn.ActECEncode, c.bck, errors.New("re-ec"))
 			rns := xreg.RenewECEncode(t, c.bck, c.uuid, cmn.ActCommit)
 			if rns.Err != nil {
 				return rns.Err

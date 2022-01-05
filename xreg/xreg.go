@@ -72,6 +72,7 @@ type (
 	abortArgs struct {
 		bcks       []*cluster.Bck // run on a slice of buckets
 		ty         string         // one of { ScopeG, ScopeBck, ... } enum
+		err        error          // original cause (or reason), e.g. cmn.ErrUserAbort
 		mountpaths bool           // mountpath xactions - see xaction.Table
 		all        bool           // all or matching `ty` above, if defined
 	}
@@ -212,58 +213,60 @@ func CheckBucketsBusy() (cause Renewable) {
 // It not only stops the "bucket xactions" but possibly "task xactions" which
 // are running on given bucket.
 
-func AbortAllBuckets(bcks ...*cluster.Bck) { defaultReg.abortAllBuckets(bcks...) }
+func AbortAllBuckets(err error, bcks ...*cluster.Bck) { defaultReg.abortAllBuckets(err, bcks...) }
 
-func (r *registry) abortAllBuckets(bcks ...*cluster.Bck) {
-	r.abort(abortArgs{bcks: bcks})
+func (r *registry) abortAllBuckets(err error, bcks ...*cluster.Bck) {
+	r.abort(abortArgs{bcks: bcks, err: err})
 }
 
 // AbortAll waits until abort of all xactions is finished
 // Every abort is done asynchronously
-func AbortAll(tys ...string) { defaultReg.abortAll(tys...) }
+func AbortAll(err error, tys ...string) { defaultReg.abortAll(err, tys...) }
 
-func (r *registry) abortAll(tys ...string) {
+func (r *registry) abortAll(err error, tys ...string) {
 	var ty string
 	if len(tys) > 0 {
 		ty = tys[0]
 	}
-	r.abort(abortArgs{all: true, ty: ty})
+	r.abort(abortArgs{ty: ty, err: err, all: true})
 }
 
 func AbortAllMountpathsXactions() { defaultReg.abortAllMountpathsXactions() }
 
 func (r *registry) abortAllMountpathsXactions() { r.abort(abortArgs{mountpaths: true}) }
 
-func DoAbort(kind string, bck *cluster.Bck) (aborted bool) { return defaultReg.doAbort(kind, bck) }
+func DoAbort(kind string, bck *cluster.Bck, err error) (aborted bool) {
+	return defaultReg.doAbort(kind, bck, err)
+}
 
-func (r *registry) doAbort(kind string, bck *cluster.Bck) (aborted bool) {
+func (r *registry) doAbort(kind string, bck *cluster.Bck, err error) (aborted bool) {
 	if kind != "" {
 		entry := r.getRunning(XactFilter{Kind: kind, Bck: bck})
 		if entry == nil {
 			return false
 		}
-		entry.Get().Abort(nil)
+		entry.Get().Abort(err)
 		return true
 	}
 	if bck == nil {
 		// No bucket and no kind - request for all available xactions.
-		r.abortAll()
+		r.abortAll(err)
 	} else {
 		// Bucket present and no kind - request for all available bucket's xactions.
-		r.abortAllBuckets(bck)
+		r.abortAllBuckets(err, bck)
 	}
 	aborted = true
 	return
 }
 
-func DoAbortByID(uuid string) (aborted bool) { return defaultReg.doAbortByID(uuid) }
+func DoAbortByID(uuid string, err error) (aborted bool) { return defaultReg.doAbortByID(uuid, err) }
 
-func (r *registry) doAbortByID(uuid string) (aborted bool) {
+func (r *registry) doAbortByID(uuid string, err error) (aborted bool) {
 	entry := r.getXact(uuid)
 	if entry == nil || entry.Finished() {
 		return false
 	}
-	entry.Abort(nil)
+	entry.Abort(err)
 	return true
 }
 
@@ -339,7 +342,7 @@ func (r *registry) abort(args abortArgs) {
 			abort = args.ty == "" || args.ty == xaction.Table[xact.Kind()].Scope
 		}
 		if abort {
-			xact.Abort(nil)
+			xact.Abort(args.err)
 		}
 		return true
 	})
@@ -509,7 +512,7 @@ func (r *registry) renewLocked(entry Renewable, flt XactFilter, bck *cluster.Bck
 		}
 		debug.Assert(wpr == WprAbort || wpr == WprKeepAndStartNew)
 		if wpr == WprAbort {
-			xprev.Abort(cmn.ErrXactRenew)
+			xprev.Abort(cmn.ErrXactRenewAbort)
 			time.Sleep(waitAbortDone) // TODO: better
 		}
 	}

@@ -101,9 +101,9 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 
 	var err error
 	select {
-	case <-r.ChanAbort():
+	case errCause := <-r.ChanAbort():
 		jg.Stop()
-		err = cmn.NewErrAborted(r.Name(), "", nil)
+		err = cmn.NewErrAborted(r.Name(), "", errCause)
 	case <-jg.ListenFinished():
 		err = jg.Stop()
 	}

@@ -338,7 +338,7 @@ func (p *proxyrunner) Stop(err error) {
 		f = glog.Warningf
 	}
 	f("Stopping %s%s, err: %v", p.si, s, err)
-	xreg.AbortAll()
+	xreg.AbortAll(errors.New("p-stop"))
 	p.httprunner.stop(!isPrimary && smap.isValid() && !isErrNoUnregister(err) /* rm from Smap*/)
 }
 

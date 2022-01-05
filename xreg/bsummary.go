@@ -46,7 +46,8 @@ type (
 
 // interface guard
 var (
-	_ Renewable = (*bsummFactory)(nil)
+	_ Renewable    = (*bsummFactory)(nil)
+	_ cluster.Xact = (*bsummXact)(nil)
 )
 
 func RenewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.BucketSummaryMsg) error {

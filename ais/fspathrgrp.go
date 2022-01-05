@@ -136,10 +136,13 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 func (g *fsprungroup) postDD(rmi *fs.MountpathInfo, action string, err error) {
 	// 1. error
 	if err != nil {
-		if errAborted := cmn.AsErrAborted(err); errAborted == nil {
+		if errCause := cmn.AsErrAborted(err); errCause == nil {
 			glog.Errorf("%s: failed to %q %s, err %v", g.t.si, action, rmi, err)
 		} else {
-			glog.Errorf("%s: %q %s: %v (cause %v)", g.t.si, action, rmi, err, errAborted.Unwrap())
+			glog.Errorf("%s: %q %s: %v (cause %v)", g.t.si, action, rmi, err, errCause.Unwrap())
+			if errCause == cmn.ErrXactUserAbort {
+				rmi.AbortDD() // reset the state
+			}
 		}
 		return
 	}

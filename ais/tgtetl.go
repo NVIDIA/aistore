@@ -99,7 +99,7 @@ func (t *targetrunner) stopETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	uuid := apiItems[0]
-	if err := etl.Stop(t, uuid); err != nil {
+	if err := etl.Stop(t, uuid, cmn.ErrXactUserAbort); err != nil {
 		statusCode := http.StatusBadRequest
 		if cmn.IsErrNotFound(err) {
 			statusCode = http.StatusNotFound

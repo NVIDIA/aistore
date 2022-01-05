@@ -35,7 +35,7 @@ type (
 		Aborted() bool
 		AbortedAfter(time.Duration) bool
 		Quiesce(time.Duration, QuiCB) QuiRes
-		ChanAbort() <-chan struct{}
+		ChanAbort() <-chan error
 		Result() (interface{}, error)
 		Snap() XactionSnap
 

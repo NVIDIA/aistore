@@ -150,7 +150,8 @@ var (
 	ErrNotEnoughTargets = errors.New("not enough target nodes")
 	ErrETLMissingUUID   = errors.New("ETL UUID can't be empty")
 	ErrNoMountpaths     = errors.New("no mountpaths")
-	ErrXactRenew        = errors.New("abort previous, start new")
+	ErrXactRenewAbort   = errors.New("renew (abort previous, start new)")
+	ErrXactUserAbort    = errors.New("user abort") // via cmn.ActXactStop
 )
 
 // ais ErrBucketAlreadyExists

@@ -79,10 +79,10 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		case cmn.ActXactStop:
 			if xactMsg.ID != "" {
-				xreg.DoAbortByID(xactMsg.ID)
+				xreg.DoAbortByID(xactMsg.ID, cmn.ErrXactUserAbort)
 				return
 			}
-			xreg.DoAbort(xactMsg.Kind, bck)
+			xreg.DoAbort(xactMsg.Kind, bck, cmn.ErrXactUserAbort)
 			return
 		default:
 			t.writeErrAct(w, r, msg.Action)

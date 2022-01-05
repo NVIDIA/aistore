@@ -372,11 +372,9 @@ func (t *targetrunner) unreg(action string, rmUserData, noShutdown bool) {
 	// Stop keepalive-ing
 	t.keepalive.send(kaSuspendMsg)
 
-	// Abort all dSort jobs
-	dsort.Managers.AbortAll(errors.New("target is being removed from the cluster via '" + action + "'"))
-
-	// Stop all xactions
-	xreg.AbortAll()
+	errCause := errors.New("target is being removed from the cluster via '" + action + "'")
+	dsort.Managers.AbortAll(errCause) // all dSort jobs
+	xreg.AbortAll(errCause)           // all xactions
 
 	if action == cmn.ActStartMaintenance || action == cmn.ActCallbackRmFromSmap {
 		return // return without terminating http
@@ -608,11 +606,11 @@ func (t *targetrunner) _applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayloa
 			}
 			present = true
 			if obck.Props.Mirror.Enabled && !nbck.Props.Mirror.Enabled {
-				xreg.DoAbort(cmn.ActPutCopies, nbck)
+				xreg.DoAbort(cmn.ActPutCopies, nbck, errors.New("apply-bmd"))
 				// NOTE: cmn.ActMakeNCopies takes care of itself
 			}
 			if obck.Props.EC.Enabled && !nbck.Props.EC.Enabled {
-				xreg.DoAbort(cmn.ActECEncode, nbck)
+				xreg.DoAbort(cmn.ActECEncode, nbck, errors.New("apply-bmd"))
 			}
 			return true
 		})
@@ -633,7 +631,7 @@ func (t *targetrunner) _applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayloa
 func (t *targetrunner) _postBMD(tag string, rmbcks []*cluster.Bck) {
 	// evict LOM cache
 	if len(rmbcks) > 0 {
-		xreg.AbortAllBuckets(rmbcks...)
+		xreg.AbortAllBuckets(errors.New("post-bmd"), rmbcks...)
 		go func(bcks ...*cluster.Bck) {
 			for _, b := range bcks {
 				cluster.EvictLomCache(b)
@@ -860,8 +858,8 @@ func (t *targetrunner) _etlMDChange(newEtlMD, oldEtlMD *etlMD) {
 		if _, ok := newEtlMD.ETLs[key]; ok {
 			continue
 		}
-		// TODO: stop only when running
-		etl.Stop(t, key)
+		// TODO: stop only when running; specify cause
+		etl.Stop(t, key, nil)
 	}
 }
 

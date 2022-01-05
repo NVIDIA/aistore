@@ -131,7 +131,10 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 			r.DecPending()
 		case <-r.IdleTimer():
 			goto fin
-		case <-r.ChanAbort():
+		case errCause := <-r.ChanAbort():
+			if err == nil {
+				err = errCause
+			}
 			goto fin
 		}
 	}

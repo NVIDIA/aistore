@@ -135,7 +135,7 @@ func (e *Aborter) ListenSmapChanged() {
 				UUID: e.uuid,
 			}, "targets have changed, aborting..."))
 			// Stop will unregister `e` from smap listeners.
-			if err := Stop(e.t, e.uuid); err != nil {
+			if err := Stop(e.t, e.uuid, nil /*TODO*/); err != nil {
 				glog.Error(err.Error())
 			}
 		}
@@ -360,14 +360,14 @@ func (b *etlBootstraper) setupXaction() {
 
 // Stop deletes all occupied by the ETL resources, including Pods and Services.
 // It unregisters ETL smap listener.
-func Stop(t cluster.Target, id string) error {
+func Stop(t cluster.Target, id string, errCause error) error {
 	errCtx := &cmn.ETLErrorContext{
 		TID:  t.SID(),
 		UUID: id,
 	}
 
 	// Abort any running offline ETLs.
-	xreg.AbortAll(cmn.ActETLBck)
+	xreg.AbortAll(errCause, cmn.ActETLBck)
 
 	c, err := GetCommunicator(id, t.Snode())
 	if err != nil {
@@ -389,15 +389,13 @@ func Stop(t cluster.Target, id string) error {
 	return nil
 }
 
-// StopAll deletes all running ETLs.
+// StopAll terminates all running ETLs.
 func StopAll(t cluster.Target) {
-	// Skip if K8s isn't even available.
 	if k8s.Detect() != nil {
 		return
 	}
-
 	for _, e := range List() {
-		if err := Stop(t, e.ID); err != nil {
+		if err := Stop(t, e.ID, nil); err != nil {
 			glog.Error(err)
 		}
 	}
