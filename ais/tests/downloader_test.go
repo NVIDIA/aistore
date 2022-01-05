@@ -825,7 +825,7 @@ func TestDownloadMountpath(t *testing.T) {
 	})
 
 	tlog.Logln("Wait a while for downloaders to pick up...")
-	time.Sleep(3 * time.Second)
+	time.Sleep(time.Second + time.Second/2)
 
 	smap := tutils.GetClusterMap(t, proxyURL)
 	selectedTarget, _ := smap.GetRandTarget()
