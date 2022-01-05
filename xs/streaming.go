@@ -131,6 +131,9 @@ func (r *streamingX) eoi(uuid string, tsi *cluster.Snode) {
 }
 
 func (r *streamingX) fin(err error) error {
+	if r.DemandBase.Finished() {
+		return err
+	}
 	r.DemandBase.Stop()
 	if err == nil {
 		err = r.err.Err()

@@ -284,12 +284,40 @@ func WaitForRebalanceToStart(baseParams api.BaseParams, args api.XactReqArgs) er
 		if err != nil {
 			return err
 		}
-		if snaps.Running() {
+		// TODO: check that all targets are running and (2) log some
+		if tid, _ := snaps.Running(); tid != "" {
 			break
 		}
-		if len(snaps) > 0 && snaps.Finished() {
+		time.Sleep(api.XactPollTime)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
 			break
 		}
+	}
+	return nil
+}
+
+// checks resilvering on each node and waits for those that are running (to stop running)
+func WaitForAllResilvers(baseParams api.BaseParams, timeout time.Duration) error {
+	args := api.XactReqArgs{Kind: cmn.ActResilver, Timeout: timeout}
+	ctx := context.Background()
+	if args.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, args.Timeout)
+		defer cancel()
+	}
+	for {
+		snaps, err := api.QueryXactionSnaps(baseParams, args)
+		if err != nil {
+			return err
+		}
+		tid, xsnap := snaps.Running()
+		if tid == "" {
+			break
+		}
+		tlog.Logf("%s: %q %+v\n", tid, cmn.ActResilver, *xsnap)
 		time.Sleep(api.XactPollTime)
 		select {
 		case <-ctx.Done():

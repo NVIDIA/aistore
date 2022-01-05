@@ -797,7 +797,7 @@ func TestDownloadMountpath(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
-			Name:     testBucketName,
+			Name:     cos.RandString(15),
 			Provider: cmn.ProviderAIS,
 		}
 		objsCnt  = 100

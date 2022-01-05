@@ -2378,6 +2378,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	lostPath := lostFSList.Available[0]
 	err = api.DetachMountpath(baseParams, tgtLost, lostPath, false /*dont-resil*/)
 	tassert.CheckFatal(t, err)
+	time.Sleep(time.Second)
 
 	wg := sync.WaitGroup{}
 
@@ -2400,7 +2401,9 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	}
 
 	tlog.Logf("Wait for resilvering to complete...\n")
-	tutils.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
+	time.Sleep(time.Second)
+	err = tutils.WaitForAllResilvers(baseParams, rebalanceTimeout)
+	tassert.CheckFatal(t, err)
 
 	msg := &cmn.ListObjsMsg{Props: cmn.GetPropsSize}
 	resEC, err := api.ListObjects(baseParams, bck, msg, 0)

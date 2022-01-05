@@ -41,6 +41,8 @@ const (
 	workerCnt = 10
 )
 
+const testMpath = "/tmp/ais/mountpath"
+
 var (
 	cliBck         cmn.Bck
 	errObjectFound = errors.New("found") // to interrupt fs.Walk when object found

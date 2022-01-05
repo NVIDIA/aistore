@@ -627,7 +627,9 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 
 	// wait for rebalance to complete
 	baseParams = tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
+	tutils.WaitForRebalAndResil(t, baseParams, rebalanceTimeout) // TODO -- FIXME: revise
+	err = tutils.WaitForAllResilvers(baseParams, rebalanceTimeout)
+	tassert.CheckFatal(t, err)
 
 	m.ensureNoErrors()
 	m.waitAndCheckCluState()
@@ -688,7 +690,14 @@ func TestGetDuringResilver(t *testing.T) {
 	m.stopGets()
 
 	wg.Wait()
-	tutils.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
+	time.Sleep(time.Second)
+
+	tlog.Logf("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)\n", target.StringEx())
+	args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
+	_, _ = api.WaitForXaction(baseParams, args)
+
+	err = tutils.WaitForAllResilvers(baseParams, rebalanceTimeout)
+	tassert.CheckFatal(t, err)
 
 	mpListAfter, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
@@ -878,9 +887,6 @@ func TestMountpathRemoveAndAdd(t *testing.T) {
 
 func TestResilverAfterAddingMountpath(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-
-	const newMountpath = "/tmp/ais/mountpath"
-
 	var (
 		m = ioContext{
 			t:               t,
@@ -897,24 +903,24 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
 	if containers.DockerRunning() {
-		err := containers.DockerCreateMpathDir(0, newMountpath)
+		err := containers.DockerCreateMpathDir(0, testMpath)
 		tassert.CheckFatal(t, err)
 	} else {
-		err := cos.CreateDir(newMountpath)
+		err := cos.CreateDir(testMpath)
 		tassert.CheckFatal(t, err)
 	}
 
 	defer func() {
 		if !containers.DockerRunning() {
-			os.RemoveAll(newMountpath)
+			os.RemoveAll(testMpath)
 		}
 	}()
 
 	m.puts()
 
 	// Add new mountpath to target
-	tlog.Logf("attach new %q on target %s\n", newMountpath, target.StringEx())
-	err := api.AttachMountpath(baseParams, target, newMountpath, true /*force*/)
+	tlog.Logf("attach new %q on target %s\n", testMpath, target.StringEx())
+	err := api.AttachMountpath(baseParams, target, testMpath, true /*force*/)
 	tassert.CheckFatal(t, err)
 
 	// Wait for resilvering
@@ -925,13 +931,13 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 	m.gets()
 
 	// Remove new mountpath from target
-	tlog.Logf("detach %q on target %s\n", newMountpath, target.StringEx())
+	tlog.Logf("detach %q on target %s\n", testMpath, target.StringEx())
 	if containers.DockerRunning() {
-		if err := api.DetachMountpath(baseParams, target, newMountpath, false /*dont-resil*/); err != nil {
+		if err := api.DetachMountpath(baseParams, target, testMpath, false /*dont-resil*/); err != nil {
 			t.Error(err.Error())
 		}
 	} else {
-		err = api.DetachMountpath(baseParams, target, newMountpath, false /*dont-resil*/)
+		err = api.DetachMountpath(baseParams, target, testMpath, false /*dont-resil*/)
 		tassert.CheckFatal(t, err)
 	}
 
@@ -941,13 +947,8 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 	m.ensureNoErrors()
 }
 
-func TestLocalAndGlobalRebalanceAfterAddingMountpath(t *testing.T) {
+func TestAttachDetachMountpathAllTargets(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-
-	const (
-		newMountpath = "/tmp/ais/mountpath"
-	)
-
 	var (
 		m = ioContext{
 			t:               t,
@@ -966,7 +967,7 @@ func TestLocalAndGlobalRebalanceAfterAddingMountpath(t *testing.T) {
 
 	defer func() {
 		if !containers.DockerRunning() {
-			os.RemoveAll(newMountpath)
+			os.RemoveAll(testMpath)
 		}
 	}()
 
@@ -974,45 +975,51 @@ func TestLocalAndGlobalRebalanceAfterAddingMountpath(t *testing.T) {
 	m.puts()
 
 	if containers.DockerRunning() {
-		err := containers.DockerCreateMpathDir(0, newMountpath)
+		err := containers.DockerCreateMpathDir(0, testMpath)
 		tassert.CheckFatal(t, err)
 		for _, target := range targets {
-			err = api.AttachMountpath(baseParams, target, newMountpath, true /*force*/)
+			err = api.AttachMountpath(baseParams, target, testMpath, true /*force*/)
 			tassert.CheckFatal(t, err)
 		}
 	} else {
 		// Add new mountpath to all targets
 		for idx, target := range targets {
-			mountpath := filepath.Join(newMountpath, fmt.Sprintf("%d", idx))
+			mountpath := filepath.Join(testMpath, fmt.Sprintf("%d", idx))
 			cos.CreateDir(mountpath)
 			err := api.AttachMountpath(baseParams, target, mountpath, true /*force*/)
 			tassert.CheckFatal(t, err)
 		}
 	}
 
-	tutils.WaitForRebalAndResil(t, tutils.BaseAPIParams(m.proxyURL), rebalanceTimeout)
+	time.Sleep(time.Second)
+	err := tutils.WaitForAllResilvers(tutils.BaseAPIParams(m.proxyURL), rebalanceTimeout)
+	tassert.CheckFatal(t, err)
 
 	// Read after rebalance
 	m.gets()
 
 	// Remove new mountpath from all targets
 	if containers.DockerRunning() {
-		err := containers.DockerRemoveMpathDir(0, newMountpath)
+		err := containers.DockerRemoveMpathDir(0, testMpath)
 		tassert.CheckFatal(t, err)
 		for _, target := range targets {
-			if err := api.DetachMountpath(baseParams, target, newMountpath, false /*dont-resil*/); err != nil {
+			if err := api.DetachMountpath(baseParams, target, testMpath, false /*dont-resil*/); err != nil {
 				t.Error(err.Error())
 			}
 		}
 	} else {
 		for idx, target := range targets {
-			mountpath := filepath.Join(newMountpath, fmt.Sprintf("%d", idx))
+			mountpath := filepath.Join(testMpath, fmt.Sprintf("%d", idx))
 			os.RemoveAll(mountpath)
 			if err := api.DetachMountpath(baseParams, target, mountpath, false /*dont-resil*/); err != nil {
 				t.Error(err.Error())
 			}
 		}
 	}
+
+	time.Sleep(time.Second)
+	err = tutils.WaitForAllResilvers(tutils.BaseAPIParams(m.proxyURL), rebalanceTimeout)
+	tassert.CheckFatal(t, err)
 
 	m.ensureNoErrors()
 }
@@ -1056,7 +1063,12 @@ func TestMountpathDisableAndEnable(t *testing.T) {
 			tassert.CheckError(t, err)
 		}
 		if len(disabled) != 0 {
-			tutils.WaitForRebalAndResil(t, baseParams)
+			tlog.Logf("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)\n", tname)
+			args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
+			_, _ = api.WaitForXaction(baseParams, args)
+
+			err = tutils.WaitForAllResilvers(baseParams, rebalanceTimeout)
+			tassert.CheckFatal(t, err)
 		}
 	}()
 	for _, mpath := range origMountpaths.Available {
@@ -1105,7 +1117,13 @@ func TestMountpathDisableAndEnable(t *testing.T) {
 	m.puts()
 	m.gets()
 	m.ensureNoErrors()
-	tutils.WaitForRebalAndResil(t, baseParams)
+
+	tlog.Logf("Wait for rebalance (when target %s that has lost all mountpaths gets removed)\n", tname)
+	args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
+	_, _ = api.WaitForXaction(baseParams, args)
+
+	err = tutils.WaitForAllResilvers(baseParams, rebalanceTimeout)
+	tassert.CheckFatal(t, err)
 }
 
 func TestForwardCP(t *testing.T) {
@@ -1676,7 +1694,7 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 	// Wait for async mirroring to finish
 	flt := api.XactReqArgs{Kind: cmn.ActPutCopies, Bck: m.bck}
 	api.WaitForXactionIdle(baseParams, flt)
-	time.Sleep(3 * time.Second) // pending writes
+	time.Sleep(time.Second) // pending writes
 
 	// GET
 	m.gets()
@@ -1690,7 +1708,7 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 	}
 
 	// Wait for resilvering
-	time.Sleep(5 * time.Second) // pending writes
+	time.Sleep(time.Second) // pending writes
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -1824,8 +1842,7 @@ func TestICRebalance(t *testing.T) {
 
 	tlog.Logf("Wait for rebalance: %s\n", rebID)
 	args := api.XactReqArgs{ID: rebID, Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
-	_, err = api.WaitForXaction(baseParams, args)
-	tassert.CheckError(t, err)
+	_, _ = api.WaitForXaction(baseParams, args)
 
 	m.waitAndCheckCluState()
 }

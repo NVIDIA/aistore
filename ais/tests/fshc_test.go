@@ -331,7 +331,8 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 			t.Logf("Failed to add mpath %s of %s: %v", selectedMpath, selectedTarget.StringEx(), err)
 		}
 
-		tutils.WaitForRebalAndResil(t, md.baseParams, rebalanceTimeout)
+		err := tutils.WaitForAllResilvers(md.baseParams, rebalanceTimeout)
+		tassert.CheckFatal(t, err)
 	}()
 
 	// generate some filenames to PUT to them in a loop
@@ -383,7 +384,8 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 			t.Logf("Failed to add mpath %s of %s: %v", selectedMpath, selectedTarget.StringEx(), err)
 		}
 
-		tutils.WaitForRebalAndResil(t, md.baseParams, rebalanceTimeout)
+		err := tutils.WaitForAllResilvers(md.baseParams, rebalanceTimeout)
+		tassert.CheckFatal(t, err)
 	}()
 
 	// generate a short list of file to run the test (to avoid flooding the log with false errors)
@@ -493,7 +495,13 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 
 	_, err = tutils.WaitForClusterState(proxyURL, "all mountpaths enabled", smap.Version, proxyCnt, targetCnt)
 	tassert.CheckFatal(t, err)
-	tutils.WaitForRebalAndResil(t, baseParams)
+
+	tlog.Logf("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)\n", target.StringEx())
+	args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
+	_, _ = api.WaitForXaction(baseParams, args)
+
+	err = tutils.WaitForAllResilvers(baseParams, rebalanceTimeout)
+	tassert.CheckFatal(t, err)
 }
 
 func TestFSAddMPathRestartNode(t *testing.T) {
@@ -602,7 +610,14 @@ func TestFSDisableMountpathsRestart(t *testing.T) {
 			for _, mpath := range mpaths {
 				api.EnableMountpath(baseParams, target, mpath)
 			}
-			tutils.WaitForRebalAndResil(t, baseParams)
+			time.Sleep(time.Second)
+
+			tlog.Logf("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)\n", target.StringEx())
+			args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
+			_, _ = api.WaitForXaction(baseParams, args)
+
+			err := tutils.WaitForAllResilvers(baseParams, rebalanceTimeout)
+			tassert.CheckFatal(t, err)
 		}
 	})
 
@@ -639,7 +654,9 @@ func TestFSDisableMountpathsRestart(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 	enabled = true
-	tutils.WaitForRebalAndResil(t, baseParams)
+
+	err = tutils.WaitForAllResilvers(baseParams, rebalanceTimeout)
+	tassert.CheckFatal(t, err)
 
 	newMpaths, err = api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)

@@ -316,18 +316,17 @@ func (nxs NodesXactSnap) TotalRunningTime() time.Duration {
 // NodesXactMultiSnap //
 ////////////////////////
 
-func (xs NodesXactMultiSnap) Running() bool {
-	for _, snaps := range xs {
-		for _, xsnap := range snaps {
+func (xs NodesXactMultiSnap) Running() (tid string, xsnap *xaction.SnapExt) {
+	var snaps []*xaction.SnapExt
+	for tid, snaps = range xs {
+		for _, xsnap = range snaps {
 			if xsnap.Running() {
-				return true
+				return
 			}
 		}
 	}
-	return false
+	return "", nil
 }
-
-func (xs NodesXactMultiSnap) Finished() bool { return !xs.Running() }
 
 func (xs NodesXactMultiSnap) ObjCount() (count int64) {
 	for _, targetStats := range xs {

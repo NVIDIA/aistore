@@ -467,6 +467,8 @@ func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList []string) 
 	}
 }
 
+// TODO -- FIXME: revise and rewrite
+//
 // Waits for both resilver and rebalance to complete.
 // If they were not started, this function treats them as completed
 // and returns. If timeout set, if any of rebalances doesn't complete before timeout

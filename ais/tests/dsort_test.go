@@ -1387,7 +1387,6 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 }
 
 func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
-	const newMountpath = "/tmp/ais/mountpath"
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	runDSortTest(
@@ -1419,7 +1418,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 					targets := m.smap.Tmap.ActiveNodes()
 					for idx, target := range targets {
 						if adding {
-							mpath := fmt.Sprintf("%s-%d", newMountpath, idx)
+							mpath := fmt.Sprintf("%s-%d", testMpath, idx)
 							if containers.DockerRunning() {
 								err := containers.DockerCreateMpathDir(0, mpath)
 								tassert.CheckFatal(t, err)
@@ -1438,7 +1437,8 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 
 					t.Cleanup(func() {
 						// Wait for any resilver that might be still running.
-						tutils.WaitForRebalAndResil(t, df.baseParams)
+						err := tutils.WaitForAllResilvers(df.baseParams, rebalanceTimeout)
+						tassert.CheckFatal(t, err)
 
 						for target, mpath := range mountpaths {
 							if adding {
@@ -1454,7 +1454,8 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 							}
 						}
 
-						tutils.WaitForRebalAndResil(t, df.baseParams)
+						err = tutils.WaitForAllResilvers(df.baseParams, rebalanceTimeout)
+						tassert.CheckFatal(t, err)
 					})
 
 					tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
