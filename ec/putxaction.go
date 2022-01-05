@@ -203,6 +203,9 @@ func (r *XactPut) stop() {
 	for _, jog := range r.putJoggers {
 		jog.stop()
 	}
+
+	// Don't close bundles, they are shared between bucket's EC actions
+	r.Finish(nil)
 }
 
 // Encode schedules FQN for erasure coding process
