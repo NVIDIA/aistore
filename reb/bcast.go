@@ -172,6 +172,7 @@ func (reb *Reb) rxReady(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 		maxwt  = md.config.Rebalance.DestRetryTime.D() + md.config.Rebalance.DestRetryTime.D()/2
 		curwt  time.Duration
 		logHdr = reb.logHdr(md)
+		xreb   = reb.xact()
 	)
 	for curwt < maxwt {
 		if reb.stages.isInStage(tsi, rebStageTraverse) {
@@ -181,8 +182,8 @@ func (reb *Reb) rxReady(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 		if _, ok = reb.checkGlobStatus(tsi, rebStageTraverse, md); ok {
 			return
 		}
-		if reb.xact().Aborted() || reb.xact().AbortedAfter(sleep) {
-			glog.Infof("%s: abort rx-ready", logHdr)
+		if err := xreb.AbortedAfter(sleep); err != nil {
+			glog.Infof("%s: abort rx-ready (%v)", logHdr, err)
 			return
 		}
 		curwt += sleep
@@ -196,16 +197,17 @@ func (reb *Reb) rxReady(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 // separately check whether it is waiting for my ACKs
 func (reb *Reb) waitFinExtended(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 	var (
+		curwt      time.Duration
+		status     *Status
 		sleep      = md.config.Timeout.CplaneOperation.D()
 		maxwt      = md.config.Rebalance.DestRetryTime.D()
 		sleepRetry = cmn.KeepaliveRetryDuration(md.config)
 		logHdr     = reb.logHdr(md)
-		curwt      time.Duration
-		status     *Status
+		xreb       = reb.xact()
 	)
 	for curwt < maxwt {
-		if reb.xact().AbortedAfter(sleep) {
-			glog.Infof("%s: abort wack", logHdr)
+		if err := xreb.AbortedAfter(sleep); err != nil {
+			glog.Infof("%s: abort wack (%v)", logHdr, err)
 			return
 		}
 		if reb.stages.isInStage(tsi, rebStageFin) {
@@ -216,8 +218,8 @@ func (reb *Reb) waitFinExtended(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 		if status, ok = reb.checkGlobStatus(tsi, rebStageFin, md); ok {
 			return
 		}
-		if reb.xact().Aborted() {
-			glog.Infof("%s: abort wack", logHdr)
+		if err := xreb.Aborted(); err != nil {
+			glog.Infof("%s: abort wack (%v)", logHdr, err)
 			return
 		}
 		//
@@ -253,8 +255,8 @@ func (reb *Reb) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md *reb
 	)
 	body, code, err := reb.t.Health(tsi, cmn.DefaultTimeout, query)
 	if err != nil {
-		if reb.xact().AbortedAfter(sleepRetry) {
-			glog.Infof("%s: abort", logHdr)
+		if errAborted := reb.xact().AbortedAfter(sleepRetry); errAborted != nil {
+			glog.Infof("%s: abort check status (%v)", logHdr, errAborted)
 			return
 		}
 		body, code, err = reb.t.Health(tsi, cmn.DefaultTimeout, query) // retry once

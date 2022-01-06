@@ -128,8 +128,8 @@ func TestXactionAbortAll(t *testing.T) {
 
 	xreg.AbortAll(errors.New("test-abort-all"))
 
-	tassert.Errorf(t, rnsLRU.Entry.Get().Aborted(), "AbortAllGlobal: expected global xaction to be aborted")
-	tassert.Errorf(t, xactBck.Aborted(), "AbortAllGlobal: expected bucket xaction to be aborted")
+	tassert.Errorf(t, rnsLRU.Entry.Get().IsAborted(), "AbortAllGlobal: expected global xaction to be aborted")
+	tassert.Errorf(t, xactBck.IsAborted(), "AbortAllGlobal: expected bucket xaction to be aborted")
 }
 
 func TestXactionAbortAllGlobal(t *testing.T) {
@@ -158,8 +158,8 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 
 	xreg.AbortAll(errors.New("test-abort-g"), xaction.ScopeG)
 
-	tassert.Errorf(t, rnsLRU.Entry.Get().Aborted(), "AbortAllGlobal: expected global xaction to be aborted")
-	tassert.Errorf(t, !xactBck.Aborted(), "AbortAllGlobal: expected bucket xaction to be running: %s", xactBck)
+	tassert.Errorf(t, rnsLRU.Entry.Get().IsAborted(), "AbortAllGlobal: expected global xaction to be aborted")
+	tassert.Errorf(t, !xactBck.IsAborted(), "AbortAllGlobal: expected bucket xaction to be running: %s", xactBck)
 }
 
 func TestXactionAbortBuckets(t *testing.T) {
@@ -188,8 +188,8 @@ func TestXactionAbortBuckets(t *testing.T) {
 
 	xreg.AbortAllBuckets(nil, bckFrom)
 
-	tassert.Errorf(t, !rnsLRU.Entry.Get().Aborted(), "AbortAllGlobal: expected global xaction to keep running")
-	tassert.Errorf(t, xactBck.Aborted(), "AbortAllGlobal: expected bucket xaction to be aborted")
+	tassert.Errorf(t, !rnsLRU.Entry.Get().IsAborted(), "AbortAllGlobal: expected global xaction to keep running")
+	tassert.Errorf(t, xactBck.IsAborted(), "AbortAllGlobal: expected bucket xaction to be aborted")
 }
 
 // TODO: extend this to include all cases of the Query

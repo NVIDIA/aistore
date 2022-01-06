@@ -83,7 +83,7 @@ func (reb *Reb) jogEC(mpathInfo *fs.MountpathInfo, bck cmn.Bck, wg *sync.WaitGro
 	}
 	if err := fs.Walk(opts); err != nil {
 		xreb := reb.xact()
-		if xreb.Aborted() || xreb.Finished() {
+		if xreb.IsAborted() || xreb.Finished() {
 			glog.Infof("aborting traversal")
 		} else {
 			glog.Warningf("failed to traverse, err: %v", err)
@@ -288,9 +288,10 @@ func (reb *Reb) renameLocalCT(req *pushReq, ct *cluster.CT, md *ec.Metadata) (
 }
 
 func (reb *Reb) walkEC(fqn string, de fs.DirEntry) (err error) {
-	if xreb := reb.xact(); xreb.Aborted() {
+	xreb := reb.xact()
+	if err := xreb.Aborted(); err != nil {
 		// notify `dir.Walk` to stop iterations
-		return cmn.NewErrAborted(xreb.Name(), "walk-ec", nil)
+		return cmn.NewErrAborted(xreb.Name(), "walk-ec", err)
 	}
 
 	if de.IsDir() {

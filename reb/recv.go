@@ -288,7 +288,7 @@ func (reb *Reb) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Reader) 
 		}
 		reb.onAir.Inc()
 		xreb := reb.xact()
-		if xreb.Aborted() {
+		if xreb.IsAborted() {
 			err = fmt.Errorf("failed to send updated metafile: %s", xreb)
 			break
 		}

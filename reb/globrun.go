@@ -198,7 +198,7 @@ func (reb *Reb) RunRebalance(smap *cluster.Smap, id int64, notif *xaction.NotifX
 		glog.Infoln(logHdr)
 	}
 
-	for errCnt != 0 && !reb.xact().Aborted() {
+	for errCnt != 0 && !reb.xact().IsAborted() {
 		errCnt = reb.bcast(rargs, reb.waitFinExtended)
 	}
 
@@ -315,8 +315,8 @@ func (reb *Reb) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time.Dur
 	if otherRebID >= rargs.id {
 		return
 	}
-	if !otherXreb.Aborted() {
-		otherXreb.Abort(nil)
+	if !otherXreb.IsAborted() {
+		otherXreb.Abort(cmn.ErrXactRenewAbort)
 		glog.Warningf("%s: aborting older %s", logHdr, otherXreb)
 		return
 	}
@@ -411,14 +411,15 @@ func (reb *Reb) endStreams(err error) {
 // when at least one bucket has EC enabled
 func (reb *Reb) runEC(rargs *rebArgs) error {
 	_ = reb.bcast(rargs, reb.rxReady) // NOTE: ignore timeout
-	if xreb := reb.xact(); xreb.Aborted() {
-		return cmn.NewErrAborted(xreb.Name(), "reb-run-ec", nil)
+	xreb := reb.xact()
+	if err := xreb.Aborted(); err != nil {
+		return cmn.NewErrAborted(xreb.Name(), "reb-run-ec-bcast", err)
 	}
 
 	reb.runECjoggers()
 
-	if xreb := reb.xact(); xreb.Aborted() {
-		return cmn.NewErrAborted(xreb.Name(), "reb-run-ec", nil)
+	if err := xreb.Aborted(); err != nil {
+		return cmn.NewErrAborted(xreb.Name(), "reb-run-ec-joggers", err)
 	}
 	glog.Infof("[%s] RebalanceEC done", reb.t.SID())
 	return nil
@@ -428,8 +429,10 @@ func (reb *Reb) runEC(rargs *rebArgs) error {
 func (reb *Reb) runNoEC(rargs *rebArgs) error {
 	ver := rargs.smap.Version
 	_ = reb.bcast(rargs, reb.rxReady) // NOTE: ignore timeout
-	if xreb := reb.xact(); xreb.Aborted() {
-		return cmn.NewErrAborted(xreb.Name(), "reb-run", nil)
+
+	xreb := reb.xact()
+	if err := xreb.Aborted(); err != nil {
+		return cmn.NewErrAborted(xreb.Name(), "reb-run-bcast", err)
 	}
 
 	wg := &sync.WaitGroup{}
@@ -443,8 +446,8 @@ func (reb *Reb) runNoEC(rargs *rebArgs) error {
 	}
 	wg.Wait()
 
-	if xreb := reb.xact(); xreb.Aborted() {
-		return cmn.NewErrAborted(xreb.Name(), "reb-run", nil)
+	if err := xreb.Aborted(); err != nil {
+		return cmn.NewErrAborted(xreb.Name(), "reb-run-joggers", err)
 	}
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("finished rebalance walk (g%d)", rargs.id)
@@ -453,13 +456,16 @@ func (reb *Reb) runNoEC(rargs *rebArgs) error {
 }
 
 func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
-	reb.changeStage(rebStageWaitAck)
-	logHdr := reb.logHdr(rargs)
-	sleep := rargs.config.Timeout.CplaneOperation.D() // NOTE: TODO: used throughout; must be separately assigned and calibrated
-	maxwt := rargs.config.Rebalance.DestRetryTime.D()
-	cnt := 0
+	var (
+		cnt    int
+		logHdr = reb.logHdr(rargs)
+		sleep  = rargs.config.Timeout.CplaneOperation.D()
+		maxwt  = rargs.config.Rebalance.DestRetryTime.D()
+		xreb   = reb.xact()
+	)
 	maxwt += time.Duration(int64(time.Minute) * int64(rargs.smap.CountTargets()/10))
 	maxwt = cos.MinDuration(maxwt, rargs.config.Rebalance.DestRetryTime.D()*2)
+	reb.changeStage(rebStageWaitAck)
 
 	for {
 		curwt := time.Duration(0)
@@ -484,8 +490,8 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 					}
 				}
 				lomack.mu.Unlock()
-				if reb.xact().Aborted() {
-					glog.Infof("%s: abort", logHdr)
+				if err := xreb.Aborted(); err != nil {
+					glog.Infof("%s: abort wait-ack (%v)", logHdr, err)
 					return
 				}
 			}
@@ -494,16 +500,17 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 				break
 			}
 			glog.Warningf("%s: waiting for %d ACKs", logHdr, cnt)
-			if reb.xact().AbortedAfter(sleep) {
-				glog.Infof("%s: abort", logHdr)
+			if err := xreb.AbortedAfter(sleep); err != nil {
+				glog.Infof("%s: abort wait-ack (%v)", logHdr, err)
 				return
 			}
+
 			curwt += sleep
 		}
 		if cnt > 0 {
 			glog.Warningf("%s: timed out waiting for %d ACK%s", logHdr, cnt, cos.Plural(cnt))
 		}
-		if reb.xact().Aborted() {
+		if xreb.IsAborted() {
 			return
 		}
 
@@ -516,13 +523,13 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 		// 8. synchronize
 		glog.Infof("%s: poll targets for: stage=(%s or %s***)", logHdr, stages[rebStageFin], stages[rebStageWaitAck])
 		errCnt = reb.bcast(rargs, reb.waitFinExtended)
-		if reb.xact().Aborted() {
+		if xreb.IsAborted() {
 			return
 		}
 
 		// 9. retransmit if needed
 		cnt = reb.retransmit(rargs)
-		if cnt == 0 || reb.xact().Aborted() {
+		if cnt == 0 || reb.xact().IsAborted() {
 			break
 		}
 		glog.Warningf("%s: retransmitted %d, more wack...", logHdr, cnt)
@@ -533,7 +540,7 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 
 func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 	aborted := func() (yes bool) {
-		yes = reb.xact().Aborted()
+		yes = reb.xact().IsAborted()
 		yes = yes || (rargs.smap.Version != reb.t.Sowner().Get().Version)
 		return
 	}
@@ -643,14 +650,14 @@ func (rj *rebJogger) jog(mpathInfo *fs.MountpathInfo) {
 		opts.ErrCallback = nil
 		opts.Bck = bck.Bck
 		if err := fs.Walk(opts); err != nil {
-			if rj.xreb.Aborted() {
+			if rj.xreb.IsAborted() {
 				glog.Infof("aborting traversal")
 			} else {
 				glog.Errorf("%s: failed to traverse, err: %v", rj.m.t.Snode(), err)
 			}
 			return true
 		}
-		return rj.m.xact().Aborted()
+		return rj.xreb.IsAborted()
 	})
 }
 
@@ -670,8 +677,8 @@ func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, arg 
 }
 
 func (rj *rebJogger) walk(fqn string, de fs.DirEntry) (err error) {
-	if rj.xreb.Aborted() {
-		return cmn.NewErrAborted(rj.xreb.Name(), "jog", nil)
+	if err := rj.xreb.Aborted(); err != nil {
+		return cmn.NewErrAborted(rj.xreb.Name(), "rj-walk", err)
 	}
 	if de.IsDir() {
 		return nil

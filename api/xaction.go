@@ -264,9 +264,9 @@ func (nxs NodesXactSnap) running() bool {
 
 func (nxs NodesXactSnap) Finished() bool { return !nxs.running() }
 
-func (nxs NodesXactSnap) Aborted() bool {
+func (nxs NodesXactSnap) IsAborted() bool {
 	for _, snap := range nxs {
-		if snap.Aborted() {
+		if snap.IsAborted() {
 			return true
 		}
 	}

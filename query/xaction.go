@@ -322,7 +322,8 @@ func (r *ObjectsListingXact) ForEach(apply func(entry *cmn.BucketEntry) error) e
 }
 
 func (r *ObjectsListingXact) TokenFulfilled(token string) bool {
-	return r.Finished() && !r.Aborted() && r.LastDiscardedResult() != "" && cmn.TokenIncludesObject(token, r.LastDiscardedResult())
+	return r.Finished() && !r.IsAborted() &&
+		r.LastDiscardedResult() != "" && cmn.TokenIncludesObject(token, r.LastDiscardedResult())
 }
 
 func (r *ObjectsListingXact) TokenUnsatisfiable(token string) bool {

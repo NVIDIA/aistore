@@ -825,7 +825,7 @@ func TestDownloadMountpath(t *testing.T) {
 	})
 
 	tlog.Logln("Wait a while for downloaders to pick up...")
-	time.Sleep(time.Second + time.Second/2)
+	time.Sleep(2 * time.Second)
 
 	smap := tutils.GetClusterMap(t, proxyURL)
 	selectedTarget, _ := smap.GetRandTarget()
@@ -837,7 +837,7 @@ func TestDownloadMountpath(t *testing.T) {
 	mpathID := cos.NowRand().Intn(len(mpathList.Available))
 	removeMpath := mpathList.Available[mpathID]
 	tlog.Logf("Disabling mountpath %q at %s\n", removeMpath, selectedTarget.StringEx())
-	err = api.DisableMountpath(baseParams, selectedTarget, removeMpath, false /*dont-resil*/)
+	err = api.DisableMountpath(baseParams, selectedTarget, removeMpath, true /*dont-resil*/)
 	tassert.CheckFatal(t, err)
 
 	defer func() {
@@ -846,12 +846,8 @@ func TestDownloadMountpath(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}()
 
-	// Wait for resilvering
-	args := api.XactReqArgs{Node: selectedTarget.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
-	_, err = api.WaitForXaction(baseParams, args)
-	tassert.CheckFatal(t, err)
-
 	// Downloader finished on the target `selectedTarget`, safe to abort the rest.
+	time.Sleep(time.Second)
 	tlog.Logf("Aborting download job %s\n", id1)
 	abortDownload(t, id1)
 

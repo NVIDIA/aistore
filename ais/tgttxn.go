@@ -792,7 +792,7 @@ func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
 			return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, c.msg.Action, c.msg.Value, err)
 		}
 		g := xreg.GetRebMarked()
-		if g.Xact != nil && !g.Xact.Finished() && !g.Xact.Aborted() {
+		if g.Xact != nil && !g.Xact.Finished() && !g.Xact.IsAborted() {
 			return errors.New("cannot start maintenance: rebalance is in progress")
 		}
 

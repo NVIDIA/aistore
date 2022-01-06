@@ -138,8 +138,11 @@ func (r *streamingX) fin(err error) error {
 	if err == nil {
 		err = r.err.Err()
 	}
-	if err == nil && r.Aborted() {
-		err = cmn.NewErrAborted(r.Name(), "", nil)
+	if err == nil {
+		err = r.Aborted()
+	}
+	if err != nil {
+		err = cmn.NewErrAborted(r.Name(), "streaming-fin", err)
 	}
 	r.p.dm.Close(err)
 	hk.Reg(r.ID(), r.unreg, waitUnregRecv)

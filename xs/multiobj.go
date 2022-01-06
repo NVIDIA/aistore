@@ -40,7 +40,7 @@ type (
 	// two selected methods that lriterator needs for itself (a strict subset of cluster.Xact)
 	lrxact interface {
 		Bck() *cluster.Bck
-		Aborted() bool
+		IsAborted() bool
 		Finished() bool
 	}
 	// common mult-obj operation context
@@ -117,7 +117,7 @@ func (r *lriterator) iterateRange(wi lrwi, smap *cluster.Smap) error {
 func (r *lriterator) iterateTemplate(smap *cluster.Smap, pt *cos.ParsedTemplate, wi lrwi) error {
 	getNext := pt.Iter()
 	for objName, hasNext := getNext(); hasNext; objName, hasNext = getNext() {
-		if r.xact.Aborted() || r.xact.Finished() {
+		if r.xact.IsAborted() || r.xact.Finished() {
 			return nil
 		}
 		lom := cluster.AllocLOM(objName)
@@ -151,7 +151,7 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 	}
 	msg := &cmn.ListObjsMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
 	for {
-		if r.xact.Aborted() || r.xact.Finished() {
+		if r.xact.IsAborted() || r.xact.Finished() {
 			break
 		}
 		if bremote {
@@ -167,7 +167,7 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 			if !be.IsStatusOK() {
 				continue
 			}
-			if r.xact.Aborted() || r.xact.Finished() {
+			if r.xact.IsAborted() || r.xact.Finished() {
 				return nil
 			}
 			lom := cluster.AllocLOM(be.Name)
@@ -193,7 +193,7 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 
 func (r *lriterator) iterateList(wi lrwi, smap *cluster.Smap) error {
 	for _, objName := range r.msg.ObjNames {
-		if r.xact.Aborted() || r.xact.Finished() {
+		if r.xact.IsAborted() || r.xact.Finished() {
 			break
 		}
 		lom := cluster.AllocLOM(objName)

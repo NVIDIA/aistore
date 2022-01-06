@@ -37,9 +37,12 @@ type (
 			inobjs   atomic.Int64 // receive
 			inbytes  atomic.Int64
 		}
-		abrt    chan error
-		aborted atomic.Bool
-		notif   *NotifXact
+		notif *NotifXact
+		abort struct {
+			mu  sync.Mutex
+			ch  chan error
+			err error
+		}
 	}
 	XactMarked struct {
 		Xact        cluster.Xact
@@ -65,7 +68,7 @@ func (xact *XactBase) InitBase(id, kind string, bck *cluster.Bck) {
 	debug.AssertMsg(kind == cmn.ActETLInline || cos.IsValidUUID(id) || IsValidRebID(id), id)
 	debug.AssertMsg(IsValidKind(kind), kind)
 	xact.id, xact.kind = id, kind
-	xact.abrt = make(chan error, 1)
+	xact.abort.ch = make(chan error, 1)
 	xact.bck = bck
 	if xact.bck != nil {
 		xact.origBck = bck.Bck
@@ -73,21 +76,55 @@ func (xact *XactBase) InitBase(id, kind string, bck *cluster.Bck) {
 	xact.setStartTime(time.Now())
 }
 
-func (xact *XactBase) ID() string              { return xact.id }
-func (xact *XactBase) Kind() string            { return xact.kind }
-func (xact *XactBase) Bck() *cluster.Bck       { return xact.bck }
-func (xact *XactBase) Finished() bool          { return xact.eutime.Load() != 0 }
-func (xact *XactBase) ChanAbort() <-chan error { return xact.abrt }
-func (xact *XactBase) Aborted() bool           { return xact.aborted.Load() }
+func (xact *XactBase) ID() string        { return xact.id }
+func (xact *XactBase) Kind() string      { return xact.kind }
+func (xact *XactBase) Bck() *cluster.Bck { return xact.bck }
+func (xact *XactBase) Finished() bool    { return xact.eutime.Load() != 0 }
 
-func (xact *XactBase) AbortedAfter(d time.Duration) (aborted bool) {
+//
+// aborting
+//
+func (xact *XactBase) ChanAbort() <-chan error { return xact.abort.ch }
+
+func (xact *XactBase) IsAborted() bool { return xact.Aborted() != nil }
+
+func (xact *XactBase) Aborted() (err error) {
+	xact.abort.mu.Lock()
+	err = xact.abort.err
+	xact.abort.mu.Unlock()
+	return
+}
+
+func (xact *XactBase) AbortedAfter(d time.Duration) (err error) {
 	sleep := cos.CalcProbeFreq(d)
-	aborted = xact.Aborted()
-	for elapsed := time.Duration(0); elapsed < d && !aborted; elapsed += sleep {
+	err = xact.Aborted()
+	for elapsed := time.Duration(0); elapsed < d && err == nil; elapsed += sleep {
 		time.Sleep(sleep)
-		aborted = xact.Aborted()
+		err = xact.Aborted()
 	}
 	return
+}
+
+func (xact *XactBase) Abort(err error) (ok bool) {
+	if err == nil {
+		err = cmn.ErrXactNoErrAbort
+	} else if errAborted := cmn.AsErrAborted(err); errAborted != nil {
+		err = errAborted.Unwrap()
+	}
+	xact.abort.mu.Lock()
+	if xact.abort.err != nil {
+		xact.abort.mu.Unlock()
+		glog.Warningf("%s already aborted (%v)", xact, xact.abort.err)
+		return
+	}
+	xact.abort.err = err
+	xact.abort.ch <- err
+	close(xact.abort.ch)
+	xact.abort.mu.Unlock()
+	if xact.Kind() != cmn.ActList {
+		glog.Infof("%s aborted(%v)", xact, err)
+	}
+	return true
 }
 
 // count all the way to duration; reset and adjust every time activity is detected
@@ -97,12 +134,12 @@ func (xact *XactBase) Quiesce(d time.Duration, cb cluster.QuiCB) cluster.QuiRes 
 		sleep       = cos.CalcProbeFreq(d)
 		dur         = d
 	)
-	if xact.Aborted() {
+	if xact.Aborted() != nil {
 		return cluster.QuiAborted
 	}
 	for idle < dur {
 		time.Sleep(sleep)
-		if xact.Aborted() {
+		if xact.Aborted() != nil {
 			return cluster.QuiAborted
 		}
 		total += sleep
@@ -134,12 +171,15 @@ func (xact *XactBase) Name() string {
 func (xact *XactBase) String() string {
 	name := xact.Name()
 	stime := cos.FormatTimestamp(xact.StartTime())
-	s := fmt.Sprintf("%s-%s", name, stime)
+	s := name + "-" + stime
+	if err := xact.Aborted(); err != nil {
+		s += "-[err: " + err.Error() + "]"
+	}
 	if !xact.Finished() {
 		return s
 	}
 	etime := cos.FormatTimestamp(xact.EndTime())
-	return fmt.Sprintf("%s-%s", s, etime)
+	return s + "-" + etime
 }
 
 func (xact *XactBase) StartTime() time.Time {
@@ -190,19 +230,6 @@ func (xact *XactBase) AddNotif(n cluster.Notif) {
 	xact.notif = n.(*NotifXact)
 	debug.Assert(xact.notif.Xact != nil && xact.notif.F != nil)
 	debug.Assert(!n.Upon(cluster.UponProgress) || xact.notif.P != nil)
-}
-
-func (xact *XactBase) Abort(err error) (ok bool) {
-	if !xact.aborted.CAS(false, true) {
-		glog.Warningf("%s already aborted", xact)
-		return
-	}
-	xact.abrt <- err
-	close(xact.abrt)
-	if xact.Kind() != cmn.ActList {
-		glog.Infof("%s aborted(%v)", xact, err)
-	}
-	return true
 }
 
 func (xact *XactBase) Finish(err error) {
@@ -262,7 +289,7 @@ func (xact *XactBase) ToSnap(snap *Snap) {
 	snap.Bck = xact.origBck
 	snap.StartTime = xact.StartTime()
 	snap.EndTime = xact.EndTime()
-	snap.AbortedX = xact.Aborted()
+	snap.AbortedX = xact.Aborted() != nil
 
 	xact.ToStats(&snap.Stats)
 }

@@ -413,7 +413,7 @@ func fmtXactStatus(rebSnap *stats.RebalanceSnap) string {
 	if rebSnap == nil {
 		return UnknownVal
 	}
-	if rebSnap.Aborted() {
+	if rebSnap.IsAborted() {
 		return "aborted"
 	}
 	if rebSnap.EndTime.IsZero() {

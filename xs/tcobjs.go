@@ -124,7 +124,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 			} else {
 				err = lrit.iterateRange(wi, smap)
 			}
-			if r.Aborted() || err != nil {
+			if r.IsAborted() || err != nil {
 				goto fin
 			}
 			r.eoi(wi.msg.TxnUUID, nil)

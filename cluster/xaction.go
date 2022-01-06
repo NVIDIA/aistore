@@ -32,10 +32,11 @@ type (
 		StartTime() time.Time
 		EndTime() time.Time
 		Finished() bool
-		Aborted() bool
-		AbortedAfter(time.Duration) bool
-		Quiesce(time.Duration, QuiCB) QuiRes
+		IsAborted() bool
+		Aborted() error
+		AbortedAfter(time.Duration) error
 		ChanAbort() <-chan error
+		Quiesce(time.Duration, QuiCB) QuiRes
 		Result() (interface{}, error)
 		Snap() XactionSnap
 
@@ -58,7 +59,7 @@ type (
 	}
 
 	XactionSnap interface {
-		Aborted() bool
+		IsAborted() bool
 		Running() bool
 		Finished() bool
 	}

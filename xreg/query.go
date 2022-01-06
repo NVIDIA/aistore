@@ -40,7 +40,7 @@ func RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, ms
 
 func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, msg *cmn.ListObjsMsg) RenewRes {
 	if xact := query.Registry.Get(msg.UUID); xact != nil {
-		if !xact.Aborted() {
+		if !xact.IsAborted() {
 			return RenewRes{Entry: &dummyEntry{xact}, Err: nil, UUID: msg.UUID}
 		}
 		query.Registry.Delete(msg.UUID)

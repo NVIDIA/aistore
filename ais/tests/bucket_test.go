@@ -2369,7 +2369,7 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 
 	snaps, err := api.GetXactionSnapsByID(baseParams, xactID)
 	tassert.CheckError(t, err)
-	tassert.Errorf(t, snaps.Aborted(), "failed to abort copy-bucket (%s)", xactID)
+	tassert.Errorf(t, snaps.IsAborted(), "failed to abort copy-bucket (%s)", xactID)
 
 	time.Sleep(time.Second)
 	bck, err := api.ListBuckets(baseParams, cmn.QueryBcks(dstBck))

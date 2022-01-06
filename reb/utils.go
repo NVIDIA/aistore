@@ -101,7 +101,7 @@ func (reb *Reb) abortRebalance() {
 func (reb *Reb) isQuiescent() bool {
 	// Finished or aborted xaction = no traffic
 	xact := reb.xact()
-	if xact == nil || xact.Aborted() || xact.Finished() {
+	if xact == nil || xact.IsAborted() || xact.Finished() {
 		return true
 	}
 

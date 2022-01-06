@@ -221,7 +221,10 @@ func (r *XactCreateArchMultiObj) Run(wg *sync.WaitGroup) {
 				err = wi.err
 				wi.wmu.Unlock()
 			}
-			if r.Aborted() || err != nil {
+			if err == nil {
+				err = r.Aborted()
+			}
+			if err != nil {
 				wi.abortAppend(err)
 				goto fin
 			}

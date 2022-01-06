@@ -478,6 +478,6 @@ func displayRebStats(tw *tabwriter.Writer, st *targetRebSnap) {
 		st.snap.ID, st.tid,
 		st.snap.Snap.Stats.InObjs, cos.B2S(st.snap.Snap.Stats.InBytes, 2),
 		st.snap.Snap.Stats.OutObjs, cos.B2S(st.snap.Snap.Stats.OutBytes, 2),
-		startTime, endTime, st.snap.Aborted(),
+		startTime, endTime, st.snap.IsAborted(),
 	)
 }

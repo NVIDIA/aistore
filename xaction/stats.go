@@ -62,9 +62,9 @@ var _ cluster.XactionSnap = (*Snap)(nil)
 // Snap //
 ///////////////
 
-func (b *Snap) Aborted() bool  { return b.AbortedX }
-func (b *Snap) Running() bool  { return b.EndTime.IsZero() }
-func (b *Snap) Finished() bool { return !b.EndTime.IsZero() }
+func (b *Snap) IsAborted() bool { return b.AbortedX }
+func (b *Snap) Running() bool   { return b.EndTime.IsZero() }
+func (b *Snap) Finished() bool  { return !b.EndTime.IsZero() }
 
 //////////////
 // QueryMsg //

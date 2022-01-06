@@ -186,8 +186,8 @@ func (pc *pushComm) doRequest(bck *cluster.Bck, objName string, timeout time.Dur
 }
 
 func (pc *pushComm) tryDoRequest(lom *cluster.LOM, timeout time.Duration) (cos.ReadCloseSizer, error) {
-	if pc.xact.Aborted() {
-		return nil, cmn.NewErrAborted(pc.xact.Name(), "try-request", nil)
+	if err := pc.xact.Aborted(); err != nil {
+		return nil, cmn.NewErrAborted(pc.xact.Name(), "try-push-comm", err)
 	}
 
 	lom.Lock(false)
@@ -276,8 +276,8 @@ func (pc *pushComm) OfflineTransform(bck *cluster.Bck, objName string, timeout t
 //////////////////
 
 func (rc *redirectComm) OnlineTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
-	if rc.xact.Aborted() {
-		return cmn.NewErrAborted(rc.xact.Name(), "try-request", nil)
+	if err := rc.xact.Aborted(); err != nil {
+		return cmn.NewErrAborted(rc.xact.Name(), "try-redirect-comm", err)
 	}
 
 	size, err := determineSize(bck, objName)
@@ -365,8 +365,8 @@ func transformerPath(bck *cluster.Bck, objName string) string {
 }
 
 func (c *baseComm) getWithTimeout(url string, size int64, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
-	if c.xact.Aborted() {
-		return nil, cmn.NewErrAborted(c.xact.Name(), "try-request", nil)
+	if err := c.xact.Aborted(); err != nil {
+		return nil, cmn.NewErrAborted(c.xact.Name(), "transform-get", err)
 	}
 
 	var (

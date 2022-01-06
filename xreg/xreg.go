@@ -281,9 +281,9 @@ func (r *registry) getSnap(flt XactFilter) ([]cluster.XactionSnap, error) {
 			if xact.Kind() == cmn.ActRebalance {
 				// Any rebalance at or after a given ID that finished and was not aborted
 				cmp := xaction.CompareRebIDs(xact.ID(), flt.ID)
-				return cmp >= 0 && xact.Finished() && !xact.Aborted()
+				return cmp >= 0 && xact.Finished() && !xact.IsAborted()
 			}
-			return xact.ID() == flt.ID && xact.Finished() && !xact.Aborted()
+			return xact.ID() == flt.ID && xact.Finished() && !xact.IsAborted()
 		}), nil
 	}
 	if flt.Bck != nil || flt.Kind != "" {

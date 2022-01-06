@@ -47,7 +47,7 @@ func (*NotifXactListener) UnmarshalStats(rawMsg []byte) (stats interface{}, fini
 		return
 	}
 	stats = xactStats
-	aborted = xactStats.Aborted()
+	aborted = xactStats.IsAborted()
 	finished = xactStats.Finished()
 	return
 }
