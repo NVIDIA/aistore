@@ -112,9 +112,9 @@ func (xact *XactBase) Abort(err error) (ok bool) {
 		err = errAborted.Unwrap()
 	}
 	xact.abort.mu.Lock()
-	if xact.abort.err != nil {
+	if err := xact.abort.err; err != nil {
 		xact.abort.mu.Unlock()
-		glog.Warningf("%s already aborted (%v)", xact, xact.abort.err)
+		glog.Warningf("%s already aborted(%v)", xact.Name(), err)
 		return
 	}
 	xact.abort.err = err
@@ -122,7 +122,7 @@ func (xact *XactBase) Abort(err error) (ok bool) {
 	close(xact.abort.ch)
 	xact.abort.mu.Unlock()
 	if xact.Kind() != cmn.ActList {
-		glog.Infof("%s aborted(%v)", xact, err)
+		glog.Infof("%s aborted(%v)", xact.Name(), err)
 	}
 	return true
 }
@@ -160,25 +160,27 @@ func (xact *XactBase) Quiesce(d time.Duration, cb cluster.QuiCB) cluster.QuiRes 
 	return cluster.Quiescent
 }
 
-func (xact *XactBase) Name() string {
+func (xact *XactBase) Name() (s string) {
 	var b string
 	if xact.bck != nil {
 		b = "-" + xact.origBck.String()
 	}
-	return fmt.Sprintf("%s[%s]%s", xact.Kind(), xact.ID(), b)
+	s = xact.Kind() + "[" + xact.ID() + "]" + b
+	return
 }
 
 func (xact *XactBase) String() string {
-	name := xact.Name()
-	stime := cos.FormatTimestamp(xact.StartTime())
-	s := name + "-" + stime
-	if err := xact.Aborted(); err != nil {
-		s += "-[err: " + err.Error() + "]"
-	}
-	if !xact.Finished() {
+	var (
+		name = xact.Name()
+		s    = name + "-" + cos.FormatTimestamp(xact.StartTime())
+	)
+	if !xact.Finished() { // ok to (rarely) miss _aborted_ state as this is purely informational
 		return s
 	}
 	etime := cos.FormatTimestamp(xact.EndTime())
+	if err := xact.Aborted(); err != nil {
+		s += "-[abrt: " + err.Error() + "]"
+	}
 	return s + "-" + etime
 }
 
