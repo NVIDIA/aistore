@@ -554,9 +554,28 @@ func (m *ioContext) ensureNumCopies(expectedCopies int, greaterOk bool) {
 	}
 }
 
-func (m *ioContext) ensureNoErrors() {
+func (m *ioContext) ensureNoGetErrors() {
 	if m.numGetErrs.Load() > 0 {
 		m.t.Fatalf("Number of get errors is non-zero: %d\n", m.numGetErrs.Load())
+	}
+}
+
+func (m *ioContext) ensureNumMountpaths(target *cluster.Snode, mpList *cmn.MountpathList) {
+	ensureNumMountpaths(m.t, target, mpList)
+}
+
+func ensureNumMountpaths(t *testing.T, target *cluster.Snode, mpList *cmn.MountpathList) {
+	baseParams := tutils.BaseAPIParams()
+	mpl, err := api.GetMountpaths(baseParams, target)
+	tassert.CheckFatal(t, err)
+	if len(mpl.Available) != len(mpList.Available) {
+		t.Errorf("%s ended up with %d mountpaths (dd=%d, disabled=%d), expecting: %d", target.StringEx(),
+			len(mpl.Available), len(mpl.WaitingDD), len(mpl.Disabled),
+			len(mpList.Available))
+	} else if len(mpl.Disabled) != len(mpList.Disabled) || len(mpl.WaitingDD) != len(mpList.WaitingDD) {
+		t.Errorf("%s ended up with (dd=%d, disabled=%d) mountpaths, expecting (%d and %d), respectively",
+			target.StringEx(), len(mpl.WaitingDD), len(mpl.Disabled),
+			len(mpList.WaitingDD), len(mpList.Disabled))
 	}
 }
 

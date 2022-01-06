@@ -844,6 +844,12 @@ func TestDownloadMountpath(t *testing.T) {
 		tlog.Logf("Enabling mountpath %q at %s\n", removeMpath, selectedTarget.StringEx())
 		err = api.EnableMountpath(baseParams, selectedTarget, removeMpath)
 		tassert.CheckFatal(t, err)
+
+		// Wait for resilvering
+		args := api.XactReqArgs{Node: selectedTarget.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
+		_, _ = api.WaitForXaction(baseParams, args)
+
+		ensureNumMountpaths(t, selectedTarget, mpathList)
 	}()
 
 	// Downloader finished on the target `selectedTarget`, safe to abort the rest.

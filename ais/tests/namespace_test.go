@@ -245,8 +245,8 @@ func TestNamespace(t *testing.T) {
 			m1.gets()
 			m2.gets()
 
-			m1.ensureNoErrors()
-			m2.ensureNoErrors()
+			m1.ensureNoGetErrors()
+			m2.ensureNoGetErrors()
 		})
 	}
 }

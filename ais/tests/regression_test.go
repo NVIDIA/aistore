@@ -528,7 +528,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	tlog.Logf("Rebalance sent     %s in %d files\n", cos.B2S(bytesSent, 2), filesSent)
 	tlog.Logf("Rebalance received %s in %d files\n", cos.B2S(bytesRecv, 2), filesRecv)
 
-	m.ensureNoErrors()
+	m.ensureNoGetErrors()
 	m.waitAndCheckCluState()
 }
 

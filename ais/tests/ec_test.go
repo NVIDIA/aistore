@@ -1989,10 +1989,15 @@ func TestECEmergencyMountpath(t *testing.T) {
 	err = api.DisableMountpath(baseParams, removeTarget, removeMpath, false /*dont-resil*/)
 	tassert.CheckFatal(t, err)
 	defer func() {
-		// Enable mountpah
 		tlog.Logf("Enabling mountpath %s at target %s...\n", removeMpath, removeTarget.ID())
 		err = api.EnableMountpath(baseParams, removeTarget, removeMpath)
 		tassert.CheckFatal(t, err)
+
+		// Wait for resilvering
+		args := api.XactReqArgs{Node: removeTarget.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
+		_, _ = api.WaitForXaction(baseParams, args)
+
+		ensureNumMountpaths(t, removeTarget, mpathList)
 	}()
 
 	// 3. Read objects

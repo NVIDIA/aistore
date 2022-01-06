@@ -1854,7 +1854,7 @@ func TestRenameBucketNonEmpty(t *testing.T) {
 
 	// Gets on renamed ais bucket
 	m.gets()
-	m.ensureNoErrors()
+	m.ensureNoGetErrors()
 
 	tlog.Logln("checking bucket props...")
 	dstProps, err := api.HeadBucket(baseParams, dstBck)

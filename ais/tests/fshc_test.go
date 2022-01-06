@@ -37,7 +37,7 @@ type checkerMD struct {
 	bck        cmn.Bck
 	smap       *cluster.Smap
 	mpList     cluster.NodeMap
-	allMps     map[*cluster.Snode]*cmn.MountpathList
+	allMps     map[string]*cmn.MountpathList
 	origAvail  int
 	fileSize   int64
 	baseParams api.BaseParams
@@ -57,7 +57,7 @@ func newCheckerMD(t *testing.T) *checkerMD {
 		},
 		fileSize: 64 * cos.KiB,
 		mpList:   make(cluster.NodeMap, 10),
-		allMps:   make(map[*cluster.Snode]*cmn.MountpathList, 10),
+		allMps:   make(map[string]*cmn.MountpathList, 10),
 		chstop:   make(chan struct{}),
 		chfail:   make(chan struct{}),
 		wg:       &sync.WaitGroup{},
@@ -74,26 +74,32 @@ func (md *checkerMD) init() {
 	md.baseParams = tutils.BaseAPIParams(md.proxyURL)
 	md.smap = tutils.GetClusterMap(md.t, md.proxyURL)
 
-	for targetID, tinfo := range md.smap.Tmap {
+	for targetID, tsi := range md.smap.Tmap {
 		tlog.Logf("Target: %s\n", targetID)
-		lst, err := api.GetMountpaths(md.baseParams, tinfo)
+		lst, err := api.GetMountpaths(md.baseParams, tsi)
 		tassert.CheckFatal(md.t, err)
 		tlog.Logf("    Mountpaths: %v\n", lst)
 
-		for _, fqn := range lst.Available {
-			md.mpList[fqn] = tinfo
+		for _, mpath := range lst.Available {
+			si, ok := md.mpList[mpath]
+			tassert.Errorf(md.t, !ok, "duplication (%s, %s, %s)", si, mpath, tsi)
+			md.mpList[mpath] = tsi
 		}
-		md.allMps[tinfo] = lst
+		md.allMps[targetID] = lst
 
 		md.origAvail += len(lst.Available)
 	}
+}
+
+func (md *checkerMD) ensureNumMountpaths(target *cluster.Snode, mpList *cmn.MountpathList) {
+	ensureNumMountpaths(md.t, target, mpList)
 }
 
 func (md *checkerMD) randomTargetMpath() (target *cluster.Snode, mpath string, mpathMap *cmn.MountpathList) {
 	// select random target and mountpath
 	for m, t := range md.mpList {
 		target, mpath = t, m
-		mpathMap = md.allMps[target]
+		mpathMap = md.allMps[target.ID()]
 		break
 	}
 	return
@@ -333,6 +339,8 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 
 		err := tutils.WaitForAllResilvers(md.baseParams, rebalanceTimeout)
 		tassert.CheckFatal(t, err)
+
+		md.ensureNumMountpaths(selectedTarget, md.allMps[selectedTarget.ID()])
 	}()
 
 	// generate some filenames to PUT to them in a loop
@@ -386,6 +394,8 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 
 		err := tutils.WaitForAllResilvers(md.baseParams, rebalanceTimeout)
 		tassert.CheckFatal(t, err)
+
+		md.ensureNumMountpaths(selectedTarget, md.allMps[selectedTarget.ID()])
 	}()
 
 	// generate a short list of file to run the test (to avoid flooding the log with false errors)
@@ -411,14 +421,14 @@ func TestFSCheckerEnablingMountpath(t *testing.T) {
 		origAvail  = 0
 	)
 
-	for targetID, tinfo := range smap.Tmap {
+	for targetID, tsi := range smap.Tmap {
 		tlog.Logf("Target: %s\n", targetID)
-		lst, err := api.GetMountpaths(baseParams, tinfo)
+		lst, err := api.GetMountpaths(baseParams, tsi)
 		tassert.CheckFatal(t, err)
 		tlog.Logf("    Mountpaths: %v\n", lst)
 
-		for _, fqn := range lst.Available {
-			mpList[fqn] = tinfo
+		for _, mpath := range lst.Available {
+			mpList[mpath] = tsi
 		}
 
 		origAvail += len(lst.Available)
@@ -438,7 +448,10 @@ func TestFSCheckerEnablingMountpath(t *testing.T) {
 		break
 	}
 
-	err := api.EnableMountpath(baseParams, selectedTarget, selectedMpath)
+	origMpl, err := api.GetMountpaths(baseParams, selectedTarget)
+	tassert.CheckFatal(t, err)
+
+	err = api.EnableMountpath(baseParams, selectedTarget, selectedMpath)
 	if err != nil {
 		t.Errorf("Enabling available mountpath should return success, got: %v", err)
 	}
@@ -452,10 +465,15 @@ func TestFSCheckerEnablingMountpath(t *testing.T) {
 			t.Errorf("Expected status %d, got %d, %v", http.StatusNotFound, status, err)
 		}
 	}
-	tutils.WaitForRebalAndResil(t, baseParams)
+	// Wait for resilvering
+	time.Sleep(time.Second)
+	args := api.XactReqArgs{ID: selectedTarget.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
+	_, _ = api.WaitForXaction(baseParams, args)
+
+	ensureNumMountpaths(t, selectedTarget, origMpl)
 }
 
-func TestFSCheckerTargetDisable(t *testing.T) {
+func TestFSCheckerTargetDisableAllMountpaths(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
 		target *cluster.Snode
@@ -475,7 +493,7 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 	oldMpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 	if len(oldMpaths.Available) == 0 {
-		t.Fatalf("Target %s does not have available mountpaths", target)
+		t.Fatalf("Target %s does not have mountpaths", target)
 	}
 
 	tlog.Logf("Removing all mountpaths from target: %s\n", target.StringEx())
@@ -486,6 +504,10 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 
 	smap, err = tutils.WaitForClusterState(proxyURL, "all mountpaths disabled", smap.Version, proxyCnt, targetCnt-1)
 	tassert.CheckFatal(t, err)
+	tlog.Logf("Wait for rebalance (triggered by %s leaving the cluster after having lost all mountpaths)\n",
+		target.StringEx())
+	args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
+	_, _ = api.WaitForXaction(baseParams, args)
 
 	tlog.Logf("Restoring target %s mountpaths\n", target.ID())
 	for _, mpath := range oldMpaths.Available {
@@ -497,11 +519,13 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)\n", target.StringEx())
-	args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
+	args = api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
 	_, _ = api.WaitForXaction(baseParams, args)
 
 	err = tutils.WaitForAllResilvers(baseParams, rebalanceTimeout)
 	tassert.CheckFatal(t, err)
+
+	ensureNumMountpaths(t, target, oldMpaths)
 }
 
 func TestFSAddMPathRestartNode(t *testing.T) {
@@ -534,6 +558,8 @@ func TestFSAddMPathRestartNode(t *testing.T) {
 		api.DetachMountpath(baseParams, target, tmpMpath, true /*dont-resil*/)
 		time.Sleep(time.Second)
 		os.Remove(tmpMpath)
+
+		ensureNumMountpaths(t, target, oldMpaths)
 	})
 
 	newMpaths, err := api.GetMountpaths(baseParams, target)
@@ -557,14 +583,14 @@ func TestFSAddMPathRestartNode(t *testing.T) {
 		t.Fatalf("Removed target didn't rejoin")
 	}
 
-	// Check if the node has newly added mount path
+	// Check if the node has newly added mountpath
 	newMpaths, err = api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, numMpaths+1 == len(newMpaths.Available),
-		"should include newly added mount path after restore - available %d!=%d", numMpaths+1, len(newMpaths.Available))
+		"should include newly added mountpath after restore - available %d!=%d", numMpaths+1, len(newMpaths.Available))
 }
 
-func TestFSDisableMountpathsRestart(t *testing.T) {
+func TestFSDisableAllExceptOneMountpathRestartNode(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{
 		Long:               true,
 		MinMountpaths:      3,
@@ -583,8 +609,8 @@ func TestFSDisableMountpathsRestart(t *testing.T) {
 		enabled    bool
 	)
 
-	for _, tinfo := range smap.Tmap {
-		target = tinfo
+	for _, tsi := range smap.Tmap {
+		target = tsi
 		break
 	}
 
@@ -620,6 +646,8 @@ func TestFSDisableMountpathsRestart(t *testing.T) {
 
 		err := tutils.WaitForAllResilvers(baseParams, rebalanceTimeout)
 		tassert.CheckFatal(t, err)
+
+		ensureNumMountpaths(t, target, oldMpaths)
 	})
 
 	// Kill and restore target

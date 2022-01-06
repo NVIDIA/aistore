@@ -318,7 +318,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 	m.smap = smap
 
 	m.gets()
-	m.ensureNoErrors()
+	m.ensureNoGetErrors()
 
 	rebID, err = api.StopMaintenance(baseParams, actVal)
 	tassert.CheckFatal(t, err)
@@ -396,7 +396,7 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 
 	m.stopGets()
 	stopped = true
-	m.ensureNoErrors()
+	m.ensureNoGetErrors()
 
 	rebID, err = api.StopMaintenance(baseParams, actVal)
 	tassert.CheckFatal(t, err)
