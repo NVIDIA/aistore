@@ -135,9 +135,11 @@ var (
 	_ ReadOpenCloser = (*ByteHandle)(nil)
 )
 
-// EOF (to accommodate unsized streaming)
+// including "unexpecting EOF" to accommodate unsized streaming and
+// early termination of the other side (prior to sending the first byte)
 func IsEOF(err error) bool {
-	return errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF)
+	return err == io.EOF || err == io.ErrUnexpectedEOF ||
+		errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF)
 }
 
 ///////////////

@@ -601,24 +601,25 @@ func TestFSDisableMountpathsRestart(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 	// Wait for resilvering
+	time.Sleep(4 * time.Second)
 	args := api.XactReqArgs{Node: target.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	t.Cleanup(func() {
-		if !enabled {
-			for _, mpath := range mpaths {
-				api.EnableMountpath(baseParams, target, mpath)
-			}
-			time.Sleep(time.Second)
-
-			tlog.Logf("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)\n", target.StringEx())
-			args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
-			_, _ = api.WaitForXaction(baseParams, args)
-
-			err := tutils.WaitForAllResilvers(baseParams, rebalanceTimeout)
-			tassert.CheckFatal(t, err)
+		if enabled {
+			return
 		}
+		for _, mpath := range mpaths {
+			api.EnableMountpath(baseParams, target, mpath)
+		}
+		time.Sleep(time.Second)
+
+		args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
+		_, _ = api.WaitForXaction(baseParams, args)
+
+		err := tutils.WaitForAllResilvers(baseParams, rebalanceTimeout)
+		tassert.CheckFatal(t, err)
 	})
 
 	// Kill and restore target
@@ -670,4 +671,7 @@ func TestFSDisableMountpathsRestart(t *testing.T) {
 		"unexpected count of disabled mountpaths, got: %d, expected: %d",
 		len(newMpaths.Disabled), 0,
 	)
+
+	args = api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
+	_, _ = api.WaitForXaction(baseParams, args)
 }

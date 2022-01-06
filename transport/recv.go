@@ -126,7 +126,8 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	}
 	h.mm.Free(hbuf)
 
-	if err != io.EOF {
+	// if err != io.EOF {
+	if !cos.IsEOF(err) {
 		cmn.WriteErr(w, r, err)
 	}
 }
