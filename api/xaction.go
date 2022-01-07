@@ -148,7 +148,8 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *nl.Notif
 // WaitForXaction waits for a given xaction to complete.
 func WaitForXaction(baseParams BaseParams, args XactReqArgs, sleeps ...time.Duration) (status *nl.NotifStatus, err error) {
 	var (
-		ctx   = context.Background()
+		ctx = context.Background()
+		// TODO: remove `sleeps` arg and calculate `sleep` based on args.Timeout
 		sleep = XactPollTime
 	)
 	if len(sleeps) > 0 {
@@ -161,7 +162,9 @@ func WaitForXaction(baseParams BaseParams, args XactReqArgs, sleeps ...time.Dura
 	}
 	for {
 		status, err = GetXactionStatus(baseParams, args)
-		if err != nil || status.Finished() {
+		canRetry := err == nil || cos.IsRetriableConnErr(err) || cmn.IsStatusServiceUnavailable(err)
+		finished := err == nil && status.Finished()
+		if !canRetry || finished {
 			return
 		}
 		time.Sleep(sleep)

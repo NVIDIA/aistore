@@ -5,13 +5,11 @@
 package tutils
 
 import (
-	"context"
 	"fmt"
 	"math/rand"
 	"net/http"
 	"net/url"
 	"path"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -655,50 +653,6 @@ func SetClusterConfigUsingMsg(t *testing.T, toUpdate *cmn.ConfigToUpdate) {
 	baseParams := BaseAPIParams(proxyURL)
 	err := api.SetClusterConfigUsingMsg(baseParams, toUpdate)
 	tassert.CheckFatal(t, err)
-}
-
-func isErrAcceptable(err error) bool {
-	if err == nil {
-		return true
-	}
-	if hErr, ok := err.(*cmn.ErrHTTP); ok {
-		// TODO: http.StatusBadGateway should be handled while performing reverseProxy (if a IC node is killed)
-		return hErr.Status == http.StatusServiceUnavailable || hErr.Status == http.StatusBadGateway
-	}
-
-	// Below errors occur when the node is killed/just started while requesting
-	return strings.Contains(err.Error(), "ContentLength") ||
-		strings.Contains(err.Error(), "connection refused") ||
-		strings.Contains(err.Error(), "EOF")
-}
-
-func WaitForXactionByID(id string, timeouts ...time.Duration) error {
-	var (
-		retryInterval = api.XactPollTime
-		args          = api.XactReqArgs{ID: id}
-		ctx           = context.Background()
-	)
-
-	if len(timeouts) > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeouts[0])
-		defer cancel()
-	}
-
-	for {
-		baseParams := BaseAPIParams()
-		if status, err := api.GetXactionStatus(baseParams, args); !isErrAcceptable(err) || status.Finished() {
-			return err
-		}
-
-		time.Sleep(retryInterval)
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			break
-		}
-	}
 }
 
 func CheckErrIsNotFound(t *testing.T, err error) {

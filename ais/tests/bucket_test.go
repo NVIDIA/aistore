@@ -2046,7 +2046,8 @@ func TestRenameBucketWithBackend(t *testing.T) {
 
 	xactID, err := api.RenameBucket(baseParams, bck, dstBck)
 	tassert.CheckFatal(t, err)
-	err = tutils.WaitForXactionByID(xactID)
+	xargs := api.XactReqArgs{ID: xactID}
+	_, err = api.WaitForXaction(baseParams, xargs)
 	tassert.CheckFatal(t, err)
 
 	exists, err := api.DoesBucketExist(baseParams, cmn.QueryBcks(bck))

@@ -1693,7 +1693,8 @@ func startCPBckAndWait(t testing.TB, srcBck cmn.Bck, count int) *sync.WaitGroup 
 				tutils.DestroyBucket(t, proxyURL, dstBck)
 				wg.Done()
 			}()
-			err = tutils.WaitForXactionByID(xactID, rebalanceTimeout)
+			xargs := api.XactReqArgs{ID: xactID, Timeout: rebalanceTimeout}
+			_, err = api.WaitForXaction(baseParams, xargs)
 			tassert.CheckError(t, err)
 		}(i)
 	}
