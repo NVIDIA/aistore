@@ -1,4 +1,4 @@
-// Package xaction provides core functionality for the AIStore extended actions.
+// Package xaction provides core functionality for the AIStore eXtended Actions (xactions).
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
@@ -39,7 +39,7 @@ type (
 		}
 		notif *NotifXact
 		abort struct {
-			mu  sync.Mutex
+			mu  sync.RWMutex
 			ch  chan error
 			err error
 		}
@@ -89,9 +89,9 @@ func (xact *XactBase) ChanAbort() <-chan error { return xact.abort.ch }
 func (xact *XactBase) IsAborted() bool { return xact.Aborted() != nil }
 
 func (xact *XactBase) Aborted() (err error) {
-	xact.abort.mu.Lock()
+	xact.abort.mu.RLock()
 	err = xact.abort.err
-	xact.abort.mu.Unlock()
+	xact.abort.mu.RUnlock()
 	return
 }
 
@@ -165,7 +165,7 @@ func (xact *XactBase) Name() (s string) {
 	if xact.bck != nil {
 		b = "-" + xact.origBck.String()
 	}
-	s = xact.Kind() + "[" + xact.ID() + "]" + b
+	s = "x-" + xact.Kind() + "[" + xact.ID() + "]" + b
 	return
 }
 

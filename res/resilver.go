@@ -40,7 +40,7 @@ type (
 		Notif             *xaction.NotifXact
 		Rmi               *fs.MountpathInfo
 		Action            string
-		PostDD            func(rmi *fs.MountpathInfo, action string, err error)
+		PostDD            func(rmi *fs.MountpathInfo, action string, xres *xs.Resilver, err error)
 		SkipGlobMisplaced bool
 		SingleRmiJogger   bool
 	}
@@ -133,7 +133,7 @@ func (res *Res) RunResilver(args Args) {
 
 	// callback to, finally, detach-disable
 	if args.PostDD != nil {
-		args.PostDD(args.Rmi, args.Action, err)
+		args.PostDD(args.Rmi, args.Action, xres, err)
 	}
 	xres.Finish(err)
 }

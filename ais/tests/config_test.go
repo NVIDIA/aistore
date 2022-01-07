@@ -127,6 +127,10 @@ func TestConfigSetGlobal(t *testing.T) {
 		"ec.enabled": strconv.FormatBool(ecCondition),
 	})
 	checkConfig(t, smap, check)
+
+	// wait for ec
+	flt := api.XactReqArgs{Kind: cmn.ActECEncode}
+	_, _ = api.WaitForXaction(baseParams, flt)
 }
 
 func TestConfigFailOverrideClusterOnly(t *testing.T) {
@@ -148,10 +152,13 @@ func TestConfigFailOverrideClusterOnly(t *testing.T) {
 	daemonConfig := tutils.GetDaemonConfig(t, proxy)
 	tassert.Errorf(t, daemonConfig.EC.Enabled == config.EC.Enabled,
 		"expected 'ec.enabled' to be %v, got: %v", config.EC.Enabled, daemonConfig.EC.Enabled)
+
+	// wait for ec
+	flt := api.XactReqArgs{Kind: cmn.ActECEncode}
+	_, _ = api.WaitForXaction(baseParams, flt)
 }
 
 func TestConfigOverrideAndRestart(t *testing.T) {
-	t.Skipf("skipping %s", t.Name()) // TODO -- FIXME: revise and enable
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal, MinProxies: 2})
 	var (
 		proxyURL      = tutils.GetPrimaryURL()
@@ -179,18 +186,15 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 	tlog.Logf("Killing %s\n", proxy.StringEx())
 	cmd, err := tutils.KillNode(proxy)
 	tassert.CheckFatal(t, err)
+	time.Sleep(time.Second)
 	smap, err = tutils.WaitForClusterState(proxyURL, "proxy removed", smap.Version, origProxyCnt-1, origTargetCnt)
 	tassert.CheckError(t, err)
 
 	err = tutils.RestoreNode(cmd, false, cmn.Proxy)
 	tassert.CheckFatal(t, err)
+	time.Sleep(time.Second)
 	_, err = tutils.WaitForClusterState(proxyURL, "proxy restored", smap.Version, origProxyCnt, origTargetCnt)
 	tassert.CheckFatal(t, err)
-
-	tlog.Logf("Wait for rebalance\n")
-	args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
-	_, _ = api.WaitForXaction(baseParams, args)
-	tassert.CheckError(t, err)
 
 	daemonConfig = tutils.GetDaemonConfig(t, proxy)
 	tassert.Fatalf(t, daemonConfig.Disk.DiskUtilLowWM == newLowWM,
@@ -226,6 +230,7 @@ func TestConfigSyncToNewNode(t *testing.T) {
 		})
 	})
 
+	time.Sleep(time.Second)
 	smap, err = tutils.WaitForClusterState(proxyURL, "proxy removed", smap.Version, origProxyCnt-1, origTargetCnt)
 	tassert.CheckError(t, err)
 
@@ -238,17 +243,18 @@ func TestConfigSyncToNewNode(t *testing.T) {
 	// 3. Restart proxy
 	err = tutils.RestoreNode(cmd, false, cmn.Proxy)
 	tassert.CheckFatal(t, err)
+	time.Sleep(time.Second)
 	_, err = tutils.WaitForClusterState(proxyURL, "proxy restored", smap.Version, origProxyCnt, origTargetCnt)
 	tassert.CheckFatal(t, err)
-
-	tlog.Logf("Wait for rebalance\n")
-	args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
-	_, _ = api.WaitForXaction(baseParams, args)
 
 	// 4. Ensure the proxy has lastest updated config
 	daemonConfig := tutils.GetDaemonConfig(t, proxy)
 	tassert.Fatalf(t, daemonConfig.EC.Enabled == newECEnabled,
 		"expected 'ec.Enabled' to be %v, got: %v", newECEnabled, daemonConfig.EC.Enabled)
+
+	// wait for ec
+	flt := api.XactReqArgs{Kind: cmn.ActECEncode}
+	_, _ = api.WaitForXaction(baseParams, flt)
 }
 
 func checkConfig(t *testing.T, smap *cluster.Smap, check func(*cluster.Snode, *cmn.Config)) {

@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/volume"
 	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xs"
 )
 
 type fsprungroup struct {
@@ -99,8 +100,8 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 	}
 	if numAvail == 0 {
 		s := fmt.Sprintf("%s: lost (via %q) the last available mountpath %q", g.t.si, action, rmi)
-		g.postDD(rmi, action, nil /*error*/) // go ahead to disable/detach
-		g.t.disable(s)                       // TODO: handle an unlikely failure to remove self from Smap
+		g.postDD(rmi, action, nil /*xaction*/, nil /*error*/) // go ahead to disable/detach
+		g.t.disable(s)
 		return
 	}
 
@@ -109,7 +110,7 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 	if dontResilver || !cmn.GCO.Get().Resilver.Enabled {
 		glog.Infof("%s: %q %s but resilvering=(%t, %t)", g.t.si, action, rmi,
 			!dontResilver, cmn.GCO.Get().Resilver.Enabled)
-		g.postDD(rmi, action, nil /*error*/) // ditto (compare with the one below)
+		g.postDD(rmi, action, nil /*xaction*/, nil /*error*/) // ditto (compare with the one below)
 		return
 	}
 
@@ -133,16 +134,20 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 	return
 }
 
-func (g *fsprungroup) postDD(rmi *fs.MountpathInfo, action string, err error) {
-	// 1. error
+func (g *fsprungroup) postDD(rmi *fs.MountpathInfo, action string, xres *xs.Resilver, err error) {
+	// 1. handle error
+	var detail string
+	if err == nil && xres != nil {
+		err = xres.Aborted()
+		detail = ", " + xres.String()
+	}
 	if err != nil {
-		if errCause := cmn.AsErrAborted(err); errCause == nil {
-			glog.Errorf("%s: failed to %q %s, err %v", g.t.si, action, rmi, err)
-		} else {
-			glog.Errorf("%s: %q %s: %v (cause %v)", g.t.si, action, rmi, err, errCause.Unwrap())
-			if errCause == cmn.ErrXactUserAbort {
-				rmi.AbortDD() // reset the state
-			}
+		if errCause := cmn.AsErrAborted(err); errCause != nil {
+			err = errCause
+		}
+		glog.Errorf("%s: %q %s: %v%s", g.t.si, action, rmi, err, detail)
+		if err == cmn.ErrXactUserAbort {
+			rmi.AbortDD() // clear the state
 		}
 		return
 	}
@@ -159,7 +164,7 @@ func (g *fsprungroup) postDD(rmi *fs.MountpathInfo, action string, err error) {
 		return
 	}
 	fspathsConfigAddDel(rmi.Path, false /*add*/)
-	glog.Infof("%s: %s %q done", g.t.si, rmi, action)
+	glog.Infof("%s: %s %q done%s", g.t.si, rmi, action, detail)
 
 	// 3. the case of multiple overlapping detach _or_ disable operations
 	//    (ie., commit previously aborted xs.Resilver, if any)
@@ -180,7 +185,7 @@ func (g *fsprungroup) postDD(rmi *fs.MountpathInfo, action string, err error) {
 			return
 		}
 		fspathsConfigAddDel(mi.Path, false /*add*/)
-		glog.Infof("%s: %s %q - was previously aborted and now done", g.t.si, mi, action)
+		glog.Infof("%s: %s %q - was previously aborted and now done%s", g.t.si, mi, action, detail)
 	}
 }
 

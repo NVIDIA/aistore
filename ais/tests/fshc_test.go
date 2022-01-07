@@ -622,7 +622,7 @@ func TestFSDisableAllExceptOneMountpathRestartNode(t *testing.T) {
 	// Disable, temporarily, all mountpaths except 1.
 	mpaths := oldMpaths.Available[:mpathCnt-1]
 	for _, mpath := range mpaths {
-		tlog.Logf("Disable mountpath %q on %s\n", mpath, target.StringEx())
+		tlog.Logf("Disable mountpath %q at %s\n", mpath, target.StringEx())
 		err = api.DisableMountpath(baseParams, target, mpath, false /*dont-resil*/)
 		tassert.CheckFatal(t, err)
 	}

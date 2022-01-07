@@ -565,17 +565,23 @@ func (m *ioContext) ensureNumMountpaths(target *cluster.Snode, mpList *cmn.Mount
 }
 
 func ensureNumMountpaths(t *testing.T, target *cluster.Snode, mpList *cmn.MountpathList) {
+	tname := target.StringEx()
 	baseParams := tutils.BaseAPIParams()
 	mpl, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 	if len(mpl.Available) != len(mpList.Available) {
-		t.Errorf("%s ended up with %d mountpaths (dd=%d, disabled=%d), expecting: %d", target.StringEx(),
-			len(mpl.Available), len(mpl.WaitingDD), len(mpl.Disabled),
-			len(mpList.Available))
+		t.Errorf("%s ended up with %d mountpaths (dd=%v, disabled=%v), expecting: %d",
+			tname, len(mpl.Available), mpl.WaitingDD, mpl.Disabled, len(mpList.Available))
 	} else if len(mpl.Disabled) != len(mpList.Disabled) || len(mpl.WaitingDD) != len(mpList.WaitingDD) {
-		t.Errorf("%s ended up with (dd=%d, disabled=%d) mountpaths, expecting (%d and %d), respectively",
-			target.StringEx(), len(mpl.WaitingDD), len(mpl.Disabled),
-			len(mpList.WaitingDD), len(mpList.Disabled))
+		t.Errorf("%s ended up with (dd=%v, disabled=%v) mountpaths, expecting (%v and %v), respectively",
+			tname, mpl.WaitingDD, mpl.Disabled, mpList.WaitingDD, mpList.Disabled)
+	}
+}
+
+func ensureNoDisabledMountpaths(t *testing.T, target *cluster.Snode, mpList *cmn.MountpathList) {
+	if len(mpList.WaitingDD) != 0 || len(mpList.Disabled) != 0 {
+		t.Fatalf("%s: disabled mountpaths at the start of the %q (avail=%d, dd=%v, disabled=%v)\n",
+			target.StringEx(), t.Name(), len(mpList.Available), mpList.WaitingDD, mpList.Disabled)
 	}
 }
 
@@ -962,6 +968,8 @@ func initMountpaths(t *testing.T, proxyURL string) {
 	for _, target := range smap.Tmap {
 		mpathList, err := api.GetMountpaths(baseParams, target)
 		tassert.CheckFatal(t, err)
+		ensureNoDisabledMountpaths(t, target, mpathList)
+
 		for _, mpath := range mpathList.Available {
 			fs.Add(mpath, target.ID())
 		}

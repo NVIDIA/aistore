@@ -1929,6 +1929,7 @@ func TestECEmergencyMountpath(t *testing.T) {
 	removeTarget, _ := o.smap.GetRandTarget()
 	mpathList, err := api.GetMountpaths(baseParams, removeTarget)
 	tassert.CheckFatal(t, err)
+	ensureNoDisabledMountpaths(t, removeTarget, mpathList)
 	if len(mpathList.Available) < 2 {
 		t.Fatalf("%s requires 2 or more mountpaths", t.Name())
 	}
@@ -1988,12 +1989,19 @@ func TestECEmergencyMountpath(t *testing.T) {
 	tlog.Logf("Disabling a mountpath %s at target: %s\n", removeMpath, removeTarget.ID())
 	err = api.DisableMountpath(baseParams, removeTarget, removeMpath, false /*dont-resil*/)
 	tassert.CheckFatal(t, err)
+
+	// Wait for resilvering
+	args := api.XactReqArgs{Node: removeTarget.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
+	_, err = api.WaitForXaction(baseParams, args)
+	tassert.CheckFatal(t, err)
+
 	defer func() {
 		tlog.Logf("Enabling mountpath %s at target %s...\n", removeMpath, removeTarget.ID())
 		err = api.EnableMountpath(baseParams, removeTarget, removeMpath)
 		tassert.CheckFatal(t, err)
 
 		// Wait for resilvering
+		time.Sleep(time.Second)
 		args := api.XactReqArgs{Node: removeTarget.ID(), Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
 		_, _ = api.WaitForXaction(baseParams, args)
 
@@ -2011,6 +2019,10 @@ func TestECEmergencyMountpath(t *testing.T) {
 	if len(objList.Entries) != o.objCount {
 		t.Fatalf("Invalid number of objects: %d, expected %d", len(objList.Entries), o.objCount)
 	}
+
+	// Wait for ec to finish
+	flt := api.XactReqArgs{Kind: cmn.ActECPut, Bck: bck}
+	_ = api.WaitForXactionIdle(baseParams, flt)
 }
 
 func TestECRebalance(t *testing.T) {

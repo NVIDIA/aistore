@@ -1,4 +1,4 @@
-// Package mirror provides local mirroring and replica management
+// Package xaction provides core functionality for the AIStore eXtended Actions (xactions).
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */

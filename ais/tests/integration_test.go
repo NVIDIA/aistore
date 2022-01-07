@@ -560,6 +560,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	}
 	mpList, err := api.GetMountpaths(baseParams, selectedTarget)
 	tassert.CheckFatal(t, err)
+	ensureNoDisabledMountpaths(t, selectedTarget, mpList)
 
 	if len(mpList.Available) < 2 {
 		t.Fatalf("Must have at least 2 mountpaths")
@@ -567,7 +568,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 
 	// Disable mountpaths temporarily
 	mpath := mpList.Available[0]
-	tlog.Logf("Disable mountpath on target %s\n", selectedTarget.ID())
+	tlog.Logf("Disable mountpath at target %s\n", selectedTarget.ID())
 	err = api.DisableMountpath(baseParams, selectedTarget, mpath, false /*dont-resil*/)
 	tassert.CheckFatal(t, err)
 
@@ -648,6 +649,7 @@ func TestGetDuringResilver(t *testing.T) {
 	target, _ := m.smap.GetRandTarget()
 	mpList, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
+	ensureNoDisabledMountpaths(t, target, mpList)
 
 	if len(mpList.Available) < 2 {
 		t.Fatalf("Must have at least 2 mountpaths")
@@ -813,13 +815,7 @@ func TestMountpathDetachAll(t *testing.T) {
 	tname := target.StringEx()
 	origMountpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
-
-	if len(origMountpaths.WaitingDD) != 0 || len(origMountpaths.Disabled) != 0 {
-		tlog.Logf("Warning %s: orig mountpaths (avail=%d, dd=%d, disabled=%d)\n", tname,
-			len(origMountpaths.Available), len(origMountpaths.WaitingDD), len(origMountpaths.Disabled))
-	} else {
-		tlog.Logf("%s: orig avail mountpaths=%d\n", tname, len(origMountpaths.Available))
-	}
+	ensureNoDisabledMountpaths(t, target, origMountpaths)
 
 	// Remove all mountpaths on the target
 	for _, mpath := range origMountpaths.Available {
@@ -835,6 +831,7 @@ func TestMountpathDetachAll(t *testing.T) {
 	// Check if mountpaths were actually removed
 	mountpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
+	ensureNoDisabledMountpaths(t, target, mountpaths)
 
 	if len(mountpaths.Available) != 0 {
 		t.Fatalf("%s should not have any paths available: %d", tname, len(mountpaths.Available))
@@ -883,6 +880,7 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 	target, _ := m.smap.GetRandTarget()
 	mpList, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
+	ensureNoDisabledMountpaths(t, target, mpList)
 
 	tutils.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
@@ -915,7 +913,7 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 	m.gets()
 
 	// Remove new mountpath from target
-	tlog.Logf("detach %q on target %s\n", testMpath, target.StringEx())
+	tlog.Logf("detach %q from target %s\n", testMpath, target.StringEx())
 	if containers.DockerRunning() {
 		if err := api.DetachMountpath(baseParams, target, testMpath, false /*dont-resil*/); err != nil {
 			t.Error(err.Error())
@@ -925,6 +923,7 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
+	time.Sleep(3 * time.Second)
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -1040,6 +1039,7 @@ func TestMountpathDisableAll(t *testing.T) {
 	tname := target.StringEx()
 	origMountpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
+	ensureNoDisabledMountpaths(t, target, origMountpaths)
 
 	if len(origMountpaths.WaitingDD) != 0 || len(origMountpaths.Disabled) != 0 {
 		tlog.Logf("Warning %s: orig mountpaths (avail=%d, dd=%d, disabled=%d)\n", tname,
@@ -1580,6 +1580,7 @@ func TestGetFromMirroredWithLostOneMountpath(t *testing.T) {
 	target, _ := m.smap.GetRandTarget()
 	mpList, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
+	ensureNoDisabledMountpaths(t, target, mpList)
 	if len(mpList.Available) < copies {
 		t.Fatalf("%s requires at least %d mountpaths per target", t.Name(), copies)
 	}
@@ -1651,6 +1652,7 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 	target, _ := m.smap.GetRandTarget()
 	mpList, err := api.GetMountpaths(baseParams, target)
 	mpathCount := len(mpList.Available)
+	ensureNoDisabledMountpaths(t, target, mpList)
 	tassert.CheckFatal(t, err)
 	if mpathCount < 3 {
 		t.Skipf("%s requires at least 3 mountpaths per target (%s has %d)", t.Name(), target.StringEx(), mpathCount)
@@ -1739,8 +1741,10 @@ func testNonRedundantMpathDD(t *testing.T, action string) {
 	// Select a random target
 	target, _ := m.smap.GetRandTarget()
 	mpList, err := api.GetMountpaths(baseParams, target)
-	mpathCount := len(mpList.Available)
 	tassert.CheckFatal(t, err)
+	ensureNoDisabledMountpaths(t, target, mpList)
+
+	mpathCount := len(mpList.Available)
 	if mpathCount < 2 {
 		t.Skipf("%s requires at least 2 mountpaths per target (%s has %d)", t.Name(), target.StringEx(), mpathCount)
 	}
