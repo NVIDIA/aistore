@@ -26,6 +26,7 @@ const (
 	ActDecommission    = "decommission" // decommission all nodes in the cluster (cleanup system data)
 	ActDeleteObjects   = "delete-listrange"
 	ActDestroyBck      = "destroy-bck" // destroy bucket data and metadata
+	ActSummaryBck      = "summary-bck"
 	ActDownload        = "download"
 	ActECEncode        = "ec-encode" // erasure code a bucket
 	ActECGet           = "ec-get"    // erasure decode objects
@@ -59,7 +60,6 @@ const (
 	ActShutdown        = "shutdown"
 	ActStartGFN        = "start-gfn"
 	ActStoreCleanup    = "cleanup-store"
-	ActSummary         = "summary"
 
 	ActAttachRemote = "attach"
 	ActDetachRemote = "detach"

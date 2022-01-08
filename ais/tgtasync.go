@@ -106,19 +106,13 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 		ctx        = context.Background()
 	)
 	if taskAction == cmn.TaskStart {
-		var (
-			status = http.StatusInternalServerError
-			err    error
-		)
-		switch action {
-		case cmn.ActSummary:
-			err = xreg.RenewBckSummary(ctx, t, bck, msg)
-		default:
+		if action != cmn.ActSummaryBck {
 			t.writeErrAct(w, r, action)
 			return
 		}
-		if err != nil {
-			t.writeErr(w, r, err, status)
+		rns := xreg.RenewBckSummary(ctx, t, bck, msg)
+		if rns.Err != nil {
+			t.writeErr(w, r, rns.Err, http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)

@@ -518,7 +518,7 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 			begin := mono.NanoTime()
 			p.listObjects(w, r, bck, msg, begin)
 		}
-	case cmn.ActSummary:
+	case cmn.ActSummaryBck:
 		p.bucketSummary(w, r, queryBcks, msg, query)
 	default:
 		p.writeErrAct(w, r, msg.Action)
@@ -1372,7 +1372,7 @@ func (p *proxyrunner) gatherBucketSummary(bck cmn.QueryBcks, msg *cmn.BucketSumm
 		isNew, q = initAsyncQuery(cmn.Bck(bck), msg, cos.GenUUID())
 		config   = cmn.GCO.Get()
 		smap     = p.owner.smap.get()
-		aisMsg   = p.newAmsgActVal(cmn.ActSummary, msg)
+		aisMsg   = p.newAmsgActVal(cmn.ActSummaryBck, msg)
 	)
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{

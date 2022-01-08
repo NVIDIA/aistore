@@ -5,12 +5,19 @@
 package xreg
 
 import (
+	"context"
+
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
 )
+
+type BckSummaryArgs struct {
+	Ctx context.Context
+	Msg *cmn.BucketSummaryMsg
+}
 
 func RegNonBckXact(entry Renewable) { defaultReg.regNonBckXact(entry) }
 
@@ -84,4 +91,18 @@ func (r *registry) renewETL(t cluster.Target, msg interface{}) RenewRes {
 		Custom: msg,
 	}, nil)
 	return r.renew(e, nil)
+}
+
+func RenewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.BucketSummaryMsg) RenewRes {
+	return defaultReg.renewBckSummary(ctx, t, bck, msg)
+}
+
+func (r *registry) renewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.BucketSummaryMsg) RenewRes {
+	custom := &BckSummaryArgs{Ctx: ctx, Msg: msg}
+	e := r.nonbckXacts[cmn.ActSummaryBck].New(Args{
+		T:      t,
+		UUID:   msg.UUID,
+		Custom: custom,
+	}, bck)
+	return r.renew(e, bck)
 }

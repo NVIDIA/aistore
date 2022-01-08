@@ -57,7 +57,8 @@ func (p *bmvFactory) Start() error {
 func (p *bmvFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	if p.phase == cmn.ActBegin {
 		if !prevEntry.Get().Finished() {
-			err = fmt.Errorf("%s: cannot(%s=>%s) older rename still in progress", p.Kind(), p.args.BckFrom, p.args.BckTo)
+			err = fmt.Errorf("%s: cannot(%s=>%s) older rename still in progress",
+				p.Kind(), p.args.BckFrom, p.args.BckTo)
 			return
 		}
 		// TODO: more checks

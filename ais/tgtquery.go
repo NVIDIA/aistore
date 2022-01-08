@@ -66,7 +66,7 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	if q.Cached {
 		lsmsg.Flags = cmn.LsPresent
 	}
-	rns := xreg.RenewQuery(ctx, t, q, lsmsg)
+	rns := xreg.RenewQueryObjects(ctx, t, q, lsmsg)
 	if rns.Err != nil {
 		t.writeErr(w, r, rns.Err)
 		return

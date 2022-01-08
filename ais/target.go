@@ -565,7 +565,7 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		t.handleListObjects(w, r, queryBcks, msg)
-	case cmn.ActSummary:
+	case cmn.ActSummaryBck:
 		t.handleSummary(w, r, queryBcks, msg)
 	default:
 		t.writeErrAct(w, r, msg.Action)

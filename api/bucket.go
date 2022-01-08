@@ -148,7 +148,7 @@ func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks,
 		Query:      cmn.AddBckToQuery(nil, cmn.Bck(query)),
 	}
 	var summaries cmn.BucketsSummaries
-	if err := waitForAsyncReqComplete(reqParams, cmn.ActSummary, msg, &summaries); err != nil {
+	if err := waitForAsyncReqComplete(reqParams, cmn.ActSummaryBck, msg, &summaries); err != nil {
 		return nil, err
 	}
 	sort.Sort(summaries)
@@ -275,7 +275,6 @@ func EvictRemoteBucket(baseParams BaseParams, bck cmn.Bck, keepMD bool) error {
 // 4. If the destination returns status code StatusOK, it means the response
 //    contains the real data and the function returns the response to the caller
 func waitForAsyncReqComplete(reqParams ReqParams, action string, msg *cmn.BucketSummaryMsg, v interface{}) error {
-	cos.Assert(action == cmn.ActSummary)
 	var (
 		uuid   string
 		sleep  = initialPollInterval

@@ -1,8 +1,9 @@
-// Package xreg provides registry and (renew, find) functions for AIS eXtended Actions (xactions).
+// Package xs contains eXtended actions (xactions) except storage services
+// (mirror, ec) and extensions (downloader, lru).
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
-package xreg
+package xs
 
 import (
 	"context"
@@ -15,11 +16,11 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xreg"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -29,10 +30,9 @@ type (
 		Err    error       `json:"error"`
 	}
 	bsummFactory struct {
+		xreg.RenewBase
 		xact *bsummXact
 		ctx  context.Context
-		t    cluster.Target
-		uuid string
 		msg  *cmn.BucketSummaryMsg
 	}
 	bsummXact struct {
@@ -46,48 +46,34 @@ type (
 
 // interface guard
 var (
-	_ Renewable    = (*bsummFactory)(nil)
-	_ cluster.Xact = (*bsummXact)(nil)
+	_ xreg.Renewable = (*bsummFactory)(nil)
+	_ cluster.Xact   = (*bsummXact)(nil)
 )
-
-func RenewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.BucketSummaryMsg) error {
-	return defaultReg.renewBckSummary(ctx, t, bck, msg)
-}
-
-func (r *registry) renewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.BucketSummaryMsg) error {
-	r.entries.mtx.Lock()
-	err := r.entries.del(msg.UUID)
-	r.entries.mtx.Unlock()
-	if err != nil {
-		return err
-	}
-	e := &bsummFactory{ctx: ctx, t: t, uuid: msg.UUID, msg: msg}
-	xact := &bsummXact{t: e.t, msg: e.msg, ctx: e.ctx}
-	xact.InitBase(e.uuid, cmn.ActSummary, bck)
-	e.xact = xact
-	e.Start()
-	r.add(e)
-	return nil
-}
 
 //////////////////
 // bsummFactory //
 //////////////////
 
-func (*bsummFactory) New(Args, *cluster.Bck) Renewable { debug.Assert(false); return nil }
+func (*bsummFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
+	summArgs := args.Custom.(*xreg.BckSummaryArgs)
+	p := &bsummFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, ctx: summArgs.Ctx, msg: summArgs.Msg}
+	return p
+}
 
-func (e *bsummFactory) Start() error {
-	go e.xact.Run(nil)
+func (p *bsummFactory) Start() error {
+	xact := &bsummXact{t: p.T, msg: p.msg, ctx: p.ctx}
+	xact.InitBase(p.UUID(), cmn.ActSummaryBck, p.Bck)
+	p.xact = xact
+	go p.xact.Run(nil)
 	return nil
 }
 
-func (*bsummFactory) Kind() string        { return cmn.ActSummary }
-func (e *bsummFactory) Get() cluster.Xact { return e.xact }
+func (*bsummFactory) Kind() string        { return cmn.ActSummaryBck }
+func (p *bsummFactory) Get() cluster.Xact { return p.xact }
 
-// never called
-func (*bsummFactory) Bucket() *cluster.Bck                         { debug.Assert(false); return nil }
-func (*bsummFactory) UUID() string                                 { debug.Assert(false); return "" }
-func (*bsummFactory) WhenPrevIsRunning(Renewable) (w WPR, e error) { debug.Assert(false); return }
+func (*bsummFactory) WhenPrevIsRunning(xreg.Renewable) (w xreg.WPR, e error) {
+	return xreg.WprUse, nil
+}
 
 ///////////////
 // bsummXact //

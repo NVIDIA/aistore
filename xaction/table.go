@@ -61,7 +61,7 @@ var Table = map[string]Record{
 	cmn.ActInvalListCache:  {Scope: ScopeBck, Access: cmn.AceObjLIST, Startable: false},
 
 	// other
-	cmn.ActSummary: {Scope: ScopeO, Access: cmn.AceObjLIST | cmn.AceBckHEAD, Startable: false, Metasync: false, Owned: true, Mountpath: true},
+	cmn.ActSummaryBck: {Scope: ScopeO, Access: cmn.AceObjLIST | cmn.AceBckHEAD, Startable: false, Metasync: false, Owned: true, Mountpath: true},
 }
 
 func IsValidKind(kind string) bool { _, ok := Table[kind]; return ok }
