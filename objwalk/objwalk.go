@@ -1,4 +1,4 @@
-// Package objwalk provides core functionality for reading the list of a bucket objects
+// Package objwalk provides core functionality for listing bucket objects in pages.
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
@@ -11,8 +11,9 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/objwalk/query"
 	"github.com/NVIDIA/aistore/objwalk/walkinfo"
-	"github.com/NVIDIA/aistore/query"
 )
 
 type (
@@ -25,12 +26,7 @@ type (
 )
 
 func NewWalk(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.ListObjsMsg) *Walk {
-	return &Walk{
-		ctx: ctx,
-		t:   t,
-		bck: bck,
-		msg: msg,
-	}
+	return &Walk{ctx: ctx, t: t, bck: bck, msg: msg}
 }
 
 // DefaultLocalObjPage should be used when there's no need to persist results for a longer period of time.
@@ -41,18 +37,17 @@ func (w *Walk) DefaultLocalObjPage(msg *cmn.ListObjsMsg) (*cmn.BucketList, error
 		bckSrc = &query.BucketSource{Bck: w.bck}
 		q      = query.NewQuery(objSrc, bckSrc, nil)
 	)
-
 	msg.UUID = cos.GenUUID()
 	xact := query.NewObjectsListing(w.ctx, w.t, q, msg)
 	go xact.Run(nil)
 
-	cos.Assert(!xact.TokenUnsatisfiable(msg.ContinuationToken))
+	debug.Assert(!xact.TokenUnsatisfiable(msg.ContinuationToken))
 	return LocalObjPage(xact, msg.PageSize)
 }
 
 // LocalObjPage walks local filesystems and collects objects for a given
-// bucket based on query.ObjectsListingXact. The bucket can be local or cloud one. In latter case the
-// function returns the list of cloud objects cached locally
+// bucket based on query.ObjectsListingXact. The bucket can be ais:// or remote.
+// In the latter case, return the list of objects cached locally.
 func LocalObjPage(xact *query.ObjectsListingXact, objectsCnt uint) (*cmn.BucketList, error) {
 	var err error
 

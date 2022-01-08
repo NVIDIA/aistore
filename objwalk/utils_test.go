@@ -1,4 +1,4 @@
-// Package objwalk provides core functionality for reading the list of a bucket objects
+// Package objwalk provides core functionality for listing bucket objects in pages.
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */

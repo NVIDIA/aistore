@@ -21,7 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/nl"
-	"github.com/NVIDIA/aistore/query"
+	"github.com/NVIDIA/aistore/objwalk/query"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xreg"
 	jsoniter "github.com/json-iterator/go"

@@ -17,7 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils"
-	"github.com/NVIDIA/aistore/query"
+	"github.com/NVIDIA/aistore/objwalk/query"
 	jsoniter "github.com/json-iterator/go"
 )
 

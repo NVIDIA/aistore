@@ -86,9 +86,9 @@ func ObjFilterFromMsg(filter *FilterMsg) (cluster.ObjectFilter, error) {
 	switch filter.Type {
 	case AND, OR:
 		if len(filter.Filters) < 2 {
-			return nil, fmt.Errorf("expected %s filter to have at least 2 inner filters, got %d", filter.Type, len(filter.Filters))
+			return nil, fmt.Errorf("expected %s filter to have at least 2 inner filters, got %d",
+				filter.Type, len(filter.Filters))
 		}
-
 		filters, err := extractObjectFilters(filter)
 		if err != nil {
 			return nil, err

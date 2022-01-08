@@ -12,7 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/query"
+	"github.com/NVIDIA/aistore/objwalk/query"
 )
 
 var errQueryHandle = errors.New("handle cannot be empty")

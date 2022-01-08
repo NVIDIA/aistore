@@ -10,7 +10,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/query"
+	"github.com/NVIDIA/aistore/objwalk/query"
 	"github.com/NVIDIA/aistore/xaction"
 )
 

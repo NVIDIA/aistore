@@ -1,4 +1,5 @@
-// Package objwalk provides core functionality for reading the list of a bucket objects
+// Package walkinfo provides common context and helper methods for object listing and
+// object querying.
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */

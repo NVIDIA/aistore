@@ -831,7 +831,6 @@ func TestMountpathDetachAll(t *testing.T) {
 	// Check if mountpaths were actually removed
 	mountpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
-	ensureNoDisabledMountpaths(t, target, mountpaths)
 
 	if len(mountpaths.Available) != 0 {
 		t.Fatalf("%s should not have any paths available: %d", tname, len(mountpaths.Available))

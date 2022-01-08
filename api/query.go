@@ -9,10 +9,11 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/query"
+	"github.com/NVIDIA/aistore/objwalk/query"
 )
 
-func InitQuery(baseParams BaseParams, objectsTemplate string, bck cmn.Bck, filter *query.FilterMsg, workersCnts ...uint) (string, error) {
+func InitQuery(baseParams BaseParams, objectsTemplate string, bck cmn.Bck, filter *query.FilterMsg,
+	workersCnts ...uint) (string, error) {
 	var (
 		outerSelectMsg = query.OuterSelectMsg{Template: objectsTemplate}
 		fromMsg        = query.FromMsg{Bck: bck}
