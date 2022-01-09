@@ -922,11 +922,11 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
+	m.ensureNoGetErrors()
+
 	time.Sleep(3 * time.Second)
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
-
-	m.ensureNoGetErrors()
 	m.ensureNumMountpaths(target, mpList)
 }
 
@@ -984,7 +984,7 @@ func TestAttachDetachMountpathAllTargets(t *testing.T) {
 		}
 	}
 
-	time.Sleep(time.Second)
+	time.Sleep(4 * time.Second)
 	err := tutils.WaitForAllResilvers(tutils.BaseAPIParams(m.proxyURL), rebalanceTimeout)
 	tassert.CheckFatal(t, err)
 
@@ -1010,7 +1010,7 @@ func TestAttachDetachMountpathAllTargets(t *testing.T) {
 		}
 	}
 
-	time.Sleep(time.Second)
+	time.Sleep(4 * time.Second)
 	err = tutils.WaitForAllResilvers(tutils.BaseAPIParams(m.proxyURL), rebalanceTimeout)
 	tassert.CheckFatal(t, err)
 
