@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/dsort"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 )
 
@@ -421,12 +421,12 @@ func daemonXactionCompletions(ctx *cli.Context) {
 		}
 	}
 	if !xactSet {
-		for kind := range xaction.Table {
+		for kind := range xact.Table {
 			fmt.Println(kind)
 		}
 		return
 	}
-	if xaction.IsBckScope(xactName) {
+	if xact.IsBckScope(xactName) {
 		bucketCompletions()(ctx)
 		return
 	}
@@ -435,7 +435,7 @@ func daemonXactionCompletions(ctx *cli.Context) {
 func xactionCompletions(cmd string) func(ctx *cli.Context) {
 	return func(c *cli.Context) {
 		if c.NArg() == 0 {
-			for kind, meta := range xaction.Table {
+			for kind, meta := range xact.Table {
 				if (cmd != cmn.ActXactStart) || (cmd == cmn.ActXactStart && meta.Startable) {
 					fmt.Println(kind)
 				}
@@ -443,7 +443,7 @@ func xactionCompletions(cmd string) func(ctx *cli.Context) {
 			return
 		}
 		xactName := c.Args().First()
-		if xaction.IsBckScope(xactName) {
+		if xact.IsBckScope(xactName) {
 			bucketCompletions()(c)
 			return
 		}

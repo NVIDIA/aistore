@@ -17,7 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/nl"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -37,8 +37,8 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		t.writeErr(w, r, rns.Err, http.StatusInternalServerError)
 		return
 	}
-	xact := rns.Entry.Get()
-	downloaderXact := xact.(*downloader.Downloader)
+	xctn := rns.Entry.Get()
+	downloaderXact := xctn.(*downloader.Downloader)
 	switch r.Method {
 	case http.MethodPost:
 		if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathDownload.L); err != nil {

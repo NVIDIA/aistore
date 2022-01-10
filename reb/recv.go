@@ -17,7 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 func (reb *Reb) recvObj(hdr transport.ObjHdr, objReader io.Reader, err error) {
@@ -125,7 +125,7 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 	if glog.FastV(5, glog.SmoduleReb) {
 		glog.Infof("%s: from %s %s", reb.t.Snode(), tsid, lom)
 	}
-	xreb := reb.xact()
+	xreb := reb.xctn()
 	xreb.InObjsAdd(1, hdr.ObjAttrs.Size)
 	// ACK
 	tsi := smap.GetTarget(tsid)
@@ -187,8 +187,8 @@ func (reb *Reb) recvPush(hdr transport.ObjHdr, _ io.Reader, err error) {
 	if req.stage == rebStageAbort && reb.RebID() <= req.rebID {
 		// a target aborted its xaction and sent the signal to others
 		glog.Warningf("%s: abort notification from %s", reb.t.Snode(), req.daemonID)
-		if reb.xact() != nil {
-			reb.xact().Abort(nil)
+		if reb.xctn() != nil {
+			reb.xctn().Abort(nil)
 		}
 		return
 	}
@@ -287,7 +287,7 @@ func (reb *Reb) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Reader) 
 			continue
 		}
 		reb.onAir.Inc()
-		xreb := reb.xact()
+		xreb := reb.xctn()
 		if xreb.IsAborted() {
 			err = fmt.Errorf("failed to send updated metafile: %s", xreb)
 			break

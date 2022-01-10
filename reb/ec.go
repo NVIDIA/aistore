@@ -48,7 +48,7 @@ func (reb *Reb) runECjoggers() {
 		wg             = &sync.WaitGroup{}
 		availablePaths = fs.GetAvail()
 		cfg            = cmn.GCO.Get()
-		b              = reb.xact().Bck()
+		b              = reb.xctn().Bck()
 	)
 	for _, mpathInfo := range availablePaths {
 		bck := cmn.Bck{Provider: cmn.ProviderAIS}
@@ -82,7 +82,7 @@ func (reb *Reb) jogEC(mpathInfo *fs.MountpathInfo, bck cmn.Bck, wg *sync.WaitGro
 		Sorted:   false,
 	}
 	if err := fs.Walk(opts); err != nil {
-		xreb := reb.xact()
+		xreb := reb.xctn()
 		if xreb.IsAborted() || xreb.Finished() {
 			glog.Infof("aborting traversal")
 		} else {
@@ -157,7 +157,7 @@ func (reb *Reb) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *cluster.
 		err = fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
 		return
 	}
-	xreb := reb.xact()
+	xreb := reb.xctn()
 	xreb.OutObjsAdd(1, o.Hdr.ObjAttrs.Size)
 	return
 }
@@ -288,7 +288,7 @@ func (reb *Reb) renameLocalCT(req *pushReq, ct *cluster.CT, md *ec.Metadata) (
 }
 
 func (reb *Reb) walkEC(fqn string, de fs.DirEntry) (err error) {
-	xreb := reb.xact()
+	xreb := reb.xctn()
 	if err := xreb.Aborted(); err != nil {
 		// notify `dir.Walk` to stop iterations
 		return cmn.NewErrAborted(xreb.Name(), "walk-ec", err)

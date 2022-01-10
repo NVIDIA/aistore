@@ -1,8 +1,8 @@
-// Package xaction provides core functionality for the AIStore eXtended Actions (xactions).
+// Package xact provides core functionality for the AIStore eXtended Actions (xactions).
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
-package xaction
+package xact
 
 import (
 	"github.com/NVIDIA/aistore/cluster"
@@ -10,22 +10,22 @@ import (
 	"github.com/NVIDIA/aistore/fs/mpather"
 )
 
-type XactBckJog struct {
-	XactBase
+type BckJog struct {
+	Base
 	t       cluster.Target
 	joggers *mpather.JoggerGroup
 }
 
-func (r *XactBckJog) Init(id, kind string, bck *cluster.Bck, opts *mpather.JoggerGroupOpts) {
+func (r *BckJog) Init(id, kind string, bck *cluster.Bck, opts *mpather.JoggerGroupOpts) {
 	r.t = opts.T
 	r.InitBase(id, kind, bck)
 	r.joggers = mpather.NewJoggerGroup(opts)
 }
 
-func (r *XactBckJog) Run()                   { r.joggers.Run() }
-func (r *XactBckJog) Target() cluster.Target { return r.t }
+func (r *BckJog) Run()                   { r.joggers.Run() }
+func (r *BckJog) Target() cluster.Target { return r.t }
 
-func (r *XactBckJog) Wait() error {
+func (r *BckJog) Wait() error {
 	for {
 		select {
 		case errCause := <-r.ChanAbort():

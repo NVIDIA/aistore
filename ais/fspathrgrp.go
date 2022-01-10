@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/res"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/volume"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/NVIDIA/aistore/xs"
 )
 

@@ -21,8 +21,8 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 // TODO: unify and refactor (lru, cleanup-store)
@@ -32,7 +32,7 @@ import (
 // When and if exceeded, AIStore target will start gradually evicting objects from its
 // stable storage: oldest first access-time wise.
 //
-// LRU is implemented as a so-called extended action (aka x-action, see xaction.go) that gets
+// LRU is implemented as a so-called extended action (aka x-action, see xact.go) that gets
 // triggered when/if a used local capacity exceeds high watermark (config.LRU.HighWM). LRU then
 // runs automatically. In order to reduce its impact on the live workload, LRU throttles itself
 // in accordance with the current storage-target's utilization (see xaction_throttle.go).
@@ -59,7 +59,7 @@ type (
 		Force               bool // Ignore LRU prop when set to be true.
 	}
 	XactLRU struct {
-		xaction.XactBase
+		xact.Base
 	}
 )
 
@@ -98,7 +98,7 @@ type (
 	}
 	lruFactory struct {
 		xreg.RenewBase
-		xact *XactLRU
+		xctn *XactLRU
 	}
 	TestFactory = lruFactory // unit tests only
 )
@@ -118,13 +118,13 @@ func (*lruFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
 }
 
 func (p *lruFactory) Start() error {
-	p.xact = &XactLRU{}
-	p.xact.InitBase(p.UUID(), cmn.ActLRU, nil)
+	p.xctn = &XactLRU{}
+	p.xctn.InitBase(p.UUID(), cmn.ActLRU, nil)
 	return nil
 }
 
 func (*lruFactory) Kind() string        { return cmn.ActLRU }
-func (p *lruFactory) Get() cluster.Xact { return p.xact }
+func (p *lruFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *lruFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	err = fmt.Errorf("%s is already running - not starting %q", prevEntry.Get(), p.Str(p.Kind()))

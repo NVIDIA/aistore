@@ -19,9 +19,9 @@ type markerEntry struct {
 }
 
 func checkMarkersExist(t *testing.T, xs ...markerEntry) {
-	for _, x := range xs {
-		exists := fs.MarkerExists(x.marker)
-		tassert.Fatalf(t, exists == x.exists, "%q marker (%t vs %t)", x.marker, exists, x.exists)
+	for _, xctn := range xs {
+		exists := fs.MarkerExists(xctn.marker)
+		tassert.Fatalf(t, exists == xctn.exists, "%q marker (%t vs %t)", xctn.marker, exists, xctn.exists)
 	}
 }
 

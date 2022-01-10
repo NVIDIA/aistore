@@ -18,8 +18,8 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 //
@@ -38,12 +38,12 @@ const (
 type (
 	streamingF struct {
 		xreg.RenewBase
-		xact cluster.Xact
+		xctn cluster.Xact
 		kind string
 		dm   *bundle.DataMover
 	}
 	streamingX struct {
-		xaction.DemandBase
+		xact.DemandBase
 		p     *streamingF
 		err   cos.ErrValue
 		wiCnt atomic.Int32
@@ -55,7 +55,7 @@ type (
 ///////////////////////////
 
 func (p *streamingF) Kind() string      { return p.kind }
-func (p *streamingF) Get() cluster.Xact { return p.xact }
+func (p *streamingF) Get() cluster.Xact { return p.xctn }
 
 func (p *streamingF) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 	debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) // xreg.usePrev() must've returned true
@@ -97,10 +97,10 @@ func (r *streamingX) TxnAbort() {
 		r.p.dm.Close(err)
 	}
 	r.p.dm.UnregRecv()
-	r.XactBase.Finish(err)
+	r.Base.Finish(err)
 }
 
-func (r *streamingX) Snap() cluster.XactionSnap { return r.DemandBase.ExtSnap() }
+func (r *streamingX) Snap() cluster.XactSnap { return r.DemandBase.ExtSnap() }
 
 func (r *streamingX) raiseErr(err error, errCode int, contOnErr bool) {
 	if cmn.IsErrAborted(err) {

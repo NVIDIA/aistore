@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/nl"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xact"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -77,7 +77,7 @@ var _ = Describe("Notifications xaction test", func() {
 			return n
 		}
 
-		baseXact = func(xactID string, counts ...int64) *xaction.SnapExt {
+		baseXact = func(xactID string, counts ...int64) *xact.SnapExt {
 			var (
 				objCount  int64
 				byteCount int64
@@ -88,22 +88,22 @@ var _ = Describe("Notifications xaction test", func() {
 			if len(counts) > 1 {
 				byteCount = counts[1]
 			}
-			return &xaction.SnapExt{Snap: xaction.Snap{
+			return &xact.SnapExt{Snap: xact.Snap{
 				ID: xactID,
-				Stats: xaction.Stats{
+				Stats: xact.Stats{
 					Bytes: byteCount,
 					Objs:  objCount,
 				},
 			}}
 		}
 
-		finishedXact = func(xactID string, counts ...int64) (snap *xaction.SnapExt) {
+		finishedXact = func(xactID string, counts ...int64) (snap *xact.SnapExt) {
 			snap = baseXact(xactID, counts...)
 			snap.EndTime = time.Now()
 			return
 		}
 
-		abortedXact = func(xactID string, counts ...int64) (snap *xaction.SnapExt) {
+		abortedXact = func(xactID string, counts ...int64) (snap *xact.SnapExt) {
 			snap = finishedXact(xactID, counts...)
 			snap.AbortedX = true
 			return
@@ -141,7 +141,7 @@ var _ = Describe("Notifications xaction test", func() {
 
 	BeforeEach(func() {
 		n = testNotifs()
-		nl = xaction.NewXactNL(xactID, cmn.ActECEncode, &smap.Smap, targets)
+		nl = xact.NewXactNL(xactID, cmn.ActECEncode, &smap.Smap, targets)
 	})
 
 	Describe("handleMsg", func() {
@@ -198,7 +198,7 @@ var _ = Describe("Notifications xaction test", func() {
 			err := n.handleProgress(nl, targets[target1ID], cos.MustMarshal(statsFirst), nil)
 			Expect(err).To(BeNil())
 			val, _ := nl.NodeStats().Load(target1ID)
-			snap, ok := val.(*xaction.SnapExt)
+			snap, ok := val.(*xact.SnapExt)
 			Expect(ok).To(BeTrue())
 			Expect(snap.Stats.Objs).To(BeEquivalentTo(initObjCount))
 			Expect(snap.Stats.Bytes).To(BeEquivalentTo(initByteCount))
@@ -207,7 +207,7 @@ var _ = Describe("Notifications xaction test", func() {
 			err = n.handleFinished(nl, targets[target1ID], cos.MustMarshal(statsProgress), nil)
 			Expect(err).To(BeNil())
 			val, _ = nl.NodeStats().Load(target1ID)
-			snap, ok = val.(*xaction.SnapExt)
+			snap, ok = val.(*xact.SnapExt)
 			Expect(ok).To(BeTrue())
 			Expect(snap.Stats.Objs).To(BeEquivalentTo(updatedObjCount))
 			Expect(snap.Stats.Bytes).To(BeEquivalentTo(updatedByteCount))
@@ -217,7 +217,7 @@ var _ = Describe("Notifications xaction test", func() {
 	Describe("ListenSmapChanged", func() {
 		It("should mark xaction Aborted when node not in smap", func() {
 			notifiers := getNodeMap(target1ID, target2ID)
-			nl = xaction.NewXactNL(xactID, cmn.ActECEncode, &smap.Smap, notifiers)
+			nl = xact.NewXactNL(xactID, cmn.ActECEncode, &smap.Smap, notifiers)
 			n = testNotifs()
 			n.add(nl)
 

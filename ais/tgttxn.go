@@ -23,8 +23,8 @@ import (
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/NVIDIA/aistore/xs"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -63,7 +63,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	xactRecord := xaction.Table[msg.Action]
+	xactRecord := xact.Table[msg.Action]
 	onlyPrimary := xactRecord.Metasync
 	if !t.ensureIntraControl(w, r, onlyPrimary) {
 		return
@@ -248,10 +248,10 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 		if rns.Err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, rns.Err)
 		}
-		xact := rns.Entry.Get()
+		xctn := rns.Entry.Get()
 		xreg.DoAbort(cmn.ActPutCopies, c.bck, errors.New("make-n-copies"))
-		c.addNotif(xact) // notify upon completion
-		xaction.GoRunW(xact)
+		c.addNotif(xctn) // notify upon completion
+		xact.GoRunW(xctn)
 	default:
 		debug.Assert(false)
 	}
@@ -324,10 +324,10 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 			if rns.Err != nil {
 				return fmt.Errorf("%s %s: %v", t.si, txn, rns.Err)
 			}
-			xact := rns.Entry.Get()
+			xctn := rns.Entry.Get()
 			xreg.DoAbort(cmn.ActPutCopies, c.bck, errors.New("re-mirror"))
-			c.addNotif(xact) // notify upon completion
-			xaction.GoRunW(xact)
+			c.addNotif(xctn) // notify upon completion
+			xact.GoRunW(xctn)
 		}
 		if reEC(txnSetBprops.bprops, txnSetBprops.nprops, c.bck) {
 			xreg.DoAbort(cmn.ActECEncode, c.bck, errors.New("re-ec"))
@@ -335,9 +335,9 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 			if rns.Err != nil {
 				return rns.Err
 			}
-			xact := rns.Entry.Get()
-			c.addNotif(xact) // ditto
-			xaction.GoRunW(xact)
+			xctn := rns.Entry.Get()
+			c.addNotif(xctn) // ditto
+			xact.GoRunW(xctn)
 		}
 	default:
 		debug.Assert(false)
@@ -417,15 +417,15 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 		if rns.Err != nil {
 			return rns.Err // must not happen at commit time
 		}
-		xact := rns.Entry.Get()
+		xctn := rns.Entry.Get()
 		err = fs.RenameBucketDirs(txnRenB.bckFrom.Props.BID, txnRenB.bckFrom.Bck, txnRenB.bckTo.Bck)
 		if err != nil {
 			return err // ditto
 		}
-		c.addNotif(xact) // notify upon completion
+		c.addNotif(xctn) // notify upon completion
 
 		reb.ActivateTimedGFN()
-		xaction.GoRunW(xact) // run and wait until it starts running
+		xact.GoRunW(xctn) // run and wait until it starts running
 	default:
 		debug.Assert(false)
 	}
@@ -532,9 +532,9 @@ func (t *targetrunner) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) erro
 			txnTcb.xtcb.TxnAbort()
 			return rns.Err
 		}
-		xact := rns.Entry.Get()
-		c.addNotif(xact) // notify upon completion
-		xaction.GoRunW(xact)
+		xctn := rns.Entry.Get()
+		c.addNotif(xctn) // notify upon completion
+		xact.GoRunW(xctn)
 	default:
 		debug.Assert(false)
 	}
@@ -562,8 +562,8 @@ func (t *targetrunner) _tcbBegin(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP
 	if err = rns.Err; err != nil {
 		return
 	}
-	xact := rns.Entry.Get()
-	xtcb := xact.(*mirror.XactTCB)
+	xctn := rns.Entry.Get()
+	xtcb := xctn.(*mirror.XactTCB)
 	txn := newTxnTCB(c, xtcb)
 	if err = t.transactions.begin(txn); err != nil {
 		return
@@ -609,11 +609,11 @@ func (t *targetrunner) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP
 		if rns.Err != nil {
 			return xactID, rns.Err
 		}
-		xact := rns.Entry.Get()
-		xactID = xact.ID()
+		xctn := rns.Entry.Get()
+		xactID = xctn.ID()
 		debug.Assert((!rns.IsRunning() && xactID == c.uuid) || (rns.IsRunning() && xactID == rns.UUID))
 
-		xtco := xact.(*xs.XactTCObjs)
+		xtco := xctn.(*xs.XactTCObjs)
 		msg.TxnUUID = c.uuid
 		txn := newTxnTCObjs(c, bckFrom, xtco, msg)
 		if err := t.transactions.begin(txn); err != nil {
@@ -684,9 +684,9 @@ func (t *targetrunner) ecEncode(c *txnServerCtx) error {
 		if rns.Err != nil {
 			return rns.Err
 		}
-		xact := rns.Entry.Get()
-		c.addNotif(xact) // notify upon completion
-		xaction.GoRunW(xact)
+		xctn := rns.Entry.Get()
+		c.addNotif(xctn) // notify upon completion
+		xact.GoRunW(xctn)
 	default:
 		debug.Assert(false)
 	}
@@ -742,11 +742,11 @@ func (t *targetrunner) createArchMultiObj(c *txnServerCtx) (string /*xaction uui
 		if rns.Err != nil {
 			return xactID, rns.Err
 		}
-		xact := rns.Entry.Get()
-		xactID = xact.ID()
+		xctn := rns.Entry.Get()
+		xactID = xctn.ID()
 		debug.Assert((!rns.IsRunning() && xactID == c.uuid) || (rns.IsRunning() && xactID == rns.UUID))
 
-		xarch := xact.(*xs.XactCreateArchMultiObj)
+		xarch := xctn.(*xs.XactCreateArchMultiObj)
 		// finalize the message and begin local transaction
 		archMsg.TxnUUID = c.uuid
 		archMsg.FromBckName = bckFrom.Name
@@ -927,13 +927,13 @@ func (t *targetrunner) coExists(bck *cluster.Bck, action string) (err error) {
 // notifications
 //
 
-func (c *txnServerCtx) addNotif(xact cluster.Xact) {
+func (c *txnServerCtx) addNotif(xctn cluster.Xact) {
 	dsts, ok := c.query[cmn.URLParamNotifyMe]
 	if !ok {
 		return
 	}
-	xact.AddNotif(&xaction.NotifXact{
+	xctn.AddNotif(&xact.NotifXact{
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: dsts, F: c.t.callerNotifyFin},
-		Xact:      xact,
+		Xact:      xctn,
 	})
 }

@@ -38,7 +38,7 @@ type etlBootstraper struct {
 	uri             string
 	originalPodName string
 	originalCommand []string
-	xact            cluster.Xact
+	xctn            cluster.Xact
 }
 
 func ParsePodSpec(errCtx *cmn.ETLErrorContext, spec []byte) (*corev1.Pod, error) {

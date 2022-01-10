@@ -19,8 +19,8 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 type (
@@ -66,7 +66,7 @@ func (p *tcoFactory) Start() error {
 	workCh := make(chan *cmn.TCObjsMsg, maxNumInParallel)
 	r := &XactTCObjs{streamingX: streamingX{p: &p.streamingF}, args: p.args, workCh: workCh}
 	r.pending.m = make(map[string]*tcowi, maxNumInParallel)
-	p.xact = r
+	p.xctn = r
 	r.DemandBase.Init(p.UUID(), p.Kind(), p.Bck, 0 /*use default*/)
 	if p.kind == cmn.ActETLObjects {
 		sizePDU = memsys.DefaultBufSize
@@ -77,7 +77,7 @@ func (p *tcoFactory) Start() error {
 	p.dm.SetXact(r)
 	p.dm.Open()
 
-	xaction.GoRunW(r)
+	xact.GoRunW(r)
 	return nil
 }
 

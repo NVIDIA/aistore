@@ -20,7 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 ////////////////////////////
@@ -110,7 +110,7 @@ func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what 
 	)
 	switch what {
 	case cmn.GetWhatQueryXactStats:
-		var xactMsg xaction.QueryMsg
+		var xactMsg xact.QueryMsg
 		if err := cmn.ReadJSON(w, r, &xactMsg); err != nil {
 			return
 		}
@@ -519,7 +519,7 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 		return
 	}
 	if ctx.rmd != nil {
-		xactID = xaction.RebID2S(ctx.rmd.Version)
+		xactID = xact.RebID2S(ctx.rmd.Version)
 	}
 	return
 }
@@ -587,7 +587,7 @@ func (p *proxyrunner) _updFinal(ctx *smapModifier, clone *smapX) {
 	}
 	if ctx.rmd != nil && ctx.nsi.IsTarget() && mustRunRebalance(ctx, clone) {
 		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
-		nl := xaction.NewXactNL(xaction.RebID2S(ctx.rmd.version()), cmn.ActRebalance, &clone.Smap, nil)
+		nl := xact.NewXactNL(xact.RebID2S(ctx.rmd.version()), cmn.ActRebalance, &clone.Smap, nil)
 		nl.SetOwner(equalIC)
 		// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
 		err := p.notifs.add(nl)
@@ -665,7 +665,7 @@ func (p *proxyrunner) _syncFinal(ctx *smapModifier, clone *smapX) {
 	)
 	pairs = append(pairs, revsPair{clone, aisMsg})
 	if ctx.rmd != nil {
-		nl := xaction.NewXactNL(xaction.RebID2S(ctx.rmd.version()), cmn.ActRebalance, &clone.Smap, nil)
+		nl := xact.NewXactNL(xact.RebID2S(ctx.rmd.version()), cmn.ActRebalance, &clone.Smap, nil)
 		nl.SetOwner(equalIC)
 		// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
 		err := p.notifs.add(nl)
@@ -805,7 +805,7 @@ func (p *proxyrunner) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
 }
 
 func (p *proxyrunner) xactStart(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
-	xactMsg := xaction.QueryMsg{}
+	xactMsg := xact.QueryMsg{}
 	if err := cos.MorphMarshal(msg.Value, &xactMsg); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
@@ -841,13 +841,13 @@ func (p *proxyrunner) xactStart(w http.ResponseWriter, r *http.Request, msg *cmn
 	}
 	freeCallResults(results)
 	smap := p.owner.smap.get()
-	nl := xaction.NewXactNL(xactMsg.ID, xactMsg.Kind, &smap.Smap, nil)
+	nl := xact.NewXactNL(xactMsg.ID, xactMsg.Kind, &smap.Smap, nil)
 	p.ic.registerEqual(regIC{smap: smap, nl: nl})
 	w.Write([]byte(xactMsg.ID))
 }
 
 func (p *proxyrunner) xactStop(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
-	xactMsg := xaction.QueryMsg{}
+	xactMsg := xact.QueryMsg{}
 	if err := cos.MorphMarshal(msg.Value, &xactMsg); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
@@ -891,11 +891,11 @@ func (p *proxyrunner) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err)
 		return
 	}
-	w.Write([]byte(xaction.RebID2S(rmdClone.version())))
+	w.Write([]byte(xact.RebID2S(rmdClone.version())))
 }
 
 func (p *proxyrunner) resilverOne(w http.ResponseWriter, r *http.Request,
-	msg *cmn.ActionMsg, xactMsg xaction.QueryMsg) {
+	msg *cmn.ActionMsg, xactMsg xact.QueryMsg) {
 	smap := p.owner.smap.get()
 	si := smap.GetTarget(xactMsg.Node)
 	if si == nil {
@@ -919,7 +919,7 @@ func (p *proxyrunner) resilverOne(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	nl := xaction.NewXactNL(xactMsg.ID, xactMsg.Kind, &smap.Smap, nil)
+	nl := xact.NewXactNL(xactMsg.ID, xactMsg.Kind, &smap.Smap, nil)
 	p.ic.registerEqual(regIC{smap: smap, nl: nl})
 	w.Write([]byte(xactMsg.ID))
 }
@@ -1221,7 +1221,7 @@ func (p *proxyrunner) rebalanceAndRmSelf(msg *cmn.ActionMsg, si *cluster.Snode) 
 		glog.Error(err)
 		debug.AssertNoErr(err)
 	} else {
-		rebID = xaction.RebID2S(rmdClone.version())
+		rebID = xact.RebID2S(rmdClone.version())
 	}
 	return
 }
@@ -1239,7 +1239,7 @@ func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, opts *cmn.ActValRmNo
 	}
 	err = p.owner.smap.modify(ctx)
 	if ctx.rmd != nil {
-		rebID = xaction.RebID2S(ctx.rmd.Version)
+		rebID = xact.RebID2S(ctx.rmd.Version)
 	}
 	return
 }
@@ -1256,7 +1256,7 @@ func (p *proxyrunner) _cancelMaintPre(ctx *smapModifier, clone *smapX) error {
 
 func (p *proxyrunner) metasyncRMD(ctx *rmdModifier, clone *rebMD) {
 	wg := p.metasyncer.sync(revsPair{clone, p.newAmsg(ctx.msg, nil)})
-	nl := xaction.NewXactNL(xaction.RebID2S(clone.Version), cmn.ActRebalance, &ctx.smap.Smap, nil)
+	nl := xact.NewXactNL(xact.RebID2S(clone.Version), cmn.ActRebalance, &ctx.smap.Smap, nil)
 	nl.SetOwner(equalIC)
 	if ctx.rebCB != nil {
 		nl.F = ctx.rebCB

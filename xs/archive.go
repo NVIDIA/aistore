@@ -26,8 +26,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 type (
@@ -110,7 +110,7 @@ func (p *archFactory) Start() error {
 	workCh := make(chan *cmn.ArchiveMsg, maxNumInParallel)
 	r := &XactCreateArchMultiObj{streamingX: streamingX{p: &p.streamingF}, bckFrom: p.Bck, workCh: workCh, config: cmn.GCO.Get()}
 	r.pending.m = make(map[string]*archwi, maxNumInParallel)
-	p.xact = r
+	p.xctn = r
 	r.DemandBase.Init(p.UUID(), cmn.ActArchive, p.Bck, 0 /*use default*/)
 	if err := p.newDM("arch", r.recv, 0); err != nil {
 		return err
@@ -118,7 +118,7 @@ func (p *archFactory) Start() error {
 	r.p.dm.SetXact(r)
 	r.p.dm.Open()
 
-	xaction.GoRunW(r)
+	xact.GoRunW(r)
 	return nil
 }
 
@@ -408,7 +408,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 
 func (wi *archwi) quiesce() cluster.QuiRes {
 	return wi.r.Quiesce(wi.r.config.Timeout.MaxKeepalive.D(), func(total time.Duration) cluster.QuiRes {
-		return xaction.RefcntQuiCB(&wi.refc, wi.r.config.Timeout.SendFile.D()/2, total)
+		return xact.RefcntQuiCB(&wi.refc, wi.r.config.Timeout.SendFile.D()/2, total)
 	})
 }
 

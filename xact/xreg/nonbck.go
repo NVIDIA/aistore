@@ -11,7 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 type BckSummaryArgs struct {
@@ -22,7 +22,7 @@ type BckSummaryArgs struct {
 func RegNonBckXact(entry Renewable) { defaultReg.regNonBckXact(entry) }
 
 func (r *registry) regNonBckXact(entry Renewable) {
-	debug.Assert(xaction.Table[entry.Kind()].Scope != xaction.ScopeBck)
+	debug.Assert(xact.Table[entry.Kind()].Scope != xact.ScopeBck)
 
 	// It is expected that registrations happen at the init time. Therefore, it
 	// is safe to assume that no `RenewXYZ` will happen before all xactions
@@ -35,7 +35,7 @@ func RenewRebalance(id int64) RenewRes {
 }
 
 func (r *registry) renewRebalance(id int64) RenewRes {
-	e := r.nonbckXacts[cmn.ActRebalance].New(Args{UUID: xaction.RebID2S(id)}, nil)
+	e := r.nonbckXacts[cmn.ActRebalance].New(Args{UUID: xact.RebID2S(id)}, nil)
 	return r.renew(e, nil)
 }
 

@@ -22,8 +22,8 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 // TODO: unify and refactor (lru, cleanup-store)
@@ -37,7 +37,7 @@ type (
 		WG      *sync.WaitGroup
 	}
 	XactCln struct {
-		xaction.XactBase
+		xact.Base
 	}
 )
 
@@ -76,7 +76,7 @@ type (
 	}
 	clnFactory struct {
 		xreg.RenewBase
-		xact *XactCln
+		xctn *XactCln
 	}
 )
 
@@ -97,13 +97,13 @@ func (*clnFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
 }
 
 func (p *clnFactory) Start() error {
-	p.xact = &XactCln{}
-	p.xact.InitBase(p.UUID(), cmn.ActStoreCleanup, nil)
+	p.xctn = &XactCln{}
+	p.xctn.InitBase(p.UUID(), cmn.ActStoreCleanup, nil)
 	return nil
 }
 
 func (*clnFactory) Kind() string        { return cmn.ActStoreCleanup }
-func (p *clnFactory) Get() cluster.Xact { return p.xact }
+func (p *clnFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *clnFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	err = fmt.Errorf("%s is already running - not starting %q", prevEntry.Get(), p.Str(p.Kind()))

@@ -10,7 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/hk"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact/xreg"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

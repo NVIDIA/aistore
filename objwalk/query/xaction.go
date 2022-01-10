@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/objwalk/walkinfo"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 const (
@@ -27,7 +27,7 @@ const (
 
 type (
 	ObjectsListingXact struct {
-		xaction.XactBase    // ID() serves as well as a query handle
+		xact.Base           // ID() serves as well as a query handle
 		t                   cluster.Target
 		ctx                 context.Context
 		msg                 *cmn.ListObjsMsg
@@ -293,7 +293,7 @@ func (r *ObjectsListingXact) NextN(n uint) (result []*cmn.BucketEntry, err error
 	return r.nextN(n)
 }
 
-// Returns single object from a query xaction. Returns io.EOF if no more results.
+// Returns single object from a query xact. Returns io.EOF if no more results.
 // Next() moves cursor so fetched object will be forgotten by a target.
 func (r *ObjectsListingXact) Next() (entry *cmn.BucketEntry, err error) {
 	res, err := r.NextN(1)

@@ -33,8 +33,8 @@ import (
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -765,8 +765,8 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	if smap.isPrimary(p.si) {
 		const txt = "is primary, cannot be on the receiving side of metasync"
 		cii.fill(&p.httprunner)
-		if xact := voteInProgress(); xact != nil {
-			err.Message = fmt.Sprintf("%s: %s [%s, %s]", p.si, txt, smap, xact)
+		if xctn := voteInProgress(); xctn != nil {
+			err.Message = fmt.Sprintf("%s: %s [%s, %s]", p.si, txt, smap, xctn)
 		} else {
 			err.Message = fmt.Sprintf("%s: %s, %s", p.si, txt, smap)
 		}
@@ -988,7 +988,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 	}
 
 	// only the primary can do metasync
-	xactRecord := xaction.Table[msg.Action]
+	xactRecord := xact.Table[msg.Action]
 	if xactRecord.Metasync {
 		if p.forwardCP(w, r, msg, bucket) {
 			return
@@ -1271,12 +1271,12 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 		var nl nl.NotifListener
 		lsmsg.UUID = cos.GenUUID()
 		if locationIsAIS || lsmsg.NeedLocalMD() {
-			nl = xaction.NewXactNL(lsmsg.UUID,
+			nl = xact.NewXactNL(lsmsg.UUID,
 				cmn.ActList, &smap.Smap, nil, bck.Bck)
 		} else {
 			// random target to execute `list-objects` on a Cloud bucket
 			si, _ := smap.GetRandTarget()
-			nl = xaction.NewXactNL(lsmsg.UUID, cmn.ActList,
+			nl = xact.NewXactNL(lsmsg.UUID, cmn.ActList,
 				&smap.Smap, cluster.NodeMap{si.ID(): si}, bck.Bck)
 		}
 		nl.SetHrwOwner(&smap.Smap)
@@ -2156,7 +2156,7 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, que
 		body   = cos.MustMarshal(aisMsg)
 		path   = cmn.URLPathBuckets.Join(bucket)
 	)
-	nlb := xaction.NewXactNL(aisMsg.UUID, aisMsg.Action, &smap.Smap, nil)
+	nlb := xact.NewXactNL(aisMsg.UUID, aisMsg.Action, &smap.Smap, nil)
 	nlb.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{smap: smap, query: query, nl: nlb})
 	args := allocBcastArgs()
@@ -2770,13 +2770,13 @@ func (p *proxyrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err
 	// Register `nl` for rebalance/resilver
 	smap := p.owner.smap.get()
 	if smap.IsIC(p.si) && smap.CountActiveTargets() > 0 {
-		nl := xaction.NewXactNL(xaction.RebID2S(newRMD.Version), cmn.ActRebalance, &smap.Smap, nil)
+		nl := xact.NewXactNL(xact.RebID2S(newRMD.Version), cmn.ActRebalance, &smap.Smap, nil)
 		nl.SetOwner(equalIC)
 		err := p.notifs.add(nl)
 		cos.AssertNoErr(err)
 
 		if newRMD.Resilver != "" {
-			nl = xaction.NewXactNL(newRMD.Resilver, cmn.ActResilver, &smap.Smap, nil)
+			nl = xact.NewXactNL(newRMD.Resilver, cmn.ActResilver, &smap.Smap, nil)
 			nl.SetOwner(equalIC)
 			err := p.notifs.add(nl)
 			cos.AssertNoErr(err)

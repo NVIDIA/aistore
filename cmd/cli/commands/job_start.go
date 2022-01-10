@@ -19,7 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/dsort"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/fatih/color"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
@@ -124,7 +124,7 @@ func startXactionKindHandler(c *cli.Context, xactKind string) (err error) {
 		sid string
 	)
 
-	if xaction.IsBckScope(xactKind) {
+	if xact.IsBckScope(xactKind) {
 		bck, err = parseBckURI(c, c.Args().First())
 		if err != nil {
 			return err
@@ -138,7 +138,7 @@ func startXactionKindHandler(c *cli.Context, xactKind string) (err error) {
 }
 
 func startXaction(c *cli.Context, xactKind string, bck cmn.Bck, sid string) (err error) {
-	if xaction.IsBckScope(xactKind) {
+	if xact.IsBckScope(xactKind) {
 		if _, err = headBucket(bck); err != nil {
 			return err
 		}

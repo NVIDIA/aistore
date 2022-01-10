@@ -1,8 +1,8 @@
-// Package xaction provides core functionality for the AIStore eXtended Actions (xactions).
+// Package xact provides core functionality for the AIStore eXtended Actions (xactions).
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
-package xaction
+package xact
 
 import "github.com/NVIDIA/aistore/cmn"
 
@@ -16,7 +16,7 @@ const (
 type (
 	Record struct {
 		Scope      string          // ScopeG (global), etc. - the enum above
-		Access     cmn.AccessAttrs // Access required by xact (see: cmn.Access*)
+		Access     cmn.AccessAttrs // Access required by xctn (see: cmn.Access*)
 		Startable  bool            // determines if this xaction can be started via API
 		Metasync   bool            // true: changes and metasyncs cluster-wide meta
 		Owned      bool            // true: JTX-owned

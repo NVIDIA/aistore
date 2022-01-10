@@ -20,8 +20,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 // =============================== Summary ====================================
@@ -130,11 +130,11 @@ var (
 )
 
 type (
-	// Downloader implements xaction.Demand interface.
+	// Downloader implements xact.Demand interface.
 	// Upon getting requests via AIS download endpoint,
 	// Downloader dispatches these requests to the corresponding jogger.
 	Downloader struct {
-		xaction.DemandBase
+		xact.DemandBase
 		t          cluster.Target
 		statsT     stats.Tracker
 		dispatcher *dispatcher
@@ -168,14 +168,14 @@ type (
 
 	dowFactory struct {
 		xreg.RenewBase
-		xact   *Downloader
+		xctn   *Downloader
 		statsT stats.Tracker
 	}
 )
 
 // interface guard
 var (
-	_ xaction.Demand = (*Downloader)(nil)
+	_ xact.Demand    = (*Downloader)(nil)
 	_ xreg.Renewable = (*dowFactory)(nil)
 	_ io.ReadCloser  = (*progressReader)(nil)
 )
@@ -237,12 +237,12 @@ func (*dowFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
 
 func (p *dowFactory) Start() error {
 	xdl := newDownloader(p.T, p.statsT)
-	p.xact = xdl
+	p.xctn = xdl
 	go xdl.Run(nil)
 	return nil
 }
 func (*dowFactory) Kind() string        { return cmn.ActDownload }
-func (p *dowFactory) Get() cluster.Xact { return p.xact }
+func (p *dowFactory) Get() cluster.Xact { return p.xctn }
 
 func (*dowFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprKeepAndStartNew, nil
@@ -347,4 +347,4 @@ func (d *Downloader) checkJob(req *request) (*downloadJobInfo, error) {
 	return jInfo, nil
 }
 
-func (d *Downloader) Snap() cluster.XactionSnap { return d.DemandBase.ExtSnap() }
+func (d *Downloader) Snap() cluster.XactSnap { return d.DemandBase.ExtSnap() }

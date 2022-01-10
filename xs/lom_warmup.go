@@ -13,17 +13,17 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 type (
 	llcFactory struct {
 		xreg.RenewBase
-		xact *xactLLC
+		xctn *xactLLC
 	}
 	xactLLC struct {
-		xaction.XactBckJog
+		xact.BckJog
 	}
 )
 
@@ -44,14 +44,14 @@ func (*llcFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (p *llcFactory) Start() error {
-	xact := newXactLLC(p.T, p.UUID(), p.Bck)
-	p.xact = xact
-	go xact.Run(nil)
+	xctn := newXactLLC(p.T, p.UUID(), p.Bck)
+	p.xctn = xctn
+	go xctn.Run(nil)
 	return nil
 }
 
 func (*llcFactory) Kind() string        { return cmn.ActLoadLomCache }
-func (p *llcFactory) Get() cluster.Xact { return p.xact }
+func (p *llcFactory) Get() cluster.Xact { return p.xctn }
 
 func (*llcFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) { return xreg.WprUse, nil }
 
@@ -68,13 +68,13 @@ func newXactLLC(t cluster.Target, uuid string, bck *cluster.Bck) (r *xactLLC) {
 		VisitObj: func(*cluster.LOM, []byte) error { return nil },
 		DoLoad:   mpather.Load,
 	}
-	r.XactBckJog.Init(uuid, cmn.ActLoadLomCache, bck, mpopts)
+	r.BckJog.Init(uuid, cmn.ActLoadLomCache, bck, mpopts)
 	return
 }
 
 func (r *xactLLC) Run(*sync.WaitGroup) {
-	r.XactBckJog.Run()
+	r.BckJog.Run()
 	glog.Infoln(r.Name())
-	err := r.XactBckJog.Wait()
+	err := r.BckJog.Wait()
 	r.Finish(err)
 }

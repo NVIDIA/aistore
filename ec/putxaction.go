@@ -15,14 +15,14 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 type (
 	putFactory struct {
 		xreg.RenewBase
-		xact *XactPut
+		xctn *XactPut
 	}
 	// Erasure coding runner: accepts requests and dispatches them to
 	// a correct mountpath runner. Runner uses dedicated to EC memory manager
@@ -49,7 +49,7 @@ type (
 
 // interface guard
 var (
-	_ xaction.Demand = (*XactPut)(nil)
+	_ xact.Demand    = (*XactPut)(nil)
 	_ xreg.Renewable = (*putFactory)(nil)
 )
 
@@ -65,13 +65,13 @@ func (*putFactory) New(_ xreg.Args, bck *cluster.Bck) xreg.Renewable {
 func (p *putFactory) Start() error {
 	xec := ECM.NewPutXact(p.Bck.Bck)
 	xec.DemandBase.Init(cos.GenUUID(), p.Kind(), p.Bck, 0 /*use default*/)
-	p.xact = xec
+	p.xctn = xec
 	go xec.Run(nil)
 	return nil
 }
 
 func (*putFactory) Kind() string        { return cmn.ActECPut }
-func (p *putFactory) Get() cluster.Xact { return p.xact }
+func (p *putFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *putFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 	debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) // xreg.usePrev() must've returned true
@@ -176,7 +176,7 @@ func (r *XactPut) mainLoop() {
 				}
 			}
 		case <-r.IdleTimer():
-			// It's OK not to notify ecmanager, it'll just have stopped xact in a map.
+			// It's OK not to notify ecmanager, it'll just have stopped xctn in a map.
 			r.stop()
 			return
 		case msg := <-r.controlCh:
@@ -229,7 +229,7 @@ func (r *XactPut) cleanup(req *request, lom *cluster.LOM) {
 	}
 }
 
-func (r *XactPut) Snap() cluster.XactionSnap {
+func (r *XactPut) Snap() cluster.XactSnap {
 	baseSnap := r.DemandBase.ExtSnap()
 	st := r.stats.stats()
 	baseSnap.Ext = &ExtECPutStats{

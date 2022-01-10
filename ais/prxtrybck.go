@@ -15,7 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 type bckInitArgs struct {
@@ -104,7 +104,7 @@ func (args *bckInitArgs) init(bucket string) (bck *cluster.Bck, errCode int, err
 
 	// Check for msg.Action permission if permissions are not explicitly specified
 	if args.perms == 0 && args.msg != nil {
-		xactRecord, ok := xaction.Table[args.msg.Action]
+		xactRecord, ok := xact.Table[args.msg.Action]
 		if !ok || xactRecord.Access == 0 {
 			return
 		}

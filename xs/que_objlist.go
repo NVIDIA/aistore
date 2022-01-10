@@ -11,13 +11,13 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/objwalk/query"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 type (
 	queFactory struct {
 		xreg.RenewBase
-		xact  *query.ObjectsListingXact
+		xctn  *query.ObjectsListingXact
 		ctx   context.Context
 		query *query.ObjectsQuery
 		msg   *cmn.ListObjsMsg
@@ -34,13 +34,13 @@ var (
 ////////////////
 
 func (p *queFactory) Start() (err error) {
-	xact := query.NewObjectsListing(p.ctx, p.T, p.query, p.msg)
-	p.xact = xact
+	xctn := query.NewObjectsListing(p.ctx, p.T, p.query, p.msg)
+	p.xctn = xctn
 	return
 }
 
 func (*queFactory) Kind() string        { return cmn.ActQueryObjects }
-func (p *queFactory) Get() cluster.Xact { return p.xact }
+func (p *queFactory) Get() cluster.Xact { return p.xctn }
 
 func (*queFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 	queArgs := args.Custom.(*xreg.ObjectsQueryArgs)

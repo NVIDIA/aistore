@@ -11,17 +11,17 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 type (
 	etlFactory struct {
 		xreg.RenewBase
-		xact *xactETL
+		xctn *xactETL
 	}
 	xactETL struct {
-		xaction.XactBase
+		xact.Base
 	}
 )
 
@@ -40,12 +40,12 @@ func (*etlFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
 }
 
 func (p *etlFactory) Start() error {
-	p.xact = newETL(p.Args.UUID, p.Kind())
+	p.xctn = newETL(p.Args.UUID, p.Kind())
 	return nil
 }
 
 func (*etlFactory) Kind() string        { return cmn.ActETLInline }
-func (p *etlFactory) Get() cluster.Xact { return p.xact }
+func (p *etlFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *etlFactory) WhenPrevIsRunning(xprev xreg.Renewable) (action xreg.WPR, err error) {
 	cos.Assert(p.UUID() != xprev.UUID())
@@ -56,9 +56,9 @@ func (p *etlFactory) WhenPrevIsRunning(xprev xreg.Renewable) (action xreg.WPR, e
 // ETL xaction //
 /////////////////
 
-func newETL(id, kind string) (xact *xactETL) {
-	xact = &xactETL{}
-	xact.InitBase(id, kind, nil)
+func newETL(id, kind string) (xctn *xactETL) {
+	xctn = &xactETL{}
+	xctn.InitBase(id, kind, nil)
 	return
 }
 

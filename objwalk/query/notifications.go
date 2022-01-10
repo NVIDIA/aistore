@@ -12,13 +12,13 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 type (
 	// TODO: add more, like target finished, query Aborted by user etc.
 	NotifListenerQuery struct {
-		xaction.NotifXactListener
+		xact.NotifXactListener
 		Targets    []*cluster.Snode
 		WorkersCnt uint
 	}
@@ -41,7 +41,7 @@ func NewQueryListener(uuid string, smap *cluster.Smap, msg *InitMsg) (*NotifList
 		return targets[i].DaemonID < targets[j].DaemonID
 	})
 	nl := &NotifListenerQuery{
-		NotifXactListener: *xaction.NewXactNL(uuid,
+		NotifXactListener: *xact.NewXactNL(uuid,
 			cmn.ActQueryObjects, smap, nil, msg.QueryMsg.From.Bck),
 		WorkersCnt: msg.WorkersCnt,
 		Targets:    targets,

@@ -12,17 +12,17 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 type (
 	eleFactory struct {
 		xreg.RenewBase
-		xact *Election
+		xctn *Election
 	}
 	Election struct {
-		xaction.XactBase
+		xact.Base
 	}
 )
 
@@ -35,13 +35,13 @@ var (
 func (*eleFactory) New(xreg.Args, *cluster.Bck) xreg.Renewable { return &eleFactory{} }
 
 func (p *eleFactory) Start() error {
-	p.xact = &Election{}
-	p.xact.InitBase(cos.GenUUID(), cmn.ActElection, nil)
+	p.xctn = &Election{}
+	p.xctn.InitBase(cos.GenUUID(), cmn.ActElection, nil)
 	return nil
 }
 
 func (*eleFactory) Kind() string        { return cmn.ActElection }
-func (p *eleFactory) Get() cluster.Xact { return p.xact }
+func (p *eleFactory) Get() cluster.Xact { return p.xctn }
 
 func (*eleFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprUse, nil

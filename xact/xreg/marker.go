@@ -7,10 +7,10 @@ package xreg
 import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xact"
 )
 
-func GetRebMarked() (out xaction.XactMarked) {
+func GetRebMarked() (out xact.Marked) {
 	entry := defaultReg.getRunning(XactFilter{Kind: cmn.ActRebalance})
 	if entry != nil {
 		out.Xact = entry.Get()
@@ -19,7 +19,7 @@ func GetRebMarked() (out xaction.XactMarked) {
 	return
 }
 
-func GetResilverMarked() (out xaction.XactMarked) {
+func GetResilverMarked() (out xact.Marked) {
 	entry := defaultReg.getRunning(XactFilter{Kind: cmn.ActResilver})
 	if entry != nil {
 		out.Xact = entry.Get()

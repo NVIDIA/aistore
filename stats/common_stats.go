@@ -29,7 +29,7 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats/statsd"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -125,7 +125,7 @@ type (
 	}
 
 	RebalanceSnap struct {
-		xaction.Snap
+		xact.Snap
 		RebID int64 `json:"glob.id,string"`
 	}
 

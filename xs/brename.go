@@ -14,13 +14,13 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 type (
 	bckRename struct {
-		xaction.XactBase
+		xact.Base
 		t       cluster.Target
 		bckFrom *cluster.Bck
 		bckTo   *cluster.Bck
@@ -28,7 +28,7 @@ type (
 	}
 	bmvFactory struct {
 		xreg.RenewBase
-		xact  *bckRename
+		xctn  *bckRename
 		phase string
 		args  *xreg.BckRenameArgs
 	}
@@ -47,10 +47,10 @@ func (*bmvFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (*bmvFactory) Kind() string        { return cmn.ActMoveBck }
-func (p *bmvFactory) Get() cluster.Xact { return p.xact }
+func (p *bmvFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *bmvFactory) Start() error {
-	p.xact = newBckRename(p.UUID(), p.Kind(), p.Bck, p.T, p.args.BckFrom, p.args.BckTo, p.args.RebID)
+	p.xctn = newBckRename(p.UUID(), p.Kind(), p.Bck, p.T, p.args.BckFrom, p.args.BckTo, p.args.RebID)
 	return nil
 }
 
@@ -82,11 +82,11 @@ func newBckRename(uuid, kind string, bck *cluster.Bck, t cluster.Target, bckFrom
 }
 
 func (r *bckRename) String() string {
-	return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.bckFrom)
+	return fmt.Sprintf("%s <= %s", r.Base.String(), r.bckFrom)
 }
 
 func (r *bckRename) Name() string {
-	return fmt.Sprintf("%s <= %s", r.XactBase.Name(), r.bckFrom)
+	return fmt.Sprintf("%s <= %s", r.Base.Name(), r.bckFrom)
 }
 
 // NOTE: assuming that rebalance takes longer than resilvering

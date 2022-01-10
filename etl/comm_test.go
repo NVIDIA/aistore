@@ -108,7 +108,7 @@ var _ = Describe("CommunicatorTest", func() {
 			pod := &corev1.Pod{}
 			pod.SetName("somename")
 
-			xact := mock.NewXact(cmn.ActETLInline)
+			xctn := mock.NewXact(cmn.ActETLInline)
 			comm = makeCommunicator(commArgs{
 				bootstraper: &etlBootstraper{
 					t: tMock,
@@ -120,7 +120,7 @@ var _ = Describe("CommunicatorTest", func() {
 
 					pod:  pod,
 					uri:  transformerServer.URL,
-					xact: xact,
+					xctn: xctn,
 				},
 			})
 			resp, err := http.Get(proxyServer.URL)

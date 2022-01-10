@@ -22,8 +22,8 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/objwalk/query"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -184,7 +184,7 @@ func (*notifs) String() string { return notifsName }
 
 // start listening
 func (n *notifs) add(nl nl.NotifListener) (err error) {
-	debug.Assert(cos.IsValidUUID(nl.UUID()) || xaction.IsValidRebID(nl.UUID()))
+	debug.Assert(cos.IsValidUUID(nl.UUID()) || xact.IsValidRebID(nl.UUID()))
 	if nl.ActiveCount() == 0 {
 		return fmt.Errorf("cannot add %q with no active notifiers", nl)
 	}
@@ -678,7 +678,7 @@ func (n *notifListenMsg) UnmarshalJSON(data []byte) (err error) {
 	} else if downloader.IsType(t.Type) {
 		n.nl = &downloader.NotifDownloadListerner{}
 	} else {
-		n.nl = &xaction.NotifXactListener{}
+		n.nl = &xact.NotifXactListener{}
 	}
 	return jsoniter.Unmarshal(t.NL, &n.nl)
 }

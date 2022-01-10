@@ -14,7 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/nl"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 const (
@@ -23,8 +23,8 @@ const (
 )
 
 type (
-	NodesXactSnap      map[string]*xaction.SnapExt
-	NodesXactMultiSnap map[string][]*xaction.SnapExt
+	NodesXactSnap      map[string]*xact.SnapExt
+	NodesXactMultiSnap map[string][]*xact.SnapExt
 
 	XactStatsHelper interface {
 		Running() bool
@@ -45,20 +45,20 @@ type (
 	}
 )
 
-// StartXaction starts a given xaction.
+// StartXaction starts a given xact.
 func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error) {
-	if !xaction.Table[args.Kind].Startable {
+	if !xact.Table[args.Kind].Startable {
 		return id, fmt.Errorf("cannot start \"kind=%s\" xaction", args.Kind)
 	}
 
-	xactMsg := xaction.QueryMsg{
+	xactMsg := xact.QueryMsg{
 		Kind: args.Kind,
 		Bck:  args.Bck,
 		Node: args.Node,
 	}
 
 	if args.Kind == cmn.ActLRU {
-		ext := &xaction.QueryMsgLRU{}
+		ext := &xact.QueryMsgLRU{}
 		if args.Buckets != nil {
 			xactMsg.Buckets = args.Buckets
 			ext.Force = args.Force
@@ -84,11 +84,11 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 	return id, err
 }
 
-// AbortXaction aborts a given xaction.
+// AbortXaction aborts a given xact.
 func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 	msg := cmn.ActionMsg{
 		Action: cmn.ActXactStop,
-		Value:  xaction.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck},
+		Value:  xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck},
 	}
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
@@ -112,7 +112,7 @@ func GetXactionSnapsByID(baseParams BaseParams, xactID string) (nxs NodesXactSna
 
 // QueryXactionSnaps gets all xaction snaps based on the specified selection.
 func QueryXactionSnaps(baseParams BaseParams, args XactReqArgs) (xs NodesXactMultiSnap, err error) {
-	msg := xaction.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck}
+	msg := xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck}
 	if args.OnlyRunning {
 		msg.OnlyRunning = Bool(true)
 	}
@@ -127,10 +127,10 @@ func QueryXactionSnaps(baseParams BaseParams, args XactReqArgs) (xs NodesXactMul
 	return xs, err
 }
 
-// GetXactionStatus retrieves the status of the xaction.
+// GetXactionStatus retrieves the status of the xact.
 func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *nl.NotifStatus, err error) {
 	baseParams.Method = http.MethodGet
-	msg := xaction.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck}
+	msg := xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck}
 	if args.OnlyRunning {
 		msg.OnlyRunning = Bool(true)
 	}
@@ -181,7 +181,7 @@ func WaitForXaction(baseParams BaseParams, args XactReqArgs, sleeps ...time.Dura
 func isXactionIdle(baseParams BaseParams, args XactReqArgs) (idle bool, err error) {
 	var (
 		xs  NodesXactMultiSnap
-		msg = xaction.QueryMsg{
+		msg = xact.QueryMsg{
 			ID:          args.ID,
 			Kind:        args.Kind,
 			Bck:         args.Bck,
@@ -207,7 +207,7 @@ func isXactionIdle(baseParams BaseParams, args XactReqArgs) (idle bool, err erro
 			if xsnap.Ext == nil {
 				continue
 			}
-			var baseExt xaction.BaseDemandStatsExt
+			var baseExt xact.BaseDemandStatsExt
 			if err := cos.MorphMarshal(xsnap.Ext, &baseExt); err == nil {
 				if !baseExt.IsIdle {
 					return false, nil
@@ -319,8 +319,8 @@ func (nxs NodesXactSnap) TotalRunningTime() time.Duration {
 // NodesXactMultiSnap //
 ////////////////////////
 
-func (xs NodesXactMultiSnap) Running() (tid string, xsnap *xaction.SnapExt) {
-	var snaps []*xaction.SnapExt
+func (xs NodesXactMultiSnap) Running() (tid string, xsnap *xact.SnapExt) {
+	var snaps []*xact.SnapExt
 	for tid, snaps = range xs {
 		for _, xsnap = range snaps {
 			if xsnap.Running() {

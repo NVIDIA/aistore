@@ -21,7 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/k8s"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 const (
@@ -252,7 +252,7 @@ func reMirror(bprops, nprops *cmn.BucketProps) bool {
 func reEC(bprops, nprops *cmn.BucketProps, bck *cluster.Bck) bool {
 	if !nprops.EC.Enabled {
 		if bprops.EC.Enabled {
-			// abort running ec-encode xact if exists
+			// abort running ec-encode xctn if exists
 			xreg.DoAbort(cmn.ActECEncode, bck, errors.New("ec-disabled"))
 		}
 		return false

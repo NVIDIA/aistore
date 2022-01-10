@@ -18,8 +18,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/objwalk"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 // Assorted multi-object (list/range templated) xactions: evict, delete, prefetch multiple objects
@@ -46,7 +46,7 @@ type (
 	// common mult-obj operation context
 	// common iterateList()/iterateRange() logic
 	lriterator struct {
-		xact    lrxact
+		xctn    lrxact
 		t       cluster.Target
 		ctx     context.Context
 		msg     *cmn.ListRangeMsg
@@ -58,21 +58,21 @@ type (
 type (
 	evdFactory struct {
 		xreg.RenewBase
-		xact *evictDelete
+		xctn *evictDelete
 		kind string
 		msg  *cmn.ListRangeMsg
 	}
 	evictDelete struct {
-		xaction.XactBase
+		xact.Base
 		lriterator
 	}
 	prfFactory struct {
 		xreg.RenewBase
-		xact *prefetch
+		xctn *prefetch
 		msg  *cmn.ListRangeMsg
 	}
 	prefetch struct {
-		xaction.XactBase
+		xact.Base
 		lriterator
 	}
 
@@ -95,8 +95,8 @@ var (
 // lriterator //
 ////////////////
 
-func (r *lriterator) init(xact lrxact, t cluster.Target, msg *cmn.ListRangeMsg, freeLOM bool) {
-	r.xact = xact
+func (r *lriterator) init(xctn lrxact, t cluster.Target, msg *cmn.ListRangeMsg, freeLOM bool) {
+	r.xctn = xctn
 	r.t = t
 	r.ctx = context.Background()
 	r.msg = msg
@@ -117,7 +117,7 @@ func (r *lriterator) iterateRange(wi lrwi, smap *cluster.Smap) error {
 func (r *lriterator) iterateTemplate(smap *cluster.Smap, pt *cos.ParsedTemplate, wi lrwi) error {
 	getNext := pt.Iter()
 	for objName, hasNext := getNext(); hasNext; objName, hasNext = getNext() {
-		if r.xact.IsAborted() || r.xact.Finished() {
+		if r.xctn.IsAborted() || r.xctn.Finished() {
 			return nil
 		}
 		lom := cluster.AllocLOM(objName)
@@ -137,7 +137,7 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 	var (
 		objList *cmn.BucketList
 		err     error
-		bck     = r.xact.Bck()
+		bck     = r.xctn.Bck()
 	)
 	if err := bck.Init(r.t.Bowner()); err != nil {
 		return err
@@ -151,7 +151,7 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 	}
 	msg := &cmn.ListObjsMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
 	for {
-		if r.xact.IsAborted() || r.xact.Finished() {
+		if r.xctn.IsAborted() || r.xctn.Finished() {
 			break
 		}
 		if bremote {
@@ -167,7 +167,7 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 			if !be.IsStatusOK() {
 				continue
 			}
-			if r.xact.IsAborted() || r.xact.Finished() {
+			if r.xctn.IsAborted() || r.xctn.Finished() {
 				return nil
 			}
 			lom := cluster.AllocLOM(be.Name)
@@ -193,7 +193,7 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 
 func (r *lriterator) iterateList(wi lrwi, smap *cluster.Smap) error {
 	for _, objName := range r.msg.ObjNames {
-		if r.xact.IsAborted() || r.xact.Finished() {
+		if r.xctn.IsAborted() || r.xctn.Finished() {
 			break
 		}
 		lom := cluster.AllocLOM(objName)
@@ -210,7 +210,7 @@ func (r *lriterator) iterateList(wi lrwi, smap *cluster.Smap) error {
 }
 
 func (r *lriterator) do(lom *cluster.LOM, wi lrwi, smap *cluster.Smap) error {
-	if err := lom.Init(r.xact.Bck().Bck); err != nil {
+	if err := lom.Init(r.xctn.Bck().Bck); err != nil {
 		return err
 	}
 	if smap != nil {
@@ -238,12 +238,12 @@ func (p *evdFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (p *evdFactory) Start() error {
-	p.xact = newEvictDelete(&p.Args, p.kind, p.Bck, p.msg)
+	p.xctn = newEvictDelete(&p.Args, p.kind, p.Bck, p.msg)
 	return nil
 }
 
 func (p *evdFactory) Kind() string      { return p.kind }
-func (p *evdFactory) Get() cluster.Xact { return p.xact }
+func (p *evdFactory) Get() cluster.Xact { return p.xctn }
 
 func (*evdFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprKeepAndStartNew, nil
@@ -306,12 +306,12 @@ func (p *prfFactory) Start() error {
 		glog.Errorf("bucket %q: can only prefetch remote buckets", b)
 		return fmt.Errorf("bucket %q: can only prefetch remote buckets", b)
 	}
-	p.xact = newPrefetch(&p.Args, p.Kind(), p.Bck, p.msg)
+	p.xctn = newPrefetch(&p.Args, p.Kind(), p.Bck, p.msg)
 	return nil
 }
 
 func (*prfFactory) Kind() string        { return cmn.ActPrefetchObjects }
-func (p *prfFactory) Get() cluster.Xact { return p.xact }
+func (p *prfFactory) Get() cluster.Xact { return p.xctn }
 
 func (*prfFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprKeepAndStartNew, nil
@@ -321,7 +321,7 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *cluster.Bck, msg *cmn.ListR
 	prf = &prefetch{}
 	prf.lriterator.init(prf, xargs.T, msg, true /*freeLOM*/)
 	prf.InitBase(xargs.UUID, kind, bck)
-	prf.lriterator.xact = prf
+	prf.lriterator.xctn = prf
 	return
 }
 

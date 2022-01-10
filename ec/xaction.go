@@ -17,7 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 const (
@@ -27,13 +27,13 @@ const (
 
 type (
 	xactECBase struct {
-		xaction.DemandBase
+		xact.DemandBase
 		t cluster.Target
 
 		smap  cluster.Sowner // cluster map
 		si    *cluster.Snode // target daemonInfo
 		stats stats          // EC statistics
-		bck   cmn.Bck        // which bucket xact belongs to
+		bck   cmn.Bck        // which bucket xctn belongs to
 
 		dOwner *dataOwner // data slice manager
 		mgr    *Manager   // EC manager
@@ -431,28 +431,28 @@ func (xacts *BckXacts) Req() *XactRespond {
 	return (*XactRespond)(xacts.req.Load())
 }
 
-func (xacts *BckXacts) SetGet(xact *XactGet) {
-	xacts.get.Store(unsafe.Pointer(xact))
+func (xacts *BckXacts) SetGet(xctn *XactGet) {
+	xacts.get.Store(unsafe.Pointer(xctn))
 }
 
-func (xacts *BckXacts) SetPut(xact *XactPut) {
-	xacts.put.Store(unsafe.Pointer(xact))
+func (xacts *BckXacts) SetPut(xctn *XactPut) {
+	xacts.put.Store(unsafe.Pointer(xctn))
 }
 
-func (xacts *BckXacts) SetReq(xact *XactRespond) {
-	xacts.req.Store(unsafe.Pointer(xact))
+func (xacts *BckXacts) SetReq(xctn *XactRespond) {
+	xacts.req.Store(unsafe.Pointer(xctn))
 }
 
 func (xacts *BckXacts) AbortGet() {
-	xact := (*XactGet)(xacts.get.Load())
-	if xact != nil && !xact.Finished() {
-		xact.Abort(nil)
+	xctn := (*XactGet)(xacts.get.Load())
+	if xctn != nil && !xctn.Finished() {
+		xctn.Abort(nil)
 	}
 }
 
 func (xacts *BckXacts) AbortPut() {
-	xact := (*XactPut)(xacts.put.Load())
-	if xact != nil && !xact.Finished() {
-		xact.Abort(nil)
+	xctn := (*XactPut)(xacts.put.Load())
+	if xctn != nil && !xctn.Finished() {
+		xctn.Abort(nil)
 	}
 }

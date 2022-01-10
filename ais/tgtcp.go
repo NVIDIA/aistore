@@ -29,8 +29,8 @@ import (
 	"github.com/NVIDIA/aistore/res"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -248,8 +248,8 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		var rebSnap *stats.RebalanceSnap
 		if entry := xreg.GetLatest(xreg.XactFilter{Kind: cmn.ActRebalance}); entry != nil {
 			var ok bool
-			if xact := entry.Get(); xact != nil {
-				rebSnap, ok = xact.Snap().(*stats.RebalanceSnap)
+			if xctn := entry.Get(); xctn != nil {
+				rebSnap, ok = xctn.Snap().(*stats.RebalanceSnap)
 				debug.Assert(ok)
 			}
 		}
@@ -679,7 +679,7 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 		}
 	}
 	if !t.regstate.disabled.Load() {
-		notif := &xaction.NotifXact{
+		notif := &xact.NotifXact{
 			NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 		}
 		if msg.Action == cmn.ActRebalance {

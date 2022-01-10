@@ -38,7 +38,7 @@ type (
 		ChanAbort() <-chan error
 		Quiesce(time.Duration, QuiCB) QuiRes
 		Result() (interface{}, error)
-		Snap() XactionSnap
+		Snap() XactSnap
 
 		// reporting: log, err
 		String() string
@@ -58,7 +58,7 @@ type (
 		OutBytes() int64
 	}
 
-	XactionSnap interface {
+	XactSnap interface {
 		IsAborted() bool
 		Running() bool
 		Finished() bool

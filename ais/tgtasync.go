@@ -15,7 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/reb"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/NVIDIA/aistore/xs"
 )
 
@@ -47,22 +47,22 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 	debug.Assert(cos.IsValidUUID(msg.UUID))
 
 	rns := xreg.RenewObjList(t, bck, msg.UUID, msg)
-	xact := rns.Entry.Get()
+	xctn := rns.Entry.Get()
 	// Double check that xaction has not gone before starting page read.
 	// Restart xaction if needed.
 	if rns.Err == xs.ErrGone {
 		rns = xreg.RenewObjList(t, bck, msg.UUID, msg)
-		xact = rns.Entry.Get()
+		xctn = rns.Entry.Get()
 	}
 	if rns.Err != nil {
 		t.writeErr(w, r, rns.Err)
 		return
 	}
 	if !rns.IsRunning() {
-		go xact.Run(nil)
+		go xctn.Run(nil)
 	}
 
-	resp := xact.(*xs.ObjListXact).Do(msg)
+	resp := xctn.(*xs.ObjListXact).Do(msg)
 	if resp.Err != nil {
 		t.writeErr(w, r, resp.Err, resp.Status)
 		return false
@@ -119,9 +119,9 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 		return
 	}
 
-	xact := xreg.GetXact(msg.UUID)
+	xctn := xreg.GetXact(msg.UUID)
 	// task never started
-	if xact == nil {
+	if xctn == nil {
 		err := cmn.NewErrNotFound("%s: task %q", t.si, msg.UUID)
 		if silent {
 			t.writeErrSilent(w, r, err, http.StatusNotFound)
@@ -132,12 +132,12 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 	}
 
 	// task still running
-	if !xact.Finished() {
+	if !xctn.Finished() {
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
 	// task has finished
-	result, err := xact.Result()
+	result, err := xctn.Result()
 	if err != nil {
 		if cmn.IsErrBucketNought(err) {
 			t.writeErr(w, r, err, http.StatusGone)

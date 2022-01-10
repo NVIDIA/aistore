@@ -29,8 +29,8 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/objwalk/walkinfo"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 // Xaction is on-demand one to avoid creating a new xaction per page even
@@ -39,18 +39,18 @@ import (
 type (
 	olFactory struct {
 		xreg.RenewBase
-		xact *ObjListXact
+		xctn *ObjListXact
 		msg  *cmn.ListObjsMsg
 	}
 	ObjListXact struct {
-		xaction.DemandBase
+		xact.DemandBase
 		t   cluster.Target
 		bck *cluster.Bck
 		msg *cmn.ListObjsMsg
 
 		workCh chan *cmn.ListObjsMsg // Incoming requests.
 		respCh chan *Resp            // Outgoing responses.
-		stopCh *cos.StopCh           // Informs about stopped xaction.
+		stopCh *cos.StopCh           // Informs about stopped xact.
 
 		objCache   chan *cmn.BucketEntry // local cache filled when idle
 		lastPage   []*cmn.BucketEntry    // last sent page and a little more
@@ -93,12 +93,12 @@ func (*olFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (p *olFactory) Start() error {
-	p.xact = newXact(p.T, p.Bck, p.msg, p.UUID())
+	p.xctn = newXact(p.T, p.Bck, p.msg, p.UUID())
 	return nil
 }
 
 func (*olFactory) Kind() string        { return cmn.ActList }
-func (p *olFactory) Get() cluster.Xact { return p.xact }
+func (p *olFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *olFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 	debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) // xreg.usePrev() must've returned true
@@ -107,7 +107,7 @@ func (p *olFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 
 func newXact(t cluster.Target, bck *cluster.Bck, lsmsg *cmn.ListObjsMsg, uuid string) *ObjListXact {
 	totallyIdle := cmn.GCO.Get().Timeout.MaxHostBusy.D()
-	xact := &ObjListXact{
+	xctn := &ObjListXact{
 		t:        t,
 		bck:      bck,
 		msg:      lsmsg,
@@ -116,16 +116,16 @@ func newXact(t cluster.Target, bck *cluster.Bck, lsmsg *cmn.ListObjsMsg, uuid st
 		stopCh:   cos.NewStopCh(),
 		lastPage: make([]*cmn.BucketEntry, 0, cacheSize),
 	}
-	debug.Assert(xact.bck.Props != nil)
-	xact.DemandBase.Init(uuid, cmn.ActList, bck, totallyIdle)
-	return xact
+	debug.Assert(xctn.bck.Props != nil)
+	xctn.DemandBase.Init(uuid, cmn.ActList, bck, totallyIdle)
+	return xctn
 }
 
 func (r *ObjListXact) String() string { return fmt.Sprintf("%s: %s", r.t.Snode(), &r.DemandBase) }
 
 // skip on-demand idle-ness check
 func (r *ObjListXact) Abort(err error) (ok bool) {
-	if ok = r.XactBase.Abort(err); ok {
+	if ok = r.Base.Abort(err); ok {
 		r.Finish(err)
 	}
 	return

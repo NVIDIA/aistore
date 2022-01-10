@@ -47,7 +47,7 @@ type (
 		config      *cmn.Config
 		mem         *memsys.MMSA
 		compression string // enum { cmn.CompressNever, ... }
-		xact        cluster.Xact
+		xctn        cluster.Xact
 		multiplier  int
 		sizePDU     int32
 		owt         cmn.OWT
@@ -113,8 +113,8 @@ func (dm *DataMover) NetC() string  { return dm.ack.net }
 func (dm *DataMover) OWT() cmn.OWT  { return dm.owt }
 
 // xaction that drives and utilizes this data mover
-func (dm *DataMover) SetXact(xact cluster.Xact) { dm.xact = xact }
-func (dm *DataMover) GetXact() cluster.Xact     { return dm.xact }
+func (dm *DataMover) SetXact(xctn cluster.Xact) { dm.xctn = xctn }
+func (dm *DataMover) GetXact() cluster.Xact     { return dm.xctn }
 
 // register user's receive-data (and, optionally, receive-ack) wrappers
 func (dm *DataMover) RegRecv() (err error) {
@@ -142,8 +142,8 @@ func (dm *DataMover) Open() {
 		Multiplier:   dm.multiplier,
 		ManualResync: true,
 	}
-	if dm.xact != nil {
-		dataArgs.Extra.SenderID = dm.xact.ID()
+	if dm.xctn != nil {
+		dataArgs.Extra.SenderID = dm.xctn.ID()
 	}
 	dm.data.streams = NewStreams(dm.t.Sowner(), dm.t.Snode(), dm.data.client, dataArgs)
 	if dm.useACKs() {
@@ -154,8 +154,8 @@ func (dm *DataMover) Open() {
 			Ntype:        cluster.Targets,
 			ManualResync: true,
 		}
-		if dm.xact != nil {
-			ackArgs.Extra.SenderID = dm.xact.ID()
+		if dm.xctn != nil {
+			ackArgs.Extra.SenderID = dm.xctn.ID()
 		}
 		dm.ack.streams = NewStreams(dm.t.Sowner(), dm.t.Snode(), dm.ack.client, ackArgs)
 	}
@@ -166,14 +166,14 @@ func (dm *DataMover) IsOpen() bool { return dm.stage.opened.Load() }
 
 // quiesce *local* Rx
 func (dm *DataMover) Quiesce(d time.Duration) cluster.QuiRes {
-	return dm.xact.Quiesce(d, dm.quicb)
+	return dm.xctn.Quiesce(d, dm.quicb)
 }
 
 func (dm *DataMover) Close(err error) {
 	debug.Assert(dm.stage.opened.Load()) // Open() must've been called
-	if err == nil && dm.xact != nil {
-		if err = dm.xact.Aborted(); err != nil {
-			err = cmn.NewErrAborted(dm.xact.Name(), "dm-close", err)
+	if err == nil && dm.xctn != nil {
+		if err = dm.xctn.Aborted(); err != nil {
+			err = cmn.NewErrAborted(dm.xctn.Name(), "dm-close", err)
 		}
 	}
 	dm.data.streams.Close(err == nil) // err == nil: close gracefully via `fin`, otherwise abort
@@ -209,7 +209,7 @@ func (dm *DataMover) UnregRecv() {
 func (dm *DataMover) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *cluster.Snode) (err error) {
 	err = dm.data.streams.Send(obj, roc, tsi)
 	if err == nil && !transport.ReservedOpcode(obj.Hdr.Opcode) {
-		dm.xact.OutObjsAdd(1, obj.Size())
+		dm.xctn.OutObjsAdd(1, obj.Size())
 	}
 	return
 }
@@ -238,7 +238,7 @@ func (dm *DataMover) quicb(_ time.Duration /*accum. sleep time*/) cluster.QuiRes
 }
 
 func (dm *DataMover) wrapRecvData(hdr transport.ObjHdr, object io.Reader, err error) {
-	dm.xact.InObjsAdd(1, hdr.ObjAttrs.Size)
+	dm.xctn.InObjsAdd(1, hdr.ObjAttrs.Size)
 	dm.stage.laterx.Store(true)
 	dm.data.recv(hdr, object, err)
 }

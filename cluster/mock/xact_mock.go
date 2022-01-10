@@ -9,7 +9,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 func init() {
@@ -21,7 +21,7 @@ var _ cluster.Xact = (*XactMock)(nil)
 
 // XactMock provides cluster.Xact interface with mocked return values.
 type XactMock struct {
-	xaction.XactBase
+	xact.Base
 }
 
 func (*XactMock) Run(*sync.WaitGroup) {
@@ -29,7 +29,7 @@ func (*XactMock) Run(*sync.WaitGroup) {
 }
 
 func NewXact(kind string) *XactMock {
-	xact := &XactMock{}
-	xact.InitBase(cos.GenUUID(), kind, nil)
-	return xact
+	xctn := &XactMock{}
+	xctn.InitBase(cos.GenUUID(), kind, nil)
+	return xctn
 }

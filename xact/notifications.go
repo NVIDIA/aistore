@@ -1,8 +1,8 @@
-// Package xaction provides core functionality for the AIStore eXtended Actions (xactions).
+// Package xact provides core functionality for the AIStore eXtended Actions (xactions).
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
-package xaction
+package xact
 
 import (
 	"net/http"

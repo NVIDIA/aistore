@@ -16,14 +16,14 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 type (
 	getFactory struct {
 		xreg.RenewBase
-		xact *XactGet
+		xctn *XactGet
 	}
 
 	// Erasure coding runner: accepts requests and dispatches them to
@@ -47,7 +47,7 @@ type (
 
 // interface guard
 var (
-	_ xaction.Demand = (*XactGet)(nil)
+	_ xact.Demand    = (*XactGet)(nil)
 	_ xreg.Renewable = (*getFactory)(nil)
 )
 
@@ -63,12 +63,12 @@ func (*getFactory) New(_ xreg.Args, bck *cluster.Bck) xreg.Renewable {
 func (p *getFactory) Start() error {
 	xec := ECM.NewGetXact(p.Bck.Bck)
 	xec.DemandBase.Init(cos.GenUUID(), p.Kind(), p.Bck, 0 /*use default*/)
-	p.xact = xec
+	p.xctn = xec
 	go xec.Run(nil)
 	return nil
 }
 func (*getFactory) Kind() string        { return cmn.ActECGet }
-func (p *getFactory) Get() cluster.Xact { return p.xact }
+func (p *getFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *getFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 	debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) // xreg.usePrev() must've returned true
@@ -198,7 +198,7 @@ func (r *XactGet) Run(*sync.WaitGroup) {
 				r.removeMpath(mpathRequest.mpath)
 			}
 		case <-r.IdleTimer():
-			// It's OK not to notify ecmanager, it'll just have stopped xact in a map.
+			// It's OK not to notify ecmanager, it'll just have stopped xctn in a map.
 			r.stop(nil)
 			return
 		case msg := <-r.controlCh:
@@ -288,7 +288,7 @@ func (r *XactGet) removeMpath(mpath string) {
 	delete(r.getJoggers, mpath)
 }
 
-func (r *XactGet) Snap() cluster.XactionSnap {
+func (r *XactGet) Snap() cluster.XactSnap {
 	baseSnap := r.DemandBase.ExtSnap()
 	st := r.stats.stats()
 	baseSnap.Ext = &ExtECGetStats{

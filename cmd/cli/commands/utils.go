@@ -33,7 +33,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
@@ -446,7 +446,7 @@ func parseXactionFromArgs(c *cli.Context) (nodeID, xactID, xactKind string, bck 
 	}
 
 	uri := c.Args().Get(1 + shift)
-	if !xaction.IsValidKind(xactKind) {
+	if !xact.IsValidKind(xactKind) {
 		xactID = xactKind
 		xactKind = ""
 		uri = c.Args().Get(1 + shift)
@@ -455,8 +455,8 @@ func parseXactionFromArgs(c *cli.Context) (nodeID, xactID, xactKind string, bck 
 		xactKind = ""
 	}
 	if uri != "" {
-		switch xaction.Table[xactKind].Scope {
-		case xaction.ScopeBck:
+		switch xact.Table[xactKind].Scope {
+		case xact.ScopeBck:
 			// Bucket is optional.
 			if uri := c.Args().Get(1); uri != "" {
 				if bck, err = parseBckURI(c, uri); err != nil {
@@ -479,7 +479,7 @@ func parseXactionFromArgs(c *cli.Context) (nodeID, xactID, xactKind string, bck 
 // Get list of xactions
 func listXactions(onlyStartable bool) []string {
 	xactKinds := make([]string, 0)
-	for kind, meta := range xaction.Table {
+	for kind, meta := range xact.Table {
 		if !onlyStartable || (onlyStartable && meta.Startable) {
 			xactKinds = append(xactKinds, kind)
 		}
@@ -1219,7 +1219,7 @@ func parseChecksumFlags(c *cli.Context) []*cos.Cksum {
 	return cksums
 }
 
-func flattenXactStats(snap *xaction.SnapExt) []*prop {
+func flattenXactStats(snap *xact.SnapExt) []*prop {
 	props := make([]*prop, 0)
 	if snap == nil {
 		return props

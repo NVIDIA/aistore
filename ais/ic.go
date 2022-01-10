@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/nl"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -175,7 +175,7 @@ func (ic *ic) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (n
 
 func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 	var (
-		msg      = &xaction.QueryMsg{}
+		msg      = &xact.QueryMsg{}
 		bck      *cluster.Bck
 		nl       nl.NotifListener
 		config   = cmn.GCO.Get()
@@ -323,7 +323,7 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 			ic.p.writeErrStatusf(w, r, http.StatusNotFound, "%s: failed to %q: %v", ic.p.si, msg.Action, err)
 			return
 		}
-		nl := xaction.NewXactNL(regMsg.UUID, regMsg.Kind, &smap.Smap, tmap)
+		nl := xact.NewXactNL(regMsg.UUID, regMsg.Kind, &smap.Smap, tmap)
 		if err = ic.p.notifs.add(nl); err != nil {
 			ic.p.writeErr(w, r, err)
 			return

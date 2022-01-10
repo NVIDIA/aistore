@@ -6,7 +6,7 @@ package mirror
 
 import (
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 func Init() {

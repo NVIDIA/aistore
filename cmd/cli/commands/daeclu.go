@@ -22,7 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 	"golang.org/x/sync/errgroup"
 )
@@ -35,7 +35,7 @@ type (
 
 	targetRebSnap struct {
 		tid  string
-		snap *xaction.SnapExt
+		snap *xact.SnapExt
 	}
 )
 

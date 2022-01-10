@@ -20,7 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 type Manager struct {
@@ -31,7 +31,7 @@ type Manager struct {
 	targetCnt atomic.Int32 // atomic, to avoid races between read/write on smap
 	bmd       *cluster.BMD // bmd owner
 
-	xacts map[string]*BckXacts // bckName -> xact map, only ais buckets allowed, no naming collisions
+	xacts map[string]*BckXacts // bckName -> xctn map, only ais buckets allowed, no naming collisions
 
 	bundleEnabled atomic.Bool // to disable and enable on the fly
 	netReq        string      // network used to send object request
@@ -148,25 +148,25 @@ func (mgr *Manager) NewRespondXact(bck cmn.Bck) *XactRespond {
 }
 
 func (mgr *Manager) RestoreBckGetXact(bck *cluster.Bck) (xget *XactGet) {
-	xact, err := _renewXact(bck, cmn.ActECGet)
+	xctn, err := _renewXact(bck, cmn.ActECGet)
 	debug.AssertNoErr(err) // TODO: handle, here and elsewhere
-	xget = xact.(*XactGet)
+	xget = xctn.(*XactGet)
 	mgr.getBckXacts(bck.Name).SetGet(xget)
 	return
 }
 
 func (mgr *Manager) RestoreBckPutXact(bck *cluster.Bck) (xput *XactPut) {
-	xact, err := _renewXact(bck, cmn.ActECPut)
+	xctn, err := _renewXact(bck, cmn.ActECPut)
 	debug.AssertNoErr(err)
-	xput = xact.(*XactPut)
+	xput = xctn.(*XactPut)
 	mgr.getBckXacts(bck.Name).SetPut(xput)
 	return
 }
 
 func (mgr *Manager) RestoreBckRespXact(bck *cluster.Bck) (xrsp *XactRespond) {
-	xact, err := _renewXact(bck, cmn.ActECRespond)
+	xctn, err := _renewXact(bck, cmn.ActECRespond)
 	debug.AssertNoErr(err)
-	xrsp = xact.(*XactRespond)
+	xrsp = xctn.(*XactRespond)
 	mgr.getBckXacts(bck.Name).SetReq(xrsp)
 	return
 }
@@ -352,7 +352,7 @@ func (mgr *Manager) disableBck(bck *cluster.Bck) {
 	mgr.RestoreBckPutXact(bck).ClearRequests()
 }
 
-// enableBck aborts xact disable and starts to accept new EC requests
+// enableBck aborts xctn disable and starts to accept new EC requests
 // enableBck uses the same channel as disableBck, so order of executing them is the same as
 // order which they arrived to a target in
 func (mgr *Manager) enableBck(bck *cluster.Bck) {

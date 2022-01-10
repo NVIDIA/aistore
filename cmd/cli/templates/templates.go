@@ -19,7 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"k8s.io/apimachinery/pkg/util/duration"
@@ -117,56 +117,56 @@ const (
 	XactionsBodyTmpl = XactionStatsHeader +
 		"{{range $daemon := . }}" + XactionBody + "{{end}}"
 	XactionStatsHeader = "NODE\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\n"
-	XactionBody        = "{{range $key, $xact := $daemon.XactSnaps}}" + XactionStatsBody + "{{end}}" +
+	XactionBody        = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactionStatsBody + "{{end}}" +
 		"{{if $daemon.XactSnaps}}\t \t \t \t \t \t \t \t \n{{end}}"
 	XactionStatsBody = "{{ $daemon.DaemonID }}\t " +
-		"{{if $xact.ID}}{{$xact.ID}}{{else}}-{{end}}\t " +
-		"{{$xact.Kind}}\t " +
-		"{{if $xact.Bck.Name}}{{$xact.Bck.Name}}{{else}}-{{end}}\t " +
-		"{{if (eq $xact.Stats.Objs 0) }}-{{else}}{{$xact.Stats.Objs}}{{end}}\t " +
-		"{{if (eq $xact.Stats.Bytes 0) }}-{{else}}{{FormatBytesSigned $xact.Stats.Bytes 2}}{{end}}\t " +
-		"{{FormatTime $xact.StartTime}}\t " +
-		"{{if (IsUnsetTime $xact.EndTime)}}-{{else}}{{FormatTime $xact.EndTime}}{{end}}\t " +
-		"{{FormatXactState $xact}}\n"
+		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
+		"{{$xctn.Kind}}\t " +
+		"{{if $xctn.Bck.Name}}{{$xctn.Bck.Name}}{{else}}-{{end}}\t " +
+		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
+		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSigned $xctn.Stats.Bytes 2}}{{end}}\t " +
+		"{{FormatTime $xctn.StartTime}}\t " +
+		"{{if (IsUnsetTime $xctn.EndTime)}}-{{else}}{{FormatTime $xctn.EndTime}}{{end}}\t " +
+		"{{FormatXactState $xctn}}\n"
 
 	XactionECGetStatsHeader = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t START\t END\t ABORTED\n"
 	XactionECGetBodyTmpl    = XactionECGetStatsHeader +
 		"{{range $daemon := . }}" + XactionECGetBody + "{{end}}"
-	XactionECGetBody      = "{{range $key, $xact := $daemon.XactSnaps}}" + XactionECGetStatsBody + "{{end}}"
+	XactionECGetBody      = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactionECGetStatsBody + "{{end}}"
 	XactionECGetStatsBody = "{{ $daemon.DaemonID }}\t " +
-		"{{if $xact.ID}}{{$xact.ID}}{{else}}-{{end}}\t " +
-		"{{if $xact.Bck.Name}}{{$xact.Bck.Name}}{{else}}-{{end}}\t " +
-		"{{if (eq $xact.Stats.Objs 0) }}-{{else}}{{$xact.Stats.Objs}}{{end}}\t " +
-		"{{if (eq $xact.Stats.Bytes 0) }}-{{else}}{{FormatBytesSigned $xact.Stats.Bytes 2}}{{end}}\t " +
+		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
+		"{{if $xctn.Bck.Name}}{{$xctn.Bck.Name}}{{else}}-{{end}}\t " +
+		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
+		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSigned $xctn.Stats.Bytes 2}}{{end}}\t " +
 
-		"{{ $ext := ExtECGetStats $xact }}" +
+		"{{ $ext := ExtECGetStats $xctn }}" +
 		"{{if (eq $ext.ErrCount 0) }}-{{else}}{{$ext.ErrCount}}{{end}}\t " +
 		"{{if (eq $ext.AvgQueueLen 0.0) }}-{{else}}{{ FormatFloat $ext.AvgQueueLen}}{{end}}\t " +
 		"{{if (eq $ext.AvgObjTime 0) }}-{{else}}{{FormatMilli $ext.AvgObjTime}}{{end}}\t " +
 
-		"{{FormatTime $xact.StartTime}}\t " +
-		"{{if (IsUnsetTime $xact.EndTime)}}-{{else}}{{FormatTime $xact.EndTime}}{{end}}\t " +
-		"{{$xact.AbortedX}}\n"
+		"{{FormatTime $xctn.StartTime}}\t " +
+		"{{if (IsUnsetTime $xctn.EndTime)}}-{{else}}{{FormatTime $xctn.EndTime}}{{end}}\t " +
+		"{{$xctn.AbortedX}}\n"
 
 	XactionECPutStatsHeader = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t ENC TIME\t START\t END\t ABORTED\n"
 	XactionECPutBodyTmpl    = XactionECPutStatsHeader +
 		"{{range $daemon := . }}" + XactionECPutBody + "{{end}}"
-	XactionECPutBody      = "{{range $key, $xact := $daemon.XactSnaps}}" + XactionECPutStatsBody + "{{end}}"
+	XactionECPutBody      = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactionECPutStatsBody + "{{end}}"
 	XactionECPutStatsBody = "{{ $daemon.DaemonID }}\t " +
-		"{{if $xact.ID}}{{$xact.ID}}{{else}}-{{end}}\t " +
-		"{{if $xact.Bck.Name}}{{$xact.Bck.Name}}{{else}}-{{end}}\t " +
-		"{{if (eq $xact.Stats.Objs 0) }}-{{else}}{{$xact.Stats.Objs}}{{end}}\t " +
-		"{{if (eq $xact.Stats.Bytes 0) }}-{{else}}{{FormatBytesSigned $xact.Stats.Bytes 2}}{{end}}\t " +
+		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
+		"{{if $xctn.Bck.Name}}{{$xctn.Bck.Name}}{{else}}-{{end}}\t " +
+		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
+		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSigned $xctn.Stats.Bytes 2}}{{end}}\t " +
 
-		"{{ $ext := ExtECPutStats $xact }}" +
+		"{{ $ext := ExtECPutStats $xctn }}" +
 		"{{if (eq $ext.EncodeErrCount 0) }}-{{else}}{{$ext.EncodeErrCount}}{{end}}\t " +
 		"{{if (eq $ext.AvgQueueLen 0.0) }}-{{else}}{{ FormatFloat $ext.AvgQueueLen}}{{end}}\t " +
 		"{{if (eq $ext.AvgObjTime 0) }}-{{else}}{{FormatMilli $ext.AvgObjTime}}{{end}}\t " +
 		"{{if (eq $ext.AvgEncodeTime 0) }}-{{else}}{{FormatMilli $ext.AvgEncodeTime}}{{end}}\t " +
 
-		"{{FormatTime $xact.StartTime}}\t " +
-		"{{if (IsUnsetTime $xact.EndTime)}}-{{else}}{{FormatTime $xact.EndTime}}{{end}}\t " +
-		"{{$xact.AbortedX}}\n"
+		"{{FormatTime $xctn.StartTime}}\t " +
+		"{{if (IsUnsetTime $xctn.EndTime)}}-{{else}}{{FormatTime $xctn.EndTime}}{{end}}\t " +
+		"{{$xctn.AbortedX}}\n"
 
 	// Buckets templates
 	BucketsSummariesFastTmpl = "NAME\t EST. OBJECTS\t EST. SIZE\t EST. USED %\n" + bucketsSummariesBody
@@ -586,7 +586,7 @@ func fmtACL(acl cmn.AccessAttrs) string {
 	return acl.Describe()
 }
 
-func extECGetStats(base *xaction.SnapExt) *ec.ExtECGetStats {
+func extECGetStats(base *xact.SnapExt) *ec.ExtECGetStats {
 	ecGet := &ec.ExtECGetStats{}
 	if err := cos.MorphMarshal(base.Ext, ecGet); err != nil {
 		return &ec.ExtECGetStats{}
@@ -594,7 +594,7 @@ func extECGetStats(base *xaction.SnapExt) *ec.ExtECGetStats {
 	return ecGet
 }
 
-func extECPutStats(base *xaction.SnapExt) *ec.ExtECPutStats {
+func extECPutStats(base *xact.SnapExt) *ec.ExtECPutStats {
 	ecPut := &ec.ExtECPutStats{}
 	if err := cos.MorphMarshal(base.Ext, ecPut); err != nil {
 		return &ec.ExtECPutStats{}
@@ -613,17 +613,17 @@ func fmtNameArch(val string, flags uint16) string {
 	return "    " + val
 }
 
-func fmtXactState(xact *xaction.SnapExt) string {
-	if xact.AbortedX {
+func fmtXactState(xctn *xact.SnapExt) string {
+	if xctn.AbortedX {
 		return xactStateAborted
 	}
-	if !xact.EndTime.IsZero() {
+	if !xctn.EndTime.IsZero() {
 		return xactStateFinished
 	}
 
-	if xact.Ext != nil {
-		var ext xaction.BaseDemandStatsExt
-		if err := cos.MorphMarshal(xact.Ext, &ext); err == nil {
+	if xctn.Ext != nil {
+		var ext xact.BaseDemandStatsExt
+		if err := cos.MorphMarshal(xctn.Ext, &ext); err == nil {
 			if ext.IsIdle {
 				return xactStateIdle
 			}

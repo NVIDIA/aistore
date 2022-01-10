@@ -42,8 +42,8 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/volume"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 const dbName = "ais.db"
@@ -668,16 +668,16 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			t.writeErr(w, r, rns.Err)
 			return
 		}
-		xact := rns.Entry.Get()
-		xact.AddNotif(&xaction.NotifXact{
+		xctn := rns.Entry.Get()
+		xctn.AddNotif(&xact.NotifXact{
 			NotifBase: nl.NotifBase{
 				When: cluster.UponTerm,
 				Dsts: []string{equalIC},
 				F:    t.callerNotifyFin,
 			},
-			Xact: xact,
+			Xact: xctn,
 		})
-		go xact.Run(nil)
+		go xctn.Run(nil)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
@@ -723,8 +723,8 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		rns := xreg.RenewPrefetch(msg.UUID, t, request.bck, lrMsg)
-		xact := rns.Entry.Get()
-		go xact.Run(nil)
+		xctn := rns.Entry.Get()
+		go xctn.Run(nil)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
@@ -1480,8 +1480,8 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 		return
 	}
 	rns := xreg.RenewPutMirror(t, lom)
-	xact := rns.Entry.Get()
-	xputlrep := xact.(*mirror.XactPut)
+	xctn := rns.Entry.Get()
+	xputlrep := xctn.(*mirror.XactPut)
 	xputlrep.Repl(lom)
 }
 
@@ -1645,8 +1645,8 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 			t.writeErr(w, r, rns.Err)
 			return
 		}
-		xact := rns.Entry.Get()
-		go xact.Run(nil)
+		xctn := rns.Entry.Get()
+		go xctn.Run(nil)
 		return
 	}
 	// 3b. promote file
@@ -1696,7 +1696,7 @@ func (t *targetrunner) runResilver(args res.Args, wg *sync.WaitGroup) {
 		t.bcastAsyncIC(msg)
 	}
 	if wg != nil {
-		wg.Done() // compare w/ xaction.GoRunW(()
+		wg.Done() // compare w/ xact.GoRunW(()
 	}
 	t.res.RunResilver(args)
 }

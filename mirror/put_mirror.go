@@ -19,8 +19,8 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 const (
@@ -30,12 +30,12 @@ const (
 type (
 	putFactory struct {
 		xreg.RenewBase
-		xact *XactPut
+		xctn *XactPut
 		lom  *cluster.LOM
 	}
 	XactPut struct {
 		// implements cluster.Xact interface
-		xaction.DemandBase
+		xact.DemandBase
 		// runtime
 		workers *mpather.WorkerGroup
 		workCh  chan cluster.LIF
@@ -64,17 +64,17 @@ func (*putFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 func (p *putFactory) Start() error {
 	slab, err := p.T.PageMM().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	cos.AssertNoErr(err)
-	xact, err := runXactPut(p.lom, slab, p.T)
+	xctn, err := runXactPut(p.lom, slab, p.T)
 	if err != nil {
 		glog.Error(err)
 		return err
 	}
-	p.xact = xact
+	p.xctn = xctn
 	return nil
 }
 
 func (*putFactory) Kind() string        { return cmn.ActPutCopies }
-func (p *putFactory) Get() cluster.Xact { return p.xact }
+func (p *putFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *putFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 	debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) // xreg.usePrev() must've returned true
@@ -192,4 +192,4 @@ func (r *XactPut) stop() (err error) {
 	return err
 }
 
-func (r *XactPut) Stats() cluster.XactionSnap { return r.DemandBase.ExtSnap() }
+func (r *XactPut) Stats() cluster.XactSnap { return r.DemandBase.ExtSnap() }

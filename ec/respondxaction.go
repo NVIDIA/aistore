@@ -19,14 +19,14 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 type (
 	rspFactory struct {
 		xreg.RenewBase
-		xact *XactRespond
+		xctn *XactRespond
 	}
 	// Xaction responsible for responding to EC requests of other targets.
 	// Should not be stopped if number of known targets is small.
@@ -37,7 +37,7 @@ type (
 
 // interface guard
 var (
-	_ xaction.Demand = (*XactRespond)(nil)
+	_ xact.Demand    = (*XactRespond)(nil)
 	_ xreg.Renewable = (*rspFactory)(nil)
 )
 
@@ -51,7 +51,7 @@ func (*rspFactory) New(_ xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (*rspFactory) Kind() string        { return cmn.ActECRespond }
-func (p *rspFactory) Get() cluster.Xact { return p.xact }
+func (p *rspFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *rspFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 	debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) // xreg.usePrev() must've returned true
@@ -61,7 +61,7 @@ func (p *rspFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 func (p *rspFactory) Start() error {
 	xec := ECM.NewRespondXact(p.Bck.Bck)
 	xec.DemandBase.Init(cos.GenUUID(), p.Kind(), p.Bck, 0 /*use default*/)
-	p.xact = xec
+	p.xctn = xec
 	go xec.Run(nil)
 	return nil
 }
@@ -247,4 +247,4 @@ func (r *XactRespond) stop(err error) {
 	r.Finish(err)
 }
 
-func (r *XactRespond) Snap() cluster.XactionSnap { return r.DemandBase.ExtSnap() }
+func (r *XactRespond) Snap() cluster.XactSnap { return r.DemandBase.ExtSnap() }

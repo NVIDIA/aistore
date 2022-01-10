@@ -19,14 +19,14 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 )
 
 type (
 	daemonTemplateXactSnaps struct {
 		DaemonID  string
-		XactSnaps []*xaction.SnapExt
+		XactSnaps []*xact.SnapExt
 	}
 
 	targetMpath struct {
@@ -386,9 +386,9 @@ func _showXactList(c *cli.Context, nodeID, xactID, xactKind string, bck cmn.Bck)
 				continue
 			}
 			runningStats := xs[tid][:0]
-			for _, xact := range snaps {
-				if xact.Running() {
-					runningStats = append(runningStats, xact)
+			for _, xctn := range snaps {
+				if xctn.Running() {
+					runningStats = append(runningStats, xctn)
 				}
 			}
 			xs[tid] = runningStats

@@ -17,21 +17,21 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 type (
 	mncFactory struct {
 		xreg.RenewBase
-		xact *xactMNC
+		xctn *xactMNC
 		args xreg.MNCArgs
 	}
 
 	// xactMNC runs in a background, traverses all local mountpaths, and makes sure
 	// the bucket is N-way replicated (where N >= 1).
 	xactMNC struct {
-		xaction.XactBckJog
+		xact.BckJog
 		tag    string
 		copies int
 	}
@@ -55,12 +55,12 @@ func (*mncFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 func (p *mncFactory) Start() error {
 	slab, err := p.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
 	cos.AssertNoErr(err)
-	p.xact = newXactMNC(p.Bck, p, slab)
+	p.xctn = newXactMNC(p.Bck, p, slab)
 	return nil
 }
 
 func (*mncFactory) Kind() string        { return cmn.ActMakeNCopies }
-func (p *mncFactory) Get() cluster.Xact { return p.xact }
+func (p *mncFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *mncFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	err = fmt.Errorf("%s is currently running, cannot start a new %q",
@@ -73,11 +73,11 @@ func (p *mncFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 /////////////
 
 func (r *xactMNC) String() string {
-	return fmt.Sprintf("%s tag=%s, copies=%d", r.XactBase.String(), r.tag, r.copies)
+	return fmt.Sprintf("%s tag=%s, copies=%d", r.Base.String(), r.tag, r.copies)
 }
 
 func (r *xactMNC) Name() string {
-	return fmt.Sprintf("%s tag=%s, copies=%d", r.XactBase.Name(), r.tag, r.copies)
+	return fmt.Sprintf("%s tag=%s, copies=%d", r.Base.Name(), r.tag, r.copies)
 }
 
 func newXactMNC(bck *cluster.Bck, p *mncFactory, slab *memsys.Slab) (r *xactMNC) {
@@ -92,7 +92,7 @@ func newXactMNC(bck *cluster.Bck, p *mncFactory, slab *memsys.Slab) (r *xactMNC)
 		DoLoad:   mpather.Load, // Required to fetch `NumCopies()` and skip copies.
 		Throttle: true,
 	}
-	r.XactBckJog.Init(p.UUID(), cmn.ActMakeNCopies, bck, mpopts)
+	r.BckJog.Init(p.UUID(), cmn.ActMakeNCopies, bck, mpopts)
 	return
 }
 
@@ -102,9 +102,9 @@ func (r *xactMNC) Run(wg *sync.WaitGroup) {
 		r.Finish(err)
 		return
 	}
-	r.XactBckJog.Run()
+	r.BckJog.Run()
 	glog.Infoln(r.Name())
-	err := r.XactBckJog.Wait()
+	err := r.BckJog.Wait()
 	r.Finish(err)
 }
 

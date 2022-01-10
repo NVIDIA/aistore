@@ -14,8 +14,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -27,7 +27,7 @@ type (
 		SmapVersion int64         `json:"smap_version,string"` // current Smap version (via smapOwner)
 		RebVersion  int64         `json:"reb_version,string"`  // Smap version of *this* rebalancing op
 		RebID       int64         `json:"reb_id,string"`       // rebalance ID
-		StatsDelta  xaction.Stats `json:"stats_delta"`         // transmitted/received since the prev req.
+		StatsDelta  xact.Stats    `json:"stats_delta"`         // transmitted/received since the prev req.
 		Stage       uint32        `json:"stage"`               // the current stage - see enum above
 		Aborted     bool          `json:"aborted"`             // aborted?
 		Running     bool          `json:"running"`             // running?
@@ -59,13 +59,13 @@ func (reb *Reb) RebStatus(status *Status) {
 	if rsmap != nil {
 		status.RebVersion = rsmap.Version
 	}
-	beginStats := (*xaction.Stats)(reb.beginStats.Load())
+	beginStats := (*xact.Stats)(reb.beginStats.Load())
 	reb.mu.RUnlock()
 	// stats
 	if beginStats == nil {
 		return
 	}
-	reb.xact().ToStats(&reb.curStats)
+	reb.xctn().ToStats(&reb.curStats)
 	status.StatsDelta.OutObjs = reb.curStats.OutObjs - beginStats.OutObjs
 	status.StatsDelta.OutBytes = reb.curStats.OutBytes - beginStats.OutBytes
 	status.StatsDelta.InObjs = reb.curStats.InObjs - beginStats.InObjs
@@ -172,7 +172,7 @@ func (reb *Reb) rxReady(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 		maxwt  = md.config.Rebalance.DestRetryTime.D() + md.config.Rebalance.DestRetryTime.D()/2
 		curwt  time.Duration
 		logHdr = reb.logHdr(md)
-		xreb   = reb.xact()
+		xreb   = reb.xctn()
 	)
 	for curwt < maxwt {
 		if reb.stages.isInStage(tsi, rebStageTraverse) {
@@ -203,7 +203,7 @@ func (reb *Reb) waitFinExtended(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 		maxwt      = md.config.Rebalance.DestRetryTime.D()
 		sleepRetry = cmn.KeepaliveRetryDuration(md.config)
 		logHdr     = reb.logHdr(md)
-		xreb       = reb.xact()
+		xreb       = reb.xctn()
 	)
 	for curwt < maxwt {
 		if err := xreb.AbortedAfter(sleep); err != nil {
@@ -255,7 +255,7 @@ func (reb *Reb) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md *reb
 	)
 	body, code, err := reb.t.Health(tsi, cmn.DefaultTimeout, query)
 	if err != nil {
-		if errAborted := reb.xact().AbortedAfter(sleepRetry); errAborted != nil {
+		if errAborted := reb.xctn().AbortedAfter(sleepRetry); errAborted != nil {
 			glog.Infof("%s: abort check status (%v)", logHdr, errAborted)
 			return
 		}
@@ -289,7 +289,7 @@ func (reb *Reb) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md *reb
 	// do not use `abortRebalance` - no need to broadcast.
 	if status.RebID == reb.RebID() && status.Aborted {
 		glog.Warningf("%s aborted %s[g%d] - aborting as well...", tsi.StringEx(), cmn.ActRebalance, status.RebID)
-		reb.xact().Abort(nil)
+		reb.xctn().Abort(nil)
 		return
 	}
 

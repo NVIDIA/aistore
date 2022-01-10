@@ -1,8 +1,8 @@
-// Package xaction provides core functionality for the AIStore eXtended Actions (xactions).
+// Package xact provides core functionality for the AIStore eXtended Actions (xactions).
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
-package xaction
+package xact
 
 import (
 	"sync"
@@ -33,7 +33,7 @@ type (
 		SubPending(n int)
 	}
 	DemandBase struct {
-		XactBase
+		Base
 		mu      sync.RWMutex
 		pending int64
 		active  int64
@@ -114,7 +114,7 @@ func (r *DemandBase) Stop() {
 	r.idle.ticks.Close()
 }
 
-func (r *DemandBase) Snap() cluster.XactionSnap { return r.ExtSnap() }
+func (r *DemandBase) Snap() cluster.XactSnap { return r.ExtSnap() }
 
 func (r *DemandBase) ExtSnap() *SnapExt {
 	snap := &SnapExt{}
@@ -130,7 +130,7 @@ func (r *DemandBase) Abort(err error) (ok bool) {
 	if err == nil && !r.likelyIdle() {
 		err = cmn.NewErrAborted(r.Name(), "x-demand", nil)
 	}
-	if ok = r.XactBase.Abort(err); ok {
+	if ok = r.Base.Abort(err); ok {
 		r.Finish(err)
 	}
 	return

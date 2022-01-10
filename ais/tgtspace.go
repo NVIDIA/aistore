@@ -16,8 +16,8 @@ import (
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/space"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 // triggers by an out-of-space condition or a suspicion of thereof
@@ -75,7 +75,7 @@ func (t *targetrunner) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ..
 		WG:                  wg,
 		Force:               force,
 	}
-	xlru.AddNotif(&xaction.NotifXact{
+	xlru.AddNotif(&xact.NotifXact{
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 		Xact:      xlru,
 	})
@@ -109,7 +109,7 @@ func (t *targetrunner) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cm
 		Buckets: bcks,
 		WG:      wg,
 	}
-	xcln.AddNotif(&xaction.NotifXact{
+	xcln.AddNotif(&xact.NotifXact{
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 		Xact:      xcln,
 	})

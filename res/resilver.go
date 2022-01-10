@@ -21,8 +21,8 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/NVIDIA/aistore/xs"
 )
 
@@ -37,7 +37,7 @@ type (
 	}
 	Args struct {
 		UUID              string
-		Notif             *xaction.NotifXact
+		Notif             *xact.NotifXact
 		Rmi               *fs.MountpathInfo
 		Action            string
 		PostDD            func(rmi *fs.MountpathInfo, action string, xres *xs.Resilver, err error)

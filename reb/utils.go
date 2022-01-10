@@ -20,8 +20,8 @@ import (
 func (reb *Reb) RebID() int64           { return reb.rebID.Load() }
 func (reb *Reb) FilterAdd(uname []byte) { reb.filterGFN.Insert(uname) }
 
-func (reb *Reb) xact() *xs.Rebalance        { return (*xs.Rebalance)(reb.xreb.Load()) }
-func (reb *Reb) setXact(xact *xs.Rebalance) { reb.xreb.Store(unsafe.Pointer(xact)) }
+func (reb *Reb) xctn() *xs.Rebalance        { return (*xs.Rebalance)(reb.xreb.Load()) }
+func (reb *Reb) setXact(xctn *xs.Rebalance) { reb.xreb.Store(unsafe.Pointer(xctn)) }
 
 func (reb *Reb) logHdr(md *rebArgs) string {
 	stage := stages[reb.stages.stage.Load()]
@@ -78,7 +78,7 @@ func (reb *Reb) changeStage(newStage uint32) {
 
 // Aborts global rebalance and notifies all other targets.
 func (reb *Reb) abortRebalance() {
-	xreb := reb.xact()
+	xreb := reb.xctn()
 	if xreb == nil || !xreb.Abort(nil) {
 		return
 	}
@@ -100,8 +100,8 @@ func (reb *Reb) abortRebalance() {
 // has already aborted or finished.
 func (reb *Reb) isQuiescent() bool {
 	// Finished or aborted xaction = no traffic
-	xact := reb.xact()
-	if xact == nil || xact.IsAborted() || xact.Finished() {
+	xctn := reb.xctn()
+	if xctn == nil || xctn.IsAborted() || xctn.Finished() {
 		return true
 	}
 

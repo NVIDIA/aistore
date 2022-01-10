@@ -18,8 +18,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 // XactDirPromote copies a bucket locally within the same cluster
@@ -27,12 +27,12 @@ import (
 type (
 	proFactory struct {
 		xreg.RenewBase
-		xact   *XactDirPromote
+		xctn   *XactDirPromote
 		dir    string
 		params *cmn.ActValPromote
 	}
 	XactDirPromote struct {
-		xaction.XactBckJog
+		xact.BckJog
 		dir    string
 		params *cmn.ActValPromote
 	}
@@ -55,14 +55,14 @@ func (*proFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (p *proFactory) Start() error {
-	xact := NewXactDirPromote(p.dir, p.Bck, p.T, p.params)
-	go xact.Run(nil)
-	p.xact = xact
+	xctn := NewXactDirPromote(p.dir, p.Bck, p.T, p.params)
+	go xctn.Run(nil)
+	p.xctn = xctn
 	return nil
 }
 
 func (*proFactory) Kind() string        { return cmn.ActPromote }
-func (p *proFactory) Get() cluster.Xact { return p.xact }
+func (p *proFactory) Get() cluster.Xact { return p.xctn }
 
 func (*proFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprKeepAndStartNew, nil
@@ -74,7 +74,7 @@ func (*proFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 
 func NewXactDirPromote(dir string, bck *cluster.Bck, t cluster.Target, params *cmn.ActValPromote) (r *XactDirPromote) {
 	r = &XactDirPromote{dir: dir, params: params}
-	r.XactBckJog.Init(cos.GenUUID(), cmn.ActPromote, bck, &mpather.JoggerGroupOpts{T: t})
+	r.BckJog.Init(cos.GenUUID(), cmn.ActPromote, bck, &mpather.JoggerGroupOpts{T: t})
 	return
 }
 

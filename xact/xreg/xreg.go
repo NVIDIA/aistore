@@ -14,7 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/hk"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 const (
@@ -48,7 +48,7 @@ type (
 	Args struct {
 		T      cluster.Target
 		UUID   string
-		Custom interface{} // Additional arguments that are specific for a given xaction.
+		Custom interface{} // Additional arguments that are specific for a given xact.
 	}
 	RenewBase struct {
 		Args
@@ -62,7 +62,7 @@ type (
 		OnlyRunning *bool
 	}
 
-	// Represents result of renewing given xaction.
+	// Represents result of renewing given xact.
 	RenewRes struct {
 		Entry Renewable // Depending on situation can be new or old entry.
 		Err   error     // Error that occurred during renewal.
@@ -73,7 +73,7 @@ type (
 		bcks       []*cluster.Bck // run on a slice of buckets
 		ty         string         // one of { ScopeG, ScopeBck, ... } enum
 		err        error          // original cause (or reason), e.g. cmn.ErrUserAbort
-		mountpaths bool           // mountpath xactions - see xaction.Table
+		mountpaths bool           // mountpath xactions - see xact.Table
 		all        bool           // all or matching `ty` above, if defined
 	}
 
@@ -120,8 +120,8 @@ func (rns *RenewRes) beingRenewed() {
 	if rns.Err != nil || !rns.IsRunning() {
 		return
 	}
-	xact := rns.Entry.Get()
-	if xdmnd, ok := xact.(xaction.Demand); ok {
+	xctn := rns.Entry.Get()
+	if xdmnd, ok := xctn.(xact.Demand); ok {
 		xdmnd.IncPending()
 		xdmnd.DecPending()
 	}
@@ -137,7 +137,7 @@ var defaultReg *registry
 
 func Init() {
 	defaultReg = newRegistry()
-	xaction.IncInactive = defaultReg.incInactive
+	xact.IncInactive = defaultReg.incInactive
 }
 
 func TestReset() { defaultReg = newRegistry() } // tests only
@@ -156,9 +156,9 @@ func RegWithHK() {
 	hk.Reg("xactions-inactive", defaultReg.hkDelInactive, 0 /*time.Duration*/)
 }
 
-func GetXact(uuid string) (xact cluster.Xact) { return defaultReg.getXact(uuid) }
+func GetXact(uuid string) (xctn cluster.Xact) { return defaultReg.getXact(uuid) }
 
-func (r *registry) getXact(uuid string) (xact cluster.Xact) {
+func (r *registry) getXact(uuid string) (xctn cluster.Xact) {
 	e := r.entries
 	e.mtx.RLock()
 outer:
@@ -166,7 +166,7 @@ outer:
 		for _, entry := range entries {
 			x := entry.Get()
 			if x != nil && x.ID() == uuid {
-				xact = x
+				xctn = x
 				break outer
 			}
 		}
@@ -255,44 +255,44 @@ func (r *registry) doAbort(kind string, bck *cluster.Bck, err error) (aborted bo
 func DoAbortByID(uuid string, err error) (aborted bool) { return defaultReg.doAbortByID(uuid, err) }
 
 func (r *registry) doAbortByID(uuid string, err error) (aborted bool) {
-	xact := r.getXact(uuid)
-	if xact == nil {
+	xctn := r.getXact(uuid)
+	if xctn == nil {
 		return
 	}
-	return xact.Abort(err)
+	return xctn.Abort(err)
 }
 
-func GetSnap(flt XactFilter) ([]cluster.XactionSnap, error) { return defaultReg.getSnap(flt) }
+func GetSnap(flt XactFilter) ([]cluster.XactSnap, error) { return defaultReg.getSnap(flt) }
 
-func (r *registry) getSnap(flt XactFilter) ([]cluster.XactionSnap, error) {
+func (r *registry) getSnap(flt XactFilter) ([]cluster.XactSnap, error) {
 	var onlyRunning bool
 	if flt.OnlyRunning != nil {
 		onlyRunning = *flt.OnlyRunning
 	}
 	if flt.ID != "" {
-		xact := r.getXact(flt.ID)
-		if xact != nil {
-			if onlyRunning && xact.Finished() {
-				return nil, cmn.NewErrXactNotFoundError("[only-running vs " + xact.String() + "]")
+		xctn := r.getXact(flt.ID)
+		if xctn != nil {
+			if onlyRunning && xctn.Finished() {
+				return nil, cmn.NewErrXactNotFoundError("[only-running vs " + xctn.String() + "]")
 			}
-			if flt.Kind != "" && xact.Kind() != flt.Kind {
-				return nil, cmn.NewErrXactNotFoundError("[kind=" + flt.Kind + " vs " + xact.String() + "]")
+			if flt.Kind != "" && xctn.Kind() != flt.Kind {
+				return nil, cmn.NewErrXactNotFoundError("[kind=" + flt.Kind + " vs " + xctn.String() + "]")
 			}
-			return []cluster.XactionSnap{xact.Snap()}, nil
+			return []cluster.XactSnap{xctn.Snap()}, nil
 		}
 		if onlyRunning || flt.Kind != cmn.ActRebalance {
 			return nil, cmn.NewErrXactNotFoundError("ID=" + flt.ID)
 		}
 		// not running rebalance: include all finished (but not aborted) ones
 		// with ID at ot _after_ the specified
-		return r.matchingXactsStats(func(xact cluster.Xact) bool {
-			cmp := xaction.CompareRebIDs(xact.ID(), flt.ID)
-			return cmp >= 0 && xact.Finished() && !xact.IsAborted()
+		return r.matchingXactsStats(func(xctn cluster.Xact) bool {
+			cmp := xact.CompareRebIDs(xctn.ID(), flt.ID)
+			return cmp >= 0 && xctn.Finished() && !xctn.IsAborted()
 		}), nil
 	}
 	if flt.Bck != nil || flt.Kind != "" {
 		// Error checks
-		if flt.Kind != "" && !xaction.IsValidKind(flt.Kind) {
+		if flt.Kind != "" && !xact.IsValidKind(flt.Kind) {
 			return nil, cmn.NewErrXactNotFoundError(flt.Kind)
 		}
 		if flt.Bck != nil && !flt.Bck.HasProvider() {
@@ -300,9 +300,9 @@ func (r *registry) getSnap(flt XactFilter) ([]cluster.XactionSnap, error) {
 		}
 
 		if onlyRunning {
-			matching := make([]cluster.XactionSnap, 0, 10)
+			matching := make([]cluster.XactSnap, 0, 10)
 			if flt.Kind == "" {
-				for kind := range xaction.Table {
+				for kind := range xact.Table {
 					entry := r.getRunning(XactFilter{Kind: kind, Bck: flt.Bck})
 					if entry != nil {
 						matching = append(matching, entry.Get().Snap())
@@ -323,35 +323,35 @@ func (r *registry) getSnap(flt XactFilter) ([]cluster.XactionSnap, error) {
 
 func (r *registry) abort(args abortArgs) {
 	r.entries.forEach(func(entry Renewable) bool {
-		xact := entry.Get()
-		if xact.Finished() {
+		xctn := entry.Get()
+		if xctn.Finished() {
 			return true
 		}
 		abort := false
 		if args.mountpaths {
 			debug.AssertMsg(args.ty == "", args.ty)
-			if xaction.IsMountpath(xact.Kind()) {
+			if xact.IsMountpath(xctn.Kind()) {
 				abort = true
 			}
 		} else if len(args.bcks) > 0 {
 			debug.AssertMsg(args.ty == "", args.ty)
 			for _, bck := range args.bcks {
-				if xact.Bck() != nil && bck.Bck.Equal(xact.Bck().Bck) {
+				if xctn.Bck() != nil && bck.Bck.Equal(xctn.Bck().Bck) {
 					abort = true
 					break
 				}
 			}
 		} else if args.all {
-			abort = args.ty == "" || args.ty == xaction.Table[xact.Kind()].Scope
+			abort = args.ty == "" || args.ty == xact.Table[xctn.Kind()].Scope
 		}
 		if abort {
-			xact.Abort(args.err)
+			xctn.Abort(args.err)
 		}
 		return true
 	})
 }
 
-func (r *registry) matchingXactsStats(match func(xact cluster.Xact) bool) []cluster.XactionSnap {
+func (r *registry) matchingXactsStats(match func(xctn cluster.Xact) bool) []cluster.XactSnap {
 	matchingEntries := make([]Renewable, 0, 20)
 	r.entries.forEach(func(entry Renewable) bool {
 		if !match(entry.Get()) {
@@ -361,7 +361,7 @@ func (r *registry) matchingXactsStats(match func(xact cluster.Xact) bool) []clus
 		return true
 	})
 	// TODO: we cannot do this inside `forEach` because - nested locks
-	sts := make([]cluster.XactionSnap, 0, len(matchingEntries))
+	sts := make([]cluster.XactSnap, 0, len(matchingEntries))
 	for _, entry := range matchingEntries {
 		sts = append(sts, entry.Get().Snap())
 	}
@@ -391,24 +391,24 @@ func (r *registry) hkDelOld() time.Duration {
 	now := time.Now()
 	r.entries.forEach(func(entry Renewable) (ret bool) {
 		var (
-			xact = entry.Get()
-			eID  = xact.ID()
+			xctn = entry.Get()
+			eID  = xctn.ID()
 			onl  bool
 		)
 		ret, onl = true, true
-		if !xact.Finished() {
+		if !xctn.Finished() {
 			return
 		}
 		// extra check if the entry is not the most recent one for
 		// a given kind (if it is keep it anyway)
 		flt := XactFilter{Kind: entry.Kind(), OnlyRunning: &onl}
-		if xaction.Table[entry.Kind()].Scope == xaction.ScopeBck {
-			flt.Bck = xact.Bck()
+		if xact.Table[entry.Kind()].Scope == xact.ScopeBck {
+			flt.Bck = xctn.Bck()
 		}
 		if r.entries.findUnlocked(flt) == nil {
 			return
 		}
-		if xact.EndTime().Add(entryOldAge).Before(now) {
+		if xctn.EndTime().Add(entryOldAge).Before(now) {
 			toRemove = append(toRemove, eID)
 		}
 		return
@@ -450,8 +450,8 @@ func (r *registry) _renewFlt(entry Renewable, flt XactFilter) (rns RenewRes) {
 		}
 		if wpr, err := entry.WhenPrevIsRunning(prevEntry); wpr == WprUse || err != nil {
 			r.RUnlock()
-			xact := prevEntry.Get()
-			return RenewRes{Entry: prevEntry, Err: err, UUID: xact.ID()}
+			xctn := prevEntry.Get()
+			return RenewRes{Entry: prevEntry, Err: err, UUID: xctn.ID()}
 		}
 	}
 	r.RUnlock()
@@ -467,7 +467,7 @@ func (r *registry) _renewFlt(entry Renewable, flt XactFilter) (rns RenewRes) {
 func usePrev(xprev cluster.Xact, nentry Renewable, bck *cluster.Bck) (use bool) {
 	pkind, nkind := xprev.Kind(), nentry.Kind()
 	debug.Assertf(pkind == nkind && pkind != "", "%s != %s", pkind, nkind)
-	pdtor, ndtor := xaction.Table[pkind], xaction.Table[nkind]
+	pdtor, ndtor := xact.Table[pkind], xact.Table[nkind]
 	debug.Assert(pdtor.Scope == ndtor.Scope)
 	// same ID
 	if xprev.ID() != "" && xprev.ID() == nentry.UUID() {
@@ -475,8 +475,8 @@ func usePrev(xprev cluster.Xact, nentry Renewable, bck *cluster.Bck) (use bool) 
 		return
 	}
 	// on-demand
-	if _, ok := xprev.(xaction.Demand); ok {
-		if pdtor.Scope != xaction.ScopeBck {
+	if _, ok := xprev.(xact.Demand); ok {
+		if pdtor.Scope != xact.ScopeBck {
 			use = true
 			return
 		}
@@ -538,7 +538,7 @@ func (e *entries) findUnlocked(flt XactFilter) Renewable {
 	if flt.OnlyRunning != nil {
 		onlyRunning = *flt.OnlyRunning
 	}
-	debug.AssertMsg(flt.Kind == "" || xaction.IsValidKind(flt.Kind), flt.Kind)
+	debug.AssertMsg(flt.Kind == "" || xact.IsValidKind(flt.Kind), flt.Kind)
 	if !onlyRunning {
 		// walk in reverse as there is a greater chance
 		// the one we are looking for is at the end
@@ -571,10 +571,10 @@ func (e *entries) forEach(matcher func(entry Renewable) bool) {
 // NOTE: is called under lock
 func (e *entries) del(id string) error {
 	for idx, entry := range e.entries {
-		xact := entry.Get()
-		if xact.ID() == id {
-			if !xact.Finished() {
-				return fmt.Errorf("cannot remove %s - is running", xact)
+		xctn := entry.Get()
+		if xctn.ID() == id {
+			if !xctn.Finished() {
+				return fmt.Errorf("cannot remove %s - is running", xctn)
 			}
 			nlen := len(e.entries) - 1
 			e.entries[idx] = e.entries[nlen]
@@ -583,9 +583,9 @@ func (e *entries) del(id string) error {
 		}
 	}
 	for idx, entry := range e.active {
-		xact := entry.Get()
-		if xact.ID() == id {
-			debug.AssertMsg(xact.Finished(), xact.String())
+		xctn := entry.Get()
+		if xctn.ID() == id {
+			debug.AssertMsg(xctn.Finished(), xctn.String())
 			nlen := len(e.active) - 1
 			e.active[idx] = e.active[nlen]
 			e.active = e.active[:nlen]
@@ -627,27 +627,27 @@ func (e *entries) len() (l int) {
 // XactFilter //
 ////////////////
 
-func (rxf XactFilter) genericMatcher(xact cluster.Xact) bool {
+func (rxf XactFilter) genericMatcher(xctn cluster.Xact) bool {
 	condition := true
 	if rxf.OnlyRunning != nil {
-		condition = condition && !xact.Finished() == *rxf.OnlyRunning
+		condition = condition && !xctn.Finished() == *rxf.OnlyRunning
 	}
 	if rxf.Kind != "" {
-		condition = condition && xact.Kind() == rxf.Kind
+		condition = condition && xctn.Kind() == rxf.Kind
 	}
 	if rxf.Bck != nil {
-		if xact.Bck() == nil {
+		if xctn.Bck() == nil {
 			return false
 		}
-		condition = condition && xact.Bck().Bck.Equal(rxf.Bck.Bck)
+		condition = condition && xctn.Bck().Bck.Equal(rxf.Bck.Bck)
 	}
 	return condition
 }
 
 func matchEntry(entry Renewable, flt XactFilter) (matches bool) {
-	xact := entry.Get()
+	xctn := entry.Get()
 	if flt.ID != "" {
-		return xact.ID() == flt.ID
+		return xctn.ID() == flt.ID
 	}
 	if entry.Kind() != flt.Kind {
 		return false
@@ -655,9 +655,9 @@ func matchEntry(entry Renewable, flt XactFilter) (matches bool) {
 	if flt.Bck == nil || flt.Bck.IsEmpty() {
 		return true
 	}
-	if xact.Bck() == nil {
+	if xctn.Bck() == nil {
 		return false
 	}
-	matches = xact.Bck().Bck.Equal(flt.Bck.Bck)
+	matches = xctn.Bck().Bck.Equal(flt.Bck.Bck)
 	return
 }

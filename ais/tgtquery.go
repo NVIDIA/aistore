@@ -14,8 +14,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/objwalk/query"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 // There are 3 methods exposed by targets:
@@ -74,12 +74,12 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	if rns.IsRunning() {
 		return
 	}
-	xact := rns.Entry.Get()
-	xact.AddNotif(&xaction.NotifXact{
+	xctn := rns.Entry.Get()
+	xctn.AddNotif(&xact.NotifXact{
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
-		Xact:      xact,
+		Xact:      xctn,
 	})
-	go xact.Run(nil)
+	go xctn.Run(nil)
 }
 
 func (t *targetrunner) httpqueryget(w http.ResponseWriter, r *http.Request) {

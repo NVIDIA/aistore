@@ -17,7 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	notif "github.com/NVIDIA/aistore/nl"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -209,7 +209,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 	c.msg.BMDVersion = bmd.version()
 
 	// 4. IC
-	nl := xaction.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bck.Bck)
+	nl := xact.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bck.Bck)
 	nl.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
@@ -321,7 +321,7 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck, nprop
 		if ctx.needReEC {
 			action = cmn.ActECEncode
 		}
-		nl := xaction.NewXactNL(c.uuid, action, &c.smap.Smap, nil, bck.Bck)
+		nl := xact.NewXactNL(c.uuid, action, &c.smap.Smap, nil, bck.Bck)
 		nl.SetOwner(equalIC)
 		p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 		xactID = c.uuid
@@ -418,7 +418,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	c.msg.RMDVersion = rmd.version()
 
 	// 4. IC
-	nl := xaction.NewXactNL(c.uuid, c.msg.Action, &c.smap.Smap, nil, bckFrom.Bck, bckTo.Bck)
+	nl := xact.NewXactNL(c.uuid, c.msg.Action, &c.smap.Smap, nil, bckFrom.Bck, bckTo.Bck)
 	nl.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{smap: c.smap, nl: nl, query: c.req.Query})
 
@@ -431,13 +431,13 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	wg := p.metasyncer.sync(revsPair{rmd, c.msg})
 
 	// Register rebalance `nl`
-	nl = xaction.NewXactNL(xaction.RebID2S(rmd.Version), cmn.ActRebalance, &c.smap.Smap, nil)
+	nl = xact.NewXactNL(xact.RebID2S(rmd.Version), cmn.ActRebalance, &c.smap.Smap, nil)
 	nl.SetOwner(equalIC)
 	err = p.notifs.add(nl)
 	debug.AssertNoErr(err)
 
 	// Register resilver `nl`
-	nl = xaction.NewXactNL(rmd.Resilver, cmn.ActResilver, &c.smap.Smap, nil)
+	nl = xact.NewXactNL(rmd.Resilver, cmn.ActResilver, &c.smap.Smap, nil)
 	nl.SetOwner(equalIC)
 	err = p.notifs.add(nl)
 	debug.AssertNoErr(err)
@@ -517,7 +517,7 @@ func (p *proxyrunner) tcb(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRu
 	}
 
 	// 4. IC
-	nl := xaction.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bckFrom.Bck, bckTo.Bck)
+	nl := xact.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bckFrom.Bck, bckTo.Bck)
 	nl.SetOwner(equalIC)
 	// setup notification listener callback to cleanup upon failure
 	nl.F = func(nl notif.NotifListener) {
@@ -676,7 +676,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 	c.msg.BMDVersion = bmd.version()
 
 	// 5. IC
-	nl := xaction.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bck.Bck)
+	nl := xact.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bck.Bck)
 	nl.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 

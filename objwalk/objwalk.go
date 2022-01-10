@@ -38,20 +38,20 @@ func (w *Walk) DefaultLocalObjPage(msg *cmn.ListObjsMsg) (*cmn.BucketList, error
 		q      = query.NewQuery(objSrc, bckSrc, nil)
 	)
 	msg.UUID = cos.GenUUID()
-	xact := query.NewObjectsListing(w.ctx, w.t, q, msg)
-	go xact.Run(nil)
+	xctn := query.NewObjectsListing(w.ctx, w.t, q, msg)
+	go xctn.Run(nil)
 
-	debug.Assert(!xact.TokenUnsatisfiable(msg.ContinuationToken))
-	return LocalObjPage(xact, msg.PageSize)
+	debug.Assert(!xctn.TokenUnsatisfiable(msg.ContinuationToken))
+	return LocalObjPage(xctn, msg.PageSize)
 }
 
 // LocalObjPage walks local filesystems and collects objects for a given
 // bucket based on query.ObjectsListingXact. The bucket can be ais:// or remote.
 // In the latter case, return the list of objects cached locally.
-func LocalObjPage(xact *query.ObjectsListingXact, objectsCnt uint) (*cmn.BucketList, error) {
+func LocalObjPage(xctn *query.ObjectsListingXact, objectsCnt uint) (*cmn.BucketList, error) {
 	var err error
 
-	entries, err := xact.NextN(objectsCnt)
+	entries, err := xctn.NextN(objectsCnt)
 	list := &cmn.BucketList{Entries: entries}
 	if err != nil && err != io.EOF {
 		return nil, err

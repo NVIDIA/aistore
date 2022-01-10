@@ -16,8 +16,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/devtools/tassert"
 	"github.com/NVIDIA/aistore/space"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/NVIDIA/aistore/xs"
 )
 
@@ -97,8 +97,8 @@ func TestXactionRenewPrefetch(t *testing.T) {
 
 	res := make(map[cluster.Xact]struct{}, 10)
 	for rns := range ch {
-		if xact := rns.Entry.Get(); xact != nil {
-			res[xact] = struct{}{}
+		if xctn := rns.Entry.Get(); xctn != nil {
+			res[xctn] = struct{}{}
 		}
 	}
 
@@ -156,7 +156,7 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 	xactBck := rnsRen.Entry.Get()
 	tassert.Errorf(t, rnsRen.Err == nil && xactBck != nil, "Xaction must be created")
 
-	xreg.AbortAll(errors.New("test-abort-g"), xaction.ScopeG)
+	xreg.AbortAll(errors.New("test-abort-g"), xact.ScopeG)
 
 	tassert.Errorf(t, rnsLRU.Entry.Get().IsAborted(), "AbortAllGlobal: expected global xaction to be aborted")
 	tassert.Errorf(t, !xactBck.IsAborted(), "AbortAllGlobal: expected bucket xaction to be running: %s", xactBck)

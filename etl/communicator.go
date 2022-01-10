@@ -64,7 +64,7 @@ type (
 		name    string
 		podName string
 
-		xact cluster.Xact
+		xctn cluster.Xact
 	}
 
 	pushComm struct {
@@ -109,7 +109,7 @@ func makeCommunicator(args commArgs) Communicator {
 		t:         args.bootstraper.t,
 		name:      args.bootstraper.originalPodName,
 		podName:   args.bootstraper.pod.Name,
-		xact:      args.bootstraper.xact,
+		xctn:      args.bootstraper.xctn,
 	}
 
 	switch args.bootstraper.msg.CommTypeX {
@@ -154,12 +154,12 @@ func (c baseComm) Name() string    { return c.name }
 func (c baseComm) PodName() string { return c.podName }
 func (c baseComm) SvcName() string { return c.podName /*pod name is same as service name*/ }
 
-func (c baseComm) ObjCount() int64 { return c.xact.Objs() }
-func (c baseComm) InBytes() int64  { return c.xact.InBytes() }
-func (c baseComm) OutBytes() int64 { return c.xact.OutBytes() }
+func (c baseComm) ObjCount() int64 { return c.xctn.Objs() }
+func (c baseComm) InBytes() int64  { return c.xctn.InBytes() }
+func (c baseComm) OutBytes() int64 { return c.xctn.OutBytes() }
 
 func (c *baseComm) Stop() {
-	c.xact.Finish(nil)
+	c.xctn.Finish(nil)
 }
 
 //////////////
@@ -186,8 +186,8 @@ func (pc *pushComm) doRequest(bck *cluster.Bck, objName string, timeout time.Dur
 }
 
 func (pc *pushComm) tryDoRequest(lom *cluster.LOM, timeout time.Duration) (cos.ReadCloseSizer, error) {
-	if err := pc.xact.Aborted(); err != nil {
-		return nil, cmn.NewErrAborted(pc.xact.Name(), "try-push-comm", err)
+	if err := pc.xctn.Aborted(); err != nil {
+		return nil, cmn.NewErrAborted(pc.xctn.Name(), "try-push-comm", err)
 	}
 
 	lom.Lock(false)
@@ -239,12 +239,12 @@ finish:
 	return cos.NewReaderWithArgs(cos.ReaderArgs{
 		R:      resp.Body,
 		Size:   resp.ContentLength,
-		ReadCb: func(i int, err error) { pc.xact.OutObjsAdd(1, int64(i)) },
+		ReadCb: func(i int, err error) { pc.xctn.OutObjsAdd(1, int64(i)) },
 		DeferCb: func() {
 			if cancel != nil {
 				cancel()
 			}
-			pc.xact.InObjsAdd(1, size)
+			pc.xctn.InObjsAdd(1, size)
 		},
 	}), nil
 }
@@ -276,15 +276,15 @@ func (pc *pushComm) OfflineTransform(bck *cluster.Bck, objName string, timeout t
 //////////////////
 
 func (rc *redirectComm) OnlineTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
-	if err := rc.xact.Aborted(); err != nil {
-		return cmn.NewErrAborted(rc.xact.Name(), "try-redirect-comm", err)
+	if err := rc.xctn.Aborted(); err != nil {
+		return cmn.NewErrAborted(rc.xctn.Name(), "try-redirect-comm", err)
 	}
 
 	size, err := determineSize(bck, objName)
 	if err != nil {
 		return err
 	}
-	rc.xact.InObjsAdd(1, size)
+	rc.xctn.InObjsAdd(1, size)
 
 	// TODO: Is there way to determine `rc.stats.outBytes`?
 	redirectURL := cos.JoinPath(rc.uri, transformerPath(bck, objName))
@@ -311,7 +311,7 @@ func (pc *revProxyComm) OnlineTransform(w http.ResponseWriter, r *http.Request, 
 	if err != nil {
 		return err
 	}
-	pc.xact.InObjsAdd(1, size)
+	pc.xctn.InObjsAdd(1, size)
 
 	// TODO: Is there way to determine `rc.stats.outBytes`?
 	path := transformerPath(bck, objName)
@@ -365,8 +365,8 @@ func transformerPath(bck *cluster.Bck, objName string) string {
 }
 
 func (c *baseComm) getWithTimeout(url string, size int64, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
-	if err := c.xact.Aborted(); err != nil {
-		return nil, cmn.NewErrAborted(c.xact.Name(), "transform-get", err)
+	if err := c.xctn.Aborted(); err != nil {
+		return nil, cmn.NewErrAborted(c.xctn.Name(), "transform-get", err)
 	}
 
 	var (
@@ -396,12 +396,12 @@ finish:
 	return cos.NewReaderWithArgs(cos.ReaderArgs{
 		R:      resp.Body,
 		Size:   resp.ContentLength,
-		ReadCb: func(i int, err error) { c.xact.OutObjsAdd(1, int64(i)) },
+		ReadCb: func(i int, err error) { c.xctn.OutObjsAdd(1, int64(i)) },
 		DeferCb: func() {
 			if cancel != nil {
 				cancel()
 			}
-			c.xact.InObjsAdd(1, size)
+			c.xctn.InObjsAdd(1, size)
 		},
 	}), nil
 }

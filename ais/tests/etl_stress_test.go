@@ -227,7 +227,7 @@ def transform(input_bytes):
 	}
 }
 
-// Responsible for cleaning all resources, except ETL xaction.
+// Responsible for cleaning all resources, except ETL xact.
 func etlPrepareAndStart(t *testing.T, m *ioContext, name, comm string) (xactID string) {
 	var (
 		bckFrom = cmn.Bck{Name: "etl-in-" + cos.RandString(5), Provider: cmn.ProviderAIS}

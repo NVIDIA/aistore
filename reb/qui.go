@@ -26,11 +26,11 @@ func (q *quiArgs) quicb(_ time.Duration /*accum. wait time*/) cluster.QuiRes {
 	return cluster.QuiInactiveCB
 }
 
-// Uses generic xaction.Quiesce to make sure that no objects are received
+// Uses generic xact.Quiesce to make sure that no objects are received
 // during a given `maxWait` interval of time.
 func (reb *Reb) quiesce(md *rebArgs, maxWait time.Duration, cb func(md *rebArgs) bool) cluster.QuiRes {
 	q := &quiArgs{md, reb, cb}
-	return reb.xact().Quiesce(maxWait, q.quicb)
+	return reb.xctn().Quiesce(maxWait, q.quicb)
 }
 
 // Returns true if all transport queues are empty

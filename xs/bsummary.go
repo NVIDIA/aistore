@@ -19,8 +19,8 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/objwalk"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -31,12 +31,12 @@ type (
 	}
 	bsummFactory struct {
 		xreg.RenewBase
-		xact *bsummXact
+		xctn *bsummXact
 		ctx  context.Context
 		msg  *cmn.BucketSummaryMsg
 	}
 	bsummXact struct {
-		xaction.XactBase
+		xact.Base
 		ctx context.Context
 		t   cluster.Target
 		msg *cmn.BucketSummaryMsg
@@ -61,15 +61,15 @@ func (*bsummFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (p *bsummFactory) Start() error {
-	xact := &bsummXact{t: p.T, msg: p.msg, ctx: p.ctx}
-	xact.InitBase(p.UUID(), cmn.ActSummaryBck, p.Bck)
-	p.xact = xact
-	go p.xact.Run(nil)
+	xctn := &bsummXact{t: p.T, msg: p.msg, ctx: p.ctx}
+	xctn.InitBase(p.UUID(), cmn.ActSummaryBck, p.Bck)
+	p.xctn = xctn
+	go p.xctn.Run(nil)
 	return nil
 }
 
 func (*bsummFactory) Kind() string        { return cmn.ActSummaryBck }
-func (p *bsummFactory) Get() cluster.Xact { return p.xact }
+func (p *bsummFactory) Get() cluster.Xact { return p.xctn }
 
 func (*bsummFactory) WhenPrevIsRunning(xreg.Renewable) (w xreg.WPR, e error) {
 	return xreg.WprUse, nil

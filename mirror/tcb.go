@@ -21,20 +21,20 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 type (
 	tcbFactory struct {
 		xreg.RenewBase
-		xact  *XactTCB
+		xctn  *XactTCB
 		kind  string
 		phase string // (see "transition")
 		args  *xreg.TCBArgs
 	}
 	XactTCB struct {
-		xaction.XactBckJog
+		xact.BckJog
 		t    cluster.Target
 		dm   *bundle.DataMover
 		args xreg.TCBArgs
@@ -93,15 +93,15 @@ func (e *tcbFactory) Start() error {
 	slab, err := e.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
 	cos.AssertNoErr(err)
 
-	e.xact = newXactTCB(e, slab)
+	e.xctn = newXactTCB(e, slab)
 	if e.kind == cmn.ActETLBck {
 		sizePDU = memsys.DefaultBufSize
 	}
 
 	// NOTE: to refcount OpcTxnDone
 	smap := e.T.Sowner().Get()
-	e.xact.refc.Store(int32(smap.CountTargets() - 1))
-	e.xact.wg.Add(1)
+	e.xctn.refc.Store(int32(smap.CountTargets() - 1))
+	e.xctn.wg.Add(1)
 
 	config := cmn.GCO.Get()
 	err = e.newDM(&config.Rebalance, e.UUID(), sizePDU)
@@ -116,20 +116,20 @@ func (e *tcbFactory) newDM(rebcfg *cmn.RebalanceConf, uuid string, sizePDU int32
 		Multiplier:  int(rebcfg.Multiplier), // ditto
 		SizePDU:     sizePDU,
 	}
-	dm, err := bundle.NewDataMover(e.T, trname+"_"+uuid, e.xact.recv, cmn.OwtPut, dmExtra)
+	dm, err := bundle.NewDataMover(e.T, trname+"_"+uuid, e.xctn.recv, cmn.OwtPut, dmExtra)
 	if err != nil {
 		return err
 	}
 	if err := dm.RegRecv(); err != nil {
 		return err
 	}
-	dm.SetXact(e.xact)
-	e.xact.dm = dm
+	dm.SetXact(e.xctn)
+	e.xctn.dm = dm
 	return nil
 }
 
 func (e *tcbFactory) Kind() string      { return e.kind }
-func (e *tcbFactory) Get() cluster.Xact { return e.xact }
+func (e *tcbFactory) Get() cluster.Xact { return e.xctn }
 
 func (e *tcbFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	prev := prevEntry.(*tcbFactory)
@@ -152,11 +152,11 @@ func (e *tcbFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 func (r *XactTCB) Args() *xreg.TCBArgs { return &r.args }
 
 func (r *XactTCB) String() string {
-	return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.args.BckFrom)
+	return fmt.Sprintf("%s <= %s", r.Base.String(), r.args.BckFrom)
 }
 
 func (r *XactTCB) Name() string {
-	return fmt.Sprintf("%s <= %s", r.XactBase.Name(), r.args.BckFrom)
+	return fmt.Sprintf("%s <= %s", r.Base.Name(), r.args.BckFrom)
 }
 
 // limited pre-run abort
@@ -166,7 +166,7 @@ func (r *XactTCB) TxnAbort() {
 		r.dm.Close(err)
 	}
 	r.dm.UnregRecv()
-	r.XactBase.Finish(err)
+	r.Base.Finish(err)
 }
 
 //
@@ -189,7 +189,7 @@ func newXactTCB(e *tcbFactory, slab *memsys.Slab) (r *XactTCB) {
 		DoLoad:   mpather.Load,
 		Throttle: true,
 	}
-	r.XactBckJog.Init(e.UUID(), e.kind, e.args.BckTo, mpopts)
+	r.BckJog.Init(e.UUID(), e.kind, e.args.BckTo, mpopts)
 	return
 }
 
@@ -202,10 +202,10 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 
 	r.wg.Done()
 
-	r.XactBckJog.Run()
+	r.BckJog.Run()
 	glog.Infoln(r.Name())
 
-	err := r.XactBckJog.Wait()
+	err := r.BckJog.Wait()
 
 	o := transport.AllocSend()
 	o.Hdr.Opcode = OpcTxnDone
@@ -214,7 +214,7 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	// NOTE: ref-counted quiescence, fairly short (optimal) waiting
 	config := cmn.GCO.Get()
 	optTime, maxTime := config.Timeout.MaxKeepalive.D(), config.Timeout.SendFile.D()/2
-	q := r.Quiesce(optTime, func(tot time.Duration) cluster.QuiRes { return xaction.RefcntQuiCB(&r.refc, maxTime, tot) })
+	q := r.Quiesce(optTime, func(tot time.Duration) cluster.QuiRes { return xact.RefcntQuiCB(&r.refc, maxTime, tot) })
 	if err == nil {
 		err = r.err.Err()
 	}

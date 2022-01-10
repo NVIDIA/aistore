@@ -10,7 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 )
 
@@ -55,17 +55,17 @@ func xactionCmds() cli.Commands {
 	)
 
 	startable := listXactions(true)
-	for _, xact := range startable {
-		if splCmdKinds.Contains(xact) {
+	for _, xctn := range startable {
+		if splCmdKinds.Contains(xctn) {
 			continue
 		}
 		cmd := cli.Command{
-			Name:   xact,
-			Usage:  fmt.Sprintf("start %s", xact),
+			Name:   xctn,
+			Usage:  fmt.Sprintf("start %s", xctn),
 			Flags:  startCmdsFlags[subcmdStartXaction],
 			Action: startXactionHandler,
 		}
-		if xaction.IsBckScope(xact) {
+		if xact.IsBckScope(xctn) {
 			cmd.ArgsUsage = bucketArgument
 			cmd.BashComplete = bucketCompletions()
 		}

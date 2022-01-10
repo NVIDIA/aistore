@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/etl/runtime"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact/xreg"
 	corev1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -355,7 +355,7 @@ func (b *etlBootstraper) setupXaction() {
 	rns := xreg.RenewETL(b.t, b.msg)
 	debug.AssertNoErr(rns.Err)
 	debug.Assert(!rns.IsRunning())
-	b.xact = rns.Entry.Get()
+	b.xctn = rns.Entry.Get()
 }
 
 // Stop deletes all occupied by the ETL resources, including Pods and Services.

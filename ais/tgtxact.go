@@ -16,8 +16,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/res"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 // TODO: uplift via higher-level query and similar (#668)
@@ -25,7 +25,7 @@ import (
 // verb /v1/xactions
 func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		xactMsg xaction.QueryMsg
+		xactMsg xact.QueryMsg
 		bck     *cluster.Bck
 	)
 	if _, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathXactions.L); err != nil {
@@ -97,9 +97,9 @@ func (t *targetrunner) getXactByID(w http.ResponseWriter, r *http.Request, what,
 		t.writeErrf(w, r, fmtUnknownQue, what)
 		return
 	}
-	xact := xreg.GetXact(uuid)
-	if xact != nil {
-		t.writeJSON(w, r, xact.Snap(), what)
+	xctn := xreg.GetXact(uuid)
+	if xctn != nil {
+		t.writeJSON(w, r, xctn.Snap(), what)
 		return
 	}
 	err := cmn.NewErrXactNotFoundError("[" + uuid + "]")
@@ -124,15 +124,15 @@ func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request,
 	}
 }
 
-func (t *targetrunner) cmdXactStart(xactMsg *xaction.QueryMsg, bck *cluster.Bck) error {
+func (t *targetrunner) cmdXactStart(xactMsg *xact.QueryMsg, bck *cluster.Bck) error {
 	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
 	const erfmn = "xaction %q requires a bucket to start"
 
-	if !xaction.IsValidKind(xactMsg.Kind) {
+	if !xact.IsValidKind(xactMsg.Kind) {
 		return fmt.Errorf(cmn.FmtErrUnknown, t.si, "xaction kind", xactMsg.Kind)
 	}
 
-	if dtor := xaction.Table[xactMsg.Kind]; dtor.Scope == xaction.ScopeBck && bck == nil {
+	if dtor := xact.Table[xactMsg.Kind]; dtor.Scope == xact.ScopeBck && bck == nil {
 		return fmt.Errorf(erfmn, xactMsg.Kind)
 	}
 
@@ -142,7 +142,7 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.QueryMsg, bck *cluster.Bck)
 		if bck != nil {
 			glog.Errorf(erfmb, xactMsg.Kind, bck)
 		}
-		ext := &xaction.QueryMsgLRU{}
+		ext := &xact.QueryMsgLRU{}
 		if err := cos.MorphMarshal(xactMsg.Ext, ext); err != nil {
 			return err
 		}
@@ -159,7 +159,7 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.QueryMsg, bck *cluster.Bck)
 		if bck != nil {
 			glog.Errorf(erfmb, xactMsg.Kind, bck)
 		}
-		notif := &xaction.NotifXact{
+		notif := &xact.NotifXact{
 			NotifBase: nl.NotifBase{
 				When: cluster.UponTerm,
 				Dsts: []string{equalIC},
@@ -174,16 +174,16 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.QueryMsg, bck *cluster.Bck)
 	case cmn.ActPrefetchObjects:
 		args := &cmn.ListRangeMsg{}
 		rns := xreg.RenewPrefetch(xactMsg.ID, t, bck, args)
-		xact := rns.Entry.Get()
-		xact.AddNotif(&xaction.NotifXact{
+		xctn := rns.Entry.Get()
+		xctn.AddNotif(&xact.NotifXact{
 			NotifBase: nl.NotifBase{
 				When: cluster.UponTerm,
 				Dsts: []string{equalIC},
 				F:    t.callerNotifyFin,
 			},
-			Xact: xact,
+			Xact: xctn,
 		})
-		go xact.Run(nil)
+		go xctn.Run(nil)
 	case cmn.ActLoadLomCache:
 		return xreg.RenewBckLoadLomCache(t, xactMsg.ID, bck)
 	// 3. cannot start

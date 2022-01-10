@@ -11,7 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/objwalk/query"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 type (
@@ -64,7 +64,7 @@ type (
 func RegBckXact(entry Renewable) { defaultReg.regBckXact(entry) }
 
 func (r *registry) regBckXact(entry Renewable) {
-	debug.Assert(xaction.Table[entry.Kind()].Scope == xaction.ScopeBck)
+	debug.Assert(xact.Table[entry.Kind()].Scope == xact.ScopeBck)
 
 	// It is expected that registrations happen at the init time. Therefore, it
 	// is safe to assume that no `RenewXYZ` will happen before all xactions
@@ -103,7 +103,7 @@ func (r *registry) renewMakeNCopies(t cluster.Target, uuid, tag string) {
 		if bck.Props.Mirror.Enabled {
 			rns := r.renewBckMakeNCopies(t, bck, uuid, tag, int(bck.Props.Mirror.Copies))
 			if rns.Err == nil && !rns.IsRunning() {
-				xaction.GoRunW(rns.Entry.Get())
+				xact.GoRunW(rns.Entry.Get())
 			}
 		}
 		return false
@@ -114,7 +114,7 @@ func (r *registry) renewMakeNCopies(t cluster.Target, uuid, tag string) {
 			if bck.Props.Mirror.Enabled {
 				rns := r.renewBckMakeNCopies(t, bck, uuid, tag, int(bck.Props.Mirror.Copies))
 				if rns.Err == nil && !rns.IsRunning() {
-					xaction.GoRunW(rns.Entry.Get())
+					xact.GoRunW(rns.Entry.Get())
 				}
 			}
 			return false
@@ -180,7 +180,7 @@ func (r *registry) renewBckRename(t cluster.Target, bckFrom, bckTo *cluster.Bck,
 	rmdVersion int64, phase string) RenewRes {
 	custom := &BckRenameArgs{
 		Phase:   phase,
-		RebID:   xaction.RebID2S(rmdVersion),
+		RebID:   xact.RebID2S(rmdVersion),
 		BckFrom: bckFrom,
 		BckTo:   bckTo,
 	}

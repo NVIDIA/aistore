@@ -14,18 +14,18 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
-	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xreg"
+	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 type (
 	encFactory struct {
 		xreg.RenewBase
-		xact  *XactBckEncode
+		xctn  *XactBckEncode
 		phase string
 	}
 	XactBckEncode struct {
-		xaction.XactBase
+		xact.Base
 		t    cluster.Target
 		bck  *cluster.Bck
 		wg   *sync.WaitGroup // to wait for EC finishes all objects
@@ -50,12 +50,12 @@ func (*encFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
 }
 
 func (p *encFactory) Start() error {
-	p.xact = newXactBckEncode(p.Bck, p.T, p.UUID())
+	p.xctn = newXactBckEncode(p.Bck, p.T, p.UUID())
 	return nil
 }
 
 func (*encFactory) Kind() string        { return cmn.ActECEncode }
-func (p *encFactory) Get() cluster.Xact { return p.xact }
+func (p *encFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *encFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	prev := prevEntry.(*encFactory)
@@ -64,7 +64,7 @@ func (p *encFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 		wpr = xreg.WprUse
 		return
 	}
-	err = fmt.Errorf("%s(%s, phase %s): cannot %s", p.Kind(), prev.xact.Bck().Name, prev.phase, p.phase)
+	err = fmt.Errorf("%s(%s, phase %s): cannot %s", p.Kind(), prev.xctn.Bck().Name, prev.phase, p.phase)
 	return
 }
 
