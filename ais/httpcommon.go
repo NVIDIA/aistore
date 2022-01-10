@@ -575,7 +575,7 @@ func (h *httprunner) parseReq(w http.ResponseWriter, r *http.Request, args *apiR
 }
 
 func (h *httprunner) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
-	xele := xreg.GetXactRunning(cmn.ActElection)
+	xele := voteInProgress()
 	cm := &cluMeta{
 		SI:             h.si,
 		VoteInProgress: xele != nil,
@@ -2495,8 +2495,7 @@ func (cii *clusterInfo) fillSmap(smap *smapX) {
 	cii.Smap.Primary.CtrlURL = smap.Primary.URL(cmn.NetworkIntraControl)
 	cii.Smap.Primary.PubURL = smap.Primary.URL(cmn.NetworkPublic)
 	cii.Smap.Primary.ID = smap.Primary.ID()
-	xact := xreg.GetXactRunning(cmn.ActElection)
-	cii.Flags.VoteInProgress = xact != nil
+	cii.Flags.VoteInProgress = voteInProgress() != nil
 }
 
 func (cii *clusterInfo) smapEqual(other *clusterInfo) (ok bool) {

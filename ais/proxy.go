@@ -765,12 +765,11 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	if smap.isPrimary(p.si) {
 		const txt = "is primary, cannot be on the receiving side of metasync"
 		cii.fill(&p.httprunner)
-		if xact := xreg.GetXactRunning(cmn.ActElection); xact != nil {
+		if xact := voteInProgress(); xact != nil {
 			err.Message = fmt.Sprintf("%s: %s [%s, %s]", p.si, txt, smap, xact)
 		} else {
 			err.Message = fmt.Sprintf("%s: %s, %s", p.si, txt, smap)
 		}
-		cii.fill(&p.httprunner)
 		p.writeErr(w, r, errors.New(cos.MustMarshalToString(err)), http.StatusConflict)
 		return
 	}

@@ -11,13 +11,19 @@ import (
 )
 
 func GetRebMarked() (out xaction.XactMarked) {
-	out.Xact = defaultReg.GetXactRunning(cmn.ActRebalance)
-	out.Interrupted = fs.MarkerExists(cmn.RebalanceMarker) && out.Xact == nil
+	entry := defaultReg.getRunning(XactFilter{Kind: cmn.ActRebalance})
+	if entry != nil {
+		out.Xact = entry.Get()
+	}
+	out.Interrupted = fs.MarkerExists(cmn.RebalanceMarker) && entry == nil
 	return
 }
 
 func GetResilverMarked() (out xaction.XactMarked) {
-	out.Xact = defaultReg.GetXactRunning(cmn.ActResilver)
-	out.Interrupted = fs.MarkerExists(cmn.ResilverMarker) && out.Xact == nil
+	entry := defaultReg.getRunning(XactFilter{Kind: cmn.ActResilver})
+	if entry != nil {
+		out.Xact = entry.Get()
+	}
+	out.Interrupted = fs.MarkerExists(cmn.ResilverMarker) && entry == nil
 	return
 }

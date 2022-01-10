@@ -917,8 +917,8 @@ func (t *targetrunner) coExists(bck *cluster.Bck, action string) (err error) {
 	} else if l.Xact != nil {
 		err = fmt.Errorf(fmtErr, t.si, l.Xact, action, bck)
 	}
-	if ren := xreg.GetXactRunning(cmn.ActMoveBck); ren != nil {
-		err = fmt.Errorf(fmtErr, t.si, ren, action, bck)
+	if ren := xreg.GetRunning(xreg.XactFilter{Kind: cmn.ActMoveBck}); ren != nil {
+		err = fmt.Errorf(fmtErr, t.si, ren.Get(), action, bck)
 	}
 	return
 }

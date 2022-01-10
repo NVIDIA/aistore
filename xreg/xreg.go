@@ -159,25 +159,19 @@ func RegWithHK() {
 func GetXact(uuid string) (xact cluster.Xact) { return defaultReg.getXact(uuid) }
 
 func (r *registry) getXact(uuid string) (xact cluster.Xact) {
-	r.entries.forEach(func(entry Renewable) bool {
-		x := entry.Get()
-		if x != nil && x.ID() == uuid {
-			xact = x
-			return false
+	e := r.entries
+	e.mtx.RLock()
+outer:
+	for _, entries := range [][]Renewable{e.active, e.entries} { // tradeoff: fewer active, higher priority
+		for _, entry := range entries {
+			x := entry.Get()
+			if x != nil && x.ID() == uuid {
+				xact = x
+				break outer
+			}
 		}
-		return true
-	})
-	return
-}
-
-func GetXactRunning(kind string) (xact cluster.Xact) { return defaultReg.GetXactRunning(kind) }
-
-func (r *registry) GetXactRunning(kind string) (xact cluster.Xact) {
-	onl := false
-	entry := r.entries.find(XactFilter{Kind: kind, OnlyRunning: &onl})
-	if entry != nil {
-		xact = entry.Get()
 	}
+	e.mtx.RUnlock()
 	return
 }
 
@@ -186,13 +180,13 @@ func GetRunning(flt XactFilter) Renewable { return defaultReg.getRunning(flt) }
 func (r *registry) getRunning(flt XactFilter) Renewable {
 	onl := true
 	flt.OnlyRunning = &onl
-	entry := r.entries.find(flt)
-	return entry
+	return r.entries.find(flt)
 }
 
 func GetLatest(flt XactFilter) Renewable { return defaultReg.getLatest(flt) }
 
 func (r *registry) getLatest(flt XactFilter) Renewable {
+	// NOTE: relies on the find() to walk in the newer --> older order
 	entry := r.entries.find(flt)
 	return entry
 }
@@ -243,10 +237,9 @@ func (r *registry) doAbort(kind string, bck *cluster.Bck, err error) (aborted bo
 	if kind != "" {
 		entry := r.getRunning(XactFilter{Kind: kind, Bck: bck})
 		if entry == nil {
-			return false
+			return
 		}
-		entry.Get().Abort(err)
-		return true
+		return entry.Get().Abort(err)
 	}
 	if bck == nil {
 		// No bucket and no kind - request for all available xactions.
@@ -262,28 +255,39 @@ func (r *registry) doAbort(kind string, bck *cluster.Bck, err error) (aborted bo
 func DoAbortByID(uuid string, err error) (aborted bool) { return defaultReg.doAbortByID(uuid, err) }
 
 func (r *registry) doAbortByID(uuid string, err error) (aborted bool) {
-	entry := r.getXact(uuid)
-	if entry == nil || entry.Finished() {
-		return false
+	xact := r.getXact(uuid)
+	if xact == nil {
+		return
 	}
-	entry.Abort(err)
-	return true
+	return xact.Abort(err)
 }
 
 func GetSnap(flt XactFilter) ([]cluster.XactionSnap, error) { return defaultReg.getSnap(flt) }
 
 func (r *registry) getSnap(flt XactFilter) ([]cluster.XactionSnap, error) {
+	var onlyRunning bool
+	if flt.OnlyRunning != nil {
+		onlyRunning = *flt.OnlyRunning
+	}
 	if flt.ID != "" {
-		if flt.OnlyRunning == nil || (flt.OnlyRunning != nil && *flt.OnlyRunning) {
-			return r.matchXactsStatsByID(flt.ID)
-		}
-		return r.matchingXactsStats(func(xact cluster.Xact) bool {
-			if xact.Kind() == cmn.ActRebalance {
-				// Any rebalance at or after a given ID that finished and was not aborted
-				cmp := xaction.CompareRebIDs(xact.ID(), flt.ID)
-				return cmp >= 0 && xact.Finished() && !xact.IsAborted()
+		xact := r.getXact(flt.ID)
+		if xact != nil {
+			if onlyRunning && xact.Finished() {
+				return nil, cmn.NewErrXactNotFoundError("[only-running vs " + xact.String() + "]")
 			}
-			return xact.ID() == flt.ID && xact.Finished() && !xact.IsAborted()
+			if flt.Kind != "" && xact.Kind() != flt.Kind {
+				return nil, cmn.NewErrXactNotFoundError("[kind=" + flt.Kind + " vs " + xact.String() + "]")
+			}
+			return []cluster.XactionSnap{xact.Snap()}, nil
+		}
+		if onlyRunning || flt.Kind != cmn.ActRebalance {
+			return nil, cmn.NewErrXactNotFoundError("ID=" + flt.ID)
+		}
+		// not running rebalance: include all finished (but not aborted) ones
+		// with ID at ot _after_ the specified
+		return r.matchingXactsStats(func(xact cluster.Xact) bool {
+			cmp := xaction.CompareRebIDs(xact.ID(), flt.ID)
+			return cmp >= 0 && xact.Finished() && !xact.IsAborted()
 		}), nil
 	}
 	if flt.Bck != nil || flt.Kind != "" {
@@ -295,8 +299,7 @@ func (r *registry) getSnap(flt XactFilter) ([]cluster.XactionSnap, error) {
 			return nil, fmt.Errorf("xaction %q: unknown provider for bucket %s", flt.Kind, flt.Bck.Name)
 		}
 
-		// TODO: investigate how does the following fare against genericMatcher
-		if flt.OnlyRunning != nil && *flt.OnlyRunning {
+		if onlyRunning {
 			matching := make([]cluster.XactionSnap, 0, 10)
 			if flt.Kind == "" {
 				for kind := range xaction.Table {
@@ -363,16 +366,6 @@ func (r *registry) matchingXactsStats(match func(xact cluster.Xact) bool) []clus
 		sts = append(sts, entry.Get().Snap())
 	}
 	return sts
-}
-
-func (r *registry) matchXactsStatsByID(xactID string) ([]cluster.XactionSnap, error) {
-	matchedStat := r.matchingXactsStats(func(xact cluster.Xact) bool {
-		return xact.ID() == xactID
-	})
-	if len(matchedStat) == 0 {
-		return nil, cmn.NewErrXactNotFoundError("ID=" + xactID)
-	}
-	return matchedStat, nil
 }
 
 func (r *registry) incInactive() { r.inactive.Inc() }
@@ -533,8 +526,20 @@ func newRegistryEntries() *entries {
 	}
 }
 
+func (e *entries) find(flt XactFilter) (entry Renewable) {
+	e.mtx.RLock()
+	entry = e.findUnlocked(flt)
+	e.mtx.RUnlock()
+	return
+}
+
 func (e *entries) findUnlocked(flt XactFilter) Renewable {
-	if flt.OnlyRunning == nil {
+	var onlyRunning bool
+	if flt.OnlyRunning != nil {
+		onlyRunning = *flt.OnlyRunning
+	}
+	debug.AssertMsg(flt.Kind == "" || xaction.IsValidKind(flt.Kind), flt.Kind)
+	if !onlyRunning {
 		// walk in reverse as there is a greater chance
 		// the one we are looking for is at the end
 		for idx := len(e.entries) - 1; idx >= 0; idx-- {
@@ -545,20 +550,12 @@ func (e *entries) findUnlocked(flt XactFilter) Renewable {
 		}
 		return nil
 	}
-	debug.AssertMsg(flt.Kind == "" || xaction.IsValidKind(flt.Kind), flt.Kind)
 	for _, entry := range e.active {
 		if !entry.Get().Finished() && matchEntry(entry, flt) {
 			return entry
 		}
 	}
 	return nil
-}
-
-func (e *entries) find(flt XactFilter) (entry Renewable) {
-	e.mtx.RLock()
-	entry = e.findUnlocked(flt)
-	e.mtx.RUnlock()
-	return
 }
 
 func (e *entries) forEach(matcher func(entry Renewable) bool) {

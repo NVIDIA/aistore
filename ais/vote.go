@@ -59,6 +59,13 @@ type (
 	}
 )
 
+func voteInProgress() (xele cluster.Xact) {
+	if e := xreg.GetRunning(xreg.XactFilter{Kind: cmn.ActElection}); e != nil {
+		xele = e.Get()
+	}
+	return
+}
+
 ///////////////////
 // voting: proxy //
 ///////////////////
