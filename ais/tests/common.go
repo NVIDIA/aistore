@@ -569,6 +569,14 @@ func ensureNumMountpaths(t *testing.T, target *cluster.Snode, mpList *cmn.Mountp
 	baseParams := tutils.BaseAPIParams()
 	mpl, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
+	for i := 0; i < 4; i++ {
+		if len(mpl.Available) == len(mpList.Available) &&
+			len(mpl.Disabled) == len(mpList.Disabled) &&
+			len(mpl.WaitingDD) == len(mpList.WaitingDD) {
+			break
+		}
+		time.Sleep(time.Second)
+	}
 	if len(mpl.Available) != len(mpList.Available) {
 		t.Errorf("%s ended up with %d mountpaths (dd=%v, disabled=%v), expecting: %d",
 			tname, len(mpl.Available), mpl.WaitingDD, mpl.Disabled, len(mpList.Available))
@@ -579,6 +587,12 @@ func ensureNumMountpaths(t *testing.T, target *cluster.Snode, mpList *cmn.Mountp
 }
 
 func ensureNoDisabledMountpaths(t *testing.T, target *cluster.Snode, mpList *cmn.MountpathList) {
+	for i := 0; i < 4; i++ {
+		if len(mpList.WaitingDD) == 0 && len(mpList.Disabled) == 0 {
+			break
+		}
+		time.Sleep(time.Second)
+	}
 	if len(mpList.WaitingDD) != 0 || len(mpList.Disabled) != 0 {
 		t.Fatalf("%s: disabled mountpaths at the start of the %q (avail=%d, dd=%v, disabled=%v)\n",
 			target.StringEx(), t.Name(), len(mpList.Available), mpList.WaitingDD, mpList.Disabled)
