@@ -196,7 +196,6 @@ func (p *proxy) Run() error {
 		{r: cmn.Buckets, h: p.bucketHandler, net: accessNetPublic},
 		{r: cmn.Objects, h: p.objectHandler, net: accessNetPublic},
 		{r: cmn.Download, h: p.downloadHandler, net: accessNetPublic},
-		{r: cmn.Query, h: p.queryHandler, net: accessNetPublic},
 		{r: cmn.ETL, h: p.etlHandler, net: accessNetPublic},
 		{r: cmn.Sort, h: p.dsortHandler, net: accessNetPublic},
 

@@ -48,7 +48,6 @@ const (
 	ActPrefetchObjects = "prefetch-listrange"
 	ActPromote         = "promote"
 	ActPutCopies       = "put-copies"
-	ActQueryObjects    = "query-objs"
 	ActRebalance       = "rebalance"
 	ActRenameObject    = "rename-obj"
 	ActResetBprops     = "reset-bprops"
@@ -360,8 +359,7 @@ const (
 	Users     = "users"    // AuthN
 	Clusters  = "clusters" // AuthN
 	Roles     = "roles"    // AuthN
-	Query     = "query"
-	IC        = "ic" // information center
+	IC        = "ic"       // information center
 
 	// l3
 	SyncSmap = "syncsmap" // legacy

@@ -6,13 +6,11 @@ package objwalk
 
 import (
 	"context"
-	"io"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/objwalk/query"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/objwalk/walkinfo"
 )
 
@@ -31,33 +29,44 @@ func NewWalk(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.L
 
 // DefaultLocalObjPage should be used when there's no need to persist results for a longer period of time.
 // It's supposed to be used when results are needed immediately.
-func (w *Walk) DefaultLocalObjPage(msg *cmn.ListObjsMsg) (*cmn.BucketList, error) {
+func (w *Walk) DefaultLocalObjPage() (*cmn.BucketList, error) {
 	var (
-		objSrc = &query.ObjectsSource{}
-		bckSrc = &query.BucketSource{Bck: w.bck}
-		q      = query.NewQuery(objSrc, bckSrc, nil)
+		bckList = &cmn.BucketList{}
+		wi      = walkinfo.NewWalkInfo(w.ctx, w.t, w.msg)
 	)
-	msg.UUID = cos.GenUUID()
-	xctn := query.NewObjectsListing(w.ctx, w.t, q, msg)
-	go xctn.Run(nil)
 
-	debug.Assert(!xctn.TokenUnsatisfiable(msg.ContinuationToken))
-	return LocalObjPage(xctn, msg.PageSize)
-}
+	cb := func(fqn string, de fs.DirEntry) error {
+		entry, err := wi.Callback(fqn, de)
+		if entry == nil && err == nil {
+			return nil
+		}
+		if err != nil {
+			return cmn.NewErrAborted(w.t.Snode().String()+" ResultSetXact", "query", err)
+		}
+		bckList.Entries = append(bckList.Entries, entry)
+		return nil
+	}
 
-// LocalObjPage walks local filesystems and collects objects for a given
-// bucket based on query.ObjectsListingXact. The bucket can be ais:// or remote.
-// In the latter case, return the list of objects cached locally.
-func LocalObjPage(xctn *query.ObjectsListingXact, objectsCnt uint) (*cmn.BucketList, error) {
-	var err error
+	opts := &fs.WalkBckOptions{
+		Options: fs.Options{
+			Bck:      w.bck.Bck,
+			CTs:      []string{fs.ObjectType},
+			Callback: cb,
+			Sorted:   true,
+		},
+		ValidateCallback: func(fqn string, de fs.DirEntry) error {
+			if de.IsDir() {
+				return wi.ProcessDir(fqn)
+			}
+			return nil
+		},
+	}
 
-	entries, err := xctn.NextN(objectsCnt)
-	list := &cmn.BucketList{Entries: entries}
-	if err != nil && err != io.EOF {
+	if err := fs.WalkBck(opts); err != nil {
 		return nil, err
 	}
 
-	return list, nil
+	return bckList, nil
 }
 
 // RemoteObjPage reads a page of objects in a cloud bucket. NOTE: if a request
@@ -67,7 +76,7 @@ func LocalObjPage(xctn *query.ObjectsListingXact, objectsCnt uint) (*cmn.BucketL
 // that is available only locally(copies, targetURL etc).
 func (w *Walk) RemoteObjPage() (*cmn.BucketList, error) {
 	if w.msg.IsFlagSet(cmn.LsPresent) {
-		return w.DefaultLocalObjPage(w.msg)
+		return w.DefaultLocalObjPage()
 	}
 	msg := &cmn.ListObjsMsg{}
 	*msg = *w.msg

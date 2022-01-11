@@ -29,7 +29,6 @@ func Init() {
 
 	xreg.RegBckXact(&olFactory{})
 	xreg.RegNonBckXact(&bsummFactory{})
-	xreg.RegBckXact(&queFactory{})
 
 	xreg.RegBckXact(&proFactory{})
 	xreg.RegBckXact(&llcFactory{})

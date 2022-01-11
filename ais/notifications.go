@@ -21,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/nl"
-	"github.com/NVIDIA/aistore/objwalk/query"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
@@ -673,9 +672,7 @@ func (n *notifListenMsg) UnmarshalJSON(data []byte) (err error) {
 	if err = jsoniter.Unmarshal(data, &t); err != nil {
 		return
 	}
-	if t.Type == cmn.ActQueryObjects {
-		n.nl = &query.NotifListenerQuery{}
-	} else if downloader.IsType(t.Type) {
+	if downloader.IsType(t.Type) {
 		n.nl = &downloader.NotifDownloadListerner{}
 	} else {
 		n.nl = &xact.NotifXactListener{}

@@ -69,13 +69,6 @@ var (
 	URLPathDownloadAbort  = urlpath(Version, Download, Abort)
 	URLPathDownloadRemove = urlpath(Version, Download, Remove)
 
-	URLPathQuery        = urlpath(Version, Query)
-	URLPathQueryInit    = urlpath(Version, Query, Init)
-	URLPathQueryPeek    = urlpath(Version, Query, Peek)
-	URLPathQueryDiscard = urlpath(Version, Query, Discard)
-	URLPathQueryNext    = urlpath(Version, Query, Next)
-	URLPathQueryWorker  = urlpath(Version, Query, WorkerOwner)
-
 	URLPathETL         = urlpath(Version, ETL)
 	URLPathETLInitSpec = urlpath(Version, ETL, ETLInitSpec)
 	URLPathETLInitCode = urlpath(Version, ETL, ETLInitCode)

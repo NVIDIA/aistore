@@ -56,7 +56,6 @@ var Table = map[string]Record{
 	cmn.ActLoadLomCache:    {Scope: ScopeBck, Startable: true, Mountpath: true},
 	cmn.ActPrefetchObjects: {Scope: ScopeBck, Access: cmn.AccessRW, RefreshCap: true, Startable: true},
 	cmn.ActPromote:         {Scope: ScopeBck, Access: cmn.AcePromote, Startable: false, RefreshCap: true},
-	cmn.ActQueryObjects:    {Scope: ScopeBck, Access: cmn.AceObjLIST, Startable: false, Metasync: false, Owned: true},
 	cmn.ActList:            {Scope: ScopeBck, Access: cmn.AceObjLIST, Startable: false, Metasync: false, Owned: true},
 	cmn.ActInvalListCache:  {Scope: ScopeBck, Access: cmn.AceObjLIST, Startable: false},
 

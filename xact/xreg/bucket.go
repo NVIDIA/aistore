@@ -5,12 +5,9 @@
 package xreg
 
 import (
-	"context"
-
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/objwalk/query"
 	"github.com/NVIDIA/aistore/xact"
 )
 
@@ -48,12 +45,6 @@ type (
 	MNCArgs struct {
 		Tag    string
 		Copies int
-	}
-
-	ObjectsQueryArgs struct {
-		Ctx context.Context
-		Q   *query.ObjectsQuery
-		Msg *cmn.ListObjsMsg
 	}
 )
 
@@ -194,14 +185,4 @@ func RenewObjList(t cluster.Target, bck *cluster.Bck, uuid string, msg *cmn.List
 func (r *registry) renewObjList(t cluster.Target, bck *cluster.Bck, uuid string, msg *cmn.ListObjsMsg) RenewRes {
 	e := r.bckXacts[cmn.ActList].New(Args{T: t, UUID: uuid, Custom: msg}, bck)
 	return r.renewByID(e, bck)
-}
-
-func RenewQueryObjects(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, msg *cmn.ListObjsMsg) RenewRes {
-	return defaultReg.RenewQueryObjects(ctx, t, q, msg)
-}
-
-func (r *registry) RenewQueryObjects(ctx context.Context, t cluster.Target, q *query.ObjectsQuery,
-	msg *cmn.ListObjsMsg) RenewRes {
-	custom := &ObjectsQueryArgs{Ctx: ctx, Q: q, Msg: msg}
-	return r.renewBucketXact(cmn.ActQueryObjects, q.BckSource.Bck, Args{t, msg.UUID, custom})
 }

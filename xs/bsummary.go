@@ -180,7 +180,7 @@ func (t *bsummXact) Run(*sync.WaitGroup) {
 				for {
 					walk := objwalk.NewWalk(context.Background(), t.t, bck, lsmsg)
 					if bck.IsAIS() {
-						list, err = walk.DefaultLocalObjPage(lsmsg)
+						list, err = walk.DefaultLocalObjPage()
 					} else {
 						list, err = walk.RemoteObjPage()
 					}

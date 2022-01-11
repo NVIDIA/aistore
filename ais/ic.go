@@ -157,22 +157,6 @@ func (ic *ic) redirectToIC(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
-func (ic *ic) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (nl nl.NotifListener, ok bool) {
-	nl, exists := ic.p.notifs.entry(uuid)
-	if !exists {
-		smap := ic.p.owner.smap.get()
-		ic.p.writeErrStatusf(w, r, http.StatusNotFound, "%q not found (%s)", uuid, smap.StrIC(ic.p.si))
-		return
-	}
-	if nl.Finished() {
-		// TODO: Maybe we should just return empty response and `http.StatusNoContent`?
-		smap := ic.p.owner.smap.get()
-		ic.p.writeErrStatusf(w, r, http.StatusGone, "%q finished (%s)", uuid, smap.StrIC(ic.p.si))
-		return
-	}
-	return nl, true
-}
-
 func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg      = &xact.QueryMsg{}

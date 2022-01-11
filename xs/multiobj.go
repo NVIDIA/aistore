@@ -158,7 +158,7 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 			objList, _, err = r.t.Backend(bck).ListObjects(bck, msg)
 		} else {
 			walk := objwalk.NewWalk(r.ctx, r.t, bck, msg)
-			objList, err = walk.DefaultLocalObjPage(msg)
+			objList, err = walk.DefaultLocalObjPage()
 		}
 		if err != nil {
 			return err

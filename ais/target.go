@@ -447,7 +447,6 @@ func (t *target) initRecvHandlers() {
 		{r: cmn.Download, h: t.downloadHandler, net: accessNetIntraControl},
 		{r: cmn.Sort, h: dsort.SortHandler, net: accessControlData},
 		{r: cmn.ETL, h: t.etlHandler, net: accessNetAll},
-		{r: cmn.Query, h: t.queryHandler, net: accessNetPublicControl},
 
 		{r: "/" + cmn.S3, h: t.s3Handler, net: accessNetPublicData},
 		{r: "/", h: t.writeErrURL, net: accessNetAll},
