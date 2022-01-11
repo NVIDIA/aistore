@@ -620,15 +620,8 @@ func fmtXactState(xctn *xact.SnapExt) string {
 	if !xctn.EndTime.IsZero() {
 		return xactStateFinished
 	}
-
-	if xctn.Ext != nil {
-		var ext xact.BaseDemandStatsExt
-		if err := cos.MorphMarshal(xctn.Ext, &ext); err == nil {
-			if ext.IsIdle {
-				return xactStateIdle
-			}
-		}
+	if xctn.Idle() {
+		return xactStateIdle
 	}
-
 	return xactStateRunning
 }

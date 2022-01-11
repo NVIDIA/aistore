@@ -177,47 +177,6 @@ func WaitForXaction(baseParams BaseParams, args XactReqArgs, sleeps ...time.Dura
 	}
 }
 
-// isXactionIdle return true if an xaction is not running or idle on all targets
-func isXactionIdle(baseParams BaseParams, args XactReqArgs) (idle bool, err error) {
-	var (
-		xs  NodesXactMultiSnap
-		msg = xact.QueryMsg{
-			ID:          args.ID,
-			Kind:        args.Kind,
-			Bck:         args.Bck,
-			OnlyRunning: Bool(true),
-		}
-	)
-	baseParams.Method = http.MethodGet
-	err = DoHTTPReqResp(ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPathCluster.S,
-		Body:       cos.MustMarshal(msg),
-		Header:     http.Header{cmn.HdrContentType: []string{cmn.ContentJSON}},
-		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatQueryXactStats}},
-	}, &xs)
-	if err != nil {
-		return false, err
-	}
-	if len(xs) == 0 {
-		return true, err
-	}
-	for _, xs := range xs {
-		for _, xsnap := range xs {
-			if xsnap.Ext == nil {
-				continue
-			}
-			var baseExt xact.BaseDemandStatsExt
-			if err := cos.MorphMarshal(xsnap.Ext, &baseExt); err == nil {
-				if !baseExt.IsIdle {
-					return false, nil
-				}
-			}
-		}
-	}
-	return true, nil
-}
-
 // WaitForXactionIdle waits for a given on-demand xaction to be idle.
 func WaitForXactionIdle(baseParams BaseParams, args XactReqArgs) error {
 	var (
@@ -229,12 +188,13 @@ func WaitForXactionIdle(baseParams BaseParams, args XactReqArgs) error {
 		ctx, cancel = context.WithTimeout(ctx, args.Timeout)
 		defer cancel()
 	}
+	args.OnlyRunning = true
 	for {
-		idle, err := isXactionIdle(baseParams, args)
+		snaps, err := QueryXactionSnaps(baseParams, args)
 		if err != nil {
 			return err
 		}
-		if idle {
+		if snaps.Idle() {
 			if idles == numConsecutiveIdle {
 				return nil
 			}
@@ -351,4 +311,15 @@ func (xs NodesXactMultiSnap) nodesXactSnap(xactID string) (nxs NodesXactSnap) {
 		}
 	}
 	return
+}
+
+func (xs NodesXactMultiSnap) Idle() bool {
+	for _, xs := range xs {
+		for _, xsnap := range xs {
+			if !xsnap.Idle() {
+				return false
+			}
+		}
+	}
+	return true
 }

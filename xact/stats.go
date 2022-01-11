@@ -66,6 +66,23 @@ func (b *Snap) IsAborted() bool { return b.AbortedX }
 func (b *Snap) Running() bool   { return b.EndTime.IsZero() }
 func (b *Snap) Finished() bool  { return !b.EndTime.IsZero() }
 
+// Idle is:
+// - stat.IsIdle for on-demand xactions
+// - !stat.Running() for the rest of xactions
+// MorphMarshal cannot be used to read any stats as BaseDemandStatsExt because
+// upcasting is unsupported (uknown fields are forbidden).
+func (b *SnapExt) Idle() bool {
+	if b.Ext == nil {
+		return !b.Running()
+	}
+	if vals, ok := b.Ext.(map[string]interface{}); ok {
+		if idle, ok := vals["is_idle"].(bool); ok {
+			return idle
+		}
+	}
+	return !b.Running()
+}
+
 //////////////
 // QueryMsg //
 //////////////
