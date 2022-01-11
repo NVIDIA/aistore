@@ -77,6 +77,10 @@ type (
 	}
 
 	sliceResults []*callResult
+	bcastResults struct {
+		mu sync.Mutex
+		s  sliceResults
+	}
 
 	// callArgs contains arguments for a peer-to-peer control plane call.
 	callArgs struct {
@@ -281,9 +285,9 @@ func (e *errNodeNotFound) Error() string {
 	return fmt.Sprintf("%s: %s node %s (not present in the %s)", e.si, e.msg, e.id, e.smap)
 }
 
-//////////////////////
+/////////////////////
 // errNoUnregister //
-////////////////////
+/////////////////////
 
 func (e *errNoUnregister) Error() string { return e.detail }
 
@@ -382,7 +386,7 @@ var (
 	callRes0    callResult
 )
 
-func allocCallRes() (a *callResult) {
+func allocCR() (a *callResult) {
 	if v := callResPool.Get(); v != nil {
 		a = v.(*callResult)
 		debug.Assert(a.si == nil)
@@ -391,23 +395,22 @@ func allocCallRes() (a *callResult) {
 	return &callResult{}
 }
 
-func _freeCallRes(res *callResult) {
+func freeCR(res *callResult) {
 	*res = callRes0
 	callResPool.Put(res)
 }
 
-func allocSliceRes() sliceResults {
+func allocBcastRes(n int) sliceResults {
 	if v := resultsPool.Get(); v != nil {
 		a := v.(*sliceResults)
 		return *a
 	}
-	return make(sliceResults, 0, 8) // TODO: num-nodes
+	return make(sliceResults, 0, n)
 }
 
-func freeCallResults(results sliceResults) {
+func freeBcastRes(results sliceResults) {
 	for _, res := range results {
-		*res = callRes0
-		callResPool.Put(res)
+		freeCR(res)
 	}
 	results = results[:0]
 	resultsPool.Put(&results)
@@ -1044,7 +1047,7 @@ func (h *httprunner) stop(rmFromSmap bool) {
 // intra-cluster IPC, control plane
 // call another target or a proxy; optionally, include a json-encoded body
 //
-func (h *httprunner) _call(si *cluster.Snode, bargs *bcastArgs) (res *callResult) {
+func (h *httprunner) _call(si *cluster.Snode, bargs *bcastArgs, results *bcastResults) {
 	cargs := callArgs{si: si, req: bargs.req, timeout: bargs.timeout}
 	cargs.req.Base = si.URL(bargs.network)
 	if bargs.req.BodyR != nil {
@@ -1053,7 +1056,14 @@ func (h *httprunner) _call(si *cluster.Snode, bargs *bcastArgs) (res *callResult
 	if bargs.fv != nil {
 		cargs.v = bargs.fv()
 	}
-	return h.call(cargs)
+	res := h.call(cargs)
+	if bargs.async {
+		freeCR(res) // discard right away
+	} else {
+		results.mu.Lock()
+		results.s = append(results.s, res)
+		results.mu.Unlock()
+	}
 }
 
 func (h *httprunner) call(args callArgs) (res *callResult) {
@@ -1063,7 +1073,7 @@ func (h *httprunner) call(args callArgs) (res *callResult) {
 		client *http.Client
 		sid    = unknownDaemonID
 	)
-	res = allocCallRes()
+	res = allocCR()
 	if args.si != nil {
 		sid = args.si.ID()
 		res.si = args.si
@@ -1233,7 +1243,7 @@ func (h *httprunner) callerNotify(n cluster.Notif, err error, kind string) {
 	args.selected = nodes
 	args.nodeCount = len(nodes)
 	args.async = true
-	h.bcastNodes(args)
+	_ = h.bcastSelected(args)
 	freeBcastArgs(args)
 }
 
@@ -1282,52 +1292,51 @@ func (h *httprunner) bcastGroup(args *bcastArgs) sliceResults {
 	return h.bcastNodes(args)
 }
 
-// bcastNodes broadcasts a message to the specified destinations (`bargs.nodes`).
-// It then waits and collects all the responses (compare with bcastAsyncNodes).
-// Note that, if specified, `bargs.req.BodyR` must implement `cos.ReadOpenCloser`.
+// broadcast to the specified destinations (`bargs.nodes`)
+// (if specified, `bargs.req.BodyR` must implement `cos.ReadOpenCloser`)
 func (h *httprunner) bcastNodes(bargs *bcastArgs) sliceResults {
 	var (
-		ch sliceResults
-		mu sync.Mutex
-		wg = cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), bargs.nodeCount)
+		results bcastResults
+		wg      = cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), bargs.nodeCount)
+		f       = func(si *cluster.Snode) { h._call(si, bargs, &results); wg.Done() }
 	)
+	debug.Assert(len(bargs.selected) == 0)
 	if !bargs.async {
-		ch = allocSliceRes()
+		results.s = allocBcastRes(len(bargs.nodes))
 	}
-	f1 := func(si *cluster.Snode) {
-		res := h._call(si, bargs)
-		if !bargs.async {
-			mu.Lock()
-			ch = append(ch, res)
-			mu.Unlock()
-		}
-		wg.Done()
-	}
-	if bargs.nodes != nil {
-		debug.Assert(len(bargs.selected) == 0)
-		for _, nodeMap := range bargs.nodes {
-			for _, si := range nodeMap {
-				if si.ID() == h.si.ID() {
-					continue
-				}
-				if !bargs.ignoreMaintenance && si.IsAnySet(cluster.NodeFlagsMaintDecomm) {
-					continue
-				}
-				wg.Add(1)
-				go f1(si)
+	for _, nodeMap := range bargs.nodes {
+		for _, si := range nodeMap {
+			if si.ID() == h.si.ID() {
+				continue
 			}
-		}
-	} else {
-		debug.Assert(len(bargs.selected) > 0)
-		for _, si := range bargs.selected {
-			debug.Assert(si.ID() != h.si.ID())
-			debug.Assert(h.owner.smap.get().GetNodeNotMaint(si.ID()) != nil)
+			if !bargs.ignoreMaintenance && si.IsAnySet(cluster.NodeFlagsMaintDecomm) {
+				continue
+			}
 			wg.Add(1)
-			go f1(si)
+			go f(si)
 		}
 	}
 	wg.Wait()
-	return ch
+	return results.s
+}
+
+func (h *httprunner) bcastSelected(bargs *bcastArgs) sliceResults {
+	var (
+		results bcastResults
+		wg      = cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), bargs.nodeCount)
+		f       = func(si *cluster.Snode) { h._call(si, bargs, &results); wg.Done() }
+	)
+	debug.Assert(len(bargs.selected) > 0)
+	if !bargs.async {
+		results.s = allocBcastRes(len(bargs.selected))
+	}
+	for _, si := range bargs.selected {
+		debug.Assert(si.ID() != h.si.ID())
+		wg.Add(1)
+		go f(si)
+	}
+	wg.Wait()
+	return results.s
 }
 
 func (h *httprunner) bcastAsyncIC(msg *aisMsg) {
@@ -1347,7 +1356,8 @@ func (h *httprunner) bcastAsyncIC(msg *aisMsg) {
 		wg.Add(1)
 		go func(si *cluster.Snode) {
 			cargs := callArgs{si: si, req: args.req, timeout: args.timeout}
-			_ = h.call(cargs)
+			res := h.call(cargs)
+			freeCR(res) // discard right away
 			wg.Done()
 		}(psi)
 	}
@@ -1367,10 +1377,10 @@ func (h *httprunner) bcastReqGroup(w http.ResponseWriter, r *http.Request, req c
 			continue
 		}
 		h.writeErr(w, r, res.error())
-		freeCallResults(results)
+		freeBcastRes(results)
 		return
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 }
 
 //////////////////////////////////
@@ -1656,7 +1666,7 @@ func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.
 	)
 	res := h.call(args)
 	b, status, err = res.bytes, res.status, res.err
-	_freeCallRes(res)
+	freeCR(res)
 	return
 }
 
@@ -2156,7 +2166,7 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Dur
 	)
 	regReq, err := h.cluMeta(opts)
 	if err != nil {
-		res := allocCallRes()
+		res := allocCR()
 		res.err = err
 		return res
 	}
@@ -2186,11 +2196,11 @@ func (h *httprunner) sendKeepalive(timeout time.Duration) (status int, err error
 			cos.ExitLogf("%v", res.err) // FATAL: cluster integrity error (cie)
 		}
 		status, err = res.status, res.err
-		_freeCallRes(res)
+		freeCR(res)
 		return
 	}
 	debug.Assert(len(res.bytes) == 0)
-	_freeCallRes(res)
+	freeCR(res)
 	return
 }
 
@@ -2272,7 +2282,7 @@ func (h *httprunner) unregisterSelf(ignoreErr bool) (err error) {
 		}
 		f("%s: failed to unreg self, err: %v(%d)", h.si, err, status)
 	}
-	_freeCallRes(res)
+	freeCR(res)
 	return
 }
 

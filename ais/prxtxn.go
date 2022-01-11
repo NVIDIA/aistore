@@ -99,10 +99,10 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, remoteH
 			continue
 		}
 		err := c.bcastAbort(bck, res.error())
-		freeCallResults(results)
+		freeBcastRes(results)
 		return err
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 
 	// 3. update BMD locally & metasync updated BMD
 	ctx := &bmdModifier{
@@ -127,10 +127,10 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, remoteH
 		glog.Errorf("Failed to commit create-bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
 		p.undoCreateBucket(msg, bck)
 		err := res.error()
-		freeCallResults(results)
+		freeBcastRes(results)
 		return err
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	return nil
 }
 
@@ -178,10 +178,10 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 			continue
 		}
 		err = c.bcastAbort(bck, res.error())
-		freeCallResults(results)
+		freeBcastRes(results)
 		return
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 
 	// 3. update BMD locally & metasync updated BMD
 	mirrorEnabled := copies > 1
@@ -222,10 +222,10 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 		glog.Error(res.err) // commit must go thru
 		p.undoUpdateCopies(msg, bck, ctx.revertProps)
 		err = res.error()
-		freeCallResults(results)
+		freeBcastRes(results)
 		return
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	xactID = c.uuid
 	return
 }
@@ -292,10 +292,10 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck, nprop
 			continue
 		}
 		err = c.bcastAbort(bck, res.error())
-		freeCallResults(results)
+		freeBcastRes(results)
 		return
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 
 	// 3. update BMD locally & metasync updated BMD
 	ctx := &bmdModifier{
@@ -328,7 +328,8 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck, nprop
 	}
 
 	// 5. commit
-	_ = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
+	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
+	freeBcastRes(results)
 	return
 }
 
@@ -380,10 +381,10 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 			continue
 		}
 		err = c.bcastAbort(bckFrom, res.error())
-		freeCallResults(results)
+		freeBcastRes(results)
 		return
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 
 	// 3. update BMD locally & metasync updated BMD
 	bmdCtx := &bmdModifier{
@@ -425,7 +426,8 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	// 5. commit
 	xactID = c.uuid
 	c.req.Body = cos.MustMarshal(c.msg)
-	_ = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
+	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
+	freeBcastRes(results)
 
 	// 6. start rebalance and resilver
 	wg := p.metasyncer.sync(revsPair{rmd, c.msg})
@@ -488,10 +490,10 @@ func (p *proxyrunner) tcb(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRu
 			continue
 		}
 		err = c.bcastAbort(bckFrom, res.error())
-		freeCallResults(results)
+		freeBcastRes(results)
 		return
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 
 	// 3. update BMD locally & metasync updated BMD
 	ctx := &bmdModifier{
@@ -531,7 +533,8 @@ func (p *proxyrunner) tcb(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRu
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 5. commit
-	_ = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
+	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
+	freeBcastRes(results)
 	xactID = c.uuid
 	return
 }
@@ -559,13 +562,14 @@ func (p *proxyrunner) tcobjs(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (x
 			continue
 		}
 		err = c.bcastAbort(bckFrom, res.error())
-		freeCallResults(results)
+		freeBcastRes(results)
 		return
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 
 	// 3. commit
-	_ = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
+	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
+	freeBcastRes(results)
 	return
 }
 
@@ -652,10 +656,10 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 			continue
 		}
 		err = c.bcastAbort(bck, res.error())
-		freeCallResults(results)
+		freeBcastRes(results)
 		return
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 
 	// 3. update BMD locally & metasync updated BMD
 	ctx := &bmdModifier{
@@ -688,10 +692,10 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 		}
 		glog.Error(res.err)
 		err = res.error()
-		freeCallResults(results)
+		freeBcastRes(results)
 		return
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	xactID = c.uuid
 	return
 }
@@ -724,10 +728,10 @@ func (p *proxyrunner) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *cmn.A
 			continue
 		}
 		err = c.bcastAbort(bckFrom, res.error())
-		freeCallResults(results)
+		freeBcastRes(results)
 		return
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 
 	// commit
 	results = c.bcast(cmn.ActCommit, 2*c.timeout.netw) // massive archiving vs workCh capacity
@@ -737,10 +741,10 @@ func (p *proxyrunner) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *cmn.A
 		}
 		glog.Error(res.err)
 		err = res.error()
-		freeCallResults(results)
+		freeBcastRes(results)
 		return
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	return
 }
 
@@ -763,10 +767,10 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, op
 			continue
 		}
 		err = c.bcastAbort(si, res.error(), cmn.Target)
-		freeCallResults(results)
+		freeBcastRes(results)
 		return
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 
 	// 2. Put node under maintenance
 	if err = p.markMaintenance(msg, si); err != nil {
@@ -780,7 +784,7 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, op
 		c.req.Path = cos.JoinWords(c.path, cmn.ActCommit)
 		res := p.call(callArgs{si: si, req: c.req, timeout: c.commitTimeout(waitmsync)})
 		err = res.error()
-		_freeCallRes(res)
+		freeCR(res)
 		if err != nil {
 			glog.Error(err)
 			return
@@ -856,10 +860,10 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 			continue
 		}
 		err := c.bcastAbort(bck, res.error())
-		freeCallResults(results)
+		freeBcastRes(results)
 		return err
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 
 	// 2. Distribute new BMD
 	ctx := &bmdModifier{
@@ -882,10 +886,10 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 		}
 		glog.Errorf("Failed to commit destroy-bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
 		err := res.error()
-		freeCallResults(results)
+		freeBcastRes(results)
 		return err
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	return nil
 }
 
@@ -909,7 +913,7 @@ func (p *proxyrunner) destroyBucketData(msg *cmn.ActionMsg, bck *cluster.Bck) er
 			return res.err
 		}
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	return nil
 }
 
@@ -946,7 +950,8 @@ func (c *txnClientCtx) bcastAbort(val fmt.Stringer, err error, key ...string) er
 		k = key[0]
 	}
 	glog.Errorf("Abort %q, %s %s, err: %v)", c.msg.Action, k, val, err)
-	_ = c.bcast(cmn.ActAbort, 0)
+	results := c.bcast(cmn.ActAbort, 0)
+	freeBcastRes(results)
 	return err
 }
 

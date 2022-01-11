@@ -359,7 +359,7 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 			failedCnt++
 		}
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	// step 5: handle connection-refused right away
 	for i := 0; i < 4; i++ {
 		if len(refused) == 0 {
@@ -460,7 +460,7 @@ func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refus
 				msg := fmt.Sprintf("%s [hr]: %s %s, err: %s [%v]", y.p.si, faisync, res.si, e.Message, e.Cii)
 				if !y.remainPrimary(e, res.si, smap) {
 					glog.Errorln(msg + " - aborting")
-					freeCallResults(results)
+					freeBcastRes(results)
 					return false
 				}
 				glog.Warningln(msg)
@@ -469,7 +469,7 @@ func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refus
 		}
 		glog.Warningf("%s [hr]: %s %s, err: %v(%d)", y.p.si, faisync, res.si, res.err, res.status)
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	return true
 }
 
@@ -569,7 +569,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 				if !y.remainPrimary(e, res.si, smap) {
 					// return zero so that the caller stops retrying (y.retryTimer)
 					glog.Errorln(msg + " - aborting")
-					freeCallResults(results)
+					freeBcastRes(results)
 					return 0
 				}
 				glog.Warningln(msg)
@@ -578,7 +578,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 		}
 		glog.Warningf("%s [hp]: %s %s, err: %v(%d)", y.p.si, faisync, res.si, res.err, res.status)
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	return
 }
 

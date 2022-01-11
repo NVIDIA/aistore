@@ -304,7 +304,7 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 			}
 		}
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	close(resCh)
 	return resCh
 }
@@ -334,7 +334,7 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) cos.StringSet {
 		glog.Warningf("%s: failed to confirm election with %s: %v", p.si, res.si, res.err)
 		errors.Add(res.si.ID())
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	return errors
 }
 
@@ -554,7 +554,7 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *c
 	}
 	res := h.call(args)
 	err = res.err
-	_freeCallRes(res)
+	freeCR(res)
 	if err == nil || !cos.IsRetriableConnErr(err) {
 		return
 	}
@@ -564,7 +564,7 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *c
 		time.Sleep(sleepTime)
 		res = h.call(args)
 		err = res.err
-		_freeCallRes(res)
+		freeCR(res)
 		if err == nil {
 			return
 		}

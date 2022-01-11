@@ -380,7 +380,7 @@ func (n *notifs) done(nl nl.NotifListener) {
 		args.nodes = []cluster.NodeMap{nl.Notifiers()}
 		args.nodeCount = len(args.nodes[0])
 		args.async = true
-		n.p.bcastNodes(args)
+		_ = n.p.bcastNodes(args)
 		freeBcastArgs(args)
 	}
 	nl.Callback(nl, time.Now().UnixNano())
@@ -468,7 +468,7 @@ func (n *notifs) syncStats(nl nl.NotifListener, dur ...time.Duration) {
 			glog.Errorf("%s: %s, node %s, err: %v", n.p.si, nl, res.si, res.err)
 		}
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	if done {
 		n.done(nl)
 	}

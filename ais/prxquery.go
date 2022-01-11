@@ -69,10 +69,10 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		p.writeErr(w, r, res.error())
-		freeCallResults(results)
+		freeBcastRes(results)
 		return
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 
 	nlq, err := query.NewQueryListener(handle, &smap.Smap, msg)
 	if err != nil {
@@ -171,12 +171,12 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			p.writeErr(w, r, res.error())
-			freeCallResults(results)
+			freeBcastRes(results)
 			return
 		}
 		lists = append(lists, res.v.(*cmn.BucketList))
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 
 	result := cmn.ConcatObjLists(lists, msg.Size)
 	if len(result.Entries) == 0 {

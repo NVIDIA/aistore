@@ -252,7 +252,7 @@ func (p *proxyrunner) joinCluster(action string, primaryURLs ...string) (status 
 		query = url.Values{cmn.URLParamNonElectable: []string{"true"}}
 	}
 	res := p.join(query, primaryURLs...)
-	defer _freeCallRes(res)
+	defer freeCR(res)
 	if res.err != nil {
 		status, err = res.status, res.err
 		return
@@ -1407,7 +1407,7 @@ func (p *proxyrunner) gatherBucketSummary(bck cmn.QueryBcks, msg *cmn.BucketSumm
 	for _, res := range results {
 		if res.err != nil {
 			err = res.error()
-			freeCallResults(results)
+			freeBcastRes(results)
 			return nil, "", err
 		}
 		targetSummary := res.v.(*cmn.BucketsSummaries)
@@ -1415,7 +1415,7 @@ func (p *proxyrunner) gatherBucketSummary(bck cmn.QueryBcks, msg *cmn.BucketSumm
 			summaries = summaries.Aggregate(bckSummary)
 		}
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	return summaries, "", nil
 }
 
@@ -1889,7 +1889,7 @@ func (p *proxyrunner) checkBckTaskResp(uuid string, results sliceResults) (allOK
 		allNotFound = false
 		if res.err != nil {
 			allOK, status, err = false, res.status, res.err
-			freeCallResults(results)
+			freeBcastRes(results)
 			return
 		}
 		if res.status != http.StatusOK {
@@ -1898,7 +1898,7 @@ func (p *proxyrunner) checkBckTaskResp(uuid string, results sliceResults) (allOK
 			break
 		}
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	if allNotFound {
 		err = cmn.NewErrNotFound("%s: task %q", p.si, uuid)
 	}
@@ -1967,14 +1967,14 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, lsmsg cmn.ListObjsMsg) (a
 	for _, res := range results {
 		if res.err != nil {
 			err = res.error()
-			freeCallResults(results)
+			freeBcastRes(results)
 			return nil, err
 		}
 		objList := res.v.(*cmn.BucketList)
 		flags |= objList.Flags
 		p.qm.b.set(lsmsg.UUID, res.si.ID(), objList.Entries, pageSize)
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	entries, hasEnough = p.qm.b.get(lsmsg.UUID, token, pageSize)
 	cos.Assert(hasEnough)
 
@@ -2051,12 +2051,12 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, lsmsg cmn.ListObjsMsg)
 		}
 		if res.err != nil {
 			err = res.error()
-			freeCallResults(results)
+			freeBcastRes(results)
 			return nil, err
 		}
 		bckLists = append(bckLists, res.v.(*cmn.BucketList))
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 
 	// Maximum objects in the final result page. Take all objects in
 	// case of Cloud and no limit is set by a user.
@@ -2146,7 +2146,7 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 		p.writeErr(w, r, res.error())
 		break
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 }
 
 func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, query url.Values) (xactID string, err error) {
@@ -2172,7 +2172,7 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, que
 		err = res.errorf("%s failed to %q List/Range", res.si, msg.Action)
 		break
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	xactID = aisMsg.UUID
 	return
 }
@@ -2476,7 +2476,7 @@ func (p *proxyrunner) smapFromURL(baseURL string) (smap *smapX, err error) {
 		args = callArgs{req: req, timeout: cmn.DefaultTimeout, v: &smapX{}}
 	)
 	res := p.call(args)
-	defer _freeCallRes(res)
+	defer freeCR(res)
 	if res.err != nil {
 		err = res.errorf("failed to get Smap from %s", baseURL)
 		return
@@ -2844,7 +2844,7 @@ func (p *proxyrunner) getDaemonInfo(osi *cluster.Snode) (si *cluster.Snode, err 
 		}
 		res = p.call(args)
 	)
-	defer _freeCallRes(res)
+	defer freeCR(res)
 	if res.err != nil {
 		return nil, res.err
 	}
@@ -2874,7 +2874,7 @@ func (p *proxyrunner) headRemoteBck(bck cmn.Bck, q url.Values) (header http.Head
 
 	req := cmn.ReqArgs{Method: http.MethodHead, Base: tsi.URL(cmn.NetworkIntraData), Path: path, Query: q}
 	res := p.call(callArgs{si: tsi, req: req, timeout: cmn.DefaultTimeout})
-	defer _freeCallRes(res)
+	defer freeCR(res)
 	if res.status == http.StatusNotFound {
 		err = cmn.NewErrRemoteBckNotFound(bck)
 	} else if res.status == http.StatusGone {

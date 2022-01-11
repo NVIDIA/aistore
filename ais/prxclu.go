@@ -177,7 +177,7 @@ func (p *proxyrunner) getRemoteAISInfo() (*cmn.BackendInfoAIS, error) {
 	}
 	res := p.call(args)
 	err = res.error()
-	_freeCallRes(res)
+	freeCR(res)
 	if err != nil {
 		return nil, err
 	}
@@ -195,12 +195,12 @@ func (p *proxyrunner) cluSysinfo(r *http.Request, timeout time.Duration, to int)
 	for _, res := range results {
 		if res.err != nil {
 			err := res.error()
-			freeCallResults(results)
+			freeBcastRes(results)
 			return nil, err
 		}
 		sysInfoMap[res.si.ID()] = res.bytes
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	return sysInfoMap, nil
 }
 
@@ -256,13 +256,13 @@ func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, resu
 		}
 		if res.err != nil {
 			p.writeErr(w, r, res.error())
-			freeCallResults(results)
+			freeBcastRes(results)
 			tres, erred = nil, true
 			return
 		}
 		tres[res.si.ID()] = res.bytes
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	return
 }
 
@@ -452,7 +452,7 @@ func (p *proxyrunner) adminJoinHandshake(nsi *cluster.Snode, apiOp string) (errC
 		timeout: config.Timeout.CplaneOperation.D(),
 	}
 	res := p.call(args)
-	defer _freeCallRes(res)
+	defer freeCR(res)
 	if res.err == nil {
 		return
 	}
@@ -836,10 +836,10 @@ func (p *proxyrunner) xactStart(w http.ResponseWriter, r *http.Request, msg *cmn
 			continue
 		}
 		p.writeErr(w, r, res.error())
-		freeCallResults(results)
+		freeBcastRes(results)
 		return
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	smap := p.owner.smap.get()
 	nl := xact.NewXactNL(xactMsg.ID, xactMsg.Kind, &smap.Smap, nil)
 	p.ic.registerEqual(regIC{smap: smap, nl: nl})
@@ -863,10 +863,10 @@ func (p *proxyrunner) xactStop(w http.ResponseWriter, r *http.Request, msg *cmn.
 			continue
 		}
 		p.writeErr(w, r, res.error())
-		freeCallResults(results)
+		freeBcastRes(results)
 		return
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 }
 
 func (p *proxyrunner) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
@@ -963,7 +963,7 @@ func (p *proxyrunner) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *cm
 		if res.err != nil {
 			p.writeErr(w, r, res.error())
 		}
-		_freeCallRes(res)
+		freeCR(res)
 		break
 	}
 }
@@ -1331,10 +1331,10 @@ func (p *proxyrunner) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 		}
 		err := res.errorf("node %s failed to set primary %s in the prepare phase", res.si, proxyid)
 		p.writeErr(w, r, err)
-		freeCallResults(results)
+		freeBcastRes(results)
 		return
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 
 	// (I.2) Prepare phase - local changes.
 	p.inPrimaryTransition.Store(true)
@@ -1365,7 +1365,7 @@ func (p *proxyrunner) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 				res.si.ID(), res.err, proxyid)
 		}
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 }
 
 /////////////////////////////////////////
@@ -1444,7 +1444,7 @@ func (p *proxyrunner) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb 
 	glog.Infof("%s: removing node %s via %q (skip-reb=%t)", p.si, node, msg.Action, skipReb)
 	res := p.call(args)
 	er, d := res.err, res.details
-	_freeCallRes(res)
+	freeCR(res)
 	if er != nil {
 		glog.Warningf("%s: %s that is being removed via %q fails to respond: %v[%s]",
 			p.si, node, msg.Action, er, d)

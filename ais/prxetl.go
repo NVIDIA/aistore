@@ -141,7 +141,7 @@ func (p *proxyrunner) startETL(w http.ResponseWriter, r *http.Request, msg etl.I
 		err = res.error()
 		glog.Error(err)
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	if err == nil {
 		ctx := &etlMDModifier{
 			pre:   _addETLPre,
@@ -207,7 +207,7 @@ func (p *proxyrunner) listETLs() (infoList etl.InfoList, err error) {
 	for _, res := range results {
 		if res.err != nil {
 			err = res.error()
-			freeCallResults(results)
+			freeBcastRes(results)
 			return nil, err
 		}
 
@@ -224,7 +224,7 @@ func (p *proxyrunner) listETLs() (infoList etl.InfoList, err error) {
 			}
 		}
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 
 	if etls == nil {
 		etls = &etl.InfoList{}
@@ -280,12 +280,12 @@ func (p *proxyrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 	for _, res := range results {
 		if res.err != nil {
 			p.writeErr(w, r, res.error())
-			freeCallResults(results)
+			freeBcastRes(results)
 			return
 		}
 		logs = append(logs, *res.v.(*etl.PodLogsMsg))
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	sort.Sort(logs)
 	p.writeJSON(w, r, logs, "logs-ETL")
 }
@@ -311,7 +311,7 @@ func (p *proxyrunner) healthETL(w http.ResponseWriter, r *http.Request) {
 	args.timeout = cmn.DefaultTimeout
 	args.fv = func() interface{} { return &etl.PodHealthMsg{} }
 	results = p.bcastGroup(args)
-	defer freeCallResults(results)
+	defer freeBcastRes(results)
 	freeBcastArgs(args)
 
 	healths := make(etl.PodsHealthMsg, 0, len(results))
@@ -350,5 +350,5 @@ func (p *proxyrunner) stopETL(w http.ResponseWriter, r *http.Request) {
 		break
 	}
 	// TODO: implement using ETL modifier
-	freeCallResults(results)
+	freeBcastRes(results)
 }

@@ -785,7 +785,7 @@ func (p *proxyrunner) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out
 			smaps[res.si] = svm.Smap
 		}
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	return
 }
 

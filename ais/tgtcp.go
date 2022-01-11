@@ -42,7 +42,7 @@ const (
 
 func (t *targetrunner) joinCluster(action string, primaryURLs ...string) (status int, err error) {
 	res := t.join(nil, primaryURLs...)
-	defer _freeCallRes(res)
+	defer freeCR(res)
 	if res.err != nil {
 		status, err = res.status, res.err
 		return
@@ -737,7 +737,7 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, rename
 		timeout: timeout,
 	}
 	res := t.call(args)
-	defer _freeCallRes(res)
+	defer freeCR(res)
 	if res.err != nil {
 		time.Sleep(timeout / 2)
 		res = t.call(args)
@@ -1050,10 +1050,10 @@ func (t *targetrunner) lookupRemoteAll(lom *cluster.LOM, smap *smapX) *cluster.S
 	for _, res := range results {
 		if res.err == nil {
 			si := res.si
-			freeCallResults(results)
+			freeBcastRes(results)
 			return si
 		}
 	}
-	freeCallResults(results)
+	freeBcastRes(results)
 	return nil
 }

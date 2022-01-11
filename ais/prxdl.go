@@ -57,7 +57,7 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 	args.req = cmn.ReqArgs{Method: method, Path: path, Body: body, Query: url.Values{}}
 	args.timeout = config.Timeout.MaxHostBusy.D()
 	results := p.bcastGroup(args)
-	defer freeCallResults(results)
+	defer freeBcastRes(results)
 	freeBcastArgs(args)
 	respCnt := len(results)
 
@@ -134,7 +134,7 @@ func (p *proxyrunner) broadcastStartDownloadRequest(r *http.Request, id string, 
 	config := cmn.GCO.Get()
 	args.timeout = config.Timeout.MaxHostBusy.D()
 	results := p.bcastGroup(args)
-	defer freeCallResults(results)
+	defer freeBcastRes(results)
 	freeBcastArgs(args)
 	for _, res := range results {
 		if res.err == nil {
