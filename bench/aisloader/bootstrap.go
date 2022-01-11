@@ -78,7 +78,7 @@ const (
 	randomObjNameLen = 32
 
 	wo2FreeSize  = 8192
-	wo2FreeDelay = 4 * time.Second
+	wo2FreeDelay = 3 * time.Second
 )
 
 type (
@@ -1086,7 +1086,7 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 			// due to the critical bug (https://github.com/golang/go/issues/30597)
 			// we are delaying `sgl.Free` for a little while.
 			for i, w := range wo2Free {
-				if now.Sub(w.end) > wo2FreeDelay && w.sgl != nil {
+				if now.Sub(w.end) > wo2FreeDelay && w.sgl != nil && !w.sgl.IsNil() {
 					w.sgl.Free()
 					continue
 				}

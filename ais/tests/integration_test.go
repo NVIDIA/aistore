@@ -1174,7 +1174,7 @@ func TestForwardCP(t *testing.T) {
 	tlog.Logf("Destroyed bucket %s via non-primary %s/%s\n", m.bck, origID, origURL)
 
 	time.Sleep(2 * time.Second)
-	tlog.Logf("Wait for rebalance: %s\n")
+	tlog.Logf("Wait for rebalance\n")
 	args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
 	_, _ = api.WaitForXaction(baseParams, args)
 }

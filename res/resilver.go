@@ -231,8 +231,12 @@ func (jg *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (errHrw error) {
 		size   int64
 		copied bool
 	)
-	lom.Lock(true) // alternatively, try-lock and skip
-
+	if !lom.TryLock(true) { // NOTE: skipping busy
+		time.Sleep(time.Second >> 1)
+		if !lom.TryLock(true) {
+			return
+		}
+	}
 	// cleanup
 	defer func() {
 		lom.Unlock(true)
@@ -287,9 +291,11 @@ redo:
 			}
 			return
 		}
-		// can swap on the fly
+		// can swap on the fly; NOTE -- TODO: better
+		lom.Unlock(true)
 		lom = hlom
 		copied = true
+		lom.Lock(true)
 	}
 
 	// 3. fix copies
