@@ -11,13 +11,11 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
-	rdebug "runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -41,523 +39,49 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
-const unknownDaemonID = "unknown"
-
-const msgpObjListBufSize = 32 * cos.KiB
-
-const (
-	fmtErrInsuffMpaths1 = "%s: not enough mountpaths (%d) to configure %s as %d-way mirror"
-	fmtErrInsuffMpaths2 = "%s: not enough mountpaths (%d) to replicate %s (configured) %d times"
-
-	fmtErrPrimaryNotReadyYet = "%s primary is not ready yet to start rebalance (started=%t, starting-up=%t)"
-
-	fmtErrInvaldAction = "invalid action %q (expected one of %v)"
-)
-
-type (
-	rangesQuery struct {
-		Range string // cmn.HdrRange, see https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35
-		Size  int64  // size, in bytes
+type htrun struct {
+	name      string
+	si        *cluster.Snode
+	logger    *log.Logger
+	keepalive keepaliver
+	statsT    stats.Tracker
+	netServ   struct {
+		pub     *netServer
+		control *netServer
+		data    *netServer
 	}
-
-	archiveQuery struct {
-		filename string // pathname in archive
-		mime     string // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
+	client struct {
+		control *http.Client // http client for intra-cluster comm
+		data    *http.Client // http client to execute target <=> target GET & PUT (object)
 	}
-
-	// callResult contains HTTP response.
-	callResult struct {
-		si      *cluster.Snode
-		bytes   []byte      // Raw bytes from response.
-		v       interface{} // Unmarshalled value (set only when requested, see: `callArgs.v`).
-		header  http.Header
-		err     error
-		details string
-		status  int
+	owner struct {
+		smap   *smapOwner
+		bmd    bmdOwner // interface with proxy and target impl-s
+		rmd    *rmdOwner
+		config *configOwner
+		etl    etlOwner // ditto
 	}
-
-	sliceResults []*callResult
-	bcastResults struct {
-		mu sync.Mutex
-		s  sliceResults
+	startup struct {
+		cluster atomic.Bool // determines if the cluster has started up
+		node    atomic.Bool // determines time when the node started up
 	}
-
-	// callArgs contains arguments for a peer-to-peer control plane call.
-	callArgs struct {
-		req     cmn.ReqArgs
-		timeout time.Duration
-		si      *cluster.Snode
-		v       interface{} // Value that needs to be unmarshalled.
-	}
-
-	// bcastArgs contains arguments for an intra-cluster broadcast call.
-	bcastArgs struct {
-		req               cmn.ReqArgs        // h.call args
-		network           string             // one of the cmn.KnownNetworks
-		timeout           time.Duration      // call timeout
-		fv                func() interface{} // optional; returns marshaled msg (see `callArgs.v`)
-		nodes             []cluster.NodeMap  // broadcast destinations - map(s)
-		selected          cluster.Nodes      // broadcast destinations - slice of selected few
-		smap              *smapX             // Smap to use
-		to                int                // (all targets, all proxies, all nodes) enum
-		nodeCount         int                // m.b. greater or equal destination count
-		ignoreMaintenance bool               // do not skip nodes under maintenance
-		async             bool               // ignore results
-	}
-
-	networkHandler struct {
-		r   string           // resource
-		h   http.HandlerFunc // handler
-		net netAccess        // handler network access
-	}
-
-	// cluster-wide control information - replicated, versioned, and synchronized
-	// usages: primary election, join-cluster
-	cluMeta struct {
-		Smap           *smapX         `json:"smap"`
-		BMD            *bucketMD      `json:"bmd"`
-		RMD            *rebMD         `json:"rmd"`
-		EtlMD          *etlMD         `json:"etlMD"`
-		Config         *globalConfig  `json:"config"`
-		SI             *cluster.Snode `json:"si"`
-		RebInterrupted bool           `json:"reb_interrupted"`
-		VoteInProgress bool           `json:"voting"`
-	}
-	nodeRegPool []cluMeta
-
-	// what data to omit when sending request/response (join-cluster, kalive)
-	cmetaFillOpt struct {
-		skipSmap      bool
-		skipBMD       bool
-		skipRMD       bool
-		skipConfig    bool
-		skipEtlMD     bool
-		fillRebMarker bool
-	}
-
-	// node <=> node cluster-info exchange
-	clusterInfo struct {
-		Smap struct {
-			Version int64  `json:"version,string"`
-			UUID    string `json:"uuid"`
-			Primary struct {
-				PubURL  string `json:"pub_url"`
-				CtrlURL string `json:"control_url"`
-				ID      string `json:"id"`
-			}
-		} `json:"smap"`
-		BMD struct {
-			Version int64  `json:"version,string"`
-			UUID    string `json:"uuid"`
-		} `json:"bmd"`
-		RMD struct {
-			Version int64 `json:"version,string"`
-		} `json:"rmd"`
-		Config struct {
-			Version int64 `json:"version,string"`
-		} `json:"config"`
-		EtlMD struct {
-			Version int64 `json:"version,string"`
-		} `json:"etlmd"`
-		Flags struct {
-			VoteInProgress bool `json:"vote_in_progress"`
-			ClusterStarted bool `json:"cluster_started"`
-			NodeStarted    bool `json:"node_started"`
-		} `json:"flags"`
-	}
-
-	electable interface {
-		proxyElection(vr *VoteRecord)
-	}
-
-	// aisMsg is an extended ActionMsg with extra information for node <=> node control plane communications
-	aisMsg struct {
-		cmn.ActionMsg
-		BMDVersion int64  `json:"bmdversion,string"`
-		RMDVersion int64  `json:"rmdversion,string"`
-		UUID       string `json:"uuid"` // cluster-wide ID of this action (operation, transaction)
-	}
-
-	// http server and http runner (common for proxy and target)
-	netServer struct {
-		sync.Mutex
-		s             *http.Server
-		muxers        cmn.HTTPMuxers
-		sndRcvBufSize int
-	}
-	httprunner struct {
-		name      string
-		si        *cluster.Snode
-		logger    *log.Logger
-		keepalive keepaliver
-		statsT    stats.Tracker
-		netServ   struct {
-			pub     *netServer
-			control *netServer
-			data    *netServer
-		}
-		client struct {
-			control *http.Client // http client for intra-cluster comm
-			data    *http.Client // http client to execute target <=> target GET & PUT (object)
-		}
-		owner struct {
-			smap   *smapOwner
-			bmd    bmdOwner // interface with proxy and target impl-s
-			rmd    *rmdOwner
-			config *configOwner
-			etl    etlOwner // ditto
-		}
-		startup struct {
-			cluster atomic.Bool // determines if the cluster has started up
-			node    atomic.Bool // determines time when the node started up
-		}
-		gmm                 *memsys.MMSA // system pagesize-based memory manager and slab allocator
-		smm                 *memsys.MMSA // system MMSA for small-size allocations
-		electable           electable
-		inPrimaryTransition atomic.Bool
-	}
-
-	glogWriter struct{}
-
-	// error types
-	// BMD & its uuid
-	errTgtBmdUUIDDiffer struct{ detail string }
-	errPrxBmdUUIDDiffer struct{ detail string }
-	errBmdUUIDSplit     struct{ detail string }
-	// ditto Smap
-	errSmapUUIDDiffer struct{ detail string }
-	errNodeNotFound   struct {
-		msg  string
-		id   string
-		si   *cluster.Snode
-		smap *smapX
-	}
-	errNotEnoughTargets struct {
-		si       *cluster.Snode
-		smap     *smapX
-		required int // should at least contain
-	}
-	errDowngrade struct {
-		si       *cluster.Snode
-		from, to string
-	}
-	errNotPrimary struct {
-		si     *cluster.Snode
-		smap   *smapX
-		detail string
-	}
-
-	errNoUnregister struct {
-		detail string
-	}
-
-	// apiRequest
-	apiRequest struct {
-		prefix []string     // in: URL must start with these items
-		after  int          // in: the number of items after the prefix
-		bckIdx int          // in: ordinal number of bucket in URL (some paths starts with extra items: EC & ETL)
-		msg    interface{}  // in/out: if not nil, Body is unmarshaled to the msg
-		items  []string     // out: URL items after the prefix
-		bck    *cluster.Bck // out: initialized bucket
-		query  url.Values   // r.URL.Query()
-	}
-)
-
-var allHTTPverbs = []string{
-	http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch,
-	http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace,
+	gmm                 *memsys.MMSA // system pagesize-based memory manager and slab allocator
+	smm                 *memsys.MMSA // system MMSA for small-size allocations
+	electable           electable
+	inPrimaryTransition atomic.Bool
 }
 
-var (
-	errRebalanceDisabled = errors.New("rebalance is disabled")
-	errForwarded         = errors.New("forwarded")
-	errSendingResp       = errors.New("err-sending-resp")
-)
+///////////
+// htrun //
+///////////
 
-// BMD uuid errs
-var errNoBMD = errors.New("no bucket metadata")
+func (h *htrun) Name() string             { return h.name }
+func (h *htrun) DataClient() *http.Client { return h.client.data }
+func (h *htrun) Snode() *cluster.Snode    { return h.si }
+func (h *htrun) Bowner() cluster.Bowner   { return h.owner.bmd }
+func (h *htrun) Sowner() cluster.Sowner   { return h.owner.smap }
 
-func (e *errTgtBmdUUIDDiffer) Error() string { return e.detail }
-func (e *errBmdUUIDSplit) Error() string     { return e.detail }
-func (e *errPrxBmdUUIDDiffer) Error() string { return e.detail }
-func (e *errSmapUUIDDiffer) Error() string   { return e.detail }
-func (e *errNodeNotFound) Error() string {
-	return fmt.Sprintf("%s: %s node %s (not present in the %s)", e.si, e.msg, e.id, e.smap)
-}
-
-/////////////////////
-// errNoUnregister //
-/////////////////////
-
-func (e *errNoUnregister) Error() string { return e.detail }
-
-func isErrNoUnregister(err error) bool {
-	if _, ok := err.(*errNoUnregister); ok {
-		return true
-	}
-	enu := &errNoUnregister{}
-	return errors.As(err, &enu)
-}
-
-//////////////////
-// errDowngrade //
-//////////////////
-
-func newErrDowngrade(si *cluster.Snode, from, to string) *errDowngrade {
-	return &errDowngrade{si, from, to}
-}
-
-func (e *errDowngrade) Error() string {
-	return fmt.Sprintf("%s: attempt to downgrade %s to %s", e.si, e.from, e.to)
-}
-
-func isErrDowngrade(err error) bool {
-	if _, ok := err.(*errDowngrade); ok {
-		return true
-	}
-	erd := &errDowngrade{}
-	return errors.As(err, &erd)
-}
-
-/////////////////////////
-// errNotEnoughTargets //
-////////////////////////
-
-func (e *errNotEnoughTargets) Error() string {
-	return fmt.Sprintf("%s: not enough targets in %s: need %d, have %d",
-		e.si, e.smap, e.required, e.smap.CountActiveTargets())
-}
-
-///////////////////
-// errNotPrimary //
-///////////////////
-
-func newErrNotPrimary(si *cluster.Snode, smap *smapX, detail ...string) *errNotPrimary {
-	if len(detail) == 0 {
-		return &errNotPrimary{si, smap, ""}
-	}
-	return &errNotPrimary{si, smap, detail[0]}
-}
-
-func (e *errNotPrimary) Error() string {
-	var present, detail string
-	if !e.smap.isPresent(e.si) {
-		present = "not present in the "
-	}
-	if e.detail != "" {
-		detail = ": " + e.detail
-	}
-	return fmt.Sprintf("%s is not primary [%s%s]%s", e.si, present, e.smap.StringEx(), detail)
-}
-
-///////////////
-// bargsPool //
-///////////////
-
-var (
-	bargsPool sync.Pool
-	bargs0    bcastArgs
-)
-
-func allocBcastArgs() (a *bcastArgs) {
-	if v := bargsPool.Get(); v != nil {
-		a = v.(*bcastArgs)
-		return
-	}
-	return &bcastArgs{}
-}
-
-func freeBcastArgs(a *bcastArgs) {
-	sel := a.selected
-	*a = bargs0
-	if sel != nil {
-		a.selected = sel[:0]
-	}
-	bargsPool.Put(a)
-}
-
-///////////////////////
-// call result pools //
-///////////////////////
-
-var (
-	resultsPool sync.Pool
-	callResPool sync.Pool
-	callRes0    callResult
-)
-
-func allocCR() (a *callResult) {
-	if v := callResPool.Get(); v != nil {
-		a = v.(*callResult)
-		debug.Assert(a.si == nil)
-		return
-	}
-	return &callResult{}
-}
-
-func freeCR(res *callResult) {
-	*res = callRes0
-	callResPool.Put(res)
-}
-
-func allocBcastRes(n int) sliceResults {
-	if v := resultsPool.Get(); v != nil {
-		a := v.(*sliceResults)
-		return *a
-	}
-	return make(sliceResults, 0, n)
-}
-
-func freeBcastRes(results sliceResults) {
-	for _, res := range results {
-		freeCR(res)
-	}
-	results = results[:0]
-	resultsPool.Put(&results)
-}
-
-////////////////
-// glogWriter //
-////////////////
-
-const tlsHandshakeErrorPrefix = "http: TLS handshake error"
-
-func (*glogWriter) Write(p []byte) (int, error) {
-	s := string(p)
-	// Ignore TLS handshake errors (see: https://github.com/golang/go/issues/26918).
-	if strings.Contains(s, tlsHandshakeErrorPrefix) {
-		return len(p), nil
-	}
-
-	glog.Errorln(s)
-
-	stacktrace := rdebug.Stack()
-	glog.Errorln(string(stacktrace))
-	return len(p), nil
-}
-
-///////////////
-// netServer //
-///////////////
-
-// Override muxer ServeHTTP to support proxying HTTPS requests. Clients
-// initiate all HTTPS requests with CONNECT method instead of GET/PUT etc.
-func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodConnect {
-		server.muxers.ServeHTTP(w, r)
-		return
-	}
-
-	// TODO: add support for caching HTTPS requests
-	destConn, err := net.DialTimeout("tcp", r.Host, 10*time.Second)
-	if err != nil {
-		cmn.WriteErr(w, r, err, http.StatusServiceUnavailable)
-		return
-	}
-
-	// Second, hijack the connection. A kind of man-in-the-middle attack
-	// Since this moment this function is responsible of HTTP connection
-	hijacker, ok := w.(http.Hijacker)
-	if !ok {
-		cmn.WriteErr(w, r, errors.New("client does not support hijacking"),
-			http.StatusInternalServerError)
-		return
-	}
-
-	// First, send that everything is OK. Trying to write a header after
-	// hijacking generates a warning and nothing works
-	w.WriteHeader(http.StatusOK)
-
-	clientConn, _, err := hijacker.Hijack()
-	if err != nil {
-		// NOTE: cannot send error because we have already written a header.
-		glog.Error(err)
-		return
-	}
-
-	// Third, start transparently sending data between source and destination
-	// by creating a tunnel between them
-	transfer := func(destination io.WriteCloser, source io.ReadCloser) {
-		io.Copy(destination, source)
-		source.Close()
-		destination.Close()
-	}
-
-	// NOTE: it looks like double closing both connections.
-	// Need to check how the tunnel works
-	go transfer(destConn, clientConn)
-	go transfer(clientConn, destConn)
-}
-
-func (server *netServer) listenAndServe(addr string, logger *log.Logger) error {
-	var (
-		httpHandler http.Handler = server.muxers
-		config                   = cmn.GCO.Get()
-	)
-	server.Lock()
-	server.s = &http.Server{
-		Addr:     addr,
-		Handler:  httpHandler,
-		ErrorLog: logger,
-	}
-	if server.sndRcvBufSize > 0 && !config.Net.HTTP.UseHTTPS {
-		server.s.ConnState = server.connStateListener // setsockopt; see also cmn.NewTransport
-	}
-	server.Unlock()
-	if config.Net.HTTP.UseHTTPS {
-		if err := server.s.ListenAndServeTLS(config.Net.HTTP.Certificate, config.Net.HTTP.Key); err != nil {
-			if err != http.ErrServerClosed {
-				glog.Errorf("Terminated server with err: %v", err)
-				return err
-			}
-		}
-	} else {
-		if err := server.s.ListenAndServe(); err != nil {
-			if err != http.ErrServerClosed {
-				glog.Errorf("Terminated server with err: %v", err)
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (server *netServer) connStateListener(c net.Conn, cs http.ConnState) {
-	if cs != http.StateNew {
-		return
-	}
-	tcpconn, ok := c.(*net.TCPConn)
-	cos.Assert(ok)
-	rawconn, _ := tcpconn.SyscallConn()
-	args := cmn.TransportArgs{SndRcvBufSize: server.sndRcvBufSize}
-	rawconn.Control(args.ConnControl(rawconn))
-}
-
-func (server *netServer) shutdown() {
-	server.Lock()
-	defer server.Unlock()
-	if server.s == nil {
-		return
-	}
-	config := cmn.GCO.Get()
-	ctx, cancel := context.WithTimeout(context.Background(), config.Timeout.MaxHostBusy.D())
-	if err := server.s.Shutdown(ctx); err != nil {
-		glog.Infof("Stopped server, err: %v", err)
-	}
-	cancel()
-}
-
-////////////////
-// httprunner //
-////////////////
-
-func (h *httprunner) Name() string             { return h.name }
-func (h *httprunner) DataClient() *http.Client { return h.client.data }
-func (h *httprunner) Snode() *cluster.Snode    { return h.si }
-func (h *httprunner) Bowner() cluster.Bowner   { return h.owner.bmd }
-func (h *httprunner) Sowner() cluster.Sowner   { return h.owner.smap }
-
-func (h *httprunner) parseReq(w http.ResponseWriter, r *http.Request, args *apiRequest) (err error) {
+func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, args *apiRequest) (err error) {
 	debug.Assert(len(args.prefix) != 0)
 	args.items, err = h.checkRESTItems(w, r, args.after, false, args.prefix)
 	if err != nil {
@@ -577,7 +101,7 @@ func (h *httprunner) parseReq(w http.ResponseWriter, r *http.Request, args *apiR
 	return
 }
 
-func (h *httprunner) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
+func (h *htrun) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
 	xele := voteInProgress()
 	cm := &cluMeta{
 		SI:             h.si,
@@ -611,7 +135,7 @@ func (h *httprunner) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
 }
 
 // usage: [API call => handler => ClusterStartedWithRetry ]
-func (h *httprunner) ClusterStartedWithRetry() bool {
+func (h *htrun) ClusterStartedWithRetry() bool {
 	if h.startup.cluster.Load() {
 		return true
 	}
@@ -625,13 +149,13 @@ func (h *httprunner) ClusterStartedWithRetry() bool {
 	return h.startup.cluster.Load()
 }
 
-func (h *httprunner) ClusterStarted() bool { return h.startup.cluster.Load() }
-func (h *httprunner) markClusterStarted()  { h.startup.cluster.Store(true) }
+func (h *htrun) ClusterStarted() bool { return h.startup.cluster.Load() }
+func (h *htrun) markClusterStarted()  { h.startup.cluster.Store(true) }
 
-func (h *httprunner) NodeStarted() bool { return h.startup.node.Load() }
-func (h *httprunner) markNodeStarted()  { h.startup.node.Store(true) }
+func (h *htrun) NodeStarted() bool { return h.startup.node.Load() }
+func (h *htrun) markNodeStarted()  { h.startup.node.Store(true) }
 
-func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
+func (h *htrun) registerNetworkHandlers(networkHandlers []networkHandler) {
 	var (
 		path   string
 		config = cmn.GCO.Get()
@@ -685,7 +209,7 @@ func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
 	}
 }
 
-func (h *httprunner) registerPublicNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
+func (h *htrun) registerPublicNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
 	for _, v := range allHTTPverbs {
 		h.netServ.pub.muxers[v].HandleFunc(path, handler)
 		if !strings.HasSuffix(path, "/") {
@@ -694,7 +218,7 @@ func (h *httprunner) registerPublicNetHandler(path string, handler func(http.Res
 	}
 }
 
-func (h *httprunner) registerIntraControlNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
+func (h *htrun) registerIntraControlNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
 	for _, v := range allHTTPverbs {
 		h.netServ.control.muxers[v].HandleFunc(path, handler)
 		if !strings.HasSuffix(path, "/") {
@@ -703,7 +227,7 @@ func (h *httprunner) registerIntraControlNetHandler(path string, handler func(ht
 	}
 }
 
-func (h *httprunner) registerIntraDataNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
+func (h *htrun) registerIntraDataNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
 	for _, v := range allHTTPverbs {
 		h.netServ.data.muxers[v].HandleFunc(path, handler)
 		if !strings.HasSuffix(path, "/") {
@@ -712,7 +236,7 @@ func (h *httprunner) registerIntraDataNetHandler(path string, handler func(http.
 	}
 }
 
-func (h *httprunner) init(config *cmn.Config) {
+func (h *htrun) init(config *cmn.Config) {
 	const (
 		defaultControlWriteBufferSize = 16 * cos.KiB // for more defaults see cmn/network.go
 		defaultControlReadBufferSize  = 16 * cos.KiB
@@ -778,7 +302,7 @@ func newMuxers() cmn.HTTPMuxers {
 	return m
 }
 
-func (h *httprunner) initNetworks() {
+func (h *htrun) initNetworks() {
 	var (
 		s                                        string
 		config                                   = cmn.GCO.Get()
@@ -876,14 +400,14 @@ func mustDiffer(ip1 cluster.NetInfo, port1 int, use1 bool, ip2 cluster.NetInfo, 
 // this node ID is present. NOTE: we are _not_ enforcing node's (`h.si`)
 // immutability - in particular, the node's IPs that, in fact, may change upon
 // restart in certain environments.
-func (h *httprunner) detectNodeChanges(smap *smapX) (err error) {
+func (h *htrun) detectNodeChanges(smap *smapX) (err error) {
 	if smap.GetNode(h.si.ID()) == nil {
 		err = fmt.Errorf("%s: not present in the loaded %s", h.si, smap)
 	}
 	return
 }
 
-func (h *httprunner) tryLoadSmap() (_ *smapX, reliable bool) {
+func (h *htrun) tryLoadSmap() (_ *smapX, reliable bool) {
 	var (
 		smap        = newSmap()
 		loaded, err = h.owner.smap.load(smap)
@@ -905,7 +429,7 @@ func (h *httprunner) tryLoadSmap() (_ *smapX, reliable bool) {
 	return smap, reliable
 }
 
-func (h *httprunner) setDaemonConfigMsg(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
+func (h *htrun) setDaemonConfigMsg(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	transient := cos.IsParseBool(r.URL.Query().Get(cmn.ActTransient))
 	toUpdate := &cmn.ConfigToUpdate{}
 	if err := cos.MorphMarshal(msg.Value, toUpdate); err != nil {
@@ -919,7 +443,7 @@ func (h *httprunner) setDaemonConfigMsg(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
-func (h *httprunner) setDaemonConfigQuery(w http.ResponseWriter, r *http.Request) {
+func (h *htrun) setDaemonConfigQuery(w http.ResponseWriter, r *http.Request) {
 	var (
 		query     = r.URL.Query()
 		transient = cos.IsParseBool(query.Get(cmn.ActTransient))
@@ -935,7 +459,7 @@ func (h *httprunner) setDaemonConfigQuery(w http.ResponseWriter, r *http.Request
 	}
 }
 
-func (h *httprunner) run() error {
+func (h *htrun) run() error {
 	config := cmn.GCO.Get()
 
 	// A wrapper to glog http.Server errors - otherwise
@@ -973,7 +497,7 @@ func (h *httprunner) run() error {
 
 // testing environment excluding Kubernetes: listen on `host:port`
 // otherwise (including production):         listen on `*:port`
-func (h *httprunner) pubListeningAddr(config *cmn.Config) string {
+func (h *htrun) pubListeningAddr(config *cmn.Config) string {
 	var (
 		testingEnv  = config.TestingEnv()
 		k8sDetected = k8s.Detect() == nil
@@ -984,7 +508,7 @@ func (h *httprunner) pubListeningAddr(config *cmn.Config) string {
 	return ":" + h.si.PublicNet.DaemonPort
 }
 
-func (h *httprunner) stopHTTPServer() {
+func (h *htrun) stopHTTPServer() {
 	h.netServ.pub.shutdown()
 	config := cmn.GCO.Get()
 	if config.HostNet.UseIntraControl {
@@ -996,7 +520,7 @@ func (h *httprunner) stopHTTPServer() {
 }
 
 // on success returns `cmn.ActValRmNode` options; on failure writes http error
-func (h *httprunner) parseUnregMsg(w http.ResponseWriter, r *http.Request) (*cmn.ActValRmNode, string, error) {
+func (h *htrun) parseUnregMsg(w http.ResponseWriter, r *http.Request) (*cmn.ActValRmNode, string, error) {
 	var (
 		msg  cmn.ActionMsg
 		opts cmn.ActValRmNode
@@ -1018,7 +542,7 @@ func (h *httprunner) parseUnregMsg(w http.ResponseWriter, r *http.Request) (*cmn
 
 // remove self from Smap (if required), terminate http, and wait (w/ timeout)
 // for running xactions to abort
-func (h *httprunner) stop(rmFromSmap bool) {
+func (h *htrun) stop(rmFromSmap bool) {
 	if rmFromSmap {
 		h.unregisterSelf(true)
 	}
@@ -1047,7 +571,7 @@ func (h *httprunner) stop(rmFromSmap bool) {
 // intra-cluster IPC, control plane
 // call another target or a proxy; optionally, include a json-encoded body
 //
-func (h *httprunner) _call(si *cluster.Snode, bargs *bcastArgs, results *bcastResults) {
+func (h *htrun) _call(si *cluster.Snode, bargs *bcastArgs, results *bcastResults) {
 	cargs := callArgs{si: si, req: bargs.req, timeout: bargs.timeout}
 	cargs.req.Base = si.URL(bargs.network)
 	if bargs.req.BodyR != nil {
@@ -1066,7 +590,7 @@ func (h *httprunner) _call(si *cluster.Snode, bargs *bcastArgs, results *bcastRe
 	}
 }
 
-func (h *httprunner) call(args callArgs) (res *callResult) {
+func (h *htrun) call(args callArgs) (res *callResult) {
 	var (
 		req    *http.Request
 		resp   *http.Response
@@ -1194,15 +718,15 @@ func (h *httprunner) call(args callArgs) (res *callResult) {
 // intra-cluster IPC, control plane: notify another node
 //
 
-func (h *httprunner) callerNotifyFin(n cluster.Notif, err error) {
+func (h *htrun) callerNotifyFin(n cluster.Notif, err error) {
 	h.callerNotify(n, err, cmn.Finished)
 }
 
-func (h *httprunner) callerNotifyProgress(n cluster.Notif) {
+func (h *htrun) callerNotifyProgress(n cluster.Notif) {
 	h.callerNotify(n, nil, cmn.Progress)
 }
 
-func (h *httprunner) callerNotify(n cluster.Notif, err error, kind string) {
+func (h *htrun) callerNotify(n cluster.Notif, err error, kind string) {
 	var (
 		smap  = h.owner.smap.get()
 		dsts  = n.Subscribers()
@@ -1252,7 +776,7 @@ func (h *httprunner) callerNotify(n cluster.Notif, err error, kind string) {
 ///////////////
 
 // bcastGroup broadcasts a message to a specific group of nodes: targets, proxies, all.
-func (h *httprunner) bcastGroup(args *bcastArgs) sliceResults {
+func (h *htrun) bcastGroup(args *bcastArgs) sliceResults {
 	if args.smap == nil {
 		args.smap = h.owner.smap.get()
 	}
@@ -1294,7 +818,7 @@ func (h *httprunner) bcastGroup(args *bcastArgs) sliceResults {
 
 // broadcast to the specified destinations (`bargs.nodes`)
 // (if specified, `bargs.req.BodyR` must implement `cos.ReadOpenCloser`)
-func (h *httprunner) bcastNodes(bargs *bcastArgs) sliceResults {
+func (h *htrun) bcastNodes(bargs *bcastArgs) sliceResults {
 	var (
 		results bcastResults
 		wg      = cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), bargs.nodeCount)
@@ -1320,7 +844,7 @@ func (h *httprunner) bcastNodes(bargs *bcastArgs) sliceResults {
 	return results.s
 }
 
-func (h *httprunner) bcastSelected(bargs *bcastArgs) sliceResults {
+func (h *htrun) bcastSelected(bargs *bcastArgs) sliceResults {
 	var (
 		results bcastResults
 		wg      = cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), bargs.nodeCount)
@@ -1339,7 +863,7 @@ func (h *httprunner) bcastSelected(bargs *bcastArgs) sliceResults {
 	return results.s
 }
 
-func (h *httprunner) bcastAsyncIC(msg *aisMsg) {
+func (h *htrun) bcastAsyncIC(msg *aisMsg) {
 	var (
 		wg     = &sync.WaitGroup{}
 		smap   = h.owner.smap.get()
@@ -1366,7 +890,7 @@ func (h *httprunner) bcastAsyncIC(msg *aisMsg) {
 }
 
 // bcastReqGroup broadcasts a ReqArgs to a specific group of nodes
-func (h *httprunner) bcastReqGroup(w http.ResponseWriter, r *http.Request, req cmn.ReqArgs, to int) {
+func (h *htrun) bcastReqGroup(w http.ResponseWriter, r *http.Request, req cmn.ReqArgs, to int) {
 	args := allocBcastArgs()
 	args.req = req
 	args.to = to
@@ -1388,7 +912,7 @@ func (h *httprunner) bcastReqGroup(w http.ResponseWriter, r *http.Request, req c
 //////////////////////////////////
 
 // remove validated fields and return the resulting slice
-func (h *httprunner) checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int,
+func (h *htrun) checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int,
 	splitAfter bool, items []string) ([]string, error) {
 	items, err := cmn.MatchRESTItems(r.URL.Path, itemsAfter, splitAfter, items)
 	if err != nil {
@@ -1399,7 +923,7 @@ func (h *httprunner) checkRESTItems(w http.ResponseWriter, r *http.Request, item
 	return items, nil
 }
 
-func (h *httprunner) writeMsgPack(w http.ResponseWriter, r *http.Request, v interface{}, tag string) (ok bool) {
+func (h *htrun) writeMsgPack(w http.ResponseWriter, r *http.Request, v interface{}, tag string) (ok bool) {
 	var (
 		err       error
 		buf, slab = h.gmm.AllocSize(msgpObjListBufSize)
@@ -1418,7 +942,7 @@ func (h *httprunner) writeMsgPack(w http.ResponseWriter, r *http.Request, v inte
 	return true
 }
 
-func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, v interface{}, tag string) (ok bool) {
+func (h *htrun) writeJSON(w http.ResponseWriter, r *http.Request, v interface{}, tag string) (ok bool) {
 	_, isByteArray := v.([]byte)
 	debug.Assert(!isByteArray)
 	ok = true
@@ -1430,7 +954,7 @@ func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, v interfa
 	return
 }
 
-func (h *httprunner) handleWriteError(r *http.Request, tag string, err error) {
+func (h *htrun) handleWriteError(r *http.Request, tag string, err error) {
 	msg := fmt.Sprintf("%s: failed to write bytes, err: %v", tag, err)
 	if _, file, line, ok := runtime.Caller(1); ok {
 		f := filepath.Base(file)
@@ -1467,7 +991,7 @@ func _checkAction(msg *cmn.ActionMsg, expectedActions ...string) (err error) {
 // Common HTTP req handlers //
 //////////////////////////////
 
-func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
+func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	var (
 		body interface{}
 		what = r.URL.Query().Get(cmn.URLParamWhat)
@@ -1544,17 +1068,17 @@ func _sev2logname(r *http.Request) (log string, err error) {
 // HTTP err + spec message + code + stats //
 ////////////////////////////////////////////
 
-func (h *httprunner) writeErr(w http.ResponseWriter, r *http.Request, err error, errCode ...int) {
+func (h *htrun) writeErr(w http.ResponseWriter, r *http.Request, err error, errCode ...int) {
 	cmn.WriteErr(w, r, err, errCode...)
 	h.statsT.AddErrorHTTP(r.Method, 1)
 }
 
-func (h *httprunner) writeErrMsg(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
+func (h *htrun) writeErrMsg(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
 	cmn.WriteErrMsg(w, r, msg, errCode...)
 	h.statsT.AddErrorHTTP(r.Method, 1)
 }
 
-func (h *httprunner) writeErrSilent(w http.ResponseWriter, r *http.Request, err error, errCode ...int) {
+func (h *htrun) writeErrSilent(w http.ResponseWriter, r *http.Request, err error, errCode ...int) {
 	const _silent = 1
 	if len(errCode) == 0 {
 		h.writeErr(w, r, err, http.StatusBadRequest, _silent)
@@ -1563,39 +1087,39 @@ func (h *httprunner) writeErrSilent(w http.ResponseWriter, r *http.Request, err 
 	}
 }
 
-func (h *httprunner) writeErrSilentf(w http.ResponseWriter, r *http.Request, errCode int,
+func (h *htrun) writeErrSilentf(w http.ResponseWriter, r *http.Request, errCode int,
 	format string, a ...interface{}) {
 	err := fmt.Errorf(format, a...)
 	h.writeErrSilent(w, r, err, errCode)
 }
 
-func (h *httprunner) writeErrStatusf(w http.ResponseWriter, r *http.Request, errCode int,
+func (h *htrun) writeErrStatusf(w http.ResponseWriter, r *http.Request, errCode int,
 	format string, a ...interface{}) {
 	h.writeErrMsg(w, r, fmt.Sprintf(format, a...), errCode)
 }
 
-func (h *httprunner) writeErrStatusSilentf(w http.ResponseWriter, r *http.Request, errCode int,
+func (h *htrun) writeErrStatusSilentf(w http.ResponseWriter, r *http.Request, errCode int,
 	format string, a ...interface{}) {
 	h.writeErrSilent(w, r, fmt.Errorf(format, a...), errCode)
 }
 
-func (h *httprunner) writeErrf(w http.ResponseWriter, r *http.Request, format string, a ...interface{}) {
+func (h *htrun) writeErrf(w http.ResponseWriter, r *http.Request, format string, a ...interface{}) {
 	h.writeErrMsg(w, r, fmt.Sprintf(format, a...))
 }
 
-func (h *httprunner) writeErrURL(w http.ResponseWriter, r *http.Request) {
+func (h *htrun) writeErrURL(w http.ResponseWriter, r *http.Request) {
 	err := cmn.NewErrHTTP(r, "invalid URL Path")
 	h.writeErr(w, r, err)
 	cmn.FreeHTTPErr(err)
 }
 
-func (h *httprunner) writeErrAct(w http.ResponseWriter, r *http.Request, action string) {
+func (h *htrun) writeErrAct(w http.ResponseWriter, r *http.Request, action string) {
 	err := cmn.NewErrHTTP(r, fmt.Sprintf("invalid action %q", action))
 	h.writeErr(w, r, err)
 	cmn.FreeHTTPErr(err)
 }
 
-func (h *httprunner) writeErrActf(w http.ResponseWriter, r *http.Request, action string,
+func (h *htrun) writeErrActf(w http.ResponseWriter, r *http.Request, action string,
 	format string, a ...interface{}) {
 	detail := fmt.Sprintf(format, a...)
 	err := cmn.NewErrHTTP(r, fmt.Sprintf("invalid action %q: %s", action, detail))
@@ -1654,7 +1178,7 @@ func (res *callResult) errorf(format string, a ...interface{}) error {
 // health client //
 ///////////////////
 
-func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.Values) (b []byte, status int, err error) {
+func (h *htrun) Health(si *cluster.Snode, timeout time.Duration, query url.Values) (b []byte, status int, err error) {
 	var (
 		path = cmn.URLPathHealth.S
 		url  = si.URL(cmn.NetworkIntraControl)
@@ -1680,7 +1204,7 @@ func (cii *clusterInfo) String() string { return fmt.Sprintf("%+v", *cii) }
 // to discover a better Smap (ie., more current), if exists
 // TODO: for the targets, validate and return maxVerBMD
 // NOTE: if `checkAll` is set to false, we stop making further requests once minPidConfirmations is achieved
-func (h *httprunner) bcastHealth(smap *smapX, checkAll ...bool) (maxCii *clusterInfo, cnt int) {
+func (h *htrun) bcastHealth(smap *smapX, checkAll ...bool) (maxCii *clusterInfo, cnt int) {
 	var (
 		query          = url.Values{cmn.URLParamClusterInfo: []string{"true"}}
 		config         = cmn.GCO.Get()
@@ -1779,7 +1303,7 @@ func _msdetail(ver int64, msg *aisMsg, caller string) (d string) {
 	return
 }
 
-func (h *httprunner) extractConfig(payload msPayload, caller string) (newConfig *globalConfig, msg *aisMsg, err error) {
+func (h *htrun) extractConfig(payload msPayload, caller string) (newConfig *globalConfig, msg *aisMsg, err error) {
 	if _, ok := payload[revsConfTag]; !ok {
 		return
 	}
@@ -1809,7 +1333,7 @@ func (h *httprunner) extractConfig(payload msPayload, caller string) (newConfig 
 	return
 }
 
-func (h *httprunner) extractEtlMD(payload msPayload, caller string) (newMD *etlMD, msg *aisMsg, err error) {
+func (h *htrun) extractEtlMD(payload msPayload, caller string) (newMD *etlMD, msg *aisMsg, err error) {
 	if _, ok := payload[revsEtlMDTag]; !ok {
 		return
 	}
@@ -1840,7 +1364,7 @@ func (h *httprunner) extractEtlMD(payload msPayload, caller string) (newMD *etlM
 	return
 }
 
-func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *smapX, msg *aisMsg, err error) {
+func (h *htrun) extractSmap(payload msPayload, caller string) (newSmap *smapX, msg *aisMsg, err error) {
 	if _, ok := payload[revsSmapTag]; !ok {
 		return
 	}
@@ -1893,7 +1417,7 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 	return
 }
 
-func (h *httprunner) extractRMD(payload msPayload, caller string) (newRMD *rebMD, msg *aisMsg, err error) {
+func (h *htrun) extractRMD(payload msPayload, caller string) (newRMD *rebMD, msg *aisMsg, err error) {
 	if _, ok := payload[revsRMDTag]; !ok {
 		return
 	}
@@ -1922,7 +1446,7 @@ func (h *httprunner) extractRMD(payload msPayload, caller string) (newRMD *rebMD
 	return
 }
 
-func (h *httprunner) extractBMD(payload msPayload, caller string) (newBMD *bucketMD, msg *aisMsg, err error) {
+func (h *htrun) extractBMD(payload msPayload, caller string) (newBMD *bucketMD, msg *aisMsg, err error) {
 	if _, ok := payload[revsBMDTag]; !ok {
 		return
 	}
@@ -1956,7 +1480,7 @@ func (h *httprunner) extractBMD(payload msPayload, caller string) (newBMD *bucke
 	return
 }
 
-func (h *httprunner) receiveSmap(newSmap *smapX, msg *aisMsg, payload msPayload,
+func (h *htrun) receiveSmap(newSmap *smapX, msg *aisMsg, payload msPayload,
 	caller string, cb func(newSmap *smapX, oldSmap *smapX)) (err error) {
 	if newSmap == nil {
 		return
@@ -1978,7 +1502,7 @@ func (h *httprunner) receiveSmap(newSmap *smapX, msg *aisMsg, payload msPayload,
 	return
 }
 
-func (h *httprunner) receiveEtlMD(newEtlMD *etlMD, msg *aisMsg, payload msPayload,
+func (h *htrun) receiveEtlMD(newEtlMD *etlMD, msg *aisMsg, payload msPayload,
 	caller string, cb func(newELT *etlMD, oldETL *etlMD)) (err error) {
 	if newEtlMD == nil {
 		return
@@ -2005,7 +1529,7 @@ func (h *httprunner) receiveEtlMD(newEtlMD *etlMD, msg *aisMsg, payload msPayloa
 	return
 }
 
-func (h *httprunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPayload, caller string) (err error) {
+func (h *htrun) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPayload, caller string) (err error) {
 	config := cmn.GCO.Get()
 	glog.Infof("receive %s%s", newConfig, _msdetail(config.Version, msg, caller))
 
@@ -2026,7 +1550,7 @@ func (h *httprunner) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload
 	return
 }
 
-func (h *httprunner) extractRevokedTokenList(payload msPayload, caller string) (*tokenList, error) {
+func (h *htrun) extractRevokedTokenList(payload msPayload, caller string) (*tokenList, error) {
 	var (
 		msg       aisMsg
 		bytes, ok = payload[revsTokenTag]
@@ -2080,7 +1604,7 @@ func (h *httprunner) extractRevokedTokenList(payload msPayload, caller string) (
 // - if these fails we try the candidates provided by the caller.
 //
 // ================================== Background =========================================
-func (h *httprunner) join(query url.Values, contactURLs ...string) (res *callResult) {
+func (h *htrun) join(query url.Values, contactURLs ...string) (res *callResult) {
 	var (
 		config                   = cmn.GCO.Get()
 		candidates               = make([]string, 0, 4+len(contactURLs))
@@ -2150,7 +1674,7 @@ func (h *httprunner) join(query url.Values, contactURLs ...string) (res *callRes
 	return
 }
 
-func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Duration, query url.Values,
+func (h *htrun) registerToURL(url string, psi *cluster.Snode, tout time.Duration, query url.Values,
 	keepalive bool) *callResult {
 	var (
 		path          string
@@ -2184,7 +1708,7 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Dur
 	return h.call(callArgs)
 }
 
-func (h *httprunner) sendKeepalive(timeout time.Duration) (status int, err error) {
+func (h *htrun) sendKeepalive(timeout time.Duration) (status int, err error) {
 	if daemon.stopping.Load() {
 		err = fmt.Errorf("%s is stopping", h.si)
 		return
@@ -2204,7 +1728,7 @@ func (h *httprunner) sendKeepalive(timeout time.Duration) (status int, err error
 	return
 }
 
-func (h *httprunner) getPrimaryURLAndSI() (url string, psi *cluster.Snode) {
+func (h *htrun) getPrimaryURLAndSI() (url string, psi *cluster.Snode) {
 	smap := h.owner.smap.get()
 	if smap.validate() != nil {
 		url, psi = cmn.GCO.Get().Proxy.PrimaryURL, nil
@@ -2214,7 +1738,7 @@ func (h *httprunner) getPrimaryURLAndSI() (url string, psi *cluster.Snode) {
 	return
 }
 
-func (h *httprunner) pollClusterStarted(config *cmn.Config, psi *cluster.Snode) (maxCii *clusterInfo) {
+func (h *htrun) pollClusterStarted(config *cmn.Config, psi *cluster.Snode) (maxCii *clusterInfo) {
 	var (
 		sleep, total, rediscover time.Duration
 		healthTimeout            = config.Timeout.CplaneOperation.D()
@@ -2262,7 +1786,7 @@ func (h *httprunner) pollClusterStarted(config *cmn.Config, psi *cluster.Snode) 
 	}
 }
 
-func (h *httprunner) unregisterSelf(ignoreErr bool) (err error) {
+func (h *htrun) unregisterSelf(ignoreErr bool) (err error) {
 	var status int
 	smap := h.owner.smap.get()
 	if smap == nil || smap.validate() != nil {
@@ -2286,7 +1810,7 @@ func (h *httprunner) unregisterSelf(ignoreErr bool) (err error) {
 	return
 }
 
-func (h *httprunner) healthByExternalWD(w http.ResponseWriter, r *http.Request) (responded bool) {
+func (h *htrun) healthByExternalWD(w http.ResponseWriter, r *http.Request) (responded bool) {
 	callerID := r.Header.Get(cmn.HdrCallerID)
 	caller := r.Header.Get(cmn.HdrCallerName)
 	// external call
@@ -2375,7 +1899,7 @@ func newBckFromQueryUname(query url.Values, required bool) (*cluster.Bck, error)
 // intra-cluster request validation //
 //////////////////////////////////////
 
-func (h *httprunner) _isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
+func (h *htrun) _isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
 	debug.Assert(hdr != nil)
 	var (
 		smap       = h.owner.smap.get()
@@ -2419,12 +1943,12 @@ func (h *httprunner) _isIntraCall(hdr http.Header, fromPrimary bool) (err error)
 	return fmt.Errorf("%s: expected %s from primary (and not %s), %s", h.si, cmn.NetworkIntraControl, caller, smap)
 }
 
-func (h *httprunner) isIntraCall(hdr http.Header) (isIntra bool) {
+func (h *htrun) isIntraCall(hdr http.Header) (isIntra bool) {
 	err := h._isIntraCall(hdr, false /*from primary*/)
 	return err == nil
 }
 
-func (h *httprunner) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyPrimary bool) (isIntra bool) {
+func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyPrimary bool) (isIntra bool) {
 	err := h._isIntraCall(r.Header, onlyPrimary)
 	if err != nil {
 		h.writeErr(w, r, err)
@@ -2447,15 +1971,15 @@ func (h *httprunner) ensureIntraControl(w http.ResponseWriter, r *http.Request, 
 // aisMsg helpers //
 ////////////////////
 
-func (h *httprunner) newAmsgStr(msgStr string, bmd *bucketMD) *aisMsg {
+func (h *htrun) newAmsgStr(msgStr string, bmd *bucketMD) *aisMsg {
 	return h.newAmsg(&cmn.ActionMsg{Value: msgStr}, bmd)
 }
 
-func (h *httprunner) newAmsgActVal(act string, val interface{}) *aisMsg {
+func (h *htrun) newAmsgActVal(act string, val interface{}) *aisMsg {
 	return h.newAmsg(&cmn.ActionMsg{Action: act, Value: val}, nil)
 }
 
-func (h *httprunner) newAmsg(actionMsg *cmn.ActionMsg, bmd *bucketMD, uuid ...string) *aisMsg {
+func (h *htrun) newAmsg(actionMsg *cmn.ActionMsg, bmd *bucketMD, uuid ...string) *aisMsg {
 	msg := &aisMsg{ActionMsg: *actionMsg}
 	if bmd != nil {
 		msg.BMDVersion = bmd.Version
@@ -2466,51 +1990,4 @@ func (h *httprunner) newAmsg(actionMsg *cmn.ActionMsg, bmd *bucketMD, uuid ...st
 		msg.UUID = uuid[0]
 	}
 	return msg
-}
-
-// Based on default error handler `defaultErrorHandler` in `httputil/reverseproxy.go`.
-func (p *proxyrunner) rpErrHandler(w http.ResponseWriter, r *http.Request, err error) {
-	msg := fmt.Sprintf("%s: rproxy err %v, req: %s %s", p.si, err, r.Method, r.URL.Path)
-	if caller := r.Header.Get(cmn.HdrCallerName); caller != "" {
-		msg += " (from " + caller + ")"
-	}
-	glog.Errorln(msg)
-	w.WriteHeader(http.StatusBadGateway)
-}
-
-/////////////////
-// clusterInfo //
-/////////////////
-
-func (cii *clusterInfo) fill(h *httprunner) {
-	var (
-		smap = h.owner.smap.get()
-		bmd  = h.owner.bmd.get()
-		rmd  = h.owner.rmd.get()
-		etl  = h.owner.etl.get()
-	)
-	cii.fillSmap(smap)
-	cii.BMD.Version = bmd.version()
-	cii.BMD.UUID = bmd.UUID
-	cii.RMD.Version = rmd.Version
-	cii.Config.Version = h.owner.config.version()
-	cii.EtlMD.Version = etl.version()
-	cii.Flags.ClusterStarted = h.ClusterStarted()
-	cii.Flags.NodeStarted = h.NodeStarted()
-}
-
-func (cii *clusterInfo) fillSmap(smap *smapX) {
-	cii.Smap.Version = smap.version()
-	cii.Smap.UUID = smap.UUID
-	cii.Smap.Primary.CtrlURL = smap.Primary.URL(cmn.NetworkIntraControl)
-	cii.Smap.Primary.PubURL = smap.Primary.URL(cmn.NetworkPublic)
-	cii.Smap.Primary.ID = smap.Primary.ID()
-	cii.Flags.VoteInProgress = voteInProgress() != nil
-}
-
-func (cii *clusterInfo) smapEqual(other *clusterInfo) (ok bool) {
-	if cii == nil || other == nil {
-		return false
-	}
-	return cii.Smap.Version == other.Smap.Version && cii.Smap.Primary.ID == other.Smap.Primary.ID
 }

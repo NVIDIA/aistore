@@ -79,10 +79,10 @@ func newEtlMD() (e *etlMD) {
 }
 
 // as revs
-func (*etlMD) tag() string             { return revsEtlMDTag }
-func (e *etlMD) version() int64        { return e.Version }
-func (*etlMD) jit(p *proxyrunner) revs { return p.owner.etl.get() }
-func (*etlMD) sgl() *memsys.SGL        { return nil }
+func (*etlMD) tag() string       { return revsEtlMDTag }
+func (e *etlMD) version() int64  { return e.Version }
+func (*etlMD) jit(p *proxy) revs { return p.owner.etl.get() }
+func (*etlMD) sgl() *memsys.SGL  { return nil }
 
 // always remarshal (TODO: unify and optimize across all cluster-level metadata types)
 func (e *etlMD) marshal() []byte {

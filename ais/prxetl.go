@@ -18,7 +18,7 @@ import (
 )
 
 // [METHOD] /v1/etl
-func (p *proxyrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
 	if !p.ClusterStartedWithRetry() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
@@ -68,7 +68,7 @@ func (p *proxyrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 //  3. Broadcast initSpecETL message to all targets.
 //  4. If any target fails to start ETL stop it on all (targets).
 //  5. In the event of success return ETL's UUID to the user.
-func (p *proxyrunner) initSpecETL(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) initSpecETL(w http.ResponseWriter, r *http.Request) {
 	_, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathETLInitSpec.L)
 	if err != nil {
 		return
@@ -97,7 +97,7 @@ func (p *proxyrunner) initSpecETL(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /v1/etl/init_code
-func (p *proxyrunner) initCodeETL(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) initCodeETL(w http.ResponseWriter, r *http.Request) {
 	_, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathETLInitCode.L)
 	if err != nil {
 		return
@@ -128,7 +128,7 @@ func (p *proxyrunner) initCodeETL(w http.ResponseWriter, r *http.Request) {
 }
 
 // startETL broadcasts a build or init ETL request and ensures only one ETL is running
-func (p *proxyrunner) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg) (err error) {
+func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg) (err error) {
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: cos.MustMarshal(msg)}
 	args.timeout = cmn.LongTimeout
@@ -173,7 +173,7 @@ func _addETLPre(ctx *etlMDModifier, clone *etlMD) (_ error) {
 	return
 }
 
-func (p *proxyrunner) _syncEtlMDFinal(ctx *etlMDModifier, clone *etlMD) {
+func (p *proxy) _syncEtlMDFinal(ctx *etlMDModifier, clone *etlMD) {
 	wg := p.metasyncer.sync(revsPair{clone, p.newAmsgStr("etl-reg", nil)})
 	if ctx.wait {
 		wg.Wait()
@@ -181,7 +181,7 @@ func (p *proxyrunner) _syncEtlMDFinal(ctx *etlMDModifier, clone *etlMD) {
 }
 
 // GET /v1/etl/list
-func (p *proxyrunner) listETL(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) listETL(w http.ResponseWriter, r *http.Request) {
 	if _, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathETLList.L); err != nil {
 		return
 	}
@@ -193,7 +193,7 @@ func (p *proxyrunner) listETL(w http.ResponseWriter, r *http.Request) {
 	p.writeJSON(w, r, etls, "list-etl")
 }
 
-func (p *proxyrunner) listETLs() (infoList etl.InfoList, err error) {
+func (p *proxy) listETLs() (infoList etl.InfoList, err error) {
 	var (
 		args = allocBcastArgs()
 		etls *etl.InfoList
@@ -233,7 +233,7 @@ func (p *proxyrunner) listETLs() (infoList etl.InfoList, err error) {
 }
 
 // GET /v1/etl/logs/<uuid>[/<target_id>]
-func (p *proxyrunner) logsETL(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.checkRESTItems(w, r, 1, true, cmn.URLPathETLLogs.L)
 	if err != nil {
 		return
@@ -291,7 +291,7 @@ func (p *proxyrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET /v1/etl/health/<uuid>
-func (p *proxyrunner) healthETL(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) healthETL(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathETLHealth.L)
 	if err != nil {
 		return
@@ -327,7 +327,7 @@ func (p *proxyrunner) healthETL(w http.ResponseWriter, r *http.Request) {
 }
 
 // DELETE /v1/etl/stop/<uuid>
-func (p *proxyrunner) stopETL(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) stopETL(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathETLStop.L)
 	if err != nil {
 		return

@@ -42,7 +42,7 @@ import (
 type (
 	putObjInfo struct {
 		atime      time.Time
-		t          *targetrunner
+		t          *target
 		lom        *cluster.LOM
 		r          io.ReadCloser // reader that has the content
 		cksumToUse *cos.Cksum    // if available (not `none`), can be validated and will be stored
@@ -56,7 +56,7 @@ type (
 	getObjInfo struct {
 		started time.Time
 		nanotim int64
-		t       *targetrunner
+		t       *target
 		lom     *cluster.LOM
 		w       io.Writer       // not necessarily http.ResponseWriter
 		ctx     context.Context // context used when getting object from remote backend (access creds)
@@ -75,7 +75,7 @@ type (
 
 	appendObjInfo struct {
 		started time.Time // started time of receiving - used to calculate the recv duration
-		t       *targetrunner
+		t       *target
 		lom     *cluster.LOM
 
 		// Reader with the content of the object.
@@ -91,7 +91,7 @@ type (
 
 	copyObjInfo struct {
 		cluster.CopyObjectParams
-		t           *targetrunner
+		t           *target
 		localOnly   bool // copy locally with no HRW=>target
 		finalize    bool // copies and EC (as in poi.finalize())
 		promoteFile bool // Determines if we are promoting a file.
@@ -99,7 +99,7 @@ type (
 
 	appendArchObjInfo struct {
 		started time.Time // started time of receiving - used to calculate the recv duration
-		t       *targetrunner
+		t       *target
 		lom     *cluster.LOM
 
 		// Reader with the content of the object.
@@ -1375,7 +1375,7 @@ func (aaoi *appendArchObjInfo) appendObject() (errCode int, err error) {
 
 // PUT(lom) => destination target
 // NOTE: always closes params.Reader, either explicitly or via Do()
-func (t *targetrunner) _sendPUT(params *cluster.SendToParams) error {
+func (t *target) _sendPUT(params *cluster.SendToParams) error {
 	var (
 		hdr   = make(http.Header, 8)
 		query = cmn.AddBckToQuery(nil, params.BckTo.Bck)

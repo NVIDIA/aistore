@@ -50,10 +50,10 @@ var _ = Describe("Notifications xaction test", func() {
 			return
 		}
 
-		mockProxyRunner = func(name string) *proxyrunner {
+		mockProxyRunner = func(name string) *proxy {
 			tracker := &mock.StatsTracker{}
-			p := &proxyrunner{
-				httprunner: httprunner{
+			p := &proxy{
+				htrun: htrun{
 					si:     mockNode(name, cmn.Proxy),
 					statsT: tracker,
 				},
@@ -71,9 +71,9 @@ var _ = Describe("Notifications xaction test", func() {
 				fin: newListeners(),
 			}
 			smap := &smapX{Smap: cluster.Smap{Version: 1}}
-			n.p.httprunner.owner.smap = newSmapOwner(cmn.GCO.Get())
-			n.p.httprunner.owner.smap.put(smap)
-			n.p.httprunner.startup.cluster = *atomic.NewBool(true)
+			n.p.htrun.owner.smap = newSmapOwner(cmn.GCO.Get())
+			n.p.htrun.owner.smap.put(smap)
+			n.p.htrun.startup.cluster = *atomic.NewBool(true)
 			return n
 		}
 

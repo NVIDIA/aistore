@@ -19,7 +19,7 @@ import (
 )
 
 type bckInitArgs struct {
-	p       *proxyrunner
+	p       *proxy
 	w       http.ResponseWriter
 	r       *http.Request
 	perms   cmn.AccessAttrs // cmn.AceGET, cmn.AcePATCH etc.

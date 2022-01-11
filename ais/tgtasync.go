@@ -20,7 +20,7 @@ import (
 )
 
 // listObjects returns a list of objects in a bucket (with optional prefix).
-func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actMsg *aisMsg) (ok bool) {
+func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actMsg *aisMsg) (ok bool) {
 	var (
 		msg   *cmn.ListObjsMsg
 		query = r.URL.Query()
@@ -78,7 +78,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 	return t.writeMsgPack(w, r, resp.BckList, "list_objects")
 }
 
-func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actMsg *aisMsg) {
+func (t *target) bucketSummary(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actMsg *aisMsg) {
 	query := r.URL.Query()
 	if glog.FastV(4, glog.SmoduleAIS) {
 		pid := query.Get(cmn.HdrCallerID)
@@ -97,7 +97,7 @@ func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck
 // - creates a new task that runs in background
 // - returns status of a running task by its ID
 // - returns the result of a task by its ID
-func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action string, bck *cluster.Bck,
+func (t *target) doAsync(w http.ResponseWriter, r *http.Request, action string, bck *cluster.Bck,
 	msg *cmn.BucketSummaryMsg) {
 	var (
 		query      = r.URL.Query()

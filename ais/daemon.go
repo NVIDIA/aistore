@@ -204,15 +204,15 @@ func initDaemon(version, buildTime string) cos.Runner {
 	return t
 }
 
-func newProxy(co *configOwner) *proxyrunner {
-	p := &proxyrunner{}
+func newProxy(co *configOwner) *proxy {
+	p := &proxy{}
 	p.name = cmn.Proxy
 	p.owner.config = co
 	return p
 }
 
-func newTarget(co *configOwner) *targetrunner {
-	t := &targetrunner{backend: make(backends, 8)}
+func newTarget(co *configOwner) *target {
+	t := &target{backend: make(backends, 8)}
 	t.name = cmn.Target
 	t.owner.bmd = newBMDOwnerTgt()
 	t.owner.etl = newEtlMDOwnerTgt()

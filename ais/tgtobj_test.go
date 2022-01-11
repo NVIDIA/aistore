@@ -27,7 +27,7 @@ const (
 )
 
 var (
-	t *targetrunner
+	t *target
 
 	// interface guard
 	_ http.ResponseWriter = (*discardRW)(nil)
@@ -71,7 +71,7 @@ func TestMain(m *testing.M) {
 
 	fs.Add(testMountpath, t.si.ID())
 
-	t.httprunner.init(config)
+	t.htrun.init(config)
 
 	t.statsT = mock.NewStatsTracker()
 	cluster.Init(t)

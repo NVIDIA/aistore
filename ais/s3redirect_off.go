@@ -27,6 +27,6 @@ func init() {
 // * docs/s3compat.md
 // * Makefile (for `s3rproxy` build tag)
 // * ais/s3redirect_on.go
-func (p *proxyrunner) s3Redirect(w http.ResponseWriter, r *http.Request, si *cluster.Snode, _, _ string) {
+func (p *proxy) s3Redirect(w http.ResponseWriter, r *http.Request, si *cluster.Snode, _, _ string) {
 	p.reverseNodeRequest(w, r, si)
 }

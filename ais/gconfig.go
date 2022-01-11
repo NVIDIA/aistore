@@ -49,9 +49,9 @@ type (
 var _ revs = (*globalConfig)(nil)
 
 // as revs
-func (*globalConfig) tag() string             { return revsConfTag }
-func (config *globalConfig) version() int64   { return config.Version }
-func (*globalConfig) jit(p *proxyrunner) revs { g, _ := p.owner.config.get(); return g }
+func (*globalConfig) tag() string           { return revsConfTag }
+func (config *globalConfig) version() int64 { return config.Version }
+func (*globalConfig) jit(p *proxy) revs     { g, _ := p.owner.config.get(); return g }
 
 func (config *globalConfig) sgl() *memsys.SGL {
 	if config._sgl.IsNil() {

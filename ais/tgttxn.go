@@ -46,11 +46,11 @@ type txnServerCtx struct {
 	bck        *cluster.Bck // aka bckFrom
 	bckTo      *cluster.Bck
 	query      url.Values
-	t          *targetrunner
+	t          *target
 }
 
 // verb /v1/txn
-func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
+func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		bucket, phase string
 		msg           = &aisMsg{}
@@ -163,7 +163,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 // createBucket //
 //////////////////
 
-func (t *targetrunner) createBucket(c *txnServerCtx) error {
+func (t *target) createBucket(c *txnServerCtx) error {
 	switch c.phase {
 	case cmn.ActBegin:
 		txn := newTxnCreateBucket(c)
@@ -190,7 +190,7 @@ func (t *targetrunner) createBucket(c *txnServerCtx) error {
 	return nil
 }
 
-func (t *targetrunner) _commitCreateDestroy(c *txnServerCtx) (err error) {
+func (t *target) _commitCreateDestroy(c *txnServerCtx) (err error) {
 	txn, err := t.transactions.find(c.uuid, "")
 	if err != nil {
 		return err
@@ -206,7 +206,7 @@ func (t *targetrunner) _commitCreateDestroy(c *txnServerCtx) (err error) {
 // makeNCopies //
 /////////////////
 
-func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
+func (t *target) makeNCopies(c *txnServerCtx) error {
 	if err := c.bck.Init(t.owner.bmd); err != nil {
 		return err
 	}
@@ -258,7 +258,7 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 	return nil
 }
 
-func (t *targetrunner) validateMakeNCopies(bck *cluster.Bck, msg *aisMsg) (curCopies, newCopies int64, err error) {
+func (t *target) validateMakeNCopies(bck *cluster.Bck, msg *aisMsg) (curCopies, newCopies int64, err error) {
 	curCopies = bck.Props.Mirror.Copies
 	newCopies, err = _parseNCopies(msg.Value)
 	if err == nil {
@@ -283,7 +283,7 @@ func (t *targetrunner) validateMakeNCopies(bck *cluster.Bck, msg *aisMsg) (curCo
 // setBucketProps //
 ////////////////////
 
-func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
+func (t *target) setBucketProps(c *txnServerCtx) error {
 	if err := c.bck.Init(t.owner.bmd); err != nil {
 		return err
 	}
@@ -345,7 +345,7 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 	return nil
 }
 
-func (t *targetrunner) validateNprops(bck *cluster.Bck, msg *aisMsg) (nprops *cmn.BucketProps, err error) {
+func (t *target) validateNprops(bck *cluster.Bck, msg *aisMsg) (nprops *cmn.BucketProps, err error) {
 	var (
 		body = cos.MustMarshal(msg.Value)
 		cs   = fs.GetCapStatus()
@@ -375,7 +375,7 @@ func (t *targetrunner) validateNprops(bck *cluster.Bck, msg *aisMsg) (nprops *cm
 // renameBucket //
 //////////////////
 
-func (t *targetrunner) renameBucket(c *txnServerCtx) error {
+func (t *target) renameBucket(c *txnServerCtx) error {
 	if err := c.bck.Init(t.owner.bmd); err != nil {
 		return err
 	}
@@ -432,7 +432,7 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 	return nil
 }
 
-func (t *targetrunner) validateBckRenTxn(bckFrom, bckTo *cluster.Bck, msg *aisMsg) error {
+func (t *target) validateBckRenTxn(bckFrom, bckTo *cluster.Bck, msg *aisMsg) error {
 	if cs := fs.GetCapStatus(); cs.Err != nil {
 		return cs.Err
 	}
@@ -464,7 +464,7 @@ func (t *targetrunner) validateBckRenTxn(bckFrom, bckTo *cluster.Bck, msg *aisMs
 	return nil
 }
 
-func (t *targetrunner) etlDP(msg *cmn.TCBMsg) (dp cluster.DP, err error) {
+func (t *target) etlDP(msg *cmn.TCBMsg) (dp cluster.DP, err error) {
 	if err = k8s.Detect(); err != nil {
 		return
 	}
@@ -476,7 +476,7 @@ func (t *targetrunner) etlDP(msg *cmn.TCBMsg) (dp cluster.DP, err error) {
 }
 
 // common for both bucket copy and bucket transform - does the heavy lifting
-func (t *targetrunner) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) error {
+func (t *target) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) error {
 	if err := c.bck.Init(t.owner.bmd); err != nil {
 		return err
 	}
@@ -541,7 +541,7 @@ func (t *targetrunner) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) erro
 	return nil
 }
 
-func (t *targetrunner) _tcbBegin(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) (nlpTo, nlpFrom *cluster.NameLockPair, err error) {
+func (t *target) _tcbBegin(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) (nlpTo, nlpFrom *cluster.NameLockPair, err error) {
 	bckTo, bckFrom := c.bckTo, c.bck
 	nlpFrom = bckFrom.GetNameLockPair()
 	if !nlpFrom.TryRLock(c.timeout.netw / 4) {
@@ -575,7 +575,7 @@ func (t *targetrunner) _tcbBegin(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP
 	return
 }
 
-func (t *targetrunner) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (string, error) {
+func (t *target) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (string, error) {
 	var xactID string
 	if err := c.bck.Init(t.owner.bmd); err != nil {
 		return xactID, err
@@ -649,7 +649,7 @@ func (t *targetrunner) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP
 // ecEncode //
 //////////////
 
-func (t *targetrunner) ecEncode(c *txnServerCtx) error {
+func (t *target) ecEncode(c *txnServerCtx) error {
 	if err := c.bck.Init(t.owner.bmd); err != nil {
 		return err
 	}
@@ -693,7 +693,7 @@ func (t *targetrunner) ecEncode(c *txnServerCtx) error {
 	return nil
 }
 
-func (t *targetrunner) validateECEncode(bck *cluster.Bck, msg *aisMsg) (err error) {
+func (t *target) validateECEncode(bck *cluster.Bck, msg *aisMsg) (err error) {
 	if cs := fs.GetCapStatus(); cs.Err != nil {
 		return cs.Err
 	}
@@ -705,7 +705,7 @@ func (t *targetrunner) validateECEncode(bck *cluster.Bck, msg *aisMsg) (err erro
 // createArchMultiObj //
 ////////////////////////
 
-func (t *targetrunner) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, error) {
+func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, error) {
 	var xactID string
 	if err := c.bck.Init(t.owner.bmd); err != nil {
 		return xactID, err
@@ -784,7 +784,7 @@ func (t *targetrunner) createArchMultiObj(c *txnServerCtx) (string /*xaction uui
 // startMaintenance //
 //////////////////////
 
-func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
+func (t *target) startMaintenance(c *txnServerCtx) error {
 	switch c.phase {
 	case cmn.ActBegin:
 		var opts cmn.ActValRmNode
@@ -824,7 +824,7 @@ func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
 // destroy local bucket / evict cloud buket //
 //////////////////////////////////////////////
 
-func (t *targetrunner) destroyBucket(c *txnServerCtx) error {
+func (t *target) destroyBucket(c *txnServerCtx) error {
 	switch c.phase {
 	case cmn.ActBegin:
 		nlp := c.bck.GetNameLockPair()
@@ -852,7 +852,7 @@ func (t *targetrunner) destroyBucket(c *txnServerCtx) error {
 // misc //
 //////////
 
-func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase string) (*txnServerCtx, error) {
+func (t *target) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase string) (*txnServerCtx, error) {
 	var (
 		err   error
 		query = r.URL.Query()
@@ -909,7 +909,7 @@ func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase
 }
 
 // TODO: #791 "limited coexistence" - extend and unify
-func (t *targetrunner) coExists(bck *cluster.Bck, action string) (err error) {
+func (t *target) coExists(bck *cluster.Bck, action string) (err error) {
 	const fmtErr = "%s: [%s] is currently running, cannot run %q (bucket %s) concurrently"
 	g, l := xreg.GetRebMarked(), xreg.GetResilverMarked()
 	if g.Xact != nil {

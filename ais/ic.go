@@ -56,11 +56,11 @@ type (
 	}
 
 	ic struct {
-		p *proxyrunner
+		p *proxy
 	}
 )
 
-func (ic *ic) init(p *proxyrunner) {
+func (ic *ic) init(p *proxy) {
 	ic.p = p
 }
 

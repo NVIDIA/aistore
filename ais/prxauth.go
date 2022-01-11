@@ -14,7 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 	tokenList := &tokenList{}
 	if _, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathTokens.L); err != nil {
 		return
@@ -36,7 +36,7 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 // Header format:
 //		'Authorization: Bearer <token>'
 // Returns: is auth enabled, decoded token, error
-func (p *proxyrunner) validateToken(hdr http.Header) (*authn.Token, error) {
+func (p *proxy) validateToken(hdr http.Header) (*authn.Token, error) {
 	authToken := hdr.Get(cmn.HdrAuthorization)
 	if authToken == "" {
 		return nil, authn.ErrNoToken
@@ -63,7 +63,7 @@ func (p *proxyrunner) validateToken(hdr http.Header) (*authn.Token, error) {
 //   Exceptions:
 //   - read-only access to a bucket is always granted
 //   - PATCH cannot be forbidden
-func (p *proxyrunner) checkACL(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, ace cmn.AccessAttrs) error {
+func (p *proxy) checkACL(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, ace cmn.AccessAttrs) error {
 	err := p._checkACL(r.Header, bck, ace)
 	if err == nil {
 		return nil
@@ -72,7 +72,7 @@ func (p *proxyrunner) checkACL(w http.ResponseWriter, r *http.Request, bck *clus
 	return err
 }
 
-func (*proxyrunner) aclErrToCode(err error) int {
+func (*proxy) aclErrToCode(err error) int {
 	switch err {
 	case nil:
 		return http.StatusOK
@@ -83,7 +83,7 @@ func (*proxyrunner) aclErrToCode(err error) int {
 	}
 }
 
-func (p *proxyrunner) _checkACL(hdr http.Header, bck *cluster.Bck, ace cmn.AccessAttrs) error {
+func (p *proxy) _checkACL(hdr http.Header, bck *cluster.Bck, ace cmn.AccessAttrs) error {
 	if p.isIntraCall(hdr) {
 		return nil
 	}

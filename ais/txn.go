@@ -51,7 +51,7 @@ type (
 	}
 	transactions struct {
 		sync.RWMutex
-		t          *targetrunner
+		t          *target
 		m          map[string]txn    // by txn.uuid
 		rendezvous map[string]rndzvs // ditto
 	}
@@ -134,7 +134,7 @@ var (
 // transactions //
 //////////////////
 
-func (txns *transactions) init(t *targetrunner) {
+func (txns *transactions) init(t *target) {
 	txns.t = t
 	txns.m = make(map[string]txn, 8)
 	txns.rendezvous = make(map[string]rndzvs, 8)

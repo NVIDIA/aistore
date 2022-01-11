@@ -105,9 +105,9 @@ var (
 )
 
 // as revs
-func (*smapX) tag() string             { return revsSmapTag }
-func (m *smapX) version() int64        { return m.Version }
-func (*smapX) jit(p *proxyrunner) revs { return p.owner.smap.get() }
+func (*smapX) tag() string       { return revsSmapTag }
+func (m *smapX) version() int64  { return m.Version }
+func (*smapX) jit(p *proxy) revs { return p.owner.smap.get() }
 
 func (m *smapX) sgl() *memsys.SGL {
 	if m._sgl.IsNil() {

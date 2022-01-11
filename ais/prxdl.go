@@ -20,7 +20,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *downloader.DlAdminBody) ([]byte, int, error) {
+func (p *proxy) broadcastDownloadAdminRequest(method, path string, msg *downloader.DlAdminBody) ([]byte, int, error) {
 	var (
 		notFoundCnt int
 		err         error
@@ -126,7 +126,7 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 	}
 }
 
-func (p *proxyrunner) broadcastStartDownloadRequest(r *http.Request, id string, body []byte) (errCode int, err error) {
+func (p *proxy) broadcastStartDownloadRequest(r *http.Request, id string, body []byte) (errCode int, err error) {
 	query := r.URL.Query()
 	query.Set(cmn.URLParamUUID, id)
 	args := allocBcastArgs()
@@ -147,7 +147,7 @@ func (p *proxyrunner) broadcastStartDownloadRequest(r *http.Request, id string, 
 }
 
 // [METHOD] /v1/download
-func (p *proxyrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	if !p.ClusterStarted() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
@@ -165,7 +165,7 @@ func (p *proxyrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 // httpDownloadAdmin is meant for aborting, removing and getting status updates for downloads.
 // GET /v1/download?id=...
 // DELETE /v1/download/{abort, remove}?id=...
-func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) {
 	payload := &downloader.DlAdminBody{}
 	if !p.ClusterStarted() {
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -211,7 +211,7 @@ func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) 
 }
 
 // POST /v1/download
-func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 	var (
 		body             []byte
 		dlb              downloader.DlBody
@@ -261,7 +261,7 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 
 // Helper methods
 
-func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *http.Request,
+func (p *proxy) validateStartDownloadRequest(w http.ResponseWriter, r *http.Request,
 	body []byte) (dlb downloader.DlBody, dlBase downloader.DlBase, ok bool) {
 	if err := jsoniter.Unmarshal(body, &dlb); err != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, p.si, "download request", cmn.BytesHead(body), err)

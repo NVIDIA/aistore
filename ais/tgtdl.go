@@ -23,7 +23,7 @@ import (
 
 // NOTE: This request is internal so we can have asserts there.
 // [METHOD] /v1/download
-func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
+func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		response   interface{}
 		respErr    error

@@ -22,7 +22,7 @@ var errQueryHandle = errors.New("handle cannot be empty")
 // - Next(handle, n) - returns next n objects from query registered by handle.
 // Objects are returned in sorted order.
 
-func (p *proxyrunner) queryHandler(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) queryHandler(w http.ResponseWriter, r *http.Request) {
 	if !p.ClusterStarted() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
@@ -37,7 +37,7 @@ func (p *proxyrunner) queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	if _, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathQueryInit.L); err != nil {
 		return
 	}
@@ -85,7 +85,7 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(handle))
 }
 
-func (p *proxyrunner) httpqueryget(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) httpqueryget(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathQuery.L)
 	if err != nil {
 		return
@@ -102,7 +102,7 @@ func (p *proxyrunner) httpqueryget(w http.ResponseWriter, r *http.Request) {
 
 // /v1/query/worker
 // TODO: change an endpoint and the name
-func (p *proxyrunner) httpquerygetworkertarget(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) httpquerygetworkertarget(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	msg := &query.NextMsg{}
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
@@ -134,7 +134,7 @@ func (p *proxyrunner) httpquerygetworkertarget(w http.ResponseWriter, r *http.Re
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
-func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 	// get next query
 	if _, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathQueryNext.L); err != nil {
 		return

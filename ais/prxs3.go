@@ -29,7 +29,7 @@ var (
 )
 
 // [METHOD] /s3
-func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("S3Request: %s - %s", r.Method, r.URL)
 	}
@@ -129,7 +129,7 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET s3/
-func (p *proxyrunner) bckNamesToS3(w http.ResponseWriter) {
+func (p *proxy) bckNamesToS3(w http.ResponseWriter) {
 	var (
 		bmd   = p.owner.bmd.get()
 		query = cmn.QueryBcks{Provider: cmn.ProviderAIS}
@@ -150,7 +150,7 @@ func (p *proxyrunner) bckNamesToS3(w http.ResponseWriter) {
 }
 
 // PUT s3/bck-name
-func (p *proxyrunner) putBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
+func (p *proxy) putBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Validate(); err != nil {
 		p.writeErr(w, r, err)
@@ -171,7 +171,7 @@ func (p *proxyrunner) putBckS3(w http.ResponseWriter, r *http.Request, bucket st
 
 // DEL s3/bck-name
 // TODO: AWS allows to delete bucket only if it is empty
-func (p *proxyrunner) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
+func (p *proxy) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
 	msg := cmn.ActionMsg{Action: cmn.ActDestroyBck}
 	if err := bck.Init(p.owner.bmd); err != nil {
@@ -197,7 +197,7 @@ func (p *proxyrunner) delBckS3(w http.ResponseWriter, r *http.Request, bucket st
 
 // DEL s3/bck-name?delete
 // Delete list of objects
-func (p *proxyrunner) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket string) {
+func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket string) {
 	defer cos.Close(r.Body)
 	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(p.owner.bmd); err != nil {
@@ -242,7 +242,7 @@ func (p *proxyrunner) delMultipleObjs(w http.ResponseWriter, r *http.Request, bu
 }
 
 // HEAD s3/bck-name
-func (p *proxyrunner) headBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
+func (p *proxy) headBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(p.owner.bmd); err != nil {
 		p.writeErr(w, r, err, http.StatusNotFound)
@@ -265,7 +265,7 @@ func (p *proxyrunner) headBckS3(w http.ResponseWriter, r *http.Request, bucket s
 }
 
 // GET s3/bckName
-func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, bucket string) {
+func (p *proxy) bckListS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(p.owner.bmd); err != nil {
 		p.writeErr(w, r, err)
@@ -301,7 +301,7 @@ func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, bucket s
 }
 
 // PUT s3/bckName/objName - with HeaderObjSrc in request header - a source
-func (p *proxyrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items []string) {
+func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	started := time.Now()
 	src := r.Header.Get(s3compat.HeaderObjSrc)
 	src = strings.Trim(src, "/") // in examples the path starts with "/"
@@ -351,7 +351,7 @@ func (p *proxyrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items []
 }
 
 // PUT s3/bckName/objName - without extra info in request header
-func (p *proxyrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, items []string) {
+func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	started := time.Now()
 	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(p.owner.bmd); err != nil {
@@ -385,7 +385,7 @@ func (p *proxyrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, ite
 }
 
 // PUT s3/bckName/objName
-func (p *proxyrunner) putObjS3(w http.ResponseWriter, r *http.Request, items []string) {
+func (p *proxy) putObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if r.Header.Get(s3compat.HeaderObjSrc) == "" {
 		p.directPutObjS3(w, r, items)
 		return
@@ -394,7 +394,7 @@ func (p *proxyrunner) putObjS3(w http.ResponseWriter, r *http.Request, items []s
 }
 
 // GET s3/<bucket-name/<object-name>[?uuid=<etl-uuid>]
-func (p *proxyrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []string) {
+func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	started := time.Now()
 	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(p.owner.bmd); err != nil {
@@ -428,7 +428,7 @@ func (p *proxyrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []s
 	p.s3Redirect(w, r, si, redirectURL, bck.Name)
 }
 
-func (p *proxyrunner) headObjS3(w http.ResponseWriter, r *http.Request, items []string) {
+func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
 		p.writeErr(w, r, errS3Obj)
 		return
@@ -457,7 +457,7 @@ func (p *proxyrunner) headObjS3(w http.ResponseWriter, r *http.Request, items []
 }
 
 // DEL s3/bckName/objName
-func (p *proxyrunner) delObjS3(w http.ResponseWriter, r *http.Request, items []string) {
+func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	started := time.Now()
 	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(p.owner.bmd); err != nil {
@@ -491,7 +491,7 @@ func (p *proxyrunner) delObjS3(w http.ResponseWriter, r *http.Request, items []s
 }
 
 // GET s3/bk-name?versioning
-func (p *proxyrunner) getBckVersioningS3(w http.ResponseWriter, r *http.Request, bucket string) {
+func (p *proxy) getBckVersioningS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(p.owner.bmd); err != nil {
 		p.writeErr(w, r, err)
@@ -506,7 +506,7 @@ func (p *proxyrunner) getBckVersioningS3(w http.ResponseWriter, r *http.Request,
 }
 
 // GET s3/bk-name?lifecycle|cors|policy|acl
-func (p *proxyrunner) unsupported(w http.ResponseWriter, r *http.Request, bucket string) {
+func (p *proxy) unsupported(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(p.owner.bmd); err != nil {
 		p.writeErr(w, r, err)
@@ -516,7 +516,7 @@ func (p *proxyrunner) unsupported(w http.ResponseWriter, r *http.Request, bucket
 }
 
 // PUT s3/bk-name?versioning
-func (p *proxyrunner) putBckVersioningS3(w http.ResponseWriter, r *http.Request, bucket string) {
+func (p *proxy) putBckVersioningS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	msg := &cmn.ActionMsg{Action: cmn.ActSetBprops}
 	if p.forwardCP(w, r, nil, msg.Action+"-"+bucket) {
 		return

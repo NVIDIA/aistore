@@ -21,7 +21,7 @@ import (
 )
 
 // triggers by an out-of-space condition or a suspicion of thereof
-func (t *targetrunner) OOS(csRefreshed *fs.CapStatus) (cs fs.CapStatus) {
+func (t *target) OOS(csRefreshed *fs.CapStatus) (cs fs.CapStatus) {
 	var err error
 	if csRefreshed != nil {
 		cs = *csRefreshed
@@ -45,7 +45,7 @@ func (t *targetrunner) OOS(csRefreshed *fs.CapStatus) (cs fs.CapStatus) {
 	return
 }
 
-func (t *targetrunner) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.Bck) {
+func (t *target) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.Bck) {
 	regToIC := id == ""
 	if regToIC {
 		id = cos.GenUUID()
@@ -82,7 +82,7 @@ func (t *targetrunner) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ..
 	space.RunLRU(&ini)
 }
 
-func (t *targetrunner) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cmn.Bck) fs.CapStatus {
+func (t *target) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cmn.Bck) fs.CapStatus {
 	regToIC := id == ""
 	if regToIC {
 		id = cos.GenUUID()

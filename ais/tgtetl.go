@@ -16,7 +16,7 @@ import (
 )
 
 // [METHOD] /v1/etl
-func (t *targetrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
+func (t *target) etlHandler(w http.ResponseWriter, r *http.Request) {
 	if err := k8s.Detect(); err != nil {
 		t.writeErrSilent(w, r, err)
 		return
@@ -63,7 +63,7 @@ func (t *targetrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) initSpecETL(w http.ResponseWriter, r *http.Request) {
+func (t *target) initSpecETL(w http.ResponseWriter, r *http.Request) {
 	var msg etl.InitSpecMsg
 	if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathETLInitSpec.L); err != nil {
 		return
@@ -78,7 +78,7 @@ func (t *targetrunner) initSpecETL(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) initCodeETL(w http.ResponseWriter, r *http.Request) {
+func (t *target) initCodeETL(w http.ResponseWriter, r *http.Request) {
 	var msg etl.InitCodeMsg
 	if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathETLInitCode.L); err != nil {
 		return
@@ -93,7 +93,7 @@ func (t *targetrunner) initCodeETL(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) stopETL(w http.ResponseWriter, r *http.Request) {
+func (t *target) stopETL(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathETLStop.L)
 	if err != nil {
 		return
@@ -109,7 +109,7 @@ func (t *targetrunner) stopETL(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) doETL(w http.ResponseWriter, r *http.Request, uuid string, bck *cluster.Bck, objName string) {
+func (t *target) doETL(w http.ResponseWriter, r *http.Request, uuid string, bck *cluster.Bck, objName string) {
 	var (
 		comm etl.Communicator
 		err  error
@@ -136,14 +136,14 @@ func (t *targetrunner) doETL(w http.ResponseWriter, r *http.Request, uuid string
 	}
 }
 
-func (t *targetrunner) listETL(w http.ResponseWriter, r *http.Request) {
+func (t *target) listETL(w http.ResponseWriter, r *http.Request) {
 	if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathETLList.L); err != nil {
 		return
 	}
 	t.writeJSON(w, r, etl.List(), "list-ETL")
 }
 
-func (t *targetrunner) logsETL(w http.ResponseWriter, r *http.Request) {
+func (t *target) logsETL(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathETLLogs.L)
 	if err != nil {
 		return
@@ -158,7 +158,7 @@ func (t *targetrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 	t.writeJSON(w, r, logs, "logs-ETL")
 }
 
-func (t *targetrunner) healthETL(w http.ResponseWriter, r *http.Request) {
+func (t *target) healthETL(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathETLHealth.L)
 	if err != nil {
 		return
@@ -202,7 +202,7 @@ func etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (secret string, b
 //
 // getObjectETL handles GET requests from ETL containers (K8s Pods).
 // getObjectETL validates the secret that was injected into a Pod during its initialization.
-func (t *targetrunner) getObjectETL(w http.ResponseWriter, r *http.Request) {
+func (t *target) getObjectETL(w http.ResponseWriter, r *http.Request) {
 	secret, bck, objName, err := etlParseObjectReq(w, r)
 	if err != nil {
 		t.writeErr(w, r, err)
@@ -222,7 +222,7 @@ func (t *targetrunner) getObjectETL(w http.ResponseWriter, r *http.Request) {
 //
 // headObjectETL handles HEAD requests from ETL containers (K8s Pods).
 // headObjectETL validates the secret that was injected into a Pod during its initialization.
-func (t *targetrunner) headObjectETL(w http.ResponseWriter, r *http.Request) {
+func (t *target) headObjectETL(w http.ResponseWriter, r *http.Request) {
 	secret, bck, objName, err := etlParseObjectReq(w, r)
 	if err != nil {
 		t.writeErr(w, r, err)

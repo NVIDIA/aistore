@@ -13,7 +13,7 @@ import (
 )
 
 // POST /v1/sort
-func (p *proxyrunner) proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 	rs := &dsort.RequestSpec{}
 	if cmn.ReadJSON(w, r, &rs) != nil {
 		return

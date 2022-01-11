@@ -45,12 +45,12 @@ type keepaliver interface {
 }
 
 type targetKeepalive struct {
-	t *targetrunner
+	t *target
 	keepalive
 }
 
 type proxyKeepalive struct {
-	p *proxyrunner
+	p *proxy
 	keepalive
 	stoppedCh  chan struct{}
 	toRemoveCh chan string
@@ -111,7 +111,7 @@ var (
 // targetKeepalive //
 /////////////////////
 
-func newTargetKeepalive(t *targetrunner, statsT stats.Tracker, startedUp *atomic.Bool) *targetKeepalive {
+func newTargetKeepalive(t *target, statsT stats.Tracker, startedUp *atomic.Bool) *targetKeepalive {
 	config := cmn.GCO.Get()
 
 	tkr := &targetKeepalive{t: t}
@@ -146,7 +146,7 @@ func (tkr *targetKeepalive) doKeepalive() (stopped bool) {
 // proxyKeepalive //
 ////////////////////
 
-func newProxyKeepalive(p *proxyrunner, statsT stats.Tracker, startedUp *atomic.Bool) *proxyKeepalive {
+func newProxyKeepalive(p *proxy, statsT stats.Tracker, startedUp *atomic.Bool) *proxyKeepalive {
 	config := cmn.GCO.Get()
 
 	pkr := &proxyKeepalive{p: p}

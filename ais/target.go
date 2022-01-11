@@ -57,8 +57,8 @@ type (
 	}
 	backends map[string]cluster.BackendProvider
 	// main
-	targetrunner struct {
-		httprunner
+	target struct {
+		htrun
 		backend      backends
 		fshc         *health.FSHC
 		fsprg        fsprungroup
@@ -71,13 +71,13 @@ type (
 )
 
 // interface guard
-var _ cos.Runner = (*targetrunner)(nil)
+var _ cos.Runner = (*target)(nil)
 
 //////////////
 // backends //
 //////////////
 
-func (b backends) init(t *targetrunner, starting bool) {
+func (b backends) init(t *target, starting bool) {
 	backend.Init()
 
 	ais := backend.NewAIS(t)
@@ -99,7 +99,7 @@ func (b backends) init(t *targetrunner, starting bool) {
 // 3rd part cloud: empty stubs unless populated via build tags
 // NOTE: write access to backends - other than target startup is also invoked
 //       via primary startup (see earlystart for "choosing remote backends")
-func (b backends) initExt(t *targetrunner, starting bool) (err error) {
+func (b backends) initExt(t *target, starting bool) (err error) {
 	config := cmn.GCO.Get()
 	for provider := range b {
 		if provider == cmn.ProviderHTTP || provider == cmn.ProviderAIS { // always present
@@ -166,7 +166,7 @@ func _overback(err error) error {
 // target runner //
 ///////////////////
 
-func (t *targetrunner) init(config *cmn.Config) {
+func (t *target) init(config *cmn.Config) {
 	t.initNetworks()
 	tid, generated := initTID(config)
 	if generated && len(config.FSP.Paths) > 0 {
@@ -209,7 +209,7 @@ func (t *targetrunner) init(config *cmn.Config) {
 	}
 }
 
-func (t *targetrunner) initHostIP() {
+func (t *target) initHostIP() {
 	var hostIP string
 	if hostIP = os.Getenv("AIS_HOST_IP"); hostIP == "" {
 		return
@@ -271,12 +271,12 @@ func regDiskMetrics(tstats *stats.Trunner, mpi fs.MPI) {
 	}
 }
 
-func (t *targetrunner) Run() error {
+func (t *target) Run() error {
 	if err := t.si.Validate(); err != nil {
 		cos.ExitLogf("%v", err)
 	}
 	config := cmn.GCO.Get()
-	t.httprunner.init(config)
+	t.htrun.init(config)
 
 	cluster.Init(t)
 	cluster.RegLomCacheWithHK(t)
@@ -403,14 +403,14 @@ func (t *targetrunner) Run() error {
 
 	defer etl.StopAll(t) // Always try to stop running ETLs.
 
-	err = t.httprunner.run()
+	err = t.htrun.run()
 
 	// do it after the `run()` to retain `restarted` marker on panic
 	fs.RemoveMarker(cmn.NodeRestartedMarker)
 	return err
 }
 
-func (t *targetrunner) endStartupStandby() (err error) {
+func (t *target) endStartupStandby() (err error) {
 	smap := t.owner.smap.get()
 	if err = smap.validate(); err != nil {
 		return
@@ -431,7 +431,7 @@ func (t *targetrunner) endStartupStandby() (err error) {
 	return
 }
 
-func (t *targetrunner) initRecvHandlers() {
+func (t *target) initRecvHandlers() {
 	networkHandlers := []networkHandler{
 		{r: cmn.Buckets, h: t.bucketHandler, net: accessNetAll},
 		{r: cmn.Objects, h: t.objectHandler, net: accessNetAll},
@@ -456,7 +456,7 @@ func (t *targetrunner) initRecvHandlers() {
 }
 
 // stop gracefully
-func (t *targetrunner) Stop(err error) {
+func (t *target) Stop(err error) {
 	// NOTE: vs metasync
 	t.regstate.Lock()
 	daemon.stopping.Store(true)
@@ -468,10 +468,10 @@ func (t *targetrunner) Stop(err error) {
 	}
 	f("Stopping %s, err: %v", t.si, err)
 	xreg.AbortAll(err)
-	t.httprunner.stop(t.netServ.pub.s != nil && !isErrNoUnregister(err) /*rm from Smap*/)
+	t.htrun.stop(t.netServ.pub.s != nil && !isErrNoUnregister(err) /*rm from Smap*/)
 }
 
-func (t *targetrunner) checkRestarted() (fatalErr, writeErr error) {
+func (t *target) checkRestarted() (fatalErr, writeErr error) {
 	if fs.MarkerExists(cmn.NodeRestartedMarker) {
 		t.statsT.Add(stats.RestartCount, 1)
 	} else {
@@ -485,7 +485,7 @@ func (t *targetrunner) checkRestarted() (fatalErr, writeErr error) {
 //
 
 // verb /v1/buckets
-func (t *targetrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
+func (t *target) bucketHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		t.httpbckget(w, r)
@@ -501,7 +501,7 @@ func (t *targetrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // verb /v1/objects
-func (t *targetrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
+func (t *target) objectHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		t.httpobjget(w, r)
@@ -523,7 +523,7 @@ func (t *targetrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 
 // verb /v1/slices
 // Non-public inerface
-func (t *targetrunner) ecHandler(w http.ResponseWriter, r *http.Request) {
+func (t *target) ecHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		t.httpecget(w, r)
@@ -537,7 +537,7 @@ func (t *targetrunner) ecHandler(w http.ResponseWriter, r *http.Request) {
 ///////////////////////
 
 // GET /v1/buckets[/bucket-name]
-func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 	var (
 		bckName   string
 		queryBcks cmn.QueryBcks
@@ -572,7 +572,7 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) handleListObjects(w http.ResponseWriter, r *http.Request, queryBcks cmn.QueryBcks, msg *aisMsg) {
+func (t *target) handleListObjects(w http.ResponseWriter, r *http.Request, queryBcks cmn.QueryBcks, msg *aisMsg) {
 	bck := cluster.NewBckEmbed(cmn.Bck(queryBcks))
 	if err := bck.Init(t.owner.bmd); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
@@ -595,7 +595,7 @@ func (t *targetrunner) handleListObjects(w http.ResponseWriter, r *http.Request,
 	)
 }
 
-func (t *targetrunner) handleSummary(w http.ResponseWriter, r *http.Request, queryBcks cmn.QueryBcks, msg *aisMsg) {
+func (t *target) handleSummary(w http.ResponseWriter, r *http.Request, queryBcks cmn.QueryBcks, msg *aisMsg) {
 	bck := cluster.NewBckEmbed(cmn.Bck(queryBcks))
 	if bck.Name != "" {
 		// Ensure that the bucket exists.
@@ -616,7 +616,7 @@ func (t *targetrunner) handleSummary(w http.ResponseWriter, r *http.Request, que
 
 // DELETE { action } /v1/buckets/bucket-name
 // (evict | delete) (list | range)
-func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	msg := aisMsg{}
 	if err := cmn.ReadJSON(w, r, &msg, true); err != nil {
 		return
@@ -684,7 +684,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /v1/buckets/bucket-name
-func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	msg := &aisMsg{}
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		return
@@ -731,7 +731,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 }
 
 // HEAD /v1/buckets/bucket-name
-func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	var (
 		bucketProps cos.SimpleKVs
 		err         error
@@ -808,7 +808,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 // Checks if the object exists locally (if not, downloads it) and sends it back
 // If the bucket is in the Cloud one and ValidateWarmGet is enabled there is an extra
 // check whether the object exists locally. Version is checked as well if configured.
-func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpobjget(w http.ResponseWriter, r *http.Request) {
 	var (
 		features = cmn.GCO.Get().Client.Features
 		request  = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
@@ -830,7 +830,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 
 // getObject is main function to get the object. It doesn't check request origin,
 // so it must be done by the caller (if necessary).
-func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query url.Values, bck *cluster.Bck, lom *cluster.LOM) {
+func (t *target) getObject(w http.ResponseWriter, r *http.Request, query url.Values, bck *cluster.Bck, lom *cluster.LOM) {
 	var (
 		ptime   = isRedirect(query)
 		config  = cmn.GCO.Get()
@@ -889,7 +889,7 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 }
 
 // PUT /v1/objects/bucket-name/object-name
-func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 	request := &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
 	if err := t.parseReq(w, r, request); err != nil {
 		return
@@ -964,7 +964,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 }
 
 // DELETE [ { action } ] /v1/objects/bucket-name/object-name
-func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg     aisMsg
 		request = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
@@ -1003,7 +1003,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /v1/objects/bucket-name/object-name
-func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg   cmn.ActionMsg
 		query = r.URL.Query()
@@ -1034,7 +1034,7 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 //
 // Initially validates if the request is internal request (either from proxy
 // or target) and calls headObject.
-func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	var (
 		features = cmn.GCO.Get().Client.Features
 		request  = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
@@ -1054,7 +1054,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 
 // headObject is main function to head the object. It doesn't check request origin,
 // so it must be done by the caller (if necessary).
-func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query url.Values, bck *cluster.Bck, lom *cluster.LOM) {
+func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Values, bck *cluster.Bck, lom *cluster.LOM) {
 	var (
 		invalidHandler = t.writeErr
 		hdr            = w.Header()
@@ -1157,7 +1157,7 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 // PATCH /v1/objects/<bucket-name>/<object-name>
 // By default, adds or updates existing custom keys. Will remove all existing keys and
 // replace them with the specified ones _iff_ `cmn.URLParamNewCustom` is set.
-func (t *targetrunner) httpobjpatch(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg      cmn.ActionMsg
 		features = cmn.GCO.Get().Client.Features
@@ -1212,7 +1212,7 @@ func (t *targetrunner) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 //////////////////////
 
 // Returns a slice. Does not use GFN.
-func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpecget(w http.ResponseWriter, r *http.Request) {
 	request := &apiRequest{after: 3, prefix: cmn.URLPathEC.L, bckIdx: 1}
 	if err := t.parseReq(w, r, request); err != nil {
 		return
@@ -1228,7 +1228,7 @@ func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
 }
 
 // Returns a CT's metadata.
-func (t *targetrunner) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) {
+func (t *target) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) {
 	if err := bck.Init(t.owner.bmd); err != nil {
 		if !cmn.IsErrRemoteBckNotFound(err) { // is ais
 			t.writeErrSilent(w, r, err)
@@ -1247,7 +1247,7 @@ func (t *targetrunner) sendECMetafile(w http.ResponseWriter, r *http.Request, bc
 	w.Write(md.NewPack())
 }
 
-func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) {
+func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) {
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(bck.Bck); err != nil {
@@ -1288,7 +1288,7 @@ func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, bck *clu
 // CheckRemoteVersion sets `vchanged` to true if object versions differ between
 // remote object and local cache.
 // NOTE: Should be called only if the local copy exists.
-func (t *targetrunner) CompareObjects(ctx context.Context, lom *cluster.LOM) (equal bool, errCode int, err error) {
+func (t *target) CompareObjects(ctx context.Context, lom *cluster.LOM) (equal bool, errCode int, err error) {
 	var objAttrs *cmn.ObjAttrs
 	objAttrs, errCode, err = t.Backend(lom.Bck()).HeadObj(ctx, lom)
 	if err != nil {
@@ -1303,7 +1303,7 @@ func (t *targetrunner) CompareObjects(ctx context.Context, lom *cluster.LOM) (eq
 	return
 }
 
-func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query cmn.QueryBcks) {
+func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, query cmn.QueryBcks) {
 	const fmterr = "failed to list %q buckets: [%v]"
 	var (
 		bcks   cmn.Bcks
@@ -1338,7 +1338,7 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query
 	t.writeJSON(w, r, bcks, listBuckets)
 }
 
-func (t *targetrunner) _listBcks(query cmn.QueryBcks, cfg *cmn.Config) (names cmn.Bcks, errCode int, err error) {
+func (t *target) _listBcks(query cmn.QueryBcks, cfg *cmn.Config) (names cmn.Bcks, errCode int, err error) {
 	_, ok := cfg.Backend.Providers[query.Provider]
 	// HDFS doesn't support listing remote buckets (there are no remote buckets).
 	if (!ok && !query.IsRemoteAIS()) || query.IsHDFS() {
@@ -1351,7 +1351,7 @@ func (t *targetrunner) _listBcks(query cmn.QueryBcks, cfg *cmn.Config) (names cm
 	return
 }
 
-func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.Time, query url.Values) (newHandle string,
+func (t *target) doAppend(r *http.Request, lom *cluster.LOM, started time.Time, query url.Values) (newHandle string,
 	errCode int, err error) {
 	var (
 		cksumValue    = r.Header.Get(cmn.HdrObjCksumVal)
@@ -1390,7 +1390,7 @@ func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.
 // Cloud bucket:
 //  - returned version ID is the version
 // In both cases, new checksum is also generated and stored along with the new version.
-func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Time, query url.Values,
+func (t *target) doPut(r *http.Request, lom *cluster.LOM, started time.Time, query url.Values,
 	skipVC bool) (errCode int, err error) {
 	var (
 		header = r.Header
@@ -1424,7 +1424,7 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 	return
 }
 
-func (t *targetrunner) doAppendArch(r *http.Request, lom *cluster.LOM, started time.Time, query url.Values) (errCode int, err error) {
+func (t *target) doAppendArch(r *http.Request, lom *cluster.LOM, started time.Time, query url.Values) (errCode int, err error) {
 	var (
 		sizeStr  = r.Header.Get(cmn.HdrContentLength)
 		mime     = query.Get(cmn.URLParamArchmime)
@@ -1462,7 +1462,7 @@ func (t *targetrunner) doAppendArch(r *http.Request, lom *cluster.LOM, started t
 	return aaoi.appendObject()
 }
 
-func (t *targetrunner) putMirror(lom *cluster.LOM) {
+func (t *target) putMirror(lom *cluster.LOM) {
 	mconfig := lom.MirrorConf()
 	if !mconfig.Enabled {
 		return
@@ -1485,7 +1485,7 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 	xputlrep.Repl(lom)
 }
 
-func (t *targetrunner) DeleteObject(lom *cluster.LOM, evict bool) (int, error) {
+func (t *target) DeleteObject(lom *cluster.LOM, evict bool) (int, error) {
 	var (
 		aisErr, backendErr         error
 		aisErrCode, backendErrCode int
@@ -1541,7 +1541,7 @@ func (t *targetrunner) DeleteObject(lom *cluster.LOM, evict bool) (int, error) {
 ///////////////////
 
 // TODO: unify with PromoteFile (refactor)
-func (t *targetrunner) objMv(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
+func (t *target) objMv(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	request := &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
 	if err := t.parseReq(w, r, request); err != nil {
 		return
@@ -1592,7 +1592,7 @@ func (t *targetrunner) objMv(w http.ResponseWriter, r *http.Request, msg *cmn.Ac
 // PROMOTE local file(s) => objects  //
 ///////////////////////////////////////
 
-func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
+func (t *target) promoteFQN(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	const fmtErr = "%s: %s failed: "
 	request := &apiRequest{after: 1, prefix: cmn.URLPathObjects.L}
 	if err := t.parseReq(w, r, request); err != nil {
@@ -1667,7 +1667,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	// TODO: inc stats
 }
 
-func (t *targetrunner) fsErr(err error, filepath string) {
+func (t *target) fsErr(err error, filepath string) {
 	if !cmn.GCO.Get().FSHC.Enabled || !cos.IsIOError(err) {
 		return
 	}
@@ -1687,7 +1687,7 @@ func (t *targetrunner) fsErr(err error, filepath string) {
 	t.fshc.OnErr(filepath)
 }
 
-func (t *targetrunner) runResilver(args res.Args, wg *sync.WaitGroup) {
+func (t *target) runResilver(args res.Args, wg *sync.WaitGroup) {
 	// with no cluster-wide UUID it's a local run
 	if args.UUID == "" {
 		args.UUID = cos.GenUUID()

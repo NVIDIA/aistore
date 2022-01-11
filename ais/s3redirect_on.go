@@ -20,7 +20,7 @@ import (
 // * docs/s3compat.md
 // * Makefile (and look for `s3rproxy` build tag)
 // * ais/s3redirect_on.go
-func (*proxyrunner) s3Redirect(w http.ResponseWriter, _ *http.Request, _ *cluster.Snode, redirectURL, bucket string) {
+func (*proxy) s3Redirect(w http.ResponseWriter, _ *http.Request, _ *cluster.Snode, redirectURL, bucket string) {
 	h := w.Header()
 	h.Set(cmn.HdrLocation, redirectURL)
 	h.Set(cmn.HdrContentType, "text/xml; charset=utf-8")

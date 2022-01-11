@@ -51,7 +51,7 @@ type (
 	}
 
 	notifs struct {
-		p   *proxyrunner
+		p   *proxy
 		nls *listeners // running
 		fin *listeners // finished
 
@@ -167,7 +167,7 @@ func (l *listeners) find(flt nlFilter) (nl nl.NotifListener, exists bool) {
 // notifs //
 ////////////
 
-func (n *notifs) init(p *proxyrunner) {
+func (n *notifs) init(p *proxy) {
 	n.p = p
 	n.nls = newListeners()
 	n.fin = newListeners()

@@ -210,9 +210,9 @@ func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *cluster.Snode, caller s
 }
 
 // as revs
-func (*bucketMD) tag() string             { return revsBMDTag }
-func (m *bucketMD) version() int64        { return m.Version }
-func (*bucketMD) jit(p *proxyrunner) revs { return p.owner.bmd.get() }
+func (*bucketMD) tag() string       { return revsBMDTag }
+func (m *bucketMD) version() int64  { return m.Version }
+func (*bucketMD) jit(p *proxy) revs { return p.owner.bmd.get() }
 
 func (m *bucketMD) sgl() *memsys.SGL {
 	if m._sgl.IsNil() {

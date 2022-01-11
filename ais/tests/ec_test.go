@@ -2076,7 +2076,7 @@ func TestECMountpaths(t *testing.T) {
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
 			if o.smap.CountActiveTargets() <= test.parity+test.data {
-				t.Skip(cmn.ErrNotEnoughTargets)
+				t.Skipf("%s: %v", t.Name(), cmn.ErrNotEnoughTargets)
 			}
 			o.parityCnt = test.parity
 			o.dataCnt = test.data
@@ -2660,6 +2660,9 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 			err := api.AttachMountpath(baseParams, rmMpath.si, rmMpath.mpath, true /*force*/)
 			tassert.CheckError(t, err)
 		}
+		time.Sleep(3 * time.Second)
+		err := tutils.WaitForAllResilvers(baseParams, rebalanceTimeout)
+		tassert.CheckFatal(t, err)
 	}()
 	// Choose `parity` random mpaths and disable them
 	i := 0

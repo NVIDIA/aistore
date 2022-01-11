@@ -23,7 +23,7 @@ import (
 // TODO: uplift via higher-level query and similar (#668)
 
 // verb /v1/xactions
-func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
+func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		xactMsg xact.QueryMsg
 		bck     *cluster.Bck
@@ -92,7 +92,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) getXactByID(w http.ResponseWriter, r *http.Request, what, uuid string) {
+func (t *target) getXactByID(w http.ResponseWriter, r *http.Request, what, uuid string) {
 	if what != cmn.GetWhatXactStats {
 		t.writeErrf(w, r, fmtUnknownQue, what)
 		return
@@ -106,7 +106,7 @@ func (t *targetrunner) getXactByID(w http.ResponseWriter, r *http.Request, what,
 	t.writeErrSilent(w, r, err, http.StatusNotFound)
 }
 
-func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request, what string, xactQuery xreg.XactFilter) {
+func (t *target) queryMatchingXact(w http.ResponseWriter, r *http.Request, what string, xactQuery xreg.XactFilter) {
 	debug.Assert(what == cmn.GetWhatQueryXactStats)
 	if what != cmn.GetWhatQueryXactStats {
 		t.writeErrf(w, r, fmtUnknownQue, what)
@@ -124,7 +124,7 @@ func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request,
 	}
 }
 
-func (t *targetrunner) cmdXactStart(xactMsg *xact.QueryMsg, bck *cluster.Bck) error {
+func (t *target) cmdXactStart(xactMsg *xact.QueryMsg, bck *cluster.Bck) error {
 	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
 	const erfmn = "xaction %q requires a bucket to start"
 

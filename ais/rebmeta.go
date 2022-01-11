@@ -52,11 +52,11 @@ type (
 var _ revs = (*rebMD)(nil)
 
 // as revs
-func (*rebMD) tag() string             { return revsRMDTag }
-func (r *rebMD) version() int64        { return r.Version }
-func (r *rebMD) marshal() []byte       { return cos.MustMarshal(r) }
-func (*rebMD) jit(p *proxyrunner) revs { return p.owner.rmd.get() }
-func (*rebMD) sgl() *memsys.SGL        { return nil }
+func (*rebMD) tag() string       { return revsRMDTag }
+func (r *rebMD) version() int64  { return r.Version }
+func (r *rebMD) marshal() []byte { return cos.MustMarshal(r) }
+func (*rebMD) jit(p *proxy) revs { return p.owner.rmd.get() }
+func (*rebMD) sgl() *memsys.SGL  { return nil }
 
 func (r *rebMD) inc() { r.Version++ }
 

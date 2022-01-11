@@ -24,7 +24,7 @@ import (
 // * Discard(n): forget first n elements from a target query.
 // * Next(n): Peek(n) + Discard(n)
 
-func (t *targetrunner) queryHandler(w http.ResponseWriter, r *http.Request) {
+func (t *target) queryHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		t.httpqueryget(w, r)
@@ -37,7 +37,7 @@ func (t *targetrunner) queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	var (
 		handle = r.Header.Get(cmn.HdrHandle) // TODO: should it be from header or from body?
 		msg    = &query.InitMsg{}
@@ -82,7 +82,7 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	go xctn.Run(nil)
 }
 
-func (t *targetrunner) httpqueryget(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpqueryget(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathQuery.L)
 	if err != nil {
 		return
@@ -99,11 +99,11 @@ func (t *targetrunner) httpqueryget(w http.ResponseWriter, r *http.Request) {
 
 // /v1/query/worker
 // TODO: change an endpoint and use the logic when #833 is done
-func (t *targetrunner) httpquerygetworkertarget(w http.ResponseWriter, _ *http.Request) {
+func (t *target) httpquerygetworkertarget(w http.ResponseWriter, _ *http.Request) {
 	w.Write([]byte(t.si.DaemonID))
 }
 
-func (t *targetrunner) httpquerygetobjects(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpquerygetobjects(w http.ResponseWriter, r *http.Request) {
 	var (
 		entries []*cmn.BucketEntry
 		msg     = &query.NextMsg{}
@@ -146,7 +146,7 @@ func (t *targetrunner) httpquerygetobjects(w http.ResponseWriter, r *http.Reques
 }
 
 // v1/query/discard/handle/value
-func (t *targetrunner) httpqueryput(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpqueryput(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.URLPathQueryDiscard.L)
 	if err != nil {
 		return
@@ -162,6 +162,6 @@ func (t *targetrunner) httpqueryput(w http.ResponseWriter, r *http.Request) {
 	resultSet.DiscardUntil(value)
 }
 
-func (t *targetrunner) queryDoesntExist(w http.ResponseWriter, r *http.Request, handle string) {
+func (t *target) queryDoesntExist(w http.ResponseWriter, r *http.Request, handle string) {
 	t.writeErrSilentf(w, r, http.StatusNotFound, "%s: handle %q not found", t.Sname(), handle)
 }

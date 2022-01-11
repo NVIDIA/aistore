@@ -20,7 +20,7 @@ import (
 )
 
 // PUT s3/bckName/objName
-func (t *targetrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
+func (t *target) s3Handler(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathS3.L)
 	if err != nil {
 		return
@@ -40,7 +40,7 @@ func (t *targetrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items []string) {
+func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
 		t.writeErr(w, r, errS3Obj)
 		return
@@ -103,7 +103,7 @@ func (t *targetrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items [
 	sgl.Free()
 }
 
-func (t *targetrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, items []string) {
+func (t *target) directPutObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	started := time.Now()
 	if cs := fs.GetCapStatus(); cs.OOS {
 		t.writeErr(w, r, cs.Err, http.StatusInsufficientStorage)
@@ -152,7 +152,7 @@ func (t *targetrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, it
 }
 
 // PUT s3/bckName/objName
-func (t *targetrunner) putObjS3(w http.ResponseWriter, r *http.Request, items []string) {
+func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if r.Header.Get(s3compat.HeaderObjSrc) == "" {
 		t.directPutObjS3(w, r, items)
 		return
@@ -161,7 +161,7 @@ func (t *targetrunner) putObjS3(w http.ResponseWriter, r *http.Request, items []
 }
 
 // GET s3/<bucket-name/<object-name>[?uuid=<etl-uuid>]
-func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []string) {
+func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
 		t.writeErr(w, r, errS3Obj)
 		return
@@ -178,7 +178,7 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 }
 
 // HEAD s3/bckName/objName
-func (t *targetrunner) headObjS3(w http.ResponseWriter, r *http.Request, items []string) {
+func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
 		t.writeErr(w, r, errS3Obj)
 		return
@@ -197,7 +197,7 @@ func (t *targetrunner) headObjS3(w http.ResponseWriter, r *http.Request, items [
 }
 
 // DEL s3/bckName/objName
-func (t *targetrunner) delObjS3(w http.ResponseWriter, r *http.Request, items []string) {
+func (t *target) delObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(t.owner.bmd); err != nil {
 		t.writeErr(w, r, err)

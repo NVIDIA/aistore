@@ -34,9 +34,9 @@ type (
 )
 
 // newDiscoverServerPrimary returns a proxy runner after initializing the fields that are needed by this test
-func newDiscoverServerPrimary() *proxyrunner {
+func newDiscoverServerPrimary() *proxy {
 	var (
-		p       = &proxyrunner{}
+		p       = &proxy{}
 		tracker = mock.NewStatsTracker()
 	)
 	p.si = cluster.NewSnode("primary", cmn.Proxy, cluster.NetInfo{}, cluster.NetInfo{}, cluster.NetInfo{})

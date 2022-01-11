@@ -313,7 +313,7 @@ func Test_MultipleNetworks(t *testing.T) {
 	for _, stream := range streams {
 		stream.Fin()
 	}
-	time.Sleep(time.Second) // FIN has been sent but not necessarily received
+	time.Sleep(3 * time.Second) // FIN has been sent but not necessarily received
 
 	if *totalRecv != totalSend {
 		t.Fatalf("total received bytes %d is different from expected: %d", *totalRecv, totalSend)

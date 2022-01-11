@@ -35,7 +35,7 @@ type (
 // 	- Each Smap instance is versioned; the versioning is monotonic (increasing)
 // 	- Only the primary (leader) proxy distributes Smap updates to all other clustered nodes
 // 	- Bootstrap sequence includes /steps/ intended to resolve all the usual conflicts that may arise.
-func (p *proxyrunner) bootstrap() {
+func (p *proxy) bootstrap() {
 	var (
 		config          = cmn.GCO.Get()
 		pid, primaryURL string
@@ -103,7 +103,7 @@ func (p *proxyrunner) bootstrap() {
 //   loaded Smap, if exists
 // - handle AIS_PRIMARY_ID (TODO: target)
 // - see also "change of mind"
-func (p *proxyrunner) determineRole(loadedSmap *smapX) (pid string, primary bool) {
+func (p *proxy) determineRole(loadedSmap *smapX) (pid string, primary bool) {
 	tag := "no Smap, "
 	if loadedSmap != nil {
 		loadedSmap.Pmap[p.si.ID()] = p.si
@@ -155,7 +155,7 @@ func (p *proxyrunner) determineRole(loadedSmap *smapX) (pid string, primary bool
 
 // join cluster
 // no change of mind when on the "secondary" track
-func (p *proxyrunner) secondaryStartup(smap *smapX, primaryURLs ...string) error {
+func (p *proxy) secondaryStartup(smap *smapX, primaryURLs ...string) error {
 	if smap == nil {
 		smap = newSmap()
 	} else if smap.Primary.ID() == p.si.ID() {
@@ -192,7 +192,7 @@ func (p *proxyrunner) secondaryStartup(smap *smapX, primaryURLs ...string) error
 // Proxy/gateway that is, potentially, the leader of the cluster.
 // It waits a configured time for other nodes to join,
 // discovers cluster-wide metadata, and resolve remaining conflicts.
-func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets int) {
+func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets int) {
 	var (
 		smap          = newSmap()
 		uuid, created string
@@ -379,7 +379,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 }
 
 // NOTE: `-override_backends` option (cli.overrideBackends)
-func (p *proxyrunner) _config(uuid string) (config *globalConfig, err error) {
+func (p *proxy) _config(uuid string) (config *globalConfig, err error) {
 	var (
 		c        cmn.ClusterConfig
 		confPath string
@@ -413,7 +413,7 @@ func (p *proxyrunner) _config(uuid string) (config *globalConfig, err error) {
 	return
 }
 
-func (p *proxyrunner) initClusterConfig(uuid string) (config *globalConfig, err error) {
+func (p *proxy) initClusterConfig(uuid string) (config *globalConfig, err error) {
 	debug.Assert(p.owner.smap.get().isPrimary(p.si))
 
 	// Create version 1 of the cluster config and set primary URL.
@@ -429,7 +429,7 @@ func (p *proxyrunner) initClusterConfig(uuid string) (config *globalConfig, err 
 }
 
 // resume rebalance if needed
-func (p *proxyrunner) resumeReb(smap *smapX, config *cmn.Config) {
+func (p *proxy) resumeReb(smap *smapX, config *cmn.Config) {
 	var (
 		ver     = smap.version()
 		nojoins = config.Timeout.MaxHostBusy.D() // initial quiet time with no new joins
@@ -490,7 +490,7 @@ until:
 }
 
 // maxVerSmap != nil iff there's a primary change _and_ the cluster has moved on
-func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.Config,
+func (p *proxy) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.Config,
 	ntargets int) (maxVerSmap *smapX) {
 	const quiescentIter = 4 // Number of iterations to consider the cluster quiescent.
 	var (
@@ -543,7 +543,7 @@ func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.C
 
 // the final major step in the primary startup sequence:
 // discover cluster-wide metadata and resolve remaining conflicts
-func (p *proxyrunner) discoverMeta(smap *smapX) {
+func (p *proxy) discoverMeta(smap *smapX) {
 	svm := p.uncoverMeta(smap)
 	if svm.BMD != nil {
 		p.owner.bmd.Lock()
@@ -639,7 +639,7 @@ merge:
 	glog.Infof("%s: merged %s", p.si.StringEx(), clone.pp())
 }
 
-func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (svm cluMeta) {
+func (p *proxy) uncoverMeta(bcastSmap *smapX) (svm cluMeta) {
 	var (
 		err         error
 		suuid       string
@@ -703,7 +703,7 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (svm cluMeta) {
 	return
 }
 
-func (p *proxyrunner) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out cluMeta, done, slowp bool) {
+func (p *proxy) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out cluMeta, done, slowp bool) {
 	var (
 		borigin, sorigin string
 		args             = allocBcastArgs()
@@ -789,7 +789,7 @@ func (p *proxyrunner) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out
 	return
 }
 
-func (p *proxyrunner) bcastMaxVerBestEffort(smap *smapX) *smapX {
+func (p *proxy) bcastMaxVerBestEffort(smap *smapX) *smapX {
 	svm, _, slowp := p.bcastMaxVer(smap, nil, nil)
 	if svm.Smap != nil && !slowp {
 		if svm.Smap.UUID == smap.UUID && svm.Smap.version() > smap.version() && svm.Smap.validate() == nil {
@@ -803,7 +803,7 @@ func (p *proxyrunner) bcastMaxVerBestEffort(smap *smapX) *smapX {
 	return nil
 }
 
-func (p *proxyrunner) regpoolMaxVer(before, after *cluMeta) (smap *smapX) {
+func (p *proxy) regpoolMaxVer(before, after *cluMeta) (smap *smapX) {
 	*after = *before
 
 	p.reg.mtx.RLock()

@@ -24,16 +24,16 @@ import (
 )
 
 // interface guard
-var _ cluster.Target = (*targetrunner)(nil)
+var _ cluster.Target = (*target)(nil)
 
-func (t *targetrunner) Sname() string               { return t.si.String() }
-func (t *targetrunner) SID() string                 { return t.si.ID() }
-func (t *targetrunner) FSHC(err error, path string) { t.fsErr(err, path) }
-func (t *targetrunner) PageMM() *memsys.MMSA        { return t.gmm }
-func (t *targetrunner) ByteMM() *memsys.MMSA        { return t.smm }
-func (t *targetrunner) DB() dbdriver.Driver         { return t.db }
+func (t *target) Sname() string               { return t.si.String() }
+func (t *target) SID() string                 { return t.si.ID() }
+func (t *target) FSHC(err error, path string) { t.fsErr(err, path) }
+func (t *target) PageMM() *memsys.MMSA        { return t.gmm }
+func (t *target) ByteMM() *memsys.MMSA        { return t.smm }
+func (t *target) DB() dbdriver.Driver         { return t.db }
 
-func (t *targetrunner) Backend(bck *cluster.Bck) cluster.BackendProvider {
+func (t *target) Backend(bck *cluster.Bck) cluster.BackendProvider {
 	if bck.Bck.IsRemoteAIS() {
 		return t.backend[cmn.ProviderAIS]
 	}
@@ -52,7 +52,7 @@ func (t *targetrunner) Backend(bck *cluster.Bck) cluster.BackendProvider {
 }
 
 // essentially, t.doPut() for external use
-func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParams) error {
+func (t *target) PutObject(lom *cluster.LOM, params cluster.PutObjectParams) error {
 	debug.Assert(params.Tag != "" && !params.Atime.IsZero())
 	workFQN := fs.CSM.Gen(lom, fs.WorkfileType, params.Tag)
 	poi := allocPutObjInfo()
@@ -73,7 +73,7 @@ func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParam
 	return err
 }
 
-func (t *targetrunner) FinalizeObj(lom *cluster.LOM, workFQN string) (errCode int, err error) {
+func (t *target) FinalizeObj(lom *cluster.LOM, workFQN string) (errCode int, err error) {
 	poi := allocPutObjInfo()
 	{
 		poi.t = t
@@ -86,7 +86,7 @@ func (t *targetrunner) FinalizeObj(lom *cluster.LOM, workFQN string) (errCode in
 	return
 }
 
-func (t *targetrunner) EvictObject(lom *cluster.LOM) (errCode int, err error) {
+func (t *target) EvictObject(lom *cluster.LOM) (errCode int, err error) {
 	errCode, err = t.DeleteObject(lom, true /*evict*/)
 	return
 }
@@ -103,7 +103,7 @@ func (t *targetrunner) EvictObject(lom *cluster.LOM) (errCode int, err error) {
 //   the AIS cluster (by performing a cold GET if need be).
 // - if the dst is cloud, we perform a regular PUT logic thus also making sure that the new
 //   replica gets created in the cloud bucket of _this_ AIS cluster.
-func (t *targetrunner) CopyObject(lom *cluster.LOM, params *cluster.CopyObjectParams, localOnly bool) (size int64, err error) {
+func (t *target) CopyObject(lom *cluster.LOM, params *cluster.CopyObjectParams, localOnly bool) (size int64, err error) {
 	objNameTo := lom.ObjName
 	coi := allocCopyObjInfo()
 	{
@@ -123,7 +123,7 @@ func (t *targetrunner) CopyObject(lom *cluster.LOM, params *cluster.CopyObjectPa
 	return
 }
 
-func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (errCode int, err error) {
+func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (errCode int, err error) {
 	// 1. lock
 	switch owt {
 	case cmn.OwtGetPrefetchLock:
@@ -185,7 +185,7 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OW
 	return
 }
 
-func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *cluster.LOM, err error) {
+func (t *target) PromoteFile(params cluster.PromoteFileParams) (nlom *cluster.LOM, err error) {
 	var (
 		tsi   *cluster.Snode
 		smap  = t.owner.smap.get()
@@ -308,13 +308,13 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 // implements health.fspathDispatcher interface
 //
 
-func (t *targetrunner) DisableMpath(mpath, reason string) (err error) {
+func (t *target) DisableMpath(mpath, reason string) (err error) {
 	glog.Warningf("Disabling mountpath %s: %s", mpath, reason)
 	_, err = t.fsprg.disableMpath(mpath, true /*dont-resilver*/) // NOTE: not resilvering upon FSCH calling
 	return
 }
 
-func (t *targetrunner) RebalanceNamespace(si *cluster.Snode) (b []byte, status int, err error) {
+func (t *target) RebalanceNamespace(si *cluster.Snode) (b []byte, status int, err error) {
 	// pull the data
 	query := url.Values{}
 	query.Set(cmn.URLParamRebData, "true")

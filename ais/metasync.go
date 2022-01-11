@@ -94,12 +94,12 @@ const faisync = "failing to sync"
 
 type (
 	revs interface {
-		tag() string             // enum { revsSmapTag, ... }
-		version() int64          // the version
-		marshal() (b []byte)     // marshals the revs
-		jit(p *proxyrunner) revs // current (just-in-time) instance
-		sgl() *memsys.SGL        // jsp-encoded SGL
-		String() string          // smap.String(), etc.
+		tag() string         // enum { revsSmapTag, ... }
+		version() int64      // the version
+		marshal() (b []byte) // marshals the revs
+		jit(p *proxy) revs   // current (just-in-time) instance
+		sgl() *memsys.SGL    // jsp-encoded SGL
+		String() string      // smap.String(), etc.
 	}
 	revsPair struct {
 		revs revs
@@ -117,7 +117,7 @@ type (
 
 	// main
 	metasyncer struct {
-		p            *proxyrunner      // parent
+		p            *proxy            // parent
 		nodesRevs    map[string]ndRevs // cluster-wide node ID => ndRevs sync-ed
 		sgls         map[string]tagl   // tag => (version => SGL)
 		lastSynced   map[string]revs   // tag => revs last/current sync-ed
@@ -142,7 +142,7 @@ func (req revsReq) isNil() bool { return len(req.pairs) == 0 }
 // metasyncer //
 ////////////////
 
-func newMetasyncer(p *proxyrunner) (y *metasyncer) {
+func newMetasyncer(p *proxy) (y *metasyncer) {
 	y = &metasyncer{p: p}
 	y.nodesRevs = make(map[string]ndRevs, 8)
 	y.inigls()

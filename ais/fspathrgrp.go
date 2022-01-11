@@ -21,11 +21,11 @@ import (
 )
 
 type fsprungroup struct {
-	t      *targetrunner
+	t      *target
 	newVol bool
 }
 
-func (g *fsprungroup) init(t *targetrunner, newVol bool) {
+func (g *fsprungroup) init(t *target, newVol bool) {
 	g.t = t
 	g.newVol = newVol
 }
