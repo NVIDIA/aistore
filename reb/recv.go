@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 func (reb *Reb) recvObj(hdr transport.ObjHdr, objReader io.Reader, err error) {
@@ -94,11 +93,6 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 		glog.Error(err)
 		return
 	}
-	marked := xreg.GetRebMarked()
-	if marked.Interrupted || marked.Xact == nil {
-		return
-	}
-
 	if stage := reb.stages.stage.Load(); stage >= rebStageFin {
 		reb.laterx.Store(true)
 		if stage > rebStageFin && glog.FastV(4, glog.SmoduleReb) {
@@ -120,10 +114,6 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 	if err := reb.t.PutObject(lom, params); err != nil {
 		glog.Error(err)
 		return
-	}
-
-	if glog.FastV(5, glog.SmoduleReb) {
-		glog.Infof("%s: from %s %s", reb.t.Snode(), tsid, lom)
 	}
 	xreb := reb.xctn()
 	xreb.InObjsAdd(1, hdr.ObjAttrs.Size)

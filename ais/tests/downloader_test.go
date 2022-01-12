@@ -952,7 +952,9 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 	tassert.Fatalf(t, err == nil, "expected: err nil, got: %v", err)
 	verifyProps(t, bck, objName, newSize, "2")
 
+	time.Sleep(time.Second)
 	downloadObject(t, bck, objName, link, false /*shouldBeSkipped*/)
+	time.Sleep(time.Second)
 	newProps := verifyProps(t, bck, objName, expectedSize, "3")
 	tassert.Errorf(
 		t, oldProps.Atime != newProps.Atime,

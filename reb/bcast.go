@@ -27,7 +27,7 @@ type (
 		SmapVersion int64         `json:"smap_version,string"` // current Smap version (via smapOwner)
 		RebVersion  int64         `json:"reb_version,string"`  // Smap version of *this* rebalancing op
 		RebID       int64         `json:"reb_id,string"`       // rebalance ID
-		StatsDelta  xact.Stats    `json:"stats_delta"`         // transmitted/received since the prev req.
+		Stats       xact.Stats    `json:"stats"`               // transmitted/received totals
 		Stage       uint32        `json:"stage"`               // the current stage - see enum above
 		Aborted     bool          `json:"aborted"`             // aborted?
 		Running     bool          `json:"running"`             // running?
@@ -59,17 +59,12 @@ func (reb *Reb) RebStatus(status *Status) {
 	if rsmap != nil {
 		status.RebVersion = rsmap.Version
 	}
-	beginStats := (*xact.Stats)(reb.beginStats.Load())
 	reb.mu.RUnlock()
-	// stats
-	if beginStats == nil {
+	xreb := reb.xctn()
+	if xreb == nil {
 		return
 	}
-	reb.xctn().ToStats(&reb.curStats)
-	status.StatsDelta.OutObjs = reb.curStats.OutObjs - beginStats.OutObjs
-	status.StatsDelta.OutBytes = reb.curStats.OutBytes - beginStats.OutBytes
-	status.StatsDelta.InObjs = reb.curStats.InObjs - beginStats.InObjs
-	status.StatsDelta.InBytes = reb.curStats.InBytes - beginStats.InBytes
+	xreb.ToStats(&status.Stats)
 
 	// wack info
 	if status.Stage != rebStageWaitAck {

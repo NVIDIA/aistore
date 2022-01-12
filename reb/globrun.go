@@ -76,16 +76,15 @@ type (
 			targets cluster.Nodes // targets for which we are waiting for
 			ts      int64         // last time we have recomputed
 		}
-		semaCh     *cos.Semaphore
-		beginStats atomic.Pointer
-		curStats   xact.Stats
-		xreb       atomic.Pointer // *xact.Rebalance
-		stages     *nodeStages
-		ecClient   *http.Client
-		rebID      atomic.Int64
-		inQueue    atomic.Int64
-		onAir      atomic.Int64
-		laterx     atomic.Bool
+		semaCh   *cos.Semaphore
+		ecClient *http.Client
+		stages   *nodeStages
+		// atomic state
+		xreb    atomic.Pointer // unsafe(*xact.Rebalance)
+		rebID   atomic.Int64
+		inQueue atomic.Int64
+		onAir   atomic.Int64
+		laterx  atomic.Bool
 	}
 	lomAcks struct {
 		mu *sync.Mutex
@@ -348,7 +347,6 @@ func (reb *Reb) rebInitRenew(rargs *rebArgs, notif *xact.NotifXact) bool {
 	reb.setXact(xreb)
 
 	// 3. init streams and data structures
-	reb.beginStats.Store(unsafe.Pointer(xreb.GetStats()))
 	reb.beginStreams()
 	if reb.awaiting.targets == nil {
 		reb.awaiting.targets = make(cluster.Nodes, 0, maxWackTargets)
@@ -601,7 +599,6 @@ func (reb *Reb) rebFini(rargs *rebArgs, err error) {
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("finishing rebalance (reb_args: %s)", reb.logHdr(rargs))
 	}
-
 	// prior to closing the streams
 	if q := reb.quiesce(rargs, rargs.config.Rebalance.Quiesce.D(), reb.nodesQuiescent); q != cluster.QuiAborted {
 		if errM := fs.RemoveMarker(cmn.RebalanceMarker); errM == nil {
@@ -610,24 +607,23 @@ func (reb *Reb) rebFini(rargs *rebArgs, err error) {
 	}
 	reb.endStreams(err)
 	reb.filterGFN.Reset()
-
 	{
 		status := &Status{}
 		reb.RebStatus(status)
-		delta, err := jsoniter.MarshalIndent(&status.StatsDelta, "", " ")
+		stats, err := jsoniter.MarshalIndent(&status.Stats, "", " ")
 		if err == nil {
-			glog.Infoln(string(delta))
+			glog.Infoln(string(stats))
 		}
 	}
 	reb.stages.stage.Store(rebStageDone)
 	reb.stages.cleanup()
 
 	reb.semaCh.Release()
-
-	if !reb.xctn().Finished() {
-		reb.xctn().Finish(nil)
+	xreb := reb.xctn()
+	if !xreb.Finished() {
+		xreb.Finish(nil)
 	} else {
-		glog.Infoln(reb.xctn().String())
+		glog.Infoln(xreb.String())
 	}
 }
 
