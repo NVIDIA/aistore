@@ -551,7 +551,8 @@ func (e *entries) findUnlocked(flt XactFilter) Renewable {
 		return nil
 	}
 	for _, entry := range e.active {
-		if !entry.Get().Finished() && matchEntry(entry, flt) {
+		xact := entry.Get()
+		if xact.Running() && matchEntry(entry, flt) {
 			return entry
 		}
 	}

@@ -32,6 +32,7 @@ type (
 		StartTime() time.Time
 		EndTime() time.Time
 		Finished() bool
+		Running() bool
 		IsAborted() bool
 		Aborted() error
 		AbortedAfter(time.Duration) error

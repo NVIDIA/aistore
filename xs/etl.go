@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -40,15 +41,19 @@ func (*etlFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
 }
 
 func (p *etlFactory) Start() error {
-	p.xctn = newETL(p.Args.UUID, p.Kind())
+	uuid := p.Args.UUID
+	if uuid == "" {
+		uuid = cos.GenUUID()
+	}
+	p.xctn = newETL(uuid, p.Kind())
 	return nil
 }
 
 func (*etlFactory) Kind() string        { return cmn.ActETLInline }
 func (p *etlFactory) Get() cluster.Xact { return p.xctn }
 
-func (p *etlFactory) WhenPrevIsRunning(xprev xreg.Renewable) (action xreg.WPR, err error) {
-	cos.Assert(p.UUID() != xprev.UUID())
+func (*etlFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
+	// TODO: check xprev and reinforce
 	return xreg.WprKeepAndStartNew, nil
 }
 
@@ -62,4 +67,4 @@ func newETL(id, kind string) (xctn *xactETL) {
 	return
 }
 
-func (*xactETL) Run(*sync.WaitGroup) { cos.Assert(false) }
+func (*xactETL) Run(*sync.WaitGroup) { debug.Assert(false) }
