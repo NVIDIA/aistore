@@ -21,26 +21,82 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// convenience structure to gather all (or most) of the relevant context in one place
-// (compare with txnServerCtx & prepTxnServer)
-type (
-	txnClientCtx struct {
-		p       *proxy
-		uuid    string
-		smap    *smapX
-		msg     *aisMsg
-		path    string
-		timeout struct {
-			netw time.Duration
-			host time.Duration
-		}
-		req cmn.ReqArgs
+// context structure to gather all (or most) of the relevant state in one place
+// (compare with txnServerCtx)
+type txnClientCtx struct {
+	p       *proxy
+	uuid    string
+	smap    *smapX
+	msg     *aisMsg
+	path    string
+	timeout struct {
+		netw time.Duration
+		host time.Duration
 	}
-)
+	req cmn.ReqArgs
+}
 
-// NOTE
-// - implementation-wise, a typical CP transaction will execute, with minor variations,
-//   the same 6 (plus/minus) steps as shown below.
+//////////////////
+// txnClientCtx //
+//////////////////
+
+func (c *txnClientCtx) begin(what fmt.Stringer) (xactID string, err error) {
+	results := c.bcast(cmn.ActBegin, c.timeout.netw)
+	for _, res := range results {
+		if res.err != nil {
+			err = c.bcastAbort(what, res.error())
+			break
+		}
+		// NOTE: not enforcing cluster-wide uniqueness - yet
+		// TODO: all xaction-renewing transactions must return uuid
+		if xactID == "" {
+			xactID = res.header.Get(cmn.HdrXactionID)
+		}
+	}
+	freeBcastRes(results)
+	return
+}
+
+func (c *txnClientCtx) commitTimeout(waitmsync bool) time.Duration {
+	if waitmsync {
+		return c.timeout.host + c.timeout.netw
+	}
+	return c.timeout.netw
+}
+
+func (c *txnClientCtx) bcast(phase string, timeout time.Duration) sliceResults {
+	c.req.Path = cos.JoinWords(c.path, phase)
+	if phase != cmn.ActAbort {
+		now := time.Now()
+		c.req.Query.Set(cmn.URLParamUnixTime, cos.UnixNano2S(now.UnixNano()))
+	}
+
+	args := allocBcastArgs()
+	defer freeBcastArgs(args)
+
+	args.req = c.req
+	args.smap = c.smap
+	args.timeout = timeout
+	return c.p.bcastGroup(args)
+}
+
+func (c *txnClientCtx) bcastAbort(what fmt.Stringer, err error) error {
+	glog.Errorf("Abort %q %s: %v", c.msg.Action, what, err)
+	results := c.bcast(cmn.ActAbort, 0)
+	freeBcastRes(results)
+	return err
+}
+
+func (c *txnClientCtx) commit(waitmsync bool) {
+	results := c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
+	freeBcastRes(results)
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// cp transactions (the proxy part)
+//
+// A typical control-plane transaction will execute, with minor variations, the same
+// 6 (plus/minus) steps as shown below:
 // - notice a certain symmetry between the client and the server sides whetreby
 //   the control flow looks as follows:
 //   	txnClientCtx =>
@@ -48,6 +104,7 @@ type (
 //   			switch msg.Action =>
 //   				txnServerCtx =>
 //   					concrete transaction, etc.
+///////////////////////////////////////////////////////////////////////////////////////////
 
 // create-bucket: { check non-existence -- begin -- create locally -- metasync -- commit }
 func (p *proxy) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, remoteHeader ...http.Header) error {
@@ -93,16 +150,9 @@ func (p *proxy) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, remoteHeader 
 		waitmsync = true // commit blocks behind metasync
 		c         = p.prepTxnClient(msg, bck, waitmsync)
 	)
-	results := c.bcast(cmn.ActBegin, c.timeout.netw)
-	for _, res := range results {
-		if res.err == nil {
-			continue
-		}
-		err := c.bcastAbort(bck, res.error())
-		freeBcastRes(results)
+	if _, err := c.begin(bck); err != nil {
 		return err
 	}
-	freeBcastRes(results)
 
 	// 3. update BMD locally & metasync updated BMD
 	ctx := &bmdModifier{
@@ -119,12 +169,12 @@ func (p *proxy) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, remoteHeader 
 	}
 
 	// 4. commit
-	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
+	results := c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
 	for _, res := range results {
 		if res.err == nil {
 			continue
 		}
-		glog.Errorf("Failed to commit create-bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
+		glog.Errorf("Failed to commit %q (msg: %v, bck: %s, err: %v)", msg.Action, msg, bck, res.err)
 		p.undoCreateBucket(msg, bck)
 		err := res.error()
 		freeBcastRes(results)
@@ -172,16 +222,9 @@ func (p *proxy) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID string
 		waitmsync = true
 		c         = p.prepTxnClient(msg, bck, waitmsync)
 	)
-	results := c.bcast(cmn.ActBegin, c.timeout.netw)
-	for _, res := range results {
-		if res.err == nil {
-			continue
-		}
-		err = c.bcastAbort(bck, res.error())
-		freeBcastRes(results)
+	if _, err = c.begin(bck); err != nil {
 		return
 	}
-	freeBcastRes(results)
 
 	// 3. update BMD locally & metasync updated BMD
 	mirrorEnabled := copies > 1
@@ -202,7 +245,6 @@ func (p *proxy) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID string
 	}
 	bmd, err = p.owner.bmd.modify(ctx)
 	if err != nil {
-		debug.AssertNoErr(err)
 		err = c.bcastAbort(bck, err)
 		return
 	}
@@ -214,7 +256,7 @@ func (p *proxy) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID string
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 5. commit
-	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
+	results := c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
 	for _, res := range results {
 		if res.err == nil {
 			continue
@@ -286,16 +328,9 @@ func (p *proxy) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck, nprops *cmn
 		waitmsync = true
 		c         = p.prepTxnClient(&nmsg, bck, waitmsync)
 	)
-	results := c.bcast(cmn.ActBegin, c.timeout.netw)
-	for _, res := range results {
-		if res.err == nil {
-			continue
-		}
-		err = c.bcastAbort(bck, res.error())
-		freeBcastRes(results)
+	if _, err = c.begin(bck); err != nil {
 		return
 	}
-	freeBcastRes(results)
 
 	// 3. update BMD locally & metasync updated BMD
 	ctx := &bmdModifier{
@@ -328,8 +363,7 @@ func (p *proxy) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck, nprops *cmn
 	}
 
 	// 5. commit
-	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
-	freeBcastRes(results)
+	c.commit(waitmsync)
 	return
 }
 
@@ -375,16 +409,9 @@ func (p *proxy) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (x
 		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
 	)
 	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.URLParamBucketTo)
-	results := c.bcast(cmn.ActBegin, c.timeout.netw)
-	for _, res := range results {
-		if res.err == nil {
-			continue
-		}
-		err = c.bcastAbort(bckFrom, res.error())
-		freeBcastRes(results)
+	if _, err = c.begin(bckFrom); err != nil {
 		return
 	}
-	freeBcastRes(results)
 
 	// 3. update BMD locally & metasync updated BMD
 	bmdCtx := &bmdModifier{
@@ -426,8 +453,7 @@ func (p *proxy) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (x
 	// 5. commit
 	xactID = c.uuid
 	c.req.Body = cos.MustMarshal(c.msg)
-	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
-	freeBcastRes(results)
+	c.commit(waitmsync)
 
 	// 6. start rebalance and resilver
 	wg := p.metasyncer.sync(revsPair{rmd, c.msg})
@@ -481,19 +507,9 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRun bool
 		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
 	)
 	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.URLParamBucketTo)
-	results := c.bcast(cmn.ActBegin, c.timeout.netw)
-	for _, res := range results {
-		if res.err == nil {
-			if xactID == "" {
-				xactID = res.header.Get(cmn.HdrXactionID)
-			}
-			continue
-		}
-		err = c.bcastAbort(bckFrom, res.error())
-		freeBcastRes(results)
+	if xactID, err = c.begin(bckFrom); err != nil {
 		return
 	}
-	freeBcastRes(results)
 
 	// 3. update BMD locally & metasync updated BMD
 	ctx := &bmdModifier{
@@ -533,8 +549,7 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRun bool
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 5. commit
-	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
-	freeBcastRes(results)
+	c.commit(waitmsync)
 	xactID = c.uuid
 	return
 }
@@ -553,23 +568,12 @@ func (p *proxy) tcobjs(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID 
 		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
 	)
 	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.URLParamBucketTo)
-	results := c.bcast(cmn.ActBegin, c.timeout.netw)
-	for _, res := range results {
-		if res.err == nil {
-			if xactID == "" {
-				xactID = res.header.Get(cmn.HdrXactionID)
-			}
-			continue
-		}
-		err = c.bcastAbort(bckFrom, res.error())
-		freeBcastRes(results)
+	if xactID, err = c.begin(bckFrom); err != nil {
 		return
 	}
-	freeBcastRes(results)
 
 	// 3. commit
-	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
-	freeBcastRes(results)
+	c.commit(waitmsync)
 	return
 }
 
@@ -650,16 +654,9 @@ func (p *proxy) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID string, e
 		waitmsync = true
 		c         = p.prepTxnClient(msg, bck, waitmsync)
 	)
-	results := c.bcast(cmn.ActBegin, c.timeout.netw)
-	for _, res := range results {
-		if res.err == nil {
-			continue
-		}
-		err = c.bcastAbort(bck, res.error())
-		freeBcastRes(results)
+	if _, err = c.begin(bck); err != nil {
 		return
 	}
-	freeBcastRes(results)
 
 	// 3. update BMD locally & metasync updated BMD
 	ctx := &bmdModifier{
@@ -685,7 +682,7 @@ func (p *proxy) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID string, e
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 6. commit
-	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
+	results := c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
 	for _, res := range results {
 		if res.err == nil {
 			continue
@@ -719,22 +716,12 @@ func (p *proxy) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	// begin
 	c := p.prepTxnClient(msg, bckFrom, false /*waitmsync*/)
 	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.URLParamBucketTo)
-	results := c.bcast(cmn.ActBegin, c.timeout.netw)
-	for _, res := range results {
-		if res.err == nil {
-			if xactID == "" {
-				xactID = res.header.Get(cmn.HdrXactionID)
-			}
-			continue
-		}
-		err = c.bcastAbort(bckFrom, res.error())
-		freeBcastRes(results)
+	if xactID, err = c.begin(bckFrom); err != nil {
 		return
 	}
-	freeBcastRes(results)
 
 	// commit
-	results = c.bcast(cmn.ActCommit, 2*c.timeout.netw) // massive archiving vs workCh capacity
+	results := c.bcast(cmn.ActCommit, 2*c.timeout.netw) // massive archiving vs workCh capacity
 	for _, res := range results {
 		if res.err == nil {
 			continue
@@ -761,20 +748,13 @@ func (p *proxy) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, opts *cm
 		}
 	}
 	// 1. begin
-	results := c.bcast(cmn.ActBegin, c.timeout.netw)
-	for _, res := range results {
-		if res.err == nil {
-			continue
-		}
-		err = c.bcastAbort(si, res.error(), cmn.Target)
-		freeBcastRes(results)
+	if _, err = c.begin(si); err != nil {
 		return
 	}
-	freeBcastRes(results)
 
 	// 2. Put node under maintenance
 	if err = p.markMaintenance(msg, si); err != nil {
-		c.bcastAbort(si, err, cmn.Target)
+		c.bcastAbort(si, err)
 		return
 	}
 
@@ -854,16 +834,9 @@ func (p *proxy) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 		c.timeout.netw = config.Timeout.MaxHostBusy.D() + config.Timeout.MaxHostBusy.D()/2
 		c.timeout.host = c.timeout.netw
 	}
-	results := c.bcast(cmn.ActBegin, c.timeout.netw)
-	for _, res := range results {
-		if res.err == nil {
-			continue
-		}
-		err := c.bcastAbort(bck, res.error())
-		freeBcastRes(results)
+	if _, err := c.begin(bck); err != nil {
 		return err
 	}
-	freeBcastRes(results)
 
 	// 2. Distribute new BMD
 	ctx := &bmdModifier{
@@ -879,12 +852,12 @@ func (p *proxy) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 	}
 
 	// 3. Commit
-	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
+	results := c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
 	for _, res := range results {
 		if res.err == nil {
 			continue
 		}
-		glog.Errorf("Failed to commit destroy-bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
+		glog.Errorf("Failed to commit %q (msg: %v, bck: %s, err: %v)", msg.Action, msg, bck, res.err)
 		err := res.error()
 		freeBcastRes(results)
 		return err
@@ -917,45 +890,10 @@ func (p *proxy) destroyBucketData(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 	return nil
 }
 
-//////////////////////////////////////
-// context, rollback & misc helpers //
-//////////////////////////////////////
+//
+// misc helpers and utilities
+///
 
-func (c *txnClientCtx) commitTimeout(waitmsync bool) time.Duration {
-	if waitmsync {
-		return c.timeout.host + c.timeout.netw
-	}
-	return c.timeout.netw
-}
-
-func (c *txnClientCtx) bcast(phase string, timeout time.Duration) sliceResults {
-	c.req.Path = cos.JoinWords(c.path, phase)
-	if phase != cmn.ActAbort {
-		now := time.Now()
-		c.req.Query.Set(cmn.URLParamUnixTime, cos.UnixNano2S(now.UnixNano()))
-	}
-
-	args := allocBcastArgs()
-	defer freeBcastArgs(args)
-
-	args.req = c.req
-	args.smap = c.smap
-	args.timeout = timeout
-	return c.p.bcastGroup(args)
-}
-
-func (c *txnClientCtx) bcastAbort(val fmt.Stringer, err error, key ...string) error {
-	k := "bucket"
-	if len(key) > 0 {
-		k = key[0]
-	}
-	glog.Errorf("Abort %q, %s %s, err: %v)", c.msg.Action, k, val, err)
-	results := c.bcast(cmn.ActAbort, 0)
-	freeBcastRes(results)
-	return err
-}
-
-// txn client context
 func (p *proxy) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck, waitmsync bool) *txnClientCtx {
 	c := &txnClientCtx{p: p, uuid: cos.GenUUID(), smap: p.owner.smap.get()}
 	c.msg = p.newAmsg(msg, nil, c.uuid)

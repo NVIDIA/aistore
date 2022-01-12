@@ -1164,6 +1164,8 @@ func TestForwardCP(t *testing.T) {
 
 		setPrimaryTo(t, m.proxyURL, m.smap, nextProxyURL, nextProxyID)
 		m.proxyURL = nextProxyURL
+
+		time.Sleep(5 * time.Second)
 	}()
 	wg.Wait()
 
@@ -1172,11 +1174,6 @@ func TestForwardCP(t *testing.T) {
 	// Step 5. destroy ais bucket via original primary which is not primary at this point
 	tutils.DestroyBucket(t, origURL, m.bck)
 	tlog.Logf("Destroyed bucket %s via non-primary %s/%s\n", m.bck, origID, origURL)
-
-	time.Sleep(2 * time.Second)
-	tlog.Logf("Wait for rebalance\n")
-	args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
-	_, _ = api.WaitForXaction(baseParams, args)
 }
 
 func TestAtimeRebalance(t *testing.T) {

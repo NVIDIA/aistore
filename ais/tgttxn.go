@@ -29,8 +29,8 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// convenience structure to gather all (or most) of the relevant context in one place
-// (compare with txnClientCtx & prepTxnClient)
+// context structure to gather all (or most) of the relevant state in one place
+// (compare with txnClientCtx)
 type txnServerCtx struct {
 	uuid    string
 	timeout struct {
@@ -48,6 +48,8 @@ type txnServerCtx struct {
 	query      url.Values
 	t          *target
 }
+
+// TODO: return xaction ID (xactID) where applicable
 
 // verb /v1/txn
 func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
@@ -98,8 +100,9 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 		err = t.renameBucket(c)
 	case cmn.ActCopyBck, cmn.ActETLBck:
 		var (
-			dp    cluster.DP
-			tcmsg = &cmn.TCBMsg{}
+			xactID string
+			dp     cluster.DP
+			tcmsg  = &cmn.TCBMsg{}
 		)
 		if err := cos.MorphMarshal(c.msg.Value, tcmsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, c.msg.Value, err)
@@ -112,7 +115,10 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		err = t.tcb(c, tcmsg, dp)
+		xactID, err = t.tcb(c, tcmsg, dp)
+		if xactID != "" {
+			w.Header().Set(cmn.HdrXactionID, xactID)
+		}
 	case cmn.ActCopyObjects, cmn.ActETLObjects:
 		var (
 			xactID string
@@ -476,50 +482,53 @@ func (t *target) etlDP(msg *cmn.TCBMsg) (dp cluster.DP, err error) {
 }
 
 // common for both bucket copy and bucket transform - does the heavy lifting
-func (t *target) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) error {
+func (t *target) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) (string, error) {
+	var xactID string
 	if err := c.bck.Init(t.owner.bmd); err != nil {
-		return err
+		return xactID, err
 	}
 	switch c.phase {
 	case cmn.ActBegin:
 		bckTo, bckFrom := c.bckTo, c.bck
 		if err := bckTo.Validate(); err != nil {
-			return err
+			return xactID, err
 		}
 		if err := bckFrom.Validate(); err != nil {
-			return err
+			return xactID, err
 		}
 		if cs := fs.GetCapStatus(); cs.Err != nil {
-			return cs.Err
+			return xactID, cs.Err
 		}
 		if err := t.coExists(bckFrom, c.msg.Action); err != nil {
-			return err
+			return xactID, err
 		}
 		bmd := t.owner.bmd.get()
 		if _, present := bmd.Get(bckFrom); !present {
-			return cmn.NewErrBckNotFound(bckFrom.Bck)
+			return xactID, cmn.NewErrBckNotFound(bckFrom.Bck)
 		}
-		if nlpTo, nlpFrom, err := t._tcbBegin(c, msg, dp); err != nil {
+		nlpTo, nlpFrom, xid, err := t._tcbBegin(c, msg, dp)
+		if err != nil {
 			if nlpFrom != nil {
 				nlpFrom.Unlock()
 			}
 			if nlpTo != nil {
 				nlpTo.Unlock()
 			}
-			return err
+			return xactID, err
 		}
+		xactID = xid
 	case cmn.ActAbort:
 		t.transactions.find(c.uuid, cmn.ActAbort)
 	case cmn.ActCommit:
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
-			return err
+			return xactID, err
 		}
 		txnTcb := txn.(*txnTCB)
 		if c.query.Get(cmn.URLParamWaitMetasync) != "" {
 			if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 				txnTcb.xtcb.TxnAbort()
-				return fmt.Errorf("%s %s: %v", t.si, txn, err)
+				return xactID, fmt.Errorf("%s %s: %v", t.si, txn, err)
 			}
 		} else {
 			t.transactions.find(c.uuid, cmn.ActCommit)
@@ -530,18 +539,21 @@ func (t *target) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) error {
 		rns := xreg.RenewTCB(t, c.uuid, c.msg.Action /*kind*/, txnTcb.xtcb.Args())
 		if rns.Err != nil {
 			txnTcb.xtcb.TxnAbort()
-			return rns.Err
+			return xactID, rns.Err
 		}
 		xctn := rns.Entry.Get()
+		xactID = xctn.ID()
+		debug.Assert(xactID == txnTcb.xtcb.ID())
 		c.addNotif(xctn) // notify upon completion
 		xact.GoRunW(xctn)
 	default:
 		debug.Assert(false)
 	}
-	return nil
+	return xactID, nil
 }
 
-func (t *target) _tcbBegin(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) (nlpTo, nlpFrom *cluster.NameLockPair, err error) {
+func (t *target) _tcbBegin(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) (nlpTo, nlpFrom *cluster.NameLockPair,
+	xactID string, err error) {
 	bckTo, bckFrom := c.bckTo, c.bck
 	nlpFrom = bckFrom.GetNameLockPair()
 	if !nlpFrom.TryRLock(c.timeout.netw / 4) {
@@ -564,6 +576,7 @@ func (t *target) _tcbBegin(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) (nlp
 	}
 	xctn := rns.Entry.Get()
 	xtcb := xctn.(*mirror.XactTCB)
+	xactID = xctn.ID()
 	txn := newTxnTCB(c, xtcb)
 	if err = t.transactions.begin(txn); err != nil {
 		return

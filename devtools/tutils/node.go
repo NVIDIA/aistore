@@ -236,6 +236,8 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 				idsToIgnore,
 			)
 			if err != nil {
+				tlog.Logf("Failed waiting for cluster state: %v (%s, %s, %v, %v)\n",
+					err, smap, syncedSmap, origVersion, idsToIgnore)
 				return nil, err
 			}
 
