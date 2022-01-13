@@ -900,7 +900,7 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 	m.puts()
 
 	// Add new mountpath to target
-	tlog.Logf("attach new %q on target %s\n", testMpath, target.StringEx())
+	tlog.Logf("attach new %q at target %s\n", testMpath, target.StringEx())
 	err = api.AttachMountpath(baseParams, target, testMpath, true /*force*/)
 	tassert.CheckFatal(t, err)
 
@@ -1075,12 +1075,13 @@ func TestMountpathDisableAll(t *testing.T) {
 		disabled.Add(mpath)
 	}
 
-	time.Sleep(time.Second)
+	time.Sleep(2 * time.Second)
 	tlog.Logf("Wait for rebalance (triggered by %s leaving the cluster after having lost all mountpaths)\n", tname)
 	args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
 	_, _ = api.WaitForXaction(baseParams, args)
 
 	// Check if mountpaths were actually disabled
+	time.Sleep(time.Second)
 	mountpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 
@@ -1704,7 +1705,7 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 	m.gets()
 
 	// Reattach previously removed mountpaths
-	tlog.Logf("Reattach mountpaths on %s\n", target.StringEx())
+	tlog.Logf("Reattach mountpaths at %s\n", target.StringEx())
 	for _, mpath := range mpList.Available[1:] {
 		err = api.AttachMountpath(baseParams, target, mpath, false /*force*/)
 		tassert.CheckFatal(t, err)
@@ -1712,7 +1713,7 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 	}
 
 	// Wait for resilvering
-	time.Sleep(time.Second) // pending writes
+	time.Sleep(3 * time.Second) // pending writes
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -1756,7 +1757,7 @@ func testNonRedundantMpathDD(t *testing.T, action string) {
 	// PUT
 	m.puts()
 
-	tlog.Logf("%s %q on target %s\n", action, mpList.Available[0], target.StringEx())
+	tlog.Logf("%s %q at target %s\n", action, mpList.Available[0], target.StringEx())
 	if action == cmn.ActMountpathDisable {
 		err = api.DisableMountpath(baseParams, target, mpList.Available[0], false /*dont-resil*/)
 	} else {
@@ -1775,10 +1776,10 @@ func testNonRedundantMpathDD(t *testing.T, action string) {
 
 	// Add previously disabled or detached mountpath
 	if action == cmn.ActMountpathDisable {
-		tlog.Logf("Re-enable %q on target %s\n", mpList.Available[0], target.StringEx())
+		tlog.Logf("Re-enable %q at target %s\n", mpList.Available[0], target.StringEx())
 		err = api.EnableMountpath(baseParams, target, mpList.Available[0])
 	} else {
-		tlog.Logf("Re-attach %q on target %s\n", mpList.Available[0], target.StringEx())
+		tlog.Logf("Re-attach %q at target %s\n", mpList.Available[0], target.StringEx())
 		err = api.AttachMountpath(baseParams, target, mpList.Available[0], false /*force*/)
 	}
 	tassert.CheckFatal(t, err)

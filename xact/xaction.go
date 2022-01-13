@@ -112,6 +112,9 @@ func (xctn *Base) AbortedAfter(d time.Duration) (err error) {
 }
 
 func (xctn *Base) Abort(err error) (ok bool) {
+	if xctn.Finished() {
+		return
+	}
 	if err == nil {
 		err = cmn.ErrXactNoErrAbort
 	} else if errAborted := cmn.AsErrAborted(err); errAborted != nil {
