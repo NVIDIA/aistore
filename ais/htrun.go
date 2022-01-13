@@ -900,7 +900,7 @@ func (h *htrun) bcastReqGroup(w http.ResponseWriter, r *http.Request, req cmn.Re
 		if res.err == nil {
 			continue
 		}
-		h.writeErr(w, r, res.error())
+		h.writeErr(w, r, res.toErr())
 		freeBcastRes(results)
 		return
 	}
@@ -1132,7 +1132,7 @@ func (h *htrun) writeErrActf(w http.ResponseWriter, r *http.Request, action stri
 ////////////////
 
 // error helper for intra-cluster calls
-func (res *callResult) error() error {
+func (res *callResult) toErr() error {
 	if res.err == nil {
 		return nil
 	}
@@ -1171,7 +1171,7 @@ func (res *callResult) errorf(format string, a ...interface{}) error {
 	} else {
 		res.err = errors.New(msg + ": " + res.err.Error())
 	}
-	return res.error()
+	return res.toErr()
 }
 
 ///////////////////

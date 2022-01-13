@@ -138,7 +138,7 @@ func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg
 		if res.err == nil {
 			continue
 		}
-		err = res.error()
+		err = res.toErr()
 		glog.Error(err)
 	}
 	freeBcastRes(results)
@@ -206,7 +206,7 @@ func (p *proxy) listETLs() (infoList etl.InfoList, err error) {
 
 	for _, res := range results {
 		if res.err != nil {
-			err = res.error()
+			err = res.toErr()
 			freeBcastRes(results)
 			return nil, err
 		}
@@ -279,7 +279,7 @@ func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request) {
 	logs := make(etl.PodsLogsMsg, 0, len(results))
 	for _, res := range results {
 		if res.err != nil {
-			p.writeErr(w, r, res.error())
+			p.writeErr(w, r, res.toErr())
 			freeBcastRes(results)
 			return
 		}
@@ -317,7 +317,7 @@ func (p *proxy) healthETL(w http.ResponseWriter, r *http.Request) {
 	healths := make(etl.PodsHealthMsg, 0, len(results))
 	for _, res := range results {
 		if res.err != nil {
-			p.writeErr(w, r, res.error(), res.status)
+			p.writeErr(w, r, res.toErr(), res.status)
 			return
 		}
 		healths = append(healths, res.v.(*etl.PodHealthMsg))
@@ -346,7 +346,7 @@ func (p *proxy) stopETL(w http.ResponseWriter, r *http.Request) {
 		if res.err == nil {
 			continue
 		}
-		p.writeErr(w, r, res.error())
+		p.writeErr(w, r, res.toErr())
 		break
 	}
 	// TODO: implement using ETL modifier

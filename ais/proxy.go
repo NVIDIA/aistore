@@ -1405,7 +1405,7 @@ func (p *proxy) gatherBucketSummary(bck cmn.QueryBcks, msg *cmn.BucketSummaryMsg
 	freeBcastArgs(args)
 	for _, res := range results {
 		if res.err != nil {
-			err = res.error()
+			err = res.toErr()
 			freeBcastRes(results)
 			return nil, "", err
 		}
@@ -1975,7 +1975,7 @@ func (p *proxy) listObjectsAIS(bck *cluster.Bck, lsmsg cmn.ListObjsMsg) (allEntr
 	freeBcastArgs(args)
 	for _, res := range results {
 		if res.err != nil {
-			err = res.error()
+			err = res.toErr()
 			freeBcastRes(results)
 			return nil, err
 		}
@@ -2059,7 +2059,7 @@ func (p *proxy) listObjectsRemote(bck *cluster.Bck, lsmsg cmn.ListObjsMsg) (allE
 			continue
 		}
 		if res.err != nil {
-			err = res.error()
+			err = res.toErr()
 			freeBcastRes(results)
 			return nil, err
 		}
@@ -2152,7 +2152,7 @@ func (p *proxy) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cluster.
 		if res.err == nil {
 			continue
 		}
-		p.writeErr(w, r, res.error())
+		p.writeErr(w, r, res.toErr())
 		break
 	}
 	freeBcastRes(results)
@@ -2541,7 +2541,7 @@ func (p *proxy) forcefulJoin(w http.ResponseWriter, r *http.Request, proxyID str
 	p.owner.smap.put(newSmap)
 	res := p.registerToURL(primary.IntraControlNet.DirectURL, primary, cmn.DefaultTimeout, nil, false)
 	if res.err != nil {
-		p.writeErr(w, r, res.error())
+		p.writeErr(w, r, res.toErr())
 	}
 }
 

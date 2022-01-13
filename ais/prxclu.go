@@ -176,7 +176,7 @@ func (p *proxy) getRemoteAISInfo() (*cmn.BackendInfoAIS, error) {
 		v:       remoteInfo,
 	}
 	res := p.call(args)
-	err = res.error()
+	err = res.toErr()
 	freeCR(res)
 	if err != nil {
 		return nil, err
@@ -194,7 +194,7 @@ func (p *proxy) cluSysinfo(r *http.Request, timeout time.Duration, to int) (cos.
 	sysInfoMap := make(cos.JSONRawMsgs, len(results))
 	for _, res := range results {
 		if res.err != nil {
-			err := res.error()
+			err := res.toErr()
 			freeBcastRes(results)
 			return nil, err
 		}
@@ -255,7 +255,7 @@ func (p *proxy) _queryResults(w http.ResponseWriter, r *http.Request, results sl
 			continue
 		}
 		if res.err != nil {
-			p.writeErr(w, r, res.error())
+			p.writeErr(w, r, res.toErr())
 			freeBcastRes(results)
 			tres, erred = nil, true
 			return
@@ -835,7 +835,7 @@ func (p *proxy) xactStart(w http.ResponseWriter, r *http.Request, msg *cmn.Actio
 		if res.err == nil {
 			continue
 		}
-		p.writeErr(w, r, res.error())
+		p.writeErr(w, r, res.toErr())
 		freeBcastRes(results)
 		return
 	}
@@ -862,7 +862,7 @@ func (p *proxy) xactStop(w http.ResponseWriter, r *http.Request, msg *cmn.Action
 		if res.err == nil {
 			continue
 		}
-		p.writeErr(w, r, res.error())
+		p.writeErr(w, r, res.toErr())
 		freeBcastRes(results)
 		return
 	}
@@ -915,7 +915,7 @@ func (p *proxy) resilverOne(w http.ResponseWriter, r *http.Request,
 		},
 	)
 	if res.err != nil {
-		p.writeErr(w, r, res.error())
+		p.writeErr(w, r, res.toErr())
 		return
 	}
 
@@ -961,7 +961,7 @@ func (p *proxy) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *cmn.Acti
 		args.si = psi
 		res := p.call(args)
 		if res.err != nil {
-			p.writeErr(w, r, res.error())
+			p.writeErr(w, r, res.toErr())
 		}
 		freeCR(res)
 		break

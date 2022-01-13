@@ -44,7 +44,7 @@ func (c *txnClientCtx) begin(what fmt.Stringer) (xactID string, err error) {
 	results := c.bcast(cmn.ActBegin, c.timeout.netw)
 	for _, res := range results {
 		if res.err != nil {
-			err = c.bcastAbort(what, res.error())
+			err = c.bcastAbort(what, res.toErr())
 			break
 		}
 		// NOTE: not enforcing cluster-wide uniqueness - yet
@@ -57,7 +57,20 @@ func (c *txnClientCtx) begin(what fmt.Stringer) (xactID string, err error) {
 	return
 }
 
-func (c *txnClientCtx) commitTimeout(waitmsync bool) time.Duration {
+func (c *txnClientCtx) commit(what fmt.Stringer, timeout time.Duration) (err error) {
+	results := c.bcast(cmn.ActCommit, timeout)
+	for _, res := range results {
+		if res.err != nil {
+			err = res.toErr()
+			glog.Errorf("Failed to commit %q %s: %v", c.msg.Action, what, err)
+			break
+		}
+	}
+	freeBcastRes(results)
+	return
+}
+
+func (c *txnClientCtx) cmtTout(waitmsync bool) time.Duration {
 	if waitmsync {
 		return c.timeout.host + c.timeout.netw
 	}
@@ -85,11 +98,6 @@ func (c *txnClientCtx) bcastAbort(what fmt.Stringer, err error) error {
 	results := c.bcast(cmn.ActAbort, 0)
 	freeBcastRes(results)
 	return err
-}
-
-func (c *txnClientCtx) commit(waitmsync bool) {
-	results := c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
-	freeBcastRes(results)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -169,18 +177,10 @@ func (p *proxy) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, remoteHeader 
 	}
 
 	// 4. commit
-	results := c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
-	for _, res := range results {
-		if res.err == nil {
-			continue
-		}
-		glog.Errorf("Failed to commit %q (msg: %v, bck: %s, err: %v)", msg.Action, msg, bck, res.err)
+	if err := c.commit(bck, c.cmtTout(waitmsync)); err != nil {
 		p.undoCreateBucket(msg, bck)
-		err := res.error()
-		freeBcastRes(results)
 		return err
 	}
-	freeBcastRes(results)
 	return nil
 }
 
@@ -256,18 +256,10 @@ func (p *proxy) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID string
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 5. commit
-	results := c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
-	for _, res := range results {
-		if res.err == nil {
-			continue
-		}
-		glog.Error(res.err) // commit must go thru
+	if err = c.commit(bck, c.cmtTout(waitmsync)); err != nil {
 		p.undoUpdateCopies(msg, bck, ctx.revertProps)
-		err = res.error()
-		freeBcastRes(results)
 		return
 	}
-	freeBcastRes(results)
 	xactID = c.uuid
 	return
 }
@@ -363,7 +355,7 @@ func (p *proxy) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck, nprops *cmn
 	}
 
 	// 5. commit
-	c.commit(waitmsync)
+	_ = c.commit(bck, c.cmtTout(waitmsync))
 	return
 }
 
@@ -453,7 +445,7 @@ func (p *proxy) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (x
 	// 5. commit
 	xactID = c.uuid
 	c.req.Body = cos.MustMarshal(c.msg)
-	c.commit(waitmsync)
+	_ = c.commit(bckFrom, c.cmtTout(waitmsync))
 
 	// 6. start rebalance and resilver
 	wg := p.metasyncer.sync(revsPair{rmd, c.msg})
@@ -549,7 +541,7 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRun bool
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 5. commit
-	c.commit(waitmsync)
+	_ = c.commit(bckFrom, c.cmtTout(waitmsync))
 	xactID = c.uuid
 	return
 }
@@ -573,7 +565,7 @@ func (p *proxy) tcobjs(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID 
 	}
 
 	// 3. commit
-	c.commit(waitmsync)
+	_ = c.commit(bckFrom, c.cmtTout(waitmsync))
 	return
 }
 
@@ -682,17 +674,9 @@ func (p *proxy) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID string, e
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 6. commit
-	results := c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
-	for _, res := range results {
-		if res.err == nil {
-			continue
-		}
-		glog.Error(res.err)
-		err = res.error()
-		freeBcastRes(results)
+	if err = c.commit(bck, c.cmtTout(waitmsync)); err != nil {
 		return
 	}
-	freeBcastRes(results)
 	xactID = c.uuid
 	return
 }
@@ -721,17 +705,7 @@ func (p *proxy) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	}
 
 	// commit
-	results := c.bcast(cmn.ActCommit, 2*c.timeout.netw) // massive archiving vs workCh capacity
-	for _, res := range results {
-		if res.err == nil {
-			continue
-		}
-		glog.Error(res.err)
-		err = res.error()
-		freeBcastRes(results)
-		return
-	}
-	freeBcastRes(results)
+	err = c.commit(bckFrom, 2*c.timeout.netw) // channel capacity when massively archiving
 	return
 }
 
@@ -762,8 +736,8 @@ func (p *proxy) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, opts *cm
 	// NOTE: Call only the target that's being decommissioned (commit is a no-op for the rest)
 	if msg.Action == cmn.ActDecommissionNode || msg.Action == cmn.ActShutdownNode {
 		c.req.Path = cos.JoinWords(c.path, cmn.ActCommit)
-		res := p.call(callArgs{si: si, req: c.req, timeout: c.commitTimeout(waitmsync)})
-		err = res.error()
+		res := p.call(callArgs{si: si, req: c.req, timeout: c.cmtTout(waitmsync)})
+		err = res.toErr()
 		freeCR(res)
 		if err != nil {
 			glog.Error(err)
@@ -852,18 +826,7 @@ func (p *proxy) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 	}
 
 	// 3. Commit
-	results := c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
-	for _, res := range results {
-		if res.err == nil {
-			continue
-		}
-		glog.Errorf("Failed to commit %q (msg: %v, bck: %s, err: %v)", msg.Action, msg, bck, res.err)
-		err := res.error()
-		freeBcastRes(results)
-		return err
-	}
-	freeBcastRes(results)
-	return nil
+	return c.commit(bck, c.cmtTout(waitmsync))
 }
 
 // erase bucket data from all targets (keep metadata)
