@@ -315,6 +315,13 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 }
 
 func TestFSCheckerDetectionEnabled(t *testing.T) {
+	// TODO -- FIXME:
+	// revise all fs-checker tests that manipulate mountpaths, make sure
+	// those (mountpaths) are always getting restored correctly when (and if) a test fails -
+	// then remove the "skipping" - here and elsewhere
+	if true {
+		t.Skipf("skipping %s", t.Name())
+	}
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
@@ -366,6 +373,9 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 }
 
 func TestFSCheckerDetectionDisabled(t *testing.T) {
+	if true {
+		t.Skipf("skipping %s", t.Name())
+	}
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
@@ -412,6 +422,9 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 }
 
 func TestFSCheckerEnablingMountpath(t *testing.T) {
+	if true {
+		t.Skipf("skipping %s", t.Name())
+	}
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
 		proxyURL   = tutils.RandomProxyURL()
@@ -474,6 +487,9 @@ func TestFSCheckerEnablingMountpath(t *testing.T) {
 }
 
 func TestFSCheckerTargetDisableAllMountpaths(t *testing.T) {
+	if true {
+		t.Skipf("skipping %s", t.Name())
+	}
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
 		target *cluster.Snode
@@ -529,7 +545,9 @@ func TestFSCheckerTargetDisableAllMountpaths(t *testing.T) {
 }
 
 func TestFSAddMountpathRestartNode(t *testing.T) {
-	t.Skipf("skipping %s", t.Name())
+	if true {
+		t.Skipf("skipping %s", t.Name())
+	}
 	var (
 		target *cluster.Snode
 
@@ -597,7 +615,9 @@ func TestFSAddMountpathRestartNode(t *testing.T) {
 }
 
 func TestFSDisableAllExceptOneMountpathRestartNode(t *testing.T) {
-	t.Skipf("skipping %s", t.Name())
+	if true {
+		t.Skipf("skipping %s", t.Name())
+	}
 	tutils.CheckSkip(t, tutils.SkipTestArgs{
 		Long:               true,
 		MinMountpaths:      3,
