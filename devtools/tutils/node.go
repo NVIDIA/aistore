@@ -179,6 +179,7 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 	smapChangeDeadline = timeStart.Add(2 * proxyChangeLatency)
 	opDeadline = timeStart.Add(3 * proxyChangeLatency)
 
+	time.Sleep(3 * time.Second) // TODO -- FIXME: remove
 	tlog.Logf("Waiting for %q(p%d, t%d, Smap > v%d)\n", reason, expPrx, expTgt, origVersion)
 
 	var (

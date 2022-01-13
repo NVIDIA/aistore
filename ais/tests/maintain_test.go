@@ -155,7 +155,6 @@ func TestMaintenanceMD(t *testing.T) {
 	time.Sleep(time.Second)
 	err = tutils.RestoreNode(cmd, false, "target")
 	tassert.CheckFatal(t, err)
-	time.Sleep(4 * time.Second)
 	_, err = tutils.WaitForClusterState(proxyURL, "target joined back", smap.Version, smap.CountActiveProxies(), smap.CountTargets())
 	tassert.CheckFatal(t, err)
 
