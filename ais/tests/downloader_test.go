@@ -143,7 +143,12 @@ func downloadObject(t *testing.T, bck cmn.Bck, objName, link string, shouldBeSki
 	waitForDownload(t, id, time.Minute)
 	status, err := api.DownloadStatus(tutils.BaseAPIParams(), id)
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, (status.SkippedCnt == 1) == shouldBeSkipped, "expected object to be [skipped: %t]", shouldBeSkipped)
+	tassert.Errorf(t, status.ErrorCnt == 0, "expected no errors during download, got: %d (errs: %v)", status.ErrorCnt, status.Errs)
+	if shouldBeSkipped {
+		tassert.Errorf(t, status.SkippedCnt == 1, "expected object to be [skipped: %t]", shouldBeSkipped)
+	} else {
+		tassert.Errorf(t, status.FinishedCnt == 1, "expected object to be finished")
+	}
 }
 
 func downloadObjectRemote(t *testing.T, body downloader.DlBackendBody, expectedFinished, expectedSkipped int) {
@@ -952,9 +957,7 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 	tassert.Fatalf(t, err == nil, "expected: err nil, got: %v", err)
 	verifyProps(t, bck, objName, newSize, "2")
 
-	time.Sleep(time.Second)
 	downloadObject(t, bck, objName, link, false /*shouldBeSkipped*/)
-	time.Sleep(time.Second)
 	newProps := verifyProps(t, bck, objName, expectedSize, "3")
 	tassert.Errorf(
 		t, oldProps.Atime != newProps.Atime,
