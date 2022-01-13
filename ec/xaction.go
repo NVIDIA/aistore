@@ -443,16 +443,16 @@ func (xacts *BckXacts) SetReq(xctn *XactRespond) {
 	xacts.req.Store(unsafe.Pointer(xctn))
 }
 
-func (xacts *BckXacts) AbortGet() {
+func (xacts *BckXacts) AbortGet() { // TODO: caller must provide the error (reason) - here and elsewhere
 	xctn := (*XactGet)(xacts.get.Load())
-	if xctn != nil && !xctn.Finished() {
+	if xctn != nil {
 		xctn.Abort(nil)
 	}
 }
 
 func (xacts *BckXacts) AbortPut() {
 	xctn := (*XactPut)(xacts.put.Load())
-	if xctn != nil && !xctn.Finished() {
+	if xctn != nil {
 		xctn.Abort(nil)
 	}
 }

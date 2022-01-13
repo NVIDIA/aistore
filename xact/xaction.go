@@ -82,7 +82,7 @@ func (xctn *Base) Bck() *cluster.Bck { return xctn.bck }
 func (xctn *Base) Finished() bool    { return xctn.eutime.Load() != 0 }
 
 func (xctn *Base) Running() (yes bool) {
-	yes = xctn.sutime.Load() != 0 && !xctn.Finished()
+	yes = xctn.sutime.Load() != 0 && !xctn.Finished() && !xctn.IsAborted()
 	debug.AssertMsg(!yes || xctn.ID() != "", xctn.String())
 	return
 }

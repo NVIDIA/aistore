@@ -128,7 +128,7 @@ func (r *DemandBase) ExtSnap() *SnapExt {
 
 func (r *DemandBase) Abort(err error) (ok bool) {
 	if err == nil && !r.likelyIdle() {
-		err = cmn.NewErrAborted(r.Name(), "x-demand", nil)
+		err = cmn.NewErrAborted(r.Name(), "aborting non-idle", nil)
 	}
 	if ok = r.Base.Abort(err); ok {
 		r.Finish(err)

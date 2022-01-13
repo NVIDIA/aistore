@@ -316,9 +316,9 @@ func (r *registry) getSnap(flt XactFilter) ([]cluster.XactSnap, error) {
 			}
 			return matching, nil
 		}
-		return r.matchingXactsStats(flt.genericMatcher), nil
+		return r.matchingXactsStats(flt.matches), nil
 	}
-	return r.matchingXactsStats(flt.genericMatcher), nil
+	return r.matchingXactsStats(flt.matches), nil
 }
 
 func (r *registry) abort(args abortArgs) {
@@ -382,7 +382,6 @@ func (r *registry) hkDelInactive() time.Duration {
 
 func (r *registry) add(entry Renewable) { r.entries.add(entry) }
 
-// FIXME: the logic here must be revisited and revised
 func (r *registry) hkDelOld() time.Duration {
 	var toRemove []string
 	if r.entries.len() < delOldThreshold {
@@ -393,9 +392,9 @@ func (r *registry) hkDelOld() time.Duration {
 		var (
 			xctn = entry.Get()
 			eID  = xctn.ID()
-			onl  bool
+			onl  = true // only running
 		)
-		ret, onl = true, true
+		ret = true // always return true (i.e., keep walking)
 		if !xctn.Finished() {
 			return
 		}
@@ -425,7 +424,7 @@ func (r *registry) hkDelOld() time.Duration {
 }
 
 func (r *registry) renewByID(entry Renewable, bck *cluster.Bck) (rns RenewRes) {
-	flt := XactFilter{ID: entry.UUID(), Bck: bck}
+	flt := XactFilter{ID: entry.UUID(), Kind: entry.Kind(), Bck: bck}
 	rns = r._renewFlt(entry, flt)
 	rns.beingRenewed()
 	return
@@ -544,15 +543,15 @@ func (e *entries) findUnlocked(flt XactFilter) Renewable {
 		// the one we are looking for is at the end
 		for idx := len(e.entries) - 1; idx >= 0; idx-- {
 			entry := e.entries[idx]
-			if matchEntry(entry, flt) {
+			if flt.matches(entry.Get()) {
 				return entry
 			}
 		}
 		return nil
 	}
+	// only running
 	for _, entry := range e.active {
-		xact := entry.Get()
-		if xact.Running() && matchEntry(entry, flt) {
+		if flt.matches(entry.Get()) {
 			return entry
 		}
 	}
@@ -628,37 +627,49 @@ func (e *entries) len() (l int) {
 // XactFilter //
 ////////////////
 
-func (rxf XactFilter) genericMatcher(xctn cluster.Xact) bool {
-	condition := true
-	if rxf.OnlyRunning != nil {
-		condition = condition && !xctn.Finished() == *rxf.OnlyRunning
+func (flt *XactFilter) String() string {
+	s := fmt.Sprintf("ID=%q, kind=%q", flt.ID, flt.Kind)
+	if flt.Bck != nil {
+		s = fmt.Sprintf("%s, %s", s, flt.Bck)
 	}
-	if rxf.Kind != "" {
-		condition = condition && xctn.Kind() == rxf.Kind
+	if flt.OnlyRunning != nil {
+		s = fmt.Sprintf("%s, only-running=%t", s, *flt.OnlyRunning)
 	}
-	if rxf.Bck != nil {
-		if xctn.Bck() == nil {
-			return false
-		}
-		condition = condition && xctn.Bck().Bck.Equal(rxf.Bck.Bck)
-	}
-	return condition
+	return s
 }
 
-func matchEntry(entry Renewable, flt XactFilter) (matches bool) {
-	xctn := entry.Get()
+func (flt XactFilter) matches(xctn cluster.Xact) (yes bool) {
+	debug.AssertMsg(xact.IsValidKind(xctn.Kind()), xctn.String())
+	// running?
+	if flt.OnlyRunning != nil {
+		if *flt.OnlyRunning != xctn.Running() {
+			return false
+		}
+	}
+	// same ID?
 	if flt.ID != "" {
-		return xctn.ID() == flt.ID
+		if yes = xctn.ID() == flt.ID; yes {
+			debug.AssertMsg(xctn.Kind() == flt.Kind, xctn.String()+" vs same ID "+flt.String())
+		}
+		return
 	}
-	if entry.Kind() != flt.Kind {
-		return false
+	// kind?
+	if flt.Kind != "" {
+		debug.AssertMsg(xact.IsValidKind(flt.Kind), flt.Kind)
+		if xctn.Kind() != flt.Kind {
+			return false
+		}
 	}
-	if flt.Bck == nil || flt.Bck.IsEmpty() {
-		return true
+	// bucket?
+	if xact.Table[xctn.Kind()].Scope != xact.ScopeBck {
+		return true // non-bucket x
 	}
+	if flt.Bck == nil {
+		return true // the filter's not filtering out
+	}
+
 	if xctn.Bck() == nil {
-		return false
+		return false // NOTE: ambiguity - cannot really compare
 	}
-	matches = xctn.Bck().Bck.Equal(flt.Bck.Bck)
-	return
+	return xctn.Bck().Equal(flt.Bck, true, true)
 }

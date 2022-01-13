@@ -804,11 +804,9 @@ func (t *target) startMaintenance(c *txnServerCtx) error {
 		if err := cos.MorphMarshal(c.msg.Value, &opts); err != nil {
 			return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, c.msg.Action, c.msg.Value, err)
 		}
-		g := xreg.GetRebMarked()
-		if g.Xact != nil && !g.Xact.Finished() && !g.Xact.IsAborted() {
-			return errors.New("cannot start maintenance: rebalance is in progress")
+		if xreb := xreg.GetRunning(xreg.XactFilter{Kind: cmn.ActRebalance}); xreb != nil {
+			return fmt.Errorf("%s: cannot start maintenance: rebalance %s is in progress", t.si, xreb)
 		}
-
 		if cause := xreg.CheckBucketsBusy(); cause != nil {
 			return fmt.Errorf("cannot start maintenance: (xaction: %q) is in progress", cause.Get())
 		}
