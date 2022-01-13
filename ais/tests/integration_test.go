@@ -1143,7 +1143,10 @@ func TestForwardCP(t *testing.T) {
 
 	t.Cleanup(func() {
 		// Restore original primary.
+		m.smap = tutils.GetClusterMap(m.t, m.proxyURL)
 		setPrimaryTo(t, m.proxyURL, m.smap, origURL, origID)
+
+		time.Sleep(time.Second)
 	})
 
 	tutils.CreateBucketWithCleanup(t, nextProxyURL, m.bck, nil)
@@ -1164,8 +1167,6 @@ func TestForwardCP(t *testing.T) {
 
 		setPrimaryTo(t, m.proxyURL, m.smap, nextProxyURL, nextProxyID)
 		m.proxyURL = nextProxyURL
-
-		time.Sleep(5 * time.Second)
 	}()
 	wg.Wait()
 
