@@ -18,12 +18,14 @@ import (
 )
 
 const (
-	delOldInterval      = 10 * time.Minute // cleanup old (entries.entries)
-	delInactiveInterval = time.Minute      // separately, cleanup inactive (entries.active)
-	entryOldAge         = 1 * time.Hour    // the interval to keep for history
-	entriesCap          = 256              // initial capacity of registry entries
-	delOldThreshold     = 300              // the number of entries to trigger (housekeeping) cleanup
-	waitAbortDone       = 2 * time.Second
+	delOldIval      = 10 * time.Minute // cleanup entries.entries
+	pruneActiveIval = 2 * time.Minute  // prune entries.active
+	oldAgeIval      = 1 * time.Hour    // the interval to keep for history
+
+	initialCap      = 256 // initial capacity of registry entries
+	delOldThreshold = 300 // the number of entries to trigger (housekeeping) cleanup
+
+	waitAbortDone = 2 * time.Second
 )
 
 type WPR int
@@ -86,7 +88,7 @@ type (
 	// to make sure that we don't keep old entries forever.
 	registry struct {
 		sync.RWMutex
-		inactive    atomic.Int64
+		finDelta    atomic.Int64
 		entries     *entries
 		bckXacts    map[string]Renewable
 		nonbckXacts map[string]Renewable
@@ -112,7 +114,12 @@ func (r *RenewBase) Str(kind string) string {
 // RenewRes //
 //////////////
 
-func (rns *RenewRes) IsRunning() bool { return rns.UUID != "" }
+func (rns *RenewRes) IsRunning() bool {
+	if rns.UUID == "" {
+		return false
+	}
+	return rns.Entry.Get().Running()
+}
 
 // make sure existing on-demand is active to prevent it from (idle) expiration
 // (see demand.go hkcb())
@@ -137,7 +144,7 @@ var defaultReg *registry
 
 func Init() {
 	defaultReg = newRegistry()
-	xact.IncInactive = defaultReg.incInactive
+	xact.IncFinished = defaultReg.incFinished
 }
 
 func TestReset() { defaultReg = newRegistry() } // tests only
@@ -153,7 +160,7 @@ func newRegistry() *registry {
 // register w/housekeeper periodic registry cleanups
 func RegWithHK() {
 	hk.Reg("xactions-old", defaultReg.hkDelOld, 0 /*time.Duration*/)
-	hk.Reg("xactions-inactive", defaultReg.hkDelInactive, 0 /*time.Duration*/)
+	hk.Reg("xactions-finDelta", defaultReg.hkPruneActive, 0 /*time.Duration*/)
 }
 
 func GetXact(uuid string) (xctn cluster.Xact) { return defaultReg.getXact(uuid) }
@@ -368,16 +375,27 @@ func (r *registry) matchingXactsStats(match func(xctn cluster.Xact) bool) []clus
 	return sts
 }
 
-func (r *registry) incInactive() { r.inactive.Inc() }
+func (r *registry) incFinished() { r.finDelta.Inc() }
 
-func (r *registry) hkDelInactive() time.Duration {
-	if r.inactive.Swap(0) == 0 {
-		return delInactiveInterval
+func (r *registry) hkPruneActive() time.Duration {
+	if r.finDelta.Swap(0) == 0 {
+		return pruneActiveIval
 	}
-	r.entries.mtx.Lock()
-	r.entries.delInactive()
-	r.entries.mtx.Unlock()
-	return delInactiveInterval
+	e := r.entries
+	e.mtx.Lock()
+	l := len(e.active)
+	for i := 0; i < l; i++ {
+		entry := e.active[i]
+		if !entry.Get().Finished() {
+			continue
+		}
+		copy(e.active[i:], e.active[i+1:])
+		i--
+		l--
+		e.active = e.active[:l]
+	}
+	e.mtx.Unlock()
+	return pruneActiveIval
 }
 
 func (r *registry) add(entry Renewable) { r.entries.add(entry) }
@@ -398,7 +416,7 @@ func (r *registry) hkDelOld() time.Duration {
 		if cnt == 0 {
 			now = time.Now()
 		}
-		if xctn.EndTime().Add(entryOldAge).Before(now) {
+		if xctn.EndTime().Add(oldAgeIval).Before(now) {
 			toRemove = append(toRemove, xctn.ID())
 			cnt++
 			if l-cnt < delOldThreshold {
@@ -408,14 +426,14 @@ func (r *registry) hkDelOld() time.Duration {
 	}
 	r.entries.mtx.RUnlock()
 	if cnt == 0 {
-		return delOldInterval
+		return delOldIval
 	}
 	r.entries.mtx.Lock()
 	for _, id := range toRemove {
 		r.entries.del(id)
 	}
 	r.entries.mtx.Unlock()
-	return delOldInterval
+	return delOldIval
 }
 
 func (r *registry) renewByID(entry Renewable, bck *cluster.Bck) (rns RenewRes) {
@@ -516,7 +534,7 @@ func (r *registry) renewLocked(entry Renewable, flt XactFilter, bck *cluster.Bck
 
 func newRegistryEntries() *entries {
 	return &entries{
-		entries: make([]Renewable, 0, entriesCap),
+		entries: make([]Renewable, 0, initialCap),
 	}
 }
 
@@ -584,20 +602,6 @@ func (e *entries) del(id string) {
 			e.active = e.active[:nlen]
 			break
 		}
-	}
-}
-
-func (e *entries) delInactive() {
-	l := len(e.active)
-	for i := 0; i < l; i++ {
-		entry := e.active[i]
-		if !entry.Get().Finished() {
-			continue
-		}
-		copy(e.active[i:], e.active[i+1:])
-		i--
-		l--
-		e.active = e.active[:l]
 	}
 }
 

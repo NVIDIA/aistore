@@ -50,7 +50,7 @@ type (
 	}
 )
 
-var IncInactive func()
+var IncFinished func()
 
 // common helper to go-run and wait until it actually starts running
 func GoRunW(xctn cluster.Xact) {
@@ -211,11 +211,8 @@ func (xctn *Base) EndTime() time.Time {
 	return time.Time{}
 }
 
-// upon completion, all xactions:
-// - atomically set end-time
-// - optionally, notify listener(s)
-// - optionally, refresh local capacity stats, etc.
-func (xctn *Base) notifyRefresh(err error) {
+// upon completion, all xactions optionally notify listener(s) and refresh local capacity stats
+func (xctn *Base) onFinished(err error) {
 	// notifications
 	if n := xctn.Notif(); n != nil {
 		nl.OnFinished(n, err)
@@ -227,7 +224,7 @@ func (xctn *Base) notifyRefresh(err error) {
 		}
 	}
 
-	IncInactive() // in re: HK cleanup long-time finished
+	IncFinished() // in re: HK cleanup long-time finished
 }
 
 func (xctn *Base) Notif() (n cluster.Notif) {
@@ -243,10 +240,11 @@ func (xctn *Base) AddNotif(n cluster.Notif) {
 	debug.Assert(!n.Upon(cluster.UponProgress) || xctn.notif.P != nil)
 }
 
+// atomically set end-time
 func (xctn *Base) Finish(err error) {
 	if xctn.eutime.CAS(0, 1) {
 		xctn.eutime.Store(time.Now().UnixNano())
-		xctn.notifyRefresh(err)
+		xctn.onFinished(err)
 		if xctn.Kind() != cmn.ActList {
 			glog.Infof("%s finished(%v)", xctn, err)
 		}
