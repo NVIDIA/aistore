@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 )
 
+// TODO: some of these constants must be configurable or derived from the config
 const (
 	delOldIval      = 10 * time.Minute // cleanup entries.entries
 	pruneActiveIval = 2 * time.Minute  // prune entries.active
@@ -25,7 +26,8 @@ const (
 	initialCap      = 256 // initial capacity of registry entries
 	delOldThreshold = 300 // the number of entries to trigger (housekeeping) cleanup
 
-	waitAbortDone = 2 * time.Second
+	waitPrevAborted = 2 * time.Second
+	waitLimitedCoex = 5 * time.Second
 )
 
 type WPR int
@@ -159,8 +161,8 @@ func newRegistry() *registry {
 
 // register w/housekeeper periodic registry cleanups
 func RegWithHK() {
-	hk.Reg("xactions-old", defaultReg.hkDelOld, 0 /*time.Duration*/)
-	hk.Reg("xactions-finDelta", defaultReg.hkPruneActive, 0 /*time.Duration*/)
+	hk.Reg("x-old", defaultReg.hkDelOld, 0 /*time.Duration*/)
+	hk.Reg("x-prune-active", defaultReg.hkPruneActive, 0 /*time.Duration*/)
 }
 
 func GetXact(uuid string) (xctn cluster.Xact) { return defaultReg.getXact(uuid) }
@@ -196,18 +198,6 @@ func (r *registry) getLatest(flt XactFilter) Renewable {
 	// NOTE: relies on the find() to walk in the newer --> older order
 	entry := r.entries.find(flt)
 	return entry
-}
-
-func CheckBucketsBusy() (cause Renewable) {
-	// These xactions have cluster-wide consequences: in general moving objects between targets.
-	busyXacts := []string{cmn.ActMoveBck, cmn.ActCopyBck, cmn.ActETLBck, cmn.ActECEncode}
-	for _, kind := range busyXacts {
-		if entry := GetRunning(XactFilter{Kind: kind}); entry != nil {
-			return cause
-		}
-	}
-
-	return nil
 }
 
 // AbortAllBuckets aborts all xactions that run with any of the provided bcks.
@@ -518,7 +508,7 @@ func (r *registry) renewLocked(entry Renewable, flt XactFilter, bck *cluster.Bck
 		debug.Assert(wpr == WprAbort || wpr == WprKeepAndStartNew)
 		if wpr == WprAbort {
 			xprev.Abort(cmn.ErrXactRenewAbort)
-			time.Sleep(waitAbortDone) // TODO: better
+			time.Sleep(waitPrevAborted)
 		}
 	}
 	if err = entry.Start(); err != nil {
@@ -661,4 +651,64 @@ func (flt XactFilter) matches(xctn cluster.Xact) (yes bool) {
 		return false // NOTE: ambiguity - cannot really compare
 	}
 	return xctn.Bck().Equal(flt.Bck, true, true)
+}
+
+//
+// "limited coexistence" logic
+//
+
+func LimitedCoexistence(tsi *cluster.Snode, bck *cluster.Bck, action string) (err error) {
+	const sleep = time.Second
+	for i := time.Duration(0); i < waitLimitedCoex; i += sleep {
+		if err = limco(tsi, bck, action); err == nil {
+			break
+		}
+		time.Sleep(sleep)
+	}
+	return
+}
+
+func limco(tsi *cluster.Snode, bck *cluster.Bck, action string) (err error) {
+	var nd *xact.Descriptor // the one that wants to run
+
+	switch {
+	// e.g. read: if copy-bucket or ETL is currently running
+	// we cannot start transitioning to maintenance
+	case action == cmn.ActStartMaintenance, action == cmn.ActShutdownNode:
+		nd = &xact.Descriptor{MassiveBck: true, Resilver: true}
+	// all supported xactions define "limited coexistence"
+	// via xact.Table
+	default:
+		if d, ok := xact.Table[action]; ok {
+			nd = &d
+		} else {
+			return
+		}
+	}
+
+	for kind, d := range xact.Table {
+		// NOTE that rebalance-vs-rebalance and resilver-vs-resilver sort it out between themselves
+		//      just fine
+		conflict := (d.Rebalance && nd.MassiveBck) || (nd.Rebalance && d.MassiveBck) ||
+			(d.Resilver && nd.MassiveBck) || (nd.Resilver && d.MassiveBck)
+		if !conflict {
+			continue
+		}
+		// the potential conflict becomes very real if the 'kind' is actually running
+		entry := GetRunning(XactFilter{Kind: kind})
+		if entry == nil {
+			continue
+		}
+		// conflict confirmed
+		var (
+			s    string
+			xctn = entry.Get()
+		)
+		if bck != nil {
+			s = " (bucket " + bck.String() + ")"
+		}
+		err = fmt.Errorf("%s: %s is currently running, cannot run %q%s concurrently", tsi, xctn, action, s)
+		break
+	}
+	return
 }

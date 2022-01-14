@@ -479,8 +479,8 @@ func parseXactionFromArgs(c *cli.Context) (nodeID, xactID, xactKind string, bck 
 // Get list of xactions
 func listXactions(onlyStartable bool) []string {
 	xactKinds := make([]string, 0)
-	for kind, meta := range xact.Table {
-		if !onlyStartable || (onlyStartable && meta.Startable) {
+	for kind, dtor := range xact.Table {
+		if !onlyStartable || (onlyStartable && dtor.Startable) {
 			xactKinds = append(xactKinds, kind)
 		}
 	}

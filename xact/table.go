@@ -14,7 +14,7 @@ const (
 )
 
 type (
-	Record struct {
+	Descriptor struct {
 		Scope      string          // ScopeG (global), etc. - the enum above
 		Access     cmn.AccessAttrs // Access required by xctn (see: cmn.Access*)
 		Startable  bool            // determines if this xaction can be started via API
@@ -22,19 +22,23 @@ type (
 		Owned      bool            // true: JTX-owned
 		RefreshCap bool            // true: refresh capacity stats upon completion
 		Mountpath  bool            // true: mountpath-traversing (jogger-based) xaction
+		// see xreg for "limited coexistence"
+		Rebalance  bool // moves data between nodes
+		Resilver   bool // moves data between mountpaths
+		MassiveBck bool // massive data copying (transforming, encoding) operation on a bucket
 	}
 )
 
-// Table is a static Kind=>[Xaction Record] map that contains
+// Table is a static Kind=>[Xaction Descriptor] map that contains
 // static properties of a given xaction type (aka `kind`), such as:
 // `Startable`, `Owned`, etc.
-var Table = map[string]Record{
+var Table = map[string]Descriptor{
 	// bucket-less xactions that will typically have a 'cluster' scope (with resilver being a notable exception)
 	cmn.ActLRU:          {Scope: ScopeG, Startable: true, Mountpath: true},
 	cmn.ActStoreCleanup: {Scope: ScopeG, Startable: true, Mountpath: true},
 	cmn.ActElection:     {Scope: ScopeG, Startable: false},
-	cmn.ActResilver:     {Scope: ScopeT, Startable: true, Mountpath: true},
-	cmn.ActRebalance:    {Scope: ScopeG, Startable: true, Metasync: true, Owned: false, Mountpath: true},
+	cmn.ActResilver:     {Scope: ScopeT, Startable: true, Mountpath: true, Resilver: true},
+	cmn.ActRebalance:    {Scope: ScopeG, Startable: true, Metasync: true, Owned: false, Mountpath: true, Rebalance: true},
 	cmn.ActDownload:     {Scope: ScopeG, Startable: false, Mountpath: true},
 	cmn.ActETLInline:    {Scope: ScopeG, Startable: false, Mountpath: false},
 
@@ -47,10 +51,10 @@ var Table = map[string]Record{
 	cmn.ActArchive:         {Scope: ScopeBck, Startable: false, RefreshCap: true},
 	cmn.ActCopyObjects:     {Scope: ScopeBck, Startable: false, RefreshCap: true},
 	cmn.ActETLObjects:      {Scope: ScopeBck, Startable: false, RefreshCap: true},
-	cmn.ActMoveBck:         {Scope: ScopeBck, Access: cmn.AceMoveBucket, Startable: false, Metasync: true, Owned: false, Mountpath: true},
-	cmn.ActCopyBck:         {Scope: ScopeBck, Access: cmn.AccessRW, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
-	cmn.ActETLBck:          {Scope: ScopeBck, Access: cmn.AccessRW, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
-	cmn.ActECEncode:        {Scope: ScopeBck, Access: cmn.AccessRW, Startable: true, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
+	cmn.ActMoveBck:         {Scope: ScopeBck, Access: cmn.AceMoveBucket, Startable: false, Metasync: true, Owned: false, Mountpath: true, Rebalance: true},
+	cmn.ActCopyBck:         {Scope: ScopeBck, Access: cmn.AccessRW, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true, MassiveBck: true},
+	cmn.ActETLBck:          {Scope: ScopeBck, Access: cmn.AccessRW, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true, MassiveBck: true},
+	cmn.ActECEncode:        {Scope: ScopeBck, Access: cmn.AccessRW, Startable: true, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true, MassiveBck: true},
 	cmn.ActEvictObjects:    {Scope: ScopeBck, Access: cmn.AceObjDELETE, Startable: false, RefreshCap: true, Mountpath: true},
 	cmn.ActDeleteObjects:   {Scope: ScopeBck, Access: cmn.AceObjDELETE, Startable: false, RefreshCap: true, Mountpath: true},
 	cmn.ActLoadLomCache:    {Scope: ScopeBck, Startable: true, Mountpath: true},

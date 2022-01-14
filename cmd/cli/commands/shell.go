@@ -435,8 +435,8 @@ func daemonXactionCompletions(ctx *cli.Context) {
 func xactionCompletions(cmd string) func(ctx *cli.Context) {
 	return func(c *cli.Context) {
 		if c.NArg() == 0 {
-			for kind, meta := range xact.Table {
-				if (cmd != cmn.ActXactStart) || (cmd == cmn.ActXactStart && meta.Startable) {
+			for kind, dtor := range xact.Table {
+				if (cmd != cmn.ActXactStart) || (cmd == cmn.ActXactStart && dtor.Startable) {
 					fmt.Println(kind)
 				}
 			}

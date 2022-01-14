@@ -272,7 +272,7 @@ func (t *target) validateMakeNCopies(bck *cluster.Bck, msg *aisMsg) (curCopies, 
 	}
 	// NOTE: #791 "limited coexistence" here and elsewhere
 	if err == nil {
-		err = t.coExists(bck, msg.Action)
+		err = xreg.LimitedCoexistence(t.si, bck, msg.Action)
 	}
 	if err != nil {
 		return
@@ -442,7 +442,11 @@ func (t *target) validateBckRenTxn(bckFrom, bckTo *cluster.Bck, msg *aisMsg) err
 	if cs := fs.GetCapStatus(); cs.Err != nil {
 		return cs.Err
 	}
-	if err := t.coExists(bckFrom, msg.Action); err != nil {
+	// TODO: move this check into xreg.LimitedCoexistence() with the capability to check on a per-bucket basis
+	if entry := xreg.GetRunning(xreg.XactFilter{Kind: cmn.ActMoveBck}); entry != nil {
+		return fmt.Errorf("%s: %s is currently running, cannot run %q (bucket %s) concurrently", t.si, entry.Get(), cmn.ActMoveBck, bckFrom)
+	}
+	if err := xreg.LimitedCoexistence(t.si, bckFrom, msg.Action); err != nil {
 		return err
 	}
 	bmd := t.owner.bmd.get()
@@ -499,7 +503,7 @@ func (t *target) tcb(c *txnServerCtx, msg *cmn.TCBMsg, dp cluster.DP) (string, e
 		if cs := fs.GetCapStatus(); cs.Err != nil {
 			return xactID, cs.Err
 		}
-		if err := t.coExists(bckFrom, c.msg.Action); err != nil {
+		if err := xreg.LimitedCoexistence(t.si, bckFrom, c.msg.Action); err != nil {
 			return xactID, err
 		}
 		bmd := t.owner.bmd.get()
@@ -609,7 +613,7 @@ func (t *target) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (str
 		if cs := fs.GetCapStatus(); cs.Err != nil {
 			return xactID, cs.Err
 		}
-		if err := t.coExists(bckFrom, c.msg.Action); err != nil {
+		if err := xreg.LimitedCoexistence(t.si, bckFrom, c.msg.Action); err != nil {
 			return xactID, err
 		}
 		bmd := t.owner.bmd.get()
@@ -706,12 +710,11 @@ func (t *target) ecEncode(c *txnServerCtx) error {
 	return nil
 }
 
-func (t *target) validateECEncode(bck *cluster.Bck, msg *aisMsg) (err error) {
+func (t *target) validateECEncode(bck *cluster.Bck, msg *aisMsg) error {
 	if cs := fs.GetCapStatus(); cs.Err != nil {
 		return cs.Err
 	}
-	err = t.coExists(bck, msg.Action)
-	return
+	return xreg.LimitedCoexistence(t.si, bck, msg.Action)
 }
 
 ////////////////////////
@@ -804,11 +807,8 @@ func (t *target) startMaintenance(c *txnServerCtx) error {
 		if err := cos.MorphMarshal(c.msg.Value, &opts); err != nil {
 			return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t.si, c.msg.Action, c.msg.Value, err)
 		}
-		if xreb := xreg.GetRunning(xreg.XactFilter{Kind: cmn.ActRebalance}); xreb != nil {
-			return fmt.Errorf("%s: cannot start maintenance: rebalance %s is in progress", t.si, xreb)
-		}
-		if cause := xreg.CheckBucketsBusy(); cause != nil {
-			return fmt.Errorf("cannot start maintenance: (xaction: %q) is in progress", cause.Get())
+		if err := xreg.LimitedCoexistence(t.si, nil, c.msg.Action); err != nil {
+			return err
 		}
 		reb.ActivateTimedGFN()
 	case cmn.ActAbort:
@@ -917,21 +917,6 @@ func (t *target) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase strin
 
 	c.t = t
 	return c, err
-}
-
-// TODO: #791 "limited coexistence" - extend and unify
-func (t *target) coExists(bck *cluster.Bck, action string) (err error) {
-	const fmtErr = "%s: [%s] is currently running, cannot run %q (bucket %s) concurrently"
-	g, l := xreg.GetRebMarked(), xreg.GetResilverMarked()
-	if g.Xact != nil {
-		err = fmt.Errorf(fmtErr, t.si, g.Xact, action, bck)
-	} else if l.Xact != nil {
-		err = fmt.Errorf(fmtErr, t.si, l.Xact, action, bck)
-	}
-	if ren := xreg.GetRunning(xreg.XactFilter{Kind: cmn.ActMoveBck}); ren != nil {
-		err = fmt.Errorf(fmtErr, t.si, ren.Get(), action, bck)
-	}
-	return
 }
 
 //

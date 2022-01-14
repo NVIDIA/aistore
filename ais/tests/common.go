@@ -569,7 +569,7 @@ func ensureNumMountpaths(t *testing.T, target *cluster.Snode, mpList *cmn.Mountp
 	baseParams := tutils.BaseAPIParams()
 	mpl, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 6; i++ {
 		if len(mpl.Available) == len(mpList.Available) &&
 			len(mpl.Disabled) == len(mpList.Disabled) &&
 			len(mpl.WaitingDD) == len(mpList.WaitingDD) {
@@ -587,7 +587,7 @@ func ensureNumMountpaths(t *testing.T, target *cluster.Snode, mpList *cmn.Mountp
 }
 
 func ensureNoDisabledMountpaths(t *testing.T, target *cluster.Snode, mpList *cmn.MountpathList) {
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 6; i++ {
 		if len(mpList.WaitingDD) == 0 && len(mpList.Disabled) == 0 {
 			break
 		}
