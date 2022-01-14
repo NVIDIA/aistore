@@ -22,6 +22,7 @@ import (
 )
 
 func TestMaintenanceOnOff(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{MinTargets: 3})
 	proxyURL := tutils.RandomProxyURL(t)
 	smap := tutils.GetClusterMap(t, proxyURL)
 
@@ -48,7 +49,7 @@ func TestMaintenanceOnOff(t *testing.T) {
 }
 
 func TestMaintenanceListObjects(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, MinTargets: 3})
 
 	var (
 		bck = cmn.Bck{Name: "maint-list", Provider: cmn.ProviderAIS}
@@ -123,7 +124,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 
 func TestMaintenanceMD(t *testing.T) {
 	// NOTE: this test requires local deployment as it checks local filesystem for VMDs.
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{MinTargets: 3, RequiredDeployment: tutils.ClusterTypeLocal})
 
 	var (
 		proxyURL   = tutils.RandomProxyURL(t)
@@ -166,7 +167,7 @@ func TestMaintenanceMD(t *testing.T) {
 }
 
 func TestMaintenanceDecommissionRebalance(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal, Long: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{MinTargets: 3, RequiredDeployment: tutils.ClusterTypeLocal, Long: true})
 	var (
 		proxyURL   = tutils.RandomProxyURL(t)
 		smap       = tutils.GetClusterMap(t, proxyURL)
@@ -263,7 +264,7 @@ func countVMDTargets(tsMpaths map[*cluster.Snode][]string) (total int) {
 }
 
 func TestMaintenanceRebalance(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{MinTargets: 3, Long: true})
 	var (
 		bck = cmn.Bck{Name: "maint-reb", Provider: cmn.ProviderAIS}
 		m   = &ioContext{
@@ -334,7 +335,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 }
 
 func TestMaintenanceGetWhileRebalance(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{MinTargets: 3, Long: true})
 	var (
 		bck = cmn.Bck{Name: "maint-get-reb", Provider: cmn.ProviderAIS}
 		m   = &ioContext{

@@ -383,43 +383,38 @@ func (r *registry) hkDelInactive() time.Duration {
 func (r *registry) add(entry Renewable) { r.entries.add(entry) }
 
 func (r *registry) hkDelOld() time.Duration {
-	var toRemove []string
-	if r.entries.len() < delOldThreshold {
-		return delOldInterval
-	}
-	now := time.Now()
-	r.entries.forEach(func(entry Renewable) (ret bool) {
-		var (
-			xctn = entry.Get()
-			eID  = xctn.ID()
-			onl  = true // only running
-		)
-		ret = true // always return true (i.e., keep walking)
+	var (
+		toRemove []string
+		now      time.Time
+		cnt      int
+	)
+	r.entries.mtx.RLock()
+	l := len(r.entries.entries)
+	for i := 0; i < l; i++ { // older (start-time wise) -> newer
+		xctn := r.entries.entries[i].Get()
 		if !xctn.Finished() {
-			return
+			continue
 		}
-		// extra check if the entry is not the most recent one for
-		// a given kind (if it is keep it anyway)
-		flt := XactFilter{Kind: entry.Kind(), OnlyRunning: &onl}
-		if xact.Table[entry.Kind()].Scope == xact.ScopeBck {
-			flt.Bck = xctn.Bck()
-		}
-		if r.entries.findUnlocked(flt) == nil {
-			return
+		if cnt == 0 {
+			now = time.Now()
 		}
 		if xctn.EndTime().Add(entryOldAge).Before(now) {
-			toRemove = append(toRemove, eID)
+			toRemove = append(toRemove, xctn.ID())
+			cnt++
+			if l-cnt < delOldThreshold {
+				break
+			}
 		}
-		return
-	})
-	if len(toRemove) > 0 {
-		r.entries.mtx.Lock()
-		for _, id := range toRemove {
-			err := r.entries.del(id)
-			debug.AssertNoErr(err)
-		}
-		r.entries.mtx.Unlock()
 	}
+	r.entries.mtx.RUnlock()
+	if cnt == 0 {
+		return delOldInterval
+	}
+	r.entries.mtx.Lock()
+	for _, id := range toRemove {
+		r.entries.del(id)
+	}
+	r.entries.mtx.Unlock()
 	return delOldInterval
 }
 
@@ -569,13 +564,11 @@ func (e *entries) forEach(matcher func(entry Renewable) bool) {
 }
 
 // NOTE: is called under lock
-func (e *entries) del(id string) error {
+func (e *entries) del(id string) {
 	for idx, entry := range e.entries {
 		xctn := entry.Get()
 		if xctn.ID() == id {
-			if !xctn.Finished() {
-				return fmt.Errorf("cannot remove %s - is running", xctn)
-			}
+			debug.AssertMsg(xctn.Finished(), xctn.String())
 			nlen := len(e.entries) - 1
 			e.entries[idx] = e.entries[nlen]
 			e.entries = e.entries[:nlen]
@@ -592,7 +585,6 @@ func (e *entries) del(id string) error {
 			break
 		}
 	}
-	return nil
 }
 
 func (e *entries) delInactive() {
@@ -614,13 +606,6 @@ func (e *entries) add(entry Renewable) {
 	e.active = append(e.active, entry)
 	e.entries = append(e.entries, entry)
 	e.mtx.Unlock()
-}
-
-func (e *entries) len() (l int) {
-	e.mtx.RLock()
-	l = len(e.entries)
-	e.mtx.RUnlock()
-	return
 }
 
 ////////////////
