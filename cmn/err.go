@@ -141,6 +141,13 @@ type (
 	ErrLmetaNotFound struct {
 		err error
 	}
+
+	ErrLimitedCoexistence struct {
+		node    string
+		xaction string
+		action  string
+		detail  string
+	}
 )
 
 var (
@@ -551,6 +558,38 @@ func IsErrSoft(err error) bool {
 	return errors.As(err, &target)
 }
 
+///////////////////////
+// ErrLmetaCorrupted & ErrLmetaNotFound
+///////////////////////
+
+func NewErrLmetaCorrupted(err error) *ErrLmetaCorrupted { return &ErrLmetaCorrupted{err} }
+func (e *ErrLmetaCorrupted) Error() string              { return e.err.Error() }
+
+func IsErrLmetaCorrupted(err error) bool {
+	_, ok := err.(*ErrLmetaCorrupted)
+	return ok
+}
+
+func NewErrLmetaNotFound(err error) *ErrLmetaNotFound { return &ErrLmetaNotFound{err} }
+func (e *ErrLmetaNotFound) Error() string             { return e.err.Error() }
+
+func IsErrLmetaNotFound(err error) bool {
+	_, ok := err.(*ErrLmetaNotFound)
+	return ok
+}
+
+///////////////////////////
+// ErrLimitedCoexistence //
+///////////////////////////
+func NewErrLimitedCoexistence(node, xaction, action, detail string) *ErrLimitedCoexistence {
+	return &ErrLimitedCoexistence{node, xaction, action, detail}
+}
+
+func (e *ErrLimitedCoexistence) Error() string {
+	return fmt.Sprintf("%s: %s is currently running, cannot run %q(%s) concurrently",
+		e.node, e.xaction, e.action, e.detail)
+}
+
 ////////////////////////////
 // error grouping helpers //
 ////////////////////////////
@@ -745,26 +784,6 @@ func (e *ErrHTTP) populateStackTrace() {
 	}
 	fmt.Fprint(buffer, "]")
 	e.trace = buffer.Bytes()
-}
-
-///////////////////////
-// ErrLmetaCorrupted & ErrLmetaNotFound
-///////////////////////
-
-func NewErrLmetaCorrupted(err error) *ErrLmetaCorrupted { return &ErrLmetaCorrupted{err} }
-func (e *ErrLmetaCorrupted) Error() string              { return e.err.Error() }
-
-func IsErrLmetaCorrupted(err error) bool {
-	_, ok := err.(*ErrLmetaCorrupted)
-	return ok
-}
-
-func NewErrLmetaNotFound(err error) *ErrLmetaNotFound { return &ErrLmetaNotFound{err} }
-func (e *ErrLmetaNotFound) Error() string             { return e.err.Error() }
-
-func IsErrLmetaNotFound(err error) bool {
-	_, ok := err.(*ErrLmetaNotFound)
-	return ok
 }
 
 //////////////////////////////

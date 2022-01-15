@@ -29,6 +29,7 @@ type (
 		ID() string
 		Kind() string
 		Bck() *Bck
+		FromTo() (*Bck, *Bck)
 		StartTime() time.Time
 		EndTime() time.Time
 		Finished() bool

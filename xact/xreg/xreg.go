@@ -602,6 +602,100 @@ func (e *entries) add(entry Renewable) {
 	e.mtx.Unlock()
 }
 
+//
+// limited coexistence
+//
+
+func LimitedCoexistence(tsi *cluster.Snode, bck *cluster.Bck, action string, otherBck ...*cluster.Bck) (err error) {
+	const sleep = time.Second
+	for i := time.Duration(0); i < waitLimitedCoex; i += sleep {
+		if err = defaultReg.limco(tsi, bck, action, otherBck...); err == nil {
+			break
+		}
+		if action == cmn.ActMoveBck {
+			return
+		}
+		time.Sleep(sleep)
+	}
+	return
+}
+
+func (r *registry) limco(tsi *cluster.Snode, bck *cluster.Bck, action string, otherBck ...*cluster.Bck) error {
+	var nd *xact.Descriptor // the one that wants to run
+
+	switch {
+	// e.g. read: if copy-bucket or ETL is currently running
+	// we cannot start transitioning to maintenance
+	case action == cmn.ActStartMaintenance, action == cmn.ActShutdownNode:
+		nd = &xact.Descriptor{MassiveBck: true, Resilver: true}
+	// all supported xactions define "limited coexistence"
+	// via xact.Table
+	default:
+		if d, ok := xact.Table[action]; ok {
+			nd = &d
+		} else {
+			return nil
+		}
+	}
+
+	for kind, d := range xact.Table {
+		// NOTE that rebalance-vs-rebalance and resilver-vs-resilver sort it out between themselves
+		//      just fine
+		conflict := (d.Rebalance && nd.MassiveBck) || (nd.Rebalance && d.MassiveBck) ||
+			(d.Resilver && nd.MassiveBck) || (nd.Resilver && d.MassiveBck)
+		if !conflict {
+			continue
+		}
+		// the potential conflict becomes very real if the 'kind' is actually running
+		entry := r.getRunning(XactFilter{Kind: kind})
+		if entry == nil {
+			continue
+		}
+		// conflict confirmed
+		var b string
+		if bck != nil {
+			b = bck.String()
+		}
+		return cmn.NewErrLimitedCoexistence(tsi.String(), entry.Get().String(), action, b)
+	}
+
+	// finally, bucket rename (cmn.ActMoveBck) is a special case -
+	// incompatible with any MassiveBck type operation _on the same_ bucket
+	if action != cmn.ActMoveBck {
+		return nil
+	}
+	bck1, bck2 := bck, otherBck[0]
+	for _, entry := range r.entries.active {
+		xctn := entry.Get()
+		if !xctn.Running() {
+			continue
+		}
+		d, ok := xact.Table[xctn.Kind()]
+		debug.Assert(ok, xctn.Kind())
+		if !d.MassiveBck {
+			continue
+		}
+		from, to := xctn.FromTo()
+		if _eqAny(bck1, bck2, from, to) {
+			detail := bck1.String() + " => " + bck2.String()
+			return cmn.NewErrLimitedCoexistence(tsi.String(), entry.Get().String(), action, detail)
+		}
+	}
+	return nil
+}
+
+func _eqAny(bck1, bck2, from, to *cluster.Bck) (eq bool) {
+	if from != nil {
+		if bck1.Equal(from, false, true) || bck2.Equal(from, false, true) {
+			return true
+		}
+	}
+	if to != nil {
+		eq = bck1.Equal(to, false, true) || bck2.Equal(to, false, true)
+	}
+	return
+}
+
 ////////////////
 // XactFilter //
 ////////////////
@@ -651,64 +745,4 @@ func (flt XactFilter) matches(xctn cluster.Xact) (yes bool) {
 		return false // NOTE: ambiguity - cannot really compare
 	}
 	return xctn.Bck().Equal(flt.Bck, true, true)
-}
-
-//
-// "limited coexistence" logic
-//
-
-func LimitedCoexistence(tsi *cluster.Snode, bck *cluster.Bck, action string) (err error) {
-	const sleep = time.Second
-	for i := time.Duration(0); i < waitLimitedCoex; i += sleep {
-		if err = limco(tsi, bck, action); err == nil {
-			break
-		}
-		time.Sleep(sleep)
-	}
-	return
-}
-
-func limco(tsi *cluster.Snode, bck *cluster.Bck, action string) (err error) {
-	var nd *xact.Descriptor // the one that wants to run
-
-	switch {
-	// e.g. read: if copy-bucket or ETL is currently running
-	// we cannot start transitioning to maintenance
-	case action == cmn.ActStartMaintenance, action == cmn.ActShutdownNode:
-		nd = &xact.Descriptor{MassiveBck: true, Resilver: true}
-	// all supported xactions define "limited coexistence"
-	// via xact.Table
-	default:
-		if d, ok := xact.Table[action]; ok {
-			nd = &d
-		} else {
-			return
-		}
-	}
-
-	for kind, d := range xact.Table {
-		// NOTE that rebalance-vs-rebalance and resilver-vs-resilver sort it out between themselves
-		//      just fine
-		conflict := (d.Rebalance && nd.MassiveBck) || (nd.Rebalance && d.MassiveBck) ||
-			(d.Resilver && nd.MassiveBck) || (nd.Resilver && d.MassiveBck)
-		if !conflict {
-			continue
-		}
-		// the potential conflict becomes very real if the 'kind' is actually running
-		entry := GetRunning(XactFilter{Kind: kind})
-		if entry == nil {
-			continue
-		}
-		// conflict confirmed
-		var (
-			s    string
-			xctn = entry.Get()
-		)
-		if bck != nil {
-			s = " (bucket " + bck.String() + ")"
-		}
-		err = fmt.Errorf("%s: %s is currently running, cannot run %q%s concurrently", tsi, xctn, action, s)
-		break
-	}
-	return
 }

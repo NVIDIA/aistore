@@ -76,6 +76,9 @@ func (p *bmvFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 }
 
 func newBckRename(uuid, kind string, bck *cluster.Bck, t cluster.Target, bckFrom, bckTo *cluster.Bck, rebID string) (x *bckRename) {
+	// NOTE: `bck` = `bckTo` = (the new name) while `bckFrom` is the existing bucket to be renamed
+	debug.AssertMsg(bck.Equal(bckTo, false, true), bck.String()+" vs "+bckTo.String())
+
 	x = &bckRename{t: t, bckFrom: bckFrom, bckTo: bckTo, rebID: rebID}
 	x.InitBase(uuid, kind, bck)
 	return
@@ -88,6 +91,8 @@ func (r *bckRename) String() string {
 func (r *bckRename) Name() string {
 	return fmt.Sprintf("%s <= %s", r.Base.Name(), r.bckFrom)
 }
+
+func (r *bckRename) FromTo() (*cluster.Bck, *cluster.Bck) { return r.bckFrom, r.bckTo }
 
 // NOTE: assuming that rebalance takes longer than resilvering
 func (r *bckRename) Run(wg *sync.WaitGroup) {

@@ -442,11 +442,7 @@ func (t *target) validateBckRenTxn(bckFrom, bckTo *cluster.Bck, msg *aisMsg) err
 	if cs := fs.GetCapStatus(); cs.Err != nil {
 		return cs.Err
 	}
-	// TODO: move this check into xreg.LimitedCoexistence() with the capability to check on a per-bucket basis
-	if entry := xreg.GetRunning(xreg.XactFilter{Kind: cmn.ActMoveBck}); entry != nil {
-		return fmt.Errorf("%s: %s is currently running, cannot run %q (bucket %s) concurrently", t.si, entry.Get(), cmn.ActMoveBck, bckFrom)
-	}
-	if err := xreg.LimitedCoexistence(t.si, bckFrom, msg.Action); err != nil {
+	if err := xreg.LimitedCoexistence(t.si, bckFrom, msg.Action, bckTo); err != nil {
 		return err
 	}
 	bmd := t.owner.bmd.get()

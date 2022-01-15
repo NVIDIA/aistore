@@ -76,10 +76,11 @@ func (xctn *Base) InitBase(id, kind string, bck *cluster.Bck) {
 	xctn.setStartTime(time.Now())
 }
 
-func (xctn *Base) ID() string        { return xctn.id }
-func (xctn *Base) Kind() string      { return xctn.kind }
-func (xctn *Base) Bck() *cluster.Bck { return xctn.bck }
-func (xctn *Base) Finished() bool    { return xctn.eutime.Load() != 0 }
+func (xctn *Base) ID() string                      { return xctn.id }
+func (xctn *Base) Kind() string                    { return xctn.kind }
+func (xctn *Base) Bck() *cluster.Bck               { return xctn.bck }
+func (*Base) FromTo() (*cluster.Bck, *cluster.Bck) { return nil, nil }
+func (xctn *Base) Finished() bool                  { return xctn.eutime.Load() != 0 }
 
 func (xctn *Base) Running() (yes bool) {
 	yes = xctn.sutime.Load() != 0 && !xctn.Finished() && !xctn.IsAborted()

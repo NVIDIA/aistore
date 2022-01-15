@@ -193,6 +193,8 @@ func newXactTCB(e *tcbFactory, slab *memsys.Slab) (r *XactTCB) {
 	return
 }
 
+func (r *XactTCB) FromTo() (*cluster.Bck, *cluster.Bck) { return r.args.BckFrom, r.args.BckTo }
+
 func (r *XactTCB) WaitRunning() { r.wg.Wait() }
 
 func (r *XactTCB) Run(wg *sync.WaitGroup) {

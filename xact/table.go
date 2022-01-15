@@ -51,7 +51,7 @@ var Table = map[string]Descriptor{
 	cmn.ActArchive:         {Scope: ScopeBck, Startable: false, RefreshCap: true},
 	cmn.ActCopyObjects:     {Scope: ScopeBck, Startable: false, RefreshCap: true},
 	cmn.ActETLObjects:      {Scope: ScopeBck, Startable: false, RefreshCap: true},
-	cmn.ActMoveBck:         {Scope: ScopeBck, Access: cmn.AceMoveBucket, Startable: false, Metasync: true, Owned: false, Mountpath: true, Rebalance: true},
+	cmn.ActMoveBck:         {Scope: ScopeBck, Access: cmn.AceMoveBucket, Startable: false, Metasync: true, Owned: false, Mountpath: true, Rebalance: true, MassiveBck: true},
 	cmn.ActCopyBck:         {Scope: ScopeBck, Access: cmn.AccessRW, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true, MassiveBck: true},
 	cmn.ActETLBck:          {Scope: ScopeBck, Access: cmn.AccessRW, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true, MassiveBck: true},
 	cmn.ActECEncode:        {Scope: ScopeBck, Access: cmn.AccessRW, Startable: true, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true, MassiveBck: true},
