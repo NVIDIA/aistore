@@ -532,7 +532,7 @@ func (mi *MountpathInfo) CheckDisks() (err error) {
 	return
 }
 
-func (mi *MountpathInfo) AbortDD() {
+func (mi *MountpathInfo) ClearDD() {
 	cos.ClearfAtomic(&mi.flags, FlagWaitingDD)
 }
 

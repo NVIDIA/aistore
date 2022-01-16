@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/res"
 	"github.com/NVIDIA/aistore/stats"
@@ -58,6 +59,10 @@ func (g *fsprungroup) attachMpath(mpath string, force bool) (addedMi *fs.Mountpa
 }
 
 func (g *fsprungroup) _postAdd(action string, mi *fs.MountpathInfo) {
+	// TODO 1: Currently, dSort doesn't handle adding/enabling mountpaths at runtime
+	// TODO 2: Integrate with xreg.LimitedCoexistence
+	dsort.Managers.AbortAll(fmt.Errorf("%q %s", action, mi))
+
 	fspathsConfigAddDel(mi.Path, true /*add*/)
 	go func() {
 		if cmn.GCO.Get().Resilver.Enabled {
@@ -98,6 +103,11 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 	if rmi == nil {
 		return
 	}
+
+	// TODO 1: Currently, dSort doesn't handle detaching/disabling mountpaths at runtime
+	// TODO 2: Integrate with xreg.LimitedCoexistence
+	dsort.Managers.AbortAll(fmt.Errorf("%q %s", action, rmi))
+
 	if numAvail == 0 {
 		s := fmt.Sprintf("%s: lost (via %q) the last available mountpath %q", g.t.si, action, rmi)
 		g.postDD(rmi, action, nil /*xaction*/, nil /*error*/) // go ahead to disable/detach
@@ -147,7 +157,7 @@ func (g *fsprungroup) postDD(rmi *fs.MountpathInfo, action string, xres *xs.Resi
 		}
 		glog.Errorf("%s: %q %s: %v%s", g.t.si, action, rmi, err, detail)
 		if err == cmn.ErrXactUserAbort {
-			rmi.AbortDD() // clear the state
+			rmi.ClearDD() // clear the state
 		}
 		return
 	}

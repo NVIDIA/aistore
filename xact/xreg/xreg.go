@@ -603,7 +603,9 @@ func (e *entries) add(entry Renewable) {
 }
 
 //
-// limited coexistence
+// LimitedCoexistence checks whether a given xaction that is about to start can, in fact, "coexist"
+// with those that are currently running. It's a piece of logic designed to centralize all decision-making
+// of that sort. Further comments below.
 //
 
 func LimitedCoexistence(tsi *cluster.Snode, bck *cluster.Bck, action string, otherBck ...*cluster.Bck) (err error) {
@@ -620,16 +622,21 @@ func LimitedCoexistence(tsi *cluster.Snode, bck *cluster.Bck, action string, oth
 	return
 }
 
+// - assorted admin-requested actions, in turn, trigger global rebalance
+//    e.g.: if copy-bucket or ETL is currently running we cannot start
+//          transitioning storage targets to maintenance
+// - all supported xactions define "limited coexistence" via their respecive
+//   descriptors in xact.Table
 func (r *registry) limco(tsi *cluster.Snode, bck *cluster.Bck, action string, otherBck ...*cluster.Bck) error {
-	var nd *xact.Descriptor // the one that wants to run
-
+	var (
+		nd          *xact.Descriptor // the one that wants to run
+		adminReqAct bool             // admin-requested action that'd generate protential conflict
+	)
+	debug.Assert(tsi.Type() == cmn.Target) // TODO: extend to proxies
 	switch {
-	// e.g. read: if copy-bucket or ETL is currently running
-	// we cannot start transitioning to maintenance
 	case action == cmn.ActStartMaintenance, action == cmn.ActShutdownNode:
-		nd = &xact.Descriptor{MassiveBck: true, Resilver: true}
-	// all supported xactions define "limited coexistence"
-	// via xact.Table
+		nd = &xact.Descriptor{}
+		adminReqAct = true
 	default:
 		if d, ok := xact.Table[action]; ok {
 			nd = &d
@@ -639,18 +646,19 @@ func (r *registry) limco(tsi *cluster.Snode, bck *cluster.Bck, action string, ot
 	}
 
 	for kind, d := range xact.Table {
-		// NOTE that rebalance-vs-rebalance and resilver-vs-resilver sort it out between themselves
-		//      just fine
-		conflict := (d.Rebalance && nd.MassiveBck) || (nd.Rebalance && d.MassiveBck) ||
-			(d.Resilver && nd.MassiveBck) || (nd.Resilver && d.MassiveBck)
+		// note that rebalance-vs-rebalance and resilver-vs-resilver sort it out between themselves
+		conflict := (d.MassiveBck && adminReqAct) ||
+			(d.Rebalance && nd.MassiveBck) || (d.Resilver && nd.MassiveBck)
 		if !conflict {
 			continue
 		}
+
 		// the potential conflict becomes very real if the 'kind' is actually running
 		entry := r.getRunning(XactFilter{Kind: kind})
 		if entry == nil {
 			continue
 		}
+
 		// conflict confirmed
 		var b string
 		if bck != nil {

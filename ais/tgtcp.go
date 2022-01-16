@@ -463,8 +463,6 @@ func (t *target) enableMpath(w http.ResponseWriter, r *http.Request, mpath strin
 		t.writeErr(w, r, err)
 		return
 	}
-	// TODO: Currently, dSort doesn't handle adding/enabling mountpaths at runtime
-	dsort.Managers.AbortAll(fmt.Errorf("mountpath %s has been enabled", enabledMi))
 }
 
 func (t *target) attachMpath(w http.ResponseWriter, r *http.Request, mpath string) {
@@ -487,9 +485,6 @@ func (t *target) attachMpath(w http.ResponseWriter, r *http.Request, mpath strin
 		t.writeErr(w, r, err)
 		return
 	}
-
-	// TODO: Currently, dSort doesn't handle adding/enabling mountpaths at runtime
-	dsort.Managers.AbortAll(fmt.Errorf("attached %s", addedMi))
 }
 
 func (t *target) disableMpath(w http.ResponseWriter, r *http.Request, mpath string) {
@@ -508,7 +503,6 @@ func (t *target) disableMpath(w http.ResponseWriter, r *http.Request, mpath stri
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	dsort.Managers.AbortAll(fmt.Errorf("mountpath %s has been disabled", disabledMi))
 }
 
 func (t *target) detachMpath(w http.ResponseWriter, r *http.Request, mpath string) {
@@ -521,7 +515,6 @@ func (t *target) detachMpath(w http.ResponseWriter, r *http.Request, mpath strin
 	if removedMi == nil {
 		return
 	}
-	dsort.Managers.AbortAll(fmt.Errorf("detached %s", removedMi))
 }
 
 func (t *target) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag, caller string, silent bool) (err error) {
